@@ -102,8 +102,7 @@ pub mod pallet {
 
 		type Balance: Balance;
 
-		/// This must be compatible with Currency at the moment.
-		type AssetBalance: Balance + From<u64>;
+		type AssetBalance: Balance;
 
 		type PromotedBalance: AtLeast32BitUnsigned
 			+ From<Self::AssetBalance>
@@ -111,10 +110,10 @@ pub mod pallet {
 			+ TryInto<Self::AssetBalance>
 			+ TryInto<Self::Balance>;
 
-		type AssetId: AssetId + From<u32> + PartialOrd;
+		type AssetId: AssetId 9+ PartialOrd;
 
 		// Asset id to address the lp tokens by.
-		type PoolAssetId: AssetId + From<u32> + PartialOrd + Incrementable;
+		type PoolAssetId: AssetId + PartialOrd + Incrementable;
 
 		// TODO rename to Fungibles
 		type Assets: Inspect<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>
@@ -684,21 +683,20 @@ pub mod pallet {
 
 		/// Used by the RPC service to provide current prices.
 		pub fn quote_price_exact_tokens_for_tokens(
-			asset1: Option<u32>,
-			asset2: Option<u32>,
-			amount: u64,
+			asset1: Option<T::AssetId>,
+			asset2: Option<T::AssetId>,
+			amount: AssetBalanceOf<T>,
 			include_fee: bool,
 		) -> Option<AssetBalanceOf<T>> {
 			let into_multi = |asset| {
 				if let Some(asset) = asset {
-					MultiAssetId::Asset(T::AssetId::from(asset))
+					MultiAssetId::Asset(asset)
 				} else {
 					MultiAssetId::Native
 				}
 			};
 			let asset1 = into_multi(asset1);
 			let asset2 = into_multi(asset2);
-			let amount = amount.into();
 			let pool_id = Self::get_pool_id(asset1, asset2);
 			let pool_account = Self::get_pool_account(pool_id);
 
@@ -717,21 +715,20 @@ pub mod pallet {
 
 		/// Used by the RPC service to provide current prices.
 		pub fn quote_price_tokens_for_exact_tokens(
-			asset1: Option<u32>,
-			asset2: Option<u32>,
-			amount: u64,
+			asset1: Option<T::AssetId>,
+			asset2: Option<T::AssetId>,
+			amount: AssetBalanceOf<T>,
 			include_fee: bool,
 		) -> Option<AssetBalanceOf<T>> {
 			let into_multi = |asset| {
 				if let Some(asset) = asset {
-					MultiAssetId::Asset(T::AssetId::from(asset))
+					MultiAssetId::Asset(asset)
 				} else {
 					MultiAssetId::Native
 				}
 			};
 			let asset1 = into_multi(asset1);
 			let asset2 = into_multi(asset2);
-			let amount = amount.into();
 			let pool_id = Self::get_pool_id(asset1, asset2);
 			let pool_account = Self::get_pool_account(pool_id);
 
@@ -898,7 +895,10 @@ where
 		if let Some(amount_in_max) = amount_in_max {
 			ensure!(amount_in_max > Zero::zero(), Error::<T>::ZeroAmount);
 		}
-		let path = vec![MultiAssetId::Asset(asset_id), MultiAssetId::Native].try_into().unwrap();
+		let mut path = sp_std::vec::Vec::new();
+		path.push(MultiAssetId::Asset(asset_id));
+		path.push(MultiAssetId::Native);
+		let path = path.try_into().unwrap();
 
 		let amount_out = Self::native_to_asset(amount_out)?;
 
@@ -922,11 +922,12 @@ where
 	}
 }
 
-//TODO: these u32 and u64 should be type params.
 sp_api::decl_runtime_apis! {
-	pub trait DexApi<Balance> where
+	pub trait DexApi<Balance, AssetBalance, AssetId> where
 		Balance: Codec + MaybeDisplay,
+		AssetBalance: frame_support::traits::tokens::Balance,
+		AssetId: Codec + MaybeDisplay
 	{
-		fn quote_price(asset1: Option<u32>, asset2: Option<u32>, amount: u64) -> Option<Balance>;
+		fn quote_price(asset1: Option<AssetId>, asset2: Option<AssetId>, amount: AssetBalance) -> Option<Balance>;
 	}
 }
