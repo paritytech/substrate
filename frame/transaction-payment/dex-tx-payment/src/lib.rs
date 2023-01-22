@@ -129,7 +129,7 @@ pub mod pallet {
 	}
 }
 
-/// Require the transactor pay for themselves and maybe include a tip to gain additional priority
+/// Require the transactor to pay for themselves and maybe include a tip to gain additional priority
 /// in the queue. Allows paying via both `Currency` as well as `fungibles::Balanced`.
 ///
 /// Wraps the transaction logic in [`pallet_transaction_payment`] and extends it with assets.
