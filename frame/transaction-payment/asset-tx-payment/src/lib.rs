@@ -60,6 +60,8 @@ use sp_runtime::{
 };
 
 #[cfg(test)]
+mod mock;
+#[cfg(test)]
 mod tests;
 
 mod payment;
