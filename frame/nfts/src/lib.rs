@@ -1776,6 +1776,17 @@ pub mod pallet {
 			)
 		}
 
+		/// Mint an item by providing the pre-signed approval.
+		///
+		/// Origin must be Signed.
+		///
+		/// - `data`: The pre-signed approval that consists of the information about the item, its
+		///   metadata, who can mint it (`None` for anyone) and until what block number.
+		/// - `signature`: The signature of the `data` object.
+		/// - `signer`: The `data` object's signer. Should be an owner of the collection.
+		///
+		/// Emits `Issued` on success.
+		/// Emits `ItemMetadataSet` if the metadata was not empty.
 		#[pallet::call_index(37)]
 		#[pallet::weight(T::WeightInfo::mint_pre_signed())]
 		pub fn mint_pre_signed(
