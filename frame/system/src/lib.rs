@@ -1503,13 +1503,21 @@ impl<T: Config> Pallet<T> {
 	/// Assert the given `event` exists.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
 	pub fn assert_has_event(event: T::RuntimeEvent) {
-		assert!(Self::events().iter().any(|record| record.event == event))
+		let events = Self::events();
+		assert!(
+			events.iter().any(|record| record.event == event),
+			"expected event {event:?} not found in events {events:?}",
+		);
 	}
 
 	/// Assert the last event equal to the given `event`.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
 	pub fn assert_last_event(event: T::RuntimeEvent) {
-		assert_eq!(Self::events().last().expect("events expected").event, event);
+		let last_event = Self::events().last().expect("events expected").event.clone();
+		assert_eq!(
+			last_event, event,
+			"expected event {event:?} is not equal to the last event {last_event:?}",
+		);
 	}
 
 	/// Return the chain's current runtime version.
