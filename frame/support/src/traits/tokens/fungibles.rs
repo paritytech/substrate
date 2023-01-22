@@ -333,7 +333,7 @@ pub trait Destroy<AccountId>: Inspect<AccountId> {
 
 /// Use an on-chain exchange to convert the asset to the equivalent in native tokens.
 pub trait SwapForNative<Origin, AccountId, Balance, AssetBalance, AssetId> {
-	// If successful returns the amount in.
+	// If successful returns the amount in native tokens.
 	fn swap_tokens_for_exact_native(
 		origin: AccountId, //Origin,
 		asset_id: AssetId,
