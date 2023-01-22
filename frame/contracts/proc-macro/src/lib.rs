@@ -724,7 +724,7 @@ fn expand_functions(
 ///
 /// # Deprecated Interfaces
 ///
-/// An interface can be annotated with #[deprecated]. It is exclusive with #[unstable].
+/// An interface can be annotated with `#[deprecated]`. It is exclusive with `#[unstable]`.
 /// Deprecated interfaces have the following properties:
 /// 	- New codes containing those interfaces cannot be uploaded.
 /// 	- New contracts from existing coes containing those interfaces cannot be instantiated.
