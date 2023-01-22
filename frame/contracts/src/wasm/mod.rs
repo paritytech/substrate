@@ -720,6 +720,7 @@ mod tests {
 	/// Execute instantiation entry point of code without validating it first.
 	///
 	/// Same as `execute_unvalidated` except that the `deploy` entry point is ran.
+	#[cfg(not(feature = "runtime-benchmarks"))]
 	fn execute_instantiate_unvalidated<E: BorrowMut<MockExt>>(
 		wat: &str,
 		input_data: Vec<u8>,
@@ -3085,6 +3086,7 @@ mod tests {
 	"#;
 		let wasm = wat::parse_str(CODE_RANDOM).unwrap();
 		let schedule = crate::Schedule::<Test>::default();
+		#[cfg(not(feature = "runtime-benchmarks"))]
 		assert_err!(execute(CODE_RANDOM, vec![], MockExt::default()), <Error<Test>>::CodeRejected);
 		self::prepare::reinstrument::<runtime::Env, Test>(
 			&wasm,
