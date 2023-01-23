@@ -1247,6 +1247,8 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Deposits an event into this block's event record.
+	///
+	/// NOTE: Events not registered at the genesis block and quietly omitted.
 	pub fn deposit_event(event: impl Into<T::RuntimeEvent>) {
 		Self::deposit_event_indexed(&[], event.into());
 	}
@@ -1256,6 +1258,8 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This will update storage entries that correspond to the specified topics.
 	/// It is expected that light-clients could subscribe to this topics.
+	///
+	/// NOTE: Events not registered at the genesis block and quietly omitted.
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::RuntimeEvent) {
 		let block_number = Self::block_number();
 		// Don't populate events on genesis.
@@ -1445,8 +1449,14 @@ impl<T: Config> Pallet<T> {
 	/// NOTE: This should only be used in tests. Reading events from the runtime can have a large
 	/// impact on the PoV size of a block. Users should use alternative and well bounded storage
 	/// items for any behavior like this.
+	///
+	/// NOTE: Events not registered at the genesis block and quietly omitted.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
 	pub fn events() -> Vec<EventRecord<T::RuntimeEvent, T::Hash>> {
+		debug_assert!(
+			!Self::block_number().is_zero(),
+			"events not registered at the genesis block"
+		);
 		// Dereferencing the events here is fine since we are not in the
 		// memory-restricted runtime.
 		Self::read_events_no_consensus().map(|e| *e).collect()
@@ -1501,6 +1511,8 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Assert the given `event` exists.
+	///
+	/// NOTE: Events not registered at the genesis block and quietly omitted.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
 	pub fn assert_has_event(event: T::RuntimeEvent) {
 		let events = Self::events();
@@ -1511,6 +1523,8 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Assert the last event equal to the given `event`.
+	///
+	/// NOTE: Events not registered at the genesis block and quietly omitted.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
 	pub fn assert_last_event(event: T::RuntimeEvent) {
 		let last_event = Self::events().last().expect("events expected").event.clone();
