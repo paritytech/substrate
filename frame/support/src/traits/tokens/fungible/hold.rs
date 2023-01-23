@@ -296,9 +296,7 @@ pub trait Mutate<AccountId>:
 		// We want to make sure we can deposit the amount in advance. If we can't then something is
 		// very wrong.
 		ensure!(Self::can_deposit(dest, amount, false) == Success, TokenError::CannotCreate);
-		if on_hold {
-			ensure!(Self::hold_available(reason, dest), TokenError::CannotCreateHold);
-		}
+		ensure!(!on_hold || Self::hold_available(reason, dest), TokenError::CannotCreateHold);
 
 		let amount = Self::decrease_balance_on_hold(reason, source, amount, best_effort)?;
 		let actual = if on_hold {
@@ -306,6 +304,40 @@ pub trait Mutate<AccountId>:
 		} else {
 			Self::increase_balance(dest, amount, best_effort)?
 		};
+		Self::done_transfer_on_hold(reason, source, dest, actual);
+		Ok(actual)
+	}
+
+	/// Transfer some `amount` of free balance from `source` to become owned by `dest` but on hold
+	/// for `reason`.
+	/// for `reason`.
+	///
+	/// If `best_effort` is `true`, then an amount less than `amount` may be transferred without
+	/// error.
+	///
+	/// `source` must obey the requirements of `keep_alive`.
+	///
+	/// If `force` is `true`, then other fund-locking mechanisms may be disregarded. It should be
+	/// left as `false` in most circumstances, but when you want the same power as a `slash`, it
+	/// may be `true`.
+	///
+	/// The amount placed on hold is returned or `Err` in the case of error and nothing is changed.
+	///
+	/// WARNING: This may return an error after a partial storage mutation. It should be used only
+	/// inside a transactional storage context and an `Err` result must imply a storage rollback.
+	fn transfer_and_hold(
+		reason: &Self::Reason,
+		source: &AccountId,
+		dest: &AccountId,
+		amount: Self::Balance,
+		best_effort: bool,
+		keep_alive: KeepAlive,
+		force: bool,
+	) -> Result<Self::Balance, DispatchError> {
+		ensure!(Self::hold_available(reason, dest), TokenError::CannotCreateHold);
+		ensure!(Self::can_deposit(dest, amount, false) == Success, TokenError::CannotCreate);
+		let actual = Self::decrease_balance(source, amount, best_effort, keep_alive, force)?;
+		Self::increase_balance_on_hold(reason, dest, actual, best_effort)?;
 		Self::done_transfer_on_hold(reason, source, dest, actual);
 		Ok(actual)
 	}
@@ -318,6 +350,13 @@ pub trait Mutate<AccountId>:
 		_source: &AccountId,
 		_dest: &AccountId,
 		_amount: Self::Balance,
+	) {
+	}
+	fn done_transfer_and_hold(
+		_reason: &Self::Reason,
+		_source: &AccountId,
+		_dest: &AccountId,
+		_transferred: Self::Balance,
 	) {
 	}
 }
