@@ -3778,7 +3778,6 @@ fn test_multi_page_payout_stakers() {
 		// compute and ensure the reward amount is greater than zero.
 		let payout = current_total_payout_for_duration(reward_time_per_era());
 		let actual_paid_out = payout_exposure_part * payout;
-		println!("Actual paid out {:?}", actual_paid_out);
 		mock::start_active_era(2);
 
 		// verify the exposures are calculated correctly.
