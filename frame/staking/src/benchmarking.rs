@@ -617,10 +617,10 @@ benchmarks! {
 	payout_stakers_alive_staked_exclude_validator {
 		let n in 0 .. T::MaxNominatorRewardedPerPage::get() as u32;
 
-		// create nominators between MaxNominatorRewardedPerPage .. 2 * MaxNominatorRewardedPerPage
+		// create nominators between MaxNominatorRewardedPerPage+1 .. =2 * MaxNominatorRewardedPerPage
 		let (validator, nominators) = create_validator_with_nominators::<T>(
-			T::MaxNominatorRewardedPerPage::get() + n,
-			2*T::MaxNominatorRewardedPerPage::get() as u32,
+			T::MaxNominatorRewardedPerPage::get() + 1 + n,
+			2 * T::MaxNominatorRewardedPerPage::get() as u32,
 			false,
 			RewardDestination::Staked,
 		)?;
