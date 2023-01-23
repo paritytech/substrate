@@ -215,7 +215,11 @@ impl StakingInterface for StakingMock {
 	}
 
 	fn nominations(who: &Self::AccountId) -> Option<Vec<Self::AccountId>> {
-		if *who >= 20 && *who <= 24 {
+		if *who == 20 {
+			Some(vec![10, 11])
+		} else if *who == 21 {
+			Some(vec![12, 13])
+		} else if *who >= 22 && *who <= 24 {
 			Some(Vec::new())
 		} else {
 			None

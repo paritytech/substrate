@@ -5,20 +5,38 @@ use frame_support::{assert_ok, assert_storage_noop};
 use sp_staking::{OnStakingUpdate, StakingInterface};
 
 type VoterList = <Runtime as pallet_stake_tracker::Config>::VoterList;
+type TargetList = <Runtime as pallet_stake_tracker::Config>::TargetList;
 type Staking = <Runtime as pallet_stake_tracker::Config>::Staking;
 
 mod on_stake_update {
 	use super::*;
 	#[test]
-	fn noop_when_not_in_list() {
+	fn empty_lists() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(VoterList::count(), 0);
+			assert_eq!(TargetList::count(), 0);
+			let validator_id = &10;
+
 			// usual user
 			assert_storage_noop!(StakeTracker::on_stake_update(&1, None));
 			// validator
-			assert_storage_noop!(StakeTracker::on_stake_update(&10, None));
+			StakeTracker::on_stake_update(validator_id, None);
+			assert_eq!(
+				ApprovalStake::<Runtime>::get(validator_id).unwrap(),
+				Staking::stake(validator_id).unwrap().active
+			);
 			// nominator
-			assert_storage_noop!(StakeTracker::on_stake_update(&20, None));
+			StakeTracker::on_stake_update(&20, None);
+			assert_eq!(
+				ApprovalStake::<Runtime>::get(validator_id).unwrap(),
+				Staking::stake(validator_id).unwrap().active + Staking::stake(&20).unwrap().active
+			);
+			assert_eq!(
+				ApprovalStake::<Runtime>::get(&11).unwrap(),
+				Staking::stake(&20).unwrap().active
+			);
+			assert_eq!(VoterList::count(), 0);
+			assert_eq!(TargetList::count(), 0);
 		});
 	}
 
