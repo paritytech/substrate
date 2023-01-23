@@ -565,7 +565,7 @@ benchmarks! {
 			let balance = T::Currency::free_balance(controller);
 			ensure!(balance.is_zero(), "Controller has balance, but should be dead.");
 		}
-	}: payout_stakers(RawOrigin::Signed(caller), validator, current_era)
+	}: payout_stakers(RawOrigin::Signed(caller), validator, current_era, 0)
 	verify {
 		let balance_after = T::Currency::free_balance(&validator_controller);
 		ensure!(
@@ -598,7 +598,7 @@ benchmarks! {
 			let balance = T::Currency::free_balance(stash);
 			nominator_balances_before.push(balance);
 		}
-	}: payout_stakers(RawOrigin::Signed(caller), validator.clone(), current_era)
+	}: payout_stakers(RawOrigin::Signed(caller), validator.clone(), current_era, 0)
 	verify {
 		let balance_after = T::Currency::free_balance(&validator);
 		ensure!(
@@ -754,7 +754,7 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = RawOrigin::Signed(caller);
 		let calls: Vec<_> = payout_calls_arg.iter().map(|arg|
-			Call::<T>::payout_stakers { validator_stash: arg.0.clone(), era: arg.1 }.encode()
+			Call::<T>::payout_stakers { validator_stash: arg.0.clone(), era: arg.1, page: 0 }.encode()
 		).collect();
 	}: {
 		for call in calls {
