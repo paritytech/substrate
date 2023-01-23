@@ -40,11 +40,11 @@
 //! - `Balanced`: One-sided mutator functions for balances on hold, which return imbalance objects
 //!   which guaranete eventual book-keeping.
 
-mod freeze;
-mod hold;
+pub mod freeze;
+pub mod hold;
 mod imbalance;
 mod item_of;
-mod regular;
+pub mod regular;
 
 pub use freeze::{Inspect as InspectFreeze, Mutate as MutateFreeze};
 pub use hold::{
