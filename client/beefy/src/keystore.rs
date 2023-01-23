@@ -28,7 +28,10 @@ use beefy_primitives::{
 	BeefyVerify, KEY_TYPE,
 };
 
-use crate::error;
+use crate::{
+	error,
+	LOG_TARGET,
+};
 
 /// A BEEFY specific keystore implemented as a `Newtype`. This is basically a
 /// wrapper around [`sp_keystore::SyncCryptoStore`] and allows to customize
@@ -53,7 +56,7 @@ impl BeefyKeystore {
 			.collect();
 
 		if public.len() > 1 {
-			warn!(target: "beefy", "🥩 Multiple private keys found for: {:?} ({})", public, public.len());
+			warn!(target: LOG_TARGET, "🥩 Multiple private keys found for: {:?} ({})", public, public.len());
 		}
 
 		public.get(0).cloned()
