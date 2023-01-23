@@ -350,6 +350,7 @@ macro_rules! benchmarks_iter {
 		( $( $names_skip_meta:tt )* )
 		( $( $pov_name:ident: $( $storage:path = $pov_mode:ident )*; )* )
 		#[skip_meta]
+		$( #[ $($attributes:tt)+ ] )*
 		$name:ident
 		$( $rest:tt )*
 	) => {
@@ -361,6 +362,7 @@ macro_rules! benchmarks_iter {
 			( $( $names_extra )* )
 			( $( $names_skip_meta )* $name )
 			( $( $pov_name: $( $storage = $pov_mode )*; )* )
+			$( #[ $( $attributes )+ ] )*
 			$name
 			$( $rest )*
 		}
@@ -375,6 +377,7 @@ macro_rules! benchmarks_iter {
 		( $( $names_skip_meta:tt )* )
 		( $( $pov_name:ident: $( $storage:path = $pov_mode:ident )*; )* )
 		#[extra]
+		$( #[ $($attributes:tt)+ ] )*
 		$name:ident
 		$( $rest:tt )*
 	) => {
@@ -386,6 +389,7 @@ macro_rules! benchmarks_iter {
 			( $( $names_extra )* $name )
 			( $( $names_skip_meta )* )
 			( $( $pov_name: $( $storage = $pov_mode )*; )* )
+			$( #[ $( $attributes )+ ] )*
 			$name
 			$( $rest )*
 		}
@@ -400,6 +404,7 @@ macro_rules! benchmarks_iter {
 		( $( $names_skip_meta:tt )* )
 		( $( $old_pov_name:ident: $( $old_storage:path = $old_pov_mode:ident )*; )* )
 		#[pov_mode = $mode:ident $( { $( $storage:path: $pov_mode:ident )* } )?]
+		$( #[ $($attributes:tt)+ ] )*
 		$name:ident
 		$( $rest:tt )*
 	) => {
@@ -411,6 +416,7 @@ macro_rules! benchmarks_iter {
 			( $( $names_extra )* )
 			( $( $names_skip_meta )* )
 			( $name: ALL = $mode $($( $storage = $pov_mode )*)?; $( $old_pov_name: $( $old_storage = $old_pov_mode )*; )* )
+			$( #[ $( $attributes )+ ] )*
 			$name
 			$( $rest )*
 		}
