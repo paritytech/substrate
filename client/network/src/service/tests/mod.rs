@@ -76,13 +76,14 @@ impl TestNetwork {
 	pub fn start_network(
 		self,
 	) -> (Arc<TestNetworkService>, (impl Stream<Item = Event> + std::marker::Unpin)) {
-		let worker = self.network;
+		let mut worker = self.network;
 		let service = worker.service().clone();
 		let event_stream = service.event_stream("test");
 
 		tokio::spawn(async move {
-			futures::pin_mut!(worker);
-			let _ = worker.await;
+			loop {
+				worker.next_action().await;
+			}
 		});
 
 		(service, event_stream)
