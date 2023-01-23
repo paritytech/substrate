@@ -146,7 +146,7 @@ impl pallet_staking::Config for Runtime {
 	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
 	type NextNewSession = ();
 	type HistoryDepth = ConstU32<84>;
-	type MaxNominatorRewardedPerValidator = ConstU32<64>;
+	type MaxNominatorRewardedPerPage = ConstU32<64>;
 	type OffendingValidatorsThreshold = ();
 	type ElectionProvider = MockElection;
 	type GenesisElectionProvider = Self::ElectionProvider;

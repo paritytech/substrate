@@ -2196,7 +2196,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 
 		let exposure = Exposure::<AccountId, Balance> { total: stake, own: stake, others: vec![] };
 		let (exposure_overview, _) =
-			exposure.clone().as_pages(MaxNominatorRewardedPerValidator::get());
+			exposure.clone().as_pages(MaxNominatorRewardedPerPage::get());
 		let reward = EraRewardPoints::<AccountId> {
 			total: 1,
 			individual: vec![(11, 1)].into_iter().collect(),
@@ -3701,7 +3701,7 @@ fn six_session_delay() {
 fn test_nominators_are_rewarded_for_all_exposure_page() {
 	ExtBuilder::default().build_and_execute(|| {
 		// 3 pages of exposure
-		let nominator_count = 2 * MaxNominatorRewardedPerValidator::get() + 1;
+		let nominator_count = 2 * MaxNominatorRewardedPerPage::get() + 1;
 
 		for i in 0..nominator_count {
 			let stash = 10_000 + i as AccountId;
@@ -3747,7 +3747,7 @@ fn test_nominators_are_rewarded_for_all_exposure_page() {
 #[test]
 fn test_multi_page_payout_stakers() {
 	// Test that payout_stakers work in general, including that only the top
-	// `T::MaxNominatorRewardedPerValidator` nominators are rewarded.
+	// `T::MaxNominatorRewardedPerPage` nominators are rewarded.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		let balance = 1000;
 		// Track the exposure of the validator and all nominators.
@@ -3772,7 +3772,7 @@ fn test_multi_page_payout_stakers() {
 		mock::start_active_era(1);
 		Staking::reward_by_ids(vec![(11, 1)]);
 
-		// Since `MaxNominatorRewardedPerValidator = 64`, there are two pages of validator exposure.
+		// Since `MaxNominatorRewardedPerPage = 64`, there are two pages of validator exposure.
 		assert_eq!(EraInfo::<Test>::get_page_count(1, &11), 2);
 
 		// compute and ensure the reward amount is greater than zero.
@@ -4025,7 +4025,7 @@ fn payout_stakers_handles_weight_refund() {
 	// Note: this test relies on the assumption that `payout_stakers_alive_staked` is solely used by
 	// `payout_stakers` to calculate the weight of each payout op.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
-		let max_nom_rewarded = MaxNominatorRewardedPerValidator::get();
+		let max_nom_rewarded = MaxNominatorRewardedPerPage::get();
 		// Make sure the configured value is meaningful for our use.
 		assert!(max_nom_rewarded >= 4);
 		let half_max_nom_rewarded = max_nom_rewarded / 2;
@@ -5875,7 +5875,7 @@ fn test_validator_exposure_is_backward_compatible_with_non_paged_rewards_payout(
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		// case 1: exposure exist in clipped.
 		// set page cap to 10
-		MaxNominatorRewardedPerValidator::set(10);
+		MaxNominatorRewardedPerPage::set(10);
 		bond_validator(11, 10, 1000);
 		let mut expected_individual_exposures: Vec<IndividualExposure<AccountId, Balance>> = vec![];
 		let mut total_exposure: Balance = 0;
