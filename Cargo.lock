@@ -4734,6 +4734,7 @@ dependencies = [
  "sc-rpc",
  "sc-service",
  "sc-service-test",
+ "sc-storage-monitor",
  "sc-sync-state-rpc",
  "sc-sysinfo",
  "sc-telemetry",
@@ -4759,7 +4760,6 @@ dependencies = [
  "sp-tracing",
  "sp-transaction-pool",
  "sp-transaction-storage-proof",
- "storage-monitor",
  "substrate-build-script-utils",
  "substrate-frame-cli",
  "substrate-rpc-client",
@@ -8875,6 +8875,7 @@ dependencies = [
  "sc-rpc",
  "sc-rpc-server",
  "sc-rpc-spec-v2",
+ "sc-storage-monitor",
  "sc-sysinfo",
  "sc-telemetry",
  "sc-tracing",
@@ -8951,6 +8952,21 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "sp-core",
+]
+
+[[package]]
+name = "sc-storage-monitor"
+version = "0.1.0"
+dependencies = [
+ "clap 4.0.32",
+ "futures",
+ "log",
+ "nix 0.26.1",
+ "sc-client-db",
+ "sc-utils",
+ "sp-core",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]
@@ -10453,20 +10469,6 @@ dependencies = [
  "nalgebra",
  "num-traits",
  "rand 0.8.5",
-]
-
-[[package]]
-name = "storage-monitor"
-version = "0.1.0"
-dependencies = [
- "clap 4.0.32",
- "futures",
- "log",
- "nix 0.26.1",
- "sc-client-db",
- "sc-utils",
- "sp-core",
- "tokio",
 ]
 
 [[package]]

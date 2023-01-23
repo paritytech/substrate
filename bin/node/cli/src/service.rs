@@ -558,12 +558,12 @@ pub fn new_full(config: Configuration, cli: Cli) -> Result<TaskManager, ServiceE
 	let task_manager = new_full_base(config, cli.no_hardware_benchmarks, |_, _| ())
 		.map(|NewFullBase { task_manager, .. }| task_manager)?;
 
-	storage_monitor::StorageMonitorService::try_spawn(
+	sc_storage_monitor::StorageMonitorService::try_spawn(
 		cli.storage_monitor,
 		database_source,
 		&task_manager.spawn_essential_handle(),
 	)?;
-	
+
 	Ok(task_manager)
 }
 

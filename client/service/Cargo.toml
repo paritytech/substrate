@@ -73,6 +73,7 @@ sc-offchain = { version = "4.0.0-dev", path = "../offchain" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.10.0-dev" }
 sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 sc-sysinfo = { version = "6.0.0-dev", path = "../sysinfo" }
+sc-storage-monitor = { version = "0.1.0", path = "../storage-monitor" }
 tracing = "0.1.29"
 tracing-futures = { version = "0.2.4" }
 async-trait = "0.1.57"

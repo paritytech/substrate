@@ -39,7 +39,7 @@ pub struct Cli {
 
 	#[allow(missing_docs)]
 	#[clap(flatten)]
-	pub storage_monitor: storage_monitor::StorageMonitorParams,
+	pub storage_monitor: sc_storage_monitor::StorageMonitorParams,
 }
 
 /// Possible subcommands of the main binary.
