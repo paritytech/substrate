@@ -220,7 +220,7 @@ fn node_config<
 	);
 
 	network_config.transport =
-		TransportConfig::Normal { enable_mdns: false, allow_private_ipv4: true };
+		TransportConfig::Normal { enable_mdns: false, allow_private_ip: true };
 
 	Configuration {
 		impl_name: String::from("network-test-impl"),
