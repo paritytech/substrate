@@ -314,6 +314,8 @@ pub mod pallet {
 		Suspended { who: T::AccountId, amount: T::Balance },
 		/// Some amount was restored into an account.
 		Restored { who: T::AccountId, amount: T::Balance },
+		/// An account was upgraded.
+		Upgraded { who: T::AccountId },
 	}
 
 	#[pallet::error]
@@ -724,6 +726,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			*account = Some(a);
 			Ok(())
 		});
+		Self::deposit_event(Event::Upgraded { who: who.clone() });
 		return true
 	}
 
