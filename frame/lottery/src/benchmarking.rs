@@ -43,8 +43,7 @@ fn setup_lottery<T: Config>(repeat: bool) -> Result<(), &'static str> {
 	];
 	// Last call will be the match for worst case scenario.
 	calls.push(frame_system::Call::<T>::remark { remark: vec![] }.into());
-	let origin =
-		T::ManagerOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+	let origin = T::ManagerOrigin::try_successful_origin().unwrap();
 	Lottery::<T>::set_calls(origin.clone(), calls)?;
 	Lottery::<T>::start_lottery(origin, price, length, delay, repeat)?;
 	Ok(())

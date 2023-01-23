@@ -202,7 +202,7 @@ benchmarks! {
 		assert_ok!(Democracy::<T>::referendum_status(ref_index));
 		// Place our proposal in the external queue, too.
 		assert_ok!(Democracy::<T>::external_propose(
-			T::ExternalOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?,
+			T::ExternalOrigin::try_successful_origin().unwrap(),
 			make_proposal::<T>(0)
 		));
 		let origin =
@@ -257,8 +257,7 @@ benchmarks! {
 	}
 
 	fast_track {
-		let origin_propose =
-			T::ExternalDefaultOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+		let origin_propose = T::ExternalDefaultOrigin::try_successful_origin().unwrap();
 		let proposal = make_proposal::<T>(0);
 		let proposal_hash = proposal.hash();
 		Democracy::<T>::external_propose_default(origin_propose, proposal)?;
@@ -277,8 +276,7 @@ benchmarks! {
 		let proposal = make_proposal::<T>(0);
 		let proposal_hash = proposal.hash();
 
-		let origin_propose = T::ExternalDefaultOrigin::try_successful_origin()
-			.map_err(|_| BenchmarkError::Weightless)?;
+		let origin_propose = T::ExternalDefaultOrigin::try_successful_origin().unwrap();
 		Democracy::<T>::external_propose_default(origin_propose, proposal)?;
 
 		let mut vetoers: BoundedVec<T::AccountId, _> = Default::default();

@@ -368,14 +368,9 @@ mod benchmark {
 
 	const SEED: u32 = 0;
 
-	fn set_members<T: Config<I>, I: 'static>(
-		members: Vec<T::AccountId>,
-		prime: Option<usize>,
-	) -> Result<(), BenchmarkError> {
-		let reset_origin =
-			T::ResetOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
-		let prime_origin =
-			T::PrimeOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+	fn set_members<T: Config<I>, I: 'static>(members: Vec<T::AccountId>, prime: Option<usize>) {
+		let reset_origin = T::ResetOrigin::try_successful_origin().unwrap();
+		let prime_origin = T::PrimeOrigin::try_successful_origin().unwrap();
 
 		assert_ok!(<Membership<T, I>>::reset_members(reset_origin, members.clone()));
 		if let Some(prime) = prime.map(|i| members[i].clone()) {
@@ -384,7 +379,6 @@ mod benchmark {
 		} else {
 			assert_ok!(<Membership<T, I>>::clear_prime(prime_origin));
 		}
-		Ok(())
 	}
 
 	benchmarks_instance_pallet! {
@@ -392,7 +386,7 @@ mod benchmark {
 			let m in 1 .. (T::MaxMembers::get() - 1);
 
 			let members = (0..m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
-			set_members::<T, I>(members, None)?;
+			set_members::<T, I>(members, None);
 			let new_member = account::<T::AccountId>("add", m, SEED);
 			let new_member_lookup = T::Lookup::unlookup(new_member.clone());
 		}: {
@@ -411,7 +405,7 @@ mod benchmark {
 			let m in 2 .. T::MaxMembers::get();
 
 			let members = (0..m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
-			set_members::<T, I>(members.clone(), Some(members.len() - 1))?;
+			set_members::<T, I>(members.clone(), Some(members.len() - 1));
 
 			let to_remove = members.first().cloned().unwrap();
 			let to_remove_lookup = T::Lookup::unlookup(to_remove.clone());
@@ -432,7 +426,7 @@ mod benchmark {
 			let m in 2 .. T::MaxMembers::get();
 
 			let members = (0..m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
-			set_members::<T, I>(members.clone(), Some(members.len() - 1))?;
+			set_members::<T, I>(members.clone(), Some(members.len() - 1));
 			let add = account::<T::AccountId>("member", m, SEED);
 			let add_lookup = T::Lookup::unlookup(add.clone());
 			let remove = members.first().cloned().unwrap();
@@ -456,7 +450,7 @@ mod benchmark {
 			let m in 1 .. T::MaxMembers::get();
 
 			let members = (1..m+1).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
-			set_members::<T, I>(members.clone(), Some(members.len() - 1))?;
+			set_members::<T, I>(members.clone(), Some(members.len() - 1));
 			let mut new_members = (m..2*m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
 		}: {
 			assert_ok!(<Membership<T, I>>::reset_members(
@@ -477,7 +471,7 @@ mod benchmark {
 			// worse case would be to change the prime
 			let members = (0..m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
 			let prime = members.last().cloned().unwrap();
-			set_members::<T, I>(members.clone(), Some(members.len() - 1))?;
+			set_members::<T, I>(members.clone(), Some(members.len() - 1));
 
 			let add = account::<T::AccountId>("member", m, SEED);
 			let add_lookup = T::Lookup::unlookup(add.clone());
@@ -497,7 +491,7 @@ mod benchmark {
 			let members = (0..m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
 			let prime = members.last().cloned().unwrap();
 			let prime_lookup = T::Lookup::unlookup(prime.clone());
-			set_members::<T, I>(members, None)?;
+			set_members::<T, I>(members, None);
 		}: {
 			assert_ok!(<Membership<T, I>>::set_prime(
 				T::PrimeOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?,
@@ -513,7 +507,7 @@ mod benchmark {
 			let m in 1 .. T::MaxMembers::get();
 			let members = (0..m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
 			let prime = members.last().cloned().unwrap();
-			set_members::<T, I>(members, None)?;
+			set_members::<T, I>(members, None);
 		}: {
 			assert_ok!(<Membership<T, I>>::clear_prime(
 				T::PrimeOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?,

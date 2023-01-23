@@ -63,7 +63,7 @@ benchmarks! {
 		whitelist_account!(caller);
 		let (preimage, hash) = sized_preimage_and_hash::<T>(s);
 		assert_ok!(Preimage::<T>::request_preimage(
-			T::ManagerOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?,
+			T::ManagerOrigin::try_successful_origin().unwrap(),
 			hash,
 		));
 	}: note_preimage(RawOrigin::Signed(caller), preimage)
@@ -75,7 +75,7 @@ benchmarks! {
 		let s in 0 .. MAX_SIZE;
 		let (preimage, hash) = sized_preimage_and_hash::<T>(s);
 		assert_ok!(Preimage::<T>::request_preimage(
-			T::ManagerOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?,
+			T::ManagerOrigin::try_successful_origin().unwrap(),
 			hash,
 		));
 	}: note_preimage<T::RuntimeOrigin>(
@@ -99,7 +99,7 @@ benchmarks! {
 	unnote_no_deposit_preimage {
 		let (preimage, hash) = preimage_and_hash::<T>();
 		assert_ok!(Preimage::<T>::note_preimage(
-			T::ManagerOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?,
+			T::ManagerOrigin::try_successful_origin().unwrap(),
 			preimage,
 		));
 	}: unnote_preimage<T::RuntimeOrigin>(
@@ -127,7 +127,7 @@ benchmarks! {
 	request_no_deposit_preimage {
 		let (preimage, hash) = preimage_and_hash::<T>();
 		assert_ok!(Preimage::<T>::note_preimage(
-			T::ManagerOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?,
+			T::ManagerOrigin::try_successful_origin().unwrap(),
 			preimage,
 		));
 	}: request_preimage<T::RuntimeOrigin>(
@@ -151,7 +151,7 @@ benchmarks! {
 	request_requested_preimage {
 		let (_, hash) = preimage_and_hash::<T>();
 		assert_ok!(Preimage::<T>::request_preimage(
-			T::ManagerOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?,
+			T::ManagerOrigin::try_successful_origin().unwrap(),
 			hash,
 		));
 	}: request_preimage<T::RuntimeOrigin>(
@@ -166,11 +166,11 @@ benchmarks! {
 	unrequest_preimage {
 		let (preimage, hash) = preimage_and_hash::<T>();
 		assert_ok!(Preimage::<T>::request_preimage(
-			T::ManagerOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?,
+			T::ManagerOrigin::try_successful_origin().unwrap(),
 			hash,
 		));
 		assert_ok!(Preimage::<T>::note_preimage(
-			T::ManagerOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?,
+			T::ManagerOrigin::try_successful_origin().unwrap(),
 			preimage,
 		));
 	}: _<T::RuntimeOrigin>(
@@ -183,7 +183,7 @@ benchmarks! {
 	unrequest_unnoted_preimage {
 		let (_, hash) = preimage_and_hash::<T>();
 		assert_ok!(Preimage::<T>::request_preimage(
-			T::ManagerOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?,
+			T::ManagerOrigin::try_successful_origin().unwrap(),
 			hash,
 		));
 	}: unrequest_preimage<T::RuntimeOrigin>(
@@ -196,11 +196,11 @@ benchmarks! {
 	unrequest_multi_referenced_preimage {
 		let (_, hash) = preimage_and_hash::<T>();
 		assert_ok!(Preimage::<T>::request_preimage(
-			T::ManagerOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?,
+			T::ManagerOrigin::try_successful_origin().unwrap(),
 			hash,
 		));
 		assert_ok!(Preimage::<T>::request_preimage(
-			T::ManagerOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?,
+			T::ManagerOrigin::try_successful_origin().unwrap(),
 			hash,
 		));
 	}: unrequest_preimage<T::RuntimeOrigin>(
