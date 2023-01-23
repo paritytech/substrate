@@ -32,6 +32,13 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(Value::<T>::get(), Some(123));
 	}
 
+	#[pov_mode = Ignored]
+	storage_single_value_ignored_read {
+		Value::<T>::put(123);
+	}: {
+		assert_eq!(Value::<T>::get(), Some(123));
+	}
+
 	storage_single_value_read_twice {
 		Value::<T>::put(123);
 	}: {
@@ -110,6 +117,22 @@ frame_benchmarking::benchmarks! {
 			assert_eq!(Map16M::<T>::get(i*10), Some(i*10)));
 	}
 
+	#[pov_mode = MaxEncodedLen {
+		Pov::Map1M: Ignored
+	}]
+	storage_map_read_per_component_one_ignored {
+		let n in 0 .. 100;
+		let m in 0 .. 100;
+
+		(0..m*10).for_each(|i| Map1M::<T>::insert(i, i));
+		(0..n*10).for_each(|i| Map16M::<T>::insert(i, i));
+	}: {
+		(0..m).for_each(|i|
+			assert_eq!(Map1M::<T>::get(i*10), Some(i*10)));
+		(0..n).for_each(|i|
+			assert_eq!(Map16M::<T>::get(i*10), Some(i*10)));
+	}
+
 	// Reads the same value from a storage map. Should not result in a component.
 	storage_1m_map_one_entry_repeated_read {
 		let n in 0 .. 100;
@@ -146,6 +169,12 @@ frame_benchmarking::benchmarks! {
 
 	// Reading unbounded values will produce no mathematical worst case PoV size for this component.
 	storage_value_unbounded_read {
+	}: {
+		assert!(UnboundedValue::<T>::get().is_none());
+	}
+
+	#[pov_mode = Ignored]
+	storage_value_unbounded_ignored_read {
 	}: {
 		assert!(UnboundedValue::<T>::get().is_none());
 	}
@@ -238,6 +267,19 @@ frame_benchmarking::benchmarks! {
 		Pov::UnboundedMap: Measured
 	}]
 	storage_map_partial_unbounded_read {
+		let i in 0 .. 1000;
+
+		Map1M::<T>::insert(i, 0);
+		UnboundedMap::<T>::insert(i, sp_std::vec![0; i as usize]);
+	}: {
+		assert!(Map1M::<T>::get(i).is_some());
+		assert!(UnboundedMap::<T>::get(i).is_some());
+	}
+
+	#[pov_mode = MaxEncodedLen {
+		Pov::UnboundedMap: Ignored
+	}]
+	storage_map_partial_unbounded_ignored_read {
 		let i in 0 .. 1000;
 
 		Map1M::<T>::insert(i, 0);
