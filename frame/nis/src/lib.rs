@@ -77,7 +77,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::traits::{
-	fungible::{self, Inspect as FungibleInspect, Mutate as FungibleMutate},
+	fungible::{self, Inspect as FunInspect, Mutate as FunMutate},
 	tokens::KeepAlive,
 };
 pub use pallet::*;
@@ -117,7 +117,7 @@ where
 }
 
 pub struct NoCounterpart<T>(sp_std::marker::PhantomData<T>);
-impl<T> FungibleInspect<T> for NoCounterpart<T> {
+impl<T> FunInspect<T> for NoCounterpart<T> {
 	type Balance = u32;
 	fn total_issuance() -> u32 {
 		0
@@ -147,7 +147,7 @@ impl<T> fungible::Unbalanced<T> for NoCounterpart<T> {
 	}
 	fn set_total_issuance(_: Self::Balance) {}
 }
-impl<T> FungibleMutate<T> for NoCounterpart<T> {}
+impl<T> FunMutate<T> for NoCounterpart<T> {}
 impl<T> Convert<Perquintill, u32> for NoCounterpart<T> {
 	fn convert(_: Perquintill) -> u32 {
 		0
@@ -156,7 +156,7 @@ impl<T> Convert<Perquintill, u32> for NoCounterpart<T> {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use super::{FungibleInspect, FungibleMutate};
+	use super::{FunInspect, FunMutate};
 	pub use crate::weights::WeightInfo;
 	use frame_support::{
 		pallet_prelude::*,
@@ -164,7 +164,7 @@ pub mod pallet {
 			fungible::{
 				self,
 				hold::{Inspect as FunHoldInspect, Mutate as FunHoldMutate},
-				Balanced as FunBalanced, Inspect as FunInspect, Mutate as FunMutate,
+				Balanced as FunBalanced,
 			},
 			nonfungible::{Inspect as NftInspect, Transfer as NftTransfer},
 			tokens::KeepAlive::CanKill,
@@ -237,7 +237,7 @@ pub mod pallet {
 		type IgnoredIssuance: Get<BalanceOf<Self>>;
 
 		/// The accounting system for the fungible counterpart tokens.
-		type Counterpart: FungibleMutate<Self::AccountId>;
+		type Counterpart: FunMutate<Self::AccountId>;
 
 		/// The system to convert an overall proportion of issuance into a number of fungible
 		/// counterpart tokens.
@@ -245,7 +245,7 @@ pub mod pallet {
 		/// In general it's best to use `WithMaximumOf`.
 		type CounterpartAmount: ConvertBack<
 			Perquintill,
-			<Self::Counterpart as FungibleInspect<Self::AccountId>>::Balance,
+			<Self::Counterpart as FunInspect<Self::AccountId>>::Balance,
 		>;
 
 		/// Unbalanced handler to account for funds created (in case of a higher total issuance over

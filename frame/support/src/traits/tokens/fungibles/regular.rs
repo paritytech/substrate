@@ -314,6 +314,24 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		Ok(amount)
 	}
 
+	/// Simple infallible function to force an account to have a particular balance, good for use
+	/// in tests and benchmarks but not recommended for production code owing to the lack of
+	/// error reporting.
+	///
+	/// Returns the new balance.
+	fn make_balance_be(
+		asset: Self::AssetId,
+		who: &AccountId,
+		amount: Self::Balance,
+	) -> Self::Balance {
+		let b = Self::balance(asset, who);
+		if b > amount {
+			Self::burn_from(asset, who, b - amount, true, true).map(|d| amount.saturating_sub(d))
+		} else {
+			Self::mint_into(asset, who, amount - b).map(|d| amount.saturating_add(d))
+		}
+		.unwrap_or(b)
+	}
 	fn done_mint_into(_asset: Self::AssetId, _who: &AccountId, _amount: Self::Balance) {}
 	fn done_burn_from(_asset: Self::AssetId, _who: &AccountId, _amount: Self::Balance) {}
 	fn done_shelve(_asset: Self::AssetId, _who: &AccountId, _amount: Self::Balance) {}
