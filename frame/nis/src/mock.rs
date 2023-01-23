@@ -19,13 +19,15 @@
 
 use crate::{self as pallet_nis, Perquintill, WithMaximumOf};
 
+use codec::{MaxEncodedLen, Encode, Decode};
 use frame_support::{
 	ord_parameter_types, parameter_types,
-	traits::{ConstU16, ConstU32, ConstU64, Currency, OnFinalize, OnInitialize, StorageMapShim},
+	traits::{ConstU16, ConstU32, ConstU64, OnFinalize, OnInitialize, StorageMapShim, fungible::Inspect},
 	weights::Weight,
 	PalletId,
 };
 use pallet_balances::{Instance1, Instance2};
+use scale_info::TypeInfo;
 use sp_core::{ConstU128, H256};
 use sp_runtime::{
 	testing::Header,
@@ -88,8 +90,13 @@ impl pallet_balances::Config<Instance1> for Test {
 	type ReserveIdentifier = [u8; 8];
 	type FreezeIdentifier = ();
 	type MaxFreezes = ();
-	type HoldIdentifier = ();
-	type MaxHolds = ();
+	type HoldIdentifier = HoldIdentifier;
+	type MaxHolds = ConstU32<1>;
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, Debug, TypeInfo)]
+pub enum HoldIdentifier {
+	Nis,
 }
 
 impl pallet_balances::Config<Instance2> for Test {
@@ -119,7 +126,7 @@ parameter_types! {
 	pub const MinReceipt: Perquintill = Perquintill::from_percent(1);
 	pub const ThawThrottle: (Perquintill, u64) = (Perquintill::from_percent(25), 5);
 	pub static MaxIntakeWeight: Weight = Weight::from_ref_time(2_000_000_000_000);
-	pub const ReserveId: [u8; 8] = *b"py/nis  ";
+	pub const HoldReason: HoldIdentifier = HoldIdentifier::Nis;
 }
 
 ord_parameter_types! {
@@ -147,7 +154,7 @@ impl pallet_nis::Config for Test {
 	type MaxIntakeWeight = MaxIntakeWeight;
 	type MinReceipt = MinReceipt;
 	type ThawThrottle = ThawThrottle;
-	type ReserveId = ReserveId;
+	type HoldReason = HoldReason;
 }
 
 // This function basically just builds a genesis storage key/value store according to
