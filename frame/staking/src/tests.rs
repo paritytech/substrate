@@ -2195,8 +2195,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 		let _ = Balances::make_free_balance_be(&11, stake);
 
 		let exposure = Exposure::<AccountId, Balance> { total: stake, own: stake, others: vec![] };
-		let (exposure_overview, _) =
-			exposure.clone().as_pages(MaxNominatorRewardedPerPage::get());
+		let (exposure_overview, _) = exposure.clone().as_pages(MaxNominatorRewardedPerPage::get());
 		let reward = EraRewardPoints::<AccountId> {
 			total: 1,
 			individual: vec![(11, 1)].into_iter().collect(),
