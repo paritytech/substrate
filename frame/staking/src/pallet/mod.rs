@@ -205,7 +205,7 @@ pub mod pallet {
 		///
 		/// A reward payout is restricted to a maximum of `MaxNominatorRewardedPerPage` nominators
 		/// in a single call. This used to limit the i/o cost for the nominator payout.
-		/// See [`payout_stakers`] for more details.
+		/// See call `payout_stakers` for more details.
 		#[pallet::constant]
 		type MaxNominatorRewardedPerPage: Get<u32>;
 
