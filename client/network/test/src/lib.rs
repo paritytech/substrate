@@ -31,7 +31,7 @@ use std::{
 	time::Duration,
 };
 
-use futures::{future::BoxFuture, prelude::*};
+use futures::{future::BoxFuture, pin_mut, prelude::*};
 use libp2p::{build_multiaddr, PeerId};
 use log::trace;
 use parking_lot::Mutex;
@@ -1064,8 +1064,12 @@ where
 		self.mut_peers(|peers| {
 			for (i, peer) in peers.iter_mut().enumerate() {
 				trace!(target: "sync", "-- Polling {}: {}", i, peer.id());
-				if let Poll::Ready(()) = peer.network.poll_unpin(cx) {
-					panic!("NetworkWorker has terminated unexpectedly.")
+				loop {
+					let net_poll_future = peer.network.next_action();
+					pin_mut!(net_poll_future);
+					if let Poll::Pending = net_poll_future.poll(cx) {
+						break
+					}
 				}
 				trace!(target: "sync", "-- Polling complete {}: {}", i, peer.id());
 
