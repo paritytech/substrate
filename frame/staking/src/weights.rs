@@ -350,7 +350,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().writes((3_u64).saturating_mul(n.into())))
 	}
 	fn  payout_stakers_alive_staked_exclude_validator(n: u32, ) -> Weight {
-		Weight::from_ref_time(0)
+		Weight::from_ref_time(n.into())
 	}
 	// Storage: Staking Ledger (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
@@ -779,7 +779,7 @@ impl WeightInfo for () {
 	}
 	fn  payout_stakers_alive_staked_exclude_validator(n: u32, ) -> Weight {
 		// Minimum execution time: 164_719 nanoseconds.
-		Weight::from_ref_time(0)
+		Weight::from_ref_time(n.into())
 	}
 	// Storage: Staking Ledger (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
