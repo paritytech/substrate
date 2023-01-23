@@ -788,14 +788,6 @@ impl<AccountId, Balance: Default + HasCompact> Default for ExposurePage<AccountI
 	}
 }
 
-impl<AccountId: Clone, Balance: HasCompact + AtLeast32BitUnsigned + Copy>
-	From<Exposure<AccountId, Balance>> for ExposurePage<AccountId, Balance>
-{
-	fn from(exposure: Exposure<AccountId, Balance>) -> Self {
-		Self { page_total: exposure.total, others: exposure.others }
-	}
-}
-
 /// A snapshot of the stake backing a single validator in the system.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct ExposureOverview<Balance: HasCompact> {
