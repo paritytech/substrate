@@ -253,7 +253,7 @@ pub enum RuntimeCosts {
 	/// Weight of calling `seal_ecdsa_recover`.
 	EcdsaRecovery,
 	/// Weight charged by a chain extension through `seal_call_chain_extension`.
-	ChainExtension(u64),
+	ChainExtension(Weight),
 	/// Weight charged for calling into the runtime.
 	CallRuntime(Weight),
 	/// Weight of calling `seal_set_code_hash`
@@ -272,7 +272,7 @@ impl RuntimeCosts {
 	fn token<T: Config>(&self, s: &HostFnWeights<T>) -> RuntimeToken {
 		use self::RuntimeCosts::*;
 		let weight = match *self {
-			MeteringBlock(amount) => s.gas.saturating_add(amount),
+			MeteringBlock(amount) => s.gas.saturating_add(Weight::from_ref_time(amount)),
 			CopyFromContract(len) => s.return_per_byte.saturating_mul(len.into()),
 			CopyToContract(len) => s.input_per_byte.saturating_mul(len.into()),
 			Caller => s.caller,
@@ -335,8 +335,8 @@ impl RuntimeCosts {
 				.hash_blake2_128
 				.saturating_add(s.hash_blake2_128_per_byte.saturating_mul(len.into())),
 			EcdsaRecovery => s.ecdsa_recover,
-			ChainExtension(amount) => amount,
-			CallRuntime(weight) => weight.ref_time(),
+			ChainExtension(weight) => weight,
+			CallRuntime(weight) => weight,
 			SetCodeHash => s.set_code_hash,
 			EcdsaToEthAddress => s.ecdsa_to_eth_address,
 			ReentrantCount => s.reentrance_count,
@@ -346,7 +346,7 @@ impl RuntimeCosts {
 		RuntimeToken {
 			#[cfg(test)]
 			_created_from: *self,
-			weight: Weight::from_ref_time(weight),
+			weight,
 		}
 	}
 }
@@ -2085,15 +2085,6 @@ pub mod env {
 		data_ptr: u32,
 		data_len: u32,
 	) -> Result<(), TrapReason> {
-		fn has_duplicates<T: Ord>(items: &mut Vec<T>) -> bool {
-			items.sort();
-			// Find any two consecutive equal elements.
-			items.windows(2).any(|w| match &w {
-				&[a, b] => a == b,
-				_ => false,
-			})
-		}
-
 		let num_topic = topics_len
 			.checked_div(sp_std::mem::size_of::<TopicOf<E::T>>() as u32)
 			.ok_or("Zero sized topics are not allowed")?;
@@ -2102,7 +2093,7 @@ pub mod env {
 			return Err(Error::<E::T>::ValueTooLarge.into())
 		}
 
-		let mut topics: Vec<TopicOf<<E as Ext>::T>> = match topics_len {
+		let topics: Vec<TopicOf<<E as Ext>::T>> = match topics_len {
 			0 => Vec::new(),
 			_ => ctx.read_sandbox_memory_as_unbounded(memory, topics_ptr, topics_len)?,
 		};
@@ -2110,13 +2101,6 @@ pub mod env {
 		// If there are more than `event_topics`, then trap.
 		if topics.len() > ctx.ext.schedule().limits.event_topics as usize {
 			return Err(Error::<E::T>::TooManyTopics.into())
-		}
-
-		// Check for duplicate topics. If there are any, then trap.
-		// Complexity O(n * log(n)) and no additional allocations.
-		// This also sorts the topics.
-		if has_duplicates(&mut topics) {
-			return Err(Error::<E::T>::DuplicateTopics.into())
 		}
 
 		let event_data = ctx.read_sandbox_memory(memory, data_ptr, data_len)?;

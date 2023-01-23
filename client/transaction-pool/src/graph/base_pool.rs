@@ -22,6 +22,7 @@
 
 use std::{cmp::Ordering, collections::HashSet, fmt, hash, sync::Arc};
 
+use crate::LOG_TARGET;
 use log::{debug, trace, warn};
 use sc_transaction_pool_api::{error, InPoolTransaction, PoolStatus};
 use serde::Serialize;
@@ -272,9 +273,9 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 		}
 
 		let tx = WaitingTransaction::new(tx, self.ready.provided_tags(), &self.recently_pruned);
-		trace!(target: "txpool", "[{:?}] {:?}", tx.transaction.hash, tx);
+		trace!(target: LOG_TARGET, "[{:?}] {:?}", tx.transaction.hash, tx);
 		debug!(
-			target: "txpool",
+			target: LOG_TARGET,
 			"[{:?}] Importing to {}",
 			tx.transaction.hash,
 			if tx.is_ready() { "ready" } else { "future" }
@@ -328,7 +329,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 				// transaction failed to be imported.
 				Err(e) =>
 					if first {
-						debug!(target: "txpool", "[{:?}] Error importing: {:?}", current_hash, e);
+						debug!(target: LOG_TARGET, "[{:?}] Error importing: {:?}", current_hash, e);
 						return Err(e)
 					} else {
 						failed.push(current_hash);
@@ -347,7 +348,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 			// since they depend on each other and will never get to the best iterator.
 			self.ready.remove_subtree(&promoted);
 
-			debug!(target: "txpool", "[{:?}] Cycle detected, bailing.", hash);
+			debug!(target: LOG_TARGET, "[{:?}] Cycle detected, bailing.", hash);
 			return Err(error::Error::CycleDetected)
 		}
 
@@ -490,7 +491,10 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 			match self.import_to_ready(tx) {
 				Ok(res) => promoted.push(res),
 				Err(e) => {
-					warn!(target: "txpool", "[{:?}] Failed to promote during pruning: {:?}", hash, e);
+					warn!(
+						target: LOG_TARGET,
+						"[{:?}] Failed to promote during pruning: {:?}", hash, e,
+					);
 					failed.push(hash)
 				},
 			}
