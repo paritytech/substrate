@@ -224,9 +224,6 @@ impl<T: Config<I>, I: 'static> fungible::UnbalancedHold<T::AccountId> for Pallet
 		who: &T::AccountId,
 		amount: Self::Balance,
 	) -> DispatchResult {
-		if amount.is_zero() {
-			return Ok(())
-		}
 		let mut new_account = Self::account(who);
 		let mut holds = Holds::<T, I>::get(who);
 		let mut increase = true;

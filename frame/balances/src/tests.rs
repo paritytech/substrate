@@ -1407,6 +1407,10 @@ macro_rules! decl_tests {
 				assert_ok!(<Balances as fungible::Unbalanced<_>>::set_balance(&1337, 1));
 				assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 1);
 				assert_eq!(<Balances as fungible::InspectHold<_>>::balance_on_hold(&OtherTestId::Foo, &1337), 60);
+
+				assert_ok!(<Balances as fungible::MutateHold<_>>::release(&OtherTestId::Foo, &1337, 60, false));
+				assert_eq!(<Balances as fungible::InspectHold<_>>::balance_on_hold(&OtherTestId::Foo, &1337), 0);
+				assert_eq!(<Balances as fungible::InspectHold<_>>::total_balance_on_hold(&1337), 0);
 			});
 		}
 
