@@ -27,7 +27,7 @@ use std::{
 
 const LOG_TARGET: &str = "storage-monitor";
 
-#[allow(missing_docs)]
+/// Error type used in this crate.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
 	#[error("IO Error")]
@@ -35,9 +35,6 @@ pub enum Error {
 	#[error("Out of storage space: available {0}MB, required {1}MB")]
 	StorageOutOfSpace(u64, u64),
 }
-
-#[allow(missing_docs)]
-pub type Result<T> = std::result::Result<T, Error>;
 
 /// Parameters used to create the storage monitor.
 #[derive(Default, Debug, Clone, Args)]
@@ -69,7 +66,7 @@ impl StorageMonitorService {
 		parameters: StorageMonitorParams,
 		database: DatabaseSource,
 		spawner: &impl SpawnEssentialNamed,
-	) -> Result<()> {
+	) -> Result<(), Error> {
 		Ok(match (parameters.threshold, database.path()) {
 			(0, _) => {
 				log::info!(
@@ -119,7 +116,7 @@ impl StorageMonitorService {
 	}
 
 	/// Returns free space in MB, or error if statvfs failed.
-	fn free_space(path: &Path) -> Result<u64> {
+	fn free_space(path: &Path) -> Result<u64, Error> {
 		statvfs(path)
 			.map(|stats| stats.blocks_available() * stats.block_size() / 1_000_000)
 			.map_err(Error::from)
@@ -128,7 +125,7 @@ impl StorageMonitorService {
 	/// Checks if the amount of free space for given `path` is above given `threshold`.
 	/// If it dropped below, error is returned.
 	/// System errors are silently ignored.
-	fn check_free_space(path: &Path, threshold: u64) -> Result<()> {
+	fn check_free_space(path: &Path, threshold: u64) -> Result<(), Error> {
 		match StorageMonitorService::free_space(path) {
 			Ok(available_space) => {
 				log::trace!(
@@ -138,10 +135,6 @@ impl StorageMonitorService {
 
 				if available_space < threshold {
 					log::error!(target: LOG_TARGET, "Available space {available_space}MB for path `{}` dropped below threshold: {threshold}MB , terminating...", path.display());
-					println!(
-						"----> {:?}",
-						Error::StorageOutOfSpace(available_space, threshold).to_string()
-					);
 					Err(Error::StorageOutOfSpace(available_space, threshold))
 				} else {
 					Ok(())
