@@ -20,7 +20,6 @@ impl-trait-for-tuples = "0.2.2"
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-sp-authorship = { version = "4.0.0-dev", default-features = false, path = "../../primitives/authorship" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 
@@ -35,7 +34,6 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"scale-info/std",
-	"sp-authorship/std",
 	"sp-runtime/std",
 	"sp-std/std",
 ]

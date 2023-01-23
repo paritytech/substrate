@@ -52,15 +52,15 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
-		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Historical: pallet_session_historical::{Pallet},
-		Offences: pallet_offences::{Pallet, Storage, Event},
-		Babe: pallet_babe::{Pallet, Call, Storage, Config, ValidateUnsigned},
-		Staking: pallet_staking::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
-		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
+		System: frame_system,
+		Authorship: pallet_authorship,
+		Balances: pallet_balances,
+		Historical: pallet_session_historical,
+		Offences: pallet_offences,
+		Babe: pallet_babe,
+		Staking: pallet_staking,
+		Session: pallet_session,
+		Timestamp: pallet_timestamp,
 	}
 );
 
@@ -124,8 +124,6 @@ impl pallet_session::historical::Config for Test {
 
 impl pallet_authorship::Config for Test {
 	type FindAuthor = pallet_session::FindAccountFromAuthorIndex<Self, Babe>;
-	type UncleGenerations = ConstU64<0>;
-	type FilterUncle = ();
 	type EventHandler = ();
 }
 

@@ -4743,7 +4743,6 @@ dependencies = [
  "sc-consensus-babe",
  "sc-consensus-epochs",
  "sc-consensus-slots",
- "sc-consensus-uncles",
  "sc-executor",
  "sc-finality-grandpa",
  "sc-keystore",
@@ -4762,7 +4761,6 @@ dependencies = [
  "soketto",
  "sp-api",
  "sp-authority-discovery",
- "sp-authorship",
  "sp-blockchain",
  "sp-consensus",
  "sp-consensus-babe",
@@ -5349,7 +5347,6 @@ dependencies = [
  "impl-trait-for-tuples",
  "parity-scale-codec",
  "scale-info",
- "sp-authorship",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -8270,16 +8267,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sc-consensus-uncles"
-version = "0.10.0-dev"
-dependencies = [
- "sc-client-api",
- "sp-authorship",
- "sp-runtime",
- "thiserror",
-]
-
-[[package]]
 name = "sc-executor"
 version = "0.10.0-dev"
 dependencies = [
@@ -9674,17 +9661,6 @@ dependencies = [
  "scale-info",
  "sp-api",
  "sp-application-crypto",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
-name = "sp-authorship"
-version = "4.0.0-dev"
-dependencies = [
- "async-trait",
- "parity-scale-codec",
- "sp-inherents",
  "sp-runtime",
  "sp-std",
 ]

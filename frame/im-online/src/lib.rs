@@ -607,10 +607,6 @@ impl<T: Config + pallet_authorship::Config>
 	fn note_author(author: ValidatorId<T>) {
 		Self::note_authorship(author);
 	}
-
-	fn note_uncle(author: ValidatorId<T>, _age: T::BlockNumber) {
-		Self::note_authorship(author);
-	}
 }
 
 impl<T: Config> Pallet<T> {

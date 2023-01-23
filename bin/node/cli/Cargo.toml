@@ -52,7 +52,6 @@ sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-core = { version = "7.0.0", path = "../../../primitives/core" }
 sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
-sp-authorship = { version = "4.0.0-dev", path = "../../../primitives/authorship" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 sp-keyring = { version = "7.0.0", path = "../../../primitives/keyring" }
 sp-keystore = { version = "0.13.0", path = "../../../primitives/keystore" }
@@ -71,7 +70,6 @@ sc-network = { version = "0.10.0-dev", path = "../../../client/network" }
 sc-network-common = { version = "0.10.0-dev", path = "../../../client/network/common" }
 sc-consensus-slots = { version = "0.10.0-dev", path = "../../../client/consensus/slots" }
 sc-consensus-babe = { version = "0.10.0-dev", path = "../../../client/consensus/babe" }
-sc-consensus-uncles = { version = "0.10.0-dev", path = "../../../client/consensus/uncles" }
 grandpa = { version = "0.10.0-dev", package = "sc-finality-grandpa", path = "../../../client/finality-grandpa" }
 sc-rpc = { version = "4.0.0-dev", path = "../../../client/rpc" }
 sc-basic-authorship = { version = "0.10.0-dev", path = "../../../client/basic-authorship" }
