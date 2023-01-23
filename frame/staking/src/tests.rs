@@ -3751,8 +3751,6 @@ fn test_multi_page_payout_stakers() {
 		let balance = 1000;
 		// Track the exposure of the validator and all nominators.
 		let mut total_exposure = balance;
-		// Track the exposure of the validator and the nominators that will get paid out.
-		let mut payout_exposure = balance;
 		// Create a validator:
 		bond_validator(11, 10, balance); // Default(64)
 		assert_eq!(Validators::<Test>::count(), 1);
@@ -3761,12 +3759,9 @@ fn test_multi_page_payout_stakers() {
 		for i in 0..100 {
 			let bond_amount = balance + i as Balance;
 			bond_nominator(1000 + i, 100 + i, bond_amount, vec![11]);
-			total_exposure += bond_amount;
 			// with multi page reward payout, payout exposure is same as total exposure.
-			payout_exposure += bond_amount;
+			total_exposure += bond_amount;
 		}
-
-		let payout_exposure_part = Perbill::from_rational(payout_exposure, total_exposure);
 
 		mock::start_active_era(1);
 		Staking::reward_by_ids(vec![(11, 1)]);
@@ -3776,7 +3771,6 @@ fn test_multi_page_payout_stakers() {
 
 		// compute and ensure the reward amount is greater than zero.
 		let payout = current_total_payout_for_duration(reward_time_per_era());
-		let actual_paid_out = payout_exposure_part * payout;
 		mock::start_active_era(2);
 
 		// verify the exposures are calculated correctly.
@@ -3793,20 +3787,29 @@ fn test_multi_page_payout_stakers() {
 		let pre_payout_total_issuance = Balances::total_issuance();
 		RewardOnUnbalanceWasCalled::set(false);
 
+		let controller_balance_before_p0_payout = Balances::free_balance(&10);
 		// Payout rewards for first exposure page
 		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1, 0));
 
+		let controller_balance_after_p0_payout = Balances::free_balance(&10);
+
 		// verify rewards have been paid out but still some left
 		assert!(Balances::total_issuance() > pre_payout_total_issuance);
-		assert!(Balances::total_issuance() < pre_payout_total_issuance + actual_paid_out);
+		assert!(Balances::total_issuance() < pre_payout_total_issuance + payout);
+
+		// verify the validator has been rewarded
+		assert!(controller_balance_after_p0_payout > controller_balance_before_p0_payout);
 
 		// Payout the second and last page of nominators
 		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1, 1));
 
+		// verify the validator was not rewarded the second time
+		assert_eq!(Balances::free_balance(&10), controller_balance_after_p0_payout);
+
 		// verify all rewards have been paid out
 		assert_eq_error_rate!(
 			Balances::total_issuance(),
-			pre_payout_total_issuance + actual_paid_out,
+			pre_payout_total_issuance + payout,
 			2
 		);
 		assert!(RewardOnUnbalanceWasCalled::get());
@@ -3844,7 +3847,6 @@ fn test_multi_page_payout_stakers() {
 
 			// compute and ensure the reward amount is greater than zero.
 			let payout = current_total_payout_for_duration(reward_time_per_era());
-			let actual_paid_out = payout_exposure_part * payout;
 			let pre_payout_total_issuance = Balances::total_issuance();
 
 			mock::start_active_era(i);
@@ -3852,7 +3854,7 @@ fn test_multi_page_payout_stakers() {
 			mock::make_all_reward_payment(i - 1);
 			assert_eq_error_rate!(
 				Balances::total_issuance(),
-				pre_payout_total_issuance + actual_paid_out,
+				pre_payout_total_issuance + payout,
 				2
 			);
 			assert!(RewardOnUnbalanceWasCalled::get());
