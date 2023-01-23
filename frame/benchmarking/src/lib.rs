@@ -1050,6 +1050,9 @@ macro_rules! impl_benchmark {
 			where T: frame_system::Config, $( $where_clause )*
 		{
 			fn benchmarks(extra: bool) -> $crate::Vec<$crate::BenchmarkMetadata> {
+				$($crate::validate_pov_mode!(
+					$pov_name: $( $storage = $pov_mode )*;
+				);)*
 				let mut all_names = $crate::vec![ $( stringify!($name).as_ref() ),* ];
 				if !extra {
 					let extra = [ $( stringify!($name_extra).as_ref() ),* ];
@@ -1507,6 +1510,37 @@ macro_rules! impl_benchmark_test_suite {
 			$(, $( $rest )* )?
 		);
 	}
+}
+
+/// Validates the passed `pov_mode`s.
+///
+/// Checks that:
+/// - a top-level `ignored` is exclusive
+/// - all modes are valid
+#[macro_export]
+macro_rules! validate_pov_mode {
+	() => {};
+	( $_bench:ident: ; ) => { };
+	( $_bench:ident: $_car:path = Ignored ; ) => { };
+	( $bench:ident: $_car:path = Ignored $( $storage:path = $_pov_mode:ident )+; ) => {
+		compile_error!(
+			concat!(concat!("`pov_mode = Ignored` is exclusive. Please remove the attribute from keys: ", $( stringify!($storage) )+), " on benchmark '", stringify!($bench), "'"));
+	};
+	( $bench:ident: $car:path = Measured $( $storage:path = $pov_mode:ident )*; ) => {
+		$crate::validate_pov_mode!(
+			$bench: $( $storage = $pov_mode )*;
+		);
+	};
+	( $bench:ident: $car:path = MaxEncodedLen $( $storage:path = $pov_mode:ident )*; ) => {
+		$crate::validate_pov_mode!(
+			$bench: $( $storage = $pov_mode )*;
+		);
+	};
+	( $bench:ident: $key:path = $unknown:ident $( $_storage:path = $_pov_mode:ident )*; ) => {
+		compile_error!(
+			concat!("Unknown pov_mode '", stringify!($unknown) ,"' for benchmark '", stringify!($bench), "' on key '", stringify!($key), "'. Must be one of: Ignored, Measured, MaxEncodedLen")
+		);
+	};
 }
 
 // Takes all arguments from `impl_benchmark_test_suite` and three additional arguments.
