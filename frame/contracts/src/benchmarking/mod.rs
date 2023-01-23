@@ -768,14 +768,14 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-		assert_eq!(T::Currency::total_balance(&beneficiary), 0u32.into());
+		assert_eq!(<T::Currency as Currency<_>>::total_balance(&beneficiary), 0u32.into());
 		assert_eq!(T::Currency::free_balance(&instance.account_id), Pallet::<T>::min_balance());
 		assert_ne!(T::Currency::reserved_balance(&instance.account_id), 0u32.into());
 	}: call(origin, instance.addr.clone(), 0u32.into(), Weight::MAX, None, vec![])
 	verify {
 		if r > 0 {
-			assert_eq!(T::Currency::total_balance(&instance.account_id), 0u32.into());
-			assert_eq!(T::Currency::total_balance(&beneficiary), Pallet::<T>::min_balance());
+			assert_eq!(<T::Currency as Currency<_>>::total_balance(&instance.account_id), 0u32.into());
+			assert_eq!(<T::Currency as Currency<_>>::total_balance(&beneficiary), Pallet::<T>::min_balance());
 		}
 	}
 
@@ -1507,12 +1507,12 @@ benchmarks! {
 		instance.set_balance(value * (r * API_BENCHMARK_BATCH_SIZE + 1).into());
 		let origin = RawOrigin::Signed(instance.caller.clone());
 		for account in &accounts {
-			assert_eq!(T::Currency::total_balance(account), 0u32.into());
+			assert_eq!(<T::Currency as Currency<_>>::total_balance(account), 0u32.into());
 		}
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 	verify {
 		for account in &accounts {
-			assert_eq!(T::Currency::total_balance(account), value);
+			assert_eq!(<T::Currency as Currency<_>>::total_balance(account), value);
 		}
 	}
 

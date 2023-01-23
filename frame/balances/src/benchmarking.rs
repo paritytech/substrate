@@ -239,10 +239,8 @@ benchmarks_instance_pallet! {
 				user
 			})
 			.collect();
-		dbg!(&who);
 	}: _(RawOrigin::Signed(caller.clone()), who)
 	verify {
-		println!("Done");
 		for i in 0 .. u {
 			let user: T::AccountId = account("old_user", i, SEED);
 			assert!(Balances::<T, I>::account(&user).flags.is_new_logic());
