@@ -22,12 +22,15 @@ use crate::{mock::*, Error};
 use frame_support::{
 	assert_noop, assert_ok,
 	traits::{
-		fungible::{Inspect as FunInspect, Mutate as FunMutate, hold::Inspect as InspectHold},
+		fungible::{hold::Inspect as InspectHold, Inspect as FunInspect, Mutate as FunMutate},
 		nonfungible::{Inspect, Transfer},
 	},
 };
 use sp_arithmetic::Perquintill;
-use sp_runtime::{Saturating, TokenError::{self, FundsUnavailable}};
+use sp_runtime::{
+	Saturating,
+	TokenError::{self, FundsUnavailable},
+};
 
 fn pot() -> u64 {
 	Balances::free_balance(&Nis::account_id())

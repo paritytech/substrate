@@ -19,10 +19,12 @@
 
 use crate::{self as pallet_nis, Perquintill, WithMaximumOf};
 
-use codec::{MaxEncodedLen, Encode, Decode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	ord_parameter_types, parameter_types,
-	traits::{ConstU16, ConstU32, ConstU64, OnFinalize, OnInitialize, StorageMapShim, fungible::Inspect},
+	traits::{
+		fungible::Inspect, ConstU16, ConstU32, ConstU64, OnFinalize, OnInitialize, StorageMapShim,
+	},
 	weights::Weight,
 	PalletId,
 };
@@ -94,7 +96,9 @@ impl pallet_balances::Config<Instance1> for Test {
 	type MaxHolds = ConstU32<1>;
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, Debug, TypeInfo)]
+#[derive(
+	Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, Debug, TypeInfo,
+)]
 pub enum HoldIdentifier {
 	Nis,
 }

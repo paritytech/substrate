@@ -350,7 +350,10 @@ pub trait Mutate<AccountId>:
 		// We want to make sure we can deposit the amount in advance. If we can't then something is
 		// very wrong.
 		ensure!(Self::can_deposit(asset, dest, amount, false) == Success, TokenError::CannotCreate);
-		ensure!(!on_hold || Self::hold_available(asset, reason, dest), TokenError::CannotCreateHold);
+		ensure!(
+			!on_hold || Self::hold_available(asset, reason, dest),
+			TokenError::CannotCreateHold
+		);
 
 		let amount = Self::decrease_balance_on_hold(asset, reason, source, amount, best_effort)?;
 		let actual = if on_hold {

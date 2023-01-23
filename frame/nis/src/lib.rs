@@ -71,8 +71,8 @@
 //!
 //! ## Terms
 //!
-//! - *Effective total issuance*: The total issuance of balances in the system, equal to the
-//!   active issuance plus the value of all outstanding receipts, less `IgnoredIssuance`.
+//! - *Effective total issuance*: The total issuance of balances in the system, equal to the active
+//!   issuance plus the value of all outstanding receipts, less `IgnoredIssuance`.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -161,8 +161,11 @@ pub mod pallet {
 	use frame_support::{
 		pallet_prelude::*,
 		traits::{
-			fungible::{self, Inspect as FunInspect, Mutate as FunMutate, Balanced as FunBalanced},
-			fungible::hold::{Inspect as FunHoldInspect, Mutate as FunHoldMutate},
+			fungible::{
+				self,
+				hold::{Inspect as FunHoldInspect, Mutate as FunHoldMutate},
+				Balanced as FunBalanced, Inspect as FunInspect, Mutate as FunMutate,
+			},
 			nonfungible::{Inspect as NftInspect, Transfer as NftTransfer},
 			tokens::KeepAlive::CanKill,
 			Defensive, DefensiveSaturating, OnUnbalanced,
@@ -179,7 +182,8 @@ pub mod pallet {
 
 	type BalanceOf<T> =
 		<<T as Config>::Currency as FunInspect<<T as frame_system::Config>::AccountId>>::Balance;
-	type DebtOf<T> = fungible::DebtOf<<T as frame_system::Config>::AccountId, <T as Config>::Currency>;
+	type DebtOf<T> =
+		fungible::DebtOf<<T as frame_system::Config>::AccountId, <T as Config>::Currency>;
 	type ReceiptRecordOf<T> = ReceiptRecord<
 		<T as frame_system::Config>::AccountId,
 		<T as frame_system::Config>::BlockNumber,
@@ -204,8 +208,10 @@ pub mod pallet {
 
 		/// Currency type that this works on.
 		type Currency: FunInspect<Self::AccountId, Balance = Self::CurrencyBalance>
-			+ FunMutate<Self::AccountId> + FunBalanced<Self::AccountId>
-			+ FunHoldInspect<Self::AccountId> + FunHoldMutate<Self::AccountId>;
+			+ FunMutate<Self::AccountId>
+			+ FunBalanced<Self::AccountId>
+			+ FunHoldInspect<Self::AccountId>
+			+ FunHoldMutate<Self::AccountId>;
 
 		/// The name for the reserve ID.
 		#[pallet::constant]
@@ -555,12 +561,8 @@ pub mod pallet {
 					let mut bid = Bid { amount, who: who.clone() };
 					let net = if queue_full {
 						sp_std::mem::swap(&mut q[0], &mut bid);
-						let _ = T::Currency::release(
-							&T::HoldReason::get(),
-							&bid.who,
-							bid.amount,
-							true,
-						);
+						let _ =
+							T::Currency::release(&T::HoldReason::get(), &bid.who, bid.amount, true);
 						Self::deposit_event(Event::<T>::BidDropped {
 							who: bid.who,
 							amount: bid.amount,
