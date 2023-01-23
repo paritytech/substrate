@@ -3807,11 +3807,7 @@ fn test_multi_page_payout_stakers() {
 		assert_eq!(Balances::free_balance(&10), controller_balance_after_p0_payout);
 
 		// verify all rewards have been paid out
-		assert_eq_error_rate!(
-			Balances::total_issuance(),
-			pre_payout_total_issuance + payout,
-			2
-		);
+		assert_eq_error_rate!(Balances::total_issuance(), pre_payout_total_issuance + payout, 2);
 		assert!(RewardOnUnbalanceWasCalled::get());
 
 		// verify all nominators of validator 11 are paid out, including the validator

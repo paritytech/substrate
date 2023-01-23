@@ -701,9 +701,9 @@ pub mod pallet {
 
 		/// Creates an entry to track validator reward has been claimed for a given era and page.
 		pub(crate) fn set_rewards_as_claimed(
-		era: EraIndex,
-		validator: &T::AccountId,
-		page: PageIndex,
+			era: EraIndex,
+			validator: &T::AccountId,
+			page: PageIndex,
 		) {
 			ClaimedRewards::<T>::mutate(era, validator, |pages| {
 				pages.push(page);
@@ -712,14 +712,14 @@ pub mod pallet {
 
 		/// Store exposure for elected validators at start of an era.
 		pub(crate) fn set_validator_exposure(
-		era: EraIndex,
-		validator: &T::AccountId,
-		exposure: Exposure<T::AccountId, BalanceOf<T>>,
+			era: EraIndex,
+			validator: &T::AccountId,
+			exposure: Exposure<T::AccountId, BalanceOf<T>>,
 		) {
 			<ErasStakers<T>>::insert(era, &validator, &exposure);
 
 			let (exposure_overview, exposure_pages) =
-			exposure.as_pages(T::MaxNominatorRewardedPerPage::get());
+				exposure.as_pages(T::MaxNominatorRewardedPerPage::get());
 
 			<ErasStakersOverview<T>>::insert(era, &validator, &exposure_overview);
 			exposure_pages.iter().enumerate().for_each(|(page, paged_exposure)| {
@@ -731,7 +731,6 @@ pub mod pallet {
 		pub(crate) fn set_total_stake(era: EraIndex, total_stake: BalanceOf<T>) {
 			<ErasTotalStake<T>>::insert(era, total_stake);
 		}
-
 	}
 
 	/// Indices of validators that have offended in the active era and whether they are currently
