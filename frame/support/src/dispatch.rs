@@ -434,13 +434,13 @@ impl PerDispatchClass<Weight> {
 	}
 
 	/// Add some weight to the given class. Saturates at the numeric bounds.
-	pub fn saturating_add(mut self, weight: Weight, class: DispatchClass) -> Self {
-		self.saturating_accrue(weight, class);
+	pub fn add(mut self, weight: Weight, class: DispatchClass) -> Self {
+		self.accrue(weight, class);
 		self
 	}
 
 	/// Increase the weight of the given class. Saturates at the numeric bounds.
-	pub fn saturating_accrue(&mut self, weight: Weight, class: DispatchClass) {
+	pub fn accrue(&mut self, weight: Weight, class: DispatchClass) {
 		self.get_mut(class).saturating_accrue(weight);
 	}
 
@@ -450,7 +450,7 @@ impl PerDispatchClass<Weight> {
 	}
 
 	/// Reduce the weight of the given class. Saturates at the numeric bounds.
-	pub fn saturating_reduce(&mut self, weight: Weight, class: DispatchClass) {
+	pub fn reduce(&mut self, weight: Weight, class: DispatchClass) {
 		self.get_mut(class).saturating_reduce(weight);
 	}
 }
