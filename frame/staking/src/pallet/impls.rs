@@ -210,10 +210,15 @@ impl<T: Config> Pallet<T> {
 		// This is how much validator + nominators are entitled to.
 		let validator_total_payout = validator_total_reward_part * era_payout;
 
-		let validator_prefs = Self::eras_validator_prefs(&era, &validator_stash);
-		// Validator first gets a cut off the top.
-		let validator_commission = validator_prefs.commission;
-		let validator_commission_payout = validator_commission * validator_total_payout;
+		// TODO(ank4n) add test and refactor this logic
+		let validator_commission_payout = if page == 0 {
+			let validator_prefs = Self::eras_validator_prefs(&era, &validator_stash);
+			// Validator first gets a cut off the top.
+			let validator_commission = validator_prefs.commission;
+			validator_commission * validator_total_payout
+		} else {
+			Zero::zero()
+		};
 
 		let validator_leftover_payout = validator_total_payout - validator_commission_payout;
 		// Now let's calculate how this is split to the validator.
@@ -266,7 +271,7 @@ impl<T: Config> Pallet<T> {
 		let payout_weight = if page == 0 {
 			T::WeightInfo::payout_stakers_alive_staked(nominator_payout_count)
 		} else {
-			T::WeightInfo::payout_stakers_alive_staked_exclude_validator(nominator_payout_count)
+			T::WeightInfo::payout_stakers_nominators_only(nominator_payout_count)
 		};
 
 		Ok(Some(payout_weight).into())

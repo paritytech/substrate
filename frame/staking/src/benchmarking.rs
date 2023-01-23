@@ -614,11 +614,11 @@ benchmarks! {
 		}
 	}
 
-	payout_stakers_alive_staked_exclude_validator {
-		let n in 0 .. T::MaxNominatorRewardedPerPage::get() as u32;
+	payout_stakers_nominators_only {
+		let n in 1 .. T::MaxNominatorRewardedPerPage::get() as u32;
 		// create nominators between MaxNominatorRewardedPerPage+1 .. =2 * MaxNominatorRewardedPerPage
-		let nominator_lower_bound = T::MaxNominatorRewardedPerPage::get() + 1;
-		let nominator_upper_bound = 2 * T::MaxNominatorRewardedPerPage::get() + 1;
+		let nominator_lower_bound = T::MaxNominatorRewardedPerPage::get();
+		let nominator_upper_bound = 2 * T::MaxNominatorRewardedPerPage::get();
 
 		let (validator, nominators) = create_validator_with_nominators::<T>(
 			nominator_lower_bound + n,
@@ -638,13 +638,16 @@ benchmarks! {
 			let balance = T::Currency::free_balance(stash);
 			nominator_balances_before.push(balance);
 		}
+
 	}: payout_stakers(RawOrigin::Signed(caller), validator.clone(), current_era, 1)
 	verify {
 		let balance_after = T::Currency::free_balance(&validator);
+
 		ensure!(
 			balance_before == balance_after,
-			"Balance of validator stash should have stayed same after payout since its not page 0.",
+			"Validator should not have received payout for pages other than 0.",
 		);
+
 		let mut nominator_payout_count = 0;
 		for ((stash, _), balance_before) in nominators.iter().zip(nominator_balances_before.iter()) {
 			let balance_after = T::Currency::free_balance(stash);
@@ -652,6 +655,7 @@ benchmarks! {
 				nominator_payout_count += 1;
 			}
 		}
+
 		ensure!(
 				nominator_payout_count == n,
 				"n nominators must have been paid.",
