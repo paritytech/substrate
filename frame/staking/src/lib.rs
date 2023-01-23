@@ -228,8 +228,8 @@
 //! validator, proportional to the value staked behind the validator (_i.e._ dividing the
 //! [`own`](Exposure::own) or [`others`](Exposure::others) by [`total`](Exposure::total) in
 //! [`Exposure`]). Note that payouts are made in pages with each page capped at
-//! [`T::MaxNominatorRewardedPerPage`] nominators. The distribution of nominators across pages are
-//! unsorted and depends on the election result provided by [`T::ElectionProvider`].
+//! [`Config::MaxNominatorRewardedPerPage`] nominators. The distribution of nominators across pages are
+//! unsorted and depends on the election result provided by [`Config::ElectionProvider`].
 //!
 //! All entities who receive a reward have the option to choose their reward destination through the
 //! [`Payee`] storage item (see
