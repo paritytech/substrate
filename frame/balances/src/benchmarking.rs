@@ -248,11 +248,9 @@ mod benchmarks {
 		assert_eq!(Balances::<T, I>::free_balance(&user), ed + ed);
 	}
 
-	upgrade_accounts {
+	#[benchmark]
+	fn upgrade_accounts(u: Linear<1, 1_000>) {
 		let caller: T::AccountId = whitelisted_caller();
-
-		let u in 1 .. 1_000;
-
 		let who = (0 .. u).into_iter()
 			.map(|i| -> T::AccountId {
 				let user = account("old_user", i, SEED);
@@ -273,8 +271,10 @@ mod benchmarks {
 				user
 			})
 			.collect();
-	}: _(RawOrigin::Signed(caller.clone()), who)
-	verify {
+
+		#[extrinsic_call]
+		_(RawOrigin::Signed(caller.clone()), who);
+
 		for i in 0 .. u {
 			let user: T::AccountId = account("old_user", i, SEED);
 			assert!(Balances::<T, I>::account(&user).flags.is_new_logic());
