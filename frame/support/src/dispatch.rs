@@ -3703,7 +3703,7 @@ mod per_dispatch_class_tests {
 	use DispatchClass::*;
 
 	#[test]
-	fn saturating_add_works() {
+	fn add_works() {
 		let a = PerDispatchClass {
 			normal: (5, 10).into(),
 			operational: (20, 30).into(),
@@ -3711,9 +3711,9 @@ mod per_dispatch_class_tests {
 		};
 		assert_eq!(
 			a.clone()
-				.saturating_add((20, 5).into(), Normal)
-				.saturating_add((10, 10).into(), Operational)
-				.saturating_add((u64::MAX, 3).into(), Mandatory),
+				.add((20, 5).into(), Normal)
+				.add((10, 10).into(), Operational)
+				.add((u64::MAX, 3).into(), Mandatory),
 			PerDispatchClass {
 				normal: (25, 15).into(),
 				operational: (30, 40).into(),
@@ -3721,9 +3721,9 @@ mod per_dispatch_class_tests {
 			}
 		);
 		let b = a
-			.saturating_add(Weight::MAX, Normal)
-			.saturating_add(Weight::MAX, Operational)
-			.saturating_add(Weight::MAX, Mandatory);
+			.add(Weight::MAX, Normal)
+			.add(Weight::MAX, Operational)
+			.add(Weight::MAX, Mandatory);
 		assert_eq!(
 			b,
 			PerDispatchClass {
@@ -3736,55 +3736,55 @@ mod per_dispatch_class_tests {
 	}
 
 	#[test]
-	fn saturating_accrue_works() {
+	fn accrue_works() {
 		let mut a = PerDispatchClass::default();
 
-		a.saturating_accrue((10, 15).into(), Normal);
+		a.accrue((10, 15).into(), Normal);
 		assert_eq!(a.normal, (10, 15).into());
 		assert_eq!(a.total(), (10, 15).into());
 
-		a.saturating_accrue((20, 25).into(), Operational);
+		a.accrue((20, 25).into(), Operational);
 		assert_eq!(a.operational, (20, 25).into());
 		assert_eq!(a.total(), (30, 40).into());
 
-		a.saturating_accrue((30, 35).into(), Mandatory);
+		a.accrue((30, 35).into(), Mandatory);
 		assert_eq!(a.mandatory, (30, 35).into());
 		assert_eq!(a.total(), (60, 75).into());
 
-		a.saturating_accrue((u64::MAX, 10).into(), Operational);
+		a.accrue((u64::MAX, 10).into(), Operational);
 		assert_eq!(a.operational, (u64::MAX, 35).into());
 		assert_eq!(a.total(), (u64::MAX, 85).into());
 
-		a.saturating_accrue((10, u64::MAX).into(), Normal);
+		a.accrue((10, u64::MAX).into(), Normal);
 		assert_eq!(a.normal, (20, u64::MAX).into());
 		assert_eq!(a.total(), Weight::MAX);
 	}
 
 	#[test]
-	fn saturating_reduce_works() {
+	fn reduce_works() {
 		let mut a = PerDispatchClass {
 			normal: (10, u64::MAX).into(),
 			mandatory: (u64::MAX, 10).into(),
 			operational: (20, 20).into(),
 		};
 
-		a.saturating_reduce((5, 100).into(), Normal);
+		a.reduce((5, 100).into(), Normal);
 		assert_eq!(a.normal, (5, u64::MAX - 100).into());
 		assert_eq!(a.total(), (u64::MAX, u64::MAX - 70).into());
 
-		a.saturating_reduce((15, 5).into(), Operational);
+		a.reduce((15, 5).into(), Operational);
 		assert_eq!(a.operational, (5, 15).into());
 		assert_eq!(a.total(), (u64::MAX, u64::MAX - 75).into());
 
-		a.saturating_reduce((50, 0).into(), Mandatory);
+		a.reduce((50, 0).into(), Mandatory);
 		assert_eq!(a.mandatory, (u64::MAX - 50, 10).into());
 		assert_eq!(a.total(), (u64::MAX - 40, u64::MAX - 75).into());
 
-		a.saturating_reduce((u64::MAX, 100).into(), Operational);
+		a.reduce((u64::MAX, 100).into(), Operational);
 		assert!(a.operational.is_zero());
 		assert_eq!(a.total(), (u64::MAX - 45, u64::MAX - 90).into());
 
-		a.saturating_reduce((5, u64::MAX).into(), Normal);
+		a.reduce((5, u64::MAX).into(), Normal);
 		assert!(a.normal.is_zero());
 		assert_eq!(a.total(), (u64::MAX - 50, 10).into());
 	}
