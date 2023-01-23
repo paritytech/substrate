@@ -43,6 +43,9 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type Value<T: Config> = StorageValue<Value = u32, QueryKind = OptionQuery>;
 
+	#[pallet::storage]
+	pub(crate) type Value2<T: Config> = StorageValue<Value = u32, QueryKind = OptionQuery>;
+
 	/// A value without a MEL bound.
 	#[pallet::storage]
 	#[pallet::unbounded]

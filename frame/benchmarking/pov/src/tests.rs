@@ -43,6 +43,18 @@ fn reading_twice_is_the_same_as_once() {
 	assert_eq!(w, w2, "Reading twice is the same as once");
 }
 
+#[test]
+fn storage_single_value_ignored_read_no_pov() {
+	let w = W::storage_single_value_ignored_read();
+	assert_eq!(w.proof_size(), 0, "Ignored PoV does not result in PoV");
+}
+
+#[test]
+fn storage_single_value_ignored_some_read_has_pov() {
+	let w = W::storage_single_value_ignored_some_read();
+	assert!(w.proof_size() != 0, "Ignored some does result in PoV");
+}
+
 /// Reading the same value from a map does not increase the PoV.
 #[test]
 fn storage_1m_map_one_entry_repeated_read_const() {

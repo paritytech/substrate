@@ -1136,6 +1136,60 @@ mod test {
 	}
 
 	#[test]
+	fn pov_mode_ignored_linear_works() {
+		let mut results = Vec::new();
+		for i in 0..5 {
+			results.push(BenchmarkResult {
+				components: vec![(BenchmarkParameter::s, i)],
+				extrinsic_time: 0,
+				storage_root_time: 0,
+				reads: 123,
+				repeat_reads: 777,
+				writes: 888,
+				repeat_writes: 999,
+				proof_size: i * 1024,
+				keys: vec![("ignored".as_bytes().to_vec(), i, 1, false)],
+			})
+		}
+
+		let data = BenchmarkBatchSplitResults {
+			pallet: b"scheduler".to_vec(),
+			instance: b"instance".to_vec(),
+			benchmark: b"first_benchmark".to_vec(),
+			time_results: results.clone(),
+			db_results: results,
+		};
+
+		let storage_info = vec![StorageInfo {
+			pallet_name: b"scheduler".to_vec(),
+			storage_name: b"ignored".to_vec(),
+			prefix: b"ignored".to_vec(),
+			max_values: None,
+			max_size: Some(1 << 22), // MEL of 4 MiB
+		}];
+
+		let mapped_results = map_results(
+			&[data],
+			&storage_info,
+			&Default::default(),
+			test_pov_mode(),
+			PovEstimationMode::Ignored,
+			&AnalysisChoice::default(),
+			&AnalysisChoice::MedianSlopes,
+			1_000_000,
+			0,
+		)
+		.unwrap();
+		let result =
+			mapped_results.get(&("scheduler".to_string(), "instance".to_string())).unwrap()[0]
+				.clone();
+
+		let base = result.base_calculated_proof_size;
+		assert!(result.component_calculated_proof_size.is_empty(), "There is no slope");
+		assert_eq!(base, 0);
+	}
+
+	#[test]
 	fn map_results_works() {
 		let mapped_results = map_results(
 			&[
