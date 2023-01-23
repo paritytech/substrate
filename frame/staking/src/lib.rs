@@ -735,6 +735,8 @@ impl<AccountId, Balance: Default + HasCompact> Default for Exposure<AccountId, B
 impl<AccountId: Clone, Balance: HasCompact + AtLeast32BitUnsigned + Copy>
 	Exposure<AccountId, Balance>
 {
+	/// Splits an `Exposure` into `ExposureOverview` and multiple chunks of `IndividualExposure`
+	/// with each chunk having maximum of `page_size` elements.
 	fn as_pages(
 		&self,
 		page_size: u32,
