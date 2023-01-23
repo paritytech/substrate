@@ -143,7 +143,6 @@ fn create_account_extrinsics(
 							BalancesCall::set_balance {
 								who: AccountId::from(a.public()).into(),
 								new_free: 0,
-								new_reserved: 0,
 							}
 							.into(),
 						),
@@ -159,7 +158,6 @@ fn create_account_extrinsics(
 							BalancesCall::set_balance {
 								who: AccountId::from(a.public()).into(),
 								new_free: 1_000_000 * DOLLARS,
-								new_reserved: 0,
 							}
 							.into(),
 						),
