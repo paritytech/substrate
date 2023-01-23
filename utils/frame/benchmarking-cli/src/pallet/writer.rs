@@ -580,7 +580,8 @@ pub(crate) fn process_storage_results(
 				},
 				None => None,
 			};
-			let is_all_ignored = pov_modes.get(&("ALL".to_string(), "ALL".to_string())) == Some(&PovEstimationMode::Ignored);
+			let is_all_ignored = pov_modes.get(&("ALL".to_string(), "ALL".to_string())) ==
+				Some(&PovEstimationMode::Ignored);
 			if is_all_ignored && override_pov_mode != Some(&PovEstimationMode::Ignored) {
 				panic!("The syntax currently does not allow to exclude single keys from a top-level `Ignored` pov-mode.");
 			}
