@@ -43,7 +43,7 @@ use codec::{Codec, Decode, Encode};
 use scale_info::TypeInfo;
 use sp_application_crypto::RuntimeAppPublic;
 use sp_core::H256;
-use sp_runtime::traits::Hash;
+use sp_runtime::traits::{Hash, NumberFor};
 use sp_std::prelude::*;
 
 /// Key type for BEEFY module.
@@ -201,6 +201,9 @@ sp_api::decl_runtime_apis! {
 	/// API necessary for BEEFY voters.
 	pub trait BeefyApi
 	{
+		/// Return the block number where BEEFY consensus is enabled/started
+		fn beefy_genesis() -> Option<NumberFor<Block>>;
+
 		/// Return the current active BEEFY validator set
 		fn validator_set() -> Option<ValidatorSet<crypto::AuthorityId>>;
 	}

@@ -252,6 +252,10 @@ macro_rules! create_test_api {
 			}
 			sp_api::mock_impl_runtime_apis! {
 				impl BeefyApi<Block> for RuntimeApi {
+					fn beefy_genesis() -> Option<NumberFor<Block>> {
+						Some(sp_runtime::traits::One::one())
+					}
+
 					fn validator_set() -> Option<BeefyValidatorSet> {
 						BeefyValidatorSet::new(make_beefy_ids(&[$($inits),+]), 0)
 					}

@@ -49,6 +49,7 @@ pub use pallet::*;
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::BlockNumberFor;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -91,15 +92,27 @@ pub mod pallet {
 	pub(super) type NextAuthorities<T: Config> =
 		StorageValue<_, BoundedVec<T::BeefyId, T::MaxAuthorities>, ValueQuery>;
 
+	/// Block number where BEEFY consensus is enabled/started
+	#[pallet::storage]
+	#[pallet::getter(fn genesis_block)]
+	pub(super) type GenesisBlock<T: Config> =
+		StorageValue<_, Option<BlockNumberFor<T>>, ValueQuery>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
+		/// Initial set of BEEFY authorities.
 		pub authorities: Vec<T::BeefyId>,
+		/// Block number where BEEFY consensus should start.
+		/// Should match the session where initial authorities are active.
+		/// *Note:* Ideally use block number where GRANDPA authorities are changed,
+		/// to guarantee the client gets a finality notification for exactly this block.
+		pub genesis_block: Option<BlockNumberFor<T>>,
 	}
 
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { authorities: Vec::new() }
+			Self { authorities: Vec::new(), genesis_block: None }
 		}
 	}
 
@@ -110,6 +123,7 @@ pub mod pallet {
 				// we panic here as runtime maintainers can simply reconfigure genesis and restart
 				// the chain easily
 				.expect("Authorities vec too big");
+			<GenesisBlock<T>>::put(&self.genesis_block);
 		}
 	}
 }
