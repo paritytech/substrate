@@ -19,13 +19,13 @@
 //! Main entry point of the sc-network crate.
 //!
 //! There are two main structs in this module: [`NetworkWorker`] and [`NetworkService`].
-//! The [`NetworkWorker`] *is* the network and implements the `Future` trait. It must be polled in
-//! order for the network to advance.
+//! The [`NetworkWorker`] *is* the network. In order for the network to advance
+//! the [`NetworkWorker::next_action`] must be called in a loop.
 //! The [`NetworkService`] is merely a shared version of the [`NetworkWorker`]. You can obtain an
 //! `Arc<NetworkService>` by calling [`NetworkWorker::service`].
 //!
 //! The methods of the [`NetworkService`] are implemented by sending a message over a channel,
-//! which is then processed by [`NetworkWorker::poll`].
+//! which is then processed by [`NetworkWorker::next_action`].
 
 use crate::{
 	behaviour::{self, Behaviour, BehaviourOut},
