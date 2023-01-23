@@ -977,7 +977,7 @@ async fn should_initialize_voter_at_genesis() {
 	net.peer(0).client().as_client().finalize_block(hashes[13], None).unwrap();
 
 	let api = TestApi::with_validator_set(&validator_set);
-	// load persistent state - nothing in DB, should init at session boundary
+	// load persistent state - nothing in DB, should init at genesis
 	let persisted_state = voter_init_setup(&mut net, &mut finality, &api).unwrap();
 
 	// Test initialization at session boundary.
@@ -998,6 +998,54 @@ async fn should_initialize_voter_at_genesis() {
 			.voting_oracle()
 			.voting_target(persisted_state.best_beefy_block(), 13),
 		Some(1)
+	);
+
+	// verify state also saved to db
+	assert!(verify_persisted_version(&*backend));
+	let state = load_persistent(&*backend).unwrap().unwrap();
+	assert_eq!(state, persisted_state);
+}
+
+#[tokio::test]
+async fn should_initialize_voter_at_custom_genesis() {
+	let keys = &[BeefyKeyring::Alice];
+	let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
+	let mut net = BeefyTestNet::new(1);
+	let backend = net.peer(0).client().as_backend();
+	// custom pallet genesis is block number 7
+	let custom_pallet_genesis = 7;
+	let api = TestApi::new(custom_pallet_genesis, &validator_set, GOOD_MMR_ROOT);
+
+	// push 15 blocks with `AuthorityChange` digests every 10 blocks
+	let hashes = net.generate_blocks_and_sync(15, 10, &validator_set, false).await;
+
+	let mut finality = net.peer(0).client().as_client().finality_notification_stream().fuse();
+
+	// finalize 3, 5, 8 without justifications
+	net.peer(0).client().as_client().finalize_block(hashes[3], None).unwrap();
+	net.peer(0).client().as_client().finalize_block(hashes[5], None).unwrap();
+	net.peer(0).client().as_client().finalize_block(hashes[8], None).unwrap();
+
+	// load persistent state - nothing in DB, should init at genesis
+	let persisted_state = voter_init_setup(&mut net, &mut finality, &api).unwrap();
+
+	// Test initialization at session boundary.
+	// verify voter initialized with single session starting at block `custom_pallet_genesis` (7)
+	let sessions = persisted_state.voting_oracle().sessions();
+	assert_eq!(sessions.len(), 1);
+	assert_eq!(sessions[0].session_start(), custom_pallet_genesis);
+	let rounds = persisted_state.active_round().unwrap();
+	assert_eq!(rounds.session_start(), custom_pallet_genesis);
+	assert_eq!(rounds.validator_set_id(), validator_set.id());
+
+	// verify next vote target is mandatory block 7
+	assert_eq!(persisted_state.best_beefy_block(), 0);
+	assert_eq!(persisted_state.best_grandpa_block(), 8);
+	assert_eq!(
+		persisted_state
+			.voting_oracle()
+			.voting_target(persisted_state.best_beefy_block(), 13),
+		Some(custom_pallet_genesis)
 	);
 
 	// verify state also saved to db
@@ -1120,4 +1168,38 @@ async fn should_initialize_voter_at_latest_finalized() {
 	assert!(verify_persisted_version(&*backend));
 	let state = load_persistent(&*backend).unwrap().unwrap();
 	assert_eq!(state, persisted_state);
+}
+
+#[tokio::test]
+async fn beefy_finalizing_after_pallet_genesis() {
+	sp_tracing::try_init_simple();
+
+	let peers = [BeefyKeyring::Alice, BeefyKeyring::Bob];
+	let validator_set = ValidatorSet::new(make_beefy_ids(&peers), 0).unwrap();
+	let session_len = 10;
+	let min_block_delta = 1;
+	let pallet_genesis = 15;
+
+	let mut net = BeefyTestNet::new(2);
+
+	let api = Arc::new(TestApi::new(pallet_genesis, &validator_set, GOOD_MMR_ROOT));
+	let beefy_peers = peers.iter().enumerate().map(|(id, key)| (id, key, api.clone())).collect();
+	tokio::spawn(initialize_beefy(&mut net, beefy_peers, min_block_delta));
+
+	// push 42 blocks including `AuthorityChange` digests every 10 blocks.
+	let hashes = net.generate_blocks_and_sync(42, session_len, &validator_set, true).await;
+
+	let net = Arc::new(Mutex::new(net));
+	let peers = peers.into_iter().enumerate();
+
+	// Minimum BEEFY block delta is 1.
+
+	// GRANDPA finalize blocks leading up to BEEFY pallet genesis -> BEEFY should finalize nothing.
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &hashes[1..14], &[]).await;
+
+	// GRANDPA finalize block #16 -> BEEFY should finalize #15 (genesis mandatory) and #16.
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &[hashes[16]], &[15, 16]).await;
+
+	// GRANDPA finalize #21 -> BEEFY finalize #20 (mandatory) and #21
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &[hashes[21]], &[20, 21]).await;
 }
