@@ -614,6 +614,49 @@ benchmarks! {
 		}
 	}
 
+	payout_stakers_alive_staked_exclude_validator {
+		let n in 0 .. T::MaxNominatorRewardedPerPage::get() as u32;
+
+		// create nominators between MaxNominatorRewardedPerPage .. 2 * MaxNominatorRewardedPerPage
+		let (validator, nominators) = create_validator_with_nominators::<T>(
+			T::MaxNominatorRewardedPerPage::get() + n,
+			2*T::MaxNominatorRewardedPerPage::get() as u32,
+			false,
+			RewardDestination::Staked,
+		)?;
+
+		let current_era = CurrentEra::<T>::get().unwrap();
+		// set the commission for this particular era as well.
+		<ErasValidatorPrefs<T>>::insert(current_era, validator.clone(), <Staking<T>>::validators(&validator));
+
+		let caller = whitelisted_caller();
+		let balance_before = T::Currency::free_balance(&validator);
+		let mut nominator_balances_before = Vec::new();
+		for (stash, _) in &nominators {
+			let balance = T::Currency::free_balance(stash);
+			nominator_balances_before.push(balance);
+		}
+	}: payout_stakers(RawOrigin::Signed(caller), validator.clone(), current_era, 1)
+	verify {
+		let balance_after = T::Currency::free_balance(&validator);
+		ensure!(
+			balance_before == balance_after,
+			"Balance of validator stash should have stayed same after payout since its not page 0.",
+		);
+		let mut nominator_payout_count = 0;
+		for ((stash, _), balance_before) in nominators.iter().zip(nominator_balances_before.iter()) {
+			let balance_after = T::Currency::free_balance(stash);
+			if balance_before < &balance_after {
+				nominator_payout_count += 1;
+			}
+		}
+		ensure!(
+				nominator_payout_count == n,
+				"n nominators must have been paid.",
+			);
+	}
+
+
 	rebond {
 		let l in 1 .. T::MaxUnlockingChunks::get() as u32;
 

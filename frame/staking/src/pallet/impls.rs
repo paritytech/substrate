@@ -262,7 +262,14 @@ impl<T: Config> Pallet<T> {
 
 		T::Reward::on_unbalanced(total_imbalance);
 		debug_assert!(nominator_payout_count <= T::MaxNominatorRewardedPerPage::get());
-		Ok(Some(T::WeightInfo::payout_stakers_alive_staked(nominator_payout_count)).into())
+
+		let payout_weight = if page == 0 {
+			T::WeightInfo::payout_stakers_alive_staked(nominator_payout_count)
+		} else {
+			T::WeightInfo::payout_stakers_alive_staked_exclude_validator(nominator_payout_count)
+		};
+
+		Ok(Some(payout_weight).into())
 	}
 
 	/// Update the ledger for a controller.
