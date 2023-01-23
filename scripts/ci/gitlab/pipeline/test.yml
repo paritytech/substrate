@@ -14,7 +14,7 @@ find-fail-ci-phrase:
   script:
     - set +e
     - rg --line-number --hidden --type rust --glob '!{.git,target}' "$ASSERT_REGEX" .; exit_status=$?
-    - if [ $exit_status -eq 0 ]; then 
+    - if [ $exit_status -eq 0 ]; then
         echo "$ASSERT_REGEX was found, exiting with 1";
         exit 1;
       else
@@ -417,9 +417,14 @@ cargo-check-each-crate:
   parallel: 2
 
 publish-crates-locally:
+  stage:                           test
   extends:
     - .test-refs
     - .crates-publishing-template
+  # When lots of crates are taken into account (for example on master where all crates are tested)
+  # the job might take a long time, as evidenced by:
+  # https://gitlab.parity.io/parity/mirrors/substrate/-/jobs/2269364
+  timeout:                         4h
   script:
     - rusty-cachier snapshot create
     - git clone
