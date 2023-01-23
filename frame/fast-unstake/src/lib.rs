@@ -86,7 +86,7 @@ pub mod pallet {
 		traits::{Defensive, ReservableCurrency, StorageVersion},
 	};
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::{traits::Zero, DispatchResult};
+use sp_runtime::{traits::Zero, DispatchResult};
 	use sp_staking::{EraIndex, StakingInterface};
 	use sp_std::{prelude::*, vec::Vec};
 	pub use weights::WeightInfo;
@@ -212,6 +212,29 @@ pub mod pallet {
 			}
 
 			Self::do_on_idle(remaining_weight)
+		}
+
+		fn integrity_test() {
+			sp_io::TestExternalities::new_empty().execute_with(|| {
+				// ensure that the value of `ErasToCheckPerBlock` is less than
+				// `T::MaxErasToCheckPerBlock`.
+				assert!(
+					ErasToCheckPerBlock::<T>::get() <= T::MaxErasToCheckPerBlock::get(),
+					"the value of `ErasToCheckPerBlock` is greater than `T::MaxErasToCheckPerBlock`",
+				);
+			});
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_n: T::BlockNumber) -> Result<(), &'static str> {
+			// ensure that the value of `ErasToCheckPerBlock` is less than
+			// `T::MaxErasToCheckPerBlock`.
+			assert!(
+				ErasToCheckPerBlock::<T>::get() <= T::MaxErasToCheckPerBlock::get(),
+				"the value of `ErasToCheckPerBlock` is greater than `T::MaxErasToCheckPerBlock`",
+			);
+
+			Ok(())
 		}
 	}
 
