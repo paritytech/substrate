@@ -16,8 +16,8 @@
 // limitations under the License.
 
 use crate::{
-	build_executor, full_extensions, rpc_err_handler, state_machine_call_with_proof, LiveState,
-	SharedParams, State, LOG_TARGET,
+	build_executor, full_extensions, rpc_err_handler, state_machine_call_with_proof, Command,
+	LiveState, SharedParams, State, LOG_TARGET,
 };
 use parity_scale_codec::Encode;
 use sc_executor::sp_wasm_interface::HostFunctions;
@@ -87,7 +87,8 @@ impl ExecuteBlockCmd {
 
 pub(crate) async fn execute_block<Block, HostFns>(
 	shared: SharedParams,
-	command: ExecuteBlockCmd,
+	command: Command,
+	cmd: ExecuteBlockCmd,
 ) -> sc_cli::Result<()>
 where
 	Block: BlockT + serde::de::DeserializeOwned,
@@ -99,10 +100,10 @@ where
 	HostFns: HostFunctions,
 {
 	let executor = build_executor::<HostFns>(&shared);
-	let ext = command.state.into_ext::<Block, HostFns>(&shared, &executor, None).await?;
+	let ext = cmd.state.into_ext::<Block, HostFns>(&shared, &command, &executor, None).await?;
 
 	// get the block number associated with this block.
-	let block_ws_uri = command.block_ws_uri::<Block>();
+	let block_ws_uri = cmd.block_ws_uri::<Block>();
 	let rpc = ws_client(&block_ws_uri).await?;
 	let next_hash = next_hash_of::<Block>(&rpc, ext.block_hash).await?;
 
@@ -126,7 +127,7 @@ where
 	// for now, hardcoded for the sake of simplicity. We might customize them one day.
 	let state_root_check = false;
 	let signature_check = false;
-	let payload = (block.clone(), state_root_check, signature_check, command.try_state).encode();
+	let payload = (block.clone(), state_root_check, signature_check, cmd.try_state).encode();
 
 	let _ = state_machine_call_with_proof::<Block, HostFns>(
 		&ext,

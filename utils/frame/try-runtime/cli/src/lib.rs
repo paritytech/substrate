@@ -607,6 +607,7 @@ impl State {
 	pub(crate) async fn into_ext<Block: BlockT + DeserializeOwned, HostFns: HostFunctions>(
 		&self,
 		shared: &SharedParams,
+		command: &Command,
 		executor: &WasmExecutor<HostFns>,
 		state_snapshot: Option<SnapshotConfig>,
 	) -> sc_cli::Result<RemoteExternalities<Block>>
@@ -706,9 +707,13 @@ impl State {
 			}
 		}
 
-		// whatever runtime we have in store now must have been compiled with try-runtime feature.
-		if !ensure_try_runtime::<Block, HostFns>(&executor, &mut ext) {
-			return Err("given runtime is NOT compiled with try-runtime feature!".into())
+		// ignore the `create-snapshot` command
+		if !matches!(command, Command::CreateSnapshot(_)) {
+			// whatever runtime we have in store now must have been compiled with try-runtime
+			// feature.
+			if !ensure_try_runtime::<Block, HostFns>(&executor, &mut ext) {
+				return Err("given runtime is NOT compiled with try-runtime feature!".into())
+			}
 		}
 
 		Ok(ext)
@@ -731,30 +736,35 @@ impl TryRuntimeCmd {
 			Command::OnRuntimeUpgrade(ref cmd) =>
 				commands::on_runtime_upgrade::on_runtime_upgrade::<Block, HostFns>(
 					self.shared.clone(),
+					self.command.clone(),
 					cmd.clone(),
 				)
 				.await,
 			Command::OffchainWorker(cmd) =>
 				commands::offchain_worker::offchain_worker::<Block, HostFns>(
 					self.shared.clone(),
+					self.command.clone(),
 					cmd.clone(),
 				)
 				.await,
 			Command::ExecuteBlock(cmd) =>
 				commands::execute_block::execute_block::<Block, HostFns>(
 					self.shared.clone(),
+					self.command.clone(),
 					cmd.clone(),
 				)
 				.await,
 			Command::FollowChain(cmd) =>
 				commands::follow_chain::follow_chain::<Block, HostFns>(
 					self.shared.clone(),
+					self.command.clone(),
 					cmd.clone(),
 				)
 				.await,
 			Command::CreateSnapshot(cmd) =>
 				commands::create_snapshot::create_snapshot::<Block, HostFns>(
 					self.shared.clone(),
+					self.command.clone(),
 					cmd.clone(),
 				)
 				.await,
