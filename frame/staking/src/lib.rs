@@ -114,7 +114,7 @@
 //!
 //! Rewards must be claimed for each era before it gets too old by `$HISTORY_DEPTH` using the
 //! `payout_stakers` call. Any account can call `payout_stakers`, which pays the reward to the
-//! validator as well as its nominators. Only the [`Config::MaxNominatorRewardedPerValidator`]
+//! validator as well as its nominators. Only the [`Config::MaxNominatorRewardedPerPage`]
 //! biggest stakers can claim their reward. This is to limit the i/o cost to mutate storage for each
 //! nominator's account.
 //!
@@ -224,13 +224,12 @@
 //! The validator can declare an amount, named [`commission`](ValidatorPrefs::commission), that does
 //! not get shared with the nominators at each reward payout through its [`ValidatorPrefs`]. This
 //! value gets deducted from the total reward that is paid to the validator and its nominators. The
-//! remaining portion is split pro rata among the validator and the top
-//! [`Config::MaxNominatorRewardedPerValidator`] nominators that nominated the validator,
-//! proportional to the value staked behind the validator (_i.e._ dividing the
+//! remaining portion is split pro rata among the validator and the nominators that nominated the
+//! validator, proportional to the value staked behind the validator (_i.e._ dividing the
 //! [`own`](Exposure::own) or [`others`](Exposure::others) by [`total`](Exposure::total) in
-//! [`Exposure`]). Note that the pro rata division of rewards uses the total exposure behind the
-//! validator, *not* just the exposure of the validator and the top
-//! [`Config::MaxNominatorRewardedPerValidator`] nominators.
+//! [`Exposure`]). Note that payouts are made in pages with each page capped at
+//! [`T::MaxNominatorRewardedPerPage`] nominators. The distribution of nominators across pages are
+//! unsorted and depends on the election result provided by [`T::ElectionProvider`].
 //!
 //! All entities who receive a reward have the option to choose their reward destination through the
 //! [`Payee`] storage item (see
