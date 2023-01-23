@@ -310,7 +310,6 @@ pub trait Mutate<AccountId>:
 
 	/// Transfer some `amount` of free balance from `source` to become owned by `dest` but on hold
 	/// for `reason`.
-	/// for `reason`.
 	///
 	/// If `best_effort` is `true`, then an amount less than `amount` may be transferred without
 	/// error.

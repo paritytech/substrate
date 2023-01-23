@@ -825,11 +825,10 @@ pub mod pallet {
 			ensure!(owner == who, Error::<T>::NotOwner);
 
 			// Unreserve and transfer the funds to the pot.
-			T::Currency::release(&T::HoldReason::get(), &who, on_hold, false)?;
-			// Transfer `excess` to the pot if we have now fully compensated for the receipt.
-			T::Currency::transfer(&who, &Self::account_id(), on_hold, CanKill)
+			let reason = T::HoldReason::get();
+			let us = Self::account_id();
+			T::Currency::transfer_on_hold(&reason, &who, &us, on_hold, false, false, false)
 				.map_err(|_| Error::<T>::Unfunded)?;
-			// TODO #12951: ^^^ The above should be done in a single operation `transfer_on_hold`.
 
 			// Record that we've moved the amount reserved.
 			let mut summary: SummaryRecordOf<T> = Summary::<T>::get();
@@ -877,10 +876,9 @@ pub mod pallet {
 			)?;
 
 			// Transfer the funds from the pot to the owner and reserve
-			T::Currency::transfer(&Self::account_id(), &who, amount, CanKill)
-				.map_err(|_| Error::<T>::Unfunded)?;
-			T::Currency::hold(&T::HoldReason::get(), &who, amount)?;
-			// TODO: ^^^ The above should be done in a single operation `transfer_and_hold`.
+			let reason = T::HoldReason::get();
+			let us = Self::account_id();
+			T::Currency::transfer_and_hold(&reason, &us, &who, amount, false, CanKill, false)?;
 
 			// Record that we've moved the amount reserved.
 			summary.receipts_on_hold.saturating_accrue(amount);
@@ -930,30 +928,18 @@ pub mod pallet {
 	}
 
 	impl<T: Config> NftTransfer<T::AccountId> for Pallet<T> {
-		fn transfer(index: &ReceiptIndex, destination: &T::AccountId) -> DispatchResult {
+		fn transfer(index: &ReceiptIndex, dest: &T::AccountId) -> DispatchResult {
 			let mut item = Receipts::<T>::get(index).ok_or(TokenError::UnknownAsset)?;
 			let (owner, on_hold) = item.owner.take().ok_or(Error::<T>::AlreadyCommunal)?;
 
-			// TODO: This should all be replaced by a single call `transfer_held`.
+			let reason = T::HoldReason::get();
+			T::Currency::transfer_on_hold(&reason, &owner, dest, on_hold, false, true, false)?;
 
-			let released = T::Currency::release(&T::HoldReason::get(), &owner, on_hold, false)?;
-			if released < on_hold {
-				let _ = T::Currency::hold(&T::HoldReason::get(), &owner, released);
-				return Err(TokenError::FundsUnavailable.into())
-			}
-			if let Err(e) = T::Currency::transfer(&owner, destination, on_hold, CanKill) {
-				let _ = T::Currency::hold(&T::HoldReason::get(), &owner, on_hold);
-				return Err(e)
-			}
-			// This can never fail, and if it somehow does, then we can't handle this gracefully.
-			let _ =
-				T::Currency::hold(&T::HoldReason::get(), destination, on_hold).defensive();
-
-			item.owner = Some((destination.clone(), on_hold));
+			item.owner = Some((dest.clone(), on_hold));
 			Receipts::<T>::insert(&index, &item);
 			Pallet::<T>::deposit_event(Event::<T>::Transferred {
 				from: owner,
-				to: destination.clone(),
+				to: dest.clone(),
 				index: *index,
 			});
 			Ok(())
