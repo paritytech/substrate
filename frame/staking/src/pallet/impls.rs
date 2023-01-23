@@ -210,15 +210,8 @@ impl<T: Config> Pallet<T> {
 		// This is how much validator + nominators are entitled to.
 		let validator_total_payout = validator_total_reward_part * era_payout;
 
-		// TODO(ank4n) add test and refactor this logic
-		let validator_commission_payout = if page == 0 {
-			let validator_prefs = Self::eras_validator_prefs(&era, &validator_stash);
-			// Validator first gets a cut off the top.
-			let validator_commission = validator_prefs.commission;
-			validator_commission * validator_total_payout
-		} else {
-			Zero::zero()
-		};
+		let validator_commission = EraInfo::<T>::get_validator_commission(era, &ledger.stash, page);
+		let validator_commission_payout = validator_commission * validator_total_payout;
 
 		let validator_leftover_payout = validator_total_payout - validator_commission_payout;
 		// Now let's calculate how this is split to the validator.
