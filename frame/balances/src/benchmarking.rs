@@ -22,11 +22,11 @@
 use super::*;
 use crate::Pallet as Balances;
 
-use types::ExtraFlags;
-use sp_runtime::traits::Bounded;
 use frame_benchmarking::{account, impl_benchmark_test_suite, whitelisted_caller};
 use frame_support::benchmarking::*;
 use frame_system::RawOrigin;
+use sp_runtime::traits::Bounded;
+use types::ExtraFlags;
 
 const SEED: u32 = 0;
 // existential deposit multiplier
@@ -251,7 +251,8 @@ mod benchmarks {
 	#[benchmark]
 	fn upgrade_accounts(u: Linear<1, 1_000>) {
 		let caller: T::AccountId = whitelisted_caller();
-		let who = (0 .. u).into_iter()
+		let who = (0..u)
+			.into_iter()
 			.map(|i| -> T::AccountId {
 				let user = account("old_user", i, SEED);
 				let account = AccountData {
@@ -264,7 +265,8 @@ mod benchmarks {
 				assert!(T::AccountStore::try_mutate_exists(&user, |a| -> DispatchResult {
 					*a = Some(account);
 					Ok(())
-				}).is_ok());
+				})
+				.is_ok());
 				assert!(!Balances::<T, I>::account(&user).flags.is_new_logic());
 				assert_eq!(frame_system::Pallet::<T>::providers(&user), 1);
 				assert_eq!(frame_system::Pallet::<T>::consumers(&user), 0);
@@ -275,7 +277,7 @@ mod benchmarks {
 		#[extrinsic_call]
 		_(RawOrigin::Signed(caller.clone()), who);
 
-		for i in 0 .. u {
+		for i in 0..u {
 			let user: T::AccountId = account("old_user", i, SEED);
 			assert!(Balances::<T, I>::account(&user).flags.is_new_logic());
 			assert_eq!(frame_system::Pallet::<T>::providers(&user), 1);
