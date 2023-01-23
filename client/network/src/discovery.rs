@@ -278,8 +278,8 @@ pub struct DiscoveryBehaviour {
 	local_peer_id: PeerId,
 	/// Number of nodes we're currently connected to.
 	num_connections: u64,
-	/// If false, `addresses_of_peer` won't return any private IPv4/IPv6 address, except for the ones
-	/// stored in `permanent_addresses` or `ephemeral_addresses`.
+	/// If false, `addresses_of_peer` won't return any private IPv4/IPv6 address, except for the
+	/// ones stored in `permanent_addresses` or `ephemeral_addresses`.
 	allow_private_ip: bool,
 	/// Number of active connections over which we interrupt the discovery process.
 	discovery_only_if_under_num: u64,

@@ -293,7 +293,11 @@ where
 						config.with_mdns(false);
 						config.allow_private_ip(false);
 					},
-					TransportConfig::Normal { enable_mdns, allow_private_ip: allow_private_ipv4, .. } => {
+					TransportConfig::Normal {
+						enable_mdns,
+						allow_private_ip: allow_private_ipv4,
+						..
+					} => {
 						config.with_mdns(enable_mdns);
 						config.allow_private_ip(allow_private_ipv4);
 					},
