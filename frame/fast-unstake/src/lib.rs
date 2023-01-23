@@ -86,7 +86,7 @@ pub mod pallet {
 		traits::{Defensive, ReservableCurrency, StorageVersion},
 	};
 	use frame_system::pallet_prelude::*;
-use sp_runtime::{traits::Zero, DispatchResult};
+	use sp_runtime::{traits::Zero, DispatchResult};
 	use sp_staking::{EraIndex, StakingInterface};
 	use sp_std::{prelude::*, vec::Vec};
 	pub use weights::WeightInfo;
@@ -215,14 +215,16 @@ use sp_runtime::{traits::Zero, DispatchResult};
 		}
 
 		fn integrity_test() {
-			sp_io::TestExternalities::new_empty().execute_with(|| {
-				// ensure that the value of `ErasToCheckPerBlock` is less than
-				// `T::MaxErasToCheckPerBlock`.
-				assert!(
-					ErasToCheckPerBlock::<T>::get() <= T::MaxErasToCheckPerBlock::get(),
-					"the value of `ErasToCheckPerBlock` is greater than `T::MaxErasToCheckPerBlock`",
-				);
-			});
+			sp_std::if_std! {
+				sp_io::TestExternalities::new_empty().execute_with(|| {
+					// ensure that the value of `ErasToCheckPerBlock` is less than
+					// `T::MaxErasToCheckPerBlock`.
+					assert!(
+						ErasToCheckPerBlock::<T>::get() <= T::MaxErasToCheckPerBlock::get(),
+						"the value of `ErasToCheckPerBlock` is greater than `T::MaxErasToCheckPerBlock`",
+					);
+				});
+			}
 		}
 
 		#[cfg(feature = "try-runtime")]
