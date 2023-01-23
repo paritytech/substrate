@@ -47,10 +47,10 @@ pub struct StorageMonitorParams {
 pub struct StorageMonitorService {
 	/// watched path
 	path: PathBuf,
-	/// number of megabytes that shall be free and available on the filesystem for watched path
+	/// number of megabytes that shall be free on the filesystem for watched path
 	threshold: u64,
 	/// storage space polling period (seconds)
-	pub polling_period: u32,
+	polling_period: u32,
 }
 
 impl StorageMonitorService {
@@ -64,7 +64,7 @@ impl StorageMonitorService {
 			(0, _) => {
 				log::info!(
 					target: LOG_TARGET,
-					"StorageMonitorService: threshold 0 given, storage monitoring disabled",
+					"StorageMonitorService: threshold `0` given, storage monitoring disabled",
 				);
 			},
 			(_, None) => {
@@ -110,8 +110,7 @@ impl StorageMonitorService {
 
 	/// Returns free space in MB, or error if statvfs failed.
 	fn free_space(path: &Path) -> Result<u64, Errno> {
-		let fs_stats = statvfs(path);
-		fs_stats.map(|stats| stats.blocks_available() * stats.block_size() / 1_000_000)
+		statvfs(path).map(|stats| stats.blocks_available() * stats.block_size() / 1_000_000)
 	}
 
 	/// Checks if the amount of free space for given `path` is above given `threshold`.
@@ -122,19 +121,11 @@ impl StorageMonitorService {
 			Ok(available_space) => {
 				log::trace!(
 					target: LOG_TARGET,
-					"free:{:?} , threshold:{:?}",
-					available_space,
-					threshold,
+					"free: {available_space} , threshold: {threshold}",
 				);
 
 				if available_space < threshold {
-					let msg = format!(
-								"Available space {:?}MB for path {:?} dropped below threshold:{:?}MB , terminating...",
-								available_space,
-								path,
-								threshold,
-							);
-					log::error!(target: LOG_TARGET, "{}", msg);
+					log::error!(target: LOG_TARGET, "Available space {available_space}MB for path `{}` dropped below threshold: {threshold}MB , terminating...", path.display());
 					Err(msg)
 				} else {
 					Ok(())

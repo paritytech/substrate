@@ -1,5 +1,5 @@
 [package]
-name = "storage-monitor"
+name = "sc-storage-monitor"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
