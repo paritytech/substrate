@@ -1,0 +1,5 @@
+error: unexpected end of input, `extra` can only be specified once
+ --> tests/benchmark_ui/extra_extra.rs:9:26
+  |
+9 |     #[benchmark(extra, extra)]
+  |                             ^

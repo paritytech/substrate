@@ -129,6 +129,8 @@ pub use extensions::check_mortality::CheckMortality as CheckEra;
 pub use frame_support::dispatch::RawOrigin;
 pub use weights::WeightInfo;
 
+const LOG_TARGET: &str = "runtime::system";
+
 /// Compute the trie root of a list of extrinsics.
 ///
 /// The merkle proof is using the same trie as runtime state with
@@ -1075,7 +1077,7 @@ impl<T: Config> Pallet<T> {
 				if account.providers == 0 {
 					// Logic error - cannot decrement beyond zero.
 					log::error!(
-						target: "runtime::system",
+						target: LOG_TARGET,
 						"Logic error: Unexpected underflow in reducing provider",
 					);
 					account.providers = 1;
@@ -1101,7 +1103,7 @@ impl<T: Config> Pallet<T> {
 				}
 			} else {
 				log::error!(
-					target: "runtime::system",
+					target: LOG_TARGET,
 					"Logic error: Account already dead when reducing provider",
 				);
 				Ok(DecRefStatus::Reaped)
@@ -1133,7 +1135,7 @@ impl<T: Config> Pallet<T> {
 				if account.sufficients == 0 {
 					// Logic error - cannot decrement beyond zero.
 					log::error!(
-						target: "runtime::system",
+						target: LOG_TARGET,
 						"Logic error: Unexpected underflow in reducing sufficients",
 					);
 				}
@@ -1150,7 +1152,7 @@ impl<T: Config> Pallet<T> {
 				}
 			} else {
 				log::error!(
-					target: "runtime::system",
+					target: LOG_TARGET,
 					"Logic error: Account already dead when reducing provider",
 				);
 				DecRefStatus::Reaped
@@ -1215,7 +1217,7 @@ impl<T: Config> Pallet<T> {
 				a.consumers -= 1;
 			} else {
 				log::error!(
-					target: "runtime::system",
+					target: LOG_TARGET,
 					"Logic error: Unexpected underflow in reducing consumer",
 				);
 			}
@@ -1337,7 +1339,7 @@ impl<T: Config> Pallet<T> {
 	/// resulting header for this block.
 	pub fn finalize() -> T::Header {
 		log::debug!(
-			target: "runtime::system",
+			target: LOG_TARGET,
 			"[{:?}] {} extrinsics, length: {} (normal {}%, op: {}%, mandatory {}%) / normal weight:\
 			 {} ({}%) op weight {} ({}%) / mandatory weight {} ({}%)",
 			Self::block_number(),
@@ -1501,13 +1503,21 @@ impl<T: Config> Pallet<T> {
 	/// Assert the given `event` exists.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
 	pub fn assert_has_event(event: T::RuntimeEvent) {
-		assert!(Self::events().iter().any(|record| record.event == event))
+		let events = Self::events();
+		assert!(
+			events.iter().any(|record| record.event == event),
+			"expected event {event:?} not found in events {events:?}",
+		);
 	}
 
 	/// Assert the last event equal to the given `event`.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
 	pub fn assert_last_event(event: T::RuntimeEvent) {
-		assert_eq!(Self::events().last().expect("events expected").event, event);
+		let last_event = Self::events().last().expect("events expected").event.clone();
+		assert_eq!(
+			last_event, event,
+			"expected event {event:?} is not equal to the last event {last_event:?}",
+		);
 	}
 
 	/// Return the chain's current runtime version.
@@ -1547,7 +1557,7 @@ impl<T: Config> Pallet<T> {
 			Ok(_) => Event::ExtrinsicSuccess { dispatch_info: info },
 			Err(err) => {
 				log::trace!(
-					target: "runtime::system",
+					target: LOG_TARGET,
 					"Extrinsic failed at block({:?}): {:?}",
 					Self::block_number(),
 					err,
