@@ -788,7 +788,10 @@ impl<AccountId, Balance: Default + HasCompact> Default for ExposurePage<AccountI
 	}
 }
 
-/// A snapshot of the stake backing a single validator in the system.
+/// An overview of stake backing a single validator.
+///
+/// It, in combination with a list of `ExposurePage`s, can be used to reconstruct a full `Exposure`
+/// struct. This is useful for cases where we want to query a single page of `Exposure`s.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct ExposureOverview<Balance: HasCompact> {
 	/// The total balance backing this validator.
