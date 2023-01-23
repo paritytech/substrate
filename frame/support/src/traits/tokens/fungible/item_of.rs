@@ -289,6 +289,26 @@ impl<
 			force,
 		)
 	}
+	fn transfer_and_hold(
+		reason: &Self::Reason,
+		source: &AccountId,
+		dest: &AccountId,
+		amount: Self::Balance,
+		best_effort: bool,
+		keep_alive: KeepAlive,
+		force: bool,
+	) -> Result<Self::Balance, DispatchError> {
+		<F as fungibles::MutateHold<AccountId>>::transfer_and_hold(
+			A::get(),
+			reason,
+			source,
+			dest,
+			amount,
+			best_effort,
+			keep_alive,
+			force,
+		)
+	}
 }
 
 impl<
