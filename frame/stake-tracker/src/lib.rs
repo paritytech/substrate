@@ -43,6 +43,7 @@ pub mod pallet {
 	use crate::*;
 	use frame_election_provider_support::{SortedListProvider, VoteWeight};
 	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::BlockNumberFor;
 
 	use sp_staking::StakingInterface;
 
@@ -77,6 +78,19 @@ pub mod pallet {
 	#[pallet::getter(fn approval_stake)]
 	pub type ApprovalStake<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, BalanceOf<T>, OptionQuery>;
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		#[cfg(feature = "try-runtime")]
+		fn try_state(n: BlockNumberFor<T>) -> Result<(), &'static str> {
+			ensure!(
+				ApprovalStake::<T>::count() >= T::TargetList::count(),
+				"ApprovalStake map missing entries"
+			);
+			T::TargetList::try_state();
+			T::VoterList::try_state();
+		}
+	}
 }
 
 impl<T: Config> Pallet<T> {
