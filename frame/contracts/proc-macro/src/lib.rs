@@ -122,23 +122,23 @@ fn iterate_fields(data: &syn::DataStruct, fmt: impl Fn(&Ident) -> TokenStream2) 
 
 fn format_weight(field: &Ident) -> TokenStream2 {
 	quote_spanned! { field.span() =>
-		&if self.#field > 1_000_000_000 {
+		&if self.#field.ref_time() > 1_000_000_000 {
 			format!(
 				"{:.1?} ms",
-				Fixed::saturating_from_rational(self.#field, 1_000_000_000).to_float()
+				Fixed::saturating_from_rational(self.#field.ref_time(), 1_000_000_000).to_float()
 			)
-		} else if self.#field > 1_000_000 {
+		} else if self.#field.ref_time() > 1_000_000 {
 			format!(
 				"{:.1?} µs",
-				Fixed::saturating_from_rational(self.#field, 1_000_000).to_float()
+				Fixed::saturating_from_rational(self.#field.ref_time(), 1_000_000).to_float()
 			)
-		} else if self.#field > 1_000 {
+		} else if self.#field.ref_time() > 1_000 {
 			format!(
 				"{:.1?} ns",
-				Fixed::saturating_from_rational(self.#field, 1_000).to_float()
+				Fixed::saturating_from_rational(self.#field.ref_time(), 1_000).to_float()
 			)
 		} else {
-			format!("{} ps", self.#field)
+			format!("{} ps", self.#field.ref_time())
 		}
 	}
 }
