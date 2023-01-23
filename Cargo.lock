@@ -6375,6 +6375,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-stake-tracker-initializer"
+version = "1.0.0-dev"
+dependencies = [
+ "frame-election-provider-support",
+ "frame-support",
+ "frame-system",
+ "log",
+ "pallet-stake-tracker",
+ "pallet-staking",
+ "parity-scale-codec",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-staking"
 version = "4.0.0-dev"
 dependencies = [

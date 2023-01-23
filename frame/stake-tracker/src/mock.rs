@@ -26,6 +26,7 @@ frame_support::construct_runtime!(
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		VoterBagsList: pallet_bags_list::<Instance1>::{Pallet, Call, Storage, Event<T>},
+		TargetBagsList: pallet_bags_list::<Instance2>::{Pallet, Call, Storage, Event<T>},
 		StakeTracker: pallet_stake_tracker::{Pallet, Storage},
 	}
 );
@@ -77,6 +78,7 @@ impl pallet_stake_tracker::Config for Runtime {
 	type Currency = Balances;
 	type Staking = StakingMock;
 	type VoterList = VoterBagsList;
+	type TargetList = TargetBagsList;
 }
 const THRESHOLDS: [sp_npos_elections::VoteWeight; 9] =
 	[10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
@@ -93,6 +95,23 @@ impl pallet_bags_list::Config<VoterBagsListInstance> for Runtime {
 	type ScoreProvider = StakingMock;
 	type BagThresholds = BagThresholds;
 	type Score = VoteWeight;
+}
+
+const THRESHOLDS_BALANCES: [Balance; 9] = [10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
+
+parameter_types! {
+	pub static BagThresholdsBalances: &'static [Balance] = &THRESHOLDS_BALANCES;
+}
+
+type TargetBagsListInstance = pallet_bags_list::Instance2;
+impl pallet_bags_list::Config<TargetBagsListInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = ();
+	// StakeTracker is the source of truth for target bags list, because chilled validators are
+	// removed from it.
+	type ScoreProvider = StakeTracker;
+	type BagThresholds = BagThresholdsBalances;
+	type Score = Balance;
 }
 
 pub struct StakingMock {}
