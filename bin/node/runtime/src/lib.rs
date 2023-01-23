@@ -1491,7 +1491,6 @@ impl pallet_assets::Config for Runtime {
 }
 
 parameter_types! {
-	pub IgnoredIssuance: Balance = Treasury::pot();
 	pub const QueueCount: u32 = 300;
 	pub const MaxQueueLen: u32 = 1000;
 	pub const FifoQueueLen: u32 = 500;
@@ -1515,7 +1514,9 @@ impl pallet_nis::Config for Runtime {
 	type Counterpart = ItemOf<Assets, ConstU32<9u32>, AccountId>;
 	type CounterpartAmount = WithMaximumOf<ConstU128<21_000_000_000_000_000_000u128>>;
 	type Deficit = ();
-	type IgnoredIssuance = IgnoredIssuance;
+	type IgnoredIssuance = ();
+	// ^^^ TODO: Make a note in the PR description that this should be replicated in all chains
+	// since we now use active issuance, not total issuance.
 	type Target = Target;
 	type PalletId = NisPalletId;
 	type QueueCount = QueueCount;
