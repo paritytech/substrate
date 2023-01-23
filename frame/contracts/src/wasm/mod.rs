@@ -2294,7 +2294,8 @@ mod tests {
 "#;
 		let mut ext = MockExt::default();
 		let result = execute(CODE_DEBUG_MESSAGE_FAIL, vec![], &mut ext);
-		assert_ok!(result,);
+		assert_ok!(result);
+		assert!(ext.debug_buffer.is_empty());
 	}
 
 	const CODE_CALL_RUNTIME: &str = r#"

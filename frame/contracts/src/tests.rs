@@ -2715,6 +2715,7 @@ fn debug_message_invalid_utf8() {
 			Determinism::Deterministic,
 		);
 		assert_ok!(result.result);
+		assert!(result.debug_message.is_empty());
 	});
 }
 

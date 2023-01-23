@@ -916,17 +916,11 @@ benchmarks! {
 	seal_debug_message_per_kb {
 		// Vary size of input in kilobytes up to maximum allowed contract memory.
 		let i in 0 .. (T::Schedule::get().limits.memory_pages * 64);
-		// All ASCII codes + an invalid utf-8 code: 128
-		let codes = (0..129).collect::<Vec<_>>();
-		// Largest debug message we can benchmark for is limited by maximum allowed
-		// contract memory which is defined by T::Schedule::get().limits.memory_pages,
-		// which to the moment is 1 Mb.
-		// We can't however initialize every byte of it, as it would bloat wasm module size which is
-		// limited by T::MaxCodeLen::get(), being far less than 1Mb.
-		//
-		// So we import maximum allowed memory to the module, in which only the beginning will be initialized by
-		// some data which represents following use cases: ASCII printable and control codes, and an invalid utf-8 byte.
-		// All unitialized memory bytes will get 0 value which is decoded to utf-8 NUL control code.
+		// We benchmark versus messages containing printable ASCII codes.
+		let mut cycle = (32..127).cycle();
+		// About 1Kb goes to the instrumented contract code instructions,
+		// whereas all the space left we use for the initialization of the debug messages data.
+		let codes = (0 .. T::MaxCodeLen::get() - 1024).map(|i| cycle.next().unwrap_or(42)).collect::<Vec<_>>();
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory {
 				min_pages: T::Schedule::get().limits.memory_pages,
@@ -944,11 +938,12 @@ benchmarks! {
 					value: codes,
 				},
 			],
-			call_body: Some(body::repeated(API_BENCHMARK_BATCH_SIZE, &[
+			call_body: Some(body::plain(vec![
 				Instruction::I32Const(0), // value_ptr
 				Instruction::I32Const((i * 1024) as i32), // value_len increments by i Kb
 				Instruction::Call(0),
 				Instruction::Drop,
+				Instruction::End,
 			])),
 			..Default::default()
 		});
