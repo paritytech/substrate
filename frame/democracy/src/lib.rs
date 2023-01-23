@@ -1152,10 +1152,10 @@ pub mod pallet {
 					ensure!(proposer == who, Error::<T>::NoPermission);
 				},
 				MetadataOwner::Referendum(index) => {
-					let maybe_root = ensure_signed_or_root(origin)?.is_none();
-					ensure!(maybe_root || maybe_hash.is_none(), Error::<T>::NoPermission);
+					let is_root = ensure_signed_or_root(origin)?.is_none();
+					ensure!(is_root || maybe_hash.is_none(), Error::<T>::NoPermission);
 					ensure!(
-						maybe_root || Self::referendum_status(index).is_err(),
+						is_root || Self::referendum_status(index).is_err(),
 						Error::<T>::NoPermission
 					);
 				},
@@ -1684,7 +1684,7 @@ impl<T: Config> Pallet<T> {
 		decode_compact_u32_at(&<DepositOf<T>>::hashed_key_for(proposal))
 	}
 
-	// Return a proposal of an index.
+	/// Return a proposal of an index.
 	fn proposal(index: PropIndex) -> Result<(PropIndex, BoundedCallOf<T>, T::AccountId), Error<T>> {
 		PublicProps::<T>::get()
 			.into_iter()

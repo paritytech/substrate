@@ -379,7 +379,7 @@ pub mod pallet {
 			index: ReferendumIndex,
 			/// Preimage hash.
 			hash: PreimageHash,
-		}
+		},
 	}
 
 	#[pallet::error]
