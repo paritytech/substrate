@@ -935,10 +935,10 @@ pub mod pallet {
 			let (owner, on_hold) = item.owner.take().ok_or(Error::<T>::AlreadyCommunal)?;
 
 			// TODO: This should all be replaced by a single call `transfer_held`.
-			let shortfall = T::Currency::release(&T::HoldReason::get(), &owner, on_hold, true)?;
-			if !shortfall.is_zero() {
-				let _ =
-					T::Currency::hold(&T::HoldReason::get(), &owner, on_hold - shortfall);
+
+			let released = T::Currency::release(&T::HoldReason::get(), &owner, on_hold, false)?;
+			if released < on_hold {
+				let _ = T::Currency::hold(&T::HoldReason::get(), &owner, released);
 				return Err(TokenError::FundsUnavailable.into())
 			}
 			if let Err(e) = T::Currency::transfer(&owner, destination, on_hold, CanKill) {

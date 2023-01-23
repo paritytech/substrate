@@ -26,9 +26,8 @@ use frame_support::{
 		nonfungible::{Inspect, Transfer},
 	},
 };
-use pallet_balances::{Error as BalancesError, Instance1};
 use sp_arithmetic::Perquintill;
-use sp_runtime::{Saturating, TokenError};
+use sp_runtime::{Saturating, TokenError::{self, FundsUnavailable}};
 
 fn pot() -> u64 {
 	Balances::free_balance(&Nis::account_id())
@@ -75,10 +74,7 @@ fn place_bid_works() {
 	new_test_ext().execute_with(|| {
 		run_to_block(1);
 		assert_noop!(Nis::place_bid(signed(1), 1, 2), Error::<Test>::AmountTooSmall);
-		assert_noop!(
-			Nis::place_bid(signed(1), 101, 2),
-			BalancesError::<Test, Instance1>::InsufficientBalance
-		);
+		assert_noop!(Nis::place_bid(signed(1), 101, 2), FundsUnavailable);
 		assert_noop!(Nis::place_bid(signed(1), 10, 4), Error::<Test>::DurationTooBig);
 		assert_ok!(Nis::place_bid(signed(1), 10, 2));
 		assert_eq!(Balances::reserved_balance(1), 10);
@@ -582,6 +578,7 @@ fn communal_thaw_when_issuance_higher_works() {
 fn private_thaw_when_issuance_higher_works() {
 	new_test_ext().execute_with(|| {
 		run_to_block(1);
+		assert_ok!(Balances::transfer(signed(2), 1, 1));
 		assert_ok!(Nis::place_bid(signed(1), 100, 1));
 		enlarge(100, 1);
 
@@ -599,6 +596,7 @@ fn private_thaw_when_issuance_higher_works() {
 
 		assert_ok!(Nis::thaw_private(signed(1), 0, None));
 
+		assert_ok!(Balances::transfer(signed(1), 2, 1));
 		assert_eq!(Balances::free_balance(1), 150);
 		assert_eq!(Balances::reserved_balance(1), 0);
 	});
@@ -611,6 +609,7 @@ fn thaw_with_ignored_issuance_works() {
 		// Give account zero some balance.
 		assert_ok!(Balances::mint_into(&0, 200));
 
+		assert_ok!(Balances::transfer(signed(2), 1, 1));
 		assert_ok!(Nis::place_bid(signed(1), 100, 1));
 		enlarge(100, 1);
 
@@ -628,6 +627,7 @@ fn thaw_with_ignored_issuance_works() {
 		assert_ok!(Nis::thaw_private(signed(1), 0, None));
 
 		// Account zero changes have been ignored.
+		assert_ok!(Balances::transfer(signed(1), 2, 1));
 		assert_eq!(Balances::free_balance(1), 150);
 		assert_eq!(Balances::reserved_balance(1), 0);
 	});
@@ -637,6 +637,7 @@ fn thaw_with_ignored_issuance_works() {
 fn thaw_when_issuance_lower_works() {
 	new_test_ext().execute_with(|| {
 		run_to_block(1);
+		assert_ok!(Balances::transfer(signed(2), 1, 1));
 		assert_ok!(Nis::place_bid(signed(1), 100, 1));
 		enlarge(100, 1);
 
@@ -648,6 +649,7 @@ fn thaw_when_issuance_lower_works() {
 		run_to_block(4);
 		assert_ok!(Nis::thaw_private(signed(1), 0, None));
 
+		assert_ok!(Balances::transfer(signed(1), 2, 1));
 		assert_eq!(Balances::free_balance(1), 75);
 		assert_eq!(Balances::reserved_balance(1), 0);
 	});
@@ -657,13 +659,14 @@ fn thaw_when_issuance_lower_works() {
 fn multiple_thaws_works() {
 	new_test_ext().execute_with(|| {
 		run_to_block(1);
+		assert_ok!(Balances::transfer(signed(3), 1, 1));
 		assert_ok!(Nis::place_bid(signed(1), 40, 1));
 		assert_ok!(Nis::place_bid(signed(1), 60, 1));
 		assert_ok!(Nis::place_bid(signed(2), 50, 1));
 		enlarge(200, 3);
 
 		// Double everyone's free balances.
-		assert_ok!(Balances::mint_into(&2, 100));
+		assert_ok!(Balances::mint_into(&2, 50));
 		assert_ok!(Balances::mint_into(&3, 100));
 		assert_ok!(Balances::mint_into(&4, 100));
 		assert_ok!(Nis::fund_deficit(signed(1)));
@@ -675,8 +678,11 @@ fn multiple_thaws_works() {
 		run_to_block(5);
 		assert_ok!(Nis::thaw_private(signed(2), 2, None));
 
+		assert_ok!(Balances::transfer(signed(1), 3, 1));
 		assert_eq!(Balances::free_balance(1), 200);
 		assert_eq!(Balances::free_balance(2), 200);
+		assert_eq!(Balances::total_balance(&1), 200);
+		assert_eq!(Balances::total_balance(&2), 200);
 	});
 }
 
@@ -684,13 +690,14 @@ fn multiple_thaws_works() {
 fn multiple_thaws_works_in_alternative_thaw_order() {
 	new_test_ext().execute_with(|| {
 		run_to_block(1);
+		assert_ok!(Balances::transfer(signed(3), 1, 1));
 		assert_ok!(Nis::place_bid(signed(1), 40, 1));
 		assert_ok!(Nis::place_bid(signed(1), 60, 1));
 		assert_ok!(Nis::place_bid(signed(2), 50, 1));
 		enlarge(200, 3);
 
 		// Double everyone's free balances.
-		assert_ok!(Balances::mint_into(&2, 100));
+		assert_ok!(Balances::mint_into(&2, 50));
 		assert_ok!(Balances::mint_into(&3, 100));
 		assert_ok!(Balances::mint_into(&4, 100));
 		assert_ok!(Nis::fund_deficit(signed(1)));
@@ -703,8 +710,11 @@ fn multiple_thaws_works_in_alternative_thaw_order() {
 		run_to_block(5);
 		assert_ok!(Nis::thaw_private(signed(1), 1, None));
 
+		assert_ok!(Balances::transfer(signed(1), 3, 1));
 		assert_eq!(Balances::free_balance(1), 200);
 		assert_eq!(Balances::free_balance(2), 200);
+		assert_eq!(Balances::total_balance(&1), 200);
+		assert_eq!(Balances::total_balance(&2), 200);
 	});
 }
 

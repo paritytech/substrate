@@ -204,6 +204,10 @@ pub trait Mutate<AccountId>:
 	///
 	/// If `best_effort` is `true`, then the amount actually unreserved and returned as the inner
 	/// value of `Ok` may be smaller than the `amount` passed.
+	///
+	/// NOTE! The inner of the `Ok` result variant returns the *actual* amount released. This is the
+	/// opposite of the `ReservableCurrency::unreserve()` result, which gives the amount not able
+	/// to be released!
 	fn release(
 		reason: &Self::Reason,
 		who: &AccountId,
