@@ -78,6 +78,8 @@ use frame_support::{
 pub use pallet::*;
 pub use weights::WeightInfo;
 
+const LOG_TARGET: &str = "runtime::tips";
+
 pub type BalanceOf<T, I = ()> = pallet_treasury::BalanceOf<T, I>;
 pub type NegativeImbalanceOf<T, I = ()> = pallet_treasury::NegativeImbalanceOf<T, I>;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
@@ -235,6 +237,7 @@ pub mod pallet {
 		/// - DbReads: `Reasons`, `Tips`
 		/// - DbWrites: `Reasons`, `Tips`
 		/// # </weight>
+		#[pallet::call_index(0)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::report_awesome(reason.len() as u32))]
 		pub fn report_awesome(
 			origin: OriginFor<T>,
@@ -292,6 +295,7 @@ pub mod pallet {
 		/// - DbReads: `Tips`, `origin account`
 		/// - DbWrites: `Reasons`, `Tips`, `origin account`
 		/// # </weight>
+		#[pallet::call_index(1)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::retract_tip())]
 		pub fn retract_tip(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -330,6 +334,7 @@ pub mod pallet {
 		/// - DbReads: `Tippers`, `Reasons`
 		/// - DbWrites: `Reasons`, `Tips`
 		/// # </weight>
+		#[pallet::call_index(2)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::tip_new(reason.len() as u32, T::Tippers::max_len() as u32))]
 		pub fn tip_new(
 			origin: OriginFor<T>,
@@ -384,6 +389,7 @@ pub mod pallet {
 		/// - DbReads: `Tippers`, `Tips`
 		/// - DbWrites: `Tips`
 		/// # </weight>
+		#[pallet::call_index(3)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::tip(T::Tippers::max_len() as u32))]
 		pub fn tip(
 			origin: OriginFor<T>,
@@ -417,6 +423,7 @@ pub mod pallet {
 		/// - DbReads: `Tips`, `Tippers`, `tip finder`
 		/// - DbWrites: `Reasons`, `Tips`, `Tippers`, `tip finder`
 		/// # </weight>
+		#[pallet::call_index(4)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::close_tip(T::Tippers::max_len() as u32))]
 		pub fn close_tip(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
 			ensure_signed(origin)?;
@@ -443,6 +450,7 @@ pub mod pallet {
 		///   `T` is charged as upper bound given by `ContainsLengthBound`.
 		///   The actual cost depends on the implementation of `T::Tippers`.
 		/// # </weight>
+		#[pallet::call_index(5)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::slash_tip(T::Tippers::max_len() as u32))]
 		pub fn slash_tip(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
 			T::RejectOrigin::ensure_origin(origin)?;

@@ -42,13 +42,41 @@ pub mod traits;
 
 pub use fixed_point::{FixedI128, FixedI64, FixedPointNumber, FixedPointOperand, FixedU128};
 pub use per_things::{
-	InnerOf, PerThing, PerU16, Perbill, Percent, Permill, Perquintill, Rounding, SignedRounding,
-	UpperOf,
+	InnerOf, MultiplyArg, PerThing, PerU16, Perbill, Percent, Permill, Perquintill, RationalArg,
+	ReciprocalArg, Rounding, SignedRounding, UpperOf,
 };
 pub use rational::{Rational128, RationalInfinite};
 
 use sp_std::{cmp::Ordering, fmt::Debug, prelude::*};
 use traits::{BaseArithmetic, One, SaturatedConversion, Unsigned, Zero};
+
+use codec::{Decode, Encode, MaxEncodedLen};
+use scale_info::TypeInfo;
+
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
+
+/// Arithmetic errors.
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub enum ArithmeticError {
+	/// Underflow.
+	Underflow,
+	/// Overflow.
+	Overflow,
+	/// Division by zero.
+	DivisionByZero,
+}
+
+impl From<ArithmeticError> for &'static str {
+	fn from(e: ArithmeticError) -> &'static str {
+		match e {
+			ArithmeticError::Underflow => "An underflow would occur",
+			ArithmeticError::Overflow => "An overflow would occur",
+			ArithmeticError::DivisionByZero => "Division by zero",
+		}
+	}
+}
 
 /// Trait for comparing two numbers with an threshold.
 ///

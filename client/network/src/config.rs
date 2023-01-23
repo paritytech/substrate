@@ -40,7 +40,6 @@ use libp2p::{
 	multiaddr, Multiaddr,
 };
 use prometheus_endpoint::Registry;
-use sc_consensus::ImportQueue;
 use sc_network_common::{
 	config::{MultiaddrWithPeerId, NonDefaultSetConfig, SetConfig, TransportConfig},
 	sync::ChainSync,
@@ -66,9 +65,8 @@ where
 	/// Assigned role for our node (full, light, ...).
 	pub role: Role,
 
-	/// How to spawn background tasks. If you pass `None`, then a threads pool will be used by
-	/// default.
-	pub executor: Option<Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>>,
+	/// How to spawn background tasks.
+	pub executor: Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>,
 
 	/// Network layer configuration.
 	pub network_config: NetworkConfiguration,
@@ -83,12 +81,6 @@ where
 	/// name on the wire.
 	pub fork_id: Option<String>,
 
-	/// Import queue to use.
-	///
-	/// The import queue is the component that verifies that blocks received from other nodes are
-	/// valid.
-	pub import_queue: Box<dyn ImportQueue<B>>,
-
 	/// Instance of chain sync implementation.
 	pub chain_sync: Box<dyn ChainSync<B>>,
 
@@ -100,39 +92,6 @@ where
 
 	/// Block announce protocol configuration
 	pub block_announce_config: NonDefaultSetConfig,
-
-	/// Request response configuration for the block request protocol.
-	///
-	/// [`RequestResponseConfig::name`] is used to tag outgoing block requests with the correct
-	/// protocol name. In addition all of [`RequestResponseConfig`] is used to handle incoming
-	/// block requests, if enabled.
-	///
-	/// Can be constructed either via
-	/// `sc_network_sync::block_request_handler::generate_protocol_config` allowing outgoing but
-	/// not incoming requests, or constructed via `sc_network_sync::block_request_handler::
-	/// BlockRequestHandler::new` allowing both outgoing and incoming requests.
-	pub block_request_protocol_config: RequestResponseConfig,
-
-	/// Request response configuration for the light client request protocol.
-	///
-	/// Can be constructed either via
-	/// `sc_network_light::light_client_requests::generate_protocol_config` allowing outgoing but
-	/// not incoming requests, or constructed via
-	/// `sc_network_light::light_client_requests::handler::LightClientRequestHandler::new`
-	/// allowing both outgoing and incoming requests.
-	pub light_client_request_protocol_config: RequestResponseConfig,
-
-	/// Request response configuration for the state request protocol.
-	///
-	/// Can be constructed either via
-	/// `sc_network_sync::state_request_handler::generate_protocol_config` allowing outgoing but
-	/// not incoming requests, or constructed via
-	/// `sc_network_sync::state_request_handler::StateRequestHandler::new` allowing
-	/// both outgoing and incoming requests.
-	pub state_request_protocol_config: RequestResponseConfig,
-
-	/// Optional warp sync protocol config.
-	pub warp_sync_protocol_config: Option<RequestResponseConfig>,
 
 	/// Request response protocol configurations
 	pub request_response_protocol_configs: Vec<RequestResponseConfig>,
@@ -264,7 +223,7 @@ impl NetworkConfiguration {
 			extra_sets: Vec::new(),
 			client_version: client_version.into(),
 			node_name: node_name.into(),
-			transport: TransportConfig::Normal { enable_mdns: false, allow_private_ipv4: true },
+			transport: TransportConfig::Normal { enable_mdns: false, allow_private_ip: true },
 			max_parallel_downloads: 5,
 			sync_mode: SyncMode::Full,
 			enable_dht_random_walk: true,

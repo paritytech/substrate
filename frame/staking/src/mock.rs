@@ -20,13 +20,14 @@
 use crate::{self as pallet_staking, *};
 use frame_election_provider_support::{onchain, SequentialPhragmen, VoteWeight};
 use frame_support::{
-	assert_ok, parameter_types,
+	assert_ok, ord_parameter_types, parameter_types,
 	traits::{
-		ConstU32, ConstU64, Currency, FindAuthor, GenesisBuild, Get, Hooks, Imbalance,
-		OnUnbalanced, OneSessionHandler,
+		ConstU32, ConstU64, Currency, EitherOfDiverse, FindAuthor, GenesisBuild, Get, Hooks,
+		Imbalance, OnUnbalanced, OneSessionHandler,
 	},
 	weights::constants::RocksDbWeight,
 };
+use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
 use sp_io;
 use sp_runtime::{
@@ -113,10 +114,6 @@ impl FindAuthor<AccountId> for Author11 {
 }
 
 parameter_types! {
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(
-			frame_support::weights::constants::WEIGHT_PER_SECOND * 2
-		);
 	pub static SessionsPerEra: SessionIndex = 3;
 	pub static ExistentialDeposit: Balance = 1;
 	pub static SlashDeferDuration: EraIndex = 0;
@@ -238,6 +235,7 @@ parameter_types! {
 	pub static MaxUnlockingChunks: u32 = 32;
 	pub static RewardOnUnbalanceWasCalled: bool = false;
 	pub static LedgerSlashPerEra: (BalanceOf<Test>, BTreeMap<EraIndex, BalanceOf<Test>>) = (Zero::zero(), BTreeMap::new());
+	pub static MaxWinners: u32 = 100;
 }
 
 type VoterBagsListInstance = pallet_bags_list::Instance1;
@@ -256,6 +254,9 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type Solver = SequentialPhragmen<AccountId, Perbill>;
 	type DataProvider = Staking;
 	type WeightInfo = ();
+	type MaxWinners = MaxWinners;
+	type VotersBound = ConstU32<{ u32::MAX }>;
+	type TargetsBound = ConstU32<{ u32::MAX }>;
 }
 
 pub struct MockReward {}
@@ -288,14 +289,14 @@ impl crate::pallet::pallet::Config for Test {
 	type Reward = MockReward;
 	type SessionsPerEra = SessionsPerEra;
 	type SlashDeferDuration = SlashDeferDuration;
-	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
+	type AdminOrigin = EnsureOneOrRoot;
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
 	type EraPayout = ConvertCurve<RewardCurve>;
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
-	type ElectionProvider = onchain::UnboundedExecution<OnChainSeqPhragmen>;
+	type ElectionProvider = onchain::OnChainExecution<OnChainSeqPhragmen>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	// NOTE: consider a macro and use `UseNominatorsAndValidatorsMap<Self>` as well.
 	type VoterList = VoterBagsList;
@@ -793,6 +794,11 @@ pub(crate) fn staking_events() -> Vec<crate::Event<Test>> {
 parameter_types! {
 	static StakingEventsIndex: usize = 0;
 }
+ord_parameter_types! {
+	pub const One: u64 = 1;
+}
+
+type EnsureOneOrRoot = EitherOfDiverse<EnsureRoot<AccountId>, EnsureSignedBy<One, AccountId>>;
 
 pub(crate) fn staking_events_since_last_call() -> Vec<crate::Event<Test>> {
 	let all: Vec<_> = System::events()

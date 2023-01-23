@@ -60,7 +60,7 @@ use crate::{
 	until_imported::UntilVoteTargetImported,
 	voting_rule::VotingRule as VotingRuleT,
 	ClientForGrandpa, CommandOrError, Commit, Config, Error, NewAuthoritySet, Precommit, Prevote,
-	PrimaryPropose, SignedMessage, VoterCommand,
+	PrimaryPropose, SignedMessage, VoterCommand, LOG_TARGET,
 };
 
 type HistoricalVotes<Block> = finality_grandpa::HistoricalVotes<
@@ -525,7 +525,7 @@ where
 			Some((_, n)) if n > best_block_number => best_block_hash,
 			Some((h, _)) => {
 				// this is the header at which the new set will start
-				let header = self.client.header(BlockId::Hash(h))?.expect(
+				let header = self.client.header(h)?.expect(
 					"got block hash from registered pending change; \
 					 pending changes are only registered on block import; qed.",
 				);
@@ -551,7 +551,10 @@ where
 		{
 			Some(proof) => proof,
 			None => {
-				debug!(target: "afg", "Equivocation offender is not part of the authority set.");
+				debug!(
+					target: LOG_TARGET,
+					"Equivocation offender is not part of the authority set."
+				);
 				return Ok(())
 			},
 		};
@@ -609,8 +612,13 @@ where
 	let tree_route = match tree_route_res {
 		Ok(tree_route) => tree_route,
 		Err(e) => {
-			debug!(target: "afg", "Encountered error computing ancestry between block {:?} and base {:?}: {}",
-				   block, base, e);
+			debug!(
+				target: LOG_TARGET,
+				"Encountered error computing ancestry between block {:?} and base {:?}: {}",
+				block,
+				base,
+				e
+			);
 
 			return Err(GrandpaError::NotDescendent)
 		},
@@ -955,7 +963,8 @@ where
 		historical_votes: &HistoricalVotes<Block>,
 	) -> Result<(), Self::Error> {
 		debug!(
-			target: "afg", "Voter {} completed round {} in set {}. Estimate = {:?}, Finalized in round = {:?}",
+			target: LOG_TARGET,
+			"Voter {} completed round {} in set {}. Estimate = {:?}, Finalized in round = {:?}",
 			self.config.name(),
 			round,
 			self.set_id,
@@ -1016,7 +1025,8 @@ where
 		historical_votes: &HistoricalVotes<Block>,
 	) -> Result<(), Self::Error> {
 		debug!(
-			target: "afg", "Voter {} concluded round {} in set {}. Estimate = {:?}, Finalized in round = {:?}",
+			target: LOG_TARGET,
+			"Voter {} concluded round {} in set {}. Estimate = {:?}, Finalized in round = {:?}",
 			self.config.name(),
 			round,
 			self.set_id,
@@ -1102,9 +1112,12 @@ where
 			Self::Signature,
 		>,
 	) {
-		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
+		warn!(
+			target: LOG_TARGET,
+			"Detected prevote equivocation in the finality worker: {:?}", equivocation
+		);
 		if let Err(err) = self.report_equivocation(equivocation.into()) {
-			warn!(target: "afg", "Error reporting prevote equivocation: {}", err);
+			warn!(target: LOG_TARGET, "Error reporting prevote equivocation: {}", err);
 		}
 	}
 
@@ -1117,9 +1130,12 @@ where
 			Self::Signature,
 		>,
 	) {
-		warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
+		warn!(
+			target: LOG_TARGET,
+			"Detected precommit equivocation in the finality worker: {:?}", equivocation
+		);
 		if let Err(err) = self.report_equivocation(equivocation.into()) {
-			warn!(target: "afg", "Error reporting precommit equivocation: {}", err);
+			warn!(target: LOG_TARGET, "Error reporting precommit equivocation: {}", err);
 		}
 	}
 }
@@ -1155,10 +1171,11 @@ where
 	SelectChain: SelectChainT<Block> + 'static,
 	VotingRule: VotingRuleT<Block, Client>,
 {
-	let base_header = match client.header(BlockId::Hash(block))? {
+	let base_header = match client.header(block)? {
 		Some(h) => h,
 		None => {
-			debug!(target: "afg",
+			warn!(
+				target: LOG_TARGET,
 				"Encountered error finding best chain containing {:?}: couldn't find base block",
 				block,
 			);
@@ -1172,74 +1189,87 @@ where
 	// proceed onwards. most of the time there will be no pending transition.  the limit, if any, is
 	// guaranteed to be higher than or equal to the given base number.
 	let limit = authority_set.current_limit(*base_header.number());
-	debug!(target: "afg", "Finding best chain containing block {:?} with number limit {:?}", block, limit);
+	debug!(
+		target: LOG_TARGET,
+		"Finding best chain containing block {:?} with number limit {:?}", block, limit
+	);
 
-	let result = match select_chain.finality_target(block, None).await {
-		Ok(best_hash) => {
-			let best_header = client
-				.header(BlockId::Hash(best_hash))?
-				.expect("Header known to exist after `finality_target` call; qed");
+	let mut target_header = match select_chain.finality_target(block, None).await {
+		Ok(target_hash) => client
+			.header(target_hash)?
+			.expect("Header known to exist after `finality_target` call; qed"),
+		Err(err) => {
+			warn!(
+				target: LOG_TARGET,
+				"Encountered error finding best chain containing {:?}: couldn't find target block: {}",
+				block,
+				err,
+			);
 
-			// check if our vote is currently being limited due to a pending change
-			let limit = limit.filter(|limit| limit < best_header.number());
-
-			let (base_header, best_header, target_header) = if let Some(target_number) = limit {
-				let mut target_header = best_header.clone();
-
-				// walk backwards until we find the target block
-				loop {
-					if *target_header.number() < target_number {
-						unreachable!(
-							"we are traversing backwards from a known block; \
-							 blocks are stored contiguously; \
-							 qed"
-						);
-					}
-
-					if *target_header.number() == target_number {
-						break
-					}
-
-					target_header = client
-						.header(BlockId::Hash(*target_header.parent_hash()))?
-						.expect("Header known to exist after `finality_target` call; qed");
-				}
-
-				(base_header, best_header, target_header)
-			} else {
-				// otherwise just use the given best as the target
-				(base_header, best_header.clone(), best_header)
-			};
-
-			// restrict vote according to the given voting rule, if the
-			// voting rule doesn't restrict the vote then we keep the
-			// previous target.
-			//
-			// note that we pass the original `best_header`, i.e. before the
-			// authority set limit filter, which can be considered a
-			// mandatory/implicit voting rule.
-			//
-			// we also make sure that the restricted vote is higher than the
-			// round base (i.e. last finalized), otherwise the value
-			// returned by the given voting rule is ignored and the original
-			// target is used instead.
-			voting_rule
-				.restrict_vote(client.clone(), &base_header, &best_header, &target_header)
-				.await
-				.filter(|(_, restricted_number)| {
-					// we can only restrict votes within the interval [base, target]
-					restricted_number >= base_header.number() &&
-						restricted_number < target_header.number()
-				})
-				.or_else(|| Some((target_header.hash(), *target_header.number())))
-		},
-		Err(e) => {
-			warn!(target: "afg", "Encountered error finding best chain containing {:?}: {}", block, e);
-			None
+			return Ok(None)
 		},
 	};
 
-	Ok(result)
+	// NOTE: this is purposefully done after `finality_target` to prevent a case
+	// where in-between these two requests there is a block import and
+	// `finality_target` returns something higher than `best_chain`.
+	let best_header = match select_chain.best_chain().await {
+		Ok(best_header) => best_header,
+		Err(err) => {
+			warn!(
+				target: LOG_TARGET,
+				"Encountered error finding best chain containing {:?}: couldn't find best block: {}",
+				block,
+				err,
+			);
+
+			return Ok(None)
+		},
+	};
+
+	if target_header.number() > best_header.number() {
+		return Err(Error::Safety(
+			"SelectChain returned a finality target higher than its best block".into(),
+		))
+	}
+
+	// check if our vote is currently being limited due to a pending change,
+	// in which case we will restrict our target header to the given limit
+	if let Some(target_number) = limit.filter(|limit| limit < target_header.number()) {
+		// walk backwards until we find the target block
+		loop {
+			if *target_header.number() < target_number {
+				unreachable!(
+					"we are traversing backwards from a known block; \
+					 blocks are stored contiguously; \
+					 qed"
+				);
+			}
+
+			if *target_header.number() == target_number {
+				break
+			}
+
+			target_header = client
+				.header(*target_header.parent_hash())?
+				.expect("Header known to exist after `finality_target` call; qed");
+		}
+	}
+
+	// restrict vote according to the given voting rule, if the voting rule
+	// doesn't restrict the vote then we keep the previous target.
+	//
+	// we also make sure that the restricted vote is higher than the round base
+	// (i.e. last finalized), otherwise the value returned by the given voting
+	// rule is ignored and the original target is used instead.
+	Ok(voting_rule
+		.restrict_vote(client.clone(), &base_header, &best_header, &target_header)
+		.await
+		.filter(|(_, restricted_number)| {
+			// we can only restrict votes within the interval [base, target]
+			restricted_number >= base_header.number() && restricted_number < target_header.number()
+		})
+		.or_else(|| Some((target_header.hash(), *target_header.number()))))
 }
 
 /// Finalize the given block and apply any authority set changes. If an
@@ -1273,7 +1303,7 @@ where
 		// This can happen after a forced change (triggered manually from the runtime when
 		// finality is stalled), since the voter will be restarted at the median last finalized
 		// block, which can be lower than the local best finalized block.
-		warn!(target: "afg", "Re-finalized block #{:?} ({:?}) in the canonical chain, current best finalized is #{:?}",
+		warn!(target: LOG_TARGET, "Re-finalized block #{:?} ({:?}) in the canonical chain, current best finalized is #{:?}",
 				hash,
 				number,
 				status.finalized_number,
@@ -1303,7 +1333,10 @@ where
 		) {
 			if let Some(sender) = justification_sender {
 				if let Err(err) = sender.notify(justification) {
-					warn!(target: "afg", "Error creating justification for subscriber: {}", err);
+					warn!(
+						target: LOG_TARGET,
+						"Error creating justification for subscriber: {}", err
+					);
 				}
 			}
 		}
@@ -1352,13 +1385,18 @@ where
 		// ideally some handle to a synchronization oracle would be used
 		// to avoid unconditionally notifying.
 		client
-			.apply_finality(import_op, &hash, persisted_justification, true)
+			.apply_finality(import_op, hash, persisted_justification, true)
 			.map_err(|e| {
-				warn!(target: "afg", "Error applying finality to block {:?}: {}", (hash, number), e);
+				warn!(
+					target: LOG_TARGET,
+					"Error applying finality to block {:?}: {}",
+					(hash, number),
+					e
+				);
 				e
 			})?;
 
-		debug!(target: "afg", "Finalizing blocks up to ({:?}, {})", number, hash);
+		debug!(target: LOG_TARGET, "Finalizing blocks up to ({:?}, {})", number, hash);
 
 		telemetry!(
 			telemetry;
@@ -1376,13 +1414,17 @@ where
 			let (new_id, set_ref) = authority_set.current();
 
 			if set_ref.len() > 16 {
-				afg_log!(
+				grandpa_log!(
 					initial_sync,
 					"👴 Applying GRANDPA set change to new set with {} authorities",
 					set_ref.len(),
 				);
 			} else {
-				afg_log!(initial_sync, "👴 Applying GRANDPA set change to new set {:?}", set_ref);
+				grandpa_log!(
+					initial_sync,
+					"👴 Applying GRANDPA set change to new set {:?}",
+					set_ref
+				);
 			}
 
 			telemetry!(
@@ -1411,8 +1453,11 @@ where
 			);
 
 			if let Err(e) = write_result {
-				warn!(target: "afg", "Failed to write updated authority set to disk. Bailing.");
-				warn!(target: "afg", "Node is in a potentially inconsistent state.");
+				warn!(
+					target: LOG_TARGET,
+					"Failed to write updated authority set to disk. Bailing."
+				);
+				warn!(target: LOG_TARGET, "Node is in a potentially inconsistent state.");
 
 				return Err(e.into())
 			}

@@ -19,6 +19,7 @@
 
 #![recursion_limit = "512"]
 
+mod benchmark;
 mod clone_no_bound;
 mod construct_runtime;
 mod crate_version;
@@ -445,10 +446,101 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 /// pallet. Otherwise it implements `StorageInfoTrait` for the pallet using the
 /// `PartialStorageInfoTrait` implementation of storages.
 ///
+/// ## Dev Mode (`#[pallet(dev_mode)]`)
+///
+/// Specifying the argument `dev_mode` will allow you to enable dev mode for a pallet. The aim
+/// of dev mode is to loosen some of the restrictions and requirements placed on production
+/// pallets for easy tinkering and development. Dev mode pallets should not be used in
+/// production. Enabling dev mode has the following effects:
+///
+/// * Weights no longer need to be specified on every `#[pallet::call]` declaration. By default, dev
+///   mode pallets will assume a weight of zero (`0`) if a weight is not specified. This is
+///   equivalent to specifying `#[weight(0)]` on all calls that do not specify a weight.
+/// * All storages are marked as unbounded, meaning you do not need to implement `MaxEncodedLen` on
+///   storage types. This is equivalent to specifying `#[pallet::unbounded]` on all storage type
+///   definitions.
+///
+/// Note that the `dev_mode` argument can only be supplied to the `#[pallet]` or
+/// `#[frame_support::pallet]` attribute macro that encloses your pallet module. This argument
+/// cannot be specified anywhere else, including but not limited to the `#[pallet::pallet]`
+/// attribute macro.
+///
+/// <div class="example-wrap" style="display:inline-block"><pre class="compile_fail"
+/// style="white-space:normal;font:inherit;">
+/// <strong>WARNING</strong>:
+/// You should not deploy or use dev mode pallets in production. Doing so can break your chain
+/// and therefore should never be done. Once you are done tinkering, you should remove the
+/// 'dev_mode' argument from your #[pallet] declaration and fix any compile errors before
+/// attempting to use your pallet in a production scenario.
+/// </pre></div>
+///
 /// See `frame_support::pallet` docs for more info.
 #[proc_macro_attribute]
 pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
 	pallet::pallet(attr, item)
+}
+
+/// An attribute macro that can be attached to a (non-empty) module declaration. Doing so will
+/// designate that module as a benchmarking module.
+///
+/// See `frame_support::benchmarking` for more info.
+#[proc_macro_attribute]
+pub fn benchmarks(attr: TokenStream, tokens: TokenStream) -> TokenStream {
+	match benchmark::benchmarks(attr, tokens, false) {
+		Ok(tokens) => tokens,
+		Err(err) => err.to_compile_error().into(),
+	}
+}
+
+/// An attribute macro that can be attached to a (non-empty) module declaration. Doing so will
+/// designate that module as an instance benchmarking module.
+///
+/// See `frame_support::benchmarking` for more info.
+#[proc_macro_attribute]
+pub fn instance_benchmarks(attr: TokenStream, tokens: TokenStream) -> TokenStream {
+	match benchmark::benchmarks(attr, tokens, true) {
+		Ok(tokens) => tokens,
+		Err(err) => err.to_compile_error().into(),
+	}
+}
+
+/// An attribute macro used to declare a benchmark within a benchmarking module. Must be
+/// attached to a function definition containing an `#[extrinsic_call]` or `#[block]`
+/// attribute.
+///
+/// See `frame_support::benchmarking` for more info.
+#[proc_macro_attribute]
+pub fn benchmark(_attrs: TokenStream, _tokens: TokenStream) -> TokenStream {
+	quote!(compile_error!(
+		"`#[benchmark]` must be in a module labeled with #[benchmarks] or #[instance_benchmarks]."
+	))
+	.into()
+}
+
+/// An attribute macro used to specify the extrinsic call inside a benchmark function, and also
+/// used as a boundary designating where the benchmark setup code ends, and the benchmark
+/// verification code begins.
+///
+/// See `frame_support::benchmarking` for more info.
+#[proc_macro_attribute]
+pub fn extrinsic_call(_attrs: TokenStream, _tokens: TokenStream) -> TokenStream {
+	quote!(compile_error!(
+		"`#[extrinsic_call]` must be in a benchmark function definition labeled with `#[benchmark]`."
+	);)
+	.into()
+}
+
+/// An attribute macro used to specify that a block should be the measured portion of the
+/// enclosing benchmark function, This attribute is also used as a boundary designating where
+/// the benchmark setup code ends, and the benchmark verification code begins.
+///
+/// See `frame_support::benchmarking` for more info.
+#[proc_macro_attribute]
+pub fn block(_attrs: TokenStream, _tokens: TokenStream) -> TokenStream {
+	quote!(compile_error!(
+		"`#[block]` must be in a benchmark function definition labeled with `#[benchmark]`."
+	))
+	.into()
 }
 
 /// Execute the annotated function in a new storage transaction.
@@ -554,7 +646,7 @@ pub fn derive_eq_no_bound(input: TokenStream) -> TokenStream {
 }
 
 /// derive `Default` but do no bound any generic. Docs are at `frame_support::DefaultNoBound`.
-#[proc_macro_derive(DefaultNoBound)]
+#[proc_macro_derive(DefaultNoBound, attributes(default))]
 pub fn derive_default_no_bound(input: TokenStream) -> TokenStream {
 	default_no_bound::derive_default_no_bound(input)
 }

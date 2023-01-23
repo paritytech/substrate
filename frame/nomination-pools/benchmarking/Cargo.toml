@@ -14,7 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 # parity
-codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 
 # FRAME
@@ -27,17 +27,17 @@ pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../.
 pallet-nomination-pools = { version = "1.0.0", default-features = false, path = "../" }
 
 # Substrate Primitives
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }
-sp-runtime-interface = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime-interface" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-runtime-interface = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime-interface" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/staking" }
-sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
+sp-std = { version = "5.0.0", default-features = false, path = "../../../primitives/std" }
 
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../balances" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../timestamp" }
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../../staking/reward-curve" }
-sp-core = { version = "6.0.0", path = "../../../primitives/core" }
-sp-io = { version = "6.0.0", path = "../../../primitives/io" }
+sp-core = { version = "7.0.0", path = "../../../primitives/core" }
+sp-io = { version = "7.0.0", path = "../../../primitives/io" }
 
 [features]
 default = ["std"]
@@ -52,9 +52,8 @@ std = [
 	"pallet-nomination-pools/std",
 	"sp-runtime/std",
 	"sp-runtime-interface/std",
-	"sp-io/std",
 	"sp-staking/std",
-	"sp-std/std",	
+	"sp-std/std",
 ]
 
 runtime-benchmarks = [

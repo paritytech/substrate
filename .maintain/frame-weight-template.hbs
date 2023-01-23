@@ -49,22 +49,22 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		{{~#if (not c.is_used)}}_{{/if}}{{c.name}}: u32, {{/each~}}
 	) -> Weight {
 		// Minimum execution time: {{underscore benchmark.min_execution_time}} nanoseconds.
-		Weight::from_ref_time({{underscore benchmark.base_weight}} as u64)
+		Weight::from_ref_time({{underscore benchmark.base_weight}})
 			{{#each benchmark.component_weight as |cw|}}
 			// Standard Error: {{underscore cw.error}}
-			.saturating_add(Weight::from_ref_time({{underscore cw.slope}} as u64).saturating_mul({{cw.name}} as u64))
+			.saturating_add(Weight::from_ref_time({{underscore cw.slope}}).saturating_mul({{cw.name}}.into()))
 			{{/each}}
 			{{#if (ne benchmark.base_reads "0")}}
-			.saturating_add(T::DbWeight::get().reads({{benchmark.base_reads}} as u64))
+			.saturating_add(T::DbWeight::get().reads({{benchmark.base_reads}}))
 			{{/if}}
 			{{#each benchmark.component_reads as |cr|}}
-			.saturating_add(T::DbWeight::get().reads(({{cr.slope}} as u64).saturating_mul({{cr.name}} as u64)))
+			.saturating_add(T::DbWeight::get().reads(({{cr.slope}}_u64).saturating_mul({{cr.name}}.into())))
 			{{/each}}
 			{{#if (ne benchmark.base_writes "0")}}
-			.saturating_add(T::DbWeight::get().writes({{benchmark.base_writes}} as u64))
+			.saturating_add(T::DbWeight::get().writes({{benchmark.base_writes}}))
 			{{/if}}
 			{{#each benchmark.component_writes as |cw|}}
-			.saturating_add(T::DbWeight::get().writes(({{cw.slope}} as u64).saturating_mul({{cw.name}} as u64)))
+			.saturating_add(T::DbWeight::get().writes(({{cw.slope}}_u64).saturating_mul({{cw.name}}.into())))
 			{{/each}}
 	}
 	{{/each}}
@@ -85,22 +85,22 @@ impl WeightInfo for () {
 		{{~#if (not c.is_used)}}_{{/if}}{{c.name}}: u32, {{/each~}}
 	) -> Weight {
 		// Minimum execution time: {{underscore benchmark.min_execution_time}} nanoseconds.
-		Weight::from_ref_time({{underscore benchmark.base_weight}} as u64)
+		Weight::from_ref_time({{underscore benchmark.base_weight}})
 			{{#each benchmark.component_weight as |cw|}}
 			// Standard Error: {{underscore cw.error}}
-			.saturating_add(Weight::from_ref_time({{underscore cw.slope}} as u64).saturating_mul({{cw.name}} as u64))
+			.saturating_add(Weight::from_ref_time({{underscore cw.slope}}).saturating_mul({{cw.name}}.into()))
 			{{/each}}
 			{{#if (ne benchmark.base_reads "0")}}
-			.saturating_add(RocksDbWeight::get().reads({{benchmark.base_reads}} as u64))
+			.saturating_add(RocksDbWeight::get().reads({{benchmark.base_reads}}))
 			{{/if}}
 			{{#each benchmark.component_reads as |cr|}}
-			.saturating_add(RocksDbWeight::get().reads(({{cr.slope}} as u64).saturating_mul({{cr.name}} as u64)))
+			.saturating_add(RocksDbWeight::get().reads(({{cr.slope}}_u64).saturating_mul({{cr.name}}.into())))
 			{{/each}}
 			{{#if (ne benchmark.base_writes "0")}}
-			.saturating_add(RocksDbWeight::get().writes({{benchmark.base_writes}} as u64))
+			.saturating_add(RocksDbWeight::get().writes({{benchmark.base_writes}}))
 			{{/if}}
 			{{#each benchmark.component_writes as |cw|}}
-			.saturating_add(RocksDbWeight::get().writes(({{cw.slope}} as u64).saturating_mul({{cw.name}} as u64)))
+			.saturating_add(RocksDbWeight::get().writes(({{cw.slope}}_u64).saturating_mul({{cw.name}}.into())))
 			{{/each}}
 	}
 	{{/each}}

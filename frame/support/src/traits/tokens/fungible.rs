@@ -40,6 +40,12 @@ pub trait Inspect<AccountId> {
 	/// The total amount of issuance in the system.
 	fn total_issuance() -> Self::Balance;
 
+	/// The total amount of issuance in the system excluding those which are controlled by the
+	/// system.
+	fn active_issuance() -> Self::Balance {
+		Self::total_issuance()
+	}
+
 	/// The minimum balance any single account may have.
 	fn minimum_balance() -> Self::Balance;
 
@@ -72,12 +78,13 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 	/// returned and nothing is changed. If successful, the amount of tokens reduced is returned.
 	fn burn_from(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError>;
 
+	// TODO: Remove.
 	/// Attempt to reduce the balance of `who` by as much as possible up to `amount`, and possibly
 	/// slightly more due to minimum_balance requirements. If no decrease is possible then an `Err`
 	/// is returned and nothing is changed. If successful, the amount of tokens reduced is returned.
 	///
 	/// The default implementation just uses `withdraw` along with `reducible_balance` to ensure
-	/// that is doesn't fail.
+	/// that it doesn't fail.
 	fn slash(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
 		Self::burn_from(who, Self::reducible_balance(who, false).min(amount))
 	}
@@ -120,6 +127,12 @@ pub trait Transfer<AccountId>: Inspect<AccountId> {
 		amount: Self::Balance,
 		keep_alive: bool,
 	) -> Result<Self::Balance, DispatchError>;
+
+	/// Reduce the active issuance by some amount.
+	fn deactivate(_: Self::Balance) {}
+
+	/// Increase the active issuance by some amount, up to the outstanding amount reduced.
+	fn reactivate(_: Self::Balance) {}
 }
 
 /// Trait for inspecting a fungible asset which can be reserved.
@@ -131,6 +144,7 @@ pub trait InspectHold<AccountId>: Inspect<AccountId> {
 	fn can_hold(who: &AccountId, amount: Self::Balance) -> bool;
 }
 
+// TODO: Introduce `HoldReason`.
 /// Trait for mutating a fungible asset which can be reserved.
 pub trait MutateHold<AccountId>: InspectHold<AccountId> + Transfer<AccountId> {
 	/// Hold some funds in an account.
@@ -147,6 +161,8 @@ pub trait MutateHold<AccountId>: InspectHold<AccountId> + Transfer<AccountId> {
 		amount: Self::Balance,
 		best_effort: bool,
 	) -> Result<Self::Balance, DispatchError>;
+
+	// TODO: Introduce repatriate_held
 
 	/// Transfer held funds into a destination account.
 	///
@@ -183,6 +199,7 @@ pub trait BalancedHold<AccountId>: Balanced<AccountId> + MutateHold<AccountId> {
 }
 
 impl<AccountId, T: Balanced<AccountId> + MutateHold<AccountId>> BalancedHold<AccountId> for T {
+	// TODO: This should be implemented properly, and `slash` should be removed.
 	fn slash_held(
 		who: &AccountId,
 		amount: Self::Balance,
@@ -212,6 +229,9 @@ impl<
 	type Balance = <F as fungibles::Inspect<AccountId>>::Balance;
 	fn total_issuance() -> Self::Balance {
 		<F as fungibles::Inspect<AccountId>>::total_issuance(A::get())
+	}
+	fn active_issuance() -> Self::Balance {
+		<F as fungibles::Inspect<AccountId>>::active_issuance(A::get())
 	}
 	fn minimum_balance() -> Self::Balance {
 		<F as fungibles::Inspect<AccountId>>::minimum_balance(A::get())
@@ -257,6 +277,12 @@ impl<
 		keep_alive: bool,
 	) -> Result<Self::Balance, DispatchError> {
 		<F as fungibles::Transfer<AccountId>>::transfer(A::get(), source, dest, amount, keep_alive)
+	}
+	fn deactivate(amount: Self::Balance) {
+		<F as fungibles::Transfer<AccountId>>::deactivate(A::get(), amount)
+	}
+	fn reactivate(amount: Self::Balance) {
+		<F as fungibles::Transfer<AccountId>>::reactivate(A::get(), amount)
 	}
 }
 

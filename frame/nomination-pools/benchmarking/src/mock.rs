@@ -102,7 +102,7 @@ impl pallet_staking::Config for Runtime {
 	type Reward = ();
 	type SessionsPerEra = ();
 	type SlashDeferDuration = ();
-	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
+	type AdminOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type BondingDuration = ConstU32<3>;
 	type SessionInterface = ();
 	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
@@ -110,7 +110,7 @@ impl pallet_staking::Config for Runtime {
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = ();
 	type ElectionProvider =
-		frame_election_provider_support::NoElection<(AccountId, BlockNumber, Staking)>;
+		frame_election_provider_support::NoElection<(AccountId, BlockNumber, Staking, ())>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type VoterList = VoterList;
 	type TargetList = pallet_staking::UseValidatorsMap<Self>;

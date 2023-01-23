@@ -102,10 +102,10 @@ use crate::{
 	exec::{AccountIdOf, ExecError, Executable, Stack as ExecStack},
 	gas::GasMeter,
 	storage::{meter::Meter as StorageMeter, ContractInfo, DeletedContract, Storage},
-	wasm::{OwnerInfo, PrefabWasmModule},
+	wasm::{OwnerInfo, PrefabWasmModule, TryInstantiate},
 	weights::WeightInfo,
 };
-use codec::{Codec, Encode, HasCompact};
+use codec::{Codec, Decode, Encode, HasCompact};
 use frame_support::{
 	dispatch::{Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo},
 	ensure,
@@ -123,8 +123,8 @@ use pallet_contracts_primitives::{
 	StorageDeposit,
 };
 use scale_info::TypeInfo;
-use sp_core::crypto::UncheckedFrom;
-use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup};
+use smallvec::Array;
+use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup, TrailingZeroInput};
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 pub use crate::{
@@ -135,6 +135,9 @@ pub use crate::{
 	wasm::Determinism,
 };
 
+#[cfg(doc)]
+pub use crate::wasm::api_doc;
+
 type CodeHash<T> = <T as frame_system::Config>::Hash;
 type TrieId = BoundedVec<u8, ConstU32<128>>;
 type BalanceOf<T> =
@@ -142,6 +145,7 @@ type BalanceOf<T> =
 type CodeVec<T> = BoundedVec<u8, <T as Config>::MaxCodeLen>;
 type RelaxedCodeVec<T> = WeakBoundedVec<u8, <T as Config>::MaxCodeLen>;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
+type DebugBufferVec<T> = BoundedVec<u8, <T as Config>::MaxDebugBufferLen>;
 
 /// Used as a sentinel value when reading and writing contract memory.
 ///
@@ -154,7 +158,7 @@ const SENTINEL: u32 = u32::MAX;
 /// Provides the contract address generation method.
 ///
 /// See [`DefaultAddressGenerator`] for the default implementation.
-pub trait AddressGenerator<T: frame_system::Config> {
+pub trait AddressGenerator<T: Config> {
 	/// Generate the address of a contract based on the given instantiate parameters.
 	///
 	/// # Note for implementors
@@ -165,6 +169,7 @@ pub trait AddressGenerator<T: frame_system::Config> {
 	fn generate_address(
 		deploying_address: &T::AccountId,
 		code_hash: &CodeHash<T>,
+		input_data: &[u8],
 		salt: &[u8],
 	) -> T::AccountId;
 }
@@ -175,28 +180,21 @@ pub trait AddressGenerator<T: frame_system::Config> {
 /// is only dependant on its inputs. It can therefore be used to reliably predict the
 /// address of a contract. This is akin to the formula of eth's CREATE2 opcode. There
 /// is no CREATE equivalent because CREATE2 is strictly more powerful.
-///
-/// Formula: `hash(deploying_address ++ code_hash ++ salt)`
+/// Formula:
+/// `hash("contract_addr_v1" ++ deploying_address ++ code_hash ++ input_data ++ salt)`
 pub struct DefaultAddressGenerator;
 
-impl<T> AddressGenerator<T> for DefaultAddressGenerator
-where
-	T: frame_system::Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
+impl<T: Config> AddressGenerator<T> for DefaultAddressGenerator {
 	fn generate_address(
 		deploying_address: &T::AccountId,
 		code_hash: &CodeHash<T>,
+		input_data: &[u8],
 		salt: &[u8],
 	) -> T::AccountId {
-		let buf: Vec<_> = deploying_address
-			.as_ref()
-			.iter()
-			.chain(code_hash.as_ref())
-			.chain(salt)
-			.cloned()
-			.collect();
-		UncheckedFrom::unchecked_from(T::Hashing::hash(&buf))
+		let entropy = (b"contract_addr_v1", deploying_address, code_hash, input_data, salt)
+			.using_encoded(T::Hashing::hash);
+		Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
+			.expect("infinite length input; no invalid inputs for type; qed")
 	}
 }
 
@@ -275,7 +273,10 @@ pub mod pallet {
 		/// The allowed depth is `CallStack::size() + 1`.
 		/// Therefore a size of `0` means that a contract cannot use call or instantiate.
 		/// In other words only the origin called "root contract" is allowed to execute then.
-		type CallStack: smallvec::Array<Item = Frame<Self>>;
+		///
+		/// This setting along with [`MaxCodeLen`](#associatedtype.MaxCodeLen) directly affects
+		/// memory usage of your runtime.
+		type CallStack: Array<Item = Frame<Self>>;
 
 		/// The maximum number of contracts that can be pending for deletion.
 		///
@@ -326,18 +327,36 @@ pub mod pallet {
 		/// The maximum length of a contract code in bytes. This limit applies to the instrumented
 		/// version of the code. Therefore `instantiate_with_code` can fail even when supplying
 		/// a wasm binary below this maximum size.
+		///
+		/// The value should be chosen carefully taking into the account the overall memory limit
+		/// your runtime has, as well as the [maximum allowed callstack
+		/// depth](#associatedtype.CallStack). Look into the `integrity_test()` for some insights.
+		#[pallet::constant]
 		type MaxCodeLen: Get<u32>;
 
 		/// The maximum allowable length in bytes for storage keys.
+		#[pallet::constant]
 		type MaxStorageKeyLen: Get<u32>;
+
+		/// Make contract callable functions marked as `#[unstable]` available.
+		///
+		/// Contracts that use `#[unstable]` functions won't be able to be uploaded unless
+		/// this is set to `true`. This is only meant for testnets and dev nodes in order to
+		/// experiment with new features.
+		///
+		/// # Warning
+		///
+		/// Do **not** set to `true` on productions chains.
+		#[pallet::constant]
+		type UnsafeUnstableInterface: Get<bool>;
+
+		/// The maximum length of the debug buffer in bytes.
+		#[pallet::constant]
+		type MaxDebugBufferLen: Get<u32>;
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
-	where
-		T::AccountId: UncheckedFrom<T::Hash>,
-		T::AccountId: AsRef<[u8]>,
-	{
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_idle(_block: T::BlockNumber, remaining_weight: Weight) -> Weight {
 			Storage::<T>::process_deletion_queue_batch(remaining_weight)
 				.saturating_add(T::WeightInfo::on_process_deletion_queue_batch())
@@ -361,17 +380,81 @@ pub mod pallet {
 				T::WeightInfo::on_process_deletion_queue_batch()
 			}
 		}
+
+		fn integrity_test() {
+			// Total runtime memory is expected to have 128Mb upper limit
+			const MAX_RUNTIME_MEM: u32 = 1024 * 1024 * 128;
+			// Memory limits for a single contract:
+			// Value stack size: 1Mb per contract, default defined in wasmi
+			const MAX_STACK_SIZE: u32 = 1024 * 1024;
+			// Heap limit is normally 16 mempages of 64kb each = 1Mb per contract
+			let max_heap_size = T::Schedule::get().limits.max_memory_size();
+			// Max call depth is CallStack::size() + 1
+			let max_call_depth = u32::try_from(T::CallStack::size().saturating_add(1))
+				.expect("CallStack size is too big");
+
+			// Check that given configured `MaxCodeLen`, runtime heap memory limit can't be broken.
+			//
+			// In worst case, the decoded wasm contract code would be `x16` times larger than the
+			// encoded one. This is because even a single-byte wasm instruction has 16-byte size in
+			// wasmi. This gives us `MaxCodeLen*16` safety margin.
+			//
+			// Next, the pallet keeps both the original and instrumented wasm blobs for each
+			// contract, hence we add up `MaxCodeLen*2` more to the safety margin.
+			//
+			// Finally, the inefficiencies of the freeing-bump allocator
+			// being used in the client for the runtime memory allocations, could lead to possible
+			// memory allocations for contract code grow up to `x4` times in some extreme cases,
+			// which gives us total multiplier of `18*4` for `MaxCodeLen`.
+			//
+			// That being said, for every contract executed in runtime, at least `MaxCodeLen*18*4`
+			// memory should be available. Note that maximum allowed heap memory and stack size per
+			// each contract (stack frame) should also be counted.
+			//
+			// Finally, we allow 50% of the runtime memory to be utilized by the contracts call
+			// stack, keeping the rest for other facilities, such as PoV, etc.
+			//
+			// This gives us the following formula:
+			//
+			// `(MaxCodeLen * 18 * 4 + MAX_STACK_SIZE + max_heap_size) * max_call_depth <
+			// MAX_RUNTIME_MEM/2`
+			//
+			// Hence the upper limit for the `MaxCodeLen` can be defined as follows:
+			let code_len_limit = MAX_RUNTIME_MEM
+				.saturating_div(2)
+				.saturating_div(max_call_depth)
+				.saturating_sub(max_heap_size)
+				.saturating_sub(MAX_STACK_SIZE)
+				.saturating_div(18 * 4);
+
+			assert!(
+				T::MaxCodeLen::get() < code_len_limit,
+				"Given `CallStack` height {:?}, `MaxCodeLen` should be set less than {:?} \
+				 (current value is {:?}), to avoid possible runtime oom issues.",
+				max_call_depth,
+				code_len_limit,
+				T::MaxCodeLen::get(),
+			);
+
+			// Debug buffer should at least be large enough to accomodate a simple error message
+			const MIN_DEBUG_BUF_SIZE: u32 = 256;
+			assert!(
+				T::MaxDebugBufferLen::get() > MIN_DEBUG_BUF_SIZE,
+				"Debug buffer should have minimum size of {} (current setting is {})",
+				MIN_DEBUG_BUF_SIZE,
+				T::MaxDebugBufferLen::get(),
+			)
+		}
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T>
 	where
-		T::AccountId: UncheckedFrom<T::Hash>,
-		T::AccountId: AsRef<[u8]>,
 		<BalanceOf<T> as HasCompact>::Type: Clone + Eq + PartialEq + Debug + TypeInfo + Encode,
 	{
 		/// Deprecated version if [`Self::call`] for use in an in-storage `Call`.
-		#[pallet::weight(T::WeightInfo::call().saturating_add(<Pallet<T>>::compat_weight(*gas_limit)))]
+		#[pallet::call_index(0)]
+		#[pallet::weight(T::WeightInfo::call().saturating_add(<Pallet<T>>::compat_weight_limit(*gas_limit)))]
 		#[allow(deprecated)]
 		#[deprecated(note = "1D weight is used in this extrinsic, please migrate to `call`")]
 		pub fn call_old_weight(
@@ -386,16 +469,17 @@ pub mod pallet {
 				origin,
 				dest,
 				value,
-				<Pallet<T>>::compat_weight(gas_limit),
+				<Pallet<T>>::compat_weight_limit(gas_limit),
 				storage_deposit_limit,
 				data,
 			)
 		}
 
 		/// Deprecated version if [`Self::instantiate_with_code`] for use in an in-storage `Call`.
+		#[pallet::call_index(1)]
 		#[pallet::weight(
-			T::WeightInfo::instantiate_with_code(code.len() as u32, salt.len() as u32)
-			.saturating_add(<Pallet<T>>::compat_weight(*gas_limit))
+			T::WeightInfo::instantiate_with_code(code.len() as u32, data.len() as u32, salt.len() as u32)
+			.saturating_add(<Pallet<T>>::compat_weight_limit(*gas_limit))
 		)]
 		#[allow(deprecated)]
 		#[deprecated(
@@ -413,7 +497,7 @@ pub mod pallet {
 			Self::instantiate_with_code(
 				origin,
 				value,
-				<Pallet<T>>::compat_weight(gas_limit),
+				<Pallet<T>>::compat_weight_limit(gas_limit),
 				storage_deposit_limit,
 				code,
 				data,
@@ -422,8 +506,9 @@ pub mod pallet {
 		}
 
 		/// Deprecated version if [`Self::instantiate`] for use in an in-storage `Call`.
+		#[pallet::call_index(2)]
 		#[pallet::weight(
-			T::WeightInfo::instantiate(salt.len() as u32).saturating_add(<Pallet<T>>::compat_weight(*gas_limit))
+			T::WeightInfo::instantiate(data.len() as u32, salt.len() as u32).saturating_add(<Pallet<T>>::compat_weight_limit(*gas_limit))
 		)]
 		#[allow(deprecated)]
 		#[deprecated(note = "1D weight is used in this extrinsic, please migrate to `instantiate`")]
@@ -439,7 +524,7 @@ pub mod pallet {
 			Self::instantiate(
 				origin,
 				value,
-				<Pallet<T>>::compat_weight(gas_limit),
+				<Pallet<T>>::compat_weight_limit(gas_limit),
 				storage_deposit_limit,
 				code_hash,
 				data,
@@ -467,6 +552,7 @@ pub mod pallet {
 		/// To avoid this situation a constructor could employ access control so that it can
 		/// only be instantiated by permissioned entities. The same is true when uploading
 		/// through [`Self::instantiate_with_code`].
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::upload_code(code.len() as u32))]
 		pub fn upload_code(
 			origin: OriginFor<T>,
@@ -483,6 +569,7 @@ pub mod pallet {
 		///
 		/// A code can only be removed by its original uploader (its owner) and only if it is
 		/// not used by any contract.
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::remove_code())]
 		pub fn remove_code(
 			origin: OriginFor<T>,
@@ -504,6 +591,7 @@ pub mod pallet {
 		/// This does **not** change the address of the contract in question. This means
 		/// that the contract address is no longer derived from its code hash after calling
 		/// this dispatchable.
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::set_code())]
 		pub fn set_code(
 			origin: OriginFor<T>,
@@ -549,6 +637,7 @@ pub mod pallet {
 		/// * If the account is a regular account, any value will be transferred.
 		/// * If no account exists and the call value is not less than `existential_deposit`,
 		/// a regular account will be created and any value will be transferred.
+		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::call().saturating_add(*gas_limit))]
 		pub fn call(
 			origin: OriginFor<T>,
@@ -605,8 +694,9 @@ pub mod pallet {
 		/// - The smart-contract account is created at the computed address.
 		/// - The `value` is transferred to the new account.
 		/// - The `deploy` function is executed in the context of the newly-created account.
+		#[pallet::call_index(7)]
 		#[pallet::weight(
-			T::WeightInfo::instantiate_with_code(code.len() as u32, salt.len() as u32)
+			T::WeightInfo::instantiate_with_code(code.len() as u32, data.len() as u32, salt.len() as u32)
 			.saturating_add(*gas_limit)
 		)]
 		pub fn instantiate_with_code(
@@ -620,6 +710,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
 			let code_len = code.len() as u32;
+			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
 			let mut output = Self::internal_instantiate(
 				origin,
@@ -638,7 +729,7 @@ pub mod pallet {
 			}
 			output.gas_meter.into_dispatch_result(
 				output.result.map(|(_address, result)| result),
-				T::WeightInfo::instantiate_with_code(code_len, salt_len),
+				T::WeightInfo::instantiate_with_code(code_len, data_len, salt_len),
 			)
 		}
 
@@ -647,8 +738,9 @@ pub mod pallet {
 		/// This function is identical to [`Self::instantiate_with_code`] but without the
 		/// code deployment step. Instead, the `code_hash` of an on-chain deployed wasm binary
 		/// must be supplied.
+		#[pallet::call_index(8)]
 		#[pallet::weight(
-			T::WeightInfo::instantiate(salt.len() as u32).saturating_add(*gas_limit)
+			T::WeightInfo::instantiate(data.len() as u32, salt.len() as u32).saturating_add(*gas_limit)
 		)]
 		pub fn instantiate(
 			origin: OriginFor<T>,
@@ -660,6 +752,7 @@ pub mod pallet {
 			salt: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
+			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
 			let mut output = Self::internal_instantiate(
 				origin,
@@ -678,7 +771,7 @@ pub mod pallet {
 			}
 			output.gas_meter.into_dispatch_result(
 				output.result.map(|(_address, output)| output),
-				T::WeightInfo::instantiate(salt_len),
+				T::WeightInfo::instantiate(data_len, salt_len),
 			)
 		}
 	}
@@ -796,8 +889,6 @@ pub mod pallet {
 		RandomSubjectTooLong,
 		/// The amount of topics passed to `seal_deposit_events` exceeds the limit.
 		TooManyTopics,
-		/// The topics passed to `seal_deposit_events` contains at least one duplicate.
-		DuplicateTopics,
 		/// The chain does not provide a chain extension. Calling the chain extension results
 		/// in this error. Note that this usually  shouldn't happen as deploying such contracts
 		/// is rejected.
@@ -830,8 +921,13 @@ pub mod pallet {
 		/// to determine whether a reversion has taken place.
 		ContractReverted,
 		/// The contract's code was found to be invalid during validation or instrumentation.
+		///
+		/// The most likely cause of this is that an API was used which is not supported by the
+		/// node. This hapens if an older node is used with a new version of ink!. Try updating
+		/// your node to the newest available version.
+		///
 		/// A more detailed error can be found on the node console if debug messages are enabled
-		/// or in the debug buffer which is returned to RPC clients.
+		/// by supplying `-lruntime::contracts=debug`.
 		CodeRejected,
 		/// An indetermistic code was used in a context where this is not permitted.
 		Indeterministic,
@@ -907,10 +1003,7 @@ struct InternalOutput<T: Config, O> {
 	result: Result<O, ExecError>,
 }
 
-impl<T: Config> Pallet<T>
-where
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
+impl<T: Config> Pallet<T> {
 	/// Perform a call to a specified contract.
 	///
 	/// This function is similar to [`Self::call`], but doesn't perform any address lookups
@@ -933,7 +1026,7 @@ where
 		debug: bool,
 		determinism: Determinism,
 	) -> ContractExecResult<BalanceOf<T>> {
-		let mut debug_message = if debug { Some(Vec::new()) } else { None };
+		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
 		let output = Self::internal_call(
 			origin,
 			dest,
@@ -949,7 +1042,7 @@ where
 			gas_consumed: output.gas_meter.gas_consumed(),
 			gas_required: output.gas_meter.gas_required(),
 			storage_deposit: output.storage_deposit,
-			debug_message: debug_message.unwrap_or_default(),
+			debug_message: debug_message.unwrap_or_default().to_vec(),
 		}
 	}
 
@@ -975,7 +1068,7 @@ where
 		salt: Vec<u8>,
 		debug: bool,
 	) -> ContractInstantiateResult<T::AccountId, BalanceOf<T>> {
-		let mut debug_message = if debug { Some(Vec::new()) } else { None };
+		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
 		let output = Self::internal_instantiate(
 			origin,
 			value,
@@ -994,7 +1087,7 @@ where
 			gas_consumed: output.gas_meter.gas_consumed(),
 			gas_required: output.gas_meter.gas_required(),
 			storage_deposit: output.storage_deposit,
-			debug_message: debug_message.unwrap_or_default(),
+			debug_message: debug_message.unwrap_or_default().to_vec(),
 		}
 	}
 
@@ -1009,8 +1102,14 @@ where
 		determinism: Determinism,
 	) -> CodeUploadResult<CodeHash<T>, BalanceOf<T>> {
 		let schedule = T::Schedule::get();
-		let module = PrefabWasmModule::from_code(code, &schedule, origin, determinism)
-			.map_err(|(err, _)| err)?;
+		let module = PrefabWasmModule::from_code(
+			code,
+			&schedule,
+			origin,
+			determinism,
+			TryInstantiate::Instantiate,
+		)
+		.map_err(|(err, _)| err)?;
 		let deposit = module.open_deposit();
 		if let Some(storage_deposit_limit) = storage_deposit_limit {
 			ensure!(storage_deposit_limit >= deposit, <Error<T>>::StorageDepositLimitExhausted);
@@ -1039,9 +1138,10 @@ where
 	pub fn contract_address(
 		deploying_address: &T::AccountId,
 		code_hash: &CodeHash<T>,
+		input_data: &[u8],
 		salt: &[u8],
 	) -> T::AccountId {
-		T::AddressGenerator::generate_address(deploying_address, code_hash, salt)
+		T::AddressGenerator::generate_address(deploying_address, code_hash, input_data, salt)
 	}
 
 	/// Returns the code hash of the contract specified by `account` ID.
@@ -1079,7 +1179,7 @@ where
 		gas_limit: Weight,
 		storage_deposit_limit: Option<BalanceOf<T>>,
 		data: Vec<u8>,
-		debug_message: Option<&mut Vec<u8>>,
+		debug_message: Option<&mut DebugBufferVec<T>>,
 		determinism: Determinism,
 	) -> InternalCallOutput<T> {
 		let mut gas_meter = GasMeter::new(gas_limit);
@@ -1122,7 +1222,7 @@ where
 		code: Code<CodeHash<T>>,
 		data: Vec<u8>,
 		salt: Vec<u8>,
-		mut debug_message: Option<&mut Vec<u8>>,
+		mut debug_message: Option<&mut DebugBufferVec<T>>,
 	) -> InternalInstantiateOutput<T> {
 		let mut storage_deposit = Default::default();
 		let mut gas_meter = GasMeter::new(gas_limit);
@@ -1135,9 +1235,10 @@ where
 						&schedule,
 						origin.clone(),
 						Determinism::Deterministic,
+						TryInstantiate::Skip,
 					)
 					.map_err(|(err, msg)| {
-						debug_message.as_mut().map(|buffer| buffer.extend(msg.as_bytes()));
+						debug_message.as_mut().map(|buffer| buffer.try_extend(&mut msg.bytes()));
 						err
 					})?;
 					// The open deposit will be charged during execution when the
@@ -1188,17 +1289,18 @@ where
 		<T::Currency as Inspect<AccountIdOf<T>>>::minimum_balance()
 	}
 
-	/// Convert a 1D Weight to a 2D weight.
+	/// Convert gas_limit from 1D Weight to a 2D Weight.
 	///
-	/// Used by backwards compatible extrinsics. We cannot just set the proof to zero
-	/// or an old `Call` will just fail.
-	fn compat_weight(gas_limit: OldWeight) -> Weight {
-		Weight::from(gas_limit).set_proof_size(u64::from(T::MaxCodeLen::get()) * 2)
+	/// Used by backwards compatible extrinsics. We cannot just set the proof_size weight limit to
+	/// zero or an old `Call` will just fail with OutOfGas.
+	fn compat_weight_limit(gas_limit: OldWeight) -> Weight {
+		Weight::from_parts(gas_limit.0, u64::from(T::MaxCodeLen::get()) * 2)
 	}
 }
 
 sp_api::decl_runtime_apis! {
 	/// The API used to dry-run contract interactions.
+	#[api_version(2)]
 	pub trait ContractsApi<AccountId, Balance, BlockNumber, Hash> where
 		AccountId: Codec,
 		Balance: Codec,

@@ -18,8 +18,8 @@
 use crate::{
 	gas::GasMeter,
 	storage::{self, Storage, WriteOutcome},
-	BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, Determinism, Error, Event, Nonce,
-	Pallet as Contracts, Schedule,
+	BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, DebugBufferVec, Determinism, Error,
+	Event, Nonce, Pallet as Contracts, Schedule,
 };
 use frame_support::{
 	crypto::ecdsa::ECDSAExt,
@@ -32,7 +32,7 @@ use frame_support::{
 use frame_system::RawOrigin;
 use pallet_contracts_primitives::ExecReturnValue;
 use smallvec::{Array, SmallVec};
-use sp_core::{crypto::UncheckedFrom, ecdsa::Public as ECDSAPublic};
+use sp_core::ecdsa::Public as ECDSAPublic;
 use sp_io::{crypto::secp256k1_ecdsa_recover_compressed, hashing::blake2_256};
 use sp_runtime::traits::{Convert, Hash};
 use sp_std::{marker::PhantomData, mem, prelude::*};
@@ -296,6 +296,18 @@ pub trait Ext: sealing::Sealed {
 
 	/// Sets new code hash for existing contract.
 	fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError>;
+
+	/// Returns the number of times the currently executing contract exists on the call stack in
+	/// addition to the calling instance. A value of 0 means no reentrancy.
+	fn reentrance_count(&self) -> u32;
+
+	/// Returns the number of times the specified contract exists on the call stack. Delegated calls
+	/// are not calculated as separate entrance.
+	/// A value of 0 means it does not exist on the call stack.
+	fn account_reentrance_count(&self, account_id: &AccountIdOf<Self::T>) -> u32;
+
+	/// Returns a nonce that is incremented for every instantiated contract.
+	fn nonce(&mut self) -> u64;
 }
 
 /// Describes the different functions that can be exported by an [`Executable`].
@@ -397,7 +409,7 @@ pub struct Stack<'a, T: Config, E> {
 	///
 	/// All the bytes added to this field should be valid UTF-8. The buffer has no defined
 	/// structure and is intended to be shown to users as-is for debugging purposes.
-	debug_message: Option<&'a mut Vec<u8>>,
+	debug_message: Option<&'a mut DebugBufferVec<T>>,
 	/// The determinism requirement of this call stack.
 	determinism: Determinism,
 	/// No executable is held by the struct but influences its behaviour.
@@ -450,7 +462,7 @@ enum FrameArgs<'a, T: Config, E> {
 		/// If `None` the contract info needs to be reloaded from storage.
 		cached_info: Option<ContractInfo<T>>,
 		/// This frame was created by `seal_delegate_call` and hence uses different code than
-		/// what is stored at [`Self::dest`]. Its caller ([`Frame::delegated_caller`]) is the
+		/// what is stored at [`Self::Call::dest`]. Its caller ([`DelegatedCall::caller`]) is the
 		/// account which called the caller contract
 		delegated_call: Option<DelegatedCall<T, E>>,
 	},
@@ -463,6 +475,8 @@ enum FrameArgs<'a, T: Config, E> {
 		executable: E,
 		/// A salt used in the contract address deriviation of the new contract.
 		salt: &'a [u8],
+		/// The input data is used in the contract address deriviation of the new contract.
+		input_data: &'a [u8],
 	},
 }
 
@@ -584,7 +598,6 @@ impl<T: Config> CachedContract<T> {
 impl<'a, T, E> Stack<'a, T, E>
 where
 	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 	E: Executable<T>,
 {
 	/// Create and run a new call stack by calling into `dest`.
@@ -605,7 +618,7 @@ where
 		schedule: &'a Schedule<T>,
 		value: BalanceOf<T>,
 		input_data: Vec<u8>,
-		debug_message: Option<&'a mut Vec<u8>>,
+		debug_message: Option<&'a mut DebugBufferVec<T>>,
 		determinism: Determinism,
 	) -> Result<ExecReturnValue, ExecError> {
 		let (mut stack, executable) = Self::new(
@@ -640,14 +653,15 @@ where
 		value: BalanceOf<T>,
 		input_data: Vec<u8>,
 		salt: &[u8],
-		debug_message: Option<&'a mut Vec<u8>>,
+		debug_message: Option<&'a mut DebugBufferVec<T>>,
 	) -> Result<(T::AccountId, ExecReturnValue), ExecError> {
 		let (mut stack, executable) = Self::new(
 			FrameArgs::Instantiate {
 				sender: origin.clone(),
-				nonce: Self::initial_nonce(),
+				nonce: <Nonce<T>>::get().wrapping_add(1),
 				executable,
 				salt,
+				input_data: input_data.as_ref(),
 			},
 			origin,
 			gas_meter,
@@ -669,7 +683,7 @@ where
 		storage_meter: &'a mut storage::meter::Meter<T>,
 		schedule: &'a Schedule<T>,
 		value: BalanceOf<T>,
-		debug_message: Option<&'a mut Vec<u8>>,
+		debug_message: Option<&'a mut DebugBufferVec<T>>,
 		determinism: Determinism,
 	) -> Result<(Self, E), ExecError> {
 		let (first_frame, executable, nonce) = Self::new_frame(
@@ -730,9 +744,13 @@ where
 
 					(dest, contract, executable, delegate_caller, ExportedFunction::Call, None)
 				},
-				FrameArgs::Instantiate { sender, nonce, executable, salt } => {
-					let account_id =
-						<Contracts<T>>::contract_address(&sender, executable.code_hash(), salt);
+				FrameArgs::Instantiate { sender, nonce, executable, salt, input_data } => {
+					let account_id = Contracts::<T>::contract_address(
+						&sender,
+						executable.code_hash(),
+						input_data,
+						salt,
+					);
 					let trie_id = Storage::<T>::generate_trie_id(&account_id, nonce);
 					let contract =
 						Storage::<T>::new_contract(&account_id, trie_id, *executable.code_hash())?;
@@ -1059,25 +1077,15 @@ where
 
 	/// Increments and returns the next nonce. Pulls it from storage if it isn't in cache.
 	fn next_nonce(&mut self) -> u64 {
-		let next = if let Some(current) = self.nonce {
-			current.wrapping_add(1)
-		} else {
-			Self::initial_nonce()
-		};
+		let next = self.nonce().wrapping_add(1);
 		self.nonce = Some(next);
 		next
-	}
-
-	/// Pull the current nonce from storage.
-	fn initial_nonce() -> u64 {
-		<Nonce<T>>::get().wrapping_add(1)
 	}
 }
 
 impl<'a, T, E> Ext for Stack<'a, T, E>
 where
 	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 	E: Executable<T>,
 {
 	type T = T;
@@ -1164,6 +1172,7 @@ where
 				nonce,
 				executable,
 				salt,
+				input_data: input_data.as_ref(),
 			},
 			value,
 			gas_limit,
@@ -1327,9 +1336,31 @@ where
 
 	fn append_debug_buffer(&mut self, msg: &str) -> bool {
 		if let Some(buffer) = &mut self.debug_message {
-			if !msg.is_empty() {
-				buffer.extend(msg.as_bytes());
-			}
+			let err_msg = scale_info::prelude::format!(
+				"Debug message too big (size={}) for debug buffer (bound={})",
+				msg.len(),
+				DebugBufferVec::<T>::bound(),
+			);
+
+			let mut msg = if msg.len() > DebugBufferVec::<T>::bound() {
+				err_msg.bytes()
+			} else {
+				msg.bytes()
+			};
+
+			let num_drain = {
+				let capacity = DebugBufferVec::<T>::bound().checked_sub(buffer.len()).expect(
+					"
+					`buffer` is of type `DebugBufferVec`,
+					`DebugBufferVec` is a `BoundedVec`,
+					`BoundedVec::len()` <= `BoundedVec::bound()`;
+					qed
+				",
+				);
+				msg.len().saturating_sub(capacity).min(buffer.len())
+			};
+			buffer.drain(0..num_drain);
+			buffer.try_extend(&mut msg).ok();
 			true
 		} else {
 			false
@@ -1373,6 +1404,27 @@ where
 			},
 		);
 		Ok(())
+	}
+
+	fn reentrance_count(&self) -> u32 {
+		let id: &AccountIdOf<Self::T> = &self.top_frame().account_id;
+		self.account_reentrance_count(id).saturating_sub(1)
+	}
+
+	fn account_reentrance_count(&self, account_id: &AccountIdOf<Self::T>) -> u32 {
+		self.frames()
+			.filter(|f| f.delegate_caller.is_none() && &f.account_id == account_id)
+			.count() as u32
+	}
+
+	fn nonce(&mut self) -> u64 {
+		if let Some(current) = self.nonce {
+			current
+		} else {
+			let current = <Nonce<T>>::get();
+			self.nonce = Some(current);
+			current
+		}
 	}
 }
 
@@ -2484,7 +2536,7 @@ mod tests {
 			exec_success()
 		});
 
-		let mut debug_buffer = Vec::new();
+		let mut debug_buffer = DebugBufferVec::<Test>::try_from(Vec::new()).unwrap();
 
 		ExtBuilder::default().build().execute_with(|| {
 			let min_balance = <Test as Config>::Currency::minimum_balance();
@@ -2507,7 +2559,7 @@ mod tests {
 			.unwrap();
 		});
 
-		assert_eq!(&String::from_utf8(debug_buffer).unwrap(), "This is a testMore text");
+		assert_eq!(&String::from_utf8(debug_buffer.to_vec()).unwrap(), "This is a testMore text");
 	}
 
 	#[test]
@@ -2518,7 +2570,7 @@ mod tests {
 			exec_trapped()
 		});
 
-		let mut debug_buffer = Vec::new();
+		let mut debug_buffer = DebugBufferVec::<Test>::try_from(Vec::new()).unwrap();
 
 		ExtBuilder::default().build().execute_with(|| {
 			let min_balance = <Test as Config>::Currency::minimum_balance();
@@ -2541,7 +2593,45 @@ mod tests {
 			assert!(result.is_err());
 		});
 
-		assert_eq!(&String::from_utf8(debug_buffer).unwrap(), "This is a testMore text");
+		assert_eq!(&String::from_utf8(debug_buffer.to_vec()).unwrap(), "This is a testMore text");
+	}
+
+	#[test]
+	fn debug_buffer_is_limited() {
+		let code_hash = MockLoader::insert(Call, move |ctx, _| {
+			ctx.ext.append_debug_buffer("overflowing bytes");
+			exec_success()
+		});
+
+		// Pre-fill the buffer up to its limit
+		let mut debug_buffer =
+			DebugBufferVec::<Test>::try_from(vec![0u8; DebugBufferVec::<Test>::bound()]).unwrap();
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule: Schedule<Test> = <Test as Config>::Schedule::get();
+			let min_balance = <Test as Config>::Currency::minimum_balance();
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
+			set_balance(&ALICE, min_balance * 10);
+			place_contract(&BOB, code_hash);
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut gas_meter,
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![],
+				Some(&mut debug_buffer),
+				Determinism::Deterministic,
+			)
+			.unwrap();
+			assert_eq!(
+				&String::from_utf8(debug_buffer[DebugBufferVec::<Test>::bound() - 17..].to_vec())
+					.unwrap(),
+				"overflowing bytes"
+			);
+		});
 	}
 
 	#[test]
@@ -3303,6 +3393,51 @@ mod tests {
 				Determinism::Deterministic,
 			);
 			assert_matches!(result, Ok(_));
+		});
+	}
+
+	#[test]
+	fn nonce_api_works() {
+		let fail_code = MockLoader::insert(Constructor, |_, _| exec_trapped());
+		let success_code = MockLoader::insert(Constructor, |_, _| exec_success());
+		let code_hash = MockLoader::insert(Call, move |ctx, _| {
+			// It is set to one when this contract was instantiated by `place_contract`
+			assert_eq!(ctx.ext.nonce(), 1);
+			// Should not change without any instantation in-between
+			assert_eq!(ctx.ext.nonce(), 1);
+			// Should not change with a failed instantiation
+			assert_err!(
+				ctx.ext.instantiate(Weight::zero(), fail_code, 0, vec![], &[],),
+				ExecError {
+					error: <Error<Test>>::ContractTrapped.into(),
+					origin: ErrorOrigin::Callee
+				}
+			);
+			assert_eq!(ctx.ext.nonce(), 1);
+			// Successful instantation increments
+			ctx.ext.instantiate(Weight::zero(), success_code, 0, vec![], &[]).unwrap();
+			assert_eq!(ctx.ext.nonce(), 2);
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let min_balance = <Test as Config>::Currency::minimum_balance();
+			let schedule = <Test as Config>::Schedule::get();
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
+			set_balance(&ALICE, min_balance * 1000);
+			place_contract(&BOB, code_hash);
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, None, 0).unwrap();
+			assert_ok!(MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut gas_meter,
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![],
+				None,
+				Determinism::Deterministic
+			));
 		});
 	}
 }

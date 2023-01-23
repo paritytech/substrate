@@ -25,7 +25,7 @@ macro_rules! unbonding_pools_with_era {
 	($($k:expr => $v:expr),* $(,)?) => {{
 		use sp_std::iter::{Iterator, IntoIterator};
 		let not_bounded: BTreeMap<_, _> = Iterator::collect(IntoIterator::into_iter([$(($k, $v),)*]));
-		UnbondingPoolsWithEra::try_from(not_bounded).unwrap()
+		BoundedBTreeMap::<EraIndex, UnbondPool<T>, TotalUnbondingPools<T>>::try_from(not_bounded).unwrap()
 	}};
 }
 
@@ -213,31 +213,30 @@ mod bonded_pool {
 
 			// Simulate a 100% slashed pool
 			StakingMock::set_bonded_balance(pool.bonded_account(), 0);
-			assert_noop!(pool.ok_to_join(0), Error::<Runtime>::OverflowRisk);
+			assert_noop!(pool.ok_to_join(), Error::<Runtime>::OverflowRisk);
 
 			// Simulate a slashed pool at `MaxPointsToBalance` + 1 slashed pool
 			StakingMock::set_bonded_balance(
 				pool.bonded_account(),
 				max_points_to_balance.saturating_add(1).into(),
 			);
-			assert_ok!(pool.ok_to_join(0));
+			assert_ok!(pool.ok_to_join());
 
 			// Simulate a slashed pool at `MaxPointsToBalance`
 			StakingMock::set_bonded_balance(pool.bonded_account(), max_points_to_balance);
-			assert_noop!(pool.ok_to_join(0), Error::<Runtime>::OverflowRisk);
+			assert_noop!(pool.ok_to_join(), Error::<Runtime>::OverflowRisk);
 
 			StakingMock::set_bonded_balance(
 				pool.bonded_account(),
 				Balance::MAX / max_points_to_balance,
 			);
-			// New bonded balance would be over threshold of Balance type
-			assert_noop!(pool.ok_to_join(0), Error::<Runtime>::OverflowRisk);
+
 			// and a sanity check
 			StakingMock::set_bonded_balance(
 				pool.bonded_account(),
 				Balance::MAX / max_points_to_balance - 1,
 			);
-			assert_ok!(pool.ok_to_join(0));
+			assert_ok!(pool.ok_to_join());
 		});
 	}
 }
@@ -437,7 +436,7 @@ mod join {
 				roles: DEFAULT_ROLES,
 			},
 		};
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().with_check(0).build_and_execute(|| {
 			// Given
 			Balances::make_free_balance_be(&11, ExistentialDeposit::get() + 2);
 			assert!(!PoolMembers::<Runtime>::contains_key(&11));
@@ -545,7 +544,7 @@ mod join {
 			// Balance needs to be gt Balance::MAX / `MaxPointsToBalance`
 			assert_noop!(
 				Pools::join(RuntimeOrigin::signed(11), 5, 123),
-				Error::<Runtime>::OverflowRisk
+				pallet_balances::Error::<Runtime>::InsufficientBalance,
 			);
 
 			StakingMock::set_bonded_balance(Pools::create_bonded_account(1), max_points_to_balance);
@@ -4283,7 +4282,7 @@ mod set_state {
 	fn set_state_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// Given
-			assert_ok!(BondedPool::<Runtime>::get(1).unwrap().ok_to_be_open(0));
+			assert_ok!(BondedPool::<Runtime>::get(1).unwrap().ok_to_be_open());
 
 			// Only the root and state toggler can change the state when the pool is ok to be open.
 			assert_noop!(
@@ -4832,6 +4831,41 @@ mod reward_counter_precision {
 	}
 
 	#[test]
+	fn massive_reward_in_small_pool() {
+		let tiny_bond = 1000 * DOT;
+		ExtBuilder::default().ed(DOT).min_bond(tiny_bond).build_and_execute(|| {
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10000000000000, joined: true }
+				]
+			);
+
+			Balances::make_free_balance_be(&20, tiny_bond);
+			assert_ok!(Pools::join(RuntimeOrigin::signed(20), tiny_bond / 2, 1));
+
+			// Suddenly, add a shit ton of rewards.
+			assert_ok!(
+				Balances::mutate_account(&default_reward_account(), |a| a.free += inflation(1))
+			);
+
+			// now claim.
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
+
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Bonded { member: 20, pool_id: 1, bonded: 5000000000000, joined: true },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 7333333333333333333 },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 3666666666666666666 }
+				]
+			);
+		})
+	}
+
+	#[test]
 	fn reward_counter_calc_wont_fail_in_normal_polkadot_future() {
 		// create a pool that has roughly half of the polkadot issuance in 10 years.
 		let pool_bond = inflation(10) / 2;
@@ -5064,330 +5098,5 @@ mod reward_counter_precision {
 					Default::default()
 				);
 			});
-	}
-}
-
-// NOTE: run this with debug_assertions, but in release mode.
-#[cfg(feature = "fuzz-test")]
-mod fuzz_test {
-	use super::*;
-	use crate::pallet::{Call as PoolsCall, Event as PoolsEvents};
-	use frame_support::traits::UnfilteredDispatchable;
-	use rand::{seq::SliceRandom, thread_rng, Rng};
-	use sp_runtime::{assert_eq_error_rate, Perquintill};
-
-	const ERA: BlockNumber = 1000;
-	const MAX_ED_MULTIPLE: Balance = 10_000;
-	const MIN_ED_MULTIPLE: Balance = 10;
-
-	// not quite elegant, just to make it available in random_signed_origin.
-	const REWARD_AGENT_ACCOUNT: AccountId = 42;
-
-	/// Grab random accounts, either known ones, or new ones.
-	fn random_signed_origin<R: Rng>(rng: &mut R) -> (RuntimeOrigin, AccountId) {
-		let count = PoolMembers::<T>::count();
-		if rng.gen::<bool>() && count > 0 {
-			// take an existing account.
-			let skip = rng.gen_range(0..count as usize);
-
-			// this is tricky: the account might be our reward agent, which we never want to be
-			// randomly chosen here. Try another one, or, if it is only our agent, return a random
-			// one nonetheless.
-			let candidate = PoolMembers::<T>::iter_keys().skip(skip).take(1).next().unwrap();
-			let acc =
-				if candidate == REWARD_AGENT_ACCOUNT { rng.gen::<AccountId>() } else { candidate };
-
-			(RuntimeOrigin::signed(acc), acc)
-		} else {
-			// create a new account
-			let acc = rng.gen::<AccountId>();
-			(RuntimeOrigin::signed(acc), acc)
-		}
-	}
-
-	fn random_ed_multiple<R: Rng>(rng: &mut R) -> Balance {
-		let multiple = rng.gen_range(MIN_ED_MULTIPLE..MAX_ED_MULTIPLE);
-		ExistentialDeposit::get() * multiple
-	}
-
-	fn fund_account<R: Rng>(rng: &mut R, account: &AccountId) {
-		let target_amount = random_ed_multiple(rng);
-		if let Some(top_up) = target_amount.checked_sub(Balances::free_balance(account)) {
-			let _ = Balances::deposit_creating(account, top_up);
-		}
-		assert!(Balances::free_balance(account) >= target_amount);
-	}
-
-	fn random_existing_pool<R: Rng>(mut rng: &mut R) -> Option<PoolId> {
-		BondedPools::<T>::iter_keys().collect::<Vec<_>>().choose(&mut rng).map(|x| *x)
-	}
-
-	fn random_call<R: Rng>(mut rng: &mut R) -> (crate::pallet::Call<T>, RuntimeOrigin) {
-		let op = rng.gen::<usize>();
-		let mut op_count =
-			<crate::pallet::Call<T> as frame_support::dispatch::GetCallName>::get_call_names()
-				.len();
-		// Exclude set_state, set_metadata, set_configs, update_roles and chill.
-		op_count -= 5;
-
-		match op % op_count {
-			0 => {
-				// join
-				let pool_id = random_existing_pool(&mut rng).unwrap_or_default();
-				let (origin, who) = random_signed_origin(&mut rng);
-				fund_account(&mut rng, &who);
-				let amount = random_ed_multiple(&mut rng);
-				(PoolsCall::<T>::join { amount, pool_id }, origin)
-			},
-			1 => {
-				// bond_extra
-				let (origin, who) = random_signed_origin(&mut rng);
-				let extra = if rng.gen::<bool>() {
-					BondExtra::Rewards
-				} else {
-					fund_account(&mut rng, &who);
-					let amount = random_ed_multiple(&mut rng);
-					BondExtra::FreeBalance(amount)
-				};
-				(PoolsCall::<T>::bond_extra { extra }, origin)
-			},
-			2 => {
-				// claim_payout
-				let (origin, _) = random_signed_origin(&mut rng);
-				(PoolsCall::<T>::claim_payout {}, origin)
-			},
-			3 => {
-				// unbond
-				let (origin, who) = random_signed_origin(&mut rng);
-				let amount = random_ed_multiple(&mut rng);
-				(PoolsCall::<T>::unbond { member_account: who, unbonding_points: amount }, origin)
-			},
-			4 => {
-				// pool_withdraw_unbonded
-				let pool_id = random_existing_pool(&mut rng).unwrap_or_default();
-				let (origin, _) = random_signed_origin(&mut rng);
-				(PoolsCall::<T>::pool_withdraw_unbonded { pool_id, num_slashing_spans: 0 }, origin)
-			},
-			5 => {
-				// withdraw_unbonded
-				let (origin, who) = random_signed_origin(&mut rng);
-				(
-					PoolsCall::<T>::withdraw_unbonded {
-						member_account: who,
-						num_slashing_spans: 0,
-					},
-					origin,
-				)
-			},
-			6 => {
-				// create
-				let (origin, who) = random_signed_origin(&mut rng);
-				let amount = random_ed_multiple(&mut rng);
-				fund_account(&mut rng, &who);
-				let root = who.clone();
-				let state_toggler = who.clone();
-				let nominator = who.clone();
-				(PoolsCall::<T>::create { amount, root, state_toggler, nominator }, origin)
-			},
-			7 => {
-				// nominate
-				let (origin, _) = random_signed_origin(&mut rng);
-				let pool_id = random_existing_pool(&mut rng).unwrap_or_default();
-				let validators = Default::default();
-				(PoolsCall::<T>::nominate { pool_id, validators }, origin)
-			},
-			_ => unreachable!(),
-		}
-	}
-
-	#[derive(Default)]
-	struct RewardAgent {
-		who: AccountId,
-		pool_id: Option<PoolId>,
-		expected_reward: Balance,
-	}
-
-	// TODO: inject some slashes into the game.
-	impl RewardAgent {
-		fn new(who: AccountId) -> Self {
-			Self { who, ..Default::default() }
-		}
-
-		fn join(&mut self) {
-			if self.pool_id.is_some() {
-				return
-			}
-			let pool_id = LastPoolId::<T>::get();
-			let amount = 10 * ExistentialDeposit::get();
-			let origin = RuntimeOrigin::signed(self.who);
-			let _ = Balances::deposit_creating(&self.who, 10 * amount);
-			self.pool_id = Some(pool_id);
-			log::info!(target: "reward-agent", "🤖 reward agent joining in {} with {}", pool_id, amount);
-			assert_ok!(PoolsCall::join::<T> { amount, pool_id }.dispatch_bypass_filter(origin));
-		}
-
-		fn claim_payout(&mut self) {
-			// 10 era later, we claim our payout. We expect our income to be roughly what we
-			// calculated.
-			if !PoolMembers::<T>::contains_key(&self.who) {
-				log!(warn, "reward agent is not in the pool yet, cannot claim");
-				return
-			}
-			let pre = Balances::free_balance(&42);
-			let origin = RuntimeOrigin::signed(42);
-			assert_ok!(PoolsCall::<T>::claim_payout {}.dispatch_bypass_filter(origin));
-			let post = Balances::free_balance(&42);
-
-			let income = post - pre;
-			log::info!(
-				target: "reward-agent", "🤖 CLAIM: actual: {}, expected: {}",
-				income,
-				self.expected_reward,
-			);
-			assert_eq_error_rate!(income, self.expected_reward, 10);
-			self.expected_reward = 0;
-		}
-	}
-
-	#[test]
-	fn fuzz_test() {
-		let mut reward_agent = RewardAgent::new(42);
-		sp_tracing::try_init_simple();
-		// NOTE: use this to get predictable (non)randomness:
-		// use::{rngs::SmallRng, SeedableRng};
-		// let mut rng = SmallRng::from_seed([0u8; 32]);
-		let mut rng = thread_rng();
-		let mut ext = sp_io::TestExternalities::new_empty();
-		// NOTE: sadly events don't fulfill the requirements of hashmap or btreemap.
-		let mut events_histogram = Vec::<(PoolsEvents<T>, u32)>::default();
-		let mut iteration = 0 as BlockNumber;
-		let mut ok = 0;
-		let mut err = 0;
-
-		ext.execute_with(|| {
-			MaxPoolMembers::<T>::set(Some(10_000));
-			MaxPoolMembersPerPool::<T>::set(Some(1000));
-			MaxPools::<T>::set(Some(1_000));
-
-			MinCreateBond::<T>::set(10 * ExistentialDeposit::get());
-			MinJoinBond::<T>::set(5 * ExistentialDeposit::get());
-			System::set_block_number(1);
-		});
-
-		ExistentialDeposit::set(10u128.pow(12u32));
-		BondingDuration::set(8);
-
-		loop {
-			ext.execute_with(|| {
-				iteration += 1;
-				let (call, origin) = random_call(&mut rng);
-				let outcome = call.clone().dispatch_bypass_filter(origin.clone());
-
-				match outcome {
-					Ok(_) => ok += 1,
-					Err(_) => err += 1,
-				};
-
-				log!(
-					debug,
-					"iteration {}, call {:?}, origin {:?}, outcome: {:?}, so far {} ok {} err",
-					iteration,
-					call,
-					origin,
-					outcome,
-					ok,
-					err,
-				);
-
-				// possibly join the reward_agent
-				if iteration > ERA / 2 && BondedPools::<T>::count() > 0 {
-					reward_agent.join();
-				}
-				// and possibly roughly every 4 era, trigger payout for the agent. Doing this more
-				// frequent is also harmless.
-				if rng.gen_range(0..(4 * ERA)) == 0 {
-					reward_agent.claim_payout();
-				}
-
-				// execute sanity checks at a fixed interval, possibly on every block.
-				if iteration %
-					(std::env::var("SANITY_CHECK_INTERVAL")
-						.ok()
-						.and_then(|x| x.parse::<u64>().ok()))
-					.unwrap_or(1) == 0
-				{
-					log!(info, "running sanity checks at {}", iteration);
-					Pools::do_try_state(u8::MAX).unwrap();
-				}
-
-				// collect and reset events.
-				System::events()
-					.into_iter()
-					.map(|r| r.event)
-					.filter_map(
-						|e| if let mock::Event::Pools(inner) = e { Some(inner) } else { None },
-					)
-					.for_each(|e| {
-						if let Some((_, c)) = events_histogram
-							.iter_mut()
-							.find(|(x, _)| std::mem::discriminant(x) == std::mem::discriminant(&e))
-						{
-							*c += 1;
-						} else {
-							events_histogram.push((e, 1))
-						}
-					});
-				System::reset_events();
-
-				// trigger an era change, and check the status of the reward agent.
-				if iteration % ERA == 0 {
-					CurrentEra::mutate(|c| *c += 1);
-					BondedPools::<T>::iter().for_each(|(id, _)| {
-						let amount = random_ed_multiple(&mut rng);
-						let _ =
-							Balances::deposit_creating(&Pools::create_reward_account(id), amount);
-						// if we just paid out the reward agent, let's calculate how much we expect
-						// our reward agent to have earned.
-						if reward_agent.pool_id.map_or(false, |mid| mid == id) {
-							let all_points = BondedPool::<T>::get(id).map(|p| p.points).unwrap();
-							let member_points =
-								PoolMembers::<T>::get(reward_agent.who).map(|m| m.points).unwrap();
-							let agent_share = Perquintill::from_rational(member_points, all_points);
-							log::info!(
-								target: "reward-agent",
-								"🤖 REWARD = amount = {:?}, ratio: {:?}, share {:?}",
-								amount,
-								agent_share,
-								agent_share * amount,
-							);
-							reward_agent.expected_reward += agent_share * amount;
-						}
-					});
-
-					log!(
-						info,
-						"iteration {}, {} pools, {} members, {} ok {} err, events = {:?}",
-						iteration,
-						BondedPools::<T>::count(),
-						PoolMembers::<T>::count(),
-						ok,
-						err,
-						events_histogram
-							.iter()
-							.map(|(x, c)| (
-								format!("{:?}", x)
-									.split(" ")
-									.map(|x| x.to_string())
-									.collect::<Vec<_>>()
-									.first()
-									.cloned()
-									.unwrap(),
-								c,
-							))
-							.collect::<Vec<_>>(),
-					);
-				}
-			});
-		}
 	}
 }

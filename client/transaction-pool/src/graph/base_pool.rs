@@ -22,6 +22,7 @@
 
 use std::{cmp::Ordering, collections::HashSet, fmt, hash, sync::Arc};
 
+use crate::LOG_TARGET;
 use log::{debug, trace, warn};
 use sc_transaction_pool_api::{error, InPoolTransaction, PoolStatus};
 use serde::Serialize;
@@ -84,7 +85,7 @@ pub struct PruneStatus<Hash, Ex> {
 
 /// Immutable transaction
 #[cfg_attr(test, derive(Clone))]
-#[derive(PartialEq, Eq, parity_util_mem::MallocSizeOf)]
+#[derive(PartialEq, Eq)]
 pub struct Transaction<Hash, Extrinsic> {
 	/// Raw extrinsic representing that transaction.
 	pub data: Extrinsic,
@@ -207,7 +208,7 @@ const RECENTLY_PRUNED_TAGS: usize = 2;
 /// as-is for the second time will fail or produce unwanted results.
 /// Most likely it is required to revalidate them and recompute set of
 /// required tags.
-#[derive(Debug, parity_util_mem::MallocSizeOf)]
+#[derive(Debug)]
 pub struct BasePool<Hash: hash::Hash + Eq, Ex> {
 	reject_future_transactions: bool,
 	future: FutureTransactions<Hash, Ex>,
@@ -272,9 +273,9 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 		}
 
 		let tx = WaitingTransaction::new(tx, self.ready.provided_tags(), &self.recently_pruned);
-		trace!(target: "txpool", "[{:?}] {:?}", tx.transaction.hash, tx);
+		trace!(target: LOG_TARGET, "[{:?}] {:?}", tx.transaction.hash, tx);
 		debug!(
-			target: "txpool",
+			target: LOG_TARGET,
 			"[{:?}] Importing to {}",
 			tx.transaction.hash,
 			if tx.is_ready() { "ready" } else { "future" }
@@ -328,7 +329,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 				// transaction failed to be imported.
 				Err(e) =>
 					if first {
-						debug!(target: "txpool", "[{:?}] Error importing: {:?}", current_hash, e);
+						debug!(target: LOG_TARGET, "[{:?}] Error importing: {:?}", current_hash, e);
 						return Err(e)
 					} else {
 						failed.push(current_hash);
@@ -347,7 +348,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 			// since they depend on each other and will never get to the best iterator.
 			self.ready.remove_subtree(&promoted);
 
-			debug!(target: "txpool", "[{:?}] Cycle detected, bailing.", hash);
+			debug!(target: LOG_TARGET, "[{:?}] Cycle detected, bailing.", hash);
 			return Err(error::Error::CycleDetected)
 		}
 
@@ -490,7 +491,10 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 			match self.import_to_ready(tx) {
 				Ok(res) => promoted.push(res),
 				Err(e) => {
-					warn!(target: "txpool", "[{:?}] Failed to promote during pruning: {:?}", hash, e);
+					warn!(
+						target: LOG_TARGET,
+						"[{:?}] Failed to promote during pruning: {:?}", hash, e,
+					);
 					failed.push(hash)
 				},
 			}
@@ -794,27 +798,6 @@ mod tests {
 		} else {
 			assert!(false, "Invalid error kind: {:?}", err);
 		}
-	}
-
-	#[test]
-	fn can_track_heap_size() {
-		let mut pool = pool();
-		pool.import(Transaction {
-			data: vec![5u8; 1024],
-			hash: 5,
-			provides: vec![vec![0], vec![4]],
-			..DEFAULT_TX.clone()
-		})
-		.expect("import 1 should be ok");
-		pool.import(Transaction {
-			data: vec![3u8; 1024],
-			hash: 7,
-			provides: vec![vec![2], vec![7]],
-			..DEFAULT_TX.clone()
-		})
-		.expect("import 2 should be ok");
-
-		assert!(parity_util_mem::malloc_size(&pool) > 5000);
 	}
 
 	#[test]

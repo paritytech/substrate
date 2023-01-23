@@ -21,7 +21,7 @@
 use sp_consensus::BlockOrigin;
 use sp_core::storage::StorageKey;
 use sp_runtime::{
-	generic::{BlockId, SignedBlock},
+	generic::SignedBlock,
 	traits::{Block as BlockT, NumberFor},
 	Justifications,
 };
@@ -30,7 +30,7 @@ use std::{collections::HashSet, fmt, sync::Arc};
 use crate::{blockchain::Info, notifications::StorageEventStream, FinalizeSummary, ImportSummary};
 
 use sc_transaction_pool_api::ChainEvent;
-use sc_utils::mpsc::TracingUnboundedReceiver;
+use sc_utils::mpsc::{TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain;
 
 /// Type that implements `futures::Stream` of block import events.
@@ -110,7 +110,7 @@ pub trait BlockBackend<Block: BlockT> {
 	/// Get block body by ID. Returns `None` if the body is not stored.
 	fn block_body(
 		&self,
-		id: &BlockId<Block>,
+		hash: Block::Hash,
 	) -> sp_blockchain::Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
 
 	/// Get all indexed transactions for a block,
@@ -118,20 +118,16 @@ pub trait BlockBackend<Block: BlockT> {
 	///
 	/// Note that this will only fetch transactions
 	/// that are indexed by the runtime with `storage_index_transaction`.
-	fn block_indexed_body(
-		&self,
-		id: &BlockId<Block>,
-	) -> sp_blockchain::Result<Option<Vec<Vec<u8>>>>;
+	fn block_indexed_body(&self, hash: Block::Hash) -> sp_blockchain::Result<Option<Vec<Vec<u8>>>>;
 
-	/// Get full block by id.
-	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>>;
+	/// Get full block by hash.
+	fn block(&self, hash: Block::Hash) -> sp_blockchain::Result<Option<SignedBlock<Block>>>;
 
-	/// Get block status.
-	fn block_status(&self, id: &BlockId<Block>)
-		-> sp_blockchain::Result<sp_consensus::BlockStatus>;
+	/// Get block status by block hash.
+	fn block_status(&self, hash: Block::Hash) -> sp_blockchain::Result<sp_consensus::BlockStatus>;
 
-	/// Get block justifications for the block with the given id.
-	fn justifications(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justifications>>;
+	/// Get block justifications for the block with the given hash.
+	fn justifications(&self, hash: Block::Hash) -> sp_blockchain::Result<Option<Justifications>>;
 
 	/// Get block hash by number.
 	fn block_hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>>;
@@ -140,10 +136,10 @@ pub trait BlockBackend<Block: BlockT> {
 	///
 	/// Note that this will only fetch transactions
 	/// that are indexed by the runtime with `storage_index_transaction`.
-	fn indexed_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<Option<Vec<u8>>>;
+	fn indexed_transaction(&self, hash: Block::Hash) -> sp_blockchain::Result<Option<Vec<u8>>>;
 
 	/// Check if transaction index exists.
-	fn has_indexed_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+	fn has_indexed_transaction(&self, hash: Block::Hash) -> sp_blockchain::Result<bool> {
 		Ok(self.indexed_transaction(hash)?.is_some())
 	}
 
@@ -200,17 +196,6 @@ impl fmt::Display for MemorySize {
 	}
 }
 
-/// Memory statistics for state db.
-#[derive(Default, Clone, Debug)]
-pub struct StateDbMemoryInfo {
-	/// Memory usage of the non-canonical overlay
-	pub non_canonical: MemorySize,
-	/// Memory usage of the pruning window.
-	pub pruning: Option<MemorySize>,
-	/// Memory usage of the pinned blocks.
-	pub pinned: MemorySize,
-}
-
 /// Memory statistics for client instance.
 #[derive(Default, Clone, Debug)]
 pub struct MemoryInfo {
@@ -218,8 +203,6 @@ pub struct MemoryInfo {
 	pub state_cache: MemorySize,
 	/// Size of backend database cache.
 	pub database_cache: MemorySize,
-	/// Size of the state db.
-	pub state_db: StateDbMemoryInfo,
 }
 
 /// I/O statistics for client instance.
@@ -267,13 +250,9 @@ impl fmt::Display for UsageInfo {
 		write!(
 			f,
 			"caches: ({} state, {} db overlay), \
-			 state db: ({} non-canonical, {} pruning, {} pinned), \
 			 i/o: ({} tx, {} write, {} read, {} avg tx, {}/{} key cache reads/total, {} trie nodes writes)",
 			self.memory.state_cache,
 			self.memory.database_cache,
-			self.memory.state_db.non_canonical,
-			self.memory.state_db.pruning.unwrap_or_default(),
-			self.memory.state_db.pinned,
 			self.io.transactions,
 			self.io.bytes_written,
 			self.io.bytes_read,
@@ -282,6 +261,53 @@ impl fmt::Display for UsageInfo {
 			self.io.state_reads,
 			self.io.state_writes_nodes,
 		)
+	}
+}
+
+/// Sends a message to the pinning-worker once dropped to unpin a block in the backend.
+#[derive(Debug)]
+pub struct UnpinHandleInner<Block: BlockT> {
+	/// Hash of the block pinned by this handle
+	hash: Block::Hash,
+	unpin_worker_sender: TracingUnboundedSender<Block::Hash>,
+}
+
+impl<Block: BlockT> UnpinHandleInner<Block> {
+	/// Create a new [`UnpinHandleInner`]
+	pub fn new(
+		hash: Block::Hash,
+		unpin_worker_sender: TracingUnboundedSender<Block::Hash>,
+	) -> Self {
+		Self { hash, unpin_worker_sender }
+	}
+}
+
+impl<Block: BlockT> Drop for UnpinHandleInner<Block> {
+	fn drop(&mut self) {
+		if let Err(err) = self.unpin_worker_sender.unbounded_send(self.hash) {
+			log::debug!(target: "db", "Unable to unpin block with hash: {}, error: {:?}", self.hash, err);
+		};
+	}
+}
+
+/// Keeps a specific block pinned while the handle is alive.
+/// Once the last handle instance for a given block is dropped, the
+/// block is unpinned in the [`Backend`](crate::backend::Backend::unpin_block).
+#[derive(Debug, Clone)]
+pub struct UnpinHandle<Block: BlockT>(Arc<UnpinHandleInner<Block>>);
+
+impl<Block: BlockT> UnpinHandle<Block> {
+	/// Create a new [`UnpinHandle`]
+	pub fn new(
+		hash: Block::Hash,
+		unpin_worker_sender: TracingUnboundedSender<Block::Hash>,
+	) -> UnpinHandle<Block> {
+		UnpinHandle(Arc::new(UnpinHandleInner::new(hash, unpin_worker_sender)))
+	}
+
+	/// Hash of the block this handle is unpinning on drop
+	pub fn hash(&self) -> Block::Hash {
+		self.0.hash
 	}
 }
 
@@ -300,6 +326,36 @@ pub struct BlockImportNotification<Block: BlockT> {
 	///
 	/// If `None`, there was no re-org while importing.
 	pub tree_route: Option<Arc<sp_blockchain::TreeRoute<Block>>>,
+	/// Handle to unpin the block this notification is for
+	unpin_handle: UnpinHandle<Block>,
+}
+
+impl<Block: BlockT> BlockImportNotification<Block> {
+	/// Create new notification
+	pub fn new(
+		hash: Block::Hash,
+		origin: BlockOrigin,
+		header: Block::Header,
+		is_new_best: bool,
+		tree_route: Option<Arc<sp_blockchain::TreeRoute<Block>>>,
+		unpin_worker_sender: TracingUnboundedSender<Block::Hash>,
+	) -> Self {
+		Self {
+			hash,
+			origin,
+			header,
+			is_new_best,
+			tree_route,
+			unpin_handle: UnpinHandle::new(hash, unpin_worker_sender),
+		}
+	}
+
+	/// Consume this notification and extract the unpin handle.
+	///
+	/// Note: Only use this if you want to keep the block pinned in the backend.
+	pub fn into_unpin_handle(self) -> UnpinHandle<Block> {
+		self.unpin_handle
+	}
 }
 
 /// Summary of a finalized block.
@@ -315,6 +371,8 @@ pub struct FinalityNotification<Block: BlockT> {
 	pub tree_route: Arc<[Block::Hash]>,
 	/// Stale branches heads.
 	pub stale_heads: Arc<[Block::Hash]>,
+	/// Handle to unpin the block this notification is for
+	unpin_handle: UnpinHandle<Block>,
 }
 
 impl<B: BlockT> TryFrom<BlockImportNotification<B>> for ChainEvent<B> {
@@ -335,26 +393,44 @@ impl<B: BlockT> From<FinalityNotification<B>> for ChainEvent<B> {
 	}
 }
 
-impl<B: BlockT> From<FinalizeSummary<B>> for FinalityNotification<B> {
-	fn from(mut summary: FinalizeSummary<B>) -> Self {
+impl<Block: BlockT> FinalityNotification<Block> {
+	/// Create finality notification from finality summary.
+	pub fn from_summary(
+		mut summary: FinalizeSummary<Block>,
+		unpin_worker_sender: TracingUnboundedSender<Block::Hash>,
+	) -> FinalityNotification<Block> {
 		let hash = summary.finalized.pop().unwrap_or_default();
 		FinalityNotification {
 			hash,
 			header: summary.header,
 			tree_route: Arc::from(summary.finalized),
 			stale_heads: Arc::from(summary.stale_heads),
+			unpin_handle: UnpinHandle::new(hash, unpin_worker_sender),
 		}
+	}
+
+	/// Consume this notification and extract the unpin handle.
+	///
+	/// Note: Only use this if you want to keep the block pinned in the backend.
+	pub fn into_unpin_handle(self) -> UnpinHandle<Block> {
+		self.unpin_handle
 	}
 }
 
-impl<B: BlockT> From<ImportSummary<B>> for BlockImportNotification<B> {
-	fn from(summary: ImportSummary<B>) -> Self {
+impl<Block: BlockT> BlockImportNotification<Block> {
+	/// Create finality notification from finality summary.
+	pub fn from_summary(
+		summary: ImportSummary<Block>,
+		unpin_worker_sender: TracingUnboundedSender<Block::Hash>,
+	) -> BlockImportNotification<Block> {
+		let hash = summary.hash;
 		BlockImportNotification {
-			hash: summary.hash,
+			hash,
 			origin: summary.origin,
 			header: summary.header,
 			is_new_best: summary.is_new_best,
 			tree_route: summary.tree_route.map(Arc::new),
+			unpin_handle: UnpinHandle::new(hash, unpin_worker_sender),
 		}
 	}
 }

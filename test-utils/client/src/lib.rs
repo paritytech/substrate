@@ -41,7 +41,7 @@ use futures::{future::Future, stream::StreamExt};
 use sc_client_api::BlockchainEvents;
 use sc_service::client::{ClientConfig, LocalCallExecutor};
 use serde::Deserialize;
-use sp_core::storage::ChildInfo;
+use sp_core::{storage::ChildInfo, testing::TaskExecutor};
 use sp_runtime::{codec::Encode, traits::Block as BlockT, OpaqueExtrinsic};
 use std::{
 	collections::{HashMap, HashSet},
@@ -62,7 +62,7 @@ impl GenesisInit for () {
 }
 
 /// A builder for creating a test client instance.
-pub struct TestClientBuilder<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit> {
+pub struct TestClientBuilder<Block: BlockT, ExecutorDispatch, Backend: 'static, G: GenesisInit> {
 	execution_strategies: ExecutionStrategies,
 	genesis_init: G,
 	/// The key is an unprefixed storage key, this only contains
@@ -203,7 +203,7 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 	)
 	where
 		ExecutorDispatch:
-			sc_client_api::CallExecutor<Block> + sc_executor::RuntimeVersionOf + 'static,
+			sc_client_api::CallExecutor<Block> + sc_executor::RuntimeVersionOf + Clone + 'static,
 		Backend: sc_client_api::backend::Backend<Block>,
 		<Backend as sc_client_api::backend::Backend<Block>>::OffchainStorage: 'static,
 	{
@@ -223,24 +223,32 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 			storage
 		};
 
+		let client_config = ClientConfig {
+			offchain_indexing_api: self.enable_offchain_indexing_api,
+			no_genesis: self.no_genesis,
+			..Default::default()
+		};
+
+		let genesis_block_builder = sc_service::GenesisBlockBuilder::new(
+			&storage,
+			!client_config.no_genesis,
+			self.backend.clone(),
+			executor.clone(),
+		)
+		.expect("Creates genesis block builder");
+
+		let spawn_handle = Box::new(TaskExecutor::new());
+
 		let client = client::Client::new(
 			self.backend.clone(),
 			executor,
-			&storage,
+			spawn_handle,
+			genesis_block_builder,
 			self.fork_blocks,
 			self.bad_blocks,
-			ExecutionExtensions::new(
-				self.execution_strategies,
-				self.keystore,
-				sc_offchain::OffchainDb::factory_from_backend(&*self.backend),
-			),
 			None,
 			None,
-			ClientConfig {
-				offchain_indexing_api: self.enable_offchain_indexing_api,
-				no_genesis: self.no_genesis,
-				..Default::default()
-			},
+			client_config,
 		)
 		.expect("Creates new client");
 
@@ -285,6 +293,11 @@ impl<Block: BlockT, D, Backend, G: GenesisInit>
 			executor,
 			Box::new(sp_core::testing::TaskExecutor::new()),
 			Default::default(),
+			ExecutionExtensions::new(
+				self.execution_strategies.clone(),
+				self.keystore.clone(),
+				sc_offchain::OffchainDb::factory_from_backend(&*self.backend),
+			),
 		)
 		.expect("Creates LocalCallExecutor");
 
