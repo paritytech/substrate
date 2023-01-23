@@ -648,7 +648,7 @@ pub mod pallet {
 		/// This is only used for paged rewards. Once older non-paged rewards are no longer
 		/// relevant, `is_rewards_claimed_temp` can be removed and this function can be made public.
 		fn is_rewards_claimed(era: EraIndex, validator: &T::AccountId, page: PageIndex) -> bool {
-			ClaimedRewards::<T>::get(era, validator).iter().find(|&&p| page == p).is_some()
+			ClaimedRewards::<T>::get(era, validator).iter().any(|&p| page == p)
 		}
 
 		/// Get exposure info for a validator at a given era and page.
