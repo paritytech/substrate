@@ -163,7 +163,7 @@ struct HostFn {
 	is_stable: bool,
 	alias_to: Option<String>,
 	/// Formulating the predicate inverted makes the expression using it simpler.
-	is_undeprecated: bool,
+	not_deprecated: bool,
 }
 
 enum HostFnReturn {
@@ -208,7 +208,7 @@ impl HostFn {
 		let mut maybe_module = None;
 		let mut is_stable = true;
 		let mut alias_to = None;
-		let mut is_undeprecated = true;
+		let mut not_deprecated = true;
 		while let Some(attr) = attrs.pop() {
 			let ident = attr.path.get_ident().ok_or(err(span, msg))?.to_string();
 			match ident.as_str() {
@@ -234,17 +234,17 @@ impl HostFn {
 					);
 				},
 				"deprecated" => {
-					if !is_undeprecated {
+					if !not_deprecated {
 						return Err(err(span, "#[deprecated] can only be specified once"))
 					}
-					is_undeprecated = false;
+					not_deprecated = false;
 				},
 				_ => return Err(err(span, msg)),
 			}
 		}
 		let name = item.sig.ident.to_string();
 
-		if !(is_stable || is_undeprecated) {
+		if !(is_stable || not_deprecated) {
 			return Err(err(span, "#[deprecated] is exclusive with #[unstable]"))
 		}
 
@@ -343,7 +343,7 @@ impl HostFn {
 							returns,
 							is_stable,
 							alias_to,
-							is_undeprecated,
+							not_deprecated,
 						})
 					},
 					_ => Err(err(span, &msg)),
@@ -566,7 +566,7 @@ fn expand_functions(
 			&f.item.sig.output
 		);
 		let is_stable = f.is_stable;
-		let is_undeprecated = f.is_undeprecated;
+		let not_deprecated = f.not_deprecated;
 
 		// If we don't expand blocks (implementing for `()`) we change a few things:
 		// - We replace any code by unreachable!
@@ -612,7 +612,7 @@ fn expand_functions(
 			// is necessary as the decision whether we allow unstable or deprecated functions
 			// is a decision made at runtime. Generation of the weights happens statically.
 			if ::core::cfg!(feature = "runtime-benchmarks") ||
-				((#is_stable || __allow_unstable__) && (#is_undeprecated || __allow_deprecated__))
+				((#is_stable || __allow_unstable__) && (#not_deprecated || __allow_deprecated__))
 			{
 				#allow_unused
 				linker.define(#module, #name, ::wasmi::Func::wrap(&mut*store, |mut __caller__: ::wasmi::Caller<#host_state>, #( #params, )*| -> #wasm_output {
