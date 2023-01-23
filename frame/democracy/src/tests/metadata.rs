@@ -52,7 +52,6 @@ fn set_external_metadata_works() {
 			owner,
 			hash,
 		}));
-		assert!(Preimage::is_requested(&hash));
 	});
 }
 
@@ -67,7 +66,6 @@ fn clear_metadata_works() {
 		// set metadata.
 		let hash = note_preimage(1);
 		assert_ok!(Democracy::set_metadata(RuntimeOrigin::signed(2), owner.clone(), Some(hash),));
-		assert!(Preimage::is_requested(&hash));
 		// fails to clear metadata with a wrong origin.
 		assert_noop!(
 			Democracy::set_metadata(RuntimeOrigin::signed(1), owner.clone(), None),
@@ -79,7 +77,6 @@ fn clear_metadata_works() {
 			owner,
 			hash,
 		}));
-		assert!(!Preimage::is_requested(&hash));
 	});
 }
 
@@ -111,7 +108,6 @@ fn set_proposal_metadata_works() {
 			owner,
 			hash,
 		}));
-		assert!(Preimage::is_requested(&hash));
 	});
 }
 
@@ -124,9 +120,7 @@ fn clear_proposal_metadata_works() {
 		let owner = MetadataOwner::Proposal(Democracy::public_prop_count() - 1);
 		// set metadata.
 		let hash = note_preimage(1);
-		assert!(!Preimage::is_requested(&hash));
 		assert_ok!(Democracy::set_metadata(RuntimeOrigin::signed(1), owner.clone(), Some(hash),));
-		assert!(Preimage::is_requested(&hash));
 		// fails to clear metadata with a wrong origin.
 		assert_noop!(
 			Democracy::set_metadata(RuntimeOrigin::signed(3), owner.clone(), None),
@@ -138,7 +132,6 @@ fn clear_proposal_metadata_works() {
 			owner,
 			hash,
 		}));
-		assert!(!Preimage::is_requested(&hash));
 	});
 }
 
@@ -166,9 +159,7 @@ fn set_referendum_metadata_by_root() {
 			Error::<Test>::NoPermission,
 		);
 		// succeed to set metadata by a root for an ongoing referendum.
-		assert!(!Preimage::is_requested(&hash));
 		assert_ok!(Democracy::set_metadata(RuntimeOrigin::root(), owner.clone(), Some(hash),));
-		assert!(Preimage::is_requested(&hash));
 		System::assert_last_event(RuntimeEvent::Democracy(crate::Event::MetadataSet {
 			owner: owner.clone(),
 			hash,
@@ -179,7 +170,6 @@ fn set_referendum_metadata_by_root() {
 			owner,
 			hash,
 		}));
-		assert!(!Preimage::is_requested(&hash));
 	});
 }
 
@@ -199,8 +189,6 @@ fn clear_referendum_metadata_works() {
 		let hash = note_preimage(1);
 		// referendum finished.
 		MetadataOf::<Test>::insert(owner.clone(), hash);
-		Preimage::request(&hash);
-		assert!(Preimage::is_requested(&hash));
 		// no permission to clear metadata of an ongoing referendum.
 		assert_noop!(
 			Democracy::set_metadata(RuntimeOrigin::signed(1), owner.clone(), None),
@@ -217,6 +205,5 @@ fn clear_referendum_metadata_works() {
 			owner,
 			hash,
 		}));
-		assert!(!Preimage::is_requested(&hash));
 	});
 }

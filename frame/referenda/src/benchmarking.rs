@@ -565,7 +565,6 @@ benchmarks_instance_pallet! {
 		assert_ok!(
 			Referenda::<T, I>::set_metadata(origin.clone(), index, Some(hash))
 		);
-		assert!(T::Preimages::is_requested(&hash));
 	}: set_metadata<T::RuntimeOrigin>(origin, index, None)
 	verify {
 		assert_last_event::<T, I>(Event::MetadataCleared { index, hash }.into());

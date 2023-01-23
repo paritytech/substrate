@@ -624,7 +624,6 @@ fn set_metadata_works() {
 			index,
 			hash,
 		}));
-		assert!(Preimage::is_requested(&hash));
 	});
 }
 
@@ -640,7 +639,6 @@ fn clear_metadata_works() {
 		));
 		let index = ReferendumCount::<Test>::get() - 1;
 		assert_ok!(Referenda::set_metadata(RuntimeOrigin::signed(1), index, Some(hash)));
-		assert!(Preimage::is_requested(&hash));
 		assert_noop!(
 			Referenda::set_metadata(RuntimeOrigin::signed(2), index, None),
 			Error::<Test>::NoPermission,
@@ -650,6 +648,5 @@ fn clear_metadata_works() {
 			index,
 			hash,
 		}));
-		assert!(!Preimage::is_requested(&hash));
 	});
 }

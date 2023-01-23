@@ -683,7 +683,6 @@ pub mod pallet {
 				let status = Self::ensure_ongoing(index)?;
 				ensure!(status.submission_deposit.who == who, Error::<T, I>::NoPermission);
 				ensure!(T::Preimages::len(&hash).is_some(), Error::<T, I>::PreimageNotExist);
-				T::Preimages::request(&hash);
 				MetadataOf::<T, I>::insert(index, hash);
 				Self::deposit_event(Event::<T, I>::MetadataSet { index, hash });
 				Ok(())
@@ -1270,9 +1269,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Clear metadata, if `Some` and unrequest associated preimage.
 	fn do_clear_metadata(index: ReferendumIndex) {
 		if let Some(hash) = MetadataOf::<T, I>::take(index) {
-			if T::Preimages::is_requested(&hash) {
-				T::Preimages::unrequest(&hash);
-			}
 			Self::deposit_event(Event::<T, I>::MetadataCleared { index, hash });
 		}
 	}

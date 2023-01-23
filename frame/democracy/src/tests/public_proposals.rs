@@ -98,11 +98,9 @@ fn cancel_proposal_should_work() {
 			Some(hash)
 		));
 		assert!(<MetadataOf<Test>>::get(MetadataOwner::Proposal(0)).is_some());
-		assert!(Preimage::is_requested(&hash));
 		assert_ok!(Democracy::cancel_proposal(RuntimeOrigin::root(), 0));
 		// metadata cleared, preimage unrequested.
 		assert!(<MetadataOf<Test>>::get(MetadataOwner::Proposal(0)).is_none());
-		assert!(!Preimage::is_requested(&hash));
 		System::assert_has_event(crate::Event::ProposalCanceled { prop_index: 0 }.into());
 		System::assert_last_event(
 			crate::Event::MetadataCleared { owner: MetadataOwner::Proposal(0), hash }.into(),

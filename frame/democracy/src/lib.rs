@@ -1162,7 +1162,6 @@ pub mod pallet {
 			}
 			if let Some(hash) = maybe_hash {
 				ensure!(T::Preimages::len(&hash).is_some(), Error::<T>::PreimageNotExist);
-				T::Preimages::request(&hash);
 				MetadataOf::<T>::insert(owner.clone(), hash);
 				Self::deposit_event(Event::<T>::MetadataSet { owner, hash });
 			} else {
@@ -1695,9 +1694,6 @@ impl<T: Config> Pallet<T> {
 	/// Clear metadata, if `Some` and unrequest associated preimage.
 	fn clear_metadata(owner: MetadataOwner) {
 		if let Some(hash) = MetadataOf::<T>::take(&owner) {
-			if T::Preimages::is_requested(&hash) {
-				T::Preimages::unrequest(&hash);
-			}
 			Self::deposit_event(Event::<T>::MetadataCleared { owner, hash });
 		}
 	}
