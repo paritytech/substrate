@@ -63,5 +63,5 @@ fn cleanup_set_id_sesion_map<T: Config>() -> Weight {
 
 	T::DbWeight::get()
 		.reads(1)
-		.saturating_add(T::DbWeight::get().writes((0..until_set_id).count().saturated_into()))
+		.saturating_add(T::DbWeight::get().writes(until_set_id))
 }
