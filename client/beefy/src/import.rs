@@ -139,7 +139,10 @@ where
 			(Some(encoded), ImportResult::Imported(_)) => {
 				if let Ok(proof) = self.decode_and_verify(&encoded, number, hash) {
 					// The proof is valid and the block is imported and final, we can import.
-					debug!(target: LOG_TARGET, "🥩 import justif {:?} for block number {:?}.", proof, number);
+					debug!(
+						target: LOG_TARGET,
+						"🥩 import justif {:?} for block number {:?}.", proof, number
+					);
 					// Send the justification to the BEEFY voter for processing.
 					self.justification_sender
 						.notify(|| Ok::<_, ()>(proof))
@@ -148,7 +151,8 @@ where
 					debug!(
 						target: LOG_TARGET,
 						"🥩 error decoding justification: {:?} for imported block {:?}",
-						encoded, number,
+						encoded,
+						number,
 					);
 				}
 			},

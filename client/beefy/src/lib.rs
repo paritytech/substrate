@@ -387,7 +387,8 @@ where
 				target: LOG_TARGET,
 				"🥩 Loading BEEFY voter state from genesis on what appears to be first startup. \
 				Starting voting rounds at block {:?}, genesis validator set {:?}.",
-				genesis_num, genesis_set,
+				genesis_num,
+				genesis_set,
 			);
 
 			sessions.push_front(Rounds::new(genesis_num, genesis_set));
@@ -396,7 +397,11 @@ where
 		}
 
 		if let Some(active) = worker::find_authorities_change::<B>(&header) {
-			info!(target: LOG_TARGET, "🥩 Marking block {:?} as BEEFY Mandatory.", *header.number());
+			info!(
+				target: LOG_TARGET,
+				"🥩 Marking block {:?} as BEEFY Mandatory.",
+				*header.number()
+			);
 			sessions.push_front(Rounds::new(*header.number(), active));
 		}
 

@@ -174,7 +174,10 @@ where
 				return ValidationResult::ProcessAndKeep(self.topic)
 			} else {
 				// TODO: report peer
-				debug!(target: LOG_TARGET, "🥩 Bad signature on message: {:?}, from: {:?}", msg, sender);
+				debug!(
+					target: LOG_TARGET,
+					"🥩 Bad signature on message: {:?}, from: {:?}", msg, sender
+				);
 			}
 		}
 

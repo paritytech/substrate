@@ -18,10 +18,7 @@
 
 //! Schema for BEEFY state persisted in the aux-db.
 
-use crate::{
-	worker::PersistedState,
-	LOG_TARGET,
-};
+use crate::{worker::PersistedState, LOG_TARGET};
 use codec::{Decode, Encode};
 use log::{info, trace};
 use sc_client_api::{backend::AuxStore, Backend};

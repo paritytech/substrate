@@ -27,8 +27,7 @@ use crate::{
 	metric_inc, metric_set,
 	metrics::Metrics,
 	round::Rounds,
-	BeefyVoterLinks,
-	LOG_TARGET,
+	BeefyVoterLinks, LOG_TARGET,
 };
 use beefy_primitives::{
 	crypto::{AuthorityId, Signature},
@@ -425,7 +424,8 @@ where
 		if let Some(active_session) = self.active_rounds() {
 			if !active_session.mandatory_done() {
 				debug!(
-					target: LOG_TARGET, "🥩 New session {} while active session {} is still lagging.",
+					target: LOG_TARGET,
+					"🥩 New session {} while active session {} is still lagging.",
 					validator_set.id(),
 					active_session.validator_set_id(),
 				);
@@ -446,7 +446,8 @@ where
 		info!(
 			target: LOG_TARGET,
 			"🥩 New Rounds for validator set id: {:?} with session_start {:?}",
-			id, new_session_start
+			id,
+			new_session_start
 		);
 	}
 
@@ -496,7 +497,10 @@ where
 				if self.pending_votes.len() < MAX_BUFFERED_VOTE_ROUNDS {
 					let votes_vec = self.pending_votes.entry(block_num).or_default();
 					if votes_vec.try_push(vote).is_err() {
-						warn!(target: LOG_TARGET, "🥩 Buffer vote dropped for round: {:?}", block_num)
+						warn!(
+							target: LOG_TARGET,
+							"🥩 Buffer vote dropped for round: {:?}", block_num
+						)
 					}
 				} else {
 					warn!(target: LOG_TARGET, "🥩 Buffer vote dropped for round: {:?}.", block_num);
@@ -529,7 +533,10 @@ where
 				if self.pending_justifications.len() < MAX_BUFFERED_JUSTIFICATIONS {
 					self.pending_justifications.entry(block_num).or_insert(justification);
 				} else {
-					warn!(target: LOG_TARGET, "🥩 Buffer justification dropped for round: {:?}.", block_num);
+					warn!(
+						target: LOG_TARGET,
+						"🥩 Buffer justification dropped for round: {:?}.", block_num
+					);
 				}
 			},
 			RoundAction::Drop => (),
@@ -567,7 +574,10 @@ where
 
 				metric_set!(self, beefy_round_concluded, block_num);
 
-				info!(target: LOG_TARGET, "🥩 Round #{} concluded, finality_proof: {:?}.", round.1, finality_proof);
+				info!(
+					target: LOG_TARGET,
+					"🥩 Round #{} concluded, finality_proof: {:?}.", round.1, finality_proof
+				);
 
 				// We created the `finality_proof` and know to be valid.
 				// New state is persisted after finalization.
@@ -628,7 +638,10 @@ where
 					self.backend
 						.append_justification(hash, (BEEFY_ENGINE_ID, finality_proof.encode()))
 				}) {
-				error!(target: LOG_TARGET, "🥩 Error {:?} on appending justification: {:?}", e, finality_proof);
+				error!(
+					target: LOG_TARGET,
+					"🥩 Error {:?} on appending justification: {:?}", e, finality_proof
+				);
 			}
 
 			self.links
@@ -754,7 +767,10 @@ where
 			.active_rounds_mut()
 			.ok_or(Error::UninitSession)?;
 		if !rounds.should_self_vote(&(payload.clone(), target_number)) {
-			debug!(target: LOG_TARGET, "🥩 Don't double vote for block number: {:?}", target_number);
+			debug!(
+				target: LOG_TARGET,
+				"🥩 Don't double vote for block number: {:?}", target_number
+			);
 			return Ok(())
 		}
 		let (validators, validator_set_id) = (rounds.validators(), rounds.validator_set_id());
@@ -763,7 +779,10 @@ where
 			debug!(target: LOG_TARGET, "🥩 Local authority id: {:?}", id);
 			id
 		} else {
-			debug!(target: LOG_TARGET, "🥩 Missing validator id - can't vote for: {:?}", target_hash);
+			debug!(
+				target: LOG_TARGET,
+				"🥩 Missing validator id - can't vote for: {:?}", target_hash
+			);
 			return Ok(())
 		};
 
@@ -836,7 +855,11 @@ where
 		mut block_import_justif: Fuse<NotificationReceiver<BeefyVersionedFinalityProof<B>>>,
 		mut finality_notifications: Fuse<FinalityNotifications<B>>,
 	) {
-		info!(target: LOG_TARGET, "🥩 run BEEFY worker, best grandpa: #{:?}.", self.best_grandpa_block());
+		info!(
+			target: LOG_TARGET,
+			"🥩 run BEEFY worker, best grandpa: #{:?}.",
+			self.best_grandpa_block()
+		);
 
 		let mut votes = Box::pin(
 			self.gossip_engine
@@ -938,11 +961,7 @@ where
 	// if the mandatory block (session_start) does not have a beefy justification yet,
 	// we vote on it
 	let target = if best_beefy < session_start {
-		debug!(
-			target: LOG_TARGET,
-			"🥩 vote target - mandatory block: #{:?}",
-			session_start,
-		);
+		debug!(target: LOG_TARGET, "🥩 vote target - mandatory block: #{:?}", session_start,);
 		session_start
 	} else {
 		let diff = best_grandpa.saturating_sub(best_beefy) + 1u32.into();

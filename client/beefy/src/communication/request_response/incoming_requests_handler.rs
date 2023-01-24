@@ -30,7 +30,7 @@ use sp_runtime::traits::Block;
 use std::{marker::PhantomData, sync::Arc};
 
 use crate::communication::request_response::{
-	on_demand_justifications_protocol_config, Error, JustificationRequest, BEEFY_SYNC_LOG_TARGET
+	on_demand_justifications_protocol_config, Error, JustificationRequest, BEEFY_SYNC_LOG_TARGET,
 };
 
 /// A request coming in, including a sender for sending responses.
