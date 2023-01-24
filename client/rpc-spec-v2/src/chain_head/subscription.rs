@@ -20,6 +20,7 @@
 
 use futures::channel::oneshot;
 use parking_lot::{RwLock, RwLockWriteGuard};
+use sc_client_api::Backend;
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	collections::{hash_map::Entry, HashMap, HashSet},
@@ -50,18 +51,37 @@ struct SubscriptionInner<Block: BlockT> {
 }
 
 /// Manage the blocks of a specific subscription ID.
-#[derive(Clone)]
-pub struct SubscriptionHandle<Block: BlockT> {
+// #[derive(Clone)]
+pub struct SubscriptionHandle<Block: BlockT, BE: Backend<Block> + 'static> {
 	inner: Arc<RwLock<SubscriptionInner<Block>>>,
 	/// The best reported block by this subscription.
 	/// Have this as a separate variable to easily share
 	/// the write guard with the RPC layer.
 	best_block: Arc<RwLock<Option<Block::Hash>>>,
+	/// Backend pinning / unpinning blocks.
+	backend: Arc<BE>,
 }
 
-impl<Block: BlockT> SubscriptionHandle<Block> {
+// We cannot derive `Clone` because that would imply the `Clone` bound on the `BE` type.
+// However, that is not necessary since we hold an `Arc<BE>`.
+impl<Block: BlockT, BE: Backend<Block> + 'static> Clone for SubscriptionHandle<Block, BE> {
+	fn clone(&self) -> SubscriptionHandle<Block, BE> {
+		SubscriptionHandle {
+			inner: self.inner.clone(),
+			best_block: self.best_block.clone(),
+			backend: self.backend.clone(),
+		}
+	}
+}
+
+impl<Block: BlockT, BE: Backend<Block> + 'static> SubscriptionHandle<Block, BE> {
 	/// Construct a new [`SubscriptionHandle`].
-	fn new(runtime_updates: bool, tx_stop: oneshot::Sender<()>, max_pinned_blocks: usize) -> Self {
+	fn new(
+		runtime_updates: bool,
+		tx_stop: oneshot::Sender<()>,
+		max_pinned_blocks: usize,
+		backend: Arc<BE>,
+	) -> Self {
 		SubscriptionHandle {
 			inner: Arc::new(RwLock::new(SubscriptionInner {
 				runtime_updates,
@@ -70,6 +90,7 @@ impl<Block: BlockT> SubscriptionHandle<Block> {
 				max_pinned_blocks,
 			})),
 			best_block: Arc::new(RwLock::new(None)),
+			backend,
 		}
 	}
 
@@ -133,13 +154,13 @@ impl<Block: BlockT> SubscriptionHandle<Block> {
 }
 
 /// Manage block pinning / unpinning for subscription IDs.
-pub struct SubscriptionManagement<Block: BlockT> {
+pub struct SubscriptionManagement<Block: BlockT, BE: Backend<Block> + 'static> {
 	/// Manage subscription by mapping the subscription ID
 	/// to a set of block hashes.
-	inner: RwLock<HashMap<String, SubscriptionHandle<Block>>>,
+	inner: RwLock<HashMap<String, SubscriptionHandle<Block, BE>>>,
 }
 
-impl<Block: BlockT> SubscriptionManagement<Block> {
+impl<Block: BlockT, BE: Backend<Block> + 'static> SubscriptionManagement<Block, BE> {
 	/// Construct a new [`SubscriptionManagement`].
 	pub fn new() -> Self {
 		SubscriptionManagement { inner: RwLock::new(HashMap::new()) }
@@ -155,13 +176,18 @@ impl<Block: BlockT> SubscriptionManagement<Block> {
 		subscription_id: String,
 		runtime_updates: bool,
 		max_pinned_blocks: usize,
-	) -> Option<(oneshot::Receiver<()>, SubscriptionHandle<Block>)> {
+		backend: Arc<BE>,
+	) -> Option<(oneshot::Receiver<()>, SubscriptionHandle<Block, BE>)> {
 		let mut subs = self.inner.write();
 
 		if let Entry::Vacant(entry) = subs.entry(subscription_id) {
 			let (tx_stop, rx_stop) = oneshot::channel();
-			let handle =
-				SubscriptionHandle::<Block>::new(runtime_updates, tx_stop, max_pinned_blocks);
+			let handle = SubscriptionHandle::<Block, BE>::new(
+				runtime_updates,
+				tx_stop,
+				max_pinned_blocks,
+				backend,
+			);
 			entry.insert(handle.clone());
 			Some((rx_stop, handle))
 		} else {
@@ -176,7 +202,10 @@ impl<Block: BlockT> SubscriptionManagement<Block> {
 	}
 
 	/// Obtain the specific subscription handle.
-	pub fn get_subscription(&self, subscription_id: &String) -> Option<SubscriptionHandle<Block>> {
+	pub fn get_subscription(
+		&self,
+		subscription_id: &String,
+	) -> Option<SubscriptionHandle<Block, BE>> {
 		let subs = self.inner.write();
 		subs.get(subscription_id).and_then(|handle| Some(handle.clone()))
 	}

@@ -60,7 +60,7 @@ use sp_runtime::{
 use std::{marker::PhantomData, sync::Arc};
 
 /// An API for chain head RPC calls.
-pub struct ChainHead<BE, Block: BlockT, Client> {
+pub struct ChainHead<BE: Backend<Block> + 'static, Block: BlockT, Client> {
 	/// Substrate client.
 	client: Arc<Client>,
 	/// Backend of the chain.
@@ -68,7 +68,7 @@ pub struct ChainHead<BE, Block: BlockT, Client> {
 	/// Executor to spawn subscriptions.
 	executor: SubscriptionTaskExecutor,
 	/// Keep track of the pinned blocks for each subscription.
-	subscriptions: Arc<SubscriptionManagement<Block>>,
+	subscriptions: Arc<SubscriptionManagement<Block, BE>>,
 	/// The hexadecimal encoded hash of the genesis block.
 	genesis_hash: String,
 	/// The maximum number of pinned blocks allowed per connection.
@@ -77,7 +77,7 @@ pub struct ChainHead<BE, Block: BlockT, Client> {
 	_phantom: PhantomData<Block>,
 }
 
-impl<BE, Block: BlockT, Client> ChainHead<BE, Block, Client> {
+impl<BE: Backend<Block> + 'static, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 	/// Create a new [`ChainHead`].
 	pub fn new<GenesisHash: AsRef<[u8]>>(
 		client: Arc<Client>,
@@ -129,7 +129,7 @@ impl<BE, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 fn generate_initial_events<Block, BE, Client>(
 	client: &Arc<Client>,
 	backend: &Arc<BE>,
-	handle: &SubscriptionHandle<Block>,
+	handle: &SubscriptionHandle<Block, BE>,
 	runtime_updates: bool,
 ) -> Result<Vec<FollowEvent<Block::Hash>>, SubscriptionManagementError>
 where
@@ -314,13 +314,14 @@ async fn submit_events<EventStream, T>(
 
 /// Generate the "NewBlock" event and potentially the "BestBlockChanged" event for
 /// every notification.
-fn handle_import_blocks<Client, Block>(
+fn handle_import_blocks<BE, Client, Block>(
 	client: &Arc<Client>,
-	handle: &SubscriptionHandle<Block>,
+	handle: &SubscriptionHandle<Block, BE>,
 	runtime_updates: bool,
 	notification: BlockImportNotification<Block>,
 ) -> Result<(FollowEvent<Block::Hash>, Option<FollowEvent<Block::Hash>>), SubscriptionManagementError>
 where
+	BE: Backend<Block> + 'static,
 	Block: BlockT + 'static,
 	Client: CallApiAt<Block> + 'static,
 {
@@ -370,12 +371,13 @@ where
 
 /// Generate the "Finalized" event and potentially the "BestBlockChanged" for
 /// every notification.
-fn handle_finalized_blocks<Client, Block>(
+fn handle_finalized_blocks<BE, Client, Block>(
 	client: &Arc<Client>,
-	handle: &SubscriptionHandle<Block>,
+	handle: &SubscriptionHandle<Block, BE>,
 	notification: FinalityNotification<Block>,
 ) -> Result<(FollowEvent<Block::Hash>, Option<FollowEvent<Block::Hash>>), SubscriptionManagementError>
 where
+	BE: Backend<Block> + 'static,
 	Block: BlockT + 'static,
 	Client: HeaderBackend<Block> + HeaderMetadata<Block, Error = BlockChainError> + 'static,
 {
@@ -474,9 +476,8 @@ where
 				return Err(err)
 			},
 		};
-
 		// Keep track of the subscription.
-		let Some((rx_stop, sub_handle)) = self.subscriptions.insert_subscription(sub_id.clone(), runtime_updates, self.max_pinned_blocks) else {
+		let Some((rx_stop, sub_handle)) = self.subscriptions.insert_subscription(sub_id.clone(), runtime_updates, self.max_pinned_blocks, self.backend.clone()) else {
 			// Inserting the subscription can only fail if the JsonRPSee
 			// generated a duplicate subscription ID.
 			debug!(target: "rpc-spec-v2", "[follow][id={:?}] Subscription already accepted", sub_id);
