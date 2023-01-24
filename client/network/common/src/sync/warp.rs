@@ -73,7 +73,7 @@ pub trait WarpSyncProvider<Block: BlockT>: Send + Sync {
 pub enum WarpSyncPhase<Block: BlockT> {
 	/// Waiting for peers to connect.
 	AwaitingPeers,
-	/// Waiting for target block to be received
+	/// Waiting for target block to be received.
 	AwaitingTargetBlock,
 	/// Downloading and verifying grandpa warp proofs.
 	DownloadingWarpProofs,
