@@ -1,6 +1,6 @@
 [package]
 name = "sc-consensus-sassafras"
-version = "0.3.0"
+version = "0.3.1-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Sassafras consensus algorithm for substrate"
 edition = "2021"
@@ -33,7 +33,7 @@ sp-application-crypto = { version = "7.0.0", path = "../../../primitives/applica
 sp-block-builder = { version = "4.0.0-dev", path = "../../../primitives/block-builder" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
-sp-consensus-sassafras = { version = "0.3.0", path = "../../../primitives/consensus/sassafras" }
+sp-consensus-sassafras = { version = "0.3.1-dev", path = "../../../primitives/consensus/sassafras" }
 sp-consensus-slots = { version = "0.10.0-dev", path = "../../../primitives/consensus/slots" }
 sp-consensus-vrf = { version = "0.10.0-dev", path = "../../../primitives/consensus/vrf" }
 sp-core = { version = "7.0.0", path = "../../../primitives/core" }

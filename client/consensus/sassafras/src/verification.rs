@@ -23,24 +23,28 @@ use super::*;
 // Allowed slot drift.
 const MAX_SLOT_DRIFT: u64 = 1;
 
-/// Sassafras verification parameters
-pub struct VerificationParams<'a, B: 'a + BlockT> {
+/// Verification parameters
+struct VerificationParams<'a, B: 'a + BlockT> {
 	/// The header being verified.
-	pub header: B::Header,
+	header: B::Header,
 	/// The pre-digest of the header being verified.
-	pub pre_digest: PreDigest,
+	pre_digest: &'a PreDigest,
 	/// The slot number of the current time.
-	pub slot_now: Slot,
+	slot_now: Slot,
 	/// Epoch descriptor of the epoch this block _should_ be under, if it's valid.
-	pub epoch: &'a Epoch,
+	epoch: &'a Epoch,
+	/// Origin
+	origin: BlockOrigin,
 	/// Expected ticket for this block.
-	pub ticket: Option<Ticket>,
+	ticket: Option<Ticket>,
 }
 
-pub struct VerifiedHeaderInfo {
-	pub authority_id: AuthorityId,
-	pub pre_digest: DigestItem,
-	pub seal: DigestItem,
+/// Verified information
+struct VerifiedHeaderInfo {
+	/// Authority index.
+	authority_id: AuthorityId,
+	/// Seal found within the header.
+	seal: DigestItem,
 }
 
 /// Check a header has been signed by the right key. If the slot is too far in
@@ -52,10 +56,10 @@ pub struct VerifiedHeaderInfo {
 ///
 /// The given header can either be from a primary or secondary slot assignment,
 /// with each having different validation logic.
-pub fn check_header<B: BlockT + Sized>(
+fn check_header<B: BlockT + Sized>(
 	params: VerificationParams<B>,
 ) -> Result<CheckedHeader<B::Header, VerifiedHeaderInfo>, Error<B>> {
-	let VerificationParams { mut header, pre_digest, slot_now, epoch, ticket } = params;
+	let VerificationParams { mut header, pre_digest, slot_now, epoch, origin, ticket } = params;
 	let config = &epoch.config;
 
 	// Check that the slot is not in the future, with some drift being allowed.
@@ -92,7 +96,7 @@ pub fn check_header<B: BlockT + Sized>(
 			let transcript =
 				make_ticket_transcript(&config.randomness, ticket_aux.attempt, epoch.epoch_idx);
 			schnorrkel::PublicKey::from_bytes(authority_id.as_slice())
-				.and_then(|p| p.vrf_verify(transcript, &ticket, &ticket_aux.proof))
+				.and_then(|p| p.vrf_verify(transcript, &ticket.output, &ticket_aux.proof))
 				.map_err(|s| sassafras_err(Error::VRFVerificationFailed(s)))?;
 		},
 		(None, None) => {
@@ -107,10 +111,11 @@ pub fn check_header<B: BlockT + Sized>(
 			log::warn!(target: "sassafras", "🌳 Unexpected secondary authoring mechanism");
 			return Err(Error::UnexpectedAuthoringMechanism)
 		},
-		(None, Some(_)) => {
-			log::warn!(target: "sassafras", "🌳 Unexpected primary authoring mechanism");
-			return Err(Error::UnexpectedAuthoringMechanism)
-		},
+		(None, Some(_)) =>
+			if origin != BlockOrigin::NetworkInitialSync {
+				log::warn!(target: "sassafras", "🌳 Unexpected primary authoring mechanism");
+				return Err(Error::UnexpectedAuthoringMechanism)
+			},
 	}
 
 	// Check slot-vrf proof
@@ -120,11 +125,7 @@ pub fn check_header<B: BlockT + Sized>(
 		.and_then(|p| p.vrf_verify(transcript, &pre_digest.vrf_output, &pre_digest.vrf_proof))
 		.map_err(|s| sassafras_err(Error::VRFVerificationFailed(s)))?;
 
-	let info = VerifiedHeaderInfo {
-		authority_id,
-		pre_digest: CompatibleDigestItem::sassafras_pre_digest(pre_digest),
-		seal,
-	};
+	let info = VerifiedHeaderInfo { authority_id, seal };
 
 	Ok(CheckedHeader::Checked(header, info))
 }
@@ -317,10 +318,11 @@ where
 			// read it from the state after import. We also skip all verifications
 			// because there's no parent state and we trust the sync module to verify
 			// that the state is correct and finalized.
+			// Just insert a tag to notify that this is indeed a Sassafras block to the
+			// `BlockImport` implementation.
+			block.insert_intermediate(INTERMEDIATE_KEY, ());
 			return Ok((block, Default::default()))
 		}
-
-		trace!(target: "sassafras", "🌳 We have {:?} logs in this header", block.header.digest().logs().len());
 
 		let hash = block.header.hash();
 		let parent_hash = *block.header.parent_hash();
@@ -340,7 +342,7 @@ where
 
 		let pre_digest = find_pre_digest::<Block>(&block.header)?;
 
-		let (check_header, epoch_descriptor) = {
+		let (checked_header, epoch_descriptor) = {
 			let epoch_changes = self.epoch_changes.shared_data();
 			let epoch_descriptor = epoch_changes
 				.epoch_descriptor_for_child_of(
@@ -359,34 +361,31 @@ where
 				.client
 				.runtime_api()
 				.slot_ticket(&BlockId::Hash(parent_hash), pre_digest.slot)
-				.map_err(|err| err.to_string())?;
+				.ok()
+				.unwrap_or_else(|| None);
 
-			let v_params = VerificationParams {
+			let verification_params = VerificationParams {
 				header: block.header.clone(),
-				pre_digest,
+				pre_digest: &pre_digest,
 				slot_now,
 				epoch: viable_epoch.as_ref(),
+				origin: block.origin,
 				ticket,
 			};
+			let checked_header = check_header::<Block>(verification_params)?;
 
-			(check_header::<Block>(v_params)?, epoch_descriptor)
+			(checked_header, epoch_descriptor)
 		};
 
-		match check_header {
+		match checked_header {
 			CheckedHeader::Checked(pre_header, verified_info) => {
-				let sassafras_pre_digest = verified_info
-					.pre_digest
-					.as_sassafras_pre_digest()
-					.expect("check_header always returns a pre-digest digest item; qed");
-				let slot = sassafras_pre_digest.slot;
-
 				// The header is valid but let's check if there was something else already
 				// proposed at the same slot by the given author. If there was, we will
 				// report the equivocation to the runtime.
 				if let Err(err) = self
 					.check_and_report_equivocation(
 						slot_now,
-						slot,
+						pre_digest.slot,
 						&block.header,
 						&verified_info.authority_id,
 						&block.origin,
@@ -400,20 +399,23 @@ where
 				// internally-set timestamp in the inherents actually matches the slot set in the
 				// seal.
 				if let Some(inner_body) = block.body {
-					let mut inherent_data = create_inherent_data_providers
-						.create_inherent_data()
-						.map_err(Error::<Block>::CreateInherents)?;
-					inherent_data.sassafras_replace_inherent_data(slot);
 					let new_block = Block::new(pre_header.clone(), inner_body);
 
-					self.check_inherents(
-						new_block.clone(),
-						BlockId::Hash(parent_hash),
-						inherent_data,
-						create_inherent_data_providers,
-						block.origin.into(),
-					)
-					.await?;
+					if !block.state_action.skip_execution_checks() {
+						// TODO-SASS-P3 :??? DOC
+						let mut inherent_data = create_inherent_data_providers
+							.create_inherent_data()
+							.map_err(Error::<Block>::CreateInherents)?;
+						inherent_data.sassafras_replace_inherent_data(pre_digest.slot);
+						self.check_inherents(
+							new_block.clone(),
+							BlockId::Hash(parent_hash),
+							inherent_data,
+							create_inherent_data_providers,
+							block.origin.into(),
+						)
+						.await?;
+					}
 
 					let (_, inner_body) = new_block.deconstruct();
 					block.body = Some(inner_body);
@@ -428,12 +430,12 @@ where
 				);
 
 				block.header = pre_header;
+				block.post_hash = Some(hash);
 				block.post_digests.push(verified_info.seal);
 				block.insert_intermediate(
 					INTERMEDIATE_KEY,
 					SassafrasIntermediate::<Block> { epoch_descriptor },
 				);
-				block.post_hash = Some(hash);
 
 				Ok((block, Default::default()))
 			},

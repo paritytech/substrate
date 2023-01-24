@@ -379,16 +379,6 @@ impl_runtime_apis! {
 	}
 
 	impl sp_consensus_sassafras::SassafrasApi<Block> for Runtime {
-		fn configuration() -> sp_consensus_sassafras::SassafrasConfiguration {
-			sp_consensus_sassafras::SassafrasConfiguration {
-				slot_duration: SLOT_DURATION_IN_MILLISECONDS,
-				epoch_duration: EPOCH_DURATION_IN_SLOTS,
-				authorities: Sassafras::authorities().to_vec(),
-				randomness: Sassafras::randomness(),
-				threshold_params: Sassafras::config(),
-			}
-		}
-
 		fn submit_tickets_unsigned_extrinsic(
 			tickets: Vec<sp_consensus_sassafras::Ticket>
 		) -> bool {
@@ -397,6 +387,14 @@ impl_runtime_apis! {
 
 		fn slot_ticket(slot: sp_consensus_sassafras::Slot) -> Option<sp_consensus_sassafras::Ticket> {
 			Sassafras::slot_ticket(slot)
+		}
+
+		fn current_epoch() -> sp_consensus_sassafras::Epoch {
+			Sassafras::current_epoch()
+		}
+
+		fn next_epoch() -> sp_consensus_sassafras::Epoch {
+			Sassafras::next_epoch()
 		}
 
 		fn generate_key_ownership_proof(

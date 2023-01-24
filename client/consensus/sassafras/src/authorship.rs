@@ -55,9 +55,9 @@ pub(crate) fn claim_slot(
 	let (authority_idx, ticket_aux) = match ticket {
 		Some(ticket) => {
 			log::debug!(target: "sassafras", "🌳 [TRY PRIMARY]");
-			let (authority_idx, ticket_aux) = epoch.tickets_aux.get(&ticket)?.clone();
+			let (authority_idx, ticket_aux) = epoch.tickets_aux.get(&ticket.output)?.clone();
 			log::debug!(target: "sassafras", "🌳 Ticket = [ticket: {:02x?}, auth: {}, attempt: {}]",
-                &ticket.as_bytes()[0..8], authority_idx, ticket_aux.attempt);
+                &ticket.output.as_bytes()[0..8], authority_idx, ticket_aux.attempt);
 			(authority_idx, Some(ticket_aux))
 		},
 		None => {
@@ -128,7 +128,11 @@ fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &SyncCryptoStorePtr) -> V
 			)
 			.ok()??;
 
-			let ticket = VRFOutput(signature.output);
+			let ticket = Ticket {
+				output: VRFOutput(signature.output),
+				// TODO-SASS-P3
+				proof: VRFProof::try_from([0; 64]).expect("FIXME"),
+			};
 			if !sp_consensus_sassafras::check_threshold(&ticket, threshold) {
 				return None
 			}
@@ -141,8 +145,10 @@ fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &SyncCryptoStorePtr) -> V
 
 		for attempt in 0..max_attempts {
 			if let Some((ticket, ticket_aux)) = make_ticket(attempt) {
+				epoch
+					.tickets_aux
+					.insert(ticket.output, (authority_idx as AuthorityIndex, ticket_aux));
 				tickets.push(ticket);
-				epoch.tickets_aux.insert(ticket, (authority_idx as AuthorityIndex, ticket_aux));
 			}
 		}
 	}

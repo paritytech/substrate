@@ -969,24 +969,30 @@ cfg_if! {
 			}
 
 			impl sp_consensus_sassafras::SassafrasApi<Block> for Runtime {
-				fn configuration() -> sp_consensus_sassafras::SassafrasConfiguration {
-					let authorities = system::authorities().into_iter().map(|x| {
-						let authority: sr25519::Public = x.into();
-						(SassafrasId::from(authority), 1)
-					}).collect();
-					sp_consensus_sassafras::SassafrasConfiguration {
-						slot_duration: SlotDuration::get(),
-						epoch_duration: EpochDuration::get(),
-						authorities,
-						randomness: <pallet_sassafras::Pallet<Runtime>>::randomness(),
-						threshold_params: <pallet_sassafras::Pallet<Runtime>>::config(),
-					}
-				}
-
 				fn submit_tickets_unsigned_extrinsic(
 					tickets: Vec<sp_consensus_sassafras::Ticket>
 				) -> bool {
 					<pallet_sassafras::Pallet<Runtime>>::submit_tickets_unsigned_extrinsic(tickets)
+				}
+
+				fn current_epoch() -> sp_consensus_sassafras::Epoch {
+					let authorities = system::authorities().into_iter().map(|x| {
+						let authority: sr25519::Public = x.into();
+						(SassafrasId::from(authority), 1)
+					}).collect();
+					let mut epoch = <pallet_sassafras::Pallet<Runtime>>::current_epoch();
+					epoch.config.authorities = authorities;
+					epoch
+				}
+
+				fn next_epoch() -> sp_consensus_sassafras::Epoch {
+					let authorities = system::authorities().into_iter().map(|x| {
+						let authority: sr25519::Public = x.into();
+						(SassafrasId::from(authority), 1)
+					}).collect();
+					let mut epoch = <pallet_sassafras::Pallet<Runtime>>::next_epoch();
+					epoch.config.authorities = authorities;
+					epoch
 				}
 
 				fn slot_ticket(slot: sp_consensus_sassafras::Slot) -> Option<sp_consensus_sassafras::Ticket> {
@@ -1285,20 +1291,30 @@ cfg_if! {
 			}
 
 			impl sp_consensus_sassafras::SassafrasApi<Block> for Runtime {
-				fn configuration() -> sp_consensus_sassafras::SassafrasConfiguration {
-					sp_consensus_sassafras::SassafrasConfiguration {
-						slot_duration: SlotDuration::get(),
-						epoch_duration: EpochDuration::get(),
-						authorities: <pallet_sassafras::Pallet<Runtime>>::authorities().to_vec(),
-						randomness: <pallet_sassafras::Pallet<Runtime>>::randomness(),
-						threshold_params: <pallet_sassafras::Pallet<Runtime>>::config(),
-					}
-				}
-
 				fn submit_tickets_unsigned_extrinsic(
 					tickets: Vec<sp_consensus_sassafras::Ticket>
 				) -> bool {
 					<pallet_sassafras::Pallet<Runtime>>::submit_tickets_unsigned_extrinsic(tickets)
+				}
+
+				fn current_epoch() -> sp_consensus_sassafras::Epoch {
+					let authorities = system::authorities().into_iter().map(|x| {
+						let authority: sr25519::Public = x.into();
+						(SassafrasId::from(authority), 1)
+					}).collect();
+					let mut epoch = <pallet_sassafras::Pallet<Runtime>>::current_epoch();
+					epoch.config.authorities = authorities;
+					epoch
+				}
+
+				fn next_epoch() -> sp_consensus_sassafras::Epoch {
+					let authorities = system::authorities().into_iter().map(|x| {
+						let authority: sr25519::Public = x.into();
+						(SassafrasId::from(authority), 1)
+					}).collect();
+					let mut epoch = <pallet_sassafras::Pallet<Runtime>>::next_epoch();
+					epoch.config.authorities = authorities;
+					epoch
 				}
 
 				fn slot_ticket(slot: sp_consensus_sassafras::Slot) -> Option<sp_consensus_sassafras::Ticket> {

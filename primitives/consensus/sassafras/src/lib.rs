@@ -103,6 +103,17 @@ impl SassafrasConfiguration {
 	}
 }
 
+/// Sassafras epoch information
+#[derive(Encode, Decode, PartialEq, Eq, Clone, Debug)]
+pub struct Epoch {
+	/// The epoch index.
+	pub epoch_idx: u64,
+	/// The starting slot of the epoch.
+	pub start_slot: Slot,
+	/// Epoch configuration.
+	pub config: SassafrasConfiguration,
+}
+
 /// Configuration data used by the Sassafras consensus engine that can be modified on epoch change.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, MaxEncodedLen, TypeInfo, Default)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -114,14 +125,43 @@ pub struct SassafrasEpochConfiguration {
 }
 
 /// Ticket type.
-pub type Ticket = VRFOutput;
+// TODO-SASS-P3: we are currently using Shnorrkel structures as placeholders.
+// Should switch to new RVRF primitive.
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+pub struct Ticket {
+	/// Ring VRF output.
+	pub output: VRFOutput,
+	/// Ring VRF commitment proof.
+	pub proof: VRFProof,
+	// Ticket opaque utility data.
+	// TODO-SASS-P3: Interpretation of this data is up to the application? Investigate
+	// Suggested by Jeff:
+	// - ephemeral_pk: public key used to...
+	// - revealed_pk: ???
+	// - gossip_auth_id: identifier to reach this actor in a separate gossip network
+	//pub data: Vec<u8>,
+}
+
+use core::cmp::Ordering;
+
+impl PartialOrd for Ticket {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		self.output.partial_cmp(&other.output)
+	}
+}
+
+impl Ord for Ticket {
+	fn cmp(&self, other: &Self) -> Ordering {
+		self.output.cmp(&other.output)
+	}
+}
 
 /// Ticket auxiliary information.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct TicketAux {
 	/// Attempt number.
 	pub attempt: u32,
-	/// Ticket proof.
+	/// Ticket revelation proof.
 	pub proof: VRFProof,
 }
 
@@ -144,7 +184,7 @@ pub fn compute_threshold(redundancy: u32, slots: u32, attempts: u32, validators:
 
 /// Returns true if the given VRF output is lower than the given threshold, false otherwise.
 pub fn check_threshold(ticket: &Ticket, threshold: U256) -> bool {
-	U256::from(ticket.as_bytes()) < threshold
+	U256::from(ticket.output.as_bytes()) < threshold
 }
 
 /// An opaque type used to represent the key ownership proof at the runtime API boundary.
@@ -172,15 +212,18 @@ impl OpaqueKeyOwnershipProof {
 sp_api::decl_runtime_apis! {
 	/// API necessary for block authorship with Sassafras.
 	pub trait SassafrasApi {
-		 /// Return the genesis configuration for Sassafras. The configuration is only read on genesis.
-		fn configuration() -> SassafrasConfiguration;
-
 		/// Submit next epoch validator tickets via an unsigned extrinsic.
 		/// This method returns `false` when creation of the extrinsics fails.
 		fn submit_tickets_unsigned_extrinsic(tickets: Vec<Ticket>) -> bool;
 
 		/// Get expected ticket for the given slot.
 		fn slot_ticket(slot: Slot) -> Option<Ticket>;
+
+		/// Current epoch information.
+		fn current_epoch() -> Epoch;
+
+		/// Next epoch information.
+		fn next_epoch() -> Epoch;
 
 		/// Generates a proof of key ownership for the given authority in the current epoch.
 		///

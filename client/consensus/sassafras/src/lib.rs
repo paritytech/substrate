@@ -184,17 +184,28 @@ fn sassafras_err<B: BlockT>(error: Error<B>) -> Error<B> {
 	error
 }
 
-/// Sassafras epoch information
+/// Sassafras epoch information augmented with private tickets information.
 #[derive(Encode, Decode, PartialEq, Eq, Clone, Debug)]
 pub struct Epoch {
 	/// The epoch index.
 	pub epoch_idx: u64,
 	/// The starting slot of the epoch.
 	pub start_slot: Slot,
-	/// Epoch configuration
+	/// Epoch configuration.
 	pub config: SassafrasConfiguration,
 	/// Tickets auxiliary data.
-	pub tickets_aux: BTreeMap<Ticket, (AuthorityIndex, TicketAux)>,
+	pub tickets_aux: BTreeMap<VRFOutput, (AuthorityIndex, TicketAux)>,
+}
+
+impl From<sp_consensus_sassafras::Epoch> for Epoch {
+	fn from(epoch: sp_consensus_sassafras::Epoch) -> Self {
+		Epoch {
+			epoch_idx: epoch.epoch_idx,
+			start_slot: epoch.start_slot,
+			config: epoch.config,
+			tickets_aux: BTreeMap::new(),
+		}
+	}
 }
 
 impl EpochT for Epoch {
@@ -252,8 +263,8 @@ where
 		info.genesis_hash
 	});
 
-	let config = client.runtime_api().configuration(&BlockId::Hash(hash))?;
-	Ok(config)
+	let epoch = client.runtime_api().current_epoch(&BlockId::Hash(hash))?;
+	Ok(epoch.config)
 }
 
 /// Intermediate value passed to block importer from authoring or validation logic.

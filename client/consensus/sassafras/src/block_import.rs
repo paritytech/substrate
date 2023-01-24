@@ -20,6 +20,7 @@
 
 use super::*;
 use sc_client_api::{AuxDataOperations, FinalityNotification, PreCommitActions};
+use sp_blockchain::BlockStatus;
 
 /// Block-import handler for Sassafras.
 ///
@@ -230,6 +231,77 @@ where
 	}
 }
 
+impl<Block, Client, Inner> SassafrasBlockImport<Block, Client, Inner>
+where
+	Block: BlockT,
+	Inner: BlockImport<Block, Transaction = sp_api::TransactionFor<Client, Block>> + Send + Sync,
+	Inner::Error: Into<ConsensusError>,
+	Client: HeaderBackend<Block>
+		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
+		+ AuxStore
+		+ ProvideRuntimeApi<Block>
+		+ Send
+		+ Sync,
+	Client::Api: SassafrasApi<Block> + ApiExt<Block>,
+{
+	/// Import whole state after a warp sync.
+	///
+	/// This function makes multiple transactions to the DB. If one of them fails we may
+	/// end up in an inconsistent state and have to resync
+	async fn import_state(
+		&mut self,
+		mut block: BlockImportParams<Block, sp_api::TransactionFor<Client, Block>>,
+		new_cache: HashMap<CacheKeyId, Vec<u8>>,
+	) -> Result<ImportResult, ConsensusError> {
+		let hash = block.post_hash();
+		let parent_hash = *block.header.parent_hash();
+		let number = *block.header.number();
+
+		// Check for the unit tag.
+		block.remove_intermediate::<()>(INTERMEDIATE_KEY)?;
+
+		// Import as best
+		block.fork_choice = Some(ForkChoiceStrategy::Custom(true));
+
+		// Reset block weight
+		aux_schema::write_block_weight(hash, 0, |values| {
+			block
+				.auxiliary
+				.extend(values.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec()))))
+		});
+
+		// First make the client import the state
+		let aux = match self.inner.import_block(block, new_cache).await {
+			Ok(ImportResult::Imported(aux)) => aux,
+			Ok(r) =>
+				return Err(ConsensusError::ClientImport(format!(
+					"Unexpected import result: {:?}",
+					r
+				))),
+			Err(e) => return Err(e.into()),
+		};
+
+		// Read epoch info from the imported state
+		let block_id = BlockId::Hash(hash);
+		let curr_epoch = self.client.runtime_api().current_epoch(&block_id).map_err(|e| {
+			ConsensusError::ClientImport(sassafras_err::<Block>(Error::RuntimeApi(e)).into())
+		})?;
+		let next_epoch = self.client.runtime_api().next_epoch(&block_id).map_err(|e| {
+			ConsensusError::ClientImport(sassafras_err::<Block>(Error::RuntimeApi(e)).into())
+		})?;
+
+		let mut epoch_changes = self.epoch_changes.shared_data();
+		epoch_changes.reset(parent_hash, hash, number, curr_epoch.into(), next_epoch.into());
+
+		aux_schema::write_epoch_changes::<Block, _, _>(&*epoch_changes, |insert| {
+			self.client.insert_aux(insert, [])
+		})
+		.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
+
+		Ok(ImportResult::Imported(aux))
+	}
+}
+
 #[async_trait::async_trait]
 impl<Block, Client, Inner> BlockImport<Block> for SassafrasBlockImport<Block, Client, Inner>
 where
@@ -254,6 +326,22 @@ where
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_hash();
 		let number = *block.header.number();
+
+		// Early exit if block already in chain, otherwise the check for epoch changes
+		// will error when trying to re-import
+		match self.client.status(BlockId::Hash(hash)) {
+			Ok(BlockStatus::InChain) => {
+				block.remove_intermediate::<SassafrasIntermediate<Block>>(INTERMEDIATE_KEY)?;
+				block.fork_choice = Some(ForkChoiceStrategy::Custom(false));
+				return self.inner.import_block(block, new_cache).await.map_err(Into::into)
+			},
+			Ok(BlockStatus::Unknown) => {},
+			Err(e) => return Err(ConsensusError::ClientImport(e.to_string())),
+		}
+
+		if block.with_state() {
+			return self.import_state(block, new_cache).await
+		}
 
 		let viable_epoch_desc = block
 			.remove_intermediate::<SassafrasIntermediate<Block>>(INTERMEDIATE_KEY)?
