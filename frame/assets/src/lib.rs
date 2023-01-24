@@ -445,7 +445,7 @@ pub mod pallet {
 		/// Some asset class was created.
 		Created { asset_id: T::AssetId, creator: T::AccountId, owner: T::AccountId },
 		/// Some assets were issued.
-		Issued { asset_id: T::AssetId, owner: T::AccountId, total_supply: T::Balance },
+		Issued { asset_id: T::AssetId, owner: T::AccountId, amount: T::Balance },
 		/// Some assets were transferred.
 		Transferred {
 			asset_id: T::AssetId,

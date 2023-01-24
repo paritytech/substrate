@@ -355,17 +355,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				ensure!(check_issuer == details.issuer, Error::<T, I>::NoPermission);
 			}
 			debug_assert!(
-				T::Balance::max_value() - details.supply >= amount,
+				details.supply.checked_add(&amount).is_some(),
 				"checked in prep; qed"
 			);
+
 			details.supply = details.supply.saturating_add(amount);
+
 			Ok(())
 		})?;
+
 		Self::deposit_event(Event::Issued {
 			asset_id: id,
 			owner: beneficiary.clone(),
-			total_supply: amount,
+			amount,
 		});
+
 		Ok(())
 	}
 
