@@ -965,8 +965,10 @@ where
 		self.behaviour.new_handler()
 	}
 
-	fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
-		self.behaviour.addresses_of_peer(peer_id)
+	fn addresses_of_peer(&mut self, _: &PeerId) -> Vec<Multiaddr> {
+		// Only `Discovery::addresses_of_peer` must be returning addresses to ensure that we
+		// don't return unwanted addresses.
+		Vec::new()
 	}
 
 	fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
