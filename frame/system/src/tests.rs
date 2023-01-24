@@ -627,7 +627,8 @@ fn events_not_emitted_during_genesis() {
 		assert!(System::block_number().is_zero());
 		let mut account_data = AccountInfo::default();
 		System::on_created_account(Default::default(), &mut account_data);
-		assert!(System::events().is_empty());
+		// No events registered at the genesis block
+		assert!(!System::read_events_no_consensus().any(|_| true));
 		// Events will be emitted starting on block 1
 		System::set_block_number(1);
 		System::on_created_account(Default::default(), &mut account_data);
