@@ -40,7 +40,7 @@ mod benchmarks {
 	// * Transfer will kill the sender account.
 	// * Transfer will create the recipient account.
 	#[benchmark]
-	fn transfer() {
+	fn transfer_allow_death() {
 		let existential_deposit = T::ExistentialDeposit::get();
 		let caller = whitelisted_caller();
 
@@ -111,7 +111,7 @@ mod benchmarks {
 
 	// Benchmark `set_balance` coming from ROOT account. This always creates an account.
 	#[benchmark]
-	fn set_balance_creating() {
+	fn force_set_balance_creating() {
 		let user: T::AccountId = account("user", 0, SEED);
 		let user_lookup = T::Lookup::unlookup(user.clone());
 
@@ -128,7 +128,7 @@ mod benchmarks {
 
 	// Benchmark `set_balance` coming from ROOT account. This always kills an account.
 	#[benchmark]
-	fn set_balance_killing() {
+	fn force_set_balance_killing() {
 		let user: T::AccountId = account("user", 0, SEED);
 		let user_lookup = T::Lookup::unlookup(user.clone());
 

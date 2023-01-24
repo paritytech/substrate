@@ -397,8 +397,9 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		value: Self::Balance,
 		best_effort: bool,
 		keep_alive: KeepAlive,
+		force: bool,
 	) -> Result<CreditOf<AccountId, Self>, DispatchError> {
-		let decrease = Self::decrease_balance(who, value, best_effort, keep_alive, false)?;
+		let decrease = Self::decrease_balance(who, value, best_effort, keep_alive, force)?;
 		Self::done_withdraw(who, decrease);
 		Ok(Imbalance::<Self::Balance, Self::OnDropCredit, Self::OnDropDebt>::new(decrease))
 	}
@@ -432,7 +433,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		keep_alive: KeepAlive,
 	) -> Result<CreditOf<AccountId, Self>, DebtOf<AccountId, Self>> {
 		let amount = debt.peek();
-		let credit = match Self::withdraw(who, amount, false, keep_alive) {
+		let credit = match Self::withdraw(who, amount, false, keep_alive, false) {
 			Err(_) => return Err(debt),
 			Ok(d) => d,
 		};

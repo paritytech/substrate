@@ -45,10 +45,10 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 			// limit given by the freezes.
 			untouchable = a.frozen.saturating_sub(a.reserved);
 		}
-		let is_provider = !a.free.is_zero();
-		let must_remain = !frame_system::Pallet::<T>::can_dec_provider(who) || keep_alive == NoKill;
-		let stay_alive = is_provider && must_remain;
-		if keep_alive == Keep || stay_alive {
+		if keep_alive == Keep
+			|| keep_alive == NoKill && !a.free.is_zero() &&
+				frame_system::Pallet::<T>::providers(who) == 1
+		{
 			// ED needed, because we want to `keep_alive` or we are required as a provider ref.
 			untouchable = untouchable.max(T::ExistentialDeposit::get());
 		}
@@ -140,7 +140,6 @@ impl<T: Config<I>, I: 'static> fungible::Unbalanced<T::AccountId> for Pallet<T, 
 			ensure!(reduction <= max_reduction, Error::<T, I>::InsufficientBalance);
 
 			account.free = amount;
-			Self::deposit_event(Event::BalanceSet { who: who.clone(), free: account.free });
 			Ok(())
 		})?
 	}

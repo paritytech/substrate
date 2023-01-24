@@ -152,17 +152,11 @@
 //! * Total issued balanced of all accounts should be less than `Config::Balance::max_value()`.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-
-#[macro_use]
-mod tests;
 mod benchmarking;
 mod impl_currency;
 mod impl_fungible;
 pub mod migration;
-mod tests_composite;
-mod tests_local;
-#[cfg(test)]
-mod tests_reentrancy;
+mod tests;
 mod types;
 pub mod weights;
 
@@ -517,8 +511,8 @@ pub mod pallet {
 		/// - Origin account is already in memory, so no DB operations for them.
 		/// # </weight>
 		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::transfer())]
-		pub fn transfer(
+		#[pallet::weight(T::WeightInfo::transfer_allow_death())]
+		pub fn transfer_allow_death(
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
 			#[pallet::compact] value: T::Balance,
@@ -539,10 +533,10 @@ pub mod pallet {
 		/// The dispatch origin for this call is `root`.
 		#[pallet::call_index(1)]
 		#[pallet::weight(
-			T::WeightInfo::set_balance_creating() // Creates a new account.
-				.max(T::WeightInfo::set_balance_killing()) // Kills an existing account.
+			T::WeightInfo::force_set_balance_creating() // Creates a new account.
+				.max(T::WeightInfo::force_set_balance_killing()) // Kills an existing account.
 		)]
-		pub fn set_balance(
+		pub fn force_set_balance(
 			origin: OriginFor<T>,
 			who: AccountIdLookupOf<T>,
 			#[pallet::compact] new_free: T::Balance,

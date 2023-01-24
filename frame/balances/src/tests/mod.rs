@@ -15,27 +15,48 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test utilities
+//! Tests.
 
 #![cfg(test)]
 
-use crate::{self as pallet_balances, decl_tests, Config, Pallet};
-use codec::{Decode, Encode};
+use crate::{self as pallet_balances, Config, Pallet, AccountData, Error};
+use codec::{Encode, Decode, MaxEncodedLen};
 use frame_support::{
-	dispatch::DispatchInfo,
 	parameter_types,
-	traits::{ConstU32, ConstU64, ConstU8},
-	weights::{IdentityFee, Weight},
+	traits::{ConstU32, ConstU64, ConstU8, StorageMapShim, StoredMap},
+	weights::IdentityFee, RuntimeDebug,
 };
 use pallet_transaction_payment::CurrencyAdapter;
+use scale_info::TypeInfo;
 use sp_core::H256;
 use sp_io;
-use sp_runtime::{testing::Header, traits::IdentityLookup};
+use sp_runtime::{testing::Header, traits::{IdentityLookup, Zero}, DispatchError, DispatchResult};
+use sp_runtime::{ArithmeticError, TokenError, FixedPointNumber, traits::{SignedExtension, BadOrigin}};
+use frame_support::{
+	assert_noop, assert_storage_noop, assert_ok, assert_err,
+	traits::{Imbalance as ImbalanceT, tokens::fungible},
+	weights::Weight, dispatch::DispatchInfo
+};
+use pallet_transaction_payment::{ChargeTransactionPayment, Multiplier};
+use frame_system::{self as system, RawOrigin};
+
+mod currency_tests;
+mod dispatchable_tests;
+mod fungible_tests;
+mod reentrancy_tests;
+
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
+#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, MaxEncodedLen, TypeInfo, RuntimeDebug)]
+pub enum TestId {
+	Foo,
+	Bar,
+	Baz,
+}
+
 frame_support::construct_runtime!(
-	pub enum Test where
+	pub struct Test where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
@@ -89,32 +110,13 @@ impl pallet_transaction_payment::Config for Test {
 	type FeeMultiplierUpdate = ();
 }
 
-#[derive(
-	Encode,
-	Decode,
-	Copy,
-	Clone,
-	Eq,
-	PartialEq,
-	Ord,
-	PartialOrd,
-	MaxEncodedLen,
-	TypeInfo,
-	RuntimeDebug,
-)]
-pub enum TestId {
-	Foo,
-	Bar,
-	Baz,
-}
-
 impl Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();
 	type RuntimeEvent = RuntimeEvent;
 	type ExistentialDeposit = ExistentialDeposit;
-	type AccountStore = frame_system::Pallet<Test>;
-	type MaxLocks = ();
+	type AccountStore = TestAccountStore;
+	type MaxLocks = ConstU32<50>;
 	type MaxReserves = ConstU32<2>;
 	type ReserveIdentifier = TestId;
 	type WeightInfo = ();
@@ -124,6 +126,7 @@ impl Config for Test {
 	type MaxHolds = ConstU32<2>;
 }
 
+#[derive(Clone)]
 pub struct ExtBuilder {
 	existential_deposit: u64,
 	monied: bool,
@@ -140,6 +143,9 @@ impl ExtBuilder {
 	}
 	pub fn monied(mut self, monied: bool) -> Self {
 		self.monied = monied;
+		if self.existential_deposit == 0 {
+			self.existential_deposit = 1;
+		}
 		self
 	}
 	pub fn set_associated_consts(&self) {
@@ -168,6 +174,81 @@ impl ExtBuilder {
 		ext.execute_with(|| System::set_block_number(1));
 		ext
 	}
+	pub fn build_and_execute_with(self, f: impl Fn()) {
+		let other = self.clone();
+		SYSTEM_STORAGE.with(|q| q.replace(false));
+		other.build().execute_with(|| f());
+		SYSTEM_STORAGE.with(|q| q.replace(true));
+		self.build().execute_with(|| f());
+	}
 }
 
-decl_tests! { Test, ExtBuilder, EXISTENTIAL_DEPOSIT }
+thread_local! {
+	pub static SYSTEM_STORAGE: sp_std::cell::RefCell<bool>  = sp_std::cell::RefCell::new(false);
+}
+pub fn use_system() -> bool {
+	SYSTEM_STORAGE.with(|q| *q.borrow())
+}
+
+type BalancesAccountStore = StorageMapShim<super::Account<Test>, u64, super::AccountData<u64>>;
+type SystemAccountStore = frame_system::Pallet<Test>;
+
+pub struct TestAccountStore;
+impl StoredMap<u64, super::AccountData<u64>> for TestAccountStore {
+	fn get(k: &u64) -> super::AccountData<u64> {
+		if use_system() {
+			<SystemAccountStore as StoredMap<_, _>>::get(k)
+		} else {
+			<BalancesAccountStore as StoredMap<_, _>>::get(k)
+		}
+	}
+	fn try_mutate_exists<R, E: From<DispatchError>>(
+		k: &u64,
+		f: impl FnOnce(&mut Option<super::AccountData<u64>>) -> Result<R, E>,
+	) -> Result<R, E> {
+		if use_system() {
+			<SystemAccountStore as StoredMap<_, _>>::try_mutate_exists(k, f)
+		} else {
+			<BalancesAccountStore as StoredMap<_, _>>::try_mutate_exists(k, f)
+		}
+	}
+	fn mutate<R>(k: &u64, f: impl FnOnce(&mut super::AccountData<u64>) -> R) -> Result<R, DispatchError> {
+		if use_system() {
+			<SystemAccountStore as StoredMap<_, _>>::mutate(k, f)
+		} else {
+			<BalancesAccountStore as StoredMap<_, _>>::mutate(k, f)
+		}
+	}
+	fn mutate_exists<R>(k: &u64, f: impl FnOnce(&mut Option<super::AccountData<u64>>) -> R) -> Result<R, DispatchError> {
+		if use_system() {
+			<SystemAccountStore as StoredMap<_, _>>::mutate_exists(k, f)
+		} else {
+			<BalancesAccountStore as StoredMap<_, _>>::mutate_exists(k, f)
+		}
+	}
+	fn insert(k: &u64, t: super::AccountData<u64>) -> Result<(), DispatchError> {
+		if use_system() {
+			<SystemAccountStore as StoredMap<_, _>>::insert(k, t)
+		} else {
+			<BalancesAccountStore as StoredMap<_, _>>::insert(k, t)
+		}
+	}
+	fn remove(k: &u64) -> Result<(), DispatchError> {
+		if use_system() {
+			<SystemAccountStore as StoredMap<_, _>>::remove(k)
+		} else {
+			<BalancesAccountStore as StoredMap<_, _>>::remove(k)
+		}
+	}
+}
+
+pub fn events() -> Vec<RuntimeEvent> {
+	let evt = System::events().into_iter().map(|evt| evt.event).collect::<Vec<_>>();
+	System::reset_events();
+	evt
+}
+
+/// create a transaction info struct from weight. Handy to avoid building the whole struct.
+pub fn info_from_weight(w: Weight) -> DispatchInfo {
+	DispatchInfo { weight: w, ..Default::default() }
+}

@@ -403,6 +403,7 @@ impl<
 		value: Self::Balance,
 		best_effort: bool,
 		keep_alive: KeepAlive,
+		force: bool,
 	) -> Result<CreditOf<AccountId, Self>, DispatchError> {
 		<F as fungibles::Balanced<AccountId>>::withdraw(
 			A::get(),
@@ -410,6 +411,7 @@ impl<
 			value,
 			best_effort,
 			keep_alive,
+			force,
 		)
 		.map(|credit| Imbalance::new(credit.peek()))
 	}
