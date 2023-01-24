@@ -16,7 +16,6 @@ mod on_stake_update {
 			assert_eq!(VoterList::count(), 0);
 			assert_eq!(TargetList::count(), 0);
 			let validator_id = &10;
-
 			// usual user
 			assert_storage_noop!(StakeTracker::on_stake_update(&1, None));
 			// validator
@@ -25,6 +24,8 @@ mod on_stake_update {
 				ApprovalStake::<Runtime>::get(validator_id).unwrap(),
 				Staking::stake(validator_id).unwrap().active
 			);
+			assert_eq!(ApprovalStake::<Runtime>::count(), 1);
+
 			// nominator
 			StakeTracker::on_stake_update(&20, None);
 			assert_eq!(
@@ -35,6 +36,7 @@ mod on_stake_update {
 				ApprovalStake::<Runtime>::get(&11).unwrap(),
 				Staking::stake(&20).unwrap().active
 			);
+			assert_eq!(ApprovalStake::<Runtime>::count(), 2);
 			assert_eq!(VoterList::count(), 0);
 			assert_eq!(TargetList::count(), 0);
 		});
@@ -62,19 +64,68 @@ mod on_stake_update {
 	#[test]
 	fn works_for_validators_and_nominators() {
 		ExtBuilder::default().build_and_execute(|| {
-			let score = 1000;
 			assert_eq!(VoterList::count(), 0);
-			// validator, nominator
-			for (idx, id) in [10, 20].iter().enumerate() {
-				let _ = VoterList::on_insert(*id, score).unwrap();
-				assert_eq!(VoterList::count() as usize, idx + 1);
-				assert_eq!(VoterList::get_score(id).unwrap(), score);
-				let _ = StakeTracker::on_stake_update(id, None);
-				assert_eq!(
-					VoterList::get_score(id).unwrap(),
-					Pallet::<Runtime>::to_vote(Staking::stake(id).map(|s| s.active).unwrap())
-				);
-			}
+			assert_eq!(TargetList::count(), 0);
+
+			let score = 1000;
+			let stake = 0;
+			let validator_id = 10;
+			let validator2_id = 11;
+			let nominator_id = 20;
+
+			// validator
+			let _ = VoterList::on_insert(validator_id, score).unwrap();
+			let _ = TargetList::on_insert(validator_id, stake).unwrap();
+
+			assert_eq!(VoterList::get_score(&validator_id).unwrap(), score);
+			assert_eq!(TargetList::get_score(&validator_id).unwrap(), stake);
+
+			let _ = StakeTracker::on_stake_update(&validator_id, None);
+			assert_eq!(
+				VoterList::get_score(&validator_id).unwrap(),
+				Pallet::<Runtime>::to_vote(
+					Staking::stake(&validator_id).map(|s| s.active).unwrap()
+				)
+			);
+			assert_eq!(
+				TargetList::get_score(&validator_id).unwrap(),
+				Staking::stake(&validator_id).map(|s| s.active).unwrap()
+			);
+
+			assert_eq!(VoterList::count(), 1);
+			assert_eq!(TargetList::count(), 1);
+
+			// nominator
+			let _ = VoterList::on_insert(nominator_id, score).unwrap();
+			let _ = TargetList::on_insert(validator2_id, stake);
+
+			// Nominating two validators, one already has their safe-stake, the other has 0.
+			let _ = StakeTracker::on_stake_update(&nominator_id, None);
+			assert_eq!(
+				VoterList::get_score(&nominator_id).unwrap(),
+				Pallet::<Runtime>::to_vote(
+					Staking::stake(&nominator_id).map(|s| s.active).unwrap()
+				)
+			);
+			assert_eq!(
+				TargetList::get_score(&validator_id).unwrap(),
+				Staking::stake(&nominator_id).map(|s| s.active).unwrap() +
+					Staking::stake(&validator_id).map(|s| s.active).unwrap()
+			);
+			assert_eq!(
+				ApprovalStake::<Runtime>::get(validator_id).unwrap(),
+				TargetList::get_score(&validator_id).unwrap()
+			);
+			assert_eq!(
+				TargetList::get_score(&validator2_id).unwrap(),
+				Staking::stake(&nominator_id).map(|s| s.active).unwrap()
+			);
+			assert_eq!(
+				ApprovalStake::<Runtime>::get(validator2_id).unwrap(),
+				TargetList::get_score(&validator2_id).unwrap()
+			);
+			assert_eq!(VoterList::count(), 2);
+			assert_eq!(TargetList::count(), 2);
 		});
 	}
 }
