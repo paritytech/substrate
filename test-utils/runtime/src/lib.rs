@@ -970,7 +970,7 @@ cfg_if! {
 
 			impl sp_consensus_sassafras::SassafrasApi<Block> for Runtime {
 				fn submit_tickets_unsigned_extrinsic(
-					tickets: Vec<sp_consensus_sassafras::Ticket>
+					tickets: Vec<sp_consensus_sassafras::TicketEnvelope>
 				) -> bool {
 					<pallet_sassafras::Pallet<Runtime>>::submit_tickets_unsigned_extrinsic(tickets)
 				}
@@ -1292,7 +1292,7 @@ cfg_if! {
 
 			impl sp_consensus_sassafras::SassafrasApi<Block> for Runtime {
 				fn submit_tickets_unsigned_extrinsic(
-					tickets: Vec<sp_consensus_sassafras::Ticket>
+					tickets: Vec<sp_consensus_sassafras::TicketEnvelope>
 				) -> bool {
 					<pallet_sassafras::Pallet<Runtime>>::submit_tickets_unsigned_extrinsic(tickets)
 				}

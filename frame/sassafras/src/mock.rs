@@ -24,7 +24,7 @@ use scale_codec::Encode;
 use sp_consensus_sassafras::{
 	digests::PreDigest,
 	vrf::{self, VRFOutput, VRFProof},
-	AuthorityIndex, AuthorityPair, Slot,
+	AuthorityIndex, AuthorityPair, Slot, TicketEnvelope,
 };
 use sp_core::{
 	crypto::{IsWrappedBy, Pair},
@@ -158,10 +158,14 @@ fn make_ticket_vrf(slot: Slot, attempt: u32, pair: &AuthorityPair) -> (VRFOutput
 
 /// Construct at most `attempts` tickets for the given `slot`.
 /// TODO-SASS-P3: filter out invalid tickets according to test threshold.
-pub fn make_tickets(slot: Slot, attempts: u32, pair: &AuthorityPair) -> Vec<(VRFOutput, VRFProof)> {
+/// E.g. by passing an optional threshold
+pub fn make_tickets(slot: Slot, attempts: u32, pair: &AuthorityPair) -> Vec<TicketEnvelope> {
 	(0..attempts)
 		.into_iter()
-		.map(|attempt| make_ticket_vrf(slot, attempt, pair))
+		.map(|attempt| {
+			let (ticket, zk_proof) = make_ticket_vrf(slot, attempt, pair);
+			TicketEnvelope { ticket, zk_proof }
+		})
 		.collect()
 }
 

@@ -23,7 +23,7 @@ use super::*;
 use sp_consensus_sassafras::{
 	digests::PreDigest,
 	vrf::{make_slot_transcript_data, make_ticket_transcript_data},
-	AuthorityId, Slot, Ticket, TicketAux,
+	AuthorityId, Slot, Ticket, TicketAux, TicketEnvelope,
 };
 use sp_core::{twox_64, ByteArray};
 
@@ -55,9 +55,9 @@ pub(crate) fn claim_slot(
 	let (authority_idx, ticket_aux) = match ticket {
 		Some(ticket) => {
 			log::debug!(target: "sassafras", "🌳 [TRY PRIMARY]");
-			let (authority_idx, ticket_aux) = epoch.tickets_aux.get(&ticket.output)?.clone();
+			let (authority_idx, ticket_aux) = epoch.tickets_aux.get(&ticket)?.clone();
 			log::debug!(target: "sassafras", "🌳 Ticket = [ticket: {:02x?}, auth: {}, attempt: {}]",
-                &ticket.output.as_bytes()[0..8], authority_idx, ticket_aux.attempt);
+                &ticket.as_bytes()[0..8], authority_idx, ticket_aux.attempt);
 			(authority_idx, Some(ticket_aux))
 		},
 		None => {
@@ -92,7 +92,7 @@ pub(crate) fn claim_slot(
 /// Generate the tickets for the given epoch.
 /// Tickets additional information will be stored within the `Epoch` structure.
 /// The additional information will be used later during session to claim slots.
-fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &SyncCryptoStorePtr) -> Vec<Ticket> {
+fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &SyncCryptoStorePtr) -> Vec<TicketEnvelope> {
 	let config = &epoch.config;
 	let max_attempts = config.threshold_params.attempts_number;
 	let redundancy_factor = config.threshold_params.redundancy_factor;
@@ -128,27 +128,28 @@ fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &SyncCryptoStorePtr) -> V
 			)
 			.ok()??;
 
-			let ticket = Ticket {
-				output: VRFOutput(signature.output),
-				// TODO-SASS-P3
-				proof: VRFProof::try_from([0; 64]).expect("FIXME"),
-			};
+			let ticket = VRFOutput(signature.output);
 			if !sp_consensus_sassafras::check_threshold(&ticket, threshold) {
 				return None
 			}
+			let envelope = TicketEnvelope {
+				ticket,
+				// TODO-SASS-P3: placeholder...
+				zk_proof: VRFProof::try_from([0; 64]).expect("FIXME"),
+			};
 
 			let ticket_aux =
 				TicketAux { attempt: attempt as u32, proof: VRFProof(signature.proof) };
 
-			Some((ticket, ticket_aux))
+			Some((envelope, ticket_aux))
 		};
 
 		for attempt in 0..max_attempts {
-			if let Some((ticket, ticket_aux)) = make_ticket(attempt) {
+			if let Some((envelope, ticket_aux)) = make_ticket(attempt) {
 				epoch
 					.tickets_aux
-					.insert(ticket.output, (authority_idx as AuthorityIndex, ticket_aux));
-				tickets.push(ticket);
+					.insert(envelope.ticket, (authority_idx as AuthorityIndex, ticket_aux));
+				tickets.push(envelope);
 			}
 		}
 	}

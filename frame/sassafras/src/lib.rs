@@ -55,7 +55,7 @@ use frame_system::offchain::{SendTransactionTypes, SubmitTransaction};
 use sp_consensus_sassafras::{
 	digests::{ConsensusLog, NextEpochDescriptor, PreDigest},
 	AuthorityId, Epoch, EquivocationProof, Randomness, SassafrasAuthorityWeight,
-	SassafrasConfiguration, SassafrasEpochConfiguration, Slot, Ticket, VRFOutput,
+	SassafrasConfiguration, SassafrasEpochConfiguration, Slot, Ticket, TicketEnvelope,
 	SASSAFRAS_ENGINE_ID,
 };
 use sp_io::hashing;
@@ -329,13 +329,17 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn submit_tickets(
 			origin: OriginFor<T>,
-			tickets: BoundedVec<Ticket, T::MaxTickets>,
+			tickets: BoundedVec<TicketEnvelope, T::MaxTickets>,
 		) -> DispatchResult {
 			ensure_none(origin)?;
 
 			let mut metadata = TicketsMeta::<T>::get();
 
 			log::debug!(target: "sassafras", "🌳 @@@@@@@@@@ received {} tickets", tickets.len());
+
+			// TODO-SASS-P4: for sure there is a better way to do this...
+			let tickets: Vec<_> = tickets.iter().map(|t| t.ticket).collect();
+			let tickets = BoundedVec::<_, T::MaxTickets>::try_from(tickets).expect("TODO");
 
 			// We just require a unique key to save the partial tickets list.
 			metadata.segments_count += 1;
@@ -450,8 +454,9 @@ pub mod pallet {
 				);
 				if !tickets
 					.iter()
-					.all(|ticket| sp_consensus_sassafras::check_threshold(ticket, threshold))
+					.all(|t| sp_consensus_sassafras::check_threshold(&t.ticket, threshold))
 				{
+					// TODO-SASS-P3: also check ZK proof to assert origin validity
 					return InvalidTransaction::Custom(0).into()
 				}
 
@@ -765,21 +770,21 @@ impl<T: Config> Pallet<T> {
 		let mut require_sort = max_iter != 0;
 
 		let mut sup = if new_segment.len() >= max_tickets {
-			new_segment[new_segment.len() - 1].output
+			new_segment[new_segment.len() - 1]
 		} else {
-			VRFOutput::try_from([0xFF; 32]).expect("This is a valid vrf output value; qed")
+			Ticket::try_from([0xFF; 32]).expect("This is a valid vrf output value; qed")
 		};
 
 		// Consume at most `max_iter` segments.
 		for _ in 0..max_iter {
 			let segment = NextTicketsSegments::<T>::take(segments_count);
 
-			segment.into_iter().filter(|t| t.output < sup).for_each(|t| new_segment.push(t));
+			segment.into_iter().filter(|t| t < &sup).for_each(|t| new_segment.push(t));
 			if new_segment.len() > max_tickets {
 				require_sort = false;
 				new_segment.sort_unstable();
 				new_segment.truncate(max_tickets);
-				sup = new_segment[max_tickets - 1].output;
+				sup = new_segment[max_tickets - 1];
 			}
 
 			segments_count -= 1;
@@ -812,9 +817,9 @@ impl<T: Config> Pallet<T> {
 	/// second half are dropped.
 	///
 	/// TODO-SASS-P3: we have to add the zk validity proofs
-	pub fn submit_tickets_unsigned_extrinsic(mut tickets: Vec<Ticket>) -> bool {
+	pub fn submit_tickets_unsigned_extrinsic(mut tickets: Vec<TicketEnvelope>) -> bool {
 		log::debug!(target: "sassafras", "🌳 @@@@@@@@@@ submitting {} tickets", tickets.len());
-		tickets.sort_unstable();
+		tickets.sort_unstable_by_key(|t| t.ticket);
 		let tickets = BoundedVec::truncate_from(tickets);
 		let call = Call::submit_tickets { tickets };
 		match SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {

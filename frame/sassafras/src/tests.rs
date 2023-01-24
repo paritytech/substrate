@@ -352,21 +352,14 @@ fn segments_incremental_sortition_works() {
 		// Submit authoring tickets in three different batches.
 		// We can ignore the threshold since we are not passing through the unsigned extrinsic
 		// validation.
-		let mut tickets: Vec<Ticket> =
-			make_tickets(start_slot + 1, segments_num * max_tickets, pair)
-				.into_iter()
-				.map(|(output, _)| output)
-				.collect();
+		let tickets: Vec<TicketEnvelope> =
+			make_tickets(start_slot + 1, segments_num * max_tickets, pair);
 		let segment_len = tickets.len() / segments_num as usize;
 		for i in 0..segments_num as usize {
 			let segment =
 				tickets[i * segment_len..(i + 1) * segment_len].to_vec().try_into().unwrap();
 			Sassafras::submit_tickets(RuntimeOrigin::none(), segment).unwrap();
 		}
-
-		tickets.sort();
-		tickets.truncate(max_tickets as usize);
-		let _expected_tickets = tickets;
 
 		let epoch_duration: u64 = <Test as Config>::EpochDuration::get();
 
@@ -445,10 +438,7 @@ fn submit_enact_claim_tickets() {
 		// Submit authoring tickets in three different batches.
 		// We can ignore the threshold since we are not passing through the unsigned extrinsic
 		// validation.
-		let mut tickets: Vec<Ticket> = make_tickets(start_slot + 1, 3 * max_tickets, &pairs[0])
-			.into_iter()
-			.map(|(output, _)| output)
-			.collect();
+		let tickets: Vec<TicketEnvelope> = make_tickets(start_slot + 1, 3 * max_tickets, &pairs[0]);
 		let tickets0 = tickets[0..6].to_vec().try_into().unwrap();
 		Sassafras::submit_tickets(RuntimeOrigin::none(), tickets0).unwrap();
 		let tickets1 = tickets[6..12].to_vec().try_into().unwrap();
@@ -456,9 +446,9 @@ fn submit_enact_claim_tickets() {
 		let tickets2 = tickets[12..18].to_vec().try_into().unwrap();
 		Sassafras::submit_tickets(RuntimeOrigin::none(), tickets2).unwrap();
 
-		tickets.sort();
-		tickets.truncate(max_tickets as usize);
-		let expected_tickets = tickets;
+		let mut expected_tickets: Vec<_> = tickets.into_iter().map(|t| t.ticket).collect();
+		expected_tickets.sort();
+		expected_tickets.truncate(max_tickets as usize);
 
 		// Check state after submit
 		let meta = TicketsMeta::<Test>::get();
@@ -520,10 +510,7 @@ fn block_allowed_to_skip_epochs() {
 		System::initialize(&start_block, &Default::default(), &digest);
 		Sassafras::on_initialize(start_block);
 
-		let tickets: Vec<Ticket> = make_tickets(start_slot + 1, 3, &pairs[0])
-			.into_iter()
-			.map(|(output, _)| output)
-			.collect();
+		let tickets: Vec<TicketEnvelope> = make_tickets(start_slot + 1, 3, &pairs[0]);
 		Sassafras::submit_tickets(
 			RuntimeOrigin::none(),
 			BoundedVec::truncate_from(tickets.clone()),

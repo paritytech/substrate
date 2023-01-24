@@ -82,7 +82,8 @@ pub use sp_consensus_sassafras::{
 	vrf::{make_slot_transcript, make_ticket_transcript},
 	AuthorityId, AuthorityIndex, AuthorityPair, AuthoritySignature, SassafrasApi,
 	SassafrasAuthorityWeight, SassafrasConfiguration, SassafrasEpochConfiguration, Ticket,
-	TicketAux, VRFOutput, VRFProof, SASSAFRAS_ENGINE_ID, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH,
+	TicketAux, TicketEnvelope, VRFOutput, VRFProof, SASSAFRAS_ENGINE_ID, VRF_OUTPUT_LENGTH,
+	VRF_PROOF_LENGTH,
 };
 
 mod authorship;
