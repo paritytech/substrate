@@ -81,6 +81,7 @@ sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
 sc-authority-discovery = { version = "0.10.0-dev", path = "../../../client/authority-discovery" }
 sc-sync-state-rpc = { version = "0.10.0-dev", path = "../../../client/sync-state-rpc" }
 sc-sysinfo = { version = "6.0.0-dev", path = "../../../client/sysinfo" }
+sc-storage-monitor = { version = "0.1.0", path = "../../../client/storage-monitor" }
 
 # frame dependencies
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
@@ -138,6 +139,7 @@ substrate-frame-cli = { version = "4.0.0-dev", optional = true, path = "../../..
 try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../utils/frame/try-runtime/cli" }
 sc-cli = { version = "0.10.0-dev", path = "../../../client/cli", optional = true }
 pallet-balances = { version = "4.0.0-dev", path = "../../../frame/balances" }
+sc-storage-monitor = { version = "0.1.0", path = "../../../client/storage-monitor" }
 
 [features]
 default = ["cli"]
