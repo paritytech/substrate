@@ -35,6 +35,7 @@ sp-wasm-interface = { version = "7.0.0", path = "../../primitives/wasm-interface
 
 [dev-dependencies]
 array-bytes = "4.1"
+assert_matches = "1.3.0"
 wat = "1.0"
 sc-runtime-test = { version = "2.0.0", path = "runtime-test" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }

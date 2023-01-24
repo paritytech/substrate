@@ -27,7 +27,7 @@ mod storage;
 
 pub use block::BlockCmd;
 pub use extrinsic::{ExtrinsicBuilder, ExtrinsicCmd, ExtrinsicFactory};
-pub use machine::{MachineCmd, Requirements, SUBSTRATE_REFERENCE_HARDWARE};
+pub use machine::{MachineCmd, SUBSTRATE_REFERENCE_HARDWARE};
 pub use overhead::OverheadCmd;
 pub use pallet::PalletCmd;
 pub use sc_service::BasePath;

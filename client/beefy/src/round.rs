@@ -16,6 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use crate::LOG_TARGET;
+
 use beefy_primitives::{
 	crypto::{AuthorityId, Public, Signature},
 	Commitment, EquivocationProof, SignedCommitment, ValidatorSet, ValidatorSetId, VoteMessage,
@@ -146,17 +148,17 @@ where
 		let equivocation_key = (vote.id.clone(), num);
 
 		if num < self.session_start || Some(num) <= self.best_done {
-			debug!(target: "beefy", "🥩 received vote for old stale round {:?}, ignoring", num);
+			debug!(target: LOG_TARGET, "🥩 received vote for old stale round {:?}, ignoring", num);
 			return VoteImportResult::Stale
 		} else if vote.commitment.validator_set_id != self.validator_set_id() {
 			debug!(
-				target: "beefy", "🥩 expected set_id {:?}, ignoring vote {:?}.",
+				target: LOG_TARGET, "🥩 expected set_id {:?}, ignoring vote {:?}.",
 				self.validator_set_id(), vote,
 			);
 			return VoteImportResult::Invalid
 		} else if !self.validators().iter().any(|id| &vote.id == id) {
 			debug!(
-				target: "beefy",
+				target: LOG_TARGET,
 				"🥩 received vote {:?} from validator that is not in the validator set, ignoring",
 				vote
 			);
@@ -211,7 +213,7 @@ where
 		self.previous_votes.retain(|&(_, number), _| number > round_num);
 		self.mandatory_done = self.mandatory_done || round_num == self.session_start;
 		self.best_done = self.best_done.max(Some(round_num));
-		debug!(target: "beefy", "🥩 Concluded round #{}", round_num);
+		debug!(target: LOG_TARGET, "🥩 Concluded round #{}", round_num);
 	}
 }
 

@@ -27,7 +27,7 @@ use crate::{
 	metric_inc, metric_set,
 	metrics::Metrics,
 	round::{Rounds, VoteImportResult},
-	BeefyVoterLinks,
+	BeefyVoterLinks, LOG_TARGET,
 };
 use beefy_primitives::{
 	check_equivocation_proof,
@@ -128,7 +128,7 @@ impl<B: Block> VoterOracle<B> {
 				min_block_delta: min_block_delta.max(1),
 			})
 		} else {
-			error!(target: "beefy", "🥩 Invalid sessions queue: {:?}.", sessions);
+			error!(target: LOG_TARGET, "🥩 Invalid sessions queue: {:?}.", sessions);
 			None
 		}
 	}
@@ -226,7 +226,7 @@ impl<B: Block> VoterOracle<B> {
 		let rounds = if let Some(r) = self.sessions.front() {
 			r
 		} else {
-			debug!(target: "beefy", "🥩 No voting round started");
+			debug!(target: LOG_TARGET, "🥩 No voting round started");
 			return None
 		};
 
@@ -234,7 +234,7 @@ impl<B: Block> VoterOracle<B> {
 		let target =
 			vote_target(best_grandpa, best_beefy, rounds.session_start(), self.min_block_delta);
 		trace!(
-			target: "beefy",
+			target: LOG_TARGET,
 			"🥩 best beefy: #{:?}, best finalized: #{:?}, current_vote_target: {:?}",
 			best_beefy,
 			best_grandpa,
@@ -413,7 +413,7 @@ where
 
 		if store.intersection(&active).count() == 0 {
 			let msg = "no authority public key found in store".to_string();
-			debug!(target: "beefy", "🥩 for block {:?} {}", block, msg);
+			debug!(target: LOG_TARGET, "🥩 for block {:?} {}", block, msg);
 			Err(Error::Keystore(msg))
 		} else {
 			Ok(())
@@ -426,13 +426,14 @@ where
 		validator_set: ValidatorSet<AuthorityId>,
 		new_session_start: NumberFor<B>,
 	) {
-		debug!(target: "beefy", "🥩 New active validator set: {:?}", validator_set);
+		debug!(target: LOG_TARGET, "🥩 New active validator set: {:?}", validator_set);
 
 		// BEEFY should finalize a mandatory block during each session.
 		if let Some(active_session) = self.active_rounds() {
 			if !active_session.mandatory_done() {
 				debug!(
-					target: "beefy", "🥩 New session {} while active session {} is still lagging.",
+					target: LOG_TARGET,
+					"🥩 New session {} while active session {} is still lagging.",
 					validator_set.id(),
 					active_session.validator_set_id(),
 				);
@@ -440,7 +441,7 @@ where
 			}
 		}
 
-		if log_enabled!(target: "beefy", log::Level::Debug) {
+		if log_enabled!(target: LOG_TARGET, log::Level::Debug) {
 			// verify the new validator set - only do it if we're also logging the warning
 			let _ = self.verify_validator_set(&new_session_start, &validator_set);
 		}
@@ -451,14 +452,15 @@ where
 			.add_session(Rounds::new(new_session_start, validator_set));
 		metric_set!(self, beefy_validator_set_id, id);
 		info!(
-			target: "beefy",
+			target: LOG_TARGET,
 			"🥩 New Rounds for validator set id: {:?} with session_start {:?}",
-			id, new_session_start
+			id,
+			new_session_start
 		);
 	}
 
 	fn handle_finality_notification(&mut self, notification: &FinalityNotification<B>) {
-		debug!(target: "beefy", "🥩 Finality notification: {:?}", notification);
+		debug!(target: LOG_TARGET, "🥩 Finality notification: {:?}", notification);
 		let header = &notification.header;
 
 		if *header.number() > self.best_grandpa_block() {
@@ -496,14 +498,17 @@ where
 		match self.voting_oracle().triage_round(block_num, best_grandpa)? {
 			RoundAction::Process => self.handle_vote(vote, false)?,
 			RoundAction::Enqueue => {
-				debug!(target: "beefy", "🥩 Buffer vote for round: {:?}.", block_num);
+				debug!(target: LOG_TARGET, "🥩 Buffer vote for round: {:?}.", block_num);
 				if self.pending_votes.len() < MAX_BUFFERED_VOTE_ROUNDS {
 					let votes_vec = self.pending_votes.entry(block_num).or_default();
 					if votes_vec.try_push(vote).is_err() {
-						warn!(target: "beefy", "🥩 Buffer vote dropped for round: {:?}", block_num)
+						warn!(
+							target: LOG_TARGET,
+							"🥩 Buffer vote dropped for round: {:?}", block_num
+						)
 					}
 				} else {
-					warn!(target: "beefy", "🥩 Buffer vote dropped for round: {:?}.", block_num);
+					warn!(target: LOG_TARGET, "🥩 Buffer vote dropped for round: {:?}.", block_num);
 				}
 			},
 			RoundAction::Drop => (),
@@ -525,15 +530,18 @@ where
 		let best_grandpa = self.best_grandpa_block();
 		match self.voting_oracle().triage_round(block_num, best_grandpa)? {
 			RoundAction::Process => {
-				debug!(target: "beefy", "🥩 Process justification for round: {:?}.", block_num);
+				debug!(target: LOG_TARGET, "🥩 Process justification for round: {:?}.", block_num);
 				self.finalize(justification)?
 			},
 			RoundAction::Enqueue => {
-				debug!(target: "beefy", "🥩 Buffer justification for round: {:?}.", block_num);
+				debug!(target: LOG_TARGET, "🥩 Buffer justification for round: {:?}.", block_num);
 				if self.pending_justifications.len() < MAX_BUFFERED_JUSTIFICATIONS {
 					self.pending_justifications.entry(block_num).or_insert(justification);
 				} else {
-					warn!(target: "beefy", "🥩 Buffer justification dropped for round: {:?}.", block_num);
+					warn!(
+						target: LOG_TARGET,
+						"🥩 Buffer justification dropped for round: {:?}.", block_num
+					);
 				}
 			},
 			RoundAction::Drop => (),
@@ -560,7 +568,7 @@ where
 
 				let finality_proof = VersionedFinalityProof::V1(signed_commitment);
 				info!(
-					target: "beefy", "🥩 Round #{} concluded, finality_proof: {:?}.",
+					target: LOG_TARGET, "🥩 Round #{} concluded, finality_proof: {:?}.",
 					block_number, finality_proof
 				);
 				// We created the `finality_proof` and know to be valid.
@@ -627,7 +635,10 @@ where
 					self.backend
 						.append_justification(hash, (BEEFY_ENGINE_ID, finality_proof.encode()))
 				}) {
-				error!(target: "beefy", "🥩 Error {:?} on appending justification: {:?}", e, finality_proof);
+				error!(
+					target: LOG_TARGET,
+					"🥩 Error {:?} on appending justification: {:?}", e, finality_proof
+				);
 			}
 
 			self.links
@@ -635,7 +646,7 @@ where
 				.notify(|| Ok::<_, ()>(finality_proof))
 				.expect("forwards closure result; the closure always returns Ok; qed.");
 		} else {
-			debug!(target: "beefy", "🥩 Can't set best beefy to older: {}", block_num);
+			debug!(target: LOG_TARGET, "🥩 Can't set best beefy to older: {}", block_num);
 		}
 		Ok(())
 	}
@@ -666,9 +677,9 @@ where
 		if !self.pending_justifications.is_empty() {
 			let justifs_to_handle = to_process_for(&mut self.pending_justifications, interval, _ph);
 			for (num, justification) in justifs_to_handle.into_iter() {
-				debug!(target: "beefy", "🥩 Handle buffered justification for: {:?}.", num);
+				debug!(target: LOG_TARGET, "🥩 Handle buffered justification for: {:?}.", num);
 				if let Err(err) = self.finalize(justification) {
-					error!(target: "beefy", "🥩 Error finalizing block: {}", err);
+					error!(target: LOG_TARGET, "🥩 Error finalizing block: {}", err);
 				}
 			}
 			// Possibly new interval after processing justifications.
@@ -679,10 +690,10 @@ where
 		if !self.pending_votes.is_empty() {
 			let votes_to_handle = to_process_for(&mut self.pending_votes, interval, _ph);
 			for (num, votes) in votes_to_handle.into_iter() {
-				debug!(target: "beefy", "🥩 Handle buffered votes for: {:?}.", num);
+				debug!(target: LOG_TARGET, "🥩 Handle buffered votes for: {:?}.", num);
 				for v in votes.into_iter() {
 					if let Err(err) = self.handle_vote(v, false) {
-						error!(target: "beefy", "🥩 Error handling buffered vote: {}", err);
+						error!(target: LOG_TARGET, "🥩 Error handling buffered vote: {}", err);
 					};
 				}
 			}
@@ -709,7 +720,7 @@ where
 	///
 	/// Also handle this self vote by calling `self.handle_vote()` for it.
 	fn do_vote(&mut self, target_number: NumberFor<B>) -> Result<(), Error> {
-		debug!(target: "beefy", "🥩 Try voting on {}", target_number);
+		debug!(target: LOG_TARGET, "🥩 Try voting on {}", target_number);
 
 		// Most of the time we get here, `target` is actually `best_grandpa`,
 		// avoid getting header from backend in that case.
@@ -741,7 +752,7 @@ where
 		let payload = if let Some(hash) = self.payload_provider.payload(&target_header) {
 			hash
 		} else {
-			warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", target_hash);
+			warn!(target: LOG_TARGET, "🥩 No MMR root digest found for: {:?}", target_hash);
 			return Ok(())
 		};
 
@@ -753,10 +764,13 @@ where
 		let (validators, validator_set_id) = (rounds.validators(), rounds.validator_set_id());
 
 		let authority_id = if let Some(id) = self.key_store.authority_id(validators) {
-			debug!(target: "beefy", "🥩 Local authority id: {:?}", id);
+			debug!(target: LOG_TARGET, "🥩 Local authority id: {:?}", id);
 			id
 		} else {
-			debug!(target: "beefy", "🥩 Missing validator id - can't vote for: {:?}", target_hash);
+			debug!(
+				target: LOG_TARGET,
+				"🥩 Missing validator id - can't vote for: {:?}", target_hash
+			);
 			return Ok(())
 		};
 
@@ -766,13 +780,13 @@ where
 		let signature = match self.key_store.sign(&authority_id, &encoded_commitment) {
 			Ok(sig) => sig,
 			Err(err) => {
-				warn!(target: "beefy", "🥩 Error signing commitment: {:?}", err);
+				warn!(target: LOG_TARGET, "🥩 Error signing commitment: {:?}", err);
 				return Ok(())
 			},
 		};
 
 		trace!(
-			target: "beefy",
+			target: LOG_TARGET,
 			"🥩 Produced signature using {:?}, is_valid: {:?}",
 			authority_id,
 			BeefyKeystore::verify(&authority_id, &signature, &encoded_commitment)
@@ -784,10 +798,10 @@ where
 
 		metric_inc!(self, beefy_votes_sent);
 
-		debug!(target: "beefy", "🥩 Sent vote message: {:?}", message);
+		debug!(target: LOG_TARGET, "🥩 Sent vote message: {:?}", message);
 
 		if let Err(err) = self.handle_vote(message, true) {
-			error!(target: "beefy", "🥩 Error handling self vote: {}", err);
+			error!(target: LOG_TARGET, "🥩 Error handling self vote: {}", err);
 		}
 
 		self.gossip_engine.gossip_message(topic::<B>(), encoded_message, false);
@@ -800,14 +814,14 @@ where
 	fn process_new_state(&mut self) {
 		// Handle pending justifications and/or votes for now GRANDPA finalized blocks.
 		if let Err(err) = self.try_pending_justif_and_votes() {
-			debug!(target: "beefy", "🥩 {}", err);
+			debug!(target: LOG_TARGET, "🥩 {}", err);
 		}
 
 		// Don't bother voting or requesting justifications during major sync.
 		if !self.network.is_major_syncing() {
 			// There were external events, 'state' is changed, author a vote if needed/possible.
 			if let Err(err) = self.try_to_vote() {
-				debug!(target: "beefy", "🥩 {}", err);
+				debug!(target: LOG_TARGET, "🥩 {}", err);
 			}
 			// If the current target is a mandatory block,
 			// make sure there's also an on-demand justification request out for it.
@@ -827,13 +841,17 @@ where
 		mut block_import_justif: Fuse<NotificationReceiver<BeefyVersionedFinalityProof<B>>>,
 		mut finality_notifications: Fuse<FinalityNotifications<B>>,
 	) {
-		info!(target: "beefy", "🥩 run BEEFY worker, best grandpa: #{:?}.", self.best_grandpa_block());
+		info!(
+			target: LOG_TARGET,
+			"🥩 run BEEFY worker, best grandpa: #{:?}.",
+			self.best_grandpa_block()
+		);
 
 		let mut votes = Box::pin(
 			self.gossip_engine
 				.messages_for(topic::<B>())
 				.filter_map(|notification| async move {
-					trace!(target: "beefy", "🥩 Got vote message: {:?}", notification);
+					trace!(target: LOG_TARGET, "🥩 Got vote message: {:?}", notification);
 
 					VoteMessage::<NumberFor<B>, AuthorityId, Signature>::decode(
 						&mut &notification.message[..],
@@ -855,7 +873,7 @@ where
 				// Use `select_biased!` to prioritize order below.
 				// Make sure to pump gossip engine.
 				_ = gossip_engine => {
-					error!(target: "beefy", "🥩 Gossip engine has terminated, closing worker.");
+					error!(target: LOG_TARGET, "🥩 Gossip engine has terminated, closing worker.");
 					return;
 				},
 				// Process finality notifications first since these drive the voter.
@@ -863,7 +881,7 @@ where
 					if let Some(notification) = notification {
 						self.handle_finality_notification(&notification);
 					} else {
-						error!(target: "beefy", "🥩 Finality stream terminated, closing worker.");
+						error!(target: LOG_TARGET, "🥩 Finality stream terminated, closing worker.");
 						return;
 					}
 				},
@@ -871,7 +889,7 @@ where
 				justif = self.on_demand_justifications.next().fuse() => {
 					if let Some(justif) = justif {
 						if let Err(err) = self.triage_incoming_justif(justif) {
-							debug!(target: "beefy", "🥩 {}", err);
+							debug!(target: LOG_TARGET, "🥩 {}", err);
 						}
 					}
 				},
@@ -880,10 +898,10 @@ where
 						// Block import justifications have already been verified to be valid
 						// by `BeefyBlockImport`.
 						if let Err(err) = self.triage_incoming_justif(justif) {
-							debug!(target: "beefy", "🥩 {}", err);
+							debug!(target: LOG_TARGET, "🥩 {}", err);
 						}
 					} else {
-						error!(target: "beefy", "🥩 Block import stream terminated, closing worker.");
+						error!(target: LOG_TARGET, "🥩 Block import stream terminated, closing worker.");
 						return;
 					}
 				},
@@ -892,10 +910,10 @@ where
 					if let Some(vote) = vote {
 						// Votes have already been verified to be valid by the gossip validator.
 						if let Err(err) = self.triage_incoming_vote(vote) {
-							debug!(target: "beefy", "🥩 {}", err);
+							debug!(target: LOG_TARGET, "🥩 {}", err);
 						}
 					} else {
-						error!(target: "beefy", "🥩 Votes gossiping stream terminated, closing worker.");
+						error!(target: LOG_TARGET, "🥩 Votes gossiping stream terminated, closing worker.");
 						return;
 					}
 				},
@@ -983,18 +1001,14 @@ where
 	// if the mandatory block (session_start) does not have a beefy justification yet,
 	// we vote on it
 	let target = if best_beefy < session_start {
-		debug!(
-			target: "beefy",
-			"🥩 vote target - mandatory block: #{:?}",
-			session_start,
-		);
+		debug!(target: LOG_TARGET, "🥩 vote target - mandatory block: #{:?}", session_start,);
 		session_start
 	} else {
 		let diff = best_grandpa.saturating_sub(best_beefy) + 1u32.into();
 		let diff = diff.saturated_into::<u32>() / 2;
 		let target = best_beefy + min_delta.max(diff.next_power_of_two()).into();
 		trace!(
-			target: "beefy",
+			target: LOG_TARGET,
 			"🥩 vote target - diff: {:?}, next_power_of_two: {:?}, target block: #{:?}",
 			diff,
 			diff.next_power_of_two(),

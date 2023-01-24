@@ -18,7 +18,7 @@
 
 //! Schema for BEEFY state persisted in the aux-db.
 
-use crate::worker::PersistedState;
+use crate::{worker::PersistedState, LOG_TARGET};
 use codec::{Decode, Encode};
 use log::{info, trace};
 use sc_client_api::{backend::AuxStore, Backend};
@@ -31,7 +31,7 @@ const WORKER_STATE_KEY: &[u8] = b"beefy_voter_state";
 const CURRENT_VERSION: u32 = 2;
 
 pub(crate) fn write_current_version<BE: AuxStore>(backend: &BE) -> ClientResult<()> {
-	info!(target: "beefy", "🥩 write aux schema version {:?}", CURRENT_VERSION);
+	info!(target: LOG_TARGET, "🥩 write aux schema version {:?}", CURRENT_VERSION);
 	AuxStore::insert_aux(backend, &[(VERSION_KEY, CURRENT_VERSION.encode().as_slice())], &[])
 }
 
@@ -40,7 +40,7 @@ pub(crate) fn write_voter_state<B: BlockT, BE: AuxStore>(
 	backend: &BE,
 	state: &PersistedState<B>,
 ) -> ClientResult<()> {
-	trace!(target: "beefy", "🥩 persisting {:?}", state);
+	trace!(target: LOG_TARGET, "🥩 persisting {:?}", state);
 	AuxStore::insert_aux(backend, &[(WORKER_STATE_KEY, state.encode().as_slice())], &[])
 }
 

@@ -22,10 +22,7 @@ use sc_client_api::backend;
 use sc_executor::RuntimeVersionOf;
 use sp_blockchain::{HeaderBackend, Result};
 use sp_core::traits::{FetchRuntimeCode, RuntimeCode, WrappedRuntimeCode};
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, NumberFor},
-};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 use sp_state_machine::BasicExternalities;
 use sp_version::RuntimeVersion;
 use std::{
@@ -54,10 +51,13 @@ impl<Block: BlockT> WasmSubstitute<Block> {
 		RuntimeCode { code_fetcher: self, hash: self.hash.clone(), heap_pages }
 	}
 
-	/// Returns `true` when the substitute matches for the given `block_id`.
-	fn matches(&self, block_id: &BlockId<Block>, backend: &impl backend::Backend<Block>) -> bool {
-		let requested_block_number =
-			backend.blockchain().block_number_from_id(block_id).ok().flatten();
+	/// Returns `true` when the substitute matches for the given `hash`.
+	fn matches(
+		&self,
+		hash: <Block as BlockT>::Hash,
+		backend: &impl backend::Backend<Block>,
+	) -> bool {
+		let requested_block_number = backend.blockchain().number(hash).ok().flatten();
 
 		Some(self.block_number) <= requested_block_number
 	}
@@ -147,10 +147,10 @@ where
 		&self,
 		spec: u32,
 		pages: Option<u64>,
-		block_id: &BlockId<Block>,
+		hash: Block::Hash,
 	) -> Option<(RuntimeCode<'_>, RuntimeVersion)> {
 		let s = self.substitutes.get(&spec)?;
-		s.matches(block_id, &*self.backend)
+		s.matches(hash, &*self.backend)
 			.then(|| (s.runtime_code(pages), s.version.clone()))
 	}
 

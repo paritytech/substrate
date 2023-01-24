@@ -432,6 +432,7 @@ async fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + '
 				.for_each(|_| future::ready(())),
 		);
 
+		let client_clone = client.clone();
 		babe_futures.push(
 			start_babe(BabeParams {
 				block_import: data.block_import.lock().take().expect("import set up during init"),
@@ -439,12 +440,19 @@ async fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + '
 				client,
 				env: environ,
 				sync_oracle: DummyOracle,
-				create_inherent_data_providers: Box::new(|_, _| async {
-					let slot = InherentDataProvider::from_timestamp_and_slot_duration(
-						Timestamp::current(),
-						SlotDuration::from_millis(SLOT_DURATION_MS),
+				create_inherent_data_providers: Box::new(move |parent, _| {
+					// Get the slot of the parent header and just increase this slot.
+					//
+					// Below we will running everything in one big future. If we would use
+					// time based slot, it can happen that on babe instance imports a block from
+					// another babe instance and then tries to build a block in the same slot making
+					// this test fail.
+					let parent_header = client_clone.header(parent).ok().flatten().unwrap();
+					let slot = Slot::from(
+						find_pre_digest::<TestBlock>(&parent_header).unwrap().slot() + 1,
 					);
-					Ok((slot,))
+
+					async move { Ok((InherentDataProvider::new(slot),)) }
 				}),
 				force_authoring: false,
 				backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
