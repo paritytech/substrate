@@ -68,18 +68,18 @@ pub struct NetworkParams {
 	#[arg(long, value_name = "PORT", conflicts_with_all = &[ "listen_addr" ])]
 	pub port: Option<u16>,
 
-	/// Always forbid connecting to private IPv4 addresses (as specified in
+	/// Always forbid connecting to private IPv4/IPv6 addresses (as specified in
 	/// [RFC1918](https://tools.ietf.org/html/rfc1918)), unless the address was passed with
 	/// `--reserved-nodes` or `--bootnodes`. Enabled by default for chains marked as "live" in
 	/// their chain specifications.
-	#[arg(long, conflicts_with_all = &["allow_private_ipv4"])]
-	pub no_private_ipv4: bool,
+	#[arg(long, alias = "no-private-ipv4", conflicts_with_all = &["allow_private_ip"])]
+	pub no_private_ip: bool,
 
-	/// Always accept connecting to private IPv4 addresses (as specified in
+	/// Always accept connecting to private IPv4/IPv6 addresses (as specified in
 	/// [RFC1918](https://tools.ietf.org/html/rfc1918)). Enabled by default for chains marked as
 	/// "local" in their chain specifications, or when `--dev` is passed.
-	#[arg(long, conflicts_with_all = &["no_private_ipv4"])]
-	pub allow_private_ipv4: bool,
+	#[arg(long, alias = "allow-private-ipv4", conflicts_with_all = &["no_private_ip"])]
+	pub allow_private_ip: bool,
 
 	/// Specify the number of outgoing connections we're trying to maintain.
 	#[arg(long, value_name = "COUNT", default_value_t = 15)]
@@ -200,8 +200,8 @@ impl NetworkParams {
 			self.discover_local ||
 				is_dev || matches!(chain_type, ChainType::Local | ChainType::Development);
 
-		let allow_private_ipv4 = match (self.allow_private_ipv4, self.no_private_ipv4) {
-			(true, true) => unreachable!("`*_private_ipv4` flags are mutually exclusive; qed"),
+		let allow_private_ip = match (self.allow_private_ip, self.no_private_ip) {
+			(true, true) => unreachable!("`*_private_ip` flags are mutually exclusive; qed"),
 			(true, false) => true,
 			(false, true) => false,
 			(false, false) =>
@@ -231,7 +231,7 @@ impl NetworkParams {
 			client_version: client_id.to_string(),
 			transport: TransportConfig::Normal {
 				enable_mdns: !is_dev && !self.no_mdns,
-				allow_private_ipv4,
+				allow_private_ip,
 			},
 			max_parallel_downloads: self.max_parallel_downloads,
 			enable_dht_random_walk: !self.reserved_only,

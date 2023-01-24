@@ -22,6 +22,7 @@ use std::{
 	sync::Arc,
 };
 
+use crate::LOG_TARGET;
 use futures::channel::mpsc::{channel, Sender};
 use parking_lot::{Mutex, RwLock};
 use sc_transaction_pool_api::{error, PoolStatus, ReadyTransactions};
@@ -199,7 +200,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 						Err(e) =>
 							if e.is_full() {
 								log::warn!(
-									target: "txpool",
+									target: LOG_TARGET,
 									"[{:?}] Trying to notify an import but the channel is full",
 									hash,
 								);
@@ -230,15 +231,17 @@ impl<B: ChainApi> ValidatedPool<B> {
 		let ready_limit = &self.options.ready;
 		let future_limit = &self.options.future;
 
-		log::debug!(target: "txpool", "Pool Status: {:?}", status);
+		log::debug!(target: LOG_TARGET, "Pool Status: {:?}", status);
 		if ready_limit.is_exceeded(status.ready, status.ready_bytes) ||
 			future_limit.is_exceeded(status.future, status.future_bytes)
 		{
 			log::debug!(
-				target: "txpool",
+				target: LOG_TARGET,
 				"Enforcing limits ({}/{}kB ready, {}/{}kB future",
-				ready_limit.count, ready_limit.total_bytes / 1024,
-				future_limit.count, future_limit.total_bytes / 1024,
+				ready_limit.count,
+				ready_limit.total_bytes / 1024,
+				future_limit.count,
+				future_limit.total_bytes / 1024,
 			);
 
 			// clean up the pool
@@ -254,7 +257,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 				removed
 			};
 			if !removed.is_empty() {
-				log::debug!(target: "txpool", "Enforcing limits: {} dropped", removed.len());
+				log::debug!(target: LOG_TARGET, "Enforcing limits: {} dropped", removed.len());
 			}
 
 			// run notifications
@@ -385,7 +388,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 								// unknown to caller => let's just notify listeners (and issue debug
 								// message)
 								log::warn!(
-									target: "txpool",
+									target: LOG_TARGET,
 									"[{:?}] Removing invalid transaction from update: {}",
 									hash,
 									err,
@@ -595,14 +598,14 @@ impl<B: ChainApi> ValidatedPool<B> {
 			return vec![]
 		}
 
-		log::debug!(target: "txpool", "Removing invalid transactions: {:?}", hashes);
+		log::debug!(target: LOG_TARGET, "Removing invalid transactions: {:?}", hashes);
 
 		// temporarily ban invalid transactions
 		self.rotator.ban(&Instant::now(), hashes.iter().cloned());
 
 		let invalid = self.pool.write().remove_subtree(hashes);
 
-		log::debug!(target: "txpool", "Removed invalid transactions: {:?}", invalid);
+		log::debug!(target: LOG_TARGET, "Removed invalid transactions: {:?}", invalid);
 
 		let mut listener = self.listener.write();
 		for tx in &invalid {
@@ -629,7 +632,11 @@ impl<B: ChainApi> ValidatedPool<B> {
 
 	/// Notify all watchers that transactions in the block with hash have been finalized
 	pub async fn on_block_finalized(&self, block_hash: BlockHash<B>) -> Result<(), B::Error> {
-		log::trace!(target: "txpool", "Attempting to notify watchers of finalization for {}", block_hash);
+		log::trace!(
+			target: LOG_TARGET,
+			"Attempting to notify watchers of finalization for {}",
+			block_hash,
+		);
 		self.listener.write().finalized(block_hash);
 		Ok(())
 	}

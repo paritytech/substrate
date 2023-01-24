@@ -47,4 +47,4 @@ sc-runtime-test = { version = "2.0.0", path = "../runtime-test" }
 sp-io = { version = "7.0.0", path = "../../../primitives/io" }
 tempfile = "3.3.0"
 paste = "1.0"
-codec = { package = "parity-scale-codec", version = "3.0.0" }
+codec = { package = "parity-scale-codec", version = "3.2.2" }
