@@ -155,7 +155,10 @@ pub fn clear_prefix(
 }
 
 pub fn contains_prefix(prefix: &[u8]) -> bool {
-	sp_io::storage::next_key(prefix).is_some()
+	match sp_io::storage::next_key(prefix) {
+		Some(key) => key.starts_with(prefix),
+		None => false,
+	}
 }
 
 /// Get a Vec of bytes from storage.

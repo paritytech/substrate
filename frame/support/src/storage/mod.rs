@@ -1792,6 +1792,7 @@ mod test {
 			assert_eq!(FooDoubleMap::contains_prefix(0), false);
 
 			assert_ok!(FooDoubleMap::try_append(1, 1, 4));
+			assert_ok!(FooDoubleMap::try_append(2, 1, 4));
 			assert!(FooDoubleMap::iter_prefix_values(1).next().is_some());
 			assert!(FooDoubleMap::contains_prefix(1));
 			FooDoubleMap::remove(1, 1);
