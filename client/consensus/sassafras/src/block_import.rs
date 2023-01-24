@@ -326,17 +326,25 @@ where
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_hash();
 		let number = *block.header.number();
+		let info = self.client.info();
 
-		// Early exit if block already in chain, otherwise the check for epoch changes
-		// will error when trying to re-import
-		match self.client.status(hash) {
-			Ok(BlockStatus::InChain) => {
-				block.remove_intermediate::<SassafrasIntermediate<Block>>(INTERMEDIATE_KEY)?;
-				block.fork_choice = Some(ForkChoiceStrategy::Custom(false));
-				return self.inner.import_block(block, new_cache).await.map_err(Into::into)
-			},
-			Ok(BlockStatus::Unknown) => {},
-			Err(e) => return Err(ConsensusError::ClientImport(e.to_string())),
+		let block_status = self
+			.client
+			.status(hash)
+			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
+
+		// Skip protocol-specific logic if block already on-chain or importing blocks
+		// during initial sync, otherwise the check for epoch changes will error
+		// because trying to re-import an epoch change entry or because of missing epoch
+		// data in the tree, respectivelly.
+		if info.block_gap.map_or(false, |(s, e)| s <= number && number <= e) ||
+			block_status == BlockStatus::InChain
+		{
+			// When re-importing existing block strip away intermediates.
+			// In case of initial sync intermediates should not be present...
+			let _ = block.remove_intermediate::<SassafrasIntermediate<Block>>(INTERMEDIATE_KEY);
+			block.fork_choice = Some(ForkChoiceStrategy::Custom(false));
+			return self.inner.import_block(block, new_cache).await.map_err(Into::into)
 		}
 
 		if block.with_state() {
