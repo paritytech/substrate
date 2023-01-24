@@ -310,6 +310,10 @@ pub mod pallet {
 		Restored { who: T::AccountId, amount: T::Balance },
 		/// An account was upgraded.
 		Upgraded { who: T::AccountId },
+		/// Total issuance was increased by `amount`, creating a credit to be balanced.
+		Issue { amount: T::Balance },
+		/// Total issuance was decreased by `amount`, creating a debt to be balanced.
+		Rescind { amount: T::Balance },
 	}
 
 	#[pallet::error]
@@ -763,7 +767,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn post_mutation(
 		_who: &T::AccountId,
 		new: AccountData<T::Balance>,
-	) -> (Option<AccountData<T::Balance>>, Option<NegativeImbalance<T, I>>) {
+	) -> (Option<AccountData<T::Balance>>, Option<	NegativeImbalance<T, I>>) {
 		// We should never be dropping if reserved is non-zero. Reserved being non-zero should imply
 		// that we have a consumer ref, so this is economically safe.
 		if new.free < T::ExistentialDeposit::get() && new.reserved.is_zero() {

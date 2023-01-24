@@ -313,6 +313,19 @@ impl<T: Config<I>, I: 'static> fungible::MutateFreeze<T::AccountId> for Pallet<T
 impl<T: Config<I>, I: 'static> fungible::Balanced<T::AccountId> for Pallet<T, I> {
 	type OnDropCredit = fungible::DecreaseIssuance<T::AccountId, Self>;
 	type OnDropDebt = fungible::IncreaseIssuance<T::AccountId, Self>;
+
+	fn done_deposit(who: &T::AccountId, amount: Self::Balance) {
+		Self::deposit_event(Event::<T, I>::Deposit { who: who.clone(), amount });
+	}
+	fn done_withdraw(who: &T::AccountId, amount: Self::Balance) {
+		Self::deposit_event(Event::<T, I>::Withdraw { who: who.clone(), amount });
+	}
+	fn done_issue(amount: Self::Balance) {
+		Self::deposit_event(Event::<T, I>::Issue { amount });
+	}
+	fn done_rescind(amount: Self::Balance) {
+		Self::deposit_event(Event::<T, I>::Rescind { amount });
+	}
 }
 
 impl<T: Config<I>, I: 'static> fungible::BalancedHold<T::AccountId> for Pallet<T, I> {}

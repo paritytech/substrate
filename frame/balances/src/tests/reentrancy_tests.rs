@@ -23,7 +23,7 @@ use fungible::Balanced;
 
 #[test]
 fn transfer_dust_removal_tst1_should_work() {
-	ExtBuilder::default().existential_deposit(100).build_and_execute_with(|| {
+	ExtBuilder::default().existential_deposit(100).dust_trap(1).build_and_execute_with(|| {
 		// Verification of reentrancy in dust removal
 		assert_ok!(Balances::force_set_balance(RawOrigin::Root.into(), 1, 1000));
 		assert_ok!(Balances::force_set_balance(RawOrigin::Root.into(), 2, 500));
@@ -45,7 +45,7 @@ fn transfer_dust_removal_tst1_should_work() {
 		assert_eq!(Balances::free_balance(&1), 1050);
 
 		// Verify the events
-		assert_eq!(System::events().len(), 14);
+		assert_eq!(System::events().len(), 12);
 
 		System::assert_has_event(RuntimeEvent::Balances(crate::Event::Transfer {
 			from: 2,
@@ -65,7 +65,7 @@ fn transfer_dust_removal_tst1_should_work() {
 
 #[test]
 fn transfer_dust_removal_tst2_should_work() {
-	ExtBuilder::default().existential_deposit(100).build_and_execute_with(|| {
+	ExtBuilder::default().existential_deposit(100).dust_trap(1).build_and_execute_with(|| {
 		// Verification of reentrancy in dust removal
 		assert_ok!(Balances::force_set_balance(RawOrigin::Root.into(), 1, 1000));
 		assert_ok!(Balances::force_set_balance(RawOrigin::Root.into(), 2, 500));
@@ -83,7 +83,7 @@ fn transfer_dust_removal_tst2_should_work() {
 		assert_eq!(Balances::free_balance(&1), 1500);
 
 		// Verify the events
-		assert_eq!(System::events().len(), 12);
+		assert_eq!(System::events().len(), 10);
 
 		System::assert_has_event(RuntimeEvent::Balances(crate::Event::Transfer {
 			from: 2,
@@ -103,7 +103,7 @@ fn transfer_dust_removal_tst2_should_work() {
 
 #[test]
 fn repatriating_reserved_balance_dust_removal_should_work() {
-	ExtBuilder::default().existential_deposit(100).build_and_execute_with(|| {
+	ExtBuilder::default().existential_deposit(100).dust_trap(1).build_and_execute_with(|| {
 		// Verification of reentrancy in dust removal
 		assert_ok!(Balances::force_set_balance(RawOrigin::Root.into(), 1, 1000));
 		assert_ok!(Balances::force_set_balance(RawOrigin::Root.into(), 2, 500));
@@ -126,7 +126,7 @@ fn repatriating_reserved_balance_dust_removal_should_work() {
 		assert_eq!(Balances::free_balance(1), 1500);
 
 		// Verify the events
-		assert_eq!(System::events().len(), 12);
+		assert_eq!(System::events().len(), 10);
 
 		System::assert_has_event(RuntimeEvent::Balances(crate::Event::Transfer {
 			from: 2,

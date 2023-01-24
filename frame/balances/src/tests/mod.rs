@@ -23,7 +23,7 @@ use crate::{self as pallet_balances, Config, Pallet, AccountData, Error};
 use codec::{Encode, Decode, MaxEncodedLen};
 use frame_support::{
 	parameter_types,
-	traits::{ConstU32, ConstU64, ConstU8, StorageMapShim, StoredMap},
+	traits::{ConstU32, ConstU64, ConstU8, StorageMapShim, StoredMap, OnUnbalanced},
 	weights::IdentityFee, RuntimeDebug,
 };
 use pallet_transaction_payment::CurrencyAdapter;
@@ -112,7 +112,7 @@ impl pallet_transaction_payment::Config for Test {
 
 impl Config for Test {
 	type Balance = u64;
-	type DustRemoval = ();
+	type DustRemoval = DustTrap;
 	type RuntimeEvent = RuntimeEvent;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = TestAccountStore;
@@ -130,10 +130,11 @@ impl Config for Test {
 pub struct ExtBuilder {
 	existential_deposit: u64,
 	monied: bool,
+	dust_trap: Option<u64>,
 }
 impl Default for ExtBuilder {
 	fn default() -> Self {
-		Self { existential_deposit: 1, monied: false }
+		Self { existential_deposit: 1, monied: false, dust_trap: None }
 	}
 }
 impl ExtBuilder {
@@ -148,8 +149,13 @@ impl ExtBuilder {
 		}
 		self
 	}
+	pub fn dust_trap(mut self, account: u64) -> Self {
+		self.dust_trap = Some(account);
+		self
+	}
 	pub fn set_associated_consts(&self) {
-		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
+		DUST_TRAP_TARGET.with(|v| v.replace(self.dust_trap));
+		EXISTENTIAL_DEPOSIT.with(|v| v.replace(self.existential_deposit));
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_associated_consts();
@@ -180,6 +186,21 @@ impl ExtBuilder {
 		other.build().execute_with(|| f());
 		SYSTEM_STORAGE.with(|q| q.replace(true));
 		self.build().execute_with(|| f());
+	}
+}
+
+parameter_types! {
+	static DustTrapTarget: Option<u64> = None;
+}
+
+pub struct DustTrap;
+
+impl OnUnbalanced<crate::NegativeImbalance<Test>> for DustTrap {
+	fn on_nonzero_unbalanced(amount: crate::NegativeImbalance<Test>) {
+		match DustTrapTarget::get() {
+			None => drop(amount),
+			Some(a) => <Balances as frame_support::traits::Currency<_>>::resolve_creating(&a, amount),
+		}
 	}
 }
 
