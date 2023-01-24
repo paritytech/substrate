@@ -326,6 +326,7 @@ pub mod pallet {
 		/// Submit next epoch tickets.
 		///
 		/// TODO-SASS-P3: this is an unsigned extrinsic. Can we remove the weight?
+		#[pallet::call_index(0)]
 		#[pallet::weight(10_000)]
 		pub fn submit_tickets(
 			origin: OriginFor<T>,
@@ -357,6 +358,7 @@ pub mod pallet {
 		/// not been enacted yet.
 		///
 		/// TODO-SASS-P4: proper weight
+		#[pallet::call_index(1)]
 		#[pallet::weight(10_000)]
 		pub fn plan_config_change(
 			origin: OriginFor<T>,
@@ -382,6 +384,7 @@ pub mod pallet {
 		/// will be defined as the equivocation reporter.
 		///
 		/// TODO-SASS-P4: proper weight
+		#[pallet::call_index(2)]
 		#[pallet::weight(10_000)]
 		pub fn report_equivocation_unsigned(
 			origin: OriginFor<T>,

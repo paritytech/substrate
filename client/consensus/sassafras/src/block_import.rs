@@ -329,7 +329,7 @@ where
 
 		// Early exit if block already in chain, otherwise the check for epoch changes
 		// will error when trying to re-import
-		match self.client.status(BlockId::Hash(hash)) {
+		match self.client.status(hash) {
 			Ok(BlockStatus::InChain) => {
 				block.remove_intermediate::<SassafrasIntermediate<Block>>(INTERMEDIATE_KEY)?;
 				block.fork_choice = Some(ForkChoiceStrategy::Custom(false));
@@ -347,17 +347,6 @@ where
 			.remove_intermediate::<SassafrasIntermediate<Block>>(INTERMEDIATE_KEY)?
 			.epoch_descriptor;
 
-		// Early exit if block already in chain, otherwise the check for
-		// epoch changes will error when trying to re-import an epoch change.
-		match self.client.status(BlockId::Hash(hash)) {
-			Ok(sp_blockchain::BlockStatus::InChain) => {
-				block.fork_choice = Some(ForkChoiceStrategy::Custom(false));
-				return self.inner.import_block(block, new_cache).await.map_err(Into::into)
-			},
-			Ok(sp_blockchain::BlockStatus::Unknown) => {},
-			Err(e) => return Err(ConsensusError::ClientImport(e.to_string())),
-		}
-
 		let pre_digest = find_pre_digest::<Block>(&block.header)
 			.expect("valid headers contain a pre-digest; header has been already verified; qed");
 		let slot = pre_digest.slot;
@@ -365,7 +354,7 @@ where
 		let parent_hash = *block.header.parent_hash();
 		let parent_header = self
 			.client
-			.header(BlockId::Hash(parent_hash))
+			.header(parent_hash)
 			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
 			.ok_or_else(|| {
 				ConsensusError::ChainLookup(
@@ -479,13 +468,10 @@ where
 	C: HeaderBackend<B> + HeaderMetadata<B, Error = sp_blockchain::Error>,
 {
 	let info = client.info();
-	if info.block_gap.is_none() {
-		epoch_changes.clear_gap();
-	}
 
 	let finalized_slot = {
 		let finalized_header = client
-			.header(BlockId::Hash(info.finalized_hash))
+			.header(info.finalized_hash)
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 			.expect("finalized headers must exist in db; qed");
 

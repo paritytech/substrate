@@ -405,6 +405,7 @@ where
 						// TODO-SASS-P3 :??? DOC
 						let mut inherent_data = create_inherent_data_providers
 							.create_inherent_data()
+							.await
 							.map_err(Error::<Block>::CreateInherents)?;
 						inherent_data.sassafras_replace_inherent_data(pre_digest.slot);
 						self.check_inherents(

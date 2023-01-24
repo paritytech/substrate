@@ -302,18 +302,17 @@ impl TestContext {
 	}
 
 	// Propose a block
-	fn propose_block(&mut self, parent_id: BlockId, slot: Option<Slot>) -> TestBlockImportParams {
-		let parent = self.client.header(&parent_id).unwrap().unwrap();
-		let parent_hash = parent.hash();
-		let parent_number = *parent.number();
+	fn propose_block(&mut self, parent_hash: Hash, slot: Option<Slot>) -> TestBlockImportParams {
+		let parent_header = self.client.header(parent_hash).unwrap().unwrap();
+		let parent_number = *parent_header.number();
 
 		let authority = Sr25519Keyring::Alice;
 		let keystore = create_keystore(authority);
 
-		let proposer = block_on(self.init(&parent)).unwrap();
+		let proposer = block_on(self.init(&parent_header)).unwrap();
 
 		let slot = slot.unwrap_or_else(|| {
-			let parent_pre_digest = find_pre_digest::<TestBlock>(&parent).unwrap();
+			let parent_pre_digest = find_pre_digest::<TestBlock>(&parent_header).unwrap();
 			parent_pre_digest.slot + 1
 		});
 
@@ -366,23 +365,21 @@ impl TestContext {
 
 	// Propose and import a new block on top of the given parent.
 	// This skips verification.
-	fn propose_and_import_block(&mut self, parent_id: BlockId, slot: Option<Slot>) -> Hash {
-		let params = self.propose_block(parent_id, slot);
+	fn propose_and_import_block(&mut self, parent_hash: Hash, slot: Option<Slot>) -> Hash {
+		let params = self.propose_block(parent_hash, slot);
 		self.import_block(params)
 	}
 
 	// Propose and import n valid blocks that are built on top of the given parent.
 	// The proposer takes care of producing epoch change digests according to the epoch
 	// duration (which is set by the test runtime).
-	fn propose_and_import_blocks(&mut self, mut parent_id: BlockId, n: usize) -> Vec<Hash> {
+	fn propose_and_import_blocks(&mut self, mut parent_hash: Hash, n: usize) -> Vec<Hash> {
 		let mut hashes = Vec::with_capacity(n);
-
 		for _ in 0..n {
-			let hash = self.propose_and_import_block(parent_id, None);
+			let hash = self.propose_and_import_block(parent_hash, None);
 			hashes.push(hash);
-			parent_id = BlockId::Hash(hash);
+			parent_hash = hash;
 		}
-
 		hashes
 	}
 }
@@ -509,7 +506,7 @@ fn claim_primary_slots_works() {
 fn import_rejects_block_without_pre_digest() {
 	let mut env = TestContext::new();
 
-	let mut import_params = env.propose_block(BlockId::Number(0), Some(999.into()));
+	let mut import_params = env.propose_block(env.client.info().genesis_hash, Some(999.into()));
 	// Remove logs from the header
 	import_params.header.digest_mut().logs.clear();
 
@@ -521,9 +518,9 @@ fn import_rejects_block_without_pre_digest() {
 fn import_rejects_block_with_unexpected_epoch_changes() {
 	let mut env = TestContext::new();
 
-	env.propose_and_import_block(BlockId::Number(0), None);
+	let hash1 = env.propose_and_import_block(env.client.info().genesis_hash, None);
 
-	let mut import_params = env.propose_block(BlockId::Number(1), None);
+	let mut import_params = env.propose_block(hash1, None);
 	// Insert an epoch change announcement when it is not required.
 	let digest_data = ConsensusLog::NextEpochData(NextEpochDescriptor {
 		authorities: env.link.genesis_config.authorities.clone(),
@@ -543,10 +540,10 @@ fn import_rejects_block_with_unexpected_epoch_changes() {
 fn import_rejects_block_with_missing_epoch_changes() {
 	let mut env = TestContext::new();
 
-	let blocks = env.propose_and_import_blocks(BlockId::Number(0), EPOCH_DURATION as usize);
+	let blocks =
+		env.propose_and_import_blocks(env.client.info().genesis_hash, EPOCH_DURATION as usize);
 
-	let mut import_params =
-		env.propose_block(BlockId::Hash(blocks[EPOCH_DURATION as usize - 1]), None);
+	let mut import_params = env.propose_block(blocks[EPOCH_DURATION as usize - 1], None);
 
 	let digest = import_params.header.digest_mut();
 	// Remove the epoch change announcement.
@@ -560,7 +557,7 @@ fn import_rejects_block_with_missing_epoch_changes() {
 fn importing_block_one_sets_genesis_epoch() {
 	let mut env = TestContext::new();
 
-	let block_hash = env.propose_and_import_block(BlockId::Number(0), Some(999.into()));
+	let block_hash = env.propose_and_import_block(env.client.info().genesis_hash, Some(999.into()));
 
 	let epoch_for_second_block = env.epoch_data(&block_hash, 1, 1000.into());
 	let genesis_epoch = Epoch::genesis(&env.link.genesis_config, 999.into());
@@ -580,11 +577,10 @@ fn allows_to_skip_epochs() {
 	// configuration created for epoch 2.
 	let mut env = TestContext::new();
 
-	let blocks = env.propose_and_import_blocks(BlockId::Number(0), 7);
+	let blocks = env.propose_and_import_blocks(env.client.info().genesis_hash, 7);
 
 	// First block after the a skipped epoch (block #8 @ slot #19)
-	let block =
-		env.propose_and_import_block(BlockId::Hash(*blocks.last().unwrap()), Some(19.into()));
+	let block = env.propose_and_import_block(*blocks.last().unwrap(), Some(19.into()));
 
 	let epoch_changes = env.link.epoch_changes.shared_data();
 	let epochs: Vec<_> = epoch_changes.tree().iter().collect();
@@ -648,11 +644,11 @@ fn allows_to_skip_epochs() {
 fn finalization_prunes_epoch_changes_and_removes_weights() {
 	let mut env = TestContext::new();
 
-	let canon = env.propose_and_import_blocks(BlockId::Number(0), 21);
+	let canon = env.propose_and_import_blocks(env.client.info().genesis_hash, 21);
 
-	let _fork1 = env.propose_and_import_blocks(BlockId::Hash(canon[0]), 10);
-	let _fork2 = env.propose_and_import_blocks(BlockId::Hash(canon[7]), 10);
-	let _fork3 = env.propose_and_import_blocks(BlockId::Hash(canon[11]), 8);
+	let _fork1 = env.propose_and_import_blocks(canon[0], 10);
+	let _fork2 = env.propose_and_import_blocks(canon[7], 10);
+	let _fork3 = env.propose_and_import_blocks(canon[11], 8);
 
 	let epoch_changes = env.link.epoch_changes.clone();
 
@@ -679,7 +675,7 @@ fn finalization_prunes_epoch_changes_and_removes_weights() {
 
 	// Finalize block #10 so that on next epoch change the tree is pruned
 	env.client.finalize_block(canon[13], None, true).unwrap();
-	let canon_tail = env.propose_and_import_blocks(BlockId::Hash(*canon.last().unwrap()), 4);
+	let canon_tail = env.propose_and_import_blocks(*canon.last().unwrap(), 4);
 
 	// Post-finalize scenario.
 	//
@@ -698,10 +694,10 @@ fn finalization_prunes_epoch_changes_and_removes_weights() {
 fn revert_prunes_epoch_changes_and_removes_weights() {
 	let mut env = TestContext::new();
 
-	let canon = env.propose_and_import_blocks(BlockId::Number(0), 21);
-	let fork1 = env.propose_and_import_blocks(BlockId::Hash(canon[0]), 10);
-	let fork2 = env.propose_and_import_blocks(BlockId::Hash(canon[7]), 10);
-	let fork3 = env.propose_and_import_blocks(BlockId::Hash(canon[11]), 8);
+	let canon = env.propose_and_import_blocks(env.client.info().genesis_hash, 21);
+	let fork1 = env.propose_and_import_blocks(canon[0], 10);
+	let fork2 = env.propose_and_import_blocks(canon[7], 10);
+	let fork3 = env.propose_and_import_blocks(canon[11], 8);
 
 	let epoch_changes = env.link.epoch_changes.clone();
 
@@ -773,7 +769,7 @@ fn revert_prunes_epoch_changes_and_removes_weights() {
 fn revert_not_allowed_for_finalized() {
 	let mut env = TestContext::new();
 
-	let canon = env.propose_and_import_blocks(BlockId::Number(0), 3);
+	let canon = env.propose_and_import_blocks(env.client.info().genesis_hash, 3);
 
 	// Finalize best block
 	env.client.finalize_block(canon[2], None, false).unwrap();
@@ -793,9 +789,9 @@ fn revert_not_allowed_for_finalized() {
 fn verify_block_claimed_via_secondary_method() {
 	let mut env = TestContext::new();
 
-	let blocks = env.propose_and_import_blocks(BlockId::Number(0), 7);
+	let blocks = env.propose_and_import_blocks(env.client.info().genesis_hash, 7);
 
-	let in_params = env.propose_block(BlockId::Hash(blocks[6]), Some(9.into()));
+	let in_params = env.propose_block(blocks[6], Some(9.into()));
 
 	let _out_params = env.verify_block(in_params);
 }
@@ -882,8 +878,8 @@ impl TestNetFactory for SassafrasTestNet {
 }
 
 // Multiple nodes authoring and validating blocks
-#[test]
-fn sassafras_network_progress() {
+#[tokio::test]
+async fn sassafras_network_progress() {
 	let net = SassafrasTestNet::new(3);
 	let net = Arc::new(Mutex::new(net));
 
@@ -931,13 +927,18 @@ fn sassafras_network_progress() {
 			.for_each(|_| future::ready(()));
 		import_notifications.push(import_futures);
 
-		let slot_duration = data.link.genesis_config.slot_duration();
-		let create_inherent_data_providers = Box::new(move |_, _| async move {
-			let slot = InherentDataProvider::from_timestamp_and_slot_duration(
-				Timestamp::current(),
-				slot_duration,
-			);
-			Ok((slot,))
+		//let slot_duration = data.link.genesis_config.slot_duration();
+		let client_clone = client.clone();
+		let create_inherent_data_providers = Box::new(move |parent, _| {
+			// Get the slot of the parent header and just increase this slot.
+			//
+			// Below we will running everything in one big future. If we would use
+			// time based slot, it can happen that on babe instance imports a block from
+			// another babe instance and then tries to build a block in the same slot making
+			// this test fail.
+			let parent_header = client_clone.header(parent).ok().flatten().unwrap();
+			let slot = Slot::from(find_pre_digest::<TestBlock>(&parent_header).unwrap().slot + 1);
+			async move { Ok((InherentDataProvider::new(slot),)) }
 		});
 		let sassafras_params = SassafrasWorkerParams {
 			client: client.clone(),
@@ -955,7 +956,7 @@ fn sassafras_network_progress() {
 		sassafras_workers.push(sassafras_worker);
 	}
 
-	block_on(future::select(
+	future::select(
 		futures::future::poll_fn(move |cx| {
 			let mut net = net.lock();
 			net.poll(cx);
@@ -967,5 +968,6 @@ fn sassafras_network_progress() {
 			Poll::<()>::Pending
 		}),
 		future::select(future::join_all(import_notifications), future::join_all(sassafras_workers)),
-	));
+	)
+	.await;
 }
