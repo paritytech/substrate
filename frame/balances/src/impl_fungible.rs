@@ -45,11 +45,16 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 			// limit given by the freezes.
 			untouchable = a.frozen.saturating_sub(a.reserved);
 		}
+		// If we want to keep our provider ref..
 		if keep_alive == Keep
+			// ..or we don't want the account to die and our provider ref is needed for it to live..
 			|| keep_alive == NoKill && !a.free.is_zero() &&
 				frame_system::Pallet::<T>::providers(who) == 1
+			// ..or we don't care about the account dying but our provider ref is required..
+			|| keep_alive == CanKill && !a.free.is_zero() &&
+				!frame_system::Pallet::<T>::can_dec_provider(who)
 		{
-			// ED needed, because we want to `keep_alive` or we are required as a provider ref.
+			// ..then the ED needed..
 			untouchable = untouchable.max(T::ExistentialDeposit::get());
 		}
 		// Liquid balance is what is neither on hold nor frozen/required for provider.

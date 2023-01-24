@@ -726,6 +726,7 @@ fn emit_events_with_no_existential_deposit_suicide() {
 			assert_eq!(
 				events(),
 				[
+					RuntimeEvent::Balances(crate::Event::BalanceSet { who: 1, free: 100 }),
 					RuntimeEvent::System(system::Event::NewAccount { account: 1 }),
 					RuntimeEvent::Balances(crate::Event::Endowed { account: 1, free_balance: 100 }),
 				]

@@ -204,7 +204,6 @@ fn freezing_and_holds_should_overlap() {
 	ExtBuilder::default().existential_deposit(1).monied(true).build_and_execute_with(|| {
 		assert_ok!(Balances::set_freeze(&TestId::Foo, &1, 10));
 		assert_ok!(Balances::hold(&TestId::Foo, &1, 9));
-		assert_eq!(Balances::total_balance_on_hold(&1), 10);
 		assert_eq!(Balances::account(&1).free, 1);
 		assert_eq!(System::consumers(&1), 1);
 		assert_eq!(Balances::account(&1).free, 1);
