@@ -8,6 +8,7 @@ use jsonrpsee::{
 };
 use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::ChildInfo;
+use sc_service::client::new_in_mem;
 use sp_api::BlockId;
 use sp_blockchain::HeaderBackend;
 use sp_consensus::BlockOrigin;
@@ -20,7 +21,8 @@ use sp_version::RuntimeVersion;
 use std::sync::Arc;
 use substrate_test_runtime::Transfer;
 use substrate_test_runtime_client::{
-	prelude::*, runtime, Backend, BlockBuilderExt, Client, ClientBlockImportExt,
+	prelude::*, runtime, runtime::RuntimeApi, Backend, BlockBuilderExt, Client,
+	ClientBlockImportExt, GenesisInit,
 };
 
 type Header = substrate_test_runtime_client::runtime::Header;
@@ -1019,4 +1021,85 @@ async fn follow_prune_best_block() {
 		pruned_block_hashes: vec![format!("{:?}", block_2_hash)],
 	});
 	assert_eq!(event, expected);
+}
+
+#[tokio::test]
+async fn pin_block_references() {
+	// Manually construct an in-memory backend and client.
+	let backend = Arc::new(sc_client_api::in_mem::Backend::new());
+	let executor = substrate_test_runtime_client::new_native_executor();
+	let client_config = sc_service::ClientConfig::default();
+
+	let genesis_block_builder = sc_service::GenesisBlockBuilder::new(
+		&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
+		!client_config.no_genesis,
+		backend.clone(),
+		executor.clone(),
+	)
+	.unwrap();
+
+	let mut client = Arc::new(
+		new_in_mem::<_, Block, _, RuntimeApi>(
+			backend.clone(),
+			executor,
+			genesis_block_builder,
+			None,
+			None,
+			None,
+			Box::new(TaskExecutor::new()),
+			client_config,
+		)
+		.unwrap(),
+	);
+
+	let api = ChainHead::new(
+		client.clone(),
+		backend.clone(),
+		Arc::new(TaskExecutor::default()),
+		CHAIN_GENESIS,
+		2,
+	)
+	.into_rpc();
+
+	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
+	let sub_id = sub.subscription_id();
+	let sub_id = serde_json::to_string(&sub_id).unwrap();
+
+	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	let hash = block.header.hash();
+	let block_hash = format!("{:?}", hash);
+	client.import(BlockOrigin::Own, block.clone()).await.unwrap();
+
+	// Ensure the imported block is propagated for this subscription.
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut sub).await,
+		FollowEvent::Initialized(_)
+	);
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut sub).await,
+		FollowEvent::NewBlock(_)
+	);
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut sub).await,
+		FollowEvent::BestBlockChanged(_)
+	);
+
+	// We need to wait a bit for:
+	// 1. `NewBlock` and `BestBlockChanged` notifications to propagate to the chainHead
+	// subscription. (pin_refs == 2)
+	// 2. The chainHead to call `pin_blocks` only once for the `NewBlock`
+	// notification (pin_refs == 3)
+	// 3. Both notifications to go out of scope (pin_refs ==  1 (total 3 - dropped 2)).
+	tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+
+	// The imported hash must be referenced once in the database (pin_block called once).
+	let refs = backend.pin_refs(&hash).unwrap();
+	assert_eq!(refs, 1);
+
+	// To not exceed the number of pinned blocks, we need to unpin before the next import.
+	let _res: () = api.call("chainHead_unstable_unpin", [&sub_id, &block_hash]).await.unwrap();
+
+	// Make sure unpin clears out the reference.
+	let refs = backend.pin_refs(&hash).unwrap();
+	assert_eq!(refs, 0);
 }
