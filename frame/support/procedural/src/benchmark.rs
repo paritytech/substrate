@@ -28,8 +28,9 @@ use syn::{
 	punctuated::Punctuated,
 	spanned::Spanned,
 	token::{Colon2, Comma, Gt, Lt, Paren},
-	Attribute, Error, Expr, ExprBlock, ExprCall, ExprPath, FnArg, Item, ItemFn, ItemMod, LitInt,
-	Pat, Path, PathArguments, PathSegment, Result, Stmt, Token, Type, WhereClause,
+	Attribute, Error, Expr, ExprBlock, ExprCall, ExprPath, FnArg, GenericParam, Generics, Item,
+	ItemFn, ItemMod, LitInt, Pat, Path, PathArguments, PathSegment, Result, Signature, Stmt, Token,
+	Type, Visibility, WhereClause,
 };
 
 mod keywords {
@@ -147,6 +148,8 @@ struct BenchmarkDef {
 	verify_stmts: Vec<Stmt>,
 	extra: bool,
 	skip_meta: bool,
+	fn_sig: Signature,
+	fn_vis: Visibility,
 }
 
 impl BenchmarkDef {
@@ -253,6 +256,8 @@ impl BenchmarkDef {
 			verify_stmts: Vec::from(&item_fn.block.stmts[(i + 1)..item_fn.block.stmts.len()]),
 			extra,
 			skip_meta,
+			fn_sig: item_fn.sig.clone(),
+			fn_vis: item_fn.vis.clone(),
 		})
 	}
 }
@@ -727,6 +732,27 @@ fn expand_benchmark(
 		BenchmarkCallDef::Block { block, attr_span: _ } => (quote!(), quote!(#block)),
 	};
 
+	let vis = benchmark_def.fn_vis;
+	let mut sig = benchmark_def.fn_sig;
+
+	// pub struct Generics {
+	// 	pub lt_token: Option<Lt>,
+	// 	pub params: Punctuated<GenericParam, Comma>,
+	// 	pub gt_token: Option<Gt>,
+	// 	pub where_clause: Option<WhereClause>,
+	// }
+
+	let fn_generics_where = match where_clause.is_empty() {
+		true => quote!(),
+		false => quote!(where #where_clause),
+	};
+	let fn_generics = quote!(<#type_impl_generics> #fn_generics_where);
+
+	// proof: must parse correctly as a Generics because we formulate it in the quote above; QED
+	sig.generics = syn::parse2::<Generics>(fn_generics).unwrap();
+	sig.ident =
+		Ident::new(format!("_{}", name.to_token_stream().to_string()).as_str(), Span::call_site());
+
 	// generate final quoted tokens
 	let res = quote! {
 		// compile-time assertions that each referenced param type implements ParamRange
@@ -736,6 +762,20 @@ fn expand_benchmark(
 
 		#[allow(non_camel_case_types)]
 		struct #name;
+
+		#[allow(unused_variables)]
+		#vis #sig {
+			#(
+				#setup_stmts
+			)*
+			#pre_call
+			// if verify {
+				#(
+					#verify_stmts
+				)*
+			// }
+		}
+		// benchmark function def
 
 		#[allow(unused_variables)]
 		impl<#type_impl_generics> #krate::BenchmarkingSetup<#type_use_generics>
