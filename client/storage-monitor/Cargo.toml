@@ -7,7 +7,6 @@ license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 repository = "https://github.com/paritytech/substrate"
 description = "Storage monitor service for substrate"
 homepage = "https://substrate.io"
-publish = false
 
 [dependencies]
 clap = { version = "4.0.9", features = ["derive", "string"] }
