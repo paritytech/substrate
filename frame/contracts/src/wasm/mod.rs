@@ -18,30 +18,36 @@
 //! This module provides a means for executing contracts
 //! represented in wasm.
 
-#[macro_use]
-mod env_def;
 mod code_cache;
 mod prepare;
 mod runtime;
 
 #[cfg(feature = "runtime-benchmarks")]
 pub use crate::wasm::code_cache::reinstrument;
-pub use crate::wasm::runtime::{CallFlags, ReturnCode, Runtime, RuntimeCosts};
+pub use crate::wasm::{
+	prepare::TryInstantiate,
+	runtime::{CallFlags, Environment, ReturnCode, Runtime, RuntimeCosts},
+};
+
+#[cfg(doc)]
+pub use crate::wasm::runtime::api_doc;
+
 use crate::{
 	exec::{ExecResult, Executable, ExportedFunction, Ext},
 	gas::GasMeter,
-	wasm::env_def::FunctionImplProvider,
 	AccountIdOf, BalanceOf, CodeHash, CodeStorage, CodeVec, Config, Error, RelaxedCodeVec,
 	Schedule,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::dispatch::{DispatchError, DispatchResult};
-use sp_core::crypto::UncheckedFrom;
+use sp_core::Get;
 use sp_runtime::RuntimeDebug;
-use sp_sandbox::{SandboxEnvironmentBuilder, SandboxInstance, SandboxMemory};
 use sp_std::prelude::*;
 #[cfg(test)]
 pub use tests::MockExt;
+use wasmi::{
+	Config as WasmiConfig, Engine, Instance, Linker, Memory, MemoryType, Module, StackLimits, Store,
+};
 
 /// A prepared wasm module ready for execution.
 ///
@@ -138,32 +144,32 @@ impl ExportedFunction {
 	}
 }
 
-impl<T: Config> PrefabWasmModule<T>
-where
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
+impl<T: Config> PrefabWasmModule<T> {
 	/// Create the module by checking and instrumenting `original_code`.
 	///
 	/// This does **not** store the module. For this one need to either call [`Self::store`]
-	/// or [`<Self as Executable>::execute`].
+	/// or [`<Self as Executable>::execute`][`Executable::execute`].
 	pub fn from_code(
 		original_code: Vec<u8>,
 		schedule: &Schedule<T>,
 		owner: AccountIdOf<T>,
 		determinism: Determinism,
+		try_instantiate: TryInstantiate,
 	) -> Result<Self, (DispatchError, &'static str)> {
-		let module = prepare::prepare_contract(
+		let module = prepare::prepare::<runtime::Env, T>(
 			original_code.try_into().map_err(|_| (<Error<T>>::CodeTooLarge.into(), ""))?,
 			schedule,
 			owner,
 			determinism,
+			try_instantiate,
 		)?;
 		Ok(module)
 	}
 
 	/// Store the code without instantiating it.
 	///
-	/// Otherwise the code is stored when [`<Self as Executable>::execute`] is called.
+	/// Otherwise the code is stored when [`<Self as Executable>::execute`][`Executable::execute`]
+	/// is called.
 	pub fn store(self) -> DispatchResult {
 		code_cache::store(self, false)
 	}
@@ -189,6 +195,44 @@ where
 		}
 	}
 
+	/// Creates and returns an instance of the supplied code.
+	///
+	/// This is either used for later executing a contract or for validation of a contract.
+	/// When validating we pass `()` as `host_state`. Please note that such a dummy instance must
+	/// **never** be called/executed since it will panic the executor.
+	pub fn instantiate<E, H>(
+		code: &[u8],
+		host_state: H,
+		memory: (u32, u32),
+		stack_limits: StackLimits,
+	) -> Result<(Store<H>, Memory, Instance), wasmi::Error>
+	where
+		E: Environment<H>,
+	{
+		let mut config = WasmiConfig::default();
+		config
+			.set_stack_limits(stack_limits)
+			.wasm_multi_value(false)
+			.wasm_mutable_global(false)
+			.wasm_sign_extension(false)
+			.wasm_saturating_float_to_int(false);
+		let engine = Engine::new(&config);
+		let module = Module::new(&engine, code)?;
+		let mut store = Store::new(&engine, host_state);
+		let mut linker = Linker::new();
+		E::define(&mut store, &mut linker, T::UnsafeUnstableInterface::get())?;
+		let memory = Memory::new(&mut store, MemoryType::new(memory.0, Some(memory.1))?).expect(
+			"The limits defined in our `Schedule` limit the amount of memory well below u32::MAX; qed",
+		);
+		linker
+			.define("env", "memory", memory)
+			.expect("We just created the linker. It has no define with this name attached; qed");
+
+		let instance = linker.instantiate(&mut store, &module)?.ensure_no_start(&mut store)?;
+
+		Ok((store, memory, instance))
+	}
+
 	/// Create and store the module without checking nor instrumenting the passed code.
 	///
 	/// # Note
@@ -201,7 +245,7 @@ where
 		schedule: &Schedule<T>,
 		owner: T::AccountId,
 	) -> DispatchResult {
-		let executable = prepare::benchmarking::prepare_contract(original_code, schedule, owner)
+		let executable = prepare::benchmarking::prepare(original_code, schedule, owner)
 			.map_err::<DispatchError, _>(Into::into)?;
 		code_cache::store(executable, false)
 	}
@@ -221,10 +265,7 @@ impl<T: Config> OwnerInfo<T> {
 	}
 }
 
-impl<T: Config> Executable<T> for PrefabWasmModule<T>
-where
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
+impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 	fn from_storage(
 		code_hash: CodeHash<T>,
 		schedule: &Schedule<T>,
@@ -247,36 +288,35 @@ where
 		function: &ExportedFunction,
 		input_data: Vec<u8>,
 	) -> ExecResult {
-		let memory = sp_sandbox::default_executor::Memory::new(self.initial, Some(self.maximum))
-			.unwrap_or_else(|_| {
-				// unlike `.expect`, explicit panic preserves the source location.
-				// Needed as we can't use `RUST_BACKTRACE` in here.
-				panic!(
-					"exec.prefab_module.initial can't be greater than exec.prefab_module.maximum;
-						thus Memory::new must not fail;
-						qed"
-				)
-			});
+		let runtime = Runtime::new(ext, input_data);
+		let (mut store, memory, instance) = Self::instantiate::<crate::wasm::runtime::Env, _>(
+			self.code.as_slice(),
+			runtime,
+			(self.initial, self.maximum),
+			StackLimits::default(),
+		)
+		.map_err(|msg| {
+			log::debug!(target: "runtime::contracts", "failed to instantiate code: {}", msg);
+			Error::<T>::CodeRejected
+		})?;
+		store.state_mut().set_memory(memory);
 
-		let mut imports = sp_sandbox::default_executor::EnvironmentDefinitionBuilder::new();
-		imports.add_memory(self::prepare::IMPORT_MODULE_MEMORY, "memory", memory.clone());
-		runtime::Env::impls(&mut |module, name, func_ptr| {
-			imports.add_host_func(module, name, func_ptr);
-		});
+		let exported_func = instance
+			.get_export(&store, function.identifier())
+			.and_then(|export| export.into_func())
+			.ok_or_else(|| {
+				log::error!(target: "runtime::contracts", "failed to find entry point");
+				Error::<T>::CodeRejected
+			})?;
 
 		// We store before executing so that the code hash is available in the constructor.
-		let code = self.code.clone();
 		if let &ExportedFunction::Constructor = function {
 			code_cache::store(self, true)?;
 		}
 
-		// Instantiate the instance from the instrumented module code and invoke the contract
-		// entrypoint.
-		let mut runtime = Runtime::new(ext, input_data, memory);
-		let result = sp_sandbox::default_executor::Instance::new(&code, &imports, &mut runtime)
-			.and_then(|mut instance| instance.invoke(function.identifier(), &[], &mut runtime));
+		let result = exported_func.call(&mut store, &[], &mut []);
 
-		runtime.to_execution_result(result)
+		store.into_state().to_execution_result(result)
 	}
 
 	fn code_hash(&self) -> &CodeHash<T> {
@@ -307,7 +347,7 @@ mod tests {
 	};
 	use assert_matches::assert_matches;
 	use frame_support::{
-		assert_ok,
+		assert_err, assert_ok,
 		dispatch::DispatchResultWithPostInfo,
 		weights::{OldWeight, Weight},
 	};
@@ -390,7 +430,7 @@ mod tests {
 				events: Default::default(),
 				runtime_calls: Default::default(),
 				schedule: Default::default(),
-				gas_meter: GasMeter::new(Weight::from_ref_time(10_000_000_000)),
+				gas_meter: GasMeter::new(Weight::from_parts(10_000_000_000, 10 * 1024 * 1024)),
 				debug_buffer: Default::default(),
 				ecdsa_recover: Default::default(),
 			}
@@ -435,7 +475,7 @@ mod tests {
 				salt: salt.to_vec(),
 			});
 			Ok((
-				Contracts::<Test>::contract_address(&ALICE, &code_hash, salt),
+				Contracts::<Test>::contract_address(&ALICE, &code_hash, &data, salt),
 				ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() },
 			))
 		}
@@ -578,25 +618,49 @@ mod tests {
 		fn ecdsa_to_eth_address(&self, _pk: &[u8; 33]) -> Result<[u8; 20], ()> {
 			Ok([2u8; 20])
 		}
-		fn reentrant_count(&self) -> u32 {
+		fn reentrance_count(&self) -> u32 {
 			12
 		}
 		fn account_reentrance_count(&self, _account_id: &AccountIdOf<Self::T>) -> u32 {
 			12
 		}
+		fn nonce(&mut self) -> u64 {
+			995
+		}
 	}
 
-	fn execute<E: BorrowMut<MockExt>>(wat: &str, input_data: Vec<u8>, mut ext: E) -> ExecResult {
+	fn execute_internal<E: BorrowMut<MockExt>>(
+		wat: &str,
+		input_data: Vec<u8>,
+		mut ext: E,
+		unstable_interface: bool,
+	) -> ExecResult {
+		type RuntimeConfig = <MockExt as Ext>::T;
+		RuntimeConfig::set_unstable_interface(unstable_interface);
 		let wasm = wat::parse_str(wat).unwrap();
 		let schedule = crate::Schedule::default();
-		let executable = PrefabWasmModule::<<MockExt as Ext>::T>::from_code(
+		let executable = PrefabWasmModule::<RuntimeConfig>::from_code(
 			wasm,
 			&schedule,
 			ALICE,
 			Determinism::Deterministic,
+			TryInstantiate::Skip,
 		)
-		.unwrap();
+		.map_err(|err| err.0)?;
 		executable.execute(ext.borrow_mut(), &ExportedFunction::Call, input_data)
+	}
+
+	fn execute<E: BorrowMut<MockExt>>(wat: &str, input_data: Vec<u8>, ext: E) -> ExecResult {
+		execute_internal(wat, input_data, ext, true)
+	}
+
+	#[cfg(not(feature = "runtime-benchmarks"))]
+	fn execute_no_unstable<E: BorrowMut<MockExt>>(
+		wat: &str,
+		input_data: Vec<u8>,
+		ext: E,
+	) -> ExecResult {
+		execute_internal(wat, input_data, ext, false)
 	}
 
 	const CODE_TRANSFER: &str = r#"
@@ -699,7 +763,6 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn contract_delegate_call() {
 		const CODE: &str = r#"
 (module
@@ -788,10 +851,7 @@ mod tests {
 "#;
 		let mut mock_ext = MockExt::default();
 		let input = vec![0xff, 0x2a, 0x99, 0x88];
-		frame_support::assert_err!(
-			execute(CODE, input.clone(), &mut mock_ext),
-			<Error<Test>>::InputForwarded,
-		);
+		assert_err!(execute(CODE, input.clone(), &mut mock_ext), <Error<Test>>::InputForwarded,);
 
 		assert_eq!(
 			&mock_ext.calls,
@@ -1584,35 +1644,32 @@ mod tests {
 		assert_ok!(execute(CODE_VALUE_TRANSFERRED, vec![], MockExt::default()));
 	}
 
-	const CODE_RETURN_FROM_START_FN: &str = r#"
+	const START_FN_ILLEGAL: &str = r#"
 (module
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(start $start)
 	(func $start
-		(call $seal_return
-			(i32.const 0)
-			(i32.const 8)
-			(i32.const 4)
-		)
 		(unreachable)
 	)
 
 	(func (export "call")
 		(unreachable)
 	)
-	(func (export "deploy"))
+
+	(func (export "deploy")
+		(unreachable)
+	)
 
 	(data (i32.const 8) "\01\02\03\04")
 )
 "#;
 
 	#[test]
-	fn return_from_start_fn() {
-		let output = execute(CODE_RETURN_FROM_START_FN, vec![], MockExt::default()).unwrap();
-
-		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: vec![1, 2, 3, 4] });
+	fn start_fn_illegal() {
+		let output = execute(START_FN_ILLEGAL, vec![], MockExt::default());
+		assert_err!(output, <Error<Test>>::CodeRejected,);
 	}
 
 	const CODE_TIMESTAMP_NOW: &str = r#"
@@ -1931,6 +1988,52 @@ mod tests {
 		assert!(mock_ext.gas_meter.gas_left().ref_time() > 0);
 	}
 
+	const CODE_DEPOSIT_EVENT_DUPLICATES: &str = r#"
+(module
+	(import "seal0" "seal_deposit_event" (func $seal_deposit_event (param i32 i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func (export "call")
+		(call $seal_deposit_event
+			(i32.const 32) ;; Pointer to the start of topics buffer
+			(i32.const 129) ;; The length of the topics buffer.
+			(i32.const 8) ;; Pointer to the start of the data buffer
+			(i32.const 13) ;; Length of the buffer
+		)
+	)
+	(func (export "deploy"))
+
+	(data (i32.const 8) "\00\01\2A\00\00\00\00\00\00\00\E5\14\00")
+
+	;; Encoded Vec<TopicOf<T>>, the buffer has length of 129 bytes.
+	(data (i32.const 32) "\10"
+"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+"\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02"
+"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+"\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04")
+)
+"#;
+
+	/// Checks that the runtime allows duplicate topics.
+	#[test]
+	fn deposit_event_duplicates_allowed() {
+		let mut mock_ext = MockExt::default();
+		assert_ok!(execute(CODE_DEPOSIT_EVENT_DUPLICATES, vec![], &mut mock_ext,));
+
+		assert_eq!(
+			mock_ext.events,
+			vec![(
+				vec![
+					H256::repeat_byte(0x01),
+					H256::repeat_byte(0x02),
+					H256::repeat_byte(0x01),
+					H256::repeat_byte(0x04)
+				],
+				vec![0x00, 0x01, 0x2a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe5, 0x14, 0x00]
+			)]
+		);
+	}
+
 	const CODE_DEPOSIT_EVENT_MAX_TOPICS: &str = r#"
 (module
 	(import "seal0" "seal_deposit_event" (func $seal_deposit_event (param i32 i32 i32 i32)))
@@ -1965,44 +2068,6 @@ mod tests {
 			execute(CODE_DEPOSIT_EVENT_MAX_TOPICS, vec![], MockExt::default(),),
 			Err(ExecError {
 				error: Error::<Test>::TooManyTopics.into(),
-				origin: ErrorOrigin::Caller,
-			})
-		);
-	}
-
-	const CODE_DEPOSIT_EVENT_DUPLICATES: &str = r#"
-(module
-	(import "seal0" "seal_deposit_event" (func $seal_deposit_event (param i32 i32 i32 i32)))
-	(import "env" "memory" (memory 1 1))
-
-	(func (export "call")
-		(call $seal_deposit_event
-			(i32.const 32) ;; Pointer to the start of topics buffer
-			(i32.const 129) ;; The length of the topics buffer.
-			(i32.const 8) ;; Pointer to the start of the data buffer
-			(i32.const 13) ;; Length of the buffer
-		)
-	)
-	(func (export "deploy"))
-
-	(data (i32.const 8) "\00\01\2A\00\00\00\00\00\00\00\E5\14\00")
-
-	;; Encoded Vec<TopicOf<T>>, the buffer has length of 129 bytes.
-	(data (i32.const 32) "\10"
-"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
-"\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02"
-"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
-"\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04")
-)
-"#;
-
-	/// Checks that the runtime traps if there are duplicates.
-	#[test]
-	fn deposit_event_duplicates() {
-		assert_eq!(
-			execute(CODE_DEPOSIT_EVENT_DUPLICATES, vec![], MockExt::default(),),
-			Err(ExecError {
-				error: Error::<Test>::DuplicateTopics.into(),
 				origin: ErrorOrigin::Caller,
 			})
 		);
@@ -2238,10 +2303,9 @@ mod tests {
 		);
 	}
 
-	#[cfg(feature = "unstable-interface")]
 	const CODE_CALL_RUNTIME: &str = r#"
 (module
-	(import "__unstable__" "call_runtime" (func $call_runtime (param i32 i32) (result i32)))
+	(import "seal0" "call_runtime" (func $call_runtime (param i32 i32) (result i32)))
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
@@ -2275,7 +2339,6 @@ mod tests {
 "#;
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn call_runtime_works() {
 		let call =
 			RuntimeCall::System(frame_system::Call::remark { remark: b"Hello World".to_vec() });
@@ -2287,7 +2350,6 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn call_runtime_panics_on_invalid_call() {
 		let mut ext = MockExt::default();
 		let result = execute(CODE_CALL_RUNTIME, vec![0x42], &mut ext);
@@ -2550,13 +2612,12 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn take_storage_works() {
 		const CODE: &str = r#"
 (module
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
-	(import "__unstable__" "take_storage" (func $take_storage (param i32 i32 i32 i32) (result i32)))
+	(import "seal0" "take_storage" (func $take_storage (param i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 4) size of input buffer (160 bytes as we copy the key+len here)
@@ -2786,7 +2847,6 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn caller_is_origin_works() {
 		const CODE_CALLER_IS_ORIGIN: &str = r#"
 ;; This runs `caller_is_origin` check on zero account address
@@ -2858,11 +2918,10 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
-	fn reentrant_count_works() {
+	fn reentrance_count_works() {
 		const CODE: &str = r#"
 (module
-	(import "__unstable__" "reentrant_count" (func $reentrant_count (result i32)))
+	(import "seal0" "reentrance_count" (func $reentrance_count (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func $assert (param i32)
 		(block $ok
@@ -2875,7 +2934,7 @@ mod tests {
 	(func (export "call")
 		(local $return_val i32)
 		(set_local $return_val
-			(call $reentrant_count)
+			(call $reentrance_count)
 		)
 		(call $assert
 			(i32.eq (get_local $return_val) (i32.const 12))
@@ -2891,11 +2950,10 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn account_reentrance_count_works() {
 		const CODE: &str = r#"
 (module
-	(import "__unstable__" "account_reentrance_count" (func $account_reentrance_count (param i32) (result i32)))
+	(import "seal0" "account_reentrance_count" (func $account_reentrance_count (param i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func $assert (param i32)
 		(block $ok
@@ -2921,5 +2979,51 @@ mod tests {
 
 		let mut mock_ext = MockExt::default();
 		execute(CODE, vec![], &mut mock_ext).unwrap();
+	}
+
+	#[test]
+	fn instantiation_nonce_works() {
+		const CODE: &str = r#"
+(module
+	(import "seal0" "instantiation_nonce" (func $nonce (result i64)))
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+	(func (export "call")
+		(call $assert
+			(i64.eq (call $nonce) (i64.const 995))
+		)
+	)
+	(func (export "deploy"))
+)
+"#;
+
+		let mut mock_ext = MockExt::default();
+		execute(CODE, vec![], &mut mock_ext).unwrap();
+	}
+
+	/// This test check that an unstable interface cannot be deployed. In case of runtime
+	/// benchmarks we always allow unstable interfaces. This is why this test does not
+	/// work when this feature is enabled.
+	#[cfg(not(feature = "runtime-benchmarks"))]
+	#[test]
+	fn cannot_deploy_unstable() {
+		const CANNOT_DEPLOY_UNSTABLE: &str = r#"
+(module
+	(import "seal0" "reentrance_count" (func $reentrance_count (result i32)))
+	(func (export "call"))
+	(func (export "deploy"))
+)
+"#;
+		assert_err!(
+			execute_no_unstable(CANNOT_DEPLOY_UNSTABLE, vec![], MockExt::default()),
+			<Error<Test>>::CodeRejected,
+		);
+		assert_ok!(execute(CANNOT_DEPLOY_UNSTABLE, vec![], MockExt::default()));
 	}
 }

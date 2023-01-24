@@ -17,7 +17,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 ahash = "0.7.6"
 futures = "0.3.21"
 futures-timer = "3.0.1"
-libp2p = { version = "0.49.0", default-features = false }
+libp2p = "0.50.0"
 log = "0.4.17"
 lru = "0.8.1"
 tracing = "0.1.29"
@@ -27,6 +27,6 @@ sc-peerset = { version = "4.0.0-dev", path = "../peerset" }
 sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
 
 [dev-dependencies]
-async-std = "1.11.0"
+tokio = "1.22.0"
 quickcheck = { version = "1.0.3", default-features = false }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }

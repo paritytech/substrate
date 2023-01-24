@@ -110,7 +110,7 @@ impl GetValidatorCount for MembershipProof {
 #[cfg(feature = "std")]
 pub fn generate_initial_session_keys<Block, T>(
 	client: std::sync::Arc<T>,
-	at: &BlockId<Block>,
+	at: Block::Hash,
 	seeds: Vec<String>,
 ) -> Result<(), sp_api::ApiError>
 where
@@ -118,10 +118,14 @@ where
 	T: ProvideRuntimeApi<Block>,
 	T::Api: SessionKeys<Block>,
 {
+	if seeds.is_empty() {
+		return Ok(())
+	}
+
 	let runtime_api = client.runtime_api();
 
 	for seed in seeds {
-		runtime_api.generate_session_keys(at, Some(seed.as_bytes().to_vec()))?;
+		runtime_api.generate_session_keys(&BlockId::Hash(at), Some(seed.as_bytes().to_vec()))?;
 	}
 
 	Ok(())

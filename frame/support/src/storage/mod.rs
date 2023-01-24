@@ -30,6 +30,7 @@ use sp_runtime::generic::{Digest, DigestItem};
 use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData, prelude::*};
 
 pub use self::{
+	stream_iter::StorageStreamIter,
 	transactional::{
 		in_storage_layer, with_storage_layer, with_transaction, with_transaction_unchecked,
 	},
@@ -47,6 +48,7 @@ pub mod generator;
 pub mod hashed;
 pub mod migration;
 pub mod storage_noop_guard;
+mod stream_iter;
 pub mod transactional;
 pub mod types;
 pub mod unhashed;

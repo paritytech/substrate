@@ -21,7 +21,7 @@ use crate::{config, ChainSyncInterface, NetworkService, NetworkWorker};
 use futures::prelude::*;
 use libp2p::Multiaddr;
 use sc_client_api::{BlockBackend, HeaderBackend};
-use sc_consensus::ImportQueue;
+use sc_consensus::{ImportQueue, Link};
 use sc_network_common::{
 	config::{
 		NonDefaultSetConfig, NonReservedPeerMode, NotificationHandshake, ProtocolId, SetConfig,
@@ -80,7 +80,7 @@ impl TestNetwork {
 		let service = worker.service().clone();
 		let event_stream = service.event_stream("test");
 
-		async_std::task::spawn(async move {
+		tokio::spawn(async move {
 			futures::pin_mut!(worker);
 			let _ = worker.await;
 		});
@@ -91,6 +91,7 @@ impl TestNetwork {
 
 struct TestNetworkBuilder {
 	import_queue: Option<Box<dyn ImportQueue<TestBlock>>>,
+	link: Option<Box<dyn Link<TestBlock>>>,
 	client: Option<Arc<substrate_test_runtime_client::TestClient>>,
 	listen_addresses: Vec<Multiaddr>,
 	set_config: Option<SetConfig>,
@@ -103,6 +104,7 @@ impl TestNetworkBuilder {
 	pub fn new() -> Self {
 		Self {
 			import_queue: None,
+			link: None,
 			client: None,
 			listen_addresses: Vec::new(),
 			set_config: None,
@@ -208,38 +210,14 @@ impl TestNetworkBuilder {
 			}
 		}
 
-		let import_queue = self.import_queue.unwrap_or(Box::new(sc_consensus::BasicQueue::new(
-			PassThroughVerifier(false),
-			Box::new(client.clone()),
-			None,
-			&sp_core::testing::TaskExecutor::new(),
-			None,
-		)));
-
-		let (chain_sync_network_provider, chain_sync_network_handle) =
-			self.chain_sync_network.unwrap_or(NetworkServiceProvider::new());
-
-		let (chain_sync, chain_sync_service) = self.chain_sync.unwrap_or({
-			let (chain_sync, chain_sync_service) = ChainSync::new(
-				match network_config.sync_mode {
-					config::SyncMode::Full => sc_network_common::sync::SyncMode::Full,
-					config::SyncMode::Fast { skip_proofs, storage_chain_mode } =>
-						sc_network_common::sync::SyncMode::LightState {
-							skip_proofs,
-							storage_chain_mode,
-						},
-					config::SyncMode::Warp => sc_network_common::sync::SyncMode::Warp,
-				},
-				client.clone(),
-				Box::new(sp_consensus::block_validation::DefaultBlockAnnounceValidator),
-				network_config.max_parallel_downloads,
+		let mut import_queue =
+			self.import_queue.unwrap_or(Box::new(sc_consensus::BasicQueue::new(
+				PassThroughVerifier(false),
+				Box::new(client.clone()),
 				None,
-				chain_sync_network_handle,
-			)
-			.unwrap();
-
-			(Box::new(chain_sync), chain_sync_service)
-		});
+				&sp_core::testing::TaskExecutor::new(),
+				None,
+			)));
 
 		let protocol_id = ProtocolId::from("test-protocol-name");
 		let fork_id = Some(String::from("test-fork-id"));
@@ -247,21 +225,21 @@ impl TestNetworkBuilder {
 		let block_request_protocol_config = {
 			let (handler, protocol_config) =
 				BlockRequestHandler::new(&protocol_id, None, client.clone(), 50);
-			async_std::task::spawn(handler.run().boxed());
+			tokio::spawn(handler.run().boxed());
 			protocol_config
 		};
 
 		let state_request_protocol_config = {
 			let (handler, protocol_config) =
 				StateRequestHandler::new(&protocol_id, None, client.clone(), 50);
-			async_std::task::spawn(handler.run().boxed());
+			tokio::spawn(handler.run().boxed());
 			protocol_config
 		};
 
 		let light_client_request_protocol_config = {
 			let (handler, protocol_config) =
 				LightClientRequestHandler::new(&protocol_id, None, client.clone());
-			async_std::task::spawn(handler.run().boxed());
+			tokio::spawn(handler.run().boxed());
 			protocol_config
 		};
 
@@ -289,6 +267,45 @@ impl TestNetworkBuilder {
 			},
 		};
 
+		let (chain_sync_network_provider, chain_sync_network_handle) =
+			self.chain_sync_network.unwrap_or(NetworkServiceProvider::new());
+
+		let (chain_sync, chain_sync_service) = self.chain_sync.unwrap_or({
+			let (chain_sync, chain_sync_service, _) = ChainSync::new(
+				match network_config.sync_mode {
+					config::SyncMode::Full => sc_network_common::sync::SyncMode::Full,
+					config::SyncMode::Fast { skip_proofs, storage_chain_mode } =>
+						sc_network_common::sync::SyncMode::LightState {
+							skip_proofs,
+							storage_chain_mode,
+						},
+					config::SyncMode::Warp => sc_network_common::sync::SyncMode::Warp,
+				},
+				client.clone(),
+				protocol_id.clone(),
+				&fork_id,
+				Roles::from(&config::Role::Full),
+				Box::new(sp_consensus::block_validation::DefaultBlockAnnounceValidator),
+				network_config.max_parallel_downloads,
+				None,
+				None,
+				chain_sync_network_handle,
+				import_queue.service(),
+				block_request_protocol_config.name.clone(),
+				state_request_protocol_config.name.clone(),
+				None,
+			)
+			.unwrap();
+
+			if let None = self.link {
+				self.link = Some(Box::new(chain_sync_service.clone()));
+			}
+			(Box::new(chain_sync), Box::new(chain_sync_service))
+		});
+		let mut link = self
+			.link
+			.unwrap_or(Box::new(sc_network_sync::service::mock::MockChainSyncInterface::new()));
+
 		let worker = NetworkWorker::<
 			substrate_test_runtime_client::runtime::Block,
 			substrate_test_runtime_client::runtime::Hash,
@@ -296,26 +313,38 @@ impl TestNetworkBuilder {
 		>::new(config::Params {
 			block_announce_config,
 			role: config::Role::Full,
-			executor: None,
+			executor: Box::new(|f| {
+				tokio::spawn(f);
+			}),
 			network_config,
 			chain: client.clone(),
 			protocol_id,
 			fork_id,
-			import_queue,
 			chain_sync,
 			chain_sync_service,
 			metrics_registry: None,
-			block_request_protocol_config,
-			state_request_protocol_config,
-			light_client_request_protocol_config,
-			warp_sync_protocol_config: None,
-			request_response_protocol_configs: Vec::new(),
+			request_response_protocol_configs: [
+				block_request_protocol_config,
+				state_request_protocol_config,
+				light_client_request_protocol_config,
+			]
+			.to_vec(),
 		})
 		.unwrap();
 
 		let service = worker.service().clone();
-		async_std::task::spawn(async move {
+		tokio::spawn(async move {
 			let _ = chain_sync_network_provider.run(service).await;
+		});
+		tokio::spawn(async move {
+			loop {
+				futures::future::poll_fn(|cx| {
+					import_queue.poll_actions(cx, &mut *link);
+					std::task::Poll::Ready(())
+				})
+				.await;
+				tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+			}
 		});
 
 		TestNetwork::new(worker)

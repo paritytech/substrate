@@ -40,7 +40,6 @@ test-rust-features:
   extends:
     - .kubernetes-env
     - .test-refs-no-trigger-prs-only
-  allow_failure:                   true
   script:
     - git clone
         --depth=1

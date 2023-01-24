@@ -16,17 +16,21 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use futures::StreamExt;
+use futures::{channel::oneshot, StreamExt};
 use libp2p::PeerId;
-use sc_network_common::{protocol::ProtocolName, service::NetworkPeers};
+use sc_network_common::{
+	protocol::ProtocolName,
+	request_responses::{IfDisconnected, RequestFailure},
+	service::{NetworkPeers, NetworkRequest},
+};
 use sc_peerset::ReputationChange;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::sync::Arc;
 
 /// Network-related services required by `sc-network-sync`
-pub trait Network: NetworkPeers {}
+pub trait Network: NetworkPeers + NetworkRequest {}
 
-impl<T> Network for T where T: NetworkPeers {}
+impl<T> Network for T where T: NetworkPeers + NetworkRequest {}
 
 /// Network service provider for `ChainSync`
 ///
@@ -43,6 +47,15 @@ pub enum ToServiceCommand {
 
 	/// Call `NetworkPeers::report_peer()`
 	ReportPeer(PeerId, ReputationChange),
+
+	/// Call `NetworkRequest::start_request()`
+	StartRequest(
+		PeerId,
+		ProtocolName,
+		Vec<u8>,
+		oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
+		IfDisconnected,
+	),
 }
 
 /// Handle that is (temporarily) passed to `ChainSync` so it can
@@ -67,12 +80,26 @@ impl NetworkServiceHandle {
 	pub fn disconnect_peer(&self, who: PeerId, protocol: ProtocolName) {
 		let _ = self.tx.unbounded_send(ToServiceCommand::DisconnectPeer(who, protocol));
 	}
+
+	/// Send request to peer
+	pub fn start_request(
+		&self,
+		who: PeerId,
+		protocol: ProtocolName,
+		request: Vec<u8>,
+		tx: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
+		connect: IfDisconnected,
+	) {
+		let _ = self
+			.tx
+			.unbounded_send(ToServiceCommand::StartRequest(who, protocol, request, tx, connect));
+	}
 }
 
 impl NetworkServiceProvider {
 	/// Create new `NetworkServiceProvider`
 	pub fn new() -> (Self, NetworkServiceHandle) {
-		let (tx, rx) = tracing_unbounded("mpsc_network_service_provider");
+		let (tx, rx) = tracing_unbounded("mpsc_network_service_provider", 100_000);
 
 		(Self { rx }, NetworkServiceHandle::new(tx))
 	}
@@ -85,6 +112,8 @@ impl NetworkServiceProvider {
 					service.disconnect_peer(peer, protocol_name),
 				ToServiceCommand::ReportPeer(peer, reputation_change) =>
 					service.report_peer(peer, reputation_change),
+				ToServiceCommand::StartRequest(peer, protocol, request, tx, connect) =>
+					service.start_request(peer, protocol, request, tx, connect),
 			}
 		}
 	}
@@ -97,7 +126,7 @@ mod tests {
 
 	// typical pattern in `Protocol` code where peer is disconnected
 	// and then reported
-	#[async_std::test]
+	#[tokio::test]
 	async fn disconnect_and_report_peer() {
 		let (provider, handle) = NetworkServiceProvider::new();
 
@@ -118,7 +147,7 @@ mod tests {
 			.once()
 			.returning(|_, _| ());
 
-		async_std::task::spawn(async move {
+		tokio::spawn(async move {
 			provider.run(Arc::new(mock_network)).await;
 		});
 
