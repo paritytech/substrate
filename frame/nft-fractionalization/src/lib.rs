@@ -29,8 +29,6 @@
 //! into their account. 
 //! 
 //! ### Functions 
-//! 
-//! The functions implement the trait `LockableNonfungible`.
 //!
 //! * `fractionalize`: lock the NFT, create and mint new asset.
 //! * `unify`: return 100% of the asset, unlock the NFT.
