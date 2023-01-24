@@ -29,10 +29,13 @@ use sc_network_common::protocol::ProtocolName;
 use sp_runtime::traits::Block;
 use std::{marker::PhantomData, sync::Arc};
 
-use crate::communication::request_response::{
-	on_demand_justifications_protocol_config, Error, JustificationRequest,
+use crate::{
+	communication::request_response::{
+		on_demand_justifications_protocol_config, Error, JustificationRequest,
+	},
+	metric_inc,
+	metrics::Metrics,
 };
-use crate::{metrics::Metrics, metric_inc, metric_set};
 
 /// A request coming in, including a sender for sending responses.
 #[derive(Debug)]
@@ -90,7 +93,7 @@ impl<B: Block> IncomingRequest<B> {
 ///
 /// Takes care of decoding and handling of invalid encoded requests.
 pub(crate) struct IncomingRequestReceiver {
-	raw: mpsc::Receiver<netconfig::IncomingRequest>
+	raw: mpsc::Receiver<netconfig::IncomingRequest>,
 }
 
 impl IncomingRequestReceiver {
@@ -102,7 +105,7 @@ impl IncomingRequestReceiver {
 	///
 	/// Any received request will be decoded, on decoding errors the provided reputation changes
 	/// will be applied and an error will be reported.
-	pub async fn recv<B, F>(&mut self, reputation_changes: F,) -> Result<IncomingRequest<B>, Error>
+	pub async fn recv<B, F>(&mut self, reputation_changes: F) -> Result<IncomingRequest<B>, Error>
 	where
 		B: Block,
 		F: FnOnce() -> Vec<ReputationChange>,
@@ -134,13 +137,16 @@ where
 		genesis_hash: Hash,
 		fork_id: Option<&str>,
 		client: Arc<Client>,
-		metrics: Option<Metrics>
+		metrics: Option<Metrics>,
 	) -> (Self, RequestResponseConfig) {
 		let (request_receiver, config) =
 			on_demand_justifications_protocol_config(genesis_hash, fork_id);
 		let justif_protocol_name = config.name.clone();
 
-		(Self { request_receiver, justif_protocol_name, client, _block: PhantomData, metrics }, config)
+		(
+			Self { request_receiver, justif_protocol_name, client, _block: PhantomData, metrics },
+			config,
+		)
 	}
 
 	/// Network request-response protocol name used by this handler.

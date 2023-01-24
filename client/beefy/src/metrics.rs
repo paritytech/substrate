@@ -62,6 +62,14 @@ pub struct Metrics {
 	pub beefy_failed_justification_respond_request: Counter<U64>,
 	/// Number of On demand justification when there is no peer to request from
 	pub beefy_on_demand_justification_no_peer_to_request_from: Counter<U64>,
+	/// Number of On demand justification peer hang up
+	pub beefy_on_demand_justification_peer_hang_up: Counter<U64>,
+	/// Number of On demand justification peer error
+	pub beefy_on_demand_justification_peer_error: Counter<U64>,
+	/// Number of On demand justification invalid proof
+	pub beefy_on_demand_justification_invalid_proof: Counter<U64>,
+	/// Number of On demand justification good proof
+	pub beefy_on_demand_justification_good_proof: Counter<U64>,
 }
 
 impl Metrics {
@@ -172,15 +180,52 @@ impl Metrics {
 				registry,
 			)?,
 			beefy_successful_justification_respond_request: register(
-				Counter::new("substrate_beefy_successful_justification_respond_request", "Number of Successful Justification respond request")?,
+				Counter::new(
+					"substrate_beefy_successful_justification_respond_request",
+					"Number of Successful Justification respond request",
+				)?,
 				registry,
 			)?,
 			beefy_failed_justification_respond_request: register(
-				Counter::new("substrate_beefy_failed_justification_respond_request", "Number of Failed Justification respond request")?,
+				Counter::new(
+					"substrate_beefy_failed_justification_respond_request",
+					"Number of Failed Justification respond request",
+				)?,
 				registry,
 			)?,
 			beefy_on_demand_justification_no_peer_to_request_from: register(
-				Counter::new("substrate_beefy_on_demand_justification_no_peer_to_request_from", "Number of on demand justification when there is no peer to request from")?,
+				Counter::new(
+					"substrate_beefy_on_demand_justification_no_peer_to_request_from",
+					"Number of on demand justification when there is no peer to request from",
+				)?,
+				registry,
+			)?,
+			beefy_on_demand_justification_peer_hang_up: register(
+				Counter::new(
+					"substrate_beefy_on_demand_justification_peer_hang_up",
+					"Number of On demand justification peer hang up",
+				)?,
+				registry,
+			)?,
+			beefy_on_demand_justification_peer_error: register(
+				Counter::new(
+					"substrate_beefy_on_demand_justification_peer_error",
+					"Number of On demand justification peer error",
+				)?,
+				registry,
+			)?,
+			beefy_on_demand_justification_invalid_proof: register(
+				Counter::new(
+					"substrate_beefy_on_demand_justification_invalid_proof",
+					"Number of On demand justification invalid proof",
+				)?,
+				registry,
+			)?,
+			beefy_on_demand_justification_good_proof: register(
+				Counter::new(
+					"substrate_beefy_on_demand_justification_good_proof",
+					"Number of On demand justification good proof",
+				)?,
 				registry,
 			)?,
 		})

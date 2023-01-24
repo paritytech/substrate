@@ -280,7 +280,7 @@ where
 		network.clone(),
 		justifications_protocol_name,
 		known_peers,
-		metrics.clone()
+		metrics.clone(),
 	);
 
 	// Subscribe to finality notifications and justifications before waiting for runtime pallet and

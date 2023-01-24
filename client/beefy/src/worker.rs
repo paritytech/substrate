@@ -1055,11 +1055,12 @@ pub(crate) mod tests {
 		let gossip_validator = Arc::new(GossipValidator::new(known_peers.clone()));
 		let gossip_engine =
 			GossipEngine::new(network.clone(), "/beefy/1", gossip_validator.clone(), None);
+		let metrics = None;
 		let on_demand_justifications = OnDemandJustificationsEngine::new(
 			network.clone(),
 			"/beefy/justifs/1".into(),
 			known_peers,
-			metrics: None,
+			metrics.clone(),
 		);
 		let at = BlockId::number(Zero::zero());
 		let genesis_header = backend.blockchain().expect_header(at).unwrap();
@@ -1078,7 +1079,7 @@ pub(crate) mod tests {
 			links,
 			gossip_engine,
 			gossip_validator,
-			metrics: None,
+			metrics,
 			network,
 			on_demand_justifications,
 			persisted_state,

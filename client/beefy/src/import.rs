@@ -35,7 +35,7 @@ use sc_consensus::{BlockCheckParams, BlockImport, BlockImportParams, ImportResul
 use crate::{
 	communication::notification::BeefyVersionedFinalityProofSender,
 	justification::{decode_and_verify_finality_proof, BeefyVersionedFinalityProof},
-	metric_inc, metric_set,
+	metric_set,
 	metrics::Metrics,
 };
 

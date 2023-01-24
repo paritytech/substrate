@@ -34,9 +34,10 @@ use std::{collections::VecDeque, result::Result, sync::Arc};
 use crate::{
 	communication::request_response::{Error, JustificationRequest},
 	justification::{decode_and_verify_finality_proof, BeefyVersionedFinalityProof},
+	metric_inc,
+	metrics::Metrics,
 	KnownPeers,
 };
-use crate::{metrics::Metrics, metric_inc, metric_set};
 
 /// Response type received from network.
 type Response = Result<Vec<u8>, RequestFailure>;
@@ -70,7 +71,7 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 		network: Arc<dyn NetworkRequest + Send + Sync>,
 		protocol_name: ProtocolName,
 		live_peers: Arc<Mutex<KnownPeers<B>>>,
-		metrics: Option<Metrics>
+		metrics: Option<Metrics>,
 	) -> Self {
 		Self {
 			network,
@@ -78,7 +79,7 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 			live_peers,
 			peers_cache: VecDeque::new(),
 			state: State::Idle,
-			metrics
+			metrics,
 		}
 	}
 
@@ -163,6 +164,7 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 	) -> Result<BeefyVersionedFinalityProof<B>, Error> {
 		response
 			.map_err(|e| {
+				metric_inc!(self, beefy_on_demand_justification_peer_hang_up);
 				debug!(
 					target: "beefy::sync",
 					"🥩 for on demand justification #{:?}, peer {:?} hung up: {:?}",
@@ -171,6 +173,7 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 				Error::InvalidResponse
 			})?
 			.map_err(|e| {
+				metric_inc!(self, beefy_on_demand_justification_peer_error);
 				debug!(
 					target: "beefy::sync",
 					"🥩 for on demand justification #{:?}, peer {:?} error: {:?}",
@@ -185,6 +188,7 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 					&req_info.active_set,
 				)
 				.map_err(|e| {
+					metric_inc!(self, beefy_on_demand_justification_invalid_proof);
 					debug!(
 						target: "beefy::sync",
 						"🥩 for on demand justification #{:?}, peer {:?} responded with invalid proof: {:?}",
@@ -222,6 +226,7 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 				}
 			})
 			.map(|proof| {
+				metric_inc!(self, beefy_on_demand_justification_good_proof);
 				debug!(
 					target: "beefy::sync",
 					"🥩 received valid on-demand justif #{:?} from {:?}",
