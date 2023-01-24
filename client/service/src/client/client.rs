@@ -493,7 +493,8 @@ where
 
 	/// Get the RuntimeVersion at a given block.
 	pub fn runtime_version_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
-		CallExecutor::runtime_version(&self.executor, id)
+		let hash = self.backend.blockchain().expect_block_hash_from_id(id)?;
+		CallExecutor::runtime_version(&self.executor, hash)
 	}
 
 	/// Apply a checked and validated block to an operation. If a justification is provided
@@ -1241,7 +1242,7 @@ where
 		method: &str,
 		call_data: &[u8],
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
-		self.executor.prove_execution(&BlockId::Hash(hash), method, call_data)
+		self.executor.prove_execution(hash, method, call_data)
 	}
 
 	fn read_proof_collection(
@@ -1726,9 +1727,10 @@ where
 		&self,
 		params: CallApiAtParams<Block, B::State>,
 	) -> Result<Vec<u8>, sp_api::ApiError> {
+		let at_hash = self.expect_block_hash_from_id(params.at)?;
 		self.executor
 			.contextual_call(
-				params.at,
+				at_hash,
 				params.function,
 				&params.arguments,
 				params.overlayed_changes,
@@ -1740,7 +1742,8 @@ where
 	}
 
 	fn runtime_version_at(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, sp_api::ApiError> {
-		CallExecutor::runtime_version(&self.executor, at).map_err(Into::into)
+		let hash = self.backend.blockchain().expect_block_hash_from_id(at)?;
+		CallExecutor::runtime_version(&self.executor, hash).map_err(Into::into)
 	}
 
 	fn state_at(&self, at: &BlockId<Block>) -> Result<Self::StateBackend, sp_api::ApiError> {
