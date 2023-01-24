@@ -203,7 +203,7 @@ where
 				self.client
 					.executor()
 					.call(
-						&BlockId::Hash(block),
+						block,
 						&method,
 						&call_data,
 						self.client.execution_extensions().strategies().other,
