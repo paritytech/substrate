@@ -122,6 +122,9 @@ impl<Block: BlockT, BE: Backend<Block> + 'static> SubscriptionHandle<Block, BE> 
 			}
 		}
 
+		self.backend
+			.pin_block(hash.clone())
+			.map_err(|err| SubscriptionManagementError::Custom(err.to_string()))?;
 		Ok(inner.blocks.insert(hash))
 	}
 
@@ -130,7 +133,13 @@ impl<Block: BlockT, BE: Backend<Block> + 'static> SubscriptionHandle<Block, BE> 
 	/// Returns whether the value was present in the set.
 	pub fn unpin_block(&self, hash: &Block::Hash) -> bool {
 		let mut inner = self.inner.write();
-		inner.blocks.remove(hash)
+		if inner.blocks.remove(hash) {
+			// Unpin the block if it was previously pinned.
+			self.backend.unpin_block(*hash);
+			true
+		} else {
+			false
+		}
 	}
 
 	/// Check if the block hash is present for the provided subscription ID.
@@ -214,12 +223,19 @@ impl<Block: BlockT, BE: Backend<Block> + 'static> SubscriptionManagement<Block, 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use futures::executor::block_on;
+	use sc_block_builder::BlockBuilderProvider;
+	use sp_consensus::BlockOrigin;
 	use sp_core::H256;
-	use substrate_test_runtime_client::runtime::Block;
+	use substrate_test_runtime_client::{
+		prelude::*, runtime::Block, Backend, ClientBlockImportExt,
+	};
 
 	#[test]
 	fn subscription_check_id() {
-		let subs = SubscriptionManagement::<Block>::new();
+		let subs = SubscriptionManagement::<Block, Backend>::new();
+		let builder = TestClientBuilder::new();
+		let backend = builder.backend();
 
 		let id = "abc".to_string();
 		let hash = H256::random();
@@ -227,7 +243,7 @@ mod tests {
 		let handle = subs.get_subscription(&id);
 		assert!(handle.is_none());
 
-		let (_, handle) = subs.insert_subscription(id.clone(), false, 10).unwrap();
+		let (_, handle) = subs.insert_subscription(id.clone(), false, 10, backend).unwrap();
 		assert!(!handle.contains_block(&hash));
 
 		subs.remove_subscription(&id);
@@ -238,13 +254,19 @@ mod tests {
 
 	#[test]
 	fn subscription_check_block() {
-		let subs = SubscriptionManagement::<Block>::new();
+		let subs = SubscriptionManagement::<Block, Backend>::new();
+		let builder = TestClientBuilder::new();
+		let backend = builder.backend();
+		let mut client = Arc::new(builder.build());
+
+		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+		let hash = block.header.hash();
+		block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
 
 		let id = "abc".to_string();
-		let hash = H256::random();
 
 		// Check with subscription.
-		let (_, handle) = subs.insert_subscription(id.clone(), false, 10).unwrap();
+		let (_, handle) = subs.insert_subscription(id.clone(), false, 10, backend).unwrap();
 		assert!(!handle.contains_block(&hash));
 		assert!(!handle.unpin_block(&hash));
 
@@ -260,19 +282,22 @@ mod tests {
 
 	#[test]
 	fn subscription_check_stop_event() {
-		let subs = SubscriptionManagement::<Block>::new();
+		let subs = SubscriptionManagement::<Block, Backend>::new();
+		let builder = TestClientBuilder::new();
+		let backend = builder.backend();
 
 		let id = "abc".to_string();
 
 		// Check with subscription.
-		let (mut rx_stop, handle) = subs.insert_subscription(id.clone(), false, 10).unwrap();
+		let (mut rx_stop, handle) =
+			subs.insert_subscription(id.clone(), false, 10, backend.clone()).unwrap();
 
 		// Check the stop signal was not received.
 		let res = rx_stop.try_recv().unwrap();
 		assert!(res.is_none());
 
 		// Inserting a second time returns None.
-		let res = subs.insert_subscription(id.clone(), false, 10);
+		let res = subs.insert_subscription(id.clone(), false, 10, backend);
 		assert!(res.is_none());
 
 		handle.stop();
@@ -284,25 +309,33 @@ mod tests {
 
 	#[test]
 	fn subscription_check_data() {
-		let subs = SubscriptionManagement::<Block>::new();
+		let subs = SubscriptionManagement::<Block, Backend>::new();
+		let builder = TestClientBuilder::new();
+		let backend = builder.backend();
 
 		let id = "abc".to_string();
-		let (_, handle) = subs.insert_subscription(id.clone(), false, 10).unwrap();
+		let (_, handle) = subs.insert_subscription(id.clone(), false, 10, backend.clone()).unwrap();
 		assert!(!handle.has_runtime_updates());
 
 		let id2 = "abcd".to_string();
-		let (_, handle) = subs.insert_subscription(id2.clone(), true, 10).unwrap();
+		let (_, handle) = subs.insert_subscription(id2.clone(), true, 10, backend).unwrap();
 		assert!(handle.has_runtime_updates());
 	}
 
 	#[test]
 	fn subscription_check_max_pinned() {
-		let subs = SubscriptionManagement::<Block>::new();
+		let subs = SubscriptionManagement::<Block, Backend>::new();
+		let builder = TestClientBuilder::new();
+		let backend = builder.backend();
+		let mut client = Arc::new(builder.build());
+
+		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+		let hash = block.header.hash();
+		block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
 
 		let id = "abc".to_string();
-		let hash = H256::random();
 		let hash_2 = H256::random();
-		let (_, handle) = subs.insert_subscription(id.clone(), false, 1).unwrap();
+		let (_, handle) = subs.insert_subscription(id.clone(), false, 1, backend).unwrap();
 
 		handle.pin_block(hash).unwrap();
 		// The same block can be pinned multiple times.
