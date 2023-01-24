@@ -30,8 +30,8 @@ use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{ConstU128, ConstU32, ConstU64, ConstU8, KeyOwnerProofSystem},
 	weights::{
-		constants::{RocksDbWeight, WEIGHT_PER_SECOND},
-		IdentityFee,
+		constants::{RocksDbWeight, WEIGHT_REF_TIME_PER_SECOND},
+		IdentityFee, Weight,
 	},
 };
 
@@ -159,9 +159,9 @@ parameter_types! {
 	/// We allow for 2 seconds of compute with a 3 second average block time.
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::with_sensible_defaults(
-		(2_u64 * WEIGHT_PER_SECOND).set_proof_size(u64::MAX),
-		NORMAL_DISPATCH_RATIO,
-	);
+			Weight::from_parts(2u64 * WEIGHT_REF_TIME_PER_SECOND, u64::MAX),
+			NORMAL_DISPATCH_RATIO,
+		);
 	pub BlockLength: frame_system::limits::BlockLength = frame_system::limits::BlockLength
 		::max_with_normal_ratio(5 * 1024 * 1024, NORMAL_DISPATCH_RATIO);
 	pub const SS58Prefix: u8 = 42;
@@ -380,7 +380,7 @@ impl_runtime_apis! {
 
 	impl sp_consensus_sassafras::SassafrasApi<Block> for Runtime {
 		fn submit_tickets_unsigned_extrinsic(
-			tickets: Vec<sp_consensus_sassafras::Ticket>
+			tickets: Vec<sp_consensus_sassafras::TicketEnvelope>
 		) -> bool {
 			Sassafras::submit_tickets_unsigned_extrinsic(tickets)
 		}
