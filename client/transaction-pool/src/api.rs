@@ -18,6 +18,7 @@
 
 //! Chain api required for the transaction pool.
 
+use crate::LOG_TARGET;
 use codec::Encode;
 use futures::{
 	channel::{mpsc, oneshot},
@@ -85,7 +86,7 @@ impl<Client, Block> FullChainApi<Client, Block> {
 		let metrics = prometheus.map(ApiMetrics::register).and_then(|r| match r {
 			Err(err) => {
 				log::warn!(
-					target: "txpool",
+					target: LOG_TARGET,
 					"Failed to register transaction pool api prometheus metrics: {:?}",
 					err,
 				);
