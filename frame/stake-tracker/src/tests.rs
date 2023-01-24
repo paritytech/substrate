@@ -2,7 +2,7 @@ use super::{mock::*, pallet::*};
 use crate as pallet_stake_tracker;
 use frame_election_provider_support::{ReadOnlySortedListProvider, SortedListProvider};
 use frame_support::{assert_ok, assert_storage_noop};
-use sp_staking::{OnStakingUpdate, StakingInterface};
+use sp_staking::{OnStakingUpdate, Stake, StakingInterface};
 
 type VoterList = <Runtime as pallet_stake_tracker::Config>::VoterList;
 type TargetList = <Runtime as pallet_stake_tracker::Config>::TargetList;
@@ -80,13 +80,37 @@ mod on_stake_update {
 			assert_eq!(VoterList::get_score(&validator_id).unwrap(), score);
 			assert_eq!(TargetList::get_score(&validator_id).unwrap(), stake);
 
+			// Previous stake is less than current (default: 0)
 			let _ = StakeTracker::on_stake_update(&validator_id, None);
+			// VoterList logic does not care about previous stake so we test it only once.
 			assert_eq!(
 				VoterList::get_score(&validator_id).unwrap(),
 				Pallet::<Runtime>::to_vote(
 					Staking::stake(&validator_id).map(|s| s.active).unwrap()
 				)
 			);
+			assert_eq!(
+				TargetList::get_score(&validator_id).unwrap(),
+				Staking::stake(&validator_id).map(|s| s.active).unwrap()
+			);
+
+			// Previous stake is more than current 10 vs 9, ApprovalStake decrements by 1.
+			let _ = StakeTracker::on_stake_update(
+				&validator_id,
+				Some(Stake { stash: validator_id, active: 10, total: 11 }),
+			);
+
+			assert_eq!(
+				TargetList::get_score(&validator_id).unwrap(),
+				Staking::stake(&validator_id).map(|s| s.active - 1).unwrap()
+			);
+
+			// Previous stake is less than current 8 vs 9, ApprovalStake increments by 1.
+			let _ = StakeTracker::on_stake_update(
+				&validator_id,
+				Some(Stake { stash: validator_id, active: 8, total: 9 }),
+			);
+
 			assert_eq!(
 				TargetList::get_score(&validator_id).unwrap(),
 				Staking::stake(&validator_id).map(|s| s.active).unwrap()
