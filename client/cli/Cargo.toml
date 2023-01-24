@@ -21,7 +21,7 @@ futures = "0.3.21"
 libp2p = "0.50.0"
 log = "0.4.17"
 names = { version = "0.13.0", default-features = false }
-parity-scale-codec = "3.0.0"
+parity-scale-codec = "3.2.2"
 rand = "0.8.5"
 regex = "1.6.0"
 rpassword = "7.0.0"
