@@ -17,7 +17,7 @@
 
 use crate::{
 	build_executor, full_extensions, parse, rpc_err_handler, state_machine_call_with_proof,
-	Command, LiveState, SharedParams, State, LOG_TARGET,
+	LiveState, SharedParams, State, LOG_TARGET,
 };
 use parity_scale_codec::{Decode, Encode};
 use sc_executor::sp_wasm_interface::HostFunctions;
@@ -80,8 +80,7 @@ async fn start_subscribing<Header: DeserializeOwned + Serialize + Send + Sync + 
 
 pub(crate) async fn follow_chain<Block, HostFns>(
 	shared: SharedParams,
-	command: Command,
-	cmd: FollowChainCmd,
+	command: FollowChainCmd,
 ) -> sc_cli::Result<()>
 where
 	Block: BlockT<Hash = H256> + DeserializeOwned,
@@ -92,7 +91,7 @@ where
 	<NumberFor<Block> as FromStr>::Err: Debug,
 	HostFns: HostFunctions,
 {
-	let (rpc, subscription) = start_subscribing::<Block::Header>(&cmd.uri).await?;
+	let (rpc, subscription) = start_subscribing::<Block::Header>(&command.uri).await?;
 	let mut finalized_headers: FinalizedHeaders<Block, _, _> =
 		FinalizedHeaders::new(&rpc, subscription);
 
@@ -131,14 +130,14 @@ where
 		// create an ext at the state of this block, whatever is the first subscription event.
 		if maybe_state_ext.is_none() {
 			let state = State::Live(LiveState {
-				uri: cmd.uri.clone(),
+				uri: command.uri.clone(),
 				// a bit dodgy, we have to un-parse the has to a string again and re-parse it
 				// inside.
 				at: Some(hex::encode(header.parent_hash().encode())),
 				pallet: vec![],
 				child_tree: true,
 			});
-			let ext = state.into_ext::<Block, HostFns>(&shared, &command, &executor, None).await?;
+			let ext = state.into_ext::<Block, HostFns>(&shared, &executor, None, true).await?;
 			maybe_state_ext = Some(ext);
 		}
 
@@ -149,7 +148,7 @@ where
 			state_ext,
 			&executor,
 			"TryRuntime_execute_block",
-			(block, cmd.state_root_check, cmd.try_state.clone()).encode().as_ref(),
+			(block, command.state_root_check, command.try_state.clone()).encode().as_ref(),
 			full_extensions(),
 			shared
 				.export_proof

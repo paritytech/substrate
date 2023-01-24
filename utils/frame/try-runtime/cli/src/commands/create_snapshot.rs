@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{build_executor, Command, LiveState, SharedParams, State, LOG_TARGET};
+use crate::{build_executor, LiveState, SharedParams, State, LOG_TARGET};
 use sc_executor::sp_wasm_interface::HostFunctions;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{fmt::Debug, str::FromStr};
@@ -34,11 +34,10 @@ pub struct CreateSnapshotCmd {
 	pub snapshot_path: Option<String>,
 }
 
-/// inner cmd for `Command::CreateSnapshot`.
+/// inner command for `Command::CreateSnapshot`.
 pub(crate) async fn create_snapshot<Block, HostFns>(
 	shared: SharedParams,
-	command: Command,
-	cmd: CreateSnapshotCmd,
+	command: CreateSnapshotCmd,
 ) -> sc_cli::Result<()>
 where
 	Block: BlockT + serde::de::DeserializeOwned,
@@ -49,7 +48,7 @@ where
 	<NumberFor<Block> as FromStr>::Err: Debug,
 	HostFns: HostFunctions,
 {
-	let snapshot_path = cmd.snapshot_path;
+	let snapshot_path = command.snapshot_path;
 	if !matches!(shared.runtime, crate::Runtime::Existing) {
 		return Err("creating a snapshot is only possible with --runtime existing.".into())
 	}
@@ -57,13 +56,13 @@ where
 	let path = match snapshot_path {
 		Some(path) => path,
 		None => {
-			let rpc = ws_client(&cmd.from.uri).await.unwrap();
+			let rpc = ws_client(&command.from.uri).await.unwrap();
 			let remote_spec = StateApi::<Block::Hash>::runtime_version(&rpc, None).await.unwrap();
 			let path_str = format!(
 				"{}-{}@{}.snap",
 				remote_spec.spec_name.to_lowercase(),
 				remote_spec.spec_version,
-				cmd.from.at.clone().unwrap_or("latest".to_owned())
+				command.from.at.clone().unwrap_or("latest".to_owned())
 			);
 			log::info!(target: LOG_TARGET, "snapshot path not provided (-s), using '{}'", path_str);
 			path_str.into()
@@ -71,8 +70,8 @@ where
 	};
 
 	let executor = build_executor::<HostFns>(&shared);
-	let _ = State::Live(cmd.from)
-		.into_ext::<Block, HostFns>(&shared, &command, &executor, Some(path.into()))
+	let _ = State::Live(command.from)
+		.into_ext::<Block, HostFns>(&shared, &executor, Some(path.into()), false)
 		.await?;
 
 	Ok(())

@@ -17,7 +17,7 @@
 
 use crate::{
 	build_executor, commands::execute_block::next_hash_of, full_extensions, parse, rpc_err_handler,
-	state_machine_call, Command, LiveState, SharedParams, State, LOG_TARGET,
+	state_machine_call, LiveState, SharedParams, State, LOG_TARGET,
 };
 use parity_scale_codec::Encode;
 use sc_executor::sp_wasm_interface::HostFunctions;
@@ -65,8 +65,7 @@ impl OffchainWorkerCmd {
 
 pub(crate) async fn offchain_worker<Block, HostFns>(
 	shared: SharedParams,
-	command: Command,
-	cmd: OffchainWorkerCmd,
+	command: OffchainWorkerCmd,
 ) -> sc_cli::Result<()>
 where
 	Block: BlockT + serde::de::DeserializeOwned,
@@ -79,9 +78,9 @@ where
 {
 	let executor = build_executor(&shared);
 	// we first build the externalities with the remote code.
-	let ext = cmd.state.into_ext::<Block, HostFns>(&shared, &command, &executor, None).await?;
+	let ext = command.state.into_ext::<Block, HostFns>(&shared, &executor, None, true).await?;
 
-	let header_ws_uri = cmd.header_ws_uri::<Block>();
+	let header_ws_uri = command.header_ws_uri::<Block>();
 
 	let rpc = ws_client(&header_ws_uri).await?;
 	let next_hash = next_hash_of::<Block>(&rpc, ext.block_hash).await?;
