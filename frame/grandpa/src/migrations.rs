@@ -19,7 +19,6 @@ use frame_support::{
 	traits::{Get, OnRuntimeUpgrade},
 	weights::Weight,
 };
-use sp_runtime::SaturatedConversion;
 
 use crate::{Config, CurrentSetId, SetIdSession, LOG_TARGET};
 
