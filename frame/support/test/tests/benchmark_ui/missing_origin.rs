@@ -1,4 +1,4 @@
-use frame_support::benchmarking::*;
+use frame_benchmarking::*;
 #[allow(unused_imports)]
 use frame_support_test::Config;
 

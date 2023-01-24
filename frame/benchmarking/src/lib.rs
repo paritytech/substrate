@@ -2052,3 +2052,5 @@ macro_rules! define_benchmarks {
 		}
 	}
 }
+
+pub use frame_support::benchmarking::*;

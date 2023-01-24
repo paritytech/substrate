@@ -2767,8 +2767,7 @@ pub mod pallet_macros {
 /// #![cfg(feature = "runtime-benchmarks")]
 ///
 /// use super::{mock_helpers::*, Pallet as MyPallet};
-/// use frame_support::benchmarking::*;
-/// use frame_benchmarking::whitelisted_caller;
+/// use frame_benchmarking::*;
 ///
 /// #[benchmarks]
 /// mod benchmarks {
@@ -2847,7 +2846,7 @@ pub mod pallet_macros {
 /// following:
 ///
 /// ```ignore
-/// 	#[extrinsic_call]
+/// #[extrinsic_call]
 /// _(RawOrigin::Signed(whitelisted_caller()), 0u32.into(), 0);
 /// ```
 ///
