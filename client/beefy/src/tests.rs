@@ -263,7 +263,7 @@ pub(crate) struct RuntimeApi {
 
 impl ProvideRuntimeApi<Block> for TestApi {
 	type Api = RuntimeApi;
-	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api> {
+	fn runtime_api(&self) -> ApiRef<Self::Api> {
 		RuntimeApi { inner: self.clone() }.into()
 	}
 }
