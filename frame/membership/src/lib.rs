@@ -369,8 +369,10 @@ mod benchmark {
 	const SEED: u32 = 0;
 
 	fn set_members<T: Config<I>, I: 'static>(members: Vec<T::AccountId>, prime: Option<usize>) {
-		let reset_origin = T::ResetOrigin::try_successful_origin().unwrap();
-		let prime_origin = T::PrimeOrigin::try_successful_origin().unwrap();
+		let reset_origin = T::ResetOrigin::try_successful_origin()
+			.expect("ResetOrigin has no successful origin required for the benchmark");
+		let prime_origin = T::PrimeOrigin::try_successful_origin()
+			.expect("PrimeOrigin has no successful origin required for the benchmark");
 
 		assert_ok!(<Membership<T, I>>::reset_members(reset_origin, members.clone()));
 		if let Some(prime) = prime.map(|i| members[i].clone()) {

@@ -35,12 +35,14 @@ fn make_member<T: Config<I>, I: 'static>(rank: Rank) -> T::AccountId {
 	let who = account::<T::AccountId>("member", MemberCount::<T, I>::get(0), SEED);
 	let who_lookup = T::Lookup::unlookup(who.clone());
 	assert_ok!(Pallet::<T, I>::add_member(
-		T::PromoteOrigin::try_successful_origin().unwrap(),
+		T::PromoteOrigin::try_successful_origin()
+			.expect("PromoteOrigin has no successful origin required for the benchmark"),
 		who_lookup.clone(),
 	));
 	for _ in 0..rank {
 		assert_ok!(Pallet::<T, I>::promote_member(
-			T::PromoteOrigin::try_successful_origin().unwrap(),
+			T::PromoteOrigin::try_successful_origin()
+				.expect("PromoteOrigin has no successful origin required for the benchmark"),
 			who_lookup.clone(),
 		));
 	}
@@ -120,7 +122,8 @@ benchmarks_instance_pallet! {
 		let caller: T::AccountId = whitelisted_caller();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
 		assert_ok!(Pallet::<T, I>::add_member(
-			T::PromoteOrigin::try_successful_origin().unwrap(),
+			T::PromoteOrigin::try_successful_origin()
+				.expect("PromoteOrigin has no successful origin required for the benchmark"),
 			caller_lookup.clone(),
 		));
 		// Create a poll
@@ -128,7 +131,8 @@ benchmarks_instance_pallet! {
 		let rank = T::MinRankOfClass::convert(class.clone());
 		for _ in 0..rank {
 			assert_ok!(Pallet::<T, I>::promote_member(
-				T::PromoteOrigin::try_successful_origin().unwrap(),
+				T::PromoteOrigin::try_successful_origin()
+					.expect("PromoteOrigin has no successful origin required for the benchmark"),
 				caller_lookup.clone(),
 			));
 		}
