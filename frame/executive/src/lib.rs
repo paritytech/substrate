@@ -545,7 +545,11 @@ where
 			let signature_batching = sp_runtime::SignatureBatching::start();
 
 			let poped_txs_count = *block.header().count();
-			let enqueued_txs = <frame_system::Pallet<System>>::pop_txs(poped_txs_count.saturated_into())
+			let popped_elems = <frame_system::Pallet<System>>::pop_txs(poped_txs_count.saturated_into());
+
+			assert_eq!(popped_elems.len(), poped_txs_count.saturated_into::<usize>(), "not enought elements to pop found");
+
+			let popped_txs = popped_elems
 				.into_iter()
 				.map(|tx_data| Block::Extrinsic::decode(& mut tx_data.as_slice()))
 				.filter_map(|maybe_tx| maybe_tx.ok())
@@ -560,11 +564,11 @@ where
 				assert!(frame_system::StorageQueue::<System>::get().is_empty() || poped_txs_count > 0u32.into());
 			}
 
-			assert_eq!(enqueued_txs, curr_block_extrinsics.cloned().collect::<Vec<_>>());
+			assert_eq!(popped_txs, curr_block_extrinsics.cloned().collect::<Vec<_>>());
 
 			let tx_to_be_executed = curr_block_inherents.clone()
 				.take(curr_block_inherents_len.checked_sub(1).unwrap_or(0))
-				.chain(enqueued_txs.iter())
+				.chain(popped_txs.iter())
 				.chain(curr_block_inherents.skip(curr_block_inherents_len.checked_sub(1).unwrap_or(0)))
 				.cloned().collect::<Vec<_>>();
 
@@ -2440,6 +2444,65 @@ mod tests {
 						.into(),
 						digest: Digest { logs: vec![DigestItem::Other(tx_hashes_list.encode())] },
 						count: 0,
+						seed: calculate_next_seed_from_bytes(
+							&keystore,
+							&key_pair.public(),
+							System::block_seed().as_bytes().to_vec(),
+						)
+						.unwrap(),
+					},
+					extrinsics: vec![enqueue_txs_inherent.clone(), enqueue_txs_inherent],
+				},
+				pub_key_bytes.clone(),
+			);
+		});
+	}
+
+	#[test]
+	#[should_panic(expected = "not enought elements to pop found")]
+	fn reject_block_that_tries_to_pop_more_txs_than_available() {
+		new_test_ext(1).execute_with(|| {
+			let secret_uri = "//Alice";
+			let keystore = sp_keystore::testing::KeyStore::new();
+
+			let key_pair =
+				sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
+			keystore
+				.insert_unknown(AURA, secret_uri, key_pair.public().as_ref())
+				.expect("Inserts unknown key");
+
+			let pub_key_bytes = AsRef::<[u8; 32]>::as_ref(&key_pair.public())
+				.iter()
+				.cloned()
+				.collect::<Vec<_>>();
+
+			let txs: Vec<TestXt> = vec![TestXt::new(call_transfer(2, 69), sign_extra(1, 0, 0))];
+			let enqueue_txs_inherent = TestXt::new(
+				enqueue_txs(txs.clone().iter().map(|t| (Some(2), t.encode())).collect::<Vec<_>>()),
+				None,
+			);
+
+			let tx_hashes_list = txs
+				.clone()
+				.iter()
+				.map(|tx| <Runtime as frame_system::Config>::Hashing::hash(&tx.encode()[..]))
+				.collect::<Vec<_>>();
+
+			Executive::execute_block_ver(
+				Block {
+					header: Header {
+						parent_hash: System::parent_hash(),
+						number: 1,
+						state_root: hex!(
+							"c6bbd33a1161f1b0d719594304a81c6cc97a183a64a09e1903cb58ed6e247148"
+						)
+						.into(),
+						extrinsics_root: hex!(
+							"9f907f07e03a93bbb696e4071f58237edc3 5a701d24e5a2155cf52a2b32a4ef3"
+						)
+						.into(),
+						digest: Digest { logs: vec![DigestItem::Other(tx_hashes_list.encode())] },
+						count: 1,
 						seed: calculate_next_seed_from_bytes(
 							&keystore,
 							&key_pair.public(),
