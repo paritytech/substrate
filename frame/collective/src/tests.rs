@@ -24,7 +24,7 @@ use frame_support::{
 	traits::{ConstU32, ConstU64, GenesisBuild, StorageVersion},
 	Hashable,
 };
-use frame_system::{EventRecord, Phase, EnsureRoot};
+use frame_system::{EnsureRoot, EventRecord, Phase};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,

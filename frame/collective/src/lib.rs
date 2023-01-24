@@ -217,7 +217,7 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 
 		/// Origin allowed to set collective members
-		type SetMembersOrigin:  EnsureOrigin<<Self as frame_system::Config>::RuntimeOrigin>;
+		type SetMembersOrigin: EnsureOrigin<<Self as frame_system::Config>::RuntimeOrigin>;
 	}
 
 	#[pallet::genesis_config]
