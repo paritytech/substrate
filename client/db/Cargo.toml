@@ -22,7 +22,7 @@ kvdb-memorydb = "0.13.0"
 kvdb-rocksdb = { version = "0.17.0", optional = true }
 linked-hash-map = "0.5.4"
 log = "0.4.17"
-parity-db = "0.4.2"
+parity-db = "0.4.3"
 parking_lot = "0.12.1"
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sc-state-db = { version = "0.10.0-dev", path = "../state-db" }
