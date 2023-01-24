@@ -221,7 +221,7 @@ pub mod pallet {
 		/// # Deprecated
 		///
 		/// Codes using the randomness functionality cannot be uploaded. Neither can contracts
-		/// be instantiated from existing codes that use deprecated functionality. It will
+		/// be instantiated from existing codes that use this deprecated functionality. It will
 		/// be removed eventually. Hence for new `pallet-contracts` deployments it is okay
 		/// to supply a dummy implementation for this type (because it is never used).
 		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;

@@ -245,10 +245,10 @@ impl HostFn {
 		let name = item.sig.ident.to_string();
 
 		if !(is_stable || not_deprecated) {
-			return Err(err(span, "#[deprecated] is exclusive with #[unstable]"))
+			return Err(err(span, "#[deprecated] is mutually exclusive with #[unstable]"))
 		}
 
-		// process arguments: The first and second arg are treated differently (ctx, memory)
+		// process arguments: The first and second args are treated differently (ctx, memory)
 		// they must exist and be `ctx: _` and `memory: _`.
 		let msg = "Every function must start with two inferred parameters: ctx: _ and memory: _";
 		let special_args = item
@@ -724,11 +724,11 @@ fn expand_functions(
 ///
 /// # Deprecated Interfaces
 ///
-/// An interface can be annotated with `#[deprecated]`. It is exclusive with `#[unstable]`.
+/// An interface can be annotated with `#[deprecated]`. It is mutually exclusive with `#[unstable]`.
 /// Deprecated interfaces have the following properties:
-/// 	- New codes containing those interfaces cannot be uploaded.
-/// 	- New contracts from existing coes containing those interfaces cannot be instantiated.
-/// - Existing contracts containing those interfaces still work
+/// 	- New contract codes utilizing those interfaces cannot be uploaded.
+/// 	- New contracts from existing codes utilizing those interfaces cannot be instantiated.
+/// - Existing contracts containing those interfaces still work.
 ///
 /// Those interfaces will eventually be removed.
 ///

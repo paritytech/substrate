@@ -3116,7 +3116,7 @@ mod tests {
 		assert_ok!(execute(CANNOT_DEPLOY_UNSTABLE, vec![], MockExt::default()));
 	}
 
-	/// The random interface is deprecated and hence new contracts using it should not deploy.
+	/// The random interface is deprecated and hence new contracts using it should not be deployed.
 	/// In case of runtime benchmarks we always allow deprecated interfaces. This is why this
 	/// test doesn't work if this feature is enabled.
 	#[cfg(not(feature = "runtime-benchmarks"))]

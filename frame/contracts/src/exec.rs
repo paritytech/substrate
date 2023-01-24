@@ -3441,7 +3441,7 @@ mod tests {
 		});
 	}
 
-	/// This works even when randomness is disabled. The check to ban deprecated
+	/// This works even though random interface is deprecated, as the check to ban deprecated
 	/// functions happens in the wasm stack which is mocked for exec tests.
 	#[test]
 	fn randomness_works() {
