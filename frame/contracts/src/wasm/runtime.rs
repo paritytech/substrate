@@ -2080,6 +2080,59 @@ pub mod env {
 		Ok(())
 	}
 
+	/// Was used to set rent allowance of the contract.
+	///
+	/// # Note
+	///
+	/// The state rent functionality was removed. This is stub only exists for
+	/// backwards compatiblity.
+	#[prefixed_alias]
+	#[deprecated]
+	fn set_rent_allowance(
+		ctx: _,
+		memory: _,
+		_value_ptr: u32,
+		_value_len: u32,
+	) -> Result<(), TrapReason> {
+		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
+		Ok(())
+	}
+
+	/// Was used to set rent allowance of the contract.
+	///
+	/// # Note
+	///
+	/// The state rent functionality was removed. This is stub only exists for
+	/// backwards compatiblity.
+	#[version(1)]
+	#[prefixed_alias]
+	#[deprecated]
+	fn set_rent_allowance(ctx: _, _memory: _, _value_ptr: u32) -> Result<(), TrapReason> {
+		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
+		Ok(())
+	}
+
+	/// Was used to store the rent allowance into the supplied buffer.
+	///
+	/// # Note
+	///
+	/// The state rent functionality was removed. This is stub only exists for
+	/// backwards compatiblity.
+	#[prefixed_alias]
+	#[deprecated]
+	fn rent_allowance(ctx: _, memory: _, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
+		ctx.charge_gas(RuntimeCosts::Balance)?;
+		let rent_allowance = <BalanceOf<E::T>>::max_value().encode();
+		Ok(ctx.write_sandbox_output(
+			memory,
+			out_ptr,
+			out_len_ptr,
+			&rent_allowance,
+			false,
+			already_charged,
+		)?)
+	}
+
 	/// Deposit a contract event with the data buffer and optional list of topics. There is a limit
 	/// on the maximum number of topics specified by `event_topics`.
 	///
@@ -2121,56 +2174,6 @@ pub mod env {
 		ctx.ext.deposit_event(topics, event_data);
 
 		Ok(())
-	}
-
-	/// Was used to set rent allowance of the contract.
-	///
-	/// # Note
-	///
-	/// The state rent functionality was removed. This is stub only exists for
-	/// backwards compatiblity.
-	#[prefixed_alias]
-	fn set_rent_allowance(
-		ctx: _,
-		memory: _,
-		_value_ptr: u32,
-		_value_len: u32,
-	) -> Result<(), TrapReason> {
-		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
-		Ok(())
-	}
-
-	/// Was used to set rent allowance of the contract.
-	///
-	/// # Note
-	///
-	/// The state rent functionality was removed. This is stub only exists for
-	/// backwards compatiblity.
-	#[version(1)]
-	#[prefixed_alias]
-	fn set_rent_allowance(ctx: _, _memory: _, _value_ptr: u32) -> Result<(), TrapReason> {
-		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
-		Ok(())
-	}
-
-	/// Was used to store the rent allowance into the supplied buffer.
-	///
-	/// # Note
-	///
-	/// The state rent functionality was removed. This is stub only exists for
-	/// backwards compatiblity.
-	#[prefixed_alias]
-	fn rent_allowance(ctx: _, memory: _, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
-		ctx.charge_gas(RuntimeCosts::Balance)?;
-		let rent_allowance = <BalanceOf<E::T>>::max_value().encode();
-		Ok(ctx.write_sandbox_output(
-			memory,
-			out_ptr,
-			out_len_ptr,
-			&rent_allowance,
-			false,
-			already_charged,
-		)?)
 	}
 
 	/// Stores the current block number of the current contract into the supplied buffer.
