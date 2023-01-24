@@ -557,6 +557,11 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	where
 		KArg1: ?Sized + EncodeLike<K1>;
 
+	/// Does any value under the first key `k1` (explicitly) exist in storage?
+	fn contains_prefix<KArg1>(k1: KArg1) -> bool
+	where
+		KArg1: EncodeLike<K1>;
+
 	/// Iterate over values that share the first key.
 	fn iter_prefix_values<KArg1>(k1: KArg1) -> PrefixIterator<V>
 	where
@@ -730,6 +735,11 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 		limit: u32,
 		maybe_cursor: Option<&[u8]>,
 	) -> sp_io::MultiRemovalResults
+	where
+		K: HasKeyPrefix<KP>;
+
+	/// Does any value under a `partial_key` prefix (explicitly) exist in storage?
+	fn contains_prefix<KP>(partial_key: KP) -> bool
 	where
 		K: HasKeyPrefix<KP>;
 
@@ -1774,6 +1784,20 @@ mod test {
 	#[crate::storage_alias]
 	type FooDoubleMap =
 		StorageDoubleMap<Prefix, Twox128, u32, Twox128, u32, BoundedVec<u32, ConstU32<7>>>;
+
+	#[test]
+	fn contains_prefix_works() {
+		TestExternalities::default().execute_with(|| {
+			assert!(FooDoubleMap::iter_prefix_values(0).next().is_none());
+			assert_eq!(FooDoubleMap::contains_prefix(0), false);
+
+			assert_ok!(FooDoubleMap::try_append(1, 1, 4));
+			assert!(FooDoubleMap::iter_prefix_values(1).next().is_some());
+			assert!(FooDoubleMap::contains_prefix(1));
+			FooDoubleMap::remove(1, 1);
+			assert_eq!(FooDoubleMap::contains_prefix(1), false);
+		});
+	}
 
 	#[test]
 	fn try_append_works() {

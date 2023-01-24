@@ -154,6 +154,10 @@ pub fn clear_prefix(
 	MultiRemovalResults { maybe_cursor, backend: i, unique: i, loops: i }
 }
 
+pub fn contains_prefix(prefix: &[u8]) -> bool {
+	sp_io::storage::next_key(prefix).is_some()
+}
+
 /// Get a Vec of bytes from storage.
 pub fn get_raw(key: &[u8]) -> Option<Vec<u8>> {
 	sp_io::storage::get(key).map(|value| value.to_vec())
