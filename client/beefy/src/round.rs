@@ -152,8 +152,10 @@ where
 			return VoteImportResult::Stale
 		} else if vote.commitment.validator_set_id != self.validator_set_id() {
 			debug!(
-				target: LOG_TARGET, "🥩 expected set_id {:?}, ignoring vote {:?}.",
-				self.validator_set_id(), vote,
+				target: LOG_TARGET,
+				"🥩 expected set_id {:?}, ignoring vote {:?}.",
+				self.validator_set_id(),
+				vote,
 			);
 			return VoteImportResult::Invalid
 		} else if !self.validators().iter().any(|id| &vote.id == id) {
@@ -169,8 +171,8 @@ where
 			// is the same public key voting for a different payload?
 			if previous_vote.commitment.payload != vote.commitment.payload {
 				debug!(
-					target: "beefy", "🥩 detected equivocated vote: 1st: {:?}, 2nd: {:?}",
-					previous_vote, vote
+					target: LOG_TARGET,
+					"🥩 detected equivocated vote: 1st: {:?}, 2nd: {:?}", previous_vote, vote
 				);
 				return VoteImportResult::Equivocation(EquivocationProof {
 					first: previous_vote.clone(),

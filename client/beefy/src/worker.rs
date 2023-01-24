@@ -568,8 +568,8 @@ where
 
 				let finality_proof = VersionedFinalityProof::V1(signed_commitment);
 				info!(
-					target: LOG_TARGET, "🥩 Round #{} concluded, finality_proof: {:?}.",
-					block_number, finality_proof
+					target: LOG_TARGET,
+					"🥩 Round #{} concluded, finality_proof: {:?}.", block_number, finality_proof
 				);
 				// We created the `finality_proof` and know to be valid.
 				// New state is persisted after finalization.
@@ -936,14 +936,18 @@ where
 		let offender_id = proof.offender_id().clone();
 
 		if proof.set_id() != validator_set_id {
-			debug!(target: "beefy", "🥩 Skip equivocation report for old set id: {:?}", proof.set_id());
+			debug!(
+				target: LOG_TARGET,
+				"🥩 Skip equivocation report for old set id: {:?}",
+				proof.set_id()
+			);
 			return Ok(())
 		} else if !check_equivocation_proof::<_, _, BeefySignatureHasher>(&proof) {
-			debug!(target: "beefy", "🥩 Skip report for bad equivocation {:?}", proof);
+			debug!(target: LOG_TARGET, "🥩 Skip report for bad equivocation {:?}", proof);
 			return Ok(())
 		} else if let Some(local_id) = self.key_store.authority_id(validators) {
 			if offender_id == local_id {
-				debug!(target: "beefy", "🥩 Skip equivocation report for own equivocation");
+				debug!(target: LOG_TARGET, "🥩 Skip equivocation report for own equivocation");
 				return Ok(())
 			}
 		}
@@ -957,7 +961,10 @@ where
 		{
 			Some(proof) => proof,
 			None => {
-				debug!(target: "beefy", "🥩 Equivocation offender not part of the authority set.");
+				debug!(
+					target: LOG_TARGET,
+					"🥩 Equivocation offender not part of the authority set."
+				);
 				return Ok(())
 			},
 		};
