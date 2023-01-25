@@ -9150,9 +9150,9 @@ dependencies = [
 
 [[package]]
 name = "schnellru"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18b6778edaf75c32e4f919526092db16db6c49296e219005925ed9777e5b263d"
+checksum = "772575a524feeb803e5b0fcbc6dd9f367e579488197c94c6e4023aad2305774d"
 dependencies = [
  "ahash 0.8.2",
  "cfg-if",
