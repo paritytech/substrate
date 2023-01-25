@@ -187,7 +187,7 @@ mod on_nominator_update {
 			StakeTracker::on_nominator_update(&20, Vec::new());
 			assert_eq!(
 				VoterList::get_score(&20).unwrap(),
-				StakeTracker::to_vote(Staking::stake(&20).map(|s| s.active).unwrap())
+				StakeTracker::to_vote(StakeTracker::slashable_balance_of(&20))
 			);
 
 			for nomination in Staking::nominations(&20).unwrap() {
@@ -195,7 +195,14 @@ mod on_nominator_update {
 					TargetList::get_score(&nomination),
 					pallet_bags_list::ListError::NodeNotFound
 				);
+				assert_eq!(
+					StakeTracker::approval_stake(&nomination).unwrap(),
+					StakeTracker::slashable_balance_of(&20)
+				);
 			}
+
+			assert_eq!(ApprovalStake::<Runtime>::count(), 2);
+			let _ = ApprovalStake::<Runtime>::clear(100, None);
 
 			// no prev nominations and nominations are in TargetList
 			for nomination in Staking::nominations(&20).unwrap() {
@@ -205,7 +212,7 @@ mod on_nominator_update {
 			StakeTracker::on_nominator_update(&20, Vec::new());
 			assert_eq!(
 				VoterList::get_score(&20).unwrap(),
-				StakeTracker::to_vote(Staking::stake(&20).unwrap().active)
+				StakeTracker::to_vote(StakeTracker::slashable_balance_of(&20))
 			);
 
 			for nomination in Staking::nominations(&20).unwrap() {
@@ -214,7 +221,58 @@ mod on_nominator_update {
 					StakeTracker::slashable_balance_of(&20)
 						.saturating_add(StakeTracker::slashable_balance_of(&nomination))
 				);
+				assert_eq!(
+					ApprovalStake::<Runtime>::get(&nomination).unwrap(),
+					StakeTracker::slashable_balance_of(&20)
+						.saturating_add(StakeTracker::slashable_balance_of(&nomination))
+				);
 			}
+
+			// some previous nominations
+
+			// reset two validators to have something new to nominate and something that won't
+			// be touched
+			for nomination in vec![10, 11] {
+				StakeTracker::on_unstake(&nomination);
+				let _ = TargetList::on_remove(&nomination);
+				StakeTracker::on_validator_add(&nomination);
+			}
+
+			// add a validator to have something to de-nominate
+			StakeTracker::on_validator_add(&12);
+			StakeTracker::on_nominator_update(&20, vec![11, 12]);
+
+			assert_eq!(
+				TargetList::get_score(&12).unwrap(),
+				StakeTracker::slashable_balance_of(&12)
+					.saturating_sub(StakeTracker::slashable_balance_of(&20))
+			);
+			assert_eq!(
+				StakeTracker::approval_stake(&12).unwrap(),
+				StakeTracker::slashable_balance_of(&12)
+					.saturating_sub(StakeTracker::slashable_balance_of(&20))
+			);
+
+			assert_eq!(
+				TargetList::get_score(&10).unwrap(),
+				StakeTracker::slashable_balance_of(&20)
+					.saturating_add(StakeTracker::slashable_balance_of(&10))
+			);
+			assert_eq!(
+				StakeTracker::approval_stake(&10).unwrap(),
+				StakeTracker::slashable_balance_of(&20)
+					.saturating_add(StakeTracker::slashable_balance_of(&10))
+			);
+
+			// this is untouched as it was present in both current and prev nominations
+			assert_eq!(
+				TargetList::get_score(&11).unwrap(),
+				StakeTracker::slashable_balance_of(&11)
+			);
+			assert_eq!(
+				StakeTracker::approval_stake(&11).unwrap(),
+				StakeTracker::slashable_balance_of(&11)
+			);
 		});
 	}
 }
