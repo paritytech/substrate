@@ -287,9 +287,9 @@ publish-crates-locally:
   extends:
     - .test-refs
     - .crates-publishing-template
-  timeout:                         4h
+  timeout:                         6h
   variables:
-    SPUB_PUBLISH_ALL: true
+    SPUB_PUBLISH_ALL:              "true"
   script:
     - rusty-cachier snapshot create
     - git clone
