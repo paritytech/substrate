@@ -123,7 +123,7 @@ impl<Block: BlockT, BE: Backend<Block> + 'static> SubscriptionHandle<Block, BE> 
 		}
 
 		self.backend
-			.pin_block(hash.clone())
+			.pin_block(hash)
 			.map_err(|err| SubscriptionManagementError::Custom(err.to_string()))?;
 		Ok(inner.blocks.insert(hash))
 	}
