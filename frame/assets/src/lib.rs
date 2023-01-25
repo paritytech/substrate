@@ -152,7 +152,7 @@ pub use types::*;
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{
-		AtLeast32BitUnsigned, Bounded, CheckedAdd, CheckedSub, Saturating, StaticLookup, Zero,
+		AtLeast32BitUnsigned, CheckedAdd, CheckedSub, Saturating, StaticLookup, Zero,
 	},
 	ArithmeticError, TokenError,
 };
@@ -427,7 +427,7 @@ pub mod pallet {
 					*amount,
 					|details| -> DispatchResult {
 						debug_assert!(
-							T::Balance::max_value() - details.supply >= *amount,
+							details.supply.checked_add(&amount).is_some(),
 							"checked in prep; qed"
 						);
 						details.supply = details.supply.saturating_add(*amount);
