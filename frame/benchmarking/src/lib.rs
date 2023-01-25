@@ -265,7 +265,7 @@ pub mod v2 {
 
 	impl<const A: u32, const B: u32> ParamRange for Linear<A, B> {
 		fn start(&self) -> u32 {
-			return A
+			A
 		}
 
 		fn end(&self) -> u32 {
