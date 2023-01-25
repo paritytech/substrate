@@ -625,36 +625,13 @@ impl<H: Hasher> SharedTrieCache<H> {
 		let mut node_cache_inline_budget = (node_cache_budget as f32 * 0.70) as usize;
 
 		// Calculate how much memory the maps will be allowed to hold inline given our budget.
-		let mut value_cache_max_inline_size;
-		loop {
-			// The map is resized in powers of two, so we'll almost certainly blow our inline
-			// budget.
-			value_cache_max_inline_size =
-				SharedValueCacheMap::<H::Out>::memory_usage_for_memory_budget(
-					value_cache_inline_budget,
-				);
+		let value_cache_max_inline_size =
+			SharedValueCacheMap::<H::Out>::memory_usage_for_memory_budget(
+				value_cache_inline_budget,
+			);
 
-			if value_cache_max_inline_size > value_cache_inline_budget {
-				// Lower our budget and try again.
-				value_cache_inline_budget = (value_cache_inline_budget as f32 * 0.90) as usize;
-			} else {
-				break
-			}
-		}
-
-		let mut node_cache_max_inline_size;
-		loop {
-			node_cache_max_inline_size =
-				SharedNodeCacheMap::<H::Out>::memory_usage_for_memory_budget(
-					node_cache_inline_budget,
-				);
-
-			if node_cache_max_inline_size > node_cache_inline_budget {
-				node_cache_inline_budget *= (node_cache_inline_budget as f32 * 0.90) as usize;
-			} else {
-				break
-			}
-		}
+		let node_cache_max_inline_size =
+			SharedNodeCacheMap::<H::Out>::memory_usage_for_memory_budget(node_cache_inline_budget);
 
 		// And this is how much data we'll at most keep on the heap for each cache.
 		let value_cache_max_heap_size = value_cache_budget - value_cache_max_inline_size;
