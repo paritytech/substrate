@@ -280,14 +280,23 @@ mod on_nominator_update {
 mod on_validator_add {
 	use super::*;
 	#[test]
-	fn noop_when_in_the_list() {
+	fn not_updating_when_in_the_list() {
 		ExtBuilder::default().build_and_execute(|| {
-			assert_eq!(VoterList::count(), 0);
-
 			// usual user, validator, nominator
 			for id in [1, 10, 20] {
 				let _ = VoterList::on_insert(id, 1000);
-				assert_storage_noop!(StakeTracker::on_validator_add(&id));
+				let _ = TargetList::on_insert(id, 1000);
+				ApprovalStake::<Runtime>::set(&id, Some(1000));
+
+				StakeTracker::on_validator_add(&id);
+				assert_eq!(VoterList::get_score(&id).unwrap(), 1000);
+				assert_eq!(TargetList::get_score(&id).unwrap(), 1000);
+				// only updates ApprovalStake as it allows for `upsert` due to the fact that it's
+				// never removed, unless unstaked
+				assert_eq!(
+					StakeTracker::approval_stake(&id).unwrap(),
+					1000 + StakeTracker::slashable_balance_of(&id)
+				)
 			}
 		});
 	}
@@ -314,6 +323,14 @@ mod on_validator_add {
 				assert_eq!(
 					VoterList::get_score(&id).unwrap(),
 					StakeTracker::to_vote(Staking::stake(&id).map(|s| s.active).unwrap())
+				);
+				assert_eq!(
+					TargetList::get_score(&id).unwrap(),
+					StakeTracker::slashable_balance_of(&id)
+				);
+				assert_eq!(
+					StakeTracker::approval_stake(&id).unwrap(),
+					StakeTracker::slashable_balance_of(&id)
 				);
 			}
 		});
@@ -397,7 +414,7 @@ mod on_unstake {
 	#[test]
 	fn removes_approval_stake() {
 		ExtBuilder::default().build_and_execute(|| {
-			// usual user, validator, nominator, not bonded
+			// anybody
 			for id in [1, 10, 20, 30] {
 				ApprovalStake::<Runtime>::insert(id, 10);
 				StakeTracker::on_unstake(&id);
