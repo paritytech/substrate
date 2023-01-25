@@ -13,7 +13,7 @@
 import subprocess, sys
 
 # Get all crates
-output = subprocess.check_output(["cargo", "tree", "--workspace", "--depth", "0", "--prefix", "none"])
+output = subprocess.check_output(["cargo", "tree", "--locked", "--workspace", "--depth", "0", "--prefix", "none"])
 
 # Convert the output into a proper list
 crates = []
