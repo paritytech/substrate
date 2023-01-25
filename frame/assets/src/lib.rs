@@ -151,9 +151,7 @@ pub use types::*;
 
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{
-		AtLeast32BitUnsigned, CheckedAdd, CheckedSub, Saturating, StaticLookup, Zero,
-	},
+	traits::{AtLeast32BitUnsigned, CheckedAdd, CheckedSub, Saturating, StaticLookup, Zero},
 	ArithmeticError, TokenError,
 };
 use sp_std::{borrow::Borrow, prelude::*};
