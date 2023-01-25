@@ -216,7 +216,14 @@ pub mod pallet {
 		/// The time implementation used to supply timestamps to contracts through `seal_now`.
 		type Time: Time;
 
-		/// The generator used to supply randomness to contracts through `seal_random`
+		/// The generator used to supply randomness to contracts through `seal_random`.
+		///
+		/// # Deprecated
+		///
+		/// Codes using the randomness functionality cannot be uploaded. Neither can contracts
+		/// be instantiated from existing codes that use this deprecated functionality. It will
+		/// be removed eventually. Hence for new `pallet-contracts` deployments it is okay
+		/// to supply a dummy implementation for this type (because it is never used).
 		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
 
 		/// The currency in which fees are paid and contract balances are held.

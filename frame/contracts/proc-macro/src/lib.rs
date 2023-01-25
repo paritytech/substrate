@@ -162,6 +162,8 @@ struct HostFn {
 	returns: HostFnReturn,
 	is_stable: bool,
 	alias_to: Option<String>,
+	/// Formulating the predicate inverted makes the expression using it simpler.
+	not_deprecated: bool,
 }
 
 enum HostFnReturn {
@@ -199,13 +201,14 @@ impl HostFn {
 
 		// process attributes
 		let msg =
-			"only #[version(<u8>)], #[unstable] and #[prefixed_alias] attributes are allowed.";
+			"only #[version(<u8>)], #[unstable], #[prefixed_alias] and #[deprecated] attributes are allowed.";
 		let span = item.span();
 		let mut attrs = item.attrs.clone();
 		attrs.retain(|a| !a.path.is_ident("doc"));
 		let mut maybe_module = None;
 		let mut is_stable = true;
 		let mut alias_to = None;
+		let mut not_deprecated = true;
 		while let Some(attr) = attrs.pop() {
 			let ident = attr.path.get_ident().ok_or(err(span, msg))?.to_string();
 			match ident.as_str() {
@@ -230,12 +233,22 @@ impl HostFn {
 						item.sig.ident.span(),
 					);
 				},
+				"deprecated" => {
+					if !not_deprecated {
+						return Err(err(span, "#[deprecated] can only be specified once"))
+					}
+					not_deprecated = false;
+				},
 				_ => return Err(err(span, msg)),
 			}
 		}
 		let name = item.sig.ident.to_string();
 
-		// process arguments: The first and second arg are treated differently (ctx, memory)
+		if !(is_stable || not_deprecated) {
+			return Err(err(span, "#[deprecated] is mutually exclusive with #[unstable]"))
+		}
+
+		// process arguments: The first and second args are treated differently (ctx, memory)
 		// they must exist and be `ctx: _` and `memory: _`.
 		let msg = "Every function must start with two inferred parameters: ctx: _ and memory: _";
 		let special_args = item
@@ -330,6 +343,7 @@ impl HostFn {
 							returns,
 							is_stable,
 							alias_to,
+							not_deprecated,
 						})
 					},
 					_ => Err(err(span, &msg)),
@@ -510,7 +524,12 @@ fn expand_impls(def: &mut EnvDef) -> TokenStream2 {
 	quote! {
 		impl<'a, E: Ext> crate::wasm::Environment<crate::wasm::runtime::Runtime<'a, E>> for Env
 		{
-			fn define(store: &mut ::wasmi::Store<crate::wasm::Runtime<E>>, linker: &mut ::wasmi::Linker<crate::wasm::Runtime<E>>, allow_unstable: bool) -> Result<(), ::wasmi::errors::LinkerError> {
+			fn define(
+				store: &mut ::wasmi::Store<crate::wasm::Runtime<E>>,
+				linker: &mut ::wasmi::Linker<crate::wasm::Runtime<E>>,
+				allow_unstable: AllowUnstableInterface,
+				allow_deprecated: AllowDeprecatedInterface,
+			) -> Result<(),::wasmi::errors::LinkerError> {
 				#impls
 				Ok(())
 			}
@@ -518,7 +537,12 @@ fn expand_impls(def: &mut EnvDef) -> TokenStream2 {
 
 		impl crate::wasm::Environment<()> for Env
 		{
-			fn define(store: &mut ::wasmi::Store<()>, linker: &mut ::wasmi::Linker<()>, allow_unstable: bool) -> Result<(), ::wasmi::errors::LinkerError> {
+			fn define(
+				store: &mut ::wasmi::Store<()>,
+				linker: &mut ::wasmi::Linker<()>,
+				allow_unstable: AllowUnstableInterface,
+				allow_deprecated: AllowDeprecatedInterface,
+			) -> Result<(), ::wasmi::errors::LinkerError> {
 				#dummy_impls
 				Ok(())
 			}
@@ -542,6 +566,7 @@ fn expand_functions(
 			&f.item.sig.output
 		);
 		let is_stable = f.is_stable;
+		let not_deprecated = f.not_deprecated;
 
 		// If we don't expand blocks (implementing for `()`) we change a few things:
 		// - We replace any code by unreachable!
@@ -582,9 +607,13 @@ fn expand_functions(
 		};
 
 		quote! {
-			// We need to allow unstable functions when runtime benchmarks are performed because
-			// we generate the weights even when those interfaces are not enabled.
-			if ::core::cfg!(feature = "runtime-benchmarks") || #is_stable || allow_unstable {
+			// We need to allow all interfaces when runtime benchmarks are performed because
+			// we generate the weights even when those interfaces are not enabled. This
+			// is necessary as the decision whether we allow unstable or deprecated functions
+			// is a decision made at runtime. Generation of the weights happens statically.
+			if ::core::cfg!(feature = "runtime-benchmarks") ||
+				((#is_stable || __allow_unstable__) && (#not_deprecated || __allow_deprecated__))
+			{
 				#allow_unused
 				linker.define(#module, #name, ::wasmi::Func::wrap(&mut*store, |mut __caller__: ::wasmi::Caller<#host_state>, #( #params, )*| -> #wasm_output {
 					let mut func = #inner;
@@ -596,6 +625,8 @@ fn expand_functions(
 		}
 	});
 	quote! {
+		let __allow_unstable__ = matches!(allow_unstable, AllowUnstableInterface::Yes);
+		let __allow_deprecated__ = matches!(allow_deprecated, AllowDeprecatedInterface::Yes);
 		#( #impls )*
 	}
 }
@@ -690,6 +721,16 @@ fn expand_functions(
 /// additional `pallet_contracts::api_doc::seal0`, `pallet_contracts::api_doc::seal1`,
 /// `...` modules each having its `Api` trait containing functions holding documentation for every
 /// host function defined by the macro.
+///
+/// # Deprecated Interfaces
+///
+/// An interface can be annotated with `#[deprecated]`. It is mutually exclusive with `#[unstable]`.
+/// Deprecated interfaces have the following properties:
+/// 	- New contract codes utilizing those interfaces cannot be uploaded.
+/// 	- New contracts from existing codes utilizing those interfaces cannot be instantiated.
+/// - Existing contracts containing those interfaces still work.
+///
+/// Those interfaces will eventually be removed.
 ///
 /// To build up these docs, run:
 ///
