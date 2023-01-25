@@ -803,6 +803,8 @@ pub struct ExposureOverview<Balance: HasCompact> {
 	pub nominator_count: u32,
 	/// Number of pages of backers.
 	pub page_count: PageIndex,
+	// TODO(ank4n): to discuss: should we keep a snapshot of validator commission for each era?
+	// Seems more fair to calculate rewards according to validator's commission at that era.
 }
 
 impl<Balance: Default + HasCompact> Default for ExposureOverview<Balance> {
