@@ -450,6 +450,6 @@ cargo-check-each-crate-macos:
     # TODO: enable rusty-cachier once it supports Mac
     # TODO: use parallel jobs, as per cargo-check-each-crate, once more Mac runners are available
     # - time ./scripts/ci/gitlab/check-each-crate.py 1 1
-    - time cargo check --all --locked
+    - time cargo check --workspace --locked
   tags:
     - osx
