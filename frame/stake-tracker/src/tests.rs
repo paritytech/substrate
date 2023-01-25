@@ -373,7 +373,7 @@ mod on_validator_remove {
 mod on_nominator_remove {
 	use super::*;
 	#[test]
-	fn noop_when_not_in_the_list() {
+	fn noop_when_not_in_the_list_and_no_nominations() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(VoterList::count(), 0);
 

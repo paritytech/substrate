@@ -216,6 +216,10 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 			let _ = ApprovalStake::<T>::mutate(&validator, |x: &mut Option<BalanceOf<T>>| {
 				*x = x.map(|b| b.saturating_sub(score))
 			});
+			let _ = T::TargetList::on_update(
+				&validator,
+				Self::approval_stake(&validator).unwrap_or_default(),
+			);
 		}
 	}
 
