@@ -4,6 +4,11 @@
 # It's relevant to check workspace crates individually because otherwise their compilation problems
 # due to feature misconfigurations won't be caught, as exemplified by
 # https://github.com/paritytech/substrate/issues/12705
+#
+# `check-each-crate.py target_group groups_total`
+#
+# - `target_group`: Integer starting from 1, the group this script should execute.
+# - `groups_total`: Integer starting from 1, total number of groups.
 
 import subprocess, sys
 
@@ -24,22 +29,25 @@ target_group = int(sys.argv[1]) - 1
 groups_total = int(sys.argv[2])
 
 if len(crates) == 0:
-	print("No crates detected!")
+	print("No crates detected!", file=sys.stderr)
 	sys.exit(1)
 
-print(f"Total crates: {len(crates)}")
+print(f"Total crates: {len(crates)}", file=sys.stderr)
 
-crates_per_group = (len(crates) + groups_total - 1) // groups_total
+crates_per_group = len(crates) // groups_total
 
-print(f"Crates per group: {crates_per_group}")
+print(f"Crates per group: {crates_per_group}", file=sys.stderr)
 
 # Check each crate
 for i in range(0, crates_per_group):
-	print(f"Checking {crates[crates_per_group * target_group + i]}")
+	crate = crates_per_group * target_group + i
 
-	res = subprocess.run(
-		["cargo", "check", "--locked", "-p", crates[crates_per_group * target_group + i]],
-	)
+	if crate >= len(crates):
+		break
+
+	print(f"Checking {crates[crate]}", file=sys.stderr)
+
+	res = subprocess.run(["cargo", "check", "--locked", "-p", crates[crate]])
 
 	if res.returncode != 0:
 		sys.exit(1)
