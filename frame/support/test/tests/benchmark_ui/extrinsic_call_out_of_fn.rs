@@ -1,4 +1,4 @@
-use frame_benchmarking::*;
+use frame_benchmarking::v2::*;
 
 #[extrinsic_call]
 mod stuff {}

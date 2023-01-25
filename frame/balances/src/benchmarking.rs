@@ -22,7 +22,7 @@
 use super::*;
 use crate::Pallet as Balances;
 
-use frame_benchmarking::*;
+use frame_benchmarking::v2::*;
 use frame_system::RawOrigin;
 
 const SEED: u32 = 0;
