@@ -39,9 +39,6 @@
 //!   number of signed origins.
 //! * `approve_as_multi` - Approve a call from a composite origin.
 //! * `cancel_as_multi` - Cancel a call from a composite origin.
-//!
-//! [`Call`]: ./enum.Call.html
-//! [`Config`]: ./trait.Config.html
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
