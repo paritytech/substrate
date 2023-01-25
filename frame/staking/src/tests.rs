@@ -4082,7 +4082,6 @@ fn test_commission_paid_only_once() {
 			// no reward paid to validator for pages other than 0
 			Balances::free_balance(&10);
 		}
-
 	});
 }
 
