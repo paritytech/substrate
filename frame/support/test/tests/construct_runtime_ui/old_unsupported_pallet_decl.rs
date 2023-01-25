@@ -13,7 +13,7 @@ mod pallet_old {
 
 }
 construct_runtime! {
-	pub enum Runtime where
+	pub struct Runtime where
 		UncheckedExtrinsic = UncheckedExtrinsic,
 		Block = Block,
 		NodeBlock = Block,
