@@ -1143,7 +1143,7 @@ dependencies = [
  "cranelift-entity",
  "cranelift-isle",
  "gimli 0.26.2",
- "hashbrown",
+ "hashbrown 0.12.3",
  "log",
  "regalloc2",
  "smallvec",
