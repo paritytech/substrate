@@ -147,38 +147,41 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 	}
 
 	fn on_nominator_update(who: &T::AccountId, prev_nominations: Vec<T::AccountId>) {
-		let nominations = T::Staking::nominations(who).unwrap_or_default();
-		let new = nominations.iter().filter(|n| !prev_nominations.contains(&n));
-		let obsolete = prev_nominations.iter().filter(|n| !nominations.contains(&n));
+		if let Some(nominations) = T::Staking::nominations(who) {
+			let new = nominations.iter().filter(|n| !prev_nominations.contains(&n));
+			let obsolete = prev_nominations.iter().filter(|n| !nominations.contains(&n));
 
-		let update_approval_stake = |nomination: &T::AccountId, new_stake: BalanceOf<T>| {
-			ApprovalStake::<T>::set(&nomination, Some(new_stake));
+			let update_approval_stake = |nomination: &T::AccountId, new_stake: BalanceOf<T>| {
+				ApprovalStake::<T>::set(&nomination, Some(new_stake));
 
-			if T::TargetList::contains(&nomination) {
-				let _ = T::TargetList::on_update(&nomination, new_stake);
-			}
-		};
+				if T::TargetList::contains(&nomination) {
+					let _ = T::TargetList::on_update(&nomination, new_stake);
+				}
+			};
 
-		for nomination in new {
-			// Create a new entry if it does not exist
-			let new_stake = Self::approval_stake(&nomination)
-				.unwrap_or_default()
-				.saturating_add(Self::slashable_balance_of(who));
+			for nomination in new {
+				// Create a new entry if it does not exist
+				let new_stake = Self::approval_stake(&nomination)
+					.unwrap_or_default()
+					.saturating_add(Self::slashable_balance_of(who));
 
-			update_approval_stake(&nomination, new_stake);
-		}
-
-		for nomination in obsolete {
-			if let Some(new_stake) = Self::approval_stake(&nomination) {
-				let new_stake = new_stake.saturating_sub(Self::slashable_balance_of(who));
 				update_approval_stake(&nomination, new_stake);
 			}
-		}
 
-		// NOTE: We ignore the result here, because this method can be called when the nominator is
-		// already in the list, just changing their nominations.
-		let _ =
-			T::VoterList::on_insert(who.clone(), Self::to_vote(Self::slashable_balance_of(who)));
+			for nomination in obsolete {
+				if let Some(new_stake) = Self::approval_stake(&nomination) {
+					let new_stake = new_stake.saturating_sub(Self::slashable_balance_of(who));
+					update_approval_stake(&nomination, new_stake);
+				}
+			}
+
+			// NOTE: We ignore the result here, because this method can be called when the nominator
+			// is already in the list, just changing their nominations.
+			let _ = T::VoterList::on_insert(
+				who.clone(),
+				Self::to_vote(Self::slashable_balance_of(who)),
+			);
+		}
 	}
 
 	// NOTE: This should only be called if that stash isn't already a validator. Because we don't

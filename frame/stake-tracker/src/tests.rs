@@ -22,7 +22,7 @@ mod on_stake_update {
 			StakeTracker::on_stake_update(validator_id, None);
 			assert_eq!(
 				ApprovalStake::<Runtime>::get(validator_id).unwrap(),
-				Staking::stake(validator_id).unwrap().active
+				StakeTracker::slashable_balance_of(validator_id)
 			);
 			assert_eq!(ApprovalStake::<Runtime>::count(), 1);
 
@@ -30,11 +30,12 @@ mod on_stake_update {
 			StakeTracker::on_stake_update(&20, None);
 			assert_eq!(
 				ApprovalStake::<Runtime>::get(validator_id).unwrap(),
-				Staking::stake(validator_id).unwrap().active + Staking::stake(&20).unwrap().active
+				StakeTracker::slashable_balance_of(validator_id) +
+					StakeTracker::slashable_balance_of(&20)
 			);
 			assert_eq!(
-				ApprovalStake::<Runtime>::get(&11).unwrap(),
-				Staking::stake(&20).unwrap().active
+				StakeTracker::approval_stake(&11).unwrap(),
+				StakeTracker::slashable_balance_of(&20)
 			);
 			assert_eq!(ApprovalStake::<Runtime>::count(), 2);
 			assert_eq!(VoterList::count(), 0);
@@ -85,13 +86,11 @@ mod on_stake_update {
 			// VoterList logic does not care about previous stake so we test it only once.
 			assert_eq!(
 				VoterList::get_score(&validator_id).unwrap(),
-				Pallet::<Runtime>::to_vote(
-					Staking::stake(&validator_id).map(|s| s.active).unwrap()
-				)
+				StakeTracker::to_vote(StakeTracker::slashable_balance_of(&validator_id))
 			);
 			assert_eq!(
 				TargetList::get_score(&validator_id).unwrap(),
-				Staking::stake(&validator_id).map(|s| s.active).unwrap()
+				StakeTracker::slashable_balance_of(&validator_id)
 			);
 
 			// Previous stake is more than current 10 vs 9, ApprovalStake decrements by 1.
@@ -102,10 +101,10 @@ mod on_stake_update {
 
 			assert_eq!(
 				TargetList::get_score(&validator_id).unwrap(),
-				Staking::stake(&validator_id).map(|s| s.active - 1).unwrap()
+				StakeTracker::slashable_balance_of(&validator_id) - 1
 			);
 
-			// Previous stake is less than current 8 vs 9, ApprovalStake increments by 1.
+			// Previous stake is less than current 8 vs 9, ApprovalStake increments	 by 1.
 			let _ = StakeTracker::on_stake_update(
 				&validator_id,
 				Some(Stake { stash: validator_id, active: 8, total: 9 }),
@@ -113,7 +112,7 @@ mod on_stake_update {
 
 			assert_eq!(
 				TargetList::get_score(&validator_id).unwrap(),
-				Staking::stake(&validator_id).map(|s| s.active).unwrap()
+				StakeTracker::slashable_balance_of(&validator_id)
 			);
 
 			assert_eq!(VoterList::count(), 1);
@@ -127,14 +126,12 @@ mod on_stake_update {
 			let _ = StakeTracker::on_stake_update(&nominator_id, None);
 			assert_eq!(
 				VoterList::get_score(&nominator_id).unwrap(),
-				Pallet::<Runtime>::to_vote(
-					Staking::stake(&nominator_id).map(|s| s.active).unwrap()
-				)
+				StakeTracker::to_vote(StakeTracker::slashable_balance_of(&nominator_id))
 			);
 			assert_eq!(
 				TargetList::get_score(&validator_id).unwrap(),
-				Staking::stake(&nominator_id).map(|s| s.active).unwrap() +
-					Staking::stake(&validator_id).map(|s| s.active).unwrap()
+				StakeTracker::slashable_balance_of(&nominator_id) +
+					StakeTracker::slashable_balance_of(&validator_id)
 			);
 			assert_eq!(
 				ApprovalStake::<Runtime>::get(validator_id).unwrap(),
@@ -142,7 +139,7 @@ mod on_stake_update {
 			);
 			assert_eq!(
 				TargetList::get_score(&validator2_id).unwrap(),
-				Staking::stake(&nominator_id).map(|s| s.active).unwrap()
+				StakeTracker::slashable_balance_of(&nominator_id)
 			);
 			assert_eq!(
 				ApprovalStake::<Runtime>::get(validator2_id).unwrap(),
@@ -156,41 +153,66 @@ mod on_stake_update {
 
 mod on_nominator_update {
 	use super::*;
+	use frame_support::assert_err;
 	#[test]
-	fn noop_when_in_the_list() {
+	fn noop_for_non_nominator() {
 		ExtBuilder::default().build_and_execute(|| {
-			assert_eq!(VoterList::count(), 0);
-
-			// usual user, validator, nominator
-			for id in [1, 10, 20] {
-				let _ = VoterList::on_insert(id, 1000);
+			// usual user, validator, not bonded user
+			for id in [1, 10, 30] {
 				assert_storage_noop!(StakeTracker::on_nominator_update(&id, Vec::new()));
 			}
 		});
 	}
 
 	#[test]
-	#[should_panic]
-	fn panics_when_not_bonded() {
+	fn nominator_in_the_list_empty_nominations() {
 		ExtBuilder::default().build_and_execute(|| {
-			assert_eq!(VoterList::count(), 0);
-			// user without stake
-			assert_storage_noop!(StakeTracker::on_nominator_update(&30, Vec::new()));
+			let _ = VoterList::on_insert(22, 1);
+			assert_storage_noop!(StakeTracker::on_nominator_update(&22, Vec::new()));
+			StakeTracker::on_nominator_update(&23, Vec::new());
+			assert_eq!(
+				VoterList::get_score(&23).unwrap(),
+				StakeTracker::to_vote(Staking::stake(&23).map(|s| s.active).unwrap())
+			)
 		});
 	}
 
 	#[test]
 	// It is the caller's problem to make sure `on_nominator_update` is called in the right context.
-	fn works_for_everyone() {
+	fn nomination_scenarios() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(VoterList::count(), 0);
 
-			// usual user, validator, nominator
-			for id in [1, 10, 20] {
-				StakeTracker::on_nominator_update(&id, Vec::new());
+			// no prev nominations and nominations are not in TargetList
+			StakeTracker::on_nominator_update(&20, Vec::new());
+			assert_eq!(
+				VoterList::get_score(&20).unwrap(),
+				StakeTracker::to_vote(Staking::stake(&20).map(|s| s.active).unwrap())
+			);
+
+			for nomination in Staking::nominations(&20).unwrap() {
+				assert_err!(
+					TargetList::get_score(&nomination),
+					pallet_bags_list::ListError::NodeNotFound
+				);
+			}
+
+			// no prev nominations and nominations are in TargetList
+			for nomination in Staking::nominations(&20).unwrap() {
+				let _ = StakeTracker::on_validator_add(&nomination);
+			}
+
+			StakeTracker::on_nominator_update(&20, Vec::new());
+			assert_eq!(
+				VoterList::get_score(&20).unwrap(),
+				StakeTracker::to_vote(Staking::stake(&20).unwrap().active)
+			);
+
+			for nomination in Staking::nominations(&20).unwrap() {
 				assert_eq!(
-					VoterList::get_score(&id).unwrap(),
-					Pallet::<Runtime>::to_vote(Staking::stake(&id).map(|s| s.active).unwrap())
+					TargetList::get_score(&nomination).unwrap(),
+					StakeTracker::slashable_balance_of(&20)
+						.saturating_add(StakeTracker::slashable_balance_of(&nomination))
 				);
 			}
 		});
@@ -233,7 +255,7 @@ mod on_validator_add {
 				StakeTracker::on_validator_add(&id);
 				assert_eq!(
 					VoterList::get_score(&id).unwrap(),
-					Pallet::<Runtime>::to_vote(Staking::stake(&id).map(|s| s.active).unwrap())
+					StakeTracker::to_vote(Staking::stake(&id).map(|s| s.active).unwrap())
 				);
 			}
 		});

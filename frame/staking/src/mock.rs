@@ -314,6 +314,7 @@ impl pallet_stake_tracker::Config for Test {
 	type Currency = Balances;
 	type Staking = Staking;
 	type VoterList = VoterBagsList;
+	type TargetList = ();
 }
 
 pub(crate) type StakingCall = crate::Call<Test>;
