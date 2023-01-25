@@ -269,7 +269,7 @@ pub mod v2 {
 		}
 
 		fn end(&self) -> u32 {
-			return B
+			B
 		}
 	}
 }
