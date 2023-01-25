@@ -36,14 +36,18 @@ print(f"Total crates: {len(crates)}", file=sys.stderr)
 
 crates_per_group = len(crates) // groups_total
 
+# If this is the last runner, we need to take care of crates
+# after the group that we lost because of the integer division.
+if target_group + 1 == groups_total:
+	overflow_crates = len(crates) % groups_total
+else:
+	overflow_crates = 0
+
 print(f"Crates per group: {crates_per_group}", file=sys.stderr)
 
 # Check each crate
-for i in range(0, crates_per_group):
+for i in range(0, crates_per_group + rest_crates):
 	crate = crates_per_group * target_group + i
-
-	if crate >= len(crates):
-		break
 
 	print(f"Checking {crates[crate]}", file=sys.stderr)
 
