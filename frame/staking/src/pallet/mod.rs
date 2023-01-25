@@ -684,7 +684,6 @@ pub mod pallet {
 			<ErasStakersOverview<T>>::get(&era, validator).page_count.max(1)
 		}
 
-		// TODO(ank4n) add commission should only be paid in page 0 test
 		/// Returns validator commission for this era and page.
 		pub(crate) fn get_validator_commission(
 			era: EraIndex,
