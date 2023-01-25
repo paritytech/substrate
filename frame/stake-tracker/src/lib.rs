@@ -204,7 +204,6 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 		let _ = T::TargetList::on_remove(who);
 		let _ = T::VoterList::on_remove(who);
 
-		// This will panic if the validator is not in the map, but this should never happen!
 		let _ = ApprovalStake::<T>::mutate(who, |x: &mut Option<BalanceOf<T>>| {
 			*x = x.map(|b| b.saturating_sub(Self::slashable_balance_of(who)))
 		});

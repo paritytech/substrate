@@ -322,7 +322,7 @@ mod on_validator_add {
 				StakeTracker::on_validator_add(&id);
 				assert_eq!(
 					VoterList::get_score(&id).unwrap(),
-					StakeTracker::to_vote(Staking::stake(&id).map(|s| s.active).unwrap())
+					StakeTracker::to_vote(StakeTracker::slashable_balance_of(&id))
 				);
 				assert_eq!(
 					TargetList::get_score(&id).unwrap(),
@@ -340,10 +340,8 @@ mod on_validator_add {
 mod on_validator_remove {
 	use super::*;
 	#[test]
-	fn noop_when_not_in_the_list() {
+	fn noop_if_not_in_list() {
 		ExtBuilder::default().build_and_execute(|| {
-			assert_eq!(VoterList::count(), 0);
-
 			// usual user, validator, nominator, not bonded
 			for id in [1, 10, 20, 30] {
 				assert_storage_noop!(StakeTracker::on_validator_remove(&id));
@@ -352,17 +350,21 @@ mod on_validator_remove {
 	}
 
 	#[test]
-	// It is the caller's problem to make sure `on_validator_remove` is called in the right context.
-	fn works_for_everyone_also_unbonded() {
+	// It is a caller's problem to make sure `on_validator_remove` is called in the right context.
+	fn works_for_everyone() {
 		ExtBuilder::default().build_and_execute(|| {
-			assert_eq!(VoterList::count(), 0);
-
-			// usual user, validator, nominator
+			// usual user, validator, nominator, unbonded
 			for id in [1, 10, 20, 30] {
-				let _ = VoterList::on_insert(id, 100);
-				assert_eq!(VoterList::count(), 1);
+				assert_ok!(VoterList::on_insert(id, 100));
+				assert_ok!(TargetList::on_insert(id, 100));
+				ApprovalStake::<Runtime>::set(&id, Some(100));
 				StakeTracker::on_validator_remove(&id);
 				assert_eq!(VoterList::count(), 0);
+				assert_eq!(TargetList::count(), 0);
+				assert_eq!(
+					StakeTracker::approval_stake(&id).unwrap(),
+					100 - StakeTracker::slashable_balance_of(&id)
+				);
 			}
 		});
 	}
