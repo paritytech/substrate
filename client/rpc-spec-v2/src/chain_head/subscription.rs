@@ -52,25 +52,15 @@ struct SubscriptionInner<Block: BlockT> {
 
 /// Manage the blocks of a specific subscription ID.
 pub struct SubscriptionHandle<Block: BlockT, BE: Backend<Block> + 'static> {
-	inner: Arc<RwLock<SubscriptionInner<Block>>>,
+	inner: RwLock<SubscriptionInner<Block>>,
 	/// The best reported block by this subscription.
 	/// Have this as a separate variable to easily share
 	/// the write guard with the RPC layer.
-	best_block: Arc<RwLock<Option<Block::Hash>>>,
+	best_block: RwLock<Option<Block::Hash>>,
 	/// Backend pinning / unpinning blocks.
+	///
+	/// The `Arc` is handled one level-above, but substrate exposes the backend as Arc<T>.
 	backend: Arc<BE>,
-}
-
-// We cannot derive `Clone` because that would imply the `Clone` bound on the `BE` type.
-// However, that is not necessary since we hold an `Arc<BE>`.
-impl<Block: BlockT, BE: Backend<Block> + 'static> Clone for SubscriptionHandle<Block, BE> {
-	fn clone(&self) -> SubscriptionHandle<Block, BE> {
-		SubscriptionHandle {
-			inner: self.inner.clone(),
-			best_block: self.best_block.clone(),
-			backend: self.backend.clone(),
-		}
-	}
 }
 
 impl<Block: BlockT, BE: Backend<Block> + 'static> SubscriptionHandle<Block, BE> {
@@ -82,13 +72,13 @@ impl<Block: BlockT, BE: Backend<Block> + 'static> SubscriptionHandle<Block, BE> 
 		backend: Arc<BE>,
 	) -> Self {
 		SubscriptionHandle {
-			inner: Arc::new(RwLock::new(SubscriptionInner {
+			inner: RwLock::new(SubscriptionInner {
 				runtime_updates,
 				tx_stop: Some(tx_stop),
 				blocks: HashSet::new(),
 				max_pinned_blocks,
-			})),
-			best_block: Arc::new(RwLock::new(None)),
+			}),
+			best_block: RwLock::new(None),
 			backend,
 		}
 	}
@@ -114,6 +104,7 @@ impl<Block: BlockT, BE: Backend<Block> + 'static> SubscriptionHandle<Block, BE> 
 
 		if inner.blocks.len() == inner.max_pinned_blocks {
 			// We have reached the limit. However, the block can be already inserted.
+
 			if inner.blocks.contains(&hash) {
 				return Ok(false)
 			} else {
@@ -132,6 +123,7 @@ impl<Block: BlockT, BE: Backend<Block> + 'static> SubscriptionHandle<Block, BE> 
 	/// Returns whether the value was present in the set.
 	pub fn unpin_block(&self, hash: &Block::Hash) -> bool {
 		let mut inner = self.inner.write();
+
 		if inner.blocks.remove(hash) {
 			// Unpin the block if it was previously pinned.
 			self.backend.unpin_block(*hash);
@@ -161,11 +153,23 @@ impl<Block: BlockT, BE: Backend<Block> + 'static> SubscriptionHandle<Block, BE> 
 	}
 }
 
+impl<Block: BlockT, BE: Backend<Block> + 'static> Drop for SubscriptionHandle<Block, BE> {
+	fn drop(&mut self) {
+		let mut inner = self.inner.write();
+
+		// Unpin any remaining blocks of this subscription.
+		for hash in &inner.blocks {
+			self.backend.unpin_block(*hash);
+		}
+		inner.blocks.clear();
+	}
+}
+
 /// Manage block pinning / unpinning for subscription IDs.
 pub struct SubscriptionManagement<Block: BlockT, BE: Backend<Block> + 'static> {
 	/// Manage subscription by mapping the subscription ID
 	/// to a set of block hashes.
-	inner: RwLock<HashMap<String, SubscriptionHandle<Block, BE>>>,
+	inner: RwLock<HashMap<String, Arc<SubscriptionHandle<Block, BE>>>>,
 }
 
 impl<Block: BlockT, BE: Backend<Block> + 'static> SubscriptionManagement<Block, BE> {
@@ -185,17 +189,17 @@ impl<Block: BlockT, BE: Backend<Block> + 'static> SubscriptionManagement<Block, 
 		runtime_updates: bool,
 		max_pinned_blocks: usize,
 		backend: Arc<BE>,
-	) -> Option<(oneshot::Receiver<()>, SubscriptionHandle<Block, BE>)> {
+	) -> Option<(oneshot::Receiver<()>, Arc<SubscriptionHandle<Block, BE>>)> {
 		let mut subs = self.inner.write();
 
 		if let Entry::Vacant(entry) = subs.entry(subscription_id) {
 			let (tx_stop, rx_stop) = oneshot::channel();
-			let handle = SubscriptionHandle::<Block, BE>::new(
+			let handle = Arc::new(SubscriptionHandle::<Block, BE>::new(
 				runtime_updates,
 				tx_stop,
 				max_pinned_blocks,
 				backend,
-			);
+			));
 			entry.insert(handle.clone());
 			Some((rx_stop, handle))
 		} else {
@@ -213,7 +217,7 @@ impl<Block: BlockT, BE: Backend<Block> + 'static> SubscriptionManagement<Block, 
 	pub fn get_subscription(
 		&self,
 		subscription_id: &String,
-	) -> Option<SubscriptionHandle<Block, BE>> {
+	) -> Option<Arc<SubscriptionHandle<Block, BE>>> {
 		let subs = self.inner.write();
 		subs.get(subscription_id).and_then(|handle| Some(handle.clone()))
 	}
