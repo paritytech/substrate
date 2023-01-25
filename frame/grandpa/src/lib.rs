@@ -333,7 +333,7 @@ pub mod pallet {
 	/// members were responsible.
 	///
 	/// This is only used for validating equivocation proofs. An equivocation proof must
-	/// contain a key-ownership proof for a given session, therefore we need a way to tie
+	/// contains a key-ownership proof for a given session, therefore we need a way to tie
 	/// together sessions and GRANDPA set ids, i.e. we need to validate that a validator
 	/// was the owner of a given key on a given session, and what the active set ID was
 	/// during that session.
