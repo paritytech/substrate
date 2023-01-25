@@ -54,8 +54,6 @@ pub mod v1;
 pub use v1::*;
 
 /// Contains macros, structs, and traits associated with v2 of the pallet benchmarking syntax.
-/// This module contains macros, structs, and traits associated with v2 of the pallet
-/// benchmarking syntax.
 ///
 /// The [`v2::benchmarks`] and [`v2::instance_benchmarks`] macros can be used to designate a
 /// module as a benchmarking module that can contain benchmarks and benchmark tests. The
@@ -117,13 +115,14 @@ pub use v1::*;
 /// benchmarks using the `#[benchmark]` attribute, as shown in the example above.
 ///
 /// The `#[benchmark]` attribute expects a function definition with a blank return type and
-/// zero or more arguments whose names are valid [`BenchmarkParamater`]
-/// parameters, such as `x`, `y`, `a`, `b`, etc., and whose param types must implement
-/// [`ParamRange`]. At the moment the only valid type that implements
-/// [`ParamRange`] is [`Linear`].
+/// zero or more arguments whose names are valid
+/// [BenchmarkParameter](`crate::BenchmarkParameter`) parameters, such as `x`, `y`, `a`, `b`,
+/// etc., and whose param types must implement [ParamRange](`v2::ParamRange`). At the moment
+/// the only valid type that implements [ParamRange](`v2::ParamRange`) is
+/// [Linear](`v2::Linear`).
 ///
-/// The valid syntax for defining a [`Linear`] is `Linear<A, B>` where `A`, and `B` are
-/// valid integer literals (that fit in a `u32`), such that `B` >= `A`.
+/// The valid syntax for defining a [Linear](`v2::Linear`)is `Linear<A, B>` where `A`, and `B`
+/// are valid integer literals (that fit in a `u32`), such that `B` >= `A`.
 ///
 /// Note that the benchmark function definition does not actually expand as a function
 /// definition, but rather is used to automatically create a number of impls and structs
@@ -257,10 +256,10 @@ pub mod v2 {
 	///
 	/// See [`v2`] for more info.
 	pub trait ParamRange {
-		/// Represents the (inclusive) starting number of this [`ParamRange`].
+		/// Represents the (inclusive) starting number of this `ParamRange`.
 		fn start(&self) -> u32;
 
-		/// Represents the (inclusive) ending number of this [`ParamRange`]
+		/// Represents the (inclusive) ending number of this `ParamRange`.
 		fn end(&self) -> u32;
 	}
 

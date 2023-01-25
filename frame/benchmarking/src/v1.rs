@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Macro for benchmarking a FRAME runtime.
+//! Macros for benchmarking a FRAME runtime.
 
 use super::*;
 
