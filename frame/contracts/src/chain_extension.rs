@@ -227,7 +227,7 @@ impl<'a, 'b, E: Ext, S: State> Environment<'a, 'b, E, S> {
 	///
 	/// Weight is synonymous with gas in substrate.
 	pub fn charge_weight(&mut self, amount: Weight) -> Result<ChargedAmount> {
-		self.inner.runtime.charge_gas(RuntimeCosts::ChainExtension(amount.ref_time()))
+		self.inner.runtime.charge_gas(RuntimeCosts::ChainExtension(amount))
 	}
 
 	/// Adjust a previously charged amount down to its actual amount.
@@ -237,7 +237,7 @@ impl<'a, 'b, E: Ext, S: State> Environment<'a, 'b, E, S> {
 	pub fn adjust_weight(&mut self, charged: ChargedAmount, actual_weight: Weight) {
 		self.inner
 			.runtime
-			.adjust_gas(charged, RuntimeCosts::ChainExtension(actual_weight.ref_time()))
+			.adjust_gas(charged, RuntimeCosts::ChainExtension(actual_weight))
 	}
 
 	/// Grants access to the execution environment of the current contract call.
@@ -408,8 +408,7 @@ impl<'a, 'b, E: Ext, S: BufOut> Environment<'a, 'b, E, S> {
 			buffer,
 			allow_skip,
 			|len| {
-				weight_per_byte
-					.map(|w| RuntimeCosts::ChainExtension(w.ref_time().saturating_mul(len.into())))
+				weight_per_byte.map(|w| RuntimeCosts::ChainExtension(w.saturating_mul(len.into())))
 			},
 		)
 	}

@@ -608,7 +608,7 @@ fn set_item_metadata_should_work() {
 		);
 		assert_noop!(
 			Nfts::clear_metadata(RuntimeOrigin::signed(1), 1, 42),
-			Error::<Test>::UnknownCollection,
+			Error::<Test>::MetadataNotFound,
 		);
 		assert_ok!(Nfts::clear_metadata(RuntimeOrigin::root(), 0, 42));
 		assert!(!ItemMetadataOf::<Test>::contains_key(0, 42));
@@ -1267,7 +1267,7 @@ fn burn_works() {
 
 		assert_noop!(
 			Nfts::burn(RuntimeOrigin::signed(5), 0, 42, Some(5)),
-			Error::<Test>::UnknownCollection
+			Error::<Test>::UnknownItem
 		);
 
 		assert_ok!(Nfts::force_mint(RuntimeOrigin::signed(2), 0, 42, 5, default_item_config()));

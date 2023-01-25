@@ -152,65 +152,68 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		namespace: AttributeNamespace<T::AccountId>,
 		key: BoundedVec<u8, T::KeyLimit>,
 	) -> DispatchResult {
-		if let Some((_, deposit)) =
-			Attribute::<T, I>::take((collection, maybe_item, &namespace, &key))
-		{
-			let mut collection_details =
-				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
+		let (_, deposit) = Attribute::<T, I>::take((collection, maybe_item, &namespace, &key))
+			.ok_or(Error::<T, I>::AttributeNotFound)?;
+		let mut collection_details =
+			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 
-			if let Some(check_owner) = &maybe_check_owner {
-				if deposit.account != maybe_check_owner {
-					ensure!(
-						Self::is_valid_namespace(
-							&check_owner,
-							&namespace,
-							&collection,
-							&collection_details.owner,
-							&maybe_item,
-						)?,
-						Error::<T, I>::NoPermission
-					);
-				}
-
-				// can't clear `CollectionOwner` type attributes if the collection/item is locked
-				match namespace {
-					AttributeNamespace::CollectionOwner => match maybe_item {
-						None => {
-							let collection_config = Self::get_collection_config(&collection)?;
-							ensure!(
-								collection_config
-									.is_setting_enabled(CollectionSetting::UnlockedAttributes),
-								Error::<T, I>::LockedCollectionAttributes
-							)
-						},
-						Some(item) => {
-							// NOTE: if the item was previously burned, the ItemConfigOf record
-							// might not exist. In that case, we allow to clear the attribute.
-							let maybe_is_locked = Self::get_item_config(&collection, &item)
-								.map_or(false, |c| {
-									c.has_disabled_setting(ItemSetting::UnlockedAttributes)
-								});
-							ensure!(!maybe_is_locked, Error::<T, I>::LockedItemAttributes);
-						},
-					},
-					_ => (),
-				};
+		if let Some(check_owner) = &maybe_check_owner {
+			// validate the provided namespace when it's not a root call and the caller is not
+			// the same as the `deposit.account` (e.g. the deposit was paid by different account)
+			if deposit.account != maybe_check_owner {
+				ensure!(
+					Self::is_valid_namespace(
+						&check_owner,
+						&namespace,
+						&collection,
+						&collection_details.owner,
+						&maybe_item,
+					)?,
+					Error::<T, I>::NoPermission
+				);
 			}
 
-			collection_details.attributes.saturating_dec();
+			// can't clear `CollectionOwner` type attributes if the collection/item is locked
 			match namespace {
-				AttributeNamespace::CollectionOwner => {
-					collection_details.owner_deposit.saturating_reduce(deposit.amount);
-					T::Currency::unreserve(&collection_details.owner, deposit.amount);
+				AttributeNamespace::CollectionOwner => match maybe_item {
+					None => {
+						let collection_config = Self::get_collection_config(&collection)?;
+						ensure!(
+							collection_config
+								.is_setting_enabled(CollectionSetting::UnlockedAttributes),
+							Error::<T, I>::LockedCollectionAttributes
+						)
+					},
+					Some(item) => {
+						// NOTE: if the item was previously burned, the ItemConfigOf record
+						// might not exist. In that case, we allow to clear the attribute.
+						let maybe_is_locked = Self::get_item_config(&collection, &item)
+							.map_or(false, |c| {
+								c.has_disabled_setting(ItemSetting::UnlockedAttributes)
+							});
+						ensure!(!maybe_is_locked, Error::<T, I>::LockedItemAttributes);
+					},
 				},
 				_ => (),
 			};
-			if let Some(deposit_account) = deposit.account {
-				T::Currency::unreserve(&deposit_account, deposit.amount);
-			}
-			Collection::<T, I>::insert(collection, &collection_details);
-			Self::deposit_event(Event::AttributeCleared { collection, maybe_item, key, namespace });
 		}
+
+		collection_details.attributes.saturating_dec();
+		match namespace {
+			AttributeNamespace::CollectionOwner => {
+				collection_details.owner_deposit.saturating_reduce(deposit.amount);
+				T::Currency::unreserve(&collection_details.owner, deposit.amount);
+			},
+			_ => (),
+		};
+
+		if let Some(deposit_account) = deposit.account {
+			T::Currency::unreserve(&deposit_account, deposit.amount);
+		}
+
+		Collection::<T, I>::insert(collection, &collection_details);
+		Self::deposit_event(Event::AttributeCleared { collection, maybe_item, key, namespace });
+
 		Ok(())
 	}
 
