@@ -371,10 +371,7 @@ impl<'a, H> ValueCacheRef<'a, H> {
 	}
 }
 
-impl<'a, H> From<ValueCacheRef<'a, H>> for ValueCacheKey<H>
-where
-	H: AsRef<[u8]>,
-{
+impl<'a, H> From<ValueCacheRef<'a, H>> for ValueCacheKey<H> {
 	fn from(value: ValueCacheRef<'a, H>) -> Self {
 		ValueCacheKey {
 			storage_root: value.storage_root,
