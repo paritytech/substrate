@@ -51,7 +51,6 @@ struct SubscriptionInner<Block: BlockT> {
 }
 
 /// Manage the blocks of a specific subscription ID.
-// #[derive(Clone)]
 pub struct SubscriptionHandle<Block: BlockT, BE: Backend<Block> + 'static> {
 	inner: Arc<RwLock<SubscriptionInner<Block>>>,
 	/// The best reported block by this subscription.
