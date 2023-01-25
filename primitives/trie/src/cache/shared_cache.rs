@@ -621,8 +621,8 @@ impl<H: Hasher> SharedTrieCache<H> {
 
 		// Split our memory budget between what we'll be holding inline in the map,
 		// and what we'll be holding on the heap.
-		let mut value_cache_inline_budget = (value_cache_budget as f32 * 0.70) as usize;
-		let mut node_cache_inline_budget = (node_cache_budget as f32 * 0.70) as usize;
+		let value_cache_inline_budget = (value_cache_budget as f32 * 0.70) as usize;
+		let node_cache_inline_budget = (node_cache_budget as f32 * 0.70) as usize;
 
 		// Calculate how much memory the maps will be allowed to hold inline given our budget.
 		let value_cache_max_inline_size =
