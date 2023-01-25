@@ -4004,14 +4004,34 @@ fn payout_stakers_handles_basic_errors() {
 			0
 		));
 
+		// can call page 1
+		assert_ok!(Staking::payout_stakers(
+			RuntimeOrigin::signed(1337),
+			11,
+			expected_last_reward_era,
+			1
+		));
+
 		// Can't claim again
 		assert_noop!(
 			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_start_reward_era, 0),
 			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
 		);
+
 		assert_noop!(
 			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_last_reward_era, 0),
 			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
+		);
+
+		assert_noop!(
+			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_last_reward_era, 1),
+			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
+		);
+
+		// invalid page
+		assert_noop!(
+			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_last_reward_era, 2),
+			Error::<Test>::InvalidPage.with_weight(err_weight)
 		);
 	});
 }
