@@ -3440,4 +3440,35 @@ mod tests {
 			));
 		});
 	}
+
+	/// This works even though random interface is deprecated, as the check to ban deprecated
+	/// functions happens in the wasm stack which is mocked for exec tests.
+	#[test]
+	fn randomness_works() {
+		let subject = b"nice subject".as_ref();
+		let code_hash = MockLoader::insert(Call, move |ctx, _| {
+			let rand = <Test as Config>::Randomness::random(subject);
+			assert_eq!(rand, ctx.ext.random(subject));
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			place_contract(&BOB, code_hash);
+
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			let result = MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![],
+				None,
+				Determinism::Deterministic,
+			);
+			assert_matches!(result, Ok(_));
+		});
+	}
 }
