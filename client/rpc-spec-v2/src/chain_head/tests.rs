@@ -1057,7 +1057,7 @@ async fn pin_block_references() {
 		backend.clone(),
 		Arc::new(TaskExecutor::default()),
 		CHAIN_GENESIS,
-		2,
+		3,
 	)
 	.into_rpc();
 
@@ -1102,4 +1102,48 @@ async fn pin_block_references() {
 	// Make sure unpin clears out the reference.
 	let refs = backend.pin_refs(&hash).unwrap();
 	assert_eq!(refs, 0);
+
+	tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+
+	// Add another 2 blocks and make sure we drop the subscription with the blocks pinned.
+	let mut hashes = Vec::new();
+	for _ in 0..2 {
+		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+		let hash = block.header.hash();
+		client.import(BlockOrigin::Own, block.clone()).await.unwrap();
+
+		// Ensure the imported block is propagated for this subscription.
+		assert_matches!(
+			get_next_event::<FollowEvent<String>>(&mut sub).await,
+			FollowEvent::NewBlock(_)
+		);
+		assert_matches!(
+			get_next_event::<FollowEvent<String>>(&mut sub).await,
+			FollowEvent::BestBlockChanged(_)
+		);
+
+		hashes.push(hash);
+	}
+
+	tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+
+	// Make sure the pin was propagated.
+	for hash in &hashes {
+		let refs = backend.pin_refs(&hash).unwrap();
+		assert_eq!(refs, 1);
+	}
+
+	// Drop the subscription and expect the pinned blocks to be released.
+	drop(sub);
+	// The `chainHead` detects the subscription was terminated when it tries
+	// to send another block.
+	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	client.import(BlockOrigin::Own, block.clone()).await.unwrap();
+
+	tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+
+	for hash in &hashes {
+		let refs = backend.pin_refs(&hash).unwrap();
+		assert_eq!(refs, 0);
+	}
 }
