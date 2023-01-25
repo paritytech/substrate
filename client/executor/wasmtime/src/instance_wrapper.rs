@@ -82,8 +82,8 @@ impl EntryPoint {
 				Backtrace { backtrace_string: backtrace.to_string() }
 			});
 
-			if let Some(error) = host_state.take_panic_message() {
-				Error::AbortedDueToPanic(MessageWithBacktrace { message: error, backtrace })
+			if let Some(message) = host_state.take_panic_message() {
+				Error::AbortedDueToPanic(MessageWithBacktrace { message, backtrace })
 			} else {
 				let message = trap.root_cause().to_string();
 				Error::AbortedDueToTrap(MessageWithBacktrace { message, backtrace })
