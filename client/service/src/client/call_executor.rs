@@ -81,13 +81,13 @@ where
 	fn check_override<'a>(
 		&'a self,
 		onchain_code: RuntimeCode<'a>,
-		id: &BlockId<Block>,
+		hash: <Block as BlockT>::Hash,
 	) -> sp_blockchain::Result<(RuntimeCode<'a>, RuntimeVersion)>
 	where
 		Block: BlockT,
 		B: backend::Backend<Block>,
 	{
-		let on_chain_version = self.on_chain_runtime_version(id)?;
+		let on_chain_version = self.on_chain_runtime_version(hash)?;
 		let code_and_version = if let Some(d) = self.wasm_override.as_ref().as_ref().and_then(|o| {
 			o.get(
 				&on_chain_version.spec_version,
@@ -95,18 +95,18 @@ where
 				&on_chain_version.spec_name,
 			)
 		}) {
-			log::debug!(target: "wasm_overrides", "using WASM override for block {}", id);
+			log::debug!(target: "wasm_overrides", "using WASM override for block {}", hash);
 			d
 		} else if let Some(s) =
 			self.wasm_substitutes
-				.get(on_chain_version.spec_version, onchain_code.heap_pages, id)
+				.get(on_chain_version.spec_version, onchain_code.heap_pages, hash)
 		{
-			log::debug!(target: "wasm_substitutes", "Using WASM substitute for block {:?}", id);
+			log::debug!(target: "wasm_substitutes", "Using WASM substitute for block {:?}", hash);
 			s
 		} else {
 			log::debug!(
 				target: "wasm_overrides",
-				"Neither WASM override nor substitute available for block {id}, using onchain code",
+				"Neither WASM override nor substitute available for block {hash}, using onchain code",
 			);
 			(onchain_code, on_chain_version)
 		};
@@ -115,14 +115,10 @@ where
 	}
 
 	/// Returns the on chain runtime version.
-	fn on_chain_runtime_version(
-		&self,
-		id: &BlockId<Block>,
-	) -> sp_blockchain::Result<RuntimeVersion> {
+	fn on_chain_runtime_version(&self, hash: Block::Hash) -> sp_blockchain::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
 
-		let at_hash = self.backend.blockchain().expect_block_hash_from_id(id)?;
-		let state = self.backend.state_at(at_hash)?;
+		let state = self.backend.state_at(hash)?;
 		let mut cache = StorageTransactionCache::<Block, B::State>::default();
 		let mut ext = Ext::new(&mut overlay, &mut cache, &state, None);
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
@@ -166,21 +162,21 @@ where
 
 	fn call(
 		&self,
-		at: &BlockId<Block>,
+		at_hash: Block::Hash,
 		method: &str,
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
 	) -> sp_blockchain::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
-		let at_hash = self.backend.blockchain().expect_block_hash_from_id(at)?;
-		let at_number = self.backend.blockchain().expect_block_number_from_id(at)?;
+		let at_number =
+			self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(at_hash))?;
 		let state = self.backend.state_at(at_hash)?;
 
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
 		let runtime_code =
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
 
-		let runtime_code = self.check_override(runtime_code, at)?.0;
+		let runtime_code = self.check_override(runtime_code, at_hash)?.0;
 
 		let extensions = self.execution_extensions.extensions(
 			at_hash,
@@ -206,7 +202,7 @@ where
 
 	fn contextual_call(
 		&self,
-		at: &BlockId<Block>,
+		at_hash: Block::Hash,
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
@@ -216,8 +212,8 @@ where
 	) -> Result<Vec<u8>, sp_blockchain::Error> {
 		let mut storage_transaction_cache = storage_transaction_cache.map(|c| c.borrow_mut());
 
-		let at_hash = self.backend.blockchain().expect_block_hash_from_id(at)?;
-		let at_number = self.backend.blockchain().expect_block_number_from_id(at)?;
+		let at_number =
+			self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(at_hash))?;
 		let state = self.backend.state_at(at_hash)?;
 
 		let (execution_manager, extensions) =
@@ -232,7 +228,7 @@ where
 
 		let runtime_code =
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
-		let runtime_code = self.check_override(runtime_code, at)?.0;
+		let runtime_code = self.check_override(runtime_code, at_hash)?.0;
 
 		match recorder {
 			Some(recorder) => {
@@ -275,24 +271,23 @@ where
 		.map_err(Into::into)
 	}
 
-	fn runtime_version(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
-		let at_hash = self.backend.blockchain().expect_block_hash_from_id(id)?;
+	fn runtime_version(&self, at_hash: Block::Hash) -> sp_blockchain::Result<RuntimeVersion> {
 		let state = self.backend.state_at(at_hash)?;
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
 
 		let runtime_code =
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
-		self.check_override(runtime_code, id).map(|(_, v)| v)
+		self.check_override(runtime_code, at_hash).map(|(_, v)| v)
 	}
 
 	fn prove_execution(
 		&self,
-		at: &BlockId<Block>,
+		at_hash: Block::Hash,
 		method: &str,
 		call_data: &[u8],
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
-		let at_hash = self.backend.blockchain().expect_block_hash_from_id(at)?;
-		let at_number = self.backend.blockchain().expect_block_number_from_id(at)?;
+		let at_number =
+			self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(at_hash))?;
 		let state = self.backend.state_at(at_hash)?;
 
 		let trie_backend = state.as_trie_backend();
@@ -300,7 +295,7 @@ where
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(trie_backend);
 		let runtime_code =
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
-		let runtime_code = self.check_override(runtime_code, at)?.0;
+		let runtime_code = self.check_override(runtime_code, at_hash)?.0;
 
 		sp_state_machine::prove_execution_on_trie_backend(
 			trie_backend,
@@ -340,7 +335,7 @@ where
 	E: CodeExecutor + RuntimeVersionOf + Clone + 'static,
 	Block: BlockT,
 {
-	fn runtime_version(&self, at: &BlockId<Block>) -> Result<sp_version::RuntimeVersion, String> {
+	fn runtime_version(&self, at: Block::Hash) -> Result<sp_version::RuntimeVersion, String> {
 		CallExecutor::runtime_version(self, at).map_err(|e| e.to_string())
 	}
 }
@@ -359,6 +354,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use backend::Backend;
 	use sc_client_api::in_mem;
 	use sc_executor::{NativeElseWasmExecutor, WasmExecutionMethod};
 	use sp_core::{
@@ -432,7 +428,7 @@ mod tests {
 		};
 
 		let check = call_executor
-			.check_override(onchain_code, &BlockId::Number(Default::default()))
+			.check_override(onchain_code, backend.blockchain().info().genesis_hash)
 			.expect("RuntimeCode override")
 			.0;
 
