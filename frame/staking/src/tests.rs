@@ -3745,8 +3745,7 @@ fn test_nominators_are_rewarded_for_all_exposure_page() {
 
 #[test]
 fn test_multi_page_payout_stakers() {
-	// Test that payout_stakers work in general, including that only the top
-	// `T::MaxNominatorRewardedPerPage` nominators are rewarded.
+	// Test that payout_stakers work in general and that it pays the correct amount of reward.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		let balance = 1000;
 		// Track the exposure of the validator and all nominators.
@@ -4033,6 +4032,57 @@ fn payout_stakers_handles_basic_errors() {
 			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_last_reward_era, 2),
 			Error::<Test>::InvalidPage.with_weight(err_weight)
 		);
+	});
+}
+
+#[test]
+fn test_commission_paid_only_once() {
+	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
+		let balance = 1;
+		let commission = 50;
+		// Create a validator:
+		bond_validator(11, 10, balance);
+		assert_ok!(Staking::validate(
+			RuntimeOrigin::signed(10),
+			ValidatorPrefs { commission: Perbill::from_percent(commission), blocked: false }
+		));
+		assert_eq!(Validators::<Test>::count(), 1);
+
+		// Create nominators, targeting stash of validators
+		for i in 0..200 {
+			let bond_amount = balance + i as Balance;
+			bond_nominator(1000 + i, 100 + i, bond_amount, vec![11]);
+		}
+
+		mock::start_active_era(1);
+		Staking::reward_by_ids(vec![(11, 1)]);
+
+		// Since `MaxNominatorRewardedPerPage = 64`, there are four pages of validator exposure.
+		assert_eq!(EraInfo::<Test>::get_page_count(1, &11), 4);
+
+		// compute and ensure the reward amount is greater than zero.
+		let payout = current_total_payout_for_duration(reward_time_per_era());
+		mock::start_active_era(2);
+
+		let controller_balance_before_p0_payout = Balances::free_balance(&10);
+		// Payout rewards for first exposure page
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1, 0));
+
+		let controller_balance_after_p0_payout = Balances::free_balance(&10);
+
+		// half of the payout goes to validator since commission is 50%
+		assert_eq_error_rate!(
+			controller_balance_after_p0_payout,
+			controller_balance_before_p0_payout + payout / 2,
+			1,
+		);
+
+		for i in 1..4 {
+			assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1, i));
+			// no reward paid to validator for pages other than 0
+			Balances::free_balance(&10);
+		}
+
 	});
 }
 
