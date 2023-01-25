@@ -46,7 +46,7 @@ else:
 print(f"Crates per group: {crates_per_group}", file=sys.stderr)
 
 # Check each crate
-for i in range(0, crates_per_group + rest_crates):
+for i in range(0, crates_per_group + overflow_crates):
 	crate = crates_per_group * target_group + i
 
 	print(f"Checking {crates[crate]}", file=sys.stderr)
