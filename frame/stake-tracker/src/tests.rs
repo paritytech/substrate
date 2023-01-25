@@ -386,20 +386,23 @@ mod on_unstake {
 	use super::*;
 
 	#[test]
-	fn noop() {
+	fn noop_if_no_approval_stake() {
 		ExtBuilder::default().build_and_execute(|| {
-			assert_eq!(VoterList::count(), 0);
-
 			// usual user, validator, nominator, not bonded
 			for id in [1, 10, 20, 30] {
 				assert_storage_noop!(StakeTracker::on_unstake(&id));
 			}
-
+		});
+	}
+	#[test]
+	fn removes_approval_stake() {
+		ExtBuilder::default().build_and_execute(|| {
 			// usual user, validator, nominator, not bonded
 			for id in [1, 10, 20, 30] {
-				assert_ok!(VoterList::on_insert(id, 100));
-				assert_storage_noop!(StakeTracker::on_unstake(&id));
+				ApprovalStake::<Runtime>::insert(id, 10);
+				StakeTracker::on_unstake(&id);
 			}
+			assert_eq!(ApprovalStake::<Runtime>::count(), 0);
 		});
 	}
 }
