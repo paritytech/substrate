@@ -122,7 +122,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxAuthorities: Get<u32>;
 
-		/// The maximum number of entries to keep in the set id to sesion index mapping.
+		/// The maximum number of entries to keep in the set id to session index mapping.
 		///
 		/// Since the `SetIdSession` map is only used for validating equivocations this
 		/// value should relate to the bonding duration of whatever staking system is
