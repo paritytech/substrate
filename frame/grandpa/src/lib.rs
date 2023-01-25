@@ -129,7 +129,7 @@ pub mod pallet {
 		/// being used (if any). If equivocation handling is not enabled then this value
 		/// can be zero.
 		#[pallet::constant]
-		type MaxSetIdSessionEntries: Get<u32>;
+		type MaxSetIdSessionEntries: Get<u64>;
 	}
 
 	#[pallet::hooks]
@@ -663,7 +663,7 @@ where
 					*s
 				});
 
-				let max_set_id_session_entries = (T::MaxSetIdSessionEntries::get() as u64).max(1);
+				let max_set_id_session_entries = T::MaxSetIdSessionEntries::get().max(1);
 				if current_set_id >= max_set_id_session_entries {
 					SetIdSession::<T>::remove(current_set_id - max_set_id_session_entries);
 				}

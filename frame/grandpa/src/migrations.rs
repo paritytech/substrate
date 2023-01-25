@@ -53,8 +53,7 @@ impl<T: Config> OnRuntimeUpgrade for CleanupSetIdSessionMap<T> {
 }
 
 fn cleanup_set_id_sesion_map<T: Config>() -> Weight {
-	let until_set_id =
-		CurrentSetId::<T>::get().saturating_sub(T::MaxSetIdSessionEntries::get() as u64);
+	let until_set_id = CurrentSetId::<T>::get().saturating_sub(T::MaxSetIdSessionEntries::get());
 
 	for set_id in 0..=until_set_id {
 		SetIdSession::<T>::remove(set_id);
