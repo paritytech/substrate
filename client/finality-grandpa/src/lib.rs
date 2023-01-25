@@ -464,10 +464,10 @@ pub trait GenesisAuthoritySetProvider<Block: BlockT> {
 	fn get(&self) -> Result<AuthorityList, ClientError>;
 }
 
-impl<Block: BlockT, E> GenesisAuthoritySetProvider<Block>
-	for Arc<dyn ExecutorProvider<Block, Executor = E>>
+impl<Block: BlockT, E, Client> GenesisAuthoritySetProvider<Block> for Arc<Client>
 where
 	E: CallExecutor<Block>,
+	Client: ExecutorProvider<Block, Executor = E> + HeaderBackend<Block>,
 {
 	fn get(&self) -> Result<AuthorityList, ClientError> {
 		// This implementation uses the Grandpa runtime API instead of reading directly from the
@@ -475,7 +475,7 @@ where
 		// the chain, whereas the runtime API is backwards compatible.
 		self.executor()
 			.call(
-				&BlockId::Number(Zero::zero()),
+				self.expect_block_hash_from_id(&BlockId::Number(Zero::zero()))?,
 				"GrandpaApi_grandpa_authorities",
 				&[],
 				ExecutionStrategy::NativeElseWasm,

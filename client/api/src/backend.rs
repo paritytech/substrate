@@ -436,12 +436,24 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 ///
 /// Manages the data layer.
 ///
-/// Note on state pruning: while an object from `state_at` is alive, the state
+/// # State Pruning
+///
+/// While an object from `state_at` is alive, the state
 /// should not be pruned. The backend should internally reference-count
 /// its state objects.
 ///
 /// The same applies for live `BlockImportOperation`s: while an import operation building on a
 /// parent `P` is alive, the state for `P` should not be pruned.
+///
+/// # Block Pruning
+///
+/// Users can pin blocks in memory by calling `pin_block`. When
+/// a block would be pruned, its value is kept in an in-memory cache
+/// until it is unpinned via `unpin_block`.
+///
+/// While a block is pinned, its state is also preserved.
+///
+/// The backend should internally reference count the number of pin / unpin calls.
 pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// Associated block insertion operation type.
 	type BlockImportOperation: BlockImportOperation<Block, State = Self::State>;
@@ -501,6 +513,14 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 
 	/// Returns a handle to offchain storage.
 	fn offchain_storage(&self) -> Option<Self::OffchainStorage>;
+
+	/// Pin the block to keep body, justification and state available after pruning.
+	/// Number of pins are reference counted. Users need to make sure to perform
+	/// one call to [`Self::unpin_block`] per call to [`Self::pin_block`].
+	fn pin_block(&self, hash: Block::Hash) -> sp_blockchain::Result<()>;
+
+	/// Unpin the block to allow pruning.
+	fn unpin_block(&self, hash: Block::Hash);
 
 	/// Returns true if state for given block is available.
 	fn have_state_at(&self, hash: Block::Hash, _number: NumberFor<Block>) -> bool {

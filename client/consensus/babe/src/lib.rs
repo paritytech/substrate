@@ -209,8 +209,9 @@ impl From<sp_consensus_babe::Epoch> for Epoch {
 }
 
 impl Epoch {
-	/// Create the genesis epoch (epoch #0). This is defined to start at the slot of
-	/// the first block, so that has to be provided.
+	/// Create the genesis epoch (epoch #0).
+	///
+	/// This is defined to start at the slot of the first block, so that has to be provided.
 	pub fn genesis(genesis_config: &BabeConfiguration, slot: Slot) -> Epoch {
 		Epoch {
 			epoch_index: 0,
@@ -223,6 +224,38 @@ impl Epoch {
 				allowed_slots: genesis_config.allowed_slots,
 			},
 		}
+	}
+
+	/// Clone and tweak epoch information to refer to the specified slot.
+	///
+	/// All the information which depends on the slot value is recomputed and assigned
+	/// to the returned epoch instance.
+	///
+	/// The `slot` must be greater than or equal the original epoch start slot,
+	/// if is less this operation is equivalent to a simple clone.
+	pub fn clone_for_slot(&self, slot: Slot) -> Epoch {
+		let mut epoch = self.clone();
+
+		let skipped_epochs = *slot.saturating_sub(self.start_slot) / self.duration;
+
+		let epoch_index = epoch.epoch_index.checked_add(skipped_epochs).expect(
+			"epoch number is u64; it should be strictly smaller than number of slots; \
+				slots relate in some way to wall clock time; \
+				if u64 is not enough we should crash for safety; qed.",
+		);
+
+		let start_slot = skipped_epochs
+			.checked_mul(epoch.duration)
+			.and_then(|skipped_slots| epoch.start_slot.checked_add(skipped_slots))
+			.expect(
+				"slot number is u64; it should relate in some way to wall clock time; \
+				 if u64 is not enough we should crash for safety; qed.",
+			);
+
+		epoch.epoch_index = epoch_index;
+		epoch.start_slot = Slot::from(start_slot);
+
+		epoch
 	}
 }
 
@@ -1540,45 +1573,27 @@ where
 				};
 
 				if viable_epoch.as_ref().end_slot() <= slot {
-					// some epochs must have been skipped as our current slot
-					// fits outside the current epoch. we will figure out
-					// which epoch it belongs to and we will re-use the same
-					// data for that epoch
-					let mut epoch_data = viable_epoch.as_mut();
-					let skipped_epochs =
-						*slot.saturating_sub(epoch_data.start_slot) / epoch_data.duration;
-
-					// NOTE: notice that we are only updating a local copy of the `Epoch`, this
+					// Some epochs must have been skipped as our current slot fits outside the
+					// current epoch. We will figure out which epoch it belongs to and we will
+					// re-use the same data for that epoch.
+					// Notice that we are only updating a local copy of the `Epoch`, this
 					// makes it so that when we insert the next epoch into `EpochChanges` below
 					// (after incrementing it), it will use the correct epoch index and start slot.
-					// we do not update the original epoch that will be re-used because there might
+					// We do not update the original epoch that will be re-used because there might
 					// be other forks (that we haven't imported) where the epoch isn't skipped, and
-					// to import those forks we want to keep the original epoch data. not updating
+					// to import those forks we want to keep the original epoch data. Not updating
 					// the original epoch works because when we search the tree for which epoch to
 					// use for a given slot, we will search in-depth with the predicate
 					// `epoch.start_slot <= slot` which will still match correctly without updating
 					// `start_slot` to the correct value as below.
-					let epoch_index = epoch_data.epoch_index.checked_add(skipped_epochs).expect(
-						"epoch number is u64; it should be strictly smaller than number of slots; \
-						slots relate in some way to wall clock time; \
-						if u64 is not enough we should crash for safety; qed.",
-					);
-
-					let start_slot = skipped_epochs
-						.checked_mul(epoch_data.duration)
-						.and_then(|skipped_slots| epoch_data.start_slot.checked_add(skipped_slots))
-						.expect(
-							"slot number is u64; it should relate in some way to wall clock time; \
-							 if u64 is not enough we should crash for safety; qed.",
-						);
+					let epoch = viable_epoch.as_mut();
+					let prev_index = epoch.epoch_index;
+					*epoch = epoch.clone_for_slot(slot);
 
 					warn!(
 						target: LOG_TARGET,
-						"👶 Epoch(s) skipped: from {} to {}", epoch_data.epoch_index, epoch_index,
+						"👶 Epoch(s) skipped: from {} to {}", prev_index, epoch.epoch_index,
 					);
-
-					epoch_data.epoch_index = epoch_index;
-					epoch_data.start_slot = Slot::from(start_slot);
 				}
 
 				log!(
