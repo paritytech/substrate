@@ -1722,12 +1722,9 @@ impl<T: Config> Pallet<T> {
 
 	fn check_exposures() -> Result<(), &'static str> {
 		// a check per validator to ensure the exposure struct is always sane.
-		// FIXME(ank4n): This will fail before the code goes live, so probably add this change after
-		// being in production? Not sure how to test this nicely. Ideally could run it for a while
-		// on a test chain and make sure this is correct before going to production.
 		let era = Self::active_era().unwrap().index;
-		ErasStakers::<T>::iter_prefix(era)
-			.map(|key, expo| {
+		ErasStakers::<T>::iter_prefix_values(era)
+			.map(|expo| {
 				ensure!(
 					expo.total ==
 						expo.own +
@@ -1737,25 +1734,6 @@ impl<T: Config> Pallet<T> {
 								.fold(Zero::zero(), |acc, x| acc + x),
 					"wrong total exposure.",
 				);
-				// look at exposure pages
-				let mut total = Zero::zero();
-				let mut own = Zero::zero();
-				let page_count = EraInfo::<T>::get_page_count(era, key);
-				for page in 0..page_count {
-					let page = EraInfo::<T>::get_page(era, key, page);
-					let paged_exposure = EraInfo::<T>::get_validator_exposure(era, key, page);
-					ensure!(paged_exposure.total == expo.total, "wrong total exposure in page.");
-					own += paged_exposure.own;
-					total = paged_exposure.own +
-						paged_exposure
-							.others
-							.iter()
-							.map(|e| e.value)
-							.fold(Zero::zero(), |acc, x| acc + x);
-				}
-				ensure!(total == expo.total, "wrong total exposure in pages.");
-				ensure!(own == expo.own, "wrong own exposure in pages.");
-
 				Ok(())
 			})
 			.collect::<Result<_, _>>()
