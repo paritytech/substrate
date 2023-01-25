@@ -78,7 +78,7 @@
 //!
 //! * [`ink`](https://github.com/paritytech/ink) is
 //! an [`eDSL`](https://wiki.haskell.org/Embedded_domain_specific_language) that enables writing
-//! WebAssembly based smart contracts in the Rust programming language. This is a work in progress.
+//! WebAssembly based smart contracts in the Rust programming language.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "runtime-benchmarks", recursion_limit = "512")]
