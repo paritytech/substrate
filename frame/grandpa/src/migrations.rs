@@ -56,11 +56,11 @@ fn cleanup_set_id_sesion_map<T: Config>() -> Weight {
 	let until_set_id =
 		CurrentSetId::<T>::get().saturating_sub(T::MaxSetIdSessionEntries::get() as u64);
 
-	for set_id in 0..until_set_id {
+	for set_id in 0..=until_set_id {
 		SetIdSession::<T>::remove(set_id);
 	}
 
 	T::DbWeight::get()
 		.reads(1)
-		.saturating_add(T::DbWeight::get().writes(until_set_id))
+		.saturating_add(T::DbWeight::get().writes(until_set_id + 1))
 }
