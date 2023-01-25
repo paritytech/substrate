@@ -16,6 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use crate::LOG_TARGET;
+
 use beefy_primitives::{
 	crypto::{Public, Signature},
 	ValidatorSet, ValidatorSetId,
@@ -122,11 +124,11 @@ where
 	) -> bool {
 		let num = round.1;
 		if num < self.session_start || Some(num) <= self.best_done {
-			debug!(target: "beefy", "🥩 received vote for old stale round {:?}, ignoring", num);
+			debug!(target: LOG_TARGET, "🥩 received vote for old stale round {:?}, ignoring", num);
 			false
 		} else if !self.validators().iter().any(|id| vote.0 == *id) {
 			debug!(
-				target: "beefy",
+				target: LOG_TARGET,
 				"🥩 received vote {:?} from validator that is not in the validator set, ignoring",
 				vote
 			);
@@ -145,7 +147,7 @@ where
 			.get(round)
 			.map(|tracker| tracker.is_done(threshold(self.validator_set.len())))
 			.unwrap_or(false);
-		trace!(target: "beefy", "🥩 Round #{} done: {}", round.1, done);
+		trace!(target: LOG_TARGET, "🥩 Round #{} done: {}", round.1, done);
 
 		if done {
 			let signatures = self.rounds.remove(round)?.votes;
@@ -165,7 +167,7 @@ where
 		self.rounds.retain(|&(_, number), _| number > round_num);
 		self.mandatory_done = self.mandatory_done || round_num == self.session_start;
 		self.best_done = self.best_done.max(Some(round_num));
-		debug!(target: "beefy", "🥩 Concluded round #{}", round_num);
+		debug!(target: LOG_TARGET, "🥩 Concluded round #{}", round_num);
 	}
 }
 
