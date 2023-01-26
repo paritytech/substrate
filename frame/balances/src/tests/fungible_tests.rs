@@ -308,7 +308,7 @@ fn double_freezing_should_work() {
 #[test]
 fn can_hold_entire_balance_when_second_provider() {
 	ExtBuilder::default().existential_deposit(1).monied(false).build_and_execute_with(|| {
-		<Balances as fungible::Mutate<_>>::make_balance_be(&1, 100);
+		<Balances as fungible::Mutate<_>>::set_balance(&1, 100);
 		assert_noop!(Balances::hold(&TestId::Foo, &1, 100), TokenError::FundsUnavailable);
 		System::inc_providers(&1);
 		assert_eq!(System::providers(&1), 2);

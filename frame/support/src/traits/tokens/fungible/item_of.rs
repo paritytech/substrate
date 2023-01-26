@@ -235,8 +235,8 @@ impl<
 		<F as fungibles::Mutate<AccountId>>::transfer(A::get(), source, dest, amount, keep_alive)
 	}
 
-	fn make_balance_be(who: &AccountId, amount: Self::Balance) -> Self::Balance {
-		<F as fungibles::Mutate<AccountId>>::make_balance_be(A::get(), who, amount)
+	fn set_balance(who: &AccountId, amount: Self::Balance) -> Self::Balance {
+		<F as fungibles::Mutate<AccountId>>::set_balance(A::get(), who, amount)
 	}
 }
 

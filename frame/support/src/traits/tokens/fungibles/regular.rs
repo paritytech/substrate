@@ -319,7 +319,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	/// error reporting.
 	///
 	/// Returns the new balance.
-	fn make_balance_be(
+	fn set_balance(
 		asset: Self::AssetId,
 		who: &AccountId,
 		amount: Self::Balance,

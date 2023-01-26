@@ -47,7 +47,7 @@ fn fill_queues<T: Config>() -> Result<(), DispatchError> {
 	let bids = T::MaxQueueLen::get();
 
 	let caller: T::AccountId = whitelisted_caller();
-	T::Currency::make_balance_be(&caller, T::MinBid::get() * BalanceOf::<T>::from(queues + bids));
+	T::Currency::set_balance(&caller, T::MinBid::get() * BalanceOf::<T>::from(queues + bids));
 
 	for _ in 0..bids {
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
@@ -62,7 +62,7 @@ benchmarks! {
 	place_bid {
 		let l in 0..(T::MaxQueueLen::get() - 1);
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::make_balance_be(&caller, BalanceOf::<T>::max_value());
+		T::Currency::set_balance(&caller, BalanceOf::<T>::max_value());
 		for i in 0..l {
 			Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
 		}
@@ -74,7 +74,7 @@ benchmarks! {
 	place_bid_max {
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = RawOrigin::Signed(caller.clone());
-		T::Currency::make_balance_be(&caller, BalanceOf::<T>::max_value());
+		T::Currency::set_balance(&caller, BalanceOf::<T>::max_value());
 		for i in 0..T::MaxQueueLen::get() {
 			Nis::<T>::place_bid(origin.clone().into(), T::MinBid::get(), 1)?;
 		}
@@ -89,7 +89,7 @@ benchmarks! {
 	retract_bid {
 		let l in 1..T::MaxQueueLen::get();
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::make_balance_be(&caller, BalanceOf::<T>::max_value());
+		T::Currency::set_balance(&caller, BalanceOf::<T>::max_value());
 		for i in 0..l {
 			Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
 		}
@@ -102,12 +102,12 @@ benchmarks! {
 		let origin = T::FundOrigin::successful_origin();
 		let caller: T::AccountId = whitelisted_caller();
 		let bid = T::MinBid::get().max(One::one());
-		T::Currency::make_balance_be(&caller, bid);
+		T::Currency::set_balance(&caller, bid);
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), bid, 1)?;
 		Nis::<T>::process_queues(Perquintill::one(), 1, 1, &mut WeightCounter::unlimited());
 		Nis::<T>::communify(RawOrigin::Signed(caller.clone()).into(), 0)?;
 		let original = T::Currency::balance(&Nis::<T>::account_id());
-		T::Currency::make_balance_be(&Nis::<T>::account_id(), BalanceOf::<T>::min_value());
+		T::Currency::set_balance(&Nis::<T>::account_id(), BalanceOf::<T>::min_value());
 	}: _<T::RuntimeOrigin>(origin)
 	verify {
 		// Must fund at least 99.999% of the required amount.
@@ -118,7 +118,7 @@ benchmarks! {
 
 	thaw_private {
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::make_balance_be(&caller, T::MinBid::get() * BalanceOf::<T>::from(3u32));
+		T::Currency::set_balance(&caller, T::MinBid::get() * BalanceOf::<T>::from(3u32));
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
 		Nis::<T>::process_queues(Perquintill::one(), 1, 2, &mut WeightCounter::unlimited());
@@ -130,7 +130,7 @@ benchmarks! {
 
 	thaw_communal {
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::make_balance_be(&caller, T::MinBid::get() * BalanceOf::<T>::from(3u32));
+		T::Currency::set_balance(&caller, T::MinBid::get() * BalanceOf::<T>::from(3u32));
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
 		Nis::<T>::process_queues(Perquintill::one(), 1, 2, &mut WeightCounter::unlimited());
@@ -143,7 +143,7 @@ benchmarks! {
 
 	privatize {
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::make_balance_be(&caller, T::MinBid::get() * BalanceOf::<T>::from(3u32));
+		T::Currency::set_balance(&caller, T::MinBid::get() * BalanceOf::<T>::from(3u32));
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
 		Nis::<T>::process_queues(Perquintill::one(), 1, 2, &mut WeightCounter::unlimited());
@@ -155,7 +155,7 @@ benchmarks! {
 
 	communify {
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::make_balance_be(&caller, T::MinBid::get() * BalanceOf::<T>::from(3u32));
+		T::Currency::set_balance(&caller, T::MinBid::get() * BalanceOf::<T>::from(3u32));
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
 		Nis::<T>::process_queues(Perquintill::one(), 1, 2, &mut WeightCounter::unlimited());

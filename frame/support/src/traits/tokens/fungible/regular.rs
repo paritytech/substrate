@@ -278,7 +278,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	/// error reporting.
 	///
 	/// Returns the new balance.
-	fn make_balance_be(who: &AccountId, amount: Self::Balance) -> Self::Balance {
+	fn set_balance(who: &AccountId, amount: Self::Balance) -> Self::Balance {
 		let b = Self::balance(who);
 		if b > amount {
 			Self::burn_from(who, b - amount, true, true).map(|d| amount.saturating_sub(d))
