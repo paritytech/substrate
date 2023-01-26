@@ -124,21 +124,24 @@ fn format_weight(field: &Ident) -> TokenStream2 {
 	quote_spanned! { field.span() =>
 		&if self.#field.ref_time() > 1_000_000_000 {
 			format!(
-				"{:.1?} ms",
-				Fixed::saturating_from_rational(self.#field.ref_time(), 1_000_000_000).to_float()
+				"{:.1?} ms, {} bytes",
+				Fixed::saturating_from_rational(self.#field.ref_time(), 1_000_000_000).to_float(),
+				self.#field.proof_size()
 			)
 		} else if self.#field.ref_time() > 1_000_000 {
 			format!(
-				"{:.1?} µs",
-				Fixed::saturating_from_rational(self.#field.ref_time(), 1_000_000).to_float()
+				"{:.1?} µs, {} bytes",
+				Fixed::saturating_from_rational(self.#field.ref_time(), 1_000_000).to_float(),
+				self.#field.proof_size()
 			)
 		} else if self.#field.ref_time() > 1_000 {
 			format!(
-				"{:.1?} ns",
-				Fixed::saturating_from_rational(self.#field.ref_time(), 1_000).to_float()
+				"{:.1?} ns, {} bytes",
+				Fixed::saturating_from_rational(self.#field.ref_time(), 1_000).to_float(),
+				self.#field.proof_size()
 			)
 		} else {
-			format!("{} ps", self.#field.ref_time())
+			format!("{} ps, {} bytes", self.#field.ref_time(), self.#field.proof_size())
 		}
 	}
 }

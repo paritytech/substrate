@@ -117,7 +117,7 @@ sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain"
 futures = "0.3.21"
 tempfile = "3.1.0"
 assert_cmd = "2.0.2"
-nix = "0.23"
+nix = { version = "0.26.1", features = ["signal"] }
 serde_json = "1.0"
 regex = "1.6.0"
 platforms = "2.0"
