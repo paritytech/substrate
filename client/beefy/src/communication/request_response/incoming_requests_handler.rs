@@ -124,7 +124,7 @@ pub struct BeefyJustifsRequestHandler<B, Client> {
 	pub(crate) justif_protocol_name: ProtocolName,
 	pub(crate) client: Arc<Client>,
 	pub(crate) _block: PhantomData<B>,
-	metrics: Option<Metrics>,
+	pub(crate) metrics: Option<Metrics>,
 }
 
 impl<B, Client> BeefyJustifsRequestHandler<B, Client>

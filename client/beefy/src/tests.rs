@@ -136,6 +136,7 @@ impl BeefyTestNet {
 				justif_protocol_name,
 				client,
 				_block: PhantomData,
+				metrics: None,
 			};
 			*net.peers[i].data.beefy_justif_req_handler.lock() = Some(justif_handler);
 		}
@@ -201,6 +202,7 @@ impl TestNetFactory for BeefyTestNet {
 			inner,
 			client.as_backend(),
 			Arc::new(two_validators::TestApi {}),
+			None,
 		);
 		let peer_data = PeerData {
 			beefy_rpc_links: Mutex::new(Some(rpc_links)),
