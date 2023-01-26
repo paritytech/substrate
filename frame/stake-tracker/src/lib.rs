@@ -87,8 +87,8 @@ pub mod pallet {
 				ApprovalStake::<T>::count() >= T::TargetList::count(),
 				"ApprovalStake map missing entries"
 			);
-			T::TargetList::try_state();
-			T::VoterList::try_state();
+			T::TargetList::try_state()?;
+			T::VoterList::try_state()?;
 		}
 	}
 }
