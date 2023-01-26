@@ -1,5 +1,5 @@
 Description: Warp sync
-Network: ./test-warp-sync.toml
+Network: ./test-webrtc.toml
 Creds: config
 
 alice: is up within 30 seconds
