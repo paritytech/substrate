@@ -880,6 +880,7 @@ pub mod pallet {
 			payee: RewardDestination<T::AccountId>,
 		) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
+			ensure!(TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
 
 			if <Bonded<T>>::contains_key(&stash) {
 				return Err(Error::<T>::AlreadyBonded.into())
@@ -948,6 +949,7 @@ pub mod pallet {
 			#[pallet::compact] max_additional: BalanceOf<T>,
 		) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
+			ensure!(TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
 
 			let controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
 			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
@@ -999,6 +1001,8 @@ pub mod pallet {
 			#[pallet::compact] value: BalanceOf<T>,
 		) -> DispatchResultWithPostInfo {
 			let controller = ensure_signed(origin)?;
+			ensure!(TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
+
 			let unlocking = Self::ledger(&controller)
 				.map(|l| l.unlocking.len())
 				.ok_or(Error::<T>::NotController)?;
@@ -1098,6 +1102,7 @@ pub mod pallet {
 			num_slashing_spans: u32,
 		) -> DispatchResultWithPostInfo {
 			let controller = ensure_signed(origin)?;
+			ensure!(TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
 
 			let actual_weight = Self::do_withdraw_unbonded(&controller, num_slashing_spans)?;
 			Ok(Some(actual_weight).into())
