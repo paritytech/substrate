@@ -36,6 +36,7 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	testing::{Header, UintAuthorityId},
 	traits::{IdentityLookup, Zero},
+	BuildStorage,
 };
 use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
 
@@ -446,7 +447,6 @@ impl ExtBuilder {
 	fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-
 		let _ = pallet_balances::GenesisConfig::<Test> {
 			balances: vec![
 				(1, 10 * self.balance_factor),
@@ -530,6 +530,7 @@ impl ExtBuilder {
 			slash_reward_fraction: Perbill::from_percent(10),
 			min_nominator_bond: self.min_nominator_bond,
 			min_validator_bond: self.min_validator_bond,
+			temporary_migration_lock: Some(true),
 			..Default::default()
 		}
 		.assimilate_storage(&mut storage);
