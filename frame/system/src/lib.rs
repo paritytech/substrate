@@ -1453,10 +1453,6 @@ impl<T: Config> Pallet<T> {
 	/// NOTE: Events not registered at the genesis block and quietly omitted.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
 	pub fn events() -> Vec<EventRecord<T::RuntimeEvent, T::Hash>> {
-		debug_assert!(
-			!Self::block_number().is_zero(),
-			"events not registered at the genesis block"
-		);
 		// Dereferencing the events here is fine since we are not in the
 		// memory-restricted runtime.
 		Self::read_events_no_consensus().map(|e| *e).collect()
@@ -1515,6 +1511,11 @@ impl<T: Config> Pallet<T> {
 	/// NOTE: Events not registered at the genesis block and quietly omitted.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
 	pub fn assert_has_event(event: T::RuntimeEvent) {
+		debug_assert!(
+			!Self::block_number().is_zero(),
+			"events not registered at the genesis block"
+		);
+
 		let events = Self::events();
 		assert!(
 			events.iter().any(|record| record.event == event),
@@ -1527,6 +1528,11 @@ impl<T: Config> Pallet<T> {
 	/// NOTE: Events not registered at the genesis block and quietly omitted.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
 	pub fn assert_last_event(event: T::RuntimeEvent) {
+		debug_assert!(
+			!Self::block_number().is_zero(),
+			"events not registered at the genesis block"
+		);
+
 		let last_event = Self::events().last().expect("events expected").event.clone();
 		assert_eq!(
 			last_event, event,
