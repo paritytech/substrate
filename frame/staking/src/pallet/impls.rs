@@ -1681,6 +1681,16 @@ impl<T: Config> Pallet<T> {
 			"VoterList contains non-staker"
 		);
 
+		ensure!(
+			T::TargetList::iter().all(|x| <Validators<T>>::contains_key(&x)),
+			"TargetList contains non-validator"
+		);
+
+		ensure!(
+			T::TargetList::count() == <Validators<T>>::count(),
+			"TargetList and Validator counts don't match"
+		);
+
 		Self::check_nominators()?;
 		Self::check_exposures()?;
 		Self::check_ledgers()?;

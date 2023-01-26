@@ -18,9 +18,11 @@
 //! Test utilities
 
 use crate::{self as pallet_staking, *};
-use frame_election_provider_support::{onchain, SequentialPhragmen, VoteWeight};
+use frame_election_provider_support::{
+	onchain, ReadOnlySortedListProvider, SequentialPhragmen, VoteWeight,
+};
 use frame_support::{
-	assert_ok, ord_parameter_types, parameter_types,
+	assert_ok, ensure, ord_parameter_types, parameter_types,
 	traits::{
 		ConstU32, ConstU64, Currency, EitherOfDiverse, FindAuthor, GenesisBuild, Get, Hooks,
 		Imbalance, OnUnbalanced, OneSessionHandler,
@@ -99,6 +101,7 @@ frame_support::construct_runtime!(
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 		Historical: pallet_session::historical::{Pallet, Storage},
 		VoterBagsList: pallet_bags_list::<Instance1>::{Pallet, Call, Storage, Event<T>},
+		TargetBagsList: pallet_bags_list::<Instance2>::{Pallet, Call, Storage, Event<T>},
 		StakeTracker: pallet_stake_tracker::{Pallet, Storage},
 	}
 );
@@ -228,9 +231,10 @@ impl OnUnbalanced<NegativeImbalanceOf<Test>> for RewardRemainderMock {
 
 const THRESHOLDS: [sp_npos_elections::VoteWeight; 9] =
 	[10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
-
+const THRESHOLDS_BALANCES: [Balance; 9] = [10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
 parameter_types! {
 	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
+	pub static BagThresholdsBalances: &'static [Balance] = &THRESHOLDS_BALANCES;
 	pub static MaxNominations: u32 = 16;
 	pub static HistoryDepth: u32 = 80;
 	pub static MaxUnlockingChunks: u32 = 32;
@@ -247,6 +251,16 @@ impl pallet_bags_list::Config<VoterBagsListInstance> for Test {
 	type ScoreProvider = Staking;
 	type BagThresholds = BagThresholds;
 	type Score = VoteWeight;
+}
+
+type TargetBagsListInstance = pallet_bags_list::Instance2;
+impl pallet_bags_list::Config<TargetBagsListInstance> for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = ();
+	// Staking is the source of truth for voter bags list, since they are not kept up to date.
+	type ScoreProvider = StakeTracker;
+	type BagThresholds = BagThresholdsBalances;
+	type Score = Balance;
 }
 
 pub struct OnChainSeqPhragmen;
@@ -314,7 +328,7 @@ impl pallet_stake_tracker::Config for Test {
 	type Currency = Balances;
 	type Staking = Staking;
 	type VoterList = VoterBagsList;
-	type TargetList = ();
+	type TargetList = TargetBagsList;
 }
 
 pub(crate) type StakingCall = crate::Call<Test>;
@@ -557,6 +571,11 @@ impl ExtBuilder {
 		let mut ext = self.build();
 		ext.execute_with(test);
 		ext.execute_with(|| {
+			assert_eq!(
+				Validators::<Test>::count(),
+				<Test as pallet_stake_tracker::Config>::TargetList::count(),
+				"The number of validators does not much StakeTracker::TargetList"
+			);
 			Staking::do_try_state(System::block_number()).unwrap();
 		});
 	}
