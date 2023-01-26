@@ -118,7 +118,10 @@ impl StorageMonitorService {
 	/// Returns free space in MB, or error if statvfs failed.
 	fn free_space(path: &Path) -> Result<u64, Error> {
 		statvfs(path)
-			.map(|stats| stats.blocks_available() * stats.block_size() / 1_000_000)
+			.map(|stats| {
+				u64::from(stats.blocks_available()).saturating_mul(u64::from(stats.block_size())) /
+					1_000_000
+			})
 			.map_err(Error::from)
 	}
 
