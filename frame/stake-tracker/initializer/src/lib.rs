@@ -12,10 +12,6 @@ macro_rules! log {
 
 pub trait Runtime: pallet_stake_tracker::Config + pallet_staking::Config {}
 
-pub mod v2 {}
-//TODO: Introduce try-state to the pallet
-//TODO: Decide what to do with new networks, no harm done if this is run on an empty Staking
-// storage
 pub mod v1 {
 	use crate::Runtime;
 	use codec::{Decode, Encode};
@@ -73,6 +69,7 @@ pub mod v1 {
 			MigrationV1StateValidators::<T>::set(Some(state))
 		}
 
+		// Build approval stakes based on available weight.
 		pub(crate) fn build_approval_stakes() -> (BTreeMap<T::AccountId, BalanceOf<T>>, Weight, bool)
 		{
 			let mut approval_stakes = BTreeMap::<T::AccountId, BalanceOf<T>>::new();
@@ -149,8 +146,6 @@ pub mod v1 {
 					let mut account_raw =
 						next_key.strip_prefix(validator_state.prefix.as_slice()).unwrap();
 
-					// TODO: not sure if this works, gotta see. Should be safe as all the keys in
-					// Validators map are AccountId. If not - let it fail.
 					let who = T::AccountId::decode(&mut account_raw).unwrap();
 					let stake = Pallet::<T>::slashable_balance_of(&who);
 					let current = approval_stakes.entry(who).or_default();
@@ -191,12 +186,8 @@ pub mod v1 {
 				let (approval_stakes, leftover_weight, is_finished) = Self::build_approval_stakes();
 
 				for (who, approval_stake) in approval_stakes {
-					if ApprovalStake::<T>::contains_key(&who) {
-						ApprovalStake::<T>::mutate(&who, |maybe_stake| {
-							if let Some(stake) = maybe_stake {
-								stake.saturating_add(approval_stake);
-							}
-						})
+					if let Some(stake) = ApprovalStake::<T>::get(&who) {
+						ApprovalStake::<T>::set(&who, Some(stake.saturating_add(approval_stake)));
 					} else {
 						ApprovalStake::<T>::insert(&who, approval_stake)
 					}
