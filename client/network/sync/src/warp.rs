@@ -109,13 +109,13 @@ where
 	/// send.
 	pub fn poll(&mut self, cx: &mut std::task::Context) -> Poll<()> {
 		let new_phase = if let Phase::PendingTargetBlock { target_block } = &mut self.phase {
-			if let Poll::Ready(Ok(target_block)) = target_block.poll_unpin(cx) {
-				Some(Phase::TargetBlock(target_block))
-			} else if let Poll::Ready(Err(e)) = target_block.poll_unpin(cx) {
-				error!(target: "sync", "Failed to get target block. Error: {:?}",e);
-				None
-			} else {
-				None
+			match target_block.poll_unpin(cx) {
+				Poll::Ready(Ok(target_block)) => Some(Phase::TargetBlock(target_block)),
+				Poll::Ready(Err(e)) => {
+					error!(target: "sync", "Failed to get target block. Error: {:?}",e);
+					None
+				},
+				_ => None,
 			}
 		} else {
 			None
