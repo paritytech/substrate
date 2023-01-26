@@ -695,9 +695,9 @@ checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 
 [[package]]
 name = "bounded-collections"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "075a0d1929805f4806da01741927bfd7ae40b1e95565b27a65b4486daa3ec917"
+checksum = "16ca4932132d3d0f863e4aa4d35e3f8bb9b102dd488f7a17723e202e720ac632"
 dependencies = [
  "log",
  "parity-scale-codec",

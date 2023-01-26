@@ -81,6 +81,7 @@ pub use self::hasher::keccak::KeccakHasher;
 pub use hash_db::Hasher;
 
 pub use sp_storage as storage;
+pub use bounded_collections as bounded;
 pub use bounded_collections::*;
 
 #[doc(hidden)]
