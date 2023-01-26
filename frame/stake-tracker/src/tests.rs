@@ -370,6 +370,8 @@ mod on_validator_remove {
 	}
 }
 
+// It is the caller's problem to make sure `on_nominator_remove` is called in the right context. So
+// we are also including not bonded users with 0 balance.
 mod on_nominator_remove {
 	use super::*;
 	#[test]
@@ -385,17 +387,48 @@ mod on_nominator_remove {
 	}
 
 	#[test]
-	// It is the caller's problem to make sure `on_nominator_remove` is called in the right context.
-	fn works_for_everyone_also_unbonded() {
+	fn no_nominations() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(VoterList::count(), 0);
 
-			// usual user, validator, nominator
+			// usual user, validator, nominator, not bonded
 			for id in [1, 10, 20, 30] {
 				let _ = VoterList::on_insert(id, 100);
 				assert_eq!(VoterList::count(), 1);
 				StakeTracker::on_nominator_remove(&id, Vec::new());
 				assert_eq!(VoterList::count(), 0);
+			}
+		});
+	}
+
+	#[test]
+	fn with_nominations() {
+		ExtBuilder::default().build_and_execute(|| {
+			// no entries in TargetList or ApprovalStake
+			// usual user, validator, nominator, not bonded
+			for id in [1, 10, 20, 30] {
+				assert_storage_noop!(StakeTracker::on_nominator_remove(&id, vec![10, 11]));
+			}
+
+			// with entries in TargetList and ApprovalStake
+
+			let nominations = vec![10, 11];
+
+			StakeTracker::on_validator_add(&10);
+			StakeTracker::on_validator_add(&11);
+			StakeTracker::on_nominator_remove(&20, nominations.clone());
+
+			for id in nominations {
+				assert_eq!(
+					TargetList::get_score(&id).unwrap(),
+					StakeTracker::slashable_balance_of(&id)
+						.saturating_sub(StakeTracker::slashable_balance_of(&20))
+				);
+				assert_eq!(
+					StakeTracker::approval_stake(&id).unwrap(),
+					StakeTracker::slashable_balance_of(&id)
+						.saturating_sub(StakeTracker::slashable_balance_of(&20))
+				);
 			}
 		});
 	}
