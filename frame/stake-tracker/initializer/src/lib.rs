@@ -25,7 +25,7 @@ pub mod v1 {
 		PartialEqNoBound,
 	};
 	use pallet_stake_tracker::{ApprovalStake, BalanceOf, Pallet};
-	use pallet_staking::Nominations;
+	use pallet_staking::{Nominations, Validators};
 	use sp_runtime::Saturating;
 	use std::collections::BTreeMap;
 
@@ -73,10 +73,8 @@ pub mod v1 {
 			MigrationV1StateValidators::<T>::set(Some(state))
 		}
 
-		pub(crate) fn build_approval_stakes(
-			max_iterations: Weight,
-		) -> (BTreeMap<T::AccountId, BalanceOf<T>>, Weight) {
-			let mut iterations: Weight = Weight::default();
+		pub(crate) fn build_approval_stakes() -> (BTreeMap<T::AccountId, BalanceOf<T>>, Weight, bool)
+		{
 			let mut approval_stakes = BTreeMap::<T::AccountId, BalanceOf<T>>::new();
 			let mut leftover_weight = T::BlockWeights::get().max_block;
 
@@ -108,11 +106,13 @@ pub mod v1 {
 								*current = current.saturating_add(stake);
 							}
 
-							iterations = iterations.saturating_add(Weight::from_ref_time(1));
 							nominator_state.last_key = next_key;
-							leftover_weight =
-								max_iterations.saturating_sub(iterations).saturating_sub(
-									Weight::from_ref_time(approval_stakes.len() as u64),
+							let approval_stake_count = approval_stakes.len() as u64;
+							leftover_weight = leftover_weight
+								.saturating_sub(T::DbWeight::get().reads(4))
+								.saturating_sub(
+									T::DbWeight::get()
+										.reads_writes(approval_stake_count, approval_stake_count),
 								);
 
 							if leftover_weight.all_lte(Weight::default()) {
@@ -120,7 +120,7 @@ pub mod v1 {
 								// approval_stakes here. Save the state and bail.
 								Self::set_nominator_state(nominator_state.clone());
 
-								return (approval_stakes, leftover_weight)
+								return (approval_stakes, leftover_weight, false)
 							}
 						},
 						None => {
@@ -155,24 +155,26 @@ pub mod v1 {
 					let stake = Pallet::<T>::slashable_balance_of(&who);
 					let current = approval_stakes.entry(who).or_default();
 					*current = current.saturating_add(stake);
-					iterations = iterations.saturating_add(Weight::from_ref_time(1));
 					validator_state.last_key = next_key;
 
-					leftover_weight = max_iterations
-						.saturating_sub(iterations)
-						.saturating_sub(Weight::from_ref_time(approval_stakes.len() as u64));
+					let approval_stake_count = approval_stakes.len() as u64;
+					leftover_weight =
+						leftover_weight.saturating_sub(T::DbWeight::get().reads(3)).saturating_sub(
+							T::DbWeight::get()
+								.reads_writes(approval_stake_count, approval_stake_count),
+						);
 
 					if leftover_weight.all_lte(Weight::default()) {
 						// We ran out of weight, also taking into account writing
 						// approval_stakes here. Save the state and bail.
 						Self::set_validator_state(validator_state.clone());
 
-						return (approval_stakes, leftover_weight)
+						return (approval_stakes, leftover_weight, false)
 					}
 				}
 			}
 
-			(approval_stakes, leftover_weight)
+			(approval_stakes, leftover_weight, true)
 		}
 	}
 
@@ -185,11 +187,8 @@ pub mod v1 {
 
 			if current == 1 && onchain == 0 {
 				let max_weight = T::BlockWeights::get().max_block;
-				// this is an approximation
-				let max_iterations = max_weight.saturating_div(4);
-				// TODO: maybe write this in a multi-block fashion.
-				let (approval_stakes, leftover_weight) =
-					Self::build_approval_stakes(max_iterations);
+
+				let (approval_stakes, leftover_weight, is_finished) = Self::build_approval_stakes();
 
 				for (who, approval_stake) in approval_stakes {
 					if ApprovalStake::<T>::contains_key(&who) {
@@ -203,14 +202,21 @@ pub mod v1 {
 					}
 				}
 
-				if leftover_weight
-					.all_gte(Weight::from_ref_time((ApprovalStake::<T>::count() * 2) as u64)) ||
+				// If there is enough weight - do this in one go. If there's max_weight, meaning
+				// that we are finished with approval_stake aggregation  - do it in one go as well.
+				if is_finished &&
+					leftover_weight
+						.all_gte(Weight::from_ref_time((Validators::<T>::count() * 2) as u64)) ||
 					leftover_weight == max_weight
 				{
 					for (key, value) in ApprovalStake::<T>::iter() {
-						<T as pallet_stake_tracker::Config>::TargetList::on_insert(key, value)
-							.unwrap();
+						if Validators::<T>::contains_key(&key) {
+							<T as pallet_stake_tracker::Config>::TargetList::on_insert(key, value)
+								.unwrap();
+						}
 					}
+					MigrationV1StateValidators::<T>::kill();
+					MigrationV1StateNominators::<T>::kill();
 				}
 
 				current.put::<Pallet<T>>();
@@ -223,16 +229,32 @@ pub mod v1 {
 
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<(), &'static str> {
+			ensure!(StorageVersion::<T>::get() == "0", "must upgrade linearly");
+
+			// A multi-block migration hack.
+			if MigrationV1StateNominators::exists() {
+				return Ok(())
+			}
+
 			ensure!(
 				<T as pallet_stake_tracker::Config>::TargetList::count() == 0,
 				"must be run on an empty TargetList instance"
 			);
-			ensure!(StorageVersion::<T>::get() == "0", "must upgrade linearly");
+
 			Ok(())
 		}
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade() -> Result<(), &'static str> {
+			// A multi-block migration hack.
+			if MigrationV1StateNominators::exists() {
+				return Ok(())
+			}
+			ensure!(
+				<T as pallet_stake_tracker::Config>::TargetList::count() ==
+					Validators::<T>::count(),
+				"TargetList must be the same length as the number of validators"
+			);
 			ensure!(StorageVersion::<T>::get() == "1", "must upgrade linearly");
 			Ok(())
 		}
