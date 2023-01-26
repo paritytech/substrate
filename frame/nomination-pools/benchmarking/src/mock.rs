@@ -206,5 +206,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		max_members: Some(3 * 3),
 	}
 	.assimilate_storage(&mut storage);
+
+	let _ = pallet_staking::GenesisConfig::<Runtime>::default().assimilate_storage(&mut storage);
 	sp_io::TestExternalities::from(storage)
 }
