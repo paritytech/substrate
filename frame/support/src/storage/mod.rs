@@ -558,6 +558,7 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KArg1: ?Sized + EncodeLike<K1>;
 
 	/// Does any value under the first key `k1` (explicitly) exist in storage?
+	/// Might have unexpected behaviour with empty keys, e.g. `[]`.
 	fn contains_prefix<KArg1>(k1: KArg1) -> bool
 	where
 		KArg1: EncodeLike<K1>;
@@ -739,6 +740,7 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 		K: HasKeyPrefix<KP>;
 
 	/// Does any value under a `partial_key` prefix (explicitly) exist in storage?
+	/// Might have unexpected behaviour with empty keys, e.g. `[]`.
 	fn contains_prefix<KP>(partial_key: KP) -> bool
 	where
 		K: HasKeyPrefix<KP>;
