@@ -40,6 +40,8 @@ const JUSTIF_CHANNEL_SIZE: usize = 10;
 const MAX_RESPONSE_SIZE: u64 = 1024 * 1024;
 const JUSTIF_REQUEST_TIMEOUT: Duration = Duration::from_secs(3);
 
+const BEEFY_SYNC_LOG_TARGET: &str = "beefy::sync";
+
 /// Get the configuration for the BEEFY justifications Request/response protocol.
 ///
 /// Returns a receiver for messages received on this protocol and the requested

@@ -110,7 +110,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			proof_recorder_root: Cell::new(root),
 			enable_tracking,
 			// Enable the cache, but do not sync anything to the shared state.
-			shared_trie_cache: SharedTrieCache::new(CacheSize::Maximum(0)),
+			shared_trie_cache: SharedTrieCache::new(CacheSize::new(0)),
 		};
 
 		state.add_whitelist_to_tracker();
