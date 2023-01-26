@@ -4967,7 +4967,7 @@ dependencies = [
  "jsonrpsee",
  "kitchensink-runtime",
  "log",
- "nix 0.26.1",
+ "nix 0.26.2",
  "node-executor",
  "node-inspect",
  "node-primitives",
@@ -6944,9 +6944,9 @@ dependencies = [
 
 [[package]]
 name = "parity-scale-codec"
-version = "3.2.2"
+version = "3.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7ab01d0f889e957861bc65888d5ccbe82c158d0270136ba46820d43837cdf72"
+checksum = "c3840933452adf7b3b9145e27086a5a3376c619dca1a21b1e5a5af0d54979bed"
 dependencies = [
  "arrayvec 0.7.2",
  "bitvec",
@@ -8618,7 +8618,7 @@ dependencies = [
 name = "sc-finality-grandpa"
 version = "0.10.0-dev"
 dependencies = [
- "ahash 0.8.2",
+ "ahash 0.8.3",
  "array-bytes",
  "assert_matches",
  "async-trait",
@@ -8818,7 +8818,7 @@ dependencies = [
 name = "sc-network-gossip"
 version = "0.10.0-dev"
 dependencies = [
- "ahash 0.8.2",
+ "ahash 0.8.3",
  "futures",
  "futures-timer",
  "libp2p",
@@ -10703,7 +10703,7 @@ dependencies = [
 name = "sp-trie"
 version = "7.0.0"
 dependencies = [
- "ahash 0.8.2",
+ "ahash 0.8.3",
  "array-bytes",
  "criterion",
  "hash-db",
