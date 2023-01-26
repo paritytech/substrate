@@ -112,7 +112,10 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { authorities: Vec::new(), genesis_block: None }
+			// BEEFY genesis will be first BEEFY-MANDATORY block,
+			// use block number one instead of chain-genesis.
+			let genesis_block = Some(sp_runtime::traits::One::one());
+			Self { authorities: Vec::new(), genesis_block }
 		}
 	}
 
