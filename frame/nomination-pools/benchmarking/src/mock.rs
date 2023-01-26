@@ -126,6 +126,7 @@ impl pallet_stake_tracker::Config for Runtime {
 	type Currency = Balances;
 	type Staking = Staking;
 	type VoterList = VoterList;
+	type TargetList = pallet_staking::UseValidatorsMap<Runtime>;
 }
 
 parameter_types! {
