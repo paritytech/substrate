@@ -49,7 +49,7 @@ use pallet_session::{
 use pallet_staking::Event as StakingEvent;
 use pallet_staking::{
 	Config as StakingConfig, Exposure, IndividualExposure, Pallet as Staking, RewardDestination,
-	ValidatorPrefs,
+	TemporaryMigrationLock, ValidatorPrefs,
 };
 
 const SEED: u32 = 0;
@@ -104,6 +104,7 @@ fn bond_amount<T: Config>() -> BalanceOf<T> {
 }
 
 fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'static str> {
+	TemporaryMigrationLock::<T>::put(true);
 	let stash: T::AccountId = account("stash", n, SEED);
 	let controller: T::AccountId = account("controller", n, SEED);
 	let controller_lookup: LookupSourceOf<T> = T::Lookup::unlookup(controller.clone());
