@@ -154,7 +154,10 @@ pub fn clear_prefix(
 	MultiRemovalResults { maybe_cursor, backend: i, unique: i, loops: i }
 }
 
-pub fn contains_prefix(prefix: &[u8]) -> bool {
+/// Returns `true` if the storage contains any key, which starts with a certain prefix,
+/// and is longer than said prefix.
+/// This means that a key which equals the prefix will not be counted.
+pub fn contains_prefixed_key(prefix: &[u8]) -> bool {
 	match sp_io::storage::next_key(prefix) {
 		Some(key) => key.starts_with(prefix),
 		None => false,

@@ -212,7 +212,7 @@ where
 	where
 		K: HasKeyPrefix<KP>,
 	{
-		unhashed::contains_prefix(&Self::storage_n_map_partial_key(partial_key))
+		unhashed::contains_prefixed_key(&Self::storage_n_map_partial_key(partial_key))
 	}
 
 	fn iter_prefix_values<KP>(partial_key: KP) -> PrefixIterator<V>
