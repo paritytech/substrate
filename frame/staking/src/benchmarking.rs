@@ -946,7 +946,7 @@ mod tests {
 
 	#[test]
 	fn create_validators_with_nominators_for_era_works() {
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().clear_tracker_target_list().build_and_execute(|| {
 			let v = 10;
 			let n = 100;
 
@@ -972,7 +972,7 @@ mod tests {
 
 	#[test]
 	fn create_validator_with_nominators_works() {
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().clear_tracker_target_list().build_and_execute(|| {
 			let n = 10;
 
 			let (validator_stash, nominators) = create_validator_with_nominators::<Test>(
@@ -1001,7 +1001,7 @@ mod tests {
 
 	#[test]
 	fn add_slashing_spans_works() {
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().clear_tracker_target_list().build_and_execute(|| {
 			let n = 10;
 
 			let (validator_stash, _nominators) = create_validator_with_nominators::<Test>(
@@ -1033,7 +1033,7 @@ mod tests {
 
 	#[test]
 	fn test_payout_all() {
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().clear_tracker_target_list().build_and_execute(|| {
 			let v = 10;
 			let n = 100;
 

@@ -22,7 +22,7 @@ use frame_election_provider_support::{
 	onchain, ReadOnlySortedListProvider, SequentialPhragmen, VoteWeight,
 };
 use frame_support::{
-	assert_ok, ensure, ord_parameter_types, parameter_types,
+	assert_ok, ord_parameter_types, parameter_types,
 	traits::{
 		ConstU32, ConstU64, Currency, EitherOfDiverse, FindAuthor, GenesisBuild, Get, Hooks,
 		Imbalance, OnUnbalanced, OneSessionHandler,
@@ -36,7 +36,6 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	testing::{Header, UintAuthorityId},
 	traits::{IdentityLookup, Zero},
-	BuildStorage,
 };
 use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
 
@@ -348,6 +347,7 @@ pub struct ExtBuilder {
 	status: BTreeMap<AccountId, StakerStatus<AccountId>>,
 	stakes: BTreeMap<AccountId, Balance>,
 	stakers: Vec<(AccountId, AccountId, Balance, StakerStatus<AccountId>)>,
+	tracker_target_list_cleanup: bool,
 }
 
 impl Default for ExtBuilder {
@@ -365,6 +365,7 @@ impl Default for ExtBuilder {
 			status: Default::default(),
 			stakes: Default::default(),
 			stakers: Default::default(),
+			tracker_target_list_cleanup: false,
 		}
 	}
 }
@@ -442,6 +443,10 @@ impl ExtBuilder {
 	}
 	pub fn balance_factor(mut self, factor: Balance) -> Self {
 		self.balance_factor = factor;
+		self
+	}
+	pub fn clear_tracker_target_list(mut self) -> Self {
+		self.tracker_target_list_cleanup = true;
 		self
 	}
 	fn build(self) -> sp_io::TestExternalities {
@@ -569,7 +574,14 @@ impl ExtBuilder {
 	}
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		sp_tracing::try_init_simple();
+
+		let tracker_cleanup = self.tracker_target_list_cleanup;
 		let mut ext = self.build();
+		ext.execute_with(|| {
+			if tracker_cleanup {
+				<Test as pallet_stake_tracker::Config>::TargetList::unsafe_clear();
+			}
+		});
 		ext.execute_with(test);
 		ext.execute_with(|| {
 			assert_eq!(
