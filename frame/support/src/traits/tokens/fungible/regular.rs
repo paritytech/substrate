@@ -32,7 +32,7 @@ use sp_arithmetic::traits::{CheckedAdd, CheckedSub};
 use sp_runtime::{traits::Saturating, ArithmeticError, DispatchResult, TokenError};
 use sp_std::marker::PhantomData;
 
-use super::{CreditOf, DebtOf, HandleImbalanceDrop, Imbalance};
+use super::{Credit, Debt, HandleImbalanceDrop, Imbalance};
 
 /// Trait for providing balance-inspection access to a fungible asset.
 pub trait Inspect<AccountId> {
@@ -98,6 +98,8 @@ pub trait Inspect<AccountId> {
 /// for the underlying datatype to implement so the user gets the much safer `Balanced` trait to
 /// use.
 pub trait Unbalanced<AccountId>: Inspect<AccountId> {
+	fn handle_dust(dust: Imbalance<Self::Balance, (), ()>);
+
 	/// Forcefully set the balance of `who` to `amount`.
 	///
 	/// If this call executes successfully, you can `assert_eq!(Self::balance(), amount);`.
@@ -109,7 +111,10 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 	/// invariants such as any Existential Deposits needed or overflows/underflows.
 	/// If this cannot be done for some reason (e.g. because the account cannot be created, deleted
 	/// or would overflow) then an `Err` is returned.
-	fn set_balance(who: &AccountId, amount: Self::Balance) -> DispatchResult;
+	///
+	/// If `Ok` is returned then its inner is the amount which was discarded as dust due to
+	/// existential deposit requirements. 
+	fn write_balance(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError>;
 
 	/// Set the total issuance to `amount`.
 	fn set_total_issuance(amount: Self::Balance);
@@ -137,7 +142,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 			amount = amount.min(free);
 		}
 		let new_balance = old_balance.checked_sub(&amount).ok_or(TokenError::FundsUnavailable)?;
-		Self::set_balance(who, new_balance)?;
+		Self::write_balance(who, new_balance)?;
 		Ok(old_balance.saturating_sub(new_balance))
 	}
 
@@ -169,7 +174,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 			if new_balance == old_balance {
 				Ok(Default::default())
 			} else {
-				Self::set_balance(who, new_balance)?;
+				Self::write_balance(who, new_balance)?;
 				Ok(new_balance.saturating_sub(old_balance))
 			}
 		}
@@ -328,7 +333,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	///
 	/// This is infallible, but doesn't guarantee that the entire `amount` is burnt, for example
 	/// in the case of underflow.
-	fn rescind(amount: Self::Balance) -> DebtOf<AccountId, Self> {
+	fn rescind(amount: Self::Balance) -> Debt<AccountId, Self> {
 		let old = Self::total_issuance();
 		let new = old.saturating_sub(amount);
 		Self::set_total_issuance(new);
@@ -343,7 +348,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	///
 	/// This is infallible, but doesn't guarantee that the entire `amount` is issued, for example
 	/// in the case of overflow.
-	fn issue(amount: Self::Balance) -> CreditOf<AccountId, Self> {
+	fn issue(amount: Self::Balance) -> Credit<AccountId, Self> {
 		let old = Self::total_issuance();
 		let new = old.saturating_add(amount);
 		Self::set_total_issuance(new);
@@ -356,7 +361,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	///
 	/// This is just the same as burning and issuing the same amount and has no effect on the
 	/// total issuance.
-	fn pair(amount: Self::Balance) -> (DebtOf<AccountId, Self>, CreditOf<AccountId, Self>) {
+	fn pair(amount: Self::Balance) -> (Debt<AccountId, Self>, Credit<AccountId, Self>) {
 		(Self::rescind(amount), Self::issue(amount))
 	}
 
@@ -373,7 +378,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		who: &AccountId,
 		value: Self::Balance,
 		best_effort: bool,
-	) -> Result<DebtOf<AccountId, Self>, DispatchError> {
+	) -> Result<Debt<AccountId, Self>, DispatchError> {
 		let increase = Self::increase_balance(who, value, best_effort)?;
 		Self::done_deposit(who, increase);
 		Ok(Imbalance::<Self::Balance, Self::OnDropDebt, Self::OnDropCredit>::new(increase))
@@ -398,7 +403,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		best_effort: bool,
 		keep_alive: KeepAlive,
 		force: bool,
-	) -> Result<CreditOf<AccountId, Self>, DispatchError> {
+	) -> Result<Credit<AccountId, Self>, DispatchError> {
 		let decrease = Self::decrease_balance(who, value, best_effort, keep_alive, force)?;
 		Self::done_withdraw(who, decrease);
 		Ok(Imbalance::<Self::Balance, Self::OnDropCredit, Self::OnDropDebt>::new(decrease))
@@ -412,8 +417,8 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	/// already exist for this to succeed.
 	fn resolve(
 		who: &AccountId,
-		credit: CreditOf<AccountId, Self>,
-	) -> Result<(), CreditOf<AccountId, Self>> {
+		credit: Credit<AccountId, Self>,
+	) -> Result<(), Credit<AccountId, Self>> {
 		let v = credit.peek();
 		let debt = match Self::deposit(who, v, false) {
 			Err(_) => return Err(credit),
@@ -429,9 +434,9 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	/// `Err`.
 	fn settle(
 		who: &AccountId,
-		debt: DebtOf<AccountId, Self>,
+		debt: Debt<AccountId, Self>,
 		keep_alive: KeepAlive,
-	) -> Result<CreditOf<AccountId, Self>, DebtOf<AccountId, Self>> {
+	) -> Result<Credit<AccountId, Self>, Debt<AccountId, Self>> {
 		let amount = debt.peek();
 		let credit = match Self::withdraw(who, amount, false, keep_alive, false) {
 			Err(_) => return Err(debt),
@@ -439,7 +444,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		};
 
 		match credit.offset(debt) {
-			SameOrOther::None => Ok(CreditOf::<AccountId, Self>::zero()),
+			SameOrOther::None => Ok(Credit::<AccountId, Self>::zero()),
 			SameOrOther::Same(dust) => Ok(dust),
 			SameOrOther::Other(rest) => {
 				debug_assert!(false, "ok withdraw return must be at least debt value; qed");

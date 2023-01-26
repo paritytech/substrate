@@ -140,7 +140,7 @@ fn create_account_extrinsics(
 					Sr25519Keyring::Alice.pair(),
 					SudoCall::sudo {
 						call: Box::new(
-							BalancesCall::set_balance {
+							BalancesCall::force_set_balance {
 								who: AccountId::from(a.public()).into(),
 								new_free: 0,
 							}
@@ -155,7 +155,7 @@ fn create_account_extrinsics(
 					Sr25519Keyring::Alice.pair(),
 					SudoCall::sudo {
 						call: Box::new(
-							BalancesCall::set_balance {
+							BalancesCall::force_set_balance {
 								who: AccountId::from(a.public()).into(),
 								new_free: 1_000_000 * DOLLARS,
 							}

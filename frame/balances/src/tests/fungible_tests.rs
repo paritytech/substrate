@@ -25,7 +25,7 @@ use fungible::{Inspect, InspectHold, MutateHold, InspectFreeze, MutateFreeze, Un
 fn unbalanced_trait_set_balance_works() {
 	ExtBuilder::default().build_and_execute_with(|| {
 		assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 0);
-		assert_ok!(Balances::set_balance(&1337, 100));
+		assert_ok!(Balances::force_set_balance(&1337, 100));
 		assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 100);
 
 		assert_ok!(<Balances as fungible::MutateHold<_>>::hold(&TestId::Foo, &1337, 60));
@@ -33,9 +33,9 @@ fn unbalanced_trait_set_balance_works() {
 		assert_eq!(<Balances as fungible::InspectHold<_>>::total_balance_on_hold(&1337), 60);
 		assert_eq!(<Balances as fungible::InspectHold<_>>::balance_on_hold(&TestId::Foo, &1337), 60);
 
-		assert_noop!(Balances::set_balance(&1337, 0), Error::<Test>::InsufficientBalance);
+		assert_noop!(Balances::force_set_balance(&1337, 0), Error::<Test>::InsufficientBalance);
 
-		assert_ok!(Balances::set_balance(&1337, 1));
+		assert_ok!(Balances::force_set_balance(&1337, 1));
 		assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 1);
 		assert_eq!(<Balances as fungible::InspectHold<_>>::balance_on_hold(&TestId::Foo, &1337), 60);
 
@@ -58,7 +58,7 @@ fn unbalanced_trait_set_total_issuance_works() {
 fn unbalanced_trait_decrease_balance_simple_works() {
 	ExtBuilder::default().build_and_execute_with(|| {
 		// An Account that starts at 100
-		assert_ok!(Balances::set_balance(&1337, 100));
+		assert_ok!(Balances::force_set_balance(&1337, 100));
 		assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 100);
 		// and reserves 50
 		assert_ok!(<Balances as fungible::MutateHold<_>>::hold(&TestId::Foo, &1337, 50));
@@ -72,7 +72,7 @@ fn unbalanced_trait_decrease_balance_simple_works() {
 #[test]
 fn unbalanced_trait_decrease_balance_works_1() {
 	ExtBuilder::default().build_and_execute_with(|| {
-		assert_ok!(Balances::set_balance(&1337, 100));
+		assert_ok!(Balances::force_set_balance(&1337, 100));
 		assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 100);
 
 		assert_noop!(
@@ -91,7 +91,7 @@ fn unbalanced_trait_decrease_balance_works_1() {
 fn unbalanced_trait_decrease_balance_works_2() {
 	ExtBuilder::default().build_and_execute_with(|| {
 		// free: 40, reserved: 60
-		assert_ok!(Balances::set_balance(&1337, 100));
+		assert_ok!(Balances::force_set_balance(&1337, 100));
 		assert_ok!(Balances::hold(&TestId::Foo, &1337, 60));
 		assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 40);
 		assert_eq!(Balances::total_balance_on_hold(&1337), 60);
@@ -111,7 +111,7 @@ fn unbalanced_trait_decrease_balance_works_2() {
 #[test]
 fn unbalanced_trait_decrease_balance_at_most_works_1() {
 	ExtBuilder::default().build_and_execute_with(|| {
-		assert_ok!(Balances::set_balance(&1337, 100));
+		assert_ok!(Balances::force_set_balance(&1337, 100));
 		assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 100);
 
 		assert_eq!(
@@ -125,7 +125,7 @@ fn unbalanced_trait_decrease_balance_at_most_works_1() {
 #[test]
 fn unbalanced_trait_decrease_balance_at_most_works_2() {
 	ExtBuilder::default().build_and_execute_with(|| {
-		assert_ok!(Balances::set_balance(&1337, 99));
+		assert_ok!(Balances::force_set_balance(&1337, 99));
 		assert_eq!(
 			Balances::decrease_balance(&1337, 99, true, CanKill, false),
 			Ok(99)
@@ -138,7 +138,7 @@ fn unbalanced_trait_decrease_balance_at_most_works_2() {
 fn unbalanced_trait_decrease_balance_at_most_works_3() {
 	ExtBuilder::default().build_and_execute_with(|| {
 		// free: 40, reserved: 60
-		assert_ok!(Balances::set_balance(&1337, 100));
+		assert_ok!(Balances::force_set_balance(&1337, 100));
 		assert_ok!(Balances::hold(&TestId::Foo, &1337, 60));
 		assert_eq!(Balances::free_balance(1337), 40);
 		assert_eq!(Balances::total_balance_on_hold(&1337), 60);

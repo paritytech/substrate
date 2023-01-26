@@ -51,7 +51,7 @@ frame_support::construct_runtime!(
 pub struct BaseFilter;
 impl Contains<RuntimeCall> for BaseFilter {
 	fn contains(call: &RuntimeCall) -> bool {
-		!matches!(call, &RuntimeCall::Balances(pallet_balances::Call::set_balance { .. }))
+		!matches!(call, &RuntimeCall::Balances(pallet_balances::Call::force_set_balance { .. }))
 	}
 }
 

@@ -109,7 +109,7 @@ mod benchmarks {
 		assert_eq!(Balances::<T, I>::free_balance(&recipient), transfer_amount);
 	}
 
-	// Benchmark `set_balance` coming from ROOT account. This always creates an account.
+	// Benchmark `force_set_balance` coming from ROOT account. This always creates an account.
 	#[benchmark]
 	fn force_set_balance_creating() {
 		let user: T::AccountId = account("user", 0, SEED);
@@ -121,12 +121,12 @@ mod benchmarks {
 		let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&user, balance_amount);
 
 		#[extrinsic_call]
-		set_balance(RawOrigin::Root, user_lookup, balance_amount);
+		force_set_balance(RawOrigin::Root, user_lookup, balance_amount);
 
 		assert_eq!(Balances::<T, I>::free_balance(&user), balance_amount);
 	}
 
-	// Benchmark `set_balance` coming from ROOT account. This always kills an account.
+	// Benchmark `force_set_balance` coming from ROOT account. This always kills an account.
 	#[benchmark]
 	fn force_set_balance_killing() {
 		let user: T::AccountId = account("user", 0, SEED);
@@ -138,7 +138,7 @@ mod benchmarks {
 		let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&user, balance_amount);
 
 		#[extrinsic_call]
-		set_balance(RawOrigin::Root, user_lookup, Zero::zero());
+		force_set_balance(RawOrigin::Root, user_lookup, Zero::zero());
 
 		assert!(Balances::<T, I>::free_balance(&user).is_zero());
 	}

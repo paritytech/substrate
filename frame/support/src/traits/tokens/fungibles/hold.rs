@@ -210,7 +210,7 @@ pub trait Balanced<AccountId>: super::Balanced<AccountId> + Unbalanced<AccountId
 		reason: &Self::Reason,
 		who: &AccountId,
 		amount: Self::Balance,
-	) -> (CreditOf<AccountId, Self>, Self::Balance) {
+	) -> (Credit<AccountId, Self>, Self::Balance) {
 		let decrease = Self::decrease_balance_on_hold(asset, reason, who, amount, true)
 			.unwrap_or(Default::default());
 		let credit =

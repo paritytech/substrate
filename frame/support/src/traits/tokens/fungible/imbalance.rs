@@ -33,6 +33,10 @@ pub trait HandleImbalanceDrop<Balance> {
 	fn handle(amount: Balance);
 }
 
+impl<Balance> HandleImbalanceDrop<Balance> for () {
+	fn handle(_: Balance) {}
+}
+
 /// An imbalance in the system, representing a divergence of recorded token supply from the sum of
 /// the balances of all accounts. This is `must_use` in order to ensure it gets handled (placing
 /// into an account, settling from an account or altering the supply).
@@ -138,7 +142,7 @@ impl<B: Balance, OnDrop: HandleImbalanceDrop<B>, OppositeOnDrop: HandleImbalance
 }
 
 /// Imbalance implying that the total_issuance value is less than the sum of all account balances.
-pub type DebtOf<AccountId, B> = Imbalance<
+pub type Debt<AccountId, B> = Imbalance<
 	<B as Inspect<AccountId>>::Balance,
 	// This will generally be implemented by increasing the total_issuance value.
 	<B as Balanced<AccountId>>::OnDropDebt,
@@ -147,7 +151,7 @@ pub type DebtOf<AccountId, B> = Imbalance<
 
 /// Imbalance implying that the total_issuance value is greater than the sum of all account
 /// balances.
-pub type CreditOf<AccountId, B> = Imbalance<
+pub type Credit<AccountId, B> = Imbalance<
 	<B as Inspect<AccountId>>::Balance,
 	// This will generally be implemented by decreasing the total_issuance value.
 	<B as Balanced<AccountId>>::OnDropCredit,

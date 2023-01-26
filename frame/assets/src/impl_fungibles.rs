@@ -81,8 +81,8 @@ impl<T: Config<I>, I: 'static> fungibles::Balanced<<T as SystemConfig>::AccountI
 }
 
 impl<T: Config<I>, I: 'static> fungibles::Unbalanced<T::AccountId> for Pallet<T, I> {
-	fn set_balance(_: Self::AssetId, _: &T::AccountId, _: Self::Balance) -> DispatchResult {
-		unreachable!("set_balance is not used if other functions are impl'd");
+	fn write_balance(_: Self::AssetId, _: &T::AccountId, _: Self::Balance) -> DispatchResult {
+		unreachable!("write_balance is not used if other functions are impl'd");
 	}
 	fn set_total_issuance(id: T::AssetId, amount: Self::Balance) {
 		Asset::<T, I>::mutate_exists(id, |maybe_asset| {

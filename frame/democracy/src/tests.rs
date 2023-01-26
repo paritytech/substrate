@@ -71,7 +71,7 @@ frame_support::construct_runtime!(
 pub struct BaseFilter;
 impl Contains<RuntimeCall> for BaseFilter {
 	fn contains(call: &RuntimeCall) -> bool {
-		!matches!(call, &RuntimeCall::Balances(pallet_balances::Call::set_balance { .. }))
+		!matches!(call, &RuntimeCall::Balances(pallet_balances::Call::force_set_balance { .. }))
 	}
 }
 
@@ -225,7 +225,7 @@ fn params_should_work() {
 }
 
 fn set_balance_proposal(value: u64) -> BoundedCallOf<Test> {
-	let inner = pallet_balances::Call::set_balance { who: 42, new_free: value };
+	let inner = pallet_balances::Call::force_set_balance { who: 42, new_free: value };
 	let outer = RuntimeCall::Balances(inner);
 	Preimage::bound(outer).unwrap()
 }

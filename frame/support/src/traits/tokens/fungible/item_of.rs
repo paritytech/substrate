@@ -119,8 +119,8 @@ impl<
 		AccountId,
 	> Unbalanced<AccountId> for ItemOf<F, A, AccountId>
 {
-	fn set_balance(who: &AccountId, amount: Self::Balance) -> DispatchResult {
-		<F as fungibles::Unbalanced<AccountId>>::set_balance(A::get(), who, amount)
+	fn write_balance(who: &AccountId, amount: Self::Balance) -> DispatchResult {
+		<F as fungibles::Unbalanced<AccountId>>::write_balance(A::get(), who, amount)
 	}
 	fn set_total_issuance(amount: Self::Balance) -> () {
 		<F as fungibles::Unbalanced<AccountId>>::set_total_issuance(A::get(), amount)
@@ -366,33 +366,33 @@ impl<
 		who: &AccountId,
 		value: Self::Balance,
 		best_effort: bool,
-	) -> Result<DebtOf<AccountId, Self>, DispatchError> {
+	) -> Result<Debt<AccountId, Self>, DispatchError> {
 		<F as fungibles::Balanced<AccountId>>::deposit(A::get(), who, value, best_effort)
 			.map(|debt| Imbalance::new(debt.peek()))
 	}
-	fn issue(amount: Self::Balance) -> CreditOf<AccountId, Self> {
+	fn issue(amount: Self::Balance) -> Credit<AccountId, Self> {
 		Imbalance::new(<F as fungibles::Balanced<AccountId>>::issue(A::get(), amount).peek())
 	}
-	fn pair(amount: Self::Balance) -> (DebtOf<AccountId, Self>, CreditOf<AccountId, Self>) {
+	fn pair(amount: Self::Balance) -> (Debt<AccountId, Self>, Credit<AccountId, Self>) {
 		let (a, b) = <F as fungibles::Balanced<AccountId>>::pair(A::get(), amount);
 		(Imbalance::new(a.peek()), Imbalance::new(b.peek()))
 	}
-	fn rescind(amount: Self::Balance) -> DebtOf<AccountId, Self> {
+	fn rescind(amount: Self::Balance) -> Debt<AccountId, Self> {
 		Imbalance::new(<F as fungibles::Balanced<AccountId>>::rescind(A::get(), amount).peek())
 	}
 	fn resolve(
 		who: &AccountId,
-		credit: CreditOf<AccountId, Self>,
-	) -> Result<(), CreditOf<AccountId, Self>> {
+		credit: Credit<AccountId, Self>,
+	) -> Result<(), Credit<AccountId, Self>> {
 		let credit = fungibles::Imbalance::new(A::get(), credit.peek());
 		<F as fungibles::Balanced<AccountId>>::resolve(who, credit)
 			.map_err(|credit| Imbalance::new(credit.peek()))
 	}
 	fn settle(
 		who: &AccountId,
-		debt: DebtOf<AccountId, Self>,
+		debt: Debt<AccountId, Self>,
 		keep_alive: KeepAlive,
-	) -> Result<CreditOf<AccountId, Self>, DebtOf<AccountId, Self>> {
+	) -> Result<Credit<AccountId, Self>, Debt<AccountId, Self>> {
 		let debt = fungibles::Imbalance::new(A::get(), debt.peek());
 		<F as fungibles::Balanced<AccountId>>::settle(who, debt, keep_alive)
 			.map(|credit| Imbalance::new(credit.peek()))
@@ -404,7 +404,7 @@ impl<
 		best_effort: bool,
 		keep_alive: KeepAlive,
 		force: bool,
-	) -> Result<CreditOf<AccountId, Self>, DispatchError> {
+	) -> Result<Credit<AccountId, Self>, DispatchError> {
 		<F as fungibles::Balanced<AccountId>>::withdraw(
 			A::get(),
 			who,
@@ -427,7 +427,7 @@ impl<
 		reason: &Self::Reason,
 		who: &AccountId,
 		amount: Self::Balance,
-	) -> (CreditOf<AccountId, Self>, Self::Balance) {
+	) -> (Credit<AccountId, Self>, Self::Balance) {
 		let (credit, amount) =
 			<F as fungibles::BalancedHold<AccountId>>::slash(A::get(), reason, who, amount);
 		(Imbalance::new(credit.peek()), amount)

@@ -198,7 +198,7 @@ impl pallet_authorship::Config for Runtime {
 
 pub struct CreditToBlockAuthor;
 impl HandleCredit<AccountId, Assets> for CreditToBlockAuthor {
-	fn handle_credit(credit: CreditOf<AccountId, Assets>) {
+	fn handle_credit(credit: Credit<AccountId, Assets>) {
 		if let Some(author) = pallet_authorship::Pallet::<Runtime>::author() {
 			// What to do in case paying the author fails (e.g. because `fee < min_balance`)
 			// default: drop the result which will trigger the `OnDrop` of the imbalance.

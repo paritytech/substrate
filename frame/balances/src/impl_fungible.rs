@@ -136,7 +136,7 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 }
 
 impl<T: Config<I>, I: 'static> fungible::Unbalanced<T::AccountId> for Pallet<T, I> {
-	fn set_balance(who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
+	fn write_balance(who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
 		let max_reduction =
 			<Self as fungible::Inspect<_>>::reducible_balance(who, KeepAlive::CanKill, true);
 		Self::mutate_account(who, |account| -> DispatchResult {
@@ -329,59 +329,3 @@ impl<T: Config<I>, I: 'static> fungible::Balanced<T::AccountId> for Pallet<T, I>
 }
 
 impl<T: Config<I>, I: 'static> fungible::BalancedHold<T::AccountId> for Pallet<T, I> {}
-
-/*
-(_reason: &Self::Reason, who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
-	if amount.is_zero() {
-		return Ok(())
-	}
-	ensure!(Self::can_reserve(who, amount), Error::<T, I>::InsufficientBalance);
-	Self::mutate_account(who, |a| {
-		a.free -= amount;
-		a.reserved += amount;
-	})?;
-	Ok(())
-}
-fn release(
-	_reason: &Self::Reason,
-	who: &T::AccountId,
-	amount: Self::Balance,
-	best_effort: bool,
-) -> Result<T::Balance, DispatchError> {
-	if amount.is_zero() {
-		return Ok(amount)
-	}
-	// Done on a best-effort basis.
-	Self::try_mutate_account(who, |a, _| {
-		let new_free = a.free.saturating_add(amount.min(a.reserved));
-		let actual = new_free - a.free;
-		ensure!(best_effort || actual == amount, Error::<T, I>::InsufficientBalance);
-		// ^^^ Guaranteed to be <= amount and <= a.reserved
-		a.free = new_free;
-		a.reserved = a.reserved.saturating_sub(actual);
-		Ok(actual)
-	})
-}
-fn burn_held(
-	reason: &Self::Reason,
-	who: &T::AccountId,
-	amount: Self::Balance,
-	best_effort: bool,
-	force: bool,
-) -> Result<Self::Balance, DispatchError> {
-	// Essentially an unreserve + burn_from, but we want to do it in a single op.
-	todo!()
-}
-fn transfer_held(
-	_reason: &Self::Reason,
-	source: &T::AccountId,
-	dest: &T::AccountId,
-	amount: Self::Balance,
-	best_effort: bool,
-	on_hold: bool,
-	_force: bool,
-) -> Result<Self::Balance, DispatchError> {
-	let status = if on_hold { Status::Reserved } else { Status::Free };
-	Self::do_transfer_reserved(source, dest, amount, best_effort, status)
-}
-*/

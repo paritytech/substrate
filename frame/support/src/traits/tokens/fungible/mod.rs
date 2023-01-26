@@ -51,6 +51,6 @@ pub use hold::{
 	Balanced as BalancedHold, Inspect as InspectHold, Mutate as MutateHold,
 	Unbalanced as UnbalancedHold,
 };
-pub use imbalance::{CreditOf, DebtOf, HandleImbalanceDrop, Imbalance};
+pub use imbalance::{Credit, Debt, HandleImbalanceDrop, Imbalance};
 pub use item_of::ItemOf;
 pub use regular::{Balanced, DecreaseIssuance, IncreaseIssuance, Inspect, Mutate, Unbalanced};

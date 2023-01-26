@@ -142,7 +142,7 @@ impl<T> FunInspect<T> for NoCounterpart<T> {
 	}
 }
 impl<T> fungible::Unbalanced<T> for NoCounterpart<T> {
-	fn set_balance(_: &T, _: Self::Balance) -> sp_runtime::DispatchResult {
+	fn write_balance(_: &T, _: Self::Balance) -> sp_runtime::DispatchResult {
 		Ok(())
 	}
 	fn set_total_issuance(_: Self::Balance) {}
@@ -183,7 +183,7 @@ pub mod pallet {
 	type BalanceOf<T> =
 		<<T as Config>::Currency as FunInspect<<T as frame_system::Config>::AccountId>>::Balance;
 	type DebtOf<T> =
-		fungible::DebtOf<<T as frame_system::Config>::AccountId, <T as Config>::Currency>;
+		fungible::Debt<<T as frame_system::Config>::AccountId, <T as Config>::Currency>;
 	type ReceiptRecordOf<T> = ReceiptRecord<
 		<T as frame_system::Config>::AccountId,
 		<T as frame_system::Config>::BlockNumber,

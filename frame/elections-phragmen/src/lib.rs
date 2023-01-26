@@ -2093,7 +2093,7 @@ mod tests {
 			assert_ok!(submit_candidacy(RuntimeOrigin::signed(4)));
 
 			// User has 100 free and 50 reserved.
-			assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 2, 150));
+			assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), 2, 150));
 			assert_ok!(Balances::reserve(&2, 50));
 			// User tries to vote with 150 tokens.
 			assert_ok!(vote(RuntimeOrigin::signed(2), vec![4, 5], 150));
