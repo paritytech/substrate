@@ -2195,7 +2195,12 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Set reward claim permission.
+		/// Sets permission to claim reward.
+		///
+		/// Lets a pool member to choose who can claim pending rewards on their behalf. By default,
+		/// this is `Permissioned` which implies only the pool member themselves can claim their pending
+		/// rewards. If a pool member wishes so, they can set this to `Permissionless` to allow any
+		/// account to claim their rewards and bond extra to the pool.
 		///
 		/// # Arguments
 		///
