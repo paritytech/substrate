@@ -49,12 +49,9 @@ benchmarks! {
 	}: _(RawOrigin::Root, Default::default())
 
 	set_code {
-		let b in 0 .. *T::BlockLength::get().max.get(DispatchClass::Normal) as u32;
-		let code = vec![1; b as usize];
-	}: _(RawOrigin::Root, code)
+		let runtime_blob = include_bytes!("../runtimes/kitchensink_runtime.compact.compressed.wasm");
+	}: _(RawOrigin::Root, runtime_blob.to_vec())
 	verify {
-		let current_code = storage::unhashed::get_raw(well_known_keys::CODE).ok_or("Code not stored.")?;
-		assert_eq!(current_code.len(), b as usize);
 	}
 
 	#[extra]

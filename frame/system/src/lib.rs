@@ -1609,6 +1609,7 @@ impl<T: Config> Pallet<T> {
 			.ok_or(Error::<T>::FailedToExtractRuntimeVersion)?;
 
 		if new_version.spec_name != current_version.spec_name {
+			log::debug!("New: {new_version:?}, Current: {current_version:?}");
 			return Err(Error::<T>::InvalidSpecName.into());
 		}
 
