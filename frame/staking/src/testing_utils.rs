@@ -27,7 +27,6 @@ use rand_chacha::{
 };
 use sp_io::hashing::blake2_256;
 
-use frame_election_provider_support::ReadOnlySortedListProvider;
 use frame_support::{pallet_prelude::*, traits::Currency};
 use sp_runtime::{traits::StaticLookup, Perbill};
 use sp_std::prelude::*;
@@ -44,6 +43,7 @@ pub fn clear_validators_and_nominators<T: Config>() {
 	Nominators::<T>::remove_all();
 
 	frame_election_provider_support::runtime_benchmarks_or_test_enabled! {
+		use frame_election_provider_support::ReadOnlySortedListProvider;
 		// NOTE: safe to call outside block production
 		T::VoterList::unsafe_clear();
 	}

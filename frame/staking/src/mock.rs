@@ -445,6 +445,7 @@ impl ExtBuilder {
 		self.balance_factor = factor;
 		self
 	}
+	#[allow(unused)]
 	pub fn clear_tracker_target_list(mut self) -> Self {
 		self.tracker_target_list_cleanup = true;
 		self
@@ -575,13 +576,16 @@ impl ExtBuilder {
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		sp_tracing::try_init_simple();
 
+		#[allow(unused)]
 		let tracker_cleanup = self.tracker_target_list_cleanup;
 		let mut ext = self.build();
-		ext.execute_with(|| {
-			if tracker_cleanup {
-				<Test as pallet_stake_tracker::Config>::TargetList::unsafe_clear();
-			}
-		});
+		frame_election_provider_support::runtime_benchmarks_or_test_enabled! {
+			ext.execute_with(|| {
+				if tracker_cleanup {
+					<Test as pallet_stake_tracker::Config>::TargetList::unsafe_clear();
+				}
+			});
+		}
 		ext.execute_with(test);
 		ext.execute_with(|| {
 			assert_eq!(
