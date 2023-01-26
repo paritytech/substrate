@@ -68,7 +68,7 @@ fn create_offence_wont_slash_non_active_validators() {
 		// so 31 didn't get slashed.
 		assert_eq!(Balances::free_balance(31), 500);
 
-		// but 11 is an active validator so it got slashed.
+		// but 11 is an active validator so they got slashed.
 		assert_eq!(Balances::free_balance(11), 800);
 	})
 }
