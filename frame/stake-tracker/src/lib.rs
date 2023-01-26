@@ -82,13 +82,13 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		#[cfg(feature = "try-runtime")]
-		fn try_state(n: BlockNumberFor<T>) -> Result<(), &'static str> {
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), &'static str> {
 			ensure!(
 				ApprovalStake::<T>::count() >= T::TargetList::count(),
 				"ApprovalStake map missing entries"
 			);
 			T::TargetList::try_state()?;
-			T::VoterList::try_state()?;
+			T::VoterList::try_state()
 		}
 	}
 }
