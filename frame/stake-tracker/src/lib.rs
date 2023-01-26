@@ -237,6 +237,6 @@ impl<T: Config> ScoreProvider<T::AccountId> for Pallet<T> {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_score_of(who: &T::AccountId, score: Self::Score) {
-		ApprovalStake::<T>::set(who, score);
+		ApprovalStake::<T>::set(who, Some(score));
 	}
 }
