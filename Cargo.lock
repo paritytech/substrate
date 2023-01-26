@@ -8383,7 +8383,7 @@ dependencies = [
 name = "sc-finality-grandpa"
 version = "0.10.0-dev"
 dependencies = [
- "ahash 0.7.6",
+ "ahash 0.8.2",
  "array-bytes",
  "assert_matches",
  "async-trait",
@@ -8583,7 +8583,7 @@ dependencies = [
 name = "sc-network-gossip"
 version = "0.10.0-dev"
 dependencies = [
- "ahash 0.7.6",
+ "ahash 0.8.2",
  "futures",
  "futures-timer",
  "libp2p",
@@ -10352,18 +10352,18 @@ dependencies = [
 name = "sp-trie"
 version = "7.0.0"
 dependencies = [
- "ahash 0.7.6",
+ "ahash 0.8.2",
  "array-bytes",
  "criterion",
  "hash-db",
  "hashbrown 0.12.3",
  "lazy_static",
- "lru",
  "memory-db",
  "nohash-hasher",
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "scale-info",
+ "schnellru",
  "sp-core",
  "sp-runtime",
  "sp-std",
