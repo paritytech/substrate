@@ -49,8 +49,6 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub const SocietyPalletId: PalletId = PalletId(*b"py/socie");
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
 }
 
 ord_parameter_types! {

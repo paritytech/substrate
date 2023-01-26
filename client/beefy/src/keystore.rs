@@ -25,10 +25,10 @@ use log::warn;
 
 use beefy_primitives::{
 	crypto::{Public, Signature},
-	BeefyVerify, KEY_TYPE,
+	BeefyAuthorityId, KEY_TYPE,
 };
 
-use crate::error;
+use crate::{error, LOG_TARGET};
 
 /// A BEEFY specific keystore implemented as a `Newtype`. This is basically a
 /// wrapper around [`sp_keystore::SyncCryptoStore`] and allows to customize
@@ -53,7 +53,12 @@ impl BeefyKeystore {
 			.collect();
 
 		if public.len() > 1 {
-			warn!(target: "beefy", "🥩 Multiple private keys found for: {:?} ({})", public, public.len());
+			warn!(
+				target: LOG_TARGET,
+				"🥩 Multiple private keys found for: {:?} ({})",
+				public,
+				public.len()
+			);
 		}
 
 		public.get(0).cloned()
@@ -99,7 +104,7 @@ impl BeefyKeystore {
 	///
 	/// Return `true` if the signature is authentic, `false` otherwise.
 	pub fn verify(public: &Public, sig: &Signature, message: &[u8]) -> bool {
-		BeefyVerify::<Keccak256>::verify(sig, message, public)
+		BeefyAuthorityId::<Keccak256>::verify(public, sig, message)
 	}
 }
 

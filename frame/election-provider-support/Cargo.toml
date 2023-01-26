@@ -12,7 +12,7 @@ description = "election provider supporting traits"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 frame-election-provider-solution-type = { version = "4.0.0-dev", path = "solution-type" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
@@ -21,10 +21,10 @@ sp-arithmetic = { version = "6.0.0", default-features = false, path = "../../pri
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
+sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
 
 [dev-dependencies]
-rand = "0.7.3"
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
+rand = { version = "0.8.5", features = ["small_rng"] }
 sp-io = { version = "7.0.0", path = "../../primitives/io" }
 sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elections" }
 
@@ -38,6 +38,7 @@ std = [
 	"scale-info/std",
 	"sp-arithmetic/std",
 	"sp-npos-elections/std",
+	"sp-core/std",
 	"sp-runtime/std",
 	"sp-std/std",
 ]

@@ -29,12 +29,11 @@ use sc_network_common::protocol::ProtocolName;
 use sp_runtime::traits::Block;
 use std::{marker::PhantomData, sync::Arc};
 
-use crate::{
-	communication::request_response::{
-		on_demand_justifications_protocol_config, Error, JustificationRequest,
-	},
-	metric_inc,
-	metrics::Metrics,
+use crate::{communication::request_response::{
+	on_demand_justifications_protocol_config, Error, JustificationRequest, BEEFY_SYNC_LOG_TARGET,
+},
+metric_inc,
+metrics::Metrics,
 };
 
 /// A request coming in, including a sender for sending responses.
@@ -183,7 +182,7 @@ where
 
 	/// Run [`BeefyJustifsRequestHandler`].
 	pub async fn run(mut self) {
-		trace!(target: "beefy::sync", "🥩 Running BeefyJustifsRequestHandler");
+		trace!(target: BEEFY_SYNC_LOG_TARGET, "🥩 Running BeefyJustifsRequestHandler");
 
 		while let Ok(request) = self.request_receiver.recv(|| vec![]).await {
 			let peer = request.peer;
@@ -191,7 +190,7 @@ where
 				Ok(()) => {
 					metric_inc!(self, beefy_successful_justification_respond_request);
 					debug!(
-						target: "beefy::sync",
+						target: BEEFY_SYNC_LOG_TARGET,
 						"🥩 Handled BEEFY justification request from {:?}.", peer
 					)
 				},
@@ -199,7 +198,7 @@ where
 					metric_inc!(self, beefy_failed_justification_respond_request);
 					// TODO (issue #12293): apply reputation changes here based on error type.
 					debug!(
-						target: "beefy::sync",
+						target: BEEFY_SYNC_LOG_TARGET,
 						"🥩 Failed to handle BEEFY justification request from {:?}: {}", peer, e,
 					)
 				},

@@ -35,6 +35,7 @@ use sc_consensus::{BlockCheckParams, BlockImport, BlockImportParams, ImportResul
 use crate::{
 	communication::notification::BeefyVersionedFinalityProofSender,
 	justification::{decode_and_verify_finality_proof, BeefyVersionedFinalityProof},
+	LOG_TARGET,
 	metric_set,
 	metrics::Metrics,
 };
@@ -143,7 +144,10 @@ where
 			(Some(encoded), ImportResult::Imported(_)) => {
 				if let Ok(proof) = self.decode_and_verify(&encoded, number, hash) {
 					// The proof is valid and the block is imported and final, we can import.
-					debug!(target: "beefy", "🥩 import justif {:?} for block number {:?}.", proof, number);
+					debug!(
+						target: LOG_TARGET,
+						"🥩 import justif {:?} for block number {:?}.", proof, number
+					);
 					// Send the justification to the BEEFY voter for processing.
 					self.justification_sender
 						.notify(|| Ok::<_, ()>(proof))
@@ -152,9 +156,10 @@ where
 					metric_set!(self, beefy_good_justification_imports, number);
 				} else {
 					debug!(
-						target: "beefy",
+						target: LOG_TARGET,
 						"🥩 error decoding justification: {:?} for imported block {:?}",
-						encoded, number,
+						encoded,
+						number,
 					);
 					metric_set!(self, beefy_bad_justification_imports, number);
 				}

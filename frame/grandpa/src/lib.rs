@@ -37,7 +37,7 @@ use codec::{self as codec, Decode, Encode, MaxEncodedLen};
 pub use fg_primitives::{AuthorityId, AuthorityList, AuthorityWeight, VersionedAuthorityList};
 use fg_primitives::{
 	ConsensusLog, EquivocationProof, ScheduledChange, SetId, GRANDPA_AUTHORITIES_KEY,
-	GRANDPA_ENGINE_ID,
+	GRANDPA_ENGINE_ID, RUNTIME_LOG_TARGET as LOG_TARGET,
 };
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, Pays},
