@@ -29,11 +29,13 @@ use sc_network_common::protocol::ProtocolName;
 use sp_runtime::traits::Block;
 use std::{marker::PhantomData, sync::Arc};
 
-use crate::{communication::request_response::{
-	on_demand_justifications_protocol_config, Error, JustificationRequest, BEEFY_SYNC_LOG_TARGET,
-},
-metric_inc,
-metrics::Metrics,
+use crate::{
+	communication::request_response::{
+		on_demand_justifications_protocol_config, Error, JustificationRequest,
+		BEEFY_SYNC_LOG_TARGET,
+	},
+	metric_inc,
+	metrics::Metrics,
 };
 
 /// A request coming in, including a sender for sending responses.
