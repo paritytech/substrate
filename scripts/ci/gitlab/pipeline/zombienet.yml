@@ -57,4 +57,4 @@ zombienet-0004-webrtc:
   script:
     - /home/nonroot/zombie-net/scripts/ci/run-test-env-manager.sh
         --github-remote-dir="${GH_DIR}/0004-webrtc"
-        --test="test-warp-sync.zndsl"
+        --test="test-webrtc.zndsl"
