@@ -25,7 +25,7 @@ pub mod v1 {
 		PartialEqNoBound,
 	};
 	use pallet_stake_tracker::{ApprovalStake, BalanceOf, Pallet};
-	use pallet_staking::{Nominations, Nominators, Validators};
+	use pallet_staking::Nominations;
 	use sp_runtime::Saturating;
 	use std::collections::BTreeMap;
 
