@@ -204,7 +204,7 @@ impl NetworkParams {
 				addrs.push(
 					Multiaddr::empty()
 						.with(Protocol::Ip4([0, 0, 0, 0].into()))
-						.with(Protocol::Tcp(port))
+						.with(Protocol::Udp(port))
 						.with(Protocol::WebRTC),
 				);
 			}
