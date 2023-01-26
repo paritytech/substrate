@@ -2021,3 +2021,23 @@ macro_rules! define_benchmarks {
 		}
 	}
 }
+
+pub use add_benchmark;
+pub use benchmark_backend;
+pub use benchmarks;
+pub use benchmarks_instance;
+pub use benchmarks_instance_pallet;
+pub use benchmarks_iter;
+pub use cb_add_benchmarks;
+pub use cb_list_benchmarks;
+pub use define_benchmarks;
+pub use impl_bench_case_tests;
+pub use impl_bench_name_tests;
+pub use impl_benchmark;
+pub use impl_benchmark_test;
+pub use impl_benchmark_test_suite;
+pub use impl_test_function;
+pub use list_benchmark;
+pub use selected_benchmark;
+pub use to_origin;
+pub use whitelist;
