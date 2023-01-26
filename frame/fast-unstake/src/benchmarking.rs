@@ -31,13 +31,11 @@ use sp_staking::{EraIndex, StakingInterface};
 use sp_std::prelude::*;
 
 const USER_SEED: u32 = 0;
-const DEFAULT_BACKER_PER_VALIDATOR: u32 = 128;
-const MAX_VALIDATORS: u32 = 128;
 
 type CurrencyOf<T> = <T as Config>::Currency;
 
-fn create_unexposed_nominators<T: Config>() -> Vec<T::AccountId> {
-	(0..T::BatchSize::get())
+fn create_unexposed_batch<T: Config>(batch_size: u32) -> Vec<T::AccountId> {
+	(0..batch_size)
 		.map(|i| {
 			let account =
 				frame_benchmarking::account::<T::AccountId>("unexposed_nominator", i, USER_SEED);
@@ -76,7 +74,7 @@ fn setup_staking<T: Config>(v: u32, until: EraIndex) {
 		.collect::<Vec<_>>();
 
 	for era in 0..=until {
-		let others = (0..DEFAULT_BACKER_PER_VALIDATOR)
+		let others = (0..T::MaxBackersPerValidator::get())
 			.map(|s| {
 				let who = frame_benchmarking::account::<T::AccountId>("nominator", era, s);
 				let value = ed;
@@ -97,8 +95,10 @@ fn on_idle_full_block<T: Config>() {
 benchmarks! {
 	// on_idle, we don't check anyone, but fully unbond them.
 	on_idle_unstake {
+		let b in 1 .. T::BatchSize::get();
+
 		ErasToCheckPerBlock::<T>::put(1);
-		for who in create_unexposed_nominators::<T>() {
+		for who in create_unexposed_batch::<T>(b).into_iter() {
 			assert_ok!(FastUnstake::<T>::register_fast_unstake(
 				RawOrigin::Signed(who.clone()).into(),
 			));
@@ -114,7 +114,7 @@ benchmarks! {
 				checked,
 				stashes,
 				..
-			}) if checked.len() == 1 && stashes.len() as u32 == T::BatchSize::get()
+			}) if checked.len() == 1 && stashes.len() as u32 == b
 		));
 	}
 	: {
@@ -123,25 +123,23 @@ benchmarks! {
 	verify {
 		assert!(matches!(
 			fast_unstake_events::<T>().last(),
-			Some(Event::BatchFinished)
+			Some(Event::BatchFinished { size: b })
 		));
 	}
 
-	// on_idle, when we check some number of eras,
+	// on_idle, when we check some number of eras and the queue is already set.
 	on_idle_check {
-		// number of eras multiplied by validators in that era.
-		let x in (T::Staking::bonding_duration() * 1) .. (T::Staking::bonding_duration() * MAX_VALIDATORS);
-
-		let u = T::Staking::bonding_duration();
-		let v = x / u;
+		let v in 1 .. 256;
+		let b in 1 .. T::BatchSize::get();
+		let u = T::MaxErasToCheckPerBlock::get().min(T::Staking::bonding_duration());
 
 		ErasToCheckPerBlock::<T>::put(u);
 		T::Staking::set_current_era(u);
 
-		// setup staking with v validators and u eras of data (0..=u)
+		// setup staking with v validators and u eras of data (0..=u+1)
 		setup_staking::<T>(v, u);
 
-		let stashes = create_unexposed_nominators::<T>().into_iter().map(|s| {
+		let stashes = create_unexposed_batch::<T>(b).into_iter().map(|s| {
 			assert_ok!(FastUnstake::<T>::register_fast_unstake(
 				RawOrigin::Signed(s.clone()).into(),
 			));
@@ -150,6 +148,8 @@ benchmarks! {
 
 		// no one is queued thus far.
 		assert_eq!(Head::<T>::get(), None);
+
+		Head::<T>::put(UnstakeRequest { stashes: stashes.clone().try_into().unwrap(), checked: Default::default() });
 	}
 	: {
 		on_idle_full_block::<T>();
@@ -167,7 +167,7 @@ benchmarks! {
 
 	register_fast_unstake {
 		ErasToCheckPerBlock::<T>::put(1);
-		let who = create_unexposed_nominators::<T>().get(0).cloned().unwrap();
+		let who = create_unexposed_batch::<T>(1).get(0).cloned().unwrap();
 		whitelist_account!(who);
 		assert_eq!(Queue::<T>::count(), 0);
 
@@ -179,7 +179,7 @@ benchmarks! {
 
 	deregister {
 		ErasToCheckPerBlock::<T>::put(1);
-		let who = create_unexposed_nominators::<T>().get(0).cloned().unwrap();
+		let who = create_unexposed_batch::<T>(1).get(0).cloned().unwrap();
 		assert_ok!(FastUnstake::<T>::register_fast_unstake(
 			RawOrigin::Signed(who.clone()).into(),
 		));
@@ -194,7 +194,7 @@ benchmarks! {
 	control {
 		let origin = <T as Config>::ControlOrigin::successful_origin();
 	}
-	: _<T::RuntimeOrigin>(origin, 128)
+	: _<T::RuntimeOrigin>(origin, T::MaxErasToCheckPerBlock::get())
 	verify {}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::ExtBuilder::default().build(), crate::mock::Runtime)
