@@ -16,29 +16,25 @@
 // limitations under the License.
 
 //! A set of benchmarks which can establish a global baseline for all other
-//! benchmarking.
+//! benchmarking. These benchmarks do not require a pallet to be deployed.
 
 #![cfg(feature = "runtime-benchmarks")]
 
+use super::*;
 use crate::benchmarks;
-use codec::Encode;
 use frame_system::Pallet as System;
-use sp_application_crypto::KeyTypeId;
 use sp_runtime::{
 	traits::{AppVerify, Hash},
 	RuntimeAppPublic,
 };
-use sp_std::prelude::*;
 
-pub const TEST_KEY_TYPE_ID: KeyTypeId = KeyTypeId(*b"test");
+mod crypto {
+	use sp_application_crypto::{app_crypto, sr25519, KeyTypeId};
 
-mod app_sr25519 {
-	use super::TEST_KEY_TYPE_ID;
-	use sp_application_crypto::{app_crypto, sr25519};
+	pub const TEST_KEY_TYPE_ID: KeyTypeId = KeyTypeId(*b"test");
 	app_crypto!(sr25519, TEST_KEY_TYPE_ID);
 }
-
-type SignerId = app_sr25519::Public;
+pub type SignerId = crypto::Public;
 
 pub struct Pallet<T: Config>(System<T>);
 pub trait Config: frame_system::Config {}
@@ -81,7 +77,6 @@ benchmarks! {
 	}
 
 	hashing {
-		let i in 0 .. 100;
 		let mut hash = T::Hash::default();
 	}: {
 		(0..=100_000u32).for_each(|j| hash = T::Hashing::hash(&j.to_be_bytes()));
@@ -106,53 +101,17 @@ benchmarks! {
 		});
 	}
 
-	#[skip_meta]
-	storage_read {
-		let i in 0 .. 1_000;
-		let mut people = Vec::new();
-		(0..i).for_each(|j| {
-			let hash = T::Hashing::hash(&j.to_be_bytes()).encode();
-			frame_support::storage::unhashed::put(&hash, &hash);
-			people.push(hash);
-		});
-	}: {
-		people.iter().for_each(|hash| {
-			// This does a storage read
-			let value = frame_support::storage::unhashed::get(hash);
-			assert_eq!(value, Some(hash.to_vec()));
-		});
-	}
-
-	#[skip_meta]
-	storage_write {
-		let i in 0 .. 1_000;
-		let mut hashes = Vec::new();
-		(0..i).for_each(|j| {
-			let hash = T::Hashing::hash(&j.to_be_bytes());
-			hashes.push(hash.encode());
-		});
-	}: {
-		hashes.iter().for_each(|hash| {
-			// This does a storage write
-			frame_support::storage::unhashed::put(hash, hash);
-		});
-	} verify {
-		hashes.iter().for_each(|hash| {
-			let value = frame_support::storage::unhashed::get(hash);
-			assert_eq!(value, Some(hash.to_vec()));
-		});
-	}
-
 	impl_benchmark_test_suite!(
 		Pallet,
-		crate::baseline::mock::new_test_ext(),
-		crate::baseline::mock::Test,
+		mock::new_test_ext(),
+		mock::Test,
 	);
 }
 
 #[cfg(test)]
 pub mod mock {
-	use sp_runtime::{testing::H256, traits::IdentityLookup};
+	use super::*;
+	use sp_runtime::testing::H256;
 
 	type AccountId = u64;
 	type AccountIndex = u32;
@@ -183,7 +142,7 @@ pub mod mock {
 		type Hash = H256;
 		type Hashing = ::sp_runtime::traits::BlakeTwo256;
 		type AccountId = AccountId;
-		type Lookup = IdentityLookup<Self::AccountId>;
+		type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 		type Header = sp_runtime::testing::Header;
 		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ();
