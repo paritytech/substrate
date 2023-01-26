@@ -50,3 +50,11 @@ zombienet-0001-basic-warp-sync:
     - /home/nonroot/zombie-net/scripts/ci/run-test-env-manager.sh
         --github-remote-dir="${GH_DIR}/0001-basic-warp-sync"
         --test="test-warp-sync.zndsl"
+
+zombienet-0004-webrtc:
+  extends:
+    - .zombienet-common
+  script:
+    - /home/nonroot/zombie-net/scripts/ci/run-test-env-manager.sh
+        --github-remote-dir="${GH_DIR}/0004-webrtc"
+        --test="test-warp-sync.zndsl"
