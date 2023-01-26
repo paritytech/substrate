@@ -926,7 +926,8 @@ async fn on_demand_beefy_justification_sync() {
 	)
 	.await;
 
-	// Spawn Dave, they are now way behind voting and can only catch up through on-demand justif sync.
+	// Spawn Dave, they are now way behind voting and can only catch up through on-demand justif
+	// sync.
 	tokio::spawn(dave_task);
 	// give Dave a chance to spawn and init.
 	run_for(Duration::from_millis(400), &net).await;
