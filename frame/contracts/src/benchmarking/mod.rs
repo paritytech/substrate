@@ -37,7 +37,7 @@ use crate::{
 	Pallet as Contracts, *,
 };
 use codec::{Encode, MaxEncodedLen};
-use frame_benchmarking::{account, benchmarks, whitelisted_caller};
+use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller};
 use frame_support::weights::Weight;
 use frame_system::RawOrigin;
 use sp_runtime::{

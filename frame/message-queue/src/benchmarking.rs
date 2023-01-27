@@ -22,8 +22,8 @@
 
 use super::{mock_helpers::*, Pallet as MessageQueue, *};
 
-use frame_benchmarking::{impl_benchmark_test_suite, whitelisted_caller};
-use frame_support::{benchmarking::*, traits::Get};
+use frame_benchmarking::v2::*;
+use frame_support::traits::Get;
 use frame_system::RawOrigin;
 use sp_std::prelude::*;
 

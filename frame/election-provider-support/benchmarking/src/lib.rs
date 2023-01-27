@@ -22,7 +22,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::Decode;
-use frame_benchmarking::{benchmarks, Vec};
+use frame_benchmarking::v1::{benchmarks, Vec};
 use frame_election_provider_support::{NposSolver, PhragMMS, SequentialPhragmen};
 
 pub struct Pallet<T: Config>(frame_system::Pallet<T>);
