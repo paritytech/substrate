@@ -86,12 +86,9 @@ pub mod pallet {
 		traits::{Defensive, ReservableCurrency, StorageVersion},
 	};
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::{
-		traits::{Saturating, Zero},
-		DispatchResult,
-	};
+	use sp_runtime::{traits::Zero, DispatchResult};
 	use sp_staking::{EraIndex, StakingInterface};
-	use sp_std::{collections::btree_set::BTreeSet, prelude::*, vec::Vec};
+	use sp_std::{prelude::*, vec::Vec};
 	pub use weights::WeightInfo;
 
 	#[derive(scale_info::TypeInfo, codec::Encode, codec::Decode, codec::MaxEncodedLen)]
@@ -138,6 +135,14 @@ pub mod pallet {
 
 		/// The weight information of this pallet.
 		type WeightInfo: WeightInfo;
+
+		/// Maximum value for `ErasToCheckPerBlock`. This should be as close as possible, but more
+		/// than the actual value, in order to have accurate benchmarks.
+		type MaxErasToCheckPerBlock: Get<u32>;
+
+		/// Use only for benchmarking.
+		#[cfg(feature = "runtime-benchmarks")]
+		type MaxBackersPerValidator: Get<u32>;
 	}
 
 	/// The current "head of the queue" being unstaked.
@@ -173,11 +178,11 @@ pub mod pallet {
 		InternalError,
 		/// A batch was partially checked for the given eras, but the process did not finish.
 		BatchChecked { eras: Vec<EraIndex> },
-		/// A batch was terminated.
+		/// A batch of a given size was terminated.
 		///
 		/// This is always follows by a number of `Unstaked` or `Slashed` events, marking the end
 		/// of the batch. A new batch will be created upon next block.
-		BatchFinished,
+		BatchFinished { size: u32 },
 	}
 
 	#[pallet::error]
@@ -207,6 +212,31 @@ pub mod pallet {
 			}
 
 			Self::do_on_idle(remaining_weight)
+		}
+
+		fn integrity_test() {
+			sp_std::if_std! {
+				sp_io::TestExternalities::new_empty().execute_with(|| {
+					// ensure that the value of `ErasToCheckPerBlock` is less than
+					// `T::MaxErasToCheckPerBlock`.
+					assert!(
+						ErasToCheckPerBlock::<T>::get() <= T::MaxErasToCheckPerBlock::get(),
+						"the value of `ErasToCheckPerBlock` is greater than `T::MaxErasToCheckPerBlock`",
+					);
+				});
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_n: T::BlockNumber) -> Result<(), &'static str> {
+			// ensure that the value of `ErasToCheckPerBlock` is less than
+			// `T::MaxErasToCheckPerBlock`.
+			assert!(
+				ErasToCheckPerBlock::<T>::get() <= T::MaxErasToCheckPerBlock::get(),
+				"the value of `ErasToCheckPerBlock` is greater than `T::MaxErasToCheckPerBlock`",
+			);
+
+			Ok(())
 		}
 	}
 
@@ -288,9 +318,10 @@ pub mod pallet {
 		/// Dispatch origin must be signed by the [`Config::ControlOrigin`].
 		#[pallet::call_index(2)]
 		#[pallet::weight(<T as Config>::WeightInfo::control())]
-		pub fn control(origin: OriginFor<T>, unchecked_eras_to_check: EraIndex) -> DispatchResult {
+		pub fn control(origin: OriginFor<T>, eras_to_check: EraIndex) -> DispatchResult {
 			let _ = T::ControlOrigin::ensure_origin(origin)?;
-			ErasToCheckPerBlock::<T>::put(unchecked_eras_to_check);
+			ensure!(eras_to_check <= T::MaxErasToCheckPerBlock::get(), Error::<T>::CallNotAllowed);
+			ErasToCheckPerBlock::<T>::put(eras_to_check);
 			Ok(())
 		}
 	}
@@ -324,27 +355,38 @@ pub mod pallet {
 		/// found out to have no eras to check. At the end of a check cycle, even if they are fully
 		/// checked, we don't finish the process.
 		pub(crate) fn do_on_idle(remaining_weight: Weight) -> Weight {
-			let mut eras_to_check_per_block = ErasToCheckPerBlock::<T>::get();
+			// any weight that is unaccounted for
+			let mut unaccounted_weight = Weight::from_ref_time(0);
+
+			let eras_to_check_per_block = ErasToCheckPerBlock::<T>::get();
 			if eras_to_check_per_block.is_zero() {
-				return T::DbWeight::get().reads(1)
+				return T::DbWeight::get().reads(1).saturating_add(unaccounted_weight)
 			}
 
 			// NOTE: here we're assuming that the number of validators has only ever increased,
 			// meaning that the number of exposures to check is either this per era, or less.
 			let validator_count = T::Staking::desired_validator_count();
+			let (next_batch_size, reads_from_queue) = Head::<T>::get()
+				.map_or((Queue::<T>::count().min(T::BatchSize::get()), true), |head| {
+					(head.stashes.len() as u32, false)
+				});
 
 			// determine the number of eras to check. This is based on both `ErasToCheckPerBlock`
 			// and `remaining_weight` passed on to us from the runtime executive.
-			let max_weight = |v, u| {
-				<T as Config>::WeightInfo::on_idle_check(v * u)
-					.max(<T as Config>::WeightInfo::on_idle_unstake())
+			let max_weight = |v, b| {
+				// NOTE: this potentially under-counts by up to `BatchSize` reads from the queue.
+				<T as Config>::WeightInfo::on_idle_check(v, b)
+					.max(<T as Config>::WeightInfo::on_idle_unstake(b))
+					.saturating_add(if reads_from_queue {
+						T::DbWeight::get().reads(next_batch_size.into())
+					} else {
+						Zero::zero()
+					})
 			};
-			while max_weight(validator_count, eras_to_check_per_block).any_gt(remaining_weight) {
-				eras_to_check_per_block.saturating_dec();
-				if eras_to_check_per_block.is_zero() {
-					log!(debug, "early existing because eras_to_check_per_block is zero");
-					return T::DbWeight::get().reads(2)
-				}
+
+			if max_weight(validator_count, next_batch_size).any_gt(remaining_weight) {
+				log!(debug, "early exit because eras_to_check_per_block is zero");
+				return T::DbWeight::get().reads(3).saturating_add(unaccounted_weight)
 			}
 
 			if T::Staking::election_ongoing() {
@@ -352,7 +394,7 @@ pub mod pallet {
 				// there is an ongoing election -- we better not do anything. Imagine someone is not
 				// exposed anywhere in the last era, and the snapshot for the election is already
 				// taken. In this time period, we don't want to accidentally unstake them.
-				return T::DbWeight::get().reads(2)
+				return T::DbWeight::get().reads(4).saturating_add(unaccounted_weight)
 			}
 
 			let UnstakeRequest { stashes, mut checked } = match Head::<T>::take().or_else(|| {
@@ -362,6 +404,9 @@ pub mod pallet {
 					.collect::<Vec<_>>()
 					.try_into()
 					.expect("take ensures bound is met; qed");
+				unaccounted_weight.saturating_accrue(
+					T::DbWeight::get().reads_writes(stashes.len() as u64, stashes.len() as u64),
+				);
 				if stashes.is_empty() {
 					None
 				} else {
@@ -377,10 +422,11 @@ pub mod pallet {
 
 			log!(
 				debug,
-				"checking {:?} stashes, eras_to_check_per_block = {:?}, remaining_weight = {:?}",
+				"checking {:?} stashes, eras_to_check_per_block = {:?}, checked {:?}, remaining_weight = {:?}",
 				stashes.len(),
 				eras_to_check_per_block,
-				remaining_weight
+				checked,
+				remaining_weight,
 			);
 
 			// the range that we're allowed to check in this round.
@@ -431,11 +477,10 @@ pub mod pallet {
 				}
 			};
 
-			let check_stash = |stash, deposit, eras_checked: &mut BTreeSet<EraIndex>| {
-				let is_exposed = unchecked_eras_to_check.iter().any(|e| {
-					eras_checked.insert(*e);
-					T::Staking::is_exposed_in_era(&stash, e)
-				});
+			let check_stash = |stash, deposit| {
+				let is_exposed = unchecked_eras_to_check
+					.iter()
+					.any(|e| T::Staking::is_exposed_in_era(&stash, e));
 
 				if is_exposed {
 					T::Currency::slash_reserved(&stash, deposit);
@@ -448,20 +493,16 @@ pub mod pallet {
 			};
 
 			if unchecked_eras_to_check.is_empty() {
-				// `stash` is not exposed in any era now -- we can let go of them now.
+				// `stashes` are not exposed in any era now -- we can let go of them now.
+				let size = stashes.len() as u32;
 				stashes.into_iter().for_each(|(stash, deposit)| unstake_stash(stash, deposit));
-				Self::deposit_event(Event::<T>::BatchFinished);
-				<T as Config>::WeightInfo::on_idle_unstake()
+				Self::deposit_event(Event::<T>::BatchFinished { size });
+				<T as Config>::WeightInfo::on_idle_unstake(size).saturating_add(unaccounted_weight)
 			} else {
-				// eras checked so far.
-				let mut eras_checked = BTreeSet::<EraIndex>::new();
-
 				let pre_length = stashes.len();
 				let stashes: BoundedVec<(T::AccountId, BalanceOf<T>), T::BatchSize> = stashes
 					.into_iter()
-					.filter(|(stash, deposit)| {
-						check_stash(stash.clone(), *deposit, &mut eras_checked)
-					})
+					.filter(|(stash, deposit)| check_stash(stash.clone(), *deposit))
 					.collect::<Vec<_>>()
 					.try_into()
 					.expect("filter can only lessen the length; still in bound; qed");
@@ -469,8 +510,8 @@ pub mod pallet {
 
 				log!(
 					debug,
-					"checked {:?} eras, pre stashes: {:?}, post: {:?}",
-					eras_checked.len(),
+					"checked {:?}, pre stashes: {:?}, post: {:?}",
+					unchecked_eras_to_check,
 					pre_length,
 					post_length,
 				);
@@ -478,7 +519,7 @@ pub mod pallet {
 				match checked.try_extend(unchecked_eras_to_check.clone().into_iter()) {
 					Ok(_) =>
 						if stashes.is_empty() {
-							Self::deposit_event(Event::<T>::BatchFinished);
+							Self::deposit_event(Event::<T>::BatchFinished { size: 0 });
 						} else {
 							Head::<T>::put(UnstakeRequest { stashes, checked });
 							Self::deposit_event(Event::<T>::BatchChecked {
@@ -491,9 +532,8 @@ pub mod pallet {
 					},
 				}
 
-				<T as Config>::WeightInfo::on_idle_check(
-					validator_count * eras_checked.len() as u32,
-				)
+				<T as Config>::WeightInfo::on_idle_check(validator_count, pre_length as u32)
+					.saturating_add(unaccounted_weight)
 			}
 		}
 	}
