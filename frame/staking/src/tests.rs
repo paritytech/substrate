@@ -1901,7 +1901,7 @@ fn wrong_vote_is_moot() {
 #[test]
 fn bond_with_no_staked_value() {
 	// Behavior when someone bonds with no staked value.
-	// Particularly when she votes and the candidate is elected.
+	// Particularly when they votes and the candidate is elected.
 	ExtBuilder::default()
 		.validator_count(3)
 		.existential_deposit(5)

@@ -110,7 +110,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			proof_recorder_root: Cell::new(root),
 			enable_tracking,
 			// Enable the cache, but do not sync anything to the shared state.
-			shared_trie_cache: SharedTrieCache::new(CacheSize::Maximum(0)),
+			shared_trie_cache: SharedTrieCache::new(CacheSize::new(0)),
 		};
 
 		state.add_whitelist_to_tracker();
@@ -606,10 +606,14 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 			let proof_recorder_root = self.proof_recorder_root.get();
 			if proof_recorder_root == Default::default() || proof_size == 1 {
 				// empty trie
+				log::debug!(target: "benchmark", "Some proof size: {}", &proof_size);
 				proof_size
 			} else {
 				if let Some(size) = proof.encoded_compact_size::<HashFor<B>>(proof_recorder_root) {
 					size as u32
+				} else if proof_recorder_root == self.root.get() {
+					log::debug!(target: "benchmark", "No changes - no proof");
+					0
 				} else {
 					panic!(
 						"proof rec root {:?}, root {:?}, genesis {:?}, rec_len {:?}",

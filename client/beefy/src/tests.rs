@@ -151,7 +151,7 @@ impl BeefyTestNet {
 	) -> Vec<H256> {
 		let mut all_hashes = Vec::with_capacity(count + 1);
 
-		// make sure genesis is the only block in network, so we can insert genesis at he beginning
+		// make sure genesis is the only block in network, so we can insert genesis at the beginning
 		// of hashes, otherwise indexing would be broken
 		assert!(self.peer(0).client().as_backend().blockchain().hash(1).unwrap().is_none());
 
@@ -926,7 +926,8 @@ async fn on_demand_beefy_justification_sync() {
 	)
 	.await;
 
-	// Spawn Dave, he's now way behind voting and can only catch up through on-demand justif sync.
+	// Spawn Dave, they are now way behind voting and can only catch up through on-demand justif
+	// sync.
 	tokio::spawn(dave_task);
 	// give Dave a chance to spawn and init.
 	run_for(Duration::from_millis(400), &net).await;
@@ -937,7 +938,7 @@ async fn on_demand_beefy_justification_sync() {
 	client.finalize_block(hashes[1], None).unwrap();
 	// Give Dave task some cpu cycles to process the finality notification,
 	run_for(Duration::from_millis(100), &net).await;
-	// freshly spun up Dave now needs to listen for gossip to figure out the state of his peers.
+	// freshly spun up Dave now needs to listen for gossip to figure out the state of their peers.
 
 	// Have the other peers do some gossip so Dave finds out about their progress.
 	finalize_block_and_wait_for_beefy(&net, fast_peers, &[hashes[25]], &[25]).await;

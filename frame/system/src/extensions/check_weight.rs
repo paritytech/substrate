@@ -135,10 +135,10 @@ where
 
 	// add the weight. If class is unlimited, use saturating add instead of checked one.
 	if limit_per_class.max_total.is_none() && limit_per_class.reserved.is_none() {
-		all_weight.add(extrinsic_weight, info.class)
+		all_weight.accrue(extrinsic_weight, info.class)
 	} else {
 		all_weight
-			.checked_add(extrinsic_weight, info.class)
+			.checked_accrue(extrinsic_weight, info.class)
 			.map_err(|_| InvalidTransaction::ExhaustsResources)?;
 	}
 
@@ -229,7 +229,7 @@ where
 		let unspent = post_info.calc_unspent(info);
 		if unspent.any_gt(Weight::zero()) {
 			crate::BlockWeight::<T>::mutate(|current_weight| {
-				current_weight.sub(unspent, info.class);
+				current_weight.reduce(unspent, info.class);
 			})
 		}
 

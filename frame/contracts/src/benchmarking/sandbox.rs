@@ -19,7 +19,9 @@
 /// ! sandbox to execute the wasm code. This is because we do not need the full
 /// ! environment that provides the seal interface as imported functions.
 use super::{code::WasmModule, Config};
-use crate::wasm::{Environment, PrefabWasmModule};
+use crate::wasm::{
+	AllowDeprecatedInterface, AllowUnstableInterface, Environment, PrefabWasmModule,
+};
 use wasmi::{errors::LinkerError, Func, Linker, StackLimits, Store};
 
 /// Minimal execution environment without any imported functions.
@@ -49,6 +51,8 @@ impl<T: Config> From<&WasmModule<T>> for Sandbox {
 			(),
 			memory,
 			StackLimits::default(),
+			// We are testing with an empty environment anyways
+			AllowDeprecatedInterface::No,
 		)
 		.expect("Failed to create benchmarking Sandbox instance");
 		let entry_point = instance.get_export(&store, "call").unwrap().into_func().unwrap();
@@ -59,7 +63,12 @@ impl<T: Config> From<&WasmModule<T>> for Sandbox {
 struct EmptyEnv;
 
 impl Environment<()> for EmptyEnv {
-	fn define(_: &mut Store<()>, _: &mut Linker<()>, _: bool) -> Result<(), LinkerError> {
+	fn define(
+		_: &mut Store<()>,
+		_: &mut Linker<()>,
+		_: AllowUnstableInterface,
+		_: AllowDeprecatedInterface,
+	) -> Result<(), LinkerError> {
 		Ok(())
 	}
 }
