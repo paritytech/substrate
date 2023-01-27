@@ -950,11 +950,14 @@ pub mod tests {
 	#[test]
 	fn storage_value_mutate_exists_should_work() {
 		new_test_ext().execute_with(|| {
+			#[crate::storage_alias]
+			pub type Value = StorageValue<Test, u32>;
+
 			assert!(!Value::exists());
 
 			Value::mutate_exists(|v| *v = Some(1));
 			assert!(Value::exists());
-			assert_eq!(Value::get(), 1);
+			assert_eq!(Value::get(), Some(1));
 
 			// removed if mutated to `None`
 			Value::mutate_exists(|v| *v = None);
@@ -965,6 +968,9 @@ pub mod tests {
 	#[test]
 	fn storage_value_try_mutate_exists_should_work() {
 		new_test_ext().execute_with(|| {
+			#[crate::storage_alias]
+			pub type Value = StorageValue<Test, u32>;
+
 			type TestResult = result::Result<(), &'static str>;
 
 			assert!(!Value::exists());
@@ -975,7 +981,7 @@ pub mod tests {
 				Ok(())
 			}));
 			assert!(Value::exists());
-			assert_eq!(Value::get(), 1);
+			assert_eq!(Value::get(), Some(1));
 
 			// no-op if `Err`
 			assert_noop!(
@@ -985,7 +991,7 @@ pub mod tests {
 				}),
 				"nah"
 			);
-			assert_eq!(Value::get(), 1);
+			assert_eq!(Value::get(), Some(1));
 
 			// removed if mutated to`None`
 			assert_ok!(Value::try_mutate_exists(|v| -> TestResult {
