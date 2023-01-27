@@ -1316,7 +1316,7 @@ pub mod tests {
 				StorageEntryMetadata {
 					name: "Value",
 					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					ty: StorageEntryType::Plain(scale_info::meta_type::<u64>()),
 					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
 					docs: vec![],
 				},
