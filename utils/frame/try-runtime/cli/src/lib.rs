@@ -523,6 +523,12 @@ pub struct SharedParams {
 	#[arg(long)]
 	pub heap_pages: Option<u64>,
 
+	/// Path to a file to export the storage proof into (as a JSON).
+	/// If several blocks are executed, the path is interpreted as a folder
+	/// where one file per block will be written (named `{block_number}-{block_hash}`).
+	#[clap(long)]
+	pub export_proof: Option<PathBuf>,
+
 	/// Overwrite the `state_version`.
 	///
 	/// Otherwise `remote-externalities` will automatically set the correct state version.
@@ -603,6 +609,7 @@ impl State {
 		shared: &SharedParams,
 		executor: &WasmExecutor<HostFns>,
 		state_snapshot: Option<SnapshotConfig>,
+		try_runtime_check: bool,
 	) -> sc_cli::Result<RemoteExternalities<Block>>
 	where
 		Block::Hash: FromStr,
@@ -701,8 +708,10 @@ impl State {
 		}
 
 		// whatever runtime we have in store now must have been compiled with try-runtime feature.
-		if !ensure_try_runtime::<Block, HostFns>(&executor, &mut ext) {
-			return Err("given runtime is NOT compiled with try-runtime feature!".into())
+		if try_runtime_check {
+			if !ensure_try_runtime::<Block, HostFns>(&executor, &mut ext) {
+				return Err("given runtime is NOT compiled with try-runtime feature!".into())
+			}
 		}
 
 		Ok(ext)
@@ -863,6 +872,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 	method: &'static str,
 	data: &[u8],
 	extensions: Extensions,
+	maybe_export_proof: Option<PathBuf>,
 ) -> sc_cli::Result<(OverlayedChanges, Vec<u8>)> {
 	use parity_scale_codec::Encode;
 
@@ -891,6 +901,32 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 	let proof = proving_backend
 		.extract_proof()
 		.expect("A recorder was set and thus, a storage proof can be extracted; qed");
+
+	if let Some(path) = maybe_export_proof {
+		let mut file = std::fs::File::create(&path).map_err(|e| {
+			log::error!(
+				target: LOG_TARGET,
+				"Failed to create file {}: {:?}",
+				path.to_string_lossy(),
+				e
+			);
+			e
+		})?;
+
+		log::info!(target: LOG_TARGET, "Writing storage proof to {}", path.to_string_lossy());
+
+		use std::io::Write as _;
+		file.write_all(storage_proof_to_raw_json(&proof).as_bytes()).map_err(|e| {
+			log::error!(
+				target: LOG_TARGET,
+				"Failed to write storage proof to {}: {:?}",
+				path.to_string_lossy(),
+				e
+			);
+			e
+		})?;
+	}
+
 	let proof_size = proof.encoded_size();
 	let compact_proof = proof
 		.clone()
@@ -950,4 +986,22 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 pub(crate) fn rpc_err_handler(error: impl Debug) -> &'static str {
 	log::error!(target: LOG_TARGET, "rpc error: {:?}", error);
 	"rpc error."
+}
+
+/// Converts a [`sp_state_machine::StorageProof`] into a JSON string.
+fn storage_proof_to_raw_json(storage_proof: &sp_state_machine::StorageProof) -> String {
+	serde_json::Value::Object(
+		storage_proof
+			.to_memory_db::<sp_runtime::traits::BlakeTwo256>()
+			.drain()
+			.iter()
+			.map(|(key, (value, _n))| {
+				(
+					format!("0x{}", hex::encode(key.as_bytes())),
+					serde_json::Value::String(format!("0x{}", hex::encode(value))),
+				)
+			})
+			.collect(),
+	)
+	.to_string()
 }

@@ -462,7 +462,7 @@ enum FrameArgs<'a, T: Config, E> {
 		/// If `None` the contract info needs to be reloaded from storage.
 		cached_info: Option<ContractInfo<T>>,
 		/// This frame was created by `seal_delegate_call` and hence uses different code than
-		/// what is stored at [`Self::dest`]. Its caller ([`Frame::delegated_caller`]) is the
+		/// what is stored at [`Self::Call::dest`]. Its caller ([`DelegatedCall::caller`]) is the
 		/// account which called the caller contract
 		delegated_call: Option<DelegatedCall<T, E>>,
 	},
@@ -1336,7 +1336,18 @@ where
 
 	fn append_debug_buffer(&mut self, msg: &str) -> bool {
 		if let Some(buffer) = &mut self.debug_message {
-			let mut msg = msg.bytes();
+			let err_msg = scale_info::prelude::format!(
+				"Debug message too big (size={}) for debug buffer (bound={})",
+				msg.len(),
+				DebugBufferVec::<T>::bound(),
+			);
+
+			let mut msg = if msg.len() > DebugBufferVec::<T>::bound() {
+				err_msg.bytes()
+			} else {
+				msg.bytes()
+			};
+
 			let num_drain = {
 				let capacity = DebugBufferVec::<T>::bound().checked_sub(buffer.len()).expect(
 					"
@@ -1349,16 +1360,7 @@ where
 				msg.len().saturating_sub(capacity).min(buffer.len())
 			};
 			buffer.drain(0..num_drain);
-			buffer
-				.try_extend(&mut msg)
-				.map_err(|_| {
-					log::debug!(
-						target: "runtime::contracts",
-						"Debug message to big (size={}) for debug buffer (bound={})",
-						msg.len(), DebugBufferVec::<T>::bound(),
-					);
-				})
-				.ok();
+			buffer.try_extend(&mut msg).ok();
 			true
 		} else {
 			false
@@ -3436,6 +3438,37 @@ mod tests {
 				None,
 				Determinism::Deterministic
 			));
+		});
+	}
+
+	/// This works even though random interface is deprecated, as the check to ban deprecated
+	/// functions happens in the wasm stack which is mocked for exec tests.
+	#[test]
+	fn randomness_works() {
+		let subject = b"nice subject".as_ref();
+		let code_hash = MockLoader::insert(Call, move |ctx, _| {
+			let rand = <Test as Config>::Randomness::random(subject);
+			assert_eq!(rand, ctx.ext.random(subject));
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			place_contract(&BOB, code_hash);
+
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			let result = MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![],
+				None,
+				Determinism::Deterministic,
+			);
+			assert_matches!(result, Ok(_));
 		});
 	}
 }
