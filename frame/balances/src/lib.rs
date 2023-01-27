@@ -556,13 +556,11 @@ pub mod pallet {
 			let new_free = if wipeout { Zero::zero() } else { new_free };
 
 			// First we try to modify the account's balance to the forced balance.
-			let (old_free, _maybe_dust) = Self::mutate_account(&who, |account| {
+			let old_free = Self::mutate_account_handling_dust(&who, |account| {
 				let old_free = account.free;
 				account.free = new_free;
 				old_free
 			})?;
-
-			//TODO: Handle dust
 
 			// This will adjust the total issuance, which was not done by the `mutate_account`
 			// above.
@@ -790,6 +788,54 @@ pub mod pallet {
 		/// Mutate an account to some new value, or delete it entirely with `None`. Will enforce
 		/// `ExistentialDeposit` law, annulling the account as needed.
 		///
+		/// It returns the result from the closure. Any dust is handled through the low-level
+		/// `fungible::Unbalanced` trap-door for legacy dust management.
+		///
+		/// NOTE: Doesn't do any preparatory work for creating a new account, so should only be used
+		/// when it is known that the account already exists.
+		///
+		/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
+		/// the caller will do this.
+		pub(crate) fn mutate_account_handling_dust<R>(
+			who: &T::AccountId,
+			f: impl FnOnce(&mut AccountData<T::Balance>) -> R,
+		) -> Result<R, DispatchError> {
+			let (r, maybe_dust) = Self::mutate_account(who, f)?;
+			if let Some(dust) = maybe_dust {
+				<Self as fungible::Unbalanced<_>>::handle_raw_dust(dust);
+			}
+			Ok(r)
+		}
+
+		/// Mutate an account to some new value, or delete it entirely with `None`. Will enforce
+		/// `ExistentialDeposit` law, annulling the account as needed.
+		///
+		/// It returns the result from the closure. Any dust is handled through the low-level
+		/// `fungible::Unbalanced` trap-door for legacy dust management.
+		///
+		/// NOTE: Doesn't do any preparatory work for creating a new account, so should only be used
+		/// when it is known that the account already exists.
+		///
+		/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
+		/// the caller will do this.
+		pub(crate) fn try_mutate_account_handling_dust<R, E: From<DispatchError>>(
+			who: &T::AccountId,
+			f: impl FnOnce(&mut AccountData<T::Balance>, bool) -> Result<R, E>,
+		) -> Result<R, E> {
+			let (r, maybe_dust) = Self::try_mutate_account(who, f)?;
+			if let Some(dust) = maybe_dust {
+				<Self as fungible::Unbalanced<_>>::handle_raw_dust(dust);
+			}
+			Ok(r)
+		}
+
+		/// Mutate an account to some new value, or delete it entirely with `None`. Will enforce
+		/// `ExistentialDeposit` law, annulling the account as needed.
+		///
+		/// It returns both the result from the closure, and an optional amount of dust
+		/// which should be handled once it is known that all nested mutates that could affect
+		/// storage items what the dust handler touches have completed.
+		///
 		/// NOTE: Doesn't do any preparatory work for creating a new account, so should only be used
 		/// when it is known that the account already exists.
 		///
@@ -806,6 +852,10 @@ pub mod pallet {
 		/// `ExistentialDeposit` law, annulling the account as needed. This will do nothing if the
 		/// result of `f` is an `Err`.
 		///
+		/// It returns both the result from the closure, and an optional amount of dust
+		/// which should be handled once it is known that all nested mutates that could affect
+		/// storage items what the dust handler touches have completed.
+		///
 		/// NOTE: Doesn't do any preparatory work for creating a new account, so should only be used
 		/// when it is known that the account already exists.
 		///
@@ -815,36 +865,6 @@ pub mod pallet {
 			who: &T::AccountId,
 			f: impl FnOnce(&mut AccountData<T::Balance>, bool) -> Result<R, E>,
 		) -> Result<(R, Option<T::Balance>), E> {
-			Self::try_mutate_account_with_dust(who, f).map(|(result, maybe_dust)| {
-				let maybe_dust = if let Some((amount, account)) = maybe_dust {
-					Pallet::<T, I>::deposit_event(Event::DustLost { account, amount });
-					Some(amount)
-				} else {
-					None
-				};
-				(result, maybe_dust)
-			})
-		}
-
-		// TODO ^^^ Consider removing. Don't see why we need to separate out DustLost event.
-
-		/// Mutate an account to some new value, or delete it entirely with `None`. Will enforce
-		/// `ExistentialDeposit` law, annulling the account as needed. This will do nothing if the
-		/// result of `f` is an `Err`.
-		///
-		/// It returns both the result from the closure, and an optional `DustCleaner` instance
-		/// which should be dropped once it is known that all nested mutates that could affect
-		/// storage items what the dust handler touches have completed.
-		///
-		/// NOTE: Doesn't do any preparatory work for creating a new account, so should only be used
-		/// when it is known that the account already exists.
-		///
-		/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
-		/// the caller will do this.
-		pub(crate) fn try_mutate_account_with_dust<R, E: From<DispatchError>>(
-			who: &T::AccountId,
-			f: impl FnOnce(&mut AccountData<T::Balance>, bool) -> Result<R, E>,
-		) -> Result<(R, Option<(T::Balance, T::AccountId)>), E> {
 			Self::ensure_upgraded(who);
 			let result = T::AccountStore::try_mutate_exists(who, |maybe_account| {
 				let is_new = maybe_account.is_none();
@@ -900,7 +920,10 @@ pub mod pallet {
 						free_balance: endowed,
 					});
 				}
-				(result, maybe_dust.map(|dust| (dust, who.clone())))
+				if let Some(amount) = maybe_dust {
+					Pallet::<T, I>::deposit_event(Event::DustLost { account: who.clone(), amount });
+				}
+				(result, maybe_dust)
 			})
 		}
 
@@ -932,10 +955,7 @@ pub mod pallet {
 			});
 			debug_assert!(res.is_ok());
 			if let Ok((_, maybe_dust)) = res {
-				debug_assert!(
-					maybe_dust.is_none(),
-					"Does not alter main balance; dust only happens when it is altered; qed"
-				);
+				debug_assert!(maybe_dust.is_none(), "Not altering main balance; qed");
 			}
 
 			let existed = Locks::<T, I>::contains_key(who);
@@ -975,10 +995,7 @@ pub mod pallet {
 					b.frozen = b.frozen.max(l.amount);
 				}
 			})?;
-			debug_assert!(
-				maybe_dust.is_none(),
-				"Does not alter main balance; dust only happens when it is altered; qed"
-			);
+			debug_assert!(maybe_dust.is_none(), "Not altering main balance; qed");
 			if freezes.is_empty() {
 				Freezes::<T, I>::remove(who);
 			} else {
@@ -1013,41 +1030,43 @@ pub mod pallet {
 				}
 			}
 
-			let ((actual, _maybe_one_dust), _maybe_other_dust) =
-				Self::try_mutate_account_with_dust(
-					beneficiary,
-					|to_account,
-					 is_new|
-					 -> Result<(T::Balance, Option<(T::Balance, T::AccountId)>), DispatchError> {
-						ensure!(!is_new, Error::<T, I>::DeadAccount);
-						Self::try_mutate_account_with_dust(
-							slashed,
-							|from_account, _| -> Result<T::Balance, DispatchError> {
-								let actual = cmp::min(from_account.reserved, value);
-								ensure!(
-									best_effort || actual == value,
-									Error::<T, I>::InsufficientBalance
-								);
-								match status {
-									Status::Free =>
-										to_account.free = to_account
-											.free
-											.checked_add(&actual)
-											.ok_or(ArithmeticError::Overflow)?,
-									Status::Reserved =>
-										to_account.reserved = to_account
-											.reserved
-											.checked_add(&actual)
-											.ok_or(ArithmeticError::Overflow)?,
-								}
-								from_account.reserved -= actual;
-								Ok(actual)
-							},
-						)
-					},
-				)?;
+			let ((actual, maybe_dust_1), maybe_dust_2) = Self::try_mutate_account(
+				beneficiary,
+				|to_account, is_new| -> Result<(T::Balance, Option<T::Balance>), DispatchError> {
+					ensure!(!is_new, Error::<T, I>::DeadAccount);
+					Self::try_mutate_account(
+						slashed,
+						|from_account, _| -> Result<T::Balance, DispatchError> {
+							let actual = cmp::min(from_account.reserved, value);
+							ensure!(
+								best_effort || actual == value,
+								Error::<T, I>::InsufficientBalance
+							);
+							match status {
+								Status::Free =>
+									to_account.free = to_account
+										.free
+										.checked_add(&actual)
+										.ok_or(ArithmeticError::Overflow)?,
+								Status::Reserved =>
+									to_account.reserved = to_account
+										.reserved
+										.checked_add(&actual)
+										.ok_or(ArithmeticError::Overflow)?,
+							}
+							from_account.reserved -= actual;
+							Ok(actual)
+						},
+					)
+				},
+			)?;
 
-			//TODO: handle the dust?
+			if let Some(dust) = maybe_dust_1 {
+				<Self as fungible::Unbalanced<_>>::handle_raw_dust(dust);
+			}
+			if let Some(dust) = maybe_dust_2 {
+				<Self as fungible::Unbalanced<_>>::handle_raw_dust(dust);
+			}
 
 			Self::deposit_event(Event::ReserveRepatriated {
 				from: slashed.clone(),

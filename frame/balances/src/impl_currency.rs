@@ -310,60 +310,6 @@ where
 		};
 		<Self as fungible::Mutate<_>>::transfer(transactor, dest, value, keep_alive)?;
 		Ok(())
-
-		/*
-		let (maybe_dust_1, maybe_dust_2) = Self::try_mutate_account_with_dust(
-			dest,
-			|to_account, _| -> Result<Option<(T::Balance, T::AccountId)>, DispatchError> {
-				Self::try_mutate_account_with_dust(
-					transactor,
-					|from_account, _| -> DispatchResult {
-						from_account.free = from_account
-							.free
-							.checked_sub(&value)
-							.ok_or(Error::<T, I>::InsufficientBalance)?;
-
-						// NOTE: total stake being stored in the same type means that this could
-						// never overflow but better to be safe than sorry.
-						to_account.free =
-							to_account.free.checked_add(&value).ok_or(ArithmeticError::Overflow)?;
-
-						let ed = T::ExistentialDeposit::get();
-						ensure!(to_account.total() >= ed, Error::<T, I>::ExistentialDeposit);
-
-						Self::ensure_can_withdraw(
-							transactor,
-							value,
-							WithdrawReasons::TRANSFER,
-							from_account.free,
-						)
-						.map_err(|_| Error::<T, I>::LiquidityRestrictions)?;
-
-						let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
-						let allow_death =
-							allow_death && system::Pallet::<T>::can_dec_provider(transactor);
-						ensure!(
-							allow_death || from_account.total() >= ed,
-							Error::<T, I>::KeepAlive
-						);
-
-						Ok(())
-					},
-				)
-				.map(|(_, maybe_dust)| maybe_dust)
-			},
-		)?;
-
-		// TODO: Handle the dust.
-
-		// Emit transfer event.
-		Self::deposit_event(Event::Transfer {
-			from: transactor.clone(),
-			to: dest.clone(),
-			amount: value,
-		});
-
-		Ok(())*/
 	}
 
 	/// Slash a target account `who`, returning the negative imbalance created and any left over
@@ -383,9 +329,7 @@ where
 			return (NegativeImbalance::zero(), value)
 		}
 
-		// TODO: Use fungible::Balanced::withdraw and convert the
-
-		let (result, maybe_dust) = match Self::try_mutate_account(
+		let result = match Self::try_mutate_account_handling_dust(
 			who,
 			|account, _is_new| -> Result<(Self::NegativeImbalance, Self::Balance), DispatchError> {
 				// Best value is the most amount we can slash following liveness rules.
@@ -399,18 +343,15 @@ where
 				Ok((NegativeImbalance::new(actual), remaining))
 			},
 		) {
-			Ok(((imbalance, remaining), maybe_dust)) => {
+			Ok((imbalance, remaining)) => {
 				Self::deposit_event(Event::Slashed {
 					who: who.clone(),
 					amount: value.saturating_sub(remaining),
 				});
-				((imbalance, remaining), maybe_dust)
+				(imbalance, remaining)
 			},
-			Err(_) => ((Self::NegativeImbalance::zero(), value), None),
+			Err(_) => (Self::NegativeImbalance::zero(), value),
 		};
-		if let Some(_dust) = maybe_dust {
-			// TODO: handle
-		}
 		result
 	}
 
@@ -425,7 +366,7 @@ where
 			return Ok(PositiveImbalance::zero())
 		}
 
-		Self::try_mutate_account(
+		Self::try_mutate_account_handling_dust(
 			who,
 			|account, is_new| -> Result<Self::PositiveImbalance, DispatchError> {
 				ensure!(!is_new, Error::<T, I>::DeadAccount);
@@ -434,7 +375,6 @@ where
 				Ok(PositiveImbalance::new(value))
 			},
 		)
-		.map(|x| x.0)
 	}
 
 	/// Deposit some `value` into the free balance of `who`, possibly creating a new account.
@@ -451,7 +391,7 @@ where
 			return Self::PositiveImbalance::zero()
 		}
 
-		Self::try_mutate_account(
+		Self::try_mutate_account_handling_dust(
 			who,
 			|account, is_new| -> Result<Self::PositiveImbalance, DispatchError> {
 				let ed = T::ExistentialDeposit::get();
@@ -468,7 +408,6 @@ where
 				Ok(PositiveImbalance::new(value))
 			},
 		)
-		.map(|x| x.0)
 		.unwrap_or_else(|_| Self::PositiveImbalance::zero())
 	}
 
@@ -485,7 +424,7 @@ where
 			return Ok(NegativeImbalance::zero())
 		}
 
-		Self::try_mutate_account(
+		Self::try_mutate_account_handling_dust(
 			who,
 			|account, _| -> Result<Self::NegativeImbalance, DispatchError> {
 				let new_free_account =
@@ -505,7 +444,6 @@ where
 				Ok(NegativeImbalance::new(value))
 			},
 		)
-		.map(|x| x.0)
 	}
 
 	/// Force the new free balance of a target account `who` to some new value `balance`.
@@ -513,7 +451,7 @@ where
 		who: &T::AccountId,
 		value: Self::Balance,
 	) -> SignedImbalance<Self::Balance, Self::PositiveImbalance> {
-		Self::try_mutate_account(
+		Self::try_mutate_account_handling_dust(
 			who,
 			|account,
 			 is_new|
@@ -539,7 +477,6 @@ where
 				Ok(imbalance)
 			},
 		)
-		.map(|x| x.0)
 		.unwrap_or_else(|_| SignedImbalance::Positive(Self::PositiveImbalance::zero()))
 	}
 }
@@ -572,7 +509,7 @@ where
 			return Ok(())
 		}
 
-		Self::try_mutate_account(who, |account, _| -> DispatchResult {
+		Self::try_mutate_account_handling_dust(who, |account, _| -> DispatchResult {
 			account.free =
 				account.free.checked_sub(&value).ok_or(Error::<T, I>::InsufficientBalance)?;
 			account.reserved =
@@ -597,7 +534,7 @@ where
 			return value
 		}
 
-		let actual = match Self::mutate_account(who, |account| {
+		let actual = match Self::mutate_account_handling_dust(who, |account| {
 			let actual = cmp::min(account.reserved, value);
 			account.reserved -= actual;
 			// defensive only: this can never fail since total issuance which is at least
@@ -612,8 +549,7 @@ where
 				// could be done.
 				return value
 			},
-		}
-		.0;
+		};
 
 		Self::deposit_event(Event::Unreserved { who: who.clone(), amount: actual });
 		value - actual
@@ -637,14 +573,14 @@ where
 		// NOTE: `mutate_account` may fail if it attempts to reduce the balance to the point that an
 		//   account is attempted to be illegally destroyed.
 
-		match Self::mutate_account(who, |account| {
+		match Self::mutate_account_handling_dust(who, |account| {
 			let actual = value.min(account.reserved);
 			account.reserved.saturating_reduce(actual);
 
 			// underflow should never happen, but it if does, there's nothing to be done here.
 			(NegativeImbalance::new(actual), value.saturating_sub(actual))
 		}) {
-			Ok(((imbalance, not_slashed), _dust)) => {
+			Ok((imbalance, not_slashed)) => {
 				Self::deposit_event(Event::Slashed {
 					who: who.clone(),
 					amount: value.saturating_sub(not_slashed),

@@ -30,7 +30,7 @@ use crate::{
 		SameOrOther, TryDrop,
 	},
 };
-use sp_arithmetic::traits::{CheckedAdd, CheckedSub};
+use sp_arithmetic::traits::{CheckedAdd, CheckedSub, One};
 use sp_runtime::{traits::Saturating, ArithmeticError, TokenError};
 
 use super::{Credit, Debt, HandleImbalanceDrop, Imbalance};
@@ -131,6 +131,18 @@ impl<A, T: Balanced<A>> Dust<A, T> {
 /// for the underlying datatype to implement so the user gets the much safer `Balanced` trait to
 /// use.
 pub trait Unbalanced<AccountId>: Inspect<AccountId> {
+	/// Create some dust and handle it with `Self::handle_dust`. This is an unbalanced operation
+	/// and it must only be used when an account is modified in a raw fashion, outside of the entire
+	/// fungibles API. The `amount` is capped at `Self::minimum_balance() - 1`.
+	///
+	/// This should not be reimplemented.
+	fn handle_raw_dust(asset: Self::AssetId, amount: Self::Balance) {
+		Self::handle_dust(Dust(
+			asset,
+			amount.min(Self::minimum_balance(asset).saturating_sub(One::one())),
+		))
+	}
+
 	/// Do something with the dust which has been destroyed from the system. `Dust` can be converted
 	/// into a `Credit` with the `Balanced` trait impl.
 	fn handle_dust(dust: Dust<AccountId, Self>);
