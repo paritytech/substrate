@@ -121,9 +121,7 @@ where
 			return
 		};
 
-		if let Some(new_phase) = new_phase {
-			self.phase = new_phase;
-		}
+		self.phase = new_phase;
 	}
 
 	///  Validate and import a state response.
