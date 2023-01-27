@@ -32,7 +32,7 @@ const BALANCE_FACTOR: u32 = 250;
 /// grab new account with infinite balance.
 fn endowed_account<T: Config>(name: &'static str, index: u32) -> T::AccountId {
 	let account: T::AccountId = account(name, index, 0);
-	// Fund each account with at-least his stake but still a sane amount as to not mess up
+	// Fund each account with at-least their stake but still a sane amount as to not mess up
 	// the vote calculation.
 	let amount = default_stake::<T>(T::MaxVoters::get()) * BalanceOf::<T>::from(BALANCE_FACTOR);
 	let _ = T::Currency::make_free_balance_be(&account, amount);
