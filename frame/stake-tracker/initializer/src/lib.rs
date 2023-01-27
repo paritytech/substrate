@@ -21,7 +21,7 @@ pub mod v1 {
 		PartialEqNoBound,
 	};
 	use pallet_stake_tracker::{ApprovalStake, BalanceOf, Pallet};
-	use pallet_staking::{Nominations, Validators};
+	use pallet_staking::{Nominations, TemporaryMigrationLock, Validators};
 	use sp_runtime::Saturating;
 	use std::collections::BTreeMap;
 
@@ -181,6 +181,7 @@ pub mod v1 {
 			let onchain = Pallet::<T>::on_chain_storage_version();
 
 			if current == 1 && onchain == 0 {
+				TemporaryMigrationLock::<T>::put(true);
 				let max_weight = T::BlockWeights::get().max_block;
 
 				let (approval_stakes, leftover_weight, is_finished) = Self::build_approval_stakes();
@@ -210,6 +211,7 @@ pub mod v1 {
 					MigrationV1StateNominators::<T>::kill();
 				}
 
+				TemporaryMigrationLock::<T>::kill();
 				current.put::<Pallet<T>>();
 				max_weight
 			} else {

@@ -586,8 +586,8 @@ pub mod pallet {
 	pub(crate) type ChillThreshold<T: Config> = StorageValue<_, Percent, OptionQuery>;
 
 	/// This is a lock introduced to initialize StakeTracker's TargetList. Once this has been done -
-	/// safe to remove. All the checks are going to be `TemporaryMigrationLock::exists()`, therefore
-	/// we don't really care about the value.
+	/// safe to remove. All the checks are going to be `!TemporaryMigrationLock::exists()`,
+	/// therefore we don't really care about the value.
 	#[pallet::storage]
 	pub type TemporaryMigrationLock<T: Config> = StorageValue<_, bool, OptionQuery>;
 
@@ -605,7 +605,6 @@ pub mod pallet {
 		pub min_validator_bond: BalanceOf<T>,
 		pub max_validator_count: Option<u32>,
 		pub max_nominator_count: Option<u32>,
-		pub temporary_migration_lock: Option<bool>,
 	}
 
 	#[cfg(feature = "std")]
@@ -623,7 +622,6 @@ pub mod pallet {
 				min_validator_bond: Default::default(),
 				max_validator_count: None,
 				max_nominator_count: None,
-				temporary_migration_lock: None,
 			}
 		}
 	}
@@ -639,7 +637,6 @@ pub mod pallet {
 			SlashRewardFraction::<T>::put(self.slash_reward_fraction);
 			MinNominatorBond::<T>::put(self.min_nominator_bond);
 			MinValidatorBond::<T>::put(self.min_validator_bond);
-			TemporaryMigrationLock::<T>::set(self.temporary_migration_lock);
 			if let Some(x) = self.max_validator_count {
 				MaxValidatorsCount::<T>::put(x);
 			}
@@ -880,7 +877,7 @@ pub mod pallet {
 			payee: RewardDestination<T::AccountId>,
 		) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
-			ensure!(TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
+			ensure!(!TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
 
 			if <Bonded<T>>::contains_key(&stash) {
 				return Err(Error::<T>::AlreadyBonded.into())
@@ -949,7 +946,7 @@ pub mod pallet {
 			#[pallet::compact] max_additional: BalanceOf<T>,
 		) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
-			ensure!(TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
+			ensure!(!TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
 
 			let controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
 			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
@@ -1001,7 +998,7 @@ pub mod pallet {
 			#[pallet::compact] value: BalanceOf<T>,
 		) -> DispatchResultWithPostInfo {
 			let controller = ensure_signed(origin)?;
-			ensure!(TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
+			ensure!(!TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
 
 			let unlocking = Self::ledger(&controller)
 				.map(|l| l.unlocking.len())
@@ -1102,7 +1099,7 @@ pub mod pallet {
 			num_slashing_spans: u32,
 		) -> DispatchResultWithPostInfo {
 			let controller = ensure_signed(origin)?;
-			ensure!(TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
+			ensure!(!TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
 
 			let actual_weight = Self::do_withdraw_unbonded(&controller, num_slashing_spans)?;
 			Ok(Some(actual_weight).into())
@@ -1117,7 +1114,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::validate())]
 		pub fn validate(origin: OriginFor<T>, prefs: ValidatorPrefs) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
-			ensure!(TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
+			ensure!(!TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 
 			ensure!(ledger.active >= MinValidatorBond::<T>::get(), Error::<T>::InsufficientBond);
@@ -1164,7 +1161,7 @@ pub mod pallet {
 			targets: Vec<AccountIdLookupOf<T>>,
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
-			ensure!(TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
+			ensure!(!TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
 
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			ensure!(ledger.active >= MinNominatorBond::<T>::get(), Error::<T>::InsufficientBond);
@@ -1241,7 +1238,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::chill())]
 		pub fn chill(origin: OriginFor<T>) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
-			ensure!(TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
+			ensure!(!TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			Self::chill_stash(&ledger.stash);
 			Ok(())
@@ -1299,7 +1296,7 @@ pub mod pallet {
 			controller: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
-			ensure!(TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
+			ensure!(!TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
 
 			let old_controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
 			let controller = T::Lookup::lookup(controller)?;
@@ -1549,7 +1546,7 @@ pub mod pallet {
 			era: EraIndex,
 		) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
-			ensure!(TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
+			ensure!(!TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
 			Self::do_payout_stakers(validator_stash, era)
 		}
 
@@ -1569,7 +1566,7 @@ pub mod pallet {
 			#[pallet::compact] value: BalanceOf<T>,
 		) -> DispatchResultWithPostInfo {
 			let controller = ensure_signed(origin)?;
-			ensure!(TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
+			ensure!(!TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			ensure!(!ledger.unlocking.is_empty(), Error::<T>::NoUnlockChunk);
 
@@ -1612,7 +1609,7 @@ pub mod pallet {
 			num_slashing_spans: u32,
 		) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
-			ensure!(TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
+			ensure!(!TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
 
 			let ed = T::Currency::minimum_balance();
 			let reapable = T::Currency::total_balance(&stash) < ed ||
@@ -1642,7 +1639,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::kick(who.len() as u32))]
 		pub fn kick(origin: OriginFor<T>, who: Vec<AccountIdLookupOf<T>>) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
-			ensure!(TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
+			ensure!(!TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
 
@@ -1752,7 +1749,7 @@ pub mod pallet {
 		pub fn chill_other(origin: OriginFor<T>, controller: T::AccountId) -> DispatchResult {
 			// Anyone can call this function.
 			let caller = ensure_signed(origin)?;
-			ensure!(TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
+			ensure!(!TemporaryMigrationLock::<T>::exists(), Error::<T>::TemporarilyLocked);
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = ledger.stash;
 
