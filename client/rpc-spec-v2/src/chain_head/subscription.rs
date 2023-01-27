@@ -159,7 +159,7 @@ impl<Block: BlockT, BE: Backend<Block> + 'static> Drop for SubscriptionHandle<Bl
 
 		// Unpin any remaining blocks of this subscription.
 		for hash in inner.blocks.drain() {
-			self.backend.unpin_block(*hash);
+			self.backend.unpin_block(hash);
 		}
 	}
 }

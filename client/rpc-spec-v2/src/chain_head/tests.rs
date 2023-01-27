@@ -9,7 +9,7 @@ use jsonrpsee::{
 use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::ChildInfo;
 use sc_service::client::new_in_mem;
-use sp_api::BlockId;
+use sp_api::{BlockId, BlockT};
 use sp_blockchain::HeaderBackend;
 use sp_consensus::BlockOrigin;
 use sp_core::{
@@ -1061,6 +1061,23 @@ async fn pin_block_references() {
 	)
 	.into_rpc();
 
+	async fn wait_pinned_references<Block: BlockT>(
+		backend: &Arc<sc_client_api::in_mem::Backend<Block>>,
+		hash: &Block::Hash,
+		target: i64,
+	) {
+		// Retry for at most 2 minutes.
+		let mut retries = 120;
+		while backend.pin_refs(hash).unwrap() != target {
+			if retries == 0 {
+				panic!("Expected target={} pinned references for hash={:?}", target, hash);
+			}
+			retries -= 1;
+
+			tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+		}
+	}
+
 	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
 	let sub_id = sub.subscription_id();
 	let sub_id = serde_json::to_string(&sub_id).unwrap();
@@ -1090,11 +1107,7 @@ async fn pin_block_references() {
 	// 2. The chainHead to call `pin_blocks` only once for the `NewBlock`
 	// notification (pin_refs == 3)
 	// 3. Both notifications to go out of scope (pin_refs ==  1 (total 3 - dropped 2)).
-	tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-
-	// The imported hash must be referenced once in the database (pin_block called once).
-	let refs = backend.pin_refs(&hash).unwrap();
-	assert_eq!(refs, 1);
+	wait_pinned_references(&backend, &hash, 1).await;
 
 	// To not exceed the number of pinned blocks, we need to unpin before the next import.
 	let _res: () = api.call("chainHead_unstable_unpin", [&sub_id, &block_hash]).await.unwrap();
@@ -1102,8 +1115,6 @@ async fn pin_block_references() {
 	// Make sure unpin clears out the reference.
 	let refs = backend.pin_refs(&hash).unwrap();
 	assert_eq!(refs, 0);
-
-	tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
 	// Add another 2 blocks and make sure we drop the subscription with the blocks pinned.
 	let mut hashes = Vec::new();
@@ -1125,12 +1136,9 @@ async fn pin_block_references() {
 		hashes.push(hash);
 	}
 
-	tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-
 	// Make sure the pin was propagated.
 	for hash in &hashes {
-		let refs = backend.pin_refs(&hash).unwrap();
-		assert_eq!(refs, 1);
+		wait_pinned_references(&backend, hash, 1).await;
 	}
 
 	// Drop the subscription and expect the pinned blocks to be released.
@@ -1140,10 +1148,7 @@ async fn pin_block_references() {
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 	client.import(BlockOrigin::Own, block.clone()).await.unwrap();
 
-	tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-
 	for hash in &hashes {
-		let refs = backend.pin_refs(&hash).unwrap();
-		assert_eq!(refs, 0);
+		wait_pinned_references(&backend, &hash, 0).await;
 	}
 }
