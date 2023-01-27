@@ -767,7 +767,7 @@ mod tests {
 				};
 				let signer = charlie.clone();
 
-				let function = RuntimeCall::Balances(BalancesCall::transfer {
+				let function = RuntimeCall::Balances(BalancesCall::transfer_allow_death {
 					dest: to.into(),
 					value: amount,
 				});

@@ -230,7 +230,7 @@ impl Contains<RuntimeCall> for TestBaseCallFilter {
 	fn contains(c: &RuntimeCall) -> bool {
 		match *c {
 			// Transfer works. Use `transfer_keep_alive` for a call that doesn't pass the filter.
-			RuntimeCall::Balances(pallet_balances::Call::transfer { .. }) => true,
+			RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death { .. }) => true,
 			RuntimeCall::Utility(_) => true,
 			// For benchmarking, this acts as a noop call
 			RuntimeCall::System(frame_system::Call::remark { .. }) => true,
@@ -282,7 +282,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 fn call_transfer(dest: u64, value: u64) -> RuntimeCall {
-	RuntimeCall::Balances(BalancesCall::transfer { dest, value })
+	RuntimeCall::Balances(BalancesCall::transfer_allow_death { dest, value })
 }
 
 fn call_foobar(err: bool, start_weight: Weight, end_weight: Option<Weight>) -> RuntimeCall {
@@ -293,7 +293,7 @@ fn call_foobar(err: bool, start_weight: Weight, end_weight: Option<Weight>) -> R
 fn as_derivative_works() {
 	new_test_ext().execute_with(|| {
 		let sub_1_0 = Utility::derivative_account_id(1, 0);
-		assert_ok!(Balances::transfer(RuntimeOrigin::signed(1), sub_1_0, 5));
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), sub_1_0, 5));
 		assert_err_ignore_postinfo!(
 			Utility::as_derivative(RuntimeOrigin::signed(1), 1, Box::new(call_transfer(6, 3)),),
 			BalancesError::<Test, _>::InsufficientBalance

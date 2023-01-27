@@ -82,7 +82,7 @@ mod benchmarks {
 		let transfer_amount = existential_deposit.saturating_mul(ED_MULTIPLIER.into());
 
 		#[extrinsic_call]
-		transfer(RawOrigin::Signed(caller.clone()), recipient_lookup, transfer_amount);
+		transfer_allow_death(RawOrigin::Signed(caller.clone()), recipient_lookup, transfer_amount);
 
 		assert!(!Balances::<T, I>::free_balance(&caller).is_zero());
 		assert!(!Balances::<T, I>::free_balance(&recipient).is_zero());
@@ -199,7 +199,7 @@ mod benchmarks {
 		}
 
 		#[extrinsic_call]
-		transfer(RawOrigin::Signed(caller.clone()), recipient_lookup, transfer_amount);
+		transfer_allow_death(RawOrigin::Signed(caller.clone()), recipient_lookup, transfer_amount);
 
 		assert_eq!(Balances::<T, I>::free_balance(&caller), Zero::zero());
 		assert_eq!(Balances::<T, I>::free_balance(&recipient), transfer_amount);
@@ -287,7 +287,7 @@ mod benchmarks {
 
 	impl_benchmark_test_suite! {
 		Balances,
-		crate::tests_composite::ExtBuilder::default().build(),
-		crate::tests_composite::Test,
+		crate::tests::ExtBuilder::default().build(),
+		crate::tests::Test,
 	}
 }

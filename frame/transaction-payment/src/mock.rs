@@ -49,7 +49,7 @@ frame_support::construct_runtime!(
 );
 
 pub(crate) const CALL: &<Runtime as frame_system::Config>::RuntimeCall =
-	&RuntimeCall::Balances(BalancesCall::transfer { dest: 2, value: 69 });
+	&RuntimeCall::Balances(BalancesCall::transfer_allow_death { dest: 2, value: 69 });
 
 parameter_types! {
 	pub(crate) static ExtrinsicBaseWeight: Weight = Weight::zero();

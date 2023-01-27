@@ -450,7 +450,7 @@ fn communify_works() {
 		assert_noop!(Nis::thaw_communal(signed(1), 1), Error::<Test>::UnknownReceipt);
 
 		// Transfer some of the fungibles away.
-		assert_ok!(NisBalances::transfer(signed(1), 2, 100_000));
+		assert_ok!(NisBalances::transfer_allow_death(signed(1), 2, 100_000));
 		assert_eq!(NisBalances::free_balance(&1), 2_000_000);
 		assert_eq!(NisBalances::free_balance(&2), 100_000);
 
@@ -459,7 +459,7 @@ fn communify_works() {
 		assert_noop!(Nis::thaw_communal(signed(2), 0), TokenError::FundsUnavailable);
 
 		// Transfer the rest to 2...
-		assert_ok!(NisBalances::transfer(signed(1), 2, 2_000_000));
+		assert_ok!(NisBalances::transfer_allow_death(signed(1), 2, 2_000_000));
 		assert_eq!(NisBalances::free_balance(&1), 0);
 		assert_eq!(NisBalances::free_balance(&2), 2_100_000);
 
@@ -486,7 +486,7 @@ fn privatize_works() {
 		assert_ok!(Nis::communify(signed(1), 0));
 
 		// Transfer the fungibles to #2
-		assert_ok!(NisBalances::transfer(signed(1), 2, 2_100_000));
+		assert_ok!(NisBalances::transfer_allow_death(signed(1), 2, 2_100_000));
 		assert_noop!(Nis::privatize(signed(1), 0), TokenError::FundsUnavailable);
 
 		// Privatize
@@ -512,16 +512,16 @@ fn privatize_and_thaw_with_another_receipt_works() {
 		assert_ok!(Nis::communify(signed(2), 1));
 
 		// Transfer half of fungibles to #3 from each of #1 and #2, and the other half from #2 to #4
-		assert_ok!(NisBalances::transfer(signed(1), 3, 1_050_000));
-		assert_ok!(NisBalances::transfer(signed(2), 3, 1_050_000));
-		assert_ok!(NisBalances::transfer(signed(2), 4, 1_050_000));
+		assert_ok!(NisBalances::transfer_allow_death(signed(1), 3, 1_050_000));
+		assert_ok!(NisBalances::transfer_allow_death(signed(2), 3, 1_050_000));
+		assert_ok!(NisBalances::transfer_allow_death(signed(2), 4, 1_050_000));
 
 		// #3 privatizes, partially thaws, then re-communifies with #0, then transfers the fungibles
 		// to #2
 		assert_ok!(Nis::privatize(signed(3), 0));
 		assert_ok!(Nis::thaw_private(signed(3), 0, Some(Perquintill::from_percent(5))));
 		assert_ok!(Nis::communify(signed(3), 0));
-		assert_ok!(NisBalances::transfer(signed(3), 1, 1_050_000));
+		assert_ok!(NisBalances::transfer_allow_death(signed(3), 1, 1_050_000));
 
 		// #1 now has enough to thaw using receipt 1
 		assert_ok!(Nis::thaw_communal(signed(1), 1));
@@ -535,7 +535,7 @@ fn privatize_and_thaw_with_another_receipt_works() {
 fn communal_thaw_when_issuance_higher_works() {
 	new_test_ext().execute_with(|| {
 		run_to_block(1);
-		assert_ok!(Balances::transfer(signed(2), 1, 1));
+		assert_ok!(Balances::transfer_allow_death(signed(2), 1, 1));
 		assert_ok!(Nis::place_bid(signed(1), 100, 1));
 		enlarge(100, 1);
 		assert_eq!(Balances::total_balance(&1), 101);
@@ -559,17 +559,17 @@ fn communal_thaw_when_issuance_higher_works() {
 		assert_ok!(Nis::fund_deficit(signed(1)));
 
 		// Transfer counterparts away...
-		assert_ok!(NisBalances::transfer(signed(1), 2, 125_000));
+		assert_ok!(NisBalances::transfer_allow_death(signed(1), 2, 125_000));
 		// ...and it's not thawable.
 		assert_noop!(Nis::thaw_communal(signed(1), 0), TokenError::FundsUnavailable);
 
 		// Transfer counterparts back...
-		assert_ok!(NisBalances::transfer(signed(2), 1, 125_000));
+		assert_ok!(NisBalances::transfer_allow_death(signed(2), 1, 125_000));
 		// ...and it is.
 		assert_ok!(Nis::thaw_communal(signed(1), 0));
 		assert_eq!(Balances::total_balance(&1), 151);
 
-		assert_ok!(Balances::transfer(signed(1), 2, 1));
+		assert_ok!(Balances::transfer_allow_death(signed(1), 2, 1));
 		assert_eq!(Balances::total_balance(&1), 150);
 		assert_eq!(Balances::free_balance(1), 150);
 		assert_eq!(Balances::total_balance_on_hold(&1), 0);
@@ -581,7 +581,7 @@ fn communal_thaw_when_issuance_higher_works() {
 fn private_thaw_when_issuance_higher_works() {
 	new_test_ext().execute_with(|| {
 		run_to_block(1);
-		assert_ok!(Balances::transfer(signed(2), 1, 1));
+		assert_ok!(Balances::transfer_allow_death(signed(2), 1, 1));
 		assert_ok!(Nis::place_bid(signed(1), 100, 1));
 		enlarge(100, 1);
 
@@ -599,7 +599,7 @@ fn private_thaw_when_issuance_higher_works() {
 
 		assert_ok!(Nis::thaw_private(signed(1), 0, None));
 
-		assert_ok!(Balances::transfer(signed(1), 2, 1));
+		assert_ok!(Balances::transfer_allow_death(signed(1), 2, 1));
 		assert_eq!(Balances::free_balance(1), 150);
 		assert_eq!(Balances::reserved_balance(1), 0);
 	});
@@ -612,14 +612,14 @@ fn thaw_with_ignored_issuance_works() {
 		// Give account zero some balance.
 		assert_ok!(Balances::mint_into(&0, 200));
 
-		assert_ok!(Balances::transfer(signed(2), 1, 1));
+		assert_ok!(Balances::transfer_allow_death(signed(2), 1, 1));
 		assert_ok!(Nis::place_bid(signed(1), 100, 1));
 		enlarge(100, 1);
 
 		// Account zero transfers 50 into everyone else's accounts.
-		assert_ok!(Balances::transfer(signed(0), 2, 50));
-		assert_ok!(Balances::transfer(signed(0), 3, 50));
-		assert_ok!(Balances::transfer(signed(0), 4, 50));
+		assert_ok!(Balances::transfer_allow_death(signed(0), 2, 50));
+		assert_ok!(Balances::transfer_allow_death(signed(0), 3, 50));
+		assert_ok!(Balances::transfer_allow_death(signed(0), 4, 50));
 
 		run_to_block(4);
 		// Unfunded initially...
@@ -630,7 +630,7 @@ fn thaw_with_ignored_issuance_works() {
 		assert_ok!(Nis::thaw_private(signed(1), 0, None));
 
 		// Account zero changes have been ignored.
-		assert_ok!(Balances::transfer(signed(1), 2, 1));
+		assert_ok!(Balances::transfer_allow_death(signed(1), 2, 1));
 		assert_eq!(Balances::free_balance(1), 150);
 		assert_eq!(Balances::reserved_balance(1), 0);
 	});
@@ -640,7 +640,7 @@ fn thaw_with_ignored_issuance_works() {
 fn thaw_when_issuance_lower_works() {
 	new_test_ext().execute_with(|| {
 		run_to_block(1);
-		assert_ok!(Balances::transfer(signed(2), 1, 1));
+		assert_ok!(Balances::transfer_allow_death(signed(2), 1, 1));
 		assert_ok!(Nis::place_bid(signed(1), 100, 1));
 		enlarge(100, 1);
 
@@ -652,7 +652,7 @@ fn thaw_when_issuance_lower_works() {
 		run_to_block(4);
 		assert_ok!(Nis::thaw_private(signed(1), 0, None));
 
-		assert_ok!(Balances::transfer(signed(1), 2, 1));
+		assert_ok!(Balances::transfer_allow_death(signed(1), 2, 1));
 		assert_eq!(Balances::free_balance(1), 75);
 		assert_eq!(Balances::reserved_balance(1), 0);
 	});
@@ -662,7 +662,7 @@ fn thaw_when_issuance_lower_works() {
 fn multiple_thaws_works() {
 	new_test_ext().execute_with(|| {
 		run_to_block(1);
-		assert_ok!(Balances::transfer(signed(3), 1, 1));
+		assert_ok!(Balances::transfer_allow_death(signed(3), 1, 1));
 		assert_ok!(Nis::place_bid(signed(1), 40, 1));
 		assert_ok!(Nis::place_bid(signed(1), 60, 1));
 		assert_ok!(Nis::place_bid(signed(2), 50, 1));
@@ -681,7 +681,7 @@ fn multiple_thaws_works() {
 		run_to_block(5);
 		assert_ok!(Nis::thaw_private(signed(2), 2, None));
 
-		assert_ok!(Balances::transfer(signed(1), 3, 1));
+		assert_ok!(Balances::transfer_allow_death(signed(1), 3, 1));
 		assert_eq!(Balances::free_balance(1), 200);
 		assert_eq!(Balances::free_balance(2), 200);
 		assert_eq!(Balances::total_balance(&1), 200);
@@ -693,7 +693,7 @@ fn multiple_thaws_works() {
 fn multiple_thaws_works_in_alternative_thaw_order() {
 	new_test_ext().execute_with(|| {
 		run_to_block(1);
-		assert_ok!(Balances::transfer(signed(3), 1, 1));
+		assert_ok!(Balances::transfer_allow_death(signed(3), 1, 1));
 		assert_ok!(Nis::place_bid(signed(1), 40, 1));
 		assert_ok!(Nis::place_bid(signed(1), 60, 1));
 		assert_ok!(Nis::place_bid(signed(2), 50, 1));
@@ -713,7 +713,7 @@ fn multiple_thaws_works_in_alternative_thaw_order() {
 		run_to_block(5);
 		assert_ok!(Nis::thaw_private(signed(1), 1, None));
 
-		assert_ok!(Balances::transfer(signed(1), 3, 1));
+		assert_ok!(Balances::transfer_allow_death(signed(1), 3, 1));
 		assert_eq!(Balances::free_balance(1), 200);
 		assert_eq!(Balances::free_balance(2), 200);
 		assert_eq!(Balances::total_balance(&1), 200);

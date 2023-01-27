@@ -87,7 +87,10 @@ pub fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
 }
 
 pub fn default_transfer_call() -> pallet_balances::Call<Runtime> {
-	pallet_balances::Call::<Runtime>::transfer { dest: bob().into(), value: 69 * DOLLARS }
+	pallet_balances::Call::<Runtime>::transfer_allow_death {
+		dest: bob().into(),
+		value: 69 * DOLLARS,
+	}
 }
 
 pub fn from_block_number(n: u32) -> Header {

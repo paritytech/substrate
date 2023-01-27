@@ -182,7 +182,7 @@ fn create_benchmark_extrinsics(
 				create_extrinsic(
 					client,
 					account.clone(),
-					BalancesCall::transfer {
+					BalancesCall::transfer_allow_death {
 						dest: Sr25519Keyring::Bob.to_account_id().into(),
 						value: 1 * DOLLARS,
 					},

@@ -98,7 +98,7 @@ fn force_unstake_works() {
 		add_slash(&11);
 		// Cant transfer
 		assert_noop!(
-			Balances::transfer(RuntimeOrigin::signed(11), 1, 10),
+			Balances::transfer_allow_death(RuntimeOrigin::signed(11), 1, 10),
 			BalancesError::<Test, _>::LiquidityRestrictions
 		);
 		// Force unstake requires root.
@@ -113,7 +113,7 @@ fn force_unstake_works() {
 		// No longer bonded.
 		assert_eq!(Staking::bonded(&11), None);
 		// Transfer works.
-		assert_ok!(Balances::transfer(RuntimeOrigin::signed(11), 1, 10));
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(11), 1, 10));
 	});
 }
 
@@ -960,14 +960,14 @@ fn cannot_transfer_staked_balance() {
 		assert_eq!(Staking::eras_stakers(active_era(), 11).total, 1000);
 		// Confirm account 11 cannot transfer as a result
 		assert_noop!(
-			Balances::transfer(RuntimeOrigin::signed(11), 20, 1),
+			Balances::transfer_allow_death(RuntimeOrigin::signed(11), 20, 1),
 			BalancesError::<Test, _>::LiquidityRestrictions
 		);
 
 		// Give account 11 extra free balance
 		let _ = Balances::make_free_balance_be(&11, 10000);
 		// Confirm that account 11 can now transfer some balance
-		assert_ok!(Balances::transfer(RuntimeOrigin::signed(11), 20, 1));
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(11), 20, 1));
 	});
 }
 
@@ -985,10 +985,10 @@ fn cannot_transfer_staked_balance_2() {
 		assert_eq!(Staking::eras_stakers(active_era(), 21).total, 1000);
 		// Confirm account 21 can transfer at most 1000
 		assert_noop!(
-			Balances::transfer(RuntimeOrigin::signed(21), 20, 1001),
+			Balances::transfer_allow_death(RuntimeOrigin::signed(21), 20, 1001),
 			BalancesError::<Test, _>::LiquidityRestrictions
 		);
-		assert_ok!(Balances::transfer(RuntimeOrigin::signed(21), 20, 1000));
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(21), 20, 1000));
 	});
 }
 
@@ -4192,7 +4192,7 @@ fn payout_creates_controller() {
 		bond_nominator(1234, 1337, 100, vec![11]);
 
 		// kill controller
-		assert_ok!(Balances::transfer(RuntimeOrigin::signed(1337), 1234, 100));
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1337), 1234, 100));
 		assert_eq!(Balances::free_balance(1337), 0);
 
 		mock::start_active_era(1);

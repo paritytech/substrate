@@ -86,7 +86,7 @@ fn should_submit_signed_transaction() {
 	t.execute_with(|| {
 		let results =
 			Signer::<Runtime, TestAuthorityId>::all_accounts().send_signed_transaction(|_| {
-				pallet_balances::Call::transfer {
+				pallet_balances::Call::transfer_allow_death {
 					dest: Alice.to_account_id().into(),
 					value: Default::default(),
 				}
@@ -123,7 +123,7 @@ fn should_submit_signed_twice_from_the_same_account() {
 	t.execute_with(|| {
 		let result =
 			Signer::<Runtime, TestAuthorityId>::any_account().send_signed_transaction(|_| {
-				pallet_balances::Call::transfer {
+				pallet_balances::Call::transfer_allow_death {
 					dest: Alice.to_account_id().into(),
 					value: Default::default(),
 				}
@@ -135,7 +135,7 @@ fn should_submit_signed_twice_from_the_same_account() {
 		// submit another one from the same account. The nonce should be incremented.
 		let result =
 			Signer::<Runtime, TestAuthorityId>::any_account().send_signed_transaction(|_| {
-				pallet_balances::Call::transfer {
+				pallet_balances::Call::transfer_allow_death {
 					dest: Alice.to_account_id().into(),
 					value: Default::default(),
 				}
@@ -174,7 +174,7 @@ fn should_submit_signed_twice_from_all_accounts() {
 	t.execute_with(|| {
 		let results = Signer::<Runtime, TestAuthorityId>::all_accounts()
 			.send_signed_transaction(|_| {
-				pallet_balances::Call::transfer { dest: Alice.to_account_id().into(), value: Default::default() }
+				pallet_balances::Call::transfer_allow_death { dest: Alice.to_account_id().into(), value: Default::default() }
 			});
 
 		let len = results.len();
@@ -185,7 +185,7 @@ fn should_submit_signed_twice_from_all_accounts() {
 		// submit another one from the same account. The nonce should be incremented.
 		let results = Signer::<Runtime, TestAuthorityId>::all_accounts()
 			.send_signed_transaction(|_| {
-				pallet_balances::Call::transfer { dest: Alice.to_account_id().into(), value: Default::default() }
+				pallet_balances::Call::transfer_allow_death { dest: Alice.to_account_id().into(), value: Default::default() }
 			});
 
 		let len = results.len();
@@ -238,7 +238,7 @@ fn submitted_transaction_should_be_valid() {
 	t.execute_with(|| {
 		let results =
 			Signer::<Runtime, TestAuthorityId>::all_accounts().send_signed_transaction(|_| {
-				pallet_balances::Call::transfer {
+				pallet_balances::Call::transfer_allow_death {
 					dest: Alice.to_account_id().into(),
 					value: Default::default(),
 				}

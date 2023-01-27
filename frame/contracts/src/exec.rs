@@ -2789,8 +2789,10 @@ mod tests {
 				RuntimeCall::System(SysCall::remark_with_event { remark: b"Hello".to_vec() });
 
 			// transfers are disallowed by the `TestFiler` (see below)
-			let forbidden_call =
-				RuntimeCall::Balances(BalanceCall::transfer { dest: CHARLIE, value: 22 });
+			let forbidden_call = RuntimeCall::Balances(BalanceCall::transfer_allow_death {
+				dest: CHARLIE,
+				value: 22,
+			});
 
 			// simple cases: direct call
 			assert_err!(
@@ -2810,7 +2812,7 @@ mod tests {
 		});
 
 		TestFilter::set_filter(|call| match call {
-			RuntimeCall::Balances(pallet_balances::Call::transfer { .. }) => false,
+			RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death { .. }) => false,
 			_ => true,
 		});
 

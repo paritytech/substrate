@@ -85,7 +85,7 @@ use sp_arithmetic::{traits::Unsigned, RationalArg};
 use sp_core::TypedGet;
 use sp_runtime::{
 	traits::{Convert, ConvertBack},
-	Perquintill,
+	DispatchError, Perquintill,
 };
 
 mod benchmarking;
@@ -142,6 +142,7 @@ impl<T> FunInspect<T> for NoCounterpart<T> {
 	}
 }
 impl<T> fungible::Unbalanced<T> for NoCounterpart<T> {
+	fn handle_dust(_: fungible::Dust<T, Self>) {}
 	fn write_balance(_: &T, _: Self::Balance) -> Result<Option<Self::Balance>, DispatchError> {
 		Ok(None)
 	}

@@ -128,7 +128,10 @@ impl InstanceFilter<RuntimeCall> for ProxyType {
 		match self {
 			ProxyType::Any => true,
 			ProxyType::JustTransfer => {
-				matches!(c, RuntimeCall::Balances(pallet_balances::Call::transfer { .. }))
+				matches!(
+					c,
+					RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death { .. })
+				)
 			},
 			ProxyType::JustUtility => matches!(c, RuntimeCall::Utility { .. }),
 		}
@@ -197,7 +200,7 @@ fn expect_events(e: Vec<RuntimeEvent>) {
 }
 
 fn call_transfer(dest: u64, value: u64) -> RuntimeCall {
-	RuntimeCall::Balances(BalancesCall::transfer { dest, value })
+	RuntimeCall::Balances(BalancesCall::transfer_allow_death { dest, value })
 }
 
 #[test]
@@ -579,7 +582,7 @@ fn pure_works() {
 		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 0));
 
 		let call = Box::new(call_transfer(6, 1));
-		assert_ok!(Balances::transfer(RuntimeOrigin::signed(3), anon, 5));
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(3), anon, 5));
 		assert_ok!(Proxy::proxy(RuntimeOrigin::signed(1), anon, None, call));
 		System::assert_last_event(ProxyEvent::ProxyExecuted { result: Ok(()) }.into());
 		assert_eq!(Balances::free_balance(6), 1);

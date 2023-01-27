@@ -490,7 +490,7 @@ impl<T: Config> Ext<T> for ReservingExt {
 						// we move to the new `fungible` API which provides for placing
 						T::Currency::reserve(
 							contract,
-							amount.saturating_sub(T::Currency::minimum_balance()),
+							amount.saturating_sub(<T::Currency as Inspect<_>>::minimum_balance()),
 						)
 					})
 				});
