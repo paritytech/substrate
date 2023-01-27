@@ -80,9 +80,9 @@ pub use self::hasher::blake2::Blake2Hasher;
 pub use self::hasher::keccak::KeccakHasher;
 pub use hash_db::Hasher;
 
-pub use sp_storage as storage;
 pub use bounded_collections as bounded;
 pub use bounded_collections::*;
+pub use sp_storage as storage;
 
 #[doc(hidden)]
 pub use sp_std;
