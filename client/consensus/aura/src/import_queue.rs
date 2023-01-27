@@ -186,16 +186,15 @@ where
 		&mut self,
 		mut block: BlockImportParams<B, ()>,
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-		// When importing whole state we don't verify the seal as the state is not available.
-		if block.with_state() {
-			return Ok((block, Default::default()))
-		}
-
-		// Skip checks that include execution, if being told so.
+		// Skip checks that include execution, if being told so or when importing only state.
 		//
 		// This is done for example when gap syncing and it is expected that the block after the gap
 		// was checked/chosen properly, e.g. by warp syncing to this block using a finality proof.
-		if block.state_action.skip_execution_checks() {
+		// Or when we are importing state only and can not verify the seal.
+		if block.with_state() || block.state_action.skip_execution_checks() {
+			// When we are importing only the state of a block, it will be the best block.
+			block.fork_choice = Some(ForkChoiceStrategy::Custom(block.with_state()));
+
 			return Ok((block, Default::default()))
 		}
 
@@ -246,14 +245,14 @@ where
 
 					// skip the inherents verification if the runtime API is old or not expected to
 					// exist.
-					if !block.state_action.skip_execution_checks() &&
-						self.client
-							.runtime_api()
-							.has_api_with::<dyn BlockBuilderApi<B>, _>(
-								&BlockId::Hash(parent_hash),
-								|v| v >= 2,
-							)
-							.map_err(|e| e.to_string())?
+					if self
+						.client
+						.runtime_api()
+						.has_api_with::<dyn BlockBuilderApi<B>, _>(
+							&BlockId::Hash(parent_hash),
+							|v| v >= 2,
+						)
+						.map_err(|e| e.to_string())?
 					{
 						self.check_inherents(
 							new_block.clone(),

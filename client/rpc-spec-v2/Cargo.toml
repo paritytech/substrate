@@ -24,7 +24,7 @@ sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-version = { version = "5.0.0", path = "../../primitives/version" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
-codec = { package = "parity-scale-codec", version = "3.0.0" }
+codec = { package = "parity-scale-codec", version = "3.2.2" }
 thiserror = "1.0"
 serde = "1.0"
 hex = "0.4"

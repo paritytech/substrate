@@ -22,7 +22,9 @@
 use crate::{
 	chain_extension::ChainExtension,
 	storage::meter::Diff,
-	wasm::{Determinism, Environment, OwnerInfo, PrefabWasmModule},
+	wasm::{
+		runtime::AllowDeprecatedInterface, Determinism, Environment, OwnerInfo, PrefabWasmModule,
+	},
 	AccountIdOf, CodeVec, Config, Error, Schedule,
 };
 use codec::{Encode, MaxEncodedLen};
@@ -52,6 +54,14 @@ pub enum TryInstantiate {
 	/// this instantiation would fail the whole transaction and an extra check is not
 	/// necessary.
 	Skip,
+}
+
+/// The reason why a contract is instrumented.
+enum InstrumentReason {
+	/// A new code is uploaded.
+	New,
+	/// Existing code is re-instrumented.
+	Reinstrument,
 }
 
 struct ContractModule<'a, T: Config> {
@@ -381,6 +391,7 @@ fn instrument<E, T>(
 	schedule: &Schedule<T>,
 	determinism: Determinism,
 	try_instantiate: TryInstantiate,
+	reason: InstrumentReason,
 ) -> Result<(Vec<u8>, (u32, u32)), (DispatchError, &'static str)>
 where
 	E: Environment<()>,
@@ -454,11 +465,20 @@ where
 		// We don't actually ever run any code so we can get away with a minimal stack which
 		// reduces the amount of memory that needs to be zeroed.
 		let stack_limits = StackLimits::new(1, 1, 0).expect("initial <= max; qed");
-		PrefabWasmModule::<T>::instantiate::<E, _>(&code, (), (initial, maximum), stack_limits)
-			.map_err(|err| {
-				log::debug!(target: "runtime::contracts", "{}", err);
-				(Error::<T>::CodeRejected.into(), "new code rejected after instrumentation")
-			})?;
+		PrefabWasmModule::<T>::instantiate::<E, _>(
+			&code,
+			(),
+			(initial, maximum),
+			stack_limits,
+			match reason {
+				InstrumentReason::New => AllowDeprecatedInterface::No,
+				InstrumentReason::Reinstrument => AllowDeprecatedInterface::Yes,
+			},
+		)
+		.map_err(|err| {
+			log::debug!(target: "runtime::contracts", "{}", err);
+			(Error::<T>::CodeRejected.into(), "new code rejected after instrumentation")
+		})?;
 	}
 
 	Ok((code, (initial, maximum)))
@@ -486,8 +506,13 @@ where
 	E: Environment<()>,
 	T: Config,
 {
-	let (code, (initial, maximum)) =
-		instrument::<E, T>(original_code.as_ref(), schedule, determinism, try_instantiate)?;
+	let (code, (initial, maximum)) = instrument::<E, T>(
+		original_code.as_ref(),
+		schedule,
+		determinism,
+		try_instantiate,
+		InstrumentReason::New,
+	)?;
 
 	let original_code_len = original_code.len();
 
@@ -532,21 +557,30 @@ where
 	E: Environment<()>,
 	T: Config,
 {
-	instrument::<E, T>(original_code, schedule, determinism, TryInstantiate::Skip)
-		.map_err(|(err, msg)| {
-			log::error!(target: "runtime::contracts", "CodeRejected during reinstrument: {}", msg);
-			err
-		})
-		.map(|(code, _)| code)
+	instrument::<E, T>(
+		original_code,
+		schedule,
+		determinism,
+		// This function was triggered by an interaction with an existing contract code
+		// that will try to instantiate anyways. Failing here would not help
+		// as the contract is already on chain.
+		TryInstantiate::Skip,
+		InstrumentReason::Reinstrument,
+	)
+	.map_err(|(err, msg)| {
+		log::error!(target: "runtime::contracts", "CodeRejected during reinstrument: {}", msg);
+		err
+	})
+	.map(|(code, _)| code)
 }
 
-/// Alternate (possibly unsafe) preparation functions used only for benchmarking.
+/// Alternate (possibly unsafe) preparation functions used only for benchmarking and testing.
 ///
 /// For benchmarking we need to construct special contracts that might not pass our
 /// sanity checks or need to skip instrumentation for correct results. We hide functions
-/// allowing this behind a feature that is only set during benchmarking to prevent usage
-/// in production code.
-#[cfg(feature = "runtime-benchmarks")]
+/// allowing this behind a feature that is only set during benchmarking or testing to
+/// prevent usage in production code.
+#[cfg(any(test, feature = "runtime-benchmarks"))]
 pub mod benchmarking {
 	use super::*;
 
@@ -600,7 +634,7 @@ mod tests {
 	#[allow(unreachable_code)]
 	mod env {
 		use super::*;
-		use crate::wasm::runtime::TrapReason;
+		use crate::wasm::runtime::{AllowDeprecatedInterface, AllowUnstableInterface, TrapReason};
 
 		// Define test environment for tests. We need ImportSatisfyCheck
 		// implementation from it. So actual implementations doesn't matter.

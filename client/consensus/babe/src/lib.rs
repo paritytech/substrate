@@ -111,7 +111,7 @@ use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_application_crypto::AppKey;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::{
-	Backend as _, Error as ClientError, ForkBackend, HeaderBackend, HeaderMetadata,
+	Backend as _, BlockStatus, Error as ClientError, ForkBackend, HeaderBackend, HeaderMetadata,
 	Result as ClientResult,
 };
 use sp_consensus::{
@@ -209,8 +209,9 @@ impl From<sp_consensus_babe::Epoch> for Epoch {
 }
 
 impl Epoch {
-	/// Create the genesis epoch (epoch #0). This is defined to start at the slot of
-	/// the first block, so that has to be provided.
+	/// Create the genesis epoch (epoch #0).
+	///
+	/// This is defined to start at the slot of the first block, so that has to be provided.
 	pub fn genesis(genesis_config: &BabeConfiguration, slot: Slot) -> Epoch {
 		Epoch {
 			epoch_index: 0,
@@ -223,6 +224,38 @@ impl Epoch {
 				allowed_slots: genesis_config.allowed_slots,
 			},
 		}
+	}
+
+	/// Clone and tweak epoch information to refer to the specified slot.
+	///
+	/// All the information which depends on the slot value is recomputed and assigned
+	/// to the returned epoch instance.
+	///
+	/// The `slot` must be greater than or equal the original epoch start slot,
+	/// if is less this operation is equivalent to a simple clone.
+	pub fn clone_for_slot(&self, slot: Slot) -> Epoch {
+		let mut epoch = self.clone();
+
+		let skipped_epochs = *slot.saturating_sub(self.start_slot) / self.duration;
+
+		let epoch_index = epoch.epoch_index.checked_add(skipped_epochs).expect(
+			"epoch number is u64; it should be strictly smaller than number of slots; \
+				slots relate in some way to wall clock time; \
+				if u64 is not enough we should crash for safety; qed.",
+		);
+
+		let start_slot = skipped_epochs
+			.checked_mul(epoch.duration)
+			.and_then(|skipped_slots| epoch.start_slot.checked_add(skipped_slots))
+			.expect(
+				"slot number is u64; it should relate in some way to wall clock time; \
+				 if u64 is not enough we should crash for safety; qed.",
+			);
+
+		epoch.epoch_index = epoch_index;
+		epoch.start_slot = Slot::from(start_slot);
+
+		epoch
 	}
 }
 
@@ -1133,11 +1166,17 @@ where
 		let hash = block.header.hash();
 		let parent_hash = *block.header.parent_hash();
 
-		if block.with_state() {
-			// When importing whole state we don't calculate epoch descriptor, but rather
-			// read it from the state after import. We also skip all verifications
-			// because there's no parent state and we trust the sync module to verify
-			// that the state is correct and finalized.
+		let info = self.client.info();
+		let number = *block.header.number();
+
+		if info.block_gap.map_or(false, |(s, e)| s <= number && number <= e) || block.with_state() {
+			// Verification for imported blocks is skipped in two cases:
+			// 1. When importing blocks below the last finalized block during network initial
+			//    synchronization.
+			// 2. When importing whole state we don't calculate epoch descriptor, but rather
+			//    read it from the state after import. We also skip all verifications
+			//    because there's no parent state and we trust the sync module to verify
+			//    that the state is correct and finalized.
 			return Ok((block, Default::default()))
 		}
 
@@ -1399,18 +1438,24 @@ where
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_hash();
 		let number = *block.header.number();
+		let info = self.client.info();
 
-		// early exit if block already in chain, otherwise the check for
-		// epoch changes will error when trying to re-import an epoch change
-		match self.client.status(hash) {
-			Ok(sp_blockchain::BlockStatus::InChain) => {
-				// When re-importing existing block strip away intermediates.
-				let _ = block.remove_intermediate::<BabeIntermediate<Block>>(INTERMEDIATE_KEY);
-				block.fork_choice = Some(ForkChoiceStrategy::Custom(false));
-				return self.inner.import_block(block, new_cache).await.map_err(Into::into)
-			},
-			Ok(sp_blockchain::BlockStatus::Unknown) => {},
-			Err(e) => return Err(ConsensusError::ClientImport(e.to_string())),
+		let block_status = self
+			.client
+			.status(hash)
+			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
+
+		// Skip babe logic if block already in chain or importing blocks during initial sync,
+		// otherwise the check for epoch changes will error because trying to re-import an
+		// epoch change or because of missing epoch data in the tree, respectivelly.
+		if info.block_gap.map_or(false, |(s, e)| s <= number && number <= e) ||
+			block_status == BlockStatus::InChain
+		{
+			// When re-importing existing block strip away intermediates.
+			// In case of initial sync intermediates should not be present...
+			let _ = block.remove_intermediate::<BabeIntermediate<Block>>(INTERMEDIATE_KEY);
+			block.fork_choice = Some(ForkChoiceStrategy::Custom(false));
+			return self.inner.import_block(block, new_cache).await.map_err(Into::into)
 		}
 
 		if block.with_state() {
@@ -1449,7 +1494,7 @@ where
 		// this way we can revert it if there's any error
 		let mut old_epoch_changes = None;
 
-		// Use an extra scope to make the compiler happy, because otherwise he complains about the
+		// Use an extra scope to make the compiler happy, because otherwise it complains about the
 		// mutex, even if we dropped it...
 		let mut epoch_changes = {
 			let mut epoch_changes = self.epoch_changes.shared_data_locked();
@@ -1506,8 +1551,6 @@ where
 					)),
 			}
 
-			let info = self.client.info();
-
 			if let Some(next_epoch_descriptor) = next_epoch_digest {
 				old_epoch_changes = Some((*epoch_changes).clone());
 
@@ -1530,45 +1573,27 @@ where
 				};
 
 				if viable_epoch.as_ref().end_slot() <= slot {
-					// some epochs must have been skipped as our current slot
-					// fits outside the current epoch. we will figure out
-					// which epoch it belongs to and we will re-use the same
-					// data for that epoch
-					let mut epoch_data = viable_epoch.as_mut();
-					let skipped_epochs =
-						*slot.saturating_sub(epoch_data.start_slot) / epoch_data.duration;
-
-					// NOTE: notice that we are only updating a local copy of the `Epoch`, this
+					// Some epochs must have been skipped as our current slot fits outside the
+					// current epoch. We will figure out which epoch it belongs to and we will
+					// re-use the same data for that epoch.
+					// Notice that we are only updating a local copy of the `Epoch`, this
 					// makes it so that when we insert the next epoch into `EpochChanges` below
 					// (after incrementing it), it will use the correct epoch index and start slot.
-					// we do not update the original epoch that will be re-used because there might
+					// We do not update the original epoch that will be re-used because there might
 					// be other forks (that we haven't imported) where the epoch isn't skipped, and
-					// to import those forks we want to keep the original epoch data. not updating
+					// to import those forks we want to keep the original epoch data. Not updating
 					// the original epoch works because when we search the tree for which epoch to
 					// use for a given slot, we will search in-depth with the predicate
 					// `epoch.start_slot <= slot` which will still match correctly without updating
 					// `start_slot` to the correct value as below.
-					let epoch_index = epoch_data.epoch_index.checked_add(skipped_epochs).expect(
-						"epoch number is u64; it should be strictly smaller than number of slots; \
-						slots relate in some way to wall clock time; \
-						if u64 is not enough we should crash for safety; qed.",
-					);
-
-					let start_slot = skipped_epochs
-						.checked_mul(epoch_data.duration)
-						.and_then(|skipped_slots| epoch_data.start_slot.checked_add(skipped_slots))
-						.expect(
-							"slot number is u64; it should relate in some way to wall clock time; \
-							 if u64 is not enough we should crash for safety; qed.",
-						);
+					let epoch = viable_epoch.as_mut();
+					let prev_index = epoch.epoch_index;
+					*epoch = epoch.clone_for_slot(slot);
 
 					warn!(
 						target: LOG_TARGET,
-						"👶 Epoch(s) skipped: from {} to {}", epoch_data.epoch_index, epoch_index,
+						"👶 Epoch(s) skipped: from {} to {}", prev_index, epoch.epoch_index,
 					);
-
-					epoch_data.epoch_index = epoch_index;
-					epoch_data.start_slot = Slot::from(start_slot);
 				}
 
 				log!(
@@ -1701,9 +1726,6 @@ where
 	Client: HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>,
 {
 	let info = client.info();
-	if info.block_gap.is_none() {
-		epoch_changes.clear_gap();
-	}
 
 	let finalized_slot = {
 		let finalized_header = client

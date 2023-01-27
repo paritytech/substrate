@@ -30,7 +30,7 @@ use sp_runtime::traits::Block;
 use std::{marker::PhantomData, sync::Arc};
 
 use crate::communication::request_response::{
-	on_demand_justifications_protocol_config, Error, JustificationRequest,
+	on_demand_justifications_protocol_config, Error, JustificationRequest, BEEFY_SYNC_LOG_TARGET,
 };
 
 /// A request coming in, including a sender for sending responses.
@@ -174,21 +174,21 @@ where
 
 	/// Run [`BeefyJustifsRequestHandler`].
 	pub async fn run(mut self) {
-		trace!(target: "beefy::sync", "🥩 Running BeefyJustifsRequestHandler");
+		trace!(target: BEEFY_SYNC_LOG_TARGET, "🥩 Running BeefyJustifsRequestHandler");
 
 		while let Ok(request) = self.request_receiver.recv(|| vec![]).await {
 			let peer = request.peer;
 			match self.handle_request(request) {
 				Ok(()) => {
 					debug!(
-						target: "beefy::sync",
+						target: BEEFY_SYNC_LOG_TARGET,
 						"🥩 Handled BEEFY justification request from {:?}.", peer
 					)
 				},
 				Err(e) => {
 					// TODO (issue #12293): apply reputation changes here based on error type.
 					debug!(
-						target: "beefy::sync",
+						target: BEEFY_SYNC_LOG_TARGET,
 						"🥩 Failed to handle BEEFY justification request from {:?}: {}", peer, e,
 					)
 				},
