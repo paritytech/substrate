@@ -214,9 +214,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	.assimilate_storage(&mut storage)
 	.unwrap();
 
-	let _ = pallet_staking::GenesisConfig::<Runtime> { ..Default::default() }
-		.assimilate_storage(&mut storage);
-
 	let _ = pallet_balances::GenesisConfig::<Runtime> {
 		balances: vec![(10, 100), (20, 100), (21, 100), (22, 100)],
 	}
