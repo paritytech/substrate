@@ -500,8 +500,8 @@ pub mod pallet {
 			/// Preimage hash.
 			hash: PreimageHash,
 		},
-		/// Metadata has been reset to new owner.
-		MetadataReset {
+		/// Metadata has been transferred to new owner.
+		MetadataTransferred {
 			/// Previous metadata owner.
 			prev_owner: MetadataOwner,
 			/// New metadata owner.
@@ -1691,7 +1691,7 @@ impl<T: Config> Pallet<T> {
 			.ok_or(Error::<T>::ProposalMissing)
 	}
 
-	/// Clear metadata, if `Some` and unrequest associated preimage.
+	/// Clear metadata if exist for a given owner.
 	fn clear_metadata(owner: MetadataOwner) {
 		if let Some(hash) = MetadataOf::<T>::take(&owner) {
 			Self::deposit_event(Event::<T>::MetadataCleared { owner, hash });
@@ -1702,7 +1702,7 @@ impl<T: Config> Pallet<T> {
 	fn reset_metadata(owner: MetadataOwner, new_owner: MetadataOwner) {
 		if let Some(hash) = MetadataOf::<T>::take(&owner) {
 			MetadataOf::<T>::insert(&new_owner, hash);
-			Self::deposit_event(Event::<T>::MetadataReset {
+			Self::deposit_event(Event::<T>::MetadataTransferred {
 				prev_owner: owner,
 				owner: new_owner,
 				hash,

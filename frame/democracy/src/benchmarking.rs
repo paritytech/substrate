@@ -296,7 +296,7 @@ benchmarks! {
 	}: _<T::RuntimeOrigin>(origin_fast_track, proposal_hash, voting_period, delay.into())
 	verify {
 		assert_eq!(Democracy::<T>::referendum_count(), 1, "referendum not created");
-		assert_last_event::<T>(crate::Event::MetadataReset {
+		assert_last_event::<T>(crate::Event::MetadataTransferred {
 			prev_owner: MetadataOwner::External,
 			owner: MetadataOwner::Referendum(0),
 			hash: preimage_hash,

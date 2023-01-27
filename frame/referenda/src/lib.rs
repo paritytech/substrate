@@ -1266,7 +1266,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			approval_needed.passing(x, tally.approval(id))
 	}
 
-	/// Clear metadata, if `Some` and unrequest associated preimage.
+	/// Clear metadata if exist for a given referendum index.
 	fn do_clear_metadata(index: ReferendumIndex) {
 		if let Some(hash) = MetadataOf::<T, I>::take(index) {
 			Self::deposit_event(Event::<T, I>::MetadataCleared { index, hash });
