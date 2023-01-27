@@ -20,6 +20,7 @@ paste = "1.0"
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 serde = { version = "1.0.136", optional = true }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-support-procedural = { version = "4.0.0-dev", default-features = false, path = "../support/procedural" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
 sp-application-crypto = { version = "7.0.0", default-features = false, path = "../../primitives/application-crypto" }
@@ -29,6 +30,7 @@ sp-runtime = { version = "7.0.0", default-features = false, path = "../../primit
 sp-runtime-interface = { version = "7.0.0", default-features = false, path = "../../primitives/runtime-interface" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 sp-storage = { version = "7.0.0", default-features = false, path = "../../primitives/storage" }
+static_assertions = "1.1.0"
 
 [dev-dependencies]
 array-bytes = "4.1"

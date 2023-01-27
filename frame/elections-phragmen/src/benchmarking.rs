@@ -21,7 +21,7 @@
 
 use super::*;
 
-use frame_benchmarking::{account, benchmarks, whitelist, BenchmarkError, BenchmarkResult};
+use frame_benchmarking::v1::{account, benchmarks, whitelist, BenchmarkError, BenchmarkResult};
 use frame_support::{dispatch::DispatchResultWithPostInfo, traits::OnInitialize};
 use frame_system::RawOrigin;
 

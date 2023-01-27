@@ -638,7 +638,7 @@ fn expand_benchmark(
 		Ok(ident) => ident,
 		Err(err) => return err.to_compile_error().into(),
 	};
-	let home = quote!(#krate::frame_support::benchmarking);
+	let home = quote!(#krate::v2);
 	let codec = quote!(#krate::frame_support::codec);
 	let traits = quote!(#krate::frame_support::traits);
 	let setup_stmts = benchmark_def.setup_stmts;

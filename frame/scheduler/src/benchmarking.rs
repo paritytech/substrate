@@ -18,7 +18,7 @@
 //! Scheduler pallet benchmarking.
 
 use super::*;
-use frame_benchmarking::{account, benchmarks};
+use frame_benchmarking::v1::{account, benchmarks};
 use frame_support::{
 	ensure,
 	traits::{schedule::Priority, BoundedInline},
