@@ -149,7 +149,7 @@ impl core::Benchmark for ImportBenchmark {
 						//    - extrinsic success
 						assert_eq!(
 							kitchensink_runtime::System::events().len(),
-							(self.block.extrinsics.len() - 1) * 10 + 1,
+							(self.block.extrinsics.len() - 1) * 8 + 1,
 						);
 					},
 					BlockType::Noop => {
