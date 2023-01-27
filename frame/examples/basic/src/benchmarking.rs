@@ -21,7 +21,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use crate::*;
-use frame_benchmarking::{
+use frame_benchmarking::v1::{
 	impl_benchmark_test_suite,
 	v2::{benchmarks, Linear},
 	whitelisted_caller,

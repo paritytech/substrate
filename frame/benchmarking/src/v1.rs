@@ -17,7 +17,7 @@
 
 //! Macros for benchmarking a FRAME runtime.
 
-use super::*;
+pub use super::*;
 
 /// Whitelist the given account.
 #[macro_export]
