@@ -40,7 +40,7 @@ type Balance = u64;
 type AccountId = u64;
 
 frame_support::construct_runtime!(
-	pub enum Runtime where
+	pub struct Runtime where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
