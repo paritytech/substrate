@@ -106,7 +106,7 @@ where
 	/// Poll to make progress.
 	///
 	/// This only makes progress when `phase = Phase::PendingTargetBlock` and the pending block was
-	/// send.
+	/// sent.
 	pub fn poll(&mut self, cx: &mut std::task::Context) {
 		let new_phase = if let Phase::PendingTargetBlock { target_block } = &mut self.phase {
 			match target_block.poll_unpin(cx) {
