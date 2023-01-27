@@ -486,10 +486,13 @@ impl<T: Config> Ext<T> for ReservingExt {
 						// and retry. This is a workaround, not a solution.
 						//
 						// The solution is to make a provider reference as part of the contract's
-						// existence and then 
-						// we move to the new `fungible` API which provides for placing 
-						T::Currency::reserve(contract, amount.saturating_sub(T::Currency::minimum_balance()))
-					}}
+						// existence and then
+						// we move to the new `fungible` API which provides for placing
+						T::Currency::reserve(
+							contract,
+							amount.saturating_sub(T::Currency::minimum_balance()),
+						)
+					})
 				});
 				if let Err(err) = result {
 					log::error!(
