@@ -623,7 +623,7 @@ pub mod pallet {
 				min_validator_bond: Default::default(),
 				max_validator_count: None,
 				max_nominator_count: None,
-				temporary_migration_lock: Some(true),
+				temporary_migration_lock: None,
 			}
 		}
 	}
