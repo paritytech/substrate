@@ -536,7 +536,6 @@ impl ExtBuilder {
 			slash_reward_fraction: Perbill::from_percent(10),
 			min_nominator_bond: self.min_nominator_bond,
 			min_validator_bond: self.min_validator_bond,
-			temporary_migration_lock: Some(true),
 			..Default::default()
 		}
 		.assimilate_storage(&mut storage);
