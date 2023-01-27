@@ -36,7 +36,7 @@ benchmarks! {
 
 	waste_proof_size_some {
 		let n in 0 .. 1024;
-		// TODO this needs <https://github.com/paritytech/substrate/pull/11637>.
+
 		(0..n).for_each(|i| TrashData::<T>::insert(i, i));
 	}: {
 		TrashData::<T>::get(n);
@@ -44,13 +44,11 @@ benchmarks! {
 
 	waste_proof_size_none {
 		let n in 0 .. 1024;
-		// TODO this needs <https://github.com/paritytech/substrate/pull/11637>.
 	}: {
 		TrashData::<T>::get(n);
 	}
 
 	on_idle {
-		// We have to run the migration so that `TrashData` is not emtpy.
 		(0..5000).for_each(|i| TrashData::<T>::insert(i, i));
 		let _ = Glutton::<T>::set_compute(SystemOrigin::Root.into(), Perbill::from_percent(100));
 		let _ = Glutton::<T>::set_storage(SystemOrigin::Root.into(), Perbill::from_percent(100));

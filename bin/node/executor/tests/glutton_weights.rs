@@ -24,25 +24,25 @@ pub mod common;
 use self::common::*;
 
 #[test]
-fn expected_weight_same_as_actual() {
+fn expected_weight_same_as_consumed() {
 	let mut t = new_test_ext(compact_code_unwrap());
 
-	let actual_weight = <Runtime as pallet_glutton::Config>::WeightInfo::on_idle();
+	let expected_weight = <Runtime as pallet_glutton::Config>::WeightInfo::on_idle();
 
 	t.execute_with(|| {
-		let got = Glutton::on_idle(
+		let consumed = Glutton::on_idle(
 			System::block_number(),
 			Weight::from_parts(WEIGHT_REF_TIME_PER_MILLIS * 10, WEIGHT_PROOF_SIZE_PER_MB),
 		);
 
-		let ratio = Perbill::from_rational(got.proof_size(), actual_weight.proof_size());
+		let ratio = Perbill::from_rational(consumed.proof_size(), expected_weight.proof_size());
 		assert!(
 			ratio >= Perbill::from_percent(95),
 			"Too few proof size consumed, was only {:?} of expected",
 			ratio
 		);
 
-		let ratio = Perbill::from_rational(got.ref_time(), actual_weight.ref_time());
+		let ratio = Perbill::from_rational(consumed.ref_time(), expected_weight.ref_time());
 		assert!(
 			ratio >= Perbill::from_percent(95),
 			"Too few ref time consumed, was only {:?} of expected",
