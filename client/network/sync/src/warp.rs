@@ -124,8 +124,6 @@ where
 		if let Some(new_phase) = new_phase {
 			self.phase = new_phase;
 		}
-
-		Poll::Pending
 	}
 
 	///  Validate and import a state response.
