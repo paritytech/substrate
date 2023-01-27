@@ -120,9 +120,9 @@ fn new_account_info(free_dollars: u128) -> Vec<u8> {
 	frame_system::AccountInfo {
 		nonce: 0u32,
 		consumers: 0,
-		providers: 0,
+		providers: 1,
 		sufficients: 0,
-		data: (free_dollars * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS),
+		data: (free_dollars * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 1u128 << 127),
 	}
 	.encode()
 }
