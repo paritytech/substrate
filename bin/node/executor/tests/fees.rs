@@ -214,7 +214,7 @@ fn block_weight_capacity_report() {
 		let mut xts = (0..num_transfers)
 			.map(|i| CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(nonce + i as Index, 0))),
-				function: RuntimeCall::Balances(pallet_balances::Call::transfer {
+				function: RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death {
 					dest: bob().into(),
 					value: 0,
 				}),
