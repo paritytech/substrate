@@ -39,3 +39,8 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 		decimals: u8,
 	) -> DispatchResult;
 }
+
+pub trait CalcMetadataDeposit<DepositBalance> {
+	// Returns the required deposit amount for a given metadata.
+	fn calc(name: &Vec<u8>, symbol: &Vec<u8>) -> DepositBalance;
+}

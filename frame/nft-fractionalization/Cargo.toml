@@ -1,5 +1,5 @@
 [package]
-name = "pallet-nft-fractionalisation"
+name = "pallet-nft-fractionalization"
 version = "4.0.0-dev"
 description = "FRAME pallet for semi-fungible tokens."
 authors = ["Parity Technologies <admin@parity.io>"]

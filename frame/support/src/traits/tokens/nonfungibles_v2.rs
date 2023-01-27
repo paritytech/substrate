@@ -294,3 +294,11 @@ pub trait Transfer<AccountId>: Inspect<AccountId> {
 		destination: &AccountId,
 	) -> DispatchResult;
 }
+
+/// Trait for locking and unlocking non-fungible sets of items.
+pub trait LockableNonfungible<CollectionId, ItemId> {
+	/// Lock `item` of `collection`.
+	fn lock(collection: &CollectionId, item: &ItemId) -> DispatchResult;
+	/// Unlock `item` of `collection`.
+	fn unlock(collection: &CollectionId, item: &ItemId) -> DispatchResult;
+}

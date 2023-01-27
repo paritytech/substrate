@@ -32,10 +32,14 @@ use frame_support::{
 	pallet_prelude::Get,
 	parameter_types,
 	traits::{
-		fungible::ItemOf, AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32,
-		Currency, EitherOfDiverse, EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter,
-		KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote,
-		WithdrawReasons,
+		fungible::ItemOf,
+		tokens::{
+			nonfungibles_v2::{Inspect, LockableNonfungible, Mutate},
+			AttributeNamespace,
+		},
+		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, Currency, EitherOfDiverse,
+		EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter, KeyOwnerProofSystem,
+		LockIdentifier, Locker, Nothing, OnUnbalanced, U128CurrencyToVote, WithdrawReasons,
 	},
 	weights::{
 		constants::{
@@ -56,7 +60,7 @@ use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
-use pallet_nfts::PalletFeatures;
+use pallet_nfts::{ItemConfig, PalletFeatures};
 use pallet_nis::WithMaximumOf;
 use pallet_session::historical::{self as pallet_session_historical};
 pub use pallet_transaction_payment::{CurrencyAdapter, Multiplier, TargetedFeeAdjustment};
@@ -74,7 +78,8 @@ use sp_runtime::{
 		SaturatedConversion, StaticLookup,
 	},
 	transaction_validity::{TransactionPriority, TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult, FixedPointNumber, FixedU128, Perbill, Percent, Permill, Perquintill,
+	ApplyExtrinsicResult, DispatchResult, FixedPointNumber, FixedU128, Perbill, Percent, Permill,
+	Perquintill,
 };
 use sp_std::prelude::*;
 #[cfg(any(feature = "std", test))]
@@ -92,8 +97,6 @@ pub use pallet_staking::StakerStatus;
 pub use pallet_sudo::Call as SudoCall;
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
-
-pub use pallet_nft_fractionalisation;
 
 /// Implementations of some helper traits passed into runtime modules as associated types.
 pub mod impls;
@@ -1562,6 +1565,17 @@ parameter_types! {
 	pub Features: PalletFeatures = PalletFeatures::all_enabled();
 }
 
+const LOCKED_NFT_KEY: &[u8; 6] = b"locked";
+type ItemId = <Runtime as pallet_nfts::Config>::ItemId;
+type CollectionId = <Runtime as pallet_nfts::Config>::CollectionId;
+
+pub struct NftLocker;
+impl Locker<CollectionId, ItemId> for NftLocker {
+	fn is_locked(collection: CollectionId, item: ItemId) -> bool {
+		Nfts::attribute(&collection, &item, &AttributeNamespace::Pallet, LOCKED_NFT_KEY).is_some()
+	}
+}
+
 impl pallet_nfts::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type CollectionId = u32;
@@ -1585,25 +1599,40 @@ impl pallet_nfts::Config for Runtime {
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = ();
 	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
-	type Locker = ();
+	type Locker = NftLocker;
 }
 
 parameter_types! {
 	pub const NftFractionsPalletId: PalletId = PalletId(*b"fraction");
-	pub const BuybackThreshold: u32 = 1;
 }
 
-impl pallet_nft_fractionalisation::Config for Runtime {
+pub struct RuntimeLockableNonfungible;
+impl LockableNonfungible<CollectionId, ItemId> for RuntimeLockableNonfungible {
+	fn lock(collection: &CollectionId, item: &ItemId) -> DispatchResult {
+		<Nfts as Mutate<AccountId, ItemConfig>>::set_attribute(
+			collection,
+			item,
+			LOCKED_NFT_KEY,
+			&[1],
+		)
+	}
+	fn unlock(collection: &CollectionId, item: &ItemId) -> DispatchResult {
+		<Nfts as Mutate<AccountId, ItemConfig>>::clear_attribute(collection, item, LOCKED_NFT_KEY)
+	}
+}
+
+impl pallet_nft_fractionalization::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type PalletId = NftFractionsPalletId;
 	type Currency = Balances;
-	type BuybackThreshold = BuybackThreshold;
-	type CollectionId = <Self as pallet_nfts::Config>::CollectionId;
-	type ItemId = <Self as pallet_nfts::Config>::ItemId;
+	type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
+	type NftId = <Self as pallet_nfts::Config>::ItemId;
 	type AssetBalance = <Self as pallet_balances::Config>::Balance;
-	type Assets = Assets;
-	type Items = Nfts;
 	type AssetId = <Self as pallet_assets::Config>::AssetId;
+	type Assets = Assets;
+	type Nfts = Nfts;
+	type NftLocker = RuntimeLockableNonfungible;
+	type WeightInfo = pallet_nft_fractionalization::weights::SubstrateWeight<Runtime>;
 }
 
 impl pallet_transaction_storage::Config for Runtime {
@@ -1761,7 +1790,7 @@ construct_runtime!(
 		Nis: pallet_nis,
 		Uniques: pallet_uniques,
 		Nfts: pallet_nfts,
-		NftFractions: pallet_nft_fractionalisation,
+		NftFractions: pallet_nft_fractionalization,
 		TransactionStorage: pallet_transaction_storage,
 		VoterList: pallet_bags_list::<Instance1>,
 		StateTrieMigration: pallet_state_trie_migration,
@@ -1894,6 +1923,7 @@ mod benches {
 		[pallet_treasury, Treasury]
 		[pallet_uniques, Uniques]
 		[pallet_nfts, Nfts]
+		[pallet_nft_fractionalization, NftFractions]
 		[pallet_utility, Utility]
 		[pallet_vesting, Vesting]
 		[pallet_whitelist, Whitelist]
