@@ -32,7 +32,7 @@ fn expected_weight_same_as_consumed() {
 	t.execute_with(|| {
 		let consumed = Glutton::on_idle(
 			System::block_number(),
-			Weight::from_parts(WEIGHT_REF_TIME_PER_MILLIS * 10, WEIGHT_PROOF_SIZE_PER_MB),
+			Weight::from_parts(WEIGHT_REF_TIME_PER_MILLIS * 20, WEIGHT_PROOF_SIZE_PER_MB),
 		);
 
 		let ratio = Perbill::from_rational(consumed.proof_size(), expected_weight.proof_size());

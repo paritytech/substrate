@@ -63,9 +63,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 8_000 nanoseconds.
-		Weight::from_ref_time(7_942_950)
-			// Standard Error: 157
-			.saturating_add(Weight::from_ref_time(209).saturating_mul(n.into()))
+		Weight::from_ref_time(7_943_072)
+			// Standard Error: 215
+			.saturating_add(Weight::from_ref_time(306).saturating_mul(n.into()))
 	}
 	/// Storage: Glutton TrashData (r:1 w:0)
 	/// Proof: Glutton TrashData (max_values: None, max_size: Some(24), added: 2499, mode: MaxEncodedLen)
@@ -74,38 +74,36 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `762`
 		//  Estimated: `2499`
-		// Minimum execution time: 3_000 nanoseconds.
-		Weight::from_parts(6_773_699, 2499)
-			// Standard Error: 1_126
-			.saturating_add(Weight::from_ref_time(2_788).saturating_mul(n.into()))
+		// Minimum execution time: 4_000 nanoseconds.
+		Weight::from_parts(7_030_096, 2499)
+			// Standard Error: 969
+			.saturating_add(Weight::from_ref_time(1_798).saturating_mul(n.into()))
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 	}
 	/// Storage: Glutton TrashData (r:1 w:0)
 	/// Proof: Glutton TrashData (max_values: None, max_size: Some(24), added: 2499, mode: MaxEncodedLen)
 	/// The range of component `n` is `[0, 1024]`.
-	fn waste_proof_size_none(n: u32, ) -> Weight {
+	fn waste_proof_size_none(_n: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `55`
 		//  Estimated: `2499`
 		// Minimum execution time: 3_000 nanoseconds.
-		Weight::from_parts(3_100_346, 2499)
-			// Standard Error: 341
-			.saturating_add(Weight::from_ref_time(683).saturating_mul(n.into()))
+		Weight::from_parts(3_556_894, 2499)
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 	}
 	/// Storage: Glutton Storage (r:1 w:0)
 	/// Proof: Glutton Storage (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
 	/// Storage: Glutton Compute (r:1 w:0)
 	/// Proof: Glutton Compute (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
-	/// Storage: Glutton TrashData (r:20 w:0)
+	/// Storage: Glutton TrashData (r:419 w:0)
 	/// Proof: Glutton TrashData (max_values: None, max_size: Some(24), added: 2499, mode: MaxEncodedLen)
 	fn on_idle() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `12180`
-		//  Estimated: `50978`
-		// Minimum execution time: 78_503_000 nanoseconds.
-		Weight::from_parts(78_503_000_000, 50978)
-			.saturating_add(T::DbWeight::get().reads(22_u64))
+		//  Measured:  `82451`
+		//  Estimated: `1048079`
+		// Minimum execution time: 8_323_000 nanoseconds.
+		Weight::from_parts(8_323_000_000, 1048079)
+			.saturating_add(T::DbWeight::get().reads(421_u64))
 	}
 	fn empty_on_idle() -> Weight {
 		// Proof Size summary in bytes:
@@ -124,9 +122,9 @@ impl WeightInfo for () {
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 8_000 nanoseconds.
-		Weight::from_ref_time(7_942_950)
-			// Standard Error: 157
-			.saturating_add(Weight::from_ref_time(209).saturating_mul(n.into()))
+		Weight::from_ref_time(7_943_072)
+			// Standard Error: 215
+			.saturating_add(Weight::from_ref_time(306).saturating_mul(n.into()))
 	}
 	/// Storage: Glutton TrashData (r:1 w:0)
 	/// Proof: Glutton TrashData (max_values: None, max_size: Some(24), added: 2499, mode: MaxEncodedLen)
@@ -135,38 +133,36 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `762`
 		//  Estimated: `2499`
-		// Minimum execution time: 3_000 nanoseconds.
-		Weight::from_parts(6_773_699, 2499)
-			// Standard Error: 1_126
-			.saturating_add(Weight::from_ref_time(2_788).saturating_mul(n.into()))
+		// Minimum execution time: 4_000 nanoseconds.
+		Weight::from_parts(7_030_096, 2499)
+			// Standard Error: 969
+			.saturating_add(Weight::from_ref_time(1_798).saturating_mul(n.into()))
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
 	}
 	/// Storage: Glutton TrashData (r:1 w:0)
 	/// Proof: Glutton TrashData (max_values: None, max_size: Some(24), added: 2499, mode: MaxEncodedLen)
 	/// The range of component `n` is `[0, 1024]`.
-	fn waste_proof_size_none(n: u32, ) -> Weight {
+	fn waste_proof_size_none(_n: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `55`
 		//  Estimated: `2499`
 		// Minimum execution time: 3_000 nanoseconds.
-		Weight::from_parts(3_100_346, 2499)
-			// Standard Error: 341
-			.saturating_add(Weight::from_ref_time(683).saturating_mul(n.into()))
+		Weight::from_parts(3_556_894, 2499)
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
 	}
 	/// Storage: Glutton Storage (r:1 w:0)
 	/// Proof: Glutton Storage (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
 	/// Storage: Glutton Compute (r:1 w:0)
 	/// Proof: Glutton Compute (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
-	/// Storage: Glutton TrashData (r:20 w:0)
+	/// Storage: Glutton TrashData (r:419 w:0)
 	/// Proof: Glutton TrashData (max_values: None, max_size: Some(24), added: 2499, mode: MaxEncodedLen)
 	fn on_idle() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `12180`
-		//  Estimated: `50978`
-		// Minimum execution time: 78_503_000 nanoseconds.
-		Weight::from_parts(78_503_000_000, 50978)
-			.saturating_add(RocksDbWeight::get().reads(22_u64))
+		//  Measured:  `82451`
+		//  Estimated: `1048079`
+		// Minimum execution time: 8_323_000 nanoseconds.
+		Weight::from_parts(8_323_000_000, 1048079)
+			.saturating_add(RocksDbWeight::get().reads(421_u64))
 	}
 	fn empty_on_idle() -> Weight {
 		// Proof Size summary in bytes:

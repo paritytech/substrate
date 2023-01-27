@@ -105,7 +105,7 @@ fn on_idle_weight_is_close_enough_works() {
 		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), Perbill::from_percent(100)));
 		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), Perbill::from_percent(100)));
 
-		let should = Weight::from_parts(WEIGHT_REF_TIME_PER_MILLIS * 10, WEIGHT_PROOF_SIZE_PER_MB);
+		let should = Weight::from_parts(WEIGHT_REF_TIME_PER_MILLIS * 20, WEIGHT_PROOF_SIZE_PER_MB);
 		let got = Glutton::on_idle(1, should);
 		assert!(got.all_lte(should), "Consumed too much weight");
 
