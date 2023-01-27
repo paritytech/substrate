@@ -81,7 +81,14 @@ impl<T: Config<I>, I: 'static> fungibles::Balanced<<T as SystemConfig>::AccountI
 }
 
 impl<T: Config<I>, I: 'static> fungibles::Unbalanced<T::AccountId> for Pallet<T, I> {
-	fn write_balance(_: Self::AssetId, _: &T::AccountId, _: Self::Balance) -> DispatchResult {
+	fn handle_dust(_: fungibles::Dust<T::AccountId, Self>) {
+		unreachable!("`decrease_balance` and `increase_balance` have non-default impls; nothing else calls this; qed");
+	}
+	fn write_balance(
+		_: Self::AssetId,
+		_: &T::AccountId,
+		_: Self::Balance,
+	) -> Result<Option<Self::Balance>, DispatchError> {
 		unreachable!("write_balance is not used if other functions are impl'd");
 	}
 	fn set_total_issuance(id: T::AssetId, amount: Self::Balance) {

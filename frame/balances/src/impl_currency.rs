@@ -304,10 +304,17 @@ where
 		if value.is_zero() || transactor == dest {
 			return Ok(())
 		}
+		let keep_alive = match existence_requirement {
+			ExistenceRequirement::KeepAlive => Keep,
+			ExistenceRequirement::AllowDeath => CanKill,
+		};
+		<Self as fungible::Mutate<_>>::transfer(transactor, dest, value, keep_alive)?;
+		Ok(())
 
-		Self::try_mutate_account_with_dust(
+		/*
+		let (maybe_dust_1, maybe_dust_2) = Self::try_mutate_account_with_dust(
 			dest,
-			|to_account, _| -> Result<DustCleaner<T, I>, DispatchError> {
+			|to_account, _| -> Result<Option<(T::Balance, T::AccountId)>, DispatchError> {
 				Self::try_mutate_account_with_dust(
 					transactor,
 					|from_account, _| -> DispatchResult {
@@ -343,9 +350,11 @@ where
 						Ok(())
 					},
 				)
-				.map(|(_, maybe_dust_cleaner)| maybe_dust_cleaner)
+				.map(|(_, maybe_dust)| maybe_dust)
 			},
 		)?;
+
+		// TODO: Handle the dust.
 
 		// Emit transfer event.
 		Self::deposit_event(Event::Transfer {
@@ -354,7 +363,7 @@ where
 			amount: value,
 		});
 
-		Ok(())
+		Ok(())*/
 	}
 
 	/// Slash a target account `who`, returning the negative imbalance created and any left over
@@ -373,7 +382,10 @@ where
 		if Self::total_balance(who).is_zero() {
 			return (NegativeImbalance::zero(), value)
 		}
-		match Self::try_mutate_account(
+
+		// TODO: Use fungible::Balanced::withdraw and convert the
+
+		let (result, maybe_dust) = match Self::try_mutate_account(
 			who,
 			|account, _is_new| -> Result<(Self::NegativeImbalance, Self::Balance), DispatchError> {
 				// Best value is the most amount we can slash following liveness rules.
@@ -387,15 +399,19 @@ where
 				Ok((NegativeImbalance::new(actual), remaining))
 			},
 		) {
-			Ok((imbalance, remaining)) => {
+			Ok(((imbalance, remaining), maybe_dust)) => {
 				Self::deposit_event(Event::Slashed {
 					who: who.clone(),
 					amount: value.saturating_sub(remaining),
 				});
-				(imbalance, remaining)
+				((imbalance, remaining), maybe_dust)
 			},
-			Err(_) => (Self::NegativeImbalance::zero(), value),
+			Err(_) => ((Self::NegativeImbalance::zero(), value), None),
+		};
+		if let Some(_dust) = maybe_dust {
+			// TODO: handle
 		}
+		result
 	}
 
 	/// Deposit some `value` into the free balance of an existing target account `who`.
@@ -418,6 +434,7 @@ where
 				Ok(PositiveImbalance::new(value))
 			},
 		)
+		.map(|x| x.0)
 	}
 
 	/// Deposit some `value` into the free balance of `who`, possibly creating a new account.
@@ -451,6 +468,7 @@ where
 				Ok(PositiveImbalance::new(value))
 			},
 		)
+		.map(|x| x.0)
 		.unwrap_or_else(|_| Self::PositiveImbalance::zero())
 	}
 
@@ -487,6 +505,7 @@ where
 				Ok(NegativeImbalance::new(value))
 			},
 		)
+		.map(|x| x.0)
 	}
 
 	/// Force the new free balance of a target account `who` to some new value `balance`.
@@ -520,6 +539,7 @@ where
 				Ok(imbalance)
 			},
 		)
+		.map(|x| x.0)
 		.unwrap_or_else(|_| SignedImbalance::Positive(Self::PositiveImbalance::zero()))
 	}
 }
@@ -592,7 +612,8 @@ where
 				// could be done.
 				return value
 			},
-		};
+		}
+		.0;
 
 		Self::deposit_event(Event::Unreserved { who: who.clone(), amount: actual });
 		value - actual
@@ -623,7 +644,7 @@ where
 			// underflow should never happen, but it if does, there's nothing to be done here.
 			(NegativeImbalance::new(actual), value.saturating_sub(actual))
 		}) {
-			Ok((imbalance, not_slashed)) => {
+			Ok(((imbalance, not_slashed), _dust)) => {
 				Self::deposit_event(Event::Slashed {
 					who: who.clone(),
 					amount: value.saturating_sub(not_slashed),

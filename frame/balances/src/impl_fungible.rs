@@ -136,17 +136,25 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 }
 
 impl<T: Config<I>, I: 'static> fungible::Unbalanced<T::AccountId> for Pallet<T, I> {
-	fn write_balance(who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
+	fn handle_dust(dust: fungible::Dust<T::AccountId, Self>) {
+		T::DustRemoval::on_unbalanced(dust.into_credit());
+	}
+	fn write_balance(
+		who: &T::AccountId,
+		amount: Self::Balance,
+	) -> Result<Option<Self::Balance>, DispatchError> {
 		let max_reduction =
 			<Self as fungible::Inspect<_>>::reducible_balance(who, KeepAlive::CanKill, true);
-		Self::mutate_account(who, |account| -> DispatchResult {
+		let (result, maybe_dust) = Self::mutate_account(who, |account| -> DispatchResult {
 			// Make sure the reduction (if there is one) is no more than the maximum allowed.
 			let reduction = account.free.saturating_sub(amount);
 			ensure!(reduction <= max_reduction, Error::<T, I>::InsufficientBalance);
 
 			account.free = amount;
 			Ok(())
-		})?
+		})?;
+		result?;
+		Ok(maybe_dust)
 	}
 
 	fn set_total_issuance(amount: Self::Balance) {
@@ -252,7 +260,8 @@ impl<T: Config<I>, I: 'static> fungible::UnbalancedHold<T::AccountId> for Pallet
 		let r = Self::try_mutate_account(who, |a, _| -> DispatchResult {
 			*a = new_account;
 			Ok(())
-		});
+		})
+		.map(|x| x.0);
 		Holds::<T, I>::insert(who, holds);
 		r
 	}

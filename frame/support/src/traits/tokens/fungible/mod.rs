@@ -44,7 +44,7 @@ pub mod freeze;
 pub mod hold;
 mod imbalance;
 mod item_of;
-pub mod regular;
+mod regular;
 
 pub use freeze::{Inspect as InspectFreeze, Mutate as MutateFreeze};
 pub use hold::{
@@ -53,4 +53,6 @@ pub use hold::{
 };
 pub use imbalance::{Credit, Debt, HandleImbalanceDrop, Imbalance};
 pub use item_of::ItemOf;
-pub use regular::{Balanced, DecreaseIssuance, IncreaseIssuance, Inspect, Mutate, Unbalanced};
+pub use regular::{
+	Balanced, DecreaseIssuance, Dust, IncreaseIssuance, Inspect, Mutate, Unbalanced,
+};

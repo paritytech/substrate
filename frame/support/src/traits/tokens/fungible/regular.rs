@@ -29,13 +29,13 @@ use crate::{
 	},
 };
 use sp_arithmetic::traits::{CheckedAdd, CheckedSub};
-use sp_runtime::{traits::Saturating, ArithmeticError, DispatchResult, TokenError};
+use sp_runtime::{traits::Saturating, ArithmeticError, TokenError};
 use sp_std::marker::PhantomData;
 
 use super::{Credit, Debt, HandleImbalanceDrop, Imbalance};
 
 /// Trait for providing balance-inspection access to a fungible asset.
-pub trait Inspect<AccountId> {
+pub trait Inspect<AccountId>: Sized {
 	/// Scalar type for representing balance of an account.
 	type Balance: Balance;
 
@@ -89,6 +89,17 @@ pub trait Inspect<AccountId> {
 	fn can_withdraw(who: &AccountId, amount: Self::Balance) -> WithdrawConsequence<Self::Balance>;
 }
 
+/// Special dust type which can be type-safely converted into a `Credit`.
+#[must_use]
+pub struct Dust<A, T: Unbalanced<A>>(pub(crate) T::Balance);
+
+impl<A, T: Balanced<A>> Dust<A, T> {
+	/// Convert `Dust` into an instance of `Credit`.
+	pub fn into_credit(self) -> Credit<A, T> {
+		Credit::<A, T>::new(self.0)
+	}
+}
+
 /// A fungible token class where the balance can be set arbitrarily.
 ///
 /// **WARNING**
@@ -98,7 +109,9 @@ pub trait Inspect<AccountId> {
 /// for the underlying datatype to implement so the user gets the much safer `Balanced` trait to
 /// use.
 pub trait Unbalanced<AccountId>: Inspect<AccountId> {
-	fn handle_dust(dust: Imbalance<Self::Balance, (), ()>);
+	/// Do something with the dust which has been destroyed from the system. `Dust` can be converted
+	/// into a `Credit` with the `Balanced` trait impl.
+	fn handle_dust(dust: Dust<AccountId, Self>);
 
 	/// Forcefully set the balance of `who` to `amount`.
 	///
@@ -112,9 +125,13 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 	/// If this cannot be done for some reason (e.g. because the account cannot be created, deleted
 	/// or would overflow) then an `Err` is returned.
 	///
-	/// If `Ok` is returned then its inner is the amount which was discarded as dust due to
-	/// existential deposit requirements. 
-	fn write_balance(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError>;
+	/// If `Ok` is returned then its inner, if `Some` is the amount which was discarded as dust due
+	/// to existential deposit requirements. The default implementation of `decrease_balance` and
+	/// `increase_balance` converts this into an `Imbalance` and then passes it into `handle_dust`.
+	fn write_balance(
+		who: &AccountId,
+		amount: Self::Balance,
+	) -> Result<Option<Self::Balance>, DispatchError>;
 
 	/// Set the total issuance to `amount`.
 	fn set_total_issuance(amount: Self::Balance);
@@ -142,7 +159,9 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 			amount = amount.min(free);
 		}
 		let new_balance = old_balance.checked_sub(&amount).ok_or(TokenError::FundsUnavailable)?;
-		Self::write_balance(who, new_balance)?;
+		if let Some(dust) = Self::write_balance(who, new_balance)? {
+			Self::handle_dust(Dust(dust));
+		}
 		Ok(old_balance.saturating_sub(new_balance))
 	}
 
@@ -174,7 +193,9 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 			if new_balance == old_balance {
 				Ok(Default::default())
 			} else {
-				Self::write_balance(who, new_balance)?;
+				if let Some(dust) = Self::write_balance(who, new_balance)? {
+					Self::handle_dust(Dust(dust));
+				}
 				Ok(new_balance.saturating_sub(old_balance))
 			}
 		}

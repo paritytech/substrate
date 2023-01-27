@@ -474,9 +474,8 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecut
 					);
 
 					used_native = true;
-					Ok(with_externalities_safe(&mut **ext, move || {
-						D::dispatch(method, data)
-					})?.ok_or_else(|| Error::MethodNotFound(method.to_owned())))
+					Ok(with_externalities_safe(&mut **ext, move || D::dispatch(method, data))?
+						.ok_or_else(|| Error::MethodNotFound(method.to_owned())))
 				} else {
 					if !can_call_with {
 						tracing::trace!(

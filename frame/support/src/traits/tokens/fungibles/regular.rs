@@ -31,12 +31,12 @@ use crate::{
 	},
 };
 use sp_arithmetic::traits::{CheckedAdd, CheckedSub};
-use sp_runtime::{traits::Saturating, ArithmeticError, DispatchResult, TokenError};
+use sp_runtime::{traits::Saturating, ArithmeticError, TokenError};
 
 use super::{Credit, Debt, HandleImbalanceDrop, Imbalance};
 
 /// Trait for providing balance-inspection access to a set of named fungible assets.
-pub trait Inspect<AccountId> {
+pub trait Inspect<AccountId>: Sized {
 	/// Means of identifying one asset class from another.
 	type AssetId: AssetId;
 
@@ -111,6 +111,17 @@ pub trait Inspect<AccountId> {
 	fn asset_exists(asset: Self::AssetId) -> bool;
 }
 
+/// Special dust type which can be type-safely converted into a `Credit`.
+#[must_use]
+pub struct Dust<A, T: Unbalanced<A>>(pub(crate) T::AssetId, pub(crate) T::Balance);
+
+impl<A, T: Balanced<A>> Dust<A, T> {
+	/// Convert `Dust` into an instance of `Credit`.
+	pub fn into_credit(self) -> Credit<A, T> {
+		Credit::<A, T>::new(self.0, self.1)
+	}
+}
+
 /// A fungible token class where the balance can be set arbitrarily.
 ///
 /// **WARNING**
@@ -120,6 +131,10 @@ pub trait Inspect<AccountId> {
 /// for the underlying datatype to implement so the user gets the much safer `Balanced` trait to
 /// use.
 pub trait Unbalanced<AccountId>: Inspect<AccountId> {
+	/// Do something with the dust which has been destroyed from the system. `Dust` can be converted
+	/// into a `Credit` with the `Balanced` trait impl.
+	fn handle_dust(dust: Dust<AccountId, Self>);
+
 	/// Forcefully set the balance of `who` to `amount`.
 	///
 	/// If this call executes successfully, you can `assert_eq!(Self::balance(), amount);`.
@@ -131,7 +146,11 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 	/// invariants such as any Existential Deposits needed or overflows/underflows.
 	/// If this cannot be done for some reason (e.g. because the account cannot be created, deleted
 	/// or would overflow) then an `Err` is returned.
-	fn write_balance(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> DispatchResult;
+	fn write_balance(
+		asset: Self::AssetId,
+		who: &AccountId,
+		amount: Self::Balance,
+	) -> Result<Option<Self::Balance>, DispatchError>;
 
 	/// Set the total issuance to `amount`.
 	fn set_total_issuance(asset: Self::AssetId, amount: Self::Balance);
@@ -160,7 +179,9 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 			amount = amount.min(free);
 		}
 		let new_balance = old_balance.checked_sub(&amount).ok_or(TokenError::FundsUnavailable)?;
-		Self::write_balance(asset, who, new_balance)?;
+		if let Some(dust) = Self::write_balance(asset, who, new_balance)? {
+			Self::handle_dust(Dust(asset, dust));
+		}
 		Ok(old_balance.saturating_sub(new_balance))
 	}
 
@@ -193,7 +214,9 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 			if new_balance == old_balance {
 				Ok(Self::Balance::default())
 			} else {
-				Self::write_balance(asset, who, new_balance)?;
+				if let Some(dust) = Self::write_balance(asset, who, new_balance)? {
+					Self::handle_dust(Dust(asset, dust));
+				}
 				Ok(new_balance.saturating_sub(old_balance))
 			}
 		}
@@ -319,11 +342,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	/// error reporting.
 	///
 	/// Returns the new balance.
-	fn set_balance(
-		asset: Self::AssetId,
-		who: &AccountId,
-		amount: Self::Balance,
-	) -> Self::Balance {
+	fn set_balance(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> Self::Balance {
 		let b = Self::balance(asset, who);
 		if b > amount {
 			Self::burn_from(asset, who, b - amount, true, true).map(|d| amount.saturating_sub(d))

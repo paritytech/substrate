@@ -119,7 +119,16 @@ impl<
 		AccountId,
 	> Unbalanced<AccountId> for ItemOf<F, A, AccountId>
 {
-	fn write_balance(who: &AccountId, amount: Self::Balance) -> DispatchResult {
+	fn handle_dust(dust: regular::Dust<AccountId, Self>)
+	where
+		Self: Sized,
+	{
+		<F as fungibles::Unbalanced<AccountId>>::handle_dust(fungibles::Dust(A::get(), dust.0))
+	}
+	fn write_balance(
+		who: &AccountId,
+		amount: Self::Balance,
+	) -> Result<Option<Self::Balance>, DispatchError> {
 		<F as fungibles::Unbalanced<AccountId>>::write_balance(A::get(), who, amount)
 	}
 	fn set_total_issuance(amount: Self::Balance) -> () {

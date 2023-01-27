@@ -247,7 +247,8 @@ fn successful_execution_with_native_equivalent_code_gives_ok() {
 		AccountInfo::<
 			<Runtime as frame_system::Config>::Index,
 			<Runtime as frame_system::Config>::AccountData,
-		>::default().encode(),
+		>::default()
+		.encode(),
 	);
 	t.insert(
 		<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(),
@@ -288,7 +289,8 @@ fn successful_execution_with_foreign_code_gives_ok() {
 		AccountInfo::<
 			<Runtime as frame_system::Config>::Index,
 			<Runtime as frame_system::Config>::AccountData,
-		>::default().encode(),
+		>::default()
+		.encode(),
 	);
 	t.insert(
 		<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(),
@@ -809,7 +811,8 @@ fn successful_execution_gives_ok() {
 		AccountInfo::<
 			<Runtime as frame_system::Config>::Index,
 			<Runtime as frame_system::Config>::AccountData,
-		>::default().encode(),
+		>::default()
+		.encode(),
 	);
 	t.insert(
 		<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(),

@@ -19,7 +19,7 @@
 
 use super::*;
 use frame_support::traits::tokens::KeepAlive::CanKill;
-use fungible::{Inspect, Mutate, hold::{Mutate as HoldMutate}};
+use fungible::{hold::Mutate as HoldMutate, Inspect, Mutate};
 
 #[test]
 fn default_indexing_on_new_accounts_should_not_work2() {
@@ -46,7 +46,7 @@ fn dust_account_removal_should_work() {
 			System::inc_account_nonce(&2);
 			assert_eq!(System::account_nonce(&2), 1);
 			assert_eq!(Balances::total_balance(&2), 2000);
-				// index 1 (account 2) becomes zombie
+			// index 1 (account 2) becomes zombie
 			assert_ok!(Balances::transfer_allow_death(Some(2).into(), 5, 1901));
 			assert_eq!(Balances::total_balance(&2), 0);
 			assert_eq!(Balances::total_balance(&5), 1901);
@@ -68,10 +68,7 @@ fn balance_transfer_works() {
 fn force_transfer_works() {
 	ExtBuilder::default().build_and_execute_with(|| {
 		let _ = Balances::mint_into(&1, 111);
-		assert_noop!(
-			Balances::force_transfer(Some(2).into(), 1, 2, 69),
-			BadOrigin,
-		);
+		assert_noop!(Balances::force_transfer(Some(2).into(), 1, 2, 69), BadOrigin,);
 		assert_ok!(Balances::force_transfer(RawOrigin::Root.into(), 1, 2, 69));
 		assert_eq!(Balances::total_balance(&1), 42);
 		assert_eq!(Balances::total_balance(&2), 69);
@@ -105,23 +102,18 @@ fn transfer_keep_alive_works() {
 
 #[test]
 fn transfer_keep_alive_all_free_succeed() {
-	ExtBuilder::default()
-		.existential_deposit(100)
-		.build_and_execute_with(|| {
-			assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), 1, 300));
-			assert_ok!(Balances::hold(&TestId::Foo, &1, 100));
-			assert_ok!(Balances::transfer_keep_alive(Some(1).into(), 2, 100));
-			assert_eq!(Balances::total_balance(&1), 200);
-			assert_eq!(Balances::total_balance(&2), 100);
-		});
+	ExtBuilder::default().existential_deposit(100).build_and_execute_with(|| {
+		assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), 1, 300));
+		assert_ok!(Balances::hold(&TestId::Foo, &1, 100));
+		assert_ok!(Balances::transfer_keep_alive(Some(1).into(), 2, 100));
+		assert_eq!(Balances::total_balance(&1), 200);
+		assert_eq!(Balances::total_balance(&2), 100);
+	});
 }
 
 #[test]
 fn transfer_all_works_1() {
-	ExtBuilder::default()
-	.existential_deposit(100)
-	.build()
-	.execute_with(|| {
+	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		// setup
 		assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), 1, 200));
 		assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), 2, 0));
@@ -134,10 +126,7 @@ fn transfer_all_works_1() {
 
 #[test]
 fn transfer_all_works_2() {
-	ExtBuilder::default()
-	.existential_deposit(100)
-	.build()
-	.execute_with(|| {
+	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		// setup
 		assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), 1, 200));
 		assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), 2, 0));
@@ -150,10 +139,7 @@ fn transfer_all_works_2() {
 
 #[test]
 fn transfer_all_works_3() {
-	ExtBuilder::default()
-	.existential_deposit(100)
-	.build()
-	.execute_with(|| {
+	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		// setup
 		assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), 1, 210));
 		assert_ok!(Balances::hold(&TestId::Foo, &1, 10));
@@ -167,10 +153,7 @@ fn transfer_all_works_3() {
 
 #[test]
 fn transfer_all_works_4() {
-	ExtBuilder::default()
-	.existential_deposit(100)
-	.build()
-	.execute_with(|| {
+	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		// setup
 		assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), 1, 210));
 		assert_ok!(Balances::hold(&TestId::Foo, &1, 10));
@@ -185,51 +168,57 @@ fn transfer_all_works_4() {
 #[test]
 fn set_balance_handles_killing_account() {
 	ExtBuilder::default().build_and_execute_with(|| {
-			let _ = Balances::mint_into(&1, 111);
-			assert_ok!(frame_system::Pallet::<Test>::inc_consumers(&1));
-			assert_noop!(
-				Balances::force_set_balance(RuntimeOrigin::root(), 1, 0),
-				DispatchError::ConsumerRemaining,
-			);
+		let _ = Balances::mint_into(&1, 111);
+		assert_ok!(frame_system::Pallet::<Test>::inc_consumers(&1));
+		assert_noop!(
+			Balances::force_set_balance(RuntimeOrigin::root(), 1, 0),
+			DispatchError::ConsumerRemaining,
+		);
 	});
 }
 
 #[test]
 fn set_balance_handles_total_issuance() {
 	ExtBuilder::default().build_and_execute_with(|| {
-			let old_total_issuance = Balances::total_issuance();
-			assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), 1337, 69));
-			assert_eq!(Balances::total_issuance(), old_total_issuance + 69);
-			assert_eq!(Balances::total_balance(&1337), 69);
-			assert_eq!(Balances::free_balance(&1337), 69);
+		let old_total_issuance = Balances::total_issuance();
+		assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), 1337, 69));
+		assert_eq!(Balances::total_issuance(), old_total_issuance + 69);
+		assert_eq!(Balances::total_balance(&1337), 69);
+		assert_eq!(Balances::free_balance(&1337), 69);
 	});
 }
 
 #[test]
 fn upgrade_accounts_should_work() {
-	ExtBuilder::default().existential_deposit(1).monied(true).build_and_execute_with(|| {
-		System::inc_providers(&7);
-		assert_ok!(<Test as Config>::AccountStore::try_mutate_exists(&7, |a| -> DispatchResult {
-			*a = Some(AccountData {
-				free: 5,
-				reserved: 5,
-				frozen: Zero::zero(),
-				flags: crate::types::ExtraFlags::old_logic(),
-			});
-			Ok(())
-		}));
-		assert!(!Balances::account(&7).flags.is_new_logic());
-		assert_eq!(System::providers(&7), 1);
-		assert_eq!(System::consumers(&7), 0);
-		assert_ok!(Balances::upgrade_accounts(Some(1).into(), vec![7]));
-		assert!(Balances::account(&7).flags.is_new_logic());
-		assert_eq!(System::providers(&7), 1);
-		assert_eq!(System::consumers(&7), 1);
+	ExtBuilder::default()
+		.existential_deposit(1)
+		.monied(true)
+		.build_and_execute_with(|| {
+			System::inc_providers(&7);
+			assert_ok!(<Test as Config>::AccountStore::try_mutate_exists(
+				&7,
+				|a| -> DispatchResult {
+					*a = Some(AccountData {
+						free: 5,
+						reserved: 5,
+						frozen: Zero::zero(),
+						flags: crate::types::ExtraFlags::old_logic(),
+					});
+					Ok(())
+				}
+			));
+			assert!(!Balances::account(&7).flags.is_new_logic());
+			assert_eq!(System::providers(&7), 1);
+			assert_eq!(System::consumers(&7), 0);
+			assert_ok!(Balances::upgrade_accounts(Some(1).into(), vec![7]));
+			assert!(Balances::account(&7).flags.is_new_logic());
+			assert_eq!(System::providers(&7), 1);
+			assert_eq!(System::consumers(&7), 1);
 
-		<Balances as frame_support::traits::ReservableCurrency<_>>::unreserve(&7, 5);
-		assert_ok!(<Balances as fungible::Mutate<_>>::transfer(&7, &1, 10, CanKill));
-		assert_eq!(Balances::total_balance(&7), 0);
-		assert_eq!(System::providers(&7), 0);
-		assert_eq!(System::consumers(&7), 0);
-	});
+			<Balances as frame_support::traits::ReservableCurrency<_>>::unreserve(&7, 5);
+			assert_ok!(<Balances as fungible::Mutate<_>>::transfer(&7, &1, 10, CanKill));
+			assert_eq!(Balances::total_balance(&7), 0);
+			assert_eq!(System::providers(&7), 0);
+			assert_eq!(System::consumers(&7), 0);
+		});
 }

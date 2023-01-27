@@ -19,26 +19,29 @@
 
 #![cfg(test)]
 
-use crate::{self as pallet_balances, Config, Pallet, AccountData, Error};
-use codec::{Encode, Decode, MaxEncodedLen};
+use crate::{self as pallet_balances, AccountData, Config, CreditOf, Error, Pallet};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
+	assert_err, assert_noop, assert_ok, assert_storage_noop,
+	dispatch::DispatchInfo,
 	parameter_types,
-	traits::{ConstU32, ConstU64, ConstU8, StorageMapShim, StoredMap, OnUnbalanced},
-	weights::IdentityFee, RuntimeDebug,
+	traits::{
+		tokens::fungible, ConstU32, ConstU64, ConstU8, Imbalance as ImbalanceT, OnUnbalanced,
+		StorageMapShim, StoredMap,
+	},
+	weights::{IdentityFee, Weight},
+	RuntimeDebug,
 };
-use pallet_transaction_payment::CurrencyAdapter;
+use frame_system::{self as system, RawOrigin};
+use pallet_transaction_payment::{ChargeTransactionPayment, CurrencyAdapter, Multiplier};
 use scale_info::TypeInfo;
 use sp_core::H256;
 use sp_io;
-use sp_runtime::{testing::Header, traits::{IdentityLookup, Zero}, DispatchError, DispatchResult};
-use sp_runtime::{ArithmeticError, TokenError, FixedPointNumber, traits::{SignedExtension, BadOrigin}};
-use frame_support::{
-	assert_noop, assert_storage_noop, assert_ok, assert_err,
-	traits::{Imbalance as ImbalanceT, tokens::fungible},
-	weights::Weight, dispatch::DispatchInfo
+use sp_runtime::{
+	testing::Header,
+	traits::{BadOrigin, IdentityLookup, SignedExtension, Zero},
+	ArithmeticError, DispatchError, DispatchResult, FixedPointNumber, TokenError,
 };
-use pallet_transaction_payment::{ChargeTransactionPayment, Multiplier};
-use frame_system::{self as system, RawOrigin};
 
 mod currency_tests;
 mod dispatchable_tests;
@@ -48,7 +51,19 @@ mod reentrancy_tests;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, MaxEncodedLen, TypeInfo, RuntimeDebug)]
+#[derive(
+	Encode,
+	Decode,
+	Copy,
+	Clone,
+	Eq,
+	PartialEq,
+	Ord,
+	PartialOrd,
+	MaxEncodedLen,
+	TypeInfo,
+	RuntimeDebug,
+)]
 pub enum TestId {
 	Foo,
 	Bar,
@@ -195,11 +210,14 @@ parameter_types! {
 
 pub struct DustTrap;
 
-impl OnUnbalanced<crate::NegativeImbalance<Test>> for DustTrap {
-	fn on_nonzero_unbalanced(amount: crate::NegativeImbalance<Test>) {
+impl OnUnbalanced<CreditOf<Test, ()>> for DustTrap {
+	fn on_nonzero_unbalanced(amount: CreditOf<Test, ()>) {
 		match DustTrapTarget::get() {
 			None => drop(amount),
-			Some(a) => <Balances as frame_support::traits::Currency<_>>::resolve_creating(&a, amount),
+			Some(a) => {
+				let result = <Balances as fungible::Balanced<_>>::resolve(&a, amount);
+				debug_assert!(result.is_ok());
+			},
 		}
 	}
 }
@@ -233,14 +251,20 @@ impl StoredMap<u64, super::AccountData<u64>> for TestAccountStore {
 			<BalancesAccountStore as StoredMap<_, _>>::try_mutate_exists(k, f)
 		}
 	}
-	fn mutate<R>(k: &u64, f: impl FnOnce(&mut super::AccountData<u64>) -> R) -> Result<R, DispatchError> {
+	fn mutate<R>(
+		k: &u64,
+		f: impl FnOnce(&mut super::AccountData<u64>) -> R,
+	) -> Result<R, DispatchError> {
 		if use_system() {
 			<SystemAccountStore as StoredMap<_, _>>::mutate(k, f)
 		} else {
 			<BalancesAccountStore as StoredMap<_, _>>::mutate(k, f)
 		}
 	}
-	fn mutate_exists<R>(k: &u64, f: impl FnOnce(&mut Option<super::AccountData<u64>>) -> R) -> Result<R, DispatchError> {
+	fn mutate_exists<R>(
+		k: &u64,
+		f: impl FnOnce(&mut Option<super::AccountData<u64>>) -> R,
+	) -> Result<R, DispatchError> {
 		if use_system() {
 			<SystemAccountStore as StoredMap<_, _>>::mutate_exists(k, f)
 		} else {

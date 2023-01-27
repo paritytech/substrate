@@ -142,8 +142,8 @@ impl<T> FunInspect<T> for NoCounterpart<T> {
 	}
 }
 impl<T> fungible::Unbalanced<T> for NoCounterpart<T> {
-	fn write_balance(_: &T, _: Self::Balance) -> sp_runtime::DispatchResult {
-		Ok(())
+	fn write_balance(_: &T, _: Self::Balance) -> Result<Option<Self::Balance>, DispatchError> {
+		Ok(None)
 	}
 	fn set_total_issuance(_: Self::Balance) {}
 }

@@ -299,11 +299,15 @@ impl<Class> VoteTally<u32, Class> for Tally {
 }
 
 pub fn set_balance_proposal(value: u64) -> Vec<u8> {
-	RuntimeCall::Balances(pallet_balances::Call::force_set_balance { who: 42, new_free: value }).encode()
+	RuntimeCall::Balances(pallet_balances::Call::force_set_balance { who: 42, new_free: value })
+		.encode()
 }
 
 pub fn set_balance_proposal_bounded(value: u64) -> BoundedCallOf<Test, ()> {
-	let c = RuntimeCall::Balances(pallet_balances::Call::force_set_balance { who: 42, new_free: value });
+	let c = RuntimeCall::Balances(pallet_balances::Call::force_set_balance {
+		who: 42,
+		new_free: value,
+	});
 	<Preimage as StorePreimage>::bound(c).unwrap()
 }
 

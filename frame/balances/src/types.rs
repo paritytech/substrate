@@ -17,7 +17,7 @@
 
 //! Types used in the pallet.
 
-use crate::{Config, Event, NegativeImbalance, Pallet};
+use crate::{Config, CreditOf, Event, Pallet};
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::ops::BitOr;
 use frame_support::{
@@ -144,7 +144,7 @@ impl<Balance: Saturating + Copy + Ord> AccountData<Balance> {
 }
 
 pub struct DustCleaner<T: Config<I>, I: 'static = ()>(
-	pub(crate) Option<(T::AccountId, NegativeImbalance<T, I>)>,
+	pub(crate) Option<(T::AccountId, CreditOf<T, I>)>,
 );
 
 impl<T: Config<I>, I: 'static> Drop for DustCleaner<T, I> {
