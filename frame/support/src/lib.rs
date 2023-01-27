@@ -1314,6 +1314,13 @@ pub mod tests {
 			prefix: "Test",
 			entries: vec![
 				StorageEntryMetadata {
+					name: "Value",
+					modifier: StorageEntryModifier::Default,
+					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
+					docs: vec![],
+				},
+				StorageEntryMetadata {
 					name: "Data",
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Map {
