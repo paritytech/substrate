@@ -24,13 +24,15 @@ mod runtime;
 
 #[cfg(feature = "runtime-benchmarks")]
 pub use crate::wasm::code_cache::reinstrument;
-pub use crate::wasm::{
-	prepare::TryInstantiate,
-	runtime::{CallFlags, Environment, ReturnCode, Runtime, RuntimeCosts},
-};
-
 #[cfg(doc)]
 pub use crate::wasm::runtime::api_doc;
+pub use crate::wasm::{
+	prepare::TryInstantiate,
+	runtime::{
+		AllowDeprecatedInterface, AllowUnstableInterface, CallFlags, Environment, ReturnCode,
+		Runtime, RuntimeCosts,
+	},
+};
 
 use crate::{
 	exec::{ExecResult, Executable, ExportedFunction, Ext},
@@ -205,6 +207,7 @@ impl<T: Config> PrefabWasmModule<T> {
 		host_state: H,
 		memory: (u32, u32),
 		stack_limits: StackLimits,
+		allow_deprecated: AllowDeprecatedInterface,
 	) -> Result<(Store<H>, Memory, Instance), wasmi::Error>
 	where
 		E: Environment<H>,
@@ -220,7 +223,16 @@ impl<T: Config> PrefabWasmModule<T> {
 		let module = Module::new(&engine, code)?;
 		let mut store = Store::new(&engine, host_state);
 		let mut linker = Linker::new();
-		E::define(&mut store, &mut linker, T::UnsafeUnstableInterface::get())?;
+		E::define(
+			&mut store,
+			&mut linker,
+			if T::UnsafeUnstableInterface::get() {
+				AllowUnstableInterface::Yes
+			} else {
+				AllowUnstableInterface::No
+			},
+			allow_deprecated,
+		)?;
 		let memory = Memory::new(&mut store, MemoryType::new(memory.0, Some(memory.1))?).expect(
 			"The limits defined in our `Schedule` limit the amount of memory well below u32::MAX; qed",
 		);
@@ -233,20 +245,14 @@ impl<T: Config> PrefabWasmModule<T> {
 		Ok((store, memory, instance))
 	}
 
-	/// Create and store the module without checking nor instrumenting the passed code.
-	///
-	/// # Note
-	///
-	/// This is useful for benchmarking where we don't want instrumentation to skew
-	/// our results. This also does not collect any deposit from the `owner`.
+	/// See [`Self::from_code_unchecked`].
 	#[cfg(feature = "runtime-benchmarks")]
 	pub fn store_code_unchecked(
 		original_code: Vec<u8>,
 		schedule: &Schedule<T>,
 		owner: T::AccountId,
 	) -> DispatchResult {
-		let executable = prepare::benchmarking::prepare(original_code, schedule, owner)
-			.map_err::<DispatchError, _>(Into::into)?;
+		let executable = Self::from_code_unchecked(original_code, schedule, owner)?;
 		code_cache::store(executable, false)
 	}
 
@@ -254,6 +260,23 @@ impl<T: Config> PrefabWasmModule<T> {
 	#[cfg(test)]
 	pub fn decrement_version(&mut self) {
 		self.instruction_weights_version = self.instruction_weights_version.checked_sub(1).unwrap();
+	}
+
+	/// Create the module without checking nor instrumenting the passed code.
+	///
+	/// # Note
+	///
+	/// This is useful for benchmarking where we don't want instrumentation to skew
+	/// our results. This also does not collect any deposit from the `owner`. Also useful
+	/// during testing when we want to deploy codes that do not pass the instantiation checks.
+	#[cfg(any(test, feature = "runtime-benchmarks"))]
+	fn from_code_unchecked(
+		original_code: Vec<u8>,
+		schedule: &Schedule<T>,
+		owner: T::AccountId,
+	) -> Result<Self, DispatchError> {
+		prepare::benchmarking::prepare(original_code, schedule, owner)
+			.map_err::<DispatchError, _>(Into::into)
 	}
 }
 
@@ -294,6 +317,10 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 			runtime,
 			(self.initial, self.maximum),
 			StackLimits::default(),
+			match function {
+				ExportedFunction::Constructor => AllowDeprecatedInterface::No,
+				ExportedFunction::Call => AllowDeprecatedInterface::Yes,
+			},
 		)
 		.map_err(|msg| {
 			log::debug!(target: "runtime::contracts", "failed to instantiate code: {}", msg);
@@ -629,38 +656,77 @@ mod tests {
 		}
 	}
 
+	/// Execute the supplied code.
+	///
+	/// Not used directly but through the wrapper functions defined below.
 	fn execute_internal<E: BorrowMut<MockExt>>(
 		wat: &str,
 		input_data: Vec<u8>,
 		mut ext: E,
+		entry_point: &ExportedFunction,
 		unstable_interface: bool,
+		skip_checks: bool,
 	) -> ExecResult {
 		type RuntimeConfig = <MockExt as Ext>::T;
 		RuntimeConfig::set_unstable_interface(unstable_interface);
 		let wasm = wat::parse_str(wat).unwrap();
 		let schedule = crate::Schedule::default();
-		let executable = PrefabWasmModule::<RuntimeConfig>::from_code(
-			wasm,
-			&schedule,
-			ALICE,
-			Determinism::Deterministic,
-			TryInstantiate::Skip,
-		)
-		.map_err(|err| err.0)?;
-		executable.execute(ext.borrow_mut(), &ExportedFunction::Call, input_data)
+		let executable = if skip_checks {
+			PrefabWasmModule::<RuntimeConfig>::from_code_unchecked(wasm, &schedule, ALICE)?
+		} else {
+			PrefabWasmModule::<RuntimeConfig>::from_code(
+				wasm,
+				&schedule,
+				ALICE,
+				Determinism::Deterministic,
+				TryInstantiate::Instantiate,
+			)
+			.map_err(|err| err.0)?
+		};
+		executable.execute(ext.borrow_mut(), entry_point, input_data)
 	}
 
+	/// Execute the suppplied code.
 	fn execute<E: BorrowMut<MockExt>>(wat: &str, input_data: Vec<u8>, ext: E) -> ExecResult {
-		execute_internal(wat, input_data, ext, true)
+		execute_internal(wat, input_data, ext, &ExportedFunction::Call, true, false)
 	}
 
+	/// Execute the supplied code with disabled unstable functions.
+	///
+	/// In our test config unstable functions are disabled so that we can test them.
+	/// In order to test that code using them is properly rejected we temporarily disable
+	/// them when this test is run.
 	#[cfg(not(feature = "runtime-benchmarks"))]
 	fn execute_no_unstable<E: BorrowMut<MockExt>>(
 		wat: &str,
 		input_data: Vec<u8>,
 		ext: E,
 	) -> ExecResult {
-		execute_internal(wat, input_data, ext, false)
+		execute_internal(wat, input_data, ext, &ExportedFunction::Call, false, false)
+	}
+
+	/// Execute code without validating it first.
+	///
+	/// This is mainly useful in order to test code which uses deprecated functions. Those
+	/// would fail when validating the code.
+	fn execute_unvalidated<E: BorrowMut<MockExt>>(
+		wat: &str,
+		input_data: Vec<u8>,
+		ext: E,
+	) -> ExecResult {
+		execute_internal(wat, input_data, ext, &ExportedFunction::Call, false, true)
+	}
+
+	/// Execute instantiation entry point of code without validating it first.
+	///
+	/// Same as `execute_unvalidated` except that the `deploy` entry point is ran.
+	#[cfg(not(feature = "runtime-benchmarks"))]
+	fn execute_instantiate_unvalidated<E: BorrowMut<MockExt>>(
+		wat: &str,
+		input_data: Vec<u8>,
+		ext: E,
+	) -> ExecResult {
+		execute_internal(wat, input_data, ext, &ExportedFunction::Constructor, false, true)
 	}
 
 	const CODE_TRANSFER: &str = r#"
@@ -1861,7 +1927,7 @@ mod tests {
 
 	#[test]
 	fn random() {
-		let output = execute(CODE_RANDOM, vec![], MockExt::default()).unwrap();
+		let output = execute_unvalidated(CODE_RANDOM, vec![], MockExt::default()).unwrap();
 
 		// The mock ext just returns the same data that was passed as the subject.
 		assert_eq!(
@@ -1931,7 +1997,7 @@ mod tests {
 
 	#[test]
 	fn random_v1() {
-		let output = execute(CODE_RANDOM_V1, vec![], MockExt::default()).unwrap();
+		let output = execute_unvalidated(CODE_RANDOM_V1, vec![], MockExt::default()).unwrap();
 
 		// The mock ext just returns the same data that was passed as the subject.
 		assert_eq!(
@@ -3007,6 +3073,29 @@ mod tests {
 		execute(CODE, vec![], &mut mock_ext).unwrap();
 	}
 
+	/// Code with deprecated functions cannot be uploaded or instantiated. However, we
+	/// need to make sure that it still can be re-instrumented.
+	#[test]
+	fn can_reinstrument_deprecated() {
+		const CODE_RANDOM: &str = r#"
+(module
+	(import "seal0" "random" (func $seal_random (param i32 i32 i32 i32)))
+	(func (export "call"))
+	(func (export "deploy"))
+)
+	"#;
+		let wasm = wat::parse_str(CODE_RANDOM).unwrap();
+		let schedule = crate::Schedule::<Test>::default();
+		#[cfg(not(feature = "runtime-benchmarks"))]
+		assert_err!(execute(CODE_RANDOM, vec![], MockExt::default()), <Error<Test>>::CodeRejected);
+		self::prepare::reinstrument::<runtime::Env, Test>(
+			&wasm,
+			&schedule,
+			Determinism::Deterministic,
+		)
+		.unwrap();
+	}
+
 	/// This test check that an unstable interface cannot be deployed. In case of runtime
 	/// benchmarks we always allow unstable interfaces. This is why this test does not
 	/// work when this feature is enabled.
@@ -3025,5 +3114,81 @@ mod tests {
 			<Error<Test>>::CodeRejected,
 		);
 		assert_ok!(execute(CANNOT_DEPLOY_UNSTABLE, vec![], MockExt::default()));
+	}
+
+	/// The random interface is deprecated and hence new contracts using it should not be deployed.
+	/// In case of runtime benchmarks we always allow deprecated interfaces. This is why this
+	/// test doesn't work if this feature is enabled.
+	#[cfg(not(feature = "runtime-benchmarks"))]
+	#[test]
+	fn cannot_deploy_deprecated() {
+		const CODE_RANDOM_0: &str = r#"
+(module
+	(import "seal0" "seal_random" (func $seal_random (param i32 i32 i32 i32)))
+	(func (export "call"))
+	(func (export "deploy"))
+)
+	"#;
+		const CODE_RANDOM_1: &str = r#"
+(module
+	(import "seal1" "seal_random" (func $seal_random (param i32 i32 i32 i32)))
+	(func (export "call"))
+	(func (export "deploy"))
+)
+	"#;
+		const CODE_RANDOM_2: &str = r#"
+(module
+	(import "seal0" "random" (func $seal_random (param i32 i32 i32 i32)))
+	(func (export "call"))
+	(func (export "deploy"))
+)
+	"#;
+		const CODE_RANDOM_3: &str = r#"
+(module
+	(import "seal1" "random" (func $seal_random (param i32 i32 i32 i32)))
+	(func (export "call"))
+	(func (export "deploy"))
+)
+	"#;
+
+		assert_ok!(execute_unvalidated(CODE_RANDOM_0, vec![], MockExt::default()));
+		assert_err!(
+			execute_instantiate_unvalidated(CODE_RANDOM_0, vec![], MockExt::default()),
+			<Error<Test>>::CodeRejected,
+		);
+		assert_err!(
+			execute(CODE_RANDOM_0, vec![], MockExt::default()),
+			<Error<Test>>::CodeRejected,
+		);
+
+		assert_ok!(execute_unvalidated(CODE_RANDOM_1, vec![], MockExt::default()));
+		assert_err!(
+			execute_instantiate_unvalidated(CODE_RANDOM_1, vec![], MockExt::default()),
+			<Error<Test>>::CodeRejected,
+		);
+		assert_err!(
+			execute(CODE_RANDOM_1, vec![], MockExt::default()),
+			<Error<Test>>::CodeRejected,
+		);
+
+		assert_ok!(execute_unvalidated(CODE_RANDOM_2, vec![], MockExt::default()));
+		assert_err!(
+			execute_instantiate_unvalidated(CODE_RANDOM_2, vec![], MockExt::default()),
+			<Error<Test>>::CodeRejected,
+		);
+		assert_err!(
+			execute(CODE_RANDOM_2, vec![], MockExt::default()),
+			<Error<Test>>::CodeRejected,
+		);
+
+		assert_ok!(execute_unvalidated(CODE_RANDOM_3, vec![], MockExt::default()));
+		assert_err!(
+			execute_instantiate_unvalidated(CODE_RANDOM_3, vec![], MockExt::default()),
+			<Error<Test>>::CodeRejected,
+		);
+		assert_err!(
+			execute(CODE_RANDOM_3, vec![], MockExt::default()),
+			<Error<Test>>::CodeRejected,
+		);
 	}
 }

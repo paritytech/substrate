@@ -44,7 +44,7 @@ fn create_offence_works_given_root_origin() {
 		// the slash should be applied right away.
 		assert_eq!(Balances::free_balance(11), 500);
 
-		// the other validator should keep his balance, because we only created
+		// the other validator should keep their balance, because we only created
 		// an offences for the first validator.
 		assert_eq!(Balances::free_balance(21), 1000);
 	})
@@ -68,7 +68,7 @@ fn create_offence_wont_slash_non_active_validators() {
 		// so 31 didn't get slashed.
 		assert_eq!(Balances::free_balance(31), 500);
 
-		// but 11 is an active validator so he got slashed.
+		// but 11 is an active validator so they got slashed.
 		assert_eq!(Balances::free_balance(11), 800);
 	})
 }

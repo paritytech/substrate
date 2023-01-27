@@ -43,7 +43,8 @@ sp-io = { version = "7.0.0", default-features = false, path = "../../../primitiv
 
 # frame dependencies
 frame-executive = { version = "4.0.0-dev", default-features = false, path = "../../../frame/executive" }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/benchmarking", optional = true }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/benchmarking" }
+frame-benchmarking-pallet-pov = { version = "4.0.0-dev", default-features = false, path = "../../../frame/benchmarking/pov" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../../frame/support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../../frame/system" }
 frame-system-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/system/benchmarking", optional = true }
@@ -178,7 +179,8 @@ std = [
 	"sp-session/std",
 	"pallet-sudo/std",
 	"frame-support/std",
-	"frame-benchmarking?/std",
+	"frame-benchmarking/std",
+	"frame-benchmarking-pallet-pov/std",
 	"frame-system-rpc-runtime-api/std",
 	"frame-system/std",
 	"pallet-election-provider-multi-phase/std",
@@ -209,6 +211,7 @@ std = [
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
+	"frame-benchmarking-pallet-pov/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
@@ -263,6 +266,7 @@ runtime-benchmarks = [
 ]
 try-runtime = [
 	"frame-try-runtime/try-runtime",
+	"frame-benchmarking-pallet-pov/try-runtime",
 	"frame-executive/try-runtime",
 	"frame-system/try-runtime",
 	"frame-support/try-runtime",

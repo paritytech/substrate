@@ -605,10 +605,13 @@ impl pallet_staking::Config for Runtime {
 impl pallet_fast_unstake::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type ControlOrigin = frame_system::EnsureRoot<AccountId>;
-	type BatchSize = ConstU32<128>;
+	type BatchSize = ConstU32<64>;
 	type Deposit = ConstU128<{ DOLLARS }>;
 	type Currency = Balances;
 	type Staking = Staking;
+	type MaxErasToCheckPerBlock = ConstU32<1>;
+	#[cfg(feature = "runtime-benchmarks")]
+	type MaxBackersPerValidator = MaxNominatorRewardedPerValidator;
 	type WeightInfo = ();
 }
 
@@ -1708,6 +1711,10 @@ impl pallet_alliance::Config for Runtime {
 	type RetirementPeriod = RetirementPeriod;
 }
 
+impl frame_benchmarking_pallet_pov::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -1774,6 +1781,7 @@ construct_runtime!(
 		RankedCollective: pallet_ranked_collective,
 		FastUnstake: pallet_fast_unstake,
 		MessageQueue: pallet_message_queue,
+		Pov: frame_benchmarking_pallet_pov,
 	}
 );
 
@@ -1842,6 +1850,7 @@ mod mmr {
 mod benches {
 	frame_benchmarking::define_benchmarks!(
 		[frame_benchmarking, BaselineBench::<Runtime>]
+		[frame_benchmarking_pallet_pov, Pov]
 		[pallet_alliance, Alliance]
 		[pallet_assets, Assets]
 		[pallet_babe, Babe]
@@ -2132,6 +2141,12 @@ impl_runtime_apis! {
 		fn query_fee_details(uxt: <Block as BlockT>::Extrinsic, len: u32) -> FeeDetails<Balance> {
 			TransactionPayment::query_fee_details(uxt, len)
 		}
+		fn query_weight_to_fee(weight: Weight) -> Balance {
+			TransactionPayment::weight_to_fee(weight)
+		}
+		fn query_length_to_fee(length: u32) -> Balance {
+			TransactionPayment::length_to_fee(length)
+		}
 	}
 
 	impl pallet_transaction_payment_rpc_runtime_api::TransactionPaymentCallApi<Block, Balance, RuntimeCall>
@@ -2142,6 +2157,12 @@ impl_runtime_apis! {
 		}
 		fn query_call_fee_details(call: RuntimeCall, len: u32) -> FeeDetails<Balance> {
 			TransactionPayment::query_call_fee_details(call, len)
+		}
+		fn query_weight_to_fee(weight: Weight) -> Balance {
+			TransactionPayment::weight_to_fee(weight)
+		}
+		fn query_length_to_fee(length: u32) -> Balance {
+			TransactionPayment::length_to_fee(length)
 		}
 	}
 
