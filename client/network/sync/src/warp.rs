@@ -107,18 +107,18 @@ where
 	///
 	/// This only makes progress when `phase = Phase::PendingTargetBlock` and the pending block was
 	/// send.
-	pub fn poll(&mut self, cx: &mut std::task::Context) -> Poll<()> {
+	pub fn poll(&mut self, cx: &mut std::task::Context) {
 		let new_phase = if let Phase::PendingTargetBlock { target_block } = &mut self.phase {
 			match target_block.poll_unpin(cx) {
-				Poll::Ready(Ok(target_block)) => Some(Phase::TargetBlock(target_block)),
+				Poll::Ready(Ok(target_block)) => Phase::TargetBlock(target_block),
 				Poll::Ready(Err(e)) => {
 					error!(target: "sync", "Failed to get target block. Error: {:?}",e);
-					None
+					return
 				},
-				_ => None,
+				_ => return,
 			}
 		} else {
-			None
+			return
 		};
 
 		if let Some(new_phase) = new_phase {
