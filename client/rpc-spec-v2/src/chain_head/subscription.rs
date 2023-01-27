@@ -103,7 +103,7 @@ impl<Block: BlockT, BE: Backend<Block> + 'static> SubscriptionHandle<Block, BE> 
 		let mut inner = self.inner.write();
 
 		if inner.blocks.len() == inner.max_pinned_blocks {
-			// We have reached the limit. However, the block can be already inserted.
+			// We reached the limit. However, the block could already be pinned.
 
 			if inner.blocks.contains(&hash) {
 				return Ok(false)
