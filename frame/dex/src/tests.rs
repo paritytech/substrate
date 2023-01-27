@@ -38,11 +38,11 @@ fn pools() -> Vec<PoolIdOf<Test>> {
 	s
 }
 
-fn assets() -> Vec<MultiAssetId<u32>> {
+fn assets() -> Vec<NativeOrAssetId<u32>> {
 	// if the storage would be public:
 	// let mut s: Vec<_> = pallet_assets::pallet::Asset::<Test>::iter().map(|x| x.0).collect();
 	let mut s: Vec<_> = <<Test as Config>::Assets>::asset_ids()
-		.map(|id| MultiAssetId::Asset(id))
+		.map(|id| NativeOrAssetId::Asset(id))
 		.collect();
 	s.sort();
 	s
@@ -56,18 +56,24 @@ fn pool_assets() -> Vec<u32> {
 	s
 }
 
-fn create_tokens(owner: u64, tokens: Vec<MultiAssetId<u32>>) {
+fn create_tokens(owner: u64, tokens: Vec<NativeOrAssetId<u32>>) {
 	for token_id in tokens {
-		if let MultiAssetId::Asset(token_id) = token_id {
-			assert_ok!(Assets::force_create(RuntimeOrigin::root(), token_id, owner, true, 1));
-		}
+		// if let Some(token_id) = token_id {
+		assert_ok!(Assets::force_create(
+			RuntimeOrigin::root(),
+			NativeOrAssetIdConverter::try_convert(token_id).unwrap(),
+			owner,
+			true,
+			1
+		));
+		// }
 	}
 }
 
-fn balance(owner: u64, token_id: MultiAssetId<u32>) -> u64 {
+fn balance(owner: u64, token_id: NativeOrAssetId<u32>) -> u64 {
 	match token_id {
-		MultiAssetId::Native => <<Test as Config>::Currency>::free_balance(owner),
-		MultiAssetId::Asset(token_id) => <<Test as Config>::Assets>::balance(token_id, owner),
+		NativeOrAssetId::Native => <<Test as Config>::Currency>::free_balance(owner),
+		NativeOrAssetId::Asset(token_id) => <<Test as Config>::Assets>::balance(token_id, owner),
 	}
 }
 
@@ -97,8 +103,8 @@ fn check_u64() {
 fn can_create_pool() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
-		let token_1 = MultiAssetId::Native;
-		let token_2 = MultiAssetId::Asset(2);
+		let token_1 = NativeOrAssetId::Native;
+		let token_2 = NativeOrAssetId::Asset(2);
 		let pool_id = (token_1, token_2);
 
 		create_tokens(user, vec![token_2]);
@@ -120,7 +126,7 @@ fn can_create_pool() {
 			Dex::create_pool(RuntimeOrigin::signed(user), token_2, token_2),
 			Error::<Test>::EqualAssets
 		);
-		let token_1 = MultiAssetId::Asset(1);
+		let token_1 = NativeOrAssetId::Asset(1);
 		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
 		AllowMultiAssetPools::set(&false);
 		assert_noop!(
@@ -134,8 +140,8 @@ fn can_create_pool() {
 fn create_same_pool_twice_should_fail() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
-		let token_1 = MultiAssetId::Native;
-		let token_2 = MultiAssetId::Asset(2);
+		let token_1 = NativeOrAssetId::Native;
+		let token_2 = NativeOrAssetId::Asset(2);
 
 		create_tokens(user, vec![token_2]);
 
@@ -163,9 +169,9 @@ fn create_same_pool_twice_should_fail() {
 fn different_pools_should_have_different_lp_tokens() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
-		let token_1 = MultiAssetId::Native;
-		let token_2 = MultiAssetId::Asset(2);
-		let token_3 = MultiAssetId::Asset(3);
+		let token_1 = NativeOrAssetId::Native;
+		let token_2 = NativeOrAssetId::Asset(2);
+		let token_3 = NativeOrAssetId::Asset(3);
 		let pool_id_1_2 = (token_1, token_2);
 		let pool_id_1_3 = (token_1, token_3);
 
@@ -202,8 +208,8 @@ fn different_pools_should_have_different_lp_tokens() {
 fn can_add_liquidity() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
-		let token_1 = MultiAssetId::Native;
-		let token_2 = MultiAssetId::Asset(2);
+		let token_1 = NativeOrAssetId::Native;
+		let token_2 = NativeOrAssetId::Asset(2);
 		let pool_id = (token_1, token_2);
 
 		create_tokens(user, vec![token_2]);
@@ -246,8 +252,8 @@ fn can_add_liquidity() {
 fn add_tiny_liquidity_leads_to_insufficient_liquidity_minted_error() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
-		let token_1 = MultiAssetId::Native;
-		let token_2 = MultiAssetId::Asset(2);
+		let token_1 = NativeOrAssetId::Native;
+		let token_2 = NativeOrAssetId::Asset(2);
 
 		create_tokens(user, vec![token_2]);
 		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
@@ -276,8 +282,8 @@ fn add_tiny_liquidity_leads_to_insufficient_liquidity_minted_error() {
 fn can_remove_liquidity() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
-		let token_1 = MultiAssetId::Native;
-		let token_2 = MultiAssetId::Asset(2);
+		let token_1 = NativeOrAssetId::Native;
+		let token_2 = NativeOrAssetId::Asset(2);
 		let pool_id = (token_1, token_2);
 
 		create_tokens(user, vec![token_2]);
@@ -334,8 +340,8 @@ fn can_remove_liquidity() {
 fn can_not_redeem_more_lp_tokens_than_were_minted() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
-		let token_1 = MultiAssetId::Native;
-		let token_2 = MultiAssetId::Asset(2);
+		let token_1 = NativeOrAssetId::Native;
+		let token_2 = NativeOrAssetId::Asset(2);
 
 		create_tokens(user, vec![token_2]);
 		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
@@ -380,8 +386,8 @@ fn can_not_redeem_more_lp_tokens_than_were_minted() {
 fn can_quote_price() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
-		let token_1 = MultiAssetId::Native;
-		let token_2 = MultiAssetId::Asset(2);
+		let token_1 = NativeOrAssetId::Native;
+		let token_2 = NativeOrAssetId::Asset(2);
 
 		create_tokens(user, vec![token_2]);
 		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
@@ -401,13 +407,37 @@ fn can_quote_price() {
 			false
 		));
 
-		assert_eq!(Dex::quote_price_exact_tokens_for_tokens(None, Some(2), 3000, false), Some(60));
+		assert_eq!(
+			Dex::quote_price_exact_tokens_for_tokens(
+				NativeOrAssetId::Native,
+				NativeOrAssetId::Asset(2),
+				3000,
+				false
+			),
+			Some(60)
+		);
 		// Check it still gives same price:
-		// (if the above accidentally exchanged then it would not give same quote as before) 
-		assert_eq!(Dex::quote_price_exact_tokens_for_tokens(None, Some(2), 3000, false), Some(60));
+		// (if the above accidentally exchanged then it would not give same quote as before)
+		assert_eq!(
+			Dex::quote_price_exact_tokens_for_tokens(
+				NativeOrAssetId::Native,
+				NativeOrAssetId::Asset(2),
+				3000,
+				false
+			),
+			Some(60)
+		);
 
 		// Check inverse:
-		assert_eq!(Dex::quote_price_exact_tokens_for_tokens(Some(2), None, 60, false), Some(3000));
+		assert_eq!(
+			Dex::quote_price_exact_tokens_for_tokens(
+				NativeOrAssetId::Asset(2),
+				NativeOrAssetId::Native,
+				60,
+				false
+			),
+			Some(3000)
+		);
 	});
 }
 
@@ -415,8 +445,8 @@ fn can_quote_price() {
 fn can_swap_with_native() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
-		let token_1 = MultiAssetId::Native;
-		let token_2 = MultiAssetId::Asset(2);
+		let token_1 = NativeOrAssetId::Native;
+		let token_2 = NativeOrAssetId::Asset(2);
 		let pool_id = (token_1, token_2);
 
 		create_tokens(user, vec![token_2]);
@@ -463,9 +493,8 @@ fn can_swap_with_native() {
 fn can_swap_with_realistic_values() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
-		let dot = MultiAssetId::Native;
-		let usd = MultiAssetId::Asset(2);
-
+		let dot = NativeOrAssetId::Native;
+		let usd = NativeOrAssetId::Asset(2);
 		create_tokens(user, vec![usd]);
 		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), dot, usd));
 
@@ -513,8 +542,8 @@ fn can_swap_with_realistic_values() {
 fn add_liquidity_causes_below_existential_deposit_but_keep_alive_set() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
-		let token_1 = MultiAssetId::Native;
-		let token_2 = MultiAssetId::Asset(2);
+		let token_1 = NativeOrAssetId::Native;
+		let token_2 = NativeOrAssetId::Asset(2);
 
 		create_tokens(user, vec![token_2]);
 		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
@@ -549,8 +578,8 @@ fn add_liquidity_causes_below_existential_deposit_but_keep_alive_set() {
 fn can_not_swap_in_pool_with_no_liquidity_added_yet() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
-		let token_1 = MultiAssetId::Native;
-		let token_2 = MultiAssetId::Asset(2);
+		let token_1 = NativeOrAssetId::Native;
+		let token_2 = NativeOrAssetId::Asset(2);
 
 		create_tokens(user, vec![token_2]);
 		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
@@ -574,8 +603,8 @@ fn can_not_swap_in_pool_with_no_liquidity_added_yet() {
 fn check_no_panic_when_try_swap_close_to_empty_pool() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
-		let token_1 = MultiAssetId::Native;
-		let token_2 = MultiAssetId::Asset(2);
+		let token_1 = NativeOrAssetId::Native;
+		let token_2 = NativeOrAssetId::Asset(2);
 		let pool_id = (token_1, token_2);
 		let lp_token = Dex::get_next_pool_asset_id();
 		create_tokens(user, vec![token_2]);
@@ -655,8 +684,8 @@ fn check_no_panic_when_try_swap_close_to_empty_pool() {
 fn swap_should_not_work_with_if_too_much_slippage() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
-		let token_1 = MultiAssetId::Native;
-		let token_2 = MultiAssetId::Asset(2);
+		let token_1 = NativeOrAssetId::Native;
+		let token_2 = NativeOrAssetId::Asset(2);
 
 		create_tokens(user, vec![token_2]);
 		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
@@ -698,8 +727,9 @@ fn swap_should_not_work_with_if_too_much_slippage() {
 fn can_swap_tokens_for_exact_tokens() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
-		let token_1 = MultiAssetId::Native;
-		let token_2 = MultiAssetId::Asset(2);
+		let token_1 = NativeOrAssetId::Native;
+		let token_2 = NativeOrAssetId::Asset(2);
+
 		let pool_id = (token_1, token_2);
 		let pallet_account = Dex::get_pool_account(pool_id);
 		let base1 = 1000;
@@ -761,8 +791,9 @@ fn can_swap_tokens_for_exact_tokens_when_not_liquidity_provider() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
 		let user2 = 2;
-		let token_1 = MultiAssetId::Native;
-		let token_2 = MultiAssetId::Asset(2);
+		let token_1 = NativeOrAssetId::Native;
+		let token_2 = NativeOrAssetId::Asset(2);
+
 		let pool_id = (token_1, token_2);
 		let pallet_account = Dex::get_pool_account(pool_id);
 		let base1 = 1000;
@@ -846,8 +877,8 @@ fn swap_when_existential_deposit_would_cause_reaping_but_keep_alive_set() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
 		let user2 = 2;
-		let token_1 = MultiAssetId::Native;
-		let token_2 = MultiAssetId::Asset(2);
+		let token_1 = NativeOrAssetId::Native;
+		let token_2 = NativeOrAssetId::Asset(2);
 
 		create_tokens(user2, vec![token_2]);
 		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user2), token_1, token_2));
@@ -906,8 +937,9 @@ fn swap_when_existential_deposit_would_cause_reaping_but_keep_alive_set() {
 fn swap_tokens_for_exact_tokens_should_not_work_if_too_much_slippage() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
-		let token_1 = MultiAssetId::Native;
-		let token_2 = MultiAssetId::Asset(2);
+		let token_1 = NativeOrAssetId::Native;
+		let token_2 = NativeOrAssetId::Asset(2);
+
 		let base1 = 1000;
 
 		create_tokens(user, vec![token_2]);
@@ -949,9 +981,9 @@ fn swap_tokens_for_exact_tokens_should_not_work_if_too_much_slippage() {
 fn swap_exact_tokens_for_tokens_in_multi_hops() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
-		let token_1 = MultiAssetId::Native;
-		let token_2 = MultiAssetId::Asset(2);
-		let token_3 = MultiAssetId::Asset(3);
+		let token_1 = NativeOrAssetId::Native;
+		let token_2 = NativeOrAssetId::Asset(2);
+		let token_3 = NativeOrAssetId::Asset(3);
 		let base1 = 10000;
 
 		create_tokens(user, vec![token_2, token_3]);
@@ -1020,9 +1052,9 @@ fn swap_exact_tokens_for_tokens_in_multi_hops() {
 fn swap_tokens_for_exact_tokens_in_multi_hops() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
-		let token_1 = MultiAssetId::Native;
-		let token_2 = MultiAssetId::Asset(2);
-		let token_3 = MultiAssetId::Asset(3);
+		let token_1 = NativeOrAssetId::Native;
+		let token_2 = NativeOrAssetId::Asset(2);
+		let token_3 = NativeOrAssetId::Asset(3);
 		let base1 = 10000;
 
 		create_tokens(user, vec![token_2, token_3]);
@@ -1090,7 +1122,7 @@ fn swap_tokens_for_exact_tokens_in_multi_hops() {
 fn can_not_swap_same_asset() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
-		let token_1 = MultiAssetId::Asset(1);
+		let token_1 = NativeOrAssetId::Asset(1);
 
 		create_tokens(user, vec![token_1]);
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 1, user, 1000));
@@ -1128,7 +1160,7 @@ fn can_not_swap_same_asset() {
 		assert_noop!(
 			Dex::swap_exact_tokens_for_tokens(
 				RuntimeOrigin::signed(user),
-				bvec![MultiAssetId::Native, MultiAssetId::Native],
+				bvec![NativeOrAssetId::Native, NativeOrAssetId::Native],
 				exchange_amount,
 				1,
 				user,

@@ -26,6 +26,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::{
 	onchain, BalancingConfig, ElectionDataProvider, SequentialPhragmen, VoteWeight,
 };
+use pallet_dex::{NativeOrAssetIdConverter, NativeOrAssetId};
 use frame_support::{
 	construct_runtime,
 	dispatch::DispatchClass,
@@ -1530,11 +1531,13 @@ impl pallet_dex::Config for Runtime {
 	type Balance = u128;
 	type PoolAssets = PoolAssets;
 	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
+	type MultiAssetId = NativeOrAssetId<u32>;
 	type PoolAssetId = <Self as pallet_assets::Config<Instance2>>::AssetId;
 	type PalletId = DexPalletId;
 	type WeightInfo = pallet_dex::weights::SubstrateWeight<Runtime>;
 	type AllowMultiAssetPools = AllowMultiAssetPools;
 	type MaxSwapPathLength = ConstU32<4>;
+	type MultiAssetIdConverter = NativeOrAssetIdConverter<u32>;
 }
 
 parameter_types! {
@@ -2176,10 +2179,10 @@ impl_runtime_apis! {
 		Block,
 		Balance,
 		u128,
-		u32
+		NativeOrAssetId<u32>
 	> for Runtime
 	{
-		fn quote_price(asset1: Option<u32>, asset2: Option<u32>, amount: u128) -> Option<Balance> {
+		fn quote_price(asset1: NativeOrAssetId<u32>, asset2: NativeOrAssetId<u32>, amount: u128) -> Option<Balance> {
 			Dex::quote_price_exact_tokens_for_tokens(asset1, asset2, amount, false)
 		}
 	}

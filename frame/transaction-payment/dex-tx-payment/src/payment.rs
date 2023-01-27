@@ -18,7 +18,7 @@ use super::*;
 use crate::Config;
 
 use codec::FullCodec;
-use frame_support::{ensure, unsigned::TransactionValidityError, Deserialize, Serialize};
+use frame_support::{ensure, unsigned::TransactionValidityError};
 use pallet_transaction_payment::OnChargeTransaction;
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -78,8 +78,7 @@ where
 		AssetBalanceOf<T>,
 		AssetIdOf<T>,
 	>,
-	AssetIdOf<T>: Default + Serialize,
-	AssetIdOf<T>: for<'de> Deserialize<'de>,
+	AssetIdOf<T>: Default + MaybeSerializeDeserialize
 {
 	type AssetId = AssetIdOf<T>;
 

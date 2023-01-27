@@ -60,7 +60,7 @@ use frame_support::{
 use frame_system::{ensure_signed, pallet_prelude::OriginFor};
 pub use pallet::*;
 use sp_runtime::{
-	traits::{CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, MaybeDisplay, Zero},
+	traits::{CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, Ensure, MaybeDisplay, Zero},
 	DispatchError,
 };
 pub use types::*;
@@ -82,7 +82,7 @@ pub mod pallet {
 		PalletId,
 	};
 	use sp_runtime::{
-		traits::{AtLeast32BitUnsigned, Hash, IntegerSquareRoot, One, TrailingZeroInput, Zero},
+		traits::{Hash, IntegerSquareRoot, One, TrailingZeroInput, Zero},
 		Saturating,
 	};
 	use sp_std::prelude::*;
@@ -104,13 +104,22 @@ pub mod pallet {
 
 		type AssetBalance: Balance;
 
-		type PromotedBalance: AtLeast32BitUnsigned
+		type PromotedBalance: IntegerSquareRoot
+			+ One
+			+ Ensure
+			+ From<u32>
+			// + Unsigned TODO: depending on sp-arithmetic seems to make cumulus not compile. std
+			// issue.
 			+ From<Self::AssetBalance>
 			+ From<Self::Balance>
 			+ TryInto<Self::AssetBalance>
 			+ TryInto<Self::Balance>;
 
 		type AssetId: AssetId + PartialOrd;
+
+		type MultiAssetId: AssetId + PartialOrd;
+
+		type MultiAssetIdConverter: MultiAssetIdConverter<Self::MultiAssetId, Self::AssetId>;
 
 		// Asset id to address the lp tokens by.
 		type PoolAssetId: AssetId + PartialOrd + Incrementable;
@@ -145,8 +154,7 @@ pub mod pallet {
 	pub type AssetBalanceOf<T> =
 		<<T as Config>::Assets as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 
-	pub type PoolIdOf<T> =
-		(MultiAssetId<<T as Config>::AssetId>, MultiAssetId<<T as Config>::AssetId>);
+	pub type PoolIdOf<T> = (<T as Config>::MultiAssetId, <T as Config>::MultiAssetId);
 
 	#[pallet::storage]
 	pub type Pools<T: Config> =
@@ -187,14 +195,14 @@ pub mod pallet {
 		SwapExecuted {
 			who: T::AccountId,
 			send_to: T::AccountId,
-			path: BoundedVec<MultiAssetId<T::AssetId>, T::MaxSwapPathLength>,
+			path: BoundedVec<T::MultiAssetId, T::MaxSwapPathLength>,
 			amount_in: AssetBalanceOf<T>,
 			amount_out: AssetBalanceOf<T>,
 		},
 		Transfer {
 			from: T::AccountId,
 			to: T::AccountId,
-			asset: MultiAssetId<T::AssetId>,
+			asset: T::MultiAssetId,
 			amount: AssetBalanceOf<T>,
 		},
 	}
@@ -247,8 +255,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::create_pool())]
 		pub fn create_pool(
 			origin: OriginFor<T>,
-			asset1: MultiAssetId<T::AssetId>,
-			asset2: MultiAssetId<T::AssetId>,
+			asset1: T::MultiAssetId,
+			asset2: T::MultiAssetId,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			ensure!(asset1 != asset2, Error::<T>::EqualAssets);
@@ -256,7 +264,7 @@ pub mod pallet {
 			let pool_id = Self::get_pool_id(asset1, asset2);
 			let (asset1, _asset2) = pool_id;
 
-			if !T::AllowMultiAssetPools::get() && asset1 != MultiAssetId::Native {
+			if !T::AllowMultiAssetPools::get() && T::MultiAssetIdConverter::get_native() != asset1 {
 				Err(Error::<T>::PoolMustContainNativeCurrency)?;
 			}
 
@@ -290,8 +298,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::add_liquidity())]
 		pub fn add_liquidity(
 			origin: OriginFor<T>,
-			asset1: MultiAssetId<T::AssetId>,
-			asset2: MultiAssetId<T::AssetId>,
+			asset1: T::MultiAssetId,
+			asset2: T::MultiAssetId,
 			amount1_desired: AssetBalanceOf<T>,
 			amount2_desired: AssetBalanceOf<T>,
 			amount1_min: AssetBalanceOf<T>,
@@ -383,8 +391,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::remove_liquidity())]
 		pub fn remove_liquidity(
 			origin: OriginFor<T>,
-			asset1: MultiAssetId<T::AssetId>,
-			asset2: MultiAssetId<T::AssetId>,
+			asset1: T::MultiAssetId,
+			asset2: T::MultiAssetId,
 			lp_token_burn: AssetBalanceOf<T>,
 			amount1_min_receive: AssetBalanceOf<T>,
 			amount2_min_receive: AssetBalanceOf<T>,
@@ -451,7 +459,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::swap_exact_tokens_for_tokens())]
 		pub fn swap_exact_tokens_for_tokens(
 			origin: OriginFor<T>,
-			path: BoundedVec<MultiAssetId<T::AssetId>, T::MaxSwapPathLength>,
+			path: BoundedVec<T::MultiAssetId, T::MaxSwapPathLength>,
 			amount_in: AssetBalanceOf<T>,
 			amount_out_min: AssetBalanceOf<T>,
 			send_to: T::AccountId,
@@ -489,7 +497,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::swap_tokens_for_exact_tokens())]
 		pub fn swap_tokens_for_exact_tokens(
 			origin: OriginFor<T>,
-			path: BoundedVec<MultiAssetId<T::AssetId>, T::MaxSwapPathLength>,
+			path: BoundedVec<T::MultiAssetId, T::MaxSwapPathLength>,
 			amount_out: AssetBalanceOf<T>,
 			amount_in_max: AssetBalanceOf<T>,
 			send_to: T::AccountId,
@@ -523,7 +531,7 @@ pub mod pallet {
 
 	impl<T: Config> Pallet<T> {
 		fn transfer(
-			asset_id: MultiAssetId<T::AssetId>,
+			asset_id: T::MultiAssetId,
 			from: &T::AccountId,
 			to: &T::AccountId,
 			amount: AssetBalanceOf<T>,
@@ -535,13 +543,18 @@ pub mod pallet {
 				asset: asset_id,
 				amount,
 			});
-			match asset_id {
-				MultiAssetId::Native => {
-					let amount = Self::asset_to_native(amount)?;
-					Ok(Self::native_to_asset(T::Currency::transfer(from, to, amount, keep_alive)?)?)
-				},
-				MultiAssetId::Asset(asset_id) =>
-					T::Assets::transfer(asset_id, from, to, amount, keep_alive),
+			if T::MultiAssetIdConverter::get_native() == asset_id {
+				let amount = Self::asset_to_native(amount)?;
+				Ok(Self::native_to_asset(T::Currency::transfer(from, to, amount, keep_alive)?)?)
+			} else {
+				T::Assets::transfer(
+					T::MultiAssetIdConverter::try_convert(asset_id)
+						.map_err(|_| Error::<T>::Overflow)?,
+					from,
+					to,
+					amount,
+					keep_alive,
+				)
 			}
 		}
 
@@ -556,7 +569,7 @@ pub mod pallet {
 		pub(crate) fn do_swap(
 			sender: &T::AccountId,
 			amounts: &Vec<AssetBalanceOf<T>>,
-			path: &BoundedVec<MultiAssetId<T::AssetId>, T::MaxSwapPathLength>,
+			path: &BoundedVec<T::MultiAssetId, T::MaxSwapPathLength>,
 			send_to: &T::AccountId,
 			keep_alive: bool,
 		) -> Result<(), DispatchError> {
@@ -605,21 +618,22 @@ pub mod pallet {
 
 		fn get_balance(
 			owner: &T::AccountId,
-			token_id: MultiAssetId<T::AssetId>,
+			token_id: T::MultiAssetId,
 		) -> Result<T::AssetBalance, Error<T>> {
-			match token_id {
-				MultiAssetId::Native =>
-					Self::native_to_asset(<<T as Config>::Currency>::balance(owner)),
-				MultiAssetId::Asset(token_id) =>
-					Ok(<<T as Config>::Assets>::balance(token_id, owner)),
+			if T::MultiAssetIdConverter::get_native() == token_id {
+				Self::native_to_asset(<<T as Config>::Currency>::balance(owner))
+			} else {
+				Ok(<<T as Config>::Assets>::balance(
+					T::MultiAssetIdConverter::try_convert(token_id)
+						.map_err(|_| Error::<T>::Overflow)?,
+					owner,
+				))
 			}
 		}
 
 		/// Returns a pool id constructed from 2 sorted assets.
-		pub fn get_pool_id(
-			asset1: MultiAssetId<T::AssetId>,
-			asset2: MultiAssetId<T::AssetId>,
-		) -> PoolIdOf<T> {
+		/// Native asset should be lower than the other asset ids.
+		pub fn get_pool_id(asset1: T::MultiAssetId, asset2: T::MultiAssetId) -> PoolIdOf<T> {
 			if asset1 <= asset2 {
 				(asset1, asset2)
 			} else {
@@ -628,8 +642,8 @@ pub mod pallet {
 		}
 
 		pub(crate) fn get_reserves(
-			asset1: MultiAssetId<T::AssetId>,
-			asset2: MultiAssetId<T::AssetId>,
+			asset1: T::MultiAssetId,
+			asset2: T::MultiAssetId,
 		) -> Result<(AssetBalanceOf<T>, AssetBalanceOf<T>), Error<T>> {
 			let pool_id = Self::get_pool_id(asset1, asset2);
 			let pool_account = Self::get_pool_account(pool_id);
@@ -646,7 +660,7 @@ pub mod pallet {
 
 		pub(crate) fn get_amounts_in(
 			amount_out: &AssetBalanceOf<T>,
-			path: &BoundedVec<MultiAssetId<T::AssetId>, T::MaxSwapPathLength>,
+			path: &BoundedVec<T::MultiAssetId, T::MaxSwapPathLength>,
 		) -> Result<Vec<AssetBalanceOf<T>>, DispatchError> {
 			let mut amounts: Vec<AssetBalanceOf<T>> = vec![*amount_out];
 
@@ -665,7 +679,7 @@ pub mod pallet {
 
 		pub(crate) fn get_amounts_out(
 			amount_in: &AssetBalanceOf<T>,
-			path: &BoundedVec<MultiAssetId<T::AssetId>, T::MaxSwapPathLength>,
+			path: &BoundedVec<T::MultiAssetId, T::MaxSwapPathLength>,
 		) -> Result<Vec<AssetBalanceOf<T>>, DispatchError> {
 			let mut amounts: Vec<AssetBalanceOf<T>> = vec![*amount_in];
 
@@ -683,20 +697,11 @@ pub mod pallet {
 
 		/// Used by the RPC service to provide current prices.
 		pub fn quote_price_exact_tokens_for_tokens(
-			asset1: Option<T::AssetId>,
-			asset2: Option<T::AssetId>,
+			asset1: T::MultiAssetId,
+			asset2: T::MultiAssetId,
 			amount: AssetBalanceOf<T>,
 			include_fee: bool,
 		) -> Option<AssetBalanceOf<T>> {
-			let into_multi = |asset| {
-				if let Some(asset) = asset {
-					MultiAssetId::Asset(asset)
-				} else {
-					MultiAssetId::Native
-				}
-			};
-			let asset1 = into_multi(asset1);
-			let asset2 = into_multi(asset2);
 			let pool_id = Self::get_pool_id(asset1, asset2);
 			let pool_account = Self::get_pool_account(pool_id);
 
@@ -715,20 +720,11 @@ pub mod pallet {
 
 		/// Used by the RPC service to provide current prices.
 		pub fn quote_price_tokens_for_exact_tokens(
-			asset1: Option<T::AssetId>,
-			asset2: Option<T::AssetId>,
+			asset1: T::MultiAssetId,
+			asset2: T::MultiAssetId,
 			amount: AssetBalanceOf<T>,
 			include_fee: bool,
 		) -> Option<AssetBalanceOf<T>> {
-			let into_multi = |asset| {
-				if let Some(asset) = asset {
-					MultiAssetId::Asset(asset)
-				} else {
-					MultiAssetId::Native
-				}
-			};
-			let asset1 = into_multi(asset1);
-			let asset2 = into_multi(asset2);
 			let pool_id = Self::get_pool_id(asset1, asset2);
 			let pool_account = Self::get_pool_account(pool_id);
 
@@ -896,8 +892,8 @@ where
 			ensure!(amount_in_max > Zero::zero(), Error::<T>::ZeroAmount);
 		}
 		let mut path = sp_std::vec::Vec::new();
-		path.push(MultiAssetId::Asset(asset_id));
-		path.push(MultiAssetId::Native);
+		path.push(T::MultiAssetIdConverter::into_multiasset_id(asset_id));
+		path.push(T::MultiAssetIdConverter::get_native());
 		let path = path.try_into().unwrap();
 
 		let amount_out = Self::native_to_asset(amount_out)?;
@@ -928,6 +924,6 @@ sp_api::decl_runtime_apis! {
 		AssetBalance: frame_support::traits::tokens::Balance,
 		AssetId: Codec + MaybeDisplay
 	{
-		fn quote_price(asset1: Option<AssetId>, asset2: Option<AssetId>, amount: AssetBalance) -> Option<Balance>;
+		fn quote_price(asset1: AssetId, asset2: AssetId, amount: AssetBalance) -> Option<Balance>;
 	}
 }

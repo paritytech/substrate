@@ -28,6 +28,7 @@ use frame_support::{
 };
 use frame_system as system;
 use frame_system::{EnsureRoot, EnsureSignedBy};
+use pallet_dex::{NativeOrAssetId, NativeOrAssetIdConverter};
 use pallet_transaction_payment::CurrencyAdapter;
 use sp_core::H256;
 use sp_runtime::{
@@ -214,10 +215,11 @@ const MAX_SWAP_PATH_LEN: u32 = 4;
 
 impl pallet_dex::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Fee = ConstU64<3>;
+	type Fee = ConstU32<3>;
 	type Currency = Balances;
 	type AssetBalance = <Self as pallet_balances::Config>::Balance;
 	type AssetId = u32;
+	type MultiAssetId = NativeOrAssetId<u32>;
 	type PoolAssetId = u32;
 	type Assets = Assets;
 	type PoolAssets = PoolAssets;
@@ -225,6 +227,7 @@ impl pallet_dex::Config for Runtime {
 	type WeightInfo = ();
 	type AllowMultiAssetPools = AllowMultiAssetPools;
 	type MaxSwapPathLength = ConstU32<MAX_SWAP_PATH_LEN>;
+	type MultiAssetIdConverter = NativeOrAssetIdConverter<u32>;
 
 	type Balance = u64;
 	type PromotedBalance = u128;
