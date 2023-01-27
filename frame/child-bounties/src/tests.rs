@@ -35,7 +35,7 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
-	Perbill, Permill,
+	Perbill, Permill, TokenError,
 };
 
 use super::Event as ChildBountiesEvent;
@@ -252,7 +252,7 @@ fn add_child_bounty() {
 
 		assert_noop!(
 			ChildBounties::add_child_bounty(RuntimeOrigin::signed(4), 0, 50, b"12345-p1".to_vec()),
-			pallet_balances::Error::<Test>::KeepAlive,
+			TokenError::UnwantedRemoval,
 		);
 
 		assert_noop!(
