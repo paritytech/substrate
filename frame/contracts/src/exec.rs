@@ -2056,9 +2056,9 @@ mod tests {
 	#[test]
 	fn code_hash_returns_proper_values() {
 		let code_bob = MockLoader::insert(Call, |ctx, _| {
-			// ALICE is not a contract and hence she does not have a code_hash
+			// ALICE is not a contract and hence they do not have a code_hash
 			assert!(ctx.ext.code_hash(&ALICE).is_none());
-			// BOB is a contract and hence he has a code_hash
+			// BOB is a contract and hence it has a code_hash
 			assert!(ctx.ext.code_hash(&BOB).is_some());
 			exec_success()
 		});

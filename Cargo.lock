@@ -2382,6 +2382,7 @@ version = "4.0.0-dev"
 dependencies = [
  "array-bytes",
  "frame-support",
+ "frame-support-procedural",
  "frame-system",
  "linregress",
  "log",
@@ -2399,6 +2400,7 @@ dependencies = [
  "sp-runtime-interface",
  "sp-std",
  "sp-storage",
+ "static_assertions",
 ]
 
 [[package]]
@@ -2445,6 +2447,20 @@ dependencies = [
  "sp-trie",
  "thiserror",
  "thousands",
+]
+
+[[package]]
+name = "frame-benchmarking-pallet-pov"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]
@@ -2581,7 +2597,6 @@ dependencies = [
  "sp-std",
  "sp-tracing",
  "sp-weights",
- "static_assertions",
  "tt-call",
 ]
 
@@ -3702,6 +3717,7 @@ name = "kitchensink-runtime"
 version = "3.0.0-dev"
 dependencies = [
  "frame-benchmarking",
+ "frame-benchmarking-pallet-pov",
  "frame-election-provider-support",
  "frame-executive",
  "frame-support",

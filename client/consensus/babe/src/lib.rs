@@ -1494,7 +1494,7 @@ where
 		// this way we can revert it if there's any error
 		let mut old_epoch_changes = None;
 
-		// Use an extra scope to make the compiler happy, because otherwise he complains about the
+		// Use an extra scope to make the compiler happy, because otherwise it complains about the
 		// mutex, even if we dropped it...
 		let mut epoch_changes = {
 			let mut epoch_changes = self.epoch_changes.shared_data_locked();

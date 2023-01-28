@@ -1,7 +1,7 @@
 # Sudo Module
 
-- [`sudo::Config`](https://docs.rs/pallet-sudo/latest/pallet_sudo/trait.Config.html)
-- [`Call`](https://docs.rs/pallet-sudo/latest/pallet_sudo/enum.Call.html)
+- [`Config`](https://docs.rs/pallet-sudo/latest/pallet_sudo/pallet/trait.Config.html)
+- [`Call`](https://docs.rs/pallet-sudo/latest/pallet_sudo/pallet/enum.Call.html)
 
 ## Overview
 

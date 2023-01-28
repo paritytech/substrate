@@ -1,7 +1,7 @@
 # Vesting Module
 
-- [`vesting::Config`](https://docs.rs/pallet-vesting/latest/pallet_vesting/trait.Config.html)
-- [`Call`](https://docs.rs/pallet-vesting/latest/pallet_vesting/enum.Call.html)
+- [`Config`](https://docs.rs/pallet-vesting/latest/pallet_vesting/pallet/trait.Config.html)
+- [`Call`](https://docs.rs/pallet-vesting/latest/pallet_vesting/pallet/enum.Call.html)
 
 ## Overview
 

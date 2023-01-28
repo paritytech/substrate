@@ -52,7 +52,7 @@ pub fn derive_impl(mut input: DeriveInput) -> Result<TokenStream> {
 			#crate_include
 
 			impl #impl_generics #crate_::pass_by::PassBy for #ident #ty_generics #where_clause {
-				type PassBy = #crate_::pass_by::Inner<#ident, #inner_ty>;
+				type PassBy = #crate_::pass_by::Inner<Self, #inner_ty>;
 			}
 
 			impl #impl_generics #crate_::pass_by::PassByInner for #ident #ty_generics #where_clause {
