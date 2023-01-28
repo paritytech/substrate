@@ -276,84 +276,65 @@ impl<T: 'static + Encode> IntoFFIValue for [T] {
 	}
 }
 
-/// Implement the traits for the `[u8; N]` arrays, where `N` is the input to this macro.
-macro_rules! impl_traits_for_arrays {
-	(
-		$(
-			$n:expr
-		),*
-		$(,)?
-	) => {
-		$(
-			/// The type is passed as `u32`.
-			///
-			/// The `u32` is the pointer to the array.
-			impl RIType for [u8; $n] {
-				type FFIType = u32;
-			}
+/// The type is passed as `u32`.
+///
+/// The `u32` is the pointer to the array.
+impl<const N: usize> RIType for [u8; N] {
+	type FFIType = u32;
+}
 
-			#[cfg(not(feature = "std"))]
-			impl IntoFFIValue for [u8; $n] {
-				type Owned = ();
+#[cfg(not(feature = "std"))]
+impl<const N: usize> IntoFFIValue for [u8; N] {
+	type Owned = ();
 
-				fn into_ffi_value(&self) -> WrappedFFIValue<u32> {
-					(self.as_ptr() as u32).into()
-				}
-			}
-
-			#[cfg(not(feature = "std"))]
-			impl FromFFIValue for [u8; $n] {
-				fn from_ffi_value(arg: u32) -> [u8; $n] {
-					let mut res = [0u8; $n];
-					let data = unsafe { Vec::from_raw_parts(arg as *mut u8, $n, $n) };
-
-					res.copy_from_slice(&data);
-
-					res
-				}
-			}
-
-			#[cfg(feature = "std")]
-			impl FromFFIValue for [u8; $n] {
-				type SelfInstance = [u8; $n];
-
-				fn from_ffi_value(context: &mut dyn FunctionContext, arg: u32) -> Result<[u8; $n]> {
-					let mut res = [0u8; $n];
-					context.read_memory_into(Pointer::new(arg), &mut res)?;
-					Ok(res)
-				}
-			}
-
-			#[cfg(feature = "std")]
-			impl IntoFFIValue for [u8; $n] {
-				fn into_ffi_value(self, context: &mut dyn FunctionContext) -> Result<u32> {
-					let addr = context.allocate_memory($n)?;
-					context.write_memory(addr, &self)?;
-					Ok(addr.into())
-				}
-			}
-
-			#[cfg(feature = "std")]
-			impl IntoPreallocatedFFIValue for [u8; $n] {
-				type SelfInstance = [u8; $n];
-
-				fn into_preallocated_ffi_value(
-					self_instance: Self::SelfInstance,
-					context: &mut dyn FunctionContext,
-					allocated: u32,
-				) -> Result<()> {
-					context.write_memory(Pointer::new(allocated), &self_instance)
-				}
-			}
-		)*
+	fn into_ffi_value(&self) -> WrappedFFIValue<u32> {
+		(self.as_ptr() as u32).into()
 	}
 }
 
-impl_traits_for_arrays! {
-	1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
-	27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50,
-	51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74,
-	75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96,
+#[cfg(not(feature = "std"))]
+impl<const N: usize> FromFFIValue for [u8; N] {
+	fn from_ffi_value(arg: u32) -> [u8; N] {
+		let mut res = [0u8; N];
+		let data = unsafe { Vec::from_raw_parts(arg as *mut u8, N, N) };
+
+		res.copy_from_slice(&data);
+
+		res
+	}
+}
+
+#[cfg(feature = "std")]
+impl<const N: usize> FromFFIValue for [u8; N] {
+	type SelfInstance = [u8; N];
+
+	fn from_ffi_value(context: &mut dyn FunctionContext, arg: u32) -> Result<[u8; N]> {
+		let mut res = [0u8; N];
+		context.read_memory_into(Pointer::new(arg), &mut res)?;
+		Ok(res)
+	}
+}
+
+#[cfg(feature = "std")]
+impl<const N: usize> IntoFFIValue for [u8; N] {
+	fn into_ffi_value(self, context: &mut dyn FunctionContext) -> Result<u32> {
+		let addr = context.allocate_memory(N as u32)?;
+		context.write_memory(addr, &self)?;
+		Ok(addr.into())
+	}
+}
+
+#[cfg(feature = "std")]
+impl<const N: usize> IntoPreallocatedFFIValue for [u8; N] {
+	type SelfInstance = [u8; N];
+
+	fn into_preallocated_ffi_value(
+		self_instance: Self::SelfInstance,
+		context: &mut dyn FunctionContext,
+		allocated: u32,
+	) -> Result<()> {
+		context.write_memory(Pointer::new(allocated), &self_instance)
+	}
 }
 
 impl<T: codec::Codec, E: codec::Codec> PassBy for sp_std::result::Result<T, E> {
