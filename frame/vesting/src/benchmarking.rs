@@ -62,13 +62,11 @@ fn add_vesting_schedules<T: Config>(
 		total_locked += locked;
 
 		let schedule = VestingInfo::new(locked, per_block, starting_block.into());
-		println!("DVT");
 		assert_ok!(Vesting::<T>::do_vested_transfer(
 			source_lookup.clone(),
 			target.clone(),
 			schedule
 		));
-		println!("DVT-OK");
 
 		// Top up to guarantee we can always transfer another schedule.
 		T::Currency::make_free_balance_be(&source, BalanceOf::<T>::max_value());
