@@ -274,15 +274,17 @@ where
 }
 
 /// checks if message is Some, otherwise reads message from stdin and optionally decodes hex
-pub fn read_message(msg: Option<&String>, should_decode: bool) -> Result<Vec<u8>, Error> {
+pub fn read_message(msg: Option<&String>, decode_hex: bool) -> Result<Vec<u8>, Error> {
 	let mut message = vec![];
 	match msg {
 		Some(m) => {
-			message = array_bytes::hex2bytes(m.as_str())?;
+			if decode_hex {
+				message = array_bytes::hex2bytes(m.as_str())?;
+			}
 		},
 		None => {
 			std::io::stdin().lock().read_to_end(&mut message)?;
-			if should_decode {
+			if decode_hex {
 				message = array_bytes::hex2bytes(array_bytes::hex_bytes2hex_str(&message)?)?;
 			}
 		},

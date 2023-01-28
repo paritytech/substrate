@@ -37,12 +37,13 @@ pub struct VerifyCmd {
 	/// If not given, you will be prompted for the URI.
 	uri: Option<String>,
 
-	/// Message to verify, if not provided you will be prompted to
-	/// pass the message via STDIN
+	/// Message to verify, if not provided you will be prompted to pass the message via STDIN.
+	///
+	/// The message is assumed to be raw bytes, unless `--hex` is specified.
 	#[arg(long)]
 	message: Option<String>,
 
-	/// The message on STDIN is hex-encoded data
+	/// The message is hex-encoded data.
 	#[arg(long)]
 	hex: bool,
 
