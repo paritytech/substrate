@@ -74,6 +74,8 @@ EXCLUDED_PALLETS=(
   "pallet_grandpa"
   "pallet_mmr"
   "pallet_offences"
+  # Only used for testing, does not need real weights.
+  "frame_benchmarking_pallet_pov"
 )
 
 # Load all pallet names in an array.

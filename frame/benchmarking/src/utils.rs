@@ -227,6 +227,7 @@ pub struct BenchmarkList {
 pub struct BenchmarkMetadata {
 	pub name: Vec<u8>,
 	pub components: Vec<(BenchmarkParameter, u32, u32)>,
+	pub pov_modes: Vec<(Vec<u8>, Vec<u8>)>,
 }
 
 sp_api::decl_runtime_apis! {

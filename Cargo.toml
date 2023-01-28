@@ -88,6 +88,7 @@ members = [
 	"frame/beefy-mmr",
 	"frame/beefy-mmr/primitives",
 	"frame/benchmarking",
+	"frame/benchmarking/pov",
 	"frame/bounties",
 	"frame/child-bounties",
 	"frame/collective",
