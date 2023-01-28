@@ -114,6 +114,12 @@ pub trait StorageValue<T: FullCodec> {
 	/// Mutate the value if closure returns `Ok`
 	fn try_mutate<R, E, F: FnOnce(&mut Self::Query) -> Result<R, E>>(f: F) -> Result<R, E>;
 
+	/// Mutate the value. Deletes the item if mutated to a `None`.
+	fn mutate_exists<R, F: FnOnce(&mut Option<T>) -> R>(f: F) -> R;
+
+	/// Mutate the value if closure returns `Ok`. Deletes the item if mutated to a `None`.
+	fn try_mutate_exists<R, E, F: FnOnce(&mut Option<T>) -> Result<R, E>>(f: F) -> Result<R, E>;
+
 	/// Clear the storage value.
 	fn kill();
 

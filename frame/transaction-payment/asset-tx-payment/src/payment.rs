@@ -21,15 +21,13 @@ use codec::FullCodec;
 use frame_support::{
 	traits::{
 		fungibles::{Balanced, CreditOf, Inspect},
-		tokens::BalanceConversion,
+		tokens::{Balance, BalanceConversion},
 	},
 	unsigned::TransactionValidityError,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{
-		AtLeast32BitUnsigned, DispatchInfoOf, MaybeSerializeDeserialize, One, PostDispatchInfoOf,
-	},
+	traits::{DispatchInfoOf, MaybeSerializeDeserialize, One, PostDispatchInfoOf},
 	transaction_validity::InvalidTransaction,
 };
 use sp_std::{fmt::Debug, marker::PhantomData};
@@ -37,13 +35,7 @@ use sp_std::{fmt::Debug, marker::PhantomData};
 /// Handle withdrawing, refunding and depositing of transaction fees.
 pub trait OnChargeAssetTransaction<T: Config> {
 	/// The underlying integer type in which fees are calculated.
-	type Balance: AtLeast32BitUnsigned
-		+ FullCodec
-		+ Copy
-		+ MaybeSerializeDeserialize
-		+ Debug
-		+ Default
-		+ TypeInfo;
+	type Balance: Balance;
 	/// The type used to identify the assets used for transaction payment.
 	type AssetId: FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default + Eq + TypeInfo;
 	/// The type used to store the intermediate values between pre- and post-dispatch.
