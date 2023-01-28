@@ -35,6 +35,7 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, Hash, IdentityLookup},
+	TokenError,
 };
 
 type BlockNumber = u64;
@@ -257,7 +258,7 @@ type ExampleCall = example::Call<Test>;
 type UtilityCall = crate::Call<Test>;
 
 use frame_system::Call as SystemCall;
-use pallet_balances::{Call as BalancesCall, Error as BalancesError};
+use pallet_balances::Call as BalancesCall;
 use pallet_root_testing::Call as RootTestingCall;
 use pallet_timestamp::Call as TimestampCall;
 
@@ -296,7 +297,7 @@ fn as_derivative_works() {
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), sub_1_0, 5));
 		assert_err_ignore_postinfo!(
 			Utility::as_derivative(RuntimeOrigin::signed(1), 1, Box::new(call_transfer(6, 3)),),
-			BalancesError::<Test, _>::InsufficientBalance
+			TokenError::FundsUnavailable,
 		);
 		assert_ok!(Utility::as_derivative(
 			RuntimeOrigin::signed(1),
@@ -603,7 +604,7 @@ fn batch_all_revert() {
 					),
 					pays_fee: Pays::Yes
 				},
-				error: pallet_balances::Error::<Test, _>::InsufficientBalance.into()
+				error: TokenError::FundsUnavailable.into(),
 			}
 		);
 		assert_eq!(Balances::free_balance(1), 10);

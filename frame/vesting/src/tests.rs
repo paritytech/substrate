@@ -17,7 +17,10 @@
 
 use frame_support::{assert_noop, assert_ok, assert_storage_noop, dispatch::EncodeLike};
 use frame_system::RawOrigin;
-use sp_runtime::traits::{BadOrigin, Identity};
+use sp_runtime::{
+	traits::{BadOrigin, Identity},
+	TokenError,
+};
 
 use super::{Vesting as VestingStorage, *};
 use crate::mock::{Balances, ExtBuilder, System, Test, Vesting};
@@ -180,10 +183,11 @@ fn unvested_balance_should_not_transfer() {
 		assert_eq!(user1_free_balance, 100); // Account 1 has free balance
 									 // Account 1 has only 5 units vested at block 1 (plus 50 unvested)
 		assert_eq!(Vesting::vesting_balance(&1), Some(45));
-		assert_noop!(
-			Balances::transfer_allow_death(Some(1).into(), 2, 56),
-			pallet_balances::Error::<Test, _>::LiquidityRestrictions,
-		); // Account 1 cannot send more than vested amount
+		assert_noop!(Balances::transfer_allow_death(Some(1).into(), 2, 56), TokenError::Frozen,); // Account
+		                                                                                  // 1 cannot
+		                                                                                  // send more
+		                                                                                  // than vested
+		                                                                                  // amount
 	});
 }
 
@@ -1145,14 +1149,11 @@ fn vested_transfer_less_than_existential_deposit_fails() {
 		);
 
 		// vested_transfer fails.
-		assert_noop!(
-			Vesting::vested_transfer(Some(3).into(), 99, sched),
-			pallet_balances::Error::<Test, _>::ExistentialDeposit,
-		);
+		assert_noop!(Vesting::vested_transfer(Some(3).into(), 99, sched), TokenError::BelowMinimum,);
 		// force_vested_transfer fails.
 		assert_noop!(
 			Vesting::force_vested_transfer(RawOrigin::Root.into(), 3, 99, sched),
-			pallet_balances::Error::<Test, _>::ExistentialDeposit,
+			TokenError::BelowMinimum,
 		);
 	});
 }
