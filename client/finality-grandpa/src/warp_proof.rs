@@ -135,11 +135,7 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 			let justification = blockchain
 				.justifications(header.hash())?
 				.and_then(|just| just.into_justification(GRANDPA_ENGINE_ID))
-				.expect(
-					"header is last in set and contains standard change signal; \
-					must have justification; \
-					qed.",
-				);
+				.ok_or_else(|| Error::MissingData)?;
 
 			let justification = GrandpaJustification::<Block>::decode(&mut &justification[..])?;
 
