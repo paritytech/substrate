@@ -21,7 +21,7 @@
 
 use super::*;
 
-use frame_benchmarking::{account, benchmarks, whitelisted_caller};
+use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller};
 use frame_support::{
 	storage::bounded_vec::BoundedVec,
 	traits::{EnsureOrigin, OnInitialize},

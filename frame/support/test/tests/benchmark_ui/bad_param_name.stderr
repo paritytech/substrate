@@ -1,0 +1,5 @@
+error: Benchmark parameter names must consist of a single lowercase letter (a-z) and no other characters.
+  --> tests/benchmark_ui/bad_param_name.rs:10:11
+   |
+10 |     fn bench(winton: Linear<1, 2>) {
+   |              ^^^^^^

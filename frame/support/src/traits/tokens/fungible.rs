@@ -78,6 +78,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 	/// returned and nothing is changed. If successful, the amount of tokens reduced is returned.
 	fn burn_from(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError>;
 
+	// TODO: Remove.
 	/// Attempt to reduce the balance of `who` by as much as possible up to `amount`, and possibly
 	/// slightly more due to minimum_balance requirements. If no decrease is possible then an `Err`
 	/// is returned and nothing is changed. If successful, the amount of tokens reduced is returned.
@@ -143,6 +144,7 @@ pub trait InspectHold<AccountId>: Inspect<AccountId> {
 	fn can_hold(who: &AccountId, amount: Self::Balance) -> bool;
 }
 
+// TODO: Introduce `HoldReason`.
 /// Trait for mutating a fungible asset which can be reserved.
 pub trait MutateHold<AccountId>: InspectHold<AccountId> + Transfer<AccountId> {
 	/// Hold some funds in an account.
@@ -159,6 +161,8 @@ pub trait MutateHold<AccountId>: InspectHold<AccountId> + Transfer<AccountId> {
 		amount: Self::Balance,
 		best_effort: bool,
 	) -> Result<Self::Balance, DispatchError>;
+
+	// TODO: Introduce repatriate_held
 
 	/// Transfer held funds into a destination account.
 	///
@@ -195,6 +199,7 @@ pub trait BalancedHold<AccountId>: Balanced<AccountId> + MutateHold<AccountId> {
 }
 
 impl<AccountId, T: Balanced<AccountId> + MutateHold<AccountId>> BalancedHold<AccountId> for T {
+	// TODO: This should be implemented properly, and `slash` should be removed.
 	fn slash_held(
 		who: &AccountId,
 		amount: Self::Balance,
