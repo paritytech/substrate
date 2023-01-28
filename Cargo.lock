@@ -2138,6 +2138,7 @@ version = "4.0.0-dev"
 dependencies = [
  "array-bytes",
  "frame-support",
+ "frame-support-procedural",
  "frame-system",
  "linregress",
  "log",
@@ -2155,6 +2156,7 @@ dependencies = [
  "sp-runtime-interface",
  "sp-std",
  "sp-storage",
+ "static_assertions",
 ]
 
 [[package]]
@@ -2351,7 +2353,6 @@ dependencies = [
  "sp-std",
  "sp-tracing",
  "sp-weights",
- "static_assertions",
  "tt-call",
 ]
 
