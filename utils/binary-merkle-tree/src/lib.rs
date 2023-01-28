@@ -294,7 +294,7 @@ fn merkelize_row<H, V, I>(
 ) -> Result<H::Out, Vec<H::Out>>
 where
 	H: Hasher,
-	H::Out: AsRef<[u8]> + PartialOrd + PartialOrd,
+	H::Out: AsRef<[u8]> + PartialOrd,
 	V: Visitor<H::Out>,
 	I: Iterator<Item = H::Out>,
 {
