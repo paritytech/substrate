@@ -1,8 +1,8 @@
 # Multisig Module
 A module for doing multisig dispatch.
 
-- [`multisig::Config`](https://docs.rs/pallet-multisig/latest/pallet_multisig/trait.Config.html)
-- [`Call`](https://docs.rs/pallet-multisig/latest/pallet_multisig/enum.Call.html)
+- [`Config`](https://docs.rs/pallet-multisig/latest/pallet_multisig/pallet/trait.Config.html)
+- [`Call`](https://docs.rs/pallet-multisig/latest/pallet_multisig/pallet/enum.Call.html)
 
 ## Overview
 

@@ -22,7 +22,7 @@
 use super::*;
 
 use crate::Pallet as Identity;
-use frame_benchmarking::{account, benchmarks, whitelisted_caller};
+use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller};
 use frame_support::{
 	ensure,
 	traits::{EnsureOrigin, Get},

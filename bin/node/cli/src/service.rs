@@ -20,7 +20,9 @@
 
 //! Service implementation. Specialized wrapper over substrate service.
 
+use crate::Cli;
 use codec::Encode;
+use frame_benchmarking_cli::SUBSTRATE_REFERENCE_HARDWARE;
 use frame_system_rpc_runtime_api::AccountNonceApi;
 use futures::prelude::*;
 use kitchensink_runtime::RuntimeApi;
@@ -317,14 +319,12 @@ pub fn new_full_base(
 		&sc_consensus_babe::BabeLink<Block>,
 	),
 ) -> Result<NewFullBase, ServiceError> {
-	let hwbench = if !disable_hardware_benchmarks {
-		config.database.path().map(|database_path| {
+	let hwbench = (!disable_hardware_benchmarks)
+		.then_some(config.database.path().map(|database_path| {
 			let _ = std::fs::create_dir_all(&database_path);
 			sc_sysinfo::gather_hwbench(Some(database_path))
-		})
-	} else {
-		None
-	};
+		}))
+		.flatten();
 
 	let sc_service::PartialComponents {
 		client,
@@ -398,6 +398,11 @@ pub fn new_full_base(
 
 	if let Some(hwbench) = hwbench {
 		sc_sysinfo::print_hwbench(&hwbench);
+		if !SUBSTRATE_REFERENCE_HARDWARE.check_hardware(&hwbench) && role.is_authority() {
+			log::warn!(
+				"⚠️  The hardware does not meet the minimal requirements for role 'Authority'."
+			);
+		}
 
 		if let Some(ref mut telemetry) = telemetry {
 			let telemetry_handle = telemetry.handle();
@@ -552,12 +557,18 @@ pub fn new_full_base(
 }
 
 /// Builds a new service for a full client.
-pub fn new_full(
-	config: Configuration,
-	disable_hardware_benchmarks: bool,
-) -> Result<TaskManager, ServiceError> {
-	new_full_base(config, disable_hardware_benchmarks, |_, _| ())
-		.map(|NewFullBase { task_manager, .. }| task_manager)
+pub fn new_full(config: Configuration, cli: Cli) -> Result<TaskManager, ServiceError> {
+	let database_source = config.database.clone();
+	let task_manager = new_full_base(config, cli.no_hardware_benchmarks, |_, _| ())
+		.map(|NewFullBase { task_manager, .. }| task_manager)?;
+
+	sc_storage_monitor::StorageMonitorService::try_spawn(
+		cli.storage_monitor,
+		database_source,
+		&task_manager.spawn_essential_handle(),
+	)?;
+
+	Ok(task_manager)
 }
 
 #[cfg(test)]

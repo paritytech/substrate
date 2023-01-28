@@ -16,6 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 sp-core = { version = "7.0.0", default-features = false, path = "../../../primitives/core" }
 sp-io = { version = "7.0.0", default-features = false, features = ["improved_panic_error_reporting"], path = "../../../primitives/io" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-runtime-interface = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime-interface" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../../primitives/std" }
 
 [build-dependencies]

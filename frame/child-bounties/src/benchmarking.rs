@@ -21,7 +21,7 @@
 
 use super::*;
 
-use frame_benchmarking::{account, benchmarks, whitelisted_caller, BenchmarkError};
+use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller, BenchmarkError};
 use frame_system::RawOrigin;
 
 use crate::Pallet as ChildBounties;

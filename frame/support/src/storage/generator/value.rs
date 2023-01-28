@@ -118,6 +118,30 @@ impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
 		ret
 	}
 
+	fn mutate_exists<R, F>(f: F) -> R
+	where
+		F: FnOnce(&mut Option<T>) -> R,
+	{
+		Self::try_mutate_exists(|v| Ok::<R, Never>(f(v)))
+			.expect("`Never` can not be constructed; qed")
+	}
+
+	fn try_mutate_exists<R, E, F>(f: F) -> Result<R, E>
+	where
+		F: FnOnce(&mut Option<T>) -> Result<R, E>,
+	{
+		let mut val = G::from_query_to_optional_value(Self::get());
+
+		let ret = f(&mut val);
+		if ret.is_ok() {
+			match val {
+				Some(ref val) => Self::put(val),
+				None => Self::kill(),
+			}
+		}
+		ret
+	}
+
 	fn take() -> G::Query {
 		let key = Self::storage_value_final_key();
 		let value = unhashed::get(&key);

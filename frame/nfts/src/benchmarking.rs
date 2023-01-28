@@ -21,7 +21,7 @@
 
 use super::*;
 use enumflags2::{BitFlag, BitFlags};
-use frame_benchmarking::{
+use frame_benchmarking::v1::{
 	account, benchmarks_instance_pallet, whitelist_account, whitelisted_caller,
 };
 use frame_support::{
