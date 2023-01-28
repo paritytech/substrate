@@ -46,7 +46,7 @@ sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 tracing-subscriber = "0.2.19"
 paste = "1.0"
 regex = "1.6.0"
-criterion = "0.3"
+criterion = "0.4.0"
 env_logger = "0.9"
 num_cpus = "1.13.1"
 tempfile = "3.3.0"
