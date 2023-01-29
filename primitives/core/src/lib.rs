@@ -81,7 +81,9 @@ pub use self::hasher::keccak::KeccakHasher;
 pub use hash_db::Hasher;
 
 pub use bounded_collections as bounded;
-pub use bounded_collections::*;
+#[cfg(feature = "std")]
+pub use bounded_collections::{bounded_btree_map, bounded_vec};
+pub use bounded_collections::{parameter_types, Get, GetDefault, TryCollect, TypedGet};
 pub use sp_storage as storage;
 
 #[doc(hidden)]
