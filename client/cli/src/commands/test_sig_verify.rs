@@ -27,10 +27,12 @@ const SEED: &str = "0xe5be9a5092b81bca64be81d212e7f2f9eba183bb7a90954f7b76361f6e
 const ALICE: &str = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY";
 const BOB: &str = "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty";
 
+/// Sign a valid UFT-8 message which can be `hex` and passed either via `stdin` or as an argument.
 fn sign(msg: &str, hex: bool, stdin: bool) -> String {
 	sign_raw(msg.as_bytes(), hex, stdin)
 }
 
+/// Sign a raw message which can be `hex` and passed either via `stdin` or as an argument.
 fn sign_raw(msg: &[u8], hex: bool, stdin: bool) -> String {
 	let mut args = vec!["sign", "--suri", SEED];
 	if !stdin {
@@ -44,10 +46,12 @@ fn sign_raw(msg: &[u8], hex: bool, stdin: bool) -> String {
 	cmd.sign(|| msg).expect("Static data is good; Must sign; qed")
 }
 
+/// Verify a valid UFT-8 message which can be `hex` and passed either via `stdin` or as an argument.
 fn verify(msg: &str, hex: bool, stdin: bool, who: &str, sig: &str) -> bool {
 	verify_raw(msg.as_bytes(), hex, stdin, who, sig)
 }
 
+/// Verify a raw message which can be `hex` and passed either via `stdin` or as an argument.
 fn verify_raw(msg: &[u8], hex: bool, stdin: bool, who: &str, sig: &str) -> bool {
 	let mut args = vec!["verify", sig, who];
 	if !stdin {

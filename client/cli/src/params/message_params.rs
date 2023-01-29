@@ -16,6 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+//! Params to configure how a message should be passed into a command.
+
 use crate::error::Error;
 use array_bytes::{hex2bytes, hex_bytes2hex_str};
 use clap::Parser;
