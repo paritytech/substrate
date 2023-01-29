@@ -31,6 +31,7 @@ mod purge_chain_cmd;
 mod revert_cmd;
 mod run_cmd;
 mod sign;
+mod test_sig_verify;
 pub mod utils;
 mod vanity;
 mod verify;

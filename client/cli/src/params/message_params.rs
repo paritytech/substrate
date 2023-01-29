@@ -29,7 +29,7 @@ pub struct MessageParams {
 	/// The message is assumed to be raw bytes per default. Use `--hex` for hex input. Can
 	/// optionally be prefixed with `0x` in the hex case.
 	#[arg(long)]
-	message: Option<Vec<u8>>,
+	message: Option<String>,
 
 	/// The message is hex-encoded data.
 	#[arg(long)]
@@ -40,16 +40,16 @@ impl MessageParams {
 	/// Produces the message by either using its immediate value or reading from stdin.
 	///
 	/// This function should only be called once and the result cached.
-	pub fn message(&self) -> Result<Vec<u8>, Error> {
-		self.message_from(std::io::stdin().lock())
-	}
-
-	fn message_from<R: BufRead>(&self, mut reader: R) -> Result<Vec<u8>, Error> {
+	pub(crate) fn message_from<F, R>(&self, create_reader: F) -> Result<Vec<u8>, Error>
+	where
+		R: BufRead,
+		F: FnOnce() -> R,
+	{
 		let raw = match &self.message {
-			Some(raw) => raw.clone(),
+			Some(raw) => raw.as_bytes().to_vec(),
 			None => {
 				let mut raw = vec![];
-				reader.read_to_end(&mut raw)?;
+				create_reader().read_to_end(&mut raw)?;
 				raw
 			},
 		};
@@ -70,8 +70,8 @@ mod tests {
 	fn message_decode_immediate() {
 		for (name, input, hex, output) in test_closures() {
 			println!("Testing: immediate_{}", name);
-			let params = MessageParams { message: Some(input.to_vec()), hex };
-			let message = params.message();
+			let params = MessageParams { message: Some(input.into()), hex };
+			let message = params.message_from(|| std::io::stdin().lock());
 
 			match output {
 				Some(output) => {
@@ -91,7 +91,7 @@ mod tests {
 		for (name, input, hex, output) in test_closures() {
 			println!("Testing: stream_{}", name);
 			let params = MessageParams { message: None, hex };
-			let message = params.message_from(input);
+			let message = params.message_from(|| input.as_bytes());
 
 			match output {
 				Some(output) => {
@@ -106,19 +106,14 @@ mod tests {
 	}
 
 	/// Returns (test_name, input, hex, output).
-	fn test_closures() -> Vec<(&'static str, &'static [u8], bool, Option<&'static [u8]>)> {
+	fn test_closures() -> Vec<(&'static str, &'static str, bool, Option<&'static [u8]>)> {
 		vec![
-			(
-				"decode_no_hex_works",
-				b"Hello this is not hex",
-				false,
-				Some(b"Hello this is not hex"),
-			),
-			("decode_no_hex_with_hex_string_works", b"0xffffffff", false, Some(b"0xffffffff")),
-			("decode_hex_works", b"0x00112233", true, Some(&[0, 17, 34, 51])),
-			("decode_hex_without_prefix_works", b"00112233", true, Some(&[0, 17, 34, 51])),
-			("decode_hex_uppercase_works", b"0xaAbbCCDd", true, Some(&[170, 187, 204, 221])),
-			("decode_hex_wrong_len_errors", b"0x0011223", true, None),
+			("decode_no_hex_works", "Hello this is not hex", false, Some(b"Hello this is not hex")),
+			("decode_no_hex_with_hex_string_works", "0xffffffff", false, Some(b"0xffffffff")),
+			("decode_hex_works", "0x00112233", true, Some(&[0, 17, 34, 51])),
+			("decode_hex_without_prefix_works", "00112233", true, Some(&[0, 17, 34, 51])),
+			("decode_hex_uppercase_works", "0xaAbbCCDd", true, Some(&[170, 187, 204, 221])),
+			("decode_hex_wrong_len_errors", "0x0011223", true, None),
 		]
 	}
 }
