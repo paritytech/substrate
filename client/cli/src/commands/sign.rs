@@ -17,7 +17,9 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Implementation of the `sign` subcommand
-use crate::{error, utils, with_crypto_scheme, CryptoSchemeFlag, KeystoreParams};
+use crate::{
+	error, params::MessageParams, utils, with_crypto_scheme, CryptoSchemeFlag, KeystoreParams,
+};
 use clap::Parser;
 use sp_core::crypto::SecretString;
 
@@ -31,14 +33,9 @@ pub struct SignCmd {
 	#[arg(long)]
 	suri: Option<String>,
 
-	/// Message to sign, if not provided you will be prompted to
-	/// pass the message via STDIN
-	#[arg(long)]
-	message: Option<String>,
-
-	/// The message on STDIN is hex-encoded data
-	#[arg(long)]
-	hex: bool,
+	#[allow(missing_docs)]
+	#[clap(flatten)]
+	pub message_params: MessageParams,
 
 	#[allow(missing_docs)]
 	#[clap(flatten)]
@@ -52,7 +49,7 @@ pub struct SignCmd {
 impl SignCmd {
 	/// Run the command
 	pub fn run(&self) -> error::Result<()> {
-		let message = utils::read_message(self.message.as_ref(), self.hex)?;
+		let message = self.message_params.message()?;
 		let suri = utils::read_uri(self.suri.as_ref())?;
 		let password = self.keystore_params.read_password()?;
 

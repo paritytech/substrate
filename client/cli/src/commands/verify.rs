@@ -18,7 +18,7 @@
 
 //! implementation of the `verify` subcommand
 
-use crate::{error, utils, with_crypto_scheme, CryptoSchemeFlag};
+use crate::{error, params::MessageParams, utils, with_crypto_scheme, CryptoSchemeFlag};
 use clap::Parser;
 use sp_core::crypto::{ByteArray, Ss58Codec};
 
@@ -37,15 +37,9 @@ pub struct VerifyCmd {
 	/// If not given, you will be prompted for the URI.
 	uri: Option<String>,
 
-	/// Message to verify, if not provided you will be prompted to pass the message via STDIN.
-	///
-	/// The message is assumed to be raw bytes, unless `--hex` is specified.
-	#[arg(long)]
-	message: Option<String>,
-
-	/// The message is hex-encoded data.
-	#[arg(long)]
-	hex: bool,
+	#[allow(missing_docs)]
+	#[clap(flatten)]
+	pub message_params: MessageParams,
 
 	#[allow(missing_docs)]
 	#[clap(flatten)]
@@ -55,7 +49,7 @@ pub struct VerifyCmd {
 impl VerifyCmd {
 	/// Run the command
 	pub fn run(&self) -> error::Result<()> {
-		let message = utils::read_message(self.message.as_ref(), self.hex)?;
+		let message = self.message_params.message()?;
 		let sig_data = array_bytes::hex2bytes(&self.sig)?;
 		let uri = utils::read_uri(self.uri.as_ref())?;
 		let uri = if let Some(uri) = uri.strip_prefix("0x") { uri } else { &uri };
