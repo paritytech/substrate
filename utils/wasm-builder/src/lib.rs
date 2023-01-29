@@ -81,8 +81,6 @@
 //! - `WASM_BUILD_NO_COLOR` - Disable color output of the wasm build.
 //! - `WASM_TARGET_DIRECTORY` - Will copy any build Wasm binary to the given directory. The path
 //!   needs to be absolute.
-//! - `WASM_BUILD_TOOLCHAIN` - The toolchain that should be used to build the Wasm binaries. The
-//!   format needs to be the same as used by cargo, e.g. `nightly-2020-02-20`.
 //! - `WASM_BUILD_WORKSPACE_HINT` - Hint the workspace that is being built. This is normally not
 //!   required as we walk up from the target directory until we find a `Cargo.toml`. If the target
 //!   directory is changed for the build, this environment variable can be used to point to the
@@ -107,7 +105,6 @@
 
 use std::{
 	env, fs,
-	io::BufRead,
 	path::{Path, PathBuf},
 	process::Command,
 };
@@ -143,9 +140,6 @@ const WASM_TARGET_DIRECTORY: &str = "WASM_TARGET_DIRECTORY";
 /// Environment variable to disable color output of the wasm build.
 const WASM_BUILD_NO_COLOR: &str = "WASM_BUILD_NO_COLOR";
 
-/// Environment variable to set the toolchain used to compile the wasm binary.
-const WASM_BUILD_TOOLCHAIN: &str = "WASM_BUILD_TOOLCHAIN";
-
 /// Environment variable that makes sure the WASM build is triggered.
 const FORCE_WASM_BUILD_ENV: &str = "FORCE_WASM_BUILD";
 
@@ -172,96 +166,23 @@ fn copy_file_if_changed(src: PathBuf, dst: PathBuf) {
 	}
 }
 
-/// Get a cargo command that compiles with nightly
-fn get_nightly_cargo() -> CargoCommand {
-	let env_cargo =
-		CargoCommand::new(&env::var("CARGO").expect("`CARGO` env variable is always set by cargo"));
-	let default_cargo = CargoCommand::new("cargo");
-	let rustup_run_nightly = CargoCommand::new_with_args("rustup", &["run", "nightly", "cargo"]);
-	let wasm_toolchain = env::var(WASM_BUILD_TOOLCHAIN).ok();
-
-	// First check if the user requested a specific toolchain
-	if let Some(cmd) = wasm_toolchain.and_then(|t| get_rustup_nightly(Some(t))) {
-		cmd
-	} else if env_cargo.is_nightly() {
-		env_cargo
-	} else if default_cargo.is_nightly() {
-		default_cargo
-	} else if rustup_run_nightly.is_nightly() {
-		rustup_run_nightly
-	} else {
-		// If no command before provided us with a nightly compiler, we try to search one
-		// with rustup. If that fails as well, we return the default cargo and let the prequisities
-		// check fail.
-		get_rustup_nightly(None).unwrap_or(default_cargo)
-	}
-}
-
-/// Get a nightly from rustup. If `selected` is `Some(_)`, a `CargoCommand` using the given
-/// nightly is returned.
-fn get_rustup_nightly(selected: Option<String>) -> Option<CargoCommand> {
-	let host = format!("-{}", env::var("HOST").expect("`HOST` is always set by cargo"));
-
-	let version = match selected {
-		Some(selected) => selected,
-		None => {
-			let output = Command::new("rustup").args(&["toolchain", "list"]).output().ok()?.stdout;
-			let lines = output.as_slice().lines();
-
-			let mut latest_nightly = None;
-			for line in lines.filter_map(|l| l.ok()) {
-				if line.starts_with("nightly-") && line.ends_with(&host) {
-					// Rustup prints them sorted
-					latest_nightly = Some(line.clone());
-				}
-			}
-
-			latest_nightly?.trim_end_matches(&host).into()
-		},
-	};
-
-	Some(CargoCommand::new_with_args("rustup", &["run", &version, "cargo"]))
-}
-
 /// Wraps a specific command which represents a cargo invocation.
 #[derive(Debug)]
 struct CargoCommand {
 	program: String,
-	args: Vec<String>,
 }
 
 impl CargoCommand {
-	fn new(program: &str) -> Self {
-		CargoCommand { program: program.into(), args: Vec::new() }
-	}
-
-	fn new_with_args(program: &str, args: &[&str]) -> Self {
-		CargoCommand {
-			program: program.into(),
-			args: args.iter().map(ToString::to_string).collect(),
-		}
-	}
-
 	fn command(&self) -> Command {
-		let mut cmd = Command::new(&self.program);
-		cmd.args(&self.args);
-		cmd
+		Command::new(&self.program)
 	}
+}
 
-	/// Check if the supplied cargo command is a nightly version
-	fn is_nightly(&self) -> bool {
-		// `RUSTC_BOOTSTRAP` tells a stable compiler to behave like a nightly. So, when this env
-		// variable is set, we can assume that whatever rust compiler we have, it is a nightly
-		// compiler. For "more" information, see:
-		// https://github.com/rust-lang/rust/blob/fa0f7d0080d8e7e9eb20aa9cbf8013f96c81287f/src/libsyntax/feature_gate/check.rs#L891
-		env::var("RUSTC_BOOTSTRAP").is_ok() ||
-			self.command()
-				.arg("--version")
-				.output()
-				.map_err(|_| ())
-				.and_then(|o| String::from_utf8(o.stdout).map_err(|_| ()))
-				.unwrap_or_default()
-				.contains("-nightly")
+impl Default for CargoCommand {
+	fn default() -> Self {
+		Self {
+			program: env::var("CARGO").expect("`CARGO` env variable is always set by cargo").into(),
+		}
 	}
 }
 

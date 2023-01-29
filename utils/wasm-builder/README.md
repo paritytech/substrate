@@ -63,8 +63,6 @@ By using environment variables, you can configure which Wasm binaries are built 
 - `WASM_BUILD_NO_COLOR` - Disable color output of the wasm build.
 - `WASM_TARGET_DIRECTORY` - Will copy any build Wasm binary to the given directory. The path needs
                            to be absolute.
-- `WASM_BUILD_TOOLCHAIN` - The toolchain that should be used to build the Wasm binaries. The
-                           format needs to be the same as used by cargo, e.g. `nightly-2020-02-20`.
 - `CARGO_NET_OFFLINE` - If `true`, `--offline` will be passed to all processes launched to prevent network access. Useful in offline environments.
 
 Each project can be skipped individually by using the environment variable `SKIP_PROJECT_NAME_WASM_BUILD`.
