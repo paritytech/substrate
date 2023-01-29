@@ -20,7 +20,9 @@
 use super::*;
 use crate::Pallet as Referenda;
 use assert_matches::assert_matches;
-use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist_account, BenchmarkError};
+use frame_benchmarking::v1::{
+	account, benchmarks_instance_pallet, whitelist_account, BenchmarkError,
+};
 use frame_support::{
 	assert_ok,
 	dispatch::UnfilteredDispatchable,

@@ -19,7 +19,7 @@
 //! A method call executor interface.
 
 use sc_executor::{RuntimeVersion, RuntimeVersionOf};
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use sp_runtime::traits::Block as BlockT;
 use sp_state_machine::{ExecutionStrategy, OverlayedChanges, StorageProof};
 use std::cell::RefCell;
 
@@ -54,7 +54,7 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 	/// No changes are made.
 	fn call(
 		&self,
-		id: &BlockId<B>,
+		at_hash: B::Hash,
 		method: &str,
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
@@ -67,7 +67,7 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 	/// of the execution context.
 	fn contextual_call(
 		&self,
-		at: &BlockId<B>,
+		at_hash: B::Hash,
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
@@ -83,14 +83,14 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 	/// Extract RuntimeVersion of given block
 	///
 	/// No changes are made.
-	fn runtime_version(&self, id: &BlockId<B>) -> Result<RuntimeVersion, sp_blockchain::Error>;
+	fn runtime_version(&self, at_hash: B::Hash) -> Result<RuntimeVersion, sp_blockchain::Error>;
 
 	/// Prove the execution of the given `method`.
 	///
 	/// No changes are made.
 	fn prove_execution(
 		&self,
-		at: &BlockId<B>,
+		at_hash: B::Hash,
 		method: &str,
 		call_data: &[u8],
 	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error>;

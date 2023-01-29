@@ -18,7 +18,7 @@
 //! Preimage pallet benchmarking.
 
 use super::*;
-use frame_benchmarking::{account, benchmarks, whitelist_account, BenchmarkError};
+use frame_benchmarking::v1::{account, benchmarks, whitelist_account, BenchmarkError};
 use frame_support::assert_ok;
 use frame_system::RawOrigin;
 use sp_runtime::traits::Bounded;

@@ -25,7 +25,7 @@ use sp_std::{
 	prelude::*,
 };
 
-use frame_benchmarking::{account, benchmarks_instance_pallet, BenchmarkError};
+use frame_benchmarking::v1::{account, benchmarks_instance_pallet, BenchmarkError};
 use frame_support::traits::{EnsureOrigin, Get, UnfilteredDispatchable};
 use frame_system::{Pallet as System, RawOrigin as SystemOrigin};
 
