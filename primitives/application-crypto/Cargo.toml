@@ -42,5 +42,4 @@ full_crypto = [
 	# Don't add `panic_handler` and `alloc_error_handler` since they are expected to be provided
 	# by the user anyway.
 	"sp-io/disable_panic_handler",
-	"sp-io/disable_oom",
 ]
