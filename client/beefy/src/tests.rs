@@ -364,7 +364,7 @@ pub(crate) trait BeefyAuthIdMaker : Clone + Encode + Decode + Debug + Ord + Sync
 impl BeefyAuthIdMaker for ecdsa_crypto::AuthorityId 
 {
      fn make_beefy_ids(keys: &[Keyring]) -> Vec<Self> {
-	 keys.iter().map(|&key| <Keyring as GenericKeyring<ecdsa_crypto::Pair>>::public(key).into()).collect()
+	     keys.iter().map(|&key| <Keyring as GenericKeyring<ecdsa_crypto::Pair>>::public(key).into()).collect()
 	     
     }
 }
@@ -372,15 +372,14 @@ impl BeefyAuthIdMaker for ecdsa_crypto::AuthorityId
 impl BeefyAuthIdMaker for (ecdsa_crypto::AuthorityId, bls_crypto::AuthorityId)
 {
      fn make_beefy_ids(keys: &[Keyring]) -> Vec<Self> {
-	 keys.iter().map(|&key| <Keyring as GenericKeyring<ECDSAnBLSPair>>::public(key).into()).collect()
+	     keys.iter().map(|&key| <Keyring as GenericKeyring<ECDSAnBLSPair>>::public(key).into()).collect()
 	     
     }
 }
 
 pub(crate) fn create_beefy_keystore<TKeyPair: SimpleKeyPair>(authority: Keyring) -> SyncCryptoStorePtr {    
-	let keystore = Arc::new(LocalKeystore::in_memory());
-	SyncCryptoStore::ecdsa_generate_new(&*keystore, BeefyKeyType, Some(&<Keyring as GenericKeyring<TKeyPair>>::to_seed(authority)))
-		.expect("Creates authority key");
+	let keystore = Arc::new(LocalKeystore::in_memory());    
+    TKeyPair::generate_in_store(keystore.clone(), authority);
 	keystore
 }
 

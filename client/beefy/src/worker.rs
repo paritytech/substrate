@@ -321,19 +321,22 @@ where
 		block: &NumberFor<B>,
 		active: &ValidatorSet<AuthId>,
 	) -> Result<(), Error> {
-		let active: BTreeSet<&AuthId> = active.validators().iter().collect();
+        match self.key_store.authority_id(active.validators()) {
+		// let active: BTreeSet<&AuthId> = active.validators().iter().collect();
 
-		let public_keys = self.key_store.authority_ids()?;
-		let store: BTreeSet<&AuthId> = public_keys.iter().collect();
+		// let public_keys = self.key_store.authority_ids()?;
+		// let store: BTreeSet<&AuthId> = public_keys.iter().collect();
 
-		if store.intersection(&active).count() == 0 {
-			let msg = "no authority public key found in store".to_string();
-			debug!(target: "beefy", "🥩 for block {:?} {}", block, msg);
-			Err(Error::Keystore(msg))
-		} else {
-			Ok(())
+		    // if store.intersection(&active).count() == 0 {
+            None => {
+			    let msg = "no authority public key found in store".to_string();
+			    debug!(target: "beefy", "🥩 for block {:?} {}", block, msg);
+			    Err(Error::Keystore(msg))
+		    },
+            Some(auth_id) => Ok(())     
 		}
-	}
+        }
+	    
 
 	/// Handle session changes by starting new voting round for mandatory blocks.
 	fn init_session_at(
@@ -1327,7 +1330,8 @@ pub(crate) mod tests {
 
 		// worker has no keystore
 		worker.key_store = None.into();
-		let expected_err = Err(Error::Keystore("no Keystore".into()));
+		//let expected_err = Err(Error::Keystore("no Keystore".into()));
+        let expected_err = Err(Error::Keystore("no authority public key found in store".to_string()));
 		assert_eq!(worker.verify_validator_set(&1, &validator_set), expected_err);
 	}
 
@@ -1338,18 +1342,26 @@ pub(crate) mod tests {
     
     #[test]
     fn keystore_vs_validator_set_with_ecdsa_n_bls_keys() {
-	keystore_vs_validator_set::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>();
+	    keystore_vs_validator_set::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>();
     }
 
 
-	#[cfg(notest)]
-	fn should_finalize_correctly() {
+	fn should_finalize_correctly<TKeyPair, AuthId,
+		                         TSignature,
+		                         BKS,		
+		                         > ()
+    where
+	    TKeyPair: Sync + Send + SimpleKeyPair,
+	    AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker + 'static,
+		TSignature: Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq + 'static,
+		BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
+    {
 		let keys = [Keyring::Alice];
-		let validator_set = ValidatorSet::new(make_beefy_ids(&keys), 0).unwrap();
+		let validator_set = ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(&keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1);
 		let backend = net.peer(0).client().as_backend();
-		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
-
+		let mut worker = create_beefy_worker::<TKeyPair, AuthId, TSignature, BKS>(&net.peer(0), &keys[0], 1);
+        
 		let keys = keys.iter().cloned().enumerate();
 		let (mut best_block_streams, mut finality_proofs) =
 			get_beefy_streams(&mut net, keys.clone());
@@ -1432,12 +1444,31 @@ pub(crate) mod tests {
 		assert!(justifs.get(BEEFY_ENGINE_ID).is_some())
 	}
 
-    #[cfg(notest)]
-    fn should_init_session() {
+    #[test]
+    fn should_finalize_correctly_with_ecdsa_keys() {        
+        should_finalize_correctly::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>();
+	}
+    
+    #[test]
+    fn should_finalize_correctly_with_ecdsa_n_bls_keys() {
+	    should_finalize_correctly::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>();
+    }
+
+    fn should_init_session<TKeyPair, AuthId,
+		                   TSignature,
+		                   BKS,		
+		                   > ()
+    where
+	        TKeyPair: Sync + Send + SimpleKeyPair,
+	        AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker + 'static,
+		TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
+		BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
+        
+    {
 		let keys = &[Keyring::Alice];
-		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
+		let validator_set = ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1);
-		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
+		let mut worker = create_beefy_worker::<TKeyPair, AuthId, TSignature, BKS>(&net.peer(0), &keys[0], 1);
 
 		assert!(worker.voting_oracle.sessions.is_empty());
 
@@ -1449,7 +1480,7 @@ pub(crate) mod tests {
 
 		// new validator set
 		let keys = &[Keyring::Bob];
-		let new_validator_set = ValidatorSet::new(make_beefy_ids(keys), 1).unwrap();
+		let new_validator_set = ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(keys), 1).unwrap();
 
 		worker.init_session_at(new_validator_set.clone(), 11);
 		// Since mandatory is not done for old rounds, we still get those.
@@ -1465,17 +1496,37 @@ pub(crate) mod tests {
 		assert_eq!(rounds.validators(), new_validator_set.validators());
 		assert_eq!(rounds.validator_set_id(), new_validator_set.id());
 	}
+    
+    #[test]
+    fn should_init_session_with_ecdsa_keys() {        
+        should_init_session::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>();
+	}
+    
+    #[test]
+    fn should_init_session_with_ecdsa_n_bls_keys() {
+	    should_init_session::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>();
+    }
 
-    #[cfg(notest)]
-    fn should_triage_votes_and_process_later() {
+    fn should_triage_votes_and_process_later<TKeyPair, AuthId,
+		                   TSignature,
+		                   BKS,		
+		                   > ()
+    where
+	        TKeyPair: Sync + Send + SimpleKeyPair<Public = AuthId, Signature = TSignature>,
+	        AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker + 'static,
+		TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
+		BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,     
+    {
 		let keys = &[Keyring::Alice, Keyring::Bob];
-		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-		let mut net = BeefyTestNet::new(1);
-		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
+		let validator_set = ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(keys), 0).unwrap();
+		let mut net : BeefyTestNet<AuthId, TSignature, BKS> = BeefyTestNet::new(1);
+		let mut worker = create_beefy_worker::<TKeyPair, AuthId, TSignature, BKS>(&net.peer(0), &keys[0], 1);
 
-		fn new_vote(
+		fn new_vote<TKeyPair, AuthId, TSignature>(
 			block_number: NumberFor<Block>,
-		) -> VoteMessage<NumberFor<Block>, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature> {
+		) -> VoteMessage<NumberFor<Block>, AuthId, TSignature> where
+	        TKeyPair: Sync + Send + SimpleKeyPair<Public = AuthId, Signature = TSignature>,
+        {
 			let commitment = Commitment {
 				payload: Payload::from_single_entry(*b"BF", vec![]),
 				block_number,
@@ -1483,8 +1534,8 @@ pub(crate) mod tests {
 			};
 			VoteMessage {
 				commitment,
-				id: Keyring::Alice.public(),
-				signature: Keyring::Alice.sign(b"I am committed"),
+				id: <Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice),
+				signature: <Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Alice, b"I am committed"),
 			}
 		}
 
@@ -1501,13 +1552,13 @@ pub(crate) mod tests {
 		worker.best_grandpa_block_header = best_grandpa_header;
 
 		// triage votes for blocks 10..13
-		worker.triage_incoming_vote(new_vote(10)).unwrap();
-		worker.triage_incoming_vote(new_vote(11)).unwrap();
-		worker.triage_incoming_vote(new_vote(12)).unwrap();
+		worker.triage_incoming_vote(new_vote::<TKeyPair, AuthId, TSignature>(10)).unwrap();
+		worker.triage_incoming_vote(new_vote::<TKeyPair, AuthId, TSignature>(11)).unwrap();
+		worker.triage_incoming_vote(new_vote::<TKeyPair, AuthId, TSignature>(12)).unwrap();
 		// triage votes for blocks 20..23
-		worker.triage_incoming_vote(new_vote(20)).unwrap();
-		worker.triage_incoming_vote(new_vote(21)).unwrap();
-		worker.triage_incoming_vote(new_vote(22)).unwrap();
+		worker.triage_incoming_vote(new_vote::<TKeyPair, AuthId, TSignature>(20)).unwrap();
+		worker.triage_incoming_vote(new_vote::<TKeyPair, AuthId, TSignature>(21)).unwrap();
+		worker.triage_incoming_vote(new_vote::<TKeyPair, AuthId, TSignature>(22)).unwrap();
 
 		// vote for 10 should have been handled, while the rest buffered for later processing
 		let mut votes = worker.pending_votes.values();
@@ -1527,11 +1578,29 @@ pub(crate) mod tests {
 		assert_eq!(votes.next().unwrap().first().unwrap().commitment.block_number, 22);
 	}
 
-	#[cfg(notest)]
-	fn should_initialize_correct_voter() {
+    #[test]
+    fn should_triage_votes_and_process_later_with_ecdsa_keys() {        
+        should_triage_votes_and_process_later::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>();
+	}
+    
+    #[test]
+    fn should_triage_votes_and_process_later_with_ecdsa_n_bls_keys() {
+	    should_triage_votes_and_process_later::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>();
+    }
+
+	fn should_initialize_correct_voter<TKeyPair, AuthId,
+		                   TSignature,
+		                   BKS,		
+		                   > ()
+    where
+	        TKeyPair: Sync + Send + SimpleKeyPair,
+	        AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker + 'static,
+		TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
+		BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
+      {
 		let keys = &[Keyring::Alice];
-		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 1).unwrap();
-		let mut net = BeefyTestNet::new(1);
+        let validator_set = ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(keys), 1).unwrap();
+		let mut net : BeefyTestNet<AuthId, TSignature, BKS> = BeefyTestNet::new(1);
 		let backend = net.peer(0).client().as_backend();
 
 		// push 15 blocks with `AuthorityChange` digests every 10 blocks
@@ -1545,7 +1614,7 @@ pub(crate) mod tests {
 
 		// Test initialization at session boundary.
 		{
-			let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
+			let mut worker = create_beefy_worker::<TKeyPair, AuthId, TSignature, BKS>(&net.peer(0), &keys[0], 1);
 
 			// initialize voter at block 13, expect rounds initialized at session_start = 10
 			let header = backend.blockchain().header(BlockId::number(13)).unwrap().unwrap();
@@ -1565,7 +1634,7 @@ pub(crate) mod tests {
 
 		// Test corner-case where session boundary == last beefy finalized.
 		{
-			let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
+			let mut worker = create_beefy_worker::<TKeyPair, AuthId, TSignature, BKS>(&net.peer(0), &keys[0], 1);
 
 			// import/append BEEFY justification for session boundary block 10
 			let commitment = Commitment {
@@ -1599,7 +1668,7 @@ pub(crate) mod tests {
 
 		// Test initialization at last BEEFY finalized.
 		{
-			let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
+			let mut worker = create_beefy_worker::<TKeyPair, AuthId, TSignature, BKS>(&net.peer(0), &keys[0], 1);
 
 			// import/append BEEFY justification for block 12
 			let commitment = Commitment {
@@ -1631,4 +1700,15 @@ pub(crate) mod tests {
 			assert_eq!(worker.voting_oracle.voting_target(worker.best_beefy_block, 13), Some(13));
 		}
 	}
+
+    #[test]
+    fn should_initialize_correct_voter_with_ecdsa_keys() {        
+        should_initialize_correct_voter::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>();
+	}
+    
+    #[test]
+    fn should_initialize_correct_voter_with_ecdsa_n_bls_keys() {
+	    should_initialize_correct_voter::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>();
+    }
+
 }

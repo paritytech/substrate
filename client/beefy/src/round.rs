@@ -178,27 +178,32 @@ where
 	}
 }
 
-#[cfg(notest)]
+#[cfg(test)]
 mod tests {
+    use core::fmt::Debug;
 	use sc_network_test::Block;
 	use sp_core::H256;
 
 	use beefy_primitives::{ecdsa_crypto::{Public, self}, ValidatorSet};
+    use codec::{Decode, Encode};
 
 	use super::{threshold, Block as BlockT, Hash, RoundTracker, Rounds};
-	use crate::keystore::tests::{Keyring, ECDSAKeyring, Identity};
+	use crate::keystore::tests::{Keyring, SimpleKeyPair};
 
-	impl<P, B> Rounds<P, B, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature>
-	where
-		P: Ord + Hash + Clone,
-		B: BlockT,
+    impl<P, B, AuthId, TSignature> Rounds<P, B, AuthId, TSignature>
+    where
+	    P: Ord + Hash + Clone,
+	    B: BlockT,
+	    AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash,
+	    TSignature: Encode + Decode + Debug + Clone + Sync + Send,
 	{
 		pub(crate) fn test_set_mandatory_done(&mut self, done: bool) {
 			self.mandatory_done = done;
 		}
 	}
 
-	#[test]
+    
+	#[cfg(notest)]
 	fn round_tracker() {
 		let mut rt = RoundTracker::default();
 		let bob_vote = (ECDSAKeyring(Identity::Bob).public(), ECDSAKeyring(Identity::Bob).sign(b"I am committed"));
@@ -228,7 +233,7 @@ mod tests {
 		assert!(rt.is_done(threshold));
 	}
 
-	#[test]
+	#[cfg(notest)]
 	fn vote_threshold() {
 		assert_eq!(threshold(1), 1);
 		assert_eq!(threshold(2), 2);
@@ -238,7 +243,7 @@ mod tests {
 		assert_eq!(threshold(300), 201);
 	}
 
-	#[test]
+	#[cfg(notest)]
 	fn new_rounds() {
 		sp_tracing::try_init_simple();
 
@@ -259,7 +264,7 @@ mod tests {
 		);
 	}
 
-	#[test]
+	#[cfg(notest)]
 	fn add_and_conclude_votes() {
 		sp_tracing::try_init_simple();
 
@@ -334,7 +339,7 @@ mod tests {
 		));
 	}
 
-	#[test]
+	#[cfg(notest)]
 	fn old_rounds_not_accepted() {
 		sp_tracing::try_init_simple();
 
@@ -371,7 +376,7 @@ mod tests {
 		assert_eq!(rounds.rounds.len(), 1);
 	}
 
-	#[test]
+	#[cfg(notest)]
 	fn multiple_rounds() {
 		sp_tracing::try_init_simple();
 

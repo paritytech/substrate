@@ -141,10 +141,10 @@ impl BeefyKeystore<ECDSAPublic,ECDSASignature> for  BeefyECDSAKeystore
 	fn authority_ids(&self) -> Result<Vec<ECDSAPublic>, error::Error> {
 		self.public_keys()
 	}
-		
+
+  
 	/// Use the `public` key to verify that `sig` is a valid signature for `message`.
 	///
-
 	fn verify(public: &Self::Public, sig: &ECDSASignature, message: &[u8]) -> bool {
 	    BeefyVerify::<Keccak256>::verify(sig, message, public)
 	}
@@ -805,12 +805,12 @@ pub mod tests {
 	println!("dave's {:?}", <Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Dave));
 	println!("Eve's {:?}", <Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Eve));
 
-	assert!(keys.len() == 4);
-	//none of these works for ECDSAandBLSKeys because currently the keystore returns a ranodm mix and match
-	//assert!(keys.contains(&<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Dave)));
-	//assert!(keys.contains(&<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Eve)));
-	//assert!(keys.contains(&key1));
-	//assert!(keys.contains(&key2));
+	    assert!(keys.len() == 4);
+        
+	    assert!(store.authority_id(&[<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Dave)]).is_some());
+	    assert!(store.authority_id(&[<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Eve)]).is_some());
+	    assert!(store.authority_id(&[key1]).is_some());
+	    assert!(store.authority_id(&[key2]).is_some());
     }
 
     #[test]
