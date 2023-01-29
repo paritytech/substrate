@@ -83,7 +83,10 @@ pub use hash_db::Hasher;
 pub use bounded_collections as bounded;
 #[cfg(feature = "std")]
 pub use bounded_collections::{bounded_btree_map, bounded_vec};
-pub use bounded_collections::{parameter_types, Get, GetDefault, TryCollect, TypedGet};
+pub use bounded_collections::{
+	parameter_types, ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128,
+	ConstU16, ConstU32, ConstU64, ConstU8, Get, GetDefault, TryCollect, TypedGet,
+};
 pub use sp_storage as storage;
 
 #[doc(hidden)]
