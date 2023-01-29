@@ -52,7 +52,7 @@ impl SignCmd {
 	/// Run the command
 	pub fn run(&self) -> error::Result<()> {
 		let sig = self.sign(|| std::io::stdin().lock())?;
-		std::io::stdout().lock().write(sig.as_bytes())?;
+		std::io::stdout().lock().write_all(sig.as_bytes())?;
 		Ok(())
 	}
 
