@@ -170,15 +170,16 @@ pub fn load<T: Config>(
 	let charged = gas_meter.charge(CodeToken::Load(max_code_len))?;
 
 	let mut prefab_module = <CodeStorage<T>>::get(code_hash).ok_or(Error::<T>::CodeNotFound)?;
-	gas_meter.adjust_gas(charged, CodeToken::Load(prefab_module.code.len() as u32));
+	let instrumented_code_len = prefab_module.code.len() as u32;
+	gas_meter.adjust_gas(charged, CodeToken::Load(instrumented_code_len));
 	prefab_module.code_hash = code_hash;
 
 	if prefab_module.instruction_weights_version < schedule.instruction_weights.version {
 		// The instruction weights have changed.
 		// We need to re-instrument the code with the new instruction weights.
-		let charged = gas_meter.charge(CodeToken::Reinstrument(max_code_len))?;
-		let code_size = reinstrument(&mut prefab_module, schedule)?;
-		gas_meter.adjust_gas(charged, CodeToken::Reinstrument(code_size));
+		let charged = gas_meter.charge(CodeToken::Reinstrument(instrumented_code_len))?;
+		let orig_code_len = reinstrument(&mut prefab_module, schedule)?;
+		gas_meter.adjust_gas(charged, CodeToken::Reinstrument(orig_code_len));
 	}
 
 	Ok(prefab_module)
