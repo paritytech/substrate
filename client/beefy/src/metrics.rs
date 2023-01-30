@@ -98,7 +98,7 @@ macro_rules! metric_inc {
 	}};
 }
 
-#[cfg(notest)]
+#[cfg(test)]
 #[macro_export]
 macro_rules! metric_get {
 	($self:ident, $m:ident) => {{
