@@ -19,7 +19,7 @@
 
 #![cfg(feature = "runtime-benchmarks")]
 
-use frame_benchmarking::{account, benchmarks_instance_pallet, whitelisted_caller};
+use frame_benchmarking::v1::{account, benchmarks_instance_pallet, whitelisted_caller};
 use frame_support::ensure;
 use frame_system::RawOrigin;
 use sp_runtime::traits::Saturating;

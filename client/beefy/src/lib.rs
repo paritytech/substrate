@@ -75,6 +75,8 @@ pub use communication::beefy_protocol_name::{
 #[cfg(test)]
 mod tests;
 
+const LOG_TARGET: &str = "beefy";
+
 /// A convenience BEEFY client trait that defines all the type bounds a BEEFY client
 /// has to satisfy. Ideally that should actually be a trait alias. Unfortunately as
 /// of today, Rust does not allow a type alias to be used as a trait bound. Tracking
@@ -252,11 +254,11 @@ where
 		prometheus_registry.as_ref().map(metrics::Metrics::register).and_then(
 			|result| match result {
 				Ok(metrics) => {
-					debug!(target: "beefy", "🥩 Registered metrics");
+					debug!(target: LOG_TARGET, "🥩 Registered metrics");
 					Some(metrics)
 				},
 				Err(err) => {
-					debug!(target: "beefy", "🥩 Failed to register metrics: {:?}", err);
+					debug!(target: LOG_TARGET, "🥩 Failed to register metrics: {:?}", err);
 					None
 				},
 			},
@@ -276,7 +278,7 @@ where
 			}) {
 			Ok(state) => state,
 			Err(e) => {
-				error!(target: "beefy", "Error: {:?}. Terminating.", e);
+				error!(target: LOG_TARGET, "Error: {:?}. Terminating.", e);
 				return
 			},
 		};
@@ -321,7 +323,7 @@ where
 		state.set_best_grandpa(best_grandpa);
 		// Overwrite persisted data with newly provided `min_block_delta`.
 		state.set_min_block_delta(min_block_delta);
-		info!(target: "beefy", "🥩 Loading BEEFY voter state from db: {:?}.", state);
+		info!(target: LOG_TARGET, "🥩 Loading BEEFY voter state from db: {:?}.", state);
 		Ok(state)
 	} else {
 		initialize_voter_state(backend, runtime, best_grandpa, min_block_delta)
@@ -357,7 +359,7 @@ where
 			.map(|justifs| justifs.get(BEEFY_ENGINE_ID).is_some())
 		{
 			info!(
-				target: "beefy",
+				target: LOG_TARGET,
 				"🥩 Initialize BEEFY voter at last BEEFY finalized block: {:?}.",
 				*header.number()
 			);
@@ -382,10 +384,11 @@ where
 			let genesis_set = expect_validator_set(runtime, BlockId::hash(header.hash()))
 				.and_then(genesis_set_sanity_check)?;
 			info!(
-				target: "beefy",
+				target: LOG_TARGET,
 				"🥩 Loading BEEFY voter state from genesis on what appears to be first startup. \
 				Starting voting rounds at block {:?}, genesis validator set {:?}.",
-				genesis_num, genesis_set,
+				genesis_num,
+				genesis_set,
 			);
 
 			sessions.push_front(Rounds::new(genesis_num, genesis_set));
@@ -394,7 +397,11 @@ where
 		}
 
 		if let Some(active) = worker::find_authorities_change::<B>(&header) {
-			info!(target: "beefy", "🥩 Marking block {:?} as BEEFY Mandatory.", *header.number());
+			info!(
+				target: LOG_TARGET,
+				"🥩 Marking block {:?} as BEEFY Mandatory.",
+				*header.number()
+			);
 			sessions.push_front(Rounds::new(*header.number(), active));
 		}
 
@@ -407,7 +414,7 @@ where
 			.flatten()
 			.ok_or_else(|| {
 				let msg = format!("{}. Could not initialize BEEFY voter.", parent_hash);
-				error!(target: "beefy", "🥩 {}", msg);
+				error!(target: LOG_TARGET, "🥩 {}", msg);
 				ClientError::Consensus(sp_consensus::Error::StateUnavailable(msg))
 			})?;
 
@@ -432,7 +439,7 @@ where
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B>,
 {
-	info!(target: "beefy", "🥩 BEEFY gadget waiting for BEEFY pallet to become available...");
+	info!(target: LOG_TARGET, "🥩 BEEFY gadget waiting for BEEFY pallet to become available...");
 	loop {
 		futures::select! {
 			notif = finality.next() => {
@@ -444,7 +451,7 @@ where
 				if let Some(active) = runtime.runtime_api().validator_set(&at).ok().flatten() {
 					// Beefy pallet available, return best grandpa at the time.
 					info!(
-						target: "beefy", "🥩 BEEFY pallet available: block {:?} validator set {:?}",
+						target: LOG_TARGET, "🥩 BEEFY pallet available: block {:?} validator set {:?}",
 						notif.header.number(), active
 					);
 					return Ok(notif.header)
@@ -456,7 +463,7 @@ where
 		}
 	}
 	let err_msg = "🥩 Gossip engine has unexpectedly terminated.".into();
-	error!(target: "beefy", "{}", err_msg);
+	error!(target: LOG_TARGET, "{}", err_msg);
 	Err(ClientError::Backend(err_msg))
 }
 
@@ -466,7 +473,7 @@ fn genesis_set_sanity_check(
 	if active.id() == GENESIS_AUTHORITY_SET_ID {
 		Ok(active)
 	} else {
-		error!(target: "beefy", "🥩 Unexpected ID for genesis validator set {:?}.", active);
+		error!(target: LOG_TARGET, "🥩 Unexpected ID for genesis validator set {:?}.", active);
 		Err(ClientError::Backend("BEEFY Genesis sanity check failed.".into()))
 	}
 }

@@ -32,7 +32,7 @@ use sp_runtime::traits::{Block, NumberFor};
 use std::{collections::VecDeque, result::Result, sync::Arc};
 
 use crate::{
-	communication::request_response::{Error, JustificationRequest},
+	communication::request_response::{Error, JustificationRequest, BEEFY_SYNC_LOG_TARGET},
 	justification::{decode_and_verify_finality_proof, BeefyVersionedFinalityProof},
 	KnownPeers,
 };
@@ -96,10 +96,8 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 
 	fn request_from_peer(&mut self, peer: PeerId, req_info: RequestInfo<B>) {
 		debug!(
-			target: "beefy::sync",
-			"🥩 requesting justif #{:?} from peer {:?}",
-			req_info.block,
-			peer,
+			target: BEEFY_SYNC_LOG_TARGET,
+			"🥩 requesting justif #{:?} from peer {:?}", req_info.block, peer,
 		);
 
 		let payload = JustificationRequest::<B> { begin: req_info.block }.encode();
@@ -132,7 +130,10 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 		if let Some(peer) = self.try_next_peer() {
 			self.request_from_peer(peer, RequestInfo { block, active_set });
 		} else {
-			debug!(target: "beefy::sync", "🥩 no good peers to request justif #{:?} from", block);
+			debug!(
+				target: BEEFY_SYNC_LOG_TARGET,
+				"🥩 no good peers to request justif #{:?} from", block
+			);
 		}
 	}
 
@@ -141,8 +142,8 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 		match &self.state {
 			State::AwaitingResponse(_, req_info, _) if req_info.block <= block => {
 				debug!(
-					target: "beefy::sync", "🥩 cancel pending request for justification #{:?}",
-					req_info.block
+					target: BEEFY_SYNC_LOG_TARGET,
+					"🥩 cancel pending request for justification #{:?}", req_info.block
 				);
 				self.state = State::Idle;
 			},
@@ -159,17 +160,21 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 		response
 			.map_err(|e| {
 				debug!(
-					target: "beefy::sync",
+					target: BEEFY_SYNC_LOG_TARGET,
 					"🥩 for on demand justification #{:?}, peer {:?} hung up: {:?}",
-					req_info.block, peer, e
+					req_info.block,
+					peer,
+					e
 				);
 				Error::InvalidResponse
 			})?
 			.map_err(|e| {
 				debug!(
-					target: "beefy::sync",
+					target: BEEFY_SYNC_LOG_TARGET,
 					"🥩 for on demand justification #{:?}, peer {:?} error: {:?}",
-					req_info.block, peer, e
+					req_info.block,
+					peer,
+					e
 				);
 				Error::InvalidResponse
 			})
@@ -181,7 +186,7 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 				)
 				.map_err(|e| {
 					debug!(
-						target: "beefy::sync",
+						target: BEEFY_SYNC_LOG_TARGET,
 						"🥩 for on demand justification #{:?}, peer {:?} responded with invalid proof: {:?}",
 						req_info.block, peer, e
 					);
@@ -213,14 +218,16 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 				if let Some(peer) = self.try_next_peer() {
 					self.request_from_peer(peer, req_info);
 				} else {
-					warn!(target: "beefy::sync", "🥩 ran out of peers to request justif #{:?} from", block);
+					warn!(
+						target: BEEFY_SYNC_LOG_TARGET,
+						"🥩 ran out of peers to request justif #{:?} from", block
+					);
 				}
 			})
 			.map(|proof| {
 				debug!(
-					target: "beefy::sync",
-					"🥩 received valid on-demand justif #{:?} from {:?}",
-					block, peer
+					target: BEEFY_SYNC_LOG_TARGET,
+					"🥩 received valid on-demand justif #{:?} from {:?}", block, peer
 				);
 				proof
 			})

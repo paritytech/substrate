@@ -49,6 +49,7 @@ pub struct PruningParams {
 	/// [default: 256]
 	#[arg(alias = "pruning", long, value_name = "PRUNING_MODE")]
 	pub state_pruning: Option<DatabasePruningMode>,
+
 	/// Specify the blocks pruning mode.
 	///
 	/// This mode specifies when the block's body (including justifications)

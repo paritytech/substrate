@@ -35,7 +35,7 @@ use sp_runtime::{
 use sp_staking::SessionIndex;
 use sp_std::prelude::*;
 
-pub use frame_benchmarking::{
+pub use frame_benchmarking::v1::{
 	account, benchmarks, impl_benchmark_test_suite, whitelist_account, whitelisted_caller,
 };
 use frame_system::RawOrigin;
