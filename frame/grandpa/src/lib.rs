@@ -121,6 +121,15 @@ pub mod pallet {
 		/// Max Authorities in use
 		#[pallet::constant]
 		type MaxAuthorities: Get<u32>;
+
+		/// The maximum number of entries to keep in the set id to session index mapping.
+		///
+		/// Since the `SetIdSession` map is only used for validating equivocations this
+		/// value should relate to the bonding duration of whatever staking system is
+		/// being used (if any). If equivocation handling is not enabled then this value
+		/// can be zero.
+		#[pallet::constant]
+		type MaxSetIdSessionEntries: Get<u64>;
 	}
 
 	#[pallet::hooks]
@@ -322,6 +331,12 @@ pub mod pallet {
 
 	/// A mapping from grandpa set ID to the index of the *most recent* session for which its
 	/// members were responsible.
+	///
+	/// This is only used for validating equivocation proofs. An equivocation proof must
+	/// contains a key-ownership proof for a given session, therefore we need a way to tie
+	/// together sessions and GRANDPA set ids, i.e. we need to validate that a validator
+	/// was the owner of a given key on a given session, and what the active set ID was
+	/// during that session.
 	///
 	/// TWOX-NOTE: `SetId` is not under user control.
 	#[pallet::storage]
@@ -643,10 +658,17 @@ where
 			};
 
 			if res.is_ok() {
-				CurrentSetId::<T>::mutate(|s| {
+				let current_set_id = CurrentSetId::<T>::mutate(|s| {
 					*s += 1;
 					*s
-				})
+				});
+
+				let max_set_id_session_entries = T::MaxSetIdSessionEntries::get().max(1);
+				if current_set_id >= max_set_id_session_entries {
+					SetIdSession::<T>::remove(current_set_id - max_set_id_session_entries);
+				}
+
+				current_set_id
 			} else {
 				// either the session module signalled that the validators have changed
 				// or the set was stalled. but since we didn't successfully schedule
@@ -659,8 +681,8 @@ where
 			Self::current_set_id()
 		};
 
-		// if we didn't issue a change, we update the mapping to note that the current
-		// set corresponds to the latest equivalent session (i.e. now).
+		// update the mapping to note that the current set corresponds to the
+		// latest equivalent session (i.e. now).
 		let session_index = <pallet_session::Pallet<T>>::current_index();
 		SetIdSession::<T>::insert(current_set_id, &session_index);
 	}
