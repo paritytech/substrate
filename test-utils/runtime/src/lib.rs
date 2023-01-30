@@ -297,7 +297,7 @@ pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
 }
 
 /// A type that can not be decoded.
-#[derive(PartialEq)]
+#[derive(PartialEq, TypeInfo)]
 pub struct DecodeFails<B: BlockT> {
 	_phantom: PhantomData<B>,
 }
