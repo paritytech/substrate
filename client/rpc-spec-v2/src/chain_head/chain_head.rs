@@ -745,7 +745,7 @@ where
 			let res = client
 				.executor()
 				.call(
-					&BlockId::Hash(hash),
+					hash,
 					&function,
 					&call_parameters,
 					client.execution_extensions().strategies().other,

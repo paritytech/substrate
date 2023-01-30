@@ -37,6 +37,22 @@ use wasmi::{core::HostError, errors::LinkerError, Linker, Memory, Store};
 /// The maximum nesting depth a contract can use when encoding types.
 const MAX_DECODE_NESTING: u32 = 256;
 
+/// Passed to [`Environment`] to determine whether it should expose deprecated interfaces.
+pub enum AllowDeprecatedInterface {
+	/// No deprecated interfaces are exposed.
+	No,
+	/// Deprecated interfaces are exposed.
+	Yes,
+}
+
+/// Passed to [`Environment`] to determine whether it should expose unstable interfaces.
+pub enum AllowUnstableInterface {
+	/// No unstable interfaces are exposed.
+	No,
+	/// Unstable interfaces are exposed.
+	Yes,
+}
+
 /// Trait implemented by the [`define_env`](pallet_contracts_proc_macro::define_env) macro for the
 /// emitted `Env` struct.
 pub trait Environment<HostState> {
@@ -45,14 +61,15 @@ pub trait Environment<HostState> {
 	fn define(
 		store: &mut Store<HostState>,
 		linker: &mut Linker<HostState>,
-		allow_unstable: bool,
+		allow_unstable: AllowUnstableInterface,
+		allow_deprecated: AllowDeprecatedInterface,
 	) -> Result<(), LinkerError>;
 }
 
 /// Type of a storage key.
 #[allow(dead_code)]
 enum KeyType {
-	/// Deprecated fix sized key `[u8;32]`.
+	/// Legacy fix sized key `[u8;32]`.
 	Fix,
 	/// Variable sized key used in transparent hashing,
 	/// cannot be larger than MaxStorageKeyLen.
@@ -91,12 +108,8 @@ pub enum ReturnCode {
 	CalleeReverted = 2,
 	/// The passed key does not exist in storage.
 	KeyNotFound = 3,
-	/// Deprecated and no longer returned: There is only the minimum balance.
-	_BelowSubsistenceThreshold = 4,
 	/// See [`Error::TransferFailed`].
 	TransferFailed = 5,
-	/// Deprecated and no longer returned: Endowment is no longer required.
-	_EndowmentTooLow = 6,
 	/// No code could be found at the supplied code hash.
 	CodeNotFound = 7,
 	/// The contract that was called is no contract (a plain account).
@@ -1280,7 +1293,7 @@ pub mod env {
 
 	/// Make a call to another contract.
 	///
-	/// # Deprecation
+	/// # New version available
 	///
 	/// This is equivalent to calling the newer version of this function with
 	/// `flags` set to `ALLOW_REENTRY`. See the newer version for documentation.
@@ -1418,7 +1431,7 @@ pub mod env {
 
 	/// Instantiate a contract with the specified code hash.
 	///
-	/// # Deprecation
+	/// # New version available
 	///
 	/// This is equivalent to calling the newer version of this function. The newer version
 	/// drops the now unnecessary length fields.
@@ -1538,7 +1551,7 @@ pub mod env {
 
 	/// Remove the calling account and transfer remaining balance.
 	///
-	/// # Deprecation
+	/// # New version available
 	///
 	/// This is equivalent to calling the newer version of this function. The newer version
 	/// drops the now unnecessary length fields.
@@ -1879,12 +1892,8 @@ pub mod env {
 	/// space at `out_ptr` is less than the size of the value a trap is triggered.
 	///
 	/// The data is encoded as `T::Hash`.
-	///
-	/// # Deprecation
-	///
-	/// This function is deprecated. Users should migrate to the [`super::seal1::Api::random()`]
-	/// version.
 	#[prefixed_alias]
+	#[deprecated]
 	fn random(
 		ctx: _,
 		memory: _,
@@ -1931,6 +1940,7 @@ pub mod env {
 	/// commitment.
 	#[version(1)]
 	#[prefixed_alias]
+	#[deprecated]
 	fn random(
 		ctx: _,
 		memory: _,
@@ -2001,10 +2011,11 @@ pub mod env {
 	/// `out_ptr`. This call overwrites it with the size of the value. If the available
 	/// space at `out_ptr` is less than the size of the value a trap is triggered.
 	///
-	/// # Deprecation
+	/// # Note
 	///
 	/// There is no longer a tombstone deposit. This function always returns `0`.
 	#[prefixed_alias]
+	#[deprecated]
 	fn tombstone_deposit(
 		ctx: _,
 		memory: _,
@@ -2030,6 +2041,7 @@ pub mod env {
 	/// The state rent functionality was removed. This is stub only exists for
 	/// backwards compatiblity
 	#[prefixed_alias]
+	#[deprecated]
 	fn restore_to(
 		ctx: _,
 		memory: _,
@@ -2054,6 +2066,7 @@ pub mod env {
 	/// backwards compatiblity
 	#[version(1)]
 	#[prefixed_alias]
+	#[deprecated]
 	fn restore_to(
 		ctx: _,
 		memory: _,
@@ -2065,6 +2078,59 @@ pub mod env {
 	) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
 		Ok(())
+	}
+
+	/// Was used to set rent allowance of the contract.
+	///
+	/// # Note
+	///
+	/// The state rent functionality was removed. This is stub only exists for
+	/// backwards compatiblity.
+	#[prefixed_alias]
+	#[deprecated]
+	fn set_rent_allowance(
+		ctx: _,
+		memory: _,
+		_value_ptr: u32,
+		_value_len: u32,
+	) -> Result<(), TrapReason> {
+		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
+		Ok(())
+	}
+
+	/// Was used to set rent allowance of the contract.
+	///
+	/// # Note
+	///
+	/// The state rent functionality was removed. This is stub only exists for
+	/// backwards compatiblity.
+	#[version(1)]
+	#[prefixed_alias]
+	#[deprecated]
+	fn set_rent_allowance(ctx: _, _memory: _, _value_ptr: u32) -> Result<(), TrapReason> {
+		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
+		Ok(())
+	}
+
+	/// Was used to store the rent allowance into the supplied buffer.
+	///
+	/// # Note
+	///
+	/// The state rent functionality was removed. This is stub only exists for
+	/// backwards compatiblity.
+	#[prefixed_alias]
+	#[deprecated]
+	fn rent_allowance(ctx: _, memory: _, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
+		ctx.charge_gas(RuntimeCosts::Balance)?;
+		let rent_allowance = <BalanceOf<E::T>>::max_value().encode();
+		Ok(ctx.write_sandbox_output(
+			memory,
+			out_ptr,
+			out_len_ptr,
+			&rent_allowance,
+			false,
+			already_charged,
+		)?)
 	}
 
 	/// Deposit a contract event with the data buffer and optional list of topics. There is a limit
@@ -2108,56 +2174,6 @@ pub mod env {
 		ctx.ext.deposit_event(topics, event_data);
 
 		Ok(())
-	}
-
-	/// Was used to set rent allowance of the contract.
-	///
-	/// # Note
-	///
-	/// The state rent functionality was removed. This is stub only exists for
-	/// backwards compatiblity.
-	#[prefixed_alias]
-	fn set_rent_allowance(
-		ctx: _,
-		memory: _,
-		_value_ptr: u32,
-		_value_len: u32,
-	) -> Result<(), TrapReason> {
-		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
-		Ok(())
-	}
-
-	/// Was used to set rent allowance of the contract.
-	///
-	/// # Note
-	///
-	/// The state rent functionality was removed. This is stub only exists for
-	/// backwards compatiblity.
-	#[version(1)]
-	#[prefixed_alias]
-	fn set_rent_allowance(ctx: _, _memory: _, _value_ptr: u32) -> Result<(), TrapReason> {
-		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
-		Ok(())
-	}
-
-	/// Was used to store the rent allowance into the supplied buffer.
-	///
-	/// # Note
-	///
-	/// The state rent functionality was removed. This is stub only exists for
-	/// backwards compatiblity.
-	#[prefixed_alias]
-	fn rent_allowance(ctx: _, memory: _, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
-		ctx.charge_gas(RuntimeCosts::Balance)?;
-		let rent_allowance = <BalanceOf<E::T>>::max_value().encode();
-		Ok(ctx.write_sandbox_output(
-			memory,
-			out_ptr,
-			out_len_ptr,
-			&rent_allowance,
-			false,
-			already_charged,
-		)?)
 	}
 
 	/// Stores the current block number of the current contract into the supplied buffer.

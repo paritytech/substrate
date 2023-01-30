@@ -19,7 +19,7 @@
 
 use super::*;
 
-use frame_benchmarking::{account, benchmarks, whitelist_account};
+use frame_benchmarking::v1::{account, benchmarks, whitelist_account};
 use frame_support::{
 	assert_noop, assert_ok,
 	traits::{Currency, EnsureOrigin, Get, OnInitialize, UnfilteredDispatchable},
