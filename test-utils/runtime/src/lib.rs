@@ -437,6 +437,13 @@ cfg_if! {
 
 #[derive(Clone, Eq, PartialEq, TypeInfo)]
 pub struct Runtime;
+// `metadata` method is implemented by `construct_runtime!` macro.
+impl Runtime {
+	#[allow(dead_code)]
+	fn metadata() -> Vec<u8> {
+		Default::default()
+	}
+}
 
 impl GetNodeBlockType for Runtime {
 	type NodeBlock = Block;
@@ -740,6 +747,14 @@ cfg_if! {
 				fn metadata() -> OpaqueMetadata {
 					unimplemented!()
 				}
+
+				fn metadata_at_version(_version: u32) -> Option<OpaqueMetadata> {
+						unimplemented!()
+				}
+
+				fn metadata_versions() -> sp_std::vec::Vec<u32> {
+						unimplemented!()
+				}
 			}
 
 			impl sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block> for Runtime {
@@ -1013,6 +1028,14 @@ cfg_if! {
 			impl sp_api::Metadata<Block> for Runtime {
 				fn metadata() -> OpaqueMetadata {
 					unimplemented!()
+				}
+
+				fn metadata_at_version(_version: u32) -> Option<OpaqueMetadata> {
+						unimplemented!()
+				}
+
+				fn metadata_versions() -> sp_std::vec::Vec<u32> {
+						unimplemented!()
 				}
 			}
 

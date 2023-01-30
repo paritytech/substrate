@@ -734,5 +734,13 @@ decl_runtime_apis! {
 	pub trait Metadata {
 		/// Returns the metadata of a runtime.
 		fn metadata() -> OpaqueMetadata;
+
+		/// Returns the metadata at a given version.
+		fn metadata_at_version(version: u32) -> Option<OpaqueMetadata>;
+
+		/// Returns the supported versions of metadata.
+		///
+		/// This can be used to call `metadata_at_version`.
+		fn metadata_versions() -> sp_std::vec::Vec<u32>;
 	}
 }
