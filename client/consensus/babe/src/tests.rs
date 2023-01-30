@@ -20,7 +20,6 @@
 
 use super::*;
 use authorship::claim_slot;
-use log::debug;
 use rand_chacha::{
 	rand_core::{RngCore, SeedableRng},
 	ChaChaRng,
@@ -35,9 +34,10 @@ use sp_application_crypto::key_types::BABE;
 use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
 use sp_consensus_babe::{
 	inherents::InherentDataProvider, make_transcript, make_transcript_data, AllowedSlots,
-	AuthorityPair, Slot,
+	AuthorityId, AuthorityPair, Slot,
 };
 use sp_consensus_slots::SlotDuration;
+use sp_consensus_vrf::schnorrkel::VRFOutput;
 use sp_core::crypto::Pair;
 use sp_keyring::Sr25519Keyring;
 use sp_keystore::{
@@ -553,52 +553,133 @@ fn sig_is_not_pre_digest() {
 }
 
 #[test]
-fn can_author_block() {
-	sp_tracing::try_init_simple();
+fn claim_epoch_slots() {
+	// We don't require the full claim information, thus as a shorter alias we're
+	// going to use a simple integer value. Generally not verbose enough, but good enough
+	// to be used within the narrow scope of a single test.
+	// 0 -> None (i.e. unable to claim the slot),
+	// 1 -> Primary
+	// 2 -> Secondary
+	// 3 -> Secondary with VRF
+	const EPOCH_DURATION: u64 = 10;
 
 	let authority = Sr25519Keyring::Alice;
 	let keystore = create_keystore(authority);
 
-	let mut i = 0;
-	let epoch = Epoch {
+	let mut epoch = Epoch {
 		start_slot: 0.into(),
 		authorities: vec![(authority.public().into(), 1)],
 		randomness: [0; 32],
 		epoch_index: 1,
-		duration: 100,
+		duration: EPOCH_DURATION,
 		config: BabeEpochConfiguration {
 			c: (3, 10),
 			allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 		},
 	};
 
-	let mut config = crate::BabeConfiguration {
-		slot_duration: 1000,
-		epoch_length: 100,
-		c: (3, 10),
-		authorities: Vec::new(),
-		randomness: [0; 32],
-		allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
+	let claim_slot_wrap = |s, e| match claim_slot(Slot::from(s as u64), &e, &keystore) {
+		None => 0,
+		Some((PreDigest::Primary(_), _)) => 1,
+		Some((PreDigest::SecondaryPlain(_), _)) => 2,
+		Some((PreDigest::SecondaryVRF(_), _)) => 3,
 	};
 
-	// with secondary slots enabled it should never be empty
-	match claim_slot(i.into(), &epoch, &keystore) {
-		None => i += 1,
-		Some(s) => debug!(target: LOG_TARGET, "Authored block {:?}", s.0),
-	}
+	// With secondary mechanism we should be able to claim all slots.
+	let claims: Vec<_> = (0..EPOCH_DURATION)
+		.into_iter()
+		.map(|slot| claim_slot_wrap(slot, epoch.clone()))
+		.collect();
+	assert_eq!(claims, [1, 2, 2, 1, 2, 2, 2, 2, 2, 1]);
 
-	// otherwise with only vrf-based primary slots we might need to try a couple
-	// of times.
-	config.allowed_slots = AllowedSlots::PrimarySlots;
-	loop {
-		match claim_slot(i.into(), &epoch, &keystore) {
-			None => i += 1,
-			Some(s) => {
-				debug!(target: LOG_TARGET, "Authored block {:?}", s.0);
-				break
-			},
-		}
-	}
+	// With secondary with VRF mechanism we should be able to claim all the slots.
+	epoch.config.allowed_slots = AllowedSlots::PrimaryAndSecondaryVRFSlots;
+	let claims: Vec<_> = (0..EPOCH_DURATION)
+		.into_iter()
+		.map(|slot| claim_slot_wrap(slot, epoch.clone()))
+		.collect();
+	assert_eq!(claims, [1, 3, 3, 1, 3, 3, 3, 3, 3, 1]);
+
+	// Otherwise with only vrf-based primary slots we are able to claim a subset of the slots.
+	epoch.config.allowed_slots = AllowedSlots::PrimarySlots;
+	let claims: Vec<_> = (0..EPOCH_DURATION)
+		.into_iter()
+		.map(|slot| claim_slot_wrap(slot, epoch.clone()))
+		.collect();
+	assert_eq!(claims, [1, 0, 0, 1, 0, 0, 0, 0, 0, 1]);
+}
+
+#[test]
+fn claim_vrf_check() {
+	let authority = Sr25519Keyring::Alice;
+	let keystore = create_keystore(authority);
+
+	let public = authority.public();
+
+	let epoch = Epoch {
+		start_slot: 0.into(),
+		authorities: vec![(public.into(), 1)],
+		randomness: [0; 32],
+		epoch_index: 1,
+		duration: 10,
+		config: BabeEpochConfiguration {
+			c: (3, 10),
+			allowed_slots: AllowedSlots::PrimaryAndSecondaryVRFSlots,
+		},
+	};
+
+	// We leverage the predictability of claim types given a constant randomness.
+
+	// We expect a Primary claim for slot 0
+
+	let pre_digest = match claim_slot(0.into(), &epoch, &keystore).unwrap().0 {
+		PreDigest::Primary(d) => d,
+		v => panic!("Unexpected pre-digest variant {:?}", v),
+	};
+	let transcript = make_transcript_data(&epoch.randomness.clone(), 0.into(), epoch.epoch_index);
+	let sign = SyncCryptoStore::sr25519_vrf_sign(&*keystore, AuthorityId::ID, &public, transcript)
+		.unwrap()
+		.unwrap();
+	assert_eq!(pre_digest.vrf_output, VRFOutput(sign.output));
+
+	// We expect a SecondaryVRF claim for slot 1
+	let pre_digest = match claim_slot(1.into(), &epoch, &keystore).unwrap().0 {
+		PreDigest::SecondaryVRF(d) => d,
+		v => panic!("Unexpected pre-digest variant {:?}", v),
+	};
+	let transcript = make_transcript_data(&epoch.randomness.clone(), 1.into(), epoch.epoch_index);
+	let sign = SyncCryptoStore::sr25519_vrf_sign(&*keystore, AuthorityId::ID, &public, transcript)
+		.unwrap()
+		.unwrap();
+	assert_eq!(pre_digest.vrf_output, VRFOutput(sign.output));
+
+	// Check that correct epoch index has been used if epochs are skipped (primary VRF)
+	let slot = Slot::from(103);
+	let claim = match claim_slot(slot, &epoch, &keystore).unwrap().0 {
+		PreDigest::Primary(d) => d,
+		v => panic!("Unexpected claim variant {:?}", v),
+	};
+	let fixed_epoch = epoch.clone_for_slot(slot);
+	let transcript = make_transcript_data(&epoch.randomness.clone(), slot, fixed_epoch.epoch_index);
+	let sign = SyncCryptoStore::sr25519_vrf_sign(&*keystore, AuthorityId::ID, &public, transcript)
+		.unwrap()
+		.unwrap();
+	assert_eq!(fixed_epoch.epoch_index, 11);
+	assert_eq!(claim.vrf_output, VRFOutput(sign.output));
+
+	// Check that correct epoch index has been used if epochs are skipped (secondary VRF)
+	let slot = Slot::from(100);
+	let pre_digest = match claim_slot(slot, &epoch, &keystore).unwrap().0 {
+		PreDigest::SecondaryVRF(d) => d,
+		v => panic!("Unexpected claim variant {:?}", v),
+	};
+	let fixed_epoch = epoch.clone_for_slot(slot);
+	let transcript = make_transcript_data(&epoch.randomness.clone(), slot, fixed_epoch.epoch_index);
+	let sign = SyncCryptoStore::sr25519_vrf_sign(&*keystore, AuthorityId::ID, &public, transcript)
+		.unwrap()
+		.unwrap();
+	assert_eq!(fixed_epoch.epoch_index, 11);
+	assert_eq!(pre_digest.vrf_output, VRFOutput(sign.output));
 }
 
 // Propose and import a new BABE block on top of the given parent.

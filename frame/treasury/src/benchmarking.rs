@@ -21,7 +21,7 @@
 
 use super::{Pallet as Treasury, *};
 
-use frame_benchmarking::{account, benchmarks_instance_pallet};
+use frame_benchmarking::v1::{account, benchmarks_instance_pallet};
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	ensure,

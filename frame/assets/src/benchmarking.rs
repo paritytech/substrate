@@ -20,7 +20,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_benchmarking::{
+use frame_benchmarking::v1::{
 	account, benchmarks_instance_pallet, whitelist_account, whitelisted_caller,
 };
 use frame_support::{
@@ -220,7 +220,7 @@ benchmarks_instance_pallet! {
 		let amount = T::Balance::from(100u32);
 	}: _(SystemOrigin::Signed(caller.clone()), asset_id, caller_lookup, amount)
 	verify {
-		assert_last_event::<T, I>(Event::Issued { asset_id: asset_id.into(), owner: caller, total_supply: amount }.into());
+		assert_last_event::<T, I>(Event::Issued { asset_id: asset_id.into(), owner: caller, amount }.into());
 	}
 
 	burn {
