@@ -25,7 +25,12 @@ pub mod v1 {
 	use pallet_stake_tracker::{ApprovalStake, BalanceOf, Pallet};
 	use pallet_staking::{Nominations, TemporaryMigrationLock, Validators};
 	use sp_runtime::Saturating;
-	use std::collections::BTreeMap;
+	use sp_std::collections::btree_map::BTreeMap;
+
+	#[cfg(feature = "try-runtime")]
+	use frame_election_provider_support::ReadOnlySortedListProvider;
+	#[cfg(feature = "try-runtime")]
+	use sp_std::vec::Vec;
 
 	/// Migration implementation that injects all validators into sorted list.
 	pub struct InjectValidatorsApprovalStakeIntoTargetList<T>(PhantomData<T>);
@@ -224,7 +229,6 @@ pub mod v1 {
 
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-			use frame_election_provider_support::ReadOnlySortedListProvider;
 			ensure!(Pallet::<T>::current_storage_version() == 0, "must upgrade linearly");
 
 			// A multi-block migration hack.
@@ -242,7 +246,6 @@ pub mod v1 {
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
-			use frame_election_provider_support::ReadOnlySortedListProvider;
 			// A multi-block migration hack.
 			if MigrationV1StateNominators::<T>::exists() {
 				return Ok(())
