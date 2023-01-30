@@ -383,7 +383,7 @@ impl Contains<RuntimeCall> for TestFilter {
 }
 
 parameter_types! {
-	pub const DeletionWeightLimit: Weight = Weight::from_ref_time(500_000_000_000);
+	pub const DeletionWeightLimit: Weight = GAS_LIMIT;
 	pub static UnstableInterface: bool = true;
 }
 
@@ -416,7 +416,7 @@ pub const BOB: AccountId32 = AccountId32::new([2u8; 32]);
 pub const CHARLIE: AccountId32 = AccountId32::new([3u8; 32]);
 pub const DJANGO: AccountId32 = AccountId32::new([4u8; 32]);
 
-pub const GAS_LIMIT: Weight = Weight::from_parts(100_000_000_000, 512 * 1024);
+pub const GAS_LIMIT: Weight = Weight::from_parts(100_000_000_000, 3 * 1024 * 1024);
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
