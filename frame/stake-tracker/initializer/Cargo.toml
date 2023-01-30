@@ -28,7 +28,14 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 
 [features]
 default = ["std"]
+
 std = [
     "pallet-staking/std",
     "pallet-stake-tracker/std",
+]
+
+try-runtime = [
+    "frame-support/try-runtime",
+    "pallet-staking/try-runtime",
+    "pallet-stake-tracker/try-runtime",
 ]

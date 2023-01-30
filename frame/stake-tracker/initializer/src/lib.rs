@@ -1,3 +1,5 @@
+#![cfg_attr(not(feature = "std"), no_std)]
+
 pub(crate) const LOG_TARGET: &str = "runtime::stake-tracker-initializer";
 
 #[macro_export]
