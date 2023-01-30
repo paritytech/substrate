@@ -1085,7 +1085,7 @@ pub(crate) mod tests {
 		BeefyWorker::<_, _, _, _, _, _, _, _, _>::new(worker_params)
 	}
 
-	#[cfg(notest)]
+	#[test]
 	fn vote_on_min_block_delta() {
 		let t = vote_target(1u32, Some(1), 1, 4);
 		assert_eq!(None, t);
@@ -1107,7 +1107,7 @@ pub(crate) mod tests {
 		assert_eq!(Some(18), t);
 	}
 
-	#[cfg(notest)]
+	#[test]
 	fn vote_on_power_of_two() {
 		let t = vote_target(1008u32, Some(1000), 1, 4);
 		assert_eq!(Some(1004), t);
@@ -1134,7 +1134,7 @@ pub(crate) mod tests {
 		assert_eq!(Some(513), t);
 	}
 
-	#[cfg(notest)]
+	#[test]
 	fn vote_on_target_block() {
 		let t = vote_target(1008u32, Some(1002), 1, 4);
 		assert_eq!(Some(1006), t);
@@ -1162,7 +1162,7 @@ pub(crate) mod tests {
 		assert_eq!(Some(1072), t);
 	}
 
-	#[cfg(notest)]
+	#[test]
 	fn vote_on_mandatory_block() {
 		let t = vote_target(1008u32, Some(1002), 1004, 4);
 		assert_eq!(Some(1004), t);
@@ -1177,9 +1177,12 @@ pub(crate) mod tests {
 		assert_eq!(Some(1072), t);
 	}
 
-	#[cfg(notest)]
-	fn should_vote_target() {
-		let mut oracle = VoterOracle::<Block, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature>::new(1);
+	fn should_vote_target<AuthId, TSignature> ()
+    where
+	        AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker + 'static,
+		TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
+    {
+		let mut oracle = VoterOracle::<Block, AuthId, TSignature>::new(1);
 
 		// rounds not initialized -> should vote: `None`
 		assert_eq!(oracle.voting_target(None, 1), None);
@@ -1216,12 +1219,25 @@ pub(crate) mod tests {
 		assert_eq!(oracle.voting_target(Some(1000), 1008), Some(1001));
 	}
 
-	#[cfg(notest)]
-	fn test_oracle_accepted_interval() {
-		let keys = &[Keyring::Alice];
-		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
+    #[test]
+    fn should_vote_target_with_ecdsa_keys() {
+	    should_vote_target::<ECDSAPublic, ECDSASignature>();
+	}
+    
+    #[test]
+    fn should_vote_target_with_ecdsa_n_bls_keys() {
+	    should_vote_target::<(ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature),>();
+    }
 
-		let mut oracle = VoterOracle::<Block, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature>::new(1);
+	fn test_oracle_accepted_interval<AuthId, TSignature> ()
+    where
+	        AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker + 'static,
+		TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
+    {
+		let keys = &[Keyring::Alice];
+		let validator_set = ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(keys), 0).unwrap();
+
+		let mut oracle = VoterOracle::<Block, AuthId, TSignature>::new(1);
 
 		// rounds not initialized -> should accept votes: `None`
 		assert!(oracle.accepted_interval(1).is_err());
@@ -1278,8 +1294,20 @@ pub(crate) mod tests {
 		assert_eq!(oracle.accepted_interval(session_four + 10), Ok((session_four, session_four)));
 	}
 
-	#[cfg(notest)]
-	fn extract_authorities_change_digest() {
+    #[test]
+    fn test_oracle_accepted_interval_with_ecdsa_keys() {
+	    test_oracle_accepted_interval::<ECDSAPublic, ECDSASignature>();
+	}
+    
+    #[test]
+    fn test_oracle_accepted_interval_with_ecdsa_n_bls_keys() {
+	    test_oracle_accepted_interval::<(ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature),>();
+    }
+
+	fn extract_authorities_change_digest<AuthId,> ()
+    where
+	    AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker + 'static,
+    {
 		let mut header = Header::new(
 			1u32.into(),
 			Default::default(),
@@ -1289,21 +1317,32 @@ pub(crate) mod tests {
 		);
 
 		// verify empty digest shows nothing
-		assert!(find_authorities_change::<Block, ecdsa_crypto::AuthorityId>(&header).is_none());
+		assert!(find_authorities_change::<Block, AuthId>(&header).is_none());
 
 		let peers = &[Keyring::One, Keyring::Two];
 		let id = 42;
-		let validator_set = ValidatorSet::new(make_beefy_ids(peers), id).unwrap();
+		let validator_set = ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(peers), id).unwrap();
 		header.digest_mut().push(DigestItem::Consensus(
 			BEEFY_ENGINE_ID,
-			ConsensusLog::<ecdsa_crypto::AuthorityId>::AuthoritiesChange(validator_set.clone()).encode(),
+			ConsensusLog::<AuthId>::AuthoritiesChange(validator_set.clone()).encode(),
 		));
 
 		// verify validator set is correctly extracted from digest
-		let extracted = find_authorities_change::<Block, ecdsa_crypto::AuthorityId>(&header);
+		let extracted = find_authorities_change::<Block, AuthId>(&header);
 		assert_eq!(extracted, Some(validator_set));
-	}
 	
+    }
+    
+    #[test]
+    fn extract_authorities_change_digest_with_ecdsa_keys() {
+	    extract_authorities_change_digest::<ECDSAPublic>();
+	}
+    
+    #[test]
+    fn extract_authorities_change_digest_with_ecdsa_n_bls_keys() {
+	    extract_authorities_change_digest::<(ECDSAPublic,BLSPublic)>();
+    }
+
 	fn keystore_vs_validator_set<TKeyPair, AuthId,
 		TSignature,
 		BKS,		

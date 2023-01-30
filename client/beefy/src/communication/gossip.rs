@@ -246,13 +246,13 @@ where
 	}
 }
 
-#[cfg(notest)]
+#[cfg(test)]
 mod tests {
 	use sc_keystore::LocalKeystore;
 	use sc_network_test::Block;
 	use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 
-	use crate::keystore::{tests::Keyring, BeefyKeystore, BeefyECDSAKeystore};
+	use crate::keystore::{tests::{Keyring, GenericKeyring}, BeefyKeystore, BeefyECDSAKeystore};
 	use beefy_primitives::{	ecdsa_crypto,
 		known_payloads, Commitment, MmrRootHash, Payload, VoteMessage, KEY_TYPE,
 	};
@@ -355,13 +355,13 @@ mod tests {
 		}
 	}
 
-	fn sign_commitment<BN: Encode, TKeyring: Keyring>(who: &TKeyring, commitment: &Commitment<BN>) -> ecdsa_crypto::Signature {
+	fn sign_commitment<BN: Encode>(who: &Keyring, commitment: &Commitment<BN>) -> ecdsa_crypto::Signature {
 		let store: SyncCryptoStorePtr = std::sync::Arc::new(LocalKeystore::in_memory());
-		SyncCryptoStore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&who.to_seed())).unwrap();
+		SyncCryptoStore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::to_seed(*who))).unwrap();
 
 		let beefy_keystore = BeefyECDSAKeystore::new(store);
 
-		beefy_keystore.sign(&who.public(), &commitment.encode()).unwrap()
+		beefy_keystore.sign(&<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::public(*who), &commitment.encode()).unwrap()
 	}
 
 	fn dummy_vote(block_number: u64) -> VoteMessage<u64, ecdsa_crypto::Public, ecdsa_crypto::Signature> {
@@ -372,7 +372,7 @@ mod tests {
 		let commitment = Commitment { payload, block_number, validator_set_id: 0 };
 		let signature = sign_commitment(&Keyring::Alice, &commitment);
 
-		VoteMessage { commitment, id: Keyring::Alice.public(), signature }
+		VoteMessage { commitment, id: <Keyring as GenericKeyring<ecdsa_crypto::Pair>>::public(Keyring::Alice), signature }
 	}
 
 	#[test]

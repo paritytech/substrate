@@ -74,7 +74,7 @@ pub fn beefy_peers_set_config(
 	cfg
 }
 
-#[cfg(notest)]
+#[cfg(test)]
 mod tests {
 	use super::*;
 
