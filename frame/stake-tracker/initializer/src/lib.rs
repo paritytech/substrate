@@ -224,7 +224,7 @@ pub mod v1 {
 
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<(), &'static str> {
-			ensure!(StorageVersion::<T>::get() == "0", "must upgrade linearly");
+			ensure!(StorageVersion::<T>::get() == 0, "must upgrade linearly");
 
 			// A multi-block migration hack.
 			if MigrationV1StateNominators::exists() {
@@ -250,7 +250,7 @@ pub mod v1 {
 					Validators::<T>::count(),
 				"TargetList must be the same length as the number of validators"
 			);
-			ensure!(StorageVersion::<T>::get() == "1", "must upgrade linearly");
+			ensure!(StorageVersion::<T>::get() == 1, "must upgrade linearly");
 			Ok(())
 		}
 	}
