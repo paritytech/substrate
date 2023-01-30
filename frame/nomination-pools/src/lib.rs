@@ -1331,7 +1331,7 @@ pub mod pallet {
 	pub type ReversePoolIdLookup<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, PoolId, OptionQuery>;
 
-	/// Map from a pool member account to their preference regarding reward payout
+	/// Map from a pool member account to their preference regarding reward payout.
 	#[pallet::storage]
 	pub type RewardClaimPermission<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, RewardClaim, ValueQuery>;
