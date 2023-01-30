@@ -25,12 +25,10 @@ pub mod v1 {
 	use pallet_stake_tracker::{ApprovalStake, BalanceOf, Pallet};
 	use pallet_staking::{Nominations, TemporaryMigrationLock, Validators};
 	use sp_runtime::Saturating;
-	use sp_std::collections::btree_map::BTreeMap;
+	use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 	#[cfg(feature = "try-runtime")]
 	use frame_election_provider_support::ReadOnlySortedListProvider;
-	#[cfg(feature = "try-runtime")]
-	use sp_std::vec::Vec;
 
 	/// Migration implementation that injects all validators into sorted list.
 	pub struct InjectValidatorsApprovalStakeIntoTargetList<T>(PhantomData<T>);
