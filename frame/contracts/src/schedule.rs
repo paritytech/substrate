@@ -619,7 +619,12 @@ impl<T: Config> Default for HostFnWeights<T> {
 			block_number: cost_batched!(seal_block_number),
 			now: cost_batched!(seal_now),
 			weight_to_fee: cost_batched!(seal_weight_to_fee),
-			gas: cost_batched!(seal_gas),
+			// Manually remove proof size from basic block cost.
+			//
+			// Due to imperfect benchmarking some host functions incur a small
+			// amount if proof size. Usually this is ok. However, charging a basic block is such
+			// a frequent operation that this would be a vast overestimation.
+			gas: cost_batched!(seal_gas).set_proof_size(0),
 			input: cost_batched!(seal_input),
 			input_per_byte: cost_byte_batched!(seal_input_per_kb),
 			r#return: cost!(seal_return),
