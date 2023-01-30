@@ -103,6 +103,14 @@ pub struct PalletCmd {
 	#[arg(long)]
 	pub output_analysis: Option<String>,
 
+	/// Which analysis function to use when analyzing measured proof sizes.
+	#[arg(long, default_value("median-slopes"))]
+	pub output_pov_analysis: Option<String>,
+
+	/// The PoV estimation mode of a benchmark if no `pov_mode` attribute is present.
+	#[arg(long, default_value("max-encoded-len"), value_enum)]
+	pub default_pov_mode: command::PovEstimationMode,
+
 	/// Set the heap pages while running benchmarks. If not set, the default value from the client
 	/// is used.
 	#[arg(long)]
@@ -116,10 +124,6 @@ pub struct PalletCmd {
 	/// construction.
 	#[arg(long)]
 	pub extra: bool,
-
-	/// Estimate PoV size.
-	#[arg(long)]
-	pub record_proof: bool,
 
 	#[allow(missing_docs)]
 	#[clap(flatten)]
@@ -166,6 +170,25 @@ pub struct PalletCmd {
 	/// template for that purpose.
 	#[arg(long)]
 	pub no_storage_info: bool,
+
+	/// The assumed default maximum size of any `StorageMap`.
+	///
+	/// When the maximum size of a map is not defined by the runtime developer,
+	/// this value is used as a worst case scenario. It will affect the calculated worst case
+	/// PoV size for accessing a value in a map, since the PoV will need to include the trie
+	/// nodes down to the underlying value.
+	#[clap(long = "map-size", default_value = "1000000")]
+	pub worst_case_map_values: u32,
+
+	/// Adjust the PoV estimation by adding additional trie layers to it.
+	///
+	/// This should be set to `log16(n)` where `n` is the number of top-level storage items in the
+	/// runtime, eg. `StorageMap`s and `StorageValue`s. A value of 2 to 3 is usually sufficient.
+	/// Each layer will result in an additional 495 bytes PoV per distinct top-level access.
+	/// Therefore multiple `StorageMap` accesses only suffer from this increase once. The exact
+	/// number of storage items depends on the runtime and the deployed pallets.
+	#[clap(long, default_value = "0")]
+	pub additional_trie_layers: u8,
 
 	/// A path to a `.json` file with existing benchmark results generated with `--json` or
 	/// `--json-file`. When specified the benchmarks are not actually executed, and the data for

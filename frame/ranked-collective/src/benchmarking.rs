@@ -21,7 +21,7 @@ use super::*;
 #[allow(unused_imports)]
 use crate::Pallet as RankedCollective;
 
-use frame_benchmarking::{account, benchmarks_instance_pallet, whitelisted_caller};
+use frame_benchmarking::v1::{account, benchmarks_instance_pallet, whitelisted_caller};
 use frame_support::{assert_ok, dispatch::UnfilteredDispatchable};
 use frame_system::RawOrigin as SystemOrigin;
 

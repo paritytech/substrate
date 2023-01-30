@@ -1321,7 +1321,7 @@ impl<T: Config> Pallet<T> {
 	/// Another potential use-case could be for the `on_initialize` and `on_finalize` hooks.
 	pub fn register_extra_weight_unchecked(weight: Weight, class: DispatchClass) {
 		BlockWeight::<T>::mutate(|current_weight| {
-			current_weight.add(weight, class);
+			current_weight.accrue(weight, class);
 		});
 	}
 

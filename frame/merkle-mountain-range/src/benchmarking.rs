@@ -20,7 +20,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use crate::*;
-use frame_benchmarking::benchmarks_instance_pallet;
+use frame_benchmarking::v1::benchmarks_instance_pallet;
 use frame_support::traits::OnInitialize;
 
 benchmarks_instance_pallet! {
