@@ -233,8 +233,7 @@ impl<T: Config> Token<T> for CodeToken {
 		match *self {
 			Reinstrument(len) => T::WeightInfo::reinstrument(len),
 			Load(len) => T::WeightInfo::call_with_code_per_byte(len)
-				.saturating_sub(T::WeightInfo::call_with_code_per_byte(0))
-				.set_proof_size(len.into()),
+				.saturating_sub(T::WeightInfo::call_with_code_per_byte(0)),
 		}
 	}
 }
