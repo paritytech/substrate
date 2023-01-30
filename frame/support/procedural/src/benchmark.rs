@@ -28,8 +28,9 @@ use syn::{
 	punctuated::Punctuated,
 	spanned::Spanned,
 	token::{Colon2, Comma, Gt, Lt, Paren},
-	Attribute, Error, Expr, ExprBlock, ExprCall, ExprPath, FnArg, Item, ItemFn, ItemMod, LitInt,
-	Pat, Path, PathArguments, PathSegment, Result, Stmt, Token, Type, WhereClause,
+	Attribute, Error, Expr, ExprBlock, ExprCall, ExprPath, FnArg, GenericArgument, Item, ItemFn,
+	ItemMod, LitInt, Pat, Path, PathArguments, PathSegment, Result, ReturnType, Stmt, Token, Type,
+	TypePath, TypeTuple, WhereClause,
 };
 
 mod keywords {
@@ -37,10 +38,12 @@ mod keywords {
 
 	custom_keyword!(benchmark);
 	custom_keyword!(benchmarks);
+	custom_keyword!(BenchmarkError);
 	custom_keyword!(block);
 	custom_keyword!(extra);
 	custom_keyword!(extrinsic_call);
 	custom_keyword!(skip_meta);
+	custom_keyword!(Result);
 }
 
 /// This represents the raw parsed data for a param definition such as `x: Linear<10, 20>`.
@@ -153,6 +156,24 @@ impl BenchmarkDef {
 	/// Constructs a [`BenchmarkDef`] by traversing an existing [`ItemFn`] node.
 	pub fn from(item_fn: &ItemFn, extra: bool, skip_meta: bool) -> Result<BenchmarkDef> {
 		let mut params: Vec<ParamDef> = Vec::new();
+
+		// parsing for non `()` return type (only allow `Result<(), BenchmarkError>`)
+		if let ReturnType::Type(_, typ) = &item_fn.sig.output {
+			let Type::Path(TypePath { path, qself: _ }) = &**typ else { panic!("bad1") };
+			let Some(segment) = path.segments.last() else { panic!("bad2") };
+			let _: keywords::Result = syn::parse(segment.ident.to_token_stream().into())?;
+			let PathArguments::AngleBracketed(args) = &segment.arguments else { panic!("bad3") };
+			if args.args.len() != 2 {
+				panic!("bad8")
+			}
+			let Some(first_arg) = args.args.first() else { panic!("bad4") };
+			let GenericArgument::Type(Type::Tuple(TypeTuple { paren_token: _, elems })) = first_arg else { panic!("bad5") };
+			if !elems.is_empty() {
+				panic!("bad6")
+			}
+			let Some(second_arg) = args.args.last() else { panic!("bad7") };
+			let _: keywords::BenchmarkError = syn::parse(second_arg.to_token_stream().into())?;
+		}
 
 		// parse params such as "x: Linear<0, 1>"
 		for arg in &item_fn.sig.inputs {
