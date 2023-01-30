@@ -223,12 +223,13 @@ pub mod v1 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<(), &'static str> {
-			ensure!(StorageVersion::<T>::get() == 0, "must upgrade linearly");
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+			use frame_election_provider_support::ReadOnlySortedListProvider;
+			ensure!(Pallet::<T>::current_storage_version() == 0, "must upgrade linearly");
 
 			// A multi-block migration hack.
-			if MigrationV1StateNominators::exists() {
-				return Ok(())
+			if MigrationV1StateNominators::<T>::exists() {
+				return Ok(Vec::new())
 			}
 
 			ensure!(
@@ -236,13 +237,14 @@ pub mod v1 {
 				"must be run on an empty TargetList instance"
 			);
 
-			Ok(())
+			Ok(Vec::new())
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {
+		fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
+			use frame_election_provider_support::ReadOnlySortedListProvider;
 			// A multi-block migration hack.
-			if MigrationV1StateNominators::exists() {
+			if MigrationV1StateNominators::<T>::exists() {
 				return Ok(())
 			}
 			ensure!(
@@ -250,7 +252,7 @@ pub mod v1 {
 					Validators::<T>::count(),
 				"TargetList must be the same length as the number of validators"
 			);
-			ensure!(StorageVersion::<T>::get() == 1, "must upgrade linearly");
+			ensure!(Pallet::<T>::current_storage_version() == 1, "must upgrade linearly");
 			Ok(())
 		}
 	}
