@@ -32,7 +32,6 @@ use self::{
 use crate::{
 	exec::{AccountIdOf, FixSizedKey, VarSizedKey},
 	schedule::{API_BENCHMARK_BATCH_SIZE, INSTR_BENCHMARK_BATCH_SIZE},
-	storage::Storage,
 	wasm::CallFlags,
 	Pallet as Contracts, *,
 };
@@ -133,14 +132,8 @@ where
 	fn store(&self, items: &Vec<(FixSizedKey, Vec<u8>)>) -> Result<(), &'static str> {
 		let info = self.info()?;
 		for item in items {
-			Storage::<T>::write(
-				&info.trie_id,
-				&item.0 as &FixSizedKey,
-				Some(item.1.clone()),
-				None,
-				false,
-			)
-			.map_err(|_| "Failed to write storage to restoration dest")?;
+			info.write(&item.0 as &FixSizedKey, Some(item.1.clone()), None, false)
+				.map_err(|_| "Failed to write storage to restoration dest")?;
 		}
 		<ContractInfoOf<T>>::insert(&self.account_id, info);
 		Ok(())
@@ -207,7 +200,7 @@ benchmarks! {
 	// The base weight consumed on processing contracts deletion queue.
 	#[pov_mode = Ignored]
 	on_process_deletion_queue_batch {}: {
-		Storage::<T>::process_deletion_queue_batch(Weight::MAX)
+		ContractInfo::<T>::process_deletion_queue_batch(Weight::MAX)
 	}
 
 	#[skip_meta]
@@ -215,9 +208,9 @@ benchmarks! {
 	on_initialize_per_trie_key {
 		let k in 0..1024;
 		let instance = Contract::<T>::with_storage(WasmModule::dummy(), k, T::Schedule::get().limits.payload_len)?;
-		Storage::<T>::queue_trie_for_deletion(&instance.info()?)?;
+		instance.info()?.queue_trie_for_deletion()?;
 	}: {
-		Storage::<T>::process_deletion_queue_batch(Weight::MAX)
+		ContractInfo::<T>::process_deletion_queue_batch(Weight::MAX)
 	}
 
 	#[pov_mode = Ignored]
@@ -225,11 +218,11 @@ benchmarks! {
 		let q in 0..1024.min(T::DeletionQueueDepth::get());
 		for i in 0 .. q {
 			let instance = Contract::<T>::with_index(i, WasmModule::dummy(), vec![])?;
-			Storage::<T>::queue_trie_for_deletion(&instance.info()?)?;
+			instance.info()?.queue_trie_for_deletion()?;
 			ContractInfoOf::<T>::remove(instance.account_id);
 		}
 	}: {
-		Storage::<T>::process_deletion_queue_batch(Weight::MAX)
+		ContractInfo::<T>::process_deletion_queue_batch(Weight::MAX)
 	}
 
 	// This benchmarks the additional weight that is charged when a contract is executed the
@@ -293,18 +286,16 @@ benchmarks! {
 		let addr = Contracts::<T>::contract_address(&caller, &hash, &input, &salt);
 	}: _(origin, value, Weight::MAX, None, code, input, salt)
 	verify {
-		// the contract itself does not trigger any reserves
-		let deposit = T::Currency::reserved_balance(&addr);
+		let deposit_account = Contract::<T>::address_info(&addr)?.deposit_account().clone();
+		let deposit = T::Currency::free_balance(&deposit_account);
 		// uploading the code reserves some balance in the callers account
 		let code_deposit = T::Currency::reserved_balance(&caller);
 		assert_eq!(
 			T::Currency::free_balance(&caller),
-			caller_funding::<T>() - value - deposit - code_deposit,
+			caller_funding::<T>() - value - deposit - code_deposit - Pallet::<T>::min_balance(),
 		);
 		// contract has the full value
-		assert_eq!(T::Currency::free_balance(&addr), value);
-		// instantiate should leave a contract
-		Contract::<T>::address_info(&addr)?;
+		assert_eq!(T::Currency::free_balance(&addr), value + Pallet::<T>::min_balance());
 	}
 
 	// Instantiate uses a dummy contract constructor to measure the overhead of the instantiate.
@@ -325,14 +316,15 @@ benchmarks! {
 		Contracts::<T>::store_code_raw(code, caller.clone())?;
 	}: _(origin, value, Weight::MAX, None, hash, input, salt)
 	verify {
-		// the contract itself does not trigger any reserves
-		let deposit = T::Currency::reserved_balance(&addr);
+		let deposit_account = Contract::<T>::address_info(&addr)?.deposit_account().clone();
+		let deposit = T::Currency::free_balance(&deposit_account);
 		// value was removed from the caller
-		assert_eq!(T::Currency::free_balance(&caller), caller_funding::<T>() - value - deposit);
+		assert_eq!(
+			T::Currency::free_balance(&caller),
+			caller_funding::<T>() - value - deposit - Pallet::<T>::min_balance(),
+		);
 		// contract has the full value
-		assert_eq!(T::Currency::free_balance(&addr), value);
-		// instantiate should leave a contract
-		Contract::<T>::address_info(&addr)?;
+		assert_eq!(T::Currency::free_balance(&addr), value + Pallet::<T>::min_balance());
 	}
 
 	// We just call a dummy contract to measure the overhead of the call extrinsic.
@@ -348,18 +340,19 @@ benchmarks! {
 		let instance = Contract::<T>::with_caller(
 			whitelisted_caller(), WasmModule::dummy(), vec![],
 		)?;
+		let deposit_account = instance.info()?.deposit_account().clone();
 		let value = Pallet::<T>::min_balance();
 		let origin = RawOrigin::Signed(instance.caller.clone());
 		let callee = instance.addr.clone();
 		let before = T::Currency::free_balance(&instance.account_id);
+		let before_deposit = T::Currency::free_balance(&deposit_account);
 	}: _(origin, callee, value, Weight::MAX, None, data)
 	verify {
-		// the contract itself does not trigger any reserves
-		let deposit = T::Currency::reserved_balance(&instance.account_id);
+		let deposit = T::Currency::free_balance(&deposit_account);
 		// value and value transfered via call should be removed from the caller
 		assert_eq!(
 			T::Currency::free_balance(&instance.caller),
-			caller_funding::<T>() - instance.value - value - deposit,
+			caller_funding::<T>() - instance.value - value - deposit - Pallet::<T>::min_balance(),
 		);
 		// contract should have received the value
 		assert_eq!(T::Currency::free_balance(&instance.account_id), before + value);
@@ -798,14 +791,16 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
+		let deposit_account = instance.info()?.deposit_account().clone();
 		assert_eq!(T::Currency::total_balance(&beneficiary), 0u32.into());
-		assert_eq!(T::Currency::free_balance(&instance.account_id), Pallet::<T>::min_balance());
-		assert_ne!(T::Currency::reserved_balance(&instance.account_id), 0u32.into());
+		assert_eq!(T::Currency::free_balance(&instance.account_id), Pallet::<T>::min_balance() * 2u32.into());
+		assert_ne!(T::Currency::free_balance(&deposit_account), 0u32.into());
 	}: call(origin, instance.addr.clone(), 0u32.into(), Weight::MAX, None, vec![])
 	verify {
 		if r > 0 {
 			assert_eq!(T::Currency::total_balance(&instance.account_id), 0u32.into());
-			assert_eq!(T::Currency::total_balance(&beneficiary), Pallet::<T>::min_balance());
+			assert_eq!(T::Currency::total_balance(&deposit_account), 0u32.into());
+			assert_eq!(T::Currency::total_balance(&beneficiary), Pallet::<T>::min_balance() * 2u32.into());
 		}
 	}
 
@@ -980,8 +975,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		for key in keys {
-			Storage::<T>::write(
-				&info.trie_id,
+			info.write(
 				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
@@ -1029,8 +1023,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		for key in keys {
-			Storage::<T>::write(
-				&info.trie_id,
+			info.write(
 				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
@@ -1078,8 +1071,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		for key in keys {
-			Storage::<T>::write(
-				&info.trie_id,
+			info.write(
 				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![42u8; (n * 2048) as usize]), // value_len increments by 2kb up to max payload_len
 				None,
@@ -1129,8 +1121,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		for key in keys {
-			Storage::<T>::write(
-				&info.trie_id,
+			info.write(
 				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
@@ -1177,8 +1168,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		for key in keys {
-			Storage::<T>::write(
-				&info.trie_id,
+			info.write(
 				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![42u8; (n * 2048) as usize]), // value_len increments by 2kb up to max payload_len
 				None,
@@ -1232,8 +1222,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		for key in keys {
-			Storage::<T>::write(
-				&info.trie_id,
+			info.write(
 				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
@@ -1287,8 +1276,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		for key in keys {
-			Storage::<T>::write(
-				&info.trie_id,
+			info.write(
 				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![42u8; (n * 2048) as usize]), // value_len increments by 2kb up to max payload_len
 				None,
@@ -1337,8 +1325,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		for key in keys {
-			Storage::<T>::write(
-				&info.trie_id,
+			info.write(
 				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
@@ -1385,8 +1372,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		for key in keys {
-			Storage::<T>::write(
-				&info.trie_id,
+			info.write(
 				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![42u8; (n * 2048) as usize]), // value_len increments by 2kb up to max payload_len
 				None,
@@ -1440,8 +1426,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		for key in keys {
-			Storage::<T>::write(
-				&info.trie_id,
+			info.write(
 				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
@@ -1495,8 +1480,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		for key in keys {
-			Storage::<T>::write(
-				&info.trie_id,
+			info.write(
 				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![42u8; (n * 2048) as usize]), // value_len increments by 2kb up to max payload_len
 				None,
@@ -1825,7 +1809,7 @@ benchmarks! {
 			.. Default::default()
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
-		instance.set_balance(value * (r * API_BENCHMARK_BATCH_SIZE + 1).into());
+		instance.set_balance((value + Pallet::<T>::min_balance()) * (r * API_BENCHMARK_BATCH_SIZE + 1).into());
 		let origin = RawOrigin::Signed(instance.caller.clone());
 		let callee = instance.addr.clone();
 		let addresses = hashes
@@ -1938,7 +1922,7 @@ benchmarks! {
 			.. Default::default()
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
-		instance.set_balance(value * (API_BENCHMARK_BATCH_SIZE + 1).into());
+		instance.set_balance((value + Pallet::<T>::min_balance()) * (API_BENCHMARK_BATCH_SIZE + 1).into());
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 

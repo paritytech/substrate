@@ -17,9 +17,9 @@
 
 use crate::{
 	gas::GasMeter,
-	storage::{self, Storage, WriteOutcome},
+	storage::{self, DepositAccount, WriteOutcome},
 	BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, DebugBufferVec, Determinism, Error,
-	Event, Nonce, Pallet as Contracts, Schedule,
+	Event, Nonce, Pallet as Contracts, Schedule, System,
 };
 use frame_support::{
 	crypto::ecdsa::ECDSAExt,
@@ -34,7 +34,10 @@ use pallet_contracts_primitives::ExecReturnValue;
 use smallvec::{Array, SmallVec};
 use sp_core::ecdsa::Public as ECDSAPublic;
 use sp_io::{crypto::secp256k1_ecdsa_recover_compressed, hashing::blake2_256};
-use sp_runtime::traits::{Convert, Hash};
+use sp_runtime::{
+	traits::{CheckedAdd, Convert, Hash},
+	ArithmeticError,
+};
 use sp_std::{marker::PhantomData, mem, prelude::*};
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
@@ -492,7 +495,7 @@ enum CachedContract<T: Config> {
 	///
 	/// In this case a reload is neither allowed nor possible. Please note that recursive
 	/// calls cannot remove a contract as this is checked and denied.
-	Terminated,
+	Terminated(DepositAccount<T>),
 }
 
 impl<T: Config> CachedContract<T> {
@@ -511,6 +514,15 @@ impl<T: Config> CachedContract<T> {
 			Some(contract)
 		} else {
 			None
+		}
+	}
+
+	/// Returns `Some` iff the contract is not `Cached::Invalidated`.
+	fn deposit_account(&self) -> Option<&DepositAccount<T>> {
+		match self {
+			CachedContract::Cached(contract) => Some(contract.deposit_account()),
+			CachedContract::Terminated(deposit_account) => Some(&deposit_account),
+			CachedContract::Invalidated => None,
 		}
 	}
 }
@@ -591,7 +603,9 @@ impl<T: Config> CachedContract<T> {
 	/// Terminate and return the contract info.
 	fn terminate(&mut self, account_id: &T::AccountId) -> ContractInfo<T> {
 		self.load(account_id);
-		get_cached_or_panic_after_load!(mem::replace(self, Self::Terminated))
+		let contract = get_cached_or_panic_after_load!(self);
+		let deposit_account = contract.deposit_account().clone();
+		get_cached_or_panic_after_load!(mem::replace(self, Self::Terminated(deposit_account)))
 	}
 }
 
@@ -751,9 +765,7 @@ where
 						input_data,
 						salt,
 					);
-					let trie_id = Storage::<T>::generate_trie_id(&account_id, nonce);
-					let contract =
-						Storage::<T>::new_contract(&account_id, trie_id, *executable.code_hash())?;
+					let contract = ContractInfo::new(&account_id, nonce, *executable.code_hash())?;
 					(
 						account_id,
 						contract,
@@ -838,16 +850,24 @@ where
 			// We need to charge the storage deposit before the initial transfer so that
 			// it can create the account in case the initial transfer is < ed.
 			if entry_point == ExportedFunction::Constructor {
+				let caller = self.caller().clone();
 				let frame = top_frame_mut!(self);
-				frame.nested_storage.charge_instantiate(
-					&self.origin,
+				frame
+					.nested_storage
+					.charge_instantiate(&self.origin, frame.contract_info.get(&frame.account_id))?;
+				Self::transfer(
+					ExistenceRequirement::KeepAlive,
+					&caller,
 					&frame.account_id,
-					frame.contract_info.get(&frame.account_id),
+					Contracts::<T>::min_balance()
+						.checked_add(&frame.value_transferred)
+						.ok_or(ArithmeticError::Overflow)?,
 				)?;
+				System::<T>::inc_consumers(&frame.account_id)?;
+			} else {
+				// Every non delegate call or instantiate also optionally transfers the balance.
+				self.initial_transfer()?;
 			}
-
-			// Every non delegate call or instantiate also optionally transfers the balance.
-			self.initial_transfer()?;
 
 			// Call into the wasm blob.
 			let output = executable
@@ -873,7 +893,7 @@ where
 			match (entry_point, delegated_code_hash) {
 				(ExportedFunction::Constructor, _) => {
 					// It is not allowed to terminate a contract inside its constructor.
-					if matches!(frame.contract_info, CachedContract::Terminated) {
+					if matches!(frame.contract_info, CachedContract::Terminated(_)) {
 						return Err(Error::<T>::TerminatedInConstructor.into())
 					}
 
@@ -965,8 +985,18 @@ where
 			// in its contract info. The load is necessary to to pull it from storage in case
 			// it was invalidated.
 			frame.contract_info.load(account_id);
+			let deposit_account = frame
+				.contract_info
+				.deposit_account()
+				.expect(
+					"Is only `None` when the info is invalidated.
+				We just re-loaded from storage which either makes the state `Cached` or `Terminated`.
+				qed",
+				)
+				.clone();
 			let mut contract = frame.contract_info.into_contract();
-			prev.nested_storage.absorb(frame.nested_storage, account_id, contract.as_mut());
+			prev.nested_storage
+				.absorb(frame.nested_storage, deposit_account, contract.as_mut());
 
 			// In case the contract wasn't terminated we need to persist changes made to it.
 			if let Some(contract) = contract {
@@ -1001,10 +1031,14 @@ where
 			if !persist {
 				return
 			}
+			let deposit_account = self.first_frame.contract_info.deposit_account().expect(
+				"Is only `None` when the info is invalidated. The first frame can't be invalidated.
+				qed",
+			).clone();
 			let mut contract = self.first_frame.contract_info.as_contract();
 			self.storage_meter.absorb(
 				mem::take(&mut self.first_frame.nested_storage),
-				&self.first_frame.account_id,
+				deposit_account,
 				contract.as_deref_mut(),
 			);
 			if let Some(contract) = contract {
@@ -1182,19 +1216,21 @@ where
 	}
 
 	fn terminate(&mut self, beneficiary: &AccountIdOf<Self::T>) -> Result<(), DispatchError> {
+		use frame_support::traits::fungible::Inspect;
 		if self.is_recursive() {
 			return Err(Error::<T>::TerminatedWhileReentrant.into())
 		}
 		let frame = self.top_frame_mut();
 		let info = frame.terminate();
 		frame.nested_storage.terminate(&info);
-		Storage::<T>::queue_trie_for_deletion(&info)?;
-		<Stack<'a, T, E>>::transfer(
-			ExistenceRequirement::AllowDeath,
+		System::<T>::dec_consumers(&frame.account_id);
+		T::Currency::transfer(
 			&frame.account_id,
 			beneficiary,
-			T::Currency::free_balance(&frame.account_id),
+			T::Currency::reducible_balance(&frame.account_id, false),
+			ExistenceRequirement::AllowDeath,
 		)?;
+		info.queue_trie_for_deletion()?;
 		ContractInfoOf::<T>::remove(&frame.account_id);
 		E::remove_user(info.code_hash);
 		Contracts::<T>::deposit_event(
@@ -1212,19 +1248,19 @@ where
 	}
 
 	fn get_storage(&mut self, key: &FixSizedKey) -> Option<Vec<u8>> {
-		Storage::<T>::read(&self.top_frame_mut().contract_info().trie_id, key)
+		self.top_frame_mut().contract_info().read(key)
 	}
 
 	fn get_storage_transparent(&mut self, key: &VarSizedKey<T>) -> Option<Vec<u8>> {
-		Storage::<T>::read(&self.top_frame_mut().contract_info().trie_id, key)
+		self.top_frame_mut().contract_info().read(key)
 	}
 
 	fn get_storage_size(&mut self, key: &FixSizedKey) -> Option<u32> {
-		Storage::<T>::size(&self.top_frame_mut().contract_info().trie_id, key)
+		self.top_frame_mut().contract_info().size(key)
 	}
 
 	fn get_storage_size_transparent(&mut self, key: &VarSizedKey<T>) -> Option<u32> {
-		Storage::<T>::size(&self.top_frame_mut().contract_info().trie_id, key)
+		self.top_frame_mut().contract_info().size(key)
 	}
 
 	fn set_storage(
@@ -1234,8 +1270,7 @@ where
 		take_old: bool,
 	) -> Result<WriteOutcome, DispatchError> {
 		let frame = self.top_frame_mut();
-		Storage::<T>::write(
-			&frame.contract_info.get(&frame.account_id).trie_id,
+		frame.contract_info.get(&frame.account_id).write(
 			key,
 			value,
 			Some(&mut frame.nested_storage),
@@ -1250,8 +1285,7 @@ where
 		take_old: bool,
 	) -> Result<WriteOutcome, DispatchError> {
 		let frame = self.top_frame_mut();
-		Storage::<T>::write(
-			&frame.contract_info.get(&frame.account_id).trie_id,
+		frame.contract_info.get(&frame.account_id).write(
 			key,
 			value,
 			Some(&mut frame.nested_storage),
@@ -1453,7 +1487,6 @@ mod tests {
 	use crate::{
 		exec::ExportedFunction::*,
 		gas::GasMeter,
-		storage::Storage,
 		tests::{
 			test_utils::{get_balance, hash, place_contract, set_balance},
 			ExtBuilder, RuntimeCall, RuntimeEvent as MetaEvent, Test, TestFilter, ALICE, BOB,
@@ -1906,9 +1939,8 @@ mod tests {
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			let executable =
 				MockExecutable::from_storage(input_data_ch, &schedule, &mut gas_meter).unwrap();
-			set_balance(&ALICE, min_balance * 1000);
-			let mut storage_meter =
-				storage::meter::Meter::new(&ALICE, Some(min_balance * 100), min_balance).unwrap();
+			set_balance(&ALICE, min_balance * 10_000);
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, None, min_balance).unwrap();
 
 			let result = MockStack::run_instantiate(
 				ALICE,
@@ -2246,7 +2278,7 @@ mod tests {
 			// Check that the newly created account has the expected code hash and
 			// there are instantiation event.
 			assert_eq!(
-				Storage::<Test>::code_hash(&instantiated_contract_address).unwrap(),
+				ContractInfo::<Test>::load_code_hash(&instantiated_contract_address).unwrap(),
 				dummy_ch
 			);
 			assert_eq!(
@@ -2288,7 +2320,7 @@ mod tests {
 			);
 
 			// Check that the account has not been created.
-			assert!(Storage::<Test>::code_hash(&instantiated_contract_address).is_none());
+			assert!(ContractInfo::<Test>::load_code_hash(&instantiated_contract_address).is_none());
 			assert!(events().is_empty());
 		});
 	}
@@ -2347,7 +2379,7 @@ mod tests {
 			// Check that the newly created account has the expected code hash and
 			// there are instantiation event.
 			assert_eq!(
-				Storage::<Test>::code_hash(&instantiated_contract_address).unwrap(),
+				ContractInfo::<Test>::load_code_hash(&instantiated_contract_address).unwrap(),
 				dummy_ch
 			);
 			assert_eq!(
@@ -2389,7 +2421,7 @@ mod tests {
 			set_balance(&ALICE, 1000);
 			set_balance(&BOB, 100);
 			place_contract(&BOB, instantiator_ch);
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(100), 0).unwrap();
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(200), 0).unwrap();
 
 			assert_matches!(
 				MockStack::run_call(
@@ -2424,8 +2456,8 @@ mod tests {
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			let executable =
 				MockExecutable::from_storage(terminate_ch, &schedule, &mut gas_meter).unwrap();
-			set_balance(&ALICE, 1000);
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(100), 100).unwrap();
+			set_balance(&ALICE, 10_000);
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, None, 100).unwrap();
 
 			assert_eq!(
 				MockStack::run_instantiate(
@@ -2509,9 +2541,8 @@ mod tests {
 			let min_balance = <Test as Config>::Currency::minimum_balance();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			let executable = MockExecutable::from_storage(code, &schedule, &mut gas_meter).unwrap();
-			set_balance(&ALICE, min_balance * 1000);
-			let mut storage_meter =
-				storage::meter::Meter::new(&ALICE, Some(min_balance * 100), min_balance).unwrap();
+			set_balance(&ALICE, min_balance * 10_000);
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, None, min_balance).unwrap();
 
 			let result = MockStack::run_instantiate(
 				ALICE,
@@ -2919,10 +2950,9 @@ mod tests {
 				MockExecutable::from_storage(succ_fail_code, &schedule, &mut gas_meter).unwrap();
 			let succ_succ_executable =
 				MockExecutable::from_storage(succ_succ_code, &schedule, &mut gas_meter).unwrap();
-			set_balance(&ALICE, min_balance * 1000);
+			set_balance(&ALICE, min_balance * 10_000);
 			let mut storage_meter =
-				storage::meter::Meter::new(&ALICE, Some(min_balance * 500), min_balance * 100)
-					.unwrap();
+				storage::meter::Meter::new(&ALICE, None, min_balance * 100).unwrap();
 
 			MockStack::run_instantiate(
 				ALICE,
