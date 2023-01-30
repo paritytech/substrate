@@ -3044,7 +3044,7 @@ benchmarks! {
 	// This is no benchmark. It merely exist to have an easy way to pretty print the curently
 	// configured `Schedule` during benchmark development.
 	// It can be outputed using the following command:
-	// cargo run --manifest-path=bin/node/cli/Cargo.toml --release \
+	// cargo run --manifest-path=bin/node/cli/Cargo.toml \
 	//     --features runtime-benchmarks -- benchmark pallet --extra --dev --execution=native \
 	//     -p pallet_contracts -e print_schedule --no-median-slopes --no-min-squares
 	#[extra]
@@ -3052,17 +3052,15 @@ benchmarks! {
 	print_schedule {
 		#[cfg(feature = "std")]
 		{
-			let weight_per_key = T::WeightInfo::on_initialize_per_trie_key(1) -
-				T::WeightInfo::on_initialize_per_trie_key(0);
-			let weight_per_queue_item = T::WeightInfo::on_initialize_per_queue_item(1) -
-				T::WeightInfo::on_initialize_per_queue_item(0);
 			let weight_limit = T::DeletionWeightLimit::get();
-			let queue_depth: u64 = T::DeletionQueueDepth::get().into();
+			let max_queue_depth = T::DeletionQueueDepth::get() as usize;
+			let empty_queue_throughput = Storage::<T>::deletion_budget(0, weight_limit);
+			let full_queue_throughput = Storage::<T>::deletion_budget(max_queue_depth, weight_limit);
 			println!("{:#?}", Schedule::<T>::default());
 			println!("###############################################");
+			println!("Lazy deletion weight per key: {}", empty_queue_throughput.0);
 			println!("Lazy deletion throughput per block (empty queue, full queue): {}, {}",
-				weight_limit / weight_per_key.ref_time(),
-				(weight_limit - weight_per_queue_item * queue_depth) / weight_per_key.ref_time(),
+				empty_queue_throughput.1, full_queue_throughput.1,
 			);
 		}
 		#[cfg(not(feature = "std"))]

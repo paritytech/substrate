@@ -232,6 +232,22 @@ impl Weight {
 		Some(Self { ref_time, proof_size })
 	}
 
+	/// Calculates how many `other` fit into `Self`.
+	///
+	/// Divides each component against the same component of `other`. Returns the smallest
+	/// component or `None` if any of `others`'s components are zero.
+	pub const fn checked_div_per_component(self, other: &Self) -> Option<u64> {
+		let ref_time = match self.ref_time.checked_div(other.ref_time) {
+			Some(t) => t,
+			None => return None,
+		};
+		let proof_size = match self.proof_size.checked_div(other.proof_size) {
+			Some(s) => s,
+			None => return None,
+		};
+		Some(if ref_time < proof_size { ref_time } else { proof_size })
+	}
+
 	/// Try to increase `self` by `amount` via checked addition.
 	pub fn checked_accrue(&mut self, amount: Self) -> Option<()> {
 		self.checked_add(&amount).map(|new_self| *self = new_self)
