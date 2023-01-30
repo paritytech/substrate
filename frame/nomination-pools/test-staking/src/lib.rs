@@ -531,7 +531,7 @@ fn pool_slash_proportional() {
 
 #[test]
 fn pool_slash_non_proportional_only_bonded_pool() {
-	// A typical example where a pool member unbonds in era 99, and he can get away with a slash
+	// A typical example where a pool member unbonds in era 99, and they can get away with a slash
 	// that happened in era 100, as long as the pool has enough active bond to cover the slash. If
 	// everything else in the slashing/staking system works, this should always be the case.
 	// Nonetheless, `ledger.slash` has been written such that it will slash greedily from any chunk
