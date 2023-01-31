@@ -118,7 +118,7 @@ impl StakingInterface for StakingMock {
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 
 	fn minimum_nominator_bond() -> Self::Balance {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn minimum_validator_bond() -> Self::Balance {
