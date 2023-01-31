@@ -1591,6 +1591,30 @@ fn metadata() {
 }
 
 #[test]
+fn metadata_at_version() {
+	use frame_support::metadata::*;
+	use sp_core::Decode;
+
+	let actual_metadata = Runtime::metadata();
+
+	let at_metadata = match Runtime::metadata_at_version(14) {
+		Some(opaque) => {
+			let bytes = &*opaque;
+			let metadata: RuntimeMetadataPrefixed = Decode::decode(&mut &bytes[..]).unwrap();
+			metadata
+		},
+		_ => panic!("metadata has been bumped, test needs to be updated"),
+	};
+
+	assert_eq!(actual_metadata, at_metadata);
+}
+
+#[test]
+fn metadata_versions() {
+	assert_eq!(vec![14], Runtime::metadata_versions());
+}
+
+#[test]
 fn test_pallet_info_access() {
 	assert_eq!(<System as frame_support::traits::PalletInfoAccess>::name(), "System");
 	assert_eq!(<Example as frame_support::traits::PalletInfoAccess>::name(), "Example");
