@@ -90,9 +90,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		mint_data: PreSignedMintOf<T, I>,
 		signer: T::AccountId,
 	) -> DispatchResult {
-		let PreSignedMint { collection, item, metadata, deadline, only_account } = mint_data;
+		let PreSignedMint { collection, item, attributes, metadata, deadline, only_account } =
+			mint_data;
 		let metadata = Self::construct_metadata(metadata)?;
 
+		ensure!(
+			attributes.len() <= T::MaxAttributesPerCall::get() as usize,
+			Error::<T, I>::MaxAttributesLimitReached
+		);
 		if let Some(account) = only_account {
 			ensure!(account == mint_to, Error::<T, I>::WrongOrigin);
 		}
@@ -113,13 +118,24 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			item_config,
 			|_, _| Ok(()),
 		)?;
+		for (key, value) in attributes {
+			Self::do_set_attribute(
+				collection_details.owner.clone(),
+				collection,
+				Some(item),
+				AttributeNamespace::CollectionOwner,
+				Self::construct_attribute_key(key)?,
+				Self::construct_attribute_value(value)?,
+				mint_to.clone(),
+			)?;
+		}
 		if !metadata.len().is_zero() {
 			Self::do_set_item_metadata(
-				Some(collection_details.owner),
+				Some(collection_details.owner.clone()),
 				collection,
 				item,
 				metadata,
-				Some(mint_to),
+				Some(mint_to.clone()),
 			)?;
 		}
 		Ok(())

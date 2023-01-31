@@ -2509,7 +2509,8 @@ fn pre_signed_mints_should_work() {
 		let mint_data = PreSignedMint {
 			collection: 0,
 			item: 0,
-			metadata: vec![00, 01],
+			attributes: vec![(vec![0], vec![1]), (vec![2], vec![3])],
+			metadata: vec![0, 1],
 			only_account: None,
 			deadline: 10000000,
 		};
@@ -2535,10 +2536,28 @@ fn pre_signed_mints_should_work() {
 		assert_eq!(items(), vec![(user_2, 0, 0)]);
 		let metadata = ItemMetadataOf::<Test>::get(0, 0).unwrap();
 		assert_eq!(metadata.deposit, ItemMetadataDeposit { account: Some(user_2), amount: 3 });
-		assert_eq!(metadata.data, vec![00, 01]);
+		assert_eq!(metadata.data, vec![0, 1]);
+
+		assert_eq!(
+			attributes(0),
+			vec![
+				(Some(0), AttributeNamespace::CollectionOwner, bvec![0], bvec![1]),
+				(Some(0), AttributeNamespace::CollectionOwner, bvec![2], bvec![3]),
+			]
+		);
+		let attribute_key: BoundedVec<_, _> = bvec![0];
+		let (_, deposit) = Attribute::<Test>::get((
+			0,
+			Some(0),
+			AttributeNamespace::CollectionOwner,
+			&attribute_key,
+		))
+		.unwrap();
+		assert_eq!(deposit.account, Some(user_2));
+		assert_eq!(deposit.amount, 3);
 
 		assert_eq!(Balances::free_balance(&user_1), 100 - 2); // 2 - collection deposit
-		assert_eq!(Balances::free_balance(&user_2), 100 - 1 - 3); // 1 - item deposit, 3 - metadata
+		assert_eq!(Balances::free_balance(&user_2), 100 - 1 - 3 - 6); // 1 - item deposit, 3 - metadata, 6 - attributes
 
 		assert_noop!(
 			Nfts::mint_pre_signed(
@@ -2551,17 +2570,19 @@ fn pre_signed_mints_should_work() {
 		);
 
 		assert_ok!(Nfts::burn(RuntimeOrigin::signed(user_2), 0, 0, Some(user_2)));
-		assert_eq!(Balances::free_balance(&user_2), 100);
+		assert_eq!(Balances::free_balance(&user_2), 100 - 6);
 
-		// check errors
+		// validate the `only_account` field
 		let mint_data = PreSignedMint {
 			collection: 0,
 			item: 0,
+			attributes: vec![],
 			metadata: vec![],
 			only_account: Some(2),
 			deadline: 10000000,
 		};
 
+		// can't mint with the wrong signature
 		assert_noop!(
 			Nfts::mint_pre_signed(
 				RuntimeOrigin::signed(user_2),
@@ -2585,6 +2606,7 @@ fn pre_signed_mints_should_work() {
 			Error::<Test>::WrongOrigin
 		);
 
+		// validate signature's expiration
 		System::set_block_number(10000001);
 		assert_noop!(
 			Nfts::mint_pre_signed(
@@ -2597,9 +2619,11 @@ fn pre_signed_mints_should_work() {
 		);
 		System::set_block_number(1);
 
+		// validate the collection
 		let mint_data = PreSignedMint {
 			collection: 1,
 			item: 0,
+			attributes: vec![],
 			metadata: vec![],
 			only_account: Some(2),
 			deadline: 10000000,
@@ -2615,6 +2639,27 @@ fn pre_signed_mints_should_work() {
 				user_1_signer.clone(),
 			),
 			Error::<Test>::UnknownCollection
+		);
+
+		// validate max attributes limit
+		let mint_data = PreSignedMint {
+			collection: 0,
+			item: 0,
+			attributes: vec![(vec![0], vec![1]), (vec![2], vec![3]), (vec![2], vec![3])],
+			metadata: vec![0, 1],
+			only_account: None,
+			deadline: 10000000,
+		};
+		let message = Encode::encode(&mint_data);
+		let signature = MultiSignature::Sr25519(user_1_pair.sign(&message));
+		assert_noop!(
+			Nfts::mint_pre_signed(
+				RuntimeOrigin::signed(user_2),
+				mint_data,
+				signature,
+				user_1_signer.clone(),
+			),
+			Error::<Test>::MaxAttributesLimitReached
 		);
 	})
 }

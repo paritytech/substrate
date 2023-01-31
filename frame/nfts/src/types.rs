@@ -486,6 +486,8 @@ pub struct PreSignedMint<CollectionId, ItemId, AccountId, Deadline> {
 	pub(super) collection: CollectionId,
 	/// Item's id.
 	pub(super) item: ItemId,
+	/// Additional item's key-value attributes.
+	pub(super) attributes: Vec<(Vec<u8>, Vec<u8>)>,
 	/// Additional item's metadata.
 	pub(super) metadata: Vec<u8>,
 	/// Restrict the claim to a particular account.

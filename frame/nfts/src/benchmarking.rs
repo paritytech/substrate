@@ -149,6 +149,14 @@ fn default_item_config() -> ItemConfig {
 	ItemConfig { settings: ItemSettings::all_enabled() }
 }
 
+fn make_filled_vec(value: u16, length: usize) -> Vec<u8> {
+	let mut vec = vec![0u8; length];
+	let mut s = Vec::from(value.to_be_bytes());
+	vec.truncate(length - s.len());
+	vec.append(&mut s);
+	vec
+}
+
 benchmarks_instance_pallet! {
 	create {
 		let collection = T::Helper::collection(0);
@@ -437,11 +445,7 @@ benchmarks_instance_pallet! {
 		T::Currency::make_free_balance_be(&target, DepositBalanceOf::<T, I>::max_value());
 		let value: BoundedVec<_, _> = vec![0u8; T::ValueLimit::get() as usize].try_into().unwrap();
 		for i in 0..n {
-			let mut key = vec![0u8; T::KeyLimit::get() as usize];
-			let mut s = Vec::from((i as u16).to_be_bytes());
-			key.truncate(s.len());
-			key.append(&mut s);
-
+			let key = make_filled_vec(i as u16, T::KeyLimit::get() as usize);
 			Nfts::<T, I>::set_attribute(
 				SystemOrigin::Signed(target.clone()).into(),
 				T::Helper::collection(0),
@@ -716,6 +720,7 @@ benchmarks_instance_pallet! {
 	}
 
 	mint_pre_signed {
+		let n in 0 .. T::MaxAttributesPerCall::get() as u32;
 		let caller_public = sr25519_generate(0.into(), None);
 		let caller_signer = MultiSigner::Sr25519(caller_public);
 		let caller = Nfts::<T, I>::signer_to_account(caller_signer.clone()).unwrap();
@@ -731,9 +736,16 @@ benchmarks_instance_pallet! {
 		));
 
 		let metadata = vec![0u8; T::StringLimit::get() as usize];
+		let mut attributes = vec![];
+		let attribute_value = vec![0u8; T::ValueLimit::get() as usize];
+		for i in 0..n {
+			let attribute_key = make_filled_vec(i as u16, T::KeyLimit::get() as usize);
+			attributes.push((attribute_key, attribute_value.clone()));
+		}
 		let mint_data = PreSignedMint {
 			collection,
 			item,
+			attributes,
 			metadata: metadata.clone(),
 			only_account: None,
 			deadline: One::one(),

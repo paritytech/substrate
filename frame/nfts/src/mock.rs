@@ -113,6 +113,7 @@ impl Config for Test {
 	type ItemAttributesApprovalsLimit = ConstU32<2>;
 	type MaxTips = ConstU32<10>;
 	type MaxDeadlineDuration = ConstU64<10000>;
+	type MaxAttributesPerCall = ConstU32<2>;
 	type Features = Features;
 	type WeightInfo = ();
 	#[cfg(feature = "runtime-benchmarks")]

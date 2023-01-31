@@ -168,6 +168,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxDeadlineDuration: Get<<Self as SystemConfig>::BlockNumber>;
 
+		/// The max number of attributes a user could set per call.
+		#[pallet::constant]
+		type MaxAttributesPerCall: Get<u32>;
+
 		/// Disables some of pallet's features.
 		#[pallet::constant]
 		type Features: Get<PalletFeatures>;
@@ -600,6 +604,8 @@ pub mod pallet {
 		WrongSignature,
 		/// The provided metadata might be too long.
 		IncorrectMetadata,
+		/// Can't set more attributes per one call.
+		MaxAttributesLimitReached,
 	}
 
 	#[pallet::call]
@@ -1332,7 +1338,15 @@ pub mod pallet {
 			value: BoundedVec<u8, T::ValueLimit>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			Self::do_set_attribute(origin, collection, maybe_item, namespace, key, value)
+			Self::do_set_attribute(
+				origin.clone(),
+				collection,
+				maybe_item,
+				namespace,
+				key,
+				value,
+				origin,
+			)
 		}
 
 		/// Force-set an attribute for a collection or item.
