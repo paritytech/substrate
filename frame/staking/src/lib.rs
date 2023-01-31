@@ -736,8 +736,8 @@ impl<AccountId: Clone, Balance: HasCompact + AtLeast32BitUnsigned + Copy>
 {
 	/// Splits an `Exposure` into `ExposureOverview` and multiple chunks of `IndividualExposure`
 	/// with each chunk having maximum of `page_size` elements.
-	fn as_pages(
-		&self,
+	fn into_pages(
+		self,
 		page_size: u32,
 	) -> (ExposureOverview<Balance>, Vec<ExposurePage<AccountId, Balance>>) {
 		let individual_chunks = self.others.chunks(page_size as usize);

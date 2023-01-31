@@ -2196,7 +2196,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 
 		let exposure = Exposure::<AccountId, Balance> { total: stake, own: stake, others: vec![] };
 		let (exposure_overview, _) =
-			exposure.clone().as_pages(MaxNominatorRewardedPerValidator::get());
+			exposure.clone().into_pages(MaxNominatorRewardedPerValidator::get());
 		let reward = EraRewardPoints::<AccountId> {
 			total: 1,
 			individual: vec![(11, 1)].into_iter().collect(),
@@ -5784,7 +5784,7 @@ fn can_page_exposure() {
 	let (exposure_overview, exposure_page): (
 		ExposureOverview<Balance>,
 		Vec<ExposurePage<AccountId, Balance>>,
-	) = exposure.clone().as_pages(3);
+	) = exposure.clone().into_pages(3);
 
 	// then
 	// 7 pages of nominators.
