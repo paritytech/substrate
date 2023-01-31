@@ -27,7 +27,7 @@ use syn::{
 	parse::{Nothing, ParseStream},
 	punctuated::Punctuated,
 	spanned::Spanned,
-	token::{Colon2, Comma, Gt, Lt, Paren, Question},
+	token::{Colon2, Comma, Gt, Lt, Paren},
 	visit::{self, Visit},
 	Attribute, Error, Expr, ExprBlock, ExprCall, ExprPath, ExprTry, FnArg, GenericArgument, Item,
 	ItemFn, ItemMod, LitInt, Pat, Path, PathArguments, PathSegment, Result, ReturnType, Stmt,
@@ -195,7 +195,18 @@ impl BenchmarkDef {
 				return invalid_return(elems.span())
 			}
 			let _: keywords::BenchmarkError = syn::parse(last_arg.to_token_stream().into())?;
-		} // else returns `()` which is permitted
+		} else {
+			// return type is `()` which is permitted
+			// check for question mark ops as these aren't allowed here
+			let mut visitor = ExprTryVisitor::new();
+			visitor.visit_item_fn(item_fn);
+			if let Some(expr) = visitor.results.first() {
+				return Err(Error::new(
+					expr.span(),
+					"The `?` operator can only be used in benchmark functions that specify `Result<(), BenchmarkError>`as their return type"
+				))
+			}
+		}
 
 		let mut params: Vec<ParamDef> = Vec::new();
 
