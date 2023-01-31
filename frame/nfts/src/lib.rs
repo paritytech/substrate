@@ -1795,7 +1795,7 @@ pub mod pallet {
 		/// Origin must be Signed.
 		///
 		/// - `data`: The pre-signed approval that consists of the information about the item, its
-		///   metadata, who can mint it (`None` for anyone) and until what block number.
+		///   metadata, attributes, who can mint it (`None` for anyone) and until what block number.
 		/// - `signature`: The signature of the `data` object.
 		/// - `signer`: The `data` object's signer. Should be an owner of the collection.
 		///
