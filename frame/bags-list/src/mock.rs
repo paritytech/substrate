@@ -20,7 +20,7 @@
 use super::*;
 use crate::{self as bags_list};
 use frame_election_provider_support::VoteWeight;
-use frame_support::{parameter_types, OpaqueMetadata};
+use frame_support::parameter_types;
 use std::collections::HashMap;
 
 pub type AccountId = u32;

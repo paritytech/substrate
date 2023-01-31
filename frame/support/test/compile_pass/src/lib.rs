@@ -26,7 +26,7 @@ use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{ConstU16, ConstU32, ConstU64},
 };
-use sp_core::{sr25519, OpaqueMetadata, H256};
+use sp_core::{sr25519, H256};
 use sp_runtime::{
 	create_runtime_str, generic,
 	traits::{BlakeTwo256, IdentityLookup, Verify},

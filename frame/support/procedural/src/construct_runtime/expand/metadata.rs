@@ -97,10 +97,10 @@ pub fn expand_runtime_metadata(
 				).into()
 			}
 
-			pub fn metadata_at_version(version: u32) -> Option<OpaqueMetadata> {
+			pub fn metadata_at_version(version: u32) -> Option<#scrate::OpaqueMetadata> {
 				match version {
 					// The V14 version is already implemented by `construct_runtime!` macro.
-					14 => Some(OpaqueMetadata::new(#runtime::metadata().into())),
+					14 => Some(#scrate::OpaqueMetadata::new(#runtime::metadata().into())),
 					_ => None,
 				}
 			}
