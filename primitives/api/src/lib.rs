@@ -73,8 +73,12 @@ extern crate self as sp_api;
 #[doc(hidden)]
 pub use codec::{self, Decode, DecodeLimit, Encode};
 #[doc(hidden)]
+pub use frame_metadata as metadata;
+#[doc(hidden)]
 #[cfg(feature = "std")]
 pub use hash_db::Hasher;
+#[doc(hidden)]
+pub use scale_info;
 #[doc(hidden)]
 #[cfg(not(feature = "std"))]
 pub use sp_core::to_substrate_wasm_fn_return_value;

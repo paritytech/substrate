@@ -15,6 +15,8 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false }
 sp-api-proc-macro = { version = "4.0.0-dev", path = "proc-macro" }
+frame-metadata = { version = "15.0.0", git = "https://github.com/paritytech/frame-metadata/", branch = "lexnv/md_v15", default-features = false, features = ["v14", "v15-unstable"] }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 sp-core = { version = "7.0.0", default-features = false, path = "../core" }
 sp-std = { version = "5.0.0", default-features = false, path = "../std" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../runtime" }
@@ -42,6 +44,8 @@ std = [
 	"hash-db",
 	"thiserror",
 	"log/std",
+	"frame-metadata/std",
+	"scale-info/std",
 ]
 # Special feature to disable logging completly.
 #
