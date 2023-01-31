@@ -1802,7 +1802,7 @@ pub mod pallet {
 		/// Emits `Issued` on success.
 		/// Emits `ItemMetadataSet` if the metadata was not empty.
 		#[pallet::call_index(37)]
-		#[pallet::weight(T::WeightInfo::mint_pre_signed())]
+		#[pallet::weight(T::WeightInfo::mint_pre_signed(data.attributes.len() as u32))]
 		pub fn mint_pre_signed(
 			origin: OriginFor<T>,
 			data: PreSignedMintOf<T, I>,
