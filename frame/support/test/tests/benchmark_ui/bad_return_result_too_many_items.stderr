@@ -1,0 +1,5 @@
+error: Invalid return type. Only `()` and `Result<(), BenchmarkError>` are allowed.
+ --> tests/benchmark_ui/bad_return_result_too_many_items.rs:8:43
+  |
+8 |     fn bench() -> Result<(), BenchmarkError, Something> {
+  |                                              ^^^^^^^^^

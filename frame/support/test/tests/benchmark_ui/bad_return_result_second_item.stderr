@@ -1,0 +1,5 @@
+error: expected `BenchmarkError`
+ --> tests/benchmark_ui/bad_return_result_second_item.rs:8:27
+  |
+8 |     fn bench() -> Result<(), String> {
+  |                              ^^^^^^

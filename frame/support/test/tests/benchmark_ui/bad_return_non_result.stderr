@@ -1,0 +1,5 @@
+error: expected `Result`
+ --> tests/benchmark_ui/bad_return_non_result.rs:8:16
+  |
+8 |     fn bench() -> Option<String> {
+  |                   ^^^^^^
