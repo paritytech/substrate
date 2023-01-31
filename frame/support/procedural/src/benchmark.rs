@@ -155,25 +155,31 @@ struct BenchmarkDef {
 impl BenchmarkDef {
 	/// Constructs a [`BenchmarkDef`] by traversing an existing [`ItemFn`] node.
 	pub fn from(item_fn: &ItemFn, extra: bool, skip_meta: bool) -> Result<BenchmarkDef> {
-		let mut params: Vec<ParamDef> = Vec::new();
-
 		// parsing for non `()` return type (only allow `Result<(), BenchmarkError>`)
+		let invalid_return = || {
+			return Err(Error::new(
+				item_fn.sig.output.span(),
+				"Invalid return type. Only `()` and `Result<(), BenchmarkError>` are allowed.",
+			))
+		};
 		if let ReturnType::Type(_, typ) = &item_fn.sig.output {
-			let Type::Path(TypePath { path, qself: _ }) = &**typ else { panic!("bad1") };
-			let Some(segment) = path.segments.last() else { panic!("bad2") };
+			let Type::Path(TypePath { path, qself: _ }) = &**typ else { return invalid_return() };
+			let Some(segment) = path.segments.last() else { return invalid_return() };
 			let _: keywords::Result = syn::parse(segment.ident.to_token_stream().into())?;
-			let PathArguments::AngleBracketed(args) = &segment.arguments else { panic!("bad3") };
+			let PathArguments::AngleBracketed(args) = &segment.arguments else { return invalid_return() };
 			if args.args.len() != 2 {
-				panic!("bad8")
+				return invalid_return()
 			}
-			let Some(first_arg) = args.args.first() else { panic!("bad4") };
-			let GenericArgument::Type(Type::Tuple(TypeTuple { paren_token: _, elems })) = first_arg else { panic!("bad5") };
+			let Some(first_arg) = args.args.first() else { return invalid_return() };
+			let GenericArgument::Type(Type::Tuple(TypeTuple { paren_token: _, elems })) = first_arg else { return invalid_return() };
 			if !elems.is_empty() {
-				panic!("bad6")
+				return invalid_return()
 			}
-			let Some(second_arg) = args.args.last() else { panic!("bad7") };
+			let Some(second_arg) = args.args.last() else { return invalid_return() };
 			let _: keywords::BenchmarkError = syn::parse(second_arg.to_token_stream().into())?;
-		}
+		} // else returns `()` which is permitted
+
+		let mut params: Vec<ParamDef> = Vec::new();
 
 		// parse params such as "x: Linear<0, 1>"
 		for arg in &item_fn.sig.inputs {
