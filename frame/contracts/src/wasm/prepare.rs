@@ -22,15 +22,17 @@
 use crate::{
 	chain_extension::ChainExtension,
 	storage::meter::Diff,
-	wasm::{Determinism, Environment, OwnerInfo, PrefabWasmModule},
+	wasm::{
+		runtime::AllowDeprecatedInterface, Determinism, Environment, OwnerInfo, PrefabWasmModule,
+	},
 	AccountIdOf, CodeVec, Config, Error, Schedule,
 };
 use codec::{Encode, MaxEncodedLen};
-use sp_core::crypto::UncheckedFrom;
 use sp_runtime::{traits::Hash, DispatchError};
 use sp_std::prelude::*;
-use wasm_instrument::parity_wasm::elements::{
-	self, External, Internal, MemoryType, Type, ValueType,
+use wasm_instrument::{
+	gas_metering,
+	parity_wasm::elements::{self, External, Internal, MemoryType, Type, ValueType},
 };
 use wasmi::StackLimits;
 use wasmparser::{Validator, WasmFeatures};
@@ -52,6 +54,14 @@ pub enum TryInstantiate {
 	/// this instantiation would fail the whole transaction and an extra check is not
 	/// necessary.
 	Skip,
+}
+
+/// The reason why a contract is instrumented.
+enum InstrumentReason {
+	/// A new code is uploaded.
+	New,
+	/// Existing code is re-instrumented.
+	Reinstrument,
 }
 
 struct ContractModule<'a, T: Config> {
@@ -132,6 +142,19 @@ impl<'a, T: Config> ContractModule<'a, T> {
 		Ok(())
 	}
 
+	fn ensure_local_variable_limit(&self, limit: u32) -> Result<(), &'static str> {
+		if let Some(code_section) = self.module.code_section() {
+			for func_body in code_section.bodies() {
+				let locals_count: u32 =
+					func_body.locals().iter().map(|val_type| val_type.count()).sum();
+				if locals_count > limit {
+					return Err("single function declares too many locals")
+				}
+			}
+		}
+		Ok(())
+	}
+
 	/// Ensures that no floating point types are in use.
 	fn ensure_no_floating_types(&self) -> Result<(), &'static str> {
 		if let Some(global_section) = self.module.global_section() {
@@ -197,20 +220,10 @@ impl<'a, T: Config> ContractModule<'a, T> {
 
 	fn inject_gas_metering(self, determinism: Determinism) -> Result<Self, &'static str> {
 		let gas_rules = self.schedule.rules(&self.module, determinism);
-		let contract_module =
-			wasm_instrument::gas_metering::inject(self.module, &gas_rules, "seal0")
-				.map_err(|_| "gas instrumentation failed")?;
+		let backend = gas_metering::host_function::Injector::new("seal0", "gas");
+		let contract_module = gas_metering::inject(self.module, backend, &gas_rules)
+			.map_err(|_| "gas instrumentation failed")?;
 		Ok(ContractModule { module: contract_module, schedule: self.schedule })
-	}
-
-	fn inject_stack_height_metering(self) -> Result<Self, &'static str> {
-		if let Some(limit) = self.schedule.limits.stack_height {
-			let contract_module = wasm_instrument::inject_stack_limiter(self.module, limit)
-				.map_err(|_| "stack height instrumentation failed")?;
-			Ok(ContractModule { module: contract_module, schedule: self.schedule })
-		} else {
-			Ok(ContractModule { module: self.module, schedule: self.schedule })
-		}
 	}
 
 	/// Check that the module has required exported functions. For now
@@ -378,11 +391,11 @@ fn instrument<E, T>(
 	schedule: &Schedule<T>,
 	determinism: Determinism,
 	try_instantiate: TryInstantiate,
+	reason: InstrumentReason,
 ) -> Result<(Vec<u8>, (u32, u32)), (DispatchError, &'static str)>
 where
 	E: Environment<()>,
 	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
 	// Do not enable any features here. Any additional feature needs to be carefully
 	// checked for potential security issues. For example, enabling multi value could lead
@@ -422,6 +435,7 @@ where
 		contract_module.ensure_no_internal_memory()?;
 		contract_module.ensure_table_size_limit(schedule.limits.table_size)?;
 		contract_module.ensure_global_variable_limit(schedule.limits.globals)?;
+		contract_module.ensure_local_variable_limit(schedule.limits.locals)?;
 		contract_module.ensure_parameter_limit(schedule.limits.parameters)?;
 		contract_module.ensure_br_table_size_limit(schedule.limits.br_table_size)?;
 
@@ -434,10 +448,7 @@ where
 		let memory_limits =
 			get_memory_limits(contract_module.scan_imports(&disallowed_imports)?, schedule)?;
 
-		let code = contract_module
-			.inject_gas_metering(determinism)?
-			.inject_stack_height_metering()?
-			.into_wasm_code()?;
+		let code = contract_module.inject_gas_metering(determinism)?.into_wasm_code()?;
 
 		Ok((code, memory_limits))
 	})()
@@ -454,11 +465,20 @@ where
 		// We don't actually ever run any code so we can get away with a minimal stack which
 		// reduces the amount of memory that needs to be zeroed.
 		let stack_limits = StackLimits::new(1, 1, 0).expect("initial <= max; qed");
-		PrefabWasmModule::<T>::instantiate::<E, _>(&code, (), (initial, maximum), stack_limits)
-			.map_err(|err| {
-				log::debug!(target: "runtime::contracts", "{}", err);
-				(Error::<T>::CodeRejected.into(), "new code rejected after instrumentation")
-			})?;
+		PrefabWasmModule::<T>::instantiate::<E, _>(
+			&code,
+			(),
+			(initial, maximum),
+			stack_limits,
+			match reason {
+				InstrumentReason::New => AllowDeprecatedInterface::No,
+				InstrumentReason::Reinstrument => AllowDeprecatedInterface::Yes,
+			},
+		)
+		.map_err(|err| {
+			log::debug!(target: "runtime::contracts", "{}", err);
+			(Error::<T>::CodeRejected.into(), "new code rejected after instrumentation")
+		})?;
 	}
 
 	Ok((code, (initial, maximum)))
@@ -485,10 +505,14 @@ pub fn prepare<E, T>(
 where
 	E: Environment<()>,
 	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
-	let (code, (initial, maximum)) =
-		instrument::<E, T>(original_code.as_ref(), schedule, determinism, try_instantiate)?;
+	let (code, (initial, maximum)) = instrument::<E, T>(
+		original_code.as_ref(),
+		schedule,
+		determinism,
+		try_instantiate,
+		InstrumentReason::New,
+	)?;
 
 	let original_code_len = original_code.len();
 
@@ -532,23 +556,31 @@ pub fn reinstrument<E, T>(
 where
 	E: Environment<()>,
 	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
-	instrument::<E, T>(original_code, schedule, determinism, TryInstantiate::Skip)
-		.map_err(|(err, msg)| {
-			log::error!(target: "runtime::contracts", "CodeRejected during reinstrument: {}", msg);
-			err
-		})
-		.map(|(code, _)| code)
+	instrument::<E, T>(
+		original_code,
+		schedule,
+		determinism,
+		// This function was triggered by an interaction with an existing contract code
+		// that will try to instantiate anyways. Failing here would not help
+		// as the contract is already on chain.
+		TryInstantiate::Skip,
+		InstrumentReason::Reinstrument,
+	)
+	.map_err(|(err, msg)| {
+		log::error!(target: "runtime::contracts", "CodeRejected during reinstrument: {}", msg);
+		err
+	})
+	.map(|(code, _)| code)
 }
 
-/// Alternate (possibly unsafe) preparation functions used only for benchmarking.
+/// Alternate (possibly unsafe) preparation functions used only for benchmarking and testing.
 ///
 /// For benchmarking we need to construct special contracts that might not pass our
 /// sanity checks or need to skip instrumentation for correct results. We hide functions
-/// allowing this behind a feature that is only set during benchmarking to prevent usage
-/// in production code.
-#[cfg(feature = "runtime-benchmarks")]
+/// allowing this behind a feature that is only set during benchmarking or testing to
+/// prevent usage in production code.
+#[cfg(any(test, feature = "runtime-benchmarks"))]
 pub mod benchmarking {
 	use super::*;
 
@@ -602,7 +634,7 @@ mod tests {
 	#[allow(unreachable_code)]
 	mod env {
 		use super::*;
-		use crate::wasm::runtime::TrapReason;
+		use crate::wasm::runtime::{AllowDeprecatedInterface, AllowUnstableInterface, TrapReason};
 
 		// Define test environment for tests. We need ImportSatisfyCheck
 		// implementation from it. So actual implementations doesn't matter.
@@ -636,7 +668,8 @@ mod tests {
 				let wasm = wat::parse_str($wat).unwrap().try_into().unwrap();
 				let schedule = Schedule {
 					limits: Limits {
-						globals: 3,
+					    globals: 3,
+					    locals: 3,
 						parameters: 3,
 						memory_pages: 16,
 						table_size: 3,
@@ -733,6 +766,43 @@ mod tests {
 			)
 			"#,
 			Err("module declares too many globals")
+		);
+	}
+
+	mod locals {
+		use super::*;
+
+		prepare_test!(
+			local_number_valid,
+			r#"
+			(module
+				(func
+					(local i32)
+					(local i32)
+					(local i32)
+				)
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Ok(_)
+		);
+
+		prepare_test!(
+			local_number_too_high,
+			r#"
+			(module
+				(func
+					(local i32)
+					(local i32)
+					(local i32)
+					(local i32)
+				)
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Err("single function declares too many locals")
 		);
 	}
 

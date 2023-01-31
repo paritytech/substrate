@@ -27,12 +27,12 @@ use crate::{
 	metric_inc, metric_set,
 	metrics::Metrics,
 	round::Rounds,
-	BeefyVoterLinks,
+	BeefyVoterLinks, LOG_TARGET,
 };
 use beefy_primitives::{
 	crypto::{AuthorityId, Signature},
-	BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, PayloadProvider, SignedCommitment,
-	ValidatorSet, VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
+	Commitment, ConsensusLog, Payload, PayloadProvider, SignedCommitment, ValidatorSet,
+	VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
 };
 use codec::{Codec, Decode, Encode};
 use futures::{stream::Fuse, FutureExt, StreamExt};
@@ -41,14 +41,13 @@ use sc_client_api::{Backend, FinalityNotification, FinalityNotifications, Header
 use sc_network_common::service::{NetworkEventStream, NetworkRequest};
 use sc_network_gossip::GossipEngine;
 use sc_utils::notification::NotificationReceiver;
-use sp_api::{BlockId, ProvideRuntimeApi};
+use sp_api::BlockId;
 use sp_arithmetic::traits::{AtLeast32Bit, Saturating};
 use sp_consensus::SyncOracle;
-use sp_mmr_primitives::MmrApi;
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
-	traits::{Block, Header, NumberFor, Zero},
-	SaturatedConversion,
+	traits::{Block, ConstU32, Header, NumberFor, Zero},
+	BoundedVec, SaturatedConversion,
 };
 use std::{
 	collections::{BTreeMap, BTreeSet, VecDeque},
@@ -56,6 +55,13 @@ use std::{
 	marker::PhantomData,
 	sync::Arc,
 };
+/// Bound for the number of buffered future voting rounds.
+const MAX_BUFFERED_VOTE_ROUNDS: usize = 600;
+/// Bound for the number of buffered votes per round number.
+const MAX_BUFFERED_VOTES_PER_ROUND: u32 = 1000;
+/// Bound for the number of pending justifications - use 2400 - the max number
+/// of justifications possible in a single session.
+const MAX_BUFFERED_JUSTIFICATIONS: usize = 2400;
 
 pub(crate) enum RoundAction {
 	Drop,
@@ -123,7 +129,7 @@ impl<B: Block> VoterOracle<B> {
 				min_block_delta: min_block_delta.max(1),
 			})
 		} else {
-			error!(target: "beefy", "🥩 Invalid sessions queue: {:?}.", sessions);
+			error!(target: LOG_TARGET, "🥩 Invalid sessions queue: {:?}.", sessions);
 			None
 		}
 	}
@@ -166,13 +172,13 @@ impl<B: Block> VoterOracle<B> {
 		Ok(())
 	}
 
-	/// Return current pending mandatory block, if any.
-	pub fn mandatory_pending(&self) -> Option<NumberFor<B>> {
+	/// Return current pending mandatory block, if any, plus its active validator set.
+	pub fn mandatory_pending(&self) -> Option<(NumberFor<B>, ValidatorSet<AuthorityId>)> {
 		self.sessions.front().and_then(|round| {
 			if round.mandatory_done() {
 				None
 			} else {
-				Some(round.session_start())
+				Some((round.session_start(), round.validator_set().clone()))
 			}
 		})
 	}
@@ -221,7 +227,7 @@ impl<B: Block> VoterOracle<B> {
 		let rounds = if let Some(r) = self.sessions.front() {
 			r
 		} else {
-			debug!(target: "beefy", "🥩 No voting round started");
+			debug!(target: LOG_TARGET, "🥩 No voting round started");
 			return None
 		};
 
@@ -229,7 +235,7 @@ impl<B: Block> VoterOracle<B> {
 		let target =
 			vote_target(best_grandpa, best_beefy, rounds.session_start(), self.min_block_delta);
 		trace!(
-			target: "beefy",
+			target: LOG_TARGET,
 			"🥩 best beefy: #{:?}, best finalized: #{:?}, current_vote_target: {:?}",
 			best_beefy,
 			best_grandpa,
@@ -239,14 +245,14 @@ impl<B: Block> VoterOracle<B> {
 	}
 }
 
-pub(crate) struct WorkerParams<B: Block, BE, P, R, N> {
+pub(crate) struct WorkerParams<B: Block, BE, P, N> {
 	pub backend: Arc<BE>,
 	pub payload_provider: P,
 	pub network: N,
 	pub key_store: BeefyKeystore,
 	pub gossip_engine: GossipEngine<B>,
 	pub gossip_validator: Arc<GossipValidator<B>>,
-	pub on_demand_justifications: OnDemandJustificationsEngine<B, R>,
+	pub on_demand_justifications: OnDemandJustificationsEngine<B>,
 	pub links: BeefyVoterLinks<B>,
 	pub metrics: Option<Metrics>,
 	pub persisted_state: PersistedState<B>,
@@ -287,7 +293,7 @@ impl<B: Block> PersistedState<B> {
 }
 
 /// A BEEFY worker plays the BEEFY protocol
-pub(crate) struct BeefyWorker<B: Block, BE, P, R, N> {
+pub(crate) struct BeefyWorker<B: Block, BE, P, N> {
 	// utilities
 	backend: Arc<BE>,
 	payload_provider: P,
@@ -297,7 +303,7 @@ pub(crate) struct BeefyWorker<B: Block, BE, P, R, N> {
 	// communication
 	gossip_engine: GossipEngine<B>,
 	gossip_validator: Arc<GossipValidator<B>>,
-	on_demand_justifications: OnDemandJustificationsEngine<B, R>,
+	on_demand_justifications: OnDemandJustificationsEngine<B>,
 
 	// channels
 	/// Links between the block importer, the background voter and the RPC layer.
@@ -307,20 +313,24 @@ pub(crate) struct BeefyWorker<B: Block, BE, P, R, N> {
 	/// BEEFY client metrics.
 	metrics: Option<Metrics>,
 	/// Buffer holding votes for future processing.
-	pending_votes: BTreeMap<NumberFor<B>, Vec<VoteMessage<NumberFor<B>, AuthorityId, Signature>>>,
+	pending_votes: BTreeMap<
+		NumberFor<B>,
+		BoundedVec<
+			VoteMessage<NumberFor<B>, AuthorityId, Signature>,
+			ConstU32<MAX_BUFFERED_VOTES_PER_ROUND>,
+		>,
+	>,
 	/// Buffer holding justifications for future processing.
 	pending_justifications: BTreeMap<NumberFor<B>, BeefyVersionedFinalityProof<B>>,
 	/// Persisted voter state.
 	persisted_state: PersistedState<B>,
 }
 
-impl<B, BE, P, R, N> BeefyWorker<B, BE, P, R, N>
+impl<B, BE, P, N> BeefyWorker<B, BE, P, N>
 where
 	B: Block + Codec,
 	BE: Backend<B>,
 	P: PayloadProvider<B>,
-	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash, NumberFor<B>>,
 	N: NetworkEventStream + NetworkRequest + SyncOracle + Send + Sync + Clone + 'static,
 {
 	/// Return a new BEEFY worker instance.
@@ -329,7 +339,7 @@ where
 	/// BEEFY pallet has been deployed on-chain.
 	///
 	/// The BEEFY pallet is needed in order to keep track of the BEEFY authority set.
-	pub(crate) fn new(worker_params: WorkerParams<B, BE, P, R, N>) -> Self {
+	pub(crate) fn new(worker_params: WorkerParams<B, BE, P, N>) -> Self {
 		let WorkerParams {
 			backend,
 			payload_provider,
@@ -395,7 +405,7 @@ where
 
 		if store.intersection(&active).count() == 0 {
 			let msg = "no authority public key found in store".to_string();
-			debug!(target: "beefy", "🥩 for block {:?} {}", block, msg);
+			debug!(target: LOG_TARGET, "🥩 for block {:?} {}", block, msg);
 			Err(Error::Keystore(msg))
 		} else {
 			Ok(())
@@ -408,13 +418,14 @@ where
 		validator_set: ValidatorSet<AuthorityId>,
 		new_session_start: NumberFor<B>,
 	) {
-		debug!(target: "beefy", "🥩 New active validator set: {:?}", validator_set);
+		debug!(target: LOG_TARGET, "🥩 New active validator set: {:?}", validator_set);
 
 		// BEEFY should finalize a mandatory block during each session.
 		if let Some(active_session) = self.active_rounds() {
 			if !active_session.mandatory_done() {
 				debug!(
-					target: "beefy", "🥩 New session {} while active session {} is still lagging.",
+					target: LOG_TARGET,
+					"🥩 New session {} while active session {} is still lagging.",
 					validator_set.id(),
 					active_session.validator_set_id(),
 				);
@@ -422,7 +433,7 @@ where
 			}
 		}
 
-		if log_enabled!(target: "beefy", log::Level::Debug) {
+		if log_enabled!(target: LOG_TARGET, log::Level::Debug) {
 			// verify the new validator set - only do it if we're also logging the warning
 			let _ = self.verify_validator_set(&new_session_start, &validator_set);
 		}
@@ -433,14 +444,15 @@ where
 			.add_session(Rounds::new(new_session_start, validator_set));
 		metric_set!(self, beefy_validator_set_id, id);
 		info!(
-			target: "beefy",
+			target: LOG_TARGET,
 			"🥩 New Rounds for validator set id: {:?} with session_start {:?}",
-			id, new_session_start
+			id,
+			new_session_start
 		);
 	}
 
 	fn handle_finality_notification(&mut self, notification: &FinalityNotification<B>) {
-		debug!(target: "beefy", "🥩 Finality notification: {:?}", notification);
+		debug!(target: LOG_TARGET, "🥩 Finality notification: {:?}", notification);
 		let header = &notification.header;
 
 		if *header.number() > self.best_grandpa_block() {
@@ -455,7 +467,7 @@ where
 				.map(|hash| {
 					backend
 						.blockchain()
-						.expect_header(BlockId::hash(*hash))
+						.expect_header(*hash)
 						.expect("just finalized block should be available; qed.")
 				})
 				.chain(std::iter::once(header.clone()))
@@ -481,8 +493,18 @@ where
 				false,
 			)?,
 			RoundAction::Enqueue => {
-				debug!(target: "beefy", "🥩 Buffer vote for round: {:?}.", block_num);
-				self.pending_votes.entry(block_num).or_default().push(vote)
+				debug!(target: LOG_TARGET, "🥩 Buffer vote for round: {:?}.", block_num);
+				if self.pending_votes.len() < MAX_BUFFERED_VOTE_ROUNDS {
+					let votes_vec = self.pending_votes.entry(block_num).or_default();
+					if votes_vec.try_push(vote).is_err() {
+						warn!(
+							target: LOG_TARGET,
+							"🥩 Buffer vote dropped for round: {:?}", block_num
+						)
+					}
+				} else {
+					warn!(target: LOG_TARGET, "🥩 Buffer vote dropped for round: {:?}.", block_num);
+				}
 			},
 			RoundAction::Drop => (),
 		};
@@ -503,12 +525,19 @@ where
 		let best_grandpa = self.best_grandpa_block();
 		match self.voting_oracle().triage_round(block_num, best_grandpa)? {
 			RoundAction::Process => {
-				debug!(target: "beefy", "🥩 Process justification for round: {:?}.", block_num);
+				debug!(target: LOG_TARGET, "🥩 Process justification for round: {:?}.", block_num);
 				self.finalize(justification)?
 			},
 			RoundAction::Enqueue => {
-				debug!(target: "beefy", "🥩 Buffer justification for round: {:?}.", block_num);
-				self.pending_justifications.entry(block_num).or_insert(justification);
+				debug!(target: LOG_TARGET, "🥩 Buffer justification for round: {:?}.", block_num);
+				if self.pending_justifications.len() < MAX_BUFFERED_JUSTIFICATIONS {
+					self.pending_justifications.entry(block_num).or_insert(justification);
+				} else {
+					warn!(
+						target: LOG_TARGET,
+						"🥩 Buffer justification dropped for round: {:?}.", block_num
+					);
+				}
 			},
 			RoundAction::Drop => (),
 		};
@@ -545,16 +574,24 @@ where
 
 				metric_set!(self, beefy_round_concluded, block_num);
 
-				info!(target: "beefy", "🥩 Round #{} concluded, finality_proof: {:?}.", round.1, finality_proof);
+				info!(
+					target: LOG_TARGET,
+					"🥩 Round #{} concluded, finality_proof: {:?}.", round.1, finality_proof
+				);
 
 				// We created the `finality_proof` and know to be valid.
 				// New state is persisted after finalization.
 				self.finalize(finality_proof)?;
 			} else {
-				if self_vote || self.voting_oracle().mandatory_pending() == Some(round.1) {
-					// Persist state after handling self vote to avoid double voting in case
-					// of voter restarts.
-					// Also persist state after handling mandatory block vote.
+				let mandatory_round = self
+					.voting_oracle()
+					.mandatory_pending()
+					.map(|p| p.0 == round.1)
+					.unwrap_or(false);
+				// Persist state after handling self vote to avoid double voting in case
+				// of voter restarts.
+				// Also persist state after handling mandatory block vote.
+				if self_vote || mandatory_round {
 					crate::aux_schema::write_voter_state(&*self.backend, &self.persisted_state)
 						.map_err(|e| Error::Backend(e.to_string()))?;
 				}
@@ -601,7 +638,10 @@ where
 					self.backend
 						.append_justification(hash, (BEEFY_ENGINE_ID, finality_proof.encode()))
 				}) {
-				error!(target: "beefy", "🥩 Error {:?} on appending justification: {:?}", e, finality_proof);
+				error!(
+					target: LOG_TARGET,
+					"🥩 Error {:?} on appending justification: {:?}", e, finality_proof
+				);
 			}
 
 			self.links
@@ -609,7 +649,7 @@ where
 				.notify(|| Ok::<_, ()>(finality_proof))
 				.expect("forwards closure result; the closure always returns Ok; qed.");
 		} else {
-			debug!(target: "beefy", "🥩 Can't set best beefy to older: {}", block_num);
+			debug!(target: LOG_TARGET, "🥩 Can't set best beefy to older: {}", block_num);
 		}
 		Ok(())
 	}
@@ -640,9 +680,9 @@ where
 		if !self.pending_justifications.is_empty() {
 			let justifs_to_handle = to_process_for(&mut self.pending_justifications, interval, _ph);
 			for (num, justification) in justifs_to_handle.into_iter() {
-				debug!(target: "beefy", "🥩 Handle buffered justification for: {:?}.", num);
+				debug!(target: LOG_TARGET, "🥩 Handle buffered justification for: {:?}.", num);
 				if let Err(err) = self.finalize(justification) {
-					error!(target: "beefy", "🥩 Error finalizing block: {}", err);
+					error!(target: LOG_TARGET, "🥩 Error finalizing block: {}", err);
 				}
 			}
 			// Possibly new interval after processing justifications.
@@ -653,14 +693,14 @@ where
 		if !self.pending_votes.is_empty() {
 			let votes_to_handle = to_process_for(&mut self.pending_votes, interval, _ph);
 			for (num, votes) in votes_to_handle.into_iter() {
-				debug!(target: "beefy", "🥩 Handle buffered votes for: {:?}.", num);
+				debug!(target: LOG_TARGET, "🥩 Handle buffered votes for: {:?}.", num);
 				for v in votes.into_iter() {
 					if let Err(err) = self.handle_vote(
 						(v.commitment.payload, v.commitment.block_number),
 						(v.id, v.signature),
 						false,
 					) {
-						error!(target: "beefy", "🥩 Error handling buffered vote: {}", err);
+						error!(target: LOG_TARGET, "🥩 Error handling buffered vote: {}", err);
 					};
 				}
 			}
@@ -685,30 +725,39 @@ where
 	///
 	/// Also handle this self vote by calling `self.handle_vote()` for it.
 	fn do_vote(&mut self, target_number: NumberFor<B>) -> Result<(), Error> {
-		debug!(target: "beefy", "🥩 Try voting on {}", target_number);
+		debug!(target: LOG_TARGET, "🥩 Try voting on {}", target_number);
 
 		// Most of the time we get here, `target` is actually `best_grandpa`,
 		// avoid getting header from backend in that case.
 		let target_header = if target_number == self.best_grandpa_block() {
 			self.persisted_state.best_grandpa_block_header.clone()
 		} else {
-			self.backend
+			let hash = self
+				.backend
 				.blockchain()
-				.expect_header(BlockId::Number(target_number))
+				.expect_block_hash_from_id(&BlockId::Number(target_number))
 				.map_err(|err| {
 					let err_msg = format!(
-						"Couldn't get header for block #{:?} (error: {:?}), skipping vote..",
+						"Couldn't get hash for block #{:?} (error: {:?}), skipping vote..",
 						target_number, err
 					);
 					Error::Backend(err_msg)
-				})?
+				})?;
+
+			self.backend.blockchain().expect_header(hash).map_err(|err| {
+				let err_msg = format!(
+					"Couldn't get header for block #{:?} ({:?}) (error: {:?}), skipping vote..",
+					target_number, hash, err
+				);
+				Error::Backend(err_msg)
+			})?
 		};
 		let target_hash = target_header.hash();
 
 		let payload = if let Some(hash) = self.payload_provider.payload(&target_header) {
 			hash
 		} else {
-			warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", target_hash);
+			warn!(target: LOG_TARGET, "🥩 No MMR root digest found for: {:?}", target_hash);
 			return Ok(())
 		};
 
@@ -718,16 +767,22 @@ where
 			.active_rounds_mut()
 			.ok_or(Error::UninitSession)?;
 		if !rounds.should_self_vote(&(payload.clone(), target_number)) {
-			debug!(target: "beefy", "🥩 Don't double vote for block number: {:?}", target_number);
+			debug!(
+				target: LOG_TARGET,
+				"🥩 Don't double vote for block number: {:?}", target_number
+			);
 			return Ok(())
 		}
 		let (validators, validator_set_id) = (rounds.validators(), rounds.validator_set_id());
 
 		let authority_id = if let Some(id) = self.key_store.authority_id(validators) {
-			debug!(target: "beefy", "🥩 Local authority id: {:?}", id);
+			debug!(target: LOG_TARGET, "🥩 Local authority id: {:?}", id);
 			id
 		} else {
-			debug!(target: "beefy", "🥩 Missing validator id - can't vote for: {:?}", target_hash);
+			debug!(
+				target: LOG_TARGET,
+				"🥩 Missing validator id - can't vote for: {:?}", target_hash
+			);
 			return Ok(())
 		};
 
@@ -737,13 +792,13 @@ where
 		let signature = match self.key_store.sign(&authority_id, &encoded_commitment) {
 			Ok(sig) => sig,
 			Err(err) => {
-				warn!(target: "beefy", "🥩 Error signing commitment: {:?}", err);
+				warn!(target: LOG_TARGET, "🥩 Error signing commitment: {:?}", err);
 				return Ok(())
 			},
 		};
 
 		trace!(
-			target: "beefy",
+			target: LOG_TARGET,
 			"🥩 Produced signature using {:?}, is_valid: {:?}",
 			authority_id,
 			BeefyKeystore::verify(&authority_id, &signature, &encoded_commitment)
@@ -755,14 +810,14 @@ where
 
 		metric_inc!(self, beefy_votes_sent);
 
-		debug!(target: "beefy", "🥩 Sent vote message: {:?}", message);
+		debug!(target: LOG_TARGET, "🥩 Sent vote message: {:?}", message);
 
 		if let Err(err) = self.handle_vote(
 			(message.commitment.payload, message.commitment.block_number),
 			(message.id, message.signature),
 			true,
 		) {
-			error!(target: "beefy", "🥩 Error handling self vote: {}", err);
+			error!(target: LOG_TARGET, "🥩 Error handling self vote: {}", err);
 		}
 
 		self.gossip_engine.gossip_message(topic::<B>(), encoded_message, false);
@@ -773,23 +828,21 @@ where
 	fn process_new_state(&mut self) {
 		// Handle pending justifications and/or votes for now GRANDPA finalized blocks.
 		if let Err(err) = self.try_pending_justif_and_votes() {
-			debug!(target: "beefy", "🥩 {}", err);
+			debug!(target: LOG_TARGET, "🥩 {}", err);
 		}
 
 		// Don't bother voting or requesting justifications during major sync.
 		if !self.network.is_major_syncing() {
 			// There were external events, 'state' is changed, author a vote if needed/possible.
 			if let Err(err) = self.try_to_vote() {
-				debug!(target: "beefy", "🥩 {}", err);
+				debug!(target: LOG_TARGET, "🥩 {}", err);
 			}
 			// If the current target is a mandatory block,
 			// make sure there's also an on-demand justification request out for it.
-			if let Some(block) = self.voting_oracle().mandatory_pending() {
+			if let Some((block, active)) = self.voting_oracle().mandatory_pending() {
 				// This only starts new request if there isn't already an active one.
-				self.on_demand_justifications.request(block);
+				self.on_demand_justifications.request(block, active);
 			}
-		} else {
-			debug!(target: "beefy", "🥩 Skipping voting while major syncing.");
 		}
 	}
 
@@ -802,13 +855,17 @@ where
 		mut block_import_justif: Fuse<NotificationReceiver<BeefyVersionedFinalityProof<B>>>,
 		mut finality_notifications: Fuse<FinalityNotifications<B>>,
 	) {
-		info!(target: "beefy", "🥩 run BEEFY worker, best grandpa: #{:?}.", self.best_grandpa_block());
+		info!(
+			target: LOG_TARGET,
+			"🥩 run BEEFY worker, best grandpa: #{:?}.",
+			self.best_grandpa_block()
+		);
 
 		let mut votes = Box::pin(
 			self.gossip_engine
 				.messages_for(topic::<B>())
 				.filter_map(|notification| async move {
-					trace!(target: "beefy", "🥩 Got vote message: {:?}", notification);
+					trace!(target: LOG_TARGET, "🥩 Got vote message: {:?}", notification);
 
 					VoteMessage::<NumberFor<B>, AuthorityId, Signature>::decode(
 						&mut &notification.message[..],
@@ -830,7 +887,7 @@ where
 				// Use `select_biased!` to prioritize order below.
 				// Make sure to pump gossip engine.
 				_ = gossip_engine => {
-					error!(target: "beefy", "🥩 Gossip engine has terminated, closing worker.");
+					error!(target: LOG_TARGET, "🥩 Gossip engine has terminated, closing worker.");
 					return;
 				},
 				// Process finality notifications first since these drive the voter.
@@ -838,7 +895,7 @@ where
 					if let Some(notification) = notification {
 						self.handle_finality_notification(&notification);
 					} else {
-						error!(target: "beefy", "🥩 Finality stream terminated, closing worker.");
+						error!(target: LOG_TARGET, "🥩 Finality stream terminated, closing worker.");
 						return;
 					}
 				},
@@ -846,7 +903,7 @@ where
 				justif = self.on_demand_justifications.next().fuse() => {
 					if let Some(justif) = justif {
 						if let Err(err) = self.triage_incoming_justif(justif) {
-							debug!(target: "beefy", "🥩 {}", err);
+							debug!(target: LOG_TARGET, "🥩 {}", err);
 						}
 					}
 				},
@@ -855,10 +912,10 @@ where
 						// Block import justifications have already been verified to be valid
 						// by `BeefyBlockImport`.
 						if let Err(err) = self.triage_incoming_justif(justif) {
-							debug!(target: "beefy", "🥩 {}", err);
+							debug!(target: LOG_TARGET, "🥩 {}", err);
 						}
 					} else {
-						error!(target: "beefy", "🥩 Block import stream terminated, closing worker.");
+						error!(target: LOG_TARGET, "🥩 Block import stream terminated, closing worker.");
 						return;
 					}
 				},
@@ -867,10 +924,10 @@ where
 					if let Some(vote) = vote {
 						// Votes have already been verified to be valid by the gossip validator.
 						if let Err(err) = self.triage_incoming_vote(vote) {
-							debug!(target: "beefy", "🥩 {}", err);
+							debug!(target: LOG_TARGET, "🥩 {}", err);
 						}
 					} else {
-						error!(target: "beefy", "🥩 Votes gossiping stream terminated, closing worker.");
+						error!(target: LOG_TARGET, "🥩 Votes gossiping stream terminated, closing worker.");
 						return;
 					}
 				},
@@ -904,18 +961,14 @@ where
 	// if the mandatory block (session_start) does not have a beefy justification yet,
 	// we vote on it
 	let target = if best_beefy < session_start {
-		debug!(
-			target: "beefy",
-			"🥩 vote target - mandatory block: #{:?}",
-			session_start,
-		);
+		debug!(target: LOG_TARGET, "🥩 vote target - mandatory block: #{:?}", session_start,);
 		session_start
 	} else {
 		let diff = best_grandpa.saturating_sub(best_beefy) + 1u32.into();
 		let diff = diff.saturated_into::<u32>() / 2;
 		let target = best_beefy + min_delta.max(diff.next_power_of_two()).into();
 		trace!(
-			target: "beefy",
+			target: LOG_TARGET,
 			"🥩 vote target - diff: {:?}, next_power_of_two: {:?}, target block: #{:?}",
 			diff,
 			diff.next_power_of_two(),
@@ -947,7 +1000,7 @@ pub(crate) mod tests {
 		BeefyRPCLinks, KnownPeers,
 	};
 	use beefy_primitives::{known_payloads, mmr::MmrRootProvider};
-	use futures::{executor::block_on, future::poll_fn, task::Poll};
+	use futures::{future::poll_fn, task::Poll};
 	use parking_lot::Mutex;
 	use sc_client_api::{Backend as BackendT, HeaderBackend};
 	use sc_network::NetworkService;
@@ -993,7 +1046,6 @@ pub(crate) mod tests {
 		Block,
 		Backend,
 		MmrRootProvider<Block, TestApi>,
-		TestApi,
 		Arc<NetworkService<Block, H256>>,
 	> {
 		let keystore = create_beefy_keystore(*key);
@@ -1024,12 +1076,13 @@ pub(crate) mod tests {
 			GossipEngine::new(network.clone(), "/beefy/1", gossip_validator.clone(), None);
 		let on_demand_justifications = OnDemandJustificationsEngine::new(
 			network.clone(),
-			api.clone(),
 			"/beefy/justifs/1".into(),
 			known_peers,
 		);
-		let at = BlockId::number(Zero::zero());
-		let genesis_header = backend.blockchain().expect_header(at).unwrap();
+		let genesis_header = backend
+			.blockchain()
+			.expect_header(backend.blockchain().info().genesis_hash)
+			.unwrap();
 		let persisted_state = PersistedState::checked_new(
 			genesis_header,
 			Zero::zero(),
@@ -1050,7 +1103,7 @@ pub(crate) mod tests {
 			on_demand_justifications,
 			persisted_state,
 		};
-		BeefyWorker::<_, _, _, _, _>::new(worker_params)
+		BeefyWorker::<_, _, _, _>::new(worker_params)
 	}
 
 	#[test]
@@ -1272,8 +1325,8 @@ pub(crate) mod tests {
 		assert_eq!(extracted, Some(validator_set));
 	}
 
-	#[test]
-	fn keystore_vs_validator_set() {
+	#[tokio::test]
+	async fn keystore_vs_validator_set() {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1);
@@ -1295,8 +1348,8 @@ pub(crate) mod tests {
 		assert_eq!(worker.verify_validator_set(&1, &validator_set), expected_err);
 	}
 
-	#[test]
-	fn should_finalize_correctly() {
+	#[tokio::test]
+	async fn should_finalize_correctly() {
 		let keys = [Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(&keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1);
@@ -1322,11 +1375,12 @@ pub(crate) mod tests {
 
 		// no 'best beefy block' or finality proofs
 		assert_eq!(worker.best_beefy_block(), 0);
-		block_on(poll_fn(move |cx| {
+		poll_fn(move |cx| {
 			assert_eq!(best_block_stream.poll_next_unpin(cx), Poll::Pending);
 			assert_eq!(finality_proof.poll_next_unpin(cx), Poll::Pending);
 			Poll::Ready(())
-		}));
+		})
+		.await;
 
 		// unknown hash for block #1
 		let (mut best_block_streams, mut finality_proofs) =
@@ -1343,7 +1397,7 @@ pub(crate) mod tests {
 		worker.finalize(justif.clone()).unwrap();
 		// verify block finalized
 		assert_eq!(worker.best_beefy_block(), 1);
-		block_on(poll_fn(move |cx| {
+		poll_fn(move |cx| {
 			// unknown hash -> nothing streamed
 			assert_eq!(best_block_stream.poll_next_unpin(cx), Poll::Pending);
 			// commitment streamed
@@ -1353,15 +1407,16 @@ pub(crate) mod tests {
 				v => panic!("unexpected value: {:?}", v),
 			}
 			Poll::Ready(())
-		}));
+		})
+		.await;
 
 		// generate 2 blocks, try again expect success
 		let (mut best_block_streams, _) = get_beefy_streams(&mut net, keys);
 		let mut best_block_stream = best_block_streams.drain(..).next().unwrap();
-		net.peer(0).push_blocks(2, false);
-		// finalize 1 and 2 without justifications
-		let hashof1 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(1)).unwrap();
-		let hashof2 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(2)).unwrap();
+		let hashes = net.peer(0).push_blocks(2, false);
+		// finalize 1 and 2 without justifications (hashes does not contain genesis)
+		let hashof1 = hashes[0];
+		let hashof2 = hashes[1];
 		backend.finalize_block(hashof1, None).unwrap();
 		backend.finalize_block(hashof2, None).unwrap();
 
@@ -1375,7 +1430,7 @@ pub(crate) mod tests {
 		assert_eq!(worker.active_rounds().unwrap().session_start(), 2);
 		// verify block finalized
 		assert_eq!(worker.best_beefy_block(), 2);
-		block_on(poll_fn(move |cx| {
+		poll_fn(move |cx| {
 			match best_block_stream.poll_next_unpin(cx) {
 				// expect Some(hash-of-block-2)
 				Poll::Ready(Some(hash)) => {
@@ -1385,15 +1440,16 @@ pub(crate) mod tests {
 				v => panic!("unexpected value: {:?}", v),
 			}
 			Poll::Ready(())
-		}));
+		})
+		.await;
 
 		// check BEEFY justifications are also appended to backend
 		let justifs = backend.blockchain().justifications(hashof2).unwrap().unwrap();
 		assert!(justifs.get(BEEFY_ENGINE_ID).is_some())
 	}
 
-	#[test]
-	fn should_init_session() {
+	#[tokio::test]
+	async fn should_init_session() {
 		let keys = &[Keyring::Alice, Keyring::Bob];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1);
@@ -1423,8 +1479,8 @@ pub(crate) mod tests {
 		assert_eq!(rounds.validator_set_id(), new_validator_set.id());
 	}
 
-	#[test]
-	fn should_triage_votes_and_process_later() {
+	#[tokio::test]
+	async fn should_triage_votes_and_process_later() {
 		let keys = &[Keyring::Alice, Keyring::Bob];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1);

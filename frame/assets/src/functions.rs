@@ -354,18 +354,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if let Some(check_issuer) = maybe_check_issuer {
 				ensure!(check_issuer == details.issuer, Error::<T, I>::NoPermission);
 			}
-			debug_assert!(
-				T::Balance::max_value() - details.supply >= amount,
-				"checked in prep; qed"
-			);
+			debug_assert!(details.supply.checked_add(&amount).is_some(), "checked in prep; qed");
+
 			details.supply = details.supply.saturating_add(amount);
+
 			Ok(())
 		})?;
-		Self::deposit_event(Event::Issued {
-			asset_id: id,
-			owner: beneficiary.clone(),
-			total_supply: amount,
-		});
+
+		Self::deposit_event(Event::Issued { asset_id: id, owner: beneficiary.clone(), amount });
+
 		Ok(())
 	}
 
@@ -664,7 +661,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				status: AssetStatus::Live,
 			},
 		);
-		Self::deposit_event(Event::ForceCreated { asset_id: id, owner });
+		Self::deposit_event(Event::ForceCreated { asset_id: id, owner: owner.clone() });
+		T::CallbackHandle::created(&id, &owner);
 		Ok(())
 	}
 
@@ -754,6 +752,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					approvals_destroyed: removed_approvals as u32,
 					approvals_remaining: details.approvals as u32,
 				});
+				T::CallbackHandle::destroyed(&id);
 				Ok(())
 			})?;
 		Ok(removed_approvals)

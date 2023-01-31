@@ -30,7 +30,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Hash},
 };
 #[cfg(not(feature = "std"))]
-use sp_sandbox::{SandboxEnvironmentBuilder, SandboxInstance, SandboxMemory, Value};
+use sp_runtime_interface::pack_ptr_and_len;
 
 extern "C" {
 	#[allow(dead_code)]
@@ -39,6 +39,10 @@ extern "C" {
 	#[allow(dead_code)]
 	fn yet_another_missing_external();
 }
+
+#[cfg(not(feature = "std"))]
+/// The size of a WASM page in bytes.
+const WASM_PAGE_SIZE: usize = 65536;
 
 #[cfg(not(feature = "std"))]
 /// Mutable static variables should be always observed to have
@@ -94,7 +98,7 @@ sp_core::wasm_export_functions! {
 		let heap_ptr = heap_base as usize;
 
 		// Find the next wasm page boundary.
-		let heap_ptr = round_up_to(heap_ptr, 65536);
+		let heap_ptr = round_up_to(heap_ptr, WASM_PAGE_SIZE);
 
 		// Make it an actual pointer
 		let heap_ptr = heap_ptr as *mut u8;
@@ -340,159 +344,31 @@ sp_core::wasm_export_functions! {
 	}
 }
 
-/// A macro to define a test entrypoint for each available sandbox executor.
-macro_rules! wasm_export_sandbox_test_functions {
-	(
-		$(
-			fn $name:ident<T>(
-				$( $arg_name:ident: $arg_ty:ty ),* $(,)?
-			) $( -> $ret_ty:ty )? where T: SandboxInstance<$state:ty> $(,)?
-			{ $( $fn_impl:tt )* }
-		)*
-	) => {
-		$(
-				#[cfg(not(feature = "std"))]
-				fn $name<T>( $($arg_name: $arg_ty),* ) $( -> $ret_ty )? where T: SandboxInstance<$state> {
-					$( $fn_impl )*
-				}
-
-				paste::paste! {
-					sp_core::wasm_export_functions! {
-						fn [<$name _host>]( $($arg_name: $arg_ty),* ) $( -> $ret_ty )? {
-							$name::<sp_sandbox::host_executor::Instance<$state>>( $( $arg_name ),* )
-						}
-
-						fn [<$name _embedded>]( $($arg_name: $arg_ty),* ) $( -> $ret_ty )? {
-							$name::<sp_sandbox::embedded_executor::Instance<$state>>( $( $arg_name ),* )
-						}
-					}
-				}
-		)*
-	};
-}
-
-wasm_export_sandbox_test_functions! {
-	fn test_sandbox<T>(code: Vec<u8>) -> bool
-	where
-		T: SandboxInstance<State>,
-	{
-		execute_sandboxed::<T>(&code, &[]).is_ok()
-	}
-
-	fn test_sandbox_args<T>(code: Vec<u8>) -> bool
-	where
-		T: SandboxInstance<State>,
-	{
-		execute_sandboxed::<T>(&code, &[Value::I32(0x12345678), Value::I64(0x1234567887654321)])
-			.is_ok()
-	}
-
-	fn test_sandbox_return_val<T>(code: Vec<u8>) -> bool
-	where
-		T: SandboxInstance<State>,
-	{
-		let ok = match execute_sandboxed::<T>(&code, &[Value::I32(0x1336)]) {
-			Ok(sp_sandbox::ReturnValue::Value(Value::I32(0x1337))) => true,
-			_ => false,
-		};
-
-		ok
-	}
-
-	fn test_sandbox_instantiate<T>(code: Vec<u8>) -> u8
-	where
-		T: SandboxInstance<()>,
-	{
-		let env_builder = T::EnvironmentBuilder::new();
-		let code = match T::new(&code, &env_builder, &mut ()) {
-			Ok(_) => 0,
-			Err(sp_sandbox::Error::Module) => 1,
-			Err(sp_sandbox::Error::Execution) => 2,
-			Err(sp_sandbox::Error::OutOfBounds) => 3,
-		};
-
-		code
-	}
-
-	fn test_sandbox_get_global_val<T>(code: Vec<u8>) -> i64
-	where
-		T: SandboxInstance<()>,
-	{
-		let env_builder = T::EnvironmentBuilder::new();
-		let instance = if let Ok(i) = T::new(&code, &env_builder, &mut ()) {
-			i
-		} else {
-			return 20
-		};
-
-		match instance.get_global_val("test_global") {
-			Some(sp_sandbox::Value::I64(val)) => val,
-			None => 30,
-			_ => 40,
-		}
-	}
-}
-
+// Returns a huge len. It should result in an error, and not an allocation.
+#[no_mangle]
 #[cfg(not(feature = "std"))]
-struct State {
-	counter: u32,
+pub extern "C" fn test_return_huge_len(_params: *const u8, _len: usize) -> u64 {
+	pack_ptr_and_len(0, u32::MAX)
 }
 
+// Returns an offset right at the edge of the wasm memory boundary. With length 0, it should
+// succeed.
+#[no_mangle]
 #[cfg(not(feature = "std"))]
-fn execute_sandboxed<T>(
-	code: &[u8],
-	args: &[Value],
-) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError>
-where
-	T: sp_sandbox::SandboxInstance<State>,
-{
-	fn env_assert(
-		_e: &mut State,
-		args: &[Value],
-	) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError> {
-		if args.len() != 1 {
-			return Err(sp_sandbox::HostError)
-		}
-		let condition = args[0].as_i32().ok_or_else(|| sp_sandbox::HostError)?;
-		if condition != 0 {
-			Ok(sp_sandbox::ReturnValue::Unit)
-		} else {
-			Err(sp_sandbox::HostError)
-		}
-	}
-	fn env_inc_counter(
-		e: &mut State,
-		args: &[Value],
-	) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError> {
-		if args.len() != 1 {
-			return Err(sp_sandbox::HostError)
-		}
-		let inc_by = args[0].as_i32().ok_or_else(|| sp_sandbox::HostError)?;
-		e.counter += inc_by as u32;
-		Ok(sp_sandbox::ReturnValue::Value(Value::I32(e.counter as i32)))
-	}
+pub extern "C" fn test_return_max_memory_offset(_params: *const u8, _len: usize) -> u64 {
+	pack_ptr_and_len((core::arch::wasm32::memory_size(0) * WASM_PAGE_SIZE) as u32, 0)
+}
 
-	let mut state = State { counter: 0 };
+// Returns an offset right at the edge of the wasm memory boundary. With length 1, it should fail.
+#[no_mangle]
+#[cfg(not(feature = "std"))]
+pub extern "C" fn test_return_max_memory_offset_plus_one(_params: *const u8, _len: usize) -> u64 {
+	pack_ptr_and_len((core::arch::wasm32::memory_size(0) * WASM_PAGE_SIZE) as u32, 1)
+}
 
-	let env_builder = {
-		let mut env_builder = T::EnvironmentBuilder::new();
-		env_builder.add_host_func("env", "assert", env_assert);
-		env_builder.add_host_func("env", "inc_counter", env_inc_counter);
-		let memory = match T::Memory::new(1, Some(16)) {
-			Ok(m) => m,
-			Err(_) => unreachable!(
-				"
-				Memory::new() can return Err only if parameters are borked; \
-				We passing params here explicitly and they're correct; \
-				Memory::new() can't return a Error qed"
-			),
-		};
-		env_builder.add_memory("env", "memory", memory);
-		env_builder
-	};
-
-	let mut instance = T::new(code, &env_builder, &mut state)?;
-	let result = instance.invoke("call", args, &mut state);
-
-	result.map_err(|_| sp_sandbox::HostError)
+// Returns an output that overflows the u32 range. It should result in an error.
+#[no_mangle]
+#[cfg(not(feature = "std"))]
+pub extern "C" fn test_return_overflow(_params: *const u8, _len: usize) -> u64 {
+	pack_ptr_and_len(u32::MAX, 1)
 }

@@ -22,4 +22,4 @@ wasm-timer = "0.2"
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 
 [dev-dependencies]
-rand = "0.7.2"
+rand = "0.8.5"

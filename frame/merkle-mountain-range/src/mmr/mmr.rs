@@ -18,12 +18,12 @@
 use crate::{
 	mmr::{
 		storage::{OffchainStorage, RuntimeStorage, Storage},
-		utils::NodesUtils,
 		Hasher, Node, NodeOf,
 	},
 	primitives::{self, Error, NodeIndex},
 	Config, HashingOf,
 };
+use sp_mmr_primitives::{mmr_lib, utils::NodesUtils};
 use sp_std::prelude::*;
 
 /// Stateless verification of the proof for a batch of leaves.

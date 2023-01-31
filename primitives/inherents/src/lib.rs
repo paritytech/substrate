@@ -56,7 +56,7 @@
 //!
 //! #[async_trait::async_trait]
 //! impl sp_inherents::InherentDataProvider for InherentDataProvider {
-//! 	fn provide_inherent_data(
+//! 	async fn provide_inherent_data(
 //! 		&self,
 //! 		inherent_data: &mut InherentData,
 //! 	) -> Result<(), sp_inherents::Error> {
@@ -106,7 +106,7 @@
 //! # struct InherentDataProvider;
 //! # #[async_trait::async_trait]
 //! # impl sp_inherents::InherentDataProvider for InherentDataProvider {
-//! # 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), sp_inherents::Error> {
+//! # 	async fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), sp_inherents::Error> {
 //! # 		inherent_data.put_data(INHERENT_IDENTIFIER, &"hello")
 //! # 	}
 //! # 	async fn try_handle_error(
@@ -443,7 +443,7 @@ mod tests {
 
 	#[async_trait::async_trait]
 	impl InherentDataProvider for TestInherentDataProvider {
-		fn provide_inherent_data(&self, data: &mut InherentData) -> Result<(), Error> {
+		async fn provide_inherent_data(&self, data: &mut InherentData) -> Result<(), Error> {
 			data.put_data(TEST_INHERENT_0, &42)
 		}
 
@@ -460,7 +460,7 @@ mod tests {
 	fn create_inherent_data() {
 		let provider = TestInherentDataProvider;
 
-		let inherent_data = provider.create_inherent_data().unwrap();
+		let inherent_data = futures::executor::block_on(provider.create_inherent_data()).unwrap();
 
 		assert_eq!(inherent_data.get_data::<u32>(&TEST_INHERENT_0).unwrap().unwrap(), 42u32);
 	}

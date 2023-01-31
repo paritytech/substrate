@@ -300,7 +300,7 @@ pub(crate) struct AsyncApi {
 }
 
 impl AsyncApi {
-	/// Creates new Offchain extensions API implementation an the asynchronous processing part.
+	/// Creates new Offchain extensions API implementation and the asynchronous processing part.
 	pub fn new(
 		network_provider: Arc<dyn NetworkProvider + Send + Sync>,
 		is_validator: bool,

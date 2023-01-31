@@ -1845,7 +1845,7 @@ mod tests {
 		use rand::{rngs::SmallRng, RngCore, SeedableRng};
 		let mut storage: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>> =
 			Default::default();
-		let mut seed = [0; 16];
+		let mut seed = [0; 32];
 		for i in 0..50u32 {
 			let mut child_infos = Vec::new();
 			let seed_partial = &mut seed[0..4];

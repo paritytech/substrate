@@ -200,6 +200,8 @@ pub mod well_known_keys {
 	pub const HEAP_PAGES: &[u8] = b":heappages";
 
 	/// Current extrinsic index (u32) is stored under this key.
+	///
+	/// Encodes to `0x3a65787472696e7369635f696e646578`.
 	pub const EXTRINSIC_INDEX: &[u8] = b":extrinsic_index";
 
 	/// Prefix of child storage keys.
@@ -407,6 +409,7 @@ impl ChildTrieParentKeyId {
 /// V0 and V1 uses a same trie implementation, but V1 will write external value node in the trie for
 /// value with size at least `TRIE_VALUE_NODE_THRESHOLD`.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[cfg_attr(feature = "std", derive(Encode, Decode))]
 pub enum StateVersion {
 	/// Old state version, no value nodes.
 	V0 = 0,

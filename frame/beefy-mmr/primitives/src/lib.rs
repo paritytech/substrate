@@ -27,7 +27,8 @@
 //! Merkle Tree is constructed from arbitrary-length leaves, that are initially hashed using the
 //! same hasher as the inner nodes.
 //! Inner nodes are created by concatenating child hashes and hashing again. The implementation
-//! does not perform any sorting of the input data (leaves) nor when inner nodes are created.
+//! sorts each pair of hashes before every hash operation. This makes proof verification more
+//! efficient by removing the need to track which side each intermediate hash is concatenated on.
 //!
 //! If the number of leaves is not even, last leaf (hash of) is promoted to the upper layer.
 
@@ -45,7 +46,7 @@ use beefy_primitives::mmr::{BeefyAuthoritySet, BeefyNextAuthoritySet};
 pub fn merkle_root<H, I>(leaves: I) -> H::Output
 where
 	H: HashT,
-	H::Output: Default + AsRef<[u8]>,
+	H::Output: Default + AsRef<[u8]> + PartialOrd,
 	I: IntoIterator,
 	I::Item: AsRef<[u8]>,
 {
@@ -56,7 +57,7 @@ where
 fn merkelize<H, V, I>(leaves: I, visitor: &mut V) -> H::Output
 where
 	H: HashT,
-	H::Output: Default + AsRef<[u8]>,
+	H::Output: Default + AsRef<[u8]> + PartialOrd,
 	V: Visitor<H::Output>,
 	I: Iterator<Item = H::Output>,
 {
@@ -141,7 +142,7 @@ impl<T> Visitor<T> for () {
 pub fn merkle_proof<H, I, T>(leaves: I, leaf_index: usize) -> MerkleProof<H::Output, T>
 where
 	H: HashT,
-	H::Output: Default + Copy + AsRef<[u8]>,
+	H::Output: Default + Copy + AsRef<[u8]> + PartialOrd,
 	I: IntoIterator<Item = T>,
 	I::IntoIter: ExactSizeIterator,
 	T: AsRef<[u8]>,
@@ -241,7 +242,7 @@ pub fn verify_proof<'a, H, P, L>(
 ) -> bool
 where
 	H: HashT,
-	H::Output: PartialEq + AsRef<[u8]>,
+	H::Output: PartialEq + AsRef<[u8]> + PartialOrd,
 	P: IntoIterator<Item = H::Output>,
 	L: Into<Leaf<'a, H::Output>>,
 {
@@ -256,15 +257,13 @@ where
 
 	let hash_len = <H as sp_core::Hasher>::LENGTH;
 	let mut combined = vec![0_u8; hash_len * 2];
-	let mut position = leaf_index;
-	let mut width = number_of_leaves;
 	let computed = proof.into_iter().fold(leaf_hash, |a, b| {
-		if position % 2 == 1 || position + 1 == width {
-			combined[..hash_len].copy_from_slice(&b.as_ref());
-			combined[hash_len..].copy_from_slice(&a.as_ref());
-		} else {
+		if a < b {
 			combined[..hash_len].copy_from_slice(&a.as_ref());
 			combined[hash_len..].copy_from_slice(&b.as_ref());
+		} else {
+			combined[..hash_len].copy_from_slice(&b.as_ref());
+			combined[hash_len..].copy_from_slice(&a.as_ref());
 		}
 		let hash = <H as HashT>::hash(&combined);
 		#[cfg(feature = "debug")]
@@ -275,8 +274,6 @@ where
 			array_bytes::bytes2hex("", &hash.as_ref()),
 			array_bytes::bytes2hex("", &combined.as_ref())
 		);
-		position /= 2;
-		width = ((width - 1) / 2) + 1;
 		hash
 	});
 
@@ -295,7 +292,7 @@ fn merkelize_row<H, V, I>(
 ) -> Result<H::Output, Vec<H::Output>>
 where
 	H: HashT,
-	H::Output: AsRef<[u8]>,
+	H::Output: AsRef<[u8]> + PartialOrd,
 	V: Visitor<H::Output>,
 	I: Iterator<Item = H::Output>,
 {
@@ -321,8 +318,13 @@ where
 		index += 2;
 		match (a, b) {
 			(Some(a), Some(b)) => {
-				combined[..hash_len].copy_from_slice(a.as_ref());
-				combined[hash_len..].copy_from_slice(b.as_ref());
+				if a < b {
+					combined[..hash_len].copy_from_slice(a.as_ref());
+					combined[hash_len..].copy_from_slice(b.as_ref());
+				} else {
+					combined[..hash_len].copy_from_slice(b.as_ref());
+					combined[hash_len..].copy_from_slice(a.as_ref());
+				}
 
 				next.push(<H as HashT>::hash(&combined));
 			},
@@ -428,12 +430,12 @@ mod tests {
 		};
 
 		test(
-			"aff1208e69c9e8be9b584b07ebac4e48a1ee9d15ce3afe20b77a4d29e4175aa3",
+			"5842148bc6ebeb52af882a317c765fccd3ae80589b21a9b8cbf21abb630e46a7",
 			vec!["a", "b", "c"],
 		);
 
 		test(
-			"b8912f7269068901f231a965adfefbc10f0eedcfa61852b103efd54dac7db3d7",
+			"7b84bec68b13c39798c6c50e9e40a0b268e3c1634db8f4cb97314eb243d4c514",
 			vec!["a", "b", "a"],
 		);
 
@@ -443,7 +445,7 @@ mod tests {
 		);
 
 		test(
-			"fb3b3be94be9e983ba5e094c9c51a7d96a4fa2e5d8e891df00ca89ba05bb1239",
+			"cc50382cfd3c9a617741e9a85efee8752b8feb95a2cbecd6365fb21366ce0c8c",
 			vec!["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
 		);
 	}
@@ -761,7 +763,7 @@ mod tests {
 			"0xc26B34D375533fFc4c5276282Fa5D660F3d8cbcB",
 		];
 		let root: H256 = array_bytes::hex2array_unchecked(
-			"72b0acd7c302a84f1f6b6cefe0ba7194b7398afb440e1b44a9dbbe270394ca53",
+			"7b2c6eebec6e85b2e272325a11c31af71df52bc0534d2d4f903e0ced191f022e",
 		)
 		.into();
 
@@ -806,11 +808,11 @@ mod tests {
 					)
 					.into(),
 					array_bytes::hex2array_unchecked(
-						"d02609d2bbdb28aa25f58b85afec937d5a4c85d37925bce6d0cf802f9d76ba79"
+						"1fad92ed8d0504ef6c0231bbbeeda960a40693f297c64e87b582beb92ecfb00f"
 					)
 					.into(),
 					array_bytes::hex2array_unchecked(
-						"ae3f8991955ed884613b0a5f40295902eea0e0abe5858fc520b72959bc016d4e"
+						"0b84c852cbcf839d562d826fd935e1b37975ccaa419e1def8d219df4b83dcbf4"
 					)
 					.into(),
 				],

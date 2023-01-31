@@ -18,7 +18,7 @@
 use crate::{limits::BlockWeights, Config, Pallet};
 use codec::{Decode, Encode};
 use frame_support::{
-	dispatch::{DispatchClass, DispatchInfo, PostDispatchInfo},
+	dispatch::{DispatchInfo, PostDispatchInfo},
 	traits::Get,
 };
 use scale_info::TypeInfo;
@@ -135,10 +135,10 @@ where
 
 	// add the weight. If class is unlimited, use saturating add instead of checked one.
 	if limit_per_class.max_total.is_none() && limit_per_class.reserved.is_none() {
-		all_weight.add(extrinsic_weight, info.class)
+		all_weight.accrue(extrinsic_weight, info.class)
 	} else {
 		all_weight
-			.checked_add(extrinsic_weight, info.class)
+			.checked_accrue(extrinsic_weight, info.class)
 			.map_err(|_| InvalidTransaction::ExhaustsResources)?;
 	}
 
@@ -190,9 +190,6 @@ where
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> Result<(), TransactionValidityError> {
-		if info.class == DispatchClass::Mandatory {
-			return Err(InvalidTransaction::MandatoryDispatch.into())
-		}
 		Self::do_pre_dispatch(info, len)
 	}
 
@@ -203,9 +200,6 @@ where
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> TransactionValidity {
-		if info.class == DispatchClass::Mandatory {
-			return Err(InvalidTransaction::MandatoryDispatch.into())
-		}
 		Self::do_validate(info, len)
 	}
 
@@ -230,20 +224,12 @@ where
 		info: &DispatchInfoOf<Self::Call>,
 		post_info: &PostDispatchInfoOf<Self::Call>,
 		_len: usize,
-		result: &DispatchResult,
+		_result: &DispatchResult,
 	) -> Result<(), TransactionValidityError> {
-		// Since mandatory dispatched do not get validated for being overweight, we are sensitive
-		// to them actually being useful. Block producers are thus not allowed to include mandatory
-		// extrinsics that result in error.
-		if let (DispatchClass::Mandatory, Err(e)) = (info.class, result) {
-			log::error!(target: "runtime::system", "Bad mandatory: {:?}", e);
-			return Err(InvalidTransaction::BadMandatory.into())
-		}
-
 		let unspent = post_info.calc_unspent(info);
 		if unspent.any_gt(Weight::zero()) {
 			crate::BlockWeight::<T>::mutate(|current_weight| {
-				current_weight.sub(unspent, info.class);
+				current_weight.reduce(unspent, info.class);
 			})
 		}
 
@@ -268,7 +254,7 @@ mod tests {
 	use super::*;
 	use crate::{
 		mock::{new_test_ext, System, Test, CALL},
-		AllExtrinsicsLen, BlockWeight,
+		AllExtrinsicsLen, BlockWeight, DispatchClass,
 	};
 	use frame_support::{assert_err, assert_ok, dispatch::Pays, weights::Weight};
 	use sp_std::marker::PhantomData;

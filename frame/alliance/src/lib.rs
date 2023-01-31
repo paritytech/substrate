@@ -503,6 +503,7 @@ pub mod pallet {
 		/// Add a new proposal to be voted on.
 		///
 		/// Must be called by a Fellow.
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::propose_proposed(
 			*length_bound, // B
 			T::MaxFellows::get(), // M
@@ -524,6 +525,7 @@ pub mod pallet {
 		/// Add an aye or nay vote for the sender to the given proposal.
 		///
 		/// Must be called by a Fellow.
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::vote(T::MaxFellows::get()))]
 		pub fn vote(
 			origin: OriginFor<T>,
@@ -541,6 +543,7 @@ pub mod pallet {
 		/// Close a vote that is either approved, disapproved, or whose voting period has ended.
 		///
 		/// Must be called by a Fellow.
+		#[pallet::call_index(2)]
 		#[pallet::weight({
 			let b = *length_bound;
 			let m = T::MaxFellows::get();
@@ -573,6 +576,7 @@ pub mod pallet {
 		/// The Alliance must be empty, and the call must provide some founding members.
 		///
 		/// Must be called by the Root origin.
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::init_members(
 			fellows.len() as u32,
 			allies.len() as u32,
@@ -623,6 +627,7 @@ pub mod pallet {
 		/// Disband the Alliance, remove all active members and unreserve deposits.
 		///
 		/// Witness data must be set.
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::disband(
 			witness.fellow_members,
 			witness.ally_members,
@@ -673,6 +678,7 @@ pub mod pallet {
 		}
 
 		/// Set a new IPFS CID to the alliance rule.
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::set_rule())]
 		pub fn set_rule(origin: OriginFor<T>, rule: Cid) -> DispatchResult {
 			T::AdminOrigin::ensure_origin(origin)?;
@@ -684,6 +690,7 @@ pub mod pallet {
 		}
 
 		/// Make an announcement of a new IPFS CID about alliance issues.
+		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::announce())]
 		pub fn announce(origin: OriginFor<T>, announcement: Cid) -> DispatchResult {
 			T::AnnouncementOrigin::ensure_origin(origin)?;
@@ -699,6 +706,7 @@ pub mod pallet {
 		}
 
 		/// Remove an announcement.
+		#[pallet::call_index(7)]
 		#[pallet::weight(T::WeightInfo::remove_announcement())]
 		pub fn remove_announcement(origin: OriginFor<T>, announcement: Cid) -> DispatchResult {
 			T::AnnouncementOrigin::ensure_origin(origin)?;
@@ -716,6 +724,7 @@ pub mod pallet {
 		}
 
 		/// Submit oneself for candidacy. A fixed deposit is reserved.
+		#[pallet::call_index(8)]
 		#[pallet::weight(T::WeightInfo::join_alliance())]
 		pub fn join_alliance(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -752,6 +761,7 @@ pub mod pallet {
 
 		/// A Fellow can nominate someone to join the alliance as an Ally. There is no deposit
 		/// required from the nominator or nominee.
+		#[pallet::call_index(9)]
 		#[pallet::weight(T::WeightInfo::nominate_ally())]
 		pub fn nominate_ally(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			let nominator = ensure_signed(origin)?;
@@ -776,6 +786,7 @@ pub mod pallet {
 		}
 
 		/// Elevate an Ally to Fellow.
+		#[pallet::call_index(10)]
 		#[pallet::weight(T::WeightInfo::elevate_ally())]
 		pub fn elevate_ally(origin: OriginFor<T>, ally: AccountIdLookupOf<T>) -> DispatchResult {
 			T::MembershipManager::ensure_origin(origin)?;
@@ -792,6 +803,7 @@ pub mod pallet {
 
 		/// As a member, give a retirement notice and start a retirement period required to pass in
 		/// order to retire.
+		#[pallet::call_index(11)]
 		#[pallet::weight(T::WeightInfo::give_retirement_notice())]
 		pub fn give_retirement_notice(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -814,6 +826,7 @@ pub mod pallet {
 		///
 		/// This can only be done once you have called `give_retirement_notice` and the
 		/// `RetirementPeriod` has passed.
+		#[pallet::call_index(12)]
 		#[pallet::weight(T::WeightInfo::retire())]
 		pub fn retire(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -836,6 +849,7 @@ pub mod pallet {
 		}
 
 		/// Kick a member from the Alliance and slash its deposit.
+		#[pallet::call_index(13)]
 		#[pallet::weight(T::WeightInfo::kick_member())]
 		pub fn kick_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			T::MembershipManager::ensure_origin(origin)?;
@@ -853,6 +867,7 @@ pub mod pallet {
 		}
 
 		/// Add accounts or websites to the list of unscrupulous items.
+		#[pallet::call_index(14)]
 		#[pallet::weight(T::WeightInfo::add_unscrupulous_items(items.len() as u32, T::MaxWebsiteUrlLength::get()))]
 		pub fn add_unscrupulous_items(
 			origin: OriginFor<T>,
@@ -882,6 +897,7 @@ pub mod pallet {
 		}
 
 		/// Deem some items no longer unscrupulous.
+		#[pallet::call_index(15)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::remove_unscrupulous_items(
 			items.len() as u32, T::MaxWebsiteUrlLength::get()
 		))]
@@ -907,6 +923,7 @@ pub mod pallet {
 		/// Close a vote that is either approved, disapproved, or whose voting period has ended.
 		///
 		/// Must be called by a Fellow.
+		#[pallet::call_index(16)]
 		#[pallet::weight({
 			let b = *length_bound;
 			let m = T::MaxFellows::get();
@@ -934,6 +951,7 @@ pub mod pallet {
 		/// Abdicate one's position as a voting member and just be an Ally. May be used by Fellows
 		/// who do not want to leave the Alliance but do not have the capacity to participate
 		/// operationally for some time.
+		#[pallet::call_index(17)]
 		#[pallet::weight(T::WeightInfo::abdicate_fellow_status())]
 		pub fn abdicate_fellow_status(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;

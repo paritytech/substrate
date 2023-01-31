@@ -8,19 +8,20 @@ homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "FRAME pallet for WASM contracts"
 readme = "README.md"
+include = ["src/**/*", "README.md", "CHANGELOG.md"]
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 bitflags = "1.3"
-codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
+codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = [
 	"derive",
 	"max-encoded-len",
 ] }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 log = { version = "0.4", default-features = false }
-wasm-instrument = { version = "0.3", default-features = false }
+wasm-instrument = { version = "0.4", default-features = false }
 serde = { version = "1", optional = true, features = ["derive"] }
 smallvec = { version = "1", default-features = false, features = [
 	"const_generics",
@@ -84,9 +85,5 @@ runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"rand",
 	"rand_pcg",
-	"unstable-interface",
 ]
 try-runtime = ["frame-support/try-runtime"]
-# Make contract callable functions marked as unstable available. Do not enable
-# on live chains as those are subject to change.
-unstable-interface = []

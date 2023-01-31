@@ -53,11 +53,13 @@ pub mod example {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		#[pallet::call_index(0)]
 		#[pallet::weight(*_weight)]
 		pub fn noop(_origin: OriginFor<T>, _weight: Weight) -> DispatchResult {
 			Ok(())
 		}
 
+		#[pallet::call_index(1)]
 		#[pallet::weight(*_start_weight)]
 		pub fn foobar(
 			origin: OriginFor<T>,
@@ -78,6 +80,7 @@ pub mod example {
 			}
 		}
 
+		#[pallet::call_index(2)]
 		#[pallet::weight(0)]
 		pub fn big_variant(_origin: OriginFor<T>, _arg: [u8; 400]) -> DispatchResult {
 			Ok(())
@@ -105,6 +108,7 @@ mod mock_democracy {
 
 		#[pallet::call]
 		impl<T: Config> Pallet<T> {
+			#[pallet::call_index(3)]
 			#[pallet::weight(0)]
 			pub fn external_propose_majority(origin: OriginFor<T>) -> DispatchResult {
 				T::ExternalMajorityOrigin::ensure_origin(origin)?;
@@ -899,5 +903,32 @@ fn batch_all_works_with_council_origin() {
 			RuntimeOrigin::from(pallet_collective::RawOrigin::Members(3, 3)),
 			vec![RuntimeCall::Democracy(mock_democracy::Call::external_propose_majority {})]
 		));
+	})
+}
+
+#[test]
+fn with_weight_works() {
+	new_test_ext().execute_with(|| {
+		let upgrade_code_call =
+			Box::new(RuntimeCall::System(frame_system::Call::set_code_without_checks {
+				code: vec![],
+			}));
+		// Weight before is max.
+		assert_eq!(upgrade_code_call.get_dispatch_info().weight, Weight::MAX);
+		assert_eq!(
+			upgrade_code_call.get_dispatch_info().class,
+			frame_support::dispatch::DispatchClass::Operational
+		);
+
+		let with_weight_call = Call::<Test>::with_weight {
+			call: upgrade_code_call,
+			weight: Weight::from_parts(123, 456),
+		};
+		// Weight after is set by Root.
+		assert_eq!(with_weight_call.get_dispatch_info().weight, Weight::from_parts(123, 456));
+		assert_eq!(
+			with_weight_call.get_dispatch_info().class,
+			frame_support::dispatch::DispatchClass::Operational
+		);
 	})
 }

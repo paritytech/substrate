@@ -53,8 +53,6 @@ pub struct Metrics {
 	pub connections_opened_total: CounterVec<U64>,
 	pub distinct_peers_connections_closed_total: Counter<U64>,
 	pub distinct_peers_connections_opened_total: Counter<U64>,
-	pub import_queue_blocks_submitted: Counter<U64>,
-	pub import_queue_justifications_submitted: Counter<U64>,
 	pub incoming_connections_errors_total: CounterVec<U64>,
 	pub incoming_connections_total: Counter<U64>,
 	pub issued_light_requests: Counter<U64>,
@@ -102,14 +100,6 @@ impl Metrics {
 			distinct_peers_connections_opened_total: prometheus::register(Counter::new(
 					"substrate_sub_libp2p_distinct_peers_connections_opened_total",
 					"Total number of connections opened with distinct peers"
-			)?, registry)?,
-			import_queue_blocks_submitted: prometheus::register(Counter::new(
-				"substrate_import_queue_blocks_submitted",
-				"Number of blocks submitted to the import queue.",
-			)?, registry)?,
-			import_queue_justifications_submitted: prometheus::register(Counter::new(
-				"substrate_import_queue_justifications_submitted",
-				"Number of justifications submitted to the import queue.",
 			)?, registry)?,
 			incoming_connections_errors_total: prometheus::register(CounterVec::new(
 				Opts::new(

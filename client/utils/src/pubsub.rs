@@ -164,7 +164,7 @@ impl<M, R> Hub<M, R> {
 	/// Subscribe to this Hub using the `subs_key: K`.
 	///
 	/// A subscription with a key `K` is possible if the Registry implements `Subscribe<K>`.
-	pub fn subscribe<K>(&self, subs_key: K) -> Receiver<M, R>
+	pub fn subscribe<K>(&self, subs_key: K, queue_size_warning: i64) -> Receiver<M, R>
 	where
 		R: Subscribe<K> + Unsubscribe,
 	{
@@ -178,7 +178,7 @@ impl<M, R> Hub<M, R> {
 		// have the sink disposed.
 		shared_borrowed.registry.subscribe(subs_key, subs_id);
 
-		let (tx, rx) = crate::mpsc::tracing_unbounded(self.tracing_key);
+		let (tx, rx) = crate::mpsc::tracing_unbounded(self.tracing_key, queue_size_warning);
 		assert!(shared_borrowed.sinks.insert(subs_id, tx).is_none(), "Used IDSequence to create another ID. Should be unique until u64 is overflowed. Should be unique.");
 
 		Receiver { shared: Arc::downgrade(&self.shared), subs_id, rx }

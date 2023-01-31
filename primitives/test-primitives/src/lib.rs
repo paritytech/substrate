@@ -29,7 +29,6 @@ use sp_runtime::traits::{BlakeTwo256, Extrinsic as ExtrinsicT, Verify};
 
 /// Extrinsic for test-runtime.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(parity_util_mem::MallocSizeOf))]
 pub enum Extrinsic {
 	IncludeData(Vec<u8>),
 	StorageChange(Vec<u8>, Option<Vec<u8>>),

@@ -17,9 +17,8 @@
 
 mod mmr;
 pub mod storage;
-pub mod utils;
 
-use sp_mmr_primitives::{DataOrHash, FullLeaf};
+use sp_mmr_primitives::{mmr_lib, DataOrHash, FullLeaf};
 use sp_runtime::traits;
 
 pub use self::mmr::{verify_leaves_proof, Mmr};

@@ -18,10 +18,14 @@
 
 #[cfg(target_os = "linux")]
 mod linux;
-mod sandbox;
 
+use assert_matches::assert_matches;
 use codec::{Decode, Encode};
-use sc_executor_common::{error::Error, runtime_blob::RuntimeBlob, wasm_runtime::WasmModule};
+use sc_executor_common::{
+	error::{Error, WasmError},
+	runtime_blob::RuntimeBlob,
+	wasm_runtime::WasmModule,
+};
 use sc_runtime_test::wasm_binary_unwrap;
 use sp_core::{
 	blake2_128, blake2_256, ed25519, map,
@@ -93,111 +97,6 @@ macro_rules! test_wasm_execution {
 			#[test]
 			fn [<$method_name _interpreted>]() {
 				$method_name(WasmExecutionMethod::Interpreted);
-			}
-		}
-	};
-}
-
-/// A macro to run a given test for each available WASM execution method *and* for each
-/// sandbox execution method.
-#[macro_export]
-macro_rules! test_wasm_execution_sandbox {
-	($method_name:ident) => {
-		paste::item! {
-			#[test]
-			fn [<$method_name _interpreted_host_executor>]() {
-				$method_name(WasmExecutionMethod::Interpreted, "_host");
-			}
-
-			#[test]
-			fn [<$method_name _interpreted_embedded_executor>]() {
-				$method_name(WasmExecutionMethod::Interpreted, "_embedded");
-			}
-
-			#[test]
-			fn [<$method_name _compiled_pooling_cow_host_executor>]() {
-				$method_name(WasmExecutionMethod::Compiled {
-					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::PoolingCopyOnWrite
-				}, "_host");
-			}
-
-			#[test]
-			fn [<$method_name _compiled_pooling_cow_embedded_executor>]() {
-				$method_name(WasmExecutionMethod::Compiled {
-					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::PoolingCopyOnWrite
-				}, "_embedded");
-			}
-
-			#[test]
-			fn [<$method_name _compiled_pooling_vanilla_host_executor>]() {
-				$method_name(WasmExecutionMethod::Compiled {
-					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::Pooling
-				}, "_host");
-			}
-
-			#[test]
-			fn [<$method_name _compiled_pooling_vanilla_embedded_executor>]() {
-				$method_name(WasmExecutionMethod::Compiled {
-					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::Pooling
-				}, "_embedded");
-			}
-
-			#[test]
-			fn [<$method_name _compiled_recreate_instance_cow_host_executor>]() {
-				$method_name(WasmExecutionMethod::Compiled {
-					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::RecreateInstanceCopyOnWrite
-				}, "_host");
-			}
-
-			#[test]
-			fn [<$method_name _compiled_recreate_instance_cow_embedded_executor>]() {
-				$method_name(WasmExecutionMethod::Compiled {
-					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::RecreateInstanceCopyOnWrite
-				}, "_embedded");
-			}
-
-			#[test]
-			fn [<$method_name _compiled_recreate_instance_vanilla_host_executor>]() {
-				$method_name(WasmExecutionMethod::Compiled {
-					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::RecreateInstance
-				}, "_host");
-			}
-
-			#[test]
-			fn [<$method_name _compiled_recreate_instance_vanilla_embedded_executor>]() {
-				$method_name(WasmExecutionMethod::Compiled {
-					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::RecreateInstance
-				}, "_embedded");
-			}
-
-			#[test]
-			fn [<$method_name _compiled_legacy_instance_reuse_host_executor>]() {
-				$method_name(WasmExecutionMethod::Compiled {
-					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::LegacyInstanceReuse
-				}, "_host");
-			}
-
-			#[test]
-			fn [<$method_name _compiled_legacy_instance_reuse_embedded_executor>]() {
-				$method_name(WasmExecutionMethod::Compiled {
-					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::LegacyInstanceReuse
-				}, "_embedded");
-			}
-		}
-	};
-
-	(interpreted_only $method_name:ident) => {
-		paste::item! {
-			#[test]
-			fn [<$method_name _interpreted_host_executor>]() {
-				$method_name(WasmExecutionMethod::Interpreted, "_host");
-			}
-		}
-
-		paste::item! {
-			#[test]
-			fn [<$method_name _interpreted_embedded_executor>]() {
-				$method_name(WasmExecutionMethod::Interpreted, "_embedded");
 			}
 		}
 	};
@@ -886,4 +785,68 @@ fn return_value(wasm_method: WasmExecutionMethod) {
 		call_in_wasm("test_return_value", &[], wasm_method, &mut ext).unwrap(),
 		(1234u64).encode()
 	);
+}
+
+test_wasm_execution!(return_huge_len);
+fn return_huge_len(wasm_method: WasmExecutionMethod) {
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+
+	match call_in_wasm("test_return_huge_len", &[], wasm_method, &mut ext).unwrap_err() {
+		Error::Runtime => {
+			assert_matches!(wasm_method, WasmExecutionMethod::Interpreted);
+		},
+		Error::RuntimeConstruction(WasmError::Other(error)) => {
+			assert_matches!(wasm_method, WasmExecutionMethod::Compiled { .. });
+			assert_eq!(error, "output exceeds bounds of wasm memory");
+		},
+		error => panic!("unexpected error: {:?}", error),
+	}
+}
+
+test_wasm_execution!(return_max_memory_offset);
+fn return_max_memory_offset(wasm_method: WasmExecutionMethod) {
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+
+	assert_eq!(
+		call_in_wasm("test_return_max_memory_offset", &[], wasm_method, &mut ext).unwrap(),
+		().encode()
+	);
+}
+
+test_wasm_execution!(return_max_memory_offset_plus_one);
+fn return_max_memory_offset_plus_one(wasm_method: WasmExecutionMethod) {
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+
+	match call_in_wasm("test_return_max_memory_offset_plus_one", &[], wasm_method, &mut ext)
+		.unwrap_err()
+	{
+		Error::Runtime => {
+			assert_matches!(wasm_method, WasmExecutionMethod::Interpreted);
+		},
+		Error::RuntimeConstruction(WasmError::Other(error)) => {
+			assert_matches!(wasm_method, WasmExecutionMethod::Compiled { .. });
+			assert_eq!(error, "output exceeds bounds of wasm memory");
+		},
+		error => panic!("unexpected error: {:?}", error),
+	}
+}
+
+test_wasm_execution!(return_overflow);
+fn return_overflow(wasm_method: WasmExecutionMethod) {
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+
+	match call_in_wasm("test_return_overflow", &[], wasm_method, &mut ext).unwrap_err() {
+		Error::Runtime => {
+			assert_matches!(wasm_method, WasmExecutionMethod::Interpreted);
+		},
+		Error::RuntimeConstruction(WasmError::Other(error)) => {
+			assert_matches!(wasm_method, WasmExecutionMethod::Compiled { .. });
+			assert_eq!(error, "output exceeds bounds of wasm memory");
+		},
+		error => panic!("unexpected error: {:?}", error),
+	}
 }

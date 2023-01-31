@@ -59,7 +59,7 @@ fn set_default_expecations_no_peers(
 	});
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn normal_network_poll_no_peers() {
 	// build `ChainSync` and set default expectations for it
 	let mut chain_sync =
@@ -83,29 +83,28 @@ async fn normal_network_poll_no_peers() {
 	.await;
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn request_justification() {
-	// build `ChainSyncInterface` provider and set no expecations for it (i.e., it cannot be
-	// called)
-	let chain_sync_service =
-		Box::new(MockChainSyncInterface::<substrate_test_runtime_client::runtime::Block>::new());
-
-	// build `ChainSync` and verify that call to `request_justification()` is made
-	let mut chain_sync =
-		Box::new(MockChainSync::<substrate_test_runtime_client::runtime::Block>::new());
-
 	let hash = H256::random();
 	let number = 1337u64;
 
-	chain_sync
-		.expect_request_justification()
+	// build `ChainSyncInterface` provider and and expect
+	// `JustificationSyncLink::request_justification() to be called once
+	let mut chain_sync_service =
+		Box::new(MockChainSyncInterface::<substrate_test_runtime_client::runtime::Block>::new());
+
+	chain_sync_service
+		.expect_justification_sync_link_request_justification()
 		.withf(move |in_hash, in_number| &hash == in_hash && &number == in_number)
 		.once()
 		.returning(|_, _| ());
 
+	// build `ChainSync` and set default expecations for it
+	let mut chain_sync = MockChainSync::<substrate_test_runtime_client::runtime::Block>::new();
+
 	set_default_expecations_no_peers(&mut chain_sync);
 	let mut network = TestNetworkBuilder::new()
-		.with_chain_sync((chain_sync, chain_sync_service))
+		.with_chain_sync((Box::new(chain_sync), chain_sync_service))
 		.build();
 
 	// send "request justifiction" message and poll the network
@@ -118,18 +117,21 @@ async fn request_justification() {
 	.await;
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn clear_justification_requests() {
-	// build `ChainSyncInterface` provider and set no expecations for it (i.e., it cannot be
-	// called)
-	let chain_sync_service =
+	// build `ChainSyncInterface` provider and expect
+	// `JustificationSyncLink::clear_justification_requests()` to be called
+	let mut chain_sync_service =
 		Box::new(MockChainSyncInterface::<substrate_test_runtime_client::runtime::Block>::new());
 
-	// build `ChainSync` and verify that call to `clear_justification_requests()` is made
+	chain_sync_service
+		.expect_justification_sync_link_clear_justification_requests()
+		.once()
+		.returning(|| ());
+
+	// build `ChainSync` and set default expecations for it
 	let mut chain_sync =
 		Box::new(MockChainSync::<substrate_test_runtime_client::runtime::Block>::new());
-
-	chain_sync.expect_clear_justification_requests().once().returning(|| ());
 
 	set_default_expecations_no_peers(&mut chain_sync);
 	let mut network = TestNetworkBuilder::new()
@@ -146,7 +148,7 @@ async fn clear_justification_requests() {
 	.await;
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn set_sync_fork_request() {
 	// build `ChainSync` and set default expectations for it
 	let mut chain_sync =
@@ -185,7 +187,7 @@ async fn set_sync_fork_request() {
 	.await;
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn on_block_finalized() {
 	let client = Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0);
 	// build `ChainSyncInterface` provider and set no expecations for it (i.e., it cannot be
@@ -197,7 +199,7 @@ async fn on_block_finalized() {
 	let mut chain_sync =
 		Box::new(MockChainSync::<substrate_test_runtime_client::runtime::Block>::new());
 
-	let at = client.header(&BlockId::Hash(client.info().best_hash)).unwrap().unwrap().hash();
+	let at = client.header(client.info().best_hash).unwrap().unwrap().hash();
 	let block = client
 		.new_block_at(&BlockId::Hash(at), Default::default(), false)
 		.unwrap()
@@ -232,21 +234,15 @@ async fn on_block_finalized() {
 
 // report from mock import queue that importing a justification was not successful
 // and verify that connection to the peer is closed
-#[async_std::test]
+#[tokio::test]
 async fn invalid_justification_imported() {
-	struct DummyImportQueue(
-		Arc<
-			RwLock<
-				Option<(
-					PeerId,
-					substrate_test_runtime_client::runtime::Hash,
-					sp_runtime::traits::NumberFor<substrate_test_runtime_client::runtime::Block>,
-				)>,
-			>,
-		>,
-	);
+	struct DummyImportQueueHandle;
 
-	impl sc_consensus::ImportQueue<substrate_test_runtime_client::runtime::Block> for DummyImportQueue {
+	impl
+		sc_consensus::import_queue::ImportQueueService<
+			substrate_test_runtime_client::runtime::Block,
+		> for DummyImportQueueHandle
+	{
 		fn import_blocks(
 			&mut self,
 			_origin: sp_consensus::BlockOrigin,
@@ -264,7 +260,23 @@ async fn invalid_justification_imported() {
 			_justifications: sp_runtime::Justifications,
 		) {
 		}
+	}
 
+	struct DummyImportQueue(
+		Arc<
+			RwLock<
+				Option<(
+					PeerId,
+					substrate_test_runtime_client::runtime::Hash,
+					sp_runtime::traits::NumberFor<substrate_test_runtime_client::runtime::Block>,
+				)>,
+			>,
+		>,
+		DummyImportQueueHandle,
+	);
+
+	#[async_trait::async_trait]
+	impl sc_consensus::ImportQueue<substrate_test_runtime_client::runtime::Block> for DummyImportQueue {
 		fn poll_actions(
 			&mut self,
 			_cx: &mut futures::task::Context,
@@ -274,13 +286,40 @@ async fn invalid_justification_imported() {
 				link.justification_imported(peer, &hash, number, false);
 			}
 		}
+
+		fn service(
+			&self,
+		) -> Box<
+			dyn sc_consensus::import_queue::ImportQueueService<
+				substrate_test_runtime_client::runtime::Block,
+			>,
+		> {
+			Box::new(DummyImportQueueHandle {})
+		}
+
+		fn service_ref(
+			&mut self,
+		) -> &mut dyn sc_consensus::import_queue::ImportQueueService<
+			substrate_test_runtime_client::runtime::Block,
+		> {
+			&mut self.1
+		}
+
+		async fn run(
+			self,
+			_link: Box<dyn sc_consensus::Link<substrate_test_runtime_client::runtime::Block>>,
+		) {
+		}
 	}
 
 	let justification_info = Arc::new(RwLock::new(None));
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
 	let (service1, mut event_stream1) = TestNetworkBuilder::new()
-		.with_import_queue(Box::new(DummyImportQueue(justification_info.clone())))
+		.with_import_queue(Box::new(DummyImportQueue(
+			justification_info.clone(),
+			DummyImportQueueHandle {},
+		)))
 		.with_listen_addresses(vec![listen_addr.clone()])
 		.build()
 		.start_network();
@@ -320,19 +359,17 @@ async fn invalid_justification_imported() {
 		while !std::matches!(event_stream1.next().await, Some(Event::SyncDisconnected { .. })) {}
 	};
 
-	if async_std::future::timeout(Duration::from_secs(5), wait_disconnection)
-		.await
-		.is_err()
-	{
+	if tokio::time::timeout(Duration::from_secs(5), wait_disconnection).await.is_err() {
 		panic!("did not receive disconnection event in time");
 	}
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn disconnect_peer_using_chain_sync_handle() {
 	let client = Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0);
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
+	let import_queue = Box::new(sc_consensus::import_queue::mock::MockImportQueueHandle::new());
 	let (chain_sync_network_provider, chain_sync_network_handle) =
 		sc_network_sync::service::network::NetworkServiceProvider::new();
 	let handle_clone = chain_sync_network_handle.clone();
@@ -346,7 +383,9 @@ async fn disconnect_peer_using_chain_sync_handle() {
 		Box::new(sp_consensus::block_validation::DefaultBlockAnnounceValidator),
 		1u32,
 		None,
+		None,
 		chain_sync_network_handle.clone(),
+		import_queue,
 		ProtocolName::from("block-request"),
 		ProtocolName::from("state-request"),
 		None,
@@ -355,7 +394,7 @@ async fn disconnect_peer_using_chain_sync_handle() {
 
 	let (node1, mut event_stream1) = TestNetworkBuilder::new()
 		.with_listen_addresses(vec![listen_addr.clone()])
-		.with_chain_sync((Box::new(chain_sync), chain_sync_service))
+		.with_chain_sync((Box::new(chain_sync), Box::new(chain_sync_service)))
 		.with_chain_sync_network((chain_sync_network_provider, chain_sync_network_handle))
 		.with_client(client.clone())
 		.build()
@@ -394,10 +433,7 @@ async fn disconnect_peer_using_chain_sync_handle() {
 		while !std::matches!(event_stream1.next().await, Some(Event::SyncDisconnected { .. })) {}
 	};
 
-	if async_std::future::timeout(Duration::from_secs(5), wait_disconnection)
-		.await
-		.is_err()
-	{
+	if tokio::time::timeout(Duration::from_secs(5), wait_disconnection).await.is_err() {
 		panic!("did not receive disconnection event in time");
 	}
 }

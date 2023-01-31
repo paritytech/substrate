@@ -39,9 +39,6 @@
 //!   number of signed origins.
 //! * `approve_as_multi` - Approve a call from a composite origin.
 //! * `cancel_as_multi` - Cancel a call from a composite origin.
-//!
-//! [`Call`]: ./enum.Call.html
-//! [`Config`]: ./trait.Config.html
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -272,6 +269,7 @@ pub mod pallet {
 		/// - DB Weight: None
 		/// - Plus Call Weight
 		/// # </weight>
+		#[pallet::call_index(0)]
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
 			(
@@ -365,6 +363,7 @@ pub mod pallet {
 		///     - Writes: Multisig Storage, [Caller Account]
 		/// - Plus Call Weight
 		/// # </weight>
+		#[pallet::call_index(1)]
 		#[pallet::weight({
 			let s = other_signatories.len() as u32;
 			let z = call.using_encoded(|d| d.len()) as u32;
@@ -428,6 +427,7 @@ pub mod pallet {
 		///     - Read: Multisig Storage, [Caller Account]
 		///     - Write: Multisig Storage, [Caller Account]
 		/// # </weight>
+		#[pallet::call_index(2)]
 		#[pallet::weight({
 			let s = other_signatories.len() as u32;
 
@@ -480,6 +480,7 @@ pub mod pallet {
 		///     - Read: Multisig Storage, [Caller Account], Refund Account
 		///     - Write: Multisig Storage, [Caller Account], Refund Account
 		/// # </weight>
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::cancel_as_multi(other_signatories.len() as u32))]
 		pub fn cancel_as_multi(
 			origin: OriginFor<T>,

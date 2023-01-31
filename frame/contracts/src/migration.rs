@@ -69,7 +69,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 		let version = <Pallet<T>>::on_chain_storage_version();
 
-		if version == 8 {
+		if version == 7 {
 			v8::pre_upgrade::<T>()?;
 		}
 

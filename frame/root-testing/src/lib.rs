@@ -45,6 +45,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// A dispatch that will fill the block weight up to the given ratio.
+		#[pallet::call_index(0)]
 		#[pallet::weight(*_ratio * T::BlockWeights::get().max_block)]
 		pub fn fill_block(origin: OriginFor<T>, _ratio: Perbill) -> DispatchResult {
 			ensure_root(origin)?;

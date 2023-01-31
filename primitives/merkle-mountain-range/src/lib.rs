@@ -20,12 +20,19 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 
+pub use mmr_lib;
+
 use scale_info::TypeInfo;
 use sp_debug_derive::RuntimeDebug;
 use sp_runtime::traits;
 use sp_std::fmt;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::Vec;
+
+pub mod utils;
+
+/// Prefix for elements stored in the Off-chain DB via Indexing API.
+pub const INDEXING_PREFIX: &'static [u8] = b"mmr";
 
 /// A type to describe node position in the MMR (node index).
 pub type NodeIndex = u64;
@@ -357,8 +364,8 @@ pub struct Proof<Hash> {
 #[derive(RuntimeDebug, codec::Encode, codec::Decode, PartialEq, Eq)]
 pub enum Error {
 	/// Error during translation of a block number into a leaf index.
-	#[cfg_attr(feature = "std", error("Error translation block number into leaf index"))]
-	BlockNumToLeafIndex,
+	#[cfg_attr(feature = "std", error("Error performing numeric op"))]
+	InvalidNumericOp,
 	/// Error while pushing new node.
 	#[cfg_attr(feature = "std", error("Error pushing new node"))]
 	Push,
@@ -418,6 +425,9 @@ sp_api::decl_runtime_apis! {
 	pub trait MmrApi<Hash: codec::Codec, BlockNumber: codec::Codec> {
 		/// Return the on-chain MMR root hash.
 		fn mmr_root() -> Result<Hash, Error>;
+
+		/// Return the number of MMR blocks in the chain.
+		fn mmr_leaf_count() -> Result<LeafIndex, Error>;
 
 		/// Generate MMR proof for a series of block numbers. If `best_known_block_number = Some(n)`,
 		/// use historical MMR state at given block height `n`. Else, use current MMR state.
