@@ -2444,7 +2444,7 @@ fn slash_in_old_span_does_not_deselect() {
 		);
 
 		// the validator doesn't get chilled again
-		assert!(<Staking as Store>::Validators::iter().any(|(stash, _)| stash == 11));
+		assert!(Validators::<Test>::iter().any(|(stash, _)| stash == 11));
 
 		// but we are still forcing a new era
 		assert_eq!(Staking::force_era(), Forcing::ForceNew);
@@ -2461,7 +2461,7 @@ fn slash_in_old_span_does_not_deselect() {
 		);
 
 		// the validator doesn't get chilled again
-		assert!(<Staking as Store>::Validators::iter().any(|(stash, _)| stash == 11));
+		assert!(Validators::<Test>::iter().any(|(stash, _)| stash == 11));
 
 		// but it's disabled
 		assert!(is_disabled(10));
@@ -3204,7 +3204,7 @@ fn remove_multi_deferred() {
 			&[Perbill::from_percent(25)],
 		);
 
-		assert_eq!(<Staking as Store>::UnappliedSlashes::get(&4).len(), 5);
+		assert_eq!(UnappliedSlashes::<Test>::get(&4).len(), 5);
 
 		// fails if list is not sorted
 		assert_noop!(
@@ -3224,7 +3224,7 @@ fn remove_multi_deferred() {
 
 		assert_ok!(Staking::cancel_deferred_slash(RuntimeOrigin::root(), 4, vec![0, 2, 4]));
 
-		let slashes = <Staking as Store>::UnappliedSlashes::get(&4);
+		let slashes = UnappliedSlashes::<Test>::get(&4);
 		assert_eq!(slashes.len(), 2);
 		assert_eq!(slashes[0].validator, 21);
 		assert_eq!(slashes[1].validator, 42);
@@ -3279,7 +3279,7 @@ fn slash_kicks_validators_not_nominators_and_disables_nominator_for_kicked_valid
 		assert_eq!(Balances::free_balance(101), 2000 - nominator_slash_amount_11);
 
 		// check that validator was chilled.
-		assert!(<Staking as Store>::Validators::iter().all(|(stash, _)| stash != 11));
+		assert!(Validators::<Test>::iter().all(|(stash, _)| stash != 11));
 
 		// actually re-bond the slashed validator
 		assert_ok!(Staking::validate(RuntimeOrigin::signed(10), Default::default()));
@@ -3625,7 +3625,7 @@ fn zero_slash_keeps_nominators() {
 		assert_eq!(Balances::free_balance(101), 2000);
 
 		// 11 is still removed..
-		assert!(<Staking as Store>::Validators::iter().all(|(stash, _)| stash != 11));
+		assert!(Validators::<Test>::iter().all(|(stash, _)| stash != 11));
 		// but their nominations are kept.
 		assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
 	});
