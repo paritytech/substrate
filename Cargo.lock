@@ -139,9 +139,9 @@ dependencies = [
 
 [[package]]
 name = "ahash"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf6ccdb167abbf410dcb915cabd428929d7f6a04980b54a11f26a39f1c7f7107"
+checksum = "2c99f64d1e06488f620f932677e24bc6e2897582980441ae90a671415bd7ec2f"
 dependencies = [
  "cfg-if",
  "getrandom 0.2.8",
@@ -2847,8 +2847,7 @@ dependencies = [
 [[package]]
 name = "hash-db"
 version = "0.15.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d23bd4e7b5eda0d0f3a307e8b381fdc8ba9000f26fbe912250c0a4cc3956364a"
+source = "git+https://github.com/koute/trie.git?branch=master_iterators#a815264f668deb92a06c27233f5e899a60790049"
 
 [[package]]
 name = "hash256-std-hasher"
@@ -2873,6 +2872,9 @@ name = "hashbrown"
 version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "43a3c133739dddd0d2990f9a4bdf8eb4b21ef50e4851ca85ab661199821d510e"
+dependencies = [
+ "ahash 0.8.3",
+]
 
 [[package]]
 name = "heck"
@@ -8385,7 +8387,7 @@ dependencies = [
 name = "sc-finality-grandpa"
 version = "0.10.0-dev"
 dependencies = [
- "ahash 0.8.2",
+ "ahash 0.8.3",
  "array-bytes",
  "assert_matches",
  "async-trait",
@@ -8585,7 +8587,7 @@ dependencies = [
 name = "sc-network-gossip"
 version = "0.10.0-dev"
 dependencies = [
- "ahash 0.8.2",
+ "ahash 0.8.3",
  "futures",
  "futures-timer",
  "libp2p",
@@ -9206,7 +9208,7 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "772575a524feeb803e5b0fcbc6dd9f367e579488197c94c6e4023aad2305774d"
 dependencies = [
- "ahash 0.8.2",
+ "ahash 0.8.3",
  "cfg-if",
  "hashbrown 0.13.2",
 ]
@@ -10251,7 +10253,7 @@ dependencies = [
  "sp-trie",
  "thiserror",
  "tracing",
- "trie-db",
+ "trie-db 0.25.0",
 ]
 
 [[package]]
@@ -10333,7 +10335,7 @@ dependencies = [
 name = "sp-trie"
 version = "7.0.0"
 dependencies = [
- "ahash 0.8.2",
+ "ahash 0.8.3",
  "array-bytes",
  "criterion",
  "hash-db",
@@ -10351,7 +10353,7 @@ dependencies = [
  "thiserror",
  "tracing",
  "trie-bench",
- "trie-db",
+ "trie-db 0.25.0",
  "trie-root",
  "trie-standardmap",
 ]
@@ -10667,7 +10669,7 @@ dependencies = [
  "sp-runtime",
  "sp-state-machine",
  "sp-trie",
- "trie-db",
+ "trie-db 0.25.0",
 ]
 
 [[package]]
@@ -10739,7 +10741,7 @@ dependencies = [
  "sp-version",
  "substrate-test-runtime-client",
  "substrate-wasm-builder",
- "trie-db",
+ "trie-db 0.25.0",
 ]
 
 [[package]]
@@ -11322,7 +11324,7 @@ dependencies = [
  "keccak-hasher",
  "memory-db",
  "parity-scale-codec",
- "trie-db",
+ "trie-db 0.24.0",
  "trie-root",
  "trie-standardmap",
 ]
@@ -11335,6 +11337,18 @@ checksum = "004e1e8f92535694b4cb1444dc5a8073ecf0815e3357f729638b9f8fc4062908"
 dependencies = [
  "hash-db",
  "hashbrown 0.12.3",
+ "log",
+ "rustc-hex",
+ "smallvec",
+]
+
+[[package]]
+name = "trie-db"
+version = "0.25.0"
+source = "git+https://github.com/koute/trie.git?branch=master_iterators#4d8bda6078eb911027ee3f43440a4272ab673ee5"
+dependencies = [
+ "hash-db",
+ "hashbrown 0.13.2",
  "log",
  "rustc-hex",
  "smallvec",

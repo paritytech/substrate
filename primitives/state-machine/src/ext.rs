@@ -159,9 +159,10 @@ where
 		use std::collections::HashMap;
 
 		self.backend
-			.pairs()
-			.iter()
-			.map(|&(ref k, ref v)| (k.to_vec(), Some(v.to_vec())))
+			.pairs(Default::default())
+			.expect("never fails in tests; qed.")
+			.map(|key_value| key_value.expect("never fails in tests; qed."))
+			.map(|(k, v)| (k, Some(v)))
 			.chain(self.overlay.changes().map(|(k, v)| (k.clone(), v.value().cloned())))
 			.collect::<HashMap<_, _>>()
 			.into_iter()
@@ -757,28 +758,34 @@ where
 		let mut delete_count: u32 = 0;
 		let mut loop_count: u32 = 0;
 		let mut maybe_next_key = None;
-		self.backend
-			.apply_to_keys_while(maybe_child, maybe_prefix, maybe_cursor, |key| {
-				if maybe_limit.map_or(false, |limit| loop_count == limit) {
-					maybe_next_key = Some(key.to_vec());
-					return false
-				}
-				let overlay = match maybe_child {
-					Some(child_info) => self.overlay.child_storage(child_info, key),
-					None => self.overlay.storage(key),
-				};
-				if !matches!(overlay, Some(None)) {
-					// not pending deletion from the backend - delete it.
-					if let Some(child_info) = maybe_child {
-						self.overlay.set_child_storage(child_info, key.to_vec(), None);
-					} else {
-						self.overlay.set_storage(key.to_vec(), None);
+		let result =
+			self.backend
+				.apply_to_keys_while(maybe_child, maybe_prefix, maybe_cursor, |key| {
+					if maybe_limit.map_or(false, |limit| loop_count == limit) {
+						maybe_next_key = Some(key.to_vec());
+						return false
 					}
-					delete_count = delete_count.saturating_add(1);
-				}
-				loop_count = loop_count.saturating_add(1);
-				true
-			});
+					let overlay = match maybe_child {
+						Some(child_info) => self.overlay.child_storage(child_info, key),
+						None => self.overlay.storage(key),
+					};
+					if !matches!(overlay, Some(None)) {
+						// not pending deletion from the backend - delete it.
+						if let Some(child_info) = maybe_child {
+							self.overlay.set_child_storage(child_info, key.to_vec(), None);
+						} else {
+							self.overlay.set_storage(key.to_vec(), None);
+						}
+						delete_count = delete_count.saturating_add(1);
+					}
+					loop_count = loop_count.saturating_add(1);
+					true
+				});
+
+		if let Err(error) = result {
+			log::debug!(target: "trie", "Error while iterating the storage: {}", error);
+		}
+
 		(maybe_next_key, delete_count, loop_count)
 	}
 }

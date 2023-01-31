@@ -31,7 +31,8 @@ use sp_runtime::{
 	StateVersion, Storage,
 };
 use sp_state_machine::{
-	backend::Backend as StateBackend, ChildStorageCollection, DBValue, StorageCollection,
+	backend::Backend as StateBackend, ChildStorageCollection, DBValue, IterArgs, StorageCollection,
+	StorageIterator, StorageKey, StorageValue,
 };
 use sp_trie::{
 	cache::{CacheSize, SharedTrieCache},
@@ -83,6 +84,31 @@ pub struct BenchmarkingState<B: BlockT> {
 	shared_trie_cache: SharedTrieCache<HashFor<B>>,
 }
 
+/// A raw iterator over the `BenchmarkingState`.
+pub struct RawIter<B: BlockT> {
+	inner: <DbState<B> as StateBackend<HashFor<B>>>::RawIter,
+}
+
+impl<B: BlockT> StorageIterator<HashFor<B>> for RawIter<B> {
+	type Backend = BenchmarkingState<B>;
+	type Error = String;
+
+	fn next_key(&mut self, backend: &Self::Backend) -> Option<Result<StorageKey, Self::Error>> {
+		self.inner.next_key(backend.state.borrow().as_ref()?)
+	}
+
+	fn next_pair(
+		&mut self,
+		backend: &Self::Backend,
+	) -> Option<Result<(StorageKey, StorageValue), Self::Error>> {
+		self.inner.next_pair(backend.state.borrow().as_ref()?)
+	}
+
+	fn was_complete(&self) -> bool {
+		self.inner.was_complete()
+	}
+}
+
 impl<B: BlockT> BenchmarkingState<B> {
 	/// Create a new instance that creates a database in a temporary dir.
 	pub fn new(
@@ -123,7 +149,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			)
 		});
 		let (root, transaction): (B::Hash, _) =
-			state.state.borrow_mut().as_mut().unwrap().full_storage_root(
+			state.state.borrow().as_ref().unwrap().full_storage_root(
 				genesis.top.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
 				child_delta,
 				state_version,
@@ -283,6 +309,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	type Error = <DbState<B> as StateBackend<HashFor<B>>>::Error;
 	type Transaction = <DbState<B> as StateBackend<HashFor<B>>>::Transaction;
 	type TrieBackendStorage = <DbState<B> as StateBackend<HashFor<B>>>::TrieBackendStorage;
+	type RawIter = RawIter<B>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.add_read_key(None, key);
@@ -356,58 +383,6 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 			.next_child_storage_key(child_info, key)
 	}
 
-	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
-		if let Some(ref state) = *self.state.borrow() {
-			state.for_keys_with_prefix(prefix, f)
-		}
-	}
-
-	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
-		if let Some(ref state) = *self.state.borrow() {
-			state.for_key_values_with_prefix(prefix, f)
-		}
-	}
-
-	fn apply_to_key_values_while<F: FnMut(Vec<u8>, Vec<u8>) -> bool>(
-		&self,
-		child_info: Option<&ChildInfo>,
-		prefix: Option<&[u8]>,
-		start_at: Option<&[u8]>,
-		f: F,
-		allow_missing: bool,
-	) -> Result<bool, Self::Error> {
-		self.state.borrow().as_ref().ok_or_else(state_err)?.apply_to_key_values_while(
-			child_info,
-			prefix,
-			start_at,
-			f,
-			allow_missing,
-		)
-	}
-
-	fn apply_to_keys_while<F: FnMut(&[u8]) -> bool>(
-		&self,
-		child_info: Option<&ChildInfo>,
-		prefix: Option<&[u8]>,
-		start_at: Option<&[u8]>,
-		f: F,
-	) {
-		if let Some(ref state) = *self.state.borrow() {
-			state.apply_to_keys_while(child_info, prefix, start_at, f)
-		}
-	}
-
-	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
-		&self,
-		child_info: &ChildInfo,
-		prefix: &[u8],
-		f: F,
-	) {
-		if let Some(ref state) = *self.state.borrow() {
-			state.for_child_keys_with_prefix(child_info, prefix, f)
-		}
-	}
-
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
@@ -437,19 +412,13 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 			.map_or(Default::default(), |s| s.child_storage_root(child_info, delta, state_version))
 	}
 
-	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.state.borrow().as_ref().map_or(Default::default(), |s| s.pairs())
-	}
-
-	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
-		self.state.borrow().as_ref().map_or(Default::default(), |s| s.keys(prefix))
-	}
-
-	fn child_keys(&self, child_info: &ChildInfo, prefix: &[u8]) -> Vec<Vec<u8>> {
+	fn raw_iter(&self, args: IterArgs) -> Result<Self::RawIter, Self::Error> {
 		self.state
 			.borrow()
 			.as_ref()
-			.map_or(Default::default(), |s| s.child_keys(child_info, prefix))
+			.map(|s| s.raw_iter(args))
+			.unwrap_or(Ok(Default::default()))
+			.map(|raw_iter| RawIter { inner: raw_iter })
 	}
 
 	fn commit(
@@ -587,7 +556,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	}
 
 	fn register_overlay_stats(&self, stats: &sp_state_machine::StateMachineStats) {
-		self.state.borrow_mut().as_mut().map(|s| s.register_overlay_stats(stats));
+		self.state.borrow().as_ref().map(|s| s.register_overlay_stats(stats));
 	}
 
 	fn usage_info(&self) -> sp_state_machine::UsageInfo {

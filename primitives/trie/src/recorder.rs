@@ -83,6 +83,7 @@ impl<H: Hasher> Recorder<H> {
 	///
 	/// - `storage_root`: The storage root of the trie for which accesses are recorded. This is
 	///   important when recording access to different tries at once (like top and child tries).
+	#[inline]
 	pub fn as_trie_recorder(
 		&self,
 		storage_root: H::Out,

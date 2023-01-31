@@ -26,7 +26,7 @@ use sp_runtime::{
 };
 use sp_state_machine::{
 	backend::{AsTrieBackend, Backend as StateBackend},
-	TrieBackend,
+	IterArgs, StorageIterator, StorageKey, StorageValue, TrieBackend,
 };
 use std::sync::Arc;
 
@@ -73,10 +73,43 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> RecordStatsState<S, B> {
 	}
 }
 
+pub struct RawIter<S, B>
+where
+	S: StateBackend<HashFor<B>>,
+	B: BlockT,
+{
+	inner: <S as StateBackend<HashFor<B>>>::RawIter,
+}
+
+impl<S, B> StorageIterator<HashFor<B>> for RawIter<S, B>
+where
+	S: StateBackend<HashFor<B>>,
+	B: BlockT,
+{
+	type Backend = RecordStatsState<S, B>;
+	type Error = S::Error;
+
+	fn next_key(&mut self, backend: &Self::Backend) -> Option<Result<StorageKey, Self::Error>> {
+		self.inner.next_key(&backend.state)
+	}
+
+	fn next_pair(
+		&mut self,
+		backend: &Self::Backend,
+	) -> Option<Result<(StorageKey, StorageValue), Self::Error>> {
+		self.inner.next_pair(&backend.state)
+	}
+
+	fn was_complete(&self) -> bool {
+		self.inner.was_complete()
+	}
+}
+
 impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for RecordStatsState<S, B> {
 	type Error = S::Error;
 	type Transaction = S::Transaction;
 	type TrieBackendStorage = S::TrieBackendStorage;
+	type RawIter = RawIter<S, B>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		let value = self.state.storage(key)?;
@@ -122,28 +155,6 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Record
 		self.state.exists_child_storage(child_info, key)
 	}
 
-	fn apply_to_key_values_while<F: FnMut(Vec<u8>, Vec<u8>) -> bool>(
-		&self,
-		child_info: Option<&ChildInfo>,
-		prefix: Option<&[u8]>,
-		start_at: Option<&[u8]>,
-		f: F,
-		allow_missing: bool,
-	) -> Result<bool, Self::Error> {
-		self.state
-			.apply_to_key_values_while(child_info, prefix, start_at, f, allow_missing)
-	}
-
-	fn apply_to_keys_while<F: FnMut(&[u8]) -> bool>(
-		&self,
-		child_info: Option<&ChildInfo>,
-		prefix: Option<&[u8]>,
-		start_at: Option<&[u8]>,
-		f: F,
-	) {
-		self.state.apply_to_keys_while(child_info, prefix, start_at, f)
-	}
-
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.next_storage_key(key)
 	}
@@ -154,23 +165,6 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Record
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.next_child_storage_key(child_info, key)
-	}
-
-	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
-		self.state.for_keys_with_prefix(prefix, f)
-	}
-
-	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
-		self.state.for_key_values_with_prefix(prefix, f)
-	}
-
-	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
-		&self,
-		child_info: &ChildInfo,
-		prefix: &[u8],
-		f: F,
-	) {
-		self.state.for_child_keys_with_prefix(child_info, prefix, f)
 	}
 
 	fn storage_root<'a>(
@@ -196,16 +190,8 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Record
 		self.state.child_storage_root(child_info, delta, state_version)
 	}
 
-	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.state.pairs()
-	}
-
-	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
-		self.state.keys(prefix)
-	}
-
-	fn child_keys(&self, child_info: &ChildInfo, prefix: &[u8]) -> Vec<Vec<u8>> {
-		self.state.child_keys(child_info, prefix)
+	fn raw_iter(&self, args: IterArgs) -> Result<Self::RawIter, Self::Error> {
+		self.state.raw_iter(args).map(|inner| RawIter { inner })
 	}
 
 	fn register_overlay_stats(&self, stats: &sp_state_machine::StateMachineStats) {

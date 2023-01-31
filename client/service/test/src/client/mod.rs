@@ -1594,7 +1594,7 @@ fn returns_status_for_pruned_blocks() {
 }
 
 #[test]
-fn storage_keys_iter_prefix_and_start_key_works() {
+fn storage_keys_prefix_and_start_key_works() {
 	let child_info = ChildInfo::new_default(b"child");
 	let client = TestClientBuilder::new()
 		.add_extra_child_storage(&child_info, b"first".to_vec(), vec![0u8; 32])
@@ -1609,7 +1609,7 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 	let child_prefix = StorageKey(b"sec".to_vec());
 
 	let res: Vec<_> = client
-		.storage_keys_iter(block_hash, Some(&prefix), None)
+		.storage_keys(block_hash, Some(&prefix), None)
 		.unwrap()
 		.map(|x| x.0)
 		.collect();
@@ -1623,7 +1623,7 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 	);
 
 	let res: Vec<_> = client
-		.storage_keys_iter(
+		.storage_keys(
 			block_hash,
 			Some(&prefix),
 			Some(&StorageKey(array_bytes::hex2bytes_unchecked("3a636f6465"))),
@@ -1634,7 +1634,7 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 	assert_eq!(res, [array_bytes::hex2bytes_unchecked("3a686561707061676573")]);
 
 	let res: Vec<_> = client
-		.storage_keys_iter(
+		.storage_keys(
 			block_hash,
 			Some(&prefix),
 			Some(&StorageKey(array_bytes::hex2bytes_unchecked("3a686561707061676573"))),
@@ -1645,19 +1645,14 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 	assert_eq!(res, Vec::<Vec<u8>>::new());
 
 	let res: Vec<_> = client
-		.child_storage_keys_iter(block_hash, child_info.clone(), Some(&child_prefix), None)
+		.child_storage_keys(block_hash, child_info.clone(), Some(&child_prefix), None)
 		.unwrap()
 		.map(|x| x.0)
 		.collect();
 	assert_eq!(res, [b"second".to_vec()]);
 
 	let res: Vec<_> = client
-		.child_storage_keys_iter(
-			block_hash,
-			child_info,
-			None,
-			Some(&StorageKey(b"second".to_vec())),
-		)
+		.child_storage_keys(block_hash, child_info, None, Some(&StorageKey(b"second".to_vec())))
 		.unwrap()
 		.map(|x| x.0)
 		.collect();
@@ -1665,7 +1660,7 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 }
 
 #[test]
-fn storage_keys_iter_works() {
+fn storage_keys_works() {
 	let client = substrate_test_runtime_client::new();
 
 	let block_hash = client.info().best_hash;
@@ -1673,7 +1668,7 @@ fn storage_keys_iter_works() {
 	let prefix = StorageKey(array_bytes::hex2bytes_unchecked(""));
 
 	let res: Vec<_> = client
-		.storage_keys_iter(block_hash, Some(&prefix), None)
+		.storage_keys(block_hash, Some(&prefix), None)
 		.unwrap()
 		.take(9)
 		.map(|x| array_bytes::bytes2hex("", &x.0))
@@ -1694,7 +1689,7 @@ fn storage_keys_iter_works() {
 	);
 
 	let res: Vec<_> = client
-		.storage_keys_iter(
+		.storage_keys(
 			block_hash,
 			Some(&prefix),
 			Some(&StorageKey(array_bytes::hex2bytes_unchecked("3a636f6465"))),
@@ -1717,7 +1712,7 @@ fn storage_keys_iter_works() {
 	);
 
 	let res: Vec<_> = client
-		.storage_keys_iter(
+		.storage_keys(
 			block_hash,
 			Some(&prefix),
 			Some(&StorageKey(array_bytes::hex2bytes_unchecked(
