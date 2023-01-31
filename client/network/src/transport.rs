@@ -38,10 +38,9 @@ pub use self::bandwidth::BandwidthSinks;
 /// Returns None if socket is empty or any error occurred while building the transport.
 fn build_quic_transport(
 	keypair: &identity::Keypair,
-) -> Boxed<(PeerId, StreamMuxerBox)> {
+) -> Boxed<(PeerId, quic::Connection)> {
 	let config = QuicConfig::new(&keypair);
 	let transport = QuicTransport::<quic::tokio::Provider>::new(config)
-		.map(|(p, c), _| (p, StreamMuxerBox::new(c)))
 		.boxed();
 
 	transport
