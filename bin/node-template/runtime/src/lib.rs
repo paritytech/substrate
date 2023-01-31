@@ -373,7 +373,7 @@ impl_runtime_apis! {
 		}
 
 		fn metadata_versions() -> sp_std::vec::Vec<u32> {
-			Runtime::metadata_versions().into()
+			Runtime::metadata_versions()
 		}
 	}
 
