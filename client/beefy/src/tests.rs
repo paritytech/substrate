@@ -26,12 +26,12 @@ use crate::{
 	},
 	gossip_protocol_name,
 	justification::*,
-	keystore::tests::Keyring as BeefyKeyring,
 	load_or_init_voter_state, wait_for_runtime_pallet, BeefyRPCLinks, BeefyVoterLinks, KnownPeers,
 	PersistedState,
 };
 use beefy_primitives::{
 	crypto::{AuthorityId, Signature},
+	keyring::Keyring as BeefyKeyring,
 	known_payloads,
 	mmr::MmrRootProvider,
 	BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, SignedCommitment, ValidatorSet,
