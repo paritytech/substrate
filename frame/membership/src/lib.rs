@@ -362,7 +362,7 @@ impl<T: Config<I>, I: 'static> SortedMembers<T::AccountId> for Pallet<T, I> {
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmark {
 	use super::{Pallet as Membership, *};
-	use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist};
+	use frame_benchmarking::v1::{account, benchmarks_instance_pallet, whitelist};
 	use frame_support::{assert_ok, traits::EnsureOrigin};
 	use frame_system::RawOrigin;
 
