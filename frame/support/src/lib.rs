@@ -50,7 +50,7 @@ pub use paste;
 pub use scale_info;
 #[cfg(feature = "std")]
 pub use serde;
-pub use sp_core::Void;
+pub use sp_core::{OpaqueMetadata, Void};
 #[doc(hidden)]
 pub use sp_core_hashing_proc_macro;
 #[doc(hidden)]

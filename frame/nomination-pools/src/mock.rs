@@ -1,6 +1,6 @@
 use super::*;
 use crate::{self as pools};
-use frame_support::{assert_ok, parameter_types, PalletId};
+use frame_support::{assert_ok, parameter_types, OpaqueMetadata, PalletId};
 use frame_system::RawOrigin;
 use sp_runtime::FixedU128;
 use sp_staking::Stake;

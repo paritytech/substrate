@@ -96,6 +96,18 @@ pub fn expand_runtime_metadata(
 					#scrate::scale_info::meta_type::<#runtime>()
 				).into()
 			}
+
+			pub fn metadata_at_version(version: u32) -> Option<OpaqueMetadata> {
+				match version {
+					// The V14 version is already implemented by `construct_runtime!` macro.
+					14 => Some(OpaqueMetadata::new(#runtime::metadata().into())),
+					_ => None,
+				}
+			}
+
+			pub fn metadata_versions() -> #scrate::sp_std::vec::Vec<u32> {
+				#scrate::sp_std::vec![ 14 ]
+			}
 		}
 	}
 }

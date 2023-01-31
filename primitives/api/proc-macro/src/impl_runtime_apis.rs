@@ -401,46 +401,6 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 	Ok(quote!( #( #impls_prepared )* ))
 }
 
-/// Generates the metadata for the runtime.
-fn generate_runtime_metadata(impls: &[ItemImpl]) -> Result<TokenStream> {
-	if impls.is_empty() {
-		return Ok(quote!(""))
-	}
-
-	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
-
-	let first_impl_ =
-		impls.get(0).expect("Trait impls should always contain at least one item; qed");
-	// Check that all traits are implemented for the same Runtime.
-	let _same_runtime = impls.iter().all(|impl_| {
-		if impl_.self_ty == first_impl_.self_ty {
-			return true
-		}
-
-		panic!(
-			"Trait impls expected for runtime `{:?}`, received `{:?}`",
-			first_impl_.self_ty, impl_.self_ty
-		);
-	});
-
-	let runtime = first_impl_.self_ty.clone();
-	Ok(quote!(
-		impl #runtime {
-			fn metadata_at_version(version: u32) -> Option<OpaqueMetadata> {
-				match version {
-					// The V14 version is already implemented by `construct_runtime!` macro.
-					14 => Some(OpaqueMetadata::new(#runtime::metadata().into())),
-					_ => None,
-				}
-			}
-
-			fn metadata_versions() -> #crate_::vec::Vec<u32> {
-				#crate_::vec![ 14 ]
-			}
-		}
-	))
-}
-
 /// Auxiliary data structure that is used to convert `impl Api for Runtime` to
 /// `impl Api for RuntimeApi`.
 /// This requires us to replace the runtime `Block` with the node `Block`,
@@ -674,7 +634,6 @@ fn impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 	let runtime_api_versions = generate_runtime_api_versions(api_impls)?;
 	let wasm_interface = generate_wasm_interface(api_impls)?;
 	let api_impls_for_runtime_api = generate_api_impl_for_runtime_api(api_impls)?;
-	let runtime_metadata = generate_runtime_metadata(api_impls)?;
 
 	Ok(quote!(
 		#hidden_includes
@@ -684,8 +643,6 @@ fn impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 		#api_impls_for_runtime
 
 		#api_impls_for_runtime_api
-
-		#runtime_metadata
 
 		#runtime_api_versions
 
