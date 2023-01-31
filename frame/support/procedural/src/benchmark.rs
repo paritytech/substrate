@@ -27,10 +27,11 @@ use syn::{
 	parse::{Nothing, ParseStream},
 	punctuated::Punctuated,
 	spanned::Spanned,
-	token::{Colon2, Comma, Gt, Lt, Paren},
-	Attribute, Error, Expr, ExprBlock, ExprCall, ExprPath, FnArg, GenericArgument, Item, ItemFn,
-	ItemMod, LitInt, Pat, Path, PathArguments, PathSegment, Result, ReturnType, Stmt, Token, Type,
-	TypePath, TypeTuple, WhereClause,
+	token::{Colon2, Comma, Gt, Lt, Paren, Question},
+	visit::{self, Visit},
+	Attribute, Error, Expr, ExprBlock, ExprCall, ExprPath, ExprTry, FnArg, GenericArgument, Item,
+	ItemFn, ItemMod, LitInt, Pat, Path, PathArguments, PathSegment, Result, ReturnType, Stmt,
+	Token, Type, TypePath, TypeTuple, WhereClause,
 };
 
 mod keywords {
@@ -63,6 +64,23 @@ struct RangeArgs {
 	_comma: Comma,
 	end: LitInt,
 	_gt_token: Gt,
+}
+
+struct ExprTryVisitor<'ast> {
+	results: Vec<&'ast ExprTry>,
+}
+
+impl<'ast> ExprTryVisitor<'ast> {
+	pub fn new() -> ExprTryVisitor<'ast> {
+		ExprTryVisitor { results: Vec::new() }
+	}
+}
+
+impl<'ast> Visit<'ast> for ExprTryVisitor<'ast> {
+	fn visit_expr_try(&mut self, expr_try: &'ast ExprTry) {
+		self.results.push(expr_try);
+		visit::visit_expr_try(self, expr_try);
+	}
 }
 
 #[derive(Clone, Debug)]
