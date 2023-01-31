@@ -206,7 +206,7 @@ pub mod pallet {
 		/// A reward payout is restricted to a maximum of `MaxNominatorRewardedPerValidator`
 		/// nominators in a single call. This used to limit the i/o cost for the nominator payout.
 		/// See call `payout_stakers` for more details.
-		/// // TODO(ank4n) keep old one and create new one.
+		// TODO(ank4n): Should we change this name? Breaking changes!
 		#[pallet::constant]
 		type MaxNominatorRewardedPerValidator: Get<u32>;
 
@@ -719,7 +719,7 @@ pub mod pallet {
 			<ErasStakers<T>>::insert(era, &validator, &exposure);
 
 			let (exposure_overview, exposure_pages) =
-				exposure.as_pages(T::MaxNominatorRewardedPerValidator::get());
+				exposure.into_pages(T::MaxNominatorRewardedPerValidator::get());
 
 			<ErasStakersOverview<T>>::insert(era, &validator, &exposure_overview);
 			exposure_pages.iter().enumerate().for_each(|(page, paged_exposure)| {
