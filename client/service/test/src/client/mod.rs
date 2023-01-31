@@ -581,7 +581,7 @@ fn uncles_with_multiple_forks() {
 }
 
 #[test]
-fn best_containing_on_longest_chain_with_single_chain_3_blocks() {
+fn finality_target_on_longest_chain_with_single_chain_3_blocks() {
 	// block tree:
 	// G -> A1 -> A2
 
@@ -606,7 +606,7 @@ fn best_containing_on_longest_chain_with_single_chain_3_blocks() {
 }
 
 #[test]
-fn best_containing_on_longest_chain_with_multiple_forks() {
+fn finality_target_on_longest_chain_with_multiple_forks() {
 	// block tree:
 	// G -> A1 -> A2 -> A3 -> A4 -> A5
 	//      A1 -> B2 -> B3 -> B4
@@ -731,8 +731,8 @@ fn best_containing_on_longest_chain_with_multiple_forks() {
 	assert!(leaves.contains(&d2.hash()));
 	assert_eq!(leaves.len(), 4);
 
+	// A quite improbable hash is retuned on error
 	let error_hash = Hash::from([0xff; 32]);
-	// the quite improbable error_hash is retuned on error
 	let finality_target = |target_hash, number| match block_on(
 		longest_chain_select.finality_target(target_hash, number),
 	) {
@@ -833,11 +833,11 @@ fn best_containing_on_longest_chain_with_multiple_forks() {
 }
 
 #[test]
-fn best_containing_on_longest_chain_with_max_depth_higher_than_best() {
+fn finality_target_on_longest_chain_with_max_depth_higher_than_best() {
 	// block tree:
 	// G -> A1 -> A2
 
-	let (mut client, longest_chain_select) = TestClientBuilder::new().build_with_longest_chain();
+	let (mut client, chain_select) = TestClientBuilder::new().build_with_longest_chain();
 
 	// G -> A1
 	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
@@ -849,20 +849,18 @@ fn best_containing_on_longest_chain_with_max_depth_higher_than_best() {
 
 	let genesis_hash = client.chain_info().genesis_hash;
 
-	assert_eq!(
-		a2.hash(),
-		block_on(longest_chain_select.finality_target(genesis_hash, Some(10))).unwrap(),
-	);
+	assert_eq!(a2.hash(), block_on(chain_select.finality_target(genesis_hash, Some(10))).unwrap(),);
 }
 
 #[test]
 fn finality_target_with_best_not_on_longest_chain() {
 	// block tree:
-	// G -> A1 -> A2 -> A3 -> A4
-	//         -> B2 -> B3
+	// G -> A1 -> A2 ->  A3  -> A4 -> A5
+	//         -> B2 -> (B3) -> B4
 	//                   ^best
 
-	let (mut client, longest_chain_select) = TestClientBuilder::new().build_with_longest_chain();
+	let (mut client, chain_select) = TestClientBuilder::new().build_with_longest_chain();
+	let genesis_hash = client.chain_info().genesis_hash;
 
 	// G -> A1
 	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
@@ -900,6 +898,13 @@ fn finality_target_with_best_not_on_longest_chain() {
 	let b2 = builder.build().unwrap().block;
 	block_on(client.import(BlockOrigin::Own, b2.clone())).unwrap();
 
+	assert_eq!(a5.hash(), block_on(chain_select.finality_target(genesis_hash, None)).unwrap());
+	assert_eq!(a5.hash(), block_on(chain_select.finality_target(a1.hash(), None)).unwrap());
+	assert_eq!(a5.hash(), block_on(chain_select.finality_target(a2.hash(), None)).unwrap());
+	assert_eq!(a5.hash(), block_on(chain_select.finality_target(a3.hash(), None)).unwrap());
+	assert_eq!(a5.hash(), block_on(chain_select.finality_target(a4.hash(), None)).unwrap());
+	assert_eq!(a5.hash(), block_on(chain_select.finality_target(a5.hash(), None)).unwrap());
+
 	// B2 -> B3
 	let b3 = client
 		.new_block_at(&BlockId::Hash(b2.hash()), Default::default(), false)
@@ -916,14 +921,21 @@ fn finality_target_with_best_not_on_longest_chain() {
 		.build()
 		.unwrap()
 		.block;
-	block_on(client.import(BlockOrigin::Own, b4.clone())).unwrap();
+	let (header, extrinsics) = b4.clone().deconstruct();
+	let mut import_params = BlockImportParams::new(BlockOrigin::Own, header);
+	import_params.body = Some(extrinsics);
+	import_params.fork_choice = Some(ForkChoiceStrategy::Custom(false));
+	block_on(client.import_block(import_params, Default::default())).unwrap();
 
-	let genesis_hash = client.chain_info().genesis_hash;
+	// double check that B3 is still the best...
+	assert_eq!(client.info().best_hash, b3.hash());
 
-	assert_eq!(
-		b4.hash(),
-		block_on(longest_chain_select.finality_target(genesis_hash, Some(10))).unwrap(),
-	);
+	assert_eq!(b4.hash(), block_on(chain_select.finality_target(genesis_hash, None)).unwrap());
+	assert_eq!(b4.hash(), block_on(chain_select.finality_target(a1.hash(), None)).unwrap());
+	assert!(block_on(chain_select.finality_target(a2.hash(), None)).is_err());
+	assert_eq!(b4.hash(), block_on(chain_select.finality_target(b2.hash(), None)).unwrap());
+	assert_eq!(b4.hash(), block_on(chain_select.finality_target(b3.hash(), None)).unwrap());
+	assert_eq!(b4.hash(), block_on(chain_select.finality_target(b4.hash(), None)).unwrap());
 }
 
 #[test]
