@@ -583,12 +583,12 @@ mod tests {
 	use super::*;
 	use codec::Input;
 	use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper};
-	use std::path::PathBuf;
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
 
-	#[cfg(any(feature = "rocksdb", test))]
+	#[cfg(feature = "rocksdb")]
 	#[test]
 	fn database_type_subdir_migration() {
+		use std::path::PathBuf;
 		type Block = RawBlock<ExtrinsicWrapper<u64>>;
 
 		fn check_dir_for_db_type(
@@ -685,6 +685,7 @@ mod tests {
 		assert_eq!(joined.remaining_len().unwrap(), Some(0));
 	}
 
+	#[cfg(feature = "rocksdb")]
 	#[test]
 	fn test_open_database_auto_new() {
 		let db_dir = tempfile::TempDir::new().unwrap();
@@ -730,6 +731,7 @@ mod tests {
 		}
 	}
 
+	#[cfg(feature = "rocksdb")]
 	#[test]
 	fn test_open_database_rocksdb_new() {
 		let db_dir = tempfile::TempDir::new().unwrap();
@@ -780,6 +782,7 @@ mod tests {
 		}
 	}
 
+	#[cfg(feature = "rocksdb")]
 	#[test]
 	fn test_open_database_paritydb_new() {
 		let db_dir = tempfile::TempDir::new().unwrap();

@@ -62,6 +62,10 @@ benchmarks! {
 	// We benchmark with the maximum possible size for a call.
 	// If the resulting weight is too big, maybe it worth having a weight which depends
 	// on the size of the call, with a new witness in parameter.
+	#[pov_mode = MaxEncodedLen {
+		// Use measured PoV size for the Preimages since we pass in a length witness.
+		Preimage::PreimageFor: Measured
+	}]
 	dispatch_whitelisted_call {
 		// NOTE: we remove `10` because we need some bytes to encode the variants and vec length
 		let n in 1 .. T::Preimages::MAX_LENGTH as u32 - 10;

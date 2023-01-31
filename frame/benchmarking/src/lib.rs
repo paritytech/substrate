@@ -47,7 +47,7 @@ pub use sp_runtime::traits::Zero;
 pub use sp_runtime::StateVersion;
 #[doc(hidden)]
 pub use sp_std::{self, boxed::Box, prelude::Vec, str, vec};
-pub use sp_storage::TrackedStorageKey;
+pub use sp_storage::{well_known_keys, TrackedStorageKey};
 pub use utils::*;
 
 /// Whitelist the given account.
@@ -211,6 +211,7 @@ macro_rules! benchmarks {
 			( )
 			( )
 			( )
+			( )
 			$( $rest )*
 		);
 	}
@@ -228,6 +229,7 @@ macro_rules! benchmarks_instance {
 			{ }
 			{ I: Instance }
 			{ }
+			( )
 			( )
 			( )
 			( )
@@ -251,6 +253,7 @@ macro_rules! benchmarks_instance_pallet {
 			( )
 			( )
 			( )
+			( )
 			$( $rest )*
 		);
 	}
@@ -268,6 +271,7 @@ macro_rules! benchmarks_iter {
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		( $( $names_skip_meta:tt )* )
+		( $( $pov_name:ident: $( $storage:path = $pov_mode:ident )*; )* )
 		impl_benchmark_test_suite!(
 			$bench_module:ident,
 			$new_test_ext:expr,
@@ -282,6 +286,7 @@ macro_rules! benchmarks_iter {
 			( $( $names )* )
 			( $( $names_extra )* )
 			( $( $names_skip_meta )* )
+			( $( $pov_name: $( $storage = $pov_mode )*; )* )
 			$( $rest )*
 		}
 	};
@@ -293,6 +298,7 @@ macro_rules! benchmarks_iter {
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		( $( $names_skip_meta:tt )* )
+		( $( $pov_name:ident: $( $storage:path = $pov_mode:ident )*; )* )
 		impl_benchmark_test_suite!(
 			$bench_module:ident,
 			$new_test_ext:expr,
@@ -307,6 +313,7 @@ macro_rules! benchmarks_iter {
 			( $( $names )* )
 			( $( $names_extra )* )
 			( $( $names_skip_meta )* )
+			( $( $pov_name: $( $storage = $pov_mode )*; )* )
 			$( $rest )*
 		}
 	};
@@ -318,6 +325,7 @@ macro_rules! benchmarks_iter {
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		( $( $names_skip_meta:tt )* )
+		( $( $pov_name:ident: $( $storage:path = $pov_mode:ident )*; )* )
 		where_clause { where $( $where_bound:tt )* }
 		$( $rest:tt )*
 	) => {
@@ -328,6 +336,7 @@ macro_rules! benchmarks_iter {
 			( $( $names )* )
 			( $( $names_extra )* )
 			( $( $names_skip_meta )* )
+			( $( $pov_name: $( $storage = $pov_mode )*; )* )
 			$( $rest )*
 		}
 	};
@@ -339,7 +348,9 @@ macro_rules! benchmarks_iter {
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		( $( $names_skip_meta:tt )* )
+		( $( $pov_name:ident: $( $storage:path = $pov_mode:ident )*; )* )
 		#[skip_meta]
+		$( #[ $($attributes:tt)+ ] )*
 		$name:ident
 		$( $rest:tt )*
 	) => {
@@ -350,6 +361,8 @@ macro_rules! benchmarks_iter {
 			( $( $names )* )
 			( $( $names_extra )* )
 			( $( $names_skip_meta )* $name )
+			( $( $pov_name: $( $storage = $pov_mode )*; )* )
+			$( #[ $( $attributes )+ ] )*
 			$name
 			$( $rest )*
 		}
@@ -362,7 +375,9 @@ macro_rules! benchmarks_iter {
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		( $( $names_skip_meta:tt )* )
+		( $( $pov_name:ident: $( $storage:path = $pov_mode:ident )*; )* )
 		#[extra]
+		$( #[ $($attributes:tt)+ ] )*
 		$name:ident
 		$( $rest:tt )*
 	) => {
@@ -373,6 +388,35 @@ macro_rules! benchmarks_iter {
 			( $( $names )* )
 			( $( $names_extra )* $name )
 			( $( $names_skip_meta )* )
+			( $( $pov_name: $( $storage = $pov_mode )*; )* )
+			$( #[ $( $attributes )+ ] )*
+			$name
+			$( $rest )*
+		}
+	};
+	// detect and extract `#[pov_mode = Mode { Pallet::Storage: Mode ... }]` tag:
+	(
+		{ $($bench_module:ident, $new_test_ext:expr, $test:path $(, $( $args:tt )* )?)? }
+		{ $( $instance:ident: $instance_bound:tt )? }
+		{ $( $where_clause:tt )* }
+		( $( $names:tt )* )
+		( $( $names_extra:tt )* )
+		( $( $names_skip_meta:tt )* )
+		( $( $old_pov_name:ident: $( $old_storage:path = $old_pov_mode:ident )*; )* )
+		#[pov_mode = $mode:ident $( { $( $storage:path: $pov_mode:ident )* } )?]
+		$( #[ $($attributes:tt)+ ] )*
+		$name:ident
+		$( $rest:tt )*
+	) => {
+		$crate::benchmarks_iter! {
+			{ $($bench_module, $new_test_ext, $test $(, $( $args )* )?)? }
+			{ $( $instance: $instance_bound )? }
+			{ $( $where_clause )* }
+			( $( $names )* )
+			( $( $names_extra )* )
+			( $( $names_skip_meta )* )
+			( $name: ALL = $mode $($( $storage = $pov_mode )*)?; $( $old_pov_name: $( $old_storage = $old_pov_mode )*; )* )
+			$( #[ $( $attributes )+ ] )*
 			$name
 			$( $rest )*
 		}
@@ -385,6 +429,7 @@ macro_rules! benchmarks_iter {
 		( $( $names:tt )* ) // This contains $( $( { $instance } )? $name:ident )*
 		( $( $names_extra:tt )* )
 		( $( $names_skip_meta:tt )* )
+		( $( $pov_name:ident: $( $storage:path = $pov_mode:ident )*; )* )
 		$name:ident { $( $code:tt )* }: _ $(< $origin_type:ty>)? ( $origin:expr $( , $arg:expr )* )
 		verify $postcode:block
 		$( $rest:tt )*
@@ -396,6 +441,7 @@ macro_rules! benchmarks_iter {
 			( $( $names )* )
 			( $( $names_extra )* )
 			( $( $names_skip_meta )* )
+			( $( $pov_name: $( $storage = $pov_mode )*; )* )
 			$name { $( $code )* }: $name $(< $origin_type >)? ( $origin $( , $arg )* )
 			verify $postcode
 			$( $rest )*
@@ -409,6 +455,7 @@ macro_rules! benchmarks_iter {
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		( $( $names_skip_meta:tt )* )
+		( $( $pov_name:ident: $( $storage:path = $pov_mode:ident )*; )* )
 		$name:ident { $( $code:tt )* }: $dispatch:ident $(<$origin_type:ty>)? ( $origin:expr $( , $arg:expr )* )
 		verify $postcode:block
 		$( $rest:tt )*
@@ -421,6 +468,7 @@ macro_rules! benchmarks_iter {
 				( $( $names )* )
 				( $( $names_extra )* )
 				( $( $names_skip_meta )* )
+				( $( $pov_name: $( $storage = $pov_mode )*; )* )
 				$name {
 					$( $code )*
 					let __call = Call::<
@@ -455,6 +503,7 @@ macro_rules! benchmarks_iter {
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		( $( $names_skip_meta:tt )* )
+		( $( $pov_name:ident: $( $storage:path = $pov_mode:ident )*; )* )
 		$name:ident { $( $code:tt )* }: $eval:block
 		verify $postcode:block
 		$( $rest:tt )*
@@ -483,6 +532,7 @@ macro_rules! benchmarks_iter {
 			( $( $names )* { $( $instance )? } $name )
 			( $( $names_extra )* )
 			( $( $names_skip_meta )* )
+			( $( $pov_name: $( $storage = $pov_mode )*; )* )
 			$( $rest )*
 		);
 	};
@@ -494,6 +544,7 @@ macro_rules! benchmarks_iter {
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		( $( $names_skip_meta:tt )* )
+		( $( $pov_name:ident: $( $storage:path = $pov_mode:ident )*; )* )
 	) => {
 		$crate::selected_benchmark!(
 			{ $( $where_clause)* }
@@ -506,6 +557,7 @@ macro_rules! benchmarks_iter {
 			( $( $names )* )
 			( $( $names_extra ),* )
 			( $( $names_skip_meta ),* )
+			( $( $pov_name: $( $storage = $pov_mode )*; )* )
 		);
 		$crate::impl_test_function!(
 			( $( $names )* )
@@ -525,6 +577,7 @@ macro_rules! benchmarks_iter {
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		( $( $names_skip_meta:tt )* )
+		( $( $pov_name:ident: $( $storage:path = $pov_mode:ident )*; )* )
 	) => {
 		$crate::selected_benchmark!(
 			{ $( $where_clause)* }
@@ -537,6 +590,7 @@ macro_rules! benchmarks_iter {
 			( $( $names )* )
 			( $( $names_extra ),* )
 			( $( $names_skip_meta ),* )
+			( $( $pov_name: $( $storage = $pov_mode )*; )* )
 		);
 	};
 	// add verify block to _() format
@@ -547,6 +601,7 @@ macro_rules! benchmarks_iter {
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		( $( $names_skip_meta:tt )* )
+		( $( $pov_name:ident: $( $storage:path = $pov_mode:ident )*; )* )
 		$name:ident { $( $code:tt )* }: _ $(<$origin_type:ty>)? ( $origin:expr $( , $arg:expr )* )
 		$( $rest:tt )*
 	) => {
@@ -557,6 +612,7 @@ macro_rules! benchmarks_iter {
 			( $( $names )* )
 			( $( $names_extra )* )
 			( $( $names_skip_meta )* )
+			( $( $pov_name: $( $storage = $pov_mode )*; )* )
 			$name { $( $code )* }: _ $(<$origin_type>)? ( $origin $( , $arg )* )
 			verify { }
 			$( $rest )*
@@ -570,6 +626,7 @@ macro_rules! benchmarks_iter {
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		( $( $names_skip_meta:tt )* )
+		( $( $pov_name:ident: $( $storage:path = $pov_mode:ident )*; )* )
 		$name:ident { $( $code:tt )* }: $dispatch:ident $(<$origin_type:ty>)? ( $origin:expr $( , $arg:expr )* )
 		$( $rest:tt )*
 	) => {
@@ -580,6 +637,7 @@ macro_rules! benchmarks_iter {
 			( $( $names )* )
 			( $( $names_extra )* )
 			( $( $names_skip_meta )* )
+			( $( $pov_name: $( $storage = $pov_mode )*; )* )
 			$name { $( $code )* }: $dispatch $(<$origin_type>)? ( $origin $( , $arg )* )
 			verify { }
 			$( $rest )*
@@ -593,6 +651,7 @@ macro_rules! benchmarks_iter {
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		( $( $names_skip_meta:tt )* )
+		( $( $pov_name:ident: $( $storage:path = $pov_mode:ident )*; )* )
 		$name:ident { $( $code:tt )* }: $(<$origin_type:ty>)? $eval:block
 		$( $rest:tt )*
 	) => {
@@ -603,6 +662,7 @@ macro_rules! benchmarks_iter {
 			( $( $names )* )
 			( $( $names_extra )* )
 			( $( $names_skip_meta )* )
+			( $( $pov_name: $( $storage = $pov_mode )*; )* )
 			$name { $( $code )* }: $(<$origin_type>)? $eval
 			verify { }
 			$( $rest )*
@@ -981,6 +1041,7 @@ macro_rules! impl_benchmark {
 		( $( { $( $name_inst:ident )? } $name:ident )* )
 		( $( $name_extra:ident ),* )
 		( $( $name_skip_meta:ident ),* )
+		( $( $pov_name:ident: $( $storage:path = $pov_mode:ident )*; )* )
 	) => {
 		// We only need to implement benchmarks for the runtime-benchmarks feature or testing.
 		#[cfg(any(feature = "runtime-benchmarks", test))]
@@ -989,23 +1050,37 @@ macro_rules! impl_benchmark {
 			where T: frame_system::Config, $( $where_clause )*
 		{
 			fn benchmarks(extra: bool) -> $crate::Vec<$crate::BenchmarkMetadata> {
+				$($crate::validate_pov_mode!(
+					$pov_name: $( $storage = $pov_mode )*;
+				);)*
 				let mut all_names = $crate::vec![ $( stringify!($name).as_ref() ),* ];
 				if !extra {
 					let extra = [ $( stringify!($name_extra).as_ref() ),* ];
 					all_names.retain(|x| !extra.contains(x));
 				}
+				let pov_modes: $crate::Vec<($crate::Vec<u8>, $crate::Vec<($crate::Vec<u8>, $crate::Vec<u8>)>)> = $crate::vec![
+					$(
+						(stringify!($pov_name).as_bytes().to_vec(),
+						$crate::vec![
+							$( ( stringify!($storage).as_bytes().to_vec(),
+								 stringify!($pov_mode).as_bytes().to_vec() ), )*
+						]),
+					)*
+				];
 				all_names.into_iter().map(|benchmark| {
 					let selected_benchmark = match benchmark {
 						$( stringify!($name) => SelectedBenchmark::$name, )*
 						_ => panic!("all benchmarks should be selectable"),
 					};
+					let name = benchmark.as_bytes().to_vec();
 					let components = <
 						SelectedBenchmark as $crate::BenchmarkingSetup<T $(, $instance)?>
 					>::components(&selected_benchmark);
 
 					$crate::BenchmarkMetadata {
-						name: benchmark.as_bytes().to_vec(),
+						name: name.clone(),
 						components,
+						pov_modes: pov_modes.iter().find(|p| p.0 == name).map(|p| p.1.clone()).unwrap_or_default(),
 					}
 				}).collect::<$crate::Vec<_>>()
 			}
@@ -1037,8 +1112,13 @@ macro_rules! impl_benchmark {
 					$crate::frame_support::storage::transactional::TRANSACTION_LEVEL_KEY.into()
 				);
 				whitelist.push(transactional_layer_key);
+				// Whitelist the `:extrinsic_index`.
+				let extrinsic_index = $crate::TrackedStorageKey::new(
+					$crate::well_known_keys::EXTRINSIC_INDEX.into()
+				);
+				whitelist.push(extrinsic_index);
 
-				$crate::benchmarking::set_whitelist(whitelist);
+				$crate::benchmarking::set_whitelist(whitelist.clone());
 
 				let mut results: $crate::Vec<$crate::BenchmarkResult> = $crate::Vec::new();
 
@@ -1062,15 +1142,22 @@ macro_rules! impl_benchmark {
 					// This will enable worst case scenario for reading from the database.
 					$crate::benchmarking::commit_db();
 
+					// Access all whitelisted keys to get them into the proof recorder since the
+					// recorder does now have a whitelist.
+					for key in &whitelist {
+						$crate::frame_support::storage::unhashed::get_raw(&key.key);
+					}
+
 					// Reset the read/write counter so we don't count operations in the setup process.
 					$crate::benchmarking::reset_read_write_count();
 
 					// Time the extrinsic logic.
 					$crate::log::trace!(
 						target: "benchmark",
-						"Start Benchmark: {} ({:?})",
+						"Start Benchmark: {} ({:?}) verify {}",
 						extrinsic,
-						c
+						c,
+						verify
 					);
 
 					let start_pov = $crate::benchmarking::proof_size();
@@ -1098,6 +1185,10 @@ macro_rules! impl_benchmark {
 					$crate::log::trace!(
 						target: "benchmark",
 						"Read/Write Count {:?}", read_write_count
+					);
+					$crate::log::trace!(
+						target: "benchmark",
+						"Proof sizes: before {:?} after {:?} diff {}", &start_pov, &end_pov, &diff_pov
 					);
 
 					// Time the storage root recalculation.
@@ -1419,6 +1510,37 @@ macro_rules! impl_benchmark_test_suite {
 			$(, $( $rest )* )?
 		);
 	}
+}
+
+/// Validates the passed `pov_mode`s.
+///
+/// Checks that:
+/// - a top-level `ignored` is exclusive
+/// - all modes are valid
+#[macro_export]
+macro_rules! validate_pov_mode {
+	() => {};
+	( $_bench:ident: ; ) => { };
+	( $_bench:ident: $_car:path = Ignored ; ) => { };
+	( $bench:ident: $_car:path = Ignored $( $storage:path = $_pov_mode:ident )+; ) => {
+		compile_error!(
+			concat!(concat!("`pov_mode = Ignored` is exclusive. Please remove the attribute from keys: ", $( stringify!($storage) )+), " on benchmark '", stringify!($bench), "'"));
+	};
+	( $bench:ident: $car:path = Measured $( $storage:path = $pov_mode:ident )*; ) => {
+		$crate::validate_pov_mode!(
+			$bench: $( $storage = $pov_mode )*;
+		);
+	};
+	( $bench:ident: $car:path = MaxEncodedLen $( $storage:path = $pov_mode:ident )*; ) => {
+		$crate::validate_pov_mode!(
+			$bench: $( $storage = $pov_mode )*;
+		);
+	};
+	( $bench:ident: $key:path = $unknown:ident $( $_storage:path = $_pov_mode:ident )*; ) => {
+		compile_error!(
+			concat!("Unknown pov_mode '", stringify!($unknown) ,"' for benchmark '", stringify!($bench), "' on key '", stringify!($key), "'. Must be one of: Ignored, Measured, MaxEncodedLen")
+		);
+	};
 }
 
 // Takes all arguments from `impl_benchmark_test_suite` and three additional arguments.

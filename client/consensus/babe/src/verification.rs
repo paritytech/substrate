@@ -22,6 +22,7 @@ use crate::{
 	babe_err, find_pre_digest, BlockT, Epoch, Error, LOG_TARGET,
 };
 use log::{debug, trace};
+use sc_consensus_epochs::Epoch as EpochT;
 use sc_consensus_slots::CheckedHeader;
 use sp_consensus_babe::{
 	digests::{
@@ -155,10 +156,16 @@ fn check_primary_header<B: BlockT + Sized>(
 	c: (u64, u64),
 ) -> Result<(), Error<B>> {
 	let author = &epoch.authorities[pre_digest.authority_index as usize].0;
+	let mut epoch_index = epoch.epoch_index;
+
+	if epoch.end_slot() <= pre_digest.slot {
+		// Slot doesn't strictly belong to this epoch, create a clone with fixed values.
+		epoch_index = epoch.clone_for_slot(pre_digest.slot).epoch_index;
+	}
 
 	if AuthorityPair::verify(&signature, pre_hash, author) {
 		let (inout, _) = {
-			let transcript = make_transcript(&epoch.randomness, pre_digest.slot, epoch.epoch_index);
+			let transcript = make_transcript(&epoch.randomness, pre_digest.slot, epoch_index);
 
 			schnorrkel::PublicKey::from_bytes(author.as_slice())
 				.and_then(|p| {
@@ -228,8 +235,14 @@ fn check_secondary_vrf_header<B: BlockT>(
 		return Err(Error::InvalidAuthor(expected_author.clone(), author.clone()))
 	}
 
+	let mut epoch_index = epoch.epoch_index;
+	if epoch.end_slot() <= pre_digest.slot {
+		// Slot doesn't strictly belong to this epoch, create a clone with fixed values.
+		epoch_index = epoch.clone_for_slot(pre_digest.slot).epoch_index;
+	}
+
 	if AuthorityPair::verify(&signature, pre_hash.as_ref(), author) {
-		let transcript = make_transcript(&epoch.randomness, pre_digest.slot, epoch.epoch_index);
+		let transcript = make_transcript(&epoch.randomness, pre_digest.slot, epoch_index);
 
 		schnorrkel::PublicKey::from_bytes(author.as_slice())
 			.and_then(|p| p.vrf_verify(transcript, &pre_digest.vrf_output, &pre_digest.vrf_proof))
