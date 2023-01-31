@@ -156,27 +156,27 @@ impl BenchmarkDef {
 	/// Constructs a [`BenchmarkDef`] by traversing an existing [`ItemFn`] node.
 	pub fn from(item_fn: &ItemFn, extra: bool, skip_meta: bool) -> Result<BenchmarkDef> {
 		// parsing for non `()` return type (only allow `Result<(), BenchmarkError>`)
-		let invalid_return = || {
+		let invalid_return = |span| {
 			return Err(Error::new(
-				item_fn.sig.output.span(),
+				span,
 				"Invalid return type. Only `()` and `Result<(), BenchmarkError>` are allowed.",
 			))
 		};
 		if let ReturnType::Type(_, typ) = &item_fn.sig.output {
-			let Type::Path(TypePath { path, qself: _ }) = &**typ else { return invalid_return() };
-			let Some(segment) = path.segments.last() else { return invalid_return() };
+			let Type::Path(TypePath { path, qself: _ }) = &**typ else { return invalid_return(typ.span()) };
+			let Some(segment) = path.segments.last() else { return invalid_return(path.span()) };
 			let _: keywords::Result = syn::parse(segment.ident.to_token_stream().into())?;
-			let PathArguments::AngleBracketed(args) = &segment.arguments else { return invalid_return() };
-			if args.args.len() != 2 {
-				return invalid_return()
+			let PathArguments::AngleBracketed(args) = &segment.arguments else { return invalid_return(segment.span()) };
+			let Some(last_arg) = args.args.last() else { return invalid_return(args.args.span()) };
+			if args.args.len() > 2 {
+				return invalid_return(last_arg.span())
 			}
-			let Some(first_arg) = args.args.first() else { return invalid_return() };
-			let GenericArgument::Type(Type::Tuple(TypeTuple { paren_token: _, elems })) = first_arg else { return invalid_return() };
+			let Some(first_arg) = args.args.first() else { return invalid_return(args.args.span()) };
+			let GenericArgument::Type(Type::Tuple(TypeTuple { paren_token: _, elems })) = first_arg else { return invalid_return(first_arg.span()) };
 			if !elems.is_empty() {
-				return invalid_return()
+				return invalid_return(elems.span())
 			}
-			let Some(second_arg) = args.args.last() else { return invalid_return() };
-			let _: keywords::BenchmarkError = syn::parse(second_arg.to_token_stream().into())?;
+			let _: keywords::BenchmarkError = syn::parse(last_arg.to_token_stream().into())?;
 		} // else returns `()` which is permitted
 
 		let mut params: Vec<ParamDef> = Vec::new();
