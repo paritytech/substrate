@@ -8037,6 +8037,7 @@ dependencies = [
 name = "sc-client-db"
 version = "0.10.0-dev"
 dependencies = [
+ "array-bytes",
  "criterion",
  "hash-db",
  "kitchensink-runtime",
