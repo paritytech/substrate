@@ -1669,18 +1669,34 @@ impl<T: Config> StakingInterface for Pallet<T> {
 }
 
 #[cfg(any(test, feature = "try-runtime"))]
+#[derive(PartialEq)]
+pub(crate) enum TestMode {
+	// run only fast running tests
+	Fast,
+	// run all the tests
+	All,
+}
+
+#[cfg(any(test, feature = "try-runtime"))]
 impl<T: Config> Pallet<T> {
-	pub(crate) fn do_try_state(_: BlockNumberFor<T>) -> Result<(), &'static str> {
+	pub(crate) fn do_try_state(_: BlockNumberFor<T>, mode: TestMode) -> Result<(), &'static str> {
+		// fast tests
 		ensure!(
 			T::VoterList::iter()
 				.all(|x| <Nominators<T>>::contains_key(&x) || <Validators<T>>::contains_key(&x)),
 			"VoterList contains non-staker"
 		);
 
-		Self::check_nominators()?;
 		Self::check_exposures()?;
 		Self::check_ledgers()?;
-		Self::check_count()
+		Self::check_count()?;
+
+		if mode == TestMode::All {
+			// slow running tests (should be avoided on CI)
+			Self::check_nominators()?;
+		}
+
+		Ok(())
 	}
 
 	fn check_count() -> Result<(), &'static str> {

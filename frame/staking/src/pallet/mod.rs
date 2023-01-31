@@ -826,7 +826,7 @@ pub mod pallet {
 
 		#[cfg(feature = "try-runtime")]
 		fn try_state(n: BlockNumberFor<T>) -> Result<(), &'static str> {
-			Self::do_try_state(n)
+			Self::do_try_state(n, TestMode::Fast)
 		}
 	}
 
