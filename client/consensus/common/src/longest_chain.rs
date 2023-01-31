@@ -21,7 +21,7 @@
 use sc_client_api::backend;
 use sp_blockchain::{Backend, HeaderBackend};
 use sp_consensus::{Error as ConsensusError, SelectChain};
-use sp_runtime::traits::{Block as BlockT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 use std::{marker::PhantomData, sync::Arc};
 
 /// Implement Longest Chain Select implementation
@@ -48,20 +48,69 @@ where
 		LongestChain { backend, _phantom: Default::default() }
 	}
 
-	fn best_block_header(&self) -> sp_blockchain::Result<<Block as BlockT>::Header> {
+	fn best_hash(&self) -> sp_blockchain::Result<<Block as BlockT>::Hash> {
 		let info = self.backend.blockchain().info();
 		let import_lock = self.backend.get_import_lock();
 		let best_hash = self
 			.backend
 			.blockchain()
-			.best_containing(info.best_hash, None, import_lock)?
+			.best_containing(info.best_hash, import_lock)?
 			.unwrap_or(info.best_hash);
+		Ok(best_hash)
+	}
 
+	fn best_header(&self) -> sp_blockchain::Result<<Block as BlockT>::Header> {
+		let best_hash = self.best_hash()?;
 		Ok(self
 			.backend
 			.blockchain()
 			.header(best_hash)?
 			.expect("given block hash was fetched from block in db; qed"))
+	}
+
+	/// If `maybe_max_block_number` is `Some(max_block_number)`
+	/// the search is limited to block `numbers <= max_block_number`.
+	/// in other words as if there were no blocks greater `max_block_number`.
+	fn finality_target(
+		&self,
+		target_hash: Block::Hash,
+		maybe_max_number: Option<NumberFor<Block>>,
+	) -> sp_blockchain::Result<Block::Hash> {
+		use sp_blockchain::Error::{MissingHeader, NotInFinalizedChain};
+		let blockchain = self.backend.blockchain();
+
+		let mut current_head = self.best_header()?;
+		let mut best_hash = current_head.hash();
+
+		let target_header = blockchain
+			.header(target_hash)?
+			.ok_or_else(|| MissingHeader(target_hash.to_string()))?;
+		let target_number = *target_header.number();
+
+		if let Some(max_number) = maybe_max_number {
+			if max_number < target_number {
+				return Err(NotInFinalizedChain)
+			}
+
+			while current_head.number() > &max_number {
+				best_hash = *current_head.parent_hash();
+				current_head = blockchain
+					.header(best_hash)?
+					.ok_or_else(|| MissingHeader(best_hash.to_string()))?;
+			}
+		}
+
+		while current_head.hash() != target_hash {
+			if *current_head.number() < target_number {
+				return Err(NotInFinalizedChain)
+			}
+			let current_hash = *current_head.parent_hash();
+			current_head = blockchain
+				.header(current_hash)?
+				.ok_or_else(|| MissingHeader(current_hash.to_string()))?;
+		}
+
+		return Ok(best_hash)
 	}
 
 	fn leaves(&self) -> Result<Vec<<Block as BlockT>::Hash>, sp_blockchain::Error> {
@@ -80,8 +129,7 @@ where
 	}
 
 	async fn best_chain(&self) -> Result<<Block as BlockT>::Header, ConsensusError> {
-		LongestChain::best_block_header(self)
-			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))
+		LongestChain::best_header(self).map_err(|e| ConsensusError::ChainLookup(e.to_string()))
 	}
 
 	async fn finality_target(
@@ -89,11 +137,7 @@ where
 		target_hash: Block::Hash,
 		maybe_max_number: Option<NumberFor<Block>>,
 	) -> Result<Block::Hash, ConsensusError> {
-		let import_lock = self.backend.get_import_lock();
-		self.backend
-			.blockchain()
-			.best_containing(target_hash, maybe_max_number, import_lock)
-			.map(|maybe_hash| maybe_hash.unwrap_or(target_hash))
+		LongestChain::finality_target(self, target_hash, maybe_max_number)
 			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))
 	}
 }
