@@ -48,10 +48,6 @@ frame_support::construct_runtime!(
 	}
 );
 
-parameter_types! {
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
-}
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -537,6 +533,31 @@ fn requesting_judgement_should_work() {
 			BlakeTwo256::hash_of(&ten())
 		));
 		assert_ok!(Identity::request_judgement(RuntimeOrigin::signed(10), 0, 10));
+	});
+}
+
+#[test]
+fn provide_judgement_should_return_judgement_payment_failed_error() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Identity::add_registrar(RuntimeOrigin::signed(1), 3));
+		assert_ok!(Identity::set_fee(RuntimeOrigin::signed(3), 0, 10));
+		assert_ok!(Identity::set_identity(RuntimeOrigin::signed(10), Box::new(ten())));
+		assert_ok!(Identity::request_judgement(RuntimeOrigin::signed(10), 0, 10));
+		// 10 for the judgement request, 10 for the identity.
+		assert_eq!(Balances::free_balance(10), 80);
+
+		// This forces judgement payment failed error
+		Balances::make_free_balance_be(&3, 0);
+		assert_noop!(
+			Identity::provide_judgement(
+				RuntimeOrigin::signed(3),
+				0,
+				10,
+				Judgement::Erroneous,
+				BlakeTwo256::hash_of(&ten())
+			),
+			Error::<Test>::JudgementPaymentFailed
+		);
 	});
 }
 

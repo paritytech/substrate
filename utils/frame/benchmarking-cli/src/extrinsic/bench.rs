@@ -43,17 +43,17 @@ use crate::shared::{StatSelect, Stats};
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
 pub struct BenchmarkParams {
 	/// Rounds of warmups before measuring.
-	#[clap(long, default_value = "10")]
+	#[arg(long, default_value_t = 10)]
 	pub warmup: u32,
 
 	/// How many times the benchmark should be repeated.
-	#[clap(long, default_value = "100")]
+	#[arg(long, default_value_t = 100)]
 	pub repeat: u32,
 
 	/// Maximal number of extrinsics that should be put into a block.
 	///
 	/// Only useful for debugging.
-	#[clap(long)]
+	#[arg(long)]
 	pub max_ext_per_block: Option<u32>,
 }
 

@@ -179,12 +179,6 @@ pub trait RuntimeSpawn: Send {
 	fn join(&self, handle: u64) -> Vec<u8>;
 }
 
-#[cfg(feature = "std")]
-sp_externalities::decl_extension! {
-	/// Extension that supports spawning extra runtime instances in externalities.
-	pub struct RuntimeSpawnExt(Box<dyn RuntimeSpawn>);
-}
-
 /// Something that can spawn tasks (blocking and non-blocking) with an assigned name
 /// and optional group.
 #[dyn_clonable::clonable]

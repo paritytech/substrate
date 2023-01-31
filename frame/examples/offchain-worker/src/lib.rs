@@ -229,6 +229,7 @@ pub mod pallet {
 		/// working and receives (and provides) meaningful data.
 		/// This example is not focused on correctness of the oracle itself, but rather its
 		/// purpose is to showcase offchain worker capabilities.
+		#[pallet::call_index(0)]
 		#[pallet::weight(0)]
 		pub fn submit_price(origin: OriginFor<T>, price: u32) -> DispatchResultWithPostInfo {
 			// Retrieve sender of the transaction.
@@ -254,6 +255,7 @@ pub mod pallet {
 		///
 		/// This example is not focused on correctness of the oracle itself, but rather its
 		/// purpose is to showcase offchain worker capabilities.
+		#[pallet::call_index(1)]
 		#[pallet::weight(0)]
 		pub fn submit_price_unsigned(
 			origin: OriginFor<T>,
@@ -270,6 +272,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		#[pallet::call_index(2)]
 		#[pallet::weight(0)]
 		pub fn submit_price_unsigned_with_signed_payload(
 			origin: OriginFor<T>,

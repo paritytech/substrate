@@ -7,7 +7,6 @@ license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "Fuzzer for FRAME pallet bags list"
-readme = "README.md"
 publish = false
 
 [dependencies]

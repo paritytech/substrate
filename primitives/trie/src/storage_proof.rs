@@ -18,7 +18,11 @@
 use codec::{Decode, Encode};
 use hash_db::{HashDB, Hasher};
 use scale_info::TypeInfo;
-use sp_std::{collections::btree_set::BTreeSet, iter::IntoIterator, vec::Vec};
+use sp_std::{
+	collections::btree_set::BTreeSet,
+	iter::{DoubleEndedIterator, IntoIterator},
+	vec::Vec,
+};
 // Note that `LayoutV1` usage here (proof compaction) is compatible
 // with `LayoutV0`.
 use crate::LayoutV1 as Layout;
@@ -54,10 +58,16 @@ impl StorageProof {
 		self.trie_nodes.is_empty()
 	}
 
+	/// Convert into an iterator over encoded trie nodes in lexicographical order constructed
+	/// from the proof.
+	pub fn into_iter_nodes(self) -> impl Sized + DoubleEndedIterator<Item = Vec<u8>> {
+		self.trie_nodes.into_iter()
+	}
+
 	/// Create an iterator over encoded trie nodes in lexicographical order constructed
 	/// from the proof.
-	pub fn iter_nodes(self) -> StorageProofNodeIterator {
-		StorageProofNodeIterator::new(self)
+	pub fn iter_nodes(&self) -> impl Sized + DoubleEndedIterator<Item = &Vec<u8>> {
+		self.trie_nodes.iter()
 	}
 
 	/// Convert into plain node vector.
@@ -70,14 +80,19 @@ impl StorageProof {
 		self.into()
 	}
 
+	/// Creates a [`MemoryDB`](crate::MemoryDB) from `Self` reference.
+	pub fn to_memory_db<H: Hasher>(&self) -> crate::MemoryDB<H> {
+		self.into()
+	}
+
 	/// Merges multiple storage proofs covering potentially different sets of keys into one proof
 	/// covering all keys. The merged proof output may be smaller than the aggregate size of the
 	/// input proofs due to deduplication of trie nodes.
 	pub fn merge(proofs: impl IntoIterator<Item = Self>) -> Self {
 		let trie_nodes = proofs
 			.into_iter()
-			.flat_map(|proof| proof.iter_nodes())
-			.collect::<sp_std::collections::btree_set::BTreeSet<_>>()
+			.flat_map(|proof| proof.into_iter_nodes())
+			.collect::<BTreeSet<_>>()
 			.into_iter()
 			.collect();
 
@@ -89,7 +104,17 @@ impl StorageProof {
 		self,
 		root: H::Out,
 	) -> Result<CompactProof, crate::CompactProofError<H::Out, crate::Error<H::Out>>> {
-		crate::encode_compact::<Layout<H>>(self, root)
+		let db = self.into_memory_db();
+		crate::encode_compact::<Layout<H>, crate::MemoryDB<H>>(&db, &root)
+	}
+
+	/// Encode as a compact proof with default trie layout.
+	pub fn to_compact_proof<H: Hasher>(
+		&self,
+		root: H::Out,
+	) -> Result<CompactProof, crate::CompactProofError<H::Out, crate::Error<H::Out>>> {
+		let db = self.to_memory_db();
+		crate::encode_compact::<Layout<H>, crate::MemoryDB<H>>(&db, &root)
 	}
 
 	/// Returns the estimated encoded size of the compact proof.
@@ -106,6 +131,12 @@ impl StorageProof {
 
 impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
 	fn from(proof: StorageProof) -> Self {
+		From::from(&proof)
+	}
+}
+
+impl<H: Hasher> From<&StorageProof> for crate::MemoryDB<H> {
+	fn from(proof: &StorageProof) -> Self {
 		let mut db = crate::MemoryDB::default();
 		proof.iter_nodes().for_each(|n| {
 			db.insert(crate::EMPTY_PREFIX, &n);
@@ -167,25 +198,5 @@ impl CompactProof {
 		)?;
 
 		Ok((db, root))
-	}
-}
-
-/// An iterator over trie nodes constructed from a storage proof. The nodes are not guaranteed to
-/// be traversed in any particular order.
-pub struct StorageProofNodeIterator {
-	inner: <BTreeSet<Vec<u8>> as IntoIterator>::IntoIter,
-}
-
-impl StorageProofNodeIterator {
-	fn new(proof: StorageProof) -> Self {
-		StorageProofNodeIterator { inner: proof.trie_nodes.into_iter() }
-	}
-}
-
-impl Iterator for StorageProofNodeIterator {
-	type Item = Vec<u8>;
-
-	fn next(&mut self) -> Option<Self::Item> {
-		self.inner.next()
 	}
 }

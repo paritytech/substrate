@@ -26,14 +26,14 @@ use log::warn;
 use beefy_primitives::{
 	ecdsa_crypto::{Public as ECDSAPublic, Signature as ECDSASignature},
         bls_crypto::{Public as BLSPublic, Signature as BLSSignature},
-        BeefyVerify,
+        BeefyAuthorityId,
 	KEY_TYPE,
 };
 
 use codec::{Decode, Encode};
 use core::fmt::Debug;
 	
-use crate::error;
+use crate::{error, LOG_TARGET};
 
 use sp_core::bls::Pair as BLSPair;
 use sp_application_crypto::Pair as app_crypto_Pair;
@@ -93,7 +93,12 @@ impl BeefyKeystore<ECDSAPublic,ECDSASignature> for  BeefyECDSAKeystore
 			.collect();
 
 		if public.len() > 1 {
-			warn!(target: "beefy", "🥩 Multiple private keys found for: {:?} ({})", public, public.len());
+			warn!(
+				target: LOG_TARGET,
+				"🥩 Multiple private keys found for: {:?} ({})",
+				public,
+				public.len()
+			);
 		}
 
 		public.get(0).cloned()
@@ -146,7 +151,7 @@ impl BeefyKeystore<ECDSAPublic,ECDSASignature> for  BeefyECDSAKeystore
 	/// Use the `public` key to verify that `sig` is a valid signature for `message`.
 	///
 	fn verify(public: &Self::Public, sig: &ECDSASignature, message: &[u8]) -> bool {
-	    BeefyVerify::<Keccak256>::verify(sig, message, public)
+		BeefyAuthorityId::<Keccak256>::verify(public, sig, message)
 	}
 
 	fn authority_id_to_public_key(auth_id: &ECDSAPublic) -> Result<Self::Public,  error::Error> {

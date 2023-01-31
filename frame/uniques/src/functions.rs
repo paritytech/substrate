@@ -50,8 +50,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		details.owner = dest;
 
 		// The approved account has to be reset to None, because otherwise pre-approve attack would
-		// be possible, where the owner can approve his second account before making the transaction
-		// and then claiming the item back.
+		// be possible, where the owner can approve their second account before making the
+		// transaction and then claiming the item back.
 		details.approved = None;
 
 		Item::<T, I>::insert(&collection, &item, &details);
@@ -189,6 +189,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		item: T::ItemId,
 		with_details: impl FnOnce(&CollectionDetailsFor<T, I>, &ItemDetailsFor<T, I>) -> DispatchResult,
 	) -> DispatchResult {
+		ensure!(!T::Locker::is_locked(collection, item), Error::<T, I>::Locked);
 		let owner = Collection::<T, I>::try_mutate(
 			&collection,
 			|maybe_collection_details| -> Result<T::AccountId, DispatchError> {

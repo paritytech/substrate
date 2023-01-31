@@ -23,6 +23,7 @@
 #![warn(missing_docs)]
 #![deny(unused_crate_dependencies)]
 
+pub mod chain_head;
 pub mod chain_spec;
 pub mod transaction;
 

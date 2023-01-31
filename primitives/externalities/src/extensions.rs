@@ -89,6 +89,19 @@ macro_rules! decl_extension {
 				Self(inner)
 			}
  		}
+	};
+	(
+		$( #[ $attr:meta ] )*
+		$vis:vis struct $ext_name:ident;
+	) => {
+		$( #[ $attr ] )*
+		$vis struct $ext_name;
+
+		impl $crate::Extension for $ext_name {
+			fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
+				self
+			}
+		}
 	}
 }
 
@@ -112,7 +125,7 @@ pub trait ExtensionStore {
 		extension: Box<dyn Extension>,
 	) -> Result<(), Error>;
 
-	/// Deregister extension with speicifed 'type_id' and drop it.
+	/// Deregister extension with specified 'type_id' and drop it.
 	///
 	/// It should return error if extension is not registered.
 	fn deregister_extension_by_type_id(&mut self, type_id: TypeId) -> Result<(), Error>;
@@ -176,6 +189,13 @@ impl Extensions {
 	/// Returns a mutable iterator over all extensions.
 	pub fn iter_mut(&mut self) -> impl Iterator<Item = (&TypeId, &mut Box<dyn Extension>)> {
 		self.extensions.iter_mut()
+	}
+}
+
+impl Extend<Extensions> for Extensions {
+	fn extend<T: IntoIterator<Item = Extensions>>(&mut self, iter: T) {
+		iter.into_iter()
+			.for_each(|ext| self.extensions.extend(ext.extensions.into_iter()));
 	}
 }
 

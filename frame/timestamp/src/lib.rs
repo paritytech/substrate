@@ -198,6 +198,7 @@ pub mod pallet {
 		///   `on_finalize`)
 		/// - 1 event handler `on_timestamp_set`. Must be `O(1)`.
 		/// # </weight>
+		#[pallet::call_index(0)]
 		#[pallet::weight((
 			T::WeightInfo::set(),
 			DispatchClass::Mandatory

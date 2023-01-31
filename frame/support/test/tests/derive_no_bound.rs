@@ -72,7 +72,7 @@ fn test_struct_named() {
 	assert_eq!(a_2, a_1);
 	assert_eq!(
 		format!("{:?}", a_1),
-		String::from("StructNamed { a: 1, b: 2, c: 3, phantom: PhantomData }")
+		String::from("StructNamed { a: 1, b: 2, c: 3, phantom: PhantomData<(derive_no_bound::ImplNone, derive_no_bound::ImplNone)> }")
 	);
 
 	let b = StructNamed::<Runtime, ImplNone, ImplNone> {
@@ -103,7 +103,7 @@ fn test_struct_unnamed() {
 	assert_eq!(a_2.1, 2);
 	assert_eq!(a_2.2, 3);
 	assert_eq!(a_2, a_1);
-	assert_eq!(format!("{:?}", a_1), String::from("StructUnnamed(1, 2, 3, PhantomData)"));
+	assert_eq!(format!("{:?}", a_1), String::from("StructUnnamed(1, 2, 3, PhantomData<(derive_no_bound::ImplNone, derive_no_bound::ImplNone)>)"));
 
 	let b = StructUnnamed::<Runtime, ImplNone, ImplNone>(1, 2, 4, Default::default());
 
@@ -111,9 +111,32 @@ fn test_struct_unnamed() {
 }
 
 #[derive(DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, DefaultNoBound)]
+struct StructNoGenerics {
+	field1: u32,
+	field2: u64,
+}
+
+#[derive(DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, DefaultNoBound)]
+enum EnumNoGenerics {
+	#[default]
+	VariantUnnamed(u32, u64),
+	VariantNamed {
+		a: u32,
+		b: u64,
+	},
+	VariantUnit,
+}
+
+#[derive(DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, DefaultNoBound)]
 enum Enum<T: Config, U, V> {
+	#[default]
 	VariantUnnamed(u32, u64, T::C, core::marker::PhantomData<(U, V)>),
-	VariantNamed { a: u32, b: u64, c: T::C, phantom: core::marker::PhantomData<(U, V)> },
+	VariantNamed {
+		a: u32,
+		b: u64,
+		c: T::C,
+		phantom: core::marker::PhantomData<(U, V)>,
+	},
 	VariantUnit,
 	VariantUnit2,
 }
@@ -121,7 +144,12 @@ enum Enum<T: Config, U, V> {
 // enum that will have a named default.
 #[derive(DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, DefaultNoBound)]
 enum Enum2<T: Config> {
-	VariantNamed { a: u32, b: u64, c: T::C },
+	#[default]
+	VariantNamed {
+		a: u32,
+		b: u64,
+		c: T::C,
+	},
 	VariantUnnamed(u32, u64, T::C),
 	VariantUnit,
 	VariantUnit2,
@@ -130,8 +158,13 @@ enum Enum2<T: Config> {
 // enum that will have a unit default.
 #[derive(DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, DefaultNoBound)]
 enum Enum3<T: Config> {
+	#[default]
 	VariantUnit,
-	VariantNamed { a: u32, b: u64, c: T::C },
+	VariantNamed {
+		a: u32,
+		b: u64,
+		c: T::C,
+	},
 	VariantUnnamed(u32, u64, T::C),
 	VariantUnit2,
 }
@@ -178,11 +211,11 @@ fn test_enum() {
 
 	assert_eq!(
 		format!("{:?}", variant_0),
-		String::from("Enum::VariantUnnamed(1, 2, 3, PhantomData)"),
+		String::from("Enum::VariantUnnamed(1, 2, 3, PhantomData<(derive_no_bound::ImplNone, derive_no_bound::ImplNone)>)"),
 	);
 	assert_eq!(
 		format!("{:?}", variant_1),
-		String::from("Enum::VariantNamed { a: 1, b: 2, c: 3, phantom: PhantomData }"),
+		String::from("Enum::VariantNamed { a: 1, b: 2, c: 3, phantom: PhantomData<(derive_no_bound::ImplNone, derive_no_bound::ImplNone)> }"),
 	);
 	assert_eq!(format!("{:?}", variant_2), String::from("Enum::VariantUnit"));
 	assert_eq!(format!("{:?}", variant_3), String::from("Enum::VariantUnit2"));

@@ -21,7 +21,7 @@ use impl_trait_for_tuples::impl_for_tuples;
 use sp_arithmetic::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
 
-// Which state tests to execute.
+/// Which state tests to execute.
 #[derive(codec::Encode, codec::Decode, Clone)]
 pub enum Select {
 	/// None of them.
@@ -81,10 +81,52 @@ impl sp_std::str::FromStr for Select {
 	}
 }
 
+/// Select which checks should be run when trying a runtime upgrade upgrade.
+#[derive(codec::Encode, codec::Decode, Clone, Debug, Copy)]
+pub enum UpgradeCheckSelect {
+	/// Run no checks.
+	None,
+	/// Run the `try_state`, `pre_upgrade` and `post_upgrade` checks.
+	All,
+	/// Run the `pre_upgrade` and `post_upgrade` checks.
+	PreAndPost,
+	/// Run the `try_state` checks.
+	TryState,
+}
+
+impl UpgradeCheckSelect {
+	/// Whether the pre- and post-upgrade checks are selected.
+	pub fn pre_and_post(&self) -> bool {
+		matches!(self, Self::All | Self::PreAndPost)
+	}
+
+	/// Whether the try-state checks are selected.
+	pub fn try_state(&self) -> bool {
+		matches!(self, Self::All | Self::TryState)
+	}
+}
+
+#[cfg(feature = "std")]
+impl core::str::FromStr for UpgradeCheckSelect {
+	type Err = &'static str;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		match s.to_lowercase().as_str() {
+			"none" => Ok(Self::None),
+			"all" => Ok(Self::All),
+			"pre-and-post" => Ok(Self::PreAndPost),
+			"try-state" => Ok(Self::TryState),
+			_ => Err("Invalid CheckSelector"),
+		}
+	}
+}
+
 /// Execute some checks to ensure the internal state of a pallet is consistent.
 ///
 /// Usually, these checks should check all of the invariants that are expected to be held on all of
 /// the storage items of your pallet.
+///
+/// This hook should not alter any storage.
 pub trait TryState<BlockNumber> {
 	/// Execute the state checks.
 	fn try_state(_: BlockNumber, _: Select) -> Result<(), &'static str>;

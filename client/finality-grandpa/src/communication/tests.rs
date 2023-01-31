@@ -135,7 +135,7 @@ impl NetworkEventStream for TestNetwork {
 		&self,
 		_name: &'static str,
 	) -> Pin<Box<dyn Stream<Item = NetworkEvent> + Send>> {
-		let (tx, rx) = tracing_unbounded("test");
+		let (tx, rx) = tracing_unbounded("test", 100_000);
 		let _ = self.sender.unbounded_send(Event::EventStream(tx));
 		Box::pin(rx)
 	}
@@ -253,7 +253,7 @@ fn voter_set_state() -> SharedVoterSetState<Block> {
 
 // needs to run in a tokio runtime.
 pub(crate) fn make_test_network() -> (impl Future<Output = Tester>, TestNetwork) {
-	let (tx, rx) = tracing_unbounded("test");
+	let (tx, rx) = tracing_unbounded("test", 100_000);
 	let net = TestNetwork { sender: tx };
 
 	#[derive(Clone)]

@@ -27,10 +27,7 @@ use std::{future::Future, pin::Pin, sync::Arc};
 use dyn_clone::DynClone;
 
 use sc_client_api::blockchain::HeaderBackend;
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, Header, NumberFor, One, Zero},
-};
+use sp_runtime::traits::{Block as BlockT, Header, NumberFor, One, Zero};
 
 /// A future returned by a `VotingRule` to restrict a given vote, if any restriction is necessary.
 pub type VotingRuleResult<Block> =
@@ -197,7 +194,7 @@ where
 
 		target_hash = *target_header.parent_hash();
 		target_header = backend
-			.header(BlockId::Hash(target_hash))
+			.header(target_hash)
 			.ok()?
 			.expect("Header known to exist due to the existence of one of its descendents; qed");
 	}
@@ -242,7 +239,7 @@ where
 						restricted_number >= base.number() &&
 							restricted_number < restricted_target.number()
 					})
-					.and_then(|(hash, _)| backend.header(BlockId::Hash(hash)).ok())
+					.and_then(|(hash, _)| backend.header(hash).ok())
 					.and_then(std::convert::identity)
 				{
 					restricted_target = header;
@@ -371,16 +368,18 @@ mod tests {
 		let rule = VotingRulesBuilder::new().add(Subtract(50)).add(Subtract(50)).build();
 
 		let mut client = Arc::new(TestClientBuilder::new().build());
+		let mut hashes = Vec::with_capacity(200);
 
 		for _ in 0..200 {
 			let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+			hashes.push(block.hash());
 
 			futures::executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 		}
 
-		let genesis = client.header(&BlockId::Number(0u32.into())).unwrap().unwrap();
+		let genesis = client.header(client.info().genesis_hash).unwrap().unwrap();
 
-		let best = client.header(&BlockId::Hash(client.info().best_hash)).unwrap().unwrap();
+		let best = client.header(client.info().best_hash).unwrap().unwrap();
 
 		let (_, number) =
 			futures::executor::block_on(rule.restrict_vote(client.clone(), &genesis, &best, &best))
@@ -390,7 +389,7 @@ mod tests {
 		// which means that we should be voting for block #100
 		assert_eq!(number, 100);
 
-		let block110 = client.header(&BlockId::Number(110u32.into())).unwrap().unwrap();
+		let block110 = client.header(hashes[109]).unwrap().unwrap();
 
 		let (_, number) = futures::executor::block_on(rule.restrict_vote(
 			client.clone(),
@@ -412,17 +411,20 @@ mod tests {
 
 		let mut client = Arc::new(TestClientBuilder::new().build());
 
-		for _ in 0..5 {
+		let n = 5;
+		let mut hashes = Vec::with_capacity(n);
+		for _ in 0..n {
 			let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+			hashes.push(block.hash());
 
 			futures::executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 		}
 
-		let best = client.header(&BlockId::Hash(client.info().best_hash)).unwrap().unwrap();
+		let best = client.header(client.info().best_hash).unwrap().unwrap();
 		let best_number = *best.number();
 
-		for i in 0u32..5 {
-			let base = client.header(&BlockId::Number(i.into())).unwrap().unwrap();
+		for i in 0..n {
+			let base = client.header(hashes[i]).unwrap().unwrap();
 			let (_, number) = futures::executor::block_on(rule.restrict_vote(
 				client.clone(),
 				&base,

@@ -24,7 +24,7 @@ use sp_core::crypto::{ByteArray, Ss58Codec};
 
 /// The `verify` command
 #[derive(Debug, Clone, Parser)]
-#[clap(
+#[command(
 	name = "verify",
 	about = "Verify a signature for a message, provided on STDIN, with a given (public or secret) key"
 )]
@@ -39,11 +39,11 @@ pub struct VerifyCmd {
 
 	/// Message to verify, if not provided you will be prompted to
 	/// pass the message via STDIN
-	#[clap(long)]
+	#[arg(long)]
 	message: Option<String>,
 
 	/// The message on STDIN is hex-encoded data
-	#[clap(long)]
+	#[arg(long)]
 	hex: bool,
 
 	#[allow(missing_docs)]

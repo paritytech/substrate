@@ -63,7 +63,7 @@ impl Era {
 	/// does not exceed `BlockHashCount` parameter passed to `system` module, since that
 	/// prunes old blocks and renders transactions immediately invalid.
 	pub fn mortal(period: u64, current: u64) -> Self {
-		let period = period.checked_next_power_of_two().unwrap_or(1 << 16).max(4).min(1 << 16);
+		let period = period.checked_next_power_of_two().unwrap_or(1 << 16).clamp(4, 1 << 16);
 		let phase = current % period;
 		let quantize_factor = (period >> 12).max(1);
 		let quantized_phase = phase / quantize_factor * quantize_factor;
@@ -105,7 +105,7 @@ impl Encode for Era {
 			Self::Immortal => output.push_byte(0),
 			Self::Mortal(period, phase) => {
 				let quantize_factor = (*period as u64 >> 12).max(1);
-				let encoded = (period.trailing_zeros() - 1).max(1).min(15) as u16 |
+				let encoded = (period.trailing_zeros() - 1).clamp(1, 15) as u16 |
 					((phase / quantize_factor) << 4) as u16;
 				encoded.encode_to(output);
 			},

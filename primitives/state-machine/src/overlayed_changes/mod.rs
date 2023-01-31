@@ -474,7 +474,7 @@ impl OverlayedChanges {
 	pub fn children(
 		&self,
 	) -> impl Iterator<Item = (impl Iterator<Item = (&StorageKey, &OverlayedValue)>, &ChildInfo)> {
-		self.children.iter().map(|(_, v)| (v.0.changes(), &v.1))
+		self.children.values().map(|v| (v.0.changes(), &v.1))
 	}
 
 	/// Get an iterator over all top changes as been by the current transaction.

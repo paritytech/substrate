@@ -31,20 +31,30 @@ mod parse;
 pub use parse::Def;
 use syn::spanned::Spanned;
 
+mod keyword {
+	syn::custom_keyword!(dev_mode);
+}
+
 pub fn pallet(
 	attr: proc_macro::TokenStream,
 	item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
+	let mut dev_mode = false;
 	if !attr.is_empty() {
-		let msg =
-			"Invalid pallet macro call: expected no attributes, e.g. macro call must be just \
-			`#[frame_support::pallet]` or `#[pallet]`";
-		let span = proc_macro2::TokenStream::from(attr).span();
-		return syn::Error::new(span, msg).to_compile_error().into()
+		if let Ok(_) = syn::parse::<keyword::dev_mode>(attr.clone()) {
+			dev_mode = true;
+		} else {
+			let msg = "Invalid pallet macro call: unexpected attribute. Macro call must be \
+				bare, such as `#[frame_support::pallet]` or `#[pallet]`, or must specify the \
+				`dev_mode` attribute, such as `#[frame_support::pallet(dev_mode)]` or \
+				#[pallet(dev_mode)].";
+			let span = proc_macro2::TokenStream::from(attr).span();
+			return syn::Error::new(span, msg).to_compile_error().into()
+		}
 	}
 
 	let item = syn::parse_macro_input!(item as syn::ItemMod);
-	match parse::Def::try_from(item) {
+	match parse::Def::try_from(item, dev_mode) {
 		Ok(def) => expand::expand(def).into(),
 		Err(e) => e.to_compile_error().into(),
 	}

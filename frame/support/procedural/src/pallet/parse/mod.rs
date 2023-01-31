@@ -59,10 +59,11 @@ pub struct Def {
 	pub type_values: Vec<type_value::TypeValueDef>,
 	pub frame_system: syn::Ident,
 	pub frame_support: syn::Ident,
+	pub dev_mode: bool,
 }
 
 impl Def {
-	pub fn try_from(mut item: syn::ItemMod) -> syn::Result<Self> {
+	pub fn try_from(mut item: syn::ItemMod, dev_mode: bool) -> syn::Result<Self> {
 		let frame_system = generate_crate_access_2018("frame-system")?;
 		let frame_support = generate_crate_access_2018("frame-support")?;
 
@@ -106,7 +107,7 @@ impl Def {
 					hooks = Some(m);
 				},
 				Some(PalletAttr::RuntimeCall(span)) if call.is_none() =>
-					call = Some(call::CallDef::try_from(span, index, item)?),
+					call = Some(call::CallDef::try_from(span, index, item, dev_mode)?),
 				Some(PalletAttr::Error(span)) if error.is_none() =>
 					error = Some(error::ErrorDef::try_from(span, index, item)?),
 				Some(PalletAttr::RuntimeEvent(span)) if event.is_none() =>
@@ -124,7 +125,7 @@ impl Def {
 				Some(PalletAttr::Inherent(_)) if inherent.is_none() =>
 					inherent = Some(inherent::InherentDef::try_from(index, item)?),
 				Some(PalletAttr::Storage(span)) =>
-					storages.push(storage::StorageDef::try_from(span, index, item)?),
+					storages.push(storage::StorageDef::try_from(span, index, item, dev_mode)?),
 				Some(PalletAttr::ValidateUnsigned(_)) if validate_unsigned.is_none() => {
 					let v = validate_unsigned::ValidateUnsignedDef::try_from(index, item)?;
 					validate_unsigned = Some(v);
@@ -173,6 +174,7 @@ impl Def {
 			type_values,
 			frame_system,
 			frame_support,
+			dev_mode,
 		};
 
 		def.check_instance_usage()?;

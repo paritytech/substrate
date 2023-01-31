@@ -41,6 +41,7 @@ use sp_runtime::{
 use std::{
 	cmp::min,
 	hash::{Hash, Hasher},
+	num::NonZeroUsize,
 	sync::Arc,
 	time::Duration,
 };
@@ -164,7 +165,9 @@ where
 		);
 		protocol_config.inbound_queue = Some(tx);
 
-		let seen_requests = LruCache::new(num_peer_hint * 2);
+		let capacity =
+			NonZeroUsize::new(num_peer_hint.max(1) * 2).expect("cache capacity is not zero");
+		let seen_requests = LruCache::new(capacity);
 
 		(Self { client, request_receiver, seen_requests }, protocol_config)
 	}
@@ -327,15 +330,21 @@ where
 		let mut blocks = Vec::new();
 
 		let mut total_size: usize = 0;
-		while let Some(header) = self.client.header(block_id).unwrap_or_default() {
+
+		let client_header_from_block_id =
+			|block_id: BlockId<B>| -> Result<Option<B::Header>, HandleRequestError> {
+				if let Some(hash) = self.client.block_hash_from_id(&block_id)? {
+					return self.client.header(hash).map_err(Into::into)
+				}
+				Ok(None)
+			};
+
+		while let Some(header) = client_header_from_block_id(block_id).unwrap_or_default() {
 			let number = *header.number();
 			let hash = header.hash();
 			let parent_hash = *header.parent_hash();
-			let justifications = if get_justification {
-				self.client.justifications(&BlockId::Hash(hash))?
-			} else {
-				None
-			};
+			let justifications =
+				if get_justification { self.client.justifications(hash)? } else { None };
 
 			let (justifications, justification, is_empty_justification) =
 				if support_multiple_justifications {
@@ -364,7 +373,7 @@ where
 				};
 
 			let body = if get_body {
-				match self.client.block_body(&BlockId::Hash(hash))? {
+				match self.client.block_body(hash)? {
 					Some(mut extrinsics) =>
 						extrinsics.iter_mut().map(|extrinsic| extrinsic.encode()).collect(),
 					None => {
@@ -377,7 +386,7 @@ where
 			};
 
 			let indexed_body = if get_indexed_body {
-				match self.client.block_indexed_body(&BlockId::Hash(hash))? {
+				match self.client.block_indexed_body(hash)? {
 					Some(transactions) => transactions,
 					None => {
 						log::trace!(

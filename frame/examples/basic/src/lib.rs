@@ -497,6 +497,7 @@ pub mod pallet {
 		//
 		// The weight for this extrinsic we rely on the auto-generated `WeightInfo` from the
 		// benchmark toolchain.
+		#[pallet::call_index(0)]
 		#[pallet::weight(
 			<T as pallet::Config>::WeightInfo::accumulate_dummy()
 		)]
@@ -541,6 +542,7 @@ pub mod pallet {
 		//
 		// The weight for this extrinsic we use our own weight object `WeightForSetDummy` to
 		// determine its weight
+		#[pallet::call_index(1)]
 		#[pallet::weight(WeightForSetDummy::<T>(<BalanceOf<T>>::from(100u32)))]
 		pub fn set_dummy(
 			origin: OriginFor<T>,

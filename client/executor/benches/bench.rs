@@ -23,7 +23,6 @@ use sc_executor_common::{
 	runtime_blob::RuntimeBlob,
 	wasm_runtime::{WasmInstance, WasmModule},
 };
-#[cfg(feature = "wasmtime")]
 use sc_executor_wasmtime::InstantiationStrategy;
 use sc_runtime_test::wasm_binary_unwrap as test_runtime;
 use sp_wasm_interface::HostFunctions as _;
@@ -35,11 +34,7 @@ use std::sync::{
 #[derive(Clone)]
 enum Method {
 	Interpreted,
-	#[cfg(feature = "wasmtime")]
-	Compiled {
-		instantiation_strategy: InstantiationStrategy,
-		precompile: bool,
-	},
+	Compiled { instantiation_strategy: InstantiationStrategy, precompile: bool },
 }
 
 // This is just a bog-standard Kusama runtime with an extra
@@ -67,7 +62,6 @@ fn initialize(
 			allow_missing_func_imports,
 		)
 		.map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) }),
-		#[cfg(feature = "wasmtime")]
 		Method::Compiled { instantiation_strategy, precompile } => {
 			let config = sc_executor_wasmtime::Config {
 				allow_missing_func_imports,
@@ -163,7 +157,6 @@ fn bench_call_instance(c: &mut Criterion) {
 	let _ = env_logger::try_init();
 
 	let strategies = [
-		#[cfg(feature = "wasmtime")]
 		(
 			"legacy_instance_reuse",
 			Method::Compiled {
@@ -171,7 +164,6 @@ fn bench_call_instance(c: &mut Criterion) {
 				precompile: false,
 			},
 		),
-		#[cfg(feature = "wasmtime")]
 		(
 			"recreate_instance_vanilla",
 			Method::Compiled {
@@ -179,7 +171,6 @@ fn bench_call_instance(c: &mut Criterion) {
 				precompile: false,
 			},
 		),
-		#[cfg(feature = "wasmtime")]
 		(
 			"recreate_instance_cow_fresh",
 			Method::Compiled {
@@ -187,7 +178,6 @@ fn bench_call_instance(c: &mut Criterion) {
 				precompile: false,
 			},
 		),
-		#[cfg(feature = "wasmtime")]
 		(
 			"recreate_instance_cow_precompiled",
 			Method::Compiled {
@@ -195,7 +185,6 @@ fn bench_call_instance(c: &mut Criterion) {
 				precompile: true,
 			},
 		),
-		#[cfg(feature = "wasmtime")]
 		(
 			"pooling_vanilla",
 			Method::Compiled {
@@ -203,7 +192,6 @@ fn bench_call_instance(c: &mut Criterion) {
 				precompile: false,
 			},
 		),
-		#[cfg(feature = "wasmtime")]
 		(
 			"pooling_cow_fresh",
 			Method::Compiled {
@@ -211,7 +199,6 @@ fn bench_call_instance(c: &mut Criterion) {
 				precompile: false,
 			},
 		),
-		#[cfg(feature = "wasmtime")]
 		(
 			"pooling_cow_precompiled",
 			Method::Compiled {

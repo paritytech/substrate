@@ -62,7 +62,7 @@ impl<H, BH> Default for Sender<H, BH> {
 impl<H: Clone, BH: Clone> Sender<H, BH> {
 	/// Add a new watcher to this sender object.
 	pub fn new_watcher(&mut self, hash: H) -> Watcher<H, BH> {
-		let (tx, receiver) = tracing_unbounded("mpsc_txpool_watcher");
+		let (tx, receiver) = tracing_unbounded("mpsc_txpool_watcher", 100_000);
 		self.receivers.push(tx);
 		Watcher { receiver, hash }
 	}

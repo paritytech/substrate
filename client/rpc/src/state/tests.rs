@@ -23,7 +23,7 @@ use assert_matches::assert_matches;
 use futures::executor;
 use jsonrpsee::{
 	core::Error as RpcError,
-	types::{error::CallError as RpcCallError, EmptyParams, ErrorObject},
+	types::{error::CallError as RpcCallError, EmptyServerParams as EmptyParams, ErrorObject},
 };
 use sc_block_builder::BlockBuilderProvider;
 use sc_rpc_api::DenyUnsafe;
@@ -70,9 +70,12 @@ async fn should_return_storage() {
 		client.storage_hash(key.clone(), Some(genesis_hash).into()).map(|x| x.is_some()),
 		Ok(true)
 	);
-	assert_eq!(client.storage_size(key.clone(), None).unwrap().unwrap() as usize, VALUE.len(),);
 	assert_eq!(
-		client.storage_size(StorageKey(b":map".to_vec()), None).unwrap().unwrap() as usize,
+		client.storage_size(key.clone(), None).await.unwrap().unwrap() as usize,
+		VALUE.len(),
+	);
+	assert_eq!(
+		client.storage_size(StorageKey(b":map".to_vec()), None).await.unwrap().unwrap() as usize,
 		2 + 3,
 	);
 	assert_eq!(

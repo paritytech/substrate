@@ -31,7 +31,7 @@ use log::{debug, trace};
 use parking_lot::{Mutex, RwLock};
 use wasm_timer::Instant;
 
-use crate::{communication::peers::KnownPeers, keystore::BeefyKeystore};
+use crate::{communication::peers::KnownPeers, keystore::BeefyKeystore, LOG_TARGET};
 use beefy_primitives::{
 	VoteMessage,
 };
@@ -136,7 +136,7 @@ where
 	///
 	/// Noting round will start a live `round`.
 	pub(crate) fn note_round(&self, round: NumberFor<B>) {
-		debug!(target: "beefy", "🥩 About to note gossip round #{}", round);
+		debug!(target: LOG_TARGET, "🥩 About to note gossip round #{}", round);
 		self.known_votes.write().insert(round);
 	}
 
@@ -144,7 +144,7 @@ where
 	///
 	/// This can be called once round is complete so we stop gossiping for it.
 	pub(crate) fn conclude_round(&self, round: NumberFor<B>) {
-		debug!(target: "beefy", "🥩 About to drop gossip round #{}", round);
+		debug!(target: LOG_TARGET, "🥩 About to drop gossip round #{}", round);
 		self.known_votes.write().conclude(round);
 	}
 }
@@ -156,6 +156,10 @@ where
 	AuthId: Encode + Decode + Debug + Ord + Sync + Send,
 	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
 {
+	fn peer_disconnected(&self, _context: &mut dyn ValidatorContext<B>, who: &PeerId) {
+		self.known_peers.lock().remove(who);
+	}
+
 	fn validate(
 		&self,
 		_context: &mut dyn ValidatorContext<B>,
@@ -187,7 +191,10 @@ where
 				return ValidationResult::ProcessAndKeep(self.topic)
 			} else {
 				// TODO: report peer
-				debug!(target: "beefy", "🥩 Bad signature on message: {:?}, from: {:?}", msg, sender);
+				debug!(
+					target: LOG_TARGET,
+					"🥩 Bad signature on message: {:?}, from: {:?}", msg, sender
+				);
 			}
 		}
 
@@ -205,7 +212,7 @@ where
 			let round = msg.commitment.block_number;
 			let expired = !known_votes.is_live(&round);
 
-			trace!(target: "beefy", "🥩 Message for round #{} expired: {}", round, expired);
+			trace!(target: LOG_TARGET, "🥩 Message for round #{} expired: {}", round, expired);
 
 			expired
 		})
@@ -239,7 +246,7 @@ where
 			let round = msg.commitment.block_number;
 			let allowed = known_votes.is_live(&round);
 
-			trace!(target: "beefy", "🥩 Message for round #{} allowed: {}", round, allowed);
+			trace!(target: LOG_TARGET, "🥩 Message for round #{} allowed: {}", round, allowed);
 
 			allowed
 		})

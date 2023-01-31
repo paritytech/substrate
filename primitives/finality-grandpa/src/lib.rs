@@ -35,8 +35,10 @@ use sp_runtime::{
 };
 use sp_std::{borrow::Cow, vec::Vec};
 
-#[cfg(feature = "std")]
-use log::debug;
+/// The log target to be used by client code.
+pub const CLIENT_LOG_TARGET: &str = "grandpa";
+/// The log target to be used by runtime code.
+pub const RUNTIME_LOG_TARGET: &str = "runtime::grandpa";
 
 /// Key type for GRANDPA module.
 pub const KEY_TYPE: sp_core::crypto::KeyTypeId = sp_application_crypto::key_types::GRANDPA;
@@ -129,7 +131,8 @@ pub type CompactCommit<Header> = grandpa::CompactCommit<
 ///
 /// This is meant to be stored in the db and passed around the network to other
 /// nodes, and are used by syncing nodes to prove authority set handoffs.
-#[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct GrandpaJustification<Header: HeaderT> {
 	pub round: u64,
 	pub commit: Commit<Header>,
@@ -138,7 +141,7 @@ pub struct GrandpaJustification<Header: HeaderT> {
 
 /// A scheduled change of authority set.
 #[cfg_attr(feature = "std", derive(Serialize))]
-#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct ScheduledChange<N> {
 	/// The new authorities after the change, along with their respective weights.
 	pub next_authorities: AuthorityList,
@@ -427,8 +430,9 @@ where
 	let valid = id.verify(&buf, signature);
 
 	if !valid {
-		#[cfg(feature = "std")]
-		debug!(target: "afg", "Bad signature on message from {:?}", id);
+		let log_target = if cfg!(feature = "std") { CLIENT_LOG_TARGET } else { RUNTIME_LOG_TARGET };
+
+		log::debug!(target: log_target, "Bad signature on message from {:?}", id);
 	}
 
 	valid

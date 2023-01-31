@@ -76,7 +76,7 @@ enum NodeSocket<TTrans: Transport> {
 
 impl<TTrans: Transport> NodeSocket<TTrans> {
 	fn wait_reconnect() -> NodeSocket<TTrans> {
-		let random_delay = rand::thread_rng().gen_range(10, 20);
+		let random_delay = rand::thread_rng().gen_range(10..20);
 		let delay = Delay::new(Duration::from_secs(random_delay));
 		log::trace!(target: "telemetry", "Pausing for {} secs before reconnecting", random_delay);
 		NodeSocket::WaitingReconnect(delay)

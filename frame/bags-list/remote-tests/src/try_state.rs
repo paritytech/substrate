@@ -25,23 +25,26 @@ use remote_externalities::{Builder, Mode, OnlineConfig};
 use sp_runtime::{traits::Block as BlockT, DeserializeOwned};
 
 /// Execute the sanity check of the bags-list.
-pub async fn execute<
-	Runtime: crate::RuntimeT<pallet_bags_list::Instance1>,
-	Block: BlockT + DeserializeOwned,
->(
+pub async fn execute<Runtime, Block>(
 	currency_unit: u64,
 	currency_name: &'static str,
 	ws_url: String,
-) {
+) where
+	Runtime: crate::RuntimeT<pallet_bags_list::Instance1>,
+	Block: BlockT + DeserializeOwned,
+	Block::Header: DeserializeOwned,
+{
 	let mut ext = Builder::<Block>::new()
 		.mode(Mode::Online(OnlineConfig {
 			transport: ws_url.to_string().into(),
 			pallets: vec![pallet_bags_list::Pallet::<Runtime, pallet_bags_list::Instance1>::name()
 				.to_string()],
+			hashed_prefixes: vec![
+				<pallet_staking::Bonded<Runtime>>::prefix_hash(),
+				<pallet_staking::Ledger<Runtime>>::prefix_hash(),
+			],
 			..Default::default()
 		}))
-		.inject_hashed_prefix(&<pallet_staking::Bonded<Runtime>>::prefix_hash())
-		.inject_hashed_prefix(&<pallet_staking::Ledger<Runtime>>::prefix_hash())
 		.build()
 		.await
 		.unwrap();

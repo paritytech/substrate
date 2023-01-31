@@ -23,12 +23,13 @@ use sp_std::prelude::*;
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Decode + Sized>(key: &[u8]) -> Option<T> {
 	sp_io::storage::get(key).and_then(|val| {
-		Decode::decode(&mut &val[..]).map(Some).unwrap_or_else(|_| {
+		Decode::decode(&mut &val[..]).map(Some).unwrap_or_else(|e| {
 			// TODO #3700: error should be handleable.
 			log::error!(
 				target: "runtime::storage",
-				"Corrupted state at {:?}",
+				"Corrupted state at `{:?}: {:?}`",
 				key,
+				e,
 			);
 			None
 		})

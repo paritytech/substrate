@@ -26,7 +26,6 @@ use codec::{Decode, Encode};
 use frame_support::{
 	assert_noop, assert_ok,
 	dispatch::DispatchError,
-	parameter_types,
 	traits::{ConstU32, ConstU64, Contains},
 	RuntimeDebug,
 };
@@ -52,10 +51,6 @@ frame_support::construct_runtime!(
 	}
 );
 
-parameter_types! {
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
-}
 impl frame_system::Config for Test {
 	type BaseCallFilter = BaseFilter;
 	type BlockWeights = ();

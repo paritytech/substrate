@@ -87,18 +87,6 @@ where
 	}
 }
 
-#[cfg(feature = "std")]
-impl<Address, Call, Signature, Extra> parity_util_mem::MallocSizeOf
-	for UncheckedExtrinsic<Address, Call, Signature, Extra>
-where
-	Extra: SignedExtension,
-{
-	fn size_of(&self, _ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
-		// Instantiated only in runtime.
-		0
-	}
-}
-
 impl<Address, Call, Signature, Extra: SignedExtension>
 	UncheckedExtrinsic<Address, Call, Signature, Extra>
 {
@@ -155,6 +143,22 @@ where
 					return Err(InvalidTransaction::BadProof.into())
 				}
 
+				let (function, extra, _) = raw_payload.deconstruct();
+				CheckedExtrinsic { signed: Some((signed, extra)), function }
+			},
+			None => CheckedExtrinsic { signed: None, function: self.function },
+		})
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn unchecked_into_checked_i_know_what_i_am_doing(
+		self,
+		lookup: &Lookup,
+	) -> Result<Self::Checked, TransactionValidityError> {
+		Ok(match self.signature {
+			Some((signed, _, extra)) => {
+				let signed = lookup.lookup(signed)?;
+				let raw_payload = SignedPayload::new(self.function, extra)?;
 				let (function, extra, _) = raw_payload.deconstruct();
 				CheckedExtrinsic { signed: Some((signed, extra)), function }
 			},

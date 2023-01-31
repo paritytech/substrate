@@ -178,6 +178,18 @@ impl TestApi {
 
 		let mut chain = self.chain.write();
 		chain.block_by_hash.insert(hash, block.clone());
+
+		if is_best_block {
+			chain
+				.block_by_number
+				.entry(*block_number)
+				.or_default()
+				.iter_mut()
+				.for_each(|x| {
+					x.1 = IsBestBlock::No;
+				});
+		}
+
 		chain
 			.block_by_number
 			.entry(*block_number)
@@ -315,25 +327,20 @@ impl sc_transaction_pool::ChainApi for TestApi {
 		Self::hash_and_length_inner(ex)
 	}
 
-	fn block_body(&self, id: &BlockId<Self::Block>) -> Self::BodyFuture {
-		futures::future::ready(Ok(match id {
-			BlockId::Number(num) =>
-				self.chain.read().block_by_number.get(num).map(|b| b[0].0.extrinsics().to_vec()),
-			BlockId::Hash(hash) =>
-				self.chain.read().block_by_hash.get(hash).map(|b| b.extrinsics().to_vec()),
-		}))
+	fn block_body(&self, hash: <Self::Block as BlockT>::Hash) -> Self::BodyFuture {
+		futures::future::ready(Ok(self
+			.chain
+			.read()
+			.block_by_hash
+			.get(&hash)
+			.map(|b| b.extrinsics().to_vec())))
 	}
 
 	fn block_header(
 		&self,
-		at: &BlockId<Self::Block>,
+		hash: <Self::Block as BlockT>::Hash,
 	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error> {
-		Ok(match at {
-			BlockId::Number(num) =>
-				self.chain.read().block_by_number.get(num).map(|b| b[0].0.header().clone()),
-			BlockId::Hash(hash) =>
-				self.chain.read().block_by_hash.get(hash).map(|b| b.header().clone()),
-		})
+		Ok(self.chain.read().block_by_hash.get(&hash).map(|b| b.header().clone()))
 	}
 
 	fn tree_route(

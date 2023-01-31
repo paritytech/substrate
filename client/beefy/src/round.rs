@@ -24,26 +24,30 @@ use codec::{Decode, Encode};
 use core::fmt::Debug;
 
 use log::{debug, trace};
+use crate::LOG_TARGET;
 
 use beefy_primitives::{
 	ValidatorSet, ValidatorSetId,
 };
+use codec::{Decode, Encode};
+use log::{debug, trace};
 use sp_runtime::traits::{Block, NumberFor};
+use std::{collections::BTreeMap, hash::Hash};
 
 /// Tracks for each round which validators have voted/signed and
 /// whether the local `self` validator has voted/signed.
 ///
 /// Does not do any validation on votes or signatures, layers above need to handle that (gossip).
-///#[derive(Default)]
+#[derive(Debug, Decode, Default, Encode, PartialEq)]
 struct RoundTracker<AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send> {
 	self_vote: bool,
-	votes: HashMap<AuthId, TSignature>,
+	votes: BTreeMap<AuthId, TSignature>,
 	
 }
 
-impl<AuthId: Encode + Decode + Debug + Ord + Sync + Send + core::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send> Default for RoundTracker<AuthId, TSignature> {
- 	fn default() -> Self { RoundTracker::<_,_> {self_vote: false,  votes: <HashMap<AuthId, TSignature> as Default>::default()}}
- }
+// impl<AuthId: Encode + Decode + Debug + Ord + Sync + Send + core::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send> Default for RoundTracker<AuthId, TSignature> {
+//  	fn default() -> Self { RoundTracker::<_,_> {self_vote: false,  votes: <HashMap<AuthId, TSignature> as Default>::default()}}
+//  }
 
 impl<AuthId: Encode + Decode + Debug + Ord + Sync + Send + core::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send> RoundTracker<AuthId, TSignature> {
 	fn add_vote(&mut self, vote: (AuthId, TSignature), self_vote: bool) -> bool {
@@ -75,6 +79,7 @@ pub fn threshold(authorities: usize) -> usize {
 /// Only round numbers > `best_done` are of interest, all others are considered stale.
 ///
 /// Does not do any validation on votes or signatures, layers above need to handle that (gossip).
+#[derive(Debug, Decode, Encode, PartialEq)]
 pub(crate) struct Rounds<Payload, B: Block, AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send> {
 	rounds: BTreeMap<(Payload, NumberFor<B>), RoundTracker<AuthId, TSignature>>,
 	session_start: NumberFor<B>,
@@ -98,6 +103,10 @@ where
 			mandatory_done: false,
 			best_done: None,
 		}
+	}
+
+	pub(crate) fn validator_set(&self) -> &ValidatorSet<Public> {
+		&self.validator_set
 	}
 
 	pub(crate) fn validator_set_id(&self) -> ValidatorSetId {
@@ -129,11 +138,11 @@ where
 	) -> bool {
 		let num = round.1;
 		if num < self.session_start || Some(num) <= self.best_done {
-			debug!(target: "beefy", "🥩 received vote for old stale round {:?}, ignoring", num);
+			debug!(target: LOG_TARGET, "🥩 received vote for old stale round {:?}, ignoring", num);
 			false
 		} else if !self.validators().iter().any(|id| vote.0 == *id) {
 			debug!(
-				target: "beefy",
+				target: LOG_TARGET,
 				"🥩 received vote {:?} from validator that is not in the validator set, ignoring",
 				vote
 			);
@@ -153,7 +162,7 @@ where
 			.get(round)
 			.map(|tracker| tracker.is_done(threshold(self.validator_set.len())))
 			.unwrap_or(false);
-		trace!(target: "beefy", "🥩 Round #{} done: {}", round.1, done);
+		trace!(target: LOG_TARGET, "🥩 Round #{} done: {}", round.1, done);
 
 		if done {
 			let signatures = self.rounds.remove(round)?.votes;
@@ -173,7 +182,7 @@ where
 		self.rounds.retain(|&(_, number), _| number > round_num);
 		self.mandatory_done = self.mandatory_done || round_num == self.session_start;
 		self.best_done = self.best_done.max(Some(round_num));
-		debug!(target: "beefy", "🥩 Concluded round #{}", round_num);
+		debug!(target: LOG_TARGET, "🥩 Concluded round #{}", round_num);
 	}
 }
 
