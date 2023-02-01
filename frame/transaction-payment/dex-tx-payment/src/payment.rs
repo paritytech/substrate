@@ -78,7 +78,7 @@ where
 		AssetBalanceOf<T>,
 		AssetIdOf<T>,
 	>,
-	AssetIdOf<T>: Default + MaybeSerializeDeserialize
+	AssetIdOf<T>: Default + MaybeSerializeDeserialize,
 {
 	type AssetId = AssetIdOf<T>;
 
@@ -123,8 +123,8 @@ where
 		// dropped below the existential balance. In that case we don't refund anything.
 		//
 		// NOTE: We do not automatically convert the native token back to the asset,
-		// otherwise the fee could go back and forth between the two currencies paying dex
-		// charges each time over the course of several transactions. It's better for the user
+		// otherwise the fee could go back and forth between the two currencies each time incurring
+		// dex charges over the course of several transactions. It's better for the user
 		// that it stays in native and smart wallets can realise there's enough native to not
 		// need to pay the next transaction using an asset.
 		<T::OnChargeTransaction>::correct_and_deposit_fee(
