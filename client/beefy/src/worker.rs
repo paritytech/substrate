@@ -489,7 +489,7 @@ where
 		let best_grandpa = self.best_grandpa_block();
 		self.gossip_validator.note_round(block_num);
 		match self.voting_oracle().triage_round(block_num, best_grandpa)? {
-			RoundAction::Process => self.handle_vote(vote, false)?,
+			RoundAction::Process => self.handle_vote(vote)?,
 			RoundAction::Enqueue => {
 				debug!(target: LOG_TARGET, "🥩 Buffer vote for round: {:?}.", block_num);
 				if self.pending_votes.len() < MAX_BUFFERED_VOTE_ROUNDS {
@@ -545,7 +545,6 @@ where
 	fn handle_vote(
 		&mut self,
 		vote: VoteMessage<NumberFor<B>, AuthorityId, Signature>,
-		self_vote: bool,
 	) -> Result<(), Error> {
 		let rounds = self
 			.persisted_state
@@ -569,15 +568,13 @@ where
 				self.finalize(finality_proof)?;
 			},
 			VoteImportResult::Ok => {
-				let mandatory_round = self
+				// Persist state after handling mandatory block vote.
+				if self
 					.voting_oracle()
 					.mandatory_pending()
 					.map(|(mandatory_num, _)| mandatory_num == block_number)
-					.unwrap_or(false);
-				// Persist state after handling self vote to avoid double voting in case
-				// of voter restarts.
-				// Also persist state after handling mandatory block vote.
-				if self_vote || mandatory_round {
+					.unwrap_or(false)
+				{
 					crate::aux_schema::write_voter_state(&*self.backend, &self.persisted_state)
 						.map_err(|e| Error::Backend(e.to_string()))?;
 				}
@@ -686,7 +683,7 @@ where
 			for (num, votes) in votes_to_handle.into_iter() {
 				debug!(target: LOG_TARGET, "🥩 Handle buffered votes for: {:?}.", num);
 				for v in votes.into_iter() {
-					if let Err(err) = self.handle_vote(v, false) {
+					if let Err(err) = self.handle_vote(v) {
 						error!(target: LOG_TARGET, "🥩 Error handling buffered vote: {}", err);
 					};
 				}
@@ -794,15 +791,17 @@ where
 
 		debug!(target: LOG_TARGET, "🥩 Sent vote message: {:?}", message);
 
-		if let Err(err) = self.handle_vote(message, true) {
+		if let Err(err) = self.handle_vote(message) {
 			error!(target: LOG_TARGET, "🥩 Error handling self vote: {}", err);
 		}
 
 		self.gossip_engine.gossip_message(topic::<B>(), encoded_message, false);
+
+		// Persist state after vote to avoid double voting in case of voter restarts.
 		self.persisted_state.best_voted = target_number;
 		metric_set!(self, beefy_best_voted, target_number);
-
-		Ok(())
+		crate::aux_schema::write_voter_state(&*self.backend, &self.persisted_state)
+			.map_err(|e| Error::Backend(e.to_string()))
 	}
 
 	fn process_new_state(&mut self) {
