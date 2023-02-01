@@ -92,7 +92,9 @@ pub mod pallet {
 	pub(super) type NextAuthorities<T: Config> =
 		StorageValue<_, BoundedVec<T::BeefyId, T::MaxAuthorities>, ValueQuery>;
 
-	/// Block number where BEEFY consensus is enabled/started
+	/// Block number where BEEFY consensus is enabled/started.
+	/// If changing this, make sure `Self::ValidatorSetId` is also reset to
+	/// `GENESIS_AUTHORITY_SET_ID` in the state of the new block number configured here.
 	#[pallet::storage]
 	#[pallet::getter(fn genesis_block)]
 	pub(super) type GenesisBlock<T: Config> =
