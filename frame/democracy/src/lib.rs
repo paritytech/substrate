@@ -813,7 +813,7 @@ pub mod pallet {
 				threshold,
 				delay,
 			);
-			Self::reset_metadata(MetadataOwner::External, MetadataOwner::Referendum(ref_index));
+			Self::transfer_metadata(MetadataOwner::External, MetadataOwner::Referendum(ref_index));
 			Ok(())
 		}
 
@@ -1537,7 +1537,7 @@ impl<T: Config> Pallet<T> {
 				threshold,
 				T::EnactmentPeriod::get(),
 			);
-			Self::reset_metadata(MetadataOwner::External, MetadataOwner::Referendum(ref_index));
+			Self::transfer_metadata(MetadataOwner::External, MetadataOwner::Referendum(ref_index));
 			Ok(())
 		} else {
 			return Err(Error::<T>::NoneWaiting.into())
@@ -1566,7 +1566,7 @@ impl<T: Config> Pallet<T> {
 					VoteThreshold::SuperMajorityApprove,
 					T::EnactmentPeriod::get(),
 				);
-				Self::reset_metadata(
+				Self::transfer_metadata(
 					MetadataOwner::Proposal(prop_index),
 					MetadataOwner::Referendum(ref_index),
 				)
@@ -1698,8 +1698,8 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Reset the metadata of an `owner` to a `new_owner`.
-	fn reset_metadata(owner: MetadataOwner, new_owner: MetadataOwner) {
+	/// Transfer the metadata of an `owner` to a `new_owner`.
+	fn transfer_metadata(owner: MetadataOwner, new_owner: MetadataOwner) {
 		if let Some(hash) = MetadataOf::<T>::take(&owner) {
 			MetadataOf::<T>::insert(&new_owner, hash);
 			Self::deposit_event(Event::<T>::MetadataTransferred {
