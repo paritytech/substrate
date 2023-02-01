@@ -292,10 +292,10 @@ fn announcer_must_be_proxy() {
 fn calling_proxy_doesnt_remove_announcement() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Proxy::add_proxy(RuntimeOrigin::signed(1), 2, ProxyType::Any, 0));
-		
+
 		let call = Box::new(call_transfer(6, 1));
 		let call_hash = BlakeTwo256::hash_of(&call);
-		
+
 		assert_ok!(Proxy::announce(RuntimeOrigin::signed(2), 1, call_hash));
 		assert_ok!(Proxy::proxy(RuntimeOrigin::signed(2), 1, None, call));
 
