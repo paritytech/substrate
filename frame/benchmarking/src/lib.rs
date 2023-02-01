@@ -238,9 +238,10 @@ pub mod v2 {
 	};
 
 	// Used in #[benchmark] implementation to ensure that benchmark function arguments
-	// implement [`ParamRange`].
+	// implement [`ParamRange`] and benchmark function return types are compatible with
+	// `BenchmarkResult`
 	#[doc(hidden)]
-	pub use static_assertions::assert_impl_all;
+	pub use static_assertions::{assert_impl_all, assert_type_eq_all};
 
 	/// Used by the new benchmarking code to specify that a benchmarking variable is linear
 	/// over some specified range, i.e. `Linear<0, 1_000>` means that the corresponding variable
@@ -272,4 +273,7 @@ pub mod v2 {
 			B
 		}
 	}
+
+	/// The return type for benchmark function definitions that make use of the `?` operator
+	pub type BenchmarkResult = Result<(), BenchmarkError>;
 }

@@ -166,14 +166,15 @@ struct BenchmarkDef {
 	setup_stmts: Vec<Stmt>,
 	call_def: BenchmarkCallDef,
 	verify_stmts: Vec<Stmt>,
+	return_type: Option<Type>, // `None` if `()` return type
 	extra: bool,
 	skip_meta: bool,
 }
 
-impl BenchmarkDef {
-	/// Constructs a [`BenchmarkDef`] by traversing an existing [`ItemFn`] node.
-	pub fn from(item_fn: &ItemFn, extra: bool, skip_meta: bool) -> Result<BenchmarkDef> {
-		if let ReturnType::Default = &item_fn.sig.output {
+/// Parses the return type of a benchmark function definition
+fn parse_return_type(item_fn: &ItemFn) -> Result<Option<Type>> {
+	match &item_fn.sig.output {
+		ReturnType::Default => {
 			// return type is `()` which is permitted
 			// check for question mark ops as these aren't allowed here
 			let mut visitor = ExprTryVisitor::new();
@@ -184,7 +185,16 @@ impl BenchmarkDef {
 					"The `?` operator can only be used in benchmark functions that specify `Result<(), BenchmarkError>`as their return type"
 				))
 			}
-		}
+			Ok(None)
+		},
+		ReturnType::Type(_, typ) => Ok(Some(*typ.clone())),
+	}
+}
+
+impl BenchmarkDef {
+	/// Constructs a [`BenchmarkDef`] by traversing an existing [`ItemFn`] node.
+	pub fn from(item_fn: &ItemFn, extra: bool, skip_meta: bool) -> Result<BenchmarkDef> {
+		let return_type = parse_return_type(item_fn)?;
 
 		// parse params such as "x: Linear<0, 1>"
 		let mut params: Vec<ParamDef> = Vec::new();
@@ -286,6 +296,7 @@ impl BenchmarkDef {
 			verify_stmts: Vec::from(&item_fn.block.stmts[(i + 1)..item_fn.block.stmts.len()]),
 			extra,
 			skip_meta,
+			return_type,
 		})
 	}
 }
@@ -694,6 +705,12 @@ fn expand_benchmark(
 		true => quote!(T: Config<I>, I: 'static),
 	};
 
+	let return_type_assertion = match benchmark_def.return_type {
+		Some(return_type) =>
+			quote!(#home::assert_type_eq_all!(#return_type, #home::BenchmarkResult);),
+		_ => quote!(),
+	};
+
 	let (pre_call, post_call) = match benchmark_def.call_def {
 		BenchmarkCallDef::ExtrinsicCall { origin, expr_call, attr_span: _ } => {
 			let mut expr_call = expr_call.clone();
@@ -766,6 +783,8 @@ fn expand_benchmark(
 		#(
 			#home::assert_impl_all!(#param_types: #home::ParamRange);
 		)*
+
+		#return_type_assertion
 
 		#[allow(non_camel_case_types)]
 		struct #name;
