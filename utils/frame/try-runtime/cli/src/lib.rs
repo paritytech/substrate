@@ -621,6 +621,7 @@ impl State {
 		shared: &SharedParams,
 		executor: &WasmExecutor<HostFns>,
 		state_snapshot: Option<SnapshotConfig>,
+		try_runtime_check: bool,
 	) -> sc_cli::Result<RemoteExternalities<Block>>
 	where
 		Block::Hash: FromStr,
@@ -719,8 +720,10 @@ impl State {
 		}
 
 		// whatever runtime we have in store now must have been compiled with try-runtime feature.
-		if !ensure_try_runtime::<Block, HostFns>(&executor, &mut ext) {
-			return Err("given runtime is NOT compiled with try-runtime feature!".into())
+		if try_runtime_check {
+			if !ensure_try_runtime::<Block, HostFns>(&executor, &mut ext) {
+				return Err("given runtime is NOT compiled with try-runtime feature!".into())
+			}
 		}
 
 		Ok(ext)

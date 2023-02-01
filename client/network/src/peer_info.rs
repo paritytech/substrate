@@ -89,7 +89,9 @@ impl PeerInfoBehaviour {
 	pub fn new(user_agent: String, local_public_key: PublicKey) -> Self {
 		let identify = {
 			let cfg = IdentifyConfig::new("/substrate/1.0".to_string(), local_public_key)
-				.with_agent_version(user_agent);
+				.with_agent_version(user_agent)
+				// We don't need any peer information cached.
+				.with_cache_size(0);
 			Identify::new(cfg)
 		};
 
@@ -182,10 +184,10 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 		IntoConnectionHandler::select(self.ping.new_handler(), self.identify.new_handler())
 	}
 
-	fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
-		let mut list = self.ping.addresses_of_peer(peer_id);
-		list.extend_from_slice(&self.identify.addresses_of_peer(peer_id));
-		list
+	fn addresses_of_peer(&mut self, _: &PeerId) -> Vec<Multiaddr> {
+		// Only `Discovery::addresses_of_peer` must be returning addresses to ensure that we
+		// don't return unwanted addresses.
+		Vec::new()
 	}
 
 	fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
