@@ -65,18 +65,17 @@ mod tests;
 mod payment;
 pub use payment::*;
 
-// Type aliases used for interaction with `OnChargeTransaction`.
+/// Type aliases used for interaction with `OnChargeTransaction`.
 pub(crate) type OnChargeTransactionOf<T> =
 	<T as pallet_transaction_payment::Config>::OnChargeTransaction;
-// Balance type alias.
+/// Balance type alias.
 pub(crate) type BalanceOf<T> =
 		<<T as pallet_transaction_payment::Config>::OnChargeTransaction as OnChargeTransaction<T>>::Balance;
-// Liquidity info type alias.
+/// Liquidity info type alias.
 pub(crate) type LiquidityInfoOf<T> =
 	<OnChargeTransactionOf<T> as OnChargeTransaction<T>>::LiquidityInfo;
 
-// Type alias used for interaction with fungibles (assets).
-// Balance type alias.
+/// Type alias used for interaction with fungibles (assets).
 pub(crate) type AssetBalanceOf<T> =
 	<<T as Config>::Fungibles as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 /// Asset id type alias.
