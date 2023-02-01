@@ -924,6 +924,8 @@ sp_api::decl_runtime_apis! {
 		AssetBalance: frame_support::traits::tokens::Balance,
 		AssetId: Codec + MaybeDisplay
 	{
-		fn quote_price(asset1: AssetId, asset2: AssetId, amount: AssetBalance) -> Option<Balance>;
+		fn quote_price_tokens_for_exact_tokens(asset1: AssetId, asset2: AssetId, amount: AssetBalance, include_fee: bool) -> Option<Balance>;
+
+		fn quote_price_exact_tokens_for_tokens(asset1: AssetId, asset2: AssetId, amount: AssetBalance, include_fee: bool) -> Option<Balance>;
 	}
 }
