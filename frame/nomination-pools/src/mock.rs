@@ -198,6 +198,12 @@ impl pallet_balances::Config for Runtime {
 	type WeightInfo = ();
 }
 
+impl Runtime {
+	fn gen_meta() -> ! {
+		unimplemented!()
+	}
+}
+
 pub struct BalanceToU256;
 impl Convert<Balance, U256> for BalanceToU256 {
 	fn convert(n: Balance) -> U256 {

@@ -15,11 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::utils::{
-	extract_all_signature_types, extract_block_type_from_trait_path, extract_impl_trait,
-	extract_parameter_names_types_and_borrows, generate_crate_access, generate_hidden_includes,
-	generate_runtime_mod_name_for_trait, parse_runtime_api_version, prefix_function_with_trait,
-	versioned_trait_name, AllowSelfRefInParameters, RequireQualifiedTraitPath,
+use crate::{
+	runtime_metadata::{generate_2trait_metadata, generate_trait_metadata},
+	utils::{
+		extract_all_signature_types, extract_block_type_from_trait_path, extract_impl_trait,
+		extract_parameter_names_types_and_borrows, generate_crate_access, generate_hidden_includes,
+		generate_runtime_mod_name_for_trait, parse_runtime_api_version, prefix_function_with_trait,
+		versioned_trait_name, AllowSelfRefInParameters, RequireQualifiedTraitPath,
+	},
 };
 
 use crate::common::API_VERSION_ATTRIBUTE;
@@ -635,6 +638,12 @@ fn impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 	let wasm_interface = generate_wasm_interface(api_impls)?;
 	let api_impls_for_runtime_api = generate_api_impl_for_runtime_api(api_impls)?;
 
+	let mut mds = Vec::new();
+	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
+	for trait_ in api_impls {
+		mds.push(generate_2trait_metadata(trait_, &crate_)?);
+	}
+
 	Ok(quote!(
 		#hidden_includes
 
@@ -645,6 +654,14 @@ fn impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 		#api_impls_for_runtime_api
 
 		#runtime_api_versions
+
+		impl Runtime {
+			pub fn gen_meta() -> Vec<#crate_::metadata::v15::TraitMetadata> {
+				vec![
+					#( #mds, )*
+				]
+			}
+		}
 
 		pub mod api {
 			use super::*;

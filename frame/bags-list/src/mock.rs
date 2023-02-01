@@ -98,6 +98,12 @@ frame_support::construct_runtime!(
 	}
 );
 
+impl Runtime {
+	fn gen_meta() -> ! {
+		unimplemented!()
+	}
+}
+
 /// Default AccountIds and their weights.
 pub(crate) const GENESIS_IDS: [(AccountId, VoteWeight); 4] =
 	[(1, 10), (2, 1_000), (3, 1_000), (4, 1_000)];
