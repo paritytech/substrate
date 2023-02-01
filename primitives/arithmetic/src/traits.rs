@@ -19,9 +19,9 @@
 
 use codec::HasCompact;
 pub use ensure::{
-	Ensure, EnsureAdd, EnsureAddAssign, EnsureDiv, EnsureDivAssign, EnsureFixedPointNumber,
-	EnsureFrom, EnsureInto, EnsureMul, EnsureMulAssign, EnsureOp, EnsureOpAssign, EnsureSub,
-	EnsureSubAssign,
+	ensure_pow, Ensure, EnsureAdd, EnsureAddAssign, EnsureDiv, EnsureDivAssign,
+	EnsureFixedPointNumber, EnsureFrom, EnsureInto, EnsureMul, EnsureMulAssign, EnsureOp,
+	EnsureOpAssign, EnsureSub, EnsureSubAssign,
 };
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
@@ -342,7 +342,7 @@ impl<T: Sized> SaturatedConversion for T {}
 /// The *EnsureOps* family functions follows the same behavior as *CheckedOps* but
 /// returning an [`ArithmeticError`](crate::ArithmeticError) instead of `None`.
 mod ensure {
-	use super::{CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, Zero};
+	use super::{checked_pow, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, One, Zero};
 	use crate::{ArithmeticError, FixedPointNumber, FixedPointOperand};
 
 	/// Performs addition that returns [`ArithmeticError`] instead of wrapping around on overflow.
@@ -509,6 +509,27 @@ mod ensure {
 			self.ensure_div_assign(v)?;
 			Ok(self)
 		}
+	}
+
+	/// Raises a value to the power of exp, returning `ArithmeticError` if an overflow occurred.
+	///
+	/// Check [`checked_pow`] for more info about border cases.
+	///
+	/// ```
+	/// use sp_arithmetic::{traits::ensure_pow, ArithmeticError};
+	///
+	/// fn overflow() -> Result<(), ArithmeticError> {
+	///     ensure_pow(2u64, 64)?;
+	///     Ok(())
+	/// }
+	///
+	/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
+	/// ```
+	pub fn ensure_pow<T: One + CheckedMul + Clone>(
+		base: T,
+		exp: usize,
+	) -> Result<T, ArithmeticError> {
+		checked_pow(base, exp).ok_or(ArithmeticError::Overflow)
 	}
 
 	impl<T: EnsureAddAssign> EnsureAdd for T {}
@@ -954,6 +975,15 @@ mod tests {
 	}
 
 	#[test]
+	fn ensure_pow_works() {
+		test_ensure(
+			values().into_iter().map(|(base, exp)| (base, exp as usize)).collect(),
+			ensure_pow,
+			|&a, &b| checked_pow(a, b),
+		);
+	}
+
+	#[test]
 	fn ensure_add_assign_works() {
 		test_ensure_assign(values(), &EnsureAddAssign::ensure_add_assign, &EnsureAdd::ensure_add);
 	}
@@ -974,11 +1004,12 @@ mod tests {
 	}
 
 	/// Test that the ensured function returns the expected un-ensured value.
-	fn test_ensure<V, E, P>(pairs: Vec<(V, V)>, ensured: E, unensured: P)
+	fn test_ensure<V, W, E, P>(pairs: Vec<(V, W)>, ensured: E, unensured: P)
 	where
 		V: Ensure + core::fmt::Debug + Copy,
-		E: Fn(V, V) -> Result<V, ArithmeticError>,
-		P: Fn(&V, &V) -> Option<V>,
+		W: Ensure + core::fmt::Debug + Copy,
+		E: Fn(V, W) -> Result<V, ArithmeticError>,
+		P: Fn(&V, &W) -> Option<V>,
 	{
 		for (a, b) in pairs.into_iter() {
 			match ensured(a, b) {
@@ -993,11 +1024,12 @@ mod tests {
 	}
 
 	/// Test that the ensured function modifies `self` to the expected un-ensured value.
-	fn test_ensure_assign<V, E, P>(pairs: Vec<(V, V)>, ensured: E, unensured: P)
+	fn test_ensure_assign<V, W, E, P>(pairs: Vec<(V, W)>, ensured: E, unensured: P)
 	where
 		V: Ensure + std::panic::RefUnwindSafe + std::panic::UnwindSafe + core::fmt::Debug + Copy,
-		E: Fn(&mut V, V) -> Result<(), ArithmeticError>,
-		P: Fn(V, V) -> Result<V, ArithmeticError> + std::panic::RefUnwindSafe,
+		W: Ensure + std::panic::RefUnwindSafe + std::panic::UnwindSafe + core::fmt::Debug + Copy,
+		E: Fn(&mut V, W) -> Result<(), ArithmeticError>,
+		P: Fn(V, W) -> Result<V, ArithmeticError> + std::panic::RefUnwindSafe,
 	{
 		for (mut a, b) in pairs.into_iter() {
 			let old_a = a;

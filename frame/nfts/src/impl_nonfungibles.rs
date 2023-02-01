@@ -157,10 +157,12 @@ impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId, ItemConfig
 		Self::do_mint(
 			*collection,
 			*item,
-			who.clone(),
+			match deposit_collection_owner {
+				true => None,
+				false => Some(who.clone()),
+			},
 			who.clone(),
 			*item_config,
-			deposit_collection_owner,
 			|_, _| Ok(()),
 		)
 	}

@@ -1277,6 +1277,8 @@ pub mod pallet {
 	pub type MaxPoolMembersPerPool<T: Config> = StorageValue<_, u32, OptionQuery>;
 
 	/// Active members.
+	///
+	/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
 	#[pallet::storage]
 	pub type PoolMembers<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, PoolMember<T>>;

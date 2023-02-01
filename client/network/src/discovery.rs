@@ -96,7 +96,7 @@ pub struct DiscoveryConfig {
 	local_peer_id: PeerId,
 	permanent_addresses: Vec<(PeerId, Multiaddr)>,
 	dht_random_walk: bool,
-	allow_private_ipv4: bool,
+	allow_private_ip: bool,
 	allow_non_globals_in_dht: bool,
 	discovery_only_if_under_num: u64,
 	enable_mdns: bool,
@@ -111,7 +111,7 @@ impl DiscoveryConfig {
 			local_peer_id: local_public_key.to_peer_id(),
 			permanent_addresses: Vec::new(),
 			dht_random_walk: true,
-			allow_private_ipv4: true,
+			allow_private_ip: true,
 			allow_non_globals_in_dht: false,
 			discovery_only_if_under_num: std::u64::MAX,
 			enable_mdns: false,
@@ -142,9 +142,9 @@ impl DiscoveryConfig {
 		self
 	}
 
-	/// Should private IPv4 addresses be reported?
-	pub fn allow_private_ipv4(&mut self, value: bool) -> &mut Self {
-		self.allow_private_ipv4 = value;
+	/// Should private IPv4/IPv6 addresses be reported?
+	pub fn allow_private_ip(&mut self, value: bool) -> &mut Self {
+		self.allow_private_ip = value;
 		self
 	}
 
@@ -189,7 +189,7 @@ impl DiscoveryConfig {
 			local_peer_id,
 			permanent_addresses,
 			dht_random_walk,
-			allow_private_ipv4,
+			allow_private_ip,
 			allow_non_globals_in_dht,
 			discovery_only_if_under_num,
 			enable_mdns,
@@ -231,7 +231,7 @@ impl DiscoveryConfig {
 			pending_events: VecDeque::new(),
 			local_peer_id,
 			num_connections: 0,
-			allow_private_ipv4,
+			allow_private_ip,
 			discovery_only_if_under_num,
 			mdns: if enable_mdns {
 				match TokioMdns::new(mdns::Config::default()) {
@@ -249,7 +249,7 @@ impl DiscoveryConfig {
 				NonZeroUsize::new(MAX_KNOWN_EXTERNAL_ADDRESSES)
 					.expect("value is a constant; constant is non-zero; qed."),
 			),
-			outbound_query_records: Vec::new(),
+			records_to_publish: Default::default(),
 		}
 	}
 }
@@ -278,17 +278,21 @@ pub struct DiscoveryBehaviour {
 	local_peer_id: PeerId,
 	/// Number of nodes we're currently connected to.
 	num_connections: u64,
-	/// If false, `addresses_of_peer` won't return any private IPv4 address, except for the ones
-	/// stored in `permanent_addresses` or `ephemeral_addresses`.
-	allow_private_ipv4: bool,
+	/// If false, `addresses_of_peer` won't return any private IPv4/IPv6 address, except for the
+	/// ones stored in `permanent_addresses` or `ephemeral_addresses`.
+	allow_private_ip: bool,
 	/// Number of active connections over which we interrupt the discovery process.
 	discovery_only_if_under_num: u64,
 	/// Should non-global addresses be added to the DHT?
 	allow_non_globals_in_dht: bool,
 	/// A cache of discovered external addresses. Only used for logging purposes.
 	known_external_addresses: LruHashSet<Multiaddr>,
-	/// A cache of outbound query records.
-	outbound_query_records: Vec<(record::Key, Vec<u8>)>,
+	/// Records to publish per QueryId.
+	///
+	/// After finishing a Kademlia query, libp2p will return us a list of the closest peers that
+	/// did not return the record(in `FinishedWithNoAdditionalRecord`). We will then put the record
+	/// to these peers.
+	records_to_publish: HashMap<QueryId, Record>,
 }
 
 impl DiscoveryBehaviour {
@@ -502,7 +506,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 				list_to_filter.extend(mdns.addresses_of_peer(peer_id));
 			}
 
-			if !self.allow_private_ipv4 {
+			if !self.allow_private_ip {
 				list_to_filter.retain(|addr| match addr.iter().next() {
 					Some(Protocol::Ip4(addr)) if !IpNetwork::from(addr).is_global() => false,
 					Some(Protocol::Ip6(addr)) if !IpNetwork::from(addr).is_global() => false,
@@ -692,33 +696,57 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 					KademliaEvent::OutboundQueryProgressed {
 						result: QueryResult::GetRecord(res),
 						stats,
-						step,
+						id,
 						..
 					} => {
 						let ev = match res {
-							Ok(ok) =>
-								if let GetRecordOk::FoundRecord(r) = ok {
-									self.outbound_query_records
-										.push((r.record.key, r.record.value));
-									continue
-								} else {
-									debug!(
-										target: "sub-libp2p",
-										"Libp2p => Query progressed to {:?} step (last: {:?})",
-										step.count,
-										step.last,
-									);
-									if step.last {
-										let records =
-											self.outbound_query_records.drain(..).collect();
-										DiscoveryOut::ValueFound(
-											records,
-											stats.duration().unwrap_or_default(),
-										)
-									} else {
+							Ok(GetRecordOk::FoundRecord(r)) => {
+								debug!(
+									target: "sub-libp2p",
+									"Libp2p => Found record ({:?}) with value: {:?}",
+									r.record.key,
+									r.record.value,
+								);
+
+								// Let's directly finish the query, as we are only interested in a
+								// quorum of 1.
+								if let Some(kad) = self.kademlia.as_mut() {
+									if let Some(mut query) = kad.query_mut(&id) {
+										query.finish();
+									}
+								}
+
+								// Will be removed below when we receive
+								// `FinishedWithNoAdditionalRecord`.
+								self.records_to_publish.insert(id, r.record.clone());
+
+								DiscoveryOut::ValueFound(
+									vec![(r.record.key, r.record.value)],
+									stats.duration().unwrap_or_default(),
+								)
+							},
+							Ok(GetRecordOk::FinishedWithNoAdditionalRecord {
+								cache_candidates,
+							}) => {
+								// We always need to remove the record to not leak any data!
+								if let Some(record) = self.records_to_publish.remove(&id) {
+									if cache_candidates.is_empty() {
 										continue
 									}
-								},
+
+									// Put the record to the `cache_candidates` that are nearest to
+									// the record key from our point of view of the network.
+									if let Some(kad) = self.kademlia.as_mut() {
+										kad.put_record_to(
+											record,
+											cache_candidates.into_iter().map(|v| v.1),
+											Quorum::One,
+										);
+									}
+								}
+
+								continue
+							},
 							Err(e @ libp2p::kad::GetRecordError::NotFound { .. }) => {
 								trace!(
 									target: "sub-libp2p",
@@ -919,7 +947,7 @@ mod tests {
 					let mut config = DiscoveryConfig::new(keypair.public());
 					config
 						.with_permanent_addresses(first_swarm_peer_id_and_addr.clone())
-						.allow_private_ipv4(true)
+						.allow_private_ip(true)
 						.allow_non_globals_in_dht(true)
 						.discovery_limit(50)
 						.with_kademlia(genesis_hash, fork_id, &protocol_id);
@@ -1037,7 +1065,7 @@ mod tests {
 			let keypair = Keypair::generate_ed25519();
 			let mut config = DiscoveryConfig::new(keypair.public());
 			config
-				.allow_private_ipv4(true)
+				.allow_private_ip(true)
 				.allow_non_globals_in_dht(true)
 				.discovery_limit(50)
 				.with_kademlia(supported_genesis_hash, None, &supported_protocol_id);

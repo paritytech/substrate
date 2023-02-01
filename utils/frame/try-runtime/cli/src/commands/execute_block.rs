@@ -99,7 +99,7 @@ where
 	HostFns: HostFunctions,
 {
 	let executor = build_executor::<HostFns>(&shared);
-	let ext = command.state.into_ext::<Block, HostFns>(&shared, &executor, None).await?;
+	let ext = command.state.into_ext::<Block, HostFns>(&shared, &executor, None, true).await?;
 
 	// get the block number associated with this block.
 	let block_ws_uri = command.block_ws_uri::<Block>();

@@ -63,7 +63,7 @@ pub mod v1 {
 
 	/// Trivial migration which makes the roles of each pool optional.
 	///
-	/// Note: The depositor is not optional since he can never change.
+	/// Note: The depositor is not optional since they can never change.
 	pub struct MigrateToV1<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV1<T> {
 		fn on_runtime_upgrade() -> Weight {

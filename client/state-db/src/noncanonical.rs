@@ -323,7 +323,6 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		&self,
 		level_index: usize,
 		discarded_journals: &mut Vec<Vec<u8>>,
-		discarded_blocks: &mut Vec<BlockHash>,
 		hash: &BlockHash,
 	) {
 		if let Some(level) = self.levels.get(level_index) {
@@ -335,13 +334,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 					.clone();
 				if parent == *hash {
 					discarded_journals.push(overlay.journal_key.clone());
-					discarded_blocks.push(overlay.hash.clone());
-					self.discard_journals(
-						level_index + 1,
-						discarded_journals,
-						discarded_blocks,
-						&overlay.hash,
-					);
+					self.discard_journals(level_index + 1, discarded_journals, &overlay.hash);
 				}
 			});
 		}
@@ -393,7 +386,6 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		self.pinned_canonincalized.push(hash.clone());
 
 		let mut discarded_journals = Vec::new();
-		let mut discarded_blocks = Vec::new();
 		for (i, overlay) in level.blocks.into_iter().enumerate() {
 			let mut pinned_children = 0;
 			// That's the one we need to canonicalize
@@ -411,12 +403,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 				commit.data.deleted.extend(overlay.deleted.clone());
 			} else {
 				// Discard this overlay
-				self.discard_journals(
-					0,
-					&mut discarded_journals,
-					&mut discarded_blocks,
-					&overlay.hash,
-				);
+				self.discard_journals(0, &mut discarded_journals, &overlay.hash);
 				pinned_children = discard_descendants(
 					&mut self.levels.as_mut_slices(),
 					&mut self.values,
@@ -437,7 +424,6 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 				discard_values(&mut self.values, overlay.inserted);
 			}
 			discarded_journals.push(overlay.journal_key.clone());
-			discarded_blocks.push(overlay.hash.clone());
 		}
 		commit.meta.deleted.append(&mut discarded_journals);
 
@@ -548,9 +534,6 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 							trace!(target: "state-db-pin", "Discarding unpinned non-canon block: {:?}", hash);
 							discard_values(&mut self.values, inserted);
 							self.parents.remove(&hash);
-							true
-						} else {
-							false
 						}
 					},
 					Entry::Vacant(_) => break,

@@ -62,7 +62,7 @@ where
 	HostFns: HostFunctions,
 {
 	let executor = build_executor(&shared);
-	let ext = command.state.into_ext::<Block, HostFns>(&shared, &executor, None).await?;
+	let ext = command.state.into_ext::<Block, HostFns>(&shared, &executor, None, true).await?;
 
 	let (_, encoded_result) = state_machine_call_with_proof::<Block, HostFns>(
 		&ext,
