@@ -1,0 +1,5 @@
+error: The `?` operator can only be used in benchmark functions that specify `Result<(), BenchmarkError>`as their return type
+ --> tests/benchmark_ui/question_op_in_non_result.rs:9:14
+  |
+9 |         something()?;
+  |                    ^

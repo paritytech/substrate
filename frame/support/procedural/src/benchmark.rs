@@ -202,7 +202,7 @@ impl BenchmarkDef {
 			visitor.visit_item_fn(item_fn);
 			if let Some(expr) = visitor.results.first() {
 				return Err(Error::new(
-					expr.span(),
+					expr.question_token.span,
 					"The `?` operator can only be used in benchmark functions that specify `Result<(), BenchmarkError>`as their return type"
 				))
 			}
