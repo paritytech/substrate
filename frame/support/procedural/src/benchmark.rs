@@ -173,7 +173,6 @@ struct BenchmarkDef {
 impl BenchmarkDef {
 	/// Constructs a [`BenchmarkDef`] by traversing an existing [`ItemFn`] node.
 	pub fn from(item_fn: &ItemFn, extra: bool, skip_meta: bool) -> Result<BenchmarkDef> {
-		// parsing for non `()` return type (only allow `Result<(), BenchmarkError>`)
 		let invalid_return = |span| {
 			return Err(Error::new(
 				span,
@@ -181,6 +180,7 @@ impl BenchmarkDef {
 			))
 		};
 		if let ReturnType::Type(_, typ) = &item_fn.sig.output {
+			// parsing for non `()` return type (only allow `Result<(), BenchmarkError>`)
 			let Type::Path(TypePath { path, qself: _ }) = &**typ else { return invalid_return(typ.span()) };
 			let Some(segment) = path.segments.last() else { return invalid_return(path.span()) };
 			let _: keywords::Result = syn::parse(segment.ident.to_token_stream().into())?;
