@@ -189,10 +189,6 @@ pub trait Backend<Block: BlockT>:
 	/// The search space is always limited to blocks which are in the finalized
 	/// chain or descendents of it.
 	///
-	/// If `maybe_max_block_number` is `Some(max_block_number)`
-	/// the search is limited to block `numbers <= max_block_number`.
-	/// in other words as if there were no blocks greater `max_block_number`.
-	///
 	/// Returns `Ok(None)` if `target_hash` is not found in search space.
 	// TODO: document time complexity of this, see [#1444](https://github.com/paritytech/substrate/issues/1444)
 	fn best_containing(
