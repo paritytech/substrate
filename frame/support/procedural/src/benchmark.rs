@@ -29,9 +29,9 @@ use syn::{
 	spanned::Spanned,
 	token::{Colon2, Comma, Gt, Lt, Paren},
 	visit::{self, Visit},
-	Attribute, Error, Expr, ExprBlock, ExprCall, ExprPath, ExprTry, FnArg, GenericArgument, Item,
-	ItemFn, ItemMod, LitInt, Pat, Path, PathArguments, PathSegment, Result, ReturnType, Stmt,
-	Token, Type, TypePath, TypeTuple, WhereClause,
+	Attribute, Error, Expr, ExprBlock, ExprCall, ExprPath, ExprTry, FnArg, Item, ItemFn, ItemMod,
+	LitInt, Pat, Path, PathArguments, PathSegment, Result, ReturnType, Stmt, Token, Type,
+	WhereClause,
 };
 
 mod keywords {
@@ -173,29 +173,7 @@ struct BenchmarkDef {
 impl BenchmarkDef {
 	/// Constructs a [`BenchmarkDef`] by traversing an existing [`ItemFn`] node.
 	pub fn from(item_fn: &ItemFn, extra: bool, skip_meta: bool) -> Result<BenchmarkDef> {
-		let invalid_return = |span| {
-			return Err(Error::new(
-				span,
-				"Invalid return type. Only `()` and `Result<(), BenchmarkError>` are allowed.",
-			))
-		};
-		if let ReturnType::Type(_, typ) = &item_fn.sig.output {
-			// parsing for non `()` return type (only allow `Result<(), BenchmarkError>`)
-			let Type::Path(TypePath { path, qself: _ }) = &**typ else { return invalid_return(typ.span()) };
-			let Some(segment) = path.segments.last() else { return invalid_return(path.span()) };
-			let _: keywords::Result = syn::parse(segment.ident.to_token_stream().into())?;
-			let PathArguments::AngleBracketed(args) = &segment.arguments else { return invalid_return(segment.span()) };
-			let Some(last_arg) = args.args.last() else { return invalid_return(args.args.span()) };
-			if args.args.len() > 2 {
-				return invalid_return(last_arg.span())
-			}
-			let Some(first_arg) = args.args.first() else { return invalid_return(args.args.span()) };
-			let GenericArgument::Type(Type::Tuple(TypeTuple { paren_token: _, elems })) = first_arg else { return invalid_return(first_arg.span()) };
-			if !elems.is_empty() {
-				return invalid_return(elems.span())
-			}
-			let _: keywords::BenchmarkError = syn::parse(last_arg.to_token_stream().into())?;
-		} else {
+		if let ReturnType::Default = &item_fn.sig.output {
 			// return type is `()` which is permitted
 			// check for question mark ops as these aren't allowed here
 			let mut visitor = ExprTryVisitor::new();
@@ -208,9 +186,8 @@ impl BenchmarkDef {
 			}
 		}
 
-		let mut params: Vec<ParamDef> = Vec::new();
-
 		// parse params such as "x: Linear<0, 1>"
+		let mut params: Vec<ParamDef> = Vec::new();
 		for arg in &item_fn.sig.inputs {
 			let invalid_param = |span| {
 				return Err(Error::new(span, "Invalid benchmark function param. A valid example would be `x: Linear<5, 10>`.", ))
