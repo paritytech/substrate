@@ -56,6 +56,8 @@ variables:
   NEXTEST_FAILURE_OUTPUT:          immediate-final
   NEXTEST_SUCCESS_OUTPUT:          final
   ZOMBIENET_IMAGE:                 "docker.io/paritytech/zombienet:v1.3.22"
+  # FAIL-CI
+  RUSTY_CACHIER_BYPASS:            "false"
 
 .shared-default:                   &shared-default
   retry:
