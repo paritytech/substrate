@@ -183,25 +183,21 @@ pub trait Backend<Block: BlockT>:
 	/// Return hashes of all blocks that are children of the block with `parent_hash`.
 	fn children(&self, parent_hash: Block::Hash) -> Result<Vec<Block::Hash>>;
 
-	/// Get the most recent block hash of the best (longest) chains
-	/// that contain block with the given `base_hash`.
+	/// Get the most recent block hash of the longest chain that contains
+	/// a block with the given `base_hash`.
 	///
 	/// The search space is always limited to blocks which are in the finalized
 	/// chain or descendents of it.
 	///
-	/// Returns `Ok(None)` if `target_hash` is not found in search space.
+	/// Returns `Ok(None)` if `base_hash` is not found in search space.
 	// TODO: document time complexity of this, see [#1444](https://github.com/paritytech/substrate/issues/1444)
 	fn best_containing(
 		&self,
 		base_hash: Block::Hash,
 		import_lock: &RwLock<()>,
 	) -> Result<Option<Block::Hash>> {
-		let target_header = {
-			match self.header(base_hash)? {
-				Some(x) => x,
-				// target not in blockchain
-				None => return Ok(None),
-			}
+		let Some(base_header) = self.header(base_hash)? else {
+			return Ok(None)
 		};
 
 		let leaves = {
@@ -210,8 +206,8 @@ pub trait Backend<Block: BlockT>:
 			// we depend on the canonical chain staying the same during this code block.
 			let _import_guard = import_lock.read();
 			let info = self.info();
-			if info.finalized_number > *target_header.number() {
-				// `target_header` is on a dead fork.
+			if info.finalized_number > *base_header.number() {
+				// `base_header` is on a dead fork.
 				return Ok(None)
 			}
 			self.leaves()?
@@ -231,7 +227,7 @@ pub trait Backend<Block: BlockT>:
 					.ok_or_else(|| Error::MissingHeader(current_hash.to_string()))?;
 
 				// stop search in this chain once we go below the target's block number
-				if current_header.number() < target_header.number() {
+				if current_header.number() < base_header.number() {
 					break
 				}
 
