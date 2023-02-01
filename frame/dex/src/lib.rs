@@ -59,6 +59,7 @@ use frame_support::{
 };
 use frame_system::{ensure_signed, pallet_prelude::OriginFor};
 pub use pallet::*;
+use sp_arithmetic::traits::Unsigned;
 use sp_runtime::{
 	traits::{CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, Ensure, MaybeDisplay, Zero},
 	DispatchError,
@@ -107,9 +108,8 @@ pub mod pallet {
 		type PromotedBalance: IntegerSquareRoot
 			+ One
 			+ Ensure
+			+ Unsigned
 			+ From<u32>
-			// + Unsigned TODO: depending on sp-arithmetic seems to make cumulus not compile. std
-			// issue.
 			+ From<Self::AssetBalance>
 			+ From<Self::Balance>
 			+ TryInto<Self::AssetBalance>

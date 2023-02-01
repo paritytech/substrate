@@ -21,6 +21,7 @@ scale-info = { version = "2.0.0", default-features = false, features = ["derive"
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-arithmetic = { version = "6.0.0", default-features = false, path = "../../primitives/arithmetic" }
 
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
@@ -40,6 +41,7 @@ std = [
 	"scale-info/std",
 	"sp-std/std",
 	"sp-runtime/std",
+	"sp-arithmetic/std"
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
