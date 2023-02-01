@@ -6,7 +6,7 @@ edition = "2021"
 license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
-description = "pallet to manage transaction payments in assets"
+description = "FRAME pallet to manage transaction payments in assets"
 readme = "README.md"
 
 [package.metadata.docs.rs]
