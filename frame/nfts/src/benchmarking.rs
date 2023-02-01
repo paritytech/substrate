@@ -22,7 +22,7 @@
 use super::*;
 use enumflags2::{BitFlag, BitFlags};
 use frame_benchmarking::v1::{
-	account, benchmarks_instance_pallet, whitelist_account, whitelisted_caller,
+	account, benchmarks_instance_pallet, whitelist_account, whitelisted_caller, BenchmarkError,
 };
 use frame_support::{
 	assert_ok,
@@ -151,7 +151,8 @@ fn default_item_config() -> ItemConfig {
 benchmarks_instance_pallet! {
 	create {
 		let collection = T::Helper::collection(0);
-		let origin = T::CreateOrigin::successful_origin(&collection);
+		let origin = T::CreateOrigin::try_successful_origin(&collection)
+			.map_err(|_| BenchmarkError::Weightless)?;
 		let caller = T::CreateOrigin::ensure_origin(origin.clone(), &collection).unwrap();
 		whitelist_account!(caller);
 		let admin = T::Lookup::unlookup(caller.clone());
@@ -311,7 +312,8 @@ benchmarks_instance_pallet! {
 
 	force_collection_owner {
 		let (collection, _, _) = create_collection::<T, I>();
-		let origin = T::ForceOrigin::successful_origin();
+		let origin =
+			T::ForceOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		let target: T::AccountId = account("target", 0, SEED);
 		let target_lookup = T::Lookup::unlookup(target.clone());
 		T::Currency::make_free_balance_be(&target, T::Currency::minimum_balance());
@@ -326,7 +328,8 @@ benchmarks_instance_pallet! {
 
 	force_collection_config {
 		let (collection, caller, _) = create_collection::<T, I>();
-		let origin = T::ForceOrigin::successful_origin();
+		let origin =
+			T::ForceOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		let call = Call::<T, I>::force_collection_config {
 			collection,
 			config: make_collection_config::<T, I>(CollectionSetting::DepositRequired.into()),

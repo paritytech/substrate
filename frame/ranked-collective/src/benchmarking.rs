@@ -21,7 +21,9 @@ use super::*;
 #[allow(unused_imports)]
 use crate::Pallet as RankedCollective;
 
-use frame_benchmarking::v1::{account, benchmarks_instance_pallet, whitelisted_caller};
+use frame_benchmarking::v1::{
+	account, benchmarks_instance_pallet, whitelisted_caller, BenchmarkError,
+};
 use frame_support::{assert_ok, dispatch::UnfilteredDispatchable};
 use frame_system::RawOrigin as SystemOrigin;
 
@@ -35,13 +37,15 @@ fn make_member<T: Config<I>, I: 'static>(rank: Rank) -> T::AccountId {
 	let who = account::<T::AccountId>("member", MemberCount::<T, I>::get(0), SEED);
 	let who_lookup = T::Lookup::unlookup(who.clone());
 	assert_ok!(Pallet::<T, I>::add_member(
-		T::PromoteOrigin::successful_origin(),
-		who_lookup.clone()
+		T::PromoteOrigin::try_successful_origin()
+			.expect("PromoteOrigin has no successful origin required for the benchmark"),
+		who_lookup.clone(),
 	));
 	for _ in 0..rank {
 		assert_ok!(Pallet::<T, I>::promote_member(
-			T::PromoteOrigin::successful_origin(),
-			who_lookup.clone()
+			T::PromoteOrigin::try_successful_origin()
+				.expect("PromoteOrigin has no successful origin required for the benchmark"),
+			who_lookup.clone(),
 		));
 	}
 	who
@@ -51,7 +55,8 @@ benchmarks_instance_pallet! {
 	add_member {
 		let who = account::<T::AccountId>("member", 0, SEED);
 		let who_lookup = T::Lookup::unlookup(who.clone());
-		let origin = T::PromoteOrigin::successful_origin();
+		let origin =
+			T::PromoteOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		let call = Call::<T, I>::add_member { who: who_lookup };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
@@ -67,7 +72,8 @@ benchmarks_instance_pallet! {
 		let who_lookup = T::Lookup::unlookup(who.clone());
 		let last = make_member::<T, I>(rank);
 		let last_index = (0..=rank).map(|r| IdToIndex::<T, I>::get(r, &last).unwrap()).collect::<Vec<_>>();
-		let origin = T::DemoteOrigin::successful_origin();
+		let origin =
+			T::DemoteOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		let call = Call::<T, I>::remove_member { who: who_lookup, min_rank: rank };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
@@ -83,7 +89,8 @@ benchmarks_instance_pallet! {
 		let rank = r as u16;
 		let who = make_member::<T, I>(rank);
 		let who_lookup = T::Lookup::unlookup(who.clone());
-		let origin = T::PromoteOrigin::successful_origin();
+		let origin =
+			T::PromoteOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		let call = Call::<T, I>::promote_member { who: who_lookup };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
@@ -99,7 +106,8 @@ benchmarks_instance_pallet! {
 		let who_lookup = T::Lookup::unlookup(who.clone());
 		let last = make_member::<T, I>(rank);
 		let last_index = IdToIndex::<T, I>::get(rank, &last).unwrap();
-		let origin = T::DemoteOrigin::successful_origin();
+		let origin =
+			T::DemoteOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		let call = Call::<T, I>::demote_member { who: who_lookup };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
@@ -115,14 +123,19 @@ benchmarks_instance_pallet! {
 	vote {
 		let caller: T::AccountId = whitelisted_caller();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
-		assert_ok!(Pallet::<T, I>::add_member(T::PromoteOrigin::successful_origin(), caller_lookup.clone()));
+		assert_ok!(Pallet::<T, I>::add_member(
+			T::PromoteOrigin::try_successful_origin()
+				.expect("PromoteOrigin has no successful origin required for the benchmark"),
+			caller_lookup.clone(),
+		));
 		// Create a poll
 		let class = T::Polls::classes().into_iter().next().unwrap();
 		let rank = T::MinRankOfClass::convert(class.clone());
 		for _ in 0..rank {
 			assert_ok!(Pallet::<T, I>::promote_member(
-				T::PromoteOrigin::successful_origin(),
-				caller_lookup.clone()
+				T::PromoteOrigin::try_successful_origin()
+					.expect("PromoteOrigin has no successful origin required for the benchmark"),
+				caller_lookup.clone(),
 			));
 		}
 

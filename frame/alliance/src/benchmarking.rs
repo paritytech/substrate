@@ -25,7 +25,7 @@ use sp_std::{
 	prelude::*,
 };
 
-use frame_benchmarking::v1::{account, benchmarks_instance_pallet};
+use frame_benchmarking::v1::{account, benchmarks_instance_pallet, BenchmarkError};
 use frame_support::traits::{EnsureOrigin, Get, UnfilteredDispatchable};
 use frame_system::{Pallet as System, RawOrigin as SystemOrigin};
 
@@ -581,7 +581,8 @@ benchmarks_instance_pallet! {
 		let rule = rule(b"hello world");
 
 		let call = Call::<T, I>::set_rule { rule: rule.clone() };
-		let origin = T::AdminOrigin::successful_origin();
+		let origin =
+			T::AdminOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_eq!(Alliance::<T, I>::rule(), Some(rule.clone()));
@@ -594,7 +595,8 @@ benchmarks_instance_pallet! {
 		let announcement = announcement(b"hello world");
 
 		let call = Call::<T, I>::announce { announcement: announcement.clone() };
-		let origin = T::AnnouncementOrigin::successful_origin();
+		let origin =
+			T::AnnouncementOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(Alliance::<T, I>::announcements().contains(&announcement));
@@ -609,7 +611,8 @@ benchmarks_instance_pallet! {
 		Announcements::<T, I>::put(announcements);
 
 		let call = Call::<T, I>::remove_announcement { announcement: announcement.clone() };
-		let origin = T::AnnouncementOrigin::successful_origin();
+		let origin =
+			T::AnnouncementOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(Alliance::<T, I>::announcements().is_empty());
@@ -665,7 +668,8 @@ benchmarks_instance_pallet! {
 
 		let ally1_lookup = T::Lookup::unlookup(ally1.clone());
 		let call = Call::<T, I>::elevate_ally { ally: ally1_lookup };
-		let origin = T::MembershipManager::successful_origin();
+		let origin =
+			T::MembershipManager::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(!Alliance::<T, I>::is_ally(&ally1));
@@ -725,7 +729,8 @@ benchmarks_instance_pallet! {
 
 		let fellow2_lookup = T::Lookup::unlookup(fellow2.clone());
 		let call = Call::<T, I>::kick_member { who: fellow2_lookup };
-		let origin = T::MembershipManager::successful_origin();
+		let origin =
+			T::MembershipManager::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(!Alliance::<T, I>::is_member(&fellow2));
@@ -754,7 +759,8 @@ benchmarks_instance_pallet! {
 		unscrupulous_list.extend(websites.into_iter().map(UnscrupulousItem::Website));
 
 		let call = Call::<T, I>::add_unscrupulous_items { items: unscrupulous_list.clone() };
-		let origin = T::AnnouncementOrigin::successful_origin();
+		let origin =
+			T::AnnouncementOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_last_event::<T, I>(Event::UnscrupulousItemAdded { items: unscrupulous_list }.into());
@@ -784,7 +790,8 @@ benchmarks_instance_pallet! {
 		unscrupulous_list.extend(websites.into_iter().map(UnscrupulousItem::Website));
 
 		let call = Call::<T, I>::remove_unscrupulous_items { items: unscrupulous_list.clone() };
-		let origin = T::AnnouncementOrigin::successful_origin();
+		let origin =
+			T::AnnouncementOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_last_event::<T, I>(Event::UnscrupulousItemRemoved { items: unscrupulous_list }.into());
