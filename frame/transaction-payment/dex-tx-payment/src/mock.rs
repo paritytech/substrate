@@ -211,7 +211,9 @@ ord_parameter_types! {
 	pub const DexOrigin: u64 = AccountIdConversion::<u64>::into_account_truncating(&DexPalletId::get());
 }
 
-const MAX_SWAP_PATH_LEN: u32 = 4;
+parameter_types! {
+	pub const MaxSwapPathLength: u32 = 4;
+}
 
 impl pallet_dex::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
