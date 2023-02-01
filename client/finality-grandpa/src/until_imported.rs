@@ -593,16 +593,17 @@ mod tests {
 		fn import_header(&self, header: Header) {
 			let hash = header.hash();
 			let number = *header.number();
-
+			let (tx, _rx) = tracing_unbounded("unpin-worker-channel", 10_000);
 			self.known_blocks.lock().insert(hash, number);
 			self.sender
-				.unbounded_send(BlockImportNotification {
+				.unbounded_send(BlockImportNotification::<Block>::new(
 					hash,
-					origin: BlockOrigin::File,
+					BlockOrigin::File,
 					header,
-					is_new_best: false,
-					tree_route: None,
-				})
+					false,
+					None,
+					tx,
+				))
 				.unwrap();
 		}
 	}

@@ -96,7 +96,7 @@ pub struct DiscoveryConfig {
 	local_peer_id: PeerId,
 	permanent_addresses: Vec<(PeerId, Multiaddr)>,
 	dht_random_walk: bool,
-	allow_private_ipv4: bool,
+	allow_private_ip: bool,
 	allow_non_globals_in_dht: bool,
 	discovery_only_if_under_num: u64,
 	enable_mdns: bool,
@@ -111,7 +111,7 @@ impl DiscoveryConfig {
 			local_peer_id: local_public_key.to_peer_id(),
 			permanent_addresses: Vec::new(),
 			dht_random_walk: true,
-			allow_private_ipv4: true,
+			allow_private_ip: true,
 			allow_non_globals_in_dht: false,
 			discovery_only_if_under_num: std::u64::MAX,
 			enable_mdns: false,
@@ -142,9 +142,9 @@ impl DiscoveryConfig {
 		self
 	}
 
-	/// Should private IPv4 addresses be reported?
-	pub fn allow_private_ipv4(&mut self, value: bool) -> &mut Self {
-		self.allow_private_ipv4 = value;
+	/// Should private IPv4/IPv6 addresses be reported?
+	pub fn allow_private_ip(&mut self, value: bool) -> &mut Self {
+		self.allow_private_ip = value;
 		self
 	}
 
@@ -189,7 +189,7 @@ impl DiscoveryConfig {
 			local_peer_id,
 			permanent_addresses,
 			dht_random_walk,
-			allow_private_ipv4,
+			allow_private_ip,
 			allow_non_globals_in_dht,
 			discovery_only_if_under_num,
 			enable_mdns,
@@ -231,7 +231,7 @@ impl DiscoveryConfig {
 			pending_events: VecDeque::new(),
 			local_peer_id,
 			num_connections: 0,
-			allow_private_ipv4,
+			allow_private_ip,
 			discovery_only_if_under_num,
 			mdns: if enable_mdns {
 				match TokioMdns::new(mdns::Config::default()) {
@@ -278,9 +278,9 @@ pub struct DiscoveryBehaviour {
 	local_peer_id: PeerId,
 	/// Number of nodes we're currently connected to.
 	num_connections: u64,
-	/// If false, `addresses_of_peer` won't return any private IPv4 address, except for the ones
-	/// stored in `permanent_addresses` or `ephemeral_addresses`.
-	allow_private_ipv4: bool,
+	/// If false, `addresses_of_peer` won't return any private IPv4/IPv6 address, except for the
+	/// ones stored in `permanent_addresses` or `ephemeral_addresses`.
+	allow_private_ip: bool,
 	/// Number of active connections over which we interrupt the discovery process.
 	discovery_only_if_under_num: u64,
 	/// Should non-global addresses be added to the DHT?
@@ -506,7 +506,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 				list_to_filter.extend(mdns.addresses_of_peer(peer_id));
 			}
 
-			if !self.allow_private_ipv4 {
+			if !self.allow_private_ip {
 				list_to_filter.retain(|addr| match addr.iter().next() {
 					Some(Protocol::Ip4(addr)) if !IpNetwork::from(addr).is_global() => false,
 					Some(Protocol::Ip6(addr)) if !IpNetwork::from(addr).is_global() => false,
@@ -947,7 +947,7 @@ mod tests {
 					let mut config = DiscoveryConfig::new(keypair.public());
 					config
 						.with_permanent_addresses(first_swarm_peer_id_and_addr.clone())
-						.allow_private_ipv4(true)
+						.allow_private_ip(true)
 						.allow_non_globals_in_dht(true)
 						.discovery_limit(50)
 						.with_kademlia(genesis_hash, fork_id, &protocol_id);
@@ -1065,7 +1065,7 @@ mod tests {
 			let keypair = Keypair::generate_ed25519();
 			let mut config = DiscoveryConfig::new(keypair.public());
 			config
-				.allow_private_ipv4(true)
+				.allow_private_ip(true)
 				.allow_non_globals_in_dht(true)
 				.discovery_limit(50)
 				.with_kademlia(supported_genesis_hash, None, &supported_protocol_id);
