@@ -1,5 +1,22 @@
-error: expected `Result`
- --> tests/benchmark_ui/bad_return_non_result.rs:8:16
-  |
-8 |     fn bench() -> Option<String> {
-  |                   ^^^^^^
+error[E0271]: type mismatch resolving `<std::option::Option<std::string::String> as TypeEq>::This == Result<(), BenchmarkError>`
+  --> tests/benchmark_ui/bad_return_non_result.rs:10:16
+   |
+10 |     fn bench() -> Option<String> {
+   |                   ^^^^^^^^^^^^^^ type mismatch resolving `<std::option::Option<std::string::String> as TypeEq>::This == Result<(), BenchmarkError>`
+   |
+note: expected this to be `Result<(), BenchmarkError>`
+  --> tests/benchmark_ui/bad_return_non_result.rs:5:1
+   |
+5  | #[benchmarks]
+   | ^^^^^^^^^^^^^
+   = note: expected enum `Result<(), BenchmarkError>`
+              found enum `std::option::Option<std::string::String>`
+note: required by a bound in `assert_type_eq_all`
+  --> tests/benchmark_ui/bad_return_non_result.rs:5:1
+   |
+5  | #[benchmarks]
+   | ^^^^^^^^^^^^^
+   | |
+   | required by a bound in this
+   | required by this bound in `assert_type_eq_all`
+   = note: this error originates in the macro `frame_benchmarking::v2::assert_type_eq_all` which comes from the expansion of the attribute macro `benchmarks` (in Nightly builds, run with -Z macro-backtrace for more info)

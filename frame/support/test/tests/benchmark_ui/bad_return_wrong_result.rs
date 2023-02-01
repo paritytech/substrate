@@ -4,8 +4,10 @@ use frame_support_test::Config;
 
 #[benchmarks]
 mod benchmarks {
+	use super::*;
+
 	#[benchmark]
-	fn bench() -> Result<(), BenchmarkError, Something> {
+	fn bench() -> Result<String, BenchmarkError> {
 		#[block]
 		{}
 	}
