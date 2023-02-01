@@ -124,7 +124,6 @@ pub mod pallet {
 		// Asset id to address the lp tokens by.
 		type PoolAssetId: AssetId + PartialOrd + Incrementable;
 
-		// TODO rename to Fungibles
 		type Assets: Inspect<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>
 			+ Transfer<Self::AccountId>;
 
