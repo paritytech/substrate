@@ -563,6 +563,12 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	where
 		KArg1: ?Sized + EncodeLike<K1>;
 
+	/// Does any value under the first key `k1` (explicitly) exist in storage?
+	/// Might have unexpected behaviour with empty keys, e.g. `[]`.
+	fn contains_prefix<KArg1>(k1: KArg1) -> bool
+	where
+		KArg1: EncodeLike<K1>;
+
 	/// Iterate over values that share the first key.
 	fn iter_prefix_values<KArg1>(k1: KArg1) -> PrefixIterator<V>
 	where
@@ -736,6 +742,12 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 		limit: u32,
 		maybe_cursor: Option<&[u8]>,
 	) -> sp_io::MultiRemovalResults
+	where
+		K: HasKeyPrefix<KP>;
+
+	/// Does any value under a `partial_key` prefix (explicitly) exist in storage?
+	/// Might have unexpected behaviour with empty keys, e.g. `[]`.
+	fn contains_prefix<KP>(partial_key: KP) -> bool
 	where
 		K: HasKeyPrefix<KP>;
 
@@ -1485,7 +1497,7 @@ pub fn storage_prefix(pallet_name: &[u8], storage_name: &[u8]) -> [u8; 32] {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::{assert_ok, hash::Identity, Twox128};
+	use crate::{assert_ok, hash::Identity, pallet_prelude::NMapKey, Twox128};
 	use bounded_vec::BoundedVec;
 	use frame_support::traits::ConstU32;
 	use generator::StorageValue as _;
@@ -1780,6 +1792,39 @@ mod test {
 	#[crate::storage_alias]
 	type FooDoubleMap =
 		StorageDoubleMap<Prefix, Twox128, u32, Twox128, u32, BoundedVec<u32, ConstU32<7>>>;
+	#[crate::storage_alias]
+	type FooTripleMap = StorageNMap<
+		Prefix,
+		(NMapKey<Twox128, u32>, NMapKey<Twox128, u32>, NMapKey<Twox128, u32>),
+		u64,
+	>;
+
+	#[test]
+	fn contains_prefix_works() {
+		TestExternalities::default().execute_with(|| {
+			// Test double maps
+			assert!(FooDoubleMap::iter_prefix_values(1).next().is_none());
+			assert_eq!(FooDoubleMap::contains_prefix(1), false);
+
+			assert_ok!(FooDoubleMap::try_append(1, 1, 4));
+			assert_ok!(FooDoubleMap::try_append(2, 1, 4));
+			assert!(FooDoubleMap::iter_prefix_values(1).next().is_some());
+			assert!(FooDoubleMap::contains_prefix(1));
+			FooDoubleMap::remove(1, 1);
+			assert_eq!(FooDoubleMap::contains_prefix(1), false);
+
+			// Test N Maps
+			assert!(FooTripleMap::iter_prefix_values((1,)).next().is_none());
+			assert_eq!(FooTripleMap::contains_prefix((1,)), false);
+
+			FooTripleMap::insert((1, 1, 1), 4);
+			FooTripleMap::insert((2, 1, 1), 4);
+			assert!(FooTripleMap::iter_prefix_values((1,)).next().is_some());
+			assert!(FooTripleMap::contains_prefix((1,)));
+			FooTripleMap::remove((1, 1, 1));
+			assert_eq!(FooTripleMap::contains_prefix((1,)), false);
+		});
+	}
 
 	#[test]
 	fn try_append_works() {
