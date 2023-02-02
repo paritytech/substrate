@@ -1808,6 +1808,7 @@ pub mod pallet {
 		/// - `signer`: The `data` object's signer. Should be an owner of the collection.
 		///
 		/// Emits `Issued` on success.
+		/// Emits `AttributeSet` if the attributes were provided.
 		/// Emits `ItemMetadataSet` if the metadata was not empty.
 		#[pallet::call_index(37)]
 		#[pallet::weight(T::WeightInfo::mint_pre_signed(data.attributes.len() as u32))]
