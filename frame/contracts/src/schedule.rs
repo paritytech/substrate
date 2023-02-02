@@ -622,7 +622,7 @@ impl<T: Config> Default for HostFnWeights<T> {
 			// Manually remove proof size from basic block cost.
 			//
 			// Due to imperfect benchmarking some host functions incur a small
-			// amount if proof size. Usually this is ok. However, charging a basic block is such
+			// amount of proof size. Usually this is ok. However, charging a basic block is such
 			// a frequent operation that this would be a vast overestimation.
 			gas: cost_batched!(seal_gas).set_proof_size(0),
 			input: cost_batched!(seal_input),
