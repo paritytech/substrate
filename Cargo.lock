@@ -9595,9 +9595,11 @@ dependencies = [
 name = "sp-api"
 version = "4.0.0-dev"
 dependencies = [
+ "frame-metadata",
  "hash-db",
  "log",
  "parity-scale-codec",
+ "scale-info",
  "sp-api-proc-macro",
  "sp-core",
  "sp-runtime",
