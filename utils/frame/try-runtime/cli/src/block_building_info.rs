@@ -105,8 +105,6 @@ pub fn substrate_info<Block: BlockT>(
 	blocktime_millis: u64,
 ) -> impl BlockBuildingInfoProvider<Block, Option<(InherentData, Digest)>> {
 	move |_, maybe_prev_info: Option<(InherentData, Digest)>| async move {
-		let uncles_idp = sp_authorship::InherentDataProvider::<Block::Header>::new(vec![]);
-
 		let timestamp_idp = match maybe_prev_info {
 			Some((inherent_data, _)) => sp_timestamp::InherentDataProvider::new(
 				inherent_data.timestamp_inherent_data().unwrap().unwrap() + blocktime_millis,
@@ -126,6 +124,6 @@ pub fn substrate_info<Block: BlockT>(
 				.encode(),
 		)];
 
-		Ok(((slot_idp, timestamp_idp, uncles_idp, storage_proof_idp), digest))
+		Ok(((slot_idp, timestamp_idp, storage_proof_idp), digest))
 	}
 }
