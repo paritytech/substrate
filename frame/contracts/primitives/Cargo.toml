@@ -14,6 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 bitflags = "1.0"
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
 
 # Substrate Dependencies (This crate should not rely on frame)
@@ -27,4 +28,5 @@ std = [
 	"codec/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"scale-info/std",
 ]

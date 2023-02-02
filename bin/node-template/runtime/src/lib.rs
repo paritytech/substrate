@@ -230,6 +230,7 @@ impl pallet_grandpa::Config for Runtime {
 
 	type WeightInfo = ();
 	type MaxAuthorities = ConstU32<32>;
+	type MaxSetIdSessionEntries = ConstU64<0>;
 }
 
 impl pallet_timestamp::Config for Runtime {
