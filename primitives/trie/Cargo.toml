@@ -37,8 +37,8 @@ schnellru = { version = "0.2.1", optional = true }
 
 [dev-dependencies]
 array-bytes = "4.1"
-criterion = "0.3.3"
-trie-bench = "0.33.0"
+criterion = "0.4.0"
+trie-bench = "0.34.0"
 trie-standardmap = "0.15.2"
 sp-runtime = { version = "7.0.0", path = "../runtime" }
 
