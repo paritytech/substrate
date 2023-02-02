@@ -11428,7 +11428,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sp-api",
- "sp-authorship",
  "sp-consensus-aura",
  "sp-consensus-babe",
  "sp-core",

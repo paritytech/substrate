@@ -203,7 +203,7 @@ where
 	BBIP: BlockBuildingInfoProvider<Block, Option<(InherentData, Digest)>>,
 {
 	let executor = build_executor::<HostFns>(&shared);
-	let ext = command.state.into_ext::<Block, HostFns>(&shared, &executor, None).await?;
+	let ext = command.state.into_ext::<Block, HostFns>(&shared, &executor, None, true).await?;
 
 	let mut last_block_hash = ext.block_hash;
 	let mut last_block_number =
