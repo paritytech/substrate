@@ -3457,7 +3457,6 @@ dependencies = [
  "frame-system-benchmarking",
  "frame-system-rpc-runtime-api",
  "frame-try-runtime",
- "impl-num-traits",
  "log",
  "node-primitives",
  "pallet-alliance",
