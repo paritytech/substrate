@@ -16,7 +16,7 @@
 // limitations under the License.
 
 //! # DO NOT USE IN PRODUCTION
-//! 
+//!
 //! The produced values do not fulfill the cryptographic requirements for random numbers.  
 //! Should not be used for high-stake production use-cases.
 //!
