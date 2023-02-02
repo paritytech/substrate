@@ -301,9 +301,15 @@ pub fn filter_cfg_attributes(attrs: &[syn::Attribute]) -> Vec<syn::Attribute> {
 }
 
 /// Generate the documentation getter function name for the given ident.
-pub fn generate_decl_docs_getter(ident: &Ident) -> String {
-	let ident_snake_name = Ident::new(&ident.to_string().to_snake_case(), ident.span());
-	format!("{}_decl_runtime_docs", ident_snake_name)
+pub fn generate_decl_docs_getter(ident: &Ident, is_trait: bool) -> Ident {
+	if is_trait {
+		// Avoid collisions for `trait Metadata { fn metadata() }` by
+		// prefixing traits with `trait_`.
+		let ident_snake_name = Ident::new(&ident.to_string().to_snake_case(), ident.span());
+		return format_ident!("trait_{}_decl_runtime_docs", ident_snake_name)
+	}
+
+	format_ident!("{}_decl_runtime_docs", ident)
 }
 
 #[cfg(test)]

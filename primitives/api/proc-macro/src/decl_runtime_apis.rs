@@ -221,7 +221,6 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
 	for decl in decls {
 		let runtime_docs = generate_decl_docs(&decl, &crate_);
-
 		let mut decl = decl.clone();
 		let decl_span = decl.span();
 		extend_generics_with_block(&mut decl.generics);

@@ -41,7 +41,7 @@ pub fn generate_decl_docs(decl: &ItemTrait, crate_: &TokenStream) -> TokenStream
 	    };
 
 		let signature = &method.sig;
-		let method_name = generate_decl_docs_getter(&signature.ident);
+		let method_name = generate_decl_docs_getter(&signature.ident, false);
 
 		let is_changed_in = method
 			.attrs
@@ -63,7 +63,7 @@ pub fn generate_decl_docs(decl: &ItemTrait, crate_: &TokenStream) -> TokenStream
 		));
 	}
 
-	let trait_name = generate_decl_docs_getter(&decl.ident);
+	let trait_name = generate_decl_docs_getter(&decl.ident, true);
 	let docs = get_doc_literals(&decl.attrs);
 	let attrs = filter_cfg_attributes(&decl.attrs);
 
