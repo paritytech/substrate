@@ -1493,6 +1493,8 @@ pub mod pallet {
 		PoolIdInUse,
 		/// Pool id provided is not correct/usable.
 		InvalidPoolId,
+		/// Restricted to pending rewards
+		CannotBondFreeBalanceOther,
 	}
 
 	#[derive(Encode, Decode, PartialEq, TypeInfo, frame_support::PalletError, RuntimeDebug)]
@@ -1591,8 +1593,23 @@ pub mod pallet {
 			T::WeightInfo::bond_extra_transfer()
 			.max(T::WeightInfo::bond_extra_reward())
 		)]
-		pub fn bond_extra(origin: OriginFor<T>, extra: BondExtra<BalanceOf<T>>) -> DispatchResult {
+		pub fn bond_extra(
+			origin: OriginFor<T>,
+			other: Option<AccountIdLookupOf<T>>,
+			extra: BondExtra<BalanceOf<T>>,
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let other = other.map(T::Lookup::lookup).transpose()?;
+			let is_bonding_for = other.is_some();
+			let who = other.unwrap_or(who);
+			if is_bonding_for {
+				ensure!(
+					RewardClaimPermission::<T>::get(&who) == RewardClaim::Permissionless,
+					Error::<T>::DoesNotHavePermission
+				);
+				ensure!(extra == BondExtra::Rewards, Error::<T>::CannotBondFreeBalanceOther);
+			}
+
 			let (mut member, mut bonded_pool, mut reward_pool) = Self::get_member_with_pools(&who)?;
 
 			// payout related stuff: we must claim the payouts, and updated recorded payout data
@@ -2139,62 +2156,6 @@ pub mod pallet {
 			T::Staking::chill(&bonded_pool.bonded_account())
 		}
 
-		/// Bond pending rewards of `member_account` into the pool they already belong.
-		///
-		/// Note: `member_account` must pass `RewardClaim::Permissionless` to `set_reward_claim`,
-		/// making this call permissionless.
-		#[pallet::call_index(14)]
-		#[pallet::weight(
-			T::WeightInfo::bond_extra_transfer()
-			.max(T::WeightInfo::bond_extra_reward())
-		)]
-		pub fn bond_extra_pending_rewards_other(
-			origin: OriginFor<T>,
-			member_account: AccountIdLookupOf<T>,
-		) -> DispatchResult {
-			ensure_signed(origin)?;
-			let member_account = T::Lookup::lookup(member_account)?;
-			let (mut member, mut bonded_pool, mut reward_pool) =
-				Self::get_member_with_pools(&member_account)?;
-
-			ensure!(
-				RewardClaimPermission::<T>::get(&member_account) == RewardClaim::Permissionless,
-				Error::<T>::DoesNotHavePermission
-			);
-
-			reward_pool.update_records(bonded_pool.id, bonded_pool.points)?;
-			ensure!(!member.active_points().is_zero(), Error::<T>::FullyUnbonding);
-
-			let current_reward_counter =
-				reward_pool.current_reward_counter(bonded_pool.id, bonded_pool.points)?;
-			let pending_rewards = member.pending_rewards(current_reward_counter)?;
-
-			if !pending_rewards.is_zero() {
-				member.last_recorded_reward_counter = current_reward_counter;
-				reward_pool.register_claimed_reward(pending_rewards);
-			}
-
-			let points_issued = bonded_pool.try_bond_funds(
-				&bonded_pool.reward_account(),
-				pending_rewards,
-				BondType::Later,
-			)?;
-
-			bonded_pool.ok_to_be_open()?;
-			member.points = member.points.saturating_add(points_issued);
-
-			Self::deposit_event(Event::<T>::Bonded {
-				member: member_account.clone(),
-				pool_id: member.pool_id,
-				bonded: pending_rewards,
-				joined: false,
-			});
-
-			Self::put_member_with_pools(&member_account, member, bonded_pool, reward_pool);
-
-			Ok(())
-		}
-
 		/// Sets permission to claim reward.
 		///
 		/// Lets a pool member to choose who can claim pending rewards on their behalf. By default,
@@ -2206,7 +2167,7 @@ pub mod pallet {
 		///
 		/// * `Origin` - Member of a pool.
 		/// * `actor` - Account to claim reward.
-		#[pallet::call_index(15)]
+		#[pallet::call_index(14)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn set_reward_claim(origin: OriginFor<T>, actor: RewardClaim) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -2403,7 +2364,7 @@ impl<T: Config> Pallet<T> {
 			// We check for zero above
 			.div(current_points)
 	}
-	// TODO: Investigate logic here to add conditional event emission on different account types.
+
 	/// If the member has some rewards, transfer a payout from the reward pool to the member.
 	// Emits events and potentially modifies pool state if any arithmetic saturates, but does
 	// not persist any of the mutable inputs to storage.

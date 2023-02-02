@@ -245,7 +245,7 @@ frame_benchmarking::benchmarks! {
 
 		// creator of the src pool will bond-extra, bumping itself to dest bag.
 
-	}: bond_extra(RuntimeOrigin::Signed(scenario.creator1.clone()), BondExtra::FreeBalance(extra))
+	}: bond_extra(RuntimeOrigin::Signed(scenario.creator1.clone()), None, BondExtra::FreeBalance(extra))
 	verify {
 		assert!(
 			T::Staking::active_stake(&scenario.origin1).unwrap() >=
@@ -263,27 +263,7 @@ frame_benchmarking::benchmarks! {
 		assert!(extra >= CurrencyOf::<T>::minimum_balance());
 		CurrencyOf::<T>::deposit_creating(&reward_account1, extra);
 
-	}: bond_extra(RuntimeOrigin::Signed(scenario.creator1.clone()), BondExtra::Rewards)
-	verify {
-		assert!(
-			T::Staking::active_stake(&scenario.origin1).unwrap() >=
-			scenario.dest_weight
-		);
-	}
-
-	bond_extra_pending_rewards_other {
-		let origin_weight = Pools::<T>::depositor_min_bond() * 2u32.into();
-		let scenario = ListScenario::<T>::new(origin_weight, true)?;
-		let scenario_creator_lookup = T::Lookup::unlookup(scenario.creator1.clone());
-		let extra = (scenario.dest_weight - origin_weight).max(CurrencyOf::<T>::minimum_balance());
-
-		let reward_account = Pools::<T>::create_reward_account(1);
-		assert!(extra >= CurrencyOf::<T>::minimum_balance());
-		CurrencyOf::<T>::deposit_creating(&reward_account, extra);
-		Pools::<T>::set_reward_claim(RuntimeOrigin::Signed(scenario.creator1.clone()).into(), RewardClaim::Permissionless)
-			.unwrap();
-
-	}:_(RuntimeOrigin::Signed(scenario.creator1.clone()), scenario_creator_lookup)
+	}: bond_extra(RuntimeOrigin::Signed(scenario.creator1.clone()), None, BondExtra::Rewards)
 	verify {
 		assert!(
 			T::Staking::active_stake(&scenario.origin1).unwrap() >=
