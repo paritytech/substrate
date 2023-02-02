@@ -101,12 +101,37 @@ pub fn expand_runtime_metadata(
 				match version {
 					// The V14 version is already implemented by `construct_runtime!` macro.
 					14 => Some(#scrate::OpaqueMetadata::new(#runtime::metadata().into())),
+					15 => Some(#scrate::OpaqueMetadata::new(#runtime::metadata_v15().into())),
 					_ => None,
 				}
 			}
 
 			pub fn metadata_versions() -> #scrate::sp_std::vec::Vec<u32> {
 				#scrate::sp_std::vec![ 14 ]
+			}
+
+			fn metadata_v15() -> #scrate::metadata::RuntimeMetadataPrefixed {
+				#scrate::metadata::v15::RuntimeMetadataLastVersion::new(
+					#scrate::sp_std::vec![ #(#pallets),* ],
+					#scrate::metadata::ExtrinsicMetadata {
+						ty: #scrate::scale_info::meta_type::<#extrinsic>(),
+						version: <#extrinsic as #scrate::sp_runtime::traits::ExtrinsicMetadata>::VERSION,
+						signed_extensions: <
+								<
+										#extrinsic as #scrate::sp_runtime::traits::ExtrinsicMetadata
+								>::SignedExtensions as #scrate::sp_runtime::traits::SignedExtension
+							>::metadata()
+								.into_iter()
+								.map(|meta| #scrate::metadata::SignedExtensionMetadata {
+										identifier: meta.identifier,
+										ty: meta.ty,
+										additional_signed: meta.additional_signed,
+								})
+								.collect(),
+					},
+					#scrate::scale_info::meta_type::<#runtime>(),
+					#runtime::runtime_metadata(),
+				).into()
 			}
 		}
 	}
