@@ -122,7 +122,7 @@ pub mod pallet {
 		type MultiAssetIdConverter: MultiAssetIdConverter<Self::MultiAssetId, Self::AssetId>;
 
 		// Asset id to address the lp tokens by.
-		type PoolAssetId: AssetId + PartialOrd + Incrementable;
+		type PoolAssetId: AssetId + PartialOrd + Incrementable + From<u32>;
 
 		type Assets: Inspect<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>
 			+ Transfer<Self::AccountId>;
