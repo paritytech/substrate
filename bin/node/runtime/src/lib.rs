@@ -26,7 +26,6 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::{
 	onchain, BalancingConfig, ElectionDataProvider, SequentialPhragmen, VoteWeight,
 };
-use pallet_dex::{NativeOrAssetIdConverter, NativeOrAssetId};
 use frame_support::{
 	construct_runtime,
 	dispatch::DispatchClass,
@@ -54,6 +53,7 @@ use frame_system::{
 };
 pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
+use pallet_dex::{NativeOrAssetId, NativeOrAssetIdConverter};
 use pallet_election_provider_multi_phase::SolutionAccuracyOf;
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
@@ -1526,7 +1526,7 @@ impl pallet_dex::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
 	type AssetBalance = <Self as pallet_balances::Config>::Balance;
-	type PromotedBalance = u128;
+	type PromotedBalance = sp_core::U256;
 	type Assets = Assets;
 	type Balance = u128;
 	type PoolAssets = PoolAssets;
