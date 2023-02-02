@@ -17,7 +17,7 @@
 
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::ItemTrait;
+use syn::{ImplItemMethod, ItemTrait, Path, Result};
 
 use crate::{
 	common::CHANGED_IN_ATTRIBUTE,
@@ -75,4 +75,53 @@ pub fn generate_decl_docs(decl: &ItemTrait, crate_: &TokenStream) -> TokenStream
 
 			#( #methods )*
 	)
+}
+
+/// Generate the runtime metadata for a given method.
+fn generate_method_metadata(
+	method: &ImplItemMethod,
+	crate_: &TokenStream,
+	hidden_mod: &Path,
+) -> Result<TokenStream> {
+	let signature = &method.sig;
+	let mut inputs = Vec::new();
+
+	for input in &signature.inputs {
+		let syn::FnArg::Typed(typed) = input else {
+				// Exclude `self` from metadata collection.
+                       continue
+               };
+
+		let pat = &typed.pat;
+		let name = format!("{}", quote!(#pat));
+		let ty = &typed.ty;
+
+		inputs.push(quote!(
+				#crate_::metadata::v15::ParamMetadata {
+						name: #name,
+						ty: #crate_::scale_info::meta_type::<#ty>(),
+				}
+		));
+	}
+
+	let output = match &signature.output {
+		syn::ReturnType::Default => quote!(#crate_::scale_info::meta_type::<()>()),
+		syn::ReturnType::Type(_, ty) => quote!(#crate_::scale_info::meta_type::<#ty>()),
+	};
+
+	// String method name including quotes for constructing `v15::MethodMetadata`.
+	let method_name = format!("{}", signature.ident);
+	// Function getter for the documentation.
+	let doc_getter = generate_decl_docs_getter(&signature.ident, false);
+	let attrs = filter_cfg_attributes(&method.attrs);
+
+	Ok(quote!(
+			#( #attrs )*
+			#crate_::metadata::v15::MethodMetadata {
+					name: #method_name,
+					inputs: #crate_::vec![ #( #inputs, )* ],
+					output: #output,
+					docs: #hidden_mod::#doc_getter(),
+			}
+	))
 }
