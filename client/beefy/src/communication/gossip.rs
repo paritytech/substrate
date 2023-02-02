@@ -101,7 +101,7 @@ pub(crate) struct GossipValidator<B, AuthId, TSignature, BKS>
 where
 	B: Block,
         BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
-	AuthId: Encode + Decode + Debug + Ord + Sync + Send,
+	AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send,
 TSignature: Encode + Decode + Debug + Clone + Sync + Send, 
 {
 	topic: B::Hash,
@@ -117,7 +117,7 @@ impl<B, AuthId, TSignature, BKS> GossipValidator<B, AuthId, TSignature, BKS>
 where
 	B: Block,
 	BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
-	AuthId: Encode + Decode + Debug + Ord + Sync + Send,
+	AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send,
 	TSignature: Encode + Decode + Debug + Clone + Sync + Send, 
 {
 	pub fn new(known_peers: Arc<Mutex<KnownPeers<B>>>) -> GossipValidator<B, AuthId, TSignature, BKS> {
@@ -153,7 +153,7 @@ impl<B, AuthId, TSignature, BKS> Validator<B> for GossipValidator<B, AuthId, TSi
 where
 	B: Block,
         BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
-	AuthId: Encode + Decode + Debug + Ord + Sync + Send,
+	AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send,
 	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
 {
 	fn peer_disconnected(&self, _context: &mut dyn ValidatorContext<B>, who: &PeerId) {

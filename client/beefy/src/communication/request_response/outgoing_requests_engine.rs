@@ -29,6 +29,7 @@ use sc_network_common::{
 	request_responses::{IfDisconnected, RequestFailure},
 	service::NetworkRequest,
 };
+use sp_api::ProvideRuntimeApi;
 use sp_runtime::traits::{Block, NumberFor};
 use std::{collections::VecDeque, result::Result, sync::Arc};
 
@@ -45,38 +46,36 @@ type Response = Result<Vec<u8>, RequestFailure>;
 type ResponseReceiver = oneshot::Receiver<Response>;
 
 #[derive(Clone, Debug)]
-struct RequestInfo<B: Block> {
+struct RequestInfo<B: Block, AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send> {
 	block: NumberFor<B>,
-	active_set: ValidatorSet<AuthorityId>,
+	active_set: ValidatorSet<AuthId>,
 }
 
-enum State<B: Block> {
+enum State<B: Block, AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send> {
 	Idle,
-	AwaitingResponse(PeerId, RequestInfo<B>, ResponseReceiver),
+	AwaitingResponse(PeerId, RequestInfo<B, AuthId>, ResponseReceiver),
 }
 
-pub struct OnDemandJustificationsEngine<B: Block, R, AuthId: Encode + Decode + Debug + Ord + Sync + Send, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>> {
+pub struct OnDemandJustificationsEngine<B: Block, AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>> {
 	network: Arc<dyn NetworkRequest + Send + Sync>,
 	protocol_name: ProtocolName,
 
 	live_peers: Arc<Mutex<KnownPeers<B>>>,
 	peers_cache: VecDeque<PeerId>,
 
-	state: State<B>,
+	state: State<B, AuthId>,
 	_auth_id : PhantomData::<AuthId>,
 	_signature: PhantomData::<TSignature>,
 	_keystor: PhantomData::<BKS>,
 
 }
 
-impl<B, R, AuthId, TSignature, BKS> OnDemandJustificationsEngine<B, R, AuthId, TSignature, BKS>
+impl<B, AuthId, TSignature, BKS> OnDemandJustificationsEngine<B, AuthId, TSignature, BKS>
 where
 	B: Block,
-	R: ProvideRuntimeApi<B>,
-	AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash,
+	AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
 	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
 	BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
-	R::Api: BeefyApi<B, AuthId>,
 {
 	pub fn new(
 		network: Arc<dyn NetworkRequest + Send + Sync>,
@@ -111,7 +110,7 @@ where
 		None
 	}
 
-	fn request_from_peer(&mut self, peer: PeerId, req_info: RequestInfo<B>) {
+	fn request_from_peer(&mut self, peer: PeerId, req_info: RequestInfo<B, AuthId>) {
 		debug!(
 			target: BEEFY_SYNC_LOG_TARGET,
 			"🥩 requesting justif #{:?} from peer {:?}", req_info.block, peer,
@@ -135,7 +134,7 @@ where
 	/// Start new justification request for `block`, if no other request is in progress.
 	///
 	/// `active_set` will be used to verify validity of potential responses.
-	pub fn request(&mut self, block: NumberFor<B>, active_set: ValidatorSet<AuthorityId>) {
+	pub fn request(&mut self, block: NumberFor<B>, active_set: ValidatorSet<AuthId>) {
 		// ignore new requests while there's already one pending
 		if matches!(self.state, State::AwaitingResponse(_, _, _)) {
 			return
@@ -171,7 +170,7 @@ where
 	fn process_response(
 		&mut self,
 		peer: PeerId,
-		req_info: &RequestInfo<B>,
+		req_info: &RequestInfo<B, AuthId>,
 		response: Result<Response, Canceled>,
 	) -> Result<BeefyVersionedFinalityProof<B, TSignature>, Error> {
 		response

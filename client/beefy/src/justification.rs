@@ -30,7 +30,7 @@ pub type BeefyVersionedFinalityProof<Block, TSignature> =
 	beefy_primitives::VersionedFinalityProof<NumberFor<Block>, TSignature>;
 
 /// Decode and verify a Beefy FinalityProof.
-pub(crate) fn decode_and_verify_finality_proof<Block: BlockT, AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>>(
+pub(crate) fn decode_and_verify_finality_proof<Block: BlockT, AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>>(
 	encoded: &[u8],
 	target_number: NumberFor<Block>,
 	validator_set: &ValidatorSet<AuthId>,
@@ -41,7 +41,7 @@ pub(crate) fn decode_and_verify_finality_proof<Block: BlockT, AuthId: Encode + D
 }
 
 /// Verify the Beefy finality proof against the validator set at the block it was generated.
-fn verify_with_validator_set<Block: BlockT, AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,>(
+fn verify_with_validator_set<Block: BlockT, AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,>(
 	target_number: NumberFor<Block>,
 	validator_set: &ValidatorSet<AuthId>,
 	proof: &BeefyVersionedFinalityProof<Block, TSignature>,
@@ -111,7 +111,7 @@ pub(crate) mod tests {
 	fn should_verify_with_validator_set<TKeyPair, AuthId, TSignature, BKS>()
     where
         TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSignature>,
-        AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker,
+        AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker,
           TSignature: Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq  + 'static,
           BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
     {
@@ -193,7 +193,7 @@ pub(crate) mod tests {
 ()
     where
     TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSignature>,
-        AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker,
+        AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker,
         TSignature: Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq  + 'static,
         BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>
     {

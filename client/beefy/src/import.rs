@@ -48,7 +48,7 @@ use crate::{
 /// Wraps a `inner: BlockImport` and ultimately defers to it.
 ///
 /// When using BEEFY, the block import worker should be using this block import object.
-pub struct BeefyBlockImport<Block: BlockT, Backend, RuntimeApi, I, AuthId: Encode + Decode + Debug + Ord + Sync + Send, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>> {
+pub struct BeefyBlockImport<Block: BlockT, Backend, RuntimeApi, I, AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>> {
 	backend: Arc<Backend>,
 	runtime: Arc<RuntimeApi>,
 	inner: I,
@@ -57,7 +57,7 @@ pub struct BeefyBlockImport<Block: BlockT, Backend, RuntimeApi, I, AuthId: Encod
 	_keystore: PhantomData::<BKS>
 }
 
-impl<Block: BlockT, BE, Runtime, I: Clone, AuthId: Encode + Decode + Debug + Ord + Sync + Send, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>> Clone for BeefyBlockImport<Block, BE, Runtime, I, AuthId, TSignature, BKS> {
+impl<Block: BlockT, BE, Runtime, I: Clone, AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>> Clone for BeefyBlockImport<Block, BE, Runtime, I, AuthId, TSignature, BKS> {
 	fn clone(&self) -> Self {
 		BeefyBlockImport {
 			backend: self.backend.clone(),
@@ -70,7 +70,7 @@ impl<Block: BlockT, BE, Runtime, I: Clone, AuthId: Encode + Decode + Debug + Ord
 	}
 }
 
-impl<Block: BlockT, BE, Runtime, I, AuthId: Encode + Decode + Debug + Ord + Sync + Send, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>> BeefyBlockImport<Block, BE, Runtime, I, AuthId, TSignature, BKS> {
+impl<Block: BlockT, BE, Runtime, I, AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>> BeefyBlockImport<Block, BE, Runtime, I, AuthId, TSignature, BKS> {
 	/// Create a new BeefyBlockImport.
 	pub fn new(
 		backend: Arc<BE>,
@@ -88,7 +88,7 @@ where
 	BE: Backend<Block>,
 	Runtime: ProvideRuntimeApi<Block>,
 	Runtime::Api: BeefyApi<Block, AuthId> + Send,
-        AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash,
+        AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
 	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
 	BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
 {
@@ -123,7 +123,7 @@ where
 		+ Sync,
 	Runtime: ProvideRuntimeApi<Block> + Send + Sync,
 	Runtime::Api: BeefyApi<Block, AuthId>,
-	AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash,
+	AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
 	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
         BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
 {

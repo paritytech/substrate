@@ -41,7 +41,7 @@ use sp_application_crypto::Pair as app_crypto_Pair;
 /// wrapper around [`sp_keystore::SyncCryptoStore`] and allows to customize
 /// common cryptographic functionality.
 pub  trait BeefyKeystore<AuthorityId, TSignature> : From<Option<SyncCryptoStorePtr>> + Sync + Send where
-	AuthorityId: Encode + Decode + Debug + Ord + Sync + Send,
+	AuthorityId: Encode + Decode + Debug + Clone + Ord + Sync + Send,
 	TSignature:  Encode + Decode + Debug + Clone + Sync + Send,
 {
 	type Public : Encode + Decode + Debug + From<AuthorityId> + Into<AuthorityId>;

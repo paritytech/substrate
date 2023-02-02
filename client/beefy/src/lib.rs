@@ -16,36 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{marker::PhantomData, sync::Arc};
 use core::fmt::Debug;
-use beefy_primitives::{BeefyApi, MmrRootHash, PayloadProvider};
-use parking_lot::Mutex;
-use prometheus::Registry;
-use sc_client_api::{Backend, BlockBackend, BlockchainEvents, Finalizer};
-use sc_consensus::BlockImport;
-use sc_network::ProtocolName;
-use sc_network_common::service::NetworkRequest;
-use sc_network_gossip::Network as GossipNetwork;
-use sp_api::{NumberFor, ProvideRuntimeApi};
-use sp_blockchain::HeaderBackend;
-use sp_consensus::{Error as ConsensusError, SyncOracle};
-use sp_keystore::SyncCryptoStorePtr;
-use sp_mmr_primitives::MmrApi;
-use sp_runtime::traits::Block;
 use codec::{Codec, Decode, Encode};
-
-mod error;
-mod keystore;
-mod metrics;
-mod round;
-mod worker;
-
-pub mod communication;
-pub mod import;
-pub mod justification;
-
-#[cfg(test)]
-mod tests;
 
 use crate::{
 	communication::{
@@ -64,7 +36,7 @@ use crate::{
 	worker::PersistedState,
 };
 use beefy_primitives::{
-	crypto::AuthorityId, BeefyApi, MmrRootHash, PayloadProvider, ValidatorSet, BEEFY_ENGINE_ID,
+	ecdsa_crypto::AuthorityId, BeefyApi, MmrRootHash, PayloadProvider, ValidatorSet, BEEFY_ENGINE_ID,
 	GENESIS_AUTHORITY_SET_ID,
 };
 use futures::{stream::Fuse, StreamExt};
@@ -174,7 +146,7 @@ where
 		+ Sync,
 	RuntimeApi: ProvideRuntimeApi<B> + Send + Sync,
 	RuntimeApi::Api: BeefyApi<B, AuthId>,
-        AuthId: Encode + Decode + Debug + Ord + Sync + Send,
+        AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send,
 	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
 	BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
 {
@@ -223,7 +195,7 @@ where
 	C: Client<B, BE>,
 	R: ProvideRuntimeApi<B>,        
 	BKS: keystore::BeefyKeystore<AuthId, TSignature, Public = AuthId>,
-	AuthId: Encode + Decode + Debug + Ord + Sync + Send,
+	AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send,
 	TSignature: Encode + Decode + Debug + Clone + Sync + Send, 
 	R::Api: BeefyApi<B, AuthId> + MmrApi<B, MmrRootHash, NumberFor<B>>,
 	N: GossipNetwork<B> + NetworkRequest +  SyncOracle + Send + Sync + 'static,
@@ -265,7 +237,7 @@ where
 	N: GossipNetwork<B> + NetworkRequest +  SyncOracle + Send + Sync + 'static,
         BKS: keystore::BeefyKeystore<AuthId, TSignature, Public = AuthId> +'static,
 
-	AuthId: Encode + Decode + Debug + Ord + std::hash::Hash + Sync + Send + 'static,
+	AuthId: Encode + Decode + Debug + Clone + Ord + std::hash::Hash + Sync + Send + 'static,
 	TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
 {
 	let BeefyParams {
@@ -349,7 +321,7 @@ where
 		persisted_state,
 	};
 
-	let worker = worker::BeefyWorker::<_, _, _, _, _, _, _, _, _>::new(worker_params);
+	let worker = worker::BeefyWorker::<_, _, _, _, _, _, _>::new(worker_params);
 
 	futures::future::join(
 		worker.run(block_import_justif, finality_notifications),
@@ -358,17 +330,19 @@ where
 	.await;
 }
 
-fn load_or_init_voter_state<B, BE, R>(
+fn load_or_init_voter_state<B, BE, R, AuthId, TSignature>(
 	backend: &BE,
 	runtime: &R,
 	best_grandpa: <B as Block>::Header,
-	min_block_delta: u32,
-) -> ClientResult<PersistedState<B>>
+    min_block_delta: u32,
+) -> ClientResult<PersistedState<B, AuthId, TSignature>>
 where
 	B: Block,
 	BE: Backend<B>,
 	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B>,
+    AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
+    TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+	R::Api: BeefyApi<B, AuthId>,
 {
 	// Initialize voter state from AUX DB or from pallet genesis.
 	if let Some(mut state) = crate::aux_schema::load_persistent(backend)? {
@@ -387,17 +361,19 @@ where
 //  - latest BEEFY finalized block, or if none found on the way,
 //  - BEEFY pallet genesis;
 // Enqueue any BEEFY mandatory blocks (session boundaries) found on the way, for voter to finalize.
-fn initialize_voter_state<B, BE, R>(
+fn initialize_voter_state<B, BE, R, AuthId, TSignature>(
 	backend: &BE,
 	runtime: &R,
 	best_grandpa: <B as Block>::Header,
 	min_block_delta: u32,
-) -> ClientResult<PersistedState<B>>
+) -> ClientResult<PersistedState<B, AuthId, TSignature>>
 where
 	B: Block,
 	BE: Backend<B>,
-	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B>,
+    R: ProvideRuntimeApi<B>,
+    AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
+    TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+	R::Api: BeefyApi<B, AuthId>,
 {
 	// Walk back the imported blocks and initialize voter either, at the last block with
 	// a BEEFY justification, or at pallet genesis block; voter will resume from there.
@@ -449,7 +425,7 @@ where
 				.ok_or_else(|| ClientError::Backend("Invalid BEEFY chain".into()))?
 		}
 
-		if let Some(active) = worker::find_authorities_change::<B>(&header) {
+		if let Some(active) = worker::find_authorities_change::<B, AuthId>(&header) {
 			info!(
 				target: LOG_TARGET,
 				"🥩 Marking block {:?} as BEEFY Mandatory.",
@@ -482,7 +458,7 @@ where
 
 /// Wait for BEEFY runtime pallet to be available, return active validator set.
 /// Should be called only once during worker initialization.
-async fn wait_for_runtime_pallet<B, R>(
+async fn wait_for_runtime_pallet<B, R, AuthId,>(
 	runtime: &R,
 	mut gossip_engine: &mut GossipEngine<B>,
 	finality: &mut Fuse<FinalityNotifications<B>>,
@@ -490,7 +466,8 @@ async fn wait_for_runtime_pallet<B, R>(
 where
 	B: Block,
 	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B>,
+    AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
+    R::Api: BeefyApi<B, AuthId>,
 {
 	info!(target: LOG_TARGET, "🥩 BEEFY gadget waiting for BEEFY pallet to become available...");
 	loop {
@@ -520,9 +497,9 @@ where
 	Err(ClientError::Backend(err_msg))
 }
 
-fn genesis_set_sanity_check(
-	active: ValidatorSet<AuthorityId>,
-) -> ClientResult<ValidatorSet<AuthorityId>> {
+fn genesis_set_sanity_check<AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash>(
+	active: ValidatorSet<AuthId>,
+) -> ClientResult<ValidatorSet<AuthId>> {
 	if active.id() == GENESIS_AUTHORITY_SET_ID {
 		Ok(active)
 	} else {
@@ -531,14 +508,15 @@ fn genesis_set_sanity_check(
 	}
 }
 
-fn expect_validator_set<B, R>(
+fn expect_validator_set<B, R, AuthId>(
 	runtime: &R,
 	at: BlockId<B>,
-) -> ClientResult<ValidatorSet<AuthorityId>>
+) -> ClientResult<ValidatorSet<AuthId>>
 where
-	B: Block,
-	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B>,
+    B: Block,
+    R: ProvideRuntimeApi<B>,
+    AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
+    R::Api: BeefyApi<B, AuthId>,
 {
 	runtime
 		.runtime_api()

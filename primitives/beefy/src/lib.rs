@@ -73,19 +73,19 @@ pub trait BeefyAuthorityId<MsgHash: Hash>: RuntimeAppPublic {
 /// The current underlying crypto scheme used is ECDSA. This can be changed,
 /// without affecting code restricted against the above listed crypto types.
 pub mod ecdsa_crypto {
-    use super::{BeefyAuthorityId, BeefyVerify, Hash};
+    use super::{BeefyAuthorityId, Hash, RuntimeAppPublic};
     use sp_application_crypto::{app_crypto, ecdsa};
     use sp_core::crypto::Wraps;
     app_crypto!(ecdsa, crate::KEY_TYPE);
 
-	/// Identity of a BEEFY authority using ECDSA as its crypto.
-	pub type AuthorityId = Public;
+    /// Identity of a BEEFY authority using ECDSA as its crypto.
+    pub type AuthorityId = Public;
 
-	/// Signature for a BEEFY authority using ECDSA as its crypto.
-	pub type AuthoritySignature = Signature;
+    /// Signature for a BEEFY authority using ECDSA as its crypto.
+    pub type AuthoritySignature = Signature;
 
-	impl<MsgHash: Hash> BeefyAuthorityId<MsgHash> for AuthorityId
-	where
+    impl<MsgHash: Hash> BeefyAuthorityId<MsgHash> for AuthorityId
+    where
 		<MsgHash as Hash>::Output: Into<[u8; 32]>,
 	{
 		fn verify(&self, signature: &<Self as RuntimeAppPublic>::Signature, msg: &[u8]) -> bool {
@@ -99,7 +99,7 @@ pub mod ecdsa_crypto {
 			}
 		}
 	}
-    }
+
 }
 
 pub mod bls_crypto {

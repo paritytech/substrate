@@ -20,6 +20,7 @@
 
 use crate::{worker::PersistedState, LOG_TARGET};
 use codec::{Decode, Encode};
+use std::fmt::Debug;
 use log::{info, trace};
 use sc_client_api::{backend::AuxStore, Backend};
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
@@ -36,9 +37,9 @@ pub(crate) fn write_current_version<B: AuxStore>(backend: &B) -> ClientResult<()
 }
 
 /// Write voter state.
-pub(crate) fn write_voter_state<Block: BlockT, B: AuxStore>(
+pub(crate) fn write_voter_state<Block: BlockT, B: AuxStore, AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send>(
 	backend: &B,
-	state: &PersistedState<Block>,
+	state: &PersistedState<Block, AuthId, TSignature>,
 ) -> ClientResult<()> {
 	trace!(target: LOG_TARGET, "🥩 persisting {:?}", state);
 	backend.insert_aux(&[(WORKER_STATE, state.encode().as_slice())], &[])
@@ -54,7 +55,7 @@ fn load_decode<B: AuxStore, T: Decode>(backend: &B, key: &[u8]) -> ClientResult<
 }
 
 /// Load or initialize persistent data from backend.
-pub(crate) fn load_persistent<B, BE>(backend: &BE) -> ClientResult<Option<PersistedState<B>>>
+pub(crate) fn load_persistent<B, BE, AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send>(backend: &BE) -> ClientResult<Option<PersistedState<B, AuthId, TSignature>>>
 where
 	B: BlockT,
 	BE: Backend<B>,
@@ -63,7 +64,7 @@ where
 
 	match version {
 		None => (),
-		Some(1) => return load_decode::<_, PersistedState<B>>(backend, WORKER_STATE),
+		Some(1) => return load_decode::<_, PersistedState<B, AuthId, TSignature>>(backend, WORKER_STATE),
 		other =>
 			return Err(ClientError::Backend(format!("Unsupported BEEFY DB version: {:?}", other))),
 	}

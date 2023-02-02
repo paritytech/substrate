@@ -20,10 +20,8 @@ use std::{
 	collections::{BTreeMap, HashMap},
 	hash::Hash, marker::PhantomData,
 };
-use codec::{Decode, Encode};
-use core::fmt::Debug;
 
-use log::{debug, trace};
+use core::fmt::Debug;
 use crate::LOG_TARGET;
 
 use beefy_primitives::{
@@ -32,22 +30,20 @@ use beefy_primitives::{
 use codec::{Decode, Encode};
 use log::{debug, trace};
 use sp_runtime::traits::{Block, NumberFor};
-use std::{collections::BTreeMap, hash::Hash};
 
 /// Tracks for each round which validators have voted/signed and
 /// whether the local `self` validator has voted/signed.
 ///
 /// Does not do any validation on votes or signatures, layers above need to handle that (gossip).
-#[derive(Debug, Decode, Default, Encode, PartialEq)]
+#[derive(Debug, Decode, Encode, PartialEq)]
 struct RoundTracker<AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send> {
 	self_vote: bool,
 	votes: BTreeMap<AuthId, TSignature>,
-	
 }
 
-// impl<AuthId: Encode + Decode + Debug + Ord + Sync + Send + core::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send> Default for RoundTracker<AuthId, TSignature> {
-//  	fn default() -> Self { RoundTracker::<_,_> {self_vote: false,  votes: <HashMap<AuthId, TSignature> as Default>::default()}}
-//  }
+impl<AuthId: Encode + Decode + Debug + Ord + Sync + Send + core::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send> Default for RoundTracker<AuthId, TSignature> {
+  	fn default() -> Self { RoundTracker::<_,_> {self_vote: false,  votes: <BTreeMap<AuthId, TSignature> as Default>::default()}}
+}
 
 impl<AuthId: Encode + Decode + Debug + Ord + Sync + Send + core::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send> RoundTracker<AuthId, TSignature> {
 	fn add_vote(&mut self, vote: (AuthId, TSignature), self_vote: bool) -> bool {
@@ -105,7 +101,7 @@ where
 		}
 	}
 
-	pub(crate) fn validator_set(&self) -> &ValidatorSet<Public> {
+	pub(crate) fn validator_set(&self) -> &ValidatorSet<AuthId> {
 		&self.validator_set
 	}
 

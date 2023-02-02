@@ -26,24 +26,17 @@ use std::{
 use codec::{Codec, Decode, Encode};
 use futures::{stream::Fuse, FutureExt, StreamExt};
 use log::{debug, error, info, log_enabled, trace, warn};
-use parking_lot::Mutex;
-
 use sc_client_api::{Backend, FinalityNotification, FinalityNotifications, HeaderBackend};
-use sc_network_common::{
-	protocol::event::Event as NetEvent,
-	service::{NetworkEventStream, NetworkRequest},
-};
+use sc_network_common::service::{NetworkEventStream, NetworkRequest};
 use sc_network_gossip::GossipEngine;
-
-use sp_api::{BlockId, ProvideRuntimeApi};
+use sc_utils::notification::NotificationReceiver;
+use sp_api::BlockId;
 use sp_arithmetic::traits::{AtLeast32Bit, Saturating};
-use sp_blockchain::Backend as BlockchainBackend;
 use sp_consensus::SyncOracle;
-use sp_mmr_primitives::MmrApi;
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
-	traits::{Block, Header, NumberFor},
-	SaturatedConversion,
+	traits::{Block, ConstU32, Header, NumberFor, Zero},
+	BoundedVec, SaturatedConversion,
 };
 
 use beefy_primitives::{
@@ -65,32 +58,7 @@ use crate::{
 	round::Rounds,
 	BeefyVoterLinks, LOG_TARGET,
 };
-use beefy_primitives::{
-	crypto::{AuthorityId, Signature},
-	Commitment, ConsensusLog, Payload, PayloadProvider, SignedCommitment, ValidatorSet,
-	VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
-};
-use codec::{Codec, Decode, Encode};
-use futures::{stream::Fuse, FutureExt, StreamExt};
-use log::{debug, error, info, log_enabled, trace, warn};
-use sc_client_api::{Backend, FinalityNotification, FinalityNotifications, HeaderBackend};
-use sc_network_common::service::{NetworkEventStream, NetworkRequest};
-use sc_network_gossip::GossipEngine;
-use sc_utils::notification::NotificationReceiver;
-use sp_api::BlockId;
-use sp_arithmetic::traits::{AtLeast32Bit, Saturating};
-use sp_consensus::SyncOracle;
-use sp_runtime::{
-	generic::OpaqueDigestItemId,
-	traits::{Block, ConstU32, Header, NumberFor, Zero},
-	BoundedVec, SaturatedConversion,
-};
-use std::{
-	collections::{BTreeMap, BTreeSet, VecDeque},
-	fmt::Debug,
-	marker::PhantomData,
-	sync::Arc,
-};
+
 /// Bound for the number of buffered future voting rounds.
 const MAX_BUFFERED_VOTE_ROUNDS: usize = 600;
 /// Bound for the number of buffered votes per round number.
@@ -109,7 +77,7 @@ pub(crate) enum RoundAction {
 /// It chooses which incoming votes to accept and which votes to generate.
 /// Keeps track of voting seen for current and future rounds.
 #[derive(Debug, Decode, Encode, PartialEq)]
-struct VoterOracle<B: Block, AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send,> {
+struct VoterOracle<B: Block, AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send,> {
 	/// Queue of known sessions. Keeps track of voting rounds (block numbers) within each session.
 	///
 	/// There are three voter states coresponding to three queue states:
@@ -124,10 +92,10 @@ struct VoterOracle<B: Block, AuthId: Encode + Decode + Debug + Ord + Sync + Send
 	min_block_delta: u32,
 }
 
-impl<B: Block, AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send> VoterOracle<B, AuthId, TSignature> {
+impl<B: Block, AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send> VoterOracle<B, AuthId, TSignature> {
 	/// Verify provided `sessions` satisfies requirements, then build `VoterOracle`.
 	pub fn checked_new(
-		sessions: VecDeque<Rounds<Payload, B>>,
+		sessions: VecDeque<Rounds<Payload, B, AuthId, TSignature>>,
 		min_block_delta: u32,
 	) -> Option<Self> {
 		let mut prev_start = Zero::zero();
@@ -172,13 +140,13 @@ impl<B: Block, AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::
 
 	// Return reference to rounds pertaining to first session in the queue.
 	// Voting will always happen at the head of the queue.
-	fn active_rounds(&self) -> Option<&Rounds<Payload, B>> {
+	fn active_rounds(&self) -> Option<&Rounds<Payload, B, AuthId, TSignature>> {
 		self.sessions.front()
 	}
 
 	// Return mutable reference to rounds pertaining to first session in the queue.
 	// Voting will always happen at the head of the queue.
-	fn active_rounds_mut(&mut self) -> Option<&mut Rounds<Payload, B>> {
+	fn active_rounds_mut(&mut self) -> Option<&mut Rounds<Payload, B, AuthId, TSignature>> {
 		self.sessions.front_mut()
 	}
 
@@ -193,7 +161,7 @@ impl<B: Block, AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::
 	}
 
 	/// Add new observed session to the Oracle.
-	pub fn add_session(&mut self, rounds: Rounds<Payload, B>) {
+	pub fn add_session(&mut self, rounds: Rounds<Payload, B, AuthId, TSignature>) {
 		self.sessions.push_back(rounds);
 		// Once we add a new session we can drop/prune previous session if it's been finalized.
 		self.try_prune();
@@ -209,7 +177,7 @@ impl<B: Block, AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::
 	}
 
 	/// Return current pending mandatory block, if any, plus its active validator set.
-	pub fn mandatory_pending(&self) -> Option<(NumberFor<B>, ValidatorSet<AuthorityId>)> {
+	pub fn mandatory_pending(&self) -> Option<(NumberFor<B>, ValidatorSet<AuthId>)> {
 		self.sessions.front().and_then(|round| {
 			if round.mandatory_done() {
 				None
@@ -281,7 +249,7 @@ impl<B: Block, AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::
 	}
 }
 
-pub(crate) struct WorkerParams<B: Block, BE, P, N, AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>> {
+pub(crate) struct WorkerParams<B: Block, BE, P, N, AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>> {
 	pub backend: Arc<BE>,
 	pub payload_provider: P,
 	pub network: N,
@@ -291,25 +259,25 @@ pub(crate) struct WorkerParams<B: Block, BE, P, N, AuthId: Encode + Decode + Deb
 	pub on_demand_justifications: OnDemandJustificationsEngine<B, AuthId, TSignature, BKS>,
 	pub links: BeefyVoterLinks<B, TSignature>,
 	pub metrics: Option<Metrics>,
-	pub persisted_state: PersistedState<B>,
+	pub persisted_state: PersistedState<B, AuthId, TSignature>,
 }
 
 #[derive(Debug, Decode, Encode, PartialEq)]
-pub(crate) struct PersistedState<B: Block> {
+pub(crate) struct PersistedState<B: Block, AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send> {
 	/// Best block we received a GRANDPA finality for.
 	best_grandpa_block_header: <B as Block>::Header,
 	/// Best block a BEEFY voting round has been concluded for.
 	best_beefy_block: NumberFor<B>,
 	/// Chooses which incoming votes to accept and which votes to generate.
 	/// Keeps track of voting seen for current and future rounds.
-	voting_oracle: VoterOracle<B>,
+	voting_oracle: VoterOracle<B, AuthId, TSignature>,
 }
 
-impl<B: Block> PersistedState<B> {
+impl<B: Block, AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send> PersistedState<B, AuthId, TSignature> {
 	pub fn checked_new(
 		grandpa_header: <B as Block>::Header,
 		best_beefy: NumberFor<B>,
-		sessions: VecDeque<Rounds<Payload, B>>,
+		sessions: VecDeque<Rounds<Payload, B, AuthId, TSignature>>,
 		min_block_delta: u32,
 	) -> Option<Self> {
 		VoterOracle::checked_new(sessions, min_block_delta).map(|voting_oracle| PersistedState {
@@ -329,7 +297,7 @@ impl<B: Block> PersistedState<B> {
 }
 
 /// A BEEFY worker plays the BEEFY protocol
-pub(crate) struct BeefyWorker<B: Block, BE, P, N, AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>> {
+pub(crate) struct BeefyWorker<B: Block, BE, P, N, AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>> {
 	// utilities
 	backend: Arc<BE>,
 	payload_provider: P,
@@ -359,7 +327,7 @@ pub(crate) struct BeefyWorker<B: Block, BE, P, N, AuthId: Encode + Decode + Debu
 	/// Buffer holding justifications for future processing.
 	pending_justifications: BTreeMap<NumberFor<B>, BeefyVersionedFinalityProof<B, TSignature>>,
 	/// Persisted voter state.
-	persisted_state: PersistedState<B>,
+	persisted_state: PersistedState<B, AuthId, TSignature>,
 }
 
 impl<B, BE, P, N, AuthId, TSignature, BKS> BeefyWorker<B, BE, P, N, AuthId, TSignature, BKS>
@@ -368,7 +336,7 @@ where
 	BE: Backend<B>,
 	P: PayloadProvider<B>,
 	N: NetworkEventStream + NetworkRequest + SyncOracle + Send + Sync + Clone + 'static,
-        AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash,
+        AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
 	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
         BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
 
@@ -417,11 +385,11 @@ where
 		self.persisted_state.best_beefy_block
 	}
 
-	fn voting_oracle(&self) -> &VoterOracle<B> {
+	fn voting_oracle(&self) -> &VoterOracle<B, AuthId, TSignature> {
 		&self.persisted_state.voting_oracle
 	}
 
-	fn active_rounds(&mut self) -> Option<&Rounds<Payload, B>> {
+	fn active_rounds(&mut self) -> Option<&Rounds<Payload, B, AuthId, TSignature>> {
 		self.persisted_state.voting_oracle.active_rounds()
 	}
 
@@ -895,7 +863,7 @@ where
 	/// which is driven by finality notifications and gossiped votes.
 	pub(crate) async fn run(
 		mut self,
-		mut block_import_justif: Fuse<NotificationReceiver<BeefyVersionedFinalityProof<B>>>,
+		mut block_import_justif: Fuse<NotificationReceiver<BeefyVersionedFinalityProof<B, TSignature>>>,
 		mut finality_notifications: Fuse<FinalityNotifications<B>>,
 	) {
 		info!(
@@ -984,7 +952,7 @@ where
 pub(crate) fn find_authorities_change<B, AuthId>(header: &B::Header) -> Option<ValidatorSet<AuthId>>
 where
 	B: Block,
-	AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash
+	AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash
 {
 	let id = OpaqueDigestItemId::Consensus(&BEEFY_ENGINE_ID);
 
@@ -1064,7 +1032,7 @@ pub(crate) mod tests {
 			&self.voting_oracle
 		}
 
-		pub fn active_round(&self) -> Option<&Rounds<Payload, B>> {
+		pub fn active_round(&self) -> Option<&Rounds<Payload, B, AuthId, TSignature>> {
 			self.voting_oracle.active_rounds()
 		}
 
@@ -1078,7 +1046,7 @@ pub(crate) mod tests {
 	}
 
 	impl<B: super::Block> VoterOracle<B> {
-		pub fn sessions(&self) -> &VecDeque<Rounds<Payload, B>> {
+		pub fn sessions(&self) -> &VecDeque<Rounds<Payload, B, AuthId, TSignature>> {
 			&self.sessions
 		}
 	}
@@ -1098,7 +1066,7 @@ pub(crate) mod tests {
 		BKS,		
 	    > where
 	        TKeyPair: Sync + Send + SimpleKeyPair,
-	        AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker + 'static,
+	        AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker + 'static,
 		TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
 		BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static, 
 	{
@@ -1253,7 +1221,7 @@ pub(crate) mod tests {
 
 	fn should_vote_target<AuthId, TSignature> ()
     where
-	        AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker + 'static,
+	        AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker + 'static,
 		TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
     {
 		let mut oracle = VoterOracle::<Block, AuthId, TSignature> { min_block_delta: 1, sessions: VecDeque::new() };
@@ -1305,7 +1273,7 @@ pub(crate) mod tests {
 
 	fn test_oracle_accepted_interval<AuthId, TSignature> ()
     where
-	        AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker + 'static,
+	        AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker + 'static,
 		TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
     {
 		let keys = &[Keyring::Alice];
@@ -1380,7 +1348,7 @@ pub(crate) mod tests {
 
 	fn extract_authorities_change_digest<AuthId,> ()
     where
-	    AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker + 'static,
+	    AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker + 'static,
     {
 		let mut header = Header::new(
 			1u32.into(),
@@ -1422,7 +1390,7 @@ pub(crate) mod tests {
 		BKS,		
 		> () where
 	        TKeyPair: Sync + Send + SimpleKeyPair,
-	        AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker + 'static,
+	        AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker + 'static,
 		TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
 		BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
 	{
@@ -1465,7 +1433,7 @@ pub(crate) mod tests {
 		                         > ()
     where
 	    TKeyPair: Sync + Send + SimpleKeyPair,
-	    AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker + 'static,
+	    AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker + 'static,
 		TSignature: Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq + 'static,
 		BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
     {
@@ -1583,7 +1551,7 @@ pub(crate) mod tests {
 		                   > ()
     where
 	        TKeyPair: Sync + Send + SimpleKeyPair,
-	        AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker + 'static,
+	        AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker + 'static,
 		TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
 		BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
         
@@ -1633,7 +1601,7 @@ pub(crate) mod tests {
 		                   > ()
     where
 	        TKeyPair: Sync + Send + SimpleKeyPair<Public = AuthId, Signature = TSignature>,
-	        AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker + 'static,
+	        AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker + 'static,
 		TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
 		BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,     
     {
@@ -1724,7 +1692,7 @@ pub(crate) mod tests {
 		                   > ()
     where
 	        TKeyPair: Sync + Send + SimpleKeyPair,
-	        AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker + 'static,
+	        AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker + 'static,
 		TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
 		BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
       {
