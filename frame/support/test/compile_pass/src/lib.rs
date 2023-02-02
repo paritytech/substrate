@@ -93,3 +93,9 @@ construct_runtime!(
 		System: frame_system,
 	}
 );
+
+impl Runtime {
+	fn runtime_metadata() -> ! {
+		unimplemented!()
+	}
+}
