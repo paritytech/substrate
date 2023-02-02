@@ -23,6 +23,8 @@ sp-state-machine = { version = "0.13.0", default-features = false, optional = tr
 sp-trie = { version = "7.0.0", default-features = false, optional = true, path = "../trie" }
 hash-db = { version = "0.15.2", optional = true }
 thiserror = { version = "1.0.30", optional = true }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
+frame-metadata = { version = "15.0.0", default-features = false, features = ["v14"] }
 
 log = { version = "0.4.17", default-features = false }
 
@@ -42,6 +44,8 @@ std = [
 	"hash-db",
 	"thiserror",
 	"log/std",
+	"scale-info/std",
+	"frame-metadata/std",
 ]
 # Special feature to disable logging completly.
 #
