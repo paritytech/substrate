@@ -15,11 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::utils::{
-	extract_parameter_names_types_and_borrows, fold_fn_decl_for_client_side, generate_crate_access,
-	generate_hidden_includes, generate_runtime_mod_name_for_trait, parse_runtime_api_version,
-	prefix_function_with_trait, replace_wild_card_parameter_names, return_type_extract_type,
-	versioned_trait_name, AllowSelfRefInParameters,
+use crate::{
+	runtime_metadata::generate_decl_docs,
+	utils::{
+		extract_parameter_names_types_and_borrows, fold_fn_decl_for_client_side,
+		generate_crate_access, generate_hidden_includes, generate_runtime_mod_name_for_trait,
+		parse_runtime_api_version, prefix_function_with_trait, replace_wild_card_parameter_names,
+		return_type_extract_type, versioned_trait_name, AllowSelfRefInParameters,
+	},
 };
 
 use crate::common::{
@@ -215,7 +218,10 @@ fn parse_renamed_attribute(renamed: &Attribute) -> Result<(String, u32)> {
 fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 	let mut result = Vec::new();
 
+	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
 	for decl in decls {
+		let runtime_docs = generate_decl_docs(&decl, &crate_);
+
 		let mut decl = decl.clone();
 		let decl_span = decl.span();
 		extend_generics_with_block(&mut decl.generics);
@@ -303,6 +309,8 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 				#( #versioned_api_traits )*
 
 				pub use #versioned_ident as #main_api_ident;
+
+				#runtime_docs
 
 				pub #api_version
 

@@ -22,6 +22,8 @@ use syn::{
 	ImplItem, ItemImpl, Pat, Path, PathArguments, Result, ReturnType, Signature, Type, TypePath,
 };
 
+use inflector::Inflector;
+
 use quote::{format_ident, quote};
 
 use std::env;
@@ -296,6 +298,12 @@ pub fn get_doc_literals(attrs: &[syn::Attribute]) -> Vec<syn::Lit> {
 /// Filters all attributes except the cfg ones.
 pub fn filter_cfg_attributes(attrs: &[syn::Attribute]) -> Vec<syn::Attribute> {
 	attrs.iter().filter(|a| a.path.is_ident("cfg")).cloned().collect()
+}
+
+/// Generate the documentation getter function name for the given ident.
+pub fn generate_decl_docs_getter(ident: &Ident) -> String {
+	let ident_snake_name = Ident::new(&ident.to_string().to_snake_case(), ident.span());
+	format!("{}_decl_runtime_docs", ident_snake_name)
 }
 
 #[cfg(test)]
