@@ -436,7 +436,7 @@ pub mod pallet {
 			equivocation_proof: Box<EquivocationProof<T::Header>>,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
-			ensure_none(origin)?;
+			ensure_unsigned(origin)?;
 
 			Self::do_report_equivocation(
 				T::HandleEquivocation::block_author(),
