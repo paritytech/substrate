@@ -22,6 +22,9 @@ proc-macro2 = "1.0.37"
 blake2 = { version = "0.10.4", default-features = false }
 proc-macro-crate = "1.1.3"
 
+[dev-dependencies]
+assert_matches = "1.3.0"
+
 # Required for the doc tests
 [features]
 default = [ "std" ]

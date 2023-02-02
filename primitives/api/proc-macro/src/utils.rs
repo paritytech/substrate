@@ -274,3 +274,51 @@ pub fn parse_runtime_api_version(version: &Attribute) -> Result<u64> {
 pub fn versioned_trait_name(trait_ident: &Ident, version: u64) -> Ident {
 	format_ident!("{}V{}", trait_ident, version)
 }
+
+/// Extract the documentation from the provided attributes.
+pub fn get_doc_literals(attrs: &[syn::Attribute]) -> Vec<syn::Lit> {
+	attrs
+		.iter()
+		.filter_map(|attr| {
+			let Ok(syn::Meta::NameValue(meta)) = attr.parse_meta() else {
+                               return None
+                       };
+
+			if meta.path.get_ident().map_or(false, |ident| ident == "doc") {
+				Some(meta.lit)
+			} else {
+				None
+			}
+		})
+		.collect()
+}
+
+#[cfg(test)]
+mod tests {
+	use assert_matches::assert_matches;
+
+	use super::*;
+
+	#[test]
+	fn check_get_doc_literals() {
+		const FIRST: &'static str = "hello";
+		const SECOND: &'static str = "WORLD";
+
+		let doc: Attribute = parse_quote!(#[doc = #FIRST]);
+		println!("DOC: {}", quote!(#doc));
+		let doc_world: Attribute = parse_quote!(#[doc = #SECOND]);
+
+		let attrs = vec![
+			doc.clone(),
+			parse_quote!(#[derive(Debug)]),
+			parse_quote!(#[test]),
+			parse_quote!(#[allow(non_camel_case_types)]),
+			doc_world.clone(),
+		];
+
+		let docs = get_doc_literals(&attrs);
+		assert_eq!(docs.len(), 2);
+		assert_matches!(&docs[0], syn::Lit::Str(val) if val.value() == FIRST);
+		assert_matches!(&docs[1], syn::Lit::Str(val) if val.value() == SECOND);
+	}
+}
