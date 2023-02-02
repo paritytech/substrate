@@ -85,7 +85,6 @@ members = [
 	"frame/balances",
 	"frame/beefy",
 	"frame/beefy-mmr",
-	"frame/beefy-mmr/primitives",
 	"frame/benchmarking",
 	"frame/benchmarking/pov",
 	"frame/bounties",
@@ -246,6 +245,7 @@ members = [
 	"utils/frame/rpc/client",
 	"utils/prometheus",
 	"utils/wasm-builder",
+	"utils/binary-merkle-tree",
 ]
 
 # The list of dependencies below (which can be both direct and indirect dependencies) are crates
