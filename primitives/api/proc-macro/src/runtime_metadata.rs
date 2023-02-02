@@ -178,7 +178,7 @@ fn generate_trait_metadata(impl_: &ItemImpl, crate_: &TokenStream) -> Result<Tok
 }
 
 /// Generate the runtime metadata for the given traits.
-pub fn generate_runtime_metadata(impls: &[ItemImpl]) -> Result<TokenStream> {
+pub fn generate_runtime_metadata(impls: &[ItemImpl], crate_: &TokenStream) -> Result<TokenStream> {
 	if impls.is_empty() {
 		return Ok(quote!())
 	}
@@ -190,8 +190,6 @@ pub fn generate_runtime_metadata(impls: &[ItemImpl]) -> Result<TokenStream> {
 		.self_ty;
 
 	let mut metadata = Vec::new();
-
-	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
 
 	for impl_ in impls {
 		metadata.push(generate_trait_metadata(impl_, &crate_)?);

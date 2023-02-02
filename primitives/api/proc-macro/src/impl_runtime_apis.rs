@@ -637,7 +637,8 @@ fn impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 	let runtime_api_versions = generate_runtime_api_versions(api_impls)?;
 	let wasm_interface = generate_wasm_interface(api_impls)?;
 	let api_impls_for_runtime_api = generate_api_impl_for_runtime_api(api_impls)?;
-	let runtime_metadata = generate_runtime_metadata(api_impls)?;
+	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
+	let runtime_metadata = generate_runtime_metadata(api_impls, &crate_)?;
 
 	Ok(quote!(
 		#hidden_includes
