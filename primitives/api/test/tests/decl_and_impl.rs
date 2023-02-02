@@ -40,9 +40,14 @@ decl_runtime_apis! {
 		fn wild_card(_: u32);
 	}
 
+	/// ApiWithCustomVersion trait documentation
+	///
+	/// Documentation on multiline.
 	#[api_version(2)]
 	pub trait ApiWithCustomVersion {
+		/// same_name version 2.
 		fn same_name();
+		/// same_name version 1.
 		#[changed_in(2)]
 		fn same_name() -> String;
 	}
@@ -164,6 +169,23 @@ fn test_client_side_function_signature() {
 		&RuntimeApiImpl<Block, TestClient>,
 		&BlockId<Block>,
 	) -> Result<String, ApiError> = RuntimeApiImpl::<Block, TestClient>::same_name_before_version_2;
+}
+
+#[test]
+fn check_runtime_api_docs() {
+	// No documentation available for the `Api` trait.
+	assert!(runtime_decl_for_Api::trait_api_decl_runtime_docs().is_empty());
+
+	assert_eq!(
+		vec![" ApiWithCustomVersion trait documentation", "", " Documentation on multiline."],
+		runtime_decl_for_ApiWithCustomVersion::trait_api_with_custom_version_decl_runtime_docs()
+	);
+
+	// Docs are collected only for the last version of methods.
+	assert_eq!(
+		vec![" same_name version 2."],
+		runtime_decl_for_ApiWithCustomVersion::same_name_decl_runtime_docs()
+	);
 }
 
 #[test]
