@@ -270,7 +270,7 @@ pub fn parse_runtime_api_version(version: &Attribute) -> Result<u64> {
 	version.base10_parse()
 }
 
-// Each versioned trait is named 'ApiNameVN' where N is the specific version. E.g. ParachainHostV2
+/// Each versioned trait is named 'ApiNameVN' where N is the specific version. E.g. ParachainHostV2
 pub fn versioned_trait_name(trait_ident: &Ident, version: u64) -> Ident {
 	format_ident!("{}V{}", trait_ident, version)
 }
@@ -293,6 +293,11 @@ pub fn get_doc_literals(attrs: &[syn::Attribute]) -> Vec<syn::Lit> {
 		.collect()
 }
 
+/// Filters all attributes except the cfg ones.
+pub fn filter_cfg_attributes(attrs: &[syn::Attribute]) -> Vec<syn::Attribute> {
+	attrs.iter().filter(|a| a.path.is_ident("cfg")).cloned().collect()
+}
+
 #[cfg(test)]
 mod tests {
 	use assert_matches::assert_matches;
@@ -305,7 +310,6 @@ mod tests {
 		const SECOND: &'static str = "WORLD";
 
 		let doc: Attribute = parse_quote!(#[doc = #FIRST]);
-		println!("DOC: {}", quote!(#doc));
 		let doc_world: Attribute = parse_quote!(#[doc = #SECOND]);
 
 		let attrs = vec![
@@ -320,5 +324,24 @@ mod tests {
 		assert_eq!(docs.len(), 2);
 		assert_matches!(&docs[0], syn::Lit::Str(val) if val.value() == FIRST);
 		assert_matches!(&docs[1], syn::Lit::Str(val) if val.value() == SECOND);
+	}
+
+	#[test]
+	fn check_filter_cfg_attributes() {
+		let cfg_std: Attribute = parse_quote!(#[cfg(feature = "std")]);
+		let cfg_benchmarks: Attribute = parse_quote!(#[cfg(feature = "runtime-benchmarks")]);
+
+		let attrs = vec![
+			cfg_std.clone(),
+			parse_quote!(#[derive(Debug)]),
+			parse_quote!(#[test]),
+			cfg_benchmarks.clone(),
+			parse_quote!(#[allow(non_camel_case_types)]),
+		];
+
+		let filtered = filter_cfg_attributes(&attrs);
+		assert_eq!(filtered.len(), 2);
+		assert_eq!(cfg_std, filtered[0]);
+		assert_eq!(cfg_benchmarks, filtered[1]);
 	}
 }
