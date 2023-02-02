@@ -127,8 +127,9 @@ impl<B: BlockT> BitswapRequestHandler<B> {
 					};
 
 					match pending_response.send(response) {
-						Ok(()) =>
-							trace!(target: LOG_TARGET, "Handled bitswap request from {peer}.",),
+						Ok(()) => {
+							trace!(target: LOG_TARGET, "Handled bitswap request from {peer}.",)
+						},
 						Err(_) => debug!(
 							target: LOG_TARGET,
 							"Failed to handle light client request from {peer}: {}",

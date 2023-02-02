@@ -297,8 +297,9 @@ pub mod v4 {
 					target: TARGET,
 					"Did not clean up any agendas. v4::CleanupAgendas can be removed."
 				),
-				Some(n) =>
-					log::info!(target: TARGET, "Cleaned up {} agendas, now {}", n, new_agendas),
+				Some(n) => {
+					log::info!(target: TARGET, "Cleaned up {} agendas, now {}", n, new_agendas)
+				},
 				None => unreachable!(
 					"Number of agendas cannot increase, old {} new {}",
 					old_agendas, new_agendas
@@ -560,8 +561,9 @@ mod test {
 						"Agenda {} should be removed",
 						i
 					),
-					Some(new) =>
-						assert_eq!(Agenda::<Test>::get(i as u64), new, "Agenda wrong {}", i),
+					Some(new) => {
+						assert_eq!(Agenda::<Test>::get(i as u64), new, "Agenda wrong {}", i)
+					},
 				}
 			}
 		});

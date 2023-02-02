@@ -975,6 +975,17 @@ where
 	}
 }
 
+/// Earlier Usage:
+/// Ensure that the origin `o` represents the root. Returns `Ok` or an `Err` otherwise.
+/// Now Deprecated, Use `ensure_unsigned` instead
+#[deprecated]
+pub fn ensure_none<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), BadOrigin>
+where
+	OuterOrigin: Into<Result<RawOrigin<AccountId>, OuterOrigin>>,
+{
+	ensure_unsigned(o)
+}
+
 /// Ensure that the origin `o` represents an unsigned extrinsic. Returns `Ok` or an `Err` otherwise.
 pub fn ensure_unsigned<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), BadOrigin>
 where
@@ -1753,7 +1764,7 @@ impl<T: Config> Lookup for ChainContext<T> {
 
 /// Prelude to be used alongside pallet macro, for ease of use.
 pub mod pallet_prelude {
-	pub use crate::{ensure_unsigned, ensure_root, ensure_signed, ensure_signed_or_root};
+	pub use crate::{ensure_root, ensure_signed, ensure_signed_or_root, ensure_unsigned};
 
 	/// Type alias for the `Origin` associated type of system config.
 	pub type OriginFor<T> = <T as crate::Config>::RuntimeOrigin;

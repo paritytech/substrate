@@ -157,7 +157,7 @@ impl BenchmarkDef {
 		// parse params such as "x: Linear<0, 1>"
 		for arg in &item_fn.sig.inputs {
 			let invalid_param = |span| {
-				return Err(Error::new(span, "Invalid benchmark function param. A valid example would be `x: Linear<5, 10>`.", ))
+				return Err(Error::new(span, "Invalid benchmark function param. A valid example would be `x: Linear<5, 10>`.", ));
 			};
 
 			let FnArg::Typed(arg) = arg else { return invalid_param(arg.span()) };
@@ -169,7 +169,7 @@ impl BenchmarkDef {
 				return Err(Error::new(
 					var_span,
 					"Benchmark parameter names must consist of a single lowercase letter (a-z) and no other characters.",
-				))
+				));
 			};
 			let name = ident.ident.to_token_stream().to_string();
 			if name.len() > 1 {

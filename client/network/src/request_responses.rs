@@ -344,7 +344,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 						)
 					}
 				},
-			FromSwarm::DialFailure(DialFailure { peer_id, error, handler }) =>
+			FromSwarm::DialFailure(DialFailure { peer_id, error, handler }) => {
 				for (p_name, p_handler) in handler.into_iter() {
 					if let Some((proto, _)) = self.protocols.get_mut(p_name.as_str()) {
 						proto.on_swarm_event(FromSwarm::DialFailure(DialFailure {
@@ -359,7 +359,8 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 						  p_name,
 						)
 					}
-				},
+				}
+			},
 			FromSwarm::ListenerClosed(e) =>
 				for (p, _) in self.protocols.values_mut() {
 					NetworkBehaviour::on_swarm_event(p, FromSwarm::ListenerClosed(e));
