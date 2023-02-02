@@ -98,7 +98,7 @@ where
 			WithdrawReasons::TRANSACTION_PAYMENT | WithdrawReasons::TIP
 		};
 
-		match C::withdraw(who, fee, withdraw_reason, ExistenceRequirement::AllowDeath) {
+		match C::withdraw(who, fee, withdraw_reason, ExistenceRequirement::KeepAlive) {
 			Ok(imbalance) => Ok(Some(imbalance)),
 			Err(_) => Err(InvalidTransaction::Payment.into()),
 		}

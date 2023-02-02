@@ -1543,7 +1543,8 @@ where
 
 						// TODO: This is over-conservative. There may now be other providers, and
 						// this pallet may not even be a provider.
-						let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
+						let allow_death = existence_requirement == ExistenceRequirement::AllowDeath ||
+							frame_system::Pallet::<T>::sufficients(transactor) > 0;
 						let allow_death =
 							allow_death && system::Pallet::<T>::can_dec_provider(transactor);
 						ensure!(
@@ -1718,7 +1719,8 @@ where
 
 				// bail if we need to keep the account alive and this would kill it.
 				let ed = T::ExistentialDeposit::get();
-				let would_be_dead = new_free_account + account.reserved < ed;
+				let would_be_dead = new_free_account + account.reserved < ed &&
+					frame_system::Pallet::<T>::sufficients(who) == 0;
 				let would_kill = would_be_dead && account.free + account.reserved >= ed;
 				ensure!(liveness == AllowDeath || !would_kill, Error::<T, I>::KeepAlive);
 

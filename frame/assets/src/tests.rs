@@ -21,7 +21,7 @@ use super::*;
 use crate::{mock::*, Error};
 use frame_support::{
 	assert_noop, assert_ok,
-	traits::{fungibles::InspectEnumerable, Currency},
+	traits::{fungibles::InspectEnumerable, Currency, ExistenceRequirement, WithdrawReasons},
 };
 use pallet_balances::Error as BalancesError;
 use sp_io::storage;
@@ -1222,5 +1222,62 @@ fn root_asset_create_should_work() {
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
 		assert!(storage::get(b"asset_created").is_some());
 		assert!(storage::get(b"asset_destroyed").is_none());
+	});
+}
+
+#[test]
+fn account_with_sufficient_asset_can_drop_below_existential_deposit_with_keepalive_when_withrawing()
+{
+	new_test_ext().execute_with(|| {
+		//NOTE: account 1 already has a sufficent asset, so we'll use account 2.
+		Balances::make_free_balance_be(&2, 20);
+
+		// Keep alive blocks transfer as account only has native:
+		assert_noop!(
+			Balances::withdraw(&2, 20, WithdrawReasons::TRANSFER, ExistenceRequirement::KeepAlive),
+			pallet_balances::Error::<Test, _>::KeepAlive
+		);
+
+		//create sufficient asset
+		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 2, true, 1));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(2), 0, 2, 100));
+
+		// Now that the account has a sufficient asset, transfer is ok:
+		assert_ok!(Balances::withdraw(
+			&2,
+			20,
+			WithdrawReasons::TRANSFER,
+			ExistenceRequirement::KeepAlive
+		));
+
+		Balances::make_free_balance_be(&2, 20);
+
+		// Check that after burn keep alive kicks in:
+		assert_ok!(Assets::burn(RuntimeOrigin::signed(2), 0, 2, 100));
+		assert_noop!(
+			Balances::withdraw(&2, 20, WithdrawReasons::TRANSFER, ExistenceRequirement::KeepAlive),
+			pallet_balances::Error::<Test, _>::KeepAlive
+		);
+	});
+}
+
+#[test]
+fn account_with_sufficient_asset_can_drop_below_existential_deposit_when_transfer_keep_alive() {
+	new_test_ext().execute_with(|| {
+		//NOTE: account 1 already has a sufficent asset, so we'll use account 2.
+		Balances::make_free_balance_be(&2, 20);
+
+		// Keep alive blocks transfer as account only has native:
+		assert_noop!(
+			Balances::transfer_keep_alive(RuntimeOrigin::signed(2), 3, 20),
+			pallet_balances::Error::<Test, _>::KeepAlive
+		);
+
+		//create sufficient asset
+		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 2, true, 1));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(2), 0, 2, 100));
+
+		// // Now that the account has a sufficient asset, transfer is ok:
+		assert_ok!(Balances::transfer_keep_alive(RuntimeOrigin::signed(2), 3, 20));
 	});
 }
