@@ -1505,6 +1505,8 @@ pub mod pallet {
 	pub type GlobalMaxCommission<T: Config> = StorageValue<_, Perbill, OptionQuery>;
 
 	/// Active members.
+	///
+	/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
 	#[pallet::storage]
 	pub type PoolMembers<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, PoolMember<T>>;
@@ -2845,12 +2847,17 @@ impl<T: Config> Pallet<T> {
 
 		for id in reward_pools {
 			let account = Self::create_reward_account(id);
-			assert!(
-				T::Currency::free_balance(&account) >= T::Currency::minimum_balance(),
-				"reward pool of {id}: {:?} (ed = {:?})",
-				T::Currency::free_balance(&account),
-				T::Currency::minimum_balance()
-			);
+			if T::Currency::free_balance(&account) < T::Currency::minimum_balance() {
+				log!(
+					warn,
+					"reward pool of {:?}: {:?} (ed = {:?}), should only happen because ED has \
+					changed recently. Pool operators should be notified to top up the reward \
+					account",
+					id,
+					T::Currency::free_balance(&account),
+					T::Currency::minimum_balance(),
+				)
+			}
 		}
 
 		let mut pools_members = BTreeMap::<PoolId, u32>::new();

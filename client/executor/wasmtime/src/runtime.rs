@@ -30,6 +30,7 @@ use sc_executor_common::{
 	runtime_blob::{
 		self, DataSegmentsSnapshot, ExposedMutableGlobalsSet, GlobalsSnapshot, RuntimeBlob,
 	},
+	util::checked_range,
 	wasm_runtime::{InvokeMethod, WasmInstance, WasmModule},
 };
 use sp_runtime_interface::unpack_ptr_and_len;
@@ -41,7 +42,7 @@ use std::{
 		Arc,
 	},
 };
-use wasmtime::{Engine, Memory, StoreLimits, Table};
+use wasmtime::{AsContext, Engine, Memory, StoreLimits, Table};
 
 pub(crate) struct StoreData {
 	/// The limits we apply to the store. We need to store it here to return a reference to this
@@ -793,7 +794,19 @@ fn extract_output_data(
 	output_ptr: u32,
 	output_len: u32,
 ) -> Result<Vec<u8>> {
+	let ctx = instance.store();
+
+	// Do a length check before allocating. The returned output should not be bigger than the
+	// available WASM memory. Otherwise, a malicious parachain can trigger a large allocation,
+	// potentially causing memory exhaustion.
+	//
+	// Get the size of the WASM memory in bytes.
+	let memory_size = ctx.as_context().data().memory().data_size(ctx);
+	if checked_range(output_ptr as usize, output_len as usize, memory_size).is_none() {
+		Err(WasmError::Other("output exceeds bounds of wasm memory".into()))?
+	}
 	let mut output = vec![0; output_len as usize];
-	util::read_memory_into(instance.store(), Pointer::new(output_ptr), &mut output)?;
+
+	util::read_memory_into(ctx, Pointer::new(output_ptr), &mut output)?;
 	Ok(output)
 }

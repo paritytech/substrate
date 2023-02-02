@@ -25,7 +25,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, NumberFor, One, SaturatedConversion, Zero},
 };
 
-use sc_client_api::{BlockBackend, UsageProvider};
+use sc_client_api::{BlockBackend, HeaderBackend, UsageProvider};
 use std::{io::Write, pin::Pin, sync::Arc, task::Poll};
 
 /// Performs the blocks export.
@@ -37,7 +37,7 @@ pub fn export_blocks<B, C>(
 	binary: bool,
 ) -> Pin<Box<dyn Future<Output = Result<(), Error>>>>
 where
-	C: BlockBackend<B> + UsageProvider<B> + 'static,
+	C: HeaderBackend<B> + BlockBackend<B> + UsageProvider<B> + 'static,
 	B: BlockT,
 {
 	let mut block = from;
@@ -75,7 +75,12 @@ where
 			wrote_header = true;
 		}
 
-		match client.block(&BlockId::number(block))? {
+		match client
+			.block_hash_from_id(&BlockId::number(block))?
+			.map(|hash| client.block(hash))
+			.transpose()?
+			.flatten()
+		{
 			Some(block) =>
 				if binary {
 					output.write_all(&block.encode())?;
@@ -83,7 +88,6 @@ where
 					serde_json::to_writer(&mut output, &block)
 						.map_err(|e| format!("Error writing JSON: {}", e))?;
 				},
-			// Reached end of the chain.
 			None => return Poll::Ready(Ok(())),
 		}
 		if (block % 10000u32.into()).is_zero() {

@@ -127,6 +127,20 @@ pub trait Mutate<AccountId, ItemConfig>: Inspect<AccountId> {
 	) -> DispatchResult {
 		key.using_encoded(|k| value.using_encoded(|v| Self::set_attribute(item, k, v)))
 	}
+
+	/// Clear attribute of `item`'s `key`.
+	///
+	/// By default, this is not a supported operation.
+	fn clear_attribute(_item: &Self::ItemId, _key: &[u8]) -> DispatchResult {
+		Err(TokenError::Unsupported.into())
+	}
+
+	/// Attempt to clear the strongly-typed attribute of `item`'s `key`.
+	///
+	/// By default this just attempts to use `clear_attribute`.
+	fn clear_typed_attribute<K: Encode>(item: &Self::ItemId, key: &K) -> DispatchResult {
+		key.using_encoded(|k| Self::clear_attribute(item, k))
+	}
 }
 
 /// Trait for transferring a non-fungible item.
@@ -232,6 +246,16 @@ impl<
 			item,
 			key,
 			value,
+		)
+	}
+	fn clear_attribute(item: &Self::ItemId, key: &[u8]) -> DispatchResult {
+		<F as nonfungibles::Mutate<AccountId, ItemConfig>>::clear_attribute(&A::get(), item, key)
+	}
+	fn clear_typed_attribute<K: Encode>(item: &Self::ItemId, key: &K) -> DispatchResult {
+		<F as nonfungibles::Mutate<AccountId, ItemConfig>>::clear_typed_attribute(
+			&A::get(),
+			item,
+			key,
 		)
 	}
 }

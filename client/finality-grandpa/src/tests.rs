@@ -20,6 +20,7 @@
 
 use super::*;
 use assert_matches::assert_matches;
+use async_trait::async_trait;
 use environment::HasVoted;
 use futures_timer::Delay;
 use parking_lot::{Mutex, RwLock};
@@ -33,8 +34,7 @@ use sc_network_test::{
 	PeersFullClient, TestClient, TestNetFactory,
 };
 use sp_api::{ApiRef, ProvideRuntimeApi};
-use sp_blockchain::Result;
-use sp_consensus::BlockOrigin;
+use sp_consensus::{BlockOrigin, Error as ConsensusError, SelectChain};
 use sp_core::H256;
 use sp_finality_grandpa::{
 	AuthorityList, EquivocationProof, GrandpaApi, OpaqueKeyOwnershipProof, GRANDPA_ENGINE_ID,
@@ -200,8 +200,47 @@ sp_api::mock_impl_runtime_apis! {
 }
 
 impl GenesisAuthoritySetProvider<Block> for TestApi {
-	fn get(&self) -> Result<AuthorityList> {
+	fn get(&self) -> sp_blockchain::Result<AuthorityList> {
 		Ok(self.genesis_authorities.clone())
+	}
+}
+
+/// A mock `SelectChain` that allows the user to set the return values for each
+/// method. After the `SelectChain` methods are called the pending value is
+/// discarded and another call to set new values must be performed.
+#[derive(Clone, Default)]
+struct MockSelectChain {
+	leaves: Arc<Mutex<Option<Vec<Hash>>>>,
+	best_chain: Arc<Mutex<Option<<Block as BlockT>::Header>>>,
+	finality_target: Arc<Mutex<Option<Hash>>>,
+}
+
+impl MockSelectChain {
+	fn set_best_chain(&self, best: <Block as BlockT>::Header) {
+		*self.best_chain.lock() = Some(best);
+	}
+
+	fn set_finality_target(&self, target: Hash) {
+		*self.finality_target.lock() = Some(target);
+	}
+}
+
+#[async_trait]
+impl SelectChain<Block> for MockSelectChain {
+	async fn leaves(&self) -> Result<Vec<Hash>, ConsensusError> {
+		Ok(self.leaves.lock().take().unwrap())
+	}
+
+	async fn best_chain(&self) -> Result<<Block as BlockT>::Header, ConsensusError> {
+		Ok(self.best_chain.lock().take().unwrap())
+	}
+
+	async fn finality_target(
+		&self,
+		_target_hash: Hash,
+		_maybe_max_number: Option<NumberFor<Block>>,
+	) -> Result<Hash, ConsensusError> {
+		Ok(self.finality_target.lock().take().unwrap())
 	}
 }
 
@@ -1291,21 +1330,16 @@ async fn voter_catches_up_to_latest_round_when_behind() {
 	future::select(test, drive_to_completion).await;
 }
 
-type TestEnvironment<N, VR> = Environment<
-	substrate_test_runtime_client::Backend,
-	Block,
-	TestClient,
-	N,
-	LongestChain<substrate_test_runtime_client::Backend, Block>,
-	VR,
->;
+type TestEnvironment<N, SC, VR> =
+	Environment<substrate_test_runtime_client::Backend, Block, TestClient, N, SC, VR>;
 
-fn test_environment<N, VR>(
+fn test_environment_with_select_chain<N, VR, SC>(
 	link: &TestLinkHalf,
 	keystore: Option<SyncCryptoStorePtr>,
 	network_service: N,
+	select_chain: SC,
 	voting_rule: VR,
-) -> TestEnvironment<N, VR>
+) -> TestEnvironment<N, SC, VR>
 where
 	N: NetworkT<Block>,
 	VR: VotingRule<Block, TestClient>,
@@ -1330,7 +1364,7 @@ where
 		authority_set: authority_set.clone(),
 		config: config.clone(),
 		client: link.client.clone(),
-		select_chain: link.select_chain.clone(),
+		select_chain,
 		set_id: authority_set.set_id(),
 		voter_set_state: set_state.clone(),
 		voters: Arc::new(authority_set.current_authorities()),
@@ -1341,6 +1375,25 @@ where
 		telemetry: None,
 		_phantom: PhantomData,
 	}
+}
+
+fn test_environment<N, VR>(
+	link: &TestLinkHalf,
+	keystore: Option<SyncCryptoStorePtr>,
+	network_service: N,
+	voting_rule: VR,
+) -> TestEnvironment<N, LongestChain<substrate_test_runtime_client::Backend, Block>, VR>
+where
+	N: NetworkT<Block>,
+	VR: VotingRule<Block, TestClient>,
+{
+	test_environment_with_select_chain(
+		link,
+		keystore,
+		network_service,
+		link.select_chain.clone(),
+		voting_rule,
+	)
 }
 
 #[tokio::test]
@@ -1452,6 +1505,77 @@ async fn grandpa_environment_respects_voting_rules() {
 			.unwrap()
 			.1,
 		21,
+	);
+}
+
+#[tokio::test]
+async fn grandpa_environment_passes_actual_best_block_to_voting_rules() {
+	// NOTE: this is a "regression" test since initially we were not passing the
+	// best block to the voting rules
+	use finality_grandpa::voter::Environment;
+
+	let peers = &[Ed25519Keyring::Alice];
+	let voters = make_ids(peers);
+
+	let mut net = GrandpaTestNet::new(TestApi::new(voters), 1, 0);
+	let peer = net.peer(0);
+	let network_service = peer.network_service().clone();
+	let link = peer.data.lock().take().unwrap();
+	let client = peer.client().as_client().clone();
+	let select_chain = MockSelectChain::default();
+
+	// add 42 blocks
+	peer.push_blocks(42, false);
+
+	// create an environment with a voting rule that always restricts votes to
+	// before the best block by 5 blocks
+	let env = test_environment_with_select_chain(
+		&link,
+		None,
+		network_service.clone(),
+		select_chain.clone(),
+		voting_rule::BeforeBestBlockBy(5),
+	);
+
+	// both best block and finality target are pointing to the same latest block,
+	// therefore we must restrict our vote on top of the given target (#21)
+	let hashof21 = client.expect_block_hash_from_id(&BlockId::Number(21)).unwrap();
+	select_chain.set_best_chain(client.expect_header(hashof21).unwrap());
+	select_chain.set_finality_target(client.expect_header(hashof21).unwrap().hash());
+
+	assert_eq!(
+		env.best_chain_containing(peer.client().info().finalized_hash)
+			.await
+			.unwrap()
+			.unwrap()
+			.1,
+		16,
+	);
+
+	// the returned finality target is already 11 blocks from the best block,
+	// therefore there should be no further restriction by the voting rule
+	let hashof10 = client.expect_block_hash_from_id(&BlockId::Number(10)).unwrap();
+	select_chain.set_best_chain(client.expect_header(hashof21).unwrap());
+	select_chain.set_finality_target(client.expect_header(hashof10).unwrap().hash());
+
+	assert_eq!(
+		env.best_chain_containing(peer.client().info().finalized_hash)
+			.await
+			.unwrap()
+			.unwrap()
+			.1,
+		10,
+	);
+
+	// returning a finality target that's higher than the best block is an
+	// inconsistent state that should be handled
+	let hashof42 = client.expect_block_hash_from_id(&BlockId::Number(42)).unwrap();
+	select_chain.set_best_chain(client.expect_header(hashof21).unwrap());
+	select_chain.set_finality_target(client.expect_header(hashof42).unwrap().hash());
+
+	assert_matches!(
+		env.best_chain_containing(peer.client().info().finalized_hash).await,
+		Err(CommandOrError::Error(Error::Safety(_)))
 	);
 }
 

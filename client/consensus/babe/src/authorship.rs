@@ -20,6 +20,7 @@
 
 use super::Epoch;
 use codec::Encode;
+use sc_consensus_epochs::Epoch as EpochT;
 use schnorrkel::{keys::PublicKey, vrf::VRFInOut};
 use sp_application_crypto::AppKey;
 use sp_consensus_babe::{
@@ -135,10 +136,15 @@ fn claim_secondary_slot(
 	keystore: &SyncCryptoStorePtr,
 	author_secondary_vrf: bool,
 ) -> Option<(PreDigest, AuthorityId)> {
-	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
+	let Epoch { authorities, randomness, mut epoch_index, .. } = epoch;
 
 	if authorities.is_empty() {
 		return None
+	}
+
+	if epoch.end_slot() <= slot {
+		// Slot doesn't strictly belong to the epoch, create a clone with fixed values.
+		epoch_index = epoch.clone_for_slot(slot).epoch_index;
 	}
 
 	let expected_author = secondary_slot_author(slot, authorities, *randomness)?;
@@ -146,7 +152,7 @@ fn claim_secondary_slot(
 	for (authority_id, authority_index) in keys {
 		if authority_id == expected_author {
 			let pre_digest = if author_secondary_vrf {
-				let transcript_data = make_transcript_data(randomness, slot, *epoch_index);
+				let transcript_data = make_transcript_data(randomness, slot, epoch_index);
 				let result = SyncCryptoStore::sr25519_vrf_sign(
 					&**keystore,
 					AuthorityId::ID,
@@ -238,11 +244,16 @@ fn claim_primary_slot(
 	keystore: &SyncCryptoStorePtr,
 	keys: &[(AuthorityId, usize)],
 ) -> Option<(PreDigest, AuthorityId)> {
-	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
+	let Epoch { authorities, randomness, mut epoch_index, .. } = epoch;
+
+	if epoch.end_slot() <= slot {
+		// Slot doesn't strictly belong to the epoch, create a clone with fixed values.
+		epoch_index = epoch.clone_for_slot(slot).epoch_index;
+	}
 
 	for (authority_id, authority_index) in keys {
-		let transcript = make_transcript(randomness, slot, *epoch_index);
-		let transcript_data = make_transcript_data(randomness, slot, *epoch_index);
+		let transcript = make_transcript(randomness, slot, epoch_index);
+		let transcript_data = make_transcript_data(randomness, slot, epoch_index);
 		let result = SyncCryptoStore::sr25519_vrf_sign(
 			&**keystore,
 			AuthorityId::ID,

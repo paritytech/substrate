@@ -134,7 +134,10 @@ where
 
 	/// Store or remove the value to be associated with `key` so that `get` returns the `query`.
 	pub fn set<KeyArg: EncodeLike<Key>>(key: KeyArg, q: QueryKind::Query) {
-		<Self as MapWrapper>::Map::set(key, q)
+		match QueryKind::from_query_to_optional_value(q) {
+			Some(v) => Self::insert(key, v),
+			None => Self::remove(key),
+		}
 	}
 
 	/// Swap the values of two keys.
@@ -745,6 +748,22 @@ mod test {
 
 			// Test initialize_counter.
 			assert_eq!(A::initialize_counter(), 2);
+
+			// Set non-existing.
+			A::set(30, 100);
+
+			assert_eq!(A::contains_key(30), true);
+			assert_eq!(A::get(30), 100);
+			assert_eq!(A::try_get(30), Ok(100));
+			assert_eq!(A::count(), 3);
+
+			// Set existing.
+			A::set(30, 101);
+
+			assert_eq!(A::contains_key(30), true);
+			assert_eq!(A::get(30), 101);
+			assert_eq!(A::try_get(30), Ok(101));
+			assert_eq!(A::count(), 3);
 		})
 	}
 
@@ -976,6 +995,40 @@ mod test {
 
 			// Test initialize_counter.
 			assert_eq!(B::initialize_counter(), 2);
+
+			// Set non-existing.
+			B::set(30, Some(100));
+
+			assert_eq!(B::contains_key(30), true);
+			assert_eq!(B::get(30), Some(100));
+			assert_eq!(B::try_get(30), Ok(100));
+			assert_eq!(B::count(), 3);
+
+			// Set existing.
+			B::set(30, Some(101));
+
+			assert_eq!(B::contains_key(30), true);
+			assert_eq!(B::get(30), Some(101));
+			assert_eq!(B::try_get(30), Ok(101));
+			assert_eq!(B::count(), 3);
+
+			// Unset existing.
+			B::set(30, None);
+
+			assert_eq!(B::contains_key(30), false);
+			assert_eq!(B::get(30), None);
+			assert_eq!(B::try_get(30), Err(()));
+
+			assert_eq!(B::count(), 2);
+
+			// Unset non-existing.
+			B::set(31, None);
+
+			assert_eq!(B::contains_key(31), false);
+			assert_eq!(B::get(31), None);
+			assert_eq!(B::try_get(31), Err(()));
+
+			assert_eq!(B::count(), 2);
 		})
 	}
 
