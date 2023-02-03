@@ -151,9 +151,7 @@ pub use types::*;
 
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{
-		AtLeast32BitUnsigned, Bounded, CheckedAdd, CheckedSub, Saturating, StaticLookup, Zero,
-	},
+	traits::{AtLeast32BitUnsigned, CheckedAdd, CheckedSub, Saturating, StaticLookup, Zero},
 	ArithmeticError, TokenError,
 };
 use sp_std::{borrow::Borrow, prelude::*};
@@ -427,7 +425,7 @@ pub mod pallet {
 					*amount,
 					|details| -> DispatchResult {
 						debug_assert!(
-							T::Balance::max_value() - details.supply >= *amount,
+							details.supply.checked_add(&amount).is_some(),
 							"checked in prep; qed"
 						);
 						details.supply = details.supply.saturating_add(*amount);
@@ -445,7 +443,7 @@ pub mod pallet {
 		/// Some asset class was created.
 		Created { asset_id: T::AssetId, creator: T::AccountId, owner: T::AccountId },
 		/// Some assets were issued.
-		Issued { asset_id: T::AssetId, owner: T::AccountId, total_supply: T::Balance },
+		Issued { asset_id: T::AssetId, owner: T::AccountId, amount: T::Balance },
 		/// Some assets were transferred.
 		Transferred {
 			asset_id: T::AssetId,
