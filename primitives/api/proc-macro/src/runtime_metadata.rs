@@ -50,11 +50,8 @@ pub fn generate_decl_docs(decl: &ItemTrait, crate_: &TokenStream) -> TokenStream
 		let signature = &method.sig;
 		let method_name = generate_decl_docs_getter(&signature.ident, false);
 
-		let is_changed_in = method
-			.attrs
-			.iter()
-			.find(|attr| attr.path.is_ident(CHANGED_IN_ATTRIBUTE))
-			.is_some();
+		let is_changed_in =
+			method.attrs.iter().any(|attr| attr.path.is_ident(CHANGED_IN_ATTRIBUTE));
 		// Report docs for the latest methods only.
 		if is_changed_in {
 			continue
