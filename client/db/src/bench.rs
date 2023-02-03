@@ -103,9 +103,7 @@ impl<B: BlockT> StorageIterator<HashFor<B>> for RawIter<B> {
 	fn next_key(&mut self, backend: &Self::Backend) -> Option<Result<StorageKey, Self::Error>> {
 		match self.inner.next_key(backend.state.borrow().as_ref()?) {
 			Some(Ok(key)) => {
-				self.key_tracker
-					.lock()
-					.add_read_key(self.child_trie.as_ref().map(|child_trie| &**child_trie), &key);
+				self.key_tracker.lock().add_read_key(self.child_trie.as_deref(), &key);
 				Some(Ok(key))
 			},
 			result => result,
@@ -118,9 +116,7 @@ impl<B: BlockT> StorageIterator<HashFor<B>> for RawIter<B> {
 	) -> Option<Result<(StorageKey, StorageValue), Self::Error>> {
 		match self.inner.next_pair(backend.state.borrow().as_ref()?) {
 			Some(Ok((key, value))) => {
-				self.key_tracker
-					.lock()
-					.add_read_key(self.child_trie.as_ref().map(|child_trie| &**child_trie), &key);
+				self.key_tracker.lock().add_read_key(self.child_trie.as_deref(), &key);
 				Some(Ok((key, value)))
 			},
 			result => result,
