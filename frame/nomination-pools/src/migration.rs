@@ -17,23 +17,37 @@
 
 use super::*;
 use crate::log;
-use frame_support::traits::OnRuntimeUpgrade;
+use crate::{BalanceOf, Config, Event, Pallet, PoolId, PoolState};
+use codec::Decode;
+use frame_support::{
+	traits::{GetStorageVersion, OnRuntimeUpgrade},
+	weights::Weight,
+};
+use sp_runtime::traits::{Saturating, Zero};
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 pub mod v1 {
 	use super::*;
 
 	#[derive(Decode)]
-	pub struct OldPoolRoles<AccountId> {
+	pub struct PoolRolesV0<AccountId> {
 		pub depositor: AccountId,
 		pub root: AccountId,
 		pub nominator: AccountId,
 		pub state_toggler: AccountId,
 	}
 
-	impl<AccountId> OldPoolRoles<AccountId> {
-		fn migrate_to_v1(self) -> PoolRoles<AccountId> {
-			PoolRoles {
+	#[derive(Decode)]
+	pub struct PoolRolesV1<AccountId> {
+		pub depositor: AccountId,
+		pub root: Option<AccountId>,
+		pub nominator: Option<AccountId>,
+		pub state_toggler: Option<AccountId>,
+	}
+
+	impl<AccountId> PoolRolesV0<AccountId> {
+		fn migrate_to_v1(self) -> PoolRolesV1<AccountId> {
+			PoolRolesV1 {
 				depositor: self.depositor,
 				root: Some(self.root),
 				nominator: Some(self.nominator),
@@ -43,23 +57,32 @@ pub mod v1 {
 	}
 
 	#[derive(Decode)]
-	pub struct OldBondedPoolInner<T: Config> {
+	pub struct BondedPoolInnerV0<T: Config> {
 		pub points: BalanceOf<T>,
 		pub state: PoolState,
 		pub member_counter: u32,
-		pub roles: OldPoolRoles<T::AccountId>,
+		pub roles: PoolRolesV0<T::AccountId>,
 	}
 
-	impl<T: Config> OldBondedPoolInner<T> {
-		fn migrate_to_v1(self) -> BondedPoolInner<T> {
+	#[derive(Decode)]
+	pub struct BondedPoolInnerV1<T: Config> {
+		pub commission: Commission<T>,
+		pub member_counter: u32,
+		pub points: BalanceOf<T>,
+		pub roles: PoolRolesV1<T::AccountId>,
+		pub state: PoolState,
+	}
+
+	impl<T: Config> BondedPoolInnerV0<T> {
+		fn migrate_to_v1(self) -> BondedPoolInnerV1<T> {
 			// Note: `commission` field not introduced to `BondedPoolInner` until
 			// migration 4.
-			BondedPoolInner {
-				points: self.points,
+			BondedPoolInnerV1 {
 				commission: Commission::default(),
 				member_counter: self.member_counter,
-				state: self.state,
+				points: self.points,
 				roles: self.roles.migrate_to_v1(),
+				state: self.state,
 			}
 		}
 	}
@@ -83,7 +106,7 @@ pub mod v1 {
 			if current == 1 && onchain == 0 {
 				// this is safe to execute on any runtime that has a bounded number of pools.
 				let mut translated = 0u64;
-				BondedPools::<T>::translate::<OldBondedPoolInner<T>, _>(|_key, old_value| {
+				BondedPools::<T>::translate::<BondedPoolInnerV0<T>, _>(|_key, old_value| {
 					translated.saturating_inc();
 					Some(old_value.migrate_to_v1())
 				});
@@ -172,17 +195,32 @@ pub mod v2 {
 	}
 
 	#[derive(Decode)]
-	pub struct OldRewardPool<B> {
+	pub struct RewardPoolV0<B> {
 		pub balance: B,
 		pub total_earnings: B,
 		pub points: U256,
 	}
 
 	#[derive(Decode)]
-	pub struct OldPoolMember<T: Config> {
+	pub struct RewardPoolV1<T: Config> {
+		last_recorded_reward_counter: T::RewardCounter,
+		last_recorded_total_payouts: BalanceOf<T>,
+		total_rewards_claimed: BalanceOf<T>,
+	}
+
+	#[derive(Decode)]
+	pub struct PoolMembersV0<T: Config> {
 		pub pool_id: PoolId,
 		pub points: BalanceOf<T>,
 		pub reward_pool_total_earnings: BalanceOf<T>,
+		pub unbonding_eras: BoundedBTreeMap<EraIndex, BalanceOf<T>, T::MaxUnbonding>,
+	}
+
+	#[derive(Decode)]
+	pub struct PoolMembersV1<T: Config> {
+		pub pool_id: PoolId,
+		pub points: BalanceOf<T>,
+		pub last_recorded_reward_counter: T::RewardCounter,
 		pub unbonding_eras: BoundedBTreeMap<EraIndex, BalanceOf<T>, T::MaxUnbonding>,
 	}
 
@@ -200,13 +238,13 @@ pub mod v2 {
 			// store each member of the pool, with their active points. In the process, migrate
 			// their data as well.
 			let mut temp_members = BTreeMap::<PoolId, Vec<(T::AccountId, BalanceOf<T>)>>::new();
-			PoolMembers::<T>::translate::<OldPoolMember<T>, _>(|key, old_member| {
+			PoolMembers::<T>::translate::<PoolMembersV0<T>, _>(|key, old_member| {
 				let id = old_member.pool_id;
 				temp_members.entry(id).or_default().push((key, old_member.points));
 
 				total_points_locked += old_member.points;
 				members_translated += 1;
-				Some(PoolMember::<T> {
+				Some(PoolMembersV1::<T> {
 					last_recorded_reward_counter: Zero::zero(),
 					pool_id: old_member.pool_id,
 					points: old_member.points,
@@ -215,105 +253,103 @@ pub mod v2 {
 			});
 
 			// translate all reward pools. In the process, do the last payout as well.
-			RewardPools::<T>::translate::<OldRewardPool<BalanceOf<T>>, _>(
-				|id, _old_reward_pool| {
-					// each pool should have at least one member.
-					let members = match temp_members.get(&id) {
-						Some(x) => x,
-						None => {
-							log!(error, "pool {} has no member! deleting it..", id);
-							return None
-						},
-					};
-					let bonded_pool = match BondedPools::<T>::get(id) {
-						Some(x) => x,
-						None => {
-							log!(error, "pool {} has no bonded pool! deleting it..", id);
-							return None
-						},
-					};
+			RewardPools::<T>::translate::<RewardPoolV0<BalanceOf<T>>, _>(|id, _old_reward_pool| {
+				// each pool should have at least one member.
+				let members = match temp_members.get(&id) {
+					Some(x) => x,
+					None => {
+						log!(error, "pool {} has no member! deleting it..", id);
+						return None;
+					},
+				};
+				let bonded_pool = match BondedPools::<T>::get(id) {
+					Some(x) => x,
+					None => {
+						log!(error, "pool {} has no bonded pool! deleting it..", id);
+						return None;
+					},
+				};
 
-					let accumulated_reward = RewardPool::<T>::current_balance(id);
-					let reward_account = Pallet::<T>::create_reward_account(id);
-					let mut sum_paid_out = BalanceOf::<T>::zero();
+				let accumulated_reward = RewardPool::<T>::current_balance(id);
+				let reward_account = Pallet::<T>::create_reward_account(id);
+				let mut sum_paid_out = BalanceOf::<T>::zero();
 
-					members
-						.into_iter()
-						.filter_map(|(who, points)| {
-							let bonded_pool = match BondedPool::<T>::get(id) {
-								Some(x) => x,
-								None => {
-									log!(error, "pool {} for member {:?} does not exist!", id, who);
-									return None
-								},
-							};
+				members
+					.into_iter()
+					.filter_map(|(who, points)| {
+						let bonded_pool = match BondedPool::<T>::get(id) {
+							Some(x) => x,
+							None => {
+								log!(error, "pool {} for member {:?} does not exist!", id, who);
+								return None;
+							},
+						};
 
-							total_value_locked += bonded_pool.points_to_balance(*points);
-							let portion = Perbill::from_rational(*points, bonded_pool.points);
-							let last_claim = portion * accumulated_reward;
+						total_value_locked += bonded_pool.points_to_balance(*points);
+						let portion = Perbill::from_rational(*points, bonded_pool.points);
+						let last_claim = portion * accumulated_reward;
 
-							log!(
-								debug,
-								"{:?} has {:?} ({:?}) of pool {} with total reward of {:?}",
-								who,
-								portion,
-								last_claim,
-								id,
-								accumulated_reward
-							);
+						log!(
+							debug,
+							"{:?} has {:?} ({:?}) of pool {} with total reward of {:?}",
+							who,
+							portion,
+							last_claim,
+							id,
+							accumulated_reward
+						);
 
-							if last_claim.is_zero() {
-								None
-							} else {
-								Some((who, last_claim))
-							}
-						})
-						.for_each(|(who, last_claim)| {
-							let outcome = T::Currency::transfer(
-								&reward_account,
-								&who,
-								last_claim,
-								ExistenceRequirement::KeepAlive,
-							);
-
-							if let Err(reason) = outcome {
-								log!(warn, "last reward claim failed due to {:?}", reason,);
-							} else {
-								sum_paid_out = sum_paid_out.saturating_add(last_claim);
-							}
-
-							Pallet::<T>::deposit_event(Event::<T>::PaidOut {
-								member: who.clone(),
-								pool_id: id,
-								payout: last_claim,
-								commission: Zero::zero(),
-							});
-						});
-
-					// this can only be because of rounding down, or because the person we
-					// wanted to pay their reward to could not accept it (dust).
-					let leftover = accumulated_reward.saturating_sub(sum_paid_out);
-					if !leftover.is_zero() {
-						// pay it all to depositor.
-						let o = T::Currency::transfer(
+						if last_claim.is_zero() {
+							None
+						} else {
+							Some((who, last_claim))
+						}
+					})
+					.for_each(|(who, last_claim)| {
+						let outcome = T::Currency::transfer(
 							&reward_account,
-							&bonded_pool.roles.depositor,
-							leftover,
+							&who,
+							last_claim,
 							ExistenceRequirement::KeepAlive,
 						);
-						log!(warn, "paying {:?} leftover to the depositor: {:?}", leftover, o);
-					}
 
-					// finally, migrate the reward pool.
-					reward_pools_translated += 1;
+						if let Err(reason) = outcome {
+							log!(warn, "last reward claim failed due to {:?}", reason,);
+						} else {
+							sum_paid_out = sum_paid_out.saturating_add(last_claim);
+						}
 
-					Some(RewardPool {
-						last_recorded_reward_counter: Zero::zero(),
-						last_recorded_total_payouts: Zero::zero(),
-						total_rewards_claimed: Zero::zero(),
-					})
-				},
-			);
+						Pallet::<T>::deposit_event(Event::<T>::PaidOut {
+							member: who.clone(),
+							pool_id: id,
+							payout: last_claim,
+							commission: Zero::zero(),
+						});
+					});
+
+				// this can only be because of rounding down, or because the person we
+				// wanted to pay their reward to could not accept it (dust).
+				let leftover = accumulated_reward.saturating_sub(sum_paid_out);
+				if !leftover.is_zero() {
+					// pay it all to depositor.
+					let o = T::Currency::transfer(
+						&reward_account,
+						&bonded_pool.roles.depositor,
+						leftover,
+						ExistenceRequirement::KeepAlive,
+					);
+					log!(warn, "paying {:?} leftover to the depositor: {:?}", leftover, o);
+				}
+
+				// finally, migrate the reward pool.
+				reward_pools_translated += 1;
+
+				Some(RewardPoolV1 {
+					last_recorded_reward_counter: Zero::zero(),
+					last_recorded_total_payouts: Zero::zero(),
+					total_rewards_claimed: Zero::zero(),
+				})
+			});
 
 			log!(
 				info,
@@ -355,8 +391,8 @@ pub mod v2 {
 			// all reward accounts must have more than ED.
 			RewardPools::<T>::iter().for_each(|(id, _)| {
 				assert!(
-					T::Currency::free_balance(&Pallet::<T>::create_reward_account(id)) >=
-						T::Currency::minimum_balance()
+					T::Currency::free_balance(&Pallet::<T>::create_reward_account(id))
+						>= T::Currency::minimum_balance()
 				)
 			});
 
@@ -458,16 +494,25 @@ pub mod v4 {
 	use super::*;
 
 	#[derive(Decode)]
-	pub struct OldBondedPoolInner<T: Config> {
+	pub struct BondedPoolInnerV0<T: Config> {
 		pub points: BalanceOf<T>,
 		pub state: PoolState,
 		pub member_counter: u32,
 		pub roles: PoolRoles<T::AccountId>,
 	}
 
-	impl<T: Config> OldBondedPoolInner<T> {
-		fn migrate_to_v4(self) -> BondedPoolInner<T> {
-			BondedPoolInner {
+	#[derive(Decode)]
+	pub struct BondedPoolInnerV1<T: Config> {
+		pub commission: Commission<T>,
+		pub member_counter: u32,
+		pub points: BalanceOf<T>,
+		pub roles: PoolRoles<T::AccountId>,
+		pub state: PoolState,
+	}
+
+	impl<T: Config> BondedPoolInnerV0<T> {
+		fn migrate_to_v4(self) -> BondedPoolInnerV1<T> {
+			BondedPoolInnerV1 {
 				commission: Commission::default(),
 				member_counter: self.member_counter,
 				points: self.points,
@@ -497,7 +542,7 @@ pub mod v4 {
 				log!(info, "Set initial global max commission to 0%");
 
 				let mut translated = 0u64;
-				BondedPools::<T>::translate::<OldBondedPoolInner<T>, _>(|_key, old_value| {
+				BondedPools::<T>::translate::<BondedPoolInnerV0<T>, _>(|_key, old_value| {
 					translated.saturating_inc();
 					Some(old_value.migrate_to_v4())
 				});
@@ -527,10 +572,10 @@ pub mod v4 {
 		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
 			// ensure all BondedPools items now contain an `inner.commission: Commission` field.
 			ensure!(
-				BondedPools::<T>::iter().all(|(_, inner)| inner.commission.current.is_none() &&
-					inner.commission.max.is_none() &&
-					inner.commission.change_rate.is_none() &&
-					inner.commission.throttle_from.is_none()),
+				BondedPools::<T>::iter().all(|(_, inner)| inner.commission.current.is_none()
+					&& inner.commission.max.is_none()
+					&& inner.commission.change_rate.is_none()
+					&& inner.commission.throttle_from.is_none()),
 				"a commission value has been incorrectly set"
 			);
 			ensure!(Pallet::<T>::on_chain_storage_version() == 4, "wrong storage version");
