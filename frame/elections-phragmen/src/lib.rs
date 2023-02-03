@@ -291,6 +291,34 @@ pub mod pallet {
 				Weight::zero()
 			}
 		}
+
+		fn integrity_test() {
+			let block_weight = T::BlockWeights::get().max_block;
+			// mind the order.
+			let election_weight = T::WeightInfo::election_phragmen(
+				T::MaxCandidates::get(),
+				T::MaxVoters::get(),
+				T::MaxVotesPerVoter::get() * T::MaxVoters::get(),
+			);
+
+			let to_seconds = |w: &Weight| {
+				w.ref_time() as f32 /
+					frame_support::weights::constants::WEIGHT_REF_TIME_PER_SECOND as f32
+			};
+			if election_weight.any_gt(block_weight) {
+				frame_support::log::error!(
+					target: LOG_TARGET,
+					"election weight {}s ({:?}) will exceed a {}s chain's block weight ({:?}) (MaxCandidates {}, MaxVoters {}, MaxVotesPerVoter {} -- tweak these parameters)",
+					election_weight,
+					to_seconds(&election_weight),
+					to_seconds(&block_weight),
+					block_weight,
+					T::MaxCandidates::get(),
+					T::MaxVoters::get(),
+					T::MaxVotesPerVoter::get(),
+				);
+			}
+		}
 	}
 
 	#[pallet::call]
