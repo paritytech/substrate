@@ -32,9 +32,13 @@ use crate::{
 /// The documentation is exposed for the runtime API metadata.
 ///
 /// This method exposes the following functions for the latest trait version:
-/// - `[TRAIT_NAME]_decl_runtime_docs`: Extract trait documentation
+/// - `trait_[TRAIT_NAME]_decl_runtime_docs`: Extract trait documentation
 /// - `[METHOD_NAME]_decl_runtime_docs`: One function for each method to extract its documentation
 pub fn generate_decl_docs(decl: &ItemTrait, crate_: &TokenStream) -> TokenStream {
+	if cfg!(feature = "no-metadata-docs") {
+		return quote!()
+	}
+
 	let mut methods = Vec::new();
 
 	for item in &decl.items {
@@ -114,8 +118,14 @@ fn generate_method_metadata(
 
 	// String method name including quotes for constructing `v15::MethodMetadata`.
 	let method_name = format!("{}", signature.ident);
-	// Function getter for the documentation.
-	let doc_getter = generate_decl_docs_getter(&signature.ident, false);
+	let docs = if cfg!(feature = "no-metadata-docs") {
+		quote!(crate_::vec![])
+	} else {
+		// Function getter for the documentation.
+		let doc_getter = generate_decl_docs_getter(&signature.ident, false);
+		quote!(#hidden_mod::#doc_getter())
+	};
+
 	let attrs = filter_cfg_attributes(&method.attrs);
 
 	Ok(quote!(
@@ -124,7 +134,7 @@ fn generate_method_metadata(
 					name: #method_name,
 					inputs: #crate_::vec![ #( #inputs, )* ],
 					output: #output,
-					docs: #hidden_mod::#doc_getter(),
+					docs: #docs,
 			}
 	))
 }
@@ -153,6 +163,12 @@ fn generate_trait_metadata(impl_: &ItemImpl, crate_: &TokenStream) -> Result<Tok
 		*segment = parse_quote!(#runtime_decl_mod);
 	}
 
+	let docs = if cfg!(feature = "no-metadata-docs") {
+		quote!(crate_::vec![])
+	} else {
+		quote!(#trait_::#trait_doc_getter())
+	};
+
 	let attrs = filter_cfg_attributes(&impl_.attrs);
 
 	let mut methods = Vec::new();
@@ -171,7 +187,7 @@ fn generate_trait_metadata(impl_: &ItemImpl, crate_: &TokenStream) -> Result<Tok
 			#crate_::metadata::v15::TraitMetadata {
 					name: #trait_name,
 					methods: #crate_::vec![ #( #methods, )* ],
-					docs: #trait_::#trait_doc_getter(),
+					docs: #docs,
 			}
 	))
 }
