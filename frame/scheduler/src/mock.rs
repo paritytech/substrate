@@ -110,6 +110,12 @@ frame_support::construct_runtime!(
 	}
 );
 
+impl Test {
+	fn runtime_metadata() -> Vec<frame_support::metadata::v15::TraitMetadata> {
+		Default::default()
+	}
+}
+
 // Scheduler must dispatch with root and no filter, this tests base filter is indeed not used.
 pub struct BaseFilter;
 impl Contains<RuntimeCall> for BaseFilter {

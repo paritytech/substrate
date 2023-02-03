@@ -348,6 +348,12 @@ frame_support::construct_runtime!(
 	}
 );
 
+impl Runtime {
+	fn runtime_metadata() -> Vec<frame_support::metadata::v15::TraitMetadata> {
+		Default::default()
+	}
+}
+
 use frame_support::weights::Weight;
 
 #[test]

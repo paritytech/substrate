@@ -1316,6 +1316,11 @@ mod tests {
 		}
 	);
 
+	impl Test {
+		fn runtime_metadata() -> Vec<frame_support::metadata::v15::TraitMetadata> {
+			Default::default()
+		}
+	}
 	pub struct ExtBuilder {
 		balance_factor: u64,
 		genesis_members: Vec<(u64, u64)>,

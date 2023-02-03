@@ -102,6 +102,12 @@ frame_support::construct_runtime!(
 	}
 );
 
+impl Test {
+	fn runtime_metadata() -> Vec<frame_support::metadata::v15::TraitMetadata> {
+		Default::default()
+	}
+}
+
 /// Author of block is always 11
 pub struct Author11;
 impl FindAuthor<AccountId> for Author11 {
