@@ -28,7 +28,7 @@ use sp_runtime::traits::Block as BlockT;
 const VERSION_KEY: &[u8] = b"beefy_auxschema_version";
 const WORKER_STATE_KEY: &[u8] = b"beefy_voter_state";
 
-const CURRENT_VERSION: u32 = 2;
+const CURRENT_VERSION: u32 = 3;
 
 pub(crate) fn write_current_version<BE: AuxStore>(backend: &BE) -> ClientResult<()> {
 	info!(target: LOG_TARGET, "🥩 write aux schema version {:?}", CURRENT_VERSION);
@@ -63,8 +63,9 @@ where
 
 	match version {
 		None => (),
-		Some(1) => return v1::migrate_from_version1::<B, _>(backend),
-		Some(2) => return load_decode::<_, PersistedState<B>>(backend, WORKER_STATE_KEY),
+		Some(1) => (), // version 1 is totally obsolete and should be simply ignored
+		Some(2) => return v2::migrate_from_version2::<B, _>(backend),
+		Some(3) => return load_decode::<_, PersistedState<B>>(backend, WORKER_STATE_KEY),
 		other =>
 			return Err(ClientError::Backend(format!("Unsupported BEEFY DB version: {:?}", other))),
 	}
@@ -73,7 +74,7 @@ where
 	Ok(None)
 }
 
-mod v1 {
+mod v2 {
 	use super::*;
 	use crate::{round::RoundTracker, worker::PersistedState, Rounds};
 	use beefy_primitives::{
@@ -167,7 +168,7 @@ mod v1 {
 		}
 	}
 
-	pub(super) fn migrate_from_version1<B: BlockT, BE>(
+	pub(super) fn migrate_from_version2<B: BlockT, BE>(
 		backend: &BE,
 	) -> ClientResult<Option<PersistedState<B>>>
 	where

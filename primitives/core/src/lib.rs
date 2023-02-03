@@ -165,7 +165,7 @@ impl sp_std::str::FromStr for Bytes {
 }
 
 /// Stores the encoded `RuntimeMetadata` for the native side as opaque type.
-#[derive(Encode, Decode, PartialEq)]
+#[derive(Encode, Decode, PartialEq, TypeInfo)]
 pub struct OpaqueMetadata(Vec<u8>);
 
 impl OpaqueMetadata {

@@ -20,7 +20,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_benchmarking::v1::benchmarks;
+use frame_benchmarking::v1::{benchmarks, BenchmarkError};
 use frame_support::{ensure, traits::EnsureOrigin};
 
 #[cfg(test)]
@@ -28,7 +28,8 @@ use crate::Pallet as Whitelist;
 
 benchmarks! {
 	whitelist_call {
-		let origin = T::WhitelistOrigin::successful_origin();
+		let origin =
+			T::WhitelistOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		let call_hash = Default::default();
 	}: _<T::RuntimeOrigin>(origin, call_hash)
 	verify {
@@ -43,7 +44,8 @@ benchmarks! {
 	}
 
 	remove_whitelisted_call {
-		let origin = T::WhitelistOrigin::successful_origin();
+		let origin =
+			T::WhitelistOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		let call_hash = Default::default();
 		Pallet::<T>::whitelist_call(origin.clone(), call_hash)
 			.expect("whitelisting call must be successful");
@@ -70,7 +72,8 @@ benchmarks! {
 		// NOTE: we remove `10` because we need some bytes to encode the variants and vec length
 		let n in 1 .. T::Preimages::MAX_LENGTH as u32 - 10;
 
-		let origin = T::DispatchWhitelistedOrigin::successful_origin();
+		let origin = T::DispatchWhitelistedOrigin::try_successful_origin()
+			.map_err(|_| BenchmarkError::Weightless)?;
 		let remark = sp_std::vec![1u8; n as usize];
 		let call: <T as Config>::RuntimeCall = frame_system::Call::remark { remark }.into();
 		let call_weight = call.get_dispatch_info().weight;
@@ -98,7 +101,8 @@ benchmarks! {
 	dispatch_whitelisted_call_with_preimage {
 		let n in 1 .. 10_000;
 
-		let origin = T::DispatchWhitelistedOrigin::successful_origin();
+		let origin = T::DispatchWhitelistedOrigin::try_successful_origin()
+			.map_err(|_| BenchmarkError::Weightless)?;
 		let remark = sp_std::vec![1u8; n as usize];
 
 		let call: <T as Config>::RuntimeCall = frame_system::Call::remark { remark }.into();
