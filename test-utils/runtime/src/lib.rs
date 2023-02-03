@@ -973,6 +973,10 @@ cfg_if! {
 			}
 
 			impl beefy_primitives::BeefyApi<Block> for Runtime {
+				fn beefy_genesis() -> Option<BlockNumber> {
+					None
+				}
+
 				fn validator_set() -> Option<beefy_primitives::ValidatorSet<beefy_primitives::crypto::AuthorityId>> {
 					None
 				}
