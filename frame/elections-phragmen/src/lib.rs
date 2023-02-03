@@ -305,6 +305,7 @@ pub mod pallet {
 				w.ref_time() as f32 /
 					frame_support::weights::constants::WEIGHT_REF_TIME_PER_SECOND as f32
 			};
+
 			if election_weight.any_gt(block_weight) {
 				frame_support::log::error!(
 					target: LOG_TARGET,
