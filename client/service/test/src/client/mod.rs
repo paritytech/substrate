@@ -347,7 +347,20 @@ fn block_builder_works_with_transactions() {
 		.expect("block 1 was just imported. qed");
 
 	assert_eq!(client.chain_info().best_number, 1);
-	assert_ne!(client.state_at(hash1).unwrap().pairs(), client.state_at(hash0).unwrap().pairs());
+	assert_ne!(
+		client
+			.state_at(hash1)
+			.unwrap()
+			.pairs(Default::default())
+			.unwrap()
+			.collect::<Vec<_>>(),
+		client
+			.state_at(hash0)
+			.unwrap()
+			.pairs(Default::default())
+			.unwrap()
+			.collect::<Vec<_>>()
+	);
 	assert_eq!(
 		client
 			.runtime_api()
@@ -406,8 +419,18 @@ fn block_builder_does_not_include_invalid() {
 
 	assert_eq!(client.chain_info().best_number, 1);
 	assert_ne!(
-		client.state_at(hashof1).unwrap().pairs(),
-		client.state_at(hashof0).unwrap().pairs()
+		client
+			.state_at(hashof1)
+			.unwrap()
+			.pairs(Default::default())
+			.unwrap()
+			.collect::<Vec<_>>(),
+		client
+			.state_at(hashof0)
+			.unwrap()
+			.pairs(Default::default())
+			.unwrap()
+			.collect::<Vec<_>>()
 	);
 	assert_eq!(client.body(hashof1).unwrap().unwrap().len(), 1)
 }
