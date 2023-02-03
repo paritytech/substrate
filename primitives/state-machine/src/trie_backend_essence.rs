@@ -606,7 +606,7 @@ where
 
 		let trie_iter = self
 			.with_trie_db(root, args.child_info.as_ref(), |db| {
-				let prefix = args.prefix.as_ref().map(|prefix| &**prefix).unwrap_or(&[]);
+				let prefix = args.prefix.as_deref().unwrap_or(&[]);
 				if let Some(start_at) = args.start_at {
 					TrieDBRawIterator::new_prefixed_then_seek(db, prefix, &start_at)
 				} else {

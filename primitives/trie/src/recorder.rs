@@ -148,7 +148,7 @@ struct TrieRecorder<H: Hasher, I> {
 impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecorder<H::Out>
 	for TrieRecorder<H, I>
 {
-	fn record<'b>(&mut self, access: TrieAccess<'b, H::Out>) {
+	fn record(&mut self, access: TrieAccess<H::Out>) {
 		let mut encoded_size_update = 0;
 
 		match access {
