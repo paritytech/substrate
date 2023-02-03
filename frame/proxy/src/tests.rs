@@ -289,6 +289,23 @@ fn announcer_must_be_proxy() {
 }
 
 #[test]
+fn calling_proxy_doesnt_remove_announcement() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Proxy::add_proxy(RuntimeOrigin::signed(1), 2, ProxyType::Any, 0));
+
+		let call = Box::new(call_transfer(6, 1));
+		let call_hash = BlakeTwo256::hash_of(&call);
+
+		assert_ok!(Proxy::announce(RuntimeOrigin::signed(2), 1, call_hash));
+		assert_ok!(Proxy::proxy(RuntimeOrigin::signed(2), 1, None, call));
+
+		// The announcement is not removed by calling proxy.
+		let announcements = Announcements::<Test>::get(2);
+		assert_eq!(announcements.0, vec![Announcement { real: 1, call_hash, height: 1 }]);
+	});
+}
+
+#[test]
 fn delayed_requires_pre_announcement() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Proxy::add_proxy(RuntimeOrigin::signed(1), 2, ProxyType::Any, 1));

@@ -543,14 +543,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "beefy-merkle-tree"
+name = "binary-merkle-tree"
 version = "4.0.0-dev"
 dependencies = [
  "array-bytes",
  "env_logger",
+ "hash-db",
  "log",
- "sp-api",
- "sp-beefy",
+ "sp-core",
  "sp-runtime",
 ]
 
@@ -5502,7 +5502,7 @@ name = "pallet-beefy-mmr"
 version = "4.0.0-dev"
 dependencies = [
  "array-bytes",
- "beefy-merkle-tree",
+ "binary-merkle-tree",
  "frame-support",
  "frame-system",
  "log",
@@ -5512,6 +5512,7 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
+ "sp-api",
  "sp-beefy",
  "sp-core",
  "sp-io",
@@ -5617,6 +5618,7 @@ version = "7.0.0"
 dependencies = [
  "bitflags",
  "parity-scale-codec",
+ "scale-info",
  "sp-runtime",
  "sp-std",
  "sp-weights",
@@ -8154,6 +8156,7 @@ dependencies = [
  "sc-network",
  "sc-network-test",
  "sc-telemetry",
+ "scale-info",
  "schnorrkel",
  "sp-api",
  "sp-application-crypto",
@@ -9962,6 +9965,7 @@ dependencies = [
  "futures",
  "impl-trait-for-tuples",
  "parity-scale-codec",
+ "scale-info",
  "sp-core",
  "sp-runtime",
  "sp-std",
@@ -10703,7 +10707,6 @@ dependencies = [
 name = "substrate-test-runtime"
 version = "2.0.0"
 dependencies = [
- "beefy-merkle-tree",
  "cfg-if",
  "frame-support",
  "frame-system",
@@ -10712,6 +10715,7 @@ dependencies = [
  "log",
  "memory-db",
  "pallet-babe",
+ "pallet-beefy-mmr",
  "pallet-timestamp",
  "parity-scale-codec",
  "sc-block-builder",

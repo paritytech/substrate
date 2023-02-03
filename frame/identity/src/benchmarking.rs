@@ -22,7 +22,7 @@
 use super::*;
 
 use crate::Pallet as Identity;
-use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller};
+use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller, BenchmarkError};
 use frame_support::{
 	ensure,
 	traits::{EnsureOrigin, Get},
@@ -42,7 +42,8 @@ fn add_registrars<T: Config>(r: u32) -> Result<(), &'static str> {
 		let registrar: T::AccountId = account("registrar", i, SEED);
 		let registrar_lookup = T::Lookup::unlookup(registrar.clone());
 		let _ = T::Currency::make_free_balance_be(&registrar, BalanceOf::<T>::max_value());
-		let registrar_origin = T::RegistrarOrigin::successful_origin();
+		let registrar_origin = T::RegistrarOrigin::try_successful_origin()
+			.expect("RegistrarOrigin has no successful origin required for the benchmark");
 		Identity::<T>::add_registrar(registrar_origin, registrar_lookup)?;
 		Identity::<T>::set_fee(RawOrigin::Signed(registrar.clone()).into(), i, 10u32.into())?;
 		let fields =
@@ -121,7 +122,8 @@ benchmarks! {
 	add_registrar {
 		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 		ensure!(Registrars::<T>::get().len() as u32 == r, "Registrars not set up correctly.");
-		let origin = T::RegistrarOrigin::successful_origin();
+		let origin =
+			T::RegistrarOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		let account = T::Lookup::unlookup(account("registrar", r + 1, SEED));
 	}: _<T::RuntimeOrigin>(origin, account)
 	verify {
@@ -280,7 +282,8 @@ benchmarks! {
 
 		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 
-		let registrar_origin = T::RegistrarOrigin::successful_origin();
+		let registrar_origin = T::RegistrarOrigin::try_successful_origin()
+			.expect("RegistrarOrigin has no successful origin required for the benchmark");
 		Identity::<T>::add_registrar(registrar_origin, caller_lookup)?;
 		let registrars = Registrars::<T>::get();
 		ensure!(registrars[r as usize].as_ref().unwrap().fee == 0u32.into(), "Fee already set.");
@@ -297,7 +300,8 @@ benchmarks! {
 
 		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 
-		let registrar_origin = T::RegistrarOrigin::successful_origin();
+		let registrar_origin = T::RegistrarOrigin::try_successful_origin()
+			.expect("RegistrarOrigin has no successful origin required for the benchmark");
 		Identity::<T>::add_registrar(registrar_origin, caller_lookup)?;
 		let registrars = Registrars::<T>::get();
 		ensure!(registrars[r as usize].as_ref().unwrap().account == caller, "id not set.");
@@ -315,7 +319,8 @@ benchmarks! {
 
 		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 
-		let registrar_origin = T::RegistrarOrigin::successful_origin();
+		let registrar_origin = T::RegistrarOrigin::try_successful_origin()
+			.expect("RegistrarOrigin has no successful origin required for the benchmark");
 		Identity::<T>::add_registrar(registrar_origin, caller_lookup)?;
 		let fields = IdentityFields(
 			IdentityField::Display | IdentityField::Legal | IdentityField::Web | IdentityField::Riot
@@ -347,7 +352,8 @@ benchmarks! {
 		let info_hash = T::Hashing::hash_of(&info);
 		Identity::<T>::set_identity(user_origin.clone(), Box::new(info))?;
 
-		let registrar_origin = T::RegistrarOrigin::successful_origin();
+		let registrar_origin = T::RegistrarOrigin::try_successful_origin()
+			.expect("RegistrarOrigin has no successful origin required for the benchmark");
 		Identity::<T>::add_registrar(registrar_origin, caller_lookup)?;
 		Identity::<T>::request_judgement(user_origin, r, 10u32.into())?;
 	}: _(RawOrigin::Signed(caller), r, user_lookup, Judgement::Reasonable, info_hash)
@@ -385,7 +391,8 @@ benchmarks! {
 			)?;
 		}
 		ensure!(IdentityOf::<T>::contains_key(&target), "Identity not set");
-		let origin = T::ForceOrigin::successful_origin();
+		let origin =
+			T::ForceOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	}: _<T::RuntimeOrigin>(origin, target_lookup)
 	verify {
 		ensure!(!IdentityOf::<T>::contains_key(&target), "Identity not removed");

@@ -297,7 +297,7 @@ pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
 }
 
 /// A type that can not be decoded.
-#[derive(PartialEq)]
+#[derive(PartialEq, TypeInfo)]
 pub struct DecodeFails<B: BlockT> {
 	_phantom: PhantomData<B>,
 }
@@ -978,7 +978,7 @@ cfg_if! {
 				}
 			}
 
-			impl beefy_merkle_tree::BeefyMmrApi<Block, beefy_primitives::MmrRootHash> for Runtime {
+			impl pallet_beefy_mmr::BeefyMmrApi<Block, beefy_primitives::MmrRootHash> for Runtime {
 				fn authority_set_proof() -> beefy_primitives::mmr::BeefyAuthoritySet<beefy_primitives::MmrRootHash> {
 					Default::default()
 				}
