@@ -328,7 +328,7 @@ use frame_support::{
 		Currency, Defensive, DefensiveOption, DefensiveResult, DefensiveSaturating,
 		ExistenceRequirement, Get,
 	},
-	DefaultNoBound,
+	DefaultNoBound, PalletError,
 };
 use scale_info::TypeInfo;
 use sp_core::U256;
@@ -394,6 +394,23 @@ enum BondType {
 	Create,
 	/// Someone is adding more funds later to this pool.
 	Later,
+}
+
+#[derive(Debug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo, PalletError)]
+pub enum CommissionError {
+	/// Commission change has been throttled.
+	CommissionChangeThrottled,
+	// Commission exceeds the pool's maximum commission.
+	CommissionExceedsMaximum,
+}
+
+impl<T> From<CommissionError> for Error<T> {
+	fn from(t: CommissionError) -> Self {
+		match t {
+			CommissionError::CommissionChangeThrottled => Error::<T>::CommissionChangeThrottled,
+			CommissionError::CommissionExceedsMaximum => Error::<T>::CommissionExceedsMaximum,
+		}
+	}
 }
 
 /// How to increase the bond of a member.
@@ -667,14 +684,17 @@ impl<T: Config> Commission<T> {
 	/// Update commission based on `current`. If a `None` is supplied, allow the commission to be
 	/// removed without any change rate restrictions. Updates `throttle_from` to the current block.
 	/// If the supplied commission is zero, `None` will be inserted and `payee` will be ignored.
-	fn try_update_current(&mut self, current: &Option<(Perbill, T::AccountId)>) -> DispatchResult {
+	fn try_update_current(
+		&mut self,
+		current: &Option<(Perbill, T::AccountId)>,
+	) -> Result<(), CommissionError> {
 		self.current = match current {
 			None => None,
 			Some((commission, payee)) => {
-				ensure!(!self.throttling(&commission), Error::<T>::CommissionChangeThrottled);
+				ensure!(!self.throttling(&commission), CommissionError::CommissionChangeThrottled);
 				ensure!(
 					self.max.map_or(true, |m| commission <= &m),
-					Error::<T>::CommissionExceedsMaximum
+					CommissionError::CommissionExceedsMaximum
 				);
 				if commission.is_zero() {
 					None
@@ -1727,7 +1747,8 @@ pub mod pallet {
 		InvalidPoolId,
 	}
 
-	#[derive(Encode, Decode, PartialEq, TypeInfo, frame_support::PalletError, RuntimeDebug)]
+
+	#[derive(Encode, Decode, PartialEq, TypeInfo, PalletError, RuntimeDebug)]
 	pub enum DefensiveError {
 		/// There isn't enough space in the unbond pool.
 		NotEnoughSpaceInUnbondPool,
@@ -2391,7 +2412,12 @@ pub mod pallet {
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
 
-			bonded_pool.commission.try_update_current(&new_commission)?;
+			bonded_pool
+				.commission
+				.try_update_current(&new_commission)
+				.map_err::<Error<T>, _>(Into::into)
+				.map_err::<DispatchError, _>(Into::into)?;
+
 			bonded_pool.put();
 			Self::deposit_event(Event::<T>::PoolCommissionUpdated {
 				pool_id,
