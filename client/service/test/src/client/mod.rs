@@ -731,7 +731,7 @@ fn finality_target_on_longest_chain_with_multiple_forks() {
 	assert!(leaves.contains(&d2.hash()));
 	assert_eq!(leaves.len(), 4);
 
-	// A quite improbable hash is retuned on error
+	// On error we return a quite improbable hash
 	let error_hash = Hash::from([0xff; 32]);
 	let finality_target = |target_hash, number| match block_on(
 		longest_chain_select.finality_target(target_hash, number),
