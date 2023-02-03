@@ -1137,162 +1137,205 @@ async fn on_demand_beefy_justification_sync_with_ecdsa_n_bls_signature() {
     on_demand_beefy_justification_sync::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>().await;
 }
 
-// #[tokio::test]
-// async fn should_initialize_voter_at_genesis() {
-// 	let keys = &[Keyring::Alice];
-// 	let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-// 	let mut net = BeefyTestNet::new(1);
-// 	let backend = net.peer(0).client().as_backend();
 
-// 	// push 15 blocks with `AuthorityChange` digests every 10 blocks
-// 	let hashes = net.generate_blocks_and_sync(15, 10, &validator_set, false).await;
+async fn  should_initialize_voter_at_genesis<TKeyPair, AuthId, TSignature, TBeefyKeystore>()
+where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSignature> + 'static,
+      TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>  + 'static,
+      AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
+      TSignature:  Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq  + 'static,
+ {
+	let keys = &[Keyring::Alice];
+	let validator_set = ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(keys), 0).unwrap();
+	let mut net: BeefyTestNet<AuthId, TSignature, TBeefyKeystore> = BeefyTestNet::new(1);
+	let backend = net.peer(0).client().as_backend();
 
-// 	let mut finality = net.peer(0).client().as_client().finality_notification_stream().fuse();
+	// push 15 blocks with `AuthorityChange` digests every 10 blocks
+	let hashes = net.generate_blocks_and_sync(15, 10, &validator_set, false).await;
 
-// 	// finalize 13 without justifications
-// 	net.peer(0).client().as_client().finalize_block(hashes[13], None).unwrap();
+	let mut finality = net.peer(0).client().as_client().finality_notification_stream().fuse();
 
-// 	// load persistent state - nothing in DB, should init at session boundary
-// 	let persisted_state = voter_init_setup(&mut net, &mut finality).unwrap();
+	// finalize 13 without justifications
+	net.peer(0).client().as_client().finalize_block(hashes[13], None).unwrap();
 
-// 	// Test initialization at session boundary.
-// 	// verify voter initialized with two sessions starting at blocks 1 and 10
-// 	let sessions = persisted_state.voting_oracle().sessions();
-// 	assert_eq!(sessions.len(), 2);
-// 	assert_eq!(sessions[0].session_start(), 1);
-// 	assert_eq!(sessions[1].session_start(), 10);
-// 	let rounds = persisted_state.active_round().unwrap();
-// 	assert_eq!(rounds.session_start(), 1);
-// 	assert_eq!(rounds.validator_set_id(), validator_set.id());
+	// load persistent state - nothing in DB, should init at session boundary
+	let persisted_state = voter_init_setup(&mut net, &mut finality).unwrap();
 
-// 	// verify next vote target is mandatory block 1
-// 	assert_eq!(persisted_state.best_beefy_block(), 0);
-// 	assert_eq!(persisted_state.best_grandpa_block(), 13);
-// 	assert_eq!(
-// 		persisted_state
-// 			.voting_oracle()
-// 			.voting_target(persisted_state.best_beefy_block(), 13),
-// 		Some(1)
-// 	);
+	// Test initialization at session boundary.
+	// verify voter initialized with two sessions starting at blocks 1 and 10
+	let sessions = persisted_state.voting_oracle().sessions();
+	assert_eq!(sessions.len(), 2);
+	assert_eq!(sessions[0].session_start(), 1);
+	assert_eq!(sessions[1].session_start(), 10);
+	let rounds = persisted_state.active_round().unwrap();
+	assert_eq!(rounds.session_start(), 1);
+	assert_eq!(rounds.validator_set_id(), validator_set.id());
 
-// 	// verify state also saved to db
-// 	assert!(verify_persisted_version(&*backend));
-// 	let state = load_persistent(&*backend).unwrap().unwrap();
-// 	assert_eq!(state, persisted_state);
-// }
+	// verify next vote target is mandatory block 1
+	assert_eq!(persisted_state.best_beefy_block(), 0);
+	assert_eq!(persisted_state.best_grandpa_block(), 13);
+	assert_eq!(
+		persisted_state
+			.voting_oracle()
+			.voting_target(persisted_state.best_beefy_block(), 13),
+		Some(1)
+	);
 
-// #[tokio::test]
-// async fn should_initialize_voter_when_last_final_is_session_boundary() {
-// 	let keys = &[Keyring::Alice];
-// 	let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-// 	let mut net = BeefyTestNet::new(1);
-// 	let backend = net.peer(0).client().as_backend();
+	// verify state also saved to db
+	assert!(verify_persisted_version(&*backend));
+	let state = load_persistent(&*backend).unwrap().unwrap();
+	assert_eq!(state, persisted_state);
+}
 
-// 	// push 15 blocks with `AuthorityChange` digests every 10 blocks
-// 	let hashes = net.generate_blocks_and_sync(15, 10, &validator_set, false).await;
+#[tokio::test]
+async fn should_initialize_voter_at_genesis_with_ecdsa_signature() {
+    should_initialize_voter_at_genesis::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
+}
 
-// 	let mut finality = net.peer(0).client().as_client().finality_notification_stream().fuse();
+#[tokio::test]
+async fn should_initialize_voter_at_genesis_with_ecdsa_n_bls_signature() {
+    should_initialize_voter_at_genesis::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>().await;
+}
 
-// 	// finalize 13 without justifications
-// 	net.peer(0).client().as_client().finalize_block(hashes[13], None).unwrap();
+async fn should_initialize_voter_when_last_final_is_session_boundary<TKeyPair, AuthId, TSignature, TBeefyKeystore>()
+where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSignature> + 'static,
+      TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>  + 'static,
+      AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
+      TSignature:  Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq  + 'static,
+{
+	let keys = &[Keyring::Alice];
+	let validator_set = ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(keys), 0).unwrap();
+	let mut net: BeefyTestNet<AuthId, TSignature, TBeefyKeystore> = BeefyTestNet::new(1);
+	let backend = net.peer(0).client().as_backend();
 
-// 	// import/append BEEFY justification for session boundary block 10
-// 	let commitment = Commitment {
-// 		payload: Payload::from_single_entry(known_payloads::MMR_ROOT_ID, vec![]),
-// 		block_number: 10,
-// 		validator_set_id: validator_set.id(),
-// 	};
-// 	let justif = VersionedFinalityProof::<_, TSignature>::V1(SignedCommitment {
-// 		commitment,
-// 		signatures: vec![None],
-// 	});
-// 	backend
-// 		.append_justification(hashes[10], (BEEFY_ENGINE_ID, justif.encode()))
-// 		.unwrap();
+	// push 15 blocks with `AuthorityChange` digests every 10 blocks
+	let hashes = net.generate_blocks_and_sync(15, 10, &validator_set, false).await;
 
-// 	// Test corner-case where session boundary == last beefy finalized,
-// 	// expect rounds initialized at last beefy finalized 10.
+	let mut finality = net.peer(0).client().as_client().finality_notification_stream().fuse();
 
-// 	// load persistent state - nothing in DB, should init at session boundary
-// 	let persisted_state = voter_init_setup(&mut net, &mut finality).unwrap();
+	// finalize 13 without justifications
+	net.peer(0).client().as_client().finalize_block(hashes[13], None).unwrap();
 
-// 	// verify voter initialized with single session starting at block 10
-// 	assert_eq!(persisted_state.voting_oracle().sessions().len(), 1);
-// 	let rounds = persisted_state.active_round().unwrap();
-// 	assert_eq!(rounds.session_start(), 10);
-// 	assert_eq!(rounds.validator_set_id(), validator_set.id());
+	// import/append BEEFY justification for session boundary block 10
+	let commitment = Commitment {
+		payload: Payload::from_single_entry(known_payloads::MMR_ROOT_ID, vec![]),
+		block_number: 10,
+		validator_set_id: validator_set.id(),
+	};
+	let justif = VersionedFinalityProof::<_, TSignature>::V1(SignedCommitment {
+		commitment,
+		signatures: vec![None],
+	});
+	backend
+		.append_justification(hashes[10], (BEEFY_ENGINE_ID, justif.encode()))
+		.unwrap();
 
-// 	// verify block 10 is correctly marked as finalized
-// 	assert_eq!(persisted_state.best_beefy_block(), 10);
-// 	assert_eq!(persisted_state.best_grandpa_block(), 13);
-// 	// verify next vote target is diff-power-of-two block 12
-// 	assert_eq!(
-// 		persisted_state
-// 			.voting_oracle()
-// 			.voting_target(persisted_state.best_beefy_block(), 13),
-// 		Some(12)
-// 	);
+	// Test corner-case where session boundary == last beefy finalized,
+	// expect rounds initialized at last beefy finalized 10.
 
-// 	// verify state also saved to db
-// 	assert!(verify_persisted_version(&*backend));
-// 	let state = load_persistent(&*backend).unwrap().unwrap();
-// 	assert_eq!(state, persisted_state);
-// }
+	// load persistent state - nothing in DB, should init at session boundary
+	let persisted_state = voter_init_setup(&mut net, &mut finality).unwrap();
 
-// #[tokio::test]
-// async fn should_initialize_voter_at_latest_finalized() {
-// 	let keys = &[Keyring::Alice];
-// 	let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-// 	let mut net = BeefyTestNet::new(1);
-// 	let backend = net.peer(0).client().as_backend();
+	// verify voter initialized with single session starting at block 10
+	assert_eq!(persisted_state.voting_oracle().sessions().len(), 1);
+	let rounds = persisted_state.active_round().unwrap();
+	assert_eq!(rounds.session_start(), 10);
+	assert_eq!(rounds.validator_set_id(), validator_set.id());
 
-// 	// push 15 blocks with `AuthorityChange` digests every 10 blocks
-// 	let hashes = net.generate_blocks_and_sync(15, 10, &validator_set, false).await;
+	// verify block 10 is correctly marked as finalized
+	assert_eq!(persisted_state.best_beefy_block(), 10);
+	assert_eq!(persisted_state.best_grandpa_block(), 13);
+	// verify next vote target is diff-power-of-two block 12
+	assert_eq!(
+		persisted_state
+			.voting_oracle()
+			.voting_target(persisted_state.best_beefy_block(), 13),
+		Some(12)
+	);
 
-// 	let mut finality = net.peer(0).client().as_client().finality_notification_stream().fuse();
+	// verify state also saved to db
+	assert!(verify_persisted_version(&*backend));
+	let state = load_persistent(&*backend).unwrap().unwrap();
+	assert_eq!(state, persisted_state);
+}
 
-// 	// finalize 13 without justifications
-// 	net.peer(0).client().as_client().finalize_block(hashes[13], None).unwrap();
+#[tokio::test]
+async fn should_initialize_voter_when_last_final_is_session_boundary_with_ecdsa_signature() {
+    should_initialize_voter_when_last_final_is_session_boundary::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
+}
 
-// 	// import/append BEEFY justification for block 12
-// 	let commitment = Commitment {
-// 		payload: Payload::from_single_entry(known_payloads::MMR_ROOT_ID, vec![]),
-// 		block_number: 12,
-// 		validator_set_id: validator_set.id(),
-// 	};
-// 	let justif = VersionedFinalityProof::<_, Signature>::V1(SignedCommitment {
-// 		commitment,
-// 		signatures: vec![None],
-// 	});
-// 	backend
-// 		.append_justification(hashes[12], (BEEFY_ENGINE_ID, justif.encode()))
-// 		.unwrap();
+#[tokio::test]
+async fn should_initialize_voter_when_last_final_is_session_boundary_with_ecdsa_n_bls_signature() {
+    should_initialize_voter_when_last_final_is_session_boundary::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>().await;
+}
 
-// 	// Test initialization at last BEEFY finalized.
+async fn should_initialize_voter_at_latest_finalized<TKeyPair, AuthId, TSignature, TBeefyKeystore>()
+where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSignature> + 'static,
+      TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>  + 'static,
+      AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
+      TSignature:  Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq  + 'static,
+{
+	let keys = &[Keyring::Alice];
+	let validator_set = ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(keys), 0).unwrap();
+	let mut net: BeefyTestNet<AuthId, TSignature, TBeefyKeystore> = BeefyTestNet::new(1);
+	let backend = net.peer(0).client().as_backend();
 
-// 	// load persistent state - nothing in DB, should init at last BEEFY finalized
-// 	let persisted_state = voter_init_setup(&mut net, &mut finality).unwrap();
+	// push 15 blocks with `AuthorityChange` digests every 10 blocks
+	let hashes = net.generate_blocks_and_sync(15, 10, &validator_set, false).await;
 
-// 	// verify voter initialized with single session starting at block 12
-// 	assert_eq!(persisted_state.voting_oracle().sessions().len(), 1);
-// 	let rounds = persisted_state.active_round().unwrap();
-// 	assert_eq!(rounds.session_start(), 12);
-// 	assert_eq!(rounds.validator_set_id(), validator_set.id());
+	let mut finality = net.peer(0).client().as_client().finality_notification_stream().fuse();
 
-// 	// verify next vote target is 13
-// 	assert_eq!(persisted_state.best_beefy_block(), 12);
-// 	assert_eq!(persisted_state.best_grandpa_block(), 13);
-// 	assert_eq!(
-// 		persisted_state
-// 			.voting_oracle()
-// 			.voting_target(persisted_state.best_beefy_block(), 13),
-// 		Some(13)
-// 	);
+	// finalize 13 without justifications
+	net.peer(0).client().as_client().finalize_block(hashes[13], None).unwrap();
 
-// 	// verify state also saved to db
-// 	assert!(verify_persisted_version(&*backend));
-// 	let state = load_persistent(&*backend).unwrap().unwrap();
-// 	assert_eq!(state, persisted_state);
-// }
+	// import/append BEEFY justification for block 12
+	let commitment = Commitment {
+		payload: Payload::from_single_entry(known_payloads::MMR_ROOT_ID, vec![]),
+		block_number: 12,
+		validator_set_id: validator_set.id(),
+	};
+	let justif = VersionedFinalityProof::<_, Signature>::V1(SignedCommitment {
+		commitment,
+		signatures: vec![None],
+	});
+	backend
+		.append_justification(hashes[12], (BEEFY_ENGINE_ID, justif.encode()))
+		.unwrap();
 
+	// Test initialization at last BEEFY finalized.
+
+	// load persistent state - nothing in DB, should init at last BEEFY finalized
+	let persisted_state = voter_init_setup(&mut net, &mut finality).unwrap();
+
+	// verify voter initialized with single session starting at block 12
+	assert_eq!(persisted_state.voting_oracle().sessions().len(), 1);
+	let rounds = persisted_state.active_round().unwrap();
+	assert_eq!(rounds.session_start(), 12);
+	assert_eq!(rounds.validator_set_id(), validator_set.id());
+
+	// verify next vote target is 13
+	assert_eq!(persisted_state.best_beefy_block(), 12);
+	assert_eq!(persisted_state.best_grandpa_block(), 13);
+	assert_eq!(
+		persisted_state
+			.voting_oracle()
+			.voting_target(persisted_state.best_beefy_block(), 13),
+		Some(13)
+	);
+
+	// verify state also saved to db
+	assert!(verify_persisted_version(&*backend));
+	let state = load_persistent(&*backend).unwrap().unwrap();
+	assert_eq!(state, persisted_state);
+}
+
+
+#[tokio::test]
+async fn should_initialize_voter_at_latest_finalized_with_ecdsa_signature() {
+    should_initialize_voter_at_latest_finalized::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
+}
+
+#[tokio::test]
+async fn should_initialize_voter_at_latest_finalized_with_ecdsa_n_bls_signature() {
+    should_initialize_voter_at_latest_finalized::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>().await;
+}
 

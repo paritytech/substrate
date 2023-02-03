@@ -45,7 +45,7 @@ pub(crate) fn write_voter_state<Block: BlockT, B: AuxStore, AuthId: Encode + Dec
 	backend.insert_aux(&[(WORKER_STATE, state.encode().as_slice())], &[])
 }
 
-fn load_decode<B: AuxStore, T: Decode>(backend: &B, key: &[u8]) -> ClientResult<Option<T>> {
+fn load_decode<BE: AuxStore, T: Decode>(backend: &BE, key: &[u8]) -> ClientResult<Option<T>> {
 	match backend.get_aux(key)? {
 		None => Ok(None),
 		Some(t) => T::decode(&mut &t[..])
@@ -55,10 +55,12 @@ fn load_decode<B: AuxStore, T: Decode>(backend: &B, key: &[u8]) -> ClientResult<
 }
 
 /// Load or initialize persistent data from backend.
-pub(crate) fn load_persistent<B, BE, AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send>(backend: &BE) -> ClientResult<Option<PersistedState<B, AuthId, TSignature>>>
+pub(crate) fn load_persistent<B, BE, AuthId, TSignature>(backend: &BE) -> ClientResult<Option<PersistedState<B, AuthId, TSignature>>>
 where
 	B: BlockT,
 	BE: Backend<B>,
+    AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
+    TSignature: Encode + Decode + Debug + Clone + Sync + Send,
 {
 	let version: Option<u32> = load_decode(backend, VERSION_KEY)?;
 
@@ -76,8 +78,16 @@ where
 #[cfg(test)]
 pub(crate) mod tests {
 	use super::*;
-	use crate::tests::BeefyTestNet;
-	use sc_network_test::TestNetFactory;
+	use crate::tests::{BeefyTestNet, BeefyAuthIdMaker};
+    use sc_network_test::TestNetFactory;
+
+    use crate::keystore::{BeefyKeystore, BeefyECDSAKeystore, BeefyBLSnECDSAKeystore, tests::{SimpleKeyPair}};
+
+    use beefy_primitives::{
+	ecdsa_crypto::{AuthorityId, Public as ECDSAPublic, Signature as ECDSASignature, self, Pair as ECDSAKeyPair},
+	bls_crypto::{Public as BLSPublic, Signature as BLSSignature, self},
+    };
+
 
 	// also used in tests.rs
 	pub fn verify_persisted_version<B: BlockT, BE: Backend<B>>(backend: &BE) -> bool {
@@ -85,22 +95,39 @@ pub(crate) mod tests {
 		version == CURRENT_VERSION
 	}
 
-	// #[tokio::test]
-	// async fn should_load_persistent_sanity_checks() {
-	// 	let mut net = BeefyTestNet::new(1);
-	// 	let backend = net.peer(0).client().as_backend();
+    async fn should_load_persistent_sanity_checks()
+    // async fn should_load_persistent_sanity_checks<AuthId, TSignature, TBeefyKeystore, >()
+    // where
+    // 	TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>  + 'static,
+    // AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
+    // TSignature:  Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq  + 'static,
+    {
+		let mut net: BeefyTestNet<ECDSAPublic, ECDSASignature, BeefyECDSAKeystore> = BeefyTestNet::new(1);
+		//let mut net: BeefyTestNet<AuthId, TSignature, TBeefyKeystore> = BeefyTestNet::new(1);
+		let backend = net.peer(0).client().as_backend();
 
-	// 	// version not available in db -> None
-	// 	assert_eq!(load_persistent(&*backend).unwrap(), None);
+		// version not available in db -> None
+		assert_eq!(load_persistent(&*backend).unwrap(), None);
 
-	// 	// populate version in db
-	// 	write_current_version(&*backend).unwrap();
-	// 	// verify correct version is retrieved
-	// 	assert_eq!(load_decode(&*backend, VERSION_KEY).unwrap(), Some(CURRENT_VERSION));
+		// populate version in db
+		write_current_version(&*backend).unwrap();
+		// verify correct version is retrieved
+		assert_eq!(load_decode(&*backend, VERSION_KEY).unwrap(), Some(CURRENT_VERSION));
 
-	// 	// version is available in db but state isn't -> None
-	// 	assert_eq!(load_persistent(&*backend).unwrap(), None);
+		// version is available in db but state isn't -> None
+		assert_eq!(load_persistent(&*backend).unwrap(), None);
 
-	// 	// full `PersistedState` load is tested in `tests.rs`.
-	// }
+		// full `PersistedState` load is tested in `tests.rs`.
+	}
+
+    // #[tokio::test]
+    // async fn should_load_persistent_sanity_checks_with_ecdsa_signature() {
+    // 	should_load_persistent_sanity_checks::<ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
+    // }
+
+    // #[tokio::test]
+    // async fn should_load_persistent_sanity_checks_with_ecdsa_n_bls_signature() {
+    // 	should_load_persistent_sanity_checks::<(ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>().await;
+    // }
+
 }
