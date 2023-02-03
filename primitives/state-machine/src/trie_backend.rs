@@ -674,14 +674,16 @@ pub mod tests {
 		trie.apply_to_keys_while(None, None, Some(b"k"), |key| {
 			list.push(key.to_vec());
 			true
-		});
+		})
+		.unwrap();
 		assert_eq!(list[0..3], vec![b"key".to_vec(), b"value1".to_vec(), b"value2".to_vec(),]);
 
 		let mut list = Vec::new();
 		trie.apply_to_keys_while(None, None, Some(b""), |key| {
 			list.push(key.to_vec());
 			true
-		});
+		})
+		.unwrap();
 		assert_eq!(
 			list[0..5],
 			vec![
