@@ -919,7 +919,7 @@ benchmarks! {
 		// We benchmark versus messages containing printable ASCII codes.
 		// About 1Kb goes to the instrumented contract code instructions,
 		// whereas all the space left we use for the initialization of the debug messages data.
-		let message = (0 .. T::MaxCodeLen::get() - 1024).zip(32..127).cycle()).map(|i| i.1).collect::<Vec<_>>();
+		let message = (0 .. T::MaxCodeLen::get() - 1024).zip((32..127).cycle()).map(|i| i.1).collect::<Vec<_>>();
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory {
 				min_pages: T::Schedule::get().limits.memory_pages,
