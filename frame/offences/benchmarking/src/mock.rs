@@ -231,6 +231,12 @@ frame_support::construct_runtime!(
 	}
 );
 
+impl Test {
+	fn runtime_metadata() -> Vec<frame_support::metadata::v15::TraitMetadata> {
+		Default::default()
+	}
+}
+
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	sp_io::TestExternalities::new(t)
