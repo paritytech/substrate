@@ -17,12 +17,15 @@
 
 use crate::log;
 use codec::Decode;
-use frame_support::{traits::{OnRuntimeUpgrade, GetStorageVersion}, weights::Weight};
-use sp_runtime::traits::{Zero, Saturating};
+use frame_support::{
+	traits::{GetStorageVersion, OnRuntimeUpgrade},
+	weights::Weight,
+};
+use sp_runtime::traits::{Saturating, Zero};
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 // import items from crate with care, prefer not bringing in definitions of storage items as they
 // might change multiple times.
-use crate::{BalanceOf, Config, Pallet, PoolId, PoolState, Event};
+use crate::{BalanceOf, Config, Event, Pallet, PoolId, PoolState};
 
 pub mod v1 {
 	use super::*;
@@ -102,7 +105,7 @@ pub mod v1 {
 			if current == 1 && onchain == 0 {
 				// this is safe to execute on any runtime that has a bounded number of pools.
 				let mut translated = 0u64;
-				crate::BondedPools::<T>::translate::<BondedPoolInnerV0<T>, _>(|_key, old_value| {
+				BondedPools::<T>::translate::<BondedPoolInnerV0<T>, _>(|_key, old_value| {
 					translated.saturating_inc();
 					Some(old_value.migrate_to_v1())
 				});
@@ -130,7 +133,10 @@ pub mod v1 {
 
 pub mod v2 {
 	use super::*;
-	use frame_support::{BoundedBTreeMap, traits::{StorageVersion, ExistenceRequirement}};
+	use frame_support::{
+		traits::{ExistenceRequirement, StorageVersion},
+		BoundedBTreeMap,
+	};
 	use sp_core::U256;
 	use sp_runtime::Perbill;
 	use sp_staking::EraIndex;
@@ -201,14 +207,14 @@ pub mod v2 {
 						Some(x) => x,
 						None => {
 							log!(error, "pool {} has no member! deleting it..", id);
-							return None
+							return None;
 						},
 					};
 					let bonded_pool = match crate::BondedPools::<T>::get(id) {
 						Some(x) => x,
 						None => {
 							log!(error, "pool {} has no bonded pool! deleting it..", id);
-							return None
+							return None;
 						},
 					};
 
@@ -223,7 +229,7 @@ pub mod v2 {
 								Some(x) => x,
 								None => {
 									log!(error, "pool {} for member {:?} does not exist!", id, who);
-									return None
+									return None;
 								},
 							};
 
@@ -334,8 +340,8 @@ pub mod v2 {
 			// all reward accounts must have more than ED.
 			RewardPools::<T>::iter().for_each(|(id, _)| {
 				assert!(
-					T::Currency::free_balance(&Pallet::<T>::create_reward_account(id)) >=
-						T::Currency::minimum_balance()
+					T::Currency::free_balance(&Pallet::<T>::create_reward_account(id))
+						>= T::Currency::minimum_balance()
 				)
 			});
 
@@ -371,7 +377,7 @@ pub mod v2 {
 
 pub mod v3 {
 	use super::*;
-	use crate::{Metadata, BondedPools};
+	use crate::{BondedPools, Metadata};
 
 	/// This migration removes stale bonded-pool metadata, if any.
 	pub struct MigrateToV3<T>(sp_std::marker::PhantomData<T>);
@@ -437,11 +443,11 @@ pub mod v3 {
 pub mod v4 {
 	use sp_runtime::Perbill;
 
-use super::*;
-	use crate::{PoolRoles, Commission, GlobalMaxCommission};
+	use super::*;
+	use crate::{Commission, GlobalMaxCommission, PoolRoles};
 
 	#[derive(Decode)]
-	pub struct OldBondedPoolInner<T: Config> {
+	pub struct BondedPoolInnerV3<T: Config> {
 		pub points: BalanceOf<T>,
 		pub state: PoolState,
 		pub member_counter: u32,
@@ -449,7 +455,7 @@ use super::*;
 	}
 
 	#[derive(Decode)]
-	pub struct NewBondedPoolInner<T: Config> {
+	pub struct BondedPoolInnerV4<T: Config> {
 		pub commission: Commission<T>,
 		pub member_counter: u32,
 		pub points: BalanceOf<T>,
@@ -457,9 +463,9 @@ use super::*;
 		pub state: PoolState,
 	}
 
-	impl<T: Config> OldBondedPoolInner<T> {
-		fn migrate_to_v4(self) -> NewBondedPoolInner<T> {
-			NewBondedPoolInner {
+	impl<T: Config> BondedPoolInnerV3<T> {
+		fn migrate_to_v4(self) -> BondedPoolInnerV4<T> {
+			BondedPoolInnerV4 {
 				commission: Commission::default(),
 				member_counter: self.member_counter,
 				points: self.points,
@@ -489,7 +495,7 @@ use super::*;
 				log!(info, "Set initial global max commission to 0%");
 
 				let mut translated = 0u64;
-				crate::BondedPools::<T>::translate::<OldBondedPoolInner<T>, _>(|_key, old_value| {
+				crate::BondedPools::<T>::translate::<BondedPoolInnerV3<T>, _>(|_key, old_value| {
 					translated.saturating_inc();
 					Some(old_value.migrate_to_v4())
 				});
@@ -515,9 +521,9 @@ use super::*;
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
 			ensure!(
-				BondedPools::<T>::iter().all(|(_, inner)| inner.commission.current.is_none() &&
-					inner.commission.max.is_none() &&
-					inner.commission.throttle.is_none()),
+				BondedPools::<T>::iter().all(|(_, inner)| inner.commission.current.is_none()
+					&& inner.commission.max.is_none()
+					&& inner.commission.throttle.is_none()),
 				"a commission value has been incorrectly set"
 			);
 			ensure!(Pallet::<T>::on_chain_storage_version() == 4, "wrong storage version");
