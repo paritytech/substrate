@@ -917,10 +917,9 @@ benchmarks! {
 		// Vary size of input in kilobytes up to maximum allowed contract memory.
 		let i in 0 .. (T::Schedule::get().limits.memory_pages * 64);
 		// We benchmark versus messages containing printable ASCII codes.
-		let mut cycle = (32..127).cycle();
 		// About 1Kb goes to the instrumented contract code instructions,
 		// whereas all the space left we use for the initialization of the debug messages data.
-		let codes = (0 .. T::MaxCodeLen::get() - 1024).map(|i| cycle.next().unwrap_or(42)).collect::<Vec<_>>();
+		let message = (0 .. T::MaxCodeLen::get() - 1024).zip(32..127).cycle()).map(|i| i.1).collect::<Vec<_>>();
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory {
 				min_pages: T::Schedule::get().limits.memory_pages,
@@ -935,7 +934,7 @@ benchmarks! {
 			data_segments: vec![
 				DataSegment {
 					offset: 0,
-					value: codes,
+					value: message,
 				},
 			],
 			call_body: Some(body::plain(vec![
