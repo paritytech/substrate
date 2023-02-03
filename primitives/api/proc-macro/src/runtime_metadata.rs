@@ -20,11 +20,10 @@ use quote::quote;
 use syn::{parse_quote, ImplItemMethod, ItemImpl, ItemTrait, Path, Result};
 
 use crate::{
-	common::{CHANGED_IN_ATTRIBUTE, HIDDEN_INCLUDES_ID},
+	common::CHANGED_IN_ATTRIBUTE,
 	utils::{
-		extract_impl_trait, filter_cfg_attributes, generate_crate_access,
-		generate_decl_docs_getter, generate_runtime_mod_name_for_trait, get_doc_literals,
-		RequireQualifiedTraitPath,
+		extract_impl_trait, filter_cfg_attributes, generate_decl_docs_getter,
+		generate_runtime_mod_name_for_trait, get_doc_literals, RequireQualifiedTraitPath,
 	},
 };
 
