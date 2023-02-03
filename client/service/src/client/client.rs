@@ -1471,8 +1471,8 @@ where
 		start_key: Option<&StorageKey>,
 	) -> sp_blockchain::Result<KeysIter<B::State, Block>> {
 		let state = self.state_at(hash)?;
-		Ok(KeysIter::new(state, prefix, start_key)
-			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?)
+		KeysIter::new(state, prefix, start_key)
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
 	}
 
 	fn child_storage_keys(
@@ -1483,8 +1483,8 @@ where
 		start_key: Option<&StorageKey>,
 	) -> sp_blockchain::Result<KeysIter<B::State, Block>> {
 		let state = self.state_at(hash)?;
-		Ok(KeysIter::new_child(state, child_info, prefix, start_key)
-			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?)
+		KeysIter::new_child(state, child_info, prefix, start_key)
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
 	}
 
 	fn storage_pairs(
@@ -1494,8 +1494,8 @@ where
 		start_key: Option<&StorageKey>,
 	) -> sp_blockchain::Result<PairsIter<B::State, Block>> {
 		let state = self.state_at(hash)?;
-		Ok(PairsIter::new(state, prefix, start_key)
-			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?)
+		PairsIter::new(state, prefix, start_key)
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
 	}
 
 	fn storage(
