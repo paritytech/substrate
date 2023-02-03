@@ -309,6 +309,7 @@ where
 {
 	inner: <State as StateBackend<HashFor<Block>>>::RawIter,
 	state: State,
+	skip_if_first: Option<StorageKey>,
 }
 
 impl<State, Block> KeysIter<State, Block>
@@ -326,7 +327,12 @@ where
 		args.prefix = prefix.as_ref().map(|prefix| prefix.0.as_slice());
 		args.start_at = start_at.as_ref().map(|start_at| start_at.0.as_slice());
 
-		Ok(Self { inner: state.raw_iter(args)?, state })
+		let start_at = args.start_at;
+		Ok(Self {
+			inner: state.raw_iter(args)?,
+			state,
+			skip_if_first: start_at.map(|key| StorageKey(key.to_vec())),
+		})
 	}
 
 	/// Create a new iterator over a child storage's keys.
@@ -341,7 +347,12 @@ where
 		args.start_at = start_at.as_ref().map(|start_at| start_at.0.as_slice());
 		args.child_info = Some(child_info);
 
-		Ok(Self { inner: state.raw_iter(args)?, state })
+		let start_at = args.start_at;
+		Ok(Self {
+			inner: state.raw_iter(args)?,
+			state,
+			skip_if_first: start_at.map(|key| StorageKey(key.to_vec())),
+		})
 	}
 }
 
@@ -353,7 +364,15 @@ where
 	type Item = StorageKey;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		self.inner.next_key(&self.state)?.ok().map(StorageKey)
+		let key = self.inner.next_key(&self.state)?.ok().map(StorageKey)?;
+
+		if let Some(skipped_key) = self.skip_if_first.take() {
+			if key == skipped_key {
+				return self.next()
+			}
+		}
+
+		Some(key)
 	}
 }
 
@@ -365,6 +384,7 @@ where
 {
 	inner: <State as StateBackend<HashFor<Block>>>::RawIter,
 	state: State,
+	skip_if_first: Option<StorageKey>,
 }
 
 impl<State, Block> Iterator for PairsIter<State, Block>
@@ -375,10 +395,19 @@ where
 	type Item = (StorageKey, StorageData);
 
 	fn next(&mut self) -> Option<Self::Item> {
-		self.inner
+		let (key, value) = self
+			.inner
 			.next_pair(&self.state)?
 			.ok()
-			.map(|(key, value)| (StorageKey(key), StorageData(value)))
+			.map(|(key, value)| (StorageKey(key), StorageData(value)))?;
+
+		if let Some(skipped_key) = self.skip_if_first.take() {
+			if key == skipped_key {
+				return self.next()
+			}
+		}
+
+		Some((key, value))
 	}
 }
 
@@ -397,7 +426,12 @@ where
 		args.prefix = prefix.as_ref().map(|prefix| prefix.0.as_slice());
 		args.start_at = start_at.as_ref().map(|start_at| start_at.0.as_slice());
 
-		Ok(Self { inner: state.raw_iter(args)?, state })
+		let start_at = args.start_at;
+		Ok(Self {
+			inner: state.raw_iter(args)?,
+			state,
+			skip_if_first: start_at.map(|key| StorageKey(key.to_vec())),
+		})
 	}
 }
 

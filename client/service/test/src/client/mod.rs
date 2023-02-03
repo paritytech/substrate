@@ -1711,6 +1711,54 @@ fn storage_keys_works() {
 		]
 	);
 
+	// Starting at an empty key nothing gets skipped.
+	let res: Vec<_> = client
+		.storage_keys(block_hash, Some(&prefix), Some(&StorageKey("".into())))
+		.unwrap()
+		.take(9)
+		.map(|x| array_bytes::bytes2hex("", &x.0))
+		.collect();
+	assert_eq!(
+		res,
+		[
+			"00c232cf4e70a5e343317016dc805bf80a6a8cd8ad39958d56f99891b07851e0",
+			"085b2407916e53a86efeb8b72dbe338c4b341dab135252f96b6ed8022209b6cb",
+			"0befda6e1ca4ef40219d588a727f1271",
+			"1a560ecfd2a62c2b8521ef149d0804eb621050e3988ed97dca55f0d7c3e6aa34",
+			"1d66850d32002979d67dd29dc583af5b2ae2a1f71c1f35ad90fff122be7a3824",
+			"237498b98d8803334286e9f0483ef513098dd3c1c22ca21c4dc155b4ef6cc204",
+			"26aa394eea5630e07c48ae0c9558cef75e0621c4869aa60c02be9adcc98a0d1d",
+			"29b9db10ec5bf7907d8f74b5e60aa8140c4fbdd8127a1ee5600cb98e5ec01729",
+			"3a636f6465",
+		]
+	);
+
+	// Starting at an incomplete key nothing gets skipped.
+	let res: Vec<_> = client
+		.storage_keys(
+			block_hash,
+			Some(&prefix),
+			Some(&StorageKey(array_bytes::hex2bytes_unchecked("3a636f64"))),
+		)
+		.unwrap()
+		.take(8)
+		.map(|x| array_bytes::bytes2hex("", &x.0))
+		.collect();
+	assert_eq!(
+		res,
+		[
+			"3a636f6465",
+			"3a686561707061676573",
+			"52008686cc27f6e5ed83a216929942f8bcd32a396f09664a5698f81371934b56",
+			"5348d72ac6cc66e5d8cbecc27b0e0677503b845fe2382d819f83001781788fd5",
+			"5c2d5fda66373dabf970e4fb13d277ce91c5233473321129d32b5a8085fa8133",
+			"6644b9b8bc315888ac8e41a7968dc2b4141a5403c58acdf70b7e8f7e07bf5081",
+			"66484000ed3f75c95fc7b03f39c20ca1e1011e5999278247d3b2f5e3c3273808",
+			"7d5007603a7f5dd729d51d93cf695d6465789443bb967c0d1fe270e388c96eaa",
+		]
+	);
+
+	// Starting at a complete key the first key is skipped.
 	let res: Vec<_> = client
 		.storage_keys(
 			block_hash,
