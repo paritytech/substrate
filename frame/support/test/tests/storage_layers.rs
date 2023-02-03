@@ -125,6 +125,12 @@ frame_support::construct_runtime!(
 	}
 );
 
+impl Runtime {
+	fn runtime_metadata() -> Vec<frame_support::metadata::v15::TraitMetadata> {
+		Default::default()
+	}
+}
+
 #[test]
 fn storage_layer_basic_commit() {
 	TestExternalities::default().execute_with(|| {

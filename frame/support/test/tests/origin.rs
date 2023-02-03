@@ -167,6 +167,12 @@ frame_support::construct_runtime!(
 	}
 );
 
+impl RuntimeOriginTest {
+	fn runtime_metadata() -> Vec<frame_support::metadata::v15::TraitMetadata> {
+		Default::default()
+	}
+}
+
 pub type Signature = sr25519::Signature;
 pub type BlockNumber = u64;
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;

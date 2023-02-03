@@ -1082,6 +1082,12 @@ mod mock {
 		}
 	);
 
+	impl Test {
+		fn runtime_metadata() -> Vec<frame_support::metadata::v15::TraitMetadata> {
+			Default::default()
+		}
+	}
+
 	parameter_types! {
 		pub const SS58Prefix: u8 = 42;
 	}

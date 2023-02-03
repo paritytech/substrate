@@ -65,6 +65,12 @@ frame_support::construct_runtime!(
 	}
 );
 
+impl Runtime {
+	fn runtime_metadata() -> Vec<frame_support::metadata::v15::TraitMetadata> {
+		Default::default()
+	}
+}
+
 pub(crate) type Balance = u64;
 pub(crate) type AccountId = u64;
 pub(crate) type BlockNumber = u64;

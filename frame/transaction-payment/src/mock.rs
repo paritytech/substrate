@@ -48,6 +48,12 @@ frame_support::construct_runtime!(
 	}
 );
 
+impl Runtime {
+	fn runtime_metadata() -> Vec<frame_support::metadata::v15::TraitMetadata> {
+		Default::default()
+	}
+}
+
 pub(crate) const CALL: &<Runtime as frame_system::Config>::RuntimeCall =
 	&RuntimeCall::Balances(BalancesCall::transfer { dest: 2, value: 69 });
 

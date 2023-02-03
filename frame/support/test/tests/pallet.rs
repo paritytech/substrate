@@ -668,6 +668,12 @@ frame_support::construct_runtime!(
 	}
 );
 
+impl Runtime {
+	fn runtime_metadata() -> Vec<frame_support::metadata::v15::TraitMetadata> {
+		Default::default()
+	}
+}
+
 // Test that the part `RuntimeCall` is excluded from Example2 and included in Example4.
 fn _ensure_call_is_correctly_excluded_and_included(call: RuntimeCall) {
 	match call {
