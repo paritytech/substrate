@@ -211,6 +211,9 @@ fn payout_works() {
 #[test]
 fn basic_new_member_skeptic_works() {
 	EnvBuilder::new().execute(|| {
+		// NOTE: events are not deposited in the genesis event
+		System::set_block_number(1);
+
 		assert_eq!(Strikes::<Test>::get(10), 0);
 		assert_ok!(Society::bid(RuntimeOrigin::signed(20), 0));
 		run_to_block(4);
@@ -218,6 +221,10 @@ fn basic_new_member_skeptic_works() {
 		run_to_block(8);
 		assert_eq!(Society::members(), vec![10]);
 		assert_eq!(Strikes::<Test>::get(10), 1);
+
+		System::assert_last_event(mock::RuntimeEvent::Society(crate::Event::SkepticsChosen {
+			skeptics: vec![10],
+		}));
 	});
 }
 
