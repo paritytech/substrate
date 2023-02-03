@@ -38,7 +38,9 @@ pub struct IterArgs<'a> {
 	/// The prefix of the keys over which to iterate.
 	pub prefix: Option<&'a [u8]>,
 
-	/// The key from which to start the iteration from.
+	/// The prefix from which to start the iteration from.
+	///
+	/// This is inclusive and the iteration will include the key which is specified here.
 	pub start_at: Option<&'a [u8]>,
 
 	/// The info of the child trie over which to iterate over.
