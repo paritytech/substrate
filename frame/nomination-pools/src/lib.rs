@@ -1729,10 +1729,6 @@ pub mod pallet {
 		Defensive(DefensiveError),
 		/// Partial unbonding now allowed permissionlessly.
 		PartialUnbondNotAllowedPermissionlessly,
-		/// No commission has been set.
-		NoCommissionSet,
-		/// No account has been set to receive commission.
-		NoCommissionPayeeSet,
 		/// The pool's max commission cannot be set higher than the existing value.
 		MaxCommissionRestricted,
 		/// The supplied commission exceeds the max allowed commission.
@@ -1746,7 +1742,6 @@ pub mod pallet {
 		/// Pool id provided is not correct/usable.
 		InvalidPoolId,
 	}
-
 
 	#[derive(Encode, Decode, PartialEq, TypeInfo, PalletError, RuntimeDebug)]
 	pub enum DefensiveError {
