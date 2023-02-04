@@ -225,7 +225,7 @@ impl<T: Config> PrefabWasmModule<T> {
 		let engine = Engine::new(&config);
 		let module = Module::new(&engine, code)?;
 		let mut store = Store::new(&engine, host_state);
-		let mut linker = Linker::new();
+		let mut linker = Linker::new(&engine);
 		E::define(
 			&mut store,
 			&mut linker,
@@ -329,7 +329,7 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 			log::debug!(target: "runtime::contracts", "failed to instantiate code: {}", msg);
 			Error::<T>::CodeRejected
 		})?;
-		store.state_mut().set_memory(memory);
+		store.data_mut().set_memory(memory);
 
 		let exported_func = instance
 			.get_export(&store, function.identifier())
@@ -346,7 +346,7 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 
 		let result = exported_func.call(&mut store, &[], &mut []);
 
-		store.into_state().to_execution_result(result)
+		store.into_data().to_execution_result(result)
 	}
 
 	fn code_hash(&self) -> &CodeHash<T> {
