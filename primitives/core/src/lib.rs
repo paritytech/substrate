@@ -55,6 +55,7 @@ pub mod bounded;
 pub mod crypto;
 pub mod hexdisplay;
 
+pub mod bls;
 pub mod defer;
 pub mod ecdsa;
 pub mod ed25519;
@@ -63,7 +64,6 @@ pub mod hash;
 mod hasher;
 pub mod offchain;
 pub mod sr25519;
-pub mod bls;
 pub mod testing;
 #[cfg(feature = "std")]
 pub mod traits;

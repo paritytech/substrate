@@ -16,8 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{fmt::Debug, marker::PhantomData};
 use codec::{Decode, Encode};
+use std::{fmt::Debug, marker::PhantomData};
 
 use beefy_primitives::{BeefyApi, BEEFY_ENGINE_ID};
 use log::debug;
@@ -48,16 +48,33 @@ use crate::{
 /// Wraps a `inner: BlockImport` and ultimately defers to it.
 ///
 /// When using BEEFY, the block import worker should be using this block import object.
-pub struct BeefyBlockImport<Block: BlockT, Backend, RuntimeApi, I, AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>> {
+pub struct BeefyBlockImport<
+	Block: BlockT,
+	Backend,
+	RuntimeApi,
+	I,
+	AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+	BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
+> {
 	backend: Arc<Backend>,
 	runtime: Arc<RuntimeApi>,
 	inner: I,
 	justification_sender: BeefyVersionedFinalityProofSender<Block, TSignature>,
-	_auth_id : PhantomData::<AuthId>,
-	_keystore: PhantomData::<BKS>
+	_auth_id: PhantomData<AuthId>,
+	_keystore: PhantomData<BKS>,
 }
 
-impl<Block: BlockT, BE, Runtime, I: Clone, AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>> Clone for BeefyBlockImport<Block, BE, Runtime, I, AuthId, TSignature, BKS> {
+impl<
+		Block: BlockT,
+		BE,
+		Runtime,
+		I: Clone,
+		AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send,
+		TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+		BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
+	> Clone for BeefyBlockImport<Block, BE, Runtime, I, AuthId, TSignature, BKS>
+{
 	fn clone(&self) -> Self {
 		BeefyBlockImport {
 			backend: self.backend.clone(),
@@ -70,7 +87,16 @@ impl<Block: BlockT, BE, Runtime, I: Clone, AuthId: Encode + Decode + Debug + Clo
 	}
 }
 
-impl<Block: BlockT, BE, Runtime, I, AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>> BeefyBlockImport<Block, BE, Runtime, I, AuthId, TSignature, BKS> {
+impl<
+		Block: BlockT,
+		BE,
+		Runtime,
+		I,
+		AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send,
+		TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+		BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
+	> BeefyBlockImport<Block, BE, Runtime, I, AuthId, TSignature, BKS>
+{
 	/// Create a new BeefyBlockImport.
 	pub fn new(
 		backend: Arc<BE>,
@@ -78,17 +104,25 @@ impl<Block: BlockT, BE, Runtime, I, AuthId: Encode + Decode + Debug + Clone + Or
 		inner: I,
 		justification_sender: BeefyVersionedFinalityProofSender<Block, TSignature>,
 	) -> BeefyBlockImport<Block, BE, Runtime, I, AuthId, TSignature, BKS> {
-		BeefyBlockImport { backend, runtime, inner, justification_sender, _auth_id : PhantomData::<AuthId>, _keystore: PhantomData::<BKS>}
+		BeefyBlockImport {
+			backend,
+			runtime,
+			inner,
+			justification_sender,
+			_auth_id: PhantomData::<AuthId>,
+			_keystore: PhantomData::<BKS>,
+		}
 	}
 }
 
-impl<Block, BE, Runtime, I, AuthId, TSignature, BKS> BeefyBlockImport<Block, BE, Runtime, I, AuthId, TSignature, BKS>
+impl<Block, BE, Runtime, I, AuthId, TSignature, BKS>
+	BeefyBlockImport<Block, BE, Runtime, I, AuthId, TSignature, BKS>
 where
 	Block: BlockT,
 	BE: Backend<Block>,
 	Runtime: ProvideRuntimeApi<Block>,
 	Runtime::Api: BeefyApi<Block, AuthId> + Send,
-        AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
+	AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
 	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
 	BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
 {
@@ -106,12 +140,17 @@ where
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 			.ok_or_else(|| ConsensusError::ClientImport("Unknown validator set".to_string()))?;
 
-		decode_and_verify_finality_proof::<Block, AuthId, TSignature, BKS>(&encoded[..], number, &validator_set)
+		decode_and_verify_finality_proof::<Block, AuthId, TSignature, BKS>(
+			&encoded[..],
+			number,
+			&validator_set,
+		)
 	}
 }
 
 #[async_trait::async_trait]
-impl<Block, BE, Runtime, I, AuthId, TSignature, BKS> BlockImport<Block> for BeefyBlockImport<Block, BE, Runtime, I, AuthId, TSignature, BKS>
+impl<Block, BE, Runtime, I, AuthId, TSignature, BKS> BlockImport<Block>
+	for BeefyBlockImport<Block, BE, Runtime, I, AuthId, TSignature, BKS>
 where
 	Block: BlockT,
 	BE: Backend<Block>,
@@ -125,7 +164,7 @@ where
 	Runtime::Api: BeefyApi<Block, AuthId>,
 	AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
 	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
-        BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
+	BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
 {
 	type Error = ConsensusError;
 	type Transaction = TransactionFor<Runtime, Block>;

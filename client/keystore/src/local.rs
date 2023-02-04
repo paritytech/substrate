@@ -19,7 +19,7 @@
 
 use async_trait::async_trait;
 use parking_lot::RwLock;
-use sp_application_crypto::{ecdsa, ed25519, sr25519, bls, AppKey, AppPair, IsWrappedBy};
+use sp_application_crypto::{bls, ecdsa, ed25519, sr25519, AppKey, AppPair, IsWrappedBy};
 use sp_core::{
 	crypto::{
 		ByteArray, CryptoTypePublicPair, ExposeSecret, KeyTypeId, Pair as PairT, SecretString,
@@ -125,8 +125,6 @@ impl CryptoStore for LocalKeystore {
 	) -> std::result::Result<bls::Public, TraitError> {
 		SyncCryptoStore::bls_generate_new(self, id, seed)
 	}
-
-	
 
 	async fn insert_unknown(
 		&self,
@@ -340,8 +338,7 @@ impl SyncCryptoStore for LocalKeystore {
 		seed: Option<&str>,
 	) -> std::result::Result<bls::Public, TraitError> {
 		let pair = match seed {
-			Some(seed) =>
-				self.0.write().insert_ephemeral_from_seed_by_type::<bls::Pair>(seed, id),
+			Some(seed) => self.0.write().insert_ephemeral_from_seed_by_type::<bls::Pair>(seed, id),
 			None => self.0.write().generate_by_type::<bls::Pair>(id),
 		}
 		.map_err(|e| -> TraitError { e.into() })?;
@@ -396,12 +393,11 @@ impl SyncCryptoStore for LocalKeystore {
 		&self,
 		id: KeyTypeId,
 		public: &bls::Public,
-		msg:  &[u8],
+		msg: &[u8],
 	) -> std::result::Result<Option<bls::Signature>, TraitError> {
 		let pair = self.0.read().key_pair_by_type::<bls::Pair>(public, id)?;
 		pair.map(|k| k.sign(msg)).map(Ok).transpose()
 	}
-
 }
 
 impl Into<SyncCryptoStorePtr> for LocalKeystore {

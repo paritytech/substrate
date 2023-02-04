@@ -46,13 +46,13 @@ use sp_core::{
 use sp_keystore::{KeystoreExt, SyncCryptoStore};
 
 use sp_core::{
+	bls,
 	crypto::KeyTypeId,
 	ecdsa, ed25519,
 	offchain::{
 		HttpError, HttpRequestId, HttpRequestStatus, OpaqueNetworkState, StorageKind, Timestamp,
 	},
 	sr25519,
-    bls,
 	storage::StateVersion,
 	LogLevel, LogLevelFilter, OpaquePeerId, H256,
 };
@@ -1122,16 +1122,16 @@ pub trait Crypto {
 		Ok(pubkey.serialize())
 	}
 
-    /// Returns all `bls` public keys for the given key id from the keystore.
-    /// This is needed for beefy keystore.
-    fn bls_public_keys(&mut self, id: KeyTypeId) -> Vec<bls::Public> {
-	    let keystore = &***self
+	/// Returns all `bls` public keys for the given key id from the keystore.
+	/// This is needed for beefy keystore.
+	fn bls_public_keys(&mut self, id: KeyTypeId) -> Vec<bls::Public> {
+		let keystore = &***self
 			.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!");
 		SyncCryptoStore::bls_public_keys(keystore, id)
 	}
 
-    /// Generate an `bls12-377` key for the given key type using an optional seed and
+	/// Generate an `bls12-377` key for the given key type using an optional seed and
 	/// store it in the keystore.
 	///
 	/// The `seed` needs to be a valid utf8.
@@ -1142,8 +1142,7 @@ pub trait Crypto {
 		let keystore = &***self
 			.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!");
-		SyncCryptoStore::bls_generate_new(keystore, id, seed)
-			.expect("`bls_generate` failed")
+		SyncCryptoStore::bls_generate_new(keystore, id, seed).expect("`bls_generate` failed")
 	}
 
 	/// Sign the given `msg` with the `bls12-377` key that corresponds to the given public key and
@@ -1172,7 +1171,6 @@ pub trait Crypto {
 	fn bls_verify(sig: &bls::Signature, msg: &[u8], pubkey: &bls::Public) -> bool {
 		bls::Pair::verify(sig, msg, pubkey)
 	}
-
 }
 
 /// Interface that provides functions for hashing with different algorithms.

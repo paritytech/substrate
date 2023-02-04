@@ -1,4 +1,3 @@
-
 // This file is part of Substrate.
 
 // Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.

@@ -20,11 +20,11 @@
 
 use crate::{worker::PersistedState, LOG_TARGET};
 use codec::{Decode, Encode};
-use std::fmt::Debug;
 use log::{info, trace};
 use sc_client_api::{backend::AuxStore, Backend};
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sp_runtime::traits::Block as BlockT;
+use std::fmt::Debug;
 
 const VERSION_KEY: &[u8] = b"beefy_auxschema_version";
 const WORKER_STATE: &[u8] = b"beefy_voter_state";
@@ -37,7 +37,12 @@ pub(crate) fn write_current_version<B: AuxStore>(backend: &B) -> ClientResult<()
 }
 
 /// Write voter state.
-pub(crate) fn write_voter_state<Block: BlockT, B: AuxStore, AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send>(
+pub(crate) fn write_voter_state<
+	Block: BlockT,
+	B: AuxStore,
+	AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+>(
 	backend: &B,
 	state: &PersistedState<Block, AuthId, TSignature>,
 ) -> ClientResult<()> {
@@ -55,18 +60,21 @@ fn load_decode<BE: AuxStore, T: Decode>(backend: &BE, key: &[u8]) -> ClientResul
 }
 
 /// Load or initialize persistent data from backend.
-pub(crate) fn load_persistent<B, BE, AuthId, TSignature>(backend: &BE) -> ClientResult<Option<PersistedState<B, AuthId, TSignature>>>
+pub(crate) fn load_persistent<B, BE, AuthId, TSignature>(
+	backend: &BE,
+) -> ClientResult<Option<PersistedState<B, AuthId, TSignature>>>
 where
 	B: BlockT,
 	BE: Backend<B>,
-    AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
-    TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+	AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
 {
 	let version: Option<u32> = load_decode(backend, VERSION_KEY)?;
 
 	match version {
 		None => (),
-		Some(1) => return load_decode::<_, PersistedState<B, AuthId, TSignature>>(backend, WORKER_STATE),
+		Some(1) =>
+			return load_decode::<_, PersistedState<B, AuthId, TSignature>>(backend, WORKER_STATE),
 		other =>
 			return Err(ClientError::Backend(format!("Unsupported BEEFY DB version: {:?}", other))),
 	}
@@ -78,16 +86,15 @@ where
 #[cfg(test)]
 pub(crate) mod tests {
 	use super::*;
-	use crate::tests::{BeefyTestNet, BeefyAuthIdMaker};
-    use sc_network_test::TestNetFactory;
+	use crate::tests::{BeefyAuthIdMaker, BeefyTestNet};
+	use sc_network_test::TestNetFactory;
 
-    use crate::keystore::{BeefyKeystore, BeefyECDSAKeystore, BeefyBLSnECDSAKeystore};
+	use crate::keystore::{BeefyBLSnECDSAKeystore, BeefyECDSAKeystore, BeefyKeystore};
 
-    use beefy_primitives::{
-	ecdsa_crypto::{Public as ECDSAPublic, Signature as ECDSASignature},
-	bls_crypto::{Public as BLSPublic, Signature as BLSSignature},
-    };
-
+	use beefy_primitives::{
+		bls_crypto::{Public as BLSPublic, Signature as BLSSignature},
+		ecdsa_crypto::{Public as ECDSAPublic, Signature as ECDSASignature},
+	};
 
 	// also used in tests.rs
 	pub fn verify_persisted_version<B: BlockT, BE: Backend<B>>(backend: &BE) -> bool {
@@ -95,19 +102,29 @@ pub(crate) mod tests {
 		version == CURRENT_VERSION
 	}
 
-    //async fn should_load_persistent_sanity_checks()
-     async fn should_load_persistent_sanity_checks<AuthId, TSignature, TBeefyKeystore, >()
-     where
-     	TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>  + 'static,
-     AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
-     TSignature:  Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq  + 'static,
-    {
-		let mut net: BeefyTestNet<ECDSAPublic, ECDSASignature, BeefyECDSAKeystore> = BeefyTestNet::new(1);
+	//async fn should_load_persistent_sanity_checks()
+	async fn should_load_persistent_sanity_checks<AuthId, TSignature, TBeefyKeystore>()
+	where
+		TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
+		AuthId: Clone
+			+ Encode
+			+ Decode
+			+ Debug
+			+ Ord
+			+ Sync
+			+ Send
+			+ BeefyAuthIdMaker
+			+ std::hash::Hash
+			+ 'static,
+		TSignature: Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq + 'static,
+	{
+		let mut net: BeefyTestNet<ECDSAPublic, ECDSASignature, BeefyECDSAKeystore> =
+			BeefyTestNet::new(1);
 		//let mut net: BeefyTestNet<AuthId, TSignature, TBeefyKeystore> = BeefyTestNet::new(1);
 		let backend = net.peer(0).client().as_backend();
 
 		// version not available in db -> None
-		assert_eq!(load_persistent::<_,_,AuthId,TSignature>(&*backend).unwrap(), None);
+		assert_eq!(load_persistent::<_, _, AuthId, TSignature>(&*backend).unwrap(), None);
 
 		// populate version in db
 		write_current_version(&*backend).unwrap();
@@ -115,19 +132,24 @@ pub(crate) mod tests {
 		assert_eq!(load_decode(&*backend, VERSION_KEY).unwrap(), Some(CURRENT_VERSION));
 
 		// version is available in db but state isn't -> None
-		assert_eq!(load_persistent::<_,_,AuthId,TSignature>(&*backend).unwrap(), None);
+		assert_eq!(load_persistent::<_, _, AuthId, TSignature>(&*backend).unwrap(), None);
 
 		// full `PersistedState` load is tested in `tests.rs`.
 	}
 
-    #[tokio::test]
-    async fn should_load_persistent_sanity_checks_with_ecdsa_signature() {
-    	should_load_persistent_sanity_checks::<ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
-    }
+	#[tokio::test]
+	async fn should_load_persistent_sanity_checks_with_ecdsa_signature() {
+		should_load_persistent_sanity_checks::<ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>()
+			.await;
+	}
 
-    #[tokio::test]
-    async fn should_load_persistent_sanity_checks_with_ecdsa_n_bls_signature() {
-    	should_load_persistent_sanity_checks::<(ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>().await;
-    }
-
+	#[tokio::test]
+	async fn should_load_persistent_sanity_checks_with_ecdsa_n_bls_signature() {
+		should_load_persistent_sanity_checks::<
+			(ECDSAPublic, BLSPublic),
+			(ECDSASignature, BLSSignature),
+			BeefyBLSnECDSAKeystore,
+		>()
+		.await;
+	}
 }

@@ -38,11 +38,9 @@ use crate::crypto::{
 use crate::crypto::{DeriveJunction, Pair as TraitPair, SecretStringError};
 #[cfg(feature = "std")]
 use bip39::{Language, Mnemonic, MnemonicType};
+use bls_like::{EngineBLS, Keypair, Message, SerializableToBytes, BLS377};
 #[cfg(feature = "full_crypto")]
 use core::convert::TryFrom;
-use bls_like::{
-    BLS377, EngineBLS, Keypair, Message, SerializableToBytes,
-};
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use sp_runtime_interface::pass_by::PassByInner;
@@ -219,7 +217,7 @@ impl sp_std::convert::TryFrom<&[u8]> for Signature {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
-		if data.len() ==  BLS377::SIGNATURE_SERIALIZED_SIZE {
+		if data.len() == BLS377::SIGNATURE_SERIALIZED_SIZE {
 			let mut inner = [0u8; BLS377::SIGNATURE_SERIALIZED_SIZE];
 			inner.copy_from_slice(data);
 			Ok(Signature(inner))
@@ -321,7 +319,7 @@ impl Signature {
 	///
 	/// NOTE: No checking goes on to ensure this is a real signature. Only use it if
 	/// you are certain that the array actually is a signature. GIGO!
-	pub fn from_slice(data: &[u8]) -> Option<Self>  {
+	pub fn from_slice(data: &[u8]) -> Option<Self> {
 		let mut r = [0u8; BLS377::SIGNATURE_SERIALIZED_SIZE];
 		r.copy_from_slice(data);
 		Some(Signature(r))
@@ -462,9 +460,9 @@ impl TraitPair for Pair {
 	///
 	/// You should never need to use this; generate(), generate_with_phrase
 	fn from_seed_slice(seed_slice: &[u8]) -> Result<Pair, SecretStringError> {
-        if seed_slice.len() != BLS377::SECRET_KEY_SIZE {
-            return Err(SecretStringError::InvalidSeedLength);
-        }        
+		if seed_slice.len() != BLS377::SECRET_KEY_SIZE {
+			return Err(SecretStringError::InvalidSeedLength)
+		}
 		let secret = bls_like::SecretKey::from_seed(seed_slice);
 		let public = secret.into_public();
 		Ok(Pair(bls_like::Keypair { secret, public }))
@@ -511,16 +509,17 @@ impl TraitPair for Pair {
 	/// This doesn't use the type system to ensure that `sig` and `pubkey` are the correct
 	/// size. Use it only if you're coming from byte buffers and need the speed.
 	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool {
-        let pubkey_array : [u8; BLS377::PUBLICKEY_SERIALIZED_SIZE]  = match pubkey.as_ref().try_into() {
+		let pubkey_array: [u8; BLS377::PUBLICKEY_SERIALIZED_SIZE] = match pubkey.as_ref().try_into()
+		{
 			Ok(pk) => pk,
 			Err(_) => return false,
-        };        
+		};
 		let public_key = match bls_like::PublicKey::<BLS377>::from_bytes(&pubkey_array) {
 			Ok(pk) => pk,
 			Err(_) => return false,
 		};
-        
-		let sig_array  = match sig.try_into() {
+
+		let sig_array = match sig.try_into() {
 			Ok(s) => s,
 			Err(_) => return false,
 		};
@@ -542,7 +541,7 @@ impl TraitPair for Pair {
 impl Pair {
 	/// Get the seed for this key.
 	pub fn seed(&self) -> Seed {
-        self.0.secret.to_bytes()
+		self.0.secret.to_bytes()
 	}
 
 	/// Exactly as `from_string` except that if no matches are found then, the the first 32
@@ -556,7 +555,6 @@ impl Pair {
 			Self::from_seed(&padded_seed)
 		})
 	}
-
 }
 impl CryptoType for Public {
 	#[cfg(feature = "full_crypto")]
@@ -590,12 +588,12 @@ mod test {
 		);
 	}
 
-    //only passes if the seed = seed (mod ScalarField)
+	//only passes if the seed = seed (mod ScalarField)
 	#[test]
 	fn seed_and_derive_should_work() {
-		let seed = hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f00"); 
+		let seed = hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f00");
 		let pair = Pair::from_seed(&seed);
-        // we are using hash to field so this is not going to work
+		// we are using hash to field so this is not going to work
 		// assert_eq!(pair.seed(), seed);
 		let path = vec![DeriveJunction::Hard([0u8; 32])];
 		let derived = pair.derive(path.into_iter(), None).ok().unwrap().0;
@@ -661,7 +659,8 @@ mod test {
 		let public = pair.public();
 		assert_eq!(
 			public,
-			Public::from_raw(hex!(
+			Public::from_raw(
+				hex!(
 				"754d2f2bbfa67df54d7e0e951979a18a1e0f45948857752cc2bac6bbb0b1d05e8e48bcc453920bf0c4bbd59932124801")
 			)
 		);

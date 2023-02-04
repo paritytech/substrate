@@ -18,8 +18,9 @@
 //! Types that should only be used for testing!
 
 use sp_core::{
+	bls,
 	crypto::{ByteArray, CryptoTypePublicPair, KeyTypeId, Pair},
-	ecdsa, ed25519, sr25519, bls
+	ecdsa, ed25519, sr25519,
 };
 
 use crate::{
@@ -77,7 +78,6 @@ impl KeyStore {
 				.map(|s| bls::Pair::from_string(s, None).expect("`bls` seed slice is valid"))
 		})
 	}
-
 }
 
 #[async_trait]
@@ -114,7 +114,7 @@ impl CryptoStore for KeyStore {
 		SyncCryptoStore::ecdsa_public_keys(self, id)
 	}
 
-    async fn bls_public_keys(&self, id: KeyTypeId) -> Vec<bls::Public> {
+	async fn bls_public_keys(&self, id: KeyTypeId) -> Vec<bls::Public> {
 		SyncCryptoStore::bls_public_keys(self, id)
 	}
 
@@ -133,7 +133,6 @@ impl CryptoStore for KeyStore {
 	) -> Result<ecdsa::Public, Error> {
 		SyncCryptoStore::ecdsa_generate_new(self, id, seed)
 	}
-
 
 	async fn insert_unknown(&self, id: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
 		SyncCryptoStore::insert_unknown(self, id, suri, public)
@@ -324,8 +323,7 @@ impl SyncCryptoStore for KeyStore {
 				Ok(pair.public())
 			},
 		}
-
-    }
+	}
 
 	fn bls_public_keys(&self, id: KeyTypeId) -> Vec<bls::Public> {
 		self.keys
@@ -333,20 +331,14 @@ impl SyncCryptoStore for KeyStore {
 			.get(&id)
 			.map(|keys| {
 				keys.values()
-					.map(|s| {
-						bls::Pair::from_string(s, None).expect("`bls` seed slice is valid")
-					})
+					.map(|s| bls::Pair::from_string(s, None).expect("`bls` seed slice is valid"))
 					.map(|p| p.public())
 					.collect()
 			})
 			.unwrap_or_default()
 	}
 
-	fn bls_generate_new(
-		&self,
-		id: KeyTypeId,
-		seed: Option<&str>,
-	) -> Result<bls::Public, Error> {
+	fn bls_generate_new(&self, id: KeyTypeId, seed: Option<&str>) -> Result<bls::Public, Error> {
 		match seed {
 			Some(seed) => {
 				let pair = bls::Pair::from_string(seed, None)
@@ -368,9 +360,8 @@ impl SyncCryptoStore for KeyStore {
 				Ok(pair.public())
 			},
 		}
-
 	}
-    
+
 	fn insert_unknown(&self, id: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
 		self.keys
 			.write()
@@ -461,7 +452,6 @@ impl SyncCryptoStore for KeyStore {
 		let pair = self.bls_key_pair(id, public);
 		pair.map(|k| k.sign(msg)).map(Ok).transpose()
 	}
-
 }
 
 impl Into<SyncCryptoStorePtr> for KeyStore {

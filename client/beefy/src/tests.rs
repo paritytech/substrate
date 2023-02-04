@@ -18,7 +18,6 @@
 
 //! Tests and test helpers for BEEFY.
 
-
 use crate::{
 	aux_schema::{load_persistent, tests::verify_persisted_version},
 	beefy_block_import_and_links,
@@ -27,19 +26,25 @@ use crate::{
 	},
 	gossip_protocol_name,
 	justification::*,
-	keystore::tests::{Keyring, GenericKeyring, SimpleKeyPair, ECDSAnBLSPair},
-	keystore::{BeefyECDSAKeystore, BeefyBLSnECDSAKeystore},
+	keystore::{
+		tests::{ECDSAnBLSPair, GenericKeyring, Keyring, SimpleKeyPair},
+		BeefyBLSnECDSAKeystore, BeefyECDSAKeystore,
+	},
 	load_or_init_voter_state, wait_for_runtime_pallet, BeefyRPCLinks, BeefyVoterLinks, KnownPeers,
 	PersistedState,
 };
 use beefy_primitives::{
-    ecdsa_crypto::{AuthorityId as ECDSAAuthorityId, Public as ECDSAPublic, Signature as ECDSASignature, Pair as ECDSAKeyPair},
-    bls_crypto::{AuthorityId as BLSAuthorityId, Public as BLSPublic, Signature as BLSSignature},
+	bls_crypto::{AuthorityId as BLSAuthorityId, Public as BLSPublic, Signature as BLSSignature},
+	ecdsa_crypto::{
+		AuthorityId as ECDSAAuthorityId, Pair as ECDSAKeyPair, Public as ECDSAPublic,
+		Signature as ECDSASignature,
+	},
 	known_payloads,
 	mmr::MmrRootProvider,
 	BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, SignedCommitment, ValidatorSet,
 	VersionedFinalityProof, BEEFY_ENGINE_ID,
 };
+use core::fmt::Debug;
 use futures::{future, stream::FuturesUnordered, Future, StreamExt};
 use parking_lot::Mutex;
 use sc_client_api::{Backend as BackendT, BlockchainEvents, FinalityNotifications, HeaderBackend};
@@ -47,8 +52,8 @@ use sc_consensus::{
 	BlockImport, BlockImportParams, BoxJustificationImport, ForkChoiceStrategy, ImportResult,
 	ImportedAux,
 };
-use sc_network::{config::RequestResponseConfig, ProtocolName};
 use sc_keystore::LocalKeystore;
+use sc_network::{config::RequestResponseConfig, ProtocolName};
 use sc_network_test::{
 	Block, BlockImportAdapter, FullPeerConfig, PassThroughVerifier, Peer, PeersClient,
 	PeersFullClient, TestNetFactory,
@@ -58,15 +63,14 @@ use serde::{Deserialize, Serialize};
 use sp_api::{ApiRef, ProvideRuntimeApi};
 use sp_consensus::BlockOrigin;
 use sp_core::H256;
-use sp_keystore::{SyncCryptoStorePtr};
+use sp_keystore::SyncCryptoStorePtr;
 use sp_mmr_primitives::{EncodableOpaqueLeaf, Error as MmrError, MmrApi, Proof};
 use sp_runtime::{
-    codec::{Encode, Decode},
+	codec::{Decode, Encode},
 	generic::BlockId,
 	traits::{Header as HeaderT, NumberFor},
 	BuildStorage, DigestItem, Justifications, Storage,
 };
-use core::fmt::Debug;
 use std::{collections::HashMap, marker::PhantomData, sync::Arc, task::Poll};
 use substrate_test_runtime_client::{runtime::Header, ClientExt};
 use tokio::time::Duration;
@@ -83,16 +87,17 @@ const BAD_MMR_ROOT: MmrRootHash = MmrRootHash::repeat_byte(0x42);
 
 type BeefyBlockImport<AuthId, TSignature, TBeefyKeystore> = crate::BeefyBlockImport<
 	Block,
-	substrate_test_runtime_client::Backend, 
+	substrate_test_runtime_client::Backend,
 	two_validators::TestApi,
-    BlockImportAdapter<PeersClient, sp_api::TransactionFor<two_validators::TestApi, Block>>,
-    AuthId,
-    TSignature,
-    TBeefyKeystore,
+	BlockImportAdapter<PeersClient, sp_api::TransactionFor<two_validators::TestApi, Block>>,
+	AuthId,
+	TSignature,
+	TBeefyKeystore,
 >;
 
 pub(crate) type BeefyValidatorSet<AuthId> = ValidatorSet<AuthId>;
-pub(crate) type BeefyPeer<AuthId, TSignature, TBeefyKeystore> = Peer<PeerData<TSignature>, BeefyBlockImport<AuthId, TSignature, TBeefyKeystore>>;
+pub(crate) type BeefyPeer<AuthId, TSignature, TBeefyKeystore> =
+	Peer<PeerData<TSignature>, BeefyBlockImport<AuthId, TSignature, TBeefyKeystore>>;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Genesis(std::collections::BTreeMap<String, String>);
@@ -107,7 +112,8 @@ impl BuildStorage for Genesis {
 
 //#[derive(Default)] can not derive due to generic
 #[derive(SmartDefault)]
-pub(crate) struct PeerData<TSignature> where
+pub(crate) struct PeerData<TSignature>
+where
 	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
 {
 	pub(crate) beefy_rpc_links: Mutex<Option<BeefyRPCLinks<Block, TSignature>>>,
@@ -118,18 +124,29 @@ pub(crate) struct PeerData<TSignature> where
 
 // #[derive(Default)] can not derive due to generic
 #[derive(SmartDefault)]
-pub(crate) struct BeefyTestNet<AuthId, TSignature, TBeefyKeystore> where
-    AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send,
-    TSignature: Encode + Decode + Debug + Clone + Sync + Send,
-    TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
+pub(crate) struct BeefyTestNet<AuthId, TSignature, TBeefyKeystore>
+where
+	AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+	TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
 {
 	peers: Vec<BeefyPeer<AuthId, TSignature, TBeefyKeystore>>,
 }
 
-impl<AuthId, TSignature, TBeefyKeystore> BeefyTestNet<AuthId, TSignature, TBeefyKeystore> where
-    AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
-    TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
-    TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
+impl<AuthId, TSignature, TBeefyKeystore> BeefyTestNet<AuthId, TSignature, TBeefyKeystore>
+where
+	AuthId: Clone
+		+ Encode
+		+ Decode
+		+ Debug
+		+ Ord
+		+ Sync
+		+ Send
+		+ BeefyAuthIdMaker
+		+ std::hash::Hash
+		+ 'static,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
+	TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
 {
 	pub(crate) fn new(n_authority: usize) -> Self {
 		let mut net = BeefyTestNet { peers: Vec::with_capacity(n_authority) };
@@ -203,10 +220,21 @@ impl<AuthId, TSignature, TBeefyKeystore> BeefyTestNet<AuthId, TSignature, TBeefy
 	}
 }
 
-impl<AuthId, TSignature, TBeefyKeystore> TestNetFactory for BeefyTestNet<AuthId, TSignature, TBeefyKeystore> where
-    AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
-    TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
-    TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>+ 'static,
+impl<AuthId, TSignature, TBeefyKeystore> TestNetFactory
+	for BeefyTestNet<AuthId, TSignature, TBeefyKeystore>
+where
+	AuthId: Clone
+		+ Encode
+		+ Decode
+		+ Debug
+		+ Ord
+		+ Sync
+		+ Send
+		+ BeefyAuthIdMaker
+		+ std::hash::Hash
+		+ 'static,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
+	TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
 {
 	type Verifier = PassThroughVerifier;
 	type BlockImport = BeefyBlockImport<AuthId, TSignature, TBeefyKeystore>;
@@ -232,8 +260,8 @@ impl<AuthId, TSignature, TBeefyKeystore> TestNetFactory for BeefyTestNet<AuthId,
 		);
 		let peer_data = PeerData::<TSignature> {
 			beefy_rpc_links: Mutex::new(Some(rpc_links)),
-		    beefy_voter_links: Mutex::new(Some(voter_links)),
-		    beefy_justif_req_handler: Mutex::new(None),
+			beefy_voter_links: Mutex::new(Some(voter_links)),
+			beefy_justif_req_handler: Mutex::new(None),
 			//..Default::default()
 		};
 		(BlockImportAdapter::new(block_import), None, peer_data)
@@ -247,7 +275,10 @@ impl<AuthId, TSignature, TBeefyKeystore> TestNetFactory for BeefyTestNet<AuthId,
 		&self.peers
 	}
 
-	fn mut_peers<F: FnOnce(&mut Vec<BeefyPeer<AuthId, TSignature, TBeefyKeystore>>)>(&mut self, closure: F) {
+	fn mut_peers<F: FnOnce(&mut Vec<BeefyPeer<AuthId, TSignature, TBeefyKeystore>>)>(
+		&mut self,
+		closure: F,
+	) {
 		closure(&mut self.peers);
 	}
 
@@ -315,9 +346,9 @@ macro_rules! create_test_api {
 	};
 }
 
-create_test_api!(two_validators,  mmr_root: GOOD_MMR_ROOT, Keyring::Alice, Keyring::Bob);
+create_test_api!(two_validators, mmr_root: GOOD_MMR_ROOT, Keyring::Alice, Keyring::Bob);
 create_test_api!(
-    four_validators,
+	four_validators,
 	mmr_root: GOOD_MMR_ROOT,
 	Keyring::Alice,
 	Keyring::Bob,
@@ -325,12 +356,12 @@ create_test_api!(
 	Keyring::Dave
 );
 create_test_api!(
-    bad_four_validators,
-    mmr_root: BAD_MMR_ROOT,
-    Keyring::Alice,
-    Keyring::Bob,
-    Keyring::Charlie,
-    Keyring::Dave
+	bad_four_validators,
+	mmr_root: BAD_MMR_ROOT,
+	Keyring::Alice,
+	Keyring::Bob,
+	Keyring::Charlie,
+	Keyring::Dave
 );
 
 fn add_mmr_digest(header: &mut Header, mmr_hash: MmrRootHash) {
@@ -340,8 +371,9 @@ fn add_mmr_digest(header: &mut Header, mmr_hash: MmrRootHash) {
 	));
 }
 
-fn add_auth_change_digest<AuthId>(header: &mut Header, new_auth_set: BeefyValidatorSet<AuthId>) where
-    AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send,
+fn add_auth_change_digest<AuthId>(header: &mut Header, new_auth_set: BeefyValidatorSet<AuthId>)
+where
+	AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send,
 {
 	header.digest_mut().push(DigestItem::Consensus(
 		BEEFY_ENGINE_ID,
@@ -349,56 +381,75 @@ fn add_auth_change_digest<AuthId>(header: &mut Header, new_auth_set: BeefyValida
 	));
 }
 
-pub(crate) trait BeefyAuthIdMaker : Clone + Encode + Decode + Debug + Ord + Sync + Send {
-    
-     fn make_beefy_ids(keys: &[Keyring]) -> Vec<Self>;
-}
-
-impl BeefyAuthIdMaker for ECDSAAuthorityId 
+pub(crate) trait BeefyAuthIdMaker:
+	Clone + Encode + Decode + Debug + Ord + Sync + Send
 {
-     fn make_beefy_ids(keys: &[Keyring]) -> Vec<Self> {
-	     keys.iter().map(|&key| <Keyring as GenericKeyring<ECDSAKeyPair>>::public(key).into()).collect()
-	     
-    }
+	fn make_beefy_ids(keys: &[Keyring]) -> Vec<Self>;
 }
 
-impl BeefyAuthIdMaker for (ECDSAAuthorityId, BLSAuthorityId)
-{
-     fn make_beefy_ids(keys: &[Keyring]) -> Vec<Self> {
-	     keys.iter().map(|&key| <Keyring as GenericKeyring<ECDSAnBLSPair>>::public(key).into()).collect()
-	     
-    }
+impl BeefyAuthIdMaker for ECDSAAuthorityId {
+	fn make_beefy_ids(keys: &[Keyring]) -> Vec<Self> {
+		keys.iter()
+			.map(|&key| <Keyring as GenericKeyring<ECDSAKeyPair>>::public(key).into())
+			.collect()
+	}
 }
 
-pub(crate) fn create_beefy_keystore<TKeyPair: SimpleKeyPair>(authority: Keyring) -> SyncCryptoStorePtr {    
-	let keystore = Arc::new(LocalKeystore::in_memory());    
-    TKeyPair::generate_in_store(keystore.clone(), authority);
+impl BeefyAuthIdMaker for (ECDSAAuthorityId, BLSAuthorityId) {
+	fn make_beefy_ids(keys: &[Keyring]) -> Vec<Self> {
+		keys.iter()
+			.map(|&key| <Keyring as GenericKeyring<ECDSAnBLSPair>>::public(key).into())
+			.collect()
+	}
+}
+
+pub(crate) fn create_beefy_keystore<TKeyPair: SimpleKeyPair>(
+	authority: Keyring,
+) -> SyncCryptoStorePtr {
+	let keystore = Arc::new(LocalKeystore::in_memory());
+	TKeyPair::generate_in_store(keystore.clone(), authority);
 	keystore
 }
 
-fn voter_init_setup<AuthId, TSignature, TBeefyKeystore> (
+fn voter_init_setup<AuthId, TSignature, TBeefyKeystore>(
 	net: &mut BeefyTestNet<AuthId, TSignature, TBeefyKeystore>,
 	finality: &mut futures::stream::Fuse<FinalityNotifications<Block>>,
 ) -> sp_blockchain::Result<PersistedState<Block, AuthId, TSignature>>
-    where
-    AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
-    TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
-    TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>+ 'static,
+where
+	AuthId: Clone
+		+ Encode
+		+ Decode
+		+ Debug
+		+ Ord
+		+ Sync
+		+ Send
+		+ BeefyAuthIdMaker
+		+ std::hash::Hash
+		+ 'static,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
+	TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
 {
 	let backend = net.peer(0).client().as_backend();
 	let api = Arc::new(crate::tests::two_validators::TestApi {});
 	let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
-	let gossip_validator =
-		Arc::new(crate::communication::gossip::GossipValidator::<Block, AuthId, TSignature, TBeefyKeystore>::new(known_peers));
+	let gossip_validator = Arc::new(crate::communication::gossip::GossipValidator::<
+		Block,
+		AuthId,
+		TSignature,
+		TBeefyKeystore,
+	>::new(known_peers));
 	let mut gossip_engine = sc_network_gossip::GossipEngine::new(
 		net.peer(0).network_service().clone(),
 		"/beefy/whatever",
 		gossip_validator,
 		None,
 	);
-	let best_grandpa =
-		futures::executor::block_on(wait_for_runtime_pallet::<_,_, AuthId>(&*api, &mut gossip_engine, finality))
-			.unwrap();
+	let best_grandpa = futures::executor::block_on(wait_for_runtime_pallet::<_, _, AuthId>(
+		&*api,
+		&mut gossip_engine,
+		finality,
+	))
+	.unwrap();
 	load_or_init_voter_state(&*backend, &*api, best_grandpa, 1)
 }
 
@@ -411,11 +462,20 @@ fn initialize_beefy<API, AuthId, TSignature, BKS, TKeyPair>(
 ) -> impl Future<Output = ()>
 where
 	API: ProvideRuntimeApi<Block> + Default + Sync + Send,
-    API::Api: BeefyApi<Block, AuthId> + MmrApi<Block, MmrRootHash, NumberFor<Block>>,
-    TSignature: Encode + Decode + Debug + Clone + Sync + Send +  'static,
-    TKeyPair: Sync + Send + SimpleKeyPair,
-    AuthId: Clone + Encode + Decode + Debug + Ord + BeefyAuthIdMaker + std::hash::Hash + Sync + Send + 'static,
-    BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
+	API::Api: BeefyApi<Block, AuthId> + MmrApi<Block, MmrRootHash, NumberFor<Block>>,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
+	TKeyPair: Sync + Send + SimpleKeyPair,
+	AuthId: Clone
+		+ Encode
+		+ Decode
+		+ Debug
+		+ Ord
+		+ BeefyAuthIdMaker
+		+ std::hash::Hash
+		+ Sync
+		+ Send
+		+ 'static,
+	BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
 {
 	let tasks = FuturesUnordered::new();
 
@@ -454,7 +514,6 @@ where
 			on_demand_justifications_handler: on_demand_justif_handler,
 			_auth_id: PhantomData,
 			_signature: PhantomData,
-
 		};
 		let task = crate::start_beefy_gadget::<_, _, _, _, _, _, _, _, _>(beefy_params);
 
@@ -466,12 +525,22 @@ where
 	tasks.for_each(|_| async move {})
 }
 
-async fn run_until<AuthId, TSignature, BKS>(future: impl Future + Unpin, net: &Arc<Mutex<BeefyTestNet<AuthId, TSignature, BKS>>>) where
-    AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
-    TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
-    BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
-
-
+async fn run_until<AuthId, TSignature, BKS>(
+	future: impl Future + Unpin,
+	net: &Arc<Mutex<BeefyTestNet<AuthId, TSignature, BKS>>>,
+) where
+	AuthId: Encode
+		+ Decode
+		+ Debug
+		+ Clone
+		+ Ord
+		+ Sync
+		+ Send
+		+ BeefyAuthIdMaker
+		+ std::hash::Hash
+		+ 'static,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
+	BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
 {
 	let drive_to_completion = futures::future::poll_fn(|cx| {
 		net.lock().poll(cx);
@@ -480,11 +549,22 @@ async fn run_until<AuthId, TSignature, BKS>(future: impl Future + Unpin, net: &A
 	let _ = future::select(future, drive_to_completion).await;
 }
 
-async fn run_for<AuthId, TSignature, BKS>(duration: Duration, net: &Arc<Mutex<BeefyTestNet<AuthId, TSignature, BKS>>>) where
-    AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
-    TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
-    BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
-
+async fn run_for<AuthId, TSignature, BKS>(
+	duration: Duration,
+	net: &Arc<Mutex<BeefyTestNet<AuthId, TSignature, BKS>>>,
+) where
+	AuthId: Encode
+		+ Decode
+		+ Debug
+		+ Clone
+		+ Ord
+		+ Sync
+		+ Send
+		+ BeefyAuthIdMaker
+		+ std::hash::Hash
+		+ 'static,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
+	BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
 {
 	run_until(Box::pin(tokio::time::sleep(duration)), net).await;
 }
@@ -493,11 +573,23 @@ pub(crate) fn get_beefy_streams<AuthId, TSignature, BKS>(
 	net: &mut BeefyTestNet<AuthId, TSignature, BKS>,
 	// peer index and key
 	peers: impl Iterator<Item = (usize, Keyring)>,
-) -> (Vec<NotificationReceiver<H256>>, Vec<NotificationReceiver<BeefyVersionedFinalityProof<Block, TSignature>>>)
+) -> (
+	Vec<NotificationReceiver<H256>>,
+	Vec<NotificationReceiver<BeefyVersionedFinalityProof<Block, TSignature>>>,
+)
 where
-    AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
-    TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
-    BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
+	AuthId: Encode
+		+ Decode
+		+ Debug
+		+ Clone
+		+ Ord
+		+ Sync
+		+ Send
+		+ BeefyAuthIdMaker
+		+ std::hash::Hash
+		+ 'static,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
+	BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
 {
 	let mut best_block_streams = Vec::new();
 	let mut versioned_finality_proof_streams = Vec::new();
@@ -516,9 +608,18 @@ async fn wait_for_best_beefy_blocks<AuthId, TSignature, BKS>(
 	net: &Arc<Mutex<BeefyTestNet<AuthId, TSignature, BKS>>>,
 	expected_beefy_blocks: &[u64],
 ) where
-    AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
-    TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
-    BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
+	AuthId: Encode
+		+ Decode
+		+ Debug
+		+ Clone
+		+ Ord
+		+ Sync
+		+ Send
+		+ BeefyAuthIdMaker
+		+ std::hash::Hash
+		+ 'static,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
+	BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
 {
 	let mut wait_for = Vec::new();
 	let len = expected_beefy_blocks.len();
@@ -544,9 +645,18 @@ async fn wait_for_beefy_signed_commitments<AuthId, TSignature, BKS>(
 	net: &Arc<Mutex<BeefyTestNet<AuthId, TSignature, BKS>>>,
 	expected_commitment_block_nums: &[u64],
 ) where
-    AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
-    TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
-    BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
+	AuthId: Encode
+		+ Decode
+		+ Debug
+		+ Clone
+		+ Ord
+		+ Sync
+		+ Send
+		+ BeefyAuthIdMaker
+		+ std::hash::Hash
+		+ 'static,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
+	BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
 {
 	let mut wait_for = Vec::new();
 	let len = expected_commitment_block_nums.len();
@@ -573,11 +683,20 @@ async fn streams_empty_after_timeout<T, AuthId, TSignature, BKS>(
 	net: &Arc<Mutex<BeefyTestNet<AuthId, TSignature, BKS>>>,
 	timeout: Option<Duration>,
 ) where
-    T: std::fmt::Debug,
-    T: std::cmp::PartialEq,
-    AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
-    TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
-    BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
+	T: std::fmt::Debug,
+	T: std::cmp::PartialEq,
+	AuthId: Encode
+		+ Decode
+		+ Debug
+		+ Clone
+		+ Ord
+		+ Sync
+		+ Send
+		+ BeefyAuthIdMaker
+		+ std::hash::Hash
+		+ 'static,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
+	BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
 {
 	if let Some(timeout) = timeout {
 		run_for(timeout, net).await;
@@ -598,9 +717,18 @@ async fn finalize_block_and_wait_for_beefy<AuthId, TSignature, BKS>(
 	finalize_targets: &[H256],
 	expected_beefy: &[u64],
 ) where
-    AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
-    TSignature: Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq + 'static,
-    BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
+	AuthId: Encode
+		+ Decode
+		+ Debug
+		+ Clone
+		+ Ord
+		+ Sync
+		+ Send
+		+ BeefyAuthIdMaker
+		+ std::hash::Hash
+		+ 'static,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq + 'static,
+	BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
 {
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
 
@@ -624,23 +752,40 @@ async fn finalize_block_and_wait_for_beefy<AuthId, TSignature, BKS>(
 }
 
 async fn beefy_finalizing_blocks<TKeyPair, AuthId, TSignature, TBeefyKeystore>()
-where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId> + 'static,
-      TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>  + 'static,
-      AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
-      TSignature:  Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq  + 'static,      
+where
+	TKeyPair: SimpleKeyPair + SimpleKeyPair<Public = AuthId> + 'static,
+	TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
+	AuthId: Clone
+		+ Encode
+		+ Decode
+		+ Debug
+		+ Ord
+		+ Sync
+		+ Send
+		+ BeefyAuthIdMaker
+		+ std::hash::Hash
+		+ 'static,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq + 'static,
 {
- 	sp_tracing::try_init_simple();
+	sp_tracing::try_init_simple();
 
- 	let peers = [Keyring::Alice, Keyring::Bob];
- 	let validator_set = ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(&peers), 0).unwrap();
- 	let session_len = 10;
- 	let min_block_delta = 4;
+	let peers = [Keyring::Alice, Keyring::Bob];
+	let validator_set =
+		ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(&peers), 0).unwrap();
+	let session_len = 10;
+	let min_block_delta = 4;
 
- 	let mut net : BeefyTestNet<AuthId, TSignature, TBeefyKeystore> = BeefyTestNet::new(2);
+	let mut net: BeefyTestNet<AuthId, TSignature, TBeefyKeystore> = BeefyTestNet::new(2);
 
 	let api = Arc::new(two_validators::TestApi {});
 	let beefy_peers = peers.iter().enumerate().map(|(id, key)| (id, key, api.clone())).collect();
-	tokio::spawn(initialize_beefy::<two_validators::TestApi, AuthId, TSignature, TBeefyKeystore, TKeyPair>(&mut net, beefy_peers, min_block_delta));
+	tokio::spawn(initialize_beefy::<
+		two_validators::TestApi,
+		AuthId,
+		TSignature,
+		TBeefyKeystore,
+		TKeyPair,
+	>(&mut net, beefy_peers, min_block_delta));
 
 	// push 42 blocks including `AuthorityChange` digests every 10 blocks.
 	let hashes = net.generate_blocks_and_sync(42, session_len, &validator_set, true).await;
@@ -668,31 +813,55 @@ where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId> + 'static,
 
 #[tokio::test]
 async fn beefy_finalizing_blocks_using_ecdsa_signature() {
-    beefy_finalizing_blocks::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
+	beefy_finalizing_blocks::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>()
+		.await;
 }
 
 #[tokio::test]
 async fn beefy_finalizing_blocks_using_ecdsa_n_bls_signature() {
-    beefy_finalizing_blocks::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>().await;
+	beefy_finalizing_blocks::<
+		ECDSAnBLSPair,
+		(ECDSAPublic, BLSPublic),
+		(ECDSASignature, BLSSignature),
+		BeefyBLSnECDSAKeystore,
+	>()
+	.await;
 }
 
 async fn lagging_validators<TKeyPair, AuthId, TSignature, TBeefyKeystore>()
-where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId> + 'static,
-      TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>  + 'static,
-      AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
-      TSignature:  Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq  + 'static,
+where
+	TKeyPair: SimpleKeyPair + SimpleKeyPair<Public = AuthId> + 'static,
+	TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
+	AuthId: Clone
+		+ Encode
+		+ Decode
+		+ Debug
+		+ Ord
+		+ Sync
+		+ Send
+		+ BeefyAuthIdMaker
+		+ std::hash::Hash
+		+ 'static,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq + 'static,
 {
 	sp_tracing::try_init_simple();
 
 	let peers = [Keyring::Alice, Keyring::Bob];
-	let validator_set = ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(&peers), 0).unwrap();
+	let validator_set =
+		ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(&peers), 0).unwrap();
 	let session_len = 30;
 	let min_block_delta = 1;
 
-	let mut net : BeefyTestNet<AuthId, TSignature, TBeefyKeystore> = BeefyTestNet::new(2);
+	let mut net: BeefyTestNet<AuthId, TSignature, TBeefyKeystore> = BeefyTestNet::new(2);
 	let api = Arc::new(two_validators::TestApi {});
 	let beefy_peers = peers.iter().enumerate().map(|(id, key)| (id, key, api.clone())).collect();
-	tokio::spawn(initialize_beefy::<two_validators::TestApi, AuthId, TSignature, TBeefyKeystore, TKeyPair>(&mut net, beefy_peers, min_block_delta));
+	tokio::spawn(initialize_beefy::<
+		two_validators::TestApi,
+		AuthId,
+		TSignature,
+		TBeefyKeystore,
+		TKeyPair,
+	>(&mut net, beefy_peers, min_block_delta));
 
 	// push 62 blocks including `AuthorityChange` digests every 30 blocks.
 	let hashes = net.generate_blocks_and_sync(62, session_len, &validator_set, true).await;
@@ -758,28 +927,45 @@ where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId> + 'static,
 
 #[tokio::test]
 async fn lagging_validators_with_ecdsa_crypto() {
-    lagging_validators::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
+	lagging_validators::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
 }
 
 #[tokio::test]
 async fn lagging_validators_with_ecdsa_n_bls_crypto() {
-    lagging_validators::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>().await;
+	lagging_validators::<
+		ECDSAnBLSPair,
+		(ECDSAPublic, BLSPublic),
+		(ECDSASignature, BLSSignature),
+		BeefyBLSnECDSAKeystore,
+	>()
+	.await;
 }
 
 async fn correct_beefy_payload<TKeyPair, AuthId, TSignature, TBeefyKeystore>()
-where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId> + 'static,
-      TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>  + 'static,
-      AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
-      TSignature:  Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq  + 'static,
+where
+	TKeyPair: SimpleKeyPair + SimpleKeyPair<Public = AuthId> + 'static,
+	TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
+	AuthId: Clone
+		+ Encode
+		+ Decode
+		+ Debug
+		+ Ord
+		+ Sync
+		+ Send
+		+ BeefyAuthIdMaker
+		+ std::hash::Hash
+		+ 'static,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq + 'static,
 {
 	sp_tracing::try_init_simple();
 
 	let peers = [Keyring::Alice, Keyring::Bob, Keyring::Charlie, Keyring::Dave];
-	let validator_set = ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(&peers), 0).unwrap();
+	let validator_set =
+		ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(&peers), 0).unwrap();
 	let session_len = 20;
 	let min_block_delta = 2;
 
-	let mut net : BeefyTestNet<AuthId, TSignature, TBeefyKeystore> = BeefyTestNet::new(4);
+	let mut net: BeefyTestNet<AuthId, TSignature, TBeefyKeystore> = BeefyTestNet::new(4);
 
 	// Alice, Bob, Charlie will vote on good payloads
 	let good_api = Arc::new(four_validators::TestApi {});
@@ -788,12 +974,24 @@ where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId> + 'static,
 		.enumerate()
 		.map(|(id, key)| (id, key, good_api.clone()))
 		.collect();
-	tokio::spawn(initialize_beefy::<four_validators::TestApi, AuthId, TSignature, TBeefyKeystore, TKeyPair>(&mut net, good_peers, min_block_delta));
+	tokio::spawn(initialize_beefy::<
+		four_validators::TestApi,
+		AuthId,
+		TSignature,
+		TBeefyKeystore,
+		TKeyPair,
+	>(&mut net, good_peers, min_block_delta));
 
 	// Dave will vote on bad mmr roots
 	let bad_api = Arc::new(bad_four_validators::TestApi {});
 	let bad_peers = vec![(3, &Keyring::Dave, bad_api)];
-	tokio::spawn(initialize_beefy::<bad_four_validators::TestApi, AuthId, TSignature, TBeefyKeystore, TKeyPair>(&mut net, bad_peers, min_block_delta));
+	tokio::spawn(initialize_beefy::<
+		bad_four_validators::TestApi,
+		AuthId,
+		TSignature,
+		TBeefyKeystore,
+		TKeyPair,
+	>(&mut net, bad_peers, min_block_delta));
 
 	// push 12 blocks
 	let hashes = net.generate_blocks_and_sync(12, session_len, &validator_set, false).await;
@@ -829,27 +1027,43 @@ where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId> + 'static,
 
 #[tokio::test]
 async fn correct_beefy_payload_with_ecdsa_signature() {
-    correct_beefy_payload::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
+	correct_beefy_payload::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
 }
 
 #[tokio::test]
 async fn correct_beefy_payload_with_ecdsa_n_bls_signature() {
-    correct_beefy_payload::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>().await;
+	correct_beefy_payload::<
+		ECDSAnBLSPair,
+		(ECDSAPublic, BLSPublic),
+		(ECDSASignature, BLSSignature),
+		BeefyBLSnECDSAKeystore,
+	>()
+	.await;
 }
 
 async fn beefy_importing_blocks<TKeyPair, AuthId, TSignature, TBeefyKeystore>()
-where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSignature> + 'static,
-      TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>  + 'static,
-      AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
-      TSignature:  Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq  + 'static,
+where
+	TKeyPair: SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSignature> + 'static,
+	TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
+	AuthId: Clone
+		+ Encode
+		+ Decode
+		+ Debug
+		+ Ord
+		+ Sync
+		+ Send
+		+ BeefyAuthIdMaker
+		+ std::hash::Hash
+		+ 'static,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq + 'static,
 {
-	use futures::{future::poll_fn};
+	use futures::future::poll_fn;
 	use sc_block_builder::BlockBuilderProvider;
 	use sc_client_api::BlockBackend;
 
 	sp_tracing::try_init_simple();
 
-	let mut net : BeefyTestNet<AuthId, TSignature, TBeefyKeystore> = BeefyTestNet::new(2);
+	let mut net: BeefyTestNet<AuthId, TSignature, TBeefyKeystore> = BeefyTestNet::new(2);
 
 	let client = net.peer(0).client().clone();
 	let (mut block_import, _, peer_data) = net.make_block_import(client.clone());
@@ -906,8 +1120,13 @@ where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSig
 	let parent_id = BlockId::Number(1);
 	let block_num = 2;
 	let keys = &[Keyring::Alice, Keyring::Bob];
-	let validator_set = ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(keys), 0).unwrap();
-	let proof = crate::justification::tests::new_finality_proof::<TKeyPair, AuthId, TSignature>(block_num, &validator_set, keys);
+	let validator_set =
+		ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(keys), 0).unwrap();
+	let proof = crate::justification::tests::new_finality_proof::<TKeyPair, AuthId, TSignature>(
+		block_num,
+		&validator_set,
+		keys,
+	);
 	let versioned_proof: VersionedFinalityProof<NumberFor<Block>, TSignature> = proof.into();
 	let encoded = versioned_proof.encode();
 	let justif = Some(Justifications::from((BEEFY_ENGINE_ID, encoded)));
@@ -950,8 +1169,13 @@ where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSig
 	let parent_id = BlockId::Number(2);
 	let block_num = 3;
 	let keys = &[Keyring::Alice];
-	let validator_set = ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(keys), 1).unwrap();
-	let proof = crate::justification::tests::new_finality_proof::<TKeyPair, AuthId, TSignature>(block_num, &validator_set, keys);
+	let validator_set =
+		ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(keys), 1).unwrap();
+	let proof = crate::justification::tests::new_finality_proof::<TKeyPair, AuthId, TSignature>(
+		block_num,
+		&validator_set,
+		keys,
+	);
 	let versioned_proof: VersionedFinalityProof<NumberFor<Block>, TSignature> = proof.into();
 	let encoded = versioned_proof.encode();
 	let justif = Some(Justifications::from((BEEFY_ENGINE_ID, encoded)));
@@ -990,34 +1214,57 @@ where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSig
 
 #[tokio::test]
 async fn beefy_importing_blocks_with_ecdsa_signature() {
-    beefy_importing_blocks::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
+	beefy_importing_blocks::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
 }
 
 #[tokio::test]
 async fn beefy_importing_blocks_with_ecdsa_n_bls_signature() {
-    beefy_importing_blocks::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>().await;
+	beefy_importing_blocks::<
+		ECDSAnBLSPair,
+		(ECDSAPublic, BLSPublic),
+		(ECDSASignature, BLSSignature),
+		BeefyBLSnECDSAKeystore,
+	>()
+	.await;
 }
 
 async fn voter_initialization<TKeyPair, AuthId, TSignature, TBeefyKeystore>()
-where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSignature> + 'static,
-      TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>  + 'static,
-      AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
-      TSignature:  Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq  + 'static,
+where
+	TKeyPair: SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSignature> + 'static,
+	TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
+	AuthId: Clone
+		+ Encode
+		+ Decode
+		+ Debug
+		+ Ord
+		+ Sync
+		+ Send
+		+ BeefyAuthIdMaker
+		+ std::hash::Hash
+		+ 'static,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq + 'static,
 {
 	sp_tracing::try_init_simple();
 	// Regression test for voter initialization where finality notifications were dropped
 	// after waiting for BEEFY pallet availability.
 
 	let peers = [Keyring::Alice, Keyring::Bob];
-	let validator_set = ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(&peers), 0).unwrap();
+	let validator_set =
+		ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(&peers), 0).unwrap();
 	let session_len = 5;
 	// Should vote on all mandatory blocks no matter the `min_block_delta`.
 	let min_block_delta = 10;
 
-	let mut net : BeefyTestNet<AuthId, TSignature, TBeefyKeystore> = BeefyTestNet::new(2);
+	let mut net: BeefyTestNet<AuthId, TSignature, TBeefyKeystore> = BeefyTestNet::new(2);
 	let api = Arc::new(two_validators::TestApi {});
 	let beefy_peers = peers.iter().enumerate().map(|(id, key)| (id, key, api.clone())).collect();
-	tokio::spawn(initialize_beefy::<two_validators::TestApi, AuthId, TSignature, TBeefyKeystore, TKeyPair>(&mut net, beefy_peers, min_block_delta));
+	tokio::spawn(initialize_beefy::<
+		two_validators::TestApi,
+		AuthId,
+		TSignature,
+		TBeefyKeystore,
+		TKeyPair,
+	>(&mut net, beefy_peers, min_block_delta));
 
 	// push 26 blocks
 	let hashes = net.generate_blocks_and_sync(26, session_len, &validator_set, false).await;
@@ -1037,43 +1284,69 @@ where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSig
 
 #[tokio::test]
 async fn voter_initialization_with_ecdsa_crypto() {
-    voter_initialization::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
+	voter_initialization::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
 }
 
 #[tokio::test]
 async fn voter_initialization_with_ecdsa_n_bls_crypto() {
-    voter_initialization::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>().await;
+	voter_initialization::<
+		ECDSAnBLSPair,
+		(ECDSAPublic, BLSPublic),
+		(ECDSASignature, BLSSignature),
+		BeefyBLSnECDSAKeystore,
+	>()
+	.await;
 }
 
 async fn on_demand_beefy_justification_sync<TKeyPair, AuthId, TSignature, TBeefyKeystore>()
-where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSignature> + 'static,
-      TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>  + 'static,
-      AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
-      TSignature:  Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq  + 'static,
-
+where
+	TKeyPair: SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSignature> + 'static,
+	TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
+	AuthId: Clone
+		+ Encode
+		+ Decode
+		+ Debug
+		+ Ord
+		+ Sync
+		+ Send
+		+ BeefyAuthIdMaker
+		+ std::hash::Hash
+		+ 'static,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq + 'static,
 {
 	sp_tracing::try_init_simple();
 
-	let all_peers =
-		[Keyring::Alice, Keyring::Bob, Keyring::Charlie, Keyring::Dave];
-	let validator_set = ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(&all_peers), 0).unwrap();
+	let all_peers = [Keyring::Alice, Keyring::Bob, Keyring::Charlie, Keyring::Dave];
+	let validator_set =
+		ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(&all_peers), 0).unwrap();
 	let session_len = 5;
 	let min_block_delta = 5;
 
-	let mut net : BeefyTestNet<AuthId, TSignature, TBeefyKeystore> = BeefyTestNet::new(4);
+	let mut net: BeefyTestNet<AuthId, TSignature, TBeefyKeystore> = BeefyTestNet::new(4);
 
 	// Alice, Bob, Charlie start first and make progress through voting.
 	let api = Arc::new(four_validators::TestApi {});
 	let fast_peers = [Keyring::Alice, Keyring::Bob, Keyring::Charlie];
 	let voting_peers =
 		fast_peers.iter().enumerate().map(|(id, key)| (id, key, api.clone())).collect();
-	tokio::spawn(initialize_beefy::<four_validators::TestApi, AuthId, TSignature, TBeefyKeystore, TKeyPair>(&mut net, voting_peers, min_block_delta));
+	tokio::spawn(initialize_beefy::<
+		four_validators::TestApi,
+		AuthId,
+		TSignature,
+		TBeefyKeystore,
+		TKeyPair,
+	>(&mut net, voting_peers, min_block_delta));
 
 	// Dave will start late and have to catch up using on-demand justification requests (since
 	// in this test there is no block import queue to automatically import justifications).
 	let dave = vec![(3, &Keyring::Dave, api)];
 	// Instantiate but don't run Dave, yet.
-	let dave_task = initialize_beefy::<four_validators::TestApi, AuthId, TSignature, TBeefyKeystore, TKeyPair>(&mut net, dave, min_block_delta);
+	let dave_task =
+		initialize_beefy::<four_validators::TestApi, AuthId, TSignature, TBeefyKeystore, TKeyPair>(
+			&mut net,
+			dave,
+			min_block_delta,
+		);
 	let dave_index = 3;
 
 	// push 30 blocks
@@ -1129,23 +1402,45 @@ where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSig
 
 #[tokio::test]
 async fn on_demand_beefy_justification_sync_with_ecdsa_signature() {
-    on_demand_beefy_justification_sync::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
+	on_demand_beefy_justification_sync::<
+		ECDSAKeyPair,
+		ECDSAPublic,
+		ECDSASignature,
+		BeefyECDSAKeystore,
+	>()
+	.await;
 }
 
 #[tokio::test]
 async fn on_demand_beefy_justification_sync_with_ecdsa_n_bls_signature() {
-    on_demand_beefy_justification_sync::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>().await;
+	on_demand_beefy_justification_sync::<
+		ECDSAnBLSPair,
+		(ECDSAPublic, BLSPublic),
+		(ECDSASignature, BLSSignature),
+		BeefyBLSnECDSAKeystore,
+	>()
+	.await;
 }
 
-
-async fn  should_initialize_voter_at_genesis<TKeyPair, AuthId, TSignature, TBeefyKeystore>()
-where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSignature> + 'static,
-      TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>  + 'static,
-      AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
-      TSignature:  Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq  + 'static,
- {
+async fn should_initialize_voter_at_genesis<TKeyPair, AuthId, TSignature, TBeefyKeystore>()
+where
+	TKeyPair: SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSignature> + 'static,
+	TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
+	AuthId: Clone
+		+ Encode
+		+ Decode
+		+ Debug
+		+ Ord
+		+ Sync
+		+ Send
+		+ BeefyAuthIdMaker
+		+ std::hash::Hash
+		+ 'static,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq + 'static,
+{
 	let keys = &[Keyring::Alice];
-	let validator_set = ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(keys), 0).unwrap();
+	let validator_set =
+		ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(keys), 0).unwrap();
 	let mut net: BeefyTestNet<AuthId, TSignature, TBeefyKeystore> = BeefyTestNet::new(1);
 	let backend = net.peer(0).client().as_backend();
 
@@ -1188,22 +1483,50 @@ where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSig
 
 #[tokio::test]
 async fn should_initialize_voter_at_genesis_with_ecdsa_signature() {
-    should_initialize_voter_at_genesis::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
+	should_initialize_voter_at_genesis::<
+		ECDSAKeyPair,
+		ECDSAPublic,
+		ECDSASignature,
+		BeefyECDSAKeystore,
+	>()
+	.await;
 }
 
 #[tokio::test]
 async fn should_initialize_voter_at_genesis_with_ecdsa_n_bls_signature() {
-    should_initialize_voter_at_genesis::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>().await;
+	should_initialize_voter_at_genesis::<
+		ECDSAnBLSPair,
+		(ECDSAPublic, BLSPublic),
+		(ECDSASignature, BLSSignature),
+		BeefyBLSnECDSAKeystore,
+	>()
+	.await;
 }
 
-async fn should_initialize_voter_when_last_final_is_session_boundary<TKeyPair, AuthId, TSignature, TBeefyKeystore>()
-where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSignature> + 'static,
-      TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>  + 'static,
-      AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
-      TSignature:  Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq  + 'static,
+async fn should_initialize_voter_when_last_final_is_session_boundary<
+	TKeyPair,
+	AuthId,
+	TSignature,
+	TBeefyKeystore,
+>()
+where
+	TKeyPair: SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSignature> + 'static,
+	TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
+	AuthId: Clone
+		+ Encode
+		+ Decode
+		+ Debug
+		+ Ord
+		+ Sync
+		+ Send
+		+ BeefyAuthIdMaker
+		+ std::hash::Hash
+		+ 'static,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq + 'static,
 {
 	let keys = &[Keyring::Alice];
-	let validator_set = ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(keys), 0).unwrap();
+	let validator_set =
+		ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(keys), 0).unwrap();
 	let mut net: BeefyTestNet<AuthId, TSignature, TBeefyKeystore> = BeefyTestNet::new(1);
 	let backend = net.peer(0).client().as_backend();
 
@@ -1260,22 +1583,45 @@ where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSig
 
 #[tokio::test]
 async fn should_initialize_voter_when_last_final_is_session_boundary_with_ecdsa_signature() {
-    should_initialize_voter_when_last_final_is_session_boundary::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
+	should_initialize_voter_when_last_final_is_session_boundary::<
+		ECDSAKeyPair,
+		ECDSAPublic,
+		ECDSASignature,
+		BeefyECDSAKeystore,
+	>()
+	.await;
 }
 
 #[tokio::test]
 async fn should_initialize_voter_when_last_final_is_session_boundary_with_ecdsa_n_bls_signature() {
-    should_initialize_voter_when_last_final_is_session_boundary::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>().await;
+	should_initialize_voter_when_last_final_is_session_boundary::<
+		ECDSAnBLSPair,
+		(ECDSAPublic, BLSPublic),
+		(ECDSASignature, BLSSignature),
+		BeefyBLSnECDSAKeystore,
+	>()
+	.await;
 }
 
 async fn should_initialize_voter_at_latest_finalized<TKeyPair, AuthId, TSignature, TBeefyKeystore>()
-where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSignature> + 'static,
-      TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>  + 'static,
-      AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
-      TSignature:  Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq  + 'static,
+where
+	TKeyPair: SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSignature> + 'static,
+	TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
+	AuthId: Clone
+		+ Encode
+		+ Decode
+		+ Debug
+		+ Ord
+		+ Sync
+		+ Send
+		+ BeefyAuthIdMaker
+		+ std::hash::Hash
+		+ 'static,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq + 'static,
 {
 	let keys = &[Keyring::Alice];
-	let validator_set = ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(keys), 0).unwrap();
+	let validator_set =
+		ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(keys), 0).unwrap();
 	let mut net: BeefyTestNet<AuthId, TSignature, TBeefyKeystore> = BeefyTestNet::new(1);
 	let backend = net.peer(0).client().as_backend();
 
@@ -1328,14 +1674,24 @@ where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSig
 	assert_eq!(state, persisted_state);
 }
 
-
 #[tokio::test]
 async fn should_initialize_voter_at_latest_finalized_with_ecdsa_signature() {
-    should_initialize_voter_at_latest_finalized::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
+	should_initialize_voter_at_latest_finalized::<
+		ECDSAKeyPair,
+		ECDSAPublic,
+		ECDSASignature,
+		BeefyECDSAKeystore,
+	>()
+	.await;
 }
 
 #[tokio::test]
 async fn should_initialize_voter_at_latest_finalized_with_ecdsa_n_bls_signature() {
-    should_initialize_voter_at_latest_finalized::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>().await;
+	should_initialize_voter_at_latest_finalized::<
+		ECDSAnBLSPair,
+		(ECDSAPublic, BLSPublic),
+		(ECDSASignature, BLSSignature),
+		BeefyBLSnECDSAKeystore,
+	>()
+	.await;
 }
-

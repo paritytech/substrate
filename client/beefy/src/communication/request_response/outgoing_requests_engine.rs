@@ -17,10 +17,10 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Generating request logic for request/response protocol for syncing BEEFY justifications.
-use std::{fmt::Debug, marker::PhantomData};
 use codec::{Decode, Encode};
+use std::{fmt::Debug, marker::PhantomData};
 
-use beefy_primitives::{ValidatorSet};
+use beefy_primitives::ValidatorSet;
 use futures::channel::{oneshot, oneshot::Canceled};
 use log::{debug, warn};
 use parking_lot::Mutex;
@@ -35,8 +35,8 @@ use std::{collections::VecDeque, result::Result, sync::Arc};
 use crate::{
 	communication::request_response::{Error, JustificationRequest, BEEFY_SYNC_LOG_TARGET},
 	justification::{decode_and_verify_finality_proof, BeefyVersionedFinalityProof},
-	KnownPeers,
 	keystore::BeefyKeystore,
+	KnownPeers,
 };
 
 /// Response type received from network.
@@ -55,7 +55,12 @@ enum State<B: Block, AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send
 	AwaitingResponse(PeerId, RequestInfo<B, AuthId>, ResponseReceiver),
 }
 
-pub struct OnDemandJustificationsEngine<B: Block, AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>> {
+pub struct OnDemandJustificationsEngine<
+	B: Block,
+	AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+	BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
+> {
 	network: Arc<dyn NetworkRequest + Send + Sync>,
 	protocol_name: ProtocolName,
 
@@ -63,10 +68,9 @@ pub struct OnDemandJustificationsEngine<B: Block, AuthId: Encode + Decode + Debu
 	peers_cache: VecDeque<PeerId>,
 
 	state: State<B, AuthId>,
-	_auth_id : PhantomData::<AuthId>,
-	_signature: PhantomData::<TSignature>,
-	_keystor: PhantomData::<BKS>,
-
+	_auth_id: PhantomData<AuthId>,
+	_signature: PhantomData<TSignature>,
+	_keystor: PhantomData<BKS>,
 }
 
 impl<B, AuthId, TSignature, BKS> OnDemandJustificationsEngine<B, AuthId, TSignature, BKS>
@@ -87,8 +91,8 @@ where
 			live_peers,
 			peers_cache: VecDeque::new(),
 			state: State::Idle,
-			_auth_id : PhantomData::<AuthId>,
-			_signature : PhantomData::<TSignature>,
+			_auth_id: PhantomData::<AuthId>,
+			_signature: PhantomData::<TSignature>,
 			_keystor: PhantomData::<BKS>,
 		}
 	}
@@ -194,7 +198,7 @@ where
 				Error::InvalidResponse
 			})
 			.and_then(|encoded| {
-				decode_and_verify_finality_proof::<B,AuthId, TSignature, BKS>(
+				decode_and_verify_finality_proof::<B, AuthId, TSignature, BKS>(
 					&encoded[..],
 					req_info.block,
 					&req_info.active_set,

@@ -18,8 +18,8 @@
 
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
-use std::marker::PhantomData;
 use core::fmt::Debug;
+use std::marker::PhantomData;
 
 use sc_network::PeerId;
 use sc_network_gossip::{MessageIntent, ValidationResult, Validator, ValidatorContext};
@@ -32,9 +32,7 @@ use parking_lot::{Mutex, RwLock};
 use wasm_timer::Instant;
 
 use crate::{communication::peers::KnownPeers, keystore::BeefyKeystore, LOG_TARGET};
-use beefy_primitives::{
-	VoteMessage,
-};
+use beefy_primitives::VoteMessage;
 
 // Timeout for rebroadcasting messages.
 const REBROADCAST_AFTER: Duration = Duration::from_secs(60 * 5);
@@ -100,9 +98,9 @@ impl<B: Block> KnownVotes<B> {
 pub(crate) struct GossipValidator<B, AuthId, TSignature, BKS>
 where
 	B: Block,
-        BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
+	BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
 	AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send,
-TSignature: Encode + Decode + Debug + Clone + Sync + Send, 
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
 {
 	topic: B::Hash,
 	known_votes: RwLock<KnownVotes<B>>,
@@ -118,9 +116,11 @@ where
 	B: Block,
 	BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
 	AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send,
-	TSignature: Encode + Decode + Debug + Clone + Sync + Send, 
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
 {
-	pub fn new(known_peers: Arc<Mutex<KnownPeers<B>>>) -> GossipValidator<B, AuthId, TSignature, BKS> {
+	pub fn new(
+		known_peers: Arc<Mutex<KnownPeers<B>>>,
+	) -> GossipValidator<B, AuthId, TSignature, BKS> {
 		GossipValidator {
 			topic: topic::<B>(),
 			known_votes: RwLock::new(KnownVotes::new()),
@@ -152,7 +152,7 @@ where
 impl<B, AuthId, TSignature, BKS> Validator<B> for GossipValidator<B, AuthId, TSignature, BKS>
 where
 	B: Block,
-        BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
+	BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
 	AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send,
 	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
 {
@@ -185,7 +185,7 @@ where
 				}
 			}
 
-			if BKS::verify(&msg.id, &msg.signature, &msg.commitment.encode ()) {
+			if BKS::verify(&msg.id, &msg.signature, &msg.commitment.encode()) {
 				self.known_votes.write().add_known(&round, msg_hash);
 				self.known_peers.lock().note_vote_for(*sender, round);
 				return ValidationResult::ProcessAndKeep(self.topic)
@@ -259,9 +259,12 @@ mod tests {
 	use sc_network_test::Block;
 	use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 
-	use crate::keystore::{tests::{Keyring, GenericKeyring}, BeefyKeystore, BeefyECDSAKeystore};
-	use beefy_primitives::{	ecdsa_crypto,
-		known_payloads, Commitment, MmrRootHash, Payload, VoteMessage, KEY_TYPE,
+	use crate::keystore::{
+		tests::{GenericKeyring, Keyring},
+		BeefyECDSAKeystore, BeefyKeystore,
+	};
+	use beefy_primitives::{
+		ecdsa_crypto, known_payloads, Commitment, MmrRootHash, Payload, VoteMessage, KEY_TYPE,
 	};
 
 	use super::*;
@@ -296,7 +299,12 @@ mod tests {
 
 	#[test]
 	fn note_and_drop_round_works() {
-		let gv = GossipValidator::<Block, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature, BeefyECDSAKeystore>::new(Arc::new(Mutex::new(KnownPeers::new())));
+		let gv = GossipValidator::<
+			Block,
+			ecdsa_crypto::AuthorityId,
+			ecdsa_crypto::Signature,
+			BeefyECDSAKeystore,
+		>::new(Arc::new(Mutex::new(KnownPeers::new())));
 
 		gv.note_round(1u64);
 
@@ -323,7 +331,12 @@ mod tests {
 
 	#[test]
 	fn note_same_round_twice() {
-		let gv = GossipValidator::<Block, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature, BeefyECDSAKeystore>::new(Arc::new(Mutex::new(KnownPeers::new())));
+		let gv = GossipValidator::<
+			Block,
+			ecdsa_crypto::AuthorityId,
+			ecdsa_crypto::Signature,
+			BeefyECDSAKeystore,
+		>::new(Arc::new(Mutex::new(KnownPeers::new())));
 
 		gv.note_round(3u64);
 		gv.note_round(7u64);
@@ -362,16 +375,31 @@ mod tests {
 		}
 	}
 
-	fn sign_commitment<BN: Encode>(who: &Keyring, commitment: &Commitment<BN>) -> ecdsa_crypto::Signature {
+	fn sign_commitment<BN: Encode>(
+		who: &Keyring,
+		commitment: &Commitment<BN>,
+	) -> ecdsa_crypto::Signature {
 		let store: SyncCryptoStorePtr = std::sync::Arc::new(LocalKeystore::in_memory());
-		SyncCryptoStore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::to_seed(*who))).unwrap();
+		SyncCryptoStore::ecdsa_generate_new(
+			&*store,
+			KEY_TYPE,
+			Some(&<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::to_seed(*who)),
+		)
+		.unwrap();
 
 		let beefy_keystore = BeefyECDSAKeystore::new(store);
 
-		beefy_keystore.sign(&<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::public(*who), &commitment.encode()).unwrap()
+		beefy_keystore
+			.sign(
+				&<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::public(*who),
+				&commitment.encode(),
+			)
+			.unwrap()
 	}
 
-	fn dummy_vote(block_number: u64) -> VoteMessage<u64, ecdsa_crypto::Public, ecdsa_crypto::Signature> {
+	fn dummy_vote(
+		block_number: u64,
+	) -> VoteMessage<u64, ecdsa_crypto::Public, ecdsa_crypto::Signature> {
 		let payload = Payload::from_single_entry(
 			known_payloads::MMR_ROOT_ID,
 			MmrRootHash::default().encode(),
@@ -379,12 +407,21 @@ mod tests {
 		let commitment = Commitment { payload, block_number, validator_set_id: 0 };
 		let signature = sign_commitment(&Keyring::Alice, &commitment);
 
-		VoteMessage { commitment, id: <Keyring as GenericKeyring<ecdsa_crypto::Pair>>::public(Keyring::Alice), signature }
+		VoteMessage {
+			commitment,
+			id: <Keyring as GenericKeyring<ecdsa_crypto::Pair>>::public(Keyring::Alice),
+			signature,
+		}
 	}
 
 	#[test]
 	fn should_avoid_verifying_signatures_twice() {
-		let gv = GossipValidator::<Block, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature, BeefyECDSAKeystore>::new(Arc::new(Mutex::new(KnownPeers::new())));
+		let gv = GossipValidator::<
+			Block,
+			ecdsa_crypto::AuthorityId,
+			ecdsa_crypto::Signature,
+			BeefyECDSAKeystore,
+		>::new(Arc::new(Mutex::new(KnownPeers::new())));
 		let sender = sc_network::PeerId::random();
 		let mut context = TestContext;
 
@@ -420,7 +457,12 @@ mod tests {
 
 	#[test]
 	fn messages_allowed_and_expired() {
-		let gv = GossipValidator::<Block, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature, BeefyECDSAKeystore>::new(Arc::new(Mutex::new(KnownPeers::new())));
+		let gv = GossipValidator::<
+			Block,
+			ecdsa_crypto::AuthorityId,
+			ecdsa_crypto::Signature,
+			BeefyECDSAKeystore,
+		>::new(Arc::new(Mutex::new(KnownPeers::new())));
 		let sender = sc_network::PeerId::random();
 		let topic = Default::default();
 		let intent = MessageIntent::Broadcast;
@@ -463,7 +505,12 @@ mod tests {
 
 	#[test]
 	fn messages_rebroadcast() {
-		let gv = GossipValidator::<Block, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature, BeefyECDSAKeystore>::new(Arc::new(Mutex::new(KnownPeers::new())));
+		let gv = GossipValidator::<
+			Block,
+			ecdsa_crypto::AuthorityId,
+			ecdsa_crypto::Signature,
+			BeefyECDSAKeystore,
+		>::new(Arc::new(Mutex::new(KnownPeers::new())));
 		let sender = sc_network::PeerId::random();
 		let topic = Default::default();
 

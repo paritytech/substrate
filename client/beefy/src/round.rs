@@ -16,17 +16,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{
-	collections::{BTreeMap},
-	hash::Hash, 
-};
+use std::{collections::BTreeMap, hash::Hash};
 
-use core::fmt::Debug;
 use crate::LOG_TARGET;
+use core::fmt::Debug;
 
-use beefy_primitives::{
-	ValidatorSet, ValidatorSetId,
-};
+use beefy_primitives::{ValidatorSet, ValidatorSetId};
 use codec::{Decode, Encode};
 use log::{debug, trace};
 use sp_runtime::traits::{Block, NumberFor};
@@ -36,16 +31,32 @@ use sp_runtime::traits::{Block, NumberFor};
 ///
 /// Does not do any validation on votes or signatures, layers above need to handle that (gossip).
 #[derive(Debug, Decode, Encode, PartialEq)]
-struct RoundTracker<AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send> {
+struct RoundTracker<
+	AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+> {
 	self_vote: bool,
 	votes: BTreeMap<AuthId, TSignature>,
 }
 
-impl<AuthId: Encode + Decode + Debug + Ord + Sync + Send + core::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send> Default for RoundTracker<AuthId, TSignature> {
-  	fn default() -> Self { RoundTracker::<_,_> {self_vote: false,  votes: <BTreeMap<AuthId, TSignature> as Default>::default()}}
+impl<
+		AuthId: Encode + Decode + Debug + Ord + Sync + Send + core::hash::Hash,
+		TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+	> Default for RoundTracker<AuthId, TSignature>
+{
+	fn default() -> Self {
+		RoundTracker::<_, _> {
+			self_vote: false,
+			votes: <BTreeMap<AuthId, TSignature> as Default>::default(),
+		}
+	}
 }
 
-impl<AuthId: Encode + Decode + Debug + Ord + Sync + Send + core::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send> RoundTracker<AuthId, TSignature> {
+impl<
+		AuthId: Encode + Decode + Debug + Ord + Sync + Send + core::hash::Hash,
+		TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+	> RoundTracker<AuthId, TSignature>
+{
 	fn add_vote(&mut self, vote: (AuthId, TSignature), self_vote: bool) -> bool {
 		if self.votes.contains_key(&vote.0) {
 			return false
@@ -76,7 +87,12 @@ pub fn threshold(authorities: usize) -> usize {
 ///
 /// Does not do any validation on votes or signatures, layers above need to handle that (gossip).
 #[derive(Debug, Decode, Encode, PartialEq)]
-pub(crate) struct Rounds<Payload, B: Block, AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send> {
+pub(crate) struct Rounds<
+	Payload,
+	B: Block,
+	AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+> {
 	rounds: BTreeMap<(Payload, NumberFor<B>), RoundTracker<AuthId, TSignature>>,
 	session_start: NumberFor<B>,
 	validator_set: ValidatorSet<AuthId>,
@@ -184,41 +200,43 @@ where
 
 #[cfg(test)]
 mod tests {
-    use core::fmt::Debug;
+	use core::fmt::Debug;
 	use sc_network_test::Block;
 	use sp_core::H256;
 
-     
 	use beefy_primitives::{
-        ecdsa_crypto::{self, Public as ECDSAPublic, Signature as ECDSASignature,},
-        bls_crypto::{Public as BLSPublic, Signature as BLSSignature},
-        ValidatorSet};
-    use codec::{Decode, Encode};
+		bls_crypto::{Public as BLSPublic, Signature as BLSSignature},
+		ecdsa_crypto::{self, Public as ECDSAPublic, Signature as ECDSASignature},
+		ValidatorSet,
+	};
+	use codec::{Decode, Encode};
 
 	use super::{threshold, Block as BlockT, Hash, RoundTracker, Rounds};
-    use crate::{keystore::{ tests::{Keyring, GenericKeyring, SimpleKeyPair, ECDSAnBLSPair}}};
+	use crate::keystore::tests::{ECDSAnBLSPair, GenericKeyring, Keyring, SimpleKeyPair};
 
-
-    impl<P, B, AuthId, TSignature> Rounds<P, B, AuthId, TSignature>
-    where
-	    P: Ord + Hash + Clone,
-	    B: BlockT,
-	    AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash,
-	    TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+	impl<P, B, AuthId, TSignature> Rounds<P, B, AuthId, TSignature>
+	where
+		P: Ord + Hash + Clone,
+		B: BlockT,
+		AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash,
+		TSignature: Encode + Decode + Debug + Clone + Sync + Send,
 	{
 		pub(crate) fn test_set_mandatory_done(&mut self, done: bool) {
 			self.mandatory_done = done;
 		}
 	}
-    
+
 	fn round_tracker<TKeyPair, AuthId, TSignature>()
-    where TKeyPair: SimpleKeyPair<Public = AuthId, Signature = TSignature>,
-          AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
-          TSignature: Encode + Decode + Debug + Clone + Sync + Send,
-    {
+	where
+		TKeyPair: SimpleKeyPair<Public = AuthId, Signature = TSignature>,
+		AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
+		TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+	{
 		let mut rt = RoundTracker::default();
-		let bob_vote = (<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Bob),
-                        <Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Bob, b"I am committed"));
+		let bob_vote = (
+			<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Bob),
+			<Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Bob, b"I am committed"),
+		);
 		let threshold = 2;
 
 		// self vote not added yet
@@ -235,7 +253,10 @@ mod tests {
 		// vote is not done
 		assert!(!rt.is_done(threshold));
 
-		let alice_vote = (<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice), <Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Alice, b"I am committed"));
+		let alice_vote = (
+			<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice),
+			<Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Alice, b"I am committed"),
+		);
 		// adding new vote (self vote this time) allowed
 		assert!(rt.add_vote(alice_vote, true));
 
@@ -245,17 +266,17 @@ mod tests {
 		assert!(rt.is_done(threshold));
 	}
 
-    #[test]
-    fn round_tracker_with_ecdsa_keys() {        
-        round_tracker::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature>();
+	#[test]
+	fn round_tracker_with_ecdsa_keys() {
+		round_tracker::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature>();
 	}
-    
-    #[test]
-    fn round_tracker_with_ecdsa_n_bls_keys() {
-	    round_tracker::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature)>();
-    }
 
-    #[test]
+	#[test]
+	fn round_tracker_with_ecdsa_n_bls_keys() {
+		round_tracker::<ECDSAnBLSPair, (ECDSAPublic, BLSPublic), (ECDSASignature, BLSSignature)>();
+	}
+
+	#[test]
 	fn vote_threshold() {
 		assert_eq!(threshold(1), 1);
 		assert_eq!(threshold(2), 2);
@@ -266,15 +287,18 @@ mod tests {
 	}
 
 	fn new_rounds<TKeyPair, AuthId, TSignature>()
-    where TKeyPair: SimpleKeyPair<Public = AuthId, Signature = TSignature>,
-          AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
-          TSignature: Encode + Decode + Debug + Clone + Sync + Send,
-    {
+	where
+		TKeyPair: SimpleKeyPair<Public = AuthId, Signature = TSignature>,
+		AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
+		TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+	{
 		sp_tracing::try_init_simple();
-        let validators = ValidatorSet::new(
-			vec![<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice),
-                 <Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Bob),
-                 <Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Charlie)],
+		let validators = ValidatorSet::new(
+			vec![
+				<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice),
+				<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Bob),
+				<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Charlie),
+			],
 			42,
 		)
 		.unwrap();
@@ -285,29 +309,31 @@ mod tests {
 		assert_eq!(42, rounds.validator_set_id());
 		assert_eq!(1, rounds.session_start());
 		assert_eq!(
-			&vec![<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice),
-<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Bob),
-<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Charlie)],
+			&vec![
+				<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice),
+				<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Bob),
+				<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Charlie)
+			],
 			rounds.validators()
 		);
 	}
 
-    #[test]
-    fn new_rounds_with_ecdsa_keys() {        
-        new_rounds::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature>();
+	#[test]
+	fn new_rounds_with_ecdsa_keys() {
+		new_rounds::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature>();
 	}
-    
-    #[test]
-    fn new_rounds_with_ecdsa_n_bls_keys() {
-	    new_rounds::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature)>();
-    }
 
+	#[test]
+	fn new_rounds_with_ecdsa_n_bls_keys() {
+		new_rounds::<ECDSAnBLSPair, (ECDSAPublic, BLSPublic), (ECDSASignature, BLSSignature)>();
+	}
 
 	fn add_and_conclude_votes<TKeyPair, AuthId, TSignature>()
-    where TKeyPair: SimpleKeyPair<Public = AuthId, Signature = TSignature>,
-          AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
-          TSignature: Encode + Decode + Debug + Clone + Sync + Send,
- {
+	where
+		TKeyPair: SimpleKeyPair<Public = AuthId, Signature = TSignature>,
+		AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
+		TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+	{
 		sp_tracing::try_init_simple();
 
 		let validators = ValidatorSet::new(
@@ -319,8 +345,8 @@ mod tests {
 			],
 			Default::default(),
 		)
-		    .unwrap();
-        
+		.unwrap();
+
 		let round = (H256::from_low_u64_le(1), 1);
 
 		let session_start = 1u64.into();
@@ -332,8 +358,10 @@ mod tests {
 		// add 1st good vote
 		assert!(rounds.add_vote(
 			&round,
-			(<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice),
-            <Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Alice, b"I am committed")),
+			(
+				<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice),
+				<Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Alice, b"I am committed")
+			),
 			true
 		));
 		// round not concluded
@@ -344,17 +372,20 @@ mod tests {
 		// double voting not allowed
 		assert!(!rounds.add_vote(
 			&round,
-(
-    <Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice),
-<Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Alice, b"I am committed")),
+			(
+				<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice),
+				<Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Alice, b"I am committed")
+			),
 			true
 		));
 
 		// invalid vote (Dave is not a validator)
 		assert!(!rounds.add_vote(
 			&round,
-			(<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Dave),
-            <Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Dave, b"I am committed")),
+			(
+				<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Dave),
+				<Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Dave, b"I am committed")
+			),
 			false
 		));
 		assert!(rounds.should_conclude(&round).is_none());
@@ -362,8 +393,10 @@ mod tests {
 		// add 2nd good vote
 		assert!(rounds.add_vote(
 			&round,
-			(<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Bob),
-                <Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Bob, b"I am committed")),
+			(
+				<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Bob),
+				<Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Bob, b"I am committed")
+			),
 			false
 		));
 		// round not concluded
@@ -372,7 +405,10 @@ mod tests {
 		// add 3rd good vote
 		assert!(rounds.add_vote(
 			&round,
-			(<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Charlie), <Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Charlie, b"I am committed")),
+			(
+				<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Charlie),
+				<Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Charlie, b"I am committed")
+			),
 			false
 		));
 		// round concluded
@@ -382,37 +418,49 @@ mod tests {
 		// Eve is a validator, but round was concluded, adding vote disallowed
 		assert!(!rounds.add_vote(
 			&round,
-			(<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Eve), <Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Eve, b"I am committed")),
+			(
+				<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Eve),
+				<Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Eve, b"I am committed")
+			),
 			false
 		));
-	}    
-
-    #[test]
-    fn add_and_conclude_votes_with_ecdsa_keys() {        
-        add_and_conclude_votes::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature>();
 	}
-    
-    #[test]
-    fn add_and_conclude_votes_with_ecdsa_n_bls_keys() {
-	    add_and_conclude_votes::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature)>();
-    }
+
+	#[test]
+	fn add_and_conclude_votes_with_ecdsa_keys() {
+		add_and_conclude_votes::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature>();
+	}
+
+	#[test]
+	fn add_and_conclude_votes_with_ecdsa_n_bls_keys() {
+		add_and_conclude_votes::<
+			ECDSAnBLSPair,
+			(ECDSAPublic, BLSPublic),
+			(ECDSASignature, BLSSignature),
+		>();
+	}
 
 	fn old_rounds_not_accepted<TKeyPair, AuthId, TSignature>()
-    where TKeyPair: SimpleKeyPair<Public = AuthId, Signature = TSignature>,
-          AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
-          TSignature: Encode + Decode + Debug + Clone + Sync + Send,
-
-    {
+	where
+		TKeyPair: SimpleKeyPair<Public = AuthId, Signature = TSignature>,
+		AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
+		TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+	{
 		sp_tracing::try_init_simple();
 
 		let validators = ValidatorSet::new(
-			vec![<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice),
-                 <Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Bob),
-                <Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Charlie)],
+			vec![
+				<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice),
+				<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Bob),
+				<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Charlie),
+			],
 			42,
 		)
 		.unwrap();
-		let alice = (<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice), <Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Alice, b"I am committed"));
+		let alice = (
+			<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice),
+			<Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Alice, b"I am committed"),
+		);
 
 		let session_start = 10u64.into();
 		let mut rounds = Rounds::<H256, Block, AuthId, TSignature>::new(session_start, validators);
@@ -440,21 +488,26 @@ mod tests {
 		assert_eq!(rounds.rounds.len(), 1);
 	}
 
-    #[test]
-    fn old_rounds_not_accepted_with_ecdsa_keys() {        
-        old_rounds_not_accepted::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature>();
+	#[test]
+	fn old_rounds_not_accepted_with_ecdsa_keys() {
+		old_rounds_not_accepted::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature>();
 	}
-    
-    #[test]
-    fn old_rounds_not_accepted_with_ecdsa_n_bls_keys() {
-	    old_rounds_not_accepted::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature)>();
-    }
+
+	#[test]
+	fn old_rounds_not_accepted_with_ecdsa_n_bls_keys() {
+		old_rounds_not_accepted::<
+			ECDSAnBLSPair,
+			(ECDSAPublic, BLSPublic),
+			(ECDSASignature, BLSSignature),
+		>();
+	}
 
 	fn multiple_rounds<TKeyPair, AuthId, TSignature>()
-    where TKeyPair: SimpleKeyPair<Public = AuthId, Signature = TSignature>,
-          AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
-          TSignature: Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq,
- {
+	where
+		TKeyPair: SimpleKeyPair<Public = AuthId, Signature = TSignature>,
+		AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
+		TSignature: Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq,
+	{
 		sp_tracing::try_init_simple();
 
 		let validators = ValidatorSet::new(
@@ -474,51 +527,90 @@ mod tests {
 		// round 1
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(1), 1),
-			(<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice), <Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Alice, b"I am committed")),
+			(
+				<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice),
+				<Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Alice, b"I am committed")
+			),
 			true,
 		));
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(1), 1),
-			(<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Bob), <Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Bob, b"I am committed")),
+			(
+				<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Bob),
+				<Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Bob, b"I am committed")
+			),
 			false,
 		));
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(1), 1),
-			(<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Charlie), <Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Charlie, b"I am committed")),
+			(
+				<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Charlie),
+				<Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Charlie, b"I am committed")
+			),
 			false,
 		));
 
 		// round 2
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(2), 2),
-			(<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice), <Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Alice, b"I am again committed")),
+			(
+				<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice),
+				<Keyring as GenericKeyring<TKeyPair>>::sign(
+					Keyring::Alice,
+					b"I am again committed"
+				)
+			),
 			true,
 		));
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(2), 2),
-			(<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Bob), <Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Bob,b"I am again committed")),
+			(
+				<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Bob),
+				<Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Bob, b"I am again committed")
+			),
 			false,
 		));
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(2), 2),
-			(<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Charlie), <Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Charlie,b"I am again committed")),
+			(
+				<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Charlie),
+				<Keyring as GenericKeyring<TKeyPair>>::sign(
+					Keyring::Charlie,
+					b"I am again committed"
+				)
+			),
 			false,
 		));
 
 		// round 3
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(3), 3),
-			(<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice), <Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Alice,b"I am still committed")),
+			(
+				<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice),
+				<Keyring as GenericKeyring<TKeyPair>>::sign(
+					Keyring::Alice,
+					b"I am still committed"
+				)
+			),
 			true,
 		));
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(3), 3),
-			(<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Bob), <Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Bob,b"I am still committed")),
+			(
+				<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Bob),
+				<Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Bob, b"I am still committed")
+			),
 			false,
 		));
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(3), 3),
-			(<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Charlie), <Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Charlie,b"I am still committed")),
+			(
+				<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Charlie),
+				<Keyring as GenericKeyring<TKeyPair>>::sign(
+					Keyring::Charlie,
+					b"I am still committed"
+				)
+			),
 			false,
 		));
 		assert_eq!(3, rounds.rounds.len());
@@ -535,22 +627,31 @@ mod tests {
 		assert_eq!(
 			signatures,
 			vec![
-				Some(<Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Alice,b"I am again committed")),
-				Some(<Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Bob,b"I am again committed")),
-				Some(<Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Charlie,b"I am again committed")),
+				Some(<Keyring as GenericKeyring<TKeyPair>>::sign(
+					Keyring::Alice,
+					b"I am again committed"
+				)),
+				Some(<Keyring as GenericKeyring<TKeyPair>>::sign(
+					Keyring::Bob,
+					b"I am again committed"
+				)),
+				Some(<Keyring as GenericKeyring<TKeyPair>>::sign(
+					Keyring::Charlie,
+					b"I am again committed"
+				)),
 				None
 			]
 		);
 	}
 
-    #[test]
-    fn multiple_rounds_with_ecdsa_keys() {        
-        multiple_rounds::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature>();
+	#[test]
+	fn multiple_rounds_with_ecdsa_keys() {
+		multiple_rounds::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature>();
 	}
-    
-    #[test]
-    fn multiple_rounds_with_ecdsa_n_bls_keys() {
-	    multiple_rounds::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature)>();
-    }
 
+	#[test]
+	fn multiple_rounds_with_ecdsa_n_bls_keys() {
+		multiple_rounds::<ECDSAnBLSPair, (ECDSAPublic, BLSPublic), (ECDSASignature, BLSSignature)>(
+		);
+	}
 }

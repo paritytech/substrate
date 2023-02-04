@@ -23,8 +23,9 @@ use crate::vrf::{VRFSignature, VRFTranscriptData};
 use async_trait::async_trait;
 use futures::{executor::block_on, future::join_all};
 use sp_core::{
+	bls,
 	crypto::{CryptoTypePublicPair, KeyTypeId},
-	ecdsa, ed25519, sr25519, bls
+	ecdsa, ed25519, sr25519,
 };
 use std::sync::Arc;
 
@@ -273,7 +274,7 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 	fn ecdsa_generate_new(&self, id: KeyTypeId, seed: Option<&str>)
 		-> Result<ecdsa::Public, Error>;
 
-    /// Returns all bls12-377 public keys for the given key type.
+	/// Returns all bls12-377 public keys for the given key type.
 	fn bls_public_keys(&self, id: KeyTypeId) -> Vec<bls::Public>;
 
 	/// Generate a new bls12-377 key pair for the given key type and an optional seed.
@@ -281,8 +282,7 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 	/// If the given seed is `Some(_)`, the key pair will only be stored in memory.
 	///
 	/// Returns the public key of the generated key pair.
-	fn bls_generate_new(&self, id: KeyTypeId, seed: Option<&str>)
-		-> Result<bls::Public, Error>;
+	fn bls_generate_new(&self, id: KeyTypeId, seed: Option<&str>) -> Result<bls::Public, Error>;
 
 	/// Insert a new key. This doesn't require any known of the crypto; but a public key must be
 	/// manually provided.
@@ -428,7 +428,6 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 		public: &bls::Public,
 		msg: &[u8],
 	) -> Result<Option<bls::Signature>, Error>;
-
 }
 
 /// A pointer to a keystore.

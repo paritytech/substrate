@@ -16,40 +16,40 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use sp_application_crypto::RuntimeAppPublic;
+use sp_application_crypto::{Pair, RuntimeAppPublic};
 use sp_core::keccak_256;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::traits::Keccak256;
-use sp_application_crypto::Pair;
 
 use log::warn;
 
 use beefy_primitives::{
+	bls_crypto::{Public as BLSPublic, Signature as BLSSignature},
 	ecdsa_crypto::{Public as ECDSAPublic, Signature as ECDSASignature},
-        bls_crypto::{Public as BLSPublic, Signature as BLSSignature},
-        BeefyAuthorityId,
-	KEY_TYPE,
+	BeefyAuthorityId, KEY_TYPE,
 };
 
 use codec::{Decode, Encode};
 use core::fmt::Debug;
-	
+
 use crate::{error, LOG_TARGET};
 
 /// A BEEFY specific keystore implemented as a `Newtype`. This is basically a
 /// wrapper around [`sp_keystore::SyncCryptoStore`] and allows to customize
 /// common cryptographic functionality.
-pub  trait BeefyKeystore<AuthorityId, TSignature> : From<Option<SyncCryptoStorePtr>> + Sync + Send where
+pub trait BeefyKeystore<AuthorityId, TSignature>:
+	From<Option<SyncCryptoStorePtr>> + Sync + Send
+where
 	AuthorityId: Encode + Decode + Debug + Clone + Ord + Sync + Send,
-	TSignature:  Encode + Decode + Debug + Clone + Sync + Send,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
 {
-	type Public : Encode + Decode + Debug + From<AuthorityId> + Into<AuthorityId>;
+	type Public: Encode + Decode + Debug + From<AuthorityId> + Into<AuthorityId>;
 
 	fn new(keystore: SyncCryptoStorePtr) -> Self;
-	
-    fn authority_id(&self, keys: &[AuthorityId]) -> Option<Self::Public>;
 
-	fn sign(&self, public: &Self::Public, message: &[u8]) -> Result<TSignature,  error::Error>;
+	fn authority_id(&self, keys: &[AuthorityId]) -> Option<Self::Public>;
+
+	fn sign(&self, public: &Self::Public, message: &[u8]) -> Result<TSignature, error::Error>;
 
 	fn public_keys(&self) -> Result<Vec<Self::Public>, error::Error>;
 
@@ -57,21 +57,19 @@ pub  trait BeefyKeystore<AuthorityId, TSignature> : From<Option<SyncCryptoStoreP
 
 	fn verify(public: &Self::Public, sig: &TSignature, message: &[u8]) -> bool;
 
-	fn authority_id_to_public_key(auth_id: &AuthorityId) -> Result<Self::Public,  error::Error>;
-
+	fn authority_id_to_public_key(auth_id: &AuthorityId) -> Result<Self::Public, error::Error>;
 }
 
-pub struct BeefyECDSAKeystore (Option<SyncCryptoStorePtr>);
+pub struct BeefyECDSAKeystore(Option<SyncCryptoStorePtr>);
 
 pub struct BeefyBLSKeystore(Option<SyncCryptoStorePtr>);
 
 pub struct BeefyBLSnECDSAKeystore(Option<SyncCryptoStorePtr>);
 
-impl BeefyKeystore<ECDSAPublic,ECDSASignature> for  BeefyECDSAKeystore
-{
+impl BeefyKeystore<ECDSAPublic, ECDSASignature> for BeefyECDSAKeystore {
 	type Public = ECDSAPublic;
-	
-	fn new(keystore: SyncCryptoStorePtr) -> Self {	
+
+	fn new(keystore: SyncCryptoStorePtr) -> Self {
 		Self(Some(keystore))
 	}
 
@@ -108,7 +106,7 @@ impl BeefyKeystore<ECDSAPublic,ECDSASignature> for  BeefyECDSAKeystore
 	/// Note that `message` usually will be pre-hashed before being signed.
 	///
 	/// Return the message signature or an error in case of failure.
-	fn sign(&self, public: &Self::Public, message: &[u8]) -> Result<ECDSASignature,  error::Error> {
+	fn sign(&self, public: &Self::Public, message: &[u8]) -> Result<ECDSASignature, error::Error> {
 		let store = self.0.clone().ok_or_else(|| error::Error::Keystore("no Keystore".into()))?;
 
 		let msg = keccak_256(message);
@@ -126,8 +124,8 @@ impl BeefyKeystore<ECDSAPublic,ECDSASignature> for  BeefyECDSAKeystore
 		Ok(sig)
 	}
 
-	/// Returns a vector of [`beefy_primitives::ecdsa_crypto::Public`] keys which are currently supported
-	/// (i.e. found in the keystore).
+	/// Returns a vector of [`beefy_primitives::ecdsa_crypto::Public`] keys which are currently
+	/// supported (i.e. found in the keystore).
 	fn public_keys(&self) -> Result<Vec<Self::Public>, error::Error> {
 		let store = self.0.clone().ok_or_else(|| error::Error::Keystore("no Keystore".into()))?;
 
@@ -139,34 +137,30 @@ impl BeefyKeystore<ECDSAPublic,ECDSASignature> for  BeefyECDSAKeystore
 		Ok(pk)
 	}
 
-
-	/// Returns a vector of [`beefy_primitives::ecdsa_crypto::Public`] keys which are currently supported
-	/// (i.e. found in the keystore).
+	/// Returns a vector of [`beefy_primitives::ecdsa_crypto::Public`] keys which are currently
+	/// supported (i.e. found in the keystore).
 	fn authority_ids(&self) -> Result<Vec<ECDSAPublic>, error::Error> {
 		self.public_keys()
 	}
 
-  
 	/// Use the `public` key to verify that `sig` is a valid signature for `message`.
-	///
 	fn verify(public: &Self::Public, sig: &ECDSASignature, message: &[u8]) -> bool {
 		BeefyAuthorityId::<Keccak256>::verify(public, sig, message)
 	}
 
-	fn authority_id_to_public_key(auth_id: &ECDSAPublic) -> Result<Self::Public,  error::Error> {
+	fn authority_id_to_public_key(auth_id: &ECDSAPublic) -> Result<Self::Public, error::Error> {
 		Ok((*auth_id).clone())
 	}
 }
 
 //Implement BLSKeyStore
-impl BeefyKeystore<BLSPublic, BLSSignature> for  BeefyBLSKeystore
-{	
+impl BeefyKeystore<BLSPublic, BLSSignature> for BeefyBLSKeystore {
 	type Public = BLSPublic;
 
-	fn new(keystore: SyncCryptoStorePtr) -> Self {	
+	fn new(keystore: SyncCryptoStorePtr) -> Self {
 		Self(Some(keystore))
 	}
-    
+
 	/// Check if the keystore contains a private key for one of the public keys
 	/// contained in `keys`. A public key with a matching private key is known
 	/// as a local authority id.
@@ -189,13 +183,13 @@ impl BeefyKeystore<BLSPublic, BLSSignature> for  BeefyBLSKeystore
 
 		public.get(0).cloned()
 	}
-	
+
 	/// Sign `message` with the `public` key.
 	///
 	/// Note that `message` usually will be pre-hashed before being signed.
 	///
 	/// Return the message signature or an error in case of failure.
-	fn sign(&self, public: &Self::Public, message: &[u8]) -> Result<BLSSignature,  error::Error> {
+	fn sign(&self, public: &Self::Public, message: &[u8]) -> Result<BLSSignature, error::Error> {
 		let store = self.0.clone().ok_or_else(|| error::Error::Keystore("no Keystore".into()))?;
 
 		let public = public.as_ref();
@@ -212,8 +206,8 @@ impl BeefyKeystore<BLSPublic, BLSSignature> for  BeefyBLSKeystore
 		Ok(sig)
 	}
 
-	/// Returns a vector of [`beefy_primitives::bls_crypto::Public`] keys which are currently supported
-	/// (i.e. found in the keystore).
+	/// Returns a vector of [`beefy_primitives::bls_crypto::Public`] keys which are currently
+	/// supported (i.e. found in the keystore).
 	fn public_keys(&self) -> Result<Vec<Self::Public>, error::Error> {
 		let store = self.0.clone().ok_or_else(|| error::Error::Keystore("no Keystore".into()))?;
 
@@ -225,8 +219,8 @@ impl BeefyKeystore<BLSPublic, BLSSignature> for  BeefyBLSKeystore
 		Ok(pk)
 	}
 
-	/// Returns a vector of [`beefy_primitives::bls_crypto::Public`] keys which are currently supported
-	/// (i.e. found in the keystore).
+	/// Returns a vector of [`beefy_primitives::bls_crypto::Public`] keys which are currently
+	/// supported (i.e. found in the keystore).
 	fn authority_ids(&self) -> Result<Vec<BLSPublic>, error::Error> {
 		self.public_keys()
 	}
@@ -238,39 +232,40 @@ impl BeefyKeystore<BLSPublic, BLSSignature> for  BeefyBLSKeystore
 		let sig = sig.as_ref();
 		let public = public.as_ref();
 
-	    println!("{:?}: {}",message, sp_core::bls::Pair::verify(sig, &message, public));
-	    sp_core::bls::Pair::verify(sig, &message, public)
+		println!("{:?}: {}", message, sp_core::bls::Pair::verify(sig, &message, public));
+		sp_core::bls::Pair::verify(sig, &message, public)
 	}
 
-	fn authority_id_to_public_key(auth_id: &BLSPublic) -> Result<Self::Public,  error::Error> {
+	fn authority_id_to_public_key(auth_id: &BLSPublic) -> Result<Self::Public, error::Error> {
 		Ok((*auth_id).clone())
 	}
-
 }
 
 impl BeefyBLSnECDSAKeystore {
-    fn both(&self) -> (BeefyECDSAKeystore, BeefyBLSKeystore) {
-            ( BeefyECDSAKeystore(self.0.clone()), BeefyBLSKeystore(self.0.clone()))
-    }
+	fn both(&self) -> (BeefyECDSAKeystore, BeefyBLSKeystore) {
+		(BeefyECDSAKeystore(self.0.clone()), BeefyBLSKeystore(self.0.clone()))
+	}
 }
 
-impl BeefyKeystore<(ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature)> for BeefyBLSnECDSAKeystore
-{	
-	fn new(keystore: SyncCryptoStorePtr) -> Self {	
+impl BeefyKeystore<(ECDSAPublic, BLSPublic), (ECDSASignature, BLSSignature)>
+	for BeefyBLSnECDSAKeystore
+{
+	fn new(keystore: SyncCryptoStorePtr) -> Self {
 		Self(Some(keystore))
 	}
 
-	type Public = (ECDSAPublic,BLSPublic);
+	type Public = (ECDSAPublic, BLSPublic);
 	/// Check if the keystore contains a private key for one of the public keys
 	/// contained in `keys`. A public key with a matching private key is known
 	/// as a local authority id.
 	///
 	/// Return the public key for which we also do have a private key. If no
 	/// matching private key is found, `None` will be returned.
-	fn authority_id(&self, keys: &[(ECDSAPublic,BLSPublic)]) -> Option<Self::Public> {
-		let (ecdsa_pubkeys, bls_pubkeys): (Vec<ECDSAPublic>, Vec<BLSPublic>) = keys.iter().cloned().unzip();
+	fn authority_id(&self, keys: &[(ECDSAPublic, BLSPublic)]) -> Option<Self::Public> {
+		let (ecdsa_pubkeys, bls_pubkeys): (Vec<ECDSAPublic>, Vec<BLSPublic>) =
+			keys.iter().cloned().unzip();
 		let own_ecdsa_key = self.both().0.authority_id(&ecdsa_pubkeys);
-		let own_bls_key  = self.both().1.authority_id(&bls_pubkeys); 
+		let own_bls_key = self.both().1.authority_id(&bls_pubkeys);
 		if own_ecdsa_key == None || own_bls_key == None {
 			None
 		} else {
@@ -278,50 +273,63 @@ impl BeefyKeystore<(ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature)> for B
 		}
 	}
 
-	fn sign(&self, public: &Self::Public, message: &[u8]) -> Result<(ECDSASignature,BLSSignature),  error::Error> {
+	fn sign(
+		&self,
+		public: &Self::Public,
+		message: &[u8],
+	) -> Result<(ECDSASignature, BLSSignature), error::Error> {
 		let bls_n_ecdsa = self.both();
 		match (bls_n_ecdsa.0.sign(&public.0, message), bls_n_ecdsa.1.sign(&public.1, message)) {
-			(Ok(ecdsa_sign),Ok(bls_sign))=> Ok((ecdsa_sign, bls_sign)),
-			_ => Err(error::Error::Signature(format!("could not sign with both bls and ecdsa keys")))
+			(Ok(ecdsa_sign), Ok(bls_sign)) => Ok((ecdsa_sign, bls_sign)),
+			_ =>
+				Err(error::Error::Signature(format!("could not sign with both bls and ecdsa keys"))),
 		}
 	}
-								      
+
 	fn public_keys(&self) -> Result<Vec<Self::Public>, error::Error> {
 		let bls_n_ecdsa = self.both();
-		let pk  : Vec<Self::Public> = bls_n_ecdsa.0.public_keys()?.into_iter().zip(bls_n_ecdsa.1.public_keys()?.into_iter()).collect();
+		let pk: Vec<Self::Public> = bls_n_ecdsa
+			.0
+			.public_keys()?
+			.into_iter()
+			.zip(bls_n_ecdsa.1.public_keys()?.into_iter())
+			.collect();
 
 		Ok(pk)
-
 	}
 
-	/// Returns a vector of [`(beefy_primitives::ecdsa_crypto::Public, beefy_primitives::bls_crypto::Public)`] keys which are currently supported
-	/// (i.e. found in the keystore).
-	fn authority_ids(&self) -> Result<Vec<(ECDSAPublic,BLSPublic)>, error::Error> {
+	/// Returns a vector of [`(beefy_primitives::ecdsa_crypto::Public,
+	/// beefy_primitives::bls_crypto::Public)`] keys which are currently supported (i.e. found in
+	/// the keystore).
+	fn authority_ids(&self) -> Result<Vec<(ECDSAPublic, BLSPublic)>, error::Error> {
 		self.public_keys()
 	}
 
-	fn verify(public: &Self::Public, sig: &(ECDSASignature,BLSSignature), message: &[u8]) -> bool {
-		match (BeefyECDSAKeystore::verify(&public.0, &sig.0, message),
-		       BeefyBLSKeystore::verify(&public.1, &sig.1, message)) {
+	fn verify(public: &Self::Public, sig: &(ECDSASignature, BLSSignature), message: &[u8]) -> bool {
+		match (
+			BeefyECDSAKeystore::verify(&public.0, &sig.0, message),
+			BeefyBLSKeystore::verify(&public.1, &sig.1, message),
+		) {
 			(true, true) => true,
-			_ => false
+			_ => false,
 		}
 	}
 
-	fn authority_id_to_public_key(auth_id: &(ECDSAPublic,BLSPublic)) -> Result<Self::Public,  error::Error> {
+	fn authority_id_to_public_key(
+		auth_id: &(ECDSAPublic, BLSPublic),
+	) -> Result<Self::Public, error::Error> {
 		Ok((*auth_id).clone())
 	}
-
 }
-    
+
 macro_rules! impl_from_cryptostore_for_keystore {
-    ($keystore:tt) => {
-	    impl From<Option<SyncCryptoStorePtr>> for $keystore {
-		    fn from(store: Option<SyncCryptoStorePtr>) -> $keystore {
-			    $keystore(store)
-		    }
-	    }
-    }
+	($keystore:tt) => {
+		impl From<Option<SyncCryptoStorePtr>> for $keystore {
+			fn from(store: Option<SyncCryptoStorePtr>) -> $keystore {
+				$keystore(store)
+			}
+		}
+	};
 }
 
 impl_from_cryptostore_for_keystore!(BeefyECDSAKeystore);
@@ -333,23 +341,25 @@ pub mod tests {
 	use std::sync::Arc;
 
 	use sc_keystore::LocalKeystore;
-	use sp_core::{ecdsa, keccak_256, Pair, crypto::{SecretStringError}};
-        use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr,};
-        use sp_application_crypto::Wraps;
+	use sp_application_crypto::Wraps;
+	use sp_core::{crypto::SecretStringError, ecdsa, keccak_256, Pair};
+	use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 
-	use beefy_primitives::{ecdsa_crypto, bls_crypto, KEY_TYPE};
+	use beefy_primitives::{bls_crypto, ecdsa_crypto, KEY_TYPE};
 
-        use super::{BeefyKeystore, BeefyECDSAKeystore, BeefyBLSnECDSAKeystore, ECDSAPublic, ECDSASignature, BLSPublic, BLSSignature};
-        use codec::{Decode, Encode};
-        use core::fmt::Debug;
+	use super::{
+		BLSPublic, BLSSignature, BeefyBLSnECDSAKeystore, BeefyECDSAKeystore, BeefyKeystore,
+		ECDSAPublic, ECDSASignature,
+	};
+	use codec::{Decode, Encode};
+	use core::fmt::Debug;
 
 	use crate::error::Error;
 
 	/// Set of test accounts using [`beefy_primitives::crypto`] types.
 	#[allow(missing_docs)]
 	#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display, strum::EnumIter)]
-	pub(crate) enum Keyring
-    {
+	pub(crate) enum Keyring {
 		Alice,
 		Bob,
 		Charlie,
@@ -357,224 +367,275 @@ pub mod tests {
 		Eve,
 		Ferdie,
 		One,
-	    Two,
-		
+		Two,
 	}
 
-    pub(crate) trait SimpleKeyPair : Clone + Sized + Sync + Send  {
-        type Public: Clone + Encode + Decode + Debug + Ord + Sync + Send;
-	type Signature:  Clone + Encode + Decode + Debug + Clone + Sync + Send;
+	pub(crate) trait SimpleKeyPair: Clone + Sized + Sync + Send {
+		type Public: Clone + Encode + Decode + Debug + Ord + Sync + Send;
+		type Signature: Clone + Encode + Decode + Debug + Clone + Sync + Send;
 
-	fn generate_in_store(store: SyncCryptoStorePtr, owner: Keyring) -> Self::Public;
+		fn generate_in_store(store: SyncCryptoStorePtr, owner: Keyring) -> Self::Public;
 
-	fn add_typed_key_to_store(store: SyncCryptoStorePtr, key_type: sp_application_crypto::KeyTypeId, seed: Option<&str>) -> Self::Public;
-			     
-	fn sign(&self, hashed_message : &[u8]) -> Self::Signature;
+		fn add_typed_key_to_store(
+			store: SyncCryptoStorePtr,
+			key_type: sp_application_crypto::KeyTypeId,
+			seed: Option<&str>,
+		) -> Self::Public;
 
-	fn public(&self) -> Self::Public;
+		fn sign(&self, hashed_message: &[u8]) -> Self::Signature;
 
- 	fn verify(sig: &Self::Signature, hashed_message : &[u8], pubkey: Self::Public) -> bool;
+		fn public(&self) -> Self::Public;
 
-        fn from_string(s: &str, password_override: Option<&str>) -> Result<Self, SecretStringError>;
+		fn verify(sig: &Self::Signature, hashed_message: &[u8], pubkey: Self::Public) -> bool;
 
-      	/// Return a vec filled with raw data.
-	fn to_raw_vec(&self) -> Vec<u8>;
-    }
+		fn from_string(s: &str, password_override: Option<&str>)
+			-> Result<Self, SecretStringError>;
 
-    pub(crate) trait  GenericKeyring<TKeyPair> where
-        TKeyPair: SimpleKeyPair,
-    {
-	/// Sign `msg`.
-	fn sign(self, msg: &[u8]) -> TKeyPair::Signature;
-
-	/// Return key pair.
-	fn pair(self) -> TKeyPair;
-
-	/// Return public key.
-	fn public(self) -> TKeyPair::Public;
-
-	/// Return seed string.
-	fn to_seed(self) -> String;
-
-    }
-	
-    impl<TKeyPair> GenericKeyring<TKeyPair> for Keyring where
-        TKeyPair: SimpleKeyPair,
-    {	
-	/// Sign `msg`.
-	fn sign(self, msg: &[u8]) -> TKeyPair::Signature {
-            let key_pair = <Keyring as GenericKeyring<TKeyPair>>::pair(self);
-	    key_pair.sign(&msg).into()
+		/// Return a vec filled with raw data.
+		fn to_raw_vec(&self) -> Vec<u8>;
 	}
 
-	/// Return key pair.
-	fn pair(self) -> TKeyPair {
-	    TKeyPair::from_string(<Keyring as GenericKeyring<TKeyPair>>::to_seed(self).as_str(), None).unwrap().into()
+	pub(crate) trait GenericKeyring<TKeyPair>
+	where
+		TKeyPair: SimpleKeyPair,
+	{
+		/// Sign `msg`.
+		fn sign(self, msg: &[u8]) -> TKeyPair::Signature;
+
+		/// Return key pair.
+		fn pair(self) -> TKeyPair;
+
+		/// Return public key.
+		fn public(self) -> TKeyPair::Public;
+
+		/// Return seed string.
+		fn to_seed(self) -> String;
 	}
 
-	/// Return public key.
-	fn public(self) -> TKeyPair::Public {
-	    <Keyring as GenericKeyring<TKeyPair>>::pair(self).public()
+	impl<TKeyPair> GenericKeyring<TKeyPair> for Keyring
+	where
+		TKeyPair: SimpleKeyPair,
+	{
+		/// Sign `msg`.
+		fn sign(self, msg: &[u8]) -> TKeyPair::Signature {
+			let key_pair = <Keyring as GenericKeyring<TKeyPair>>::pair(self);
+			key_pair.sign(&msg).into()
+		}
+
+		/// Return key pair.
+		fn pair(self) -> TKeyPair {
+			TKeyPair::from_string(
+				<Keyring as GenericKeyring<TKeyPair>>::to_seed(self).as_str(),
+				None,
+			)
+			.unwrap()
+			.into()
+		}
+
+		/// Return public key.
+		fn public(self) -> TKeyPair::Public {
+			<Keyring as GenericKeyring<TKeyPair>>::pair(self).public()
+		}
+
+		/// Return seed string.
+		fn to_seed(self) -> String {
+			format!("//{}", self)
+		}
 	}
 
-	/// Return seed string.
-	fn to_seed(self) -> String {
-	    format!("//{}", self)
+	// Auxiliary traits for ECDSA
+	impl SimpleKeyPair for ecdsa_crypto::Pair {
+		type Public = ecdsa_crypto::Public;
+		type Signature = ecdsa_crypto::Signature;
+
+		fn generate_in_store(store: SyncCryptoStorePtr, owner: Keyring) -> Self::Public {
+			SyncCryptoStore::ecdsa_generate_new(
+				&*store,
+				KEY_TYPE,
+				Some(&<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::to_seed(owner)),
+			)
+			.ok()
+			.unwrap()
+			.into()
+		}
+
+		fn add_typed_key_to_store(
+			store: SyncCryptoStorePtr,
+			key_type: sp_application_crypto::KeyTypeId,
+			seed: Option<&str>,
+		) -> Self::Public {
+			SyncCryptoStore::ecdsa_generate_new(&*store, key_type, seed)
+				.ok()
+				.unwrap()
+				.into()
+		}
+
+		fn sign(&self, message: &[u8]) -> Self::Signature {
+			let hashed_message = keccak_256(message);
+			self.as_inner_ref().sign_prehashed(&hashed_message).into()
+		}
+
+		fn verify(
+			sig: &<Self as SimpleKeyPair>::Signature,
+			message: &[u8],
+			pubkey: Self::Public,
+		) -> bool {
+			let hashed_message = keccak_256(message);
+			ecdsa::Pair::verify_prehashed(
+				sig.as_inner_ref(),
+				&hashed_message,
+				pubkey.as_inner_ref(),
+			)
+		}
+
+		fn public(&self) -> Self::Public {
+			<ecdsa_crypto::Pair as sp_application_crypto::Pair>::public(self)
+		}
+
+		fn from_string(
+			s: &str,
+			password_override: Option<&str>,
+		) -> Result<Self, SecretStringError> {
+			<ecdsa_crypto::Pair as sp_application_crypto::Pair>::from_string(s, password_override)
+		}
+
+		/// Return a vec filled with raw data.
+		fn to_raw_vec(&self) -> Vec<u8> {
+			<ecdsa_crypto::Pair as sp_application_crypto::Pair>::to_raw_vec(self)
+		}
 	}
 
-    }
-
-    // Auxiliary traits for ECDSA
-    impl SimpleKeyPair for ecdsa_crypto::Pair
-    {
-        type Public = ecdsa_crypto::Public;
-        type Signature = ecdsa_crypto::Signature;
-
-        fn generate_in_store(store: SyncCryptoStorePtr, owner: Keyring) -> Self::Public {
-	    SyncCryptoStore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::to_seed(owner)))
-		.ok()
-		.unwrap()
-		.into()
+	fn keystore() -> SyncCryptoStorePtr {
+		Arc::new(LocalKeystore::in_memory())
 	}
 
-	fn add_typed_key_to_store(store: SyncCryptoStorePtr, key_type: sp_application_crypto::KeyTypeId, seed: Option<&str>)-> Self::Public {
-	    SyncCryptoStore::ecdsa_generate_new(&*store, key_type, seed)
-		.ok()
-		.unwrap()
-		.into()
+	/// Auxiliray tairt for ECDSAnBLS
+	#[derive(Clone)]
+	pub(crate) struct ECDSAnBLSPair(pub ecdsa_crypto::Pair, pub bls_crypto::Pair);
+
+	/// implementing ECDSAnBLSPair as a simple key pair to be used in the test key ring
+	impl SimpleKeyPair for ECDSAnBLSPair {
+		type Public = (ECDSAPublic, BLSPublic);
+		type Signature = (ECDSASignature, BLSSignature);
+
+		fn generate_in_store(store: SyncCryptoStorePtr, owner: Keyring) -> Self::Public {
+			(
+				SyncCryptoStore::ecdsa_generate_new(
+					&*store,
+					KEY_TYPE,
+					Some(&<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::to_seed(owner)),
+				)
+				.ok()
+				.unwrap()
+				.into(),
+				SyncCryptoStore::bls_generate_new(
+					&*store,
+					KEY_TYPE,
+					Some(&<Keyring as GenericKeyring<ECDSAnBLSPair>>::to_seed(owner)),
+				)
+				.ok()
+				.unwrap()
+				.into(),
+			)
+		}
+
+		fn add_typed_key_to_store(
+			store: SyncCryptoStorePtr,
+			key_type: sp_application_crypto::KeyTypeId,
+			seed: Option<&str>,
+		) -> Self::Public {
+			(
+				SyncCryptoStore::ecdsa_generate_new(&*store, key_type, seed)
+					.ok()
+					.unwrap()
+					.into(),
+				SyncCryptoStore::bls_generate_new(&*store, key_type, seed).ok().unwrap().into(),
+			)
+		}
+
+		fn sign(&self, message: &[u8]) -> Self::Signature {
+			let hashed_message = keccak_256(message);
+			(self.0.as_inner_ref().sign_prehashed(&hashed_message).into(), self.1.sign(message))
+		}
+
+		fn verify(sig: &Self::Signature, message: &[u8], pubkey: Self::Public) -> bool {
+			let hashed_message = keccak_256(message);
+			ecdsa::Pair::verify_prehashed(
+				&sig.0.as_inner_ref(),
+				&hashed_message,
+				&pubkey.0.as_inner_ref(),
+			) && bls_crypto::Pair::verify(&sig.1, &message, &pubkey.1)
+		}
+
+		fn public(&self) -> Self::Public {
+			(
+				<ecdsa_crypto::Pair as sp_application_crypto::Pair>::public(&self.0),
+				<bls_crypto::Pair as sp_application_crypto::Pair>::public(&self.1),
+			)
+		}
+
+		fn from_string(
+			s: &str,
+			password_override: Option<&str>,
+		) -> Result<Self, SecretStringError> {
+			let ecdsa_pair = <ecdsa_crypto::Pair as sp_application_crypto::Pair>::from_string(
+				s,
+				password_override,
+			)?;
+			let bls_pair = <bls_crypto::Pair as sp_application_crypto::Pair>::from_string(
+				s,
+				password_override,
+			)?;
+			Ok(ECDSAnBLSPair(ecdsa_pair, bls_pair))
+		}
+
+		/// Return a vec filled with raw data.
+		fn to_raw_vec(&self) -> Vec<u8> {
+			<ecdsa_crypto::Pair as sp_application_crypto::Pair>::to_raw_vec(&self.0)
+		}
 	}
-			     
-	fn sign(&self, message : &[u8]) -> Self::Signature {
-	    let hashed_message = keccak_256(message);
-	    self.as_inner_ref().sign_prehashed(&hashed_message).into()
-	}
 
- 	fn verify(sig: &<Self as SimpleKeyPair>::Signature, message : &[u8], pubkey: Self::Public) -> bool        {
-	    let hashed_message = keccak_256(message);
-	    ecdsa::Pair::verify_prehashed(sig.as_inner_ref(), &hashed_message, pubkey.as_inner_ref())		
-	}
+	fn pair_verify_should_work<TKeyPair: SimpleKeyPair>() {
+		let msg = b"I am Alice!";
+		let sig = <Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Alice, b"I am Alice!");
 
-	fn public(&self) -> Self::Public {
-            <ecdsa_crypto::Pair as sp_application_crypto::Pair>::public(self)
-        }
-
-        fn from_string(s: &str, password_override: Option<&str>) -> Result<Self, SecretStringError> {
-            <ecdsa_crypto::Pair as sp_application_crypto::Pair>::from_string(s, password_override)
-        }
-
-        /// Return a vec filled with raw data.
-	fn to_raw_vec(&self) -> Vec<u8> {
-            <ecdsa_crypto::Pair as sp_application_crypto::Pair>::to_raw_vec(self)
-        }
-
-    }    
-
-    fn keystore() -> SyncCryptoStorePtr {
-	    Arc::new(LocalKeystore::in_memory())
-    }
-
-    /// Auxiliray tairt for ECDSAnBLS
-    #[derive(Clone)]
-    pub(crate) struct ECDSAnBLSPair (pub ecdsa_crypto::Pair, pub bls_crypto::Pair);
-
-    /// implementing ECDSAnBLSPair as a simple key pair to be used in the test key ring
-    impl SimpleKeyPair for ECDSAnBLSPair
-    {
-        type Public = (ECDSAPublic,BLSPublic);
-        type Signature = (ECDSASignature,BLSSignature);
-
-        fn generate_in_store(store: SyncCryptoStorePtr, owner: Keyring) -> Self::Public {
-	    (SyncCryptoStore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::to_seed(owner)))
-	     .ok()
-	     .unwrap().into(), 
-             SyncCryptoStore::bls_generate_new(&*store, KEY_TYPE, Some(&<Keyring as GenericKeyring<ECDSAnBLSPair>>::to_seed(owner)))
-	     .ok()
-	     .unwrap()
-	     .into()
-	    )
-    
-	}
-
-	fn add_typed_key_to_store(store: SyncCryptoStorePtr, key_type: sp_application_crypto::KeyTypeId, seed: Option<&str>)-> Self::Public {
-	    (SyncCryptoStore::ecdsa_generate_new(&*store, key_type, seed)
-		.ok()
-		.unwrap()
-	     .into()
-	     ,
-	     SyncCryptoStore::bls_generate_new(&*store, key_type, seed)
-	     .ok()
-	     .unwrap()
-	     .into())
-	}
-
-        
-	fn sign(&self, message : &[u8]) -> Self::Signature {
-	    let hashed_message = keccak_256(message);
-            (self.0.as_inner_ref().sign_prehashed(&hashed_message).into(), self.1.sign(message))
-	}
-
- 	fn verify(sig: &Self::Signature, message : &[u8], pubkey: Self::Public) -> bool {
-	    let hashed_message = keccak_256(message);
-	    ecdsa::Pair::verify_prehashed(&sig.0.as_inner_ref(), &hashed_message, &pubkey.0.as_inner_ref()) &&	
-	    bls_crypto::Pair::verify(&sig.1, &message, &pubkey.1)		
-	}
-	
-	fn public(&self) -> Self::Public {
-            (<ecdsa_crypto::Pair as sp_application_crypto::Pair>::public(&self.0), <bls_crypto::Pair as sp_application_crypto::Pair>::public(&self.1))
-        }
-
-        fn from_string(s: &str, password_override: Option<&str>) -> Result<Self, SecretStringError> {
-            let ecdsa_pair = <ecdsa_crypto::Pair as sp_application_crypto::Pair>::from_string(s, password_override)?;
-            let bls_pair = <bls_crypto::Pair as sp_application_crypto::Pair>::from_string(s, password_override)?;
-	        Ok(ECDSAnBLSPair(ecdsa_pair, bls_pair))
-        }
-	
-        /// Return a vec filled with raw data.
-	fn to_raw_vec(&self) -> Vec<u8> {
-            <ecdsa_crypto::Pair as sp_application_crypto::Pair>::to_raw_vec(&self.0)
-        }
-        
-    }
-
-    fn pair_verify_should_work<TKeyPair: SimpleKeyPair>() {
-	let msg = b"I am Alice!";
-	let sig = <Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Alice, b"I am Alice!");
-
-	assert!(TKeyPair::verify(
+		assert!(TKeyPair::verify(
 			&sig,
 			&msg.as_slice(),
 			<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice),
-	));
+		));
 
-	// different public key -> fail
-	assert!(!TKeyPair::verify(
-	    &sig,
-	    &msg.as_slice(),
-	    <Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Bob).into(),
-	));
+		// different public key -> fail
+		assert!(!TKeyPair::verify(
+			&sig,
+			&msg.as_slice(),
+			<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Bob).into(),
+		));
 
-	let msg = b"I am not Alice!";
+		let msg = b"I am not Alice!";
 
-	// different msg -> fail
-	assert!(
-	    !TKeyPair::verify(&sig, &msg.as_slice(), <Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice))
-	);
-	
-    }
-    
-    #[test]
-    fn pair_verify_should_work_ecdsa() {
-	pair_verify_should_work::<ecdsa_crypto::Pair>();
-    }
+		// different msg -> fail
+		assert!(!TKeyPair::verify(
+			&sig,
+			&msg.as_slice(),
+			<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice)
+		));
+	}
 
-    #[test]
-    fn pair_verify_should_work_ecdsa_n_bls() {
-	pair_verify_should_work::<ECDSAnBLSPair>();
-    }
+	#[test]
+	fn pair_verify_should_work_ecdsa() {
+		pair_verify_should_work::<ecdsa_crypto::Pair>();
+	}
 
-    fn pair_works<TKeyPair>()
-        where TKeyPair : SimpleKeyPair,
-    {
+	#[test]
+	fn pair_verify_should_work_ecdsa_n_bls() {
+		pair_verify_should_work::<ECDSAnBLSPair>();
+	}
+
+	fn pair_works<TKeyPair>()
+	where
+		TKeyPair: SimpleKeyPair,
+	{
 		let want = TKeyPair::from_string("//Alice", None).expect("Pair failed").to_raw_vec();
 		let got = <Keyring as GenericKeyring<TKeyPair>>::pair(Keyring::Alice).to_raw_vec();
 		assert_eq!(want, got);
@@ -608,120 +669,138 @@ pub mod tests {
 		assert_eq!(want, got);
 	}
 
-    #[test]
-    fn ecdsa_pair_works(){
-        pair_works::<ecdsa_crypto::Pair>();
-    }
+	#[test]
+	fn ecdsa_pair_works() {
+		pair_works::<ecdsa_crypto::Pair>();
+	}
 
-    #[test]
-    fn ecdsa_n_bls_pair_works () {
-         pair_works::<ECDSAnBLSPair>();
-    }
+	#[test]
+	fn ecdsa_n_bls_pair_works() {
+		pair_works::<ECDSAnBLSPair>();
+	}
 
-    fn authority_id_works<TKeyPair, AuthId, TSignature, TBeefyKeystore>()
-    where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId>,
-          TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
-    	  AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send,
-	      TSignature:  Encode + Decode + Debug + Clone + Sync + Send,
+	fn authority_id_works<TKeyPair, AuthId, TSignature, TBeefyKeystore>()
+	where
+		TKeyPair: SimpleKeyPair + SimpleKeyPair<Public = AuthId>,
+		TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
+		AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send,
+		TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+	{
+		let store = keystore();
 
-    {
-	let store = keystore();
+		TKeyPair::generate_in_store(store.clone(), Keyring::Alice);
 
-	TKeyPair::generate_in_store(store.clone(), Keyring::Alice);
+		let alice: TKeyPair::Public = <Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice);
 
-	let alice: TKeyPair::Public = <Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice);
-    
-	let bob = <Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Bob);
-	let charlie = <Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Charlie);
+		let bob = <Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Bob);
+		let charlie = <Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Charlie);
 
-	let beefy_store: TBeefyKeystore = TBeefyKeystore::new(store);
+		let beefy_store: TBeefyKeystore = TBeefyKeystore::new(store);
 
-	let mut keys = vec![bob, charlie];
+		let mut keys = vec![bob, charlie];
 
-	let id = beefy_store.authority_id(keys.as_slice());
-	assert!(id.is_none());
+		let id = beefy_store.authority_id(keys.as_slice());
+		assert!(id.is_none());
 
-	keys.push(alice.clone());
+		keys.push(alice.clone());
 
-	let id = beefy_store.authority_id(keys.as_slice()).unwrap();
-	assert_eq!(id, alice);
-    }
+		let id = beefy_store.authority_id(keys.as_slice()).unwrap();
+		assert_eq!(id, alice);
+	}
 
-    #[test]
-    fn authority_id_works_for_ecdsa() {	     	        
-	authority_id_works::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>();
-    }
+	#[test]
+	fn authority_id_works_for_ecdsa() {
+		authority_id_works::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>();
+	}
 
-    #[test]
-    fn authority_id_works_for_ecdsa_n_bls() {
-	    authority_id_works::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>();
-    }
+	#[test]
+	fn authority_id_works_for_ecdsa_n_bls() {
+		authority_id_works::<
+			ECDSAnBLSPair,
+			(ECDSAPublic, BLSPublic),
+			(ECDSASignature, BLSSignature),
+			BeefyBLSnECDSAKeystore,
+		>();
+	}
 
-    fn sign_works<TKeyPair, AuthId, TSignature, TBeefyKeystore>()
-        where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId>,
-              TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
-    	      AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send,
-	      TSignature:  Encode + Decode + Debug + Clone + Sync + Send,
-    {
-	let store = keystore();
+	fn sign_works<TKeyPair, AuthId, TSignature, TBeefyKeystore>()
+	where
+		TKeyPair: SimpleKeyPair + SimpleKeyPair<Public = AuthId>,
+		TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
+		AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send,
+		TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+	{
+		let store = keystore();
 
-	TKeyPair::generate_in_store(store.clone(), Keyring::Alice);
+		TKeyPair::generate_in_store(store.clone(), Keyring::Alice);
 
-	let alice = <Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice);
+		let alice = <Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice);
 
-        let store: TBeefyKeystore = TBeefyKeystore::new(store);
+		let store: TBeefyKeystore = TBeefyKeystore::new(store);
 
-	let msg = b"are you involved or commited?";
+		let msg = b"are you involved or commited?";
 
-	let sig1 = store.sign(&alice, msg).unwrap();
-	let sig2 = <Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Alice,msg);
+		let sig1 = store.sign(&alice, msg).unwrap();
+		let sig2 = <Keyring as GenericKeyring<TKeyPair>>::sign(Keyring::Alice, msg);
 
-	assert_eq!(sig1.encode(), sig2.encode());
-    }
+		assert_eq!(sig1.encode(), sig2.encode());
+	}
 
-    #[test]
-    fn sign_works_for_ecdsa() {	     	        
-	sign_works::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>();
-    }
+	#[test]
+	fn sign_works_for_ecdsa() {
+		sign_works::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>();
+	}
 
-    #[test]
-    fn sign_works_for_ecdsa_n_bls() {
-	    sign_works::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>();
-    }
+	#[test]
+	fn sign_works_for_ecdsa_n_bls() {
+		sign_works::<
+			ECDSAnBLSPair,
+			(ECDSAPublic, BLSPublic),
+			(ECDSASignature, BLSSignature),
+			BeefyBLSnECDSAKeystore,
+		>();
+	}
 
-    fn sign_error<TKeyPair, AuthId, TSignature, TBeefyKeystore>(expected_error_message: &str)
-    where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId>,
-          TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
-    	  AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send,
-	  TSignature:  Encode + Decode + Debug + Clone + Sync + Send,
-    {
-	let store = keystore();
+	fn sign_error<TKeyPair, AuthId, TSignature, TBeefyKeystore>(expected_error_message: &str)
+	where
+		TKeyPair: SimpleKeyPair + SimpleKeyPair<Public = AuthId>,
+		TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
+		AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send,
+		TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+	{
+		let store = keystore();
 
-	TKeyPair::generate_in_store(store.clone(), Keyring::Bob);		
+		TKeyPair::generate_in_store(store.clone(), Keyring::Bob);
 
-	let store: TBeefyKeystore = TBeefyKeystore::new(store);
+		let store: TBeefyKeystore = TBeefyKeystore::new(store);
 
-	let alice = <Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice);
+		let alice = <Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice);
 
-	let msg = b"are you involved or commited?";
-	let sig = store.sign(&alice, msg).err().unwrap();
-	let err = Error::Signature(expected_error_message.to_string());
+		let msg = b"are you involved or commited?";
+		let sig = store.sign(&alice, msg).err().unwrap();
+		let err = Error::Signature(expected_error_message.to_string());
 
-	assert_eq!(sig, err);
-    }
+		assert_eq!(sig, err);
+	}
 
-    #[test]
-    fn sign_error_for_ecdsa() {	     	        
-	sign_error::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>("ecdsa_sign_prehashed() failed");
-    }
+	#[test]
+	fn sign_error_for_ecdsa() {
+		sign_error::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>(
+			"ecdsa_sign_prehashed() failed",
+		);
+	}
 
-    #[test]
-    fn sign_error_for_ecdsa_n_bls() {
-	    sign_error::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>("could not sign with both bls and ecdsa keys");
-    }
-    
+	#[test]
+	fn sign_error_for_ecdsa_n_bls() {
+		sign_error::<
+			ECDSAnBLSPair,
+			(ECDSAPublic, BLSPublic),
+			(ECDSASignature, BLSSignature),
+			BeefyBLSnECDSAKeystore,
+		>("could not sign with both bls and ecdsa keys");
+	}
 
-    #[test]
+	#[test]
 	fn sign_no_keystore() {
 		//TODO: new can not generate keystore with None element
 		//I also don't think we need that. so this test should go away.
@@ -735,93 +814,122 @@ pub mod tests {
 		// assert_eq!(sig, err);
 	}
 
-    fn verify_works<TKeyPair, AuthId, TSignature, TBeefyKeystore>()
-    where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId>,
-          TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
-    	  AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send,
-	  TSignature:  Encode + Decode + Debug + Clone + Sync + Send,
-    {
-	let store = keystore();
+	fn verify_works<TKeyPair, AuthId, TSignature, TBeefyKeystore>()
+	where
+		TKeyPair: SimpleKeyPair + SimpleKeyPair<Public = AuthId>,
+		TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
+		AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send,
+		TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+	{
+		let store = keystore();
 
-	TKeyPair::generate_in_store(store.clone(), Keyring::Alice);		
+		TKeyPair::generate_in_store(store.clone(), Keyring::Alice);
 
-	let store: TBeefyKeystore = TBeefyKeystore::new(store);
+		let store: TBeefyKeystore = TBeefyKeystore::new(store);
 
-	let alice = <Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice);
+		let alice = <Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Alice);
 
-	// `msg` and `sig` match
-	let msg = b"are you involved or commited?";
-	let sig = store.sign(&alice, msg).unwrap();
-	assert!(TBeefyKeystore::verify(&alice, &sig, msg));
+		// `msg` and `sig` match
+		let msg = b"are you involved or commited?";
+		let sig = store.sign(&alice, msg).unwrap();
+		assert!(TBeefyKeystore::verify(&alice, &sig, msg));
 
-	// `msg and `sig` don't match
-	let msg = b"you are just involved";
-	assert!(!TBeefyKeystore::verify(&alice, &sig, msg));
-	
-    }
+		// `msg and `sig` don't match
+		let msg = b"you are just involved";
+		assert!(!TBeefyKeystore::verify(&alice, &sig, msg));
+	}
 
-    #[test]
-    fn verify_works_for_ecdsa() {	     	        
-	verify_works::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>();
-    }
+	#[test]
+	fn verify_works_for_ecdsa() {
+		verify_works::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>();
+	}
 
-    #[test]
-    fn verify_works_for_ecdsa_n_bls() {
-	    verify_works::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>();
-    }
+	#[test]
+	fn verify_works_for_ecdsa_n_bls() {
+		verify_works::<
+			ECDSAnBLSPair,
+			(ECDSAPublic, BLSPublic),
+			(ECDSASignature, BLSSignature),
+			BeefyBLSnECDSAKeystore,
+		>();
+	}
 
-    // Note that we use keys with and without a seed for this test.
-    fn public_keys_works<TKeyPair, AuthId, TSignature, TBeefyKeystore>() 
-    where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId>,
-	  TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
-	  AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send,
-	  TSignature:  Encode + Decode + Debug + Clone + Sync + Send,
-    {
-	const TEST_TYPE: sp_application_crypto::KeyTypeId =
-	    sp_application_crypto::KeyTypeId(*b"test");
+	// Note that we use keys with and without a seed for this test.
+	fn public_keys_works<TKeyPair, AuthId, TSignature, TBeefyKeystore>()
+	where
+		TKeyPair: SimpleKeyPair + SimpleKeyPair<Public = AuthId>,
+		TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
+		AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send,
+		TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+	{
+		const TEST_TYPE: sp_application_crypto::KeyTypeId =
+			sp_application_crypto::KeyTypeId(*b"test");
 
-	let store = keystore();
+		let store = keystore();
 
-	// test keys
-	let _ = TKeyPair::add_typed_key_to_store(store.clone(), TEST_TYPE, Some(<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::to_seed(Keyring::Alice).as_str()));		
-	let _ = TKeyPair::add_typed_key_to_store(store.clone(), TEST_TYPE, Some(<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::to_seed(Keyring::Bob).as_str()));
+		// test keys
+		let _ = TKeyPair::add_typed_key_to_store(
+			store.clone(),
+			TEST_TYPE,
+			Some(<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::to_seed(Keyring::Alice).as_str()),
+		);
+		let _ = TKeyPair::add_typed_key_to_store(
+			store.clone(),
+			TEST_TYPE,
+			Some(<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::to_seed(Keyring::Bob).as_str()),
+		);
 
-	// BEEFY keys
-	let _ = TKeyPair::add_typed_key_to_store(store.clone(), KEY_TYPE, Some(<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::to_seed(Keyring::Dave).as_str()));
-	let _ = TKeyPair::add_typed_key_to_store(store.clone(), KEY_TYPE, Some(<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::to_seed(Keyring::Eve).as_str()));
+		// BEEFY keys
+		let _ = TKeyPair::add_typed_key_to_store(
+			store.clone(),
+			KEY_TYPE,
+			Some(<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::to_seed(Keyring::Dave).as_str()),
+		);
+		let _ = TKeyPair::add_typed_key_to_store(
+			store.clone(),
+			KEY_TYPE,
+			Some(<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::to_seed(Keyring::Eve).as_str()),
+		);
 
-	let _ = TKeyPair::add_typed_key_to_store(store.clone(), TEST_TYPE, None);
-	let _ = TKeyPair::add_typed_key_to_store(store.clone(), TEST_TYPE, None);
+		let _ = TKeyPair::add_typed_key_to_store(store.clone(), TEST_TYPE, None);
+		let _ = TKeyPair::add_typed_key_to_store(store.clone(), TEST_TYPE, None);
 
-	let key1: AuthId = TKeyPair::add_typed_key_to_store(store.clone(), KEY_TYPE, None);
-	let key2: AuthId = TKeyPair::add_typed_key_to_store(store.clone(), KEY_TYPE, None);
+		let key1: AuthId = TKeyPair::add_typed_key_to_store(store.clone(), KEY_TYPE, None);
+		let key2: AuthId = TKeyPair::add_typed_key_to_store(store.clone(), KEY_TYPE, None);
 
-	let store : TBeefyKeystore = TBeefyKeystore::new(store);
+		let store: TBeefyKeystore = TBeefyKeystore::new(store);
 
-	let keys = store.public_keys().ok().unwrap();
+		let keys = store.public_keys().ok().unwrap();
 
-	println!("key len {}",keys.len());
-	println!("keys {:?}",keys);
-	println!("dave's {:?}", <Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Dave));
-	println!("Eve's {:?}", <Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Eve));
+		println!("key len {}", keys.len());
+		println!("keys {:?}", keys);
+		println!("dave's {:?}", <Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Dave));
+		println!("Eve's {:?}", <Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Eve));
 
-	    assert!(keys.len() == 4);
-        
-	    assert!(store.authority_id(&[<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Dave)]).is_some());
-	    assert!(store.authority_id(&[<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Eve)]).is_some());
-	    assert!(store.authority_id(&[key1]).is_some());
-	    assert!(store.authority_id(&[key2]).is_some());
-    }
+		assert!(keys.len() == 4);
 
-    #[test]
-    fn public_keys_works_for_ecdsa_keystore() {
-	public_keys_works::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>();
-    }
+		assert!(store
+			.authority_id(&[<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Dave)])
+			.is_some());
+		assert!(store
+			.authority_id(&[<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Eve)])
+			.is_some());
+		assert!(store.authority_id(&[key1]).is_some());
+		assert!(store.authority_id(&[key2]).is_some());
+	}
 
-    #[test]
-    fn public_keys_works_for_ecdsa_n_bls() {
-	public_keys_works::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>();
-    }
+	#[test]
+	fn public_keys_works_for_ecdsa_keystore() {
+		public_keys_works::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>();
+	}
 
+	#[test]
+	fn public_keys_works_for_ecdsa_n_bls() {
+		public_keys_works::<
+			ECDSAnBLSPair,
+			(ECDSAPublic, BLSPublic),
+			(ECDSASignature, BLSSignature),
+			BeefyBLSnECDSAKeystore,
+		>();
+	}
 }
-

@@ -16,8 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use core::fmt::Debug;
 use codec::{Decode, Encode};
+use core::fmt::Debug;
 
 use crate::{
 	communication::{
@@ -36,8 +36,7 @@ use crate::{
 	worker::PersistedState,
 };
 use beefy_primitives::{
-	BeefyApi, MmrRootHash, PayloadProvider, ValidatorSet, BEEFY_ENGINE_ID,
-	GENESIS_AUTHORITY_SET_ID,
+	BeefyApi, MmrRootHash, PayloadProvider, ValidatorSet, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
 };
 use futures::{stream::Fuse, StreamExt};
 use log::{debug, error, info};
@@ -110,7 +109,7 @@ where
 /// Links between the block importer, the background voter and the RPC layer,
 /// to be used by the voter.
 #[derive(Clone)]
-pub struct BeefyVoterLinks<B: Block, TSignature: Encode + Decode + Debug + Clone + Sync + Send,> {
+pub struct BeefyVoterLinks<B: Block, TSignature: Encode + Decode + Debug + Clone + Sync + Send> {
 	// BlockImport -> Voter links
 	/// Stream of BEEFY signed commitments from block import to voter.
 	pub from_block_import_justif_stream: BeefyVersionedFinalityProofStream<B, TSignature>,
@@ -135,8 +134,12 @@ pub struct BeefyRPCLinks<B: Block, TSignature: Encode + Decode + Debug + Clone +
 pub fn beefy_block_import_and_links<B, BE, RuntimeApi, I, AuthId, TSignature, BKS>(
 	wrapped_block_import: I,
 	backend: Arc<BE>,
-	runtime: Arc<RuntimeApi>,	
-) -> (BeefyBlockImport<B, BE, RuntimeApi, I, AuthId, TSignature, BKS>, BeefyVoterLinks<B, TSignature>, BeefyRPCLinks<B, TSignature>)
+	runtime: Arc<RuntimeApi>,
+) -> (
+	BeefyBlockImport<B, BE, RuntimeApi, I, AuthId, TSignature, BKS>,
+	BeefyVoterLinks<B, TSignature>,
+	BeefyRPCLinks<B, TSignature>,
+)
 where
 	B: Block,
 	BE: Backend<B>,
@@ -145,7 +148,7 @@ where
 		+ Sync,
 	RuntimeApi: ProvideRuntimeApi<B> + Send + Sync,
 	RuntimeApi::Api: BeefyApi<B, AuthId>,
-        AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send,
+	AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send,
 	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
 	BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
 {
@@ -192,12 +195,12 @@ where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
-	R: ProvideRuntimeApi<B>,        
+	R: ProvideRuntimeApi<B>,
 	BKS: keystore::BeefyKeystore<AuthId, TSignature, Public = AuthId>,
 	AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send,
-	TSignature: Encode + Decode + Debug + Clone + Sync + Send, 
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
 	R::Api: BeefyApi<B, AuthId> + MmrApi<B, MmrRootHash, NumberFor<B>>,
-	N: GossipNetwork<B> + NetworkRequest +  SyncOracle + Send + Sync + 'static,
+	N: GossipNetwork<B> + NetworkRequest + SyncOracle + Send + Sync + 'static,
 {
 	/// BEEFY client
 	pub client: Arc<C>,
@@ -218,23 +221,24 @@ where
 	pub links: BeefyVoterLinks<B, TSignature>,
 	/// Handler for incoming BEEFY justifications requests from a remote peer.
 	pub on_demand_justifications_handler: BeefyJustifsRequestHandler<B, C>,
-	pub _auth_id : PhantomData::<AuthId>,
-	pub _signature: PhantomData::<TSignature>,
+	pub _auth_id: PhantomData<AuthId>,
+	pub _signature: PhantomData<TSignature>,
 }
 
 /// Start the BEEFY gadget.
 ///
 /// This is a thin shim around running and awaiting a BEEFY worker.
-pub async fn start_beefy_gadget<B, BE, C, N, P, R, AuthId, TSignature, BKS>(beefy_params: BeefyParams<B, BE, C, N, P, R, AuthId, TSignature, BKS>)
-where
+pub async fn start_beefy_gadget<B, BE, C, N, P, R, AuthId, TSignature, BKS>(
+	beefy_params: BeefyParams<B, BE, C, N, P, R, AuthId, TSignature, BKS>,
+) where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE> + BlockBackend<B>,
 	P: PayloadProvider<B>,
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B, AuthId> + MmrApi<B, MmrRootHash, NumberFor<B>>,
-	N: GossipNetwork<B> + NetworkRequest +  SyncOracle + Send + Sync + 'static,
-        BKS: keystore::BeefyKeystore<AuthId, TSignature, Public = AuthId> +'static,
+	N: GossipNetwork<B> + NetworkRequest + SyncOracle + Send + Sync + 'static,
+	BKS: keystore::BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
 
 	AuthId: Encode + Decode + Debug + Clone + Ord + std::hash::Hash + Sync + Send + 'static,
 	TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
@@ -311,7 +315,7 @@ where
 		backend,
 		payload_provider,
 		network,
-		key_store: key_store,
+		key_store,
 		gossip_engine,
 		gossip_validator,
 		on_demand_justifications,
@@ -333,14 +337,14 @@ fn load_or_init_voter_state<B, BE, R, AuthId, TSignature>(
 	backend: &BE,
 	runtime: &R,
 	best_grandpa: <B as Block>::Header,
-    min_block_delta: u32,
+	min_block_delta: u32,
 ) -> ClientResult<PersistedState<B, AuthId, TSignature>>
 where
 	B: Block,
 	BE: Backend<B>,
 	R: ProvideRuntimeApi<B>,
-    AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
-    TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+	AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
 	R::Api: BeefyApi<B, AuthId>,
 {
 	// Initialize voter state from AUX DB or from pallet genesis.
@@ -369,9 +373,9 @@ fn initialize_voter_state<B, BE, R, AuthId, TSignature>(
 where
 	B: Block,
 	BE: Backend<B>,
-    R: ProvideRuntimeApi<B>,
-    AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
-    TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+	R: ProvideRuntimeApi<B>,
+	AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
 	R::Api: BeefyApi<B, AuthId>,
 {
 	// Walk back the imported blocks and initialize voter either, at the last block with
@@ -457,7 +461,7 @@ where
 
 /// Wait for BEEFY runtime pallet to be available, return active validator set.
 /// Should be called only once during worker initialization.
-async fn wait_for_runtime_pallet<B, R, AuthId,>(
+async fn wait_for_runtime_pallet<B, R, AuthId>(
 	runtime: &R,
 	mut gossip_engine: &mut GossipEngine<B>,
 	finality: &mut Fuse<FinalityNotifications<B>>,
@@ -465,8 +469,8 @@ async fn wait_for_runtime_pallet<B, R, AuthId,>(
 where
 	B: Block,
 	R: ProvideRuntimeApi<B>,
-    AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
-    R::Api: BeefyApi<B, AuthId>,
+	AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
+	R::Api: BeefyApi<B, AuthId>,
 {
 	info!(target: LOG_TARGET, "🥩 BEEFY gadget waiting for BEEFY pallet to become available...");
 	loop {
@@ -496,7 +500,9 @@ where
 	Err(ClientError::Backend(err_msg))
 }
 
-fn genesis_set_sanity_check<AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash>(
+fn genesis_set_sanity_check<
+	AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
+>(
 	active: ValidatorSet<AuthId>,
 ) -> ClientResult<ValidatorSet<AuthId>> {
 	if active.id() == GENESIS_AUTHORITY_SET_ID {
@@ -512,10 +518,10 @@ fn expect_validator_set<B, R, AuthId>(
 	at: BlockId<B>,
 ) -> ClientResult<ValidatorSet<AuthId>>
 where
-    B: Block,
-    R: ProvideRuntimeApi<B>,
-    AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
-    R::Api: BeefyApi<B, AuthId>,
+	B: Block,
+	R: ProvideRuntimeApi<B>,
+	AuthId: Encode + Decode + Debug + Clone + Ord + Sync + Send + std::hash::Hash,
+	R::Api: BeefyApi<B, AuthId>,
 {
 	runtime
 		.runtime_api()
