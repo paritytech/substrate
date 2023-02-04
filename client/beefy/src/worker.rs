@@ -994,8 +994,8 @@ pub(crate) mod tests {
 		communication::notification::{BeefyBestBlockStream, BeefyVersionedFinalityProofStream},
 		keystore::tests::Keyring,
 		tests::{
-			create_beefy_keystore, get_beefy_streams, make_beefy_ids, two_validators::TestApi,
-			BeefyPeer, BeefyTestNet,
+			create_beefy_keystore, get_beefy_streams, make_beefy_ids, BeefyPeer, BeefyTestNet,
+			TestApi,
 		},
 		BeefyRPCLinks, KnownPeers,
 	};
@@ -1068,7 +1068,7 @@ pub(crate) mod tests {
 		};
 
 		let backend = peer.client().as_backend();
-		let api = Arc::new(TestApi {});
+		let api = Arc::new(TestApi::with_validator_set(&genesis_validator_set));
 		let network = peer.network_service().clone();
 		let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
 		let gossip_validator = Arc::new(GossipValidator::new(known_peers.clone()));
