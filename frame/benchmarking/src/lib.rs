@@ -272,4 +272,6 @@ pub mod v2 {
 			B
 		}
 	}
+
+	pub type BenchmarkResult = Result<(), BenchmarkError>;
 }

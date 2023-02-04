@@ -28,9 +28,9 @@ use syn::{
 	punctuated::Punctuated,
 	spanned::Spanned,
 	token::{Colon2, Comma, Gt, Lt, Paren},
-	Attribute, Error, Expr, ExprBlock, ExprCall, ExprPath, FnArg, GenericParam, Generics, Item,
-	ItemFn, ItemMod, LitInt, Pat, Path, PathArguments, PathSegment, Result, Signature, Stmt, Token,
-	Type, Visibility, WhereClause,
+	Attribute, Error, Expr, ExprBlock, ExprCall, ExprPath, FnArg, Generics, Item, ItemFn, ItemMod,
+	LitInt, Pat, Path, PathArguments, PathSegment, Result, Signature, Stmt, Token, Type,
+	Visibility, WhereClause,
 };
 
 mod keywords {
@@ -735,13 +735,6 @@ fn expand_benchmark(
 	let vis = benchmark_def.fn_vis;
 	let mut sig = benchmark_def.fn_sig;
 
-	// pub struct Generics {
-	// 	pub lt_token: Option<Lt>,
-	// 	pub params: Punctuated<GenericParam, Comma>,
-	// 	pub gt_token: Option<Gt>,
-	// 	pub where_clause: Option<WhereClause>,
-	// }
-
 	let fn_generics_where = match where_clause.is_empty() {
 		true => quote!(),
 		false => quote!(where #where_clause),
@@ -753,8 +746,23 @@ fn expand_benchmark(
 	sig.ident =
 		Ident::new(format!("_{}", name.to_token_stream().to_string()).as_str(), Span::call_site());
 
+	let function_def = quote! {
+		#vis #sig {
+			#(
+				#setup_stmts
+			)*
+			#pre_call
+			#(
+				#verify_stmts
+			)*
+			Ok(())
+		}
+	};
+
 	// generate final quoted tokens
 	let res = quote! {
+		#function_def
+
 		// compile-time assertions that each referenced param type implements ParamRange
 		#(
 			#home::assert_impl_all!(#param_types: #home::ParamRange);
@@ -762,20 +770,6 @@ fn expand_benchmark(
 
 		#[allow(non_camel_case_types)]
 		struct #name;
-
-		#[allow(unused_variables)]
-		#vis #sig {
-			#(
-				#setup_stmts
-			)*
-			#pre_call
-			// if verify {
-				#(
-					#verify_stmts
-				)*
-			// }
-		}
-		// benchmark function def
 
 		#[allow(unused_variables)]
 		impl<#type_impl_generics> #krate::BenchmarkingSetup<#type_use_generics>

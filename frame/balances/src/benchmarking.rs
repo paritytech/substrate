@@ -189,12 +189,12 @@ mod benchmarks {
 			existential_deposit.saturating_mul((ED_MULTIPLIER - 1).into()) + 1u32.into();
 
 		// Create a bunch of users in storage.
-		for i in 0..u {
-			// The `account` function uses `blake2_256` to generate unique accounts, so these
-			// should be quite random and evenly distributed in the trie.
-			let new_user: T::AccountId = account("new_user", i, SEED);
-			let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&new_user, balance);
-		}
+		// for i in 0..u {
+		// 	// The `account` function uses `blake2_256` to generate unique accounts, so these
+		// 	// should be quite random and evenly distributed in the trie.
+		// 	let new_user: T::AccountId = account("new_user", i, SEED);
+		// 	let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&new_user, balance);
+		// }
 
 		#[extrinsic_call]
 		transfer(RawOrigin::Signed(caller.clone()), recipient_lookup, transfer_amount);
@@ -225,7 +225,7 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn force_unreserve() {
+	fn force_unreserve() -> BenchmarkResult {
 		let user: T::AccountId = account("user", 0, SEED);
 		let user_lookup = T::Lookup::unlookup(user.clone());
 
