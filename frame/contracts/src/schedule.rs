@@ -592,18 +592,6 @@ impl<T: Config> Default for InstructionWeights<T> {
 }
 
 impl<T: Config> Default for HostFnWeights<T> {
-	/// PoV should contain all trie nodes that are read during state transition (i.e. block
-	/// production). Hence we need to charge the `proof_size` weight for every host function which
-	/// reads storage, namely:
-	/// - get_storage,
-	/// - take_storage,
-	/// - contains_storage,
-	/// - clear_storage,
-	/// - set_storage.
-	///
-	/// The last two functions write to storage, but they also do read storage in order to return
-	/// the size of the pre-existed value. Till we have PoV benchmarks implemented, we approximate
-	/// `proof_size` as being equal to the size of storage read.
 	fn default() -> Self {
 		Self {
 			caller: cost_batched!(seal_caller),
