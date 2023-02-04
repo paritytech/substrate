@@ -655,9 +655,9 @@ impl<T: Config> Default for HostFnWeights<T> {
 			call: cost_batched!(seal_call),
 			delegate_call: cost_batched!(seal_delegate_call),
 			call_transfer_surcharge: cost_batched_args!(seal_call_per_transfer_clone_kb, 1, 0),
-			call_per_cloned_byte: cost_batched_args!(seal_call_per_transfer_clone_kb, 0, 1),
+			call_per_cloned_byte: cost_byte_batched_args!(seal_call_per_transfer_clone_kb, 0, 1),
 			instantiate: cost_batched!(seal_instantiate),
-			instantiate_transfer_surcharge: cost_byte_batched_args!(
+			instantiate_transfer_surcharge: cost_batched_args!(
 				seal_instantiate_per_transfer_input_salt_kb,
 				1,
 				0,
