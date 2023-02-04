@@ -69,21 +69,20 @@ pub trait BeefyAuthorityId<MsgHash: Hash>: RuntimeAppPublic {
 ///
 /// Your code should use the above types as concrete types for all crypto related
 /// functionality.
-///
 pub mod ecdsa_crypto {
-    use super::{BeefyAuthorityId, Hash, RuntimeAppPublic};
-    use sp_application_crypto::{app_crypto, ecdsa};
-    use sp_core::crypto::Wraps;
-    app_crypto!(ecdsa, crate::KEY_TYPE);
+	use super::{BeefyAuthorityId, Hash, RuntimeAppPublic};
+	use sp_application_crypto::{app_crypto, ecdsa};
+	use sp_core::crypto::Wraps;
+	app_crypto!(ecdsa, crate::KEY_TYPE);
 
-    /// Identity of a BEEFY authority using ECDSA as its crypto.
-    pub type AuthorityId = Public;
+	/// Identity of a BEEFY authority using ECDSA as its crypto.
+	pub type AuthorityId = Public;
 
-    /// Signature for a BEEFY authority using ECDSA as its crypto.
-    pub type AuthoritySignature = Signature;
+	/// Signature for a BEEFY authority using ECDSA as its crypto.
+	pub type AuthoritySignature = Signature;
 
-    impl<MsgHash: Hash> BeefyAuthorityId<MsgHash> for AuthorityId
-    where
+	impl<MsgHash: Hash> BeefyAuthorityId<MsgHash> for AuthorityId
+	where
 		<MsgHash as Hash>::Output: Into<[u8; 32]>,
 	{
 		fn verify(&self, signature: &<Self as RuntimeAppPublic>::Signature, msg: &[u8]) -> bool {
@@ -97,7 +96,6 @@ pub mod ecdsa_crypto {
 			}
 		}
 	}
-
 }
 
 /// BEEFY cryptographic types for BLS crypto
@@ -109,7 +107,6 @@ pub mod ecdsa_crypto {
 ///
 /// Your code should use the above types as concrete types for all crypto related
 /// functionality.
-///
 pub mod bls_crypto {
 	use sp_application_crypto::{app_crypto, bls};
 	app_crypto!(bls, crate::KEY_TYPE);
@@ -219,7 +216,7 @@ impl<AuthorityId> OnNewValidatorSet<AuthorityId> for () {
 }
 
 sp_api::decl_runtime_apis! {
-	/// API necessary for BEEFY voters with only ECDSA key.	
+	/// API necessary for BEEFY voters with only ECDSA key.
 	pub trait BeefyApi<AuthorityId> where AuthorityId : Encode + Decode
 	{
 		/// Return the current active BEEFY validator set
@@ -248,8 +245,8 @@ mod tests {
 		assert_eq!(validators.validators(), &vec![alice.public()]);
 	}
 
-    #[test]
-    fn beefy_verify_works() {
+	#[test]
+	fn beefy_verify_works() {
 		let msg = &b"test-message"[..];
 		let (pair, _) = crypto::Pair::generate();
 

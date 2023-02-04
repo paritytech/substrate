@@ -96,9 +96,7 @@ pub struct SignedCommitment<TBlockNumber, TSignature> {
 	pub signatures: Vec<Option<TSignature>>,
 }
 
-impl<TBlockNumber, TSignature>
-	SignedCommitment<TBlockNumber, TSignature>
-{
+impl<TBlockNumber, TSignature> SignedCommitment<TBlockNumber, TSignature> {
 	/// Return the number of collected signatures.
 	pub fn no_of_signatures(&self) -> usize {
 		self.signatures.iter().filter(|x| x.is_some()).count()
@@ -135,15 +133,11 @@ struct CompactSignedCommitment<TBlockNumber, TSignature> {
 	signatures_compact: Vec<TSignature>,
 }
 
-impl<'a, TBlockNumber: Clone, TSignature>
-	CompactSignedCommitment<TBlockNumber, &'a TSignature>
-{
+impl<'a, TBlockNumber: Clone, TSignature> CompactSignedCommitment<TBlockNumber, &'a TSignature> {
 	/// Packs a `SignedCommitment` into the compressed `CompactSignedCommitment` format for
 	/// efficient network transport.
-	fn pack(
-		signed_commitment: &'a SignedCommitment<TBlockNumber, TSignature>,
-	) -> Self {
-		let SignedCommitment { commitment, signatures} = signed_commitment;
+	fn pack(signed_commitment: &'a SignedCommitment<TBlockNumber, TSignature>) -> Self {
+		let SignedCommitment { commitment, signatures } = signed_commitment;
 		let validator_set_len = signatures.len() as u32;
 
 		let signatures_compact: Vec<&'a TSignature> =
@@ -182,10 +176,7 @@ impl<'a, TBlockNumber: Clone, TSignature>
 
 	/// Unpacks a `CompactSignedCommitment` into the uncompressed `SignedCommitment` form.
 	fn unpack(
-		temporary_signatures: CompactSignedCommitment<
-			TBlockNumber,
-			TSignature,
-		>,
+		temporary_signatures: CompactSignedCommitment<TBlockNumber, TSignature>,
 	) -> SignedCommitment<TBlockNumber, TSignature> {
 		let CompactSignedCommitment {
 			commitment,
@@ -213,8 +204,7 @@ impl<'a, TBlockNumber: Clone, TSignature>
 	}
 }
 
-impl<TBlockNumber, TSignature> Encode
-	for SignedCommitment<TBlockNumber, TSignature>
+impl<TBlockNumber, TSignature> Encode for SignedCommitment<TBlockNumber, TSignature>
 where
 	TBlockNumber: Encode + Clone,
 	TSignature: Encode,
@@ -225,8 +215,7 @@ where
 	}
 }
 
-impl<TBlockNumber, TSignature> Decode
-	for SignedCommitment<TBlockNumber, TSignature>
+impl<TBlockNumber, TSignature> Decode for SignedCommitment<TBlockNumber, TSignature>
 where
 	TBlockNumber: Decode + Clone,
 	TSignature: Decode,
@@ -267,32 +256,31 @@ mod tests {
 	use crate::{crypto, known_payloads, KEY_TYPE};
 	use codec::Decode;
 
-	use crate::{ecdsa_crypto, KEY_TYPE, bls_crypto::{Signature as BLSSignature}};
-	use bls_like::{Keypair, SignedMessage as BLSSignedMessage, Signed, pop::SignatureAggregatorAssumingPoP, BLS377, SerializableToBytes};	
+	use crate::{bls_crypto::Signature as BLSSignature, ecdsa_crypto, KEY_TYPE};
+	use bls_like::{
+		pop::SignatureAggregatorAssumingPoP, Keypair, SerializableToBytes, Signed,
+		SignedMessage as BLSSignedMessage, BLS377,
+	};
 
 	type TestCommitment = Commitment<u128>;
 
 	const LARGE_RAW_COMMITMENT: &[u8] = include_bytes!("../test-res/large-raw-commitment");
 
-        ///types for bls-less commitment
+	///types for bls-less commitment
 
-	type TestSignedCommitment =
-		SignedCommitment<u128, ecdsa_crypto::Signature>;
-	type TestVersionedFinalityProof =
-	VersionedFinalityProof<u128, ecdsa_crypto::Signature>;
+	type TestSignedCommitment = SignedCommitment<u128, ecdsa_crypto::Signature>;
+	type TestVersionedFinalityProof = VersionedFinalityProof<u128, ecdsa_crypto::Signature>;
 
 	///types for commitment supporting aggregatable bls signature
 	#[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
 	struct BLSAggregatableSignature(BLSSignature);
 
 	#[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
-	struct ECDSABLSSignaturePair (ecdsa_crypto::Signature, BLSSignature); 
+	struct ECDSABLSSignaturePair(ecdsa_crypto::Signature, BLSSignature);
 
-	type TestBLSSignedCommitment =
-		SignedCommitment<u128, ECDSABLSSignaturePair>;
-	type TestVersionedBLSFinalityProof =
-	VersionedFinalityProof<u128, ECDSABLSSignaturePair>;
-	
+	type TestBLSSignedCommitment = SignedCommitment<u128, ECDSABLSSignaturePair>;
+	type TestVersionedBLSFinalityProof = VersionedFinalityProof<u128, ECDSABLSSignaturePair>;
+
 	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
 	fn mock_ecdsa_signatures() -> (ecdsa_crypto::Signature, ecdsa_crypto::Signature) {
 		let store: SyncCryptoStorePtr = KeyStore::new().into();
@@ -317,7 +305,7 @@ mod tests {
 
 	///generates mock aggregatable bls signature for generating test commitment
 	///BLS signatures
-	fn mock_bls_signatures() ->  (BLSSignature, BLSSignature) {
+	fn mock_bls_signatures() -> (BLSSignature, BLSSignature) {
 		let store: SyncCryptoStorePtr = KeyStore::new().into();
 
 		let mut alice = sp_core::bls::Pair::from_string("//Alice", None).unwrap();
@@ -400,11 +388,18 @@ mod tests {
 		//aggregatedsigs.aggregate(&bls_signed_msgs.0);
 		//aggregatedsigs.aggregate(&bls_signed_msgs.1);
 
-		//let aggregated_signature = (&aggregatedsigs).signature(); //<SignatureAggregatorAssumingPoP<BLS377>) as Signed>::signature(&aggregatedsigs.signature());
+		//let aggregated_signature = (&aggregatedsigs).signature();
+		// //<SignatureAggregatorAssumingPoP<BLS377>) as
+		// Signed>::signature(&aggregatedsigs.signature());
 
 		let ecdsa_and_bls_signed = SignedCommitment {
 			commitment,
-			signatures: vec![None, None, Some(ECDSABLSSignaturePair(ecdsa_sigs.0, bls_signed_msgs.0)), Some(ECDSABLSSignaturePair(ecdsa_sigs.1, bls_signed_msgs.1))],
+			signatures: vec![
+				None,
+				None,
+				Some(ECDSABLSSignaturePair(ecdsa_sigs.0, bls_signed_msgs.0)),
+				Some(ECDSABLSSignaturePair(ecdsa_sigs.1, bls_signed_msgs.1)),
+			],
 		};
 
 		//when
@@ -415,15 +410,13 @@ mod tests {
 
 		// then
 		assert_eq!(decoded, Ok(ecdsa_and_bls_signed));
-		assert_eq!( 
+		assert_eq!(
 			encoded,
 			hex_literal::hex!(
 				"046d68343048656c6c6f20576f726c642105000000000000000000000000000000000000000000000004300400000008558455ad81279df0795cc985580e4fb75d72d948d1107b2ac80a09abed4da8480c746cc321f2319a5e99a830e314d10dd3cd68ce3dc0c33c86e99bcb7816f9ba0134835b340f62cb1bcb58f2cbdb4435a0e1780c5ec56c88ec198f9300581712a1d4876ce82befeeaf97d72351b25b9c002c729c651768c11f692807fb5ee5e8c50c1f07576fe705b406bc677e706304e92438b80e1bc87e0591ed99273a5a46012d6e1f8105c337a86cdd9aaacdc496577f3db8c55ef9e6fd48f2c5c05a2274707491635d8ba3df64f324575b7b2a34487bca2324b6a0046395a71681be3d0c2a0084c79ad33c5c69de77c1242167b1b11469df914306073696dbedd1d03805c917a9fb0074d2003dad4bb476f1f560650085fb69b3c2cedfbbd8d3aa8b80ac9525fe5cafbd585d84c0e49052df577e85602bb892a3bfd8525d15478e05a0f47b80"
 			)
 		);
-
-
-		}
+	}
 
 	#[test]
 	fn signed_commitment_count_signatures() {

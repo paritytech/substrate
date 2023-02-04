@@ -1,4 +1,3 @@
-
 // This file is part of Substrate.
 
 // Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
@@ -66,8 +65,7 @@ impl<TBlockNumber, TAggregatedSignature>
 		aggregator: TSignatureAggregator,
 	) -> (Self, Vec<Option<TSignature>>)
 	where
-		TSignatureAggregator:
-			FnOnce(&[Option<TSignature>]) -> TAggregatedSignature,
+		TSignatureAggregator: FnOnce(&[Option<TSignature>]) -> TAggregatedSignature,
 	{
 		let SignedCommitment { commitment, signatures } = signed;
 		let signed_by = signatures.iter().map(|s| s.is_some()).collect();
@@ -86,23 +84,25 @@ mod tests {
 	use super::*;
 	use codec::Decode;
 
-	use crate::{ecdsa_crypto, known_payloads, Payload, KEY_TYPE, bls_crypto::{Signature as BLSSignature}};
-	use bls_like::{pop::SignatureAggregatorAssumingPoP, Signed, EngineBLS, BLS377, SerializableToBytes};	
+	use crate::{
+		bls_crypto::Signature as BLSSignature, ecdsa_crypto, known_payloads, Payload, KEY_TYPE,
+	};
+	use bls_like::{
+		pop::SignatureAggregatorAssumingPoP, EngineBLS, SerializableToBytes, Signed, BLS377,
+	};
 
 	type TestCommitment = Commitment<u128>;
 
 	///types for ecdsa signed commitment
-	type TestSignedCommitment =
-		SignedCommitment<u128, ecdsa_crypto::Signature>;
+	type TestSignedCommitment = SignedCommitment<u128, ecdsa_crypto::Signature>;
 	type TestSignedCommitmentWitness =
 		SignedCommitmentWitness<u128, Vec<Option<ecdsa_crypto::Signature>>>;
 
 	#[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
-	struct ECDSABLSSignaturePair (ecdsa_crypto::Signature, BLSSignature); 
+	struct ECDSABLSSignaturePair(ecdsa_crypto::Signature, BLSSignature);
 
 	///types for commitment containing  bls signature along side ecdsa signature
-	type TestBLSSignedCommitment =
-		SignedCommitment<u128, ECDSABLSSignaturePair>;
+	type TestBLSSignedCommitment = SignedCommitment<u128, ECDSABLSSignaturePair>;
 	type TestBLSSignedCommitmentWitness =
 		SignedCommitmentWitness<u128, [u8; BLS377::SIGNATURE_SERIALIZED_SIZE]>;
 
@@ -130,7 +130,7 @@ mod tests {
 
 	///generates mock aggregatable bls signature for generating test commitment
 	///BLS signatures
-	fn mock_bls_signatures() ->  (BLSSignature, BLSSignature) {
+	fn mock_bls_signatures() -> (BLSSignature, BLSSignature) {
 		let store: SyncCryptoStorePtr = KeyStore::new().into();
 
 		let mut alice = sp_core::bls::Pair::from_string("//Alice", None).unwrap();
@@ -157,10 +157,7 @@ mod tests {
 
 		let sigs = mock_ecdsa_signatures();
 
-		SignedCommitment {
-			commitment,
-			signatures: vec![None, None, Some(sigs.0), Some(sigs.1)],
-		}
+		SignedCommitment { commitment, signatures: vec![None, None, Some(sigs.0), Some(sigs.1)] }
 	}
 
 	fn ecdsa_and_bls_signed_commitment() -> TestBLSSignedCommitment {
@@ -174,8 +171,12 @@ mod tests {
 
 		SignedCommitment {
 			commitment,
-			signatures: vec![None, None, Some(ECDSABLSSignaturePair(ecdsa_sigs.0, bls_sigs.0)), Some(ECDSABLSSignaturePair(ecdsa_sigs.1, bls_sigs.1))],
-	
+			signatures: vec![
+				None,
+				None,
+				Some(ECDSABLSSignaturePair(ecdsa_sigs.0, bls_sigs.0)),
+				Some(ECDSABLSSignaturePair(ecdsa_sigs.1, bls_sigs.1)),
+			],
 		}
 	}
 
@@ -185,12 +186,11 @@ mod tests {
 		let signed = ecdsa_signed_commitment();
 
 		// when
-		let (witness, signatures) = TestSignedCommitmentWitness::from_signed::<_,_,Vec<Option<ecdsa_crypto::Signature>>>(
-			signed,
-			|sigs| {
-				sigs.to_vec()
-			},
-		);
+		let (witness, signatures) = TestSignedCommitmentWitness::from_signed::<
+			_,
+			_,
+			Vec<Option<ecdsa_crypto::Signature>>,
+		>(signed, |sigs| sigs.to_vec());
 
 		// then
 		assert_eq!(witness.aggregated_signature, signatures);
@@ -202,30 +202,45 @@ mod tests {
 		let signed = ecdsa_and_bls_signed_commitment();
 
 		// when
-		let (witness, signatures) = TestBLSSignedCommitmentWitness::from_signed::<_,_,[u8; BLS377::SIGNATURE_SERIALIZED_SIZE]>(
-			signed,
-			|sigs| {
-				//we are going to aggregate the signatures here
-				let mut aggregatedsigs  : SignatureAggregatorAssumingPoP<BLS377> =  SignatureAggregatorAssumingPoP::new();
-				sigs.iter().filter_map(|sig| sig.clone().map(|sig| aggregatedsigs.add_signature(&(bls_like::Signature::from_bytes(<BLSSignature as AsRef<[u8]>>::as_ref(&sig.1.clone()).try_into().unwrap())).unwrap())));
-				(&aggregatedsigs).signature().to_bytes()
-			}
-		);
+		let (witness, signatures) = TestBLSSignedCommitmentWitness::from_signed::<
+			_,
+			_,
+			[u8; BLS377::SIGNATURE_SERIALIZED_SIZE],
+		>(signed, |sigs| {
+			//we are going to aggregate the signatures here
+			let mut aggregatedsigs: SignatureAggregatorAssumingPoP<BLS377> =
+				SignatureAggregatorAssumingPoP::new();
+			sigs.iter().filter_map(|sig| {
+				sig.clone().map(|sig| {
+					aggregatedsigs.add_signature(
+						&(bls_like::Signature::from_bytes(
+							<BLSSignature as AsRef<[u8]>>::as_ref(&sig.1.clone())
+								.try_into()
+								.unwrap(),
+						))
+						.unwrap(),
+					)
+				})
+			});
+			(&aggregatedsigs).signature().to_bytes()
+		});
 		// then
 		BLSSignature::try_from(witness.aggregated_signature.as_slice()).unwrap();
-		//, signatures.iter().filter_map(|sig| sig.map(|sig| (bls_like::Signature::<BLS377>::from_bytes(<BLSSignature as AsRef<[u8]>>::as_ref(&sig.1).try_into().unwrap())).unwrap())).collect::<Vec<bls_like::Signature::<BLS377>>>().iter().sum());
+		//, signatures.iter().filter_map(|sig| sig.map(|sig|
+		//, (bls_like::Signature::<BLS377>::from_bytes(<BLSSignature as
+		//, AsRef<[u8]>>::as_ref(&sig.1).try_into().unwrap())).unwrap())).
+		//, collect::<Vec<bls_like::Signature::<BLS377>>>().iter().sum());
 	}
 
 	#[test]
 	fn should_encode_and_decode_witness() {
 		// given
 		let signed = ecdsa_signed_commitment();
-		let (witness, _) = TestSignedCommitmentWitness::from_signed::<_,_,Vec<Option<ecdsa_crypto::Signature>>>(
-			signed,
-			|sigs: &[std::option::Option<ecdsa_crypto::Signature>]| {
-				sigs.to_vec()
-			},
-		);
+		let (witness, _) =
+			TestSignedCommitmentWitness::from_signed::<_, _, Vec<Option<ecdsa_crypto::Signature>>>(
+				signed,
+				|sigs: &[std::option::Option<ecdsa_crypto::Signature>]| sigs.to_vec(),
+			);
 
 		// when
 		let encoded = codec::Encode::encode(&witness);
