@@ -18,7 +18,10 @@
 use crate::{mock::*, *};
 use sp_runtime::{DispatchError, ModuleError};
 
-use frame_support::{assert_noop, assert_ok, traits::fungibles::InspectEnumerable};
+use frame_support::{
+	assert_noop, assert_ok,
+	traits::{fungibles::InspectEnumerable, Currency},
+};
 
 fn events() -> Vec<Event<Test>> {
 	let result = System::events()
@@ -58,15 +61,13 @@ fn pool_assets() -> Vec<u32> {
 
 fn create_tokens(owner: u64, tokens: Vec<NativeOrAssetId<u32>>) {
 	for token_id in tokens {
-		// if let Some(token_id) = token_id {
 		assert_ok!(Assets::force_create(
 			RuntimeOrigin::root(),
 			NativeOrAssetIdConverter::try_convert(token_id).unwrap(),
 			owner,
-			true,
+			false,
 			1
 		));
-		// }
 	}
 }
 
@@ -392,7 +393,7 @@ fn can_quote_price() {
 		create_tokens(user, vec![token_2]);
 		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
 
-		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user, 1000, 0));
+		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user, 1010, 0));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 2, user, 1000));
 
 		assert_ok!(Dex::add_liquidity(
@@ -452,7 +453,8 @@ fn can_swap_with_native() {
 		create_tokens(user, vec![token_2]);
 		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
 
-		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user, 1000, 0));
+		let ed = 10;
+		Balances::make_free_balance_be(&user, 1000 + ed);
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 2, user, 1000));
 
 		let liquidity1 = 1000;
@@ -483,7 +485,7 @@ fn can_swap_with_native() {
 		));
 
 		let pallet_account = Dex::get_pool_account(pool_id);
-		assert_eq!(balance(user, token_1), expect_receive);
+		assert_eq!(balance(user, token_1), expect_receive + ed);
 		assert_eq!(balance(pallet_account, token_1), liquidity1 - expect_receive);
 		assert_eq!(balance(pallet_account, token_2), liquidity2 + input_amount);
 	});
@@ -562,8 +564,8 @@ fn add_liquidity_causes_below_existential_deposit_but_keep_alive_set() {
 				liquidity2,
 				1,
 				1,
-				user,
-				true // keep_alive set so user account doesn't get reaped.
+				3,    // send sufficient LP tokens to a different user
+				true  // keep_alive set so user account doesn't get reaped.
 			),
 			DispatchError::Module(ModuleError {
 				index: 1,
@@ -610,7 +612,7 @@ fn check_no_panic_when_try_swap_close_to_empty_pool() {
 		create_tokens(user, vec![token_2]);
 		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
 
-		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user, 1000, 0));
+		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user, 1010, 0));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 2, user, 1000));
 
 		let liquidity1 = 1000;
@@ -690,7 +692,7 @@ fn swap_should_not_work_with_if_too_much_slippage() {
 		create_tokens(user, vec![token_2]);
 		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
 
-		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user, 1000, 0));
+		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user, 1010, 0));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 2, user, 1000));
 
 		let liquidity1 = 1000;
@@ -796,13 +798,13 @@ fn can_swap_tokens_for_exact_tokens_when_not_liquidity_provider() {
 
 		let pool_id = (token_1, token_2);
 		let pallet_account = Dex::get_pool_account(pool_id);
-		let base1 = 1000;
+		let base1 = 1010;
 
 		create_tokens(user2, vec![token_2]);
 		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user2), token_1, token_2));
 
 		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user, base1, 0));
-		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user2, 1000, 0));
+		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user2, 1010, 0));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(user2), 2, user2, 1000));
 
 		let before1 =
@@ -824,7 +826,7 @@ fn can_swap_tokens_for_exact_tokens_when_not_liquidity_provider() {
 			false
 		));
 
-		assert_eq!(balance(user, token_1), 1000);
+		assert_eq!(balance(user, token_1), 1010);
 		assert_eq!(balance(user, token_2), 0);
 
 		let exchange_out2 = 1;
@@ -840,7 +842,7 @@ fn can_swap_tokens_for_exact_tokens_when_not_liquidity_provider() {
 			true
 		));
 
-		assert_eq!(balance(user, token_1), 1000 - expect_in1);
+		assert_eq!(balance(user, token_1), 1010 - expect_in1);
 		assert_eq!(balance(pallet_account, token_1), liquidity1 + expect_in1);
 		assert_eq!(balance(user, token_2), exchange_out2);
 		assert_eq!(balance(pallet_account, token_2), liquidity2 - exchange_out2);
@@ -884,7 +886,7 @@ fn swap_when_existential_deposit_would_cause_reaping_but_keep_alive_set() {
 		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user2), token_1, token_2));
 
 		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user, 1, 0));
-		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user2, 1000, 0));
+		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user2, 1010, 0));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(user2), 2, user2, 2000));
 
 		assert_ok!(Dex::add_liquidity(

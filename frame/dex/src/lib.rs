@@ -272,10 +272,12 @@ pub mod pallet {
 			let pool_account = Self::get_pool_account(pool_id);
 			let lp_token = NextPoolAssetId::<T>::get().unwrap_or(T::PoolAssetId::initial_value());
 
+			frame_system::Pallet::<T>::inc_providers(&pool_account);
+
 			let next_lp_token_id = lp_token.increment();
 			NextPoolAssetId::<T>::set(Some(next_lp_token_id));
 
-			T::PoolAssets::create(lp_token, pool_account.clone(), true, MIN_LIQUIDITY.into())?;
+			T::PoolAssets::create(lp_token, pool_account.clone(), false, MIN_LIQUIDITY.into())?;
 
 			let pool_info = PoolInfo { lp_token };
 			Pools::<T>::insert(pool_id, pool_info);
