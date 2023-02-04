@@ -33,12 +33,12 @@ use crate::{
 	PersistedState,
 };
 use beefy_primitives::{
-    ecdsa_crypto::{AuthorityId, Public as ECDSAPublic, Signature as ECDSASignature, self, Pair as ECDSAKeyPair},
-    bls_crypto::{Public as BLSPublic, Signature as BLSSignature, self},
+    ecdsa_crypto::{AuthorityId as ECDSAAuthorityId, Public as ECDSAPublic, Signature as ECDSASignature, Pair as ECDSAKeyPair},
+    bls_crypto::{AuthorityId as BLSAuthorityId, Public as BLSPublic, Signature as BLSSignature},
 	known_payloads,
 	mmr::MmrRootProvider,
 	BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, SignedCommitment, ValidatorSet,
-	VersionedFinalityProof, BEEFY_ENGINE_ID, KEY_TYPE as BeefyKeyType,
+	VersionedFinalityProof, BEEFY_ENGINE_ID,
 };
 use futures::{future, stream::FuturesUnordered, Future, StreamExt};
 use parking_lot::Mutex;
@@ -58,7 +58,7 @@ use serde::{Deserialize, Serialize};
 use sp_api::{ApiRef, ProvideRuntimeApi};
 use sp_consensus::BlockOrigin;
 use sp_core::H256;
-use sp_keystore::{testing::KeyStore as TestKeystore, SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::{SyncCryptoStorePtr};
 use sp_mmr_primitives::{EncodableOpaqueLeaf, Error as MmrError, MmrApi, Proof};
 use sp_runtime::{
     codec::{Encode, Decode},
@@ -336,7 +336,7 @@ create_test_api!(
 fn add_mmr_digest(header: &mut Header, mmr_hash: MmrRootHash) {
 	header.digest_mut().push(DigestItem::Consensus(
 		BEEFY_ENGINE_ID,
-		ConsensusLog::<AuthorityId>::MmrRoot(mmr_hash).encode(),
+		ConsensusLog::<ECDSAAuthorityId>::MmrRoot(mmr_hash).encode(),
 	));
 }
 
@@ -354,15 +354,15 @@ pub(crate) trait BeefyAuthIdMaker : Clone + Encode + Decode + Debug + Ord + Sync
      fn make_beefy_ids(keys: &[Keyring]) -> Vec<Self>;
 }
 
-impl BeefyAuthIdMaker for ecdsa_crypto::AuthorityId 
+impl BeefyAuthIdMaker for ECDSAAuthorityId 
 {
      fn make_beefy_ids(keys: &[Keyring]) -> Vec<Self> {
-	     keys.iter().map(|&key| <Keyring as GenericKeyring<ecdsa_crypto::Pair>>::public(key).into()).collect()
+	     keys.iter().map(|&key| <Keyring as GenericKeyring<ECDSAKeyPair>>::public(key).into()).collect()
 	     
     }
 }
 
-impl BeefyAuthIdMaker for (ecdsa_crypto::AuthorityId, bls_crypto::AuthorityId)
+impl BeefyAuthIdMaker for (ECDSAAuthorityId, BLSAuthorityId)
 {
      fn make_beefy_ids(keys: &[Keyring]) -> Vec<Self> {
 	     keys.iter().map(|&key| <Keyring as GenericKeyring<ECDSAnBLSPair>>::public(key).into()).collect()
@@ -668,7 +668,7 @@ where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId> + 'static,
 
 #[tokio::test]
 async fn beefy_finalizing_blocks_using_ecdsa_signature() {
-    beefy_finalizing_blocks::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
+    beefy_finalizing_blocks::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
 }
 
 #[tokio::test]
@@ -758,12 +758,12 @@ where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId> + 'static,
 
 #[tokio::test]
 async fn lagging_validators_with_ecdsa_crypto() {
-    beefy_finalizing_blocks::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
+    lagging_validators::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
 }
 
 #[tokio::test]
 async fn lagging_validators_with_ecdsa_n_bls_crypto() {
-    beefy_finalizing_blocks::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>().await;
+    lagging_validators::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>().await;
 }
 
 async fn correct_beefy_payload<TKeyPair, AuthId, TSignature, TBeefyKeystore>()
@@ -829,7 +829,7 @@ where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId> + 'static,
 
 #[tokio::test]
 async fn correct_beefy_payload_with_ecdsa_signature() {
-    correct_beefy_payload::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
+    correct_beefy_payload::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
 }
 
 #[tokio::test]
@@ -843,7 +843,7 @@ where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSig
       AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
       TSignature:  Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq  + 'static,
 {
-	use futures::{future::poll_fn, task::Poll};
+	use futures::{future::poll_fn};
 	use sc_block_builder::BlockBuilderProvider;
 	use sc_client_api::BlockBackend;
 
@@ -990,7 +990,7 @@ where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSig
 
 #[tokio::test]
 async fn beefy_importing_blocks_with_ecdsa_signature() {
-    beefy_importing_blocks::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
+    beefy_importing_blocks::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
 }
 
 #[tokio::test]
@@ -1037,7 +1037,7 @@ where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSig
 
 #[tokio::test]
 async fn voter_initialization_with_ecdsa_crypto() {
-    voter_initialization::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
+    voter_initialization::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
 }
 
 #[tokio::test]
@@ -1129,7 +1129,7 @@ where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSig
 
 #[tokio::test]
 async fn on_demand_beefy_justification_sync_with_ecdsa_signature() {
-    on_demand_beefy_justification_sync::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
+    on_demand_beefy_justification_sync::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
 }
 
 #[tokio::test]
@@ -1188,7 +1188,7 @@ where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSig
 
 #[tokio::test]
 async fn should_initialize_voter_at_genesis_with_ecdsa_signature() {
-    should_initialize_voter_at_genesis::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
+    should_initialize_voter_at_genesis::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
 }
 
 #[tokio::test]
@@ -1260,7 +1260,7 @@ where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSig
 
 #[tokio::test]
 async fn should_initialize_voter_when_last_final_is_session_boundary_with_ecdsa_signature() {
-    should_initialize_voter_when_last_final_is_session_boundary::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
+    should_initialize_voter_when_last_final_is_session_boundary::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
 }
 
 #[tokio::test]
@@ -1331,7 +1331,7 @@ where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSig
 
 #[tokio::test]
 async fn should_initialize_voter_at_latest_finalized_with_ecdsa_signature() {
-    should_initialize_voter_at_latest_finalized::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
+    should_initialize_voter_at_latest_finalized::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
 }
 
 #[tokio::test]

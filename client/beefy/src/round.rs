@@ -17,8 +17,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use std::{
-	collections::{BTreeMap, HashMap},
-	hash::Hash, marker::PhantomData,
+	collections::{BTreeMap},
+	hash::Hash, 
 };
 
 use core::fmt::Debug;
@@ -190,13 +190,13 @@ mod tests {
 
      
 	use beefy_primitives::{
-        ecdsa_crypto::{self, Public as ECDSAPublic, Signature as ECDSASignature, Pair as ECDSAKeyPair},
+        ecdsa_crypto::{self, Public as ECDSAPublic, Signature as ECDSASignature,},
         bls_crypto::{Public as BLSPublic, Signature as BLSSignature},
         ValidatorSet};
     use codec::{Decode, Encode};
 
 	use super::{threshold, Block as BlockT, Hash, RoundTracker, Rounds};
-    use crate::{keystore::{ BeefyECDSAKeystore, BeefyBLSnECDSAKeystore, tests::{Keyring, GenericKeyring, SimpleKeyPair, ECDSAnBLSPair}}, tests::BeefyAuthIdMaker,};
+    use crate::{keystore::{ tests::{Keyring, GenericKeyring, SimpleKeyPair, ECDSAnBLSPair}}};
 
 
     impl<P, B, AuthId, TSignature> Rounds<P, B, AuthId, TSignature>

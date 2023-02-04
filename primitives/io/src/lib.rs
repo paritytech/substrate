@@ -1122,6 +1122,8 @@ pub trait Crypto {
 		Ok(pubkey.serialize())
 	}
 
+    /// Returns all `bls` public keys for the given key id from the keystore.
+    /// This is needed for beefy keystore.
     fn bls_public_keys(&mut self, id: KeyTypeId) -> Vec<bls::Public> {
 	    let keystore = &***self
 			.extension::<KeystoreExt>()

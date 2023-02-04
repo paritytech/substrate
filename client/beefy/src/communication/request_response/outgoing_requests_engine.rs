@@ -18,9 +18,9 @@
 
 //! Generating request logic for request/response protocol for syncing BEEFY justifications.
 use std::{fmt::Debug, marker::PhantomData};
-use codec::{Codec, Decode, Encode};
+use codec::{Decode, Encode};
 
-use beefy_primitives::{BeefyApi, ValidatorSet};
+use beefy_primitives::{ValidatorSet};
 use futures::channel::{oneshot, oneshot::Canceled};
 use log::{debug, warn};
 use parking_lot::Mutex;
@@ -29,7 +29,6 @@ use sc_network_common::{
 	request_responses::{IfDisconnected, RequestFailure},
 	service::NetworkRequest,
 };
-use sp_api::ProvideRuntimeApi;
 use sp_runtime::traits::{Block, NumberFor};
 use std::{collections::VecDeque, result::Result, sync::Arc};
 

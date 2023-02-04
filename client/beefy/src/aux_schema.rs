@@ -81,11 +81,11 @@ pub(crate) mod tests {
 	use crate::tests::{BeefyTestNet, BeefyAuthIdMaker};
     use sc_network_test::TestNetFactory;
 
-    use crate::keystore::{BeefyKeystore, BeefyECDSAKeystore, BeefyBLSnECDSAKeystore, tests::{SimpleKeyPair}};
+    use crate::keystore::{BeefyKeystore, BeefyECDSAKeystore, BeefyBLSnECDSAKeystore};
 
     use beefy_primitives::{
-	ecdsa_crypto::{AuthorityId, Public as ECDSAPublic, Signature as ECDSASignature, self, Pair as ECDSAKeyPair},
-	bls_crypto::{Public as BLSPublic, Signature as BLSSignature, self},
+	ecdsa_crypto::{Public as ECDSAPublic, Signature as ECDSASignature},
+	bls_crypto::{Public as BLSPublic, Signature as BLSSignature},
     };
 
 

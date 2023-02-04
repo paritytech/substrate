@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use std::{
-	collections::{BTreeMap, BTreeSet, VecDeque},
+	collections::{BTreeMap, VecDeque},
 	fmt::Debug,
 	marker::PhantomData,
 	sync::Arc,
@@ -40,9 +40,8 @@ use sp_runtime::{
 };
 
 use beefy_primitives::{
-	ecdsa_crypto,
-	BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, PayloadProvider, SignedCommitment,
-	ValidatorSet, VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
+	Commitment, ConsensusLog, Payload, PayloadProvider, SignedCommitment,
+	ValidatorSet, VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
 };
 
 use crate::{
@@ -407,18 +406,12 @@ where
 		active: &ValidatorSet<AuthId>,
 	) -> Result<(), Error> {
         match self.key_store.authority_id(active.validators()) {
-		// let active: BTreeSet<&AuthId> = active.validators().iter().collect();
-
-		// let public_keys = self.key_store.authority_ids()?;
-		// let store: BTreeSet<&AuthId> = public_keys.iter().collect();
-
-		    // if store.intersection(&active).count() == 0 {
             None => {
 			    let msg = "no authority public key found in store".to_string();
 			    debug!(target: LOG_TARGET, "🥩 for block {:?} {}", block, msg);
 			    Err(Error::Keystore(msg))
 		    },
-            Some(auth_id) => Ok(())     
+            Some(_auth_id) => Ok(())     
 		}
     }
 	    
@@ -1003,7 +996,6 @@ where
 pub(crate) mod tests {
 	use super::*;
 	use crate::{
-	    keystore,
 	    communication::notification::{BeefyBestBlockStream, BeefyVersionedFinalityProofStream},
 	    keystore::{ BeefyECDSAKeystore, BeefyBLSnECDSAKeystore, tests::{Keyring, GenericKeyring, SimpleKeyPair, ECDSAnBLSPair}},
 		tests::{
@@ -1013,8 +1005,8 @@ pub(crate) mod tests {
 		BeefyRPCLinks, KnownPeers,
 	};
 
-    use beefy_primitives::{known_payloads, mmr::MmrRootProvider, ecdsa_crypto::{self, Public as ECDSAPublic, Signature as ECDSASignature, Pair as ECDSAKeyPair}, bls_crypto::{self, Public as BLSPublic, Signature as BLSSignature}};
-	use futures::{executor::block_on, future::poll_fn, task::Poll};
+    use beefy_primitives::{known_payloads, mmr::MmrRootProvider, ecdsa_crypto::{Public as ECDSAPublic, Signature as ECDSASignature, Pair as ECDSAKeyPair}, bls_crypto::{Public as BLSPublic, Signature as BLSSignature}};
+	use futures::{future::poll_fn, task::Poll};
 	use parking_lot::Mutex;
 	use sc_client_api::{Backend as BackendT, HeaderBackend};
 	use sc_network::NetworkService;
@@ -1423,7 +1415,7 @@ pub(crate) mod tests {
 
     #[tokio::test]
     async fn keystore_vs_validator_set_with_ecdsa_keys() {
-	    keystore_vs_validator_set::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>();
+	    keystore_vs_validator_set::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>();
 	}
     
     #[tokio::test]
@@ -1542,7 +1534,7 @@ pub(crate) mod tests {
 
     #[tokio::test]
     async fn should_finalize_correctly_with_ecdsa_keys() {        
-        should_finalize_correctly::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
+        should_finalize_correctly::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
 	}
     
     #[tokio::test]
@@ -1592,7 +1584,7 @@ pub(crate) mod tests {
     
     #[tokio::test]
     async fn should_init_session_with_ecdsa_keys() {        
-        should_init_session::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
+        should_init_session::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
 	}
     
     #[tokio::test]
@@ -1683,7 +1675,7 @@ pub(crate) mod tests {
 
     #[tokio::test]
     async fn should_triage_votes_and_process_later_with_ecdsa_keys() {       
-        should_triage_votes_and_process_later::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
+        should_triage_votes_and_process_later::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
 	}
     
     #[tokio::test]

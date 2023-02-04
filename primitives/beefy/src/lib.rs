@@ -60,18 +60,16 @@ pub trait BeefyAuthorityId<MsgHash: Hash>: RuntimeAppPublic {
 	fn verify(&self, signature: &<Self as RuntimeAppPublic>::Signature, msg: &[u8]) -> bool;
 }
 
-/// BEEFY cryptographic types
+/// BEEFY cryptographic types for ECDSA crypto
 ///
 /// This module basically introduces three crypto types:
-/// - `crypto::Pair`
-/// - `crypto::Public`
-/// - `crypto::Signature`
+/// - `ecdsa_crypto::Pair`
+/// - `ecdsa_crypto::Public`
+/// - `ecdsa_crypto::Signature`
 ///
 /// Your code should use the above types as concrete types for all crypto related
 /// functionality.
 ///
-/// The current underlying crypto scheme used is ECDSA. This can be changed,
-/// without affecting code restricted against the above listed crypto types.
 pub mod ecdsa_crypto {
     use super::{BeefyAuthorityId, Hash, RuntimeAppPublic};
     use sp_application_crypto::{app_crypto, ecdsa};
@@ -102,14 +100,24 @@ pub mod ecdsa_crypto {
 
 }
 
+/// BEEFY cryptographic types for BLS crypto
+///
+/// This module basically introduces three crypto types:
+/// - `bls_crypto::Pair`
+/// - `bls_crypto::Public`
+/// - `bls_crypto::Signature`
+///
+/// Your code should use the above types as concrete types for all crypto related
+/// functionality.
+///
 pub mod bls_crypto {
 	use sp_application_crypto::{app_crypto, bls};
 	app_crypto!(bls, crate::KEY_TYPE);
 
-	/// Identity of a BEEFY authority using ECDSA as its crypto.
+	/// Identity of a BEEFY authority using BLS as its crypto.
 	pub type AuthorityId = Public;
 
-	/// Signature for a BEEFY authority using ECDSA as its crypto.
+	/// Signature for a BEEFY authority using BLS as its crypto.
 	pub type AuthoritySignature = Signature;
 }
 

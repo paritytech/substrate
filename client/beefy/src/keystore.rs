@@ -20,6 +20,7 @@ use sp_application_crypto::RuntimeAppPublic;
 use sp_core::keccak_256;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::traits::Keccak256;
+use sp_application_crypto::Pair;
 
 use log::warn;
 
@@ -35,8 +36,6 @@ use core::fmt::Debug;
 	
 use crate::{error, LOG_TARGET};
 
-use sp_core::bls::Pair as BLSPair;
-use sp_application_crypto::Pair as app_crypto_Pair;
 /// A BEEFY specific keystore implemented as a `Newtype`. This is basically a
 /// wrapper around [`sp_keystore::SyncCryptoStore`] and allows to customize
 /// common cryptographic functionality.
@@ -288,8 +287,6 @@ impl BeefyKeystore<(ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature)> for B
 	}
 								      
 	fn public_keys(&self) -> Result<Vec<Self::Public>, error::Error> {
-		let store = self.0.clone().ok_or_else(|| error::Error::Keystore("no Keystore".into()))?;
-
 		let bls_n_ecdsa = self.both();
 		let pk  : Vec<Self::Public> = bls_n_ecdsa.0.public_keys()?.into_iter().zip(bls_n_ecdsa.1.public_keys()?.into_iter()).collect();
 
@@ -336,17 +333,15 @@ pub mod tests {
 	use std::sync::Arc;
 
 	use sc_keystore::LocalKeystore;
-	use sp_core::{ecdsa, bls, keccak_256, Pair, crypto::{SecretStringError}};
-        use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr, CryptoStore};
+	use sp_core::{ecdsa, keccak_256, Pair, crypto::{SecretStringError}};
+        use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr,};
         use sp_application_crypto::Wraps;
 
 	use beefy_primitives::{ecdsa_crypto, bls_crypto, KEY_TYPE};
-        use sp_runtime::testing::TestSignature;
 
         use super::{BeefyKeystore, BeefyECDSAKeystore, BeefyBLSnECDSAKeystore, ECDSAPublic, ECDSASignature, BLSPublic, BLSSignature};
         use codec::{Decode, Encode};
         use core::fmt::Debug;
-    	use std::marker::PhantomData;
 
 	use crate::error::Error;
 

@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use core::fmt::Debug;
-use codec::{Codec, Decode, Encode};
+use codec::{Decode, Encode};
 
 use crate::{
 	communication::{
@@ -36,7 +36,7 @@ use crate::{
 	worker::PersistedState,
 };
 use beefy_primitives::{
-	ecdsa_crypto::AuthorityId, BeefyApi, MmrRootHash, PayloadProvider, ValidatorSet, BEEFY_ENGINE_ID,
+	BeefyApi, MmrRootHash, PayloadProvider, ValidatorSet, BEEFY_ENGINE_ID,
 	GENESIS_AUTHORITY_SET_ID,
 };
 use futures::{stream::Fuse, StreamExt};
@@ -53,7 +53,6 @@ use sp_blockchain::{
 	Backend as BlockchainBackend, Error as ClientError, HeaderBackend, Result as ClientResult,
 };
 use sp_consensus::{Error as ConsensusError, SyncOracle};
-use sp_keystore::SyncCryptoStorePtr;
 use sp_mmr_primitives::MmrApi;
 use sp_runtime::{
 	generic::BlockId,

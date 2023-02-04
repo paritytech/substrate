@@ -81,7 +81,7 @@ fn verify_with_validator_set<Block: BlockT, AuthId: Encode + Decode + Debug + Cl
 #[cfg(test)]
 pub(crate) mod tests {
 	use beefy_primitives::{
-		known_payloads, Commitment, Payload, SignedCommitment, VersionedFinalityProof, ecdsa_crypto::{self, Public as ECDSAPublic, Signature as ECDSASignature, Pair as ECDSAKeyPair},
+		known_payloads, Commitment, Payload, SignedCommitment, VersionedFinalityProof, ecdsa_crypto::{Public as ECDSAPublic, Signature as ECDSASignature, Pair as ECDSAKeyPair},
         bls_crypto::{Public as BLSPublic, Signature as BLSSignature},
 	};
 	use substrate_test_runtime_client::runtime::Block;
@@ -181,7 +181,7 @@ pub(crate) mod tests {
 
     #[test]
     fn should_verify_with_validator_set_with_ecdsa_keys() {        
-        should_verify_with_validator_set::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>();
+        should_verify_with_validator_set::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>();
 	}
     
     #[test]
@@ -214,7 +214,7 @@ pub(crate) mod tests {
 
     #[test]
     fn should_decode_and_verify_finality_proof_with_ecdsa_keys() {        
-        should_decode_and_verify_finality_proof::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>();
+        should_decode_and_verify_finality_proof::<ECDSAKeyPair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>();
 	}
     
     #[test]

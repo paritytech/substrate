@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use std::{fmt::Debug, marker::PhantomData};
-use codec::{Codec, Decode, Encode};
+use codec::{Decode, Encode};
 
 use beefy_primitives::{BeefyApi, BEEFY_ENGINE_ID};
 use log::debug;
