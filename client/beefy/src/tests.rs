@@ -1293,7 +1293,7 @@ where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSig
 		block_number: 12,
 		validator_set_id: validator_set.id(),
 	};
-	let justif = VersionedFinalityProof::<_, Signature>::V1(SignedCommitment {
+	let justif = VersionedFinalityProof::<_, TSignature>::V1(SignedCommitment {
 		commitment,
 		signatures: vec![None],
 	});

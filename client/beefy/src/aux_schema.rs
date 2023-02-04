@@ -95,19 +95,19 @@ pub(crate) mod tests {
 		version == CURRENT_VERSION
 	}
 
-    async fn should_load_persistent_sanity_checks()
-    // async fn should_load_persistent_sanity_checks<AuthId, TSignature, TBeefyKeystore, >()
-    // where
-    // 	TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>  + 'static,
-    // AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
-    // TSignature:  Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq  + 'static,
+    //async fn should_load_persistent_sanity_checks()
+     async fn should_load_persistent_sanity_checks<AuthId, TSignature, TBeefyKeystore, >()
+     where
+     	TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>  + 'static,
+     AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
+     TSignature:  Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq  + 'static,
     {
 		let mut net: BeefyTestNet<ECDSAPublic, ECDSASignature, BeefyECDSAKeystore> = BeefyTestNet::new(1);
 		//let mut net: BeefyTestNet<AuthId, TSignature, TBeefyKeystore> = BeefyTestNet::new(1);
 		let backend = net.peer(0).client().as_backend();
 
 		// version not available in db -> None
-		assert_eq!(load_persistent(&*backend).unwrap(), None);
+		assert_eq!(load_persistent::<_,_,AuthId,TSignature>(&*backend).unwrap(), None);
 
 		// populate version in db
 		write_current_version(&*backend).unwrap();
@@ -115,19 +115,19 @@ pub(crate) mod tests {
 		assert_eq!(load_decode(&*backend, VERSION_KEY).unwrap(), Some(CURRENT_VERSION));
 
 		// version is available in db but state isn't -> None
-		assert_eq!(load_persistent(&*backend).unwrap(), None);
+		assert_eq!(load_persistent::<_,_,AuthId,TSignature>(&*backend).unwrap(), None);
 
 		// full `PersistedState` load is tested in `tests.rs`.
 	}
 
-    // #[tokio::test]
-    // async fn should_load_persistent_sanity_checks_with_ecdsa_signature() {
-    // 	should_load_persistent_sanity_checks::<ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
-    // }
+    #[tokio::test]
+    async fn should_load_persistent_sanity_checks_with_ecdsa_signature() {
+    	should_load_persistent_sanity_checks::<ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>().await;
+    }
 
-    // #[tokio::test]
-    // async fn should_load_persistent_sanity_checks_with_ecdsa_n_bls_signature() {
-    // 	should_load_persistent_sanity_checks::<(ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>().await;
-    // }
+    #[tokio::test]
+    async fn should_load_persistent_sanity_checks_with_ecdsa_n_bls_signature() {
+    	should_load_persistent_sanity_checks::<(ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>().await;
+    }
 
 }
