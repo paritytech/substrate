@@ -40,10 +40,13 @@ fn migrate_v0_to_v1<T: Config<I>, I: 'static>(accounts: &[T::AccountId]) -> Weig
 		// Set storage version to `1`.
 		StorageVersion::new(1).put::<Pallet<T, I>>();
 
-		log::info!(target: "runtime::balances", "Storage to version 1");
+		log::info!(target: LOG_TARGET, "Storage to version 1");
 		T::DbWeight::get().reads_writes(2 + accounts.len() as u64, 3)
 	} else {
-		log::info!(target: "runtime::balances",  "Migration did not execute. This probably should be removed");
+		log::info!(
+			target: LOG_TARGET,
+			"Migration did not execute. This probably should be removed"
+		);
 		T::DbWeight::get().reads(1)
 	}
 }
@@ -87,10 +90,13 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for ResetInactive<T, I> {
 			// Set storage version to `0`.
 			StorageVersion::new(0).put::<Pallet<T, I>>();
 
-			log::info!(target: "runtime::balances", "Storage to version 0");
+			log::info!(target: LOG_TARGET, "Storage to version 0");
 			T::DbWeight::get().reads_writes(1, 2)
 		} else {
-			log::info!(target: "runtime::balances",  "Migration did not execute. This probably should be removed");
+			log::info!(
+				target: LOG_TARGET,
+				"Migration did not execute. This probably should be removed"
+			);
 			T::DbWeight::get().reads(1)
 		}
 	}

@@ -32,7 +32,6 @@ members = [
 	"client/consensus/manual-seal",
 	"client/consensus/pow",
 	"client/consensus/slots",
-	"client/consensus/uncles",
 	"client/db",
 	"client/executor",
 	"client/executor/common",
@@ -64,6 +63,7 @@ members = [
 	"client/service",
 	"client/service/test",
 	"client/state-db",
+	"client/storage-monitor",
 	"client/sysinfo",
 	"client/sync-state-rpc",
 	"client/telemetry",
@@ -85,8 +85,8 @@ members = [
 	"frame/balances",
 	"frame/beefy",
 	"frame/beefy-mmr",
-	"frame/beefy-mmr/primitives",
 	"frame/benchmarking",
+	"frame/benchmarking/pov",
 	"frame/bounties",
 	"frame/child-bounties",
 	"frame/collective",
@@ -175,7 +175,6 @@ members = [
 	"primitives/arithmetic",
 	"primitives/arithmetic/fuzzer",
 	"primitives/authority-discovery",
-	"primitives/authorship",
 	"primitives/beefy",
 	"primitives/block-builder",
 	"primitives/blockchain",
@@ -246,6 +245,7 @@ members = [
 	"utils/frame/rpc/client",
 	"utils/prometheus",
 	"utils/wasm-builder",
+	"utils/binary-merkle-tree",
 ]
 
 # The list of dependencies below (which can be both direct and indirect dependencies) are crates
