@@ -1,4 +1,3 @@
-
 pub trait GetMaintenanceStatusTrait {
 	fn is_maintenance() -> bool;
 

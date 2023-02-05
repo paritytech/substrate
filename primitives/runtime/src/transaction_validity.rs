@@ -88,10 +88,12 @@ pub enum InvalidTransaction {
 	BadSigner,
 	/// The swap prevalidation has failed
 	SwapPrevalidation,
-	/// Fee lock processing has failed either due to not enough funds to reserve or an unexpected error
+	/// Fee lock processing has failed either due to not enough funds to reserve or an unexpected
+	/// error
 	ProcessFeeLock,
-	/// Unlock fee has failed either due to no fee locks or fee lock cant be unlocked yet or an unexpected error
-	UnlockFee
+	/// Unlock fee has failed either due to no fee locks or fee lock cant be unlocked yet or an
+	/// unexpected error
+	UnlockFee,
 }
 
 impl InvalidTransaction {

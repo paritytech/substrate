@@ -23,7 +23,7 @@ use super::*;
 
 use crate as utility;
 use frame_support::{
-	assert_err_ignore_postinfo, assert_noop, assert_ok, assert_err,
+	assert_err, assert_err_ignore_postinfo, assert_noop, assert_ok,
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, Dispatchable, Pays},
 	error::BadOrigin,
 	parameter_types, storage,
@@ -174,11 +174,10 @@ pub struct MockDisallowedInBatch;
 impl Contains<RuntimeCall> for MockDisallowedInBatch {
 	fn contains(c: &RuntimeCall) -> bool {
 		match c {
-			RuntimeCall::Example(example::Call::disallowed {..}) => true,
-			_ => false
+			RuntimeCall::Example(example::Call::disallowed { .. }) => true,
+			_ => false,
 		}
 	}
-
 }
 
 impl Config for Test {
@@ -216,7 +215,7 @@ fn call_foobar(err: bool, start_weight: Weight, end_weight: Option<Weight>) -> R
 }
 
 fn call_disallowed() -> RuntimeCall {
-	RuntimeCall::Example(ExampleCall::disallowed { })
+	RuntimeCall::Example(ExampleCall::disallowed {})
 }
 
 #[test]
@@ -362,11 +361,8 @@ fn batch_with_root_works() {
 #[test]
 fn batch_call_disallowed_with_root_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Utility::batch(
-			RuntimeOrigin::root(),
-			vec![call_disallowed()]
-		), );
-		
+		assert_ok!(Utility::batch(RuntimeOrigin::root(), vec![call_disallowed()]),);
+
 		System::assert_last_event(utility::Event::BatchCompleted.into());
 	});
 }
@@ -374,10 +370,7 @@ fn batch_call_disallowed_with_root_works() {
 #[test]
 fn batch_filters_disallowed_with_signed() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Utility::batch(
-			RuntimeOrigin::signed(1),
-			vec![call_disallowed()]
-		), );
+		assert_ok!(Utility::batch(RuntimeOrigin::signed(1), vec![call_disallowed()]),);
 		System::assert_last_event(
 			utility::Event::BatchInterrupted {
 				index: 0,
@@ -541,15 +534,11 @@ fn batch_all_works() {
 	});
 }
 
-
 #[test]
 fn batch_all_call_disallowed_with_root_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Utility::batch_all(
-			RuntimeOrigin::root(),
-			vec![call_disallowed()]
-		), );
-		
+		assert_ok!(Utility::batch_all(RuntimeOrigin::root(), vec![call_disallowed()]),);
+
 		System::assert_last_event(utility::Event::BatchCompleted.into());
 	});
 }
@@ -557,14 +546,16 @@ fn batch_all_call_disallowed_with_root_works() {
 #[test]
 fn batch_all_filters_disallowed_with_signed() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(Utility::batch_all(
-			RuntimeOrigin::signed(1),
-			vec![call_disallowed()]
-		), DispatchErrorWithPostInfo {
-			 post_info: PostDispatchInfo {
-				 actual_weight: Some(Weight::from_parts(21476000,0) ),
-				 pays_fee: Pays::Yes },
-				 error:  frame_system::Error::<Test>::CallFiltered.into() });
+		assert_noop!(
+			Utility::batch_all(RuntimeOrigin::signed(1), vec![call_disallowed()]),
+			DispatchErrorWithPostInfo {
+				post_info: PostDispatchInfo {
+					actual_weight: Some(Weight::from_parts(21476000, 0)),
+					pays_fee: Pays::Yes
+				},
+				error: frame_system::Error::<Test>::CallFiltered.into()
+			}
+		);
 	});
 }
 
@@ -753,11 +744,8 @@ fn force_batch_works() {
 #[test]
 fn force_batch_call_disallowed_with_root_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Utility::force_batch(
-			RuntimeOrigin::root(),
-			vec![call_disallowed()]
-		), );
-		
+		assert_ok!(Utility::force_batch(RuntimeOrigin::root(), vec![call_disallowed()]),);
+
 		System::assert_last_event(utility::Event::BatchCompleted.into());
 	});
 }
@@ -765,14 +753,12 @@ fn force_batch_call_disallowed_with_root_works() {
 #[test]
 fn force_batch_call_filters_disallowed_with_signed() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Utility::force_batch(
-			RuntimeOrigin::signed(1),
-			vec![call_disallowed()]
-		), );
-		
+		assert_ok!(Utility::force_batch(RuntimeOrigin::signed(1), vec![call_disallowed()]),);
+
 		System::assert_last_event(utility::Event::BatchCompletedWithErrors.into());
 		System::assert_has_event(
-			utility::Event::ItemFailed { error: frame_system::Error::<Test>::CallFiltered.into() }.into(),
+			utility::Event::ItemFailed { error: frame_system::Error::<Test>::CallFiltered.into() }
+				.into(),
 		);
 	});
 }

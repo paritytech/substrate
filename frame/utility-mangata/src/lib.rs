@@ -59,14 +59,13 @@ pub mod weights;
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{extract_actual_weight, GetDispatchInfo, PostDispatchInfo},
-	traits::{IsSubType, OriginTrait, UnfilteredDispatchable},
+	traits::{Contains, IsSubType, OriginTrait, UnfilteredDispatchable},
 };
 use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
 use sp_runtime::traits::{BadOrigin, Dispatchable, TrailingZeroInput};
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
-use frame_support::traits::Contains;
 
 pub use pallet::*;
 
@@ -223,14 +222,15 @@ pub mod pallet {
 				let result = if is_root {
 					call.dispatch_bypass_filter(origin.clone())
 				} else {
-
 					let mut filtered_origin = origin.clone();
 
 					// Do not allowed disallowed calls in batch
-					filtered_origin.add_filter(move |c: &<T as frame_system::Config>::RuntimeCall| {
-						let c = <T as Config>::RuntimeCall::from_ref(c);
-						!T::DisallowedInBatch::contains(c)
-					});
+					filtered_origin.add_filter(
+						move |c: &<T as frame_system::Config>::RuntimeCall| {
+							let c = <T as Config>::RuntimeCall::from_ref(c);
+							!T::DisallowedInBatch::contains(c)
+						},
+					);
 
 					call.dispatch(filtered_origin)
 				};
@@ -355,10 +355,12 @@ pub mod pallet {
 				} else {
 					let mut filtered_origin = origin.clone();
 
-					filtered_origin.add_filter(move |c: &<T as frame_system::Config>::RuntimeCall| {
-						let c = <T as Config>::RuntimeCall::from_ref(c);
-						!T::DisallowedInBatch::contains(c)
-					});
+					filtered_origin.add_filter(
+						move |c: &<T as frame_system::Config>::RuntimeCall| {
+							let c = <T as Config>::RuntimeCall::from_ref(c);
+							!T::DisallowedInBatch::contains(c)
+						},
+					);
 
 					// Don't allow users to nest `batch_all` calls.
 					filtered_origin.add_filter(
@@ -476,10 +478,12 @@ pub mod pallet {
 					let mut filtered_origin = origin.clone();
 
 					// Do not allowed disallowed calls in batch
-					filtered_origin.add_filter(move |c: &<T as frame_system::Config>::RuntimeCall| {
-						let c = <T as Config>::RuntimeCall::from_ref(c);
-						!T::DisallowedInBatch::contains(c)
-					});
+					filtered_origin.add_filter(
+						move |c: &<T as frame_system::Config>::RuntimeCall| {
+							let c = <T as Config>::RuntimeCall::from_ref(c);
+							!T::DisallowedInBatch::contains(c)
+						},
+					);
 
 					call.dispatch(filtered_origin)
 				};
@@ -518,8 +522,4 @@ impl<T: Config> Pallet<T> {
 		Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
 			.expect("infinite length input; no invalid inputs for type; qed")
 	}
-}
-
-pub trait TestFilter<T>{
-	fn check(c: &T) -> bool;
 }
