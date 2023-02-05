@@ -298,7 +298,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ListBags::get(score)
 	}
 
-	pub fn do_try_state() -> Result<(), &'static str> {
+	fn do_try_state() -> Result<(), &'static str> {
 		List::<T, I>::do_try_state()
 	}
 }
