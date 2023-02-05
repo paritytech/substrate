@@ -297,10 +297,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn list_bags_get(score: T::Score) -> Option<list::Bag<T, I>> {
 		ListBags::get(score)
 	}
-
-	fn do_try_state() -> Result<(), &'static str> {
-		List::<T, I>::do_try_state()
-	}
 }
 
 impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I> {
@@ -354,7 +350,7 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 
 	#[cfg(feature = "try-runtime")]
 	fn try_state() -> Result<(), &'static str> {
-		Self::do_try_state()
+		List::<T, I>::do_try_state()
 	}
 
 	fn unsafe_clear() {
