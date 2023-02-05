@@ -647,7 +647,7 @@ impl<T: Config> Default for HostFnWeights<T> {
 				1
 			)),
 			debug_message: to_weight!(cost_batched!(seal_debug_message)),
-			debug_message_per_byte: to_weight!(cost_byte_batched!(seal_debug_message_per_kb)),
+			debug_message_per_byte: to_weight!(cost_byte!(seal_debug_message_per_kb)),
 			set_storage: to_weight!(cost_batched!(seal_set_storage), 1024u64),
 			set_code_hash: to_weight!(cost_batched!(seal_set_code_hash)),
 			set_storage_per_new_byte: to_weight!(cost_byte_batched!(seal_set_storage_per_new_kb)),
