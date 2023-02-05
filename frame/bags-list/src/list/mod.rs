@@ -750,8 +750,7 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 	/// * Ensures head has no prev.
 	/// * Ensures tail has no next.
 	/// * Ensures there are no loops, traversal from head to tail is correct.
-	#[cfg(feature = "std")]
-	#[allow(dead_code)]
+	#[cfg(any(test, feature = "try-runtime", feature = "fuzz"))]
 	fn do_try_state(&self) -> Result<(), &'static str> {
 		frame_support::ensure!(
 			self.head()
@@ -897,8 +896,7 @@ impl<T: Config<I>, I: 'static> Node<T, I> {
 		self.bag_upper
 	}
 
-	#[cfg(feature = "std")]
-	#[allow(dead_code)]
+	#[cfg(any(test, feature = "try-runtime", feature = "fuzz"))]
 	fn do_try_state(&self) -> Result<(), &'static str> {
 		let expected_bag = Bag::<T, I>::get(self.bag_upper).ok_or("bag not found for node")?;
 
