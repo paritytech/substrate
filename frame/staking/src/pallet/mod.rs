@@ -201,14 +201,23 @@ pub mod pallet {
 		/// guess.
 		type NextNewSession: EstimateNextNewSession<Self::BlockNumber>;
 
-		/// The maximum number of nominators rewarded for each validator.
+		/// The maximum number of nominators rewarded for each validator when using
+		/// `ErasStakersClipped`.
 		///
-		/// A reward payout is restricted to a maximum of `MaxNominatorRewardedPerValidator`
-		/// nominators in a single call. This used to limit the i/o cost for the nominator payout.
-		/// See call `payout_stakers` for more details.
-		// TODO(ank4n): Should we change this name? Breaking changes!
+		/// For older non-paged exposure, a reward payout is restricted to the top
+		/// `MaxNominatorRewardedPerValidator` nominators. This is to limit the i/o cost for the
+		/// nominator payout.
+		// TODO(ank4n) #[deprecated(note = "This constant is no longer used and will be removed in the future.")]
 		#[pallet::constant]
 		type MaxNominatorRewardedPerValidator: Get<u32>;
+
+		/// The maximum size of each `T::ExposurePage`.
+		///
+		/// An `ExposurePage` is bounded to a maximum of `MaxExposurePageSize` nominators. The
+		/// actual page size is a dynamic value that is determined by the storage item
+		/// `T::ExposurePageSize`.
+		#[pallet::constant]
+		type MaxExposurePageSize: Get<u32>;
 
 		/// The fraction of the validator set that is safe to be offending.
 		/// After the threshold is reached a new era will be forced.
@@ -465,6 +474,12 @@ pub mod pallet {
 		Exposure<T::AccountId, BalanceOf<T>>,
 		ValueQuery,
 	>;
+
+	/// The nominator count each `ExposurePage` is capped at.
+	///
+	/// This cannot be greater than `T::MaxExposurePageSize`.
+	#[pallet::storage]
+	pub type ExposurePageSize<T> = StorageValue<_, u32, OptionQuery>;
 
 	/// Paginated exposure of a validator at given era.
 	///
@@ -1632,7 +1647,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Pay out all the stakers behind a single validator for a single era and page.
+		/// Pay out next page of the stakers behind a validator for the given era.
 		///
 		/// - `validator_stash` is the stash account of the validator.
 		/// - `era` may be any era between `[current_era - history_depth; current_era]`.
@@ -1642,7 +1657,7 @@ pub mod pallet {
 		/// The origin of this call must be _Signed_. Any account can call this function, even if
 		/// it is not one of the stakers.
 		///
-		/// If a validator has more than `T::MaxMaxNominatorRewardedPerValidator` nominators backing
+		/// If a validator has more than `T::MaxNominatorRewardedPerValidator` nominators backing
 		/// them, then the list of nominators is paged, with each page being capped at
 		/// `T::MaxNominatorRewardedPerValidator`. If a validator has more than one page of
 		/// nominators, the call needs to be made for each page separately in order for all the
@@ -1962,6 +1977,50 @@ pub mod pallet {
 			T::AdminOrigin::ensure_origin(origin)?;
 			MinCommission::<T>::put(new);
 			Ok(())
+		}
+
+		/// Pay out a page of the stakers behind a validator for the given era and page.
+		///
+		/// - `validator_stash` is the stash account of the validator.
+		/// - `era` may be any era between `[current_era - history_depth; current_era]`.
+		/// - `page` is the page index of nominators to pay out with value between 0 and
+		///   `num_nominators / T::MaxNominatorRewardedPerValidator`.
+		///
+		/// The origin of this call must be _Signed_. Any account can call this function, even if
+		/// it is not one of the stakers.
+		///
+		/// If a validator has more than `T::MaxNominatorRewardedPerValidator` nominators backing
+		/// them, then the list of nominators is paged, with each page being capped at
+		/// `T::MaxNominatorRewardedPerValidator`. If a validator has more than one page of
+		/// nominators, the call needs to be made for each page separately in order for all the
+		/// nominators backing a validator receive the reward. The nominators are not sorted across
+		/// pages and so it should not be assumed the highest staker would be on the topmost page
+		/// and vice versa. If rewards are not claimed in `${HistoryDepth}` eras, they are lost.
+		///
+		/// # <weight>
+		/// - Time complexity: at most O(MaxNominatorRewardedPerValidator).
+		/// - Contains a limited number of reads and writes.
+		/// -----------
+		/// N is the Number of payouts for the validator (including the validator)
+		/// Weight:
+		/// - Reward Destination Staked: O(N)
+		/// - Reward Destination Controller (Creating): O(N)
+		///
+		///   NOTE: weights are assuming that payouts are made to alive stash account (Staked).
+		///   Paying even a dead controller is cheaper weight-wise. We don't do any refunds here.
+		/// # </weight>
+		#[pallet::call_index(26)]
+		#[pallet::weight(T::WeightInfo::payout_stakers_alive_staked(
+			T::MaxNominatorRewardedPerValidator::get()
+		))]
+		pub fn payout_stakers_by_page(
+			origin: OriginFor<T>,
+			validator_stash: T::AccountId,
+			era: EraIndex,
+			page: PageIndex,
+		) -> DispatchResultWithPostInfo {
+			ensure_signed(origin)?;
+			Self::do_payout_stakers(validator_stash, era, page)
 		}
 	}
 }
