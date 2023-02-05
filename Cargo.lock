@@ -543,14 +543,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "beefy-merkle-tree"
+name = "binary-merkle-tree"
 version = "4.0.0-dev"
 dependencies = [
  "array-bytes",
  "env_logger",
+ "hash-db",
  "log",
- "sp-api",
- "sp-beefy",
+ "sp-core",
  "sp-runtime",
 ]
 
@@ -698,6 +698,18 @@ name = "block-padding"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
+
+[[package]]
+name = "bounded-collections"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "de2aff4807e40f478132150d80b031f2461d88f061851afcab537d7600c24120"
+dependencies = [
+ "log",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+]
 
 [[package]]
 name = "bs58"
@@ -5499,7 +5511,7 @@ name = "pallet-beefy-mmr"
 version = "4.0.0-dev"
 dependencies = [
  "array-bytes",
- "beefy-merkle-tree",
+ "binary-merkle-tree",
  "frame-support",
  "frame-system",
  "log",
@@ -5509,6 +5521,7 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
+ "sp-api",
  "sp-beefy",
  "sp-core",
  "sp-io",
@@ -5614,6 +5627,7 @@ version = "7.0.0"
 dependencies = [
  "bitflags",
  "parity-scale-codec",
+ "scale-info",
  "sp-runtime",
  "sp-std",
  "sp-weights",
@@ -6720,9 +6734,9 @@ dependencies = [
 
 [[package]]
 name = "parity-scale-codec"
-version = "3.2.2"
+version = "3.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7ab01d0f889e957861bc65888d5ccbe82c158d0270136ba46820d43837cdf72"
+checksum = "c3840933452adf7b3b9145e27086a5a3376c619dca1a21b1e5a5af0d54979bed"
 dependencies = [
  "arrayvec 0.7.2",
  "bitvec",
@@ -8150,6 +8164,7 @@ dependencies = [
  "sc-network",
  "sc-network-test",
  "sc-telemetry",
+ "scale-info",
  "schnorrkel",
  "sp-api",
  "sp-application-crypto",
@@ -9846,6 +9861,7 @@ dependencies = [
  "base58",
  "bitflags",
  "blake2",
+ "bounded-collections",
  "criterion",
  "dyn-clonable",
  "ed25519-zebra",
@@ -9958,6 +9974,7 @@ dependencies = [
  "futures",
  "impl-trait-for-tuples",
  "parity-scale-codec",
+ "scale-info",
  "sp-core",
  "sp-runtime",
  "sp-std",
@@ -10699,7 +10716,6 @@ dependencies = [
 name = "substrate-test-runtime"
 version = "2.0.0"
 dependencies = [
- "beefy-merkle-tree",
  "cfg-if",
  "frame-support",
  "frame-system",
@@ -10708,6 +10724,7 @@ dependencies = [
  "log",
  "memory-db",
  "pallet-babe",
+ "pallet-beefy-mmr",
  "pallet-timestamp",
  "parity-scale-codec",
  "sc-block-builder",
