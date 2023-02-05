@@ -3770,14 +3770,14 @@ fn test_multi_page_payout_stakers_by_page() {
 
 		// verify the exposures are calculated correctly.
 		let actual_exposure_0 = EraInfo::<Test>::get_validator_exposure(1, &11, 0);
-		assert_eq!(actual_exposure_0.total, total_exposure);
-		assert_eq!(actual_exposure_0.own, 1000);
-		assert_eq!(actual_exposure_0.others.len(), 64);
+		assert_eq!(actual_exposure_0.0.total, total_exposure);
+		assert_eq!(actual_exposure_0.0.own, 1000);
+		assert_eq!(actual_exposure_0.1.others.len(), 64);
 		let actual_exposure_1 = EraInfo::<Test>::get_validator_exposure(1, &11, 1);
-		assert_eq!(actual_exposure_1.total, total_exposure);
+		assert_eq!(actual_exposure_1.0.total, total_exposure);
 		// own stake is only included once in the first page
-		assert_eq!(actual_exposure_1.own, 0);
-		assert_eq!(actual_exposure_1.others.len(), 100 - 64);
+		assert_eq!(actual_exposure_1.0.own, 0);
+		assert_eq!(actual_exposure_1.1.others.len(), 100 - 64);
 
 		let pre_payout_total_issuance = Balances::total_issuance();
 		RewardOnUnbalanceWasCalled::set(false);
@@ -3901,11 +3901,21 @@ fn test_multi_page_payout_stakers_by_page() {
 		assert_eq!(Staking::claimed_rewards(first_claimable_reward_era, &11), vec![0, 1]);
 
 		// verify only page 0 is marked as claimed
-		assert_ok!(Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, last_reward_era, 0));
+		assert_ok!(Staking::payout_stakers_by_page(
+			RuntimeOrigin::signed(1337),
+			11,
+			last_reward_era,
+			0
+		));
 		assert_eq!(Staking::claimed_rewards(last_reward_era, &11), vec![0]);
 
 		// verify page 0 and 1 are marked as claimed
-		assert_ok!(Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, last_reward_era, 1));
+		assert_ok!(Staking::payout_stakers_by_page(
+			RuntimeOrigin::signed(1337),
+			11,
+			last_reward_era,
+			1
+		));
 		assert_eq!(Staking::claimed_rewards(last_reward_era, &11), vec![0, 1]);
 
 		// Out of order claims works.
@@ -4009,23 +4019,43 @@ fn payout_stakers_handles_basic_errors() {
 
 		// Can't claim again
 		assert_noop!(
-			Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, expected_start_reward_era, 0),
+			Staking::payout_stakers_by_page(
+				RuntimeOrigin::signed(1337),
+				11,
+				expected_start_reward_era,
+				0
+			),
 			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
 		);
 
 		assert_noop!(
-			Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, expected_last_reward_era, 0),
+			Staking::payout_stakers_by_page(
+				RuntimeOrigin::signed(1337),
+				11,
+				expected_last_reward_era,
+				0
+			),
 			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
 		);
 
 		assert_noop!(
-			Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, expected_last_reward_era, 1),
+			Staking::payout_stakers_by_page(
+				RuntimeOrigin::signed(1337),
+				11,
+				expected_last_reward_era,
+				1
+			),
 			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
 		);
 
 		// invalid page
 		assert_noop!(
-			Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, expected_last_reward_era, 2),
+			Staking::payout_stakers_by_page(
+				RuntimeOrigin::signed(1337),
+				11,
+				expected_last_reward_era,
+				2
+			),
 			Error::<Test>::InvalidPage.with_weight(err_weight)
 		);
 	});
@@ -4123,8 +4153,11 @@ fn payout_stakers_handles_weight_refund() {
 		start_active_era(2);
 
 		// Collect payouts when there are no nominators
-		let call =
-			TestCall::Staking(StakingCall::payout_stakers_by_page { validator_stash: 11, era: 1, page: 0 });
+		let call = TestCall::Staking(StakingCall::payout_stakers_by_page {
+			validator_stash: 11,
+			era: 1,
+			page: 0,
+		});
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(RuntimeOrigin::signed(20));
 		assert_ok!(result);
@@ -4137,8 +4170,11 @@ fn payout_stakers_handles_weight_refund() {
 		start_active_era(3);
 
 		// Collect payouts for an era where the validator did not receive any points.
-		let call =
-			TestCall::Staking(StakingCall::payout_stakers_by_page { validator_stash: 11, era: 2, page: 0 });
+		let call = TestCall::Staking(StakingCall::payout_stakers_by_page {
+			validator_stash: 11,
+			era: 2,
+			page: 0,
+		});
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(RuntimeOrigin::signed(20));
 		assert_ok!(result);
@@ -4151,8 +4187,11 @@ fn payout_stakers_handles_weight_refund() {
 		start_active_era(4);
 
 		// Collect payouts when the validator has `half_max_nom_rewarded` nominators.
-		let call =
-			TestCall::Staking(StakingCall::payout_stakers_by_page { validator_stash: 11, era: 3, page: 0 });
+		let call = TestCall::Staking(StakingCall::payout_stakers_by_page {
+			validator_stash: 11,
+			era: 3,
+			page: 0,
+		});
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(RuntimeOrigin::signed(20));
 		assert_ok!(result);
@@ -4175,16 +4214,22 @@ fn payout_stakers_handles_weight_refund() {
 		start_active_era(6);
 
 		// Collect payouts when the validator had `half_max_nom_rewarded` nominators.
-		let call =
-			TestCall::Staking(StakingCall::payout_stakers_by_page { validator_stash: 11, era: 5, page: 0 });
+		let call = TestCall::Staking(StakingCall::payout_stakers_by_page {
+			validator_stash: 11,
+			era: 5,
+			page: 0,
+		});
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(RuntimeOrigin::signed(20));
 		assert_ok!(result);
 		assert_eq!(extract_actual_weight(&result, &info), max_nom_rewarded_weight);
 
 		// Try and collect payouts for an era that has already been collected.
-		let call =
-			TestCall::Staking(StakingCall::payout_stakers_by_page { validator_stash: 11, era: 5, page: 0 });
+		let call = TestCall::Staking(StakingCall::payout_stakers_by_page {
+			validator_stash: 11,
+			era: 5,
+			page: 0,
+		});
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(RuntimeOrigin::signed(20));
 		assert!(result.is_err());
@@ -5980,11 +6025,11 @@ fn test_validator_exposure_is_backward_compatible_with_non_paged_rewards_payout(
 		);
 		// verify `EraInfo` returns page from paged storage
 		assert_eq!(
-			EraInfo::<Test>::get_validator_exposure(1, &11, 0).others,
+			EraInfo::<Test>::get_validator_exposure(1, &11, 0).1.others,
 			actual_exposure_page_0.others
 		);
 		assert_eq!(
-			EraInfo::<Test>::get_validator_exposure(1, &11, 1).others,
+			EraInfo::<Test>::get_validator_exposure(1, &11, 1).1.others,
 			actual_exposure_page_1.others
 		);
 		assert_eq!(EraInfo::<Test>::get_page_count(1, &11), 2);
@@ -6006,11 +6051,14 @@ fn test_validator_exposure_is_backward_compatible_with_non_paged_rewards_payout(
 		// verify `EraInfo` returns exposure from clipped storage
 		assert!(matches!(
 			EraInfo::<Test>::get_validator_exposure(1, &11, 0),
-			Exposure {
+			(ExposureOverview {
 				own,
+				page_count,
+				..
+			}, ExposurePage {
 				others,
 				..
-			} if others == clipped_exposure && own == 1000));
+			}) if others == clipped_exposure && own == 1000 && page_count == 1));
 
 		// for pages other than 0, clipped storage returns empty exposure
 		assert_eq!(EraInfo::<Test>::get_validator_exposure(1, &11, 1), Default::default());

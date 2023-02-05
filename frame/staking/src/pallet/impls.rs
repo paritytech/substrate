@@ -205,7 +205,7 @@ impl<T: Config> Pallet<T> {
 		// Then look at the validator, figure out the proportion of their reward
 		// which goes to them and each of their nominators.
 
-		let exposure = EraInfo::<T>::get_validator_exposure(era, &ledger.stash, page);
+		let (exposure_overview, exposure_page) = EraInfo::<T>::get_validator_exposure(era, &ledger.stash, page);
 		let era_reward_points = <ErasRewardPoints<T>>::get(&era);
 		let total_reward_points = era_reward_points.total;
 		let validator_reward_points = era_reward_points
@@ -232,7 +232,7 @@ impl<T: Config> Pallet<T> {
 
 		let validator_leftover_payout = validator_total_payout - validator_commission_payout;
 		// Now let's calculate how this is split to the validator.
-		let validator_exposure_part = Perbill::from_rational(exposure.own, exposure.total);
+		let validator_exposure_part = Perbill::from_rational(exposure_overview.own, exposure_overview.total);
 		let validator_staking_payout = validator_exposure_part * validator_leftover_payout;
 
 		Self::deposit_event(Event::<T>::PayoutStarted {
@@ -259,8 +259,8 @@ impl<T: Config> Pallet<T> {
 
 		// Lets now calculate how this is split to the nominators.
 		// Reward only the clipped exposures. Note this is not necessarily sorted.
-		for nominator in exposure.others.iter() {
-			let nominator_exposure_part = Perbill::from_rational(nominator.value, exposure.total);
+		for nominator in exposure_page.others.iter() {
+			let nominator_exposure_part = Perbill::from_rational(nominator.value, exposure_overview.total);
 
 			let nominator_reward: BalanceOf<T> =
 				nominator_exposure_part * validator_leftover_payout;
