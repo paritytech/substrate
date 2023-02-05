@@ -133,7 +133,7 @@ impl<T: Config<I>, I: 'static, M: MaxClassVoters<Class = ClassOf<T, I>>>
 	#[cfg(feature = "runtime-benchmarks")]
 	fn unanimity(class: ClassOf<T, I>) -> Self {
 		Self {
-			bare_ayes: M::max_class_voters(class),
+			bare_ayes: M::max_class_voters(class.clone()),
 			ayes: M::max_class_voters(class),
 			nays: 0,
 			dummy: PhantomData,
@@ -153,14 +153,14 @@ impl<T: Config<I>, I: 'static, M: MaxClassVoters<Class = ClassOf<T, I>>>
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn setup(class: ClassOf<T, I>, granularity: Perbill) {
-		if M::max_class_voters(class) == 0 {
+		if M::max_class_voters(class.clone()) == 0 {
 			let max_voters = granularity.saturating_reciprocal_mul(1u32);
 			for i in 0..max_voters {
 				let who: T::AccountId =
 					frame_benchmarking::account("ranked_collective_benchmarking", i, 0);
 				crate::Pallet::<T, I>::do_add_member_to_rank(
 					who,
-					T::MinRankOfClass::convert(class),
+					T::MinRankOfClass::convert(class.clone()),
 				)
 				.expect("could not add members for benchmarks");
 			}
