@@ -948,8 +948,9 @@ benchmarks! {
 	}
 
 	seal_debug_message_per_kb {
-		// Vary size of input in kilobytes up to maximum allowed contract memory.
-		let i in 0 .. (T::Schedule::get().limits.memory_pages * 64);
+		// Vary size of input in kilobytes up to maximum allowed contract memory
+		// or maximum allowed debug buffer size, whichever is less.
+		let i in 0 .. (T::Schedule::get().limits.memory_pages * 64).min(T::MaxDebugBufferLen::get() / 1024);
 		// We benchmark versus messages containing printable ASCII codes.
 		// About 1Kb goes to the instrumented contract code instructions,
 		// whereas all the space left we use for the initialization of the debug messages data.
