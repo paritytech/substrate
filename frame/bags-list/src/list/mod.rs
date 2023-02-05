@@ -511,7 +511,8 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	/// * length of this list is in sync with `ListNodes::count()`,
 	/// * and sanity-checks all bags and nodes. This will cascade down all the checks and makes sure
 	/// all bags and nodes are checked per *any* update to `List`.
-	#[cfg(any(test, feature = "try-runtime"))]
+	#[cfg(feature = "std")]
+	#[allow(dead_code)]
 	pub(crate) fn do_try_state() -> Result<(), &'static str> {
 		let mut seen_in_list = BTreeSet::new();
 		ensure!(
@@ -749,7 +750,8 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 	/// * Ensures head has no prev.
 	/// * Ensures tail has no next.
 	/// * Ensures there are no loops, traversal from head to tail is correct.
-	#[cfg(any(test, feature = "try-runtime"))]
+	#[cfg(feature = "std")]
+	#[allow(dead_code)]
 	fn do_try_state(&self) -> Result<(), &'static str> {
 		frame_support::ensure!(
 			self.head()
@@ -895,7 +897,8 @@ impl<T: Config<I>, I: 'static> Node<T, I> {
 		self.bag_upper
 	}
 
-	#[cfg(any(test, feature = "try-runtime"))]
+	#[cfg(feature = "std")]
+	#[allow(dead_code)]
 	fn do_try_state(&self) -> Result<(), &'static str> {
 		let expected_bag = Bag::<T, I>::get(self.bag_upper).ok_or("bag not found for node")?;
 
