@@ -90,14 +90,14 @@ pub type Votes = u32;
 )]
 #[scale_info(skip_type_params(T, I, M))]
 #[codec(mel_bound())]
-pub struct Tally<T, I, M: GetMaxVoters> {
+pub struct Tally<T, I, M: MaxClassVoters> {
 	bare_ayes: MemberIndex,
 	ayes: Votes,
 	nays: Votes,
 	dummy: PhantomData<(T, I, M)>,
 }
 
-impl<T: Config<I>, I: 'static, M: GetMaxVoters> Tally<T, I, M> {
+impl<T: Config<I>, I: 'static, M: MaxClassVoters> Tally<T, I, M> {
 	pub fn from_parts(bare_ayes: MemberIndex, ayes: Votes, nays: Votes) -> Self {
 		Tally { bare_ayes, ayes, nays, dummy: PhantomData }
 	}
@@ -112,53 +112,59 @@ impl<T: Config<I>, I: 'static, M: GetMaxVoters> Tally<T, I, M> {
 
 pub type TallyOf<T, I = ()> = Tally<T, I, Pallet<T, I>>;
 pub type PollIndexOf<T, I = ()> = <<T as Config<I>>::Polls as Polling<TallyOf<T, I>>>::Index;
+pub type ClassOf<T, I = ()> = <<T as Config<I>>::Polls as Polling<TallyOf<T, I>>>::Class;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
-impl<T: Config<I>, I: 'static, M: GetMaxVoters> VoteTally<Votes, Rank> for Tally<T, I, M> {
-	fn new(_: Rank) -> Self {
+impl<T: Config<I>, I: 'static, M: MaxClassVoters<Class = ClassOf<T, I>>>
+	VoteTally<Votes, ClassOf<T, I>> for Tally<T, I, M>
+{
+	fn new(_: ClassOf<T, I>) -> Self {
 		Self { bare_ayes: 0, ayes: 0, nays: 0, dummy: PhantomData }
 	}
-	fn ayes(&self, _: Rank) -> Votes {
+	fn ayes(&self, _: ClassOf<T, I>) -> Votes {
 		self.bare_ayes
 	}
-	fn support(&self, class: Rank) -> Perbill {
-		Perbill::from_rational(self.bare_ayes, M::get_max_voters(class))
+	fn support(&self, class: ClassOf<T, I>) -> Perbill {
+		Perbill::from_rational(self.bare_ayes, M::max_class_voters(class))
 	}
-	fn approval(&self, _: Rank) -> Perbill {
+	fn approval(&self, _: ClassOf<T, I>) -> Perbill {
 		Perbill::from_rational(self.ayes, 1.max(self.ayes + self.nays))
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	fn unanimity(class: Rank) -> Self {
+	fn unanimity(class: ClassOf<T, I>) -> Self {
 		Self {
-			bare_ayes: M::get_max_voters(class),
-			ayes: M::get_max_voters(class),
+			bare_ayes: M::max_class_voters(class),
+			ayes: M::max_class_voters(class),
 			nays: 0,
 			dummy: PhantomData,
 		}
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	fn rejection(class: Rank) -> Self {
-		Self { bare_ayes: 0, ayes: 0, nays: M::get_max_voters(class), dummy: PhantomData }
+	fn rejection(class: ClassOf<T, I>) -> Self {
+		Self { bare_ayes: 0, ayes: 0, nays: M::max_class_voters(class), dummy: PhantomData }
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	fn from_requirements(support: Perbill, approval: Perbill, class: Rank) -> Self {
-		let c = M::get_max_voters(class);
+	fn from_requirements(support: Perbill, approval: Perbill, class: ClassOf<T, I>) -> Self {
+		let c = M::max_class_voters(class);
 		let ayes = support * c;
 		let nays = ((ayes as u64) * 1_000_000_000u64 / approval.deconstruct() as u64) as u32 - ayes;
 		Self { bare_ayes: ayes, ayes, nays, dummy: PhantomData }
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn setup(class: Rank, granularity: Perbill) {
-		if M::get_max_voters(class) == 0 {
+	fn setup(class: ClassOf<T, I>, granularity: Perbill) {
+		if M::max_class_voters(class) == 0 {
 			let max_voters = granularity.saturating_reciprocal_mul(1u32);
 			for i in 0..max_voters {
 				let who: T::AccountId =
 					frame_benchmarking::account("ranked_collective_benchmarking", i, 0);
-				crate::Pallet::<T, I>::do_add_member_to_rank(who, class)
-					.expect("could not add members for benchmarks");
+				crate::Pallet::<T, I>::do_add_member_to_rank(
+					who,
+					T::MinRankOfClass::convert(class),
+				)
+				.expect("could not add members for benchmarks");
 			}
-			assert_eq!(M::get_max_voters(class), max_voters);
+			assert_eq!(M::max_class_voters(class), max_voters);
 		}
 	}
 }
@@ -228,13 +234,27 @@ impl Convert<Rank, Votes> for Geometric {
 }
 
 /// Trait for getting the maximum number of voters for a given rank.
-pub trait GetMaxVoters {
+pub trait MaxRankVoters {
 	/// Return the maximum number of voters for the rank `r`.
-	fn get_max_voters(r: Rank) -> MemberIndex;
+	fn max_rank_voters(r: Rank) -> MemberIndex;
 }
-impl<T: Config<I>, I: 'static> GetMaxVoters for Pallet<T, I> {
-	fn get_max_voters(r: Rank) -> MemberIndex {
+impl<T: Config<I>, I: 'static> MaxRankVoters for Pallet<T, I> {
+	fn max_rank_voters(r: Rank) -> MemberIndex {
 		MemberCount::<T, I>::get(r)
+	}
+}
+
+/// Trait for getting the maximum number of voters for a given poll class.
+pub trait MaxClassVoters {
+	/// Poll class type.
+	type Class;
+	/// Return the maximum number of voters for the class `c`.
+	fn max_class_voters(c: Self::Class) -> MemberIndex;
+}
+impl<T: Config<I>, I: 'static> MaxClassVoters for Pallet<T, I> {
+	type Class = ClassOf<T, I>;
+	fn max_class_voters(c: Self::Class) -> MemberIndex {
+		<Self as MaxRankVoters>::max_rank_voters(T::MinRankOfClass::convert(c))
 	}
 }
 
@@ -340,7 +360,7 @@ pub mod pallet {
 		/// Convert the tally class into the minimum rank required to vote on the poll. If
 		/// `Polls::Class` is the same type as `Rank`, then `Identity` can be used here to mean
 		/// "a rank of at least the poll class".
-		type MinRankOfClass: Convert<<Self::Polls as Polling<TallyOf<Self, I>>>::Class, Rank>;
+		type MinRankOfClass: Convert<ClassOf<Self, I>, Rank>;
 
 		/// Convert a rank_delta into a number of votes the rank gets.
 		///
