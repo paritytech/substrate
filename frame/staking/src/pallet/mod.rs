@@ -687,10 +687,7 @@ pub mod pallet {
 					let overview = <ErasStakersOverview<T>>::get(&era, validator);
 					// own stake is included only once in the first page.
 					let own = if page == 0 { overview.own } else { Zero::zero() };
-					(ExposureOverview {
-						own,
-						..overview
-					}, exposure_page)
+					(ExposureOverview { own, ..overview }, exposure_page)
 				},
 				_ => Default::default(),
 			}
