@@ -131,7 +131,63 @@ impl<T: Config> Pallet<T> {
 		Ok(used_weight)
 	}
 
+	fn validate_payout_stakers(
+		validator_stash: T::AccountId,
+		era: EraIndex,
+	) -> Result<(), Error<T>> {
+		// Validate input data
+		let current_era = CurrentEra::<T>::get().ok_or_else(|| {
+			Error::<T>::InvalidEraToReward
+		})?;
+
+		let history_depth = T::HistoryDepth::get();
+		ensure!(
+			era <= current_era && era >= current_era.saturating_sub(history_depth),
+			Error::<T>::InvalidEraToReward
+		);
+
+		// ensure!(
+		// 	page < EraInfo::<T>::get_page_count(era, &validator_stash),
+		// 	Error::<T>::InvalidPage.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
+		// );
+
+		// Note: if era has no reward to be claimed, era may be future. better not to update
+		// `ledger.legacy_claimed_rewards` in this case.
+		let era_payout = <ErasValidatorReward<T>>::get(&era).ok_or_else(|| {
+			Error::<T>::InvalidEraToReward
+		})?;
+
+		let controller = Self::bonded(&validator_stash).ok_or_else(|| {
+			Error::<T>::NotStash
+		})?;
+		let mut ledger = <Ledger<T>>::get(&controller).ok_or(Error::<T>::NotController)?;
+
+		// // clean up legacy claimed rewards
+		ledger
+			.legacy_claimed_rewards
+			.retain(|&x| x >= current_era.saturating_sub(history_depth));
+		<Ledger<T>>::insert(&controller, &ledger);
+
+		// if EraInfo::<T>::is_rewards_claimed_temp(era, &ledger, &ledger.stash, page) {
+		// 	Error::<T>::AlreadyClaimed
+		// 		.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
+		// }
+
+
+		Ok(())
+	}
+
+
+
 	pub(super) fn do_payout_stakers(
+		validator_stash: T::AccountId,
+		era: EraIndex,
+	) -> DispatchResultWithPostInfo {
+		EraInfo::<T>::get_page_count(era, &validator_stash);
+		Self::do_payout_stakers_by_page(validator_stash, era, 0)
+	}
+
+	pub(super) fn do_payout_stakers_by_page(
 		validator_stash: T::AccountId,
 		era: EraIndex,
 		page: PageIndex,

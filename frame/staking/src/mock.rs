@@ -760,7 +760,7 @@ pub(crate) fn make_all_reward_payment(era: EraIndex) {
 	for validator_controller in validators_with_reward.iter().filter_map(Staking::bonded) {
 		let ledger = <Ledger<Test>>::get(&validator_controller).unwrap();
 		for page in 0..EraInfo::<Test>::get_page_count(era, &ledger.stash) {
-			assert_ok!(Staking::payout_stakers(
+			assert_ok!(Staking::payout_stakers_by_page(
 				RuntimeOrigin::signed(1337),
 				ledger.stash,
 				era,

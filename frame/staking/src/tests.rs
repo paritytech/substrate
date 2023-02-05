@@ -2207,7 +2207,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 		ErasStakers::<Test>::insert(0, 11, &exposure);
 		ErasStakersOverview::<Test>::insert(0, 11, exposure_overview);
 		ErasValidatorReward::<Test>::insert(0, stake);
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 0, 0));
+		assert_ok!(Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, 0, 0));
 		assert_eq!(Balances::total_balance(&11), stake * 2);
 
 		// Set staker
@@ -3576,19 +3576,19 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 		// Last kept is 1:
 		assert!(current_era - HistoryDepth::get() == 1);
 		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 0, 0),
+			Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, 0, 0),
 			// Fail: Era out of history
 			Error::<Test>::InvalidEraToReward.with_weight(err_weight)
 		);
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1, 0));
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 2, 0));
+		assert_ok!(Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, 1, 0));
+		assert_ok!(Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, 2, 0));
 		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 2, 0),
+			Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, 2, 0),
 			// Fail: Double claim
 			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
 		);
 		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, active_era, 0),
+			Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, active_era, 0),
 			// Fail: Era not finished yet
 			Error::<Test>::InvalidEraToReward.with_weight(err_weight)
 		);
@@ -3740,7 +3740,7 @@ fn test_nominators_are_rewarded_for_all_exposure_page() {
 }
 
 #[test]
-fn test_multi_page_payout_stakers() {
+fn test_multi_page_payout_stakers_by_page() {
 	// Test that payout_stakers work in general and that it pays the correct amount of reward.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		let balance = 1000;
@@ -3784,7 +3784,7 @@ fn test_multi_page_payout_stakers() {
 
 		let controller_balance_before_p0_payout = Balances::free_balance(&10);
 		// Payout rewards for first exposure page
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1, 0));
+		assert_ok!(Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, 1, 0));
 
 		let controller_balance_after_p0_payout = Balances::free_balance(&10);
 
@@ -3796,7 +3796,7 @@ fn test_multi_page_payout_stakers() {
 		assert!(controller_balance_after_p0_payout > controller_balance_before_p0_payout);
 
 		// Payout the second and last page of nominators
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1, 1));
+		assert_ok!(Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, 1, 1));
 
 		// verify the validator was not rewarded the second time
 		assert_eq!(Balances::free_balance(&10), controller_balance_after_p0_payout);
@@ -3883,7 +3883,7 @@ fn test_multi_page_payout_stakers() {
 		}
 
 		// verify only page 0 is marked as claimed
-		assert_ok!(Staking::payout_stakers(
+		assert_ok!(Staking::payout_stakers_by_page(
 			RuntimeOrigin::signed(1337),
 			11,
 			first_claimable_reward_era,
@@ -3892,7 +3892,7 @@ fn test_multi_page_payout_stakers() {
 		assert_eq!(Staking::claimed_rewards(first_claimable_reward_era, &11), vec![0]);
 
 		// verify page 0 and 1 are marked as claimed
-		assert_ok!(Staking::payout_stakers(
+		assert_ok!(Staking::payout_stakers_by_page(
 			RuntimeOrigin::signed(1337),
 			11,
 			first_claimable_reward_era,
@@ -3901,19 +3901,19 @@ fn test_multi_page_payout_stakers() {
 		assert_eq!(Staking::claimed_rewards(first_claimable_reward_era, &11), vec![0, 1]);
 
 		// verify only page 0 is marked as claimed
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, last_reward_era, 0));
+		assert_ok!(Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, last_reward_era, 0));
 		assert_eq!(Staking::claimed_rewards(last_reward_era, &11), vec![0]);
 
 		// verify page 0 and 1 are marked as claimed
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, last_reward_era, 1));
+		assert_ok!(Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, last_reward_era, 1));
 		assert_eq!(Staking::claimed_rewards(last_reward_era, &11), vec![0, 1]);
 
 		// Out of order claims works.
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 69, 0));
+		assert_ok!(Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, 69, 0));
 		assert_eq!(Staking::claimed_rewards(69, &11), vec![0]);
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 23, 1));
+		assert_ok!(Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, 23, 1));
 		assert_eq!(Staking::claimed_rewards(23, &11), vec![1]);
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 42, 0));
+		assert_ok!(Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, 42, 0));
 		assert_eq!(Staking::claimed_rewards(42, &11), vec![0]);
 	});
 }
@@ -3944,12 +3944,12 @@ fn payout_stakers_handles_basic_errors() {
 
 		// Wrong Era, too big
 		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 2, 0),
+			Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, 2, 0),
 			Error::<Test>::InvalidEraToReward.with_weight(err_weight)
 		);
 		// Wrong Staker
 		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(1337), 10, 1, 0),
+			Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 10, 1, 0),
 			Error::<Test>::NotStash.with_weight(err_weight)
 		);
 
@@ -3969,7 +3969,7 @@ fn payout_stakers_handles_basic_errors() {
 		// to payout era starting from expected_start_reward_era=19 through
 		// expected_last_reward_era=98 (80 total eras), but not 18 or 99.
 		assert_noop!(
-			Staking::payout_stakers(
+			Staking::payout_stakers_by_page(
 				RuntimeOrigin::signed(1337),
 				11,
 				expected_start_reward_era - 1,
@@ -3978,7 +3978,7 @@ fn payout_stakers_handles_basic_errors() {
 			Error::<Test>::InvalidEraToReward.with_weight(err_weight)
 		);
 		assert_noop!(
-			Staking::payout_stakers(
+			Staking::payout_stakers_by_page(
 				RuntimeOrigin::signed(1337),
 				11,
 				expected_last_reward_era + 1,
@@ -3986,13 +3986,13 @@ fn payout_stakers_handles_basic_errors() {
 			),
 			Error::<Test>::InvalidEraToReward.with_weight(err_weight)
 		);
-		assert_ok!(Staking::payout_stakers(
+		assert_ok!(Staking::payout_stakers_by_page(
 			RuntimeOrigin::signed(1337),
 			11,
 			expected_start_reward_era,
 			0
 		));
-		assert_ok!(Staking::payout_stakers(
+		assert_ok!(Staking::payout_stakers_by_page(
 			RuntimeOrigin::signed(1337),
 			11,
 			expected_last_reward_era,
@@ -4000,7 +4000,7 @@ fn payout_stakers_handles_basic_errors() {
 		));
 
 		// can call page 1
-		assert_ok!(Staking::payout_stakers(
+		assert_ok!(Staking::payout_stakers_by_page(
 			RuntimeOrigin::signed(1337),
 			11,
 			expected_last_reward_era,
@@ -4009,23 +4009,23 @@ fn payout_stakers_handles_basic_errors() {
 
 		// Can't claim again
 		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_start_reward_era, 0),
+			Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, expected_start_reward_era, 0),
 			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
 		);
 
 		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_last_reward_era, 0),
+			Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, expected_last_reward_era, 0),
 			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
 		);
 
 		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_last_reward_era, 1),
+			Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, expected_last_reward_era, 1),
 			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
 		);
 
 		// invalid page
 		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_last_reward_era, 2),
+			Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, expected_last_reward_era, 2),
 			Error::<Test>::InvalidPage.with_weight(err_weight)
 		);
 	});
@@ -4063,7 +4063,7 @@ fn test_commission_paid_only_once() {
 
 		let controller_balance_before_p0_payout = Balances::free_balance(&10);
 		// Payout rewards for first exposure page
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1, 0));
+		assert_ok!(Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, 1, 0));
 
 		let controller_balance_after_p0_payout = Balances::free_balance(&10);
 
@@ -4075,7 +4075,7 @@ fn test_commission_paid_only_once() {
 		);
 
 		for i in 1..4 {
-			assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1, i));
+			assert_ok!(Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, 1, i));
 			// no reward paid to validator for pages other than 0
 			Balances::free_balance(&10);
 		}
@@ -4124,7 +4124,7 @@ fn payout_stakers_handles_weight_refund() {
 
 		// Collect payouts when there are no nominators
 		let call =
-			TestCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 1, page: 0 });
+			TestCall::Staking(StakingCall::payout_stakers_by_page { validator_stash: 11, era: 1, page: 0 });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(RuntimeOrigin::signed(20));
 		assert_ok!(result);
@@ -4138,7 +4138,7 @@ fn payout_stakers_handles_weight_refund() {
 
 		// Collect payouts for an era where the validator did not receive any points.
 		let call =
-			TestCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 2, page: 0 });
+			TestCall::Staking(StakingCall::payout_stakers_by_page { validator_stash: 11, era: 2, page: 0 });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(RuntimeOrigin::signed(20));
 		assert_ok!(result);
@@ -4152,7 +4152,7 @@ fn payout_stakers_handles_weight_refund() {
 
 		// Collect payouts when the validator has `half_max_nom_rewarded` nominators.
 		let call =
-			TestCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 3, page: 0 });
+			TestCall::Staking(StakingCall::payout_stakers_by_page { validator_stash: 11, era: 3, page: 0 });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(RuntimeOrigin::signed(20));
 		assert_ok!(result);
@@ -4176,7 +4176,7 @@ fn payout_stakers_handles_weight_refund() {
 
 		// Collect payouts when the validator had `half_max_nom_rewarded` nominators.
 		let call =
-			TestCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 5, page: 0 });
+			TestCall::Staking(StakingCall::payout_stakers_by_page { validator_stash: 11, era: 5, page: 0 });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(RuntimeOrigin::signed(20));
 		assert_ok!(result);
@@ -4184,7 +4184,7 @@ fn payout_stakers_handles_weight_refund() {
 
 		// Try and collect payouts for an era that has already been collected.
 		let call =
-			TestCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 5, page: 0 });
+			TestCall::Staking(StakingCall::payout_stakers_by_page { validator_stash: 11, era: 5, page: 0 });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(RuntimeOrigin::signed(20));
 		assert!(result.is_err());
@@ -4326,7 +4326,7 @@ fn payout_creates_controller() {
 		// compute and ensure the reward amount is greater than zero.
 		let _ = current_total_payout_for_duration(reward_time_per_era());
 		mock::start_active_era(2);
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1, 0));
+		assert_ok!(Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, 1, 0));
 
 		// Controller is created
 		assert!(Balances::free_balance(1337) > 0);
@@ -4354,7 +4354,7 @@ fn payout_to_any_account_works() {
 		// compute and ensure the reward amount is greater than zero.
 		let _ = current_total_payout_for_duration(reward_time_per_era());
 		mock::start_active_era(2);
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1, 0));
+		assert_ok!(Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, 1, 0));
 
 		// Payment is successful
 		assert!(Balances::free_balance(42) > 0);
@@ -5891,7 +5891,7 @@ fn test_legacy_claimed_rewards_is_checked_at_reward_payout() {
 
 		// verify rewards for era 1 cannot be claimed
 		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1, 0),
+			Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, 1, 0),
 			Error::<Test>::AlreadyClaimed
 				.with_weight(<Test as Config>::WeightInfo::payout_stakers_alive_staked(0)),
 		);
@@ -5906,7 +5906,7 @@ fn test_legacy_claimed_rewards_is_checked_at_reward_payout() {
 		);
 
 		// verify rewards for era 2 can be claimed
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 2, 0));
+		assert_ok!(Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, 2, 0));
 		assert_eq!(
 			EraInfo::<Test>::is_rewards_claimed_temp(
 				2,
@@ -6018,10 +6018,10 @@ fn test_validator_exposure_is_backward_compatible_with_non_paged_rewards_payout(
 		assert_eq!(EraInfo::<Test>::get_page_count(1, &11), 1);
 
 		// payout for page 0 works
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 0, 0));
+		assert_ok!(Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, 0, 0));
 		// payout for page 1 fails
 		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 0, 1),
+			Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, 0, 1),
 			Error::<Test>::InvalidPage
 				.with_weight(<Test as Config>::WeightInfo::payout_stakers_alive_staked(0))
 		);

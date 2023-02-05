@@ -778,6 +778,7 @@ pub struct ExposurePage<AccountId, Balance: HasCompact> {
 	#[codec(compact)]
 	pub page_total: Balance,
 	/// The portions of nominators stashes that are exposed.
+	/// TODO(ank4n): BoundedVec touches lot of code, skip for now.
 	pub others: Vec<IndividualExposure<AccountId, Balance>>,
 }
 

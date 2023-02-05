@@ -207,7 +207,8 @@ pub mod pallet {
 		/// For older non-paged exposure, a reward payout is restricted to the top
 		/// `MaxNominatorRewardedPerValidator` nominators. This is to limit the i/o cost for the
 		/// nominator payout.
-		// TODO(ank4n) #[deprecated(note = "This constant is no longer used and will be removed in the future.")]
+		// TODO(ank4n) #[deprecated(note = "This constant is no longer used and will be removed in
+		// the future.")]
 		#[pallet::constant]
 		type MaxNominatorRewardedPerValidator: Get<u32>;
 
@@ -667,7 +668,7 @@ pub mod pallet {
 		/// This is only used for paged rewards. Once older non-paged rewards are no longer
 		/// relevant, `is_rewards_claimed_temp` can be removed and this function can be made public.
 		fn is_rewards_claimed(era: EraIndex, validator: &T::AccountId, page: PageIndex) -> bool {
-			ClaimedRewards::<T>::get(era, validator).iter().any(|&p| page == p)
+			ClaimedRewards::<T>::get(era, validator).binary_search(&page).is_ok()
 		}
 
 		/// Get exposure info for a validator at a given era and page.
@@ -720,9 +721,18 @@ pub mod pallet {
 			validator: &T::AccountId,
 			page: PageIndex,
 		) {
-			ClaimedRewards::<T>::mutate(era, validator, |pages| {
-				pages.push(page);
-			})
+			let mut claimed_pages = ClaimedRewards::<T>::get(era, validator);
+			let search = claimed_pages.binary_search(&page);
+			// this should never be called if the reward has already been claimed
+			debug_assert!(search.is_err());
+
+			match search {
+				Err(index) => {
+					claimed_pages.insert(index, page);
+					ClaimedRewards::<T>::insert(era, validator, claimed_pages);
+				},
+				_ => {},
+			}
 		}
 
 		/// Store exposure for elected validators at start of an era.
@@ -1651,11 +1661,13 @@ pub mod pallet {
 		///
 		/// - `validator_stash` is the stash account of the validator.
 		/// - `era` may be any era between `[current_era - history_depth; current_era]`.
-		/// - `page` is the page index of nominators to pay out with value between 0 and
-		///   `num_nominators / T::MaxNominatorRewardedPerValidator`.
+		///   `num_nominators / T::ExposurePageSize`.
 		///
 		/// The origin of this call must be _Signed_. Any account can call this function, even if
 		/// it is not one of the stakers.
+		///
+		/// This pays out the earliest exposure page not claimed for the era. If all pages are
+		/// claimed, it returns an error `InvalidPage`.
 		///
 		/// If a validator has more than `T::MaxNominatorRewardedPerValidator` nominators backing
 		/// them, then the list of nominators is paged, with each page being capped at
@@ -1685,10 +1697,9 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			validator_stash: T::AccountId,
 			era: EraIndex,
-			page: PageIndex,
 		) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
-			Self::do_payout_stakers(validator_stash, era, page)
+			Self::do_payout_stakers(validator_stash, era)
 		}
 
 		/// Rebond a portion of the stash scheduled to be unlocked.
@@ -2020,7 +2031,7 @@ pub mod pallet {
 			page: PageIndex,
 		) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
-			Self::do_payout_stakers(validator_stash, era, page)
+			Self::do_payout_stakers_by_page(validator_stash, era, page)
 		}
 	}
 }
