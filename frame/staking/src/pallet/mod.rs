@@ -779,9 +779,14 @@ pub mod pallet {
 			exposure: Exposure<T::AccountId, BalanceOf<T>>,
 		) {
 			<ErasStakers<T>>::insert(era, &validator, &exposure);
+			// FIXME(ankan) Should we sort exposure.others for backward compatibility?
+
+			let page_size = <ExposurePageSize<T>>::get()
+				.unwrap_or_else(|| T::MaxExposurePageSize::get())
+				.clamp(1, T::MaxExposurePageSize::get());
 
 			let (exposure_overview, exposure_pages) =
-				exposure.into_pages(T::MaxNominatorRewardedPerValidator::get());
+				exposure.into_pages(page_size);
 
 			<ErasStakersOverview<T>>::insert(era, &validator, &exposure_overview);
 			exposure_pages.iter().enumerate().for_each(|(page, paged_exposure)| {
