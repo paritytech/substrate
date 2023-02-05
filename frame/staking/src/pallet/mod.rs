@@ -701,6 +701,43 @@ pub mod pallet {
 			<ErasStakersOverview<T>>::get(&era, validator).page_count.max(1)
 		}
 
+		/// Returns the next page that can be claimed or `None` if nothing to claim.
+		// TODO(ank4n): Test and refactor
+		pub(crate) fn get_next_claimable_page(
+			era: EraIndex,
+			validator: &T::AccountId,
+			ledger: &StakingLedger<T>,
+		) -> Option<PageIndex> {
+			if Self::is_non_paged_exposure(era, validator) {
+				return match ledger.legacy_claimed_rewards.binary_search(&era) {
+					// already claimed
+					Ok(_) => None,
+					// Non-paged exposure is considered as a single page
+					Err(_) => Some(0),
+				}
+			}
+
+			// Find next claimable page of paged exposure.
+			let page_count = Self::get_page_count(era, validator);
+			let claimed_pages = ClaimedRewards::<T>::get(era, validator);
+			let claimed_page_count = claimed_pages.len() as PageIndex;
+
+			// find the first page that is not claimed.
+			for page in 0..claimed_page_count as PageIndex {
+				debug_assert!(page <= claimed_pages[page as usize]);
+				if page < claimed_pages[page as usize] {
+					return Some(page)
+				}
+			}
+			// all pages are claimed
+			return if claimed_page_count < page_count { Some(claimed_page_count) } else { None }
+		}
+
+		/// Checks if exposure is paged or not.
+		fn is_non_paged_exposure(era: EraIndex, validator: &T::AccountId) -> bool {
+			<ErasStakersClipped<T>>::contains_key(&era, validator)
+		}
+
 		/// Returns validator commission for this era and page.
 		pub(crate) fn get_validator_commission(
 			era: EraIndex,
