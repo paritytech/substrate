@@ -691,7 +691,12 @@ fn compact_wasm_file(
 
 	let (wasm_compact_path, wasm_compact_compressed_path) = if profile.wants_compact() {
 		let wasm_compact_path = project.join(format!("{}.compact.wasm", out_name,));
-		wasm_opt::OptimizationOptions::new_opt_level_0()
+		let mut level = match &profile {
+			Profile::Production => wasm_opt::OptimizationOptions::new_opt_level_4(),
+			Profile::Release => wasm_opt::OptimizationOptions::new_opt_level_1(),
+			Profile::Debug => wasm_opt::OptimizationOptions::new_opt_level_0(),
+		};
+		level
 			.mvp_features_only()
 			.debug_info(true)
 			.add_pass(wasm_opt::Pass::StripDwarf)
