@@ -679,18 +679,38 @@ pub mod pallet {
 			era: EraIndex,
 			validator: &T::AccountId,
 			page: PageIndex,
-		) -> Exposure<T::AccountId, BalanceOf<T>> {
+		) -> (ExposureOverview<BalanceOf<T>>, ExposurePage<T::AccountId, BalanceOf<T>>) {
 			return match <ErasStakersPaged<T>>::get(era, (validator, page)) {
 				// only return clipped exposure if page zero and no paged exposure entry
-				None if page == 0 => <ErasStakersClipped<T>>::get(&era, validator),
+				None if page == 0 => Self::get_clipped_exposure_as_page(era, validator),
 				Some(exposure_page) => {
 					let overview = <ErasStakersOverview<T>>::get(&era, validator);
 					// own stake is included only once in the first page.
 					let own = if page == 0 { overview.own } else { Zero::zero() };
-					Exposure { total: overview.total, own, others: exposure_page.others }
+					(ExposureOverview {
+						own,
+						..overview
+					}, exposure_page)
 				},
 				_ => Default::default(),
 			}
+		}
+
+		/// Get clipped exposure and convert it as `ExposurePage`.
+		fn get_clipped_exposure_as_page(
+			era: EraIndex,
+			validator: &T::AccountId,
+		) -> (ExposureOverview<BalanceOf<T>>, ExposurePage<T::AccountId, BalanceOf<T>>) {
+			let exposure = <ErasStakersClipped<T>>::get(&era, validator);
+			(
+				ExposureOverview {
+					total: exposure.total,
+					own: exposure.own,
+					nominator_count: exposure.others.len() as u32,
+					page_count: 1,
+				},
+				ExposurePage { page_total: exposure.total, others: exposure.others },
+			)
 		}
 
 		/// Returns the number of pages of exposure a validator has for the given era.
@@ -785,8 +805,7 @@ pub mod pallet {
 				.unwrap_or_else(|| T::MaxExposurePageSize::get())
 				.clamp(1, T::MaxExposurePageSize::get());
 
-			let (exposure_overview, exposure_pages) =
-				exposure.into_pages(page_size);
+			let (exposure_overview, exposure_pages) = exposure.into_pages(page_size);
 
 			<ErasStakersOverview<T>>::insert(era, &validator, &exposure_overview);
 			exposure_pages.iter().enumerate().for_each(|(page, paged_exposure)| {
