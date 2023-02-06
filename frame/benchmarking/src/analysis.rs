@@ -161,7 +161,7 @@ fn raw_linear_regression(
 		data.extend(xs);
 	}
 	let model = linregress::fit_low_level_regression_model(&data, ys.len(), x_vars + 2).ok()?;
-	Some((model.parameters[0], model.parameters[1..].to_vec(), model.se))
+	Some((model.parameters()[0], model.parameters()[1..].to_vec(), model.se().to_vec()))
 }
 
 fn linear_regression(
