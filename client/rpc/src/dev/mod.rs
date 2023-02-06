@@ -69,10 +69,7 @@ where
 		self.deny_unsafe.check_if_safe()?;
 
 		let block = {
-			let block = self
-				.client
-				.block(&BlockId::Hash(hash))
-				.map_err(|e| Error::BlockQueryError(Box::new(e)))?;
+			let block = self.client.block(hash).map_err(|e| Error::BlockQueryError(Box::new(e)))?;
 			if let Some(block) = block {
 				let (mut header, body) = block.block.deconstruct();
 				// Remove the `Seal` to ensure we have the number of digests as expected by the

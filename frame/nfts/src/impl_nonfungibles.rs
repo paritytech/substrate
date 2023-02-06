@@ -157,10 +157,12 @@ impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId, ItemConfig
 		Self::do_mint(
 			*collection,
 			*item,
-			who.clone(),
+			match deposit_collection_owner {
+				true => None,
+				false => Some(who.clone()),
+			},
 			who.clone(),
 			*item_config,
-			deposit_collection_owner,
 			|_, _| Ok(()),
 		)
 	}
@@ -235,6 +237,49 @@ impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId, ItemConfig
 					collection, k, v,
 				)
 			})
+		})
+	}
+
+	fn clear_attribute(
+		collection: &Self::CollectionId,
+		item: &Self::ItemId,
+		key: &[u8],
+	) -> DispatchResult {
+		Self::do_clear_attribute(
+			None,
+			*collection,
+			Some(*item),
+			AttributeNamespace::Pallet,
+			Self::construct_attribute_key(key.to_vec())?,
+		)
+	}
+
+	fn clear_typed_attribute<K: Encode>(
+		collection: &Self::CollectionId,
+		item: &Self::ItemId,
+		key: &K,
+	) -> DispatchResult {
+		key.using_encoded(|k| {
+			<Self as Mutate<T::AccountId, ItemConfig>>::clear_attribute(collection, item, k)
+		})
+	}
+
+	fn clear_collection_attribute(collection: &Self::CollectionId, key: &[u8]) -> DispatchResult {
+		Self::do_clear_attribute(
+			None,
+			*collection,
+			None,
+			AttributeNamespace::Pallet,
+			Self::construct_attribute_key(key.to_vec())?,
+		)
+	}
+
+	fn clear_typed_collection_attribute<K: Encode>(
+		collection: &Self::CollectionId,
+		key: &K,
+	) -> DispatchResult {
+		key.using_encoded(|k| {
+			<Self as Mutate<T::AccountId, ItemConfig>>::clear_collection_attribute(collection, k)
 		})
 	}
 }

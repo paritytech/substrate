@@ -1174,7 +1174,7 @@ where
 	let base_header = match client.header(block)? {
 		Some(h) => h,
 		None => {
-			debug!(
+			warn!(
 				target: LOG_TARGET,
 				"Encountered error finding best chain containing {:?}: couldn't find base block",
 				block,
@@ -1194,75 +1194,82 @@ where
 		"Finding best chain containing block {:?} with number limit {:?}", block, limit
 	);
 
-	let result = match select_chain.finality_target(block, None).await {
-		Ok(best_hash) => {
-			let best_header = client
-				.header(best_hash)?
-				.expect("Header known to exist after `finality_target` call; qed");
-
-			// check if our vote is currently being limited due to a pending change
-			let limit = limit.filter(|limit| limit < best_header.number());
-
-			let (base_header, best_header, target_header) = if let Some(target_number) = limit {
-				let mut target_header = best_header.clone();
-
-				// walk backwards until we find the target block
-				loop {
-					if *target_header.number() < target_number {
-						unreachable!(
-							"we are traversing backwards from a known block; \
-							 blocks are stored contiguously; \
-							 qed"
-						);
-					}
-
-					if *target_header.number() == target_number {
-						break
-					}
-
-					target_header = client
-						.header(*target_header.parent_hash())?
-						.expect("Header known to exist after `finality_target` call; qed");
-				}
-
-				(base_header, best_header, target_header)
-			} else {
-				// otherwise just use the given best as the target
-				(base_header, best_header.clone(), best_header)
-			};
-
-			// restrict vote according to the given voting rule, if the
-			// voting rule doesn't restrict the vote then we keep the
-			// previous target.
-			//
-			// note that we pass the original `best_header`, i.e. before the
-			// authority set limit filter, which can be considered a
-			// mandatory/implicit voting rule.
-			//
-			// we also make sure that the restricted vote is higher than the
-			// round base (i.e. last finalized), otherwise the value
-			// returned by the given voting rule is ignored and the original
-			// target is used instead.
-			voting_rule
-				.restrict_vote(client.clone(), &base_header, &best_header, &target_header)
-				.await
-				.filter(|(_, restricted_number)| {
-					// we can only restrict votes within the interval [base, target]
-					restricted_number >= base_header.number() &&
-						restricted_number < target_header.number()
-				})
-				.or_else(|| Some((target_header.hash(), *target_header.number())))
-		},
-		Err(e) => {
+	let mut target_header = match select_chain.finality_target(block, None).await {
+		Ok(target_hash) => client
+			.header(target_hash)?
+			.expect("Header known to exist after `finality_target` call; qed"),
+		Err(err) => {
 			warn!(
 				target: LOG_TARGET,
-				"Encountered error finding best chain containing {:?}: {}", block, e
+				"Encountered error finding best chain containing {:?}: couldn't find target block: {}",
+				block,
+				err,
 			);
-			None
+
+			return Ok(None)
 		},
 	};
 
-	Ok(result)
+	// NOTE: this is purposefully done after `finality_target` to prevent a case
+	// where in-between these two requests there is a block import and
+	// `finality_target` returns something higher than `best_chain`.
+	let best_header = match select_chain.best_chain().await {
+		Ok(best_header) => best_header,
+		Err(err) => {
+			warn!(
+				target: LOG_TARGET,
+				"Encountered error finding best chain containing {:?}: couldn't find best block: {}",
+				block,
+				err,
+			);
+
+			return Ok(None)
+		},
+	};
+
+	if target_header.number() > best_header.number() {
+		return Err(Error::Safety(
+			"SelectChain returned a finality target higher than its best block".into(),
+		))
+	}
+
+	// check if our vote is currently being limited due to a pending change,
+	// in which case we will restrict our target header to the given limit
+	if let Some(target_number) = limit.filter(|limit| limit < target_header.number()) {
+		// walk backwards until we find the target block
+		loop {
+			if *target_header.number() < target_number {
+				unreachable!(
+					"we are traversing backwards from a known block; \
+					 blocks are stored contiguously; \
+					 qed"
+				);
+			}
+
+			if *target_header.number() == target_number {
+				break
+			}
+
+			target_header = client
+				.header(*target_header.parent_hash())?
+				.expect("Header known to exist after `finality_target` call; qed");
+		}
+	}
+
+	// restrict vote according to the given voting rule, if the voting rule
+	// doesn't restrict the vote then we keep the previous target.
+	//
+	// we also make sure that the restricted vote is higher than the round base
+	// (i.e. last finalized), otherwise the value returned by the given voting
+	// rule is ignored and the original target is used instead.
+	Ok(voting_rule
+		.restrict_vote(client.clone(), &base_header, &best_header, &target_header)
+		.await
+		.filter(|(_, restricted_number)| {
+			// we can only restrict votes within the interval [base, target]
+			restricted_number >= base_header.number() && restricted_number < target_header.number()
+		})
+		.or_else(|| Some((target_header.hash(), *target_header.number()))))
 }
 
 /// Finalize the given block and apply any authority set changes. If an

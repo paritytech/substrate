@@ -91,8 +91,6 @@ pub type MaxMembers = ConstU32<100>;
 parameter_types! {
 	pub const MotionDuration: u64 = 3;
 	pub const MaxProposals: u32 = 257;
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;

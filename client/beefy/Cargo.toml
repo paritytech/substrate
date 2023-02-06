@@ -11,7 +11,7 @@ homepage = "https://substrate.io"
 [dependencies]
 array-bytes = "4.1"
 async-trait = "0.1.57"
-codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.2.2", features = ["derive"] }
 fnv = "1.0.6"
 futures = "0.3"
 log = "0.4"

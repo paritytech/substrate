@@ -78,6 +78,8 @@ use frame_support::{
 pub use pallet::*;
 pub use weights::WeightInfo;
 
+const LOG_TARGET: &str = "runtime::tips";
+
 pub type BalanceOf<T, I = ()> = pallet_treasury::BalanceOf<T, I>;
 pub type NegativeImbalanceOf<T, I = ()> = pallet_treasury::NegativeImbalanceOf<T, I>;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;

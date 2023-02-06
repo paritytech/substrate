@@ -39,6 +39,10 @@ extern "C" {
 }
 
 #[cfg(not(feature = "std"))]
+/// The size of a WASM page in bytes.
+const WASM_PAGE_SIZE: usize = 65536;
+
+#[cfg(not(feature = "std"))]
 /// Mutable static variables should be always observed to have
 /// the initialized value at the start of a runtime call.
 static mut MUTABLE_STATIC: u64 = 32;
@@ -92,7 +96,7 @@ sp_core::wasm_export_functions! {
 		let heap_ptr = heap_base as usize;
 
 		// Find the next wasm page boundary.
-		let heap_ptr = round_up_to(heap_ptr, 65536);
+		let heap_ptr = round_up_to(heap_ptr, WASM_PAGE_SIZE);
 
 		// Make it an actual pointer
 		let heap_ptr = heap_ptr as *mut u8;
@@ -335,5 +339,51 @@ sp_core::wasm_export_functions! {
 	fn test_return_value() -> u64 {
 		// Mainly a test that the macro is working when we have a return statement here.
 		return 1234;
+	}
+}
+
+// Tests that check output validity. We explicitly return the ptr and len, so we avoid using the
+// `wasm_export_functions` macro.
+mod output_validity {
+	#[cfg(not(feature = "std"))]
+	use super::WASM_PAGE_SIZE;
+
+	#[cfg(not(feature = "std"))]
+	use sp_runtime_interface::pack_ptr_and_len;
+
+	// Returns a huge len. It should result in an error, and not an allocation.
+	#[no_mangle]
+	#[cfg(not(feature = "std"))]
+	pub extern "C" fn test_return_huge_len(_params: *const u8, _len: usize) -> u64 {
+		pack_ptr_and_len(0, u32::MAX)
+	}
+
+	// Returns an offset right before the edge of the wasm memory boundary. It should succeed.
+	#[no_mangle]
+	#[cfg(not(feature = "std"))]
+	pub extern "C" fn test_return_max_memory_offset(_params: *const u8, _len: usize) -> u64 {
+		let output_ptr = (core::arch::wasm32::memory_size(0) * WASM_PAGE_SIZE) as u32 - 1;
+		let ptr = output_ptr as *mut u8;
+		unsafe {
+			ptr.write(u8::MAX);
+		}
+		pack_ptr_and_len(output_ptr, 1)
+	}
+
+	// Returns an offset right after the edge of the wasm memory boundary. It should fail.
+	#[no_mangle]
+	#[cfg(not(feature = "std"))]
+	pub extern "C" fn test_return_max_memory_offset_plus_one(
+		_params: *const u8,
+		_len: usize,
+	) -> u64 {
+		pack_ptr_and_len((core::arch::wasm32::memory_size(0) * WASM_PAGE_SIZE) as u32, 1)
+	}
+
+	// Returns an output that overflows the u32 range. It should result in an error.
+	#[no_mangle]
+	#[cfg(not(feature = "std"))]
+	pub extern "C" fn test_return_overflow(_params: *const u8, _len: usize) -> u64 {
+		pack_ptr_and_len(u32::MAX, 1)
 	}
 }
