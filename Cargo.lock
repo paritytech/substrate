@@ -7910,7 +7910,6 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "pin-project",
- "rand 0.7.3",
  "rand 0.8.5",
  "sc-block-builder",
  "sc-client-api",
