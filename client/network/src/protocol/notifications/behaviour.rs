@@ -2328,7 +2328,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn remote_substream_open_rejected() {
+	async fn disconnect_remote_substream_before_handled_by_peerset() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
 		let conn = ConnectionId::new(0usize);
@@ -2601,7 +2601,7 @@ mod tests {
 			Some(&PeerState::PendingRequest { .. })
 		));
 
-		// attempt to connect the backed-off peer and verify that the request is pending
+		// attempt to disconnect the backed-off peer and verify that the request is pending
 		notif.peerset_report_disconnect(peer, set_id);
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Backoff { .. })));
 	}
@@ -2788,7 +2788,7 @@ mod tests {
 	}
 
 	#[test]
-	fn close_connection_for_incoming_peer_two_connection() {
+	fn close_connection_for_incoming_peer_two_connections() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
 		let conn = ConnectionId::new(0usize);
@@ -3294,6 +3294,7 @@ mod tests {
 			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
 		);
 
+		// manually add backoff for the entry
 		if let Some(&mut PeerState::Incoming { ref mut backoff_until, .. }) =
 			notif.peers.get_mut(&(peer, 0.into()))
 		{
@@ -4252,7 +4253,7 @@ mod tests {
 	#[test]
 	#[should_panic]
 	#[cfg(debug_assertions)]
-	fn inject_connection_closed_for_incoming_peer() {
+	fn inject_non_existent_connection_closed_for_incoming_peer() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
 		let conn = ConnectionId::new(0usize);
@@ -4295,7 +4296,7 @@ mod tests {
 	#[test]
 	#[should_panic]
 	#[cfg(debug_assertions)]
-	fn inject_connection_closed_for_disabled_peer() {
+	fn inject_non_existent_connection_closed_for_disabled_peer() {
 		let (mut notif, _peerset) = development_notifs();
 		let set_id = sc_peerset::SetId::from(0);
 		let peer = PeerId::random();
@@ -4330,7 +4331,7 @@ mod tests {
 	#[test]
 	#[should_panic]
 	#[cfg(debug_assertions)]
-	fn inject_connection_closed_for_disabled_pending_enable() {
+	fn inject_non_existent_connection_closed_for_disabled_pending_enable() {
 		let (mut notif, _peerset) = development_notifs();
 		let set_id = sc_peerset::SetId::from(0);
 		let peer = PeerId::random();
@@ -4526,7 +4527,7 @@ mod tests {
 	#[test]
 	#[should_panic]
 	#[cfg(debug_assertions)]
-	fn open_desired_by_remote_non_existent_peer() {
+	fn open_result_ok_non_existent_peer() {
 		let (mut notif, _peerset) = development_notifs();
 		let conn = ConnectionId::new(0usize);
 		let connected = ConnectedPoint::Listener {
