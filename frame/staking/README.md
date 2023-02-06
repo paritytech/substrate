@@ -88,7 +88,7 @@ An account can become a nominator via the [`nominate`](https://docs.rs/pallet-st
 The **reward and slashing** procedure is the core of the Staking module, attempting to _embrace
 valid behavior_ while _punishing any misbehavior or lack of availability_.
 
-Rewards must be claimed for each era before it gets too old by `$HISTORY_DEPTH` using the
+Rewards must be claimed for each era before it gets too old by [`HistoryDeth`] using the
 `payout_stakers` call. Any account can call `payout_stakers`, which pays the reward to the
 validator as well as its nominators. Rewards are paged to maximum of [`Config::MaxNominatorRewardedPerValidator`]
 nominators per call. Each page of staker payout needs to be called separately to ensure all nominators are
