@@ -29,6 +29,7 @@
 #     - ./scripts/ci/gitlab/my_amazing_script.sh
 
 stages:
+  - weights
   - check
   - test
   - build
@@ -284,6 +285,8 @@ check-crates-publishing-pipeline:
     - ONLY_CHECK_PIPELINE=true ./releng-scripts/publish-crates
 
 include:
+  # weights jobs
+  - scripts/ci/gitlab/pipeline/weights.yml
   # check jobs
   - scripts/ci/gitlab/pipeline/check.yml
   # tests jobs
