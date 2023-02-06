@@ -337,8 +337,8 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>> Ensu
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> O {
-		O::from(RawOrigin::Signed(ForceActivateOrigin::Strong.acc()))
+	fn try_successful_origin() -> Result<O, ()> {
+		Ok(O::from(RawOrigin::Signed(ForceActivateOrigin::Strong.acc())))
 	}
 }
 
@@ -360,8 +360,8 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>> Ensu
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> O {
-		O::from(RawOrigin::Signed(ForceActivateOrigin::Strong.acc()))
+	fn try_successful_origin() -> Result<O, ()> {
+		Ok(O::from(RawOrigin::Signed(ForceActivateOrigin::Strong.acc())))
 	}
 }
 
