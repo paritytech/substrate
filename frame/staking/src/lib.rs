@@ -817,6 +817,7 @@ impl<Balance: Default + HasCompact> Default for ExposureOverview<Balance> {
 	}
 }
 
+/// Extended view of Exposure comprising of `ExposureOverview` and a single page of `ExposurePage`.
 #[derive(Encode, Decode, RuntimeDebug, TypeInfo, PartialEq, Eq)]
 struct ExposureExt<AccountId, Balance: HasCompact> {
 	exposure_overview: ExposureOverview<Balance>,
