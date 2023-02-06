@@ -18,6 +18,7 @@
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
+use crate::LOG_TARGET;
 use futures::{channel::mpsc::Receiver, Future};
 use sc_transaction_pool_api::error;
 use sp_blockchain::TreeRoute;
@@ -208,7 +209,8 @@ impl<B: ChainApi> Pool<B> {
 	) {
 		let now = Instant::now();
 		self.validated_pool.resubmit(revalidated_transactions);
-		log::debug!(target: "txpool",
+		log::debug!(
+			target: LOG_TARGET,
 			"Resubmitted. Took {} ms. Status: {:?}",
 			now.elapsed().as_millis(),
 			self.validated_pool.status()
@@ -249,7 +251,7 @@ impl<B: ChainApi> Pool<B> {
 		extrinsics: &[ExtrinsicFor<B>],
 	) -> Result<(), B::Error> {
 		log::debug!(
-			target: "txpool",
+			target: LOG_TARGET,
 			"Starting pruning of block {:?} (extrinsics: {})",
 			at,
 			extrinsics.len()
@@ -287,7 +289,10 @@ impl<B: ChainApi> Pool<B> {
 							future_tags.extend(validity.provides);
 						}
 					} else {
-						log::trace!(target: "txpool", "txpool is empty, skipping validation for block {at:?}");
+						log::trace!(
+							target: LOG_TARGET,
+							"txpool is empty, skipping validation for block {at:?}",
+						);
 					}
 				},
 			}
@@ -323,7 +328,7 @@ impl<B: ChainApi> Pool<B> {
 		tags: impl IntoIterator<Item = Tag>,
 		known_imported_hashes: impl IntoIterator<Item = ExtrinsicHash<B>> + Clone,
 	) -> Result<(), B::Error> {
-		log::debug!(target: "txpool", "Pruning at {:?}", at);
+		log::debug!(target: LOG_TARGET, "Pruning at {:?}", at);
 		// Prune all transactions that provide given tags
 		let prune_status = self.validated_pool.prune_tags(tags)?;
 
@@ -342,7 +347,7 @@ impl<B: ChainApi> Pool<B> {
 		let reverified_transactions =
 			self.verify(at, pruned_transactions, CheckBannedBeforeVerify::Yes).await?;
 
-		log::trace!(target: "txpool", "Pruning at {:?}. Resubmitting transactions.", at);
+		log::trace!(target: LOG_TARGET, "Pruning at {:?}. Resubmitting transactions.", at);
 		// And finally - submit reverified transactions back to the pool
 
 		self.validated_pool.resubmit_pruned(

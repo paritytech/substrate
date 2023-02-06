@@ -71,6 +71,8 @@ pub mod weights;
 pub use pallet::*;
 pub use weights::WeightInfo;
 
+const LOG_TARGET: &str = "runtime::collective";
+
 /// Simple index type for proposal counting.
 pub type ProposalIndex = u32;
 
@@ -390,7 +392,7 @@ pub mod pallet {
 			ensure_root(origin)?;
 			if new_members.len() > T::MaxMembers::get() as usize {
 				log::error!(
-					target: "runtime::collective",
+					target: LOG_TARGET,
 					"New members count ({}) exceeds maximum amount of members expected ({}).",
 					new_members.len(),
 					T::MaxMembers::get(),
@@ -400,7 +402,7 @@ pub mod pallet {
 			let old = Members::<T, I>::get();
 			if old.len() > old_count as usize {
 				log::warn!(
-					target: "runtime::collective",
+					target: LOG_TARGET,
 					"Wrong count used to estimate set_members weight. expected ({}) vs actual ({})",
 					old_count,
 					old.len(),
@@ -1040,7 +1042,7 @@ impl<T: Config<I>, I: 'static> ChangeMembers<T::AccountId> for Pallet<T, I> {
 	) {
 		if new.len() > T::MaxMembers::get() as usize {
 			log::error!(
-				target: "runtime::collective",
+				target: LOG_TARGET,
 				"New members count ({}) exceeds maximum amount of members expected ({}).",
 				new.len(),
 				T::MaxMembers::get(),

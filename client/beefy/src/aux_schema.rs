@@ -18,7 +18,7 @@
 
 //! Schema for BEEFY state persisted in the aux-db.
 
-use crate::worker::PersistedState;
+use crate::{worker::PersistedState, LOG_TARGET};
 use codec::{Decode, Encode};
 use log::{info, trace};
 use sc_client_api::{backend::AuxStore, Backend};
@@ -28,10 +28,10 @@ use sp_runtime::traits::Block as BlockT;
 const VERSION_KEY: &[u8] = b"beefy_auxschema_version";
 const WORKER_STATE: &[u8] = b"beefy_voter_state";
 
-const CURRENT_VERSION: u32 = 1;
+const CURRENT_VERSION: u32 = 2;
 
 pub(crate) fn write_current_version<B: AuxStore>(backend: &B) -> ClientResult<()> {
-	info!(target: "beefy", "🥩 write aux schema version {:?}", CURRENT_VERSION);
+	info!(target: LOG_TARGET, "🥩 write aux schema version {:?}", CURRENT_VERSION);
 	AuxStore::insert_aux(backend, &[(VERSION_KEY, CURRENT_VERSION.encode().as_slice())], &[])
 }
 
@@ -40,7 +40,7 @@ pub(crate) fn write_voter_state<Block: BlockT, B: AuxStore>(
 	backend: &B,
 	state: &PersistedState<Block>,
 ) -> ClientResult<()> {
-	trace!(target: "beefy", "🥩 persisting {:?}", state);
+	trace!(target: LOG_TARGET, "🥩 persisting {:?}", state);
 	backend.insert_aux(&[(WORKER_STATE, state.encode().as_slice())], &[])
 }
 
@@ -63,7 +63,8 @@ where
 
 	match version {
 		None => (),
-		Some(1) => return load_decode::<_, PersistedState<B>>(backend, WORKER_STATE),
+		Some(1) => (), // version 1 is totally obsolete and should be simply ignored
+		Some(2) => return load_decode::<_, PersistedState<B>>(backend, WORKER_STATE),
 		other =>
 			return Err(ClientError::Backend(format!("Unsupported BEEFY DB version: {:?}", other))),
 	}

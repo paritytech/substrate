@@ -291,11 +291,15 @@ where
 				match params.network_config.transport {
 					TransportConfig::MemoryOnly => {
 						config.with_mdns(false);
-						config.allow_private_ipv4(false);
+						config.allow_private_ip(false);
 					},
-					TransportConfig::Normal { enable_mdns, allow_private_ipv4, .. } => {
+					TransportConfig::Normal {
+						enable_mdns,
+						allow_private_ip: allow_private_ipv4,
+						..
+					} => {
 						config.with_mdns(enable_mdns);
-						config.allow_private_ipv4(allow_private_ipv4);
+						config.allow_private_ip(allow_private_ipv4);
 					},
 				}
 

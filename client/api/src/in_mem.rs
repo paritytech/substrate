@@ -788,6 +788,12 @@ where
 	fn requires_full_sync(&self) -> bool {
 		false
 	}
+
+	fn pin_block(&self, _: <Block as BlockT>::Hash) -> blockchain::Result<()> {
+		Ok(())
+	}
+
+	fn unpin_block(&self, _: <Block as BlockT>::Hash) {}
 }
 
 impl<Block: BlockT> backend::LocalBackend<Block> for Backend<Block> where Block::Hash: Ord {}

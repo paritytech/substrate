@@ -117,11 +117,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	result
 }
 
-parameter_types! {
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
-}
-
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -174,8 +169,6 @@ impl pallet_session::historical::Config for Runtime {
 
 impl pallet_authorship::Config for Runtime {
 	type FindAuthor = ();
-	type UncleGenerations = ConstU64<5>;
-	type FilterUncle = ();
 	type EventHandler = ImOnline;
 }
 
