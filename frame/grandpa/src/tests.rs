@@ -359,7 +359,7 @@ fn report_equivocation_current_set_works() {
 
 		// report the equivocation and the tx should be dispatched successfully
 		assert_ok!(Grandpa::report_equivocation_unsigned(
-			Origin::none(),
+			RuntimeOrigin::none(),
 			Box::new(equivocation_proof),
 			key_owner_proof,
 		),);
@@ -437,7 +437,7 @@ fn report_equivocation_old_set_works() {
 		// report the equivocation using the key ownership proof generated on
 		// the old set, the tx should be dispatched successfully
 		assert_ok!(Grandpa::report_equivocation_unsigned(
-			Origin::none(),
+			RuntimeOrigin::none(),
 			Box::new(equivocation_proof),
 			key_owner_proof,
 		),);
@@ -500,7 +500,7 @@ fn report_equivocation_invalid_set_id() {
 		// the call for reporting the equivocation should error
 		assert_err!(
 			Grandpa::report_equivocation_unsigned(
-				Origin::none(),
+				RuntimeOrigin::none(),
 				Box::new(equivocation_proof),
 				key_owner_proof,
 			),
@@ -541,7 +541,7 @@ fn report_equivocation_invalid_session() {
 		// proof from the previous set, the session should be invalid.
 		assert_err!(
 			Grandpa::report_equivocation_unsigned(
-				Origin::none(),
+				RuntimeOrigin::none(),
 				Box::new(equivocation_proof),
 				key_owner_proof,
 			),
@@ -586,7 +586,7 @@ fn report_equivocation_invalid_key_owner_proof() {
 		// proof for a different key than the one in the equivocation proof.
 		assert_err!(
 			Grandpa::report_equivocation_unsigned(
-				Origin::none(),
+				RuntimeOrigin::none(),
 				Box::new(equivocation_proof),
 				invalid_key_owner_proof,
 			),
@@ -617,7 +617,7 @@ fn report_equivocation_invalid_equivocation_proof() {
 		let assert_invalid_equivocation_proof = |equivocation_proof| {
 			assert_err!(
 				Grandpa::report_equivocation_unsigned(
-					Origin::none(),
+					RuntimeOrigin::none(),
 					Box::new(equivocation_proof),
 					key_owner_proof.clone(),
 				),
@@ -723,7 +723,7 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 
 		// we submit the report
 		Grandpa::report_equivocation_unsigned(
-			Origin::none(),
+			RuntimeOrigin::none(),
 			Box::new(equivocation_proof),
 			key_owner_proof,
 		)
@@ -778,6 +778,33 @@ fn on_new_session_doesnt_start_new_set_if_schedule_change_failed() {
 		// session validators changed)
 		Grandpa::on_new_session(true, std::iter::empty(), std::iter::empty());
 		assert_eq!(Grandpa::current_set_id(), 2);
+	});
+}
+
+#[test]
+fn cleans_up_old_set_id_session_mappings() {
+	new_test_ext(vec![(1, 1), (2, 1), (3, 1)]).execute_with(|| {
+		let max_set_id_session_entries = MaxSetIdSessionEntries::get();
+
+		start_era(max_set_id_session_entries);
+
+		// we should have a session id mapping for all the set ids from
+		// `max_set_id_session_entries` eras we have observed
+		for i in 1..=max_set_id_session_entries {
+			assert!(Grandpa::session_for_set(i as u64).is_some());
+		}
+
+		start_era(max_set_id_session_entries * 2);
+
+		// we should keep tracking the new mappings for new eras
+		for i in max_set_id_session_entries + 1..=max_set_id_session_entries * 2 {
+			assert!(Grandpa::session_for_set(i as u64).is_some());
+		}
+
+		// but the old ones should have been pruned by now
+		for i in 1..=max_set_id_session_entries {
+			assert!(Grandpa::session_for_set(i as u64).is_none());
+		}
 	});
 }
 
@@ -856,12 +883,12 @@ fn valid_equivocation_reports_dont_pay_fees() {
 		.get_dispatch_info();
 
 		// it should have non-zero weight and the fee has to be paid.
-		assert!(info.weight.all_gt(Weight::zero()));
+		assert!(info.weight.any_gt(Weight::zero()));
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// report the equivocation.
 		let post_info = Grandpa::report_equivocation_unsigned(
-			Origin::none(),
+			RuntimeOrigin::none(),
 			Box::new(equivocation_proof.clone()),
 			key_owner_proof.clone(),
 		)
@@ -875,7 +902,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 		// report the equivocation again which is invalid now since it is
 		// duplicate.
 		let post_info = Grandpa::report_equivocation_unsigned(
-			Origin::none(),
+			RuntimeOrigin::none(),
 			Box::new(equivocation_proof),
 			key_owner_proof,
 		)

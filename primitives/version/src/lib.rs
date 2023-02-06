@@ -48,7 +48,7 @@ pub use sp_runtime::{create_runtime_str, StateVersion};
 pub use sp_std;
 
 #[cfg(feature = "std")]
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use sp_runtime::traits::Block as BlockT;
 
 #[cfg(feature = "std")]
 pub mod embed;
@@ -370,14 +370,14 @@ pub trait GetNativeVersion {
 #[cfg(feature = "std")]
 pub trait GetRuntimeVersionAt<Block: BlockT> {
 	/// Returns the version of runtime at the given block.
-	fn runtime_version(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, String>;
+	fn runtime_version(&self, at: <Block as BlockT>::Hash) -> Result<RuntimeVersion, String>;
 }
 
 #[cfg(feature = "std")]
 impl<T: GetRuntimeVersionAt<Block>, Block: BlockT> GetRuntimeVersionAt<Block>
 	for std::sync::Arc<T>
 {
-	fn runtime_version(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, String> {
+	fn runtime_version(&self, at: <Block as BlockT>::Hash) -> Result<RuntimeVersion, String> {
 		(&**self).runtime_version(at)
 	}
 }

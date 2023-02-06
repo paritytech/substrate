@@ -20,7 +20,7 @@
 //! that expect babe-specific digests.
 
 use super::ConsensusDataProvider;
-use crate::Error;
+use crate::{Error, LOG_TARGET};
 use codec::Encode;
 use sc_client_api::{AuxStore, UsageProvider};
 use sc_consensus_babe::{
@@ -30,7 +30,7 @@ use sc_consensus_epochs::{
 	descendent_query, EpochHeader, SharedEpochChanges, ViableEpochDescriptor,
 };
 use sp_keystore::SyncCryptoStorePtr;
-use std::{borrow::Cow, marker::PhantomData, sync::Arc};
+use std::{marker::PhantomData, sync::Arc};
 
 use sc_consensus::{BlockImportParams, ForkChoiceStrategy, Verifier};
 use sp_api::{ProvideRuntimeApi, TransactionFor};
@@ -44,7 +44,7 @@ use sp_consensus_babe::{
 use sp_consensus_slots::Slot;
 use sp_inherents::InherentData;
 use sp_runtime::{
-	generic::{BlockId, Digest},
+	generic::Digest,
 	traits::{Block as BlockT, Header},
 	DigestItem,
 };
@@ -108,7 +108,7 @@ where
 		let parent_hash = import_params.header.parent_hash();
 		let parent = self
 			.client
-			.header(BlockId::Hash(*parent_hash))
+			.header(*parent_hash)
 			.ok()
 			.flatten()
 			.ok_or_else(|| format!("header for block {} not found", parent_hash))?;
@@ -125,10 +125,8 @@ where
 		// drop the lock
 		drop(epoch_changes);
 
-		import_params.intermediates.insert(
-			Cow::from(INTERMEDIATE_KEY),
-			Box::new(BabeIntermediate::<B> { epoch_descriptor }) as Box<_>,
-		);
+		import_params
+			.insert_intermediate(INTERMEDIATE_KEY, BabeIntermediate::<B> { epoch_descriptor });
 
 		Ok((import_params, None))
 	}
@@ -181,7 +179,7 @@ where
 		let epoch = epoch_changes
 			.viable_epoch(&epoch_descriptor, |slot| Epoch::genesis(&self.config, slot))
 			.ok_or_else(|| {
-				log::info!(target: "babe", "create_digest: no viable_epoch :(");
+				log::info!(target: LOG_TARGET, "create_digest: no viable_epoch :(");
 				sp_consensus::Error::InvalidAuthoritiesSet
 			})?;
 
@@ -292,7 +290,7 @@ where
 		let has_authority = epoch.authorities.iter().any(|(id, _)| *id == *authority);
 
 		if !has_authority {
-			log::info!(target: "manual-seal", "authority not found");
+			log::info!(target: LOG_TARGET, "authority not found");
 			let timestamp = inherents
 				.timestamp_inherent_data()?
 				.ok_or_else(|| Error::StringError("No timestamp inherent data".into()))?;
@@ -315,10 +313,7 @@ where
 			};
 		}
 
-		params.intermediates.insert(
-			Cow::from(INTERMEDIATE_KEY),
-			Box::new(BabeIntermediate::<B> { epoch_descriptor }) as Box<_>,
-		);
+		params.insert_intermediate(INTERMEDIATE_KEY, BabeIntermediate::<B> { epoch_descriptor });
 
 		Ok(())
 	}

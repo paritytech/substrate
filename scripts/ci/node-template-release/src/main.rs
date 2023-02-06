@@ -29,10 +29,10 @@ type CargoToml = HashMap<String, toml::Value>;
 #[derive(Parser)]
 struct Options {
 	/// The path to the `node-template` source.
-	#[clap(parse(from_os_str))]
+	#[arg()]
 	node_template: PathBuf,
 	/// The path where to output the generated `tar.gz` file.
-	#[clap(parse(from_os_str))]
+	#[arg()]
 	output: PathBuf,
 }
 

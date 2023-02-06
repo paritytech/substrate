@@ -112,7 +112,7 @@ impl Stats {
 	/// Returns the specified percentile for the given data.
 	/// This is best effort since it ignores the interpolation case.
 	fn percentile(mut xs: Vec<u64>, p: f64) -> u64 {
-		xs.sort_unstable();
+		xs.sort();
 		let index = (xs.len() as f64 * p).ceil() as usize - 1;
 		xs[index.clamp(0, xs.len() - 1)]
 	}

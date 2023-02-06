@@ -18,6 +18,7 @@
 
 use std::{collections::HashMap, fmt::Debug, hash};
 
+use crate::LOG_TARGET;
 use linked_hash_map::LinkedHashMap;
 use log::{debug, trace};
 use serde::Serialize;
@@ -67,13 +68,13 @@ impl<H: hash::Hash + traits::Member + Serialize, C: ChainApi> Listener<H, C> {
 
 	/// Notify the listeners about extrinsic broadcast.
 	pub fn broadcasted(&mut self, hash: &H, peers: Vec<String>) {
-		trace!(target: "txpool", "[{:?}] Broadcasted", hash);
+		trace!(target: LOG_TARGET, "[{:?}] Broadcasted", hash);
 		self.fire(hash, |watcher| watcher.broadcast(peers));
 	}
 
 	/// New transaction was added to the ready pool or promoted from the future pool.
 	pub fn ready(&mut self, tx: &H, old: Option<&H>) {
-		trace!(target: "txpool", "[{:?}] Ready (replaced with {:?})", tx, old);
+		trace!(target: LOG_TARGET, "[{:?}] Ready (replaced with {:?})", tx, old);
 		self.fire(tx, |watcher| watcher.ready());
 		if let Some(old) = old {
 			self.fire(old, |watcher| watcher.usurped(tx.clone()));
@@ -82,13 +83,13 @@ impl<H: hash::Hash + traits::Member + Serialize, C: ChainApi> Listener<H, C> {
 
 	/// New transaction was added to the future pool.
 	pub fn future(&mut self, tx: &H) {
-		trace!(target: "txpool", "[{:?}] Future", tx);
+		trace!(target: LOG_TARGET, "[{:?}] Future", tx);
 		self.fire(tx, |watcher| watcher.future());
 	}
 
 	/// Transaction was dropped from the pool because of the limit.
 	pub fn dropped(&mut self, tx: &H, by: Option<&H>) {
-		trace!(target: "txpool", "[{:?}] Dropped (replaced with {:?})", tx, by);
+		trace!(target: LOG_TARGET, "[{:?}] Dropped (replaced with {:?})", tx, by);
 		self.fire(tx, |watcher| match by {
 			Some(t) => watcher.usurped(t.clone()),
 			None => watcher.dropped(),
@@ -97,20 +98,25 @@ impl<H: hash::Hash + traits::Member + Serialize, C: ChainApi> Listener<H, C> {
 
 	/// Transaction was removed as invalid.
 	pub fn invalid(&mut self, tx: &H) {
-		debug!(target: "txpool", "[{:?}] Extrinsic invalid", tx);
+		debug!(target: LOG_TARGET, "[{:?}] Extrinsic invalid", tx);
 		self.fire(tx, |watcher| watcher.invalid());
 	}
 
 	/// Transaction was pruned from the pool.
 	pub fn pruned(&mut self, block_hash: BlockHash<C>, tx: &H) {
-		debug!(target: "txpool", "[{:?}] Pruned at {:?}", tx, block_hash);
-		self.fire(tx, |s| s.in_block(block_hash));
-		self.finality_watchers.entry(block_hash).or_insert(vec![]).push(tx.clone());
+		debug!(target: LOG_TARGET, "[{:?}] Pruned at {:?}", tx, block_hash);
+		// Get the transactions included in the given block hash.
+		let txs = self.finality_watchers.entry(block_hash).or_insert(vec![]);
+		txs.push(tx.clone());
+		// Current transaction is the last one included.
+		let tx_index = txs.len() - 1;
+
+		self.fire(tx, |watcher| watcher.in_block(block_hash, tx_index));
 
 		while self.finality_watchers.len() > MAX_FINALITY_WATCHERS {
 			if let Some((hash, txs)) = self.finality_watchers.pop_front() {
 				for tx in txs {
-					self.fire(&tx, |s| s.finality_timeout(hash));
+					self.fire(&tx, |watcher| watcher.finality_timeout(hash));
 				}
 			}
 		}
@@ -120,7 +126,7 @@ impl<H: hash::Hash + traits::Member + Serialize, C: ChainApi> Listener<H, C> {
 	pub fn retracted(&mut self, block_hash: BlockHash<C>) {
 		if let Some(hashes) = self.finality_watchers.remove(&block_hash) {
 			for hash in hashes {
-				self.fire(&hash, |s| s.retracted(block_hash))
+				self.fire(&hash, |watcher| watcher.retracted(block_hash))
 			}
 		}
 	}
@@ -128,9 +134,14 @@ impl<H: hash::Hash + traits::Member + Serialize, C: ChainApi> Listener<H, C> {
 	/// Notify all watchers that transactions have been finalized
 	pub fn finalized(&mut self, block_hash: BlockHash<C>) {
 		if let Some(hashes) = self.finality_watchers.remove(&block_hash) {
-			for hash in hashes {
-				log::debug!(target: "txpool", "[{:?}] Sent finalization event (block {:?})", hash, block_hash);
-				self.fire(&hash, |s| s.finalized(block_hash))
+			for (tx_index, hash) in hashes.into_iter().enumerate() {
+				log::debug!(
+					target: LOG_TARGET,
+					"[{:?}] Sent finalization event (block {:?})",
+					hash,
+					block_hash,
+				);
+				self.fire(&hash, |watcher| watcher.finalized(block_hash, tx_index))
 			}
 		}
 	}

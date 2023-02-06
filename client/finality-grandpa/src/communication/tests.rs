@@ -28,10 +28,7 @@ use parity_scale_codec::Encode;
 use sc_network::{config::Role, Multiaddr, PeerId, ReputationChange};
 use sc_network_common::{
 	config::MultiaddrWithPeerId,
-	protocol::{
-		event::{Event as NetworkEvent, ObservedRole},
-		ProtocolName,
-	},
+	protocol::{event::Event as NetworkEvent, role::ObservedRole, ProtocolName},
 	service::{
 		NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
 		NetworkSyncForkRequest, NotificationSender, NotificationSenderError,
@@ -138,7 +135,7 @@ impl NetworkEventStream for TestNetwork {
 		&self,
 		_name: &'static str,
 	) -> Pin<Box<dyn Stream<Item = NetworkEvent> + Send>> {
-		let (tx, rx) = tracing_unbounded("test");
+		let (tx, rx) = tracing_unbounded("test", 100_000);
 		let _ = self.sender.unbounded_send(Event::EventStream(tx));
 		Box::pin(rx)
 	}
@@ -256,7 +253,7 @@ fn voter_set_state() -> SharedVoterSetState<Block> {
 
 // needs to run in a tokio runtime.
 pub(crate) fn make_test_network() -> (impl Future<Output = Tester>, TestNetwork) {
-	let (tx, rx) = tracing_unbounded("test");
+	let (tx, rx) = tracing_unbounded("test", 100_000);
 	let net = TestNetwork { sender: tx };
 
 	#[derive(Clone)]
@@ -646,7 +643,7 @@ fn grandpa_protocol_name() {
 
 	// Create protocol name using random genesis hash.
 	let genesis_hash = sp_core::H256::random();
-	let expected = format!("/{}/grandpa/1", hex::encode(genesis_hash));
+	let expected = format!("/{}/grandpa/1", array_bytes::bytes2hex("", genesis_hash.as_ref()));
 	let proto_name = grandpa_protocol_name::standard_name(&genesis_hash, &chain_spec);
 	assert_eq!(proto_name.to_string(), expected);
 

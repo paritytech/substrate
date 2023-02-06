@@ -22,7 +22,7 @@ use frame_support::{
 };
 
 pub trait Config: 'static + Eq + Clone {
-	type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
+	type RuntimeOrigin: Into<Result<RawOrigin<Self::AccountId>, Self::RuntimeOrigin>>
 		+ From<RawOrigin<Self::AccountId>>;
 
 	type BaseCallFilter: frame_support::traits::Contains<Self::RuntimeCall>;
@@ -36,7 +36,7 @@ pub trait Config: 'static + Eq + Clone {
 }
 
 frame_support::decl_module! {
-	pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {
+	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=self {
 		#[weight = 0]
 		fn noop(_origin) {}
 	}

@@ -72,10 +72,10 @@ use sp_runtime::{
 	generic,
 	traits::{
 		self, AtLeast32Bit, AtLeast32BitUnsigned, BadOrigin, BlockNumberProvider, Bounded,
-		CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay, MaybeMallocSizeOf,
+		CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay,
 		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup, Zero,
 	},
-	DispatchError, Perbill, RuntimeDebug,
+	DispatchError, RuntimeDebug,
 };
 #[cfg(any(feature = "std", test))]
 use sp_std::map;
@@ -88,7 +88,7 @@ use frame_support::{
 		extract_actual_pays_fee, extract_actual_weight, DispatchClass, DispatchInfo,
 		DispatchResult, DispatchResultWithPostInfo, PerDispatchClass,
 	},
-	storage,
+	storage::{self, StorageStreamIter},
 	traits::{
 		ConstU32, Contains, EnsureOrigin, Get, HandleLifetime, OnKilledAccount, OnNewAccount,
 		OriginTrait, PalletInfo, SortedMembers, StoredMap, TypedGet,
@@ -128,6 +128,8 @@ pub use extensions::{
 pub use extensions::check_mortality::CheckMortality as CheckEra;
 pub use frame_support::dispatch::RawOrigin;
 pub use weights::WeightInfo;
+
+const LOG_TARGET: &str = "runtime::system";
 
 /// Compute the trie root of a list of extrinsics.
 ///
@@ -197,7 +199,6 @@ impl<MaxNormal: Get<u32>, MaxOverflow: Get<u32>> ConsumerLimits for (MaxNormal, 
 pub mod pallet {
 	use crate::{self as frame_system, pallet_prelude::*, *};
 	use frame_support::pallet_prelude::*;
-	use sp_runtime::DispatchErrorWithPostInfo;
 
 	/// System configuration trait. Implemented by runtime.
 	#[pallet::config]
@@ -215,14 +216,17 @@ pub mod pallet {
 		#[pallet::constant]
 		type BlockLength: Get<limits::BlockLength>;
 
-		/// The `Origin` type used by dispatchable calls.
-		type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
+		/// The `RuntimeOrigin` type used by dispatchable calls.
+		type RuntimeOrigin: Into<Result<RawOrigin<Self::AccountId>, Self::RuntimeOrigin>>
 			+ From<RawOrigin<Self::AccountId>>
 			+ Clone
 			+ OriginTrait<Call = Self::RuntimeCall>;
 
 		/// The aggregated `RuntimeCall` type.
-		type RuntimeCall: Dispatchable + Debug;
+		type RuntimeCall: Parameter
+			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin>
+			+ Debug
+			+ From<Call<Self>>;
 
 		/// Account index (aka nonce) type. This stores the number of previous transactions
 		/// associated with a sender account.
@@ -248,7 +252,6 @@ pub mod pallet {
 			+ Copy
 			+ sp_std::hash::Hash
 			+ sp_std::str::FromStr
-			+ MaybeMallocSizeOf
 			+ MaxEncodedLen
 			+ TypeInfo;
 
@@ -266,7 +269,6 @@ pub mod pallet {
 			+ sp_std::hash::Hash
 			+ AsRef<[u8]>
 			+ AsMut<[u8]>
-			+ MaybeMallocSizeOf
 			+ MaxEncodedLen;
 
 		/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
@@ -360,35 +362,22 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		#[cfg(feature = "std")]
 		fn integrity_test() {
-			T::BlockWeights::get().validate().expect("The weights are invalid.");
+			sp_io::TestExternalities::default().execute_with(|| {
+				T::BlockWeights::get().validate().expect("The weights are invalid.");
+			});
 		}
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// A dispatch that will fill the block weight up to the given ratio.
-		// TODO: This should only be available for testing, rather than in general usage, but
-		// that's not possible at present (since it's within the pallet macro).
-		#[pallet::weight(*_ratio * T::BlockWeights::get().max_block)]
-		pub fn fill_block(origin: OriginFor<T>, _ratio: Perbill) -> DispatchResultWithPostInfo {
-			match ensure_root(origin) {
-				Ok(_) => Ok(().into()),
-				Err(_) => {
-					// roughly same as a 4 byte remark since perbill is u32.
-					Err(DispatchErrorWithPostInfo {
-						post_info: Some(T::SystemWeightInfo::remark(4u32)).into(),
-						error: DispatchError::BadOrigin,
-					})
-				},
-			}
-		}
-
 		/// Make some on-chain remark.
 		///
 		/// # <weight>
 		/// - `O(1)`
 		/// # </weight>
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::SystemWeightInfo::remark(_remark.len() as u32))]
 		pub fn remark(origin: OriginFor<T>, _remark: Vec<u8>) -> DispatchResultWithPostInfo {
 			ensure_signed_or_root(origin)?;
@@ -396,6 +385,7 @@ pub mod pallet {
 		}
 
 		/// Set the number of pages in the WebAssembly environment's heap.
+		#[pallet::call_index(1)]
 		#[pallet::weight((T::SystemWeightInfo::set_heap_pages(), DispatchClass::Operational))]
 		pub fn set_heap_pages(origin: OriginFor<T>, pages: u64) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
@@ -416,6 +406,7 @@ pub mod pallet {
 		/// The weight of this function is dependent on the runtime, but generally this is very
 		/// expensive. We will treat this as a full block.
 		/// # </weight>
+		#[pallet::call_index(2)]
 		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
 		pub fn set_code(origin: OriginFor<T>, code: Vec<u8>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
@@ -433,6 +424,7 @@ pub mod pallet {
 		/// - 1 event.
 		/// The weight of this function is dependent on the runtime. We will treat this as a full
 		/// block. # </weight>
+		#[pallet::call_index(3)]
 		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
 		pub fn set_code_without_checks(
 			origin: OriginFor<T>,
@@ -444,6 +436,7 @@ pub mod pallet {
 		}
 
 		/// Set some items of storage.
+		#[pallet::call_index(4)]
 		#[pallet::weight((
 			T::SystemWeightInfo::set_storage(items.len() as u32),
 			DispatchClass::Operational,
@@ -460,6 +453,7 @@ pub mod pallet {
 		}
 
 		/// Kill some items from storage.
+		#[pallet::call_index(5)]
 		#[pallet::weight((
 			T::SystemWeightInfo::kill_storage(keys.len() as u32),
 			DispatchClass::Operational,
@@ -476,6 +470,7 @@ pub mod pallet {
 		///
 		/// **NOTE:** We rely on the Root origin to provide us the number of subkeys under
 		/// the prefix we are removing to accurately calculate the weight of this function.
+		#[pallet::call_index(6)]
 		#[pallet::weight((
 			T::SystemWeightInfo::kill_prefix(_subkeys.saturating_add(1)),
 			DispatchClass::Operational,
@@ -491,6 +486,7 @@ pub mod pallet {
 		}
 
 		/// Make some on-chain remark and emit event.
+		#[pallet::call_index(7)]
 		#[pallet::weight(T::SystemWeightInfo::remark_with_event(remark.len() as u32))]
 		pub fn remark_with_event(
 			origin: OriginFor<T>,
@@ -562,6 +558,7 @@ pub mod pallet {
 
 	/// The current weight for the block.
 	#[pallet::storage]
+	#[pallet::whitelist_storage]
 	#[pallet::getter(fn block_weight)]
 	pub(super) type BlockWeight<T: Config> = StorageValue<_, ConsumedWeight, ValueQuery>;
 
@@ -584,6 +581,7 @@ pub mod pallet {
 
 	/// The current block number being processed. Set by `execute_block`.
 	#[pallet::storage]
+	#[pallet::whitelist_storage]
 	#[pallet::getter(fn block_number)]
 	pub(super) type Number<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
@@ -606,12 +604,14 @@ pub mod pallet {
 	/// Events have a large in-memory size. Box the events to not go out-of-memory
 	/// just in case someone still reads them from within the runtime.
 	#[pallet::storage]
+	#[pallet::whitelist_storage]
 	#[pallet::unbounded]
 	pub(super) type Events<T: Config> =
 		StorageValue<_, Vec<Box<EventRecord<T::RuntimeEvent, T::Hash>>>, ValueQuery>;
 
 	/// The number of events in the `Events<T>` list.
 	#[pallet::storage]
+	#[pallet::whitelist_storage]
 	#[pallet::getter(fn event_count)]
 	pub(super) type EventCount<T: Config> = StorageValue<_, EventIndex, ValueQuery>;
 
@@ -647,6 +647,7 @@ pub mod pallet {
 
 	/// The execution phase of the block.
 	#[pallet::storage]
+	#[pallet::whitelist_storage]
 	pub(super) type ExecutionPhase<T: Config> = StorageValue<_, Phase>;
 
 	#[cfg_attr(feature = "std", derive(Default))]
@@ -785,6 +786,7 @@ impl From<sp_version::RuntimeVersion> for LastRuntimeUpgradeInfo {
 	}
 }
 
+/// Ensure the origin is Root.
 pub struct EnsureRoot<AccountId>(sp_std::marker::PhantomData<AccountId>);
 impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, AccountId>
 	EnsureOrigin<O> for EnsureRoot<AccountId>
@@ -803,6 +805,7 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 	}
 }
 
+/// Ensure the origin is Root and return the provided `Success` value.
 pub struct EnsureRootWithSuccess<AccountId, Success>(
 	sp_std::marker::PhantomData<(AccountId, Success)>,
 );
@@ -826,6 +829,31 @@ impl<
 	}
 }
 
+/// Ensure the origin is provided `Ensure` origin and return the provided `Success` value.
+pub struct EnsureWithSuccess<Ensure, AccountId, Success>(
+	sp_std::marker::PhantomData<(Ensure, AccountId, Success)>,
+);
+
+impl<
+		O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
+		Ensure: EnsureOrigin<O>,
+		AccountId,
+		Success: TypedGet,
+	> EnsureOrigin<O> for EnsureWithSuccess<Ensure, AccountId, Success>
+{
+	type Success = Success::Type;
+
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		Ensure::try_origin(o).map(|_| Success::get())
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn try_successful_origin() -> Result<O, ()> {
+		Ensure::try_successful_origin()
+	}
+}
+
+/// Ensure the origin is any `Signed` origin.
 pub struct EnsureSigned<AccountId>(sp_std::marker::PhantomData<AccountId>);
 impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, AccountId: Decode>
 	EnsureOrigin<O> for EnsureSigned<AccountId>
@@ -846,6 +874,7 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 	}
 }
 
+/// Ensure the origin is `Signed` origin from the given `AccountId`.
 pub struct EnsureSignedBy<Who, AccountId>(sp_std::marker::PhantomData<(Who, AccountId)>);
 impl<
 		O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
@@ -874,6 +903,7 @@ impl<
 	}
 }
 
+/// Ensure the origin is `None`. i.e. unsigned transaction.
 pub struct EnsureNone<AccountId>(sp_std::marker::PhantomData<AccountId>);
 impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, AccountId>
 	EnsureOrigin<O> for EnsureNone<AccountId>
@@ -892,6 +922,7 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 	}
 }
 
+/// Always fail.
 pub struct EnsureNever<T>(sp_std::marker::PhantomData<T>);
 impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
 	type Success = T;
@@ -1046,7 +1077,7 @@ impl<T: Config> Pallet<T> {
 				if account.providers == 0 {
 					// Logic error - cannot decrement beyond zero.
 					log::error!(
-						target: "runtime::system",
+						target: LOG_TARGET,
 						"Logic error: Unexpected underflow in reducing provider",
 					);
 					account.providers = 1;
@@ -1072,7 +1103,7 @@ impl<T: Config> Pallet<T> {
 				}
 			} else {
 				log::error!(
-					target: "runtime::system",
+					target: LOG_TARGET,
 					"Logic error: Account already dead when reducing provider",
 				);
 				Ok(DecRefStatus::Reaped)
@@ -1104,7 +1135,7 @@ impl<T: Config> Pallet<T> {
 				if account.sufficients == 0 {
 					// Logic error - cannot decrement beyond zero.
 					log::error!(
-						target: "runtime::system",
+						target: LOG_TARGET,
 						"Logic error: Unexpected underflow in reducing sufficients",
 					);
 				}
@@ -1121,7 +1152,7 @@ impl<T: Config> Pallet<T> {
 				}
 			} else {
 				log::error!(
-					target: "runtime::system",
+					target: LOG_TARGET,
 					"Logic error: Account already dead when reducing provider",
 				);
 				DecRefStatus::Reaped
@@ -1186,7 +1217,7 @@ impl<T: Config> Pallet<T> {
 				a.consumers -= 1;
 			} else {
 				log::error!(
-					target: "runtime::system",
+					target: LOG_TARGET,
 					"Logic error: Unexpected underflow in reducing consumer",
 				);
 			}
@@ -1216,6 +1247,8 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Deposits an event into this block's event record.
+	///
+	/// NOTE: Events not registered at the genesis block and quietly omitted.
 	pub fn deposit_event(event: impl Into<T::RuntimeEvent>) {
 		Self::deposit_event_indexed(&[], event.into());
 	}
@@ -1225,6 +1258,8 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This will update storage entries that correspond to the specified topics.
 	/// It is expected that light-clients could subscribe to this topics.
+	///
+	/// NOTE: Events not registered at the genesis block and quietly omitted.
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::RuntimeEvent) {
 		let block_number = Self::block_number();
 		// Don't populate events on genesis.
@@ -1286,7 +1321,7 @@ impl<T: Config> Pallet<T> {
 	/// Another potential use-case could be for the `on_initialize` and `on_finalize` hooks.
 	pub fn register_extra_weight_unchecked(weight: Weight, class: DispatchClass) {
 		BlockWeight::<T>::mutate(|current_weight| {
-			current_weight.add(weight, class);
+			current_weight.accrue(weight, class);
 		});
 	}
 
@@ -1308,7 +1343,7 @@ impl<T: Config> Pallet<T> {
 	/// resulting header for this block.
 	pub fn finalize() -> T::Header {
 		log::debug!(
-			target: "runtime::system",
+			target: LOG_TARGET,
 			"[{:?}] {} extrinsics, length: {} (normal {}%, op: {}%, mandatory {}%) / normal weight:\
 			 {} ({}%) op weight {} ({}%) / mandatory weight {} ({}%)",
 			Self::block_number(),
@@ -1414,19 +1449,26 @@ impl<T: Config> Pallet<T> {
 	/// NOTE: This should only be used in tests. Reading events from the runtime can have a large
 	/// impact on the PoV size of a block. Users should use alternative and well bounded storage
 	/// items for any behavior like this.
+	///
+	/// NOTE: Events not registered at the genesis block and quietly omitted.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
 	pub fn events() -> Vec<EventRecord<T::RuntimeEvent, T::Hash>> {
+		debug_assert!(
+			!Self::block_number().is_zero(),
+			"events not registered at the genesis block"
+		);
 		// Dereferencing the events here is fine since we are not in the
 		// memory-restricted runtime.
-		Self::read_events_no_consensus().into_iter().map(|e| *e).collect()
+		Self::read_events_no_consensus().map(|e| *e).collect()
 	}
 
 	/// Get the current events deposited by the runtime.
 	///
 	/// Should only be called if you know what you are doing and outside of the runtime block
 	/// execution else it can have a large impact on the PoV size of a block.
-	pub fn read_events_no_consensus() -> Vec<Box<EventRecord<T::RuntimeEvent, T::Hash>>> {
-		Events::<T>::get()
+	pub fn read_events_no_consensus(
+	) -> impl sp_std::iter::Iterator<Item = Box<EventRecord<T::RuntimeEvent, T::Hash>>> {
+		Events::<T>::stream_iter()
 	}
 
 	/// Set the block number to something in particular. Can be used as an alternative to
@@ -1469,15 +1511,27 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Assert the given `event` exists.
+	///
+	/// NOTE: Events not registered at the genesis block and quietly omitted.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
 	pub fn assert_has_event(event: T::RuntimeEvent) {
-		assert!(Self::events().iter().any(|record| record.event == event))
+		let events = Self::events();
+		assert!(
+			events.iter().any(|record| record.event == event),
+			"expected event {event:?} not found in events {events:?}",
+		);
 	}
 
 	/// Assert the last event equal to the given `event`.
+	///
+	/// NOTE: Events not registered at the genesis block and quietly omitted.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
 	pub fn assert_last_event(event: T::RuntimeEvent) {
-		assert_eq!(Self::events().last().expect("events expected").event, event);
+		let last_event = Self::events().last().expect("events expected").event.clone();
+		assert_eq!(
+			last_event, event,
+			"expected event {event:?} is not equal to the last event {last_event:?}",
+		);
 	}
 
 	/// Return the chain's current runtime version.
@@ -1504,14 +1558,20 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
+	///
+	/// Emits an `ExtrinsicSuccess` or `ExtrinsicFailed` event depending on the outcome.
+	/// The emitted event contains the post-dispatch corrected weight including
+	/// the base-weight for its dispatch class.
 	pub fn note_applied_extrinsic(r: &DispatchResultWithPostInfo, mut info: DispatchInfo) {
-		info.weight = extract_actual_weight(r, &info);
+		info.weight = extract_actual_weight(r, &info)
+			.saturating_add(T::BlockWeights::get().get(info.class).base_extrinsic);
 		info.pays_fee = extract_actual_pays_fee(r, &info);
+
 		Self::deposit_event(match r {
 			Ok(_) => Event::ExtrinsicSuccess { dispatch_info: info },
 			Err(err) => {
 				log::trace!(
-					target: "runtime::system",
+					target: LOG_TARGET,
 					"Extrinsic failed at block({:?}): {:?}",
 					Self::block_number(),
 					err,
@@ -1696,7 +1756,7 @@ pub mod pallet_prelude {
 	pub use crate::{ensure_none, ensure_root, ensure_signed, ensure_signed_or_root};
 
 	/// Type alias for the `Origin` associated type of system config.
-	pub type OriginFor<T> = <T as crate::Config>::Origin;
+	pub type OriginFor<T> = <T as crate::Config>::RuntimeOrigin;
 
 	/// Type alias for the `BlockNumber` associated type of system config.
 	pub type BlockNumberFor<T> = <T as crate::Config>::BlockNumber;

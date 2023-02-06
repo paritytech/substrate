@@ -26,7 +26,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			let has_runtime_upgrade = hooks.has_runtime_upgrade;
 			(where_clause, span, has_runtime_upgrade)
 		},
-		None => (None, def.pallet_struct.attr_span, false),
+		None => (def.config.where_clause.clone(), def.pallet_struct.attr_span, false),
 	};
 
 	let frame_support = &def.frame_support;
@@ -50,7 +50,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 	} else {
 		// default.
 		quote::quote! {
-			#frame_support::log::info!(
+			#frame_support::log::debug!(
 				target: #frame_support::LOG_TARGET,
 				"✅ no migration for {}",
 				pallet_name,
@@ -63,7 +63,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			<T as #frame_system::Config>::PalletInfo
 			as
 			#frame_support::traits::PalletInfo
-		>::name::<Self>().expect("Every active pallet has a name in the runtime; qed");
+		>::name::<Self>().expect("No name found for the pallet! This usually means that the pallet wasn't added to `construct_runtime!`.");
 		#frame_support::log::debug!(
 			target: #frame_support::LOG_TARGET,
 			"🩺 try-state pallet {:?}",
@@ -76,7 +76,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 		quote::quote! {
 			impl<#type_impl_gen>
 				#frame_support::traits::Hooks<<T as #frame_system::Config>::BlockNumber>
-				for Pallet<#type_use_gen> {}
+				for #pallet_ident<#type_use_gen> #where_clause {}
 		}
 	} else {
 		proc_macro2::TokenStream::new()
@@ -160,7 +160,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn pre_upgrade() -> Result<(), &'static str> {
+			fn pre_upgrade() -> Result<#frame_support::sp_std::vec::Vec<u8>, &'static str> {
 				<
 					Self
 					as
@@ -169,12 +169,12 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn post_upgrade() -> Result<(), &'static str> {
+			fn post_upgrade(state: #frame_support::sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
 				<
 					Self
 					as
 					#frame_support::traits::Hooks<<T as #frame_system::Config>::BlockNumber>
-				>::post_upgrade()
+				>::post_upgrade(state)
 			}
 		}
 
@@ -191,16 +191,19 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 		}
 
-		impl<#type_impl_gen>
-			#frame_support::traits::IntegrityTest
+		// Integrity tests are only required for when `std` is enabled.
+		#frame_support::std_enabled! {
+			impl<#type_impl_gen>
+				#frame_support::traits::IntegrityTest
 			for #pallet_ident<#type_use_gen> #where_clause
-		{
-			fn integrity_test() {
-				<
-					Self as #frame_support::traits::Hooks<
+			{
+				fn integrity_test() {
+					<
+						Self as #frame_support::traits::Hooks<
 						<T as #frame_system::Config>::BlockNumber
-					>
-				>::integrity_test()
+						>
+						>::integrity_test()
+				}
 			}
 		}
 

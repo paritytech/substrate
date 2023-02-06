@@ -32,9 +32,10 @@ use sc_network_common::{
 	config::ProtocolId,
 	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
 };
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use sp_runtime::traits::Block as BlockT;
 use std::{
 	hash::{Hash, Hasher},
+	num::NonZeroUsize,
 	sync::Arc,
 	time::Duration,
 };
@@ -69,10 +70,11 @@ pub fn generate_protocol_config<Hash: AsRef<[u8]>>(
 
 /// Generate the state protocol name from the genesis hash and fork id.
 fn generate_protocol_name<Hash: AsRef<[u8]>>(genesis_hash: Hash, fork_id: Option<&str>) -> String {
+	let genesis_hash = genesis_hash.as_ref();
 	if let Some(fork_id) = fork_id {
-		format!("/{}/{}/state/2", hex::encode(genesis_hash), fork_id)
+		format!("/{}/{}/state/2", array_bytes::bytes2hex("", genesis_hash), fork_id)
 	} else {
-		format!("/{}/state/2", hex::encode(genesis_hash))
+		format!("/{}/state/2", array_bytes::bytes2hex("", genesis_hash))
 	}
 }
 
@@ -143,7 +145,9 @@ where
 		);
 		protocol_config.inbound_queue = Some(tx);
 
-		let seen_requests = LruCache::new(num_peer_hint * 2);
+		let capacity =
+			NonZeroUsize::new(num_peer_hint.max(1) * 2).expect("cache capacity is not zero");
+		let seen_requests = LruCache::new(capacity);
 
 		(Self { client, request_receiver, seen_requests }, protocol_config)
 	}
@@ -204,14 +208,14 @@ where
 
 			if !request.no_proof {
 				let (proof, _count) = self.client.read_proof_collection(
-					&BlockId::hash(block),
+					block,
 					request.start.as_slice(),
 					MAX_RESPONSE_BYTES,
 				)?;
 				response.proof = proof.encode();
 			} else {
 				let entries = self.client.storage_collection(
-					&BlockId::hash(block),
+					block,
 					request.start.as_slice(),
 					MAX_RESPONSE_BYTES,
 				)?;

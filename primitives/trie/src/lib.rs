@@ -57,10 +57,10 @@ pub use trie_db::{
 pub use trie_stream::TrieStream;
 
 /// substrate trie layout
-pub struct LayoutV0<H>(sp_std::marker::PhantomData<H>);
+pub struct LayoutV0<H>(PhantomData<H>);
 
 /// substrate trie layout, with external value nodes.
-pub struct LayoutV1<H>(sp_std::marker::PhantomData<H>);
+pub struct LayoutV1<H>(PhantomData<H>);
 
 impl<H> TrieLayout for LayoutV0<H>
 where
@@ -146,11 +146,6 @@ where
 	}
 }
 
-#[cfg(not(feature = "memory-tracker"))]
-type MemTracker = memory_db::NoopTracker<trie_db::DBValue>;
-#[cfg(feature = "memory-tracker")]
-type MemTracker = memory_db::MemCounter<trie_db::DBValue>;
-
 /// TrieDB error over `TrieConfiguration` trait.
 pub type TrieError<L> = trie_db::TrieError<TrieHash<L>, CError<L>>;
 /// Reexport from `hash_db`, with genericity set for `Hasher` trait.
@@ -161,14 +156,13 @@ pub type HashDB<'a, H> = dyn hash_db::HashDB<H, trie_db::DBValue> + 'a;
 /// Reexport from `hash_db`, with genericity set for `Hasher` trait.
 /// This uses a `KeyFunction` for prefixing keys internally (avoiding
 /// key conflict for non random keys).
-pub type PrefixedMemoryDB<H> =
-	memory_db::MemoryDB<H, memory_db::PrefixedKey<H>, trie_db::DBValue, MemTracker>;
+pub type PrefixedMemoryDB<H> = memory_db::MemoryDB<H, memory_db::PrefixedKey<H>, trie_db::DBValue>;
 /// Reexport from `hash_db`, with genericity set for `Hasher` trait.
 /// This uses a noops `KeyFunction` (key addressing must be hashed or using
 /// an encoding scheme that avoid key conflict).
-pub type MemoryDB<H> = memory_db::MemoryDB<H, memory_db::HashKey<H>, trie_db::DBValue, MemTracker>;
+pub type MemoryDB<H> = memory_db::MemoryDB<H, memory_db::HashKey<H>, trie_db::DBValue>;
 /// Reexport from `hash_db`, with genericity set for `Hasher` trait.
-pub type GenericMemoryDB<H, KF> = memory_db::MemoryDB<H, KF, trie_db::DBValue, MemTracker>;
+pub type GenericMemoryDB<H, KF> = memory_db::MemoryDB<H, KF, trie_db::DBValue>;
 
 /// Persistent trie database read-access interface for the a given hasher.
 pub type TrieDB<'a, 'cache, L> = trie_db::TrieDB<'a, 'cache, L>;
@@ -527,7 +521,6 @@ where
 /// Constants used into trie simplification codec.
 mod trie_constants {
 	const FIRST_PREFIX: u8 = 0b_00 << 6;
-	pub const NIBBLE_SIZE_BOUND: usize = u16::max_value() as usize;
 	pub const LEAF_PREFIX_MASK: u8 = 0b_01 << 6;
 	pub const BRANCH_WITHOUT_MASK: u8 = 0b_10 << 6;
 	pub const BRANCH_WITH_MASK: u8 = 0b_11 << 6;
@@ -542,7 +535,6 @@ mod tests {
 	use super::*;
 	use codec::{Compact, Decode, Encode};
 	use hash_db::{HashDB, Hasher};
-	use hex_literal::hex;
 	use sp_core::Blake2Hasher;
 	use trie_db::{DBValue, NodeCodec as NodeCodecT, Trie, TrieMut};
 	use trie_standardmap::{Alphabet, StandardMap, ValueMode};
@@ -550,8 +542,7 @@ mod tests {
 	type LayoutV0 = super::LayoutV0<Blake2Hasher>;
 	type LayoutV1 = super::LayoutV1<Blake2Hasher>;
 
-	type MemoryDBMeta<H> =
-		memory_db::MemoryDB<H, memory_db::HashKey<H>, trie_db::DBValue, MemTracker>;
+	type MemoryDBMeta<H> = memory_db::MemoryDB<H, memory_db::HashKey<H>, trie_db::DBValue>;
 
 	fn hashed_null_node<T: TrieConfiguration>() -> TrieHash<T> {
 		<T::Codec as NodeCodecT>::hashed_null_node()
@@ -845,8 +836,14 @@ mod tests {
 	}
 	fn iterator_works_inner<Layout: TrieConfiguration>() {
 		let pairs = vec![
-			(hex!("0103000000000000000464").to_vec(), hex!("0400000000").to_vec()),
-			(hex!("0103000000000000000469").to_vec(), hex!("0401000000").to_vec()),
+			(
+				array_bytes::hex2bytes_unchecked("0103000000000000000464"),
+				array_bytes::hex2bytes_unchecked("0400000000"),
+			),
+			(
+				array_bytes::hex2bytes_unchecked("0103000000000000000469"),
+				array_bytes::hex2bytes_unchecked("0401000000"),
+			),
 		];
 
 		let mut mdb = MemoryDB::default();
@@ -859,7 +856,7 @@ mod tests {
 		let mut iter_pairs = Vec::new();
 		for pair in iter {
 			let (key, value) = pair.unwrap();
-			iter_pairs.push((key, value.to_vec()));
+			iter_pairs.push((key, value));
 		}
 
 		assert_eq!(pairs, iter_pairs);
@@ -868,15 +865,15 @@ mod tests {
 	#[test]
 	fn proof_non_inclusion_works() {
 		let pairs = vec![
-			(hex!("0102").to_vec(), hex!("01").to_vec()),
-			(hex!("0203").to_vec(), hex!("0405").to_vec()),
+			(array_bytes::hex2bytes_unchecked("0102"), array_bytes::hex2bytes_unchecked("01")),
+			(array_bytes::hex2bytes_unchecked("0203"), array_bytes::hex2bytes_unchecked("0405")),
 		];
 
 		let mut memdb = MemoryDB::default();
 		let mut root = Default::default();
 		populate_trie::<LayoutV1>(&mut memdb, &mut root, &pairs);
 
-		let non_included_key: Vec<u8> = hex!("0909").to_vec();
+		let non_included_key: Vec<u8> = array_bytes::hex2bytes_unchecked("0909");
 		let proof =
 			generate_trie_proof::<LayoutV1, _, _, _>(&memdb, root, &[non_included_key.clone()])
 				.unwrap();
@@ -893,7 +890,7 @@ mod tests {
 		assert!(verify_trie_proof::<LayoutV1, _, _, Vec<u8>>(
 			&root,
 			&proof,
-			&[(non_included_key, Some(hex!("1010").to_vec()))],
+			&[(non_included_key, Some(array_bytes::hex2bytes_unchecked("1010")))],
 		)
 		.is_err());
 	}
@@ -901,8 +898,8 @@ mod tests {
 	#[test]
 	fn proof_inclusion_works() {
 		let pairs = vec![
-			(hex!("0102").to_vec(), hex!("01").to_vec()),
-			(hex!("0203").to_vec(), hex!("0405").to_vec()),
+			(array_bytes::hex2bytes_unchecked("0102"), array_bytes::hex2bytes_unchecked("01")),
+			(array_bytes::hex2bytes_unchecked("0203"), array_bytes::hex2bytes_unchecked("0405")),
 		];
 
 		let mut memdb = MemoryDB::default();
@@ -932,7 +929,7 @@ mod tests {
 		assert!(verify_trie_proof::<LayoutV1, _, _, _>(
 			&root,
 			&proof,
-			&[(hex!("4242").to_vec(), Some(pairs[0].1.clone()))]
+			&[(array_bytes::hex2bytes_unchecked("4242"), Some(pairs[0].1.clone()))]
 		)
 		.is_err());
 
@@ -980,5 +977,31 @@ mod tests {
 		.unwrap();
 
 		assert_eq!(first_storage_root, second_storage_root);
+	}
+
+	#[test]
+	fn big_key() {
+		let check = |keysize: usize| {
+			let mut memdb = PrefixedMemoryDB::<Blake2Hasher>::default();
+			let mut root = Default::default();
+			let mut t = TrieDBMutBuilder::<LayoutV1>::new(&mut memdb, &mut root).build();
+			t.insert(&vec![0x01u8; keysize][..], &[0x01u8, 0x23]).unwrap();
+			std::mem::drop(t);
+			let t = TrieDBBuilder::<LayoutV1>::new(&memdb, &root).build();
+			assert_eq!(t.get(&vec![0x01u8; keysize][..]).unwrap(), Some(vec![0x01u8, 0x23]));
+		};
+		check(u16::MAX as usize / 2); // old limit
+		check(u16::MAX as usize / 2 + 1); // value over old limit still works
+	}
+
+	#[test]
+	fn node_with_no_children_fail_decoding() {
+		let branch = NodeCodec::<Blake2Hasher>::branch_node_nibbled(
+			b"some_partial".iter().copied(),
+			24,
+			vec![None; 16].into_iter(),
+			Some(trie_db::node::Value::Inline(b"value"[..].into())),
+		);
+		assert!(NodeCodec::<Blake2Hasher>::decode(branch.as_slice()).is_err());
 	}
 }

@@ -18,7 +18,7 @@
 pub trait Config: frame_support_test::Config {}
 
 frame_support::decl_module! {
-	pub struct Module<T: Config> for enum Call where origin: T::Origin, system=frame_support_test {}
+	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=frame_support_test {}
 }
 
 frame_support::decl_storage!{

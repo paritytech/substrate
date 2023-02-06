@@ -75,7 +75,7 @@
 //! 			let who = ensure_signed(origin)?;
 //!
 //! 			let _ = <scored_pool::Pallet<T>>::submit_candidacy(
-//! 				T::Origin::from(Some(who.clone()).into())
+//! 				T::RuntimeOrigin::from(Some(who.clone()).into())
 //! 			);
 //! 			Ok(())
 //! 		}
@@ -183,13 +183,13 @@ pub mod pallet {
 		type MembershipChanged: ChangeMembers<Self::AccountId>;
 
 		/// Allows a configurable origin type to set a score to a candidate in the pool.
-		type ScoreOrigin: EnsureOrigin<Self::Origin>;
+		type ScoreOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Required origin for removing a member (though can always be Root).
 		/// Configurable origin which enables removing an entity. If the entity
 		/// is part of the `Members` it is immediately replaced by the next
 		/// highest scoring candidate, if available.
-		type KickOrigin: EnsureOrigin<Self::Origin>;
+		type KickOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 	}
 
 	#[pallet::event]
@@ -311,6 +311,7 @@ pub mod pallet {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the transactor in the `Pool`.
+		#[pallet::call_index(0)]
 		#[pallet::weight(0)]
 		pub fn submit_candidacy(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -340,6 +341,7 @@ pub mod pallet {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the transactor in the `Pool`.
+		#[pallet::call_index(1)]
 		#[pallet::weight(0)]
 		pub fn withdraw_candidacy(origin: OriginFor<T>, index: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -358,6 +360,7 @@ pub mod pallet {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of `dest` in the `Pool`.
+		#[pallet::call_index(2)]
 		#[pallet::weight(0)]
 		pub fn kick(
 			origin: OriginFor<T>,
@@ -382,6 +385,7 @@ pub mod pallet {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the `dest` in the `Pool`.
+		#[pallet::call_index(3)]
 		#[pallet::weight(0)]
 		pub fn score(
 			origin: OriginFor<T>,
@@ -421,6 +425,7 @@ pub mod pallet {
 		/// (this happens each `Period`).
 		///
 		/// May only be called from root.
+		#[pallet::call_index(4)]
 		#[pallet::weight(0)]
 		pub fn change_member_count(origin: OriginFor<T>, count: u32) -> DispatchResult {
 			ensure_root(origin)?;

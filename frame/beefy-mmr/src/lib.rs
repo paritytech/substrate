@@ -33,7 +33,7 @@
 //!
 //! and thanks to versioning can be easily updated in the future.
 
-use sp_runtime::traits::{Convert, Hash, Member};
+use sp_runtime::traits::{Convert, Member};
 use sp_std::prelude::*;
 
 use beefy_primitives::{
@@ -73,12 +73,8 @@ where
 /// Convert BEEFY secp256k1 public keys into Ethereum addresses
 pub struct BeefyEcdsaToEthereum;
 impl Convert<beefy_primitives::crypto::AuthorityId, Vec<u8>> for BeefyEcdsaToEthereum {
-	fn convert(a: beefy_primitives::crypto::AuthorityId) -> Vec<u8> {
-		sp_core::ecdsa::Public::try_from(a.as_ref())
-			.map_err(|_| {
-				log::error!(target: "runtime::beefy", "Invalid BEEFY PublicKey format!");
-			})
-			.unwrap_or(sp_core::ecdsa::Public::from_raw([0u8; 33]))
+	fn convert(beefy_id: beefy_primitives::crypto::AuthorityId) -> Vec<u8> {
+		sp_core::ecdsa::Public::from(beefy_id)
 			.to_eth_address()
 			.map(|v| v.to_vec())
 			.map_err(|_| {
@@ -142,10 +138,7 @@ pub mod pallet {
 		StorageValue<_, BeefyNextAuthoritySet<MerkleRootOf<T>>, ValueQuery>;
 }
 
-impl<T: Config> LeafDataProvider for Pallet<T>
-where
-	MerkleRootOf<T>: From<beefy_merkle_tree::Hash> + Into<beefy_merkle_tree::Hash>,
-{
+impl<T: Config> LeafDataProvider for Pallet<T> {
 	type LeafData = MmrLeaf<
 		<T as frame_system::Config>::BlockNumber,
 		<T as frame_system::Config>::Hash,
@@ -163,19 +156,9 @@ where
 	}
 }
 
-impl<T: Config> beefy_merkle_tree::Hasher for Pallet<T>
-where
-	MerkleRootOf<T>: Into<beefy_merkle_tree::Hash>,
-{
-	fn hash(data: &[u8]) -> beefy_merkle_tree::Hash {
-		<T as pallet_mmr::Config>::Hashing::hash(data).into()
-	}
-}
-
 impl<T> beefy_primitives::OnNewValidatorSet<<T as pallet_beefy::Config>::BeefyId> for Pallet<T>
 where
 	T: pallet::Config,
-	MerkleRootOf<T>: From<beefy_merkle_tree::Hash> + Into<beefy_merkle_tree::Hash>,
 {
 	/// Compute and cache BEEFY authority sets based on updated BEEFY validator sets.
 	fn on_new_validator_set(
@@ -190,10 +173,7 @@ where
 	}
 }
 
-impl<T: Config> Pallet<T>
-where
-	MerkleRootOf<T>: From<beefy_merkle_tree::Hash> + Into<beefy_merkle_tree::Hash>,
-{
+impl<T: Config> Pallet<T> {
 	/// Return the currently active BEEFY authority set proof.
 	pub fn authority_set_proof() -> BeefyAuthoritySet<MerkleRootOf<T>> {
 		Pallet::<T>::beefy_authorities()
@@ -220,7 +200,24 @@ where
 			.map(T::BeefyAuthorityToMerkleLeaf::convert)
 			.collect::<Vec<_>>();
 		let len = beefy_addresses.len() as u32;
-		let root = beefy_merkle_tree::merkle_root::<Self, _, _>(beefy_addresses).into();
+		let root = binary_merkle_tree::merkle_root::<<T as pallet_mmr::Config>::Hashing, _>(
+			beefy_addresses,
+		)
+		.into();
 		BeefyAuthoritySet { id, len, root }
+	}
+}
+
+sp_api::decl_runtime_apis! {
+	/// API useful for BEEFY light clients.
+	pub trait BeefyMmrApi<H>
+	where
+		BeefyAuthoritySet<H>: sp_api::Decode,
+	{
+		/// Return the currently active BEEFY authority set proof.
+		fn authority_set_proof() -> BeefyAuthoritySet<H>;
+
+		/// Return the next/queued BEEFY authority set proof.
+		fn next_authority_set_proof() -> BeefyNextAuthoritySet<H>;
 	}
 }

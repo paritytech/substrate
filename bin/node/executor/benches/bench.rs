@@ -25,9 +25,10 @@ use kitchensink_runtime::{
 use node_executor::ExecutorDispatch;
 use node_primitives::{BlockNumber, Hash};
 use node_testing::keyring::*;
-#[cfg(feature = "wasmtime")]
-use sc_executor::WasmtimeInstantiationStrategy;
-use sc_executor::{Externalities, NativeElseWasmExecutor, RuntimeVersionOf, WasmExecutionMethod};
+use sc_executor::{
+	Externalities, NativeElseWasmExecutor, RuntimeVersionOf, WasmExecutionMethod,
+	WasmtimeInstantiationStrategy,
+};
 use sp_core::{
 	storage::well_known_keys,
 	traits::{CodeExecutor, RuntimeCode},
@@ -161,7 +162,6 @@ fn bench_execute_block(c: &mut Criterion) {
 	let execution_methods = vec![
 		ExecutionMethod::Native,
 		ExecutionMethod::Wasm(WasmExecutionMethod::Interpreted),
-		#[cfg(feature = "wasmtime")]
 		ExecutionMethod::Wasm(WasmExecutionMethod::Compiled {
 			instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
 		}),

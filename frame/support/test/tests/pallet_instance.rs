@@ -82,6 +82,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Doc comment put in metadata
+		#[pallet::call_index(0)]
 		#[pallet::weight(Weight::from_ref_time(*_foo as u64))]
 		pub fn foo(
 			origin: OriginFor<T>,
@@ -93,6 +94,7 @@ pub mod pallet {
 		}
 
 		/// Doc comment put in metadata
+		#[pallet::call_index(1)]
 		#[pallet::weight(1)]
 		pub fn foo_storage_layer(
 			origin: OriginFor<T>,
@@ -286,7 +288,7 @@ pub mod pallet2 {
 
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u32;
 	type RuntimeCall = RuntimeCall;
@@ -617,44 +619,29 @@ fn storage_expand() {
 
 #[test]
 fn pallet_metadata_expands() {
-	use frame_support::traits::{CrateVersion, PalletInfoData, PalletsInfoAccess};
+	use frame_support::traits::PalletsInfoAccess;
 	let mut infos = AllPalletsWithSystem::infos();
 	infos.sort_by_key(|x| x.index);
-	assert_eq!(
-		infos,
-		vec![
-			PalletInfoData {
-				index: 0,
-				name: "System",
-				module_name: "frame_system",
-				crate_version: CrateVersion { major: 4, minor: 0, patch: 0 },
-			},
-			PalletInfoData {
-				index: 1,
-				name: "Example",
-				module_name: "pallet",
-				crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
-			},
-			PalletInfoData {
-				index: 2,
-				name: "Instance1Example",
-				module_name: "pallet",
-				crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
-			},
-			PalletInfoData {
-				index: 3,
-				name: "Example2",
-				module_name: "pallet2",
-				crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
-			},
-			PalletInfoData {
-				index: 4,
-				name: "Instance1Example2",
-				module_name: "pallet2",
-				crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
-			},
-		]
-	);
+
+	assert_eq!(infos[0].index, 0);
+	assert_eq!(infos[0].name, "System");
+	assert_eq!(infos[0].module_name, "frame_system");
+
+	assert_eq!(infos[1].index, 1);
+	assert_eq!(infos[1].name, "Example");
+	assert_eq!(infos[1].module_name, "pallet");
+
+	assert_eq!(infos[2].index, 2);
+	assert_eq!(infos[2].name, "Instance1Example");
+	assert_eq!(infos[2].module_name, "pallet");
+
+	assert_eq!(infos[3].index, 3);
+	assert_eq!(infos[3].name, "Example2");
+	assert_eq!(infos[3].module_name, "pallet2");
+
+	assert_eq!(infos[4].index, 4);
+	assert_eq!(infos[4].name, "Instance1Example2");
+	assert_eq!(infos[4].module_name, "pallet2");
 }
 
 #[test]

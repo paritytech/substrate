@@ -33,8 +33,9 @@ use sc_client_api::backend::Backend;
 use sc_consensus::{BlockCheckParams, BlockImport, BlockImportParams, ImportResult};
 
 use crate::{
+	communication::notification::BeefyVersionedFinalityProofSender,
 	justification::{decode_and_verify_finality_proof, BeefyVersionedFinalityProof},
-	notification::BeefyVersionedFinalityProofSender,
+	LOG_TARGET,
 };
 
 /// A block-import handler for BEEFY.
@@ -78,7 +79,7 @@ where
 	Block: BlockT,
 	BE: Backend<Block>,
 	Runtime: ProvideRuntimeApi<Block>,
-	Runtime::Api: BeefyApi<Block> + Send + Sync,
+	Runtime::Api: BeefyApi<Block> + Send,
 {
 	fn decode_and_verify(
 		&self,
@@ -138,16 +139,20 @@ where
 			(Some(encoded), ImportResult::Imported(_)) => {
 				if let Ok(proof) = self.decode_and_verify(&encoded, number, hash) {
 					// The proof is valid and the block is imported and final, we can import.
-					debug!(target: "beefy", "🥩 import justif {:?} for block number {:?}.", proof, number);
+					debug!(
+						target: LOG_TARGET,
+						"🥩 import justif {:?} for block number {:?}.", proof, number
+					);
 					// Send the justification to the BEEFY voter for processing.
 					self.justification_sender
 						.notify(|| Ok::<_, ()>(proof))
 						.expect("forwards closure result; the closure always returns Ok; qed.");
 				} else {
 					debug!(
-						target: "beefy",
+						target: LOG_TARGET,
 						"🥩 error decoding justification: {:?} for imported block {:?}",
-						encoded, number,
+						encoded,
+						number,
 					);
 				}
 			},

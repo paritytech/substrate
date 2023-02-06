@@ -49,6 +49,8 @@ pub use self::{
 use sc_transaction_pool_api::TransactionPool;
 use sp_api::{ProvideRuntimeApi, TransactionFor};
 
+const LOG_TARGET: &str = "manual-seal";
+
 /// The `ConsensusEngineId` of Manual Seal.
 pub const MANUAL_SEAL_ENGINE_ID: ConsensusEngineId = [b'm', b'a', b'n', b'l'];
 
@@ -247,13 +249,66 @@ pub async fn run_instant_seal<B, BI, CB, E, C, TP, SC, CIDP, P>(
 	.await
 }
 
+/// Runs the background authorship task for the instant seal engine.
+/// instant-seal creates a new block for every transaction imported into
+/// the transaction pool.
+///
+/// This function will finalize the block immediately as well. If you don't
+/// want this behavior use `run_instant_seal` instead.
+pub async fn run_instant_seal_and_finalize<B, BI, CB, E, C, TP, SC, CIDP, P>(
+	InstantSealParams {
+		block_import,
+		env,
+		client,
+		pool,
+		select_chain,
+		consensus_data_provider,
+		create_inherent_data_providers,
+	}: InstantSealParams<B, BI, E, C, TP, SC, CIDP, P>,
+) where
+	B: BlockT + 'static,
+	BI: BlockImport<B, Error = sp_consensus::Error, Transaction = sp_api::TransactionFor<C, B>>
+		+ Send
+		+ Sync
+		+ 'static,
+	C: HeaderBackend<B> + Finalizer<B, CB> + ProvideRuntimeApi<B> + 'static,
+	CB: ClientBackend<B> + 'static,
+	E: Environment<B> + 'static,
+	E::Proposer: Proposer<B, Proof = P, Transaction = TransactionFor<C, B>>,
+	SC: SelectChain<B> + 'static,
+	TransactionFor<C, B>: 'static,
+	TP: TransactionPool<Block = B>,
+	CIDP: CreateInherentDataProviders<B, ()>,
+	P: Send + Sync + 'static,
+{
+	// Creates and finalizes blocks as soon as transactions are imported
+	// into the transaction pool.
+	let commands_stream = pool.import_notification_stream().map(|_| EngineCommand::SealNewBlock {
+		create_empty: false,
+		finalize: true,
+		parent_hash: None,
+		sender: None,
+	});
+
+	run_manual_seal(ManualSealParams {
+		block_import,
+		env,
+		client,
+		pool,
+		commands_stream,
+		select_chain,
+		consensus_data_provider,
+		create_inherent_data_providers,
+	})
+	.await
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use sc_basic_authorship::ProposerFactory;
-	use sc_client_api::BlockBackend;
 	use sc_consensus::ImportedAux;
-	use sc_transaction_pool::{BasicPool, Options, RevalidationType};
+	use sc_transaction_pool::{BasicPool, FullChainApi, Options, RevalidationType};
 	use sc_transaction_pool_api::{MaintainedTransactionPool, TransactionPool, TransactionSource};
 	use sp_inherents::InherentData;
 	use sp_runtime::generic::{BlockId, Digest, DigestItem};
@@ -305,6 +360,7 @@ mod tests {
 		let (client, select_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
 		let spawner = sp_core::testing::TaskExecutor::new();
+		let genesis_hash = client.info().genesis_hash;
 		let pool = Arc::new(BasicPool::with_revalidation_type(
 			Options::default(),
 			true.into(),
@@ -313,6 +369,8 @@ mod tests {
 			RevalidationType::Full,
 			spawner.clone(),
 			0,
+			genesis_hash,
+			genesis_hash,
 		));
 		let env = ProposerFactory::new(spawner.clone(), client.clone(), pool.clone(), None, None);
 		// this test checks that blocks are created as soon as transactions are imported into the
@@ -366,7 +424,8 @@ mod tests {
 			}
 		);
 		// assert that there's a new block in the db.
-		assert!(client.header(&BlockId::Number(1)).unwrap().is_some())
+		assert!(client.header(created_block.hash).unwrap().is_some());
+		assert_eq!(client.header(created_block.hash).unwrap().unwrap().number, 1)
 	}
 
 	#[tokio::test]
@@ -375,6 +434,7 @@ mod tests {
 		let (client, select_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
 		let spawner = sp_core::testing::TaskExecutor::new();
+		let genesis_hash = client.info().genesis_hash;
 		let pool = Arc::new(BasicPool::with_revalidation_type(
 			Options::default(),
 			true.into(),
@@ -383,6 +443,8 @@ mod tests {
 			RevalidationType::Full,
 			spawner.clone(),
 			0,
+			genesis_hash,
+			genesis_hash,
 		));
 		let env = ProposerFactory::new(spawner.clone(), client.clone(), pool.clone(), None, None);
 		// this test checks that blocks are created as soon as an engine command is sent over the
@@ -433,7 +495,7 @@ mod tests {
 			}
 		);
 		// assert that there's a new block in the db.
-		let header = client.header(&BlockId::Number(1)).unwrap().unwrap();
+		let header = client.header(created_block.hash).unwrap().unwrap();
 		let (tx, rx) = futures::channel::oneshot::channel();
 		sink.send(EngineCommand::FinalizeBlock {
 			sender: Some(tx),
@@ -451,8 +513,13 @@ mod tests {
 		let builder = TestClientBuilder::new();
 		let (client, select_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
-		let pool_api = api();
+		let pool_api = Arc::new(FullChainApi::new(
+			client.clone(),
+			None,
+			&sp_core::testing::TaskExecutor::new(),
+		));
 		let spawner = sp_core::testing::TaskExecutor::new();
+		let genesis_hash = client.info().genesis_hash;
 		let pool = Arc::new(BasicPool::with_revalidation_type(
 			Options::default(),
 			true.into(),
@@ -461,6 +528,8 @@ mod tests {
 			RevalidationType::Full,
 			spawner.clone(),
 			0,
+			genesis_hash,
+			genesis_hash,
 		));
 		let env = ProposerFactory::new(spawner.clone(), client.clone(), pool.clone(), None, None);
 		// this test checks that blocks are created as soon as an engine command is sent over the
@@ -496,7 +565,6 @@ mod tests {
 		.await
 		.unwrap();
 		let created_block = rx.await.unwrap().unwrap();
-		pool_api.increment_nonce(Alice.into());
 
 		// assert that the background task returns ok
 		assert_eq!(
@@ -512,11 +580,11 @@ mod tests {
 				}
 			}
 		);
-		let block = client.block(&BlockId::Number(1)).unwrap().unwrap().block;
-		pool_api.add_block(block, true);
+
 		assert!(pool.submit_one(&BlockId::Number(1), SOURCE, uxt(Alice, 1)).await.is_ok());
 
-		let header = client.header(&BlockId::Number(1)).expect("db error").expect("imported above");
+		let header = client.header(created_block.hash).expect("db error").expect("imported above");
+		assert_eq!(header.number, 1);
 		pool.maintain(sc_transaction_pool_api::ChainEvent::NewBestBlock {
 			hash: header.hash(),
 			tree_route: None,
@@ -534,9 +602,6 @@ mod tests {
 			.await
 			.is_ok());
 		assert_matches::assert_matches!(rx1.await.expect("should be no error receiving"), Ok(_));
-		let block = client.block(&BlockId::Number(2)).unwrap().unwrap().block;
-		pool_api.add_block(block, true);
-		pool_api.increment_nonce(Alice.into());
 
 		assert!(pool.submit_one(&BlockId::Number(1), SOURCE, uxt(Bob, 0)).await.is_ok());
 		let (tx2, rx2) = futures::channel::oneshot::channel();
@@ -551,7 +616,7 @@ mod tests {
 			.is_ok());
 		let imported = rx2.await.unwrap().unwrap();
 		// assert that fork block is in the db
-		assert!(client.header(&BlockId::Hash(imported.hash)).unwrap().is_some())
+		assert!(client.header(imported.hash).unwrap().is_some())
 	}
 
 	#[tokio::test]
@@ -560,6 +625,7 @@ mod tests {
 		let (client, select_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
 		let spawner = sp_core::testing::TaskExecutor::new();
+		let genesis_hash = client.header(client.info().genesis_hash).unwrap().unwrap().hash();
 		let pool = Arc::new(BasicPool::with_revalidation_type(
 			Options::default(),
 			true.into(),
@@ -568,6 +634,8 @@ mod tests {
 			RevalidationType::Full,
 			spawner.clone(),
 			0,
+			genesis_hash,
+			genesis_hash,
 		));
 		let env = ProposerFactory::new(spawner.clone(), client.clone(), pool.clone(), None, None);
 
@@ -599,7 +667,7 @@ mod tests {
 		let created_block = rx.await.unwrap().unwrap();
 
 		// assert that the background task returned the actual header hash
-		let header = client.header(&BlockId::Number(1)).unwrap().unwrap();
-		assert_eq!(header.hash(), created_block.hash);
+		let header = client.header(created_block.hash).unwrap().unwrap();
+		assert_eq!(header.number, 1);
 	}
 }

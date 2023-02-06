@@ -22,11 +22,12 @@ use remote_externalities::{Builder, Mode, OnlineConfig};
 use sp_runtime::{traits::Block as BlockT, DeserializeOwned};
 
 /// Execute create a snapshot from pallet-staking.
-pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT + DeserializeOwned>(
-	voter_limit: Option<usize>,
-	currency_unit: u64,
-	ws_url: String,
-) {
+pub async fn execute<Runtime, Block>(voter_limit: Option<usize>, currency_unit: u64, ws_url: String)
+where
+	Runtime: crate::RuntimeT<pallet_bags_list::Instance1>,
+	Block: BlockT + DeserializeOwned,
+	Block::Header: DeserializeOwned,
+{
 	use frame_support::storage::generator::StorageMap;
 
 	let mut ext = Builder::<Block>::new()
@@ -34,16 +35,21 @@ pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT + DeserializeOwned>
 			transport: ws_url.to_string().into(),
 			// NOTE: we don't scrape pallet-staking, this kinda ensures that the source of the data
 			// is bags-list.
-			pallets: vec![pallet_bags_list::Pallet::<Runtime>::name().to_string()],
+			pallets: vec![pallet_bags_list::Pallet::<Runtime, pallet_bags_list::Instance1>::name()
+				.to_string()],
 			at: None,
+			hashed_prefixes: vec![
+				<pallet_staking::Bonded<Runtime>>::prefix_hash(),
+				<pallet_staking::Ledger<Runtime>>::prefix_hash(),
+				<pallet_staking::Validators<Runtime>>::map_storage_final_prefix(),
+				<pallet_staking::Nominators<Runtime>>::map_storage_final_prefix(),
+			],
+			hashed_keys: vec![
+				<pallet_staking::Validators<Runtime>>::counter_storage_final_key().to_vec(),
+				<pallet_staking::Nominators<Runtime>>::counter_storage_final_key().to_vec(),
+			],
 			..Default::default()
 		}))
-		.inject_hashed_prefix(&<pallet_staking::Bonded<Runtime>>::prefix_hash())
-		.inject_hashed_prefix(&<pallet_staking::Ledger<Runtime>>::prefix_hash())
-		.inject_hashed_prefix(&<pallet_staking::Validators<Runtime>>::map_storage_final_prefix())
-		.inject_hashed_prefix(&<pallet_staking::Nominators<Runtime>>::map_storage_final_prefix())
-		.inject_hashed_key(&<pallet_staking::Validators<Runtime>>::counter_storage_final_key())
-		.inject_hashed_key(&<pallet_staking::Nominators<Runtime>>::counter_storage_final_key())
 		.build()
 		.await
 		.unwrap();

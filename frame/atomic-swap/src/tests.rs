@@ -3,10 +3,7 @@
 use super::*;
 use crate as pallet_atomic_swap;
 
-use frame_support::{
-	parameter_types,
-	traits::{ConstU32, ConstU64},
-};
+use frame_support::traits::{ConstU32, ConstU64};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -28,16 +25,12 @@ frame_support::construct_runtime!(
 	}
 );
 
-parameter_types! {
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
-}
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -100,7 +93,7 @@ fn two_party_successful_swap() {
 	// A creates the swap on chain1.
 	chain1.execute_with(|| {
 		AtomicSwap::create_swap(
-			Origin::signed(A),
+			RuntimeOrigin::signed(A),
 			B,
 			hashed_proof,
 			BalanceSwapAction::new(50),
@@ -115,7 +108,7 @@ fn two_party_successful_swap() {
 	// B creates the swap on chain2.
 	chain2.execute_with(|| {
 		AtomicSwap::create_swap(
-			Origin::signed(B),
+			RuntimeOrigin::signed(B),
 			A,
 			hashed_proof,
 			BalanceSwapAction::new(75),
@@ -129,8 +122,12 @@ fn two_party_successful_swap() {
 
 	// A reveals the proof and claims the swap on chain2.
 	chain2.execute_with(|| {
-		AtomicSwap::claim_swap(Origin::signed(A), proof.to_vec(), BalanceSwapAction::new(75))
-			.unwrap();
+		AtomicSwap::claim_swap(
+			RuntimeOrigin::signed(A),
+			proof.to_vec(),
+			BalanceSwapAction::new(75),
+		)
+		.unwrap();
 
 		assert_eq!(Balances::free_balance(A), 100 + 75);
 		assert_eq!(Balances::free_balance(B), 200 - 75);
@@ -138,8 +135,12 @@ fn two_party_successful_swap() {
 
 	// B use the revealed proof to claim the swap on chain1.
 	chain1.execute_with(|| {
-		AtomicSwap::claim_swap(Origin::signed(B), proof.to_vec(), BalanceSwapAction::new(50))
-			.unwrap();
+		AtomicSwap::claim_swap(
+			RuntimeOrigin::signed(B),
+			proof.to_vec(),
+			BalanceSwapAction::new(50),
+		)
+		.unwrap();
 
 		assert_eq!(Balances::free_balance(A), 100 - 50);
 		assert_eq!(Balances::free_balance(B), 200 + 50);

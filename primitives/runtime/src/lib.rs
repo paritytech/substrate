@@ -93,9 +93,9 @@ pub use sp_arithmetic::biguint;
 pub use sp_arithmetic::helpers_128bit;
 /// Re-export top-level arithmetic stuff.
 pub use sp_arithmetic::{
-	traits::SaturatedConversion, FixedI128, FixedI64, FixedPointNumber, FixedPointOperand,
-	FixedU128, InnerOf, PerThing, PerU16, Perbill, Percent, Permill, Perquintill, Rational128,
-	Rounding, UpperOf,
+	traits::SaturatedConversion, ArithmeticError, FixedI128, FixedI64, FixedPointNumber,
+	FixedPointOperand, FixedU128, InnerOf, PerThing, PerU16, Perbill, Percent, Permill,
+	Perquintill, Rational128, Rounding, UpperOf,
 };
 
 pub use either::Either;
@@ -234,7 +234,7 @@ impl BuildStorage for () {
 /// Consensus engine unique ID.
 pub type ConsensusEngineId = [u8; 4];
 
-/// Signature verify that can work with any known signature types..
+/// Signature verify that can work with any known signature types.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Eq, PartialEq, Clone, Encode, Decode, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub enum MultiSignature {
@@ -474,7 +474,7 @@ pub type DispatchResult = sp_std::result::Result<(), DispatchError>;
 pub type DispatchResultWithInfo<T> = sp_std::result::Result<T, DispatchErrorWithPostInfo<T>>;
 
 /// Reason why a pallet call failed.
-#[derive(Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
+#[derive(Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct ModuleError {
 	/// Module index, matching the metadata module index.
@@ -494,7 +494,7 @@ impl PartialEq for ModuleError {
 }
 
 /// Errors related to transactional storage layers.
-#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum TransactionalError {
 	/// Too many transactional layers have been spawned.
@@ -519,7 +519,7 @@ impl From<TransactionalError> for DispatchError {
 }
 
 /// Reason why a dispatch call failed.
-#[derive(Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo, PartialEq)]
+#[derive(Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo, PartialEq, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum DispatchError {
 	/// Some error occurred.
@@ -547,6 +547,12 @@ pub enum DispatchError {
 	/// The number of transactional layers has been reached, or we are not in a transactional
 	/// layer.
 	Transactional(TransactionalError),
+	/// Resources exhausted, e.g. attempt to read/write data which is too large to manipulate.
+	Exhausted,
+	/// The state is corrupt; this is generally not going to fix itself.
+	Corruption,
+	/// Some resource (e.g. a preimage) is unavailable right now. This might fix itself later.
+	Unavailable,
 }
 
 /// Result of a `Dispatchable` which contains the `DispatchResult` and additional information about
@@ -596,7 +602,7 @@ impl From<crate::traits::BadOrigin> for DispatchError {
 }
 
 /// Description of what went wrong when trying to complete an operation on a token.
-#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum TokenError {
 	/// Funds are unavailable.
@@ -635,28 +641,6 @@ impl From<TokenError> for DispatchError {
 	}
 }
 
-/// Arithmetic errors.
-#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub enum ArithmeticError {
-	/// Underflow.
-	Underflow,
-	/// Overflow.
-	Overflow,
-	/// Division by zero.
-	DivisionByZero,
-}
-
-impl From<ArithmeticError> for &'static str {
-	fn from(e: ArithmeticError) -> &'static str {
-		match e {
-			ArithmeticError::Underflow => "An underflow would occur",
-			ArithmeticError::Overflow => "An overflow would occur",
-			ArithmeticError::DivisionByZero => "Division by zero",
-		}
-	}
-}
-
 impl From<ArithmeticError> for DispatchError {
 	fn from(e: ArithmeticError) -> DispatchError {
 		Self::Arithmetic(e)
@@ -671,18 +655,21 @@ impl From<&'static str> for DispatchError {
 
 impl From<DispatchError> for &'static str {
 	fn from(err: DispatchError) -> &'static str {
+		use DispatchError::*;
 		match err {
-			DispatchError::Other(msg) => msg,
-			DispatchError::CannotLookup => "Cannot lookup",
-			DispatchError::BadOrigin => "Bad origin",
-			DispatchError::Module(ModuleError { message, .. }) =>
-				message.unwrap_or("Unknown module error"),
-			DispatchError::ConsumerRemaining => "Consumer remaining",
-			DispatchError::NoProviders => "No providers",
-			DispatchError::TooManyConsumers => "Too many consumers",
-			DispatchError::Token(e) => e.into(),
-			DispatchError::Arithmetic(e) => e.into(),
-			DispatchError::Transactional(e) => e.into(),
+			Other(msg) => msg,
+			CannotLookup => "Cannot lookup",
+			BadOrigin => "Bad origin",
+			Module(ModuleError { message, .. }) => message.unwrap_or("Unknown module error"),
+			ConsumerRemaining => "Consumer remaining",
+			NoProviders => "No providers",
+			TooManyConsumers => "Too many consumers",
+			Token(e) => e.into(),
+			Arithmetic(e) => e.into(),
+			Transactional(e) => e.into(),
+			Exhausted => "Resources exhausted",
+			Corruption => "State corrupt",
+			Unavailable => "Resource unavailable",
 		}
 	}
 }
@@ -698,33 +685,37 @@ where
 
 impl traits::Printable for DispatchError {
 	fn print(&self) {
+		use DispatchError::*;
 		"DispatchError".print();
 		match self {
-			Self::Other(err) => err.print(),
-			Self::CannotLookup => "Cannot lookup".print(),
-			Self::BadOrigin => "Bad origin".print(),
-			Self::Module(ModuleError { index, error, message }) => {
+			Other(err) => err.print(),
+			CannotLookup => "Cannot lookup".print(),
+			BadOrigin => "Bad origin".print(),
+			Module(ModuleError { index, error, message }) => {
 				index.print();
 				error.print();
 				if let Some(msg) = message {
 					msg.print();
 				}
 			},
-			Self::ConsumerRemaining => "Consumer remaining".print(),
-			Self::NoProviders => "No providers".print(),
-			Self::TooManyConsumers => "Too many consumers".print(),
-			Self::Token(e) => {
+			ConsumerRemaining => "Consumer remaining".print(),
+			NoProviders => "No providers".print(),
+			TooManyConsumers => "Too many consumers".print(),
+			Token(e) => {
 				"Token error: ".print();
 				<&'static str>::from(*e).print();
 			},
-			Self::Arithmetic(e) => {
+			Arithmetic(e) => {
 				"Arithmetic error: ".print();
 				<&'static str>::from(*e).print();
 			},
-			Self::Transactional(e) => {
+			Transactional(e) => {
 				"Transactional error: ".print();
 				<&'static str>::from(*e).print();
 			},
+			Exhausted => "Resources exhausted".print(),
+			Corruption => "State corrupt".print(),
+			Unavailable => "Resource unavailable".print(),
 		}
 	}
 }
@@ -858,13 +849,6 @@ impl OpaqueExtrinsic {
 	/// Convert an encoded extrinsic to an `OpaqueExtrinsic`.
 	pub fn from_bytes(mut bytes: &[u8]) -> Result<Self, codec::Error> {
 		Self::decode(&mut bytes)
-	}
-}
-
-#[cfg(feature = "std")]
-impl parity_util_mem::MallocSizeOf for OpaqueExtrinsic {
-	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
-		self.0.size_of(ops)
 	}
 }
 

@@ -56,7 +56,7 @@ mod pallet_old {
 
 	decl_module! {
 		pub struct Module<T: Config<I>, I: Instance = DefaultInstance> for enum Call
-		where origin: T::Origin
+		where origin: T::RuntimeOrigin
 		{
 			type Error = Error<T, I>;
 			fn deposit_event() = default;
@@ -127,6 +127,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
+		#[pallet::call_index(0)]
 		#[pallet::weight(<T::Balance as Into<u64>>::into(new_value.clone()))]
 		pub fn set_dummy(
 			origin: OriginFor<T>,
@@ -210,7 +211,7 @@ impl frame_system::Config for Runtime {
 	type BlockLength = ();
 	type DbWeight = ();
 	type BaseCallFilter = frame_support::traits::Everything;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u32;
 	type RuntimeCall = RuntimeCall;

@@ -18,6 +18,7 @@
 
 //! Chain api required for the transaction pool.
 
+use crate::LOG_TARGET;
 use codec::Encode;
 use futures::{
 	channel::{mpsc, oneshot},
@@ -30,6 +31,7 @@ use std::{marker::PhantomData, pin::Pin, sync::Arc};
 use prometheus_endpoint::Registry as PrometheusRegistry;
 use sc_client_api::{blockchain::HeaderBackend, BlockBackend};
 use sp_api::{ApiExt, ProvideRuntimeApi};
+use sp_blockchain::{HeaderMetadata, TreeRoute};
 use sp_core::traits::SpawnEssentialNamed;
 use sp_runtime::{
 	generic::BlockId,
@@ -84,7 +86,7 @@ impl<Client, Block> FullChainApi<Client, Block> {
 		let metrics = prometheus.map(ApiMetrics::register).and_then(|r| match r {
 			Err(err) => {
 				log::warn!(
-					target: "txpool",
+					target: LOG_TARGET,
 					"Failed to register transaction pool api prometheus metrics: {:?}",
 					err,
 				);
@@ -111,8 +113,11 @@ impl<Client, Block> FullChainApi<Client, Block> {
 impl<Client, Block> graph::ChainApi for FullChainApi<Client, Block>
 where
 	Block: BlockT,
-	Client:
-		ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block> + HeaderBackend<Block>,
+	Client: ProvideRuntimeApi<Block>
+		+ BlockBackend<Block>
+		+ BlockIdTo<Block>
+		+ HeaderBackend<Block>
+		+ HeaderMetadata<Block, Error = sp_blockchain::Error>,
 	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
 {
@@ -122,8 +127,8 @@ where
 		Pin<Box<dyn Future<Output = error::Result<TransactionValidity>> + Send>>;
 	type BodyFuture = Ready<error::Result<Option<Vec<<Self::Block as BlockT>::Extrinsic>>>>;
 
-	fn block_body(&self, id: &BlockId<Self::Block>) -> Self::BodyFuture {
-		ready(self.client.block_body(id).map_err(error::Error::from))
+	fn block_body(&self, hash: Block::Hash) -> Self::BodyFuture {
+		ready(self.client.block_body(hash).map_err(error::Error::from))
 	}
 
 	fn validate_transaction(
@@ -186,9 +191,17 @@ where
 
 	fn block_header(
 		&self,
-		at: &BlockId<Self::Block>,
+		hash: <Self::Block as BlockT>::Hash,
 	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error> {
-		self.client.header(*at).map_err(Into::into)
+		self.client.header(hash).map_err(Into::into)
+	}
+
+	fn tree_route(
+		&self,
+		from: <Self::Block as BlockT>::Hash,
+		to: <Self::Block as BlockT>::Hash,
+	) -> Result<TreeRoute<Self::Block>, Self::Error> {
+		sp_blockchain::tree_route::<Block, Client>(&*self.client, from, to).map_err(Into::into)
 	}
 }
 
@@ -202,8 +215,11 @@ fn validate_transaction_blocking<Client, Block>(
 ) -> error::Result<TransactionValidity>
 where
 	Block: BlockT,
-	Client:
-		ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block> + HeaderBackend<Block>,
+	Client: ProvideRuntimeApi<Block>
+		+ BlockBackend<Block>
+		+ BlockIdTo<Block>
+		+ HeaderBackend<Block>
+		+ HeaderMetadata<Block, Error = sp_blockchain::Error>,
 	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
 {
@@ -264,8 +280,11 @@ where
 impl<Client, Block> FullChainApi<Client, Block>
 where
 	Block: BlockT,
-	Client:
-		ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block> + HeaderBackend<Block>,
+	Client: ProvideRuntimeApi<Block>
+		+ BlockBackend<Block>
+		+ BlockIdTo<Block>
+		+ HeaderBackend<Block>
+		+ HeaderMetadata<Block, Error = sp_blockchain::Error>,
 	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
 {

@@ -43,7 +43,6 @@ struct PrometheusMetrics {
 	// I/O
 	database_cache: Gauge<U64>,
 	state_cache: Gauge<U64>,
-	state_db: GaugeVec<U64>,
 }
 
 impl PrometheusMetrics {
@@ -115,13 +114,6 @@ impl PrometheusMetrics {
 			)?,
 			state_cache: register(
 				Gauge::new("substrate_state_cache_bytes", "State cache size in bytes")?,
-				registry,
-			)?,
-			state_db: register(
-				GaugeVec::new(
-					Opts::new("substrate_state_db_cache_bytes", "State DB cache in bytes"),
-					&["subtype"],
-				)?,
 				registry,
 			)?,
 		})
@@ -254,18 +246,6 @@ impl MetricsService {
 			if let Some(info) = info.usage.as_ref() {
 				metrics.database_cache.set(info.memory.database_cache.as_bytes() as u64);
 				metrics.state_cache.set(info.memory.state_cache.as_bytes() as u64);
-
-				metrics
-					.state_db
-					.with_label_values(&["non_canonical"])
-					.set(info.memory.state_db.non_canonical.as_bytes() as u64);
-				if let Some(pruning) = info.memory.state_db.pruning {
-					metrics.state_db.with_label_values(&["pruning"]).set(pruning.as_bytes() as u64);
-				}
-				metrics
-					.state_db
-					.with_label_values(&["pinned"])
-					.set(info.memory.state_db.pinned.as_bytes() as u64);
 			}
 		}
 

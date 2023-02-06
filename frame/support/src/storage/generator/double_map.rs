@@ -233,6 +233,13 @@ where
 		.into()
 	}
 
+	fn contains_prefix<KArg1>(k1: KArg1) -> bool
+	where
+		KArg1: EncodeLike<K1>,
+	{
+		unhashed::contains_prefixed_key(Self::storage_double_map_final_key1(k1).as_ref())
+	}
+
 	fn iter_prefix_values<KArg1>(k1: KArg1) -> storage::PrefixIterator<V>
 	where
 		KArg1: ?Sized + EncodeLike<K1>,
@@ -512,14 +519,14 @@ mod test_iterators {
 	use codec::{Decode, Encode};
 
 	pub trait Config: 'static {
-		type Origin;
+		type RuntimeOrigin;
 		type BlockNumber;
 		type PalletInfo: crate::traits::PalletInfo;
 		type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
 	}
 
 	crate::decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {}
+		pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=self {}
 	}
 
 	#[derive(PartialEq, Eq, Clone, Encode, Decode)]

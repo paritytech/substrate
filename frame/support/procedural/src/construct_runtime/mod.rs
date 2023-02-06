@@ -389,8 +389,9 @@ fn decl_all_pallets<'a>(
 				(attr, names)
 			} else {
 				let test_cfg = features.remove("test").then_some(quote!(test)).into_iter();
+				let disabled_features = all_features.difference(&features);
 				let features = features.iter();
-				let attr = quote!(#[cfg(all( #(#test_cfg),* #(feature = #features),* ))]);
+				let attr = quote!(#[cfg(all( #(#test_cfg,)* #(feature = #features,)* #(not(feature = #disabled_features)),* ))]);
 
 				(attr, names)
 			}
@@ -422,7 +423,7 @@ fn decl_all_pallets<'a>(
 			/// All pallets included in the runtime as a nested tuple of types in reversed order.
 			/// Excludes the System pallet.
 			#[deprecated(note = "Using reverse pallet orders is deprecated. use only \
-			`AllPalletWithSystem or AllPalletsWithoutSystem`")]
+			`AllPalletsWithSystem or AllPalletsWithoutSystem`")]
 			pub type AllPalletsWithoutSystemReversed = ( #(#names,)* );
 		}
 	});
@@ -433,7 +434,7 @@ fn decl_all_pallets<'a>(
 			#attr
 			/// All pallets included in the runtime as a nested tuple of types in reversed order.
 			#[deprecated(note = "Using reverse pallet orders is deprecated. use only \
-			`AllPalletWithSystem or AllPalletsWithoutSystem`")]
+			`AllPalletsWithSystem or AllPalletsWithoutSystem`")]
 			pub type AllPalletsWithSystemReversed = ( #(#names,)* );
 		}
 	});
@@ -447,7 +448,7 @@ fn decl_all_pallets<'a>(
 			/// All pallets included in the runtime as a nested tuple of types in reversed order.
 			/// With the system pallet first.
 			#[deprecated(note = "Using reverse pallet orders is deprecated. use only \
-			`AllPalletWithSystem or AllPalletsWithoutSystem`")]
+			`AllPalletsWithSystem or AllPalletsWithoutSystem`")]
 			pub type AllPalletsReversedWithSystemFirst = ( #(#names,)* );
 		}
 	});

@@ -360,7 +360,7 @@ Runtime
 -------
 
 * Introduce stacked filtering (#6273)
-* Allow "anonymous" proxied accounts (#6236)
+* Allow "pure" proxied accounts (#6236)
 * Allow over-weight collective proposals to be closed (#6163)
 * Fix Election when ForceNone V1 (#6166)
 

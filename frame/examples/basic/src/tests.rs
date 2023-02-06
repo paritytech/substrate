@@ -21,7 +21,6 @@ use crate::*;
 use frame_support::{
 	assert_ok,
 	dispatch::{DispatchInfo, GetDispatchInfo},
-	parameter_types,
 	traits::{ConstU64, OnInitialize},
 };
 use sp_core::H256;
@@ -51,16 +50,12 @@ frame_support::construct_runtime!(
 	}
 );
 
-parameter_types! {
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
-}
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -128,12 +123,12 @@ fn it_works_for_optional_value() {
 		assert_eq!(Example::dummy(), Some(val1));
 
 		// Check that accumulate works when we have Some value in Dummy already.
-		assert_ok!(Example::accumulate_dummy(Origin::signed(1), val2));
+		assert_ok!(Example::accumulate_dummy(RuntimeOrigin::signed(1), val2));
 		assert_eq!(Example::dummy(), Some(val1 + val2));
 
 		// Check that accumulate works when we Dummy has None in it.
 		<Example as OnInitialize<u64>>::on_initialize(2);
-		assert_ok!(Example::accumulate_dummy(Origin::signed(1), val1));
+		assert_ok!(Example::accumulate_dummy(RuntimeOrigin::signed(1), val1));
 		assert_eq!(Example::dummy(), Some(val1 + val2 + val1));
 	});
 }
@@ -142,7 +137,7 @@ fn it_works_for_optional_value() {
 fn it_works_for_default_value() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(Example::foo(), 24);
-		assert_ok!(Example::accumulate_foo(Origin::signed(1), 1));
+		assert_ok!(Example::accumulate_foo(RuntimeOrigin::signed(1), 1));
 		assert_eq!(Example::foo(), 25);
 	});
 }
@@ -151,7 +146,7 @@ fn it_works_for_default_value() {
 fn set_dummy_works() {
 	new_test_ext().execute_with(|| {
 		let test_val = 133;
-		assert_ok!(Example::set_dummy(Origin::root(), test_val.into()));
+		assert_ok!(Example::set_dummy(RuntimeOrigin::root(), test_val.into()));
 		assert_eq!(Example::dummy(), Some(test_val));
 	});
 }
@@ -191,11 +186,13 @@ fn weights_work() {
 	let default_call = pallet_example_basic::Call::<Test>::accumulate_dummy { increase_by: 10 };
 	let info1 = default_call.get_dispatch_info();
 	// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
-	assert!(info1.weight.all_gt(Weight::zero()));
+	// TODO: account for proof size weight
+	assert!(info1.weight.ref_time() > 0);
 
 	// `set_dummy` is simpler than `accumulate_dummy`, and the weight
 	//   should be less.
 	let custom_call = pallet_example_basic::Call::<Test>::set_dummy { new_value: 20 };
 	let info2 = custom_call.get_dispatch_info();
-	assert!(info1.weight.all_gt(info2.weight));
+	// TODO: account for proof size weight
+	assert!(info1.weight.ref_time() > info2.weight.ref_time());
 }

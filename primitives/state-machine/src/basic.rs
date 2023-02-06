@@ -356,7 +356,6 @@ impl sp_externalities::ExtensionStore for BasicExternalities {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use hex_literal::hex;
 	use sp_core::{
 		map,
 		storage::{well_known_keys::CODE, Storage, StorageChild},
@@ -368,10 +367,11 @@ mod tests {
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
-		const ROOT: [u8; 32] =
-			hex!("39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa");
+		let root = array_bytes::hex2bytes_unchecked(
+			"39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa",
+		);
 
-		assert_eq!(&ext.storage_root(StateVersion::default())[..], &ROOT);
+		assert_eq!(&ext.storage_root(StateVersion::default())[..], &root);
 	}
 
 	#[test]

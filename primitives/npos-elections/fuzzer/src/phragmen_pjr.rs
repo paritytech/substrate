@@ -68,18 +68,18 @@ fn main() {
 
 #[cfg(not(fuzzing))]
 #[derive(Debug, Parser)]
-#[clap(author, version, about)]
+#[command(author, version, about)]
 struct Opt {
 	/// How many candidates participate in this election
-	#[clap(short, long)]
+	#[arg(short, long)]
 	candidates: Option<usize>,
 
 	/// How many voters participate in this election
-	#[clap(short, long)]
+	#[arg(short, long)]
 	voters: Option<usize>,
 
 	/// Random seed to use in this election
-	#[clap(long)]
+	#[arg(long)]
 	seed: Option<u64>,
 }
 

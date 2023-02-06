@@ -65,10 +65,9 @@ use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT},
 	RuntimeString,
 };
-use std::{
-	borrow::Cow, cmp::Ordering, collections::HashMap, marker::PhantomData, sync::Arc,
-	time::Duration,
-};
+use std::{cmp::Ordering, collections::HashMap, marker::PhantomData, sync::Arc, time::Duration};
+
+const LOG_TARGET: &str = "pow";
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error<B: BlockT> {
@@ -278,6 +277,7 @@ where
 
 		let inherent_data = inherent_data_providers
 			.create_inherent_data()
+			.await
 			.map_err(|e| Error::CreateInherents(e))?;
 
 		let inherent_res = self
@@ -341,23 +341,25 @@ where
 		if let Some(inner_body) = block.body.take() {
 			let check_block = B::new(block.header.clone(), inner_body);
 
-			self.check_inherents(
-				check_block.clone(),
-				BlockId::Hash(parent_hash),
-				self.create_inherent_data_providers
-					.create_inherent_data_providers(parent_hash, ())
-					.await?,
-				block.origin.into(),
-			)
-			.await?;
+			if !block.state_action.skip_execution_checks() {
+				self.check_inherents(
+					check_block.clone(),
+					BlockId::Hash(parent_hash),
+					self.create_inherent_data_providers
+						.create_inherent_data_providers(parent_hash, ())
+						.await?,
+					block.origin.into(),
+				)
+				.await?;
+			}
 
 			block.body = Some(check_block.deconstruct().1);
 		}
 
 		let inner_seal = fetch_seal::<B>(block.post_digests.last(), block.header.hash())?;
 
-		let intermediate =
-			block.take_intermediate::<PowIntermediate<Algorithm::Difficulty>>(INTERMEDIATE_KEY)?;
+		let intermediate = block
+			.remove_intermediate::<PowIntermediate<Algorithm::Difficulty>>(INTERMEDIATE_KEY)?;
 
 		let difficulty = match intermediate.difficulty {
 			Some(difficulty) => difficulty,
@@ -453,9 +455,7 @@ where
 		let intermediate = PowIntermediate::<Algorithm::Difficulty> { difficulty: None };
 		block.header = checked_header;
 		block.post_digests.push(seal);
-		block
-			.intermediates
-			.insert(Cow::from(INTERMEDIATE_KEY), Box::new(intermediate) as Box<_>);
+		block.insert_intermediate(INTERMEDIATE_KEY, intermediate);
 		block.post_hash = Some(hash);
 
 		Ok((block, None))
@@ -533,7 +533,7 @@ where
 			}
 
 			if sync_oracle.is_major_syncing() {
-				debug!(target: "pow", "Skipping proposal due to sync.");
+				debug!(target: LOG_TARGET, "Skipping proposal due to sync.");
 				worker.on_major_syncing();
 				continue
 			}
@@ -542,7 +542,7 @@ where
 				Ok(x) => x,
 				Err(err) => {
 					warn!(
-						target: "pow",
+						target: LOG_TARGET,
 						"Unable to pull new block for authoring. \
 						 Select best chain error: {}",
 						err
@@ -563,7 +563,7 @@ where
 				Ok(x) => x,
 				Err(err) => {
 					warn!(
-						target: "pow",
+						target: LOG_TARGET,
 						"Unable to propose new block for authoring. \
 						 Fetch difficulty failed: {}",
 						err,
@@ -579,7 +579,7 @@ where
 				Ok(x) => x,
 				Err(err) => {
 					warn!(
-						target: "pow",
+						target: LOG_TARGET,
 						"Unable to propose new block for authoring. \
 						 Creating inherent data providers failed: {}",
 						err,
@@ -588,11 +588,11 @@ where
 				},
 			};
 
-			let inherent_data = match inherent_data_providers.create_inherent_data() {
+			let inherent_data = match inherent_data_providers.create_inherent_data().await {
 				Ok(r) => r,
 				Err(e) => {
 					warn!(
-						target: "pow",
+						target: LOG_TARGET,
 						"Unable to propose new block for authoring. \
 						 Creating inherent data failed: {}",
 						e,
@@ -612,7 +612,7 @@ where
 				Ok(x) => x,
 				Err(err) => {
 					warn!(
-						target: "pow",
+						target: LOG_TARGET,
 						"Unable to propose new block for authoring. \
 						 Creating proposer failed: {:?}",
 						err,
@@ -626,7 +626,7 @@ where
 					Ok(x) => x,
 					Err(err) => {
 						warn!(
-							target: "pow",
+							target: LOG_TARGET,
 							"Unable to propose new block for authoring. \
 							 Creating proposal failed: {}",
 							err,
@@ -656,14 +656,14 @@ where
 fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<Option<Vec<u8>>, Error<B>> {
 	let mut pre_digest: Option<_> = None;
 	for log in header.digest().logs() {
-		trace!(target: "pow", "Checking log {:?}, looking for pre runtime digest", log);
+		trace!(target: LOG_TARGET, "Checking log {:?}, looking for pre runtime digest", log);
 		match (log, pre_digest.is_some()) {
 			(DigestItem::PreRuntime(POW_ENGINE_ID, _), true) =>
 				return Err(Error::MultiplePreRuntimeDigests),
 			(DigestItem::PreRuntime(POW_ENGINE_ID, v), false) => {
 				pre_digest = Some(v.clone());
 			},
-			(_, _) => trace!(target: "pow", "Ignoring digest not meant for us"),
+			(_, _) => trace!(target: LOG_TARGET, "Ignoring digest not meant for us"),
 		}
 	}
 

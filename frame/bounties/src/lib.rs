@@ -151,8 +151,7 @@ pub enum BountyStatus<AccountId, BlockNumber> {
 	Approved,
 	/// The bounty is funded and waiting for curator assignment.
 	Funded,
-	/// A curator has been proposed by the `ApproveOrigin`. Waiting for acceptance from the
-	/// curator.
+	/// A curator has been proposed. Waiting for acceptance from the curator.
 	CuratorProposed {
 		/// The assigned curator of this bounty.
 		curator: AccountId,
@@ -333,6 +332,7 @@ pub mod pallet {
 		/// - `fee`: The curator fee.
 		/// - `value`: The total payment amount of this bounty, curator fee included.
 		/// - `description`: The description of this bounty.
+		#[pallet::call_index(0)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::propose_bounty(description.len() as u32))]
 		pub fn propose_bounty(
 			origin: OriginFor<T>,
@@ -347,20 +347,24 @@ pub mod pallet {
 		/// Approve a bounty proposal. At a later time, the bounty will be funded and become active
 		/// and the original deposit will be returned.
 		///
-		/// May only be called from `T::ApproveOrigin`.
+		/// May only be called from `T::SpendOrigin`.
 		///
 		/// # <weight>
 		/// - O(1).
 		/// # </weight>
+		#[pallet::call_index(1)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::approve_bounty())]
 		pub fn approve_bounty(
 			origin: OriginFor<T>,
 			#[pallet::compact] bounty_id: BountyIndex,
 		) -> DispatchResult {
-			T::ApproveOrigin::ensure_origin(origin)?;
-
+			let max_amount = T::SpendOrigin::ensure_origin(origin)?;
 			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
+				ensure!(
+					bounty.value <= max_amount,
+					pallet_treasury::Error::<T, I>::InsufficientPermission
+				);
 				ensure!(bounty.status == BountyStatus::Proposed, Error::<T, I>::UnexpectedStatus);
 
 				bounty.status = BountyStatus::Approved;
@@ -375,11 +379,12 @@ pub mod pallet {
 
 		/// Assign a curator to a funded bounty.
 		///
-		/// May only be called from `T::ApproveOrigin`.
+		/// May only be called from `T::SpendOrigin`.
 		///
 		/// # <weight>
 		/// - O(1).
 		/// # </weight>
+		#[pallet::call_index(2)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::propose_curator())]
 		pub fn propose_curator(
 			origin: OriginFor<T>,
@@ -387,11 +392,15 @@ pub mod pallet {
 			curator: AccountIdLookupOf<T>,
 			#[pallet::compact] fee: BalanceOf<T, I>,
 		) -> DispatchResult {
-			T::ApproveOrigin::ensure_origin(origin)?;
+			let max_amount = T::SpendOrigin::ensure_origin(origin)?;
 
 			let curator = T::Lookup::lookup(curator)?;
 			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
+				ensure!(
+					bounty.value <= max_amount,
+					pallet_treasury::Error::<T, I>::InsufficientPermission
+				);
 				match bounty.status {
 					BountyStatus::Funded => {},
 					_ => return Err(Error::<T, I>::UnexpectedStatus.into()),
@@ -425,6 +434,7 @@ pub mod pallet {
 		/// # <weight>
 		/// - O(1).
 		/// # </weight>
+		#[pallet::call_index(3)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::unassign_curator())]
 		pub fn unassign_curator(
 			origin: OriginFor<T>,
@@ -510,6 +520,7 @@ pub mod pallet {
 		/// # <weight>
 		/// - O(1).
 		/// # </weight>
+		#[pallet::call_index(4)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::accept_curator())]
 		pub fn accept_curator(
 			origin: OriginFor<T>,
@@ -552,6 +563,7 @@ pub mod pallet {
 		/// # <weight>
 		/// - O(1).
 		/// # </weight>
+		#[pallet::call_index(5)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::award_bounty())]
 		pub fn award_bounty(
 			origin: OriginFor<T>,
@@ -599,6 +611,7 @@ pub mod pallet {
 		/// # <weight>
 		/// - O(1).
 		/// # </weight>
+		#[pallet::call_index(6)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::claim_bounty())]
 		pub fn claim_bounty(
 			origin: OriginFor<T>,
@@ -662,6 +675,7 @@ pub mod pallet {
 		/// # <weight>
 		/// - O(1).
 		/// # </weight>
+		#[pallet::call_index(7)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::close_bounty_proposed()
 			.max(<T as Config<I>>::WeightInfo::close_bounty_active()))]
 		pub fn close_bounty(
@@ -753,6 +767,7 @@ pub mod pallet {
 		/// # <weight>
 		/// - O(1).
 		/// # </weight>
+		#[pallet::call_index(8)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::extend_bounty_expiry())]
 		pub fn extend_bounty_expiry(
 			origin: OriginFor<T>,
@@ -819,7 +834,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		value: BalanceOf<T, I>,
 	) -> DispatchResult {
 		let bounded_description: BoundedVec<_, _> =
-			description.try_into().map_err(|()| Error::<T, I>::ReasonTooBig)?;
+			description.try_into().map_err(|_| Error::<T, I>::ReasonTooBig)?;
 		ensure!(value >= T::BountyValueMinimum::get(), Error::<T, I>::InvalidValue);
 
 		let index = Self::bounty_count();

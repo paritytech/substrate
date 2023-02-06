@@ -28,7 +28,7 @@ use std::{
 
 /// The `inspect-node-key` command
 #[derive(Debug, Parser)]
-#[clap(
+#[command(
 	name = "inspect-node-key",
 	about = "Load a node key from a file or stdin and print the corresponding peer-id."
 )]
@@ -36,18 +36,18 @@ pub struct InspectNodeKeyCmd {
 	/// Name of file to read the secret key from.
 	///
 	/// If not given, the secret key is read from stdin (up to EOF).
-	#[clap(long)]
+	#[arg(long)]
 	file: Option<PathBuf>,
 
 	/// The input is in raw binary format.
 	///
 	/// If not given, the input is read as an hex encoded string.
-	#[clap(long)]
+	#[arg(long)]
 	bin: bool,
 
 	/// This argument is deprecated and has no effect for this command.
 	#[deprecated(note = "Network identifier is not used for node-key inspection")]
-	#[clap(short = 'n', long = "network", value_name = "NETWORK", ignore_case = true)]
+	#[arg(short = 'n', long = "network", value_name = "NETWORK", ignore_case = true)]
 	pub network_scheme: Option<String>,
 }
 
@@ -66,7 +66,8 @@ impl InspectNodeKeyCmd {
 		if !self.bin {
 			// With hex input, give to the user a bit of tolerance about whitespaces
 			let keyhex = String::from_utf8_lossy(&file_data);
-			file_data = hex::decode(keyhex.trim()).map_err(|_| "failed to decode secret as hex")?;
+			file_data = array_bytes::hex2bytes(keyhex.trim())
+				.map_err(|_| "failed to decode secret as hex")?;
 		}
 
 		let secret =

@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use kvdb::{DBTransaction, KeyValueDB};
+use kvdb::{DBKeyValue, DBTransaction, KeyValueDB};
 use kvdb_rocksdb::{Database, DatabaseConfig};
 use std::{io, path::PathBuf, sync::Arc};
 
@@ -29,7 +29,6 @@ pub enum DatabaseType {
 pub struct TempDatabase(tempfile::TempDir);
 
 struct ParityDbWrapper(parity_db::Db);
-parity_util_mem::malloc_size_of_is_0!(ParityDbWrapper);
 
 impl KeyValueDB for ParityDbWrapper {
 	/// Get a value by key.
@@ -38,7 +37,7 @@ impl KeyValueDB for ParityDbWrapper {
 	}
 
 	/// Get a value by partial key. Only works for flushed data.
-	fn get_by_prefix(&self, _col: u32, _prefix: &[u8]) -> Option<Box<[u8]>> {
+	fn get_by_prefix(&self, _col: u32, _prefix: &[u8]) -> io::Result<Option<Vec<u8>>> {
 		unimplemented!()
 	}
 
@@ -56,7 +55,7 @@ impl KeyValueDB for ParityDbWrapper {
 	}
 
 	/// Iterate over flushed data for a given column.
-	fn iter<'a>(&'a self, _col: u32) -> Box<dyn Iterator<Item = (Box<[u8]>, Box<[u8]>)> + 'a> {
+	fn iter<'a>(&'a self, _col: u32) -> Box<dyn Iterator<Item = io::Result<DBKeyValue>> + 'a> {
 		unimplemented!()
 	}
 
@@ -65,12 +64,7 @@ impl KeyValueDB for ParityDbWrapper {
 		&'a self,
 		_col: u32,
 		_prefix: &'a [u8],
-	) -> Box<dyn Iterator<Item = (Box<[u8]>, Box<[u8]>)> + 'a> {
-		unimplemented!()
-	}
-
-	/// Attempt to replace this database with a new one located at the given path.
-	fn restore(&self, _new_db: &str) -> io::Result<()> {
+	) -> Box<dyn Iterator<Item = io::Result<DBKeyValue>> + 'a> {
 		unimplemented!()
 	}
 }
