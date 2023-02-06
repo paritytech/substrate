@@ -37,7 +37,7 @@ futures-util = { version = "0.3.19", default-features = false }
 
 [dev-dependencies]
 serde_json = "1.0"
-tokio = { version = "1.22.0", features = ["macros"] }
+tokio = { version = "1.25.0", features = ["macros"] }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }

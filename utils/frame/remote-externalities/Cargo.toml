@@ -19,7 +19,7 @@ frame-support = { version = "4.0.0-dev", optional = true, path = "../../../frame
 sp-core = { version = "7.0.0", path = "../../../primitives/core" }
 sp-io = { version = "7.0.0", path = "../../../primitives/io" }
 sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
-tokio = { version = "1.22.0", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
 substrate-rpc-client = { path = "../rpc/client" }
 futures = "0.3"
 
