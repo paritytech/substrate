@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use crate::{
-	runtime_metadata::generate_runtime_metadata,
+	runtime_metadata::{generate_runtime_metadata, generate_runtime_metadata2},
 	utils::{
 		extract_all_signature_types, extract_block_type_from_trait_path, extract_impl_trait,
 		extract_parameter_names_types_and_borrows, generate_crate_access, generate_hidden_includes,
@@ -638,7 +638,9 @@ fn impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 	let wasm_interface = generate_wasm_interface(api_impls)?;
 	let api_impls_for_runtime_api = generate_api_impl_for_runtime_api(api_impls)?;
 	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
-	let runtime_metadata = generate_runtime_metadata(api_impls, &crate_)?;
+	let runtime_metadata = generate_runtime_metadata2(api_impls, &crate_)?;
+
+	println!("runtime {}", runtime_metadata);
 
 	Ok(quote!(
 		#hidden_includes

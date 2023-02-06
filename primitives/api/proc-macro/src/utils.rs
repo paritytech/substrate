@@ -312,6 +312,11 @@ pub fn generate_decl_docs_getter(ident: &Ident, is_trait: bool) -> Ident {
 	format_ident!("{}_decl_runtime_docs", ident)
 }
 
+/// Generate the documentation getter function name for the given ident.
+pub fn generate_decl_metadata_getter(ident: &Ident) -> Ident {
+	format_ident!("{}_decl_runtime_metadata", ident)
+}
+
 #[cfg(test)]
 mod tests {
 	use assert_matches::assert_matches;

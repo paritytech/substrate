@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use crate::{
-	runtime_metadata::generate_decl_docs,
+	runtime_metadata::{generate_decl_docs, generate_decl_metadata},
 	utils::{
 		extract_parameter_names_types_and_borrows, fold_fn_decl_for_client_side,
 		generate_crate_access, generate_hidden_includes, generate_runtime_mod_name_for_trait,
@@ -68,7 +68,9 @@ fn extend_generics_with_block(generics: &mut Generics) {
 	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
 
 	generics.lt_token = Some(Default::default());
-	generics.params.insert(0, parse_quote!( Block: #c::BlockT ));
+	generics.params.insert(0, parse_quote!( Block: #c::BlockT));
+	// .insert(0, parse_quote!( Block: #c::BlockT + #c::scale_info::TypeInfo));
+
 	generics.gt_token = Some(Default::default());
 }
 
@@ -224,6 +226,13 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 		let mut decl = decl.clone();
 		let decl_span = decl.span();
 		extend_generics_with_block(&mut decl.generics);
+
+		let metadata = generate_decl_metadata(&decl, &crate_);
+		// let res = format!("{}", quote!(#metadata));
+		// if res.contains("BlockBuilder") {
+		// 	println!("{}", res);
+		// }
+
 		let mod_name = generate_runtime_mod_name_for_trait(&decl.ident);
 		let found_attributes = remove_supported_attributes(&mut decl.attrs);
 		let api_version =
@@ -308,6 +317,8 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 				#( #versioned_api_traits )*
 
 				pub use #versioned_ident as #main_api_ident;
+
+				#metadata
 
 				#runtime_docs
 
