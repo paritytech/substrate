@@ -178,12 +178,12 @@ pub mod pallet {
 
 		/// Off-Chain signature type.
 		///
-		/// Can verify whether an [Config::AccountId] created a signature.
+		/// Can verify whether an `Self::OffchainPublic` created a signature.
 		type OffchainSignature: Verify<Signer = Self::OffchainPublic> + Parameter;
 
 		/// Off-Chain public key.
 		///
-		/// Must identify as an on-chain [Self::AccountId].
+		/// Must identify as an on-chain `Self::AccountId`.
 		type OffchainPublic: IdentifyAccount<AccountId = Self::AccountId>;
 
 		#[cfg(feature = "runtime-benchmarks")]
