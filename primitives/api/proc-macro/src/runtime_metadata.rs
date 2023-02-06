@@ -496,11 +496,13 @@ pub fn generate_runtime_metadata2(impls: &[ItemImpl], crate_: &TokenStream) -> R
 	}
 
 	Ok(quote!(
-		impl #runtime_name {
-			pub fn runtime_metadata() -> #crate_::vec::Vec<#crate_::metadata::v15::TraitMetadata> {
+		trait InternalImplRuntimeApis {
+			#[inline(always)]
+			fn runtime_metadata(&self) -> #crate_::vec::Vec<#crate_::metadata::v15::TraitMetadata> {
 				#crate_::vec![ #( #metadata, )* ]
 			}
 		}
+		impl InternalImplRuntimeApis for #runtime_name {}
 	))
 }
 

@@ -289,6 +289,14 @@ fn construct_runtime_final_expansion(
 			type RuntimeBlock = #block;
 		}
 
+		trait InternalConstructRuntime {
+			#[inline(always)]
+			fn runtime_metadata(&self) -> #scrate::sp_std::vec::Vec<#scrate::metadata::v15::TraitMetadata> {
+				Default::default()
+			}
+		}
+		impl InternalConstructRuntime for &#name {}
+
 		#outer_event
 
 		#outer_origin
