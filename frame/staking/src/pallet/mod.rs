@@ -749,13 +749,7 @@ pub mod pallet {
 		pub(crate) fn get_validator_commission(
 			era: EraIndex,
 			validator_stash: &T::AccountId,
-			page: PageIndex,
 		) -> Perbill {
-			if page != 0 {
-				// commission is only paid in the first page
-				return Zero::zero()
-			}
-
 			<ErasValidatorPrefs<T>>::get(&era, validator_stash).commission
 		}
 
