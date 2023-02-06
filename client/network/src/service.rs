@@ -1302,7 +1302,7 @@ where
 	async fn next_action(&mut self) -> bool {
 		futures::select! {
 			// Next message from the service.
-			msg = self.from_service.next().fuse() => {
+			msg = self.from_service.next() => {
 				if let Some(msg) = msg {
 					self.handle_worker_message(msg);
 				} else {
@@ -1310,8 +1310,7 @@ where
 				}
 			},
 			// Next event from `Swarm`.
-			event = self.network_service.next().fuse() => {
-				let event = event.expect("`Swarm` event stream guaranteed to never terminate.");
+			event = self.network_service.select_next_some() => {
 				self.handle_swarm_event(event);
 			},
 		};
