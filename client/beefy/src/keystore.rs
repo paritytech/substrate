@@ -19,7 +19,6 @@
 use sp_application_crypto::RuntimeAppPublic;
 use sp_core::keccak_256;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
-use sp_runtime::traits::Keccak256;
 
 use log::warn;
 
@@ -28,7 +27,10 @@ use beefy_primitives::{
 	BeefyAuthorityId, KEY_TYPE,
 };
 
-use crate::error;
+use crate::{error, LOG_TARGET};
+
+/// Hasher used for BEEFY signatures.
+pub(crate) type BeefySignatureHasher = sp_runtime::traits::Keccak256;
 
 /// A BEEFY specific keystore implemented as a `Newtype`. This is basically a
 /// wrapper around [`sp_keystore::SyncCryptoStore`] and allows to customize
@@ -53,7 +55,12 @@ impl BeefyKeystore {
 			.collect();
 
 		if public.len() > 1 {
-			warn!(target: "beefy", "🥩 Multiple private keys found for: {:?} ({})", public, public.len());
+			warn!(
+				target: LOG_TARGET,
+				"🥩 Multiple private keys found for: {:?} ({})",
+				public,
+				public.len()
+			);
 		}
 
 		public.get(0).cloned()
@@ -99,7 +106,7 @@ impl BeefyKeystore {
 	///
 	/// Return `true` if the signature is authentic, `false` otherwise.
 	pub fn verify(public: &Public, sig: &Signature, message: &[u8]) -> bool {
-		BeefyAuthorityId::<Keccak256>::verify(public, sig, message)
+		BeefyAuthorityId::<BeefySignatureHasher>::verify(public, sig, message)
 	}
 }
 
@@ -114,62 +121,12 @@ pub mod tests {
 	use std::sync::Arc;
 
 	use sc_keystore::LocalKeystore;
-	use sp_core::{ecdsa, keccak_256, Pair};
-	use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+	use sp_core::{ecdsa, Pair};
 
-	use beefy_primitives::{crypto, KEY_TYPE};
+	use beefy_primitives::{crypto, keyring::Keyring};
 
-	use super::BeefyKeystore;
+	use super::*;
 	use crate::error::Error;
-
-	/// Set of test accounts using [`beefy_primitives::crypto`] types.
-	#[allow(missing_docs)]
-	#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display, strum::EnumIter)]
-	pub(crate) enum Keyring {
-		Alice,
-		Bob,
-		Charlie,
-		Dave,
-		Eve,
-		Ferdie,
-		One,
-		Two,
-	}
-
-	impl Keyring {
-		/// Sign `msg`.
-		pub fn sign(self, msg: &[u8]) -> crypto::Signature {
-			let msg = keccak_256(msg);
-			ecdsa::Pair::from(self).sign_prehashed(&msg).into()
-		}
-
-		/// Return key pair.
-		pub fn pair(self) -> crypto::Pair {
-			ecdsa::Pair::from_string(self.to_seed().as_str(), None).unwrap().into()
-		}
-
-		/// Return public key.
-		pub fn public(self) -> crypto::Public {
-			self.pair().public()
-		}
-
-		/// Return seed string.
-		pub fn to_seed(self) -> String {
-			format!("//{}", self)
-		}
-	}
-
-	impl From<Keyring> for crypto::Pair {
-		fn from(k: Keyring) -> Self {
-			k.pair()
-		}
-	}
-
-	impl From<Keyring> for ecdsa::Pair {
-		fn from(k: Keyring) -> Self {
-			k.pair().into()
-		}
-	}
 
 	fn keystore() -> SyncCryptoStorePtr {
 		Arc::new(LocalKeystore::in_memory())

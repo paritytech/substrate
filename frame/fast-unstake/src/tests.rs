@@ -18,7 +18,7 @@
 //! Tests for pallet-fast-unstake.
 
 use super::*;
-use crate::{mock::*, types::*, weights::WeightInfo, Event};
+use crate::{mock::*, types::*, Event};
 use frame_support::{assert_noop, assert_ok, bounded_vec, pallet_prelude::*, traits::Currency};
 use pallet_staking::{CurrentEra, RewardDestination};
 
@@ -237,120 +237,6 @@ mod on_idle {
 	}
 
 	#[test]
-	fn respects_weight() {
-		ExtBuilder::default().build_and_execute(|| {
-			// we want to check all eras in one block...
-			ErasToCheckPerBlock::<T>::put(BondingDuration::get() + 1);
-			CurrentEra::<T>::put(BondingDuration::get());
-
-			// given
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
-			assert_eq!(Queue::<T>::get(1), Some(Deposit::get()));
-
-			assert_eq!(Queue::<T>::count(), 1);
-			assert_eq!(Head::<T>::get(), None);
-
-			// when: call fast unstake with not enough weight to process the whole thing, just one
-			// era.
-			let remaining_weight = <T as Config>::WeightInfo::on_idle_check(
-				pallet_staking::ValidatorCount::<T>::get() * 1,
-			);
-			assert_eq!(FastUnstake::on_idle(0, remaining_weight), remaining_weight);
-
-			// then
-			assert_eq!(
-				fast_unstake_events_since_last_call(),
-				vec![Event::BatchChecked { eras: vec![3] }]
-			);
-			assert_eq!(
-				Head::<T>::get(),
-				Some(UnstakeRequest {
-					stashes: bounded_vec![(1, Deposit::get())],
-					checked: bounded_vec![3]
-				})
-			);
-
-			// when: another 1 era.
-			let remaining_weight = <T as Config>::WeightInfo::on_idle_check(
-				pallet_staking::ValidatorCount::<T>::get() * 1,
-			);
-			assert_eq!(FastUnstake::on_idle(0, remaining_weight), remaining_weight);
-
-			// then:
-			assert_eq!(
-				fast_unstake_events_since_last_call(),
-				vec![Event::BatchChecked { eras: bounded_vec![2] }]
-			);
-			assert_eq!(
-				Head::<T>::get(),
-				Some(UnstakeRequest {
-					stashes: bounded_vec![(1, Deposit::get())],
-					checked: bounded_vec![3, 2]
-				})
-			);
-
-			// when: then 5 eras, we only need 2 more.
-			let remaining_weight = <T as Config>::WeightInfo::on_idle_check(
-				pallet_staking::ValidatorCount::<T>::get() * 5,
-			);
-			assert_eq!(
-				FastUnstake::on_idle(0, remaining_weight),
-				// note the amount of weight consumed: 2 eras worth of weight.
-				<T as Config>::WeightInfo::on_idle_check(
-					pallet_staking::ValidatorCount::<T>::get() * 2,
-				)
-			);
-
-			// then:
-			assert_eq!(
-				fast_unstake_events_since_last_call(),
-				vec![Event::BatchChecked { eras: vec![1, 0] }]
-			);
-			assert_eq!(
-				Head::<T>::get(),
-				Some(UnstakeRequest {
-					stashes: bounded_vec![(1, Deposit::get())],
-					checked: bounded_vec![3, 2, 1, 0]
-				})
-			);
-
-			// when: not enough weight to unstake:
-			let remaining_weight =
-				<T as Config>::WeightInfo::on_idle_unstake() - Weight::from_ref_time(1);
-			assert_eq!(FastUnstake::on_idle(0, remaining_weight), Weight::from_ref_time(0));
-
-			// then nothing happens:
-			assert_eq!(fast_unstake_events_since_last_call(), vec![]);
-			assert_eq!(
-				Head::<T>::get(),
-				Some(UnstakeRequest {
-					stashes: bounded_vec![(1, Deposit::get())],
-					checked: bounded_vec![3, 2, 1, 0]
-				})
-			);
-
-			// when: enough weight to get over at least one iteration: then we are unblocked and can
-			// unstake.
-			let remaining_weight = <T as Config>::WeightInfo::on_idle_check(
-				pallet_staking::ValidatorCount::<T>::get() * 1,
-			);
-			assert_eq!(
-				FastUnstake::on_idle(0, remaining_weight),
-				<T as Config>::WeightInfo::on_idle_unstake()
-			);
-
-			// then we finish the unbonding:
-			assert_eq!(
-				fast_unstake_events_since_last_call(),
-				vec![Event::Unstaked { stash: 1, result: Ok(()) }, Event::BatchFinished],
-			);
-			assert_eq!(Head::<T>::get(), None,);
-
-			assert_unstaked(&1);
-		});
-	}
-
-	#[test]
 	fn if_head_not_set_one_random_fetched_from_queue() {
 		ExtBuilder::default().build_and_execute(|| {
 			ErasToCheckPerBlock::<T>::put(BondingDuration::get() + 1);
@@ -410,7 +296,7 @@ mod on_idle {
 				vec![
 					Event::BatchChecked { eras: vec![3, 2, 1, 0] },
 					Event::Unstaked { stash: 1, result: Ok(()) },
-					Event::BatchFinished,
+					Event::BatchFinished { size: 1 },
 					Event::BatchChecked { eras: vec![3, 2, 1, 0] }
 				]
 			);
@@ -458,10 +344,10 @@ mod on_idle {
 				vec![
 					Event::BatchChecked { eras: vec![3, 2, 1, 0] },
 					Event::Unstaked { stash: 1, result: Ok(()) },
-					Event::BatchFinished,
+					Event::BatchFinished { size: 1 },
 					Event::BatchChecked { eras: vec![3, 2, 1, 0] },
 					Event::Unstaked { stash: 3, result: Ok(()) },
-					Event::BatchFinished,
+					Event::BatchFinished { size: 1 },
 				]
 			);
 
@@ -503,7 +389,7 @@ mod on_idle {
 				vec![
 					Event::BatchChecked { eras: vec![3, 2, 1, 0] },
 					Event::Unstaked { stash: 1, result: Ok(()) },
-					Event::BatchFinished
+					Event::BatchFinished { size: 1 }
 				]
 			);
 			assert_unstaked(&1);
@@ -545,7 +431,7 @@ mod on_idle {
 				vec![
 					Event::BatchChecked { eras: vec![3, 2, 1, 0] },
 					Event::Unstaked { stash: 1, result: Ok(()) },
-					Event::BatchFinished
+					Event::BatchFinished { size: 1 }
 				]
 			);
 			assert_unstaked(&1);
@@ -620,7 +506,7 @@ mod on_idle {
 					Event::BatchChecked { eras: vec![1] },
 					Event::BatchChecked { eras: vec![0] },
 					Event::Unstaked { stash: 1, result: Ok(()) },
-					Event::BatchFinished
+					Event::BatchFinished { size: 1 }
 				]
 			);
 			assert_unstaked(&1);
@@ -704,7 +590,7 @@ mod on_idle {
 					Event::BatchChecked { eras: vec![0] },
 					Event::BatchChecked { eras: vec![4] },
 					Event::Unstaked { stash: 1, result: Ok(()) },
-					Event::BatchFinished
+					Event::BatchFinished { size: 1 }
 				]
 			);
 			assert_unstaked(&1);
@@ -799,7 +685,7 @@ mod on_idle {
 					Event::BatchChecked { eras: vec![4] },
 					Event::BatchChecked { eras: vec![1] },
 					Event::Unstaked { stash: 1, result: Ok(()) },
-					Event::BatchFinished
+					Event::BatchFinished { size: 1 }
 				]
 			);
 
@@ -843,7 +729,7 @@ mod on_idle {
 					Event::BatchChecked { eras: vec![3] },
 					Event::BatchChecked { eras: vec![2] },
 					Event::Slashed { stash: exposed, amount: Deposit::get() },
-					Event::BatchFinished
+					Event::BatchFinished { size: 0 }
 				]
 			);
 		});
@@ -879,7 +765,7 @@ mod on_idle {
 				vec![
 					Event::BatchChecked { eras: vec![3, 2] },
 					Event::Slashed { stash: exposed, amount: Deposit::get() },
-					Event::BatchFinished
+					Event::BatchFinished { size: 0 }
 				]
 			);
 		});
@@ -910,7 +796,10 @@ mod on_idle {
 
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
-				vec![Event::Slashed { stash: 100, amount: Deposit::get() }, Event::BatchFinished]
+				vec![
+					Event::Slashed { stash: 100, amount: Deposit::get() },
+					Event::BatchFinished { size: 0 }
+				]
 			);
 		});
 	}
@@ -946,7 +835,7 @@ mod on_idle {
 				vec![
 					Event::BatchChecked { eras: vec![3, 2, 1, 0] },
 					Event::Unstaked { stash: 42, result: Ok(()) },
-					Event::BatchFinished
+					Event::BatchFinished { size: 1 }
 				]
 			);
 		});
@@ -1001,7 +890,7 @@ mod batched {
 					Event::Unstaked { stash: 1, result: Ok(()) },
 					Event::Unstaked { stash: 5, result: Ok(()) },
 					Event::Unstaked { stash: 7, result: Ok(()) },
-					Event::BatchFinished
+					Event::BatchFinished { size: 3 }
 				]
 			);
 		});
@@ -1067,7 +956,7 @@ mod batched {
 					Event::Unstaked { stash: 1, result: Ok(()) },
 					Event::Unstaked { stash: 5, result: Ok(()) },
 					Event::Unstaked { stash: 7, result: Ok(()) },
-					Event::BatchFinished
+					Event::BatchFinished { size: 3 }
 				]
 			);
 		});
@@ -1132,7 +1021,7 @@ mod batched {
 					Event::BatchChecked { eras: vec![1, 0] },
 					Event::Unstaked { stash: 1, result: Ok(()) },
 					Event::Unstaked { stash: 3, result: Ok(()) },
-					Event::BatchFinished
+					Event::BatchFinished { size: 2 }
 				]
 			);
 		});
@@ -1191,10 +1080,32 @@ mod batched {
 					Event::Slashed { stash: 666, amount: Deposit::get() },
 					Event::BatchChecked { eras: vec![3] },
 					Event::Slashed { stash: 667, amount: Deposit::get() },
-					Event::BatchFinished,
+					Event::BatchFinished { size: 0 },
 					Event::BatchChecked { eras: vec![3] }
 				]
 			);
 		});
 	}
+}
+
+#[test]
+fn kusama_estimate() {
+	use crate::WeightInfo;
+	let block_time = frame_support::weights::Weight::from_ref_time(
+		frame_support::weights::constants::WEIGHT_REF_TIME_PER_SECOND * 2,
+	)
+	.ref_time() as f32;
+	let on_idle = crate::weights::SubstrateWeight::<T>::on_idle_check(1000, 64).ref_time() as f32;
+	dbg!(block_time, on_idle, on_idle / block_time);
+}
+
+#[test]
+fn polkadot_estimate() {
+	use crate::WeightInfo;
+	let block_time = frame_support::weights::Weight::from_ref_time(
+		frame_support::weights::constants::WEIGHT_REF_TIME_PER_SECOND * 2,
+	)
+	.ref_time() as f32;
+	let on_idle = crate::weights::SubstrateWeight::<T>::on_idle_check(300, 64).ref_time() as f32;
+	dbg!(block_time, on_idle, on_idle / block_time);
 }

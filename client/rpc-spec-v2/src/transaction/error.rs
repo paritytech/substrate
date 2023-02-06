@@ -68,7 +68,7 @@ impl<Hash> From<Error> for TransactionEvent<Hash> {
 			Error::Pool(PoolError::TooLowPriority { old, new }) =>
 				TransactionEvent::Invalid(TransactionError {
 					error: format!(
-						"The priority of the transactin is too low (pool {} > current {})",
+						"The priority of the transaction is too low (pool {} > current {})",
 						old, new
 					),
 				}),
