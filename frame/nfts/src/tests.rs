@@ -171,8 +171,6 @@ fn basic_minting_should_work() {
 		));
 		assert_eq!(collections(), vec![(account(1), 0), (account(2), 1)]);
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(account(2)), 1, 69, account(1), None));
-		// assert_ok!(Nfts::force_mint(RuntimeOrigin::signed(account(2)), 1, 69, 1,
-		// default_item_config()));
 		assert_eq!(items(), vec![(account(1), 0, 42), (account(1), 1, 69)]);
 	});
 }
