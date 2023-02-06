@@ -59,7 +59,7 @@ pub(crate) const SPECULATIVE_NUM_SPANS: u32 = 32;
 pub mod pallet {
 	use frame_election_provider_support::ElectionDataProvider;
 
-	use crate::{BenchmarkingConfig, ExposureOverview};
+	use crate::{BenchmarkingConfig, ExposureExt, ExposureOverview};
 
 	use super::*;
 
@@ -679,35 +679,25 @@ pub mod pallet {
 			era: EraIndex,
 			validator: &T::AccountId,
 			page: PageIndex,
-		) -> (ExposureOverview<BalanceOf<T>>, ExposurePage<T::AccountId, BalanceOf<T>>) {
+		) -> Option<ExposureExt<T::AccountId, BalanceOf<T>>> {
 			return match <ErasStakersPaged<T>>::get(era, (validator, page)) {
-				// only return clipped exposure if page zero and no paged exposure entry
-				None if page == 0 => Self::get_clipped_exposure_as_page(era, validator),
+				// return clipped exposure if page zero and paged exposure does not exist
+				None if page == 0 =>
+					Some(ExposureExt::from_clipped(<ErasStakersClipped<T>>::get(era, validator))),
+
+				// return paged exposure if it exists
 				Some(exposure_page) => {
 					let overview = <ErasStakersOverview<T>>::get(&era, validator);
 					// own stake is included only once in the first page.
 					let own = if page == 0 { overview.own } else { Zero::zero() };
-					(ExposureOverview { own, ..overview }, exposure_page)
-				},
-				_ => Default::default(),
-			}
-		}
 
-		/// Get clipped exposure and convert it as `ExposurePage`.
-		fn get_clipped_exposure_as_page(
-			era: EraIndex,
-			validator: &T::AccountId,
-		) -> (ExposureOverview<BalanceOf<T>>, ExposurePage<T::AccountId, BalanceOf<T>>) {
-			let exposure = <ErasStakersClipped<T>>::get(&era, validator);
-			(
-				ExposureOverview {
-					total: exposure.total,
-					own: exposure.own,
-					nominator_count: exposure.others.len() as u32,
-					page_count: 1,
+					Some(ExposureExt {
+						exposure_overview: ExposureOverview { own, ..overview },
+						exposure_page,
+					})
 				},
-				ExposurePage { page_total: exposure.total, others: exposure.others },
-			)
+				_ => None,
+			}
 		}
 
 		/// Returns the number of pages of exposure a validator has for the given era.
