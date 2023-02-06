@@ -279,12 +279,6 @@ frame_support::construct_runtime!(
 	}
 );
 
-impl Runtime {
-	fn runtime_metadata() -> Vec<frame_support::metadata::v15::TraitMetadata> {
-		Default::default()
-	}
-}
-
 #[cfg(test)]
 mod test {
 	use super::{pallet, pallet_old, Runtime};

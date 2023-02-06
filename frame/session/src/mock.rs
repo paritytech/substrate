@@ -103,12 +103,6 @@ frame_support::construct_runtime!(
 	}
 );
 
-impl Test {
-	fn runtime_metadata() -> Vec<frame_support::metadata::v15::TraitMetadata> {
-		Default::default()
-	}
-}
-
 parameter_types! {
 	pub static Validators: Vec<u64> = vec![1, 2, 3];
 	pub static NextValidators: Vec<u64> = vec![1, 2, 3];

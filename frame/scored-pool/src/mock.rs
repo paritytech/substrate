@@ -46,12 +46,6 @@ construct_runtime!(
 	}
 );
 
-impl Test {
-	fn runtime_metadata() -> Vec<frame_support::metadata::v15::TraitMetadata> {
-		Default::default()
-	}
-}
-
 parameter_types! {
 	pub const CandidateDeposit: u64 = 25;
 }

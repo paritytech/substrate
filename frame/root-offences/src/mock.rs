@@ -58,12 +58,6 @@ frame_support::construct_runtime!(
 	}
 );
 
-impl Test {
-	fn runtime_metadata() -> Vec<frame_support::metadata::v15::TraitMetadata> {
-		Default::default()
-	}
-}
-
 /// Another session handler struct to test on_disabled.
 pub struct OtherSessionHandler;
 impl OneSessionHandler<AccountId> for OtherSessionHandler {

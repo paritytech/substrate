@@ -196,12 +196,6 @@ mod tests {
 		}
 	);
 
-	impl Test {
-		fn runtime_metadata() -> Vec<frame_support::metadata::v15::TraitMetadata> {
-			Default::default()
-		}
-	}
-
 	parameter_types! {
 		pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
 	}

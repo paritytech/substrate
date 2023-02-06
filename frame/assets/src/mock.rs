@@ -47,12 +47,6 @@ construct_runtime!(
 	}
 );
 
-impl Test {
-	fn runtime_metadata() -> Vec<frame_support::metadata::v15::TraitMetadata> {
-		Default::default()
-	}
-}
-
 type AccountId = u64;
 type AssetId = u32;
 

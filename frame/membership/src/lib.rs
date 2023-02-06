@@ -555,12 +555,6 @@ mod tests {
 		}
 	);
 
-	impl Test {
-		fn runtime_metadata() -> Vec<frame_support::metadata::v15::TraitMetadata> {
-			Default::default()
-		}
-	}
-
 	parameter_types! {
 		pub static Members: Vec<u64> = vec![];
 		pub static Prime: Option<u64> = None;
