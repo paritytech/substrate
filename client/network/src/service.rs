@@ -1310,19 +1310,12 @@ where
 			}
 		};
 
-		// Next swarm event, or `future::pending()` if the stream has terminated
-		// (guaranteed to never happen with `Swarm`).
+		// Next swarm event.
 		let next_swarm_event = {
 			let swarm = &mut self.network_service;
 
 			async move {
-				if let Some(event) = swarm.next().await {
-					event
-				} else {
-					loop {
-						futures::pending!();
-					}
-				}
+				swarm.next().await.expect("`Swarm` event stream guaranteed to never terminate.")
 			}
 		};
 
