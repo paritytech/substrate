@@ -1309,7 +1309,7 @@ where
 					return false
 				}
 			},
-			// Next event from `Swarm`.
+			// Next event from `Swarm` (the stream guaranteed to never terminate).
 			event = self.network_service.select_next_some() => {
 				self.handle_swarm_event(event);
 			},
