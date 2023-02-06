@@ -128,7 +128,7 @@ members = [
 	"frame/nomination-pools/benchmarking",
 	"frame/nomination-pools/test-staking",
 	"frame/nomination-pools/runtime-api",
-	"frame/randomness-collective-flip",
+	"frame/insecure-randomness-collective-flip",
 	"frame/ranked-collective",
 	"frame/recovery",
 	"frame/referenda",

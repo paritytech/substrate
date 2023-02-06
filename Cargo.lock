@@ -3526,6 +3526,7 @@ dependencies = [
  "pallet-identity",
  "pallet-im-online",
  "pallet-indices",
+ "pallet-insecure-randomness-collective-flip",
  "pallet-lottery",
  "pallet-membership",
  "pallet-message-queue",
@@ -3540,7 +3541,6 @@ dependencies = [
  "pallet-offences-benchmarking",
  "pallet-preimage",
  "pallet-proxy",
- "pallet-randomness-collective-flip",
  "pallet-ranked-collective",
  "pallet-recovery",
  "pallet-referenda",
@@ -4981,7 +4981,7 @@ dependencies = [
  "pallet-aura",
  "pallet-balances",
  "pallet-grandpa",
- "pallet-randomness-collective-flip",
+ "pallet-insecure-randomness-collective-flip",
  "pallet-sudo",
  "pallet-template",
  "pallet-timestamp",
@@ -5591,7 +5591,7 @@ dependencies = [
  "pallet-balances",
  "pallet-contracts-primitives",
  "pallet-contracts-proc-macro",
- "pallet-randomness-collective-flip",
+ "pallet-insecure-randomness-collective-flip",
  "pallet-timestamp",
  "pallet-utility",
  "parity-scale-codec",
@@ -5868,6 +5868,21 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-keyring",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-insecure-randomness-collective-flip"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "safe-mix",
+ "scale-info",
+ "sp-core",
+ "sp-io",
  "sp-runtime",
  "sp-std",
 ]
@@ -6190,21 +6205,6 @@ dependencies = [
  "pallet-balances",
  "pallet-utility",
  "parity-scale-codec",
- "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
-name = "pallet-randomness-collective-flip"
-version = "4.0.0-dev"
-dependencies = [
- "frame-support",
- "frame-system",
- "parity-scale-codec",
- "safe-mix",
  "scale-info",
  "sp-core",
  "sp-io",
