@@ -486,7 +486,7 @@ pub trait Public: ByteArray + Derive + CryptoType + PartialEq + Eq + Clone + Sen
 
 /// An opaque 32-byte cryptographic identifier.
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Hash))]
+#[cfg_attr(feature = "std", derive(Hash, Copy))]
 pub struct AccountId32([u8; 32]);
 
 impl AccountId32 {

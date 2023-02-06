@@ -1585,6 +1585,8 @@ impl pallet_nfts::Config for Runtime {
 	type MaxDeadlineDuration = MaxDeadlineDuration;
 	type MaxAttributesPerCall = MaxAttributesPerCall;
 	type Features = Features;
+	type OffchainSignature = Signature;
+	type OffchainPublic = <Signature as traits::Verify>::Signer;
 	type WeightInfo = pallet_nfts::weights::SubstrateWeight<Runtime>;
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = ();
