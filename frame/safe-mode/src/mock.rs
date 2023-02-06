@@ -38,7 +38,7 @@ impl frame_system::Config for Test {
 	type BaseCallFilter = InsideBoth<Everything, SafeMode>;
 	type BlockWeights = ();
 	type BlockLength = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -181,7 +181,7 @@ impl ForceActivateOrigin {
 	}
 
 	/// Signed origin.
-	pub fn signed(&self) -> <Test as frame_system::Config>::Origin {
+	pub fn signed(&self) -> <Test as frame_system::Config>::RuntimeOrigin {
 		RawOrigin::Signed(self.acc()).into()
 	}
 }
@@ -206,7 +206,7 @@ impl ForceExtendOrigin {
 	}
 
 	/// Signed origin.
-	pub fn signed(&self) -> <Test as frame_system::Config>::Origin {
+	pub fn signed(&self) -> <Test as frame_system::Config>::RuntimeOrigin {
 		RawOrigin::Signed(self.acc()).into()
 	}
 }
@@ -229,8 +229,8 @@ impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>>> EnsureOrigin<O>
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> O {
-		O::from(RawOrigin::Signed(ForceActivateOrigin::Strong.acc()))
+	fn try_successful_origin() -> Result<O, ()> {
+		Ok(O::from(RawOrigin::Signed(ForceActivateOrigin::Strong.acc())))
 	}
 }
 
@@ -252,8 +252,8 @@ impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>>> EnsureOrigin<O>
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> O {
-		O::from(RawOrigin::Signed(ForceExtendOrigin::Strong.acc()))
+	fn try_successful_origin() -> Result<O, ()> {
+		Ok(O::from(RawOrigin::Signed(ForceExtendOrigin::Strong.acc())))
 	}
 }
 

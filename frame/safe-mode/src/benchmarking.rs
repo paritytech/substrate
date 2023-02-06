@@ -19,7 +19,7 @@
 
 use super::{Pallet as SafeMode, *};
 
-use frame_benchmarking::{benchmarks, whitelisted_caller};
+use frame_benchmarking::{benchmarks, whitelisted_caller, BenchmarkError};
 use frame_support::traits::{Currency, UnfilteredDispatchable};
 use frame_system::{Pallet as System, RawOrigin};
 use sp_runtime::traits::{Bounded, One};
@@ -38,7 +38,7 @@ benchmarks! {
 	}
 
 	force_activate {
-		let force_origin = T::ForceActivateOrigin::successful_origin();
+		let force_origin = T::ForceActivateOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		let duration = T::ForceActivateOrigin::ensure_origin(force_origin.clone()).unwrap();
 		let call = Call::<T>::force_activate {};
 	}: { call.dispatch_bypass_filter(force_origin)? }
@@ -73,7 +73,7 @@ benchmarks! {
 		System::<T>::set_block_number(1u32.into());
 		assert!(SafeMode::<T>::activate(origin.clone().into()).is_ok());
 
-		let force_origin = T::ForceExtendOrigin::successful_origin();
+		let force_origin = T::ForceExtendOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		let extension = T::ForceExtendOrigin::ensure_origin(force_origin.clone()).unwrap();
 		let call = Call::<T>::force_extend {};
 	}: { call.dispatch_bypass_filter(force_origin)? }
@@ -91,7 +91,7 @@ benchmarks! {
 
 		assert!(SafeMode::<T>::activate(origin.clone().into()).is_ok());
 
-		let force_origin = T::ForceDeactivateOrigin::successful_origin();
+		let force_origin = T::ForceDeactivateOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		let call = Call::<T>::force_deactivate {};
 	}: { call.dispatch_bypass_filter(force_origin)? }
 	verify {
@@ -114,7 +114,7 @@ benchmarks! {
 			BalanceOf::<T>::max_value() - T::ActivateReservationAmount::get().unwrap()
 		);
 
-		let force_origin = T::ForceDeactivateOrigin::successful_origin();
+		let force_origin = T::ForceDeactivateOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		assert!(SafeMode::<T>::force_deactivate(force_origin.clone()).is_ok());
 
 		System::<T>::set_block_number(System::<T>::block_number() + T::ReleaseDelay::get().unwrap() + One::one());
@@ -143,14 +143,15 @@ benchmarks! {
 			BalanceOf::<T>::max_value() - T::ActivateReservationAmount::get().unwrap()
 		);
 
-		let force_origin = T::ForceDeactivateOrigin::successful_origin();
+		// TODO
+		let force_origin = T::ForceDeactivateOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		assert!(SafeMode::<T>::force_deactivate(force_origin.clone()).is_ok());
 
 		System::<T>::set_block_number(System::<T>::block_number() + One::one());
 		System::<T>::on_initialize(System::<T>::block_number());
 		SafeMode::<T>::on_initialize(System::<T>::block_number());
 
-		let release_origin = T::ForceReservationOrigin::successful_origin();
+		let release_origin = T::ForceReservationOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		let call = Call::<T>::force_release_reservation { account: caller.clone(), block: activated_at_block.clone()};
 	}: { call.dispatch_bypass_filter(release_origin)? }
 	verify {
@@ -173,10 +174,11 @@ benchmarks! {
 			BalanceOf::<T>::max_value() - T::ActivateReservationAmount::get().unwrap()
 		);
 
-		let force_origin = T::ForceDeactivateOrigin::successful_origin();
+		// TODO
+		let force_origin = T::ForceDeactivateOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		assert!(SafeMode::<T>::force_deactivate(force_origin.clone()).is_ok());
 
-		let release_origin = T::ForceReservationOrigin::successful_origin();
+		let release_origin = T::ForceReservationOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		let call = Call::<T>::slash_reservation { account: caller.clone(), block: activated_at_block.clone()};
 	}: { call.dispatch_bypass_filter(release_origin)? }
 	verify {

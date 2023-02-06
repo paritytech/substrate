@@ -121,7 +121,7 @@ pub mod pallet {
 
 		/// The overarching call type.
 		type RuntimeCall: Parameter
-			+ Dispatchable<Origin = Self::Origin>
+			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin>
 			+ GetDispatchInfo
 			+ GetCallMetadata
 			+ From<frame_system::Call<Self>>
@@ -129,10 +129,10 @@ pub mod pallet {
 			+ IsType<<Self as frame_system::Config>::RuntimeCall>;
 
 		/// The only origin that can pause calls.
-		type PauseOrigin: EnsureOrigin<Self::Origin>;
+		type PauseOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The only origin that can un-pause calls.
-		type UnpauseOrigin: EnsureOrigin<Self::Origin>;
+		type UnpauseOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Contains all calls that cannot be paused.
 		///
@@ -222,6 +222,7 @@ pub mod pallet {
 		///
 		/// Can only be called by [`Config::PauseOrigin`].
 		/// Emits an [`Event::SomethingPaused`] event on success.
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::pause())]
 		pub fn pause(origin: OriginFor<T>, full_name: FullNameOf<T>) -> DispatchResult {
 			T::PauseOrigin::ensure_origin(origin)?;
@@ -237,6 +238,7 @@ pub mod pallet {
 		///
 		/// Can only be called by [`Config::UnpauseOrigin`].
 		/// Emits an [`Event::SomethingUnpaused`] event on success.
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::unpause())]
 		pub fn unpause(origin: OriginFor<T>, full_name: FullNameOf<T>) -> DispatchResult {
 			T::UnpauseOrigin::ensure_origin(origin)?;

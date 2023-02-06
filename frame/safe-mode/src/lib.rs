@@ -93,19 +93,19 @@ pub mod pallet {
 		/// The origin that may call [`Pallet::force_activate`].
 		///
 		/// The `Success` value is the number of blocks that this origin can activate safe-mode for.
-		type ForceActivateOrigin: EnsureOrigin<Self::Origin, Success = Self::BlockNumber>;
+		type ForceActivateOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Self::BlockNumber>;
 
 		/// The origin that may call [`Pallet::force_extend`].
 		///
 		/// The `Success` value is the number of blocks that this origin can extend the safe-mode.
-		type ForceExtendOrigin: EnsureOrigin<Self::Origin, Success = Self::BlockNumber>;
+		type ForceExtendOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Self::BlockNumber>;
 
 		/// The origin that may call [`Pallet::force_activate`].
-		type ForceDeactivateOrigin: EnsureOrigin<Self::Origin>;
+		type ForceDeactivateOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The origin that may call [`Pallet::force_release_reservation`] and
 		/// [`Pallet::slash_reservation`].
-		type ForceReservationOrigin: EnsureOrigin<Self::Origin>;
+		type ForceReservationOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The minimal duration a deposit will remain reserved after safe-mode is activated or
 		/// extended, unless [`Pallet::force_release_reservation`] is successfully dispatched
@@ -232,6 +232,7 @@ pub mod pallet {
 		/// This may be called by any signed origin with [`Config::ActivateReservationAmount`] free
 		/// currency to reserve. This call can be disabled for all origins by configuring
 		/// [`Config::ActivateReservationAmount`] to `None`.
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::activate())]
 		pub fn activate(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -247,6 +248,7 @@ pub mod pallet {
 		/// ### Safety
 		///
 		/// Can only be called by the [`Config::ForceActivateOrigin`] origin.
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::force_activate())]
 		pub fn force_activate(origin: OriginFor<T>) -> DispatchResult {
 			let duration = T::ForceActivateOrigin::ensure_origin(origin)?;
@@ -266,6 +268,7 @@ pub mod pallet {
 		/// This may be called by any signed origin with [`Config::ExtendReservationAmount`] free
 		/// currency to reserve. This call can be disabled for all origins by configuring
 		/// [`Config::ExtendReservationAmount`] to `None`.
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::extend())]
 		pub fn extend(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -281,6 +284,7 @@ pub mod pallet {
 		/// ### Safety
 		///
 		/// Can only be called by the [`Config::ForceExtendOrigin`] origin.
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::force_extend())]
 		pub fn force_extend(origin: OriginFor<T>) -> DispatchResult {
 			let duration = T::ForceExtendOrigin::ensure_origin(origin)?;
@@ -301,6 +305,7 @@ pub mod pallet {
 		/// ### Safety
 		///
 		/// Can only be called by the [`Config::ForceDeactivateOrigin`] origin.
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::force_deactivate())]
 		pub fn force_deactivate(origin: OriginFor<T>) -> DispatchResult {
 			T::ForceDeactivateOrigin::ensure_origin(origin)?;
@@ -317,6 +322,7 @@ pub mod pallet {
 		/// ### Safety
 		///
 		/// Can only be called by the [`Config::ForceReservationOrigin`] origin.
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::slash_reservation())]
 		pub fn slash_reservation(
 			origin: OriginFor<T>,
@@ -343,6 +349,7 @@ pub mod pallet {
 		/// This may be called by any signed origin.
 		/// This call can be disabled for all origins by configuring
 		/// [`Config::ReleaseDelay`] to `None`.
+		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::release_reservation())]
 		pub fn release_reservation(
 			origin: OriginFor<T>,
@@ -365,6 +372,7 @@ pub mod pallet {
 		/// ### Safety
 		///
 		/// Can only be called by the [`Config::ForceReservationOrigin`] origin.
+		#[pallet::call_index(7)]
 		#[pallet::weight(T::WeightInfo::force_release_reservation())]
 		pub fn force_release_reservation(
 			origin: OriginFor<T>,

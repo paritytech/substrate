@@ -29,13 +29,13 @@ use frame_election_provider_support::{
 use frame_support::{
 	construct_runtime,
 	dispatch::DispatchClass,
-	pallet_prelude::Get,
+	pallet_prelude::EnsureOrigin,
 	parameter_types,
 	traits::{
 		fungible::ItemOf, AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32,
-		Currency, EitherOfDiverse, EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter,
-		KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote,
-		WithdrawReasons,
+		Contains, Currency, EitherOfDiverse, EqualPrivilegeOnly, Imbalance, InsideBoth,
+		InstanceFilter, KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced,
+		U128CurrencyToVote, WithdrawReasons,
 	},
 	weights::{
 		constants::{
@@ -70,7 +70,7 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	generic, impl_opaque_keys,
 	traits::{
-		self, BlakeTwo256, Block as BlockT, Bounded, ConvertInto, NumberFor, OpaqueKeys,
+		self, BlakeTwo256, Block as BlockT, Bounded, ConvertInto, Get, NumberFor, OpaqueKeys,
 		SaturatedConversion, StaticLookup,
 	},
 	transaction_validity::{TransactionPriority, TransactionSource, TransactionValidity},
@@ -289,7 +289,7 @@ impl ForceActivateOrigin {
 	}
 
 	/// Signed origin.
-	pub fn signed(&self) -> <Runtime as frame_system::Config>::Origin {
+	pub fn signed(&self) -> <Runtime as frame_system::Config>::RuntimeOrigin {
 		RawOrigin::Signed(self.acc()).into()
 	}
 }
@@ -314,7 +314,7 @@ impl ForceExtendOrigin {
 	}
 
 	/// Signed origin.
-	pub fn signed(&self) -> <Runtime as frame_system::Config>::Origin {
+	pub fn signed(&self) -> <Runtime as frame_system::Config>::RuntimeOrigin {
 		RawOrigin::Signed(self.acc()).into()
 	}
 }
@@ -1689,7 +1689,7 @@ parameter_types! {
 	pub const ThawThrottle: (Perquintill, BlockNumber) = (Perquintill::from_percent(25), 5);
 	pub Target: Perquintill = Perquintill::zero();
 	pub const NisPalletId: PalletId = PalletId(*b"py/nis  ");
-	pub const NisReserveId: [u8; 8] = *b"py/nis  ";
+	pub const NisReserveId: u32 = 123; // FAIL-CI
 }
 
 impl pallet_nis::Config for Runtime {
