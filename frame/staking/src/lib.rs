@@ -825,6 +825,7 @@ struct ExposureExt<AccountId, Balance: HasCompact> {
 }
 
 impl<AccountId, Balance: HasCompact + Copy + AtLeast32BitUnsigned> ExposureExt<AccountId, Balance> {
+	/// Create a new instance of `ExposureExt` from legacy clipped exposures.
 	pub fn from_clipped(exposure: Exposure<AccountId, Balance>) -> Self {
 		Self {
 			exposure_overview: ExposureOverview {
@@ -836,23 +837,23 @@ impl<AccountId, Balance: HasCompact + Copy + AtLeast32BitUnsigned> ExposureExt<A
 			exposure_page: ExposurePage { page_total: exposure.total, others: exposure.others },
 		}
 	}
+
+	/// Returns total exposure of this validator across pages
 	pub fn total(&self) -> Balance {
 		self.exposure_overview.total
 	}
 
-	pub fn own(&self) -> Balance {
-		self.exposure_overview.own
-	}
-
-	pub fn page_count(&self) -> PageIndex {
-		self.exposure_overview.page_count
-	}
-
-	// Returns the total stake of this page.
+	/// Returns total exposure of this validator for current page
 	pub fn current_total(&self) -> Balance {
 		self.exposure_page.page_total + self.exposure_overview.own
 	}
 
+	/// Returns validator's own stake that is exposed
+	pub fn own(&self) -> Balance {
+		self.exposure_overview.own
+	}
+
+	/// Returns the portions of nominators stashes that are exposed in this page
 	pub fn others(&self) -> &Vec<IndividualExposure<AccountId, Balance>> {
 		&self.exposure_page.others
 	}
