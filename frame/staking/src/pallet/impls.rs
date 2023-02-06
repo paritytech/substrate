@@ -240,9 +240,13 @@ impl<T: Config> Pallet<T> {
 		// Now let's calculate how this is split to the validator.
 		let validator_exposure_part = Perbill::from_rational(exposure.own(), exposure.total());
 		let validator_staking_payout = validator_exposure_part * validator_leftover_payout;
-		let page_stake_part = Perbill::from_rational(exposure.page_total(), exposure.total());
+		let page_stake_part = Perbill::from_rational(exposure.current_total(), exposure.total());
 		// validator commission is paid out in fraction across pages proportional to the page stake.
 		let validator_commission_payout = page_stake_part * validator_total_commission_payout;
+		println!(
+			"validator_commission_payout: {:?}, validator_total_commission_payout: {:?}, exposure_total: {:?}, exposure_page_total: {:?}, page_count: {:?}, own: {:?}",
+			validator_commission_payout, validator_total_commission_payout, exposure.total(), exposure.current_total(), exposure.page_count(), exposure.own()
+		);
 
 		Self::deposit_event(Event::<T>::PayoutStarted {
 			era_index: era,
@@ -287,13 +291,7 @@ impl<T: Config> Pallet<T> {
 		T::Reward::on_unbalanced(total_imbalance);
 		debug_assert!(nominator_payout_count <= T::MaxNominatorRewardedPerValidator::get());
 
-		let payout_weight = if page == 0 {
-			T::WeightInfo::payout_stakers_alive_staked(nominator_payout_count)
-		} else {
-			T::WeightInfo::payout_stakers_nominators_only(nominator_payout_count)
-		};
-
-		Ok(Some(payout_weight).into())
+		Ok(Some(T::WeightInfo::payout_stakers_alive_staked(nominator_payout_count)).into())
 	}
 
 	/// Update the ledger for a controller.

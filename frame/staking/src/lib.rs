@@ -824,7 +824,7 @@ struct ExposureExt<AccountId, Balance: HasCompact> {
 	exposure_page: ExposurePage<AccountId, Balance>,
 }
 
-impl<AccountId, Balance: HasCompact + Copy> ExposureExt<AccountId, Balance> {
+impl<AccountId, Balance: HasCompact + Copy + AtLeast32BitUnsigned> ExposureExt<AccountId, Balance> {
 	pub fn from_clipped(exposure: Exposure<AccountId, Balance>) -> Self {
 		Self {
 			exposure_overview: ExposureOverview {
@@ -844,16 +844,13 @@ impl<AccountId, Balance: HasCompact + Copy> ExposureExt<AccountId, Balance> {
 		self.exposure_overview.own
 	}
 
-	pub fn nominator_count(&self) -> u32 {
-		self.exposure_overview.nominator_count
-	}
-
 	pub fn page_count(&self) -> PageIndex {
 		self.exposure_overview.page_count
 	}
 
-	pub fn page_total(&self) -> Balance {
-		self.exposure_page.page_total
+	// Returns the total stake of this page.
+	pub fn current_total(&self) -> Balance {
+		self.exposure_page.page_total + self.exposure_overview.own
 	}
 
 	pub fn others(&self) -> &Vec<IndividualExposure<AccountId, Balance>> {

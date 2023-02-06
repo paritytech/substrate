@@ -68,7 +68,6 @@ pub trait WeightInfo {
 	fn cancel_deferred_slash(s: u32, ) -> Weight;
 	fn payout_stakers_dead_controller(n: u32, ) -> Weight;
 	fn payout_stakers_alive_staked(n: u32, ) -> Weight;
-	fn payout_stakers_nominators_only(n: u32, ) -> Weight;
 	fn rebond(l: u32, ) -> Weight;
 	fn reap_stash(s: u32, ) -> Weight;
 	fn new_era(v: u32, n: u32, ) -> Weight;
@@ -349,28 +348,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(4))
 			.saturating_add(T::DbWeight::get().writes((3_u64).saturating_mul(n.into())))
 	}
-	// Storage: Staking CurrentEra (r:1 w:0)
-	// Storage: Staking ErasStakersOverview (r:1 w:0)
-	// Storage: Staking ErasValidatorReward (r:1 w:0)
-	// Storage: Staking Bonded (r:2 w:0)
-	// Storage: Staking Ledger (r:2 w:2)
-	// Storage: Staking ClaimedRewards (r:1 w:1)
-	// Storage: Staking ErasStakersPaged (r:1 w:0)
-	// Storage: Staking ErasRewardPoints (r:1 w:0)
-	// Storage: Staking Payee (r:2 w:0)
-	// Storage: Balances Locks (r:2 w:2)
-	// Storage: System Account (r:2 w:2)
-	/// The range of component `n` is `[1, 256]`.
-	fn payout_stakers_nominators_only(n: u32, ) -> Weight {
-		// Minimum execution time: 272_243 nanoseconds.
-		Weight::from_ref_time(228_003_618)
-			// Standard Error: 35_442
-			.saturating_add(Weight::from_ref_time(34_057_392).saturating_mul(n.into()))
-			.saturating_add(T::DbWeight::get().reads(11))
-			.saturating_add(T::DbWeight::get().reads((5_u64).saturating_mul(n.into())))
-			.saturating_add(T::DbWeight::get().writes(4))
-			.saturating_add(T::DbWeight::get().writes((3_u64).saturating_mul(n.into())))
-	}
+
 	// Storage: Staking Ledger (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
@@ -792,28 +770,6 @@ impl WeightInfo for () {
 			// Standard Error: 30_392
 			.saturating_add(Weight::from_ref_time(30_760_443).saturating_mul(n.into()))
 			.saturating_add(RocksDbWeight::get().reads(12))
-			.saturating_add(RocksDbWeight::get().reads((5_u64).saturating_mul(n.into())))
-			.saturating_add(RocksDbWeight::get().writes(4))
-			.saturating_add(RocksDbWeight::get().writes((3_u64).saturating_mul(n.into())))
-	}
-	// Storage: Staking CurrentEra (r:1 w:0)
-	// Storage: Staking ErasStakersOverview (r:1 w:0)
-	// Storage: Staking ErasValidatorReward (r:1 w:0)
-	// Storage: Staking Bonded (r:2 w:0)
-	// Storage: Staking Ledger (r:2 w:2)
-	// Storage: Staking ClaimedRewards (r:1 w:1)
-	// Storage: Staking ErasStakersPaged (r:1 w:0)
-	// Storage: Staking ErasRewardPoints (r:1 w:0)
-	// Storage: Staking Payee (r:2 w:0)
-	// Storage: Balances Locks (r:2 w:2)
-	// Storage: System Account (r:2 w:2)
-	/// The range of component `n` is `[1, 256]`.
-	fn payout_stakers_nominators_only(n: u32, ) -> Weight {
-		// Minimum execution time: 272_243 nanoseconds.
-		Weight::from_ref_time(228_003_618)
-			// Standard Error: 35_442
-			.saturating_add(Weight::from_ref_time(34_057_392).saturating_mul(n.into()))
-			.saturating_add(RocksDbWeight::get().reads(11))
 			.saturating_add(RocksDbWeight::get().reads((5_u64).saturating_mul(n.into())))
 			.saturating_add(RocksDbWeight::get().writes(4))
 			.saturating_add(RocksDbWeight::get().writes((3_u64).saturating_mul(n.into())))

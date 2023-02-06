@@ -4062,7 +4062,7 @@ fn payout_stakers_handles_basic_errors() {
 }
 
 #[test]
-fn test_commission_paid_only_once() {
+fn test_commission_paid_across_pages() {
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		let balance = 1;
 		let commission = 50;
@@ -4091,24 +4091,29 @@ fn test_commission_paid_only_once() {
 		let payout = current_total_payout_for_duration(reward_time_per_era());
 		mock::start_active_era(2);
 
-		let controller_balance_before_p0_payout = Balances::free_balance(&10);
+		let initial_balance = Balances::free_balance(&10);
 		// Payout rewards for first exposure page
 		assert_ok!(Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, 1, 0));
 
 		let controller_balance_after_p0_payout = Balances::free_balance(&10);
 
-		// half of the payout goes to validator since commission is 50%
+		// some commission is paid
+		assert!(initial_balance < controller_balance_after_p0_payout);
+
+		// payout all pages
+		for i in 1..4 {
+			let before_balance = Balances::free_balance(&10);
+			assert_ok!(Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, 1, i));
+			let after_balance = Balances::free_balance(&10);
+			// some commission is paid for every page
+			assert!(before_balance < after_balance);
+		}
+
 		assert_eq_error_rate!(
-			controller_balance_after_p0_payout,
-			controller_balance_before_p0_payout + payout / 2,
+			Balances::free_balance(&10),
+			initial_balance + payout / 2,
 			1,
 		);
-
-		for i in 1..4 {
-			assert_ok!(Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, 1, i));
-			// no reward paid to validator for pages other than 0
-			Balances::free_balance(&10);
-		}
 	});
 }
 
