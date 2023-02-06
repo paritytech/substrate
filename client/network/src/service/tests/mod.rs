@@ -81,9 +81,7 @@ impl TestNetwork {
 		let event_stream = service.event_stream("test");
 
 		tokio::spawn(async move {
-			loop {
-				worker.next_action().await;
-			}
+			worker.run().await;
 		});
 
 		(service, event_stream)

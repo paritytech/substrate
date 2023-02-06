@@ -1293,15 +1293,20 @@ where
 	H: ExHashT,
 	Client: HeaderBackend<B> + 'static,
 {
+	/// Run the network.
+	pub async fn run(&mut self) {
+		while self.next_action().await {}
+	}
+
 	/// Perform one action on the network.
-	pub async fn next_action(&mut self) {
+	async fn next_action(&mut self) -> bool {
 		futures::select! {
 			// Next message from the service.
 			msg = self.from_service.next().fuse() => {
 				if let Some(msg) = msg {
 					self.handle_worker_message(msg);
 				} else {
-					return
+					return false
 				}
 			},
 			// Next event from `Swarm`.
@@ -1361,6 +1366,8 @@ where
 					as u64,
 			);
 		}
+
+		true
 	}
 
 	/// Process the next message coming from the `NetworkService`.

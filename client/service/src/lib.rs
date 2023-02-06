@@ -286,10 +286,8 @@ async fn build_network_future<
 				}
 			}
 
-			// The network worker has done something. Nothing special to do, but could be
-			// used in the future to perform actions in response of things that happened on
-			// the network.
-			_ = network.next_action().fuse() => {}
+			// Drive the network. Shut down the network future if `NetworkWorker` has terminated.
+			_ = network.run().fuse() => return,
 		}
 	}
 }

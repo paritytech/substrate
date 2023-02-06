@@ -76,7 +76,7 @@ async fn normal_network_poll_no_peers() {
 		.build();
 
 	// poll the network once
-	let _ = network.network().next_action().now_or_never();
+	let _ = network.network().run().now_or_never();
 }
 
 #[tokio::test]
@@ -106,7 +106,7 @@ async fn request_justification() {
 	// send "request justifiction" message and poll the network
 	network.service().request_justification(&hash, number);
 
-	let _ = network.network().next_action().now_or_never();
+	let _ = network.network().run().now_or_never();
 }
 
 #[tokio::test]
@@ -133,7 +133,7 @@ async fn clear_justification_requests() {
 	// send "request justifiction" message and poll the network
 	network.service().clear_justification_requests();
 
-	let _ = network.network().next_action().now_or_never();
+	let _ = network.network().run().now_or_never();
 }
 
 #[tokio::test]
@@ -168,7 +168,7 @@ async fn set_sync_fork_request() {
 	// send "set sync fork request" message and poll the network
 	network.service().set_sync_fork_request(copy_peers, hash, number);
 
-	let _ = network.network().next_action().now_or_never();
+	let _ = network.network().run().now_or_never();
 }
 
 #[tokio::test]
@@ -209,7 +209,7 @@ async fn on_block_finalized() {
 	// send "set sync fork request" message and poll the network
 	network.network().on_block_finalized(hash, header);
 
-	let _ = network.network().next_action().now_or_never();
+	let _ = network.network().run().now_or_never();
 }
 
 // report from mock import queue that importing a justification was not successful
