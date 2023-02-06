@@ -63,7 +63,7 @@ where
 
 	match version {
 		None => (),
-		Some(1) => return v1::migrate_from_version1::<B, _>(backend),
+		Some(1) => (), // version 1 is totally obsolete and should be simply ignored
 		Some(2) => return load_decode::<_, PersistedState<B>>(backend, WORKER_STATE_KEY),
 		other =>
 			return Err(ClientError::Backend(format!("Unsupported BEEFY DB version: {:?}", other))),
@@ -71,118 +71,6 @@ where
 
 	// No persistent state found in DB.
 	Ok(None)
-}
-
-mod v1 {
-	use super::*;
-	use crate::{round::RoundTracker, worker::PersistedState, Rounds};
-	use beefy_primitives::{
-		crypto::{Public, Signature},
-		Commitment, Payload, ValidatorSet,
-	};
-	use sp_runtime::traits::NumberFor;
-	use std::collections::{BTreeMap, VecDeque};
-
-	#[derive(Decode)]
-	struct V1RoundTracker {
-		self_vote: bool,
-		votes: BTreeMap<Public, Signature>,
-	}
-
-	impl Into<RoundTracker> for V1RoundTracker {
-		fn into(self) -> RoundTracker {
-			// make the compiler happy by using this deprecated field
-			let _ = self.self_vote;
-			RoundTracker::new(self.votes)
-		}
-	}
-
-	#[derive(Decode)]
-	struct V1Rounds<B: BlockT> {
-		rounds: BTreeMap<(Payload, NumberFor<B>), V1RoundTracker>,
-		session_start: NumberFor<B>,
-		validator_set: ValidatorSet<Public>,
-		mandatory_done: bool,
-		best_done: Option<NumberFor<B>>,
-	}
-
-	impl<B> Into<Rounds<B>> for V1Rounds<B>
-	where
-		B: BlockT,
-	{
-		fn into(self) -> Rounds<B> {
-			let validator_set_id = self.validator_set.id();
-			let rounds = self
-				.rounds
-				.into_iter()
-				.map(|((payload, block_number), v1_tracker)| {
-					(Commitment { payload, block_number, validator_set_id }, v1_tracker.into())
-				})
-				.collect();
-			Rounds::<B>::new_manual(
-				rounds,
-				BTreeMap::new(),
-				self.session_start,
-				self.validator_set,
-				self.mandatory_done,
-				self.best_done,
-			)
-		}
-	}
-
-	#[derive(Decode)]
-	pub(crate) struct V1VoterOracle<B: BlockT> {
-		sessions: VecDeque<V1Rounds<B>>,
-		min_block_delta: u32,
-	}
-
-	#[derive(Decode)]
-	pub(crate) struct V1PersistedState<B: BlockT> {
-		/// Best block we received a GRANDPA finality for.
-		best_grandpa_block_header: <B as BlockT>::Header,
-		/// Best block a BEEFY voting round has been concluded for.
-		best_beefy_block: NumberFor<B>,
-		/// Chooses which incoming votes to accept and which votes to generate.
-		/// Keeps track of voting seen for current and future rounds.
-		voting_oracle: V1VoterOracle<B>,
-	}
-
-	impl<B> TryInto<PersistedState<B>> for V1PersistedState<B>
-	where
-		B: BlockT,
-	{
-		type Error = ();
-		fn try_into(self) -> Result<PersistedState<B>, Self::Error> {
-			let Self { best_grandpa_block_header, best_beefy_block, voting_oracle } = self;
-			let V1VoterOracle { sessions, min_block_delta } = voting_oracle;
-			let sessions =
-				sessions.into_iter().map(<V1Rounds<B> as Into<Rounds<B>>>::into).collect();
-			PersistedState::checked_new(
-				best_grandpa_block_header,
-				best_beefy_block,
-				sessions,
-				min_block_delta,
-			)
-			.ok_or(())
-		}
-	}
-
-	pub(super) fn migrate_from_version1<B: BlockT, BE>(
-		backend: &BE,
-	) -> ClientResult<Option<PersistedState<B>>>
-	where
-		B: BlockT,
-		BE: Backend<B>,
-	{
-		write_current_version(backend)?;
-		if let Some(new_state) = load_decode::<_, V1PersistedState<B>>(backend, WORKER_STATE_KEY)?
-			.and_then(|old_state| old_state.try_into().ok())
-		{
-			write_voter_state(backend, &new_state)?;
-			return Ok(Some(new_state))
-		}
-		Ok(None)
-	}
 }
 
 #[cfg(test)]

@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[macro_use]
-extern crate criterion;
-
-use criterion::{black_box, Bencher, BenchmarkId, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, Bencher, BenchmarkId, Criterion};
 use sp_core::{
 	crypto::Pair as _,
 	hashing::{blake2_128, twox_128},

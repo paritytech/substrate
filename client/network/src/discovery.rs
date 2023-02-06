@@ -77,7 +77,7 @@ use sc_network_common::{config::ProtocolId, utils::LruHashSet};
 use sp_core::hexdisplay::HexDisplay;
 use std::{
 	cmp,
-	collections::{HashMap, HashSet, VecDeque},
+	collections::{hash_map::Entry, HashMap, HashSet, VecDeque},
 	num::NonZeroUsize,
 	task::{Context, Poll},
 	time::Duration,
@@ -318,14 +318,16 @@ impl DiscoveryBehaviour {
 	/// If we didn't know this address before, also generates a `Discovered` event.
 	pub fn add_known_address(&mut self, peer_id: PeerId, addr: Multiaddr) {
 		let addrs_list = self.ephemeral_addresses.entry(peer_id).or_default();
-		if !addrs_list.iter().any(|a| *a == addr) {
-			if let Some(k) = self.kademlia.as_mut() {
-				k.add_address(&peer_id, addr.clone());
-			}
-
-			self.pending_events.push_back(DiscoveryOut::Discovered(peer_id));
-			addrs_list.push(addr);
+		if addrs_list.contains(&addr) {
+			return
 		}
+
+		if let Some(k) = self.kademlia.as_mut() {
+			k.add_address(&peer_id, addr.clone());
+		}
+
+		self.pending_events.push_back(DiscoveryOut::Discovered(peer_id));
+		addrs_list.push(addr);
 	}
 
 	/// Add a self-reported address of a remote peer to the k-buckets of the DHT
@@ -456,7 +458,7 @@ pub enum DiscoveryOut {
 
 	/// The DHT yielded results for the record request.
 	///
-	/// Returning the result grouped in (key, value) pairs as well as the request duration..
+	/// Returning the result grouped in (key, value) pairs as well as the request duration.
 	ValueFound(Vec<(record::Key, Vec<u8>)>, Duration),
 
 	/// The record requested was not found in the DHT.
@@ -535,9 +537,13 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			FromSwarm::DialFailure(e @ DialFailure { peer_id, error, .. }) => {
 				if let Some(peer_id) = peer_id {
 					if let DialError::Transport(errors) = error {
-						if let Some(list) = self.ephemeral_addresses.get_mut(&peer_id) {
+						if let Entry::Occupied(mut entry) = self.ephemeral_addresses.entry(peer_id)
+						{
 							for (addr, _error) in errors {
-								list.retain(|a| a != addr);
+								entry.get_mut().retain(|a| a != addr);
+							}
+							if entry.get().is_empty() {
+								entry.remove();
 							}
 						}
 					}

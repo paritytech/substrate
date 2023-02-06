@@ -300,6 +300,9 @@ sp_api::decl_runtime_apis! {
 	/// API necessary for BEEFY voters.
 	pub trait BeefyApi
 	{
+		/// Return the block number where BEEFY consensus is enabled/started
+		fn beefy_genesis() -> Option<NumberFor<Block>>;
+
 		/// Return the current active BEEFY validator set
 		fn validator_set() -> Option<ValidatorSet<crypto::AuthorityId>>;
 

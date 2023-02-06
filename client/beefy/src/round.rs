@@ -145,7 +145,7 @@ where
 		vote: VoteMessage<NumberFor<B>, AuthorityId, Signature>,
 	) -> VoteImportResult<B> {
 		let num = vote.commitment.block_number;
-		let equivocation_key = (vote.id.clone(), num);
+		let vote_key = (vote.id.clone(), num);
 
 		if num < self.session_start || Some(num) <= self.best_done {
 			debug!(target: LOG_TARGET, "🥩 received vote for old stale round {:?}, ignoring", num);
@@ -167,7 +167,7 @@ where
 			return VoteImportResult::Invalid
 		}
 
-		if let Some(previous_vote) = self.previous_votes.get(&equivocation_key) {
+		if let Some(previous_vote) = self.previous_votes.get(&vote_key) {
 			// is the same public key voting for a different payload?
 			if previous_vote.commitment.payload != vote.commitment.payload {
 				debug!(
@@ -181,7 +181,7 @@ where
 			}
 		} else {
 			// this is the first vote sent by `id` for `num`, all good
-			self.previous_votes.insert(equivocation_key, vote.clone());
+			self.previous_votes.insert(vote_key, vote.clone());
 		}
 
 		// add valid vote

@@ -496,7 +496,7 @@ where
 		let best_grandpa = self.best_grandpa_block();
 		self.gossip_validator.note_round(block_num);
 		match self.voting_oracle().triage_round(block_num, best_grandpa)? {
-			RoundAction::Process => self.handle_vote(vote, false)?,
+			RoundAction::Process => self.handle_vote(vote)?,
 			RoundAction::Enqueue => {
 				debug!(target: LOG_TARGET, "🥩 Buffer vote for round: {:?}.", block_num);
 				if self.pending_votes.len() < MAX_BUFFERED_VOTE_ROUNDS {
@@ -552,7 +552,6 @@ where
 	fn handle_vote(
 		&mut self,
 		vote: VoteMessage<NumberFor<B>, AuthorityId, Signature>,
-		self_vote: bool,
 	) -> Result<(), Error> {
 		let rounds = self
 			.persisted_state
@@ -576,15 +575,13 @@ where
 				self.finalize(finality_proof)?;
 			},
 			VoteImportResult::Ok => {
-				let mandatory_round = self
+				// Persist state after handling mandatory block vote.
+				if self
 					.voting_oracle()
 					.mandatory_pending()
 					.map(|(mandatory_num, _)| mandatory_num == block_number)
-					.unwrap_or(false);
-				// Persist state after handling self vote to avoid double voting in case
-				// of voter restarts.
-				// Also persist state after handling mandatory block vote.
-				if self_vote || mandatory_round {
+					.unwrap_or(false)
+				{
 					crate::aux_schema::write_voter_state(&*self.backend, &self.persisted_state)
 						.map_err(|e| Error::Backend(e.to_string()))?;
 				}
@@ -692,7 +689,7 @@ where
 			for (num, votes) in votes_to_handle.into_iter() {
 				debug!(target: LOG_TARGET, "🥩 Handle buffered votes for: {:?}.", num);
 				for v in votes.into_iter() {
-					if let Err(err) = self.handle_vote(v, false) {
+					if let Err(err) = self.handle_vote(v) {
 						error!(target: LOG_TARGET, "🥩 Error handling buffered vote: {}", err);
 					};
 				}
@@ -800,7 +797,7 @@ where
 
 		debug!(target: LOG_TARGET, "🥩 Sent vote message: {:?}", message);
 
-		if let Err(err) = self.handle_vote(message, true) {
+		if let Err(err) = self.handle_vote(message) {
 			error!(target: LOG_TARGET, "🥩 Error handling self vote: {}", err);
 		}
 
@@ -808,7 +805,11 @@ where
 		self.persisted_state.best_voted = target_number;
 		metric_set!(self, beefy_best_voted, target_number);
 
-		Ok(())
+		// Persist state after vote to avoid double voting in case of voter restarts.
+		self.persisted_state.best_voted = target_number;
+		metric_set!(self, beefy_best_voted, target_number);
+		crate::aux_schema::write_voter_state(&*self.backend, &self.persisted_state)
+			.map_err(|e| Error::Backend(e.to_string()))
 	}
 
 	fn process_new_state(&mut self) {
@@ -834,8 +835,7 @@ where
 
 	/// Main loop for BEEFY worker.
 	///
-	/// Wait for BEEFY runtime pallet to be available, then start the main async loop
-	/// which is driven by finality notifications and gossiped votes.
+	/// Run the main async loop which is driven by finality notifications and gossiped votes.
 	pub(crate) async fn run(
 		mut self,
 		mut block_import_justif: Fuse<NotificationReceiver<BeefyVersionedFinalityProof<B>>>,
@@ -1040,8 +1040,8 @@ pub(crate) mod tests {
 	use crate::{
 		communication::notification::{BeefyBestBlockStream, BeefyVersionedFinalityProofStream},
 		tests::{
-			create_beefy_keystore, get_beefy_streams, make_beefy_ids, two_validators::TestApi,
-			BeefyPeer, BeefyTestNet,
+			create_beefy_keystore, get_beefy_streams, make_beefy_ids, BeefyPeer, BeefyTestNet,
+			TestApi,
 		},
 		BeefyRPCLinks, KnownPeers,
 	};
@@ -1117,7 +1117,7 @@ pub(crate) mod tests {
 		};
 
 		let backend = peer.client().as_backend();
-		let api = Arc::new(TestApi {});
+		let api = Arc::new(TestApi::with_validator_set(&genesis_validator_set));
 		let network = peer.network_service().clone();
 		let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
 		let gossip_validator = Arc::new(GossipValidator::new(known_peers.clone()));
