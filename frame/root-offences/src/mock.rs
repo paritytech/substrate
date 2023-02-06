@@ -145,17 +145,6 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type TargetsBound = ConstU32<{ u32::MAX }>;
 }
 
-pub struct OnStakerSlashMock<T: Config>(core::marker::PhantomData<T>);
-impl<T: Config> sp_staking::OnStakerSlash<AccountId, Balance> for OnStakerSlashMock<T> {
-	fn on_slash(
-		_pool_account: &AccountId,
-		slashed_bonded: Balance,
-		slashed_chunks: &BTreeMap<EraIndex, Balance>,
-	) {
-		LedgerSlashPerEra::set((slashed_bonded, slashed_chunks.clone()));
-	}
-}
-
 parameter_types! {
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 	pub static Offset: BlockNumber = 0;
@@ -163,7 +152,6 @@ parameter_types! {
 	pub static SessionsPerEra: SessionIndex = 3;
 	pub static SlashDeferDuration: EraIndex = 0;
 	pub const BondingDuration: EraIndex = 3;
-	pub static LedgerSlashPerEra: (BalanceOf<Test>, BTreeMap<EraIndex, BalanceOf<Test>>) = (Zero::zero(), BTreeMap::new());
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(75);
 }
 
@@ -192,7 +180,7 @@ impl pallet_staking::Config for Test {
 	type MaxUnlockingChunks = ConstU32<32>;
 	type HistoryDepth = ConstU32<84>;
 	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
-	type OnStakerSlash = OnStakerSlashMock<Test>;
+	type OnStakerSlash = ();
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
 }

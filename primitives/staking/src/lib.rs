@@ -42,15 +42,17 @@ pub trait OnStakerSlash<AccountId, Balance> {
 	/// * `slashed_active` - The new bonded balance of the staker after the slash was applied.
 	/// * `slashed_unlocking` - A map of slashed eras, and the balance of that unlocking chunk after
 	///   the slash is applied. Any era not present in the map is not affected at all.
+	/// * `total_slashed` - The total amount that was slashed.
 	fn on_slash(
 		stash: &AccountId,
 		slashed_active: Balance,
 		slashed_unlocking: &BTreeMap<EraIndex, Balance>,
+		total_slashed: Balance,
 	);
 }
 
 impl<AccountId, Balance> OnStakerSlash<AccountId, Balance> for () {
-	fn on_slash(_: &AccountId, _: Balance, _: &BTreeMap<EraIndex, Balance>) {
+	fn on_slash(_: &AccountId, _: Balance, _: &BTreeMap<EraIndex, Balance>, _: Balance) {
 		// Nothing to do here
 	}
 }

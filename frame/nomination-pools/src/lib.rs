@@ -469,6 +469,16 @@ impl<T: Config> PoolMember<T> {
 		}
 	}
 
+	/// Total balance of the member.
+	#[cfg(any(feature = "try-runtime", test))]
+	fn total_balance(&self) -> BalanceOf<T> {
+		// TODO
+		self.active_balance().saturating_add(self.unbonding_eras
+			.as_ref()
+			.iter()
+			.fold(BalanceOf::<T>::zero(), |acc, (_, v)| acc.saturating_add(*v)))
+	}
+
 	/// Total points of this member, both active and unbonding.
 	fn total_points(&self) -> BalanceOf<T> {
 		self.active_points().saturating_add(self.unbonding_points())
@@ -684,6 +694,9 @@ impl<T: Config> BondedPool<T> {
 	fn issue(&mut self, new_funds: BalanceOf<T>) -> BalanceOf<T> {
 		let points_to_issue = self.balance_to_point(new_funds);
 		self.points = self.points.saturating_add(points_to_issue);
+		TotalValueLocked::<T>::mutate(|tvl| {
+			tvl.saturating_accrue(new_funds);
+		});
 		points_to_issue
 	}
 
@@ -900,9 +913,8 @@ impl<T: Config> BondedPool<T> {
 
 	/// Bond exactly `amount` from `who`'s funds into this pool.
 	///
-	/// If the bond type is `Create`, `Staking::bond` is called, and `who`
-	/// is allowed to be killed. Otherwise, `Staking::bond_extra` is called and `who`
-	/// cannot be killed.
+	/// If the bond type is `Create`, `Staking::bond` is called, and `who` is allowed to be killed.
+	/// Otherwise, `Staking::bond_extra` is called and `who` cannot be killed.
 	///
 	/// Returns `Ok(points_issues)`, `Err` otherwise.
 	fn try_bond_funds(
@@ -1097,6 +1109,10 @@ impl<T: Config> UnbondPool<T> {
 		self.points = self.points.saturating_sub(points);
 		self.balance = self.balance.saturating_sub(balance_to_unbond);
 
+		TotalValueLocked::<T>::mutate(|tvl| {
+			tvl.saturating_reduce(balance_to_unbond);
+		});
+
 		balance_to_unbond
 	}
 }
@@ -1246,6 +1262,10 @@ pub mod pallet {
 		/// The maximum number of simultaneous unbonding chunks that can exist per member.
 		type MaxUnbonding: Get<u32>;
 	}
+
+	/// Summary of all pools
+	#[pallet::storage]
+	pub type TotalValueLocked<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
 
 	/// Minimum amount to bond to join a pool.
 	#[pallet::storage]
@@ -1439,9 +1459,9 @@ pub mod pallet {
 		CannotWithdrawAny,
 		/// The amount does not meet the minimum bond to either join or create a pool.
 		///
-		/// The depositor can never unbond to a value less than
-		/// `Pallet::depositor_min_bond`. The caller does not have nominating
-		/// permissions for the pool. Members can never unbond to a value below `MinJoinBond`.
+		/// The depositor can never unbond to a value less than `Pallet::depositor_min_bond`. The
+		/// caller does not have nominating permissions for the pool. Members can never unbond to a
+		/// value below `MinJoinBond`.
 		MinimumBondNotMet,
 		/// The transaction could not be executed due to overflow risk for the pool.
 		OverflowRisk,
@@ -2464,6 +2484,7 @@ impl<T: Config> Pallet<T> {
 		let bonded_pools = BondedPools::<T>::iter_keys().collect::<Vec<_>>();
 		let reward_pools = RewardPools::<T>::iter_keys().collect::<Vec<_>>();
 		assert_eq!(bonded_pools, reward_pools);
+		let mut expected_tvl = Zero::zero();
 
 		assert!(Metadata::<T>::iter_keys().all(|k| bonded_pools.contains(&k)));
 		assert!(SubPoolsStorage::<T>::iter_keys().all(|k| bonded_pools.contains(&k)));
@@ -2493,6 +2514,7 @@ impl<T: Config> Pallet<T> {
 			assert!(!d.total_points().is_zero(), "no member should have zero points: {:?}", d);
 			*pools_members.entry(d.pool_id).or_default() += 1;
 			all_members += 1;
+			expected_tvl += d.tota
 
 			let reward_pool = RewardPools::<T>::get(d.pool_id).unwrap();
 			if !bonded_pool.points.is_zero() {
@@ -2535,8 +2557,11 @@ impl<T: Config> Pallet<T> {
 				"depositor must always have MinCreateBond stake in the pool, except for when the \
 				pool is being destroyed and the depositor is the last member",
 			);
+			expected_tvl += T::Staking::total_stake(&bonded_pool.bonded_account())
+				.expect("all pools must have total stake");
 		});
 		assert!(MaxPoolMembers::<T>::get().map_or(true, |max| all_members <= max));
+		assert_eq!(TotalValueLocked::<T>::get(), expected_tvl);
 
 		if level <= 1 {
 			return Ok(())
@@ -2586,12 +2611,21 @@ impl<T: Config> OnStakerSlash<T::AccountId, BalanceOf<T>> for Pallet<T> {
 		// anything here.
 		slashed_bonded: BalanceOf<T>,
 		slashed_unlocking: &BTreeMap<EraIndex, BalanceOf<T>>,
+		total_slashed: BalanceOf<T>,
 	) {
-		if let Some(pool_id) = ReversePoolIdLookup::<T>::get(pool_account) {
-			let mut sub_pools = match SubPoolsStorage::<T>::get(pool_id).defensive() {
+		if let Some(pool_id) = ReversePoolIdLookup::<T>::get(pool_account).defensive() {
+			// TODO: bug here: a slash toward a pool who's subpools were missing would not be tracked. write a test for it.
+			Self::deposit_event(Event::<T>::PoolSlashed { pool_id, balance: slashed_bonded });
+
+			TotalValueLocked::<T>::mutate(|tvl| {
+				tvl.saturating_reduce(total_slashed);
+			});
+
+			let mut sub_pools = match SubPoolsStorage::<T>::get(pool_id) {
 				Some(sub_pools) => sub_pools,
 				None => return,
 			};
+
 			for (era, slashed_balance) in slashed_unlocking.iter() {
 				if let Some(pool) = sub_pools.with_era.get_mut(era) {
 					pool.balance = *slashed_balance;
@@ -2602,8 +2636,6 @@ impl<T: Config> OnStakerSlash<T::AccountId, BalanceOf<T>> for Pallet<T> {
 					});
 				}
 			}
-
-			Self::deposit_event(Event::<T>::PoolSlashed { pool_id, balance: slashed_bonded });
 			SubPoolsStorage::<T>::insert(pool_id, sub_pools);
 		}
 	}
