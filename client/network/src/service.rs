@@ -1295,33 +1295,20 @@ where
 {
 	/// Perform one action on the network.
 	pub async fn next_action(&mut self) {
-		// Next message from the service, or `future::pending()` if the stream has terminated.
-		let next_worker_msg = {
-			let from_service = &mut self.from_service;
-
-			async move {
-				if let Some(msg) = from_service.next().await {
-					msg
-				} else {
-					loop {
-						futures::pending!();
-					}
-				}
-			}
-		};
-
-		// Next swarm event.
-		let next_swarm_event = {
-			let swarm = &mut self.network_service;
-
-			async move {
-				swarm.next().await.expect("`Swarm` event stream guaranteed to never terminate.")
-			}
-		};
-
 		futures::select! {
-			msg = next_worker_msg.fuse() => self.handle_worker_message(msg),
-			next_event = next_swarm_event.fuse() => self.handle_swarm_event(next_event),
+			// Next message from the service.
+			msg = self.from_service.next().fuse() => {
+				if let Some(msg) = msg {
+					self.handle_worker_message(msg);
+				} else {
+					return
+				}
+			},
+			// Next event from `Swarm`.
+			event = self.network_service.next().fuse() => {
+				let event = event.expect("`Swarm` event stream guaranteed to never terminate.");
+				self.handle_swarm_event(event);
+			},
 		};
 
 		let num_connected_peers =
