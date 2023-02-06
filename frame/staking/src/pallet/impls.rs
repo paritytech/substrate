@@ -232,13 +232,17 @@ impl<T: Config> Pallet<T> {
 		// This is how much validator + nominators are entitled to.
 		let validator_total_payout = validator_total_reward_part * era_payout;
 
-		let validator_commission = EraInfo::<T>::get_validator_commission(era, &ledger.stash, page);
-		let validator_commission_payout = validator_commission * validator_total_payout;
+		let validator_commission = EraInfo::<T>::get_validator_commission(era, &ledger.stash);
+		// total commission validator takes across all nominator pages
+		let validator_total_commission_payout = validator_commission * validator_total_payout;
 
-		let validator_leftover_payout = validator_total_payout - validator_commission_payout;
+		let validator_leftover_payout = validator_total_payout - validator_total_commission_payout;
 		// Now let's calculate how this is split to the validator.
 		let validator_exposure_part = Perbill::from_rational(exposure.own(), exposure.total());
 		let validator_staking_payout = validator_exposure_part * validator_leftover_payout;
+		let page_stake_part = Perbill::from_rational(exposure.page_total(), exposure.total());
+		// validator commission is paid out in fraction across pages proportional to the page stake.
+		let validator_commission_payout = page_stake_part * validator_total_commission_payout;
 
 		Self::deposit_event(Event::<T>::PayoutStarted {
 			era_index: era,
