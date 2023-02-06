@@ -25,9 +25,6 @@ lazy_static! {
 	///
 	/// These values are provided by Parity, however it is possible
 	/// to use your own requirements if you are running a custom chain.
-	///
-	/// The reference hardware is describe here:
-	/// <https://wiki.polkadot.network/docs/maintain-guides-how-to-validate-polkadot>
 	pub static ref SUBSTRATE_REFERENCE_HARDWARE: Requirements = {
 		let raw = include_bytes!("reference_hardware.json").as_slice();
 		serde_json::from_slice(raw).expect("Hardcoded data is known good; qed")
