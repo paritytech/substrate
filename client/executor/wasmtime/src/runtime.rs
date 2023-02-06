@@ -376,8 +376,8 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 				//   size: 32384
 				//   table_elements: 1249
 				//   memory_pages: 2070
-				size: 64 * 1024,
-				table_elements: 3072,
+				size: 128 * 1024,
+				table_elements: 8192,
 				memory_pages,
 
 				// We can only have a single of those.

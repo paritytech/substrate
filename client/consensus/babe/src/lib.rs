@@ -152,7 +152,7 @@ mod tests;
 const LOG_TARGET: &str = "babe";
 
 /// BABE epoch information
-#[derive(Decode, Encode, PartialEq, Eq, Clone, Debug)]
+#[derive(Decode, Encode, PartialEq, Eq, Clone, Debug, scale_info::TypeInfo)]
 pub struct Epoch {
 	/// The epoch index.
 	pub epoch_index: u64,
@@ -1494,7 +1494,7 @@ where
 		// this way we can revert it if there's any error
 		let mut old_epoch_changes = None;
 
-		// Use an extra scope to make the compiler happy, because otherwise he complains about the
+		// Use an extra scope to make the compiler happy, because otherwise it complains about the
 		// mutex, even if we dropped it...
 		let mut epoch_changes = {
 			let mut epoch_changes = self.epoch_changes.shared_data_locked();
