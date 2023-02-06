@@ -817,6 +817,49 @@ impl<Balance: Default + HasCompact> Default for ExposureOverview<Balance> {
 	}
 }
 
+#[derive(Encode, Decode, RuntimeDebug, TypeInfo, PartialEq, Eq)]
+struct ExposureExt<AccountId, Balance: HasCompact> {
+	exposure_overview: ExposureOverview<Balance>,
+	exposure_page: ExposurePage<AccountId, Balance>,
+}
+
+impl<AccountId, Balance: HasCompact + Copy> ExposureExt<AccountId, Balance> {
+	pub fn from_clipped(exposure: Exposure<AccountId, Balance>) -> Self {
+		Self {
+			exposure_overview: ExposureOverview {
+				total: exposure.total,
+				own: exposure.own,
+				nominator_count: exposure.others.len() as u32,
+				page_count: 1,
+			},
+			exposure_page: ExposurePage { page_total: exposure.total, others: exposure.others },
+		}
+	}
+	pub fn total(&self) -> Balance {
+		self.exposure_overview.total
+	}
+
+	pub fn own(&self) -> Balance {
+		self.exposure_overview.own
+	}
+
+	pub fn nominator_count(&self) -> u32 {
+		self.exposure_overview.nominator_count
+	}
+
+	pub fn page_count(&self) -> PageIndex {
+		self.exposure_overview.page_count
+	}
+
+	pub fn page_total(&self) -> Balance {
+		self.exposure_page.page_total
+	}
+
+	pub fn others(&self) -> &Vec<IndividualExposure<AccountId, Balance>> {
+		&self.exposure_page.others
+	}
+}
+
 /// A pending slash record. The value of the slash has been computed but not applied yet,
 /// rather deferred for several eras.
 #[derive(Encode, Decode, RuntimeDebug, TypeInfo)]

@@ -3769,15 +3769,15 @@ fn test_multi_page_payout_stakers_by_page() {
 		mock::start_active_era(2);
 
 		// verify the exposures are calculated correctly.
-		let actual_exposure_0 = EraInfo::<Test>::get_validator_exposure(1, &11, 0);
-		assert_eq!(actual_exposure_0.0.total, total_exposure);
-		assert_eq!(actual_exposure_0.0.own, 1000);
-		assert_eq!(actual_exposure_0.1.others.len(), 64);
-		let actual_exposure_1 = EraInfo::<Test>::get_validator_exposure(1, &11, 1);
-		assert_eq!(actual_exposure_1.0.total, total_exposure);
+		let actual_exposure_0 = EraInfo::<Test>::get_validator_exposure(1, &11, 0).unwrap();
+		assert_eq!(actual_exposure_0.total(), total_exposure);
+		assert_eq!(actual_exposure_0.own(), 1000);
+		assert_eq!(actual_exposure_0.others().len(), 64);
+		let actual_exposure_1 = EraInfo::<Test>::get_validator_exposure(1, &11, 1).unwrap();
+		assert_eq!(actual_exposure_1.total(), total_exposure);
 		// own stake is only included once in the first page
-		assert_eq!(actual_exposure_1.0.own, 0);
-		assert_eq!(actual_exposure_1.1.others.len(), 100 - 64);
+		assert_eq!(actual_exposure_1.own(), 0);
+		assert_eq!(actual_exposure_1.others().len(), 100 - 64);
 
 		let pre_payout_total_issuance = Balances::total_issuance();
 		RewardOnUnbalanceWasCalled::set(false);
@@ -6025,12 +6025,12 @@ fn test_validator_exposure_is_backward_compatible_with_non_paged_rewards_payout(
 		);
 		// verify `EraInfo` returns page from paged storage
 		assert_eq!(
-			EraInfo::<Test>::get_validator_exposure(1, &11, 0).1.others,
-			actual_exposure_page_0.others
+			EraInfo::<Test>::get_validator_exposure(1, &11, 0).unwrap().others(),
+			&actual_exposure_page_0.others
 		);
 		assert_eq!(
-			EraInfo::<Test>::get_validator_exposure(1, &11, 1).1.others,
-			actual_exposure_page_1.others
+			EraInfo::<Test>::get_validator_exposure(1, &11, 1).unwrap().others(),
+			&actual_exposure_page_1.others
 		);
 		assert_eq!(EraInfo::<Test>::get_page_count(1, &11), 2);
 
@@ -6049,19 +6049,13 @@ fn test_validator_exposure_is_backward_compatible_with_non_paged_rewards_payout(
 		);
 
 		// verify `EraInfo` returns exposure from clipped storage
-		assert!(matches!(
-			EraInfo::<Test>::get_validator_exposure(1, &11, 0),
-			(ExposureOverview {
-				own,
-				page_count,
-				..
-			}, ExposurePage {
-				others,
-				..
-			}) if others == clipped_exposure && own == 1000 && page_count == 1));
+		let actual_exposure = EraInfo::<Test>::get_validator_exposure(1, &11, 0).unwrap();
+		assert_eq!(actual_exposure.others(), &clipped_exposure);
+		assert_eq!(actual_exposure.own(), 1000);
+		assert_eq!(actual_exposure.page_count(), 1);
 
 		// for pages other than 0, clipped storage returns empty exposure
-		assert_eq!(EraInfo::<Test>::get_validator_exposure(1, &11, 1), Default::default());
+		assert_eq!(EraInfo::<Test>::get_validator_exposure(1, &11, 1), None);
 		// page size is 1 for clipped storage
 		assert_eq!(EraInfo::<Test>::get_page_count(1, &11), 1);
 
