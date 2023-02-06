@@ -853,9 +853,15 @@ impl<AccountId, Balance: HasCompact + Copy + AtLeast32BitUnsigned> ExposureExt<A
 		self.exposure_overview.own
 	}
 
-	/// Returns the portions of nominators stashes that are exposed in this page
+	/// Returns the portions of nominators stashes that are exposed in this page.
 	pub fn others(&self) -> &Vec<IndividualExposure<AccountId, Balance>> {
 		&self.exposure_page.others
+	}
+
+	/// Returns the number of pages of nominators stashes that are exposed.
+	#[allow(dead_code)]
+	pub fn page_count(&self) -> PageIndex {
+		self.exposure_overview.page_count
 	}
 }
 
