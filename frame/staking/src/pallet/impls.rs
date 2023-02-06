@@ -243,10 +243,6 @@ impl<T: Config> Pallet<T> {
 		let page_stake_part = Perbill::from_rational(exposure.current_total(), exposure.total());
 		// validator commission is paid out in fraction across pages proportional to the page stake.
 		let validator_commission_payout = page_stake_part * validator_total_commission_payout;
-		println!(
-			"validator_commission_payout: {:?}, validator_total_commission_payout: {:?}, exposure_total: {:?}, exposure_page_total: {:?}, page_count: {:?}, own: {:?}",
-			validator_commission_payout, validator_total_commission_payout, exposure.total(), exposure.current_total(), exposure.page_count(), exposure.own()
-		);
 
 		Self::deposit_event(Event::<T>::PayoutStarted {
 			era_index: era,

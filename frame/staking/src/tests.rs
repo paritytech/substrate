@@ -4109,11 +4109,7 @@ fn test_commission_paid_across_pages() {
 			assert!(before_balance < after_balance);
 		}
 
-		assert_eq_error_rate!(
-			Balances::free_balance(&10),
-			initial_balance + payout / 2,
-			1,
-		);
+		assert_eq_error_rate!(Balances::free_balance(&10), initial_balance + payout / 2, 1,);
 	});
 }
 
