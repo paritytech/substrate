@@ -237,8 +237,7 @@ impl<T: Config> Pallet<T> {
 
 		let validator_leftover_payout = validator_total_payout - validator_commission_payout;
 		// Now let's calculate how this is split to the validator.
-		let validator_exposure_part =
-			Perbill::from_rational(exposure.own(), exposure.total());
+		let validator_exposure_part = Perbill::from_rational(exposure.own(), exposure.total());
 		let validator_staking_payout = validator_exposure_part * validator_leftover_payout;
 
 		Self::deposit_event(Event::<T>::PayoutStarted {
@@ -266,8 +265,7 @@ impl<T: Config> Pallet<T> {
 		// Lets now calculate how this is split to the nominators.
 		// Reward only the clipped exposures. Note this is not necessarily sorted.
 		for nominator in exposure.others().iter() {
-			let nominator_exposure_part =
-				Perbill::from_rational(nominator.value, exposure.total());
+			let nominator_exposure_part = Perbill::from_rational(nominator.value, exposure.total());
 
 			let nominator_reward: BalanceOf<T> =
 				nominator_exposure_part * validator_leftover_payout;
