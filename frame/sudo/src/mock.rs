@@ -106,12 +106,6 @@ frame_support::construct_runtime!(
 	}
 );
 
-impl Test {
-	fn runtime_metadata() -> Vec<frame_support::metadata::v15::TraitMetadata> {
-		Default::default()
-	}
-}
-
 pub struct BlockEverything;
 impl Contains<RuntimeCall> for BlockEverything {
 	fn contains(_: &RuntimeCall) -> bool {

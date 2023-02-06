@@ -275,12 +275,6 @@ frame_support::construct_runtime!(
 	}
 );
 
-impl Runtime {
-	fn runtime_metadata() -> Vec<frame_support::metadata::v15::TraitMetadata> {
-		Default::default()
-	}
-}
-
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;

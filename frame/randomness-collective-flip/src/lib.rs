@@ -185,12 +185,6 @@ mod tests {
 		}
 	);
 
-	impl Test {
-		fn runtime_metadata() -> Vec<frame_support::metadata::v15::TraitMetadata> {
-			Default::default()
-		}
-	}
-
 	parameter_types! {
 		pub BlockLength: limits::BlockLength = limits::BlockLength
 			::max(2 * 1024);

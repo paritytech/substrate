@@ -58,12 +58,6 @@ frame_support::construct_runtime!(
 	}
 );
 
-impl Test {
-	fn runtime_metadata() -> Vec<frame_support::metadata::v15::TraitMetadata> {
-		Default::default()
-	}
-}
-
 parameter_types! {
 	pub const MaximumBlockWeight: Weight = Weight::from_ref_time(1024);
 	pub const MaximumBlockLength: u32 = 2 * 1024;

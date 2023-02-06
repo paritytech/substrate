@@ -73,12 +73,6 @@ frame_support::construct_runtime!(
 	}
 );
 
-impl Test {
-	fn runtime_metadata() -> Vec<frame_support::metadata::v15::TraitMetadata> {
-		Default::default()
-	}
-}
-
 #[macro_use]
 pub mod test_utils {
 	use super::{Balances, Hash, SysConfig, Test};
