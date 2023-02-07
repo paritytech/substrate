@@ -1374,7 +1374,7 @@ mod test {
 	}
 
 	#[test]
-	fn prune_works_for_distant_ancestor() {
+	fn prune_works_for_not_direct_ancestor() {
 		let (mut tree, is_descendent_of) = test_fork_tree();
 
 		// This is to re-root the tree not at the immediate ancestor, but the one just before.
@@ -1406,22 +1406,6 @@ mod test {
 		assert_eq!(
 			removed.map(|(hash, _, _)| hash).collect::<Vec<_>>(),
 			vec!["O", "I", "G", "A", "B", "C", "D", "E", "J", "K"]
-		);
-	}
-
-	#[test]
-	fn prune_works5() {
-		let (mut tree, is_descendent_of) = test_fork_tree();
-
-		let removed = tree.prune(&"M", &50, &is_descendent_of, &|_| true).unwrap();
-
-		assert_eq!(tree.roots.iter().map(|node| node.hash).collect::<Vec<_>>(), vec!["L"]);
-
-		assert_eq!(tree.iter().map(|(hash, _, _)| *hash).collect::<Vec<_>>(), vec!["L", "M"],);
-
-		assert_eq!(
-			removed.map(|(hash, _, _)| hash).collect::<Vec<_>>(),
-			vec!["O", "A", "B", "C", "D", "E", "F", "H", "I", "G", "J", "K"]
 		);
 	}
 
