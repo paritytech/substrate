@@ -15,6 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! # DO NOT USE IN PRODUCTION
+//!
+//! The produced values do not fulfill the cryptographic requirements for random numbers.  
+//! Should not be used for high-stake production use-cases.
+//!
 //! # Randomness Pallet
 //!
 //! The Randomness Collective Flip pallet provides a [`random`](./struct.Module.html#method.random)
@@ -50,13 +55,13 @@
 //!     pub struct Pallet<T>(_);
 //!
 //!     #[pallet::config]
-//!     pub trait Config: frame_system::Config + pallet_randomness_collective_flip::Config {}
+//!     pub trait Config: frame_system::Config + pallet_insecure_randomness_collective_flip::Config {}
 //!
 //!     #[pallet::call]
 //!     impl<T: Config> Pallet<T> {
 //!         #[pallet::weight(0)]
 //!         pub fn random_module_example(origin: OriginFor<T>) -> DispatchResult {
-//!             let _random_value = <pallet_randomness_collective_flip::Pallet<T>>::random(&b"my context"[..]);
+//!             let _random_value = <pallet_insecure_randomness_collective_flip::Pallet<T>>::random(&b"my context"[..]);
 //!             Ok(())
 //!         }
 //!     }
@@ -157,7 +162,7 @@ impl<T: Config> Randomness<T::Hash, T::BlockNumber> for Pallet<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate as pallet_randomness_collective_flip;
+	use crate as pallet_insecure_randomness_collective_flip;
 
 	use sp_core::H256;
 	use sp_runtime::{
@@ -181,7 +186,7 @@ mod tests {
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
 			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-			CollectiveFlip: pallet_randomness_collective_flip::{Pallet, Storage},
+			CollectiveFlip: pallet_insecure_randomness_collective_flip::{Pallet, Storage},
 		}
 	);
 
@@ -217,7 +222,7 @@ mod tests {
 		type MaxConsumers = ConstU32<16>;
 	}
 
-	impl pallet_randomness_collective_flip::Config for Test {}
+	impl pallet_insecure_randomness_collective_flip::Config for Test {}
 
 	fn new_test_ext() -> sp_io::TestExternalities {
 		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
