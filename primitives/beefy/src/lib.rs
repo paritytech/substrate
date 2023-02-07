@@ -173,7 +173,7 @@ pub enum ConsensusLog<AuthorityId: Codec> {
 ///
 /// A vote message is a direct vote created by a BEEFY node on every voting round
 /// and is gossiped to its peers.
-#[derive(Debug, Decode, Encode, TypeInfo)]
+#[derive(Clone, Debug, Decode, Encode, PartialEq, TypeInfo)]
 pub struct VoteMessage<Number, Id, Signature> {
 	/// Commit to information extracted from a finalized block
 	pub commitment: Commitment<Number>,
@@ -206,6 +206,83 @@ sp_api::decl_runtime_apis! {
 
 		/// Return the current active BEEFY validator set
 		fn validator_set() -> Option<ValidatorSet<crypto::AuthorityId>>;
+	}
+}
+
+#[cfg(feature = "std")]
+/// Test accounts using [`crate::crypto`] types.
+pub mod keyring {
+	use super::*;
+	use sp_core::{ecdsa, keccak_256, Pair};
+	use std::collections::HashMap;
+	use strum::IntoEnumIterator;
+
+	/// Set of test accounts using [`crate::crypto`] types.
+	#[allow(missing_docs)]
+	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumIter)]
+	pub enum Keyring {
+		Alice,
+		Bob,
+		Charlie,
+		Dave,
+		Eve,
+		Ferdie,
+		One,
+		Two,
+	}
+
+	impl Keyring {
+		/// Sign `msg`.
+		pub fn sign(self, msg: &[u8]) -> crypto::Signature {
+			// todo: use custom signature hashing type
+			let msg = keccak_256(msg);
+			ecdsa::Pair::from(self).sign_prehashed(&msg).into()
+		}
+
+		/// Return key pair.
+		pub fn pair(self) -> crypto::Pair {
+			ecdsa::Pair::from_string(self.to_seed().as_str(), None).unwrap().into()
+		}
+
+		/// Return public key.
+		pub fn public(self) -> crypto::Public {
+			self.pair().public()
+		}
+
+		/// Return seed string.
+		pub fn to_seed(self) -> String {
+			format!("//{}", self)
+		}
+
+		/// Get Keyring from public key.
+		pub fn from_public(who: &crypto::Public) -> Option<Keyring> {
+			Self::iter().find(|&k| &crypto::Public::from(k) == who)
+		}
+	}
+
+	lazy_static::lazy_static! {
+		static ref PRIVATE_KEYS: HashMap<Keyring, crypto::Pair> =
+			Keyring::iter().map(|i| (i, i.pair())).collect();
+		static ref PUBLIC_KEYS: HashMap<Keyring, crypto::Public> =
+			PRIVATE_KEYS.iter().map(|(&name, pair)| (name, pair.public())).collect();
+	}
+
+	impl From<Keyring> for crypto::Pair {
+		fn from(k: Keyring) -> Self {
+			k.pair()
+		}
+	}
+
+	impl From<Keyring> for ecdsa::Pair {
+		fn from(k: Keyring) -> Self {
+			k.pair().into()
+		}
+	}
+
+	impl From<Keyring> for crypto::Public {
+		fn from(k: Keyring) -> Self {
+			(*PUBLIC_KEYS).get(&k).cloned().unwrap()
+		}
 	}
 }
 
