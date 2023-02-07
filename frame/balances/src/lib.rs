@@ -170,7 +170,7 @@ use frame_support::{
 	traits::{
 		tokens::{
 			fungible, BalanceStatus as Status, DepositConsequence,
-			KeepAlive::{CanKill, Keep},
+			KeepAlive::{CanKill, Keep, NoKill},
 			WithdrawConsequence,
 		},
 		Currency, Defensive, Get, OnUnbalanced, ReservableCurrency, StoredMap,
@@ -738,16 +738,17 @@ pub mod pallet {
 		/// Get the balance of an account that can be used for transfers, reservations, or any other
 		/// non-locking, non-transaction-fee activity. Will be at most `free_balance`.
 		pub fn usable_balance(who: impl sp_std::borrow::Borrow<T::AccountId>) -> T::Balance {
-			// TODO: use fungible::Inspect
-			Self::account(who.borrow()).usable()
+			<Self as fungible::Inspect<_>>::reducible_balance(who.borrow(), CanKill, false)
 		}
 
 		/// Get the balance of an account that can be used for paying transaction fees (not tipping,
 		/// or any other kind of fees, though). Will be at most `free_balance`.
+		///
+		/// This requires that the account stays alive.
 		pub fn usable_balance_for_fees(
 			who: impl sp_std::borrow::Borrow<T::AccountId>,
 		) -> T::Balance {
-			Self::account(who.borrow()).usable()
+			<Self as fungible::Inspect<_>>::reducible_balance(who.borrow(), NoKill, false)
 		}
 
 		/// Get the reserved balance of an account.

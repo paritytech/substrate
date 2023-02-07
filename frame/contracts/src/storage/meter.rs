@@ -30,7 +30,7 @@ use frame_support::{
 };
 use pallet_contracts_primitives::StorageDeposit as Deposit;
 use sp_runtime::{
-	traits::{Saturating, Zero},
+	traits::{One, Saturating, Zero},
 	FixedPointNumber, FixedU128,
 };
 use sp_std::{marker::PhantomData, vec::Vec};
@@ -384,8 +384,9 @@ where
 				.update_contract::<T>(None);
 
 		// Instantiate needs to transfer the minimum balance at least in order to pull the
-		// contract's account into existence.
-		deposit = deposit.max(Deposit::Charge(Pallet::<T>::min_balance()));
+		// contract's account into existence. However, since the minimum balance itself is not
+		// reservable, we must also an additional one unit of funds to create a reservation.
+		deposit = deposit.max(Deposit::Charge(Pallet::<T>::min_balance() + One::one()));
 		if deposit.charge_or_zero() > self.limit {
 			return Err(<Error<T>>::StorageDepositLimitExhausted.into())
 		}
@@ -490,7 +491,9 @@ impl<T: Config> Ext<T> for ReservingExt {
 						// we move to the new `fungible` API which provides for placing
 						T::Currency::reserve(
 							contract,
-							amount.saturating_sub(<T::Currency as Inspect<_>>::minimum_balance()),
+							amount
+								.saturating_sub(<T::Currency as Inspect<_>>::minimum_balance())
+								.max(One::one()),
 						)
 					})
 				});

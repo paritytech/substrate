@@ -893,7 +893,7 @@ fn deploy_and_call_other_contract() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Balances(pallet_balances::Event::Endowed {
 						account: callee_addr.clone(),
-						free_balance: min_balance,
+						free_balance: min_balance + 1,
 					}),
 					topics: vec![],
 				},
@@ -902,7 +902,7 @@ fn deploy_and_call_other_contract() {
 					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: callee_addr.clone(),
-						amount: min_balance,
+						amount: min_balance + 1,
 					}),
 					topics: vec![],
 				},
@@ -910,7 +910,7 @@ fn deploy_and_call_other_contract() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: callee_addr.clone(),
-						amount: min_balance,
+						amount: 1,
 					}),
 					topics: vec![],
 				},
