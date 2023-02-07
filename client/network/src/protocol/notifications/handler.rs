@@ -1431,6 +1431,7 @@ pub mod tests {
 			negotiated_fallback: None,
 			substream: NotificationsOutSubstream::new(Framed::new(io, codec)),
 		};
+
 		handler.on_connection_event(handler::ConnectionEvent::FullyNegotiatedOutbound(
 			handler::FullyNegotiatedOutbound { protocol: notif_out, info: 0 },
 		));
@@ -1484,8 +1485,6 @@ pub mod tests {
 		handler.on_connection_event(handler::ConnectionEvent::DialUpgradeError(
 			handler::DialUpgradeError { info: 0, error: ConnectionHandlerUpgrErr::Timeout },
 		));
-
-		handler.on_behaviour_event(NotifsHandlerIn::Close { protocol_index: 0 });
 		assert!(std::matches!(
 			handler.protocols[0].state,
 			State::Closed { pending_opening: false }
@@ -1494,23 +1493,6 @@ pub mod tests {
 
 	#[tokio::test]
 	async fn dial_upgrade_error_resets_open_desired_state() {
-		let mut handler = notifs_handler();
-		let (io, _io2) = MockSubstream::negotiated().await;
-		let mut codec = UviBytes::default();
-		codec.set_max_len(usize::MAX);
-
-		let notif_in = NotificationsInOpen {
-			handshake: b"hello, world".to_vec(),
-			negotiated_fallback: None,
-			substream: NotificationsInSubstream::new(
-				Framed::new(io, codec),
-				NotificationsInSubstreamHandshake::NotSent,
-			),
-		};
-		handler.on_connection_event(handler::ConnectionEvent::FullyNegotiatedInbound(
-			handler::FullyNegotiatedInbound { protocol: (notif_in, 0), info: () },
-		));
-
 		let mut handler = notifs_handler();
 		let (io, mut io2) = MockSubstream::negotiated().await;
 		let mut codec = UviBytes::default();

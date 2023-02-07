@@ -2386,6 +2386,11 @@ mod tests {
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Disabled { .. })));
 
 		// manually add backoff for the entry
+		//
+		// there is not straight-forward way of adding backoff to `PeerState::Disabled`
+		// so manually adjust the value in order to progress on to the next stage.
+		// This modification together with `ConnectionClosed` will conver the peer
+		// state into `PeerState::Backoff`.
 		if let Some(PeerState::Disabled { ref mut backoff_until, .. }) =
 			notif.peers.get_mut(&(peer, set_id))
 		{
@@ -2649,6 +2654,8 @@ mod tests {
 		));
 
 		notif.peerset_report_accept(sc_peerset::IncomingIndex(0));
+		assert_eq!(notif.incoming.len(), 0);
+		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(PeerState::Disabled { .. })));
 	}
 
 	#[test]
@@ -2847,7 +2854,14 @@ mod tests {
 				remaining_established: 0usize,
 			},
 		));
-		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Disabled { .. })));
+
+		if let Some(&PeerState::Disabled { ref connections, .. }) = notif.peers.get(&(peer, set_id))
+		{
+			assert_eq!(connections.len(), 1);
+			assert_eq!(connections[0], (conn1, ConnectionState::Closed));
+		} else {
+			panic!("invalid state");
+		}
 	}
 
 	#[test]
@@ -2867,10 +2881,7 @@ mod tests {
 			libp2p::swarm::behaviour::ConnectionEstablished {
 				peer_id: peer,
 				connection_id: conn,
-				endpoint: &ConnectedPoint::Listener {
-					local_addr: Multiaddr::empty(),
-					send_back_addr: Multiaddr::empty(),
-				},
+				endpoint: &connected,
 				failed_addresses: &[],
 				other_established: 0usize,
 			},
@@ -2924,10 +2935,7 @@ mod tests {
 				libp2p::swarm::behaviour::ConnectionEstablished {
 					peer_id: peer,
 					connection_id: conn_id,
-					endpoint: &ConnectedPoint::Listener {
-						local_addr: Multiaddr::empty(),
-						send_back_addr: Multiaddr::empty(),
-					},
+					endpoint: &connected,
 					failed_addresses: &[],
 					other_established: 0usize,
 				},
@@ -3082,7 +3090,7 @@ mod tests {
 			local_addr: Multiaddr::empty(),
 			send_back_addr: Multiaddr::empty(),
 		};
-		let backoff_duration = Duration::from_secs(2);
+		let backoff_duration = Duration::from_millis(100);
 
 		notif.on_swarm_event(FromSwarm::ConnectionEstablished(
 			libp2p::swarm::behaviour::ConnectionEstablished {
@@ -3193,7 +3201,7 @@ mod tests {
 	}
 
 	#[test]
-	fn peer_is_backed_off_if_both_connections_get_closed_while_peer_is_disabled() {
+	fn peer_is_backed_off_if_both_connections_get_closed_while_peer_is_disabled_with_back_off() {
 		let (mut notif, _peerset) = development_notifs();
 		let set_id = sc_peerset::SetId::from(0);
 		let peer = PeerId::random();
@@ -3256,7 +3264,7 @@ mod tests {
 		notif.on_swarm_event(FromSwarm::ConnectionClosed(
 			libp2p::swarm::behaviour::ConnectionClosed {
 				peer_id: peer,
-				connection_id: conn1,
+				connection_id: conn2,
 				endpoint: &connected,
 				handler: NotifsHandlerProto::new(vec![]).into_handler(&peer, &connected),
 				remaining_established: 0usize,
@@ -3334,10 +3342,7 @@ mod tests {
 				libp2p::swarm::behaviour::ConnectionEstablished {
 					peer_id: peer,
 					connection_id: conn_id,
-					endpoint: &ConnectedPoint::Listener {
-						local_addr: Multiaddr::empty(),
-						send_back_addr: Multiaddr::empty(),
-					},
+					endpoint: &connected,
 					failed_addresses: &[],
 					other_established: 0usize,
 				},
@@ -3358,15 +3363,10 @@ mod tests {
 			conn1,
 			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
 		);
-
-		if let Some(&mut PeerState::Incoming { ref mut backoff_until, .. }) =
-			notif.peers.get_mut(&(peer, 0.into()))
-		{
-			*backoff_until =
-				Some(Instant::now().checked_add(std::time::Duration::from_secs(5)).unwrap());
-		} else {
-			panic!("invalid state");
-		}
+		assert!(std::matches!(
+			notif.peers.get_mut(&(peer, 0.into())),
+			Some(&mut PeerState::Incoming { .. })
+		));
 
 		notif.on_swarm_event(FromSwarm::ConnectionClosed(
 			libp2p::swarm::behaviour::ConnectionClosed {
@@ -3422,15 +3422,10 @@ mod tests {
 			conn1,
 			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
 		);
-
-		if let Some(&mut PeerState::Incoming { ref mut backoff_until, .. }) =
-			notif.peers.get_mut(&(peer, 0.into()))
-		{
-			*backoff_until =
-				Some(Instant::now().checked_add(std::time::Duration::from_secs(5)).unwrap());
-		} else {
-			panic!("invalid state");
-		}
+		assert!(std::matches!(
+			notif.peers.get_mut(&(peer, 0.into())),
+			Some(PeerState::Incoming { .. })
+		));
 
 		notif.on_swarm_event(FromSwarm::ConnectionClosed(
 			libp2p::swarm::behaviour::ConnectionClosed {
@@ -3463,10 +3458,7 @@ mod tests {
 				libp2p::swarm::behaviour::ConnectionEstablished {
 					peer_id: peer,
 					connection_id: conn_id,
-					endpoint: &ConnectedPoint::Listener {
-						local_addr: Multiaddr::empty(),
-						send_back_addr: Multiaddr::empty(),
-					},
+					endpoint: &connected,
 					failed_addresses: &[],
 					other_established: 0usize,
 				},
@@ -3506,7 +3498,6 @@ mod tests {
 			panic!("invalid state");
 		}
 
-		// close the other connection and verify that notification replacement event is emitted
 		notif.on_swarm_event(FromSwarm::ConnectionClosed(
 			libp2p::swarm::behaviour::ConnectionClosed {
 				peer_id: peer,
@@ -3567,6 +3558,7 @@ mod tests {
 			Some(&PeerState::PendingRequest { .. })
 		));
 
+		let now = Instant::now();
 		notif.on_swarm_event(FromSwarm::DialFailure(libp2p::swarm::behaviour::DialFailure {
 			peer_id: Some(peer),
 			handler: NotifsHandlerProto::new(vec![]),
@@ -3576,7 +3568,7 @@ mod tests {
 		if let Some(PeerState::PendingRequest { ref timer_deadline, .. }) =
 			notif.peers.get(&(peer, set_id))
 		{
-			assert!(timer_deadline > &(Instant::now() + std::time::Duration::from_secs(5)));
+			assert!(timer_deadline > &(now + std::time::Duration::from_secs(5)));
 		}
 	}
 
@@ -3659,7 +3651,7 @@ mod tests {
 			notif.peers.get_mut(&(peer, 0.into()))
 		{
 			*backoff_until =
-				Some(Instant::now().checked_add(std::time::Duration::from_secs(2)).unwrap());
+				Some(Instant::now().checked_add(std::time::Duration::from_millis(100)).unwrap());
 		} else {
 			panic!("invalid state");
 		}
@@ -3674,7 +3666,7 @@ mod tests {
 			},
 		));
 
-		let duration = if let Some(&PeerState::Backoff { timer_deadline, .. }) =
+		let until = if let Some(&PeerState::Backoff { timer_deadline, .. }) =
 			notif.peers.get(&(peer, set_id))
 		{
 			timer_deadline
@@ -3682,8 +3674,8 @@ mod tests {
 			panic!("invalid state");
 		};
 
-		if duration > Instant::now() {
-			std::thread::sleep(duration - Instant::now());
+		if until > Instant::now() {
+			std::thread::sleep(until - Instant::now());
 		}
 
 		assert!(notif.peers.get(&(peer, set_id)).is_some());
@@ -3739,6 +3731,7 @@ mod tests {
 		));
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Disabled { .. })));
 
+		// open substream
 		notif.on_connection_handler_event(
 			peer,
 			conn,
@@ -3756,16 +3749,6 @@ mod tests {
 
 		if let Some(PeerState::Enabled { ref connections, .. }) = notif.peers.get(&(peer, set_id)) {
 			assert!(std::matches!(connections[0], (_, ConnectionState::Open(_))));
-			assert_eq!(connections[0].0, conn);
-		} else {
-			panic!("invalid state");
-		}
-
-		notif.peerset_report_disconnect(peer, set_id);
-
-		if let Some(PeerState::Disabled { ref connections, .. }) = notif.peers.get(&(peer, set_id))
-		{
-			assert!(std::matches!(connections[0], (_, ConnectionState::Closing)));
 			assert_eq!(connections[0].0, conn);
 		} else {
 			panic!("invalid state");
@@ -3800,6 +3783,10 @@ mod tests {
 				panic!("invalid state");
 			};
 
+		// one of the peers has an active backoff timer so poll the notifications code until
+		// the timer has expired. Because the connection is still in the state of `Closing`,
+		// verify that the code continues to keep the peer disabled by resetting the timer
+		// after the first one expired.
 		if tokio::time::timeout(Duration::from_secs(5), async {
 			let mut params = MockPollParams { peer_id: PeerId::random(), addr: Multiaddr::empty() };
 
@@ -3810,17 +3797,21 @@ mod tests {
 				})
 				.await;
 
-				prev_instant =
-					if let Some(PeerState::DisabledPendingEnable { timer_deadline, .. }) =
-						notif.peers.get(&(peer, set_id))
-					{
-						if timer_deadline != &prev_instant {
-							break
-						}
-						timer_deadline.clone()
-					} else {
-						panic!("invalid state");
-					};
+				prev_instant = if let Some(PeerState::DisabledPendingEnable {
+					timer_deadline,
+					connections,
+					..
+				}) = notif.peers.get(&(peer, set_id))
+				{
+					assert!(std::matches!(connections[0], (_, ConnectionState::Closing)));
+
+					if timer_deadline != &prev_instant {
+						break
+					}
+					timer_deadline.clone()
+				} else {
+					panic!("invalid state");
+				};
 			}
 		})
 		.await
@@ -3849,10 +3840,7 @@ mod tests {
 			libp2p::swarm::behaviour::ConnectionEstablished {
 				peer_id: peer,
 				connection_id: conn,
-				endpoint: &ConnectedPoint::Listener {
-					local_addr: Multiaddr::empty(),
-					send_back_addr: Multiaddr::empty(),
-				},
+				endpoint: &connected,
 				failed_addresses: &[],
 				other_established: 0usize,
 			},
