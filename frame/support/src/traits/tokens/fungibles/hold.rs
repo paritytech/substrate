@@ -51,7 +51,7 @@ pub trait Inspect<AccountId>: super::Inspect<AccountId> {
 		force: bool,
 	) -> Self::Balance;
 
-	/// Amount of funds on hold (for all hold reasons) of `who`.
+	/// Amount of funds on hold (for the given reason) of `who`.
 	fn balance_on_hold(
 		asset: Self::AssetId,
 		reason: &Self::Reason,
