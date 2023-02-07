@@ -201,24 +201,23 @@ pub mod pallet {
 		/// guess.
 		type NextNewSession: EstimateNextNewSession<Self::BlockNumber>;
 
-		/// The maximum number of nominators rewarded for each validator when using
-		/// `ErasStakersClipped`.
-		///
-		/// For older non-paged exposure, a reward payout is restricted to the top
-		/// `MaxNominatorRewardedPerValidator` nominators. This is to limit the i/o cost for the
-		/// nominator payout.
-		// TODO(ank4n) #[deprecated(note = "This constant is no longer used and will be removed in
-		// the future.")]
-		#[pallet::constant]
-		type MaxNominatorRewardedPerValidator: Get<u32>;
-
 		/// The maximum size of each `T::ExposurePage`.
 		///
-		/// An `ExposurePage` is bounded to a maximum of `MaxExposurePageSize` nominators. The
-		/// actual page size is a dynamic value that is determined by the storage item
-		/// `T::ExposurePageSize`.
+		/// An `ExposurePage` is bounded to a maximum of `MaxNominatorRewardedPerValidator`
+		/// nominators. The actual page size is a dynamic value that is determined by the storage
+		/// item `T::ExposurePageSize`.
+		///
+		/// For older non-paged exposure, a reward payout was restricted to the top
+		/// `MaxNominatorRewardedPerValidator` nominators. This is to limit the i/o cost for the
+		/// nominator payout.
+		///
+		/// The name is a bit misleading, because historically we used to reward the top
+		/// `MaxNominatorRewardedPerValidator` nominators by stake when we did not had paged
+		/// exposures. In future we should rename this to something like `ExposurePageSize` when we
+		/// are ready to get rid of `ErasStakersClipped`.
+		/// Refer issue: #13034
 		#[pallet::constant]
-		type MaxExposurePageSize: Get<u32>;
+		type MaxNominatorRewardedPerValidator: Get<u32>;
 
 		/// The fraction of the validator set that is safe to be offending.
 		/// After the threshold is reached a new era will be forced.
@@ -478,7 +477,7 @@ pub mod pallet {
 
 	/// The nominator count each `ExposurePage` is capped at.
 	///
-	/// This cannot be greater than `T::MaxExposurePageSize`.
+	/// This cannot be greater than `T::MaxNominatorRewardedPerValidator`.
 	#[pallet::storage]
 	pub type ExposurePageSize<T> = StorageValue<_, u32, OptionQuery>;
 
@@ -783,8 +782,8 @@ pub mod pallet {
 			// FIXME(ankan) Should we sort exposure.others for backward compatibility?
 
 			let page_size = <ExposurePageSize<T>>::get()
-				.unwrap_or_else(|| T::MaxExposurePageSize::get())
-				.clamp(1, T::MaxExposurePageSize::get());
+				.unwrap_or_else(|| T::MaxNominatorRewardedPerValidator::get())
+				.clamp(1, T::MaxNominatorRewardedPerValidator::get());
 
 			let (exposure_overview, exposure_pages) = exposure.into_pages(page_size);
 
