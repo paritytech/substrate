@@ -329,3 +329,17 @@ fn can_hold_entire_balance_when_second_provider() {
 			assert_noop!(System::dec_providers(&1), DispatchError::ConsumerRemaining);
 		});
 }
+
+#[test]
+fn unholding_frees_hold_slot() {
+	ExtBuilder::default()
+		.existential_deposit(1)
+		.monied(false)
+		.build_and_execute_with(|| {
+			<Balances as fungible::Mutate<_>>::set_balance(&1, 100);
+			assert_ok!(Balances::hold(&TestId::Foo, &1, 10));
+			assert_ok!(Balances::hold(&TestId::Bar, &1, 10));
+			assert_ok!(Balances::release(&TestId::Foo, &1, 10, false));
+			assert_ok!(Balances::hold(&TestId::Baz, &1, 10));
+		});
+}

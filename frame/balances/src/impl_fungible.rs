@@ -245,7 +245,6 @@ impl<T: Config<I>, I: 'static> fungible::UnbalancedHold<T::AccountId> for Pallet
 			delta = item.amount.max(amount) - item.amount.min(amount);
 			increase = amount > item.amount;
 			item.amount = amount;
-			drop(item);
 			holds.retain(|x| !x.amount.is_zero());
 		} else {
 			if !amount.is_zero() {
