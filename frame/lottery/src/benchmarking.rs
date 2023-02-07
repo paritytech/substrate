@@ -21,7 +21,7 @@
 
 use super::*;
 
-use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller};
+use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller, BenchmarkError};
 use frame_support::{
 	storage::bounded_vec::BoundedVec,
 	traits::{EnsureOrigin, OnInitialize},
@@ -43,7 +43,8 @@ fn setup_lottery<T: Config>(repeat: bool) -> Result<(), &'static str> {
 	];
 	// Last call will be the match for worst case scenario.
 	calls.push(frame_system::Call::<T>::remark { remark: vec![] }.into());
-	let origin = T::ManagerOrigin::successful_origin();
+	let origin = T::ManagerOrigin::try_successful_origin()
+		.expect("ManagerOrigin has no successful origin required for the benchmark");
 	Lottery::<T>::set_calls(origin.clone(), calls)?;
 	Lottery::<T>::start_lottery(origin, price, length, delay, repeat)?;
 	Ok(())
@@ -76,7 +77,8 @@ benchmarks! {
 	set_calls {
 		let n in 0 .. T::MaxCalls::get() as u32;
 		let calls = vec![frame_system::Call::<T>::remark { remark: vec![] }.into(); n as usize];
-		let origin = T::ManagerOrigin::successful_origin();
+		let origin =
+			T::ManagerOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		assert!(CallIndices::<T>::get().is_empty());
 	}: _<T::RuntimeOrigin>(origin, calls)
 	verify {
@@ -89,7 +91,8 @@ benchmarks! {
 		let price = BalanceOf::<T>::max_value();
 		let end = 10u32.into();
 		let payout = 5u32.into();
-		let origin = T::ManagerOrigin::successful_origin();
+		let origin =
+			T::ManagerOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	}: _<T::RuntimeOrigin>(origin, price, end, payout, true)
 	verify {
 		assert!(crate::Lottery::<T>::get().is_some());
@@ -98,7 +101,8 @@ benchmarks! {
 	stop_repeat {
 		setup_lottery::<T>(true)?;
 		assert_eq!(crate::Lottery::<T>::get().unwrap().repeat, true);
-		let origin = T::ManagerOrigin::successful_origin();
+		let origin =
+			T::ManagerOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	}: _<T::RuntimeOrigin>(origin)
 	verify {
 		assert_eq!(crate::Lottery::<T>::get().unwrap().repeat, false);
