@@ -10282,6 +10282,7 @@ name = "sp-test-primitives"
 version = "2.0.0"
 dependencies = [
  "parity-scale-codec",
+ "scale-info",
  "serde",
  "sp-application-crypto",
  "sp-core",
