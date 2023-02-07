@@ -9615,7 +9615,6 @@ dependencies = [
 name = "sp-api-proc-macro"
 version = "4.0.0-dev"
 dependencies = [
- "Inflector",
  "assert_matches",
  "blake2",
  "proc-macro-crate",
