@@ -264,7 +264,7 @@ variables:
     - .test-refs-no-trigger-prs-only
   script:
     - mkdir -p "$HOME/.cargo-bin"
-    - export PATH="$HOME/.cargo-bin:$PATH"
+    - export PATH="$HOME/.cargo-bin/bin:$PATH"
     - cargo install --quiet --root "$HOME/.cargo-bin" diener --version 0.4.6
     - diener --version
     - git clone
