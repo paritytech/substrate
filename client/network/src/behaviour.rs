@@ -29,7 +29,7 @@ use libp2p::{
 	core::{Multiaddr, PeerId, PublicKey},
 	identify::Info as IdentifyInfo,
 	kad::record,
-	NetworkBehaviour,
+	swarm::NetworkBehaviour,
 };
 
 use sc_network_common::{

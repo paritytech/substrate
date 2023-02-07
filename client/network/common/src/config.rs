@@ -323,10 +323,10 @@ pub enum TransportConfig {
 		/// and connect to them if they support the same chain.
 		enable_mdns: bool,
 
-		/// If true, allow connecting to private IPv4 addresses (as defined in
+		/// If true, allow connecting to private IPv4/IPv6 addresses (as defined in
 		/// [RFC1918](https://tools.ietf.org/html/rfc1918)). Irrelevant for addresses that have
 		/// been passed in `::sc_network::config::NetworkConfiguration::boot_nodes`.
-		allow_private_ipv4: bool,
+		allow_private_ip: bool,
 	},
 
 	/// Only allow connections within the same process.
@@ -480,7 +480,7 @@ impl NetworkConfiguration {
 			extra_sets: Vec::new(),
 			client_version: client_version.into(),
 			node_name: node_name.into(),
-			transport: TransportConfig::Normal { enable_mdns: false, allow_private_ipv4: true },
+			transport: TransportConfig::Normal { enable_mdns: false, allow_private_ip: true },
 			max_parallel_downloads: 5,
 			sync_mode: SyncMode::Full,
 			enable_dht_random_walk: true,
