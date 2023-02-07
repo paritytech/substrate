@@ -418,17 +418,12 @@ where
 
 		// Curr now points to our direct ancestor, if necessary remove any node that is
 		// not a descendant of `hash`.
-		let mut is_first = true;
 		let children = std::mem::take(&mut curr.children);
 		for child in children {
-			if is_first &&
-				(child.number == *number && child.hash == *hash ||
-					*number < child.number && is_descendent_of(hash, &child.hash)?)
+			if child.number == *number && child.hash == *hash ||
+				*number < child.number && is_descendent_of(hash, &child.hash)?
 			{
 				curr.children.push(child);
-				// Assuming that the tree is well formed only one child should pass this
-				// requirement due to ancestry restrictions (i.e. they must be different forks).
-				is_first = false;
 			} else {
 				removed.push(child);
 			}
