@@ -32,7 +32,7 @@ pub enum Error<E> {
 	UnfinalizedAncestor,
 	/// Imported or finalized node that is an ancestor of previously finalized node.
 	Revert,
-	/// Error throw by user when checking for node ancestry.
+	/// Error thrown by user when checking for node ancestry.
 	Client(E),
 }
 
@@ -376,43 +376,41 @@ where
 		F: Fn(&H, &H) -> Result<bool, E>,
 		P: Fn(&V) -> bool,
 	{
-		let root_index =
+		let new_root_path =
 			match self.find_node_index_where(hash, number, is_descendent_of, predicate)? {
-				Some(idx) => idx,
+				Some(path) => path,
 				None => return Ok(RemovedIterator { stack: Vec::new() }),
 			};
 
 		let mut removed = std::mem::take(&mut self.roots);
 
 		// Find and detach the new root from the removed nodes
-		let root_siblings = root_index
+		let root_siblings = new_root_path
 			.iter()
-			.take(root_index.len() - 1)
+			.take(new_root_path.len() - 1)
 			.fold(&mut removed, |curr, idx| &mut curr[*idx].children);
-		let root = root_siblings.remove(root_index[root_index.len() - 1]);
+		let root = root_siblings.remove(new_root_path[new_root_path.len() - 1]);
 		self.roots = vec![root];
 
-		// If, because of the `predicate`, the new root is not the deepest
-		// ancestor of `hash` then we can remove all the nodes that are
-		// descendants of the new `root` but not ancestors of `hash`.
+		// If, because of the `predicate`, the new root is not the deepest ancestor
+		// of `hash` then we can remove all the nodes that are descendants of the new
+		// `root` but not ancestors of `hash`.
 		let mut curr = &mut self.roots[0];
 		loop {
-			let mut next_ancestor_idx = usize::MAX;
+			let mut maybe_ancestor_idx = None;
 			for (idx, child) in curr.children.iter().enumerate() {
-				if child.number == *number && child.hash == *hash ||
-					child.number < *number && is_descendent_of(&child.hash, hash)?
-				{
-					next_ancestor_idx = idx;
+				if child.number < *number && is_descendent_of(&child.hash, hash)? {
+					maybe_ancestor_idx = Some(idx);
 					break
 				}
 			}
-			if next_ancestor_idx == usize::MAX {
-				// We are above all current node children, stop searching
+			let Some(ancestor_idx) = maybe_ancestor_idx else {
+				// Now we are positioned just above block identified by `hash`
 				break
-			}
+			};
 			// Preserve only the ancestor node, the siblings are removed
 			let mut next_siblings = std::mem::take(&mut curr.children);
-			let next = next_siblings.remove(next_ancestor_idx);
+			let next = next_siblings.remove(ancestor_idx);
 			curr.children = vec![next];
 			removed.append(&mut next_siblings);
 			curr = &mut curr.children[0];
@@ -420,16 +418,19 @@ where
 
 		// Curr now points to our direct ancestor, if necessary remove any node that is
 		// not a descendant of `hash`.
-		if curr.children.len() > 0 {
-			let children = std::mem::take(&mut curr.children);
-			for child in children {
-				if child.number == *number && child.hash == *hash ||
-					*number < child.number && is_descendent_of(hash, &child.hash)?
-				{
-					curr.children.push(child);
-				} else {
-					removed.push(child);
-				}
+		let mut is_first = true;
+		let children = std::mem::take(&mut curr.children);
+		for child in children {
+			if is_first &&
+				(child.number == *number && child.hash == *hash ||
+					*number < child.number && is_descendent_of(hash, &child.hash)?)
+			{
+				curr.children.push(child);
+				// Assuming that the tree is well formed only one child should pass this
+				// requirement due to ancestry restrictions (i.e. they must be different forks).
+				is_first = false;
+			} else {
+				removed.push(child);
 			}
 		}
 
@@ -1332,7 +1333,7 @@ mod test {
 	}
 
 	#[test]
-	fn prune_works() {
+	fn prune_works_for_in_tree_hashes() {
 		let (mut tree, is_descendent_of) = test_fork_tree();
 
 		let removed = tree.prune(&"C", &30, &is_descendent_of, &|_| true).unwrap();
@@ -1359,7 +1360,7 @@ mod test {
 	}
 
 	#[test]
-	fn prune_works2() {
+	fn prune_works_for_out_of_tree_hashes() {
 		let (mut tree, is_descendent_of) = test_fork_tree();
 
 		let removed = tree.prune(&"c", &25, &is_descendent_of, &|_| true).unwrap();
@@ -1378,10 +1379,10 @@ mod test {
 	}
 
 	#[test]
-	fn prune_works3() {
+	fn prune_works_for_distant_ancestor() {
 		let (mut tree, is_descendent_of) = test_fork_tree();
 
-		// This is to re-root not at the immediate ancestor, but the one before.
+		// This is to re-root the tree not at the immediate ancestor, but the one just before.
 		let removed = tree.prune(&"m", &45, &is_descendent_of, &|height| *height == 3).unwrap();
 
 		assert_eq!(tree.roots.iter().map(|node| node.hash).collect::<Vec<_>>(), vec!["H"]);
@@ -1395,7 +1396,7 @@ mod test {
 	}
 
 	#[test]
-	fn prune_works4() {
+	fn prune_works_for_far_away_ancestor() {
 		let (mut tree, is_descendent_of) = test_fork_tree();
 
 		let removed = tree.prune(&"m", &45, &is_descendent_of, &|height| *height == 2).unwrap();
