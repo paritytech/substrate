@@ -598,7 +598,7 @@ benchmarks! {
 			let balance = T::Currency::free_balance(stash);
 			nominator_balances_before.push(balance);
 		}
-	}: payout_stakers_by_page(RawOrigin::Signed(caller), validator.clone(), current_era, 0)
+	}: payout_stakers(RawOrigin::Signed(caller), validator.clone(), current_era)
 	verify {
 		let balance_after = T::Currency::free_balance(&validator);
 		ensure!(
