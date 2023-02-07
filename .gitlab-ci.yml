@@ -263,10 +263,10 @@ variables:
     - .docker-env
     - .test-refs-no-trigger-prs-only
   script:
-    - cargo install --quiet diener --version 0.4.6
-    - diener --version
     - mkdir -p "$HOME/.cargo/bin"
     - export PATH="$HOME/.cargo/bin:$PATH"
+    - cargo install --quiet diener --version 0.4.6
+    - diener --version
     - git clone
         --depth=1
         --branch="$PIPELINE_SCRIPTS_TAG"
