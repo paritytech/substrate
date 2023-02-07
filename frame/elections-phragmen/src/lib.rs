@@ -270,7 +270,7 @@ pub mod pallet {
 		/// Maximum numbers of votes per voter.
 		///
 		/// Warning: This impacts the size of the election which is run onchain. Chose wisely, and
-		/// consider how it will impact`T::WeightInfo::election_phragmen`.
+		/// consider how it will impact `T::WeightInfo::election_phragmen`.
 		#[pallet::constant]
 		type MaxVotesPerVoter: Get<u32>;
 
