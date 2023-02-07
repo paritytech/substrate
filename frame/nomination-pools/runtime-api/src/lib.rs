@@ -34,7 +34,7 @@ sp_api::decl_runtime_apis! {
 		fn pending_rewards(who: AccountId) -> Balance;
 
 		/// Returns the points to balance conversion for a given pool.
-		fn points_to_balance(pool_id: PoolId) -> Balance;
+		fn points_to_balance(pool_id: PoolId, points: Balance) -> Balance;
 
 		/// Returns the equivalent points of `new_funds` for a given pool
 		fn balance_to_points(pool_id: PoolId, new_funds: Balance) -> Balance;

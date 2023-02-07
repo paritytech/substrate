@@ -196,6 +196,46 @@ mod bonded_pool {
 	}
 
 	#[test]
+	fn api_points_to_balance_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert!(BondedPool::<Runtime>::get(1).is_some());
+			assert_eq!(Pallet::<Runtime>::api_points_to_balance(1, 10), 10);
+
+			// slash half of the pool's balance. expected result of `fn api_points_to_balance`
+			// to be 1/2 of the pool's balance.
+			StakingMock::set_bonded_balance(
+				default_bonded_account(),
+				Pools::depositor_min_bond() / 2,
+			);
+			assert_eq!(Pallet::<Runtime>::api_points_to_balance(1, 10), 5);
+
+			// if pool does not exist, points to balance ratio is 0.
+			assert_eq!(BondedPool::<Runtime>::get(2), None);
+			assert_eq!(Pallet::<Runtime>::api_points_to_balance(2, 10), 0);
+		})
+	}
+
+	#[test]
+	fn api_balance_to_points_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(Pallet::<Runtime>::api_balance_to_points(1, 0), 0);
+			assert_eq!(Pallet::<Runtime>::api_balance_to_points(1, 10), 10);
+
+			// slash half of the pool's balance. expect result of `fn api_balance_to_points`
+			// to be 2 * of the balance to add to the pool.
+			StakingMock::set_bonded_balance(
+				default_bonded_account(),
+				Pools::depositor_min_bond() / 2,
+			);
+			assert_eq!(Pallet::<Runtime>::api_balance_to_points(1, 10), 20);
+
+			// if pool does not exist, points to balance ratio is 0.
+			assert_eq!(BondedPool::<Runtime>::get(2), None);
+			assert_eq!(Pallet::<Runtime>::api_points_to_balance(2, 10), 0);
+		})
+	}
+
+	#[test]
 	fn ok_to_join_with_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			let pool = BondedPool::<Runtime> {

@@ -1975,8 +1975,8 @@ impl_runtime_apis! {
 			NominationPools::api_pending_rewards(who).unwrap_or_default()
 		}
 
-		fn points_to_balance(pool_id: pallet_nomination_pools::PoolId) -> Balance {
-			NominationPools::api_points_to_balance(pool_id)
+		fn points_to_balance(pool_id: pallet_nomination_pools::PoolId, points: Balance) -> Balance {
+			NominationPools::api_points_to_balance(pool_id, points)
 		}
 
 		fn balance_to_points(pool_id: pallet_nomination_pools::PoolId, new_funds: Balance) -> Balance {

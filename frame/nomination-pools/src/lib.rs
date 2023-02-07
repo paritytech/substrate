@@ -2162,10 +2162,10 @@ impl<T: Config> Pallet<T> {
 
 	/// Returns the points to balance conversion for a specified pool.
 	///
-	/// If the pool ID does not exist, it returns an error. Used by runtime API.
-	pub fn api_points_to_balance(pool_id: PoolId) -> BalanceOf<T> {
+	/// If the pool ID does not exist, it returns 0 ratio points to balance. Used by runtime API.
+	pub fn api_points_to_balance(pool_id: PoolId, points: BalanceOf<T>) -> BalanceOf<T> {
 		if let Some(pool) = BondedPool::<T>::get(pool_id) {
-			pool.points_to_balance(pool.points)
+			pool.points_to_balance(points)
 		} else {
 			Zero::zero()
 		}
@@ -2173,7 +2173,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Returns the equivalent `new_funds` balance to point conversion for a specified pool.
 	///
-	/// If the pool ID does not exist, it returns an error. Used by runtime API.
+	/// If the pool ID does not exist, returns 0 ratio balance to points. Used by runtime API.
 	pub fn api_balance_to_points(pool_id: PoolId, new_funds: BalanceOf<T>) -> BalanceOf<T> {
 		if let Some(pool) = BondedPool::<T>::get(pool_id) {
 			let bonded_balance =
