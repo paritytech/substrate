@@ -100,7 +100,7 @@ where
 		ForkTree { roots: Vec::new(), best_finalized_number: None }
 	}
 
-	/// Rebalance the tree
+	/// Rebalance the tree.
 	///
 	/// For each tree level sort child nodes by max branch depth (decreasing).
 	///
