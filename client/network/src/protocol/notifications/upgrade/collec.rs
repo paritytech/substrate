@@ -131,9 +131,9 @@ mod tests {
 
 		let upgrade: UpgradeCollec<_> = upgrades.into_iter().collect::<UpgradeCollec<_>>();
 		let protos = vec![
-			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol1")), 1), 0),
-			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol2")), 2), 1),
-			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol3")), 3), 2),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from("protocol1".to_string()), 1), 0),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from("protocol2".to_string()), 2), 1),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from("protocol3".to_string()), 3), 2),
 		];
 		let upgrades = upgrade.protocol_info().collect::<Vec<_>>();
 
@@ -156,9 +156,9 @@ mod tests {
 			let mut upgrade = MockProtocolUpgrade::<ProtoNameWithUsize<ProtoName>>::new();
 			upgrade.expect_protocol_info().return_once(move || {
 				vec![
-					ProtoNameWithUsize(ProtoName::from(format!("protocol22")), 1),
-					ProtoNameWithUsize(ProtoName::from(format!("protocol33")), 2),
-					ProtoNameWithUsize(ProtoName::from(format!("protocol44")), 3),
+					ProtoNameWithUsize(ProtoName::from("protocol22".to_string()), 1),
+					ProtoNameWithUsize(ProtoName::from("protocol33".to_string()), 2),
+					ProtoNameWithUsize(ProtoName::from("protocol44".to_string()), 3),
 				]
 				.into_iter()
 			});
@@ -167,11 +167,11 @@ mod tests {
 
 		let upgrade: UpgradeCollec<_> = upgrades.into_iter().collect::<UpgradeCollec<_>>();
 		let protos = vec![
-			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol1")), 1), 0),
-			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol2")), 2), 1),
-			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol22")), 1), 2),
-			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol33")), 2), 2),
-			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol44")), 3), 2),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from("protocol1".to_string()), 1), 0),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from("protocol2".to_string()), 2), 1),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from("protocol22".to_string()), 1), 2),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from("protocol33".to_string()), 2), 2),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from("protocol44".to_string()), 3), 2),
 		];
 		let upgrades = upgrade.protocol_info().collect::<Vec<_>>();
 		assert_eq!(upgrades, protos,);

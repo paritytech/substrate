@@ -2411,7 +2411,7 @@ mod tests {
 		let timer = if let Some(&PeerState::Backoff { timer_deadline, .. }) =
 			notif.peers.get(&(peer, set_id))
 		{
-			timer_deadline.clone()
+			timer_deadline
 		} else {
 			panic!("invalid state");
 		};
@@ -3778,7 +3778,7 @@ mod tests {
 				assert!(std::matches!(connections[0], (_, ConnectionState::Closing)));
 				assert_eq!(connections[0].0, conn);
 
-				timer_deadline.clone()
+				*timer_deadline
 			} else {
 				panic!("invalid state");
 			};
@@ -3808,7 +3808,7 @@ mod tests {
 					if timer_deadline != &prev_instant {
 						break
 					}
-					timer_deadline.clone()
+					*timer_deadline
 				} else {
 					panic!("invalid state");
 				};
