@@ -125,7 +125,7 @@ fn runtime_metadata() {
 				v15::MethodMetadata {
 					name: "test",
 					inputs: vec![v15::ParamMetadata::<MetaForm> {
-						name: "_data",
+						name: "data",
 						ty: meta_type::<u64>(),
 					}],
 					output: meta_type::<()>(),
@@ -134,7 +134,7 @@ fn runtime_metadata() {
 				v15::MethodMetadata {
 					name: "something_with_block",
 					inputs: vec![v15::ParamMetadata::<MetaForm> {
-						name: "_",
+						name: "block",
 						ty: meta_type::<Block>(),
 					}],
 					output: meta_type::<Block>(),
@@ -143,8 +143,8 @@ fn runtime_metadata() {
 				v15::MethodMetadata {
 					name: "function_with_two_args",
 					inputs: vec![
-						v15::ParamMetadata::<MetaForm> { name: "_", ty: meta_type::<u64>() },
-						v15::ParamMetadata::<MetaForm> { name: "_", ty: meta_type::<Block>() },
+						v15::ParamMetadata::<MetaForm> { name: "data", ty: meta_type::<u64>() },
+						v15::ParamMetadata::<MetaForm> { name: "block", ty: meta_type::<Block>() },
 					],
 					output: meta_type::<()>(),
 					docs: vec![],
@@ -183,7 +183,7 @@ fn runtime_metadata() {
 				v15::MethodMetadata {
 					name: "execute_block",
 					inputs: vec![v15::ParamMetadata::<MetaForm> {
-						name: "_",
+						name: "block",
 						ty: meta_type::<Block>(),
 					}],
 					output: meta_type::<()>(),
@@ -192,7 +192,7 @@ fn runtime_metadata() {
 				v15::MethodMetadata {
 					name: "initialize_block",
 					inputs: vec![v15::ParamMetadata::<MetaForm> {
-						name: "_",
+						name: "header",
 						ty: meta_type::<&<Block as BlockT>::Header>(),
 					}],
 					output: meta_type::<()>(),
@@ -205,6 +205,7 @@ fn runtime_metadata() {
 		},
 	];
 
-	let runtime_metadata = Runtime::runtime_metadata();
+	let rt = Runtime;
+	let runtime_metadata = (&rt).runtime_metadata();
 	assert_eq!(runtime_metadata, expected_runtime_metadata);
 }
