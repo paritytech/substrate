@@ -1585,6 +1585,7 @@ pub mod pallet {
 		/// accumulated rewards, see [`BondExtra`].
 		///
 		/// Bonding extra funds implies an automatic payout of all pending rewards as well.
+		/// See `bond_extra_other` to bond pending rewards of `other` members.
 		// NOTE: this transaction is implemented with the sole purpose of readability and
 		// correctness, not optimization. We read/write several storage items multiple times instead
 		// of just once, in the spirit reusing code.
@@ -1593,51 +1594,10 @@ pub mod pallet {
 			T::WeightInfo::bond_extra_transfer()
 			.max(T::WeightInfo::bond_extra_reward())
 		)]
-		pub fn bond_extra(
-			origin: OriginFor<T>,
-			other: Option<AccountIdLookupOf<T>>,
-			extra: BondExtra<BalanceOf<T>>,
-		) -> DispatchResult {
+		pub fn bond_extra(origin: OriginFor<T>, extra: BondExtra<BalanceOf<T>>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let other = other.map(T::Lookup::lookup).transpose()?;
-			let is_bonding_for = other.is_some();
-			let who = other.unwrap_or(who);
-			if is_bonding_for {
-				ensure!(
-					RewardClaimPermission::<T>::get(&who) == RewardClaim::Permissionless,
-					Error::<T>::DoesNotHavePermission
-				);
-				ensure!(extra == BondExtra::Rewards, Error::<T>::CannotBondFreeBalanceOther);
-			}
 
-			let (mut member, mut bonded_pool, mut reward_pool) = Self::get_member_with_pools(&who)?;
-
-			// payout related stuff: we must claim the payouts, and updated recorded payout data
-			// before updating the bonded pool points, similar to that of `join` transaction.
-			reward_pool.update_records(bonded_pool.id, bonded_pool.points)?;
-			let claimed =
-				Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
-
-			let (points_issued, bonded) = match extra {
-				BondExtra::FreeBalance(amount) =>
-					(bonded_pool.try_bond_funds(&who, amount, BondType::Later)?, amount),
-				BondExtra::Rewards =>
-					(bonded_pool.try_bond_funds(&who, claimed, BondType::Later)?, claimed),
-			};
-
-			bonded_pool.ok_to_be_open()?;
-			member.points =
-				member.points.checked_add(&points_issued).ok_or(Error::<T>::OverflowRisk)?;
-
-			Self::deposit_event(Event::<T>::Bonded {
-				member: who.clone(),
-				pool_id: member.pool_id,
-				bonded,
-				joined: false,
-			});
-			Self::put_member_with_pools(&who, member, bonded_pool, reward_pool);
-
-			Ok(())
+			Self::do_bond_extra(who, None, extra)
 		}
 
 		/// A bonded member can use this to claim their payout based on the rewards that the pool
@@ -2156,6 +2116,29 @@ pub mod pallet {
 			T::Staking::chill(&bonded_pool.bonded_account())
 		}
 
+		/// Bond `extra` more funds from `origin` and
+		/// pending rewards of `other` into their respective pools.
+		///
+		/// Origin can bond extra more funds from free balance and pending rewards
+		/// when `other` is `None`.
+		///
+		/// Origin can bond extra pending rewards of `other` given `Some` is a member and
+		/// set reward claim to Permissionless.
+		#[pallet::call_index(14)]
+		#[pallet::weight(
+			T::WeightInfo::bond_extra_transfer()
+			.max(T::WeightInfo::bond_extra_reward())
+		)]
+		pub fn bond_extra_other(
+			origin: OriginFor<T>,
+			other: Option<AccountIdLookupOf<T>>,
+			extra: BondExtra<BalanceOf<T>>,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+
+			Self::do_bond_extra(who, other, extra)
+		}
+
 		/// Sets permission to claim reward.
 		///
 		/// Lets a pool member to choose who can claim pending rewards on their behalf. By default,
@@ -2165,9 +2148,9 @@ pub mod pallet {
 		///
 		/// # Arguments
 		///
-		/// * `Origin` - Member of a pool.
-		/// * `actor` - Account to claim reward.
-		#[pallet::call_index(14)]
+		/// * `origin` - Member of a pool.
+		/// * `actor` - Account to claim reward. // improve this
+		#[pallet::call_index(15)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn set_reward_claim(origin: OriginFor<T>, actor: RewardClaim) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -2476,6 +2459,52 @@ impl<T: Config> Pallet<T> {
 			joined: true,
 		});
 		bonded_pool.put();
+
+		Ok(())
+	}
+
+	fn do_bond_extra(
+		who: T::AccountId,
+		other: Option<AccountIdLookupOf<T>>,
+		extra: BondExtra<BalanceOf<T>>,
+	) -> DispatchResult {
+		let other = other.map(T::Lookup::lookup).transpose()?;
+		let is_bonding_for = other.is_some();
+		let who = other.unwrap_or(who);
+		if is_bonding_for {
+			ensure!(
+				RewardClaimPermission::<T>::get(&who) == RewardClaim::Permissionless,
+				Error::<T>::DoesNotHavePermission
+			);
+			ensure!(extra == BondExtra::Rewards, Error::<T>::CannotBondFreeBalanceOther);
+		}
+
+		let (mut member, mut bonded_pool, mut reward_pool) = Self::get_member_with_pools(&who)?;
+
+		// payout related stuff: we must claim the payouts, and updated recorded payout data
+		// before updating the bonded pool points, similar to that of `join` transaction.
+		reward_pool.update_records(bonded_pool.id, bonded_pool.points)?;
+		let claimed =
+			Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
+
+		let (points_issued, bonded) = match extra {
+			BondExtra::FreeBalance(amount) =>
+				(bonded_pool.try_bond_funds(&who, amount, BondType::Later)?, amount),
+			BondExtra::Rewards =>
+				(bonded_pool.try_bond_funds(&who, claimed, BondType::Later)?, claimed),
+		};
+
+		bonded_pool.ok_to_be_open()?;
+		member.points =
+			member.points.checked_add(&points_issued).ok_or(Error::<T>::OverflowRisk)?;
+
+		Self::deposit_event(Event::<T>::Bonded {
+			member: who.clone(),
+			pool_id: member.pool_id,
+			bonded,
+			joined: false,
+		});
+		Self::put_member_with_pools(&who, member, bonded_pool, reward_pool);
 
 		Ok(())
 	}

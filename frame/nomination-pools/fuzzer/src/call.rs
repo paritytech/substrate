@@ -110,7 +110,7 @@ fn random_call<R: Rng>(mut rng: &mut R) -> (pools::Call<T>, RuntimeOrigin) {
 				let amount = random_ed_multiple(&mut rng);
 				BondExtra::FreeBalance(amount)
 			};
-			(PoolsCall::<T>::bond_extra { other: Some(who), extra }, origin)
+			(PoolsCall::<T>::bond_extra { extra }, origin)
 		},
 		2 => {
 			// claim_payout

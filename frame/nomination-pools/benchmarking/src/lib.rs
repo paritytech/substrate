@@ -245,7 +245,7 @@ frame_benchmarking::benchmarks! {
 
 		// creator of the src pool will bond-extra, bumping itself to dest bag.
 
-	}: bond_extra(RuntimeOrigin::Signed(scenario.creator1.clone()), None, BondExtra::FreeBalance(extra))
+	}: bond_extra(RuntimeOrigin::Signed(scenario.creator1.clone()), BondExtra::FreeBalance(extra))
 	verify {
 		assert!(
 			T::Staking::active_stake(&scenario.origin1).unwrap() >=
@@ -263,7 +263,7 @@ frame_benchmarking::benchmarks! {
 		assert!(extra >= CurrencyOf::<T>::minimum_balance());
 		CurrencyOf::<T>::deposit_creating(&reward_account1, extra);
 
-	}: bond_extra(RuntimeOrigin::Signed(scenario.creator1.clone()), None, BondExtra::Rewards)
+	}: bond_extra(RuntimeOrigin::Signed(scenario.creator1.clone()), BondExtra::Rewards)
 	verify {
 		assert!(
 			T::Staking::active_stake(&scenario.origin1).unwrap() >=
