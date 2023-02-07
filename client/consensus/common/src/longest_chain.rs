@@ -75,7 +75,7 @@ where
 	/// in other words as if there were no blocks greater than `max_block_number`.
 	fn finality_target(
 		&self,
-		target_hash: Block::Hash,
+		base_hash: Block::Hash,
 		maybe_max_number: Option<NumberFor<Block>>,
 	) -> sp_blockchain::Result<Block::Hash> {
 		use sp_blockchain::Error::{MissingHeader, NotInFinalizedChain};
@@ -85,8 +85,8 @@ where
 		let mut best_hash = current_head.hash();
 
 		let target_header = blockchain
-			.header(target_hash)?
-			.ok_or_else(|| MissingHeader(target_hash.to_string()))?;
+			.header(base_hash)?
+			.ok_or_else(|| MissingHeader(base_hash.to_string()))?;
 		let target_number = *target_header.number();
 
 		if let Some(max_number) = maybe_max_number {
@@ -102,7 +102,7 @@ where
 			}
 		}
 
-		while current_head.hash() != target_hash {
+		while current_head.hash() != base_hash {
 			if *current_head.number() < target_number {
 				return Err(NotInFinalizedChain)
 			}
@@ -136,10 +136,10 @@ where
 
 	async fn finality_target(
 		&self,
-		target_hash: Block::Hash,
+		base_hash: Block::Hash,
 		maybe_max_number: Option<NumberFor<Block>>,
 	) -> Result<Block::Hash, ConsensusError> {
-		LongestChain::finality_target(self, target_hash, maybe_max_number)
+		LongestChain::finality_target(self, base_hash, maybe_max_number)
 			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))
 	}
 }
