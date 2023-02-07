@@ -708,7 +708,6 @@ pub mod pallet {
 		}
 
 		/// Returns the next page that can be claimed or `None` if nothing to claim.
-		// TODO(ank4n): Test and refactor
 		pub(crate) fn get_next_claimable_page(
 			era: EraIndex,
 			validator: &T::AccountId,
