@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use crate::{
-	runtime_metadata::generate_decl_docs,
+	runtime_metadata::generate_decl_runtime_metadata,
 	utils::{
 		extract_parameter_names_types_and_borrows, fold_fn_decl_for_client_side,
 		generate_crate_access, generate_hidden_includes, generate_runtime_mod_name_for_trait,
@@ -220,10 +220,10 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 
 	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
 	for decl in decls {
-		let runtime_docs = generate_decl_docs(&decl, &crate_);
 		let mut decl = decl.clone();
 		let decl_span = decl.span();
 		extend_generics_with_block(&mut decl.generics);
+		let metadata = generate_decl_runtime_metadata(&decl, &crate_);
 		let mod_name = generate_runtime_mod_name_for_trait(&decl.ident);
 		let found_attributes = remove_supported_attributes(&mut decl.attrs);
 		let api_version =
@@ -309,7 +309,7 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 
 				pub use #versioned_ident as #main_api_ident;
 
-				#runtime_docs
+				#metadata
 
 				pub #api_version
 
