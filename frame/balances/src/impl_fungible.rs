@@ -245,10 +245,14 @@ impl<T: Config<I>, I: 'static> fungible::UnbalancedHold<T::AccountId> for Pallet
 			delta = item.amount.max(amount) - item.amount.min(amount);
 			increase = amount > item.amount;
 			item.amount = amount;
+			drop(item);
+			holds.retain(|x| !x.amount.is_zero());
 		} else {
-			holds
-				.try_push(IdAmount { id: reason.clone(), amount })
-				.map_err(|_| Error::<T, I>::TooManyHolds)?;
+			if !amount.is_zero() {
+				holds
+					.try_push(IdAmount { id: reason.clone(), amount })
+					.map_err(|_| Error::<T, I>::TooManyHolds)?;
+			}
 		}
 
 		new_account.reserved = if increase {
