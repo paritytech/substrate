@@ -43,14 +43,14 @@
 //! ### Voting
 //!
 //! Voters can vote for a limited number of the candidates by providing a list of account ids,
-//! bounded by [`Config::MaxVotesPerVoter`]. Invalid votes (voting for non-candidates) and
-//! duplicate votes are ignored during election. Yet, a voter _might_ vote for a future candidate.
-//! Voters reserve a bond as they vote. Each vote defines a `value`. This amount is locked from the
-//! account of the voter and indicates the weight of the vote. Voters can update their votes at any
-//! time by calling `vote()` again. This can update the vote targets (which might update the
-//! deposit) or update the vote's stake ([`Voter::stake`]). After a round, votes are kept and might
-//! still be valid for further rounds. A voter is responsible for calling `remove_voter` once they
-//! are done to have their bond back and remove the lock.
+//! bounded by [`Config::MaxVotesPerVoter`]. Invalid votes (voting for non-candidates) and duplicate
+//! votes are ignored during election. Yet, a voter _might_ vote for a future candidate. Voters
+//! reserve a bond as they vote. Each vote defines a `value`. This amount is locked from the account
+//! of the voter and indicates the weight of the vote. Voters can update their votes at any time by
+//! calling `vote()` again. This can update the vote targets (which might update the deposit) or
+//! update the vote's stake ([`Voter::stake`]). After a round, votes are kept and might still be
+//! valid for further rounds. A voter is responsible for calling `remove_voter` once they are done
+//! to have their bond back and remove the lock.
 //!
 //! See [`Call::vote`], [`Call::remove_voter`].
 //!
