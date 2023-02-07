@@ -43,7 +43,7 @@
 //! ### Voting
 //!
 //! Voters can vote for a limited number of the candidates by providing a list of account ids,
-//! bounded by [`T::Config::MaxVotesPerVoter`]. Invalid votes (voting for non-candidates) and
+//! bounded by [`Config::MaxVotesPerVoter`]. Invalid votes (voting for non-candidates) and
 //! duplicate votes are ignored during election. Yet, a voter _might_ vote for a future candidate.
 //! Voters reserve a bond as they vote. Each vote defines a `value`. This amount is locked from the
 //! account of the voter and indicates the weight of the vote. Voters can update their votes at any
