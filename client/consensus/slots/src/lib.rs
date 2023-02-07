@@ -524,13 +524,7 @@ pub async fn start_slot_worker<B, C, W, SO, CIDP, Proof>(
 	let mut slots = Slots::new(slot_duration.as_duration(), create_inherent_data_providers, client);
 
 	loop {
-		let slot_info = match slots.next_slot().await {
-			Ok(r) => r,
-			Err(e) => {
-				warn!(target: LOG_TARGET, "Error while polling for next slot: {}", e);
-				return
-			},
-		};
+		let slot_info = slots.next_slot().await;
 
 		if sync_oracle.is_major_syncing() {
 			debug!(target: LOG_TARGET, "Skipping proposal slot due to sync.");

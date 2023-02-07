@@ -1901,7 +1901,7 @@ fn wrong_vote_is_moot() {
 #[test]
 fn bond_with_no_staked_value() {
 	// Behavior when someone bonds with no staked value.
-	// Particularly when she votes and the candidate is elected.
+	// Particularly when they votes and the candidate is elected.
 	ExtBuilder::default()
 		.validator_count(3)
 		.existential_deposit(5)
@@ -2237,9 +2237,7 @@ fn reward_from_authorship_event_handler_works() {
 		assert_eq!(<pallet_authorship::Pallet<Test>>::author(), Some(11));
 
 		Pallet::<Test>::note_author(11);
-		Pallet::<Test>::note_uncle(21, 1);
-		// Rewarding the same two times works.
-		Pallet::<Test>::note_uncle(11, 1);
+		Pallet::<Test>::note_author(11);
 
 		// Not mandatory but must be coherent with rewards
 		assert_eq_uvec!(Session::validators(), vec![11, 21]);
@@ -2248,10 +2246,7 @@ fn reward_from_authorship_event_handler_works() {
 		// 11 is rewarded as a block producer and uncle referencer and uncle producer
 		assert_eq!(
 			ErasRewardPoints::<Test>::get(active_era()),
-			EraRewardPoints {
-				individual: vec![(11, 20 + 2 * 2 + 1), (21, 1)].into_iter().collect(),
-				total: 26,
-			},
+			EraRewardPoints { individual: vec![(11, 20 * 2)].into_iter().collect(), total: 40 },
 		);
 	})
 }

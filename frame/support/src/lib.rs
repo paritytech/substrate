@@ -874,6 +874,7 @@ pub mod tests {
 
 	decl_storage! {
 		trait Store for Module<T: Config> as Test {
+			pub Value get(fn value): u64;
 			pub Data get(fn data) build(|_| vec![(15u32, 42u64)]):
 				map hasher(twox_64_concat) u32 => u64;
 			pub OptionLinkedMap: map hasher(blake2_128_concat) u32 => Option<u32>;
@@ -943,6 +944,61 @@ pub mod tests {
 				<T as Config>::BlockNumber,
 				<T as Config>::BlockNumber,
 			>;
+		});
+	}
+
+	#[test]
+	fn storage_value_mutate_exists_should_work() {
+		new_test_ext().execute_with(|| {
+			#[crate::storage_alias]
+			pub type Value = StorageValue<Test, u32>;
+
+			assert!(!Value::exists());
+
+			Value::mutate_exists(|v| *v = Some(1));
+			assert!(Value::exists());
+			assert_eq!(Value::get(), Some(1));
+
+			// removed if mutated to `None`
+			Value::mutate_exists(|v| *v = None);
+			assert!(!Value::exists());
+		});
+	}
+
+	#[test]
+	fn storage_value_try_mutate_exists_should_work() {
+		new_test_ext().execute_with(|| {
+			#[crate::storage_alias]
+			pub type Value = StorageValue<Test, u32>;
+
+			type TestResult = result::Result<(), &'static str>;
+
+			assert!(!Value::exists());
+
+			// mutated if `Ok`
+			assert_ok!(Value::try_mutate_exists(|v| -> TestResult {
+				*v = Some(1);
+				Ok(())
+			}));
+			assert!(Value::exists());
+			assert_eq!(Value::get(), Some(1));
+
+			// no-op if `Err`
+			assert_noop!(
+				Value::try_mutate_exists(|v| -> TestResult {
+					*v = Some(2);
+					Err("nah")
+				}),
+				"nah"
+			);
+			assert_eq!(Value::get(), Some(1));
+
+			// removed if mutated to`None`
+			assert_ok!(Value::try_mutate_exists(|v| -> TestResult {
+				*v = None;
+				Ok(())
+			}));
+			assert!(!Value::exists());
 		});
 	}
 
@@ -1257,6 +1313,13 @@ pub mod tests {
 		PalletStorageMetadata {
 			prefix: "Test",
 			entries: vec![
+				StorageEntryMetadata {
+					name: "Value",
+					modifier: StorageEntryModifier::Default,
+					ty: StorageEntryType::Plain(scale_info::meta_type::<u64>()),
+					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
+					docs: vec![],
+				},
 				StorageEntryMetadata {
 					name: "Data",
 					modifier: StorageEntryModifier::Default,
