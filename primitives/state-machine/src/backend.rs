@@ -51,7 +51,7 @@ pub struct IterArgs<'a> {
 	/// When a missing trie node is reached the iterator will:
 	///   - return an error if this is set to `false` (default)
 	///   - return `None` if this is set to `true`
-	pub allow_missing: bool,
+	pub stop_on_incomplete_database: bool,
 }
 
 /// A trait for a raw storage iterator.
@@ -236,7 +236,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 			child_info: child_info.cloned(),
 			prefix,
 			start_at,
-			allow_missing,
+			stop_on_incomplete_database: allow_missing,
 			..IterArgs::default()
 		};
 		let mut iter = self.pairs(args)?;

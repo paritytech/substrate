@@ -266,7 +266,7 @@ pub struct RawIter<S, H, C>
 where
 	H: Hasher,
 {
-	allow_missing: bool,
+	stop_on_incomplete_database: bool,
 	root: H::Out,
 	child_info: Option<ChildInfo>,
 	trie_iter: TrieDBRawIterator<Layout<H>>,
@@ -305,7 +305,9 @@ where
 			},
 			Some(Err(error)) => {
 				self.state = IterState::FinishedIncomplete;
-				if matches!(*error, TrieError::IncompleteDatabase(_)) && self.allow_missing {
+				if matches!(*error, TrieError::IncompleteDatabase(_)) &&
+					self.stop_on_incomplete_database
+				{
 					None
 				} else {
 					Some(Err(format!("TrieDB iteration error: {}", error)))
@@ -321,7 +323,7 @@ where
 {
 	fn default() -> Self {
 		Self {
-			allow_missing: false,
+			stop_on_incomplete_database: false,
 			child_info: None,
 			root: Default::default(),
 			trie_iter: TrieDBRawIterator::empty(),
@@ -616,7 +618,7 @@ where
 			.map_err(|e| format!("TrieDB iteration error: {}", e))?;
 
 		Ok(RawIter {
-			allow_missing: args.allow_missing,
+			stop_on_incomplete_database: args.stop_on_incomplete_database,
 			child_info: args.child_info,
 			root,
 			trie_iter,
