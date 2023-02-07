@@ -362,15 +362,17 @@ impl<T: Config<I>, I: 'static> SortedMembers<T::AccountId> for Pallet<T, I> {
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmark {
 	use super::{Pallet as Membership, *};
-	use frame_benchmarking::v1::{account, benchmarks_instance_pallet, whitelist};
+	use frame_benchmarking::v1::{account, benchmarks_instance_pallet, whitelist, BenchmarkError};
 	use frame_support::{assert_ok, traits::EnsureOrigin};
 	use frame_system::RawOrigin;
 
 	const SEED: u32 = 0;
 
 	fn set_members<T: Config<I>, I: 'static>(members: Vec<T::AccountId>, prime: Option<usize>) {
-		let reset_origin = T::ResetOrigin::successful_origin();
-		let prime_origin = T::PrimeOrigin::successful_origin();
+		let reset_origin = T::ResetOrigin::try_successful_origin()
+			.expect("ResetOrigin has no successful origin required for the benchmark");
+		let prime_origin = T::PrimeOrigin::try_successful_origin()
+			.expect("PrimeOrigin has no successful origin required for the benchmark");
 
 		assert_ok!(<Membership<T, I>>::reset_members(reset_origin, members.clone()));
 		if let Some(prime) = prime.map(|i| members[i].clone()) {
@@ -390,9 +392,11 @@ mod benchmark {
 			let new_member = account::<T::AccountId>("add", m, SEED);
 			let new_member_lookup = T::Lookup::unlookup(new_member.clone());
 		}: {
-			assert_ok!(<Membership<T, I>>::add_member(T::AddOrigin::successful_origin(), new_member_lookup));
-		}
-		verify {
+			assert_ok!(<Membership<T, I>>::add_member(
+				T::AddOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?,
+				new_member_lookup,
+			));
+		} verify {
 			assert!(<Members<T, I>>::get().contains(&new_member));
 			#[cfg(test)] crate::tests::clean();
 		}
@@ -408,7 +412,10 @@ mod benchmark {
 			let to_remove = members.first().cloned().unwrap();
 			let to_remove_lookup = T::Lookup::unlookup(to_remove.clone());
 		}: {
-			assert_ok!(<Membership<T, I>>::remove_member(T::RemoveOrigin::successful_origin(), to_remove_lookup));
+			assert_ok!(<Membership<T, I>>::remove_member(
+				T::RemoveOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?,
+				to_remove_lookup,
+			));
 		} verify {
 			assert!(!<Members<T, I>>::get().contains(&to_remove));
 			// prime is rejigged
@@ -428,7 +435,7 @@ mod benchmark {
 			let remove_lookup = T::Lookup::unlookup(remove.clone());
 		}: {
 			assert_ok!(<Membership<T, I>>::swap_member(
-				T::SwapOrigin::successful_origin(),
+				T::SwapOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?,
 				remove_lookup,
 				add_lookup,
 			));
@@ -448,7 +455,10 @@ mod benchmark {
 			set_members::<T, I>(members.clone(), Some(members.len() - 1));
 			let mut new_members = (m..2*m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
 		}: {
-			assert_ok!(<Membership<T, I>>::reset_members(T::ResetOrigin::successful_origin(), new_members.clone()));
+			assert_ok!(<Membership<T, I>>::reset_members(
+				T::ResetOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?,
+				new_members.clone(),
+			));
 		} verify {
 			new_members.sort();
 			assert_eq!(<Members<T, I>>::get(), new_members);
@@ -485,7 +495,10 @@ mod benchmark {
 			let prime_lookup = T::Lookup::unlookup(prime.clone());
 			set_members::<T, I>(members, None);
 		}: {
-			assert_ok!(<Membership<T, I>>::set_prime(T::PrimeOrigin::successful_origin(), prime_lookup));
+			assert_ok!(<Membership<T, I>>::set_prime(
+				T::PrimeOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?,
+				prime_lookup,
+			));
 		} verify {
 			assert!(<Prime<T, I>>::get().is_some());
 			assert!(<T::MembershipChanged>::get_prime().is_some());
@@ -498,7 +511,9 @@ mod benchmark {
 			let prime = members.last().cloned().unwrap();
 			set_members::<T, I>(members, None);
 		}: {
-			assert_ok!(<Membership<T, I>>::clear_prime(T::PrimeOrigin::successful_origin()));
+			assert_ok!(<Membership<T, I>>::clear_prime(
+				T::PrimeOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?,
+			));
 		} verify {
 			assert!(<Prime<T, I>>::get().is_none());
 			assert!(<T::MembershipChanged>::get_prime().is_none());

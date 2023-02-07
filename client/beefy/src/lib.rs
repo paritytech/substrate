@@ -53,7 +53,7 @@ use sp_keystore::SyncCryptoStorePtr;
 use sp_mmr_primitives::MmrApi;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block, One, Zero},
+	traits::{Block, Zero},
 };
 use std::{collections::VecDeque, marker::PhantomData, sync::Arc};
 
@@ -346,6 +346,12 @@ where
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B>,
 {
+	let beefy_genesis = runtime
+		.runtime_api()
+		.beefy_genesis(&BlockId::hash(best_grandpa.hash()))
+		.ok()
+		.flatten()
+		.ok_or_else(|| ClientError::Backend("BEEFY pallet expected to be active.".into()))?;
 	// Walk back the imported blocks and initialize voter either, at the last block with
 	// a BEEFY justification, or at pallet genesis block; voter will resume from there.
 	let blockchain = backend.blockchain();
@@ -378,20 +384,19 @@ where
 			break state
 		}
 
-		if *header.number() == One::one() {
-			// We've reached chain genesis, initialize voter here.
-			let genesis_num = *header.number();
+		if *header.number() == beefy_genesis {
+			// We've reached BEEFY genesis, initialize voter here.
 			let genesis_set = expect_validator_set(runtime, BlockId::hash(header.hash()))
 				.and_then(genesis_set_sanity_check)?;
 			info!(
 				target: LOG_TARGET,
 				"🥩 Loading BEEFY voter state from genesis on what appears to be first startup. \
 				Starting voting rounds at block {:?}, genesis validator set {:?}.",
-				genesis_num,
+				beefy_genesis,
 				genesis_set,
 			);
 
-			sessions.push_front(Rounds::new(genesis_num, genesis_set));
+			sessions.push_front(Rounds::new(beefy_genesis, genesis_set));
 			break PersistedState::checked_new(best_grandpa, Zero::zero(), sessions, min_block_delta)
 				.ok_or_else(|| ClientError::Backend("Invalid BEEFY chain".into()))?
 		}
@@ -448,13 +453,16 @@ where
 					None => break
 				};
 				let at = BlockId::hash(notif.header.hash());
-				if let Some(active) = runtime.runtime_api().validator_set(&at).ok().flatten() {
-					// Beefy pallet available, return best grandpa at the time.
-					info!(
-						target: LOG_TARGET, "🥩 BEEFY pallet available: block {:?} validator set {:?}",
-						notif.header.number(), active
-					);
-					return Ok(notif.header)
+				if let Some(start) = runtime.runtime_api().beefy_genesis(&at).ok().flatten() {
+					if *notif.header.number() >= start {
+						// Beefy pallet available, return header for best grandpa at the time.
+						info!(
+							target: LOG_TARGET,
+							"🥩 BEEFY pallet available: block {:?} beefy genesis {:?}",
+							notif.header.number(), start
+						);
+						return Ok(notif.header)
+					}
 				}
 			},
 			_ = gossip_engine => {

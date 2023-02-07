@@ -20,7 +20,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller};
+use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller};, BenchmarkError
 use frame_support::traits::{
 	fungible::Inspect as FunInspect, nonfungible::Inspect, EnsureOrigin, Get,
 };
@@ -99,7 +99,8 @@ benchmarks! {
 	}
 
 	fund_deficit {
-		let origin = T::FundOrigin::successful_origin();
+		let origin =
+			T::FundOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		let caller: T::AccountId = whitelisted_caller();
 		let bid = T::MinBid::get().max(One::one());
 		T::Currency::set_balance(&caller, bid);
