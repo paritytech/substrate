@@ -110,6 +110,7 @@ pallet-utility = { version = "4.0.0-dev", default-features = false, path = "../.
 pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-payment" }
 pallet-transaction-payment-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-payment/rpc/runtime-api/" }
 pallet-asset-tx-payment = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-payment/asset-tx-payment/" }
+pallet-dex-tx-payment = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-payment/dex-tx-payment/" }
 pallet-transaction-storage = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-storage" }
 pallet-uniques = { version = "4.0.0-dev", default-features = false, path = "../../../frame/uniques" }
 pallet-vesting = { version = "4.0.0-dev", default-features = false, path = "../../../frame/vesting" }

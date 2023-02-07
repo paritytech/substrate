@@ -480,6 +480,12 @@ impl pallet_asset_tx_payment::Config for Runtime {
 	>;
 }
 
+impl pallet_dex_tx_payment::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Fungibles = Assets;
+	type OnChargeAssetTransactionBySwap = pallet_dex_tx_payment::FungiblesAdapter<Dex>;
+}
+
 parameter_types! {
 	pub const MinimumPeriod: Moment = SLOT_DURATION / 2;
 }
@@ -1266,7 +1272,8 @@ where
 			frame_system::CheckEra::<Runtime>::from(era),
 			frame_system::CheckNonce::<Runtime>::from(nonce),
 			frame_system::CheckWeight::<Runtime>::new(),
-			pallet_asset_tx_payment::ChargeAssetTxPayment::<Runtime>::from(tip, None),
+			// pallet_asset_tx_payment::ChargeAssetTxPayment::<Runtime>::from(tip, None),
+			pallet_dex_tx_payment::ChargeAssetTxPaymentBySwap::<Runtime>::from(tip, None),
 		);
 		let raw_payload = SignedPayload::new(call, extra)
 			.map_err(|e| {
@@ -1764,6 +1771,7 @@ construct_runtime!(
 		Balances: pallet_balances,
 		TransactionPayment: pallet_transaction_payment,
 		AssetTxPayment: pallet_asset_tx_payment,
+		DexTxPayment: pallet_dex_tx_payment,
 		ElectionProviderMultiPhase: pallet_election_provider_multi_phase,
 		Staking: pallet_staking,
 		Session: pallet_session,
@@ -1841,7 +1849,8 @@ pub type SignedExtra = (
 	frame_system::CheckEra<Runtime>,
 	frame_system::CheckNonce<Runtime>,
 	frame_system::CheckWeight<Runtime>,
-	pallet_asset_tx_payment::ChargeAssetTxPayment<Runtime>,
+	// pallet_asset_tx_payment::ChargeAssetTxPayment<Runtime>,
+	pallet_dex_tx_payment::ChargeAssetTxPaymentBySwap<Runtime>,
 );
 
 /// Unchecked extrinsic type as expected by this runtime.
