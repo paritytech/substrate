@@ -41,6 +41,9 @@ macro_rules! if_wasmtime_is_enabled {
 if_wasmtime_is_enabled! {
 	// Reexport wasmtime so that its types are accessible from the procedural macro.
 	pub use wasmtime;
+
+	// Wasmtime uses anyhow types but doesn't reexport them.
+	pub use anyhow;
 }
 
 /// Result type used by traits in this crate.

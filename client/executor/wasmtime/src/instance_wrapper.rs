@@ -76,27 +76,17 @@ impl EntryPoint {
 				.as_mut()
 				.expect("host state cannot be empty while a function is being called; qed");
 
-			// The logic to print out a backtrace is somewhat complicated,
-			// so let's get wasmtime to print it out for us.
-			let mut backtrace_string = trap.to_string();
-			let suffix = "\nwasm backtrace:";
-			if let Some(index) = backtrace_string.find(suffix) {
-				// Get rid of the error message and just grab the backtrace,
-				// since we're storing the error message ourselves separately.
-				backtrace_string.replace_range(0..index + suffix.len(), "");
-			}
+			let backtrace = trap.downcast_ref::<wasmtime::WasmBacktrace>().map(|backtrace| {
+				// The logic to print out a backtrace is somewhat complicated,
+				// so let's get wasmtime to print it out for us.
+				Backtrace { backtrace_string: backtrace.to_string() }
+			});
 
-			let backtrace = Backtrace { backtrace_string };
-			if let Some(error) = host_state.take_panic_message() {
-				Error::AbortedDueToPanic(MessageWithBacktrace {
-					message: error,
-					backtrace: Some(backtrace),
-				})
+			if let Some(message) = host_state.take_panic_message() {
+				Error::AbortedDueToPanic(MessageWithBacktrace { message, backtrace })
 			} else {
-				Error::AbortedDueToTrap(MessageWithBacktrace {
-					message: trap.display_reason().to_string(),
-					backtrace: Some(backtrace),
-				})
+				let message = trap.root_cause().to_string();
+				Error::AbortedDueToTrap(MessageWithBacktrace { message, backtrace })
 			}
 		})
 	}
@@ -106,7 +96,7 @@ impl EntryPoint {
 		ctx: impl AsContext,
 	) -> std::result::Result<Self, &'static str> {
 		let entrypoint = func
-			.typed::<(u32, u32), u64, _>(ctx)
+			.typed::<(u32, u32), u64>(ctx)
 			.map_err(|_| "Invalid signature for direct entry point")?;
 		Ok(Self { call_type: EntryPointType::Direct { entrypoint } })
 	}
@@ -117,7 +107,7 @@ impl EntryPoint {
 		ctx: impl AsContext,
 	) -> std::result::Result<Self, &'static str> {
 		let dispatcher = dispatcher
-			.typed::<(u32, u32, u32), u64, _>(ctx)
+			.typed::<(u32, u32, u32), u64>(ctx)
 			.map_err(|_| "Invalid signature for wrapped entry point")?;
 		Ok(Self { call_type: EntryPointType::Wrapped { func, dispatcher } })
 	}

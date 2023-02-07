@@ -193,6 +193,8 @@ pub use weights::WeightInfo;
 
 pub use pallet::*;
 
+const LOG_TARGET: &str = "runtime::balances";
+
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
@@ -950,7 +952,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if locks.len() as u32 > T::MaxLocks::get() {
 			log::warn!(
-				target: "runtime::balances",
+				target: LOG_TARGET,
 				"Warning: A user has more currency locks than expected. \
 				A runtime configuration adjustment may be needed."
 			);
@@ -985,7 +987,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				// since the funds that are under the lock will themselves be stored in the
 				// account and therefore will need a reference.
 				log::warn!(
-					target: "runtime::balances",
+					target: LOG_TARGET,
 					"Warning: Attempt to introduce lock consumer reference, yet no providers. \
 					This is unexpected but should be safe."
 				);

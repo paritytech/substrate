@@ -84,7 +84,7 @@ impl pallet_balances::Config<Instance1> for Test {
 	type AccountStore = System;
 	type WeightInfo = ();
 	type MaxLocks = ();
-	type MaxReserves = ();
+	type MaxReserves = ConstU32<1>;
 	type ReserveIdentifier = [u8; 8];
 }
 
@@ -112,6 +112,7 @@ parameter_types! {
 	pub const MinReceipt: Perquintill = Perquintill::from_percent(1);
 	pub const ThawThrottle: (Perquintill, u64) = (Perquintill::from_percent(25), 5);
 	pub static MaxIntakeWeight: Weight = Weight::from_ref_time(2_000_000_000_000);
+	pub const ReserveId: [u8; 8] = *b"py/nis  ";
 }
 
 ord_parameter_types! {
@@ -139,6 +140,7 @@ impl pallet_nis::Config for Test {
 	type MaxIntakeWeight = MaxIntakeWeight;
 	type MinReceipt = MinReceipt;
 	type ThawThrottle = ThawThrottle;
+	type ReserveId = ReserveId;
 }
 
 // This function basically just builds a genesis storage key/value store according to
