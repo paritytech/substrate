@@ -860,7 +860,7 @@ impl<T: Config> Pallet<T> {
 		match skipped_epochs.binary_search_by_key(&epoch_index, |(epoch_index, _)| *epoch_index) {
 			// we have an exact match so we just return the given session index
 			Ok(index) => skipped_epochs[index].1,
-			// we haven't found any skipped epoch before the given the epoch,
+			// we haven't found any skipped epoch before the given epoch,
 			// so the epoch index and session index should match
 			Err(0) => epoch_index.saturated_into::<u32>(),
 			// we have found a skipped epoch before the given epoch
@@ -871,7 +871,7 @@ impl<T: Config> Pallet<T> {
 
 				// calculate the number of skipped epochs at this point by checking the difference
 				// between the epoch and session indices. epoch index should always be greater or
-				// equal than session index, this is because epochs can be skipped whereas sessions
+				// equal to session index, this is because epochs can be skipped whereas sessions
 				// can't
 				let skipped_epochs = closest_skipped_epoch.0 - closest_skipped_epoch.1 as u64;
 				epoch_index.saturating_sub(skipped_epochs).saturated_into::<u32>()
