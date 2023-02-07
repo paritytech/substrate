@@ -42,7 +42,8 @@ pub trait Inspect<AccountId>: super::Inspect<AccountId> {
 
 	/// Get the maximum amount that the `total_balance_on_hold` of `who` can be reduced successfully
 	/// based on whether we are willing to force the reduction and potentially go below user-level
-	/// restrictions on the minimum amount of the account.
+	/// restrictions on the minimum amount of the account. Note: This cannot bring the account into
+	/// an inconsistent state with regards any required existential deposit.
 	///
 	/// Always less than `total_balance_on_hold()`.
 	fn reducible_total_balance_on_hold(who: &AccountId, force: bool) -> Self::Balance;
