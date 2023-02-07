@@ -175,7 +175,10 @@ async fn build_network_future<
 					Some(n) => n,
 					// If this stream is shut down, that means the client has shut down, and the
 					// most appropriate thing to do for the network future is to shut down too.
-					None => return,
+					None => {
+						debug!("Block import stream has terminated, shutting down the network future.");
+						return
+					},
 				};
 
 				if announce_imported_blocks {
@@ -287,7 +290,10 @@ async fn build_network_future<
 			}
 
 			// Drive the network. Shut down the network future if `NetworkWorker` has terminated.
-			_ = network.run().fuse() => return,
+			_ = network.run().fuse() => {
+				debug!("`NetworkWorker` has terminated, shutting down the network future.");
+				return
+			},
 		}
 	}
 }
