@@ -74,7 +74,7 @@ pub trait Inspect<AccountId>: Sized {
 	/// account should be kept alive (`keep_alive`) or whether we are willing to force the reduction
 	/// and potentially go below user-level restrictions on the minimum amount of the account.
 	///
-	/// Always less than `balance()`.
+	/// Always less than or equal to `balance()`.
 	fn reducible_balance(who: &AccountId, keep_alive: KeepAlive, force: bool) -> Self::Balance;
 
 	/// Returns `true` if the balance of `who` may be increased by `amount`.
