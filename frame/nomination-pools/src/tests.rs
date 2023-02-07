@@ -229,7 +229,7 @@ mod bonded_pool {
 			);
 			assert_eq!(Pallet::<Runtime>::api_balance_to_points(1, 10), 20);
 
-			// if pool does not exist, points to balance ratio is 0.
+			// if pool does not exist, balance to points ratio is 0.
 			assert_eq!(BondedPool::<Runtime>::get(2), None);
 			assert_eq!(Pallet::<Runtime>::api_points_to_balance(2, 10), 0);
 		})
