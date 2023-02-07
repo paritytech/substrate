@@ -252,7 +252,7 @@ pub mod pallet {
 		/// The maximum number of candidates in a phragmen election.
 		///
 		/// Warning: This impacts the size of the election which is run onchain. Chose wisely, and
-		/// consider how it will impact`T::WeightInfo::election_phragmen`.
+		/// consider how it will impact `T::WeightInfo::election_phragmen`.
 		///
 		/// When this limit is reached no more candidates are accepted in the election.
 		#[pallet::constant]
