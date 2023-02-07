@@ -47,7 +47,7 @@ pub trait Inspect<AccountId>: super::Inspect<AccountId> {
 	/// Always less than `total_balance_on_hold()`.
 	fn reducible_total_balance_on_hold(who: &AccountId, force: bool) -> Self::Balance;
 
-	/// Amount of funds on hold (for all hold reasons) of `who`.
+	/// Amount of funds on hold (for the given reason) of `who`.
 	fn balance_on_hold(reason: &Self::Reason, who: &AccountId) -> Self::Balance;
 
 	/// Returns `true` if it's possible to place (additional) funds under a hold of a given

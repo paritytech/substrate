@@ -280,7 +280,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		Ok(actual)
 	}
 
-	/// Attempt to increase the `asset` balance of `who` by `amount`.
+	/// Attempt to decrease the `asset` balance of `who` by `amount`.
 	///
 	/// Equivalent to `burn_from`, except with an expectation that within the bounds of some
 	/// universal issuance, the total assets `suspend`ed and `resume`d will be equivalent. The
