@@ -30,6 +30,8 @@ pub(crate) struct Metrics {
 	pub beefy_round_concluded: Gauge<U64>,
 	/// Best block finalized by BEEFY
 	pub beefy_best_block: Gauge<U64>,
+	/// Best block BEEFY voted on
+	pub beefy_best_voted: Gauge<U64>,
 	/// Next block BEEFY should vote on
 	pub beefy_should_vote_on: Gauge<U64>,
 	/// Number of sessions with lagging signed commitment on mandatory block
@@ -59,6 +61,10 @@ impl Metrics {
 			)?,
 			beefy_best_block: register(
 				Gauge::new("substrate_beefy_best_block", "Best block finalized by BEEFY")?,
+				registry,
+			)?,
+			beefy_best_voted: register(
+				Gauge::new("substrate_beefy_best_voted", "Best block voted on by BEEFY")?,
 				registry,
 			)?,
 			beefy_should_vote_on: register(
