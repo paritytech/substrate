@@ -89,7 +89,7 @@
 //!
 //! ### Dispatchable Functions
 //!
-//! - `transfer` - Transfer some liquid free balance to another account.
+//! - `transfer_allow_death` - Transfer some liquid free balance to another account.
 //! - `force_set_balance` - Set the balances of a given account. The origin of this call must be
 //!   root.
 //!
@@ -494,7 +494,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Transfer some liquid free balance to another account.
 		///
-		/// `transfer` will set the `FreeBalance` of the sender and receiver.
+		/// `transfer_allow_death` will set the `FreeBalance` of the sender and receiver.
 		/// If the sender's account is below the existential deposit as a result
 		/// of the transfer, the account will be reaped.
 		///
@@ -512,8 +512,8 @@ pub mod pallet {
 		///   - Transferring balances to accounts that did not exist before will cause
 		///     `T::OnNewAccount::on_new_account` to be called.
 		///   - Removing enough funds from an account will trigger `T::DustRemoval::on_unbalanced`.
-		///   - `transfer_keep_alive` works the same way as `transfer`, but has an additional check
-		///     that the transfer will not kill the origin account.
+		///   - `transfer_keep_alive` works the same way as `transfer_allow_death`, but has an
+		///     additional check that the transfer will not kill the origin account.
 		/// ---------------------------------
 		/// - Origin account is already in memory, so no DB operations for them.
 		/// # </weight>
@@ -530,12 +530,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Set the balances of a given account.
-		///
-		/// This will alter `FreeBalance` and `ReservedBalance` in storage. it will
-		/// also alter the total issuance of the system (`TotalIssuance`) appropriately.
-		/// If the new free or reserved balance is below the existential deposit,
-		/// it will reset the account nonce (`frame_system::AccountNonce`).
+		/// Set the regular balance of a given account.
 		///
 		/// The dispatch origin for this call is `root`.
 		#[pallet::call_index(1)]
@@ -574,8 +569,8 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Exactly as `transfer`, except the origin must be root and the source account may be
-		/// specified.
+		/// Exactly as `transfer_allow_death`, except the origin must be root and the source account
+		/// may be specified.
 		/// # <weight>
 		/// - Same as transfer, but additional read and write because the source account is not
 		///   assumed to be in the overlay.
@@ -595,12 +590,12 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Same as the [`transfer`] call, but with a check that the transfer will not kill the
-		/// origin account.
+		/// Same as the [`transfer_allow_death`] call, but with a check that the transfer will not
+		/// kill the origin account.
 		///
-		/// 99% of the time you want [`transfer`] instead.
+		/// 99% of the time you want [`transfer_allow_death`] instead.
 		///
-		/// [`transfer`]: struct.Pallet.html#method.transfer
+		/// [`transfer_allow_death`]: struct.Pallet.html#method.transfer
 		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::transfer_keep_alive())]
 		pub fn transfer_keep_alive(
