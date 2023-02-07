@@ -37,8 +37,6 @@
 //!   which guaranete eventual book-keeping. May be useful for some sophisticated operations where
 //!   funds must be removed from an account before it is known precisely what should be done with
 //!   them.
-//! - `Balanced`: One-sided mutator functions for balances on hold, which return imbalance objects
-//!   which guaranete eventual book-keeping.
 
 pub mod freeze;
 pub mod hold;
