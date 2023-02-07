@@ -1,4 +1,4 @@
-use frame_support::benchmarking::*;
+use frame_benchmarking::v2::*;
 use frame_support_test::Config;
 
 #[benchmarks]
