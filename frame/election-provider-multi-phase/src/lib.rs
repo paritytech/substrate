@@ -1141,10 +1141,7 @@ pub mod pallet {
 				Self::rotate_round();
 			}
 
-			match Self::create_snapshot() {
-				Ok(_) => Self::on_initialize_open_signed(),
-				Err(_) => return Err(Error::<T>::SnapshotCreationFailed.into()),
-			}
+			Self::phase_transition(Phase::Signed);
 
 			Ok(())
 		}
@@ -1164,21 +1161,21 @@ pub mod pallet {
 		pub fn force_start_unsigned(origin: OriginFor<T>) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
-			let (need_snapshot, enabled) = if Self::current_phase().is_signed() {
+			let need_snapshot = if Self::current_phase().is_signed() {
 				let _ = Self::finalize_signed_phase();
-				(false, true)
+				false
 			} else {
-				(true, true)
+				true
 			};
 
 			let now = <frame_system::Pallet<T>>::block_number();
 			if need_snapshot {
 				match Self::create_snapshot() {
-					Ok(_) => Self::on_initialize_open_unsigned(enabled, now),
+					Ok(_) => Self::phase_transition(Phase::Unsigned((true, now))),
 					Err(_) => return Err(Error::<T>::SnapshotCreationFailed.into()),
 				}
 			} else {
-				Self::on_initialize_open_unsigned(enabled, now);
+				Self::phase_transition(Phase::Unsigned((true, now)));
 			}
 
 			Ok(())
@@ -1498,6 +1495,9 @@ impl<T: Config> Pallet<T> {
 		let voters = T::DataProvider::electing_voters(Some(voter_limit))
 			.map_err(ElectionError::DataProvider)?;
 
+		// Why do we need this? Isn't limiting the length of targets and voters
+		// already done by calling `electable_targets(Some(target_limit)` and
+		// `electing_voters(Some(voter_limit))`
 		if targets.len() > target_limit || voters.len() > voter_limit {
 			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
 		}
@@ -2112,14 +2112,17 @@ mod tests {
 			);
 
 			assert_ok!(MultiPhase::force_start_signed(crate::mock::RuntimeOrigin::root()));
-			//assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
+			/*assert_eq!(
+				multi_phase_events(),
+				vec![Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 }]
+			);*/
 			assert!(MultiPhase::current_phase().is_signed());
-			assert!(MultiPhase::snapshot().is_some());
+			// Didn't proceed to following round since the previos phase was `Phase::Off`.
+			assert_eq!(MultiPhase::round(), 1);
 
 			assert_ok!(MultiPhase::force_start_signed(crate::mock::RuntimeOrigin::root()));
 			//assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 			assert!(MultiPhase::current_phase().is_signed());
-			assert!(MultiPhase::snapshot().is_some());
 			assert_eq!(MultiPhase::round(), 2);
 		})
 	}
