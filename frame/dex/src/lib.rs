@@ -105,7 +105,7 @@ pub mod pallet {
 
 		type AssetBalance: Balance;
 
-		type PromotedBalance: IntegerSquareRoot
+		type HigherPrecisionBalance: IntegerSquareRoot
 			+ One
 			+ Ensure
 			+ Unsigned
@@ -560,11 +560,15 @@ pub mod pallet {
 		}
 
 		pub(crate) fn native_to_asset(amount: T::Balance) -> Result<T::AssetBalance, Error<T>> {
-			T::PromotedBalance::from(amount).try_into().map_err(|_| Error::<T>::Overflow)
+			T::HigherPrecisionBalance::from(amount)
+				.try_into()
+				.map_err(|_| Error::<T>::Overflow)
 		}
 
 		pub(crate) fn asset_to_native(amount: T::AssetBalance) -> Result<T::Balance, Error<T>> {
-			T::PromotedBalance::from(amount).try_into().map_err(|_| Error::<T>::Overflow)
+			T::HigherPrecisionBalance::from(amount)
+				.try_into()
+				.map_err(|_| Error::<T>::Overflow)
 		}
 
 		pub(crate) fn do_swap(
@@ -756,8 +760,8 @@ pub mod pallet {
 			amount1: &AssetBalanceOf<T>,
 			amount2: &AssetBalanceOf<T>,
 		) -> Result<AssetBalanceOf<T>, Error<T>> {
-			let amount1 = T::PromotedBalance::from(*amount1);
-			let amount2 = T::PromotedBalance::from(*amount2);
+			let amount1 = T::HigherPrecisionBalance::from(*amount1);
+			let amount2 = T::HigherPrecisionBalance::from(*amount2);
 
 			let result = amount1
 				.checked_mul(&amount2)
@@ -774,9 +778,9 @@ pub mod pallet {
 			b: &AssetBalanceOf<T>,
 			c: &AssetBalanceOf<T>,
 		) -> Result<AssetBalanceOf<T>, Error<T>> {
-			let a = T::PromotedBalance::from(*a);
-			let b = T::PromotedBalance::from(*b);
-			let c = T::PromotedBalance::from(*c);
+			let a = T::HigherPrecisionBalance::from(*a);
+			let b = T::HigherPrecisionBalance::from(*b);
+			let c = T::HigherPrecisionBalance::from(*c);
 
 			let result = a
 				.checked_mul(&b)
@@ -796,16 +800,16 @@ pub mod pallet {
 			reserve_in: &AssetBalanceOf<T>,
 			reserve_out: &AssetBalanceOf<T>,
 		) -> Result<AssetBalanceOf<T>, Error<T>> {
-			let amount_in = T::PromotedBalance::from(*amount_in);
-			let reserve_in = T::PromotedBalance::from(*reserve_in);
-			let reserve_out = T::PromotedBalance::from(*reserve_out);
+			let amount_in = T::HigherPrecisionBalance::from(*amount_in);
+			let reserve_in = T::HigherPrecisionBalance::from(*reserve_in);
+			let reserve_out = T::HigherPrecisionBalance::from(*reserve_out);
 
 			if reserve_in.is_zero() || reserve_out.is_zero() {
 				return Err(Error::<T>::ZeroLiquidity.into())
 			}
 
 			let amount_in_with_fee = amount_in
-				.checked_mul(&(T::PromotedBalance::from(1000u32) - (T::Fee::get().into())))
+				.checked_mul(&(T::HigherPrecisionBalance::from(1000u32) - (T::Fee::get().into())))
 				.ok_or(Error::<T>::Overflow)?;
 
 			let numerator =
@@ -831,9 +835,9 @@ pub mod pallet {
 			reserve_in: &AssetBalanceOf<T>,
 			reserve_out: &AssetBalanceOf<T>,
 		) -> Result<AssetBalanceOf<T>, Error<T>> {
-			let amount_out = T::PromotedBalance::from(*amount_out);
-			let reserve_in = T::PromotedBalance::from(*reserve_in);
-			let reserve_out = T::PromotedBalance::from(*reserve_out);
+			let amount_out = T::HigherPrecisionBalance::from(*amount_out);
+			let reserve_in = T::HigherPrecisionBalance::from(*reserve_in);
+			let reserve_out = T::HigherPrecisionBalance::from(*reserve_out);
 
 			if reserve_in.is_zero() || reserve_out.is_zero() {
 				return Err(Error::<T>::ZeroLiquidity.into())
@@ -848,7 +852,7 @@ pub mod pallet {
 			let denominator = reserve_out
 				.checked_sub(&amount_out)
 				.ok_or(Error::<T>::Overflow)?
-				.checked_mul(&(T::PromotedBalance::from(1000u32) - T::Fee::get().into()))
+				.checked_mul(&(T::HigherPrecisionBalance::from(1000u32) - T::Fee::get().into()))
 				.ok_or(Error::<T>::Overflow)?;
 
 			let result = numerator

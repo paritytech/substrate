@@ -164,7 +164,7 @@ impl Config for Test {
 	type MaxSwapPathLength = ConstU32<4>;
 
 	type Balance = u64;
-	type PromotedBalance = u128;
+	type HigherPrecisionBalance = u128;
 
 	type MultiAssetId = NativeOrAssetId<u32>;
 	type MultiAssetIdConverter = NativeOrAssetIdConverter<u32>;

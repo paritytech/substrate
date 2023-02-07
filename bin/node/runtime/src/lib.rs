@@ -1533,7 +1533,7 @@ impl pallet_dex::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
 	type AssetBalance = <Self as pallet_balances::Config>::Balance;
-	type PromotedBalance = sp_core::U256;
+	type HigherPrecisionBalance = sp_core::U256;
 	type Assets = Assets;
 	type Balance = u128;
 	type PoolAssets = PoolAssets;

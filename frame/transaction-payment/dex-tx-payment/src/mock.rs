@@ -232,7 +232,7 @@ impl pallet_dex::Config for Runtime {
 	type MultiAssetIdConverter = NativeOrAssetIdConverter<u32>;
 
 	type Balance = u64;
-	type PromotedBalance = u128;
+	type HigherPrecisionBalance = u128;
 }
 
 parameter_types! {
