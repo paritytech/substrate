@@ -263,9 +263,9 @@ variables:
     - .docker-env
     - .test-refs-no-trigger-prs-only
   script:
-    - mkdir -p "$HOME/.cargo/bin"
+    - mkdir -p "$HOME/.cargo-bin"
     - export PATH="$HOME/.cargo/bin:$PATH"
-    - cargo install --quiet diener --version 0.4.6
+    - cargo install --quiet --root "$HOME/.cargo-bin" diener --version 0.4.6
     - diener --version
     - git clone
         --depth=1
