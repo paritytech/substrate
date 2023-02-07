@@ -314,19 +314,17 @@ pub mod pallet {
 				to_seconds(&block_weight),
 				block_weight,
 			);
-			if election_weight.any_gt(block_weight) {
-				frame_support::log::error!(
-						target: LOG_TARGET,
-						"election weight {}s ({:?}) will exceed a {}s chain's block weight ({:?}) (MaxCandidates {}, MaxVoters {}, MaxVotesPerVoter {} -- tweak these parameters)",
-						election_weight,
-						to_seconds(&election_weight),
-						to_seconds(&block_weight),
-						block_weight,
-						T::MaxCandidates::get(),
-						T::MaxVoters::get(),
-						T::MaxVotesPerVoter::get(),
-					);
-			}
+			assert!(
+				election_weight.all_lt(block_weight),
+				"election weight {}s ({:?}) will exceed a {}s chain's block weight ({:?}) (MaxCandidates {}, MaxVoters {}, MaxVotesPerVoter {} -- tweak these parameters)",
+				election_weight,
+				to_seconds(&election_weight),
+				to_seconds(&block_weight),
+				block_weight,
+				T::MaxCandidates::get(),
+				T::MaxVoters::get(),
+				T::MaxVotesPerVoter::get(),
+			);
 		}
 	}
 
