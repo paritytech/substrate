@@ -512,7 +512,6 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	/// * and sanity-checks all bags and nodes. This will cascade down all the checks and makes sure
 	/// all bags and nodes are checked per *any* update to `List`.
 	#[cfg(any(test, feature = "try-runtime", feature = "fuzz"))]
-	#[allow(dead_code)]
 	pub(crate) fn do_try_state() -> Result<(), &'static str> {
 		let mut seen_in_list = BTreeSet::new();
 		ensure!(
@@ -790,7 +789,7 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 	}
 
 	/// Check if the bag contains a node with `id`.
-	#[allow(dead_code)]
+	#[cfg(any(test, feature = "try-runtime", feature = "fuzz"))]
 	fn contains(&self, id: &T::AccountId) -> bool {
 		self.iter().any(|n| n.id() == id)
 	}
