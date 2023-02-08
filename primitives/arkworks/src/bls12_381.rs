@@ -26,7 +26,7 @@ use ark_ec::{
 	pairing::{MillerLoopOutput, Pairing},
 	short_weierstrass::SWCurveConfig,
 };
-use ark_serialize::{CanonicalDeserialize, Compress, Validate};
+use ark_serialize::{CanonicalSerialize, CanonicalDeserialize, Compress, Validate};
 use ark_std::io::Cursor;
 use sp_std::vec::Vec;
 
