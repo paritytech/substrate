@@ -1133,7 +1133,7 @@ pub mod pallet {
 		/// The dispatch origin for this call must be `ForceOrigin`.
 		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::on_initialize_open_signed())]
-		pub fn force_start_signed(origin: OriginFor<T>) -> DispatchResult {
+		pub fn force_start_signed_phase(origin: OriginFor<T>) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
 			// If the current phase is not `Phase::Off` proceed to the next round.
@@ -1141,7 +1141,10 @@ pub mod pallet {
 				Self::rotate_round();
 			}
 
-			Self::phase_transition(Phase::Signed);
+			match Self::create_snapshot() {
+				Ok(_) => Self::phase_transition(Phase::Signed),
+				Err(_) => return Err(Error::<T>::SnapshotCreationFailed.into()),
+			}
 
 			Ok(())
 		}
@@ -1158,7 +1161,7 @@ pub mod pallet {
 				Weight::from_ref_time(10_000)
 			}
 		})]
-		pub fn force_start_unsigned(origin: OriginFor<T>) -> DispatchResult {
+		pub fn force_start_unsigned_phase(origin: OriginFor<T>) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
 			let need_snapshot = if Self::current_phase().is_signed() {
@@ -1186,7 +1189,7 @@ pub mod pallet {
 		/// The dispatch origin for this call must be `ForceOrigin`.
 		#[pallet::call_index(8)]
 		#[pallet::weight(T::DbWeight::get().writes(1))]
-		pub fn force_start_emergency(origin: OriginFor<T>) -> DispatchResult {
+		pub fn force_start_emergency_phase(origin: OriginFor<T>) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
 			<CurrentPhase<T>>::put(Phase::Emergency);
@@ -1495,9 +1498,6 @@ impl<T: Config> Pallet<T> {
 		let voters = T::DataProvider::electing_voters(Some(voter_limit))
 			.map_err(ElectionError::DataProvider)?;
 
-		// Why do we need this? Isn't limiting the length of targets and voters
-		// already done by calling `electable_targets(Some(target_limit)` and
-		// `electing_voters(Some(voter_limit))`
 		if targets.len() > target_limit || voters.len() > voter_limit {
 			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
 		}
@@ -2077,7 +2077,9 @@ mod tests {
 	#[test]
 	fn force_rotate_round_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			assert_eq!(System::block_number(), 0);
+			roll_to(1);
+			assert_eq!(System::block_number(), 1);
+
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 			assert_eq!(MultiPhase::round(), 1);
 
@@ -2092,58 +2094,69 @@ mod tests {
 
 			assert_ok!(MultiPhase::force_rotate_round(crate::mock::RuntimeOrigin::root()));
 			assert_eq!(MultiPhase::round(), 2);
+			assert_eq!(
+				multi_phase_events(),
+				vec![Event::PhaseTransitioned { from: Phase::Off, to: Phase::Off, round: 2 },]
+			);
 		})
 	}
 
 	#[test]
-	fn force_start_signed_works() {
+	fn force_start_signed_phase_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			assert_eq!(System::block_number(), 0);
+			roll_to(1);
+			assert_eq!(System::block_number(), 1);
+
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 			assert_eq!(MultiPhase::round(), 1);
 
 			assert_noop!(
-				MultiPhase::force_start_signed(crate::mock::RuntimeOrigin::none()),
+				MultiPhase::force_start_signed_phase(crate::mock::RuntimeOrigin::none()),
 				DispatchError::BadOrigin
 			);
 			assert_noop!(
-				MultiPhase::force_start_signed(crate::mock::RuntimeOrigin::signed(1)),
+				MultiPhase::force_start_signed_phase(crate::mock::RuntimeOrigin::signed(1)),
 				DispatchError::BadOrigin
 			);
 
-			assert_ok!(MultiPhase::force_start_signed(crate::mock::RuntimeOrigin::root()));
-			/*assert_eq!(
-				multi_phase_events(),
-				vec![Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 }]
-			);*/
+			assert_ok!(MultiPhase::force_start_signed_phase(crate::mock::RuntimeOrigin::root()));
 			assert!(MultiPhase::current_phase().is_signed());
+			assert!(MultiPhase::snapshot().is_some());
 			// Didn't proceed to following round since the previos phase was `Phase::Off`.
 			assert_eq!(MultiPhase::round(), 1);
 
-			assert_ok!(MultiPhase::force_start_signed(crate::mock::RuntimeOrigin::root()));
-			//assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
+			assert_ok!(MultiPhase::force_start_signed_phase(crate::mock::RuntimeOrigin::root()));
 			assert!(MultiPhase::current_phase().is_signed());
+			assert!(MultiPhase::snapshot().is_some());
 			assert_eq!(MultiPhase::round(), 2);
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::PhaseTransitioned { from: Phase::Signed, to: Phase::Off, round: 2 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 2 },
+				]
+			);
 		})
 	}
 
 	#[test]
-	fn force_start_unsigned_works() {
+	fn force_start_unsigned_phase_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(System::block_number(), 0);
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 			assert_eq!(MultiPhase::round(), 1);
 
 			assert_noop!(
-				MultiPhase::force_start_unsigned(crate::mock::RuntimeOrigin::none()),
+				MultiPhase::force_start_unsigned_phase(crate::mock::RuntimeOrigin::none()),
 				DispatchError::BadOrigin
 			);
 			assert_noop!(
-				MultiPhase::force_start_unsigned(crate::mock::RuntimeOrigin::signed(1)),
+				MultiPhase::force_start_unsigned_phase(crate::mock::RuntimeOrigin::signed(1)),
 				DispatchError::BadOrigin
 			);
 
-			assert_ok!(MultiPhase::force_start_unsigned(crate::mock::RuntimeOrigin::root()));
+			assert_ok!(MultiPhase::force_start_unsigned_phase(crate::mock::RuntimeOrigin::root()));
 			//assert_eq!(multi_phase_events(), vec![Event::UnsignedPhaseStarted { round: 1 }]);
 			assert!(MultiPhase::current_phase().is_unsigned());
 			assert!(MultiPhase::snapshot().is_some());
@@ -2158,15 +2171,15 @@ mod tests {
 			assert_eq!(MultiPhase::round(), 1);
 
 			assert_noop!(
-				MultiPhase::force_start_emergency(crate::mock::RuntimeOrigin::none()),
+				MultiPhase::force_start_emergency_phase(crate::mock::RuntimeOrigin::none()),
 				DispatchError::BadOrigin
 			);
 			assert_noop!(
-				MultiPhase::force_start_emergency(crate::mock::RuntimeOrigin::signed(1)),
+				MultiPhase::force_start_emergency_phase(crate::mock::RuntimeOrigin::signed(1)),
 				DispatchError::BadOrigin
 			);
 
-			assert_ok!(MultiPhase::force_start_emergency(crate::mock::RuntimeOrigin::root()));
+			assert_ok!(MultiPhase::force_start_emergency_phase(crate::mock::RuntimeOrigin::root()));
 			assert!(MultiPhase::current_phase().is_emergency());
 		})
 	}
