@@ -1004,8 +1004,9 @@ parameter_types! {
 	pub const TermDuration: BlockNumber = 7 * DAYS;
 	pub const DesiredMembers: u32 = 13;
 	pub const DesiredRunnersUp: u32 = 7;
-	pub const MaxVoters: u32 = 10 * 1000;
-	pub const MaxCandidates: u32 = 1000;
+	pub const MaxVoters: u32 = 512;
+	pub const MaxCandidates: u32 = 64;
+	pub const MaxVotesPerVoter: u32 = 16;
 	// The ElectionsPalletId parameter name was changed along with the renaming of the elections
 	// pallet, but we keep the same lock ID to prevent a migration from current runtimes.
 	// Related to https://github.com/paritytech/substrate/issues/8250
@@ -1033,6 +1034,7 @@ impl pallet_elections::Config for Runtime {
 	type DesiredRunnersUp = DesiredRunnersUp;
 	type TermDuration = TermDuration;
 	type MaxVoters = MaxVoters;
+	type MaxVotesPerVoter = MaxVotesPerVoter;
 	type MaxCandidates = MaxCandidates;
 	type ElectionSolver = SequentialPhragmen<Self::AccountId, Perbill>;
 	type SolverWeightInfo = SubstrateWeight<Runtime>;
