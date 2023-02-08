@@ -1213,16 +1213,9 @@ mod tests {
 	};
 	use substrate_test_utils::assert_eq_uvec;
 
-	parameter_types! {
-		pub BlockWeights: frame_system::limits::BlockWeights =
-			frame_system::limits::BlockWeights::simple_max(
-				frame_support::weights::Weight::from_ref_time(1024).set_proof_size(u64::MAX),
-			);
-	}
-
 	impl frame_system::Config for Test {
 		type BaseCallFilter = frame_support::traits::Everything;
-		type BlockWeights = BlockWeights;
+		type BlockWeights = ();
 		type BlockLength = ();
 		type DbWeight = ();
 		type RuntimeOrigin = RuntimeOrigin;
