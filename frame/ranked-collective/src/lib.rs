@@ -256,21 +256,7 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<T::RuntimeOrigin, ()> {
-		let who = IndexToId::<T, I>::get(MIN_RANK, 0).ok_or(())?;
-		Ok(frame_system::RawOrigin::Signed(who).into())
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> T::RuntimeOrigin {
-		match Self::try_successful_origin() {
-			Ok(o) => o,
-			Err(()) => {
-				let who: T::AccountId = frame_benchmarking::whitelisted_caller();
-				crate::Pallet::<T, I>::do_add_member_to_rank(who.clone(), MIN_RANK)
-					.expect("failed to add ranked member");
-				frame_system::RawOrigin::Signed(who).into()
-			},
-		}
+		EnsureRankedMember::<T, I, MIN_RANK>::try_successful_origin()
 	}
 }
 
@@ -292,21 +278,7 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<T::RuntimeOrigin, ()> {
-		let who = IndexToId::<T, I>::get(MIN_RANK, 0).ok_or(())?;
-		Ok(frame_system::RawOrigin::Signed(who).into())
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> T::RuntimeOrigin {
-		match Self::try_successful_origin() {
-			Ok(o) => o,
-			Err(()) => {
-				let who: T::AccountId = frame_benchmarking::whitelisted_caller();
-				crate::Pallet::<T, I>::do_add_member_to_rank(who.clone(), MIN_RANK)
-					.expect("failed to add ranked member");
-				frame_system::RawOrigin::Signed(who).into()
-			},
-		}
+		EnsureRankedMember::<T, I, MIN_RANK>::try_successful_origin()
 	}
 }
 
@@ -328,21 +300,10 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<T::RuntimeOrigin, ()> {
-		let who = IndexToId::<T, I>::get(MIN_RANK, 0).ok_or(())?;
+		let who = frame_benchmarking::account::<T::AccountId>("successful_origin", 0, 0);
+		crate::Pallet::<T, I>::do_add_member_to_rank(who.clone(), MIN_RANK)
+			.expect("Could not add members for benchmarks");
 		Ok(frame_system::RawOrigin::Signed(who).into())
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> T::RuntimeOrigin {
-		match Self::try_successful_origin() {
-			Ok(o) => o,
-			Err(()) => {
-				let who: T::AccountId = frame_benchmarking::whitelisted_caller();
-				crate::Pallet::<T, I>::do_add_member_to_rank(who.clone(), MIN_RANK)
-					.expect("failed to add ranked member");
-				frame_system::RawOrigin::Signed(who).into()
-			},
-		}
 	}
 }
 

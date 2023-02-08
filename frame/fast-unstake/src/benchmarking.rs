@@ -20,7 +20,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use crate::{types::*, Pallet as FastUnstake, *};
-use frame_benchmarking::v1::{benchmarks, whitelist_account};
+use frame_benchmarking::v1::{benchmarks, whitelist_account, BenchmarkError};
 use frame_support::{
 	assert_ok,
 	traits::{Currency, EnsureOrigin, Get, Hooks},
@@ -192,7 +192,8 @@ benchmarks! {
 	}
 
 	control {
-		let origin = <T as Config>::ControlOrigin::successful_origin();
+		let origin = <T as Config>::ControlOrigin::try_successful_origin()
+			.map_err(|_| BenchmarkError::Weightless)?;
 	}
 	: _<T::RuntimeOrigin>(origin, T::MaxErasToCheckPerBlock::get())
 	verify {}

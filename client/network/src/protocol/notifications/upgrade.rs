@@ -20,8 +20,8 @@ pub use self::{
 	collec::UpgradeCollec,
 	notifications::{
 		NotificationsHandshakeError, NotificationsIn, NotificationsInOpen,
-		NotificationsInSubstream, NotificationsOut, NotificationsOutError, NotificationsOutOpen,
-		NotificationsOutSubstream,
+		NotificationsInSubstream, NotificationsInSubstreamHandshake, NotificationsOut,
+		NotificationsOutError, NotificationsOutOpen, NotificationsOutSubstream,
 	},
 };
 
