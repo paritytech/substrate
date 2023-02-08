@@ -73,7 +73,7 @@ pub mod pallet {
 			tokens::nonfungibles_v2::{
 				Inspect as NonFungiblesInspect, LockableNonfungible, Transfer,
 			},
-			Currency, ExistenceRequirement,
+			Currency, ExistenceRequirement, ReservableCurrency,
 		},
 		PalletId,
 	};
@@ -96,7 +96,7 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The currency mechanism, used for paying for deposits.
-		type Currency: Currency<Self::AccountId>;
+		type Currency: ReservableCurrency<Self::AccountId>;
 
 		#[pallet::constant]
 		type Fee: Get<FeeDepositOf<Self>>;
@@ -160,7 +160,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		(T::NftCollectionId, T::NftId),
-		Details<AssetIdOf<T>, AssetBalanceOf<T>, FeeDepositOf<T>>,
+		Details<AssetIdOf<T>, AssetBalanceOf<T>, FeeDepositOf<T>, T::AccountId>,
 		OptionQuery,
 	>;
 
@@ -228,7 +228,7 @@ pub mod pallet {
 
 			let pallet_account = Self::get_pallet_account();
 			let fee = T::Fee::get();
-			Self::do_reserve_fee(&nft_owner, pallet_account.clone(), fee)?;
+			T::Currency::reserve(&nft_owner, fee)?;
 			Self::do_lock_nft(nft_collection_id, nft_id)?;
 			Self::do_create_asset(asset_id, pallet_account.clone())?;
 			Self::do_mint_asset(asset_id, &beneficiary, fractions)?;
@@ -236,7 +236,7 @@ pub mod pallet {
 
 			NftToAsset::<T>::insert(
 				(nft_collection_id, nft_id),
-				Details { asset: asset_id, fractions, fee },
+				Details { asset: asset_id, fractions, asset_creator: nft_owner, fee },
 			);
 
 			Self::deposit_event(Event::NftFractionalized {
@@ -278,11 +278,11 @@ pub mod pallet {
 				let details = maybe_details.take().ok_or(Error::<T>::DataNotFound)?;
 				ensure!(details.asset == asset_id, Error::<T>::DataNotFound);
 
-				let pallet_account = Self::get_pallet_account();
 				let fee = details.fee;
+				let asset_creator = details.asset_creator;
 				Self::do_burn_asset(asset_id, &who, details.fractions)?;
 				Self::do_unlock_nft(nft_collection_id, nft_id, &beneficiary)?;
-				Self::do_unreserve_fee(&who, pallet_account, fee)?;
+				T::Currency::unreserve(&asset_creator, fee);
 
 				Self::deposit_event(Event::NftUnified {
 					nft_collection: nft_collection_id,
@@ -303,14 +303,6 @@ pub mod pallet {
 		/// the value and only call this once.
 		fn get_pallet_account() -> T::AccountId {
 			T::PalletId::get().into_account_truncating()
-		}
-
-		fn do_reserve_fee(account: &T::AccountId, pallet_account: T::AccountId, fee: FeeDepositOf<T>) -> DispatchResult {
-			T::Currency::transfer(account, &pallet_account, fee, ExistenceRequirement::KeepAlive)
-		}
-
-		fn do_unreserve_fee(account: &T::AccountId, pallet_account: T::AccountId, fee: FeeDepositOf<T>) -> DispatchResult {
-			T::Currency::transfer(&pallet_account, account, fee, ExistenceRequirement::KeepAlive)
 		}
 
 		/// Transfer the NFT from the account holding that NFT to the pallet's account.
