@@ -3770,7 +3770,7 @@ mod tests {
 
 		notif.peerset_report_connect(peer, set_id);
 
-		let mut prev_instant =
+		let prev_instant =
 			if let Some(PeerState::DisabledPendingEnable {
 				ref connections, timer_deadline, ..
 			}) = notif.peers.get(&(peer, set_id))
@@ -3797,10 +3797,8 @@ mod tests {
 				})
 				.await;
 
-				prev_instant = if let Some(PeerState::DisabledPendingEnable {
-					timer_deadline,
-					connections,
-					..
+				if let Some(PeerState::DisabledPendingEnable {
+					timer_deadline, connections, ..
 				}) = notif.peers.get(&(peer, set_id))
 				{
 					assert!(std::matches!(connections[0], (_, ConnectionState::Closing)));
@@ -3808,10 +3806,9 @@ mod tests {
 					if timer_deadline != &prev_instant {
 						break
 					}
-					*timer_deadline
 				} else {
 					panic!("invalid state");
-				};
+				}
 			}
 		})
 		.await
