@@ -811,7 +811,7 @@ fn return_max_memory_offset(wasm_method: WasmExecutionMethod) {
 
 	assert_eq!(
 		call_in_wasm("test_return_max_memory_offset", &[], wasm_method, &mut ext).unwrap(),
-		().encode()
+		(u8::MAX).encode()
 	);
 }
 

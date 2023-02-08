@@ -534,7 +534,7 @@ where
 		self.network_service.behaviour().user_protocol().num_sync_requests()
 	}
 
-	/// Adds an address for a node.
+	/// Adds an address known to a node.
 	pub fn add_known_address(&mut self, peer_id: PeerId, addr: Multiaddr) {
 		self.network_service.behaviour_mut().add_known_address(peer_id, addr);
 	}
