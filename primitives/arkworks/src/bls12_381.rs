@@ -32,6 +32,9 @@ use sp_std::vec::Vec;
 
 /// Compute multi miller loop through arkworks
 pub fn multi_miller_loop(a_vec: Vec<Vec<u8>>, b_vec: Vec<Vec<u8>>) -> Vec<u8> {
+	// test
+	// test 
+	// test
 	let g1: Vec<_> = a_vec
 		.iter()
 		.map(|b| {
