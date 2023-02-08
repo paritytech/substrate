@@ -68,7 +68,11 @@ where
 			.expect("given block hash was fetched from block in db; qed"))
 	}
 
-	/// Returns the highest descendant of the given target block.
+	/// Returns the highest descendant of the given block that is
+	/// a valid candidate to be finalized.
+	///
+	/// In this implementation being valid means that is a descendant of the
+	/// best chain according to the `best_header` method.
 	///
 	/// If `maybe_max_number` is `Some(max_block_number)`
 	/// the search is limited to block `number <= max_block_number`.
