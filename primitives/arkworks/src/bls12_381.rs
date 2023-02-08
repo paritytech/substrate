@@ -32,19 +32,16 @@ use sp_std::vec::Vec;
 
 /// Compute multi miller loop through arkworks
 pub fn multi_miller_loop(a_vec: Vec<Vec<u8>>, b_vec: Vec<Vec<u8>>) -> Vec<u8> {
-	// test
-	// test 
-	// test
 	let g1: Vec<_> = a_vec
 		.iter()
-		.map(|b| {
-			let cursor = Cursor::new(b);
-			ark_bls12_381::G1Affine::deserialize_with_mode(
+		.map(|a| {
+			let cursor = Cursor::new(a);
+			<Bls12_381 as Pairing>::G1Affine::deserialize_with_mode(
 				cursor,
 				Compress::Yes,
 				Validate::No,
 			)
-			.map(ark_ec::bls12::G1Prepared::from)
+			.map(<Bls12_381 as Pairing>::G1Prepared::from)
 			.unwrap()
 		})
 		.collect();
@@ -52,12 +49,12 @@ pub fn multi_miller_loop(a_vec: Vec<Vec<u8>>, b_vec: Vec<Vec<u8>>) -> Vec<u8> {
 		.iter()
 		.map(|b| {
 			let cursor = Cursor::new(b);
-			ark_bls12_381::G2Affine::deserialize_with_mode(
+			<Bls12_381 as Pairing>::G2Affine::deserialize_with_mode(
 				cursor,
 				Compress::Yes,
 				Validate::No,
 			)
-			.map(ark_ec::bls12::G2Prepared::from)
+			.map(<Bls12_381 as Pairing>::G2Prepared::from)
 			.unwrap()
 		})
 		.collect();
