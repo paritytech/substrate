@@ -70,8 +70,8 @@ where
 
 	/// Returns the highest descendant of the given target block.
 	///
-	/// If `maybe_max_block_number` is `Some(max_block_number)`
-	/// the search is limited to block `numbers <= max_block_number`.
+	/// If `maybe_max_number` is `Some(max_block_number)`
+	/// the search is limited to block `number <= max_block_number`.
 	/// in other words as if there were no blocks greater than `max_block_number`.
 	fn finality_target(
 		&self,
