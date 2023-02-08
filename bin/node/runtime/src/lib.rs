@@ -1629,6 +1629,7 @@ impl LockableNonfungible<CollectionId, ItemId> for RuntimeLockableNonfungible {
 impl pallet_nft_fractionalization::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type PalletId = NftFractionsPalletId;
+	type Fee = AssetDeposit;
 	type Currency = Balances;
 	type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
 	type NftId = <Self as pallet_nfts::Config>::ItemId;
