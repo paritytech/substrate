@@ -38,7 +38,7 @@ pub fn multi_miller_loop(a_vec: Vec<Vec<u8>>, b_vec: Vec<Vec<u8>>) -> Vec<u8> {
 			let cursor = Cursor::new(a);
 			<Bls12_381 as Pairing>::G1Affine::deserialize_with_mode(
 				cursor,
-				Compress::No,
+				Compress::Yes,
 				Validate::No,
 			)
 			.map(<Bls12_381 as Pairing>::G1Prepared::from)
@@ -51,7 +51,7 @@ pub fn multi_miller_loop(a_vec: Vec<Vec<u8>>, b_vec: Vec<Vec<u8>>) -> Vec<u8> {
 			let cursor = Cursor::new(b);
 			<Bls12_381 as Pairing>::G2Affine::deserialize_with_mode(
 				cursor,
-				Compress::No,
+				Compress::Yes,
 				Validate::No,
 			)
 			.map(<Bls12_381 as Pairing>::G2Prepared::from)
