@@ -216,6 +216,7 @@ pub mod pallet {
 		/// exposures. In future we should rename this to something like `ExposurePageSize` when we
 		/// are ready to get rid of `ErasStakersClipped`.
 		/// Refer issue: #13034
+		/// TODO(ank4n): rename this to `MaxExposurePageSize`.
 		#[pallet::constant]
 		type MaxNominatorRewardedPerValidator: Get<u32>;
 
