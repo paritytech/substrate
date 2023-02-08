@@ -41,10 +41,7 @@ use sc_network_common::{
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{
 	collections::{HashMap, HashSet, VecDeque},
-	io, iter,
-	num::NonZeroUsize,
-	pin::Pin,
-	sync::Arc,
+	iter,
 	task::Poll,
 };
 

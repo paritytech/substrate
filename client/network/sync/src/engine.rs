@@ -51,7 +51,6 @@ use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnbound
 use sp_blockchain::HeaderMetadata;
 use sp_consensus::block_validation::BlockAnnounceValidator;
 use sp_runtime::{
-	generic::BlockId,
 	traits::{Block as BlockT, CheckedSub, Header, NumberFor, Zero},
 	SaturatedConversion,
 };
