@@ -37,12 +37,12 @@ pub fn sw_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	let cursor = Cursor::new(base);
 	let base = ark_ec::short_weierstrass::Projective::<JubjubConfig>::deserialize_with_mode(
 		cursor,
-		Compress::Yes,
+		Compress::No,
 		Validate::No,
 	)
 	.unwrap();
 	let cursor = Cursor::new(scalar);
-	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::No, Validate::No).unwrap();
 
 	let result = <JubjubConfig as SWCurveConfig>::mul_projective(&base, &scalar);
 
@@ -52,10 +52,10 @@ pub fn sw_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 /// Compute a scalar multiplication through arkworks
 pub fn sw_mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	let cursor = Cursor::new(base);
-	let base = SWAffine::<JubjubConfig>::deserialize_with_mode(cursor, Compress::Yes, Validate::No)
+	let base = SWAffine::<JubjubConfig>::deserialize_with_mode(cursor, Compress::No, Validate::No)
 		.unwrap();
 	let cursor = Cursor::new(scalar);
-	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::No, Validate::No).unwrap();
 
 	let result = <JubjubConfig as SWCurveConfig>::mul_affine(&base, &scalar);
 
@@ -67,12 +67,12 @@ pub fn te_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	let cursor = Cursor::new(base);
 	let base = twisted_edwards::Projective::<JubjubConfig>::deserialize_with_mode(
 		cursor,
-		Compress::Yes,
+		Compress::No,
 		Validate::No,
 	)
 	.unwrap();
 	let cursor = Cursor::new(scalar);
-	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::No, Validate::No).unwrap();
 
 	let result = <JubjubConfig as TECurveConfig>::mul_projective(&base, &scalar);
 
@@ -82,10 +82,10 @@ pub fn te_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 /// Compute a scalar multiplication through arkworks
 pub fn te_mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	let cursor = Cursor::new(base);
-	let base = TEAffine::<JubjubConfig>::deserialize_with_mode(cursor, Compress::Yes, Validate::No)
+	let base = TEAffine::<JubjubConfig>::deserialize_with_mode(cursor, Compress::No, Validate::No)
 		.unwrap();
 	let cursor = Cursor::new(scalar);
-	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::No, Validate::No).unwrap();
 
 	let result = <JubjubConfig as TECurveConfig>::mul_affine(&base, &scalar);
 
@@ -98,7 +98,7 @@ pub fn te_msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 		.iter()
 		.map(|a| {
 			let cursor = Cursor::new(a);
-			TEAffine::<JubjubConfig>::deserialize_with_mode(cursor, Compress::Yes, Validate::No)
+			TEAffine::<JubjubConfig>::deserialize_with_mode(cursor, Compress::No, Validate::No)
 				.unwrap()
 		})
 		.collect();
@@ -108,7 +108,7 @@ pub fn te_msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 			let cursor = Cursor::new(a);
 			<JubjubConfig as CurveConfig>::ScalarField::deserialize_with_mode(
 				cursor,
-				Compress::Yes,
+				Compress::No,
 				Validate::No,
 			)
 			.unwrap()
@@ -126,7 +126,7 @@ pub fn sw_msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 		.iter()
 		.map(|a| {
 			let cursor = Cursor::new(a);
-			SWAffine::<JubjubConfig>::deserialize_with_mode(cursor, Compress::Yes, Validate::No)
+			SWAffine::<JubjubConfig>::deserialize_with_mode(cursor, Compress::No, Validate::No)
 				.unwrap()
 		})
 		.collect();
@@ -136,7 +136,7 @@ pub fn sw_msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 			let cursor = Cursor::new(a);
 			<JubjubConfig as CurveConfig>::ScalarField::deserialize_with_mode(
 				cursor,
-				Compress::Yes,
+				Compress::No,
 				Validate::No,
 			)
 			.unwrap()

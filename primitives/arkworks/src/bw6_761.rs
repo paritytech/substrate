@@ -38,7 +38,7 @@ pub fn multi_miller_loop(a_vec: Vec<Vec<u8>>, b_vec: Vec<Vec<u8>>) -> Vec<u8> {
 			let cursor = Cursor::new(a);
 			<BW6_761 as Pairing>::G1Affine::deserialize_with_mode(
 				cursor,
-				Compress::Yes,
+				Compress::No,
 				Validate::No,
 			)
 			.map(<BW6_761 as Pairing>::G1Prepared::from)
@@ -51,7 +51,7 @@ pub fn multi_miller_loop(a_vec: Vec<Vec<u8>>, b_vec: Vec<Vec<u8>>) -> Vec<u8> {
 			let cursor = Cursor::new(b);
 			<BW6_761 as Pairing>::G2Affine::deserialize_with_mode(
 				cursor,
-				Compress::Yes,
+				Compress::No,
 				Validate::No,
 			)
 			.map(<BW6_761 as Pairing>::G2Prepared::from)
@@ -69,7 +69,7 @@ pub fn final_exponentiation(target: Vec<u8>) -> Vec<u8> {
 	let cursor = Cursor::new(target);
 	let target = <BW6_761 as Pairing>::TargetField::deserialize_with_mode(
 		cursor,
-		Compress::Yes,
+		Compress::No,
 		Validate::No,
 	)
 	.unwrap();
@@ -82,10 +82,10 @@ pub fn final_exponentiation(target: Vec<u8>) -> Vec<u8> {
 /// Compute a scalar multiplication on G2 through arkworks
 pub fn mul_projective_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	let cursor = Cursor::new(base);
-	let base = G2Projective::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+	let base = G2Projective::deserialize_with_mode(cursor, Compress::No, Validate::No).unwrap();
 
 	let cursor = Cursor::new(scalar);
-	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::No, Validate::No).unwrap();
 
 	let result = <ark_bw6_761::g2::Config as SWCurveConfig>::mul_projective(&base, &scalar);
 
@@ -95,10 +95,10 @@ pub fn mul_projective_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 /// Compute a scalar multiplication on G2 through arkworks
 pub fn mul_projective_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	let cursor = Cursor::new(base);
-	let base = G1Projective::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+	let base = G1Projective::deserialize_with_mode(cursor, Compress::No, Validate::No).unwrap();
 
 	let cursor = Cursor::new(scalar);
-	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::No, Validate::No).unwrap();
 
 	let result = <ark_bw6_761::g1::Config as SWCurveConfig>::mul_projective(&base, &scalar);
 
@@ -108,10 +108,10 @@ pub fn mul_projective_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 /// Compute a scalar multiplication on G2 through arkworks
 pub fn mul_affine_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	let cursor = Cursor::new(base);
-	let base = G1Affine::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+	let base = G1Affine::deserialize_with_mode(cursor, Compress::No, Validate::No).unwrap();
 
 	let cursor = Cursor::new(scalar);
-	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::No, Validate::No).unwrap();
 
 	let result = <ark_bw6_761::g1::Config as SWCurveConfig>::mul_affine(&base, &scalar);
 
@@ -121,10 +121,10 @@ pub fn mul_affine_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 /// Compute a scalar multiplication on G2 through arkworks
 pub fn mul_affine_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	let cursor = Cursor::new(base);
-	let base = G2Affine::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+	let base = G2Affine::deserialize_with_mode(cursor, Compress::No, Validate::No).unwrap();
 
 	let cursor = Cursor::new(scalar);
-	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::No, Validate::No).unwrap();
 
 	let result = <ark_bw6_761::g2::Config as SWCurveConfig>::mul_affine(&base, &scalar);
 
@@ -139,7 +139,7 @@ pub fn msm_g1(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 			let cursor = Cursor::new(a);
 			<BW6_761 as Pairing>::G1Affine::deserialize_with_mode(
 				cursor,
-				Compress::Yes,
+				Compress::No,
 				Validate::No,
 			)
 			.unwrap()
@@ -151,7 +151,7 @@ pub fn msm_g1(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 			let cursor = Cursor::new(a);
 			<ark_bw6_761::g1::Config as CurveConfig>::ScalarField::deserialize_with_mode(
 				cursor,
-				Compress::Yes,
+				Compress::No,
 				Validate::No,
 			)
 			.unwrap()
@@ -172,7 +172,7 @@ pub fn msm_g2(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 			let cursor = Cursor::new(a);
 			<BW6_761 as Pairing>::G2Affine::deserialize_with_mode(
 				cursor,
-				Compress::Yes,
+				Compress::No,
 				Validate::No,
 			)
 			.unwrap()
@@ -184,7 +184,7 @@ pub fn msm_g2(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 			let cursor = Cursor::new(a);
 			<ark_bw6_761::g2::Config as CurveConfig>::ScalarField::deserialize_with_mode(
 				cursor,
-				Compress::Yes,
+				Compress::No,
 				Validate::No,
 			)
 			.unwrap()

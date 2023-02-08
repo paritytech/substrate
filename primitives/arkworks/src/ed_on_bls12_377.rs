@@ -33,12 +33,12 @@ pub fn mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	let cursor = Cursor::new(base);
 	let base = twisted_edwards::Projective::<EdwardsConfig>::deserialize_with_mode(
 		cursor,
-		Compress::Yes,
+		Compress::No,
 		Validate::No,
 	)
 	.unwrap();
 	let cursor = Cursor::new(scalar);
-	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::No, Validate::No).unwrap();
 
 	let result = <EdwardsConfig as TECurveConfig>::mul_projective(&base, &scalar);
 
@@ -50,12 +50,12 @@ pub fn mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	let cursor = Cursor::new(base);
 	let base = twisted_edwards::Affine::<EdwardsConfig>::deserialize_with_mode(
 		cursor,
-		Compress::Yes,
+		Compress::No,
 		Validate::No,
 	)
 	.unwrap();
 	let cursor = Cursor::new(scalar);
-	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::No, Validate::No).unwrap();
 
 	let result = <EdwardsConfig as TECurveConfig>::mul_affine(&base, &scalar);
 
@@ -70,7 +70,7 @@ pub fn msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 			let cursor = Cursor::new(a);
 			twisted_edwards::Affine::<EdwardsConfig>::deserialize_with_mode(
 				cursor,
-				Compress::Yes,
+				Compress::No,
 				Validate::No,
 			)
 			.unwrap()
@@ -82,7 +82,7 @@ pub fn msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 			let cursor = Cursor::new(a);
 			<EdwardsConfig as CurveConfig>::ScalarField::deserialize_with_mode(
 				cursor,
-				Compress::Yes,
+				Compress::No,
 				Validate::No,
 			)
 			.unwrap()

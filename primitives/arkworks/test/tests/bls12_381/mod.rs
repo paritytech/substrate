@@ -132,7 +132,7 @@ macro_rules! test_vectors {
 #[test]
 fn g1_compressed_valid_test_vectors() {
 	let bytes: &'static [u8] = include_bytes!("g1_compressed_valid_test_vectors.dat");
-	test_vectors!(G1Projective, G1Affine, Compress::Yes, bytes);
+	test_vectors!(G1Projective, G1Affine, Compress::No, bytes);
 }
 
 #[test]
@@ -144,7 +144,7 @@ fn g1_uncompressed_valid_test_vectors() {
 #[test]
 fn g2_compressed_valid_test_vectors() {
 	let bytes: &'static [u8] = include_bytes!("g2_compressed_valid_test_vectors.dat");
-	test_vectors!(G2Projective, G2Affine, Compress::Yes, bytes);
+	test_vectors!(G2Projective, G2Affine, Compress::No, bytes);
 }
 
 #[test]
