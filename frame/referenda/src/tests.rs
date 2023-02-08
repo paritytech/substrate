@@ -578,3 +578,75 @@ fn curve_handles_all_inputs() {
 	let threshold = test_curve.threshold(Perbill::one());
 	assert_eq!(threshold, Perbill::zero());
 }
+
+#[test]
+fn set_metadata_works() {
+	new_test_ext().execute_with(|| {
+		use frame_support::traits::Hash as PreimageHash;
+		// invalid preimage hash.
+		let invalid_hash: PreimageHash = [1u8; 32].into();
+		// fails to set metadata for a finished referendum.
+		assert_ok!(Referenda::submit(
+			RuntimeOrigin::signed(1),
+			Box::new(RawOrigin::Root.into()),
+			set_balance_proposal_bounded(1),
+			DispatchTime::At(1),
+		));
+		let index = ReferendumCount::<Test>::get() - 1;
+		assert_ok!(Referenda::kill(RuntimeOrigin::root(), index));
+		assert_noop!(
+			Referenda::set_metadata(RuntimeOrigin::signed(1), index, Some(invalid_hash)),
+			Error::<Test>::NotOngoing,
+		);
+		// no permission to set metadata.
+		assert_ok!(Referenda::submit(
+			RuntimeOrigin::signed(1),
+			Box::new(RawOrigin::Root.into()),
+			set_balance_proposal_bounded(1),
+			DispatchTime::At(1),
+		));
+		let index = ReferendumCount::<Test>::get() - 1;
+		assert_noop!(
+			Referenda::set_metadata(RuntimeOrigin::signed(2), index, Some(invalid_hash)),
+			Error::<Test>::NoPermission,
+		);
+		// preimage does not exist.
+		let index = ReferendumCount::<Test>::get() - 1;
+		assert_noop!(
+			Referenda::set_metadata(RuntimeOrigin::signed(1), index, Some(invalid_hash)),
+			Error::<Test>::PreimageNotExist,
+		);
+		// metadata set.
+		let index = ReferendumCount::<Test>::get() - 1;
+		let hash = note_preimage(1);
+		assert_ok!(Referenda::set_metadata(RuntimeOrigin::signed(1), index, Some(hash)));
+		System::assert_last_event(RuntimeEvent::Referenda(crate::Event::MetadataSet {
+			index,
+			hash,
+		}));
+	});
+}
+
+#[test]
+fn clear_metadata_works() {
+	new_test_ext().execute_with(|| {
+		let hash = note_preimage(1);
+		assert_ok!(Referenda::submit(
+			RuntimeOrigin::signed(1),
+			Box::new(RawOrigin::Root.into()),
+			set_balance_proposal_bounded(1),
+			DispatchTime::At(1),
+		));
+		let index = ReferendumCount::<Test>::get() - 1;
+		assert_ok!(Referenda::set_metadata(RuntimeOrigin::signed(1), index, Some(hash)));
+		assert_noop!(
+			Referenda::set_metadata(RuntimeOrigin::signed(2), index, None),
+			Error::<Test>::NoPermission,
+		);
+		assert_ok!(Referenda::set_metadata(RuntimeOrigin::signed(1), index, None),);
+		System::assert_last_event(RuntimeEvent::Referenda(crate::Event::MetadataCleared {
+			index,
+			hash,
+		}));
+	});
+}
