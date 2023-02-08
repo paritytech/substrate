@@ -1020,3 +1020,111 @@ async fn follow_prune_best_block() {
 	});
 	assert_eq!(event, expected);
 }
+
+#[tokio::test]
+async fn follow_unpin_pruned_block() {
+	let builder = TestClientBuilder::new();
+	let backend = builder.backend();
+	let mut client = Arc::new(builder.build());
+
+	let api = ChainHead::new(
+		client.clone(),
+		backend,
+		Arc::new(TaskExecutor::default()),
+		CHAIN_GENESIS,
+		MAX_PINNED_BLOCKS,
+	)
+	.into_rpc();
+
+	// Block tree before the subscription:
+	//
+	// finalized -> block 1 -> block 2
+	//                            ^^^ finalized
+	//           -> block 1 -> block 3
+	//
+
+	let block_1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	client.import(BlockOrigin::Own, block_1.clone()).await.unwrap();
+
+	let block_2 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	let block_2_hash = block_2.header.hash();
+	client.import(BlockOrigin::Own, block_2.clone()).await.unwrap();
+
+	// Block 3 with parent Block 1 is not the best imported.
+	let mut block_builder = client
+		.new_block_at(&BlockId::Hash(block_1.header.hash()), Default::default(), false)
+		.unwrap();
+	// This push is required as otherwise block 3 has the same hash as block 2 and won't get
+	// imported
+	block_builder
+		.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 41,
+			nonce: 0,
+		})
+		.unwrap();
+	let block_3 = block_builder.build().unwrap().block;
+	let block_3_hash = block_3.header.hash();
+	client.import(BlockOrigin::Own, block_3.clone()).await.unwrap();
+
+	// Block 3 is not pruned, pruning happens at height (N - 1).
+	client.finalize_block(block_2_hash, None).unwrap();
+
+	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
+	let sub_id = sub.subscription_id();
+	let sub_id = serde_json::to_string(&sub_id).unwrap();
+
+	// Initialized must always be reported first.
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	println!("Event: {:?}", event);
+	let expected = FollowEvent::Initialized(Initialized {
+		finalized_block_hash: format!("{:?}", block_2_hash),
+		finalized_block_runtime: None,
+		runtime_updates: false,
+	});
+	assert_eq!(event, expected);
+
+	// Block tree: 
+	//
+	// finalized -> block 1 -> block 2 -> block 4
+    //                                       ^^^ finalized
+	//           -> block 1 -> block 3
+	//
+	// Mark block 4 as finalized to force block 3 to get pruned.
+
+	let block_4 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	let block_4_hash = block_4.header.hash();
+	client.import(BlockOrigin::Own, block_4.clone()).await.unwrap();
+
+	client.finalize_block(block_4_hash, None).unwrap();
+
+	// Check block 4.
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::NewBlock(NewBlock {
+		block_hash: format!("{:?}", block_4_hash),
+		parent_block_hash: format!("{:?}", block_2_hash),
+		new_runtime: None,
+		runtime_updates: false,
+	});
+	assert_eq!(event, expected);
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::BestBlockChanged(BestBlockChanged {
+		best_block_hash: format!("{:?}", block_4_hash),
+	});
+	assert_eq!(event, expected);
+
+	// Block 3 must be pruned.
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::Finalized(Finalized {
+		finalized_block_hashes: vec![
+			format!("{:?}", block_4_hash),
+		],
+		pruned_block_hashes: vec![format!("{:?}", block_3_hash),],
+	});
+	assert_eq!(event, expected);
+
+	// Pruned hash can be unpinned.
+	let hash = format!("{:?}", block_3_hash);
+	let _res: () = api.call("chainHead_unstable_unpin", [&sub_id, &hash]).await.unwrap();
+}
