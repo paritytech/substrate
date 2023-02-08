@@ -61,7 +61,10 @@ pub fn multi_miller_loop(a_vec: Vec<Vec<u8>>, b_vec: Vec<Vec<u8>>) -> Vec<u8> {
 
 	let result = Bls12_381::multi_miller_loop(g1, g2).0;
 
-	serialize_result(result)
+	let mut serialized_result = vec![0u8; result.serialized_size(Compress::Yes)];
+	let mut cursor = Cursor::new(&mut serialized_result[..]);
+	result.serialize_compressed(&mut cursor).unwrap();
+	serialized_result
 }
 
 /// Compute final exponentiation through arkworks
