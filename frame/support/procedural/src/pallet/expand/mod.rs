@@ -33,6 +33,7 @@ mod store_trait;
 mod tt_default_parts;
 mod type_value;
 mod validate_unsigned;
+mod doc_only;
 
 use crate::pallet::Def;
 use frame_support_procedural_tools::get_doc_literals;
@@ -72,6 +73,7 @@ pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
 	let origins = origin::expand_origins(&mut def);
 	let validate_unsigned = validate_unsigned::expand_validate_unsigned(&mut def);
 	let tt_default_parts = tt_default_parts::expand_tt_default_parts(&mut def);
+	let doc_only = doc_only::expand_doc_only(&mut def);
 
 	if get_doc_literals(&def.item.attrs).is_empty() {
 		def.item.attrs.push(syn::parse_quote!(
@@ -103,6 +105,7 @@ pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
 		#origins
 		#validate_unsigned
 		#tt_default_parts
+		#doc_only
 	);
 
 	def.item
