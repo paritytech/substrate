@@ -1149,41 +1149,6 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Initializes an open unsigned phase. If EPM is in the signed phase it
-		/// first finalizes it before initalizing the unsigned phase.
-		///
-		/// The dispatch origin for this call must be `ForceOrigin`.
-		#[pallet::call_index(7)]
-		#[pallet::weight({
-			if Pallet::<T>::current_phase().is_signed() {
-				Weight::from_ref_time(10_000)
-			}else {
-				Weight::from_ref_time(10_000)
-			}
-		})]
-		pub fn force_start_unsigned_phase(origin: OriginFor<T>) -> DispatchResult {
-			T::ForceOrigin::ensure_origin(origin)?;
-
-			let need_snapshot = if Self::current_phase().is_signed() {
-				let _ = Self::finalize_signed_phase();
-				false
-			} else {
-				true
-			};
-
-			let now = <frame_system::Pallet<T>>::block_number();
-			if need_snapshot {
-				match Self::create_snapshot() {
-					Ok(_) => Self::phase_transition(Phase::Unsigned((true, now))),
-					Err(_) => return Err(Error::<T>::SnapshotCreationFailed.into()),
-				}
-			} else {
-				Self::phase_transition(Phase::Unsigned((true, now)));
-			}
-
-			Ok(())
-		}
-
 		/// Sets the current phase to `Phase::Emergency`
 		///
 		/// The dispatch origin for this call must be `ForceOrigin`.
@@ -2137,29 +2102,6 @@ mod tests {
 					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 2 },
 				]
 			);
-		})
-	}
-
-	#[test]
-	fn force_start_unsigned_phase_works() {
-		ExtBuilder::default().build_and_execute(|| {
-			assert_eq!(System::block_number(), 0);
-			assert_eq!(MultiPhase::current_phase(), Phase::Off);
-			assert_eq!(MultiPhase::round(), 1);
-
-			assert_noop!(
-				MultiPhase::force_start_unsigned_phase(crate::mock::RuntimeOrigin::none()),
-				DispatchError::BadOrigin
-			);
-			assert_noop!(
-				MultiPhase::force_start_unsigned_phase(crate::mock::RuntimeOrigin::signed(1)),
-				DispatchError::BadOrigin
-			);
-
-			assert_ok!(MultiPhase::force_start_unsigned_phase(crate::mock::RuntimeOrigin::root()));
-			//assert_eq!(multi_phase_events(), vec![Event::UnsignedPhaseStarted { round: 1 }]);
-			assert!(MultiPhase::current_phase().is_unsigned());
-			assert!(MultiPhase::snapshot().is_some());
 		})
 	}
 
