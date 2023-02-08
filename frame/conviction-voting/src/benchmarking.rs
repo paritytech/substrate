@@ -20,7 +20,7 @@
 use super::*;
 
 use assert_matches::assert_matches;
-use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist_account};
+use frame_benchmarking::v1::{account, benchmarks_instance_pallet, whitelist_account};
 use frame_support::{
 	dispatch::RawOrigin,
 	traits::{fungible, Currency, Get},

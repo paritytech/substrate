@@ -24,7 +24,10 @@ use std::{
 	sync::Arc,
 };
 
-use crate::graph::{ChainApi, ExtrinsicHash, NumberFor, Pool, ValidatedTransaction};
+use crate::{
+	graph::{ChainApi, ExtrinsicHash, NumberFor, Pool, ValidatedTransaction},
+	LOG_TARGET,
+};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_runtime::{
 	generic::BlockId,
@@ -82,13 +85,23 @@ async fn batch_revalidate<Api: ChainApi>(
 	for (validation_result, ext_hash, ext) in validation_results {
 		match validation_result {
 			Ok(Err(TransactionValidityError::Invalid(err))) => {
-				log::debug!(target: "txpool", "[{:?}]: Revalidation: invalid {:?}", ext_hash, err);
+				log::debug!(
+					target: LOG_TARGET,
+					"[{:?}]: Revalidation: invalid {:?}",
+					ext_hash,
+					err,
+				);
 				invalid_hashes.push(ext_hash);
 			},
 			Ok(Err(TransactionValidityError::Unknown(err))) => {
 				// skipping unknown, they might be pushed by valid or invalid transaction
 				// when latter resubmitted.
-				log::trace!(target: "txpool", "[{:?}]: Unknown during revalidation: {:?}", ext_hash, err);
+				log::trace!(
+					target: LOG_TARGET,
+					"[{:?}]: Unknown during revalidation: {:?}",
+					ext_hash,
+					err,
+				);
 			},
 			Ok(Ok(validity)) => {
 				revalidated.insert(
@@ -105,7 +118,7 @@ async fn batch_revalidate<Api: ChainApi>(
 			},
 			Err(validation_err) => {
 				log::debug!(
-					target: "txpool",
+					target: LOG_TARGET,
 					"[{:?}]: Removing due to error during revalidation: {}",
 					ext_hash,
 					validation_err
@@ -183,7 +196,7 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 			// we don't add something that already scheduled for revalidation
 			if self.members.contains_key(&ext_hash) {
 				log::trace!(
-					target: "txpool",
+					target: LOG_TARGET,
 					"[{:?}] Skipped adding for revalidation: Already there.",
 					ext_hash,
 				);
@@ -231,7 +244,7 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 
 					if batch_len > 0 || this.len() > 0 {
 						log::debug!(
-							target: "txpool",
+							target: LOG_TARGET,
 							"Revalidated {} transactions. Left in the queue for revalidation: {}.",
 							batch_len,
 							this.len(),
@@ -248,7 +261,7 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 
 							if this.members.len() > 0 {
 								log::debug!(
-									target: "txpool",
+									target: LOG_TARGET,
 									"Updated revalidation queue at {:?}. Transactions: {:?}",
 									this.best_block,
 									this.members,
@@ -320,14 +333,15 @@ where
 	) {
 		if transactions.len() > 0 {
 			log::debug!(
-				target: "txpool", "Sent {} transactions to revalidation queue",
+				target: LOG_TARGET,
+				"Sent {} transactions to revalidation queue",
 				transactions.len(),
 			);
 		}
 
 		if let Some(ref to_worker) = self.background {
 			if let Err(e) = to_worker.unbounded_send(WorkerPayload { at, transactions }) {
-				log::warn!(target: "txpool", "Failed to update background worker: {:?}", e);
+				log::warn!(target: LOG_TARGET, "Failed to update background worker: {:?}", e);
 			}
 		} else {
 			let pool = self.pool.clone();

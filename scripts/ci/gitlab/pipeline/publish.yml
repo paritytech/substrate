@@ -184,19 +184,19 @@ publish-draft-release:
 
 .publish-crates-template:
   stage:                           publish
-  extends:                         .crates-publishing-template
+  extends:
+    - .crates-publishing-template
+    - .crates-publishing-pipeline
   # We don't want multiple jobs racing to publish crates as it's redundant and they might overwrite
   # the releases of one another. Use resource_group to ensure that at most one instance of this job
   # is running at any given time.
   resource_group:                  crates-publishing
-  variables:
-    # crates.io rate limits crates publishing by 1 per minute, so a delay needs to be inserted
-    # slightly higher than that after publishing each crate. The value is specified in seconds.
-    SPUB_AFTER_PUBLISH_DELAY: 64
-  # We might have to publish lots of crates at a time. Given the 1 minute delay introduced above and
-  # taking into account the 202 (as of Dec 07, 2022) publishable Substrate crates, that would equate
-  # to roughly 202 minutes of delay, or 3h and 22 minutes. As such, the job needs to have a much
-  # higher timeout than average.
+  # crates.io currently rate limits crate publishing at 1 per minute:
+  # https://github.com/paritytech/release-engineering/issues/123#issuecomment-1335509748
+  # Taking into account the 202 (as of Dec 07, 2022) publishable Substrate crates, in the worst
+  # case, due to the rate limits alone, we'd have to wait through at least 202 minutes of delay.
+  # Taking into account also the verification steps and extra synchronization delays after
+  # publishing the crate, the job needs to have a much higher timeout than average.
   timeout:                         9h
   # A custom publishing environment is used for us to be able to set up protected secrets
   # specifically for it
@@ -211,15 +211,9 @@ publish-draft-release:
     - rusty-cachier cache upload
 
 publish-crates:
-  extends:
-    - .publish-crates-template
-    - .scheduled-crate-publishing-pipeline
-  needs:
-    - job:                         publish-crates-locally
-      artifacts:                   false
+  extends:                         .publish-crates-template
 
 publish-crates-manual:
   extends:                         .publish-crates-template
-  rules:                           !reference [.crate-publishing-pipeline, rules]
   when:                            manual
-  allow_failure:                   true
+  interruptible:                   false

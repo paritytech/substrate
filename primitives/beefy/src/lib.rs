@@ -43,26 +43,20 @@ use codec::{Codec, Decode, Encode};
 use scale_info::TypeInfo;
 use sp_application_crypto::RuntimeAppPublic;
 use sp_core::H256;
-use sp_runtime::traits::Hash;
+use sp_runtime::traits::{Hash, NumberFor};
 use sp_std::prelude::*;
 
 /// Key type for BEEFY module.
 pub const KEY_TYPE: sp_application_crypto::KeyTypeId = sp_application_crypto::KeyTypeId(*b"beef");
 
-/// Trait representing BEEFY authority id.
-pub trait BeefyAuthorityId: RuntimeAppPublic {}
-
-/// Means of verification for a BEEFY authority signature.
+/// Trait representing BEEFY authority id, including custom signature verification.
 ///
 /// Accepts custom hashing fn for the message and custom convertor fn for the signer.
-pub trait BeefyVerify<MsgHash: Hash> {
-	/// Type of the signer.
-	type Signer: BeefyAuthorityId;
-
+pub trait BeefyAuthorityId<MsgHash: Hash>: RuntimeAppPublic {
 	/// Verify a signature.
 	///
-	/// Return `true` if signature is valid for the value.
-	fn verify(&self, msg: &[u8], signer: &Self::Signer) -> bool;
+	/// Return `true` if signature over `msg` is valid for this id.
+	fn verify(&self, signature: &<Self as RuntimeAppPublic>::Signature, msg: &[u8]) -> bool;
 }
 
 /// BEEFY cryptographic types
@@ -78,7 +72,7 @@ pub trait BeefyVerify<MsgHash: Hash> {
 /// The current underlying crypto scheme used is ECDSA. This can be changed,
 /// without affecting code restricted against the above listed crypto types.
 pub mod crypto {
-	use super::{BeefyAuthorityId, BeefyVerify, Hash};
+	use super::{BeefyAuthorityId, Hash, RuntimeAppPublic};
 	use sp_application_crypto::{app_crypto, ecdsa};
 	use sp_core::crypto::Wraps;
 	app_crypto!(ecdsa, crate::KEY_TYPE);
@@ -89,21 +83,17 @@ pub mod crypto {
 	/// Signature for a BEEFY authority using ECDSA as its crypto.
 	pub type AuthoritySignature = Signature;
 
-	impl BeefyAuthorityId for AuthorityId {}
-
-	impl<MsgHash: Hash> BeefyVerify<MsgHash> for AuthoritySignature
+	impl<MsgHash: Hash> BeefyAuthorityId<MsgHash> for AuthorityId
 	where
 		<MsgHash as Hash>::Output: Into<[u8; 32]>,
 	{
-		type Signer = AuthorityId;
-
-		fn verify(&self, msg: &[u8], signer: &Self::Signer) -> bool {
+		fn verify(&self, signature: &<Self as RuntimeAppPublic>::Signature, msg: &[u8]) -> bool {
 			let msg_hash = <MsgHash as Hash>::hash(msg).into();
 			match sp_io::crypto::secp256k1_ecdsa_recover_compressed(
-				self.as_inner_ref().as_ref(),
+				signature.as_inner_ref().as_ref(),
 				&msg_hash,
 			) {
-				Ok(raw_pubkey) => raw_pubkey.as_ref() == AsRef::<[u8]>::as_ref(signer),
+				Ok(raw_pubkey) => raw_pubkey.as_ref() == AsRef::<[u8]>::as_ref(self),
 				_ => false,
 			}
 		}
@@ -183,7 +173,7 @@ pub enum ConsensusLog<AuthorityId: Codec> {
 ///
 /// A vote message is a direct vote created by a BEEFY node on every voting round
 /// and is gossiped to its peers.
-#[derive(Debug, Decode, Encode, TypeInfo)]
+#[derive(Clone, Debug, Decode, Encode, PartialEq, TypeInfo)]
 pub struct VoteMessage<Number, Id, Signature> {
 	/// Commit to information extracted from a finalized block
 	pub commitment: Commitment<Number>,
@@ -211,8 +201,88 @@ sp_api::decl_runtime_apis! {
 	/// API necessary for BEEFY voters.
 	pub trait BeefyApi
 	{
+		/// Return the block number where BEEFY consensus is enabled/started
+		fn beefy_genesis() -> Option<NumberFor<Block>>;
+
 		/// Return the current active BEEFY validator set
 		fn validator_set() -> Option<ValidatorSet<crypto::AuthorityId>>;
+	}
+}
+
+#[cfg(feature = "std")]
+/// Test accounts using [`crate::crypto`] types.
+pub mod keyring {
+	use super::*;
+	use sp_core::{ecdsa, keccak_256, Pair};
+	use std::collections::HashMap;
+	use strum::IntoEnumIterator;
+
+	/// Set of test accounts using [`crate::crypto`] types.
+	#[allow(missing_docs)]
+	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumIter)]
+	pub enum Keyring {
+		Alice,
+		Bob,
+		Charlie,
+		Dave,
+		Eve,
+		Ferdie,
+		One,
+		Two,
+	}
+
+	impl Keyring {
+		/// Sign `msg`.
+		pub fn sign(self, msg: &[u8]) -> crypto::Signature {
+			// todo: use custom signature hashing type
+			let msg = keccak_256(msg);
+			ecdsa::Pair::from(self).sign_prehashed(&msg).into()
+		}
+
+		/// Return key pair.
+		pub fn pair(self) -> crypto::Pair {
+			ecdsa::Pair::from_string(self.to_seed().as_str(), None).unwrap().into()
+		}
+
+		/// Return public key.
+		pub fn public(self) -> crypto::Public {
+			self.pair().public()
+		}
+
+		/// Return seed string.
+		pub fn to_seed(self) -> String {
+			format!("//{}", self)
+		}
+
+		/// Get Keyring from public key.
+		pub fn from_public(who: &crypto::Public) -> Option<Keyring> {
+			Self::iter().find(|&k| &crypto::Public::from(k) == who)
+		}
+	}
+
+	lazy_static::lazy_static! {
+		static ref PRIVATE_KEYS: HashMap<Keyring, crypto::Pair> =
+			Keyring::iter().map(|i| (i, i.pair())).collect();
+		static ref PUBLIC_KEYS: HashMap<Keyring, crypto::Public> =
+			PRIVATE_KEYS.iter().map(|(&name, pair)| (name, pair.public())).collect();
+	}
+
+	impl From<Keyring> for crypto::Pair {
+		fn from(k: Keyring) -> Self {
+			k.pair()
+		}
+	}
+
+	impl From<Keyring> for ecdsa::Pair {
+		fn from(k: Keyring) -> Self {
+			k.pair().into()
+		}
+	}
+
+	impl From<Keyring> for crypto::Public {
+		fn from(k: Keyring) -> Self {
+			(*PUBLIC_KEYS).get(&k).cloned().unwrap()
+		}
 	}
 }
 
@@ -248,23 +318,31 @@ mod tests {
 			pair.as_inner_ref().sign_prehashed(&blake2_256(msg)).into();
 
 		// Verification works if same hashing function is used when signing and verifying.
-		assert!(BeefyVerify::<Keccak256>::verify(&keccak_256_signature, msg, &pair.public()));
-		assert!(BeefyVerify::<BlakeTwo256>::verify(&blake2_256_signature, msg, &pair.public()));
+		assert!(BeefyAuthorityId::<Keccak256>::verify(&pair.public(), &keccak_256_signature, msg));
+		assert!(BeefyAuthorityId::<BlakeTwo256>::verify(
+			&pair.public(),
+			&blake2_256_signature,
+			msg
+		));
 		// Verification fails if distinct hashing functions are used when signing and verifying.
-		assert!(!BeefyVerify::<Keccak256>::verify(&blake2_256_signature, msg, &pair.public()));
-		assert!(!BeefyVerify::<BlakeTwo256>::verify(&keccak_256_signature, msg, &pair.public()));
+		assert!(!BeefyAuthorityId::<Keccak256>::verify(&pair.public(), &blake2_256_signature, msg));
+		assert!(!BeefyAuthorityId::<BlakeTwo256>::verify(
+			&pair.public(),
+			&keccak_256_signature,
+			msg
+		));
 
 		// Other public key doesn't work
 		let (other_pair, _) = crypto::Pair::generate();
-		assert!(!BeefyVerify::<Keccak256>::verify(
+		assert!(!BeefyAuthorityId::<Keccak256>::verify(
+			&other_pair.public(),
 			&keccak_256_signature,
 			msg,
-			&other_pair.public()
 		));
-		assert!(!BeefyVerify::<BlakeTwo256>::verify(
+		assert!(!BeefyAuthorityId::<BlakeTwo256>::verify(
+			&other_pair.public(),
 			&blake2_256_signature,
 			msg,
-			&other_pair.public()
 		));
 	}
 }
