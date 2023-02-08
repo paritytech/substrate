@@ -775,7 +775,7 @@ mod tests {
 				let check_era = frame_system::CheckEra::from(Era::Immortal);
 				let check_nonce = frame_system::CheckNonce::from(index);
 				let check_weight = frame_system::CheckWeight::new();
-				let tx_payment = pallet_asset_tx_payment::ChargeAssetTxPayment::from(0, None);
+				let tx_payment = pallet_dex_tx_payment::ChargeAssetTxPaymentBySwap::from(0, None);
 				let extra = (
 					check_non_zero_sender,
 					check_spec_version,
