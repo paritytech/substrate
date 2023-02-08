@@ -642,10 +642,8 @@ pub mod pallet {
 	pub type CurrentPlannedSession<T> = StorageValue<_, SessionIndex, ValueQuery>;
 
 	/// Wrapper struct for Era related information. It is not a pure encapsulation as these storage
-	/// items can be accessed directly but nevertheless, its recommended to use `EraInfo` for
-	/// accessing the following: (1) `ErasStakers`, (2) `ClaimedRewards`, (3) `ErasStakersClipped`,
-	/// (4) `ErasStakersPaged`, (5) `ErasTotalStake`.
-	// TODO(Ank4n): add all era related storage items in this struct
+	/// items can be accessed directly but nevertheless, its recommended to use `EraInfo` where we
+	/// can and add more functions to it as needed.
 	pub(crate) struct EraInfo<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> EraInfo<T> {
 		/// Temporary function which looks at both (1) passed param `T::StakingLedger` for legacy
