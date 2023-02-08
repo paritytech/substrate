@@ -3149,9 +3149,9 @@ dependencies = [
 
 [[package]]
 name = "hermit-abi"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "856b5cb0902c2b6d65d5fd97dfa30f9b70c7538e770b98eab5ed52d8db923e01"
+checksum = "fed44880c466736ef9a5c5b5facefb5ed0785676d0c02d612db14e54f0d84286"
 
 [[package]]
 name = "hex"
@@ -3535,7 +3535,7 @@ version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22e18b0a45d56fe973d6db23972bf5bc46f988a4a2385deac9cc29572f09daef"
 dependencies = [
- "hermit-abi 0.3.0",
+ "hermit-abi 0.3.1",
  "io-lifetimes 1.0.5",
  "rustix 0.36.8",
  "windows-sys 0.45.0",
@@ -9934,7 +9934,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bls12-377"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate?branch=no-compression#c5e9fdd4fbe325547ec03336365cd6b649921bdb"
+source = "git+https://github.com/paritytech/ark-substrate?branch=no-compression#064f2753c43e1864d051cfec31246aa4c347ab11"
 dependencies = [
  "ark-bls12-377",
  "ark-ff",
@@ -9948,7 +9948,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bls12-381"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate?branch=no-compression#c5e9fdd4fbe325547ec03336365cd6b649921bdb"
+source = "git+https://github.com/paritytech/ark-substrate?branch=no-compression#064f2753c43e1864d051cfec31246aa4c347ab11"
 dependencies = [
  "ark-bls12-381",
  "ark-ff",
@@ -9961,7 +9961,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bw6-761"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate?branch=no-compression#c5e9fdd4fbe325547ec03336365cd6b649921bdb"
+source = "git+https://github.com/paritytech/ark-substrate?branch=no-compression#064f2753c43e1864d051cfec31246aa4c347ab11"
 dependencies = [
  "ark-bw6-761",
  "ark-ff",
@@ -9974,7 +9974,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-ed-on-bls12-377"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate?branch=no-compression#c5e9fdd4fbe325547ec03336365cd6b649921bdb"
+source = "git+https://github.com/paritytech/ark-substrate?branch=no-compression#064f2753c43e1864d051cfec31246aa4c347ab11"
 dependencies = [
  "ark-ed-on-bls12-377",
  "ark-ff",
@@ -9988,7 +9988,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-ed-on-bls12-381"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate?branch=no-compression#c5e9fdd4fbe325547ec03336365cd6b649921bdb"
+source = "git+https://github.com/paritytech/ark-substrate?branch=no-compression#064f2753c43e1864d051cfec31246aa4c347ab11"
 dependencies = [
  "ark-ed-on-bls12-381",
  "ark-ff",
@@ -10002,7 +10002,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-models"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate?branch=no-compression#c5e9fdd4fbe325547ec03336365cd6b649921bdb"
+source = "git+https://github.com/paritytech/ark-substrate?branch=no-compression#064f2753c43e1864d051cfec31246aa4c347ab11"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -10018,7 +10018,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-utils"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate?branch=no-compression#c5e9fdd4fbe325547ec03336365cd6b649921bdb"
+source = "git+https://github.com/paritytech/ark-substrate?branch=no-compression#064f2753c43e1864d051cfec31246aa4c347ab11"
 dependencies = [
  "ark-serialize",
  "ark-std",
