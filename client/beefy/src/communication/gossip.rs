@@ -120,7 +120,7 @@ where
 
 	/// Note a voting round.
 	///
-	/// Noting round will start a live `round`.
+	/// Noting round will track gossiped votes for `round`.
 	pub(crate) fn note_round(&self, round: NumberFor<B>) {
 		debug!(target: LOG_TARGET, "🥩 About to note gossip round #{}", round);
 		self.known_votes.write().insert(round);
@@ -242,9 +242,10 @@ mod tests {
 	use sc_network_test::Block;
 	use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 
-	use crate::keystore::{tests::Keyring, BeefyKeystore};
+	use crate::keystore::BeefyKeystore;
 	use beefy_primitives::{
-		crypto::Signature, known_payloads, Commitment, MmrRootHash, Payload, VoteMessage, KEY_TYPE,
+		crypto::Signature, keyring::Keyring, known_payloads, Commitment, MmrRootHash, Payload,
+		VoteMessage, KEY_TYPE,
 	};
 
 	use super::*;

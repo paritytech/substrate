@@ -81,12 +81,13 @@ fn verify_with_validator_set<Block: BlockT>(
 #[cfg(test)]
 pub(crate) mod tests {
 	use beefy_primitives::{
-		known_payloads, Commitment, Payload, SignedCommitment, VersionedFinalityProof,
+		keyring::Keyring, known_payloads, Commitment, Payload, SignedCommitment,
+		VersionedFinalityProof,
 	};
 	use substrate_test_runtime_client::runtime::Block;
 
 	use super::*;
-	use crate::{keystore::tests::Keyring, tests::make_beefy_ids};
+	use crate::tests::make_beefy_ids;
 
 	pub(crate) fn new_finality_proof(
 		block_num: NumberFor<Block>,
