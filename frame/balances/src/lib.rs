@@ -756,31 +756,6 @@ pub mod pallet {
 			T::AccountStore::get(who)
 		}
 
-		/// Handles any steps needed after mutating an account.
-		///
-		/// This includes DustRemoval unbalancing, in the case than the `new` account's total
-		/// balance is non-zero but below ED.
-		///
-		/// Returns two values:
-		/// - `Some` containing the the `new` account, iff the account has sufficient balance.
-		/// - `Some` containing the dust to be dropped, iff some dust should be dropped.
-		pub(crate) fn post_mutation(
-			_who: &T::AccountId,
-			new: AccountData<T::Balance>,
-		) -> (Option<AccountData<T::Balance>>, Option<T::Balance>) {
-			// We should never be dropping if reserved is non-zero. Reserved being non-zero should
-			// imply that we have a consumer ref, so this is economically safe.
-			if new.free < T::ExistentialDeposit::get() && new.reserved.is_zero() {
-				if new.free.is_zero() {
-					(None, None)
-				} else {
-					(None, Some(new.free))
-				}
-			} else {
-				(Some(new), None)
-			}
-		}
-
 		/// Mutate an account to some new value, or delete it entirely with `None`. Will enforce
 		/// `ExistentialDeposit` law, annulling the account as needed.
 		///
@@ -898,16 +873,33 @@ pub mod pallet {
 				}
 
 				let maybe_endowed = if is_new { Some(account.free) } else { None };
-				let maybe_account_maybe_dust = Self::post_mutation(who, account);
-				*maybe_account = maybe_account_maybe_dust.0;
-				if let Some(ref account) = &maybe_account {
+
+				// Handle any steps needed after mutating an account.
+				//
+				// This includes DustRemoval unbalancing, in the case than the `new` account's total
+				// balance is non-zero but below ED.
+				//
+				// Updates `maybe_account` to `Some` iff the account has sufficient balance.
+				// Evaluates `maybe_dust`, which is `Some` containing the dust to be dropped, iff
+				// some dust should be dropped.
+				//
+				// We should never be dropping if reserved is non-zero. Reserved being non-zero
+				// should imply that we have a consumer ref, so this is economically safe.
+				let ed = T::ExistentialDeposit::get();
+				let maybe_dust = if account.free < ed && account.reserved.is_zero() {
+					if account.free.is_zero() {
+						None
+					} else {
+						Some(account.free)
+					}
+				} else {
 					assert!(
-						account.free.is_zero() ||
-							account.free >= T::ExistentialDeposit::get() ||
-							!account.reserved.is_zero()
+						account.free.is_zero() || account.free >= ed || !account.reserved.is_zero()
 					);
-				}
-				Ok((maybe_endowed, maybe_account_maybe_dust.1, result))
+					*maybe_account = Some(account);
+					None
+				};
+				Ok((maybe_endowed, maybe_dust, result))
 			});
 			result.map(|(maybe_endowed, maybe_dust, result)| {
 				if let Some(endowed) = maybe_endowed {
