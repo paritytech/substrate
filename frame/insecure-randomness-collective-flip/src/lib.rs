@@ -176,14 +176,14 @@ mod tests {
 	};
 	use frame_system::limits;
 
-	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+	type RuntimeExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 	type Block = frame_system::mocking::MockBlock<Test>;
 
 	frame_support::construct_runtime!(
 		pub enum Test where
 			Block = Block,
 			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic,
+			RuntimeExtrinsic = RuntimeExtrinsic,
 		{
 			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 			CollectiveFlip: pallet_insecure_randomness_collective_flip::{Pallet, Storage},

@@ -36,7 +36,7 @@ use sp_state_machine::TestExternalities as CoreTestExternalities;
 
 use kitchensink_runtime::{
 	constants::currency::*, Block, BuildStorage, CheckedExtrinsic, Header, Runtime,
-	UncheckedExtrinsic,
+	RuntimeExtrinsic,
 };
 use node_executor::ExecutorDispatch;
 use node_primitives::{BlockNumber, Hash};
@@ -82,7 +82,7 @@ pub const TRANSACTION_VERSION: u32 = kitchensink_runtime::VERSION.transaction_ve
 
 pub type TestExternalities<H> = CoreTestExternalities<H>;
 
-pub fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
+pub fn sign(xt: CheckedExtrinsic) -> RuntimeExtrinsic {
 	node_testing::keyring::sign(xt, SPEC_VERSION, TRANSACTION_VERSION, GENESIS_HASH)
 }
 

@@ -296,7 +296,7 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 
 /// Construct a runtime, with the given name and the given pallets.
 ///
-/// The parameters here are specific types for `Block`, `NodeBlock`, and `UncheckedExtrinsic`
+/// The parameters here are specific types for `Block`, `NodeBlock`, and `RuntimeExtrinsic`
 /// and the pallets that are used by the runtime.
 /// `Block` is the block type that is used in the runtime and `NodeBlock` is the block type
 /// that is used in the node. For instance they can differ in the extrinsics type.
@@ -308,7 +308,7 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 ///     pub enum Runtime where
 ///         Block = Block,
 ///         NodeBlock = node::Block,
-///         UncheckedExtrinsic = UncheckedExtrinsic
+///         RuntimeExtrinsic = RuntimeExtrinsic
 ///     {
 ///         System: frame_system::{Pallet, Call, Event<T>, Config<T>} = 0,
 ///         Test: path::to::test::{Pallet, Call} = 1,

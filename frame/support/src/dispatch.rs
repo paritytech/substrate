@@ -35,7 +35,7 @@ pub use crate::{
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_runtime::{
-	generic::{CheckedExtrinsic, UncheckedExtrinsic},
+	generic::{CheckedExtrinsic, RuntimeExtrinsic},
 	traits::SignedExtension,
 };
 pub use sp_runtime::{
@@ -337,7 +337,7 @@ where
 
 /// Implementation for unchecked extrinsic.
 impl<Address, Call, Signature, Extra> GetDispatchInfo
-	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+	for RuntimeExtrinsic<Address, Call, Signature, Extra>
 where
 	Call: GetDispatchInfo,
 	Extra: SignedExtension,

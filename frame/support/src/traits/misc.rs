@@ -882,7 +882,7 @@ where
 }
 
 impl<Address, Call, Signature, Extra> ExtrinsicCall
-	for sp_runtime::generic::UncheckedExtrinsic<Address, Call, Signature, Extra>
+	for sp_runtime::generic::RuntimeExtrinsic<Address, Call, Signature, Extra>
 where
 	Extra: sp_runtime::traits::SignedExtension,
 {

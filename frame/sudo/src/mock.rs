@@ -91,14 +91,14 @@ pub mod logger {
 	pub(super) type I32Log<T> = StorageValue<_, BoundedVec<i32, ConstU32<1_000>>, ValueQuery>;
 }
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type RuntimeExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
 	pub enum Test where
 		Block = Block,
 		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+		RuntimeExtrinsic = RuntimeExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Sudo: sudo::{Pallet, Call, Config<T>, Storage, Event<T>},

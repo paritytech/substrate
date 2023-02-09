@@ -29,7 +29,7 @@ use syn::{
 mod keyword {
 	syn::custom_keyword!(Block);
 	syn::custom_keyword!(NodeBlock);
-	syn::custom_keyword!(UncheckedExtrinsic);
+	syn::custom_keyword!(RuntimeExtrinsic);
 	syn::custom_keyword!(Pallet);
 	syn::custom_keyword!(Call);
 	syn::custom_keyword!(Storage);
@@ -130,7 +130,7 @@ impl Parse for WhereSection {
 		let block = remove_kind(input, WhereKind::Block, &mut definitions)?.value;
 		let node_block = remove_kind(input, WhereKind::NodeBlock, &mut definitions)?.value;
 		let unchecked_extrinsic =
-			remove_kind(input, WhereKind::UncheckedExtrinsic, &mut definitions)?.value;
+			remove_kind(input, WhereKind::RuntimeExtrinsic, &mut definitions)?.value;
 		if let Some(WhereDefinition { ref kind_span, ref kind, .. }) = definitions.first() {
 			let msg = format!(
 				"`{:?}` was declared above. Please use exactly one declaration for `{:?}`.",
@@ -146,7 +146,7 @@ impl Parse for WhereSection {
 pub enum WhereKind {
 	Block,
 	NodeBlock,
-	UncheckedExtrinsic,
+	RuntimeExtrinsic,
 }
 
 #[derive(Debug)]
@@ -163,8 +163,8 @@ impl Parse for WhereDefinition {
 			(input.parse::<keyword::Block>()?.span(), WhereKind::Block)
 		} else if lookahead.peek(keyword::NodeBlock) {
 			(input.parse::<keyword::NodeBlock>()?.span(), WhereKind::NodeBlock)
-		} else if lookahead.peek(keyword::UncheckedExtrinsic) {
-			(input.parse::<keyword::UncheckedExtrinsic>()?.span(), WhereKind::UncheckedExtrinsic)
+		} else if lookahead.peek(keyword::RuntimeExtrinsic) {
+			(input.parse::<keyword::RuntimeExtrinsic>()?.span(), WhereKind::RuntimeExtrinsic)
 		} else {
 			return Err(lookahead.error())
 		};

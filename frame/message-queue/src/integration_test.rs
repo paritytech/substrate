@@ -40,14 +40,14 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 };
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type RuntimeExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
 	pub enum Test where
 		Block = Block,
 		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+		RuntimeExtrinsic = RuntimeExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		MessageQueue: pallet_message_queue::{Pallet, Call, Storage, Event<T>},
@@ -105,15 +105,15 @@ impl Config for Test {
 /// # Example output
 ///
 /// ```pre
-/// Enqueued 1189 messages across 176 queues. Payload 46.97 KiB    
-/// Processing 772 of 1189 messages    
-/// Enqueued 9270 messages across 1559 queues. Payload 131.85 KiB    
-/// Processing 6262 of 9687 messages    
-/// Enqueued 5025 messages across 1225 queues. Payload 100.23 KiB    
-/// Processing 1739 of 8450 messages    
-/// Enqueued 42061 messages across 6357 queues. Payload 536.29 KiB    
-/// Processing 11675 of 48772 messages    
-/// Enqueued 20253 messages across 2420 queues. Payload 288.34 KiB    
+/// Enqueued 1189 messages across 176 queues. Payload 46.97 KiB
+/// Processing 772 of 1189 messages
+/// Enqueued 9270 messages across 1559 queues. Payload 131.85 KiB
+/// Processing 6262 of 9687 messages
+/// Enqueued 5025 messages across 1225 queues. Payload 100.23 KiB
+/// Processing 1739 of 8450 messages
+/// Enqueued 42061 messages across 6357 queues. Payload 536.29 KiB
+/// Processing 11675 of 48772 messages
+/// Enqueued 20253 messages across 2420 queues. Payload 288.34 KiB
 /// Processing 28711 of 57350 messages
 /// Processing all remaining 28639 messages
 /// ```

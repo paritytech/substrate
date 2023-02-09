@@ -49,15 +49,14 @@ use sp_runtime::{
 };
 use std::sync::Arc;
 
-pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic =
-	sp_runtime::generic::UncheckedExtrinsic<AccountId, RuntimeCall, (), ()>;
+pub type Block = sp_runtime::generic::Block<Header, RuntimeExtrinsic>;
+pub type RuntimeExtrinsic = sp_runtime::generic::RuntimeExtrinsic<AccountId, RuntimeCall, (), ()>;
 
 frame_support::construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
 		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+		RuntimeExtrinsic = RuntimeExtrinsic
 	{
 		System: frame_system::{Pallet, Call, Event<T>, Config},
 		Balances: pallet_balances::{Pallet, Call, Event<T>, Config<T>},

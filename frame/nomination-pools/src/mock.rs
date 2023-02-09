@@ -233,13 +233,13 @@ impl pools::Config for Runtime {
 	type MaxPointsToBalance = frame_support::traits::ConstU8<10>;
 }
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
+type RuntimeExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
 type Block = frame_system::mocking::MockBlock<Runtime>;
 frame_support::construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
 		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+		RuntimeExtrinsic = RuntimeExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Storage, Event<T>, Config},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},

@@ -212,14 +212,14 @@ where
 
 impl crate::Config for Test {}
 
-pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, RuntimeCall, u64, ()>;
+pub type Block = sp_runtime::generic::Block<Header, RuntimeExtrinsic>;
+pub type RuntimeExtrinsic = sp_runtime::generic::RuntimeExtrinsic<u32, RuntimeCall, u64, ()>;
 
 frame_support::construct_runtime!(
 	pub enum Test where
 		Block = Block,
 		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+		RuntimeExtrinsic = RuntimeExtrinsic
 	{
 		System: system::{Pallet, Call, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},

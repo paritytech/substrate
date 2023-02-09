@@ -1243,7 +1243,7 @@ where
 		public: <Signature as traits::Verify>::Signer,
 		account: AccountId,
 		nonce: Index,
-	) -> Option<(RuntimeCall, <UncheckedExtrinsic as traits::Extrinsic>::SignaturePayload)> {
+	) -> Option<(RuntimeCall, <RuntimeExtrinsic as traits::Extrinsic>::SignaturePayload)> {
 		let tip = 0;
 		// take the biggest period possible.
 		let period =
@@ -1285,7 +1285,7 @@ impl<C> frame_system::offchain::SendTransactionTypes<C> for Runtime
 where
 	RuntimeCall: From<C>,
 {
-	type Extrinsic = UncheckedExtrinsic;
+	type Extrinsic = RuntimeExtrinsic;
 	type OverarchingCall = RuntimeCall;
 }
 
@@ -1705,7 +1705,7 @@ construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
 		NodeBlock = node_primitives::Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+		RuntimeExtrinsic = RuntimeExtrinsic
 	{
 		System: frame_system,
 		Utility: pallet_utility,
@@ -1776,7 +1776,7 @@ pub type Address = sp_runtime::MultiAddress<AccountId, AccountIndex>;
 /// Block header type as expected by this runtime.
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 /// Block type as expected by this runtime.
-pub type Block = generic::Block<Header, UncheckedExtrinsic>;
+pub type Block = generic::Block<Header, RuntimeExtrinsic>;
 /// A Block signed with a Justification
 pub type SignedBlock = generic::SignedBlock<Block>;
 /// BlockId type as expected by this runtime.
@@ -1798,8 +1798,7 @@ pub type SignedExtra = (
 );
 
 /// Unchecked extrinsic type as expected by this runtime.
-pub type UncheckedExtrinsic =
-	generic::UncheckedExtrinsic<Address, RuntimeCall, Signature, SignedExtra>;
+pub type RuntimeExtrinsic = generic::RuntimeExtrinsic<Address, RuntimeCall, Signature, SignedExtra>;
 /// The payload being signed in transactions.
 pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
 /// Extrinsic type that has already been checked.

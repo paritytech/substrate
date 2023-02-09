@@ -700,7 +700,7 @@ impl<T: Config> Pallet<T> {
 // [here](https://crates.parity.io/sp_runtime/traits/trait.SignedExtension.html).
 //
 // The signed extensions are aggregated in the runtime file of a substrate chain. All extensions
-// should be aggregated in a tuple and passed to the `CheckedExtrinsic` and `UncheckedExtrinsic`
+// should be aggregated in a tuple and passed to the `CheckedExtrinsic` and `RuntimeExtrinsic`
 // types defined in the runtime. Lookup `pub type SignedExtra = (...)` in `node/runtime` and
 // `node-template` for an example of this.
 

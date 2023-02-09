@@ -646,14 +646,14 @@ impl pallet5::Config for Runtime {
 }
 
 pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;
-pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
+pub type Block = sp_runtime::generic::Block<Header, RuntimeExtrinsic>;
+pub type RuntimeExtrinsic = sp_runtime::generic::RuntimeExtrinsic<u32, RuntimeCall, (), ()>;
 
 frame_support::construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
 		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+		RuntimeExtrinsic = RuntimeExtrinsic
 	{
 		// Exclude part `Storage` in order not to check its metadata in tests.
 		System: frame_system exclude_parts { Pallet, Storage },
@@ -758,7 +758,7 @@ fn inherent_expand() {
 
 	let inherents = InherentData::new().create_extrinsics();
 
-	let expected = vec![UncheckedExtrinsic {
+	let expected = vec![RuntimeExtrinsic {
 		function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
 		signature: None,
 	}];
@@ -773,11 +773,11 @@ fn inherent_expand() {
 			Digest::default(),
 		),
 		vec![
-			UncheckedExtrinsic {
+			RuntimeExtrinsic {
 				function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
-			UncheckedExtrinsic {
+			RuntimeExtrinsic {
 				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 0 }),
 				signature: None,
 			},
@@ -795,11 +795,11 @@ fn inherent_expand() {
 			Digest::default(),
 		),
 		vec![
-			UncheckedExtrinsic {
+			RuntimeExtrinsic {
 				function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
-			UncheckedExtrinsic {
+			RuntimeExtrinsic {
 				function: RuntimeCall::Example(pallet::Call::foo { foo: 0, bar: 0 }),
 				signature: None,
 			},
@@ -816,7 +816,7 @@ fn inherent_expand() {
 			BlakeTwo256::hash(b"test"),
 			Digest::default(),
 		),
-		vec![UncheckedExtrinsic {
+		vec![RuntimeExtrinsic {
 			function: RuntimeCall::Example(pallet::Call::foo_storage_layer { foo: 0 }),
 			signature: None,
 		}],
@@ -834,7 +834,7 @@ fn inherent_expand() {
 			BlakeTwo256::hash(b"test"),
 			Digest::default(),
 		),
-		vec![UncheckedExtrinsic {
+		vec![RuntimeExtrinsic {
 			function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
 			signature: Some((1, (), ())),
 		}],
@@ -853,11 +853,11 @@ fn inherent_expand() {
 			Digest::default(),
 		),
 		vec![
-			UncheckedExtrinsic {
+			RuntimeExtrinsic {
 				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 1 }),
 				signature: None,
 			},
-			UncheckedExtrinsic {
+			RuntimeExtrinsic {
 				function: RuntimeCall::Example(pallet::Call::foo_storage_layer { foo: 0 }),
 				signature: None,
 			},
@@ -875,15 +875,15 @@ fn inherent_expand() {
 			Digest::default(),
 		),
 		vec![
-			UncheckedExtrinsic {
+			RuntimeExtrinsic {
 				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 1 }),
 				signature: None,
 			},
-			UncheckedExtrinsic {
+			RuntimeExtrinsic {
 				function: RuntimeCall::Example(pallet::Call::foo_storage_layer { foo: 0 }),
 				signature: None,
 			},
-			UncheckedExtrinsic {
+			RuntimeExtrinsic {
 				function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
@@ -901,15 +901,15 @@ fn inherent_expand() {
 			Digest::default(),
 		),
 		vec![
-			UncheckedExtrinsic {
+			RuntimeExtrinsic {
 				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 1 }),
 				signature: None,
 			},
-			UncheckedExtrinsic {
+			RuntimeExtrinsic {
 				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 0 }),
 				signature: Some((1, (), ())),
 			},
-			UncheckedExtrinsic {
+			RuntimeExtrinsic {
 				function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
@@ -1566,7 +1566,7 @@ fn metadata() {
 	}
 
 	let extrinsic = ExtrinsicMetadata {
-		ty: meta_type::<UncheckedExtrinsic>(),
+		ty: meta_type::<RuntimeExtrinsic>(),
 		version: 4,
 		signed_extensions: vec![SignedExtensionMetadata {
 			identifier: "UnitSignedExtension",

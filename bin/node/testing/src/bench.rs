@@ -36,7 +36,7 @@ use codec::{Decode, Encode};
 use futures::executor;
 use kitchensink_runtime::{
 	constants::currency::DOLLARS, AccountId, BalancesCall, CheckedExtrinsic, MinimumPeriod,
-	RuntimeCall, Signature, SystemCall, UncheckedExtrinsic,
+	RuntimeCall, RuntimeExtrinsic, Signature, SystemCall,
 };
 use node_primitives::Block;
 use sc_block_builder::BlockBuilderProvider;
@@ -574,7 +574,7 @@ impl BenchKeyring {
 		spec_version: u32,
 		tx_version: u32,
 		genesis_hash: [u8; 32],
-	) -> UncheckedExtrinsic {
+	) -> RuntimeExtrinsic {
 		match xt.signed {
 			Some((signed, extra)) => {
 				let payload = (
@@ -593,12 +593,12 @@ impl BenchKeyring {
 						key.sign(b)
 					}
 				});
-				UncheckedExtrinsic {
+				RuntimeExtrinsic {
 					signature: Some((sp_runtime::MultiAddress::Id(signed), signature, extra)),
 					function: payload.0,
 				}
 			},
-			None => UncheckedExtrinsic { signature: None, function: xt.function },
+			None => RuntimeExtrinsic { signature: None, function: xt.function },
 		}
 	}
 

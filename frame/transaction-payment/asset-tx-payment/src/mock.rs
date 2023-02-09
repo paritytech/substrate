@@ -34,7 +34,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, ConvertInto, IdentityLookup, SaturatedConversion},
 };
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
+type RuntimeExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
 type Block = frame_system::mocking::MockBlock<Runtime>;
 type Balance = u64;
 type AccountId = u64;
@@ -43,7 +43,7 @@ frame_support::construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
 		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+		RuntimeExtrinsic = RuntimeExtrinsic,
 	{
 		System: system,
 		Balances: pallet_balances,

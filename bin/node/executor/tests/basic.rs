@@ -29,8 +29,8 @@ use sp_runtime::{
 
 use kitchensink_runtime::{
 	constants::{currency::*, time::SLOT_DURATION},
-	Balances, CheckedExtrinsic, Header, Runtime, RuntimeCall, RuntimeEvent, System,
-	TransactionPayment, Treasury, UncheckedExtrinsic,
+	Balances, CheckedExtrinsic, Header, Runtime, RuntimeCall, RuntimeEvent, RuntimeExtrinsic,
+	System, TransactionPayment, Treasury,
 };
 use node_primitives::{Balance, Hash};
 use node_testing::keyring::*;
@@ -65,7 +65,7 @@ fn transfer_fee<E: Encode>(extrinsic: &E) -> Balance {
 	)
 }
 
-fn xt() -> UncheckedExtrinsic {
+fn xt() -> RuntimeExtrinsic {
 	sign(CheckedExtrinsic {
 		signed: Some((alice(), signed_extra(0, 0))),
 		function: RuntimeCall::Balances(default_transfer_call()),

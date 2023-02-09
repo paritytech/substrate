@@ -7,7 +7,7 @@ error: Unexpected tokens, expected one of `=`, `,`
 error[E0412]: cannot find type `RuntimeCall` in this scope
   --> tests/construct_runtime_ui/both_use_and_excluded_parts.rs:18:64
    |
-18 | pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
+18 | pub type RuntimeExtrinsic = generic::RuntimeExtrinsic<u32, RuntimeCall, Signature, ()>;
    |                            -                                   ^^^^^^^^^^^ not found in this scope
    |                            |
    |                            help: you might be missing a type parameter: `<RuntimeCall>`

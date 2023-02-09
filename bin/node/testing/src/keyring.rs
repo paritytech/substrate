@@ -19,7 +19,7 @@
 //! Test accounts.
 
 use codec::Encode;
-use kitchensink_runtime::{CheckedExtrinsic, SessionKeys, SignedExtra, UncheckedExtrinsic};
+use kitchensink_runtime::{CheckedExtrinsic, RuntimeExtrinsic, SessionKeys, SignedExtra};
 use node_primitives::{AccountId, Balance, Index};
 use sp_keyring::{AccountKeyring, Ed25519Keyring, Sr25519Keyring};
 use sp_runtime::generic::Era;
@@ -87,7 +87,7 @@ pub fn sign(
 	spec_version: u32,
 	tx_version: u32,
 	genesis_hash: [u8; 32],
-) -> UncheckedExtrinsic {
+) -> RuntimeExtrinsic {
 	match xt.signed {
 		Some((signed, extra)) => {
 			let payload =
@@ -102,11 +102,11 @@ pub fn sign(
 					}
 				})
 				.into();
-			UncheckedExtrinsic {
+			RuntimeExtrinsic {
 				signature: Some((sp_runtime::MultiAddress::Id(signed), signature, extra)),
 				function: payload.0,
 			}
 		},
-		None => UncheckedExtrinsic { signature: None, function: xt.function },
+		None => RuntimeExtrinsic { signature: None, function: xt.function },
 	}
 }

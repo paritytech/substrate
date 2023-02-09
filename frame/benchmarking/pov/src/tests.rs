@@ -164,14 +164,14 @@ fn noop_is_free() {
 mod mock {
 	use sp_runtime::testing::H256;
 
-	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+	type RuntimeExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 	type Block = frame_system::mocking::MockBlock<Test>;
 
 	frame_support::construct_runtime!(
 		pub enum Test where
 			Block = Block,
 			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic,
+			RuntimeExtrinsic = RuntimeExtrinsic,
 		{
 			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 			Baseline: crate::{Pallet, Call, Storage, Event<T>},

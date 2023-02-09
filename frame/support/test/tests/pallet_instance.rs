@@ -330,14 +330,14 @@ impl pallet2::Config<pallet::Instance1> for Runtime {
 }
 
 pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;
-pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
+pub type Block = sp_runtime::generic::Block<Header, RuntimeExtrinsic>;
+pub type RuntimeExtrinsic = sp_runtime::generic::RuntimeExtrinsic<u32, RuntimeCall, (), ()>;
 
 frame_support::construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
 		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+		RuntimeExtrinsic = RuntimeExtrinsic
 	{
 		// Exclude part `Storage` in order not to check its metadata in tests.
 		System: frame_system exclude_parts { Storage },
@@ -902,7 +902,7 @@ fn metadata() {
 		vec![system_pallet_metadata, example_pallet_metadata, example_pallet_instance1_metadata];
 
 	let extrinsic = ExtrinsicMetadata {
-		ty: scale_info::meta_type::<UncheckedExtrinsic>(),
+		ty: scale_info::meta_type::<RuntimeExtrinsic>(),
 		version: 4,
 		signed_extensions: vec![SignedExtensionMetadata {
 			identifier: "UnitSignedExtension",

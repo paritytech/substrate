@@ -43,7 +43,7 @@ use sp_storage::{StorageData, StorageKey};
 /// # 	pub enum TestRuntime where
 /// # 		Block = frame_system::mocking::MockBlock<TestRuntime>,
 /// # 		NodeBlock = frame_system::mocking::MockBlock<TestRuntime>,
-/// # 		UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<TestRuntime>,
+/// # 		RuntimeExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<TestRuntime>,
 /// # 	{
 /// # 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 /// # 		Test: pallet_test::{Pallet, Storage},

@@ -4,7 +4,7 @@ construct_runtime! {
 	pub enum Runtime where
 		Block = Block,
 		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+		RuntimeExtrinsic = RuntimeExtrinsic
 	{
 		System: system::{Pallet},
 		#[cfg(feature = 1)]

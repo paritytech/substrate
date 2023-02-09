@@ -183,13 +183,13 @@ impl pallet_nomination_pools::Config for Runtime {
 }
 
 type Block = frame_system::mocking::MockBlock<Runtime>;
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
+type RuntimeExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
 
 frame_support::construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
 		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+		RuntimeExtrinsic = RuntimeExtrinsic
 	{
 		System: frame_system::{Pallet, Call, Event<T>},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},

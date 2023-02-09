@@ -5,7 +5,7 @@ construct_runtime! {
 		Block = Block,
 		NodeBlock = Block,
 		TypeX = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+		RuntimeExtrinsic = RuntimeExtrinsic,
 	{}
 }
 

@@ -271,7 +271,7 @@ fn construct_runtime_final_expansion(
 	let res = quote!(
 		#scrate_decl
 
-		// Prevent UncheckedExtrinsic to print unused warning.
+		// Prevent RuntimeExtrinsic to print unused warning.
 		const _: () = {
 			#[allow(unused)]
 			type __hidden_use_of_unchecked_extrinsic = #unchecked_extrinsic;

@@ -79,8 +79,8 @@ pub mod decl_pallet {
 pub type BlockNumber = u64;
 pub type Index = u64;
 pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;
-pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
+pub type Block = sp_runtime::generic::Block<Header, RuntimeExtrinsic>;
+pub type RuntimeExtrinsic = sp_runtime::generic::RuntimeExtrinsic<u32, RuntimeCall, (), ()>;
 
 impl frame_system::Config for Runtime {
 	type BlockWeights = ();
@@ -117,7 +117,7 @@ frame_support::construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
 		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+		RuntimeExtrinsic = RuntimeExtrinsic
 	{
 		System: frame_system,
 		MyPallet: pallet,

@@ -154,8 +154,8 @@ pub type AccountId = <Signature as Verify>::Signer;
 pub type BlockNumber = u64;
 pub type Index = u64;
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
-pub type Block = generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
+pub type Block = generic::Block<Header, RuntimeExtrinsic>;
+pub type RuntimeExtrinsic = generic::RuntimeExtrinsic<u32, RuntimeCall, Signature, ()>;
 
 impl system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
@@ -175,7 +175,7 @@ frame_support::construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
 		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+		RuntimeExtrinsic = RuntimeExtrinsic
 	{
 		System: system::{Pallet, Call, Event<T>},
 		Module: module::{Pallet, Call, Storage, Config},

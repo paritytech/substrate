@@ -27,14 +27,14 @@ use sp_runtime::{
 	BuildStorage, Perbill,
 };
 
-type UncheckedExtrinsic = mocking::MockUncheckedExtrinsic<Test>;
+type RuntimeExtrinsic = mocking::MockUncheckedExtrinsic<Test>;
 type Block = mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
 	pub enum Test where
 		Block = Block,
 		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+		RuntimeExtrinsic = RuntimeExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 	}

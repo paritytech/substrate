@@ -290,7 +290,7 @@ frame_support::construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
 		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+		RuntimeExtrinsic = RuntimeExtrinsic
 	{
 		System: system::{Pallet, Call, Event<T>},
 		Module1_1: module1::<Instance1>::{
@@ -314,8 +314,8 @@ frame_support::construct_runtime!(
 );
 
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
-pub type Block = generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
+pub type Block = generic::Block<Header, RuntimeExtrinsic>;
+pub type RuntimeExtrinsic = generic::RuntimeExtrinsic<u32, RuntimeCall, Signature, ()>;
 
 fn new_test_ext() -> sp_io::TestExternalities {
 	GenesisConfig {

@@ -20,7 +20,7 @@ use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use frame_support::Hashable;
 use kitchensink_runtime::{
 	constants::currency::*, Block, BuildStorage, CheckedExtrinsic, GenesisConfig, Header,
-	RuntimeCall, UncheckedExtrinsic,
+	RuntimeCall, RuntimeExtrinsic,
 };
 use node_executor::ExecutorDispatch;
 use node_primitives::{BlockNumber, Hash};
@@ -63,7 +63,7 @@ enum ExecutionMethod {
 	Wasm(WasmExecutionMethod),
 }
 
-fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
+fn sign(xt: CheckedExtrinsic) -> RuntimeExtrinsic {
 	node_testing::keyring::sign(xt, SPEC_VERSION, TRANSACTION_VERSION, GENESIS_HASH)
 }
 

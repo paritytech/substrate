@@ -31,7 +31,7 @@ use scale_info::{build::Fields, meta_type, Path, StaticTypeInfo, Type, TypeInfo,
 use sp_io::hashing::blake2_256;
 use sp_std::{fmt, prelude::*};
 
-/// Current version of the [`UncheckedExtrinsic`] encoded format.
+/// Current version of the [`RuntimeExtrinsic`] encoded format.
 ///
 /// This version needs to be bumped if the encoded representation changes.
 /// It ensures that if the representation is changed and the format is not known,
@@ -41,7 +41,7 @@ const EXTRINSIC_FORMAT_VERSION: u8 = 4;
 /// A extrinsic right from the external world. This is unchecked and so
 /// can contain a signature.
 #[derive(PartialEq, Eq, Clone)]
-pub struct UncheckedExtrinsic<Address, Call, Signature, Extra>
+pub struct RuntimeExtrinsic<Address, Call, Signature, Extra>
 where
 	Extra: SignedExtension,
 {
@@ -56,20 +56,19 @@ where
 /// Manual [`TypeInfo`] implementation because of custom encoding. The data is a valid encoded
 /// `Vec<u8>`, but requires some logic to extract the signature and payload.
 ///
-/// See [`UncheckedExtrinsic::encode`] and [`UncheckedExtrinsic::decode`].
-impl<Address, Call, Signature, Extra> TypeInfo
-	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+/// See [`RuntimeExtrinsic::encode`] and [`RuntimeExtrinsic::decode`].
+impl<Address, Call, Signature, Extra> TypeInfo for RuntimeExtrinsic<Address, Call, Signature, Extra>
 where
 	Address: StaticTypeInfo,
 	Call: StaticTypeInfo,
 	Signature: StaticTypeInfo,
 	Extra: SignedExtension + StaticTypeInfo,
 {
-	type Identity = UncheckedExtrinsic<Address, Call, Signature, Extra>;
+	type Identity = RuntimeExtrinsic<Address, Call, Signature, Extra>;
 
 	fn type_info() -> Type {
 		Type::builder()
-			.path(Path::new("UncheckedExtrinsic", module_path!()))
+			.path(Path::new("RuntimeExtrinsic", module_path!()))
 			// Include the type parameter types, even though they are not used directly in any of
 			// the described fields. These type definitions can be used by downstream consumers
 			// to help construct the custom decoding from the opaque bytes (see below).
@@ -79,7 +78,7 @@ where
 				TypeParameter::new("Signature", Some(meta_type::<Signature>())),
 				TypeParameter::new("Extra", Some(meta_type::<Extra>())),
 			])
-			.docs(&["UncheckedExtrinsic raw bytes, requires custom decoding routine"])
+			.docs(&["RuntimeExtrinsic raw bytes, requires custom decoding routine"])
 			// Because of the custom encoding, we can only accurately describe the encoding as an
 			// opaque `Vec<u8>`. Downstream consumers will need to manually implement the codec to
 			// encode/decode the `signature` and `function` fields.
@@ -88,7 +87,7 @@ where
 }
 
 impl<Address, Call, Signature, Extra: SignedExtension>
-	UncheckedExtrinsic<Address, Call, Signature, Extra>
+	RuntimeExtrinsic<Address, Call, Signature, Extra>
 {
 	/// New instance of a signed extrinsic aka "transaction".
 	pub fn new_signed(function: Call, signed: Address, signature: Signature, extra: Extra) -> Self {
@@ -102,7 +101,7 @@ impl<Address, Call, Signature, Extra: SignedExtension>
 }
 
 impl<Address, Call, Signature, Extra: SignedExtension> Extrinsic
-	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+	for RuntimeExtrinsic<Address, Call, Signature, Extra>
 {
 	type Call = Call;
 
@@ -122,7 +121,7 @@ impl<Address, Call, Signature, Extra: SignedExtension> Extrinsic
 }
 
 impl<Address, AccountId, Call, Signature, Extra, Lookup> Checkable<Lookup>
-	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+	for RuntimeExtrinsic<Address, Call, Signature, Extra>
 where
 	Address: Member + MaybeDisplay,
 	Call: Encode + Member,
@@ -168,7 +167,7 @@ where
 }
 
 impl<Address, Call, Signature, Extra> ExtrinsicMetadata
-	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+	for RuntimeExtrinsic<Address, Call, Signature, Extra>
 where
 	Extra: SignedExtension,
 {
@@ -234,7 +233,7 @@ where
 {
 }
 
-impl<Address, Call, Signature, Extra> Decode for UncheckedExtrinsic<Address, Call, Signature, Extra>
+impl<Address, Call, Signature, Extra> Decode for RuntimeExtrinsic<Address, Call, Signature, Extra>
 where
 	Address: Decode,
 	Signature: Decode,
@@ -273,7 +272,7 @@ where
 	}
 }
 
-impl<Address, Call, Signature, Extra> Encode for UncheckedExtrinsic<Address, Call, Signature, Extra>
+impl<Address, Call, Signature, Extra> Encode for RuntimeExtrinsic<Address, Call, Signature, Extra>
 where
 	Address: Encode,
 	Signature: Encode,
@@ -308,7 +307,7 @@ where
 }
 
 impl<Address, Call, Signature, Extra> EncodeLike
-	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+	for RuntimeExtrinsic<Address, Call, Signature, Extra>
 where
 	Address: Encode,
 	Signature: Encode,
@@ -319,7 +318,7 @@ where
 
 #[cfg(feature = "std")]
 impl<Address: Encode, Signature: Encode, Call: Encode, Extra: SignedExtension> serde::Serialize
-	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+	for RuntimeExtrinsic<Address, Call, Signature, Extra>
 {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error>
 	where
@@ -331,7 +330,7 @@ impl<Address: Encode, Signature: Encode, Call: Encode, Extra: SignedExtension> s
 
 #[cfg(feature = "std")]
 impl<'a, Address: Decode, Signature: Decode, Call: Decode, Extra: SignedExtension>
-	serde::Deserialize<'a> for UncheckedExtrinsic<Address, Call, Signature, Extra>
+	serde::Deserialize<'a> for RuntimeExtrinsic<Address, Call, Signature, Extra>
 {
 	fn deserialize<D>(de: D) -> Result<Self, D::Error>
 	where
@@ -344,7 +343,7 @@ impl<'a, Address: Decode, Signature: Decode, Call: Decode, Extra: SignedExtensio
 }
 
 impl<Address, Call, Signature, Extra> fmt::Debug
-	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+	for RuntimeExtrinsic<Address, Call, Signature, Extra>
 where
 	Address: fmt::Debug,
 	Call: fmt::Debug,
@@ -353,14 +352,14 @@ where
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		write!(
 			f,
-			"UncheckedExtrinsic({:?}, {:?})",
+			"RuntimeExtrinsic({:?}, {:?})",
 			self.signature.as_ref().map(|x| (&x.0, &x.2)),
 			self.function,
 		)
 	}
 }
 
-impl<Address, Call, Signature, Extra> From<UncheckedExtrinsic<Address, Call, Signature, Extra>>
+impl<Address, Call, Signature, Extra> From<RuntimeExtrinsic<Address, Call, Signature, Extra>>
 	for OpaqueExtrinsic
 where
 	Address: Encode,
@@ -368,9 +367,9 @@ where
 	Call: Encode,
 	Extra: SignedExtension,
 {
-	fn from(extrinsic: UncheckedExtrinsic<Address, Call, Signature, Extra>) -> Self {
+	fn from(extrinsic: RuntimeExtrinsic<Address, Call, Signature, Extra>) -> Self {
 		Self::from_bytes(extrinsic.encode().as_slice()).expect(
-			"both OpaqueExtrinsic and UncheckedExtrinsic have encoding that is compatible with \
+			"both OpaqueExtrinsic and RuntimeExtrinsic have encoding that is compatible with \
 				raw Vec<u8> encoding; qed",
 		)
 	}
@@ -417,7 +416,7 @@ mod tests {
 		}
 	}
 
-	type Ex = UncheckedExtrinsic<TestAccountId, TestCall, TestSig, TestExtra>;
+	type Ex = RuntimeExtrinsic<TestAccountId, TestCall, TestSig, TestExtra>;
 	type CEx = CheckedExtrinsic<TestAccountId, TestCall, TestExtra>;
 
 	#[test]

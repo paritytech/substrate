@@ -17,7 +17,7 @@
 
 use codec::Decode;
 use frame_system::offchain::{SendSignedTransaction, Signer, SubmitTransaction};
-use kitchensink_runtime::{Executive, Indices, Runtime, UncheckedExtrinsic};
+use kitchensink_runtime::{Executive, Indices, Runtime, RuntimeExtrinsic};
 use sp_application_crypto::AppKey;
 use sp_core::offchain::{testing::TestTransactionPoolExt, TransactionPoolExt};
 use sp_keyring::sr25519::Keyring::Alice;
@@ -146,12 +146,12 @@ fn should_submit_signed_twice_from_the_same_account() {
 
 		// now check that the transaction nonces are not equal
 		let s = state.read();
-		fn nonce(tx: UncheckedExtrinsic) -> frame_system::CheckNonce<Runtime> {
+		fn nonce(tx: RuntimeExtrinsic) -> frame_system::CheckNonce<Runtime> {
 			let extra = tx.signature.unwrap().2;
 			extra.5
 		}
-		let nonce1 = nonce(UncheckedExtrinsic::decode(&mut &*s.transactions[0]).unwrap());
-		let nonce2 = nonce(UncheckedExtrinsic::decode(&mut &*s.transactions[1]).unwrap());
+		let nonce1 = nonce(RuntimeExtrinsic::decode(&mut &*s.transactions[0]).unwrap());
+		let nonce2 = nonce(RuntimeExtrinsic::decode(&mut &*s.transactions[1]).unwrap());
 		assert!(nonce1 != nonce2, "Transactions should have different nonces. Got: {:?}", nonce1);
 	});
 }
@@ -195,14 +195,14 @@ fn should_submit_signed_twice_from_all_accounts() {
 
 		// now check that the transaction nonces are not equal
 		let s = state.read();
-		fn nonce(tx: UncheckedExtrinsic) -> frame_system::CheckNonce<Runtime> {
+		fn nonce(tx: RuntimeExtrinsic) -> frame_system::CheckNonce<Runtime> {
 			let extra = tx.signature.unwrap().2;
 			extra.5
 		}
-		let nonce1 = nonce(UncheckedExtrinsic::decode(&mut &*s.transactions[0]).unwrap());
-		let nonce2 = nonce(UncheckedExtrinsic::decode(&mut &*s.transactions[1]).unwrap());
-		let nonce3 = nonce(UncheckedExtrinsic::decode(&mut &*s.transactions[2]).unwrap());
-		let nonce4 = nonce(UncheckedExtrinsic::decode(&mut &*s.transactions[3]).unwrap());
+		let nonce1 = nonce(RuntimeExtrinsic::decode(&mut &*s.transactions[0]).unwrap());
+		let nonce2 = nonce(RuntimeExtrinsic::decode(&mut &*s.transactions[1]).unwrap());
+		let nonce3 = nonce(RuntimeExtrinsic::decode(&mut &*s.transactions[2]).unwrap());
+		let nonce4 = nonce(RuntimeExtrinsic::decode(&mut &*s.transactions[3]).unwrap());
 		assert!(
 			nonce1 != nonce3,
 			"Transactions should have different nonces. Got: 1st tx nonce: {:?}, 2nd nonce: {:?}", nonce1, nonce3
@@ -254,7 +254,7 @@ fn submitted_transaction_should_be_valid() {
 	let mut t = new_test_ext(compact_code_unwrap());
 	t.execute_with(|| {
 		let source = TransactionSource::External;
-		let extrinsic = UncheckedExtrinsic::decode(&mut &*tx0).unwrap();
+		let extrinsic = RuntimeExtrinsic::decode(&mut &*tx0).unwrap();
 		// add balance to the account
 		let author = extrinsic.signature.clone().unwrap().0;
 		let address = Indices::lookup(author).unwrap();

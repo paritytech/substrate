@@ -257,7 +257,7 @@ frame_support::construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
 		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+		RuntimeExtrinsic = RuntimeExtrinsic
 	{
 		System: system::{Pallet, Call, Event<T>, Origin<T>} = 30,
 		Module1_1: module1::<Instance1>::{Pallet, Call, Storage, Event<T>, Origin<T>},
@@ -276,8 +276,8 @@ frame_support::construct_runtime!(
 );
 
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
-pub type Block = generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
+pub type Block = generic::Block<Header, RuntimeExtrinsic>;
+pub type RuntimeExtrinsic = generic::RuntimeExtrinsic<u32, RuntimeCall, Signature, ()>;
 
 #[test]
 fn check_modules_error_type() {
@@ -710,7 +710,7 @@ fn test_metadata() {
 	];
 
 	let extrinsic = ExtrinsicMetadata {
-		ty: meta_type::<UncheckedExtrinsic>(),
+		ty: meta_type::<RuntimeExtrinsic>(),
 		version: 4,
 		signed_extensions: vec![SignedExtensionMetadata {
 			identifier: "UnitSignedExtension",

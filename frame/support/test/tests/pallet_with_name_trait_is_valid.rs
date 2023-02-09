@@ -106,7 +106,7 @@ mod tests {
 	);
 	type TestBlock = sp_runtime::generic::Block<TestHeader, TestUncheckedExtrinsic>;
 	type TestHeader = sp_runtime::generic::Header<u64, sp_runtime::traits::BlakeTwo256>;
-	type TestUncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<
+	type TestUncheckedExtrinsic = sp_runtime::generic::RuntimeExtrinsic<
 		<Runtime as frame_system::Config>::AccountId,
 		<Runtime as frame_system::Config>::RuntimeCall,
 		(),
@@ -117,7 +117,7 @@ mod tests {
 		pub enum Runtime where
 			Block = TestBlock,
 			NodeBlock = TestBlock,
-			UncheckedExtrinsic = TestUncheckedExtrinsic
+			RuntimeExtrinsic = TestUncheckedExtrinsic
 		{
 			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 			PalletTest: pallet_test::{Pallet, Call, Storage, Event<T>, Config, ValidateUnsigned, Inherent},

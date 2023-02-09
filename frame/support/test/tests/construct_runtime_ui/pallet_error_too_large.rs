@@ -1,6 +1,6 @@
 use frame_support::construct_runtime;
-use sp_runtime::{generic, traits::BlakeTwo256};
 use sp_core::sr25519;
+use sp_runtime::{generic, traits::BlakeTwo256};
 
 #[frame_support::pallet]
 mod pallet {
@@ -18,29 +18,29 @@ mod pallet {
 
 #[derive(scale_info::TypeInfo, frame_support::PalletError, codec::Encode, codec::Decode)]
 pub enum Nested1 {
-	Nested2(Nested2)
+	Nested2(Nested2),
 }
 
 #[derive(scale_info::TypeInfo, frame_support::PalletError, codec::Encode, codec::Decode)]
 pub enum Nested2 {
-	Nested3(Nested3)
+	Nested3(Nested3),
 }
 
 #[derive(scale_info::TypeInfo, frame_support::PalletError, codec::Encode, codec::Decode)]
 pub enum Nested3 {
-	Nested4(Nested4)
+	Nested4(Nested4),
 }
 
 #[derive(scale_info::TypeInfo, frame_support::PalletError, codec::Encode, codec::Decode)]
 pub enum Nested4 {
-	Num(u8)
+	Num(u8),
 }
 
 pub type Signature = sr25519::Signature;
 pub type BlockNumber = u32;
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
-pub type Block = generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
+pub type Block = generic::Block<Header, RuntimeExtrinsic>;
+pub type RuntimeExtrinsic = generic::RuntimeExtrinsic<u32, RuntimeCall, Signature, ()>;
 
 impl pallet::Config for Runtime {}
 
@@ -75,7 +75,7 @@ construct_runtime! {
 	pub enum Runtime where
 		Block = Block,
 		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+		RuntimeExtrinsic = RuntimeExtrinsic
 	{
 		System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
 		Pallet: pallet::{Pallet},

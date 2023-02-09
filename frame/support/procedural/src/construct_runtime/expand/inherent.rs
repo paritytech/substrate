@@ -76,7 +76,7 @@ pub fn expand_outer_inherent(
 						let inherent = <#unchecked_extrinsic as #scrate::inherent::Extrinsic>::new(
 							inherent.into(),
 							None,
-						).expect("Runtime UncheckedExtrinsic is not Opaque, so it has to return \
+						).expect("Runtime RuntimeExtrinsic is not Opaque, so it has to return \
 							`Some`; qed");
 
 						inherents.push(inherent);

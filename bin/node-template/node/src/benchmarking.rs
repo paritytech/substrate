@@ -103,7 +103,7 @@ pub fn create_benchmark_extrinsic(
 	sender: sp_core::sr25519::Pair,
 	call: runtime::RuntimeCall,
 	nonce: u32,
-) -> runtime::UncheckedExtrinsic {
+) -> runtime::RuntimeExtrinsic {
 	let genesis_hash = client.block_hash(0).ok().flatten().expect("Genesis block exists; qed");
 	let best_hash = client.chain_info().best_hash;
 	let best_block = client.chain_info().best_number;
@@ -142,7 +142,7 @@ pub fn create_benchmark_extrinsic(
 	);
 	let signature = raw_payload.using_encoded(|e| sender.sign(e));
 
-	runtime::UncheckedExtrinsic::new_signed(
+	runtime::RuntimeExtrinsic::new_signed(
 		call.clone(),
 		sp_runtime::AccountId32::from(sender.public()).into(),
 		runtime::Signature::Sr25519(signature.clone()),

@@ -73,7 +73,7 @@ pub fn create_extrinsic(
 	sender: sp_core::sr25519::Pair,
 	function: impl Into<kitchensink_runtime::RuntimeCall>,
 	nonce: Option<u32>,
-) -> kitchensink_runtime::UncheckedExtrinsic {
+) -> kitchensink_runtime::RuntimeExtrinsic {
 	let function = function.into();
 	let genesis_hash = client.block_hash(0).ok().flatten().expect("Genesis block exists; qed");
 	let best_hash = client.chain_info().best_hash;
@@ -117,7 +117,7 @@ pub fn create_extrinsic(
 	);
 	let signature = raw_payload.using_encoded(|e| sender.sign(e));
 
-	kitchensink_runtime::UncheckedExtrinsic::new_signed(
+	kitchensink_runtime::RuntimeExtrinsic::new_signed(
 		function,
 		sp_runtime::AccountId32::from(sender.public()).into(),
 		kitchensink_runtime::Signature::Sr25519(signature),
@@ -569,7 +569,7 @@ mod tests {
 	use codec::Encode;
 	use kitchensink_runtime::{
 		constants::{currency::CENTS, time::SLOT_DURATION},
-		Address, BalancesCall, RuntimeCall, UncheckedExtrinsic,
+		Address, BalancesCall, RuntimeCall, RuntimeExtrinsic,
 	};
 	use node_primitives::{Block, DigestItem, Signature};
 	use sc_client_api::BlockBackend;
@@ -790,8 +790,7 @@ mod tests {
 				let signature = raw_payload.using_encoded(|payload| signer.sign(payload));
 				let (function, extra, _) = raw_payload.deconstruct();
 				index += 1;
-				UncheckedExtrinsic::new_signed(function, from.into(), signature.into(), extra)
-					.into()
+				RuntimeExtrinsic::new_signed(function, from.into(), signature.into(), extra).into()
 			},
 		);
 	}

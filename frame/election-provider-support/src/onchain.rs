@@ -193,14 +193,14 @@ mod tests {
 	type BlockNumber = u64;
 
 	pub type Header = sp_runtime::generic::Header<BlockNumber, sp_runtime::traits::BlakeTwo256>;
-	pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<AccountId, (), (), ()>;
-	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
+	pub type RuntimeExtrinsic = sp_runtime::generic::RuntimeExtrinsic<AccountId, (), (), ()>;
+	pub type Block = sp_runtime::generic::Block<Header, RuntimeExtrinsic>;
 
 	frame_support::construct_runtime!(
 		pub enum Runtime where
 			Block = Block,
 			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic
+			RuntimeExtrinsic = RuntimeExtrinsic
 		{
 			System: frame_system::{Pallet, Call, Event<T>},
 		}

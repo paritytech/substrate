@@ -54,10 +54,10 @@
 //! ```
 //! # use sp_runtime::generic;
 //! # use frame_executive as executive;
-//! # pub struct UncheckedExtrinsic {};
+//! # pub struct RuntimeExtrinsic {};
 //! # pub struct Header {};
 //! # type Context = frame_system::ChainContext<Runtime>;
-//! # pub type Block = generic::Block<Header, UncheckedExtrinsic>;
+//! # pub type Block = generic::Block<Header, RuntimeExtrinsic>;
 //! # pub type Balances = u64;
 //! # pub type AllPalletsWithSystem = u64;
 //! # pub enum Runtime {};
@@ -85,10 +85,10 @@
 //! ```
 //! # use sp_runtime::generic;
 //! # use frame_executive as executive;
-//! # pub struct UncheckedExtrinsic {};
+//! # pub struct RuntimeExtrinsic {};
 //! # pub struct Header {};
 //! # type Context = frame_system::ChainContext<Runtime>;
-//! # pub type Block = generic::Block<Header, UncheckedExtrinsic>;
+//! # pub type Block = generic::Block<Header, RuntimeExtrinsic>;
 //! # pub type Balances = u64;
 //! # pub type AllPalletsWithSystem = u64;
 //! # pub enum Runtime {};
@@ -841,7 +841,7 @@ mod tests {
 		pub enum Runtime where
 			Block = TestBlock,
 			NodeBlock = TestBlock,
-			UncheckedExtrinsic = TestUncheckedExtrinsic
+			RuntimeExtrinsic = TestUncheckedExtrinsic
 		{
 			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 			Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
