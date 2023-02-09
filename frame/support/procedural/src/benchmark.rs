@@ -146,6 +146,7 @@ struct BenchmarkDef {
 	setup_stmts: Vec<Stmt>,
 	call_def: BenchmarkCallDef,
 	verify_stmts: Vec<Stmt>,
+	last_stmt: Stmt,
 	extra: bool,
 	skip_meta: bool,
 	fn_sig: Signature,
@@ -249,11 +250,17 @@ impl BenchmarkDef {
 			)),
 		};
 
+		if i >= item_fn.block.stmts.len() - 1 {
+			panic!("panic A");
+		}
+		let Some(last_stmt) = item_fn.block.stmts.last() else { return Err(Error::new(item_fn.block.span(), "panic B", )) };
+
 		Ok(BenchmarkDef {
 			params,
 			setup_stmts: Vec::from(&item_fn.block.stmts[0..i]),
 			call_def,
-			verify_stmts: Vec::from(&item_fn.block.stmts[(i + 1)..item_fn.block.stmts.len()]),
+			verify_stmts: Vec::from(&item_fn.block.stmts[(i + 1)..item_fn.block.stmts.len() - 1]),
+			last_stmt: last_stmt.clone(),
 			extra,
 			skip_meta,
 			fn_sig: item_fn.sig.clone(),
@@ -648,6 +655,7 @@ fn expand_benchmark(
 	let traits = quote!(#krate::frame_support::traits);
 	let setup_stmts = benchmark_def.setup_stmts;
 	let verify_stmts = benchmark_def.verify_stmts;
+	let last_stmt = benchmark_def.last_stmt;
 	let test_ident = Ident::new(format!("test_{}", name.to_string()).as_str(), Span::call_site());
 
 	// unroll params (prepare for quoting)
@@ -752,15 +760,18 @@ fn expand_benchmark(
 				#setup_stmts
 			)*
 			#pre_call
-			#(
-				#verify_stmts
-			)*
-			Ok(())
+			if verify {
+				#(
+					#verify_stmts
+				)*
+			}
+			#last_stmt
 		}
 	};
-
+	println!("last_stmt: {}", last_stmt.to_token_stream().to_string());
 	// generate final quoted tokens
 	let res = quote! {
+		// benchmark function def
 		#function_def
 
 		// compile-time assertions that each referenced param type implements ParamRange
@@ -807,7 +818,10 @@ fn expand_benchmark(
 							#verify_stmts
 						)*
 					}
-					Ok(())
+					match #last_stmt {
+						Ok(_) => Ok(()), // discard custom BenchmarkResult<T> type in this context
+						Err(err) => Err(err)
+					}
 				}))
 			}
 		}

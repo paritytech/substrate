@@ -273,5 +273,5 @@ pub mod v2 {
 		}
 	}
 
-	pub type BenchmarkResult = Result<(), BenchmarkError>;
+	pub type BenchmarkResult<T> = Result<T, BenchmarkError>;
 }
