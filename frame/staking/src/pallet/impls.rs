@@ -1476,9 +1476,11 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 		// nothing to do upon regenerate.
 		0
 	}
+	#[cfg(feature = "try-runtime")]
 	fn try_state() -> Result<(), &'static str> {
 		Ok(())
 	}
+
 	fn unsafe_clear() {
 		#[allow(deprecated)]
 		Validators::<T>::remove_all();
@@ -1550,6 +1552,8 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 		// nothing to do upon regenerate.
 		0
 	}
+
+	#[cfg(feature = "try-runtime")]
 	fn try_state() -> Result<(), &'static str> {
 		Ok(())
 	}
