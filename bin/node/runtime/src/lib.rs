@@ -2045,6 +2045,20 @@ impl_runtime_apis! {
 		}
 	}
 
+	impl pallet_assets_runtime_api::AssetsApi<
+		Block,
+		AccountId,
+		Balance,
+		u32,
+	> for Runtime
+	{
+		fn account_balances(instance: u8, account: AccountId) -> Vec<(u32, Balance)> {
+			match instance {
+				_ => Assets::account_balances(instance, account),
+			}
+		}
+	}
+
 	impl pallet_contracts::ContractsApi<Block, AccountId, Balance, BlockNumber, Hash> for Runtime
 	{
 		fn call(

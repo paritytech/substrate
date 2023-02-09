@@ -37,11 +37,14 @@ fn asset_ids() -> Vec<u32> {
 fn basic_minting_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 1, 1, true, 1));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
 		assert_eq!(Assets::balance(0, 1), 100);
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 2, 100));
 		assert_eq!(Assets::balance(0, 2), 100);
-		assert_eq!(asset_ids(), vec![0, 999]);
+		assert_eq!(asset_ids(), vec![0, 1, 999]);
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 1, 1, 100));
+		assert_eq!(Assets::account_balances(1), vec![(0, 100), (999, 100), (1, 100)]);
 	});
 }
 
