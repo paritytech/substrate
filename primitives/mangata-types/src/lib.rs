@@ -4,8 +4,8 @@ pub use sp_runtime::{
 	traits::{BlakeTwo256, IdentifyAccount, Verify},
 	MultiAddress, MultiSignature, OpaqueExtrinsic,
 };
-pub mod traits;
 pub mod assets;
+pub mod traits;
 
 pub type TokenId = u32;
 pub type Balance = u128;

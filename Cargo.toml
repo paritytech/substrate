@@ -159,6 +159,7 @@ members = [
 	"frame/tips",
 	"frame/uniques",
 	"frame/utility",
+	"frame/utility-mangata",
 	"frame/vesting",
 	"frame/whitelist",
 	"frame/vesting-mangata",
@@ -436,6 +437,7 @@ pallet-offences = { path = "../substrate/frame/offences" }
 pallet-nicks = { path = "../substrate/frame/nicks" }
 pallet-im-online = { path = "../substrate/frame/im-online" }
 pallet-utility = { path = "../substrate/frame/utility" }
+pallet-utility-mangata = { path = "../substrate/frame/utility-mangata" }
 pallet-sudo = { path = "../substrate/frame/sudo" }
 pallet-bags-list = { path = "../substrate/frame/bags-list" }
 frame-system = { path = "../substrate/frame/system" }
@@ -600,6 +602,7 @@ pallet-offences = { path = "../substrate/frame/offences" }
 pallet-nicks = { path = "../substrate/frame/nicks" }
 pallet-im-online = { path = "../substrate/frame/im-online" }
 pallet-utility = { path = "../substrate/frame/utility" }
+pallet-utility-mangata = { path = "../substrate/frame/utility-mangata" }
 pallet-sudo = { path = "../substrate/frame/sudo" }
 pallet-bags-list = { path = "../substrate/frame/bags-list" }
 frame-system = { path = "../substrate/frame/system" }
