@@ -256,8 +256,15 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<T::RuntimeOrigin, ()> {
-		let who = IndexToId::<T, I>::get(MIN_RANK, 0).ok_or(())?;
-		Ok(frame_system::RawOrigin::Signed(who).into())
+		match IndexToId::<T, I>::get(MIN_RANK, 0) {
+			Some(who) => Ok(frame_system::RawOrigin::Signed(who).into()),
+			None => {
+				let who: T::AccountId = frame_benchmarking::whitelisted_caller();
+				crate::Pallet::<T, I>::do_add_member_to_rank(who.clone(), MIN_RANK)
+					.expect("failed to add ranked member");
+				Ok(frame_system::RawOrigin::Signed(who).into())
+			},
+		}
 	}
 }
 
@@ -279,8 +286,15 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<T::RuntimeOrigin, ()> {
-		let who = IndexToId::<T, I>::get(MIN_RANK, 0).ok_or(())?;
-		Ok(frame_system::RawOrigin::Signed(who).into())
+		match IndexToId::<T, I>::get(MIN_RANK, 0) {
+			Some(who) => Ok(frame_system::RawOrigin::Signed(who).into()),
+			None => {
+				let who: T::AccountId = frame_benchmarking::whitelisted_caller();
+				crate::Pallet::<T, I>::do_add_member_to_rank(who.clone(), MIN_RANK)
+					.expect("failed to add ranked member");
+				Ok(frame_system::RawOrigin::Signed(who).into())
+			},
+		}
 	}
 }
 
@@ -302,8 +316,15 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<T::RuntimeOrigin, ()> {
-		let who = IndexToId::<T, I>::get(MIN_RANK, 0).ok_or(())?;
-		Ok(frame_system::RawOrigin::Signed(who).into())
+		match IndexToId::<T, I>::get(MIN_RANK, 0) {
+			Some(who) => Ok(frame_system::RawOrigin::Signed(who).into()),
+			None => {
+				let who: T::AccountId = frame_benchmarking::whitelisted_caller();
+				crate::Pallet::<T, I>::do_add_member_to_rank(who.clone(), MIN_RANK)
+					.expect("failed to add ranked member");
+				Ok(frame_system::RawOrigin::Signed(who).into())
+			},
+		}
 	}
 }
 
