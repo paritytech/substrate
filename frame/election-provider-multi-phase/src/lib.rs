@@ -1114,7 +1114,7 @@ pub mod pallet {
 		}
 
 		/// Rotates the round which results in setting the current phase to
-		/// `Phase::Off`.
+		/// `Phase::Off` and removes all the current solutions.
 		///
 		/// The dispatch origin for this call must be `ForceOrigin`.
 		#[pallet::call_index(5)]
@@ -1122,7 +1122,7 @@ pub mod pallet {
 		pub fn force_rotate_round(origin: OriginFor<T>) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
-			Self::rotate_round();
+			Self::do_force_rotate_round();
 
 			Ok(())
 		}
@@ -1134,11 +1134,11 @@ pub mod pallet {
 		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::on_initialize_open_signed())]
 		pub fn force_start_signed_phase(origin: OriginFor<T>) -> DispatchResult {
-			T::ForceOrigin::ensure_origin(origin)?;
+			T::ForceOrigin::ensure_origin(origin.clone())?;
 
 			// If the current phase is not `Phase::Off` proceed to the next round.
 			if !Self::current_phase().is_off() {
-				Self::rotate_round();
+				Self::do_force_rotate_round();
 			}
 
 			match Self::create_snapshot() {
@@ -1149,14 +1149,16 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Sets the current phase to `Phase::Emergency`
+		/// Sets the current phase to `Phase::Emergency` and removes the current
+		/// queued solution.
 		///
 		/// The dispatch origin for this call must be `ForceOrigin`.
 		#[pallet::call_index(8)]
-		#[pallet::weight(T::DbWeight::get().writes(1))]
+		#[pallet::weight(T::DbWeight::get().writes(2))]
 		pub fn force_start_emergency_phase(origin: OriginFor<T>) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
+			<QueuedSolution<T>>::kill();
 			<CurrentPhase<T>>::put(Phase::Emergency);
 			Ok(())
 		}
@@ -1404,6 +1406,16 @@ impl<T: Config> Pallet<T> {
 			},
 			_ => {},
 		}
+	}
+
+	/// Remove the current solutions and proceed to the following round.
+	fn do_force_rotate_round() {
+		if Self::current_phase().is_signed() {
+			Self::finalize_signed_phase();
+		}
+
+		<QueuedSolution<T>>::kill();
+		Self::rotate_round();
 	}
 
 	/// Phase transition helper.
