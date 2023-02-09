@@ -26,7 +26,7 @@ use ark_ec::{
 	pairing::{MillerLoopOutput, Pairing},
 	short_weierstrass::SWCurveConfig,
 };
-use ark_serialize::{CanonicalSerialize, CanonicalDeserialize, Compress, Validate};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use ark_std::io::Cursor;
 use sp_std::vec::Vec;
 
@@ -36,11 +36,7 @@ pub fn multi_miller_loop(a_vec: Vec<Vec<u8>>, b_vec: Vec<Vec<u8>>) -> Vec<u8> {
 		.iter()
 		.map(|a| {
 			let cursor = Cursor::new(a);
-			<Bls12_381 as Pairing>::G1Affine::deserialize_with_mode(
-				cursor,
-				Compress::Yes,
-				Validate::No,
-			)
+			<ark_ec::short_weierstrass::Affine<ark_bls12_381::g1::Config> as CanonicalDeserialize>::deserialize_uncompressed(cursor)
 			.map(<Bls12_381 as Pairing>::G1Prepared::from)
 			.unwrap()
 		})
@@ -49,11 +45,7 @@ pub fn multi_miller_loop(a_vec: Vec<Vec<u8>>, b_vec: Vec<Vec<u8>>) -> Vec<u8> {
 		.iter()
 		.map(|b| {
 			let cursor = Cursor::new(b);
-			<Bls12_381 as Pairing>::G2Affine::deserialize_with_mode(
-				cursor,
-				Compress::Yes,
-				Validate::No,
-			)
+			<ark_ec::short_weierstrass::Affine<ark_bls12_381::g2::Config> as CanonicalDeserialize>::deserialize_uncompressed(cursor)
 			.map(<Bls12_381 as Pairing>::G2Prepared::from)
 			.unwrap()
 		})
