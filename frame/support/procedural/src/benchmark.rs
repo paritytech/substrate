@@ -25,12 +25,13 @@ use quote::{quote, quote_spanned, ToTokens};
 use syn::{
 	parenthesized,
 	parse::{Nothing, ParseStream},
+	parse_quote,
 	punctuated::Punctuated,
 	spanned::Spanned,
 	token::{Colon2, Comma, Gt, Lt, Paren},
-	Attribute, Error, Expr, ExprBlock, ExprCall, ExprPath, FnArg, Generics, Item, ItemFn, ItemMod,
-	LitInt, Pat, Path, PathArguments, PathSegment, Result, Signature, Stmt, Token, Type,
-	Visibility, WhereClause,
+	Attribute, Error, Expr, ExprBlock, ExprCall, ExprPath, FnArg, Item, ItemFn, ItemMod, LitInt,
+	Pat, Path, PathArguments, PathSegment, Result, Signature, Stmt, Token, Type, Visibility,
+	WhereClause,
 };
 
 mod keywords {
@@ -747,12 +748,17 @@ fn expand_benchmark(
 		true => quote!(),
 		false => quote!(where #where_clause),
 	};
-	let fn_generics = quote!(<#type_impl_generics> #fn_generics_where);
 
-	// proof: must parse correctly as a Generics because we formulate it in the quote above; QED
-	sig.generics = syn::parse2::<Generics>(fn_generics).unwrap();
+	// modify signature generics, ident, and inputs, e.g:
+	// before: `fn bench(u: Linear<1, 100>) -> BenchmarkResult<()>`
+	// after: `fn _bench <T: Config<I>, I: 'static>(u: u32, verify: bool) -> BenchmarkResult<()>`
+	sig.generics = parse_quote!(<#type_impl_generics> #fn_generics_where);
 	sig.ident =
 		Ident::new(format!("_{}", name.to_token_stream().to_string()).as_str(), Span::call_site());
+	let mut fn_param_inputs: Vec<TokenStream2> =
+		param_names.iter().map(|name| quote!(#name: u32)).collect();
+	fn_param_inputs.push(quote!(verify: bool));
+	sig.inputs = parse_quote!(#(#fn_param_inputs),*);
 
 	let function_def = quote! {
 		#vis #sig {
@@ -768,7 +774,7 @@ fn expand_benchmark(
 			#last_stmt
 		}
 	};
-	println!("last_stmt: {}", last_stmt.to_token_stream().to_string());
+
 	// generate final quoted tokens
 	let res = quote! {
 		// benchmark function def
