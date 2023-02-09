@@ -99,7 +99,7 @@ impl NetworkServiceHandle {
 impl NetworkServiceProvider {
 	/// Create new `NetworkServiceProvider`
 	pub fn new() -> (Self, NetworkServiceHandle) {
-		let (tx, rx) = tracing_unbounded("mpsc_network_service_provider");
+		let (tx, rx) = tracing_unbounded("mpsc_network_service_provider", 100_000);
 
 		(Self { rx }, NetworkServiceHandle::new(tx))
 	}

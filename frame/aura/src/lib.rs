@@ -58,6 +58,8 @@ mod tests;
 
 pub use pallet::*;
 
+const LOG_TARGET: &str = "runtime::aura";
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -151,7 +153,15 @@ impl<T: Config> Pallet<T> {
 	///
 	/// The storage will be applied immediately.
 	/// And aura consensus log will be appended to block's log.
+	///
+	/// This is a no-op if `new` is empty.
 	pub fn change_authorities(new: BoundedVec<T::AuthorityId, T::MaxAuthorities>) {
+		if new.is_empty() {
+			log::warn!(target: LOG_TARGET, "Ignoring empty authority change.");
+
+			return
+		}
+
 		<Authorities<T>>::put(&new);
 
 		let log = DigestItem::Consensus(
@@ -222,7 +232,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 			if last_authorities != next_authorities {
 				if next_authorities.len() as u32 > T::MaxAuthorities::get() {
 					log::warn!(
-						target: "runtime::aura",
+						target: LOG_TARGET,
 						"next authorities list larger than {}, truncating",
 						T::MaxAuthorities::get(),
 					);

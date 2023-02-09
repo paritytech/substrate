@@ -29,10 +29,7 @@ use futures::{
 use jsonrpsee::SubscriptionSink;
 use sc_client_api::{BlockBackend, BlockchainEvents};
 use sp_blockchain::HeaderBackend;
-use sp_runtime::{
-	generic::{BlockId, SignedBlock},
-	traits::Block as BlockT,
-};
+use sp_runtime::{generic::SignedBlock, traits::Block as BlockT};
 
 /// Blockchain API backend for full nodes. Reads all the data from local database.
 pub struct FullChain<Block: BlockT, Client> {
@@ -62,11 +59,11 @@ where
 	}
 
 	fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, Error> {
-		self.client.header(BlockId::Hash(self.unwrap_or_best(hash))).map_err(client_err)
+		self.client.header(self.unwrap_or_best(hash)).map_err(client_err)
 	}
 
 	fn block(&self, hash: Option<Block::Hash>) -> Result<Option<SignedBlock<Block>>, Error> {
-		self.client.block(&BlockId::Hash(self.unwrap_or_best(hash))).map_err(client_err)
+		self.client.block(self.unwrap_or_best(hash)).map_err(client_err)
 	}
 
 	fn subscribe_all_heads(&self, sink: SubscriptionSink) {
@@ -130,7 +127,7 @@ fn subscribe_headers<Block, Client, F, G, S>(
 {
 	// send current head right at the start.
 	let maybe_header = client
-		.header(BlockId::Hash(best_block_hash()))
+		.header(best_block_hash())
 		.map_err(client_err)
 		.and_then(|header| header.ok_or_else(|| Error::Other("Best header missing.".into())))
 		.map_err(|e| log::warn!("Best header error {:?}", e))

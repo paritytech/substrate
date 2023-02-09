@@ -23,12 +23,13 @@ use sp_std::prelude::*;
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Decode + Sized>(key: &[u8]) -> Option<T> {
 	sp_io::storage::get(key).and_then(|val| {
-		Decode::decode(&mut &val[..]).map(Some).unwrap_or_else(|_| {
+		Decode::decode(&mut &val[..]).map(Some).unwrap_or_else(|e| {
 			// TODO #3700: error should be handleable.
 			log::error!(
 				target: "runtime::storage",
-				"Corrupted state at {:?}",
+				"Corrupted state at `{:?}: {:?}`",
 				key,
+				e,
 			);
 			None
 		})
@@ -151,6 +152,16 @@ pub fn clear_prefix(
 		SomeRemaining(i) => (Some(prefix.to_vec()), i),
 	};
 	MultiRemovalResults { maybe_cursor, backend: i, unique: i, loops: i }
+}
+
+/// Returns `true` if the storage contains any key, which starts with a certain prefix,
+/// and is longer than said prefix.
+/// This means that a key which equals the prefix will not be counted.
+pub fn contains_prefixed_key(prefix: &[u8]) -> bool {
+	match sp_io::storage::next_key(prefix) {
+		Some(key) => key.starts_with(prefix),
+		None => false,
+	}
 }
 
 /// Get a Vec of bytes from storage.

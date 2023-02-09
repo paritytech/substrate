@@ -379,14 +379,15 @@ fn find_package_by_manifest_path<'a>(
 	if let Some(pkg) = crate_metadata.packages.iter().find(|p| p.manifest_path == manifest_path) {
 		return pkg
 	}
+
 	let pkgs_by_name = crate_metadata
 		.packages
 		.iter()
 		.filter(|p| p.name == pkg_name)
 		.collect::<Vec<_>>();
-	let mut pkgs = pkgs_by_name.iter();
-	if let Some(pkg) = pkgs.next() {
-		if pkgs.next().is_some() {
+
+	if let Some(pkg) = pkgs_by_name.first() {
+		if pkgs_by_name.len() > 1 {
 			panic!(
 				"Found multiple packages matching the name {pkg_name} ({manifest_path:?}): {:?}",
 				pkgs_by_name
@@ -395,7 +396,7 @@ fn find_package_by_manifest_path<'a>(
 			return pkg
 		}
 	} else {
-		panic!("Failed to find entry for package {pkg_name} ({manifest_path:?})");
+		panic!("Failed to find entry for package {pkg_name} ({manifest_path:?}).");
 	}
 }
 

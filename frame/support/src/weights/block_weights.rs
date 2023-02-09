@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) 2023 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,7 +16,7 @@
 // limitations under the License.
 
 //! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION 4.0.0-dev
-//! DATE: 2022-11-07 (Y/M/D)
+//! DATE: 2023-01-25 (Y/M/D)
 //! HOSTNAME: `bm2`, CPU: `Intel(R) Core(TM) i7-7700K CPU @ 4.20GHz`
 //!
 //! SHORT-NAME: `block`, LONG-NAME: `BlockExecution`, RUNTIME: `Development`
@@ -37,23 +37,24 @@
 //   --repeat=100
 
 use sp_core::parameter_types;
-use sp_weights::{constants::WEIGHT_PER_NANOS, Weight};
+use sp_weights::{constants::WEIGHT_REF_TIME_PER_NANOS, Weight};
 
 parameter_types! {
 	/// Time to execute an empty block.
 	/// Calculated by multiplying the *Average* with `1.0` and adding `0`.
 	///
 	/// Stats nanoseconds:
-	///   Min, Max: 351_000, 392_617
-	///   Average:  358_523
-	///   Median:   359_836
-	///   Std-Dev:  6698.67
+	///   Min, Max: 377_722, 414_752
+	///   Average:  381_015
+	///   Median:   379_751
+	///   Std-Dev:  5462.64
 	///
 	/// Percentiles nanoseconds:
-	///   99th: 390_723
-	///   95th: 365_799
-	///   75th: 361_582
-	pub const BlockExecutionWeight: Weight = WEIGHT_PER_NANOS.saturating_mul(358_523);
+	///   99th: 413_074
+	///   95th: 384_876
+	///   75th: 380_642
+	pub const BlockExecutionWeight: Weight =
+		Weight::from_ref_time(WEIGHT_REF_TIME_PER_NANOS.saturating_mul(381_015));
 }
 
 #[cfg(test)]
@@ -69,12 +70,12 @@ mod test_weights {
 
 		// At least 100 µs.
 		assert!(
-			w.ref_time() >= 100u64 * constants::WEIGHT_PER_MICROS.ref_time(),
+			w.ref_time() >= 100u64 * constants::WEIGHT_REF_TIME_PER_MICROS,
 			"Weight should be at least 100 µs."
 		);
 		// At most 50 ms.
 		assert!(
-			w.ref_time() <= 50u64 * constants::WEIGHT_PER_MILLIS.ref_time(),
+			w.ref_time() <= 50u64 * constants::WEIGHT_REF_TIME_PER_MILLIS,
 			"Weight should be at most 50 ms."
 		);
 	}

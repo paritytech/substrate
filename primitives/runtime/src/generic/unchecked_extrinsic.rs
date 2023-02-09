@@ -149,6 +149,22 @@ where
 			None => CheckedExtrinsic { signed: None, function: self.function },
 		})
 	}
+
+	#[cfg(feature = "try-runtime")]
+	fn unchecked_into_checked_i_know_what_i_am_doing(
+		self,
+		lookup: &Lookup,
+	) -> Result<Self::Checked, TransactionValidityError> {
+		Ok(match self.signature {
+			Some((signed, _, extra)) => {
+				let signed = lookup.lookup(signed)?;
+				let raw_payload = SignedPayload::new(self.function, extra)?;
+				let (function, extra, _) = raw_payload.deconstruct();
+				CheckedExtrinsic { signed: Some((signed, extra)), function }
+			},
+			None => CheckedExtrinsic { signed: None, function: self.function },
+		})
+	}
 }
 
 impl<Address, Call, Signature, Extra> ExtrinsicMetadata

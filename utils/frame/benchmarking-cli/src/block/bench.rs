@@ -18,7 +18,7 @@
 //! Contains the core benchmarking logic.
 
 use codec::DecodeAll;
-use frame_support::weights::constants::WEIGHT_PER_NANOS;
+use frame_support::weights::constants::WEIGHT_REF_TIME_PER_NANOS;
 use frame_system::ConsumedWeight;
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sc_cli::{Error, Result};
@@ -94,9 +94,9 @@ where
 			let block_num = BlockId::Number(i.into());
 			let parent_num = BlockId::Number(((i - 1) as u32).into());
 			let consumed = self.consumed_weight(&block_num)?;
+			let hash = self.client.expect_block_hash_from_id(&block_num)?;
 
-			let block =
-				self.client.block(&block_num)?.ok_or(format!("Block {} not found", block_num))?;
+			let block = self.client.block(hash)?.ok_or(format!("Block {} not found", block_num))?;
 			let block = self.unsealed(block.block);
 			let took = self.measure_block(&block, &parent_num)?;
 
@@ -148,7 +148,7 @@ where
 
 		let weight = ConsumedWeight::decode_all(&mut raw_weight)?;
 		// Should be divisible, but still use floats in case we ever change that.
-		Ok((weight.total().ref_time() as f64 / WEIGHT_PER_NANOS.ref_time() as f64).floor()
+		Ok((weight.total().ref_time() as f64 / WEIGHT_REF_TIME_PER_NANOS as f64).floor()
 			as NanoSeconds)
 	}
 

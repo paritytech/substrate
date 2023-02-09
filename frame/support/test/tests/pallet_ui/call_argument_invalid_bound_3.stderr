@@ -1,8 +1,8 @@
 error[E0277]: `Bar` doesn't implement `std::fmt::Debug`
-  --> tests/pallet_ui/call_argument_invalid_bound_3.rs:22:36
+  --> tests/pallet_ui/call_argument_invalid_bound_3.rs:23:36
    |
-22 |         pub fn foo(origin: OriginFor<T>, bar: Bar) -> DispatchResultWithPostInfo {
-   |                                          ^^^ `Bar` cannot be formatted using `{:?}`
+23 |         pub fn foo(origin: OriginFor<T>, _bar: Bar) -> DispatchResultWithPostInfo {
+   |                                          ^^^^ `Bar` cannot be formatted using `{:?}`
    |
    = help: the trait `std::fmt::Debug` is not implemented for `Bar`
    = note: add `#[derive(Debug)]` to `Bar` or manually `impl std::fmt::Debug for Bar`

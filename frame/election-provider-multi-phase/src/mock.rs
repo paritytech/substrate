@@ -239,7 +239,7 @@ parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 	pub BlockWeights: frame_system::limits::BlockWeights = frame_system::limits::BlockWeights
 		::with_sensible_defaults(
-			Weight::from_parts(2u64 * constants::WEIGHT_PER_SECOND.ref_time(), u64::MAX),
+			Weight::from_parts(2u64 * constants::WEIGHT_REF_TIME_PER_SECOND, u64::MAX),
 			NORMAL_DISPATCH_RATIO,
 		);
 }

@@ -143,7 +143,7 @@ impl core::Benchmark for ConstructionBenchmark {
 			proposer_factory.init(
 				&context
 					.client
-					.header(&BlockId::number(0))
+					.header(context.client.chain_info().genesis_hash)
 					.expect("Database error querying block #0")
 					.expect("Block #0 should exist"),
 			),

@@ -239,9 +239,9 @@ pub(crate) fn compute_slash<T: Config>(
 		return None
 	}
 
-	let (prior_slash_p, _era_slash) =
+	let prior_slash_p =
 		<Pallet<T> as Store>::ValidatorSlashInEra::get(&params.slash_era, params.stash)
-			.unwrap_or((Perbill::zero(), Zero::zero()));
+			.map_or(Zero::zero(), |(prior_slash_proportion, _)| prior_slash_proportion);
 
 	// compare slash proportions rather than slash values to avoid issues due to rounding
 	// error.
@@ -390,9 +390,7 @@ fn slash_nominators<T: Config>(
 			let mut era_slash =
 				<Pallet<T> as Store>::NominatorSlashInEra::get(&params.slash_era, stash)
 					.unwrap_or_else(Zero::zero);
-
 			era_slash += own_slash_difference;
-
 			<Pallet<T> as Store>::NominatorSlashInEra::insert(&params.slash_era, stash, &era_slash);
 
 			era_slash
@@ -411,12 +409,10 @@ fn slash_nominators<T: Config>(
 			let target_span = spans.compare_and_update_span_slash(params.slash_era, era_slash);
 
 			if target_span == Some(spans.span_index()) {
-				// End the span, but don't chill the nominator. its nomination
-				// on this validator will be ignored in the future.
+				// end the span, but don't chill the nominator.
 				spans.end_span(params.now);
 			}
 		}
-
 		nominators_slashed.push((stash.clone(), nom_slashed));
 	}
 

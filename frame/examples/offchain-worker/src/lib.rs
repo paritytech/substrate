@@ -229,6 +229,7 @@ pub mod pallet {
 		/// working and receives (and provides) meaningful data.
 		/// This example is not focused on correctness of the oracle itself, but rather its
 		/// purpose is to showcase offchain worker capabilities.
+		#[pallet::call_index(0)]
 		#[pallet::weight(0)]
 		pub fn submit_price(origin: OriginFor<T>, price: u32) -> DispatchResultWithPostInfo {
 			// Retrieve sender of the transaction.
@@ -254,6 +255,7 @@ pub mod pallet {
 		///
 		/// This example is not focused on correctness of the oracle itself, but rather its
 		/// purpose is to showcase offchain worker capabilities.
+		#[pallet::call_index(1)]
 		#[pallet::weight(0)]
 		pub fn submit_price_unsigned(
 			origin: OriginFor<T>,
@@ -270,6 +272,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		#[pallet::call_index(2)]
 		#[pallet::weight(0)]
 		pub fn submit_price_unsigned_with_signed_payload(
 			origin: OriginFor<T>,
@@ -407,15 +410,14 @@ impl<T: Config> Pallet<T> {
 		match res {
 			// The value has been set correctly, which means we can safely send a transaction now.
 			Ok(block_number) => {
-				// Depending if the block is even or odd we will send a `Signed` or `Unsigned`
-				// transaction.
+				// We will send different transactions based on a random number.
 				// Note that this logic doesn't really guarantee that the transactions will be sent
 				// in an alternating fashion (i.e. fairly distributed). Depending on the execution
 				// order and lock acquisition, we may end up for instance sending two `Signed`
 				// transactions in a row. If a strict order is desired, it's better to use
 				// the storage entry for that. (for instance store both block number and a flag
 				// indicating the type of next transaction to send).
-				let transaction_type = block_number % 3u32.into();
+				let transaction_type = block_number % 4u32.into();
 				if transaction_type == Zero::zero() {
 					TransactionType::Signed
 				} else if transaction_type == T::BlockNumber::from(1u32) {

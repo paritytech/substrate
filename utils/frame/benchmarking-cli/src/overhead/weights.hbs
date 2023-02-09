@@ -14,7 +14,7 @@
 {{/each}}
 
 use sp_core::parameter_types;
-use sp_weights::{constants::WEIGHT_PER_NANOS, Weight};
+use sp_weights::{constants::WEIGHT_REF_TIME_PER_NANOS, Weight};
 
 parameter_types! {
 	{{#if (eq short_name "block")}}
@@ -34,7 +34,8 @@ parameter_types! {
 	///   99th: {{underscore stats.p99}}
 	///   95th: {{underscore stats.p95}}
 	///   75th: {{underscore stats.p75}}
-	pub const {{long_name}}Weight: Weight = WEIGHT_PER_NANOS.saturating_mul({{underscore weight}});
+	pub const {{long_name}}Weight: Weight =
+		Weight::from_ref_time(WEIGHT_REF_TIME_PER_NANOS.saturating_mul({{underscore weight}}));
 }
 
 #[cfg(test)]
@@ -51,23 +52,23 @@ mod test_weights {
 		{{#if (eq short_name "block")}}
 		// At least 100 µs.
 		assert!(
-			w.ref_time() >= 100u64 * constants::WEIGHT_PER_MICROS.ref_time(),
+			w.ref_time() >= 100u64 * constants::WEIGHT_REF_TIME_PER_MICROS,
 			"Weight should be at least 100 µs."
 		);
 		// At most 50 ms.
 		assert!(
-			w.ref_time() <= 50u64 * constants::WEIGHT_PER_MILLIS.ref_time(),
+			w.ref_time() <= 50u64 * constants::WEIGHT_REF_TIME_PER_MILLIS,
 			"Weight should be at most 50 ms."
 		);
 		{{else}}
 		// At least 10 µs.
 		assert!(
-			w.ref_time() >= 10u64 * constants::WEIGHT_PER_MICROS.ref_time(),
+			w.ref_time() >= 10u64 * constants::WEIGHT_REF_TIME_PER_MICROS,
 			"Weight should be at least 10 µs."
 		);
 		// At most 1 ms.
 		assert!(
-			w.ref_time() <= constants::WEIGHT_PER_MILLIS.ref_time(),
+			w.ref_time() <= constants::WEIGHT_REF_TIME_PER_MILLIS,
 			"Weight should be at most 1 ms."
 		);
 		{{/if}}

@@ -16,13 +16,6 @@
 // limitations under the License.
 
 //! # Primitives for transaction weighting.
-//!
-//! Latest machine specification used to benchmark are:
-//! - Digital Ocean: ubuntu-s-2vcpu-4gb-ams3-01
-//! - 2x Intel(R) Xeon(R) CPU E5-2650 v4 @ 2.20GHz
-//! - 4GB RAM
-//! - Ubuntu 19.10 (GNU/Linux 5.3.0-18-generic x86_64)
-//! - rustc 1.42.0 (b8cedc004 2020-03-09)
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -47,12 +40,13 @@ pub use weight_meter::*;
 pub use weight_v2::*;
 
 pub mod constants {
-	use super::Weight;
+	pub const WEIGHT_REF_TIME_PER_SECOND: u64 = 1_000_000_000_000;
+	pub const WEIGHT_REF_TIME_PER_MILLIS: u64 = 1_000_000_000;
+	pub const WEIGHT_REF_TIME_PER_MICROS: u64 = 1_000_000;
+	pub const WEIGHT_REF_TIME_PER_NANOS: u64 = 1_000;
 
-	pub const WEIGHT_PER_SECOND: Weight = Weight::from_ref_time(1_000_000_000_000);
-	pub const WEIGHT_PER_MILLIS: Weight = Weight::from_ref_time(1_000_000_000);
-	pub const WEIGHT_PER_MICROS: Weight = Weight::from_ref_time(1_000_000);
-	pub const WEIGHT_PER_NANOS: Weight = Weight::from_ref_time(1_000);
+	pub const WEIGHT_PROOF_SIZE_PER_MB: u64 = 1024 * 1024;
+	pub const WEIGHT_PROOF_SIZE_PER_KB: u64 = 1024;
 }
 
 /// The old weight type.

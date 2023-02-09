@@ -40,7 +40,6 @@ use libp2p::{
 	multiaddr, Multiaddr,
 };
 use prometheus_endpoint::Registry;
-use sc_consensus::ImportQueue;
 use sc_network_common::{
 	config::{MultiaddrWithPeerId, NonDefaultSetConfig, SetConfig, TransportConfig},
 	sync::ChainSync,
@@ -81,12 +80,6 @@ where
 	/// Fork ID to distinguish protocols of different hard forks. Part of the standard protocol
 	/// name on the wire.
 	pub fork_id: Option<String>,
-
-	/// Import queue to use.
-	///
-	/// The import queue is the component that verifies that blocks received from other nodes are
-	/// valid.
-	pub import_queue: Box<dyn ImportQueue<B>>,
 
 	/// Instance of chain sync implementation.
 	pub chain_sync: Box<dyn ChainSync<B>>,
@@ -230,7 +223,7 @@ impl NetworkConfiguration {
 			extra_sets: Vec::new(),
 			client_version: client_version.into(),
 			node_name: node_name.into(),
-			transport: TransportConfig::Normal { enable_mdns: false, allow_private_ipv4: true },
+			transport: TransportConfig::Normal { enable_mdns: false, allow_private_ip: true },
 			max_parallel_downloads: 5,
 			sync_mode: SyncMode::Full,
 			enable_dht_random_walk: true,

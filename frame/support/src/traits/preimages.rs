@@ -26,6 +26,9 @@ use sp_std::borrow::Cow;
 pub type Hash = H256;
 pub type BoundedInline = crate::BoundedVec<u8, ConstU32<128>>;
 
+/// The maximum we expect a single legacy hash lookup to be.
+const MAX_LEGACY_LEN: u32 = 1_000_000;
+
 #[derive(
 	Encode, Decode, MaxEncodedLen, Clone, Eq, PartialEq, scale_info::TypeInfo, RuntimeDebug,
 )]
@@ -67,20 +70,25 @@ impl<T> Bounded<T> {
 	/// Returns the hash of the preimage.
 	///
 	/// The hash is re-calculated every time if the preimage is inlined.
-	pub fn hash(&self) -> H256 {
+	pub fn hash(&self) -> Hash {
 		use Bounded::*;
 		match self {
-			Legacy { hash, .. } => *hash,
+			Lookup { hash, .. } | Legacy { hash, .. } => *hash,
 			Inline(x) => blake2_256(x.as_ref()).into(),
-			Lookup { hash, .. } => *hash,
 		}
 	}
-}
 
-// The maximum we expect a single legacy hash lookup to be.
-const MAX_LEGACY_LEN: u32 = 1_000_000;
+	/// Returns the hash to lookup the preimage.
+	///
+	/// If this is a `Bounded::Inline`, `None` is returned as no lookup is required.
+	pub fn lookup_hash(&self) -> Option<Hash> {
+		use Bounded::*;
+		match self {
+			Lookup { hash, .. } | Legacy { hash, .. } => Some(*hash),
+			Inline(_) => None,
+		}
+	}
 
-impl<T> Bounded<T> {
 	/// Returns the length of the preimage or `None` if the length is unknown.
 	pub fn len(&self) -> Option<u32> {
 		match self {
@@ -168,8 +176,11 @@ pub trait QueryPreimage {
 		}
 	}
 
-	/// Create a `Bounded` instance based on the `hash` and `len` of the encoded value. This may not
-	/// be `peek`-able or `realize`-able.
+	/// Create a `Bounded` instance based on the `hash` and `len` of the encoded value.
+	///
+	/// It also directly requests the given `hash` using [`Self::request`].
+	///
+	/// This may not be `peek`-able or `realize`-able.
 	fn pick<T>(hash: Hash, len: u32) -> Bounded<T> {
 		Self::request(&hash);
 		Bounded::Lookup { hash, len }
@@ -228,10 +239,12 @@ pub trait StorePreimage: QueryPreimage {
 		Self::unrequest(hash)
 	}
 
-	/// Convert an otherwise unbounded or large value into a type ready for placing in storage. The
-	/// result is a type whose `MaxEncodedLen` is 131 bytes.
+	/// Convert an otherwise unbounded or large value into a type ready for placing in storage.
+	///
+	/// The result is a type whose `MaxEncodedLen` is 131 bytes.
 	///
 	/// NOTE: Once this API is used, you should use either `drop` or `realize`.
+	/// The value is also noted using [`Self::note`].
 	fn bound<T: Encode>(t: T) -> Result<Bounded<T>, DispatchError> {
 		let data = t.encode();
 		let len = data.len() as u32;

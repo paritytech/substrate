@@ -119,6 +119,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::whitelist_call())]
 		pub fn whitelist_call(origin: OriginFor<T>, call_hash: PreimageHash) -> DispatchResult {
 			T::WhitelistOrigin::ensure_origin(origin)?;
@@ -136,6 +137,7 @@ pub mod pallet {
 			Ok(())
 		}
 
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::remove_whitelisted_call())]
 		pub fn remove_whitelisted_call(
 			origin: OriginFor<T>,
@@ -152,6 +154,7 @@ pub mod pallet {
 			Ok(())
 		}
 
+		#[pallet::call_index(2)]
 		#[pallet::weight(
 			T::WeightInfo::dispatch_whitelisted_call(*call_encoded_len)
 				.saturating_add(*call_weight_witness)
@@ -190,6 +193,7 @@ pub mod pallet {
 			Ok(actual_weight.into())
 		}
 
+		#[pallet::call_index(3)]
 		#[pallet::weight({
 			let call_weight = call.get_dispatch_info().weight;
 			let call_len = call.encoded_size() as u32;

@@ -21,10 +21,7 @@
 use sc_client_api::backend;
 use sp_blockchain::{Backend, HeaderBackend};
 use sp_consensus::{Error as ConsensusError, SelectChain};
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, NumberFor},
-};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{marker::PhantomData, sync::Arc};
 
 /// Implement Longest Chain Select implementation
@@ -63,7 +60,7 @@ where
 		Ok(self
 			.backend
 			.blockchain()
-			.header(BlockId::Hash(best_hash))?
+			.header(best_hash)?
 			.expect("given block hash was fetched from block in db; qed"))
 	}
 

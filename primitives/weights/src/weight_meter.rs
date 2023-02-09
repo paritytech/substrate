@@ -71,6 +71,12 @@ impl WeightMeter {
 		time.max(pov)
 	}
 
+	/// Consume some weight and defensively fail if it is over the limit. Saturate in any case.
+	pub fn defensive_saturating_accrue(&mut self, w: Weight) {
+		self.consumed.saturating_accrue(w);
+		debug_assert!(self.consumed.all_lte(self.limit), "Weight counter overflow");
+	}
+
 	/// Consume the given weight after checking that it can be consumed. Otherwise do nothing.
 	pub fn check_accrue(&mut self, w: Weight) -> bool {
 		self.consumed.checked_add(&w).map_or(false, |test| {

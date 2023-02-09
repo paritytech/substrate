@@ -22,7 +22,8 @@ use crate::{
 	config::{Configuration, KeystoreConfig, PrometheusConfig},
 	error::Error,
 	metrics::MetricsService,
-	start_rpc_servers, RpcHandlers, SpawnTaskHandle, TaskManager, TransactionPoolAdapter,
+	start_rpc_servers, BuildGenesisBlock, GenesisBlockBuilder, RpcHandlers, SpawnTaskHandle,
+	TaskManager, TransactionPoolAdapter,
 };
 use futures::{channel::oneshot, future::ready, FutureExt, StreamExt};
 use jsonrpsee::RpcModule;
@@ -58,7 +59,7 @@ use sc_rpc::{
 	system::SystemApiServer,
 	DenyUnsafe, SubscriptionTaskExecutor,
 };
-use sc_rpc_spec_v2::transaction::TransactionApiServer;
+use sc_rpc_spec_v2::{chain_head::ChainHeadApiServer, transaction::TransactionApiServer};
 use sc_telemetry::{telemetry, ConnectionMessage, Telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sc_transaction_pool_api::MaintainedTransactionPool;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
@@ -69,11 +70,7 @@ use sp_consensus::block_validation::{
 };
 use sp_core::traits::{CodeExecutor, SpawnNamed};
 use sp_keystore::{CryptoStore, SyncCryptoStore, SyncCryptoStorePtr};
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, BlockIdTo, NumberFor, Zero},
-	BuildStorage,
-};
+use sp_runtime::traits::{Block as BlockT, BlockIdTo, NumberFor, Zero};
 use std::{str::FromStr, sync::Arc, time::SystemTime};
 
 /// Full client type.
@@ -182,7 +179,7 @@ where
 	new_full_parts(config, telemetry, executor).map(|parts| parts.0)
 }
 
-/// Create the initial parts of a full node.
+/// Create the initial parts of a full node with the default genesis block builder.
 pub fn new_full_parts<TBl, TRtApi, TExec>(
 	config: &Configuration,
 	telemetry: Option<TelemetryHandle>,
@@ -191,6 +188,34 @@ pub fn new_full_parts<TBl, TRtApi, TExec>(
 where
 	TBl: BlockT,
 	TExec: CodeExecutor + RuntimeVersionOf + Clone,
+{
+	let backend = new_db_backend(config.db_config())?;
+
+	let genesis_block_builder = GenesisBlockBuilder::new(
+		config.chain_spec.as_storage_builder(),
+		!config.no_genesis(),
+		backend.clone(),
+		executor.clone(),
+	)?;
+
+	new_full_parts_with_genesis_builder(config, telemetry, executor, backend, genesis_block_builder)
+}
+
+/// Create the initial parts of a full node.
+pub fn new_full_parts_with_genesis_builder<TBl, TRtApi, TExec, TBuildGenesisBlock>(
+	config: &Configuration,
+	telemetry: Option<TelemetryHandle>,
+	executor: TExec,
+	backend: Arc<TFullBackend<TBl>>,
+	genesis_block_builder: TBuildGenesisBlock,
+) -> Result<TFullParts<TBl, TRtApi, TExec>, Error>
+where
+	TBl: BlockT,
+	TExec: CodeExecutor + RuntimeVersionOf + Clone,
+	TBuildGenesisBlock: BuildGenesisBlock<
+		TBl,
+		BlockImportOperation = <Backend<TBl> as sc_client_api::backend::Backend<TBl>>::BlockImportOperation
+	>,
 {
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 
@@ -208,16 +233,7 @@ where
 		.cloned()
 		.unwrap_or_default();
 
-	let (client, backend) = {
-		let db_config = sc_client_db::DatabaseSettings {
-			trie_cache_maximum_size: config.trie_cache_maximum_size,
-			state_pruning: config.state_pruning.clone(),
-			source: config.database.clone(),
-			blocks_pruning: config.blocks_pruning,
-		};
-
-		let backend = new_db_backend(db_config)?;
-
+	let client = {
 		let extensions = sc_client_api::execution_extensions::ExecutionExtensions::new(
 			config.execution_strategies.clone(),
 			Some(keystore_container.sync_keystore()),
@@ -244,7 +260,7 @@ where
 		let client = new_client(
 			backend.clone(),
 			executor,
-			chain_spec.as_storage_builder(),
+			genesis_block_builder,
 			fork_blocks,
 			bad_blocks,
 			extensions,
@@ -263,7 +279,7 @@ where
 			},
 		)?;
 
-		(client, backend)
+		client
 	};
 
 	Ok((client, backend, keystore_container, task_manager))
@@ -282,10 +298,10 @@ where
 }
 
 /// Create an instance of client backed by given backend.
-pub fn new_client<E, Block, RA>(
+pub fn new_client<E, Block, RA, G>(
 	backend: Arc<Backend<Block>>,
 	executor: E,
-	genesis_storage: &dyn BuildStorage,
+	genesis_block_builder: G,
 	fork_blocks: ForkBlocks<Block>,
 	bad_blocks: BadBlocks<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
@@ -305,18 +321,24 @@ pub fn new_client<E, Block, RA>(
 where
 	Block: BlockT,
 	E: CodeExecutor + RuntimeVersionOf,
+	G: BuildGenesisBlock<
+		Block,
+		BlockImportOperation = <Backend<Block> as sc_client_api::backend::Backend<Block>>::BlockImportOperation
+	>,
 {
 	let executor = crate::client::LocalCallExecutor::new(
 		backend.clone(),
 		executor,
-		spawn_handle,
+		spawn_handle.clone(),
 		config.clone(),
 		execution_extensions,
 	)?;
+
 	crate::client::Client::new(
 		backend,
 		executor,
-		genesis_storage,
+		spawn_handle,
+		genesis_block_builder,
 		fork_blocks,
 		bad_blocks,
 		prometheus_registry,
@@ -456,7 +478,7 @@ where
 
 	sp_session::generate_initial_session_keys(
 		client.clone(),
-		&BlockId::Hash(chain_info.best_hash),
+		chain_info.best_hash,
 		config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
 	)
 	.map_err(|e| Error::Application(Box::new(e)))?;
@@ -526,7 +548,7 @@ where
 			keystore.clone(),
 			system_rpc_tx.clone(),
 			&config,
-			backend.offchain_storage(),
+			backend.clone(),
 			&*rpc_builder,
 		)
 	};
@@ -620,7 +642,7 @@ fn gen_rpc_module<TBl, TBackend, TCl, TRpc, TExPool>(
 	keystore: SyncCryptoStorePtr,
 	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 	config: &Configuration,
-	offchain_storage: Option<<TBackend as sc_client_api::backend::Backend<TBl>>::OffchainStorage>,
+	backend: Arc<TBackend>,
 	rpc_builder: &(dyn Fn(DenyUnsafe, SubscriptionTaskExecutor) -> Result<RpcModule<TRpc>, Error>),
 ) -> Result<RpcModule<()>, Error>
 where
@@ -675,6 +697,19 @@ where
 	)
 	.into_rpc();
 
+	// Maximum pinned blocks per connection.
+	// This number is large enough to consider immediate blocks,
+	// but it will change to facilitate adequate limits for the pinning API.
+	const MAX_PINNED_BLOCKS: usize = 4096;
+	let chain_head_v2 = sc_rpc_spec_v2::chain_head::ChainHead::new(
+		client.clone(),
+		backend.clone(),
+		task_executor.clone(),
+		client.info().genesis_hash,
+		MAX_PINNED_BLOCKS,
+	)
+	.into_rpc();
+
 	let author = sc_rpc::author::Author::new(
 		client.clone(),
 		transaction_pool,
@@ -686,7 +721,7 @@ where
 
 	let system = sc_rpc::system::System::new(system_info, system_rpc_tx, deny_unsafe).into_rpc();
 
-	if let Some(storage) = offchain_storage {
+	if let Some(storage) = backend.offchain_storage() {
 		let offchain = sc_rpc::offchain::Offchain::new(storage, deny_unsafe).into_rpc();
 
 		rpc_api.merge(offchain).map_err(|e| Error::Application(e.into()))?;
@@ -694,6 +729,7 @@ where
 
 	// Part of the RPC v2 spec.
 	rpc_api.merge(transaction_v2).map_err(|e| Error::Application(e.into()))?;
+	rpc_api.merge(chain_head_v2).map_err(|e| Error::Application(e.into()))?;
 
 	// Part of the old RPC spec.
 	rpc_api.merge(chain).map_err(|e| Error::Application(e.into()))?;
@@ -853,7 +889,9 @@ where
 		block_announce_validator,
 		config.network.max_parallel_downloads,
 		warp_sync_provider,
+		config.prometheus_config.as_ref().map(|config| config.registry.clone()).as_ref(),
 		chain_sync_network_handle,
+		import_queue.service(),
 		block_request_protocol_config.name.clone(),
 		state_request_protocol_config.name.clone(),
 		warp_sync_protocol_config.as_ref().map(|config| config.name.clone()),
@@ -877,9 +915,8 @@ where
 		chain: client.clone(),
 		protocol_id: protocol_id.clone(),
 		fork_id: config.chain_spec.fork_id().map(ToOwned::to_owned),
-		import_queue: Box::new(import_queue),
 		chain_sync: Box::new(chain_sync),
-		chain_sync_service,
+		chain_sync_service: Box::new(chain_sync_service.clone()),
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		block_announce_config,
 		request_response_protocol_configs: request_response_protocol_configs
@@ -925,8 +962,9 @@ where
 		Some("networking"),
 		chain_sync_network_provider.run(network.clone()),
 	);
+	spawn_handle.spawn("import-queue", None, import_queue.run(Box::new(chain_sync_service)));
 
-	let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc");
+	let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc", 10_000);
 
 	let future = build_network_future(
 		config.role.clone(),

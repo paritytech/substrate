@@ -193,6 +193,8 @@ pub use weights::WeightInfo;
 
 pub use pallet::*;
 
+const LOG_TARGET: &str = "runtime::balances";
+
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
@@ -282,6 +284,7 @@ pub mod pallet {
 		/// ---------------------------------
 		/// - Origin account is already in memory, so no DB operations for them.
 		/// # </weight>
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::transfer())]
 		pub fn transfer(
 			origin: OriginFor<T>,
@@ -307,6 +310,7 @@ pub mod pallet {
 		/// it will reset the account nonce (`frame_system::AccountNonce`).
 		///
 		/// The dispatch origin for this call is `root`.
+		#[pallet::call_index(1)]
 		#[pallet::weight(
 			T::WeightInfo::set_balance_creating() // Creates a new account.
 				.max(T::WeightInfo::set_balance_killing()) // Kills an existing account.
@@ -360,6 +364,7 @@ pub mod pallet {
 		/// - Same as transfer, but additional read and write because the source account is not
 		///   assumed to be in the overlay.
 		/// # </weight>
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::force_transfer())]
 		pub fn force_transfer(
 			origin: OriginFor<T>,
@@ -385,6 +390,7 @@ pub mod pallet {
 		/// 99% of the time you want [`transfer`] instead.
 		///
 		/// [`transfer`]: struct.Pallet.html#method.transfer
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::transfer_keep_alive())]
 		pub fn transfer_keep_alive(
 			origin: OriginFor<T>,
@@ -414,6 +420,7 @@ pub mod pallet {
 		///   keep the sender account alive (true). # <weight>
 		/// - O(1). Just like transfer, but reading the user's transferable balance first.
 		///   #</weight>
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::transfer_all())]
 		pub fn transfer_all(
 			origin: OriginFor<T>,
@@ -432,6 +439,7 @@ pub mod pallet {
 		/// Unreserve some balance from a user by force.
 		///
 		/// Can only be called by ROOT.
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::force_unreserve())]
 		pub fn force_unreserve(
 			origin: OriginFor<T>,
@@ -944,7 +952,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if locks.len() as u32 > T::MaxLocks::get() {
 			log::warn!(
-				target: "runtime::balances",
+				target: LOG_TARGET,
 				"Warning: A user has more currency locks than expected. \
 				A runtime configuration adjustment may be needed."
 			);
@@ -979,7 +987,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				// since the funds that are under the lock will themselves be stored in the
 				// account and therefore will need a reference.
 				log::warn!(
-					target: "runtime::balances",
+					target: LOG_TARGET,
 					"Warning: Attempt to introduce lock consumer reference, yet no providers. \
 					This is unexpected but should be safe."
 				);
