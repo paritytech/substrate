@@ -206,6 +206,7 @@ std = [
 	"pallet-recovery/std",
 	"pallet-uniques/std",
 	"pallet-nfts/std",
+	"pallet-nfts-runtime-api/std",
 	"pallet-vesting/std",
 	"log/std",
 	"frame-try-runtime?/std",
