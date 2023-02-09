@@ -698,7 +698,8 @@ fn expand_benchmark(
 		true => quote!(T: Config<I>, I: 'static),
 	};
 
-	let (pre_call, post_call) = match benchmark_def.call_def {
+	// used in the benchmarking impls
+	let (pre_call, post_call, fn_call_body) = match &benchmark_def.call_def {
 		BenchmarkCallDef::ExtrinsicCall { origin, expr_call, attr_span: _ } => {
 			let mut expr_call = expr_call.clone();
 
@@ -742,13 +743,13 @@ fn expand_benchmark(
 				qself: None,
 				path: Path { leading_colon: None, segments: punct },
 			});
-
+			let pre_call = quote! {
+				let __call = Call::<#type_use_generics>::#expr_call;
+				let __benchmarked_call_encoded = #codec::Encode::encode(&__call);
+			};
 			(
-				// (pre_call, post_call):
-				quote! {
-					let __call = Call::<#type_use_generics>::#expr_call;
-					let __benchmarked_call_encoded = #codec::Encode::encode(&__call);
-				},
+				// (pre_call, post_call, fn_call_body):
+				pre_call.clone(),
 				quote! {
 					let __call_decoded = <Call<#type_use_generics> as #codec::Decode>
 						::decode(&mut &__benchmarked_call_encoded[..])
@@ -759,18 +760,20 @@ fn expand_benchmark(
 						__origin,
 					)?;
 				},
+				pre_call,
 			)
 		},
-		BenchmarkCallDef::Block { block, attr_span: _ } => (quote!(), quote!(#block)),
+		BenchmarkCallDef::Block { block, attr_span: _ } =>
+			(quote!(), quote!(#block), quote!(#block)),
 	};
 
 	let vis = benchmark_def.fn_vis;
-	let mut sig = benchmark_def.fn_sig;
 
 	// modify signature generics, ident, and inputs, e.g:
 	// before: `fn bench(u: Linear<1, 100>) -> BenchmarkResult<()>`
 	// after: `fn _bench <T: Config<I>, I: 'static>(u: u32, verify: bool) ->
 	// BenchmarkResult<()>`
+	let mut sig = benchmark_def.fn_sig;
 	sig.generics = parse_quote!(<#type_impl_generics>);
 	if !where_clause.is_empty() {
 		sig.generics.where_clause = parse_quote!(where #where_clause);
@@ -795,7 +798,7 @@ fn expand_benchmark(
 			#(
 				#setup_stmts
 			)*
-			#pre_call
+			#fn_call_body
 			if verify {
 				#(
 					#verify_stmts
