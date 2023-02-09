@@ -78,10 +78,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		} else {
 			frame_system::Pallet::<T>::inc_consumers(who)
 				.map_err(|_| Error::<T, I>::UnavailableConsumer)?;
-			ensure!(
-				frame_system::Pallet::<T>::can_inc_consumer(who),
-				Error::<T, I>::UnavailableConsumer
-			);
+			// We ensure that we can still increment consumers once more because we could otherwise
+			// allow accidental usage of all consumer references which could cause grief.
+			if !frame_system::Pallet::<T>::can_inc_consumer(who) {
+				frame_system::Pallet::<T>::dec_consumers(who);
+				return Err(Error::<T, I>::UnavailableConsumer.into())
+			}
 			ExistenceReason::Consumer
 		};
 		d.accounts = accounts;
