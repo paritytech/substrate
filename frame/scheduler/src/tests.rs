@@ -480,6 +480,7 @@ fn scheduler_handles_periodic_unavailable_preimage() {
 		let call = RuntimeCall::Logger(LoggerCall::log { i: 42, weight: (max_weight / 3) * 2 });
 		let hash = <Test as frame_system::Config>::Hashing::hash_of(&call);
 		let len = call.using_encoded(|x| x.len()) as u32;
+		// Important to use here `Bounded::Lookup` to ensure that we request the hash.
 		let bound = Bounded::Lookup { hash, len };
 		// The preimage isn't requested yet.
 		assert!(!Preimage::is_requested(&hash));
@@ -508,6 +509,9 @@ fn scheduler_handles_periodic_unavailable_preimage() {
 		// Does not ever execute again.
 		run_to_block(100);
 		assert_eq!(logger::log().len(), 1);
+
+		// The preimage is not requested anymore.
+		assert!(!Preimage::is_requested(&hash));
 	});
 }
 
