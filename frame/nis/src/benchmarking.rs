@@ -20,7 +20,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller};, BenchmarkError
+use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller, BenchmarkError};
 use frame_support::traits::{
 	fungible::Inspect as FunInspect, nonfungible::Inspect, EnsureOrigin, Get,
 };
@@ -62,7 +62,9 @@ benchmarks! {
 	place_bid {
 		let l in 0..(T::MaxQueueLen::get() - 1);
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller, BalanceOf::<T>::max_value());
+		let ed = T::Currency::minimum_balance();
+		let bid = T::MinBid::get();
+		T::Currency::set_balance(&caller, (ed + bid) * BalanceOf::<T>::from(l + 1) + bid);
 		for i in 0..l {
 			Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
 		}
@@ -74,7 +76,10 @@ benchmarks! {
 	place_bid_max {
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = RawOrigin::Signed(caller.clone());
-		T::Currency::set_balance(&caller, BalanceOf::<T>::max_value());
+		let ed = T::Currency::minimum_balance();
+		let bid = T::MinBid::get();
+		let ql = T::MaxQueueLen::get();
+		T::Currency::set_balance(&caller, (ed + bid) * BalanceOf::<T>::from(ql + 1) + bid);
 		for i in 0..T::MaxQueueLen::get() {
 			Nis::<T>::place_bid(origin.clone().into(), T::MinBid::get(), 1)?;
 		}
@@ -89,7 +94,9 @@ benchmarks! {
 	retract_bid {
 		let l in 1..T::MaxQueueLen::get();
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller, BalanceOf::<T>::max_value());
+		let ed = T::Currency::minimum_balance();
+		let bid = T::MinBid::get();
+		T::Currency::set_balance(&caller, (ed + bid) * BalanceOf::<T>::from(l + 1) + bid);
 		for i in 0..l {
 			Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
 		}
@@ -103,7 +110,8 @@ benchmarks! {
 			T::FundOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		let caller: T::AccountId = whitelisted_caller();
 		let bid = T::MinBid::get().max(One::one());
-		T::Currency::set_balance(&caller, bid);
+		let ed = T::Currency::minimum_balance();
+		T::Currency::set_balance(&caller, ed + bid);
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), bid, 1)?;
 		Nis::<T>::process_queues(Perquintill::one(), 1, 1, &mut WeightCounter::unlimited());
 		Nis::<T>::communify(RawOrigin::Signed(caller.clone()).into(), 0)?;
