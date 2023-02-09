@@ -54,7 +54,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		//  Estimated: `{{benchmark.base_calculated_proof_size}}{{#each benchmark.component_calculated_proof_size as |cp|}} + {{cp.name}} * ({{cp.slope}} ±{{underscore cp.error}}){{/each}}`
 		// Minimum execution time: {{underscore benchmark.min_execution_time}} nanoseconds.
 		Weight::from_ref_time({{underscore benchmark.base_weight}})
-			.add_proof_size({{underscore benchmark.base_calculated_proof_size}})
+			.saturating_add(Weight::from_proof_size({{benchmark.base_calculated_proof_size}}))
 			{{#each benchmark.component_weight as |cw|}}
 			// Standard Error: {{underscore cw.error}}
 			.saturating_add(Weight::from_ref_time({{underscore cw.slope}}).saturating_mul({{cw.name}}.into()))
@@ -97,7 +97,7 @@ impl WeightInfo for () {
 		//  Estimated: `{{benchmark.base_calculated_proof_size}}{{#each benchmark.component_calculated_proof_size as |cp|}} + {{cp.name}} * ({{cp.slope}} ±{{underscore cp.error}}){{/each}}`
 		// Minimum execution time: {{underscore benchmark.min_execution_time}} nanoseconds.
 		Weight::from_ref_time({{underscore benchmark.base_weight}})
-			.add_proof_size({{underscore benchmark.base_calculated_proof_size}})
+			.saturating_add(Weight::from_proof_size({{benchmark.base_calculated_proof_size}}))
 			{{#each benchmark.component_weight as |cw|}}
 			// Standard Error: {{underscore cw.error}}
 			.saturating_add(Weight::from_ref_time({{underscore cw.slope}}).saturating_mul({{cw.name}}.into()))
