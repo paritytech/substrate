@@ -50,6 +50,8 @@ where
 
 /// Provides [`BlockBuildingInfoProvider`] implementation for chains that include timestamp inherent
 /// and use Aura for a block production.
+///
+/// It depends only on the expected block production frequency, i.e. `blocktime_millis`.
 pub fn timestamp_with_aura_info<Block: BlockT>(
 	blocktime_millis: u64,
 ) -> impl BlockBuildingInfoProvider<Block, Option<(InherentData, Digest)>> {
@@ -71,6 +73,8 @@ pub fn timestamp_with_aura_info<Block: BlockT>(
 
 /// Provides [`BlockBuildingInfoProvider`] implementation for chains that include timestamp inherent
 /// and use Babe for a block production.
+///
+/// It depends only on the expected block production frequency, i.e. `blocktime_millis`.
 pub fn timestamp_with_babe_info<Block: BlockT>(
 	blocktime_millis: u64,
 ) -> impl BlockBuildingInfoProvider<Block, Option<(InherentData, Digest)>> {
@@ -101,6 +105,8 @@ pub fn timestamp_with_babe_info<Block: BlockT>(
 ///  - Babe for a block production (inherent + digest),
 ///  - uncles inherent,
 ///  - storage proof inherent
+///
+/// It depends only on the expected block production frequency, i.e. `blocktime_millis`.
 pub fn substrate_info<Block: BlockT>(
 	blocktime_millis: u64,
 ) -> impl BlockBuildingInfoProvider<Block, Option<(InherentData, Digest)>> {
