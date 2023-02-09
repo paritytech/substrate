@@ -30,8 +30,8 @@ use syn::{
 	spanned::Spanned,
 	token::{Colon2, Comma, Gt, Lt, Paren},
 	Attribute, Error, Expr, ExprBlock, ExprCall, ExprPath, FnArg, Item, ItemFn, ItemMod, LitInt,
-	Pat, Path, PathArguments, PathSegment, Result, Signature, Stmt, Token, Type, Visibility,
-	WhereClause,
+	Pat, Path, PathArguments, PathSegment, Result, ReturnType, Signature, Stmt, Token, Type,
+	Visibility, WhereClause,
 };
 
 mod keywords {
@@ -147,7 +147,7 @@ struct BenchmarkDef {
 	setup_stmts: Vec<Stmt>,
 	call_def: BenchmarkCallDef,
 	verify_stmts: Vec<Stmt>,
-	last_stmt: Stmt,
+	last_stmt: Option<Stmt>,
 	extra: bool,
 	skip_meta: bool,
 	fn_sig: Signature,
@@ -251,17 +251,40 @@ impl BenchmarkDef {
 			)),
 		};
 
-		if i >= item_fn.block.stmts.len() - 1 {
-			panic!("panic A");
-		}
-		let Some(last_stmt) = item_fn.block.stmts.last() else { return Err(Error::new(item_fn.block.span(), "panic B", )) };
-
+		let (verify_stmts, last_stmt) = match item_fn.sig.output {
+			ReturnType::Default =>
+			// no return type, last_stmt should be None
+				(Vec::from(&item_fn.block.stmts[(i + 1)..item_fn.block.stmts.len()]), None),
+			ReturnType::Type(_, _) => {
+				// defined return type, last_stmt should be BenchmarkResult<T> compatible and
+				// should not be included in verify_stmts
+				if i == item_fn.block.stmts.len() {
+					return Err(Error::new(
+						item_fn.block.span(),
+						"Benchmark `#[block]` or `#[extrinsic_call]` item cannot be the \
+						last statement of your benchmark function definition. If you have \
+						defined a return type, you should return something compatible \
+						with `BenchmarkResult<T>` (i.e. `Ok(T)`) as the last statement.",
+					))
+				}
+				let Some(stmt) = item_fn.block.stmts.last() else {
+					return Err(Error::new(
+						item_fn.block.span(),
+						"Benchmark function definitions cannot be empty!",
+					))
+				};
+				(
+					Vec::from(&item_fn.block.stmts[(i + 1)..item_fn.block.stmts.len() - 1]),
+					Some(stmt.clone()),
+				)
+			},
+		};
 		Ok(BenchmarkDef {
 			params,
 			setup_stmts: Vec::from(&item_fn.block.stmts[0..i]),
 			call_def,
-			verify_stmts: Vec::from(&item_fn.block.stmts[(i + 1)..item_fn.block.stmts.len() - 1]),
-			last_stmt: last_stmt.clone(),
+			verify_stmts,
+			last_stmt,
 			extra,
 			skip_meta,
 			fn_sig: item_fn.sig.clone(),
@@ -760,7 +783,15 @@ fn expand_benchmark(
 	fn_param_inputs.push(quote!(verify: bool));
 	sig.inputs = parse_quote!(#(#fn_param_inputs),*);
 
-	let function_def = quote! {
+	// used in instance() impl
+	let impl_last_stmt = match &last_stmt {
+		Some(stmt) => quote!(#stmt),
+		None => quote!(Ok(())),
+	};
+
+	// generate final quoted tokens
+	let res = quote! {
+		// benchmark function definition
 		#vis #sig {
 			#(
 				#setup_stmts
@@ -773,12 +804,6 @@ fn expand_benchmark(
 			}
 			#last_stmt
 		}
-	};
-
-	// generate final quoted tokens
-	let res = quote! {
-		// benchmark function def
-		#function_def
 
 		// compile-time assertions that each referenced param type implements ParamRange
 		#(
@@ -824,7 +849,7 @@ fn expand_benchmark(
 							#verify_stmts
 						)*
 					}
-					match #last_stmt {
+					match #impl_last_stmt {
 						Ok(_) => Ok(()), // discard custom BenchmarkResult<T> type in this context
 						Err(err) => Err(err)
 					}
