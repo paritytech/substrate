@@ -44,7 +44,7 @@ fn basic_minting_should_work() {
 		assert_eq!(Assets::balance(0, 2), 100);
 		assert_eq!(asset_ids(), vec![0, 1, 999]);
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 1, 1, 100));
-		assert_eq!(Assets::account_balances(0, 1), vec![(0, 100), (999, 100), (1, 100)]);
+		assert_eq!(Assets::account_balances(1), vec![(0, 100), (999, 100), (1, 100)]);
 	});
 }
 

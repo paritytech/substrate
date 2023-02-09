@@ -2054,7 +2054,7 @@ impl_runtime_apis! {
 	{
 		fn account_balances(instance: u8, account: AccountId) -> Vec<(u32, Balance)> {
 			match instance {
-				_ => Assets::account_balances(instance, account),
+				_ => Assets::account_balances(account),
 			}
 		}
 	}
