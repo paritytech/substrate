@@ -23,15 +23,15 @@
 use parking_lot::RwLock;
 use std::sync::Arc;
 
-use sc_rpc::SubscriptionTaskExecutor;
+use sc_rpc::{utils::accept_and_pipe_from_stream, SubscriptionTaskExecutor};
 use sp_runtime::traits::Block as BlockT;
 
 use futures::{task::SpawnError, FutureExt, StreamExt};
 use jsonrpsee::{
-	core::{async_trait, Error as JsonRpseeError, RpcResult},
+	core::{async_trait, Error as JsonRpseeError, RpcResult, SubscriptionResult},
 	proc_macros::rpc,
-	types::{error::CallError, ErrorObject, SubscriptionResult},
-	SubscriptionSink,
+	types::{error::CallError, ErrorObject},
+	PendingSubscriptionSink,
 };
 use log::warn;
 
@@ -90,7 +90,7 @@ pub trait BeefyApi<Notification, Hash> {
 		unsubscribe = "beefy_unsubscribeJustifications",
 		item = Notification,
 	)]
-	fn subscribe_justifications(&self);
+	async fn subscribe_justifications(&self);
 
 	/// Returns hash of the latest BEEFY finalized block as seen by this client.
 	///
@@ -105,7 +105,7 @@ pub trait BeefyApi<Notification, Hash> {
 pub struct Beefy<Block: BlockT> {
 	finality_proof_stream: BeefyVersionedFinalityProofStream<Block>,
 	beefy_best_block: Arc<RwLock<Option<Block::Hash>>>,
-	executor: SubscriptionTaskExecutor,
+	_executor: SubscriptionTaskExecutor,
 }
 
 impl<Block> Beefy<Block>
@@ -128,7 +128,7 @@ where
 		});
 
 		executor.spawn("substrate-rpc-subscription", Some("rpc"), future.map(drop).boxed());
-		Ok(Self { finality_proof_stream, beefy_best_block, executor })
+		Ok(Self { finality_proof_stream, beefy_best_block, _executor: executor })
 	}
 }
 
@@ -138,18 +138,16 @@ impl<Block> BeefyApiServer<notification::EncodedVersionedFinalityProof, Block::H
 where
 	Block: BlockT,
 {
-	fn subscribe_justifications(&self, mut sink: SubscriptionSink) -> SubscriptionResult {
+	async fn subscribe_justifications(
+		&self,
+		pending: PendingSubscriptionSink,
+	) -> SubscriptionResult {
 		let stream = self
 			.finality_proof_stream
 			.subscribe(100_000)
 			.map(|vfp| notification::EncodedVersionedFinalityProof::new::<Block>(vfp));
 
-		let fut = async move {
-			sink.pipe_from_stream(stream).await;
-		};
-
-		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
-		Ok(())
+		accept_and_pipe_from_stream(pending, stream).await
 	}
 
 	async fn latest_finalized(&self) -> RpcResult<Block::Hash> {
@@ -172,7 +170,7 @@ mod tests {
 	};
 	use beefy_primitives::{known_payloads, Payload, SignedCommitment};
 	use codec::{Decode, Encode};
-	use jsonrpsee::{types::EmptyServerParams as EmptyParams, RpcModule};
+	use jsonrpsee::{core::EmptyServerParams as EmptyParams, RpcModule};
 	use sp_runtime::traits::{BlakeTwo256, Hash};
 	use substrate_test_runtime_client::runtime::Block;
 
@@ -199,7 +197,7 @@ mod tests {
 		let (rpc, _) = setup_io_handler();
 		let request = r#"{"jsonrpc":"2.0","method":"beefy_getFinalizedHead","params":[],"id":1}"#;
 		let expected_response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"BEEFY RPC endpoint not ready"},"id":1}"#.to_string();
-		let (response, _) = rpc.raw_json_request(&request).await.unwrap();
+		let (response, _) = rpc.raw_json_request(&request, 1).await.unwrap();
 
 		assert_eq!(expected_response, response.result);
 	}
@@ -230,7 +228,7 @@ mod tests {
 
 		let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
 		while std::time::Instant::now() < deadline {
-			let (response, _) = io.raw_json_request(request).await.expect("RPC requests work");
+			let (response, _) = io.raw_json_request(request, 1).await.expect("RPC requests work");
 			if response.result != not_ready {
 				assert_eq!(response.result, expected);
 				// Success
@@ -249,7 +247,7 @@ mod tests {
 		let (rpc, _) = setup_io_handler();
 		// Subscribe call.
 		let _sub = rpc
-			.subscribe("beefy_subscribeJustifications", EmptyParams::new())
+			.subscribe_unbounded("beefy_subscribeJustifications", EmptyParams::new())
 			.await
 			.unwrap();
 
@@ -257,6 +255,7 @@ mod tests {
 		let (response, _) = rpc
 			.raw_json_request(
 				r#"{"jsonrpc":"2.0","method":"beefy_unsubscribeJustifications","params":["FOO"],"id":1}"#,
+				1,
 			)
 			.await
 			.unwrap();
@@ -284,7 +283,7 @@ mod tests {
 
 		// Subscribe
 		let mut sub = rpc
-			.subscribe("beefy_subscribeJustifications", EmptyParams::new())
+			.subscribe_unbounded("beefy_subscribeJustifications", EmptyParams::new())
 			.await
 			.unwrap();
 

@@ -27,7 +27,10 @@ use std::sync::Arc;
 
 use crate::SubscriptionTaskExecutor;
 
-use jsonrpsee::{core::RpcResult, types::SubscriptionResult, SubscriptionSink};
+use jsonrpsee::{
+	core::{async_trait, RpcResult, SubscriptionResult},
+	PendingSubscriptionSink, SubscriptionSink,
+};
 use sc_client_api::BlockchainEvents;
 use sp_rpc::{list::ListOrValue, number::NumberOrHex};
 use sp_runtime::{
@@ -42,6 +45,7 @@ pub use sc_rpc_api::chain::*;
 use sp_blockchain::HeaderBackend;
 
 /// Blockchain backend API
+#[async_trait]
 trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 where
 	Block: BlockT + 'static,
@@ -91,13 +95,13 @@ where
 	}
 
 	/// All new head subscription
-	fn subscribe_all_heads(&self, sink: SubscriptionSink);
+	async fn subscribe_all_heads(&self, sink: SubscriptionSink);
 
 	/// New best head subscription
-	fn subscribe_new_heads(&self, sink: SubscriptionSink);
+	async fn subscribe_new_heads(&self, sink: SubscriptionSink);
 
 	/// Finalized head subscription
-	fn subscribe_finalized_heads(&self, sink: SubscriptionSink);
+	async fn subscribe_finalized_heads(&self, sink: SubscriptionSink);
 }
 
 /// Create new state API that works on full node.
@@ -118,6 +122,7 @@ pub struct Chain<Block: BlockT, Client> {
 	backend: Box<dyn ChainBackend<Client, Block>>,
 }
 
+#[async_trait]
 impl<Block, Client> ChainApiServer<NumberFor<Block>, Block::Hash, Block::Header, SignedBlock<Block>>
 	for Chain<Block, Client>
 where
@@ -156,18 +161,24 @@ where
 		self.backend.finalized_head().map_err(Into::into)
 	}
 
-	fn subscribe_all_heads(&self, sink: SubscriptionSink) -> SubscriptionResult {
-		self.backend.subscribe_all_heads(sink);
+	async fn subscribe_all_heads(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
+		let sink = pending.accept().await?;
+		self.backend.subscribe_all_heads(sink).await;
 		Ok(())
 	}
 
-	fn subscribe_new_heads(&self, sink: SubscriptionSink) -> SubscriptionResult {
-		self.backend.subscribe_new_heads(sink);
+	async fn subscribe_new_heads(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
+		let sink = pending.accept().await?;
+		self.backend.subscribe_new_heads(sink).await;
 		Ok(())
 	}
 
-	fn subscribe_finalized_heads(&self, sink: SubscriptionSink) -> SubscriptionResult {
-		self.backend.subscribe_finalized_heads(sink);
+	async fn subscribe_finalized_heads(
+		&self,
+		pending: PendingSubscriptionSink,
+	) -> SubscriptionResult {
+		let sink = pending.accept().await?;
+		self.backend.subscribe_finalized_heads(sink).await;
 		Ok(())
 	}
 }

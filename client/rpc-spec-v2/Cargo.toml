@@ -34,6 +34,7 @@ tokio-stream = { version = "0.1", features = ["sync"] }
 array-bytes = "4.1"
 log = "0.4.17"
 futures-util = { version = "0.3.19", default-features = false }
+sc-rpc = { path = "../rpc" }
 
 [dev-dependencies]
 serde_json = "1.0"

@@ -124,7 +124,7 @@ impl<Hash: Send + 'static> ManualSealApiServer<Hash> for ManualSeal<Hash> {
 			sender: Some(sender),
 		};
 
-		sink.send(command).await?;
+		sink.send(command).await.unwrap();
 
 		match receiver.await {
 			Ok(Ok(rx)) => Ok(rx),
@@ -141,7 +141,7 @@ impl<Hash: Send + 'static> ManualSealApiServer<Hash> for ManualSeal<Hash> {
 		let mut sink = self.import_block_channel.clone();
 		let (sender, receiver) = oneshot::channel();
 		let command = EngineCommand::FinalizeBlock { hash, sender: Some(sender), justification };
-		sink.send(command).await?;
+		sink.send(command).await.unwrap();
 		receiver.await.map(|_| true).map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 }

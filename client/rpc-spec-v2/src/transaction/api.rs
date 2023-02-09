@@ -33,5 +33,5 @@ pub trait TransactionApi<Hash: Clone> {
 		unsubscribe = "transaction_unstable_unwatch",
 		item = TransactionEvent<Hash>,
 	)]
-	fn submit_and_watch(&self, bytes: Bytes);
+	async fn submit_and_watch(&self, bytes: Bytes);
 }
