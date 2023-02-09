@@ -767,15 +767,14 @@ fn expand_benchmark(
 	let vis = benchmark_def.fn_vis;
 	let mut sig = benchmark_def.fn_sig;
 
-	let fn_generics_where = match where_clause.is_empty() {
-		true => quote!(),
-		false => quote!(where #where_clause),
-	};
-
 	// modify signature generics, ident, and inputs, e.g:
 	// before: `fn bench(u: Linear<1, 100>) -> BenchmarkResult<()>`
-	// after: `fn _bench <T: Config<I>, I: 'static>(u: u32, verify: bool) -> BenchmarkResult<()>`
-	sig.generics = parse_quote!(<#type_impl_generics> #fn_generics_where);
+	// after: `fn _bench <T: Config<I>, I: 'static>(u: u32, verify: bool) ->
+	// BenchmarkResult<()>`
+	sig.generics = parse_quote!(<#type_impl_generics>);
+	if !where_clause.is_empty() {
+		sig.generics.where_clause = parse_quote!(where #where_clause);
+	}
 	sig.ident =
 		Ident::new(format!("_{}", name.to_token_stream().to_string()).as_str(), Span::call_site());
 	let mut fn_param_inputs: Vec<TokenStream2> =
