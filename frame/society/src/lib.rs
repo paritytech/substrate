@@ -689,7 +689,7 @@ pub mod pallet {
 		/// Parameters:
 		/// - `value`: A one time payment the bid would like to receive when joining the society.
 		///
-		/// # <weight>
+		/// Total Complexity: O(M + B + C + logM + logB + X)
 		/// Key: B (len of bids), C (len of candidates), M (len of members), X (balance reserve)
 		/// - Storage Reads:
 		/// 	- One storage read to check for suspended candidate. O(1)
@@ -710,9 +710,6 @@ pub mod pallet {
 		/// - Events:
 		/// 	- One event for new bid.
 		/// 	- Up to one event for AutoUnbid if bid.len() > MAX_BID_COUNT.
-		///
-		/// Total Complexity: O(M + B + C + logM + logB + X)
-		/// # </weight>
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn bid(origin: OriginFor<T>, value: BalanceOf<T, I>) -> DispatchResult {
@@ -745,14 +742,11 @@ pub mod pallet {
 		/// Parameters:
 		/// - `pos`: Position in the `Bids` vector of the bid who wants to unbid.
 		///
-		/// # <weight>
+		/// Total Complexity: O(B + X)
 		/// Key: B (len of bids), X (balance unreserve)
 		/// - One storage read and write to retrieve and update the bids. O(B)
 		/// - Either one unreserve balance action O(X) or one vouching storage removal. O(1)
 		/// - One event.
-		///
-		/// Total Complexity: O(B + X)
-		/// # </weight>
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn unbid(origin: OriginFor<T>, pos: u32) -> DispatchResult {
@@ -799,7 +793,7 @@ pub mod pallet {
 		/// - `tip`: Your cut of the total `value` payout when the candidate is inducted into
 		/// the society. Tips larger than `value` will be saturated upon payout.
 		///
-		/// # <weight>
+		/// Total Complexity: O(M + B + C + logM + logB + X)
 		/// Key: B (len of bids), C (len of candidates), M (len of members)
 		/// - Storage Reads:
 		/// 	- One storage read to retrieve all members. O(M)
@@ -823,9 +817,6 @@ pub mod pallet {
 		/// - Events:
 		/// 	- One event for vouch.
 		/// 	- Up to one event for AutoUnbid if bid.len() > MAX_BID_COUNT.
-		///
-		/// Total Complexity: O(M + B + C + logM + logB + X)
-		/// # </weight>
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn vouch(
@@ -869,15 +860,12 @@ pub mod pallet {
 		/// Parameters:
 		/// - `pos`: Position in the `Bids` vector of the bid who should be unvouched.
 		///
-		/// # <weight>
+		/// Total Complexity: O(B)
 		/// Key: B (len of bids)
 		/// - One storage read O(1) to check the signer is a vouching member.
 		/// - One storage mutate to retrieve and update the bids. O(B)
 		/// - One vouching storage removal. O(1)
 		/// - One event.
-		///
-		/// Total Complexity: O(B)
-		/// # </weight>
 		#[pallet::call_index(3)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn unvouch(origin: OriginFor<T>, pos: u32) -> DispatchResult {
@@ -910,16 +898,13 @@ pub mod pallet {
 		/// - `approve`: A boolean which says if the candidate should be approved (`true`) or
 		///   rejected (`false`).
 		///
-		/// # <weight>
+		/// Total Complexity: O(M + logM + C)
 		/// Key: C (len of candidates), M (len of members)
 		/// - One storage read O(M) and O(log M) search to check user is a member.
 		/// - One account lookup.
 		/// - One storage read O(C) and O(C) search to check that user is a candidate.
 		/// - One storage write to add vote to votes. O(1)
 		/// - One event.
-		///
-		/// Total Complexity: O(M + logM + C)
-		/// # </weight>
 		#[pallet::call_index(4)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn vote(
@@ -949,14 +934,11 @@ pub mod pallet {
 		/// - `approve`: A boolean which says if the candidate should be
 		/// approved (`true`) or rejected (`false`).
 		///
-		/// # <weight>
+		/// Total Complexity: O(M + logM)
 		/// - Key: M (len of members)
 		/// - One storage read O(M) and O(log M) search to check user is a member.
 		/// - One storage write to add vote to votes. O(1)
 		/// - One event.
-		///
-		/// Total Complexity: O(M + logM)
-		/// # </weight>
 		#[pallet::call_index(5)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn defender_vote(origin: OriginFor<T>, approve: bool) -> DispatchResult {
@@ -982,16 +964,13 @@ pub mod pallet {
 		/// The dispatch origin for this call must be _Signed_ and a member with
 		/// payouts remaining.
 		///
-		/// # <weight>
+		/// Total Complexity: O(M + logM + P + X)
 		/// Key: M (len of members), P (number of payouts for a particular member)
 		/// - One storage read O(M) and O(log M) search to check signer is a member.
 		/// - One storage read O(P) to get all payouts for a member.
 		/// - One storage read O(1) to get the current block number.
 		/// - One currency transfer call. O(X)
 		/// - One storage write or removal to update the member's payouts. O(P)
-		///
-		/// Total Complexity: O(M + logM + P + X)
-		/// # </weight>
 		#[pallet::call_index(6)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn payout(origin: OriginFor<T>) -> DispatchResult {
@@ -1028,13 +1007,10 @@ pub mod pallet {
 		/// - `max_members` - The initial max number of members for the society.
 		/// - `rules` - The rules of this society concerning membership.
 		///
-		/// # <weight>
+		/// Total Complexity: O(1)
 		/// - Two storage mutates to set `Head` and `Founder`. O(1)
 		/// - One storage write to add the first member to society. O(1)
 		/// - One event.
-		///
-		/// Total Complexity: O(1)
-		/// # </weight>
 		#[pallet::call_index(7)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn found(
@@ -1063,13 +1039,10 @@ pub mod pallet {
 		/// the `Founder` and the `Head`. This implies that it may only be done when there is one
 		/// member.
 		///
-		/// # <weight>
+		/// Total Complexity: O(1)
 		/// - Two storage reads O(1).
 		/// - Four storage removals O(1).
 		/// - One event.
-		///
-		/// Total Complexity: O(1)
-		/// # </weight>
 		#[pallet::call_index(8)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn unfound(origin: OriginFor<T>) -> DispatchResult {
@@ -1103,7 +1076,7 @@ pub mod pallet {
 		/// - `forgive` - A boolean representing whether the suspension judgement origin forgives
 		///   (`true`) or rejects (`false`) a suspended member.
 		///
-		/// # <weight>
+		/// Total Complexity: O(M + logM + B)
 		/// Key: B (len of bids), M (len of members)
 		/// - One storage read to check `who` is a suspended member. O(1)
 		/// - Up to one storage write O(M) with O(log M) binary search to add a member back to
@@ -1113,9 +1086,6 @@ pub mod pallet {
 		/// - Up to one additional event if unvouch takes place.
 		/// - One storage removal. O(1)
 		/// - One event for the judgement.
-		///
-		/// Total Complexity: O(M + logM + B)
-		/// # </weight>
 		#[pallet::call_index(9)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn judge_suspended_member(
@@ -1171,7 +1141,7 @@ pub mod pallet {
 		/// - `who` - The suspended candidate to be judged.
 		/// - `judgement` - `Approve`, `Reject`, or `Rebid`.
 		///
-		/// # <weight>
+		/// Total Complexity: O(M + logM + B + X)
 		/// Key: B (len of bids), M (len of members), X (balance action)
 		/// - One storage read to check `who` is a suspended candidate.
 		/// - One storage removal of the suspended candidate.
@@ -1191,9 +1161,6 @@ pub mod pallet {
 		/// - Up to one additional event if unvouch takes place.
 		/// - One storage removal.
 		/// - One event for the judgement.
-		///
-		/// Total Complexity: O(M + logM + B + X)
-		/// # </weight>
 		#[pallet::call_index(10)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn judge_suspended_candidate(
@@ -1262,12 +1229,9 @@ pub mod pallet {
 		/// Parameters:
 		/// - `max` - The maximum number of members for the society.
 		///
-		/// # <weight>
+		/// Total Complexity: O(1)
 		/// - One storage write to update the max. O(1)
 		/// - One event.
-		///
-		/// Total Complexity: O(1)
-		/// # </weight>
 		#[pallet::call_index(11)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn set_max_members(origin: OriginFor<T>, max: u32) -> DispatchResult {
