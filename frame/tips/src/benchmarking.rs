@@ -19,7 +19,9 @@
 
 #![cfg(feature = "runtime-benchmarks")]
 
-use frame_benchmarking::v1::{account, benchmarks_instance_pallet, whitelisted_caller};
+use frame_benchmarking::v1::{
+	account, benchmarks_instance_pallet, whitelisted_caller, BenchmarkError,
+};
 use frame_support::ensure;
 use frame_system::RawOrigin;
 use sp_runtime::traits::Saturating;
@@ -196,7 +198,8 @@ benchmarks_instance_pallet! {
 		let reason_hash = T::Hashing::hash(&reason[..]);
 		let hash = T::Hashing::hash_of(&(&reason_hash, &beneficiary));
 		ensure!(Tips::<T, I>::contains_key(hash), "tip does not exist");
-		let reject_origin = T::RejectOrigin::successful_origin();
+		let reject_origin =
+			T::RejectOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	}: _<T::RuntimeOrigin>(reject_origin, hash)
 
 	impl_benchmark_test_suite!(TipsMod, crate::tests::new_test_ext(), crate::tests::Test);

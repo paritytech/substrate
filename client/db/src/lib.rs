@@ -1806,7 +1806,13 @@ impl<Block: BlockT> Backend<Block> {
 		}
 
 		let new_displaced = self.blockchain.leaves.write().finalize_height(f_num);
-		self.prune_blocks(transaction, f_num, &new_displaced, current_transaction_justifications)?;
+		self.prune_blocks(
+			transaction,
+			f_num,
+			f_hash,
+			&new_displaced,
+			current_transaction_justifications,
+		)?;
 
 		Ok(())
 	}
@@ -1815,6 +1821,7 @@ impl<Block: BlockT> Backend<Block> {
 		&self,
 		transaction: &mut Transaction<DbHash>,
 		finalized_number: NumberFor<Block>,
+		finalized_hash: Block::Hash,
 		displaced: &FinalizationOutcome<Block::Hash, NumberFor<Block>>,
 		current_transaction_justifications: &mut HashMap<Block::Hash, Justification>,
 	) -> ClientResult<()> {
@@ -1843,10 +1850,10 @@ impl<Block: BlockT> Backend<Block> {
 
 					self.prune_block(transaction, BlockId::<Block>::number(number))?;
 				}
-				self.prune_displaced_branches(transaction, finalized_number, displaced)?;
+				self.prune_displaced_branches(transaction, finalized_hash, displaced)?;
 			},
 			BlocksPruning::KeepFinalized => {
-				self.prune_displaced_branches(transaction, finalized_number, displaced)?;
+				self.prune_displaced_branches(transaction, finalized_hash, displaced)?;
 			},
 		}
 		Ok(())
@@ -1855,28 +1862,21 @@ impl<Block: BlockT> Backend<Block> {
 	fn prune_displaced_branches(
 		&self,
 		transaction: &mut Transaction<DbHash>,
-		finalized: NumberFor<Block>,
+		finalized: Block::Hash,
 		displaced: &FinalizationOutcome<Block::Hash, NumberFor<Block>>,
 	) -> ClientResult<()> {
 		// Discard all blocks from displaced branches
 		for h in displaced.leaves() {
-			let mut number = finalized;
-			let mut hash = *h;
-			// Follow displaced chains back until we reach a finalized block.
-			// Since leaves are discarded due to finality, they can't have parents
-			// that are canonical, but not yet finalized. So we stop deleting as soon as
-			// we reach canonical chain.
-			while self.blockchain.hash(number)? != Some(hash) {
-				match self.blockchain.header(hash)? {
-					Some(header) => {
-						self.blockchain.insert_persisted_body_if_pinned(hash)?;
-
-						self.prune_block(transaction, BlockId::<Block>::hash(hash))?;
-						number = header.number().saturating_sub(One::one());
-						hash = *header.parent_hash();
+			match sp_blockchain::tree_route(&self.blockchain, *h, finalized) {
+				Ok(tree_route) =>
+					for r in tree_route.retracted() {
+						self.blockchain.insert_persisted_body_if_pinned(r.hash)?;
+						self.prune_block(transaction, BlockId::<Block>::hash(r.hash))?;
 					},
-					None => break,
-				}
+				Err(sp_blockchain::Error::UnknownBlock(_)) => {
+					// Sometimes routes can't be calculated. E.g. after warp sync.
+				},
+				Err(e) => Err(e)?,
 			}
 		}
 		Ok(())
@@ -3567,6 +3567,50 @@ pub(crate) mod tests {
 		assert_eq!(None, bc.body(blocks[2]).unwrap());
 		assert_eq!(Some(vec![3.into()]), bc.body(blocks[3]).unwrap());
 		assert_eq!(Some(vec![4.into()]), bc.body(blocks[4]).unwrap());
+	}
+
+	#[test]
+	fn prune_blocks_on_finalize_and_reorg() {
+		//	0 - 1b
+		//	\ - 1a - 2a - 3a
+		//	     \ - 2b
+
+		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Some(10), 10);
+
+		let make_block = |index, parent, val: u64| {
+			insert_block(&backend, index, parent, None, H256::random(), vec![val.into()], None)
+				.unwrap()
+		};
+
+		let block_0 = make_block(0, Default::default(), 0x00);
+		let block_1a = make_block(1, block_0, 0x1a);
+		let block_1b = make_block(1, block_0, 0x1b);
+		let block_2a = make_block(2, block_1a, 0x2a);
+		let block_2b = make_block(2, block_1a, 0x2b);
+		let block_3a = make_block(3, block_2a, 0x3a);
+
+		// Make sure 1b is head
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, block_0).unwrap();
+		op.mark_head(block_1b).unwrap();
+		backend.commit_operation(op).unwrap();
+
+		// Finalize 3a
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, block_0).unwrap();
+		op.mark_head(block_3a).unwrap();
+		op.mark_finalized(block_1a, None).unwrap();
+		op.mark_finalized(block_2a, None).unwrap();
+		op.mark_finalized(block_3a, None).unwrap();
+		backend.commit_operation(op).unwrap();
+
+		let bc = backend.blockchain();
+		assert_eq!(None, bc.body(block_1b).unwrap());
+		assert_eq!(None, bc.body(block_2b).unwrap());
+		assert_eq!(Some(vec![0x00.into()]), bc.body(block_0).unwrap());
+		assert_eq!(Some(vec![0x1a.into()]), bc.body(block_1a).unwrap());
+		assert_eq!(Some(vec![0x2a.into()]), bc.body(block_2a).unwrap());
+		assert_eq!(Some(vec![0x3a.into()]), bc.body(block_3a).unwrap());
 	}
 
 	#[test]

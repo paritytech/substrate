@@ -1,12 +1,12 @@
 [package]
-name = "pallet-randomness-collective-flip"
+name = "pallet-insecure-randomness-collective-flip"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
-description = "FRAME randomness collective flip pallet"
+description = "Insecure do not use in production: FRAME randomness collective flip pallet"
 readme = "README.md"
 
 [package.metadata.docs.rs]
