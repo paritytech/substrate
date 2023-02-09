@@ -94,10 +94,11 @@ pub struct Announcement<AccountId, Hash, BlockNumber> {
 	height: BlockNumber,
 }
 
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::{DispatchResult, *};
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, traits};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -177,6 +178,28 @@ pub mod pallet {
 		type AnnouncementDepositFactor: Get<BalanceOf<Self>>;
 	}
 
+	/// A trait for removing all proxies.
+	pub trait RemoveAllProxies {
+		/// Removes all proxies associated with the given account `who`.
+		fn remove_all_proxy_delegates(who: T::AccountId) -> DispatchResult;
+	}
+
+	impl<T: Trait> RemoveAllProxies for Pallet<T> {
+		fn remove_all_proxy_delegates(who: T::AccountId) -> DispatchResult {
+			// Get the current proxies stored in storage.
+			let mut proxies = Proxies::<T>::get();
+
+			// Remove the proxy associated with the given account `who`.
+			let old_deposit = proxies.remove(&who);
+
+			// Unreserve the deposit associated with the removed proxy.
+			T::Currency::unreserve(&who, old_deposit.unwrap_or_else(Zero::zero));
+
+			// Return success.
+			Ok(())
+		}
+	}
+
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Dispatch the given `call` from an account that the sender is authorised for through
@@ -251,7 +274,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let delegate = T::Lookup::lookup(delegate)?;
-			Self::remove_all_proxy_delegates(&who, delegate, proxy_type, delay)
+			Self::remove_proxy_delegate(&who, delegate, proxy_type, delay)
 		}
 
 		/// Unregister all proxy accounts for the sender.
@@ -262,10 +285,14 @@ pub mod pallet {
 		/// the unreserved fees will be inaccessible. **All access to this account will be lost.**
 		#[pallet::weight(T::WeightInfo::remove_proxies(T::MaxProxies::get()))]
 		pub fn remove_proxies(origin: OriginFor<T>) -> DispatchResult {
+			// Ensure that the origin is a signed account.
 			let who = ensure_signed(origin)?;
-			let (_, old_deposit) = Proxies::<T>::take(&who);
-			T::Currency::unreserve(&who, old_deposit);
 
+			// Call the `remove_all_proxy_delegates` method to remove all proxies associated with
+			// `who`.
+			<Pallet<T>>::remove_all_proxy_delegates(who)?;
+
+			// Return success.
 			Ok(())
 		}
 
@@ -790,15 +817,5 @@ impl<T: Config> Pallet<T> {
 		});
 		let e = call.dispatch(origin);
 		Self::deposit_event(Event::ProxyExecuted { result: e.map(|_| ()).map_err(|e| e.error) });
-	}
-
-	pub fn remove_all_proxy_delegates(
-		delegator: &T::AccountId,
-		delegatee: T::AccountId,
-		proxy_type: T::ProxyType,
-		delay: T::BlockNumber,
-	) -> DispatchResult {
-		ensure!(delegator != &delegatee, Error::<T>::NoSelfProxy);
-		Self::remove_proxy_delegate(delegator, delegatee, proxy_type, delay)
 	}
 }
