@@ -20,7 +20,7 @@
 
 //! Integration test that the `sign` and `verify` sub-commands work together.
 
-use super::*;
+use crate::*;
 use clap::Parser;
 
 const SEED: &str = "0xe5be9a5092b81bca64be81d212e7f2f9eba183bb7a90954f7b76361f6edb5c0a";
