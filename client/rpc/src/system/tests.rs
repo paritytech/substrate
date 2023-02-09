@@ -20,8 +20,8 @@ use super::{helpers::SyncState, *};
 use assert_matches::assert_matches;
 use futures::prelude::*;
 use jsonrpsee::{
-	core::Error as RpcError,
-	types::{error::CallError, EmptyServerParams as EmptyParams},
+	core::{EmptyServerParams as EmptyParams, Error as RpcError},
+	types::error::CallError,
 	RpcModule,
 };
 use sc_network::{self, config::Role, PeerId};

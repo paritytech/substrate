@@ -23,14 +23,13 @@ mod tests;
 
 use std::sync::Arc;
 
-use crate::SubscriptionTaskExecutor;
+use crate::{utils::accept_and_pipe_from_stream, SubscriptionTaskExecutor};
 
 use codec::{Decode, Encode};
-use futures::{FutureExt, TryFutureExt};
+use futures::TryFutureExt;
 use jsonrpsee::{
-	core::{async_trait, Error as JsonRpseeError, RpcResult},
-	types::SubscriptionResult,
-	SubscriptionSink,
+	core::{async_trait, Error as JsonRpseeError, RpcResult, SubscriptionResult},
+	PendingSubscriptionSink,
 };
 use sc_rpc_api::DenyUnsafe;
 use sc_transaction_pool_api::{
@@ -59,7 +58,7 @@ pub struct Author<P, Client> {
 	/// Whether to deny unsafe calls
 	deny_unsafe: DenyUnsafe,
 	/// Executor to spawn subscriptions.
-	executor: SubscriptionTaskExecutor,
+	_executor: SubscriptionTaskExecutor,
 }
 
 impl<P, Client> Author<P, Client> {
@@ -71,7 +70,7 @@ impl<P, Client> Author<P, Client> {
 		deny_unsafe: DenyUnsafe,
 		executor: SubscriptionTaskExecutor,
 	) -> Self {
-		Author { client, pool, keystore, deny_unsafe, executor }
+		Author { client, pool, keystore, deny_unsafe, _executor: executor }
 	}
 }
 
@@ -177,12 +176,16 @@ where
 			.collect())
 	}
 
-	fn watch_extrinsic(&self, mut sink: SubscriptionSink, xt: Bytes) -> SubscriptionResult {
+	async fn watch_extrinsic(
+		&self,
+		pending: PendingSubscriptionSink,
+		xt: Bytes,
+	) -> SubscriptionResult {
 		let best_block_hash = self.client.info().best_hash;
 		let dxt = match TransactionFor::<P>::decode(&mut &xt[..]).map_err(|e| Error::from(e)) {
 			Ok(dxt) => dxt,
 			Err(e) => {
-				let _ = sink.reject(JsonRpseeError::from(e));
+				let _ = pending.reject(JsonRpseeError::from(e)).await;
 				return Ok(())
 			},
 		};
@@ -196,19 +199,14 @@ where
 					.unwrap_or_else(|e| error::Error::Verification(Box::new(e)))
 			});
 
-		let fut = async move {
-			let stream = match submit.await {
-				Ok(stream) => stream,
-				Err(err) => {
-					let _ = sink.reject(JsonRpseeError::from(err));
-					return
-				},
-			};
-
-			sink.pipe_from_stream(stream).await;
+		let stream = match submit.await {
+			Ok(stream) => stream,
+			Err(err) => {
+				let _ = pending.reject(JsonRpseeError::from(err)).await;
+				return Ok(())
+			},
 		};
 
-		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
-		Ok(())
+		accept_and_pipe_from_stream(pending, stream).await
 	}
 }

@@ -36,3 +36,4 @@ sp-keyring = { version = "7.0.0", path = "../../primitives/keyring" }
 sp-keystore = { version = "0.13.0", path = "../../primitives/keystore" }
 sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
 sp-state-machine = { version = "0.13.0", path = "../../primitives/state-machine" }
+tokio = { version = "1", features = ["sync"] }

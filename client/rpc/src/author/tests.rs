@@ -22,8 +22,8 @@ use crate::testing::{test_executor, timeout_secs};
 use assert_matches::assert_matches;
 use codec::Encode;
 use jsonrpsee::{
-	core::Error as RpcError,
-	types::{error::CallError, EmptyServerParams as EmptyParams},
+	core::{EmptyServerParams as EmptyParams, Error as RpcError},
+	types::error::CallError,
 	RpcModule,
 };
 use sc_transaction_pool::{BasicPool, FullChainApi};
@@ -82,7 +82,7 @@ impl TestSetup {
 			pool: self.pool.clone(),
 			keystore: self.keystore.clone(),
 			deny_unsafe: DenyUnsafe::No,
-			executor: test_executor(),
+			_executor: test_executor(),
 		}
 	}
 
@@ -113,7 +113,7 @@ async fn author_should_watch_extrinsic() {
 	let api = TestSetup::into_rpc();
 	let xt = to_hex(&uxt(AccountKeyring::Alice, 0).encode(), true);
 
-	let mut sub = api.subscribe("author_submitAndWatchExtrinsic", [xt]).await.unwrap();
+	let mut sub = api.subscribe_unbounded("author_submitAndWatchExtrinsic", [xt]).await.unwrap();
 	let (tx, sub_id) = timeout_secs(10, sub.next::<TransactionStatus<H256, Block>>())
 		.await
 		.unwrap()
@@ -154,7 +154,7 @@ async fn author_should_return_watch_validation_error() {
 
 	let api = TestSetup::into_rpc();
 	let failed_sub = api
-		.subscribe(METHOD, [to_hex(&uxt(AccountKeyring::Alice, 179).encode(), true)])
+		.subscribe_unbounded(METHOD, [to_hex(&uxt(AccountKeyring::Alice, 179).encode(), true)])
 		.await;
 
 	assert_matches!(

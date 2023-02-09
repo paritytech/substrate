@@ -34,7 +34,7 @@ pub trait ChainHeadApi<Hash> {
 		unsubscribe = "chainHead_unstable_unfollow",
 		item = FollowEvent<Hash>,
 	)]
-	fn chain_head_unstable_follow(&self, runtime_updates: bool);
+	async fn chain_head_unstable_follow(&self, runtime_updates: bool);
 
 	/// Retrieves the body (list of transactions) of a pinned block.
 	///
@@ -52,7 +52,7 @@ pub trait ChainHeadApi<Hash> {
 		unsubscribe = "chainHead_unstable_stopBody",
 		item = ChainHeadEvent<String>,
 	)]
-	fn chain_head_unstable_body(
+	async fn chain_head_unstable_body(
 		&self,
 		follow_subscription: String,
 		hash: Hash,
@@ -96,7 +96,7 @@ pub trait ChainHeadApi<Hash> {
 		unsubscribe = "chainHead_unstable_stopStorage",
 		item = ChainHeadEvent<String>,
 	)]
-	fn chain_head_unstable_storage(
+	async fn chain_head_unstable_storage(
 		&self,
 		follow_subscription: String,
 		hash: Hash,
@@ -115,7 +115,7 @@ pub trait ChainHeadApi<Hash> {
 		unsubscribe = "chainHead_unstable_stopCall",
 		item = ChainHeadEvent<String>,
 	)]
-	fn chain_head_unstable_call(
+	async fn chain_head_unstable_call(
 		&self,
 		follow_subscription: String,
 		hash: Hash,

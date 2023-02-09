@@ -43,3 +43,64 @@ pub mod testing;
 
 /// Task executor that is being used by RPC subscriptions.
 pub type SubscriptionTaskExecutor = std::sync::Arc<dyn sp_core::traits::SpawnNamed>;
+
+/// todo..
+pub mod utils {
+	use futures::{Stream, StreamExt};
+	use jsonrpsee::{
+		core::SubscriptionResult, PendingSubscriptionSink, SendTimeoutError, SubscriptionMessage,
+		SubscriptionSink,
+	};
+	use sp_runtime::Serialize;
+
+	/// todo..
+	pub async fn accept_and_pipe_from_stream<S, T>(
+		pending: PendingSubscriptionSink,
+		stream: S,
+	) -> SubscriptionResult
+	where
+		S: Stream<Item = T> + Unpin,
+		T: Serialize,
+	{
+		let sink = pending.accept().await?;
+		pipe_from_stream(sink, stream).await
+	}
+
+	/// todo..
+	pub async fn pipe_from_stream<S, T>(sink: SubscriptionSink, mut stream: S) -> SubscriptionResult
+	where
+		S: Stream<Item = T> + Unpin,
+		T: Serialize,
+	{
+		let close_msg = loop {
+			tokio::select! {
+				biased;
+				_ = sink.closed() => break None,
+
+				maybe_item = stream.next() => {
+					let item = match maybe_item {
+						Some(item) => item,
+						None => break Some("Subscription completed successfully".to_string()),
+					};
+					let msg = match SubscriptionMessage::from_json(&item) {
+						Ok(msg) => msg,
+						Err(e) => break Some(e.to_string()),
+					};
+
+					match sink.send_timeout(msg, std::time::Duration::from_secs(60)).await {
+						Ok(_) => (),
+						Err(SendTimeoutError::Closed(_)) => break None,
+						Err(SendTimeoutError::Timeout(_)) => break Some("Subscription closed because send timeout elapsed".to_string()),
+					}
+				}
+			}
+		};
+
+		if let Some(msg) = close_msg {
+			let msg = SubscriptionMessage::from_json(&msg)?;
+			let _ = sink.send(msg).await;
+		}
+
+		Ok(())
+	}
+}

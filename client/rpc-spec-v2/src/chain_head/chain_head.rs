@@ -33,14 +33,13 @@ use crate::{
 use codec::Encode;
 use futures::{
 	channel::oneshot,
-	future::FutureExt,
 	stream::{self, Stream, StreamExt},
 };
 use futures_util::future::Either;
 use jsonrpsee::{
-	core::{async_trait, RpcResult},
-	types::{SubscriptionEmptyError, SubscriptionId, SubscriptionResult},
-	SubscriptionSink,
+	core::{async_trait, RpcResult, SubscriptionCallbackError, SubscriptionResult},
+	types::{SubscriptionId, ErrorObjectOwned},
+	DisconnectError, PendingSubscriptionSink, SubscriptionMessage, SubscriptionSink,
 };
 use log::{debug, error};
 use sc_client_api::{
@@ -66,7 +65,7 @@ pub struct ChainHead<BE, Block: BlockT, Client> {
 	/// Backend of the chain.
 	backend: Arc<BE>,
 	/// Executor to spawn subscriptions.
-	executor: SubscriptionTaskExecutor,
+	_executor: SubscriptionTaskExecutor,
 	/// Keep track of the pinned blocks for each subscription.
 	subscriptions: Arc<SubscriptionManagement<Block>>,
 	/// The hexadecimal encoded hash of the genesis block.
@@ -91,7 +90,7 @@ impl<BE, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 		Self {
 			client,
 			backend,
-			executor,
+			_executor: executor,
 			subscriptions: Arc::new(SubscriptionManagement::new()),
 			genesis_hash,
 			max_pinned_blocks,
@@ -100,25 +99,20 @@ impl<BE, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 	}
 
 	/// Accept the subscription and return the subscription ID on success.
-	fn accept_subscription(
+	async fn accept_subscription(
 		&self,
-		sink: &mut SubscriptionSink,
-	) -> Result<String, SubscriptionEmptyError> {
+		pending: PendingSubscriptionSink,
+	) -> Result<(SubscriptionSink, String), SubscriptionCallbackError> {
 		// The subscription must be accepted before it can provide a valid subscription ID.
-		sink.accept()?;
-
-		let Some(sub_id) = sink.subscription_id() else {
-			// This can only happen if the subscription was not accepted.
-			return Err(SubscriptionEmptyError)
-		};
+		let sink = pending.accept().await?;
 
 		// Get the string representation for the subscription.
-		let sub_id = match sub_id {
+		let sub_id = match sink.subscription_id() {
 			SubscriptionId::Num(num) => num.to_string(),
 			SubscriptionId::Str(id) => id.into_owned().into(),
 		};
 
-		Ok(sub_id)
+		Ok((sink, sub_id))
 	}
 }
 
@@ -189,23 +183,48 @@ where
 	Ok(in_memory_blocks)
 }
 
+
+struct MaybePendingSubscription(Option<PendingSubscriptionSink>);
+
+impl MaybePendingSubscription {
+	pub fn new(p: PendingSubscriptionSink) -> Self {
+		Self(Some(p))
+	}
+	
+	pub async fn accept(&mut self) -> Result<SubscriptionSink, SubscriptionCallbackError> {
+		if let Some(p) = self.0.take() {
+			p.accept().await.map_err(|_| SubscriptionCallbackError::None)
+		} else {
+			Err(SubscriptionCallbackError::None)
+		}
+	}
+
+	pub async fn reject(&mut self, err: impl Into<ErrorObjectOwned>) {
+		if let Some(p) = self.0.take() {
+			let _ = p.reject(err).await;
+		}
+	}
+}
+
+
+
 /// Parse hex-encoded string parameter as raw bytes.
 ///
 /// If the parsing fails, the subscription is rejected.
-fn parse_hex_param(
-	sink: &mut SubscriptionSink,
+async fn parse_hex_param(
+	pending: &mut MaybePendingSubscription,
 	param: String,
-) -> Result<Vec<u8>, SubscriptionEmptyError> {
+) -> Result<Vec<u8>, SubscriptionCallbackError> {
 	// Methods can accept empty parameters.
 	if param.is_empty() {
-		return Ok(Default::default())
+		return Ok(Vec::new())
 	}
 
 	match array_bytes::hex2bytes(&param) {
 		Ok(bytes) => Ok(bytes),
 		Err(_) => {
-			let _ = sink.reject(ChainHeadRpcError::InvalidParam(param));
-			Err(SubscriptionEmptyError)
+			let _ = pending.reject(ChainHeadRpcError::InvalidParam(param)).await;
+			Err(SubscriptionCallbackError::None)
 		},
 	}
 }
@@ -295,21 +314,20 @@ async fn submit_events<EventStream, T>(
 	while let Either::Left((Some(event), next_stop_event)) =
 		futures_util::future::select(stream_item, stop_event).await
 	{
-		match sink.send(&event) {
-			Ok(true) => {
+		let msg = SubscriptionMessage::from_json(&event).expect("serialize should work");
+		match sink.send(msg).await {
+			Ok(_) => {
 				stream_item = stream.next();
 				stop_event = next_stop_event;
 			},
 			// Client disconnected.
-			Ok(false) => return,
-			Err(_) => {
-				// Failed to submit event.
-				break
-			},
+			Err(DisconnectError(_)) => return,
 		}
 	}
 
-	let _ = sink.send(&FollowEvent::<String>::Stop);
+	let msg = SubscriptionMessage::from_json(&FollowEvent::<String>::Stop)
+		.expect("serialize should work");
+	let _ = sink.send(msg).await;
 }
 
 /// Generate the "NewBlock" event and potentially the "BestBlockChanged" event for
@@ -462,25 +480,20 @@ where
 		+ StorageProvider<Block, BE>
 		+ 'static,
 {
-	fn chain_head_unstable_follow(
+	async fn chain_head_unstable_follow(
 		&self,
-		mut sink: SubscriptionSink,
+		pending: PendingSubscriptionSink,
 		runtime_updates: bool,
 	) -> SubscriptionResult {
-		let sub_id = match self.accept_subscription(&mut sink) {
-			Ok(sub_id) => sub_id,
-			Err(err) => {
-				sink.close(ChainHeadRpcError::InvalidSubscriptionID);
-				return Err(err)
-			},
-		};
+		let (mut sink, sub_id) = self.accept_subscription(pending).await?;
 
 		// Keep track of the subscription.
 		let Some((rx_stop, sub_handle)) = self.subscriptions.insert_subscription(sub_id.clone(), runtime_updates, self.max_pinned_blocks) else {
 			// Inserting the subscription can only fail if the JsonRPSee
 			// generated a duplicate subscription ID.
 			debug!(target: "rpc-spec-v2", "[follow][id={:?}] Subscription already accepted", sub_id);
-			let _ = sink.send(&FollowEvent::<Block::Hash>::Stop);
+			let msg = SubscriptionMessage::from_json(&FollowEvent::<Block::Hash>::Stop).expect("serialize infallible; qed");
+			let _ = sink.send(msg).await;
 			return Ok(())
 		};
 		debug!(target: "rpc-spec-v2", "[follow][id={:?}] Subscription accepted", sub_id);
@@ -527,32 +540,31 @@ where
 			.flatten();
 
 		let merged = tokio_stream::StreamExt::merge(stream_import, stream_finalized);
-		let subscriptions = self.subscriptions.clone();
-		let client = self.client.clone();
-		let backend = self.backend.clone();
-		let fut = async move {
-			let Ok(initial_events) = generate_initial_events(&client, &backend, &sub_handle, runtime_updates) else {
+
+		
+			let Ok(initial_events) = generate_initial_events(&self.client, &self.backend, &sub_handle, runtime_updates) else {
 				// Stop the subscription if we exceeded the maximum number of blocks pinned.
 				debug!(target: "rpc-spec-v2", "[follow][id={:?}] Exceeded max pinned blocks from initial events", sub_id);
-				let _ = sink.send(&FollowEvent::<Block::Hash>::Stop);
-				return
+				let msg = SubscriptionMessage::from_json(&FollowEvent::<Block::Hash>::Stop).expect("serialize infallible; qed");
+				let _ = sink.send(msg).await;
+				return Ok(())
 			};
 
 			let stream = stream::iter(initial_events).chain(merged);
 
 			submit_events(&mut sink, stream.boxed(), rx_stop).await;
 			// The client disconnected or called the unsubscribe method.
-			subscriptions.remove_subscription(&sub_id);
+			self.subscriptions.remove_subscription(&sub_id);
 			debug!(target: "rpc-spec-v2", "[follow][id={:?}] Subscription removed", sub_id);
-		};
 
-		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
+
+
 		Ok(())
 	}
 
-	fn chain_head_unstable_body(
+	async fn chain_head_unstable_body(
 		&self,
-		mut sink: SubscriptionSink,
+		pending: PendingSubscriptionSink,
 		follow_subscription: String,
 		hash: Block::Hash,
 		_network_config: Option<NetworkConfig>,
@@ -560,37 +572,39 @@ where
 		let client = self.client.clone();
 		let subscriptions = self.subscriptions.clone();
 
-		let fut = async move {
-			let Some(handle) = subscriptions.get_subscription(&follow_subscription) else {
-				// Invalid invalid subscription ID.
-				let _ = sink.send(&ChainHeadEvent::<String>::Disjoint);
-				return
-			};
-
-			// Block is not part of the subscription.
-			if !handle.contains_block(&hash) {
-				let _ = sink.reject(ChainHeadRpcError::InvalidBlock);
-				return
-			}
-
-			let event = match client.block(hash) {
-				Ok(Some(signed_block)) => {
-					let extrinsics = signed_block.block.extrinsics();
-					let result = format!("0x{:?}", HexDisplay::from(&extrinsics.encode()));
-					ChainHeadEvent::Done(ChainHeadResult { result })
-				},
-				Ok(None) => {
-					// The block's body was pruned. This subscription ID has become invalid.
-					debug!(target: "rpc-spec-v2", "[body][id={:?}] Stopping subscription because hash={:?} was pruned", follow_subscription, hash);
-					handle.stop();
-					ChainHeadEvent::<String>::Disjoint
-				},
-				Err(error) => ChainHeadEvent::Error(ErrorEvent { error: error.to_string() }),
-			};
-			let _ = sink.send(&event);
+		let Some(handle) = subscriptions.get_subscription(&follow_subscription) else {
+			// Invalid invalid subscription ID.
+			let msg = SubscriptionMessage::from_json(&ChainHeadEvent::<String>::Disjoint)?;
+			let sink = pending.accept().await?;	
+			let _ = sink.send(msg);
+			return Err(SubscriptionCallbackError::None);
 		};
 
-		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
+		// Block is not part of the subscription.
+		if !handle.contains_block(&hash) {
+			let _ = pending.reject(ChainHeadRpcError::InvalidBlock).await;
+			return Err(SubscriptionCallbackError::None)
+		}
+
+		let sink = pending.accept().await?;
+
+		let event = match client.block(hash) {
+			Ok(Some(signed_block)) => {
+				let extrinsics = signed_block.block.extrinsics();
+				let result = format!("0x{:?}", HexDisplay::from(&extrinsics.encode()));
+				ChainHeadEvent::Done(ChainHeadResult { result })
+			},
+			Ok(None) => {
+				// The block's body was pruned. This subscription ID has become invalid.
+				debug!(target: "rpc-spec-v2", "[body][id={:?}] Stopping subscription because hash={:?} was pruned", follow_subscription, hash);
+				handle.stop();
+				ChainHeadEvent::<String>::Disjoint
+			},
+			Err(error) => ChainHeadEvent::Error(ErrorEvent { error: error.to_string() }),
+		};
+		let msg = SubscriptionMessage::from_json(&event).expect("serialize infallible; qed");
+		let _ = sink.send(msg).await;
+
 		Ok(())
 	}
 
@@ -620,37 +634,38 @@ where
 		Ok(self.genesis_hash.clone())
 	}
 
-	fn chain_head_unstable_storage(
+	async fn chain_head_unstable_storage(
 		&self,
-		mut sink: SubscriptionSink,
+		pending: PendingSubscriptionSink,
 		follow_subscription: String,
 		hash: Block::Hash,
 		key: String,
 		child_key: Option<String>,
 		_network_config: Option<NetworkConfig>,
 	) -> SubscriptionResult {
-		let key = StorageKey(parse_hex_param(&mut sink, key)?);
+		
+		let mut pending = MaybePendingSubscription::new(pending);
+		let key = StorageKey(parse_hex_param(&mut pending, key).await?);
 
-		let child_key = child_key
-			.map(|child_key| parse_hex_param(&mut sink, child_key))
-			.transpose()?
-			.map(ChildInfo::new_default_from_vec);
+		let child_key = match child_key {
+			Some(k) => Some(ChildInfo::new_default_from_vec(parse_hex_param(&mut pending, k).await?)),
+			None => None,
+		};
 
-		let client = self.client.clone();
-		let subscriptions = self.subscriptions.clone();
-
-		let fut = async move {
-			let Some(handle) = subscriptions.get_subscription(&follow_subscription) else {
-				// Invalid invalid subscription ID.
-				let _ = sink.send(&ChainHeadEvent::<String>::Disjoint);
-				return
-			};
+		let Some(handle) = self.subscriptions.get_subscription(&follow_subscription) else {
+			let sink = pending.accept().await?;
+			// Invalid invalid subscription ID.
+			let _ = sink.send(SubscriptionMessage::from_json(&ChainHeadEvent::<String>::Disjoint)?).await;
+			return Ok(());
+		};
 
 			// Block is not part of the subscription.
 			if !handle.contains_block(&hash) {
-				let _ = sink.reject(ChainHeadRpcError::InvalidBlock);
-				return
+				let _ = pending.reject(ChainHeadRpcError::InvalidBlock);
+				return Ok(());
 			}
+
+			let sink = pending.accept().await?;
 
 			// The child key is provided, use the key to query the child trie.
 			if let Some(child_key) = child_key {
@@ -659,12 +674,13 @@ where
 				if well_known_keys::is_default_child_storage_key(child_key.storage_key()) ||
 					well_known_keys::is_child_storage_key(child_key.storage_key())
 				{
+					let msg = SubscriptionMessage::from_json(&ChainHeadEvent::Done(ChainHeadResult { result: None::<String> }))?;
 					let _ = sink
-						.send(&ChainHeadEvent::Done(ChainHeadResult { result: None::<String> }));
-					return
+						.send(msg).await;
+					return Ok(());
 				}
 
-				let res = client
+				let res = self.client
 					.child_storage(hash, &child_key, &key)
 					.map(|result| {
 						let result =
@@ -674,8 +690,8 @@ where
 					.unwrap_or_else(|error| {
 						ChainHeadEvent::Error(ErrorEvent { error: error.to_string() })
 					});
-				let _ = sink.send(&res);
-				return
+				let _ = sink.send(SubscriptionMessage::from_json(&res)?).await;
+				return Ok(());
 			}
 
 			// The main key must not be prefixed with b":child_storage:" nor
@@ -683,13 +699,14 @@ where
 			if well_known_keys::is_default_child_storage_key(&key.0) ||
 				well_known_keys::is_child_storage_key(&key.0)
 			{
+				let msg = SubscriptionMessage::from_json(&ChainHeadEvent::Done(ChainHeadResult { result: None::<String> }))?;
 				let _ =
-					sink.send(&ChainHeadEvent::Done(ChainHeadResult { result: None::<String> }));
-				return
+					sink.send(msg).await;
+				return Ok(());
 			}
 
 			// Main root trie storage query.
-			let res = client
+			let res = self.client
 				.storage(hash, &key)
 				.map(|result| {
 					let result =
@@ -699,55 +716,56 @@ where
 				.unwrap_or_else(|error| {
 					ChainHeadEvent::Error(ErrorEvent { error: error.to_string() })
 				});
-			let _ = sink.send(&res);
-		};
-
-		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
+			let _ = sink.send(SubscriptionMessage::from_json(&res)?).await;
+		
+	
 		Ok(())
 	}
 
-	fn chain_head_unstable_call(
+	async fn chain_head_unstable_call(
 		&self,
-		mut sink: SubscriptionSink,
+		pending: PendingSubscriptionSink,
 		follow_subscription: String,
 		hash: Block::Hash,
 		function: String,
 		call_parameters: String,
 		_network_config: Option<NetworkConfig>,
 	) -> SubscriptionResult {
-		let call_parameters = Bytes::from(parse_hex_param(&mut sink, call_parameters)?);
+		let mut pending = MaybePendingSubscription::new(pending);
+		let bytes = parse_hex_param(&mut pending, call_parameters).await?;
+		let call_parameters = Bytes::from(bytes);
 
-		let client = self.client.clone();
-		let subscriptions = self.subscriptions.clone();
 
-		let fut = async move {
-			let Some(handle) = subscriptions.get_subscription(&follow_subscription) else {
+			let Some(handle) = self.subscriptions.get_subscription(&follow_subscription) else {
 				// Invalid invalid subscription ID.
-				let _ = sink.send(&ChainHeadEvent::<String>::Disjoint);
-				return
+				let sink = pending.accept().await?;
+				let _ = sink.send(SubscriptionMessage::from_json(&ChainHeadEvent::<String>::Disjoint)?).await;
+				return Ok(());
 			};
 
 			// Block is not part of the subscription.
 			if !handle.contains_block(&hash) {
-				let _ = sink.reject(ChainHeadRpcError::InvalidBlock);
-				return
+				let _ = pending.reject(ChainHeadRpcError::InvalidBlock);
+				return Ok(());
 			}
 
 			// Reject subscription if runtime_updates is false.
 			if !handle.has_runtime_updates() {
-				let _ = sink.reject(ChainHeadRpcError::InvalidParam(
+				let _ = pending.reject(ChainHeadRpcError::InvalidParam(
 					"The runtime updates flag must be set".into(),
 				));
-				return
+				return Ok(());
 			}
 
-			let res = client
+			let sink = pending.accept().await?;
+
+			let res = self.client
 				.executor()
 				.call(
 					hash,
 					&function,
 					&call_parameters,
-					client.execution_extensions().strategies().other,
+					self.client.execution_extensions().strategies().other,
 				)
 				.map(|result| {
 					let result = format!("0x{:?}", HexDisplay::from(&result));
@@ -757,10 +775,8 @@ where
 					ChainHeadEvent::Error(ErrorEvent { error: error.to_string() })
 				});
 
-			let _ = sink.send(&res);
-		};
-
-		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
+			let _ = sink.send(SubscriptionMessage::from_json(&res)?).await;
+	
 		Ok(())
 	}
 
