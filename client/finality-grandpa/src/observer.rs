@@ -437,7 +437,7 @@ mod tests {
 			aux_schema::load_persistent(&*backend, client.info().genesis_hash, 0, || Ok(voters))
 				.unwrap();
 
-		let (_tx, voter_command_rx) = tracing_unbounded("");
+		let (_tx, voter_command_rx) = tracing_unbounded("test_mpsc_voter_command", 100_000);
 
 		let observer = ObserverWork::new(
 			client,

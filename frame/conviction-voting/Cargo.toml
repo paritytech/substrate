@@ -14,7 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 assert_matches = "1.3.0"
-codec = { package = "parity-scale-codec", version = "3.0.3", default-features = false, features = [
+codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = [
 	"derive",
 	"max-encoded-len",
 ] }

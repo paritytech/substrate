@@ -225,7 +225,8 @@ pub mod pallet {
 
 	/// The amount which has been reported as inactive to Currency.
 	#[pallet::storage]
-	pub type Inactive<T: Config<I>, I: 'static = ()> = StorageValue<_, BalanceOf<T, I>, ValueQuery>;
+	pub type Deactivated<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, BalanceOf<T, I>, ValueQuery>;
 
 	/// Proposal indices that have been approved but not yet awarded.
 	#[pallet::storage]
@@ -292,6 +293,8 @@ pub mod pallet {
 			amount: BalanceOf<T, I>,
 			beneficiary: T::AccountId,
 		},
+		/// The inactive funds of the pallet have been updated.
+		UpdatedInactive { reactivated: BalanceOf<T, I>, deactivated: BalanceOf<T, I> },
 	}
 
 	/// Error for the treasury pallet.
@@ -321,13 +324,15 @@ pub mod pallet {
 		/// # </weight>
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			let pot = Self::pot();
-			let deactivated = Inactive::<T, I>::get();
+			let deactivated = Deactivated::<T, I>::get();
 			if pot != deactivated {
-				match (pot > deactivated, pot.max(deactivated) - pot.min(deactivated)) {
-					(true, delta) => T::Currency::deactivate(delta),
-					(false, delta) => T::Currency::reactivate(delta),
-				}
-				Inactive::<T, I>::put(&pot);
+				T::Currency::reactivate(deactivated);
+				T::Currency::deactivate(pot);
+				Deactivated::<T, I>::put(&pot);
+				Self::deposit_event(Event::<T, I>::UpdatedInactive {
+					reactivated: deactivated,
+					deactivated: pot,
+				});
 			}
 
 			// Check to see if we should spend some funds!

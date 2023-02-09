@@ -15,15 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Re-exports `sp-weights` public API, and contains benchmarked weight constants specific to
-//! FRAME.
-//!
-//! Latest machine specification used to benchmark are:
-//! - Digital Ocean: ubuntu-s-2vcpu-4gb-ams3-01
-//! - 2x Intel(R) Xeon(R) CPU E5-2650 v4 @ 2.20GHz
-//! - 4GB RAM
-//! - Ubuntu 19.10 (GNU/Linux 5.3.0-18-generic x86_64)
-//! - rustc 1.42.0 (b8cedc004 2020-03-09)
+//! Re-exports `sp-weights` public API, and contains benchmarked weight constants specific to FRAME.
 
 mod block_weights;
 mod extrinsic_weights;

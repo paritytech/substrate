@@ -26,7 +26,6 @@
 
 use crate::{Config, Determinism};
 use frame_support::traits::Get;
-use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::Hash;
 use sp_std::{borrow::ToOwned, prelude::*};
 use wasm_instrument::{
@@ -73,11 +72,6 @@ pub struct ModuleDefinition {
 	pub aux_body: Option<FuncBody>,
 	/// The amount of I64 arguments the aux function should have.
 	pub aux_arg_num: u32,
-	/// If set to true the stack height limiter is injected into the the module. This is
-	/// needed for instruction debugging because the cost of executing the stack height
-	/// instrumentation should be included in the costs for the individual instructions
-	/// that cause more metering code (only call).
-	pub inject_stack_metering: bool,
 	/// Create a table containing function pointers.
 	pub table: Option<TableSegment>,
 	/// Create a section named "dummy" of the specified size. This is useful in order to
@@ -105,11 +99,7 @@ pub struct ImportedMemory {
 }
 
 impl ImportedMemory {
-	pub fn max<T: Config>() -> Self
-	where
-		T: Config,
-		T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-	{
+	pub fn max<T: Config>() -> Self {
 		let pages = max_pages::<T>();
 		Self { min_pages: pages, max_pages: pages }
 	}
@@ -130,11 +120,7 @@ pub struct WasmModule<T: Config> {
 	pub memory: Option<ImportedMemory>,
 }
 
-impl<T: Config> From<ModuleDefinition> for WasmModule<T>
-where
-	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
+impl<T: Config> From<ModuleDefinition> for WasmModule<T> {
 	fn from(def: ModuleDefinition) -> Self {
 		// internal functions start at that offset.
 		let func_offset = u32::try_from(def.imported_functions.len()).unwrap();
@@ -247,32 +233,19 @@ where
 			)));
 		}
 
-		let mut code = contract.build();
-
-		if def.inject_stack_metering {
-			code = inject_stack_metering::<T>(code);
-		}
-
-		let code = code.into_bytes().unwrap();
+		let code = contract.build().into_bytes().unwrap();
 		let hash = T::Hashing::hash(&code);
 		Self { code: code.into(), hash, memory: def.memory }
 	}
 }
 
-impl<T: Config> WasmModule<T>
-where
-	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
+impl<T: Config> WasmModule<T> {
 	/// Uses the supplied wasm module and instruments it when requested.
-	pub fn instrumented(code: &[u8], inject_gas: bool, inject_stack: bool) -> Self {
+	pub fn instrumented(code: &[u8], inject_gas: bool) -> Self {
 		let module = {
 			let mut module = Module::from_bytes(code).unwrap();
 			if inject_gas {
 				module = inject_gas_metering::<T>(module);
-			}
-			if inject_stack {
-				module = inject_stack_metering::<T>(module);
 			}
 			module
 		};
@@ -533,11 +506,7 @@ pub mod body {
 }
 
 /// The maximum amount of pages any contract is allowed to have according to the current `Schedule`.
-pub fn max_pages<T: Config>() -> u32
-where
-	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
+pub fn max_pages<T: Config>() -> u32 {
 	T::Schedule::get().limits.memory_pages
 }
 
@@ -546,12 +515,4 @@ fn inject_gas_metering<T: Config>(module: Module) -> Module {
 	let gas_rules = schedule.rules(&module, Determinism::Deterministic);
 	let backend = gas_metering::host_function::Injector::new("seal0", "gas");
 	gas_metering::inject(module, backend, &gas_rules).unwrap()
-}
-
-fn inject_stack_metering<T: Config>(module: Module) -> Module {
-	if let Some(height) = T::Schedule::get().limits.stack_height {
-		wasm_instrument::inject_stack_limiter(module, height).unwrap()
-	} else {
-		module
-	}
 }

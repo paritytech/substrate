@@ -21,7 +21,7 @@
 
 use super::*;
 
-use frame_benchmarking::benchmarks;
+use frame_benchmarking::v1::benchmarks;
 use frame_support::{traits::UnfilteredDispatchable, WeakBoundedVec};
 use frame_system::RawOrigin;
 use sp_core::{offchain::OpaqueMultiaddr, OpaquePeerId};

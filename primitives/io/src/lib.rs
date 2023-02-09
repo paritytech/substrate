@@ -783,13 +783,13 @@ pub trait Crypto {
 		{
 			use ed25519_dalek::Verifier;
 
-			let public_key = if let Ok(vk) = ed25519_dalek::PublicKey::from_bytes(&pub_key.0) {
-				vk
-			} else {
+			let Ok(public_key) = ed25519_dalek::PublicKey::from_bytes(&pub_key.0) else {
 				return false
 			};
 
-			let sig = ed25519_dalek::Signature::from(sig.0);
+			let Ok(sig) = ed25519_dalek::Signature::from_bytes(&sig.0) else {
+				return false
+			};
 
 			public_key.verify(msg, &sig).is_ok()
 		} else {
@@ -1945,5 +1945,23 @@ mod tests {
 		BasicExternalities::default().execute_with(|| {
 			assert!(crypto::ed25519_verify(&zero_ed_sig(), &Vec::new(), &zero_ed_pub()));
 		})
+	}
+
+	#[test]
+	fn dalek_should_not_panic_on_invalid_signature() {
+		let mut ext = BasicExternalities::default();
+		ext.register_extension(UseDalekExt::default());
+
+		ext.execute_with(|| {
+			let mut bytes = [0u8; 64];
+			// Make it invalid
+			bytes[63] = 0b1110_0000;
+
+			assert!(!crypto::ed25519_verify(
+				&ed25519::Signature::from_raw(bytes),
+				&Vec::new(),
+				&zero_ed_pub()
+			));
+		});
 	}
 }

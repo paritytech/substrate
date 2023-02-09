@@ -153,7 +153,15 @@ impl<T: Config> Pallet<T> {
 	///
 	/// The storage will be applied immediately.
 	/// And aura consensus log will be appended to block's log.
+	///
+	/// This is a no-op if `new` is empty.
 	pub fn change_authorities(new: BoundedVec<T::AuthorityId, T::MaxAuthorities>) {
+		if new.is_empty() {
+			log::warn!(target: LOG_TARGET, "Ignoring empty authority change.");
+
+			return
+		}
+
 		<Authorities<T>>::put(&new);
 
 		let log = DigestItem::Consensus(

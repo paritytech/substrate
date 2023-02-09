@@ -116,6 +116,11 @@
 //!
 //! Please refer to the [`Pallet`] struct for details on publicly available functions.
 //!
+//! ### Callbacks
+//!
+//! Using `CallbackHandle` associated type, user can configure custom callback functions which are
+//! executed when new asset is created or an existing asset is destroyed.
+//!
 //! ## Related Modules
 //!
 //! * [`System`](../frame_system/index.html)
@@ -146,9 +151,7 @@ pub use types::*;
 
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{
-		AtLeast32BitUnsigned, Bounded, CheckedAdd, CheckedSub, Saturating, StaticLookup, Zero,
-	},
+	traits::{AtLeast32BitUnsigned, CheckedAdd, CheckedSub, Saturating, StaticLookup, Zero},
 	ArithmeticError, TokenError,
 };
 use sp_std::{borrow::Borrow, prelude::*};
@@ -170,6 +173,19 @@ pub use pallet::*;
 pub use weights::WeightInfo;
 
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
+const LOG_TARGET: &str = "runtime::assets";
+
+/// Trait with callbacks that are executed after successfull asset creation or destruction.
+pub trait AssetsCallback<AssetId, AccountId> {
+	/// Indicates that asset with `id` was successfully created by the `owner`
+	fn created(_id: &AssetId, _owner: &AccountId) {}
+
+	/// Indicates that asset with `id` has just been destroyed
+	fn destroyed(_id: &AssetId) {}
+}
+
+/// Empty implementation in case no callbacks are required.
+impl<AssetId, AccountId> AssetsCallback<AssetId, AccountId> for () {}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -282,6 +298,9 @@ pub mod pallet {
 
 		/// Additional data to be stored with an account's asset balance.
 		type Extra: Member + Parameter + Default + MaxEncodedLen;
+
+		/// Callback methods for asset state change (e.g. asset created or destroyed)
+		type CallbackHandle: AssetsCallback<Self::AssetId, Self::AccountId>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -406,7 +425,7 @@ pub mod pallet {
 					*amount,
 					|details| -> DispatchResult {
 						debug_assert!(
-							T::Balance::max_value() - details.supply >= *amount,
+							details.supply.checked_add(&amount).is_some(),
 							"checked in prep; qed"
 						);
 						details.supply = details.supply.saturating_add(*amount);
@@ -424,7 +443,7 @@ pub mod pallet {
 		/// Some asset class was created.
 		Created { asset_id: T::AssetId, creator: T::AccountId, owner: T::AccountId },
 		/// Some assets were issued.
-		Issued { asset_id: T::AssetId, owner: T::AccountId, total_supply: T::Balance },
+		Issued { asset_id: T::AssetId, owner: T::AccountId, amount: T::Balance },
 		/// Some assets were transferred.
 		Transferred {
 			asset_id: T::AssetId,
@@ -598,7 +617,14 @@ pub mod pallet {
 					status: AssetStatus::Live,
 				},
 			);
-			Self::deposit_event(Event::Created { asset_id: id, creator: owner, owner: admin });
+
+			Self::deposit_event(Event::Created {
+				asset_id: id,
+				creator: owner.clone(),
+				owner: admin,
+			});
+			T::CallbackHandle::created(&id, &owner);
+
 			Ok(())
 		}
 

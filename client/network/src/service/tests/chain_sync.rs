@@ -199,7 +199,7 @@ async fn on_block_finalized() {
 	let mut chain_sync =
 		Box::new(MockChainSync::<substrate_test_runtime_client::runtime::Block>::new());
 
-	let at = client.header(&BlockId::Hash(client.info().best_hash)).unwrap().unwrap().hash();
+	let at = client.header(client.info().best_hash).unwrap().unwrap().hash();
 	let block = client
 		.new_block_at(&BlockId::Hash(at), Default::default(), false)
 		.unwrap()

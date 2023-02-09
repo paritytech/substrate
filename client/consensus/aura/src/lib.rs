@@ -957,7 +957,7 @@ mod tests {
 			compatibility_mode: Default::default(),
 		};
 
-		let head = client.header(&BlockId::Number(0)).unwrap().unwrap();
+		let head = client.expect_header(client.info().genesis_hash).unwrap();
 
 		let res = worker
 			.on_slot(SlotInfo {
@@ -972,6 +972,6 @@ mod tests {
 			.unwrap();
 
 		// The returned block should be imported and we should be able to get its header by now.
-		assert!(client.header(&BlockId::Hash(res.block.hash())).unwrap().is_some());
+		assert!(client.header(res.block.hash()).unwrap().is_some());
 	}
 }

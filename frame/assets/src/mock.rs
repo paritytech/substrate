@@ -20,11 +20,13 @@
 use super::*;
 use crate as pallet_assets;
 
+use codec::Encode;
 use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64, GenesisBuild},
 };
 use sp_core::H256;
+use sp_io::storage;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -45,6 +47,9 @@ construct_runtime!(
 	}
 );
 
+type AccountId = u64;
+type AssetId = u32;
+
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -55,7 +60,7 @@ impl frame_system::Config for Test {
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type AccountId = u64;
+	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type RuntimeEvent = RuntimeEvent;
@@ -84,6 +89,17 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 }
 
+pub struct AssetsCallbackHandle;
+impl AssetsCallback<AssetId, AccountId> for AssetsCallbackHandle {
+	fn created(_id: &AssetId, _owner: &AccountId) {
+		storage::set(b"asset_created", &().encode());
+	}
+
+	fn destroyed(_id: &AssetId) {
+		storage::set(b"asset_destroyed", &().encode());
+	}
+}
+
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = u64;
@@ -100,6 +116,7 @@ impl Config for Test {
 	type StringLimit = ConstU32<50>;
 	type Freezer = TestFreezer;
 	type WeightInfo = ();
+	type CallbackHandle = AssetsCallbackHandle;
 	type Extra = ();
 	type RemoveItemsLimit = ConstU32<5>;
 	#[cfg(feature = "runtime-benchmarks")]

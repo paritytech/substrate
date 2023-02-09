@@ -37,7 +37,7 @@ use crate::{
 	Pallet as Contracts, *,
 };
 use codec::{Encode, MaxEncodedLen};
-use frame_benchmarking::{account, benchmarks, whitelisted_caller};
+use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller};
 use frame_support::weights::Weight;
 use frame_system::RawOrigin;
 use sp_runtime::{
@@ -63,8 +63,6 @@ struct Contract<T: Config> {
 
 impl<T: Config> Contract<T>
 where
-	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 	<BalanceOf<T> as HasCompact>::Type: Clone + Eq + PartialEq + Debug + TypeInfo + Encode,
 {
 	/// Create new contract and use a default account id as instantiator.
@@ -90,7 +88,7 @@ where
 		let value = Pallet::<T>::min_balance();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let salt = vec![0xff];
-		let addr = Contracts::<T>::contract_address(&caller, &module.hash, &salt);
+		let addr = Contracts::<T>::contract_address(&caller, &module.hash, &data, &salt);
 
 		Contracts::<T>::store_code_raw(module.code, caller.clone())?;
 		Contracts::<T>::instantiate(
@@ -203,17 +201,17 @@ macro_rules! load_benchmark {
 
 benchmarks! {
 	where_clause { where
-		T::AccountId: UncheckedFrom<T::Hash>,
-		T::AccountId: AsRef<[u8]>,
 		<BalanceOf<T> as codec::HasCompact>::Type: Clone + Eq + PartialEq + sp_std::fmt::Debug + scale_info::TypeInfo + codec::Encode,
 	}
 
 	// The base weight consumed on processing contracts deletion queue.
+	#[pov_mode = Ignored]
 	on_process_deletion_queue_batch {}: {
 		Storage::<T>::process_deletion_queue_batch(Weight::MAX)
 	}
 
 	#[skip_meta]
+	#[pov_mode = Ignored]
 	on_initialize_per_trie_key {
 		let k in 0..1024;
 		let instance = Contract::<T>::with_storage(WasmModule::dummy(), k, T::Schedule::get().limits.payload_len)?;
@@ -222,6 +220,7 @@ benchmarks! {
 		Storage::<T>::process_deletion_queue_batch(Weight::MAX)
 	}
 
+	#[pov_mode = Ignored]
 	on_initialize_per_queue_item {
 		let q in 0..1024.min(T::DeletionQueueDepth::get());
 		for i in 0 .. q {
@@ -236,6 +235,7 @@ benchmarks! {
 	// This benchmarks the additional weight that is charged when a contract is executed the
 	// first time after a new schedule was deployed: For every new schedule a contract needs
 	// to re-run the instrumentation once.
+	#[pov_mode = Ignored]
 	reinstrument {
 		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::MaxCodeLen::get());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c, Location::Call);
@@ -252,6 +252,7 @@ benchmarks! {
 	// is responsible. This is achieved by generating all code to the `deploy` function
 	// which is in the wasm module but not executed on `call`.
 	// The results are supposed to be used as `call_with_code_kb(c) - call_with_code_kb(0)`.
+	#[pov_mode = Ignored]
 	call_with_code_per_byte {
 		let c in 0 .. T::MaxCodeLen::get();
 		let instance = Contract::<T>::with_caller(
@@ -270,23 +271,27 @@ benchmarks! {
 	// a code of that size into the sandbox.
 	//
 	// `c`: Size of the code in kilobytes.
+	// `i`: Size of the input in kilobytes.
 	// `s`: Size of the salt in kilobytes.
 	//
 	// # Note
 	//
 	// We cannot let `c` grow to the maximum code size because the code is not allowed
 	// to be larger than the maximum size **after instrumentation**.
+	#[pov_mode = Ignored]
 	instantiate_with_code {
 		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::MaxCodeLen::get());
+		let i in 0 .. code::max_pages::<T>() * 64 * 1024;
 		let s in 0 .. code::max_pages::<T>() * 64 * 1024;
+		let input = vec![42u8; i as usize];
 		let salt = vec![42u8; s as usize];
 		let value = Pallet::<T>::min_balance();
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c, Location::Call);
 		let origin = RawOrigin::Signed(caller.clone());
-		let addr = Contracts::<T>::contract_address(&caller, &hash, &salt);
-	}: _(origin, value, Weight::MAX, None, code, vec![], salt)
+		let addr = Contracts::<T>::contract_address(&caller, &hash, &input, &salt);
+	}: _(origin, value, Weight::MAX, None, code, input, salt)
 	verify {
 		// the contract itself does not trigger any reserves
 		let deposit = T::Currency::reserved_balance(&addr);
@@ -303,18 +308,22 @@ benchmarks! {
 	}
 
 	// Instantiate uses a dummy contract constructor to measure the overhead of the instantiate.
+	// `i`: Size of the input in kilobytes.
 	// `s`: Size of the salt in kilobytes.
+	#[pov_mode = Ignored]
 	instantiate {
+		let i in 0 .. code::max_pages::<T>() * 64 * 1024;
 		let s in 0 .. code::max_pages::<T>() * 64 * 1024;
+		let input = vec![42u8; i as usize];
 		let salt = vec![42u8; s as usize];
 		let value = Pallet::<T>::min_balance();
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy();
 		let origin = RawOrigin::Signed(caller.clone());
-		let addr = Contracts::<T>::contract_address(&caller, &hash, &salt);
+		let addr = Contracts::<T>::contract_address(&caller, &hash, &input, &salt);
 		Contracts::<T>::store_code_raw(code, caller.clone())?;
-	}: _(origin, value, Weight::MAX, None, hash, vec![], salt)
+	}: _(origin, value, Weight::MAX, None, hash, input, salt)
 	verify {
 		// the contract itself does not trigger any reserves
 		let deposit = T::Currency::reserved_balance(&addr);
@@ -333,6 +342,7 @@ benchmarks! {
 	// part of `seal_input`. The costs for invoking a contract of a specific size are not part
 	// of this benchmark because we cannot know the size of the contract when issuing a call
 	// transaction. See `invoke_per_code_kb` for this.
+	#[pov_mode = Ignored]
 	call {
 		let data = vec![42u8; 1024];
 		let instance = Contract::<T>::with_caller(
@@ -365,6 +375,7 @@ benchmarks! {
 	//
 	// We cannot let `c` grow to the maximum code size because the code is not allowed
 	// to be larger than the maximum size **after instrumentation**.
+	#[pov_mode = Ignored]
 	upload_code {
 		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::MaxCodeLen::get());
 		let caller = whitelisted_caller();
@@ -381,6 +392,7 @@ benchmarks! {
 	// Removing code does not depend on the size of the contract because all the information
 	// needed to verify the removal claim (refcount, owner) is stored in a separate storage
 	// item (`OwnerInfoOf`).
+	#[pov_mode = Ignored]
 	remove_code {
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
@@ -397,6 +409,7 @@ benchmarks! {
 		assert!(<Contract<T>>::code_removed(&hash));
 	}
 
+	#[pov_mode = Ignored]
 	set_code {
 		let instance = <Contract<T>>::with_caller(
 			whitelisted_caller(), WasmModule::dummy(), vec![],
@@ -411,6 +424,7 @@ benchmarks! {
 		assert_eq!(instance.info()?.code_hash, hash);
 	}
 
+	#[pov_mode = Ignored]
 	seal_caller {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
@@ -419,6 +433,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	#[pov_mode = Ignored]
 	seal_is_contract {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let accounts = (0 .. r * API_BENCHMARK_BATCH_SIZE)
@@ -456,6 +471,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	#[pov_mode = Ignored]
 	seal_code_hash {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let accounts = (0 .. r * API_BENCHMARK_BATCH_SIZE)
@@ -501,6 +517,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	#[pov_mode = Ignored]
 	seal_own_code_hash {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
@@ -509,6 +526,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	#[pov_mode = Ignored]
 	seal_caller_is_origin {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let code = WasmModule::<T>::from(ModuleDefinition {
@@ -529,6 +547,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	#[pov_mode = Ignored]
 	seal_address {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
@@ -537,6 +556,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	#[pov_mode = Ignored]
 	seal_gas_left {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
@@ -545,6 +565,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	#[pov_mode = Ignored]
 	seal_balance {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
@@ -553,6 +574,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	#[pov_mode = Ignored]
 	seal_value_transferred {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
@@ -561,6 +583,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	#[pov_mode = Ignored]
 	seal_minimum_balance {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
@@ -569,6 +592,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	#[pov_mode = Ignored]
 	seal_block_number {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
@@ -577,6 +601,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	#[pov_mode = Ignored]
 	seal_now {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
@@ -585,6 +610,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	#[pov_mode = Ignored]
 	seal_weight_to_fee {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let pages = code::max_pages::<T>();
@@ -612,6 +638,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	#[pov_mode = Ignored]
 	seal_gas {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let code = WasmModule::<T>::from(ModuleDefinition {
@@ -632,6 +659,7 @@ benchmarks! {
 
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	#[pov_mode = Ignored]
 	seal_input {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let code = WasmModule::<T>::from(ModuleDefinition {
@@ -659,6 +687,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	#[pov_mode = Ignored]
 	seal_input_per_kb {
 		let n in 0 .. code::max_pages::<T>() * 64;
 		let pages = code::max_pages::<T>();
@@ -692,6 +721,7 @@ benchmarks! {
 	// We cannot call `seal_return` multiple times. Therefore our weight determination is not
 	// as precise as with other APIs. Because this function can only be called once per
 	// contract it cannot be used as an attack vector.
+	#[pov_mode = Ignored]
 	seal_return {
 		let r in 0 .. 1;
 		let code = WasmModule::<T>::from(ModuleDefinition {
@@ -714,6 +744,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	#[pov_mode = Ignored]
 	seal_return_per_kb {
 		let n in 0 .. code::max_pages::<T>() * 64;
 		let code = WasmModule::<T>::from(ModuleDefinition {
@@ -738,6 +769,7 @@ benchmarks! {
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// The same argument as for `seal_return` is true here.
+	#[pov_mode = Ignored]
 	seal_terminate {
 		let r in 0 .. 1;
 		let beneficiary = account::<T::AccountId>("beneficiary", 0, 0);
@@ -780,6 +812,7 @@ benchmarks! {
 	// We benchmark only for the maximum subject length. We assume that this is some lowish
 	// number (< 1 KB). Therefore we are not overcharging too much in case a smaller subject is
 	// used.
+	#[pov_mode = Ignored]
 	seal_random {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let pages = code::max_pages::<T>();
@@ -814,6 +847,7 @@ benchmarks! {
 
 	// Overhead of calling the function without any topic.
 	// We benchmark for the worst case (largest event).
+	#[pov_mode = Ignored]
 	seal_deposit_event {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let code = WasmModule::<T>::from(ModuleDefinition {
@@ -840,6 +874,7 @@ benchmarks! {
 	// Benchmark the overhead that topics generate.
 	// `t`: Number of topics
 	// `n`: Size of event payload in kb
+	#[pov_mode = Ignored]
 	seal_deposit_event_per_topic_and_kb {
 		let t in 0 .. T::Schedule::get().limits.event_topics;
 		let n in 0 .. T::Schedule::get().limits.payload_len / 1024;
@@ -878,6 +913,7 @@ benchmarks! {
 	// The size of the supplied message does not influence the weight because as it is never
 	// processed during on-chain execution: It is only ever read during debugging which happens
 	// when the contract is called as RPC where weights do not matter.
+	#[pov_mode = Ignored]
 	seal_debug_message {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let max_bytes = code::max_pages::<T>() * 64 * 1024;
@@ -908,6 +944,7 @@ benchmarks! {
 	// because re-writing at an existing key is always more expensive than writing
 	// it at a virgin key.
 	#[skip_meta]
+	#[pov_mode = Ignored]
 	seal_set_storage {
 		let r in 0 .. API_BENCHMARK_BATCHES/2;
 		let max_key_len = T::MaxStorageKeyLen::get();
@@ -956,6 +993,7 @@ benchmarks! {
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	#[skip_meta]
+	#[pov_mode = Ignored]
 	seal_set_storage_per_new_kb {
 		let n in 0 .. T::Schedule::get().limits.payload_len / 2048; // half of the max payload_len in kb
 		let max_key_len = T::MaxStorageKeyLen::get();
@@ -1004,6 +1042,7 @@ benchmarks! {
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	#[skip_meta]
+	#[pov_mode = Ignored]
 	seal_set_storage_per_old_kb {
 		let n in 0 .. T::Schedule::get().limits.payload_len / 2048; // half of the max payload_len in kb
 		let max_key_len = T::MaxStorageKeyLen::get();
@@ -1056,6 +1095,7 @@ benchmarks! {
 	// deleting a non existing key. We generate keys of a maximum length, and have to
 	// reduce batch size in order to make resulting contract code size less than MaxCodeLen.
 	#[skip_meta]
+	#[pov_mode = Ignored]
 	seal_clear_storage {
 		let r in 0 .. API_BENCHMARK_BATCHES/2;
 		let max_key_len = T::MaxStorageKeyLen::get();
@@ -1103,6 +1143,7 @@ benchmarks! {
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	#[skip_meta]
+	#[pov_mode = Ignored]
 	seal_clear_storage_per_kb {
 		let n in 0 .. T::Schedule::get().limits.payload_len / 2048; // half of the max payload_len in kb
 		let max_key_len = T::MaxStorageKeyLen::get();
@@ -1150,6 +1191,7 @@ benchmarks! {
 
 	// We make sure that all storage accesses are to unique keys.
 	#[skip_meta]
+	#[pov_mode = Ignored]
 	seal_get_storage {
 		let r in 0 .. API_BENCHMARK_BATCHES/2;
 		let max_key_len = T::MaxStorageKeyLen::get();
@@ -1204,6 +1246,7 @@ benchmarks! {
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	#[skip_meta]
+	#[pov_mode = Ignored]
 	seal_get_storage_per_kb {
 		let n in 0 .. T::Schedule::get().limits.payload_len / 2048; // half of the max payload_len in kb
 		let max_key_len = T::MaxStorageKeyLen::get();
@@ -1259,6 +1302,7 @@ benchmarks! {
 
 	// We make sure that all storage accesses are to unique keys.
 	#[skip_meta]
+	#[pov_mode = Ignored]
 	seal_contains_storage {
 		let r in 0 .. API_BENCHMARK_BATCHES/2;
 		let max_key_len = T::MaxStorageKeyLen::get();
@@ -1307,6 +1351,7 @@ benchmarks! {
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	#[skip_meta]
+	#[pov_mode = Ignored]
 	seal_contains_storage_per_kb {
 		let n in 0 .. T::Schedule::get().limits.payload_len / 2048; // half of the max payload_len in kb
 		let max_key_len = T::MaxStorageKeyLen::get();
@@ -1354,6 +1399,7 @@ benchmarks! {
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	#[skip_meta]
+	#[pov_mode = Ignored]
 	seal_take_storage {
 		let r in 0 .. API_BENCHMARK_BATCHES/2;
 		let max_key_len = T::MaxStorageKeyLen::get();
@@ -1408,6 +1454,7 @@ benchmarks! {
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	#[skip_meta]
+	#[pov_mode = Ignored]
 	seal_take_storage_per_kb {
 		let n in 0 .. T::Schedule::get().limits.payload_len / 2048; // half of the max payload_len in kb
 		let max_key_len = T::MaxStorageKeyLen::get();
@@ -1462,6 +1509,7 @@ benchmarks! {
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// We transfer to unique accounts.
+	#[pov_mode = Ignored]
 	seal_transfer {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let accounts = (0..r * API_BENCHMARK_BATCH_SIZE)
@@ -1515,6 +1563,7 @@ benchmarks! {
 	}
 
 	// We call unique accounts.
+	#[pov_mode = Ignored]
 	seal_call {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let dummy_code = WasmModule::<T>::dummy_with_bytes(0);
@@ -1573,6 +1622,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	#[pov_mode = Ignored]
 	seal_delegate_call {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let hashes = (0..r * API_BENCHMARK_BATCH_SIZE)
@@ -1625,6 +1675,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller);
 	}: call(origin, callee, 0u32.into(), Weight::MAX, None, vec![])
 
+	#[pov_mode = Ignored]
 	seal_call_per_transfer_clone_kb {
 		let t in 0 .. 1;
 		let c in 0 .. code::max_pages::<T>() * 64;
@@ -1683,6 +1734,7 @@ benchmarks! {
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, bytes)
 
 	// We assume that every instantiate sends at least the minimum balance.
+	#[pov_mode = Ignored]
 	seal_instantiate {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let hashes = (0..r * API_BENCHMARK_BATCH_SIZE)
@@ -1779,7 +1831,7 @@ benchmarks! {
 		let addresses = hashes
 			.iter()
 			.map(|hash| Contracts::<T>::contract_address(
-				&instance.account_id, hash, &[],
+				&instance.account_id, hash, &[], &[],
 			))
 			.collect::<Vec<_>>();
 
@@ -1796,8 +1848,10 @@ benchmarks! {
 		}
 	}
 
-	seal_instantiate_per_transfer_salt_kb {
+	#[pov_mode = Ignored]
+	seal_instantiate_per_transfer_input_salt_kb {
 		let t in 0 .. 1;
+		let i in 0 .. (code::max_pages::<T>() - 1) * 64;
 		let s in 0 .. (code::max_pages::<T>() - 1) * 64;
 		let callee_code = WasmModule::<T>::dummy();
 		let hash = callee_code.hash;
@@ -1865,14 +1919,14 @@ benchmarks! {
 				Regular(Instruction::I64Const(0)), // gas
 				Regular(Instruction::I32Const(value_offset as i32)), // value_ptr
 				Regular(Instruction::I32Const(value_len as i32)), // value_len
-				Regular(Instruction::I32Const(0)), // input_data_ptr
-				Regular(Instruction::I32Const(0)), // input_data_len
+				Counter(salt_offset as u32, salt_len as u32), // input_data_ptr
+				Regular(Instruction::I32Const((i * 1024) as i32)), // input_data_len
 				Regular(Instruction::I32Const((addr_len_offset + addr_len) as i32)), // address_ptr
 				Regular(Instruction::I32Const(addr_len_offset as i32)), // address_len_ptr
 				Regular(Instruction::I32Const(SENTINEL as i32)), // output_ptr
 				Regular(Instruction::I32Const(0)), // output_len_ptr
 				Counter(salt_offset as u32, salt_len as u32), // salt_ptr
-				Regular(Instruction::I32Const((s * 1024).max(salt_len as u32) as i32)), // salt_len
+				Regular(Instruction::I32Const((s * 1024) as i32)), // salt_len
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::I32Eqz),
 				Regular(Instruction::If(BlockType::NoResult)),
@@ -1889,6 +1943,7 @@ benchmarks! {
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// Only the overhead of calling the function itself with minimal arguments.
+	#[pov_mode = Ignored]
 	seal_hash_sha2_256 {
 		let r in 0 .. 1;
 		let instance = Contract::<T>::new(WasmModule::hasher(
@@ -1898,6 +1953,7 @@ benchmarks! {
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// `n`: Input to hash in kilobytes
+	#[pov_mode = Ignored]
 	seal_hash_sha2_256_per_kb {
 		let n in 0 .. code::max_pages::<T>() * 64;
 		let instance = Contract::<T>::new(WasmModule::hasher(
@@ -1907,6 +1963,7 @@ benchmarks! {
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// Only the overhead of calling the function itself with minimal arguments.
+	#[pov_mode = Ignored]
 	seal_hash_keccak_256 {
 		let r in 0 .. 1;
 		let instance = Contract::<T>::new(WasmModule::hasher(
@@ -1916,6 +1973,7 @@ benchmarks! {
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// `n`: Input to hash in kilobytes
+	#[pov_mode = Ignored]
 	seal_hash_keccak_256_per_kb {
 		let n in 0 .. code::max_pages::<T>() * 64;
 		let instance = Contract::<T>::new(WasmModule::hasher(
@@ -1925,6 +1983,7 @@ benchmarks! {
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// Only the overhead of calling the function itself with minimal arguments.
+	#[pov_mode = Ignored]
 	seal_hash_blake2_256 {
 		let r in 0 .. 1;
 		let instance = Contract::<T>::new(WasmModule::hasher(
@@ -1934,6 +1993,7 @@ benchmarks! {
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// `n`: Input to hash in kilobytes
+	#[pov_mode = Ignored]
 	seal_hash_blake2_256_per_kb {
 		let n in 0 .. code::max_pages::<T>() * 64;
 		let instance = Contract::<T>::new(WasmModule::hasher(
@@ -1943,6 +2003,7 @@ benchmarks! {
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// Only the overhead of calling the function itself with minimal arguments.
+	#[pov_mode = Ignored]
 	seal_hash_blake2_128 {
 		let r in 0 .. 1;
 		let instance = Contract::<T>::new(WasmModule::hasher(
@@ -1952,6 +2013,7 @@ benchmarks! {
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// `n`: Input to hash in kilobytes
+	#[pov_mode = Ignored]
 	seal_hash_blake2_128_per_kb {
 		let n in 0 .. code::max_pages::<T>() * 64;
 		let instance = Contract::<T>::new(WasmModule::hasher(
@@ -1962,6 +2024,7 @@ benchmarks! {
 
 	// Only calling the function itself with valid arguments.
 	// It generates different private keys and signatures for the message "Hello world".
+	#[pov_mode = Ignored]
 	seal_ecdsa_recover {
 		let r in 0 .. 1;
 
@@ -2010,6 +2073,7 @@ benchmarks! {
 
 	// Only calling the function itself for the list of
 	// generated different ECDSA keys.
+	#[pov_mode = Ignored]
 	seal_ecdsa_to_eth_address {
 		let r in 0 .. 1;
 		let key_type = sp_core::crypto::KeyTypeId(*b"code");
@@ -2045,6 +2109,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	#[pov_mode = Ignored]
 	seal_set_code_hash {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let code_hashes = (0..r * API_BENCHMARK_BATCH_SIZE)
@@ -2085,6 +2150,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	#[pov_mode = Ignored]
 	seal_reentrance_count {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let code = WasmModule::<T>::from(ModuleDefinition {
@@ -2105,6 +2171,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	#[pov_mode = Ignored]
 	seal_account_reentrance_count {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let dummy_code = WasmModule::<T>::dummy_with_bytes(0);
@@ -2138,6 +2205,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	#[pov_mode = Ignored]
 	seal_instantiation_nonce {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let code = WasmModule::<T>::from(ModuleDefinition {
@@ -2168,6 +2236,7 @@ benchmarks! {
 	// The weight that would result from the respective benchmark we call: `w_bench`.
 	//
 	// w_i{32,64}const = w_drop = w_bench / 2
+	#[pov_mode = Ignored]
 	instr_i64const {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
@@ -2182,6 +2251,7 @@ benchmarks! {
 	}
 
 	// w_i{32,64}load = w_bench - 2 * w_param
+	#[pov_mode = Ignored]
 	instr_i64load {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
@@ -2198,6 +2268,7 @@ benchmarks! {
 	}
 
 	// w_i{32,64}store{...} = w_bench - 2 * w_param
+	#[pov_mode = Ignored]
 	instr_i64store {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
@@ -2214,6 +2285,7 @@ benchmarks! {
 	}
 
 	// w_select = w_bench - 4 * w_param
+	#[pov_mode = Ignored]
 	instr_select {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
@@ -2231,6 +2303,7 @@ benchmarks! {
 	}
 
 	// w_if = w_bench - 3 * w_param
+	#[pov_mode = Ignored]
 	instr_if {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
@@ -2251,6 +2324,7 @@ benchmarks! {
 
 	// w_br = w_bench - 2 * w_param
 	// Block instructions are not counted.
+	#[pov_mode = Ignored]
 	instr_br {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
@@ -2277,6 +2351,7 @@ benchmarks! {
 
 	// w_br_if = w_bench - 3 * w_param
 	// Block instructions are not counted.
+	#[pov_mode = Ignored]
 	instr_br_if {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
@@ -2304,6 +2379,7 @@ benchmarks! {
 
 	// w_br_table = w_bench - 3 * w_param
 	// Block instructions are not counted.
+	#[pov_mode = Ignored]
 	instr_br_table {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let table = Box::new(BrTableData {
@@ -2334,6 +2410,7 @@ benchmarks! {
 	}
 
 	// w_br_table_per_entry = w_bench
+	#[pov_mode = Ignored]
 	instr_br_table_per_entry {
 		let e in 1 .. T::Schedule::get().limits.br_table_size;
 		let entry: Vec<u32> = [0, 1].iter()
@@ -2368,6 +2445,7 @@ benchmarks! {
 	}
 
 	// w_call = w_bench - 2 * w_param
+	#[pov_mode = Ignored]
 	instr_call {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
@@ -2381,7 +2459,6 @@ benchmarks! {
 			call_body: Some(body::repeated(r * INSTR_BENCHMARK_BATCH_SIZE, &[
 				Instruction::Call(2), // call aux
 			])),
-			inject_stack_metering: true,
 			.. Default::default()
 		}));
 	}: {
@@ -2389,6 +2466,7 @@ benchmarks! {
 	}
 
 	// w_call_indrect = w_bench - 3 * w_param
+	#[pov_mode = Ignored]
 	instr_call_indirect {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let num_elements = T::Schedule::get().limits.table_size;
@@ -2405,7 +2483,6 @@ benchmarks! {
 				RandomI32(0, num_elements as i32),
 				Regular(Instruction::CallIndirect(0, 0)), // we only have one sig: 0
 			])),
-			inject_stack_metering: true,
 			table: Some(TableSegment {
 				num_elements,
 				function_index: 2, // aux
@@ -2420,6 +2497,7 @@ benchmarks! {
 	// Calling a function indirectly causes it to go through a thunk function whose runtime
 	// linearly depend on the amount of parameters to this function.
 	// Please note that this is not necessary with a direct call.
+	#[pov_mode = Ignored]
 	instr_call_indirect_per_param {
 		let p in 0 .. T::Schedule::get().limits.parameters;
 		let num_elements = T::Schedule::get().limits.table_size;
@@ -2438,7 +2516,6 @@ benchmarks! {
 				RandomI32(0, num_elements as i32),
 				Regular(Instruction::CallIndirect(p.min(1), 0)), // aux signature: 1 or 0
 			])),
-			inject_stack_metering: true,
 			table: Some(TableSegment {
 				num_elements,
 				function_index: 2, // aux
@@ -2450,6 +2527,7 @@ benchmarks! {
 	}
 
 	// w_per_local = w_bench
+	#[pov_mode = Ignored]
 	instr_call_per_local {
 		let l in 0 .. T::Schedule::get().limits.locals;
 		let mut aux_body = body::plain(vec![
@@ -2468,6 +2546,7 @@ benchmarks! {
 	}
 
 	// w_local_get = w_bench - 1 * w_param
+	#[pov_mode = Ignored]
 	instr_local_get {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let max_locals = T::Schedule::get().limits.locals;
@@ -2485,6 +2564,7 @@ benchmarks! {
 	}
 
 	// w_local_set = w_bench - 1 * w_param
+	#[pov_mode = Ignored]
 	instr_local_set {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let max_locals = T::Schedule::get().limits.locals;
@@ -2502,6 +2582,7 @@ benchmarks! {
 	}
 
 	// w_local_tee = w_bench - 2 * w_param
+	#[pov_mode = Ignored]
 	instr_local_tee {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let max_locals = T::Schedule::get().limits.locals;
@@ -2520,6 +2601,7 @@ benchmarks! {
 	}
 
 	// w_global_get = w_bench - 1 * w_param
+	#[pov_mode = Ignored]
 	instr_global_get {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let max_globals = T::Schedule::get().limits.globals;
@@ -2536,6 +2618,7 @@ benchmarks! {
 	}
 
 	// w_global_set = w_bench - 1 * w_param
+	#[pov_mode = Ignored]
 	instr_global_set {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let max_globals = T::Schedule::get().limits.globals;
@@ -2552,6 +2635,7 @@ benchmarks! {
 	}
 
 	// w_memory_get = w_bench - 1 * w_param
+	#[pov_mode = Ignored]
 	instr_memory_current {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
@@ -2571,6 +2655,7 @@ benchmarks! {
 	// Therefore the repeat count is limited by the maximum memory any contract can have.
 	// Using a contract with more memory will skew the benchmark because the runtime of grow
 	// depends on how much memory is already allocated.
+	#[pov_mode = Ignored]
 	instr_memory_grow {
 		let r in 0 .. 1;
 		let max_pages = ImportedMemory::max::<T>().max_pages;
@@ -2593,6 +2678,7 @@ benchmarks! {
 	// Unary numeric instructions.
 	// All use w = w_bench - 2 * w_param.
 
+	#[pov_mode = Ignored]
 	instr_i64clz {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::unary_instr(
@@ -2603,6 +2689,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64ctz {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::unary_instr(
@@ -2613,6 +2700,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64popcnt {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::unary_instr(
@@ -2623,6 +2711,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64eqz {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::unary_instr(
@@ -2633,6 +2722,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64extendsi32 {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
@@ -2647,6 +2737,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64extendui32 {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
@@ -2661,6 +2752,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i32wrapi64 {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::unary_instr(
@@ -2674,6 +2766,7 @@ benchmarks! {
 	// Binary numeric instructions.
 	// All use w = w_bench - 3 * w_param.
 
+	#[pov_mode = Ignored]
 	instr_i64eq {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
@@ -2684,6 +2777,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64ne {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
@@ -2694,6 +2788,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64lts {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
@@ -2704,6 +2799,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64ltu {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
@@ -2714,6 +2810,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64gts {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
@@ -2724,6 +2821,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64gtu {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
@@ -2734,6 +2832,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64les {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
@@ -2744,6 +2843,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64leu {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
@@ -2754,6 +2854,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64ges {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
@@ -2764,6 +2865,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64geu {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
@@ -2774,6 +2876,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64add {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
@@ -2784,6 +2887,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64sub {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
@@ -2794,6 +2898,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64mul {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
@@ -2804,6 +2909,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64divs {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
@@ -2814,6 +2920,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64divu {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
@@ -2824,6 +2931,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64rems {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
@@ -2834,6 +2942,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64remu {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
@@ -2844,6 +2953,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64and {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
@@ -2854,6 +2964,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64or {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
@@ -2864,6 +2975,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64xor {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
@@ -2874,6 +2986,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64shl {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
@@ -2884,6 +2997,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64shrs {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
@@ -2894,6 +3008,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64shru {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
@@ -2904,6 +3019,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64rotl {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
@@ -2914,6 +3030,7 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	#[pov_mode = Ignored]
 	instr_i64rotr {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
@@ -2928,9 +3045,10 @@ benchmarks! {
 	// configured `Schedule` during benchmark development.
 	// It can be outputed using the following command:
 	// cargo run --manifest-path=bin/node/cli/Cargo.toml --release \
-	//     --features runtime-benchmarks -- benchmark --extra --dev --execution=native \
+	//     --features runtime-benchmarks -- benchmark pallet --extra --dev --execution=native \
 	//     -p pallet_contracts -e print_schedule --no-median-slopes --no-min-squares
 	#[extra]
+	#[pov_mode = Ignored]
 	print_schedule {
 		#[cfg(feature = "std")]
 		{
@@ -2956,6 +3074,7 @@ benchmarks! {
 	// `g` is used to enable gas instrumentation to compare the performance impact of
 	// that instrumentation at runtime.
 	#[extra]
+	#[pov_mode = Ignored]
 	ink_erc20_transfer {
 		let g in 0 .. 1;
 		let gas_metering = g != 0;
@@ -2965,7 +3084,7 @@ benchmarks! {
 			new.encode()
 		};
 		let instance = Contract::<T>::new(
-			WasmModule::instrumented(code, gas_metering, true), data,
+			WasmModule::instrumented(code, gas_metering), data,
 		)?;
 		let data = {
 			let transfer: ([u8; 4], AccountIdOf<T>, BalanceOf<T>) = (
@@ -2994,6 +3113,7 @@ benchmarks! {
 	// `g` is used to enable gas instrumentation to compare the performance impact of
 	// that instrumentation at runtime.
 	#[extra]
+	#[pov_mode = Ignored]
 	solang_erc20_transfer {
 		let g in 0 .. 1;
 		let gas_metering = g != 0;
@@ -3012,7 +3132,7 @@ benchmarks! {
 			new.encode()
 		};
 		let instance = Contract::<T>::with_caller(
-			caller, WasmModule::instrumented(code, gas_metering, true), data,
+			caller, WasmModule::instrumented(code, gas_metering), data,
 		)?;
 		balance[0] = 1;
 		let data = {

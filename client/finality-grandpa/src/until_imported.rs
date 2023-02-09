@@ -579,7 +579,7 @@ mod tests {
 
 	impl TestChainState {
 		fn new() -> (Self, ImportNotifications<Block>) {
-			let (tx, rx) = tracing_unbounded("test");
+			let (tx, rx) = tracing_unbounded("test", 100_000);
 			let state =
 				TestChainState { sender: tx, known_blocks: Arc::new(Mutex::new(HashMap::new())) };
 
@@ -593,16 +593,17 @@ mod tests {
 		fn import_header(&self, header: Header) {
 			let hash = header.hash();
 			let number = *header.number();
-
+			let (tx, _rx) = tracing_unbounded("unpin-worker-channel", 10_000);
 			self.known_blocks.lock().insert(hash, number);
 			self.sender
-				.unbounded_send(BlockImportNotification {
+				.unbounded_send(BlockImportNotification::<Block>::new(
 					hash,
-					origin: BlockOrigin::File,
+					BlockOrigin::File,
 					header,
-					is_new_best: false,
-					tree_route: None,
-				})
+					false,
+					None,
+					tx,
+				))
 				.unwrap();
 		}
 	}
@@ -680,7 +681,7 @@ mod tests {
 		// enact all dependencies before importing the message
 		enact_dependencies(&chain_state);
 
-		let (global_tx, global_rx) = tracing_unbounded("test");
+		let (global_tx, global_rx) = tracing_unbounded("test", 100_000);
 
 		let until_imported = UntilGlobalMessageBlocksImported::new(
 			import_notifications,
@@ -708,7 +709,7 @@ mod tests {
 		let (chain_state, import_notifications) = TestChainState::new();
 		let block_status = chain_state.block_status();
 
-		let (global_tx, global_rx) = tracing_unbounded("test");
+		let (global_tx, global_rx) = tracing_unbounded("test", 100_000);
 
 		let until_imported = UntilGlobalMessageBlocksImported::new(
 			import_notifications,
@@ -896,7 +897,7 @@ mod tests {
 		let (chain_state, import_notifications) = TestChainState::new();
 		let block_status = chain_state.block_status();
 
-		let (global_tx, global_rx) = tracing_unbounded("test");
+		let (global_tx, global_rx) = tracing_unbounded("test", 100_000);
 
 		let block_sync_requester = TestBlockSyncRequester::default();
 

@@ -120,7 +120,7 @@ where
 	) -> Result<Self, Error> {
 		let beefy_best_block = Arc::new(RwLock::new(None));
 
-		let stream = best_block_stream.subscribe();
+		let stream = best_block_stream.subscribe(100_000);
 		let closure_clone = beefy_best_block.clone();
 		let future = stream.for_each(move |best_beefy| {
 			let async_clone = closure_clone.clone();
@@ -141,7 +141,7 @@ where
 	fn subscribe_justifications(&self, mut sink: SubscriptionSink) -> SubscriptionResult {
 		let stream = self
 			.finality_proof_stream
-			.subscribe()
+			.subscribe(100_000)
 			.map(|vfp| notification::EncodedVersionedFinalityProof::new::<Block>(vfp));
 
 		let fut = async move {

@@ -28,7 +28,7 @@
 
 use crate::config::*;
 use codec::{Decode, Encode};
-use futures::{channel::mpsc, prelude::*, stream::FuturesUnordered};
+use futures::{prelude::*, stream::FuturesUnordered};
 use libp2p::{multiaddr, PeerId};
 use log::{debug, trace, warn};
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
@@ -40,6 +40,7 @@ use sc_network_common::{
 	utils::{interval, LruHashSet},
 	ExHashT,
 };
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	collections::{hash_map::Entry, HashMap},
@@ -168,7 +169,7 @@ impl TransactionsHandlerPrototype {
 		metrics_registry: Option<&Registry>,
 	) -> error::Result<(TransactionsHandler<B, H, S>, TransactionsHandlerController<H>)> {
 		let event_stream = service.event_stream("transactions-handler");
-		let (to_handler, from_controller) = mpsc::unbounded();
+		let (to_handler, from_controller) = tracing_unbounded("mpsc_transactions_handler", 100_000);
 
 		let handler = TransactionsHandler {
 			protocol_name: self.protocol_name,
@@ -197,7 +198,7 @@ impl TransactionsHandlerPrototype {
 
 /// Controls the behaviour of a [`TransactionsHandler`] it is connected to.
 pub struct TransactionsHandlerController<H: ExHashT> {
-	to_handler: mpsc::UnboundedSender<ToHandler<H>>,
+	to_handler: TracingUnboundedSender<ToHandler<H>>,
 }
 
 impl<H: ExHashT> TransactionsHandlerController<H> {
@@ -246,7 +247,7 @@ pub struct TransactionsHandler<
 	// All connected peers
 	peers: HashMap<PeerId, Peer<H>>,
 	transaction_pool: Arc<dyn TransactionPool<H, B>>,
-	from_controller: mpsc::UnboundedReceiver<ToHandler<H>>,
+	from_controller: TracingUnboundedReceiver<ToHandler<H>>,
 	/// Prometheus metrics.
 	metrics: Option<Metrics>,
 }

@@ -104,7 +104,7 @@ where
 	}
 
 	fn subscribe_justifications(&self, mut sink: SubscriptionSink) -> SubscriptionResult {
-		let stream = self.justification_stream.subscribe().map(
+		let stream = self.justification_stream.subscribe(100_000).map(
 			|x: sc_finality_grandpa::GrandpaJustification<Block>| {
 				JustificationNotification::from(x)
 			},

@@ -88,7 +88,7 @@ pub mod v1 {
 	use super::*;
 
 	/// The log target.
-	const TARGET: &'static str = "runtime::democracy::migration::v1";
+	const TARGET: &'static str = "runtime::referenda::migration::v1";
 
 	/// Transforms a submission deposit of ReferendumInfo(Approved|Rejected|Cancelled|TimedOut) to
 	/// optional value, making it refundable.

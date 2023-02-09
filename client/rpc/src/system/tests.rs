@@ -52,7 +52,7 @@ impl Default for Status {
 fn api<T: Into<Option<Status>>>(sync: T) -> RpcModule<System<Block>> {
 	let status = sync.into().unwrap_or_default();
 	let should_have_peers = !status.is_dev;
-	let (tx, rx) = tracing_unbounded("rpc_system_tests");
+	let (tx, rx) = tracing_unbounded("rpc_system_tests", 10_000);
 	thread::spawn(move || {
 		futures::executor::block_on(rx.for_each(move |request| {
 			match request {

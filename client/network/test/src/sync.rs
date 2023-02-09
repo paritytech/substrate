@@ -267,9 +267,9 @@ async fn sync_justifications() {
 	net.peer(0).client().finalize_block(hashof15, Some(just.clone()), true).unwrap();
 	net.peer(0).client().finalize_block(hashof20, Some(just.clone()), true).unwrap();
 
-	let hashof10 = net.peer(1).client().header(&BlockId::Number(10)).unwrap().unwrap().hash();
-	let hashof15 = net.peer(1).client().header(&BlockId::Number(15)).unwrap().unwrap().hash();
-	let hashof20 = net.peer(1).client().header(&BlockId::Number(20)).unwrap().unwrap().hash();
+	let hashof10 = net.peer(1).client().as_client().hash(10).unwrap().unwrap();
+	let hashof15 = net.peer(1).client().as_client().hash(15).unwrap().unwrap();
+	let hashof20 = net.peer(1).client().as_client().hash(20).unwrap().unwrap();
 
 	// peer 1 should get the justifications from the network
 	net.peer(1).request_justification(&hashof10, 10);
@@ -408,8 +408,8 @@ async fn can_sync_small_non_best_forks() {
 	net.peer(1).push_blocks(10, false);
 	assert_eq!(net.peer(1).client().info().best_number, 40);
 
-	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
-	assert!(net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_none());
+	assert!(net.peer(0).client().header(small_hash).unwrap().is_some());
+	assert!(net.peer(1).client().header(small_hash).unwrap().is_none());
 
 	// poll until the two nodes connect, otherwise announcing the block will not work
 	futures::future::poll_fn::<(), _>(|cx| {
@@ -426,8 +426,8 @@ async fn can_sync_small_non_best_forks() {
 
 	assert_eq!(net.peer(0).client().info().best_number, 40);
 
-	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
-	assert!(!net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
+	assert!(net.peer(0).client().header(small_hash).unwrap().is_some());
+	assert!(!net.peer(1).client().header(small_hash).unwrap().is_some());
 
 	net.peer(0).announce_block(small_hash, None);
 
@@ -436,8 +436,8 @@ async fn can_sync_small_non_best_forks() {
 	futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 
-		assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
-		if net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_none() {
+		assert!(net.peer(0).client().header(small_hash).unwrap().is_some());
+		if net.peer(1).client().header(small_hash).unwrap().is_none() {
 			return Poll::Pending
 		}
 		Poll::Ready(())
@@ -449,7 +449,7 @@ async fn can_sync_small_non_best_forks() {
 	net.peer(0).announce_block(another_fork, None);
 	futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
-		if net.peer(1).client().header(&BlockId::Hash(another_fork)).unwrap().is_none() {
+		if net.peer(1).client().header(another_fork).unwrap().is_none() {
 			return Poll::Pending
 		}
 		Poll::Ready(())
@@ -478,7 +478,7 @@ async fn can_sync_forks_ahead_of_the_best_chain() {
 		.unwrap();
 	// Peer 1 is on 1-block fork
 	net.peer(1).push_blocks(1, false);
-	assert!(net.peer(0).client().header(&BlockId::Hash(fork_hash)).unwrap().is_some());
+	assert!(net.peer(0).client().header(fork_hash).unwrap().is_some());
 	assert_eq!(net.peer(0).client().info().best_number, 1);
 	assert_eq!(net.peer(1).client().info().best_number, 2);
 
@@ -486,7 +486,7 @@ async fn can_sync_forks_ahead_of_the_best_chain() {
 	futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 
-		if net.peer(1).client().header(&BlockId::Hash(fork_hash)).unwrap().is_none() {
+		if net.peer(1).client().header(fork_hash).unwrap().is_none() {
 			return Poll::Pending
 		}
 		Poll::Ready(())
@@ -512,8 +512,8 @@ async fn can_sync_explicit_forks() {
 	net.peer(1).push_blocks(10, false);
 	assert_eq!(net.peer(1).client().info().best_number, 40);
 
-	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
-	assert!(net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_none());
+	assert!(net.peer(0).client().header(small_hash).unwrap().is_some());
+	assert!(net.peer(1).client().header(small_hash).unwrap().is_none());
 
 	// poll until the two nodes connect, otherwise announcing the block will not work
 	futures::future::poll_fn::<(), _>(|cx| {
@@ -530,8 +530,8 @@ async fn can_sync_explicit_forks() {
 
 	assert_eq!(net.peer(0).client().info().best_number, 40);
 
-	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
-	assert!(!net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
+	assert!(net.peer(0).client().header(small_hash).unwrap().is_some());
+	assert!(!net.peer(1).client().header(small_hash).unwrap().is_some());
 
 	// request explicit sync
 	let first_peer_id = net.peer(0).id();
@@ -541,8 +541,8 @@ async fn can_sync_explicit_forks() {
 	futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 
-		assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
-		if net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_none() {
+		assert!(net.peer(0).client().header(small_hash).unwrap().is_some());
+		if net.peer(1).client().header(small_hash).unwrap().is_none() {
 			return Poll::Pending
 		}
 		Poll::Ready(())
@@ -634,7 +634,7 @@ async fn imports_stale_once() {
 
 		futures::future::poll_fn::<(), _>(|cx| {
 			net.poll(cx);
-			if net.peer(1).client().header(&BlockId::Hash(hash)).unwrap().is_some() {
+			if net.peer(1).client().header(hash).unwrap().is_some() {
 				Poll::Ready(())
 			} else {
 				Poll::Pending
@@ -992,9 +992,8 @@ async fn multiple_requests_are_accepted_as_long_as_they_are_not_fulfilled() {
 	let hashes = net.peer(0).push_blocks(10, false);
 	net.run_until_sync().await;
 
-	let hashof10 = hashes[9];
-
 	// there's currently no justification for block #10
+	let hashof10 = hashes[9];
 	assert_eq!(net.peer(0).client().justifications(hashof10).unwrap(), None);
 	assert_eq!(net.peer(1).client().justifications(hashof10).unwrap(), None);
 
@@ -1061,8 +1060,8 @@ async fn syncs_all_forks_from_single_peer() {
 	net.run_until_sync().await;
 
 	// Peer 1 should have both branches,
-	assert!(net.peer(1).client().header(&BlockId::Hash(branch1)).unwrap().is_some());
-	assert!(net.peer(1).client().header(&BlockId::Hash(branch2)).unwrap().is_some());
+	assert!(net.peer(1).client().header(branch1).unwrap().is_some());
+	assert!(net.peer(1).client().header(branch2).unwrap().is_some());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1086,7 +1085,7 @@ async fn syncs_after_missing_announcement() {
 	let final_block = net.peer(0).push_blocks_at(BlockId::Number(11), 1, false).pop().unwrap();
 	net.peer(1).push_blocks_at(BlockId::Number(10), 1, true);
 	net.run_until_sync().await;
-	assert!(net.peer(1).client().header(&BlockId::Hash(final_block)).unwrap().is_some());
+	assert!(net.peer(1).client().header(final_block).unwrap().is_some());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

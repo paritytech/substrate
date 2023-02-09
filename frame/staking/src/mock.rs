@@ -20,13 +20,14 @@
 use crate::{self as pallet_staking, *};
 use frame_election_provider_support::{onchain, SequentialPhragmen, VoteWeight};
 use frame_support::{
-	assert_ok, parameter_types,
+	assert_ok, ord_parameter_types, parameter_types,
 	traits::{
-		ConstU32, ConstU64, Currency, FindAuthor, GenesisBuild, Get, Hooks, Imbalance,
-		OnUnbalanced, OneSessionHandler,
+		ConstU32, ConstU64, Currency, EitherOfDiverse, FindAuthor, GenesisBuild, Get, Hooks,
+		Imbalance, OnUnbalanced, OneSessionHandler,
 	},
 	weights::constants::RocksDbWeight,
 };
+use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
 use sp_io;
 use sp_runtime::{
@@ -90,14 +91,14 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
-		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
-		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
-		Historical: pallet_session::historical::{Pallet, Storage},
-		VoterBagsList: pallet_bags_list::<Instance1>::{Pallet, Call, Storage, Event<T>},
+		System: frame_system,
+		Authorship: pallet_authorship,
+		Timestamp: pallet_timestamp,
+		Balances: pallet_balances,
+		Staking: pallet_staking,
+		Session: pallet_session,
+		Historical: pallet_session::historical,
+		VoterBagsList: pallet_bags_list::<Instance1>,
 	}
 );
 
@@ -113,10 +114,6 @@ impl FindAuthor<AccountId> for Author11 {
 }
 
 parameter_types! {
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(
-			Weight::from_parts(frame_support::weights::constants::WEIGHT_REF_TIME_PER_SECOND * 2, u64::MAX),
-		);
 	pub static SessionsPerEra: SessionIndex = 3;
 	pub static ExistentialDeposit: Balance = 1;
 	pub static SlashDeferDuration: EraIndex = 0;
@@ -185,8 +182,6 @@ impl pallet_session::historical::Config for Test {
 }
 impl pallet_authorship::Config for Test {
 	type FindAuthor = Author11;
-	type UncleGenerations = ConstU64<0>;
-	type FilterUncle = ();
 	type EventHandler = Pallet<Test>;
 }
 
@@ -292,7 +287,7 @@ impl crate::pallet::pallet::Config for Test {
 	type Reward = MockReward;
 	type SessionsPerEra = SessionsPerEra;
 	type SlashDeferDuration = SlashDeferDuration;
-	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
+	type AdminOrigin = EnsureOneOrRoot;
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
 	type EraPayout = ConvertCurve<RewardCurve>;
@@ -797,6 +792,11 @@ pub(crate) fn staking_events() -> Vec<crate::Event<Test>> {
 parameter_types! {
 	static StakingEventsIndex: usize = 0;
 }
+ord_parameter_types! {
+	pub const One: u64 = 1;
+}
+
+type EnsureOneOrRoot = EitherOfDiverse<EnsureRoot<AccountId>, EnsureSignedBy<One, AccountId>>;
 
 pub(crate) fn staking_events_since_last_call() -> Vec<crate::Event<Test>> {
 	let all: Vec<_> = System::events()

@@ -122,7 +122,7 @@ where
 				};
 
 				if let Ok(hash) = effective_block_hash {
-					if let Ok(Some(header)) = self.inner.header(BlockId::Hash(hash)) {
+					if let Ok(Some(header)) = self.inner.header(hash) {
 						if *header.number() == pending_change.effective_number() {
 							out.push((header.hash(), *header.number()));
 						}
@@ -364,14 +364,12 @@ where
 					// best finalized block.
 					let best_finalized_number = self.inner.info().finalized_number;
 					let canon_number = best_finalized_number.min(median_last_finalized_number);
-					let canon_hash =
-						self.inner.header(BlockId::Number(canon_number))
+					let canon_hash = self.inner.hash(canon_number)
 							.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 							.expect(
 								"the given block number is less or equal than the current best finalized number; \
 								 current best finalized number must exist in chain; qed."
-							)
-							.hash();
+							);
 
 					NewAuthoritySet {
 						canon_number,
@@ -536,7 +534,7 @@ where
 
 		// early exit if block already in chain, otherwise the check for
 		// authority changes will error when trying to re-import a change block
-		match self.inner.status(BlockId::Hash(hash)) {
+		match self.inner.status(hash) {
 			Ok(BlockStatus::InChain) => {
 				// Strip justifications when re-importing an existing block.
 				let _justifications = block.justifications.take();
