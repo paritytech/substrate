@@ -78,4 +78,4 @@ runtime-benchmarks = [
 fuzz = [
 	"frame-election-provider-support/fuzz"
 ]
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = ["frame-support/try-runtime", "frame-election-provider-support/try-runtime"]

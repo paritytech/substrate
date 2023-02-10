@@ -76,7 +76,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 		quote::quote! {
 			impl<#type_impl_gen>
 				#frame_support::traits::Hooks<<T as #frame_system::Config>::BlockNumber>
-				for Pallet<#type_use_gen> {}
+				for #pallet_ident<#type_use_gen> #where_clause {}
 		}
 	} else {
 		proc_macro2::TokenStream::new()

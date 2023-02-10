@@ -276,6 +276,13 @@ pub mod pallet {
 	}
 }
 
+#[cfg(any(test, feature = "try-runtime", feature = "fuzz"))]
+impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	pub fn do_try_state() -> Result<(), &'static str> {
+		List::<T, I>::do_try_state()
+	}
+}
+
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Move an account from one bag to another, depositing an event on success.
 	///
@@ -326,8 +333,10 @@ impl<T: Config<I>, I: 'static> ReadOnlySortedListProvider<T::AccountId> for Pall
 	fn get_score(id: &T::AccountId) -> Result<T::Score, ListError> {
 		List::<T, I>::get_score(id)
 	}
+
+	#[cfg(feature = "try-runtime")]
 	fn try_state() -> Result<(), &'static str> {
-		List::<T, I>::try_state()
+		Self::do_try_state()
 	}
 
 	frame_election_provider_support::runtime_benchmarks_or_test_enabled! {

@@ -407,7 +407,6 @@ pub mod v8 {
 				Nominators::<T::Config>::iter().map(|(id, _)| id),
 				Pallet::<T::Config>::weight_of_fn(),
 			);
-			debug_assert_eq!(T::VoterList::try_state(), Ok(()));
 
 			obsolete::StorageVersion::<T::Config>::put(obsolete::Releases::V8_0_0);
 			frame_support::log::info!(

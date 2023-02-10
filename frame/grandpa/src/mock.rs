@@ -220,6 +220,7 @@ impl pallet_offences::Config for Test {
 parameter_types! {
 	pub const ReportLongevity: u64 =
 		BondingDuration::get() as u64 * SessionsPerEra::get() as u64 * Period::get();
+	pub const MaxSetIdSessionEntries: u32 = BondingDuration::get() * SessionsPerEra::get();
 }
 
 impl Config for Test {
@@ -240,6 +241,7 @@ impl Config for Test {
 
 	type WeightInfo = ();
 	type MaxAuthorities = ConstU32<100>;
+	type MaxSetIdSessionEntries = MaxSetIdSessionEntries;
 }
 
 pub fn grandpa_log(log: ConsensusLog<u64>) -> DigestItem {

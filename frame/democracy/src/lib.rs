@@ -155,14 +155,17 @@
 use codec::{Decode, Encode};
 use frame_support::{
 	ensure,
+	error::BadOrigin,
 	traits::{
 		defensive_prelude::*,
 		schedule::{v3::Named as ScheduleNamed, DispatchTime},
-		Bounded, Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced, QueryPreimage,
-		ReservableCurrency, StorePreimage, WithdrawReasons,
+		Bounded, Currency, EnsureOrigin, Get, Hash as PreimageHash, LockIdentifier,
+		LockableCurrency, OnUnbalanced, QueryPreimage, ReservableCurrency, StorePreimage,
+		WithdrawReasons,
 	},
 	weights::Weight,
 };
+use frame_system::pallet_prelude::OriginFor;
 use sp_runtime::{
 	traits::{Bounded as ArithBounded, One, Saturating, StaticLookup, Zero},
 	ArithmeticError, DispatchError, DispatchResult,
@@ -176,7 +179,10 @@ mod vote_threshold;
 pub mod weights;
 pub use conviction::Conviction;
 pub use pallet::*;
-pub use types::{Delegations, ReferendumInfo, ReferendumStatus, Tally, UnvoteScope};
+pub use types::{
+	Delegations, MetadataOwner, PropIndex, ReferendumIndex, ReferendumInfo, ReferendumStatus,
+	Tally, UnvoteScope,
+};
 pub use vote::{AccountVote, Vote, Voting};
 pub use vote_threshold::{Approved, VoteThreshold};
 pub use weights::WeightInfo;
@@ -190,12 +196,6 @@ pub mod benchmarking;
 pub mod migrations;
 
 const DEMOCRACY_ID: LockIdentifier = *b"democrac";
-
-/// A proposal index.
-pub type PropIndex = u32;
-
-/// A referendum index.
-pub type ReferendumIndex = u32;
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -425,6 +425,15 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type Cancellations<T: Config> = StorageMap<_, Identity, H256, bool, ValueQuery>;
 
+	/// General information concerning any proposal or referendum.
+	/// The `PreimageHash` refers to the preimage of the `Preimages` provider which can be a JSON
+	/// dump or IPFS hash of a JSON file.
+	///
+	/// Consider a garbage collection for a metadata of finished referendums to `unrequest` (remove)
+	/// large preimages.
+	#[pallet::storage]
+	pub type MetadataOf<T: Config> = StorageMap<_, Blake2_128Concat, MetadataOwner, PreimageHash>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		_phantom: sp_std::marker::PhantomData<T>,
@@ -477,6 +486,29 @@ pub mod pallet {
 		Seconded { seconder: T::AccountId, prop_index: PropIndex },
 		/// A proposal got canceled.
 		ProposalCanceled { prop_index: PropIndex },
+		/// Metadata for a proposal or a referendum has been set.
+		MetadataSet {
+			/// Metadata owner.
+			owner: MetadataOwner,
+			/// Preimage hash.
+			hash: PreimageHash,
+		},
+		/// Metadata for a proposal or a referendum has been cleared.
+		MetadataCleared {
+			/// Metadata owner.
+			owner: MetadataOwner,
+			/// Preimage hash.
+			hash: PreimageHash,
+		},
+		/// Metadata has been transferred to new owner.
+		MetadataTransferred {
+			/// Previous metadata owner.
+			prev_owner: MetadataOwner,
+			/// New metadata owner.
+			owner: MetadataOwner,
+			/// Preimage hash.
+			hash: PreimageHash,
+		},
 	}
 
 	#[pallet::error]
@@ -528,6 +560,8 @@ pub mod pallet {
 		TooMany,
 		/// Voting period too low
 		VotingPeriodLow,
+		/// The preimage does not exist.
+		PreimageNotExist,
 	}
 
 	#[pallet::hooks]
@@ -773,12 +807,13 @@ pub mod pallet {
 
 			<NextExternal<T>>::kill();
 			let now = <frame_system::Pallet<T>>::block_number();
-			Self::inject_referendum(
+			let ref_index = Self::inject_referendum(
 				now.saturating_add(voting_period),
 				ext_proposal,
 				threshold,
 				delay,
 			);
+			Self::transfer_metadata(MetadataOwner::External, MetadataOwner::Referendum(ref_index));
 			Ok(())
 		}
 
@@ -816,6 +851,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::Vetoed { who, proposal_hash, until });
 			<NextExternal<T>>::kill();
+			Self::clear_metadata(MetadataOwner::External);
 			Ok(())
 		}
 
@@ -1025,12 +1061,14 @@ pub mod pallet {
 							T::Slash::on_unbalanced(T::Currency::slash_reserved(&who, amount).0);
 						}
 					}
+					Self::clear_metadata(MetadataOwner::Proposal(prop_index));
 				}
 			});
 
 			// Remove the external queued referendum, if it's there.
 			if matches!(NextExternal::<T>::get(), Some((p, ..)) if p.hash() == proposal_hash) {
 				NextExternal::<T>::kill();
+				Self::clear_metadata(MetadataOwner::External);
 			}
 
 			// Remove the referendum, if it's there.
@@ -1067,8 +1105,68 @@ pub mod pallet {
 					T::Slash::on_unbalanced(T::Currency::slash_reserved(&who, amount).0);
 				}
 			}
-
 			Self::deposit_event(Event::<T>::ProposalCanceled { prop_index });
+			Self::clear_metadata(MetadataOwner::Proposal(prop_index));
+			Ok(())
+		}
+
+		/// Set or clear a metadata of a proposal or a referendum.
+		///
+		/// Parameters:
+		/// - `origin`: Must correspond to the `MetadataOwner`.
+		///     - `ExternalOrigin` for an external proposal with the `SuperMajorityApprove`
+		///       threshold.
+		///     - `ExternalDefaultOrigin` for an external proposal with the `SuperMajorityAgainst`
+		///       threshold.
+		///     - `ExternalMajorityOrigin` for an external proposal with the `SimpleMajority`
+		///       threshold.
+		///     - `Signed` by a creator for a public proposal.
+		///     - `Signed` to clear a metadata for a finished referendum.
+		///     - `Root` to set a metadata for an ongoing referendum.
+		/// - `owner`: an identifier of a metadata owner.
+		/// - `maybe_hash`: The hash of an on-chain stored preimage. `None` to clear a metadata.
+		#[pallet::call_index(18)]
+		#[pallet::weight(
+			match (owner, maybe_hash) {
+				(MetadataOwner::External, Some(_)) => T::WeightInfo::set_external_metadata(),
+				(MetadataOwner::External, None) => T::WeightInfo::clear_external_metadata(),
+				(MetadataOwner::Proposal(_), Some(_)) => T::WeightInfo::set_proposal_metadata(),
+				(MetadataOwner::Proposal(_), None) => T::WeightInfo::clear_proposal_metadata(),
+				(MetadataOwner::Referendum(_), Some(_)) => T::WeightInfo::set_referendum_metadata(),
+				(MetadataOwner::Referendum(_), None) => T::WeightInfo::clear_referendum_metadata(),
+			}
+		)]
+		pub fn set_metadata(
+			origin: OriginFor<T>,
+			owner: MetadataOwner,
+			maybe_hash: Option<PreimageHash>,
+		) -> DispatchResult {
+			match owner {
+				MetadataOwner::External => {
+					let (_, threshold) = <NextExternal<T>>::get().ok_or(Error::<T>::NoProposal)?;
+					Self::ensure_external_origin(threshold, origin)?;
+				},
+				MetadataOwner::Proposal(index) => {
+					let who = ensure_signed(origin)?;
+					let (_, _, proposer) = Self::proposal(index)?;
+					ensure!(proposer == who, Error::<T>::NoPermission);
+				},
+				MetadataOwner::Referendum(index) => {
+					let is_root = ensure_signed_or_root(origin)?.is_none();
+					ensure!(is_root || maybe_hash.is_none(), Error::<T>::NoPermission);
+					ensure!(
+						is_root || Self::referendum_status(index).is_err(),
+						Error::<T>::NoPermission
+					);
+				},
+			}
+			if let Some(hash) = maybe_hash {
+				ensure!(T::Preimages::len(&hash).is_some(), Error::<T>::PreimageNotExist);
+				MetadataOf::<T>::insert(owner.clone(), hash);
+				Self::deposit_event(Event::<T>::MetadataSet { owner, hash });
+			} else {
+				Self::clear_metadata(owner);
+			}
 			Ok(())
 		}
 	}
@@ -1146,6 +1244,7 @@ impl<T: Config> Pallet<T> {
 	pub fn internal_cancel_referendum(ref_index: ReferendumIndex) {
 		Self::deposit_event(Event::<T>::Cancelled { ref_index });
 		ReferendumInfoOf::<T>::remove(ref_index);
+		Self::clear_metadata(MetadataOwner::Referendum(ref_index));
 	}
 
 	// private.
@@ -1432,12 +1531,13 @@ impl<T: Config> Pallet<T> {
 		if let Some((proposal, threshold)) = <NextExternal<T>>::take() {
 			LastTabledWasExternal::<T>::put(true);
 			Self::deposit_event(Event::<T>::ExternalTabled);
-			Self::inject_referendum(
+			let ref_index = Self::inject_referendum(
 				now.saturating_add(T::VotingPeriod::get()),
 				proposal,
 				threshold,
 				T::EnactmentPeriod::get(),
 			);
+			Self::transfer_metadata(MetadataOwner::External, MetadataOwner::Referendum(ref_index));
 			Ok(())
 		} else {
 			return Err(Error::<T>::NoneWaiting.into())
@@ -1460,12 +1560,16 @@ impl<T: Config> Pallet<T> {
 					T::Currency::unreserve(d, deposit);
 				}
 				Self::deposit_event(Event::<T>::Tabled { proposal_index: prop_index, deposit });
-				Self::inject_referendum(
+				let ref_index = Self::inject_referendum(
 					now.saturating_add(T::VotingPeriod::get()),
 					proposal,
 					VoteThreshold::SuperMajorityApprove,
 					T::EnactmentPeriod::get(),
 				);
+				Self::transfer_metadata(
+					MetadataOwner::Proposal(prop_index),
+					MetadataOwner::Referendum(ref_index),
+				)
 			}
 			Ok(())
 		} else {
@@ -1577,6 +1681,52 @@ impl<T: Config> Pallet<T> {
 		// DepositOf first tuple element is a vec, decoding its len is equivalent to decode a
 		// `Compact<u32>`.
 		decode_compact_u32_at(&<DepositOf<T>>::hashed_key_for(proposal))
+	}
+
+	/// Return a proposal of an index.
+	fn proposal(index: PropIndex) -> Result<(PropIndex, BoundedCallOf<T>, T::AccountId), Error<T>> {
+		PublicProps::<T>::get()
+			.into_iter()
+			.find(|(prop_index, _, _)| prop_index == &index)
+			.ok_or(Error::<T>::ProposalMissing)
+	}
+
+	/// Clear metadata if exist for a given owner.
+	fn clear_metadata(owner: MetadataOwner) {
+		if let Some(hash) = MetadataOf::<T>::take(&owner) {
+			Self::deposit_event(Event::<T>::MetadataCleared { owner, hash });
+		}
+	}
+
+	/// Transfer the metadata of an `owner` to a `new_owner`.
+	fn transfer_metadata(owner: MetadataOwner, new_owner: MetadataOwner) {
+		if let Some(hash) = MetadataOf::<T>::take(&owner) {
+			MetadataOf::<T>::insert(&new_owner, hash);
+			Self::deposit_event(Event::<T>::MetadataTransferred {
+				prev_owner: owner,
+				owner: new_owner,
+				hash,
+			});
+		}
+	}
+
+	/// Ensure external origin for corresponding vote threshold.
+	fn ensure_external_origin(
+		threshold: VoteThreshold,
+		origin: OriginFor<T>,
+	) -> Result<(), BadOrigin> {
+		match threshold {
+			VoteThreshold::SuperMajorityApprove => {
+				let _ = T::ExternalOrigin::ensure_origin(origin)?;
+			},
+			VoteThreshold::SuperMajorityAgainst => {
+				let _ = T::ExternalDefaultOrigin::ensure_origin(origin)?;
+			},
+			VoteThreshold::SimpleMajority => {
+				let _ = T::ExternalMajorityOrigin::ensure_origin(origin)?;
+			},
+		};
+		Ok(())
 	}
 }
 

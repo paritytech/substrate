@@ -504,6 +504,7 @@ pub trait ReadOnlySortedListProvider<AccountId> {
 	fn get_score(id: &AccountId) -> Result<Self::Score, Self::Error>;
 
 	/// Check internal state of list. Only meant for debugging.
+  #[cfg(feature = "try-runtime")]
 	fn try_state() -> Result<(), &'static str>;
 
 	/// Remove all items from the list.
