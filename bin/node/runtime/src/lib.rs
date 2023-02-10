@@ -2052,10 +2052,8 @@ impl_runtime_apis! {
 		u32,
 	> for Runtime
 	{
-		fn account_balances(instance: u8, account: AccountId) -> Vec<(u32, Balance)> {
-			match instance {
-				_ => Assets::account_balances(account),
-			}
+		fn account_balances(account: AccountId) -> Vec<(u32, Balance)> {
+			Assets::account_balances(account)
 		}
 	}
 
