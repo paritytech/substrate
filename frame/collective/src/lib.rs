@@ -420,7 +420,8 @@ pub mod pallet {
 		/// ## Complexity:
 		/// - `O(B + M + P)` where:
 		/// - `B` is `proposal` size in bytes (length-fee-bounded)
-		/// - `M` members-count (code-bounded) and `P` complexity of dispatching `proposal`
+		/// - `M` members-count (code-bounded)
+		/// - `P` complexity of dispatching `proposal`
 		#[pallet::call_index(1)]
 		#[pallet::weight((
 			T::WeightInfo::execute(
