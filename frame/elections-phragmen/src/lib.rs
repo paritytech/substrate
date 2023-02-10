@@ -481,10 +481,10 @@ pub mod pallet {
 		/// The dispatch origin of this call must be signed, and have one of the above roles.
 		/// The type of renouncing must be provided as witness data.
 		///
-		/// # Complexity
-		/// 	- Renouncing::Candidate(count): O(count + log(count))
-		/// 	- Renouncing::Member: O(1)
-		/// 	- Renouncing::RunnerUp: O(1)
+		/// ## Complexity
+		///   - Renouncing::Candidate(count): O(count + log(count))
+		///   - Renouncing::Member: O(1)
+		///   - Renouncing::RunnerUp: O(1)
 		#[pallet::call_index(3)]
 		#[pallet::weight(match *renouncing {
 			Renouncing::Candidate(count) => T::WeightInfo::renounce_candidacy_candidate(count),
