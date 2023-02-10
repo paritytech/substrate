@@ -1064,12 +1064,10 @@ where
 		self.mut_peers(|peers| {
 			for (i, peer) in peers.iter_mut().enumerate() {
 				trace!(target: "sync", "-- Polling {}: {}", i, peer.id());
-				loop {
+				{
 					let net_poll_future = peer.network.run();
 					pin_mut!(net_poll_future);
-					if let Poll::Pending = net_poll_future.poll(cx) {
-						break
-					}
+					let _ = net_poll_future.poll(cx);
 				}
 				trace!(target: "sync", "-- Polling complete {}: {}", i, peer.id());
 

@@ -180,13 +180,13 @@ pub trait NetworkPeers {
 	/// purposes.
 	fn deny_unreserved_peers(&self);
 
-	/// Adds a `PeerId` and its `Multiaddr` as reserved.
+	/// Adds a `PeerId` and its `Multiaddr` as reserved for a sync protocol (default peer set).
 	///
 	/// Returns an `Err` if the given string is not a valid multiaddress
 	/// or contains an invalid peer ID (which includes the local peer ID).
 	fn add_reserved_peer(&self, peer: MultiaddrWithPeerId) -> Result<(), String>;
 
-	/// Removes a `PeerId` from the list of reserved peers.
+	/// Removes a `PeerId` from the list of reserved peers for a sync protocol (default peer set).
 	fn remove_reserved_peer(&self, peer_id: PeerId);
 
 	/// Sets the reserved set of a protocol to the given set of peers.
@@ -359,6 +359,9 @@ pub trait NetworkStateInfo {
 	/// Returns the local external addresses.
 	fn external_addresses(&self) -> Vec<Multiaddr>;
 
+	/// Returns the listening addresses (without trailing `/p2p/` with our `PeerId`).
+	fn listen_addresses(&self) -> Vec<Multiaddr>;
+
 	/// Returns the local Peer ID.
 	fn local_peer_id(&self) -> PeerId;
 }
@@ -370,6 +373,10 @@ where
 {
 	fn external_addresses(&self) -> Vec<Multiaddr> {
 		T::external_addresses(self)
+	}
+
+	fn listen_addresses(&self) -> Vec<Multiaddr> {
+		T::listen_addresses(self)
 	}
 
 	fn local_peer_id(&self) -> PeerId {
@@ -605,7 +612,7 @@ where
 }
 
 /// Provides ability to announce blocks to the network.
-pub trait NetworkBlock<BlockHash, BlockNumber> {
+pub trait NetworkBlock<BlockHash, BlockNumber, BlockHeader> {
 	/// Make sure an important block is propagated to peers.
 	///
 	/// In chain-based consensus, we often need to make sure non-best forks are
@@ -614,12 +621,16 @@ pub trait NetworkBlock<BlockHash, BlockNumber> {
 
 	/// Inform the network service about new best imported block.
 	fn new_best_block_imported(&self, hash: BlockHash, number: BlockNumber);
+
+	/// Notify the network service (and underlying `NetworkSync`) about a finalized block.
+	fn on_block_finalized(&self, hash: BlockHash, header: BlockHeader);
 }
 
-impl<T, BlockHash, BlockNumber> NetworkBlock<BlockHash, BlockNumber> for Arc<T>
+impl<T, BlockHash, BlockNumber, BlockHeader> NetworkBlock<BlockHash, BlockNumber, BlockHeader>
+	for Arc<T>
 where
 	T: ?Sized,
-	T: NetworkBlock<BlockHash, BlockNumber>,
+	T: NetworkBlock<BlockHash, BlockNumber, BlockHeader>,
 {
 	fn announce_block(&self, hash: BlockHash, data: Option<Vec<u8>>) {
 		T::announce_block(self, hash, data)
@@ -627,5 +638,9 @@ where
 
 	fn new_best_block_imported(&self, hash: BlockHash, number: BlockNumber) {
 		T::new_best_block_imported(self, hash, number)
+	}
+
+	fn on_block_finalized(&self, hash: BlockHash, header: BlockHeader) {
+		T::on_block_finalized(self, hash, header)
 	}
 }

@@ -112,8 +112,12 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	num_connected: Arc<AtomicUsize>,
 	/// The local external addresses.
 	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
+	/// Listen addresses. Do **NOT** include a trailing `/p2p/` with our `PeerId`.
+	listen_addresses: Arc<Mutex<Vec<Multiaddr>>>,
 	/// Are we actively catching up with the chain?
 	is_major_syncing: Arc<AtomicBool>,
+	/// Best seen block number.
+	best_seen_block: Arc<Mutex<Option<NumberFor<B>>>>,
 	/// Local copy of the `PeerId` of the local node.
 	local_peer_id: PeerId,
 	/// The `KeyPair` that defines the `PeerId` of the local node.
@@ -440,13 +444,17 @@ where
 		}
 
 		let external_addresses = Arc::new(Mutex::new(Vec::new()));
+		let listen_addresses = Arc::new(Mutex::new(Vec::new()));
 		let peers_notifications_sinks = Arc::new(Mutex::new(HashMap::new()));
+		let best_seen_block = Arc::new(Mutex::new(None));
 
 		let service = Arc::new(NetworkService {
 			bandwidth,
 			external_addresses: external_addresses.clone(),
+			listen_addresses: listen_addresses.clone(),
 			num_connected: num_connected.clone(),
 			is_major_syncing: is_major_syncing.clone(),
+			best_seen_block: best_seen_block.clone(),
 			peerset: peerset_handle,
 			local_peer_id,
 			local_identity,
@@ -461,8 +469,10 @@ where
 
 		Ok(NetworkWorker {
 			external_addresses,
+			listen_addresses,
 			num_connected,
 			is_major_syncing,
+			best_seen_block,
 			network_service: swarm,
 			service,
 			from_service,
@@ -717,6 +727,35 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		}
 	}
 
+	/// Get currently connected peers.
+	pub async fn peers_debug_info(&self) -> Result<Vec<(PeerId, PeerInfo<B>)>, ()> {
+		let (tx, rx) = oneshot::channel();
+
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::PeersDebugInfo { pending_response: tx });
+
+		// The channel can only be closed if the network worker no longer exists.
+		rx.await.map_err(|_| ())
+	}
+
+	/// Get the list of reserved peers.
+	pub async fn reserved_peers(&self) -> Result<Vec<PeerId>, ()> {
+		let (tx, rx) = oneshot::channel();
+
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::ReservedPeers { pending_response: tx });
+
+		// The channel can only be closed if the network worker no longer exists.
+		rx.await.map_err(|_| ())
+	}
+
+	/// Get target sync block number.
+	pub fn best_seen_block(&self) -> Option<NumberFor<B>> {
+		self.best_seen_block.lock().clone()
+	}
+
 	/// Utility function to extract `PeerId` from each `Multiaddr` for peer set updates.
 	///
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
@@ -778,6 +817,11 @@ where
 	/// Returns the local external addresses.
 	fn external_addresses(&self) -> Vec<Multiaddr> {
 		self.external_addresses.lock().clone()
+	}
+
+	/// Returns the listener addresses (without trailing `/p2p/` with our `PeerId`).
+	fn listen_addresses(&self) -> Vec<Multiaddr> {
+		self.listen_addresses.lock().clone()
 	}
 
 	/// Returns the local Peer ID.
@@ -1133,7 +1177,7 @@ where
 	}
 }
 
-impl<B, H> NetworkBlock<B::Hash, NumberFor<B>> for NetworkService<B, H>
+impl<B, H> NetworkBlock<B::Hash, NumberFor<B>, B::Header> for NetworkService<B, H>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
@@ -1146,6 +1190,10 @@ where
 		let _ = self
 			.to_worker
 			.unbounded_send(ServiceToWorkerMsg::NewBestBlockImported(hash, number));
+	}
+
+	fn on_block_finalized(&self, hash: B::Hash, header: B::Header) {
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::BlockFinalized(hash, header));
 	}
 }
 
@@ -1249,6 +1297,13 @@ enum ServiceToWorkerMsg<B: BlockT> {
 	},
 	DisconnectPeer(PeerId, ProtocolName),
 	NewBestBlockImported(B::Hash, NumberFor<B>),
+	BlockFinalized(B::Hash, B::Header),
+	PeersDebugInfo {
+		pending_response: oneshot::Sender<Vec<(PeerId, PeerInfo<B>)>>,
+	},
+	ReservedPeers {
+		pending_response: oneshot::Sender<Vec<PeerId>>,
+	},
 }
 
 /// Main network worker. Must be polled in order for the network to advance.
@@ -1264,9 +1319,13 @@ where
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
+	listen_addresses: Arc<Mutex<Vec<Multiaddr>>>,
+	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	num_connected: Arc<AtomicUsize>,
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	is_major_syncing: Arc<AtomicBool>,
+	/// Best seen block.
+	best_seen_block: Arc<Mutex<Option<NumberFor<B>>>>,
 	/// The network service that can be extracted and shared through the codebase.
 	service: Arc<NetworkService<B, H>>,
 	/// The *actual* network.
@@ -1324,11 +1383,15 @@ where
 		self.num_connected.store(num_connected_peers, Ordering::Relaxed);
 		{
 			let external_addresses =
-				Swarm::<Behaviour<B, Client>>::external_addresses(&self.network_service)
-					.map(|r| &r.addr)
-					.cloned()
-					.collect();
+				self.network_service.external_addresses().map(|r| &r.addr).cloned().collect();
 			*self.external_addresses.lock() = external_addresses;
+
+			let listen_addresses =
+				self.network_service.listeners().map(ToOwned::to_owned).collect();
+			*self.listen_addresses.lock() = listen_addresses;
+
+			let best_seen_block = self.best_seen_block();
+			*self.best_seen_block.lock() = best_seen_block;
 		}
 
 		let is_major_syncing = self
@@ -1462,6 +1525,15 @@ where
 				.behaviour_mut()
 				.user_protocol_mut()
 				.new_best_block_imported(hash, number),
+			ServiceToWorkerMsg::BlockFinalized(hash, header) =>
+				self.on_block_finalized(hash, header),
+			ServiceToWorkerMsg::PeersDebugInfo { pending_response } => {
+				let _ = pending_response.send(self.peers_debug_info());
+			},
+			ServiceToWorkerMsg::ReservedPeers { pending_response } => {
+				let _ =
+					pending_response.send(self.reserved_peers().map(ToOwned::to_owned).collect());
+			},
 		}
 	}
 
