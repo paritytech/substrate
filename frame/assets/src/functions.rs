@@ -925,7 +925,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})
 	}
 
-	/// Used by the RPC service to provide account balances.
+	/// Returns all the non-zero balances for all assets of the given `account`.
 	pub fn account_balances(account: T::AccountId) -> Vec<(T::AssetId, T::Balance)> {
 		Asset::<T, I>::iter_keys()
 			.filter_map(|id| Self::maybe_balance(id, account.clone()).map(|balance| (id, balance)))
