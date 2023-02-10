@@ -276,7 +276,7 @@ impl<T: Config> Pallet<T> {
 		});
 		T::Currency::set_lock(STAKING_ID, &ledger.stash, ledger.total, WithdrawReasons::all());
 		<Ledger<T>>::insert(controller, ledger);
-		T::EventListener::on_stake_update(&ledger.stash, prev_ledger);
+		T::EventListeners::on_stake_update(&ledger.stash, prev_ledger);
 	}
 
 	/// Chill a stash account.
@@ -668,7 +668,7 @@ impl<T: Config> Pallet<T> {
 		Self::do_remove_nominator(stash);
 
 		frame_system::Pallet::<T>::dec_consumers(stash);
-		T::EventListener::on_unstake(stash);
+		T::EventListeners::on_unstake(stash);
 
 		Ok(())
 	}
@@ -887,7 +887,7 @@ impl<T: Config> Pallet<T> {
 	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T>) {
 		let prev_nominations = Self::nominations(who);
 		Nominators::<T>::insert(who, nominations);
-		T::EventListener::on_nominator_update(who, prev_nominations.unwrap_or_default());
+		T::EventListeners::on_nominator_update(who, prev_nominations.unwrap_or_default());
 	}
 
 	/// This function will remove a nominator from the `Nominators` storage map,
@@ -900,7 +900,7 @@ impl<T: Config> Pallet<T> {
 	pub fn do_remove_nominator(who: &T::AccountId) -> bool {
 		if let Some(nominations) = Self::nominations(who) {
 			Nominators::<T>::remove(who);
-			T::EventListener::on_nominator_remove(who, nominations);
+			T::EventListeners::on_nominator_remove(who, nominations);
 			return true
 		}
 		false
@@ -915,7 +915,7 @@ impl<T: Config> Pallet<T> {
 	/// wrong.
 	pub fn do_add_validator(who: &T::AccountId, prefs: ValidatorPrefs) {
 		if !Validators::<T>::contains_key(who) {
-			T::EventListener::on_validator_add(who);
+			T::EventListeners::on_validator_add(who);
 		}
 		Validators::<T>::insert(who, prefs);
 	}
@@ -929,7 +929,7 @@ impl<T: Config> Pallet<T> {
 	pub fn do_remove_validator(who: &T::AccountId) -> bool {
 		if Validators::<T>::contains_key(who) {
 			Validators::<T>::remove(who);
-			T::EventListener::on_validator_remove(who);
+			T::EventListeners::on_validator_remove(who);
 			return true
 		}
 		false
