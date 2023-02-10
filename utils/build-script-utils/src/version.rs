@@ -17,8 +17,8 @@
 
 use std::{borrow::Cow, process::Command};
 
-/// Generate the `cargo:` key output
-pub fn generate_cargo_keys() {
+/// Add `SUBSTRATE_CLI_IMPL_VERSION` to the cargo env
+pub fn generate_git_commit_key() {
 	let commit = if let Ok(hash) = std::env::var("SUBSTRATE_CLI_GIT_COMMIT_HASH") {
 		Cow::from(hash.trim().to_owned())
 	} else {
@@ -41,10 +41,12 @@ pub fn generate_cargo_keys() {
 		}
 	};
 
-	println!("cargo:rustc-env=SUBSTRATE_CLI_IMPL_VERSION={}", get_version(&commit))
+	println!("cargo:rustc-env=SUBSTRATE_CLI_IMPL_VERSION={}", generate_version_string(&commit));
 }
 
-fn get_version(impl_commit: &str) -> String {
+/// Generate a string made of the version number followed by the git commit hash
+/// if available.
+fn generate_version_string(impl_commit: &str) -> String {
 	let commit_dash = if impl_commit.is_empty() { "" } else { "-" };
 
 	format!(

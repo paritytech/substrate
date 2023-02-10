@@ -15,18 +15,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Crate with utility functions for `build.rs` scripts.
+use std::{borrow::Cow, process::Command};
 
-mod git;
-mod version;
-mod build_date;
+/// Add `SUBSTRATE_CLI_BUILD_DATE` to the cargo env
+pub fn generate_build_date_key() {
+	let build_date = match Command::new("date").args(["-u", "+%FT%TZ"]).output() {
+		Ok(o) if o.status.success() => {
+			let tmsp = String::from_utf8_lossy(&o.stdout).trim().to_owned();
+			Cow::from(tmsp)
+		},
+		Ok(o) => {
+			println!("cargo:warning=date command failed with status: {}", o.status);
+			Cow::from("unknown")
+		},
+		Err(err) => {
+			println!("cargo:warning=Failed to execute date command: {}", err);
+			Cow::from("unknown")
+		},
+	};
 
-pub use git::*;
-pub use version::*;
-pub use build_date::*;
-
-/// Generate the `cargo:` key output
-pub fn generate_cargo_keys() {
-	generate_git_commit_key();
-	generate_build_date_key();
+	println!("cargo:rustc-env=SUBSTRATE_CLI_BUILD_DATE={build_date}");
 }

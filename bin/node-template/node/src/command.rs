@@ -16,7 +16,9 @@ impl SubstrateCli for Cli {
 	}
 
 	fn impl_version() -> String {
-		env!("SUBSTRATE_CLI_IMPL_VERSION").into()
+		let impl_version: String = env!("SUBSTRATE_CLI_IMPL_VERSION").into();
+		let build_date: String = env!("SUBSTRATE_CLI_BUILD_DATE").into();
+		format!("{impl_version} built {build_date}")
 	}
 
 	fn description() -> String {
