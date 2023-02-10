@@ -1,6 +1,6 @@
 use super::{mock::*, pallet::*};
 use crate as pallet_stake_tracker;
-use frame_election_provider_support::{ReadOnlySortedListProvider, SortedListProvider};
+use frame_election_provider_support::SortedListProvider;
 use frame_support::{assert_ok, assert_storage_noop};
 use sp_staking::{OnStakingUpdate, StakingInterface};
 

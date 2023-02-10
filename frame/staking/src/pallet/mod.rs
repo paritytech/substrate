@@ -58,7 +58,7 @@ pub(crate) const SPECULATIVE_NUM_SPANS: u32 = 32;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_election_provider_support::{ElectionDataProvider, ReadOnlySortedListProvider};
+	use frame_election_provider_support::{ElectionDataProvider, SortedListProvider};
 
 	use crate::BenchmarkingConfig;
 
@@ -227,7 +227,7 @@ pub mod pallet {
 		/// Invariant: what comes out of this list will always be a nominator.
 		// NOTE: Staking does not maintain this list, it merely reads from it. The list is
 		// maintained by `EventListener` implementors.
-		type VoterList: ReadOnlySortedListProvider<Self::AccountId, Score = VoteWeight>;
+		type VoterList: SortedListProvider<Self::AccountId, Score = VoteWeight>;
 
 		/// WIP: This is a noop as of now, the actual business logic that's described below is going
 		/// to be introduced in a follow-up PR.

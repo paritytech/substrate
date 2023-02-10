@@ -292,7 +292,7 @@ pub mod v10 {
 
 pub mod v9 {
 	use super::*;
-	use frame_election_provider_support::{ReadOnlySortedListProvider, SortedListProvider};
+	use frame_election_provider_support::SortedListProvider;
 	#[cfg(feature = "try-runtime")]
 	use frame_support::codec::{Decode, Encode};
 	#[cfg(feature = "try-runtime")]
@@ -376,7 +376,7 @@ pub mod v9 {
 pub mod v8 {
 	use super::*;
 	use crate::{Config, Nominators, Pallet, Weight};
-	use frame_election_provider_support::{ReadOnlySortedListProvider, SortedListProvider};
+	use frame_election_provider_support::SortedListProvider;
 	use frame_support::traits::Get;
 
 	pub trait MigrationConfig {

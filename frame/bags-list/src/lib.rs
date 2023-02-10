@@ -20,7 +20,7 @@
 //! A semi-sorted list, where items hold an `AccountId` based on some `Score`. The
 //! `AccountId` (`id` for short) might be synonym to a `voter` or `nominator` in some context, and
 //! `Score` signifies the chance of each id being included in the final
-//! [`ReadOnlySortedListProvider::iter`].
+//! [`SortedListProvider::iter`].
 //!
 //! It implements [`frame_election_provider_support::SortedListProvider`] to provide a semi-sorted
 //! list of accounts to another pallet. It needs some other pallet to give it some information about
@@ -54,9 +54,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::FullCodec;
-use frame_election_provider_support::{
-	ReadOnlySortedListProvider, ScoreProvider, SortedListProvider,
-};
+use frame_election_provider_support::{ScoreProvider, SortedListProvider};
 use frame_system::ensure_signed;
 use sp_runtime::traits::{AtLeast32BitUnsigned, Bounded, StaticLookup};
 use sp_std::prelude::*;
@@ -271,7 +269,7 @@ pub mod pallet {
 
 		#[cfg(feature = "try-runtime")]
 		fn try_state(_: BlockNumberFor<T>) -> Result<(), &'static str> {
-			<Self as ReadOnlySortedListProvider<T::AccountId>>::try_state()
+			<Self as SortedListProvider<T::AccountId>>::try_state()
 		}
 	}
 }
@@ -308,7 +306,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 }
 
-impl<T: Config<I>, I: 'static> ReadOnlySortedListProvider<T::AccountId> for Pallet<T, I> {
+impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I> {
 	type Error = ListError;
 	type Score = T::Score;
 
@@ -395,7 +393,7 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 }
 
 impl<T: Config<I>, I: 'static> ScoreProvider<T::AccountId> for Pallet<T, I> {
-	type Score = <Pallet<T, I> as ReadOnlySortedListProvider<T::AccountId>>::Score;
+	type Score = <Pallet<T, I> as SortedListProvider<T::AccountId>>::Score;
 
 	fn score(id: &T::AccountId) -> T::Score {
 		Node::<T, I>::get(id).map(|node| node.score()).unwrap_or_default()

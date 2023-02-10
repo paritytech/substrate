@@ -471,15 +471,20 @@ where
 	}
 }
 
-/// A trait that defines a set of functions that allow read access to the underlying storage
-/// and the types those functions depend upon.
+/// A utility trait for something to implement `ElectionDataProvider` in a sensible way.
+///
+/// This is generic over `AccountId` and it can represent a validator, a nominator, or any other
+/// entity.
+///
+/// Something that implements this trait will do a best-effort sort over ids, and thus can be
+/// used on the implementing side of [`ElectionDataProvider`].
 ///
 /// The scores (see [`Self::Score`]) are ascending, the higher, the better.
 ///
 /// Initially a part of [`SortedListProvider`], it allows for restricting a consumer to read-only
 /// operations. This is particularly useful in case the list is populated by one entity and
 /// read by another.
-pub trait ReadOnlySortedListProvider<AccountId> {
+pub trait SortedListProvider<AccountId> {
 	/// The list's error type.
 	type Error: sp_std::fmt::Debug;
 
@@ -507,31 +512,6 @@ pub trait ReadOnlySortedListProvider<AccountId> {
 	#[cfg(feature = "try-runtime")]
 	fn try_state() -> Result<(), &'static str>;
 
-	/// Remove all items from the list.
-	///
-	/// ## WARNING
-	///
-	/// This function should never be called in production settings because it can lead to an
-	/// unbounded amount of storage accesses.
-	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn unsafe_clear();
-
-	/// If `who` changes by the returned amount they are guaranteed to have a worst case change
-	/// in their list position.
-	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn score_update_worst_case(_who: &AccountId, _is_increase: bool) -> Self::Score;
-}
-
-/// A utility trait for something to implement `ElectionDataProvider` in a sensible way.
-///
-/// This is generic over `AccountId` and it can represent a validator, a nominator, or any other
-/// entity.
-///
-/// Something that implements this trait will do a best-effort sort over ids, and thus can be
-/// used on the implementing side of [`ElectionDataProvider`].
-///
-/// Inherits [`ReadOnlySortedListProvider`], which provides basic types and read-only methods.
-pub trait SortedListProvider<AccountId>: ReadOnlySortedListProvider<AccountId> {
 	/// Hook for inserting a new id.
 	///
 	/// Implementation should return an error if duplicate item is being inserted.
@@ -581,6 +561,20 @@ pub trait SortedListProvider<AccountId>: ReadOnlySortedListProvider<AccountId> {
 		all: impl IntoIterator<Item = AccountId>,
 		score_of: Box<dyn Fn(&AccountId) -> Self::Score>,
 	) -> u32;
+
+	/// Remove all items from the list.
+	///
+	/// ## WARNING
+	///
+	/// This function should never be called in production settings because it can lead to an
+	/// unbounded amount of storage accesses.
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn unsafe_clear();
+
+	/// If `who` changes by the returned amount they are guaranteed to have a worst case change
+	/// in their list position.
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn score_update_worst_case(_who: &AccountId, _is_increase: bool) -> Self::Score;
 }
 
 /// Something that can provide the `Score` of an account. Similar to [`ElectionProvider`] and

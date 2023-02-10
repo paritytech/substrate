@@ -18,7 +18,7 @@
 //! Tests for the module.
 
 use super::{ConfigOp, Event, *};
-use frame_election_provider_support::{ElectionProvider, ReadOnlySortedListProvider, Support};
+use frame_election_provider_support::{ElectionProvider, SortedListProvider, Support};
 use frame_support::{
 	assert_noop, assert_ok, assert_storage_noop, bounded_vec,
 	dispatch::{extract_actual_weight, GetDispatchInfo, WithPostDispatchInfo},
