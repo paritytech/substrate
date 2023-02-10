@@ -15,8 +15,28 @@ update_substrate_weights:
     paths:
       - substrate_weights_${CI_COMMIT_SHORT_SHA}.patch
   script:
-    - ./scripts/run_all_benchmarks.sh
-    - git diff -P > substrate_weights_${CI_COMMIT_SHORT_SHA}.patch
+    # - ./scripts/run_all_benchmarks.sh
+    - cargo build --profile=production --locked --features=runtime-benchmarks
+    # - git diff -P > substrate_weights_${CI_COMMIT_SHORT_SHA}.patch
   tags:
     - weights-vm
 
+update_substrate_weights2:
+  # The update-weights pipeline defaults to `interruptible: false` so that we'll be able to
+  # reach and run the benchmarking jobs despite the "Auto-cancel redundant pipelines" CI setting.
+  # The setting is relevant because future pipelines (e.g. created for new commits or other schedules)
+  # might otherwise cancel the benchmark jobs early.
+  interruptible:                   false
+  stage:                           weights
+  timeout:                         1d
+  when:                            manual
+  image:                           $CI_IMAGE
+  artifacts:
+    paths:
+      - substrate_weights_${CI_COMMIT_SHORT_SHA}.patch
+  script:
+    # - ./scripts/run_all_benchmarks.sh
+    - cargo build --profile=production --locked --features=runtime-benchmarks
+    # - git diff -P > substrate_weights_${CI_COMMIT_SHORT_SHA}.patch
+  tags:
+    - bench-bot
