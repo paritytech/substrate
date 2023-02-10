@@ -164,7 +164,8 @@ pub mod pallet {
 			+ codec::Codec
 			+ codec::EncodeLike
 			+ scale_info::TypeInfo
-			+ MaxEncodedLen;
+			+ MaxEncodedLen
+			+ PartialOrd;
 
 		/// Data stored in the leaf nodes.
 		///

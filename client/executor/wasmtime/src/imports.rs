@@ -20,7 +20,7 @@ use crate::{host::HostContext, runtime::StoreData};
 use sc_executor_common::error::WasmError;
 use sp_wasm_interface::{FunctionContext, HostFunctions};
 use std::collections::HashMap;
-use wasmtime::{ExternType, FuncType, ImportType, Linker, Module, Trap};
+use wasmtime::{ExternType, FuncType, ImportType, Linker, Module};
 
 /// Goes over all imports of a module and prepares the given linker for instantiation of the module.
 /// Returns an error if there are imports that cannot be satisfied.
@@ -67,7 +67,7 @@ where
 				log::debug!("Missing import: '{}' {:?}", name, func_ty);
 				linker
 					.func_new("env", &name, func_ty.clone(), move |_, _, _| {
-						Err(Trap::new(error.clone()))
+					    Err(anyhow::Error::msg(error.clone()))
 					})
 					.expect("adding a missing import stub can only fail when the item already exists, and it is missing here; qed");
 			}

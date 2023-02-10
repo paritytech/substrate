@@ -513,6 +513,8 @@ pub mod pallet {
 		Unfounded { founder: T::AccountId },
 		/// Some funds were deposited into the society account.
 		Deposit { value: BalanceOf<T, I> },
+		/// A group of members has been choosen as Skeptics
+		SkepticsChosen { skeptics: Vec<T::AccountId> },
 	}
 
 	/// The first member.
@@ -1610,12 +1612,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		// Select sqrt(n) random members from the society and make them skeptics.
 		let pick_member =
-			|_| pick_item(&mut rng, &members[..]).expect("exited if members empty; qed");
-		for skeptic in (0..members.len().integer_sqrt()).map(pick_member) {
+			|_| pick_item(&mut rng, &members[..]).expect("exited if members empty; qed").clone();
+		let skeptics = (0..members.len().integer_sqrt()).map(pick_member).collect::<Vec<_>>();
+		skeptics.iter().for_each(|skeptic| {
 			for Bid { who: c, .. } in candidates.iter() {
 				<Votes<T, I>>::insert(c, skeptic, Vote::Skeptic);
 			}
-		}
+		});
+		Self::deposit_event(Event::<T, I>::SkepticsChosen { skeptics });
 	}
 
 	/// Attempt to slash the payout of some member. Return the total amount that was deducted.

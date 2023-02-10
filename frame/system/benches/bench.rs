@@ -16,10 +16,7 @@
 // limitations under the License.
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use frame_support::{
-	traits::{ConstU32, ConstU64},
-	weights::Weight,
-};
+use frame_support::traits::{ConstU32, ConstU64};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
