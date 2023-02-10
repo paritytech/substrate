@@ -22,7 +22,7 @@ jobs:
           API_BASE: https://api.github.com/repos
           REPO: ${{ github.repository }}
           RULES_PATH: labels/ruled_labels
-          CHECK_SPECS: specs_polkadot.yaml
+          CHECK_SPECS: specs_substrate.yaml
         run: |
           echo "REPO: ${REPO}"
           echo "GITHUB_PR: ${GITHUB_PR}"
