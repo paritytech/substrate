@@ -3434,7 +3434,6 @@ pub(crate) mod tests {
 		}
 	}
 
-
 	#[test]
 	fn prune_blocks_on_finalize_with_fork() {
 		sp_tracing::try_init_simple();
