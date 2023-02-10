@@ -1406,7 +1406,7 @@ impl<T: Config> ReadOnlySortedListProvider<T::AccountId> for UseValidatorsMap<T>
 	fn get_score(id: &T::AccountId) -> Result<Self::Score, Self::Error> {
 		Ok(Pallet::<T>::weight_of(id).into())
 	}
-  #[cfg(feature = "try-runtime")]
+	#[cfg(feature = "try-runtime")]
 	fn try_state() -> Result<(), &'static str> {
 		Ok(())
 	}
