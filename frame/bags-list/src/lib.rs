@@ -328,6 +328,7 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 	fn contains(id: &T::AccountId) -> bool {
 		List::<T, I>::contains(id)
 	}
+
 	fn get_score(id: &T::AccountId) -> Result<T::Score, ListError> {
 		List::<T, I>::get_score(id)
 	}
@@ -335,6 +336,18 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 	#[cfg(feature = "try-runtime")]
 	fn try_state() -> Result<(), &'static str> {
 		Self::do_try_state()
+	}
+
+	fn on_insert(id: T::AccountId, score: T::Score) -> Result<(), ListError> {
+		List::<T, I>::insert(id, score)
+	}
+
+	fn on_update(id: &T::AccountId, new_score: T::Score) -> Result<(), ListError> {
+		Pallet::<T, I>::do_rebag(id, new_score).map(|_| ())
+	}
+
+	fn on_remove(id: &T::AccountId) -> Result<(), ListError> {
+		List::<T, I>::remove(id)
 	}
 
 	frame_election_provider_support::runtime_benchmarks_or_test_enabled! {
@@ -365,20 +378,6 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 				thresholds[prev_threshold_idx]
 			}
 		}
-	}
-}
-
-impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I> {
-	fn on_insert(id: T::AccountId, score: T::Score) -> Result<(), ListError> {
-		List::<T, I>::insert(id, score)
-	}
-
-	fn on_update(id: &T::AccountId, new_score: T::Score) -> Result<(), ListError> {
-		Pallet::<T, I>::do_rebag(id, new_score).map(|_| ())
-	}
-
-	fn on_remove(id: &T::AccountId) -> Result<(), ListError> {
-		List::<T, I>::remove(id)
 	}
 
 	fn unsafe_regenerate(
