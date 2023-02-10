@@ -98,7 +98,7 @@ pub trait OnStakingUpdate<AccountId, Balance> {
 	/// Fired when someone sets their intention to nominate, either new, or existing one.
 	fn on_nominator_update(who: &AccountId, prev_nominations: Vec<AccountId>);
 	/// Fired when someone sets their intention to validate, either new, or existing one.
-	fn on_validator_add(who: &AccountId);
+	fn on_validator_update(who: &AccountId);
 	/// Fired when someone removes their intention to validate, either due to chill or nominating.
 	fn on_validator_remove(who: &AccountId); // only fire this event when this is an actual Validator
 	/// Fired when someone removes their intention to nominate, either due to chill or validating.
@@ -117,7 +117,7 @@ impl<AccountId, Balance> OnStakingUpdate<AccountId, Balance> for () {
 		// stub
 	}
 
-	fn on_validator_add(_: &AccountId) {
+	fn on_validator_update(_: &AccountId) {
 		// stub
 	}
 

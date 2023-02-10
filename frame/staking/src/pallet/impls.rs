@@ -915,7 +915,7 @@ impl<T: Config> Pallet<T> {
 	/// wrong.
 	pub fn do_add_validator(who: &T::AccountId, prefs: ValidatorPrefs) {
 		if !Validators::<T>::contains_key(who) {
-			T::EventListeners::on_validator_add(who);
+			T::EventListeners::on_validator_update(who);
 		}
 		Validators::<T>::insert(who, prefs);
 	}

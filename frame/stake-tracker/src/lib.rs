@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) 2023 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -100,7 +100,7 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 	/// balance when they chill?
 	///	Why? Because we don't remove ApprovalStake when a validator chills and we need to make sure
 	/// their self-stake is up-to-date and not applied twice.
-	fn on_validator_add(who: &T::AccountId) {
+	fn on_validator_update(who: &T::AccountId) {
 		let self_stake = Self::slashable_balance_of(who);
 		// maybe update sorted list.
 		let _ = T::VoterList::on_insert(who.clone(), Self::to_vote(self_stake));

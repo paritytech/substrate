@@ -1,3 +1,20 @@
+// This file is part of Substrate.
+
+// Copyright (C) 2023 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use super::{mock::*, pallet::*};
 use crate as pallet_stake_tracker;
 use frame_election_provider_support::SortedListProvider;
@@ -104,7 +121,7 @@ mod on_nominator_update {
 	}
 }
 
-mod on_validator_add {
+mod on_validator_update {
 	use super::*;
 	#[test]
 	fn noop_when_in_the_list() {
@@ -114,7 +131,7 @@ mod on_validator_add {
 			// usual user, validator, nominator
 			for id in [1, 10, 20] {
 				let _ = VoterList::on_insert(id, 1000);
-				assert_storage_noop!(StakeTracker::on_validator_add(&id));
+				assert_storage_noop!(StakeTracker::on_validator_update(&id));
 			}
 		});
 	}
@@ -125,19 +142,19 @@ mod on_validator_add {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(VoterList::count(), 0);
 			// user without stake
-			assert_storage_noop!(StakeTracker::on_validator_add(&30));
+			assert_storage_noop!(StakeTracker::on_validator_update(&30));
 		});
 	}
 
 	#[test]
-	// It is the caller's problem to make sure `on_validator_add` is called in the right context.
+	// It is the caller's problem to make sure `on_validator_update` is called in the right context.
 	fn works_for_everyone() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(VoterList::count(), 0);
 
 			// usual user, validator, nominator
 			for id in [1, 10, 20] {
-				StakeTracker::on_validator_add(&id);
+				StakeTracker::on_validator_update(&id);
 				assert_eq!(
 					VoterList::get_score(&id).unwrap(),
 					Pallet::<Runtime>::to_vote(Staking::stake(&id).map(|s| s.active).unwrap())
