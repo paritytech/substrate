@@ -196,8 +196,14 @@ impl_encode_like_tuples!(A, B, C, D, E, F, G, H, I, J, K, L, M, O, P);
 impl_encode_like_tuples!(A, B, C, D, E, F, G, H, I, J, K, L, M, O, P, Q);
 impl_encode_like_tuples!(A, B, C, D, E, F, G, H, I, J, K, L, M, O, P, Q, R);
 
-impl<'a, T: EncodeLike<U>, U: Encode> EncodeLikeTuple<U> for codec::Ref<'a, T, U> {}
-impl<'a, T: EncodeLike<U>, U: Encode> crate::storage::private::Sealed for codec::Ref<'a, T, U> {}
+impl<'a, T: EncodeLike<U> + EncodeLikeTuple<U>, U: Encode> EncodeLikeTuple<U>
+	for codec::Ref<'a, T, U>
+{
+}
+impl<'a, T: EncodeLike<U> + EncodeLikeTuple<U>, U: Encode> crate::storage::private::Sealed
+	for codec::Ref<'a, T, U>
+{
+}
 
 /// Trait to indicate that a tuple can be converted into an iterator of a vector of encoded bytes.
 pub trait TupleToEncodedIter {
