@@ -305,7 +305,7 @@ impl crate::pallet::pallet::Config for Test {
 	type OnStakerSlash = OnStakerSlashMock<Test>;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type WeightInfo = ();
-	type EventListener = StakeTracker;
+	type EventListeners = StakeTracker;
 }
 
 impl pallet_stake_tracker::Config for Test {

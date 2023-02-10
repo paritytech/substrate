@@ -119,7 +119,7 @@ impl pallet_staking::Config for Runtime {
 	type OnStakerSlash = Pools;
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
-	type EventListener = StakeTracker;
+	type EventListeners = StakeTracker;
 }
 
 impl pallet_stake_tracker::Config for Runtime {

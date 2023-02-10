@@ -204,7 +204,7 @@ impl pallet_staking::Config for Test {
 	type OnStakerSlash = ();
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
-	type EventListener = ();
+	type EventListeners = ();
 }
 
 impl pallet_offences::Config for Test {
