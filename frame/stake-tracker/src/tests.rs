@@ -40,8 +40,7 @@ mod on_stake_update {
 	}
 
 	#[test]
-	#[should_panic]
-	fn panics_when_not_bonded() {
+	fn does_nothing_when_not_bonded() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(VoterList::count(), 0);
 			// user without stake
@@ -94,27 +93,19 @@ mod on_nominator_update {
 	}
 
 	#[test]
-	#[should_panic]
-	fn panics_when_not_bonded() {
-		ExtBuilder::default().build_and_execute(|| {
-			assert_eq!(VoterList::count(), 0);
-			// user without stake
-			assert_storage_noop!(StakeTracker::on_nominator_update(&30, Vec::new()));
-		});
-	}
-
-	#[test]
 	// It is the caller's problem to make sure `on_nominator_update` is called in the right context.
 	fn works_for_everyone() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(VoterList::count(), 0);
 
-			// usual user, validator, nominator
-			for id in [1, 10, 20] {
+			// usual user, validator, nominator, not bonded
+			for id in [1, 10, 20, 30] {
 				StakeTracker::on_nominator_update(&id, Vec::new());
 				assert_eq!(
 					VoterList::get_score(&id).unwrap(),
-					Pallet::<Runtime>::to_vote(Staking::stake(&id).map(|s| s.active).unwrap())
+					Pallet::<Runtime>::to_vote(
+						Staking::stake(&id).map(|s| s.active).unwrap_or_default()
+					)
 				);
 			}
 		});
@@ -137,27 +128,19 @@ mod on_validator_update {
 	}
 
 	#[test]
-	#[should_panic]
-	fn panics_when_not_bonded() {
-		ExtBuilder::default().build_and_execute(|| {
-			assert_eq!(VoterList::count(), 0);
-			// user without stake
-			assert_storage_noop!(StakeTracker::on_validator_update(&30));
-		});
-	}
-
-	#[test]
 	// It is the caller's problem to make sure `on_validator_update` is called in the right context.
 	fn works_for_everyone() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(VoterList::count(), 0);
 
-			// usual user, validator, nominator
-			for id in [1, 10, 20] {
+			// usual user, validator, nominator, no stake
+			for id in [1, 10, 20, 30] {
 				StakeTracker::on_validator_update(&id);
 				assert_eq!(
 					VoterList::get_score(&id).unwrap(),
-					Pallet::<Runtime>::to_vote(Staking::stake(&id).map(|s| s.active).unwrap())
+					Pallet::<Runtime>::to_vote(
+						Staking::stake(&id).map(|s| s.active).unwrap_or_default()
+					)
 				);
 			}
 		});
@@ -215,7 +198,7 @@ mod on_nominator_remove {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(VoterList::count(), 0);
 
-			// usual user, validator, nominator
+			// usual user, validator, nominator, bonded
 			for id in [1, 10, 20, 30] {
 				let _ = VoterList::on_insert(id, 100);
 				assert_eq!(VoterList::count(), 1);
