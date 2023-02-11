@@ -1236,7 +1236,7 @@ where
 	{
 		warn!(
 			target: LOG_TARGET,
-			"SelectChain returned a finality target inconsistent with its best block. Setting best block to target block"
+			"SelectChain returned a finality target inconsistent with its best block. Restricting best block to target block"
 		);
 
 		best_header = target_header.clone();
@@ -1244,7 +1244,7 @@ where
 
 	debug!(
 		target: LOG_TARGET,
-		"SelectChain: finality_target: #{} ({}), best_chain: #{} ({})",
+		"SelectChain: finality target: #{} ({}), best block: #{} ({})",
 		target_header.number(),
 		target_header.hash(),
 		best_header.number(),
