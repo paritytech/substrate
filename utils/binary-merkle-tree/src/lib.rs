@@ -31,40 +31,42 @@
 //! efficient by removing the need to track which side each intermediate hash is concatenated on.
 //!
 //! If the number of leaves is not even, last leaf (hash of) is promoted to the upper layer.
+#[cfg(not(feature = "std"))]
+extern crate alloc;
+#[cfg(not(feature = "std"))]
+use alloc::vec;
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
 
-pub use sp_runtime::traits::Keccak256;
-use sp_runtime::{app_crypto::sp_core, sp_std, traits::Hash as HashT};
-use sp_std::{vec, vec::Vec};
-
-use beefy_primitives::mmr::{BeefyAuthoritySet, BeefyNextAuthoritySet};
+use hash_db::Hasher;
 
 /// Construct a root hash of a Binary Merkle Tree created from given leaves.
 ///
 /// See crate-level docs for details about Merkle Tree construction.
 ///
 /// In case an empty list of leaves is passed the function returns a 0-filled hash.
-pub fn merkle_root<H, I>(leaves: I) -> H::Output
+pub fn merkle_root<H, I>(leaves: I) -> H::Out
 where
-	H: HashT,
-	H::Output: Default + AsRef<[u8]> + PartialOrd,
+	H: Hasher,
+	H::Out: Default + AsRef<[u8]> + PartialOrd,
 	I: IntoIterator,
 	I::Item: AsRef<[u8]>,
 {
-	let iter = leaves.into_iter().map(|l| <H as HashT>::hash(l.as_ref()));
+	let iter = leaves.into_iter().map(|l| <H as Hasher>::hash(l.as_ref()));
 	merkelize::<H, _, _>(iter, &mut ()).into()
 }
 
-fn merkelize<H, V, I>(leaves: I, visitor: &mut V) -> H::Output
+fn merkelize<H, V, I>(leaves: I, visitor: &mut V) -> H::Out
 where
-	H: HashT,
-	H::Output: Default + AsRef<[u8]> + PartialOrd,
-	V: Visitor<H::Output>,
-	I: Iterator<Item = H::Output>,
+	H: Hasher,
+	H::Out: Default + AsRef<[u8]> + PartialOrd,
+	V: Visitor<H::Out>,
+	I: Iterator<Item = H::Out>,
 {
 	let upper = Vec::with_capacity((leaves.size_hint().1.unwrap_or(0).saturating_add(1)) / 2);
 	let mut next = match merkelize_row::<H, _, _>(leaves, upper, visitor) {
 		Ok(root) => return root,
-		Err(next) if next.is_empty() => return H::Output::default(),
+		Err(next) if next.is_empty() => return H::Out::default(),
 		Err(next) => next,
 	};
 
@@ -139,17 +141,17 @@ impl<T> Visitor<T> for () {
 /// # Panic
 ///
 /// The function will panic if given `leaf_index` is greater than the number of leaves.
-pub fn merkle_proof<H, I, T>(leaves: I, leaf_index: usize) -> MerkleProof<H::Output, T>
+pub fn merkle_proof<H, I, T>(leaves: I, leaf_index: usize) -> MerkleProof<H::Out, T>
 where
-	H: HashT,
-	H::Output: Default + Copy + AsRef<[u8]> + PartialOrd,
+	H: Hasher,
+	H::Out: Default + Copy + AsRef<[u8]> + PartialOrd,
 	I: IntoIterator<Item = T>,
 	I::IntoIter: ExactSizeIterator,
 	T: AsRef<[u8]>,
 {
 	let mut leaf = None;
 	let iter = leaves.into_iter().enumerate().map(|(idx, l)| {
-		let hash = <H as HashT>::hash(l.as_ref());
+		let hash = <H as Hasher>::hash(l.as_ref());
 		if idx == leaf_index {
 			leaf = Some(l);
 		}
@@ -234,28 +236,28 @@ impl<'a, H, T: AsRef<[u8]>> From<&'a T> for Leaf<'a, H> {
 ///
 /// The proof must not contain the root hash.
 pub fn verify_proof<'a, H, P, L>(
-	root: &'a H::Output,
+	root: &'a H::Out,
 	proof: P,
 	number_of_leaves: usize,
 	leaf_index: usize,
 	leaf: L,
 ) -> bool
 where
-	H: HashT,
-	H::Output: PartialEq + AsRef<[u8]> + PartialOrd,
-	P: IntoIterator<Item = H::Output>,
-	L: Into<Leaf<'a, H::Output>>,
+	H: Hasher,
+	H::Out: PartialEq + AsRef<[u8]> + PartialOrd,
+	P: IntoIterator<Item = H::Out>,
+	L: Into<Leaf<'a, H::Out>>,
 {
 	if leaf_index >= number_of_leaves {
 		return false
 	}
 
 	let leaf_hash = match leaf.into() {
-		Leaf::Value(content) => <H as HashT>::hash(content),
+		Leaf::Value(content) => <H as Hasher>::hash(content),
 		Leaf::Hash(hash) => hash,
 	};
 
-	let hash_len = <H as sp_core::Hasher>::LENGTH;
+	let hash_len = <H as Hasher>::LENGTH;
 	let mut combined = vec![0_u8; hash_len * 2];
 	let computed = proof.into_iter().fold(leaf_hash, |a, b| {
 		if a < b {
@@ -265,7 +267,7 @@ where
 			combined[..hash_len].copy_from_slice(&b.as_ref());
 			combined[hash_len..].copy_from_slice(&a.as_ref());
 		}
-		let hash = <H as HashT>::hash(&combined);
+		let hash = <H as Hasher>::hash(&combined);
 		#[cfg(feature = "debug")]
 		log::debug!(
 			"[verify_proof]: (a, b) {:?}, {:?} => {:?} ({:?}) hash",
@@ -287,20 +289,20 @@ where
 /// empty iterator) an `Err` with the inner nodes of upper layer is returned.
 fn merkelize_row<H, V, I>(
 	mut iter: I,
-	mut next: Vec<H::Output>,
+	mut next: Vec<H::Out>,
 	visitor: &mut V,
-) -> Result<H::Output, Vec<H::Output>>
+) -> Result<H::Out, Vec<H::Out>>
 where
-	H: HashT,
-	H::Output: AsRef<[u8]> + PartialOrd,
-	V: Visitor<H::Output>,
-	I: Iterator<Item = H::Output>,
+	H: Hasher,
+	H::Out: AsRef<[u8]> + PartialOrd,
+	V: Visitor<H::Out>,
+	I: Iterator<Item = H::Out>,
 {
 	#[cfg(feature = "debug")]
 	log::debug!("[merkelize_row]");
 	next.clear();
 
-	let hash_len = <H as sp_core::Hasher>::LENGTH;
+	let hash_len = <H as Hasher>::LENGTH;
 	let mut index = 0;
 	let mut combined = vec![0_u8; hash_len * 2];
 	loop {
@@ -326,7 +328,7 @@ where
 					combined[hash_len..].copy_from_slice(a.as_ref());
 				}
 
-				next.push(<H as HashT>::hash(&combined));
+				next.push(<H as Hasher>::hash(&combined));
 			},
 			// Odd number of items. Promote the item to the upper layer.
 			(Some(a), None) if !next.is_empty() => {
@@ -347,24 +349,11 @@ where
 	}
 }
 
-sp_api::decl_runtime_apis! {
-	/// API useful for BEEFY light clients.
-	pub trait BeefyMmrApi<H>
-	where
-		BeefyAuthoritySet<H>: sp_api::Decode,
-	{
-		/// Return the currently active BEEFY authority set proof.
-		fn authority_set_proof() -> BeefyAuthoritySet<H>;
-
-		/// Return the next/queued BEEFY authority set proof.
-		fn next_authority_set_proof() -> BeefyNextAuthoritySet<H>;
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::sp_core::H256;
+	use sp_core::H256;
+	use sp_runtime::traits::Keccak256;
 
 	#[test]
 	fn should_generate_empty_root() {

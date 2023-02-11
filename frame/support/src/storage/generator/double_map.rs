@@ -233,6 +233,13 @@ where
 		.into()
 	}
 
+	fn contains_prefix<KArg1>(k1: KArg1) -> bool
+	where
+		KArg1: EncodeLike<K1>,
+	{
+		unhashed::contains_prefixed_key(Self::storage_double_map_final_key1(k1).as_ref())
+	}
+
 	fn iter_prefix_values<KArg1>(k1: KArg1) -> storage::PrefixIterator<V>
 	where
 		KArg1: ?Sized + EncodeLike<K1>,
