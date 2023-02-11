@@ -1641,8 +1641,8 @@ async fn grandpa_environment_checks_if_best_block_is_descendent_of_finality_targ
 		ForkChoiceStrategy::LongestChain,
 	);
 
-	let hashof5_b = fork.first().unwrap().clone();
-	let hashof10_b = fork.last().unwrap().clone();
+	let hashof5_b = *fork.first().unwrap();
+	let hashof10_b = *fork.last().unwrap();
 
 	// returning a finality target that's higher than the best block is inconsistent,
 	// therefore the best block should be set to be the same block as the target
