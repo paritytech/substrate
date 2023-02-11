@@ -274,13 +274,15 @@ impl BenchmarkDef {
 			ReturnType::Type(_, _) => {
 				// defined return type, last_stmt should be BenchmarkResult<T> compatible and
 				// should not be included in verify_stmts
-				if i == item_fn.block.stmts.len() {
+				if i + 1 >= item_fn.block.stmts.len() {
 					return Err(Error::new(
 						item_fn.block.span(),
 						"Benchmark `#[block]` or `#[extrinsic_call]` item cannot be the \
-						last statement of your benchmark function definition. If you have \
-						defined a return type, you should return something compatible \
-						with `BenchmarkResult<T>` (i.e. `Ok(T)`) as the last statement.",
+						last statement of your benchmark function definition if you have \
+						defined a return type. You should return something compatible \
+						with `BenchmarkResult<T>` or Result<T, BenchmarkError> (i.e. \
+						`Ok(T)`) as the last statement or change your signature to a \
+						blank return type.",
 					))
 				}
 				let Some(stmt) = item_fn.block.stmts.last() else {
