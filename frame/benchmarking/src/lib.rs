@@ -240,7 +240,7 @@ pub mod v2 {
 	// Used in #[benchmark] implementation to ensure that benchmark function arguments
 	// implement [`ParamRange`].
 	#[doc(hidden)]
-	pub use static_assertions::assert_impl_all;
+	pub use static_assertions::{assert_impl_all, assert_type_eq_all};
 
 	/// Used by the new benchmarking code to specify that a benchmarking variable is linear
 	/// over some specified range, i.e. `Linear<0, 1_000>` means that the corresponding variable

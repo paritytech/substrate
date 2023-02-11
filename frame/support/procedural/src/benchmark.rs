@@ -43,6 +43,9 @@ mod keywords {
 	custom_keyword!(extra);
 	custom_keyword!(extrinsic_call);
 	custom_keyword!(skip_meta);
+	custom_keyword!(BenchmarkError);
+	custom_keyword!(BenchmarkResult);
+	custom_keyword!(Result);
 }
 
 /// This represents the raw parsed data for a param definition such as `x: Linear<10, 20>`.
@@ -154,6 +157,14 @@ struct BenchmarkDef {
 	fn_vis: Visibility,
 }
 
+#[derive(Parse)]
+enum BenchmarkResultVariant {
+	#[peek(keywords::BenchmarkResult, name = "BenchmarkResult<T>")]
+	BenchmarkResult(keywords::BenchmarkResult, Token![<], Type, Token![>]),
+	#[peek(keywords::Result, name = "Result<T, BenchmarkError>")]
+	Result(keywords::Result, Token![<], Type, keywords::BenchmarkError, Token![>]),
+}
+
 impl BenchmarkDef {
 	/// Constructs a [`BenchmarkDef`] by traversing an existing [`ItemFn`] node.
 	pub fn from(item_fn: &ItemFn, extra: bool, skip_meta: bool) -> Result<BenchmarkDef> {
@@ -202,6 +213,11 @@ impl BenchmarkDef {
 			}
 
 			params.push(ParamDef { name, typ: typ.clone(), start, end });
+		}
+
+		// ensure ReturnType is a BenchmarkResult<T> or Result<T, BenchmarkError>, if specified
+		if let ReturnType::Type(_, typ) = &item_fn.sig.output {
+			syn::parse2::<BenchmarkResultVariant>(typ.to_token_stream())?;
 		}
 
 		// #[extrinsic_call] / #[block] handling
