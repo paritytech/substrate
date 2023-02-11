@@ -37,6 +37,7 @@ use blake2::{Blake2b512, Digest};
 use frame_support::{defensive, pallet_prelude::*, weights::WeightMeter};
 use frame_system::pallet_prelude::*;
 use sp_runtime::{traits::Zero, Perbill, Saturating};
+use sp_std::{vec, vec::Vec};
 
 pub use pallet::*;
 pub use weights::WeightInfo;
@@ -146,10 +147,9 @@ pub mod pallet {
 			}
 
 			// Now we waste ref time.
-			let mut num_ref_time = 0;
+			let mut prev_result = vec![]; // There isn't a previous result.
 			while meter.can_accrue(T::WeightInfo::waste_ref_time(1)) {
-				Self::waste_ref_time(num_ref_time);
-				num_ref_time.saturating_inc();
+				prev_result = Self::waste_ref_time(prev_result);
 				meter.defensive_saturating_accrue(T::WeightInfo::waste_ref_time(1));
 			}
 
@@ -213,16 +213,16 @@ pub mod pallet {
 			}
 		}
 
-		/// Wastes some `ref_time`. Receives a counter as an argument.
-		pub fn waste_ref_time(counter: u64) -> Vec<u8> {
+		/// Wastes some `ref_time`. Receives the previous result as an argument.
+		pub(crate) fn waste_ref_time(prev_result: Vec<u8>) -> Vec<u8> {
 			let mut hasher = Blake2b512::new();
 
-			let mut prev_result: Vec<u8> = Default::default();
+			let mut prev_result = prev_result.clone();
 			let mut result: Vec<u8> = Default::default();
 			// Blake2 has a very high speed of hashing so we make multiple hashes with it to
 			// waste more `ref_time` at once.
-			(0..50).for_each(|i: u64| {
-				hasher.update((counter & i).to_le_bytes());
+			(0..50).for_each(|_| {
+				hasher.update(prev_result.clone());
 				result = hasher.clone().finalize().to_vec();
 				// We or the values of the hashing result with the previous hashing result.
 				(0..prev_result.len()).for_each(|j: usize| result[j] |= prev_result[j]);

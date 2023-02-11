@@ -31,7 +31,7 @@ benchmarks! {
 	waste_ref_time {
 		let n in 0 .. 1024;
 	}: {
-		Glutton::<T>::waste_ref_time(n);
+		Glutton::<T>::waste_ref_time(n.to_le_bytes().to_vec());
 	}
 
 	waste_proof_size_some {
