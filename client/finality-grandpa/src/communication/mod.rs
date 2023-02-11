@@ -167,7 +167,7 @@ const TELEMETRY_VOTERS_LIMIT: usize = 10;
 /// well as the ability to set a fork sync request for a particular block.
 pub trait Network<Block: BlockT>:
 	NetworkSyncForkRequest<Block::Hash, NumberFor<Block>>
-	+ NetworkBlock<Block::Hash, NumberFor<Block>>
+	+ NetworkBlock<Block::Hash, NumberFor<Block>, Block::Header>
 	+ GossipNetwork<Block>
 	+ Clone
 	+ Send
@@ -179,7 +179,7 @@ impl<Block, T> Network<Block> for T
 where
 	Block: BlockT,
 	T: NetworkSyncForkRequest<Block::Hash, NumberFor<Block>>
-		+ NetworkBlock<Block::Hash, NumberFor<Block>>
+		+ NetworkBlock<Block::Hash, NumberFor<Block>, Block::Header>
 		+ GossipNetwork<Block>
 		+ Clone
 		+ Send

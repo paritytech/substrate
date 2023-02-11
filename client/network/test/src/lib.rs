@@ -81,7 +81,7 @@ use sp_runtime::{
 };
 use substrate_test_runtime_client::AccountKeyring;
 pub use substrate_test_runtime_client::{
-	runtime::{Block, Extrinsic, Hash, Transfer},
+	runtime::{Block, Extrinsic, Hash, Header, Transfer},
 	TestClient, TestClientBuilder, TestClientBuilderExt,
 };
 use tokio::time::timeout;
