@@ -102,7 +102,7 @@ where
 				best_hash = *current_head.parent_hash();
 				current_head = blockchain
 					.header(best_hash)?
-					.ok_or_else(|| MissingHeader(best_hash.to_string()))?;
+					.ok_or_else(|| MissingHeader(format!("{best_hash:?}")))?;
 			}
 		}
 
@@ -113,10 +113,10 @@ where
 			let current_hash = *current_head.parent_hash();
 			current_head = blockchain
 				.header(current_hash)?
-				.ok_or_else(|| MissingHeader(current_hash.to_string()))?;
+				.ok_or_else(|| MissingHeader(format!("{best_hash:?}")))?;
 		}
 
-		return Ok(best_hash)
+		Ok(best_hash)
 	}
 
 	fn leaves(&self) -> Result<Vec<<Block as BlockT>::Hash>, sp_blockchain::Error> {
