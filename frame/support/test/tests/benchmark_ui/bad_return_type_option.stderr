@@ -1,0 +1,5 @@
+error: expected either BenchmarkResult<T> or Result<T, BenchmarkError>
+  --> tests/benchmark_ui/bad_return_type_option.rs:10:16
+   |
+10 |     fn bench() -> Option<BenchmarkError> {
+   |                   ^^^^^^
