@@ -1062,8 +1062,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		<Validators<T>>::remove_all();
 		#[allow(deprecated)]
 		<Nominators<T>>::remove_all();
-		// TODO: sort it out some other way
-		// T::VoterList::unsafe_clear();
+		T::VoterList::unsafe_clear();
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]

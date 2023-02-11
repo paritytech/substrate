@@ -32,18 +32,12 @@ pub mod try_state;
 ///
 /// For example, this can be the `Runtime` type of the Polkadot runtime.
 pub trait RuntimeT<I: 'static>:
-	pallet_staking::Config
-	+ pallet_stake_tracker::Config
-	+ pallet_bags_list::Config<I>
-	+ frame_system::Config
+	pallet_staking::Config + pallet_bags_list::Config<I> + frame_system::Config
 {
 }
 impl<
 		I: 'static,
-		T: pallet_staking::Config
-			+ pallet_stake_tracker::Config
-			+ pallet_bags_list::Config<I>
-			+ frame_system::Config,
+		T: pallet_staking::Config + pallet_bags_list::Config<I> + frame_system::Config,
 	> RuntimeT<I> for T
 {
 }

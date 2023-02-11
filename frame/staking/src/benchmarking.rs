@@ -189,7 +189,6 @@ impl<T: Config> ListScenario<T> {
 		)?;
 
 		// find a destination weight that will trigger the worst case scenario
-		// TODO: This is a hack, might be great to implement this differently.
 		let dest_weight_as_vote =
 			T::VoterList::score_update_worst_case(&origin_stash1, is_increase);
 

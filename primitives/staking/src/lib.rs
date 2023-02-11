@@ -82,7 +82,6 @@ pub struct Stake<AccountId, Balance> {
 }
 
 /// A generic staking event listener.
-///
 /// Note that the interface is designed in a way that the events are fired post-action, so any
 /// pre-action data that is needed needs to be passed to interface methods.
 /// The rest of the data can be retrieved by using `StakingInterface`.

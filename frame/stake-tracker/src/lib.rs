@@ -61,9 +61,7 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	/// The total balance that can be slashed from a stash account as of right now.
-	pub fn slashable_balance_of(who: &T::AccountId) -> BalanceOf<T> {
-		// Weight note: consider making the stake accessible through stash.
+	pub fn active_stake_of(who: &T::AccountId) -> BalanceOf<T> {
 		T::Staking::stake(&who).map(|l| l.active).unwrap_or_default()
 	}
 
@@ -75,33 +73,30 @@ impl<T: Config> Pallet<T> {
 
 impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 	fn on_stake_update(who: &T::AccountId, _: Option<Stake<T::AccountId, BalanceOf<T>>>) {
-		let current_stake = T::Staking::stake(who).unwrap();
-		let current_active = current_stake.active;
+		if let Ok(current_stake) = T::Staking::stake(who) {
+			let current_active = current_stake.active;
 
-		// if this is a nominator
-		if let Some(_) = T::Staking::nominations(&current_stake.stash) {
-			let _ = T::VoterList::on_update(&current_stake.stash, Self::to_vote(current_active));
-		}
+			// if this is a nominator
+			if let Some(_) = T::Staking::nominations(&current_stake.stash) {
+				let _ =
+					T::VoterList::on_update(&current_stake.stash, Self::to_vote(current_active));
+			}
 
-		if T::Staking::is_validator(&current_stake.stash) {
-			let _ = T::VoterList::on_update(&current_stake.stash, Self::to_vote(current_active));
+			if T::Staking::is_validator(&current_stake.stash) {
+				let _ =
+					T::VoterList::on_update(&current_stake.stash, Self::to_vote(current_active));
+			}
 		}
 	}
 
 	fn on_nominator_update(who: &T::AccountId, _prev_nominations: Vec<T::AccountId>) {
 		// NOTE: We ignore the result here, because this method can be called when the nominator is
 		// already in the list, just changing their nominations.
-		let _ =
-			T::VoterList::on_insert(who.clone(), Self::to_vote(Self::slashable_balance_of(who)));
+		let _ = T::VoterList::on_insert(who.clone(), Self::to_vote(Self::active_stake_of(who)));
 	}
 
-	/// This should only be called if that stash isn't already a validator. Note, that if we want to
-	/// properly track ApprovalStake here - we need to make sure we subtract the validator stash
-	/// balance when they chill?
-	///	Why? Because we don't remove ApprovalStake when a validator chills and we need to make sure
-	/// their self-stake is up-to-date and not applied twice.
 	fn on_validator_update(who: &T::AccountId) {
-		let self_stake = Self::slashable_balance_of(who);
+		let self_stake = Self::active_stake_of(who);
 		// maybe update sorted list.
 		let _ = T::VoterList::on_insert(who.clone(), Self::to_vote(self_stake));
 	}
