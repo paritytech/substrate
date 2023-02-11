@@ -214,16 +214,21 @@ pub mod pallet {
 		}
 
 		/// Wastes some `ref_time`. Receives a counter as an argument.
-		pub fn waste_ref_time(counter: u64) -> u64 {
+		pub fn waste_ref_time(counter: u64) -> Vec<u8> {
 			let mut hasher = Blake2b512::new();
-			let mut result = 0;
-			// Blake2 has a very high speed of hashing so we make multiple
-			// hashes with it to waste more `ref_time` at once.
-			(0..50).for_each(|i: u32| {
+
+			let mut prev_result: Vec<u8> = Default::default();
+			let mut result: Vec<u8> = Default::default();
+			// Blake2 has a very high speed of hashing so we make multiple hashes with it to
+			// waste more `ref_time` at once.
+			(0..50).for_each(|i: u64| {
 				hasher.update((counter & i).to_le_bytes());
-				result |= hasher.clone().finalize();
+				result = hasher.clone().finalize().to_vec();
+				// We or the values of the hashing result with the previous hashing result.
+				(0..prev_result.len()).for_each(|j: usize| result[j] |= prev_result[j]);
+				prev_result = result.clone();
 			});
-			
+
 			result
 		}
 	}
