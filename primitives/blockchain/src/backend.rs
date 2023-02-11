@@ -191,7 +191,7 @@ pub trait Backend<Block: BlockT>:
 	///
 	/// Returns `Ok(None)` if `base_hash` is not found in search space.
 	// TODO: document time complexity of this, see [#1444](https://github.com/paritytech/substrate/issues/1444)
-	fn best_containing(
+	fn longest_containing(
 		&self,
 		base_hash: Block::Hash,
 		import_lock: &RwLock<()>,

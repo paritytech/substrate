@@ -54,7 +54,7 @@ where
 		let best_hash = self
 			.backend
 			.blockchain()
-			.best_containing(info.best_hash, import_lock)?
+			.longest_containing(info.best_hash, import_lock)?
 			.unwrap_or(info.best_hash);
 		Ok(best_hash)
 	}
@@ -82,20 +82,24 @@ where
 		base_hash: Block::Hash,
 		maybe_max_number: Option<NumberFor<Block>>,
 	) -> sp_blockchain::Result<Block::Hash> {
-		use sp_blockchain::Error::{MissingHeader, NotInFinalizedChain};
+		use sp_blockchain::Error::{Application, MissingHeader};
 		let blockchain = self.backend.blockchain();
 
 		let mut current_head = self.best_header()?;
 		let mut best_hash = current_head.hash();
 
-		let target_header = blockchain
+		let base_header = blockchain
 			.header(base_hash)?
 			.ok_or_else(|| MissingHeader(base_hash.to_string()))?;
-		let target_number = *target_header.number();
+		let base_number = *base_header.number();
 
 		if let Some(max_number) = maybe_max_number {
-			if max_number < target_number {
-				return Err(NotInFinalizedChain)
+			if max_number < base_number {
+				let msg = format!(
+					"Requested a finality target using max number {} below the base number {}",
+					max_number, base_number
+				);
+				return Err(Application(msg.into()))
 			}
 
 			while current_head.number() > &max_number {
@@ -107,8 +111,12 @@ where
 		}
 
 		while current_head.hash() != base_hash {
-			if *current_head.number() < target_number {
-				return Err(NotInFinalizedChain)
+			if *current_head.number() < base_number {
+				let msg = format!(
+					"Requested a finality target using a base {:?} not in the best chain {:?}",
+					base_hash, best_hash,
+				);
+				return Err(Application(msg.into()))
 			}
 			let current_hash = *current_head.parent_hash();
 			current_head = blockchain
