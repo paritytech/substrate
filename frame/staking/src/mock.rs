@@ -35,7 +35,10 @@ use sp_runtime::{
 	testing::{Header, UintAuthorityId},
 	traits::{IdentityLookup, Zero},
 };
-use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
+use sp_staking::{
+	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
+	OnStakingUpdate, Stake,
+};
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
 pub const BLOCK_TIME: u64 = 1000;
@@ -234,6 +237,12 @@ parameter_types! {
 	pub static MaxUnlockingChunks: u32 = 32;
 	pub static RewardOnUnbalanceWasCalled: bool = false;
 	pub static LedgerSlashPerEra: (BalanceOf<Test>, BTreeMap<EraIndex, BalanceOf<Test>>) = (Zero::zero(), BTreeMap::new());
+	pub static OnStakeUpdate: Vec<(AccountId, Option<Stake<AccountId, Balance>>)> = Vec::new();
+	pub static OnNominatorUpdate: Vec<(AccountId, Vec<AccountId>)> = Vec::new();
+	pub static OnValidatorUpdate: Vec<AccountId> = Vec::new();
+	pub static OnValidatorRemove: Vec<AccountId> = Vec::new();
+	pub static OnNominatorRemove: Vec<(AccountId, Vec<AccountId>)> = Vec::new();
+	pub static OnUnstake: Vec<AccountId> = Vec::new();
 	pub static MaxWinners: u32 = 100;
 }
 
@@ -276,6 +285,45 @@ impl<T: Config> sp_staking::OnStakerSlash<AccountId, Balance> for OnStakerSlashM
 	}
 }
 
+pub struct EventListenerMock;
+impl OnStakingUpdate<AccountId, Balance> for EventListenerMock {
+	fn on_stake_update(who: &AccountId, prev_stake: Option<Stake<AccountId, Balance>>) {
+		let mut vec = OnStakeUpdate::get();
+		vec.push((who.clone(), prev_stake));
+		OnStakeUpdate::set(vec);
+	}
+
+	fn on_nominator_update(who: &AccountId, prev_nominations: Vec<AccountId>) {
+		let mut vec = OnNominatorUpdate::get();
+		vec.push((who.clone(), prev_nominations));
+		OnNominatorUpdate::set(vec);
+	}
+
+	fn on_validator_update(who: &AccountId) {
+		let mut vec = OnValidatorUpdate::get();
+		vec.push(who.clone());
+		OnValidatorUpdate::set(vec);
+	}
+
+	fn on_validator_remove(who: &AccountId) {
+		let mut vec = OnValidatorRemove::get();
+		vec.push(who.clone());
+		OnValidatorRemove::set(vec);
+	}
+
+	fn on_nominator_remove(who: &AccountId, nominations: Vec<AccountId>) {
+		let mut vec = OnNominatorRemove::get();
+		vec.push((who.clone(), nominations));
+		OnNominatorRemove::set(vec);
+	}
+
+	fn on_unstake(who: &AccountId) {
+		let mut vec = OnUnstake::get();
+		vec.push(who.clone());
+		OnUnstake::set(vec);
+	}
+}
+
 impl crate::pallet::pallet::Config for Test {
 	type MaxNominations = MaxNominations;
 	type Currency = Balances;
@@ -305,7 +353,7 @@ impl crate::pallet::pallet::Config for Test {
 	type OnStakerSlash = OnStakerSlashMock<Test>;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type WeightInfo = ();
-	type EventListeners = StakeTracker;
+	type EventListeners = (StakeTracker, EventListenerMock);
 }
 
 impl pallet_stake_tracker::Config for Test {
