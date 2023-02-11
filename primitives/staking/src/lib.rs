@@ -62,8 +62,8 @@ impl<AccountId, Balance> OnStakerSlash<AccountId, Balance> for () {
 
 /// A struct that reflects stake that an account has in the staking system. Provides a set of
 /// methods to operate on it's properties. Aimed at making `StakingInterface` more concise.
-#[derive(Default)]
-pub struct Stake<AccountId, Balance> {
+#[derive(Default, Clone)]
+pub struct Stake<AccountId: Clone, Balance: Clone> {
 	/// The stash account whose balance is actually locked and at stake.
 	pub stash: AccountId,
 	/// The total stake that `stash` has in the staking system. This includes the
@@ -85,7 +85,7 @@ pub struct Stake<AccountId, Balance> {
 /// Note that the interface is designed in a way that the events are fired post-action, so any
 /// pre-action data that is needed needs to be passed to interface methods.
 /// The rest of the data can be retrieved by using `StakingInterface`.
-pub trait OnStakingUpdate<AccountId, Balance> {
+pub trait OnStakingUpdate<AccountId: Clone, Balance: Copy> {
 	/// Fired when the stake amount of someone updates.
 	///
 	/// Also called when someone stakes for the first time. (TODO: is it? this is why we need unit
@@ -106,30 +106,30 @@ pub trait OnStakingUpdate<AccountId, Balance> {
 	fn on_unstake(who: &AccountId); // -> basically `kill_stash`
 }
 
-#[cfg(feature = "std")]
-impl<AccountId, Balance> OnStakingUpdate<AccountId, Balance> for () {
-	fn on_stake_update(_: &AccountId, _: Option<Stake<AccountId, Balance>>) {
-		// stub
+#[impl_trait_for_tuples::impl_for_tuples(10)]
+impl<AccountId: Clone, Balance: Copy> OnStakingUpdate<AccountId, Balance> for Tuple {
+	fn on_stake_update(who: &AccountId, prev_stake: Option<Stake<AccountId, Balance>>) {
+		for_tuples!( #( Tuple::on_stake_update(who, prev_stake.clone()); )* );
 	}
 
-	fn on_nominator_update(_: &AccountId, _: Vec<AccountId>) {
-		// stub
+	fn on_nominator_update(who: &AccountId, prev_nominations: Vec<AccountId>) {
+		for_tuples!( #( Tuple::on_nominator_update(who, prev_nominations.clone()); )* );
 	}
 
-	fn on_validator_update(_: &AccountId) {
-		// stub
+	fn on_validator_update(who: &AccountId) {
+		for_tuples!( #( Tuple::on_validator_update(who); )* );
 	}
 
-	fn on_validator_remove(_: &AccountId) {
-		// stub
+	fn on_validator_remove(who: &AccountId) {
+		for_tuples!( #( Tuple::on_validator_remove(who); )* );
 	}
 
-	fn on_nominator_remove(_: &AccountId, _: Vec<AccountId>) {
-		// stub
+	fn on_nominator_remove(who: &AccountId, nominations: Vec<AccountId>) {
+		for_tuples!( #( Tuple::on_nominator_remove(who, nominations.clone()); )* );
 	}
 
-	fn on_unstake(_: &AccountId) {
-		// stub
+	fn on_unstake(who: &AccountId) {
+		for_tuples!( #( Tuple::on_unstake(who); )* );
 	}
 }
 
@@ -150,7 +150,7 @@ pub trait StakingInterface {
 		+ Saturating;
 
 	/// AccountId type used by the staking system
-	type AccountId;
+	type AccountId: Clone;
 
 	/// whatever
 	type CurrencyToVote: CurrencyToVote<Self::Balance>;

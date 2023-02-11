@@ -19,6 +19,7 @@ sp-core = { version = "7.0.0", default-features = false, path = "../core" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../runtime" }
 sp-std = { version = "5.0.0", default-features = false, path = "../std" }
 sp-arithmetic = { version = "6.0.0", default-features = false, path = "../arithmetic" }
+impl-trait-for-tuples = "0.2.2"
 
 [features]
 default = ["std"]
