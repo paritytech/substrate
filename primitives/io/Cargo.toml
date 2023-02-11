@@ -20,7 +20,7 @@ codec = { package = "parity-scale-codec", version = "3.2.2", default-features = 
 sp-core = { version = "7.0.0", default-features = false, path = "../core" }
 sp-keystore = { version = "0.13.0", default-features = false, optional = true, path = "../keystore" }
 sp-std = { version = "5.0.0", default-features = false, path = "../std" }
-libsecp256k1 = { version = "0.7", optional = true }
+libsecp256k1 = { version = "0.7", default-features = false, optional = true }
 sp-state-machine = { version = "0.13.0", default-features = false, optional = true, path = "../state-machine" }
 sp-runtime-interface = { version = "7.0.0", default-features = false, path = "../runtime-interface" }
 sp-trie = { version = "7.0.0", default-features = false, optional = true, path = "../trie" }
