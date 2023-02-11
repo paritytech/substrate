@@ -139,19 +139,19 @@ impl StakingInterface for StakingMock {
 	}
 
 	fn minimum_validator_bond() -> Self::Balance {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn stash_by_ctrl(_: &Self::AccountId) -> Result<Self::AccountId, DispatchError> {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn bonding_duration() -> EraIndex {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn current_era() -> EraIndex {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn stake(
@@ -160,7 +160,7 @@ impl StakingInterface for StakingMock {
 		if *who >= 30 {
 			return Err(DispatchError::Other("not bonded"))
 		}
-		let stake = <Runtime as pallet_stake_tracker::Config>::Currency::total_balance(who);
+		let stake = Balances::total_balance(who);
 		Ok(Stake {
 			stash: *who,
 			active: stake.saturating_sub(ExistentialDeposit::get()),
@@ -169,43 +169,43 @@ impl StakingInterface for StakingMock {
 	}
 
 	fn bond(_: &Self::AccountId, _: Self::Balance, _: &Self::AccountId) -> DispatchResult {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn nominate(_: &Self::AccountId, _: Vec<Self::AccountId>) -> DispatchResult {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn chill(_: &Self::AccountId) -> DispatchResult {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn bond_extra(_: &Self::AccountId, _: Self::Balance) -> DispatchResult {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn unbond(_: &Self::AccountId, _: Self::Balance) -> DispatchResult {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn withdraw_unbonded(_: Self::AccountId, _: u32) -> Result<bool, DispatchError> {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn desired_validator_count() -> u32 {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn election_ongoing() -> bool {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn force_unstake(_: Self::AccountId) -> DispatchResult {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn is_exposed_in_era(_: &Self::AccountId, _: &EraIndex) -> bool {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn is_validator(who: &Self::AccountId) -> bool {
@@ -226,12 +226,12 @@ impl StakingInterface for StakingMock {
 		_: &Self::AccountId,
 		_: Vec<(Self::AccountId, Self::Balance)>,
 	) {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_current_era(_: EraIndex) {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 }
 

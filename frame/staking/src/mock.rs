@@ -99,7 +99,7 @@ frame_support::construct_runtime!(
 		Session: pallet_session,
 		Historical: pallet_session::historical,
 		VoterBagsList: pallet_bags_list::<Instance1>,
-	StakeTracker: pallet_stake_tracker,
+		StakeTracker: pallet_stake_tracker,
 	}
 );
 
