@@ -1546,6 +1546,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 impl<T: Config> StakingInterface for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Balance = BalanceOf<T>;
+	type CurrencyToVote = T::CurrencyToVote;
 
 	fn minimum_nominator_bond() -> Self::Balance {
 		MinNominatorBond::<T>::get()
@@ -1666,8 +1667,6 @@ impl<T: Config> StakingInterface for Pallet<T> {
 			CurrentEra::<T>::put(era);
 		}
 	}
-
-	type CurrencyToVote = T::CurrencyToVote;
 
 	fn is_validator(who: &Self::AccountId) -> bool {
 		Validators::<T>::contains_key(who)
