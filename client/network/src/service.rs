@@ -753,7 +753,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 	/// Get target sync block number.
 	pub fn best_seen_block(&self) -> Option<NumberFor<B>> {
-		self.best_seen_block.lock().clone()
+		*self.best_seen_block.lock()
 	}
 
 	/// Utility function to extract `PeerId` from each `Multiaddr` for peer set updates.
