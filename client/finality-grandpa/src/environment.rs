@@ -1234,7 +1234,7 @@ where
 			target_header.hash() != best_header.hash() ||
 		!is_descendent_of(&target_header.hash(), &best_header.hash())?
 	{
-		warn!(
+		debug!(
 			target: LOG_TARGET,
 			"SelectChain returned a finality target inconsistent with its best block. Restricting best block to target block"
 		);
