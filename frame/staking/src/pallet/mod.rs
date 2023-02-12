@@ -800,7 +800,8 @@ pub mod pallet {
 			let max_page_count = Self::get_max_exposure_page_count();
 
 			let nominator_count = exposure.others.len();
-			let page_count = nominator_count.saturating_add(page_size as usize - 1)/page_size as usize;
+			let page_count =
+				nominator_count.saturating_add(page_size as usize - 1) / page_size as usize;
 
 			// clip nominators if it exceeds the maximum page count.
 			let exposure = if page_count as PageIndex > max_page_count {
