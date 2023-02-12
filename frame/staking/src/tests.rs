@@ -3935,7 +3935,6 @@ fn test_multi_page_payout_stakers_by_page() {
 }
 
 #[test]
-//todo
 fn test_multi_page_payout_stakers_backward_compatible() {
 	// Test that payout_stakers work in general and that it pays the correct amount of reward.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
@@ -4162,6 +4161,80 @@ fn test_multi_page_payout_stakers_backward_compatible() {
 
 		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, test_era));
 		assert_eq!(Staking::claimed_rewards(test_era, &11), vec![0, 1, 2, 3]);
+	});
+}
+
+#[test]
+fn test_page_count_and_size() {
+	// Test that payout_stakers work in general and that it pays the correct amount of reward.
+	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
+		let balance = 1000;
+		// Track the exposure of the validator and all nominators.
+		// Create a validator:
+		bond_validator(11, 10, balance); // Default(64)
+		assert_eq!(Validators::<Test>::count(), 1);
+
+		// Create nominators, targeting stash of validators
+		for i in 0..100 {
+			let bond_amount = balance + i as Balance;
+			bond_nominator(1000 + i, 100 + i, bond_amount, vec![11]);
+		}
+
+		mock::start_active_era(1);
+
+		// Since max exposure page count is 1, we should only have 1 page with clipped and sorted
+		// nominators.
+		assert_eq!(EraInfo::<Test>::get_page_count(1, &11), 1);
+		let exposure = EraInfo::<Test>::get_validator_exposure(1, &11, 0).unwrap();
+		let mut previous_nominator_balance: Balance = u32::MAX as Balance;
+		exposure.others().iter().for_each(|e| {
+			// Nominators are sorted by balance in descending order.
+			assert!(e.value < previous_nominator_balance);
+			previous_nominator_balance = e.value;
+		});
+
+		// the last nominator balance is higher than the last 36 clipped nominators.
+		assert_eq!(previous_nominator_balance, 1000 + 36);
+
+		// increase max page size
+		allow_paged_rewards(10);
+		mock::start_active_era(2);
+
+		assert_eq!(EraInfo::<Test>::get_page_count(2, &11), 2);
+		// first page has 64 nominators
+		assert_eq!(EraInfo::<Test>::get_validator_exposure(2, &11, 0).unwrap().others().len(), 64);
+		// second page has 36 nominators
+		assert_eq!(EraInfo::<Test>::get_validator_exposure(2, &11, 1).unwrap().others().len(), 36);
+
+		// now lets decrease page size
+		ExposurePageSize::<Test>::put(32);
+		mock::start_active_era(3);
+		// now we expect 4 pages.
+		assert_eq!(EraInfo::<Test>::get_page_count(3, &11), 4);
+		// first 3 pages have 32 nominators each
+		assert_eq!(EraInfo::<Test>::get_validator_exposure(3, &11, 0).unwrap().others().len(), 32);
+		assert_eq!(EraInfo::<Test>::get_validator_exposure(3, &11, 1).unwrap().others().len(), 32);
+		assert_eq!(EraInfo::<Test>::get_validator_exposure(3, &11, 2).unwrap().others().len(), 32);
+		assert_eq!(EraInfo::<Test>::get_validator_exposure(3, &11, 3).unwrap().others().len(), 4);
+
+		// now lets decrease page size even more
+		ExposurePageSize::<Test>::put(9);
+		mock::start_active_era(4);
+		// now we expect the max 10 pages with each page having 9 nominators.
+		assert_eq!(EraInfo::<Test>::get_page_count(4, &11), 10);
+
+		// all nominators are sorted by balance in descending order.
+		let mut previous_nominator_balance: Balance = u32::MAX as Balance;
+		for page in 0..10 {
+			let exposure = EraInfo::<Test>::get_validator_exposure(4, &11, page).unwrap();
+			exposure.others().iter().for_each(|e| {
+				assert!(e.value < previous_nominator_balance);
+				previous_nominator_balance = e.value;
+			});
+		}
+
+		// the last nominator balance is higher than the last 10 clipped nominators.
+		assert_eq!(previous_nominator_balance, 1000 + 10);
 	});
 }
 
