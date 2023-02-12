@@ -482,6 +482,16 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type ExposurePageSize<T> = StorageValue<_, u32, OptionQuery>;
 
+	/// Maximum number of exposure pages that can be stored for a single validator in an era.
+	///
+	/// Must be greater than 0.
+	///
+	/// When this is set to 1, the reward payout behaviour is similar to how it used to work before
+	/// we had paged exposures.
+	#[pallet::storage]
+	// TODO(ank4n): Does it need #[pallet::getter(...)]
+	pub type MaxExposurePageCount<T> = StorageValue<_, PageIndex, OptionQuery>;
+
 	/// Paginated exposure of a validator at given era.
 	///
 	/// This is keyed first by the era index to allow bulk deletion, then the tuple of stash account
@@ -650,7 +660,7 @@ pub mod pallet {
 		/// non-paged rewards, and (2) `T::ClaimedRewards` for paged rewards. This function can be
 		/// removed once `$HistoryDepth` eras have passed and none of the older non-paged rewards
 		/// are relevant/claimable.
-		// TODO: Cleanup tracking issue: #13034
+		// Refer tracker issue for cleanup: #13034
 		pub(crate) fn is_rewards_claimed_temp(
 			era: EraIndex,
 			ledger: &StakingLedger<T>,
@@ -742,6 +752,11 @@ pub mod pallet {
 			<ErasStakersClipped<T>>::contains_key(&era, validator)
 		}
 
+		/// Returns the maximum number of pages of exposure we can store.
+		fn get_max_exposure_page_count() -> PageIndex {
+			return <MaxExposurePageCount<T>>::get().unwrap_or_default().max(1)
+		}
+
 		/// Returns validator commission for this era and page.
 		pub(crate) fn get_validator_commission(
 			era: EraIndex,
@@ -777,11 +792,28 @@ pub mod pallet {
 			exposure: Exposure<T::AccountId, BalanceOf<T>>,
 		) {
 			<ErasStakers<T>>::insert(era, &validator, &exposure);
-			// FIXME(ankan) Should we sort exposure.others for backward compatibility?
 
 			let page_size = <ExposurePageSize<T>>::get()
 				.unwrap_or_else(|| T::MaxNominatorRewardedPerValidator::get())
 				.clamp(1, T::MaxNominatorRewardedPerValidator::get());
+
+			let max_page_count = Self::get_max_exposure_page_count();
+
+			let nominator_count = exposure.others.len();
+			let page_count = nominator_count.saturating_add(page_size as usize - 1)/page_size as usize;
+
+			// clip nominators if it exceeds the maximum page count.
+			let exposure = if page_count as PageIndex > max_page_count {
+				// sort before clipping.
+				let mut exposure_clipped = exposure;
+				let clipped_max_len = max_page_count * page_size;
+
+				exposure_clipped.others.sort_by(|a, b| b.value.cmp(&a.value));
+				exposure_clipped.others.truncate(clipped_max_len as usize);
+				exposure_clipped
+			} else {
+				exposure
+			};
 
 			let (exposure_overview, exposure_pages) = exposure.into_pages(page_size);
 

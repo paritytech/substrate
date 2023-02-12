@@ -819,3 +819,7 @@ pub(crate) fn staking_events_since_last_call() -> Vec<crate::Event<Test>> {
 pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
 	(Balances::free_balance(who), Balances::reserved_balance(who))
 }
+
+pub(crate) fn allow_exposure_pages(max_count: u32) {
+	MaxExposurePageCount::<Test>::put(max_count.max(1));
+}
