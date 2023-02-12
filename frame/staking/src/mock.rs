@@ -289,37 +289,37 @@ pub struct EventListenerMock;
 impl OnStakingUpdate<AccountId, Balance> for EventListenerMock {
 	fn on_stake_update(who: &AccountId, prev_stake: Option<Stake<AccountId, Balance>>) {
 		let mut vec = OnStakeUpdate::get();
-		vec.push((who.clone(), prev_stake));
+		vec.push((*who, prev_stake));
 		OnStakeUpdate::set(vec);
 	}
 
 	fn on_nominator_update(who: &AccountId, prev_nominations: Vec<AccountId>) {
 		let mut vec = OnNominatorUpdate::get();
-		vec.push((who.clone(), prev_nominations));
+		vec.push((*who, prev_nominations));
 		OnNominatorUpdate::set(vec);
 	}
 
 	fn on_validator_update(who: &AccountId) {
 		let mut vec = OnValidatorUpdate::get();
-		vec.push(who.clone());
+		vec.push(*who);
 		OnValidatorUpdate::set(vec);
 	}
 
 	fn on_validator_remove(who: &AccountId) {
 		let mut vec = OnValidatorRemove::get();
-		vec.push(who.clone());
+		vec.push(*who);
 		OnValidatorRemove::set(vec);
 	}
 
 	fn on_nominator_remove(who: &AccountId, nominations: Vec<AccountId>) {
 		let mut vec = OnNominatorRemove::get();
-		vec.push((who.clone(), nominations));
+		vec.push((*who, nominations));
 		OnNominatorRemove::set(vec);
 	}
 
 	fn on_unstake(who: &AccountId) {
 		let mut vec = OnUnstake::get();
-		vec.push(who.clone());
+		vec.push(*who);
 		OnUnstake::set(vec);
 	}
 }
