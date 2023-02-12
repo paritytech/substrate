@@ -820,6 +820,6 @@ pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
 	(Balances::free_balance(who), Balances::reserved_balance(who))
 }
 
-pub(crate) fn allow_exposure_pages(max_count: u32) {
-	MaxExposurePageCount::<Test>::put(max_count.max(1));
+pub(crate) fn allow_paged_rewards(max_pages: u32) {
+	MaxExposurePageCount::<Test>::put(max_pages.max(1));
 }
