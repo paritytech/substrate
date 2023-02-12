@@ -251,28 +251,22 @@ impl StorageType {
 					>;
 				}
 			},
-			Self::Map { _kw, value_ty, query_type, hasher_ty, key_ty, prefix_generics, .. } => {
-				let query_type = query_type.as_ref().map(|(c, t)| quote!(#c #t));
-
-				quote! {
-					#( #attributes )*
-					#visibility type #storage_name #storage_generics = #crate_::storage::types::StorageMap<
-						#storage_instance #prefix_generics,
-						#hasher_ty,
-						#key_ty,
-						#value_ty
-						#query_type
-					>;
-				}
-			},
 			Self::CountedMap {
 				value_ty, query_type, hasher_ty, key_ty, prefix_generics, ..
-			} => {
+			} |
+			Self::Map { value_ty, query_type, hasher_ty, key_ty, prefix_generics, .. } => {
 				let query_type = query_type.as_ref().map(|(c, t)| quote!(#c #t));
+				let map_type = Ident::new(
+					match self {
+						Self::Map { .. } => "StorageMap",
+						_ => "CountedStorageMap",
+					},
+					Span::call_site(),
+				);
 
 				quote! {
 					#( #attributes )*
-					#visibility type #storage_name #storage_generics = #crate_::storage::types::CountedStorageMap<
+					#visibility type #storage_name #storage_generics = #crate_::storage::types::#map_type<
 						#storage_instance #prefix_generics,
 						#hasher_ty,
 						#key_ty,
