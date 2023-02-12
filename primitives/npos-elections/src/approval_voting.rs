@@ -22,7 +22,7 @@
 
 use crate::{setup_inputs, ElectionResult, IdentifierT, PerThing128, VoteWeight};
 use sp_arithmetic::{traits::{Bounded, Zero}, Rounding, helpers_128bit::multiply_by_rational_with_rounding};
-use sp_std::cmp::Reverse;
+use sp_std::{vec::Vec, cmp::Reverse};
 
 /// Execute an approvals voting election scheme. The return type is a list of winners and a weight
 /// distribution vector of all voters who contribute to the winners.
