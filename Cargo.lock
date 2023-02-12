@@ -1626,16 +1626,6 @@ dependencies = [
 
 [[package]]
 name = "crypto-mac"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b584a330336237c1eecd3e94266efb216c56ed91225d634cb2991c5f3fd1aeab"
-dependencies = [
- "generic-array 0.14.6",
- "subtle",
-]
-
-[[package]]
-name = "crypto-mac"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bff07008ec701e8028e2ceb8f83f0e4274ee62bd2dbdc4fefff2e9a91824081a"
@@ -3184,16 +3174,6 @@ dependencies = [
 
 [[package]]
 name = "hmac"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "126888268dcc288495a26bf004b38c5fdbb31682f992c84ceb046a1f0fe38840"
-dependencies = [
- "crypto-mac 0.8.0",
- "digest 0.9.0",
-]
-
-[[package]]
-name = "hmac"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1441c6b1e930e2817404b5046f1f989899143a12bf92de603b69f4e0aee1e15"
@@ -3219,17 +3199,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e"
 dependencies = [
  "digest 0.10.6",
-]
-
-[[package]]
-name = "hmac-drbg"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17ea0a1394df5b6574da6e0c1ade9e78868c9fb0a4e5ef4428e32da4676b85b1"
-dependencies = [
- "digest 0.9.0",
- "generic-array 0.14.6",
- "hmac 0.8.1",
 ]
 
 [[package]]
@@ -4355,14 +4324,12 @@ dependencies = [
  "arrayref",
  "base64 0.13.1",
  "digest 0.9.0",
- "hmac-drbg",
  "libsecp256k1-core",
  "libsecp256k1-gen-ecmult",
  "libsecp256k1-gen-genmult",
  "rand 0.8.5",
  "serde",
  "sha2 0.9.9",
- "typenum",
 ]
 
 [[package]]
@@ -9937,7 +9904,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bls12-377"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#d05d2f213b6e715fec0b46cf3d63991c833aa62b"
+source = "git+https://github.com/paritytech/ark-substrate?branch=no-compression#ee80487c70c3faf954ea6f2c27566221c418a106"
 dependencies = [
  "ark-bls12-377",
  "ark-ff",
@@ -9951,9 +9918,10 @@ dependencies = [
 [[package]]
 name = "sp-ark-bls12-381"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#d05d2f213b6e715fec0b46cf3d63991c833aa62b"
+source = "git+https://github.com/paritytech/ark-substrate?branch=no-compression#ee80487c70c3faf954ea6f2c27566221c418a106"
 dependencies = [
  "ark-bls12-381",
+ "ark-ec",
  "ark-ff",
  "ark-serialize",
  "ark-std",
@@ -9964,7 +9932,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bw6-761"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#d05d2f213b6e715fec0b46cf3d63991c833aa62b"
+source = "git+https://github.com/paritytech/ark-substrate?branch=no-compression#ee80487c70c3faf954ea6f2c27566221c418a106"
 dependencies = [
  "ark-bw6-761",
  "ark-ff",
@@ -9977,7 +9945,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-ed-on-bls12-377"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#d05d2f213b6e715fec0b46cf3d63991c833aa62b"
+source = "git+https://github.com/paritytech/ark-substrate?branch=no-compression#ee80487c70c3faf954ea6f2c27566221c418a106"
 dependencies = [
  "ark-ed-on-bls12-377",
  "ark-ff",
@@ -9991,7 +9959,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-ed-on-bls12-381"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#d05d2f213b6e715fec0b46cf3d63991c833aa62b"
+source = "git+https://github.com/paritytech/ark-substrate?branch=no-compression#ee80487c70c3faf954ea6f2c27566221c418a106"
 dependencies = [
  "ark-ed-on-bls12-381",
  "ark-ff",
@@ -10005,7 +9973,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-models"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#d05d2f213b6e715fec0b46cf3d63991c833aa62b"
+source = "git+https://github.com/paritytech/ark-substrate?branch=no-compression#ee80487c70c3faf954ea6f2c27566221c418a106"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -10021,7 +9989,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-utils"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#d05d2f213b6e715fec0b46cf3d63991c833aa62b"
+source = "git+https://github.com/paritytech/ark-substrate?branch=no-compression#ee80487c70c3faf954ea6f2c27566221c418a106"
 dependencies = [
  "ark-serialize",
  "ark-std",

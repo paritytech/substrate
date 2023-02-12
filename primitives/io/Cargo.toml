@@ -20,23 +20,23 @@ codec = { package = "parity-scale-codec", version = "3.2.2", default-features = 
 sp-core = { version = "7.0.0", default-features = false, path = "../core" }
 sp-keystore = { version = "0.13.0", default-features = false, optional = true, path = "../keystore" }
 sp-std = { version = "5.0.0", default-features = false, path = "../std" }
-libsecp256k1 = { version = "0.7", optional = true }
+libsecp256k1 = { version = "0.7", default-features = false, optional = true }
 sp-state-machine = { version = "0.13.0", default-features = false, optional = true, path = "../state-machine" }
 sp-runtime-interface = { version = "7.0.0", default-features = false, path = "../runtime-interface" }
 sp-trie = { version = "7.0.0", default-features = false, optional = true, path = "../trie" }
 sp-externalities = { version = "0.13.0", default-features = false, path = "../externalities" }
 sp-tracing = { version = "6.0.0", default-features = false, path = "../tracing" }
 sp-arkworks = { version = "0.4.0", default-features = false, optional = true, path = "../arkworks" }
-log = { version = "0.4.17", optional = true }
-futures = { version = "0.3.21", features = ["thread-pool"], optional = true }
-secp256k1 = { version = "0.24.0", features = ["recovery", "global-context"], optional = true }
+log = { version = "0.4.17", default-features = false, optional = true }
+futures = { version = "0.3.21", features = ["thread-pool"], default-features = false, optional = true }
+secp256k1 = { version = "0.24.0", features = ["recovery", "global-context"], default-features = false, optional = true }
 tracing = { version = "0.1.29", default-features = false }
 tracing-core = { version = "0.1.28", default-features = false}
 
 # Required for backwards compatibility reason, but only used for verifying when `UseDalekExt` is set.
 ed25519-dalek = { version = "1.0.1", default-features = false, optional = true }
 # Force the usage of ed25519, this is being used in `ed25519-dalek`.
-ed25519 = { version = "1.5.2", optional = true }
+ed25519 = { version = "1.5.2", optional = true, default-features = false }
 
 [features]
 default = ["std"]

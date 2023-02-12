@@ -325,9 +325,9 @@ lto = "fat"
 codegen-units = 1
 
 [patch.crates-io]
-sp-ark-models = { git = "https://github.com/paritytech/ark-substrate" }
-sp-ark-bls12-377 = { git = "https://github.com/paritytech/ark-substrate" }
-sp-ark-bls12-381 = { git = "https://github.com/paritytech/ark-substrate" }
-sp-ark-bw6-761 = { git = "https://github.com/paritytech/ark-substrate" }
-sp-ark-ed-on-bls12-377 = { git = "https://github.com/paritytech/ark-substrate" }
-sp-ark-ed-on-bls12-381 = { git = "https://github.com/paritytech/ark-substrate" }
+sp-ark-models = { git = "https://github.com/paritytech/ark-substrate", branch = "no-compression" }
+sp-ark-bls12-377 = { git = "https://github.com/paritytech/ark-substrate", branch = "no-compression" }
+sp-ark-bls12-381 = { git = "https://github.com/paritytech/ark-substrate", branch = "no-compression" }
+sp-ark-bw6-761 = { git = "https://github.com/paritytech/ark-substrate", branch = "no-compression" }
+sp-ark-ed-on-bls12-377 = { git = "https://github.com/paritytech/ark-substrate", branch = "no-compression" }
+sp-ark-ed-on-bls12-381 = { git = "https://github.com/paritytech/ark-substrate", branch = "no-compression" }
