@@ -72,7 +72,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(Weight::from_ref_time(1_711_424_000 as u64).saturating_mul(d as u64))
 	}
 
-	fn approval_voting(v: u32, t: u32, d: u32, ) -> Weight {
+	fn approval_voting(_v: u32, _t: u32, _d: u32, ) -> Weight {
         Weight::zero()
     }
 }
@@ -97,7 +97,7 @@ impl WeightInfo for () {
 			// Standard Error: 6_649_000
 			.saturating_add(Weight::from_ref_time(1_711_424_000 as u64).saturating_mul(d as u64))
 	}
-    fn approval_voting(v: u32, t: u32, d: u32, ) -> Weight {
+    fn approval_voting(_v: u32, _t: u32, _d: u32, ) -> Weight {
         Weight::zero()
     }
 }
