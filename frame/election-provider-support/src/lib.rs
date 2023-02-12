@@ -480,10 +480,6 @@ where
 /// used on the implementing side of [`ElectionDataProvider`].
 ///
 /// The scores (see [`Self::Score`]) are ascending, the higher, the better.
-///
-/// Initially a part of [`SortedListProvider`], it allows for restricting a consumer to read-only
-/// operations. This is particularly useful in case the list is populated by one entity and
-/// read by another.
 pub trait SortedListProvider<AccountId> {
 	/// The list's error type.
 	type Error: sp_std::fmt::Debug;

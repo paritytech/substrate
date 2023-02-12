@@ -25,10 +25,14 @@ mod tests;
 use frame_election_provider_support::{SortedListProvider, VoteWeight};
 use frame_support::traits::{Currency, CurrencyToVote};
 pub use pallet::*;
+use sp_runtime::{
+	traits::{Bounded, Zero},
+	Saturating,
+};
 
 use sp_staking::{OnStakingUpdate, Stake, StakingInterface};
 
-use sp_std::vec::Vec;
+use sp_std::{boxed::Box, vec::Vec};
 
 /// The balance type of this pallet.
 pub type BalanceOf<T> = <<T as Config>::Staking as StakingInterface>::Balance;
@@ -110,4 +114,78 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 	}
 
 	fn on_unstake(_who: &T::AccountId) {}
+}
+
+/// A wrapper for a given `SortedListProvider` that disables insert/update/remove operations,
+/// effectively rendering it read-only, except for unsafe operations.
+pub struct TrackedList<T, S, P>(sp_std::marker::PhantomData<(T, S, P)>);
+
+impl<T: Config, S: Bounded + Saturating + Zero, P: SortedListProvider<T::AccountId, Score = S>>
+	SortedListProvider<T::AccountId> for TrackedList<T, S, P>
+{
+	type Error = P::Error;
+	type Score = P::Score;
+	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
+		P::iter()
+	}
+
+	fn iter_from(
+		start: &T::AccountId,
+	) -> Result<Box<dyn Iterator<Item = T::AccountId>>, Self::Error> {
+		P::iter_from(start)
+	}
+
+	fn count() -> u32 {
+		P::count()
+	}
+
+	fn contains(id: &T::AccountId) -> bool {
+		P::contains(id)
+	}
+
+	fn get_score(id: &T::AccountId) -> Result<Self::Score, Self::Error> {
+		P::get_score(id)
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn try_state() -> Result<(), &'static str> {
+		P::try_state()
+	}
+
+	fn on_insert(_id: T::AccountId, _score: Self::Score) -> Result<(), Self::Error> {
+		unreachable!()
+	}
+
+	fn on_update(_id: &T::AccountId, _score: Self::Score) -> Result<(), Self::Error> {
+		unreachable!()
+	}
+
+	fn on_increase(_id: &T::AccountId, _additional: Self::Score) -> Result<(), Self::Error> {
+		unreachable!()
+	}
+
+	fn on_decrease(_id: &T::AccountId, _decreased: Self::Score) -> Result<(), Self::Error> {
+		unreachable!()
+	}
+
+	fn on_remove(_id: &T::AccountId) -> Result<(), Self::Error> {
+		unreachable!()
+	}
+
+	fn unsafe_regenerate(
+		all: impl IntoIterator<Item = T::AccountId>,
+		score_of: Box<dyn Fn(&T::AccountId) -> Self::Score>,
+	) -> u32 {
+		P::unsafe_regenerate(all, score_of)
+	}
+
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn unsafe_clear() {
+		P::unsafe_clear()
+	}
+
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn score_update_worst_case(who: &T::AccountId, is_increase: bool) -> Self::Score {
+		P::score_update_worst_case(who, is_increase)
+	}
 }
