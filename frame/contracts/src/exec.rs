@@ -34,10 +34,7 @@ use pallet_contracts_primitives::ExecReturnValue;
 use smallvec::{Array, SmallVec};
 use sp_core::ecdsa::Public as ECDSAPublic;
 use sp_io::{crypto::secp256k1_ecdsa_recover_compressed, hashing::blake2_256};
-use sp_runtime::{
-	traits::{CheckedAdd, Convert, Hash},
-	ArithmeticError,
-};
+use sp_runtime::traits::{Convert, Hash};
 use sp_std::{marker::PhantomData, mem, prelude::*};
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
@@ -850,24 +847,16 @@ where
 			// We need to charge the storage deposit before the initial transfer so that
 			// it can create the account in case the initial transfer is < ed.
 			if entry_point == ExportedFunction::Constructor {
-				let caller = self.caller().clone();
 				let frame = top_frame_mut!(self);
-				frame
-					.nested_storage
-					.charge_instantiate(&self.origin, frame.contract_info.get(&frame.account_id))?;
-				Self::transfer(
-					ExistenceRequirement::KeepAlive,
-					&caller,
+				frame.nested_storage.charge_instantiate(
+					&self.origin,
 					&frame.account_id,
-					Contracts::<T>::min_balance()
-						.checked_add(&frame.value_transferred)
-						.ok_or(ArithmeticError::Overflow)?,
+					frame.contract_info.get(&frame.account_id),
 				)?;
-				System::<T>::inc_consumers(&frame.account_id)?;
-			} else {
-				// Every non delegate call or instantiate also optionally transfers the balance.
-				self.initial_transfer()?;
 			}
+
+			// Every non delegate call or instantiate also optionally transfers the balance.
+			self.initial_transfer()?;
 
 			// Call into the wasm blob.
 			let output = executable

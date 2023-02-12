@@ -371,6 +371,7 @@ where
 	pub fn charge_instantiate(
 		&mut self,
 		origin: &T::AccountId,
+		contract: &T::AccountId,
 		info: &mut ContractInfo<T>,
 	) -> Result<DepositOf<T>, DispatchError> {
 		debug_assert!(self.is_alive());
@@ -382,7 +383,8 @@ where
 
 		// Instantiate needs to transfer at least the minimum balance in order to pull the
 		// deposit account into existence.
-		deposit = deposit.max(Deposit::Charge(ed));
+		// We also add another `ed` here which goes to the contract's own account into existence.
+		deposit = deposit.max(Deposit::Charge(ed)).saturating_add(&Deposit::Charge(ed));
 		if deposit.charge_or_zero() > self.limit {
 			return Err(<Error<T>>::StorageDepositLimitExhausted.into())
 		}
@@ -395,8 +397,17 @@ where
 		// Usually, deposit charges are deferred to be able to coalesce them with refunds.
 		// However, we need to charge immediately so that the account is created before
 		// charges possibly below the ed are collected and fail.
-		E::charge(origin, info.deposit_account(), &deposit, false);
+		E::charge(
+			origin,
+			info.deposit_account(),
+			&deposit.saturating_sub(&Deposit::Charge(ed)),
+			false,
+		);
 		System::<T>::inc_consumers(info.deposit_account())?;
+
+		// We also need to make sure that the contract's account itself exists.
+		T::Currency::transfer(origin, contract, ed, ExistenceRequirement::KeepAlive)?;
+		System::<T>::inc_consumers(contract)?;
 
 		Ok(deposit)
 	}
@@ -775,7 +786,7 @@ mod tests {
 					Charge {
 						origin: ALICE,
 						contract: DepositAccount(CHARLIE),
-						amount: Deposit::Refund(120),
+						amount: Deposit::Refund(119),
 						terminated: true
 					},
 					Charge {

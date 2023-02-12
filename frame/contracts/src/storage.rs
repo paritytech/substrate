@@ -22,8 +22,8 @@ pub mod meter;
 use crate::{
 	exec::{AccountIdOf, StorageKey},
 	weights::WeightInfo,
-	AddressGenerator, BalanceOf, CodeHash, Config, ContractInfoOf, DeletionQueue, Error, TrieId,
-	SENTINEL,
+	AddressGenerator, BalanceOf, CodeHash, Config, ContractInfoOf, DeletionQueue, Error, Pallet,
+	TrieId, SENTINEL,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -118,7 +118,9 @@ impl<T: Config> ContractInfo<T> {
 
 	/// Same as [`Self::extra_deposit`] but including the base deposit.
 	pub fn total_deposit(&self) -> BalanceOf<T> {
-		self.extra_deposit().saturating_add(self.storage_base_deposit)
+		self.extra_deposit()
+			.saturating_add(self.storage_base_deposit)
+			.saturating_sub(Pallet::<T>::min_balance())
 	}
 
 	/// Return the account that storage deposits should be deposited into.

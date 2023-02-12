@@ -588,7 +588,7 @@ fn instantiate_and_call_and_deposit_event() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Balances(pallet_balances::Event::Endowed {
 						account: addr.clone(),
-						free_balance: min_balance + value,
+						free_balance: min_balance,
 					}),
 					topics: vec![],
 				},
@@ -597,7 +597,16 @@ fn instantiate_and_call_and_deposit_event() {
 					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
-						amount: min_balance + value,
+						amount: min_balance,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
+						from: ALICE,
+						to: addr.clone(),
+						amount: value,
 					}),
 					topics: vec![],
 				},
@@ -911,7 +920,16 @@ fn deploy_and_call_other_contract() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Balances(pallet_balances::Event::Endowed {
 						account: callee_addr.clone(),
-						free_balance: 32768 + min_balance,
+						free_balance: min_balance,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
+						from: ALICE,
+						to: callee_addr.clone(),
+						amount: min_balance,
 					}),
 					topics: vec![],
 				},
@@ -920,7 +938,7 @@ fn deploy_and_call_other_contract() {
 					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: caller_addr.clone(),
 						to: callee_addr.clone(),
-						amount: 32768 + min_balance, // hard coded in wasm
+						amount: 32768 // hardcoded in wasm
 					}),
 					topics: vec![],
 				},
@@ -3302,7 +3320,7 @@ fn instantiate_with_below_existential_deposit_works() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Balances(pallet_balances::Event::Endowed {
 						account: addr.clone(),
-						free_balance: min_balance + 50,
+						free_balance: min_balance,
 					}),
 					topics: vec![],
 				},
@@ -3311,7 +3329,16 @@ fn instantiate_with_below_existential_deposit_works() {
 					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
-						amount: min_balance + 50,
+						amount: min_balance,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
+						from: ALICE,
+						to: addr.clone(),
+						amount: 50,
 					}),
 					topics: vec![],
 				},
