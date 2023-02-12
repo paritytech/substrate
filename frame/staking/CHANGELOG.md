@@ -18,6 +18,8 @@ as a minor version bump.
 
 - Unlimited number of nominators can be rewarded.
 - New storage item `ExposurePageSize` to limit the number of nominators rewarded for a single call for reward payout.
+- New storage item `MaxExposurePageCount` to limit the maximum number of exposure pages that can be created. If this
+- value is not set, it defaults to 1, resulting in the same behaviour as we have today with clipped exposures.
 - New storage item `ErasStakersPaged` that keeps upto `ExposurePageSize` individual nominator exposures by era, validator and page.
 - New storage item `ErasStakersOverview` which complements `ErasStakersPaged` and keeps track of validator's own stake and total backing stake for each era.
 - New call `payout_stakers_by_page` that allows to payout rewards for a single validator by passing the page explicitly.
@@ -31,5 +33,5 @@ as a minor version bump.
 - `ErasStakersClipped` is deprecated in favor of `ErasStakersPaged`. In 84 eras, `ErasStakersClipped` will be removed.
 - `StakingLedger.claimed_rewards` is renamed to `StakingLedger.legacy_claimed_rewards` and is deprecated.
 
-### PRs
-[#13059](https://github.com/paritytech/substrate/pull/13059)
+
+[5.0.0]: https://github.com/paritytech/substrate/pull/13059
