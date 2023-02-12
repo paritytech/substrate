@@ -179,13 +179,13 @@ impl<T: Config, S: Bounded + Saturating + Zero, P: SortedListProvider<T::Account
 		P::unsafe_regenerate(all, score_of)
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn unsafe_clear() {
-		P::unsafe_clear()
-	}
+	frame_election_provider_support::runtime_benchmarks_or_test_enabled! {
+		fn unsafe_clear() {
+			P::unsafe_clear()
+		}
 
-	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn score_update_worst_case(who: &T::AccountId, is_increase: bool) -> Self::Score {
-		P::score_update_worst_case(who, is_increase)
+		fn score_update_worst_case(who: &T::AccountId, is_increase: bool) -> Self::Score {
+			P::score_update_worst_case(who, is_increase)
+		}
 	}
 }
