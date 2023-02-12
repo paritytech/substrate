@@ -3746,7 +3746,6 @@ fn test_nominators_are_rewarded_for_all_exposure_page() {
 fn test_multi_page_payout_stakers_by_page() {
 	// Test that payout_stakers work in general and that it pays the correct amount of reward.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
-
 		// enable multi paged rewards payout
 		allow_exposure_pages(10);
 
