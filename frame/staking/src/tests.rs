@@ -3693,6 +3693,45 @@ fn six_session_delay() {
 }
 
 #[test]
+fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward() {
+	// with max exposure page count set to 1, clipped exposure logic works exactly as before.
+	ExtBuilder::default().build_and_execute(|| {
+		for i in 0..=MaxNominatorRewardedPerValidator::get() {
+			let stash = 10_000 + i as AccountId;
+			let controller = 20_000 + i as AccountId;
+			let balance = 10_000 + i as Balance;
+			Balances::make_free_balance_be(&stash, balance);
+			assert_ok!(Staking::bond(
+				RuntimeOrigin::signed(stash),
+				controller,
+				balance,
+				RewardDestination::Stash
+			));
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(controller), vec![11]));
+		}
+		mock::start_active_era(1);
+
+		Pallet::<Test>::reward_by_ids(vec![(11, 1)]);
+		// compute and ensure the reward amount is greater than zero.
+		let _ = current_total_payout_for_duration(reward_time_per_era());
+
+		mock::start_active_era(2);
+		mock::make_all_reward_payment(1);
+
+		// Assert only nominators from 1 to Max are rewarded
+		for i in 0..=MaxNominatorRewardedPerValidator::get() {
+			let stash = 10_000 + i as AccountId;
+			let balance = 10_000 + i as Balance;
+			if stash == 10_000 {
+				assert!(Balances::free_balance(&stash) == balance);
+			} else {
+				assert!(Balances::free_balance(&stash) > balance);
+			}
+		}
+	});
+}
+
+#[test]
 fn test_nominators_are_rewarded_for_all_exposure_page() {
 	ExtBuilder::default().build_and_execute(|| {
 		// enable multi paged rewards payout
