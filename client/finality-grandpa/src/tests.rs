@@ -237,7 +237,7 @@ impl SelectChain<Block> for MockSelectChain {
 
 	async fn finality_target(
 		&self,
-		_target_hash: Hash,
+		_base_hash: Hash,
 		_maybe_max_number: Option<NumberFor<Block>>,
 	) -> Result<Hash, ConsensusError> {
 		Ok(self.finality_target.lock().take().unwrap())
