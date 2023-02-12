@@ -21,8 +21,12 @@
 //! vote weight. The candidates with the most backing are the election winners.
 
 use crate::{setup_inputs, ElectionResult, IdentifierT, PerThing128, VoteWeight};
-use sp_arithmetic::{traits::{Bounded, Zero}, Rounding, helpers_128bit::multiply_by_rational_with_rounding};
-use sp_std::{vec::Vec, cmp::Reverse};
+use sp_arithmetic::{
+	helpers_128bit::multiply_by_rational_with_rounding,
+	traits::{Bounded, Zero},
+	Rounding,
+};
+use sp_std::{cmp::Reverse, vec::Vec};
 
 /// Execute an approvals voting election scheme. The return type is a list of winners and a weight
 /// distribution vector of all voters who contribute to the winners.
@@ -56,33 +60,32 @@ pub fn approval_voting<AccountId: IdentifierT, P: PerThing128>(
 			winners_count += 1;
 			winners_count <= to_elect
 		})
-        .map(|w| {
-            w.borrow_mut().elected = true;
-            w
-        })
+		.map(|w| {
+			w.borrow_mut().elected = true;
+			w
+		})
 		.map(|w_ptr| (w_ptr.borrow().who.clone(), w_ptr.borrow().approval_stake))
 		.collect();
 
-    for voter in &mut voters {
-        for edge in &mut voter.edges {
-            if edge.candidate.borrow().elected {
-                edge.weight = multiply_by_rational_with_rounding(
-                    voter.budget,
-                    edge.load.n(),
-                    voter.load.n(),
-                    Rounding::Down,
-                ).unwrap_or(Bounded::max_value());
-            } else {
-                edge.weight = Zero::zero()
-            }
-        }
-    }
+	for voter in &mut voters {
+		for edge in &mut voter.edges {
+			if edge.candidate.borrow().elected {
+				edge.weight = multiply_by_rational_with_rounding(
+					voter.budget,
+					edge.load.n(),
+					voter.load.n(),
+					Rounding::Down,
+				)
+				.unwrap_or(Bounded::max_value());
+			} else {
+				edge.weight = Zero::zero()
+			}
+		}
+	}
 
-	let mut assignments = voters
-		.into_iter()
-		.filter_map(|v| v.into_assignment())
-		.collect::<Vec<_>>();
-    let _ = assignments
+	let mut assignments =
+		voters.into_iter().filter_map(|v| v.into_assignment()).collect::<Vec<_>>();
+	let _ = assignments
 		.iter_mut()
 		.try_for_each(|a| a.try_normalize().map_err(crate::Error::ArithmeticError))?;
 
