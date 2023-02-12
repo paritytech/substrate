@@ -136,6 +136,7 @@ impl ToTokens for SimpleGenerics {
 mod storage_types {
 	syn::custom_keyword!(StorageValue);
 	syn::custom_keyword!(StorageMap);
+	syn::custom_keyword!(CountedStorageMap);
 	syn::custom_keyword!(StorageDoubleMap);
 	syn::custom_keyword!(StorageNMap);
 }
@@ -155,6 +156,21 @@ enum StorageType {
 	},
 	Map {
 		_kw: storage_types::StorageMap,
+		_lt_token: Token![<],
+		prefix: SimplePath,
+		prefix_generics: Option<TypeGenerics>,
+		_hasher_comma: Token![,],
+		hasher_ty: Type,
+		_key_comma: Token![,],
+		key_ty: Type,
+		_value_comma: Token![,],
+		value_ty: Type,
+		query_type: Option<(Token![,], Type)>,
+		_trailing_comma: Option<Token![,]>,
+		_gt_token: Token![>],
+	},
+	CountedMap {
+		_kw: storage_types::CountedStorageMap,
 		_lt_token: Token![<],
 		prefix: SimplePath,
 		prefix_generics: Option<TypeGenerics>,
@@ -235,12 +251,28 @@ impl StorageType {
 					>;
 				}
 			},
-			Self::Map { value_ty, query_type, hasher_ty, key_ty, prefix_generics, .. } => {
+			Self::Map { _kw, value_ty, query_type, hasher_ty, key_ty, prefix_generics, .. } => {
 				let query_type = query_type.as_ref().map(|(c, t)| quote!(#c #t));
 
 				quote! {
 					#( #attributes )*
 					#visibility type #storage_name #storage_generics = #crate_::storage::types::StorageMap<
+						#storage_instance #prefix_generics,
+						#hasher_ty,
+						#key_ty,
+						#value_ty
+						#query_type
+					>;
+				}
+			},
+			Self::CountedMap {
+				value_ty, query_type, hasher_ty, key_ty, prefix_generics, ..
+			} => {
+				let query_type = query_type.as_ref().map(|(c, t)| quote!(#c #t));
+
+				quote! {
+					#( #attributes )*
+					#visibility type #storage_name #storage_generics = #crate_::storage::types::CountedStorageMap<
 						#storage_instance #prefix_generics,
 						#hasher_ty,
 						#key_ty,
@@ -296,6 +328,7 @@ impl StorageType {
 		match self {
 			Self::Value { prefix, .. } |
 			Self::Map { prefix, .. } |
+			Self::CountedMap { prefix, .. } |
 			Self::NMap { prefix, .. } |
 			Self::DoubleMap { prefix, .. } => prefix,
 		}
@@ -306,6 +339,7 @@ impl StorageType {
 		match self {
 			Self::Value { prefix_generics, .. } |
 			Self::Map { prefix_generics, .. } |
+			Self::CountedMap { prefix_generics, .. } |
 			Self::NMap { prefix_generics, .. } |
 			Self::DoubleMap { prefix_generics, .. } => prefix_generics.as_ref(),
 		}
@@ -349,6 +383,22 @@ impl Parse for StorageType {
 			})
 		} else if lookahead.peek(storage_types::StorageMap) {
 			Ok(Self::Map {
+				_kw: input.parse()?,
+				_lt_token: input.parse()?,
+				prefix: input.parse()?,
+				prefix_generics: parse_pallet_generics(input)?,
+				_hasher_comma: input.parse()?,
+				hasher_ty: input.parse()?,
+				_key_comma: input.parse()?,
+				key_ty: input.parse()?,
+				_value_comma: input.parse()?,
+				value_ty: input.parse()?,
+				query_type: parse_query_type(input)?,
+				_trailing_comma: input.peek(Token![,]).then(|| input.parse()).transpose()?,
+				_gt_token: input.parse()?,
+			})
+		} else if lookahead.peek(storage_types::CountedStorageMap) {
+			Ok(Self::CountedMap {
 				_kw: input.parse()?,
 				_lt_token: input.parse()?,
 				prefix: input.parse()?,
@@ -476,6 +526,7 @@ pub fn storage_alias(input: TokenStream) -> Result<TokenStream> {
 		input.storage_type.prefix(),
 		input.storage_type.prefix_generics(),
 		&input.visibility,
+		matches!(input.storage_type, StorageType::CountedMap { .. }),
 	)?;
 
 	let definition = input.storage_type.generate_type_declaration(
@@ -511,6 +562,7 @@ fn generate_storage_instance(
 	prefix: &SimplePath,
 	prefix_generics: Option<&TypeGenerics>,
 	visibility: &Visibility,
+	is_counted_map: bool,
 ) -> Result<StorageInstance> {
 	if let Some(ident) = prefix.get_ident().filter(|i| *i == "_") {
 		return Err(Error::new(ident.span(), "`_` is not allowed as prefix by `storage_alias`."))
@@ -549,6 +601,33 @@ fn generate_storage_instance(
 	let name = Ident::new(&format!("{}_Storage_Instance", storage_name), Span::call_site());
 	let storage_name_str = storage_name.to_string();
 
+	let mut counter_code = Option::None;
+
+	if is_counted_map {
+		let counter_name = Ident::new(&format!("Counter_{}", name), Span::call_site());
+		let counter_storage_name_str = "counter_".to_owned() + &storage_name_str;
+
+		counter_code = Some(quote! {
+			#visibility struct #counter_name< #impl_generics >(
+				#crate_::sp_std::marker::PhantomData<(#type_generics)>
+			) #where_clause;
+
+			impl<#impl_generics> #crate_::traits::StorageInstance
+				for #counter_name< #type_generics > #where_clause
+			{
+				fn pallet_prefix() -> &'static str {
+					#pallet_prefix
+				}
+
+				const STORAGE_PREFIX: &'static str = #counter_storage_name_str;
+			}
+
+			impl<#impl_generics> #crate_::storage::types::CountedStorageMapInstance for #name< #impl_generics > {
+				type CounterPrefix = #counter_name;
+			}
+		});
+	}
+
 	// Implement `StorageInstance` trait.
 	let code = quote! {
 		#visibility struct #name< #impl_generics >(
@@ -564,6 +643,8 @@ fn generate_storage_instance(
 
 			const STORAGE_PREFIX: &'static str = #storage_name_str;
 		}
+
+		#counter_code
 	};
 
 	Ok(StorageInstance { name, code })
