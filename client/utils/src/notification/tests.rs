@@ -36,7 +36,7 @@ fn notification_channel_simple() {
 
 	// Create a future to receive a single notification
 	// from the stream and verify its payload.
-	let future = stream.subscribe().take(1).for_each(move |payload| {
+	let future = stream.subscribe(100_000).take(1).for_each(move |payload| {
 		let test_payload = closure_payload.clone();
 		async move {
 			assert_eq!(payload, test_payload);

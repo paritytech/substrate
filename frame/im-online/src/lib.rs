@@ -474,6 +474,7 @@ pub mod pallet {
 		/// # </weight>
 		// NOTE: the weight includes the cost of validate_unsigned as it is part of the cost to
 		// import block with such an extrinsic.
+		#[pallet::call_index(0)]
 		#[pallet::weight(<T as Config>::WeightInfo::validate_unsigned_and_then_heartbeat(
 			heartbeat.validators_len as u32,
 			heartbeat.network_state.external_addresses.len() as u32,
@@ -604,10 +605,6 @@ impl<T: Config + pallet_authorship::Config>
 	pallet_authorship::EventHandler<ValidatorId<T>, T::BlockNumber> for Pallet<T>
 {
 	fn note_author(author: ValidatorId<T>) {
-		Self::note_authorship(author);
-	}
-
-	fn note_uncle(author: ValidatorId<T>, _age: T::BlockNumber) {
 		Self::note_authorship(author);
 	}
 }

@@ -24,7 +24,7 @@ pub fn migrate_to_v1<T: Config<I>, I: 'static, P: GetStorageVersion + PalletInfo
 ) -> frame_support::weights::Weight {
 	let on_chain_storage_version = <P as GetStorageVersion>::on_chain_storage_version();
 	log::info!(
-		target: "runtime::uniques",
+		target: LOG_TARGET,
 		"Running migration storage v1 for uniques with storage version {:?}",
 		on_chain_storage_version,
 	);
@@ -37,7 +37,7 @@ pub fn migrate_to_v1<T: Config<I>, I: 'static, P: GetStorageVersion + PalletInfo
 		}
 		StorageVersion::new(1).put::<P>();
 		log::info!(
-			target: "runtime::uniques",
+			target: LOG_TARGET,
 			"Running migration storage v1 for uniques with storage version {:?} was complete",
 			on_chain_storage_version,
 		);
@@ -45,7 +45,7 @@ pub fn migrate_to_v1<T: Config<I>, I: 'static, P: GetStorageVersion + PalletInfo
 		T::DbWeight::get().reads_writes(count as u64 + 1, count as u64 + 1)
 	} else {
 		log::warn!(
-			target: "runtime::uniques",
+			target: LOG_TARGET,
 			"Attempted to apply migration to v1 but failed because storage version is {:?}",
 			on_chain_storage_version,
 		);

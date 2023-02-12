@@ -948,3 +948,34 @@ fn generate_equivocation_report_blob() {
 		println!("equivocation_proof.encode(): {:?}", equivocation_proof.encode());
 	});
 }
+
+#[test]
+fn skipping_over_epochs_works() {
+	let mut ext = new_test_ext(3);
+
+	ext.execute_with(|| {
+		let epoch_duration: u64 = <Test as Config>::EpochDuration::get();
+
+		// this sets the genesis slot to 100;
+		let genesis_slot = 100;
+		go_to_block(1, genesis_slot);
+
+		// we will author all blocks from epoch #0 and arrive at a point where
+		// we are in epoch #1. we should already have the randomness ready that
+		// will be used in epoch #2
+		progress_to_block(epoch_duration + 1);
+		assert_eq!(EpochIndex::<Test>::get(), 1);
+
+		// genesis randomness is an array of zeros
+		let randomness_for_epoch_2 = NextRandomness::<Test>::get();
+		assert!(randomness_for_epoch_2 != [0; 32]);
+
+		// we will now create a block for a slot that is part of epoch #4.
+		// we should appropriately increment the epoch index as well as re-use
+		// the randomness from epoch #2 on epoch #4
+		go_to_block(System::block_number() + 1, genesis_slot + epoch_duration * 4);
+
+		assert_eq!(EpochIndex::<Test>::get(), 4);
+		assert_eq!(Randomness::<Test>::get(), randomness_for_epoch_2);
+	});
+}

@@ -142,18 +142,11 @@ this pallet contains the concept of an unstable interface. Akin to the rust nigh
 it allows us to add new interfaces but mark them as unstable so that contract languages can
 experiment with them and give feedback before we stabilize those.
 
-In order to access interfaces marked as `#[unstable]` in `runtime.rs` one need to compile
-this crate with the `unstable-interface` feature enabled. It should be obvious that any
-live runtime should never be compiled with this feature: In addition to be subject to
-change or removal those interfaces do not have proper weights associated with them and
-are therefore considered unsafe.
-
-The substrate runtime exposes this feature as `contracts-unstable-interface`. Example
-commandline for running the substrate node with unstable contracts interfaces:
-
-```bash
-cargo run --release --features contracts-unstable-interface -- --dev
-```
+In order to access interfaces marked as `#[unstable]` in `runtime.rs` one need to set
+`pallet_contracts::Config::UnsafeUnstableInterface` to `ConstU32<true>`. It should be obvious
+that any production runtime should never be compiled with this feature: In addition to be
+subject to change or removal those interfaces might not have proper weights associated with
+them and are therefore considered unsafe.
 
 New interfaces are generally added as unstable and might go through several iterations
 before they are promoted to a stable interface.

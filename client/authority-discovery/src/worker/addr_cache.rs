@@ -69,6 +69,11 @@ impl AddrCache {
 			);
 		}
 
+		log::debug!(
+			target: super::LOG_TARGET,
+			"Found addresses for authority {authority_id:?}: {addresses:?}",
+		);
+
 		let old_addresses = self.authority_id_to_addresses.insert(authority_id.clone(), addresses);
 		let old_peer_ids = addresses_to_peer_ids(&old_addresses.unwrap_or_default());
 

@@ -69,7 +69,7 @@ The interesting part in the generated weight file tells us the weight constants 
 ///   99th: 18_270
 ///   95th: 16_190
 ///   75th: 14_819
-read: 14_262 * constants::WEIGHT_PER_NANOS,
+read: 14_262 * constants::WEIGHT_REF_TIME_PER_NANOS,
 
 /// Time to write one storage item.
 /// Calculated by multiplying the *Average* of all values with `1.1` and adding `0`.
@@ -84,7 +84,7 @@ read: 14_262 * constants::WEIGHT_PER_NANOS,
 ///   99th: 135_839
 ///   95th: 106_129
 ///   75th: 79_239
-write: 71_347 * constants::WEIGHT_PER_NANOS,
+write: 71_347 * constants::WEIGHT_REF_TIME_PER_NANOS,
 ```
 
 ## Arguments

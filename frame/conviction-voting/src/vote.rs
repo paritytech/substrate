@@ -74,6 +74,10 @@ pub enum AccountVote<Balance> {
 	/// A split vote with balances given for both ways, and with no conviction, useful for
 	/// parachains when voting.
 	Split { aye: Balance, nay: Balance },
+	/// A split vote with balances given for both ways as well as abstentions, and with no
+	/// conviction, useful for parachains when voting, other off-chain aggregate accounts and
+	/// individuals who wish to abstain.
+	SplitAbstain { aye: Balance, nay: Balance, abstain: Balance },
 }
 
 impl<Balance: Saturating> AccountVote<Balance> {
@@ -94,6 +98,8 @@ impl<Balance: Saturating> AccountVote<Balance> {
 		match self {
 			AccountVote::Standard { balance, .. } => balance,
 			AccountVote::Split { aye, nay } => aye.saturating_add(nay),
+			AccountVote::SplitAbstain { aye, nay, abstain } =>
+				aye.saturating_add(nay).saturating_add(abstain),
 		}
 	}
 

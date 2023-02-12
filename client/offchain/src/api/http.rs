@@ -66,8 +66,8 @@ impl SharedClient {
 
 /// Creates a pair of [`HttpApi`] and [`HttpWorker`].
 pub fn http(shared_client: SharedClient) -> (HttpApi, HttpWorker) {
-	let (to_worker, from_api) = tracing_unbounded("mpsc_ocw_to_worker");
-	let (to_api, from_worker) = tracing_unbounded("mpsc_ocw_to_api");
+	let (to_worker, from_api) = tracing_unbounded("mpsc_ocw_to_worker", 100_000);
+	let (to_api, from_worker) = tracing_unbounded("mpsc_ocw_to_api", 100_000);
 
 	let api = HttpApi {
 		to_worker,

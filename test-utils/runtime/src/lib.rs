@@ -166,8 +166,6 @@ pub enum Extrinsic {
 	Store(Vec<u8>),
 }
 
-parity_util_mem::malloc_size_of_is_0!(Extrinsic); // non-opaque extrinsic does not need this
-
 #[cfg(feature = "std")]
 impl serde::Serialize for Extrinsic {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error>
@@ -299,7 +297,7 @@ pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
 }
 
 /// A type that can not be decoded.
-#[derive(PartialEq)]
+#[derive(PartialEq, TypeInfo)]
 pub struct DecodeFails<B: BlockT> {
 	_phantom: PhantomData<B>,
 }
@@ -975,12 +973,16 @@ cfg_if! {
 			}
 
 			impl beefy_primitives::BeefyApi<Block> for Runtime {
+				fn beefy_genesis() -> Option<BlockNumber> {
+					None
+				}
+
 				fn validator_set() -> Option<beefy_primitives::ValidatorSet<beefy_primitives::crypto::AuthorityId>> {
 					None
 				}
 			}
 
-			impl beefy_merkle_tree::BeefyMmrApi<Block, beefy_primitives::MmrRootHash> for Runtime {
+			impl pallet_beefy_mmr::BeefyMmrApi<Block, beefy_primitives::MmrRootHash> for Runtime {
 				fn authority_set_proof() -> beefy_primitives::mmr::BeefyAuthoritySet<beefy_primitives::MmrRootHash> {
 					Default::default()
 				}

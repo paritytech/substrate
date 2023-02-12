@@ -192,6 +192,7 @@ pub mod pallet {
 		T::AccountId: From<SomeType1> + From<SomeType3> + SomeAssociation1,
 	{
 		/// Doc comment put in metadata
+		#[pallet::call_index(0)]
 		#[pallet::weight(Weight::from_ref_time(*_foo as u64))]
 		pub fn foo(
 			origin: OriginFor<T>,
@@ -206,6 +207,7 @@ pub mod pallet {
 		}
 
 		/// Doc comment put in metadata
+		#[pallet::call_index(1)]
 		#[pallet::weight(1)]
 		pub fn foo_storage_layer(
 			_origin: OriginFor<T>,
@@ -220,6 +222,7 @@ pub mod pallet {
 		}
 
 		// Test for DispatchResult return type
+		#[pallet::call_index(2)]
 		#[pallet::weight(1)]
 		pub fn foo_no_post_info(_origin: OriginFor<T>) -> DispatchResult {
 			Ok(())

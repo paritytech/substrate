@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
+codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = [
 	"derive",
 ] }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
@@ -49,4 +49,4 @@ std = [
 	"sp-std/std",
 	"sp-tracing/std",
 ]
-try-runtime = ["frame-support/try-runtime", "frame-try-runtime/try-runtime" ]
+try-runtime = ["frame-support/try-runtime", "frame-try-runtime/try-runtime", "sp-runtime/try-runtime"]

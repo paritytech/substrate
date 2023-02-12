@@ -1,0 +1,20 @@
+[package]
+name = "sc-storage-monitor"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+repository = "https://github.com/paritytech/substrate"
+description = "Storage monitor service for substrate"
+homepage = "https://substrate.io"
+
+[dependencies]
+clap = { version = "4.0.9", features = ["derive", "string"] }
+futures = "0.3.21"
+log = "0.4.17"
+nix = { version = "0.26.1", features = ["fs"] }
+sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../db" }
+sc-utils = { version = "4.0.0-dev", path = "../utils" }
+sp-core = { version = "7.0.0", path = "../../primitives/core" }
+tokio = "1.22.0"
+thiserror = "1.0.30"

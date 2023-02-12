@@ -25,6 +25,12 @@ use sp_runtime::{
 	RuntimeDebug,
 };
 
+/// A proposal index.
+pub type PropIndex = u32;
+
+/// A referendum index.
+pub type ReferendumIndex = u32;
+
 /// Info regarding an ongoing referendum.
 #[derive(Encode, MaxEncodedLen, Decode, Default, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct Tally<Balance> {
@@ -205,4 +211,15 @@ pub enum UnvoteScope {
 	Any,
 	/// Permitted to do only the changes that do not need the owner's permission.
 	OnlyExpired,
+}
+
+/// Identifies an owner of a metadata.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub enum MetadataOwner {
+	/// External proposal.
+	External,
+	/// Public proposal of the index.
+	Proposal(PropIndex),
+	/// Referendum of the index.
+	Referendum(ReferendumIndex),
 }

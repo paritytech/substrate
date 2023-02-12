@@ -153,6 +153,7 @@ pub mod pallet {
 		///
 		/// If the preimage was previously requested, no fees or deposits are taken for providing
 		/// the preimage. Otherwise, a deposit is taken proportional to the size of the preimage.
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::note_preimage(bytes.len() as u32))]
 		pub fn note_preimage(origin: OriginFor<T>, bytes: Vec<u8>) -> DispatchResultWithPostInfo {
 			// We accept a signed origin which will pay a deposit, or a root origin where a deposit
@@ -172,6 +173,7 @@ pub mod pallet {
 		///
 		/// - `hash`: The hash of the preimage to be removed from the store.
 		/// - `len`: The length of the preimage of `hash`.
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::unnote_preimage())]
 		pub fn unnote_preimage(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
 			let maybe_sender = Self::ensure_signed_or_manager(origin)?;
@@ -182,6 +184,7 @@ pub mod pallet {
 		///
 		/// If the preimage requests has already been provided on-chain, we unreserve any deposit
 		/// a user may have paid, and take the control of the preimage out of their hands.
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::request_preimage())]
 		pub fn request_preimage(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
 			T::ManagerOrigin::ensure_origin(origin)?;
@@ -192,6 +195,7 @@ pub mod pallet {
 		/// Clear a previously made request for a preimage.
 		///
 		/// NOTE: THIS MUST NOT BE CALLED ON `hash` MORE TIMES THAN `request_preimage`.
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::unrequest_preimage())]
 		pub fn unrequest_preimage(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
 			T::ManagerOrigin::ensure_origin(origin)?;

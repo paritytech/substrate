@@ -104,7 +104,7 @@ where
 	}
 
 	fn subscribe_justifications(&self, mut sink: SubscriptionSink) -> SubscriptionResult {
-		let stream = self.justification_stream.subscribe().map(
+		let stream = self.justification_stream.subscribe(100_000).map(
 			|x: sc_finality_grandpa::GrandpaJustification<Block>| {
 				JustificationNotification::from(x)
 			},
@@ -138,7 +138,7 @@ mod tests {
 	use std::{collections::HashSet, convert::TryInto, sync::Arc};
 
 	use jsonrpsee::{
-		types::{EmptyParams, SubscriptionId},
+		types::{EmptyServerParams as EmptyParams, SubscriptionId},
 		RpcModule,
 	};
 	use parity_scale_codec::{Decode, Encode};

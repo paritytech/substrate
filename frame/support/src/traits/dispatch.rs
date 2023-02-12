@@ -20,10 +20,12 @@
 use crate::dispatch::{DispatchResultWithPostInfo, Parameter, RawOrigin};
 use codec::MaxEncodedLen;
 use sp_runtime::{
-	traits::{BadOrigin, Member, Morph, TryMorph},
+	traits::{BadOrigin, Get, Member, Morph, TryMorph},
 	Either,
 };
-use sp_std::marker::PhantomData;
+use sp_std::{cmp::Ordering, marker::PhantomData};
+
+use super::misc;
 
 /// Some sort of check on the origin is performed by this object.
 pub trait EnsureOrigin<OuterOrigin> {
@@ -38,28 +40,15 @@ pub trait EnsureOrigin<OuterOrigin> {
 	/// Perform the origin check.
 	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin>;
 
-	/// Returns an outer origin capable of passing `try_origin` check.
-	///
-	/// NOTE: This should generally *NOT* be reimplemented. Instead implement
-	/// `try_successful_origin`.
+	/// Attempt to get an outer origin capable of passing `try_origin` check. May return `Err` if it
+	/// is impossible.
 	///
 	/// ** Should be used for benchmarking only!!! **
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> OuterOrigin {
-		Self::try_successful_origin().expect("No origin exists which can satisfy the guard")
-	}
-
-	/// Attept to get an outer origin capable of passing `try_origin` check. May return `Err` if it
-	/// is impossible. Default implementation just uses `successful_origin()`.
-	///
-	/// ** Should be used for benchmarking only!!! **
-	#[cfg(feature = "runtime-benchmarks")]
-	fn try_successful_origin() -> Result<OuterOrigin, ()> {
-		Ok(Self::successful_origin())
-	}
+	fn try_successful_origin() -> Result<OuterOrigin, ()>;
 }
 
-/// `EnsureOrigin` implementation that always fails.
+/// [`EnsureOrigin`] implementation that always fails.
 pub struct NeverEnsureOrigin<Success>(sp_std::marker::PhantomData<Success>);
 impl<OO, Success> EnsureOrigin<OO> for NeverEnsureOrigin<Success> {
 	type Success = Success;
@@ -69,6 +58,90 @@ impl<OO, Success> EnsureOrigin<OO> for NeverEnsureOrigin<Success> {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<OO, ()> {
 		Err(())
+	}
+}
+
+/// [`EnsureOrigin`] implementation that checks that an origin has equal or higher privilege
+/// compared to the expected `Origin`.
+///
+/// It will take the shortcut of comparing the incoming origin with the expected `Origin` and if
+/// both are the same the origin is accepted.
+///
+/// # Example
+///
+/// ```rust
+/// # use frame_support::traits::{EnsureOriginEqualOrHigherPrivilege, PrivilegeCmp, EnsureOrigin as _};
+/// # use sp_runtime::traits::{parameter_types, Get};
+/// # use sp_std::cmp::Ordering;
+///
+/// #[derive(Eq, PartialEq, Debug)]
+/// pub enum Origin {
+///     Root,
+///     SomethingBelowRoot,
+///     NormalUser,
+/// }
+///
+/// struct OriginPrivilegeCmp;
+///
+/// impl PrivilegeCmp<Origin> for OriginPrivilegeCmp {
+///     fn cmp_privilege(left: &Origin, right: &Origin) -> Option<Ordering> {
+///         match (left, right) {
+///             (Origin::Root, Origin::Root) => Some(Ordering::Equal),
+///             (Origin::Root, _) => Some(Ordering::Greater),
+///             (Origin::SomethingBelowRoot, Origin::SomethingBelowRoot) => Some(Ordering::Equal),
+///             (Origin::SomethingBelowRoot, Origin::Root) => Some(Ordering::Less),
+///             (Origin::SomethingBelowRoot, Origin::NormalUser) => Some(Ordering::Greater),
+///             (Origin::NormalUser, Origin::NormalUser) => Some(Ordering::Equal),
+///             (Origin::NormalUser, _) => Some(Ordering::Less),
+///         }
+///     }
+/// }
+///
+/// parameter_types! {
+///     pub const ExpectedOrigin: Origin = Origin::SomethingBelowRoot;
+/// }
+///
+/// type EnsureOrigin = EnsureOriginEqualOrHigherPrivilege<ExpectedOrigin, OriginPrivilegeCmp>;
+///
+/// // `Root` has an higher privilege as our expected origin.
+/// assert!(EnsureOrigin::ensure_origin(Origin::Root).is_ok());
+/// // `SomethingBelowRoot` is exactly the expected origin.
+/// assert!(EnsureOrigin::ensure_origin(Origin::SomethingBelowRoot).is_ok());
+/// // The `NormalUser` origin is not allowed.
+/// assert!(EnsureOrigin::ensure_origin(Origin::NormalUser).is_err());
+/// ```
+pub struct EnsureOriginEqualOrHigherPrivilege<Origin, PrivilegeCmp>(
+	sp_std::marker::PhantomData<(Origin, PrivilegeCmp)>,
+);
+
+impl<OuterOrigin, Origin, PrivilegeCmp> EnsureOrigin<OuterOrigin>
+	for EnsureOriginEqualOrHigherPrivilege<Origin, PrivilegeCmp>
+where
+	Origin: Get<OuterOrigin>,
+	OuterOrigin: Eq,
+	PrivilegeCmp: misc::PrivilegeCmp<OuterOrigin>,
+{
+	type Success = ();
+
+	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
+		let expected_origin = Origin::get();
+
+		// If this is the expected origin, it has the same privilege.
+		if o == expected_origin {
+			return Ok(())
+		}
+
+		let cmp = PrivilegeCmp::cmp_privilege(&o, &expected_origin);
+
+		match cmp {
+			Some(Ordering::Equal) | Some(Ordering::Greater) => Ok(()),
+			None | Some(Ordering::Less) => Err(o),
+		}
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn try_successful_origin() -> Result<OuterOrigin, ()> {
+		Ok(Origin::get())
 	}
 }
 
@@ -85,25 +158,12 @@ pub trait EnsureOriginWithArg<OuterOrigin, Argument> {
 	/// Perform the origin check, returning the origin value if unsuccessful. This allows chaining.
 	fn try_origin(o: OuterOrigin, a: &Argument) -> Result<Self::Success, OuterOrigin>;
 
-	/// Returns an outer origin capable of passing `try_origin` check.
-	///
-	/// NOTE: This should generally *NOT* be reimplemented. Instead implement
-	/// `try_successful_origin`.
+	/// Attempt to get an outer origin capable of passing `try_origin` check. May return `Err` if it
+	/// is impossible.
 	///
 	/// ** Should be used for benchmarking only!!! **
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin(a: &Argument) -> OuterOrigin {
-		Self::try_successful_origin(a).expect("No origin exists which can satisfy the guard")
-	}
-
-	/// Attept to get an outer origin capable of passing `try_origin` check. May return `Err` if it
-	/// is impossible. Default implementation just uses `successful_origin()`.
-	///
-	/// ** Should be used for benchmarking only!!! **
-	#[cfg(feature = "runtime-benchmarks")]
-	fn try_successful_origin(a: &Argument) -> Result<OuterOrigin, ()> {
-		Ok(Self::successful_origin(a))
-	}
+	fn try_successful_origin(a: &Argument) -> Result<OuterOrigin, ()>;
 }
 
 pub struct AsEnsureOriginWithArg<EO>(sp_std::marker::PhantomData<EO>);

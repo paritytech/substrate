@@ -16,10 +16,7 @@
 // limitations under the License.
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use frame_support::{
-	traits::{ConstU32, ConstU64},
-	weights::Weight,
-};
+use frame_support::traits::{ConstU32, ConstU64};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -62,10 +59,6 @@ frame_support::construct_runtime!(
 );
 
 frame_support::parameter_types! {
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::with_sensible_defaults(
-			Weight::from_ref_time(4 * 1024 * 1024), Perbill::from_percent(75),
-		);
 	pub BlockLength: frame_system::limits::BlockLength =
 		frame_system::limits::BlockLength::max_with_normal_ratio(
 			4 * 1024 * 1024, Perbill::from_percent(75),

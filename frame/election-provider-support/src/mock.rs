@@ -97,7 +97,7 @@ pub fn generate_random_votes(
 		// it's not interesting if a voter chooses 0 or all candidates, so rule those cases out.
 		// also, let's not generate any cases which result in a compact overflow.
 		let n_candidates_chosen =
-			rng.gen_range(1, candidates.len().min(<TestSolution as crate::NposSolution>::LIMIT));
+			rng.gen_range(1..candidates.len().min(<TestSolution as crate::NposSolution>::LIMIT));
 
 		let mut chosen_candidates = Vec::with_capacity(n_candidates_chosen);
 		chosen_candidates.extend(candidates.choose_multiple(&mut rng, n_candidates_chosen));
@@ -106,7 +106,7 @@ pub fn generate_random_votes(
 
 	// always generate a sensible number of winners: elections are uninteresting if nobody wins,
 	// or everybody wins
-	let num_winners = rng.gen_range(1, candidate_count);
+	let num_winners = rng.gen_range(1..candidate_count);
 	let mut winners: HashSet<AccountId> = HashSet::with_capacity(num_winners);
 	winners.extend(candidates.choose_multiple(&mut rng, num_winners));
 	assert_eq!(winners.len(), num_winners);
@@ -123,7 +123,7 @@ pub fn generate_random_votes(
 			let mut available_stake = 1000;
 			let mut stake_distribution = Vec::with_capacity(num_chosen_winners);
 			for _ in 0..num_chosen_winners - 1 {
-				let stake = rng.gen_range(0, available_stake).min(1);
+				let stake = rng.gen_range(0..available_stake).min(1);
 				stake_distribution.push(TestAccuracy::from_perthousand(stake));
 				available_stake -= stake;
 			}

@@ -18,6 +18,7 @@
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
+use crate::LOG_TARGET;
 use futures::{channel::mpsc::Receiver, Future};
 use sc_transaction_pool_api::error;
 use sp_blockchain::TreeRoute;
@@ -96,7 +97,7 @@ pub trait ChainApi: Send + Sync {
 	/// Returns a block header given the block id.
 	fn block_header(
 		&self,
-		at: &BlockId<Self::Block>,
+		at: <Self::Block as BlockT>::Hash,
 	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error>;
 
 	/// Compute a tree-route between two blocks. See [`TreeRoute`] for more details.
@@ -142,15 +143,6 @@ enum CheckBannedBeforeVerify {
 /// Extrinsics pool that performs validation.
 pub struct Pool<B: ChainApi> {
 	validated_pool: Arc<ValidatedPool<B>>,
-}
-
-impl<B: ChainApi> parity_util_mem::MallocSizeOf for Pool<B>
-where
-	ExtrinsicFor<B>: parity_util_mem::MallocSizeOf,
-{
-	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
-		self.validated_pool.size_of(ops)
-	}
 }
 
 impl<B: ChainApi> Pool<B> {
@@ -217,7 +209,8 @@ impl<B: ChainApi> Pool<B> {
 	) {
 		let now = Instant::now();
 		self.validated_pool.resubmit(revalidated_transactions);
-		log::debug!(target: "txpool",
+		log::debug!(
+			target: LOG_TARGET,
 			"Resubmitted. Took {} ms. Status: {:?}",
 			now.elapsed().as_millis(),
 			self.validated_pool.status()
@@ -258,7 +251,7 @@ impl<B: ChainApi> Pool<B> {
 		extrinsics: &[ExtrinsicFor<B>],
 	) -> Result<(), B::Error> {
 		log::debug!(
-			target: "txpool",
+			target: LOG_TARGET,
 			"Starting pruning of block {:?} (extrinsics: {})",
 			at,
 			extrinsics.len()
@@ -280,14 +273,26 @@ impl<B: ChainApi> Pool<B> {
 				// if it's not found in the pool query the runtime at parent block
 				// to get validity info and tags that the extrinsic provides.
 				None => {
-					let validity = self
-						.validated_pool
-						.api()
-						.validate_transaction(parent, TransactionSource::InBlock, extrinsic.clone())
-						.await;
+					// Avoid validating block txs if the pool is empty
+					if !self.validated_pool.status().is_empty() {
+						let validity = self
+							.validated_pool
+							.api()
+							.validate_transaction(
+								parent,
+								TransactionSource::InBlock,
+								extrinsic.clone(),
+							)
+							.await;
 
-					if let Ok(Ok(validity)) = validity {
-						future_tags.extend(validity.provides);
+						if let Ok(Ok(validity)) = validity {
+							future_tags.extend(validity.provides);
+						}
+					} else {
+						log::trace!(
+							target: LOG_TARGET,
+							"txpool is empty, skipping validation for block {at:?}",
+						);
 					}
 				},
 			}
@@ -323,7 +328,7 @@ impl<B: ChainApi> Pool<B> {
 		tags: impl IntoIterator<Item = Tag>,
 		known_imported_hashes: impl IntoIterator<Item = ExtrinsicHash<B>> + Clone,
 	) -> Result<(), B::Error> {
-		log::debug!(target: "txpool", "Pruning at {:?}", at);
+		log::debug!(target: LOG_TARGET, "Pruning at {:?}", at);
 		// Prune all transactions that provide given tags
 		let prune_status = self.validated_pool.prune_tags(tags)?;
 
@@ -342,7 +347,7 @@ impl<B: ChainApi> Pool<B> {
 		let reverified_transactions =
 			self.verify(at, pruned_transactions, CheckBannedBeforeVerify::Yes).await?;
 
-		log::trace!(target: "txpool", "Pruning at {:?}. Resubmitting transactions.", at);
+		log::trace!(target: LOG_TARGET, "Pruning at {:?}. Resubmitting transactions.", at);
 		// And finally - submit reverified transactions back to the pool
 
 		self.validated_pool.resubmit_pruned(

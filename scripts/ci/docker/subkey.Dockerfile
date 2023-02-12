@@ -3,10 +3,11 @@ FROM docker.io/library/ubuntu:20.04
 # metadata
 ARG VCS_REF
 ARG BUILD_DATE
+ARG IMAGE_NAME
 
 LABEL io.parity.image.authors="devops-team@parity.io" \
 	io.parity.image.vendor="Parity Technologies" \
-	io.parity.image.title="parity/subkey" \
+	io.parity.image.title="${IMAGE_NAME}" \
 	io.parity.image.description="Subkey: key generating utility for Substrate." \
 	io.parity.image.source="https://github.com/paritytech/substrate/blob/${VCS_REF}/scripts/ci/docker/subkey.Dockerfile" \
 	io.parity.image.revision="${VCS_REF}" \

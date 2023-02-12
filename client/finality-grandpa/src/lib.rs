@@ -76,6 +76,9 @@ use sp_application_crypto::AppKey;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult};
 use sp_consensus::SelectChain;
 use sp_core::crypto::ByteArray;
+use sp_finality_grandpa::{
+	AuthorityList, AuthoritySignature, SetId, CLIENT_LOG_TARGET as LOG_TARGET,
+};
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
@@ -96,7 +99,7 @@ use std::{
 // utility logging macro that takes as first argument a conditional to
 // decide whether to log under debug or info level (useful to restrict
 // logging under initial sync).
-macro_rules! afg_log {
+macro_rules! grandpa_log {
 	($condition:expr, $($msg: expr),+ $(,)?) => {
 		{
 			let log_level = if $condition {
@@ -105,7 +108,7 @@ macro_rules! afg_log {
 				log::Level::Info
 			};
 
-			log::log!(target: "afg", log_level, $($msg),+);
+			log::log!(target: LOG_TARGET, log_level, $($msg),+);
 		}
 	};
 }
@@ -140,7 +143,6 @@ pub use voting_rule::{
 use aux_schema::PersistentData;
 use communication::{Network as NetworkT, NetworkBridge};
 use environment::{Environment, VoterSetState};
-use sp_finality_grandpa::{AuthorityList, AuthoritySignature, SetId};
 use until_imported::UntilGlobalMessageBlocksImported;
 
 // Re-export these two because it's just so damn convenient.
@@ -462,10 +464,10 @@ pub trait GenesisAuthoritySetProvider<Block: BlockT> {
 	fn get(&self) -> Result<AuthorityList, ClientError>;
 }
 
-impl<Block: BlockT, E> GenesisAuthoritySetProvider<Block>
-	for Arc<dyn ExecutorProvider<Block, Executor = E>>
+impl<Block: BlockT, E, Client> GenesisAuthoritySetProvider<Block> for Arc<Client>
 where
 	E: CallExecutor<Block>,
+	Client: ExecutorProvider<Block, Executor = E> + HeaderBackend<Block>,
 {
 	fn get(&self) -> Result<AuthorityList, ClientError> {
 		// This implementation uses the Grandpa runtime API instead of reading directly from the
@@ -473,7 +475,7 @@ where
 		// the chain, whereas the runtime API is backwards compatible.
 		self.executor()
 			.call(
-				&BlockId::Number(Zero::zero()),
+				self.expect_block_hash_from_id(&BlockId::Number(Zero::zero()))?,
 				"GrandpaApi_grandpa_authorities",
 				&[],
 				ExecutionStrategy::NativeElseWasm,
@@ -564,7 +566,8 @@ where
 			}
 		})?;
 
-	let (voter_commands_tx, voter_commands_rx) = tracing_unbounded("mpsc_grandpa_voter_command");
+	let (voter_commands_tx, voter_commands_rx) =
+		tracing_unbounded("mpsc_grandpa_voter_command", 100_000);
 
 	let (justification_sender, justification_stream) = GrandpaJustificationStream::channel();
 
@@ -803,10 +806,11 @@ where
 	);
 
 	let voter_work = voter_work.map(|res| match res {
-		Ok(()) => error!(target: "afg",
+		Ok(()) => error!(
+			target: LOG_TARGET,
 			"GRANDPA voter future has concluded naturally, this should be unreachable."
 		),
-		Err(e) => error!(target: "afg", "GRANDPA voter error: {}", e),
+		Err(e) => error!(target: LOG_TARGET, "GRANDPA voter error: {}", e),
 	});
 
 	// Make sure that `telemetry_task` doesn't accidentally finish and kill grandpa.
@@ -871,7 +875,7 @@ where
 		let metrics = match prometheus_registry.as_ref().map(Metrics::register) {
 			Some(Ok(metrics)) => Some(metrics),
 			Some(Err(e)) => {
-				debug!(target: "afg", "Failed to register metrics: {:?}", e);
+				debug!(target: LOG_TARGET, "Failed to register metrics: {:?}", e);
 				None
 			},
 			None => None,
@@ -913,7 +917,12 @@ where
 	/// state. This method should be called when we know that the authority set
 	/// has changed (e.g. as signalled by a voter command).
 	fn rebuild_voter(&mut self) {
-		debug!(target: "afg", "{}: Starting new voter with set ID {}", self.env.config.name(), self.env.set_id);
+		debug!(
+			target: LOG_TARGET,
+			"{}: Starting new voter with set ID {}",
+			self.env.config.name(),
+			self.env.set_id
+		);
 
 		let maybe_authority_id =
 			local_authority_id(&self.env.voters, self.env.config.keystore.as_ref());
@@ -974,7 +983,8 @@ where
 
 				// Repoint shared_voter_state so that the RPC endpoint can query the state
 				if self.shared_voter_state.reset(voter.voter_state()).is_none() {
-					info!(target: "afg",
+					info!(
+						target: LOG_TARGET,
 						"Timed out trying to update shared GRANDPA voter state. \
 						RPC endpoints may return stale data."
 					);
@@ -1043,7 +1053,7 @@ where
 				Ok(())
 			},
 			VoterCommand::Pause(reason) => {
-				info!(target: "afg", "Pausing old validator set: {}", reason);
+				info!(target: LOG_TARGET, "Pausing old validator set: {}", reason);
 
 				// not racing because old voter is shut down.
 				self.env.update_voter_set_state(|voter_set_state| {

@@ -26,10 +26,7 @@ use finality_grandpa::{voter_set::VoterSet, Error as GrandpaError};
 use parity_scale_codec::{Decode, Encode};
 use sp_blockchain::{Error as ClientError, HeaderBackend};
 use sp_finality_grandpa::AuthorityId;
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT, NumberFor},
-};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 
 use crate::{AuthorityList, Commit, Error};
 
@@ -104,7 +101,7 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 					break
 				}
 
-				match client.header(BlockId::Hash(current_hash))? {
+				match client.header(current_hash)? {
 					Some(current_header) => {
 						// NOTE: this should never happen as we pick the lowest block
 						// as base and only traverse backwards from the other blocks

@@ -18,7 +18,7 @@
 //! Scheduler pallet benchmarking.
 
 use super::*;
-use frame_benchmarking::{account, benchmarks};
+use frame_benchmarking::v1::{account, benchmarks, BenchmarkError};
 use frame_support::{
 	ensure,
 	traits::{schedule::Priority, BoundedInline},
@@ -160,6 +160,10 @@ benchmarks! {
 
 	// `service_task` when the task is a non-periodic, non-named, fetched call (with a known
 	// preimage length) and which is not dispatched (e.g. due to being overweight).
+	#[pov_mode = MaxEncodedLen {
+		// Use measured PoV size for the Preimages since we pass in a length witness.
+		Preimage::PreimageFor: Measured
+	}]
 	service_task_fetched {
 		let s in (BoundedInline::bound() as u32) .. (T::Preimages::MAX_LENGTH as u32);
 		let now = BLOCK_NUMBER.into();
@@ -240,17 +244,22 @@ benchmarks! {
 
 		fill_schedule::<T>(when, s)?;
 		assert_eq!(Agenda::<T>::get(when).len(), s as usize);
-		let schedule_origin = T::ScheduleOrigin::successful_origin();
+		let schedule_origin =
+			T::ScheduleOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	}: _<SystemOrigin<T>>(schedule_origin, when, 0)
 	verify {
 		ensure!(
-			Lookup::<T>::get(u32_to_name(0)).is_none(),
-			"didn't remove from lookup"
+			s == 1 || Lookup::<T>::get(u32_to_name(0)).is_none(),
+			"didn't remove from lookup if more than 1 task scheduled for `when`"
 		);
 		// Removed schedule is NONE
 		ensure!(
-			Agenda::<T>::get(when)[0].is_none(),
-			"didn't remove from schedule"
+			s == 1 || Agenda::<T>::get(when)[0].is_none(),
+			"didn't remove from schedule if more than 1 task scheduled for `when`"
+		);
+		ensure!(
+			s > 1 || Agenda::<T>::get(when).len() == 0,
+			"remove from schedule if only 1 task scheduled for `when`"
 		);
 	}
 
@@ -280,13 +289,17 @@ benchmarks! {
 	}: _(RawOrigin::Root, u32_to_name(0))
 	verify {
 		ensure!(
-			Lookup::<T>::get(u32_to_name(0)).is_none(),
-			"didn't remove from lookup"
+			s == 1 || Lookup::<T>::get(u32_to_name(0)).is_none(),
+			"didn't remove from lookup if more than 1 task scheduled for `when`"
 		);
 		// Removed schedule is NONE
 		ensure!(
-			Agenda::<T>::get(when)[0].is_none(),
-			"didn't remove from schedule"
+			s == 1 || Agenda::<T>::get(when)[0].is_none(),
+			"didn't remove from schedule if more than 1 task scheduled for `when`"
+		);
+		ensure!(
+			s > 1 || Agenda::<T>::get(when).len() == 0,
+			"remove from schedule if only 1 task scheduled for `when`"
 		);
 	}
 

@@ -256,21 +256,7 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<T::RuntimeOrigin, ()> {
-		let who = IndexToId::<T, I>::get(MIN_RANK, 0).ok_or(())?;
-		Ok(frame_system::RawOrigin::Signed(who).into())
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> T::RuntimeOrigin {
-		match Self::try_successful_origin() {
-			Ok(o) => o,
-			Err(()) => {
-				let who: T::AccountId = frame_benchmarking::whitelisted_caller();
-				crate::Pallet::<T, I>::do_add_member_to_rank(who.clone(), MIN_RANK)
-					.expect("failed to add ranked member");
-				frame_system::RawOrigin::Signed(who).into()
-			},
-		}
+		EnsureRankedMember::<T, I, MIN_RANK>::try_successful_origin()
 	}
 }
 
@@ -292,21 +278,7 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<T::RuntimeOrigin, ()> {
-		let who = IndexToId::<T, I>::get(MIN_RANK, 0).ok_or(())?;
-		Ok(frame_system::RawOrigin::Signed(who).into())
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> T::RuntimeOrigin {
-		match Self::try_successful_origin() {
-			Ok(o) => o,
-			Err(()) => {
-				let who: T::AccountId = frame_benchmarking::whitelisted_caller();
-				crate::Pallet::<T, I>::do_add_member_to_rank(who.clone(), MIN_RANK)
-					.expect("failed to add ranked member");
-				frame_system::RawOrigin::Signed(who).into()
-			},
-		}
+		EnsureRankedMember::<T, I, MIN_RANK>::try_successful_origin()
 	}
 }
 
@@ -328,21 +300,10 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<T::RuntimeOrigin, ()> {
-		let who = IndexToId::<T, I>::get(MIN_RANK, 0).ok_or(())?;
+		let who = frame_benchmarking::account::<T::AccountId>("successful_origin", 0, 0);
+		crate::Pallet::<T, I>::do_add_member_to_rank(who.clone(), MIN_RANK)
+			.expect("Could not add members for benchmarks");
 		Ok(frame_system::RawOrigin::Signed(who).into())
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> T::RuntimeOrigin {
-		match Self::try_successful_origin() {
-			Ok(o) => o,
-			Err(()) => {
-				let who: T::AccountId = frame_benchmarking::whitelisted_caller();
-				crate::Pallet::<T, I>::do_add_member_to_rank(who.clone(), MIN_RANK)
-					.expect("failed to add ranked member");
-				frame_system::RawOrigin::Signed(who).into()
-			},
-		}
 	}
 }
 
@@ -470,6 +431,7 @@ pub mod pallet {
 		/// - `rank`: The rank to give the new member.
 		///
 		/// Weight: `O(1)`
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::add_member())]
 		pub fn add_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			let _ = T::PromoteOrigin::ensure_origin(origin)?;
@@ -483,6 +445,7 @@ pub mod pallet {
 		/// - `who`: Account of existing member.
 		///
 		/// Weight: `O(1)`
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::promote_member(0))]
 		pub fn promote_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			let max_rank = T::PromoteOrigin::ensure_origin(origin)?;
@@ -497,6 +460,7 @@ pub mod pallet {
 		/// - `who`: Account of existing member of rank greater than zero.
 		///
 		/// Weight: `O(1)`, less if the member's index is highest in its rank.
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::demote_member(0))]
 		pub fn demote_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			let max_rank = T::DemoteOrigin::ensure_origin(origin)?;
@@ -528,6 +492,7 @@ pub mod pallet {
 		/// - `min_rank`: The rank of the member or greater.
 		///
 		/// Weight: `O(min_rank)`.
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::remove_member(*min_rank as u32))]
 		pub fn remove_member(
 			origin: OriginFor<T>,
@@ -562,6 +527,7 @@ pub mod pallet {
 		/// fee.
 		///
 		/// Weight: `O(1)`, less if there was no previous vote on the poll by the member.
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::vote())]
 		pub fn vote(
 			origin: OriginFor<T>,
@@ -618,6 +584,7 @@ pub mod pallet {
 		/// Transaction fees are waived if the operation is successful.
 		///
 		/// Weight `O(max)` (less if there are fewer items to remove than `max`).
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::cleanup_poll(*max))]
 		pub fn cleanup_poll(
 			origin: OriginFor<T>,

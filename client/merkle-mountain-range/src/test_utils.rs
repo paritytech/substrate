@@ -16,13 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use futures::{executor::LocalPool, task::LocalSpawn, FutureExt};
-use std::{
-	future::Future,
-	sync::{Arc, Mutex},
-	time::Duration,
-};
-
+use crate::MmrGadget;
+use parking_lot::Mutex;
 use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::{
 	Backend as BackendT, BlockchainEvents, FinalityNotifications, ImportNotifications,
@@ -42,33 +37,34 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header as HeaderT},
 };
+use std::{future::Future, sync::Arc, time::Duration};
 use substrate_test_runtime_client::{
 	runtime::{Block, BlockNumber, Hash, Header},
 	Backend, BlockBuilderExt, Client, ClientBlockImportExt, ClientExt, DefaultTestClientBuilderExt,
 	TestClientBuilder, TestClientBuilderExt,
 };
-
-use crate::MmrGadget;
+use tokio::runtime::Runtime;
 
 type MmrHash = H256;
 
-struct MockRuntimeApiData {
-	num_blocks: BlockNumber,
+pub(crate) struct MockRuntimeApiData {
+	pub(crate) num_blocks: BlockNumber,
 }
 
 #[derive(Clone)]
-pub struct MockRuntimeApi {
-	data: Arc<Mutex<MockRuntimeApiData>>,
+pub(crate) struct MockRuntimeApi {
+	pub(crate) data: Arc<Mutex<MockRuntimeApiData>>,
 }
 
 impl MockRuntimeApi {
-	pub const INDEXING_PREFIX: &'static [u8] = b"mmr_test";
+	pub(crate) const INDEXING_PREFIX: &'static [u8] = b"mmr_test";
 }
 
-pub struct MmrBlock {
-	block: Block,
-	leaf_idx: Option<LeafIndex>,
-	leaf_data: Vec<u8>,
+#[derive(Clone, Debug)]
+pub(crate) struct MmrBlock {
+	pub(crate) block: Block,
+	pub(crate) leaf_idx: Option<LeafIndex>,
+	pub(crate) leaf_data: Vec<u8>,
 }
 
 #[derive(Clone, Copy)]
@@ -91,7 +87,7 @@ impl MmrBlock {
 			OffchainKeyType::Temp => NodesUtils::node_temp_offchain_key::<Header>(
 				MockRuntimeApi::INDEXING_PREFIX,
 				node,
-				*self.block.header.parent_hash(),
+				self.parent_hash(),
 			),
 			OffchainKeyType::Canon =>
 				NodesUtils::node_canon_offchain_key(MockRuntimeApi::INDEXING_PREFIX, node),
@@ -99,14 +95,14 @@ impl MmrBlock {
 	}
 }
 
-pub struct MockClient {
-	client: Mutex<Client<Backend>>,
-	backend: Arc<Backend>,
-	runtime_api_params: Arc<Mutex<MockRuntimeApiData>>,
+pub(crate) struct MockClient {
+	pub(crate) client: Mutex<Client<Backend>>,
+	pub(crate) backend: Arc<Backend>,
+	pub(crate) runtime_api_params: Arc<Mutex<MockRuntimeApiData>>,
 }
 
 impl MockClient {
-	fn new() -> Self {
+	pub(crate) fn new() -> Self {
 		let client_builder = TestClientBuilder::new().enable_offchain_indexing_api();
 		let (client, backend) = client_builder.build_with_backend();
 		MockClient {
@@ -116,7 +112,7 @@ impl MockClient {
 		}
 	}
 
-	fn offchain_db(&self) -> OffchainDb<<Backend as BackendT<Block>>::OffchainStorage> {
+	pub(crate) fn offchain_db(&self) -> OffchainDb<<Backend as BackendT<Block>>::OffchainStorage> {
 		OffchainDb::new(self.backend.offchain_storage().unwrap())
 	}
 
@@ -126,7 +122,7 @@ impl MockClient {
 		name: &[u8],
 		maybe_leaf_idx: Option<LeafIndex>,
 	) -> MmrBlock {
-		let mut client = self.client.lock().unwrap();
+		let mut client = self.client.lock();
 
 		let mut block_builder = client.new_block_at(at, Default::default(), false).unwrap();
 		// Make sure the block has a different hash than its siblings
@@ -158,12 +154,24 @@ impl MockClient {
 	}
 
 	pub fn finalize_block(&self, hash: Hash, maybe_num_mmr_blocks: Option<BlockNumber>) {
-		let client = self.client.lock().unwrap();
+		let client = self.client.lock();
 		if let Some(num_mmr_blocks) = maybe_num_mmr_blocks {
-			self.runtime_api_params.lock().unwrap().num_blocks = num_mmr_blocks;
+			self.runtime_api_params.lock().num_blocks = num_mmr_blocks;
 		}
 
 		client.finalize_block(hash, None).unwrap();
+	}
+
+	pub fn undo_block_canonicalization(&self, mmr_block: &MmrBlock) {
+		let mut offchain_db = self.offchain_db();
+		for node in NodesUtils::right_branch_ending_in_leaf(mmr_block.leaf_idx.unwrap()) {
+			let canon_key = mmr_block.get_offchain_key(node, OffchainKeyType::Canon);
+			let val = offchain_db.local_storage_get(StorageKind::PERSISTENT, &canon_key).unwrap();
+			offchain_db.local_storage_clear(StorageKind::PERSISTENT, &canon_key);
+
+			let temp_key = mmr_block.get_offchain_key(node, OffchainKeyType::Temp);
+			offchain_db.local_storage_set(StorageKind::PERSISTENT, &temp_key, &val);
+		}
 	}
 
 	pub fn check_offchain_storage<F>(
@@ -217,7 +225,7 @@ impl HeaderMetadata<Block> for MockClient {
 	type Error = <Client<Backend> as HeaderMetadata<Block>>::Error;
 
 	fn header_metadata(&self, hash: Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
-		self.client.lock().unwrap().header_metadata(hash)
+		self.client.lock().header_metadata(hash)
 	}
 
 	fn insert_header_metadata(&self, _hash: Hash, _header_metadata: CachedHeaderMetadata<Block>) {
@@ -230,24 +238,24 @@ impl HeaderMetadata<Block> for MockClient {
 }
 
 impl HeaderBackend<Block> for MockClient {
-	fn header(&self, id: BlockId<Block>) -> sc_client_api::blockchain::Result<Option<Header>> {
-		self.client.lock().unwrap().header(&id)
+	fn header(&self, hash: Hash) -> sc_client_api::blockchain::Result<Option<Header>> {
+		self.client.lock().header(hash)
 	}
 
 	fn info(&self) -> Info<Block> {
-		self.client.lock().unwrap().info()
+		self.client.lock().info()
 	}
 
-	fn status(&self, id: BlockId<Block>) -> sc_client_api::blockchain::Result<BlockStatus> {
-		self.client.lock().unwrap().status(id)
+	fn status(&self, hash: Hash) -> sc_client_api::blockchain::Result<BlockStatus> {
+		self.client.lock().status(hash)
 	}
 
 	fn number(&self, hash: Hash) -> sc_client_api::blockchain::Result<Option<BlockNumber>> {
-		self.client.lock().unwrap().number(hash)
+		self.client.lock().number(hash)
 	}
 
 	fn hash(&self, number: BlockNumber) -> sc_client_api::blockchain::Result<Option<Hash>> {
-		self.client.lock().unwrap().hash(number)
+		self.client.lock().hash(number)
 	}
 }
 
@@ -257,7 +265,7 @@ impl BlockchainEvents<Block> for MockClient {
 	}
 
 	fn finality_notification_stream(&self) -> FinalityNotifications<Block> {
-		self.client.lock().unwrap().finality_notification_stream()
+		self.client.lock().finality_notification_stream()
 	}
 
 	fn storage_changes_notification_stream(
@@ -284,7 +292,7 @@ sp_api::mock_impl_runtime_apis! {
 		}
 
 		fn mmr_leaf_count(&self) -> Result<LeafIndex, mmr::Error> {
-			Ok(self.data.lock().unwrap().num_blocks)
+			Ok(self.data.lock().num_blocks)
 		}
 
 		fn generate_proof(
@@ -311,34 +319,48 @@ sp_api::mock_impl_runtime_apis! {
 	}
 }
 
-pub fn run_test_with_mmr_gadget<F, Fut>(f: F)
+pub(crate) fn run_test_with_mmr_gadget<F, Fut>(post_gadget: F)
 where
 	F: FnOnce(Arc<MockClient>) -> Fut + 'static,
 	Fut: Future<Output = ()>,
 {
-	let mut pool = LocalPool::new();
+	run_test_with_mmr_gadget_pre_post(|_| async {}, post_gadget);
+}
+
+pub(crate) fn run_test_with_mmr_gadget_pre_post<F, G, RetF, RetG>(pre_gadget: F, post_gadget: G)
+where
+	F: FnOnce(Arc<MockClient>) -> RetF + 'static,
+	G: FnOnce(Arc<MockClient>) -> RetG + 'static,
+	RetF: Future<Output = ()>,
+	RetG: Future<Output = ()>,
+{
 	let client = Arc::new(MockClient::new());
+	run_test_with_mmr_gadget_pre_post_using_client(client, pre_gadget, post_gadget)
+}
+
+pub(crate) fn run_test_with_mmr_gadget_pre_post_using_client<F, G, RetF, RetG>(
+	client: Arc<MockClient>,
+	pre_gadget: F,
+	post_gadget: G,
+) where
+	F: FnOnce(Arc<MockClient>) -> RetF + 'static,
+	G: FnOnce(Arc<MockClient>) -> RetG + 'static,
+	RetF: Future<Output = ()>,
+	RetG: Future<Output = ()>,
+{
+	let client_clone = client.clone();
+	let runtime = Runtime::new().unwrap();
+	runtime.block_on(async move { pre_gadget(client_clone).await });
 
 	let client_clone = client.clone();
-	pool.spawner()
-		.spawn_local_obj(
-			async move {
-				let backend = client_clone.backend.clone();
-				MmrGadget::start(
-					client_clone.clone(),
-					backend,
-					MockRuntimeApi::INDEXING_PREFIX.to_vec(),
-				)
-				.await
-			}
-			.boxed_local()
-			.into(),
-		)
-		.unwrap();
+	runtime.spawn(async move {
+		let backend = client_clone.backend.clone();
+		MmrGadget::start(client_clone, backend, MockRuntimeApi::INDEXING_PREFIX.to_vec()).await
+	});
 
-	pool.run_until(async move {
-		async_std::task::sleep(Duration::from_millis(200)).await;
+	runtime.block_on(async move {
+		tokio::time::sleep(Duration::from_millis(200)).await;
 
-		f(client).await
+		post_gadget(client).await
 	});
 }

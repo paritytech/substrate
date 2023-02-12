@@ -8,7 +8,6 @@ edition = "2021"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 documentation = "https://docs.rs/sc-network-light"
-readme = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -18,11 +17,11 @@ prost-build = "0.11"
 
 [dependencies]
 array-bytes = "4.1"
-codec = { package = "parity-scale-codec", version = "3.0.0", features = [
+codec = { package = "parity-scale-codec", version = "3.2.2", features = [
     "derive",
 ] }
 futures = "0.3.21"
-libp2p = "0.49.0"
+libp2p = "0.50.0"
 log = "0.4.16"
 prost = "0.11"
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }

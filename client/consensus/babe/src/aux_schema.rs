@@ -21,7 +21,7 @@
 use codec::{Decode, Encode};
 use log::info;
 
-use crate::{migration::EpochV0, Epoch};
+use crate::{migration::EpochV0, Epoch, LOG_TARGET};
 use sc_client_api::backend::AuxStore;
 use sc_consensus_epochs::{
 	migration::{EpochChangesV0For, EpochChangesV1For},
@@ -82,7 +82,7 @@ pub fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 	let epoch_changes =
 		SharedEpochChanges::<Block, Epoch>::new(maybe_epoch_changes.unwrap_or_else(|| {
 			info!(
-				target: "babe",
+				target: LOG_TARGET,
 				"👶 Creating empty BABE epoch changes on what appears to be first startup.",
 			);
 			EpochChangesFor::<Block, Epoch>::default()

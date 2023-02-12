@@ -190,3 +190,5 @@ pub trait StakingInterface {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_current_era(era: EraIndex);
 }
+
+sp_core::generate_feature_enabled_macro!(runtime_benchmarks_enabled, feature = "runtime-benchmarks", $);

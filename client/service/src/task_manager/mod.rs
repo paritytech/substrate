@@ -24,12 +24,19 @@ use futures::{
 	future::{pending, select, try_join_all, BoxFuture, Either},
 	Future, FutureExt, StreamExt,
 };
+use parking_lot::Mutex;
 use prometheus_endpoint::{
 	exponential_buckets, register, CounterVec, HistogramOpts, HistogramVec, Opts, PrometheusError,
 	Registry, U64,
 };
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
-use std::{panic, pin::Pin, result::Result};
+use std::{
+	collections::{hash_map::Entry, HashMap},
+	panic,
+	pin::Pin,
+	result::Result,
+	sync::Arc,
+};
 use tokio::runtime::Handle;
 use tracing_futures::Instrument;
 
@@ -72,6 +79,7 @@ pub struct SpawnTaskHandle {
 	on_exit: exit_future::Exit,
 	tokio_handle: Handle,
 	metrics: Option<Metrics>,
+	task_registry: TaskRegistry,
 }
 
 impl SpawnTaskHandle {
@@ -113,6 +121,7 @@ impl SpawnTaskHandle {
 	) {
 		let on_exit = self.on_exit.clone();
 		let metrics = self.metrics.clone();
+		let registry = self.task_registry.clone();
 
 		let group = match group.into() {
 			GroupName::Specific(var) => var,
@@ -120,20 +129,34 @@ impl SpawnTaskHandle {
 			GroupName::Default => DEFAULT_GROUP_NAME,
 		};
 
+		let task_type_label = match task_type {
+			TaskType::Blocking => "blocking",
+			TaskType::Async => "async",
+		};
+
 		// Note that we increase the started counter here and not within the future. This way,
 		// we could properly visualize on Prometheus situations where the spawning doesn't work.
 		if let Some(metrics) = &self.metrics {
-			metrics.tasks_spawned.with_label_values(&[name, group]).inc();
+			metrics.tasks_spawned.with_label_values(&[name, group, task_type_label]).inc();
 			// We do a dummy increase in order for the task to show up in metrics.
-			metrics.tasks_ended.with_label_values(&[name, "finished", group]).inc_by(0);
+			metrics
+				.tasks_ended
+				.with_label_values(&[name, "finished", group, task_type_label])
+				.inc_by(0);
 		}
 
 		let future = async move {
+			// Register the task and keep the "token" alive until the task is ended. Then this
+			// "token" will unregister this task.
+			let _registry_token = registry.register_task(name, group);
+
 			if let Some(metrics) = metrics {
 				// Add some wrappers around `task`.
 				let task = {
-					let poll_duration = metrics.poll_duration.with_label_values(&[name, group]);
-					let poll_start = metrics.poll_start.with_label_values(&[name, group]);
+					let poll_duration =
+						metrics.poll_duration.with_label_values(&[name, group, task_type_label]);
+					let poll_start =
+						metrics.poll_start.with_label_values(&[name, group, task_type_label]);
 					let inner =
 						prometheus_future::with_poll_durations(poll_duration, poll_start, task);
 					// The logic of `AssertUnwindSafe` here is ok considering that we throw
@@ -144,15 +167,24 @@ impl SpawnTaskHandle {
 
 				match select(on_exit, task).await {
 					Either::Right((Err(payload), _)) => {
-						metrics.tasks_ended.with_label_values(&[name, "panic", group]).inc();
+						metrics
+							.tasks_ended
+							.with_label_values(&[name, "panic", group, task_type_label])
+							.inc();
 						panic::resume_unwind(payload)
 					},
 					Either::Right((Ok(()), _)) => {
-						metrics.tasks_ended.with_label_values(&[name, "finished", group]).inc();
+						metrics
+							.tasks_ended
+							.with_label_values(&[name, "finished", group, task_type_label])
+							.inc();
 					},
 					Either::Left(((), _)) => {
 						// The `on_exit` has triggered.
-						metrics.tasks_ended.with_label_values(&[name, "interrupted", group]).inc();
+						metrics
+							.tasks_ended
+							.with_label_values(&[name, "interrupted", group, task_type_label])
+							.inc();
 					},
 				}
 			} else {
@@ -298,6 +330,8 @@ pub struct TaskManager {
 	/// terminates and gracefully shutdown. Also ends the parent `future()` if a child's essential
 	/// task fails.
 	children: Vec<TaskManager>,
+	/// The registry of all running tasks.
+	task_registry: TaskRegistry,
 }
 
 impl TaskManager {
@@ -310,7 +344,8 @@ impl TaskManager {
 		let (signal, on_exit) = exit_future::signal();
 
 		// A side-channel for essential tasks to communicate shutdown.
-		let (essential_failed_tx, essential_failed_rx) = tracing_unbounded("mpsc_essential_tasks");
+		let (essential_failed_tx, essential_failed_rx) =
+			tracing_unbounded("mpsc_essential_tasks", 100);
 
 		let metrics = prometheus_registry.map(Metrics::register).transpose()?;
 
@@ -323,6 +358,7 @@ impl TaskManager {
 			essential_failed_rx,
 			keep_alive: Box::new(()),
 			children: Vec::new(),
+			task_registry: Default::default(),
 		})
 	}
 
@@ -332,6 +368,7 @@ impl TaskManager {
 			on_exit: self.on_exit.clone(),
 			tokio_handle: self.tokio_handle.clone(),
 			metrics: self.metrics.clone(),
+			task_registry: self.task_registry.clone(),
 		}
 	}
 
@@ -384,6 +421,14 @@ impl TaskManager {
 	pub fn add_child(&mut self, child: TaskManager) {
 		self.children.push(child);
 	}
+
+	/// Consume `self` and return the [`TaskRegistry`].
+	///
+	/// This [`TaskRegistry`] can be used to check for still running tasks after this task manager
+	/// was dropped.
+	pub fn into_task_registry(self) -> TaskRegistry {
+		self.task_registry
+	}
 }
 
 #[derive(Clone)]
@@ -407,29 +452,100 @@ impl Metrics {
 					buckets: exponential_buckets(0.001, 4.0, 9)
 						.expect("function parameters are constant and always valid; qed"),
 				},
-				&["task_name", "task_group"]
+				&["task_name", "task_group", "kind"]
 			)?, registry)?,
 			poll_start: register(CounterVec::new(
 				Opts::new(
 					"substrate_tasks_polling_started_total",
 					"Total number of times we started invoking Future::poll"
 				),
-				&["task_name", "task_group"]
+				&["task_name", "task_group", "kind"]
 			)?, registry)?,
 			tasks_spawned: register(CounterVec::new(
 				Opts::new(
 					"substrate_tasks_spawned_total",
 					"Total number of tasks that have been spawned on the Service"
 				),
-				&["task_name", "task_group"]
+				&["task_name", "task_group", "kind"]
 			)?, registry)?,
 			tasks_ended: register(CounterVec::new(
 				Opts::new(
 					"substrate_tasks_ended_total",
 					"Total number of tasks for which Future::poll has returned Ready(()) or panicked"
 				),
-				&["task_name", "reason", "task_group"]
+				&["task_name", "reason", "task_group", "kind"]
 			)?, registry)?,
 		})
+	}
+}
+
+/// Ensures that a [`Task`] is unregistered when this object is dropped.
+struct UnregisterOnDrop {
+	task: Task,
+	registry: TaskRegistry,
+}
+
+impl Drop for UnregisterOnDrop {
+	fn drop(&mut self) {
+		let mut tasks = self.registry.tasks.lock();
+
+		if let Entry::Occupied(mut entry) = (*tasks).entry(self.task.clone()) {
+			*entry.get_mut() -= 1;
+
+			if *entry.get() == 0 {
+				entry.remove();
+			}
+		}
+	}
+}
+
+/// Represents a running async task in the [`TaskManager`].
+///
+/// As a task is identified by a name and a group, it is totally valid that there exists multiple
+/// tasks with the same name and group.
+#[derive(Clone, Hash, Eq, PartialEq)]
+pub struct Task {
+	/// The name of the task.
+	pub name: &'static str,
+	/// The group this task is associated to.
+	pub group: &'static str,
+}
+
+impl Task {
+	/// Returns if the `group` is the [`DEFAULT_GROUP_NAME`].
+	pub fn is_default_group(&self) -> bool {
+		self.group == DEFAULT_GROUP_NAME
+	}
+}
+
+/// Keeps track of all running [`Task`]s in [`TaskManager`].
+#[derive(Clone, Default)]
+pub struct TaskRegistry {
+	tasks: Arc<Mutex<HashMap<Task, usize>>>,
+}
+
+impl TaskRegistry {
+	/// Register a task with the given `name` and `group`.
+	///
+	/// Returns [`UnregisterOnDrop`] that ensures that the task is unregistered when this value is
+	/// dropped.
+	fn register_task(&self, name: &'static str, group: &'static str) -> UnregisterOnDrop {
+		let task = Task { name, group };
+
+		{
+			let mut tasks = self.tasks.lock();
+
+			*(*tasks).entry(task.clone()).or_default() += 1;
+		}
+
+		UnregisterOnDrop { task, registry: self.clone() }
+	}
+
+	/// Returns the running tasks.
+	///
+	/// As a task is only identified by its `name` and `group`, there can be duplicate tasks. The
+	/// number per task represents the concurrently running tasks with the same identifier.
+	pub fn running_tasks(&self) -> HashMap<Task, usize> {
+		(*self.tasks.lock()).clone()
 	}
 }

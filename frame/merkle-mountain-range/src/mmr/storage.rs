@@ -60,14 +60,6 @@ impl<StorageType, T, I, L> Default for Storage<StorageType, T, I, L> {
 	}
 }
 
-impl<T, I, L> Storage<OffchainStorage, T, I, L>
-where
-	T: Config<I>,
-	I: 'static,
-	L: primitives::FullLeaf,
-{
-}
-
 impl<T, I, L> mmr_lib::MMRStore<NodeOf<T, I, L>> for Storage<OffchainStorage, T, I, L>
 where
 	T: Config<I>,
