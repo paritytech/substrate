@@ -62,7 +62,7 @@ impl<AccountId, Balance> OnStakerSlash<AccountId, Balance> for () {
 
 /// A struct that reflects stake that an account has in the staking system. Provides a set of
 /// methods to operate on it's properties. Aimed at making `StakingInterface` more concise.
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
 pub struct Stake<AccountId: Clone, Balance: Clone> {
 	/// The stash account whose balance is actually locked and at stake.
 	pub stash: AccountId,

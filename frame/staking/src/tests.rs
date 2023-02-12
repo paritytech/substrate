@@ -34,7 +34,7 @@ use sp_runtime::{
 };
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
-	SessionIndex,
+	SessionIndex, Stake,
 };
 use sp_std::prelude::*;
 use substrate_test_utils::assert_eq_uvec;
@@ -230,7 +230,7 @@ fn basic_setup_works() {
 
 #[test]
 fn change_controller_works() {
-	ExtBuilder::default().build_and_execute(|| {
+	ExtBuilder::default().check_events(true).build_and_execute(|| {
 		// 10 and 11 are bonded as stash controller.
 		assert_eq!(Staking::bonded(&11), Some(10));
 
@@ -248,6 +248,9 @@ fn change_controller_works() {
 			Error::<Test>::NotController,
 		);
 		assert_ok!(Staking::validate(RuntimeOrigin::signed(5), ValidatorPrefs::default()));
+
+		assert_eq!(OnValidatorUpdate::take(), vec![11]);
+		assert_eq!(OnValidatorRemove::take(), vec![11]);
 	})
 }
 
@@ -453,6 +456,7 @@ fn staking_should_work() {
 #[test]
 fn blocking_and_kicking_works() {
 	ExtBuilder::default()
+		.check_events(true)
 		.minimum_validator_count(1)
 		.validator_count(4)
 		.nominate(true)
@@ -475,6 +479,7 @@ fn blocking_and_kicking_works() {
 				Staking::nominate(RuntimeOrigin::signed(100), vec![11]),
 				Error::<Test>::BadTarget
 			);
+			assert_eq!(OnNominatorUpdate::take(), vec![(101, vec![11, 21])]);
 		});
 }
 
@@ -1159,7 +1164,7 @@ fn bond_extra_works() {
 	// Tests that extra `free_balance` in the stash can be added to stake
 	// NOTE: this tests only verifies `StakingLedger` for correct updates
 	// See `bond_extra_and_withdraw_unbonded_works` for more details and updates on `Exposure`.
-	ExtBuilder::default().build_and_execute(|| {
+	ExtBuilder::default().check_events(true).build_and_execute(|| {
 		// Check that account 10 is a validator
 		assert!(<Validators<Test>>::contains_key(11));
 		// Check that account 10 is bonded to account 11
@@ -1206,6 +1211,14 @@ fn bond_extra_works() {
 				claimed_rewards: bounded_vec![],
 			})
 		);
+
+		assert_eq!(
+			OnStakeUpdate::take(),
+			vec![
+				(11, Some(Stake { stash: 11, total: 1000, active: 1000 })),
+				(11, Some(Stake { stash: 11, total: 1100, active: 1100 }))
+			]
+		)
 	});
 }
 
@@ -1217,7 +1230,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 	// * It can add extra funds to the bonded account.
 	// * it can unbond a portion of its funds from the stash account.
 	// * Once the unbonding period is done, it can actually take the funds out of the stash.
-	ExtBuilder::default().nominate(false).build_and_execute(|| {
+	ExtBuilder::default().check_events(true).nominate(false).build_and_execute(|| {
 		// Set payee to controller. avoids confusion
 		assert_ok!(Staking::set_payee(RuntimeOrigin::signed(10), RewardDestination::Controller));
 
@@ -1346,6 +1359,16 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				claimed_rewards: bounded_vec![],
 			}),
 		);
+		assert_eq!(
+			OnStakeUpdate::take(),
+			vec![
+				(11, Some(Stake { stash: 11, total: 1000, active: 1000 })),
+				(11, Some(Stake { stash: 11, total: 1100, active: 1100 })),
+				(11, Some(Stake { stash: 11, total: 1100, active: 100 })),
+				(11, Some(Stake { stash: 11, total: 1100, active: 100 })),
+				(11, Some(Stake { stash: 11, total: 1100, active: 100 }))
+			]
+		);
 	})
 }
 
@@ -1394,7 +1417,7 @@ fn many_unbond_calls_should_work() {
 
 #[test]
 fn auto_withdraw_may_not_unlock_all_chunks() {
-	ExtBuilder::default().build_and_execute(|| {
+	ExtBuilder::default().check_events(true).build_and_execute(|| {
 		// set `MaxUnlockingChunks` to a low number to test case when the unbonding period
 		// is larger than the number of unlocking chunks available, which may result on a
 		// `Error::NoMoreChunks`, even when the auto-withdraw tries to release locked chunks.
@@ -1418,6 +1441,16 @@ fn auto_withdraw_may_not_unlock_all_chunks() {
 		current_era += 10;
 		mock::start_active_era(current_era);
 		assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
+
+		assert_eq!(
+			OnStakeUpdate::take(),
+			vec![
+				(11, Some(Stake { stash: 11, total: 1000, active: 1000 })),
+				(11, Some(Stake { stash: 11, total: 1000, active: 999 })),
+				(11, Some(Stake { stash: 11, total: 1000, active: 999 })),
+				(11, Some(Stake { stash: 11, total: 999, active: 999 }))
+			]
+		);
 	})
 }
 
@@ -1708,6 +1741,7 @@ fn rebond_emits_right_value_in_event() {
 #[test]
 fn reward_to_stake_works() {
 	ExtBuilder::default()
+		.check_events(true)
 		.nominate(false)
 		.set_status(31, StakerStatus::Idle)
 		.set_status(41, StakerStatus::Idle)
@@ -1758,6 +1792,14 @@ fn reward_to_stake_works() {
 			// -- new infos
 			assert_eq!(Staking::eras_stakers(active_era(), 11).total, 1000 + total_payout_0 / 2);
 			assert_eq!(Staking::eras_stakers(active_era(), 21).total, 69 + total_payout_0 / 2);
+
+			assert_eq!(
+				OnStakeUpdate::take(),
+				[
+					(11, Some(Stake { stash: 11, total: 1000, active: 1000 })),
+					(21, Some(Stake { stash: 21, total: 69, active: 69 }))
+				]
+			);
 		});
 }
 
@@ -1908,6 +1950,7 @@ fn bond_with_no_staked_value() {
 		.balance_factor(5)
 		.nominate(false)
 		.minimum_validator_count(1)
+		.check_events(true)
 		.build_and_execute(|| {
 			// Can't bond with 1
 			assert_noop!(
@@ -1950,6 +1993,15 @@ fn bond_with_no_staked_value() {
 			assert_ok!(Staking::withdraw_unbonded(RuntimeOrigin::signed(2), 0));
 			assert!(Staking::ledger(2).is_none());
 			assert_eq!(Balances::locks(&1).len(), 0);
+			assert_eq!(
+				OnStakeUpdate::take(),
+				vec![
+					(1, None),
+					(1, Some(Stake { stash: 1, total: 5, active: 5 })),
+					(1, Some(Stake { stash: 1, total: 5, active: 0 }))
+				]
+			);
+			assert_eq!(OnUnstake::take(), vec![1]);
 		});
 }
 
@@ -1959,6 +2011,7 @@ fn bond_with_little_staked_value_bounded() {
 		.validator_count(3)
 		.nominate(false)
 		.minimum_validator_count(1)
+		.check_events(true)
 		.build_and_execute(|| {
 			// setup
 			assert_ok!(Staking::chill(RuntimeOrigin::signed(30)));
@@ -2024,6 +2077,18 @@ fn bond_with_little_staked_value_bounded() {
 				init_balance_10 + total_payout_0 / 3 + total_payout_1 / 3,
 				2,
 			);
+
+			assert_eq!(
+				OnStakeUpdate::take(),
+				vec![
+					(1, None),
+					(21, Some(Stake { stash: 21, total: 1000, active: 1000 })),
+					(31, Some(Stake { stash: 31, total: 500, active: 500 })),
+					(21, Some(Stake { stash: 21, total: 4692, active: 4692 }))
+				]
+			);
+			assert_eq!(OnValidatorUpdate::take(), vec![1]);
+			assert_eq!(OnValidatorRemove::take(), vec![31]);
 		});
 }
 
@@ -2034,6 +2099,7 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider() {
 		.nominate(false)
 		.minimum_validator_count(1)
 		.set_stake(31, 1000)
+		.check_events(true)
 		.build_and_execute(|| {
 			// ensure all have equal stake.
 			assert_eq!(
@@ -2077,6 +2143,8 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider() {
 					(31, Support { total: 2200, voters: vec![(31, 1000), (1, 600), (3, 600)] })
 				],
 			);
+			assert_eq!(OnStakeUpdate::take(), vec![(1, None), (3, None)]);
+			assert_eq!(OnNominatorUpdate::take(), vec![(1, vec![]), (3, vec![])]);
 		});
 }
 
@@ -2088,6 +2156,7 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider_elected() {
 		.nominate(false)
 		.set_stake(31, 1000)
 		.minimum_validator_count(1)
+		.check_events(true)
 		.build_and_execute(|| {
 			// ensure all have equal stake.
 			assert_eq!(
@@ -2131,6 +2200,8 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider_elected() {
 					(21, Support { total: 2500, voters: vec![(21, 1000), (1, 500), (3, 1000)] })
 				],
 			);
+			assert_eq!(OnStakeUpdate::take(), vec![(1, None), (3, None)]);
+			assert_eq!(OnNominatorUpdate::take(), vec![(1, vec![]), (3, vec![])]);
 		});
 }
 
@@ -4060,51 +4131,57 @@ fn payout_stakers_handles_weight_refund() {
 
 #[test]
 fn bond_during_era_correctly_populates_claimed_rewards() {
-	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
-		// Era = None
-		bond_validator(9, 8, 1000);
-		assert_eq!(
-			Staking::ledger(&8),
-			Some(StakingLedger {
-				stash: 9,
-				total: 1000,
-				active: 1000,
-				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![],
-			})
-		);
-		mock::start_active_era(5);
-		bond_validator(11, 10, 1000);
-		assert_eq!(
-			Staking::ledger(&10),
-			Some(StakingLedger {
-				stash: 11,
-				total: 1000,
-				active: 1000,
-				unlocking: Default::default(),
-				claimed_rewards: (0..5).collect::<Vec<_>>().try_into().unwrap(),
-			})
-		);
+	ExtBuilder::default()
+		.has_stakers(false)
+		.check_events(true)
+		.build_and_execute(|| {
+			// Era = None
+			bond_validator(9, 8, 1000);
+			assert_eq!(
+				Staking::ledger(&8),
+				Some(StakingLedger {
+					stash: 9,
+					total: 1000,
+					active: 1000,
+					unlocking: Default::default(),
+					claimed_rewards: bounded_vec![],
+				})
+			);
+			mock::start_active_era(5);
+			bond_validator(11, 10, 1000);
+			assert_eq!(
+				Staking::ledger(&10),
+				Some(StakingLedger {
+					stash: 11,
+					total: 1000,
+					active: 1000,
+					unlocking: Default::default(),
+					claimed_rewards: (0..5).collect::<Vec<_>>().try_into().unwrap(),
+				})
+			);
 
-		// make sure only era upto history depth is stored
-		let current_era = 99;
-		let last_reward_era = 99 - HistoryDepth::get();
-		mock::start_active_era(current_era);
-		bond_validator(13, 12, 1000);
-		assert_eq!(
-			Staking::ledger(&12),
-			Some(StakingLedger {
-				stash: 13,
-				total: 1000,
-				active: 1000,
-				unlocking: Default::default(),
-				claimed_rewards: (last_reward_era..current_era)
-					.collect::<Vec<_>>()
-					.try_into()
-					.unwrap(),
-			})
-		);
-	});
+			// make sure only era upto history depth is stored
+			let current_era = 99;
+			let last_reward_era = 99 - HistoryDepth::get();
+			mock::start_active_era(current_era);
+			bond_validator(13, 12, 1000);
+			assert_eq!(
+				Staking::ledger(&12),
+				Some(StakingLedger {
+					stash: 13,
+					total: 1000,
+					active: 1000,
+					unlocking: Default::default(),
+					claimed_rewards: (last_reward_era..current_era)
+						.collect::<Vec<_>>()
+						.try_into()
+						.unwrap(),
+				})
+			);
+
+			assert_eq!(OnStakeUpdate::take(), vec![(9, None), (11, None), (13, None)]);
+			assert_eq!(OnValidatorUpdate::take(), vec![9, 11, 13]);
+		});
 }
 
 #[test]
@@ -4337,6 +4414,7 @@ fn cannot_rebond_to_lower_than_ed() {
 	ExtBuilder::default()
 		.existential_deposit(10)
 		.balance_factor(10)
+		.check_events(true)
 		.build_and_execute(|| {
 			// initial stuff.
 			assert_eq!(
@@ -4369,6 +4447,11 @@ fn cannot_rebond_to_lower_than_ed() {
 				Staking::rebond(RuntimeOrigin::signed(20), 5),
 				Error::<Test>::InsufficientBond
 			);
+			assert_eq!(
+				OnStakeUpdate::take(),
+				vec![(21, Some(Stake { stash: 21, total: 10000, active: 10000 }))]
+			);
+			assert_eq!(OnValidatorRemove::take(), [21]);
 		})
 }
 
@@ -4377,6 +4460,7 @@ fn cannot_bond_extra_to_lower_than_ed() {
 	ExtBuilder::default()
 		.existential_deposit(10)
 		.balance_factor(10)
+		.check_events(true)
 		.build_and_execute(|| {
 			// initial stuff.
 			assert_eq!(
@@ -4409,6 +4493,11 @@ fn cannot_bond_extra_to_lower_than_ed() {
 				Staking::bond_extra(RuntimeOrigin::signed(21), 5),
 				Error::<Test>::InsufficientBond,
 			);
+			assert_eq!(
+				OnStakeUpdate::take(),
+				vec![(21, Some(Stake { stash: 21, total: 10000, active: 10000 }))]
+			);
+			assert_eq!(OnValidatorRemove::take(), vec![21]);
 		})
 }
 
@@ -4762,6 +4851,7 @@ fn chill_other_works() {
 		.balance_factor(100)
 		.min_nominator_bond(1_000)
 		.min_validator_bond(1_500)
+		.check_events(true)
 		.build_and_execute(|| {
 			let initial_validators = Validators::<Test>::count();
 			let initial_nominators = Nominators::<Test>::count();
@@ -4908,12 +4998,87 @@ fn chill_other_works() {
 			// chill a validator. Limit is reached, chill-able.
 			assert_eq!(Validators::<Test>::count(), 9);
 			assert_ok!(Staking::chill_other(RuntimeOrigin::signed(1337), 3));
+
+			assert_eq!(
+				OnStakeUpdate::take(),
+				vec![
+					(0, None),
+					(2, None),
+					(4, None),
+					(6, None),
+					(8, None),
+					(10, None),
+					(12, None),
+					(14, None),
+					(16, None),
+					(18, None),
+					(20, None),
+					(22, None),
+					(24, None),
+					(26, None),
+					(28, None),
+					(30, None),
+					(32, None),
+					(34, None),
+					(36, None),
+					(38, None),
+					(40, None),
+					(42, None),
+					(44, None),
+					(46, None),
+					(48, None),
+					(50, None),
+					(52, None),
+					(54, None),
+					(56, None),
+					(58, None),
+				],
+			);
+			assert_eq!(
+				OnNominatorUpdate::take(),
+				vec![
+					(0, vec![]),
+					(4, vec![]),
+					(8, vec![]),
+					(12, vec![]),
+					(16, vec![]),
+					(20, vec![]),
+					(24, vec![]),
+					(28, vec![]),
+					(32, vec![]),
+					(36, vec![]),
+					(40, vec![]),
+					(44, vec![]),
+					(48, vec![]),
+					(52, vec![]),
+					(56, vec![])
+				]
+			);
+			assert_eq!(
+				OnValidatorUpdate::take(),
+				vec![2, 6, 10, 14, 18, 22, 26, 30, 34, 38, 42, 46, 50, 54, 58]
+			);
+			assert_eq!(OnValidatorRemove::take(), vec![26, 30, 34, 38, 42, 46, 50, 54, 58, 2]);
+			assert_eq!(
+				OnNominatorRemove::take(),
+				vec![
+					(24, vec![1]),
+					(28, vec![1]),
+					(32, vec![1]),
+					(36, vec![1]),
+					(40, vec![1]),
+					(44, vec![1]),
+					(48, vec![1]),
+					(52, vec![1]),
+					(56, vec![1]),
+				],
+			);
 		})
 }
 
 #[test]
 fn capped_stakers_works() {
-	ExtBuilder::default().build_and_execute(|| {
+	ExtBuilder::default().check_events(true).build_and_execute(|| {
 		let validator_count = Validators::<Test>::count();
 		assert_eq!(validator_count, 3);
 		let nominator_count = Nominators::<Test>::count();
@@ -5008,6 +5173,58 @@ fn capped_stakers_works() {
 			RuntimeOrigin::signed(last_validator),
 			ValidatorPrefs::default()
 		));
+		assert_eq!(
+			OnStakeUpdate::take(),
+			vec![
+				(12372621823874611106, None),
+				(17270956243860093491, None),
+				(5465328850787429409, None),
+				(17161747032660228993, None),
+				(15952342661998645977, None),
+				(3727006293154618313, None),
+				(1400879179532508248, None),
+				(1021376644067438394, None),
+				(4362915210409513192, None),
+				(777994016134154318, None),
+				(15963114285730158603, None),
+				(12891137879492301340, None),
+				(4753808362819695445, None),
+				(17018405332266509855, None),
+				(7651320429057838151, None),
+				(8398748157494047725, None),
+				(1473894167078292758, None),
+				(15979092350402807284, None)
+			]
+		);
+		assert_eq!(
+			OnNominatorUpdate::take(),
+			vec![
+				(4362915210409513192, vec![]),
+				(777994016134154318, vec![]),
+				(15963114285730158603, vec![]),
+				(12891137879492301340, vec![]),
+				(4753808362819695445, vec![]),
+				(17018405332266509855, vec![]),
+				(7651320429057838151, vec![]),
+				(8398748157494047725, vec![]),
+				(1473894167078292758, vec![]),
+				(1473894167078292758, vec![1]),
+				(15979092350402807284, vec![])
+			]
+		);
+		assert_eq!(
+			OnValidatorUpdate::take(),
+			vec![
+				12372621823874611106,
+				17270956243860093491,
+				5465328850787429409,
+				17161747032660228993,
+				15952342661998645977,
+				3727006293154618313,
+				1400879179532508248,
+				1021376644067438394
+			]
+		);
 	})
 }
 

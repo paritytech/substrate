@@ -378,6 +378,7 @@ pub struct ExtBuilder {
 	status: BTreeMap<AccountId, StakerStatus<AccountId>>,
 	stakes: BTreeMap<AccountId, Balance>,
 	stakers: Vec<(AccountId, AccountId, Balance, StakerStatus<AccountId>)>,
+	check_events: bool,
 }
 
 impl Default for ExtBuilder {
@@ -395,6 +396,7 @@ impl Default for ExtBuilder {
 			status: Default::default(),
 			stakes: Default::default(),
 			stakers: Default::default(),
+			check_events: false,
 		}
 	}
 }
@@ -472,6 +474,10 @@ impl ExtBuilder {
 	}
 	pub fn balance_factor(mut self, factor: Balance) -> Self {
 		self.balance_factor = factor;
+		self
+	}
+	pub fn check_events(mut self, check: bool) -> Self {
+		self.check_events = check;
 		self
 	}
 	fn build(self) -> sp_io::TestExternalities {
@@ -599,8 +605,29 @@ impl ExtBuilder {
 	}
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		sp_tracing::try_init_simple();
+		let check_events = self.check_events;
 		let mut ext = self.build();
+		ext.execute_with(|| {
+			// Clean up all the events produced on init.
+			OnStakeUpdate::take();
+			OnNominatorUpdate::take();
+			OnValidatorUpdate::take();
+			OnValidatorRemove::take();
+			OnNominatorRemove::take();
+			OnUnstake::take();
+		});
 		ext.execute_with(test);
+		if check_events {
+			ext.execute_with(|| {
+				// Make sure we have checked all the events produced by the test.
+				assert!(OnStakeUpdate::get().is_empty(), "Unexpected OnStakeUpdate events");
+				assert!(OnNominatorUpdate::get().is_empty(), "Unexpected OnNominatorUpdate events");
+				assert!(OnValidatorUpdate::get().is_empty(), "Unexpected OnValidatorUpdate events");
+				assert!(OnValidatorRemove::get().is_empty(), "Unexpected OnValidatorRemove events");
+				assert!(OnNominatorRemove::get().is_empty(), "Unexpected OnNominatorRemove events");
+				assert!(OnUnstake::get().is_empty(), "Unexpected OnUnstake events");
+			});
+		}
 		ext.execute_with(|| {
 			Staking::do_try_state(System::block_number()).unwrap();
 		});
