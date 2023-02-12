@@ -1118,9 +1118,19 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be `ForceOrigin`.
 		#[pallet::call_index(5)]
-		#[pallet::weight(T::DbWeight::get().writes(5))]
-		pub fn force_rotate_round(origin: OriginFor<T>) -> DispatchResult {
+		#[pallet::weight({
+			if current_phase.is_signed() {
+				T::WeightInfo::force_rotate_round_from_signed()
+			}else {
+				T::WeightInfo::force_rotate_round()
+			}
+		})]
+		pub fn force_rotate_round(
+			origin: OriginFor<T>,
+			current_phase: Phase<T::BlockNumber>,
+		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
+			ensure!(current_phase == Self::current_phase(), <Error<T>>::CallNotAllowed);
 
 			Self::do_force_rotate_round();
 
@@ -1132,9 +1142,21 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be `ForceOrigin`.
 		#[pallet::call_index(6)]
-		#[pallet::weight(T::WeightInfo::on_initialize_open_signed())]
-		pub fn force_start_signed_phase(origin: OriginFor<T>) -> DispatchResult {
+		#[pallet::weight({
+			if current_phase.is_signed() {
+				T::WeightInfo::on_initialize_open_signed().saturating_add(T::WeightInfo::force_rotate_round_from_signed())
+			}else if !current_phase.is_off() {
+				T::WeightInfo::on_initialize_open_signed().saturating_add(T::WeightInfo::force_rotate_round())
+			}else {
+				T::WeightInfo::on_initialize_open_signed()
+			}
+		})]
+		pub fn force_start_signed_phase(
+			origin: OriginFor<T>,
+			current_phase: Phase<T::BlockNumber>,
+		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin.clone())?;
+			ensure!(current_phase == Self::current_phase(), <Error<T>>::CallNotAllowed);
 
 			// If the current phase is not `Phase::Off` proceed to the next round.
 			if !Self::current_phase().is_off() {
@@ -2061,16 +2083,26 @@ mod tests {
 			assert_eq!(MultiPhase::round(), 1);
 
 			assert_noop!(
-				MultiPhase::force_rotate_round(crate::mock::RuntimeOrigin::none()),
+				MultiPhase::force_rotate_round(crate::mock::RuntimeOrigin::none(), Phase::Off),
 				DispatchError::BadOrigin
 			);
 			assert_noop!(
-				MultiPhase::force_rotate_round(crate::mock::RuntimeOrigin::signed(1)),
+				MultiPhase::force_rotate_round(crate::mock::RuntimeOrigin::signed(1), Phase::Off),
 				DispatchError::BadOrigin
 			);
 
-			assert_ok!(MultiPhase::force_rotate_round(crate::mock::RuntimeOrigin::root()));
+			// The provided current phase is incorrect.
+			assert_noop!(
+				MultiPhase::force_rotate_round(crate::mock::RuntimeOrigin::root(), Phase::Signed),
+				Error::<Runtime>::CallNotAllowed
+			);
+
+			assert_ok!(MultiPhase::force_rotate_round(
+				crate::mock::RuntimeOrigin::root(),
+				Phase::Off
+			));
 			assert_eq!(MultiPhase::round(), 2);
+
 			assert_eq!(
 				multi_phase_events(),
 				vec![Event::PhaseTransitioned { from: Phase::Off, to: Phase::Off, round: 2 },]
@@ -2088,21 +2120,42 @@ mod tests {
 			assert_eq!(MultiPhase::round(), 1);
 
 			assert_noop!(
-				MultiPhase::force_start_signed_phase(crate::mock::RuntimeOrigin::none()),
+				MultiPhase::force_start_signed_phase(
+					crate::mock::RuntimeOrigin::none(),
+					Phase::Off
+				),
 				DispatchError::BadOrigin
 			);
 			assert_noop!(
-				MultiPhase::force_start_signed_phase(crate::mock::RuntimeOrigin::signed(1)),
+				MultiPhase::force_start_signed_phase(
+					crate::mock::RuntimeOrigin::signed(1),
+					Phase::Off
+				),
 				DispatchError::BadOrigin
 			);
 
-			assert_ok!(MultiPhase::force_start_signed_phase(crate::mock::RuntimeOrigin::root()));
+			// The provided current phase is incorrect.
+			assert_noop!(
+				MultiPhase::force_start_signed_phase(
+					crate::mock::RuntimeOrigin::root(),
+					Phase::Signed
+				),
+				Error::<Runtime>::CallNotAllowed
+			);
+
+			assert_ok!(MultiPhase::force_start_signed_phase(
+				crate::mock::RuntimeOrigin::root(),
+				Phase::Off
+			));
 			assert!(MultiPhase::current_phase().is_signed());
 			assert!(MultiPhase::snapshot().is_some());
 			// Didn't proceed to following round since the previos phase was `Phase::Off`.
 			assert_eq!(MultiPhase::round(), 1);
 
-			assert_ok!(MultiPhase::force_start_signed_phase(crate::mock::RuntimeOrigin::root()));
+			assert_ok!(MultiPhase::force_start_signed_phase(
+				crate::mock::RuntimeOrigin::root(),
+				Phase::Signed
+			));
 			assert!(MultiPhase::current_phase().is_signed());
 			assert!(MultiPhase::snapshot().is_some());
 			assert_eq!(MultiPhase::round(), 2);
