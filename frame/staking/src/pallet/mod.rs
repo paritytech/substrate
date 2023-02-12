@@ -796,7 +796,6 @@ pub mod pallet {
 			let page_size = <ExposurePageSize<T>>::get()
 				.unwrap_or_else(|| T::MaxNominatorRewardedPerValidator::get())
 				.clamp(1, T::MaxNominatorRewardedPerValidator::get());
-
 			let max_page_count = Self::get_max_exposure_page_count();
 
 			let nominator_count = exposure.others.len();
