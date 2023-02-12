@@ -43,6 +43,7 @@ pub fn clear_validators_and_nominators<T: Config>() {
 	Nominators::<T>::remove_all();
 
 	frame_election_provider_support::runtime_benchmarks_or_test_enabled! {
+		use frame_election_provider_support::SortedListProvider;
 		// NOTE: safe to call outside block production
 		T::VoterList::unsafe_clear();
 	}
