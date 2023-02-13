@@ -162,7 +162,7 @@ enum BenchmarkResultVariant {
 	#[peek(keywords::BenchmarkResult, name = "BenchmarkResult<T>")]
 	BenchmarkResult(keywords::BenchmarkResult, Token![<], Type, Token![>]),
 	#[peek(keywords::Result, name = "Result<T, BenchmarkError>")]
-	Result(keywords::Result, Token![<], Type, keywords::BenchmarkError, Token![>]),
+	Result(keywords::Result, Token![<], Type, Comma, keywords::BenchmarkError, Token![>]),
 }
 
 impl BenchmarkDef {
