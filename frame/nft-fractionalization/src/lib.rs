@@ -56,15 +56,18 @@ pub use weights::WeightInfo;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{
+		pallet_prelude::*,
+		traits::tokens::{AssetId, Balance as AssetBalance},
+	};
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::traits::{One, Zero};
 	use scale_info::prelude::format;
+	use sp_runtime::traits::{One, Zero};
 	use sp_std::fmt::Display;
 
 	use frame_support::{
 		dispatch::DispatchResult,
-		sp_runtime::traits::{AccountIdConversion, AtLeast32BitUnsigned, StaticLookup},
+		sp_runtime::traits::{AccountIdConversion, StaticLookup},
 		traits::{
 			fungibles::{
 				metadata::{CalcMetadataDeposit, Mutate as MutateMetadata},
@@ -82,7 +85,7 @@ pub mod pallet {
 		<<T as Config>::Assets as Inspect<<T as SystemConfig>::AccountId>>::AssetId;
 	pub type AssetBalanceOf<T> =
 		<<T as Config>::Assets as Inspect<<T as SystemConfig>::AccountId>>::Balance;
-	pub type FeeDepositOf<T> =
+	pub type DepositOf<T> =
 		<<T as Config>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
 	pub type AccountIdLookupOf<T> = <<T as SystemConfig>::Lookup as StaticLookup>::Source;
 
@@ -99,7 +102,7 @@ pub mod pallet {
 		type Currency: ReservableCurrency<Self::AccountId>;
 
 		#[pallet::constant]
-		type Fee: Get<FeeDepositOf<Self>>;
+		type Deposit: Get<DepositOf<Self>>;
 
 		/// Identifier for the collection of NFT.
 		type NftCollectionId: Member + Parameter + MaxEncodedLen + Copy + Display;
@@ -108,24 +111,10 @@ pub mod pallet {
 		type NftId: Member + Parameter + MaxEncodedLen + Copy + Display;
 
 		/// The type used to describe the amount of fractions converted into assets.
-		type AssetBalance: AtLeast32BitUnsigned
-			+ codec::FullCodec
-			+ Copy
-			+ MaybeSerializeDeserialize
-			+ sp_std::fmt::Debug
-			+ From<u64>
-			+ TypeInfo
-			+ MaxEncodedLen;
+		type AssetBalance: AssetBalance;
 
 		/// The type used to identify the assets created during fractionalization.
-		type AssetId: Member
-			+ Parameter
-			+ Copy
-			+ From<u32>
-			+ MaybeSerializeDeserialize
-			+ MaxEncodedLen
-			+ PartialOrd
-			+ TypeInfo;
+		type AssetId: AssetId;
 
 		/// Registry for the minted assets.
 		type Assets: Inspect<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>
@@ -160,7 +149,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		(T::NftCollectionId, T::NftId),
-		Details<AssetIdOf<T>, AssetBalanceOf<T>, FeeDepositOf<T>, T::AccountId>,
+		Details<AssetIdOf<T>, AssetBalanceOf<T>, DepositOf<T>, T::AccountId>,
 		OptionQuery,
 	>;
 
@@ -201,6 +190,8 @@ pub mod pallet {
 		/// The dispatch origin for this call must be Signed.
 		/// The origin must be the owner of the NFT they are trying to lock.
 		///
+		/// `Deposit` funds of sender are reserved.
+		///
 		/// - `nft_collection_id`: The ID used to identify the collection of the NFT.
 		/// Is used within the context of `pallet_nfts`.
 		/// - `nft_id`: The ID used to identify the NFT within the given collection.
@@ -209,6 +200,8 @@ pub mod pallet {
 		/// Is used within the context of `pallet_assets`.
 		/// - `beneficiary`: The account that will receive the newly created asset.
 		/// - `fractions`: The amount to be minted of the newly created asset.
+		///
+		/// Emits `NftFractionalized` event when successful.
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::fractionalize())]
 		pub fn fractionalize(
@@ -227,8 +220,8 @@ pub mod pallet {
 			ensure!(nft_owner == who, Error::<T>::NoPermission);
 
 			let pallet_account = Self::get_pallet_account();
-			let fee = T::Fee::get();
-			T::Currency::reserve(&nft_owner, fee)?;
+			let deposit = T::Deposit::get();
+			T::Currency::reserve(&nft_owner, deposit)?;
 			Self::do_lock_nft(nft_collection_id, nft_id)?;
 			Self::do_create_asset(asset_id, pallet_account.clone())?;
 			Self::do_mint_asset(asset_id, &beneficiary, fractions)?;
@@ -236,7 +229,7 @@ pub mod pallet {
 
 			NftToAsset::<T>::insert(
 				(nft_collection_id, nft_id),
-				Details { asset: asset_id, fractions, asset_creator: nft_owner, fee },
+				Details { asset: asset_id, fractions, asset_creator: nft_owner, deposit },
 			);
 
 			Self::deposit_event(Event::NftFractionalized {
@@ -254,6 +247,8 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be Signed.
 		///
+		/// `Deposit` funds will be returned to `asset_creator`.
+		///
 		/// - `nft_collection_id`: The ID used to identify the collection of the NFT.
 		/// Is used within the context of `pallet_nfts`.
 		/// - `nft_id`: The ID used to identify the NFT within the given collection.
@@ -262,6 +257,8 @@ pub mod pallet {
 		/// the original ID of the created asset, corresponding to the NFT.
 		/// Is used within the context of `pallet_assets`.
 		/// - `beneficiary`: The account that will receive the unified NFT.
+		///
+		/// Emits `NftUnified` event when successful.
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::unify())]
 		pub fn unify(
@@ -278,11 +275,11 @@ pub mod pallet {
 				let details = maybe_details.take().ok_or(Error::<T>::DataNotFound)?;
 				ensure!(details.asset == asset_id, Error::<T>::DataNotFound);
 
-				let fee = details.fee;
+				let deposit = details.deposit;
 				let asset_creator = details.asset_creator;
 				Self::do_burn_asset(asset_id, &who, details.fractions)?;
 				Self::do_unlock_nft(nft_collection_id, nft_id, &beneficiary)?;
-				T::Currency::unreserve(&asset_creator, fee);
+				T::Currency::unreserve(&asset_creator, deposit);
 
 				Self::deposit_event(Event::NftUnified {
 					nft_collection: nft_collection_id,

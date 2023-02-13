@@ -185,6 +185,7 @@ impl LockableNonfungible<CollectionId, ItemId> for MockLockableNonfungible {
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
+	type Deposit = ConstU64<1>;
 	type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
 	type NftId = <Self as pallet_nfts::Config>::ItemId;
 	type AssetBalance = <Self as pallet_balances::Config>::Balance;

@@ -81,6 +81,8 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) {
 benchmarks! {
 	where_clause {
 		where
+			T::AssetBalance: From<u64>,
+			T::AssetId: From<u32>,
 			T::NftCollectionId: From<u32>,
 			T::NftId: From<u32>,
 			T::Currency: Unbalanced<T::AccountId>,

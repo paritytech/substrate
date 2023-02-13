@@ -22,15 +22,16 @@ use scale_info::TypeInfo;
 
 /// Stores the details of a fractionalized item.
 #[derive(Decode, Encode, Default, PartialEq, Eq, MaxEncodedLen, TypeInfo)]
-pub struct Details<AssetId, Fractions, Fee, AccountId> {
+pub struct Details<AssetId, Fractions, Deposit, AccountId> {
 	/// Minted asset.
 	pub asset: AssetId,
 
 	/// Number of fractions minted.
 	pub fractions: Fractions,
 
-	/// Fee reserved for creating a new asset.
-	pub fee: Fee,
+	/// Reserved deposit for creating a new asset.
+	pub deposit: Deposit,
 
+	/// Account that fractionalized an item.
 	pub asset_creator: AccountId,
 }
