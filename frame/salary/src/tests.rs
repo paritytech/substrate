@@ -132,7 +132,7 @@ impl RankedMembers for TestClub {
 impl Config for Test {
 	type WeightInfo = ();
 	type RuntimeEvent = RuntimeEvent;
-	type Salary = TestPay;
+	type Paymaster = TestPay;
 	type Members = TestClub;
 	type ActiveSalaryForRank = Identity;
 	type CyclePeriod = ConstU64<4>;
