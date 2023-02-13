@@ -608,8 +608,6 @@ pub mod pallet {
 		IncorrectData,
 		/// The extrinsic should be sent by another origin.
 		WrongOrigin,
-		/// Unable to get the account id from the provided public key.
-		WrongPublic,
 		/// The provided signature is incorrect.
 		WrongSignature,
 		/// The provided metadata might be too long.
