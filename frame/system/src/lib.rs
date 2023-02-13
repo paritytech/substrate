@@ -1611,10 +1611,13 @@ impl<T: Config> Pallet<T> {
 	/// it and extracting the runtime version of it. It checks that the runtime version
 	/// of the old and new runtime has the same spec name and that the spec version is increasing.
 	pub fn can_set_code(code: &[u8]) -> Result<(), sp_runtime::DispatchError> {
-		let current_version = T::Version::get();
-		let new_version = sp_io::misc::runtime_version(code)
-			.and_then(|v| RuntimeVersion::decode(&mut &v[..]).ok())
-			.ok_or(Error::<T>::FailedToExtractRuntimeVersion)?;
+		#[cfg_attr(feature = "runtime-benchmarks", allow(unused_variables))]
+		let (current_version, new_version) = (
+			T::Version::get(),
+			sp_io::misc::runtime_version(code)
+				.and_then(|v| RuntimeVersion::decode(&mut &v[..]).ok())
+				.ok_or(Error::<T>::FailedToExtractRuntimeVersion)?,
+		);
 
 		// Disable checks if we are benchmarking `set_code` to make it possible to set arbitrary
 		// runtimes without modification
