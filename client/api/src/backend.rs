@@ -52,7 +52,7 @@ pub type TransactionFor<B, Block> = TransactionForSB<StateBackendFor<B, Block>, 
 /// Describes which block import notification stream should be notified.
 #[derive(Debug, Clone, Copy)]
 pub enum ImportNotificationAction {
-	/// Notify only when the chain has synced to the tip or there is a re-org.
+	/// Notify only when the node has synced to the tip or there is a re-org.
 	RecentBlock,
 	/// Notify for every single block no matter what the sync state is.
 	EveryBlock,
