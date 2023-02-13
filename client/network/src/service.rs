@@ -1353,7 +1353,7 @@ where
 	Client: HeaderBackend<B> + 'static,
 {
 	/// Run the network.
-	pub async fn run(&mut self) {
+	pub async fn run(mut self) {
 		while self.next_action().await {}
 	}
 
