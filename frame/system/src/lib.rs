@@ -398,7 +398,7 @@ pub mod pallet {
 		/// ## Complexity
 		/// - `O(C + S)` where `C` length of `code` and `S` complexity of `can_set_code`
 		#[pallet::call_index(2)]
-		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
+		#[pallet::weight((T::SystemWeightInfo::set_code(code.len() as u32), DispatchClass::Operational))]
 		pub fn set_code(origin: OriginFor<T>, code: Vec<u8>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			Self::can_set_code(&code)?;
@@ -1250,7 +1250,7 @@ impl<T: Config> Pallet<T> {
 		let block_number = Self::block_number();
 		// Don't populate events on genesis.
 		if block_number.is_zero() {
-			return
+			return;
 		}
 
 		let phase = ExecutionPhase::<T>::get().unwrap_or_default();
@@ -1609,11 +1609,11 @@ impl<T: Config> Pallet<T> {
 			.ok_or(Error::<T>::FailedToExtractRuntimeVersion)?;
 
 		if new_version.spec_name != current_version.spec_name {
-			return Err(Error::<T>::InvalidSpecName.into())
+			return Err(Error::<T>::InvalidSpecName.into());
 		}
 
 		if new_version.spec_version <= current_version.spec_version {
-			return Err(Error::<T>::SpecVersionNeedsToIncrease.into())
+			return Err(Error::<T>::SpecVersionNeedsToIncrease.into());
 		}
 
 		Ok(())
@@ -1698,7 +1698,7 @@ impl<T: Config> StoredMap<T::AccountId, T::AccountData> for Pallet<T> {
 				},
 			}
 		} else if !was_providing && !is_providing {
-			return Ok(result)
+			return Ok(result);
 		}
 		Account::<T>::mutate(k, |a| a.data = some_data.unwrap_or_default());
 		Ok(result)

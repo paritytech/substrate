@@ -48,9 +48,14 @@ benchmarks! {
 	set_heap_pages {
 	}: _(RawOrigin::Root, Default::default())
 
-	// `set_code` was not benchmarked because it is pretty hard to come up with a real
-	// Wasm runtime to test the upgrade with. But this is okay because we will make
-	// `set_code` take a full block anyway.
+	set_code {
+		let b in 0 .. *T::BlockLength::get().max.get(DispatchClass::Normal) as u32;
+		let code = vec![1; b as usize];
+	}: _(RawOrigin::Root, code)
+	verify {
+		let current_code = storage::unhashed::get_raw(well_known_keys::CODE).ok_or("Code not stored.")?;
+		assert_eq!(current_code.len(), b as usize);
+	}
 
 	#[extra]
 	set_code_without_checks {

@@ -50,6 +50,7 @@ use sp_std::marker::PhantomData;
 pub trait WeightInfo {
 	fn remark(b: u32, ) -> Weight;
 	fn remark_with_event(b: u32, ) -> Weight;
+	fn set_code(b: u32, ) -> Weight;
 	fn set_heap_pages() -> Weight;
 	fn set_storage(i: u32, ) -> Weight;
 	fn kill_storage(i: u32, ) -> Weight;
@@ -105,6 +106,9 @@ impl<T: crate::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(Weight::from_ref_time(631_438).saturating_mul(i.into()))
 			.saturating_add(T::DbWeight::get().writes((1_u64).saturating_mul(i.into())))
 	}
+	fn set_code(b: u32) -> Weight {
+		Weight::from_ref_time(1_000_000)
+	}
 	/// Storage: Skipped Metadata (r:0 w:0)
 	/// Proof Skipped: Skipped Metadata (max_values: None, max_size: None, mode: Measured)
 	/// The range of component `i` is `[0, 1000]`.
@@ -155,6 +159,9 @@ impl WeightInfo for () {
 		Weight::from_ref_time(7_748_000)
 			// Standard Error: 0
 			.saturating_add(Weight::from_ref_time(1_423).saturating_mul(b.into()))
+	}
+	fn set_code(b: u32) -> Weight {
+		Weight::from_ref_time(1_000_000)
 	}
 	/// Storage: System Digest (r:1 w:1)
 	/// Proof Skipped: System Digest (max_values: Some(1), max_size: None, mode: Measured)
