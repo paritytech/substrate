@@ -165,6 +165,8 @@ impl pallet_nfts::Config for Test {
 
 parameter_types! {
 	pub const NftFractionalizationPalletId: PalletId = PalletId(*b"fraction");
+	pub NewAssetSymbol: String = "FRAC".to_string();
+	pub NewAssetName: String = "Frac".to_string();
 }
 
 pub struct MockLockableNonfungible;
@@ -184,8 +186,10 @@ impl LockableNonfungible<CollectionId, ItemId> for MockLockableNonfungible {
 
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Currency = Balances;
 	type Deposit = ConstU64<1>;
+	type Currency = Balances;
+	type NewAssetSymbol = NewAssetSymbol;
+	type NewAssetName = NewAssetName;
 	type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
 	type NftId = <Self as pallet_nfts::Config>::ItemId;
 	type AssetBalance = <Self as pallet_balances::Config>::Balance;

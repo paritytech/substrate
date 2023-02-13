@@ -1609,6 +1609,8 @@ impl pallet_nfts::Config for Runtime {
 
 parameter_types! {
 	pub const NftFractionalizationPalletId: PalletId = PalletId(*b"fraction");
+	pub NewAssetSymbol: String = "FRAC".to_string();
+	pub NewAssetName: String = "Frac".to_string();
 }
 
 pub struct RuntimeLockableNonfungible;
@@ -1628,9 +1630,10 @@ impl LockableNonfungible<CollectionId, ItemId> for RuntimeLockableNonfungible {
 
 impl pallet_nft_fractionalization::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type PalletId = NftFractionalizationPalletId;
 	type Deposit = AssetDeposit;
 	type Currency = Balances;
+	type NewAssetSymbol = NewAssetSymbol;
+	type NewAssetName = NewAssetName;
 	type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
 	type NftId = <Self as pallet_nfts::Config>::ItemId;
 	type AssetBalance = <Self as pallet_balances::Config>::Balance;
@@ -1638,6 +1641,7 @@ impl pallet_nft_fractionalization::Config for Runtime {
 	type Assets = Assets;
 	type Nfts = Nfts;
 	type NftLocker = RuntimeLockableNonfungible;
+	type PalletId = NftFractionalizationPalletId;
 	type WeightInfo = pallet_nft_fractionalization::weights::SubstrateWeight<Runtime>;
 }
 

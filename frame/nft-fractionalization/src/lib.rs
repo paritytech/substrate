@@ -138,6 +138,14 @@ pub mod pallet {
 		#[pallet::constant]
 		type PalletId: Get<PalletId>;
 
+		/// The newly created asset's symbol.
+		#[pallet::constant]
+		type NewAssetSymbol: Get<String>;
+
+		/// The newly created asset's name.
+		#[pallet::constant]
+		type NewAssetName: Get<String>;
+
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 	}
@@ -349,9 +357,10 @@ pub mod pallet {
 			nft_collection_id: &T::NftCollectionId,
 			nft_id: &T::NftId,
 		) -> DispatchResult {
-			let symbol = "FRAC";
-			let name = format!("Frac {nft_collection_id}-{nft_id}");
-			let deposit = T::Assets::calc(&name.clone().into(), &symbol.into());
+			let symbol = T::NewAssetSymbol::get();
+			let name = T::NewAssetName::get();
+			let name = format!("{} {}-{}", name, nft_collection_id, nft_id);
+			let deposit = T::Assets::calc(&name.clone().into(), &symbol.clone().into());
 			if deposit != Zero::zero() {
 				T::Currency::transfer(
 					&depositor,
