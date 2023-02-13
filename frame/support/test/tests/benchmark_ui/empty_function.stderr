@@ -1,0 +1,5 @@
+error: Benchmark function definitions cannot be empty!
+  --> tests/benchmark_ui/empty_function.rs:10:13
+   |
+10 |     fn bench() {}
+   |                ^^

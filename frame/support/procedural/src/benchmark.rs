@@ -168,9 +168,15 @@ enum BenchmarkResultVariant {
 impl BenchmarkDef {
 	/// Constructs a [`BenchmarkDef`] by traversing an existing [`ItemFn`] node.
 	pub fn from(item_fn: &ItemFn, extra: bool, skip_meta: bool) -> Result<BenchmarkDef> {
-		let mut params: Vec<ParamDef> = Vec::new();
+		let empty_fn = || {
+			return Err(Error::new(
+				item_fn.block.span(),
+				"Benchmark function definitions cannot be empty!",
+			))
+		};
 
 		// parse params such as "x: Linear<0, 1>"
+		let mut params: Vec<ParamDef> = Vec::new();
 		for arg in &item_fn.sig.inputs {
 			let invalid_param = |span| {
 				return Err(Error::new(span, "Invalid benchmark function param. A valid example would be `x: Linear<5, 10>`.", ))
@@ -213,6 +219,10 @@ impl BenchmarkDef {
 			}
 
 			params.push(ParamDef { name, typ: typ.clone(), start, end });
+		}
+
+		if item_fn.block.stmts.is_empty() {
+			return empty_fn()
 		}
 
 		// ensure ReturnType is a BenchmarkResult<T> or Result<T, BenchmarkError>, if specified
@@ -285,12 +295,7 @@ impl BenchmarkDef {
 						blank return type.",
 					))
 				}
-				let Some(stmt) = item_fn.block.stmts.last() else {
-					return Err(Error::new(
-						item_fn.block.span(),
-						"Benchmark function definitions cannot be empty!",
-					))
-				};
+				let Some(stmt) = item_fn.block.stmts.last() else { return empty_fn() };
 				(
 					Vec::from(&item_fn.block.stmts[(i + 1)..item_fn.block.stmts.len() - 1]),
 					Some(stmt.clone()),
