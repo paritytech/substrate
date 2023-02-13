@@ -1169,7 +1169,7 @@ impl<T: Config> Get<u32> for TotalUnbondingPools<T> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::traits::StorageVersion;
+	use frame_support::traits::{StorageVersion, TryStateSelect};
 	use frame_system::{ensure_signed, pallet_prelude::*};
 
 	/// The current storage version.
@@ -2122,7 +2122,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: BlockNumberFor<T>) -> Result<(), &'static str> {
+		fn try_state(_n: BlockNumberFor<T>, _: TryStateSelect) -> Result<(), &'static str> {
 			Self::do_try_state(u8::MAX)
 		}
 

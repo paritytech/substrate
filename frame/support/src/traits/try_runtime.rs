@@ -22,7 +22,7 @@ use sp_arithmetic::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
 
 /// Which state tests to execute.
-#[derive(codec::Encode, codec::Decode, Clone, scale_info::TypeInfo)]
+#[derive(codec::Encode, codec::Decode, Clone,  Eq, PartialEq, scale_info::TypeInfo)]
 pub enum Select {
 	/// None of them.
 	None,
@@ -34,6 +34,10 @@ pub enum Select {
 	///
 	/// Pallet names are obtained from [`super::PalletInfoAccess`].
 	Only(Vec<Vec<u8>>),
+	/// Run only fast running tests.
+	///
+	/// Optimal mode for CI. Avoids long running tests.
+	Fast,
 }
 
 impl Default for Select {
@@ -55,6 +59,7 @@ impl sp_std::fmt::Debug for Select {
 			),
 			Select::All => write!(f, "All"),
 			Select::None => write!(f, "None"),
+			Select::Fast => write!(f, "Fast"),
 		}
 	}
 }
@@ -142,7 +147,7 @@ impl<BlockNumber: Clone + sp_std::fmt::Debug + AtLeast32BitUnsigned> TryState<Bl
 	fn try_state(n: BlockNumber, targets: Select) -> Result<(), &'static str> {
 		match targets {
 			Select::None => Ok(()),
-			Select::All => {
+			Select::All | Select::Fast => {
 				let mut result = Ok(());
 				for_tuples!( #( result = result.and(Tuple::try_state(n.clone(), targets.clone())); )* );
 				result

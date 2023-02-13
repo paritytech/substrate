@@ -214,14 +214,14 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 		{
 			fn try_state(
 				n: <T as #frame_system::Config>::BlockNumber,
-				_s: #frame_support::traits::TryStateSelect
+				s: #frame_support::traits::TryStateSelect
 			) -> Result<(), &'static str> {
 				#log_try_state
 				<
 					Self as #frame_support::traits::Hooks<
 						<T as #frame_system::Config>::BlockNumber
 					>
-				>::try_state(n)
+				>::try_state(n, s)
 			}
 		}
 	)
