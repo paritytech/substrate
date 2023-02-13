@@ -229,19 +229,21 @@ variables:
     # this job runs only on nightly pipeline with the mentioned variable, against `master` branch
     - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "nightly"
 
-.crate-publishing-pipeline:
-  rules:
-    - if: $CI_COMMIT_REF_NAME != "master"
-      when: never
+.crates-publishing-variables:
+  variables:
+    CRATESIO_CRATES_OWNER:         parity-crate-owner
+    REPO:                          substrate
+    REPO_OWNER:                    paritytech
 
-.scheduled-crate-publishing-pipeline:
+.crates-publishing-pipeline:
+  extends:                         .crates-publishing-variables
   rules:
-    - !reference [.crate-publishing-pipeline, rules]
-    - if: $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "automatic-crate-publishing"
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_REF_NAME == "master" && $PIPELINE == "automatic-crate-publishing"
 
 .crates-publishing-template:
-  stage:                           test
-  extends:                         .docker-env
+  extends:
+    - .docker-env
+    - .crates-publishing-variables
   # collect artifacts even on failure so that we know how the crates were generated (they'll be
   # generated to the artifacts folder according to SPUB_TMP further down)
   artifacts:
@@ -251,12 +253,7 @@ variables:
     paths:
       - artifacts/
   variables:
-    CRATESIO_API: https://crates.io/api
-    CRATESIO_CRATES_OWNER: parity-crate-owner
-    GH_API: https://api.github.com
-    REPO: substrate
-    REPO_OWNER: paritytech
-    SPUB_TMP: artifacts
+    SPUB_TMP:                      artifacts
 
 #### stage:                       .pre
 
@@ -273,6 +270,18 @@ skip-if-draft:
      - echo "pipeline source is ${CI_PIPELINE_SOURCE}"
      - ./scripts/ci/gitlab/skip_if_draft.sh
   allow_failure:                   true
+
+check-crates-publishing-pipeline:
+  stage:                           .pre
+  extends:
+    - .kubernetes-env
+    - .crates-publishing-pipeline
+  script:
+    - git clone
+        --depth 1
+        --branch "$RELENG_SCRIPTS_BRANCH"
+        https://github.com/paritytech/releng-scripts.git
+    - ONLY_CHECK_PIPELINE=true ./releng-scripts/publish-crates
 
 include:
   # check jobs

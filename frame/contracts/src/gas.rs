@@ -153,8 +153,8 @@ impl<T: Config> GasMeter<T> {
 	/// Returns `OutOfGas` if there is not enough gas or addition of the specified
 	/// amount of gas has lead to overflow. On success returns `Proceed`.
 	///
-	/// NOTE that amount is always consumed, i.e. if there is not enough gas
-	/// then the counter will be set to zero.
+	/// NOTE that amount isn't consumed if there is not enough gas. This is considered
+	/// safe because we always charge gas before performing any resource-spending action.
 	#[inline]
 	pub fn charge<Tok: Token<T>>(&mut self, token: Tok) -> Result<ChargedAmount, DispatchError> {
 		#[cfg(test)]

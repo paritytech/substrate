@@ -627,6 +627,48 @@ mod test {
 			assert_eq!(AValueQueryWithAnOnEmpty::take(2), 97);
 			assert_eq!(A::contains_key(2), false);
 
+			// Set non-existing.
+			B::set(30, 100);
+
+			assert_eq!(B::contains_key(30), true);
+			assert_eq!(B::get(30), 100);
+			assert_eq!(B::try_get(30), Ok(100));
+
+			// Set existing.
+			B::set(30, 101);
+
+			assert_eq!(B::contains_key(30), true);
+			assert_eq!(B::get(30), 101);
+			assert_eq!(B::try_get(30), Ok(101));
+
+			// Set non-existing.
+			A::set(30, Some(100));
+
+			assert_eq!(A::contains_key(30), true);
+			assert_eq!(A::get(30), Some(100));
+			assert_eq!(A::try_get(30), Ok(100));
+
+			// Set existing.
+			A::set(30, Some(101));
+
+			assert_eq!(A::contains_key(30), true);
+			assert_eq!(A::get(30), Some(101));
+			assert_eq!(A::try_get(30), Ok(101));
+
+			// Unset existing.
+			A::set(30, None);
+
+			assert_eq!(A::contains_key(30), false);
+			assert_eq!(A::get(30), None);
+			assert_eq!(A::try_get(30), Err(()));
+
+			// Unset non-existing.
+			A::set(31, None);
+
+			assert_eq!(A::contains_key(31), false);
+			assert_eq!(A::get(31), None);
+			assert_eq!(A::try_get(31), Err(()));
+
 			B::insert(2, 10);
 			assert_eq!(A::migrate_key::<Blake2_256, _>(2), Some(10));
 			assert_eq!(A::contains_key(2), true);

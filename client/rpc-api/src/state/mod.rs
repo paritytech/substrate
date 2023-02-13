@@ -71,8 +71,8 @@ pub trait StateApi<Hash> {
 	fn storage_hash(&self, key: StorageKey, hash: Option<Hash>) -> RpcResult<Option<Hash>>;
 
 	/// Returns the size of a storage entry at a block's state.
-	#[method(name = "state_getStorageSize", aliases = ["state_getStorageSizeAt"], blocking)]
-	fn storage_size(&self, key: StorageKey, hash: Option<Hash>) -> RpcResult<Option<u64>>;
+	#[method(name = "state_getStorageSize", aliases = ["state_getStorageSizeAt"])]
+	async fn storage_size(&self, key: StorageKey, hash: Option<Hash>) -> RpcResult<Option<u64>>;
 
 	/// Returns the runtime metadata as an opaque blob.
 	#[method(name = "state_getMetadata", blocking)]

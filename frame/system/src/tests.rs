@@ -627,7 +627,8 @@ fn events_not_emitted_during_genesis() {
 		assert!(System::block_number().is_zero());
 		let mut account_data = AccountInfo::default();
 		System::on_created_account(Default::default(), &mut account_data);
-		assert!(System::events().is_empty());
+		// No events registered at the genesis block
+		assert!(!System::read_events_no_consensus().any(|_| true));
 		// Events will be emitted starting on block 1
 		System::set_block_number(1);
 		System::on_created_account(Default::default(), &mut account_data);
@@ -678,10 +679,13 @@ fn ensure_signed_stuff_works() {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	{
-		let successful_origin: RuntimeOrigin = EnsureSigned::successful_origin();
+		let successful_origin: RuntimeOrigin = EnsureSigned::try_successful_origin()
+			.expect("EnsureSigned has no successful origin required for the test");
 		assert_ok!(EnsureSigned::try_origin(successful_origin));
 
-		let successful_origin: RuntimeOrigin = EnsureSignedBy::<Members, _>::successful_origin();
+		let successful_origin: RuntimeOrigin =
+			EnsureSignedBy::<Members, _>::try_successful_origin()
+				.expect("EnsureSignedBy has no successful origin required for the test");
 		assert_ok!(EnsureSignedBy::<Members, _>::try_origin(successful_origin));
 	}
 }
