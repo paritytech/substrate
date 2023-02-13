@@ -58,9 +58,10 @@ fn scheduling_with_preimages_works() {
 			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
 		let hash = <Test as frame_system::Config>::Hashing::hash_of(&call);
 		let len = call.using_encoded(|x| x.len()) as u32;
-		let hashed = Preimage::pick(hash, len);
-		assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(0), call.encode()));
+		// Important to use here `Bounded::Lookup` to ensure that we request the hash.
+		let hashed = Bounded::Lookup { hash, len };
 		assert_ok!(Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), hashed));
+		assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(0), call.encode()));
 		assert!(Preimage::is_requested(&hash));
 		run_to_block(3);
 		assert!(logger::log().is_empty());
@@ -479,8 +480,10 @@ fn scheduler_handles_periodic_unavailable_preimage() {
 		let call = RuntimeCall::Logger(LoggerCall::log { i: 42, weight: (max_weight / 3) * 2 });
 		let hash = <Test as frame_system::Config>::Hashing::hash_of(&call);
 		let len = call.using_encoded(|x| x.len()) as u32;
-		let bound = Preimage::pick(hash, len);
-		assert_ok!(Preimage::note(call.encode().into()));
+		// Important to use here `Bounded::Lookup` to ensure that we request the hash.
+		let bound = Bounded::Lookup { hash, len };
+		// The preimage isn't requested yet.
+		assert!(!Preimage::is_requested(&hash));
 
 		assert_ok!(Scheduler::do_schedule(
 			DispatchTime::At(4),
@@ -489,11 +492,18 @@ fn scheduler_handles_periodic_unavailable_preimage() {
 			root(),
 			bound.clone(),
 		));
+
+		// The preimage is requested.
+		assert!(Preimage::is_requested(&hash));
+
+		// Note the preimage.
+		assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(1), call.encode()));
+
 		// Executes 1 times till block 4.
 		run_to_block(4);
 		assert_eq!(logger::log().len(), 1);
 
-		// Unnote the preimage.
+		// Unnote the preimage
 		Preimage::unnote(&hash);
 
 		// Does not ever execute again.
@@ -1129,7 +1139,8 @@ fn postponed_named_task_cannot_be_rescheduled() {
 			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) });
 		let hash = <Test as frame_system::Config>::Hashing::hash_of(&call);
 		let len = call.using_encoded(|x| x.len()) as u32;
-		let hashed = Preimage::pick(hash, len);
+		// Important to use here `Bounded::Lookup` to ensure that we request the hash.
+		let hashed = Bounded::Lookup { hash, len };
 		let name: [u8; 32] = hash.as_ref().try_into().unwrap();
 
 		let address = Scheduler::do_schedule_named(

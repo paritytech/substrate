@@ -80,7 +80,7 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 
 	fn reset_peers_cache_for_block(&mut self, block: NumberFor<B>) {
 		// TODO (issue #12296): replace peer selection with generic one that involves all protocols.
-		self.peers_cache = self.live_peers.lock().at_least_at_block(block);
+		self.peers_cache = self.live_peers.lock().further_than(block);
 	}
 
 	fn try_next_peer(&mut self) -> Option<PeerId> {
@@ -199,7 +199,6 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 		let (peer, req_info, resp) = match &mut self.state {
 			State::Idle => {
 				futures::pending!();
-				// Doesn't happen as 'futures::pending!()' is an 'await' barrier that never passes.
 				return None
 			},
 			State::AwaitingResponse(peer, req_info, receiver) => {

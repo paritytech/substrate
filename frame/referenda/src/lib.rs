@@ -72,8 +72,8 @@ use frame_support::{
 			v3::{Anon as ScheduleAnon, Named as ScheduleNamed},
 			DispatchTime,
 		},
-		Currency, LockIdentifier, OnUnbalanced, OriginTrait, PollStatus, Polling, QueryPreimage,
-		ReservableCurrency, StorePreimage, VoteTally,
+		Currency, Hash as PreimageHash, LockIdentifier, OnUnbalanced, OriginTrait, PollStatus,
+		Polling, QueryPreimage, ReservableCurrency, StorePreimage, VoteTally,
 	},
 	BoundedVec,
 };
@@ -251,6 +251,16 @@ pub mod pallet {
 	pub type DecidingCount<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TrackIdOf<T, I>, u32, ValueQuery>;
 
+	/// The metadata is a general information concerning the referendum.
+	/// The `PreimageHash` refers to the preimage of the `Preimages` provider which can be a JSON
+	/// dump or IPFS hash of a JSON file.
+	///
+	/// Consider a garbage collection for a metadata of finished referendums to `unrequest` (remove)
+	/// large preimages.
+	#[pallet::storage]
+	pub type MetadataOf<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Blake2_128Concat, ReferendumIndex, PreimageHash>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -356,6 +366,20 @@ pub mod pallet {
 			/// The amount placed by the account.
 			amount: BalanceOf<T, I>,
 		},
+		/// Metadata for a referendum has been set.
+		MetadataSet {
+			/// Index of the referendum.
+			index: ReferendumIndex,
+			/// Preimage hash.
+			hash: PreimageHash,
+		},
+		/// Metadata for a referendum has been cleared.
+		MetadataCleared {
+			/// Index of the referendum.
+			index: ReferendumIndex,
+			/// Preimage hash.
+			hash: PreimageHash,
+		},
 	}
 
 	#[pallet::error]
@@ -384,6 +408,8 @@ pub mod pallet {
 		NoDeposit,
 		/// The referendum status is invalid for this operation.
 		BadStatus,
+		/// The preimage does not exist.
+		PreimageNotExist,
 	}
 
 	#[pallet::call]
@@ -540,6 +566,7 @@ pub mod pallet {
 			Self::deposit_event(Event::<T, I>::Killed { index, tally: status.tally });
 			Self::slash_deposit(Some(status.submission_deposit.clone()));
 			Self::slash_deposit(status.decision_deposit.clone());
+			Self::do_clear_metadata(index);
 			let info = ReferendumInfo::Killed(frame_system::Pallet::<T>::block_number());
 			ReferendumInfoFor::<T, I>::insert(index, info);
 			Ok(())
@@ -632,6 +659,40 @@ pub mod pallet {
 			};
 			Self::deposit_event(e);
 			Ok(())
+		}
+
+		/// Set or clear metadata of a referendum.
+		///
+		/// Parameters:
+		/// - `origin`: Must be `Signed` by a creator of a referendum or by anyone to clear a
+		///   metadata of a finished referendum.
+		/// - `index`:  The index of a referendum to set or clear metadata for.
+		/// - `maybe_hash`: The hash of an on-chain stored preimage. `None` to clear a metadata.
+		#[pallet::call_index(8)]
+		#[pallet::weight(
+			maybe_hash.map_or(
+				T::WeightInfo::clear_metadata(), |_| T::WeightInfo::set_some_metadata())
+			)]
+		pub fn set_metadata(
+			origin: OriginFor<T>,
+			index: ReferendumIndex,
+			maybe_hash: Option<PreimageHash>,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			if let Some(hash) = maybe_hash {
+				let status = Self::ensure_ongoing(index)?;
+				ensure!(status.submission_deposit.who == who, Error::<T, I>::NoPermission);
+				ensure!(T::Preimages::len(&hash).is_some(), Error::<T, I>::PreimageNotExist);
+				MetadataOf::<T, I>::insert(index, hash);
+				Self::deposit_event(Event::<T, I>::MetadataSet { index, hash });
+				Ok(())
+			} else {
+				if let Some(status) = Self::ensure_ongoing(index).ok() {
+					ensure!(status.submission_deposit.who == who, Error::<T, I>::NoPermission);
+				}
+				Self::do_clear_metadata(index);
+				Ok(())
+			}
 		}
 	}
 }
@@ -1203,5 +1264,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let x = Perbill::from_rational(elapsed.min(period), period);
 		support_needed.passing(x, tally.support(id)) &&
 			approval_needed.passing(x, tally.approval(id))
+	}
+
+	/// Clear metadata if exist for a given referendum index.
+	fn do_clear_metadata(index: ReferendumIndex) {
+		if let Some(hash) = MetadataOf::<T, I>::take(index) {
+			Self::deposit_event(Event::<T, I>::MetadataCleared { index, hash });
+		}
 	}
 }

@@ -215,6 +215,9 @@ pub mod pallet {
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
+
+		/// Origin allowed to set collective members
+		type SetMembersOrigin: EnsureOrigin<<Self as frame_system::Config>::RuntimeOrigin>;
 	}
 
 	#[pallet::genesis_config]
@@ -349,7 +352,7 @@ pub mod pallet {
 		/// - `old_count`: The upper bound for the previous number of members in storage. Used for
 		///   weight estimation.
 		///
-		/// Requires root origin.
+		/// The dispatch of this call must be `SetMembersOrigin`.
 		///
 		/// NOTE: Does not enforce the expected `MaxMembers` limit on the amount of members, but
 		///       the weight estimations rely on it to estimate dispatchable weight.
@@ -389,7 +392,7 @@ pub mod pallet {
 			prime: Option<T::AccountId>,
 			old_count: MemberCount,
 		) -> DispatchResultWithPostInfo {
-			ensure_root(origin)?;
+			T::SetMembersOrigin::ensure_origin(origin)?;
 			if new_members.len() > T::MaxMembers::get() as usize {
 				log::error!(
 					target: LOG_TARGET,
