@@ -77,9 +77,7 @@ where
 		backend: &Self::Backend,
 	) -> Option<core::result::Result<(StorageKey, StorageValue), Self::Error>>;
 
-	/// Returns whether the trie end was reached.
-	///
-	/// Will return `true` once we've reached the end of the trie.
+	/// Returns whether the end of iteration was reached without an error.
 	fn was_complete(&self) -> bool;
 }
 
