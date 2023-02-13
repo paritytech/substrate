@@ -197,7 +197,7 @@ async fn build_network_future<
 
 			// List of blocks that the client has finalized.
 			notification = finality_notification_stream.select_next_some() => {
-				chain_sync_service.on_block_finalized(notification.hash, notification.header.number().clone());
+				chain_sync_service.on_block_finalized(notification.hash, *notification.header.number());
 			}
 
 			// Drive the network. Shut down the network future if `NetworkWorker` has terminated.
