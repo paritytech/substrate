@@ -593,11 +593,12 @@ fn generate_storage_instance(
 
 	let where_clause = storage_where_clause.map(|w| quote!(#w)).unwrap_or_default();
 
-	let name = Ident::new(&format!("{}_Storage_Instance", storage_name), Span::call_site());
+	let name_str = format!("{}_Storage_Instance", storage_name);
+	let name = Ident::new(&name_str, Span::call_site());
 	let storage_name_str = storage_name.to_string();
 
 	let counter_code = is_counted_map.then(|| {
-		let counter_name = Ident::new(&counter_prefix(&name.to_string()), Span::call_site());
+		let counter_name = Ident::new(&counter_prefix(&name_str), Span::call_site());
 		let counter_storage_name_str = counter_prefix(&storage_name_str);
 
 		quote! {
