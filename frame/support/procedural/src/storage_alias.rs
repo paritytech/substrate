@@ -595,9 +595,7 @@ fn generate_storage_instance(
 	let name = Ident::new(&format!("{}_Storage_Instance", storage_name), Span::call_site());
 	let storage_name_str = storage_name.to_string();
 
-	let mut counter_code = Option::None;
-
-	if is_counted_map {
+	let counter_code = is_counted_map.then(|| {
 		let counter_name = Ident::new(&format!("Counter_{}", name), Span::call_site());
 		let counter_storage_name_str = "counter_".to_owned() + &storage_name_str;
 
@@ -620,7 +618,7 @@ fn generate_storage_instance(
 				type CounterPrefix = #counter_name;
 			}
 		});
-	}
+	});
 
 	// Implement `StorageInstance` trait.
 	let code = quote! {
