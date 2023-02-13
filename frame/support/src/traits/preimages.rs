@@ -26,61 +26,6 @@ use sp_std::borrow::Cow;
 pub type Hash = H256;
 pub type BoundedInline = crate::BoundedVec<u8, ConstU32<128>>;
 
-/// The maximum we expect a single legacy hash lookup to be.
-const MAX_LEGACY_LEN: u32 = 1_000_000;
-
-#[derive(
-	Encode, Decode, MaxEncodedLen, Clone, Eq, PartialEq, scale_info::TypeInfo, RuntimeDebug,
-)]
-#[codec(mel_bound())]
-pub enum BoundedBlob {
-	/// A bounded blob. Its encoding must be at most 128 bytes.
-	Inline(BoundedInline),
-	/// A Blake2-256 hash of the blob together with an upper limit for its size.
-	Lookup { hash: Hash, len: u32 },
-}
-
-impl<T> BoundedBlob {
-	/// Returns the hash of the preimage.
-	///
-	/// The hash is re-calculated every time if the preimage is inlined.
-	pub fn hash(&self) -> H256 {
-		match self {
-			Self::Inline(x) => blake2_256(x.as_ref()).into(),
-			Self::Lookup { hash, .. } => *hash,
-		}
-	}
-
-	/// Returns the length of the preimage.
-	pub fn len(&self) -> u32 {
-		match self {
-			Self::Inline(i) => Some(i.len() as u32),
-			Self::Lookup { len, .. } => Some(*len),
-		}
-	}
-
-	/// Returns whether the image will require a lookup to be peeked.
-	pub fn lookup_needed(&self) -> bool {
-		match self {
-			Self::Inline(..) => false,
-			Self::Lookup { .. } => true,
-		}
-	}
-
-	/// The maximum length of the lookup that is needed to peek `Self`.
-	pub fn lookup_len(&self) -> Option<u32> {
-		match self {
-			Self::Inline(..) => None,
-			Self::Lookup { len, .. } => Some(*len),
-		}
-	}
-
-	/// Constructs a `Lookup` bounded item.
-	pub fn unrequested(hash: Hash, len: u32) -> Self {
-		Self::Lookup { hash, len }
-	}
-}
-
 #[derive(
 	Encode, Decode, MaxEncodedLen, Clone, Eq, PartialEq, scale_info::TypeInfo, RuntimeDebug,
 )]
@@ -90,14 +35,11 @@ pub enum Bounded<T> {
 	/// do not support creation of this except for transitioning from legacy state.
 	/// In the future we will make this a pure `Dummy` item storing only the final `dummy` field.
 	Legacy { hash: Hash, dummy: sp_std::marker::PhantomData<T> },
-	/// A bounded `T`. Its encoding must be at most 128 bytes.
+	/// A an bounded `Call`. Its encoding must be at most 128 bytes.
 	Inline(BoundedInline),
-	/// A Blake2-256 hash of the data together with an upper limit for its size.
+	/// A Blake2-256 hash of the call together with an upper limit for its size.
 	Lookup { hash: Hash, len: u32 },
 }
-
-// The maximum we expect a single legacy hash lookup to be.
-const MAX_LEGACY_LEN: u32 = 1_000_000;
 
 impl<T> Bounded<T> {
 	/// Casts the wrapped type into something that encodes alike.
@@ -125,25 +67,20 @@ impl<T> Bounded<T> {
 	/// Returns the hash of the preimage.
 	///
 	/// The hash is re-calculated every time if the preimage is inlined.
-	pub fn hash(&self) -> Hash {
+	pub fn hash(&self) -> H256 {
 		use Bounded::*;
 		match self {
-			Lookup { hash, .. } | Legacy { hash, .. } => *hash,
+			Legacy { hash, .. } => *hash,
 			Inline(x) => blake2_256(x.as_ref()).into(),
+			Lookup { hash, .. } => *hash,
 		}
 	}
+}
 
-	/// Returns the hash to lookup the preimage.
-	///
-	/// If this is a `Bounded::Inline`, `None` is returned as no lookup is required.
-	pub fn lookup_hash(&self) -> Option<Hash> {
-		use Bounded::*;
-		match self {
-			Lookup { hash, .. } | Legacy { hash, .. } => Some(*hash),
-			Inline(_) => None,
-		}
-	}
+// The maximum we expect a single legacy hash lookup to be.
+const MAX_LEGACY_LEN: u32 = 1_000_000;
 
+impl<T> Bounded<T> {
 	/// Returns the length of the preimage or `None` if the length is unknown.
 	pub fn len(&self) -> Option<u32> {
 		match self {
@@ -231,11 +168,8 @@ pub trait QueryPreimage {
 		}
 	}
 
-	/// Create a `Bounded` instance based on the `hash` and `len` of the encoded value.
-	///
-	/// It also directly requests the given `hash` using [`Self::request`].
-	///
-	/// This may not be `peek`-able or `realize`-able.
+	/// Create a `Bounded` instance based on the `hash` and `len` of the encoded value. This may not
+	/// be `peek`-able or `realize`-able.
 	fn pick<T>(hash: Hash, len: u32) -> Bounded<T> {
 		Self::request(&hash);
 		Bounded::Lookup { hash, len }
@@ -270,64 +204,6 @@ pub trait QueryPreimage {
 		Self::drop(bounded);
 		Ok(r)
 	}
-
-	/// Request that the data required for decoding the given `bounded` blob is made available.
-	fn hold_blob(bounded: &BoundedBlob) {
-		use BoundedBlob::*;
-		match bounded {
-			Inline(..) => {},
-			Lookup { hash, .. } => Self::request(hash),
-		}
-	}
-
-	/// No longer request that the data required for decoding the given `bounded` blob is made
-	/// available.
-	fn drop_blob(bounded: &BoundedBlob) {
-		use BoundedBlob::*;
-		match bounded {
-			Inline(..) => {},
-			Lookup { hash, .. } => Self::unrequest(hash),
-		}
-	}
-
-	/// Check to see if all data required for the given `bounded` blob is available.
-	fn have_blob(bounded: &BoundedBlob) -> bool {
-		use BoundedBlob::*;
-		match bounded {
-			Inline(..) => true,
-			Lookup { hash, .. } => Self::len(hash).is_some(),
-		}
-	}
-
-	/// Create a `BoundedBlob` based on the `hash` and `len` of the encoded value. This may not
-	/// be `peek`-able or `realize`-able.
-	fn pick_blob(hash: Hash, len: u32) -> BoundedBlob {
-		Self::request(&hash);
-		BoundedBlob::Lookup { hash, len }
-	}
-
-	/// Convert the given `bounded` blob back into its original data.
-	///
-	/// NOTE: This does not remove any data needed for realization. If you will no longer use the
-	/// `bounded`, call `realize` instead or call `drop` afterwards.
-	fn peek_blob(bounded: &BoundedBlob) -> Result<Vec<u8>, DispatchError> {
-		use BoundedBlob::*;
-		Ok(match bounded {
-			Inline(data) => data,
-			Lookup { hash, len } => {
-				Self::fetch(hash, Some(*len))?
-			},
-		})
-	}
-
-	/// Convert the given `bounded` value back into its original data. If successful,
-	/// `drop` any data backing it. This will not break the realisability of independently
-	/// created instances of `Bounded` which happen to have identical data.
-	fn realize_blob(bounded: &BoundedBlob) -> Result<Vec<u8>, DispatchError> {
-		let r = Self::peek(bounded)?;
-		Self::drop(bounded);
-		Ok(r)
-	}
 }
 
 /// A interface for managing preimages to hashes on chain.
@@ -352,12 +228,10 @@ pub trait StorePreimage: QueryPreimage {
 		Self::unrequest(hash)
 	}
 
-	/// Convert an otherwise unbounded or large value into a type ready for placing in storage.
-	///
-	/// The result is a type whose `MaxEncodedLen` is 131 bytes.
+	/// Convert an otherwise unbounded or large value into a type ready for placing in storage. The
+	/// result is a type whose `MaxEncodedLen` is 131 bytes.
 	///
 	/// NOTE: Once this API is used, you should use either `drop` or `realize`.
-	/// The value is also noted using [`Self::note`].
 	fn bound<T: Encode>(t: T) -> Result<Bounded<T>, DispatchError> {
 		let data = t.encode();
 		let len = data.len() as u32;
