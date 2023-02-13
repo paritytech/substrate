@@ -264,6 +264,7 @@ enum IterState {
 	FinishedIncomplete,
 }
 
+/// A raw iterator over the storage.
 pub struct RawIter<S, H, C>
 where
 	H: Hasher,
@@ -543,6 +544,7 @@ where
 		})
 	}
 
+	/// Create a raw iterator over the storage.
 	pub fn raw_iter(&self, args: IterArgs) -> Result<RawIter<S, H, C>> {
 		let root = if let Some(child_info) = args.child_info.as_ref() {
 			let root = match self.child_root(&child_info)? {
