@@ -367,7 +367,13 @@ where
 					self.notify_imported(import_notification, storage_changes)?,
 				ImportNotificationAction::EveryBlock =>
 					self.notify_imported_for_every_block(import_notification, storage_changes)?,
-				ImportNotificationAction::None => {},
+				ImportNotificationAction::None => {
+					// Cleanup any closed import notification sinks.
+					self.import_notification_sinks.lock().retain(|sink| !sink.is_closed());
+					self.every_block_import_notification_sinks
+						.lock()
+						.retain(|sink| !sink.is_closed());
+				},
 			}
 
 			Ok(r)
@@ -1087,12 +1093,7 @@ where
 		let notification = match notification {
 			Some(notify_import) => notify_import,
 			None => {
-				// Cleanup any closed import notification sinks since we won't
-				// be sending any notifications below which would remove any
-				// closed sinks. this is necessary since during initial sync we
-				// won't send any import notifications which could lead to a
-				// temporary leak of closed/discarded notification sinks (e.g.
-				// from consensus code).
+				// Cleanup any closed import notification sinks.
 				self.every_block_import_notification_sinks
 					.lock()
 					.retain(|sink| !sink.is_closed());
