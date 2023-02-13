@@ -17,6 +17,7 @@
 
 //! Implementation of the `storage_alias` attribute macro.
 
+use crate::counter_prefix;
 use frame_support_procedural_tools::generate_crate_access_2018;
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens};
@@ -596,10 +597,11 @@ fn generate_storage_instance(
 	let storage_name_str = storage_name.to_string();
 
 	let counter_code = is_counted_map.then(|| {
-		let counter_name = Ident::new(&format!("Counter_{}", name), Span::call_site());
+
+		let counter_name = Ident::new(&counter_prefix(&name.to_string()), Span::call_site());
 		let counter_storage_name_str = "counter_".to_owned() + &storage_name_str;
 
-		counter_code = Some(quote! {
+		quote! {
 			#visibility struct #counter_name< #impl_generics >(
 				#crate_::sp_std::marker::PhantomData<(#type_generics)>
 			) #where_clause;
@@ -617,7 +619,7 @@ fn generate_storage_instance(
 			impl<#impl_generics> #crate_::storage::types::CountedStorageMapInstance for #name< #impl_generics > {
 				type CounterPrefix = #counter_name;
 			}
-		});
+		}
 	});
 
 	// Implement `StorageInstance` trait.
