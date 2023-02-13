@@ -1673,15 +1673,6 @@ impl<T: Config> StakingInterface for Pallet<T> {
 }
 
 #[cfg(any(test, feature = "try-runtime"))]
-#[derive(PartialEq)]
-pub(crate) enum TestMode {
-	// run only fast running tests
-	Fast,
-	// run all the tests
-	All,
-}
-
-#[cfg(any(test, feature = "try-runtime"))]
 impl<T: Config> Pallet<T> {
 	pub(crate) fn do_try_state(_: BlockNumberFor<T>, fast_mode: bool) -> Result<(), &'static str> {
 		// fast tests
