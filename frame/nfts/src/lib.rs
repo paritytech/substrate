@@ -606,7 +606,7 @@ pub mod pallet {
 		AlreadyClaimed,
 		/// The provided data is incorrect.
 		IncorrectData,
-		/// The extrinsic should be sent by another origin.
+		/// The extrinsic was sent by the wrong origin.
 		WrongOrigin,
 		/// The provided signature is incorrect.
 		WrongSignature,
