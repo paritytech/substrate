@@ -505,7 +505,7 @@ where
 						)
 					}
 				} else {
-					metric_inc!(self, beefy_buffered_votes_full);
+					metric_inc!(self, beefy_buffered_votes_dropped);
 					warn!(target: LOG_TARGET, "🥩 Buffer vote dropped for round: {:?}.", block_num);
 				}
 			},
@@ -529,6 +529,7 @@ where
 		match self.voting_oracle().triage_round(block_num, best_grandpa)? {
 			RoundAction::Process => {
 				debug!(target: LOG_TARGET, "🥩 Process justification for round: {:?}.", block_num);
+				metric_inc!(self, beefy_imported_justifications);
 				self.finalize(justification)?
 			},
 			RoundAction::Enqueue => {
@@ -537,7 +538,7 @@ where
 				if self.pending_justifications.len() < MAX_BUFFERED_JUSTIFICATIONS {
 					self.pending_justifications.entry(block_num).or_insert(justification);
 				} else {
-					metric_inc!(self, beefy_buffered_justifications_full);
+					metric_inc!(self, beefy_buffered_justifications_dropped);
 					warn!(
 						target: LOG_TARGET,
 						"🥩 Buffer justification dropped for round: {:?}.", block_num
@@ -655,7 +656,6 @@ where
 				.notify(|| Ok::<_, ()>(finality_proof))
 				.expect("forwards closure result; the closure always returns Ok; qed.");
 		} else {
-			debug!(target: "beefy", "🥩 Can't set best beefy to older: {}", block_num);
 			debug!(target: LOG_TARGET, "🥩 Can't set best beefy to older: {}", block_num);
 		}
 		Ok(())
@@ -829,7 +829,7 @@ where
 
 		self.gossip_engine.gossip_message(topic::<B>(), encoded_message, false);
 
-		metric_inc!(self, beefy_successful_votes);
+		metric_inc!(self, beefy_self_votes);
 
 		Ok(())
 	}

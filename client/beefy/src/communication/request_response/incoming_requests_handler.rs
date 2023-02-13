@@ -124,8 +124,8 @@ pub struct BeefyJustifsRequestHandler<B, Client> {
 	pub(crate) request_receiver: IncomingRequestReceiver,
 	pub(crate) justif_protocol_name: ProtocolName,
 	pub(crate) client: Arc<Client>,
-	pub(crate) _block: PhantomData<B>,
 	pub(crate) metrics: Option<Metrics>,
+	pub(crate) _block: PhantomData<B>,
 }
 
 impl<B, Client> BeefyJustifsRequestHandler<B, Client>
@@ -145,7 +145,7 @@ where
 		let justif_protocol_name = config.name.clone();
 
 		(
-			Self { request_receiver, justif_protocol_name, client, _block: PhantomData, metrics },
+			Self { request_receiver, justif_protocol_name, client, metrics, _block: PhantomData },
 			config,
 		)
 	}
