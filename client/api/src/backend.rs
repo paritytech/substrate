@@ -49,6 +49,19 @@ pub type TransactionForSB<B, Block> = <B as StateBackend<HashFor<Block>>>::Trans
 /// Extracts the transaction for the given backend.
 pub type TransactionFor<B, Block> = TransactionForSB<StateBackendFor<B, Block>, Block>;
 
+/// Describes which block import notification stream should be notified.
+#[derive(Debug, Clone)]
+pub enum ImportNotificationAction {
+	/// Notify only when the chain has synced to the tip or there is a re-org.
+	RecentBlock,
+	/// Notify for every single block no matter what the sync state is.
+	EveryBlock,
+	/// Both block import notifications above should be fired.
+	Both,
+	/// No block import notification should be fired.
+	None,
+}
+
 /// Import operation summary.
 ///
 /// Contains information about the block that just got imported,
@@ -68,6 +81,8 @@ pub struct ImportSummary<Block: BlockT> {
 	///
 	/// If `None`, there was no re-org while importing.
 	pub tree_route: Option<sp_blockchain::TreeRoute<Block>>,
+	/// What notify action to take for this import.
+	pub import_notification_action: ImportNotificationAction,
 }
 
 /// Finalization operation summary.

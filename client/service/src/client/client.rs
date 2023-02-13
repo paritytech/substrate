@@ -31,7 +31,7 @@ use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider, RecordProof};
 use sc_client_api::{
 	backend::{
 		self, apply_aux, BlockImportOperation, ClientImportOperation, FinalizeSummary, Finalizer,
-		ImportSummary, LockImportRun, NewBlockState, StorageProvider,
+		ImportNotificationAction, ImportSummary, LockImportRun, NewBlockState, StorageProvider,
 	},
 	client::{
 		BadBlocks, BlockBackend, BlockImportNotification, BlockOf, BlockchainEvents, ClientInfo,
@@ -106,6 +106,7 @@ where
 	executor: E,
 	storage_notifications: StorageNotifications<Block>,
 	import_notification_sinks: NotificationSinks<BlockImportNotification<Block>>,
+	every_block_import_notification_sinks: NotificationSinks<BlockImportNotification<Block>>,
 	finality_notification_sinks: NotificationSinks<FinalityNotification<Block>>,
 	// Collects auxiliary operations to be performed atomically together with
 	// block import operations.
@@ -304,19 +305,22 @@ where
 				FinalityNotification::from_summary(summary, self.unpin_worker_sender.clone())
 			});
 
-			let (import_notification, storage_changes) = match notify_imported {
-				Some(mut summary) => {
-					let storage_changes = summary.storage_changes.take();
-					(
-						Some(BlockImportNotification::from_summary(
-							summary,
-							self.unpin_worker_sender.clone(),
-						)),
-						storage_changes,
-					)
-				},
-				None => (None, None),
-			};
+			let (import_notification, storage_changes, import_notification_action) =
+				match notify_imported {
+					Some(mut summary) => {
+						let import_notification_action = summary.import_notification_action.clone();
+						let storage_changes = summary.storage_changes.take();
+						(
+							Some(BlockImportNotification::from_summary(
+								summary,
+								self.unpin_worker_sender.clone(),
+							)),
+							storage_changes,
+							import_notification_action,
+						)
+					},
+					None => (None, None, ImportNotificationAction::None),
+				};
 
 			if let Some(ref notification) = finality_notification {
 				for action in self.finality_actions.lock().iter_mut() {
@@ -353,7 +357,18 @@ where
 			}
 
 			self.notify_finalized(finality_notification)?;
-			self.notify_imported(import_notification, storage_changes)?;
+
+			match import_notification_action {
+				ImportNotificationAction::Both => {
+					self.notify_imported(import_notification.clone(), storage_changes.clone())?;
+					self.notify_imported_for_every_block(import_notification, storage_changes)?;
+				},
+				ImportNotificationAction::RecentBlock =>
+					self.notify_imported(import_notification, storage_changes)?,
+				ImportNotificationAction::EveryBlock =>
+					self.notify_imported_for_every_block(import_notification, storage_changes)?,
+				ImportNotificationAction::None => {},
+			}
 
 			Ok(r)
 		};
@@ -451,6 +466,7 @@ where
 			executor,
 			storage_notifications: StorageNotifications::new(prometheus_registry),
 			import_notification_sinks: Default::default(),
+			every_block_import_notification_sinks: Default::default(),
 			finality_notification_sinks: Default::default(),
 			import_actions: Default::default(),
 			finality_actions: Default::default(),
@@ -771,9 +787,14 @@ where
 
 		operation.op.insert_aux(aux)?;
 
-		// We only notify when we are already synced to the tip of the chain
+		let should_notify_every_block =
+			!self.every_block_import_notification_sinks.lock().is_empty();
+
+		// Notify when we are already synced to the tip of the chain
 		// or if this import triggers a re-org
-		if make_notifications || tree_route.is_some() {
+		let should_notify_recent_block = make_notifications || tree_route.is_some();
+
+		if should_notify_every_block || should_notify_recent_block {
 			let header = import_headers.into_post();
 			if finalized {
 				let mut summary = match operation.notify_finalized.take() {
@@ -812,6 +833,16 @@ where
 				operation.notify_finalized = Some(summary);
 			}
 
+			let import_notification_action = if should_notify_every_block {
+				if should_notify_recent_block {
+					ImportNotificationAction::Both
+				} else {
+					ImportNotificationAction::EveryBlock
+				}
+			} else {
+				ImportNotificationAction::RecentBlock
+			};
+
 			operation.notify_imported = Some(ImportSummary {
 				hash,
 				origin,
@@ -819,6 +850,7 @@ where
 				is_new_best,
 				storage_changes,
 				tree_route,
+				import_notification_action,
 			})
 		}
 
@@ -1041,6 +1073,43 @@ where
 		}
 
 		self.import_notification_sinks
+			.lock()
+			.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+
+		Ok(())
+	}
+
+	fn notify_imported_for_every_block(
+		&self,
+		notification: Option<BlockImportNotification<Block>>,
+		storage_changes: Option<(StorageCollection, ChildStorageCollection)>,
+	) -> sp_blockchain::Result<()> {
+		let notification = match notification {
+			Some(notify_import) => notify_import,
+			None => {
+				// Cleanup any closed import notification sinks since we won't
+				// be sending any notifications below which would remove any
+				// closed sinks. this is necessary since during initial sync we
+				// won't send any import notifications which could lead to a
+				// temporary leak of closed/discarded notification sinks (e.g.
+				// from consensus code).
+				self.every_block_import_notification_sinks
+					.lock()
+					.retain(|sink| !sink.is_closed());
+				return Ok(())
+			},
+		};
+
+		if let Some(storage_changes) = storage_changes {
+			// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
+			self.storage_notifications.trigger(
+				&notification.hash,
+				storage_changes.0.into_iter(),
+				storage_changes.1.into_iter().map(|(sk, v)| (sk, v.into_iter())),
+			);
+		}
+
+		self.every_block_import_notification_sinks
 			.lock()
 			.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
 
@@ -1977,6 +2046,12 @@ where
 	fn import_notification_stream(&self) -> ImportNotifications<Block> {
 		let (sink, stream) = tracing_unbounded("mpsc_import_notification_stream", 100_000);
 		self.import_notification_sinks.lock().push(sink);
+		stream
+	}
+
+	fn every_import_notification_stream(&self) -> ImportNotifications<Block> {
+		let (sink, stream) = tracing_unbounded("mpsc_every_import_notification_stream", 100_000);
+		self.every_block_import_notification_sinks.lock().push(sink);
 		stream
 	}
 

@@ -63,6 +63,9 @@ pub trait BlockchainEvents<Block: BlockT> {
 	/// imported block.
 	fn import_notification_stream(&self) -> ImportNotifications<Block>;
 
+	/// Get a stream of every imported block.
+	fn every_import_notification_stream(&self) -> ImportNotifications<Block>;
+
 	/// Get a stream of finality notifications. Not guaranteed to be fired for every
 	/// finalized block.
 	fn finality_notification_stream(&self) -> FinalityNotifications<Block>;
