@@ -335,66 +335,6 @@ where
 	}
 }
 
-impl<S, H, C> TrieBackendEssence<S, H, C>
-where
-	H: Hasher,
-	H::Out: Codec + Ord,
-	S: TrieBackendStorage<H>,
-	C: AsLocalTrieCache<H> + Send + Sync,
-{
-	#[cfg(not(feature = "std"))]
-	#[inline]
-	fn with_trie_db<R>(
-		&self,
-		root: H::Out,
-		child_info: Option<&ChildInfo>,
-		callback: impl FnOnce(&sp_trie::TrieDB<Layout<H>>) -> R,
-	) -> R {
-		let backend = self as &dyn HashDBRef<H, Vec<u8>>;
-		let db = child_info
-			.as_ref()
-			.map(|child_info| KeySpacedDB::new(backend, child_info.keyspace()));
-		let db = db.as_ref().map(|db| db as &dyn HashDBRef<H, Vec<u8>>).unwrap_or(backend);
-
-		let trie = TrieDBBuilder::<H>::new(db, &root).build();
-
-		callback(&trie)
-	}
-
-	#[cfg(feature = "std")]
-	#[inline]
-	fn with_trie_db<R>(
-		&self,
-		root: H::Out,
-		child_info: Option<&ChildInfo>,
-		callback: impl FnOnce(&sp_trie::TrieDB<Layout<H>>) -> R,
-	) -> R {
-		let backend = self as &dyn HashDBRef<H, Vec<u8>>;
-		let db = child_info
-			.as_ref()
-			.map(|child_info| KeySpacedDB::new(backend, child_info.keyspace()));
-		let db = db.as_ref().map(|db| db as &dyn HashDBRef<H, Vec<u8>>).unwrap_or(backend);
-
-		let recorder = self.recorder.as_ref();
-		let mut recorder = recorder.as_ref().map(|r| r.as_trie_recorder(root));
-		let recorder = match recorder.as_mut() {
-			Some(recorder) => Some(recorder as &mut dyn TrieRecorder<H::Out>),
-			None => None,
-		};
-
-		let cache = self.trie_node_cache.as_ref();
-		let mut cache = cache.map(|c| c.as_local_trie_cache().as_trie_db_cache(root));
-		let cache = cache.as_mut().map(|c| c as &mut dyn sp_trie::TrieCache<NodeCodec<H>>);
-
-		let trie = TrieDBBuilder::<H>::new(db, &root)
-			.with_optional_recorder(recorder)
-			.with_optional_cache(cache)
-			.build();
-
-		callback(&trie)
-	}
-}
-
 impl<S, H, C> StorageIterator<H> for RawIter<S, H, C>
 where
 	H: Hasher,
@@ -425,6 +365,31 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H> + Send + Sync>
 where
 	H::Out: Codec + Ord,
 {
+	/// Calls the given closure with a [`TrieDb`] constructed for the given
+	/// storage root and (optionally) child trie.
+	#[inline]
+	fn with_trie_db<R>(
+		&self,
+		root: H::Out,
+		child_info: Option<&ChildInfo>,
+		callback: impl FnOnce(&sp_trie::TrieDB<Layout<H>>) -> R,
+	) -> R {
+		let backend = self as &dyn HashDBRef<H, Vec<u8>>;
+		let db = child_info
+			.as_ref()
+			.map(|child_info| KeySpacedDB::new(backend, child_info.keyspace()));
+		let db = db.as_ref().map(|db| db as &dyn HashDBRef<H, Vec<u8>>).unwrap_or(backend);
+
+		self.with_recorder_and_cache(Some(root), |recorder, cache| {
+			let trie = TrieDBBuilder::<H>::new(db, &root)
+				.with_optional_recorder(recorder)
+				.with_optional_cache(cache)
+				.build();
+
+			callback(&trie)
+		})
+	}
+
 	/// Return the next key in the trie i.e. the minimum key that is strictly superior to `key` in
 	/// lexicographic order.
 	pub fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>> {
