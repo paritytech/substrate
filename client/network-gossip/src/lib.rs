@@ -81,10 +81,7 @@ mod validator;
 
 /// Abstraction over a network.
 pub trait Network<B: BlockT>:
-	NetworkPeers
-	+ NetworkEventStream
-	+ NetworkNotification
-	+ NetworkBlock<B::Hash, NumberFor<B>>
+	NetworkPeers + NetworkEventStream + NetworkNotification + NetworkBlock<B::Hash, NumberFor<B>>
 {
 	fn add_set_reserved(&self, who: PeerId, protocol: ProtocolName) {
 		let addr =

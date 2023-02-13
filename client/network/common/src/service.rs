@@ -623,8 +623,7 @@ pub trait NetworkBlock<BlockHash, BlockNumber> {
 	fn new_best_block_imported(&self, hash: BlockHash, number: BlockNumber);
 }
 
-impl<T, BlockHash, BlockNumber> NetworkBlock<BlockHash, BlockNumber>
-	for Arc<T>
+impl<T, BlockHash, BlockNumber> NetworkBlock<BlockHash, BlockNumber> for Arc<T>
 where
 	T: ?Sized,
 	T: NetworkBlock<BlockHash, BlockNumber>,

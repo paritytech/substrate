@@ -1362,7 +1362,7 @@ where
 				},
 				ToServiceCommand::Status { pending_response } => {
 					let _ = pending_response.send(self.status());
-				}
+				},
 			}
 		}
 		self.process_outbound_requests();

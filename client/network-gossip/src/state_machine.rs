@@ -677,9 +677,7 @@ mod tests {
 		}
 	}
 
-	impl NetworkBlock<<Block as BlockT>::Hash, NumberFor<Block>>
-		for NoOpNetwork
-	{
+	impl NetworkBlock<<Block as BlockT>::Hash, NumberFor<Block>> for NoOpNetwork {
 		fn announce_block(&self, _hash: <Block as BlockT>::Hash, _data: Option<Vec<u8>>) {
 			unimplemented!();
 		}

@@ -273,7 +273,7 @@ pub use sc_network_common::{
 	},
 	sync::{
 		warp::{WarpSyncPhase, WarpSyncProgress},
-		StateDownloadProgress, SyncState, 
+		StateDownloadProgress, SyncState,
 	},
 };
 pub use service::{

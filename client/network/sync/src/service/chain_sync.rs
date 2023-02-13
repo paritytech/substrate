@@ -36,7 +36,9 @@ pub enum ToServiceCommand<B: BlockT> {
 	),
 	JustificationImported(PeerId, B::Hash, NumberFor<B>, bool),
 	BlockFinalized(B::Hash, NumberFor<B>),
-	Status { pending_response: oneshot::Sender<SyncStatus<B>> },
+	Status {
+		pending_response: oneshot::Sender<SyncStatus<B>>,
+	},
 }
 
 /// Handle for communicating with `ChainSync` asynchronously
@@ -57,7 +59,7 @@ impl<B: BlockT> ChainSyncInterfaceHandle<B> {
 	}
 
 	/// Get sync status
-	/// 
+	///
 	/// Returns an error if `ChainSync` has terminated.
 	pub async fn status(&self) -> Result<SyncStatus<B>, ()> {
 		let (tx, rx) = oneshot::channel();
