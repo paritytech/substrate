@@ -69,6 +69,12 @@ fn get_cargo_env_var<T: FromStr>(version_env: &str) -> std::result::Result<T, ()
 	T::from_str(&version).map_err(drop)
 }
 
+/// Generate the counter_prefix related to the storage.
+/// counter_prefix is used by counted storage map.
+fn counter_prefix(prefix: &str) -> String {
+	format!("CounterFor{}", prefix)
+}
+
 /// Declares strongly-typed wrappers around codec-compatible types in storage.
 ///
 /// ## Example
