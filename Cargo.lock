@@ -10560,7 +10560,7 @@ dependencies = [
 
 [[package]]
 name = "subkey"
-version = "2.0.2"
+version = "3.0.0"
 dependencies = [
  "clap 4.1.4",
  "sc-cli",

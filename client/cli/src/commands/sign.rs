@@ -17,9 +17,13 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Implementation of the `sign` subcommand
-use crate::{error, utils, with_crypto_scheme, CryptoSchemeFlag, KeystoreParams};
+use crate::{
+	error, params::MessageParams, utils, with_crypto_scheme, CryptoSchemeFlag, KeystoreParams,
+};
+use array_bytes::bytes2hex;
 use clap::Parser;
 use sp_core::crypto::SecretString;
+use std::io::{BufRead, Write};
 
 /// The `sign` command
 #[derive(Debug, Clone, Parser)]
@@ -31,14 +35,9 @@ pub struct SignCmd {
 	#[arg(long)]
 	suri: Option<String>,
 
-	/// Message to sign, if not provided you will be prompted to
-	/// pass the message via STDIN
-	#[arg(long)]
-	message: Option<String>,
-
-	/// The message on STDIN is hex-encoded data
-	#[arg(long)]
-	hex: bool,
+	#[allow(missing_docs)]
+	#[clap(flatten)]
+	pub message_params: MessageParams,
 
 	#[allow(missing_docs)]
 	#[clap(flatten)]
@@ -52,15 +51,26 @@ pub struct SignCmd {
 impl SignCmd {
 	/// Run the command
 	pub fn run(&self) -> error::Result<()> {
-		let message = utils::read_message(self.message.as_ref(), self.hex)?;
+		let sig = self.sign(|| std::io::stdin().lock())?;
+		std::io::stdout().lock().write_all(sig.as_bytes())?;
+		Ok(())
+	}
+
+	/// Sign a message.
+	///
+	/// The message can either be provided as immediate argument via CLI or otherwise read from the
+	/// reader created by `create_reader`. The reader will only be created in case that the message
+	/// is not passed as immediate.
+	pub(crate) fn sign<F, R>(&self, create_reader: F) -> error::Result<String>
+	where
+		R: BufRead,
+		F: FnOnce() -> R,
+	{
+		let message = self.message_params.message_from(create_reader)?;
 		let suri = utils::read_uri(self.suri.as_ref())?;
 		let password = self.keystore_params.read_password()?;
 
-		let signature =
-			with_crypto_scheme!(self.crypto_scheme.scheme, sign(&suri, password, message))?;
-
-		println!("{}", signature);
-		Ok(())
+		with_crypto_scheme!(self.crypto_scheme.scheme, sign(&suri, password, message))
 	}
 }
 
@@ -70,26 +80,47 @@ fn sign<P: sp_core::Pair>(
 	message: Vec<u8>,
 ) -> error::Result<String> {
 	let pair = utils::pair_from_suri::<P>(suri, password)?;
-	Ok(array_bytes::bytes2hex("", pair.sign(&message).as_ref()))
+	Ok(bytes2hex("0x", pair.sign(&message).as_ref()))
 }
 
 #[cfg(test)]
 mod test {
 	use super::*;
 
-	#[test]
-	fn sign() {
-		let seed = "0xad1fb77243b536b90cfe5f0d351ab1b1ac40e3890b41dc64f766ee56340cfca5";
+	const SEED: &str = "0xe5be9a5092b81bca64be81d212e7f2f9eba183bb7a90954f7b76361f6edb5c0a";
 
-		let sign = SignCmd::parse_from(&[
+	#[test]
+	fn sign_arg() {
+		let cmd = SignCmd::parse_from(&[
 			"sign",
 			"--suri",
-			seed,
+			&SEED,
 			"--message",
-			&seed[2..],
+			&SEED,
+			"--password",
+			"12345",
+			"--hex",
+		]);
+		let sig = cmd.sign(|| std::io::stdin().lock()).expect("Must sign");
+
+		assert!(sig.starts_with("0x"), "Signature must start with 0x");
+		assert!(array_bytes::hex2bytes(&sig).is_ok(), "Signature is valid hex");
+	}
+
+	#[test]
+	fn sign_stdin() {
+		let cmd = SignCmd::parse_from(&[
+			"sign",
+			"--suri",
+			SEED,
+			"--message",
+			&SEED,
 			"--password",
 			"12345",
 		]);
-		assert!(sign.run().is_ok());
+		let sig = cmd.sign(|| SEED.as_bytes()).expect("Must sign");
+
+		assert!(sig.starts_with("0x"), "Signature must start with 0x");
+		assert!(array_bytes::hex2bytes(&sig).is_ok(), "Signature is valid hex");
 	}
 }
