@@ -465,24 +465,7 @@ pub mod pallet {
 		pub fn demote_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			let max_rank = T::DemoteOrigin::ensure_origin(origin)?;
 			let who = T::Lookup::lookup(who)?;
-			let mut record = Self::ensure_member(&who)?;
-			let rank = record.rank;
-			ensure!(max_rank >= rank, Error::<T, I>::NoPermission);
-
-			Self::remove_from_rank(&who, rank)?;
-			let maybe_rank = rank.checked_sub(1);
-			match maybe_rank {
-				None => {
-					Members::<T, I>::remove(&who);
-					Self::deposit_event(Event::MemberRemoved { who, rank: 0 });
-				},
-				Some(rank) => {
-					record.rank = rank;
-					Members::<T, I>::insert(&who, &record);
-					Self::deposit_event(Event::RankChanged { who, rank });
-				},
-			}
-			Ok(())
+			Self::do_demote_member(who, Some(max_rank))
 		}
 
 		/// Remove the member entirely.
@@ -503,13 +486,9 @@ pub mod pallet {
 			let who = T::Lookup::lookup(who)?;
 			let MemberRecord { rank, .. } = Self::ensure_member(&who)?;
 			ensure!(min_rank >= rank, Error::<T, I>::InvalidWitness);
-			ensure!(max_rank >= rank, Error::<T, I>::NoPermission);
 
-			for r in 0..=rank {
-				Self::remove_from_rank(&who, r)?;
-			}
-			Members::<T, I>::remove(&who);
-			Self::deposit_event(Event::MemberRemoved { who, rank });
+			Self::do_remove_member(who, Some(max_rank))?;
+
 			Ok(PostDispatchInfo {
 				actual_weight: Some(T::WeightInfo::remove_member(rank as u32)),
 				pays_fee: Pays::Yes,
@@ -681,6 +660,50 @@ pub mod pallet {
 			for _ in 0..rank {
 				Self::do_promote_member(who.clone(), None)?;
 			}
+			Ok(())
+		}
+
+		/// Decrement the rank of an existing member by one. If the member is already at rank zero,
+		/// then they are removed entirely.
+		///
+		/// A `maybe_max_rank` may be provided to check that the member does not get demoted beyond
+		/// a certain rank. Is `None` is provided, then the rank will be decremented without checks.
+		pub fn do_demote_member(who: T::AccountId, maybe_max_rank: Option<Rank>) -> DispatchResult {
+			let mut record = Self::ensure_member(&who)?;
+			let rank = record.rank;
+			if let Some(max_rank) = maybe_max_rank {
+				ensure!(max_rank >= rank, Error::<T, I>::NoPermission);
+			}
+			Self::remove_from_rank(&who, rank)?;
+			let maybe_rank = rank.checked_sub(1);
+			match maybe_rank {
+				None => {
+					Members::<T, I>::remove(&who);
+					Self::deposit_event(Event::MemberRemoved { who, rank: 0 });
+				},
+				Some(rank) => {
+					record.rank = rank;
+					Members::<T, I>::insert(&who, &record);
+					Self::deposit_event(Event::RankChanged { who, rank });
+				},
+			}
+			Ok(())
+		}
+
+		/// Remove the member entirely.
+		///
+		/// A `maybe_max_rank` may be provided to check that the member does not get removed from
+		/// a certain rank. Is `None` is provided, then the rank will be decremented without checks.
+		pub fn do_remove_member(who: T::AccountId, maybe_max_rank: Option<Rank>) -> DispatchResult {
+			let MemberRecord { rank, .. } = Self::ensure_member(&who)?;
+			if let Some(max_rank) = maybe_max_rank {
+				ensure!(max_rank >= rank, Error::<T, I>::NoPermission);
+			}
+			for r in 0..=rank {
+				Self::remove_from_rank(&who, r)?;
+			}
+			Members::<T, I>::remove(&who);
+			Self::deposit_event(Event::MemberRemoved { who, rank });
 			Ok(())
 		}
 	}
