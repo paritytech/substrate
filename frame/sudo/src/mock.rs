@@ -81,13 +81,11 @@ pub mod logger {
 	}
 
 	#[pallet::storage]
-	#[pallet::getter(fn account_log)]
-	pub(super) type AccountLog<T: Config> =
+	pub type AccountLog<T: Config> =
 		StorageValue<_, BoundedVec<T::AccountId, ConstU32<1_000>>, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn i32_log)]
-	pub(super) type I32Log<T> = StorageValue<_, BoundedVec<i32, ConstU32<1_000>>, ValueQuery>;
+	pub type I32Log<T> = StorageValue<_, BoundedVec<i32, ConstU32<1_000>>, ValueQuery>;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;

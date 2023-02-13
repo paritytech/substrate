@@ -31,7 +31,9 @@ use frame_support::{
 	traits::{Currency, KeyOwnerProofSystem, OnInitialize},
 };
 
-use crate::{mock::*, Call, Config, Error, Weight, WeightInfo};
+use crate::{
+	mock::*, Authorities, Call, Config, Error, NextAuthorities, ValidatorSetId, Weight, WeightInfo,
+};
 
 fn init_block(block: u64) {
 	System::set_block_number(block);
@@ -48,15 +50,14 @@ fn genesis_session_initializes_authorities() {
 	let want = authorities.clone();
 
 	new_test_ext_raw_authorities(authorities).execute_with(|| {
-		let authorities = Beefy::authorities();
-
+		let authorities = Authorities::<Test>::get();
 		assert_eq!(authorities.len(), 4);
 		assert_eq!(want[0], authorities[0]);
 		assert_eq!(want[1], authorities[1]);
 
-		assert!(Beefy::validator_set_id() == 0);
+		assert!(ValidatorSetId::<Test>::get() == 0);
 
-		let next_authorities = Beefy::next_authorities();
+		let next_authorities = NextAuthorities::<Test>::get();
 
 		assert_eq!(next_authorities.len(), 4);
 		assert_eq!(want[0], next_authorities[0]);
@@ -70,11 +71,11 @@ fn session_change_updates_authorities() {
 	let want_validators = authorities.clone();
 
 	new_test_ext(vec![1, 2, 3, 4]).execute_with(|| {
-		assert!(0 == Beefy::validator_set_id());
+		assert!(0 == ValidatorSetId::<Test>::get());
 
 		init_block(1);
 
-		assert!(1 == Beefy::validator_set_id());
+		assert!(1 == ValidatorSetId::<Test>::get());
 
 		let want = beefy_log(ConsensusLog::AuthoritiesChange(
 			ValidatorSet::new(want_validators, 1).unwrap(),
@@ -85,7 +86,7 @@ fn session_change_updates_authorities() {
 
 		init_block(2);
 
-		assert!(2 == Beefy::validator_set_id());
+		assert!(2 == ValidatorSetId::<Test>::get());
 
 		let want = beefy_log(ConsensusLog::AuthoritiesChange(
 			ValidatorSet::new(vec![mock_beefy_id(2), mock_beefy_id(4)], 2).unwrap(),
@@ -101,7 +102,7 @@ fn session_change_updates_next_authorities() {
 	let want = vec![mock_beefy_id(1), mock_beefy_id(2), mock_beefy_id(3), mock_beefy_id(4)];
 
 	new_test_ext(vec![1, 2, 3, 4]).execute_with(|| {
-		let next_authorities = Beefy::next_authorities();
+		let next_authorities = NextAuthorities::<Test>::get();
 
 		assert_eq!(next_authorities.len(), 4);
 		assert_eq!(want[0], next_authorities[0]);
@@ -111,7 +112,7 @@ fn session_change_updates_next_authorities() {
 
 		init_block(1);
 
-		let next_authorities = Beefy::next_authorities();
+		let next_authorities = NextAuthorities::<Test>::get();
 
 		assert_eq!(next_authorities.len(), 2);
 		assert_eq!(want[1], next_authorities[0]);
@@ -260,8 +261,8 @@ fn report_equivocation_current_set_works() {
 	let authorities = test_authorities();
 
 	new_test_ext_raw_authorities(authorities).execute_with(|| {
-		assert_eq!(Staking::current_era(), Some(0));
-		assert_eq!(Session::current_index(), 0);
+		assert_eq!(pallet_staking::CurrentEra::<Test>::get(), Some(0));
+		assert_eq!(pallet_session::CurrentIndex::<Test>::get(), 0);
 
 		start_era(1);
 
@@ -269,7 +270,7 @@ fn report_equivocation_current_set_works() {
 		let validator_set = Beefy::validator_set().unwrap();
 		let authorities = validator_set.validators();
 		let set_id = validator_set.id();
-		let validators = Session::validators();
+		let validators = pallet_session::Validators::<Test>::get();
 
 		// make sure that all validators have the same balance
 		for validator in &validators {
@@ -346,7 +347,7 @@ fn report_equivocation_old_set_works() {
 		let block_num = System::block_number();
 		let validator_set = Beefy::validator_set().unwrap();
 		let authorities = validator_set.validators();
-		let validators = Session::validators();
+		let validators = pallet_session::Validators::<Test>::get();
 		let old_set_id = validator_set.id();
 
 		assert_eq!(authorities.len(), 2);

@@ -50,7 +50,7 @@
 //! Based on research at <https://research.web3.foundation/en/latest/polkadot/slashing/npos.html>
 
 use crate::{
-	BalanceOf, Config, Error, Exposure, NegativeImbalanceOf, NominatorSlashInEra,
+	BalanceOf, Bonded, Config, Error, Exposure, Ledger, NegativeImbalanceOf, NominatorSlashInEra,
 	OffendingValidators, Pallet, Perbill, SessionInterface, SpanSlash, UnappliedSlash,
 	ValidatorSlashInEra,
 };
@@ -597,12 +597,12 @@ pub fn do_slash<T: Config>(
 	slashed_imbalance: &mut NegativeImbalanceOf<T>,
 	slash_era: EraIndex,
 ) {
-	let controller = match <Pallet<T>>::bonded(stash).defensive() {
+	let controller = match Bonded::<T>::get(stash).defensive() {
 		None => return,
 		Some(c) => c,
 	};
 
-	let mut ledger = match <Pallet<T>>::ledger(&controller) {
+	let mut ledger = match Ledger::<T>::get(&controller) {
 		Some(ledger) => ledger,
 		None => return, // nothing to do.
 	};

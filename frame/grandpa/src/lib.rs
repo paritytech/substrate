@@ -316,7 +316,6 @@ pub mod pallet {
 	/// The number of changes (both in terms of keys and underlying economic responsibilities)
 	/// in the "set" of Grandpa validators from genesis.
 	#[pallet::storage]
-	#[pallet::getter(fn current_set_id)]
 	pub(super) type CurrentSetId<T: Config> = StorageValue<_, SetId, ValueQuery>;
 
 	/// A mapping from grandpa set ID to the index of the *most recent* session for which its
@@ -415,6 +414,12 @@ pub enum StoredState<N> {
 }
 
 impl<T: Config> Pallet<T> {
+	/// The number of changes (both in terms of keys and underlying economic responsibilities)
+	/// in the "set" of Grandpa validators from genesis.
+	pub fn current_set_id() -> SetId {
+		CurrentSetId::<T>::get()
+	}
+
 	/// Get the current set of authorities, along with their respective weights.
 	pub fn grandpa_authorities() -> AuthorityList {
 		storage::unhashed::get_or_default::<VersionedAuthorityList>(GRANDPA_AUTHORITIES_KEY).into()
@@ -473,7 +478,7 @@ impl<T: Config> Pallet<T> {
 			let scheduled_at = <frame_system::Pallet<T>>::block_number();
 
 			if forced.is_some() {
-				if Self::next_forced().map_or(false, |next| next > scheduled_at) {
+				if NextForced::<T>::get().map_or(false, |next| next > scheduled_at) {
 					return Err(Error::<T>::TooSoon.into())
 				}
 
@@ -592,17 +597,17 @@ where
 				// either the session module signalled that the validators have changed
 				// or the set was stalled. but since we didn't successfully schedule
 				// an authority set change we do not increment the set id.
-				Self::current_set_id()
+				CurrentSetId::<T>::get()
 			}
 		} else {
 			// nothing's changed, neither economic conditions nor session keys. update the pointer
 			// of the current set.
-			Self::current_set_id()
+			CurrentSetId::<T>::get()
 		};
 
 		// update the mapping to note that the current set corresponds to the
 		// latest equivalent session (i.e. now).
-		let session_index = <pallet_session::Pallet<T>>::current_index();
+		let session_index = <pallet_session::CurrentIndex<T>>::get();
 		SetIdSession::<T>::insert(current_set_id, &session_index);
 	}
 

@@ -33,7 +33,7 @@ use sp_session::MembershipProof;
 use sp_std::prelude::*;
 
 use super::{shared, Config, IdentificationTuple, ProvingTrie};
-use crate::{Pallet as SessionModule, SessionIndex};
+use crate::{CurrentIndex, SessionIndex};
 
 /// A set of validators, which was used for a fixed session index.
 struct ValidatorSet<T: Config> {
@@ -129,7 +129,7 @@ pub fn prune_older_than<T: Config>(first_to_keep: SessionIndex) {
 
 /// Keep the newest `n` items, and prune all items older than that.
 pub fn keep_newest<T: Config>(n_to_keep: usize) {
-	let session_index = <SessionModule<T>>::current_index();
+	let session_index = CurrentIndex::<T>::get();
 	let n_to_keep = n_to_keep as SessionIndex;
 	if n_to_keep < session_index {
 		prune_older_than::<T>(session_index - n_to_keep)
@@ -239,7 +239,7 @@ mod tests {
 
 			// "on-chain"
 			onchain::store_current_session_validator_set_to_offchain::<Test>();
-			assert_eq!(<SessionModule<Test>>::current_index(), 1);
+			assert_eq!(CurrentIndex::<Test>::get(), 1);
 
 			set_next_validators(vec![7, 8]);
 
@@ -251,7 +251,7 @@ mod tests {
 		ext.execute_with(|| {
 			System::set_block_number(2);
 			Session::on_initialize(2);
-			assert_eq!(<SessionModule<Test>>::current_index(), 2);
+			assert_eq!(CurrentIndex::<Test>::get(), 2);
 
 			// "off-chain"
 			let proof = prove_session_membership::<Test, _>(1, (DUMMY, &encoded_key_1));

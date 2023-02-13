@@ -404,7 +404,6 @@ pub mod pallet {
 
 	/// The current set of keys that may issue a heartbeat.
 	#[pallet::storage]
-	#[pallet::getter(fn keys)]
 	pub(crate) type Keys<T: Config> =
 		StorageValue<_, WeakBoundedVec<T::AuthorityId, T::MaxKeys>, ValueQuery>;
 
@@ -605,6 +604,11 @@ impl<T: Config + pallet_authorship::Config>
 }
 
 impl<T: Config> Pallet<T> {
+	/// The current set of keys that may issue a heartbeat.
+	pub fn keys() -> WeakBoundedVec<T::AuthorityId, T::MaxKeys> {
+		Keys::<T>::get()
+	}
+
 	/// Returns `true` if a heartbeat has been received for the authority at
 	/// `authority_index` in the authorities series or if the authority has
 	/// authored at least one block, during the current session. Otherwise

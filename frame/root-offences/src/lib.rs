@@ -28,7 +28,7 @@ mod mock;
 mod tests;
 
 use pallet_session::historical::IdentificationTuple;
-use pallet_staking::{BalanceOf, Exposure, ExposureOf, Pallet as Staking};
+use pallet_staking::{BalanceOf, Exposure, ExposureOf};
 use sp_runtime::Perbill;
 use sp_staking::offence::{DisableStrategy, OnOffenceHandler};
 
@@ -103,7 +103,7 @@ pub mod pallet {
 		fn get_offence_details(
 			offenders: Vec<(T::AccountId, Perbill)>,
 		) -> Result<Vec<OffenceDetails<T>>, DispatchError> {
-			let now = Staking::<T>::active_era()
+			let now = pallet_staking::ActiveEra::<T>::get()
 				.map(|e| e.index)
 				.ok_or(Error::<T>::FailedToGetActiveEra)?;
 
@@ -111,7 +111,7 @@ pub mod pallet {
 				.clone()
 				.into_iter()
 				.map(|(o, _)| OffenceDetails::<T> {
-					offender: (o.clone(), Staking::<T>::eras_stakers(now, o)),
+					offender: (o.clone(), pallet_staking::ErasStakers::<T>::get(now, o)),
 					reporters: vec![],
 				})
 				.collect())

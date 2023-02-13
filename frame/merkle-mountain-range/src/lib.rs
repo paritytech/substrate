@@ -220,7 +220,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		fn on_initialize(_n: T::BlockNumber) -> Weight {
 			use primitives::LeafDataProvider;
-			let leaves = Self::mmr_leaves();
+			let leaves = NumberOfLeaves::<T, I>::get();
 			let peaks_before = sp_mmr_primitives::utils::NodesUtils::new(leaves).number_of_peaks();
 			let data = T::LeafData::leaf_data();
 
@@ -321,7 +321,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	{
 		let first_mmr_block = utils::first_mmr_block_num::<T::Header>(
 			<frame_system::Pallet<T>>::block_number(),
-			Self::mmr_leaves(),
+			NumberOfLeaves::<T, I>::get(),
 		)?;
 
 		utils::block_num_to_leaf_index::<T::Header>(block_num, first_mmr_block)
@@ -361,7 +361,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Return the on-chain MMR root hash.
 	pub fn mmr_root() -> <T as Config<I>>::Hash {
-		Self::mmr_root_hash()
+		RootHash::<T, I>::get()
 	}
 
 	/// Verify MMR proof for given `leaves`.
@@ -374,7 +374,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		leaves: Vec<LeafOf<T, I>>,
 		proof: primitives::Proof<<T as Config<I>>::Hash>,
 	) -> Result<(), primitives::Error> {
-		if proof.leaf_count > Self::mmr_leaves() ||
+		if proof.leaf_count > NumberOfLeaves::<T, I>::get() ||
 			proof.leaf_count == 0 ||
 			(proof.items.len().saturating_add(leaves.len())) as u64 > proof.leaf_count
 		{

@@ -592,8 +592,8 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = T::SignedFilter::ensure_origin(origin)?;
 
-			let max_limits =
-				Self::signed_migration_max_limits().ok_or(Error::<T>::SignedMigrationNotAllowed)?;
+			let max_limits = SignedMigrationMaxLimits::<T>::get()
+				.ok_or(Error::<T>::SignedMigrationNotAllowed)?;
 			ensure!(
 				limits.size <= max_limits.size && limits.item <= max_limits.item,
 				Error::<T>::MaxSignedLimits,
@@ -603,7 +603,7 @@ pub mod pallet {
 			let deposit = T::SignedDepositPerItem::get().saturating_mul(limits.item.into());
 			ensure!(T::Currency::can_slash(&who, deposit), Error::<T>::NotEnoughFunds);
 
-			let mut task = Self::migration_process();
+			let mut task = MigrationProcess::<T>::get();
 			ensure!(
 				task == witness_task,
 				DispatchErrorWithPostInfo {
@@ -806,8 +806,8 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
-			if let Some(limits) = Self::auto_limits() {
-				let mut task = Self::migration_process();
+			if let Some(limits) = AutoLimits::<T>::get() {
+				let mut task = MigrationProcess::<T>::get();
 				if let Err(e) = task.migrate_until_exhaustion(limits) {
 					Self::halt(e);
 				}
@@ -910,9 +910,9 @@ mod benchmarks {
 			let caller = frame_benchmarking::whitelisted_caller();
 			// Allow signed migrations.
 			SignedMigrationMaxLimits::<T>::put(MigrationLimits { size: 1024, item: 5 });
-		}: _(frame_system::RawOrigin::Signed(caller), null, 0, StateTrieMigration::<T>::migration_process())
+		}: _(frame_system::RawOrigin::Signed(caller), null, 0, MigrationProcess::<T>::get())
 		verify {
-			assert_eq!(StateTrieMigration::<T>::migration_process(), Default::default())
+			assert_eq!(MigrationProcess::<T>::get(), Default::default())
 		}
 
 		continue_migrate_wrong_witness {
@@ -931,7 +931,7 @@ mod benchmarks {
 			)
 		}
 		verify {
-			assert_eq!(StateTrieMigration::<T>::migration_process(), Default::default())
+			assert_eq!(MigrationProcess::<T>::get(), Default::default())
 		}
 
 		migrate_custom_top_success {
@@ -944,7 +944,7 @@ mod benchmarks {
 			T::Currency::make_free_balance_be(&caller, stash);
 		}: migrate_custom_top(frame_system::RawOrigin::Signed(caller.clone()), Default::default(), 0)
 		verify {
-			assert_eq!(StateTrieMigration::<T>::migration_process(), Default::default());
+			assert_eq!(MigrationProcess::<T>::get(), Default::default());
 			assert_eq!(T::Currency::free_balance(&caller), stash)
 		}
 
@@ -977,7 +977,7 @@ mod benchmarks {
 			);
 		}
 		verify {
-			assert_eq!(StateTrieMigration::<T>::migration_process(), Default::default());
+			assert_eq!(MigrationProcess::<T>::get(), Default::default());
 			// must have gotten slashed
 			assert!(T::Currency::free_balance(&caller) < stash)
 		}
@@ -996,7 +996,7 @@ mod benchmarks {
 			0
 		)
 		verify {
-			assert_eq!(StateTrieMigration::<T>::migration_process(), Default::default());
+			assert_eq!(MigrationProcess::<T>::get(), Default::default());
 			assert_eq!(T::Currency::free_balance(&caller), stash);
 		}
 
@@ -1021,7 +1021,7 @@ mod benchmarks {
 			)
 		}
 		verify {
-			assert_eq!(StateTrieMigration::<T>::migration_process(), Default::default());
+			assert_eq!(MigrationProcess::<T>::get(), Default::default());
 			// must have gotten slashed
 			assert!(T::Currency::free_balance(&caller) < stash)
 		}
@@ -1315,10 +1315,9 @@ mod test {
 			assert!(AutoLimits::<Test>::get().is_none());
 
 			// Calling `migrate_until_exhaustion` also fails.
-			let mut task = StateTrieMigration::migration_process();
-			let result = task.migrate_until_exhaustion(
-				StateTrieMigration::signed_migration_max_limits().unwrap(),
-			);
+			let mut task = MigrationProcess::<Test>::get();
+			let result =
+				task.migrate_until_exhaustion(SignedMigrationMaxLimits::<Test>::get().unwrap());
 			assert!(result.is_err());
 		});
 	}
@@ -1350,10 +1349,9 @@ mod test {
 			assert!(AutoLimits::<Test>::get().is_none());
 
 			// Calling `migrate_until_exhaustion` also fails.
-			let mut task = StateTrieMigration::migration_process();
-			let result = task.migrate_until_exhaustion(
-				StateTrieMigration::signed_migration_max_limits().unwrap(),
-			);
+			let mut task = MigrationProcess::<Test>::get();
+			let result =
+				task.migrate_until_exhaustion(SignedMigrationMaxLimits::<Test>::get().unwrap());
 			assert!(result.is_err());
 		});
 	}
@@ -1369,7 +1367,7 @@ mod test {
 			let root = run_to_block(30).0;
 
 			// eventually everything is over.
-			assert!(StateTrieMigration::migration_process().finished());
+			assert!(MigrationProcess::<Test>::get().finished());
 			root
 		});
 
@@ -1393,7 +1391,7 @@ mod test {
 			let root = run_to_block(30).0;
 
 			// eventually everything is over.
-			assert!(StateTrieMigration::migration_process().finished());
+			assert!(MigrationProcess::<Test>::get().finished());
 			root
 		});
 
@@ -1425,7 +1423,7 @@ mod test {
 
 				// eventually everything is over.
 				assert!(matches!(
-					StateTrieMigration::migration_process(),
+					MigrationProcess::<Test>::get(),
 					MigrationTask { progress_top: Progress::Complete, .. }
 				));
 				root
@@ -1502,15 +1500,14 @@ mod test {
 			// migrate all keys in a series of submissions
 			while !MigrationProcess::<Test>::get().finished() {
 				// first we compute the task to get the accurate consumption.
-				let mut task = StateTrieMigration::migration_process();
-				let result = task.migrate_until_exhaustion(
-					StateTrieMigration::signed_migration_max_limits().unwrap(),
-				);
+				let mut task = MigrationProcess::<Test>::get();
+				let result =
+					task.migrate_until_exhaustion(SignedMigrationMaxLimits::<Test>::get().unwrap());
 				assert!(result.is_ok());
 
 				frame_support::assert_ok!(StateTrieMigration::continue_migrate(
 					RuntimeOrigin::signed(1),
-					StateTrieMigration::signed_migration_max_limits().unwrap(),
+					SignedMigrationMaxLimits::<Test>::get().unwrap(),
 					task.dyn_size,
 					MigrationProcess::<Test>::get()
 				));
@@ -1520,7 +1517,7 @@ mod test {
 
 				// and the task should be updated
 				assert!(matches!(
-					StateTrieMigration::migration_process(),
+					MigrationProcess::<Test>::get(),
 					MigrationTask { size: x, .. } if x > 0,
 				));
 			}
@@ -1613,7 +1610,9 @@ mod test {
 /// Exported set of tests to be called against different runtimes.
 #[cfg(feature = "remote-test")]
 pub(crate) mod remote_tests {
-	use crate::{AutoLimits, MigrationLimits, Pallet as StateTrieMigration, LOG_TARGET};
+	use crate::{
+		AutoLimits, MigrationLimits, MigrationProcess, Pallet as StateTrieMigration, LOG_TARGET,
+	};
 	use codec::Encode;
 	use frame_support::{
 		traits::{Get, Hooks},
@@ -1694,7 +1693,7 @@ pub(crate) mod remote_tests {
 			let last_state_root = ext.backend.root().clone();
 			let ((finished, weight), proof) = ext.execute_and_prove(|| {
 				let weight = run_to_block::<Runtime>(now + One::one()).1;
-				if StateTrieMigration::<Runtime>::migration_process().finished() {
+				if MigrationProcess::<Runtime>::get().finished() {
 					return (true, weight)
 				}
 				duration += One::one();
@@ -1731,7 +1730,7 @@ pub(crate) mod remote_tests {
 				target: LOG_TARGET,
 				"finished on_initialize migration in {} block, final state of the task: {:?}",
 				duration,
-				StateTrieMigration::<Runtime>::migration_process(),
+				MigrationProcess::<Runtime>::get(),
 			)
 		});
 

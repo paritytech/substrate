@@ -202,7 +202,7 @@ pub mod pallet {
 		pub fn set(origin: OriginFor<T>, #[pallet::compact] now: T::Moment) -> DispatchResult {
 			ensure_none(origin)?;
 			assert!(!DidUpdate::<T>::exists(), "Timestamp must be updated only once in the block");
-			let prev = Self::now();
+			let prev = Now::<T>::get();
 			assert!(
 				prev.is_zero() || now >= prev + T::MinimumPeriod::get(),
 				"Timestamp must increment by at least <MinimumPeriod> between sequential blocks"
@@ -229,7 +229,7 @@ pub mod pallet {
 				.expect("Timestamp inherent data must be provided");
 			let data = (*inherent_data).saturated_into::<T::Moment>();
 
-			let next_time = cmp::max(data, Self::now() + T::MinimumPeriod::get());
+			let next_time = cmp::max(data, Now::<T>::get() + T::MinimumPeriod::get());
 			Some(Call::set { now: next_time })
 		}
 
@@ -250,7 +250,7 @@ pub mod pallet {
 				.expect("Timestamp inherent data not correctly encoded")
 				.expect("Timestamp inherent data must be provided");
 
-			let minimum = (Self::now() + T::MinimumPeriod::get()).saturated_into::<u64>();
+			let minimum = (Now::<T>::get() + T::MinimumPeriod::get()).saturated_into::<u64>();
 			if t > *(data + MAX_TIMESTAMP_DRIFT_MILLIS) {
 				Err(InherentError::TooFarInFuture)
 			} else if t < minimum {
@@ -272,7 +272,7 @@ impl<T: Config> Pallet<T> {
 	/// NOTE: if this function is called prior to setting the timestamp,
 	/// it will return the timestamp of the previous block.
 	pub fn get() -> T::Moment {
-		Self::now()
+		Now::<T>::get()
 	}
 
 	/// Set the timestamp to something in particular. Only used for tests.
@@ -289,7 +289,7 @@ impl<T: Config> Time for Pallet<T> {
 
 	/// Before the first set of now with inherent the value returned is zero.
 	fn now() -> Self::Moment {
-		Self::now()
+		Now::<T>::get()
 	}
 }
 
@@ -300,7 +300,7 @@ impl<T: Config> UnixTime for Pallet<T> {
 	fn now() -> core::time::Duration {
 		// now is duration since unix epoch in millisecond as documented in
 		// `sp_timestamp::InherentDataProvider`.
-		let now = Self::now();
+		let now = Now::<T>::get();
 		sp_std::if_std! {
 			if now == T::Moment::zero() {
 				log::error!(

@@ -528,8 +528,8 @@ benchmarks_instance_pallet! {
 			fellows: fellows.clone(),
 			allies: allies.clone(),
 		}.into());
-		assert_eq!(Alliance::<T, I>::members(MemberRole::Fellow), fellows);
-		assert_eq!(Alliance::<T, I>::members(MemberRole::Ally), allies);
+		assert_eq!(Members::<T, I>::get(MemberRole::Fellow), fellows);
+		assert_eq!(Members::<T, I>::get(MemberRole::Ally), allies);
 	}
 
 	disband {
@@ -582,7 +582,7 @@ benchmarks_instance_pallet! {
 			T::AdminOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_eq!(Alliance::<T, I>::rule(), Some(rule.clone()));
+		assert_eq!(Rule::<T, I>::get(), Some(rule.clone()));
 		assert_last_event::<T, I>(Event::NewRuleSet { rule }.into());
 	}
 
@@ -596,7 +596,7 @@ benchmarks_instance_pallet! {
 			T::AnnouncementOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert!(Alliance::<T, I>::announcements().contains(&announcement));
+		assert!(Announcements::<T, I>::get().contains(&announcement));
 		assert_last_event::<T, I>(Event::Announced { announcement }.into());
 	}
 
@@ -612,7 +612,7 @@ benchmarks_instance_pallet! {
 			T::AnnouncementOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert!(Alliance::<T, I>::announcements().is_empty());
+		assert!(Announcements::<T, I>::get().is_empty());
 		assert_last_event::<T, I>(Event::AnnouncementRemoved { announcement }.into());
 	}
 

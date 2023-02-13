@@ -150,7 +150,7 @@ impl<T: Config> LeafDataProvider for Pallet<T> {
 			version: T::LeafVersion::get(),
 			parent_number_and_hash: ParentNumberAndHash::<T>::leaf_data(),
 			leaf_extra: T::BeefyDataProvider::extra_data(),
-			beefy_next_authority_set: Pallet::<T>::beefy_next_authorities(),
+			beefy_next_authority_set: BeefyNextAuthorities::<T>::get(),
 		}
 	}
 }
@@ -175,12 +175,12 @@ where
 impl<T: Config> Pallet<T> {
 	/// Return the currently active BEEFY authority set proof.
 	pub fn authority_set_proof() -> BeefyAuthoritySet<MerkleRootOf<T>> {
-		Pallet::<T>::beefy_authorities()
+		BeefyAuthorities::<T>::get()
 	}
 
 	/// Return the next/queued BEEFY authority set proof.
 	pub fn next_authority_set_proof() -> BeefyNextAuthoritySet<MerkleRootOf<T>> {
-		Pallet::<T>::beefy_next_authorities()
+		BeefyNextAuthorities::<T>::get()
 	}
 
 	/// Returns details of a BEEFY authority set.

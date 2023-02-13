@@ -124,7 +124,7 @@ benchmarks_instance_pallet! {
 			value,
 			beneficiary_lookup
 		)?;
-		let proposal_id = Treasury::<T, _>::proposal_count() - 1;
+		let proposal_id = ProposalCount::<T, _>::get() - 1;
 		Treasury::<T, I>::approve_proposal(RawOrigin::Root.into(), proposal_id)?;
 		let reject_origin =
 			T::RejectOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;

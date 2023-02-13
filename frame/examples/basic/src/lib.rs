@@ -505,8 +505,6 @@ pub mod pallet {
 			let _sender = ensure_signed(origin)?;
 
 			// Read the value of dummy from storage.
-			// let dummy = Self::dummy();
-			// Will also work using the `::get` on the storage item type itself:
 			// let dummy = <Dummy<T>>::get();
 
 			// Calculate the new value.
@@ -600,20 +598,14 @@ pub mod pallet {
 	//   - `Foo::put(1); Foo::get()` returns `1`;
 	//   - `Foo::kill(); Foo::get()` returns `0` (u32::default()).
 	#[pallet::storage]
-	// The getter attribute generate a function on `Pallet` placeholder:
-	// `fn getter_name() -> Type` for basic value items or
-	// `fn getter_name(key: KeyType) -> ValueType` for map items.
-	#[pallet::getter(fn dummy)]
 	pub(super) type Dummy<T: Config> = StorageValue<_, T::Balance>;
 
 	// A map that has enumerable entries.
 	#[pallet::storage]
-	#[pallet::getter(fn bar)]
 	pub(super) type Bar<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, T::Balance>;
 
 	// this one uses the query kind: `ValueQuery`, we'll demonstrate the usage of 'mutate' API.
 	#[pallet::storage]
-	#[pallet::getter(fn foo)]
 	pub(super) type Foo<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
 	#[pallet::storage]

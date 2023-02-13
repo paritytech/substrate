@@ -594,7 +594,7 @@ where
 		if pays_fee == Pays::Yes {
 			// the adjustable part of the fee.
 			let unadjusted_weight_fee = Self::weight_to_fee(weight);
-			let multiplier = Self::next_fee_multiplier();
+			let multiplier = NextFeeMultiplier::<T>::get();
 			// final adjusted weight fee.
 			let adjusted_weight_fee = multiplier.saturating_mul_int(unadjusted_weight_fee);
 

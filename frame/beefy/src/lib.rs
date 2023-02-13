@@ -275,8 +275,8 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	/// Return the current active BEEFY validator set.
 	pub fn validator_set() -> Option<ValidatorSet<T::BeefyId>> {
-		let validators: BoundedVec<T::BeefyId, T::MaxAuthorities> = Self::authorities();
-		let id: sp_consensus_beefy::ValidatorSetId = Self::validator_set_id();
+		let validators: BoundedVec<T::BeefyId, T::MaxAuthorities> = Authorities::<T>::get();
+		let id: sp_consensus_beefy::ValidatorSetId = ValidatorSetId::<T>::get();
 		ValidatorSet::<T::BeefyId>::new(validators, id)
 	}
 
@@ -300,7 +300,7 @@ impl<T: Config> Pallet<T> {
 	) {
 		<Authorities<T>>::put(&new);
 
-		let new_id = Self::validator_set_id() + 1u64;
+		let new_id = ValidatorSetId::<T>::get() + 1u64;
 		<ValidatorSetId<T>>::put(new_id);
 
 		<NextAuthorities<T>>::put(&queued);
@@ -414,9 +414,9 @@ where
 		// We want to have at least one BEEFY mandatory block per session.
 		Self::change_authorities(bounded_next_authorities, bounded_next_queued_authorities);
 
-		let validator_set_id = Self::validator_set_id();
+		let validator_set_id = ValidatorSetId::<T>::get();
 		// Update the mapping for the new set id that corresponds to the latest session (i.e. now).
-		let session_index = <pallet_session::Pallet<T>>::current_index();
+		let session_index = <pallet_session::CurrentIndex<T>>::get();
 		SetIdSession::<T>::insert(validator_set_id, &session_index);
 		// Prune old entry if limit reached.
 		let max_set_id_session_entries = T::MaxSetIdSessionEntries::get().max(1);
@@ -437,7 +437,7 @@ where
 
 impl<T: Config> IsMember<T::BeefyId> for Pallet<T> {
 	fn is_member(authority_id: &T::BeefyId) -> bool {
-		Self::authorities().iter().any(|id| id == authority_id)
+		Authorities::<T>::get().iter().any(|id| id == authority_id)
 	}
 }
 

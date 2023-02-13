@@ -30,10 +30,10 @@ fn simple_passing_should_work() {
 		);
 		assert_ok!(Democracy::vote(RuntimeOrigin::signed(1), r, aye(1)));
 		assert_eq!(tally(r), Tally { ayes: 1, nays: 0, turnout: 10 });
-		assert_eq!(Democracy::lowest_unbaked(), 0);
+		assert_eq!(LowestUnbaked::<Test>::get(), 0);
 		next_block();
 		next_block();
-		assert_eq!(Democracy::lowest_unbaked(), 1);
+		assert_eq!(LowestUnbaked::<Test>::get(), 1);
 		assert_eq!(Balances::free_balance(42), 2);
 	});
 }
@@ -140,16 +140,16 @@ fn lowest_unbaked_should_be_sensible() {
 		assert_ok!(Democracy::vote(RuntimeOrigin::signed(1), r2, aye(1)));
 		// r3 is canceled
 		assert_ok!(Democracy::cancel_referendum(RuntimeOrigin::root(), r3.into()));
-		assert_eq!(Democracy::lowest_unbaked(), 0);
+		assert_eq!(LowestUnbaked::<Test>::get(), 0);
 
 		next_block();
 		// r2 ends with approval
-		assert_eq!(Democracy::lowest_unbaked(), 0);
+		assert_eq!(LowestUnbaked::<Test>::get(), 0);
 
 		next_block();
 		// r1 ends with approval
-		assert_eq!(Democracy::lowest_unbaked(), 3);
-		assert_eq!(Democracy::lowest_unbaked(), Democracy::referendum_count());
+		assert_eq!(LowestUnbaked::<Test>::get(), 3);
+		assert_eq!(LowestUnbaked::<Test>::get(), ReferendumCount::<Test>::get());
 
 		// r2 is executed
 		assert_eq!(Balances::free_balance(42), 2);

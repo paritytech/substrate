@@ -96,7 +96,7 @@ pub struct SameAuthoritiesForever;
 impl EpochChangeTrigger for SameAuthoritiesForever {
 	fn trigger<T: Config>(now: T::BlockNumber) {
 		if <Pallet<T>>::should_epoch_change(now) {
-			let authorities = <Pallet<T>>::authorities();
+			let authorities = Authorities::<T>::get();
 			let next_authorities = authorities.clone();
 
 			<Pallet<T>>::enact_epoch_change(authorities, next_authorities, None);
@@ -290,10 +290,9 @@ pub mod pallet {
 	#[pallet::getter(fn lateness)]
 	pub(super) type Lateness<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
-	/// The configuration for the current epoch. Should never be `None` as it is initialized in
-	/// genesis.
+	/// The configuration for the current epoch.
+	/// Should never be `None` as it is initialized in genesis.
 	#[pallet::storage]
-	#[pallet::getter(fn epoch_config)]
 	pub(super) type EpochConfig<T> = StorageValue<_, BabeEpochConfiguration>;
 
 	/// The configuration for the next epoch, `None` if the config will not change
@@ -363,7 +362,7 @@ pub mod pallet {
 						.and_then(|(authority, _)| {
 							let public = authority.as_inner_ref();
 							let transcript = sp_consensus_babe::make_transcript(
-								&Self::randomness(),
+								&Randomness::<T>::get(),
 								CurrentSlot::<T>::get(),
 								EpochIndex::<T>::get(),
 							);
@@ -503,7 +502,7 @@ impl<T: Config> FindAuthor<u32> for Pallet<T> {
 
 impl<T: Config> IsMember<AuthorityId> for Pallet<T> {
 	fn is_member(authority_id: &AuthorityId) -> bool {
-		<Pallet<T>>::authorities().iter().any(|id| &id.0 == authority_id)
+		Authorities::<T>::get().iter().any(|id| &id.0 == authority_id)
 	}
 }
 
@@ -519,6 +518,12 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
+	/// The configuration for the current epoch.
+	/// Should never be `None` as it is initialized in genesis.
+	pub fn epoch_config() -> Option<BabeEpochConfiguration> {
+		EpochConfig::<T>::get()
+	}
+
 	/// Determine the BABE slot duration based on the Timestamp module configuration.
 	pub fn slot_duration() -> T::Moment {
 		// we double the minimum block-period so each author can always propose within
@@ -581,7 +586,7 @@ impl<T: Config> Pallet<T> {
 	) {
 		// PRECONDITION: caller has done initialization and is guaranteed
 		// by the session module to be called before this.
-		debug_assert!(Self::initialized().is_some());
+		debug_assert!(Initialized::<T>::get().is_some());
 
 		if authorities.is_empty() {
 			log::warn!(target: LOG_TARGET, "Ignoring empty epoch change.");
@@ -695,8 +700,8 @@ impl<T: Config> Pallet<T> {
 			epoch_index: EpochIndex::<T>::get(),
 			start_slot: Self::current_epoch_start(),
 			duration: T::EpochDuration::get(),
-			authorities: Self::authorities().to_vec(),
-			randomness: Self::randomness(),
+			authorities: Authorities::<T>::get().to_vec(),
+			randomness: Randomness::<T>::get(),
 			config: EpochConfig::<T>::get()
 				.expect("EpochConfig is initialized in genesis; we never `take` or `kill` it; qed"),
 		}
@@ -773,8 +778,8 @@ impl<T: Config> Pallet<T> {
 		// we use the same values as genesis because we haven't collected any
 		// randomness yet.
 		let next = NextEpochDescriptor {
-			authorities: Self::authorities().to_vec(),
-			randomness: Self::randomness(),
+			authorities: Authorities::<T>::get().to_vec(),
+			randomness: Randomness::<T>::get(),
 		};
 
 		Self::deposit_consensus(ConsensusLog::NextEpochData(next));
@@ -783,7 +788,7 @@ impl<T: Config> Pallet<T> {
 	fn initialize(now: T::BlockNumber) {
 		// since `initialize` can be called twice (e.g. if session module is present)
 		// let's ensure that we only do the initialization once per block
-		let initialized = Self::initialized().is_some();
+		let initialized = Initialized::<T>::get().is_some();
 		if initialized {
 			return
 		}
@@ -929,7 +934,7 @@ impl<T: Config> frame_support::traits::EstimateNextSessionRotation<T::BlockNumbe
 
 impl<T: Config> frame_support::traits::Lateness<T::BlockNumber> for Pallet<T> {
 	fn lateness(&self) -> T::BlockNumber {
-		Self::lateness()
+		Lateness::<T>::get()
 	}
 }
 
@@ -973,7 +978,7 @@ where
 			),
 		);
 
-		let session_index = <pallet_session::Pallet<T>>::current_index();
+		let session_index = <pallet_session::CurrentIndex<T>>::get();
 
 		Self::enact_epoch_change(bounded_authorities, next_bounded_authorities, Some(session_index))
 	}

@@ -204,8 +204,8 @@ fn record(event: RuntimeEvent) -> EventRecord<RuntimeEvent, H256> {
 #[test]
 fn motions_basic_environment_works() {
 	ExtBuilder::default().build_and_execute(|| {
-		assert_eq!(Collective::members(), vec![1, 2, 3]);
-		assert_eq!(*Collective::proposals(), Vec::<H256>::new());
+		assert_eq!(Members::<Test, Instance1>::get(), vec![1, 2, 3]);
+		assert_eq!(*Proposals::<Test>::get(), Vec::<H256>::new());
 	});
 }
 
@@ -583,12 +583,12 @@ fn removal_of_old_voters_votes_works() {
 		assert_ok!(Collective::vote(RuntimeOrigin::signed(1), hash, 0, true));
 		assert_ok!(Collective::vote(RuntimeOrigin::signed(2), hash, 0, true));
 		assert_eq!(
-			Collective::voting(&hash),
+			Voting::<Test, Instance1>::get(&hash),
 			Some(Votes { index: 0, threshold: 3, ayes: vec![1, 2], nays: vec![], end })
 		);
 		Collective::change_members_sorted(&[4], &[1], &[2, 3, 4]);
 		assert_eq!(
-			Collective::voting(&hash),
+			Voting::<Test, Instance1>::get(&hash),
 			Some(Votes { index: 0, threshold: 3, ayes: vec![2], nays: vec![], end })
 		);
 
@@ -604,12 +604,12 @@ fn removal_of_old_voters_votes_works() {
 		assert_ok!(Collective::vote(RuntimeOrigin::signed(2), hash, 1, true));
 		assert_ok!(Collective::vote(RuntimeOrigin::signed(3), hash, 1, false));
 		assert_eq!(
-			Collective::voting(&hash),
+			Voting::<Test, Instance1>::get(&hash),
 			Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![3], end })
 		);
 		Collective::change_members_sorted(&[], &[3], &[2, 4]);
 		assert_eq!(
-			Collective::voting(&hash),
+			Voting::<Test, Instance1>::get(&hash),
 			Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![], end })
 		);
 	});
@@ -631,7 +631,7 @@ fn removal_of_old_voters_votes_works_with_set_members() {
 		assert_ok!(Collective::vote(RuntimeOrigin::signed(1), hash, 0, true));
 		assert_ok!(Collective::vote(RuntimeOrigin::signed(2), hash, 0, true));
 		assert_eq!(
-			Collective::voting(&hash),
+			Voting::<Test, Instance1>::get(&hash),
 			Some(Votes { index: 0, threshold: 3, ayes: vec![1, 2], nays: vec![], end })
 		);
 		assert_ok!(Collective::set_members(
@@ -641,7 +641,7 @@ fn removal_of_old_voters_votes_works_with_set_members() {
 			MaxMembers::get()
 		));
 		assert_eq!(
-			Collective::voting(&hash),
+			Voting::<Test, Instance1>::get(&hash),
 			Some(Votes { index: 0, threshold: 3, ayes: vec![2], nays: vec![], end })
 		);
 
@@ -657,7 +657,7 @@ fn removal_of_old_voters_votes_works_with_set_members() {
 		assert_ok!(Collective::vote(RuntimeOrigin::signed(2), hash, 1, true));
 		assert_ok!(Collective::vote(RuntimeOrigin::signed(3), hash, 1, false));
 		assert_eq!(
-			Collective::voting(&hash),
+			Voting::<Test, Instance1>::get(&hash),
 			Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![3], end })
 		);
 		assert_ok!(Collective::set_members(
@@ -667,7 +667,7 @@ fn removal_of_old_voters_votes_works_with_set_members() {
 			MaxMembers::get()
 		));
 		assert_eq!(
-			Collective::voting(&hash),
+			Voting::<Test, Instance1>::get(&hash),
 			Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![], end })
 		);
 	});
@@ -686,10 +686,10 @@ fn propose_works() {
 			Box::new(proposal.clone()),
 			proposal_len
 		));
-		assert_eq!(*Collective::proposals(), vec![hash]);
-		assert_eq!(Collective::proposal_of(&hash), Some(proposal));
+		assert_eq!(*Proposals::<Test, Instance1>::get(), vec![hash]);
+		assert_eq!(ProposalOf::<Test, Instance1>::get(&hash), Some(proposal));
 		assert_eq!(
-			Collective::voting(&hash),
+			Voting::<Test, Instance1>::get(&hash),
 			Some(Votes { index: 0, threshold: 3, ayes: vec![], nays: vec![], end })
 		);
 
@@ -849,13 +849,13 @@ fn motions_vote_after_works() {
 		));
 		// Initially there a no votes when the motion is proposed.
 		assert_eq!(
-			Collective::voting(&hash),
+			Voting::<Test, Instance1>::get(&hash),
 			Some(Votes { index: 0, threshold: 2, ayes: vec![], nays: vec![], end })
 		);
 		// Cast first aye vote.
 		assert_ok!(Collective::vote(RuntimeOrigin::signed(1), hash, 0, true));
 		assert_eq!(
-			Collective::voting(&hash),
+			Voting::<Test, Instance1>::get(&hash),
 			Some(Votes { index: 0, threshold: 2, ayes: vec![1], nays: vec![], end })
 		);
 		// Try to cast a duplicate aye vote.
@@ -866,7 +866,7 @@ fn motions_vote_after_works() {
 		// Cast a nay vote.
 		assert_ok!(Collective::vote(RuntimeOrigin::signed(1), hash, 0, false));
 		assert_eq!(
-			Collective::voting(&hash),
+			Voting::<Test, Instance1>::get(&hash),
 			Some(Votes { index: 0, threshold: 2, ayes: vec![], nays: vec![1], end })
 		);
 		// Try to cast a duplicate nay vote.
@@ -917,7 +917,7 @@ fn motions_all_first_vote_free_works() {
 			proposal_len,
 		));
 		assert_eq!(
-			Collective::voting(&hash),
+			Voting::<Test, Instance1>::get(&hash),
 			Some(Votes { index: 0, threshold: 2, ayes: vec![], nays: vec![], end })
 		);
 
@@ -982,14 +982,14 @@ fn motions_reproposing_disapproved_works() {
 			proposal_weight,
 			proposal_len
 		));
-		assert_eq!(*Collective::proposals(), vec![]);
+		assert_eq!(*Proposals::<Test, Instance1>::get(), vec![]);
 		assert_ok!(Collective::propose(
 			RuntimeOrigin::signed(1),
 			2,
 			Box::new(proposal.clone()),
 			proposal_len
 		));
-		assert_eq!(*Collective::proposals(), vec![hash]);
+		assert_eq!(*Proposals::<Test, Instance1>::get(), vec![hash]);
 	});
 }
 

@@ -22,7 +22,7 @@ use sp_runtime::traits::Convert;
 use sp_std::prelude::*;
 
 use super::{shared, Config as HistoricalConfig};
-use crate::{Config as SessionConfig, Pallet as SessionModule, SessionIndex};
+use crate::{Config as SessionConfig, CurrentIndex, SessionIndex, Validators};
 
 /// Store the validator-set associated to the `session_index` to the off-chain database.
 ///
@@ -35,7 +35,7 @@ use crate::{Config as SessionConfig, Pallet as SessionModule, SessionIndex};
 pub fn store_session_validator_set_to_offchain<T: HistoricalConfig + SessionConfig>(
 	session_index: SessionIndex,
 ) {
-	let encoded_validator_list = <SessionModule<T>>::validators()
+	let encoded_validator_list = Validators::<T>::get()
 		.into_iter()
 		.filter_map(|validator_id: <T as SessionConfig>::ValidatorId| {
 			let full_identification =
@@ -55,5 +55,5 @@ pub fn store_session_validator_set_to_offchain<T: HistoricalConfig + SessionConf
 /// See [`store_session_validator_set_to_offchain`]
 /// for further information and restrictions.
 pub fn store_current_session_validator_set_to_offchain<T: HistoricalConfig + SessionConfig>() {
-	store_session_validator_set_to_offchain::<T>(<SessionModule<T>>::current_index());
+	store_session_validator_set_to_offchain::<T>(CurrentIndex::<T>::get());
 }

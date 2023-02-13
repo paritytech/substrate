@@ -109,7 +109,7 @@ benchmarks! {
 		whitelist_account!(caller);
 	}: _(RawOrigin::Signed(caller), proposal, value)
 	verify {
-		assert_eq!(Democracy::<T>::public_props().len(), p as usize, "Proposals not created.");
+		assert_eq!(PublicProps::<T>::get().len(), p as usize, "Proposals not created.");
 	}
 
 	second {
@@ -123,12 +123,12 @@ benchmarks! {
 			Democracy::<T>::second(RawOrigin::Signed(seconder).into(), 0)?;
 		}
 
-		let deposits = Democracy::<T>::deposit_of(0).ok_or("Proposal not created")?;
+		let deposits = DepositOf::<T>::get(0).ok_or("Proposal not created")?;
 		assert_eq!(deposits.0.len(), (T::MaxDeposits::get() - 1) as usize, "Seconds not recorded");
 		whitelist_account!(caller);
 	}: _(RawOrigin::Signed(caller), 0)
 	verify {
-		let deposits = Democracy::<T>::deposit_of(0).ok_or("Proposal not created")?;
+		let deposits = DepositOf::<T>::get(0).ok_or("Proposal not created")?;
 		assert_eq!(deposits.0.len(), (T::MaxDeposits::get()) as usize, "`second` benchmark did not work");
 	}
 
@@ -176,7 +176,7 @@ benchmarks! {
 		// Change vote from aye to nay
 		let nay = Vote { aye: false, conviction: Conviction::Locked1x };
 		let new_vote = AccountVote::Standard { vote: nay, balance: 1000u32.into() };
-		let ref_index = Democracy::<T>::referendum_count() - 1;
+		let ref_index = ReferendumCount::<T>::get() - 1;
 
 		// This tests when a user changes a vote
 		whitelist_account!(caller);
@@ -187,7 +187,7 @@ benchmarks! {
 			_ => return Err("Votes are not direct".into()),
 		};
 		assert_eq!(votes.len(), T::MaxVotes::get() as usize, "Vote was incorrectly added");
-		let referendum_info = Democracy::<T>::referendum_info(ref_index)
+		let referendum_info = ReferendumInfoOf::<T>::get(ref_index)
 			.ok_or("referendum doesn't exist")?;
 		let tally =  match referendum_info {
 			ReferendumInfo::Ongoing(r) => r.tally,
@@ -304,7 +304,7 @@ benchmarks! {
 		let delay = 0u32;
 	}: _<T::RuntimeOrigin>(origin_fast_track, proposal_hash, voting_period, delay.into())
 	verify {
-		assert_eq!(Democracy::<T>::referendum_count(), 1, "referendum not created");
+		assert_eq!(ReferendumCount::<T>::get(), 1, "referendum not created");
 		assert_last_event::<T>(crate::Event::MetadataTransferred {
 			prev_owner: MetadataOwner::External,
 			owner: MetadataOwner::Referendum(0),
@@ -383,7 +383,7 @@ benchmarks! {
 			add_referendum::<T>(i);
 		}
 
-		assert_eq!(Democracy::<T>::referendum_count(), r, "referenda not created");
+		assert_eq!(ReferendumCount::<T>::get(), r, "referenda not created");
 
 		// Launch external
 		LastTabledWasExternal::<T>::put(false);
@@ -401,7 +401,7 @@ benchmarks! {
 	}: { Democracy::<T>::on_initialize(block_number) }
 	verify {
 		// One extra because of next external
-		assert_eq!(Democracy::<T>::referendum_count(), r + 1, "referenda not created");
+		assert_eq!(ReferendumCount::<T>::get(), r + 1, "referenda not created");
 		ensure!(!<NextExternal<T>>::exists(), "External wasn't taken");
 
 		// All but the new next external should be finished
@@ -423,7 +423,7 @@ benchmarks! {
 			add_referendum::<T>(i);
 		}
 
-		assert_eq!(Democracy::<T>::referendum_count(), r, "referenda not created");
+		assert_eq!(ReferendumCount::<T>::get(), r, "referenda not created");
 
 		// Launch public
 		assert!(add_proposal::<T>(r).is_ok(), "proposal not created");
@@ -434,7 +434,7 @@ benchmarks! {
 	}: { Democracy::<T>::on_initialize(block_number) }
 	verify {
 		// One extra because of next public
-		assert_eq!(Democracy::<T>::referendum_count(), r + 1, "proposal not accepted");
+		assert_eq!(ReferendumCount::<T>::get(), r + 1, "proposal not accepted");
 
 		// All should be finished
 		for i in 0 .. r {
@@ -462,8 +462,8 @@ benchmarks! {
 			ReferendumInfoOf::<T>::insert(key, info);
 		}
 
-		assert_eq!(Democracy::<T>::referendum_count(), r, "referenda not created");
-		assert_eq!(Democracy::<T>::lowest_unbaked(), 0, "invalid referenda init");
+		assert_eq!(ReferendumCount::<T>::get(), r, "referenda not created");
+		assert_eq!(LowestUnbaked::<T>::get(), 0, "invalid referenda init");
 
 	}: { Democracy::<T>::on_initialize(1u32.into()) }
 	verify {
@@ -492,8 +492,8 @@ benchmarks! {
 			ReferendumInfoOf::<T>::insert(key, info);
 		}
 
-		assert_eq!(Democracy::<T>::referendum_count(), r, "referenda not created");
-		assert_eq!(Democracy::<T>::lowest_unbaked(), 0, "invalid referenda init");
+		assert_eq!(ReferendumCount::<T>::get(), r, "referenda not created");
+		assert_eq!(LowestUnbaked::<T>::get(), 0, "invalid referenda init");
 
 		let block_number = T::LaunchPeriod::get();
 

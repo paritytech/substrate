@@ -259,7 +259,6 @@ pub mod pallet {
 
 	/// Actual proposal for a given hash, if it's current.
 	#[pallet::storage]
-	#[pallet::getter(fn proposal_of)]
 	pub type ProposalOf<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, T::Hash, <T as Config<I>>::Proposal, OptionQuery>;
 
@@ -447,7 +446,7 @@ pub mod pallet {
 			#[pallet::compact] length_bound: u32,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let members = Self::members();
+			let members = Members::<T, I>::get();
 			ensure!(members.contains(&who), Error::<T, I>::NotMember);
 			let proposal_len = proposal.encoded_size();
 			ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
@@ -507,7 +506,7 @@ pub mod pallet {
 			#[pallet::compact] length_bound: u32,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let members = Self::members();
+			let members = Members::<T, I>::get();
 			ensure!(members.contains(&who), Error::<T, I>::NotMember);
 
 			if threshold < 2 {
@@ -553,7 +552,7 @@ pub mod pallet {
 			approve: bool,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let members = Self::members();
+			let members = Members::<T, I>::get();
 			ensure!(members.contains(&who), Error::<T, I>::NotMember);
 
 			// Detects first vote of the member in the motion
@@ -653,11 +652,16 @@ fn get_result_weight(result: DispatchResultWithPostInfo) -> Option<Weight> {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	/// Actual proposal for a given hash, if it's current.
+	pub fn proposal_of(who: T::Hash) -> Option<<T as Config<I>>::Proposal> {
+		ProposalOf::<T, I>::get(who)
+	}
+
 	/// Check whether `who` is a member of the collective.
 	pub fn is_member(who: &T::AccountId) -> bool {
 		// Note: The dispatchables *do not* use this to check membership so make sure
 		// to update those if this is changed.
-		Self::members().contains(who)
+		Members::<T, I>::get().contains(who)
 	}
 
 	/// Execute immediately when adding a new proposal.
@@ -671,7 +675,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 		ensure!(!<ProposalOf<T, I>>::contains_key(proposal_hash), Error::<T, I>::DuplicateProposal);
 
-		let seats = Self::members().len() as MemberCount;
+		let seats = Members::<T, I>::get().len() as MemberCount;
 		let result = proposal.dispatch(RawOrigin::Members(1, seats).into());
 		Self::deposit_event(Event::Executed {
 			proposal_hash,
@@ -699,7 +703,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Ok(proposals.len())
 			})?;
 
-		let index = Self::proposal_count();
+		let index = ProposalCount::<T, I>::get();
 		<ProposalCount<T, I>>::mutate(|i| *i += 1);
 		<ProposalOf<T, I>>::insert(proposal_hash, proposal);
 		let votes = {
@@ -725,7 +729,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		index: ProposalIndex,
 		approve: bool,
 	) -> Result<bool, DispatchError> {
-		let mut voting = Self::voting(&proposal).ok_or(Error::<T, I>::ProposalMissing)?;
+		let mut voting = Voting::<T, I>::get(&proposal).ok_or(Error::<T, I>::ProposalMissing)?;
 		ensure!(voting.index == index, Error::<T, I>::WrongIndex);
 
 		let position_yes = voting.ayes.iter().position(|a| a == &who);
@@ -776,12 +780,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		proposal_weight_bound: Weight,
 		length_bound: u32,
 	) -> DispatchResultWithPostInfo {
-		let voting = Self::voting(&proposal_hash).ok_or(Error::<T, I>::ProposalMissing)?;
+		let voting = Voting::<T, I>::get(&proposal_hash).ok_or(Error::<T, I>::ProposalMissing)?;
 		ensure!(voting.index == index, Error::<T, I>::WrongIndex);
 
 		let mut no_votes = voting.nays.len() as MemberCount;
 		let mut yes_votes = voting.ayes.len() as MemberCount;
-		let seats = Self::members().len() as MemberCount;
+		let seats = Members::<T, I>::get().len() as MemberCount;
 		let approved = yes_votes >= voting.threshold;
 		let disapproved = seats.saturating_sub(no_votes) < voting.threshold;
 		// Allow (dis-)approving the proposal as soon as there are enough votes.
@@ -815,7 +819,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// Only allow actual closing of the proposal after the voting period has ended.
 		ensure!(frame_system::Pallet::<T>::block_number() >= voting.end, Error::<T, I>::TooEarly);
 
-		let prime_vote = Self::prime().map(|who| voting.ayes.iter().any(|a| a == &who));
+		let prime_vote = Prime::<T, I>::get().map(|who| voting.ayes.iter().any(|a| a == &who));
 
 		// default voting strategy.
 		let default = T::DefaultVote::default_vote(prime_vote, yes_votes, no_votes, seats);
@@ -1059,7 +1063,7 @@ impl<T: Config<I>, I: 'static> ChangeMembers<T::AccountId> for Pallet<T, I> {
 		// remove accounts from all current voting in motions.
 		let mut outgoing = outgoing.to_vec();
 		outgoing.sort();
-		for h in Self::proposals().into_iter() {
+		for h in Proposals::<T, I>::get().into_iter() {
 			<Voting<T, I>>::mutate(h, |v| {
 				if let Some(mut votes) = v.take() {
 					votes.ayes = votes

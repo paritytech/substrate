@@ -251,7 +251,7 @@ pub mod pallet {
 				description.try_into().map_err(|_| BountiesError::<T>::ReasonTooBig)?;
 			ensure!(value >= T::ChildBountyValueMinimum::get(), BountiesError::<T>::InvalidValue);
 			ensure!(
-				Self::parent_child_bounties(parent_bounty_id) <=
+				ParentChildBounties::<T>::get(parent_bounty_id) <=
 					T::MaxActiveChildBountyCount::get() as u32,
 				Error::<T>::TooManyChildBounties,
 			);
@@ -276,7 +276,7 @@ pub mod pallet {
 			)?;
 
 			// Get child-bounty ID.
-			let child_bounty_id = Self::child_bounty_count();
+			let child_bounty_id = ChildBountyCount::<T>::get();
 			let child_bounty_account = Self::child_bounty_account_id(child_bounty_id);
 
 			// Transfer funds from parent bounty to child-bounty.
@@ -817,7 +817,7 @@ impl<T: Config> Pallet<T> {
 	fn ensure_bounty_active(
 		bounty_id: BountyIndex,
 	) -> Result<(T::AccountId, T::BlockNumber), DispatchError> {
-		let parent_bounty = pallet_bounties::Pallet::<T>::bounties(bounty_id)
+		let parent_bounty = pallet_bounties::Bounties::<T>::get(bounty_id)
 			.ok_or(BountiesError::<T>::InvalidIndex)?;
 		if let BountyStatus::Active { curator, update_due } = parent_bounty.get_status() {
 			Ok((curator, update_due))
@@ -901,13 +901,13 @@ impl<T: Config> pallet_bounties::ChildBountyManager<BalanceOf<T>> for Pallet<T> 
 	fn child_bounties_count(
 		bounty_id: pallet_bounties::BountyIndex,
 	) -> pallet_bounties::BountyIndex {
-		Self::parent_child_bounties(bounty_id)
+		ParentChildBounties::<T>::get(bounty_id)
 	}
 
 	fn children_curator_fees(bounty_id: pallet_bounties::BountyIndex) -> BalanceOf<T> {
 		// This is asked for when the parent bounty is being claimed. No use of
 		// keeping it in state after that. Hence removing.
-		let children_fee_total = Self::children_curator_fees(bounty_id);
+		let children_fee_total = ChildrenCuratorFees::<T>::get(bounty_id);
 		<ChildrenCuratorFees<T>>::remove(bounty_id);
 		children_fee_total
 	}

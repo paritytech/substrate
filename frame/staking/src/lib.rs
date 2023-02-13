@@ -793,7 +793,7 @@ where
 	}
 
 	fn validators() -> Vec<<T as frame_system::Config>::AccountId> {
-		<pallet_session::Pallet<T>>::validators()
+		pallet_session::Validators::<T>::get()
 	}
 
 	fn prune_historical_up_to(up_to: SessionIndex) {
@@ -887,7 +887,7 @@ pub struct StashOf<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T> {
 	fn convert(controller: T::AccountId) -> Option<T::AccountId> {
-		<Pallet<T>>::ledger(&controller).map(|l| l.stash)
+		Ledger::<T>::get(&controller).map(|l| l.stash)
 	}
 }
 
@@ -902,8 +902,7 @@ impl<T: Config> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>
 	for ExposureOf<T>
 {
 	fn convert(validator: T::AccountId) -> Option<Exposure<T::AccountId, BalanceOf<T>>> {
-		<Pallet<T>>::active_era()
-			.map(|active_era| <Pallet<T>>::eras_stakers(active_era.index, &validator))
+		ActiveEra::<T>::get().map(|active_era| ErasStakers::<T>::get(active_era.index, &validator))
 	}
 }
 

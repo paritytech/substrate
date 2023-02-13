@@ -165,16 +165,13 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn nmap)]
 	pub type NMap<T, I = ()> = StorageNMap<_, storage::Key<Blake2_128Concat, u8>, u32>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn nmap2)]
 	pub type NMap2<T, I = ()> =
 		StorageNMap<_, (storage::Key<Twox64Concat, u16>, storage::Key<Blake2_128Concat, u32>), u64>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn nmap3)]
 	pub type NMap3<T, I = ()> = StorageNMap<
 		_,
 		(NMapKey<Blake2_128Concat, u8>, NMapKey<Twox64Concat, u16>),

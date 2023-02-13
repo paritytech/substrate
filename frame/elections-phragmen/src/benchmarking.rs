@@ -121,18 +121,18 @@ fn distribute_voters<T: Config>(
 /// members, or members and runners-up.
 fn fill_seats_up_to<T: Config>(m: u32) -> Result<Vec<T::AccountId>, &'static str> {
 	let _ = submit_candidates_with_self_vote::<T>(m, "fill_seats_up_to")?;
-	assert_eq!(<Elections<T>>::candidates().len() as u32, m, "wrong number of candidates.");
+	assert_eq!(<Candidates<T>>::get().len() as u32, m, "wrong number of candidates.");
 	<Elections<T>>::do_phragmen();
-	assert_eq!(<Elections<T>>::candidates().len(), 0, "some candidates remaining.");
+	assert_eq!(<Candidates<T>>::get().len(), 0, "some candidates remaining.");
 	assert_eq!(
-		<Elections<T>>::members().len() + <Elections<T>>::runners_up().len(),
+		<Members<T>>::get().len() + RunnersUp::<T>::get().len(),
 		m as usize,
 		"wrong number of members and runners-up",
 	);
-	Ok(<Elections<T>>::members()
+	Ok(<Members<T>>::get()
 		.into_iter()
 		.map(|m| m.who)
-		.chain(<Elections<T>>::runners_up().into_iter().map(|r| r.who))
+		.chain(RunnersUp::<T>::get().into_iter().map(|r| r.who))
 		.collect())
 }
 
@@ -349,7 +349,7 @@ benchmarks! {
 	}: remove_member(RawOrigin::Root, removing, true, false)
 	verify {
 		// must still have enough members.
-		assert_eq!(<Elections<T>>::members().len() as u32, T::DesiredMembers::get());
+		assert_eq!(<Members<T>>::get().len() as u32, T::DesiredMembers::get());
 		#[cfg(test)]
 		{
 			// reset members in between benchmark tests.
@@ -407,9 +407,9 @@ benchmarks! {
 		<Elections<T>>::on_initialize(T::TermDuration::get());
 	}
 	verify {
-		assert_eq!(<Elections<T>>::members().len() as u32, T::DesiredMembers::get().min(c));
+		assert_eq!(<Members<T>>::get().len() as u32, T::DesiredMembers::get().min(c));
 		assert_eq!(
-			<Elections<T>>::runners_up().len() as u32,
+			RunnersUp::<T>::get().len() as u32,
 			T::DesiredRunnersUp::get().min(c.saturating_sub(T::DesiredMembers::get())),
 		);
 

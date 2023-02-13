@@ -365,7 +365,6 @@ pub mod pallet {
 
 	/// The total units issued in the system.
 	#[pallet::storage]
-	#[pallet::getter(fn total_issuance)]
 	#[pallet::whitelist_storage]
 	pub type TotalIssuance<T: Config<I>, I: 'static = ()> = StorageValue<_, T::Balance, ValueQuery>;
 

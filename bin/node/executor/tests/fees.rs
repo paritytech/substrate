@@ -24,7 +24,6 @@ use frame_support::{
 use kitchensink_runtime::{
 	constants::{currency::*, time::SLOT_DURATION},
 	Balances, CheckedExtrinsic, Multiplier, Runtime, RuntimeCall, TransactionByteFee,
-	TransactionPayment,
 };
 use node_primitives::Balance;
 use node_testing::keyring::*;
@@ -41,7 +40,10 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 	let mut prev_multiplier = Multiplier::one();
 
 	t.execute_with(|| {
-		assert_eq!(TransactionPayment::next_fee_multiplier(), prev_multiplier);
+		assert_eq!(
+			pallet_transaction_payment::NextFeeMultiplier::<Runtime>::get(),
+			prev_multiplier
+		);
 	});
 
 	let mut tt = new_test_ext(compact_code_unwrap());
@@ -99,7 +101,7 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 
 	// weight multiplier is increased for next block.
 	t.execute_with(|| {
-		let fm = TransactionPayment::next_fee_multiplier();
+		let fm = pallet_transaction_payment::NextFeeMultiplier::<Runtime>::get();
 		println!("After a big block: {:?} -> {:?}", prev_multiplier, fm);
 		assert!(fm > prev_multiplier);
 		prev_multiplier = fm;
@@ -110,7 +112,7 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 
 	// weight multiplier is increased for next block.
 	t.execute_with(|| {
-		let fm = TransactionPayment::next_fee_multiplier();
+		let fm = pallet_transaction_payment::NextFeeMultiplier::<Runtime>::get();
 		println!("After a small block: {:?} -> {:?}", prev_multiplier, fm);
 		assert!(fm < prev_multiplier);
 	});

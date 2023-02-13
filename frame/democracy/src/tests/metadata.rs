@@ -89,7 +89,7 @@ fn set_proposal_metadata_works() {
 		// create an external proposal.
 		assert_ok!(propose_set_balance(1, 2, 5));
 		// metadata owner is a public proposal.
-		let owner = MetadataOwner::Proposal(Democracy::public_prop_count() - 1);
+		let owner = MetadataOwner::Proposal(PublicPropCount::<Test>::get() - 1);
 		// fails to set non-existing preimage.
 		assert_noop!(
 			Democracy::set_metadata(RuntimeOrigin::signed(1), owner.clone(), Some(invalid_hash),),
@@ -117,7 +117,7 @@ fn clear_proposal_metadata_works() {
 		// create an external proposal.
 		assert_ok!(propose_set_balance(1, 2, 5));
 		// metadata owner is a public proposal.
-		let owner = MetadataOwner::Proposal(Democracy::public_prop_count() - 1);
+		let owner = MetadataOwner::Proposal(PublicPropCount::<Test>::get() - 1);
 		// set metadata.
 		let hash = note_preimage(1);
 		assert_ok!(Democracy::set_metadata(RuntimeOrigin::signed(1), owner.clone(), Some(hash),));

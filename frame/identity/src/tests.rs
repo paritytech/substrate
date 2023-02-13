@@ -240,7 +240,7 @@ fn adding_registrar_should_work() {
 		let fields = IdentityFields(IdentityField::Display | IdentityField::Legal);
 		assert_ok!(Identity::set_fields(RuntimeOrigin::signed(3), 0, fields));
 		assert_eq!(
-			Identity::registrars(),
+			Registrars::<Test>::get(),
 			vec![Some(RegistrarInfo { account: 3, fee: 10, fields })]
 		);
 	});
@@ -270,7 +270,7 @@ fn registration_should_work() {
 		three_fields.additional.try_push(Default::default()).unwrap();
 		assert!(three_fields.additional.try_push(Default::default()).is_err());
 		assert_ok!(Identity::set_identity(RuntimeOrigin::signed(10), Box::new(ten())));
-		assert_eq!(Identity::identity(10).unwrap().info, ten());
+		assert_eq!(IdentityOf::<Test>::get(10).unwrap().info, ten());
 		assert_eq!(Balances::free_balance(10), 90);
 		assert_ok!(Identity::clear_identity(RuntimeOrigin::signed(10)));
 		assert_eq!(Balances::free_balance(10), 100);
@@ -346,7 +346,10 @@ fn uninvited_judgement_should_work() {
 			Judgement::Reasonable,
 			identity_hash
 		));
-		assert_eq!(Identity::identity(10).unwrap().judgements, vec![(0, Judgement::Reasonable)]);
+		assert_eq!(
+			IdentityOf::<Test>::get(10).unwrap().judgements,
+			vec![(0, Judgement::Reasonable)]
+		);
 	});
 }
 
@@ -363,7 +366,7 @@ fn clearing_judgement_should_work() {
 			BlakeTwo256::hash_of(&ten())
 		));
 		assert_ok!(Identity::clear_identity(RuntimeOrigin::signed(10)));
-		assert_eq!(Identity::identity(10), None);
+		assert_eq!(IdentityOf::<Test>::get(10), None);
 	});
 }
 
@@ -373,7 +376,7 @@ fn killing_slashing_should_work() {
 		assert_ok!(Identity::set_identity(RuntimeOrigin::signed(10), Box::new(ten())));
 		assert_noop!(Identity::kill_identity(RuntimeOrigin::signed(1), 10), BadOrigin);
 		assert_ok!(Identity::kill_identity(RuntimeOrigin::signed(2), 10));
-		assert_eq!(Identity::identity(10), None);
+		assert_eq!(IdentityOf::<Test>::get(10), None);
 		assert_eq!(Balances::free_balance(10), 90);
 		assert_noop!(
 			Identity::kill_identity(RuntimeOrigin::signed(2), 10),
@@ -394,32 +397,47 @@ fn setting_subaccounts_should_work() {
 		assert_ok!(Identity::set_identity(RuntimeOrigin::signed(10), Box::new(ten())));
 		assert_ok!(Identity::set_subs(RuntimeOrigin::signed(10), subs.clone()));
 		assert_eq!(Balances::free_balance(10), 80);
-		assert_eq!(Identity::subs_of(10), (10, vec![20].try_into().unwrap()));
-		assert_eq!(Identity::super_of(20), Some((10, Data::Raw(vec![40; 1].try_into().unwrap()))));
+		assert_eq!(SubsOf::<Test>::get(10), (10, vec![20].try_into().unwrap()));
+		assert_eq!(
+			SuperOf::<Test>::get(20),
+			Some((10, Data::Raw(vec![40; 1].try_into().unwrap())))
+		);
 
 		// push another item and re-set it.
 		subs.push((30, Data::Raw(vec![50; 1].try_into().unwrap())));
 		assert_ok!(Identity::set_subs(RuntimeOrigin::signed(10), subs.clone()));
 		assert_eq!(Balances::free_balance(10), 70);
-		assert_eq!(Identity::subs_of(10), (20, vec![20, 30].try_into().unwrap()));
-		assert_eq!(Identity::super_of(20), Some((10, Data::Raw(vec![40; 1].try_into().unwrap()))));
-		assert_eq!(Identity::super_of(30), Some((10, Data::Raw(vec![50; 1].try_into().unwrap()))));
+		assert_eq!(SubsOf::<Test>::get(10), (20, vec![20, 30].try_into().unwrap()));
+		assert_eq!(
+			SuperOf::<Test>::get(20),
+			Some((10, Data::Raw(vec![40; 1].try_into().unwrap())))
+		);
+		assert_eq!(
+			SuperOf::<Test>::get(30),
+			Some((10, Data::Raw(vec![50; 1].try_into().unwrap())))
+		);
 
 		// switch out one of the items and re-set.
 		subs[0] = (40, Data::Raw(vec![60; 1].try_into().unwrap()));
 		assert_ok!(Identity::set_subs(RuntimeOrigin::signed(10), subs.clone()));
 		assert_eq!(Balances::free_balance(10), 70); // no change in the balance
-		assert_eq!(Identity::subs_of(10), (20, vec![40, 30].try_into().unwrap()));
-		assert_eq!(Identity::super_of(20), None);
-		assert_eq!(Identity::super_of(30), Some((10, Data::Raw(vec![50; 1].try_into().unwrap()))));
-		assert_eq!(Identity::super_of(40), Some((10, Data::Raw(vec![60; 1].try_into().unwrap()))));
+		assert_eq!(SubsOf::<Test>::get(10), (20, vec![40, 30].try_into().unwrap()));
+		assert_eq!(SuperOf::<Test>::get(20), None);
+		assert_eq!(
+			SuperOf::<Test>::get(30),
+			Some((10, Data::Raw(vec![50; 1].try_into().unwrap())))
+		);
+		assert_eq!(
+			SuperOf::<Test>::get(40),
+			Some((10, Data::Raw(vec![60; 1].try_into().unwrap())))
+		);
 
 		// clear
 		assert_ok!(Identity::set_subs(RuntimeOrigin::signed(10), vec![]));
 		assert_eq!(Balances::free_balance(10), 90);
-		assert_eq!(Identity::subs_of(10), (0, BoundedVec::default()));
-		assert_eq!(Identity::super_of(30), None);
-		assert_eq!(Identity::super_of(40), None);
+		assert_eq!(SubsOf::<Test>::get(10), (0, BoundedVec::default()));
+		assert_eq!(SuperOf::<Test>::get(30), None);
+		assert_eq!(SuperOf::<Test>::get(40), None);
 
 		subs.push((20, Data::Raw(vec![40; 1].try_into().unwrap())));
 		assert_noop!(
@@ -439,7 +457,7 @@ fn clearing_account_should_remove_subaccounts_and_refund() {
 		));
 		assert_ok!(Identity::clear_identity(RuntimeOrigin::signed(10)));
 		assert_eq!(Balances::free_balance(10), 100);
-		assert!(Identity::super_of(20).is_none());
+		assert!(SuperOf::<Test>::get(20).is_none());
 	});
 }
 
@@ -453,7 +471,7 @@ fn killing_account_should_remove_subaccounts_and_not_refund() {
 		));
 		assert_ok!(Identity::kill_identity(RuntimeOrigin::signed(2), 10));
 		assert_eq!(Balances::free_balance(10), 80);
-		assert!(Identity::super_of(20).is_none());
+		assert!(SuperOf::<Test>::get(20).is_none());
 	});
 }
 

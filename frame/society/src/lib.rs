@@ -833,7 +833,7 @@ pub mod pallet {
 		pub fn unvouch(origin: OriginFor<T>, pos: u32) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
 			ensure!(
-				Self::vouching(&voucher) == Some(VouchingStatus::Vouching),
+				Vouching::<T, I>::get(&voucher) == Some(VouchingStatus::Vouching),
 				Error::<T, I>::NotVouching
 			);
 
@@ -1105,7 +1105,7 @@ pub mod pallet {
 					Judgement::Approve => {
 						// Suspension Judgement origin has approved this candidate
 						// Make sure we can pay them
-						let pot = Self::pot();
+						let pot = Pot::<T, I>::get();
 						ensure!(pot >= value, Error::<T, I>::InsufficientPot);
 						// Try to add user as a member! Can fail with `MaxMember` limit.
 						Self::add_member(&who)?;
@@ -1113,7 +1113,7 @@ pub mod pallet {
 						<Pot<T, I>>::put(pot - value);
 						// Add payout for new candidate
 						let maturity = <frame_system::Pallet<T>>::block_number() +
-							Self::lock_duration(Self::members().len() as u32);
+							Self::lock_duration(Members::<T, I>::get().len() as u32);
 						Self::pay_accepted_candidate(&who, value, kind, maturity);
 					},
 					Judgement::Reject => {
@@ -1178,7 +1178,7 @@ pub struct EnsureFounder<T>(sp_std::marker::PhantomData<T>);
 impl<T: Config> EnsureOrigin<T::RuntimeOrigin> for EnsureFounder<T> {
 	type Success = T::AccountId;
 	fn try_origin(o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
-		o.into().and_then(|o| match (o, Founder::<T>::get()) {
+		o.into().and_then(|o| match (o, Founder::<T, _>::get()) {
 			(frame_system::RawOrigin::Signed(ref who), Some(ref f)) if who == f => Ok(who.clone()),
 			(r, _) => Err(T::RuntimeOrigin::from(r)),
 		})
@@ -1186,7 +1186,7 @@ impl<T: Config> EnsureOrigin<T::RuntimeOrigin> for EnsureFounder<T> {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<T::RuntimeOrigin, ()> {
-		let founder = Founder::<T>::get().ok_or(())?;
+		let founder = Founder::<T, _>::get().ok_or(())?;
 		Ok(T::RuntimeOrigin::from(frame_system::RawOrigin::Signed(founder)))
 	}
 }
@@ -1302,8 +1302,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// NOTE: This does not correctly clean up a member from storage. It simply
 	/// removes them from the Members storage item.
 	pub fn remove_member(m: &T::AccountId) -> DispatchResult {
-		ensure!(Self::head() != Some(m.clone()), Error::<T, I>::Head);
-		ensure!(Self::founder() != Some(m.clone()), Error::<T, I>::Founder);
+		ensure!(Head::<T, I>::get() != Some(m.clone()), Error::<T, I>::Head);
+		ensure!(Founder::<T, I>::get() != Some(m.clone()), Error::<T, I>::Founder);
 
 		let mut members = <Members<T, I>>::get();
 		match members.binary_search(m) {
@@ -1596,7 +1596,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// Assume there are members, else don't run this logic.
 		if !members.is_empty() {
 			// End current defender rotation
-			if let Some(defender) = Self::defender() {
+			if let Some(defender) = Defender::<T, I>::get() {
 				let mut approval_count = 0;
 				let mut rejection_count = 0;
 				// Tallies total number of approve and reject votes for the defender.
@@ -1608,7 +1608,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				if approval_count <= rejection_count {
 					// User has failed the challenge
 					Self::suspend_member(&defender);
-					*members = Self::members();
+					*members = Members::<T, I>::get();
 				}
 
 				// Clean up all votes.

@@ -154,7 +154,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
-			ensure!(Self::key().map_or(false, |k| sender == k), Error::<T>::RequireSudo);
+			ensure!(Key::<T>::get().map_or(false, |k| sender == k), Error::<T>::RequireSudo);
 
 			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
 			Self::deposit_event(Event::Sudid { sudo_result: res.map(|_| ()).map_err(|e| e.error) });
@@ -179,7 +179,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
-			ensure!(Self::key().map_or(false, |k| sender == k), Error::<T>::RequireSudo);
+			ensure!(Key::<T>::get().map_or(false, |k| sender == k), Error::<T>::RequireSudo);
 
 			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
 			Self::deposit_event(Event::Sudid { sudo_result: res.map(|_| ()).map_err(|e| e.error) });
@@ -202,7 +202,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
-			ensure!(Self::key().map_or(false, |k| sender == k), Error::<T>::RequireSudo);
+			ensure!(Key::<T>::get().map_or(false, |k| sender == k), Error::<T>::RequireSudo);
 			let new = T::Lookup::lookup(new)?;
 
 			Self::deposit_event(Event::KeyChanged { old_sudoer: Key::<T>::get() });
@@ -235,7 +235,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
-			ensure!(Self::key().map_or(false, |k| sender == k), Error::<T>::RequireSudo);
+			ensure!(Key::<T>::get().map_or(false, |k| sender == k), Error::<T>::RequireSudo);
 
 			let who = T::Lookup::lookup(who)?;
 

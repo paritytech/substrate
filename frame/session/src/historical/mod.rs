@@ -49,7 +49,7 @@ use frame_support::{
 	Parameter,
 };
 
-use crate::{self as pallet_session, Pallet as Session};
+use crate::{self as pallet_session, CurrentIndex, Pallet as Session, Validators};
 
 pub use pallet::*;
 
@@ -83,7 +83,6 @@ pub mod pallet {
 
 	/// Mapping from historical session indices to session-data root hash and validator count.
 	#[pallet::storage]
-	#[pallet::getter(fn historical_root)]
 	pub type HistoricalSessions<T: Config> =
 		StorageMap<_, Twox64Concat, SessionIndex, (T::Hash, ValidatorCount), OptionQuery>;
 
@@ -125,11 +124,11 @@ impl<T: Config> ValidatorSet<T::AccountId> for Pallet<T> {
 	type ValidatorIdOf = T::ValidatorIdOf;
 
 	fn session_index() -> sp_staking::SessionIndex {
-		super::Pallet::<T>::current_index()
+		CurrentIndex::<T>::get()
 	}
 
 	fn validators() -> Vec<Self::ValidatorId> {
-		super::Pallet::<T>::validators()
+		Validators::<T>::get()
 	}
 }
 
@@ -321,8 +320,8 @@ impl<T: Config, D: AsRef<[u8]>> KeyOwnerProofSystem<(KeyTypeId, D)> for Pallet<T
 	type IdentificationTuple = IdentificationTuple<T>;
 
 	fn prove(key: (KeyTypeId, D)) -> Option<Self::Proof> {
-		let session = <Session<T>>::current_index();
-		let validators = <Session<T>>::validators()
+		let session = CurrentIndex::<T>::get();
+		let validators = Validators::<T>::get()
 			.into_iter()
 			.filter_map(|validator| {
 				T::FullIdentificationOf::convert(validator.clone())
@@ -345,10 +344,10 @@ impl<T: Config, D: AsRef<[u8]>> KeyOwnerProofSystem<(KeyTypeId, D)> for Pallet<T
 	fn check_proof(key: (KeyTypeId, D), proof: Self::Proof) -> Option<IdentificationTuple<T>> {
 		let (id, data) = key;
 
-		if proof.session == <Session<T>>::current_index() {
+		if proof.session == CurrentIndex::<T>::get() {
 			<Session<T>>::key_owner(id, data.as_ref()).and_then(|owner| {
 				T::FullIdentificationOf::convert(owner.clone()).and_then(move |id| {
-					let count = <Session<T>>::validators().len() as ValidatorCount;
+					let count = Validators::<T>::get().len() as ValidatorCount;
 
 					if count != proof.validator_count {
 						return None
@@ -373,8 +372,9 @@ impl<T: Config, D: AsRef<[u8]>> KeyOwnerProofSystem<(KeyTypeId, D)> for Pallet<T
 #[cfg(test)]
 pub(crate) mod tests {
 	use super::*;
-	use crate::mock::{
-		force_new_session, set_next_validators, NextValidators, Session, System, Test,
+	use crate::{
+		mock::{force_new_session, set_next_validators, NextValidators, Session, System, Test},
+		CurrentIndex,
 	};
 
 	use sp_runtime::{key_types::DUMMY, testing::UintAuthorityId};
@@ -425,8 +425,8 @@ pub(crate) mod tests {
 			System::set_block_number(2);
 			Session::on_initialize(2);
 
-			assert!(Historical::historical_root(proof.session).is_some());
-			assert!(Session::current_index() > proof.session);
+			assert!(HistoricalSessions::<Test>::get(proof.session).is_some());
+			assert!(CurrentIndex::<Test>::get() > proof.session);
 
 			// proof-checking in the next session is also OK.
 			assert!(Historical::check_proof((DUMMY, &encoded_key_1[..]), proof.clone()).is_some());
@@ -453,7 +453,7 @@ pub(crate) mod tests {
 			assert_eq!(<StoredRange<Test>>::get(), Some((0, 100)));
 
 			for i in 0..100 {
-				assert!(Historical::historical_root(i).is_some())
+				assert!(HistoricalSessions::<Test>::get(i).is_some())
 			}
 
 			Historical::prune_up_to(10);
@@ -463,7 +463,7 @@ pub(crate) mod tests {
 			assert_eq!(<StoredRange<Test>>::get(), Some((10, 100)));
 
 			for i in 10..100 {
-				assert!(Historical::historical_root(i).is_some())
+				assert!(HistoricalSessions::<Test>::get(i).is_some())
 			}
 
 			Historical::prune_up_to(99);
@@ -483,14 +483,14 @@ pub(crate) mod tests {
 			assert_eq!(<StoredRange<Test>>::get(), Some((100, 200)));
 
 			for i in 100..200 {
-				assert!(Historical::historical_root(i).is_some())
+				assert!(HistoricalSessions::<Test>::get(i).is_some())
 			}
 
 			Historical::prune_up_to(9999);
 			assert_eq!(<StoredRange<Test>>::get(), None);
 
 			for i in 100..200 {
-				assert!(Historical::historical_root(i).is_none())
+				assert!(HistoricalSessions::<Test>::get(i).is_none())
 			}
 		});
 	}

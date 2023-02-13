@@ -44,7 +44,7 @@ fn initialize_block(block: u64) {
 fn simple_setup_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
-		assert_eq!(Session::validators(), vec![1, 2, 3]);
+		assert_eq!(Validators::<Test>::get(), vec![1, 2, 3]);
 	});
 }
 
@@ -60,7 +60,7 @@ fn put_get_keys() {
 fn keys_cleared_on_kill() {
 	let mut ext = new_test_ext();
 	ext.execute_with(|| {
-		assert_eq!(Session::validators(), vec![1, 2, 3]);
+		assert_eq!(Validators::<Test>::get(), vec![1, 2, 3]);
 		assert_eq!(Session::load_keys(&1), Some(UintAuthorityId(1).into()));
 
 		let id = DUMMY;
@@ -79,7 +79,7 @@ fn keys_cleared_on_kill() {
 fn purge_keys_works_for_stash_id() {
 	let mut ext = new_test_ext();
 	ext.execute_with(|| {
-		assert_eq!(Session::validators(), vec![1, 2, 3]);
+		assert_eq!(Validators::<Test>::get(), vec![1, 2, 3]);
 		TestValidatorIdOf::set(vec![(10, 1), (20, 2), (3, 3)].into_iter().collect());
 		assert_eq!(Session::load_keys(&1), Some(UintAuthorityId(1).into()));
 		assert_eq!(Session::load_keys(&2), Some(UintAuthorityId(2).into()));
@@ -108,10 +108,10 @@ fn authorities_should_track_validators() {
 		force_new_session();
 		initialize_block(1);
 		assert_eq!(
-			Session::queued_keys(),
+			QueuedKeys::<Test>::get(),
 			vec![(1, UintAuthorityId(1).into()), (2, UintAuthorityId(2).into()),]
 		);
-		assert_eq!(Session::validators(), vec![1, 2, 3]);
+		assert_eq!(Validators::<Test>::get(), vec![1, 2, 3]);
 		assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 		assert!(before_session_end_called());
 		reset_before_session_end_called();
@@ -119,10 +119,10 @@ fn authorities_should_track_validators() {
 		force_new_session();
 		initialize_block(2);
 		assert_eq!(
-			Session::queued_keys(),
+			QueuedKeys::<Test>::get(),
 			vec![(1, UintAuthorityId(1).into()), (2, UintAuthorityId(2).into()),]
 		);
-		assert_eq!(Session::validators(), vec![1, 2]);
+		assert_eq!(Validators::<Test>::get(), vec![1, 2]);
 		assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2)]);
 		assert!(before_session_end_called());
 		reset_before_session_end_called();
@@ -132,28 +132,28 @@ fn authorities_should_track_validators() {
 		force_new_session();
 		initialize_block(3);
 		assert_eq!(
-			Session::queued_keys(),
+			QueuedKeys::<Test>::get(),
 			vec![
 				(1, UintAuthorityId(1).into()),
 				(2, UintAuthorityId(2).into()),
 				(4, UintAuthorityId(4).into()),
 			]
 		);
-		assert_eq!(Session::validators(), vec![1, 2]);
+		assert_eq!(Validators::<Test>::get(), vec![1, 2]);
 		assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2)]);
 		assert!(before_session_end_called());
 
 		force_new_session();
 		initialize_block(4);
 		assert_eq!(
-			Session::queued_keys(),
+			QueuedKeys::<Test>::get(),
 			vec![
 				(1, UintAuthorityId(1).into()),
 				(2, UintAuthorityId(2).into()),
 				(4, UintAuthorityId(4).into()),
 			]
 		);
-		assert_eq!(Session::validators(), vec![1, 2, 4]);
+		assert_eq!(Validators::<Test>::get(), vec![1, 2, 4]);
 		assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(4)]);
 	});
 }
@@ -164,20 +164,20 @@ fn should_work_with_early_exit() {
 		set_session_length(10);
 
 		initialize_block(1);
-		assert_eq!(Session::current_index(), 0);
+		assert_eq!(CurrentIndex::<Test>::get(), 0);
 
 		initialize_block(2);
-		assert_eq!(Session::current_index(), 0);
+		assert_eq!(CurrentIndex::<Test>::get(), 0);
 
 		force_new_session();
 		initialize_block(3);
-		assert_eq!(Session::current_index(), 1);
+		assert_eq!(CurrentIndex::<Test>::get(), 1);
 
 		initialize_block(9);
-		assert_eq!(Session::current_index(), 1);
+		assert_eq!(CurrentIndex::<Test>::get(), 1);
 
 		initialize_block(10);
-		assert_eq!(Session::current_index(), 2);
+		assert_eq!(CurrentIndex::<Test>::get(), 2);
 	});
 }
 
@@ -446,7 +446,7 @@ fn upgrade_keys() {
 
 		// Check queued keys.
 		assert_eq!(
-			Session::queued_keys(),
+			QueuedKeys::<Test>::get(),
 			vec![(1, mock_keys_for(1)), (2, mock_keys_for(2)), (3, mock_keys_for(3)),],
 		);
 

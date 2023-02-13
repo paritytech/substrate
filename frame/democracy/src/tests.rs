@@ -220,7 +220,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 #[test]
 fn params_should_work() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(Democracy::referendum_count(), 0);
+		assert_eq!(ReferendumCount::<Test>::get(), 0);
 		assert_eq!(Balances::free_balance(42), 0);
 		assert_eq!(Balances::total_issuance(), 210);
 	});

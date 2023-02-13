@@ -2069,8 +2069,8 @@ impl_runtime_apis! {
 				slot_duration: Babe::slot_duration(),
 				epoch_length: EpochDuration::get(),
 				c: epoch_config.c,
-				authorities: Babe::authorities().to_vec(),
-				randomness: Babe::randomness(),
+				authorities: pallet_babe::Authorities::<Runtime>::get().to_vec(),
+				randomness: pallet_babe::Randomness::<Runtime>::get(),
 				allowed_slots: epoch_config.allowed_slots,
 			}
 		}
@@ -2292,11 +2292,11 @@ impl_runtime_apis! {
 		BlockNumber,
 	> for Runtime {
 		fn mmr_root() -> Result<mmr::Hash, mmr::Error> {
-			Ok(Mmr::mmr_root())
+			Ok(pallet_mmr::RootHash::<Runtime>::get())
 		}
 
 		fn mmr_leaf_count() -> Result<mmr::LeafIndex, mmr::Error> {
-			Ok(Mmr::mmr_leaves())
+			Ok(pallet_mmr::NumberOfLeaves::<Runtime>::get())
 		}
 
 		fn generate_proof(

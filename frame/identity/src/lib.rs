@@ -158,7 +158,6 @@ pub mod pallet {
 	///
 	/// TWOX-NOTE: OK ― `AccountId` is a secure hash.
 	#[pallet::storage]
-	#[pallet::getter(fn identity)]
 	pub(super) type IdentityOf<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
@@ -170,7 +169,6 @@ pub mod pallet {
 	/// The super-identity of an alternative "sub" identity together with its name, within that
 	/// context. If the account is not some other account's sub-identity, then just `None`.
 	#[pallet::storage]
-	#[pallet::getter(fn super_of)]
 	pub(super) type SuperOf<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, (T::AccountId, Data), OptionQuery>;
 
@@ -976,5 +974,18 @@ impl<T: Config> Pallet<T> {
 	pub fn has_identity(who: &T::AccountId, fields: u64) -> bool {
 		IdentityOf::<T>::get(who)
 			.map_or(false, |registration| (registration.info.fields().0.bits() & fields) == fields)
+	}
+
+	/// Information that is pertinent to identify the entity behind an account.
+	pub fn identity(
+		who: &T::AccountId,
+	) -> Option<Registration<BalanceOf<T>, T::MaxRegistrars, T::MaxAdditionalFields>> {
+		IdentityOf::<T>::get(who)
+	}
+
+	/// The super-identity of an alternative "sub" identity together with its name, within that
+	/// context. If the account is not some other account's sub-identity, then just `None`.
+	pub fn super_of(who: &T::AccountId) -> Option<(T::AccountId, Data)> {
+		SuperOf::<T>::get(who)
 	}
 }

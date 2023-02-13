@@ -61,7 +61,7 @@ benchmarks! {
 			false,
 			RewardDestination::Staked,
 		)?;
-		let v_controller = pallet_staking::Pallet::<T>::bonded(&v_stash).ok_or("not stash")?;
+		let v_controller = pallet_staking::Bonded::<T>::get(&v_stash).ok_or("not stash")?;
 
 		let keys = T::Keys::decode(&mut TrailingZeroInput::zeroes()).unwrap();
 		let proof: Vec<u8> = vec![0,1,2,3];
@@ -78,7 +78,7 @@ benchmarks! {
 			false,
 			RewardDestination::Staked
 		)?;
-		let v_controller = pallet_staking::Pallet::<T>::bonded(&v_stash).ok_or("not stash")?;
+		let v_controller = pallet_staking::Bonded::<T>::get(&v_stash).ok_or("not stash")?;
 		let keys = T::Keys::decode(&mut TrailingZeroInput::zeroes()).unwrap();
 		let proof: Vec<u8> = vec![0,1,2,3];
 		Session::<T>::set_keys(RawOrigin::Signed(v_controller.clone()).into(), keys, proof)?;
@@ -134,7 +134,7 @@ fn check_membership_proof_setup<T: Config>(
 		use rand::{RngCore, SeedableRng};
 
 		let validator = T::Lookup::lookup(who).unwrap();
-		let controller = pallet_staking::Pallet::<T>::bonded(validator).unwrap();
+		let controller = pallet_staking::Bonded::<T>::get(validator).unwrap();
 
 		let keys = {
 			let mut keys = [0u8; 128];
@@ -157,7 +157,7 @@ fn check_membership_proof_setup<T: Config>(
 	Pallet::<T>::on_initialize(T::BlockNumber::one());
 
 	// skip sessions until the new validator set is enacted
-	while Session::<T>::validators().len() < n as usize {
+	while Validators::<T>::get().len() < n as usize {
 		Session::<T>::rotate_session();
 	}
 

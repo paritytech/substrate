@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{mock::*, *};
+use crate::{mock::*, primitives::DataOrHash, Pallet as Mmr, *};
 
 use frame_support::traits::{Get, OnInitialize};
 use sp_core::{
@@ -58,7 +58,6 @@ type BlockNumber = <Test as frame_system::Config>::BlockNumber;
 fn decode_node(
 	v: Vec<u8>,
 ) -> mmr::Node<<Test as Config>::Hashing, ((BlockNumber, H256), LeafData)> {
-	use crate::primitives::DataOrHash;
 	type A = DataOrHash<<Test as Config>::Hashing, (BlockNumber, H256)>;
 	type B = DataOrHash<<Test as Config>::Hashing, LeafData>;
 	type Node = mmr::Node<<Test as Config>::Hashing, (A, B)>;
@@ -84,25 +83,25 @@ fn should_start_empty() {
 	new_test_ext().execute_with(|| {
 		// given
 		assert_eq!(
-			crate::RootHash::<Test>::get(),
+			RootHash::<Test>::get(),
 			"0000000000000000000000000000000000000000000000000000000000000000"
 				.parse()
 				.unwrap()
 		);
-		assert_eq!(crate::NumberOfLeaves::<Test>::get(), 0);
-		assert_eq!(crate::Nodes::<Test>::get(0), None);
+		assert_eq!(NumberOfLeaves::<Test>::get(), 0);
+		assert_eq!(Nodes::<Test>::get(0), None);
 
 		// when
 		let weight = new_block();
 
 		// then
-		assert_eq!(crate::NumberOfLeaves::<Test>::get(), 1);
+		assert_eq!(NumberOfLeaves::<Test>::get(), 1);
 		assert_eq!(
-			crate::Nodes::<Test>::get(0),
+			Nodes::<Test>::get(0),
 			Some(hex("4320435e8c3318562dba60116bdbcc0b82ffcecb9bb39aae3300cfda3ad0b8b0"))
 		);
 		assert_eq!(
-			crate::RootHash::<Test>::get(),
+			RootHash::<Test>::get(),
 			hex("4320435e8c3318562dba60116bdbcc0b82ffcecb9bb39aae3300cfda3ad0b8b0")
 		);
 		assert!(weight != Weight::zero());
@@ -119,13 +118,9 @@ fn should_append_to_mmr_when_on_initialize_is_called() {
 		let parent_b1 = <frame_system::Pallet<Test>>::parent_hash();
 
 		// then
-		assert_eq!(crate::NumberOfLeaves::<Test>::get(), 1);
+		assert_eq!(NumberOfLeaves::<Test>::get(), 1);
 		assert_eq!(
-			(
-				crate::Nodes::<Test>::get(0),
-				crate::Nodes::<Test>::get(1),
-				crate::RootHash::<Test>::get(),
-			),
+			(Nodes::<Test>::get(0), Nodes::<Test>::get(1), RootHash::<Test>::get(),),
 			(
 				Some(hex("4320435e8c3318562dba60116bdbcc0b82ffcecb9bb39aae3300cfda3ad0b8b0")),
 				None,
@@ -138,16 +133,16 @@ fn should_append_to_mmr_when_on_initialize_is_called() {
 		let parent_b2 = <frame_system::Pallet<Test>>::parent_hash();
 
 		// then
-		assert_eq!(crate::NumberOfLeaves::<Test>::get(), 2);
+		assert_eq!(NumberOfLeaves::<Test>::get(), 2);
 		let peaks = peaks_from_leaves_count(2);
 		assert_eq!(peaks, vec![2]);
 		assert_eq!(
 			(
-				crate::Nodes::<Test>::get(0),
-				crate::Nodes::<Test>::get(1),
-				crate::Nodes::<Test>::get(2),
-				crate::Nodes::<Test>::get(3),
-				crate::RootHash::<Test>::get(),
+				Nodes::<Test>::get(0),
+				Nodes::<Test>::get(1),
+				Nodes::<Test>::get(2),
+				Nodes::<Test>::get(3),
+				RootHash::<Test>::get(),
 			),
 			(
 				None,
@@ -196,18 +191,18 @@ fn should_construct_larger_mmr_correctly() {
 		add_blocks(7);
 
 		// then
-		assert_eq!(crate::NumberOfLeaves::<Test>::get(), 7);
+		assert_eq!(NumberOfLeaves::<Test>::get(), 7);
 		let peaks = peaks_from_leaves_count(7);
 		assert_eq!(peaks, vec![6, 9, 10]);
 		for i in (0..=10).filter(|p| !peaks.contains(p)) {
-			assert!(crate::Nodes::<Test>::get(i).is_none());
+			assert!(Nodes::<Test>::get(i).is_none());
 		}
 		assert_eq!(
 			(
-				crate::Nodes::<Test>::get(6),
-				crate::Nodes::<Test>::get(9),
-				crate::Nodes::<Test>::get(10),
-				crate::RootHash::<Test>::get(),
+				Nodes::<Test>::get(6),
+				Nodes::<Test>::get(9),
+				Nodes::<Test>::get(10),
+				RootHash::<Test>::get(),
 			),
 			(
 				Some(hex("ae88a0825da50e953e7a359c55fe13c8015e48d03d301b8bdfc9193874da9252")),
@@ -257,7 +252,7 @@ fn should_generate_proofs_correctly() {
 		// when generate proofs for all leaves.
 		let proofs = (1_u64..=best_block_number)
 			.into_iter()
-			.map(|block_num| crate::Pallet::<Test>::generate_proof(vec![block_num], None).unwrap())
+			.map(|block_num| Mmr::<Test>::generate_proof(vec![block_num], None).unwrap())
 			.collect::<Vec<_>>();
 		// when generate historical proofs for all leaves
 		let historical_proofs = (1_u64..best_block_number)
@@ -266,11 +261,8 @@ fn should_generate_proofs_correctly() {
 				let mut proofs = vec![];
 				for historical_best_block in block_num..=num_blocks {
 					proofs.push(
-						crate::Pallet::<Test>::generate_proof(
-							vec![block_num],
-							Some(historical_best_block),
-						)
-						.unwrap(),
+						Mmr::<Test>::generate_proof(vec![block_num], Some(historical_best_block))
+							.unwrap(),
 					)
 				}
 				proofs
@@ -428,7 +420,7 @@ fn should_generate_batch_proof_correctly() {
 	register_offchain_ext(&mut ext);
 	ext.execute_with(|| {
 		// when generate proofs for a batch of leaves
-		let (.., proof) = crate::Pallet::<Test>::generate_proof(vec![1, 5, 6], None).unwrap();
+		let (.., proof) = Mmr::<Test>::generate_proof(vec![1, 5, 6], None).unwrap();
 		// then
 		assert_eq!(
 			proof,
@@ -445,8 +437,7 @@ fn should_generate_batch_proof_correctly() {
 		);
 
 		// when generate historical proofs for a batch of leaves
-		let (.., historical_proof) =
-			crate::Pallet::<Test>::generate_proof(vec![1, 5, 6], Some(6)).unwrap();
+		let (.., historical_proof) = Mmr::<Test>::generate_proof(vec![1, 5, 6], Some(6)).unwrap();
 		// then
 		assert_eq!(
 			historical_proof,
@@ -461,8 +452,7 @@ fn should_generate_batch_proof_correctly() {
 		);
 
 		// when generate historical proofs for a batch of leaves
-		let (.., historical_proof) =
-			crate::Pallet::<Test>::generate_proof(vec![1, 5, 6], None).unwrap();
+		let (.., historical_proof) = Mmr::<Test>::generate_proof(vec![1, 5, 6], None).unwrap();
 		// then
 		assert_eq!(historical_proof, proof);
 	});
@@ -483,33 +473,27 @@ fn should_verify() {
 	register_offchain_ext(&mut ext);
 	let (leaves, proof5) = ext.execute_with(|| {
 		// when
-		crate::Pallet::<Test>::generate_proof(vec![5], None).unwrap()
+		Mmr::<Test>::generate_proof(vec![5], None).unwrap()
 	});
 	let (simple_historical_leaves, simple_historical_proof5) = ext.execute_with(|| {
 		// when
-		crate::Pallet::<Test>::generate_proof(vec![5], Some(6)).unwrap()
+		Mmr::<Test>::generate_proof(vec![5], Some(6)).unwrap()
 	});
 	let (advanced_historical_leaves, advanced_historical_proof5) = ext.execute_with(|| {
 		// when
-		crate::Pallet::<Test>::generate_proof(vec![5], Some(7)).unwrap()
+		Mmr::<Test>::generate_proof(vec![5], Some(7)).unwrap()
 	});
 
 	ext.execute_with(|| {
 		add_blocks(7);
 		// then
-		assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proof5), Ok(()));
+		assert_eq!(Mmr::<Test>::verify_leaves(leaves, proof5), Ok(()));
 		assert_eq!(
-			crate::Pallet::<Test>::verify_leaves(
-				simple_historical_leaves,
-				simple_historical_proof5
-			),
+			Mmr::<Test>::verify_leaves(simple_historical_leaves, simple_historical_proof5),
 			Ok(())
 		);
 		assert_eq!(
-			crate::Pallet::<Test>::verify_leaves(
-				advanced_historical_leaves,
-				advanced_historical_proof5
-			),
+			Mmr::<Test>::verify_leaves(advanced_historical_leaves, advanced_historical_proof5),
 			Ok(())
 		);
 	});
@@ -522,9 +506,8 @@ fn should_verify_batch_proofs() {
 		block_numbers: &Vec<u64>,
 		blocks_to_add: usize,
 	) {
-		let (leaves, proof) = ext.execute_with(|| {
-			crate::Pallet::<Test>::generate_proof(block_numbers.to_vec(), None).unwrap()
-		});
+		let (leaves, proof) =
+			ext.execute_with(|| Mmr::<Test>::generate_proof(block_numbers.to_vec(), None).unwrap());
 
 		let max_block_number = ext.execute_with(|| frame_system::Pallet::<Test>::block_number());
 		let min_block_number = block_numbers.iter().max().unwrap();
@@ -533,8 +516,7 @@ fn should_verify_batch_proofs() {
 		let historical_proofs = (*min_block_number..=max_block_number)
 			.map(|best_block| {
 				ext.execute_with(|| {
-					crate::Pallet::<Test>::generate_proof(block_numbers.to_vec(), Some(best_block))
-						.unwrap()
+					Mmr::<Test>::generate_proof(block_numbers.to_vec(), Some(best_block)).unwrap()
 				})
 			})
 			.collect::<Vec<_>>();
@@ -542,12 +524,9 @@ fn should_verify_batch_proofs() {
 		ext.execute_with(|| {
 			add_blocks(blocks_to_add);
 			// then
-			assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proof), Ok(()));
+			assert_eq!(Mmr::<Test>::verify_leaves(leaves, proof), Ok(()));
 			historical_proofs.iter().for_each(|(leaves, proof)| {
-				assert_eq!(
-					crate::Pallet::<Test>::verify_leaves(leaves.clone(), proof.clone()),
-					Ok(())
-				);
+				assert_eq!(Mmr::<Test>::verify_leaves(leaves.clone(), proof.clone()), Ok(()));
 			});
 		})
 	}
@@ -607,9 +586,9 @@ fn verification_should_be_stateless() {
 	let mut ext = new_test_ext();
 	let (root_6, root_7) = ext.execute_with(|| {
 		add_blocks(6);
-		let root_6 = crate::Pallet::<Test>::mmr_root_hash();
+		let root_6 = RootHash::<Test>::get();
 		add_blocks(1);
-		let root_7 = crate::Pallet::<Test>::mmr_root_hash();
+		let root_7 = RootHash::<Test>::get();
 		(root_6, root_7)
 	});
 	ext.persist_offchain_overlay();
@@ -619,15 +598,15 @@ fn verification_should_be_stateless() {
 	register_offchain_ext(&mut ext);
 	let (leaves, proof5) = ext.execute_with(|| {
 		// when
-		crate::Pallet::<Test>::generate_proof(vec![5], None).unwrap()
+		Mmr::<Test>::generate_proof(vec![5], None).unwrap()
 	});
 	let (_, historical_proof5) = ext.execute_with(|| {
 		// when
-		crate::Pallet::<Test>::generate_proof(vec![5], Some(6)).unwrap()
+		Mmr::<Test>::generate_proof(vec![5], Some(6)).unwrap()
 	});
 
 	// Verify proof without relying on any on-chain data.
-	let leaf = crate::primitives::DataOrHash::Data(leaves[0].clone());
+	let leaf = DataOrHash::Data(leaves[0].clone());
 	assert_eq!(
 		crate::verify_leaves_proof::<<Test as Config>::Hashing, _>(
 			root_7,
@@ -655,9 +634,9 @@ fn should_verify_batch_proof_statelessly() {
 	let mut ext = new_test_ext();
 	let (root_6, root_7) = ext.execute_with(|| {
 		add_blocks(6);
-		let root_6 = crate::Pallet::<Test>::mmr_root_hash();
+		let root_6 = RootHash::<Test>::get();
 		add_blocks(1);
-		let root_7 = crate::Pallet::<Test>::mmr_root_hash();
+		let root_7 = RootHash::<Test>::get();
 		(root_6, root_7)
 	});
 	ext.persist_offchain_overlay();
@@ -667,21 +646,18 @@ fn should_verify_batch_proof_statelessly() {
 	register_offchain_ext(&mut ext);
 	let (leaves, proof) = ext.execute_with(|| {
 		// when
-		crate::Pallet::<Test>::generate_proof(vec![1, 4, 5], None).unwrap()
+		Mmr::<Test>::generate_proof(vec![1, 4, 5], None).unwrap()
 	});
 	let (historical_leaves, historical_proof) = ext.execute_with(|| {
 		// when
-		crate::Pallet::<Test>::generate_proof(vec![1, 4, 5], Some(6)).unwrap()
+		Mmr::<Test>::generate_proof(vec![1, 4, 5], Some(6)).unwrap()
 	});
 
 	// Verify proof without relying on any on-chain data.
 	assert_eq!(
 		crate::verify_leaves_proof::<<Test as Config>::Hashing, _>(
 			root_7,
-			leaves
-				.into_iter()
-				.map(|leaf| crate::primitives::DataOrHash::Data(leaf))
-				.collect(),
+			leaves.into_iter().map(|leaf| DataOrHash::Data(leaf)).collect(),
 			proof
 		),
 		Ok(())
@@ -689,10 +665,7 @@ fn should_verify_batch_proof_statelessly() {
 	assert_eq!(
 		crate::verify_leaves_proof::<<Test as Config>::Hashing, _>(
 			root_6,
-			historical_leaves
-				.into_iter()
-				.map(|leaf| crate::primitives::DataOrHash::Data(leaf))
-				.collect(),
+			historical_leaves.into_iter().map(|leaf| DataOrHash::Data(leaf)).collect(),
 			historical_proof
 		),
 		Ok(())
@@ -711,11 +684,11 @@ fn should_verify_on_the_next_block_since_there_is_no_pruning_yet() {
 
 	ext.execute_with(|| {
 		// when
-		let (leaves, proof5) = crate::Pallet::<Test>::generate_proof(vec![5], None).unwrap();
+		let (leaves, proof5) = Mmr::<Test>::generate_proof(vec![5], None).unwrap();
 		new_block();
 
 		// then
-		assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proof5), Ok(()));
+		assert_eq!(Mmr::<Test>::verify_leaves(leaves, proof5), Ok(()));
 	});
 }
 
@@ -743,20 +716,19 @@ fn should_verify_canonicalized() {
 
 	// Generate proofs for some blocks.
 	let (leaves, proofs) =
-		ext.execute_with(|| crate::Pallet::<Test>::generate_proof(vec![1, 4, 5, 7], None).unwrap());
+		ext.execute_with(|| Mmr::<Test>::generate_proof(vec![1, 4, 5, 7], None).unwrap());
 	// Verify all previously generated proofs.
 	ext.execute_with(|| {
-		assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proofs), Ok(()));
+		assert_eq!(Mmr::<Test>::verify_leaves(leaves, proofs), Ok(()));
 	});
 
 	// Generate proofs for some new blocks.
-	let (leaves, proofs) = ext.execute_with(|| {
-		crate::Pallet::<Test>::generate_proof(vec![block_hash_size + 7], None).unwrap()
-	});
+	let (leaves, proofs) =
+		ext.execute_with(|| Mmr::<Test>::generate_proof(vec![block_hash_size + 7], None).unwrap());
 	// Add some more blocks then verify all previously generated proofs.
 	ext.execute_with(|| {
 		add_blocks(7);
-		assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proofs), Ok(()));
+		assert_eq!(Mmr::<Test>::verify_leaves(leaves, proofs), Ok(()));
 	});
 }
 
@@ -774,18 +746,12 @@ fn does_not_panic_when_generating_historical_proofs() {
 	register_offchain_ext(&mut ext);
 	ext.execute_with(|| {
 		// when leaf index is invalid
-		assert_eq!(crate::Pallet::<Test>::generate_proof(vec![10], None), Err(Error::LeafNotFound),);
+		assert_eq!(Mmr::<Test>::generate_proof(vec![10], None), Err(Error::LeafNotFound),);
 
 		// when leaves count is invalid
-		assert_eq!(
-			crate::Pallet::<Test>::generate_proof(vec![3], Some(100)),
-			Err(Error::GenerateProof),
-		);
+		assert_eq!(Mmr::<Test>::generate_proof(vec![3], Some(100)), Err(Error::GenerateProof),);
 
 		// when both leaf index and leaves count are invalid
-		assert_eq!(
-			crate::Pallet::<Test>::generate_proof(vec![10], Some(100)),
-			Err(Error::LeafNotFound),
-		);
+		assert_eq!(Mmr::<Test>::generate_proof(vec![10], Some(100)), Err(Error::LeafNotFound),);
 	});
 }

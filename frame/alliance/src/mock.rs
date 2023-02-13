@@ -197,7 +197,7 @@ impl ProposalProvider<AccountId, H256, RuntimeCall> for AllianceProposalProvider
 	}
 
 	fn proposal_of(proposal_hash: H256) -> Option<RuntimeCall> {
-		AllianceMotion::proposal_of(proposal_hash)
+		pallet_collective::ProposalOf::<Test, Instance1>::get(proposal_hash)
 	}
 }
 

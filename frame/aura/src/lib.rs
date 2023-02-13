@@ -117,7 +117,6 @@ pub mod pallet {
 
 	/// The current authority set.
 	#[pallet::storage]
-	#[pallet::getter(fn authorities)]
 	pub(super) type Authorities<T: Config> =
 		StorageValue<_, BoundedVec<T::AuthorityId, T::MaxAuthorities>, ValueQuery>;
 
@@ -204,6 +203,11 @@ impl<T: Config> Pallet<T> {
 		// the majority of its slot.
 		<T as pallet_timestamp::Config>::MinimumPeriod::get().saturating_mul(2u32.into())
 	}
+
+	/// The current authority set.
+	pub fn authorities() -> BoundedVec<T::AuthorityId, T::MaxAuthorities> {
+		Authorities::<T>::get()
+	}
 }
 
 impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T> {
@@ -228,7 +232,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		// instant changes
 		if changed {
 			let next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
-			let last_authorities = Self::authorities();
+			let last_authorities = Authorities::<T>::get();
 			if last_authorities != next_authorities {
 				if next_authorities.len() as u32 > T::MaxAuthorities::get() {
 					log::warn!(
@@ -261,7 +265,7 @@ impl<T: Config> FindAuthor<u32> for Pallet<T> {
 		for (id, mut data) in digests.into_iter() {
 			if id == AURA_ENGINE_ID {
 				let slot = Slot::decode(&mut data).ok()?;
-				let author_index = *slot % Self::authorities().len() as u64;
+				let author_index = *slot % Authorities::<T>::get().len() as u64;
 				return Some(author_index as u32)
 			}
 		}
@@ -284,7 +288,7 @@ impl<T: Config, Inner: FindAuthor<u32>> FindAuthor<T::AuthorityId>
 	{
 		let i = Inner::find_author(digests)?;
 
-		let validators = <Pallet<T>>::authorities();
+		let validators = Authorities::<T>::get();
 		validators.get(i as usize).cloned()
 	}
 }
@@ -294,7 +298,7 @@ pub type AuraAuthorId<T> = FindAccountFromAuthorIndex<T, Pallet<T>>;
 
 impl<T: Config> IsMember<T::AuthorityId> for Pallet<T> {
 	fn is_member(authority_id: &T::AuthorityId) -> bool {
-		Self::authorities().iter().any(|id| id == authority_id)
+		Authorities::<T>::get().iter().any(|id| id == authority_id)
 	}
 }
 

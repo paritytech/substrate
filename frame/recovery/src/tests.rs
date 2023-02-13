@@ -29,9 +29,9 @@ use sp_runtime::traits::BadOrigin;
 fn basic_setup_works() {
 	new_test_ext().execute_with(|| {
 		// Nothing in storage to start
-		assert_eq!(Recovery::proxy(&2), None);
-		assert_eq!(Recovery::active_recovery(&1, &2), None);
-		assert_eq!(Recovery::recovery_config(&1), None);
+		assert_eq!(Proxy::<Test>::get(&2), None);
+		assert_eq!(ActiveRecoveries::<Test>::get(&1, &2), None);
+		assert_eq!(Recoverable::<Test>::get(&1), None);
 		// Everyone should have starting balance of 100
 		assert_eq!(Balances::free_balance(1), 100);
 	});
@@ -244,7 +244,7 @@ fn create_recovery_works() {
 			friends: friends.try_into().unwrap(),
 			threshold,
 		};
-		assert_eq!(Recovery::recovery_config(5), Some(recovery_config));
+		assert_eq!(Recoverable::<Test>::get(5), Some(recovery_config));
 	});
 }
 

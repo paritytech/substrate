@@ -556,7 +556,7 @@ benchmarks! {
 
 		let current_era = CurrentEra::<T>::get().unwrap();
 		// set the commission for this particular era as well.
-		<ErasValidatorPrefs<T>>::insert(current_era, validator.clone(), <Staking<T>>::validators(&validator));
+		<ErasValidatorPrefs<T>>::insert(current_era, validator.clone(), Validators::<T>::get(&validator));
 
 		let caller = whitelisted_caller();
 		let validator_controller = <Bonded<T>>::get(&validator).unwrap();
@@ -589,7 +589,7 @@ benchmarks! {
 
 		let current_era = CurrentEra::<T>::get().unwrap();
 		// set the commission for this particular era as well.
-		<ErasValidatorPrefs<T>>::insert(current_era, validator.clone(), <Staking<T>>::validators(&validator));
+		<ErasValidatorPrefs<T>>::insert(current_era, validator.clone(), Validators::<T>::get(&validator));
 
 		let caller = whitelisted_caller();
 		let balance_before = T::Currency::free_balance(&validator);
