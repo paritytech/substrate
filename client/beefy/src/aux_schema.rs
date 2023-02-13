@@ -26,25 +26,25 @@ use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sp_runtime::traits::Block as BlockT;
 
 const VERSION_KEY: &[u8] = b"beefy_auxschema_version";
-const WORKER_STATE: &[u8] = b"beefy_voter_state";
+const WORKER_STATE_KEY: &[u8] = b"beefy_voter_state";
 
 const CURRENT_VERSION: u32 = 2;
 
-pub(crate) fn write_current_version<B: AuxStore>(backend: &B) -> ClientResult<()> {
+pub(crate) fn write_current_version<BE: AuxStore>(backend: &BE) -> ClientResult<()> {
 	info!(target: LOG_TARGET, "🥩 write aux schema version {:?}", CURRENT_VERSION);
 	AuxStore::insert_aux(backend, &[(VERSION_KEY, CURRENT_VERSION.encode().as_slice())], &[])
 }
 
 /// Write voter state.
-pub(crate) fn write_voter_state<Block: BlockT, B: AuxStore>(
-	backend: &B,
-	state: &PersistedState<Block>,
+pub(crate) fn write_voter_state<B: BlockT, BE: AuxStore>(
+	backend: &BE,
+	state: &PersistedState<B>,
 ) -> ClientResult<()> {
 	trace!(target: LOG_TARGET, "🥩 persisting {:?}", state);
-	backend.insert_aux(&[(WORKER_STATE, state.encode().as_slice())], &[])
+	AuxStore::insert_aux(backend, &[(WORKER_STATE_KEY, state.encode().as_slice())], &[])
 }
 
-fn load_decode<B: AuxStore, T: Decode>(backend: &B, key: &[u8]) -> ClientResult<Option<T>> {
+fn load_decode<BE: AuxStore, T: Decode>(backend: &BE, key: &[u8]) -> ClientResult<Option<T>> {
 	match backend.get_aux(key)? {
 		None => Ok(None),
 		Some(t) => T::decode(&mut &t[..])
@@ -64,7 +64,7 @@ where
 	match version {
 		None => (),
 		Some(1) => (), // version 1 is totally obsolete and should be simply ignored
-		Some(2) => return load_decode::<_, PersistedState<B>>(backend, WORKER_STATE),
+		Some(2) => return load_decode::<_, PersistedState<B>>(backend, WORKER_STATE_KEY),
 		other =>
 			return Err(ClientError::Backend(format!("Unsupported BEEFY DB version: {:?}", other))),
 	}

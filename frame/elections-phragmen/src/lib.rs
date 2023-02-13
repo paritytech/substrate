@@ -43,14 +43,14 @@
 //! ### Voting
 //!
 //! Voters can vote for a limited number of the candidates by providing a list of account ids,
-//! bounded by [`MAXIMUM_VOTE`]. Invalid votes (voting for non-candidates) and duplicate votes are
-//! ignored during election. Yet, a voter _might_ vote for a future candidate. Voters reserve a bond
-//! as they vote. Each vote defines a `value`. This amount is locked from the account of the voter
-//! and indicates the weight of the vote. Voters can update their votes at any time by calling
-//! `vote()` again. This can update the vote targets (which might update the deposit) or update the
-//! vote's stake ([`Voter::stake`]). After a round, votes are kept and might still be valid for
-//! further rounds. A voter is responsible for calling `remove_voter` once they are done to have
-//! their bond back and remove the lock.
+//! bounded by [`Config::MaxVotesPerVoter`]. Invalid votes (voting for non-candidates) and duplicate
+//! votes are ignored during election. Yet, a voter _might_ vote for a future candidate. Voters
+//! reserve a bond as they vote. Each vote defines a `value`. This amount is locked from the account
+//! of the voter and indicates the weight of the vote. Voters can update their votes at any time by
+//! calling `vote()` again. This can update the vote targets (which might update the deposit) or
+//! update the vote's stake ([`Voter::stake`]). After a round, votes are kept and might still be
+//! valid for further rounds. A voter is responsible for calling `remove_voter` once they are done
+//! to have their bond back and remove the lock.
 //!
 //! See [`Call::vote`], [`Call::remove_voter`].
 //!
@@ -123,9 +123,6 @@ pub use weights::WeightInfo;
 pub mod migrations;
 
 const LOG_TARGET: &str = "runtime::elections-phragmen";
-
-/// The maximum votes allowed per voter.
-pub const MAXIMUM_VOTE: usize = 16;
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -254,18 +251,28 @@ pub mod pallet {
 
 		/// The maximum number of candidates in a phragmen election.
 		///
-		/// Warning: The election happens onchain, and this value will determine
-		/// the size of the election. When this limit is reached no more
-		/// candidates are accepted in the election.
+		/// Warning: This impacts the size of the election which is run onchain. Chose wisely, and
+		/// consider how it will impact `T::WeightInfo::election_phragmen`.
+		///
+		/// When this limit is reached no more candidates are accepted in the election.
 		#[pallet::constant]
 		type MaxCandidates: Get<u32>;
 
 		/// The maximum number of voters to allow in a phragmen election.
 		///
-		/// Warning: This impacts the size of the election which is run onchain.
+		/// Warning: This impacts the size of the election which is run onchain. Chose wisely, and
+		/// consider how it will impact `T::WeightInfo::election_phragmen`.
+		///
 		/// When the limit is reached the new voters are ignored.
 		#[pallet::constant]
 		type MaxVoters: Get<u32>;
+
+		/// Maximum numbers of votes per voter.
+		///
+		/// Warning: This impacts the size of the election which is run onchain. Chose wisely, and
+		/// consider how it will impact `T::WeightInfo::election_phragmen`.
+		#[pallet::constant]
+		type MaxVotesPerVoter: Get<u32>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -283,6 +290,41 @@ pub mod pallet {
 			} else {
 				Weight::zero()
 			}
+		}
+
+		fn integrity_test() {
+			let block_weight = T::BlockWeights::get().max_block;
+			// mind the order.
+			let election_weight = T::WeightInfo::election_phragmen(
+				T::MaxCandidates::get(),
+				T::MaxVoters::get(),
+				T::MaxVotesPerVoter::get() * T::MaxVoters::get(),
+			);
+
+			let to_seconds = |w: &Weight| {
+				w.ref_time() as f32 /
+					frame_support::weights::constants::WEIGHT_REF_TIME_PER_SECOND as f32
+			};
+
+			frame_support::log::debug!(
+				target: LOG_TARGET,
+				"election weight {}s ({:?}) // chain's block weight {}s ({:?})",
+				to_seconds(&election_weight),
+				election_weight,
+				to_seconds(&block_weight),
+				block_weight,
+			);
+			assert!(
+				election_weight.all_lt(block_weight),
+				"election weight {}s ({:?}) will exceed a {}s chain's block weight ({:?}) (MaxCandidates {}, MaxVoters {}, MaxVotesPerVoter {} -- tweak these parameters)",
+				election_weight,
+				to_seconds(&election_weight),
+				to_seconds(&block_weight),
+				block_weight,
+				T::MaxCandidates::get(),
+				T::MaxVoters::get(),
+				T::MaxVotesPerVoter::get(),
+			);
 		}
 	}
 
@@ -307,10 +349,6 @@ pub mod pallet {
 		///
 		/// It is the responsibility of the caller to **NOT** place all of their balance into the
 		/// lock and keep some for further operations.
-		///
-		/// # <weight>
-		/// We assume the maximum weight among all 3 cases: vote_equal, vote_more and vote_less.
-		/// # </weight>
 		#[pallet::call_index(0)]
 		#[pallet::weight(
 			T::WeightInfo::vote_more(votes.len() as u32)
@@ -324,8 +362,10 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
-			// votes should not be empty and more than `MAXIMUM_VOTE` in any case.
-			ensure!(votes.len() <= MAXIMUM_VOTE, Error::<T>::MaximumVotesExceeded);
+			ensure!(
+				votes.len() <= T::MaxVotesPerVoter::get() as usize,
+				Error::<T>::MaximumVotesExceeded
+			);
 			ensure!(!votes.is_empty(), Error::<T>::NoVotes);
 
 			let candidates_count = <Candidates<T>>::decode_len().unwrap_or(0);
@@ -1006,7 +1046,7 @@ impl<T: Config> Pallet<T> {
 					// count](https://en.wikipedia.org/wiki/Borda_count). We weigh everyone's vote for
 					// that new member by a multiplier based on the order of the votes. i.e. the
 					// first person a voter votes for gets a 16x multiplier, the next person gets a
-					// 15x multiplier, an so on... (assuming `MAXIMUM_VOTE` = 16)
+					// 15x multiplier, an so on... (assuming `T::MaxVotesPerVoter` = 16)
 					let mut prime_votes = new_members_sorted_by_id
 						.iter()
 						.map(|c| (&c.0, BalanceOf::<T>::zero()))
@@ -1014,7 +1054,7 @@ impl<T: Config> Pallet<T> {
 					for (_, stake, votes) in voters_and_stakes.into_iter() {
 						for (vote_multiplier, who) in
 							votes.iter().enumerate().map(|(vote_position, who)| {
-								((MAXIMUM_VOTE - vote_position) as u32, who)
+								((T::MaxVotesPerVoter::get() as usize - vote_position) as u32, who)
 							}) {
 							if let Ok(i) = prime_votes.binary_search_by_key(&who, |k| k.0) {
 								prime_votes[i].1 = prime_votes[i]
@@ -1173,16 +1213,9 @@ mod tests {
 	};
 	use substrate_test_utils::assert_eq_uvec;
 
-	parameter_types! {
-		pub BlockWeights: frame_system::limits::BlockWeights =
-			frame_system::limits::BlockWeights::simple_max(
-				frame_support::weights::Weight::from_ref_time(1024).set_proof_size(u64::MAX),
-			);
-	}
-
 	impl frame_system::Config for Test {
 		type BaseCallFilter = frame_support::traits::Everything;
-		type BlockWeights = BlockWeights;
+		type BlockWeights = ();
 		type BlockLength = ();
 		type DbWeight = ();
 		type RuntimeOrigin = RuntimeOrigin;
@@ -1297,6 +1330,7 @@ mod tests {
 		type KickedMember = ();
 		type WeightInfo = ();
 		type MaxVoters = PhragmenMaxVoters;
+		type MaxVotesPerVoter = ConstU32<16>;
 		type MaxCandidates = PhragmenMaxCandidates;
 	}
 
