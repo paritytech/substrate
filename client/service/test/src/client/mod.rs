@@ -581,7 +581,7 @@ fn uncles_with_multiple_forks() {
 }
 
 #[test]
-fn best_containing_on_longest_chain_with_single_chain_3_blocks() {
+fn finality_target_on_longest_chain_with_single_chain_3_blocks() {
 	// block tree:
 	// G -> A1 -> A2
 
@@ -606,7 +606,7 @@ fn best_containing_on_longest_chain_with_single_chain_3_blocks() {
 }
 
 #[test]
-fn best_containing_on_longest_chain_with_multiple_forks() {
+fn finality_target_on_longest_chain_with_multiple_forks() {
 	// block tree:
 	// G -> A1 -> A2 -> A3 -> A4 -> A5
 	//      A1 -> B2 -> B3 -> B4
@@ -731,8 +731,13 @@ fn best_containing_on_longest_chain_with_multiple_forks() {
 	assert!(leaves.contains(&d2.hash()));
 	assert_eq!(leaves.len(), 4);
 
-	let finality_target = |target_hash, number| {
-		block_on(longest_chain_select.finality_target(target_hash, number)).unwrap()
+	// On error we return a quite improbable hash
+	let error_hash = Hash::from([0xff; 32]);
+	let finality_target = |target_hash, number| match block_on(
+		longest_chain_select.finality_target(target_hash, number),
+	) {
+		Ok(hash) => hash,
+		Err(_) => error_hash,
 	};
 
 	// search without restriction
@@ -742,11 +747,11 @@ fn best_containing_on_longest_chain_with_multiple_forks() {
 	assert_eq!(a5.hash(), finality_target(a3.hash(), None));
 	assert_eq!(a5.hash(), finality_target(a4.hash(), None));
 	assert_eq!(a5.hash(), finality_target(a5.hash(), None));
-	assert_eq!(b4.hash(), finality_target(b2.hash(), None));
-	assert_eq!(b4.hash(), finality_target(b3.hash(), None));
-	assert_eq!(b4.hash(), finality_target(b4.hash(), None));
-	assert_eq!(c3.hash(), finality_target(c3.hash(), None));
-	assert_eq!(d2.hash(), finality_target(d2.hash(), None));
+	assert_eq!(error_hash, finality_target(b2.hash(), None));
+	assert_eq!(error_hash, finality_target(b3.hash(), None));
+	assert_eq!(error_hash, finality_target(b4.hash(), None));
+	assert_eq!(error_hash, finality_target(c3.hash(), None));
+	assert_eq!(error_hash, finality_target(d2.hash(), None));
 
 	// search only blocks with number <= 5. equivalent to without restriction for this scenario
 	assert_eq!(a5.hash(), finality_target(genesis_hash, Some(5)));
@@ -755,11 +760,11 @@ fn best_containing_on_longest_chain_with_multiple_forks() {
 	assert_eq!(a5.hash(), finality_target(a3.hash(), Some(5)));
 	assert_eq!(a5.hash(), finality_target(a4.hash(), Some(5)));
 	assert_eq!(a5.hash(), finality_target(a5.hash(), Some(5)));
-	assert_eq!(b4.hash(), finality_target(b2.hash(), Some(5)));
-	assert_eq!(b4.hash(), finality_target(b3.hash(), Some(5)));
-	assert_eq!(b4.hash(), finality_target(b4.hash(), Some(5)));
-	assert_eq!(c3.hash(), finality_target(c3.hash(), Some(5)));
-	assert_eq!(d2.hash(), finality_target(d2.hash(), Some(5)));
+	assert_eq!(error_hash, finality_target(b2.hash(), Some(5)));
+	assert_eq!(error_hash, finality_target(b3.hash(), Some(5)));
+	assert_eq!(error_hash, finality_target(b4.hash(), Some(5)));
+	assert_eq!(error_hash, finality_target(c3.hash(), Some(5)));
+	assert_eq!(error_hash, finality_target(d2.hash(), Some(5)));
 
 	// search only blocks with number <= 4
 	assert_eq!(a4.hash(), finality_target(genesis_hash, Some(4)));
@@ -767,73 +772,72 @@ fn best_containing_on_longest_chain_with_multiple_forks() {
 	assert_eq!(a4.hash(), finality_target(a2.hash(), Some(4)));
 	assert_eq!(a4.hash(), finality_target(a3.hash(), Some(4)));
 	assert_eq!(a4.hash(), finality_target(a4.hash(), Some(4)));
-	assert_eq!(a5.hash(), finality_target(a5.hash(), Some(4)));
-	assert_eq!(b4.hash(), finality_target(b2.hash(), Some(4)));
-	assert_eq!(b4.hash(), finality_target(b3.hash(), Some(4)));
-	assert_eq!(b4.hash(), finality_target(b4.hash(), Some(4)));
-	assert_eq!(c3.hash(), finality_target(c3.hash(), Some(4)));
-	assert_eq!(d2.hash(), finality_target(d2.hash(), Some(4)));
+	assert_eq!(error_hash, finality_target(a5.hash(), Some(4)));
+	assert_eq!(error_hash, finality_target(b2.hash(), Some(4)));
+	assert_eq!(error_hash, finality_target(b3.hash(), Some(4)));
+	assert_eq!(error_hash, finality_target(b4.hash(), Some(4)));
+	assert_eq!(error_hash, finality_target(c3.hash(), Some(4)));
+	assert_eq!(error_hash, finality_target(d2.hash(), Some(4)));
 
 	// search only blocks with number <= 3
 	assert_eq!(a3.hash(), finality_target(genesis_hash, Some(3)));
 	assert_eq!(a3.hash(), finality_target(a1.hash(), Some(3)));
 	assert_eq!(a3.hash(), finality_target(a2.hash(), Some(3)));
 	assert_eq!(a3.hash(), finality_target(a3.hash(), Some(3)));
-	assert_eq!(a4.hash(), finality_target(a4.hash(), Some(3)));
-	assert_eq!(a5.hash(), finality_target(a5.hash(), Some(3)));
-	assert_eq!(b3.hash(), finality_target(b2.hash(), Some(3)));
-	assert_eq!(b3.hash(), finality_target(b3.hash(), Some(3)));
-	assert_eq!(b4.hash(), finality_target(b4.hash(), Some(3)));
-	assert_eq!(c3.hash(), finality_target(c3.hash(), Some(3)));
-	assert_eq!(d2.hash(), finality_target(d2.hash(), Some(3)));
+	assert_eq!(error_hash, finality_target(a4.hash(), Some(3)));
+	assert_eq!(error_hash, finality_target(a5.hash(), Some(3)));
+	assert_eq!(error_hash, finality_target(b2.hash(), Some(3)));
+	assert_eq!(error_hash, finality_target(b3.hash(), Some(3)));
+	assert_eq!(error_hash, finality_target(b4.hash(), Some(3)));
+	assert_eq!(error_hash, finality_target(c3.hash(), Some(3)));
+	assert_eq!(error_hash, finality_target(d2.hash(), Some(3)));
 
 	// search only blocks with number <= 2
 	assert_eq!(a2.hash(), finality_target(genesis_hash, Some(2)));
 	assert_eq!(a2.hash(), finality_target(a1.hash(), Some(2)));
 	assert_eq!(a2.hash(), finality_target(a2.hash(), Some(2)));
-	assert_eq!(a3.hash(), finality_target(a3.hash(), Some(2)));
-	assert_eq!(a4.hash(), finality_target(a4.hash(), Some(2)));
-	assert_eq!(a5.hash(), finality_target(a5.hash(), Some(2)));
-	assert_eq!(b2.hash(), finality_target(b2.hash(), Some(2)));
-	assert_eq!(b3.hash(), finality_target(b3.hash(), Some(2)));
-	assert_eq!(b4.hash(), finality_target(b4.hash(), Some(2)));
-	assert_eq!(c3.hash(), finality_target(c3.hash(), Some(2)));
-	assert_eq!(d2.hash(), finality_target(d2.hash(), Some(2)));
+	assert_eq!(error_hash, finality_target(a3.hash(), Some(2)));
+	assert_eq!(error_hash, finality_target(a4.hash(), Some(2)));
+	assert_eq!(error_hash, finality_target(a5.hash(), Some(2)));
+	assert_eq!(error_hash, finality_target(b2.hash(), Some(2)));
+	assert_eq!(error_hash, finality_target(b3.hash(), Some(2)));
+	assert_eq!(error_hash, finality_target(b4.hash(), Some(2)));
+	assert_eq!(error_hash, finality_target(c3.hash(), Some(2)));
+	assert_eq!(error_hash, finality_target(d2.hash(), Some(2)));
 
 	// search only blocks with number <= 1
 	assert_eq!(a1.hash(), finality_target(genesis_hash, Some(1)));
 	assert_eq!(a1.hash(), finality_target(a1.hash(), Some(1)));
-	assert_eq!(a2.hash(), finality_target(a2.hash(), Some(1)));
-	assert_eq!(a3.hash(), finality_target(a3.hash(), Some(1)));
-	assert_eq!(a4.hash(), finality_target(a4.hash(), Some(1)));
-	assert_eq!(a5.hash(), finality_target(a5.hash(), Some(1)));
-
-	assert_eq!(b2.hash(), finality_target(b2.hash(), Some(1)));
-	assert_eq!(b3.hash(), finality_target(b3.hash(), Some(1)));
-	assert_eq!(b4.hash(), finality_target(b4.hash(), Some(1)));
-	assert_eq!(c3.hash(), finality_target(c3.hash(), Some(1)));
-	assert_eq!(d2.hash(), finality_target(d2.hash(), Some(1)));
+	assert_eq!(error_hash, finality_target(a2.hash(), Some(1)));
+	assert_eq!(error_hash, finality_target(a3.hash(), Some(1)));
+	assert_eq!(error_hash, finality_target(a4.hash(), Some(1)));
+	assert_eq!(error_hash, finality_target(a5.hash(), Some(1)));
+	assert_eq!(error_hash, finality_target(b2.hash(), Some(1)));
+	assert_eq!(error_hash, finality_target(b3.hash(), Some(1)));
+	assert_eq!(error_hash, finality_target(b4.hash(), Some(1)));
+	assert_eq!(error_hash, finality_target(c3.hash(), Some(1)));
+	assert_eq!(error_hash, finality_target(d2.hash(), Some(1)));
 
 	// search only blocks with number <= 0
 	assert_eq!(genesis_hash, finality_target(genesis_hash, Some(0)));
-	assert_eq!(a1.hash(), finality_target(a1.hash(), Some(0)));
-	assert_eq!(a2.hash(), finality_target(a2.hash(), Some(0)));
-	assert_eq!(a3.hash(), finality_target(a3.hash(), Some(0)));
-	assert_eq!(a4.hash(), finality_target(a4.hash(), Some(0)));
-	assert_eq!(a5.hash(), finality_target(a5.hash(), Some(0)));
-	assert_eq!(b2.hash(), finality_target(b2.hash(), Some(0)));
-	assert_eq!(b3.hash(), finality_target(b3.hash(), Some(0)));
-	assert_eq!(b4.hash(), finality_target(b4.hash(), Some(0)));
-	assert_eq!(c3.hash(), finality_target(c3.hash(), Some(0)));
-	assert_eq!(d2.hash(), finality_target(d2.hash(), Some(0)));
+	assert_eq!(error_hash, finality_target(a1.hash(), Some(0)));
+	assert_eq!(error_hash, finality_target(a2.hash(), Some(0)));
+	assert_eq!(error_hash, finality_target(a3.hash(), Some(0)));
+	assert_eq!(error_hash, finality_target(a4.hash(), Some(0)));
+	assert_eq!(error_hash, finality_target(a5.hash(), Some(0)));
+	assert_eq!(error_hash, finality_target(b2.hash(), Some(0)));
+	assert_eq!(error_hash, finality_target(b3.hash(), Some(0)));
+	assert_eq!(error_hash, finality_target(b4.hash(), Some(0)));
+	assert_eq!(error_hash, finality_target(c3.hash(), Some(0)));
+	assert_eq!(error_hash, finality_target(d2.hash(), Some(0)));
 }
 
 #[test]
-fn best_containing_on_longest_chain_with_max_depth_higher_than_best() {
+fn finality_target_on_longest_chain_with_max_depth_higher_than_best() {
 	// block tree:
 	// G -> A1 -> A2
 
-	let (mut client, longest_chain_select) = TestClientBuilder::new().build_with_longest_chain();
+	let (mut client, chain_select) = TestClientBuilder::new().build_with_longest_chain();
 
 	// G -> A1
 	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
@@ -845,10 +849,93 @@ fn best_containing_on_longest_chain_with_max_depth_higher_than_best() {
 
 	let genesis_hash = client.chain_info().genesis_hash;
 
-	assert_eq!(
-		a2.hash(),
-		block_on(longest_chain_select.finality_target(genesis_hash, Some(10))).unwrap(),
-	);
+	assert_eq!(a2.hash(), block_on(chain_select.finality_target(genesis_hash, Some(10))).unwrap(),);
+}
+
+#[test]
+fn finality_target_with_best_not_on_longest_chain() {
+	// block tree:
+	// G -> A1 -> A2 ->  A3  -> A4 -> A5
+	//         -> B2 -> (B3) -> B4
+	//                   ^best
+
+	let (mut client, chain_select) = TestClientBuilder::new().build_with_longest_chain();
+	let genesis_hash = client.chain_info().genesis_hash;
+
+	// G -> A1
+	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	block_on(client.import(BlockOrigin::Own, a1.clone())).unwrap();
+
+	// A1 -> A2
+	let a2 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	block_on(client.import(BlockOrigin::Own, a2.clone())).unwrap();
+
+	// A2 -> A3
+	let a3 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	block_on(client.import(BlockOrigin::Own, a3.clone())).unwrap();
+
+	// A3 -> A4
+	let a4 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	block_on(client.import(BlockOrigin::Own, a4.clone())).unwrap();
+
+	// A3 -> A5
+	let a5 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	block_on(client.import(BlockOrigin::Own, a5.clone())).unwrap();
+
+	// A1 -> B2
+	let mut builder = client
+		.new_block_at(&BlockId::Hash(a1.hash()), Default::default(), false)
+		.unwrap();
+	// this push is required as otherwise B2 has the same hash as A2 and won't get imported
+	builder
+		.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 41,
+			nonce: 0,
+		})
+		.unwrap();
+	let b2 = builder.build().unwrap().block;
+	block_on(client.import(BlockOrigin::Own, b2.clone())).unwrap();
+
+	assert_eq!(a5.hash(), block_on(chain_select.finality_target(genesis_hash, None)).unwrap());
+	assert_eq!(a5.hash(), block_on(chain_select.finality_target(a1.hash(), None)).unwrap());
+	assert_eq!(a5.hash(), block_on(chain_select.finality_target(a2.hash(), None)).unwrap());
+	assert_eq!(a5.hash(), block_on(chain_select.finality_target(a3.hash(), None)).unwrap());
+	assert_eq!(a5.hash(), block_on(chain_select.finality_target(a4.hash(), None)).unwrap());
+	assert_eq!(a5.hash(), block_on(chain_select.finality_target(a5.hash(), None)).unwrap());
+
+	// B2 -> B3
+	let b3 = client
+		.new_block_at(&BlockId::Hash(b2.hash()), Default::default(), false)
+		.unwrap()
+		.build()
+		.unwrap()
+		.block;
+	block_on(client.import_as_best(BlockOrigin::Own, b3.clone())).unwrap();
+
+	// B3 -> B4
+	let b4 = client
+		.new_block_at(&BlockId::Hash(b3.hash()), Default::default(), false)
+		.unwrap()
+		.build()
+		.unwrap()
+		.block;
+	let (header, extrinsics) = b4.clone().deconstruct();
+	let mut import_params = BlockImportParams::new(BlockOrigin::Own, header);
+	import_params.body = Some(extrinsics);
+	import_params.fork_choice = Some(ForkChoiceStrategy::Custom(false));
+	block_on(client.import_block(import_params, Default::default())).unwrap();
+
+	// double check that B3 is still the best...
+	assert_eq!(client.info().best_hash, b3.hash());
+
+	assert_eq!(b4.hash(), block_on(chain_select.finality_target(genesis_hash, None)).unwrap());
+	assert_eq!(b4.hash(), block_on(chain_select.finality_target(a1.hash(), None)).unwrap());
+	assert!(block_on(chain_select.finality_target(a2.hash(), None)).is_err());
+	assert_eq!(b4.hash(), block_on(chain_select.finality_target(b2.hash(), None)).unwrap());
+	assert_eq!(b4.hash(), block_on(chain_select.finality_target(b3.hash(), None)).unwrap());
+	assert_eq!(b4.hash(), block_on(chain_select.finality_target(b4.hash(), None)).unwrap());
 }
 
 #[test]
@@ -995,7 +1082,7 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 		.block;
 	block_on(client.import(BlockOrigin::Own, b2.clone())).unwrap();
 
-	// A2 is the current best since it's the longest chain
+	// A2 is the current best since it's the (first) longest chain
 	assert_eq!(client.chain_info().best_hash, a2.hash());
 
 	// we finalize block B1 which is on a different branch from current best
@@ -1012,8 +1099,7 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 	// `SelectChain` should report B2 as best block though
 	assert_eq!(block_on(select_chain.best_chain()).unwrap().hash(), b2.hash());
 
-	// after we build B3 on top of B2 and import it
-	// it should be the new best block,
+	// after we build B3 on top of B2 and import it, it should be the new best block
 	let b3 = client
 		.new_block_at(&BlockId::Hash(b2.hash()), Default::default(), false)
 		.unwrap()
@@ -1021,6 +1107,9 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, b3.clone())).unwrap();
+
+	// `SelectChain` should report B3 as best block though
+	assert_eq!(block_on(select_chain.best_chain()).unwrap().hash(), b3.hash());
 
 	assert_eq!(client.chain_info().best_hash, b3.hash());
 
