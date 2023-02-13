@@ -1679,7 +1679,7 @@ pub(crate) enum TestMode {
 
 #[cfg(any(test, feature = "try-runtime"))]
 impl<T: Config> Pallet<T> {
-	pub(crate) fn do_try_state(_: BlockNumberFor<T>, mode: TestMode) -> Result<(), &'static str> {
+	pub(crate) fn do_try_state(_: BlockNumberFor<T>, fast_mode: bool) -> Result<(), &'static str> {
 		// fast tests
 		ensure!(
 			T::VoterList::iter()
@@ -1691,7 +1691,7 @@ impl<T: Config> Pallet<T> {
 		Self::check_ledgers()?;
 		Self::check_count()?;
 
-		if mode == TestMode::All {
+		if !fast_mode {
 			// slow running tests (should be avoided on CI)
 			Self::check_nominators()?;
 		}

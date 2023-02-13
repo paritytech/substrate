@@ -22,6 +22,7 @@ use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 pub mod v1 {
 	use super::*;
+	use frame_support::traits::TryStateSelect;
 
 	#[derive(Decode)]
 	pub struct OldPoolRoles<AccountId> {
@@ -100,7 +101,7 @@ pub mod v1 {
 		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
 			// new version must be set.
 			assert_eq!(Pallet::<T>::on_chain_storage_version(), 1);
-			Pallet::<T>::try_state(frame_system::Pallet::<T>::block_number())?;
+			Pallet::<T>::try_state(frame_system::Pallet::<T>::block_number(), TryStateSelect::All)?;
 			Ok(())
 		}
 	}
