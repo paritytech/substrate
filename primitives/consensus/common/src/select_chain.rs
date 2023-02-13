@@ -43,14 +43,14 @@ pub trait SelectChain<Block: BlockT>: Sync + Send + Clone {
 	/// finalize.
 	async fn best_chain(&self) -> Result<<Block as BlockT>::Header, Error>;
 
-	/// Get the best descendent of `target_hash` that we should attempt to
-	/// finalize next, if any. It is valid to return the given `target_hash`
+	/// Get the best descendent of `base_hash` that we should attempt to
+	/// finalize next, if any. It is valid to return the given `base_hash`
 	/// itself if no better descendent exists.
 	async fn finality_target(
 		&self,
-		target_hash: <Block as BlockT>::Hash,
+		base_hash: <Block as BlockT>::Hash,
 		_maybe_max_number: Option<NumberFor<Block>>,
 	) -> Result<<Block as BlockT>::Hash, Error> {
-		Ok(target_hash)
+		Ok(base_hash)
 	}
 }
