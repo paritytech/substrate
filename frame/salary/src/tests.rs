@@ -45,7 +45,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Paymaster: pallet_salary::{Pallet, Call, Storage, Event<T>},
+		Salary: pallet_salary::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -132,7 +132,7 @@ impl RankedMembers for TestClub {
 impl Config for Test {
 	type WeightInfo = ();
 	type RuntimeEvent = RuntimeEvent;
-	type Paymaster = TestPay;
+	type Salary = TestPay;
 	type Members = TestClub;
 	type ActiveSalaryForRank = Identity;
 	type CyclePeriod = ConstU64<4>;
@@ -159,17 +159,17 @@ fn run_to(n: u64) {
 #[test]
 fn basic_stuff() {
 	new_test_ext().execute_with(|| {
-		assert!(Paymaster::last_claim(&0).is_err());
-		assert_eq!(Paymaster::status(), None);
+		assert!(Salary::last_claim(&0).is_err());
+		assert_eq!(Salary::status(), None);
 	});
 }
 
 #[test]
 fn can_start() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Paymaster::next_cycle(RuntimeOrigin::signed(1)));
+		assert_ok!(Salary::next_cycle(RuntimeOrigin::signed(1)));
 		assert_eq!(
-			Paymaster::status(),
+			Salary::status(),
 			Some(StatusType { cycle_index: 0, cycle_start: 1, remaining_budget: 10 })
 		);
 	});
@@ -178,25 +178,25 @@ fn can_start() {
 #[test]
 fn next_cycle_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Paymaster::next_cycle(RuntimeOrigin::signed(1)));
+		assert_ok!(Salary::next_cycle(RuntimeOrigin::signed(1)));
 		run_to(4);
-		assert_noop!(Paymaster::next_cycle(RuntimeOrigin::signed(1)), Error::<Test>::NotYet);
+		assert_noop!(Salary::next_cycle(RuntimeOrigin::signed(1)), Error::<Test>::NotYet);
 
 		run_to(5);
-		assert_ok!(Paymaster::next_cycle(RuntimeOrigin::signed(1)));
+		assert_ok!(Salary::next_cycle(RuntimeOrigin::signed(1)));
 		assert_eq!(
-			Paymaster::status(),
+			Salary::status(),
 			Some(StatusType { cycle_index: 1, cycle_start: 5, remaining_budget: 10 })
 		);
 
 		run_to(8);
-		assert_noop!(Paymaster::next_cycle(RuntimeOrigin::signed(1)), Error::<Test>::NotYet);
+		assert_noop!(Salary::next_cycle(RuntimeOrigin::signed(1)), Error::<Test>::NotYet);
 
 		BUDGET.with(|b| b.replace(5));
 		run_to(9);
-		assert_ok!(Paymaster::next_cycle(RuntimeOrigin::signed(1)));
+		assert_ok!(Salary::next_cycle(RuntimeOrigin::signed(1)));
 		assert_eq!(
-			Paymaster::status(),
+			Salary::status(),
 			Some(StatusType { cycle_index: 2, cycle_start: 9, remaining_budget: 5 })
 		);
 	});
@@ -205,14 +205,14 @@ fn next_cycle_works() {
 #[test]
 fn induct_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Paymaster::next_cycle(RuntimeOrigin::signed(1)));
+		assert_ok!(Salary::next_cycle(RuntimeOrigin::signed(1)));
 
-		assert_noop!(Paymaster::induct(RuntimeOrigin::signed(1)), Error::<Test>::NotMember);
+		assert_noop!(Salary::induct(RuntimeOrigin::signed(1)), Error::<Test>::NotMember);
 		TestClub::change(&1, 1);
-		assert!(Paymaster::last_claim(&1).is_err());
-		assert_ok!(Paymaster::induct(RuntimeOrigin::signed(1)));
-		assert_eq!(Paymaster::last_claim(&1).unwrap(), 0);
-		assert_noop!(Paymaster::induct(RuntimeOrigin::signed(1)), Error::<Test>::AlreadyInducted);
+		assert!(Salary::last_claim(&1).is_err());
+		assert_ok!(Salary::induct(RuntimeOrigin::signed(1)));
+		assert_eq!(Salary::last_claim(&1).unwrap(), 0);
+		assert_noop!(Salary::induct(RuntimeOrigin::signed(1)), Error::<Test>::AlreadyInducted);
 	});
 }
 
@@ -220,50 +220,50 @@ fn induct_works() {
 fn payment_works() {
 	new_test_ext().execute_with(|| {
 		TestClub::change(&1, 1);
-		assert_noop!(Paymaster::induct(RuntimeOrigin::signed(1)), Error::<Test>::NotStarted);
-		assert_ok!(Paymaster::next_cycle(RuntimeOrigin::signed(1)));
-		assert_noop!(Paymaster::payout(RuntimeOrigin::signed(1)), Error::<Test>::NotInducted);
-		assert_ok!(Paymaster::induct(RuntimeOrigin::signed(1)));
+		assert_noop!(Salary::induct(RuntimeOrigin::signed(1)), Error::<Test>::NotStarted);
+		assert_ok!(Salary::next_cycle(RuntimeOrigin::signed(1)));
+		assert_noop!(Salary::payout(RuntimeOrigin::signed(1)), Error::<Test>::NotInducted);
+		assert_ok!(Salary::induct(RuntimeOrigin::signed(1)));
 		// No claim on the cycle active during induction.
-		assert_noop!(Paymaster::payout(RuntimeOrigin::signed(1)), Error::<Test>::NoClaim);
+		assert_noop!(Salary::payout(RuntimeOrigin::signed(1)), Error::<Test>::NoClaim);
 
 		run_to(5);
-		assert_ok!(Paymaster::next_cycle(RuntimeOrigin::signed(1)));
-		assert_ok!(Paymaster::payout(RuntimeOrigin::signed(1)));
+		assert_ok!(Salary::next_cycle(RuntimeOrigin::signed(1)));
+		assert_ok!(Salary::payout(RuntimeOrigin::signed(1)));
 		assert_eq!(paid(1), 1);
-		assert_eq!(Paymaster::status().unwrap().remaining_budget, 9);
-		assert_noop!(Paymaster::payout(RuntimeOrigin::signed(1)), Error::<Test>::NoClaim);
+		assert_eq!(Salary::status().unwrap().remaining_budget, 9);
+		assert_noop!(Salary::payout(RuntimeOrigin::signed(1)), Error::<Test>::NoClaim);
 		run_to(8);
-		assert_noop!(Paymaster::next_cycle(RuntimeOrigin::signed(1)), Error::<Test>::NotYet);
+		assert_noop!(Salary::next_cycle(RuntimeOrigin::signed(1)), Error::<Test>::NotYet);
 		run_to(9);
-		assert_ok!(Paymaster::next_cycle(RuntimeOrigin::signed(1)));
-		assert_ok!(Paymaster::payout(RuntimeOrigin::signed(1)));
+		assert_ok!(Salary::next_cycle(RuntimeOrigin::signed(1)));
+		assert_ok!(Salary::payout(RuntimeOrigin::signed(1)));
 		assert_eq!(paid(1), 2);
-		assert_eq!(Paymaster::status().unwrap().remaining_budget, 9);
+		assert_eq!(Salary::status().unwrap().remaining_budget, 9);
 	});
 }
 
 #[test]
 fn zero_payment_fails() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Paymaster::next_cycle(RuntimeOrigin::signed(1)));
+		assert_ok!(Salary::next_cycle(RuntimeOrigin::signed(1)));
 		TestClub::change(&1, 0);
-		assert_ok!(Paymaster::induct(RuntimeOrigin::signed(1)));
+		assert_ok!(Salary::induct(RuntimeOrigin::signed(1)));
 		run_to(5);
-		assert_ok!(Paymaster::next_cycle(RuntimeOrigin::signed(1)));
-		assert_noop!(Paymaster::payout(RuntimeOrigin::signed(1)), Error::<Test>::ClaimZero);
+		assert_ok!(Salary::next_cycle(RuntimeOrigin::signed(1)));
+		assert_noop!(Salary::payout(RuntimeOrigin::signed(1)), Error::<Test>::ClaimZero);
 	});
 }
 
 #[test]
 fn bankrupt_fails_gracefully() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Paymaster::next_cycle(RuntimeOrigin::signed(1)));
+		assert_ok!(Salary::next_cycle(RuntimeOrigin::signed(1)));
 		TestClub::change(&1, 11);
-		assert_ok!(Paymaster::induct(RuntimeOrigin::signed(1)));
+		assert_ok!(Salary::induct(RuntimeOrigin::signed(1)));
 		run_to(5);
-		assert_ok!(Paymaster::next_cycle(RuntimeOrigin::signed(1)));
-		assert_noop!(Paymaster::payout(RuntimeOrigin::signed(1)), Error::<Test>::Bankrupt);
+		assert_ok!(Salary::next_cycle(RuntimeOrigin::signed(1)));
+		assert_noop!(Salary::payout(RuntimeOrigin::signed(1)), Error::<Test>::Bankrupt);
 		assert_eq!(paid(1), 0);
 	});
 }
