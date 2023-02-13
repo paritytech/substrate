@@ -218,7 +218,7 @@ where
 		},
 	};
 
-	let unknown_headers = if collect_unknow_headers {
+	let unknown_headers = if collect_unknown_headers {
 		// Collect all headers from the requested block until the last block of the set
 		let mut headers = Vec::new();
 		let mut current = block + One::one();
