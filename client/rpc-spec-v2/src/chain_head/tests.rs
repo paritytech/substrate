@@ -1019,10 +1019,16 @@ async fn follow_prune_best_block() {
 		pruned_block_hashes: vec![format!("{:?}", block_2_hash)],
 	});
 	assert_eq!(event, expected);
+
+	// Pruned hash can be unpinned.
+	let sub_id = sub.subscription_id();
+	let sub_id = serde_json::to_string(&sub_id).unwrap();
+	let hash = format!("{:?}", block_2_hash);
+	let _res: () = api.call("chainHead_unstable_unpin", [&sub_id, &hash]).await.unwrap();
 }
 
 #[tokio::test]
-async fn follow_unpin_pruned_block() {
+async fn follow_forks_pruned_block() {
 	let builder = TestClientBuilder::new();
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
