@@ -39,6 +39,7 @@ use sp_runtime::{
 	ConsensusEngineId, KeyTypeId, Permill,
 };
 use sp_session::{GetSessionNumber, GetValidatorCount};
+use sp_staking::equivocation::EquivocationHandler2;
 use sp_std::prelude::*;
 
 use sp_consensus_babe::{
@@ -63,7 +64,7 @@ mod mock;
 #[cfg(all(feature = "std", test))]
 mod tests;
 
-pub use equivocation::{BabeEquivocationOffence, EquivocationHandler, HandleEquivocation};
+pub use equivocation::{BabeEquivocationOffence, EquivocationHandler};
 #[allow(deprecated)]
 pub use randomness::CurrentBlockRandomness;
 pub use randomness::{
@@ -171,8 +172,15 @@ pub mod pallet {
 		/// NOTE: when enabling equivocation handling (i.e. this type isn't set to
 		/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
 		/// definition.
-		type HandleEquivocation: HandleEquivocation<Self>;
+		type HandleEquivocation2: EquivocationHandler2<
+			AccountId = Self::AccountId,
+			KeyOwnerProof = Self::KeyOwnerProof,
+			KeyOwnerIdentification = Self::KeyOwnerIdentification,
+			Offence = BabeEquivocationOffence<Self::KeyOwnerIdentification>,
+			EquivocationProof = EquivocationProof<Self::Header>,
+		>;
 
+		/// Helper for weights computations
 		type WeightInfo: WeightInfo;
 
 		/// Max number of authorities allowed
@@ -439,7 +447,7 @@ pub mod pallet {
 			ensure_none(origin)?;
 
 			Self::do_report_equivocation(
-				T::HandleEquivocation::block_author(),
+				T::HandleEquivocation2::block_author(),
 				*equivocation_proof,
 				key_owner_proof,
 			)
@@ -849,12 +857,7 @@ impl<T: Config> Pallet<T> {
 		let offence =
 			BabeEquivocationOffence { slot, validator_set_count, offender, session_index };
 
-		let reporters = match reporter {
-			Some(id) => vec![id],
-			None => vec![],
-		};
-
-		T::HandleEquivocation::report_offence(reporters, offence)
+		T::HandleEquivocation2::report_offence(reporter.into_iter().collect(), offence)
 			.map_err(|_| Error::<T>::DuplicateOffenceReport)?;
 
 		// waive the fee since the report is valid and beneficial
@@ -869,7 +872,8 @@ impl<T: Config> Pallet<T> {
 		equivocation_proof: EquivocationProof<T::Header>,
 		key_owner_proof: T::KeyOwnerProof,
 	) -> Option<()> {
-		T::HandleEquivocation::submit_unsigned_equivocation_report(
+		// TODO: this should be submitted anyway...???
+		T::HandleEquivocation2::submit_unsigned_equivocation_report(
 			equivocation_proof,
 			key_owner_proof,
 		)

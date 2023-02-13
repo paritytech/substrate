@@ -50,7 +50,7 @@ use frame_support::{
 use scale_info::TypeInfo;
 use sp_runtime::{generic::DigestItem, traits::Zero, DispatchResult, KeyTypeId};
 use sp_session::{GetSessionNumber, GetValidatorCount};
-use sp_staking::SessionIndex;
+use sp_staking::{equivocation::EquivocationHandler2, SessionIndex};
 
 mod default_weights;
 mod equivocation;
@@ -63,10 +63,7 @@ mod mock;
 #[cfg(all(feature = "std", test))]
 mod tests;
 
-pub use equivocation::{
-	EquivocationHandler, GrandpaEquivocationOffence, GrandpaOffence, GrandpaTimeSlot,
-	HandleEquivocation,
-};
+pub use equivocation::{EquivocationHandler, GrandpaEquivocationOffence, GrandpaTimeSlot};
 
 pub use pallet::*;
 
@@ -113,7 +110,13 @@ pub mod pallet {
 		/// NOTE: when enabling equivocation handling (i.e. this type isn't set to
 		/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
 		/// definition.
-		type HandleEquivocation: HandleEquivocation<Self>;
+		type HandleEquivocation: EquivocationHandler2<
+			AccountId = Self::AccountId,
+			KeyOwnerProof = Self::KeyOwnerProof,
+			KeyOwnerIdentification = Self::KeyOwnerIdentification,
+			Offence = GrandpaEquivocationOffence<Self::KeyOwnerIdentification>,
+			EquivocationProof = EquivocationProof<Self::Hash, Self::BlockNumber>,
+		>;
 
 		/// Weights for this pallet.
 		type WeightInfo: WeightInfo;
@@ -583,18 +586,15 @@ impl<T: Config> Pallet<T> {
 			return Err(Error::<T>::InvalidEquivocationProof.into())
 		}
 
-		// report to the offences module rewarding the sender.
-		T::HandleEquivocation::report_offence(
-			reporter.into_iter().collect(),
-			<T::HandleEquivocation as HandleEquivocation<T>>::Offence::new(
-				session_index,
-				validator_count,
-				offender,
-				set_id,
-				round,
-			),
-		)
-		.map_err(|_| Error::<T>::DuplicateOffenceReport)?;
+		let offence = GrandpaEquivocationOffence {
+			time_slot: GrandpaTimeSlot { set_id, round },
+			session_index,
+			offender,
+			validator_count,
+		};
+
+		T::HandleEquivocation::report_offence(reporter.into_iter().collect(), offence)
+			.map_err(|_| Error::<T>::DuplicateOffenceReport)?;
 
 		// waive the fee since the report is valid and beneficial
 		Ok(Pays::No.into())
