@@ -418,8 +418,7 @@ impl Notifications {
 		self.disconnect_peer_inner(peer_id, set_id);
 	}
 
-	/// Inner implementation of `disconnect_peer`. If `ban` is `Some`, we ban the peer
-	/// for the specific duration.
+	/// Inner implementation of `disconnect_peer`.
 	fn disconnect_peer_inner(
 		&mut self,
 		peer_id: &PeerId,
