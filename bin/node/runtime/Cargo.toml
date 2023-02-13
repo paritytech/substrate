@@ -53,7 +53,6 @@ frame-system-rpc-runtime-api = { version = "4.0.0-dev", default-features = false
 frame-try-runtime = { version = "0.10.0-dev", default-features = false, path = "../../../frame/try-runtime", optional = true }
 pallet-alliance = { version = "4.0.0-dev", default-features = false, path = "../../../frame/alliance" }
 pallet-assets = { version = "4.0.0-dev", default-features = false, path = "../../../frame/assets" }
-pallet-assets-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/assets/runtime-api" }
 pallet-authority-discovery = { version = "4.0.0-dev", default-features = false, path = "../../../frame/authority-discovery" }
 pallet-authorship = { version = "4.0.0-dev", default-features = false, path = "../../../frame/authorship" }
 pallet-babe = { version = "4.0.0-dev", default-features = false, path = "../../../frame/babe" }
@@ -129,7 +128,6 @@ std = [
 	"frame-election-provider-support/std",
 	"sp-authority-discovery/std",
 	"pallet-assets/std",
-	"pallet-assets-runtime-api/std",
 	"pallet-authority-discovery/std",
 	"pallet-authorship/std",
 	"sp-consensus-babe/std",

@@ -74,7 +74,6 @@ members = [
 	"client/utils",
 	"frame/alliance",
 	"frame/assets",
-	"frame/assets/runtime-api",
 	"frame/atomic-swap",
 	"frame/aura",
 	"frame/authority-discovery",

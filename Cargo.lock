@@ -3531,7 +3531,6 @@ dependencies = [
  "pallet-alliance",
  "pallet-asset-tx-payment",
  "pallet-assets",
- "pallet-assets-runtime-api",
  "pallet-authority-discovery",
  "pallet-authorship",
  "pallet-babe",
@@ -5346,15 +5345,6 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
- "sp-std",
-]
-
-[[package]]
-name = "pallet-assets-runtime-api"
-version = "4.0.0-dev"
-dependencies = [
- "parity-scale-codec",
- "sp-api",
  "sp-std",
 ]
 

@@ -107,6 +107,9 @@ use sp_runtime::generic::Era;
 /// Generated voter bag information.
 mod voter_bags;
 
+/// Runtime API definition for assets.
+pub mod assets_api;
+
 // Make the WASM binary available.
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
@@ -2045,7 +2048,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl pallet_assets_runtime_api::AssetsApi<
+	impl assets_api::AssetsApi<
 		Block,
 		AccountId,
 		Balance,
