@@ -130,7 +130,7 @@ pub use authorities::{AuthoritySet, AuthoritySetChanges, SharedAuthoritySet};
 pub use aux_schema::best_justification;
 pub use communication::grandpa_protocol_name::standard_name as protocol_standard_name;
 pub use finality_grandpa::voter::report;
-pub use finality_proof::{FinalityProof, FinalityProofError, FinalityProofProvider, prove_finality};
+pub use finality_proof::{FinalityProof, FinalityProofError, FinalityProofProvider};
 pub use import::{find_forced_change, find_scheduled_change, GrandpaBlockImport};
 pub use justification::GrandpaJustification;
 pub use notification::{GrandpaJustificationSender, GrandpaJustificationStream};

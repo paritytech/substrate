@@ -149,7 +149,10 @@ pub enum FinalityProofError {
 
 /// Prove finality for the given block number by returning a Justification for the last block of
 /// the authority set.
-pub fn prove_finality<Block, B>(
+///
+/// If `collect_unknown_headers` is true,
+/// it will collect all headers from the requested block until the last block of the set.
+fn prove_finality<Block, B>(
 	backend: &B,
 	authority_set_changes: AuthoritySetChanges<NumberFor<Block>>,
 	block: NumberFor<Block>,
@@ -161,11 +164,11 @@ where
 {
 	// Early-return if we are sure that there are no blocks finalized that cover the requested
 	// block.
-	let info = backend.blockchain().info();
-	if info.finalized_number < block {
+	let finalized_number = backend.blockchain().info().finalized_number;
+	if finalized_number < block {
 		let err = format!(
 			"Requested finality proof for descendant of #{} while we only have finalized #{}.",
-			block, info.finalized_number,
+			block, finalized_number,
 		);
 		trace!(target: LOG_TARGET, "{}", &err);
 		return Err(FinalityProofError::BlockNotYetFinalized)
