@@ -1065,9 +1065,8 @@ where
 			for (i, peer) in peers.iter_mut().enumerate() {
 				trace!(target: "sync", "-- Polling {}: {}", i, peer.id());
 				{
-					let net_poll_future = peer.network.run();
-					pin_mut!(net_poll_future);
-					let _ = net_poll_future.poll(cx);
+					peer.network.next_action().poll(cx);
+
 				}
 				trace!(target: "sync", "-- Polling complete {}: {}", i, peer.id());
 

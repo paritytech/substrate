@@ -80,9 +80,9 @@ impl TestNetwork {
 		let service = worker.service().clone();
 		let event_stream = service.event_stream("test");
 
-		tokio::spawn(async move {
-			worker.run().await;
-		});
+		tokio::spawn(
+			worker.run()
+		);
 
 		(service, event_stream)
 	}
