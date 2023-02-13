@@ -437,13 +437,13 @@ where
 			.stale_heads
 			.iter()
 			.cloned()
-			.filter_map(|hash| {
+			.filter(|hash| {
 				if !to_ignore.contains(&hash) {
-					return Some(hash)
+					return true
 				}
 
 				to_ignore.remove(&hash);
-				None
+				false
 			})
 			.collect()
 	};
