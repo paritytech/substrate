@@ -1045,7 +1045,10 @@ pub(crate) mod tests {
 		},
 		BeefyRPCLinks, KnownPeers,
 	};
-	use beefy_primitives::{known_payloads, Keyring, MmrRootProvider, Payload, SignedCommitment};
+	use beefy_primitives::{
+		generate_equivocation_proof, known_payloads, known_payloads::MMR_ROOT_ID, Keyring,
+		MmrRootProvider, Payload, SignedCommitment,
+	};
 	use futures::{future::poll_fn, task::Poll};
 	use parking_lot::Mutex;
 	use sc_client_api::{Backend as BackendT, HeaderBackend};
@@ -1596,5 +1599,66 @@ pub(crate) mod tests {
 		let mut votes = worker.pending_votes.values();
 		assert_eq!(votes.next().unwrap().first().unwrap().commitment.block_number, 21);
 		assert_eq!(votes.next().unwrap().first().unwrap().commitment.block_number, 22);
+	}
+
+	#[tokio::test]
+	async fn should_not_report_bad_old_or_self_equivocations() {
+		let block_num = 1;
+		let set_id = 1;
+		let keys = [Keyring::Alice];
+		let validator_set = ValidatorSet::new(make_beefy_ids(&keys), set_id).unwrap();
+		// Alice votes on good MMR roots, equivocations are allowed/expected
+		let mut api_alice = TestApi::with_validator_set(&validator_set);
+		api_alice.allow_equivocations();
+		let api_alice = Arc::new(api_alice);
+
+		let mut net = BeefyTestNet::new(1);
+		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
+		worker.runtime = api_alice.clone();
+
+		let payload1 = Payload::from_single_entry(MMR_ROOT_ID, vec![42]);
+		let payload2 = Payload::from_single_entry(MMR_ROOT_ID, vec![128]);
+
+		// generate an equivocation proof, with Bob as perpetrator
+		let good_proof = generate_equivocation_proof(
+			(block_num, payload1.clone(), set_id, &Keyring::Bob),
+			(block_num, payload2.clone(), set_id, &Keyring::Bob),
+		);
+		{
+			// expect voter (Alice) to successfully report it
+			assert_eq!(worker.report_equivocation(good_proof.clone()), Ok(()));
+			// verify Alice reports Bob equivocation to runtime
+			let reported = api_alice.reported_equivocations.as_ref().unwrap().lock();
+			assert_eq!(reported.len(), 1);
+			assert_eq!(*reported.get(0).unwrap(), good_proof);
+		}
+		api_alice.reported_equivocations.as_ref().unwrap().lock().clear();
+
+		// now let's try with a bad proof
+		let mut bad_proof = good_proof.clone();
+		bad_proof.first.id = Keyring::Charlie.public();
+		// bad proofs are simply ignored
+		assert_eq!(worker.report_equivocation(bad_proof), Ok(()));
+		// verify nothing reported to runtime
+		assert!(api_alice.reported_equivocations.as_ref().unwrap().lock().is_empty());
+
+		// now let's try with old set it
+		let mut old_proof = good_proof.clone();
+		old_proof.first.commitment.validator_set_id = 0;
+		old_proof.second.commitment.validator_set_id = 0;
+		// old proofs are simply ignored
+		assert_eq!(worker.report_equivocation(old_proof), Ok(()));
+		// verify nothing reported to runtime
+		assert!(api_alice.reported_equivocations.as_ref().unwrap().lock().is_empty());
+
+		// now let's try reporting a self-equivocation
+		let self_proof = generate_equivocation_proof(
+			(block_num, payload1.clone(), set_id, &Keyring::Alice),
+			(block_num, payload2.clone(), set_id, &Keyring::Alice),
+		);
+		// equivocations done by 'self' are simply ignored (not reported)
+		assert_eq!(worker.report_equivocation(self_proof), Ok(()));
+		// verify nothing reported to runtime
+		assert!(api_alice.reported_equivocations.as_ref().unwrap().lock().is_empty());
 	}
 }
