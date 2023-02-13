@@ -31,7 +31,7 @@ use syn::{
 	token::{Colon2, Comma, Gt, Lt, Paren},
 	Attribute, Error, Expr, ExprBlock, ExprCall, ExprPath, FnArg, Item, ItemFn, ItemMod, LitInt,
 	Pat, Path, PathArguments, PathSegment, Result, ReturnType, Signature, Stmt, Token, Type,
-	Visibility, WhereClause,
+	TypePath, Visibility, WhereClause,
 };
 
 mod keywords {
@@ -162,7 +162,7 @@ enum BenchmarkResultVariant {
 	#[peek(keywords::BenchmarkResult, name = "BenchmarkResult<T>")]
 	BenchmarkResult(keywords::BenchmarkResult, Token![<], Type, Token![>]),
 	#[peek(keywords::Result, name = "Result<T, BenchmarkError>")]
-	Result(keywords::Result, Token![<], Type, Comma, keywords::BenchmarkError, Token![>]),
+	Result(keywords::Result, Token![<], Type, Comma, TypePath, Token![>]),
 }
 
 impl BenchmarkDef {
@@ -227,7 +227,14 @@ impl BenchmarkDef {
 
 		// ensure ReturnType is a BenchmarkResult<T> or Result<T, BenchmarkError>, if specified
 		if let ReturnType::Type(_, typ) = &item_fn.sig.output {
-			syn::parse2::<BenchmarkResultVariant>(typ.to_token_stream())?;
+			let Type::Path(TypePath { path, qself: _ }) = &**typ else { panic!("unreachable state") };
+			let Some(seg) = path.segments.last() else { panic!("unreachable state") };
+			let var: BenchmarkResultVariant = syn::parse2(seg.to_token_stream())?;
+			if let BenchmarkResultVariant::Result(_, _, _, _, TypePath { path, qself: _ }, _) = var
+			{
+				let Some(seg) = path.segments.last() else { panic!("unreachable state") };
+				syn::parse2::<keywords::BenchmarkError>(seg.to_token_stream())?;
+			} // else it is a valid BenchmarkResult<T> and we are good
 		}
 
 		// #[extrinsic_call] / #[block] handling
