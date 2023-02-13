@@ -22,7 +22,7 @@ use sp_arithmetic::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
 
 /// Which state tests to execute.
-#[derive(codec::Encode, codec::Decode, Clone,  Eq, PartialEq, scale_info::TypeInfo)]
+#[derive(codec::Encode, codec::Decode, Clone, Eq, PartialEq, scale_info::TypeInfo)]
 pub enum Select {
 	/// None of them.
 	None,
