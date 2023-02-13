@@ -1046,8 +1046,8 @@ pub(crate) mod tests {
 		BeefyRPCLinks, KnownPeers,
 	};
 	use beefy_primitives::{
-		generate_equivocation_proof, known_payloads, known_payloads::MMR_ROOT_ID, Keyring,
-		MmrRootProvider, Payload, SignedCommitment,
+		generate_equivocation_proof, known_payloads, known_payloads::MMR_ROOT_ID,
+		mmr::MmrRootProvider, Keyring, Payload, SignedCommitment,
 	};
 	use futures::{future::poll_fn, task::Poll};
 	use parking_lot::Mutex;

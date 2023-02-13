@@ -17,19 +17,9 @@
 
 #![cfg(feature = "std")]
 
-use crate::{
-	crypto, known_payloads, mmr::find_mmr_root_digest, payload::PayloadProvider, Commitment,
-	EquivocationProof, MmrRootHash, Payload, ValidatorSetId, VoteMessage,
-};
+use crate::{crypto, Commitment, EquivocationProof, Payload, ValidatorSetId, VoteMessage};
 use codec::Encode;
-use sp_api::{NumberFor, ProvideRuntimeApi};
 use sp_core::{ecdsa, keccak_256, Pair};
-use sp_mmr_primitives::MmrApi;
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block, Header},
-};
-use sp_std::{marker::PhantomData, sync::Arc};
 use std::collections::HashMap;
 use strum::IntoEnumIterator;
 
@@ -98,50 +88,6 @@ impl From<Keyring> for ecdsa::Pair {
 impl From<Keyring> for crypto::Public {
 	fn from(k: Keyring) -> Self {
 		(*PUBLIC_KEYS).get(&k).cloned().unwrap()
-	}
-}
-
-/// A [`crate::Payload`] provider where payload is Merkle Mountain Range root hash.
-///
-/// Encoded payload contains a [`crate::MmrRootHash`] type (i.e. 32-bytes hash).
-pub struct MmrRootProvider<B, R> {
-	runtime: Arc<R>,
-	_phantom: PhantomData<B>,
-}
-
-impl<B, R> MmrRootProvider<B, R>
-where
-	B: Block,
-	R: ProvideRuntimeApi<B>,
-	R::Api: MmrApi<B, MmrRootHash, NumberFor<B>>,
-{
-	/// Create new BEEFY Payload provider with MMR Root as payload.
-	pub fn new(runtime: Arc<R>) -> Self {
-		Self { runtime, _phantom: PhantomData }
-	}
-
-	/// Simple wrapper that gets MMR root from header digests or from client state.
-	fn mmr_root_from_digest_or_runtime(&self, header: &B::Header) -> Option<MmrRootHash> {
-		find_mmr_root_digest::<B>(header).or_else(|| {
-			self.runtime
-				.runtime_api()
-				.mmr_root(&BlockId::hash(header.hash()))
-				.ok()
-				.and_then(|r| r.ok())
-		})
-	}
-}
-
-impl<B: Block, R> PayloadProvider<B> for MmrRootProvider<B, R>
-where
-	B: Block,
-	R: ProvideRuntimeApi<B>,
-	R::Api: MmrApi<B, MmrRootHash, NumberFor<B>>,
-{
-	fn payload(&self, header: &B::Header) -> Option<Payload> {
-		self.mmr_root_from_digest_or_runtime(header).map(|mmr_root| {
-			Payload::from_single_entry(known_payloads::MMR_ROOT_ID, mmr_root.encode())
-		})
 	}
 }
 
