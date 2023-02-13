@@ -153,7 +153,7 @@ async fn build_network_future<
 		+ 'static,
 	H: sc_network_common::ExHashT,
 >(
-	mut network: sc_network::NetworkWorker<B, H, C>,
+	network: sc_network::NetworkWorker<B, H, C>,
 	client: Arc<C>,
 	announce_imported_blocks: bool,
 ) {

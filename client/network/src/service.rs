@@ -1360,7 +1360,8 @@ where
 	/// Perform one action on the network.
 	///
 	/// Returns `false` when the worker should be shutdown.
-	async fn next_action(&mut self) -> bool {
+	/// Use in tests only.
+	pub async fn next_action(&mut self) -> bool {
 		futures::select! {
 			// Next message from the service.
 			msg = self.from_service.next() => {
