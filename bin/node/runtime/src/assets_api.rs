@@ -18,8 +18,6 @@
 
 //! Runtime API definition for assets.
 
-#![cfg_attr(not(feature = "std"), no_std)]
-
 use codec::Codec;
 use sp_std::vec::Vec;
 
