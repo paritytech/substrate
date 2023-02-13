@@ -151,7 +151,7 @@ ord_parameter_types! {
 
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Fee = ConstU64<3>;
+	type Fee = ConstU32<3>;
 	type Currency = Balances;
 	type AssetBalance = <Self as pallet_balances::Config>::Balance;
 	type AssetId = u32;
@@ -162,6 +162,12 @@ impl Config for Test {
 	type WeightInfo = ();
 	type AllowMultiAssetPools = AllowMultiAssetPools;
 	type MaxSwapPathLength = ConstU32<4>;
+
+	type Balance = u64;
+	type HigherPrecisionBalance = u128;
+
+	type MultiAssetId = NativeOrAssetId<u32>;
+	type MultiAssetIdConverter = NativeOrAssetIdConverter<u32>;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
