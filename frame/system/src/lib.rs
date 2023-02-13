@@ -397,8 +397,16 @@ pub mod pallet {
 		///
 		/// ## Complexity
 		/// - `O(C + S)` where `C` length of `code` and `S` complexity of `can_set_code`
+		/// - 1 call to `can_set_code`: `O(S)` (calls `sp_io::misc::runtime_version` which is
+		///   expensive).
+		/// - 1 storage write (codec `O(C)`).
+		/// - 1 digest item.
+		/// - 1 event.
+		/// The weight of this function is dependent on the runtime, but generally this is very
+		/// expensive.
+		/// # </weight>
 		#[pallet::call_index(2)]
-		#[pallet::weight((T::SystemWeightInfo::set_code(code.len() as u32), DispatchClass::Operational))]
+		#[pallet::weight((T::SystemWeightInfo::set_code(), DispatchClass::Operational))]
 		pub fn set_code(origin: OriginFor<T>, code: Vec<u8>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			Self::can_set_code(&code)?;
@@ -1608,13 +1616,18 @@ impl<T: Config> Pallet<T> {
 			.and_then(|v| RuntimeVersion::decode(&mut &v[..]).ok())
 			.ok_or(Error::<T>::FailedToExtractRuntimeVersion)?;
 
-		if new_version.spec_name != current_version.spec_name {
-			log::debug!("New: {new_version:?}, Current: {current_version:?}");
-			return Err(Error::<T>::InvalidSpecName.into());
-		}
+		// Disable checks if we are benchmarking `set_code` to make it possible to set arbitrary
+		// runtimes without modification
+		#[cfg(not(feature = "runtime-benchmarks"))]
+		{
+			if new_version.spec_name != current_version.spec_name {
+				log::debug!("New: {new_version:?}, Current: {current_version:?}");
+				return Err(Error::<T>::InvalidSpecName.into());
+			}
 
-		if new_version.spec_version <= current_version.spec_version {
-			return Err(Error::<T>::SpecVersionNeedsToIncrease.into());
+			if new_version.spec_version <= current_version.spec_version {
+				return Err(Error::<T>::SpecVersionNeedsToIncrease.into());
+			}
 		}
 
 		Ok(())
