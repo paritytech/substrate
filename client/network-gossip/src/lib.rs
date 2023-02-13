@@ -84,7 +84,7 @@ pub trait Network<B: BlockT>:
 	NetworkPeers
 	+ NetworkEventStream
 	+ NetworkNotification
-	+ NetworkBlock<B::Hash, NumberFor<B>, B::Header>
+	+ NetworkBlock<B::Hash, NumberFor<B>>
 {
 	fn add_set_reserved(&self, who: PeerId, protocol: ProtocolName) {
 		let addr =
@@ -100,6 +100,6 @@ impl<T, B: BlockT> Network<B> for T where
 	T: NetworkPeers
 		+ NetworkEventStream
 		+ NetworkNotification
-		+ NetworkBlock<B::Hash, NumberFor<B>, B::Header>
+		+ NetworkBlock<B::Hash, NumberFor<B>>
 {
 }

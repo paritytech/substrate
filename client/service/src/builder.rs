@@ -962,7 +962,7 @@ where
 		Some("networking"),
 		chain_sync_network_provider.run(network.clone()),
 	);
-	spawn_handle.spawn("import-queue", None, import_queue.run(Box::new(chain_sync_service)));
+	spawn_handle.spawn("import-queue", None, import_queue.run(Box::new(chain_sync_service.clone())));
 
 	let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc", 10_000);
 	spawn_handle.spawn(
@@ -971,13 +971,14 @@ where
 		build_system_rpc_future(
 			config.role.clone(),
 			network_mut.service().clone(),
+			chain_sync_service.clone(),
 			client.clone(),
 			system_rpc_rx,
 			has_bootnodes,
 		),
 	);
 
-	let future = build_network_future(network_mut, client, config.announce_block);
+	let future = build_network_future(network_mut, client, chain_sync_service, config.announce_block);
 
 	// TODO: Normally, one is supposed to pass a list of notifications protocols supported by the
 	// node through the `NetworkConfiguration` struct. But because this function doesn't know in

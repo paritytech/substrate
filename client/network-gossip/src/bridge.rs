@@ -435,7 +435,7 @@ mod tests {
 		}
 	}
 
-	impl NetworkBlock<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header>
+	impl NetworkBlock<<Block as BlockT>::Hash, NumberFor<Block>>
 		for TestNetwork
 	{
 		fn announce_block(&self, _hash: <Block as BlockT>::Hash, _data: Option<Vec<u8>>) {
@@ -446,14 +446,6 @@ mod tests {
 			&self,
 			_hash: <Block as BlockT>::Hash,
 			_number: NumberFor<Block>,
-		) {
-			unimplemented!();
-		}
-
-		fn on_block_finalized(
-			&self,
-			_hash: <Block as BlockT>::Hash,
-			_header: <Block as BlockT>::Header,
 		) {
 			unimplemented!();
 		}

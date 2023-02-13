@@ -35,7 +35,7 @@ use sc_network_common::{
 	},
 };
 use sc_network_gossip::Validator;
-use sc_network_test::{Block, Hash, Header};
+use sc_network_test::{Block, Hash};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_finality_grandpa::AuthorityList;
 use sp_keyring::Ed25519Keyring;
@@ -155,16 +155,12 @@ impl NetworkNotification for TestNetwork {
 	}
 }
 
-impl NetworkBlock<Hash, NumberFor<Block>, Header> for TestNetwork {
+impl NetworkBlock<Hash, NumberFor<Block>> for TestNetwork {
 	fn announce_block(&self, hash: Hash, _data: Option<Vec<u8>>) {
 		let _ = self.sender.unbounded_send(Event::Announce(hash));
 	}
 
 	fn new_best_block_imported(&self, _hash: Hash, _number: NumberFor<Block>) {
-		unimplemented!();
-	}
-
-	fn on_block_finalized(&self, _hash: Hash, _header: Header) {
 		unimplemented!();
 	}
 }

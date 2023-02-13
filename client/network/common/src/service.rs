@@ -612,7 +612,7 @@ where
 }
 
 /// Provides ability to announce blocks to the network.
-pub trait NetworkBlock<BlockHash, BlockNumber, BlockHeader> {
+pub trait NetworkBlock<BlockHash, BlockNumber> {
 	/// Make sure an important block is propagated to peers.
 	///
 	/// In chain-based consensus, we often need to make sure non-best forks are
@@ -621,16 +621,13 @@ pub trait NetworkBlock<BlockHash, BlockNumber, BlockHeader> {
 
 	/// Inform the network service about new best imported block.
 	fn new_best_block_imported(&self, hash: BlockHash, number: BlockNumber);
-
-	/// Notify the network service (and underlying `NetworkSync`) about a finalized block.
-	fn on_block_finalized(&self, hash: BlockHash, header: BlockHeader);
 }
 
-impl<T, BlockHash, BlockNumber, BlockHeader> NetworkBlock<BlockHash, BlockNumber, BlockHeader>
+impl<T, BlockHash, BlockNumber> NetworkBlock<BlockHash, BlockNumber>
 	for Arc<T>
 where
 	T: ?Sized,
-	T: NetworkBlock<BlockHash, BlockNumber, BlockHeader>,
+	T: NetworkBlock<BlockHash, BlockNumber>,
 {
 	fn announce_block(&self, hash: BlockHash, data: Option<Vec<u8>>) {
 		T::announce_block(self, hash, data)
@@ -638,9 +635,5 @@ where
 
 	fn new_best_block_imported(&self, hash: BlockHash, number: BlockNumber) {
 		T::new_best_block_imported(self, hash, number)
-	}
-
-	fn on_block_finalized(&self, hash: BlockHash, header: BlockHeader) {
-		T::on_block_finalized(self, hash, header)
 	}
 }

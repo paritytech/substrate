@@ -46,6 +46,7 @@ use sc_network_common::{
 	config::MultiaddrWithPeerId,
 	service::{NetworkBlock, NetworkPeers},
 };
+use sc_network_sync::service::chain_sync::ChainSyncInterfaceHandle;
 use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_blockchain::HeaderMetadata;
 use sp_consensus::SyncOracle;
@@ -155,6 +156,7 @@ async fn build_network_future<
 >(
 	network: sc_network::NetworkWorker<B, H, C>,
 	client: Arc<C>,
+	chain_sync_service: ChainSyncInterfaceHandle<B>,
 	announce_imported_blocks: bool,
 ) {
 	let mut imported_blocks_stream = client.import_notification_stream().fuse();
@@ -195,7 +197,7 @@ async fn build_network_future<
 
 			// List of blocks that the client has finalized.
 			notification = finality_notification_stream.select_next_some() => {
-				network_service.on_block_finalized(notification.hash, notification.header);
+				chain_sync_service.on_block_finalized(notification.hash, notification.header.number().clone());
 			}
 
 			// Drive the network. Shut down the network future if `NetworkWorker` has terminated.
@@ -222,6 +224,7 @@ async fn build_system_rpc_future<
 >(
 	role: Role,
 	network_service: Arc<sc_network::NetworkService<B, H>>,
+	chain_sync_service: ChainSyncInterfaceHandle<B>,
 	client: Arc<C>,
 	mut rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
@@ -232,7 +235,7 @@ async fn build_system_rpc_future<
 	loop {
 		// Answer incoming RPC requests.
 		let Some(req) = rpc_rx.next().await else {
-			debug!("RPC requests stream has terminated, shutting down the system RPC future.`");
+			debug!("RPC requests stream has terminated, shutting down the system RPC future.");
 			return;
 		};
 
@@ -334,15 +337,20 @@ async fn build_system_rpc_future<
 
 				let best_number = client.info().best_number;
 
+				let Ok(status) = chain_sync_service.status().await else {
+					debug!("`ChainSync` has terminated, shutting down the system RPC future.");
+					return
+				};
+
 				let _ = sender.send(SyncState {
 					starting_block,
 					current_block: best_number,
-					highest_block: network_service.best_seen_block().unwrap_or(best_number),
+					highest_block: status.best_seen_block.unwrap_or(best_number),
 				});
 			},
 		}
 	}
-	debug!("`NetworkWorker` has terminated, shutting down the system RPC future.`");
+	debug!("`NetworkWorker` has terminated, shutting down the system RPC future.");
 }
 
 // Wrapper for HTTP and WS servers that makes sure they are properly shut down.
