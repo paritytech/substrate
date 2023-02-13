@@ -794,15 +794,14 @@ impl<Block: BlockT> Inner<Block> {
 		{
 			let local_view = match self.local_view {
 				None => return None,
-				Some(ref mut v) => {
+				Some(ref mut v) =>
 					if v.round == round {
 						// Do not send neighbor packets out if `round` has not changed ---
 						// such behavior is punishable.
 						return None
 					} else {
 						v
-					}
-				},
+					},
 			};
 
 			let set_id = local_view.set_id;
@@ -828,7 +827,7 @@ impl<Block: BlockT> Inner<Block> {
 		{
 			let local_view = match self.local_view {
 				ref mut x @ None => x.get_or_insert(LocalView::new(set_id, Round(1))),
-				Some(ref mut v) => {
+				Some(ref mut v) =>
 					if v.set_id == set_id {
 						let diff_authorities = self.authorities.iter().collect::<HashSet<_>>() !=
 							authorities.iter().collect::<HashSet<_>>();
@@ -846,8 +845,7 @@ impl<Block: BlockT> Inner<Block> {
 						return None
 					} else {
 						v
-					}
-				},
+					},
 			};
 
 			local_view.update_set(set_id);
