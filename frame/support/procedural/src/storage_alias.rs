@@ -597,9 +597,8 @@ fn generate_storage_instance(
 	let storage_name_str = storage_name.to_string();
 
 	let counter_code = is_counted_map.then(|| {
-
 		let counter_name = Ident::new(&counter_prefix(&name.to_string()), Span::call_site());
-		let counter_storage_name_str = "counter_".to_owned() + &storage_name_str;
+		let counter_storage_name_str = counter_prefix(&storage_name_str);
 
 		quote! {
 			#visibility struct #counter_name< #impl_generics >(
@@ -616,8 +615,10 @@ fn generate_storage_instance(
 				const STORAGE_PREFIX: &'static str = #counter_storage_name_str;
 			}
 
-			impl<#impl_generics> #crate_::storage::types::CountedStorageMapInstance for #name< #impl_generics > {
-				type CounterPrefix = #counter_name;
+			impl<#impl_generics> #crate_::storage::types::CountedStorageMapInstance
+				for #name< #type_generics > #where_clause
+			{
+				type CounterPrefix = #counter_name < #type_generics >;
 			}
 		}
 	});
