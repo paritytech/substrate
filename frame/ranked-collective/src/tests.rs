@@ -355,19 +355,35 @@ fn promote_demote_by_rank_works() {
 		assert_ok!(Club::promote_member(RuntimeOrigin::signed(2), 6));
 		assert_ok!(Club::add_member(RuntimeOrigin::signed(2), 7));
 		assert_ok!(Club::promote_member(RuntimeOrigin::signed(2), 7));
+		assert_ok!(Club::promote_member(RuntimeOrigin::signed(2), 7));
 
 		// #3 as rank 3 can demote/remove #4 & #5 but not #6 & #7
 		assert_ok!(Club::demote_member(RuntimeOrigin::signed(3), 4));
 		assert_ok!(Club::remove_member(RuntimeOrigin::signed(3), 5, 0));
 		assert_noop!(Club::demote_member(RuntimeOrigin::signed(3), 6), Error::<Test>::NoPermission);
 		assert_noop!(
-			Club::remove_member(RuntimeOrigin::signed(3), 7, 1),
+			Club::remove_member(RuntimeOrigin::signed(3), 7, 2),
 			Error::<Test>::NoPermission
 		);
+		assert_noop!(
+			Club::remove_member(RuntimeOrigin::signed(3), 7, 1),
+			Error::<Test>::InvalidWitness
+		);
 
-		// #2 as rank 5 can demote/remove #6 & #7
+		// #2 as rank 5 can demote #6 until removed
+		type Rank0 = EnsureRanked<Test, (), 0>;
+		assert_eq!(Rank0::try_origin(RuntimeOrigin::signed(6)).unwrap(), 1);
 		assert_ok!(Club::demote_member(RuntimeOrigin::signed(2), 6));
-		assert_ok!(Club::remove_member(RuntimeOrigin::signed(2), 7, 1));
+		assert_eq!(Rank0::try_origin(RuntimeOrigin::signed(6)).unwrap(), 0);
+		assert_ok!(Club::demote_member(RuntimeOrigin::signed(2), 6));
+		assert!(Rank0::try_origin(RuntimeOrigin::signed(6)).is_err());
+		assert_noop!(Club::demote_member(RuntimeOrigin::signed(2), 6), Error::<Test>::NotMember);
+
+		// #2 as rank 5 can remove #7
+		assert_eq!(Rank0::try_origin(RuntimeOrigin::signed(7)).unwrap(), 2);
+		assert_ok!(Club::remove_member(RuntimeOrigin::signed(2), 7, 2));
+		assert!(Rank0::try_origin(RuntimeOrigin::signed(7)).is_err());
+		assert_noop!(Club::demote_member(RuntimeOrigin::signed(2), 7), Error::<Test>::NotMember);
 	});
 }
 
