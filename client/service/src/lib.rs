@@ -231,8 +231,13 @@ async fn build_system_rpc_future<
 
 	loop {
 		// Answer incoming RPC requests.
-		match rpc_rx.next().await {
-			Some(sc_rpc::system::Request::Health(sender)) => {
+		let Some(req) = rpc_rx.next().await else {
+			debug!("RPC requests stream has terminated, shutting down the system RPC future.`");
+			return;
+		};
+
+		match req {
+			sc_rpc::system::Request::Health(sender) => {
 				let peers = network_service.peers_debug_info().await;
 				if let Ok(peers) = peers {
 					let _ = sender.send(sc_rpc::system::Health {
@@ -244,10 +249,10 @@ async fn build_system_rpc_future<
 					break
 				}
 			},
-			Some(sc_rpc::system::Request::LocalPeerId(sender)) => {
+			sc_rpc::system::Request::LocalPeerId(sender) => {
 				let _ = sender.send(network_service.local_peer_id().to_base58());
 			},
-			Some(sc_rpc::system::Request::LocalListenAddresses(sender)) => {
+			sc_rpc::system::Request::LocalListenAddresses(sender) => {
 				let peer_id = network_service.local_peer_id().into();
 				let p2p_proto_suffix = sc_network::multiaddr::Protocol::P2p(peer_id);
 				let addresses = network_service
@@ -257,7 +262,7 @@ async fn build_system_rpc_future<
 					.collect();
 				let _ = sender.send(addresses);
 			},
-			Some(sc_rpc::system::Request::Peers(sender)) => {
+			sc_rpc::system::Request::Peers(sender) => {
 				let peers = network_service.peers_debug_info().await;
 				if let Ok(peers) = peers {
 					let _ = sender.send(
@@ -275,7 +280,7 @@ async fn build_system_rpc_future<
 					break
 				}
 			},
-			Some(sc_rpc::system::Request::NetworkState(sender)) => {
+			sc_rpc::system::Request::NetworkState(sender) => {
 				let network_state = network_service.network_state().await;
 				if let Ok(network_state) = network_state {
 					if let Ok(network_state) = serde_json::to_value(network_state) {
@@ -285,7 +290,7 @@ async fn build_system_rpc_future<
 					break
 				}
 			},
-			Some(sc_rpc::system::Request::NetworkAddReservedPeer(peer_addr, sender)) => {
+			sc_rpc::system::Request::NetworkAddReservedPeer(peer_addr, sender) => {
 				let result = match MultiaddrWithPeerId::try_from(peer_addr) {
 					Ok(peer) => network_service.add_reserved_peer(peer),
 					Err(err) => Err(err.to_string()),
@@ -293,7 +298,7 @@ async fn build_system_rpc_future<
 				let x = result.map_err(sc_rpc::system::error::Error::MalformattedPeerArg);
 				let _ = sender.send(x);
 			},
-			Some(sc_rpc::system::Request::NetworkRemoveReservedPeer(peer_id, sender)) => {
+			sc_rpc::system::Request::NetworkRemoveReservedPeer(peer_id, sender) => {
 				let _ = match peer_id.parse::<PeerId>() {
 					Ok(peer_id) => {
 						network_service.remove_reserved_peer(peer_id);
@@ -304,7 +309,7 @@ async fn build_system_rpc_future<
 					))),
 				};
 			},
-			Some(sc_rpc::system::Request::NetworkReservedPeers(sender)) => {
+			sc_rpc::system::Request::NetworkReservedPeers(sender) => {
 				let reserved_peers = network_service.reserved_peers().await;
 				if let Ok(reserved_peers) = reserved_peers {
 					let reserved_peers =
@@ -314,7 +319,7 @@ async fn build_system_rpc_future<
 					break
 				}
 			},
-			Some(sc_rpc::system::Request::NodeRoles(sender)) => {
+			sc_rpc::system::Request::NodeRoles(sender) => {
 				use sc_rpc::system::NodeRole;
 
 				let node_role = match role {
@@ -324,7 +329,7 @@ async fn build_system_rpc_future<
 
 				let _ = sender.send(vec![node_role]);
 			},
-			Some(sc_rpc::system::Request::SyncState(sender)) => {
+			sc_rpc::system::Request::SyncState(sender) => {
 				use sc_rpc::system::SyncState;
 
 				let best_number = client.info().best_number;
@@ -335,8 +340,6 @@ async fn build_system_rpc_future<
 					highest_block: network_service.best_seen_block().unwrap_or(best_number),
 				});
 			},
-			None =>
-				debug!("RPC requests stream has terminated, shutting down the system RPC future.`"),
 		}
 	}
 	debug!("`NetworkWorker` has terminated, shutting down the system RPC future.`");
