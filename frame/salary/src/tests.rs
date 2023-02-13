@@ -33,7 +33,7 @@ use sp_runtime::{
 use sp_std::cell::RefCell;
 
 use super::*;
-use crate as pallet_paymaster;
+use crate as pallet_salary;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -45,7 +45,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Paymaster: pallet_paymaster::{Pallet, Call, Storage, Event<T>},
+		Paymaster: pallet_salary::{Pallet, Call, Storage, Event<T>},
 	}
 );
 

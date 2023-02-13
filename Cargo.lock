@@ -6204,7 +6204,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-paymaster"
+name = "pallet-salary"
 version = "4.0.0-dev"
 dependencies = [
  "frame-benchmarking",

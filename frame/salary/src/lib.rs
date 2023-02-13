@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Proof-of-Personhood system.
+//! Make periodic payment to members of a ranked collective according to rank.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "128"]
