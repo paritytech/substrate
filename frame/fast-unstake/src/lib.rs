@@ -83,8 +83,12 @@ pub mod pallet {
 	use crate::types::*;
 	use frame_support::{
 		pallet_prelude::*,
-		traits::{Defensive, ReservableCurrency, StorageVersion, TryStateSelect},
+		traits::{Defensive, ReservableCurrency, StorageVersion},
 	};
+
+	#[cfg(feature = "try-runtime")]
+	use frame_support::traits::TryStateSelect;
+
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::{traits::Zero, DispatchResult};
 	use sp_staking::{EraIndex, StakingInterface};

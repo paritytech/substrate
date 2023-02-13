@@ -59,7 +59,9 @@ pub(crate) const SPECULATIVE_NUM_SPANS: u32 = 32;
 #[frame_support::pallet]
 pub mod pallet {
 	use frame_election_provider_support::ElectionDataProvider;
+	#[cfg(feature = "try-runtime")]
 	use frame_support::traits::TryStateSelect;
+
 
 	use crate::BenchmarkingConfig;
 

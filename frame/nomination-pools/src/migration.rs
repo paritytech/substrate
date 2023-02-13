@@ -22,6 +22,7 @@ use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 pub mod v1 {
 	use super::*;
+	#[cfg(feature = "try-runtime")]
 	use frame_support::traits::TryStateSelect;
 
 	#[derive(Decode)]
