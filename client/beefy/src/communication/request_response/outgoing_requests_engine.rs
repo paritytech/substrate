@@ -35,7 +35,7 @@ use crate::{
 	communication::request_response::{Error, JustificationRequest, BEEFY_SYNC_LOG_TARGET},
 	justification::{decode_and_verify_finality_proof, BeefyVersionedFinalityProof},
 	metric_inc,
-	metrics::Metrics,
+	metrics::OnDemandOutgoingRequestsMetrics,
 	KnownPeers,
 };
 
@@ -63,7 +63,7 @@ pub struct OnDemandJustificationsEngine<B: Block> {
 	peers_cache: VecDeque<PeerId>,
 
 	state: State<B>,
-	metrics: Option<Metrics>,
+	metrics: Option<OnDemandOutgoingRequestsMetrics>,
 }
 
 impl<B: Block> OnDemandJustificationsEngine<B> {
@@ -71,8 +71,28 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 		network: Arc<dyn NetworkRequest + Send + Sync>,
 		protocol_name: ProtocolName,
 		live_peers: Arc<Mutex<KnownPeers<B>>>,
-		metrics: Option<Metrics>,
+		prometheus_registry: Option<prometheus::Registry>,
 	) -> Self {
+		let metrics = prometheus_registry
+			.as_ref()
+			.map(OnDemandOutgoingRequestsMetrics::register)
+			.and_then(|result| match result {
+				Ok(metrics) => {
+					debug!(
+						target: "beefy",
+						"🥩 Registered on-demand outgoing justification requests metrics"
+					);
+					Some(metrics)
+				},
+				Err(err) => {
+					debug!(
+						target: "beefy",
+						"🥩 Failed to register outgoing justification requests metrics: {:?}",
+						err
+					);
+					None
+				},
+			});
 		Self {
 			network,
 			protocol_name,

@@ -19,9 +19,10 @@
 //! BEEFY Prometheus metrics definition
 
 use prometheus::{register, Counter, Gauge, PrometheusError, Registry, U64};
-/// BEEFY metrics exposed through Prometheus
+
+/// BEEFY voting-related metrics exposed through Prometheus
 #[derive(Clone, Debug)]
-pub struct Metrics {
+pub struct VoterMetrics {
 	/// Current active validator set id
 	pub beefy_validator_set_id: Gauge<U64>,
 	/// Total number of votes sent by this node
@@ -54,27 +55,9 @@ pub struct Metrics {
 	pub beefy_best_block_to_old_block: Gauge<U64>,
 	/// Number of Successful handled votes
 	pub beefy_successful_handled_votes: Counter<U64>,
-	/// Number of Good Justification imports
-	pub beefy_good_justification_imports: Counter<U64>,
-	/// Number of Bad Justification imports
-	pub beefy_bad_justification_imports: Counter<U64>,
-	/// Number of Successful Justification respond request
-	pub beefy_successful_justification_respond_request: Counter<U64>,
-	/// Number of Failed Justification respond request
-	pub beefy_failed_justification_respond_request: Counter<U64>,
-	/// Number of On demand justification when there is no peer to request from
-	pub beefy_on_demand_justification_no_peer_to_request_from: Counter<U64>,
-	/// Number of On demand justification peer hang up
-	pub beefy_on_demand_justification_peer_hang_up: Counter<U64>,
-	/// Number of On demand justification peer error
-	pub beefy_on_demand_justification_peer_error: Counter<U64>,
-	/// Number of On demand justification invalid proof
-	pub beefy_on_demand_justification_invalid_proof: Counter<U64>,
-	/// Number of On demand justification good proof
-	pub beefy_on_demand_justification_good_proof: Counter<U64>,
 }
 
-impl Metrics {
+impl VoterMetrics {
 	pub(crate) fn register(registry: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
 			beefy_validator_set_id: register(
@@ -177,6 +160,22 @@ impl Metrics {
 				)?,
 				registry,
 			)?,
+		})
+	}
+}
+
+/// BEEFY block-import-related metrics exposed through Prometheus
+#[derive(Clone, Debug)]
+pub struct BlockImportMetrics {
+	/// Number of Good Justification imports
+	pub beefy_good_justification_imports: Counter<U64>,
+	/// Number of Bad Justification imports
+	pub beefy_bad_justification_imports: Counter<U64>,
+}
+
+impl BlockImportMetrics {
+	pub(crate) fn register(registry: &Registry) -> Result<Self, PrometheusError> {
+		Ok(Self {
 			beefy_good_justification_imports: register(
 				Counter::new(
 					"substrate_beefy_good_justification_imports",
@@ -191,52 +190,90 @@ impl Metrics {
 				)?,
 				registry,
 			)?,
-			beefy_successful_justification_respond_request: register(
+		})
+	}
+}
+
+/// BEEFY on-demand-justifications-related metrics exposed through Prometheus
+#[derive(Clone, Debug)]
+pub struct OnDemandIncomingRequestsMetrics {
+	/// Number of Successful Justification responses
+	pub beefy_successful_justification_responses: Counter<U64>,
+	/// Number of Failed Justification responses
+	pub beefy_failed_justification_responses: Counter<U64>,
+}
+
+impl OnDemandIncomingRequestsMetrics {
+	pub(crate) fn register(registry: &Registry) -> Result<Self, PrometheusError> {
+		Ok(Self {
+			beefy_successful_justification_responses: register(
 				Counter::new(
-					"substrate_beefy_successful_justification_respond_request",
-					"Number of Successful Justification respond request",
+					"substrate_beefy_successful_justification_responses",
+					"Number of Successful Justification responses",
 				)?,
 				registry,
 			)?,
-			beefy_failed_justification_respond_request: register(
+			beefy_failed_justification_responses: register(
 				Counter::new(
-					"substrate_beefy_failed_justification_respond_request",
-					"Number of Failed Justification respond request",
+					"substrate_beefy_failed_justification_responses",
+					"Number of Failed Justification responses",
 				)?,
 				registry,
 			)?,
+		})
+	}
+}
+
+/// BEEFY on-demand-justifications-related metrics exposed through Prometheus
+#[derive(Clone, Debug)]
+pub struct OnDemandOutgoingRequestsMetrics {
+	/// Number of times there was no good peer to request justification from
+	pub beefy_on_demand_justification_no_peer_to_request_from: Counter<U64>,
+	/// Number of on-demand justification peer hang up
+	pub beefy_on_demand_justification_peer_hang_up: Counter<U64>,
+	/// Number of on-demand justification peer error
+	pub beefy_on_demand_justification_peer_error: Counter<U64>,
+	/// Number of on-demand justification invalid proof
+	pub beefy_on_demand_justification_invalid_proof: Counter<U64>,
+	/// Number of on-demand justification good proof
+	pub beefy_on_demand_justification_good_proof: Counter<U64>,
+}
+
+impl OnDemandOutgoingRequestsMetrics {
+	pub(crate) fn register(registry: &Registry) -> Result<Self, PrometheusError> {
+		Ok(Self {
 			beefy_on_demand_justification_no_peer_to_request_from: register(
 				Counter::new(
 					"substrate_beefy_on_demand_justification_no_peer_to_request_from",
-					"Number of on demand justification when there is no peer to request from",
+					"Number of times there was no good peer to request justification from",
 				)?,
 				registry,
 			)?,
 			beefy_on_demand_justification_peer_hang_up: register(
 				Counter::new(
 					"substrate_beefy_on_demand_justification_peer_hang_up",
-					"Number of On demand justification peer hang up",
+					"Number of on-demand justification peer hang up",
 				)?,
 				registry,
 			)?,
 			beefy_on_demand_justification_peer_error: register(
 				Counter::new(
 					"substrate_beefy_on_demand_justification_peer_error",
-					"Number of On demand justification peer error",
+					"Number of on-demand justification peer error",
 				)?,
 				registry,
 			)?,
 			beefy_on_demand_justification_invalid_proof: register(
 				Counter::new(
 					"substrate_beefy_on_demand_justification_invalid_proof",
-					"Number of On demand justification invalid proof",
+					"Number of on-demand justification invalid proof",
 				)?,
 				registry,
 			)?,
 			beefy_on_demand_justification_good_proof: register(
 				Counter::new(
 					"substrate_beefy_on_demand_justification_good_proof",
-					"Number of On demand justification good proof",
+					"Number of on-demand justification good proof",
 				)?,
 				registry,
 			)?,

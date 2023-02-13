@@ -35,7 +35,7 @@ use crate::{
 		BEEFY_SYNC_LOG_TARGET,
 	},
 	metric_inc,
-	metrics::Metrics,
+	metrics::OnDemandIncomingRequestsMetrics,
 };
 
 /// A request coming in, including a sender for sending responses.
@@ -124,7 +124,7 @@ pub struct BeefyJustifsRequestHandler<B, Client> {
 	pub(crate) request_receiver: IncomingRequestReceiver,
 	pub(crate) justif_protocol_name: ProtocolName,
 	pub(crate) client: Arc<Client>,
-	pub(crate) metrics: Option<Metrics>,
+	pub(crate) metrics: Option<OnDemandIncomingRequestsMetrics>,
 	pub(crate) _block: PhantomData<B>,
 }
 
@@ -138,11 +138,31 @@ where
 		genesis_hash: Hash,
 		fork_id: Option<&str>,
 		client: Arc<Client>,
-		metrics: Option<Metrics>,
+		prometheus_registry: Option<prometheus::Registry>,
 	) -> (Self, RequestResponseConfig) {
 		let (request_receiver, config) =
 			on_demand_justifications_protocol_config(genesis_hash, fork_id);
 		let justif_protocol_name = config.name.clone();
+		let metrics = prometheus_registry
+			.as_ref()
+			.map(OnDemandIncomingRequestsMetrics::register)
+			.and_then(|result| match result {
+				Ok(metrics) => {
+					debug!(
+						target: "beefy",
+						"🥩 Registered on-demand incoming justification requests metrics"
+					);
+					Some(metrics)
+				},
+				Err(err) => {
+					debug!(
+						target: "beefy",
+						"🥩 Failed to register incoming justification requests metrics: {:?}",
+						err
+					);
+					None
+				},
+			});
 
 		(
 			Self { request_receiver, justif_protocol_name, client, metrics, _block: PhantomData },
@@ -190,14 +210,14 @@ where
 			let peer = request.peer;
 			match self.handle_request(request) {
 				Ok(()) => {
-					metric_inc!(self, beefy_successful_justification_respond_request);
+					metric_inc!(self, beefy_successful_justification_responses);
 					debug!(
 						target: BEEFY_SYNC_LOG_TARGET,
 						"🥩 Handled BEEFY justification request from {:?}.", peer
 					)
 				},
 				Err(e) => {
-					metric_inc!(self, beefy_failed_justification_respond_request);
+					metric_inc!(self, beefy_failed_justification_responses);
 					// TODO (issue #12293): apply reputation changes here based on error type.
 					debug!(
 						target: BEEFY_SYNC_LOG_TARGET,

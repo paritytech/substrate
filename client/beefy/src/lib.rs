@@ -154,19 +154,19 @@ where
 	let (to_voter_justif_sender, from_block_import_justif_stream) =
 		BeefyVersionedFinalityProofStream::<B>::channel();
 
-	let metrics =
-		prometheus_registry.as_ref().map(metrics::Metrics::register).and_then(
-			|result| match result {
-				Ok(metrics) => {
-					debug!(target: "beefy", "🥩 Registered metrics");
-					Some(metrics)
-				},
-				Err(err) => {
-					debug!(target: "beefy", "🥩 Failed to register metrics: {:?}", err);
-					None
-				},
+	let metrics = prometheus_registry
+		.as_ref()
+		.map(metrics::BlockImportMetrics::register)
+		.and_then(|result| match result {
+			Ok(metrics) => {
+				debug!(target: "beefy", "🥩 Registered block-import metrics");
+				Some(metrics)
 			},
-		);
+			Err(err) => {
+				debug!(target: "beefy", "🥩 Failed to register block-import metrics: {:?}", err);
+				None
+			},
+		});
 
 	// BlockImport
 	let import = BeefyBlockImport::new(
@@ -264,25 +264,26 @@ where
 	);
 
 	let metrics =
-		prometheus_registry.as_ref().map(metrics::Metrics::register).and_then(
-			|result| match result {
+		prometheus_registry
+			.as_ref()
+			.map(metrics::VoterMetrics::register)
+			.and_then(|result| match result {
 				Ok(metrics) => {
-					debug!(target: LOG_TARGET, "🥩 Registered metrics");
+					debug!(target: LOG_TARGET, "🥩 Registered voter metrics");
 					Some(metrics)
 				},
 				Err(err) => {
-					debug!(target: LOG_TARGET, "🥩 Failed to register metrics: {:?}", err);
+					debug!(target: LOG_TARGET, "🥩 Failed to register voter metrics: {:?}", err);
 					None
 				},
-			},
-		);
+			});
 
 	// The `GossipValidator` adds and removes known peers based on valid votes and network events.
 	let on_demand_justifications = OnDemandJustificationsEngine::new(
 		network.clone(),
 		justifications_protocol_name,
 		known_peers,
-		metrics.clone(),
+		prometheus_registry.clone(),
 	);
 
 	// Subscribe to finality notifications and justifications before waiting for runtime pallet and

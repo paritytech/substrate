@@ -25,7 +25,7 @@ use crate::{
 	justification::BeefyVersionedFinalityProof,
 	keystore::BeefyKeystore,
 	metric_get, metric_inc, metric_set,
-	metrics::Metrics,
+	metrics::VoterMetrics,
 	round::Rounds,
 	BeefyVoterLinks, LOG_TARGET,
 };
@@ -254,7 +254,7 @@ pub(crate) struct WorkerParams<B: Block, BE, P, N> {
 	pub gossip_validator: Arc<GossipValidator<B>>,
 	pub on_demand_justifications: OnDemandJustificationsEngine<B>,
 	pub links: BeefyVoterLinks<B>,
-	pub metrics: Option<Metrics>,
+	pub metrics: Option<VoterMetrics>,
 	pub persisted_state: PersistedState<B>,
 }
 
@@ -311,7 +311,7 @@ pub(crate) struct BeefyWorker<B: Block, BE, P, N> {
 
 	// voter state
 	/// BEEFY client metrics.
-	metrics: Option<Metrics>,
+	metrics: Option<VoterMetrics>,
 	/// Buffer holding votes for future processing.
 	pending_votes: BTreeMap<
 		NumberFor<B>,
@@ -1095,7 +1095,7 @@ pub(crate) mod tests {
 			network.clone(),
 			"/beefy/justifs/1".into(),
 			known_peers,
-			metrics.clone(),
+			None,
 		);
 		let genesis_header = backend
 			.blockchain()
