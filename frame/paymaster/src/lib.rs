@@ -20,14 +20,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "128"]
 
-use codec::{MaxEncodedLen, FullCodec};
+use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_arithmetic::traits::{Zero, Saturating};
-use sp_runtime::traits::{AtLeast32BitUnsigned, Convert};
-use sp_std::{marker::PhantomData, fmt::Debug, prelude::*};
+use sp_arithmetic::traits::{Saturating, Zero};
+use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub, Convert};
+use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 use frame_support::{
-	dispatch::DispatchResultWithPostInfo, ensure, traits::RankedMembers,
+	dispatch::DispatchResultWithPostInfo, ensure, traits::RankedMembers, RuntimeDebug,
 };
 
 #[cfg(test)]
@@ -47,7 +47,7 @@ pub type Cycle = u32;
 // XCM/MultiAsset and made generic over assets.
 pub trait Pay {
 	/// The type by which we measure units of the currency in which we make payments.
-	type Balance: AtLeast32BitUnsigned + FullCodec + MaxEncodedLen + TypeInfo;
+	type Balance: AtLeast32BitUnsigned + FullCodec + MaxEncodedLen + TypeInfo + Debug;
 	/// The type by which we identify the individuals to whom a payment may be made.
 	type AccountId;
 	/// An identifier given to an individual payment.
@@ -62,10 +62,17 @@ pub trait Pay {
 	fn pay(who: &Self::AccountId, amount: Self::Balance) -> Result<Self::Id, ()>;
 }
 
+#[derive(Encode, Decode, Eq, PartialEq, Clone, TypeInfo, MaxEncodedLen, RuntimeDebug)]
+pub struct StatusType<CycleIndex, BlockNumber, Balance> {
+	cycle_index: CycleIndex,
+	cycle_start: BlockNumber,
+	remaining_budget: Balance,
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, dispatch::Pays};
+	use frame_support::{dispatch::Pays, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -89,7 +96,10 @@ pub mod pallet {
 		type Members: RankedMembers<AccountId = <Self as frame_system::Config>::AccountId>;
 
 		/// The maximum payout to be made for a single period to an active member of the given rank.
-		type ActiveSalaryForRank: Convert<<Self::Members as RankedMembers>::Rank, <Self::Paymaster as Pay>::Balance>;
+		type ActiveSalaryForRank: Convert<
+			<Self::Members as RankedMembers>::Rank,
+			<Self::Paymaster as Pay>::Balance,
+		>;
 
 		/// The number of blocks between sequential payout cycles.
 		#[pallet::constant]
@@ -97,15 +107,20 @@ pub mod pallet {
 	}
 
 	pub type CycleIndexOf<T> = <T as frame_system::Config>::BlockNumber;
+	pub type StatusOf<T, I> = StatusType<
+		CycleIndexOf<T>,
+		<T as frame_system::Config>::BlockNumber,
+		<<T as Config<I>>::Paymaster as Pay>::Balance,
+	>;
 
 	/// The current payout cycle, the block nunber at which it started and the remaining balance in
 	/// this cycle's budget.
 	#[pallet::storage]
 	pub(super) type Status<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, (CycleIndexOf<T>, T::BlockNumber, <T::Paymaster as Pay>::Balance), OptionQuery>;
+		StorageValue<_, StatusOf<T, I>, OptionQuery>;
 
-	/// The most recent cycle which was paid to a member. None implies that a member has not yet
-	/// been paid.
+	/// The most recent cycle index which was paid to a member. None implies that a member has not
+	/// yet been paid.
 	#[pallet::storage]
 	pub(super) type LastClaim<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, T::AccountId, CycleIndexOf<T>, OptionQuery>;
@@ -117,12 +132,16 @@ pub mod pallet {
 		Inducted { who: T::AccountId },
 		/// A payment happened.
 		Paid { who: T::AccountId, id: <T::Paymaster as Pay>::Id },
+		/// The next cycle begins.
+		CycleStarted { index: CycleIndexOf<T>, budget: <T::Paymaster as Pay>::Balance },
 	}
 
 	#[pallet::error]
 	pub enum Error<T, I = ()> {
 		/// The account is not a ranked member.
 		NotMember,
+		/// The account is already inducted.
+		AlreadyInducted,
 		// The account is not yet inducted into the system.
 		NotInducted,
 		/// The member does not have a current valid claim.
@@ -146,9 +165,12 @@ pub mod pallet {
 		#[pallet::call_index(0)]
 		pub fn induct(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
+			let cycle_index = Status::<T, I>::get().ok_or(Error::<T, I>::NotStarted)?.cycle_index;
 			let _ = T::Members::rank_of(&who).ok_or(Error::<T, I>::NotMember)?;
-			let last_payout = Status::<T, I>::get().map_or(Zero::zero(), |x| x.1);
-			LastClaim::<T, I>::insert(&who, last_payout);
+			ensure!(!LastClaim::<T, I>::contains_key(&who), Error::<T, I>::AlreadyInducted);
+
+			LastClaim::<T, I>::insert(&who, cycle_index);
+
 			Self::deposit_event(Event::<T, I>::Inducted { who });
 			Ok(Pays::No.into())
 		}
@@ -163,14 +185,16 @@ pub mod pallet {
 			let rank = T::Members::rank_of(&who).ok_or(Error::<T, I>::NotMember)?;
 			let payout = T::ActiveSalaryForRank::convert(rank);
 			ensure!(!payout.is_zero(), Error::<T, I>::ClaimZero);
-			let last_claim = LastClaim::<T, I>::get(&who).ok_or(Error::<T, I>::NotInducted)?;
-			let (_, last_payout, budget) = Status::<T, I>::get().ok_or(Error::<T, I>::NotStarted)?;
-			ensure!(last_claim < last_payout, Error::<T, I>::NoClaim);
-			ensure!(payout <= budget, Error::<T, I>::Bankrupt);
+			let last_claim = Self::last_claim(&who)?;
+			let mut status = Status::<T, I>::get().ok_or(Error::<T, I>::NotStarted)?;
+			ensure!(last_claim < status.cycle_index, Error::<T, I>::NoClaim);
+			status.remaining_budget =
+				status.remaining_budget.checked_sub(&payout).ok_or(Error::<T, I>::Bankrupt)?;
 
 			let id = T::Paymaster::pay(&who, payout).map_err(|()| Error::<T, I>::PayError)?;
+			LastClaim::<T, I>::insert(&who, status.cycle_index);
+			Status::<T, I>::put(&status);
 
-			LastClaim::<T, I>::insert(&who, last_payout);
 			Self::deposit_event(Event::<T, I>::Paid { who, id });
 			Ok(Pays::No.into())
 		}
@@ -183,16 +207,39 @@ pub mod pallet {
 		pub fn next_cycle(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
 			let now = frame_system::Pallet::<T>::block_number();
-			let (mut cycle_index, mut cycle_start, _) = Status::<T, I>::get()
-				.ok_or(Error::<T, I>::NoClaim)?;
-			cycle_start.saturating_accrue(T::CyclePeriod::get());
-			ensure!(now >= cycle_start, Error::<T, I>::NotYet);
-			cycle_index.saturating_inc();
-			let budget = T::Paymaster::budget();
-			Status::<T, I>::put((cycle_index, cycle_start, budget));
+			let mut status = match Status::<T, I>::get() {
+				// Not first time... (move along start block and bump index)
+				Some(mut status) => {
+					status.cycle_start.saturating_accrue(T::CyclePeriod::get());
+					ensure!(now >= status.cycle_start, Error::<T, I>::NotYet);
+					status.cycle_index.saturating_inc();
+					status
+				},
+				// First time... (initialize)
+				None => StatusType {
+					cycle_index: Zero::zero(),
+					cycle_start: now,
+					remaining_budget: Zero::zero(),
+				},
+			};
+			status.remaining_budget = T::Paymaster::budget();
+
+			Status::<T, I>::put(&status);
+
+			Self::deposit_event(Event::<T, I>::CycleStarted {
+				index: status.cycle_index,
+				budget: status.remaining_budget,
+			});
 			Ok(Pays::No.into())
 		}
 	}
 
-	impl<T: Config<I>, I: 'static> Pallet<T, I> {}
+	impl<T: Config<I>, I: 'static> Pallet<T, I> {
+		pub fn status() -> Option<StatusOf<T, I>> {
+			Status::<T, I>::get()
+		}
+		pub fn last_claim(who: &T::AccountId) -> Result<CycleIndexOf<T>, DispatchError> {
+			LastClaim::<T, I>::get(&who).ok_or(Error::<T, I>::NotInducted.into())
+		}
+	}
 }

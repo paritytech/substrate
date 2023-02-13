@@ -21,19 +21,19 @@ use std::collections::BTreeMap;
 
 use frame_support::{
 	assert_noop, assert_ok,
-	error::BadOrigin,
 	pallet_prelude::Weight,
 	parameter_types,
-	traits::{ConstU16, ConstU32, ConstU64, EitherOf, Everything, MapSuccess, Polling},
+	traits::{ConstU32, ConstU64, Everything},
 };
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, Identity, IdentityLookup, ReduceBy},
+	traits::{BlakeTwo256, Identity, IdentityLookup},
 };
+use sp_std::cell::RefCell;
 
 use super::*;
-use crate as pallet_ranked_collective;
+use crate as pallet_paymaster;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -45,7 +45,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Club: pallet_ranked_collective::{Pallet, Call, Storage, Event<T>},
+		Paymaster: pallet_paymaster::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -80,113 +80,62 @@ impl frame_system::Config for Test {
 	type MaxConsumers = ConstU32<16>;
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub enum TestPollState {
-	Ongoing(TallyOf<Test>, Rank),
-	Completed(u64, bool),
-}
-use TestPollState::*;
-
-parameter_types! {
-	pub static Polls: BTreeMap<u8, TestPollState> = vec![
-		(1, Completed(1, true)),
-		(2, Completed(2, false)),
-		(3, Ongoing(Tally::from_parts(0, 0, 0), 1)),
-	].into_iter().collect();
+thread_local! {
+	pub static PAID: RefCell<BTreeMap<u64, u64>> = RefCell::new(BTreeMap::new());
+	pub static BUDGET: RefCell<u64> = RefCell::new(10u64);
+	pub static LAST_ID: RefCell<u64> = RefCell::new(0u64);
 }
 
-pub struct TestPolls;
-impl Polling<TallyOf<Test>> for TestPolls {
-	type Index = u8;
-	type Votes = Votes;
-	type Moment = u64;
-	type Class = Rank;
-	fn classes() -> Vec<Self::Class> {
-		vec![0, 1, 2]
-	}
-	fn as_ongoing(index: u8) -> Option<(TallyOf<Test>, Self::Class)> {
-		Polls::get().remove(&index).and_then(|x| {
-			if let TestPollState::Ongoing(t, c) = x {
-				Some((t, c))
-			} else {
-				None
-			}
-		})
-	}
-	fn access_poll<R>(
-		index: Self::Index,
-		f: impl FnOnce(PollStatus<&mut TallyOf<Test>, Self::Moment, Self::Class>) -> R,
-	) -> R {
-		let mut polls = Polls::get();
-		let entry = polls.get_mut(&index);
-		let r = match entry {
-			Some(Ongoing(ref mut tally_mut_ref, class)) =>
-				f(PollStatus::Ongoing(tally_mut_ref, *class)),
-			Some(Completed(when, succeeded)) => f(PollStatus::Completed(*when, *succeeded)),
-			None => f(PollStatus::None),
-		};
-		Polls::set(polls);
-		r
-	}
-	fn try_access_poll<R>(
-		index: Self::Index,
-		f: impl FnOnce(
-			PollStatus<&mut TallyOf<Test>, Self::Moment, Self::Class>,
-		) -> Result<R, DispatchError>,
-	) -> Result<R, DispatchError> {
-		let mut polls = Polls::get();
-		let entry = polls.get_mut(&index);
-		let r = match entry {
-			Some(Ongoing(ref mut tally_mut_ref, class)) =>
-				f(PollStatus::Ongoing(tally_mut_ref, *class)),
-			Some(Completed(when, succeeded)) => f(PollStatus::Completed(*when, *succeeded)),
-			None => f(PollStatus::None),
-		}?;
-		Polls::set(polls);
-		Ok(r)
+fn paid(who: u64) -> u64 {
+	PAID.with(|p| p.borrow().get(&who).cloned().unwrap_or(0))
+}
+
+pub struct TestPay;
+impl Pay for TestPay {
+	type AccountId = u64;
+	type Balance = u64;
+	type Id = u64;
+
+	fn budget() -> Self::Balance {
+		BUDGET.with(|b| *b.borrow())
 	}
 
-	#[cfg(feature = "runtime-benchmarks")]
-	fn create_ongoing(class: Self::Class) -> Result<Self::Index, ()> {
-		let mut polls = Polls::get();
-		let i = polls.keys().rev().next().map_or(0, |x| x + 1);
-		polls.insert(i, Ongoing(Tally::new(class), class));
-		Polls::set(polls);
-		Ok(i)
+	fn pay(who: &Self::AccountId, amount: Self::Balance) -> Result<Self::Id, ()> {
+		PAID.with(|paid| *paid.borrow_mut().entry(*who).or_default() += amount);
+		Ok(LAST_ID.with(|lid| {
+			let x = *lid.borrow();
+			lid.replace(x + 1);
+			x
+		}))
 	}
+}
 
-	#[cfg(feature = "runtime-benchmarks")]
-	fn end_ongoing(index: Self::Index, approved: bool) -> Result<(), ()> {
-		let mut polls = Polls::get();
-		match polls.get(&index) {
-			Some(Ongoing(..)) => {},
-			_ => return Err(()),
-		}
-		let now = frame_system::Pallet::<Test>::block_number();
-		polls.insert(index, Completed(now, approved));
-		Polls::set(polls);
-		Ok(())
+thread_local! {
+	pub static CLUB: RefCell<BTreeMap<u64, u64>> = RefCell::new(BTreeMap::new());
+}
+
+pub struct TestClub;
+impl RankedMembers for TestClub {
+	type AccountId = u64;
+	type Rank = u64;
+	fn rank_of(who: &Self::AccountId) -> Option<Self::Rank> {
+		CLUB.with(|club| club.borrow().get(who).cloned())
+	}
+	fn remove(who: &Self::AccountId) {
+		CLUB.with(|club| club.borrow_mut().remove(&who));
+	}
+	fn change(who: &Self::AccountId, rank: Self::Rank) {
+		CLUB.with(|club| club.borrow_mut().insert(*who, rank));
 	}
 }
 
 impl Config for Test {
 	type WeightInfo = ();
 	type RuntimeEvent = RuntimeEvent;
-	type PromoteOrigin = EitherOf<
-		// Root can promote arbitrarily.
-		frame_system::EnsureRootWithSuccess<Self::AccountId, ConstU16<65535>>,
-		// Members can promote up to the rank of 2 below them.
-		MapSuccess<EnsureRanked<Test, (), 2>, ReduceBy<ConstU16<2>>>,
-	>;
-	type DemoteOrigin = EitherOf<
-		// Root can demote arbitrarily.
-		frame_system::EnsureRootWithSuccess<Self::AccountId, ConstU16<65535>>,
-		// Members can demote up to the rank of 3 below them.
-		MapSuccess<EnsureRanked<Test, (), 3>, ReduceBy<ConstU16<3>>>,
-	>;
-	type Polls = TestPolls;
-	type MinRankOfClass = Identity;
-	type VoteWeight = Geometric;
+	type Paymaster = TestPay;
+	type Members = TestClub;
+	type ActiveSalaryForRank = Identity;
+	type CyclePeriod = ConstU64<4>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -200,10 +149,6 @@ fn next_block() {
 	System::set_block_number(System::block_number() + 1);
 }
 
-fn member_count(r: Rank) -> MemberIndex {
-	MemberCount::<Test>::get(r)
-}
-
 #[allow(dead_code)]
 fn run_to(n: u64) {
 	while System::block_number() < n {
@@ -211,296 +156,114 @@ fn run_to(n: u64) {
 	}
 }
 
-fn tally(index: u8) -> TallyOf<Test> {
-	<TestPolls as Polling<TallyOf<Test>>>::as_ongoing(index).expect("No poll").0
-}
-
-#[test]
-#[ignore]
-#[should_panic(expected = "No poll")]
-fn unknown_poll_should_panic() {
-	let _ = tally(0);
-}
-
-#[test]
-#[ignore]
-#[should_panic(expected = "No poll")]
-fn completed_poll_should_panic() {
-	let _ = tally(1);
-}
-
 #[test]
 fn basic_stuff() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(tally(3), Tally::from_parts(0, 0, 0));
+		assert!(Paymaster::last_claim(&0).is_err());
+		assert_eq!(Paymaster::status(), None);
 	});
 }
 
 #[test]
-fn member_lifecycle_works() {
+fn can_start() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Club::add_member(RuntimeOrigin::root(), 1));
-		assert_ok!(Club::promote_member(RuntimeOrigin::root(), 1));
-		assert_ok!(Club::demote_member(RuntimeOrigin::root(), 1));
-		assert_ok!(Club::demote_member(RuntimeOrigin::root(), 1));
-		assert_eq!(member_count(0), 0);
-		assert_eq!(member_count(1), 0);
-	});
-}
-
-#[test]
-fn add_remove_works() {
-	new_test_ext().execute_with(|| {
-		assert_noop!(Club::add_member(RuntimeOrigin::signed(1), 1), DispatchError::BadOrigin);
-		assert_ok!(Club::add_member(RuntimeOrigin::root(), 1));
-		assert_eq!(member_count(0), 1);
-
-		assert_ok!(Club::demote_member(RuntimeOrigin::root(), 1));
-		assert_eq!(member_count(0), 0);
-
-		assert_ok!(Club::add_member(RuntimeOrigin::root(), 1));
-		assert_eq!(member_count(0), 1);
-
-		assert_ok!(Club::add_member(RuntimeOrigin::root(), 2));
-		assert_eq!(member_count(0), 2);
-
-		assert_ok!(Club::add_member(RuntimeOrigin::root(), 3));
-		assert_eq!(member_count(0), 3);
-
-		assert_ok!(Club::demote_member(RuntimeOrigin::root(), 3));
-		assert_eq!(member_count(0), 2);
-
-		assert_ok!(Club::demote_member(RuntimeOrigin::root(), 1));
-		assert_eq!(member_count(0), 1);
-
-		assert_ok!(Club::demote_member(RuntimeOrigin::root(), 2));
-		assert_eq!(member_count(0), 0);
-	});
-}
-
-#[test]
-fn promote_demote_works() {
-	new_test_ext().execute_with(|| {
-		assert_noop!(Club::add_member(RuntimeOrigin::signed(1), 1), DispatchError::BadOrigin);
-		assert_ok!(Club::add_member(RuntimeOrigin::root(), 1));
-		assert_eq!(member_count(0), 1);
-		assert_eq!(member_count(1), 0);
-
-		assert_ok!(Club::add_member(RuntimeOrigin::root(), 2));
-		assert_eq!(member_count(0), 2);
-		assert_eq!(member_count(1), 0);
-
-		assert_ok!(Club::promote_member(RuntimeOrigin::root(), 1));
-		assert_eq!(member_count(0), 2);
-		assert_eq!(member_count(1), 1);
-
-		assert_ok!(Club::promote_member(RuntimeOrigin::root(), 2));
-		assert_eq!(member_count(0), 2);
-		assert_eq!(member_count(1), 2);
-
-		assert_ok!(Club::demote_member(RuntimeOrigin::root(), 1));
-		assert_eq!(member_count(0), 2);
-		assert_eq!(member_count(1), 1);
-
-		assert_noop!(Club::demote_member(RuntimeOrigin::signed(1), 1), DispatchError::BadOrigin);
-		assert_ok!(Club::demote_member(RuntimeOrigin::root(), 1));
-		assert_eq!(member_count(0), 1);
-		assert_eq!(member_count(1), 1);
-	});
-}
-
-#[test]
-fn promote_demote_by_rank_works() {
-	new_test_ext().execute_with(|| {
-		assert_ok!(Club::add_member(RuntimeOrigin::root(), 1));
-		for _ in 0..7 {
-			assert_ok!(Club::promote_member(RuntimeOrigin::root(), 1));
-		}
-
-		// #1 can add #2 and promote to rank 1
-		assert_ok!(Club::add_member(RuntimeOrigin::signed(1), 2));
-		assert_ok!(Club::promote_member(RuntimeOrigin::signed(1), 2));
-		// #2 as rank 1 cannot do anything privileged
-		assert_noop!(Club::add_member(RuntimeOrigin::signed(2), 3), BadOrigin);
-
-		assert_ok!(Club::promote_member(RuntimeOrigin::signed(1), 2));
-		// #2 as rank 2 can add #3.
-		assert_ok!(Club::add_member(RuntimeOrigin::signed(2), 3));
-
-		// #2 as rank 2 cannot promote #3 to rank 1
-		assert_noop!(
-			Club::promote_member(RuntimeOrigin::signed(2), 3),
-			Error::<Test>::NoPermission
-		);
-
-		// #1 as rank 7 can promote #2 only up to rank 5 and once there cannot demote them.
-		assert_ok!(Club::promote_member(RuntimeOrigin::signed(1), 2));
-		assert_ok!(Club::promote_member(RuntimeOrigin::signed(1), 2));
-		assert_ok!(Club::promote_member(RuntimeOrigin::signed(1), 2));
-		assert_noop!(
-			Club::promote_member(RuntimeOrigin::signed(1), 2),
-			Error::<Test>::NoPermission
-		);
-		assert_noop!(Club::demote_member(RuntimeOrigin::signed(1), 2), Error::<Test>::NoPermission);
-
-		// #2 as rank 5 can promote #3 only up to rank 3 and once there cannot demote them.
-		assert_ok!(Club::promote_member(RuntimeOrigin::signed(2), 3));
-		assert_ok!(Club::promote_member(RuntimeOrigin::signed(2), 3));
-		assert_ok!(Club::promote_member(RuntimeOrigin::signed(2), 3));
-		assert_noop!(
-			Club::promote_member(RuntimeOrigin::signed(2), 3),
-			Error::<Test>::NoPermission
-		);
-		assert_noop!(Club::demote_member(RuntimeOrigin::signed(2), 3), Error::<Test>::NoPermission);
-
-		// #2 can add #4 & #5 as rank 0 and #6 & #7 as rank 1.
-		assert_ok!(Club::add_member(RuntimeOrigin::signed(2), 4));
-		assert_ok!(Club::add_member(RuntimeOrigin::signed(2), 5));
-		assert_ok!(Club::add_member(RuntimeOrigin::signed(2), 6));
-		assert_ok!(Club::promote_member(RuntimeOrigin::signed(2), 6));
-		assert_ok!(Club::add_member(RuntimeOrigin::signed(2), 7));
-		assert_ok!(Club::promote_member(RuntimeOrigin::signed(2), 7));
-
-		// #3 as rank 3 can demote/remove #4 & #5 but not #6 & #7
-		assert_ok!(Club::demote_member(RuntimeOrigin::signed(3), 4));
-		assert_ok!(Club::remove_member(RuntimeOrigin::signed(3), 5, 0));
-		assert_noop!(Club::demote_member(RuntimeOrigin::signed(3), 6), Error::<Test>::NoPermission);
-		assert_noop!(
-			Club::remove_member(RuntimeOrigin::signed(3), 7, 1),
-			Error::<Test>::NoPermission
-		);
-
-		// #2 as rank 5 can demote/remove #6 & #7
-		assert_ok!(Club::demote_member(RuntimeOrigin::signed(2), 6));
-		assert_ok!(Club::remove_member(RuntimeOrigin::signed(2), 7, 1));
-	});
-}
-
-#[test]
-fn voting_works() {
-	new_test_ext().execute_with(|| {
-		assert_ok!(Club::add_member(RuntimeOrigin::root(), 0));
-		assert_ok!(Club::add_member(RuntimeOrigin::root(), 1));
-		assert_ok!(Club::promote_member(RuntimeOrigin::root(), 1));
-		assert_ok!(Club::add_member(RuntimeOrigin::root(), 2));
-		assert_ok!(Club::promote_member(RuntimeOrigin::root(), 2));
-		assert_ok!(Club::promote_member(RuntimeOrigin::root(), 2));
-		assert_ok!(Club::add_member(RuntimeOrigin::root(), 3));
-		assert_ok!(Club::promote_member(RuntimeOrigin::root(), 3));
-		assert_ok!(Club::promote_member(RuntimeOrigin::root(), 3));
-		assert_ok!(Club::promote_member(RuntimeOrigin::root(), 3));
-
-		assert_noop!(Club::vote(RuntimeOrigin::signed(0), 3, true), Error::<Test>::RankTooLow);
-		assert_eq!(tally(3), Tally::from_parts(0, 0, 0));
-
-		assert_ok!(Club::vote(RuntimeOrigin::signed(1), 3, true));
-		assert_eq!(tally(3), Tally::from_parts(1, 1, 0));
-		assert_ok!(Club::vote(RuntimeOrigin::signed(1), 3, false));
-		assert_eq!(tally(3), Tally::from_parts(0, 0, 1));
-
-		assert_ok!(Club::vote(RuntimeOrigin::signed(2), 3, true));
-		assert_eq!(tally(3), Tally::from_parts(1, 3, 1));
-		assert_ok!(Club::vote(RuntimeOrigin::signed(2), 3, false));
-		assert_eq!(tally(3), Tally::from_parts(0, 0, 4));
-
-		assert_ok!(Club::vote(RuntimeOrigin::signed(3), 3, true));
-		assert_eq!(tally(3), Tally::from_parts(1, 6, 4));
-		assert_ok!(Club::vote(RuntimeOrigin::signed(3), 3, false));
-		assert_eq!(tally(3), Tally::from_parts(0, 0, 10));
-	});
-}
-
-#[test]
-fn cleanup_works() {
-	new_test_ext().execute_with(|| {
-		assert_ok!(Club::add_member(RuntimeOrigin::root(), 1));
-		assert_ok!(Club::promote_member(RuntimeOrigin::root(), 1));
-		assert_ok!(Club::add_member(RuntimeOrigin::root(), 2));
-		assert_ok!(Club::promote_member(RuntimeOrigin::root(), 2));
-		assert_ok!(Club::add_member(RuntimeOrigin::root(), 3));
-		assert_ok!(Club::promote_member(RuntimeOrigin::root(), 3));
-
-		assert_ok!(Club::vote(RuntimeOrigin::signed(1), 3, true));
-		assert_ok!(Club::vote(RuntimeOrigin::signed(2), 3, false));
-		assert_ok!(Club::vote(RuntimeOrigin::signed(3), 3, true));
-
-		assert_noop!(Club::cleanup_poll(RuntimeOrigin::signed(4), 3, 10), Error::<Test>::Ongoing);
-		Polls::set(
-			vec![(1, Completed(1, true)), (2, Completed(2, false)), (3, Completed(3, true))]
-				.into_iter()
-				.collect(),
-		);
-		assert_ok!(Club::cleanup_poll(RuntimeOrigin::signed(4), 3, 10));
-		// NOTE: This will fail until #10016 is merged.
-		//		assert_noop!(Club::cleanup_poll(RuntimeOrigin::signed(4), 3, 10),
-		// Error::<Test>::NoneRemaining);
-	});
-}
-
-#[test]
-fn ensure_ranked_works() {
-	new_test_ext().execute_with(|| {
-		assert_ok!(Club::add_member(RuntimeOrigin::root(), 1));
-		assert_ok!(Club::promote_member(RuntimeOrigin::root(), 1));
-		assert_ok!(Club::add_member(RuntimeOrigin::root(), 2));
-		assert_ok!(Club::promote_member(RuntimeOrigin::root(), 2));
-		assert_ok!(Club::promote_member(RuntimeOrigin::root(), 2));
-		assert_ok!(Club::add_member(RuntimeOrigin::root(), 3));
-		assert_ok!(Club::promote_member(RuntimeOrigin::root(), 3));
-		assert_ok!(Club::promote_member(RuntimeOrigin::root(), 3));
-		assert_ok!(Club::promote_member(RuntimeOrigin::root(), 3));
-
-		use frame_support::traits::OriginTrait;
-		type Rank1 = EnsureRanked<Test, (), 1>;
-		type Rank2 = EnsureRanked<Test, (), 2>;
-		type Rank3 = EnsureRanked<Test, (), 3>;
-		type Rank4 = EnsureRanked<Test, (), 4>;
-		assert_eq!(Rank1::try_origin(RuntimeOrigin::signed(1)).unwrap(), 1);
-		assert_eq!(Rank1::try_origin(RuntimeOrigin::signed(2)).unwrap(), 2);
-		assert_eq!(Rank1::try_origin(RuntimeOrigin::signed(3)).unwrap(), 3);
+		assert_ok!(Paymaster::next_cycle(RuntimeOrigin::signed(1)));
 		assert_eq!(
-			Rank2::try_origin(RuntimeOrigin::signed(1)).unwrap_err().as_signed().unwrap(),
-			1
-		);
-		assert_eq!(Rank2::try_origin(RuntimeOrigin::signed(2)).unwrap(), 2);
-		assert_eq!(Rank2::try_origin(RuntimeOrigin::signed(3)).unwrap(), 3);
-		assert_eq!(
-			Rank3::try_origin(RuntimeOrigin::signed(1)).unwrap_err().as_signed().unwrap(),
-			1
-		);
-		assert_eq!(
-			Rank3::try_origin(RuntimeOrigin::signed(2)).unwrap_err().as_signed().unwrap(),
-			2
-		);
-		assert_eq!(Rank3::try_origin(RuntimeOrigin::signed(3)).unwrap(), 3);
-		assert_eq!(
-			Rank4::try_origin(RuntimeOrigin::signed(1)).unwrap_err().as_signed().unwrap(),
-			1
-		);
-		assert_eq!(
-			Rank4::try_origin(RuntimeOrigin::signed(2)).unwrap_err().as_signed().unwrap(),
-			2
-		);
-		assert_eq!(
-			Rank4::try_origin(RuntimeOrigin::signed(3)).unwrap_err().as_signed().unwrap(),
-			3
+			Paymaster::status(),
+			Some(StatusType { cycle_index: 0, cycle_start: 1, remaining_budget: 10 })
 		);
 	});
 }
 
 #[test]
-fn do_add_member_to_rank_works() {
+fn next_cycle_works() {
 	new_test_ext().execute_with(|| {
-		let max_rank = 9u16;
-		assert_ok!(Club::do_add_member_to_rank(69, max_rank / 2));
-		assert_ok!(Club::do_add_member_to_rank(1337, max_rank));
-		for i in 0..=max_rank {
-			if i <= max_rank / 2 {
-				assert_eq!(member_count(i), 2);
-			} else {
-				assert_eq!(member_count(i), 1);
-			}
-		}
-		assert_eq!(member_count(max_rank + 1), 0);
-	})
+		assert_ok!(Paymaster::next_cycle(RuntimeOrigin::signed(1)));
+		run_to(4);
+		assert_noop!(Paymaster::next_cycle(RuntimeOrigin::signed(1)), Error::<Test>::NotYet);
+
+		run_to(5);
+		assert_ok!(Paymaster::next_cycle(RuntimeOrigin::signed(1)));
+		assert_eq!(
+			Paymaster::status(),
+			Some(StatusType { cycle_index: 1, cycle_start: 5, remaining_budget: 10 })
+		);
+
+		run_to(8);
+		assert_noop!(Paymaster::next_cycle(RuntimeOrigin::signed(1)), Error::<Test>::NotYet);
+
+		BUDGET.with(|b| b.replace(5));
+		run_to(9);
+		assert_ok!(Paymaster::next_cycle(RuntimeOrigin::signed(1)));
+		assert_eq!(
+			Paymaster::status(),
+			Some(StatusType { cycle_index: 2, cycle_start: 9, remaining_budget: 5 })
+		);
+	});
+}
+
+#[test]
+fn induct_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Paymaster::next_cycle(RuntimeOrigin::signed(1)));
+
+		assert_noop!(Paymaster::induct(RuntimeOrigin::signed(1)), Error::<Test>::NotMember);
+		TestClub::change(&1, 1);
+		assert!(Paymaster::last_claim(&1).is_err());
+		assert_ok!(Paymaster::induct(RuntimeOrigin::signed(1)));
+		assert_eq!(Paymaster::last_claim(&1).unwrap(), 0);
+		assert_noop!(Paymaster::induct(RuntimeOrigin::signed(1)), Error::<Test>::AlreadyInducted);
+	});
+}
+
+#[test]
+fn payment_works() {
+	new_test_ext().execute_with(|| {
+		TestClub::change(&1, 1);
+		assert_noop!(Paymaster::induct(RuntimeOrigin::signed(1)), Error::<Test>::NotStarted);
+		assert_ok!(Paymaster::next_cycle(RuntimeOrigin::signed(1)));
+		assert_noop!(Paymaster::payout(RuntimeOrigin::signed(1)), Error::<Test>::NotInducted);
+		assert_ok!(Paymaster::induct(RuntimeOrigin::signed(1)));
+		// No claim on the cycle active during induction.
+		assert_noop!(Paymaster::payout(RuntimeOrigin::signed(1)), Error::<Test>::NoClaim);
+
+		run_to(5);
+		assert_ok!(Paymaster::next_cycle(RuntimeOrigin::signed(1)));
+		assert_ok!(Paymaster::payout(RuntimeOrigin::signed(1)));
+		assert_eq!(paid(1), 1);
+		assert_eq!(Paymaster::status().unwrap().remaining_budget, 9);
+		assert_noop!(Paymaster::payout(RuntimeOrigin::signed(1)), Error::<Test>::NoClaim);
+		run_to(8);
+		assert_noop!(Paymaster::next_cycle(RuntimeOrigin::signed(1)), Error::<Test>::NotYet);
+		run_to(9);
+		assert_ok!(Paymaster::next_cycle(RuntimeOrigin::signed(1)));
+		assert_ok!(Paymaster::payout(RuntimeOrigin::signed(1)));
+		assert_eq!(paid(1), 2);
+		assert_eq!(Paymaster::status().unwrap().remaining_budget, 9);
+	});
+}
+
+#[test]
+fn zero_payment_fails() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Paymaster::next_cycle(RuntimeOrigin::signed(1)));
+		TestClub::change(&1, 0);
+		assert_ok!(Paymaster::induct(RuntimeOrigin::signed(1)));
+		run_to(5);
+		assert_ok!(Paymaster::next_cycle(RuntimeOrigin::signed(1)));
+		assert_noop!(Paymaster::payout(RuntimeOrigin::signed(1)), Error::<Test>::ClaimZero);
+	});
+}
+
+#[test]
+fn bankrupt_fails_gracefully() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Paymaster::next_cycle(RuntimeOrigin::signed(1)));
+		TestClub::change(&1, 11);
+		assert_ok!(Paymaster::induct(RuntimeOrigin::signed(1)));
+		run_to(5);
+		assert_ok!(Paymaster::next_cycle(RuntimeOrigin::signed(1)));
+		assert_noop!(Paymaster::payout(RuntimeOrigin::signed(1)), Error::<Test>::Bankrupt);
+		assert_eq!(paid(1), 0);
+	});
 }
