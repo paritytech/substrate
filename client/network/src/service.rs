@@ -727,7 +727,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		}
 	}
 
-	/// Get currently connected peers.
+	/// Get connected peers debug information.
+	///
+	/// Returns an error if the `NetworkWorker` is no longer running.
 	pub async fn peers_debug_info(&self) -> Result<Vec<(PeerId, PeerInfo<B>)>, ()> {
 		let (tx, rx) = oneshot::channel();
 
@@ -740,6 +742,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	}
 
 	/// Get the list of reserved peers.
+	///
+	/// Returns an error if the `NetworkWorker` is no longer running.
 	pub async fn reserved_peers(&self) -> Result<Vec<PeerId>, ()> {
 		let (tx, rx) = oneshot::channel();
 
