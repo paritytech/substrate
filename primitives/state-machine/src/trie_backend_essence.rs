@@ -444,21 +444,7 @@ where
 		child_info: Option<&ChildInfo>,
 		key: &[u8],
 	) -> Result<Option<StorageKey>> {
-		let dyn_eph: &dyn HashDBRef<_, _>;
-		let keyspace_eph;
-		if let Some(child_info) = child_info.as_ref() {
-			keyspace_eph = KeySpacedDB::new(self, child_info.keyspace());
-			dyn_eph = &keyspace_eph;
-		} else {
-			dyn_eph = self;
-		}
-
-		self.with_recorder_and_cache(Some(*root), |recorder, cache| {
-			let trie = TrieDBBuilder::<H>::new(dyn_eph, root)
-				.with_optional_recorder(recorder)
-				.with_optional_cache(cache)
-				.build();
-
+		self.with_trie_db(*root, child_info, |trie| {
 			let mut iter = trie.key_iter().map_err(|e| format!("TrieDB iteration error: {}", e))?;
 
 			// The key just after the one given in input, basically `key++0`.
