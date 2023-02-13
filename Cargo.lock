@@ -8874,6 +8874,7 @@ dependencies = [
  "futures",
  "futures-util",
  "hex",
+ "itertools",
  "jsonrpsee",
  "log",
  "parity-scale-codec",
