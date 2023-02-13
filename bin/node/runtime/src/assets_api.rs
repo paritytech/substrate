@@ -28,7 +28,7 @@ sp_api::decl_runtime_apis! {
 		AssetBalance: Codec,
 		AssetId: Codec,
 	{
-		/// Returns the list of asset id and non-zero balances the AccountId has.
+		/// Returns the list of `AssetId`s and corresponding balance that an `AccountId` has.
 		fn account_balances(account: AccountId) -> Vec<(AssetId, AssetBalance)>;
 	}
 }
