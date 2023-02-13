@@ -167,6 +167,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H>> TrieBackendEss
 	///
 	/// If the given `storage_root` is `None`, `self.root` will be used.
 	#[cfg(feature = "std")]
+	#[inline]
 	fn with_recorder_and_cache<R>(
 		&self,
 		storage_root: Option<H::Out>,
@@ -192,6 +193,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H>> TrieBackendEss
 	}
 
 	#[cfg(not(feature = "std"))]
+	#[inline]
 	fn with_recorder_and_cache<R>(
 		&self,
 		_: Option<H::Out>,
