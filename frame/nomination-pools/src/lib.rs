@@ -1597,7 +1597,7 @@ pub mod pallet {
 		pub fn bond_extra(origin: OriginFor<T>, extra: BondExtra<BalanceOf<T>>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			Self::do_bond_extra(who, None, extra)
+			Self::do_bond_extra(who, who, extra)
 		}
 
 		/// A bonded member can use this to claim their payout based on the rewards that the pool
@@ -2131,7 +2131,7 @@ pub mod pallet {
 		)]
 		pub fn bond_extra_other(
 			origin: OriginFor<T>,
-			other: Option<AccountIdLookupOf<T>>,
+			other: AccountIdLookupOf<T>,
 			extra: BondExtra<BalanceOf<T>>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -2468,16 +2468,14 @@ impl<T: Config> Pallet<T> {
 		other: Option<AccountIdLookupOf<T>>,
 		extra: BondExtra<BalanceOf<T>>,
 	) -> DispatchResult {
-		let other = other.map(T::Lookup::lookup).transpose()?;
-		let is_bonding_for = other.is_some();
-		let who = other.unwrap_or(who);
-		if is_bonding_for {
-			ensure!(
-				RewardClaimPermission::<T>::get(&who) == RewardClaim::Permissionless,
-				Error::<T>::DoesNotHavePermission
-			);
-			ensure!(extra == BondExtra::Rewards, Error::<T>::CannotBondFreeBalanceOther);
+		let other = T::Lookup::lookup(other)?;
+		// either it is permissioned, or they have allowed it.
+		if who != other {
+			ensure!(matches!(RewardClaimPermission::<T>::get(&target), 
+ RewardClaim::Permissionless), Error::<T>::DoesNotHavePermission);
+ 			ensure!(extra == BondExtra::Rewards, Error::<T>::CannotBondFreeBalanceOther);
 		}
+ );
 
 		let (mut member, mut bonded_pool, mut reward_pool) = Self::get_member_with_pools(&who)?;
 
