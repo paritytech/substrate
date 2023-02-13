@@ -1065,15 +1065,12 @@ async fn follow_unpin_pruned_block() {
 		})
 		.unwrap();
 	let block_3 = block_builder.build().unwrap().block;
-	let block_3_hash = block_3.header.hash();
 	client.import(BlockOrigin::Own, block_3.clone()).await.unwrap();
 
 	// Block 3 is not pruned, pruning happens at height (N - 1).
 	client.finalize_block(block_2_hash, None).unwrap();
 
 	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
-	let sub_id = sub.subscription_id();
-	let sub_id = serde_json::to_string(&sub_id).unwrap();
 
 	// Initialized must always be reported first.
 	let event: FollowEvent<String> = get_next_event(&mut sub).await;
@@ -1085,10 +1082,10 @@ async fn follow_unpin_pruned_block() {
 	});
 	assert_eq!(event, expected);
 
-	// Block tree: 
+	// Block tree:
 	//
 	// finalized -> block 1 -> block 2 -> block 4
-    //                                       ^^^ finalized
+	//                                       ^^^ finalized
 	//           -> block 1 -> block 3
 	//
 	// Mark block 4 as finalized to force block 3 to get pruned.
@@ -1114,17 +1111,11 @@ async fn follow_unpin_pruned_block() {
 	});
 	assert_eq!(event, expected);
 
-	// Block 3 must be pruned.
+	// Block 3 must not be reported as pruned.
 	let event: FollowEvent<String> = get_next_event(&mut sub).await;
 	let expected = FollowEvent::Finalized(Finalized {
-		finalized_block_hashes: vec![
-			format!("{:?}", block_4_hash),
-		],
-		pruned_block_hashes: vec![format!("{:?}", block_3_hash),],
+		finalized_block_hashes: vec![format!("{:?}", block_4_hash)],
+		pruned_block_hashes: vec![],
 	});
 	assert_eq!(event, expected);
-
-	// Pruned hash can be unpinned.
-	let hash = format!("{:?}", block_3_hash);
-	let _res: () = api.call("chainHead_unstable_unpin", [&sub_id, &hash]).await.unwrap();
 }
