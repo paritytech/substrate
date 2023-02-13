@@ -245,7 +245,7 @@ where
 			.backend
 			.pairs(Default::default())
 			.expect("creating an iterator over all of the pairs doesn't fail in tests")
-			.collect(); // TODO: Print those out without a `collect`.
+			.collect();
 		write!(f, "overlay: {:?}\nbackend: {:?}", self.overlay, pairs)
 	}
 }
