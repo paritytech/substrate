@@ -31,12 +31,9 @@ use crate::{
 };
 use beefy_primitives::{
 	crypto::{AuthorityId, Signature},
-	keyring::Keyring as BeefyKeyring,
-	known_payloads,
-	mmr::MmrRootProvider,
-	BeefyApi, Commitment, ConsensusLog, EquivocationProof, MmrRootHash, OpaqueKeyOwnershipProof,
-	Payload, SignedCommitment, ValidatorSet, ValidatorSetId, VersionedFinalityProof,
-	BEEFY_ENGINE_ID, KEY_TYPE as BeefyKeyType,
+	known_payloads, BeefyApi, Commitment, ConsensusLog, EquivocationProof, Keyring as BeefyKeyring,
+	MmrRootHash, MmrRootProvider, OpaqueKeyOwnershipProof, Payload, SignedCommitment, ValidatorSet,
+	ValidatorSetId, VersionedFinalityProof, BEEFY_ENGINE_ID, KEY_TYPE as BeefyKeyType,
 };
 use futures::{future, stream::FuturesUnordered, Future, StreamExt};
 use parking_lot::Mutex;

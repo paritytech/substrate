@@ -199,8 +199,8 @@ mod tests {
 	use sc_network_test::Block;
 
 	use beefy_primitives::{
-		crypto::Public, keyring::Keyring, known_payloads::MMR_ROOT_ID, Commitment,
-		EquivocationProof, Payload, SignedCommitment, ValidatorSet, VoteMessage,
+		crypto::Public, known_payloads::MMR_ROOT_ID, Commitment, EquivocationProof, Keyring,
+		Payload, SignedCommitment, ValidatorSet, VoteMessage,
 	};
 
 	use super::{threshold, Block as BlockT, RoundTracker, Rounds};

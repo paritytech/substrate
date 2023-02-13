@@ -17,10 +17,6 @@
 
 use std::vec;
 
-use beefy_primitives::{
-	keyring::Keyring as BeefyKeyring, Commitment, Payload, ValidatorSetId, VoteMessage,
-};
-use codec::Encode;
 use frame_election_provider_support::{onchain, SequentialPhragmen};
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -340,21 +336,4 @@ pub fn start_session(session_index: SessionIndex) {
 pub fn start_era(era_index: EraIndex) {
 	start_session((era_index * 3).into());
 	assert_eq!(Staking::current_era(), Some(era_index));
-}
-
-pub fn generate_equivocation_proof(
-	vote1: (u64, Payload, ValidatorSetId, &BeefyKeyring),
-	vote2: (u64, Payload, ValidatorSetId, &BeefyKeyring),
-) -> EquivocationProof<u64, BeefyId, BeefySignature> {
-	let signed_vote = |block_number: u64,
-	                   payload: Payload,
-	                   validator_set_id: ValidatorSetId,
-	                   keyring: &BeefyKeyring| {
-		let commitment = Commitment { validator_set_id, block_number, payload };
-		let signature = keyring.sign(&commitment.encode());
-		VoteMessage { commitment, id: keyring.public(), signature }
-	};
-	let first = signed_vote(vote1.0, vote1.1, vote1.2, vote1.3);
-	let second = signed_vote(vote2.0, vote2.1, vote2.2, vote2.3);
-	EquivocationProof { first, second }
 }

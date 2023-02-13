@@ -137,62 +137,6 @@ pub fn find_mmr_root_digest<B: Block>(header: &B::Header) -> Option<MmrRootHash>
 	header.digest().convert_first(|l| l.try_to(id).and_then(filter))
 }
 
-#[cfg(feature = "std")]
-pub use mmr_root_provider::MmrRootProvider;
-#[cfg(feature = "std")]
-mod mmr_root_provider {
-	use super::*;
-	use crate::{known_payloads, payload::PayloadProvider, Payload};
-	use sp_api::{NumberFor, ProvideRuntimeApi};
-	use sp_mmr_primitives::MmrApi;
-	use sp_runtime::generic::BlockId;
-	use sp_std::{marker::PhantomData, sync::Arc};
-
-	/// A [`crate::Payload`] provider where payload is Merkle Mountain Range root hash.
-	///
-	/// Encoded payload contains a [`crate::MmrRootHash`] type (i.e. 32-bytes hash).
-	pub struct MmrRootProvider<B, R> {
-		runtime: Arc<R>,
-		_phantom: PhantomData<B>,
-	}
-
-	impl<B, R> MmrRootProvider<B, R>
-	where
-		B: Block,
-		R: ProvideRuntimeApi<B>,
-		R::Api: MmrApi<B, MmrRootHash, NumberFor<B>>,
-	{
-		/// Create new BEEFY Payload provider with MMR Root as payload.
-		pub fn new(runtime: Arc<R>) -> Self {
-			Self { runtime, _phantom: PhantomData }
-		}
-
-		/// Simple wrapper that gets MMR root from header digests or from client state.
-		fn mmr_root_from_digest_or_runtime(&self, header: &B::Header) -> Option<MmrRootHash> {
-			find_mmr_root_digest::<B>(header).or_else(|| {
-				self.runtime
-					.runtime_api()
-					.mmr_root(&BlockId::hash(header.hash()))
-					.ok()
-					.and_then(|r| r.ok())
-			})
-		}
-	}
-
-	impl<B: Block, R> PayloadProvider<B> for MmrRootProvider<B, R>
-	where
-		B: Block,
-		R: ProvideRuntimeApi<B>,
-		R::Api: MmrApi<B, MmrRootHash, NumberFor<B>>,
-	{
-		fn payload(&self, header: &B::Header) -> Option<Payload> {
-			self.mmr_root_from_digest_or_runtime(header).map(|mmr_root| {
-				Payload::from_single_entry(known_payloads::MMR_ROOT_ID, mmr_root.encode())
-			})
-		}
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;

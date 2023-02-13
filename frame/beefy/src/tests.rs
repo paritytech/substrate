@@ -18,8 +18,8 @@
 use std::vec;
 
 use beefy_primitives::{
-	check_equivocation_proof, keyring::Keyring as BeefyKeyring, known_payloads::MMR_ROOT_ID,
-	Payload, ValidatorSet,
+	check_equivocation_proof, generate_equivocation_proof, known_payloads::MMR_ROOT_ID,
+	Keyring as BeefyKeyring, Payload, ValidatorSet,
 };
 use codec::Encode;
 

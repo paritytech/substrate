@@ -1045,9 +1045,7 @@ pub(crate) mod tests {
 		},
 		BeefyRPCLinks, KnownPeers,
 	};
-	use beefy_primitives::{
-		keyring::Keyring, known_payloads, mmr::MmrRootProvider, Payload, SignedCommitment,
-	};
+	use beefy_primitives::{known_payloads, Keyring, MmrRootProvider, Payload, SignedCommitment};
 	use futures::{future::poll_fn, task::Poll};
 	use parking_lot::Mutex;
 	use sc_client_api::{Backend as BackendT, HeaderBackend};
