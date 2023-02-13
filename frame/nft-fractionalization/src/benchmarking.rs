@@ -33,7 +33,7 @@ use pallet_nfts::{CollectionConfig, CollectionSettings, ItemConfig, MintSettings
 use sp_runtime::traits::{Bounded, StaticLookup};
 use sp_std::prelude::*;
 
-use crate::Pallet as NftFractions;
+use crate::Pallet as NftFractionalization;
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as InspectFungible<<T as SystemConfig>::AccountId>>::Balance;
@@ -107,7 +107,7 @@ benchmarks! {
 
 	unify {
 		let (caller, caller_lookup) = mint_nft::<T>(0.into());
-		NftFractions::<T>::fractionalize(
+		NftFractionalization::<T>::fractionalize(
 			SystemOrigin::Signed(caller.clone()).into(),
 			0.into(),
 			0.into(),
@@ -127,5 +127,5 @@ benchmarks! {
 		);
 	}
 
-	impl_benchmark_test_suite!(NftFractions, crate::mock::new_test_ext(), crate::mock::Test);
+	impl_benchmark_test_suite!(NftFractionalization, crate::mock::new_test_ext(), crate::mock::Test);
 }

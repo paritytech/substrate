@@ -1608,7 +1608,7 @@ impl pallet_nfts::Config for Runtime {
 }
 
 parameter_types! {
-	pub const NftFractionsPalletId: PalletId = PalletId(*b"fraction");
+	pub const NftFractionalizationPalletId: PalletId = PalletId(*b"fraction");
 }
 
 pub struct RuntimeLockableNonfungible;
@@ -1628,7 +1628,7 @@ impl LockableNonfungible<CollectionId, ItemId> for RuntimeLockableNonfungible {
 
 impl pallet_nft_fractionalization::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type PalletId = NftFractionsPalletId;
+	type PalletId = NftFractionalizationPalletId;
 	type Deposit = AssetDeposit;
 	type Currency = Balances;
 	type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
@@ -1800,7 +1800,7 @@ construct_runtime!(
 		Nis: pallet_nis,
 		Uniques: pallet_uniques,
 		Nfts: pallet_nfts,
-		NftFractions: pallet_nft_fractionalization,
+		NftFractionalization: pallet_nft_fractionalization,
 		TransactionStorage: pallet_transaction_storage,
 		VoterList: pallet_bags_list::<Instance1>,
 		StateTrieMigration: pallet_state_trie_migration,
@@ -1931,7 +1931,7 @@ mod benches {
 		[pallet_treasury, Treasury]
 		[pallet_uniques, Uniques]
 		[pallet_nfts, Nfts]
-		[pallet_nft_fractionalization, NftFractions]
+		[pallet_nft_fractionalization, NftFractionalization]
 		[pallet_utility, Utility]
 		[pallet_vesting, Vesting]
 		[pallet_whitelist, Whitelist]

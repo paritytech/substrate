@@ -54,7 +54,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		NftFractions: pallet_nft_fractionalization,
+		NftFractionalization: pallet_nft_fractionalization,
 		Assets: pallet_assets,
 		Balances: pallet_balances,
 		Nfts: pallet_nfts,
@@ -164,7 +164,7 @@ impl pallet_nfts::Config for Test {
 }
 
 parameter_types! {
-	pub const NftFractionsPalletId: PalletId = PalletId(*b"fraction");
+	pub const NftFractionalizationPalletId: PalletId = PalletId(*b"fraction");
 }
 
 pub struct MockLockableNonfungible;
@@ -192,7 +192,7 @@ impl Config for Test {
 	type AssetId = <Self as pallet_assets::Config>::AssetId;
 	type Assets = Assets;
 	type Nfts = Nfts;
-	type PalletId = NftFractionsPalletId;
+	type PalletId = NftFractionalizationPalletId;
 	type NftLocker = MockLockableNonfungible;
 	type WeightInfo = ();
 }
