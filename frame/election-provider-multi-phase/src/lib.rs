@@ -1155,7 +1155,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			current_phase: Phase<T::BlockNumber>,
 		) -> DispatchResult {
-			T::ForceOrigin::ensure_origin(origin.clone())?;
+			ensure_root(origin)?;
 			ensure!(current_phase == Self::current_phase(), <Error<T>>::CallNotAllowed);
 
 			// If the current phase is not `Phase::Off` proceed to the next round.
