@@ -308,7 +308,7 @@ where
 			let (import_notification, storage_changes, import_notification_action) =
 				match notify_imported {
 					Some(mut summary) => {
-						let import_notification_action = summary.import_notification_action.clone();
+						let import_notification_action = summary.import_notification_action;
 						let storage_changes = summary.storage_changes.take();
 						(
 							Some(BlockImportNotification::from_summary(
@@ -357,24 +357,7 @@ where
 			}
 
 			self.notify_finalized(finality_notification)?;
-
-			match import_notification_action {
-				ImportNotificationAction::Both => {
-					self.notify_imported(import_notification.clone(), storage_changes.clone())?;
-					self.notify_imported_for_every_block(import_notification, storage_changes)?;
-				},
-				ImportNotificationAction::RecentBlock =>
-					self.notify_imported(import_notification, storage_changes)?,
-				ImportNotificationAction::EveryBlock =>
-					self.notify_imported_for_every_block(import_notification, storage_changes)?,
-				ImportNotificationAction::None => {
-					// Cleanup any closed import notification sinks.
-					self.import_notification_sinks.lock().retain(|sink| !sink.is_closed());
-					self.every_block_import_notification_sinks
-						.lock()
-						.retain(|sink| !sink.is_closed());
-				},
-			}
+			self.notify_imported(import_notification, import_notification_action, storage_changes)?;
 
 			Ok(r)
 		};
@@ -802,7 +785,7 @@ where
 
 		if should_notify_every_block || should_notify_recent_block {
 			let header = import_headers.into_post();
-			if finalized {
+			if finalized && should_notify_recent_block {
 				let mut summary = match operation.notify_finalized.take() {
 					Some(mut summary) => {
 						summary.header = header.clone();
@@ -1053,6 +1036,7 @@ where
 	fn notify_imported(
 		&self,
 		notification: Option<BlockImportNotification<Block>>,
+		import_notification_action: ImportNotificationAction,
 		storage_changes: Option<(StorageCollection, ChildStorageCollection)>,
 	) -> sp_blockchain::Result<()> {
 		let notification = match notification {
@@ -1065,38 +1049,11 @@ where
 				// temporary leak of closed/discarded notification sinks (e.g.
 				// from consensus code).
 				self.import_notification_sinks.lock().retain(|sink| !sink.is_closed());
-				return Ok(())
-			},
-		};
 
-		if let Some(storage_changes) = storage_changes {
-			// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
-			self.storage_notifications.trigger(
-				&notification.hash,
-				storage_changes.0.into_iter(),
-				storage_changes.1.into_iter().map(|(sk, v)| (sk, v.into_iter())),
-			);
-		}
-
-		self.import_notification_sinks
-			.lock()
-			.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
-
-		Ok(())
-	}
-
-	fn notify_imported_for_every_block(
-		&self,
-		notification: Option<BlockImportNotification<Block>>,
-		storage_changes: Option<(StorageCollection, ChildStorageCollection)>,
-	) -> sp_blockchain::Result<()> {
-		let notification = match notification {
-			Some(notify_import) => notify_import,
-			None => {
-				// Cleanup any closed import notification sinks.
 				self.every_block_import_notification_sinks
 					.lock()
 					.retain(|sink| !sink.is_closed());
+
 				return Ok(())
 			},
 		};
@@ -1110,9 +1067,28 @@ where
 			);
 		}
 
-		self.every_block_import_notification_sinks
-			.lock()
-			.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+		match import_notification_action {
+			ImportNotificationAction::Both => {
+				self.import_notification_sinks
+					.lock()
+					.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+
+				self.every_block_import_notification_sinks
+					.lock()
+					.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+			},
+			ImportNotificationAction::RecentBlock => {
+				self.import_notification_sinks
+					.lock()
+					.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+			},
+			ImportNotificationAction::EveryBlock => {
+				self.every_block_import_notification_sinks
+					.lock()
+					.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+			},
+			ImportNotificationAction::None => {},
+		}
 
 		Ok(())
 	}
