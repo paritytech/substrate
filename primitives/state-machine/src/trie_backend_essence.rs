@@ -75,6 +75,109 @@ impl<H> Cache<H> {
 	}
 }
 
+enum IterState {
+	Pending,
+	FinishedComplete,
+	FinishedIncomplete,
+}
+
+/// A raw iterator over the storage.
+pub struct RawIter<S, H, C>
+where
+	H: Hasher,
+{
+	stop_on_incomplete_database: bool,
+	root: H::Out,
+	child_info: Option<ChildInfo>,
+	trie_iter: TrieDBRawIterator<Layout<H>>,
+	state: IterState,
+	_phantom: PhantomData<(S, C)>,
+}
+
+impl<S, H, C> RawIter<S, H, C>
+where
+	H: Hasher,
+	S: TrieBackendStorage<H>,
+	H::Out: Codec + Ord,
+	C: AsLocalTrieCache<H> + Send + Sync,
+{
+	#[inline]
+	fn prepare<R>(
+		&mut self,
+		backend: &TrieBackendEssence<S, H, C>,
+		callback: impl FnOnce(
+			&sp_trie::TrieDB<Layout<H>>,
+			&mut TrieDBRawIterator<Layout<H>>,
+		) -> Option<core::result::Result<R, Box<TrieError<<H as Hasher>::Out>>>>,
+	) -> Option<Result<R>> {
+		if !matches!(self.state, IterState::Pending) {
+			return None
+		}
+
+		let result = backend.with_trie_db(self.root, self.child_info.as_ref(), |db| {
+			callback(&db, &mut self.trie_iter)
+		});
+		match result {
+			Some(Ok(key_value)) => Some(Ok(key_value)),
+			None => {
+				self.state = IterState::FinishedComplete;
+				None
+			},
+			Some(Err(error)) => {
+				self.state = IterState::FinishedIncomplete;
+				if matches!(*error, TrieError::IncompleteDatabase(_)) &&
+					self.stop_on_incomplete_database
+				{
+					None
+				} else {
+					Some(Err(format!("TrieDB iteration error: {}", error)))
+				}
+			},
+		}
+	}
+}
+
+impl<S, H, C> Default for RawIter<S, H, C>
+where
+	H: Hasher,
+{
+	fn default() -> Self {
+		Self {
+			stop_on_incomplete_database: false,
+			child_info: None,
+			root: Default::default(),
+			trie_iter: TrieDBRawIterator::empty(),
+			state: IterState::FinishedComplete,
+			_phantom: Default::default(),
+		}
+	}
+}
+
+impl<S, H, C> StorageIterator<H> for RawIter<S, H, C>
+where
+	H: Hasher,
+	S: TrieBackendStorage<H>,
+	H::Out: Codec + Ord,
+	C: AsLocalTrieCache<H> + Send + Sync,
+{
+	type Backend = crate::TrieBackend<S, H, C>;
+	type Error = crate::DefaultError;
+
+	#[inline]
+	fn next_key(&mut self, backend: &Self::Backend) -> Option<Result<StorageKey>> {
+		self.prepare(&backend.essence, |trie, trie_iter| trie_iter.next_key(&trie))
+	}
+
+	#[inline]
+	fn next_pair(&mut self, backend: &Self::Backend) -> Option<Result<(StorageKey, StorageValue)>> {
+		self.prepare(&backend.essence, |trie, trie_iter| trie_iter.next_item(&trie))
+	}
+
+	fn was_complete(&self) -> bool {
+		matches!(self.state, IterState::FinishedComplete)
+	}
+}
+
 /// Patricia trie-based pairs storage essence.
 pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher, C> {
 	storage: S,
@@ -255,109 +358,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H>> TrieBackendEss
 		) -> (Option<H::Out>, R),
 	) -> R {
 		callback(None, None).1
-	}
-}
-
-enum IterState {
-	Pending,
-	FinishedComplete,
-	FinishedIncomplete,
-}
-
-/// A raw iterator over the storage.
-pub struct RawIter<S, H, C>
-where
-	H: Hasher,
-{
-	stop_on_incomplete_database: bool,
-	root: H::Out,
-	child_info: Option<ChildInfo>,
-	trie_iter: TrieDBRawIterator<Layout<H>>,
-	state: IterState,
-	_phantom: PhantomData<(S, C)>,
-}
-
-impl<S, H, C> RawIter<S, H, C>
-where
-	H: Hasher,
-	S: TrieBackendStorage<H>,
-	H::Out: Codec + Ord,
-	C: AsLocalTrieCache<H> + Send + Sync,
-{
-	#[inline]
-	fn prepare<R>(
-		&mut self,
-		backend: &TrieBackendEssence<S, H, C>,
-		callback: impl FnOnce(
-			&sp_trie::TrieDB<Layout<H>>,
-			&mut TrieDBRawIterator<Layout<H>>,
-		) -> Option<core::result::Result<R, Box<TrieError<<H as Hasher>::Out>>>>,
-	) -> Option<Result<R>> {
-		if !matches!(self.state, IterState::Pending) {
-			return None
-		}
-
-		let result = backend.with_trie_db(self.root, self.child_info.as_ref(), |db| {
-			callback(&db, &mut self.trie_iter)
-		});
-		match result {
-			Some(Ok(key_value)) => Some(Ok(key_value)),
-			None => {
-				self.state = IterState::FinishedComplete;
-				None
-			},
-			Some(Err(error)) => {
-				self.state = IterState::FinishedIncomplete;
-				if matches!(*error, TrieError::IncompleteDatabase(_)) &&
-					self.stop_on_incomplete_database
-				{
-					None
-				} else {
-					Some(Err(format!("TrieDB iteration error: {}", error)))
-				}
-			},
-		}
-	}
-}
-
-impl<S, H, C> Default for RawIter<S, H, C>
-where
-	H: Hasher,
-{
-	fn default() -> Self {
-		Self {
-			stop_on_incomplete_database: false,
-			child_info: None,
-			root: Default::default(),
-			trie_iter: TrieDBRawIterator::empty(),
-			state: IterState::FinishedComplete,
-			_phantom: Default::default(),
-		}
-	}
-}
-
-impl<S, H, C> StorageIterator<H> for RawIter<S, H, C>
-where
-	H: Hasher,
-	S: TrieBackendStorage<H>,
-	H::Out: Codec + Ord,
-	C: AsLocalTrieCache<H> + Send + Sync,
-{
-	type Backend = crate::TrieBackend<S, H, C>;
-	type Error = crate::DefaultError;
-
-	#[inline]
-	fn next_key(&mut self, backend: &Self::Backend) -> Option<Result<StorageKey>> {
-		self.prepare(&backend.essence, |trie, trie_iter| trie_iter.next_key(&trie))
-	}
-
-	#[inline]
-	fn next_pair(&mut self, backend: &Self::Backend) -> Option<Result<(StorageKey, StorageValue)>> {
-		self.prepare(&backend.essence, |trie, trie_iter| trie_iter.next_item(&trie))
-	}
-
-	fn was_complete(&self) -> bool {
-		matches!(self.state, IterState::FinishedComplete)
 	}
 }
 
