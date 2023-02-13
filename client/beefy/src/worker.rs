@@ -24,7 +24,7 @@ use crate::{
 	error::Error,
 	justification::BeefyVersionedFinalityProof,
 	keystore::BeefyKeystore,
-	metric_inc, metric_set,
+	metric_get, metric_inc, metric_set,
 	metrics::Metrics,
 	round::Rounds,
 	BeefyVoterLinks, LOG_TARGET,
@@ -494,22 +494,24 @@ where
 				false,
 			)?,
 			RoundAction::Enqueue => {
-				metric_inc!(self, beefy_buffered_votes);
 				debug!(target: LOG_TARGET, "🥩 Buffer vote for round: {:?}.", block_num);
 				if self.pending_votes.len() < MAX_BUFFERED_VOTE_ROUNDS {
 					let votes_vec = self.pending_votes.entry(block_num).or_default();
-					if votes_vec.try_push(vote).is_err() {
+					if votes_vec.try_push(vote).is_ok() {
+						metric_inc!(self, beefy_buffered_votes);
+					} else {
 						warn!(
 							target: LOG_TARGET,
 							"🥩 Buffer vote dropped for round: {:?}", block_num
-						)
+						);
+						metric_inc!(self, beefy_buffered_votes_dropped);
 					}
 				} else {
-					metric_inc!(self, beefy_buffered_votes_dropped);
 					warn!(target: LOG_TARGET, "🥩 Buffer vote dropped for round: {:?}.", block_num);
+					metric_inc!(self, beefy_buffered_votes_dropped);
 				}
 			},
-			RoundAction::Drop => (),
+			RoundAction::Drop => metric_inc!(self, beefy_stale_votes),
 		};
 		Ok(())
 	}
@@ -533,10 +535,10 @@ where
 				self.finalize(justification)?
 			},
 			RoundAction::Enqueue => {
-				metric_inc!(self, beefy_buffered_justifications);
 				debug!(target: LOG_TARGET, "🥩 Buffer justification for round: {:?}.", block_num);
 				if self.pending_justifications.len() < MAX_BUFFERED_JUSTIFICATIONS {
 					self.pending_justifications.entry(block_num).or_insert(justification);
+					metric_inc!(self, beefy_buffered_justifications);
 				} else {
 					metric_inc!(self, beefy_buffered_justifications_dropped);
 					warn!(
@@ -545,7 +547,7 @@ where
 					);
 				}
 			},
-			RoundAction::Drop => (),
+			RoundAction::Drop => metric_inc!(self, beefy_stale_justifications),
 		};
 		Ok(())
 	}
@@ -577,8 +579,6 @@ where
 
 				let finality_proof =
 					VersionedFinalityProof::V1(SignedCommitment { commitment, signatures });
-
-				metric_set!(self, beefy_round_concluded, block_num);
 
 				info!(
 					target: LOG_TARGET,
@@ -657,6 +657,7 @@ where
 				.expect("forwards closure result; the closure always returns Ok; qed.");
 		} else {
 			debug!(target: LOG_TARGET, "🥩 Can't set best beefy to older: {}", block_num);
+			metric_set!(self, beefy_best_block_to_old_block, block_num);
 		}
 		Ok(())
 	}
@@ -688,19 +689,23 @@ where
 			let justifs_to_handle = to_process_for(&mut self.pending_justifications, interval, _ph);
 			for (num, justification) in justifs_to_handle.into_iter() {
 				debug!(target: LOG_TARGET, "🥩 Handle buffered justification for: {:?}.", num);
+				metric_inc!(self, beefy_imported_justifications);
 				if let Err(err) = self.finalize(justification) {
 					error!(target: LOG_TARGET, "🥩 Error finalizing block: {}", err);
 				}
 			}
+			metric_set!(self, beefy_buffered_justifications, self.pending_justifications.len());
 			// Possibly new interval after processing justifications.
 			interval = self.voting_oracle().accepted_interval(best_grandpa)?;
 		}
 
 		// Process pending votes.
 		if !self.pending_votes.is_empty() {
+			let mut processed = 0u64;
 			let votes_to_handle = to_process_for(&mut self.pending_votes, interval, _ph);
 			for (num, votes) in votes_to_handle.into_iter() {
 				debug!(target: LOG_TARGET, "🥩 Handle buffered votes for: {:?}.", num);
+				processed += votes.len() as u64;
 				for v in votes.into_iter() {
 					if let Err(err) = self.handle_vote(
 						(v.commitment.payload, v.commitment.block_number),
@@ -710,6 +715,10 @@ where
 						error!(target: LOG_TARGET, "🥩 Error handling buffered vote: {}", err);
 					};
 				}
+			}
+			if let Some(previous) = metric_get!(self, beefy_buffered_votes) {
+				previous.sub(processed);
+				metric_set!(self, beefy_buffered_votes, previous.get());
 			}
 		}
 		Ok(())
@@ -828,8 +837,6 @@ where
 		}
 
 		self.gossip_engine.gossip_message(topic::<B>(), encoded_message, false);
-
-		metric_inc!(self, beefy_self_votes);
 
 		Ok(())
 	}

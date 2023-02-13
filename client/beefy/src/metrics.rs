@@ -26,8 +26,6 @@ pub struct Metrics {
 	pub beefy_validator_set_id: Gauge<U64>,
 	/// Total number of votes sent by this node
 	pub beefy_votes_sent: Counter<U64>,
-	/// Most recent concluded voting round
-	pub beefy_round_concluded: Gauge<U64>,
 	/// Best block finalized by BEEFY
 	pub beefy_best_block: Gauge<U64>,
 	/// Next block BEEFY should vote on
@@ -38,24 +36,28 @@ pub struct Metrics {
 	pub beefy_no_session_initialized: Counter<U64>,
 	/// Number of times no Authority public key found in store
 	pub beefy_no_authority_found_in_store: Counter<U64>,
-	/// Number of Buffered votes
-	pub beefy_buffered_votes: Counter<U64>,
-	/// Number of times Buffered votes is full
-	pub beefy_buffered_votes_full: Counter<U64>,
-	/// Number of Buffered justifications
-	pub beefy_buffered_justifications: Counter<U64>,
-	/// Number of times Buffered justifications is full
-	pub beefy_buffered_justifications_full: Counter<U64>,
+	/// Number of currently buffered votes
+	pub beefy_buffered_votes: Gauge<U64>,
+	/// Number of valid but stale votes received
+	pub beefy_stale_votes: Counter<U64>,
+	/// Number of votes dropped due to full buffers
+	pub beefy_buffered_votes_dropped: Counter<U64>,
+	/// Number of currently buffered justifications
+	pub beefy_buffered_justifications: Gauge<U64>,
+	/// Number of valid but stale justifications received
+	pub beefy_stale_justifications: Counter<U64>,
+	/// Number of valid justifications successfully imported
+	pub beefy_imported_justifications: Counter<U64>,
+	/// Number of justifications dropped due to full buffers
+	pub beefy_buffered_justifications_dropped: Counter<U64>,
 	/// Trying to set Best Beefy block to old block
 	pub beefy_best_block_to_old_block: Gauge<U64>,
 	/// Number of Successful handled votes
 	pub beefy_successful_handled_votes: Counter<U64>,
-	/// Number of Successful votes
-	pub beefy_successful_votes: Counter<U64>,
-	/// Number of Bad Justification imports
-	pub beefy_bad_justification_imports: Gauge<U64>,
 	/// Number of Good Justification imports
-	pub beefy_good_justification_imports: Gauge<U64>,
+	pub beefy_good_justification_imports: Counter<U64>,
+	/// Number of Bad Justification imports
+	pub beefy_bad_justification_imports: Counter<U64>,
 	/// Number of Successful Justification respond request
 	pub beefy_successful_justification_respond_request: Counter<U64>,
 	/// Number of Failed Justification respond request
@@ -86,13 +88,6 @@ impl Metrics {
 				Counter::new("substrate_beefy_votes_sent", "Number of votes sent by this node")?,
 				registry,
 			)?,
-			beefy_round_concluded: register(
-				Gauge::new(
-					"substrate_beefy_round_concluded",
-					"Voting round, that has been concluded",
-				)?,
-				registry,
-			)?,
 			beefy_best_block: register(
 				Gauge::new("substrate_beefy_best_block", "Best block finalized by BEEFY")?,
 				registry,
@@ -108,10 +103,10 @@ impl Metrics {
 				)?,
 				registry,
 			)?,
-			beefy_voting_with_no_session_initialized: register(
+			beefy_no_session_initialized: register(
 				Counter::new(
-					"substrate_voting_with_no_session_initialized",
-					"Number of validator's trying to vote with no session initialized",
+					"substrate_beefy_no_session_initialized",
+					"Number of times trying to vote with no session initialized",
 				)?,
 				registry,
 			)?,
@@ -123,27 +118,48 @@ impl Metrics {
 				registry,
 			)?,
 			beefy_buffered_votes: register(
-				Counter::new("substrate_beefy_buffered_votes", "Number of Buffered votes")?,
+				Gauge::new("substrate_beefy_buffered_votes", "Number of currently buffered votes")?,
 				registry,
 			)?,
-			beefy_buffered_votes_full: register(
+			beefy_stale_votes: register(
 				Counter::new(
-					"substrate_beefy_buffered_votes_full",
-					"Number of times Buffered votes is full",
+					"substrate_beefy_stale_votes",
+					"Number of valid but stale votes received",
+				)?,
+				registry,
+			)?,
+			beefy_buffered_votes_dropped: register(
+				Counter::new(
+					"substrate_beefy_buffered_votes_dropped",
+					"Number of votes dropped due to full buffers",
 				)?,
 				registry,
 			)?,
 			beefy_buffered_justifications: register(
-				Counter::new(
+				Gauge::new(
 					"substrate_beefy_buffered_justifications",
-					"Number of Buffered justifications",
+					"Number of currently buffered justifications",
 				)?,
 				registry,
 			)?,
-			beefy_buffered_justifications_full: register(
+			beefy_stale_justifications: register(
 				Counter::new(
-					"substrate_beefy_buffered_justifications_full",
-					"Number of times Buffered justifications is full",
+					"substrate_beefy_stale_justifications",
+					"Number of valid but stale justifications received",
+				)?,
+				registry,
+			)?,
+			beefy_imported_justifications: register(
+				Counter::new(
+					"substrate_beefy_imported_justifications",
+					"Number of valid justifications successfully imported",
+				)?,
+				registry,
+			)?,
+			beefy_buffered_justifications_dropped: register(
+				Counter::new(
+					"substrate_beefy_buffered_justifications_dropped",
+					"Number of justifications dropped due to full buffers",
 				)?,
 				registry,
 			)?,
@@ -161,21 +177,17 @@ impl Metrics {
 				)?,
 				registry,
 			)?,
-			beefy_successful_votes: register(
-				Counter::new("substrate_beefy_successful_votes", "Number of Successful votes")?,
-				registry,
-			)?,
-			beefy_bad_justification_imports: register(
-				Gauge::new(
-					"substrate_beefy_bad_justification_imports",
-					"Number of Bad Justification imports",
+			beefy_good_justification_imports: register(
+				Counter::new(
+					"substrate_beefy_good_justification_imports",
+					"Number of Good Justification imports",
 				)?,
 				registry,
 			)?,
-			beefy_good_justification_imports: register(
-				Gauge::new(
-					"substrate_beefy_good_justification_imports",
-					"Number of Good Justification imports",
+			beefy_bad_justification_imports: register(
+				Counter::new(
+					"substrate_beefy_bad_justification_imports",
+					"Number of Bad Justification imports",
 				)?,
 				registry,
 			)?,
@@ -254,7 +266,6 @@ macro_rules! metric_inc {
 	}};
 }
 
-#[cfg(test)]
 #[macro_export]
 macro_rules! metric_get {
 	($self:ident, $m:ident) => {{

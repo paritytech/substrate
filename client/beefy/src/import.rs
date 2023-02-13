@@ -35,7 +35,7 @@ use sc_consensus::{BlockCheckParams, BlockImport, BlockImportParams, ImportResul
 use crate::{
 	communication::notification::BeefyVersionedFinalityProofSender,
 	justification::{decode_and_verify_finality_proof, BeefyVersionedFinalityProof},
-	metric_set,
+	metric_inc,
 	metrics::Metrics,
 	LOG_TARGET,
 };
@@ -153,7 +153,7 @@ where
 						.notify(|| Ok::<_, ()>(proof))
 						.expect("forwards closure result; the closure always returns Ok; qed.");
 
-					metric_inc!(self, beefy_block_import_good_justification);
+					metric_inc!(self, beefy_good_justification_imports);
 				} else {
 					debug!(
 						target: LOG_TARGET,
@@ -161,7 +161,7 @@ where
 						encoded,
 						number,
 					);
-					metric_inc!(self, beefy_block_import_bad_justification);
+					metric_inc!(self, beefy_bad_justification_imports);
 				}
 			},
 			_ => (),
