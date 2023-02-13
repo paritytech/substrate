@@ -2056,9 +2056,9 @@ mod tests {
 	#[test]
 	fn code_hash_returns_proper_values() {
 		let code_bob = MockLoader::insert(Call, |ctx, _| {
-			// ALICE is not a contract and hence she does not have a code_hash
+			// ALICE is not a contract and hence they do not have a code_hash
 			assert!(ctx.ext.code_hash(&ALICE).is_none());
-			// BOB is a contract and hence he has a code_hash
+			// BOB is a contract and hence it has a code_hash
 			assert!(ctx.ext.code_hash(&BOB).is_some());
 			exec_success()
 		});
@@ -3438,6 +3438,37 @@ mod tests {
 				None,
 				Determinism::Deterministic
 			));
+		});
+	}
+
+	/// This works even though random interface is deprecated, as the check to ban deprecated
+	/// functions happens in the wasm stack which is mocked for exec tests.
+	#[test]
+	fn randomness_works() {
+		let subject = b"nice subject".as_ref();
+		let code_hash = MockLoader::insert(Call, move |ctx, _| {
+			let rand = <Test as Config>::Randomness::random(subject);
+			assert_eq!(rand, ctx.ext.random(subject));
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			place_contract(&BOB, code_hash);
+
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			let result = MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![],
+				None,
+				Determinism::Deterministic,
+			);
+			assert_matches!(result, Ok(_));
 		});
 	}
 }

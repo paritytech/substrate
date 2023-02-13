@@ -782,6 +782,33 @@ fn on_new_session_doesnt_start_new_set_if_schedule_change_failed() {
 }
 
 #[test]
+fn cleans_up_old_set_id_session_mappings() {
+	new_test_ext(vec![(1, 1), (2, 1), (3, 1)]).execute_with(|| {
+		let max_set_id_session_entries = MaxSetIdSessionEntries::get();
+
+		start_era(max_set_id_session_entries);
+
+		// we should have a session id mapping for all the set ids from
+		// `max_set_id_session_entries` eras we have observed
+		for i in 1..=max_set_id_session_entries {
+			assert!(Grandpa::session_for_set(i as u64).is_some());
+		}
+
+		start_era(max_set_id_session_entries * 2);
+
+		// we should keep tracking the new mappings for new eras
+		for i in max_set_id_session_entries + 1..=max_set_id_session_entries * 2 {
+			assert!(Grandpa::session_for_set(i as u64).is_some());
+		}
+
+		// but the old ones should have been pruned by now
+		for i in 1..=max_set_id_session_entries {
+			assert!(Grandpa::session_for_set(i as u64).is_none());
+		}
+	});
+}
+
+#[test]
 fn always_schedules_a_change_on_new_session_when_stalled() {
 	new_test_ext(vec![(1, 1), (2, 1), (3, 1)]).execute_with(|| {
 		start_era(1);

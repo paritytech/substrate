@@ -21,8 +21,11 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use crate::*;
-use frame_benchmarking::{impl_benchmark_test_suite, whitelisted_caller};
-use frame_support::benchmarking::{benchmarks, Linear};
+use frame_benchmarking::v1::{
+	impl_benchmark_test_suite,
+	v2::{benchmarks, Linear},
+	whitelisted_caller,
+};
 use frame_system::RawOrigin;
 
 // To actually run this benchmark on pallet-example-basic, we need to put this pallet into the
