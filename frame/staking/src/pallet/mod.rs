@@ -62,7 +62,6 @@ pub mod pallet {
 	#[cfg(feature = "try-runtime")]
 	use frame_support::traits::TryStateSelect;
 
-
 	use crate::BenchmarkingConfig;
 
 	use super::*;
