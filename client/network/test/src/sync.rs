@@ -1258,11 +1258,12 @@ async fn warp_sync_to_target_block() {
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(Default::default());
 
+	let gap_end = net.peer(0).push_blocks(63, false).pop().unwrap();
+	let target = net.peer(0).push_blocks(1, false).pop().unwrap();
 	net.peer(1).push_blocks(64, false);
 	net.peer(2).push_blocks(64, false);
 
-	let info = net.peer(0).client.info();
-	let target_block = net.peer(0).client.header(info.best_hash).unwrap().unwrap();
+	let target_block = net.peer(0).client.header(target).unwrap().unwrap();
 
 	net.add_full_peer_with_config(FullPeerConfig {
 		sync_mode: SyncMode::Warp,
@@ -1272,6 +1273,17 @@ async fn warp_sync_to_target_block() {
 
 	net.run_until_sync().await;
 	assert!(net.peer(3).client().has_state_at(&BlockId::Number(64)));
+
+	// Wait for peer 1 download block history
+	futures::future::poll_fn::<(), _>(|cx| {
+		net.poll(cx);
+		if net.peer(3).has_body(gap_end) && net.peer(3).has_body(target) {
+			Poll::Ready(())
+		} else {
+			Poll::Pending
+		}
+	})
+	.await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
