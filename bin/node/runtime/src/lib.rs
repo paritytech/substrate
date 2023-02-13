@@ -53,6 +53,7 @@ use frame_system::{
 };
 pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
+use pallet_dex::{NativeOrAssetId, NativeOrAssetIdConverter};
 use pallet_election_provider_multi_phase::SolutionAccuracyOf;
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
@@ -65,7 +66,7 @@ pub use pallet_transaction_payment::{CurrencyAdapter, Multiplier, TargetedFeeAdj
 use pallet_transaction_payment::{FeeDetails, RuntimeDispatchInfo};
 use sp_api::impl_runtime_apis;
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
-use sp_core::{crypto::KeyTypeId, ConstU64, OpaqueMetadata};
+use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_inherents::{CheckInherentsResult, InherentData};
 use sp_runtime::{
 	create_runtime_str,
@@ -1510,6 +1511,7 @@ impl pallet_assets::Config<Instance2> for Runtime {
 	type Extra = ();
 	type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
 	type RemoveItemsLimit = ConstU32<1000>;
+	type CallbackHandle = ();
 	#[cfg(feature = "runtime-benchmarks")]
 	type BenchmarkHelper = ();
 }
@@ -1520,18 +1522,22 @@ parameter_types! {
 }
 
 impl pallet_dex::Config for Runtime {
-	type Fee = ConstU64<3>;
+	type Fee = ConstU32<3>;
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
 	type AssetBalance = <Self as pallet_balances::Config>::Balance;
+	type HigherPrecisionBalance = sp_core::U256;
 	type Assets = Assets;
+	type Balance = u128;
 	type PoolAssets = PoolAssets;
 	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
+	type MultiAssetId = NativeOrAssetId<u32>;
 	type PoolAssetId = <Self as pallet_assets::Config<Instance2>>::AssetId;
 	type PalletId = DexPalletId;
 	type WeightInfo = pallet_dex::weights::SubstrateWeight<Runtime>;
 	type AllowMultiAssetPools = AllowMultiAssetPools;
 	type MaxSwapPathLength = ConstU32<4>;
+	type MultiAssetIdConverter = NativeOrAssetIdConverter<u32>;
 }
 
 parameter_types! {
@@ -2172,10 +2178,16 @@ impl_runtime_apis! {
 	impl pallet_dex::DexApi<
 		Block,
 		Balance,
+		u128,
+		NativeOrAssetId<u32>
 	> for Runtime
 	{
-		fn quote_price(asset1: Option<u32>, asset2: Option<u32>, amount: u64) -> Option<Balance> {
-			Dex::quote_price(asset1, asset2, amount)
+		fn quote_price_exact_tokens_for_tokens(asset1: NativeOrAssetId<u32>, asset2: NativeOrAssetId<u32>, amount: u128, include_fee: bool) -> Option<Balance> {
+			Dex::quote_price_exact_tokens_for_tokens(asset1, asset2, amount, include_fee)
+		}
+
+		fn quote_price_tokens_for_exact_tokens(asset1: NativeOrAssetId<u32>, asset2: NativeOrAssetId<u32>, amount: u128, include_fee: bool) -> Option<Balance> {
+			Dex::quote_price_tokens_for_exact_tokens(asset1, asset2, amount, include_fee)
 		}
 	}
 
