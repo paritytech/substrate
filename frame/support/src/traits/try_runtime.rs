@@ -68,9 +68,10 @@ impl sp_std::fmt::Debug for Select {
 impl sp_std::str::FromStr for Select {
 	type Err = &'static str;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		match s {
-			"all" | "All" => Ok(Select::All),
-			"none" | "None" => Ok(Select::None),
+		match s.to_lowercase().as_ref() {
+			"fast" => Ok(Select::Fast),
+			"all" => Ok(Select::All),
+			"none" => Ok(Select::None),
 			_ =>
 				if s.starts_with("rr-") {
 					let count = s
