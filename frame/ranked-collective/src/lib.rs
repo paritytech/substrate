@@ -664,7 +664,7 @@ pub mod pallet {
 		}
 
 		/// Decrement the rank of an existing member by one. If the member is already at rank zero,
-		/// then they are removed entirely.
+		/// then it is removed entirely.
 		///
 		/// A `maybe_max_rank` may be provided to check that the member does not get demoted beyond
 		/// a certain rank. Is `None` is provided, then the rank will be decremented without checks.
@@ -693,7 +693,7 @@ pub mod pallet {
 		/// Remove the member entirely.
 		///
 		/// A `maybe_max_rank` may be provided to check that the member does not get removed from
-		/// a certain rank. Is `None` is provided, then the rank will be decremented without checks.
+		/// a certain rank. if `None` is provided, then the rank will be decremented without checks.
 		pub fn do_remove_member(who: T::AccountId, maybe_max_rank: Option<Rank>) -> DispatchResult {
 			let MemberRecord { rank, .. } = Self::ensure_member(&who)?;
 			if let Some(max_rank) = maybe_max_rank {
