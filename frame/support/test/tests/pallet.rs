@@ -19,7 +19,7 @@ use frame_support::{
 	dispatch::{
 		DispatchClass, DispatchInfo, GetDispatchInfo, Parameter, Pays, UnfilteredDispatchable,
 	},
-	pallet_prelude::ValueQuery,
+	pallet_prelude::{StorageInfoTrait, ValueQuery},
 	storage::unhashed,
 	traits::{
 		ConstU32, GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize,
@@ -1927,5 +1927,9 @@ fn test_storage_alias() {
 		pallet2::SomeCountedStorageMap::<Runtime>::insert(10, 100);
 		assert_eq!(Some(100), SomeCountedStorageMap::<Runtime>::get(10));
 		assert_eq!(1, SomeCountedStorageMap::<Runtime>::count());
+		assert_eq!(
+			SomeCountedStorageMap::<Runtime>::storage_info(),
+			pallet2::SomeCountedStorageMap::<Runtime>::storage_info()
+		);
 	})
 }
