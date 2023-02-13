@@ -114,7 +114,8 @@ where
 			return Ok(None)
 		};
 
-		prove_finality(&*self.backend, authority_set_changes, block, true).map(|opt| opt.map(|proof| proof.encode()))
+		prove_finality(&*self.backend, authority_set_changes, block, true)
+			.map(|opt| opt.map(|proof| proof.encode()))
 	}
 }
 
@@ -219,29 +220,26 @@ where
 
 	let unknown_headers = if collect_unknow_headers {
 		// Collect all headers from the requested block until the last block of the set
-			let mut headers = Vec::new();
-			let mut current = block + One::one();
-			loop {
-				if current > just_block || headers.len() >= MAX_UNKNOWN_HEADERS {
-					break
-				}
-				let hash = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(current))?;
-				headers.push(backend.blockchain().expect_header(hash)?);
-				current += One::one();
+		let mut headers = Vec::new();
+		let mut current = block + One::one();
+		loop {
+			if current > just_block || headers.len() >= MAX_UNKNOWN_HEADERS {
+				break
 			}
-			headers
+			let hash = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(current))?;
+			headers.push(backend.blockchain().expect_header(hash)?);
+			current += One::one();
+		}
+		headers
 	} else {
 		Default::default()
 	};
 
-
-	Ok(Some(
-		FinalityProof {
-			block: backend.blockchain().expect_block_hash_from_id(&BlockId::Number(just_block))?,
-			justification,
-			unknown_headers,
-		}
-	))
+	Ok(Some(FinalityProof {
+		block: backend.blockchain().expect_block_hash_from_id(&BlockId::Number(just_block))?,
+		justification,
+		unknown_headers,
+	}))
 }
 
 #[cfg(test)]
@@ -507,7 +505,10 @@ mod tests {
 		authority_set_changes.append(0, 5);
 		authority_set_changes.append(1, 8);
 
-		let proof_of_6: FinalityProof = prove_finality(&*backend, authority_set_changes.clone(), 6, true).unwrap().unwrap();
+		let proof_of_6: FinalityProof =
+			prove_finality(&*backend, authority_set_changes.clone(), 6, true)
+				.unwrap()
+				.unwrap();
 
 		assert_eq!(
 			proof_of_6,
@@ -518,7 +519,10 @@ mod tests {
 			},
 		);
 
-		let proof_of_6_without_unknown: FinalityProof = prove_finality(&*backend, authority_set_changes.clone(), 6, false).unwrap().unwrap();
+		let proof_of_6_without_unknown: FinalityProof =
+			prove_finality(&*backend, authority_set_changes.clone(), 6, false)
+				.unwrap()
+				.unwrap();
 
 		assert_eq!(
 			proof_of_6_without_unknown,
@@ -558,7 +562,8 @@ mod tests {
 		let mut authority_set_changes = AuthoritySetChanges::empty();
 		authority_set_changes.append(0, 5);
 
-		let proof_of_6: FinalityProof = prove_finality(&*backend, authority_set_changes, 6, true).unwrap().unwrap();
+		let proof_of_6: FinalityProof =
+			prove_finality(&*backend, authority_set_changes, 6, true).unwrap().unwrap();
 
 		assert_eq!(
 			proof_of_6,
