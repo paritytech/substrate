@@ -23,8 +23,7 @@ use nix::{
 	sys::signal::{kill, Signal::SIGINT},
 	unistd::Pid,
 };
-use node_primitives::Block;
-use remote_externalities::rpc_api::RpcService;
+use node_primitives::{Hash, Header};
 use std::{
 	io::{BufRead, BufReader, Read},
 	ops::{Deref, DerefMut},
@@ -69,12 +68,14 @@ pub async fn wait_n_finalized_blocks(
 
 /// Wait for at least n blocks to be finalized from a specified node
 pub async fn wait_n_finalized_blocks_from(n: usize, url: &str) {
+	use substrate_rpc_client::{ws_client, ChainApi};
+
 	let mut built_blocks = std::collections::HashSet::new();
 	let mut interval = tokio::time::interval(Duration::from_secs(2));
-	let rpc_service = RpcService::new(url, false).await.unwrap();
+	let rpc = ws_client(url).await.unwrap();
 
 	loop {
-		if let Ok(block) = rpc_service.get_finalized_head::<Block>().await {
+		if let Ok(block) = ChainApi::<(), Hash, Header, ()>::finalized_head(&rpc).await {
 			built_blocks.insert(block);
 			if built_blocks.len() > n {
 				break
@@ -160,6 +161,7 @@ pub fn find_ws_url_from_output(read: impl Read + Send) -> (String, String) {
 			let line =
 				line.expect("failed to obtain next line from stdout for WS address discovery");
 			data.push_str(&line);
+			data.push_str("\n");
 
 			// does the line contain our port (we expect this specific output from substrate).
 			let sock_addr = match line.split_once("Running JSON-RPC WS server: addr=") {
@@ -169,7 +171,10 @@ pub fn find_ws_url_from_output(read: impl Read + Send) -> (String, String) {
 
 			Some(format!("ws://{}", sock_addr))
 		})
-		.expect("We should get a WebSocket address");
+		.unwrap_or_else(|| {
+			eprintln!("Observed node output:\n{}", data);
+			panic!("We should get a WebSocket address")
+		});
 
 	(ws_url, data)
 }

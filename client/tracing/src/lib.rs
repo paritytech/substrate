@@ -625,11 +625,7 @@ mod tests {
 				let _guard2 = span2.enter();
 				// emit event
 				tracing::event!(target: "test_target", tracing::Level::INFO, "test_event1");
-				for msg in rx.recv() {
-					if !msg {
-						break
-					}
-				}
+				let _ = rx.recv();
 				// guard2 and span2 dropped / exited
 			});
 

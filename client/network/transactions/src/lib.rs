@@ -28,7 +28,7 @@
 
 use crate::config::*;
 use codec::{Decode, Encode};
-use futures::{channel::mpsc, prelude::*, stream::FuturesUnordered};
+use futures::{prelude::*, stream::FuturesUnordered};
 use libp2p::{multiaddr, PeerId};
 use log::{debug, trace, warn};
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
@@ -40,6 +40,7 @@ use sc_network_common::{
 	utils::{interval, LruHashSet},
 	ExHashT,
 };
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	collections::{hash_map::Entry, HashMap},
@@ -168,15 +169,17 @@ impl TransactionsHandlerPrototype {
 		metrics_registry: Option<&Registry>,
 	) -> error::Result<(TransactionsHandler<B, H, S>, TransactionsHandlerController<H>)> {
 		let event_stream = service.event_stream("transactions-handler");
-		let (to_handler, from_controller) = mpsc::unbounded();
+		let (to_handler, from_controller) = tracing_unbounded("mpsc_transactions_handler", 100_000);
 
 		let handler = TransactionsHandler {
 			protocol_name: self.protocol_name,
-			propagate_timeout: Box::pin(interval(PROPAGATE_TIMEOUT)),
+			propagate_timeout: (Box::pin(interval(PROPAGATE_TIMEOUT))
+				as Pin<Box<dyn Stream<Item = ()> + Send>>)
+				.fuse(),
 			pending_transactions: FuturesUnordered::new(),
 			pending_transactions_peers: HashMap::new(),
 			service,
-			event_stream,
+			event_stream: event_stream.fuse(),
 			peers: HashMap::new(),
 			transaction_pool,
 			from_controller,
@@ -195,7 +198,7 @@ impl TransactionsHandlerPrototype {
 
 /// Controls the behaviour of a [`TransactionsHandler`] it is connected to.
 pub struct TransactionsHandlerController<H: ExHashT> {
-	to_handler: mpsc::UnboundedSender<ToHandler<H>>,
+	to_handler: TracingUnboundedSender<ToHandler<H>>,
 }
 
 impl<H: ExHashT> TransactionsHandlerController<H> {
@@ -229,7 +232,7 @@ pub struct TransactionsHandler<
 > {
 	protocol_name: ProtocolName,
 	/// Interval at which we call `propagate_transactions`.
-	propagate_timeout: Pin<Box<dyn Stream<Item = ()> + Send>>,
+	propagate_timeout: stream::Fuse<Pin<Box<dyn Stream<Item = ()> + Send>>>,
 	/// Pending transactions verification tasks.
 	pending_transactions: FuturesUnordered<PendingTransaction<H>>,
 	/// As multiple peers can send us the same transaction, we group
@@ -240,11 +243,11 @@ pub struct TransactionsHandler<
 	/// Network service to use to send messages and manage peers.
 	service: S,
 	/// Stream of networking events.
-	event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
+	event_stream: stream::Fuse<Pin<Box<dyn Stream<Item = Event> + Send>>>,
 	// All connected peers
 	peers: HashMap<PeerId, Peer<H>>,
 	transaction_pool: Arc<dyn TransactionPool<H, B>>,
-	from_controller: mpsc::UnboundedReceiver<ToHandler<H>>,
+	from_controller: TracingUnboundedReceiver<ToHandler<H>>,
 	/// Prometheus metrics.
 	metrics: Option<Metrics>,
 }
@@ -268,7 +271,7 @@ where
 	pub async fn run(mut self) {
 		loop {
 			futures::select! {
-				_ = self.propagate_timeout.next().fuse() => {
+				_ = self.propagate_timeout.next() => {
 					self.propagate_transactions();
 				},
 				(tx_hash, result) = self.pending_transactions.select_next_some() => {
@@ -278,7 +281,7 @@ where
 						warn!(target: "sub-libp2p", "Inconsistent state, no peers for pending transaction!");
 					}
 				},
-				network_event = self.event_stream.next().fuse() => {
+				network_event = self.event_stream.next() => {
 					if let Some(network_event) = network_event {
 						self.handle_network_event(network_event).await;
 					} else {
@@ -286,7 +289,7 @@ where
 						return;
 					}
 				},
-				message = self.from_controller.select_next_some().fuse() => {
+				message = self.from_controller.select_next_some() => {
 					match message {
 						ToHandler::PropagateTransaction(hash) => self.propagate_transaction(&hash),
 						ToHandler::PropagateTransactions => self.propagate_transactions(),

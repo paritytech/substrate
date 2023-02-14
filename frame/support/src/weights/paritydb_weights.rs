@@ -24,8 +24,8 @@ pub mod constants {
 		/// ParityDB can be enabled with a feature flag, but is still experimental. These weights
 		/// are available for brave runtime engineers who may want to try this out as default.
 		pub const ParityDbWeight: RuntimeDbWeight = RuntimeDbWeight {
-			read: 8_000 * constants::WEIGHT_PER_NANOS.ref_time(),
-			write: 50_000 * constants::WEIGHT_PER_NANOS.ref_time(),
+			read: 8_000 * constants::WEIGHT_REF_TIME_PER_NANOS,
+			write: 50_000 * constants::WEIGHT_REF_TIME_PER_NANOS,
 		};
 	}
 
@@ -41,20 +41,20 @@ pub mod constants {
 		fn sane() {
 			// At least 1 µs.
 			assert!(
-				W::get().reads(1).ref_time() >= constants::WEIGHT_PER_MICROS.ref_time(),
+				W::get().reads(1).ref_time() >= constants::WEIGHT_REF_TIME_PER_MICROS,
 				"Read weight should be at least 1 µs."
 			);
 			assert!(
-				W::get().writes(1).ref_time() >= constants::WEIGHT_PER_MICROS.ref_time(),
+				W::get().writes(1).ref_time() >= constants::WEIGHT_REF_TIME_PER_MICROS,
 				"Write weight should be at least 1 µs."
 			);
 			// At most 1 ms.
 			assert!(
-				W::get().reads(1).ref_time() <= constants::WEIGHT_PER_MILLIS.ref_time(),
+				W::get().reads(1).ref_time() <= constants::WEIGHT_REF_TIME_PER_MILLIS,
 				"Read weight should be at most 1 ms."
 			);
 			assert!(
-				W::get().writes(1).ref_time() <= constants::WEIGHT_PER_MILLIS.ref_time(),
+				W::get().writes(1).ref_time() <= constants::WEIGHT_REF_TIME_PER_MILLIS,
 				"Write weight should be at most 1 ms."
 			);
 		}

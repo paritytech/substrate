@@ -24,7 +24,7 @@ use frame_support::{
 	traits::{ConstU32, ConstU64, GenesisBuild, StorageVersion},
 	Hashable,
 };
-use frame_system::{EventRecord, Phase};
+use frame_system::{EnsureRoot, EventRecord, Phase};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -69,6 +69,7 @@ mod mock_democracy {
 
 		#[pallet::call]
 		impl<T: Config> Pallet<T> {
+			#[pallet::call_index(0)]
 			#[pallet::weight(0)]
 			pub fn external_propose_majority(origin: OriginFor<T>) -> DispatchResult {
 				T::ExternalMajorityOrigin::ensure_origin(origin)?;
@@ -89,9 +90,7 @@ pub type MaxMembers = ConstU32<100>;
 
 parameter_types! {
 	pub const MotionDuration: u64 = 3;
-	pub const MaxProposals: u32 = 100;
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
+	pub const MaxProposals: u32 = 257;
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
@@ -128,6 +127,7 @@ impl Config<Instance1> for Test {
 	type MaxMembers = MaxMembers;
 	type DefaultVote = PrimeDefaultVote;
 	type WeightInfo = ();
+	type SetMembersOrigin = EnsureRoot<Self::AccountId>;
 }
 impl Config<Instance2> for Test {
 	type RuntimeOrigin = RuntimeOrigin;
@@ -138,6 +138,7 @@ impl Config<Instance2> for Test {
 	type MaxMembers = MaxMembers;
 	type DefaultVote = MoreThanMajorityThenPrimeDefaultVote;
 	type WeightInfo = ();
+	type SetMembersOrigin = EnsureRoot<Self::AccountId>;
 }
 impl mock_democracy::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
@@ -152,6 +153,7 @@ impl Config for Test {
 	type MaxMembers = MaxMembers;
 	type DefaultVote = PrimeDefaultVote;
 	type WeightInfo = ();
+	type SetMembersOrigin = EnsureRoot<Self::AccountId>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

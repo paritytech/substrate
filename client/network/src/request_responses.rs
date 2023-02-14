@@ -40,14 +40,16 @@ use futures::{
 	prelude::*,
 };
 use libp2p::{
-	core::{connection::ConnectionId, transport::ListenerId, ConnectedPoint, Multiaddr, PeerId},
+	core::{connection::ConnectionId, Multiaddr, PeerId},
 	request_response::{
 		handler::RequestResponseHandler, ProtocolSupport, RequestResponse, RequestResponseCodec,
 		RequestResponseConfig, RequestResponseEvent, RequestResponseMessage, ResponseChannel,
 	},
 	swarm::{
-		handler::multi::MultiHandler, ConnectionHandler, IntoConnectionHandler, NetworkBehaviour,
-		NetworkBehaviourAction, PollParameters,
+		behaviour::{ConnectionClosed, DialFailure, FromSwarm, ListenFailure},
+		handler::multi::MultiHandler,
+		ConnectionHandler, IntoConnectionHandler, NetworkBehaviour, NetworkBehaviourAction,
+		PollParameters,
 	},
 };
 use sc_network_common::{
@@ -312,120 +314,119 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 		Vec::new()
 	}
 
-	fn inject_connection_established(
-		&mut self,
-		peer_id: &PeerId,
-		conn: &ConnectionId,
-		endpoint: &ConnectedPoint,
-		failed_addresses: Option<&Vec<Multiaddr>>,
-		other_established: usize,
-	) {
-		for (p, _) in self.protocols.values_mut() {
-			NetworkBehaviour::inject_connection_established(
-				p,
+	fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
+		match event {
+			FromSwarm::ConnectionEstablished(e) =>
+				for (p, _) in self.protocols.values_mut() {
+					NetworkBehaviour::on_swarm_event(p, FromSwarm::ConnectionEstablished(e));
+				},
+			FromSwarm::ConnectionClosed(ConnectionClosed {
 				peer_id,
-				conn,
+				connection_id,
 				endpoint,
-				failed_addresses,
-				other_established,
-			)
+				handler,
+				remaining_established,
+			}) =>
+				for (p_name, p_handler) in handler.into_iter() {
+					if let Some((proto, _)) = self.protocols.get_mut(p_name.as_str()) {
+						proto.on_swarm_event(FromSwarm::ConnectionClosed(ConnectionClosed {
+							peer_id,
+							connection_id,
+							endpoint,
+							handler: p_handler,
+							remaining_established,
+						}));
+					} else {
+						log::error!(
+						  target: "sub-libp2p",
+						  "on_swarm_event/connection_closed: no request-response instance registered for protocol {:?}",
+						  p_name,
+						)
+					}
+				},
+			FromSwarm::DialFailure(DialFailure { peer_id, error, handler }) =>
+				for (p_name, p_handler) in handler.into_iter() {
+					if let Some((proto, _)) = self.protocols.get_mut(p_name.as_str()) {
+						proto.on_swarm_event(FromSwarm::DialFailure(DialFailure {
+							peer_id,
+							handler: p_handler,
+							error,
+						}));
+					} else {
+						log::error!(
+						  target: "sub-libp2p",
+						  "on_swarm_event/dial_failure: no request-response instance registered for protocol {:?}",
+						  p_name,
+						)
+					}
+				},
+			FromSwarm::ListenerClosed(e) =>
+				for (p, _) in self.protocols.values_mut() {
+					NetworkBehaviour::on_swarm_event(p, FromSwarm::ListenerClosed(e));
+				},
+			FromSwarm::ListenFailure(ListenFailure { local_addr, send_back_addr, handler }) =>
+				for (p_name, p_handler) in handler.into_iter() {
+					if let Some((proto, _)) = self.protocols.get_mut(p_name.as_str()) {
+						proto.on_swarm_event(FromSwarm::ListenFailure(ListenFailure {
+							local_addr,
+							send_back_addr,
+							handler: p_handler,
+						}));
+					} else {
+						log::error!(
+						  target: "sub-libp2p",
+						  "on_swarm_event/listen_failure: no request-response instance registered for protocol {:?}",
+						  p_name,
+						)
+					}
+				},
+			FromSwarm::ListenerError(e) =>
+				for (p, _) in self.protocols.values_mut() {
+					NetworkBehaviour::on_swarm_event(p, FromSwarm::ListenerError(e));
+				},
+			FromSwarm::ExpiredExternalAddr(e) =>
+				for (p, _) in self.protocols.values_mut() {
+					NetworkBehaviour::on_swarm_event(p, FromSwarm::ExpiredExternalAddr(e));
+				},
+			FromSwarm::NewListener(e) =>
+				for (p, _) in self.protocols.values_mut() {
+					NetworkBehaviour::on_swarm_event(p, FromSwarm::NewListener(e));
+				},
+			FromSwarm::ExpiredListenAddr(e) =>
+				for (p, _) in self.protocols.values_mut() {
+					NetworkBehaviour::on_swarm_event(p, FromSwarm::ExpiredListenAddr(e));
+				},
+			FromSwarm::NewExternalAddr(e) =>
+				for (p, _) in self.protocols.values_mut() {
+					NetworkBehaviour::on_swarm_event(p, FromSwarm::NewExternalAddr(e));
+				},
+			FromSwarm::AddressChange(e) =>
+				for (p, _) in self.protocols.values_mut() {
+					NetworkBehaviour::on_swarm_event(p, FromSwarm::AddressChange(e));
+				},
+			FromSwarm::NewListenAddr(e) =>
+				for (p, _) in self.protocols.values_mut() {
+					NetworkBehaviour::on_swarm_event(p, FromSwarm::NewListenAddr(e));
+				},
 		}
 	}
 
-	fn inject_connection_closed(
-		&mut self,
-		peer_id: &PeerId,
-		conn: &ConnectionId,
-		endpoint: &ConnectedPoint,
-		handler: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
-		remaining_established: usize,
-	) {
-		for (p_name, event) in handler.into_iter() {
-			if let Some((proto, _)) = self.protocols.get_mut(p_name.as_str()) {
-				proto.inject_connection_closed(
-					peer_id,
-					conn,
-					endpoint,
-					event,
-					remaining_established,
-				)
-			} else {
-				log::error!(
-					target: "sub-libp2p",
-					"inject_connection_closed: no request-response instance registered for protocol {:?}",
-					p_name,
-				)
-			}
-		}
-	}
-
-	fn inject_event(
+	fn on_connection_handler_event(
 		&mut self,
 		peer_id: PeerId,
-		connection: ConnectionId,
-		(p_name, event): <Self::ConnectionHandler as ConnectionHandler>::OutEvent,
+		connection_id: ConnectionId,
+		(p_name, event): <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as
+      ConnectionHandler>::OutEvent,
 	) {
 		if let Some((proto, _)) = self.protocols.get_mut(&*p_name) {
-			return proto.inject_event(peer_id, connection, event)
+			return proto.on_connection_handler_event(peer_id, connection_id, event)
 		}
 
-		log::warn!(target: "sub-libp2p",
-			"inject_node_event: no request-response instance registered for protocol {:?}",
-			p_name)
-	}
-
-	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
-		for (p, _) in self.protocols.values_mut() {
-			NetworkBehaviour::inject_new_external_addr(p, addr)
-		}
-	}
-
-	fn inject_expired_external_addr(&mut self, addr: &Multiaddr) {
-		for (p, _) in self.protocols.values_mut() {
-			NetworkBehaviour::inject_expired_external_addr(p, addr)
-		}
-	}
-
-	fn inject_expired_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
-		for (p, _) in self.protocols.values_mut() {
-			NetworkBehaviour::inject_expired_listen_addr(p, id, addr)
-		}
-	}
-
-	fn inject_dial_failure(
-		&mut self,
-		peer_id: Option<PeerId>,
-		_: Self::ConnectionHandler,
-		error: &libp2p::swarm::DialError,
-	) {
-		for (p, _) in self.protocols.values_mut() {
-			let handler = p.new_handler();
-			NetworkBehaviour::inject_dial_failure(p, peer_id, handler, error)
-		}
-	}
-
-	fn inject_new_listener(&mut self, id: ListenerId) {
-		for (p, _) in self.protocols.values_mut() {
-			NetworkBehaviour::inject_new_listener(p, id)
-		}
-	}
-
-	fn inject_new_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
-		for (p, _) in self.protocols.values_mut() {
-			NetworkBehaviour::inject_new_listen_addr(p, id, addr)
-		}
-	}
-
-	fn inject_listener_error(&mut self, id: ListenerId, err: &(dyn std::error::Error + 'static)) {
-		for (p, _) in self.protocols.values_mut() {
-			NetworkBehaviour::inject_listener_error(p, id, err)
-		}
-	}
-
-	fn inject_listener_closed(&mut self, id: ListenerId, reason: Result<(), &io::Error>) {
-		for (p, _) in self.protocols.values_mut() {
-			NetworkBehaviour::inject_listener_closed(p, id, reason)
-		}
+		log::warn!(
+			target: "sub-libp2p",
+			"on_connection_handler_event: no request-response instance registered for protocol {:?}",
+			p_name
+		);
 	}
 
 	fn poll(
@@ -919,11 +920,18 @@ mod tests {
 		},
 		identity::Keypair,
 		noise,
-		swarm::{Swarm, SwarmEvent},
+		swarm::{Executor, Swarm, SwarmEvent},
 		Multiaddr,
 	};
 	use sc_peerset::{Peerset, PeersetConfig, SetConfig};
 	use std::{iter, time::Duration};
+
+	struct TokioExecutor(tokio::runtime::Runtime);
+	impl Executor for TokioExecutor {
+		fn exec(&self, f: Pin<Box<dyn Future<Output = ()> + Send>>) {
+			let _ = self.0.spawn(f);
+		}
+	}
 
 	fn build_swarm(
 		list: impl Iterator<Item = ProtocolConfig>,
@@ -953,7 +961,13 @@ mod tests {
 
 		let behaviour = RequestResponsesBehaviour::new(list, handle).unwrap();
 
-		let mut swarm = Swarm::new(transport, behaviour, keypair.public().to_peer_id());
+		let runtime = tokio::runtime::Runtime::new().unwrap();
+		let mut swarm = Swarm::with_executor(
+			transport,
+			behaviour,
+			keypair.public().to_peer_id(),
+			TokioExecutor(runtime),
+		);
 		let listen_addr: Multiaddr = format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
 
 		swarm.listen_on(listen_addr.clone()).unwrap();

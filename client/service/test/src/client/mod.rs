@@ -20,7 +20,8 @@ use futures::executor::block_on;
 use parity_scale_codec::{Decode, Encode, Joiner};
 use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::{
-	in_mem, BlockBackend, BlockchainEvents, FinalityNotifications, StorageProvider,
+	in_mem, BlockBackend, BlockchainEvents, ExecutorProvider, FinalityNotifications, HeaderBackend,
+	StorageProvider,
 };
 use sc_client_db::{Backend, BlocksPruning, DatabaseSettings, DatabaseSource, PruningMode};
 use sc_consensus::{
@@ -344,11 +345,15 @@ fn block_builder_works_with_transactions() {
 	let block = builder.build().unwrap().block;
 	block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
+	let hash0 = client
+		.expect_block_hash_from_id(&BlockId::Number(0))
+		.expect("block 0 was just imported. qed");
+	let hash1 = client
+		.expect_block_hash_from_id(&BlockId::Number(1))
+		.expect("block 1 was just imported. qed");
+
 	assert_eq!(client.chain_info().best_number, 1);
-	assert_ne!(
-		client.state_at(&BlockId::Number(1)).unwrap().pairs(),
-		client.state_at(&BlockId::Number(0)).unwrap().pairs()
-	);
+	assert_ne!(client.state_at(hash1).unwrap().pairs(), client.state_at(hash0).unwrap().pairs());
 	assert_eq!(
 		client
 			.runtime_api()
@@ -398,12 +403,19 @@ fn block_builder_does_not_include_invalid() {
 	let block = builder.build().unwrap().block;
 	block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
+	let hashof0 = client
+		.expect_block_hash_from_id(&BlockId::Number(0))
+		.expect("block 0 was just imported. qed");
+	let hashof1 = client
+		.expect_block_hash_from_id(&BlockId::Number(1))
+		.expect("block 1 was just imported. qed");
+
 	assert_eq!(client.chain_info().best_number, 1);
 	assert_ne!(
-		client.state_at(&BlockId::Number(1)).unwrap().pairs(),
-		client.state_at(&BlockId::Number(0)).unwrap().pairs()
+		client.state_at(hashof1).unwrap().pairs(),
+		client.state_at(hashof0).unwrap().pairs()
 	);
-	assert_eq!(client.body(&BlockId::Number(1)).unwrap().unwrap().len(), 1)
+	assert_eq!(client.body(hashof1).unwrap().unwrap().len(), 1)
 }
 
 #[test]
@@ -575,7 +587,7 @@ fn uncles_with_multiple_forks() {
 }
 
 #[test]
-fn best_containing_on_longest_chain_with_single_chain_3_blocks() {
+fn finality_target_on_longest_chain_with_single_chain_3_blocks() {
 	// block tree:
 	// G -> A1 -> A2
 
@@ -600,7 +612,7 @@ fn best_containing_on_longest_chain_with_single_chain_3_blocks() {
 }
 
 #[test]
-fn best_containing_on_longest_chain_with_multiple_forks() {
+fn finality_target_on_longest_chain_with_multiple_forks() {
 	// block tree:
 	// G -> A1 -> A2 -> A3 -> A4 -> A5
 	//      A1 -> B2 -> B3 -> B4
@@ -725,8 +737,13 @@ fn best_containing_on_longest_chain_with_multiple_forks() {
 	assert!(leaves.contains(&d2.hash()));
 	assert_eq!(leaves.len(), 4);
 
-	let finality_target = |target_hash, number| {
-		block_on(longest_chain_select.finality_target(target_hash, number)).unwrap()
+	// On error we return a quite improbable hash
+	let error_hash = Hash::from([0xff; 32]);
+	let finality_target = |target_hash, number| match block_on(
+		longest_chain_select.finality_target(target_hash, number),
+	) {
+		Ok(hash) => hash,
+		Err(_) => error_hash,
 	};
 
 	// search without restriction
@@ -736,11 +753,11 @@ fn best_containing_on_longest_chain_with_multiple_forks() {
 	assert_eq!(a5.hash(), finality_target(a3.hash(), None));
 	assert_eq!(a5.hash(), finality_target(a4.hash(), None));
 	assert_eq!(a5.hash(), finality_target(a5.hash(), None));
-	assert_eq!(b4.hash(), finality_target(b2.hash(), None));
-	assert_eq!(b4.hash(), finality_target(b3.hash(), None));
-	assert_eq!(b4.hash(), finality_target(b4.hash(), None));
-	assert_eq!(c3.hash(), finality_target(c3.hash(), None));
-	assert_eq!(d2.hash(), finality_target(d2.hash(), None));
+	assert_eq!(error_hash, finality_target(b2.hash(), None));
+	assert_eq!(error_hash, finality_target(b3.hash(), None));
+	assert_eq!(error_hash, finality_target(b4.hash(), None));
+	assert_eq!(error_hash, finality_target(c3.hash(), None));
+	assert_eq!(error_hash, finality_target(d2.hash(), None));
 
 	// search only blocks with number <= 5. equivalent to without restriction for this scenario
 	assert_eq!(a5.hash(), finality_target(genesis_hash, Some(5)));
@@ -749,11 +766,11 @@ fn best_containing_on_longest_chain_with_multiple_forks() {
 	assert_eq!(a5.hash(), finality_target(a3.hash(), Some(5)));
 	assert_eq!(a5.hash(), finality_target(a4.hash(), Some(5)));
 	assert_eq!(a5.hash(), finality_target(a5.hash(), Some(5)));
-	assert_eq!(b4.hash(), finality_target(b2.hash(), Some(5)));
-	assert_eq!(b4.hash(), finality_target(b3.hash(), Some(5)));
-	assert_eq!(b4.hash(), finality_target(b4.hash(), Some(5)));
-	assert_eq!(c3.hash(), finality_target(c3.hash(), Some(5)));
-	assert_eq!(d2.hash(), finality_target(d2.hash(), Some(5)));
+	assert_eq!(error_hash, finality_target(b2.hash(), Some(5)));
+	assert_eq!(error_hash, finality_target(b3.hash(), Some(5)));
+	assert_eq!(error_hash, finality_target(b4.hash(), Some(5)));
+	assert_eq!(error_hash, finality_target(c3.hash(), Some(5)));
+	assert_eq!(error_hash, finality_target(d2.hash(), Some(5)));
 
 	// search only blocks with number <= 4
 	assert_eq!(a4.hash(), finality_target(genesis_hash, Some(4)));
@@ -761,73 +778,72 @@ fn best_containing_on_longest_chain_with_multiple_forks() {
 	assert_eq!(a4.hash(), finality_target(a2.hash(), Some(4)));
 	assert_eq!(a4.hash(), finality_target(a3.hash(), Some(4)));
 	assert_eq!(a4.hash(), finality_target(a4.hash(), Some(4)));
-	assert_eq!(a5.hash(), finality_target(a5.hash(), Some(4)));
-	assert_eq!(b4.hash(), finality_target(b2.hash(), Some(4)));
-	assert_eq!(b4.hash(), finality_target(b3.hash(), Some(4)));
-	assert_eq!(b4.hash(), finality_target(b4.hash(), Some(4)));
-	assert_eq!(c3.hash(), finality_target(c3.hash(), Some(4)));
-	assert_eq!(d2.hash(), finality_target(d2.hash(), Some(4)));
+	assert_eq!(error_hash, finality_target(a5.hash(), Some(4)));
+	assert_eq!(error_hash, finality_target(b2.hash(), Some(4)));
+	assert_eq!(error_hash, finality_target(b3.hash(), Some(4)));
+	assert_eq!(error_hash, finality_target(b4.hash(), Some(4)));
+	assert_eq!(error_hash, finality_target(c3.hash(), Some(4)));
+	assert_eq!(error_hash, finality_target(d2.hash(), Some(4)));
 
 	// search only blocks with number <= 3
 	assert_eq!(a3.hash(), finality_target(genesis_hash, Some(3)));
 	assert_eq!(a3.hash(), finality_target(a1.hash(), Some(3)));
 	assert_eq!(a3.hash(), finality_target(a2.hash(), Some(3)));
 	assert_eq!(a3.hash(), finality_target(a3.hash(), Some(3)));
-	assert_eq!(a4.hash(), finality_target(a4.hash(), Some(3)));
-	assert_eq!(a5.hash(), finality_target(a5.hash(), Some(3)));
-	assert_eq!(b3.hash(), finality_target(b2.hash(), Some(3)));
-	assert_eq!(b3.hash(), finality_target(b3.hash(), Some(3)));
-	assert_eq!(b4.hash(), finality_target(b4.hash(), Some(3)));
-	assert_eq!(c3.hash(), finality_target(c3.hash(), Some(3)));
-	assert_eq!(d2.hash(), finality_target(d2.hash(), Some(3)));
+	assert_eq!(error_hash, finality_target(a4.hash(), Some(3)));
+	assert_eq!(error_hash, finality_target(a5.hash(), Some(3)));
+	assert_eq!(error_hash, finality_target(b2.hash(), Some(3)));
+	assert_eq!(error_hash, finality_target(b3.hash(), Some(3)));
+	assert_eq!(error_hash, finality_target(b4.hash(), Some(3)));
+	assert_eq!(error_hash, finality_target(c3.hash(), Some(3)));
+	assert_eq!(error_hash, finality_target(d2.hash(), Some(3)));
 
 	// search only blocks with number <= 2
 	assert_eq!(a2.hash(), finality_target(genesis_hash, Some(2)));
 	assert_eq!(a2.hash(), finality_target(a1.hash(), Some(2)));
 	assert_eq!(a2.hash(), finality_target(a2.hash(), Some(2)));
-	assert_eq!(a3.hash(), finality_target(a3.hash(), Some(2)));
-	assert_eq!(a4.hash(), finality_target(a4.hash(), Some(2)));
-	assert_eq!(a5.hash(), finality_target(a5.hash(), Some(2)));
-	assert_eq!(b2.hash(), finality_target(b2.hash(), Some(2)));
-	assert_eq!(b3.hash(), finality_target(b3.hash(), Some(2)));
-	assert_eq!(b4.hash(), finality_target(b4.hash(), Some(2)));
-	assert_eq!(c3.hash(), finality_target(c3.hash(), Some(2)));
-	assert_eq!(d2.hash(), finality_target(d2.hash(), Some(2)));
+	assert_eq!(error_hash, finality_target(a3.hash(), Some(2)));
+	assert_eq!(error_hash, finality_target(a4.hash(), Some(2)));
+	assert_eq!(error_hash, finality_target(a5.hash(), Some(2)));
+	assert_eq!(error_hash, finality_target(b2.hash(), Some(2)));
+	assert_eq!(error_hash, finality_target(b3.hash(), Some(2)));
+	assert_eq!(error_hash, finality_target(b4.hash(), Some(2)));
+	assert_eq!(error_hash, finality_target(c3.hash(), Some(2)));
+	assert_eq!(error_hash, finality_target(d2.hash(), Some(2)));
 
 	// search only blocks with number <= 1
 	assert_eq!(a1.hash(), finality_target(genesis_hash, Some(1)));
 	assert_eq!(a1.hash(), finality_target(a1.hash(), Some(1)));
-	assert_eq!(a2.hash(), finality_target(a2.hash(), Some(1)));
-	assert_eq!(a3.hash(), finality_target(a3.hash(), Some(1)));
-	assert_eq!(a4.hash(), finality_target(a4.hash(), Some(1)));
-	assert_eq!(a5.hash(), finality_target(a5.hash(), Some(1)));
-
-	assert_eq!(b2.hash(), finality_target(b2.hash(), Some(1)));
-	assert_eq!(b3.hash(), finality_target(b3.hash(), Some(1)));
-	assert_eq!(b4.hash(), finality_target(b4.hash(), Some(1)));
-	assert_eq!(c3.hash(), finality_target(c3.hash(), Some(1)));
-	assert_eq!(d2.hash(), finality_target(d2.hash(), Some(1)));
+	assert_eq!(error_hash, finality_target(a2.hash(), Some(1)));
+	assert_eq!(error_hash, finality_target(a3.hash(), Some(1)));
+	assert_eq!(error_hash, finality_target(a4.hash(), Some(1)));
+	assert_eq!(error_hash, finality_target(a5.hash(), Some(1)));
+	assert_eq!(error_hash, finality_target(b2.hash(), Some(1)));
+	assert_eq!(error_hash, finality_target(b3.hash(), Some(1)));
+	assert_eq!(error_hash, finality_target(b4.hash(), Some(1)));
+	assert_eq!(error_hash, finality_target(c3.hash(), Some(1)));
+	assert_eq!(error_hash, finality_target(d2.hash(), Some(1)));
 
 	// search only blocks with number <= 0
 	assert_eq!(genesis_hash, finality_target(genesis_hash, Some(0)));
-	assert_eq!(a1.hash(), finality_target(a1.hash(), Some(0)));
-	assert_eq!(a2.hash(), finality_target(a2.hash(), Some(0)));
-	assert_eq!(a3.hash(), finality_target(a3.hash(), Some(0)));
-	assert_eq!(a4.hash(), finality_target(a4.hash(), Some(0)));
-	assert_eq!(a5.hash(), finality_target(a5.hash(), Some(0)));
-	assert_eq!(b2.hash(), finality_target(b2.hash(), Some(0)));
-	assert_eq!(b3.hash(), finality_target(b3.hash(), Some(0)));
-	assert_eq!(b4.hash(), finality_target(b4.hash(), Some(0)));
-	assert_eq!(c3.hash(), finality_target(c3.hash(), Some(0)));
-	assert_eq!(d2.hash(), finality_target(d2.hash(), Some(0)));
+	assert_eq!(error_hash, finality_target(a1.hash(), Some(0)));
+	assert_eq!(error_hash, finality_target(a2.hash(), Some(0)));
+	assert_eq!(error_hash, finality_target(a3.hash(), Some(0)));
+	assert_eq!(error_hash, finality_target(a4.hash(), Some(0)));
+	assert_eq!(error_hash, finality_target(a5.hash(), Some(0)));
+	assert_eq!(error_hash, finality_target(b2.hash(), Some(0)));
+	assert_eq!(error_hash, finality_target(b3.hash(), Some(0)));
+	assert_eq!(error_hash, finality_target(b4.hash(), Some(0)));
+	assert_eq!(error_hash, finality_target(c3.hash(), Some(0)));
+	assert_eq!(error_hash, finality_target(d2.hash(), Some(0)));
 }
 
 #[test]
-fn best_containing_on_longest_chain_with_max_depth_higher_than_best() {
+fn finality_target_on_longest_chain_with_max_depth_higher_than_best() {
 	// block tree:
 	// G -> A1 -> A2
 
-	let (mut client, longest_chain_select) = TestClientBuilder::new().build_with_longest_chain();
+	let (mut client, chain_select) = TestClientBuilder::new().build_with_longest_chain();
 
 	// G -> A1
 	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
@@ -839,10 +855,93 @@ fn best_containing_on_longest_chain_with_max_depth_higher_than_best() {
 
 	let genesis_hash = client.chain_info().genesis_hash;
 
-	assert_eq!(
-		a2.hash(),
-		block_on(longest_chain_select.finality_target(genesis_hash, Some(10))).unwrap(),
-	);
+	assert_eq!(a2.hash(), block_on(chain_select.finality_target(genesis_hash, Some(10))).unwrap(),);
+}
+
+#[test]
+fn finality_target_with_best_not_on_longest_chain() {
+	// block tree:
+	// G -> A1 -> A2 ->  A3  -> A4 -> A5
+	//         -> B2 -> (B3) -> B4
+	//                   ^best
+
+	let (mut client, chain_select) = TestClientBuilder::new().build_with_longest_chain();
+	let genesis_hash = client.chain_info().genesis_hash;
+
+	// G -> A1
+	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	block_on(client.import(BlockOrigin::Own, a1.clone())).unwrap();
+
+	// A1 -> A2
+	let a2 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	block_on(client.import(BlockOrigin::Own, a2.clone())).unwrap();
+
+	// A2 -> A3
+	let a3 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	block_on(client.import(BlockOrigin::Own, a3.clone())).unwrap();
+
+	// A3 -> A4
+	let a4 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	block_on(client.import(BlockOrigin::Own, a4.clone())).unwrap();
+
+	// A3 -> A5
+	let a5 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	block_on(client.import(BlockOrigin::Own, a5.clone())).unwrap();
+
+	// A1 -> B2
+	let mut builder = client
+		.new_block_at(&BlockId::Hash(a1.hash()), Default::default(), false)
+		.unwrap();
+	// this push is required as otherwise B2 has the same hash as A2 and won't get imported
+	builder
+		.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 41,
+			nonce: 0,
+		})
+		.unwrap();
+	let b2 = builder.build().unwrap().block;
+	block_on(client.import(BlockOrigin::Own, b2.clone())).unwrap();
+
+	assert_eq!(a5.hash(), block_on(chain_select.finality_target(genesis_hash, None)).unwrap());
+	assert_eq!(a5.hash(), block_on(chain_select.finality_target(a1.hash(), None)).unwrap());
+	assert_eq!(a5.hash(), block_on(chain_select.finality_target(a2.hash(), None)).unwrap());
+	assert_eq!(a5.hash(), block_on(chain_select.finality_target(a3.hash(), None)).unwrap());
+	assert_eq!(a5.hash(), block_on(chain_select.finality_target(a4.hash(), None)).unwrap());
+	assert_eq!(a5.hash(), block_on(chain_select.finality_target(a5.hash(), None)).unwrap());
+
+	// B2 -> B3
+	let b3 = client
+		.new_block_at(&BlockId::Hash(b2.hash()), Default::default(), false)
+		.unwrap()
+		.build()
+		.unwrap()
+		.block;
+	block_on(client.import_as_best(BlockOrigin::Own, b3.clone())).unwrap();
+
+	// B3 -> B4
+	let b4 = client
+		.new_block_at(&BlockId::Hash(b3.hash()), Default::default(), false)
+		.unwrap()
+		.build()
+		.unwrap()
+		.block;
+	let (header, extrinsics) = b4.clone().deconstruct();
+	let mut import_params = BlockImportParams::new(BlockOrigin::Own, header);
+	import_params.body = Some(extrinsics);
+	import_params.fork_choice = Some(ForkChoiceStrategy::Custom(false));
+	block_on(client.import_block(import_params, Default::default())).unwrap();
+
+	// double check that B3 is still the best...
+	assert_eq!(client.info().best_hash, b3.hash());
+
+	assert_eq!(b4.hash(), block_on(chain_select.finality_target(genesis_hash, None)).unwrap());
+	assert_eq!(b4.hash(), block_on(chain_select.finality_target(a1.hash(), None)).unwrap());
+	assert!(block_on(chain_select.finality_target(a2.hash(), None)).is_err());
+	assert_eq!(b4.hash(), block_on(chain_select.finality_target(b2.hash(), None)).unwrap());
+	assert_eq!(b4.hash(), block_on(chain_select.finality_target(b3.hash(), None)).unwrap());
+	assert_eq!(b4.hash(), block_on(chain_select.finality_target(b4.hash(), None)).unwrap());
 }
 
 #[test]
@@ -865,7 +964,7 @@ fn import_with_justification() {
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, a2.clone())).unwrap();
-	client.finalize_block(BlockId::hash(a2.hash()), None).unwrap();
+	client.finalize_block(a2.hash(), None).unwrap();
 
 	// A2 -> A3
 	let justification = Justifications::from((TEST_ENGINE_ID, vec![1, 2, 3]));
@@ -879,11 +978,11 @@ fn import_with_justification() {
 
 	assert_eq!(client.chain_info().finalized_hash, a3.hash());
 
-	assert_eq!(client.justifications(&BlockId::Hash(a3.hash())).unwrap(), Some(justification));
+	assert_eq!(client.justifications(a3.hash()).unwrap(), Some(justification));
 
-	assert_eq!(client.justifications(&BlockId::Hash(a1.hash())).unwrap(), None);
+	assert_eq!(client.justifications(a1.hash()).unwrap(), None);
 
-	assert_eq!(client.justifications(&BlockId::Hash(a2.hash())).unwrap(), None);
+	assert_eq!(client.justifications(a2.hash()).unwrap(), None);
 
 	finality_notification_check(&mut finality_notifications, &[a1.hash(), a2.hash()], &[]);
 	finality_notification_check(&mut finality_notifications, &[a3.hash()], &[]);
@@ -989,12 +1088,12 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 		.block;
 	block_on(client.import(BlockOrigin::Own, b2.clone())).unwrap();
 
-	// A2 is the current best since it's the longest chain
+	// A2 is the current best since it's the (first) longest chain
 	assert_eq!(client.chain_info().best_hash, a2.hash());
 
 	// we finalize block B1 which is on a different branch from current best
 	// which should trigger a re-org.
-	ClientExt::finalize_block(&client, BlockId::Hash(b1.hash()), None).unwrap();
+	ClientExt::finalize_block(&client, b1.hash(), None).unwrap();
 
 	// B1 should now be the latest finalized
 	assert_eq!(client.chain_info().finalized_hash, b1.hash());
@@ -1006,8 +1105,7 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 	// `SelectChain` should report B2 as best block though
 	assert_eq!(block_on(select_chain.best_chain()).unwrap().hash(), b2.hash());
 
-	// after we build B3 on top of B2 and import it
-	// it should be the new best block,
+	// after we build B3 on top of B2 and import it, it should be the new best block
 	let b3 = client
 		.new_block_at(&BlockId::Hash(b2.hash()), Default::default(), false)
 		.unwrap()
@@ -1016,9 +1114,12 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 		.block;
 	block_on(client.import(BlockOrigin::Own, b3.clone())).unwrap();
 
+	// `SelectChain` should report B3 as best block though
+	assert_eq!(block_on(select_chain.best_chain()).unwrap().hash(), b3.hash());
+
 	assert_eq!(client.chain_info().best_hash, b3.hash());
 
-	ClientExt::finalize_block(&client, BlockId::Hash(b3.hash()), None).unwrap();
+	ClientExt::finalize_block(&client, b3.hash(), None).unwrap();
 
 	finality_notification_check(&mut finality_notifications, &[b1.hash()], &[]);
 	finality_notification_check(&mut finality_notifications, &[b2.hash(), b3.hash()], &[a2.hash()]);
@@ -1116,7 +1217,7 @@ fn finality_notifications_content() {
 
 	// Postpone import to test behavior of import of finalized block.
 
-	ClientExt::finalize_block(&client, BlockId::Hash(a2.hash()), None).unwrap();
+	ClientExt::finalize_block(&client, a2.hash(), None).unwrap();
 
 	// Import and finalize D4
 	block_on(client.import_as_final(BlockOrigin::Own, d4.clone())).unwrap();
@@ -1127,13 +1228,30 @@ fn finality_notifications_content() {
 }
 
 #[test]
-fn get_header_by_block_number_doesnt_panic() {
+fn get_block_by_bad_block_hash_returns_none() {
+	let client = substrate_test_runtime_client::new();
+
+	let hash = H256::from_low_u64_be(5);
+	assert!(client.block(hash).unwrap().is_none());
+}
+
+#[test]
+fn expect_block_hash_by_block_number_doesnt_panic() {
 	let client = substrate_test_runtime_client::new();
 
 	// backend uses u32 for block numbers, make sure we don't panic when
 	// trying to convert
 	let id = BlockId::<Block>::Number(72340207214430721);
-	client.header(&id).expect_err("invalid block number overflows u32");
+	client.block_hash_from_id(&id).expect_err("invalid block number overflows u32");
+}
+
+#[test]
+fn get_hash_by_block_number_doesnt_panic() {
+	let client = substrate_test_runtime_client::new();
+
+	// backend uses u32 for block numbers, make sure we don't panic when
+	// trying to convert
+	client.hash(72340207214430721).expect_err("invalid block number overflows u32");
 }
 
 #[test]
@@ -1272,7 +1390,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 
 	// we will finalize A2 which should make it impossible to import a new
 	// B3 at the same height but that doesn't include it
-	ClientExt::finalize_block(&client, BlockId::Hash(a2.hash()), None).unwrap();
+	ClientExt::finalize_block(&client, a2.hash(), None).unwrap();
 
 	let import_err = block_on(client.import(BlockOrigin::Own, b3)).err().unwrap();
 	let expected_err =
@@ -1307,7 +1425,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, a3.clone())).unwrap();
-	ClientExt::finalize_block(&client, BlockId::Hash(a3.hash()), None).unwrap();
+	ClientExt::finalize_block(&client, a3.hash(), None).unwrap();
 
 	finality_notification_check(&mut finality_notifications, &[a1.hash(), a2.hash()], &[]);
 
@@ -1474,10 +1592,7 @@ fn returns_status_for_pruned_blocks() {
 		block_on(client.check_block(check_block_a1.clone())).unwrap(),
 		ImportResult::imported(false),
 	);
-	assert_eq!(
-		client.block_status(&BlockId::hash(check_block_a1.hash)).unwrap(),
-		BlockStatus::Unknown,
-	);
+	assert_eq!(client.block_status(check_block_a1.hash).unwrap(), BlockStatus::Unknown);
 
 	block_on(client.import_as_final(BlockOrigin::Own, a1.clone())).unwrap();
 
@@ -1485,10 +1600,7 @@ fn returns_status_for_pruned_blocks() {
 		block_on(client.check_block(check_block_a1.clone())).unwrap(),
 		ImportResult::AlreadyInChain,
 	);
-	assert_eq!(
-		client.block_status(&BlockId::hash(check_block_a1.hash)).unwrap(),
-		BlockStatus::InChainWithState,
-	);
+	assert_eq!(client.block_status(check_block_a1.hash).unwrap(), BlockStatus::InChainWithState);
 
 	let a2 = client
 		.new_block_at(&BlockId::Hash(a1.hash()), Default::default(), false)
@@ -1511,18 +1623,12 @@ fn returns_status_for_pruned_blocks() {
 		block_on(client.check_block(check_block_a1.clone())).unwrap(),
 		ImportResult::AlreadyInChain,
 	);
-	assert_eq!(
-		client.block_status(&BlockId::hash(check_block_a1.hash)).unwrap(),
-		BlockStatus::InChainPruned,
-	);
+	assert_eq!(client.block_status(check_block_a1.hash).unwrap(), BlockStatus::InChainPruned);
 	assert_eq!(
 		block_on(client.check_block(check_block_a2.clone())).unwrap(),
 		ImportResult::AlreadyInChain,
 	);
-	assert_eq!(
-		client.block_status(&BlockId::hash(check_block_a2.hash)).unwrap(),
-		BlockStatus::InChainWithState,
-	);
+	assert_eq!(client.block_status(check_block_a2.hash).unwrap(), BlockStatus::InChainWithState);
 
 	let a3 = client
 		.new_block_at(&BlockId::Hash(a2.hash()), Default::default(), false)
@@ -1546,26 +1652,17 @@ fn returns_status_for_pruned_blocks() {
 		block_on(client.check_block(check_block_a1.clone())).unwrap(),
 		ImportResult::AlreadyInChain,
 	);
-	assert_eq!(
-		client.block_status(&BlockId::hash(check_block_a1.hash)).unwrap(),
-		BlockStatus::InChainPruned,
-	);
+	assert_eq!(client.block_status(check_block_a1.hash).unwrap(), BlockStatus::InChainPruned);
 	assert_eq!(
 		block_on(client.check_block(check_block_a2.clone())).unwrap(),
 		ImportResult::AlreadyInChain,
 	);
-	assert_eq!(
-		client.block_status(&BlockId::hash(check_block_a2.hash)).unwrap(),
-		BlockStatus::InChainPruned,
-	);
+	assert_eq!(client.block_status(check_block_a2.hash).unwrap(), BlockStatus::InChainPruned);
 	assert_eq!(
 		block_on(client.check_block(check_block_a3.clone())).unwrap(),
 		ImportResult::AlreadyInChain,
 	);
-	assert_eq!(
-		client.block_status(&BlockId::hash(check_block_a3.hash)).unwrap(),
-		BlockStatus::InChainWithState,
-	);
+	assert_eq!(client.block_status(check_block_a3.hash).unwrap(), BlockStatus::InChainWithState);
 
 	let mut check_block_b1 = BlockCheckParams {
 		hash: b1.hash(),
@@ -1600,12 +1697,14 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 		.add_extra_child_storage(&child_info, b"third".to_vec(), vec![0u8; 32])
 		.build();
 
+	let block_hash = client.info().best_hash;
+
 	let child_root = b":child_storage:default:child".to_vec();
 	let prefix = StorageKey(array_bytes::hex2bytes_unchecked("3a"));
 	let child_prefix = StorageKey(b"sec".to_vec());
 
 	let res: Vec<_> = client
-		.storage_keys_iter(&BlockId::Number(0), Some(&prefix), None)
+		.storage_keys_iter(block_hash, Some(&prefix), None)
 		.unwrap()
 		.map(|x| x.0)
 		.collect();
@@ -1620,7 +1719,7 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 
 	let res: Vec<_> = client
 		.storage_keys_iter(
-			&BlockId::Number(0),
+			block_hash,
 			Some(&prefix),
 			Some(&StorageKey(array_bytes::hex2bytes_unchecked("3a636f6465"))),
 		)
@@ -1631,7 +1730,7 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 
 	let res: Vec<_> = client
 		.storage_keys_iter(
-			&BlockId::Number(0),
+			block_hash,
 			Some(&prefix),
 			Some(&StorageKey(array_bytes::hex2bytes_unchecked("3a686561707061676573"))),
 		)
@@ -1641,7 +1740,7 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 	assert_eq!(res, Vec::<Vec<u8>>::new());
 
 	let res: Vec<_> = client
-		.child_storage_keys_iter(&BlockId::Number(0), child_info.clone(), Some(&child_prefix), None)
+		.child_storage_keys_iter(block_hash, child_info.clone(), Some(&child_prefix), None)
 		.unwrap()
 		.map(|x| x.0)
 		.collect();
@@ -1649,7 +1748,7 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 
 	let res: Vec<_> = client
 		.child_storage_keys_iter(
-			&BlockId::Number(0),
+			block_hash,
 			child_info,
 			None,
 			Some(&StorageKey(b"second".to_vec())),
@@ -1664,10 +1763,12 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 fn storage_keys_iter_works() {
 	let client = substrate_test_runtime_client::new();
 
+	let block_hash = client.info().best_hash;
+
 	let prefix = StorageKey(array_bytes::hex2bytes_unchecked(""));
 
 	let res: Vec<_> = client
-		.storage_keys_iter(&BlockId::Number(0), Some(&prefix), None)
+		.storage_keys_iter(block_hash, Some(&prefix), None)
 		.unwrap()
 		.take(9)
 		.map(|x| array_bytes::bytes2hex("", &x.0))
@@ -1689,7 +1790,7 @@ fn storage_keys_iter_works() {
 
 	let res: Vec<_> = client
 		.storage_keys_iter(
-			&BlockId::Number(0),
+			block_hash,
 			Some(&prefix),
 			Some(&StorageKey(array_bytes::hex2bytes_unchecked("3a636f6465"))),
 		)
@@ -1712,7 +1813,7 @@ fn storage_keys_iter_works() {
 
 	let res: Vec<_> = client
 		.storage_keys_iter(
-			&BlockId::Number(0),
+			block_hash,
 			Some(&prefix),
 			Some(&StorageKey(array_bytes::hex2bytes_unchecked(
 				"7d5007603a7f5dd729d51d93cf695d6465789443bb967c0d1fe270e388c96eaa",
@@ -1738,17 +1839,30 @@ fn storage_keys_iter_works() {
 fn cleans_up_closed_notification_sinks_on_block_import() {
 	use substrate_test_runtime_client::GenesisInit;
 
+	let backend = Arc::new(sc_client_api::in_mem::Backend::new());
+	let executor = substrate_test_runtime_client::new_native_executor();
+	let client_config = sc_service::ClientConfig::default();
+
+	let genesis_block_builder = sc_service::GenesisBlockBuilder::new(
+		&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
+		!client_config.no_genesis,
+		backend.clone(),
+		executor.clone(),
+	)
+	.unwrap();
+
 	// NOTE: we need to build the client here instead of using the client
 	// provided by test_runtime_client otherwise we can't access the private
 	// `import_notification_sinks` and `finality_notification_sinks` fields.
 	let mut client = new_in_mem::<_, Block, _, RuntimeApi>(
-		substrate_test_runtime_client::new_native_executor(),
-		&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
+		backend,
+		executor,
+		genesis_block_builder,
 		None,
 		None,
 		None,
 		Box::new(TaskExecutor::new()),
-		Default::default(),
+		client_config,
 	)
 	.unwrap();
 
@@ -1857,4 +1971,41 @@ fn reorg_triggers_a_notification_even_for_sources_that_should_not_trigger_notifi
 	// We should have a tree route of the re-org
 	let tree_route = notification.tree_route.unwrap();
 	assert_eq!(tree_route.enacted()[0].hash, b1.hash());
+}
+
+#[test]
+fn use_dalek_ext_works() {
+	fn zero_ed_pub() -> sp_core::ed25519::Public {
+		sp_core::ed25519::Public([0u8; 32])
+	}
+
+	fn zero_ed_sig() -> sp_core::ed25519::Signature {
+		sp_core::ed25519::Signature::from_raw([0u8; 64])
+	}
+
+	let mut client = TestClientBuilder::new().build();
+
+	client.execution_extensions().set_extensions_factory(
+		sc_client_api::execution_extensions::ExtensionBeforeBlock::<Block, sp_io::UseDalekExt>::new(
+			1,
+		),
+	);
+
+	let a1 = client
+		.new_block_at(&BlockId::Number(0), Default::default(), false)
+		.unwrap()
+		.build()
+		.unwrap()
+		.block;
+	block_on(client.import(BlockOrigin::NetworkInitialSync, a1.clone())).unwrap();
+
+	// On block zero it will use dalek and then on block 1 it will use zebra
+	assert!(!client
+		.runtime_api()
+		.verify_ed25519(&BlockId::Number(0), zero_ed_sig(), zero_ed_pub(), vec![])
+		.unwrap());
+	assert!(client
+		.runtime_api()
+		.verify_ed25519(&BlockId::Number(1), zero_ed_sig(), zero_ed_pub(), vec![])
+		.unwrap());
 }

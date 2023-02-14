@@ -21,13 +21,15 @@ use codec::{Decode, Encode};
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 
+use scale_info::TypeInfo;
+
 use sp_runtime::traits::{AtLeast32BitUnsigned, Zero};
 use sp_std::prelude::*;
 
-use frame_support::{dispatch::DispatchClass, weights::Weight};
+use frame_support::dispatch::DispatchClass;
 
 /// The base fee and adjusted weight and length fees constitute the _inclusion fee_.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+#[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 pub struct InclusionFee<Balance> {
@@ -63,7 +65,7 @@ impl<Balance: AtLeast32BitUnsigned + Copy> InclusionFee<Balance> {
 ///   - (Optional) `inclusion_fee`: Only the `Pays::Yes` transaction can have the inclusion fee.
 ///   - `tip`: If included in the transaction, the tip will be added on top. Only signed
 ///     transactions can have a tip.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+#[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 pub struct FeeDetails<Balance> {
@@ -91,12 +93,18 @@ impl<Balance: AtLeast32BitUnsigned + Copy> FeeDetails<Balance> {
 
 /// Information related to a dispatchable's class, weight, and fee that can be queried from the
 /// runtime.
-#[derive(Eq, PartialEq, Encode, Decode, Default)]
+#[derive(Eq, PartialEq, Encode, Decode, Default, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-#[cfg_attr(feature = "std", serde(bound(serialize = "Balance: std::fmt::Display")))]
-#[cfg_attr(feature = "std", serde(bound(deserialize = "Balance: std::str::FromStr")))]
-pub struct RuntimeDispatchInfo<Balance> {
+#[cfg_attr(
+	feature = "std",
+	serde(bound(serialize = "Balance: std::fmt::Display, Weight: Serialize"))
+)]
+#[cfg_attr(
+	feature = "std",
+	serde(bound(deserialize = "Balance: std::str::FromStr, Weight: Deserialize<'de>"))
+)]
+pub struct RuntimeDispatchInfo<Balance, Weight = frame_support::weights::Weight> {
 	/// Weight of this dispatch.
 	pub weight: Weight,
 	/// Class of this dispatch.
@@ -131,6 +139,7 @@ mod serde_balance {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use frame_support::weights::Weight;
 
 	#[test]
 	fn should_serialize_and_deserialize_properly_with_string() {

@@ -77,8 +77,8 @@ const STORAGE_LOCK_DEFAULT_EXPIRY_DURATION: Duration = Duration::from_millis(20_
 const STORAGE_LOCK_DEFAULT_EXPIRY_BLOCKS: u32 = 4;
 
 /// Time between checks if the lock is still being held in milliseconds.
-const STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MIN: Duration = Duration::from_millis(100);
-const STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MAX: Duration = Duration::from_millis(10);
+const STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MIN: Duration = Duration::from_millis(10);
+const STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MAX: Duration = Duration::from_millis(100);
 
 /// Lockable item for use with a persisted storage lock.
 ///
@@ -137,10 +137,9 @@ impl Lockable for Time {
 		let remainder: Duration = now.diff(deadline);
 		// do not snooze the full duration, but instead snooze max 100ms
 		// it might get unlocked in another thread
-		use core::cmp::{max, min};
-		let snooze = max(
-			min(remainder, STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MAX),
+		let snooze = remainder.clamp(
 			STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MIN,
+			STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MAX,
 		);
 		sp_io::offchain::sleep_until(now.add(snooze));
 	}
@@ -239,10 +238,9 @@ impl<B: BlockNumberProvider> Lockable for BlockAndTime<B> {
 	fn snooze(deadline: &Self::Deadline) {
 		let now = offchain::timestamp();
 		let remainder: Duration = now.diff(&(deadline.timestamp));
-		use core::cmp::{max, min};
-		let snooze = max(
-			min(remainder, STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MAX),
+		let snooze = remainder.clamp(
 			STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MIN,
+			STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MAX,
 		);
 		sp_io::offchain::sleep_until(now.add(snooze));
 	}

@@ -244,6 +244,10 @@ pub struct NonDefaultSetConfig {
 	/// `sc_network::protocol::event::Event::NotificationStreamOpened::negotiated_fallback`
 	pub fallback_names: Vec<protocol::ProtocolName>,
 	/// Handshake of the protocol
+	///
+	/// NOTE: Currently custom handshakes are not fully supported. See issue #5685 for more
+	/// details. This field is temporarily used to allow moving the hardcoded block announcement
+	/// protocol out of `protocol.rs`.
 	pub handshake: Option<NotificationHandshake>,
 	/// Maximum allowed size of single notifications.
 	pub max_notification_size: u64,
@@ -297,10 +301,10 @@ pub enum TransportConfig {
 		/// and connect to them if they support the same chain.
 		enable_mdns: bool,
 
-		/// If true, allow connecting to private IPv4 addresses (as defined in
+		/// If true, allow connecting to private IPv4/IPv6 addresses (as defined in
 		/// [RFC1918](https://tools.ietf.org/html/rfc1918)). Irrelevant for addresses that have
 		/// been passed in `::sc_network::config::NetworkConfiguration::boot_nodes`.
-		allow_private_ipv4: bool,
+		allow_private_ip: bool,
 	},
 
 	/// Only allow connections within the same process.

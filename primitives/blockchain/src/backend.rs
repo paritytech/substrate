@@ -21,9 +21,10 @@ use log::warn;
 use parking_lot::RwLock;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT, NumberFor},
+	traits::{Block as BlockT, Header as HeaderT, NumberFor, Saturating},
 	Justifications,
 };
+use std::collections::btree_set::BTreeSet;
 
 use crate::header_metadata::HeaderMetadata;
 
@@ -32,11 +33,11 @@ use crate::error::{Error, Result};
 /// Blockchain database header backend. Does not perform any validation.
 pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	/// Get block header. Returns `None` if block is not found.
-	fn header(&self, id: BlockId<Block>) -> Result<Option<Block::Header>>;
+	fn header(&self, hash: Block::Hash) -> Result<Option<Block::Header>>;
 	/// Get blockchain info.
 	fn info(&self) -> Info<Block>;
 	/// Get block status.
-	fn status(&self, id: BlockId<Block>) -> Result<BlockStatus>;
+	fn status(&self, hash: Block::Hash) -> Result<BlockStatus>;
 	/// Get block number by hash. Returns `None` if the header is not in the chain.
 	fn number(
 		&self,
@@ -62,9 +63,9 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	}
 
 	/// Get block header. Returns `UnknownBlock` error if block is not found.
-	fn expect_header(&self, id: BlockId<Block>) -> Result<Block::Header> {
-		self.header(id)?
-			.ok_or_else(|| Error::UnknownBlock(format!("Expect header: {}", id)))
+	fn expect_header(&self, hash: Block::Hash) -> Result<Block::Header> {
+		self.header(hash)?
+			.ok_or_else(|| Error::UnknownBlock(format!("Expect header: {}", hash)))
 	}
 
 	/// Convert an arbitrary block ID into a block number. Returns `UnknownBlock` error if block is
@@ -78,10 +79,81 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	/// Convert an arbitrary block ID into a block hash. Returns `UnknownBlock` error if block is
 	/// not found.
 	fn expect_block_hash_from_id(&self, id: &BlockId<Block>) -> Result<Block::Hash> {
-		self.block_hash_from_id(id).and_then(|n| {
-			n.ok_or_else(|| Error::UnknownBlock(format!("Expect block hash from id: {}", id)))
+		self.block_hash_from_id(id).and_then(|h| {
+			h.ok_or_else(|| Error::UnknownBlock(format!("Expect block hash from id: {}", id)))
 		})
 	}
+}
+
+/// Handles stale forks.
+pub trait ForkBackend<Block: BlockT>:
+	HeaderMetadata<Block> + HeaderBackend<Block> + Send + Sync
+{
+	/// Best effort to get all the header hashes that are part of the provided forks
+	/// starting only from the fork heads.
+	///
+	/// The function tries to reconstruct the route from the fork head to the canonical chain.
+	/// If any of the hashes on the route can't be found in the db, the function won't be able
+	/// to reconstruct the route anymore. In this case it will give up expanding the current fork,
+	/// move on to the next ones and at the end it will return an error that also contains
+	/// the partially expanded forks.
+	fn expand_forks(
+		&self,
+		fork_heads: &[Block::Hash],
+	) -> std::result::Result<BTreeSet<Block::Hash>, (BTreeSet<Block::Hash>, Error)> {
+		let mut missing_blocks = vec![];
+		let mut expanded_forks = BTreeSet::new();
+		for fork_head in fork_heads {
+			let mut route_head = *fork_head;
+			// Insert stale blocks hashes until canonical chain is reached.
+			// If we reach a block that is already part of the `expanded_forks` we can stop
+			// processing the fork.
+			while expanded_forks.insert(route_head) {
+				match self.header_metadata(route_head) {
+					Ok(meta) => {
+						// If the parent is part of the canonical chain or there doesn't exist a
+						// block hash for the parent number (bug?!), we can abort adding blocks.
+						let parent_number = meta.number.saturating_sub(1u32.into());
+						match self.hash(parent_number) {
+							Ok(Some(parent_hash)) =>
+								if parent_hash == meta.parent {
+									break
+								},
+							Ok(None) | Err(_) => {
+								missing_blocks.push(BlockId::<Block>::Number(parent_number));
+								break
+							},
+						}
+
+						route_head = meta.parent;
+					},
+					Err(_e) => {
+						missing_blocks.push(BlockId::<Block>::Hash(route_head));
+						break
+					},
+				}
+			}
+		}
+
+		if !missing_blocks.is_empty() {
+			return Err((
+				expanded_forks,
+				Error::UnknownBlocks(format!(
+					"Missing stale headers {:?} while expanding forks {:?}.",
+					fork_heads, missing_blocks
+				)),
+			))
+		}
+
+		Ok(expanded_forks)
+	}
+}
+
+impl<Block, T> ForkBackend<Block> for T
+where
+	Block: BlockT,
+	T: HeaderMetadata<Block> + HeaderBackend<Block> + Send + Sync,
+{
 }
 
 /// Blockchain database backend. Does not perform any validation.
@@ -89,9 +161,9 @@ pub trait Backend<Block: BlockT>:
 	HeaderBackend<Block> + HeaderMetadata<Block, Error = Error>
 {
 	/// Get block body. Returns `None` if block is not found.
-	fn body(&self, id: BlockId<Block>) -> Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
+	fn body(&self, hash: Block::Hash) -> Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
 	/// Get block justifications. Returns `None` if no justification exists.
-	fn justifications(&self, id: BlockId<Block>) -> Result<Option<Justifications>>;
+	fn justifications(&self, hash: Block::Hash) -> Result<Option<Justifications>>;
 	/// Get last finalized block hash.
 	fn last_finalized(&self) -> Result<Block::Hash>;
 
@@ -111,104 +183,51 @@ pub trait Backend<Block: BlockT>:
 	/// Return hashes of all blocks that are children of the block with `parent_hash`.
 	fn children(&self, parent_hash: Block::Hash) -> Result<Vec<Block::Hash>>;
 
-	/// Get the most recent block hash of the best (longest) chains
-	/// that contain block with the given `target_hash`.
+	/// Get the most recent block hash of the longest chain that contains
+	/// a block with the given `base_hash`.
 	///
 	/// The search space is always limited to blocks which are in the finalized
 	/// chain or descendents of it.
 	///
-	/// If `maybe_max_block_number` is `Some(max_block_number)`
-	/// the search is limited to block `numbers <= max_block_number`.
-	/// in other words as if there were no blocks greater `max_block_number`.
-	/// Returns `Ok(None)` if `target_hash` is not found in search space.
-	/// TODO: document time complexity of this, see [#1444](https://github.com/paritytech/substrate/issues/1444)
-	fn best_containing(
+	/// Returns `Ok(None)` if `base_hash` is not found in search space.
+	// TODO: document time complexity of this, see [#1444](https://github.com/paritytech/substrate/issues/1444)
+	fn longest_containing(
 		&self,
-		target_hash: Block::Hash,
-		maybe_max_number: Option<NumberFor<Block>>,
+		base_hash: Block::Hash,
 		import_lock: &RwLock<()>,
 	) -> Result<Option<Block::Hash>> {
-		let target_header = {
-			match self.header(BlockId::Hash(target_hash))? {
-				Some(x) => x,
-				// target not in blockchain
-				None => return Ok(None),
-			}
+		let Some(base_header) = self.header(base_hash)? else {
+			return Ok(None)
 		};
-
-		if let Some(max_number) = maybe_max_number {
-			// target outside search range
-			if target_header.number() > &max_number {
-				return Ok(None)
-			}
-		}
 
 		let leaves = {
 			// ensure no blocks are imported during this code block.
 			// an import could trigger a reorg which could change the canonical chain.
 			// we depend on the canonical chain staying the same during this code block.
 			let _import_guard = import_lock.read();
-
 			let info = self.info();
-
-			// this can be `None` if the best chain is shorter than the target header.
-			let maybe_canon_hash = self.hash(*target_header.number())?;
-
-			if maybe_canon_hash.as_ref() == Some(&target_hash) {
-				// if a `max_number` is given we try to fetch the block at the
-				// given depth, if it doesn't exist or `max_number` is not
-				// provided, we continue to search from all leaves below.
-				if let Some(max_number) = maybe_max_number {
-					if let Some(header) = self.hash(max_number)? {
-						return Ok(Some(header))
-					}
-				}
-			} else if info.finalized_number >= *target_header.number() {
-				// header is on a dead fork.
+			if info.finalized_number > *base_header.number() {
+				// `base_header` is on a dead fork.
 				return Ok(None)
 			}
-
 			self.leaves()?
 		};
 
 		// for each chain. longest chain first. shortest last
 		for leaf_hash in leaves {
-			// start at the leaf
 			let mut current_hash = leaf_hash;
-
-			// if search is not restricted then the leaf is the best
-			let mut best_hash = leaf_hash;
-
-			// go backwards entering the search space
-			// waiting until we are <= max_number
-			if let Some(max_number) = maybe_max_number {
-				loop {
-					let current_header = self
-						.header(BlockId::Hash(current_hash))?
-						.ok_or_else(|| Error::MissingHeader(current_hash.to_string()))?;
-
-					if current_header.number() <= &max_number {
-						best_hash = current_header.hash();
-						break
-					}
-
-					current_hash = *current_header.parent_hash();
-				}
-			}
-
 			// go backwards through the chain (via parent links)
 			loop {
-				// until we find target
-				if current_hash == target_hash {
-					return Ok(Some(best_hash))
+				if current_hash == base_hash {
+					return Ok(Some(leaf_hash))
 				}
 
 				let current_header = self
-					.header(BlockId::Hash(current_hash))?
+					.header(current_hash)?
 					.ok_or_else(|| Error::MissingHeader(current_hash.to_string()))?;
 
 				// stop search in this chain once we go below the target's block number
-				if current_header.number() < target_header.number() {
+				if current_header.number() < base_header.number() {
 					break
 				}
 
@@ -221,9 +240,8 @@ pub trait Backend<Block: BlockT>:
 		//
 		// FIXME #1558 only issue this warning when not on a dead fork
 		warn!(
-			"Block {:?} exists in chain but not found when following all \
-			leaves backwards. Number limit = {:?}",
-			target_hash, maybe_max_number,
+			"Block {:?} exists in chain but not found when following all leaves backwards",
+			base_hash,
 		);
 
 		Ok(None)
@@ -231,14 +249,14 @@ pub trait Backend<Block: BlockT>:
 
 	/// Get single indexed transaction by content hash. Note that this will only fetch transactions
 	/// that are indexed by the runtime with `storage_index_transaction`.
-	fn indexed_transaction(&self, hash: &Block::Hash) -> Result<Option<Vec<u8>>>;
+	fn indexed_transaction(&self, hash: Block::Hash) -> Result<Option<Vec<u8>>>;
 
 	/// Check if indexed transaction exists.
-	fn has_indexed_transaction(&self, hash: &Block::Hash) -> Result<bool> {
+	fn has_indexed_transaction(&self, hash: Block::Hash) -> Result<bool> {
 		Ok(self.indexed_transaction(hash)?.is_some())
 	}
 
-	fn block_indexed_body(&self, id: BlockId<Block>) -> Result<Option<Vec<Vec<u8>>>>;
+	fn block_indexed_body(&self, hash: Block::Hash) -> Result<Option<Vec<Vec<u8>>>>;
 }
 
 /// Blockchain info

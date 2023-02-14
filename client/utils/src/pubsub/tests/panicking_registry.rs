@@ -30,7 +30,7 @@ fn t01() {
 	let hub = TestHub::new(TK);
 	assert_hub_props(&hub, 0, 0);
 
-	let rx_01 = hub.subscribe(SubsKey::new());
+	let rx_01 = hub.subscribe(SubsKey::new(), 100_000);
 	assert_hub_props(&hub, 1, 1);
 
 	std::mem::drop(rx_01);
@@ -45,17 +45,17 @@ fn t02() {
 		assert_hub_props(&hub, 0, 0);
 
 		// Subscribe rx-01
-		let rx_01 = hub.subscribe(SubsKey::new());
+		let rx_01 = hub.subscribe(SubsKey::new(), 100_000);
 		assert_hub_props(&hub, 1, 1);
 
 		// Subscribe rx-02 so that its unsubscription will lead to an attempt to drop rx-01 in the
 		// middle of unsubscription of rx-02
-		let rx_02 = hub.subscribe(SubsKey::new().with_receiver(rx_01));
+		let rx_02 = hub.subscribe(SubsKey::new().with_receiver(rx_01), 100_000);
 		assert_hub_props(&hub, 2, 2);
 
 		// Subscribe rx-03 in order to see that it will receive messages after the unclean
 		// unsubscription
-		let mut rx_03 = hub.subscribe(SubsKey::new());
+		let mut rx_03 = hub.subscribe(SubsKey::new(), 100_000);
 		assert_hub_props(&hub, 3, 3);
 
 		// drop rx-02 leads to an attempt to unsubscribe rx-01
@@ -69,7 +69,7 @@ fn t02() {
 
 		// Subscribe rx-04 in order to see that it will receive messages after the unclean
 		// unsubscription
-		let mut rx_04 = hub.subscribe(SubsKey::new());
+		let mut rx_04 = hub.subscribe(SubsKey::new(), 100_000);
 		assert_hub_props(&hub, 3, 3);
 
 		hub.send(2);
@@ -96,8 +96,8 @@ fn t02() {
 }
 
 async fn add_some_subscribers_see_that_messages_are_delivered_and_unsubscribe(hub: &TestHub) {
-	let rx_01 = hub.subscribe(SubsKey::new());
-	let rx_02 = hub.subscribe(SubsKey::new());
+	let rx_01 = hub.subscribe(SubsKey::new(), 100_000);
+	let rx_02 = hub.subscribe(SubsKey::new(), 100_000);
 
 	hub.send(1);
 	hub.send(2);
@@ -121,9 +121,8 @@ fn t03() {
 		add_some_subscribers_see_that_messages_are_delivered_and_unsubscribe(&hub).await;
 		assert_hub_props(&hub, 0, 0);
 
-		assert!(catch_unwind(AssertUnwindSafe(
-			|| hub.subscribe(SubsKey::new().with_panic(SubsKeyPanic::OnSubscribePanicBefore))
-		))
+		assert!(catch_unwind(AssertUnwindSafe(|| hub
+			.subscribe(SubsKey::new().with_panic(SubsKeyPanic::OnSubscribePanicBefore), 100_000)))
 		.is_err());
 
 		assert_hub_props(&hub, 0, 0);
@@ -141,9 +140,8 @@ fn t04() {
 		add_some_subscribers_see_that_messages_are_delivered_and_unsubscribe(&hub).await;
 		assert_hub_props(&hub, 0, 0);
 
-		assert!(catch_unwind(AssertUnwindSafe(
-			|| hub.subscribe(SubsKey::new().with_panic(SubsKeyPanic::OnSubscribePanicAfter))
-		))
+		assert!(catch_unwind(AssertUnwindSafe(|| hub
+			.subscribe(SubsKey::new().with_panic(SubsKeyPanic::OnSubscribePanicAfter), 100_000)))
 		.is_err());
 
 		// the registry has panicked after it has added a subs-id into its internal storage — the
@@ -163,8 +161,8 @@ fn t05() {
 		add_some_subscribers_see_that_messages_are_delivered_and_unsubscribe(&hub).await;
 		assert_hub_props(&hub, 0, 0);
 
-		let rx_01 =
-			hub.subscribe(SubsKey::new().with_panic(SubsKeyPanic::OnUnsubscribePanicBefore));
+		let rx_01 = hub
+			.subscribe(SubsKey::new().with_panic(SubsKeyPanic::OnUnsubscribePanicBefore), 100_000);
 
 		assert_hub_props(&hub, 1, 1);
 		add_some_subscribers_see_that_messages_are_delivered_and_unsubscribe(&hub).await;
@@ -189,7 +187,8 @@ fn t06() {
 		add_some_subscribers_see_that_messages_are_delivered_and_unsubscribe(&hub).await;
 		assert_hub_props(&hub, 0, 0);
 
-		let rx_01 = hub.subscribe(SubsKey::new().with_panic(SubsKeyPanic::OnUnsubscribePanicAfter));
+		let rx_01 = hub
+			.subscribe(SubsKey::new().with_panic(SubsKeyPanic::OnUnsubscribePanicAfter), 100_000);
 
 		assert_hub_props(&hub, 1, 1);
 		add_some_subscribers_see_that_messages_are_delivered_and_unsubscribe(&hub).await;
@@ -214,7 +213,8 @@ fn t07() {
 		add_some_subscribers_see_that_messages_are_delivered_and_unsubscribe(&hub).await;
 		assert_hub_props(&hub, 0, 0);
 
-		let rx_01 = hub.subscribe(SubsKey::new().with_panic(SubsKeyPanic::OnDispatchPanicBefore));
+		let rx_01 =
+			hub.subscribe(SubsKey::new().with_panic(SubsKeyPanic::OnDispatchPanicBefore), 100_000);
 		assert_hub_props(&hub, 1, 1);
 		assert!(catch_unwind(AssertUnwindSafe(|| hub.send(1))).is_err());
 		assert_hub_props(&hub, 1, 1);
@@ -235,7 +235,8 @@ fn t08() {
 		add_some_subscribers_see_that_messages_are_delivered_and_unsubscribe(&hub).await;
 		assert_hub_props(&hub, 0, 0);
 
-		let rx_01 = hub.subscribe(SubsKey::new().with_panic(SubsKeyPanic::OnDispatchPanicAfter));
+		let rx_01 =
+			hub.subscribe(SubsKey::new().with_panic(SubsKeyPanic::OnDispatchPanicAfter), 100_000);
 		assert_hub_props(&hub, 1, 1);
 		assert!(catch_unwind(AssertUnwindSafe(|| hub.send(1))).is_err());
 		assert_hub_props(&hub, 1, 1);

@@ -513,6 +513,8 @@ pub mod pallet {
 		Unfounded { founder: T::AccountId },
 		/// Some funds were deposited into the society account.
 		Deposit { value: BalanceOf<T, I> },
+		/// A group of members has been choosen as Skeptics
+		SkepticsChosen { skeptics: Vec<T::AccountId> },
 	}
 
 	/// The first member.
@@ -711,6 +713,7 @@ pub mod pallet {
 		///
 		/// Total Complexity: O(M + B + C + logM + logB + X)
 		/// # </weight>
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn bid(origin: OriginFor<T>, value: BalanceOf<T, I>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -750,6 +753,7 @@ pub mod pallet {
 		///
 		/// Total Complexity: O(B + X)
 		/// # </weight>
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn unbid(origin: OriginFor<T>, pos: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -822,6 +826,7 @@ pub mod pallet {
 		///
 		/// Total Complexity: O(M + B + C + logM + logB + X)
 		/// # </weight>
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn vouch(
 			origin: OriginFor<T>,
@@ -873,6 +878,7 @@ pub mod pallet {
 		///
 		/// Total Complexity: O(B)
 		/// # </weight>
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn unvouch(origin: OriginFor<T>, pos: u32) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
@@ -914,6 +920,7 @@ pub mod pallet {
 		///
 		/// Total Complexity: O(M + logM + C)
 		/// # </weight>
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn vote(
 			origin: OriginFor<T>,
@@ -950,6 +957,7 @@ pub mod pallet {
 		///
 		/// Total Complexity: O(M + logM)
 		/// # </weight>
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn defender_vote(origin: OriginFor<T>, approve: bool) -> DispatchResult {
 			let voter = ensure_signed(origin)?;
@@ -984,6 +992,7 @@ pub mod pallet {
 		///
 		/// Total Complexity: O(M + logM + P + X)
 		/// # </weight>
+		#[pallet::call_index(6)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn payout(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -1026,6 +1035,7 @@ pub mod pallet {
 		///
 		/// Total Complexity: O(1)
 		/// # </weight>
+		#[pallet::call_index(7)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn found(
 			origin: OriginFor<T>,
@@ -1060,6 +1070,7 @@ pub mod pallet {
 		///
 		/// Total Complexity: O(1)
 		/// # </weight>
+		#[pallet::call_index(8)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn unfound(origin: OriginFor<T>) -> DispatchResult {
 			let founder = ensure_signed(origin)?;
@@ -1105,6 +1116,7 @@ pub mod pallet {
 		///
 		/// Total Complexity: O(M + logM + B)
 		/// # </weight>
+		#[pallet::call_index(9)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn judge_suspended_member(
 			origin: OriginFor<T>,
@@ -1182,6 +1194,7 @@ pub mod pallet {
 		///
 		/// Total Complexity: O(M + logM + B + X)
 		/// # </weight>
+		#[pallet::call_index(10)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn judge_suspended_candidate(
 			origin: OriginFor<T>,
@@ -1255,6 +1268,7 @@ pub mod pallet {
 		///
 		/// Total Complexity: O(1)
 		/// # </weight>
+		#[pallet::call_index(11)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn set_max_members(origin: OriginFor<T>, max: u32) -> DispatchResult {
 			ensure_root(origin)?;
@@ -1598,12 +1612,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		// Select sqrt(n) random members from the society and make them skeptics.
 		let pick_member =
-			|_| pick_item(&mut rng, &members[..]).expect("exited if members empty; qed");
-		for skeptic in (0..members.len().integer_sqrt()).map(pick_member) {
+			|_| pick_item(&mut rng, &members[..]).expect("exited if members empty; qed").clone();
+		let skeptics = (0..members.len().integer_sqrt()).map(pick_member).collect::<Vec<_>>();
+		skeptics.iter().for_each(|skeptic| {
 			for Bid { who: c, .. } in candidates.iter() {
 				<Votes<T, I>>::insert(c, skeptic, Vote::Skeptic);
 			}
-		}
+		});
+		Self::deposit_event(Event::<T, I>::SkepticsChosen { skeptics });
 	}
 
 	/// Attempt to slash the payout of some member. Return the total amount that was deducted.

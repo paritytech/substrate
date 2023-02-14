@@ -44,7 +44,7 @@ use sc_consensus_slots::{
 	SlotInfo, StorageChanges,
 };
 use sc_telemetry::TelemetryHandle;
-use sp_api::ProvideRuntimeApi;
+use sp_api::{Core, ProvideRuntimeApi};
 use sp_application_crypto::{AppKey, AppPublic};
 use sp_blockchain::{HeaderBackend, Result as CResult};
 use sp_consensus::{BlockOrigin, Environment, Error as ConsensusError, Proposer, SelectChain};
@@ -72,7 +72,46 @@ pub use sp_consensus_aura::{
 	AuraApi, ConsensusLog, SlotDuration, AURA_ENGINE_ID,
 };
 
+const LOG_TARGET: &str = "aura";
+
 type AuthorityId<P> = <P as Pair>::Public;
+
+/// Run `AURA` in a compatibility mode.
+///
+/// This is required for when the chain was launched and later there
+/// was a consensus breaking change.
+#[derive(Debug, Clone)]
+pub enum CompatibilityMode<N> {
+	/// Don't use any compatibility mode.
+	None,
+	/// Call `initialize_block` before doing any runtime calls.
+	///
+	/// Previously the node would execute `initialize_block` before fetchting the authorities
+	/// from the runtime. This behaviour changed in: <https://github.com/paritytech/substrate/pull/9132>
+	///
+	/// By calling `initialize_block` before fetching the authorities, on a block that
+	/// would enact a new validator set, the block would already be build/sealed by an
+	/// authority of the new set. With this mode disabled (the default) a block that enacts a new
+	/// set isn't sealed/built by an authority of the new set, however to make new nodes be able to
+	/// sync old chains this compatibility mode exists.
+	UseInitializeBlock {
+		/// The block number until this compatibility mode should be executed. The first runtime
+		/// call in the context of the `until` block (importing it/building it) will disable the
+		/// compatibility mode (i.e. at `until` the default rules will apply). When enabling this
+		/// compatibility mode the `until` block should be a future block on which all nodes will
+		/// have upgraded to a release that includes the updated compatibility mode configuration.
+		/// At `until` block there will be a hard fork when the authority set changes, between the
+		/// old nodes (running with `initialize_block`, i.e. without the compatibility mode
+		/// configuration) and the new nodes.
+		until: N,
+	},
+}
+
+impl<N> Default for CompatibilityMode<N> {
+	fn default() -> Self {
+		Self::None
+	}
+}
 
 /// Get the slot duration for Aura.
 pub fn slot_duration<A, B, C>(client: &C) -> CResult<SlotDuration>
@@ -106,7 +145,7 @@ fn slot_author<P: Pair>(slot: Slot, authorities: &[AuthorityId<P>]) -> Option<&A
 }
 
 /// Parameters of [`start_aura`].
-pub struct StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS> {
+pub struct StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS, N> {
 	/// The duration of a slot.
 	pub slot_duration: SlotDuration,
 	/// The client to interact with the chain.
@@ -140,6 +179,10 @@ pub struct StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS> {
 	pub max_block_proposal_slot_portion: Option<SlotProportion>,
 	/// Telemetry instance used to report telemetry metrics.
 	pub telemetry: Option<TelemetryHandle>,
+	/// Compatibility mode that should be used.
+	///
+	/// If in doubt, use `Default::default()`.
+	pub compatibility_mode: CompatibilityMode<N>,
 }
 
 /// Start the aura worker. The returned future should be run in a futures executor.
@@ -159,7 +202,8 @@ pub fn start_aura<P, B, C, SC, I, PF, SO, L, CIDP, BS, Error>(
 		block_proposal_slot_portion,
 		max_block_proposal_slot_portion,
 		telemetry,
-	}: StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS>,
+		compatibility_mode,
+	}: StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS, NumberFor<B>>,
 ) -> Result<impl Future<Output = ()>, sp_consensus::Error>
 where
 	P: Pair + Send + Sync,
@@ -174,7 +218,7 @@ where
 	PF::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	SO: SyncOracle + Send + Sync + Clone,
 	L: sc_consensus::JustificationSyncLink<B>,
-	CIDP: CreateInherentDataProviders<B, ()> + Send,
+	CIDP: CreateInherentDataProviders<B, ()> + Send + 'static,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
@@ -191,6 +235,7 @@ where
 		telemetry,
 		block_proposal_slot_portion,
 		max_block_proposal_slot_portion,
+		compatibility_mode,
 	});
 
 	Ok(sc_consensus_slots::start_slot_worker(
@@ -203,7 +248,7 @@ where
 }
 
 /// Parameters of [`build_aura_worker`].
-pub struct BuildAuraWorkerParams<C, I, PF, SO, L, BS> {
+pub struct BuildAuraWorkerParams<C, I, PF, SO, L, BS, N> {
 	/// The client to interact with the chain.
 	pub client: Arc<C>,
 	/// The block import.
@@ -231,6 +276,10 @@ pub struct BuildAuraWorkerParams<C, I, PF, SO, L, BS> {
 	pub max_block_proposal_slot_portion: Option<SlotProportion>,
 	/// Telemetry instance used to report telemetry metrics.
 	pub telemetry: Option<TelemetryHandle>,
+	/// Compatibility mode that should be used.
+	///
+	/// If in doubt, use `Default::default()`.
+	pub compatibility_mode: CompatibilityMode<N>,
 }
 
 /// Build the aura worker.
@@ -249,7 +298,8 @@ pub fn build_aura_worker<P, B, C, PF, I, SO, L, BS, Error>(
 		max_block_proposal_slot_portion,
 		telemetry,
 		force_authoring,
-	}: BuildAuraWorkerParams<C, I, PF, SO, L, BS>,
+		compatibility_mode,
+	}: BuildAuraWorkerParams<C, I, PF, SO, L, BS, NumberFor<B>>,
 ) -> impl sc_consensus_slots::SimpleSlotWorker<
 	B,
 	Proposer = PF::Proposer,
@@ -286,11 +336,12 @@ where
 		telemetry,
 		block_proposal_slot_portion,
 		max_block_proposal_slot_portion,
+		compatibility_mode,
 		_key_type: PhantomData::<P>,
 	}
 }
 
-struct AuraWorker<C, E, I, P, SO, L, BS> {
+struct AuraWorker<C, E, I, P, SO, L, BS, N> {
 	client: Arc<C>,
 	block_import: I,
 	env: E,
@@ -302,12 +353,13 @@ struct AuraWorker<C, E, I, P, SO, L, BS> {
 	block_proposal_slot_portion: SlotProportion,
 	max_block_proposal_slot_portion: Option<SlotProportion>,
 	telemetry: Option<TelemetryHandle>,
+	compatibility_mode: CompatibilityMode<N>,
 	_key_type: PhantomData<P>,
 }
 
 #[async_trait::async_trait]
 impl<B, C, E, I, P, Error, SO, L, BS> sc_consensus_slots::SimpleSlotWorker<B>
-	for AuraWorker<C, E, I, P, SO, L, BS>
+	for AuraWorker<C, E, I, P, SO, L, BS, NumberFor<B>>
 where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + HeaderBackend<B> + Sync,
@@ -345,7 +397,12 @@ where
 		header: &B::Header,
 		_slot: Slot,
 	) -> Result<Self::AuxData, sp_consensus::Error> {
-		authorities(self.client.as_ref(), &BlockId::Hash(header.hash()))
+		authorities(
+			self.client.as_ref(),
+			header.hash(),
+			*header.number() + 1u32.into(),
+			&self.compatibility_mode,
+		)
 	}
 
 	fn authorities_len(&self, epoch_data: &Self::AuxData) -> Option<usize> {
@@ -475,7 +532,7 @@ where
 }
 
 fn aura_err<B: BlockT>(error: Error<B>) -> Error<B> {
-	debug!(target: "aura", "{}", error);
+	debug!(target: LOG_TARGET, "{}", error);
 	error
 }
 
@@ -525,26 +582,52 @@ pub fn find_pre_digest<B: BlockT, Signature: Codec>(header: &B::Header) -> Resul
 
 	let mut pre_digest: Option<Slot> = None;
 	for log in header.digest().logs() {
-		trace!(target: "aura", "Checking log {:?}", log);
+		trace!(target: LOG_TARGET, "Checking log {:?}", log);
 		match (CompatibleDigestItem::<Signature>::as_aura_pre_digest(log), pre_digest.is_some()) {
 			(Some(_), true) => return Err(aura_err(Error::MultipleHeaders)),
-			(None, _) => trace!(target: "aura", "Ignoring digest not meant for us"),
+			(None, _) => trace!(target: LOG_TARGET, "Ignoring digest not meant for us"),
 			(s, false) => pre_digest = s,
 		}
 	}
 	pre_digest.ok_or_else(|| aura_err(Error::NoDigestFound))
 }
 
-fn authorities<A, B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, ConsensusError>
+fn authorities<A, B, C>(
+	client: &C,
+	parent_hash: B::Hash,
+	context_block_number: NumberFor<B>,
+	compatibility_mode: &CompatibilityMode<NumberFor<B>>,
+) -> Result<Vec<A>, ConsensusError>
 where
 	A: Codec + Debug,
 	B: BlockT,
-	C: ProvideRuntimeApi<B> + BlockOf,
+	C: ProvideRuntimeApi<B>,
 	C::Api: AuraApi<B, A>,
 {
-	client
-		.runtime_api()
-		.authorities(at)
+	let runtime_api = client.runtime_api();
+
+	match compatibility_mode {
+		CompatibilityMode::None => {},
+		// Use `initialize_block` until we hit the block that should disable the mode.
+		CompatibilityMode::UseInitializeBlock { until } =>
+			if *until > context_block_number {
+				runtime_api
+					.initialize_block(
+						&BlockId::Hash(parent_hash),
+						&B::Header::new(
+							context_block_number,
+							Default::default(),
+							Default::default(),
+							parent_hash,
+							Default::default(),
+						),
+					)
+					.map_err(|_| sp_consensus::Error::InvalidAuthoritiesSet)?;
+			},
+	}
+
+	runtime_api
+		.authorities(&BlockId::Hash(parent_hash))
 		.ok()
 		.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)
 }
@@ -552,7 +635,6 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use futures::executor;
 	use parking_lot::Mutex;
 	use sc_block_builder::BlockBuilderProvider;
 	use sc_client_api::BlockchainEvents;
@@ -631,6 +713,7 @@ mod tests {
 				InherentDataProviders = (InherentDataProvider,),
 			>,
 		>,
+		u64,
 	>;
 	type AuraPeer = Peer<(), PeersClient>;
 
@@ -660,6 +743,7 @@ mod tests {
 				}),
 				CheckForEquivocation::Yes,
 				None,
+				CompatibilityMode::None,
 			)
 		}
 
@@ -686,8 +770,8 @@ mod tests {
 		}
 	}
 
-	#[test]
-	fn authoring_blocks() {
+	#[tokio::test]
+	async fn authoring_blocks() {
 		sp_tracing::try_init_simple();
 		let net = AuraTestNet::new(3);
 
@@ -749,18 +833,20 @@ mod tests {
 					block_proposal_slot_portion: SlotProportion::new(0.5),
 					max_block_proposal_slot_portion: None,
 					telemetry: None,
+					compatibility_mode: CompatibilityMode::None,
 				})
 				.expect("Starts aura"),
 			);
 		}
 
-		executor::block_on(future::select(
+		future::select(
 			future::poll_fn(move |cx| {
 				net.lock().poll(cx);
 				Poll::<()>::Pending
 			}),
 			future::select(future::join_all(aura_futures), future::join_all(import_notifications)),
-		));
+		)
+		.await;
 	}
 
 	#[test]
@@ -769,7 +855,8 @@ mod tests {
 
 		assert_eq!(client.chain_info().best_number, 0);
 		assert_eq!(
-			authorities(&client, &BlockId::Number(0)).unwrap(),
+			authorities(&client, client.chain_info().best_hash, 1, &CompatibilityMode::None)
+				.unwrap(),
 			vec![
 				Keyring::Alice.public().into(),
 				Keyring::Bob.public().into(),
@@ -778,8 +865,8 @@ mod tests {
 		);
 	}
 
-	#[test]
-	fn current_node_authority_should_claim_slot() {
+	#[tokio::test]
+	async fn current_node_authority_should_claim_slot() {
 		let net = AuraTestNet::new(4);
 
 		let mut authorities = vec![
@@ -814,6 +901,7 @@ mod tests {
 			_key_type: PhantomData::<AuthorityPair>,
 			block_proposal_slot_portion: SlotProportion::new(0.5),
 			max_block_proposal_slot_portion: None,
+			compatibility_mode: Default::default(),
 		};
 
 		let head = Header::new(
@@ -823,18 +911,18 @@ mod tests {
 			Default::default(),
 			Default::default(),
 		);
-		assert!(executor::block_on(worker.claim_slot(&head, 0.into(), &authorities)).is_none());
-		assert!(executor::block_on(worker.claim_slot(&head, 1.into(), &authorities)).is_none());
-		assert!(executor::block_on(worker.claim_slot(&head, 2.into(), &authorities)).is_none());
-		assert!(executor::block_on(worker.claim_slot(&head, 3.into(), &authorities)).is_some());
-		assert!(executor::block_on(worker.claim_slot(&head, 4.into(), &authorities)).is_none());
-		assert!(executor::block_on(worker.claim_slot(&head, 5.into(), &authorities)).is_none());
-		assert!(executor::block_on(worker.claim_slot(&head, 6.into(), &authorities)).is_none());
-		assert!(executor::block_on(worker.claim_slot(&head, 7.into(), &authorities)).is_some());
+		assert!(worker.claim_slot(&head, 0.into(), &authorities).await.is_none());
+		assert!(worker.claim_slot(&head, 1.into(), &authorities).await.is_none());
+		assert!(worker.claim_slot(&head, 2.into(), &authorities).await.is_none());
+		assert!(worker.claim_slot(&head, 3.into(), &authorities).await.is_some());
+		assert!(worker.claim_slot(&head, 4.into(), &authorities).await.is_none());
+		assert!(worker.claim_slot(&head, 5.into(), &authorities).await.is_none());
+		assert!(worker.claim_slot(&head, 6.into(), &authorities).await.is_none());
+		assert!(worker.claim_slot(&head, 7.into(), &authorities).await.is_some());
 	}
 
-	#[test]
-	fn on_slot_returns_correct_block() {
+	#[tokio::test]
+	async fn on_slot_returns_correct_block() {
 		let net = AuraTestNet::new(4);
 
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
@@ -866,21 +954,24 @@ mod tests {
 			_key_type: PhantomData::<AuthorityPair>,
 			block_proposal_slot_portion: SlotProportion::new(0.5),
 			max_block_proposal_slot_portion: None,
+			compatibility_mode: Default::default(),
 		};
 
-		let head = client.header(&BlockId::Number(0)).unwrap().unwrap();
+		let head = client.expect_header(client.info().genesis_hash).unwrap();
 
-		let res = executor::block_on(worker.on_slot(SlotInfo {
-			slot: 0.into(),
-			ends_at: Instant::now() + Duration::from_secs(100),
-			inherent_data: InherentData::new(),
-			duration: Duration::from_millis(1000),
-			chain_head: head,
-			block_size_limit: None,
-		}))
-		.unwrap();
+		let res = worker
+			.on_slot(SlotInfo {
+				slot: 0.into(),
+				ends_at: Instant::now() + Duration::from_secs(100),
+				create_inherent_data: Box::new(()),
+				duration: Duration::from_millis(1000),
+				chain_head: head,
+				block_size_limit: None,
+			})
+			.await
+			.unwrap();
 
 		// The returned block should be imported and we should be able to get its header by now.
-		assert!(client.header(&BlockId::Hash(res.block.hash())).unwrap().is_some());
+		assert!(client.header(res.block.hash()).unwrap().is_some());
 	}
 }

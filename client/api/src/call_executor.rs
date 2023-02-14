@@ -20,13 +20,12 @@
 
 use sc_executor::{RuntimeVersion, RuntimeVersionOf};
 use sp_core::traits::CallContext;
-use sp_externalities::Extensions;
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
-use sp_state_machine::{ExecutionManager, ExecutionStrategy, OverlayedChanges, StorageProof};
+use sp_runtime::traits::Block as BlockT;
+use sp_state_machine::{ExecutionStrategy, OverlayedChanges, StorageProof};
 use std::cell::RefCell;
 
 use crate::execution_extensions::ExecutionExtensions;
-use sp_api::{ProofRecorder, StorageTransactionCache};
+use sp_api::{ExecutionContext, ProofRecorder, StorageTransactionCache};
 
 /// Executor Provider
 pub trait ExecutorProvider<Block: BlockT> {
@@ -48,16 +47,18 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 	/// The backend used by the node.
 	type Backend: crate::backend::Backend<B>;
 
+	/// Returns the [`ExecutionExtensions`].
+	fn execution_extensions(&self) -> &ExecutionExtensions<B>;
+
 	/// Execute a call to a contract on top of state in a block of given hash.
 	///
 	/// No changes are made.
 	fn call(
 		&self,
-		id: &BlockId<B>,
+		at_hash: B::Hash,
 		method: &str,
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
-		extensions: Option<Extensions>,
 		context: CallContext,
 	) -> Result<Vec<u8>, sp_blockchain::Error>;
 
@@ -66,14 +67,9 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 	/// No changes are made.
 	/// Before executing the method, passed header is installed as the current header
 	/// of the execution context.
-	fn contextual_call<
-		EM: Fn(
-			Result<Vec<u8>, Self::Error>,
-			Result<Vec<u8>, Self::Error>,
-		) -> Result<Vec<u8>, Self::Error>,
-	>(
+	fn contextual_call(
 		&self,
-		at: &BlockId<B>,
+		at_hash: B::Hash,
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
@@ -82,25 +78,21 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 				StorageTransactionCache<B, <Self::Backend as crate::backend::Backend<B>>::State>,
 			>,
 		>,
-		execution_manager: ExecutionManager<EM>,
 		proof_recorder: &Option<ProofRecorder<B>>,
-		extensions: Option<Extensions>,
-		context: CallContext,
-	) -> sp_blockchain::Result<Vec<u8>>
-	where
-		ExecutionManager<EM>: Clone;
+		context: ExecutionContext,
+	) -> sp_blockchain::Result<Vec<u8>>;
 
 	/// Extract RuntimeVersion of given block
 	///
 	/// No changes are made.
-	fn runtime_version(&self, id: &BlockId<B>) -> Result<RuntimeVersion, sp_blockchain::Error>;
+	fn runtime_version(&self, at_hash: B::Hash) -> Result<RuntimeVersion, sp_blockchain::Error>;
 
 	/// Prove the execution of the given `method`.
 	///
 	/// No changes are made.
 	fn prove_execution(
 		&self,
-		at: &BlockId<B>,
+		at_hash: B::Hash,
 		method: &str,
 		call_data: &[u8],
 	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error>;

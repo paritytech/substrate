@@ -26,11 +26,11 @@ use log::{debug, trace};
 use sc_client_api::BlockBackend;
 use sc_network::{config as netconfig, config::RequestResponseConfig, PeerId, ReputationChange};
 use sc_network_common::protocol::ProtocolName;
-use sp_runtime::{generic::BlockId, traits::Block};
+use sp_runtime::traits::Block;
 use std::{marker::PhantomData, sync::Arc};
 
 use crate::communication::request_response::{
-	on_demand_justifications_protocol_config, Error, JustificationRequest,
+	on_demand_justifications_protocol_config, Error, JustificationRequest, BEEFY_SYNC_LOG_TARGET,
 };
 
 /// A request coming in, including a sender for sending responses.
@@ -149,13 +149,18 @@ where
 	fn handle_request(&self, request: IncomingRequest<B>) -> Result<(), Error> {
 		// TODO (issue #12293): validate `request` and change peer reputation for invalid requests.
 
-		let maybe_encoded_proof = self
-			.client
-			.justifications(&BlockId::Number(request.payload.begin))
-			.map_err(Error::Client)?
-			.and_then(|justifs| justifs.get(BEEFY_ENGINE_ID).cloned())
-			// No BEEFY justification present.
-			.ok_or(());
+		let maybe_encoded_proof = if let Some(hash) =
+			self.client.block_hash(request.payload.begin).map_err(Error::Client)?
+		{
+			self.client
+				.justifications(hash)
+				.map_err(Error::Client)?
+				.and_then(|justifs| justifs.get(BEEFY_ENGINE_ID).cloned())
+				// No BEEFY justification present.
+				.ok_or(())
+		} else {
+			Err(())
+		};
 
 		request
 			.pending_response
@@ -169,21 +174,21 @@ where
 
 	/// Run [`BeefyJustifsRequestHandler`].
 	pub async fn run(mut self) {
-		trace!(target: "beefy::sync", "🥩 Running BeefyJustifsRequestHandler");
+		trace!(target: BEEFY_SYNC_LOG_TARGET, "🥩 Running BeefyJustifsRequestHandler");
 
 		while let Ok(request) = self.request_receiver.recv(|| vec![]).await {
 			let peer = request.peer;
 			match self.handle_request(request) {
 				Ok(()) => {
 					debug!(
-						target: "beefy::sync",
+						target: BEEFY_SYNC_LOG_TARGET,
 						"🥩 Handled BEEFY justification request from {:?}.", peer
 					)
 				},
 				Err(e) => {
 					// TODO (issue #12293): apply reputation changes here based on error type.
 					debug!(
-						target: "beefy::sync",
+						target: BEEFY_SYNC_LOG_TARGET,
 						"🥩 Failed to handle BEEFY justification request from {:?}: {}", peer, e,
 					)
 				},

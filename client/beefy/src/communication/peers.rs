@@ -46,11 +46,6 @@ impl<B: Block> KnownPeers<B> {
 		Self { live: HashMap::new() }
 	}
 
-	/// Add new connected `peer`.
-	pub fn add_new(&mut self, peer: PeerId) {
-		self.live.entry(peer).or_default();
-	}
-
 	/// Note vote round number for `peer`.
 	pub fn note_vote_for(&mut self, peer: PeerId, round: NumberFor<B>) {
 		let data = self.live.entry(peer).or_default();
@@ -62,11 +57,11 @@ impl<B: Block> KnownPeers<B> {
 		self.live.remove(peer);
 	}
 
-	/// Return _filtered and cloned_ list of peers that have voted on `block` or higher.
-	pub fn at_least_at_block(&self, block: NumberFor<B>) -> VecDeque<PeerId> {
+	/// Return _filtered and cloned_ list of peers that have voted on higher than `block`.
+	pub fn further_than(&self, block: NumberFor<B>) -> VecDeque<PeerId> {
 		self.live
 			.iter()
-			.filter_map(|(k, v)| (v.last_voted_on >= block).then_some(k))
+			.filter_map(|(k, v)| (v.last_voted_on > block).then_some(k))
 			.cloned()
 			.collect()
 	}
@@ -87,35 +82,32 @@ mod tests {
 		let mut peers = KnownPeers::<sc_network_test::Block>::new();
 		assert!(peers.live.is_empty());
 
-		// Alice and Bob new connected peers.
-		peers.add_new(alice);
-		peers.add_new(bob);
 		// 'Tracked' Bob seen voting for 5.
 		peers.note_vote_for(bob, 5);
 		// Previously unseen Charlie now seen voting for 10.
 		peers.note_vote_for(charlie, 10);
 
-		assert_eq!(peers.live.len(), 3);
-		assert!(peers.contains(&alice));
+		assert_eq!(peers.live.len(), 2);
+		assert!(!peers.contains(&alice));
 		assert!(peers.contains(&bob));
 		assert!(peers.contains(&charlie));
 
-		// Get peers at block >= 5
-		let at_5 = peers.at_least_at_block(5);
+		// Get peers at block > 4
+		let further_than_4 = peers.further_than(4);
 		// Should be Bob and Charlie
-		assert_eq!(at_5.len(), 2);
-		assert!(at_5.contains(&bob));
-		assert!(at_5.contains(&charlie));
+		assert_eq!(further_than_4.len(), 2);
+		assert!(further_than_4.contains(&bob));
+		assert!(further_than_4.contains(&charlie));
 
 		// 'Tracked' Alice seen voting for 10.
 		peers.note_vote_for(alice, 10);
 
-		// Get peers at block >= 9
-		let at_9 = peers.at_least_at_block(9);
+		// Get peers at block > 9
+		let further_than_9 = peers.further_than(9);
 		// Should be Charlie and Alice
-		assert_eq!(at_9.len(), 2);
-		assert!(at_9.contains(&charlie));
-		assert!(at_9.contains(&alice));
+		assert_eq!(further_than_9.len(), 2);
+		assert!(further_than_9.contains(&charlie));
+		assert!(further_than_9.contains(&alice));
 
 		// Remove Alice
 		peers.remove(&alice);
@@ -123,9 +115,9 @@ mod tests {
 		assert!(!peers.contains(&alice));
 
 		// Get peers at block >= 9
-		let at_9 = peers.at_least_at_block(9);
+		let further_than_9 = peers.further_than(9);
 		// Now should be just Charlie
-		assert_eq!(at_9.len(), 1);
-		assert!(at_9.contains(&charlie));
+		assert_eq!(further_than_9.len(), 1);
+		assert!(further_than_9.contains(&charlie));
 	}
 }

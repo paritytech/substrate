@@ -117,8 +117,6 @@ pub(crate) fn size_and_prefix_iterator(
 	prefix: u8,
 	prefix_mask: usize,
 ) -> impl Iterator<Item = u8> {
-	let size = sp_std::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, size);
-
 	let max_value = 255u8 >> prefix_mask;
 	let l1 = sp_std::cmp::min((max_value as usize).saturating_sub(1), size);
 	let (first_byte, mut rem) = if size == l1 {
@@ -165,12 +163,11 @@ fn decode_size(
 		return Ok(result)
 	}
 	result -= 1;
-	while result <= trie_constants::NIBBLE_SIZE_BOUND {
+	loop {
 		let n = input.read_byte()? as usize;
 		if n < 255 {
 			return Ok(result + n + 1)
 		}
 		result += 255;
 	}
-	Ok(trie_constants::NIBBLE_SIZE_BOUND)
 }

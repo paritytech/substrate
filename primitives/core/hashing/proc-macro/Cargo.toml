@@ -19,4 +19,4 @@ proc-macro = true
 proc-macro2 = "1.0.37"
 quote = "1.0.6"
 syn = { version = "1.0.98", features = ["full", "parsing"] }
-sp-core-hashing = { version = "4.0.0", default-features = false, path = "../" }
+sp-core-hashing = { version = "5.0.0", default-features = false, path = "../" }

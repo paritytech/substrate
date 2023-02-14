@@ -18,7 +18,7 @@
 //! Scheduler pallet benchmarking.
 
 use super::*;
-use frame_benchmarking::{account, benchmarks};
+use frame_benchmarking::v1::{account, benchmarks, BenchmarkError};
 use frame_support::{
 	ensure,
 	traits::{schedule::Priority, BoundedInline},
@@ -122,17 +122,13 @@ fn make_origin<T: Config>(signed: bool) -> <T as Config>::PalletsOrigin {
 	}
 }
 
-fn dummy_counter() -> WeightCounter {
-	WeightCounter { used: Weight::zero(), limit: Weight::MAX }
-}
-
 benchmarks! {
 	// `service_agendas` when no work is done.
 	service_agendas_base {
 		let now = T::BlockNumber::from(BLOCK_NUMBER);
 		IncompleteSince::<T>::put(now - One::one());
 	}: {
-		Scheduler::<T>::service_agendas(&mut dummy_counter(), now, 0);
+		Scheduler::<T>::service_agendas(&mut WeightMeter::max_limit(), now, 0);
 	} verify {
 		assert_eq!(IncompleteSince::<T>::get(), Some(now - One::one()));
 	}
@@ -144,7 +140,7 @@ benchmarks! {
 		fill_schedule::<T>(now, s)?;
 		let mut executed = 0;
 	}: {
-		Scheduler::<T>::service_agenda(&mut dummy_counter(), &mut executed, now, now, 0);
+		Scheduler::<T>::service_agenda(&mut WeightMeter::max_limit(), &mut executed, now, now, 0);
 	} verify {
 		assert_eq!(executed, 0);
 	}
@@ -155,7 +151,7 @@ benchmarks! {
 		let now = BLOCK_NUMBER.into();
 		let task = make_task::<T>(false, false, false, None, 0);
 		// prevent any tasks from actually being executed as we only want the surrounding weight.
-		let mut counter = WeightCounter { used: Weight::zero(), limit: Weight::zero() };
+		let mut counter = WeightMeter::from_limit(Weight::zero());
 	}: {
 		let result = Scheduler::<T>::service_task(&mut counter, now, now, 0, true, task);
 	} verify {
@@ -164,12 +160,16 @@ benchmarks! {
 
 	// `service_task` when the task is a non-periodic, non-named, fetched call (with a known
 	// preimage length) and which is not dispatched (e.g. due to being overweight).
+	#[pov_mode = MaxEncodedLen {
+		// Use measured PoV size for the Preimages since we pass in a length witness.
+		Preimage::PreimageFor: Measured
+	}]
 	service_task_fetched {
 		let s in (BoundedInline::bound() as u32) .. (T::Preimages::MAX_LENGTH as u32);
 		let now = BLOCK_NUMBER.into();
 		let task = make_task::<T>(false, false, false, Some(s), 0);
 		// prevent any tasks from actually being executed as we only want the surrounding weight.
-		let mut counter = WeightCounter { used: Weight::zero(), limit: Weight::zero() };
+		let mut counter = WeightMeter::from_limit(Weight::zero());
 	}: {
 		let result = Scheduler::<T>::service_task(&mut counter, now, now, 0, true, task);
 	} verify {
@@ -181,7 +181,7 @@ benchmarks! {
 		let now = BLOCK_NUMBER.into();
 		let task = make_task::<T>(false, true, false, None, 0);
 		// prevent any tasks from actually being executed as we only want the surrounding weight.
-		let mut counter = WeightCounter { used: Weight::zero(), limit: Weight::zero() };
+		let mut counter = WeightMeter::from_limit(Weight::zero());
 	}: {
 		let result = Scheduler::<T>::service_task(&mut counter, now, now, 0, true, task);
 	} verify {
@@ -193,7 +193,7 @@ benchmarks! {
 		let now = BLOCK_NUMBER.into();
 		let task = make_task::<T>(true, false, false, None, 0);
 		// prevent any tasks from actually being executed as we only want the surrounding weight.
-		let mut counter = WeightCounter { used: Weight::zero(), limit: Weight::zero() };
+		let mut counter = WeightMeter::from_limit(Weight::zero());
 	}: {
 		let result = Scheduler::<T>::service_task(&mut counter, now, now, 0, true, task);
 	} verify {
@@ -201,7 +201,7 @@ benchmarks! {
 
 	// `execute_dispatch` when the origin is `Signed`, not counting the dispatable's weight.
 	execute_dispatch_signed {
-		let mut counter = WeightCounter { used: Weight::zero(), limit: Weight::MAX };
+		let mut counter = WeightMeter::max_limit();
 		let origin = make_origin::<T>(true);
 		let call = T::Preimages::realize(&make_call::<T>(None)).unwrap().0;
 	}: {
@@ -212,7 +212,7 @@ benchmarks! {
 
 	// `execute_dispatch` when the origin is not `Signed`, not counting the dispatable's weight.
 	execute_dispatch_unsigned {
-		let mut counter = WeightCounter { used: Weight::zero(), limit: Weight::MAX };
+		let mut counter = WeightMeter::max_limit();
 		let origin = make_origin::<T>(false);
 		let call = T::Preimages::realize(&make_call::<T>(None)).unwrap().0;
 	}: {
@@ -244,17 +244,22 @@ benchmarks! {
 
 		fill_schedule::<T>(when, s)?;
 		assert_eq!(Agenda::<T>::get(when).len(), s as usize);
-		let schedule_origin = T::ScheduleOrigin::successful_origin();
+		let schedule_origin =
+			T::ScheduleOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	}: _<SystemOrigin<T>>(schedule_origin, when, 0)
 	verify {
 		ensure!(
-			Lookup::<T>::get(u32_to_name(0)).is_none(),
-			"didn't remove from lookup"
+			s == 1 || Lookup::<T>::get(u32_to_name(0)).is_none(),
+			"didn't remove from lookup if more than 1 task scheduled for `when`"
 		);
 		// Removed schedule is NONE
 		ensure!(
-			Agenda::<T>::get(when)[0].is_none(),
-			"didn't remove from schedule"
+			s == 1 || Agenda::<T>::get(when)[0].is_none(),
+			"didn't remove from schedule if more than 1 task scheduled for `when`"
+		);
+		ensure!(
+			s > 1 || Agenda::<T>::get(when).len() == 0,
+			"remove from schedule if only 1 task scheduled for `when`"
 		);
 	}
 
@@ -284,13 +289,17 @@ benchmarks! {
 	}: _(RawOrigin::Root, u32_to_name(0))
 	verify {
 		ensure!(
-			Lookup::<T>::get(u32_to_name(0)).is_none(),
-			"didn't remove from lookup"
+			s == 1 || Lookup::<T>::get(u32_to_name(0)).is_none(),
+			"didn't remove from lookup if more than 1 task scheduled for `when`"
 		);
 		// Removed schedule is NONE
 		ensure!(
-			Agenda::<T>::get(when)[0].is_none(),
-			"didn't remove from schedule"
+			s == 1 || Agenda::<T>::get(when)[0].is_none(),
+			"didn't remove from schedule if more than 1 task scheduled for `when`"
+		);
+		ensure!(
+			s > 1 || Agenda::<T>::get(when).len() == 0,
+			"remove from schedule if only 1 task scheduled for `when`"
 		);
 	}
 

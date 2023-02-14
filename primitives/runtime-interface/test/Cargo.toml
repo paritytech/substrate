@@ -16,9 +16,9 @@ tracing = "0.1.29"
 tracing-core = "0.1.28"
 sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
 sc-executor-common = { version = "0.10.0-dev", path = "../../../client/executor/common" }
-sp-io = { version = "6.0.0", path = "../../io" }
-sp-runtime = { version = "6.0.0", path = "../../runtime" }
-sp-runtime-interface = { version = "6.0.0", path = "../" }
+sp-io = { version = "7.0.0", path = "../../io" }
+sp-runtime = { version = "7.0.0", path = "../../runtime" }
+sp-runtime-interface = { version = "7.0.0", path = "../" }
 sp-runtime-interface-test-wasm = { version = "2.0.0", path = "../test-wasm" }
 sp-runtime-interface-test-wasm-deprecated = { version = "2.0.0", path = "../test-wasm-deprecated" }
-sp-state-machine = { version = "0.12.0", path = "../../state-machine" }
+sp-state-machine = { version = "0.13.0", path = "../../state-machine" }

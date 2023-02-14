@@ -389,8 +389,9 @@ fn decl_all_pallets<'a>(
 				(attr, names)
 			} else {
 				let test_cfg = features.remove("test").then_some(quote!(test)).into_iter();
+				let disabled_features = all_features.difference(&features);
 				let features = features.iter();
-				let attr = quote!(#[cfg(all( #(#test_cfg),* #(feature = #features),* ))]);
+				let attr = quote!(#[cfg(all( #(#test_cfg,)* #(feature = #features,)* #(not(feature = #disabled_features)),* ))]);
 
 				(attr, names)
 			}
@@ -578,6 +579,7 @@ fn decl_integrity_test(scrate: &TokenStream2) -> TokenStream2 {
 
 			#[test]
 			pub fn runtime_integrity_tests() {
+				#scrate::sp_tracing::try_init_simple();
 				<AllPalletsWithSystem as #scrate::traits::IntegrityTest>::integrity_test();
 			}
 		}

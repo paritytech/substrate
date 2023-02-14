@@ -13,4 +13,4 @@ error: `Pallet` does not have #[pallet::call] defined, perhaps you should remove
 58 | | }
    | |_- in this macro invocation
    |
-   = note: this error originates in the macro `pallet::__substrate_call_check::is_call_part_defined` (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this error originates in the macro `pallet::__substrate_call_check::is_call_part_defined` which comes from the expansion of the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)

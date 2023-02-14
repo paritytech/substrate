@@ -99,9 +99,9 @@ impl Cid {
 	Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo, Default,
 )]
 pub struct DisbandWitness {
-	/// Total number of voting members in the current Alliance.
+	/// Total number of fellow members in the current Alliance.
 	#[codec(compact)]
-	pub(super) voting_members: u32,
+	pub(super) fellow_members: u32,
 	/// Total number of ally members in the current Alliance.
 	#[codec(compact)]
 	pub(super) ally_members: u32,
@@ -110,8 +110,8 @@ pub struct DisbandWitness {
 #[cfg(test)]
 impl DisbandWitness {
 	// Creates new DisbandWitness.
-	pub(super) fn new(voting_members: u32, ally_members: u32) -> Self {
-		Self { voting_members, ally_members }
+	pub(super) fn new(fellow_members: u32, ally_members: u32) -> Self {
+		Self { fellow_members, ally_members }
 	}
 }
 

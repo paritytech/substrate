@@ -17,6 +17,7 @@
 
 //! Migrations to version [`4.0.0`], as denoted by the changelog.
 
+use super::super::LOG_TARGET;
 use frame_support::{
 	traits::{Get, StorageVersion},
 	weights::Weight,
@@ -35,14 +36,14 @@ pub const OLD_PREFIX: &[u8] = b"PhragmenElection";
 pub fn migrate<T: crate::Config, N: AsRef<str>>(new_pallet_name: N) -> Weight {
 	if new_pallet_name.as_ref().as_bytes() == OLD_PREFIX {
 		log::info!(
-			target: "runtime::elections-phragmen",
+			target: LOG_TARGET,
 			"New pallet name is equal to the old prefix. No migration needs to be done.",
 		);
 		return Weight::zero()
 	}
 	let storage_version = StorageVersion::get::<crate::Pallet<T>>();
 	log::info!(
-		target: "runtime::elections-phragmen",
+		target: LOG_TARGET,
 		"Running migration to v4 for elections-phragmen with storage version {:?}",
 		storage_version,
 	);
@@ -59,7 +60,7 @@ pub fn migrate<T: crate::Config, N: AsRef<str>>(new_pallet_name: N) -> Weight {
 		<T as frame_system::Config>::BlockWeights::get().max_block
 	} else {
 		log::warn!(
-			target: "runtime::elections-phragmen",
+			target: LOG_TARGET,
 			"Attempted to apply migration to v4 but failed because storage version is {:?}",
 			storage_version,
 		);

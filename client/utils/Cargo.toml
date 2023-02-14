@@ -10,6 +10,7 @@ description = "I/O for Substrate runtimes"
 readme = "README.md"
 
 [dependencies]
+backtrace = "0.3.67"
 futures = "0.3.21"
 futures-timer = "3.0.2"
 lazy_static = "1.4.0"
