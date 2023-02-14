@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 serde = { version = "1.0.136", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive", "max-encoded-len"] }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
-frame-metadata = { version = "15.0.0", default-features = false }
+frame-metadata = { version = "15.0.0", default-features = false, features = ["v14"] }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
@@ -68,6 +68,8 @@ std = [
 	"frame-support-procedural/std",
 	"log/std",
 ]
+# The runtime supports the metadata V14.
+metadata-v14 = ["frame-metadata/v14"]
 runtime-benchmarks = []
 try-runtime = []
 # By default some types have documentation, `no-metadata-docs` allows to reduce the documentation
@@ -80,5 +82,3 @@ full-metadata-docs = ["scale-info/docs"]
 # pallets in a runtime grows. Does increase the compile time!
 tuples-96 = []
 tuples-128 = []
-# The runtime supports the metadata V14.
-metadata-v14 = ["frame-metadata/v14"]
