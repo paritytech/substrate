@@ -76,6 +76,9 @@ use sp_application_crypto::AppKey;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult};
 use sp_consensus::SelectChain;
 use sp_core::crypto::ByteArray;
+use sp_finality_grandpa::{
+	AuthorityList, AuthoritySignature, SetId, CLIENT_LOG_TARGET as LOG_TARGET,
+};
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
@@ -92,8 +95,6 @@ use std::{
 	task::{Context, Poll},
 	time::Duration,
 };
-
-const LOG_TARGET: &str = "grandpa";
 
 // utility logging macro that takes as first argument a conditional to
 // decide whether to log under debug or info level (useful to restrict
@@ -142,7 +143,6 @@ pub use voting_rule::{
 use aux_schema::PersistentData;
 use communication::{Network as NetworkT, NetworkBridge};
 use environment::{Environment, VoterSetState};
-use sp_finality_grandpa::{AuthorityList, AuthoritySignature, SetId};
 use until_imported::UntilGlobalMessageBlocksImported;
 
 // Re-export these two because it's just so damn convenient.
@@ -464,10 +464,10 @@ pub trait GenesisAuthoritySetProvider<Block: BlockT> {
 	fn get(&self) -> Result<AuthorityList, ClientError>;
 }
 
-impl<Block: BlockT, E> GenesisAuthoritySetProvider<Block>
-	for Arc<dyn ExecutorProvider<Block, Executor = E>>
+impl<Block: BlockT, E, Client> GenesisAuthoritySetProvider<Block> for Arc<Client>
 where
 	E: CallExecutor<Block>,
+	Client: ExecutorProvider<Block, Executor = E> + HeaderBackend<Block>,
 {
 	fn get(&self) -> Result<AuthorityList, ClientError> {
 		// This implementation uses the Grandpa runtime API instead of reading directly from the
@@ -475,7 +475,7 @@ where
 		// the chain, whereas the runtime API is backwards compatible.
 		self.executor()
 			.call(
-				&BlockId::Number(Zero::zero()),
+				self.expect_block_hash_from_id(&BlockId::Number(Zero::zero()))?,
 				"GrandpaApi_grandpa_authorities",
 				&[],
 				ExecutionStrategy::NativeElseWasm,

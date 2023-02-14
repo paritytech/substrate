@@ -26,7 +26,6 @@ use codec::{Decode, Encode};
 use frame_support::{
 	assert_noop, assert_ok,
 	dispatch::DispatchError,
-	parameter_types,
 	traits::{ConstU32, ConstU64, Contains},
 	RuntimeDebug,
 };
@@ -52,10 +51,6 @@ frame_support::construct_runtime!(
 	}
 );
 
-parameter_types! {
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
-}
 impl frame_system::Config for Test {
 	type BaseCallFilter = BaseFilter;
 	type BlockWeights = ();
@@ -290,6 +285,23 @@ fn announcer_must_be_proxy() {
 			Proxy::announce(RuntimeOrigin::signed(2), 1, H256::zero()),
 			Error::<Test>::NotProxy
 		);
+	});
+}
+
+#[test]
+fn calling_proxy_doesnt_remove_announcement() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Proxy::add_proxy(RuntimeOrigin::signed(1), 2, ProxyType::Any, 0));
+
+		let call = Box::new(call_transfer(6, 1));
+		let call_hash = BlakeTwo256::hash_of(&call);
+
+		assert_ok!(Proxy::announce(RuntimeOrigin::signed(2), 1, call_hash));
+		assert_ok!(Proxy::proxy(RuntimeOrigin::signed(2), 1, None, call));
+
+		// The announcement is not removed by calling proxy.
+		let announcements = Announcements::<Test>::get(2);
+		assert_eq!(announcements.0, vec![Announcement { real: 1, call_hash, height: 1 }]);
 	});
 }
 

@@ -71,6 +71,8 @@ pub mod weights;
 pub use pallet::*;
 pub use weights::WeightInfo;
 
+const LOG_TARGET: &str = "runtime::collective";
+
 /// Simple index type for proposal counting.
 pub type ProposalIndex = u32;
 
@@ -213,6 +215,9 @@ pub mod pallet {
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
+
+		/// Origin allowed to set collective members
+		type SetMembersOrigin: EnsureOrigin<<Self as frame_system::Config>::RuntimeOrigin>;
 	}
 
 	#[pallet::genesis_config]
@@ -347,7 +352,7 @@ pub mod pallet {
 		/// - `old_count`: The upper bound for the previous number of members in storage. Used for
 		///   weight estimation.
 		///
-		/// Requires root origin.
+		/// The dispatch of this call must be `SetMembersOrigin`.
 		///
 		/// NOTE: Does not enforce the expected `MaxMembers` limit on the amount of members, but
 		///       the weight estimations rely on it to estimate dispatchable weight.
@@ -387,10 +392,10 @@ pub mod pallet {
 			prime: Option<T::AccountId>,
 			old_count: MemberCount,
 		) -> DispatchResultWithPostInfo {
-			ensure_root(origin)?;
+			T::SetMembersOrigin::ensure_origin(origin)?;
 			if new_members.len() > T::MaxMembers::get() as usize {
 				log::error!(
-					target: "runtime::collective",
+					target: LOG_TARGET,
 					"New members count ({}) exceeds maximum amount of members expected ({}).",
 					new_members.len(),
 					T::MaxMembers::get(),
@@ -400,7 +405,7 @@ pub mod pallet {
 			let old = Members::<T, I>::get();
 			if old.len() > old_count as usize {
 				log::warn!(
-					target: "runtime::collective",
+					target: LOG_TARGET,
 					"Wrong count used to estimate set_members weight. expected ({}) vs actual ({})",
 					old_count,
 					old.len(),
@@ -1040,7 +1045,7 @@ impl<T: Config<I>, I: 'static> ChangeMembers<T::AccountId> for Pallet<T, I> {
 	) {
 		if new.len() > T::MaxMembers::get() as usize {
 			log::error!(
-				target: "runtime::collective",
+				target: LOG_TARGET,
 				"New members count ({}) exceeds maximum amount of members expected ({}).",
 				new.len(),
 				T::MaxMembers::get(),
