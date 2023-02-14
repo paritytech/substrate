@@ -124,12 +124,6 @@ pub use v1::*;
 /// The valid syntax for defining a [Linear](`v2::Linear`)is `Linear<A, B>` where `A`, and `B`
 /// are valid integer literals (that fit in a `u32`), such that `B` >= `A`.
 ///
-/// Note that the benchmark function definition does not actually expand as a function
-/// definition, but rather is used to automatically create a number of impls and structs
-/// required by the benchmarking engine. For this reason, the visibility of the function
-/// definition as well as the return type are not used for any purpose and are discarded by the
-/// expansion code.
-///
 /// Also note that the `// setup code` and `// verification code` comments shown above are not
 /// required and are included simply for demonstration purposes.
 ///
@@ -229,6 +223,98 @@ pub use v1::*;
 /// 		crate::mock::new_test_ext::<crate::integration_test::Test>(),
 /// 		crate::integration_test::Test
 /// 	);
+/// }
+/// ```
+///
+/// ## Benchmark Function Generation
+///
+/// The benchmark function definition that you provide is used to automatically create a number
+/// of impls and structs required by the benchmarking engine. Additionally, a benchmark
+/// function is also generated that resembles the function definition you provide, with a few
+/// modifications:
+/// 1. The function name is transformed from i.e. `original_name` to `_original_name` so as not
+///    to collide with the struct `original_name` that is created for some of the benchmarking
+///    engine impls.
+/// 2. Appropriate `T: Config` and `I` (if this is an instance benchmark) generics are added to
+///    the function automatically during expansion, so you should not add these manually on
+///    your function definition (but you may make use of `T` and `I` anywhere within your
+///    benchmark function, in any of the three sections (setup, call, verification).
+/// 3. Arguments such as `u: Linear<10, 100>` are converted to `u: u32` to make the function
+///    directly callable.
+/// 4. A `verify: bool` param is added as the last argument. Specifying `true` will result in
+///    the verification section of your function executing, while a value of `false` will skip
+///    verification.
+/// 5. If you specify a return type on the function definition, it must conform to the rules
+///    specified below in the next section, and the last statement of the function definition
+///    must return a valid return path that is compatible with `BenchmarkResult<T>`.
+///
+/// The reason we generate an actual function is to allow the compiler to enforce several
+/// constraints that would otherwise be difficult to enforce and to reduce developer confusion
+/// (especially regarding the use of the `?` operator, as covered below).
+///
+/// Note that any attributes, comments, and doc comments attached to your benchmark function
+/// definition are also carried over onto the resulting benchmark function and the struct for
+/// that benchmark. As a result you should be care
+///
+/// ### Support for `BenchmarkResult<T>` and the `?` operator
+///
+/// You may optionally specify `BenchmarkResult<T>` (short for `Result<T, BenchmarkError>`) as
+/// the return type of your benchmark function definition. If you do so, you must return a
+/// compatible `Result<T, BenchmarkError>` as the *last statement* of your benchmark function
+/// definition. You may also use the `?` operator throughout your benchmark function
+/// definition if you choose to follow this route. The type `T` can be any type, so you can use
+/// this to return custom data from your benchmark function definition, if desired. Otherwise
+/// you can simply use `()` as `T` if you simply want to make use of the `?` operator. See the
+/// example below:
+///
+/// ```ignore
+/// #![cfg(feature = "runtime-benchmarks")]
+///
+/// use super::{mock_helpers::*, Pallet as MyPallet};
+/// use frame_benchmarking::v2::*;
+///
+/// #[benchmarks]
+/// mod benchmarks {
+/// 	use super::*;
+///
+/// 	#[benchmark]
+/// 	fn bench_name(x: Linear<5, 25>) -> BenchmarkResult<String> {
+/// 		// setup code
+/// 		let z = x + 4;
+/// 		let caller = whitelisted_caller();
+///
+/// 		// note we can make use of the ? operator
+/// 		something(z)?;
+///
+/// 		#[extrinsic_call]
+/// 		extrinsic_name(SystemOrigin::Signed(caller), other, arguments);
+///
+/// 		// verification code
+/// 		assert_eq!(MyPallet::<T>::my_var(), z);
+///
+///         // we must return a valid `BenchmarkResult<String>` as the last line of our benchmark
+///         // function definition. This line is not included as part of the verification code that
+/// 		// appears above it.
+///         Ok(String::from("hey"))
+/// 	}
+/// }
+/// ```
+///
+/// Since you are completely free to use any type you want within `BenchmarkResult<T>`, this
+/// can be useful if you want to actually call benchmark functions directly for some reason and
+/// do something with the result. If you do not need to do anything with the return value, you
+/// can of course use `()` as the inner type, such as the following:
+///
+/// ```ignore
+/// #[benchmark]
+/// fn bench_name(x: Linear<25, 100>) -> BenchmarkResult<()> {
+/// 	let z = x + 4;
+/// 	let caller = whitelisted_caller();
+/// 	something_else(z)?;
+/// 	#[extrinsic_call]
+/// 	extrinsic_name(SystemOrigin::Signed(caller), other, arguments);
+/// 	assert_eq!(MyPallet::<T>::my_var(), z);
+///     Ok(())
 /// }
 /// ```
 pub mod v2 {
