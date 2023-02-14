@@ -779,20 +779,24 @@ fn expand_benchmark(
 				let __call = Call::<#type_use_generics>::#expr_call;
 				let __benchmarked_call_encoded = #codec::Encode::encode(&__call);
 			};
+			let post_call = quote! {
+				let __call_decoded = <Call<#type_use_generics> as #codec::Decode>
+					::decode(&mut &__benchmarked_call_encoded[..])
+					.expect("call is encoded above, encoding must be correct");
+				let __origin = #origin.into();
+				<Call<#type_use_generics> as #traits::UnfilteredDispatchable>::dispatch_bypass_filter(
+					__call_decoded,
+					__origin,
+				)
+			};
 			(
 				// (pre_call, post_call, fn_call_body):
 				pre_call.clone(),
+				quote!(#post_call?;),
 				quote! {
-					let __call_decoded = <Call<#type_use_generics> as #codec::Decode>
-						::decode(&mut &__benchmarked_call_encoded[..])
-						.expect("call is encoded above, encoding must be correct");
-					let __origin = #origin.into();
-					<Call<#type_use_generics> as #traits::UnfilteredDispatchable>::dispatch_bypass_filter(
-						__call_decoded,
-						__origin,
-					)?;
+					#pre_call
+					#post_call.unwrap();
 				},
-				pre_call,
 			)
 		},
 		BenchmarkCallDef::Block { block, attr_span: _ } =>
@@ -830,9 +834,7 @@ fn expand_benchmark(
 		None => quote!(Ok(())),
 	};
 
-	// generate final quoted tokens
-	let res = quote! {
-		// benchmark function definition
+	let fn_def = quote! {
 		#(
 			#fn_attrs
 		)*
@@ -848,6 +850,12 @@ fn expand_benchmark(
 			}
 			#last_stmt
 		}
+	};
+
+	// generate final quoted tokens
+	let res = quote! {
+		// benchmark function definition
+		#fn_def
 
 		// compile-time assertions that each referenced param type implements ParamRange
 		#(
