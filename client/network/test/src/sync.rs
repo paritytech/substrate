@@ -1259,7 +1259,7 @@ async fn warp_sync_to_target_block() {
 	net.add_full_peer_with_config(Default::default());
 
 	let blocks = net.peer(0).push_blocks(64, false);
-	let target = *blocks[63];
+	let target = blocks[63];
 	net.peer(1).push_blocks(64, false);
 	net.peer(2).push_blocks(64, false);
 
@@ -1278,7 +1278,7 @@ async fn warp_sync_to_target_block() {
 	futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 		let peer = net.peer(3);
-		if blocks.iter().all(|b| peer.has_bodyl(*b)) {
+		if blocks.iter().all(|b| peer.has_body(*b)) {
 			Poll::Ready(())
 		} else {
 			Poll::Pending
