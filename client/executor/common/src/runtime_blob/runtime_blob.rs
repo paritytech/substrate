@@ -158,6 +158,9 @@ impl RuntimeBlob {
 	}
 
 	/// Setup the memory instances according to the given `heap_pages`.
+	///
+	/// Will return an error in case there is no memory section present,
+	/// or if the memory section is empty.
 	pub fn setup_memory_according_to_heap_pages(
 		&mut self,
 		heap_pages: HeapPages,
@@ -173,10 +176,9 @@ impl RuntimeBlob {
 		for memory_ty in memory_section.entries_mut() {
 			let initial = memory_ty.limits().initial();
 			let (min, max) = match heap_pages {
-				HeapPages::Dynamic => (initial, None),
-				HeapPages::Max(max) => (initial, Some(max as _)),
-				HeapPages::ExtraMax(extra) =>
-					(initial + extra as u32, Some(initial + extra as u32)),
+				HeapPages::Dynamic { maximum_pages } => (initial, maximum_pages),
+				HeapPages::Static { extra_pages } =>
+					(initial + extra_pages, Some(initial + extra_pages)),
 			};
 			*memory_ty = MemoryType::new(min, max);
 		}

@@ -93,7 +93,7 @@ impl RuntimeBuilder {
 			instantiation_strategy,
 			canonicalize_nans: false,
 			deterministic_stack: false,
-			heap_pages: HeapPages::ExtraMax(1024),
+			heap_pages: HeapPages::Static(1024),
 			precompile_runtime: false,
 			tmpdir: None,
 		}
@@ -378,7 +378,7 @@ fn test_max_memory_pages(
 
 	// check the old behavior if preserved. That is, if no limit is set we allow 4 GiB of memory.
 	try_instantiate(
-		HeapPages::ExtraMax(1024),
+		HeapPages::Static(1024),
 		format!(
 			r#"
 			(module
@@ -537,7 +537,7 @@ fn test_instances_without_reuse_are_not_leaked() {
 				deterministic_stack_limit: None,
 				canonicalize_nans: false,
 				parallel_compilation: true,
-				heap_pages: HeapPages::ExtraMax(2048),
+				heap_pages: HeapPages::Static(2048),
 			},
 		},
 	)

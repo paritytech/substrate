@@ -39,7 +39,7 @@ use sp_version::{GetNativeVersion, NativeVersion, RuntimeVersion};
 use sp_wasm_interface::{ExtendedHostFunctions, HostFunctions};
 
 /// Default num of pages for the heap
-const DEFAULT_HEAP_PAGES: HeapPages = HeapPages::ExtraMax(2048);
+const DEFAULT_HEAP_PAGES: HeapPages = HeapPages::Static { extra_pages: 2048 };
 
 /// Set up the externalities and safe calling environment to execute runtime calls.
 ///
@@ -250,10 +250,10 @@ where
 		WasmExecutor {
 			method,
 			default_onchain_heap_pages: unwrap_heap_pages(
-				default_heap_pages.map(|h| HeapPages::ExtraMax(h as _)),
+				default_heap_pages.map(|h| HeapPages::Static { extra_pages: h as _ }),
 			),
 			default_offchain_heap_pages: unwrap_heap_pages(
-				default_heap_pages.map(|h| HeapPages::ExtraMax(h as _)),
+				default_heap_pages.map(|h| HeapPages::Static { extra_pages: h as _ }),
 			),
 			cache: Arc::new(RuntimeCache::new(
 				max_runtime_instances,
@@ -466,7 +466,7 @@ where
 
 		let on_chain_heap_pages = runtime_code
 			.heap_pages
-			.map(|h| HeapPages::ExtraMax(h as _))
+			.map(|h| HeapPages::Static { extra_pages: h as _ })
 			.unwrap_or_else(|| self.default_onchain_heap_pages);
 
 		let heap_pages = match context {
@@ -498,7 +498,7 @@ where
 	) -> Result<RuntimeVersion> {
 		let on_chain_heap_pages = runtime_code
 			.heap_pages
-			.map(|h| HeapPages::ExtraMax(h as _))
+			.map(|h| HeapPages::Static { extra_pages: h as _ })
 			.unwrap_or_else(|| self.default_onchain_heap_pages);
 
 		self.with_instance(
@@ -603,7 +603,7 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecut
 
 		let on_chain_heap_pages = runtime_code
 			.heap_pages
-			.map(|h| HeapPages::ExtraMax(h as _))
+			.map(|h| HeapPages::Static { extra_pages: h as _ })
 			.unwrap_or_else(|| self.wasm.default_onchain_heap_pages);
 
 		let heap_pages = match context {

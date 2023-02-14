@@ -123,12 +123,22 @@ pub trait WasmInstance: Send {
 /// Defines the number of heap pages a wasm runtime should support.
 #[derive(Debug, Copy, Clone, PartialEq, Hash, Eq)]
 pub enum HeapPages {
-	/// Allow in maximum the given number of heap pages.
-	Max(usize),
-	/// Allow in maximum the given number of heap pages plus the initial number of heap pages
-	/// requested by the wasm file.
-	ExtraMax(usize),
-	/// The maximum number is dynamic and is only restricted by the upper maximum of heap pages
+	/// Allocate a static number of heap pages.
+	///
+	/// The total number of allocated heap pages is the initial number of heap pages requested by
+	/// the wasm file plus the `extra_pages`.
+	Static {
+		/// The number of pages that will be added on top of the initial heap pages requested by
+		/// the wasm file.
+		extra_pages: u32,
+	},
+	/// Allocate the initial heap pages as requested by the wasm file and then grow dynamically.
+	///
+	/// If `maximum_pages` is `Some(_)`, it will be taken as the maximum number of heap pages to
+	/// allocate. Other the maximum number of heap pages is restricted to the maximum number as
 	/// supported by wasm.
-	Dynamic,
+	Dynamic {
+		/// The optional maximum number of heap pages to allocate.
+		maximum_pages: Option<u32>,
+	},
 }

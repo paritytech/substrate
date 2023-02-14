@@ -496,7 +496,7 @@ fn mk_test_runtime(wasm_method: WasmExecutionMethod, pages: HeapPages) -> Arc<dy
 
 test_wasm_execution!(returns_mutable_static);
 fn returns_mutable_static(wasm_method: WasmExecutionMethod) {
-	let runtime = mk_test_runtime(wasm_method, HeapPages::Max(1024));
+	let runtime = mk_test_runtime(wasm_method, HeapPages::Dynamic { maximum_pages: Some(1024) });
 
 	let mut instance = runtime.new_instance().unwrap();
 	let res = instance.call_export("returns_mutable_static", &[0]).unwrap();
@@ -511,7 +511,7 @@ fn returns_mutable_static(wasm_method: WasmExecutionMethod) {
 
 test_wasm_execution!(returns_mutable_static_bss);
 fn returns_mutable_static_bss(wasm_method: WasmExecutionMethod) {
-	let runtime = mk_test_runtime(wasm_method, HeapPages::Max(1024));
+	let runtime = mk_test_runtime(wasm_method, HeapPages::Dynamic { maximum_pages: Some(1024) });
 
 	let mut instance = runtime.new_instance().unwrap();
 	let res = instance.call_export("returns_mutable_static_bss", &[0]).unwrap();
@@ -536,9 +536,10 @@ fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
 	//
 	// The fixture performs 2 allocations of 768KB and this theoretically gives 1536KB, however, due
 	// to our allocator algorithm there are inefficiencies.
-	const REQUIRED_MEMORY_PAGES: usize = 32;
+	const REQUIRED_MEMORY_PAGES: u32 = 32;
 
-	let runtime = mk_test_runtime(wasm_method, HeapPages::ExtraMax(REQUIRED_MEMORY_PAGES));
+	let runtime =
+		mk_test_runtime(wasm_method, HeapPages::Static { extra_pages: REQUIRED_MEMORY_PAGES });
 	let mut instance = runtime.new_instance().unwrap();
 
 	// On the first invocation we allocate approx. 768KB (75%) of stack and then trap.
@@ -552,7 +553,7 @@ fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
 
 test_wasm_execution!(interpreted_only heap_is_reset_between_calls);
 fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
-	let runtime = mk_test_runtime(wasm_method, HeapPages::ExtraMax(1024));
+	let runtime = mk_test_runtime(wasm_method, HeapPages::Static { extra_pages: 1024 });
 	let mut instance = runtime.new_instance().unwrap();
 
 	let heap_base = instance
@@ -659,7 +660,7 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 
 test_wasm_execution!(allocate_two_gigabyte);
 fn allocate_two_gigabyte(wasm_method: WasmExecutionMethod) {
-	let runtime = mk_test_runtime(wasm_method, HeapPages::Dynamic);
+	let runtime = mk_test_runtime(wasm_method, HeapPages::Dynamic { maximum_pages: None });
 
 	let mut instance = runtime.new_instance().unwrap();
 	let res = instance.call_export("allocate_two_gigabyte", &[0]).unwrap();
@@ -728,7 +729,7 @@ fn memory_is_cleared_between_invocations(wasm_method: WasmExecutionMethod) {
 
 	let runtime = crate::wasm_runtime::create_wasm_runtime_with_code::<HostFunctions>(
 		wasm_method,
-		HeapPages::Max(1024),
+		HeapPages::Dynamic { maximum_pages: Some(1024) },
 		RuntimeBlob::uncompress_if_needed(&binary[..]).unwrap(),
 		true,
 		None,

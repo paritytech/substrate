@@ -339,16 +339,18 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 
 	config.memory_init_cow(use_cow);
 	config.memory_guaranteed_dense_image_size(match semantics.heap_pages {
-		HeapPages::Max(max) => max as u64 * WASM_PAGE_SIZE,
-		_ => u64::MAX,
+		HeapPages::Dynamic { maximum_pages } =>
+			maximum_pages.map(|p| p as u64 * WASM_PAGE_SIZE).unwrap_or(u64::MAX),
+		HeapPages::Static { .. } => u64::MAX,
 	});
 
 	if use_pooling {
 		const MAX_WASM_PAGES: u64 = 0x10000;
 
 		let memory_pages = match semantics.heap_pages {
-			HeapPages::Max(max) => max as u64,
-			_ => MAX_WASM_PAGES,
+			HeapPages::Dynamic { maximum_pages } =>
+				maximum_pages.map(|p| p as u64).unwrap_or(MAX_WASM_PAGES),
+			HeapPages::Static { .. } => MAX_WASM_PAGES,
 		};
 
 		let mut pooling_config = wasmtime::PoolingAllocationConfig::default();

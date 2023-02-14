@@ -57,7 +57,7 @@ fn initialize(
 	match method {
 		Method::Interpreted => sc_executor_wasmi::create_runtime(
 			blob,
-			HeapPages::ExtraMax(heap_pages),
+			HeapPages::Static(heap_pages),
 			host_functions,
 			allow_missing_func_imports,
 		)
@@ -67,7 +67,7 @@ fn initialize(
 				allow_missing_func_imports,
 				cache_path: None,
 				semantics: sc_executor_wasmtime::Semantics {
-					heap_pages: sc_executor_common::wasm_runtime::HeapPages::ExtraMax(heap_pages),
+					heap_pages: HeapPages::Static(heap_pages),
 					instantiation_strategy,
 					deterministic_stack_limit: None,
 					canonicalize_nans: false,
