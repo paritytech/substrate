@@ -1277,7 +1277,8 @@ async fn warp_sync_to_target_block() {
 	// Wait for peer 1 download block history
 	futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
-		if net.peer(3).has_body(gap_end) && net.peer(3).has_body(target) {
+		let peer = net.peer(3);
+		if blocks.iter().all(|b| peer.has_bodyl(*b)) {
 			Poll::Ready(())
 		} else {
 			Poll::Pending
