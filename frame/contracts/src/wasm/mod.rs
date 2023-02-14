@@ -24,8 +24,13 @@ mod runtime;
 
 #[cfg(feature = "runtime-benchmarks")]
 pub use crate::wasm::code_cache::reinstrument;
+
 #[cfg(doc)]
 pub use crate::wasm::runtime::api_doc;
+
+#[cfg(test)]
+pub use tests::MockExt;
+
 pub use crate::wasm::{
 	prepare::TryInstantiate,
 	runtime::{
@@ -45,8 +50,6 @@ use frame_support::dispatch::{DispatchError, DispatchResult};
 use sp_core::Get;
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
-#[cfg(test)]
-pub use tests::MockExt;
 use wasmi::{
 	Config as WasmiConfig, Engine, Instance, Linker, Memory, MemoryType, Module, StackLimits, Store,
 };

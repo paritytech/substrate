@@ -16,7 +16,6 @@
 
 //! Test to execute the sanity-check of the voter bag.
 
-use frame_election_provider_support::SortedListProvider;
 use frame_support::{
 	storage::generator::StorageMap,
 	traits::{Get, PalletInfoAccess},
@@ -51,7 +50,9 @@ pub async fn execute<Runtime, Block>(
 
 	ext.execute_with(|| {
 		sp_core::crypto::set_default_ss58_version(Runtime::SS58Prefix::get().try_into().unwrap());
-		pallet_bags_list::Pallet::<Runtime, pallet_bags_list::Instance1>::try_state().unwrap();
+
+		pallet_bags_list::Pallet::<Runtime, pallet_bags_list::Instance1>::do_try_state().unwrap();
+
 		log::info!(target: crate::LOG_TARGET, "executed bags-list sanity check with no errors.");
 
 		crate::display_and_check_bags::<Runtime>(currency_unit, currency_name);

@@ -226,8 +226,8 @@ fn deep_call_stack_wat(depth: usize) -> String {
 
 // We need two limits here since depending on whether the code is compiled in debug
 // or in release mode the maximum call depth is slightly different.
-const CALL_DEPTH_LOWER_LIMIT: usize = 65478;
-const CALL_DEPTH_UPPER_LIMIT: usize = 65514;
+const CALL_DEPTH_LOWER_LIMIT: usize = 65455;
+const CALL_DEPTH_UPPER_LIMIT: usize = 65503;
 
 test_wasm_execution!(test_consume_under_1mb_of_stack_does_not_trap);
 fn test_consume_under_1mb_of_stack_does_not_trap(instantiation_strategy: InstantiationStrategy) {
@@ -553,5 +553,36 @@ fn test_instances_without_reuse_are_not_leaked() {
 	let mut instance = runtime.new_instance().unwrap();
 	for _ in 0..10001 {
 		instance.call_export("test_empty_return", &[0]).unwrap();
+	}
+}
+
+#[test]
+fn test_rustix_version_matches_with_wasmtime() {
+	let metadata = cargo_metadata::MetadataCommand::new()
+		.manifest_path("../../../Cargo.toml")
+		.exec()
+		.unwrap();
+
+	let wasmtime_rustix = metadata
+		.packages
+		.iter()
+		.find(|pkg| pkg.name == "wasmtime-runtime")
+		.unwrap()
+		.dependencies
+		.iter()
+		.find(|dep| dep.name == "rustix")
+		.unwrap();
+	let our_rustix = metadata
+		.packages
+		.iter()
+		.find(|pkg| pkg.name == "sc-executor-wasmtime")
+		.unwrap()
+		.dependencies
+		.iter()
+		.find(|dep| dep.name == "rustix")
+		.unwrap();
+
+	if wasmtime_rustix.req != our_rustix.req {
+		panic!("our version of rustix ({0}) doesn't match wasmtime's ({1}); bump the version in `sc-executor-wasmtime`'s `Cargo.toml' to '{1}' and try again", our_rustix.req, wasmtime_rustix.req);
 	}
 }
