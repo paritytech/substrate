@@ -463,15 +463,11 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// # <weight>
-		/// - Complexity: `O(K + E)` where K is length of `Keys` (heartbeat.validators_len) and E is
-		///   length of `heartbeat.network_state.external_address`
+		/// ## Complexity:
+		/// - `O(K + E)` where K is length of `Keys` (heartbeat.validators_len) and E is length of
+		///   `heartbeat.network_state.external_address`
 		///   - `O(K)`: decoding of length `K`
 		///   - `O(E)`: decoding/encoding of length `E`
-		/// - DbReads: pallet_session `Validators`, pallet_session `CurrentIndex`, `Keys`,
-		///   `ReceivedHeartbeats`
-		/// - DbWrites: `ReceivedHeartbeats`
-		/// # </weight>
 		// NOTE: the weight includes the cost of validate_unsigned as it is part of the cost to
 		// import block with such an extrinsic.
 		#[pallet::call_index(0)]
