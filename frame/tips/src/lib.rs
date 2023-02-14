@@ -231,12 +231,9 @@ pub mod pallet {
 		///
 		/// Emits `NewTip` if successful.
 		///
-		/// # <weight>
-		/// - Complexity: `O(R)` where `R` length of `reason`.
+		/// ## Complexity
+		/// - `O(R)` where `R` length of `reason`.
 		///   - encoding and hashing of 'reason'
-		/// - DbReads: `Reasons`, `Tips`
-		/// - DbWrites: `Reasons`, `Tips`
-		/// # </weight>
 		#[pallet::call_index(0)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::report_awesome(reason.len() as u32))]
 		pub fn report_awesome(
@@ -289,12 +286,9 @@ pub mod pallet {
 		///
 		/// Emits `TipRetracted` if successful.
 		///
-		/// # <weight>
-		/// - Complexity: `O(1)`
+		/// ## Complexity
+		/// - `O(1)`
 		///   - Depends on the length of `T::Hash` which is fixed.
-		/// - DbReads: `Tips`, `origin account`
-		/// - DbWrites: `Reasons`, `Tips`, `origin account`
-		/// # </weight>
 		#[pallet::call_index(1)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::retract_tip())]
 		pub fn retract_tip(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
@@ -325,15 +319,12 @@ pub mod pallet {
 		///
 		/// Emits `NewTip` if successful.
 		///
-		/// # <weight>
-		/// - Complexity: `O(R + T)` where `R` length of `reason`, `T` is the number of tippers.
+		/// ## Complexity
+		/// - `O(R + T)` where `R` length of `reason`, `T` is the number of tippers.
 		///   - `O(T)`: decoding `Tipper` vec of length `T`. `T` is charged as upper bound given by
 		///     `ContainsLengthBound`. The actual cost depends on the implementation of
 		///     `T::Tippers`.
 		///   - `O(R)`: hashing and encoding of reason of length `R`
-		/// - DbReads: `Tippers`, `Reasons`
-		/// - DbWrites: `Reasons`, `Tips`
-		/// # </weight>
 		#[pallet::call_index(2)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::tip_new(reason.len() as u32, T::Tippers::max_len() as u32))]
 		pub fn tip_new(
@@ -379,16 +370,13 @@ pub mod pallet {
 		/// Emits `TipClosing` if the threshold of tippers has been reached and the countdown period
 		/// has started.
 		///
-		/// # <weight>
-		/// - Complexity: `O(T)` where `T` is the number of tippers. decoding `Tipper` vec of length
-		///   `T`, insert tip and check closing, `T` is charged as upper bound given by
-		///   `ContainsLengthBound`. The actual cost depends on the implementation of `T::Tippers`.
+		/// ## Complexity
+		/// - `O(T)` where `T` is the number of tippers. decoding `Tipper` vec of length `T`, insert
+		///   tip and check closing, `T` is charged as upper bound given by `ContainsLengthBound`.
+		///   The actual cost depends on the implementation of `T::Tippers`.
 		///
 		///   Actually weight could be lower as it depends on how many tips are in `OpenTip` but it
 		///   is weighted as if almost full i.e of length `T-1`.
-		/// - DbReads: `Tippers`, `Tips`
-		/// - DbWrites: `Tips`
-		/// # </weight>
 		#[pallet::call_index(3)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::tip(T::Tippers::max_len() as u32))]
 		pub fn tip(
@@ -416,13 +404,10 @@ pub mod pallet {
 		/// - `hash`: The identity of the open tip for which a tip value is declared. This is formed
 		///   as the hash of the tuple of the original tip `reason` and the beneficiary account ID.
 		///
-		/// # <weight>
-		/// - Complexity: `O(T)` where `T` is the number of tippers. decoding `Tipper` vec of length
-		///   `T`. `T` is charged as upper bound given by `ContainsLengthBound`. The actual cost
-		///   depends on the implementation of `T::Tippers`.
-		/// - DbReads: `Tips`, `Tippers`, `tip finder`
-		/// - DbWrites: `Reasons`, `Tips`, `Tippers`, `tip finder`
-		/// # </weight>
+		/// ## Complexity
+		/// - : `O(T)` where `T` is the number of tippers. decoding `Tipper` vec of length `T`. `T`
+		///   is charged as upper bound given by `ContainsLengthBound`. The actual cost depends on
+		///   the implementation of `T::Tippers`.
 		#[pallet::call_index(4)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::close_tip(T::Tippers::max_len() as u32))]
 		pub fn close_tip(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
@@ -446,10 +431,8 @@ pub mod pallet {
 		///
 		/// Emits `TipSlashed` if successful.
 		///
-		/// # <weight>
-		///   `T` is charged as upper bound given by `ContainsLengthBound`.
-		///   The actual cost depends on the implementation of `T::Tippers`.
-		/// # </weight>
+		/// ## Complexity
+		/// - O(1).
 		#[pallet::call_index(5)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::slash_tip(T::Tippers::max_len() as u32))]
 		pub fn slash_tip(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {

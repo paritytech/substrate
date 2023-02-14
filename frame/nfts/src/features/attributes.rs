@@ -26,6 +26,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		namespace: AttributeNamespace<T::AccountId>,
 		key: BoundedVec<u8, T::KeyLimit>,
 		value: BoundedVec<u8, T::ValueLimit>,
+		depositor: T::AccountId,
 	) -> DispatchResult {
 		ensure!(
 			Self::is_pallet_feature_enabled(PalletFeature::Attributes),
@@ -66,7 +67,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 
 		let attribute = Attribute::<T, I>::get((collection, maybe_item, &namespace, &key));
-		if attribute.is_none() {
+		let attribute_exists = attribute.is_some();
+		if !attribute_exists {
 			collection_details.attributes.saturating_inc();
 		}
 
@@ -74,6 +76,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			attribute.map_or(AttributeDeposit { account: None, amount: Zero::zero() }, |m| m.1);
 
 		let mut deposit = Zero::zero();
+		// disabled DepositRequired setting only affects the CollectionOwner namespace
 		if collection_config.is_setting_enabled(CollectionSetting::DepositRequired) ||
 			namespace != AttributeNamespace::CollectionOwner
 		{
@@ -82,33 +85,50 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.saturating_add(T::AttributeDepositBase::get());
 		}
 
+		let is_collection_owner_namespace = namespace == AttributeNamespace::CollectionOwner;
+		let is_depositor_collection_owner =
+			is_collection_owner_namespace && collection_details.owner == depositor;
+
+		// NOTE: in the CollectionOwner namespace if the depositor is `None` that means the deposit
+		// was paid by the collection's owner.
+		let old_depositor =
+			if is_collection_owner_namespace && old_deposit.account.is_none() && attribute_exists {
+				Some(collection_details.owner.clone())
+			} else {
+				old_deposit.account
+			};
+		let depositor_has_changed = old_depositor != Some(depositor.clone());
+
 		// NOTE: when we transfer an item, we don't move attributes in the ItemOwner namespace.
 		// When the new owner updates the same attribute, we will update the depositor record
 		// and return the deposit to the previous owner.
-		if old_deposit.account.is_some() && old_deposit.account != Some(origin.clone()) {
-			T::Currency::unreserve(&old_deposit.account.unwrap(), old_deposit.amount);
-			T::Currency::reserve(&origin, deposit)?;
+		if depositor_has_changed {
+			if let Some(old_depositor) = old_depositor {
+				T::Currency::unreserve(&old_depositor, old_deposit.amount);
+			}
+			T::Currency::reserve(&depositor, deposit)?;
 		} else if deposit > old_deposit.amount {
-			T::Currency::reserve(&origin, deposit - old_deposit.amount)?;
+			T::Currency::reserve(&depositor, deposit - old_deposit.amount)?;
 		} else if deposit < old_deposit.amount {
-			T::Currency::unreserve(&origin, old_deposit.amount - deposit);
+			T::Currency::unreserve(&depositor, old_deposit.amount - deposit);
 		}
 
-		// NOTE: we don't track the depositor in the CollectionOwner namespace as it's always a
-		// collection's owner. This simplifies the collection's transfer to another owner.
-		let deposit_owner = match namespace {
-			AttributeNamespace::CollectionOwner => {
-				collection_details.owner_deposit.saturating_accrue(deposit);
+		if is_depositor_collection_owner {
+			if !depositor_has_changed {
 				collection_details.owner_deposit.saturating_reduce(old_deposit.amount);
-				None
-			},
-			_ => Some(origin),
-		};
+			}
+			collection_details.owner_deposit.saturating_accrue(deposit);
+		}
 
+		let new_deposit_owner = match is_depositor_collection_owner {
+			true => None,
+			false => Some(depositor),
+		};
 		Attribute::<T, I>::insert(
 			(&collection, maybe_item, &namespace, &key),
-			(&value, AttributeDeposit { account: deposit_owner, amount: deposit }),
+			(&value, AttributeDeposit { account: new_deposit_owner, amount: deposit }),
 		);
+
 		Collection::<T, I>::insert(collection, &collection_details);
 		Self::deposit_event(Event::AttributeSet { collection, maybe_item, key, value, namespace });
 		Ok(())
@@ -188,10 +208,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						// NOTE: if the item was previously burned, the ItemConfigOf record
 						// might not exist. In that case, we allow to clear the attribute.
 						let maybe_is_locked = Self::get_item_config(&collection, &item)
-							.map_or(false, |c| {
-								c.has_disabled_setting(ItemSetting::UnlockedAttributes)
+							.map_or(None, |c| {
+								Some(c.has_disabled_setting(ItemSetting::UnlockedAttributes))
 							});
-						ensure!(!maybe_is_locked, Error::<T, I>::LockedItemAttributes);
+						match maybe_is_locked {
+							Some(is_locked) => {
+								// when item exists, then only the collection's owner can clear that
+								// attribute
+								ensure!(
+									check_owner == &collection_details.owner,
+									Error::<T, I>::NoPermission
+								);
+								ensure!(!is_locked, Error::<T, I>::LockedItemAttributes);
+							},
+							None => (),
+						}
 					},
 				},
 				_ => (),
@@ -199,16 +230,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 
 		collection_details.attributes.saturating_dec();
-		match namespace {
-			AttributeNamespace::CollectionOwner => {
+
+		match deposit.account {
+			Some(deposit_account) => {
+				T::Currency::unreserve(&deposit_account, deposit.amount);
+			},
+			None if namespace == AttributeNamespace::CollectionOwner => {
 				collection_details.owner_deposit.saturating_reduce(deposit.amount);
 				T::Currency::unreserve(&collection_details.owner, deposit.amount);
 			},
 			_ => (),
-		};
-
-		if let Some(deposit_account) = deposit.account {
-			T::Currency::unreserve(&deposit_account, deposit.amount);
 		}
 
 		Collection::<T, I>::insert(collection, &collection_details);

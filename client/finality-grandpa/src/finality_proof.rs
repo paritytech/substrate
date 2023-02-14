@@ -58,6 +58,7 @@ use crate::{
 const MAX_UNKNOWN_HEADERS: usize = 100_000;
 
 /// Finality proof provider for serving network requests.
+#[derive(Clone)]
 pub struct FinalityProofProvider<BE, Block: BlockT> {
 	backend: Arc<BE>,
 	shared_authority_set: Option<SharedAuthoritySet<Block::Hash, NumberFor<Block>>>,
@@ -99,11 +100,24 @@ where
 	B: Backend<Block>,
 {
 	/// Prove finality for the given block number by returning a Justification for the last block of
-	/// the authority set.
+	/// the authority set in bytes.
 	pub fn prove_finality(
 		&self,
 		block: NumberFor<Block>,
 	) -> Result<Option<Vec<u8>>, FinalityProofError> {
+		Ok(self.prove_finality_proof(block, true)?.map(|proof| proof.encode()))
+	}
+
+	/// Prove finality for the given block number by returning a Justification for the last block of
+	/// the authority set.
+	///
+	/// If `collect_unknown_headers` is true, the finality proof will include all headers from the
+	/// requested block until the block the justification refers to.
+	pub fn prove_finality_proof(
+		&self,
+		block: NumberFor<Block>,
+		collect_unknown_headers: bool,
+	) -> Result<Option<FinalityProof<Block::Header>>, FinalityProofError> {
 		let authority_set_changes = if let Some(changes) = self
 			.shared_authority_set
 			.as_ref()
@@ -114,7 +128,7 @@ where
 			return Ok(None)
 		};
 
-		prove_finality(&*self.backend, authority_set_changes, block)
+		prove_finality(&*self.backend, authority_set_changes, block, collect_unknown_headers)
 	}
 }
 
@@ -146,22 +160,29 @@ pub enum FinalityProofError {
 	Client(#[from] sp_blockchain::Error),
 }
 
+/// Prove finality for the given block number by returning a justification for the last block of
+/// the authority set of which the given block is part of, or a justification for the latest
+/// finalized block if the given block is part of the current authority set.
+///
+/// If `collect_unknown_headers` is true, the finality proof will include all headers from the
+/// requested block until the block the justification refers to.
 fn prove_finality<Block, B>(
 	backend: &B,
 	authority_set_changes: AuthoritySetChanges<NumberFor<Block>>,
 	block: NumberFor<Block>,
-) -> Result<Option<Vec<u8>>, FinalityProofError>
+	collect_unknown_headers: bool,
+) -> Result<Option<FinalityProof<Block::Header>>, FinalityProofError>
 where
 	Block: BlockT,
 	B: Backend<Block>,
 {
 	// Early-return if we are sure that there are no blocks finalized that cover the requested
 	// block.
-	let info = backend.blockchain().info();
-	if info.finalized_number < block {
+	let finalized_number = backend.blockchain().info().finalized_number;
+	if finalized_number < block {
 		let err = format!(
 			"Requested finality proof for descendant of #{} while we only have finalized #{}.",
-			block, info.finalized_number,
+			block, finalized_number,
 		);
 		trace!(target: LOG_TARGET, "{}", &err);
 		return Err(FinalityProofError::BlockNotYetFinalized)
@@ -214,9 +235,9 @@ where
 		},
 	};
 
-	// Collect all headers from the requested block until the last block of the set
-	let unknown_headers = {
-		let mut headers = Vec::new();
+	let mut headers = Vec::new();
+	if collect_unknown_headers {
+		// Collect all headers from the requested block until the last block of the set
 		let mut current = block + One::one();
 		loop {
 			if current > just_block || headers.len() >= MAX_UNKNOWN_HEADERS {
@@ -226,17 +247,13 @@ where
 			headers.push(backend.blockchain().expect_header(hash)?);
 			current += One::one();
 		}
-		headers
 	};
 
-	Ok(Some(
-		FinalityProof {
-			block: backend.blockchain().expect_block_hash_from_id(&BlockId::Number(just_block))?,
-			justification,
-			unknown_headers,
-		}
-		.encode(),
-	))
+	Ok(Some(FinalityProof {
+		block: backend.blockchain().expect_block_hash_from_id(&BlockId::Number(just_block))?,
+		justification,
+		unknown_headers: headers,
+	}))
 }
 
 #[cfg(test)]
@@ -334,7 +351,7 @@ mod tests {
 		let authority_set_changes = AuthoritySetChanges::empty();
 
 		// The last finalized block is 4, so we cannot provide further justifications.
-		let proof_of_5 = prove_finality(&*backend, authority_set_changes, 5);
+		let proof_of_5 = prove_finality(&*backend, authority_set_changes, 5, true);
 		assert!(matches!(proof_of_5, Err(FinalityProofError::BlockNotYetFinalized)));
 	}
 
@@ -347,7 +364,7 @@ mod tests {
 
 		// Block 4 is finalized without justification
 		// => we can't prove finality of 3
-		let proof_of_3 = prove_finality(&*backend, authority_set_changes, 3).unwrap();
+		let proof_of_3 = prove_finality(&*backend, authority_set_changes, 3, true).unwrap();
 		assert_eq!(proof_of_3, None);
 	}
 
@@ -478,7 +495,7 @@ mod tests {
 		let mut authority_set_changes = AuthoritySetChanges::empty();
 		authority_set_changes.append(1, 8);
 
-		let proof_of_6 = prove_finality(&*backend, authority_set_changes, 6);
+		let proof_of_6 = prove_finality(&*backend, authority_set_changes, 6, true);
 		assert!(matches!(proof_of_6, Err(FinalityProofError::BlockNotInAuthoritySetChanges)));
 	}
 
@@ -502,16 +519,31 @@ mod tests {
 		authority_set_changes.append(0, 5);
 		authority_set_changes.append(1, 8);
 
-		let proof_of_6: FinalityProof = Decode::decode(
-			&mut &prove_finality(&*backend, authority_set_changes.clone(), 6).unwrap().unwrap()[..],
-		)
-		.unwrap();
+		let proof_of_6: FinalityProof =
+			prove_finality(&*backend, authority_set_changes.clone(), 6, true)
+				.unwrap()
+				.unwrap();
+
 		assert_eq!(
 			proof_of_6,
 			FinalityProof {
 				block: block8.hash(),
 				justification: grandpa_just8.encode(),
 				unknown_headers: vec![block7.header().clone(), block8.header().clone()],
+			},
+		);
+
+		let proof_of_6_without_unknown: FinalityProof =
+			prove_finality(&*backend, authority_set_changes.clone(), 6, false)
+				.unwrap()
+				.unwrap();
+
+		assert_eq!(
+			proof_of_6_without_unknown,
+			FinalityProof {
+				block: block8.hash(),
+				justification: grandpa_just8.encode(),
+				unknown_headers: vec![],
 			},
 		);
 	}
@@ -525,7 +557,7 @@ mod tests {
 		let mut authority_set_changes = AuthoritySetChanges::empty();
 		authority_set_changes.append(0, 5);
 
-		assert!(matches!(prove_finality(&*backend, authority_set_changes, 6), Ok(None)));
+		assert!(matches!(prove_finality(&*backend, authority_set_changes, 6, true), Ok(None)));
 	}
 
 	#[test]
@@ -544,10 +576,9 @@ mod tests {
 		let mut authority_set_changes = AuthoritySetChanges::empty();
 		authority_set_changes.append(0, 5);
 
-		let proof_of_6: FinalityProof = Decode::decode(
-			&mut &prove_finality(&*backend, authority_set_changes, 6).unwrap().unwrap()[..],
-		)
-		.unwrap();
+		let proof_of_6: FinalityProof =
+			prove_finality(&*backend, authority_set_changes, 6, true).unwrap().unwrap();
+
 		assert_eq!(
 			proof_of_6,
 			FinalityProof {
