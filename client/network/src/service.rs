@@ -19,7 +19,7 @@
 //! Main entry point of the sc-network crate.
 //!
 //! There are two main structs in this module: [`NetworkWorker`] and [`NetworkService`].
-//! The [`NetworkWorker`] *is* the network. Network is driven by `NetworkWorker::run()` future that
+//! The [`NetworkWorker`] *is* the network. Network is driven by [`NetworkWorker::run`] future that
 //! terminates only when all instances of the control handles [`NetworkService`] were dropped.
 //! The [`NetworkService`] is merely a shared version of the [`NetworkWorker`]. You can obtain an
 //! `Arc<NetworkService>` by calling [`NetworkWorker::service`].
