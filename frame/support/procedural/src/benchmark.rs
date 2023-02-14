@@ -855,6 +855,9 @@ fn expand_benchmark(
 		)*
 
 		#[allow(non_camel_case_types)]
+		#(
+			#fn_attrs
+		)*
 		struct #name;
 
 		#[allow(unused_variables)]
