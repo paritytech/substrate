@@ -28,6 +28,7 @@ use crate::{
 		},
 	},
 	import::BeefyBlockImport,
+	metrics::register_metrics,
 	round::Rounds,
 	worker::PersistedState,
 };
@@ -36,7 +37,7 @@ use beefy_primitives::{
 	GENESIS_AUTHORITY_SET_ID,
 };
 use futures::{stream::Fuse, StreamExt};
-use log::{debug, error, info};
+use log::{error, info};
 use parking_lot::Mutex;
 use prometheus::Registry;
 use sc_client_api::{Backend, BlockBackend, BlockchainEvents, FinalityNotifications, Finalizer};
@@ -153,20 +154,7 @@ where
 	// BlockImport -> Voter links
 	let (to_voter_justif_sender, from_block_import_justif_stream) =
 		BeefyVersionedFinalityProofStream::<B>::channel();
-
-	let metrics = prometheus_registry
-		.as_ref()
-		.map(metrics::BlockImportMetrics::register)
-		.and_then(|result| match result {
-			Ok(metrics) => {
-				debug!(target: "beefy", "🥩 Registered block-import metrics");
-				Some(metrics)
-			},
-			Err(err) => {
-				debug!(target: "beefy", "🥩 Failed to register block-import metrics: {:?}", err);
-				None
-			},
-		});
+	let metrics = register_metrics(prometheus_registry);
 
 	// BlockImport
 	let import = BeefyBlockImport::new(
@@ -262,21 +250,7 @@ where
 		gossip_validator.clone(),
 		None,
 	);
-
-	let metrics =
-		prometheus_registry
-			.as_ref()
-			.map(metrics::VoterMetrics::register)
-			.and_then(|result| match result {
-				Ok(metrics) => {
-					debug!(target: LOG_TARGET, "🥩 Registered voter metrics");
-					Some(metrics)
-				},
-				Err(err) => {
-					debug!(target: LOG_TARGET, "🥩 Failed to register voter metrics: {:?}", err);
-					None
-				},
-			});
+	let metrics = register_metrics(prometheus_registry.clone());
 
 	// The `GossipValidator` adds and removes known peers based on valid votes and network events.
 	let on_demand_justifications = OnDemandJustificationsEngine::new(

@@ -35,7 +35,7 @@ use crate::{
 		BEEFY_SYNC_LOG_TARGET,
 	},
 	metric_inc,
-	metrics::OnDemandIncomingRequestsMetrics,
+	metrics::{register_metrics, OnDemandIncomingRequestsMetrics},
 };
 
 /// A request coming in, including a sender for sending responses.
@@ -143,27 +143,7 @@ where
 		let (request_receiver, config) =
 			on_demand_justifications_protocol_config(genesis_hash, fork_id);
 		let justif_protocol_name = config.name.clone();
-		let metrics = prometheus_registry
-			.as_ref()
-			.map(OnDemandIncomingRequestsMetrics::register)
-			.and_then(|result| match result {
-				Ok(metrics) => {
-					debug!(
-						target: "beefy",
-						"🥩 Registered on-demand incoming justification requests metrics"
-					);
-					Some(metrics)
-				},
-				Err(err) => {
-					debug!(
-						target: "beefy",
-						"🥩 Failed to register incoming justification requests metrics: {:?}",
-						err
-					);
-					None
-				},
-			});
-
+		let metrics = register_metrics(prometheus_registry);
 		(
 			Self { request_receiver, justif_protocol_name, client, metrics, _block: PhantomData },
 			config,

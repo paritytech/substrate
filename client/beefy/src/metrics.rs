@@ -18,7 +18,14 @@
 
 //! BEEFY Prometheus metrics definition
 
+use log::debug;
 use prometheus::{register, Counter, Gauge, PrometheusError, Registry, U64};
+
+/// Helper trait for registering BEEFY metrics to Prometheus registry.
+pub(crate) trait PrometheusRegister<T: Sized = Self>: Sized {
+	const DESCRIPTION: &'static str;
+	fn register(registry: &Registry) -> Result<Self, PrometheusError>;
+}
 
 /// BEEFY voting-related metrics exposed through Prometheus
 #[derive(Clone, Debug)]
@@ -59,8 +66,9 @@ pub struct VoterMetrics {
 	pub beefy_successful_handled_votes: Counter<U64>,
 }
 
-impl VoterMetrics {
-	pub(crate) fn register(registry: &Registry) -> Result<Self, PrometheusError> {
+impl PrometheusRegister for VoterMetrics {
+	const DESCRIPTION: &'static str = "voter";
+	fn register(registry: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
 			beefy_validator_set_id: register(
 				Gauge::new(
@@ -179,8 +187,9 @@ pub struct BlockImportMetrics {
 	pub beefy_bad_justification_imports: Counter<U64>,
 }
 
-impl BlockImportMetrics {
-	pub(crate) fn register(registry: &Registry) -> Result<Self, PrometheusError> {
+impl PrometheusRegister for BlockImportMetrics {
+	const DESCRIPTION: &'static str = "block-import";
+	fn register(registry: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
 			beefy_good_justification_imports: register(
 				Counter::new(
@@ -209,8 +218,9 @@ pub struct OnDemandIncomingRequestsMetrics {
 	pub beefy_failed_justification_responses: Counter<U64>,
 }
 
-impl OnDemandIncomingRequestsMetrics {
-	pub(crate) fn register(registry: &Registry) -> Result<Self, PrometheusError> {
+impl PrometheusRegister for OnDemandIncomingRequestsMetrics {
+	const DESCRIPTION: &'static str = "on-demand incoming justification requests";
+	fn register(registry: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
 			beefy_successful_justification_responses: register(
 				Counter::new(
@@ -245,8 +255,9 @@ pub struct OnDemandOutgoingRequestsMetrics {
 	pub beefy_on_demand_justification_good_proof: Counter<U64>,
 }
 
-impl OnDemandOutgoingRequestsMetrics {
-	pub(crate) fn register(registry: &Registry) -> Result<Self, PrometheusError> {
+impl PrometheusRegister for OnDemandOutgoingRequestsMetrics {
+	const DESCRIPTION: &'static str = "on-demand outgoing justification requests";
+	fn register(registry: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
 			beefy_on_demand_justification_no_peer_to_request_from: register(
 				Counter::new(
@@ -285,6 +296,21 @@ impl OnDemandOutgoingRequestsMetrics {
 			)?,
 		})
 	}
+}
+
+pub(crate) fn register_metrics<T: PrometheusRegister>(
+	prometheus_registry: Option<prometheus::Registry>,
+) -> Option<T> {
+	prometheus_registry.as_ref().map(T::register).and_then(|result| match result {
+		Ok(metrics) => {
+			debug!(target: "beefy", "🥩 Registered {} metrics", T::DESCRIPTION);
+			Some(metrics)
+		},
+		Err(err) => {
+			debug!(target: "beefy", "🥩 Failed to register {} metrics: {:?}", T::DESCRIPTION, err);
+			None
+		},
+	})
 }
 
 // Note: we use the `format` macro to convert an expr into a `u64`. This will fail,
