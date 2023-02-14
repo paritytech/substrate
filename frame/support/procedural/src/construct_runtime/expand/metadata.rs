@@ -99,14 +99,17 @@ pub fn expand_runtime_metadata(
 
 			pub fn metadata_at_version(version: u32) -> Option<#scrate::OpaqueMetadata> {
 				match version {
-					// The V14 version is already implemented by `construct_runtime!` macro.
+					#[cfg(feature = "metadata-v14")]
 					14 => Some(#scrate::OpaqueMetadata::new(#runtime::metadata().into())),
 					_ => None,
 				}
 			}
 
 			pub fn metadata_versions() -> #scrate::sp_std::vec::Vec<u32> {
-				#scrate::sp_std::vec![ 14 ]
+				#scrate::sp_std::vec![
+					#[cfg(feature = "metadata-v14")]
+					14,
+				]
 			}
 		}
 	}
