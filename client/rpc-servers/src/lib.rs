@@ -77,8 +77,8 @@ pub struct Config<'a, M: Send + Sync + 'static> {
 }
 
 /// Start RPC server listening on given address.
-pub async fn start_server<'a, M: Send + Sync + 'static>(
-	config: Config<'a, M>,
+pub async fn start_server<M: Send + Sync + 'static>(
+	config: Config<'_, M>,
 ) -> Result<ServerHandle, Box<dyn StdError + Send + Sync>> {
 	let Config {
 		addrs,
