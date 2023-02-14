@@ -148,7 +148,7 @@ impl ExtBuilder {
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		self.build().execute_with(|| {
 			test();
-			List::<Runtime>::try_state().expect("Try-state post condition failed")
+			List::<Runtime>::do_try_state().expect("do_try_state post condition failed")
 		})
 	}
 

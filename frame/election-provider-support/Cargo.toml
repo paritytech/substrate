@@ -43,3 +43,4 @@ std = [
 	"sp-std/std",
 ]
 runtime-benchmarks = []
+try-runtime = []
