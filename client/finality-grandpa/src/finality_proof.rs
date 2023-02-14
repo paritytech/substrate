@@ -63,6 +63,15 @@ pub struct FinalityProofProvider<BE, Block: BlockT> {
 	shared_authority_set: Option<SharedAuthoritySet<Block::Hash, NumberFor<Block>>>,
 }
 
+impl<BE, Block: BlockT> Clone for FinalityProofProvider<BE, Block> {
+	fn clone(&self) -> Self {
+		Self {
+			backend: self.backend.clone(),
+			shared_authority_set: self.shared_authority_set.clone(),
+		}
+	}
+}
+
 impl<B, Block> FinalityProofProvider<B, Block>
 where
 	Block: BlockT,
@@ -104,7 +113,7 @@ where
 		&self,
 		block: NumberFor<Block>,
 	) -> Result<Option<Vec<u8>>, FinalityProofError> {
-		Ok(self.prove_original_finality(block, true)?.map(|proof| proof.encode()))
+		Ok(self.prove_finality_proof(block, true)?.map(|proof| proof.encode()))
 	}
 
 	/// Prove finality for the given block number by returning a Justification for the last block of
