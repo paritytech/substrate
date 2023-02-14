@@ -21,11 +21,7 @@
 //! vote weight. The candidates with the most backing are the election winners.
 
 use crate::{setup_inputs, ElectionResult, IdentifierT, PerThing128, VoteWeight};
-use sp_arithmetic::{
-	helpers_128bit::multiply_by_rational_with_rounding,
-	traits::{Bounded, Zero},
-	Rounding,
-};
+use sp_arithmetic::traits::Zero;
 use sp_std::{cmp::Reverse, vec::Vec};
 
 /// Execute an approvals voting election scheme. The return type is a list of winners and a weight
@@ -53,13 +49,9 @@ pub fn approval_voting<AccountId: IdentifierT, P: PerThing128>(
 
 	candidates.sort_by_key(|c| Reverse(c.borrow().approval_stake));
 
-	let mut winners_count = 0;
 	let winners = candidates
 		.into_iter()
-		.take_while(|_| {
-			winners_count += 1;
-			winners_count <= to_elect
-		})
+		.take(to_elect)
 		.map(|w| {
 			w.borrow_mut().elected = true;
 			w
@@ -70,13 +62,7 @@ pub fn approval_voting<AccountId: IdentifierT, P: PerThing128>(
 	for voter in &mut voters {
 		for edge in &mut voter.edges {
 			if edge.candidate.borrow().elected {
-				edge.weight = multiply_by_rational_with_rounding(
-					voter.budget,
-					edge.load.n(),
-					voter.load.n(),
-					Rounding::Down,
-				)
-				.unwrap_or(Bounded::max_value());
+				edge.weight = voter.budget
 			} else {
 				edge.weight = Zero::zero()
 			}
