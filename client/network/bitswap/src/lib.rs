@@ -127,9 +127,8 @@ impl<B: BlockT> BitswapRequestHandler<B> {
 					};
 
 					match pending_response.send(response) {
-						Ok(()) => {
-							trace!(target: LOG_TARGET, "Handled bitswap request from {peer}.",)
-						},
+						Ok(()) =>
+							trace!(target: LOG_TARGET, "Handled bitswap request from {peer}.",),
 						Err(_) => debug!(
 							target: LOG_TARGET,
 							"Failed to handle light client request from {peer}: {}",
@@ -204,7 +203,7 @@ impl<B: BlockT> BitswapRequestHandler<B> {
 
 			let mut hash = B::Hash::default();
 			hash.as_mut().copy_from_slice(&cid.hash().digest()[0..32]);
-			let transaction = match self.client.indexed_transaction(&hash) {
+			let transaction = match self.client.indexed_transaction(hash) {
 				Ok(ex) => ex,
 				Err(e) => {
 					error!(target: LOG_TARGET, "Error retrieving transaction {}: {}", hash, e);

@@ -16,11 +16,11 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 aquamarine = "0.1.12"
 log = "0.4.8"
-sp-state-machine = { version = "0.12.0", path = "../../primitives/state-machine" }
-sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
+sp-state-machine = { version = "0.13.0", path = "../../primitives/state-machine" }
+sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-sp-core = { version = "6.0.0", path = "../../primitives/core" }
+sp-core = { version = "7.0.0", path = "../../primitives/core" }
 sp-block-builder = { version = "4.0.0-dev", path = "../../primitives/block-builder" }
 sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
 sp-ver = { version = "4.0.0-dev", path = "../../primitives/ver" }

@@ -98,7 +98,7 @@ where
 #[derive(Clone)]
 pub struct NetworkStatus<B: BlockT> {
 	/// Current global sync state.
-	pub sync_state: SyncState,
+	pub sync_state: SyncState<NumberFor<B>>,
 	/// Target sync block number.
 	pub best_seen_block: Option<NumberFor<B>>,
 	/// Number of peers participating in syncing.

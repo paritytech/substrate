@@ -97,6 +97,7 @@ pub(crate) type ChargeAssetLiquidityOf<T> =
 #[derive(Encode, Decode, DefaultNoBound, TypeInfo)]
 pub enum InitialPayment<T: Config> {
 	/// No initial fee was payed.
+	#[default]
 	Nothing,
 	/// The initial fee was payed in the native currency.
 	Native(LiquidityInfoOf<T>),

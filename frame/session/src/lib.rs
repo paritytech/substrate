@@ -595,6 +595,7 @@ pub mod pallet {
 		/// - DbReads per key id: `KeyOwner`
 		/// - DbWrites per key id: `KeyOwner`
 		/// # </weight>
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::set_keys())]
 		pub fn set_keys(origin: OriginFor<T>, keys: T::Keys, proof: Vec<u8>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -620,6 +621,7 @@ pub mod pallet {
 		/// - DbWrites: `NextKeys`, `origin account`
 		/// - DbWrites per key id: `KeyOwner`
 		/// # </weight>
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::purge_keys())]
 		pub fn purge_keys(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;

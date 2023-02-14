@@ -1,4 +1,4 @@
-# Sudo Offences Pallet
+# Root Offences Pallet
 
 Pallet that allows the root to create an offence.
 

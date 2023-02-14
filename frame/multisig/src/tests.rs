@@ -24,7 +24,7 @@ use super::*;
 use crate as pallet_multisig;
 use frame_support::{
 	assert_noop, assert_ok, parameter_types,
-	traits::{ConstU16, ConstU32, ConstU64, Contains},
+	traits::{ConstU32, ConstU64, Contains},
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -107,7 +107,7 @@ impl Config for Test {
 	type Currency = Balances;
 	type DepositBase = ConstU64<1>;
 	type DepositFactor = ConstU64<1>;
-	type MaxSignatories = ConstU16<3>;
+	type MaxSignatories = ConstU32<3>;
 	type WeightInfo = ();
 }
 

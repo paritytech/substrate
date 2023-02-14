@@ -185,7 +185,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		amount: Self::Balance,
 	) -> Result<Self::Balance, DispatchError> {
 		let old_balance = Self::balance(asset, who);
-		let (mut new_balance, mut amount) = if old_balance < amount {
+		let (mut new_balance, mut amount) = if Self::reducible_balance(asset, who, false) < amount {
 			return Err(TokenError::NoFunds.into())
 		} else {
 			(old_balance - amount, amount)
@@ -211,8 +211,9 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		amount: Self::Balance,
 	) -> Self::Balance {
 		let old_balance = Self::balance(asset, who);
-		let (mut new_balance, mut amount) = if old_balance < amount {
-			(Zero::zero(), old_balance)
+		let old_free_balance = Self::reducible_balance(asset, who, false);
+		let (mut new_balance, mut amount) = if old_free_balance < amount {
+			(old_balance.saturating_sub(old_free_balance), old_free_balance)
 		} else {
 			(old_balance - amount, amount)
 		};

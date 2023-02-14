@@ -22,11 +22,11 @@ handlebars = "4.2.2"
 hash-db = "0.15.2"
 Inflector = "0.11.4"
 itertools = "0.10.3"
-kvdb = "0.12.0"
+kvdb = "0.13.0"
 lazy_static = "1.4.0"
 linked-hash-map = "0.5.4"
 log = "0.4.17"
-memory-db = "0.30.0"
+memory-db = "0.31.0"
 rand = { version = "0.8.4", features = ["small_rng"] }
 rand_pcg = "0.3.1"
 serde = "1.0.136"
@@ -41,6 +41,9 @@ frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
 sc-block-builder = { version = "0.10.0-dev", path = "../../../client/block-builder" }
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
 sc-block-builder-ver = { version = "0.10.0-dev", path = "../../../client/block-builder-ver" }
+sp-consensus-aura = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/consensus/aura" }
+ver-api = { version = "4.0.0-dev", path = "../../../primitives/ver-api" }
+sp-consensus = { path = "../../../primitives/consensus/common" }
 sc-cli = { version = "0.10.0-dev", default-features = false, path = "../../../client/cli" }
 sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
 sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../../../client/db" }
@@ -49,19 +52,16 @@ sc-service = { version = "0.10.0-dev", default-features = false, path = "../../.
 sc-sysinfo = { version = "6.0.0-dev", path = "../../../client/sysinfo" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-sp-core = { version = "6.0.0", path = "../../../primitives/core" }
+sp-core = { version = "7.0.0", path = "../../../primitives/core" }
 sp-database = { version = "4.0.0-dev", path = "../../../primitives/database" }
-sp-externalities = { version = "0.12.0", path = "../../../primitives/externalities" }
+sp-externalities = { version = "0.13.0", path = "../../../primitives/externalities" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
-sp-keystore = { version = "0.12.0", path = "../../../primitives/keystore" }
-sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
-sp-state-machine = { version = "0.12.0", path = "../../../primitives/state-machine" }
-sp-storage = { version = "6.0.0", path = "../../../primitives/storage" }
-sp-trie = { version = "6.0.0", path = "../../../primitives/trie" }
-sp-consensus-aura = { version = "0.10.0-dev", path = "../../../primitives/consensus/aura" }
-sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
-ver-api = { path = "../../../primitives/ver-api"}
-sp-ver = { path = "../../../primitives/ver" , features=["helpers"] }
+sp-keystore = { version = "0.13.0", path = "../../../primitives/keystore" }
+sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
+sp-state-machine = { version = "0.13.0", path = "../../../primitives/state-machine" }
+sp-std = { version = "5.0.0", path = "../../../primitives/std" }
+sp-storage = { version = "7.0.0", path = "../../../primitives/storage" }
+sp-trie = { version = "7.0.0", path = "../../../primitives/trie" }
 gethostname = "0.2.3"
 futures = "0.3.21"
 

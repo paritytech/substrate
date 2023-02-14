@@ -15,31 +15,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{fmt::Debug, str::FromStr};
-
-use parity_scale_codec::Decode;
-use sc_executor::NativeExecutionDispatch;
-use sc_service::Configuration;
+use crate::{build_executor, state_machine_call_with_proof, SharedParams, State, LOG_TARGET};
+use parity_scale_codec::{Decode, Encode};
+use sc_executor::sp_wasm_interface::HostFunctions;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use sp_weights::Weight;
+use std::{fmt::Debug, str::FromStr};
 
-use crate::{
-	build_executor, ensure_matching_spec, extract_code, local_spec, state_machine_call_with_proof,
-	SharedParams, State, LOG_TARGET,
-};
-
-/// Configurations of the [`Command::OnRuntimeUpgrade`].
+/// Configurations of the [`crate::Command::OnRuntimeUpgrade`].
 #[derive(Debug, Clone, clap::Parser)]
 pub struct OnRuntimeUpgradeCmd {
 	/// The state type to use.
 	#[command(subcommand)]
 	pub state: State,
+
+	/// Execute `try_state`, `pre_upgrade` and `post_upgrade` checks as well.
+	///
+	/// This will perform more checks, but it will also makes the reported PoV/Weight be
+	/// inaccurate.
+	#[clap(long)]
+	pub checks: bool,
 }
 
-pub(crate) async fn on_runtime_upgrade<Block, ExecDispatch>(
+pub(crate) async fn on_runtime_upgrade<Block, HostFns>(
 	shared: SharedParams,
 	command: OnRuntimeUpgradeCmd,
-	config: Configuration,
 ) -> sc_cli::Result<()>
 where
 	Block: BlockT + serde::de::DeserializeOwned,
@@ -48,40 +48,22 @@ where
 	Block::Header: serde::de::DeserializeOwned,
 	NumberFor<Block>: FromStr,
 	<NumberFor<Block> as FromStr>::Err: Debug,
-	ExecDispatch: NativeExecutionDispatch + 'static,
+	HostFns: HostFunctions,
 {
-	let executor = build_executor(&shared, &config);
-	let execution = shared.execution;
+	let executor = build_executor(&shared);
+	let ext = command.state.into_ext::<Block, HostFns>(&shared, &executor, None).await?;
 
-	let ext = {
-		let builder = command.state.builder::<Block>()?.state_version(shared.state_version);
-		let (code_key, code) = extract_code(&config.chain_spec)?;
-		builder.inject_hashed_key_value(&[(code_key, code)]).build().await?
-	};
-
-	if let Some(uri) = command.state.live_uri() {
-		let (expected_spec_name, expected_spec_version, _) =
-			local_spec::<Block, ExecDispatch>(&ext, &executor);
-		ensure_matching_spec::<Block>(
-			uri,
-			expected_spec_name,
-			expected_spec_version,
-			shared.no_spec_check_panic,
-		)
-		.await;
-	}
-
-	let (_, encoded_result) = state_machine_call_with_proof::<Block, ExecDispatch>(
+	let (_, encoded_result) = state_machine_call_with_proof::<Block, HostFns>(
 		&ext,
 		&executor,
-		execution,
 		"TryRuntime_on_runtime_upgrade",
-		&[],
+		command.checks.encode().as_ref(),
 		Default::default(), // we don't really need any extensions here.
 	)?;
 
 	let (weight, total_weight) = <(Weight, Weight) as Decode>::decode(&mut &*encoded_result)
 		.map_err(|e| format!("failed to decode weight: {:?}", e))?;
+
 	log::info!(
 		target: LOG_TARGET,
 		"TryRuntime_on_runtime_upgrade executed without errors. Consumed weight = ({} ps, {} byte), total weight = ({} ps, {} byte) ({:.2} %, {:.2} %).",

@@ -28,6 +28,7 @@
 
 extern crate self as sp_weights;
 
+mod weight_meter;
 mod weight_v2;
 
 use codec::{CompactAs, Decode, Encode, MaxEncodedLen};
@@ -42,15 +43,17 @@ use sp_arithmetic::{
 use sp_core::Get;
 use sp_debug_derive::RuntimeDebug;
 
+pub use weight_meter::*;
 pub use weight_v2::*;
 
 pub mod constants {
-	use super::Weight;
+	pub const WEIGHT_REF_TIME_PER_SECOND: u64 = 1_000_000_000_000;
+	pub const WEIGHT_REF_TIME_PER_MILLIS: u64 = 1_000_000_000;
+	pub const WEIGHT_REF_TIME_PER_MICROS: u64 = 1_000_000;
+	pub const WEIGHT_REF_TIME_PER_NANOS: u64 = 1_000;
 
-	pub const WEIGHT_PER_SECOND: Weight = Weight::from_ref_time(1_000_000_000_000);
-	pub const WEIGHT_PER_MILLIS: Weight = Weight::from_ref_time(1_000_000_000);
-	pub const WEIGHT_PER_MICROS: Weight = Weight::from_ref_time(1_000_000);
-	pub const WEIGHT_PER_NANOS: Weight = Weight::from_ref_time(1_000);
+	pub const WEIGHT_PROOF_SIZE_PER_MB: u64 = 1024 * 1024;
+	pub const WEIGHT_PROOF_SIZE_PER_KB: u64 = 1024;
 }
 
 /// The old weight type.
@@ -70,6 +73,8 @@ pub mod constants {
 	MaxEncodedLen,
 	TypeInfo,
 )]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(transparent))]
 pub struct OldWeight(pub u64);
 
 /// The weight of database operations that the runtime can invoke.
@@ -106,7 +111,7 @@ impl RuntimeDbWeight {
 /// coeff_integer * x^(degree) + coeff_frac * x^(degree)
 /// ```
 ///
-/// The `negative` value encodes whether the term is added or substracted from the
+/// The `negative` value encodes whether the term is added or subtracted from the
 /// overall polynomial result.
 #[derive(Clone, Encode, Decode, TypeInfo)]
 pub struct WeightToFeeCoefficient<Balance> {

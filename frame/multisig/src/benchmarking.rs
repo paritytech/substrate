@@ -69,7 +69,7 @@ benchmarks! {
 
 	as_multi_create {
 		// Signatories, need at least 2 total people
-		let s in 2 .. T::MaxSignatories::get() as u32;
+		let s in 2 .. T::MaxSignatories::get();
 		// Transaction Length
 		let z in 0 .. 10_000;
 		let (mut signatories, call) = setup_multi::<T>(s, z)?;
@@ -86,7 +86,7 @@ benchmarks! {
 
 	as_multi_approve {
 		// Signatories, need at least 3 people (so we don't complete the multisig)
-		let s in 3 .. T::MaxSignatories::get() as u32;
+		let s in 3 .. T::MaxSignatories::get();
 		// Transaction Length
 		let z in 0 .. 10_000;
 		let (mut signatories, call) = setup_multi::<T>(s, z)?;
@@ -110,7 +110,7 @@ benchmarks! {
 
 	as_multi_complete {
 		// Signatories, need at least 2 people
-		let s in 2 .. T::MaxSignatories::get() as u32;
+		let s in 2 .. T::MaxSignatories::get();
 		// Transaction Length
 		let z in 0 .. 10_000;
 		let (mut signatories, call) = setup_multi::<T>(s, z)?;
@@ -141,7 +141,7 @@ benchmarks! {
 
 	approve_as_multi_create {
 		// Signatories, need at least 2 people
-		let s in 2 .. T::MaxSignatories::get() as u32;
+		let s in 2 .. T::MaxSignatories::get();
 		// Transaction Length, not a component
 		let z = 10_000;
 		let (mut signatories, call) = setup_multi::<T>(s, z)?;
@@ -159,7 +159,7 @@ benchmarks! {
 
 	approve_as_multi_approve {
 		// Signatories, need at least 2 people
-		let s in 2 .. T::MaxSignatories::get() as u32;
+		let s in 2 .. T::MaxSignatories::get();
 		// Transaction Length, not a component
 		let z = 10_000;
 		let (mut signatories, call) = setup_multi::<T>(s, z)?;
@@ -190,7 +190,7 @@ benchmarks! {
 
 	cancel_as_multi {
 		// Signatories, need at least 2 people
-		let s in 2 .. T::MaxSignatories::get() as u32;
+		let s in 2 .. T::MaxSignatories::get();
 		// Transaction Length, not a component
 		let z = 10_000;
 		let (mut signatories, call) = setup_multi::<T>(s, z)?;

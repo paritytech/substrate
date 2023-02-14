@@ -229,11 +229,6 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 			&storage,
 			self.fork_blocks,
 			self.bad_blocks,
-			ExecutionExtensions::new(
-				self.execution_strategies,
-				self.keystore,
-				sc_offchain::OffchainDb::factory_from_backend(&*self.backend),
-			),
 			None,
 			None,
 			ClientConfig {
@@ -285,6 +280,11 @@ impl<Block: BlockT, D, Backend, G: GenesisInit>
 			executor,
 			Box::new(sp_core::testing::TaskExecutor::new()),
 			Default::default(),
+			ExecutionExtensions::new(
+				self.execution_strategies.clone(),
+				self.keystore.clone(),
+				sc_offchain::OffchainDb::factory_from_backend(&*self.backend),
+			),
 		)
 		.expect("Creates LocalCallExecutor");
 

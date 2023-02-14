@@ -59,6 +59,9 @@ pub enum Error {
 	#[error("UnknownBlock: {0}")]
 	UnknownBlock(String),
 
+	#[error("UnknownBlocks: {0}")]
+	UnknownBlocks(String),
+
 	#[error(transparent)]
 	ApplyExtrinsicFailed(#[from] ApplyExtrinsicFailed),
 

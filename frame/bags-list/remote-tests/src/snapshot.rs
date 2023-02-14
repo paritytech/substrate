@@ -25,7 +25,7 @@ use sp_runtime::{traits::Block as BlockT, DeserializeOwned};
 pub async fn execute<Runtime, Block>(voter_limit: Option<usize>, currency_unit: u64, ws_url: String)
 where
 	Runtime: crate::RuntimeT<pallet_bags_list::Instance1>,
-	Block: BlockT,
+	Block: BlockT + DeserializeOwned,
 	Block::Header: DeserializeOwned,
 {
 	use frame_support::storage::generator::StorageMap;
@@ -38,14 +38,18 @@ where
 			pallets: vec![pallet_bags_list::Pallet::<Runtime, pallet_bags_list::Instance1>::name()
 				.to_string()],
 			at: None,
+			hashed_prefixes: vec![
+				<pallet_staking::Bonded<Runtime>>::prefix_hash(),
+				<pallet_staking::Ledger<Runtime>>::prefix_hash(),
+				<pallet_staking::Validators<Runtime>>::map_storage_final_prefix(),
+				<pallet_staking::Nominators<Runtime>>::map_storage_final_prefix(),
+			],
+			hashed_keys: vec![
+				<pallet_staking::Validators<Runtime>>::counter_storage_final_key().to_vec(),
+				<pallet_staking::Nominators<Runtime>>::counter_storage_final_key().to_vec(),
+			],
 			..Default::default()
 		}))
-		.inject_hashed_prefix(&<pallet_staking::Bonded<Runtime>>::prefix_hash())
-		.inject_hashed_prefix(&<pallet_staking::Ledger<Runtime>>::prefix_hash())
-		.inject_hashed_prefix(&<pallet_staking::Validators<Runtime>>::map_storage_final_prefix())
-		.inject_hashed_prefix(&<pallet_staking::Nominators<Runtime>>::map_storage_final_prefix())
-		.inject_hashed_key(&<pallet_staking::Validators<Runtime>>::counter_storage_final_key())
-		.inject_hashed_key(&<pallet_staking::Nominators<Runtime>>::counter_storage_final_key())
 		.build()
 		.await
 		.unwrap();

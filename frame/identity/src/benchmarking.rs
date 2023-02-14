@@ -144,9 +144,14 @@ benchmarks! {
 
 			// User requests judgement from all the registrars, and they approve
 			for i in 0..r {
+				let registrar: T::AccountId = account("registrar", i, SEED);
+				let registrar_lookup = T::Lookup::unlookup(registrar.clone());
+				let balance_to_use =  T::Currency::minimum_balance() * 10u32.into();
+				let _ = T::Currency::make_free_balance_be(&registrar, balance_to_use);
+
 				Identity::<T>::request_judgement(caller_origin.clone(), i, 10u32.into())?;
 				Identity::<T>::provide_judgement(
-					RawOrigin::Signed(account("registrar", i, SEED)).into(),
+					RawOrigin::Signed(registrar).into(),
 					i,
 					caller_lookup.clone(),
 					Judgement::Reasonable,
@@ -213,9 +218,13 @@ benchmarks! {
 
 		// User requests judgement from all the registrars, and they approve
 		for i in 0..r {
+			let registrar: T::AccountId = account("registrar", i, SEED);
+			let balance_to_use =  T::Currency::minimum_balance() * 10u32.into();
+			let _ = T::Currency::make_free_balance_be(&registrar, balance_to_use);
+
 			Identity::<T>::request_judgement(caller_origin.clone(), i, 10u32.into())?;
 			Identity::<T>::provide_judgement(
-				RawOrigin::Signed(account("registrar", i, SEED)).into(),
+				RawOrigin::Signed(registrar).into(),
 				i,
 				caller_lookup.clone(),
 				Judgement::Reasonable,
@@ -362,9 +371,13 @@ benchmarks! {
 
 		// User requests judgement from all the registrars, and they approve
 		for i in 0..r {
+			let registrar: T::AccountId = account("registrar", i, SEED);
+			let balance_to_use =  T::Currency::minimum_balance() * 10u32.into();
+			let _ = T::Currency::make_free_balance_be(&registrar, balance_to_use);
+
 			Identity::<T>::request_judgement(target_origin.clone(), i, 10u32.into())?;
 			Identity::<T>::provide_judgement(
-				RawOrigin::Signed(account("registrar", i, SEED)).into(),
+				RawOrigin::Signed(registrar).into(),
 				i,
 				target_lookup.clone(),
 				Judgement::Reasonable,

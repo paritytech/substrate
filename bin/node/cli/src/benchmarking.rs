@@ -116,8 +116,7 @@ pub fn inherent_benchmark_data() -> Result<InherentData> {
 	let d = Duration::from_millis(0);
 	let timestamp = sp_timestamp::InherentDataProvider::new(d.into());
 
-	timestamp
-		.provide_inherent_data(&mut inherent_data)
+	futures::executor::block_on(timestamp.provide_inherent_data(&mut inherent_data))
 		.map_err(|e| format!("creating inherent data: {:?}", e))?;
 	Ok(inherent_data)
 }

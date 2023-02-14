@@ -133,15 +133,15 @@ impl<T: Config> ListScenario<T> {
 
 		// Create accounts with the origin weight
 		let (pool_creator1, pool_origin1) = create_pool_account::<T>(USER_SEED + 1, origin_weight);
-		T::StakingInterface::nominate(
-			pool_origin1.clone(),
+		T::Staking::nominate(
+			&pool_origin1,
 			// NOTE: these don't really need to be validators.
 			vec![account("random_validator", 0, USER_SEED)],
 		)?;
 
 		let (_, pool_origin2) = create_pool_account::<T>(USER_SEED + 2, origin_weight);
-		T::StakingInterface::nominate(
-			pool_origin2.clone(),
+		T::Staking::nominate(
+			&pool_origin2,
 			vec![account("random_validator", 0, USER_SEED)].clone(),
 		)?;
 
@@ -156,10 +156,7 @@ impl<T: Config> ListScenario<T> {
 
 		// Create an account with the worst case destination weight
 		let (_, pool_dest1) = create_pool_account::<T>(USER_SEED + 3, dest_weight);
-		T::StakingInterface::nominate(
-			pool_dest1.clone(),
-			vec![account("random_validator", 0, USER_SEED)],
-		)?;
+		T::Staking::nominate(&pool_dest1, vec![account("random_validator", 0, USER_SEED)])?;
 
 		let weight_of = pallet_staking::Pallet::<T>::weight_of_fn();
 		assert_eq!(vote_to_balance::<T>(weight_of(&pool_origin1)).unwrap(), origin_weight);
@@ -185,12 +182,11 @@ impl<T: Config> ListScenario<T> {
 		self.origin1_member = Some(joiner.clone());
 		CurrencyOf::<T>::make_free_balance_be(&joiner, amount * 2u32.into());
 
-		let original_bonded = T::StakingInterface::active_stake(&self.origin1).unwrap();
+		let original_bonded = T::Staking::active_stake(&self.origin1).unwrap();
 
 		// Unbond `amount` from the underlying pool account so when the member joins
 		// we will maintain `current_bonded`.
-		T::StakingInterface::unbond(self.origin1.clone(), amount)
-			.expect("the pool was created in `Self::new`.");
+		T::Staking::unbond(&self.origin1, amount).expect("the pool was created in `Self::new`.");
 
 		// Account pool points for the unbonded balance.
 		BondedPools::<T>::mutate(&1, |maybe_pool| {
@@ -219,7 +215,7 @@ frame_benchmarking::benchmarks! {
 		// setup the worst case list scenario.
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		assert_eq!(
-			T::StakingInterface::active_stake(&scenario.origin1).unwrap(),
+			T::Staking::active_stake(&scenario.origin1).unwrap(),
 			origin_weight
 		);
 
@@ -234,7 +230,7 @@ frame_benchmarking::benchmarks! {
 	verify {
 		assert_eq!(CurrencyOf::<T>::free_balance(&joiner), joiner_free - max_additional);
 		assert_eq!(
-			T::StakingInterface::active_stake(&scenario.origin1).unwrap(),
+			T::Staking::active_stake(&scenario.origin1).unwrap(),
 			scenario.dest_weight
 		);
 	}
@@ -249,7 +245,7 @@ frame_benchmarking::benchmarks! {
 	}: bond_extra(RuntimeOrigin::Signed(scenario.creator1.clone()), BondExtra::FreeBalance(extra))
 	verify {
 		assert!(
-			T::StakingInterface::active_stake(&scenario.origin1).unwrap() >=
+			T::Staking::active_stake(&scenario.origin1).unwrap() >=
 			scenario.dest_weight
 		);
 	}
@@ -267,7 +263,7 @@ frame_benchmarking::benchmarks! {
 	}: bond_extra(RuntimeOrigin::Signed(scenario.creator1.clone()), BondExtra::Rewards)
 	verify {
 		assert!(
-			T::StakingInterface::active_stake(&scenario.origin1).unwrap() >=
+			T::Staking::active_stake(&scenario.origin1).unwrap() >=
 			scenario.dest_weight
 		);
 	}
@@ -314,7 +310,7 @@ frame_benchmarking::benchmarks! {
 		whitelist_account!(member_id);
 	}: _(RuntimeOrigin::Signed(member_id.clone()), member_id_lookup, all_points)
 	verify {
-		let bonded_after = T::StakingInterface::active_stake(&scenario.origin1).unwrap();
+		let bonded_after = T::Staking::active_stake(&scenario.origin1).unwrap();
 		// We at least went down to the destination bag
 		assert!(bonded_after <= scenario.dest_weight);
 		let member = PoolMembers::<T>::get(
@@ -323,7 +319,7 @@ frame_benchmarking::benchmarks! {
 		.unwrap();
 		assert_eq!(
 			member.unbonding_eras.keys().cloned().collect::<Vec<_>>(),
-			vec![0 + T::StakingInterface::bonding_duration()]
+			vec![0 + T::Staking::bonding_duration()]
 		);
 		assert_eq!(
 			member.unbonding_eras.values().cloned().collect::<Vec<_>>(),
@@ -345,7 +341,7 @@ frame_benchmarking::benchmarks! {
 
 		// Sanity check join worked
 		assert_eq!(
-			T::StakingInterface::active_stake(&pool_account).unwrap(),
+			T::Staking::active_stake(&pool_account).unwrap(),
 			min_create_bond + min_join_bond
 		);
 		assert_eq!(CurrencyOf::<T>::free_balance(&joiner), min_join_bond);
@@ -355,7 +351,7 @@ frame_benchmarking::benchmarks! {
 
 		// Sanity check that unbond worked
 		assert_eq!(
-			T::StakingInterface::active_stake(&pool_account).unwrap(),
+			T::Staking::active_stake(&pool_account).unwrap(),
 			min_create_bond
 		);
 		assert_eq!(pallet_staking::Ledger::<T>::get(&pool_account).unwrap().unlocking.len(), 1);
@@ -388,7 +384,7 @@ frame_benchmarking::benchmarks! {
 
 		// Sanity check join worked
 		assert_eq!(
-			T::StakingInterface::active_stake(&pool_account).unwrap(),
+			T::Staking::active_stake(&pool_account).unwrap(),
 			min_create_bond + min_join_bond
 		);
 		assert_eq!(CurrencyOf::<T>::free_balance(&joiner), min_join_bond);
@@ -399,7 +395,7 @@ frame_benchmarking::benchmarks! {
 
 		// Sanity check that unbond worked
 		assert_eq!(
-			T::StakingInterface::active_stake(&pool_account).unwrap(),
+			T::Staking::active_stake(&pool_account).unwrap(),
 			min_create_bond
 		);
 		assert_eq!(pallet_staking::Ledger::<T>::get(&pool_account).unwrap().unlocking.len(), 1);
@@ -446,7 +442,7 @@ frame_benchmarking::benchmarks! {
 
 		// Sanity check that unbond worked
 		assert_eq!(
-			T::StakingInterface::active_stake(&pool_account).unwrap(),
+			T::Staking::active_stake(&pool_account).unwrap(),
 			Zero::zero()
 		);
 		assert_eq!(
@@ -525,8 +521,8 @@ frame_benchmarking::benchmarks! {
 			}
 		);
 		assert_eq!(
-			T::StakingInterface::active_stake(&Pools::<T>::create_bonded_account(1)),
-			Some(min_create_bond)
+			T::Staking::active_stake(&Pools::<T>::create_bonded_account(1)),
+			Ok(min_create_bond)
 		);
 	}
 
@@ -564,8 +560,8 @@ frame_benchmarking::benchmarks! {
 			}
 		);
 		assert_eq!(
-			T::StakingInterface::active_stake(&Pools::<T>::create_bonded_account(1)),
-			Some(min_create_bond)
+			T::Staking::active_stake(&Pools::<T>::create_bonded_account(1)),
+			Ok(min_create_bond)
 		);
 	}
 
@@ -647,13 +643,13 @@ frame_benchmarking::benchmarks! {
 			.map(|i| account("stash", USER_SEED, i))
 			.collect();
 
-		assert_ok!(Pools::<T>::nominate(RuntimeOrigin::Signed(depositor.clone()).into(), 1, validators));
-		assert!(T::StakingInterface::nominations(Pools::<T>::create_bonded_account(1)).is_some());
+		assert_ok!(T::Staking::nominate(&pool_account, validators));
+		assert!(T::Staking::nominations(Pools::<T>::create_bonded_account(1)).is_some());
 
 		whitelist_account!(depositor);
 	}:_(RuntimeOrigin::Signed(depositor.clone()), 1)
 	verify {
-		assert!(T::StakingInterface::nominations(Pools::<T>::create_bonded_account(1)).is_none());
+		assert!(T::Staking::nominations(Pools::<T>::create_bonded_account(1)).is_none());
 	}
 
 	impl_benchmark_test_suite!(

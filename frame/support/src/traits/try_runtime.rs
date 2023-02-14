@@ -85,6 +85,8 @@ impl sp_std::str::FromStr for Select {
 ///
 /// Usually, these checks should check all of the invariants that are expected to be held on all of
 /// the storage items of your pallet.
+///
+/// This hook should not alter any storage.
 pub trait TryState<BlockNumber> {
 	/// Execute the state checks.
 	fn try_state(_: BlockNumber, _: Select) -> Result<(), &'static str>;

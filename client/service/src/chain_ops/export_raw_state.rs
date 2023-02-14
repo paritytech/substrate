@@ -25,7 +25,7 @@ use std::{collections::HashMap, sync::Arc};
 
 /// Export the raw state at the given `block`. If `block` is `None`, the
 /// best block will be used.
-pub fn export_raw_state<B, BA, C>(client: Arc<C>, hash: &B::Hash) -> Result<Storage, Error>
+pub fn export_raw_state<B, BA, C>(client: Arc<C>, hash: B::Hash) -> Result<Storage, Error>
 where
 	C: UsageProvider<B> + StorageProvider<B, BA>,
 	B: BlockT,

@@ -21,13 +21,10 @@
 
 use futures::task::Poll;
 use libp2p::PeerId;
-use sc_consensus::{BlockImportError, BlockImportStatus};
 use sc_network_common::sync::{
 	message::{BlockAnnounce, BlockData, BlockRequest, BlockResponse},
-	warp::{EncodedProof, WarpProofRequest},
-	BadPeer, ChainSync as ChainSyncT, Metrics, OnBlockData, OnBlockJustification, OnStateData,
-	OpaqueBlockRequest, OpaqueBlockResponse, OpaqueStateRequest, OpaqueStateResponse, PeerInfo,
-	PollBlockAnnounceValidation, SyncStatus,
+	BadPeer, ChainSync as ChainSyncT, Metrics, OnBlockData, OnBlockJustification,
+	OpaqueBlockResponse, PeerInfo, PollBlockAnnounceValidation, SyncStatus,
 };
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
@@ -40,6 +37,7 @@ mockall::mock! {
 		fn num_sync_requests(&self) -> usize;
 		fn num_downloaded_blocks(&self) -> usize;
 		fn num_peers(&self) -> usize;
+		fn num_active_peers(&self) -> usize;
 		fn new_peer(
 			&mut self,
 			who: PeerId,
@@ -55,35 +53,18 @@ mockall::mock! {
 			hash: &Block::Hash,
 			number: NumberFor<Block>,
 		);
-		fn justification_requests<'a>(
-			&'a mut self,
-		) -> Box<dyn Iterator<Item = (PeerId, BlockRequest<Block>)> + 'a>;
-		fn block_requests<'a>(&'a mut self) -> Box<dyn Iterator<Item = (PeerId, BlockRequest<Block>)> + 'a>;
-		fn state_request(&mut self) -> Option<(PeerId, OpaqueStateRequest)>;
-		fn warp_sync_request(&mut self) -> Option<(PeerId, WarpProofRequest<Block>)>;
 		fn on_block_data(
 			&mut self,
 			who: &PeerId,
 			request: Option<BlockRequest<Block>>,
 			response: BlockResponse<Block>,
 		) -> Result<OnBlockData<Block>, BadPeer>;
-		fn on_state_data(
-			&mut self,
-			who: &PeerId,
-			response: OpaqueStateResponse,
-		) -> Result<OnStateData<Block>, BadPeer>;
-		fn on_warp_sync_data(&mut self, who: &PeerId, response: EncodedProof) -> Result<(), BadPeer>;
+		fn process_block_response_data(&mut self, blocks_to_import: Result<OnBlockData<Block>, BadPeer>);
 		fn on_block_justification(
 			&mut self,
 			who: PeerId,
 			response: BlockResponse<Block>,
 		) -> Result<OnBlockJustification<Block>, BadPeer>;
-		fn on_blocks_processed(
-			&mut self,
-			imported: usize,
-			count: usize,
-			results: Vec<(Result<BlockImportStatus<NumberFor<Block>>, BlockImportError>, Block::Hash)>,
-		) -> Box<dyn Iterator<Item = Result<(PeerId, BlockRequest<Block>), BadPeer>>>;
 		fn on_justification_import(
 			&mut self,
 			hash: Block::Hash,
@@ -102,21 +83,21 @@ mockall::mock! {
 			&mut self,
 			cx: &mut std::task::Context<'a>,
 		) -> Poll<PollBlockAnnounceValidation<Block::Header>>;
-		fn peer_disconnected(&mut self, who: &PeerId) -> Option<OnBlockData<Block>>;
+		fn peer_disconnected(&mut self, who: &PeerId);
 		fn metrics(&self) -> Metrics;
-		fn create_opaque_block_request(&self, request: &BlockRequest<Block>) -> OpaqueBlockRequest;
-		fn encode_block_request(&self, request: &OpaqueBlockRequest) -> Result<Vec<u8>, String>;
-		fn decode_block_response(&self, response: &[u8]) -> Result<OpaqueBlockResponse, String>;
 		fn block_response_into_blocks(
 			&self,
 			request: &BlockRequest<Block>,
 			response: OpaqueBlockResponse,
 		) -> Result<Vec<BlockData<Block>>, String>;
-		fn encode_state_request(&self, request: &OpaqueStateRequest) -> Result<Vec<u8>, String>;
-		fn decode_state_response(&self, response: &[u8]) -> Result<OpaqueStateResponse, String>;
 		fn poll<'a>(
 			&mut self,
 			cx: &mut std::task::Context<'a>,
 		) -> Poll<PollBlockAnnounceValidation<Block::Header>>;
+		fn send_block_request(
+			&mut self,
+			who: PeerId,
+			request: BlockRequest<Block>,
+		);
 	}
 }

@@ -118,6 +118,10 @@ where
 	T: ProvideRuntimeApi<Block>,
 	T::Api: SessionKeys<Block>,
 {
+	if seeds.is_empty() {
+		return Ok(())
+	}
+
 	let runtime_api = client.runtime_api();
 
 	for seed in seeds {

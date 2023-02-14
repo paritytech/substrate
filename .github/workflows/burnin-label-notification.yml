@@ -1,0 +1,17 @@
+name: Notify devops when burn-in label applied
+on:
+  pull_request:
+    types: [labeled]
+
+jobs:
+  notify-devops:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify devops
+        if: github.event.label.name == 'A1-needsburnin'
+        uses: s3krit/matrix-message-action@v0.0.3
+        with:
+          room_id: ${{ secrets.POLKADOT_DEVOPS_MATRIX_ROOM_ID }}
+          access_token: ${{ secrets.POLKADOT_DEVOPS_MATRIX_ACCESS_TOKEN }}
+          message: "@room Burn-in request received for [${{ github.event.pull_request.title }}](${{ github.event.pull_request.html_url }})"
+          server: "matrix.parity.io"

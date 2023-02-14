@@ -43,7 +43,6 @@ use log::{debug, error, warn};
 use sc_client_api::{blockchain::HeaderBackend, BlockBackend, BlockchainEvents, ProofProvider};
 use sc_network::PeerId;
 use sc_network_common::{config::MultiaddrWithPeerId, service::NetworkBlock};
-use sc_rpc_server::WsConfig;
 use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_blockchain::HeaderMetadata;
 use sp_consensus::SyncOracle;
@@ -294,20 +293,9 @@ async fn build_network_future<
 
 // Wrapper for HTTP and WS servers that makes sure they are properly shut down.
 mod waiting {
-	pub struct HttpServer(pub Option<sc_rpc_server::HttpServer>);
+	pub struct Server(pub Option<sc_rpc_server::Server>);
 
-	impl Drop for HttpServer {
-		fn drop(&mut self) {
-			if let Some(server) = self.0.take() {
-				// This doesn't not wait for the server to be stopped but fires the signal.
-				let _ = server.stop();
-			}
-		}
-	}
-
-	pub struct WsServer(pub Option<sc_rpc_server::WsServer>);
-
-	impl Drop for WsServer {
+	impl Drop for Server {
 		fn drop(&mut self) {
 			if let Some(server) = self.0.take() {
 				// This doesn't not wait for the server to be stopped but fires the signal.
@@ -326,9 +314,6 @@ fn start_rpc_servers<R>(
 where
 	R: Fn(sc_rpc::DenyUnsafe) -> Result<RpcModule<()>, Error>,
 {
-	let (max_request_size, ws_max_response_size, http_max_response_size) =
-		legacy_cli_parsing(config);
-
 	fn deny_unsafe(addr: SocketAddr, methods: &RpcMethods) -> sc_rpc::DenyUnsafe {
 		let is_exposed_addr = !addr.ip().is_loopback();
 		match (is_exposed_addr, methods) {
@@ -336,6 +321,9 @@ where
 			_ => sc_rpc::DenyUnsafe::Yes,
 		}
 	}
+
+	let (max_request_size, ws_max_response_size, http_max_response_size) =
+		legacy_cli_parsing(config);
 
 	let random_port = |mut addr: SocketAddr| {
 		addr.set_port(0);
@@ -346,6 +334,7 @@ where
 		.rpc_ws
 		.unwrap_or_else(|| "127.0.0.1:9944".parse().expect("valid sockaddr; qed"));
 	let ws_addr2 = random_port(ws_addr);
+
 	let http_addr = config
 		.rpc_http
 		.unwrap_or_else(|| "127.0.0.1:9933".parse().expect("valid sockaddr; qed"));
@@ -353,29 +342,29 @@ where
 
 	let metrics = sc_rpc_server::RpcMetrics::new(config.prometheus_registry())?;
 
-	let http_fut = sc_rpc_server::start_http(
-		[http_addr, http_addr2],
-		config.rpc_cors.as_ref(),
-		max_request_size,
-		http_max_response_size,
-		metrics.clone(),
-		gen_rpc_module(deny_unsafe(ws_addr, &config.rpc_methods))?,
-		config.tokio_handle.clone(),
-	);
-
-	let ws_config = WsConfig {
+	let server_config = sc_rpc_server::WsConfig {
 		max_connections: config.rpc_ws_max_connections,
 		max_payload_in_mb: max_request_size,
 		max_payload_out_mb: ws_max_response_size,
 		max_subs_per_conn: config.rpc_max_subs_per_conn,
 	};
 
-	let ws_fut = sc_rpc_server::start_ws(
+	let http_fut = sc_rpc_server::start_http(
+		[http_addr, http_addr2],
+		config.rpc_cors.as_ref(),
+		max_request_size,
+		http_max_response_size,
+		metrics.clone(),
+		gen_rpc_module(deny_unsafe(http_addr, &config.rpc_methods))?,
+		config.tokio_handle.clone(),
+	);
+
+	let ws_fut = sc_rpc_server::start(
 		[ws_addr, ws_addr2],
 		config.rpc_cors.as_ref(),
-		ws_config,
-		metrics,
-		gen_rpc_module(deny_unsafe(http_addr, &config.rpc_methods))?,
+		server_config.clone(),
+		metrics.clone(),
+		gen_rpc_module(deny_unsafe(ws_addr, &config.rpc_methods))?,
 		config.tokio_handle.clone(),
 		rpc_id_provider,
 	);
@@ -383,8 +372,7 @@ where
 	match tokio::task::block_in_place(|| {
 		config.tokio_handle.block_on(futures::future::try_join(http_fut, ws_fut))
 	}) {
-		Ok((http, ws)) =>
-			Ok(Box::new((waiting::HttpServer(Some(http)), waiting::WsServer(Some(ws))))),
+		Ok((http, ws)) => Ok(Box::new((waiting::Server(Some(http)), waiting::Server(Some(ws))))),
 		Err(e) => Err(Error::Application(e)),
 	}
 }

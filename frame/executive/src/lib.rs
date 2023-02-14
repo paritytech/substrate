@@ -124,6 +124,7 @@ use crate::traits::AtLeast32BitUnsigned;
 use codec::{Codec, Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo},
+	pallet_prelude::InvalidTransaction,
 	traits::{
 		EnsureInherentsAreFirst, ExecuteBlock, Get, OffchainWorker, OnFinalize, OnIdle,
 		OnInitialize, OnRuntimeUpgrade,
@@ -294,27 +295,71 @@ where
 {
 	/// Execute given block, but don't as strict is the normal block execution.
 	///
-	/// Some consensus related checks such as the state root check can be switched off via
-	/// `try_state_root`. Some additional non-consensus checks can be additionally enabled via
-	/// `try_state`.
+	/// Some checks can be disabled via:
+	///
+	/// - `state_root_check`
+	/// - `signature_check`
 	///
 	/// Should only be used for testing ONLY.
 	pub fn try_execute_block(
 		block: Block,
-		try_state_root: bool,
+		state_root_check: bool,
+		signature_check: bool,
 		select: frame_try_runtime::TryStateSelect,
-	) -> Result<frame_support::weights::Weight, &'static str> {
-		use frame_support::traits::TryState;
+	) -> Result<Weight, &'static str> {
+		frame_support::log::info!(
+			target: "frame::executive",
+			"try-runtime: executing block #{:?} / state root check: {:?} / signature check: {:?} / try-state-select: {:?}",
+			block.header().number(),
+			state_root_check,
+			signature_check,
+			select,
+		);
 
 		Self::initialize_block(block.header());
 		Self::initial_checks(&block);
 
 		let (header, extrinsics) = block.deconstruct();
 
-		Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
+		let try_apply_extrinsic = |uxt: Block::Extrinsic| -> ApplyExtrinsicResult {
+			sp_io::init_tracing();
+			let encoded = uxt.encode();
+			let encoded_len = encoded.len();
 
-		// run the try-state checks of all pallets.
-		<AllPalletsWithSystem as TryState<System::BlockNumber>>::try_state(
+			// skip signature verification.
+			let xt = if signature_check {
+				uxt.check(&Default::default())
+			} else {
+				uxt.unchecked_into_checked_i_know_what_i_am_doing(&Default::default())
+			}?;
+			<frame_system::Pallet<System>>::note_extrinsic(encoded);
+
+			let dispatch_info = xt.get_dispatch_info();
+			let r = Applyable::apply::<UnsignedValidator>(xt, &dispatch_info, encoded_len)?;
+
+			<frame_system::Pallet<System>>::note_applied_extrinsic(&r, dispatch_info);
+
+			Ok(r.map(|_| ()).map_err(|e| e.error))
+		};
+
+		for e in extrinsics {
+			if let Err(err) = try_apply_extrinsic(e.clone()) {
+				frame_support::log::error!(
+					target: "runtime::executive", "executing transaction {:?} failed due to {:?}. Aborting the rest of the block execution.",
+					e,
+					err,
+				);
+				break
+			}
+		}
+
+		// post-extrinsics book-keeping
+		<frame_system::Pallet<System>>::note_finished_extrinsics();
+		Self::idle_and_finalize_hook(*header.number());
+
+		// run the try-state checks of all pallets, ensuring they don't alter any state.
+		let _guard = frame_support::StorageNoopGuard::default();
+		<AllPalletsWithSystem as frame_support::traits::TryState<System::BlockNumber>>::try_state(
 			*header.number(),
 			select,
 		)
@@ -322,6 +367,7 @@ where
 			frame_support::log::error!(target: "runtime::executive", "failure: {:?}", e);
 			e
 		})?;
+		drop(_guard);
 
 		// do some of the checks that would normally happen in `final_checks`, but perhaps skip
 		// the state root check.
@@ -333,7 +379,7 @@ where
 				assert!(header_item == computed_item, "Digest item must match that calculated.");
 			}
 
-			if try_state_root {
+			if state_root_check {
 				let storage_root = new_header.state_root();
 				header.state_root().check_equal(storage_root);
 				assert!(
@@ -353,14 +399,30 @@ where
 
 	/// Execute all `OnRuntimeUpgrade` of this runtime, including the pre and post migration checks.
 	///
-	/// This should only be used for testing.
-	pub fn try_runtime_upgrade() -> Result<frame_support::weights::Weight, &'static str> {
-		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::pre_upgrade().unwrap();
-		let weight = Self::execute_on_runtime_upgrade();
-		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::post_upgrade(
-			Vec::<u8>::new(),
-		)
-		.unwrap();
+	/// Runs the try-state code both before and after the migration function if `checks` is set to
+	/// `true`. Also, if set to `true`, it runs the `pre_upgrade` and `post_upgrade` hooks.
+	pub fn try_runtime_upgrade(checks: bool) -> Result<Weight, &'static str> {
+		if checks {
+			let _guard = frame_support::StorageNoopGuard::default();
+			<AllPalletsWithSystem as frame_support::traits::TryState<System::BlockNumber>>::try_state(
+				frame_system::Pallet::<System>::block_number(),
+				frame_try_runtime::TryStateSelect::All,
+			)?;
+		}
+
+		let weight =
+			<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::try_on_runtime_upgrade(
+				checks,
+			)?;
+
+		if checks {
+			let _guard = frame_support::StorageNoopGuard::default();
+			<AllPalletsWithSystem as frame_support::traits::TryState<System::BlockNumber>>::try_state(
+				frame_system::Pallet::<System>::block_number(),
+				frame_try_runtime::TryStateSelect::All,
+			)?;
+		}
+
 		Ok(weight)
 	}
 }
@@ -390,7 +452,7 @@ where
 	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
 {
 	/// Execute all `OnRuntimeUpgrade` of this runtime, and return the aggregate weight.
-	pub fn execute_on_runtime_upgrade() -> frame_support::weights::Weight {
+	pub fn execute_on_runtime_upgrade() -> Weight {
 		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::on_runtime_upgrade()
 	}
 
@@ -498,7 +560,7 @@ where
 		// Check that transaction trie root represents the transactions.
 		let xts_root = frame_system::extrinsics_root::<System::Hashing, _>(&block.extrinsics());
 		header.extrinsics_root().check_equal(&xts_root);
-		assert!(header.extrinsics_root() == &xts_root, "Transaction trie root must be valid.");
+		assert!(header.extrinsics_root() == &xts_root, "not enought elements to pop found");
 	}
 
 	/// Actually execute all transitions for `block`.
@@ -595,7 +657,7 @@ where
 						let info = t.clone().get_dispatch_info();
 						t.clone().check(&Default::default()).expect("incomming tx needs to be properly signed");
 						all = frame_system::calculate_consumed_weight::<CallOf<Block::Extrinsic, Context>>(max.clone(), all, &info)
-							.expect("sum of extrinsics should fit into single block");
+							.expect("Transaction would exhaust the block limits");
 
 					}
 
@@ -696,6 +758,14 @@ where
 		let dispatch_info = xt.get_dispatch_info();
 		let r = Applyable::apply::<UnsignedValidator>(xt, &dispatch_info, encoded_len)?;
 
+		// Mandatory(inherents) are not allowed to fail.
+		//
+		// The entire block should be discarded if an inherent fails to apply. Otherwise
+		// it may open an attack vector.
+		if r.is_err() && dispatch_info.class == DispatchClass::Mandatory {
+			return Err(InvalidTransaction::BadMandatory.into())
+		}
+
 		<frame_system::Pallet<System>>::note_applied_extrinsic(&r, dispatch_info);
 
 		Ok(r.map(|_| ()).map_err(|e| e.error))
@@ -756,6 +826,10 @@ where
 		let dispatch_info = within_span! { sp_tracing::Level::TRACE, "dispatch_info";
 			xt.get_dispatch_info()
 		};
+
+		if dispatch_info.class == DispatchClass::Mandatory {
+			return Err(InvalidTransaction::MandatoryValidation.into())
+		}
 
 		within_span! {
 			sp_tracing::Level::TRACE, "validate";
@@ -862,6 +936,7 @@ mod tests {
 
 		#[pallet::call]
 		impl<T: Config> Pallet<T> {
+			#[pallet::call_index(0)]
 			#[pallet::weight(100)]
 			pub fn some_function(origin: OriginFor<T>) -> DispatchResult {
 				// NOTE: does not make any different.
@@ -869,36 +944,42 @@ mod tests {
 				Ok(())
 			}
 
+			#[pallet::call_index(1)]
 			#[pallet::weight((200, DispatchClass::Operational))]
 			pub fn some_root_operation(origin: OriginFor<T>) -> DispatchResult {
 				frame_system::ensure_root(origin)?;
 				Ok(())
 			}
 
+			#[pallet::call_index(2)]
 			#[pallet::weight(0)]
 			pub fn some_unsigned_message(origin: OriginFor<T>) -> DispatchResult {
 				frame_system::ensure_none(origin)?;
 				Ok(())
 			}
 
+			#[pallet::call_index(3)]
 			#[pallet::weight(0)]
 			pub fn allowed_unsigned(origin: OriginFor<T>) -> DispatchResult {
 				frame_system::ensure_root(origin)?;
 				Ok(())
 			}
 
+			#[pallet::call_index(4)]
 			#[pallet::weight(0)]
 			pub fn unallowed_unsigned(origin: OriginFor<T>) -> DispatchResult {
 				frame_system::ensure_root(origin)?;
 				Ok(())
 			}
 
-			#[pallet::weight(0)]
+			#[pallet::call_index(5)]
+			#[pallet::weight((0, DispatchClass::Mandatory))]
 			pub fn inherent_call(origin: OriginFor<T>) -> DispatchResult {
-				let _ = frame_system::ensure_none(origin)?;
+				frame_system::ensure_none(origin)?;
 				Ok(())
 			}
 
+			#[pallet::call_index(6)]
 			#[pallet::weight(0)]
 			pub fn calculate_storage_root(_origin: OriginFor<T>) -> DispatchResult {
 				let root = sp_io::storage::root(sp_runtime::StateVersion::V1);
@@ -1148,13 +1229,13 @@ mod tests {
 		block_import_works_inner(
 			new_test_ext_v0(1),
 			array_bytes::hex_n_into_unchecked(
-				"ddceab450519bbc0aebe68a8017e02db370d4a534faab424e7f111a257c8bbca",
+				"1e4e3699be2cec577f164e32b88f0f6f2124557be8eaab02cb751f4e561ac902",
 			),
 		);
 		block_import_works_inner(
 			new_test_ext(1),
 			array_bytes::hex_n_into_unchecked(
-				"7723223a19520c37ed5340623d480414d0e287f0189bf8c9f268d80832a2de5e",
+				"a5991b9204bb6ebb83e0da0abeef3b3a91ea7f7d1e547a62df6c62752fe9295d",
 			),
 		);
 	}
@@ -1839,7 +1920,7 @@ mod tests {
 						parent_hash: [69u8; 32].into(),
 						number: 1,
 						state_root: hex!(
-							"c1a5373581a3142b5107428aae1fd4e43259287c84db11f67a6525656c65f70c"
+							"7c3644ad634bf7d91f11984ebb149e389c92f99fef8ac181f7a9a43ee31d94e3"
 						)
 						.into(),
 						extrinsics_root: hex!(
@@ -1897,11 +1978,11 @@ mod tests {
 						parent_hash: System::parent_hash(),
 						number: 1,
 						state_root: hex!(
-							"c6bbd33a1161f1b0d719594304a81c6cc97a183a64a09e1903cb58ed6e247148"
+							"10b8fe2ef82cb245fc71dab724fde5462bacc4f0d2b3b6bf0581aa89d63ef3a1"
 						)
 						.into(),
 						extrinsics_root: hex!(
-							"49a06b961d7cc4479e3a4ff859d16cd022ce10def840c2124695bea891c8a18c"
+							"325ff57815f725eb40852ec4cd91526f8bdbbc1bd1c5d79e5a85d5d92704b0c9"
 						)
 						.into(),
 						digest: Digest { logs: vec![DigestItem::Other(tx_hashes_list.encode())] },
@@ -1924,7 +2005,7 @@ mod tests {
 						parent_hash: System::parent_hash(),
 						number: 2,
 						state_root: hex!(
-							"30078f391818adda0ccfbbfb39abe63ed367041077a4d6c16187c5f412281aa7"
+							"9bd12b1263d49dd1d6cf7fdf0d1c8330db2c927bb2d55e77b725ccdcaaefcba5"
 						)
 						.into(),
 						extrinsics_root: hex!(
@@ -1986,11 +2067,11 @@ mod tests {
 						parent_hash: System::parent_hash(),
 						number: 1,
 						state_root: hex!(
-							"347bf9906542825357b29ff5a31d6ef55fe25365cc46a105b2eec18e7d942c39"
+							"5bc40cfd524119a0f1ca2fbd9f0357806d0041f56e0de1750b1fe0011915ca4c"
 						)
 						.into(),
 						extrinsics_root: hex!(
-							"2297bffad2121ea12a31460894a8e5215f9c734afe0290c37225f8f36d16a8b5"
+							"6406786b8a8f590d77d8dc6126c16f7f1621efac35914834d95ec032562f5125"
 						)
 						.into(),
 						digest: Digest { logs: vec![DigestItem::Other(tx_hashes_list.encode())] },
@@ -2048,11 +2129,11 @@ mod tests {
 						parent_hash: System::parent_hash(),
 						number: 1,
 						state_root: hex!(
-							"347bf9906542825357b29ff5a31d6ef55fe25365cc46a105b2eec18e7d942c39"
+							"5bc40cfd524119a0f1ca2fbd9f0357806d0041f56e0de1750b1fe0011915ca4c"
 						)
 						.into(),
 						extrinsics_root: hex!(
-							"67c3f299c63ffbe544a83c0ca551f9edb1b1c81c0423e99238d020fc252b0159"
+							"f380e937898ceef6feb3fbb47e4fb59d0be185c5f98be64baafa89c778d165c5"
 						)
 						.into(),
 						digest: Digest { logs: vec![DigestItem::Other(tx_hashes_list.encode())] },
@@ -2079,7 +2160,7 @@ mod tests {
 						)
 						.into(),
 						extrinsics_root: hex!(
-							"67c3f299c63ffbe544a83c0ca551f9edb1b1c81c0423e99238d020fc252b0159"
+							"f380e937898ceef6feb3fbb47e4fb59d0be185c5f98be64baafa89c778d165c5"
 						)
 						.into(),
 						digest: Digest { logs: vec![DigestItem::Other(tx_hashes_list.encode())] },
@@ -2133,7 +2214,7 @@ mod tests {
 						)
 						.into(),
 						extrinsics_root: hex!(
-							"8a9e640f76baf0990ddbec6f75a2e8ec3dafd3fde8dcc673bcc1469d9dfc9de2"
+							"47f1dc33bc8221e453f3d48e6cedb33aa8fec1bdba47da155096bf67f614fb82"
 						)
 						.into(),
 						digest: Digest { logs: vec![DigestItem::Other(tx_hashes_list.encode())] },
@@ -2187,11 +2268,11 @@ mod tests {
 						parent_hash: System::parent_hash(),
 						number: 1,
 						state_root: hex!(
-							"c6bbd33a1161f1b0d719594304a81c6cc97a183a64a09e1903cb58ed6e247148"
+							"10b8fe2ef82cb245fc71dab724fde5462bacc4f0d2b3b6bf0581aa89d63ef3a1"
 						)
 						.into(),
 						extrinsics_root: hex!(
-							"49a06b961d7cc4479e3a4ff859d16cd022ce10def840c2124695bea891c8a18c"
+							"325ff57815f725eb40852ec4cd91526f8bdbbc1bd1c5d79e5a85d5d92704b0c9"
 						)
 						.into(),
 						digest: Digest { logs: vec![DigestItem::Other(tx_hashes_list.encode())] },
@@ -2220,7 +2301,7 @@ mod tests {
 						parent_hash: System::parent_hash(),
 						number: 2,
 						state_root: hex!(
-							"cecc44cf1dbd96b64fc7817d3e421c0ef623ae3d49a872d9bca67b635455c0e8"
+							"9a3734f7495f8d2cdeaf71b8908040428848f8333274f9b871f522aa8838cc2e"
 						)
 						.into(),
 						extrinsics_root: hex!(
@@ -2285,11 +2366,11 @@ mod tests {
 						parent_hash: System::parent_hash(),
 						number: 1,
 						state_root: hex!(
-							"1f1e089a56d87fd7d636593b3716d27be16cf596c5842ce364679127fdcc7315"
+							"19fd2bb5ce39066549e0f84e2fcabb715e3541e3c26ec8047554bbcd9c7885a4"
 						)
 						.into(),
 						extrinsics_root: hex!(
-							"b556518ac4690266bf7327301ed75f30bbefe4e8ef45920849e746c08b0a36e0"
+							"0bf3649935d974c08416350641382ffef980a58eace1f4b5b968705d206c7aae"
 						)
 						.into(),
 						digest: Digest { logs: vec![DigestItem::Other(tx_hashes_list.encode())] },
@@ -2313,7 +2394,7 @@ mod tests {
 						parent_hash: System::parent_hash(),
 						number: 2,
 						state_root: hex!(
-							"a82520d8f5343f23813ef7de98efb35cfba8a5d9e5a6010aff93e607de61d588"
+							"15a8610abb49b6649f043cf75c2ff9ed4209fb5b657fd345d0e0fc9b8165ba72"
 						)
 						.into(),
 						extrinsics_root: hex!(
@@ -2376,11 +2457,11 @@ mod tests {
 						parent_hash: System::parent_hash(),
 						number: 1,
 						state_root: hex!(
-							"c6bbd33a1161f1b0d719594304a81c6cc97a183a64a09e1903cb58ed6e247148"
+							"10b8fe2ef82cb245fc71dab724fde5462bacc4f0d2b3b6bf0581aa89d63ef3a1"
 						)
 						.into(),
 						extrinsics_root: hex!(
-							"b17b5ebd3c0b536875c69fa58220b274cfdfdf06e2f374a0b5f5e1cc4386dba1"
+							"2b8d0b6c617c1bc4003690d7e83d33cbe69d7237167e52c446bc690e188ce300"
 						)
 						.into(),
 						digest: Digest { logs: vec![DigestItem::Other(tx_hashes_list.encode())] },
@@ -2435,11 +2516,11 @@ mod tests {
 						parent_hash: System::parent_hash(),
 						number: 1,
 						state_root: hex!(
-							"c6bbd33a1161f1b0d719594304a81c6cc97a183a64a09e1903cb58ed6e247148"
+							"10b8fe2ef82cb245fc71dab724fde5462bacc4f0d2b3b6bf0581aa89d63ef3a1"
 						)
 						.into(),
 						extrinsics_root: hex!(
-							"9f907f07e03a93bbb696e4071f58237edc3 5a701d24e5a2155cf52a2b32a4ef3"
+							"c455a6cba17ea145cc03fa905ae969826a26780278ace184c61510e638901a85"
 						)
 						.into(),
 						digest: Digest { logs: vec![DigestItem::Other(tx_hashes_list.encode())] },
@@ -2456,6 +2537,45 @@ mod tests {
 				pub_key_bytes.clone(),
 			);
 		});
+
+		#[should_panic(expected = "A call was labelled as mandatory, but resulted in an Error.")]
+		fn invalid_inherents_fail_block_execution() {
+			let xt1 = TestXt::new(
+				RuntimeCall::Custom(custom::Call::inherent_call {}),
+				sign_extra(1, 0, 0),
+			);
+
+			new_test_ext(1).execute_with(|| {
+				Executive::execute_block(Block::new(
+					Header::new(
+						1,
+						H256::default(),
+						H256::default(),
+						[69u8; 32].into(),
+						Digest::default(),
+					),
+					vec![xt1],
+				));
+			});
+		}
+
+		// Inherents are created by the runtime and don't need to be validated.
+		#[test]
+		fn inherents_fail_validate_block() {
+			let xt1 = TestXt::new(RuntimeCall::Custom(custom::Call::inherent_call {}), None);
+
+			new_test_ext(1).execute_with(|| {
+				assert_eq!(
+					Executive::validate_transaction(
+						TransactionSource::External,
+						xt1,
+						H256::random()
+					)
+					.unwrap_err(),
+					InvalidTransaction::MandatoryValidation.into()
+				);
+			})
+		}
 	}
 
 	#[test]

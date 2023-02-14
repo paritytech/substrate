@@ -72,11 +72,11 @@ use sp_runtime::{
 	generic,
 	traits::{
 		self, AtLeast32Bit, AtLeast32BitUnsigned, BadOrigin, BlockNumberProvider, Bounded,
-		CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay, MaybeMallocSizeOf,
+		CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay,
 		MaybeSerializeDeserialize, Member, One, SaturatedConversion, Saturating, SimpleBitOps,
 		StaticLookup, Zero,
 	},
-	DispatchError, Perbill, RuntimeDebug,
+	DispatchError, RuntimeDebug,
 };
 #[cfg(any(feature = "std", test))]
 use sp_std::map;
@@ -205,7 +205,6 @@ impl<MaxNormal: Get<u32>, MaxOverflow: Get<u32>> ConsumerLimits for (MaxNormal, 
 pub mod pallet {
 	use crate::{self as frame_system, pallet_prelude::*, *};
 	use frame_support::pallet_prelude::*;
-	use sp_runtime::DispatchErrorWithPostInfo;
 
 	/// System configuration trait. Implemented by runtime.
 	#[pallet::config]
@@ -259,7 +258,6 @@ pub mod pallet {
 			+ Copy
 			+ sp_std::hash::Hash
 			+ sp_std::str::FromStr
-			+ MaybeMallocSizeOf
 			+ MaxEncodedLen
 			+ TypeInfo;
 
@@ -277,7 +275,6 @@ pub mod pallet {
 			+ sp_std::hash::Hash
 			+ AsRef<[u8]>
 			+ AsMut<[u8]>
-			+ MaybeMallocSizeOf
 			+ MaxEncodedLen;
 
 		/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
@@ -379,26 +376,10 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// A dispatch that will fill the block weight up to the given ratio.
-		// TODO: This should only be available for testing, rather than in general usage, but
-		// that's not possible at present (since it's within the pallet macro).
-		#[pallet::weight(*_ratio * T::BlockWeights::get().max_block)]
-		pub fn fill_block(origin: OriginFor<T>, _ratio: Perbill) -> DispatchResultWithPostInfo {
-			match ensure_root(origin) {
-				Ok(_) => Ok(().into()),
-				Err(_) => {
-					// roughly same as a 4 byte remark since perbill is u32.
-					Err(DispatchErrorWithPostInfo {
-						post_info: Some(T::SystemWeightInfo::remark(4u32)).into(),
-						error: DispatchError::BadOrigin,
-					})
-				},
-			}
-		}
-
 		/// Persists list of encoded txs into the storage queue. There is an dedicated
 		/// check in [Executive](https://storage.googleapis.com/mangata-docs-node/frame_executive/struct.Executive.html) that verifies that passed binary data can be
 		/// decoded into extrinsics.
+		#[pallet::call_index(0)]
 		#[pallet::weight((
 			0,
 			DispatchClass::Mandatory
@@ -430,6 +411,7 @@ pub mod pallet {
 		/// # <weight>
 		/// - `O(1)`
 		/// # </weight>
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::SystemWeightInfo::remark(_remark.len() as u32))]
 		pub fn remark(origin: OriginFor<T>, _remark: Vec<u8>) -> DispatchResultWithPostInfo {
 			ensure_signed_or_root(origin)?;
@@ -437,6 +419,7 @@ pub mod pallet {
 		}
 
 		/// Set the number of pages in the WebAssembly environment's heap.
+		#[pallet::call_index(2)]
 		#[pallet::weight((T::SystemWeightInfo::set_heap_pages(), DispatchClass::Operational))]
 		pub fn set_heap_pages(origin: OriginFor<T>, pages: u64) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
@@ -457,6 +440,7 @@ pub mod pallet {
 		/// The weight of this function is dependent on the runtime, but generally this is very
 		/// expensive. We will treat this as a full block.
 		/// # </weight>
+		#[pallet::call_index(3)]
 		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
 		pub fn set_code(origin: OriginFor<T>, code: Vec<u8>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
@@ -474,6 +458,7 @@ pub mod pallet {
 		/// - 1 event.
 		/// The weight of this function is dependent on the runtime. We will treat this as a full
 		/// block. # </weight>
+		#[pallet::call_index(4)]
 		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
 		pub fn set_code_without_checks(
 			origin: OriginFor<T>,
@@ -485,6 +470,7 @@ pub mod pallet {
 		}
 
 		/// Set some items of storage.
+		#[pallet::call_index(5)]
 		#[pallet::weight((
 			T::SystemWeightInfo::set_storage(items.len() as u32),
 			DispatchClass::Operational,
@@ -501,6 +487,7 @@ pub mod pallet {
 		}
 
 		/// Kill some items from storage.
+		#[pallet::call_index(6)]
 		#[pallet::weight((
 			T::SystemWeightInfo::kill_storage(keys.len() as u32),
 			DispatchClass::Operational,
@@ -517,6 +504,7 @@ pub mod pallet {
 		///
 		/// **NOTE:** We rely on the Root origin to provide us the number of subkeys under
 		/// the prefix we are removing to accurately calculate the weight of this function.
+		#[pallet::call_index(7)]
 		#[pallet::weight((
 			T::SystemWeightInfo::kill_prefix(_subkeys.saturating_add(1)),
 			DispatchClass::Operational,
@@ -532,6 +520,7 @@ pub mod pallet {
 		}
 
 		/// Make some on-chain remark and emit event.
+		#[pallet::call_index(8)]
 		#[pallet::weight(T::SystemWeightInfo::remark_with_event(remark.len() as u32))]
 		pub fn remark_with_event(
 			origin: OriginFor<T>,
@@ -881,6 +870,7 @@ impl From<sp_version::RuntimeVersion> for LastRuntimeUpgradeInfo {
 	}
 }
 
+/// Ensure the origin is Root.
 pub struct EnsureRoot<AccountId>(sp_std::marker::PhantomData<AccountId>);
 impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, AccountId>
 	EnsureOrigin<O> for EnsureRoot<AccountId>
@@ -899,6 +889,7 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 	}
 }
 
+/// Ensure the origin is Root and return the provided `Success` value.
 pub struct EnsureRootWithSuccess<AccountId, Success>(
 	sp_std::marker::PhantomData<(AccountId, Success)>,
 );
@@ -922,6 +913,31 @@ impl<
 	}
 }
 
+/// Ensure the origin is provided `Ensure` origin and return the provided `Success` value.
+pub struct EnsureWithSuccess<Ensure, AccountId, Success>(
+	sp_std::marker::PhantomData<(Ensure, AccountId, Success)>,
+);
+
+impl<
+		O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
+		Ensure: EnsureOrigin<O>,
+		AccountId,
+		Success: TypedGet,
+	> EnsureOrigin<O> for EnsureWithSuccess<Ensure, AccountId, Success>
+{
+	type Success = Success::Type;
+
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		Ensure::try_origin(o).map(|_| Success::get())
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn try_successful_origin() -> Result<O, ()> {
+		Ensure::try_successful_origin()
+	}
+}
+
+/// Ensure the origin is any `Signed` origin.
 pub struct EnsureSigned<AccountId>(sp_std::marker::PhantomData<AccountId>);
 impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, AccountId: Decode>
 	EnsureOrigin<O> for EnsureSigned<AccountId>
@@ -942,6 +958,7 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 	}
 }
 
+/// Ensure the origin is `Signed` origin from the given `AccountId`.
 pub struct EnsureSignedBy<Who, AccountId>(sp_std::marker::PhantomData<(Who, AccountId)>);
 impl<
 		O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
@@ -970,6 +987,7 @@ impl<
 	}
 }
 
+/// Ensure the origin is `None`. i.e. unsigned transaction.
 pub struct EnsureNone<AccountId>(sp_std::marker::PhantomData<AccountId>);
 impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, AccountId>
 	EnsureOrigin<O> for EnsureNone<AccountId>
@@ -988,6 +1006,7 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 	}
 }
 
+/// Always fail.
 pub struct EnsureNever<T>(sp_std::marker::PhantomData<T>);
 impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
 	type Success = T;

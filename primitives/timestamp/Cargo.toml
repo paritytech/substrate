@@ -20,8 +20,8 @@ log = { version = "0.4.17", optional = true }
 thiserror = { version = "1.0.30", optional = true }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../api" }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../inherents" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../runtime" }
-sp-std = { version = "4.0.0", default-features = false, path = "../std" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../runtime" }
+sp-std = { version = "5.0.0", default-features = false, path = "../std" }
 
 [features]
 default = [ "std" ]

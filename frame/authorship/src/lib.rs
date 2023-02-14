@@ -237,6 +237,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Provide a set of uncles.
+		#[pallet::call_index(0)]
 		#[pallet::weight((0, DispatchClass::Mandatory))]
 		pub fn set_uncles(origin: OriginFor<T>, new_uncles: Vec<T::Header>) -> DispatchResult {
 			ensure_none(origin)?;

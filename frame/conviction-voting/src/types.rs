@@ -147,6 +147,15 @@ impl<
 				self.ayes = self.ayes.checked_add(&aye.votes)?;
 				self.nays = self.nays.checked_add(&nay.votes)?;
 			},
+			AccountVote::SplitAbstain { aye, nay, abstain } => {
+				let aye = Conviction::None.votes(aye);
+				let nay = Conviction::None.votes(nay);
+				let abstain = Conviction::None.votes(abstain);
+				self.support =
+					self.support.checked_add(&aye.capital)?.checked_add(&abstain.capital)?;
+				self.ayes = self.ayes.checked_add(&aye.votes)?;
+				self.nays = self.nays.checked_add(&nay.votes)?;
+			},
 		}
 		Some(())
 	}
@@ -168,6 +177,15 @@ impl<
 				let aye = Conviction::None.votes(aye);
 				let nay = Conviction::None.votes(nay);
 				self.support = self.support.checked_sub(&aye.capital)?;
+				self.ayes = self.ayes.checked_sub(&aye.votes)?;
+				self.nays = self.nays.checked_sub(&nay.votes)?;
+			},
+			AccountVote::SplitAbstain { aye, nay, abstain } => {
+				let aye = Conviction::None.votes(aye);
+				let nay = Conviction::None.votes(nay);
+				let abstain = Conviction::None.votes(abstain);
+				self.support =
+					self.support.checked_sub(&aye.capital)?.checked_sub(&abstain.capital)?;
 				self.ayes = self.ayes.checked_sub(&aye.votes)?;
 				self.nays = self.nays.checked_sub(&nay.votes)?;
 			},

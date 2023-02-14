@@ -111,9 +111,32 @@ fn test_struct_unnamed() {
 }
 
 #[derive(DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, DefaultNoBound)]
+struct StructNoGenerics {
+	field1: u32,
+	field2: u64,
+}
+
+#[derive(DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, DefaultNoBound)]
+enum EnumNoGenerics {
+	#[default]
+	VariantUnnamed(u32, u64),
+	VariantNamed {
+		a: u32,
+		b: u64,
+	},
+	VariantUnit,
+}
+
+#[derive(DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, DefaultNoBound)]
 enum Enum<T: Config, U, V> {
+	#[default]
 	VariantUnnamed(u32, u64, T::C, core::marker::PhantomData<(U, V)>),
-	VariantNamed { a: u32, b: u64, c: T::C, phantom: core::marker::PhantomData<(U, V)> },
+	VariantNamed {
+		a: u32,
+		b: u64,
+		c: T::C,
+		phantom: core::marker::PhantomData<(U, V)>,
+	},
 	VariantUnit,
 	VariantUnit2,
 }
@@ -121,7 +144,12 @@ enum Enum<T: Config, U, V> {
 // enum that will have a named default.
 #[derive(DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, DefaultNoBound)]
 enum Enum2<T: Config> {
-	VariantNamed { a: u32, b: u64, c: T::C },
+	#[default]
+	VariantNamed {
+		a: u32,
+		b: u64,
+		c: T::C,
+	},
 	VariantUnnamed(u32, u64, T::C),
 	VariantUnit,
 	VariantUnit2,
@@ -130,8 +158,13 @@ enum Enum2<T: Config> {
 // enum that will have a unit default.
 #[derive(DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, DefaultNoBound)]
 enum Enum3<T: Config> {
+	#[default]
 	VariantUnit,
-	VariantNamed { a: u32, b: u64, c: T::C },
+	VariantNamed {
+		a: u32,
+		b: u64,
+		c: T::C,
+	},
 	VariantUnnamed(u32, u64, T::C),
 	VariantUnit2,
 }

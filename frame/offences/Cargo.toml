@@ -20,13 +20,13 @@ serde = { version = "1.0.136", optional = true }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../balances" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
-sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
+sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
-sp-core = { version = "6.0.0", path = "../../primitives/core" }
-sp-io = { version = "6.0.0", path = "../../primitives/io" }
+sp-core = { version = "7.0.0", path = "../../primitives/core" }
+sp-io = { version = "7.0.0", path = "../../primitives/io" }
 
 [features]
 default = ["std"]

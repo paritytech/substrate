@@ -20,8 +20,8 @@ futures-timer = "3.0.1"
 log = "0.4.8"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.10.0-dev"}
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
-sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
-sp-core = { version = "6.0.0", path = "../../primitives/core" }
+sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
+sp-core = { version = "7.0.0", path = "../../primitives/core" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
@@ -38,3 +38,4 @@ sc-transaction-pool = { version = "4.0.0-dev", path = "../transaction-pool" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 parking_lot = "0.11.2"
 env_logger = "0.9.0"
+tokio = { version = "1.22.0", features = ["signal", "rt-multi-thread", "parking_lot"] }

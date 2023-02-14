@@ -21,9 +21,10 @@ use crate::{ExecutionLimit, HwBench};
 use sc_telemetry::SysInfo;
 use sp_core::{sr25519, Pair};
 use sp_io::crypto::sr25519_verify;
-use sp_std::prelude::*;
+use sp_std::{fmt, prelude::*};
 
 use rand::{seq::SliceRandom, Rng, RngCore};
+use serde::Serializer;
 use std::{
 	fs::File,
 	io::{Seek, SeekFrom, Write},
@@ -32,6 +33,110 @@ use std::{
 	time::{Duration, Instant},
 };
 
+/// The unit in which the [`Throughput`] (bytes per second) is denoted.
+pub enum Unit {
+	GiBs,
+	MiBs,
+	KiBs,
+}
+
+impl fmt::Display for Unit {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.write_str(match self {
+			Unit::GiBs => "GiBs",
+			Unit::MiBs => "MiBs",
+			Unit::KiBs => "KiBs",
+		})
+	}
+}
+
+/// Throughput as measured in bytes per second.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub struct Throughput(f64);
+
+const KIBIBYTE: f64 = (1 << 10) as f64;
+const MEBIBYTE: f64 = (1 << 20) as f64;
+const GIBIBYTE: f64 = (1 << 30) as f64;
+
+impl Throughput {
+	/// Construct [`Self`] from kibibyte/s.
+	pub fn from_kibs(kibs: f64) -> Throughput {
+		Throughput(kibs * KIBIBYTE)
+	}
+
+	/// Construct [`Self`] from mebibyte/s.
+	pub fn from_mibs(mibs: f64) -> Throughput {
+		Throughput(mibs * MEBIBYTE)
+	}
+
+	/// Construct [`Self`] from gibibyte/s.
+	pub fn from_gibs(gibs: f64) -> Throughput {
+		Throughput(gibs * GIBIBYTE)
+	}
+
+	/// [`Self`] as number of byte/s.
+	pub fn as_bytes(&self) -> f64 {
+		self.0
+	}
+
+	/// [`Self`] as number of kibibyte/s.
+	pub fn as_kibs(&self) -> f64 {
+		self.0 / KIBIBYTE
+	}
+
+	/// [`Self`] as number of mebibyte/s.
+	pub fn as_mibs(&self) -> f64 {
+		self.0 / MEBIBYTE
+	}
+
+	/// [`Self`] as number of gibibyte/s.
+	pub fn as_gibs(&self) -> f64 {
+		self.0 / GIBIBYTE
+	}
+
+	/// Normalizes [`Self`] to use the largest unit possible.
+	pub fn normalize(&self) -> (f64, Unit) {
+		let bs = self.0;
+
+		if bs >= GIBIBYTE {
+			(self.as_gibs(), Unit::GiBs)
+		} else if bs >= MEBIBYTE {
+			(self.as_mibs(), Unit::MiBs)
+		} else {
+			(self.as_kibs(), Unit::KiBs)
+		}
+	}
+}
+
+impl fmt::Display for Throughput {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let (value, unit) = self.normalize();
+		write!(f, "{:.2?} {}", value, unit)
+	}
+}
+
+/// Serializes `Throughput` and uses MiBs as the unit.
+pub fn serialize_throughput<S>(throughput: &Throughput, serializer: S) -> Result<S::Ok, S::Error>
+where
+	S: Serializer,
+{
+	serializer.serialize_u64(throughput.as_mibs() as u64)
+}
+
+/// Serializes `Option<Throughput>` and uses MiBs as the unit.
+pub fn serialize_throughput_option<S>(
+	maybe_throughput: &Option<Throughput>,
+	serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+	S: Serializer,
+{
+	if let Some(throughput) = maybe_throughput {
+		return serializer.serialize_some(&(throughput.as_mibs() as u64))
+	}
+	serializer.serialize_none()
+}
+
 #[inline(always)]
 pub(crate) fn benchmark<E>(
 	name: &str,
@@ -39,7 +144,7 @@ pub(crate) fn benchmark<E>(
 	max_iterations: usize,
 	max_duration: Duration,
 	mut run: impl FnMut() -> Result<(), E>,
-) -> Result<f64, E> {
+) -> Result<Throughput, E> {
 	// Run the benchmark once as a warmup to get the code into the L1 cache.
 	run()?;
 
@@ -58,9 +163,9 @@ pub(crate) fn benchmark<E>(
 		}
 	}
 
-	let score = ((size * count) as f64 / elapsed.as_secs_f64()) / (1024.0 * 1024.0);
+	let score = Throughput::from_kibs((size * count) as f64 / (elapsed.as_secs_f64() * 1024.0));
 	log::trace!(
-		"Calculated {} of {:.2}MB/s in {} iterations in {}ms",
+		"Calculated {} of {} in {} iterations in {}ms",
 		name,
 		score,
 		count,
@@ -120,14 +225,14 @@ fn clobber_value<T>(input: &mut T) {
 pub const DEFAULT_CPU_EXECUTION_LIMIT: ExecutionLimit =
 	ExecutionLimit::Both { max_iterations: 4 * 1024, max_duration: Duration::from_millis(100) };
 
-// This benchmarks the CPU speed as measured by calculating BLAKE2b-256 hashes, in MB/s.
-pub fn benchmark_cpu(limit: ExecutionLimit) -> f64 {
+// This benchmarks the CPU speed as measured by calculating BLAKE2b-256 hashes, in bytes per second.
+pub fn benchmark_cpu(limit: ExecutionLimit) -> Throughput {
 	// In general the results of this benchmark are somewhat sensitive to how much
-	// data we hash at the time. The smaller this is the *less* MB/s we can hash,
-	// the bigger this is the *more* MB/s we can hash, up until a certain point
+	// data we hash at the time. The smaller this is the *less* B/s we can hash,
+	// the bigger this is the *more* B/s we can hash, up until a certain point
 	// where we can achieve roughly ~100% of what the hasher can do. If we'd plot
 	// this on a graph with the number of bytes we want to hash on the X axis
-	// and the speed in MB/s on the Y axis then we'd essentially see it grow
+	// and the speed in B/s on the Y axis then we'd essentially see it grow
 	// logarithmically.
 	//
 	// In practice however we might not always have enough data to hit the maximum
@@ -156,12 +261,12 @@ pub fn benchmark_cpu(limit: ExecutionLimit) -> f64 {
 pub const DEFAULT_MEMORY_EXECUTION_LIMIT: ExecutionLimit =
 	ExecutionLimit::Both { max_iterations: 32, max_duration: Duration::from_millis(100) };
 
-// This benchmarks the effective `memcpy` memory bandwidth available in MB/s.
+// This benchmarks the effective `memcpy` memory bandwidth available in bytes per second.
 //
 // It doesn't technically measure the absolute maximum memory bandwidth available,
 // but that's fine, because real code most of the time isn't optimized to take
 // advantage of the full memory bandwidth either.
-pub fn benchmark_memory(limit: ExecutionLimit) -> f64 {
+pub fn benchmark_memory(limit: ExecutionLimit) -> Throughput {
 	// Ideally this should be at least as big as the CPU's L3 cache,
 	// and it should be big enough so that the `memcpy` takes enough
 	// time to be actually measurable.
@@ -253,7 +358,7 @@ pub const DEFAULT_DISK_EXECUTION_LIMIT: ExecutionLimit =
 pub fn benchmark_disk_sequential_writes(
 	limit: ExecutionLimit,
 	directory: &Path,
-) -> Result<f64, String> {
+) -> Result<Throughput, String> {
 	const SIZE: usize = 64 * 1024 * 1024;
 
 	let buffer = random_data(SIZE);
@@ -295,7 +400,7 @@ pub fn benchmark_disk_sequential_writes(
 pub fn benchmark_disk_random_writes(
 	limit: ExecutionLimit,
 	directory: &Path,
-) -> Result<f64, String> {
+) -> Result<Throughput, String> {
 	const SIZE: usize = 64 * 1024 * 1024;
 
 	let buffer = random_data(SIZE);
@@ -360,9 +465,9 @@ pub fn benchmark_disk_random_writes(
 
 /// Benchmarks the verification speed of sr25519 signatures.
 ///
-/// Returns the throughput in MB/s by convention.
+/// Returns the throughput in B/s by convention.
 /// The values are rather small (0.4-0.8) so it is advised to convert them into KB/s.
-pub fn benchmark_sr25519_verify(limit: ExecutionLimit) -> f64 {
+pub fn benchmark_sr25519_verify(limit: ExecutionLimit) -> Throughput {
 	const INPUT_SIZE: usize = 32;
 	const ITERATION_SIZE: usize = 2048;
 	let pair = sr25519::Pair::from_string("//Alice", None).unwrap();
@@ -402,8 +507,8 @@ pub fn benchmark_sr25519_verify(limit: ExecutionLimit) -> f64 {
 pub fn gather_hwbench(scratch_directory: Option<&Path>) -> HwBench {
 	#[allow(unused_mut)]
 	let mut hwbench = HwBench {
-		cpu_hashrate_score: benchmark_cpu(DEFAULT_CPU_EXECUTION_LIMIT) as u64,
-		memory_memcpy_score: benchmark_memory(DEFAULT_MEMORY_EXECUTION_LIMIT) as u64,
+		cpu_hashrate_score: benchmark_cpu(DEFAULT_CPU_EXECUTION_LIMIT),
+		memory_memcpy_score: benchmark_memory(DEFAULT_MEMORY_EXECUTION_LIMIT),
 		disk_sequential_write_score: None,
 		disk_random_write_score: None,
 	};
@@ -412,7 +517,7 @@ pub fn gather_hwbench(scratch_directory: Option<&Path>) -> HwBench {
 		hwbench.disk_sequential_write_score =
 			match benchmark_disk_sequential_writes(DEFAULT_DISK_EXECUTION_LIMIT, scratch_directory)
 			{
-				Ok(score) => Some(score as u64),
+				Ok(score) => Some(score),
 				Err(error) => {
 					log::warn!("Failed to run the sequential write disk benchmark: {}", error);
 					None
@@ -421,7 +526,7 @@ pub fn gather_hwbench(scratch_directory: Option<&Path>) -> HwBench {
 
 		hwbench.disk_random_write_score =
 			match benchmark_disk_random_writes(DEFAULT_DISK_EXECUTION_LIMIT, scratch_directory) {
-				Ok(score) => Some(score as u64),
+				Ok(score) => Some(score),
 				Err(error) => {
 					log::warn!("Failed to run the random write disk benchmark: {}", error);
 					None
@@ -435,6 +540,7 @@ pub fn gather_hwbench(scratch_directory: Option<&Path>) -> HwBench {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use sp_runtime::assert_eq_error_rate_float;
 
 	#[cfg(target_os = "linux")]
 	#[test]
@@ -450,19 +556,19 @@ mod tests {
 
 	#[test]
 	fn test_benchmark_cpu() {
-		assert!(benchmark_cpu(DEFAULT_CPU_EXECUTION_LIMIT) > 0.0);
+		assert!(benchmark_cpu(DEFAULT_CPU_EXECUTION_LIMIT) > Throughput::from_mibs(0.0));
 	}
 
 	#[test]
 	fn test_benchmark_memory() {
-		assert!(benchmark_memory(DEFAULT_MEMORY_EXECUTION_LIMIT) > 0.0);
+		assert!(benchmark_memory(DEFAULT_MEMORY_EXECUTION_LIMIT) > Throughput::from_mibs(0.0));
 	}
 
 	#[test]
 	fn test_benchmark_disk_sequential_writes() {
 		assert!(
 			benchmark_disk_sequential_writes(DEFAULT_DISK_EXECUTION_LIMIT, "./".as_ref()).unwrap() >
-				0.0
+				Throughput::from_mibs(0.0)
 		);
 	}
 
@@ -470,12 +576,45 @@ mod tests {
 	fn test_benchmark_disk_random_writes() {
 		assert!(
 			benchmark_disk_random_writes(DEFAULT_DISK_EXECUTION_LIMIT, "./".as_ref()).unwrap() >
-				0.0
+				Throughput::from_mibs(0.0)
 		);
 	}
 
 	#[test]
 	fn test_benchmark_sr25519_verify() {
-		assert!(benchmark_sr25519_verify(ExecutionLimit::MaxIterations(1)) > 0.0);
+		assert!(
+			benchmark_sr25519_verify(ExecutionLimit::MaxIterations(1)) > Throughput::from_mibs(0.0)
+		);
+	}
+
+	/// Test the [`Throughput`].
+	#[test]
+	fn throughput_works() {
+		/// Float precision.
+		const EPS: f64 = 0.1;
+		let gib = Throughput::from_gibs(14.324);
+
+		assert_eq_error_rate_float!(14.324, gib.as_gibs(), EPS);
+		assert_eq_error_rate_float!(14667.776, gib.as_mibs(), EPS);
+		assert_eq_error_rate_float!(14667.776 * 1024.0, gib.as_kibs(), EPS);
+		assert_eq!("14.32 GiBs", gib.to_string());
+
+		let mib = Throughput::from_mibs(1029.0);
+		assert_eq!("1.00 GiBs", mib.to_string());
+	}
+
+	/// Test the [`HwBench`] serialization.
+	#[test]
+	fn hwbench_serialize_works() {
+		let hwbench = HwBench {
+			cpu_hashrate_score: Throughput::from_gibs(1.32),
+			memory_memcpy_score: Throughput::from_kibs(9342.432),
+			disk_sequential_write_score: Some(Throughput::from_kibs(4332.12)),
+			disk_random_write_score: None,
+		};
+
+		let serialized = serde_json::to_string(&hwbench).unwrap();
+		// Throughput from all of the benchmarks should be converted to MiBs.
+		assert_eq!(serialized, "{\"cpu_hashrate_score\":1351,\"memory_memcpy_score\":9,\"disk_sequential_write_score\":4}");
 	}
 }

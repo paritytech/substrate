@@ -8,8 +8,8 @@ edition = "2018"
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"]}
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 
-sp-core = { version = "6.0.0", default-features = false, path = "../core" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../runtime" }
+sp-core = { version = "7.0.0", default-features = false, path = "../core" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../runtime" }
 
 [features]
 default = ["std"]

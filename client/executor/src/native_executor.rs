@@ -23,24 +23,18 @@ use crate::{
 };
 
 use std::{
-	collections::HashMap,
 	marker::PhantomData,
 	panic::{AssertUnwindSafe, UnwindSafe},
 	path::PathBuf,
-	sync::{
-		atomic::{AtomicU64, Ordering},
-		mpsc, Arc,
-	},
+	sync::Arc,
 };
 
 use codec::Encode;
 use sc_executor_common::{
 	runtime_blob::RuntimeBlob,
-	wasm_runtime::{AllocationStats, InvokeMethod, WasmInstance, WasmModule},
+	wasm_runtime::{AllocationStats, WasmInstance, WasmModule},
 };
-use sp_core::traits::{CodeExecutor, Externalities, RuntimeCode, RuntimeSpawn, RuntimeSpawnExt};
-use sp_externalities::ExternalitiesExt as _;
-use sp_tasks::new_async_externalities;
+use sp_core::traits::{CodeExecutor, Externalities, RuntimeCode};
 use sp_version::{GetNativeVersion, NativeVersion, RuntimeVersion};
 use sp_wasm_interface::{ExtendedHostFunctions, HostFunctions};
 
@@ -277,11 +271,9 @@ where
 
 		let mut instance = AssertUnwindSafe(instance);
 		let mut ext = AssertUnwindSafe(ext);
-		let module = AssertUnwindSafe(module);
 		let mut allocation_stats_out = AssertUnwindSafe(allocation_stats_out);
 
 		with_externalities_safe(&mut **ext, move || {
-			preregister_builtin_ext(module.clone());
 			let (result, allocation_stats) =
 				instance.call_with_allocation_stats(export_name.into(), call_data);
 			**allocation_stats_out = allocation_stats;
@@ -349,16 +341,10 @@ where
 			"Executing function",
 		);
 
-		let result = self.with_instance(
-			runtime_code,
-			ext,
-			|module, mut instance, _onchain_version, mut ext| {
-				with_externalities_safe(&mut **ext, move || {
-					preregister_builtin_ext(module.clone());
-					instance.call_export(method, data)
-				})
-			},
-		);
+		let result =
+			self.with_instance(runtime_code, ext, |_, mut instance, _onchain_version, mut ext| {
+				with_externalities_safe(&mut **ext, move || instance.call_export(method, data))
+			});
 		(result, false)
 	}
 }
@@ -451,138 +437,6 @@ impl<D: NativeExecutionDispatch> GetNativeVersion for NativeElseWasmExecutor<D> 
 	}
 }
 
-/// Helper inner struct to implement `RuntimeSpawn` extension.
-pub struct RuntimeInstanceSpawn {
-	module: Arc<dyn WasmModule>,
-	tasks: parking_lot::Mutex<HashMap<u64, mpsc::Receiver<Vec<u8>>>>,
-	counter: AtomicU64,
-	scheduler: Box<dyn sp_core::traits::SpawnNamed>,
-}
-
-impl RuntimeSpawn for RuntimeInstanceSpawn {
-	fn spawn_call(&self, dispatcher_ref: u32, func: u32, data: Vec<u8>) -> u64 {
-		let new_handle = self.counter.fetch_add(1, Ordering::Relaxed);
-
-		let (sender, receiver) = mpsc::channel();
-		self.tasks.lock().insert(new_handle, receiver);
-
-		let module = self.module.clone();
-		let scheduler = self.scheduler.clone();
-		self.scheduler.spawn(
-			"executor-extra-runtime-instance",
-			None,
-			Box::pin(async move {
-				let module = AssertUnwindSafe(module);
-
-				let async_ext = match new_async_externalities(scheduler.clone()) {
-					Ok(val) => val,
-					Err(e) => {
-						tracing::error!(
-							target: "executor",
-							error = %e,
-							"Failed to setup externalities for async context.",
-						);
-
-						// This will drop sender and receiver end will panic
-						return
-					},
-				};
-
-				let mut async_ext = match async_ext.with_runtime_spawn(Box::new(
-					RuntimeInstanceSpawn::new(module.clone(), scheduler),
-				)) {
-					Ok(val) => val,
-					Err(e) => {
-						tracing::error!(
-							target: "executor",
-							error = %e,
-							"Failed to setup runtime extension for async externalities",
-						);
-
-						// This will drop sender and receiver end will panic
-						return
-					},
-				};
-
-				let result = with_externalities_safe(&mut async_ext, move || {
-					// FIXME: Should be refactored to shared "instance factory".
-					// Instantiating wasm here every time is suboptimal at the moment, shared
-					// pool of instances should be used.
-					//
-					// https://github.com/paritytech/substrate/issues/7354
-					let mut instance = match module.new_instance() {
-						Ok(instance) => instance,
-						Err(error) => {
-							panic!("failed to create new instance from module: {}", error)
-						},
-					};
-
-					match instance
-						.call(InvokeMethod::TableWithWrapper { dispatcher_ref, func }, &data[..])
-					{
-						Ok(result) => result,
-						Err(error) => panic!("failed to invoke instance: {}", error),
-					}
-				});
-
-				match result {
-					Ok(output) => {
-						let _ = sender.send(output);
-					},
-					Err(error) => {
-						// If execution is panicked, the `join` in the original runtime code will
-						// panic as well, since the sender is dropped without sending anything.
-						tracing::error!(error = %error, "Call error in spawned task");
-					},
-				}
-			}),
-		);
-
-		new_handle
-	}
-
-	fn join(&self, handle: u64) -> Vec<u8> {
-		let receiver = self.tasks.lock().remove(&handle).expect("No task for the handle");
-		receiver.recv().expect("Spawned task panicked for the handle")
-	}
-}
-
-impl RuntimeInstanceSpawn {
-	pub fn new(
-		module: Arc<dyn WasmModule>,
-		scheduler: Box<dyn sp_core::traits::SpawnNamed>,
-	) -> Self {
-		Self { module, scheduler, counter: 0.into(), tasks: HashMap::new().into() }
-	}
-
-	fn with_externalities_and_module(
-		module: Arc<dyn WasmModule>,
-		mut ext: &mut dyn Externalities,
-	) -> Option<Self> {
-		ext.extension::<sp_core::traits::TaskExecutorExt>()
-			.map(move |task_ext| Self::new(module, task_ext.clone()))
-	}
-}
-
-/// Pre-registers the built-in extensions to the currently effective externalities.
-///
-/// Meant to be called each time before calling into the runtime.
-fn preregister_builtin_ext(module: Arc<dyn WasmModule>) {
-	sp_externalities::with_externalities(move |mut ext| {
-		if let Some(runtime_spawn) =
-			RuntimeInstanceSpawn::with_externalities_and_module(module, ext)
-		{
-			if let Err(e) = ext.register_extension(RuntimeSpawnExt(Box::new(runtime_spawn))) {
-				tracing::trace!(
-					target: "executor",
-					error = ?e,
-					"Failed to register `RuntimeSpawnExt` instance on externalities",
-				)
-			}
-		}
-	});
-}
-
 impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecutor<D> {
 	type Error = Error;
 
@@ -604,7 +458,7 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecut
 		let result = self.wasm.with_instance(
 			runtime_code,
 			ext,
-			|module, mut instance, onchain_version, mut ext| {
+			|_, mut instance, onchain_version, mut ext| {
 				let onchain_version =
 					onchain_version.ok_or_else(|| Error::ApiError("Unknown version".into()))?;
 
@@ -632,10 +486,7 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecut
 						);
 					}
 
-					with_externalities_safe(&mut **ext, move || {
-						preregister_builtin_ext(module.clone());
-						instance.call_export(method, data)
-					})
+					with_externalities_safe(&mut **ext, move || instance.call_export(method, data))
 				}
 			},
 		);

@@ -270,6 +270,7 @@ impl<'a, 'b, E: Ext> Environment<'a, 'b, E, InitState> {
 	/// ever create this type. Chain extensions merely consume it.
 	pub(crate) fn new(
 		runtime: &'a mut Runtime<'b, E>,
+		memory: &'a mut [u8],
 		id: u32,
 		input_ptr: u32,
 		input_len: u32,
@@ -277,7 +278,7 @@ impl<'a, 'b, E: Ext> Environment<'a, 'b, E, InitState> {
 		output_len_ptr: u32,
 	) -> Self {
 		Environment {
-			inner: Inner { runtime, id, input_ptr, input_len, output_ptr, output_len_ptr },
+			inner: Inner { runtime, memory, id, input_ptr, input_len, output_ptr, output_len_ptr },
 			phantom: PhantomData,
 		}
 	}
@@ -338,9 +339,11 @@ where
 	/// charge the overall costs either using `max_len` (worst case approximation) or using
 	/// [`in_len()`](Self::in_len).
 	pub fn read(&self, max_len: u32) -> Result<Vec<u8>> {
-		self.inner
-			.runtime
-			.read_sandbox_memory(self.inner.input_ptr, self.inner.input_len.min(max_len))
+		self.inner.runtime.read_sandbox_memory(
+			self.inner.memory,
+			self.inner.input_ptr,
+			self.inner.input_len.min(max_len),
+		)
 	}
 
 	/// Reads `min(buffer.len(), in_len) from contract memory.
@@ -354,7 +357,11 @@ where
 			let buffer = core::mem::take(buffer);
 			&mut buffer[..len.min(self.inner.input_len as usize)]
 		};
-		self.inner.runtime.read_sandbox_memory_into_buf(self.inner.input_ptr, sliced)?;
+		self.inner.runtime.read_sandbox_memory_into_buf(
+			self.inner.memory,
+			self.inner.input_ptr,
+			sliced,
+		)?;
 		*buffer = sliced;
 		Ok(())
 	}
@@ -366,14 +373,20 @@ where
 	/// weight of the chain extension. This should usually be the case when fixed input types
 	/// are used.
 	pub fn read_as<T: Decode + MaxEncodedLen>(&mut self) -> Result<T> {
-		self.inner.runtime.read_sandbox_memory_as(self.inner.input_ptr)
+		self.inner
+			.runtime
+			.read_sandbox_memory_as(self.inner.memory, self.inner.input_ptr)
 	}
 
 	/// Reads and decodes a type with a dynamic size from contract memory.
 	///
 	/// Make sure to include `len` in your weight calculations.
 	pub fn read_as_unbounded<T: Decode>(&mut self, len: u32) -> Result<T> {
-		self.inner.runtime.read_sandbox_memory_as_unbounded(self.inner.input_ptr, len)
+		self.inner.runtime.read_sandbox_memory_as_unbounded(
+			self.inner.memory,
+			self.inner.input_ptr,
+			len,
+		)
 	}
 
 	/// The length of the input as passed in as `input_len`.
@@ -406,6 +419,7 @@ where
 		weight_per_byte: Option<Weight>,
 	) -> Result<()> {
 		self.inner.runtime.write_sandbox_output(
+			self.inner.memory,
 			self.inner.output_ptr,
 			self.inner.output_len_ptr,
 			buffer,
@@ -426,6 +440,8 @@ where
 struct Inner<'a, 'b, E: Ext> {
 	/// The runtime contains all necessary functions to interact with the running contract.
 	runtime: &'a mut Runtime<'b, E>,
+	/// Reference to the contracts memory.
+	memory: &'a mut [u8],
 	/// Verbatim argument passed to `seal_call_chain_extension`.
 	id: u32,
 	/// Verbatim argument passed to `seal_call_chain_extension`.

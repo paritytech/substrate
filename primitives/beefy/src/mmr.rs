@@ -64,7 +64,7 @@ pub struct MmrLeaf<BlockNumber, Hash, MerkleRoot, ExtraData> {
 	pub leaf_extra: ExtraData,
 }
 
-/// A MMR leaf versioning scheme.
+/// An MMR leaf versioning scheme.
 ///
 /// Version is a single byte that constist of two components:
 /// - `major` - 3 bits

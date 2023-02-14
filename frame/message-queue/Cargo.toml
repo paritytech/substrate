@@ -1,0 +1,53 @@
+[package]
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+name = "pallet-message-queue"
+version = "7.0.0-dev"
+license = "Apache-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "FRAME pallet to queue and process messages"
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
+scale-info = { version = "2.1.2", default-features = false, features = ["derive"] }
+serde = { version = "1.0.137", optional = true, features = ["derive"] }
+log = { version = "0.4.17", default-features = false }
+
+sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
+sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
+sp-arithmetic = { version = "6.0.0", default-features = false, path = "../../primitives/arithmetic" }
+sp-weights = { version = "4.0.0", default-features = false, path = "../../primitives/weights" }
+
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+
+[dev-dependencies]
+sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
+rand = "0.8.5"
+rand_distr = "0.4.3"
+
+[features]
+default = ["std"]
+std = [
+	"codec/std",
+	"scale-info/std",
+	"sp-core/std",
+	"sp-io/std",
+	"sp-runtime/std",
+	"sp-std/std",
+	"sp-arithmetic/std",
+	"sp-weights/std",
+	"frame-benchmarking?/std",
+	"frame-support/std",
+	"frame-system/std",
+]
+runtime-benchmarks = [
+	"frame-benchmarking/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+]
+try-runtime = ["frame-support/try-runtime"]

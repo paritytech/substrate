@@ -35,7 +35,7 @@ lazy_static::lazy_static! {
 }
 
 /// No hashing [`LruCache`].
-type NoHashingLruCache<K, T> = lru::LruCache<K, T, BuildNoHashHasher<K>>;
+type NoHashingLruCache<K, T> = LruCache<K, T, BuildNoHashHasher<K>>;
 
 /// The shared node cache.
 ///

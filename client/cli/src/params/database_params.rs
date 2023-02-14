@@ -23,7 +23,7 @@ use clap::Args;
 #[derive(Debug, Clone, PartialEq, Args)]
 pub struct DatabaseParams {
 	/// Select database backend to use.
-	#[arg(long, alias = "db", value_name = "DB", value_enum)]
+	#[arg(long, alias = "db", value_name = "DB", ignore_case = true, value_enum)]
 	pub database: Option<Database>,
 
 	/// Limit the memory the database cache can use.

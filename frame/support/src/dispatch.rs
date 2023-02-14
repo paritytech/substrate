@@ -359,13 +359,15 @@ where
 
 /// Implementation for test extrinsic.
 #[cfg(feature = "std")]
-impl<Call: Encode, Extra: Encode> GetDispatchInfo for sp_runtime::testing::TestXt<Call, Extra> {
+impl<Call: Encode + GetDispatchInfo, Extra: Encode> GetDispatchInfo
+	for sp_runtime::testing::TestXt<Call, Extra>
+{
 	fn get_dispatch_info(&self) -> DispatchInfo {
 		// for testing: weight == size.
 		DispatchInfo {
 			weight: Weight::from_ref_time(self.encode().len() as _),
 			pays_fee: Pays::Yes,
-			..Default::default()
+			class: self.call.get_dispatch_info().class,
 		}
 	}
 }
@@ -2021,7 +2023,11 @@ macro_rules! decl_module {
 		$ignore:ident
 		$mod_type:ident<$trait_instance:ident $(, $instance:ident)?> $fn_name:ident $origin:ident $system:ident [ $( $param_name:ident),* ]
 	) => {
-			<$mod_type<$trait_instance $(, $instance)?>>::$fn_name( $origin $(, $param_name )* ).map(Into::into).map_err(Into::into)
+			// We execute all dispatchable in a new storage layer, allowing them
+			// to return an error at any point, and undoing any storage changes.
+			$crate::storage::with_storage_layer(|| {
+				<$mod_type<$trait_instance $(, $instance)?>>::$fn_name( $origin $(, $param_name )* ).map(Into::into).map_err(Into::into)
+			})
 	};
 
 	// no `deposit_event` function wanted
@@ -2182,7 +2188,7 @@ macro_rules! decl_module {
 					$system::Config
 				>::PalletInfo as $crate::traits::PalletInfo>::name::<Self>().unwrap_or("<unknown pallet name>");
 
-				$crate::log::info!(
+				$crate::log::debug!(
 					target: $crate::LOG_TARGET,
 					"✅ no migration for {}",
 					pallet_name,
@@ -2361,9 +2367,11 @@ macro_rules! decl_module {
 		$vis fn $name(
 			$origin: $origin_ty $(, $param: $param_ty )*
 		) -> $crate::dispatch::DispatchResult {
-			$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!(stringify!($name)));
-			{ $( $impl )* }
-			Ok(())
+			$crate::storage::with_storage_layer(|| {
+				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!(stringify!($name)));
+				{ $( $impl )* }
+				Ok(())
+			})
 		}
 	};
 
@@ -2379,8 +2387,10 @@ macro_rules! decl_module {
 	) => {
 		$(#[$fn_attr])*
 		$vis fn $name($origin: $origin_ty $(, $param: $param_ty )* ) -> $result {
-			$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!(stringify!($name)));
-			$( $impl )*
+			$crate::storage::with_storage_layer(|| {
+				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!(stringify!($name)));
+				$( $impl )*
+			})
 		}
 	};
 

@@ -29,14 +29,14 @@ sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
-sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
+sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
 sp-database = { version = "4.0.0-dev", path = "../../primitives/database" }
-sp-externalities = { version = "0.12.0", path = "../../primitives/externalities" }
-sp-keystore = { version = "0.12.0", default-features = false, path = "../../primitives/keystore" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-state-machine = { version = "0.12.0", path = "../../primitives/state-machine" }
-sp-storage = { version = "6.0.0", path = "../../primitives/storage" }
-sp-trie = { version = "6.0.0", path = "../../primitives/trie" }
+sp-externalities = { version = "0.13.0", path = "../../primitives/externalities" }
+sp-keystore = { version = "0.13.0", default-features = false, path = "../../primitives/keystore" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-state-machine = { version = "0.13.0", path = "../../primitives/state-machine" }
+sp-storage = { version = "7.0.0", path = "../../primitives/storage" }
+sp-trie = { version = "7.0.0", path = "../../primitives/trie" }
 
 [dev-dependencies]
 thiserror = "1.0.30"

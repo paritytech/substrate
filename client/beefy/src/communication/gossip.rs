@@ -139,6 +139,10 @@ impl<B> Validator<B> for GossipValidator<B>
 where
 	B: Block,
 {
+	fn peer_disconnected(&self, _context: &mut dyn ValidatorContext<B>, who: &PeerId) {
+		self.known_peers.lock().remove(who);
+	}
+
 	fn validate(
 		&self,
 		_context: &mut dyn ValidatorContext<B>,

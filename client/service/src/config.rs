@@ -20,9 +20,7 @@
 
 pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionStrategy};
 pub use sc_client_db::{BlocksPruning, Database, DatabaseSource, PruningMode};
-pub use sc_executor::WasmExecutionMethod;
-#[cfg(feature = "wasmtime")]
-pub use sc_executor::WasmtimeInstantiationStrategy;
+pub use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 pub use sc_network::{
 	config::{NetworkConfiguration, NodeKeyConfig, Role},
 	Multiaddr,

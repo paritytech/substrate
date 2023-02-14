@@ -20,7 +20,7 @@
 //! that expect babe-specific digests.
 
 use super::ConsensusDataProvider;
-use crate::Error;
+use crate::{Error, LOG_TARGET};
 use codec::Encode;
 use sc_client_api::{AuxStore, UsageProvider};
 use sc_consensus_babe::{
@@ -179,7 +179,7 @@ where
 		let epoch = epoch_changes
 			.viable_epoch(&epoch_descriptor, |slot| Epoch::genesis(&self.config, slot))
 			.ok_or_else(|| {
-				log::info!(target: "babe", "create_digest: no viable_epoch :(");
+				log::info!(target: LOG_TARGET, "create_digest: no viable_epoch :(");
 				sp_consensus::Error::InvalidAuthoritiesSet
 			})?;
 
@@ -290,7 +290,7 @@ where
 		let has_authority = epoch.authorities.iter().any(|(id, _)| *id == *authority);
 
 		if !has_authority {
-			log::info!(target: "manual-seal", "authority not found");
+			log::info!(target: LOG_TARGET, "authority not found");
 			let timestamp = inherents
 				.timestamp_inherent_data()?
 				.ok_or_else(|| Error::StringError("No timestamp inherent data".into()))?;

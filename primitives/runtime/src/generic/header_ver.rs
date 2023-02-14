@@ -22,7 +22,7 @@ use crate::{
 	generic::Digest,
 	scale_info::TypeInfo,
 	traits::{
-		self, AtLeast32BitUnsigned, Hash as HashT, MaybeDisplay, MaybeMallocSizeOf, MaybeSerialize,
+		self, AtLeast32BitUnsigned, Hash as HashT, MaybeDisplay, MaybeSerialize,
 		MaybeSerializeDeserialize, Member, SimpleBitOps,
 	},
 };
@@ -70,7 +70,6 @@ where
 			self.number.size_of(ops) +
 			self.state_root.size_of(ops) +
 			self.extrinsics_root.size_of(ops) +
-			self.digest.size_of(ops) +
 			self.seed.size_of(ops) +
 			self.count.size_of(ops)
 	}
@@ -109,8 +108,7 @@ where
 		+ Copy
 		+ Into<U256>
 		+ TryFrom<U256>
-		+ sp_std::str::FromStr
-		+ MaybeMallocSizeOf,
+		+ sp_std::str::FromStr,
 	Hash: HashT,
 	Hash::Output: Default
 		+ sp_std::hash::Hash
@@ -121,8 +119,7 @@ where
 		+ Debug
 		+ MaybeDisplay
 		+ SimpleBitOps
-		+ Codec
-		+ MaybeMallocSizeOf,
+		+ Codec,
 {
 	type Number = Number;
 	type Hash = <Hash as HashT>::Output;

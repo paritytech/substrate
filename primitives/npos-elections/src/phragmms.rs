@@ -49,7 +49,7 @@ pub fn phragmms<AccountId: IdentifierT, P: PerThing128>(
 ) -> Result<ElectionResult<AccountId, P>, crate::Error> {
 	let (candidates, mut voters) = setup_inputs(candidates, voters);
 
-	let mut winners = Vec::new();
+	let mut winners = vec![];
 	for round in 0..to_elect {
 		if let Some(round_winner) = calculate_max_score::<AccountId, P>(&candidates, &voters) {
 			apply_elected::<AccountId>(&mut voters, Rc::clone(&round_winner));

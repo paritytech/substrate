@@ -26,7 +26,7 @@ use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64},
 	weights::{
-		constants::{RocksDbWeight, WEIGHT_PER_SECOND},
+		constants::{RocksDbWeight, WEIGHT_REF_TIME_PER_SECOND},
 		Weight,
 	},
 };
@@ -85,7 +85,9 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(2u64 * WEIGHT_PER_SECOND);
+		frame_system::limits::BlockWeights::simple_max(
+			Weight::from_parts(2u64 * WEIGHT_REF_TIME_PER_SECOND, u64::MAX),
+		);
 }
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;

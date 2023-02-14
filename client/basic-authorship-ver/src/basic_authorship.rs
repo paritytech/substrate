@@ -361,21 +361,13 @@ where
 	/// ```
 	fn propose(
 		self,
-		mut inherent_data: InherentData,
+		inherent_data: InherentData,
 		inherent_digests: Digest,
 		max_duration: time::Duration,
 		block_size_limit: Option<usize>,
 	) -> Self::Proposal {
 		let (tx, rx) = oneshot::channel();
 		let spawn_handle = self.spawn_handle.clone();
-
-		if let Ok(None) = inherent_data
-			.get_data::<sp_core::ShufflingSeed>(&sp_ver::RANDOM_SEED_INHERENT_IDENTIFIER)
-		{
-			sp_ver::RandomSeedInherentDataProvider(Default::default())
-				.provide_inherent_data(&mut inherent_data)
-				.unwrap();
-		}
 
 		spawn_handle.spawn_blocking(
 			"basic-authorship-proposer",
@@ -426,6 +418,7 @@ where
 	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>, PR::Proof>, sp_blockchain::Error>
 	{
 		let propose_with_start = time::Instant::now();
+		let inherent_data = inherent_data.clone();
 
 		let mut block_builder =
 			self.client.new_block_at(&self.parent_id, inherent_digests, PR::ENABLED)?;
@@ -744,8 +737,8 @@ mod tests {
 		ChainEvent::NewBestBlock { hash: header.hash(), tree_route: None }
 	}
 
-	#[test]
-	fn should_cease_building_block_when_deadline_is_reached() {
+	#[tokio::test]
+	async fn should_cease_building_block_when_deadline_is_reached() {
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
@@ -790,10 +783,20 @@ mod tests {
 
 		// when
 		let deadline = time::Duration::from_secs(3);
-		let block =
-			block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
-				.map(|r| r.block)
+
+		let mut inherent_data = InherentData::new();
+		if let Ok(None) = inherent_data
+			.get_data::<sp_core::ShufflingSeed>(&sp_ver::RANDOM_SEED_INHERENT_IDENTIFIER)
+		{
+			sp_ver::RandomSeedInherentDataProvider(Default::default())
+				.provide_inherent_data(&mut inherent_data)
+				.await
 				.unwrap();
+		}
+
+		let block = block_on(proposer.propose(inherent_data, Default::default(), deadline, None))
+			.map(|r| r.block)
+			.unwrap();
 
 		// then
 		// block should have some extrinsics although we have some more in the pool.
@@ -801,8 +804,8 @@ mod tests {
 		assert_eq!(txpool.ready().count(), 2);
 	}
 
-	#[test]
-	fn should_not_panic_when_deadline_is_reached() {
+	#[tokio::test]
+	async fn should_not_panic_when_deadline_is_reached() {
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full(
@@ -831,14 +834,24 @@ mod tests {
 			}),
 		);
 
+		let mut inherent_data = InherentData::new();
+		if let Ok(None) = inherent_data
+			.get_data::<sp_core::ShufflingSeed>(&sp_ver::RANDOM_SEED_INHERENT_IDENTIFIER)
+		{
+			sp_ver::RandomSeedInherentDataProvider(Default::default())
+				.provide_inherent_data(&mut inherent_data)
+				.await
+				.unwrap();
+		}
+
 		let deadline = time::Duration::from_secs(1);
-		block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
+		block_on(proposer.propose(inherent_data, Default::default(), deadline, None))
 			.map(|r| r.block)
 			.unwrap();
 	}
 
-	#[test]
-	fn proposed_storage_changes_should_match_execute_block_storage_changes() {
+	#[tokio::test]
+	async fn proposed_storage_changes_should_match_execute_block_storage_changes() {
 		let (client, _) = TestClientBuilder::new().build_with_backend();
 		let client = Arc::new(client);
 		let spawner = sp_core::testing::TaskExecutor::new();
@@ -872,10 +885,19 @@ mod tests {
 			Box::new(move || time::Instant::now()),
 		);
 
+		let mut inherent_data = InherentData::new();
+		if let Ok(None) = inherent_data
+			.get_data::<sp_core::ShufflingSeed>(&sp_ver::RANDOM_SEED_INHERENT_IDENTIFIER)
+		{
+			sp_ver::RandomSeedInherentDataProvider(Default::default())
+				.provide_inherent_data(&mut inherent_data)
+				.await
+				.unwrap();
+		}
+
 		let deadline = time::Duration::from_secs(9);
 		let proposal =
-			block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
-				.unwrap();
+			block_on(proposer.propose(inherent_data, Default::default(), deadline, None)).unwrap();
 
 		assert_eq!(proposal.block.extrinsics().len(), 1);
 
@@ -893,8 +915,8 @@ mod tests {
 		// );
 	}
 
-	#[test]
-	fn should_cease_building_block_when_block_limit_is_reached() {
+	#[tokio::test]
+	async fn should_cease_building_block_when_block_limit_is_reached() {
 		let _ = env_logger::try_init();
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
@@ -934,10 +956,20 @@ mod tests {
 
 		let proposer = block_on(proposer_factory.init(&genesis_header)).unwrap();
 
+		let mut inherent_data = InherentData::new();
+		if let Ok(None) = inherent_data
+			.get_data::<sp_core::ShufflingSeed>(&sp_ver::RANDOM_SEED_INHERENT_IDENTIFIER)
+		{
+			sp_ver::RandomSeedInherentDataProvider(Default::default())
+				.provide_inherent_data(&mut inherent_data)
+				.await
+				.unwrap();
+		}
+
 		// Give it enough time
 		let deadline = time::Duration::from_secs(20);
 		let block = block_on(proposer.propose(
-			Default::default(),
+			inherent_data.clone(),
 			Default::default(),
 			deadline,
 			Some(block_limit * 2),
@@ -954,7 +986,7 @@ mod tests {
 		let proposer = block_on(proposer_factory.init(&genesis_header)).unwrap();
 
 		let block =
-			block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
+			block_on(proposer.propose(inherent_data.clone(), Default::default(), deadline, None))
 				.map(|r| r.block)
 				.unwrap();
 
@@ -996,8 +1028,8 @@ mod tests {
 		// 	);
 	}
 
-	#[test]
-	fn should_keep_adding_transactions_after_exhausts_resources_before_soft_deadline() {
+	#[tokio::test]
+	async fn should_keep_adding_transactions_after_exhausts_resources_before_soft_deadline() {
 		let _ = env_logger::try_init();
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
@@ -1049,13 +1081,22 @@ mod tests {
 			}),
 		);
 
+		let mut inherent_data = InherentData::new();
+		if let Ok(None) = inherent_data
+			.get_data::<sp_core::ShufflingSeed>(&sp_ver::RANDOM_SEED_INHERENT_IDENTIFIER)
+		{
+			sp_ver::RandomSeedInherentDataProvider(Default::default())
+				.provide_inherent_data(&mut inherent_data)
+				.await
+				.unwrap();
+		}
+
 		// when
 		// give it enough time so that deadline is never triggered.
 		let deadline = time::Duration::from_secs(90);
-		let block =
-			block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
-				.map(|r| r.block)
-				.unwrap();
+		let block = block_on(proposer.propose(inherent_data, Default::default(), deadline, None))
+			.map(|r| r.block)
+			.unwrap();
 
 		// then block should have all non-exhaust resources extrinsics (+ the first one).
 		assert_eq!(block.extrinsics().len(), 1);
@@ -1064,8 +1105,8 @@ mod tests {
 				Extrinsic::EnqueueTxs(count) if *count == (MAX_SKIPPED_TRANSACTIONS + 1) as u64));
 	}
 
-	#[test]
-	fn should_only_skip_up_to_some_limit_after_soft_deadline() {
+	#[tokio::test]
+	async fn should_only_skip_up_to_some_limit_after_soft_deadline() {
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
@@ -1125,10 +1166,19 @@ mod tests {
 			}),
 		);
 
-		let block =
-			block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
-				.map(|r| r.block)
+		let mut inherent_data = InherentData::new();
+		if let Ok(None) = inherent_data
+			.get_data::<sp_core::ShufflingSeed>(&sp_ver::RANDOM_SEED_INHERENT_IDENTIFIER)
+		{
+			sp_ver::RandomSeedInherentDataProvider(Default::default())
+				.provide_inherent_data(&mut inherent_data)
+				.await
 				.unwrap();
+		}
+
+		let block = block_on(proposer.propose(inherent_data, Default::default(), deadline, None))
+			.map(|r| r.block)
+			.unwrap();
 
 		// then the block should have no transactions despite some in the pool
 		assert_eq!(block.extrinsics().len(), 1);

@@ -136,17 +136,6 @@ impl<T, Block: BlockT> ReadyPoll<T, Block> {
 	}
 }
 
-impl<PoolApi, Block> parity_util_mem::MallocSizeOf for BasicPool<PoolApi, Block>
-where
-	PoolApi: graph::ChainApi<Block = Block>,
-	Block: BlockT,
-{
-	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
-		// other entries insignificant or non-primary references
-		self.pool.size_of(ops)
-	}
-}
-
 /// Type of revalidation.
 pub enum RevalidationType {
 	/// Light revalidation type.
@@ -551,12 +540,12 @@ impl<N: Clone + Copy + AtLeast32Bit> RevalidationStatus<N> {
 
 /// Prune the known txs for the given block.
 async fn prune_known_txs_for_block<Block: BlockT, Api: graph::ChainApi<Block = Block>>(
-	block_id: BlockId<Block>,
+	block_hash: Block::Hash,
 	api: &Api,
 	pool: &graph::Pool<Api>,
 ) -> Vec<ExtrinsicHash<Api>> {
 	let extrinsics = api
-		.block_body(&block_id)
+		.block_body(block_hash)
 		.await
 		.unwrap_or_else(|e| {
 			log::warn!("Prune known transactions: error request: {}", e);
@@ -567,14 +556,14 @@ async fn prune_known_txs_for_block<Block: BlockT, Api: graph::ChainApi<Block = B
 	let hashes = extrinsics.iter().map(|tx| pool.hash_of(tx)).collect::<Vec<_>>();
 	log::trace!(target: "txpool", "Pruning transactions: {:?}", hashes);
 
-	let header = match api.block_header(&block_id) {
+	let header = match api.block_header(&BlockId::Hash(block_hash)) {
 		Ok(Some(h)) => h,
 		Ok(None) => {
-			log::debug!(target: "txpool", "Could not find header for {:?}.", block_id);
+			log::debug!(target: "txpool", "Could not find header for {:?}.", block_hash);
 			return hashes
 		},
 		Err(e) => {
-			log::debug!(target: "txpool", "Error retrieving header for {:?}: {}", block_id, e);
+			log::debug!(target: "txpool", "Error retrieving header for {:?}: {}", block_hash, e);
 			return hashes
 		},
 	};
@@ -592,13 +581,15 @@ async fn prune_known_txs_for_block<Block: BlockT, Api: graph::ChainApi<Block = B
 				|hash| log::debug!(target: "txpool", "found enqueued tx in the log {}", hash),
 			);
 
-			if let Err(e) = pool.prune_known(&block_id, &enqueued_hashes) {
+			if let Err(e) = pool.prune_known(&BlockId::Hash(block_hash), &enqueued_hashes) {
 				log::error!("Cannot prune known in the pool: {}", e);
 			}
 		}
 	}
 
-	if let Err(e) = pool.prune(&block_id, &BlockId::hash(*header.parent_hash()), &extrinsics).await
+	if let Err(e) = pool
+		.prune(&BlockId::Hash(block_hash), &BlockId::hash(*header.parent_hash()), &extrinsics)
+		.await
 	{
 		log::error!("Cannot prune known in the pool: {}", e);
 	}
@@ -655,7 +646,7 @@ where
 			tree_route
 				.enacted()
 				.iter()
-				.map(|h| prune_known_txs_for_block(BlockId::Hash(h.hash), &*api, &*pool)),
+				.map(|h| prune_known_txs_for_block(h.hash, &*api, &*pool)),
 		)
 		.await
 		.into_iter()
@@ -673,7 +664,7 @@ where
 				let hash = retracted.hash;
 
 				let block_transactions = api
-					.block_body(&BlockId::hash(hash))
+					.block_body(hash)
 					.await
 					.unwrap_or_else(|e| {
 						log::warn!("Failed to fetch block body: {}", e);
@@ -765,8 +756,8 @@ where
 
 		match result {
 			Err(msg) => {
-				log::warn!(target: "txpool", "{msg}");
-				return
+				log::debug!(target: "txpool", "{msg}");
+				self.enactment_state.lock().force_update(&event);
 			},
 			Ok(None) => {},
 			Ok(Some(tree_route)) => {

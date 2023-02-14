@@ -138,7 +138,7 @@ mod tests {
 	use std::{collections::HashSet, convert::TryInto, sync::Arc};
 
 	use jsonrpsee::{
-		types::{EmptyParams, SubscriptionId},
+		types::{EmptyServerParams as EmptyParams, SubscriptionId},
 		RpcModule,
 	};
 	use parity_scale_codec::{Decode, Encode};

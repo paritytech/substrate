@@ -1,6 +1,6 @@
 [package]
 name = "sp-state-machine"
-version = "0.12.0"
+version = "0.13.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate State Machine"
 edition = "2021"
@@ -24,17 +24,17 @@ smallvec = "1.8.0"
 thiserror = { version = "1.0.30", optional = true }
 tracing = { version = "0.1.29", optional = true }
 trie-root = { version = "0.17.0", default-features = false }
-sp-core = { version = "6.0.0", default-features = false, path = "../core" }
-sp-externalities = { version = "0.12.0", default-features = false, path = "../externalities" }
-sp-panic-handler = { version = "4.0.0", optional = true, path = "../panic-handler" }
-sp-std = { version = "4.0.0", default-features = false, path = "../std" }
-sp-trie = { version = "6.0.0", default-features = false, path = "../trie" }
+sp-core = { version = "7.0.0", default-features = false, path = "../core" }
+sp-externalities = { version = "0.13.0", default-features = false, path = "../externalities" }
+sp-panic-handler = { version = "5.0.0", optional = true, path = "../panic-handler" }
+sp-std = { version = "5.0.0", default-features = false, path = "../std" }
+sp-trie = { version = "7.0.0", default-features = false, path = "../trie" }
 
 [dev-dependencies]
 array-bytes = "4.1"
 pretty_assertions = "1.2.1"
 rand = "0.7.2"
-sp-runtime = { version = "6.0.0", path = "../runtime" }
+sp-runtime = { version = "7.0.0", path = "../runtime" }
 trie-db = "0.24.0"
 assert_matches = "1.5"
 

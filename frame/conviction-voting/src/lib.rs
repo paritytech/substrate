@@ -121,8 +121,8 @@ pub mod pallet {
 
 		/// The maximum number of concurrent votes an account may have.
 		///
-		/// Also used to compute weight, an overly large value can
-		/// lead to extrinsic with large weight estimation: see `delegate` for instance.
+		/// Also used to compute weight, an overly large value can lead to extrinsics with large
+		/// weight estimation: see `delegate` for instance.
 		#[pallet::constant]
 		type MaxVotes: Get<u32>;
 
@@ -208,6 +208,7 @@ pub mod pallet {
 		/// - `vote`: The vote configuration.
 		///
 		/// Weight: `O(R)` where R is the number of polls the voter has voted on.
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::vote_new().max(T::WeightInfo::vote_existing()))]
 		pub fn vote(
 			origin: OriginFor<T>,
@@ -243,6 +244,7 @@ pub mod pallet {
 		///   voted on. Weight is initially charged as if maximum votes, but is refunded later.
 		// NOTE: weight must cover an incorrect voting of origin with max votes, this is ensure
 		// because a valid delegation cover decoding a direct voting with max votes.
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::delegate(T::MaxVotes::get()))]
 		pub fn delegate(
 			origin: OriginFor<T>,
@@ -261,7 +263,7 @@ pub mod pallet {
 		/// Undelegate the voting power of the sending account for a particular class of polls.
 		///
 		/// Tokens may be unlocked following once an amount of time consistent with the lock period
-		/// of the conviction with which the delegation was issued.
+		/// of the conviction with which the delegation was issued has passed.
 		///
 		/// The dispatch origin of this call must be _Signed_ and the signing account must be
 		/// currently delegating.
@@ -274,6 +276,7 @@ pub mod pallet {
 		///   voted on. Weight is initially charged as if maximum votes, but is refunded later.
 		// NOTE: weight must cover an incorrect voting of origin with max votes, this is ensure
 		// because a valid delegation cover decoding a direct voting with max votes.
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::undelegate(T::MaxVotes::get().into()))]
 		pub fn undelegate(
 			origin: OriginFor<T>,
@@ -284,7 +287,7 @@ pub mod pallet {
 			Ok(Some(T::WeightInfo::undelegate(votes)).into())
 		}
 
-		/// Remove the lock caused prior voting/delegating which has expired within a particluar
+		/// Remove the lock caused by prior voting/delegating which has expired within a particular
 		/// class.
 		///
 		/// The dispatch origin of this call must be _Signed_.
@@ -293,6 +296,7 @@ pub mod pallet {
 		/// - `target`: The account to remove the lock on.
 		///
 		/// Weight: `O(R)` with R number of vote of target.
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::unlock())]
 		pub fn unlock(
 			origin: OriginFor<T>,
@@ -334,6 +338,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(R + log R)` where R is the number of polls that `target` has voted on.
 		///   Weight is calculated for the maximum number of vote.
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::remove_vote())]
 		pub fn remove_vote(
 			origin: OriginFor<T>,
@@ -360,6 +365,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(R + log R)` where R is the number of polls that `target` has voted on.
 		///   Weight is calculated for the maximum number of vote.
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::remove_other_vote())]
 		pub fn remove_other_vote(
 			origin: OriginFor<T>,
@@ -475,7 +481,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})
 	}
 
-	/// Return the number of votes for `who`
+	/// Return the number of votes for `who`.
 	fn increase_upstream_delegation(
 		who: &T::AccountId,
 		class: &ClassOf<T, I>,
@@ -503,7 +509,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})
 	}
 
-	/// Return the number of votes for `who`
+	/// Return the number of votes for `who`.
 	fn reduce_upstream_delegation(
 		who: &T::AccountId,
 		class: &ClassOf<T, I>,

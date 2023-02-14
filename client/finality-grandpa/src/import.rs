@@ -45,6 +45,7 @@ use crate::{
 	justification::GrandpaJustification,
 	notification::GrandpaJustificationSender,
 	AuthoritySetChanges, ClientForGrandpa, CommandOrError, Error, NewAuthoritySet, VoterCommand,
+	LOG_TARGET,
 };
 
 /// A block-import handler for GRANDPA.
@@ -424,8 +425,8 @@ where
 	}
 
 	/// Read current set id form a given state.
-	fn current_set_id(&self, hash: &Block::Hash) -> Result<SetId, ConsensusError> {
-		let id = &BlockId::hash(*hash);
+	fn current_set_id(&self, hash: Block::Hash) -> Result<SetId, ConsensusError> {
+		let id = &BlockId::hash(hash);
 		let runtime_version = self.inner.runtime_api().version(id).map_err(|e| {
 			ConsensusError::ClientImport(format!(
 				"Unable to retrieve current runtime version. {}",
@@ -480,7 +481,7 @@ where
 					.runtime_api()
 					.grandpa_authorities(&BlockId::hash(hash))
 					.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
-				let set_id = self.current_set_id(&hash)?;
+				let set_id = self.current_set_id(hash)?;
 				let authority_set = AuthoritySet::new(
 					authorities.clone(),
 					set_id,
@@ -589,18 +590,16 @@ where
 				Ok(ImportResult::Imported(aux)) => aux,
 				Ok(r) => {
 					debug!(
-						target: "afg",
-						"Restoring old authority set after block import result: {:?}",
-						r,
+						target: LOG_TARGET,
+						"Restoring old authority set after block import result: {:?}", r,
 					);
 					pending_changes.revert();
 					return Ok(r)
 				},
 				Err(e) => {
 					debug!(
-						target: "afg",
-						"Restoring old authority set after block import error: {}",
-						e,
+						target: LOG_TARGET,
+						"Restoring old authority set after block import error: {}", e,
 					);
 					pending_changes.revert();
 					return Err(ConsensusError::ClientImport(e.to_string()))
@@ -665,7 +664,7 @@ where
 				import_res.unwrap_or_else(|err| {
 					if needs_justification {
 						debug!(
-							target: "afg",
+							target: LOG_TARGET,
 							"Requesting justification from peers due to imported block #{} that enacts authority set change with invalid justification: {}",
 							number,
 							err
@@ -678,7 +677,7 @@ where
 			None =>
 				if needs_justification {
 					debug!(
-						target: "afg",
+						target: LOG_TARGET,
 						"Imported unjustified block #{} that enacts authority set change, waiting for finality for enactment.",
 						number,
 					);
@@ -803,7 +802,7 @@ where
 
 		match result {
 			Err(CommandOrError::VoterCommand(command)) => {
-				afg_log!(
+				grandpa_log!(
 					initial_sync,
 					"👴 Imported justification for block #{} that triggers \
 					command {}, signaling voter.",

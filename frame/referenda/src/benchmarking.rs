@@ -264,6 +264,20 @@ benchmarks_instance_pallet! {
 		assert_matches!(ReferendumInfoFor::<T, I>::get(index), Some(ReferendumInfo::Cancelled(_, _, None)));
 	}
 
+	refund_submission_deposit {
+		let (origin, index) = create_referendum::<T, I>();
+		let caller = frame_system::ensure_signed(origin.clone()).unwrap();
+		let balance = T::Currency::free_balance(&caller);
+		assert_ok!(Referenda::<T, I>::cancel(T::CancelOrigin::successful_origin(), index));
+		assert_matches!(ReferendumInfoFor::<T, I>::get(index), Some(ReferendumInfo::Cancelled(_, Some(_), _)));
+	}: _<T::RuntimeOrigin>(origin, index)
+	verify {
+		assert_matches!(ReferendumInfoFor::<T, I>::get(index), Some(ReferendumInfo::Cancelled(_, None, _)));
+		let new_balance = T::Currency::free_balance(&caller);
+		// the deposit is zero or make sure it was unreserved.
+		assert!(T::SubmissionDeposit::get().is_zero() || new_balance > balance);
+	}
+
 	cancel {
 		let (_origin, index) = create_referendum::<T, I>();
 		place_deposit::<T, I>(index);
