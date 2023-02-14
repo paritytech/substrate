@@ -1595,8 +1595,7 @@ fn metadata_at_version() {
 	use frame_support::metadata::*;
 	use sp_core::Decode;
 
-	let actual_metadata = Runtime::metadata();
-
+	let metadata_v14 = Runtime::metadata();
 	let at_metadata = match Runtime::metadata_at_version(14) {
 		Some(opaque) => {
 			let bytes = &*opaque;
@@ -1606,7 +1605,7 @@ fn metadata_at_version() {
 		_ => panic!("metadata has been bumped, test needs to be updated"),
 	};
 
-	assert_eq!(actual_metadata, at_metadata);
+	assert_eq!(metadata_v14, at_metadata);
 }
 
 #[test]
