@@ -1258,8 +1258,8 @@ async fn warp_sync_to_target_block() {
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(Default::default());
 
-	let gap_end = net.peer(0).push_blocks(63, false).pop().unwrap();
-	let target = net.peer(0).push_blocks(1, false).pop().unwrap();
+	let blocks = net.peer(0).push_blocks(64, false);
+	let target = *blocks[63];
 	net.peer(1).push_blocks(64, false);
 	net.peer(2).push_blocks(64, false);
 
