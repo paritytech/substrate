@@ -1850,17 +1850,13 @@ pub mod pallet {
 		pub fn set_attributes_pre_signed(
 			origin: OriginFor<T>,
 			data: PreSignedAttributesOf<T, I>,
-			signature: MultiSignature,
-			signer: MultiSigner,
+			signature: T::OffchainSignature,
+			signer: T::AccountId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let msg = Encode::encode(&data);
-			ensure!(
-				signature.verify(&*msg, &signer.clone().into_account()),
-				Error::<T, I>::WrongSignature
-			);
-			let signer_account = Self::signer_to_account(signer)?;
-			Self::do_set_attributes_pre_signed(origin, data, signer_account)
+			ensure!(signature.verify(&*msg, &signer), Error::<T, I>::WrongSignature);
+			Self::do_set_attributes_pre_signed(origin, data, signer)
 		}
 	}
 }

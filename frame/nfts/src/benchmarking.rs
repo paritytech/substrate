@@ -775,15 +775,13 @@ benchmarks_instance_pallet! {
 
 	set_attributes_pre_signed {
 		let n in 0 .. T::MaxAttributesPerCall::get() as u32;
-		let (collection, caller, _) = create_collection::<T, I>();
+		let (collection, _, _) = create_collection::<T, I>();
 
 		let item_owner: T::AccountId = account("item_owner", 0, SEED);
 		let item_owner_lookup = T::Lookup::unlookup(item_owner.clone());
 
-		let account_public = sr25519_generate(0.into(), None);
-		let account_signer = MultiSigner::Sr25519(account_public);
-		let account = Nfts::<T, I>::signer_to_account(account_signer.clone()).unwrap();
-		let account_lookup = T::Lookup::unlookup(account.clone());
+		let signer_public = sr25519_generate(0.into(), None);
+		let signer: T::AccountId = MultiSigner::Sr25519(signer_public).into_account().into();
 
 		T::Currency::make_free_balance_be(&item_owner, DepositBalanceOf::<T, I>::max_value());
 
@@ -806,20 +804,20 @@ benchmarks_instance_pallet! {
 			collection,
 			item,
 			attributes,
-			namespace: AttributeNamespace::Account(account.clone()),
+			namespace: AttributeNamespace::Account(signer.clone()),
 			deadline: One::one(),
 		};
 		let message = Encode::encode(&pre_signed_data);
-		let signature = MultiSignature::Sr25519(sr25519_sign(0.into(), &account_public, &message).unwrap());
+		let signature = MultiSignature::Sr25519(sr25519_sign(0.into(), &signer_public, &message).unwrap());
 
 		frame_system::Pallet::<T>::set_block_number(One::one());
-	}: _(SystemOrigin::Signed(item_owner.clone()), pre_signed_data, signature, account_signer)
+	}: _(SystemOrigin::Signed(item_owner.clone()), pre_signed_data, signature.into(), signer.clone())
 	verify {
 		assert_last_event::<T, I>(
 			Event::PreSignedAttributesSet {
 				collection,
 				item,
-				namespace: AttributeNamespace::Account(account.clone()),
+				namespace: AttributeNamespace::Account(signer.clone()),
 			}
 			.into(),
 		);
