@@ -18,9 +18,10 @@
 
 //! implementation of the `verify` subcommand
 
-use crate::{error, utils, with_crypto_scheme, CryptoSchemeFlag};
+use crate::{error, params::MessageParams, utils, with_crypto_scheme, CryptoSchemeFlag};
 use clap::Parser;
 use sp_core::crypto::{ByteArray, Ss58Codec};
+use std::io::BufRead;
 
 /// The `verify` command
 #[derive(Debug, Clone, Parser)]
@@ -37,14 +38,9 @@ pub struct VerifyCmd {
 	/// If not given, you will be prompted for the URI.
 	uri: Option<String>,
 
-	/// Message to verify, if not provided you will be prompted to
-	/// pass the message via STDIN
-	#[arg(long)]
-	message: Option<String>,
-
-	/// The message on STDIN is hex-encoded data
-	#[arg(long)]
-	hex: bool,
+	#[allow(missing_docs)]
+	#[clap(flatten)]
+	pub message_params: MessageParams,
 
 	#[allow(missing_docs)]
 	#[clap(flatten)]
@@ -54,7 +50,20 @@ pub struct VerifyCmd {
 impl VerifyCmd {
 	/// Run the command
 	pub fn run(&self) -> error::Result<()> {
-		let message = utils::read_message(self.message.as_ref(), self.hex)?;
+		self.verify(|| std::io::stdin().lock())
+	}
+
+	/// Verify a signature for a message.
+	///
+	/// The message can either be provided as immediate argument via CLI or otherwise read from the
+	/// reader created by `create_reader`. The reader will only be created in case that the message
+	/// is not passed as immediate.
+	pub(crate) fn verify<F, R>(&self, create_reader: F) -> error::Result<()>
+	where
+		R: BufRead,
+		F: FnOnce() -> R,
+	{
+		let message = self.message_params.message_from(create_reader)?;
 		let sig_data = array_bytes::hex2bytes(&self.sig)?;
 		let uri = utils::read_uri(self.uri.as_ref())?;
 		let uri = if let Some(uri) = uri.strip_prefix("0x") { uri } else { &uri };
@@ -85,4 +94,44 @@ where
 	}
 
 	Ok(())
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	const ALICE: &str = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY";
+	const SIG1: &str = "0x4eb25a2285a82374888880af0024eb30c3a21ce086eae3862888d345af607f0ad6fb081312f11730932564f24a9f8ebcee2d46861413ae61307eca58db2c3e81";
+	const SIG2: &str = "0x026342225155056ea797118c1c8c8b3cc002aa2020c36f4217fa3c302783a572ad3dcd38c231cbaf86cadb93984d329c963ceac0685cc1ee4c1ed50fa443a68f";
+
+	// Verify work with `--message` argument.
+	#[test]
+	fn verify_immediate() {
+		let cmd = VerifyCmd::parse_from(&["verify", SIG1, ALICE, "--message", "test message"]);
+		assert!(cmd.run().is_ok(), "Alice' signature should verify");
+	}
+
+	// Verify work without `--message` argument.
+	#[test]
+	fn verify_stdin() {
+		let cmd = VerifyCmd::parse_from(&["verify", SIG1, ALICE]);
+		let message = "test message";
+		assert!(cmd.verify(|| message.as_bytes()).is_ok(), "Alice' signature should verify");
+	}
+
+	// Verify work with `--message` argument for hex message.
+	#[test]
+	fn verify_immediate_hex() {
+		let cmd = VerifyCmd::parse_from(&["verify", SIG2, ALICE, "--message", "0xaabbcc", "--hex"]);
+		assert!(cmd.run().is_ok(), "Alice' signature should verify");
+	}
+
+	// Verify work without `--message` argument for hex message.
+	#[test]
+	fn verify_stdin_hex() {
+		let cmd = VerifyCmd::parse_from(&["verify", SIG2, ALICE, "--hex"]);
+		assert!(cmd.verify(|| "0xaabbcc".as_bytes()).is_ok());
+		assert!(cmd.verify(|| "aabbcc".as_bytes()).is_ok());
+		assert!(cmd.verify(|| "0xaABBcC".as_bytes()).is_ok());
+	}
 }

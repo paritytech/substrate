@@ -31,7 +31,7 @@ use sp_core::{
 	Pair,
 };
 use sp_runtime::{traits::IdentifyAccount, MultiSigner};
-use std::{io::Read, path::PathBuf};
+use std::path::PathBuf;
 
 /// Public key type for Runtime
 pub type PublicFor<P> = <P as sp_core::Pair>::Public;
@@ -271,23 +271,6 @@ where
 	PublicFor<P>: Into<MultiSigner>,
 {
 	format!("0x{}", HexDisplay::from(&public_key.into().into_account().as_ref()))
-}
-
-/// checks if message is Some, otherwise reads message from stdin and optionally decodes hex
-pub fn read_message(msg: Option<&String>, should_decode: bool) -> Result<Vec<u8>, Error> {
-	let mut message = vec![];
-	match msg {
-		Some(m) => {
-			message = array_bytes::hex2bytes(m.as_str())?;
-		},
-		None => {
-			std::io::stdin().lock().read_to_end(&mut message)?;
-			if should_decode {
-				message = array_bytes::hex2bytes(array_bytes::hex_bytes2hex_str(&message)?)?;
-			}
-		},
-	}
-	Ok(message)
 }
 
 /// Allows for calling $method with appropriate crypto impl.
