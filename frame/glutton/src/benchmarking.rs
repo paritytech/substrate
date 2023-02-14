@@ -28,10 +28,10 @@ use crate::Pallet as Glutton;
 use frame_system::Pallet as System;
 
 benchmarks! {
-	waste_ref_time {
-		let n in 0 .. 1024;
+	waste_ref_time_iter {
+		let n in 0 .. 10_000;
 	}: {
-		Glutton::<T>::waste_ref_time(n.to_le_bytes().to_vec());
+		Glutton::<T>::waste_ref_time_iter(vec![0u8; 64]);
 	}
 
 	waste_proof_size_some {
@@ -48,6 +48,14 @@ benchmarks! {
 		TrashData::<T>::get(n);
 	}
 
+	read_limits {
+		Compute::<T>::put(Perbill::from_percent(50));
+		Storage::<T>::put(Perbill::from_percent(25));
+	}: {
+		Compute::<T>::get();
+		Compute::<T>::get();
+	}
+
 	on_idle {
 		(0..5000).for_each(|i| TrashData::<T>::insert(i, i));
 		let _ = Glutton::<T>::set_compute(SystemOrigin::Root.into(), Perbill::from_percent(100));
@@ -57,10 +65,8 @@ benchmarks! {
 	}
 
 	empty_on_idle {
-		let _ = Glutton::<T>::set_compute(SystemOrigin::Root.into(), Perbill::from_percent(100));
-		let _ = Glutton::<T>::set_storage(SystemOrigin::Root.into(), Perbill::from_percent(100));
 	}: {
-		let weight = Glutton::<T>::on_idle(System::<T>::block_number(), T::DbWeight::get().reads(1));
+		Glutton::<T>::on_idle(System::<T>::block_number(), Weight::zero());
 	}
 
 	impl_benchmark_test_suite!(Glutton, crate::mock::new_test_ext(), crate::mock::Test);

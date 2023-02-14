@@ -103,7 +103,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn integrity_test() {
 			assert!(
-				!T::WeightInfo::waste_ref_time(1).ref_time().is_zero(),
+				!T::WeightInfo::waste_ref_time_iter(1).ref_time().is_zero(),
 				"Weight zero; would get stuck in an infinite loop"
 			);
 			assert!(
@@ -114,7 +114,7 @@ pub mod pallet {
 
 		fn on_idle(_: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let mut meter = WeightMeter::from_limit(remaining_weight);
-			if !meter.check_accrue(T::DbWeight::get().reads(2)) {
+			if !meter.check_accrue(Self::read_limits_weight()) {
 				return T::WeightInfo::empty_on_idle()
 			}
 
@@ -144,13 +144,7 @@ pub mod pallet {
 				}
 			}
 
-			// Now we waste ref time.
-			let mut prev_result = vec![]; // There isn't a previous result.
-			while meter.can_accrue(T::WeightInfo::waste_ref_time(1)) {
-				prev_result = Self::waste_ref_time(prev_result);
-				meter.defensive_saturating_accrue(T::WeightInfo::waste_ref_time(1));
-			}
-
+			Self::waste_at_most_ref_time(&mut meter);
 			meter.consumed
 		}
 	}
@@ -202,6 +196,10 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
+		fn read_limits_weight() -> Weight {
+			T::WeightInfo::read_limits().max(T::DbWeight::get().reads(2))
+		}
+
 		/// Wastes some `proof_size`. Receives a counter as an argument.
 		fn waste_proof_size(counter: u32) -> Weight {
 			if TrashData::<T>::get(counter).is_some() {
@@ -211,23 +209,37 @@ pub mod pallet {
 			}
 		}
 
+		/// Waste at most the remaining ref time weight of `meter`.
+		///
+		/// Tries to come as close to the limit as possible.
+		pub(crate) fn waste_at_most_ref_time(meter: &mut WeightMeter) {
+			// Now we waste ref time.
+			let mut clobber = vec![0u8; 64]; // There isn't a previous result.
+			while meter.can_accrue(T::WeightInfo::waste_ref_time_iter(1)) {
+				clobber = Self::waste_ref_time_iter(clobber);
+				meter.defensive_saturating_accrue(T::WeightInfo::waste_ref_time_iter(1));
+			}
+
+			// By casting it into a vec we can hopefully prevent the compiler from optimizing it
+			// out. Note that `Blake2b512` produces 64 bytes, this is therefore impossible - but the
+			// compiler does not know that (hopefully).
+			debug_assert!(clobber.len() == 64);
+			if clobber == vec![0u8; 65] {
+				TrashData::<T>::insert(0, clobber[0] as u32);
+			}
+		}
+
 		/// Wastes some `ref_time`. Receives the previous result as an argument.
-		pub(crate) fn waste_ref_time(prev_result: Vec<u8>) -> Vec<u8> {
+		pub(crate) fn waste_ref_time_iter(clobber: Vec<u8>) -> Vec<u8> {
 			let mut hasher = Blake2b512::new();
 
-			let mut prev_result = prev_result.clone();
-			let mut result: Vec<u8> = Default::default();
 			// Blake2 has a very high speed of hashing so we make multiple hashes with it to
 			// waste more `ref_time` at once.
 			(0..50).for_each(|_| {
-				hasher.update(prev_result.clone());
-				result = hasher.clone().finalize().to_vec();
-				// We or the values of the hashing result with the previous hashing result.
-				(0..prev_result.len()).for_each(|j: usize| result[j] |= prev_result[j]);
-				prev_result = result.clone();
+				hasher.update(clobber.as_slice());
 			});
 
-			result
+			hasher.finalize().to_vec()
 		}
 	}
 }

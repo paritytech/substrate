@@ -124,3 +124,20 @@ fn on_idle_weight_is_close_enough_works() {
 		);
 	});
 }
+
+#[test]
+fn waste_at_most_ref_time_weight_close_enough() {
+	new_test_ext().execute_with(|| {
+		let mut meter =
+			WeightMeter::from_limit(Weight::from_parts(WEIGHT_REF_TIME_PER_SECOND, u64::MAX));
+		// Over-spending fails defensively.
+		Glutton::waste_at_most_ref_time(&mut meter);
+
+		// We require it to be under-spend by at most 5%.
+		assert!(
+			meter.consumed_ratio() >= Perbill::from_percent(95),
+			"Consumed too few: {:?}",
+			meter.consumed_ratio()
+		);
+	});
+}
