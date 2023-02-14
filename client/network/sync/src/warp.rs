@@ -46,7 +46,7 @@ enum Phase<B: BlockT, Client> {
 		warp_sync_provider: Arc<dyn WarpSyncProvider<B>>,
 	},
 	PendingTargetBlock {
-		target_block: oneshot::Receiver<B::Header>,
+		target_block: Option<oneshot::Receiver<B::Header>>,
 	},
 	TargetBlock(B::Header),
 	State(StateSync<B, Client>),
@@ -97,7 +97,7 @@ where
 			},
 			WarpSyncParams::WaitForTarget(block) => Self {
 				client,
-				phase: Phase::PendingTargetBlock { target_block: block },
+				phase: Phase::PendingTargetBlock { target_block: Some(block) },
 				total_proof_bytes: 0,
 			},
 		}
@@ -108,12 +108,14 @@ where
 	/// This only makes progress when `phase = Phase::PendingTargetBlock` and the pending block was
 	/// sent.
 	pub fn poll(&mut self, cx: &mut std::task::Context) {
-		let new_phase = if let Phase::PendingTargetBlock { target_block } = &mut self.phase {
+		let new_phase = if let Phase::PendingTargetBlock { target_block: Some(target_block) } =
+			&mut self.phase
+		{
 			match target_block.poll_unpin(cx) {
-				Poll::Ready(Ok(target_block)) => Phase::TargetBlock(target_block),
+				Poll::Ready(Ok(target)) => Phase::TargetBlock(target),
 				Poll::Ready(Err(e)) => {
 					error!(target: "sync", "Failed to get target block. Error: {:?}",e);
-					return
+					Phase::PendingTargetBlock { target_block: None }
 				},
 				_ => return,
 			}
