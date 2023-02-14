@@ -184,10 +184,9 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Index and store data off chain. Minimum data size is 1 bytes, maximum is
 		/// `MaxTransactionSize`. Data will be removed after `STORAGE_PERIOD` blocks, unless `renew`
-		/// is called. # <weight>
-		/// - n*log(n) of data size, as all data is pushed to an in-memory trie.
-		/// Additionally contains a DB write.
-		/// # </weight>
+		/// is called.
+		/// ## Complexity
+		/// - O(n*log(n)) of data size, as all data is pushed to an in-memory trie.
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::store(data.len() as u32))]
 		pub fn store(origin: OriginFor<T>, data: Vec<u8>) -> DispatchResult {
@@ -234,9 +233,8 @@ pub mod pallet {
 		/// previous `store` or `renew` call and transaction index within that block.
 		/// Transaction index is emitted in the `Stored` or `Renewed` event.
 		/// Applies same fees as `store`.
-		/// # <weight>
-		/// - Constant.
-		/// # </weight>
+		/// ## Complexity
+		/// - O(1).
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::renew())]
 		pub fn renew(
@@ -277,12 +275,10 @@ pub mod pallet {
 
 		/// Check storage proof for block number `block_number() - StoragePeriod`.
 		/// If such block does not exist the proof is expected to be `None`.
-		/// # <weight>
+		/// ## Complexity
 		/// - Linear w.r.t the number of indexed transactions in the proved block for random
 		///   probing.
 		/// There's a DB read for each transaction.
-		/// Here we assume a maximum of 100 probed transactions.
-		/// # </weight>
 		#[pallet::call_index(2)]
 		#[pallet::weight((T::WeightInfo::check_proof_max(), DispatchClass::Mandatory))]
 		pub fn check_proof(

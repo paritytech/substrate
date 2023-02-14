@@ -435,9 +435,9 @@ pub mod pallet {
 		/// Even if a candidate ends up being a member, they must call [`Call::renounce_candidacy`]
 		/// to get their deposit back. Losing the spot in an election will always lead to a slash.
 		///
-		/// # <weight>
 		/// The number of current candidates must be provided as witness data.
-		/// # </weight>
+		/// ## Complexity
+		/// O(C + log(C)) where C is candidate_count.
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::submit_candidacy(*candidate_count))]
 		pub fn submit_candidacy(
@@ -479,10 +479,12 @@ pub mod pallet {
 		///   next round.
 		///
 		/// The dispatch origin of this call must be signed, and have one of the above roles.
-		///
-		/// # <weight>
 		/// The type of renouncing must be provided as witness data.
-		/// # </weight>
+		///
+		/// ## Complexity
+		///   - Renouncing::Candidate(count): O(count + log(count))
+		///   - Renouncing::Member: O(1)
+		///   - Renouncing::RunnerUp: O(1)
 		#[pallet::call_index(3)]
 		#[pallet::weight(match *renouncing {
 			Renouncing::Candidate(count) => T::WeightInfo::renounce_candidacy_candidate(count),
@@ -542,10 +544,8 @@ pub mod pallet {
 		///
 		/// Note that this does not affect the designated block number of the next election.
 		///
-		/// # <weight>
-		/// If we have a replacement, we use a small weight. Else, since this is a root call and
-		/// will go into phragmen, we assume full block for now.
-		/// # </weight>
+		/// ## Complexity
+		/// - Check details of remove_and_replace_member() and do_phragmen().
 		#[pallet::call_index(4)]
 		#[pallet::weight(if *rerun_election {
 			T::WeightInfo::remove_member_without_replacement()
@@ -579,9 +579,8 @@ pub mod pallet {
 		///
 		/// The dispatch origin of this call must be root.
 		///
-		/// # <weight>
-		/// The total number of voters and those that are defunct must be provided as witness data.
-		/// # </weight>
+		/// ## Complexity
+		/// - Check is_defunct_voter() details.
 		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::clean_defunct_voters(*_num_voters, *_num_defunct))]
 		pub fn clean_defunct_voters(

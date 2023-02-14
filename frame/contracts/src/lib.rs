@@ -912,8 +912,6 @@ pub mod pallet {
 		///
 		/// This can be triggered by a call to `seal_terminate`.
 		TerminatedInConstructor,
-		/// The debug message specified to `seal_debug_message` does contain invalid UTF-8.
-		DebugMessageInvalidUTF8,
 		/// A call tried to invoke a contract that is flagged as non-reentrant.
 		ReentranceDenied,
 		/// Origin doesn't have enough balance to pay the required storage deposits.

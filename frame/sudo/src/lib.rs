@@ -142,12 +142,8 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - O(1).
-		/// - Limited storage reads.
-		/// - One DB write (event).
-		/// - Weight of derivative `call` execution + 10,000.
-		/// # </weight>
 		#[pallet::call_index(0)]
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
@@ -173,10 +169,8 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - O(1).
-		/// - The weight of this call is defined by the caller.
-		/// # </weight>
 		#[pallet::call_index(1)]
 		#[pallet::weight((*_weight, call.get_dispatch_info().class))]
 		pub fn sudo_unchecked_weight(
@@ -199,11 +193,8 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - O(1).
-		/// - Limited storage reads.
-		/// - One DB change.
-		/// # </weight>
 		#[pallet::call_index(2)]
 		#[pallet::weight(0)]
 		pub fn set_key(
@@ -226,12 +217,8 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - O(1).
-		/// - Limited storage reads.
-		/// - One DB write (event).
-		/// - Weight of derivative `call` execution + 10,000.
-		/// # </weight>
 		#[pallet::call_index(3)]
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
