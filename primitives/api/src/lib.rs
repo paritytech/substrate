@@ -736,6 +736,9 @@ decl_runtime_apis! {
 		fn metadata() -> OpaqueMetadata;
 
 		/// Returns the metadata at a given version.
+		///
+		/// If the given `version` isn't supported, this will return `None`.
+		/// Use [`Self::metadata_versions`] to find out about supported metadata version of the runtime.
 		fn metadata_at_version(version: u32) -> Option<OpaqueMetadata>;
 
 		/// Returns the supported versions of metadata.
