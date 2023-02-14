@@ -148,7 +148,7 @@ fn clean<T: Config>() {
 benchmarks! {
 	// -- Signed ones
 	vote_equal {
-		let v in 1 .. (MAXIMUM_VOTE as u32);
+		let v in 1 .. T::MaxVotesPerVoter::get();
 		clean::<T>();
 
 		// create a bunch of candidates.
@@ -168,7 +168,7 @@ benchmarks! {
 	}: vote(RawOrigin::Signed(caller), votes, stake)
 
 	vote_more {
-		let v in 2 .. (MAXIMUM_VOTE as u32);
+		let v in 2 .. T::MaxVotesPerVoter::get();
 		clean::<T>();
 
 		// create a bunch of candidates.
@@ -190,7 +190,7 @@ benchmarks! {
 	}: vote(RawOrigin::Signed(caller), votes, stake / <BalanceOf<T>>::from(10u32))
 
 	vote_less {
-		let v in 2 .. (MAXIMUM_VOTE as u32);
+		let v in 2 .. T::MaxVotesPerVoter::get();
 		clean::<T>();
 
 		// create a bunch of candidates.
@@ -212,7 +212,7 @@ benchmarks! {
 
 	remove_voter {
 		// we fix the number of voted candidates to max
-		let v = MAXIMUM_VOTE as u32;
+		let v = T::MaxVotesPerVoter::get();
 		clean::<T>();
 
 		// create a bunch of candidates.
@@ -368,7 +368,7 @@ benchmarks! {
 		clean::<T>();
 
 		let all_candidates = submit_candidates::<T>(T::MaxCandidates::get(), "candidates")?;
-		distribute_voters::<T>(all_candidates, v, MAXIMUM_VOTE)?;
+		distribute_voters::<T>(all_candidates, v, T::MaxVotesPerVoter::get() as usize)?;
 
 		// all candidates leave.
 		<Candidates<T>>::kill();
@@ -389,17 +389,17 @@ benchmarks! {
 		// that we give all candidates a self vote to make sure they are all considered.
 		let c in 1 .. T::MaxCandidates::get();
 		let v in 1 .. T::MaxVoters::get();
-		let e in (T::MaxVoters::get()) .. T::MaxVoters::get() as u32 * MAXIMUM_VOTE as u32;
+		let e in (T::MaxVoters::get()) .. T::MaxVoters::get() * T::MaxVotesPerVoter::get();
 		clean::<T>();
 
 		// so we have a situation with v and e. we want e to basically always be in the range of `e
-		// -> e * MAXIMUM_VOTE`, but we cannot express that now with the benchmarks. So what we do
-		// is: when c is being iterated, v, and e are max and fine. when v is being iterated, e is
-		// being set to max and this is a problem. In these cases, we cap e to a lower value, namely
-		// v * MAXIMUM_VOTE. when e is being iterated, v is at max, and again fine. all in all,
-		// votes_per_voter can never be more than MAXIMUM_VOTE. Note that this might cause `v` to be
-		// an overestimate.
-		let votes_per_voter = (e / v).min(MAXIMUM_VOTE as u32);
+		// -> e * T::MaxVotesPerVoter::get()`, but we cannot express that now with the benchmarks.
+		// So what we do is: when c is being iterated, v, and e are max and fine. when v is being
+		// iterated, e is being set to max and this is a problem. In these cases, we cap e to a
+		// lower value, namely v * T::MaxVotesPerVoter::get(). when e is being iterated, v is at
+		// max, and again fine. all in all, votes_per_voter can never be more than
+		// T::MaxVotesPerVoter::get(). Note that this might cause `v` to be an overestimate.
+		let votes_per_voter = (e / v).min(T::MaxVotesPerVoter::get());
 
 		let all_candidates = submit_candidates_with_self_vote::<T>(c, "candidates")?;
 		let _ = distribute_voters::<T>(all_candidates, v.saturating_sub(c), votes_per_voter as usize)?;
@@ -411,68 +411,6 @@ benchmarks! {
 		assert_eq!(
 			<Elections<T>>::runners_up().len() as u32,
 			T::DesiredRunnersUp::get().min(c.saturating_sub(T::DesiredMembers::get())),
-		);
-
-		#[cfg(test)]
-		{
-			// reset members in between benchmark tests.
-			use crate::tests::MEMBERS;
-			MEMBERS.with(|m| *m.borrow_mut() = vec![]);
-		}
-	}
-
-	#[extra]
-	election_phragmen_c_e {
-		let c in 1 .. T::MaxCandidates::get();
-		let e in (T::MaxVoters::get()) .. T::MaxVoters::get() * MAXIMUM_VOTE as u32;
-		let fixed_v = T::MaxVoters::get();
-		clean::<T>();
-
-		let votes_per_voter = e / fixed_v;
-
-		let all_candidates = submit_candidates_with_self_vote::<T>(c, "candidates")?;
-		let _ = distribute_voters::<T>(
-			all_candidates,
-			fixed_v - c,
-			votes_per_voter as usize,
-		)?;
-	}: {
-		<Elections<T>>::on_initialize(T::TermDuration::get());
-	}
-	verify {
-		assert_eq!(<Elections<T>>::members().len() as u32, T::DesiredMembers::get().min(c));
-		assert_eq!(
-			<Elections<T>>::runners_up().len() as u32,
-			T::DesiredRunnersUp::get().min(c.saturating_sub(T::DesiredMembers::get())),
-		);
-
-		#[cfg(test)]
-		{
-			// reset members in between benchmark tests.
-			use crate::tests::MEMBERS;
-			MEMBERS.with(|m| *m.borrow_mut() = vec![]);
-		}
-	}
-
-	#[extra]
-	election_phragmen_v {
-		let v in 4 .. 16;
-		let fixed_c = T::MaxCandidates::get() / 10;
-		let fixed_e = 64;
-		clean::<T>();
-
-		let votes_per_voter = fixed_e / v;
-
-		let all_candidates = submit_candidates_with_self_vote::<T>(fixed_c, "candidates")?;
-		let _ = distribute_voters::<T>(all_candidates, v, votes_per_voter as usize)?;
-	}: {
-		<Elections<T>>::on_initialize(T::TermDuration::get());
-	}
-	verify {
-		assert_eq!(<Elections<T>>::members().len() as u32, T::DesiredMembers::get().min(fixed_c));
-		assert_eq!(
-			<Elections<T>>::runners_up().len() as u32,
-			T::DesiredRunnersUp::get().min(fixed_c.saturating_sub(T::DesiredMembers::get())),
 		);
 
 		#[cfg(test)]

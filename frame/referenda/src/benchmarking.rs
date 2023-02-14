@@ -33,7 +33,6 @@ use sp_runtime::traits::Bounded as ArithBounded;
 
 const SEED: u32 = 0;
 
-#[allow(dead_code)]
 fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::RuntimeEvent) {
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
@@ -629,6 +628,31 @@ benchmarks_instance_pallet! {
 	verify {
 		let info = ReferendumInfoFor::<T, I>::get(index).unwrap();
 		assert_matches!(info, ReferendumInfo::Rejected(..));
+	}
+
+	set_some_metadata {
+		use sp_std::borrow::Cow;
+		let origin = T::SubmitOrigin::try_successful_origin()
+			.expect("SubmitOrigin has no successful origin required for the benchmark");
+		let index = create_referendum::<T, I>(origin.clone());
+		let hash = T::Preimages::note(Cow::from(vec![5, 6])).unwrap();
+	}: set_metadata<T::RuntimeOrigin>(origin, index, Some(hash))
+	verify {
+		assert_last_event::<T, I>(Event::MetadataSet { index, hash }.into());
+	}
+
+	clear_metadata {
+		use sp_std::borrow::Cow;
+		let origin = T::SubmitOrigin::try_successful_origin()
+			.expect("SubmitOrigin has no successful origin required for the benchmark");
+		let index = create_referendum::<T, I>(origin.clone());
+		let hash = T::Preimages::note(Cow::from(vec![6, 7, 8])).unwrap();
+		assert_ok!(
+			Referenda::<T, I>::set_metadata(origin.clone(), index, Some(hash))
+		);
+	}: set_metadata<T::RuntimeOrigin>(origin, index, None)
+	verify {
+		assert_last_event::<T, I>(Event::MetadataCleared { index, hash }.into());
 	}
 
 	impl_benchmark_test_suite!(
