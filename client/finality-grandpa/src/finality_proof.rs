@@ -147,11 +147,12 @@ pub enum FinalityProofError {
 	Client(#[from] sp_blockchain::Error),
 }
 
-/// Prove finality for the given block number by returning a Justification for the last block of
-/// the authority set.
+/// Prove finality for the given block number by returning a justification for the last block of
+/// the authority set of which the given block is part of, or a justification for the latest finalized
+/// block if the given block is part of the current authority set.
 ///
-/// If `collect_unknown_headers` is true,
-/// it will collect all headers from the requested block until the last block of the set.
+/// If `collect_unknown_headers` is true, the finality proof will include all headers from the requested 
+/// block until the block the justification refers to.
 fn prove_finality<Block, B>(
 	backend: &B,
 	authority_set_changes: AuthoritySetChanges<NumberFor<Block>>,
