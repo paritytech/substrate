@@ -29,23 +29,19 @@ use frame_system::Pallet as System;
 
 benchmarks! {
 	waste_ref_time_iter {
-		let n in 0 .. 10_000;
 	}: {
 		Glutton::<T>::waste_ref_time_iter(vec![0u8; 64]);
 	}
 
 	waste_proof_size_some {
-		let n in 0 .. 1024;
-
-		(0..n).for_each(|i| TrashData::<T>::insert(i, i));
+		(0..5000).for_each(|i| TrashData::<T>::insert(i, i));
 	}: {
-		TrashData::<T>::get(n);
+		TrashData::<T>::get(2500);
 	}
 
 	waste_proof_size_none {
-		let n in 0 .. 1024;
 	}: {
-		TrashData::<T>::get(n);
+		TrashData::<T>::get(2500);
 	}
 
 	read_limits {
@@ -53,15 +49,16 @@ benchmarks! {
 		Storage::<T>::put(Perbill::from_percent(25));
 	}: {
 		Compute::<T>::get();
-		Compute::<T>::get();
+		Storage::<T>::get();
 	}
 
+	// For manual verification only.
 	on_idle {
 		(0..5000).for_each(|i| TrashData::<T>::insert(i, i));
 		let _ = Glutton::<T>::set_compute(SystemOrigin::Root.into(), Perbill::from_percent(100));
 		let _ = Glutton::<T>::set_storage(SystemOrigin::Root.into(), Perbill::from_percent(100));
 	}: {
-		let weight = Glutton::<T>::on_idle(System::<T>::block_number(), Weight::from_parts(WEIGHT_REF_TIME_PER_MILLIS * 20, WEIGHT_PROOF_SIZE_PER_MB));
+		let weight = Glutton::<T>::on_idle(System::<T>::block_number(), Weight::from_parts(WEIGHT_REF_TIME_PER_MILLIS * 100, WEIGHT_PROOF_SIZE_PER_MB * 5));
 	}
 
 	empty_on_idle {
