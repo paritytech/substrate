@@ -42,8 +42,6 @@ pub struct VoterMetrics {
 	pub beefy_should_vote_on: Gauge<U64>,
 	/// Number of sessions with lagging signed commitment on mandatory block
 	pub beefy_lagging_sessions: Counter<U64>,
-	/// Number of times trying to vote with no session initialized
-	pub beefy_no_session_initialized: Counter<U64>,
 	/// Number of times no Authority public key found in store
 	pub beefy_no_authority_found_in_store: Counter<U64>,
 	/// Number of currently buffered votes
@@ -97,13 +95,6 @@ impl PrometheusRegister for VoterMetrics {
 				Counter::new(
 					"substrate_beefy_lagging_sessions",
 					"Number of sessions with lagging signed commitment on mandatory block",
-				)?,
-				registry,
-			)?,
-			beefy_no_session_initialized: register(
-				Counter::new(
-					"substrate_beefy_no_session_initialized",
-					"Number of times trying to vote with no session initialized",
 				)?,
 				registry,
 			)?,
