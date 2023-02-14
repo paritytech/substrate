@@ -410,15 +410,14 @@ impl<T: Config> Pallet<T> {
 		match res {
 			// The value has been set correctly, which means we can safely send a transaction now.
 			Ok(block_number) => {
-				// Depending if the block is even or odd we will send a `Signed` or `Unsigned`
-				// transaction.
+				// We will send different transactions based on a random number.
 				// Note that this logic doesn't really guarantee that the transactions will be sent
 				// in an alternating fashion (i.e. fairly distributed). Depending on the execution
 				// order and lock acquisition, we may end up for instance sending two `Signed`
 				// transactions in a row. If a strict order is desired, it's better to use
 				// the storage entry for that. (for instance store both block number and a flag
 				// indicating the type of next transaction to send).
-				let transaction_type = block_number % 3u32.into();
+				let transaction_type = block_number % 4u32.into();
 				if transaction_type == Zero::zero() {
 					TransactionType::Signed
 				} else if transaction_type == T::BlockNumber::from(1u32) {

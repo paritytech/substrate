@@ -172,9 +172,8 @@ pub mod pallet {
 		/// If origin is root then the calls are dispatched without checking origin filter. (This
 		/// includes bypassing `frame_system::Config::BaseCallFilter`).
 		///
-		/// # <weight>
-		/// - Complexity: O(C) where C is the number of calls to be batched.
-		/// # </weight>
+		/// ## Complexity
+		/// - O(C) where C is the number of calls to be batched.
 		///
 		/// This will return `Ok` in all circumstances. To determine the success of the batch, an
 		/// event is deposited. If a call failed and the batch was interrupted, then the
@@ -301,9 +300,8 @@ pub mod pallet {
 		/// If origin is root then the calls are dispatched without checking origin filter. (This
 		/// includes bypassing `frame_system::Config::BaseCallFilter`).
 		///
-		/// # <weight>
-		/// - Complexity: O(C) where C is the number of calls to be batched.
-		/// # </weight>
+		/// ## Complexity
+		/// - O(C) where C is the number of calls to be batched.
 		#[pallet::call_index(2)]
 		#[pallet::weight({
 			let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
@@ -374,12 +372,8 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be _Root_.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - O(1).
-		/// - Limited storage reads.
-		/// - One DB write (event).
-		/// - Weight of derivative `call` execution + T::WeightInfo::dispatch_as().
-		/// # </weight>
 		#[pallet::call_index(3)]
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
@@ -415,9 +409,8 @@ pub mod pallet {
 		/// If origin is root then the calls are dispatch without checking origin filter. (This
 		/// includes bypassing `frame_system::Config::BaseCallFilter`).
 		///
-		/// # <weight>
-		/// - Complexity: O(C) where C is the number of calls to be batched.
-		/// # </weight>
+		/// ## Complexity
+		/// - O(C) where C is the number of calls to be batched.
 		#[pallet::call_index(4)]
 		#[pallet::weight({
 			let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
