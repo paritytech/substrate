@@ -698,9 +698,9 @@ where
 	.into_rpc();
 
 	// Maximum pinned blocks per connection.
-	// This number is large enough to consider immediate blocks,
-	// but it will change to facilitate adequate limits for the pinning API.
-	const MAX_PINNED_BLOCKS: usize = 4096;
+	// This number is large enough to consider immediate blocks.
+	// Note: This should never exceed the `PINNING_CACHE_SIZE` from client/db.
+	const MAX_PINNED_BLOCKS: usize = 512;
 	let chain_head_v2 = sc_rpc_spec_v2::chain_head::ChainHead::new(
 		client.clone(),
 		backend.clone(),
