@@ -1068,6 +1068,7 @@ where
 					let net_poll_future = peer.network.next_action();
 					pin_mut!(net_poll_future);
 					if let Poll::Ready(true) = net_poll_future.poll(cx) {
+						// Schedule wake if `next_action()` indicated that it must be called again.
 						cx.waker().wake_by_ref();
 					}
 				}
