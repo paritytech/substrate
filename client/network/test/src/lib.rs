@@ -1067,7 +1067,9 @@ where
 				{
 					let net_poll_future = peer.network.next_action();
 					pin_mut!(net_poll_future);
-					let _ = net_poll_future.poll(cx);
+					if let Poll::Ready(true) = net_poll_future.poll(cx) {
+						cx.waker().wake_by_ref();
+					}
 				}
 				trace!(target: "sync", "-- Polling complete {}: {}", i, peer.id());
 
