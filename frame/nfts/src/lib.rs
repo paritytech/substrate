@@ -52,7 +52,7 @@ use frame_support::traits::{
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
 	traits::{Saturating, StaticLookup, Zero},
-	MultiSignature, MultiSigner, RuntimeDebug,
+	RuntimeDebug,
 };
 use sp_std::prelude::*;
 
@@ -175,6 +175,16 @@ pub mod pallet {
 		/// Disables some of pallet's features.
 		#[pallet::constant]
 		type Features: Get<PalletFeatures>;
+
+		/// Off-Chain signature type.
+		///
+		/// Can verify whether an `Self::OffchainPublic` created a signature.
+		type OffchainSignature: Verify<Signer = Self::OffchainPublic> + Parameter;
+
+		/// Off-Chain public key.
+		///
+		/// Must identify as an on-chain `Self::AccountId`.
+		type OffchainPublic: IdentifyAccount<AccountId = Self::AccountId>;
 
 		#[cfg(feature = "runtime-benchmarks")]
 		/// A set of helper functions for benchmarking.
@@ -602,10 +612,8 @@ pub mod pallet {
 		AlreadyClaimed,
 		/// The provided data is incorrect.
 		IncorrectData,
-		/// The extrinsic should be sent by another origin.
+		/// The extrinsic was sent by the wrong origin.
 		WrongOrigin,
-		/// Unable to get the account id from the provided public key.
-		WrongPublic,
 		/// The provided signature is incorrect.
 		WrongSignature,
 		/// The provided metadata might be too long.
@@ -1802,8 +1810,9 @@ pub mod pallet {
 		///
 		/// Origin must be Signed.
 		///
-		/// - `data`: The pre-signed approval that consists of the information about the item, its
-		///   metadata, attributes, who can mint it (`None` for anyone) and until what block number.
+		/// - `mint_data`: The pre-signed approval that consists of the information about the item,
+		///   its metadata, attributes, who can mint it (`None` for anyone) and until what block
+		///   number.
 		/// - `signature`: The signature of the `data` object.
 		/// - `signer`: The `data` object's signer. Should be an owner of the collection.
 		///
@@ -1811,21 +1820,17 @@ pub mod pallet {
 		/// Emits `AttributeSet` if the attributes were provided.
 		/// Emits `ItemMetadataSet` if the metadata was not empty.
 		#[pallet::call_index(37)]
-		#[pallet::weight(T::WeightInfo::mint_pre_signed(data.attributes.len() as u32))]
+		#[pallet::weight(T::WeightInfo::mint_pre_signed(mint_data.attributes.len() as u32))]
 		pub fn mint_pre_signed(
 			origin: OriginFor<T>,
-			data: PreSignedMintOf<T, I>,
-			signature: MultiSignature,
-			signer: MultiSigner,
+			mint_data: PreSignedMintOf<T, I>,
+			signature: T::OffchainSignature,
+			signer: T::AccountId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			let msg = Encode::encode(&data);
-			ensure!(
-				signature.verify(&*msg, &signer.clone().into_account()),
-				Error::<T, I>::WrongSignature
-			);
-			let signer_account = Self::signer_to_account(signer)?;
-			Self::do_mint_pre_signed(origin, data, signer_account)
+			let msg = Encode::encode(&mint_data);
+			ensure!(signature.verify(&*msg, &signer), Error::<T, I>::WrongSignature);
+			Self::do_mint_pre_signed(origin, mint_data, signer)
 		}
 
 		/// Set attributes for an item by providing the pre-signed approval.

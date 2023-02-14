@@ -18,8 +18,6 @@
 //! Various pieces of common functionality.
 
 use crate::*;
-use frame_support::pallet_prelude::*;
-use sp_runtime::traits::IdentifyAccount;
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Get the owner of the item, if the item exists.
@@ -30,12 +28,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Get the owner of the collection, if the collection exists.
 	pub fn collection_owner(collection: T::CollectionId) -> Option<T::AccountId> {
 		Collection::<T, I>::get(collection).map(|i| i.owner)
-	}
-
-	/// Convert signer into account id.
-	pub fn signer_to_account(signer: MultiSigner) -> Result<T::AccountId, DispatchError> {
-		Ok(T::AccountId::decode(&mut signer.into_account().as_ref())
-			.map_err(|_| Error::<T, I>::WrongPublic)?)
 	}
 
 	#[cfg(any(test, feature = "runtime-benchmarks"))]

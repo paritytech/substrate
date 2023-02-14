@@ -543,6 +543,16 @@ mod test {
 			97
 		}
 	}
+	#[crate::storage_alias]
+	type ExampleCountedMap = CountedStorageMap<Prefix, Twox64Concat, u16, u32>;
+
+	#[test]
+	fn storage_alias_works() {
+		TestExternalities::default().execute_with(|| {
+			assert_eq!(ExampleCountedMap::count(), 0);
+			ExampleCountedMap::insert(3, 10);
+		})
+	}
 
 	#[test]
 	fn test_value_query() {
