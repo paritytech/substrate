@@ -2117,13 +2117,14 @@ pub mod pallet {
 		}
 
 		/// Bond `extra` more funds from `origin` and
-		/// pending rewards of `other` into their respective pools.
+		/// pending rewards of `other` members into their respective pools.
 		///
-		/// Origin can bond extra more funds from free balance and pending rewards
-		/// when `other` is `None`.
+		/// Origin can bond extra funds from free balance
+		/// or pending rewards when `origin == other`.
 		///
-		/// Origin can bond extra pending rewards of `other` given `Some` is a member and
-		/// set reward claim to Permissionless.
+		/// In the case of `origin != other`, `origin` can only bond extra
+		/// pending rewards of `other` members assuming set_reward_claim
+		/// for the given member is `Permissionless`.
 		#[pallet::call_index(14)]
 		#[pallet::weight(
 			T::WeightInfo::bond_extra_transfer()
@@ -2469,11 +2470,11 @@ impl<T: Config> Pallet<T> {
 		extra: BondExtra<BalanceOf<T>>,
 	) -> DispatchResult {
 		if signer != who {
-			ensure!(matches!(
-				RewardClaimPermission::<T>::get(&who),
- 				RewardClaim::Permissionless), Error::<T>::DoesNotHavePermission
+			ensure!(
+				matches!(RewardClaimPermission::<T>::get(&who), RewardClaim::Permissionless),
+				Error::<T>::DoesNotHavePermission
 			);
- 			ensure!(extra == BondExtra::Rewards, Error::<T>::CannotBondFreeBalanceOther);
+			ensure!(extra == BondExtra::Rewards, Error::<T>::CannotBondFreeBalanceOther);
 		}
 
 		let (mut member, mut bonded_pool, mut reward_pool) = Self::get_member_with_pools(&who)?;

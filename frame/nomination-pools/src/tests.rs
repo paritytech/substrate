@@ -4652,11 +4652,7 @@ mod bond_extra {
 				RuntimeOrigin::signed(10),
 				RewardClaim::Permissionless
 			));
-			assert_ok!(Pools::bond_extra_other(
-				RuntimeOrigin::signed(50),
-				10,
-				BondExtra::Rewards
-			));
+			assert_ok!(Pools::bond_extra_other(RuntimeOrigin::signed(50), 10, BondExtra::Rewards));
 			assert_eq!(Balances::free_balance(&default_reward_account()), 7);
 
 			// then
@@ -4669,26 +4665,19 @@ mod bond_extra {
 				Pools::bond_extra_other(RuntimeOrigin::signed(40), 40, BondExtra::Rewards),
 				Error::<Runtime>::PoolMemberNotFound
 			);
-			assert_ok!(Pools::set_reward_claim(
+
+			// when
+			assert_ok!(Pools::bond_extra_other(
 				RuntimeOrigin::signed(20),
-				RewardClaim::Permissionless
+				20,
+				BondExtra::FreeBalance(10)
 			));
-			// todo DDS.
-			// assert_n!(
-			// 	Pools::bond_extra_other(
-			// 		RuntimeOrigin::signed(20),
-			// 		20,
-			// 		BondExtra::FreeBalance(10)
-			// 	),
-			// 	Error::<Runtime>::CannotBondFreeBalanceOther
-			// );
 
 			// then
-			assert_eq!(Balances::free_balance(20), 20);
-			// 20's share of the rewards is the other 2/3 of the rewards, since they have 20/30 of
-			// the shares
-			assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().points, 20);
-			assert_eq!(BondedPools::<Runtime>::get(1).unwrap().points, 31);
+			assert_eq!(Balances::free_balance(20), 12);
+			assert_eq!(Balances::free_balance(&default_reward_account()), 5);
+			assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().points, 30);
+			assert_eq!(BondedPools::<Runtime>::get(1).unwrap().points, 41);
 		})
 	}
 }
