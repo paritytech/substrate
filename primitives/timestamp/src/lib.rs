@@ -136,7 +136,7 @@ impl From<Duration> for Timestamp {
 pub enum InherentError {
 	/// The time between the blocks is too short.
 	#[cfg_attr(feature = "std", error("The time since the last timestamp is lower than the minimum period."))]
-	TimeBetweenBlocksTooShort,
+	TooEarly,
 	/// The block timestamp is too far in the future
 	#[cfg_attr(feature = "std", error("The timestamp of the block is too far in the future."))]
 	TooFarInFuture,
@@ -145,7 +145,7 @@ pub enum InherentError {
 impl IsFatalError for InherentError {
 	fn is_fatal_error(&self) -> bool {
 		match self {
-			InherentError::TimeBetweenBlocksTooShort => true,
+			InherentError::TooEarly => true,
 			InherentError::TooFarInFuture => true,
 		}
 	}

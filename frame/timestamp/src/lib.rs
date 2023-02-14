@@ -258,7 +258,7 @@ pub mod pallet {
 			if t > *(data + MAX_TIMESTAMP_DRIFT_MILLIS) {
 				Err(InherentError::TooFarInFuture)
 			} else if t < minimum {
-				Err(InherentError::TimeBetweenBlocksTooShort)
+				Err(InherentError::TooEarly)
 			} else {
 				Ok(())
 			}
