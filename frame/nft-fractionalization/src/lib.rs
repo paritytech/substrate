@@ -61,9 +61,9 @@ pub mod pallet {
 		traits::tokens::{AssetId, Balance as AssetBalance},
 	};
 	use frame_system::pallet_prelude::*;
-	use scale_info::prelude::format;
+	use scale_info::prelude::{format, string::String};
 	use sp_runtime::traits::{One, Zero};
-	use sp_std::fmt::Display;
+	use sp_std::{fmt::Display, prelude::*};
 
 	use frame_support::{
 		dispatch::DispatchResult,
@@ -140,11 +140,11 @@ pub mod pallet {
 
 		/// The newly created asset's symbol.
 		#[pallet::constant]
-		type NewAssetSymbol: Get<String>;
+		type NewAssetSymbol: Get<Vec<u8>>;
 
 		/// The newly created asset's name.
 		#[pallet::constant]
-		type NewAssetName: Get<String>;
+		type NewAssetName: Get<Vec<u8>>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -359,7 +359,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let symbol = T::NewAssetSymbol::get();
 			let name = T::NewAssetName::get();
-			let name = format!("{} {}-{}", name, nft_collection_id, nft_id);
+			let name = format!("{} {nft_collection_id}-{nft_id}", String::from_utf8_lossy(&name));
 			let deposit = T::Assets::calc(&name.clone().into(), &symbol.clone().into());
 			if deposit != Zero::zero() {
 				T::Currency::transfer(

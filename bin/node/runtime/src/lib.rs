@@ -1609,8 +1609,8 @@ impl pallet_nfts::Config for Runtime {
 
 parameter_types! {
 	pub const NftFractionalizationPalletId: PalletId = PalletId(*b"fraction");
-	pub NewAssetSymbol: String = "FRAC".to_string();
-	pub NewAssetName: String = "Frac".to_string();
+	pub NewAssetSymbol: Vec<u8> = (*b"FRAC").into();
+	pub NewAssetName: Vec<u8> = (*b"Frac").into();
 }
 
 pub struct RuntimeLockableNonfungible;
