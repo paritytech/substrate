@@ -1398,7 +1398,7 @@ mod tests {
 
 	parameter_types! {
 		pub const ElectionsPalletId: LockIdentifier = *b"phrelect";
-		pub const MaxVoters: u32 = 128;
+		pub const MaxVoters: u32 = 512;
 		pub const MaxCandidates: u32 = 64;
 	}
 
