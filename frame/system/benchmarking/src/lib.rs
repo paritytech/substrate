@@ -22,7 +22,7 @@
 use codec::Encode;
 use frame_benchmarking::v1::{benchmarks, whitelisted_caller};
 use frame_support::{dispatch::DispatchClass, storage, traits::Get};
-use frame_system::{Call, EventRecord, Pallet as System, Phase, RawOrigin};
+use frame_system::{Call, Pallet as System, RawOrigin};
 use sp_core::storage::well_known_keys;
 use sp_runtime::traits::Hash;
 use sp_std::{prelude::*, vec};
@@ -52,14 +52,7 @@ benchmarks! {
 		let runtime_blob = include_bytes!("../res/kitchensink_runtime.compact.compressed.wasm");
 	}: _(RawOrigin::Root, runtime_blob.to_vec())
 	verify {
-		assert_eq!(
-		System::<T>::events(),
-			vec![EventRecord {
-				phase: Phase::Initialization,
-				event: frame_system::Event::<T>::CodeUpdated.into(),
-				topics: vec![],
-			}],
-		);
+		System::<T>::assert_last_event(frame_system::Event::<T>::CodeUpdated.into());
 	}
 
 	#[extra]
