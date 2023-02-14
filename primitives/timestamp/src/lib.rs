@@ -135,7 +135,7 @@ impl From<Duration> for Timestamp {
 #[cfg_attr(feature = "std", derive(Decode, thiserror::Error))]
 pub enum InherentError {
 	/// The time between the blocks is too short.
-	#[cfg_attr(feature = "std", error("The time between the blocks is too short."))]
+	#[cfg_attr(feature = "std", error("The time since the last timestamp is lower than the minimum period."))]
 	TimeBetweenBlocksTooShort,
 	/// The block timestamp is too far in the future
 	#[cfg_attr(feature = "std", error("The timestamp of the block is too far in the future."))]
