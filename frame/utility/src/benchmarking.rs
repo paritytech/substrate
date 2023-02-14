@@ -86,5 +86,13 @@ benchmarks! {
 		assert_last_event::<T>(Event::BatchCompleted.into())
 	}
 
+	ensure_dispatch_as {
+		let caller = account("caller", SEED, SEED);
+		let call = Box::new(frame_system::Call::remark { remark: vec![] }.into());
+		let origin: T::RuntimeOrigin = RawOrigin::Signed(caller).into();
+		let pallets_origin: <T::RuntimeOrigin as frame_support::traits::OriginTrait>::PalletsOrigin = origin.caller().clone();
+		let pallets_origin = Into::<T::PalletsOrigin>::into(pallets_origin);
+	}: _(RawOrigin::Root, Box::new(pallets_origin), call)
+
 	impl_benchmark_test_suite!(Pallet, crate::tests::new_test_ext(), crate::tests::Test);
 }

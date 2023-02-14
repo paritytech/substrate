@@ -490,6 +490,35 @@ pub mod pallet {
 			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
 			res.map(|_| ()).map_err(|e| e.error)
 		}
+
+		/// Dispatches a function call with a provided origin. Unlike `dispatch_as`, this
+		/// function propagates errors returned by the wrapped `call`.
+		///
+		/// The dispatch origin for this call must be _Root_.
+		///
+		/// ## Complexity
+		/// - O(1).
+		#[pallet::call_index(6)]
+		#[pallet::weight({
+			let dispatch_info = call.get_dispatch_info();
+			(
+				T::WeightInfo::ensure_dispatch_as()
+					.saturating_add(dispatch_info.weight),
+				dispatch_info.class,
+			)
+		})]
+		pub fn ensure_dispatch_as(
+			origin: OriginFor<T>,
+			as_origin: Box<T::PalletsOrigin>,
+			call: Box<<T as Config>::RuntimeCall>,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+
+			call.dispatch_bypass_filter((*as_origin).into()).map_err(|e| e.error)?;
+
+			Self::deposit_event(Event::DispatchedAs { result: Ok(()) });
+			Ok(())
+		}
 	}
 }
 
