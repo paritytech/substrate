@@ -58,18 +58,10 @@ use crate::{
 const MAX_UNKNOWN_HEADERS: usize = 100_000;
 
 /// Finality proof provider for serving network requests.
+#[derive(Clone)]
 pub struct FinalityProofProvider<BE, Block: BlockT> {
 	backend: Arc<BE>,
 	shared_authority_set: Option<SharedAuthoritySet<Block::Hash, NumberFor<Block>>>,
-}
-
-impl<BE, Block: BlockT> Clone for FinalityProofProvider<BE, Block> {
-	fn clone(&self) -> Self {
-		Self {
-			backend: self.backend.clone(),
-			shared_authority_set: self.shared_authority_set.clone(),
-		}
-	}
 }
 
 impl<B, Block> FinalityProofProvider<B, Block>
@@ -243,9 +235,9 @@ where
 		},
 	};
 
-	let unknown_headers = if collect_unknown_headers {
+	let mut headers = Vec::new();
+	if collect_unknown_headers {
 		// Collect all headers from the requested block until the last block of the set
-		let mut headers = Vec::new();
 		let mut current = block + One::one();
 		loop {
 			if current > just_block || headers.len() >= MAX_UNKNOWN_HEADERS {
@@ -255,15 +247,12 @@ where
 			headers.push(backend.blockchain().expect_header(hash)?);
 			current += One::one();
 		}
-		headers
-	} else {
-		Default::default()
 	};
 
 	Ok(Some(FinalityProof {
 		block: backend.blockchain().expect_block_hash_from_id(&BlockId::Number(just_block))?,
 		justification,
-		unknown_headers,
+		unknown_headers: headers,
 	}))
 }
 
