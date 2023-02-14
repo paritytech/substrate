@@ -155,6 +155,7 @@ struct BenchmarkDef {
 	skip_meta: bool,
 	fn_sig: Signature,
 	fn_vis: Visibility,
+	fn_attrs: Vec<Attribute>,
 }
 
 #[derive(Parse)]
@@ -319,6 +320,7 @@ impl BenchmarkDef {
 			skip_meta,
 			fn_sig: item_fn.sig.clone(),
 			fn_vis: item_fn.vis.clone(),
+			fn_attrs: item_fn.attrs.clone(),
 		})
 	}
 }
@@ -799,6 +801,13 @@ fn expand_benchmark(
 
 	let vis = benchmark_def.fn_vis;
 
+	// remove #[benchmark] attribute
+	let fn_attrs: Vec<&Attribute> = benchmark_def
+		.fn_attrs
+		.iter()
+		.filter(|attr| !syn::parse2::<keywords::benchmark>(attr.path.to_token_stream()).is_ok())
+		.collect();
+
 	// modify signature generics, ident, and inputs, e.g:
 	// before: `fn bench(u: Linear<1, 100>) -> BenchmarkResult<()>`
 	// after: `fn _bench <T: Config<I>, I: 'static>(u: u32, verify: bool) ->
@@ -824,6 +833,9 @@ fn expand_benchmark(
 	// generate final quoted tokens
 	let res = quote! {
 		// benchmark function definition
+		#(
+			#fn_attrs
+		)*
 		#vis #sig {
 			#(
 				#setup_stmts
