@@ -373,8 +373,8 @@ pub fn testnet_genesis(
 			..Default::default()
 		},
 		glutton: GluttonConfig {
-			compute: Perbill::from_percent(100),
-			storage: Perbill::from_percent(100),
+			compute: Perbill::from_percent(0),
+			storage: Perbill::from_percent(0),
 		},
 	}
 }
