@@ -99,11 +99,24 @@ where
 	B: Backend<Block>,
 {
 	/// Prove finality for the given block number by returning a Justification for the last block of
-	/// the authority set.
+	/// the authority set in bytes.
 	pub fn prove_finality(
 		&self,
 		block: NumberFor<Block>,
 	) -> Result<Option<Vec<u8>>, FinalityProofError> {
+		Ok(self.prove_original_finality(block, true)?.map(|proof| proof.encode()))
+	}
+
+	/// Prove finality for the given block number by returning a Justification for the last block of
+	/// the authority set.
+	///
+	/// If `collect_unknown_headers` is true, the finality proof will include all headers from the
+	/// requested block until the block the justification refers to.
+	pub fn prove_finality_proof(
+		&self,
+		block: NumberFor<Block>,
+		collect_unknown_headers: bool,
+	) -> Result<Option<FinalityProof<Block::Header>>, FinalityProofError> {
 		let authority_set_changes = if let Some(changes) = self
 			.shared_authority_set
 			.as_ref()
@@ -114,8 +127,7 @@ where
 			return Ok(None)
 		};
 
-		prove_finality(&*self.backend, authority_set_changes, block, true)
-			.map(|opt| opt.map(|proof| proof.encode()))
+		prove_finality(&*self.backend, authority_set_changes, block, collect_unknown_headers)
 	}
 }
 
@@ -148,11 +160,11 @@ pub enum FinalityProofError {
 }
 
 /// Prove finality for the given block number by returning a justification for the last block of
-/// the authority set of which the given block is part of, or a justification for the latest finalized
-/// block if the given block is part of the current authority set.
+/// the authority set of which the given block is part of, or a justification for the latest
+/// finalized block if the given block is part of the current authority set.
 ///
-/// If `collect_unknown_headers` is true, the finality proof will include all headers from the requested 
-/// block until the block the justification refers to.
+/// If `collect_unknown_headers` is true, the finality proof will include all headers from the
+/// requested block until the block the justification refers to.
 fn prove_finality<Block, B>(
 	backend: &B,
 	authority_set_changes: AuthoritySetChanges<NumberFor<Block>>,
