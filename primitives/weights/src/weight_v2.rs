@@ -247,18 +247,32 @@ impl Weight {
 		Self { ref_time: 0, proof_size: 0 }
 	}
 
-	/// Constant version of Add with u64.
+	/// Constant version of Add for `ref_time` component with u64.
 	///
 	/// Is only overflow safe when evaluated at compile-time.
-	pub const fn add(self, scalar: u64) -> Self {
-		Self { ref_time: self.ref_time + scalar, proof_size: self.proof_size + scalar }
+	pub const fn add_ref_time(self, scalar: u64) -> Self {
+		Self { ref_time: self.ref_time + scalar, proof_size: self.proof_size }
 	}
 
-	/// Constant version of Sub with u64.
+	/// Constant version of Add for `proof_size` component with u64.
 	///
 	/// Is only overflow safe when evaluated at compile-time.
-	pub const fn sub(self, scalar: u64) -> Self {
-		Self { ref_time: self.ref_time - scalar, proof_size: self.proof_size - scalar }
+	pub const fn add_proof_size(self, scalar: u64) -> Self {
+		Self { ref_time: self.ref_time, proof_size: self.proof_size + scalar }
+	}
+
+	/// Constant version of Sub for `ref_time` component with u64.
+	///
+	/// Is only overflow safe when evaluated at compile-time.
+	pub const fn sub_ref_time(self, scalar: u64) -> Self {
+		Self { ref_time: self.ref_time - scalar, proof_size: self.proof_size }
+	}
+
+	/// Constant version of Sub for `proof_size` component with u64.
+	///
+	/// Is only overflow safe when evaluated at compile-time.
+	pub const fn sub_proof_size(self, scalar: u64) -> Self {
+		Self { ref_time: self.ref_time, proof_size: self.proof_size - scalar }
 	}
 
 	/// Constant version of Div with u64.

@@ -1213,7 +1213,7 @@ where
 	// NOTE: this is purposefully done after `finality_target` to prevent a case
 	// where in-between these two requests there is a block import and
 	// `finality_target` returns something higher than `best_chain`.
-	let best_header = match select_chain.best_chain().await {
+	let mut best_header = match select_chain.best_chain().await {
 		Ok(best_header) => best_header,
 		Err(err) => {
 			warn!(
@@ -1227,11 +1227,29 @@ where
 		},
 	};
 
-	if target_header.number() > best_header.number() {
-		return Err(Error::Safety(
-			"SelectChain returned a finality target higher than its best block".into(),
-		))
+	let is_descendent_of = is_descendent_of(&*client, None);
+
+	if target_header.number() > best_header.number() ||
+		target_header.number() == best_header.number() &&
+			target_header.hash() != best_header.hash() ||
+		!is_descendent_of(&target_header.hash(), &best_header.hash())?
+	{
+		debug!(
+			target: LOG_TARGET,
+			"SelectChain returned a finality target inconsistent with its best block. Restricting best block to target block"
+		);
+
+		best_header = target_header.clone();
 	}
+
+	debug!(
+		target: LOG_TARGET,
+		"SelectChain: finality target: #{} ({}), best block: #{} ({})",
+		target_header.number(),
+		target_header.hash(),
+		best_header.number(),
+		best_header.hash(),
+	);
 
 	// check if our vote is currently being limited due to a pending change,
 	// in which case we will restrict our target header to the given limit
@@ -1254,6 +1272,13 @@ where
 				.header(*target_header.parent_hash())?
 				.expect("Header known to exist after `finality_target` call; qed");
 		}
+
+		debug!(
+			target: LOG_TARGET,
+			"Finality target restricted to #{} ({}) due to pending authority set change",
+			target_header.number(),
+			target_header.hash()
+		)
 	}
 
 	// restrict vote according to the given voting rule, if the voting rule
