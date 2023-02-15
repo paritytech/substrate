@@ -12,6 +12,7 @@ this guarantee: For example adding a new field to an in-storage data structure w
 changes to frontends to properly display it. However, those changes will still be regarded
 as a minor version bump.
 
+[//]: # TODO(ank4n) these versions should be same as storage version
 ## [5.0.0] - UNRELEASED
 
 ### Added
