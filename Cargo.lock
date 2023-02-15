@@ -5041,6 +5041,7 @@ dependencies = [
  "pallet-balances",
  "pallet-bounties",
  "pallet-cere-ddc",
+ "pallet-cere-staking",
  "pallet-chainbridge",
  "pallet-child-bounties",
  "pallet-collective",
@@ -5637,6 +5638,16 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+]
+
+[[package]]
+name = "pallet-cere-staking"
+version = "0.1.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "scale-info",
 ]
 
 [[package]]
