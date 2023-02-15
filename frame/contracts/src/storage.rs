@@ -245,13 +245,12 @@ impl<T: Config> Storage<T> {
 	/// Calculates the weight that is necessary to remove one key from the trie and how many
 	/// of those keys can be deleted from the deletion queue given the supplied queue length
 	/// and weight limit.
-	pub fn deletion_budget(queue_len: usize, weight_limit: Weight) -> (u64, u32) {
+	pub fn deletion_budget(queue_len: usize, weight_limit: Weight) -> (Weight, u32) {
 		let base_weight = T::WeightInfo::on_process_deletion_queue_batch();
 		let weight_per_queue_item = T::WeightInfo::on_initialize_per_queue_item(1) -
 			T::WeightInfo::on_initialize_per_queue_item(0);
-		let weight_per_key = (T::WeightInfo::on_initialize_per_trie_key(1) -
-			T::WeightInfo::on_initialize_per_trie_key(0))
-		.ref_time();
+		let weight_per_key = T::WeightInfo::on_initialize_per_trie_key(1) -
+			T::WeightInfo::on_initialize_per_trie_key(0);
 		let decoding_weight = weight_per_queue_item.saturating_mul(queue_len as u64);
 
 		// `weight_per_key` being zero makes no sense and would constitute a failure to
@@ -259,9 +258,8 @@ impl<T: Config> Storage<T> {
 		let key_budget = weight_limit
 			.saturating_sub(base_weight)
 			.saturating_sub(decoding_weight)
-			.checked_div(weight_per_key)
-			.unwrap_or(Weight::zero())
-			.ref_time() as u32;
+			.checked_div_per_component(&weight_per_key)
+			.unwrap_or(0) as u32;
 
 		(weight_per_key, key_budget)
 	}
@@ -306,10 +304,7 @@ impl<T: Config> Storage<T> {
 		}
 
 		<DeletionQueue<T>>::put(queue);
-		let ref_time_weight = weight_limit
-			.ref_time()
-			.saturating_sub(weight_per_key.saturating_mul(u64::from(remaining_key_budget)));
-		Weight::from_ref_time(ref_time_weight)
+		weight_limit.saturating_sub(weight_per_key.saturating_mul(u64::from(remaining_key_budget)))
 	}
 
 	/// Generates a unique trie id by returning `hash(account_id ++ nonce)`.
