@@ -160,18 +160,24 @@ fn run_to(n: u64) {
 #[test]
 fn basic_stuff() {
 	new_test_ext().execute_with(|| {
-		//		assert!(Salary::last_claim(&0).is_err());
-		//		assert_eq!(Salary::status(), None);
+		assert!(Salary::last_active(&0).is_err());
+		assert_eq!(Salary::status(), None);
 	});
 }
-/*
+
 #[test]
 fn can_start() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
 		assert_eq!(
 			Salary::status(),
-			Some(StatusType { cycle_index: 0, cycle_start: 1, remaining_budget: 10 })
+			Some(StatusType {
+				cycle_index: 0,
+				cycle_start: 1,
+				budget: 10,
+				total_registrations: 0,
+				total_unregistered_paid: 0,
+			})
 		);
 	});
 }
@@ -187,7 +193,13 @@ fn bump_works() {
 		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
 		assert_eq!(
 			Salary::status(),
-			Some(StatusType { cycle_index: 1, cycle_start: 5, remaining_budget: 10 })
+			Some(StatusType {
+				cycle_index: 1,
+				cycle_start: 5,
+				budget: 10,
+				total_registrations: 0,
+				total_unregistered_paid: 0
+			})
 		);
 
 		run_to(8);
@@ -198,7 +210,13 @@ fn bump_works() {
 		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
 		assert_eq!(
 			Salary::status(),
-			Some(StatusType { cycle_index: 2, cycle_start: 9, remaining_budget: 5 })
+			Some(StatusType {
+				cycle_index: 2,
+				cycle_start: 9,
+				budget: 5,
+				total_registrations: 0,
+				total_unregistered_paid: 0
+			})
 		);
 	});
 }
@@ -210,9 +228,9 @@ fn induct_works() {
 
 		assert_noop!(Salary::induct(RuntimeOrigin::signed(1)), Error::<Test>::NotMember);
 		TestClub::change(&1, 1);
-		assert!(Salary::last_claim(&1).is_err());
+		assert!(Salary::last_active(&1).is_err());
 		assert_ok!(Salary::induct(RuntimeOrigin::signed(1)));
-		assert_eq!(Salary::last_claim(&1).unwrap(), 0);
+		assert_eq!(Salary::last_active(&1).unwrap(), 0);
 		assert_noop!(Salary::induct(RuntimeOrigin::signed(1)), Error::<Test>::AlreadyInducted);
 	});
 }
@@ -226,24 +244,29 @@ fn payment_works() {
 		assert_noop!(Salary::payout(RuntimeOrigin::signed(1)), Error::<Test>::NotInducted);
 		assert_ok!(Salary::induct(RuntimeOrigin::signed(1)));
 		// No claim on the cycle active during induction.
+		assert_noop!(Salary::payout(RuntimeOrigin::signed(1)), Error::<Test>::TooEarly);
+		run_to(3);
 		assert_noop!(Salary::payout(RuntimeOrigin::signed(1)), Error::<Test>::NoClaim);
 
-		run_to(5);
+		run_to(6);
 		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
+		assert_noop!(Salary::payout(RuntimeOrigin::signed(1)), Error::<Test>::TooEarly);
+		run_to(7);
 		assert_ok!(Salary::payout(RuntimeOrigin::signed(1)));
 		assert_eq!(paid(1), 1);
-		assert_eq!(Salary::status().unwrap().remaining_budget, 9);
+		assert_eq!(Salary::status().unwrap().total_unregistered_paid, 1);
 		assert_noop!(Salary::payout(RuntimeOrigin::signed(1)), Error::<Test>::NoClaim);
 		run_to(8);
 		assert_noop!(Salary::bump(RuntimeOrigin::signed(1)), Error::<Test>::NotYet);
 		run_to(9);
 		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
+		run_to(11);
 		assert_ok!(Salary::payout(RuntimeOrigin::signed(1)));
 		assert_eq!(paid(1), 2);
-		assert_eq!(Salary::status().unwrap().remaining_budget, 9);
+		assert_eq!(Salary::status().unwrap().total_unregistered_paid, 1);
 	});
 }
-
+/*
 #[test]
 fn zero_payment_fails() {
 	new_test_ext().execute_with(|| {

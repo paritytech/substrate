@@ -24,16 +24,13 @@ use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::{Saturating, Zero};
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, CheckedSub, Convert},
+	traits::{AtLeast32BitUnsigned, Convert},
 	Perbill,
 };
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 use frame_support::{
-	dispatch::DispatchResultWithPostInfo,
-	ensure,
-	traits::{schedule::v3::Anon as ScheduleAnon, RankedMembers},
-	RuntimeDebug,
+	dispatch::DispatchResultWithPostInfo, ensure, traits::RankedMembers, RuntimeDebug,
 };
 
 #[cfg(test)]
@@ -218,7 +215,7 @@ pub mod pallet {
 			let _ = ensure_signed(origin)?;
 			let now = frame_system::Pallet::<T>::block_number();
 			let cycle_period = T::RegistrationPeriod::get() + T::PayoutPeriod::get();
-			let mut status = match Status::<T, I>::get() {
+			let status = match Status::<T, I>::get() {
 				// Not first time... (move along start block and bump index)
 				Some(mut status) => {
 					status.cycle_start.saturating_accrue(cycle_period);
@@ -269,7 +266,6 @@ pub mod pallet {
 			claimant.unpaid = Some(payout);
 			status.total_registrations.saturating_accrue(payout);
 
-			let id = T::Paymaster::pay(&who, payout).map_err(|()| Error::<T, I>::PayError)?;
 			Claimant::<T, I>::insert(&who, &claimant);
 			Status::<T, I>::put(&status);
 
@@ -323,7 +319,7 @@ pub mod pallet {
 				let payout = ideal_payout.min(pot);
 				ensure!(!payout.is_zero(), Error::<T, I>::ClaimZero);
 
-				status.total_unregistered_paid.saturating_reduce(payout);
+				status.total_unregistered_paid.saturating_accrue(payout);
 				payout
 			};
 
@@ -341,13 +337,11 @@ pub mod pallet {
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		/*
 		pub fn status() -> Option<StatusOf<T, I>> {
 			Status::<T, I>::get()
 		}
-		pub fn last_claim(who: &T::AccountId) -> Result<CycleIndexOf<T>, DispatchError> {
-			Claimant::<T, I>::get(&who).ok_or(Error::<T, I>::NotInducted.into())
+		pub fn last_active(who: &T::AccountId) -> Result<CycleIndexOf<T>, DispatchError> {
+			Ok(Claimant::<T, I>::get(&who).ok_or(Error::<T, I>::NotInducted)?.last_active)
 		}
-		*/
 	}
 }
