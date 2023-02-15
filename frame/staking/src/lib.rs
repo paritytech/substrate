@@ -746,16 +746,15 @@ impl<AccountId: Clone, Balance: HasCompact + AtLeast32BitUnsigned + Copy>
 
 		for chunk in individual_chunks {
 			let mut page_total: Balance = Zero::zero();
+			let mut others: Vec<IndividualExposure<AccountId, Balance>> = vec![];
 			for individual in chunk.iter() {
 				page_total = page_total.saturating_add(individual.value);
+				others.push(IndividualExposure { who: individual.who.clone(), value: individual.value })
 			}
 
 			exposure_pages.push(ExposurePage {
 				page_total,
-				others: chunk
-					.iter()
-					.map(|c| IndividualExposure { who: c.who.clone(), value: c.value })
-					.collect(),
+				others,
 			});
 		}
 
