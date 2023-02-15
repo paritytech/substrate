@@ -3559,7 +3559,6 @@ pub(crate) mod tests {
 		assert_eq!(Some(vec![0x3a.into()]), bc.body(block_3a).unwrap());
 	}
 
-
 	#[test]
 	fn indexed_data_block_body() {
 		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Some(1), 10);

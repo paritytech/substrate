@@ -751,13 +751,13 @@ impl<AccountId: Clone, Balance: HasCompact + AtLeast32BitUnsigned + Copy>
 			let mut others: Vec<IndividualExposure<AccountId, Balance>> = vec![];
 			for individual in chunk.iter() {
 				page_total = page_total.saturating_add(individual.value);
-				others.push(IndividualExposure { who: individual.who.clone(), value: individual.value })
+				others.push(IndividualExposure {
+					who: individual.who.clone(),
+					value: individual.value,
+				})
 			}
 
-			exposure_pages.push(ExposurePage {
-				page_total,
-				others,
-			});
+			exposure_pages.push(ExposurePage { page_total, others });
 		}
 
 		(
@@ -786,7 +786,9 @@ pub struct ExposurePage<AccountId, Balance: HasCompact> {
 ///
 /// It, in combination with a list of `ExposurePage`s, can be used to reconstruct a full `Exposure`
 /// struct. This is useful for cases where we want to query a single page of `Exposure`s.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo, Default)]
+#[derive(
+	PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo, Default,
+)]
 pub struct ExposureOverview<Balance: HasCompact> {
 	/// The total balance backing this validator.
 	#[codec(compact)]
