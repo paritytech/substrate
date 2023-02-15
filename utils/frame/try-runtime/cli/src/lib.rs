@@ -377,7 +377,7 @@ use sp_core::{
 	},
 	storage::well_known_keys,
 	testing::TaskExecutor,
-	traits::{CallContext, TaskExecutorExt},
+	traits::{CallContext, ReadRuntimeVersion, TaskExecutorExt},
 	twox_128, H256,
 };
 use sp_externalities::Extensions;
