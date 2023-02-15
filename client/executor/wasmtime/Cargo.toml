@@ -25,7 +25,7 @@ wasmtime = { version = "5.0.0", default-features = false, features = [
 	"jitdump",
 	"parallel-compilation",
 	"pooling-allocator"
-] }
+], git = "https://github.com/paritytech/wasmtime.git", branch = "v5.0.0_lto_fix" }
 anyhow = "1.0.68"
 sc-allocator = { version = "4.1.0-dev", path = "../../allocator" }
 sc-executor-common = { version = "0.10.0-dev", path = "../common" }

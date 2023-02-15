@@ -349,9 +349,8 @@ pub mod pallet {
 		///
 		/// May only be called from `T::SpendOrigin`.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - O(1).
-		/// # </weight>
 		#[pallet::call_index(1)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::approve_bounty())]
 		pub fn approve_bounty(
@@ -381,9 +380,8 @@ pub mod pallet {
 		///
 		/// May only be called from `T::SpendOrigin`.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - O(1).
-		/// # </weight>
 		#[pallet::call_index(2)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::propose_curator())]
 		pub fn propose_curator(
@@ -431,9 +429,8 @@ pub mod pallet {
 		/// anyone in the community to call out that a curator is not doing their due diligence, and
 		/// we should pick a new curator. In this case the curator should also be slashed.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - O(1).
-		/// # </weight>
 		#[pallet::call_index(3)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::unassign_curator())]
 		pub fn unassign_curator(
@@ -517,9 +514,8 @@ pub mod pallet {
 		///
 		/// May only be called from the curator.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - O(1).
-		/// # </weight>
 		#[pallet::call_index(4)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::accept_curator())]
 		pub fn accept_curator(
@@ -560,9 +556,8 @@ pub mod pallet {
 		/// - `bounty_id`: Bounty ID to award.
 		/// - `beneficiary`: The beneficiary account whom will receive the payout.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - O(1).
-		/// # </weight>
 		#[pallet::call_index(5)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::award_bounty())]
 		pub fn award_bounty(
@@ -608,9 +603,8 @@ pub mod pallet {
 		///
 		/// - `bounty_id`: Bounty ID to claim.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - O(1).
-		/// # </weight>
 		#[pallet::call_index(6)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::claim_bounty())]
 		pub fn claim_bounty(
@@ -672,9 +666,8 @@ pub mod pallet {
 		///
 		/// - `bounty_id`: Bounty ID to cancel.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - O(1).
-		/// # </weight>
 		#[pallet::call_index(7)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::close_bounty_proposed()
 			.max(<T as Config<I>>::WeightInfo::close_bounty_active()))]
@@ -764,9 +757,8 @@ pub mod pallet {
 		/// - `bounty_id`: Bounty ID to extend.
 		/// - `remark`: additional information.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - O(1).
-		/// # </weight>
 		#[pallet::call_index(8)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::extend_bounty_expiry())]
 		pub fn extend_bounty_expiry(

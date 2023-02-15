@@ -910,13 +910,12 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
-	// The size of the supplied message does not influence the weight because as it is never
-	// processed during on-chain execution: It is only ever read during debugging which happens
-	// when the contract is called as RPC where weights do not matter.
+	// Benchmark debug_message call with zero input data.
+	// Whereas this function is used in RPC mode only, it still should be secured
+	// against an excessive use.
 	#[pov_mode = Ignored]
 	seal_debug_message {
 		let r in 0 .. API_BENCHMARK_BATCHES;
-		let max_bytes = code::max_pages::<T>() * 64 * 1024;
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory { min_pages: 1, max_pages: 1 }),
 			imported_functions: vec![ImportedFunction {
@@ -927,15 +926,75 @@ benchmarks! {
 			}],
 			call_body: Some(body::repeated(r * API_BENCHMARK_BATCH_SIZE, &[
 				Instruction::I32Const(0), // value_ptr
-				Instruction::I32Const(max_bytes as i32), // value_len
+				Instruction::I32Const(0), // value_len
 				Instruction::Call(0),
 				Instruction::Drop,
 			])),
 			.. Default::default()
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
-		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+	}: {
+		<Contracts<T>>::bare_call(
+			instance.caller,
+			instance.account_id,
+			0u32.into(),
+			Weight::MAX,
+			None,
+			vec![],
+			true,
+			Determinism::Deterministic,
+		)
+		.result?;
+	}
+
+	seal_debug_message_per_kb {
+		// Vary size of input in kilobytes up to maximum allowed contract memory
+		// or maximum allowed debug buffer size, whichever is less.
+		let i in 0 .. (T::Schedule::get().limits.memory_pages * 64).min(T::MaxDebugBufferLen::get() / 1024);
+		// We benchmark versus messages containing printable ASCII codes.
+		// About 1Kb goes to the instrumented contract code instructions,
+		// whereas all the space left we use for the initialization of the debug messages data.
+		let message = (0 .. T::MaxCodeLen::get() - 1024).zip((32..127).cycle()).map(|i| i.1).collect::<Vec<_>>();
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory {
+				min_pages: T::Schedule::get().limits.memory_pages,
+				max_pages: T::Schedule::get().limits.memory_pages,
+			}),
+			imported_functions: vec![ImportedFunction {
+				module: "seal0",
+				name: "seal_debug_message",
+				params: vec![ValueType::I32, ValueType::I32],
+				return_type: Some(ValueType::I32),
+			 }],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: message,
+				},
+			],
+			call_body: Some(body::plain(vec![
+				Instruction::I32Const(0), // value_ptr
+				Instruction::I32Const((i * 1024) as i32), // value_len increments by i Kb
+				Instruction::Call(0),
+				Instruction::Drop,
+				Instruction::End,
+			])),
+			..Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+	}: {
+		<Contracts<T>>::bare_call(
+			instance.caller,
+			instance.account_id,
+			0u32.into(),
+			Weight::MAX,
+			None,
+			vec![],
+			true,
+			Determinism::Deterministic,
+		)
+		.result?;
+	}
 
 	// Only the overhead of calling the function itself with minimal arguments.
 	// The contract is a bit more complex because it needs to use different keys in order

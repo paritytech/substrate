@@ -555,7 +555,6 @@ where
 		let block_number = vote.commitment.block_number;
 		match rounds.add_vote(vote) {
 			VoteImportResult::RoundConcluded(signed_commitment) => {
-				self.gossip_validator.conclude_round(block_number);
 				metric_set!(self, beefy_round_concluded, block_number);
 
 				let finality_proof = VersionedFinalityProof::V1(signed_commitment);
@@ -602,6 +601,7 @@ where
 
 		// Finalize inner round and update voting_oracle state.
 		self.persisted_state.voting_oracle.finalize(block_num)?;
+		self.gossip_validator.conclude_round(block_num);
 
 		if block_num > self.best_beefy_block() {
 			// Set new best BEEFY block number.
