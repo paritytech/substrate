@@ -50,8 +50,11 @@ frame_support::construct_runtime!(
 	}
 );
 
+use frame_system::pallet::preludes::testing::Impl;
+type SystemRuntime = Impl<RuntimeCall, RuntimeOrigin, RuntimeEvent, PalletInfo>;
 impl frame_system::Config for Test {
-	type BaseCallFilter = frame_support::traits::Everything;
+	type BaseCallFilter = <SystemRuntime as frame_system::Config>::BaseCallFilter;
+	// type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
