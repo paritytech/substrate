@@ -42,7 +42,7 @@ use node_primitives::Block;
 use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::{
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
-	BlockBackend, ExecutionStrategy,
+	ExecutionStrategy, HeaderBackend,
 };
 use sc_client_db::PruningMode;
 use sc_consensus::{BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult, ImportedAux};
@@ -54,7 +54,7 @@ use sp_core::{blake2_256, ed25519, sr25519, traits::SpawnNamed, ExecutionContext
 use sp_inherents::InherentData;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, IdentifyAccount, Verify, Zero},
+	traits::{Block as BlockT, IdentifyAccount, Verify},
 	OpaqueExtrinsic,
 };
 
@@ -277,11 +277,7 @@ impl<'a> BlockContentIterator<'a> {
 			.runtime_version_at(&BlockId::number(0))
 			.expect("There should be runtime version at 0");
 
-		let genesis_hash = client
-			.block_hash(Zero::zero())
-			.expect("Database error?")
-			.expect("Genesis block always exists; qed");
-
+		let genesis_hash = client.info().genesis_hash;
 		BlockContentIterator { iteration: 0, content, keyring, runtime_version, genesis_hash }
 	}
 }
@@ -445,7 +441,7 @@ impl BenchDb {
 		client
 			.runtime_api()
 			.inherent_extrinsics_with_context(
-				&BlockId::number(0),
+				client.info().genesis_hash,
 				ExecutionContext::BlockConstruction,
 				inherent_data,
 			)

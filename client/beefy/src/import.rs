@@ -24,7 +24,6 @@ use sp_api::{ProvideRuntimeApi, TransactionFor};
 use sp_blockchain::well_known_cache_keys;
 use sp_consensus::Error as ConsensusError;
 use sp_runtime::{
-	generic::BlockId,
 	traits::{Block as BlockT, Header as HeaderT, NumberFor},
 	EncodedJustification,
 };
@@ -87,11 +86,10 @@ where
 		number: NumberFor<Block>,
 		hash: <Block as BlockT>::Hash,
 	) -> Result<BeefyVersionedFinalityProof<Block>, ConsensusError> {
-		let block_id = BlockId::hash(hash);
 		let validator_set = self
 			.runtime
 			.runtime_api()
-			.validator_set(&block_id)
+			.validator_set(hash)
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 			.ok_or_else(|| ConsensusError::ClientImport("Unknown validator set".to_string()))?;
 

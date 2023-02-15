@@ -840,7 +840,6 @@ where
 			CoreApi<Block> + ApiExt<Block, StateBackend = B::State>,
 	{
 		let parent_hash = import_block.header.parent_hash();
-		let at = BlockId::Hash(*parent_hash);
 		let state_action = std::mem::replace(&mut import_block.state_action, StateAction::Skip);
 		let (enact_state, storage_changes) = match (self.block_status(*parent_hash)?, state_action)
 		{
@@ -872,7 +871,7 @@ where
 				let execution_context = import_block.origin.into();
 
 				runtime_api.execute_block_with_context(
-					&at,
+					*parent_hash,
 					execution_context,
 					Block::new(import_block.header.clone(), body.clone()),
 				)?;

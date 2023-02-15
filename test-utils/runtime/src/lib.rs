@@ -1339,7 +1339,6 @@ mod tests {
 	use sp_api::ProvideRuntimeApi;
 	use sp_consensus::BlockOrigin;
 	use sp_core::storage::well_known_keys::HEAP_PAGES;
-	use sp_runtime::generic::BlockId;
 	use sp_state_machine::ExecutionStrategy;
 	use substrate_test_runtime_client::{
 		prelude::*, runtime::TestAPI, DefaultTestClientBuilderExt, TestClientBuilder,
@@ -1354,27 +1353,27 @@ mod tests {
 			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
 			.set_heap_pages(8)
 			.build();
-		let block_id = BlockId::Hash(client.chain_info().best_hash);
+		let at_hash = client.chain_info().best_hash;
 
 		// Try to allocate 1024k of memory on heap. This is going to fail since it is twice larger
 		// than the heap.
-		let ret = client.runtime_api().vec_with_capacity(&block_id, 1048576);
+		let ret = client.runtime_api().vec_with_capacity(at_hash, 1048576);
 		assert!(ret.is_err());
 
 		// Create a block that sets the `:heap_pages` to 32 pages of memory which corresponds to
 		// ~2048k of heap memory.
-		let (new_block_id, block) = {
+		let (new_at_hash, block) = {
 			let mut builder = client.new_block(Default::default()).unwrap();
 			builder.push_storage_change(HEAP_PAGES.to_vec(), Some(32u64.encode())).unwrap();
 			let block = builder.build().unwrap().block;
 			let hash = block.header.hash();
-			(BlockId::Hash(hash), block)
+			(hash, block)
 		};
 
 		futures::executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
 		// Allocation of 1024k while having ~2048k should succeed.
-		let ret = client.runtime_api().vec_with_capacity(&new_block_id, 1048576);
+		let ret = client.runtime_api().vec_with_capacity(new_at_hash, 1048576);
 		assert!(ret.is_ok());
 	}
 
@@ -1383,9 +1382,9 @@ mod tests {
 		let client =
 			TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
 		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Hash(client.chain_info().best_hash);
+		let at_hash = client.chain_info().best_hash;
 
-		runtime_api.test_storage(&block_id).unwrap();
+		runtime_api.test_storage(at_hash).unwrap();
 	}
 
 	fn witness_backend() -> (sp_trie::MemoryDB<crate::Hashing>, crate::Hash) {
@@ -1410,8 +1409,8 @@ mod tests {
 		let client =
 			TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
 		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Hash(client.chain_info().best_hash);
+		let at_hash = client.chain_info().best_hash;
 
-		runtime_api.test_witness(&block_id, proof, root).unwrap();
+		runtime_api.test_witness(at_hash, proof, root).unwrap();
 	}
 }

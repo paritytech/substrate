@@ -20,7 +20,6 @@ use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::ecdsa::{AppPair, AppPublic};
 use sp_core::{crypto::Pair, testing::ECDSA};
 use sp_keystore::{testing::KeyStore, SyncCryptoStore};
-use sp_runtime::generic::BlockId;
 use std::sync::Arc;
 use substrate_test_runtime_client::{
 	runtime::TestAPI, DefaultTestClientBuilderExt, TestClientBuilder, TestClientBuilderExt,
@@ -32,7 +31,7 @@ fn ecdsa_works_in_runtime() {
 	let test_client = TestClientBuilder::new().set_keystore(keystore.clone()).build();
 	let (signature, public) = test_client
 		.runtime_api()
-		.test_ecdsa_crypto(&BlockId::Number(0))
+		.test_ecdsa_crypto(test_client.chain_info().genesis_hash)
 		.expect("Tests `ecdsa` crypto.");
 
 	let supported_keys = SyncCryptoStore::keys(&*keystore, ECDSA).unwrap();

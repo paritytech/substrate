@@ -53,10 +53,7 @@ use sp_blockchain::{
 	Backend as BlockChainBackend, Error as BlockChainError, HeaderBackend, HeaderMetadata,
 };
 use sp_core::{hexdisplay::HexDisplay, storage::well_known_keys, Bytes};
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, Header},
-};
+use sp_runtime::traits::{Block as BlockT, Header};
 use std::{marker::PhantomData, sync::Arc};
 
 /// An API for chain head RPC calls.
@@ -142,12 +139,8 @@ where
 	let finalized_block_hash = client.info().finalized_hash;
 	handle.pin_block(finalized_block_hash)?;
 
-	let finalized_block_runtime = generate_runtime_event(
-		&client,
-		runtime_updates,
-		&BlockId::Hash(finalized_block_hash),
-		None,
-	);
+	let finalized_block_runtime =
+		generate_runtime_event(&client, runtime_updates, finalized_block_hash, None);
 
 	let initialized_event = FollowEvent::Initialized(Initialized {
 		finalized_block_hash,
@@ -162,12 +155,7 @@ where
 	for (child, parent) in initial_blocks.into_iter() {
 		handle.pin_block(child)?;
 
-		let new_runtime = generate_runtime_event(
-			&client,
-			runtime_updates,
-			&BlockId::Hash(child),
-			Some(&BlockId::Hash(parent)),
-		);
+		let new_runtime = generate_runtime_event(&client, runtime_updates, child, Some(parent));
 
 		let event = FollowEvent::NewBlock(NewBlock {
 			block_hash: child,
@@ -214,8 +202,8 @@ fn parse_hex_param(
 fn generate_runtime_event<Client, Block>(
 	client: &Arc<Client>,
 	runtime_updates: bool,
-	block: &BlockId<Block>,
-	parent: Option<&BlockId<Block>>,
+	block: Block::Hash,
+	parent: Option<Block::Hash>,
 ) -> Option<RuntimeEvent>
 where
 	Block: BlockT + 'static,
@@ -329,8 +317,8 @@ where
 	let new_runtime = generate_runtime_event(
 		&client,
 		runtime_updates,
-		&BlockId::Hash(notification.hash),
-		Some(&BlockId::Hash(*notification.header.parent_hash())),
+		notification.hash,
+		Some(*notification.header.parent_hash()),
 	);
 
 	// Note: `Block::Hash` will serialize to hexadecimal encoded string.
