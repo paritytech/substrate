@@ -240,7 +240,7 @@ impl<T: Config> Pallet<T> {
 		// Now let's calculate how this is split to the validator.
 		let validator_exposure_part = Perbill::from_rational(exposure.own(), exposure.total());
 		let validator_staking_payout = validator_exposure_part * validator_leftover_payout;
-		let page_stake_part = Perbill::from_rational(exposure.current_total(), exposure.total());
+		let page_stake_part = Perbill::from_rational(exposure.page_total(), exposure.total());
 		// validator commission is paid out in fraction across pages proportional to the page stake.
 		let validator_commission_payout = page_stake_part * validator_total_commission_payout;
 

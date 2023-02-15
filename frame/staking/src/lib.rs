@@ -845,8 +845,8 @@ impl<AccountId, Balance: HasCompact + Copy + AtLeast32BitUnsigned> ExposureExt<A
 		self.exposure_overview.total
 	}
 
-	/// Returns total exposure of this validator for current page
-	pub fn current_total(&self) -> Balance {
+	/// Returns total exposure of this validator for the current page
+	pub fn page_total(&self) -> Balance {
 		self.exposure_page.page_total + self.exposure_overview.own
 	}
 
