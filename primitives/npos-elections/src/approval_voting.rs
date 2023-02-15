@@ -27,6 +27,9 @@ use sp_std::{cmp::Reverse, vec::Vec};
 /// Execute an approvals voting election scheme. The return type is a list of winners and a weight
 /// distribution vector of all voters who contribute to the winners.
 ///
+/// - The vote assignment distribution for each vote is always 100%, since a voter backs a candidate
+///   with its full stake, regardless of how many candidates are backed by the same stake. However,
+///   the caller may normalize votes on site if required.
 /// - Returning winners are sorted based on desirability. Voters are unsorted.
 /// - The returning winners are zipped with their final backing stake. Yet, to get the exact final
 ///   weight distribution from the winner's point of view, one needs to build a support map. See
@@ -69,11 +72,7 @@ pub fn approval_voting<AccountId: IdentifierT, P: PerThing128>(
 		}
 	}
 
-	let mut assignments =
-		voters.into_iter().filter_map(|v| v.into_assignment()).collect::<Vec<_>>();
-	let _ = assignments
-		.iter_mut()
-		.try_for_each(|a| a.try_normalize().map_err(crate::Error::ArithmeticError))?;
+	let assignments = voters.into_iter().filter_map(|v| v.into_assignment()).collect::<Vec<_>>();
 
 	Ok(ElectionResult { winners, assignments })
 }

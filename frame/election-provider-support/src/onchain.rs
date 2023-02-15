@@ -350,6 +350,7 @@ mod tests {
 		sp_io::TestExternalities::new_empty().execute_with(|| {
 			DesiredTargets::set(3);
 
+			// note that the `OnChainExecution::elect` implementation normalizes the vote weights.
 			assert_eq!(
 				<OnChainExecution::<ApprovalVotingParams> as ElectionProvider>::elect().unwrap(),
 				vec![

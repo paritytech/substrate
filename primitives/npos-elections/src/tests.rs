@@ -45,15 +45,24 @@ fn approval_voting_works() {
 		vec![
 			Assignment {
 				who: 10u64,
-				distribution: vec![(1, Perbill::from_percent(50)), (2, Perbill::from_percent(50))]
+				distribution: vec![
+					(1, Perbill::from_percent(100)),
+					(2, Perbill::from_percent(100))
+				]
 			},
 			Assignment {
 				who: 20u64,
-				distribution: vec![(1, Perbill::from_percent(50)), (2, Perbill::from_percent(50))]
+				distribution: vec![
+					(1, Perbill::from_percent(100)),
+					(2, Perbill::from_percent(100))
+				]
 			},
 			Assignment {
 				who: 30u64,
-				distribution: vec![(1, Perbill::from_percent(50)), (2, Perbill::from_percent(50))]
+				distribution: vec![
+					(1, Perbill::from_percent(100)),
+					(2, Perbill::from_percent(100))
+				]
 			},
 			Assignment { who: 40u64, distribution: vec![(4, Perbill::from_percent(100))] },
 		]
