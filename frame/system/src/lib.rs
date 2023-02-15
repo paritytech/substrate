@@ -203,7 +203,7 @@ pub mod pallet {
 	pub mod preludes {
 		use super::*;
 		pub mod testing {
-			type AccountId = u32;
+			type AccountId = u64;
 			use sp_runtime::traits::IdentityLookup;
 
 			use super::*;
