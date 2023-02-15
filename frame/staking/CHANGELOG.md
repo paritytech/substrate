@@ -28,7 +28,7 @@ as a minor version bump.
 
 ### Changed
 - `payout_stakers` can be called multiple times for the same era if the validator has more than `ExposurePageSize` nominators backing them.
-- `MaxNominatorRewardedPerValidator` is renamed to `MaxExposurePageSize`.
+- `MaxExposurePageSize` is renamed to `MaxExposurePageSize`.
 
 ### Deprecated
 - `ErasStakersClipped` is deprecated in favor of `ErasStakersPaged`. In 84 eras, `ErasStakersClipped` will be removed.
