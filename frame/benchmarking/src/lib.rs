@@ -121,7 +121,7 @@ pub use v1::*;
 /// the only valid type that implements [ParamRange](`v2::ParamRange`) is
 /// [Linear](`v2::Linear`).
 ///
-/// The valid syntax for defining a [Linear](`v2::Linear`)is `Linear<A, B>` where `A`, and `B`
+/// The valid syntax for defining a [Linear](`v2::Linear`) is `Linear<A, B>` where `A`, and `B`
 /// are valid integer literals (that fit in a `u32`), such that `B` >= `A`.
 ///
 /// Also note that the `// setup code` and `// verification code` comments shown above are not
@@ -183,10 +183,10 @@ pub use v1::*;
 ///
 /// #### `skip_meta`
 ///
-/// Specifies that the benchmarking framework should not analyze the storage keys that
+/// Specifies that the benchmarking framework should not analyze the storage keys that the
 /// benchmarked code read or wrote. This useful to suppress the prints in the form of unknown
-/// 0x… in case a storage key that does not have metadata. Note that this skips the analysis
-/// of all accesses, not just ones without metadata.
+/// 0x… in case a storage key that does not have metadata. Note that this skips the analysis of
+/// all accesses, not just ones without metadata.
 ///
 /// ## Where Clause
 ///
@@ -246,15 +246,16 @@ pub use v1::*;
 ///    verification.
 /// 5. If you specify a return type on the function definition, it must conform to the rules
 ///    specified below in the next section, and the last statement of the function definition
-///    must return a valid return path that is compatible with `BenchmarkResult<T>`.
+///    must return a valid return path that is compatible with [`v2::BenchmarkResult<T>`].
 ///
-/// The reason we generate an actual function is to allow the compiler to enforce several
-/// constraints that would otherwise be difficult to enforce and to reduce developer confusion
-/// (especially regarding the use of the `?` operator, as covered below).
+/// The reason we generate an actual function as part of the expansion is to allow the compiler
+/// to enforce several constraints that would otherwise be difficult to enforce and to reduce
+/// developer confusion (especially regarding the use of the `?` operator, as covered below).
 ///
 /// Note that any attributes, comments, and doc comments attached to your benchmark function
 /// definition are also carried over onto the resulting benchmark function and the struct for
-/// that benchmark. As a result you should be care
+/// that benchmark. As a result you should be careful about what attributes you attach here as
+/// they will be replicated in multiple places.
 ///
 /// ### Support for `BenchmarkResult<T>` and the `?` operator
 ///
