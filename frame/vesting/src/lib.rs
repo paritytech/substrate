@@ -297,12 +297,8 @@ pub mod pallet {
 		///
 		/// Emits either `VestingCompleted` or `VestingUpdated`.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`.
-		/// - DbWeight: 2 Reads, 2 Writes
-		///     - Reads: Vesting Storage, Balances Locks, [Sender Account]
-		///     - Writes: Vesting Storage, Balances Locks, [Sender Account]
-		/// # </weight>
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::vest_locked(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES)
 			.max(T::WeightInfo::vest_unlocked(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES))
@@ -321,12 +317,8 @@ pub mod pallet {
 		///
 		/// Emits either `VestingCompleted` or `VestingUpdated`.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`.
-		/// - DbWeight: 3 Reads, 3 Writes
-		///     - Reads: Vesting Storage, Balances Locks, Target Account
-		///     - Writes: Vesting Storage, Balances Locks, Target Account
-		/// # </weight>
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::vest_other_locked(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES)
 			.max(T::WeightInfo::vest_other_unlocked(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES))
@@ -348,12 +340,8 @@ pub mod pallet {
 		///
 		/// NOTE: This will unlock all schedules through the current block.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`.
-		/// - DbWeight: 3 Reads, 3 Writes
-		///     - Reads: Vesting Storage, Balances Locks, Target Account, [Sender Account]
-		///     - Writes: Vesting Storage, Balances Locks, Target Account, [Sender Account]
-		/// # </weight>
 		#[pallet::call_index(2)]
 		#[pallet::weight(
 			T::WeightInfo::vested_transfer(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES)
@@ -380,12 +368,8 @@ pub mod pallet {
 		///
 		/// NOTE: This will unlock all schedules through the current block.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`.
-		/// - DbWeight: 4 Reads, 4 Writes
-		///     - Reads: Vesting Storage, Balances Locks, Target Account, Source Account
-		///     - Writes: Vesting Storage, Balances Locks, Target Account, Source Account
-		/// # </weight>
 		#[pallet::call_index(3)]
 		#[pallet::weight(
 			T::WeightInfo::force_vested_transfer(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES)
