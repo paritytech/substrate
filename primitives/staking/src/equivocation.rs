@@ -40,7 +40,9 @@ pub trait EquivocationHandler {
 	) -> DispatchResult;
 
 	/// Fetch the current block author id, if defined.
-	fn block_author() -> Option<Self::AccountId>;
+	fn block_author() -> Option<Self::AccountId> {
+		None
+	}
 }
 
 // impl<T> HandleEquivocation2 for () {

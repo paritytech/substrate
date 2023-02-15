@@ -50,7 +50,7 @@ use frame_support::{
 use scale_info::TypeInfo;
 use sp_runtime::{generic::DigestItem, traits::Zero, DispatchResult, KeyTypeId};
 use sp_session::{GetSessionNumber, GetValidatorCount};
-use sp_staking::{equivocation::EquivocationHandler2, SessionIndex};
+use sp_staking::{equivocation::EquivocationHandler as EquivocationHandlerT, SessionIndex};
 
 mod default_weights;
 mod equivocation;
@@ -110,7 +110,7 @@ pub mod pallet {
 		/// NOTE: when enabling equivocation handling (i.e. this type isn't set to
 		/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
 		/// definition.
-		type HandleEquivocation: EquivocationHandler2<
+		type HandleEquivocation: EquivocationHandlerT<
 			AccountId = Self::AccountId,
 			KeyOwnerProof = Self::KeyOwnerProof,
 			KeyOwnerIdentification = Self::KeyOwnerIdentification,

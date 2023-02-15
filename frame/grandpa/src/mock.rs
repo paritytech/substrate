@@ -235,8 +235,7 @@ impl Config for Test {
 		AuthorityId,
 	)>>::IdentificationTuple;
 
-	type HandleEquivocation =
-		super::EquivocationHandler<Self::KeyOwnerIdentification, Offences, ReportLongevity>;
+	type HandleEquivocation = super::EquivocationHandler<Self, Offences, ReportLongevity>;
 
 	type WeightInfo = ();
 	type MaxAuthorities = ConstU32<100>;
