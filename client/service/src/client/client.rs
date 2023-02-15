@@ -1741,8 +1741,10 @@ where
 			.map_err(Into::into)
 	}
 
-	fn runtime_version_at(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, sp_api::ApiError> {
-		let hash = self.backend.blockchain().expect_block_hash_from_id(at)?;
+	fn runtime_version_at(
+		&self,
+		hash: <Block as BlockT>::Hash,
+	) -> Result<RuntimeVersion, sp_api::ApiError> {
 		CallExecutor::runtime_version(&self.executor, hash).map_err(Into::into)
 	}
 

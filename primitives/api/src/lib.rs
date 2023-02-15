@@ -400,16 +400,16 @@ pub use sp_api_proc_macro::impl_runtime_apis;
 ///
 /// This attribute can be placed above individual function in the mock implementation to
 /// request more control over the function declaration. From the client side each runtime api
-/// function is called with the `at` parameter that is a [`BlockId`](sp_api::BlockId). When
-/// using the `advanced` attribute, the macro expects that the first parameter of the function
-/// is this `at` parameter. Besides that the macro also doesn't do the automatic return value
-/// rewrite, which means that full return value must be specified. The full return value is
-/// constructed like [`Result`]`<<ReturnValue>, Error>` while `ReturnValue` being the return
-/// value that is specified in the trait declaration.
+/// function is called with the `at` parameter that is a [`Hash`](sp_runtime::traits::Hash).
+/// When using the `advanced` attribute, the macro expects that the first parameter of the
+/// function is this `at` parameter. Besides that the macro also doesn't do the automatic
+/// return value rewrite, which means that full return value must be specified. The full return
+/// value is constructed like [`Result`]`<<ReturnValue>, Error>` while `ReturnValue` being the
+/// return value that is specified in the trait declaration.
 ///
 /// ## Example
 /// ```rust
-/// # use sp_runtime::{traits::Block as BlockT, generic::BlockId};
+/// # use sp_runtime::traits::Block as BlockT;
 /// # use sp_test_primitives::Block;
 /// # use codec;
 /// #
@@ -429,16 +429,14 @@ pub use sp_api_proc_macro::impl_runtime_apis;
 /// sp_api::mock_impl_runtime_apis! {
 ///     impl Balance<Block> for MockApi {
 ///         #[advanced]
-///         fn get_balance(&self, at: &BlockId<Block>) -> Result<u64, sp_api::ApiError> {
+///         fn get_balance(&self, at: <Block as BlockT>::Hash) -> Result<u64, sp_api::ApiError> {
 ///             println!("Being called at: {}", at);
 ///
 ///             Ok(self.balance.into())
 ///         }
 ///         #[advanced]
-///         fn set_balance(at: &BlockId<Block>, val: u64) -> Result<(), sp_api::ApiError> {
-///             if let BlockId::Number(1) = at {
-///                 println!("Being called to set balance to: {}", val);
-///             }
+///         fn set_balance(at: <Block as BlockT>::Hash, val: u64) -> Result<(), sp_api::ApiError> {
+///             println!("Being called at: {}", at);
 ///
 ///             Ok(().into())
 ///         }
@@ -539,14 +537,17 @@ pub trait ApiExt<Block: BlockT> {
 		Self: Sized;
 
 	/// Checks if the given api is implemented and versions match.
-	fn has_api<A: RuntimeApiInfo + ?Sized>(&self, at: &BlockId<Block>) -> Result<bool, ApiError>
+	fn has_api<A: RuntimeApiInfo + ?Sized>(
+		&self,
+		at_hash: <Block as BlockT>::Hash,
+	) -> Result<bool, ApiError>
 	where
 		Self: Sized;
 
 	/// Check if the given api is implemented and the version passes a predicate.
 	fn has_api_with<A: RuntimeApiInfo + ?Sized, P: Fn(u32) -> bool>(
 		&self,
-		at: &BlockId<Block>,
+		at_hash: <Block as BlockT>::Hash,
 		pred: P,
 	) -> Result<bool, ApiError>
 	where
@@ -555,7 +556,7 @@ pub trait ApiExt<Block: BlockT> {
 	/// Returns the version of the given api.
 	fn api_version<A: RuntimeApiInfo + ?Sized>(
 		&self,
-		at: &BlockId<Block>,
+		at_hash: <Block as BlockT>::Hash,
 	) -> Result<Option<u32>, ApiError>
 	where
 		Self: Sized;
@@ -619,7 +620,10 @@ pub trait CallApiAt<Block: BlockT> {
 	) -> Result<Vec<u8>, ApiError>;
 
 	/// Returns the runtime version at the given block.
-	fn runtime_version_at(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, ApiError>;
+	fn runtime_version_at(
+		&self,
+		at_hash: <Block as BlockT>::Hash,
+	) -> Result<RuntimeVersion, ApiError>;
 
 	/// Get the state `at` the given block.
 	fn state_at(&self, at: &BlockId<Block>) -> Result<Self::StateBackend, ApiError>;
