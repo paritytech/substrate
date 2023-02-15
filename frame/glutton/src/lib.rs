@@ -232,7 +232,7 @@ pub mod pallet {
 
 			// Blake2 has a very high speed of hashing so we make multiple hashes with it to
 			// waste more `ref_time` at once.
-			(0..120_000).for_each(|_| {
+			(0..70_000).for_each(|_| {
 				hasher.update(clobber.as_slice());
 			});
 
