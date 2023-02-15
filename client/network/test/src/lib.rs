@@ -1064,12 +1064,15 @@ where
 		self.mut_peers(|peers| {
 			for (i, peer) in peers.iter_mut().enumerate() {
 				trace!(target: "sync", "-- Polling {}: {}", i, peer.id());
-				{
+				loop {
+					// The code below is not quite correct, because we are polling a different
+					// instance of the future every time. But as long as `NetworkWorker::next_action()`
+					// contains just streams polling not interleaved with other `.await`s, dropping
+					// the future and recreating it works the same as polling a single instance. 
 					let net_poll_future = peer.network.next_action();
 					pin_mut!(net_poll_future);
-					if let Poll::Ready(true) = net_poll_future.poll(cx) {
-						// Schedule wake if `next_action()` indicated that it must be called again.
-						cx.waker().wake_by_ref();
+					if let Poll::Pending = net_poll_future.poll(cx) {
+						break
 					}
 				}
 				trace!(target: "sync", "-- Polling complete {}: {}", i, peer.id());
