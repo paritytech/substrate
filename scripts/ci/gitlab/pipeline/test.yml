@@ -296,12 +296,11 @@ quick-benchmarks:
 test-frame-examples-compile-to-wasm:
   # into one job
   stage:                           test
-  variables:
-    RUSTY_CACHIER_TOOLCHAIN: nightly
   extends:
     - .docker-env
     - .test-refs
   variables:
+    RUSTY_CACHIER_TOOLCHAIN: nightly
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
     RUSTFLAGS:                     "-Cdebug-assertions=y"
@@ -365,12 +364,11 @@ test-full-crypto-feature:
   needs:
     - job:                         check-tracing
       artifacts:                   false
-  variables:
-    RUSTY_CACHIER_TOOLCHAIN: nightly
   extends:
     - .docker-env
     - .test-refs
   variables:
+    RUSTY_CACHIER_TOOLCHAIN: nightly
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
     RUSTFLAGS:                     "-Cdebug-assertions=y"
@@ -385,12 +383,11 @@ test-full-crypto-feature:
 
 check-rustdoc:
   stage:                           test
-  variables:
-    RUSTY_CACHIER_TOOLCHAIN: nightly
   extends:
     - .docker-env
     - .test-refs
   variables:
+    RUSTY_CACHIER_TOOLCHAIN: nightly
     SKIP_WASM_BUILD:               1
     RUSTDOCFLAGS:                  "-Dwarnings"
   script:
