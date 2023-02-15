@@ -200,10 +200,77 @@ pub mod pallet {
 	use crate::{self as frame_system, pallet_prelude::*, *};
 	use frame_support::pallet_prelude::*;
 
+	pub mod preludes {
+		use super::*;
+		pub mod testing {
+			type AccountId = u32;
+			use sp_runtime::traits::IdentityLookup;
+
+			use super::*;
+
+			// things that cannot have default are made into generics.
+			#[derive(frame_support::CloneNoBound, frame_support::EqNoBound, frame_support::PartialEqNoBound)]
+			pub struct TestImpl<RuntimeCall, RuntimeOrigin, RuntimeEvent, PalletInfo>(
+				sp_std::marker::PhantomData<(RuntimeCall, RuntimeOrigin, RuntimeEvent, PalletInfo)>,
+			);
+			impl<RuntimeCall, RuntimeOrigin, RuntimeEvent, PalletInfo> Config
+				for TestImpl<RuntimeCall, RuntimeOrigin, RuntimeEvent, PalletInfo>
+			where
+				RuntimeCall: Parameter
+					+ Dispatchable<RuntimeOrigin = RuntimeOrigin>
+					+ Debug
+					+ 'static
+					+ From<Call<Self>>
+					+ Sync
+					+ Send,
+				RuntimeOrigin: Into<Result<RawOrigin<AccountId>, RuntimeOrigin>>
+					+ From<RawOrigin<AccountId>>
+					+ OriginTrait<Call = RuntimeCall>
+					+ Clone
+					+ 'static,
+				RuntimeEvent: Parameter + Member + From<Event<Self>> + Debug + IsType<RuntimeEvent>,
+				PalletInfo: frame_support::traits::PalletInfo + 'static,
+			{
+				type RuntimeOrigin = RuntimeOrigin;
+				type RuntimeEvent = RuntimeEvent;
+				type RuntimeCall = RuntimeCall;
+
+				type Version = ();
+				type BaseCallFilter = frame_support::traits::Everything;
+				type BlockWeights = ();
+				type BlockLength = ();
+				type DbWeight = ();
+				type Index = u64;
+				type BlockNumber = u64;
+				type Hash = sp_core::hash::H256;
+				type Hashing = sp_runtime::traits::BlakeTwo256;
+				type AccountId = AccountId;
+				type Lookup = IdentityLookup<AccountId>;
+				type Header = <crate::mocking::MockBlock<Self> as sp_runtime::traits::Block>::Header;
+				type BlockHashCount = frame_support::traits::ConstU64<10>;
+				type PalletInfo = PalletInfo;
+				type AccountData = u32;
+				type OnNewAccount = ();
+				type OnKilledAccount = ();
+				type SystemWeightInfo = ();
+				type SS58Prefix = ();
+				type OnSetCode = ();
+				type MaxConsumers = ConstU32<16>;
+			}
+		}
+	}
+
 	/// System configuration trait. Implemented by runtime.
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: 'static + Eq + Clone {
+		/// The aggregated event type of the runtime.
+		type RuntimeEvent: Parameter
+			+ Member
+			+ From<Event<Self>>
+			+ Debug
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+
 		/// The basic call filter to use in Origin. All origins are built with this filter as base,
 		/// except Root.
 		type BaseCallFilter: Contains<Self::RuntimeCall>;
@@ -293,13 +360,6 @@ pub mod pallet {
 
 		/// The block header.
 		type Header: Parameter + traits::Header<Number = Self::BlockNumber, Hash = Self::Hash>;
-
-		/// The aggregated event type of the runtime.
-		type RuntimeEvent: Parameter
-			+ Member
-			+ From<Event<Self>>
-			+ Debug
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 		#[pallet::constant]
