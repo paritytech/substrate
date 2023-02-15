@@ -59,7 +59,7 @@ pub trait AddressGenerator<T: Config> {
 pub struct DefaultAddressGenerator;
 
 impl<T: Config> AddressGenerator<T> for DefaultAddressGenerator {
-	/// Formular: `hash("contract_addr_v1" ++ deploying_address ++ code_hash ++ input_data ++ salt)`
+	/// Formula: `hash("contract_addr_v1" ++ deploying_address ++ code_hash ++ input_data ++ salt)`
 	fn contract_address(
 		deploying_address: &T::AccountId,
 		code_hash: &CodeHash<T>,
@@ -72,7 +72,7 @@ impl<T: Config> AddressGenerator<T> for DefaultAddressGenerator {
 			.expect("infinite length input; no invalid inputs for type; qed")
 	}
 
-	/// Formular: `hash("contract_deposit_v1" ++ contract_addr)`
+	/// Formula: `hash("contract_deposit_v1" ++ contract_addr)`
 	fn deposit_address(contract_addr: &T::AccountId) -> T::AccountId {
 		let entropy = (b"contract_deposit_v1", contract_addr).using_encoded(T::Hashing::hash);
 		Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))

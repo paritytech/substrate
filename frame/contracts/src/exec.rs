@@ -971,7 +971,7 @@ where
 
 			// Record the storage meter changes of the nested call into the parent meter.
 			// If the dropped frame's contract wasn't terminated we update the deposit counter
-			// in its contract info. The load is necessary to to pull it from storage in case
+			// in its contract info. The load is necessary to pull it from storage in case
 			// it was invalidated.
 			frame.contract_info.load(account_id);
 			let deposit_account = frame
