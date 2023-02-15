@@ -92,13 +92,12 @@ where
 
 		for i in self.params.from..=self.params.to {
 			let block_num = BlockId::Number(i.into());
-			let parent_num = BlockId::Number(((i - 1) as u32).into());
 			let consumed = self.consumed_weight(&block_num)?;
 			let hash = self.client.expect_block_hash_from_id(&block_num)?;
 
 			let block = self.client.block(hash)?.ok_or(format!("Block {} not found", block_num))?;
 			let block = self.unsealed(block.block);
-			let took = self.measure_block(&block, &parent_num)?;
+			let took = self.measure_block(&block, *block.header().parent_hash())?;
 
 			self.log_weight(i, block.extrinsics().len(), consumed, took);
 		}
@@ -107,7 +106,7 @@ where
 	}
 
 	/// Return the average *execution* aka. *import* time of the block.
-	fn measure_block(&self, block: &Block, parent_num: &BlockId<Block>) -> Result<NanoSeconds> {
+	fn measure_block(&self, block: &Block, parent_hash: Block::Hash) -> Result<NanoSeconds> {
 		let mut record = Vec::<NanoSeconds>::default();
 		// Interesting part here:
 		// Execute the block multiple times and collect stats about its execution time.
@@ -117,7 +116,7 @@ where
 			let start = Instant::now();
 
 			runtime_api
-				.execute_block(&parent_num, block)
+				.execute_block(parent_hash, block)
 				.map_err(|e| Error::Client(RuntimeApiError(e)))?;
 
 			record.push(start.elapsed().as_nanos() as NanoSeconds);
