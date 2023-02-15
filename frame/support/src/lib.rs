@@ -50,6 +50,8 @@ pub use paste;
 pub use scale_info;
 #[cfg(feature = "std")]
 pub use serde;
+#[doc(hidden)]
+pub use sp_core::ConstGet;
 pub use sp_core::Void;
 #[doc(hidden)]
 pub use sp_core_hashing_proc_macro;
@@ -67,8 +69,6 @@ pub use sp_state_machine::BasicExternalities;
 pub use sp_std;
 #[doc(hidden)]
 pub use tt_call::*;
-#[doc(hidden)]
-pub use sp_core::ConstGet;
 
 #[macro_use]
 pub mod dispatch;
