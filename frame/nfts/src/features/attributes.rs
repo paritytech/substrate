@@ -184,6 +184,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
 		ensure!(item_details.owner == origin, Error::<T, I>::NoPermission);
 
+		// Only the CollectionOwner and Account() namespaces could be updated in this way.
+		// For the Account() namespace we check and set the approval if it wasn't set before.
 		match &namespace {
 			AttributeNamespace::CollectionOwner => {},
 			AttributeNamespace::Account(account) => {

@@ -1843,8 +1843,9 @@ pub mod pallet {
 		/// - `signer`: The `data` object's signer. Should be an owner of the collection for the
 		///   `CollectionOwner` namespace.
 		///
-		/// Emits `AttributeSet`.
-		/// Emits `PreSignedAttributesSet`.
+		/// Emits `AttributeSet` for each provided attribute.
+		/// Emits `ItemAttributesApprovalAdded` if the approval wasn't set before.
+		/// Emits `PreSignedAttributesSet` on success.
 		#[pallet::call_index(38)]
 		#[pallet::weight(T::WeightInfo::set_attributes_pre_signed(data.attributes.len() as u32))]
 		pub fn set_attributes_pre_signed(
