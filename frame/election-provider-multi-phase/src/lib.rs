@@ -1118,13 +1118,13 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be `ForceOrigin`.
 		#[pallet::call_index(5)]
-		#[pallet::weight({
+		#[pallet::weight(({
 			if current_phase.is_signed() {
 				T::WeightInfo::force_rotate_round_from_signed()
 			}else {
 				T::WeightInfo::force_rotate_round()
 			}
-		})]
+		}, DispatchClass::Operational))]
 		pub fn force_rotate_round(
 			origin: OriginFor<T>,
 			current_phase: Phase<T::BlockNumber>,
@@ -1140,9 +1140,9 @@ pub mod pallet {
 		/// Initializes an open signed phase. If the current phase is not
 		/// `Phase::Off` proceeds to the next round.
 		///
-		/// The dispatch origin for this call must be `ForceOrigin`.
+		/// The dispatch origin for this call must be root.
 		#[pallet::call_index(6)]
-		#[pallet::weight({
+		#[pallet::weight(({
 			if current_phase.is_signed() {
 				T::WeightInfo::on_initialize_open_signed().saturating_add(T::WeightInfo::force_rotate_round_from_signed())
 			}else if !current_phase.is_off() {
@@ -1150,7 +1150,7 @@ pub mod pallet {
 			}else {
 				T::WeightInfo::on_initialize_open_signed()
 			}
-		})]
+		}, DispatchClass::Operational))]
 		pub fn force_start_signed_phase(
 			origin: OriginFor<T>,
 			current_phase: Phase<T::BlockNumber>,
@@ -1176,7 +1176,7 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be `ForceOrigin`.
 		#[pallet::call_index(8)]
-		#[pallet::weight(T::DbWeight::get().writes(2))]
+		#[pallet::weight((T::DbWeight::get().writes(2), DispatchClass::Operational))]
 		pub fn force_start_emergency_phase(origin: OriginFor<T>) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
