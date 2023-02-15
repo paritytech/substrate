@@ -301,7 +301,7 @@ impl BenchmarkDef {
 						"Benchmark `#[block]` or `#[extrinsic_call]` item cannot be the \
 						last statement of your benchmark function definition if you have \
 						defined a return type. You should return something compatible \
-						Result<T, BenchmarkError> (i.e. `Ok(T)`) as the last statement \
+						with Result<T, BenchmarkError> (i.e. `Ok(T)`) as the last statement \
 						or change your signature to a blank return type.",
 					))
 				}
