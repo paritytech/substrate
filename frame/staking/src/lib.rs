@@ -467,7 +467,8 @@ pub struct StakingLedger<T: Config> {
 	/// List of eras for which the stakers behind a validator have claimed rewards. Only updated
 	/// for validators.
 	///
-	/// This is deprecated as of V14 and will be removed in future.
+	/// This is deprecated as of V14 in favor of `T::ClaimedRewards` and will be removed in future.
+	/// Refer issue: #13034
 	pub legacy_claimed_rewards: BoundedVec<EraIndex, T::HistoryDepth>,
 }
 
