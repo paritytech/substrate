@@ -31,7 +31,7 @@ use sc_executor_common::{
 		self, DataSegmentsSnapshot, ExposedMutableGlobalsSet, GlobalsSnapshot, RuntimeBlob,
 	},
 	util::checked_range,
-	wasm_runtime::{HeapPages, InvokeMethod, WasmInstance, WasmModule},
+	wasm_runtime::{HeapAllocStrategy, InvokeMethod, WasmInstance, WasmModule},
 };
 use sp_runtime_interface::unpack_ptr_and_len;
 use sp_wasm_interface::{HostFunctions, Pointer, Value, WordSize};
@@ -44,6 +44,7 @@ use std::{
 };
 use wasmtime::{AsContext, Engine, Memory, Table};
 
+#[derive(Default)]
 pub(crate) struct StoreData {
 	/// This will only be set when we call into the runtime.
 	pub(crate) host_state: Option<HostState>,
@@ -338,19 +339,19 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 	const WASM_PAGE_SIZE: u64 = 65536;
 
 	config.memory_init_cow(use_cow);
-	config.memory_guaranteed_dense_image_size(match semantics.heap_pages {
-		HeapPages::Dynamic { maximum_pages } =>
+	config.memory_guaranteed_dense_image_size(match semantics.heap_alloc_strategy {
+		HeapAllocStrategy::Dynamic { maximum_pages } =>
 			maximum_pages.map(|p| p as u64 * WASM_PAGE_SIZE).unwrap_or(u64::MAX),
-		HeapPages::Static { .. } => u64::MAX,
+		HeapAllocStrategy::Static { .. } => u64::MAX,
 	});
 
 	if use_pooling {
 		const MAX_WASM_PAGES: u64 = 0x10000;
 
-		let memory_pages = match semantics.heap_pages {
-			HeapPages::Dynamic { maximum_pages } =>
+		let memory_pages = match semantics.heap_alloc_strategy {
+			HeapAllocStrategy::Dynamic { maximum_pages } =>
 				maximum_pages.map(|p| p as u64).unwrap_or(MAX_WASM_PAGES),
-			HeapPages::Static { .. } => MAX_WASM_PAGES,
+			HeapAllocStrategy::Static { .. } => MAX_WASM_PAGES,
 		};
 
 		let mut pooling_config = wasmtime::PoolingAllocationConfig::default();
@@ -496,8 +497,8 @@ pub struct Semantics {
 	/// Configures wasmtime to use multiple threads for compiling.
 	pub parallel_compilation: bool,
 
-	/// The number of WASM pages which will be allocated.
-	pub heap_pages: HeapPages,
+	/// The heap allocation strategy to use.
+	pub heap_alloc_strategy: HeapAllocStrategy,
 }
 
 #[derive(Clone)]
@@ -650,7 +651,7 @@ where
 	let mut linker = wasmtime::Linker::new(&engine);
 	crate::imports::prepare_imports::<H>(&mut linker, &module, config.allow_missing_func_imports)?;
 
-	let mut store = crate::instance_wrapper::create_store(module.engine());
+	let mut store = Store::new(module.engine(), Default::default());
 	let instance_pre = linker
 		.instantiate_pre(&mut store, &module)
 		.map_err(|e| WasmError::Other(format!("cannot pre-instantiate module: {:#}", e)))?;
@@ -678,7 +679,7 @@ fn prepare_blob_for_compilation(
 	// now automatically take care of creating the memory for us, and it is also necessary
 	// to enable `wasmtime`'s instance pooling. (Imported memories are ineligible for pooling.)
 	blob.convert_memory_import_into_export()?;
-	blob.setup_memory_according_to_heap_pages(semantics.heap_pages)?;
+	blob.setup_memory_according_to_heap_alloc_strategy(semantics.heap_alloc_strategy)?;
 
 	Ok(blob)
 }

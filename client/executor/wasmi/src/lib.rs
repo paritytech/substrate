@@ -32,7 +32,7 @@ use sc_allocator::{AllocationStats, FreeingBumpHeapAllocator};
 use sc_executor_common::{
 	error::{Error, MessageWithBacktrace, WasmError},
 	runtime_blob::{DataSegmentsSnapshot, RuntimeBlob},
-	wasm_runtime::{HeapPages, InvokeMethod, WasmInstance, WasmModule},
+	wasm_runtime::{HeapAllocStrategy, InvokeMethod, WasmInstance, WasmModule},
 };
 use sp_runtime_interface::unpack_ptr_and_len;
 use sp_wasm_interface::{Function, FunctionContext, Pointer, Result as WResult, WordSize};
@@ -458,6 +458,7 @@ impl WasmModule for WasmiRuntime {
 			host_functions: self.host_functions.clone(),
 			allow_missing_func_imports: self.allow_missing_func_imports,
 			missing_functions: Arc::new(missing_functions),
+			memoy_zeroed: true,
 		}))
 	}
 }
@@ -466,7 +467,7 @@ impl WasmModule for WasmiRuntime {
 /// stores it in the instance.
 pub fn create_runtime(
 	mut blob: RuntimeBlob,
-	heap_pages: HeapPages,
+	heap_alloc_strategy: HeapAllocStrategy,
 	host_functions: Vec<&'static dyn Function>,
 	allow_missing_func_imports: bool,
 ) -> Result<WasmiRuntime, WasmError> {
@@ -476,7 +477,7 @@ pub fn create_runtime(
 	// Make sure we only have exported memory to simplify the code of the wasmi executor.
 	blob.convert_memory_import_into_export()?;
 	// Ensure that the memory uses the correct heap pages.
-	blob.setup_memory_according_to_heap_pages(heap_pages)?;
+	blob.setup_memory_according_to_heap_alloc_strategy(heap_alloc_strategy)?;
 
 	let module =
 		Module::from_parity_wasm_module(blob.into_inner()).map_err(|_| WasmError::InvalidModule)?;
@@ -503,6 +504,8 @@ pub struct WasmiInstance {
 	instance: ModuleRef,
 	/// The memory instance of used by the wasm module.
 	memory: MemoryRef,
+	/// Is the memory zeroed?
+	memoy_zeroed: bool,
 	/// The snapshot of global variable values just after instantiation.
 	global_vals_snapshot: GlobalValsSnapshot,
 	/// The snapshot of data segments.
@@ -530,14 +533,16 @@ impl WasmiInstance {
 		// We reuse a single wasm instance for multiple calls and a previous call (if any)
 		// altered the state. Therefore, we need to restore the instance to original state.
 
-		// First, zero initialize the linear memory.
-		self.memory.erase().map_err(|e| {
-			// Snapshot restoration failed. This is pretty unexpected since this can happen
-			// if some invariant is broken or if the system is under extreme memory pressure
-			// (so erasing fails).
-			error!(target: "wasm-executor", "snapshot restoration failed: {}", e);
-			WasmError::ErasingFailed(e.to_string())
-		})?;
+		if !self.memoy_zeroed {
+			// First, zero initialize the linear memory.
+			self.memory.erase().map_err(|e| {
+				// Snapshot restoration failed. This is pretty unexpected since this can happen
+				// if some invariant is broken or if the system is under extreme memory pressure
+				// (so erasing fails).
+				error!(target: "wasm-executor", "snapshot restoration failed: {}", e);
+				WasmError::ErasingFailed(e.to_string())
+			})?;
+		}
 
 		// Second, reapply data segments into the linear memory.
 		self.data_segments_snapshot
@@ -557,11 +562,8 @@ impl WasmiInstance {
 			allocation_stats,
 		);
 
-		// Unmap the memory to let the OS reclaim it.
-		if !sc_executor_common::util::unmap_memory(&self.memory.direct_access().as_ref()) {
-			// If we couldn't unmap it, erase the memory.
-			let _ = self.memory.erase();
-		}
+		// If we couldn't unmap it, erase the memory.
+		self.memoy_zeroed = self.memory.erase().is_ok();
 
 		res
 	}

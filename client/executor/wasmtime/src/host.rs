@@ -30,6 +30,11 @@ use crate::{instance_wrapper::MemoryWrapper, runtime::StoreData, util};
 /// call, whereas the state is maintained for the duration of a Wasm runtime call, which may make
 /// many different host calls that must share state.
 pub struct HostState {
+	/// The allocator instance to keep track of allocated memory.
+	///
+	/// This is stored as an `Option` as we need to temporarly set this to `None` when we are
+	/// allocating/deallocating memory. The problem being that we can only mutable access `caller`
+	/// once.
 	allocator: Option<FreeingBumpHeapAllocator>,
 	panic_message: Option<String>,
 }
@@ -37,10 +42,7 @@ pub struct HostState {
 impl HostState {
 	/// Constructs a new `HostState`.
 	pub fn new(allocator: FreeingBumpHeapAllocator) -> Self {
-		HostState {
-			allocator: Some(allocator),
-			panic_message: None,
-		}
+		HostState { allocator: Some(allocator), panic_message: None }
 	}
 
 	/// Takes the error message out of the host state, leaving a `None` in its place.
@@ -49,7 +51,9 @@ impl HostState {
 	}
 
 	pub(crate) fn allocation_stats(&self) -> AllocationStats {
-		self.allocator.as_ref().unwrap().stats()
+		self.allocator.as_ref()
+			.expect("Allocator is always set and only unavailable when doing an allocation/deallocation; qed")
+			.stats()
 	}
 }
 
@@ -90,6 +94,7 @@ impl<'a> sp_wasm_interface::FunctionContext for HostContext<'a> {
 			.take()
 			.expect("allocator is not empty when calling a function in wasm; qed");
 
+		// We can not return on error early, as we need to store back allocator.
 		let res = allocator
 			.allocate(&mut MemoryWrapper(&memory, &mut self.caller), size)
 			.map_err(|e| e.to_string());
@@ -107,6 +112,7 @@ impl<'a> sp_wasm_interface::FunctionContext for HostContext<'a> {
 			.take()
 			.expect("allocator is not empty when calling a function in wasm; qed");
 
+		// We can not return on error early, as we need to store back allocator.
 		let res = allocator
 			.deallocate(&mut MemoryWrapper(&memory, &mut self.caller), ptr)
 			.map_err(|e| e.to_string());

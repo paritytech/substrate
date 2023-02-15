@@ -147,10 +147,6 @@ impl<C: AsContextMut> sc_allocator::Memory for MemoryWrapper<'_, C> {
 	}
 }
 
-pub(crate) fn create_store(engine: &wasmtime::Engine) -> Store {
-	Store::new(engine, StoreData { host_state: None, memory: None, table: None })
-}
-
 /// Wrap the given WebAssembly Instance of a wasm module with Substrate-runtime.
 ///
 /// This struct is a handy wrapper around a wasmtime `Instance` that provides substrate specific
@@ -167,7 +163,7 @@ pub struct InstanceWrapper {
 
 impl InstanceWrapper {
 	pub(crate) fn new(engine: &Engine, instance_pre: &InstancePre<StoreData>) -> Result<Self> {
-		let mut store = create_store(engine);
+		let mut store = Store::new(engine, Default::default());
 		let instance = instance_pre.instantiate(&mut store).map_err(|error| {
 			WasmError::Other(format!(
 				"failed to instantiate a new WASM module instance: {:#}",
@@ -328,11 +324,61 @@ impl InstanceWrapper {
 			return
 		}
 
-		if !sc_executor_common::util::unmap_memory(self.memory.data(self.store.as_context())) {
-			// If we're on an unsupported OS or the memory couldn't have been
-			// decommited for some reason then just manually zero it out.
-			self.memory.data_mut(self.store.as_context_mut()).fill(0);
+		cfg_if::cfg_if! {
+			if #[cfg(target_os = "linux")] {
+				use std::sync::Once;
+
+				unsafe {
+					let ptr = self.memory.data_ptr(&self.store);
+					let len = self.memory.data_size(&self.store);
+
+					// Linux handles MADV_DONTNEED reliably. The result is that the given area
+					// is unmapped and will be zeroed on the next pagefault.
+					if libc::madvise(ptr as _, len, libc::MADV_DONTNEED) != 0 {
+						static LOGGED: Once = Once::new();
+						LOGGED.call_once(|| {
+							log::warn!(
+								"madvise(MADV_DONTNEED) failed: {}",
+								std::io::Error::last_os_error(),
+							);
+						});
+					} else {
+						return;
+					}
+				}
+			} else if #[cfg(target_os = "macos")] {
+				use std::sync::Once;
+
+				unsafe {
+					let ptr = self.memory.data_ptr(&self.store);
+					let len = self.memory.data_size(&self.store);
+
+					// On MacOS we can simply overwrite memory mapping.
+					if libc::mmap(
+						ptr as _,
+						len,
+						libc::PROT_READ | libc::PROT_WRITE,
+						libc::MAP_FIXED | libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+						-1,
+						0,
+					) == libc::MAP_FAILED {
+						static LOGGED: Once = Once::new();
+						LOGGED.call_once(|| {
+							log::warn!(
+								"Failed to decommit WASM instance memory through mmap: {}",
+								std::io::Error::last_os_error(),
+							);
+						});
+					} else {
+						return;
+					}
+				}
+			}
 		}
+
+		// If we're on an unsupported OS or the memory couldn't have been
+		// decommited for some reason then just manually zero it out.
+		self.memory.data_mut(self.store.as_context_mut()).fill(0);
 	}
 
 	pub(crate) fn store(&self) -> &Store {
@@ -350,7 +396,7 @@ fn decommit_works() {
 	let code = wat::parse_str("(module (memory (export \"memory\") 1 4))").unwrap();
 	let module = wasmtime::Module::new(&engine, code).unwrap();
 	let linker = wasmtime::Linker::new(&engine);
-	let mut store = create_store(&engine);
+	let mut store = Store::new(&engine, Default::default());
 	let instance_pre = linker.instantiate_pre(&mut store, &module).unwrap();
 	let mut wrapper = InstanceWrapper::new(&engine, &instance_pre).unwrap();
 	unsafe { *wrapper.memory.data_ptr(&wrapper.store) = 42 };

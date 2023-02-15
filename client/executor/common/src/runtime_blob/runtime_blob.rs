@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{error::WasmError, wasm_runtime::HeapPages};
+use crate::{error::WasmError, wasm_runtime::HeapAllocStrategy};
 use wasm_instrument::{
 	export_mutable_globals,
 	parity_wasm::elements::{
@@ -157,13 +157,13 @@ impl RuntimeBlob {
 		Ok(())
 	}
 
-	/// Setup the memory instances according to the given `heap_pages`.
+	/// Setup the memory instances according to the given `heap_alloc_strategy`.
 	///
 	/// Will return an error in case there is no memory section present,
 	/// or if the memory section is empty.
-	pub fn setup_memory_according_to_heap_pages(
+	pub fn setup_memory_according_to_heap_alloc_strategy(
 		&mut self,
-		heap_pages: HeapPages,
+		heap_alloc_strategy: HeapAllocStrategy,
 	) -> Result<(), WasmError> {
 		let memory_section = self
 			.raw_module
@@ -175,9 +175,9 @@ impl RuntimeBlob {
 		}
 		for memory_ty in memory_section.entries_mut() {
 			let initial = memory_ty.limits().initial();
-			let (min, max) = match heap_pages {
-				HeapPages::Dynamic { maximum_pages } => (initial, maximum_pages),
-				HeapPages::Static { extra_pages } =>
+			let (min, max) = match heap_alloc_strategy {
+				HeapAllocStrategy::Dynamic { maximum_pages } => (initial, maximum_pages),
+				HeapAllocStrategy::Static { extra_pages } =>
 					(initial + extra_pages, Some(initial + extra_pages)),
 			};
 			*memory_ty = MemoryType::new(min, max);

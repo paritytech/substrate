@@ -871,8 +871,7 @@ mod tests {
 	#[test]
 	fn should_allocate_max_possible_allocation_size() {
 		// given
-		let mut mem =
-			MemoryInstance::with_size(MAX_POSSIBLE_ALLOCATION + PAGE_SIZE);
+		let mut mem = MemoryInstance::with_size(MAX_POSSIBLE_ALLOCATION + PAGE_SIZE);
 		let mut heap = FreeingBumpHeapAllocator::new(0);
 
 		// when

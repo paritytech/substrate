@@ -8379,9 +8379,6 @@ dependencies = [
 name = "sc-executor-common"
 version = "0.10.0-dev"
 dependencies = [
- "cfg-if",
- "libc",
- "log",
  "sc-allocator",
  "sp-maybe-compressed-blob",
  "sp-wasm-interface",
@@ -8408,6 +8405,8 @@ version = "0.10.0-dev"
 dependencies = [
  "anyhow",
  "cargo_metadata",
+ "cfg-if",
+ "libc",
  "log",
  "once_cell",
  "parity-scale-codec",

@@ -24,7 +24,7 @@ use codec::{Decode, Encode};
 use sc_executor_common::{
 	error::{Error, WasmError},
 	runtime_blob::RuntimeBlob,
-	wasm_runtime::{HeapPages, WasmModule},
+	wasm_runtime::{HeapAllocStrategy, WasmModule},
 };
 use sc_runtime_test::wasm_binary_unwrap;
 use sp_core::{
@@ -480,7 +480,10 @@ fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 	}
 }
 
-fn mk_test_runtime(wasm_method: WasmExecutionMethod, pages: HeapPages) -> Arc<dyn WasmModule> {
+fn mk_test_runtime(
+	wasm_method: WasmExecutionMethod,
+	pages: HeapAllocStrategy,
+) -> Arc<dyn WasmModule> {
 	let blob = RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap())
 		.expect("failed to create a runtime blob out of test runtime");
 
@@ -496,7 +499,8 @@ fn mk_test_runtime(wasm_method: WasmExecutionMethod, pages: HeapPages) -> Arc<dy
 
 test_wasm_execution!(returns_mutable_static);
 fn returns_mutable_static(wasm_method: WasmExecutionMethod) {
-	let runtime = mk_test_runtime(wasm_method, HeapPages::Dynamic { maximum_pages: Some(1024) });
+	let runtime =
+		mk_test_runtime(wasm_method, HeapAllocStrategy::Dynamic { maximum_pages: Some(1024) });
 
 	let mut instance = runtime.new_instance().unwrap();
 	let res = instance.call_export("returns_mutable_static", &[0]).unwrap();
@@ -511,7 +515,8 @@ fn returns_mutable_static(wasm_method: WasmExecutionMethod) {
 
 test_wasm_execution!(returns_mutable_static_bss);
 fn returns_mutable_static_bss(wasm_method: WasmExecutionMethod) {
-	let runtime = mk_test_runtime(wasm_method, HeapPages::Dynamic { maximum_pages: Some(1024) });
+	let runtime =
+		mk_test_runtime(wasm_method, HeapAllocStrategy::Dynamic { maximum_pages: Some(1024) });
 
 	let mut instance = runtime.new_instance().unwrap();
 	let res = instance.call_export("returns_mutable_static_bss", &[0]).unwrap();
@@ -538,8 +543,10 @@ fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
 	// to our allocator algorithm there are inefficiencies.
 	const REQUIRED_MEMORY_PAGES: u32 = 32;
 
-	let runtime =
-		mk_test_runtime(wasm_method, HeapPages::Static { extra_pages: REQUIRED_MEMORY_PAGES });
+	let runtime = mk_test_runtime(
+		wasm_method,
+		HeapAllocStrategy::Static { extra_pages: REQUIRED_MEMORY_PAGES },
+	);
 	let mut instance = runtime.new_instance().unwrap();
 
 	// On the first invocation we allocate approx. 768KB (75%) of stack and then trap.
@@ -553,7 +560,7 @@ fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
 
 test_wasm_execution!(interpreted_only heap_is_reset_between_calls);
 fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
-	let runtime = mk_test_runtime(wasm_method, HeapPages::Static { extra_pages: 1024 });
+	let runtime = mk_test_runtime(wasm_method, HeapAllocStrategy::Static { extra_pages: 1024 });
 	let mut instance = runtime.new_instance().unwrap();
 
 	let heap_base = instance
@@ -660,7 +667,7 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 
 test_wasm_execution!(allocate_two_gigabyte);
 fn allocate_two_gigabyte(wasm_method: WasmExecutionMethod) {
-	let runtime = mk_test_runtime(wasm_method, HeapPages::Dynamic { maximum_pages: None });
+	let runtime = mk_test_runtime(wasm_method, HeapAllocStrategy::Dynamic { maximum_pages: None });
 
 	let mut instance = runtime.new_instance().unwrap();
 	let res = instance.call_export("allocate_two_gigabyte", &[0]).unwrap();
@@ -729,7 +736,7 @@ fn memory_is_cleared_between_invocations(wasm_method: WasmExecutionMethod) {
 
 	let runtime = crate::wasm_runtime::create_wasm_runtime_with_code::<HostFunctions>(
 		wasm_method,
-		HeapPages::Dynamic { maximum_pages: Some(1024) },
+		HeapAllocStrategy::Dynamic { maximum_pages: Some(1024) },
 		RuntimeBlob::uncompress_if_needed(&binary[..]).unwrap(),
 		true,
 		None,

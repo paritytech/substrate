@@ -120,9 +120,11 @@ pub trait WasmInstance: Send {
 	}
 }
 
-/// Defines the number of heap pages a wasm runtime should support.
+/// Defines the heap pages allocation strategy the wasm runtime should use.
+///
+/// A heap page is defined as 64KiB of memory.
 #[derive(Debug, Copy, Clone, PartialEq, Hash, Eq)]
-pub enum HeapPages {
+pub enum HeapAllocStrategy {
 	/// Allocate a static number of heap pages.
 	///
 	/// The total number of allocated heap pages is the initial number of heap pages requested by

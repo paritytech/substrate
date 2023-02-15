@@ -22,7 +22,10 @@ use sc_client_api::{
 };
 use sc_executor::{RuntimeVersion, RuntimeVersionOf};
 use sp_api::{ProofRecorder, StorageTransactionCache};
-use sp_core::{traits::{CallContext, CodeExecutor, RuntimeCode, SpawnNamed}, ExecutionContext};
+use sp_core::{
+	traits::{CallContext, CodeExecutor, RuntimeCode, SpawnNamed},
+	ExecutionContext,
+};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_state_machine::{
 	backend::AsTrieBackend, ExecutionStrategy, Ext, OverlayedChanges, StateMachine, StorageProof,
@@ -211,8 +214,7 @@ where
 		storage_transaction_cache: Option<&RefCell<StorageTransactionCache<Block, B::State>>>,
 		recorder: &Option<ProofRecorder<Block>>,
 		context: ExecutionContext,
-	) -> Result<Vec<u8>, sp_blockchain::Error>
-	{
+	) -> Result<Vec<u8>, sp_blockchain::Error> {
 		let mut storage_transaction_cache = storage_transaction_cache.map(|c| c.borrow_mut());
 
 		let at_number =

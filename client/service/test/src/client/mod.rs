@@ -114,7 +114,7 @@ fn construct_block(
 		Default::default(),
 		&runtime_code,
 		task_executor.clone() as Box<_>,
-		CallContext::Offchain,
+		CallContext::Onchain,
 	)
 	.execute(ExecutionStrategy::NativeElseWasm)
 	.unwrap();
@@ -129,7 +129,7 @@ fn construct_block(
 			Default::default(),
 			&runtime_code,
 			task_executor.clone() as Box<_>,
-			CallContext::Offchain,
+			CallContext::Onchain,
 		)
 		.execute(ExecutionStrategy::NativeElseWasm)
 		.unwrap();
@@ -144,7 +144,7 @@ fn construct_block(
 		Default::default(),
 		&runtime_code,
 		task_executor.clone() as Box<_>,
-		CallContext::Offchain,
+		CallContext::Onchain,
 	)
 	.execute(ExecutionStrategy::NativeElseWasm)
 	.unwrap();
@@ -216,7 +216,7 @@ fn construct_genesis_should_work_with_native() {
 		Default::default(),
 		&runtime_code,
 		TaskExecutor::new(),
-		CallContext::Offchain,
+		CallContext::Onchain,
 	)
 	.execute(ExecutionStrategy::NativeElseWasm)
 	.unwrap();
@@ -250,7 +250,7 @@ fn construct_genesis_should_work_with_wasm() {
 		Default::default(),
 		&runtime_code,
 		TaskExecutor::new(),
-		CallContext::Offchain,
+		CallContext::Onchain,
 	)
 	.execute(ExecutionStrategy::AlwaysWasm)
 	.unwrap();
@@ -284,7 +284,7 @@ fn construct_genesis_with_bad_transaction_should_panic() {
 		Default::default(),
 		&runtime_code,
 		TaskExecutor::new(),
-		CallContext::Offchain,
+		CallContext::Onchain,
 	)
 	.execute(ExecutionStrategy::NativeElseWasm);
 	assert!(r.is_err());

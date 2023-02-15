@@ -21,7 +21,7 @@ use codec::Encode;
 
 use sc_executor_common::{
 	runtime_blob::RuntimeBlob,
-	wasm_runtime::{HeapPages, WasmInstance, WasmModule},
+	wasm_runtime::{HeapAllocStrategy, WasmInstance, WasmModule},
 };
 use sc_executor_wasmtime::InstantiationStrategy;
 use sc_runtime_test::wasm_binary_unwrap as test_runtime;
@@ -57,7 +57,7 @@ fn initialize(
 	match method {
 		Method::Interpreted => sc_executor_wasmi::create_runtime(
 			blob,
-			HeapPages::Static(heap_pages),
+			HeapAllocStrategy::Static { extra_pages: heap_pages },
 			host_functions,
 			allow_missing_func_imports,
 		)
@@ -67,7 +67,7 @@ fn initialize(
 				allow_missing_func_imports,
 				cache_path: None,
 				semantics: sc_executor_wasmtime::Semantics {
-					heap_pages: HeapPages::Static(heap_pages),
+					heap_alloc_strategy: HeapAllocStrategy::Static { extra_pages: heap_pages },
 					instantiation_strategy,
 					deterministic_stack_limit: None,
 					canonicalize_nans: false,
