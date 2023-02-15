@@ -232,6 +232,38 @@ impl Weight {
 		Some(Self { ref_time, proof_size })
 	}
 
+	/// Calculates how many `other` fit into `self`.
+	///
+	/// Divides each component of `self` against the same component of `other`. Returns the minimum
+	/// of all those divisions. Returns `None` in case **all** components of `other` are zero.
+	///
+	/// This returns `Some` even if some components of `other` are zero as long as there is at least
+	/// one non-zero component in `other`. The devision for this particular component will then
+	/// yield the maximum value (e.g u64::MAX). This is because we assume not every operation and
+	/// hence each `Weight` will necessarily use each resource.
+	pub const fn checked_div_per_component(self, other: &Self) -> Option<u64> {
+		let mut all_zero = true;
+		let ref_time = match self.ref_time.checked_div(other.ref_time) {
+			Some(ref_time) => {
+				all_zero = false;
+				ref_time
+			},
+			None => u64::MAX,
+		};
+		let proof_size = match self.proof_size.checked_div(other.proof_size) {
+			Some(proof_size) => {
+				all_zero = false;
+				proof_size
+			},
+			None => u64::MAX,
+		};
+		if all_zero {
+			None
+		} else {
+			Some(if ref_time < proof_size { ref_time } else { proof_size })
+		}
+	}
+
 	/// Try to increase `self` by `amount` via checked addition.
 	pub fn checked_accrue(&mut self, amount: Self) -> Option<()> {
 		self.checked_add(&amount).map(|new_self| *self = new_self)
@@ -581,5 +613,49 @@ mod tests {
 		assert_eq!(weight, Weight::from_parts(0, 18));
 		assert!(weight.checked_reduce(Weight::from_parts(0, 18)).is_some());
 		assert!(weight.is_zero());
+	}
+
+	#[test]
+	fn checked_div_per_component_works() {
+		assert_eq!(
+			Weight::from_parts(10, 20).checked_div_per_component(&Weight::from_parts(2, 10)),
+			Some(2)
+		);
+		assert_eq!(
+			Weight::from_parts(10, 200).checked_div_per_component(&Weight::from_parts(2, 10)),
+			Some(5)
+		);
+		assert_eq!(
+			Weight::from_parts(10, 200).checked_div_per_component(&Weight::from_parts(1, 10)),
+			Some(10)
+		);
+		assert_eq!(
+			Weight::from_parts(10, 200).checked_div_per_component(&Weight::from_parts(2, 1)),
+			Some(5)
+		);
+		assert_eq!(
+			Weight::from_parts(10, 200).checked_div_per_component(&Weight::from_parts(0, 10)),
+			Some(20)
+		);
+		assert_eq!(
+			Weight::from_parts(10, 200).checked_div_per_component(&Weight::from_parts(1, 0)),
+			Some(10)
+		);
+		assert_eq!(
+			Weight::from_parts(0, 200).checked_div_per_component(&Weight::from_parts(2, 3)),
+			Some(0)
+		);
+		assert_eq!(
+			Weight::from_parts(10, 0).checked_div_per_component(&Weight::from_parts(2, 3)),
+			Some(0)
+		);
+		assert_eq!(
+			Weight::from_parts(10, 200).checked_div_per_component(&Weight::from_parts(0, 0)),
+			None,
+		);
+		assert_eq!(
+			Weight::from_parts(0, 0).checked_div_per_component(&Weight::from_parts(0, 0)),
+			None,
+		);
 	}
 }

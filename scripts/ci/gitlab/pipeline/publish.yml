@@ -49,6 +49,19 @@
     DOCKER_USER:                   $Docker_Hub_User_Parity
     DOCKER_PASS:                   $Docker_Hub_Pass_Parity
 
+.push-docker-image-description:
+  stage:                           publish
+  extends:
+    - .kubernetes-env
+    - .publish-refs
+  variables:
+    CI_IMAGE:                      paritytech/docker-description
+    DOCKERHUB_REPOSITORY:          parity/$PRODUCT
+    DOCKER_USERNAME:               $Docker_Hub_User_Parity
+    DOCKER_PASSWORD:               $Docker_Hub_Pass_Parity
+    README_FILEPATH:               $CI_PROJECT_DIR/scripts/ci/docker/$PRODUCT.Dockerfile.README.md
+  script:
+    - echo # Dummy command to satisfy GitLab CI linter.
 
 # publish image to docker.io/paritypr, (e.g. for later use in zombienet testing)
 .build-push-image-temporary:
@@ -89,6 +102,14 @@ publish-docker-subkey:
       artifacts:                   true
   variables:
     PRODUCT:                       subkey
+
+publish-docker-description-subkey:
+  extends:                         .push-docker-image-description
+  needs:
+    - job:                         build-subkey-linux
+  variables:
+    PRODUCT:                       subkey
+    SHORT_DESCRIPTION:             "The subkey program is a key management utility for Substrate-based blockchains."
 
 publish-s3-release:
   stage:                           publish
