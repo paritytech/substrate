@@ -24,7 +24,7 @@ use frame_support::{
 	traits::{ConstU32, ConstU64, GenesisBuild, StorageVersion},
 	Hashable,
 };
-use frame_system::{EventRecord, Phase};
+use frame_system::{EnsureRoot, EventRecord, Phase};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -127,6 +127,7 @@ impl Config<Instance1> for Test {
 	type MaxMembers = MaxMembers;
 	type DefaultVote = PrimeDefaultVote;
 	type WeightInfo = ();
+	type SetMembersOrigin = EnsureRoot<Self::AccountId>;
 }
 impl Config<Instance2> for Test {
 	type RuntimeOrigin = RuntimeOrigin;
@@ -137,6 +138,7 @@ impl Config<Instance2> for Test {
 	type MaxMembers = MaxMembers;
 	type DefaultVote = MoreThanMajorityThenPrimeDefaultVote;
 	type WeightInfo = ();
+	type SetMembersOrigin = EnsureRoot<Self::AccountId>;
 }
 impl mock_democracy::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
@@ -151,6 +153,7 @@ impl Config for Test {
 	type MaxMembers = MaxMembers;
 	type DefaultVote = PrimeDefaultVote;
 	type WeightInfo = ();
+	type SetMembersOrigin = EnsureRoot<Self::AccountId>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

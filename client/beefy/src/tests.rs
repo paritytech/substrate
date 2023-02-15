@@ -893,7 +893,7 @@ async fn on_demand_beefy_justification_sync() {
 		[BeefyKeyring::Alice, BeefyKeyring::Bob, BeefyKeyring::Charlie, BeefyKeyring::Dave];
 	let validator_set = ValidatorSet::new(make_beefy_ids(&all_peers), 0).unwrap();
 	let session_len = 5;
-	let min_block_delta = 5;
+	let min_block_delta = 4;
 
 	let mut net = BeefyTestNet::new(4);
 
@@ -912,7 +912,7 @@ async fn on_demand_beefy_justification_sync() {
 	let dave_index = 3;
 
 	// push 30 blocks
-	let hashes = net.generate_blocks_and_sync(30, session_len, &validator_set, false).await;
+	let hashes = net.generate_blocks_and_sync(35, session_len, &validator_set, false).await;
 
 	let fast_peers = fast_peers.into_iter().enumerate();
 	let net = Arc::new(Mutex::new(net));
@@ -921,7 +921,7 @@ async fn on_demand_beefy_justification_sync() {
 	finalize_block_and_wait_for_beefy(
 		&net,
 		fast_peers.clone(),
-		&[hashes[1], hashes[6], hashes[10], hashes[17], hashes[24]],
+		&[hashes[1], hashes[6], hashes[10], hashes[17], hashes[23]],
 		&[1, 5, 10, 15, 20],
 	)
 	.await;
@@ -941,12 +941,12 @@ async fn on_demand_beefy_justification_sync() {
 	// freshly spun up Dave now needs to listen for gossip to figure out the state of their peers.
 
 	// Have the other peers do some gossip so Dave finds out about their progress.
-	finalize_block_and_wait_for_beefy(&net, fast_peers, &[hashes[25]], &[25]).await;
+	finalize_block_and_wait_for_beefy(&net, fast_peers, &[hashes[25], hashes[29]], &[25, 29]).await;
 
 	// Now verify Dave successfully finalized #1 (through on-demand justification request).
 	wait_for_best_beefy_blocks(dave_best_blocks, &net, &[1]).await;
 
-	// Give Dave all tasks some cpu cycles to burn through their events queues,
+	// Give all tasks some cpu cycles to burn through their events queues,
 	run_for(Duration::from_millis(100), &net).await;
 	// then verify Dave catches up through on-demand justification requests.
 	finalize_block_and_wait_for_beefy(
@@ -959,7 +959,7 @@ async fn on_demand_beefy_justification_sync() {
 
 	let all_peers = all_peers.into_iter().enumerate();
 	// Now that Dave has caught up, sanity check voting works for all of them.
-	finalize_block_and_wait_for_beefy(&net, all_peers, &[hashes[30]], &[30]).await;
+	finalize_block_and_wait_for_beefy(&net, all_peers, &[hashes[30], hashes[34]], &[30]).await;
 }
 
 #[tokio::test]

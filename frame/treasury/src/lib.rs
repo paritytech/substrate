@@ -315,13 +315,8 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
-		/// # <weight>
-		/// - Complexity: `O(A)` where `A` is the number of approvals
-		/// - Db reads and writes: `Approvals`, `pot account data`
-		/// - Db reads and writes per approval: `Proposals`, `proposer account data`, `beneficiary
-		///   account data`
-		/// - The weight is overestimated if some approvals got missed.
-		/// # </weight>
+		/// ## Complexity
+		/// - `O(A)` where `A` is the number of approvals
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			let pot = Self::pot();
 			let deactivated = Deactivated::<T, I>::get();
@@ -350,11 +345,8 @@ pub mod pallet {
 		/// is reserved and slashed if the proposal is rejected. It is returned once the
 		/// proposal is awarded.
 		///
-		/// # <weight>
-		/// - Complexity: O(1)
-		/// - DbReads: `ProposalCount`, `origin account`
-		/// - DbWrites: `ProposalCount`, `Proposals`, `origin account`
-		/// # </weight>
+		/// ## Complexity
+		/// - O(1)
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::propose_spend())]
 		pub fn propose_spend(
@@ -381,11 +373,8 @@ pub mod pallet {
 		///
 		/// May only be called from `T::RejectOrigin`.
 		///
-		/// # <weight>
-		/// - Complexity: O(1)
-		/// - DbReads: `Proposals`, `rejected proposer account`
-		/// - DbWrites: `Proposals`, `rejected proposer account`
-		/// # </weight>
+		/// ## Complexity
+		/// - O(1)
 		#[pallet::call_index(1)]
 		#[pallet::weight((T::WeightInfo::reject_proposal(), DispatchClass::Operational))]
 		pub fn reject_proposal(
@@ -412,11 +401,8 @@ pub mod pallet {
 		///
 		/// May only be called from `T::ApproveOrigin`.
 		///
-		/// # <weight>
-		/// - Complexity: O(1).
-		/// - DbReads: `Proposals`, `Approvals`
-		/// - DbWrite: `Approvals`
-		/// # </weight>
+		/// ## Complexity
+		///  - O(1).
 		#[pallet::call_index(2)]
 		#[pallet::weight((T::WeightInfo::approve_proposal(T::MaxApprovals::get()), DispatchClass::Operational))]
 		pub fn approve_proposal(
@@ -472,10 +458,8 @@ pub mod pallet {
 		/// May only be called from `T::RejectOrigin`.
 		/// - `proposal_id`: The index of a proposal
 		///
-		/// # <weight>
-		/// - Complexity: O(A) where `A` is the number of approvals
-		/// - Db reads and writes: `Approvals`
-		/// # </weight>
+		/// ## Complexity
+		/// - O(A) where `A` is the number of approvals
 		///
 		/// Errors:
 		/// - `ProposalNotApproved`: The `proposal_id` supplied was not found in the approval queue,

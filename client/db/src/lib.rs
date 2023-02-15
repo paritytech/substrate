@@ -1929,13 +1929,13 @@ impl<Block: BlockT> Backend<Block> {
 		Ok(())
 	}
 
-	fn empty_state(&self) -> ClientResult<RecordStatsState<RefTrackingState<Block>, Block>> {
+	fn empty_state(&self) -> RecordStatsState<RefTrackingState<Block>, Block> {
 		let root = EmptyStorage::<Block>::new().0; // Empty trie
 		let db_state = DbStateBuilder::<Block>::new(self.storage.clone(), root)
 			.with_optional_cache(self.shared_trie_cache.as_ref().map(|c| c.local_cache()))
 			.build();
 		let state = RefTrackingState::new(db_state, self.storage.clone(), None);
-		Ok(RecordStatsState::new(state, None, self.state_usage.clone()))
+		RecordStatsState::new(state, None, self.state_usage.clone())
 	}
 }
 
@@ -2063,7 +2063,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	fn begin_operation(&self) -> ClientResult<Self::BlockImportOperation> {
 		Ok(BlockImportOperation {
 			pending_block: None,
-			old_state: self.empty_state()?,
+			old_state: self.empty_state(),
 			db_updates: PrefixedMemoryDB::default(),
 			storage_updates: Default::default(),
 			child_storage_updates: Default::default(),
@@ -2082,7 +2082,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		block: Block::Hash,
 	) -> ClientResult<()> {
 		if block == Default::default() {
-			operation.old_state = self.empty_state()?;
+			operation.old_state = self.empty_state();
 		} else {
 			operation.old_state = self.state_at(block)?;
 		}
@@ -2439,6 +2439,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 						.unwrap_or(None)
 						.is_some()
 				};
+
 				if let Ok(()) =
 					self.storage.state_db.pin(&hash, hdr.number.saturated_into::<u64>(), hint)
 				{
@@ -2593,25 +2594,30 @@ pub(crate) mod tests {
 		use sp_runtime::testing::Digest;
 
 		let digest = Digest::default();
-		let header = Header {
-			number,
-			parent_hash,
-			state_root: BlakeTwo256::trie_root(Vec::new(), StateVersion::V1),
-			digest,
-			extrinsics_root,
-		};
-		let header_hash = header.hash();
+		let mut header =
+			Header { number, parent_hash, state_root: Default::default(), digest, extrinsics_root };
 
 		let block_hash = if number == 0 { Default::default() } else { parent_hash };
 		let mut op = backend.begin_operation().unwrap();
 		backend.begin_state_operation(&mut op, block_hash).unwrap();
-		op.set_block_data(header, Some(body), None, None, NewBlockState::Best).unwrap();
 		if let Some(index) = transaction_index {
 			op.update_transaction_index(index).unwrap();
 		}
+
+		// Insert some fake data to ensure that the block can be found in the state column.
+		let (root, overlay) = op.old_state.storage_root(
+			vec![(block_hash.as_ref(), Some(block_hash.as_ref()))].into_iter(),
+			StateVersion::V1,
+		);
+		op.update_db_storage(overlay).unwrap();
+		header.state_root = root.into();
+
+		op.set_block_data(header.clone(), Some(body), None, None, NewBlockState::Best)
+			.unwrap();
+
 		backend.commit_operation(op)?;
 
-		Ok(header_hash)
+		Ok(header.hash())
 	}
 
 	pub fn insert_header_no_head(
@@ -2623,18 +2629,31 @@ pub(crate) mod tests {
 		use sp_runtime::testing::Digest;
 
 		let digest = Digest::default();
-		let header = Header {
-			number,
-			parent_hash,
-			state_root: BlakeTwo256::trie_root(Vec::new(), StateVersion::V1),
-			digest,
-			extrinsics_root,
-		};
-		let header_hash = header.hash();
+		let mut header =
+			Header { number, parent_hash, state_root: Default::default(), digest, extrinsics_root };
 		let mut op = backend.begin_operation().unwrap();
-		op.set_block_data(header, None, None, None, NewBlockState::Normal).unwrap();
+
+		let root = backend
+			.state_at(parent_hash)
+			.unwrap_or_else(|_| {
+				if parent_hash == Default::default() {
+					backend.empty_state()
+				} else {
+					panic!("Unknown block: {parent_hash:?}")
+				}
+			})
+			.storage_root(
+				vec![(parent_hash.as_ref(), Some(parent_hash.as_ref()))].into_iter(),
+				StateVersion::V1,
+			)
+			.0;
+		header.state_root = root.into();
+
+		op.set_block_data(header.clone(), None, None, None, NewBlockState::Normal)
+			.unwrap();
 		backend.commit_operation(op).unwrap();
-		header_hash
+
+		header.hash()
 	}
 
 	#[test]
@@ -3369,204 +3388,131 @@ pub(crate) mod tests {
 
 	#[test]
 	fn prune_blocks_on_finalize() {
-		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Some(2), 0);
-		let mut blocks = Vec::new();
-		let mut prev_hash = Default::default();
-		for i in 0..5 {
-			let hash = insert_block(
-				&backend,
-				i,
-				prev_hash,
-				None,
-				Default::default(),
-				vec![i.into()],
-				None,
-			)
-			.unwrap();
-			blocks.push(hash);
-			prev_hash = hash;
-		}
+		let pruning_modes =
+			vec![BlocksPruning::Some(2), BlocksPruning::KeepFinalized, BlocksPruning::KeepAll];
 
-		{
-			let mut op = backend.begin_operation().unwrap();
-			backend.begin_state_operation(&mut op, blocks[4]).unwrap();
-			for i in 1..5 {
-				op.mark_finalized(blocks[i], None).unwrap();
+		for pruning_mode in pruning_modes {
+			let backend = Backend::<Block>::new_test_with_tx_storage(pruning_mode, 0);
+			let mut blocks = Vec::new();
+			let mut prev_hash = Default::default();
+			for i in 0..5 {
+				let hash = insert_block(
+					&backend,
+					i,
+					prev_hash,
+					None,
+					Default::default(),
+					vec![i.into()],
+					None,
+				)
+				.unwrap();
+				blocks.push(hash);
+				prev_hash = hash;
 			}
-			backend.commit_operation(op).unwrap();
-		}
-		let bc = backend.blockchain();
-		assert_eq!(None, bc.body(blocks[0]).unwrap());
-		assert_eq!(None, bc.body(blocks[1]).unwrap());
-		assert_eq!(None, bc.body(blocks[2]).unwrap());
-		assert_eq!(Some(vec![3.into()]), bc.body(blocks[3]).unwrap());
-		assert_eq!(Some(vec![4.into()]), bc.body(blocks[4]).unwrap());
-	}
 
-	#[test]
-	fn prune_blocks_on_finalize_in_keep_all() {
-		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::KeepAll, 0);
-		let mut blocks = Vec::new();
-		let mut prev_hash = Default::default();
-		for i in 0..5 {
-			let hash = insert_block(
-				&backend,
-				i,
-				prev_hash,
-				None,
-				Default::default(),
-				vec![i.into()],
-				None,
-			)
-			.unwrap();
-			blocks.push(hash);
-			prev_hash = hash;
-		}
+			{
+				let mut op = backend.begin_operation().unwrap();
+				backend.begin_state_operation(&mut op, blocks[4]).unwrap();
+				for i in 1..5 {
+					op.mark_finalized(blocks[i], None).unwrap();
+				}
+				backend.commit_operation(op).unwrap();
+			}
+			let bc = backend.blockchain();
 
-		let mut op = backend.begin_operation().unwrap();
-		backend.begin_state_operation(&mut op, blocks[4]).unwrap();
-		for i in 1..3 {
-			op.mark_finalized(blocks[i], None).unwrap();
-		}
-		backend.commit_operation(op).unwrap();
-
-		let bc = backend.blockchain();
-		assert_eq!(Some(vec![0.into()]), bc.body(blocks[0]).unwrap());
-		assert_eq!(Some(vec![1.into()]), bc.body(blocks[1]).unwrap());
-		assert_eq!(Some(vec![2.into()]), bc.body(blocks[2]).unwrap());
-		assert_eq!(Some(vec![3.into()]), bc.body(blocks[3]).unwrap());
-		assert_eq!(Some(vec![4.into()]), bc.body(blocks[4]).unwrap());
-	}
-
-	#[test]
-	fn prune_blocks_on_finalize_with_fork_in_keep_all() {
-		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::KeepAll, 10);
-		let mut blocks = Vec::new();
-		let mut prev_hash = Default::default();
-		for i in 0..5 {
-			let hash = insert_block(
-				&backend,
-				i,
-				prev_hash,
-				None,
-				Default::default(),
-				vec![i.into()],
-				None,
-			)
-			.unwrap();
-			blocks.push(hash);
-			prev_hash = hash;
-		}
-
-		// insert a fork at block 2
-		let fork_hash_root = insert_block(
-			&backend,
-			2,
-			blocks[1],
-			None,
-			sp_core::H256::random(),
-			vec![2.into()],
-			None,
-		)
-		.unwrap();
-		insert_block(
-			&backend,
-			3,
-			fork_hash_root,
-			None,
-			H256::random(),
-			vec![3.into(), 11.into()],
-			None,
-		)
-		.unwrap();
-
-		let mut op = backend.begin_operation().unwrap();
-		backend.begin_state_operation(&mut op, blocks[4]).unwrap();
-		op.mark_head(blocks[4]).unwrap();
-		backend.commit_operation(op).unwrap();
-
-		let bc = backend.blockchain();
-		assert_eq!(Some(vec![2.into()]), bc.body(fork_hash_root).unwrap());
-
-		for i in 1..5 {
-			let mut op = backend.begin_operation().unwrap();
-			backend.begin_state_operation(&mut op, blocks[i]).unwrap();
-			op.mark_finalized(blocks[i], None).unwrap();
-			backend.commit_operation(op).unwrap();
-		}
-
-		assert_eq!(Some(vec![0.into()]), bc.body(blocks[0]).unwrap());
-		assert_eq!(Some(vec![1.into()]), bc.body(blocks[1]).unwrap());
-		assert_eq!(Some(vec![2.into()]), bc.body(blocks[2]).unwrap());
-		assert_eq!(Some(vec![3.into()]), bc.body(blocks[3]).unwrap());
-		assert_eq!(Some(vec![4.into()]), bc.body(blocks[4]).unwrap());
-
-		assert_eq!(Some(vec![2.into()]), bc.body(fork_hash_root).unwrap());
-		assert_eq!(bc.info().best_number, 4);
-		for i in 0..5 {
-			assert!(bc.hash(i).unwrap().is_some());
+			if matches!(pruning_mode, BlocksPruning::Some(_)) {
+				assert_eq!(None, bc.body(blocks[0]).unwrap());
+				assert_eq!(None, bc.body(blocks[1]).unwrap());
+				assert_eq!(None, bc.body(blocks[2]).unwrap());
+				assert_eq!(Some(vec![3.into()]), bc.body(blocks[3]).unwrap());
+				assert_eq!(Some(vec![4.into()]), bc.body(blocks[4]).unwrap());
+			} else {
+				for i in 0..5 {
+					assert_eq!(Some(vec![(i as u64).into()]), bc.body(blocks[i]).unwrap());
+				}
+			}
 		}
 	}
 
 	#[test]
 	fn prune_blocks_on_finalize_with_fork() {
-		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Some(2), 10);
-		let mut blocks = Vec::new();
-		let mut prev_hash = Default::default();
-		for i in 0..5 {
-			let hash = insert_block(
+		sp_tracing::try_init_simple();
+
+		let pruning_modes =
+			vec![BlocksPruning::Some(2), BlocksPruning::KeepFinalized, BlocksPruning::KeepAll];
+
+		for pruning in pruning_modes {
+			let backend = Backend::<Block>::new_test_with_tx_storage(pruning, 10);
+			let mut blocks = Vec::new();
+			let mut prev_hash = Default::default();
+			for i in 0..5 {
+				let hash = insert_block(
+					&backend,
+					i,
+					prev_hash,
+					None,
+					Default::default(),
+					vec![i.into()],
+					None,
+				)
+				.unwrap();
+				blocks.push(hash);
+				prev_hash = hash;
+			}
+
+			// insert a fork at block 2
+			let fork_hash_root =
+				insert_block(&backend, 2, blocks[1], None, H256::random(), vec![2.into()], None)
+					.unwrap();
+			insert_block(
 				&backend,
-				i,
-				prev_hash,
+				3,
+				fork_hash_root,
 				None,
-				Default::default(),
-				vec![i.into()],
+				H256::random(),
+				vec![3.into(), 11.into()],
 				None,
 			)
 			.unwrap();
-			blocks.push(hash);
-			prev_hash = hash;
-		}
-
-		// insert a fork at block 2
-		let fork_hash_root = insert_block(
-			&backend,
-			2,
-			blocks[1],
-			None,
-			sp_core::H256::random(),
-			vec![2.into()],
-			None,
-		)
-		.unwrap();
-		insert_block(
-			&backend,
-			3,
-			fork_hash_root,
-			None,
-			H256::random(),
-			vec![3.into(), 11.into()],
-			None,
-		)
-		.unwrap();
-		let mut op = backend.begin_operation().unwrap();
-		backend.begin_state_operation(&mut op, blocks[4]).unwrap();
-		op.mark_head(blocks[4]).unwrap();
-		backend.commit_operation(op).unwrap();
-
-		for i in 1..5 {
 			let mut op = backend.begin_operation().unwrap();
 			backend.begin_state_operation(&mut op, blocks[4]).unwrap();
-			op.mark_finalized(blocks[i], None).unwrap();
+			op.mark_head(blocks[4]).unwrap();
 			backend.commit_operation(op).unwrap();
-		}
 
-		let bc = backend.blockchain();
-		assert_eq!(None, bc.body(blocks[0]).unwrap());
-		assert_eq!(None, bc.body(blocks[1]).unwrap());
-		assert_eq!(None, bc.body(blocks[2]).unwrap());
-		assert_eq!(Some(vec![3.into()]), bc.body(blocks[3]).unwrap());
-		assert_eq!(Some(vec![4.into()]), bc.body(blocks[4]).unwrap());
+			let bc = backend.blockchain();
+			assert_eq!(Some(vec![2.into()]), bc.body(fork_hash_root).unwrap());
+
+			for i in 1..5 {
+				let mut op = backend.begin_operation().unwrap();
+				backend.begin_state_operation(&mut op, blocks[4]).unwrap();
+				op.mark_finalized(blocks[i], None).unwrap();
+				backend.commit_operation(op).unwrap();
+			}
+
+			if matches!(pruning, BlocksPruning::Some(_)) {
+				assert_eq!(None, bc.body(blocks[0]).unwrap());
+				assert_eq!(None, bc.body(blocks[1]).unwrap());
+				assert_eq!(None, bc.body(blocks[2]).unwrap());
+
+				assert_eq!(Some(vec![3.into()]), bc.body(blocks[3]).unwrap());
+				assert_eq!(Some(vec![4.into()]), bc.body(blocks[4]).unwrap());
+			} else {
+				for i in 0..5 {
+					assert_eq!(Some(vec![(i as u64).into()]), bc.body(blocks[i]).unwrap());
+				}
+			}
+
+			if matches!(pruning, BlocksPruning::KeepAll) {
+				assert_eq!(Some(vec![2.into()]), bc.body(fork_hash_root).unwrap());
+			} else {
+				assert_eq!(None, bc.body(fork_hash_root).unwrap());
+			}
+
+			assert_eq!(bc.info().best_number, 4);
+			for i in 0..5 {
+				assert!(bc.hash(i).unwrap().is_some());
+			}
+		}
 	}
 
 	#[test]
@@ -3841,13 +3787,7 @@ pub(crate) mod tests {
 		assert!(matches!(backend.commit_operation(op), Err(sp_blockchain::Error::SetHeadTooOld)));
 
 		// Insert 2 as best again.
-		let header = Header {
-			number: 2,
-			parent_hash: block1,
-			state_root: BlakeTwo256::trie_root(Vec::new(), StateVersion::V1),
-			digest: Default::default(),
-			extrinsics_root: Default::default(),
-		};
+		let header = backend.blockchain().header(block2).unwrap().unwrap();
 		let mut op = backend.begin_operation().unwrap();
 		op.set_block_data(header, None, None, None, NewBlockState::Best).unwrap();
 		backend.commit_operation(op).unwrap();
@@ -3864,13 +3804,7 @@ pub(crate) mod tests {
 		assert_eq!(backend.blockchain().info().finalized_hash, block0);
 
 		// Insert 1 as final again.
-		let header = Header {
-			number: 1,
-			parent_hash: block0,
-			state_root: BlakeTwo256::trie_root(Vec::new(), StateVersion::V1),
-			digest: Default::default(),
-			extrinsics_root: Default::default(),
-		};
+		let header = backend.blockchain().header(block1).unwrap().unwrap();
 
 		let mut op = backend.begin_operation().unwrap();
 		op.set_block_data(header, None, None, None, NewBlockState::Final).unwrap();
@@ -4021,7 +3955,8 @@ pub(crate) mod tests {
 
 	#[test]
 	fn force_delayed_canonicalize_waiting_for_blocks_to_be_finalized() {
-		let pruning_modes = [BlocksPruning::Some(10), BlocksPruning::KeepAll];
+		let pruning_modes =
+			[BlocksPruning::Some(10), BlocksPruning::KeepAll, BlocksPruning::KeepFinalized];
 
 		for pruning_mode in pruning_modes {
 			eprintln!("Running with pruning mode: {:?}", pruning_mode);
