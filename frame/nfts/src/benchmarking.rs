@@ -31,7 +31,11 @@ use frame_support::{
 	BoundedVec,
 };
 use frame_system::RawOrigin as SystemOrigin;
-use sp_runtime::traits::{Bounded, One};
+use sp_io::crypto::{sr25519_generate, sr25519_sign};
+use sp_runtime::{
+	traits::{Bounded, IdentifyAccount, One},
+	AccountId32, MultiSignature, MultiSigner,
+};
 use sp_std::prelude::*;
 
 use crate::Pallet as Nfts;
@@ -148,7 +152,21 @@ fn default_item_config() -> ItemConfig {
 	ItemConfig { settings: ItemSettings::all_enabled() }
 }
 
+fn make_filled_vec(value: u16, length: usize) -> Vec<u8> {
+	let mut vec = vec![0u8; length];
+	let mut s = Vec::from(value.to_be_bytes());
+	vec.truncate(length - s.len());
+	vec.append(&mut s);
+	vec
+}
+
 benchmarks_instance_pallet! {
+	where_clause {
+		where
+			T::OffchainSignature: From<MultiSignature>,
+			T::AccountId: From<AccountId32>,
+	}
+
 	create {
 		let collection = T::Helper::collection(0);
 		let origin = T::CreateOrigin::try_successful_origin(&collection)
@@ -439,11 +457,7 @@ benchmarks_instance_pallet! {
 		T::Currency::make_free_balance_be(&target, DepositBalanceOf::<T, I>::max_value());
 		let value: BoundedVec<_, _> = vec![0u8; T::ValueLimit::get() as usize].try_into().unwrap();
 		for i in 0..n {
-			let mut key = vec![0u8; T::KeyLimit::get() as usize];
-			let mut s = Vec::from((i as u16).to_be_bytes());
-			key.truncate(s.len());
-			key.append(&mut s);
-
+			let key = make_filled_vec(i as u16, T::KeyLimit::get() as usize);
 			Nfts::<T, I>::set_attribute(
 				SystemOrigin::Signed(target.clone()).into(),
 				T::Helper::collection(0),
@@ -715,6 +729,48 @@ benchmarks_instance_pallet! {
 			price: Some(price_with_direction),
 			deadline: duration.saturating_add(One::one()),
 		}.into());
+	}
+
+	mint_pre_signed {
+		let n in 0 .. T::MaxAttributesPerCall::get() as u32;
+		let caller_public = sr25519_generate(0.into(), None);
+		let caller = MultiSigner::Sr25519(caller_public).into_account().into();
+		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
+		let caller_lookup = T::Lookup::unlookup(caller.clone());
+
+		let collection = T::Helper::collection(0);
+		let item = T::Helper::item(0);
+		assert_ok!(Nfts::<T, I>::force_create(
+			SystemOrigin::Root.into(),
+			caller_lookup.clone(),
+			default_collection_config::<T, I>()
+		));
+
+		let metadata = vec![0u8; T::StringLimit::get() as usize];
+		let mut attributes = vec![];
+		let attribute_value = vec![0u8; T::ValueLimit::get() as usize];
+		for i in 0..n {
+			let attribute_key = make_filled_vec(i as u16, T::KeyLimit::get() as usize);
+			attributes.push((attribute_key, attribute_value.clone()));
+		}
+		let mint_data = PreSignedMint {
+			collection,
+			item,
+			attributes,
+			metadata: metadata.clone(),
+			only_account: None,
+			deadline: One::one(),
+		};
+		let message = Encode::encode(&mint_data);
+		let signature = MultiSignature::Sr25519(sr25519_sign(0.into(), &caller_public, &message).unwrap());
+
+		let target: T::AccountId = account("target", 0, SEED);
+		T::Currency::make_free_balance_be(&target, DepositBalanceOf::<T, I>::max_value());
+		frame_system::Pallet::<T>::set_block_number(One::one());
+	}: _(SystemOrigin::Signed(target.clone()), mint_data, signature.into(), caller)
+	verify {
+		let metadata: BoundedVec<_, _> = metadata.try_into().unwrap();
+		assert_last_event::<T, I>(Event::ItemMetadataSet { collection, item, data: metadata }.into());
 	}
 
 	impl_benchmark_test_suite!(Nfts, crate::mock::new_test_ext(), crate::mock::Test);

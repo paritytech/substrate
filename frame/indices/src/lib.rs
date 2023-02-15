@@ -90,14 +90,8 @@ pub mod pallet {
 		///
 		/// Emits `IndexAssigned` if successful.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`.
-		/// - One storage mutation (codec `O(1)`).
-		/// - One reserve operation.
-		/// - One event.
-		/// -------------------
-		/// - DB Weight: 1 Read/Write (Accounts)
-		/// # </weight>
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::claim())]
 		pub fn claim(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
@@ -122,16 +116,8 @@ pub mod pallet {
 		///
 		/// Emits `IndexAssigned` if successful.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`.
-		/// - One storage mutation (codec `O(1)`).
-		/// - One transfer operation.
-		/// - One event.
-		/// -------------------
-		/// - DB Weight:
-		///    - Reads: Indices Accounts, System Account (recipient)
-		///    - Writes: Indices Accounts, System Account (recipient)
-		/// # </weight>
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::transfer())]
 		pub fn transfer(
@@ -165,14 +151,8 @@ pub mod pallet {
 		///
 		/// Emits `IndexFreed` if successful.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`.
-		/// - One storage mutation (codec `O(1)`).
-		/// - One reserve operation.
-		/// - One event.
-		/// -------------------
-		/// - DB Weight: 1 Read/Write (Accounts)
-		/// # </weight>
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::free())]
 		pub fn free(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
@@ -200,16 +180,8 @@ pub mod pallet {
 		///
 		/// Emits `IndexAssigned` if successful.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`.
-		/// - One storage mutation (codec `O(1)`).
-		/// - Up to one reserve operation.
-		/// - One event.
-		/// -------------------
-		/// - DB Weight:
-		///    - Reads: Indices Accounts, System Account (original owner)
-		///    - Writes: Indices Accounts, System Account (original owner)
-		/// # </weight>
 		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::force_transfer())]
 		pub fn force_transfer(
@@ -241,14 +213,8 @@ pub mod pallet {
 		///
 		/// Emits `IndexFrozen` if successful.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`.
-		/// - One storage mutation (codec `O(1)`).
-		/// - Up to one slash operation.
-		/// - One event.
-		/// -------------------
-		/// - DB Weight: 1 Read/Write (Accounts)
-		/// # </weight>
 		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::freeze())]
 		pub fn freeze(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
