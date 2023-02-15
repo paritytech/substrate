@@ -50,6 +50,7 @@
     DOCKER_PASS:                   $Docker_Hub_Pass_Parity
 
 .push-docker-image-description:
+  stage:                           publish
   extends:
     - .kubernetes-env
     - .publish-refs
