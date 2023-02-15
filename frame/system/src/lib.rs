@@ -210,11 +210,11 @@ pub mod pallet {
 
 			// things that cannot have default are made into generics.
 			#[derive(frame_support::CloneNoBound, frame_support::EqNoBound, frame_support::PartialEqNoBound)]
-			pub struct TestImpl<RuntimeCall, RuntimeOrigin, RuntimeEvent, PalletInfo>(
+			pub struct Impl<RuntimeCall, RuntimeOrigin, RuntimeEvent, PalletInfo>(
 				sp_std::marker::PhantomData<(RuntimeCall, RuntimeOrigin, RuntimeEvent, PalletInfo)>,
 			);
 			impl<RuntimeCall, RuntimeOrigin, RuntimeEvent, PalletInfo> Config
-				for TestImpl<RuntimeCall, RuntimeOrigin, RuntimeEvent, PalletInfo>
+				for Impl<RuntimeCall, RuntimeOrigin, RuntimeEvent, PalletInfo>
 			where
 				RuntimeCall: Parameter
 					+ Dispatchable<RuntimeOrigin = RuntimeOrigin>
