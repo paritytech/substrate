@@ -5,4 +5,4 @@
 * Sign and verify signatures on messages.
 * Sign and verify signatures for encoded transactions.
 * Derive hierarchical deterministic child key pairs.
-* Documentation
+* [Documentation](https://docs.substrate.io/reference/command-line-tools/subkey/)
