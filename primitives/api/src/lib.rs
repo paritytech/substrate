@@ -591,7 +591,7 @@ pub trait ApiExt<Block: BlockT> {
 #[cfg(feature = "std")]
 pub struct CallApiAtParams<'a, Block: BlockT, Backend: StateBackend<HashFor<Block>>> {
 	/// The block id that determines the state that should be setup when calling the function.
-	pub at: &'a BlockId<Block>,
+	pub at: Block::Hash,
 	/// The name of the function that should be called.
 	pub function: &'static str,
 	/// The encoded arguments of the function.

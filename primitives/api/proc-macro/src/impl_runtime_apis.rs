@@ -441,7 +441,7 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 					)?;
 
 					let params = #crate_::CallApiAtParams {
-						at: &#crate_::BlockId::Hash(at),
+						at,
 						function: (*fn_name)(version),
 						arguments: params,
 						overlayed_changes: &self.changes,

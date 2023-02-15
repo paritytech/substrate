@@ -1726,10 +1726,9 @@ where
 		&self,
 		params: CallApiAtParams<Block, B::State>,
 	) -> Result<Vec<u8>, sp_api::ApiError> {
-		let at_hash = self.expect_block_hash_from_id(params.at)?;
 		self.executor
 			.contextual_call(
-				at_hash,
+				params.at,
 				params.function,
 				&params.arguments,
 				params.overlayed_changes,
