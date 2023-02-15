@@ -17,6 +17,8 @@
 
 //! Tests for pallet-example-basic.
 
+use core::hash::Hash;
+
 use crate::*;
 use frame_support::{
 	assert_ok,
@@ -50,51 +52,74 @@ frame_support::construct_runtime!(
 	}
 );
 
-use frame_system::pallet::preludes::testing::Impl;
-type SystemRuntime = Impl<RuntimeCall, RuntimeOrigin, RuntimeEvent, PalletInfo>;
+type SystemRuntime = frame_system::pallet::preludes::testing::Impl<
+	RuntimeCall,
+	RuntimeOrigin,
+	RuntimeEvent,
+	PalletInfo,
+>;
+
+impl From<frame_system::Call<SystemRuntime>> for RuntimeCall {
+	fn from(_: frame_system::Call<SystemRuntime>) -> Self {
+		unreachable!()
+	}
+}
+
+impl From<frame_system::Event<SystemRuntime>> for RuntimeEvent {
+	fn from(_: frame_system::Event<SystemRuntime>) -> Self {
+		unreachable!()
+	}
+}
+
 impl frame_system::Config for Test {
-	type BaseCallFilter = <SystemRuntime as frame_system::Config>::BaseCallFilter;
-	// type BaseCallFilter = frame_support::traits::Everything;
-	type BlockWeights = ();
-	type BlockLength = ();
-	type DbWeight = ();
+	// these cannot be overwritten.
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
-	type Hash = H256;
 	type RuntimeCall = RuntimeCall;
-	type Hashing = BlakeTwo256;
-	type AccountId = u64;
-	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
 	type RuntimeEvent = RuntimeEvent;
-	type BlockHashCount = ConstU64<250>;
-	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = pallet_balances::AccountData<u64>;
-	type OnNewAccount = ();
-	type OnKilledAccount = ();
-	type SystemWeightInfo = ();
-	type SS58Prefix = ();
-	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+
+	// This one we want to overwrite.
+	type AccountData = pallet_balances::AccountData<Self::AccountId>;
+
+	// this causes some errors.
+	type Hash = H256;
+	// This causes the compiler to go into infinite loop.
+	type AccountId = u64;
+
+	type BaseCallFilter = <SystemRuntime as frame_system::Config>::BaseCallFilter;
+	type BlockWeights = <SystemRuntime as frame_system::Config>::BlockWeights;
+	type BlockLength = <SystemRuntime as frame_system::Config>::BlockLength;
+	type DbWeight = <SystemRuntime as frame_system::Config>::DbWeight;
+	type Index = <SystemRuntime as frame_system::Config>::Index;
+	type BlockNumber = <SystemRuntime as frame_system::Config>::BlockNumber;
+	type Hashing = <SystemRuntime as frame_system::Config>::Hashing;
+	type Lookup = <SystemRuntime as frame_system::Config>::Lookup;
+	type Header = <SystemRuntime as frame_system::Config>::Header;
+	type BlockHashCount = <SystemRuntime as frame_system::Config>::BlockHashCount;
+	type Version = <SystemRuntime as frame_system::Config>::Version;
+	type OnNewAccount = <SystemRuntime as frame_system::Config>::OnNewAccount;
+	type OnKilledAccount = <SystemRuntime as frame_system::Config>::OnKilledAccount;
+	type SystemWeightInfo = <SystemRuntime as frame_system::Config>::SystemWeightInfo;
+	type SS58Prefix = <SystemRuntime as frame_system::Config>::SS58Prefix;
+	type OnSetCode = <SystemRuntime as frame_system::Config>::OnSetCode;
+	type MaxConsumers = <SystemRuntime as frame_system::Config>::MaxConsumers;
 }
 
 impl pallet_balances::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
 	type MaxLocks = ();
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type Balance = u64;
 	type DustRemoval = ();
-	type RuntimeEvent = RuntimeEvent;
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 }
 
 impl Config for Test {
-	type MagicNumber = ConstU64<1_000_000_000>;
 	type RuntimeEvent = RuntimeEvent;
+	type MagicNumber = ConstU64<1_000_000_000>;
 	type WeightInfo = ();
 }
 
