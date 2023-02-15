@@ -1745,7 +1745,7 @@ where
 		CallExecutor::runtime_version(&self.executor, hash).map_err(Into::into)
 	}
 
-	fn state_at(&self, at: <Block as BlockT>::Hash) -> Result<Self::StateBackend, sp_api::ApiError> {
+	fn state_at(&self, at: Block::Hash) -> Result<Self::StateBackend, sp_api::ApiError> {
 		self.state_at(at).map_err(Into::into)
 	}
 }
