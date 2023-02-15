@@ -683,7 +683,7 @@ pub mod pallet {
 			validator: &T::AccountId,
 			page: PageIndex,
 		) -> Option<ExposureExt<T::AccountId, BalanceOf<T>>> {
-			return match <ErasStakersPaged<T>>::get(era, (validator, page)) {
+			match <ErasStakersPaged<T>>::get(era, (validator, page)) {
 				// return clipped exposure if page zero and paged exposure does not exist
 				None if page == 0 =>
 					Some(ExposureExt::from_clipped(<ErasStakersClipped<T>>::get(era, validator))),
