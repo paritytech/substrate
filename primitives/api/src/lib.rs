@@ -115,7 +115,7 @@ pub const MAX_EXTRINSIC_DEPTH: u32 = 256;
 /// The macro will create two declarations, one for using on the client side and one for using
 /// on the runtime side. The declaration for the runtime side is hidden in its own module.
 /// The client side declaration gets two extra parameters per function,
-/// `&self` and `at: &BlockId<Block>`. The runtime side declaration will match the given trait
+/// `&self` and `at: Block::Hash`. The runtime side declaration will match the given trait
 /// declaration. Besides one exception, the macro adds an extra generic parameter `Block:
 /// BlockT` to the client side and the runtime side. This generic parameter is usable by the
 /// user.
@@ -182,7 +182,7 @@ pub const MAX_EXTRINSIC_DEPTH: u32 = 256;
 /// ```
 ///
 /// To check if a given runtime implements a runtime api trait, the `RuntimeVersion` has the
-/// function `has_api<A>()`. Also the `ApiExt` provides a function `has_api<A>(at: &BlockId)`
+/// function `has_api<A>()`. Also the `ApiExt` provides a function `has_api<A>(at: Hash)`
 /// to check if the runtime at the given block id implements the requested runtime api trait.
 ///
 /// # Declaring multiple api versions
