@@ -31,7 +31,7 @@ use std::{
 	time::Duration,
 };
 
-use futures::{channel::oneshot, pin_mut, future::BoxFuture, prelude::*};
+use futures::{channel::oneshot, future::BoxFuture, pin_mut, prelude::*};
 use libp2p::{build_multiaddr, PeerId};
 use log::trace;
 use parking_lot::Mutex;
@@ -1080,9 +1080,10 @@ where
 				trace!(target: "sync", "-- Polling {}: {}", i, peer.id());
 				loop {
 					// The code below is not quite correct, because we are polling a different
-					// instance of the future every time. But as long as `NetworkWorker::next_action()`
-					// contains just streams polling not interleaved with other `.await`s, dropping
-					// the future and recreating it works the same as polling a single instance. 
+					// instance of the future every time. But as long as
+					// `NetworkWorker::next_action()` contains just streams polling not interleaved
+					// with other `.await`s, dropping the future and recreating it works the same as
+					// polling a single instance.
 					let net_poll_future = peer.network.next_action();
 					pin_mut!(net_poll_future);
 					if let Poll::Pending = net_poll_future.poll(cx) {
