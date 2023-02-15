@@ -1492,6 +1492,7 @@ pub mod pallet_prelude {
 	};
 	pub use sp_std::marker::PhantomData;
 	pub use sp_weights::Weight;
+	pub use sp_core::ConstGet;
 }
 
 /// The `pallet` attribute macro defines a pallet that can be used with
