@@ -1617,15 +1617,9 @@ impl<T: Config> Pallet<T> {
 	/// Current era is ending; we should finish up any proposals.
 	///
 	///
-	/// # <weight>
+	/// ## Complexity:
 	/// If a referendum is launched or maturing, this will take full block weight if queue is not
-	/// empty. Otherwise:
-	/// - Complexity: `O(R)` where `R` is the number of unbaked referenda.
-	/// - Db reads: `LastTabledWasExternal`, `NextExternal`, `PublicProps`, `account`,
-	///   `ReferendumCount`, `LowestUnbaked`
-	/// - Db writes: `PublicProps`, `account`, `ReferendumCount`, `DepositOf`, `ReferendumInfoOf`
-	/// - Db reads per R: `DepositOf`, `ReferendumInfoOf`
-	/// # </weight>
+	/// empty. Otherwise, `O(R)` where `R` is the number of unbaked referenda.
 	fn begin_block(now: T::BlockNumber) -> Weight {
 		let max_block_weight = T::BlockWeights::get().max_block;
 		let mut weight = Weight::zero();
