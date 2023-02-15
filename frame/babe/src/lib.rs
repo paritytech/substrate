@@ -39,7 +39,7 @@ use sp_runtime::{
 	ConsensusEngineId, KeyTypeId, Permill,
 };
 use sp_session::{GetSessionNumber, GetValidatorCount};
-use sp_staking::equivocation::EquivocationHandler2;
+use sp_staking::equivocation::EquivocationHandler as EquivocationHandlerT;
 use sp_std::prelude::*;
 
 use sp_consensus_babe::{
@@ -172,7 +172,7 @@ pub mod pallet {
 		/// NOTE: when enabling equivocation handling (i.e. this type isn't set to
 		/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
 		/// definition.
-		type HandleEquivocation2: EquivocationHandler2<
+		type HandleEquivocation: EquivocationHandlerT<
 			AccountId = Self::AccountId,
 			KeyOwnerProof = Self::KeyOwnerProof,
 			KeyOwnerIdentification = Self::KeyOwnerIdentification,
@@ -447,7 +447,7 @@ pub mod pallet {
 			ensure_none(origin)?;
 
 			Self::do_report_equivocation(
-				T::HandleEquivocation2::block_author(),
+				T::HandleEquivocation::block_author(),
 				*equivocation_proof,
 				key_owner_proof,
 			)
@@ -857,7 +857,7 @@ impl<T: Config> Pallet<T> {
 		let offence =
 			BabeEquivocationOffence { slot, validator_set_count, offender, session_index };
 
-		T::HandleEquivocation2::report_offence(reporter.into_iter().collect(), offence)
+		T::HandleEquivocation::report_offence(reporter.into_iter().collect(), offence)
 			.map_err(|_| Error::<T>::DuplicateOffenceReport)?;
 
 		// waive the fee since the report is valid and beneficial
@@ -873,7 +873,7 @@ impl<T: Config> Pallet<T> {
 		key_owner_proof: T::KeyOwnerProof,
 	) -> Option<()> {
 		// TODO: this should be submitted anyway...???
-		T::HandleEquivocation2::submit_unsigned_equivocation_report(
+		T::HandleEquivocation::submit_unsigned_equivocation_report(
 			equivocation_proof,
 			key_owner_proof,
 		)

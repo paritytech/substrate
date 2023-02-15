@@ -1,8 +1,8 @@
-use crate::offence::{Offence, OffenceError};
+use crate::offence::{Offence, OffenceError, ReportOffence};
 use sp_core::Get;
 use sp_runtime::DispatchResult;
 
-pub trait EquivocationHandler2 {
+pub trait EquivocationHandler {
 	/// The longevity, in blocks, that the equivocation report is valid for. When using the staking
 	/// pallet this should be equal to the bonding duration (in blocks, not eras).
 	type ReportLongevity: Get<u64>;
@@ -17,17 +17,21 @@ pub trait EquivocationHandler2 {
 
 	type KeyOwnerProof;
 
-	/// Report an offence proved by the given reporters.
+	type ReportOffence: ReportOffence<Self::AccountId, Self::KeyOwnerIdentification, Self::Offence>;
+
 	fn report_offence(
 		reporters: Vec<Self::AccountId>,
 		offence: Self::Offence,
-	) -> Result<(), OffenceError>;
+	) -> Result<(), OffenceError> {
+		Self::ReportOffence::report_offence(reporters, offence)
+	}
 
-	/// Returns true if all of the offenders at the given time slot have already been reported.
 	fn is_known_offence(
 		offenders: &[Self::KeyOwnerIdentification],
 		time_slot: &<Self::Offence as Offence<Self::KeyOwnerIdentification>>::TimeSlot,
-	) -> bool;
+	) -> bool {
+		Self::ReportOffence::is_known_offence(offenders, time_slot)
+	}
 
 	/// Create and dispatch an equivocation report extrinsic.
 	fn submit_unsigned_equivocation_report(
@@ -42,6 +46,7 @@ pub trait EquivocationHandler2 {
 // impl<T> HandleEquivocation2 for () {
 // 	type ReportLongevity = ();
 // 	type AccountId = ();
+//  type ReportOffence = ();
 
 // 	fn report_offence(
 // 		_reporters: Vec<T::AccountId>,

@@ -43,8 +43,8 @@ use sp_runtime::{
 	DispatchResult, Perbill,
 };
 use sp_staking::{
-	equivocation::EquivocationHandler2,
-	offence::{Kind, Offence, OffenceError, ReportOffence},
+	equivocation::EquivocationHandler as EquivocationHandlerT,
+	offence::{Kind, Offence, ReportOffence},
 	SessionIndex,
 };
 use sp_std::prelude::*;
@@ -65,7 +65,7 @@ impl<I, R, L> Default for EquivocationHandler<I, R, L> {
 	}
 }
 
-impl<T, R, L> EquivocationHandler2 for EquivocationHandler<T, R, L>
+impl<T, R, L> EquivocationHandlerT for EquivocationHandler<T, R, L>
 where
 	// We use the authorship pallet
 	// to fetch the current block
@@ -98,19 +98,7 @@ where
 
 	type KeyOwnerProof = T::KeyOwnerProof;
 
-	fn report_offence(
-		reporters: Vec<Self::AccountId>,
-		offence: BabeEquivocationOffence<T::KeyOwnerIdentification>,
-	) -> Result<(), OffenceError> {
-		R::report_offence(reporters, offence)
-	}
-
-	fn is_known_offence(
-		offenders: &[Self::KeyOwnerIdentification],
-		time_slot: &<Self::Offence as Offence<Self::KeyOwnerIdentification>>::TimeSlot,
-	) -> bool {
-		R::is_known_offence(offenders, time_slot)
-	}
+	type ReportOffence = R;
 
 	fn submit_unsigned_equivocation_report(
 		equivocation_proof: Self::EquivocationProof,
@@ -160,8 +148,7 @@ impl<T: Config> Pallet<T> {
 			// check report staleness
 			is_known_offence::<T>(equivocation_proof, key_owner_proof)?;
 
-			let longevity =
-				<T::HandleEquivocation2 as EquivocationHandler2>::ReportLongevity::get();
+			let longevity = <T::HandleEquivocation as EquivocationHandlerT>::ReportLongevity::get();
 
 			ValidTransaction::with_tag_prefix("BabeEquivocation")
 				// We assign the maximum priority for any equivocation report.
@@ -197,7 +184,7 @@ fn is_known_offence<T: Config>(
 		.ok_or(InvalidTransaction::BadProof)?;
 
 	// check if the offence has already been reported, and if so then we can discard the report.
-	if T::HandleEquivocation2::is_known_offence(&[offender], &equivocation_proof.slot) {
+	if T::HandleEquivocation::is_known_offence(&[offender], &equivocation_proof.slot) {
 		Err(InvalidTransaction::Stale.into())
 	} else {
 		Ok(())
