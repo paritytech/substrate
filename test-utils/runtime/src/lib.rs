@@ -1338,7 +1338,7 @@ mod tests {
 	use sc_block_builder::BlockBuilderProvider;
 	use sp_api::ProvideRuntimeApi;
 	use sp_consensus::BlockOrigin;
-	use sp_core::storage::well_known_keys::HEAP_PAGES;
+	use sp_core::{storage::well_known_keys::HEAP_PAGES, ExecutionContext};
 	use sp_runtime::generic::BlockId;
 	use sp_state_machine::ExecutionStrategy;
 	use substrate_test_runtime_client::{
@@ -1358,7 +1358,12 @@ mod tests {
 
 		// Try to allocate 1024k of memory on heap. This is going to fail since it is twice larger
 		// than the heap.
-		let ret = client.runtime_api().vec_with_capacity(&block_id, 1048576);
+		let ret = client.runtime_api().vec_with_capacity_with_context(
+			&block_id,
+			// Use `BlockImport` to ensure we use the on chain heap pages as configured above.
+			ExecutionContext::Importing,
+			1048576,
+		);
 		assert!(ret.is_err());
 
 		// Create a block that sets the `:heap_pages` to 32 pages of memory which corresponds to

@@ -273,7 +273,7 @@ where
 					extensions,
 					&runtime_code,
 					self.spawn_handle.clone(),
-					CallContext::Offchain,
+					call_context,
 				)
 				.with_storage_transaction_cache(storage_transaction_cache.as_deref_mut())
 				.set_parent_hash(at_hash);
