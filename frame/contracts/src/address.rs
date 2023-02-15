@@ -51,7 +51,7 @@ pub trait AddressGenerator<T: Config> {
 /// Default address generator.
 ///
 /// This is the default address generator used by contract instantiation. Its result
-/// is only dependant on its inputs. It can therefore be used to reliably predict the
+/// is only dependent on its inputs. It can therefore be used to reliably predict the
 /// address of a contract. This is akin to the formula of eth's CREATE2 opcode. There
 /// is no CREATE equivalent because CREATE2 is strictly more powerful.
 /// Formula:
@@ -74,7 +74,7 @@ impl<T: Config> AddressGenerator<T> for DefaultAddressGenerator {
 
 	/// Formula: `hash("contract_deposit_v1" ++ contract_addr)`
 	fn deposit_address(contract_addr: &T::AccountId) -> T::AccountId {
-		let entropy = (b"contract_deposit_v1", contract_addr).using_encoded(T::Hashing::hash);
+		let entropy = (b"contract_depo_v1", contract_addr).using_encoded(T::Hashing::hash);
 		Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
 			.expect("infinite length input; no invalid inputs for type; qed")
 	}
