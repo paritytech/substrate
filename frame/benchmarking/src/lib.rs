@@ -114,12 +114,12 @@ pub use v1::*;
 /// Within a `#[benchmarks]` or `#[instance_benchmarks]` module, you can define individual
 /// benchmarks using the `#[benchmark]` attribute, as shown in the example above.
 ///
-/// The `#[benchmark]` attribute expects a function definition with a blank return type and
-/// zero or more arguments whose names are valid
-/// [BenchmarkParameter](`crate::BenchmarkParameter`) parameters, such as `x`, `y`, `a`, `b`,
-/// etc., and whose param types must implement [ParamRange](`v2::ParamRange`). At the moment
-/// the only valid type that implements [ParamRange](`v2::ParamRange`) is
-/// [Linear](`v2::Linear`).
+/// The `#[benchmark]` attribute expects a function definition with a blank return type (or a
+/// return type compatible with `Result<T, BenchmarkError>`, as discussed below) and zero or
+/// more arguments whose names are valid [BenchmarkParameter](`crate::BenchmarkParameter`)
+/// parameters, such as `x`, `y`, `a`, `b`, etc., and whose param types must implement
+/// [ParamRange](`v2::ParamRange`). At the moment the only valid type that implements
+/// [ParamRange](`v2::ParamRange`) is [Linear](`v2::Linear`).
 ///
 /// The valid syntax for defining a [Linear](`v2::Linear`) is `Linear<A, B>` where `A`, and `B`
 /// are valid integer literals (that fit in a `u32`), such that `B` >= `A`.
@@ -246,7 +246,7 @@ pub use v1::*;
 ///    verification.
 /// 5. If you specify a return type on the function definition, it must conform to the rules
 ///    specified below in the next section, and the last statement of the function definition
-///    must return a valid return path that is compatible with [`v2::BenchmarkResult<T>`].
+///    must return a valid return path that is compatible with `Result<T, BenchmarkError>`.
 ///
 /// The reason we generate an actual function as part of the expansion is to allow the compiler
 /// to enforce several constraints that would otherwise be difficult to enforce and to reduce
@@ -257,16 +257,15 @@ pub use v1::*;
 /// that benchmark. As a result you should be careful about what attributes you attach here as
 /// they will be replicated in multiple places.
 ///
-/// ### Support for `BenchmarkResult<T>` and the `?` operator
+/// ### Support for `Result<T, BenchmarkError>` and the `?` operator
 ///
-/// You may optionally specify `BenchmarkResult<T>` (short for `Result<T, BenchmarkError>`) as
-/// the return type of your benchmark function definition. If you do so, you must return a
-/// compatible `Result<T, BenchmarkError>` as the *last statement* of your benchmark function
-/// definition. You may also use the `?` operator throughout your benchmark function
-/// definition if you choose to follow this route. The type `T` can be any type, so you can use
-/// this to return custom data from your benchmark function definition, if desired. Otherwise
-/// you can simply use `()` as `T` if you simply want to make use of the `?` operator. See the
-/// example below:
+/// You may optionally specify `Result<T, BenchmarkError>` as the return type of your benchmark
+/// function definition. If you do so, you must return a compatible `Result<T, BenchmarkError>`
+/// as the *last statement* of your benchmark function definition. You may also use the `?`
+/// operator throughout your benchmark function definition if you choose to follow this route.
+/// The type `T` can be any type, so you can use this to return custom data from your benchmark
+/// function definition, if desired. Otherwise you can simply use `()` as `T` if you simply
+/// want to make use of the `?` operator. See the example below:
 ///
 /// ```ignore
 /// #![cfg(feature = "runtime-benchmarks")]
@@ -279,7 +278,7 @@ pub use v1::*;
 /// 	use super::*;
 ///
 /// 	#[benchmark]
-/// 	fn bench_name(x: Linear<5, 25>) -> BenchmarkResult<String> {
+/// 	fn bench_name(x: Linear<5, 25>) -> Result<String, BenchmarkError> {
 /// 		// setup code
 /// 		let z = x + 4;
 /// 		let caller = whitelisted_caller();
@@ -293,22 +292,22 @@ pub use v1::*;
 /// 		// verification code
 /// 		assert_eq!(MyPallet::<T>::my_var(), z);
 ///
-///         // we must return a valid `BenchmarkResult<String>` as the last line of our benchmark
+///         // we must return a valid `Result<String, BenchmarkError>` as the last line of our benchmark
 ///         // function definition. This line is not included as part of the verification code that
-/// 		// appears above it.
+///         // appears above it.
 ///         Ok(String::from("hey"))
 /// 	}
 /// }
 /// ```
 ///
-/// Since you are completely free to use any type you want within `BenchmarkResult<T>`, this
+/// Since you are completely free to use any type you want within `Result<T, BenchmarkError>`, this
 /// can be useful if you want to actually call benchmark functions directly for some reason and
 /// do something with the result. If you do not need to do anything with the return value, you
 /// can of course use `()` as the inner type, such as the following:
 ///
 /// ```ignore
 /// #[benchmark]
-/// fn bench_name(x: Linear<25, 100>) -> BenchmarkResult<()> {
+/// fn bench_name(x: Linear<25, 100>) -> Result<(), BenchmarkError> {
 /// 	let z = x + 4;
 /// 	let caller = whitelisted_caller();
 /// 	something_else(z)?;
@@ -359,6 +358,4 @@ pub mod v2 {
 			B
 		}
 	}
-
-	pub type BenchmarkResult<T> = Result<T, BenchmarkError>;
 }

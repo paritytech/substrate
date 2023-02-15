@@ -6,7 +6,7 @@ use frame_support_test::Config;
 mod benches {
 	use super::*;
 
-	fn something() -> BenchmarkResult<()> {
+	fn something() -> Result<(), BenchmarkError> {
 		Ok(())
 	}
 

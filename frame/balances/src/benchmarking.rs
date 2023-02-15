@@ -225,7 +225,7 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn force_unreserve() -> BenchmarkResult<()> {
+	fn force_unreserve() -> Result<(), BenchmarkError> {
 		let user: T::AccountId = account("user", 0, SEED);
 		let user_lookup = T::Lookup::unlookup(user.clone());
 

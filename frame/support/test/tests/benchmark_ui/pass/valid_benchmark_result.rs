@@ -6,7 +6,7 @@ mod benches {
 	use super::*;
 
 	#[benchmark]
-	fn bench() -> BenchmarkResult<u32> {
+	fn bench() -> Result<u32, BenchmarkError> {
 		let a = 2 + 2;
 		#[block]
 		{}

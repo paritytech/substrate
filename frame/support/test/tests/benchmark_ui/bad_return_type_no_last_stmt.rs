@@ -7,7 +7,7 @@ mod benches {
 	use super::*;
 
 	#[benchmark]
-	fn bench() -> BenchmarkResult<()> {
+	fn bench() -> Result<(), BenchmarkError> {
 		#[block]
 		{}
 	}

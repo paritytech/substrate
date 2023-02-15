@@ -7,7 +7,7 @@ mod benches {
 	use super::*;
 
 	#[benchmark]
-	fn bench() -> frame_benchmarking::v2::BenchmarkResult<()> {
+	fn bench() -> Result<(), frame_benchmarking::v2::BenchmarkError> {
 		#[block]
 		{}
 		Ok(())

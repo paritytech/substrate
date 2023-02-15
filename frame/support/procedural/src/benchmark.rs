@@ -44,7 +44,6 @@ mod keywords {
 	custom_keyword!(extrinsic_call);
 	custom_keyword!(skip_meta);
 	custom_keyword!(BenchmarkError);
-	custom_keyword!(BenchmarkResult);
 	custom_keyword!(Result);
 }
 
@@ -158,12 +157,15 @@ struct BenchmarkDef {
 	fn_attrs: Vec<Attribute>,
 }
 
+/// used to parse something compatible with `Result<T, E>`
 #[derive(Parse)]
-enum BenchmarkResultVariant {
-	#[peek(keywords::BenchmarkResult, name = "BenchmarkResult<T>")]
-	BenchmarkResult(keywords::BenchmarkResult, Token![<], Type, Token![>]),
-	#[peek(keywords::Result, name = "Result<T, BenchmarkError>")]
-	Result(keywords::Result, Token![<], Type, Comma, TypePath, Token![>]),
+struct ResultDef {
+	_result_kw: keywords::Result,
+	_lt: Token![<],
+	_t_type: Type,
+	_comma: Comma,
+	e_type: TypePath,
+	_gt: Token![>],
 }
 
 impl BenchmarkDef {
@@ -226,16 +228,17 @@ impl BenchmarkDef {
 			return empty_fn()
 		}
 
-		// ensure ReturnType is a BenchmarkResult<T> or Result<T, BenchmarkError>, if specified
+		// ensure ReturnType is a Result<T, BenchmarkError>, if specified
 		if let ReturnType::Type(_, typ) = &item_fn.sig.output {
+			// for this to parse as a ReturnType::Type, the contents must be a TypePath, QED
 			let Type::Path(TypePath { path, qself: _ }) = &**typ else { panic!("unreachable state") };
+			// for this to parse as a TypePath, it has to have at least one segment, QED
 			let Some(seg) = path.segments.last() else { panic!("unreachable state") };
-			let var: BenchmarkResultVariant = syn::parse2(seg.to_token_stream())?;
-			if let BenchmarkResultVariant::Result(_, _, _, _, TypePath { path, qself: _ }, _) = var
-			{
-				let Some(seg) = path.segments.last() else { panic!("unreachable state") };
-				syn::parse2::<keywords::BenchmarkError>(seg.to_token_stream())?;
-			} // else it is a valid BenchmarkResult<T> and we are good
+			let res: ResultDef = syn::parse2(seg.to_token_stream())?;
+			let TypePath { path, qself: _ } = res.e_type;
+			// for this to parse as a TypePath, it has to have at least one segment, QED
+			let Some(seg) = path.segments.last() else { panic!("unreachable state") };
+			syn::parse2::<keywords::BenchmarkError>(seg.to_token_stream())?;
 		}
 
 		// #[extrinsic_call] / #[block] handling
@@ -290,17 +293,16 @@ impl BenchmarkDef {
 			// no return type, last_stmt should be None
 				(Vec::from(&item_fn.block.stmts[(i + 1)..item_fn.block.stmts.len()]), None),
 			ReturnType::Type(_, _) => {
-				// defined return type, last_stmt should be BenchmarkResult<T> compatible and
-				// should not be included in verify_stmts
+				// defined return type, last_stmt should be Result<T, BenchmarkError>
+				// compatible and should not be included in verify_stmts
 				if i + 1 >= item_fn.block.stmts.len() {
 					return Err(Error::new(
 						item_fn.block.span(),
 						"Benchmark `#[block]` or `#[extrinsic_call]` item cannot be the \
 						last statement of your benchmark function definition if you have \
 						defined a return type. You should return something compatible \
-						with `BenchmarkResult<T>` or Result<T, BenchmarkError> (i.e. \
-						`Ok(T)`) as the last statement or change your signature to a \
-						blank return type.",
+						Result<T, BenchmarkError> (i.e. `Ok(T)`) as the last statement \
+						or change your signature to a blank return type.",
 					))
 				}
 				let Some(stmt) = item_fn.block.stmts.last() else { return empty_fn() };
@@ -813,9 +815,9 @@ fn expand_benchmark(
 		.collect();
 
 	// modify signature generics, ident, and inputs, e.g:
-	// before: `fn bench(u: Linear<1, 100>) -> BenchmarkResult<()>`
-	// after: `fn _bench <T: Config<I>, I: 'static>(u: u32, verify: bool) ->
-	// BenchmarkResult<()>`
+	// before: `fn bench(u: Linear<1, 100>) -> Result<(), BenchmarkError>`
+	// after: `fn _bench <T: Config<I>, I: 'static>(u: u32, verify: bool) -> Result<(),
+	// BenchmarkError>`
 	let mut sig = benchmark_def.fn_sig;
 	sig.generics = parse_quote!(<#type_impl_generics>);
 	if !where_clause.is_empty() {
@@ -905,7 +907,7 @@ fn expand_benchmark(
 						)*
 					}
 					match #impl_last_stmt {
-						Ok(_) => Ok(()), // discard custom BenchmarkResult<T> type in this context
+						Ok(_) => Ok(()), // discard custom Result<T, BenchmarkError> type in this context
 						Err(err) => Err(err)
 					}
 				}))
