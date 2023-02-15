@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use frame_support::{pallet_prelude::Weight, traits::Hooks, weights::constants::*};
-use kitchensink_runtime::{Glutton, Runtime, System};
+use kitchensink_runtime::{Glutton, Runtime, System, RuntimeOrigin};
 use pallet_glutton::WeightInfo;
 use sp_runtime::Perbill;
 
@@ -30,6 +30,9 @@ fn expected_weight_same_as_consumed() {
 	let expected_weight = <Runtime as pallet_glutton::Config>::WeightInfo::on_idle();
 
 	t.execute_with(|| {
+		let _ = Glutton::set_compute(RuntimeOrigin::root(), Perbill::from_percent(100));
+		let _ = Glutton::set_storage(RuntimeOrigin::root(), Perbill::from_percent(100));
+
 		let consumed = Glutton::on_idle(
 			System::block_number(),
 			Weight::from_parts(WEIGHT_REF_TIME_PER_MILLIS * 20, WEIGHT_PROOF_SIZE_PER_MB),
