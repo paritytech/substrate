@@ -230,7 +230,8 @@ parameter_types! {
 	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
 	pub static MaxNominations: u32 = 16;
 	pub static HistoryDepth: u32 = 80;
-	pub static MaxNominatorRewardedPerValidator: u32 = 64;
+	pub static MaxExposurePageSize: u32 = 64;
+	pub static MaxExposurePageCount: u32 = 1;
 	pub static MaxUnlockingChunks: u32 = 32;
 	pub static RewardOnUnbalanceWasCalled: bool = false;
 	pub static LedgerSlashPerEra: (BalanceOf<Test>, BTreeMap<EraIndex, BalanceOf<Test>>) = (Zero::zero(), BTreeMap::new());
@@ -293,7 +294,8 @@ impl crate::pallet::pallet::Config for Test {
 	type SessionInterface = Self;
 	type EraPayout = ConvertCurve<RewardCurve>;
 	type NextNewSession = Session;
-	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
+	type MaxExposurePageSize = MaxExposurePageSize;
+	type MaxExposurePageCount = MaxExposurePageCount;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type ElectionProvider = onchain::OnChainExecution<OnChainSeqPhragmen>;
 	type GenesisElectionProvider = Self::ElectionProvider;
@@ -821,5 +823,5 @@ pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
 }
 
 pub(crate) fn allow_paged_rewards(max_pages: u32) {
-	MaxExposurePageCount::<Test>::put(max_pages.max(1));
+	MaxExposurePageCount::set(max_pages.max(1));
 }

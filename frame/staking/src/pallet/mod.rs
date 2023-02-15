@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -204,22 +204,26 @@ pub mod pallet {
 
 		/// The maximum size of each `T::ExposurePage`.
 		///
-		/// An `ExposurePage` is bounded to a maximum of `MaxNominatorRewardedPerValidator`
+		/// An `ExposurePage` is bounded to a maximum of `MaxExposurePageSize`
 		/// nominators. The actual page size is a dynamic value that is determined by the storage
 		/// item `T::ExposurePageSize`.
 		///
 		/// For older non-paged exposure, a reward payout was restricted to the top
-		/// `MaxNominatorRewardedPerValidator` nominators. This is to limit the i/o cost for the
+		/// `MaxExposurePageSize` nominators. This is to limit the i/o cost for the
 		/// nominator payout.
 		///
-		/// The name is a bit misleading, because historically we used to reward the top
-		/// `MaxNominatorRewardedPerValidator` nominators by stake when we did not had paged
-		/// exposures. In future we should rename this to something like `ExposurePageSize` when we
-		/// are ready to get rid of `ErasStakersClipped`.
-		/// Refer issue: #13034
-		/// TODO(ank4n): rename this to `MaxExposurePageSize`.
+		/// Note: `MaxExposurePageSize` is used to bound `ClaimedRewards` and is unsafe to reduce
+		/// without handling it in a migration.
 		#[pallet::constant]
-		type MaxNominatorRewardedPerValidator: Get<u32>;
+		type MaxExposurePageSize: Get<u32>;
+
+		/// Maximum number of exposure pages that can be stored for a single validator in an era.
+		///
+		/// Must be greater than 0.
+		///
+		/// When this is set to 1, the reward payout behaviour is similar to how it used to work
+		/// before we had paged exposures.
+		type MaxExposurePageCount: Get<u32>;
 
 		/// The fraction of the validator set that is safe to be offending.
 		/// After the threshold is reached a new era will be forced.
@@ -456,7 +460,7 @@ pub mod pallet {
 	/// New `Exposure`s are stored in a paged manner in `ErasStakersPaged` instead.
 	///
 	/// This is similar to [`ErasStakers`] but number of nominators exposed is reduced to the
-	/// `T::MaxNominatorRewardedPerValidator` biggest stakers.
+	/// `T::MaxExposurePageSize` biggest stakers.
 	/// (Note: the field `total` and `own` of the exposure remains unchanged).
 	/// This is used to limit the i/o cost for the nominator payout.
 	///
@@ -479,19 +483,9 @@ pub mod pallet {
 
 	/// The nominator count each `ExposurePage` is capped at.
 	///
-	/// This cannot be greater than `T::MaxNominatorRewardedPerValidator`.
+	/// This cannot be greater than `T::MaxExposurePageSize`.
 	#[pallet::storage]
 	pub type ExposurePageSize<T> = StorageValue<_, u32, OptionQuery>;
-
-	/// Maximum number of exposure pages that can be stored for a single validator in an era.
-	///
-	/// Must be greater than 0.
-	///
-	/// When this is set to 1, the reward payout behaviour is similar to how it used to work before
-	/// we had paged exposures.
-	#[pallet::storage]
-	// TODO(ank4n): Does it need #[pallet::getter(...)]
-	pub type MaxExposurePageCount<T> = StorageValue<_, PageIndex, OptionQuery>;
 
 	/// Paginated exposure of a validator at given era.
 	///
@@ -753,11 +747,6 @@ pub mod pallet {
 			<ErasStakersClipped<T>>::contains_key(&era, validator)
 		}
 
-		/// Returns the maximum number of pages of exposure we can store.
-		fn get_max_exposure_page_count() -> PageIndex {
-			return <MaxExposurePageCount<T>>::get().unwrap_or_default().max(1)
-		}
-
 		/// Returns validator commission for this era and page.
 		pub(crate) fn get_validator_commission(
 			era: EraIndex,
@@ -795,16 +784,16 @@ pub mod pallet {
 			<ErasStakers<T>>::insert(era, &validator, &exposure);
 
 			let page_size = <ExposurePageSize<T>>::get()
-				.unwrap_or_else(|| T::MaxNominatorRewardedPerValidator::get())
-				.clamp(1, T::MaxNominatorRewardedPerValidator::get());
-			let max_page_count = Self::get_max_exposure_page_count();
+				.unwrap_or_else(|| T::MaxExposurePageSize::get())
+				.clamp(1, T::MaxExposurePageSize::get());
+			let max_page_count = T::MaxExposurePageCount::get();
 
 			let nominator_count = exposure.others.len();
-			let page_count =
+			let required_page_count =
 				nominator_count.saturating_add(page_size as usize - 1) / page_size as usize;
 
 			// clip nominators if it exceeds the maximum page count.
-			let exposure = if page_count as PageIndex > max_page_count {
+			let exposure = if required_page_count as PageIndex > max_page_count {
 				// sort before clipping.
 				let mut exposure_clipped = exposure;
 				let clipped_max_len = max_page_count * page_size;
@@ -1741,16 +1730,16 @@ pub mod pallet {
 		/// This pays out the earliest exposure page not claimed for the era. If all pages are
 		/// claimed, it returns an error `InvalidPage`.
 		///
-		/// If a validator has more than `T::MaxNominatorRewardedPerValidator` nominators backing
+		/// If a validator has more than `T::MaxExposurePageSize` nominators backing
 		/// them, then the list of nominators is paged, with each page being capped at
-		/// `T::MaxNominatorRewardedPerValidator`. If a validator has more than one page of
+		/// `T::MaxExposurePageSize`. If a validator has more than one page of
 		/// nominators, the call needs to be made for each page separately in order for all the
 		/// nominators backing a validator receive the reward. The nominators are not sorted across
 		/// pages and so it should not be assumed the highest staker would be on the topmost page
 		/// and vice versa. If rewards are not claimed in `${HistoryDepth}` eras, they are lost.
 		///
 		/// # <weight>
-		/// - Time complexity: at most O(MaxNominatorRewardedPerValidator).
+		/// - Time complexity: at most O(MaxExposurePageSize).
 		/// - Contains a limited number of reads and writes.
 		/// -----------
 		/// N is the Number of payouts for the validator (including the validator)
@@ -1761,10 +1750,10 @@ pub mod pallet {
 		///   NOTE: weights are assuming that payouts are made to alive stash account (Staked).
 		///   Paying even a dead controller is cheaper weight-wise. We don't do any refunds here.
 		/// # </weight>
+		/// ## Complexity
+		/// - At most O(MaxExposurePageSize).
 		#[pallet::call_index(18)]
-		#[pallet::weight(T::WeightInfo::payout_stakers_alive_staked(
-			T::MaxNominatorRewardedPerValidator::get()
-		))]
+		#[pallet::weight(T::WeightInfo::payout_stakers_alive_staked(T::MaxExposurePageSize::get()))]
 		pub fn payout_stakers(
 			origin: OriginFor<T>,
 			validator_stash: T::AccountId,
@@ -2067,21 +2056,21 @@ pub mod pallet {
 		/// - `validator_stash` is the stash account of the validator.
 		/// - `era` may be any era between `[current_era - history_depth; current_era]`.
 		/// - `page` is the page index of nominators to pay out with value between 0 and
-		///   `num_nominators / T::MaxNominatorRewardedPerValidator`.
+		///   `num_nominators / T::MaxExposurePageSize`.
 		///
 		/// The origin of this call must be _Signed_. Any account can call this function, even if
 		/// it is not one of the stakers.
 		///
-		/// If a validator has more than `T::MaxNominatorRewardedPerValidator` nominators backing
+		/// If a validator has more than `T::MaxExposurePageSize` nominators backing
 		/// them, then the list of nominators is paged, with each page being capped at
-		/// `T::MaxNominatorRewardedPerValidator`. If a validator has more than one page of
+		/// `T::MaxExposurePageSize`. If a validator has more than one page of
 		/// nominators, the call needs to be made for each page separately in order for all the
 		/// nominators backing a validator receive the reward. The nominators are not sorted across
 		/// pages and so it should not be assumed the highest staker would be on the topmost page
 		/// and vice versa. If rewards are not claimed in `${HistoryDepth}` eras, they are lost.
 		///
 		/// # <weight>
-		/// - Time complexity: at most O(MaxNominatorRewardedPerValidator).
+		/// - Time complexity: at most O(MaxExposurePageSize).
 		/// - Contains a limited number of reads and writes.
 		/// -----------
 		/// N is the Number of payouts for the validator (including the validator)
@@ -2093,9 +2082,7 @@ pub mod pallet {
 		///   Paying even a dead controller is cheaper weight-wise. We don't do any refunds here.
 		/// # </weight>
 		#[pallet::call_index(26)]
-		#[pallet::weight(T::WeightInfo::payout_stakers_alive_staked(
-			T::MaxNominatorRewardedPerValidator::get()
-		))]
+		#[pallet::weight(T::WeightInfo::payout_stakers_alive_staked(T::MaxExposurePageSize::get()))]
 		pub fn payout_stakers_by_page(
 			origin: OriginFor<T>,
 			validator_stash: T::AccountId,
