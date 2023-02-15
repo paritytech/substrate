@@ -67,6 +67,8 @@ pub use sp_state_machine::BasicExternalities;
 pub use sp_std;
 #[doc(hidden)]
 pub use tt_call::*;
+#[doc(hidden)]
+pub use sp_core::ConstGet;
 
 #[macro_use]
 pub mod dispatch;
@@ -336,6 +338,12 @@ macro_rules! parameter_types {
 			type Type = $type;
 			fn get() -> $type {
 				Self::get()
+			}
+		}
+
+		impl<_I: From<$type> $(, $ty_params)*> $crate::ConstGet<_I> for $name< $($ty_params),* > {
+			fn get() -> _I {
+				_I::from(Self::get())
 			}
 		}
 	};

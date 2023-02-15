@@ -438,3 +438,11 @@ macro_rules! generate_feature_enabled_macro {
 		}
 	};
 }
+
+/// A trait for querying a single value from a type.
+///
+/// The value should be a constant.
+pub trait ConstGet<T> {
+	/// Return the constant value.
+	fn get() -> T;
+}
