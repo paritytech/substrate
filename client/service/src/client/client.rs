@@ -1741,7 +1741,7 @@ where
 
 	fn runtime_version_at(
 		&self,
-		hash: <Block as BlockT>::Hash,
+		hash: Block::Hash,
 	) -> Result<RuntimeVersion, sp_api::ApiError> {
 		CallExecutor::runtime_version(&self.executor, hash).map_err(Into::into)
 	}

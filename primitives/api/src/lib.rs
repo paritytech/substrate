@@ -539,7 +539,7 @@ pub trait ApiExt<Block: BlockT> {
 	/// Checks if the given api is implemented and versions match.
 	fn has_api<A: RuntimeApiInfo + ?Sized>(
 		&self,
-		at_hash: <Block as BlockT>::Hash,
+		at_hash: Block::Hash,
 	) -> Result<bool, ApiError>
 	where
 		Self: Sized;
@@ -547,7 +547,7 @@ pub trait ApiExt<Block: BlockT> {
 	/// Check if the given api is implemented and the version passes a predicate.
 	fn has_api_with<A: RuntimeApiInfo + ?Sized, P: Fn(u32) -> bool>(
 		&self,
-		at_hash: <Block as BlockT>::Hash,
+		at_hash: Block::Hash,
 		pred: P,
 	) -> Result<bool, ApiError>
 	where
@@ -556,7 +556,7 @@ pub trait ApiExt<Block: BlockT> {
 	/// Returns the version of the given api.
 	fn api_version<A: RuntimeApiInfo + ?Sized>(
 		&self,
-		at_hash: <Block as BlockT>::Hash,
+		at_hash: Block::Hash,
 	) -> Result<Option<u32>, ApiError>
 	where
 		Self: Sized;
@@ -622,7 +622,7 @@ pub trait CallApiAt<Block: BlockT> {
 	/// Returns the runtime version at the given block.
 	fn runtime_version_at(
 		&self,
-		at_hash: <Block as BlockT>::Hash,
+		at_hash: Block::Hash,
 	) -> Result<RuntimeVersion, ApiError>;
 
 	/// Get the state `at` the given block.

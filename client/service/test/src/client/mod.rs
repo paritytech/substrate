@@ -291,14 +291,14 @@ fn client_initializes_from_genesis_ok() {
 	assert_eq!(
 		client
 			.runtime_api()
-			.balance_of(client.chain_info().best_hash, AccountKeyring::Alice.into(),)
+			.balance_of(client.chain_info().best_hash, AccountKeyring::Alice.into())
 			.unwrap(),
 		1000
 	);
 	assert_eq!(
 		client
 			.runtime_api()
-			.balance_of(client.chain_info().best_hash, AccountKeyring::Ferdie.into(),)
+			.balance_of(client.chain_info().best_hash, AccountKeyring::Ferdie.into())
 			.unwrap(),
 		0
 	);
@@ -345,14 +345,14 @@ fn block_builder_works_with_transactions() {
 	assert_eq!(
 		client
 			.runtime_api()
-			.balance_of(client.chain_info().best_hash, AccountKeyring::Alice.into(),)
+			.balance_of(client.chain_info().best_hash, AccountKeyring::Alice.into())
 			.unwrap(),
 		958
 	);
 	assert_eq!(
 		client
 			.runtime_api()
-			.balance_of(client.chain_info().best_hash, AccountKeyring::Ferdie.into(),)
+			.balance_of(client.chain_info().best_hash, AccountKeyring::Ferdie.into())
 			.unwrap(),
 		42
 	);
