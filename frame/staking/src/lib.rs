@@ -466,6 +466,8 @@ pub struct StakingLedger<T: Config> {
 	pub unlocking: BoundedVec<UnlockChunk<BalanceOf<T>>, T::MaxUnlockingChunks>,
 	/// List of eras for which the stakers behind a validator have claimed rewards. Only updated
 	/// for validators.
+	///
+	/// This is deprecated as of V14 and will be removed in future.
 	pub legacy_claimed_rewards: BoundedVec<EraIndex, T::HistoryDepth>,
 }
 
@@ -784,7 +786,7 @@ pub struct ExposurePage<AccountId, Balance: HasCompact> {
 ///
 /// It, in combination with a list of `ExposurePage`s, can be used to reconstruct a full `Exposure`
 /// struct. This is useful for cases where we want to query a single page of `Exposure`s.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo, Default)]
 pub struct ExposureOverview<Balance: HasCompact> {
 	/// The total balance backing this validator.
 	#[codec(compact)]
@@ -794,19 +796,8 @@ pub struct ExposureOverview<Balance: HasCompact> {
 	pub own: Balance,
 	/// Number of nominators backing this validator.
 	pub nominator_count: u32,
-	/// Number of pages of backers.
+	/// Number of pages of nominators.
 	pub page_count: PageIndex,
-}
-
-impl<Balance: Default + HasCompact> Default for ExposureOverview<Balance> {
-	fn default() -> Self {
-		Self {
-			total: Default::default(),
-			own: Default::default(),
-			nominator_count: Default::default(),
-			page_count: Default::default(),
-		}
-	}
 }
 
 /// Extended view of Exposure comprising of `ExposureOverview` and a single page of `ExposurePage`.
