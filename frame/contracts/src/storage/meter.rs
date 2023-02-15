@@ -267,8 +267,8 @@ where
 	/// Absorb a child that was spawned to handle a sub call.
 	///
 	/// This should be called whenever a sub call comes to its end and it is **not** reverted.
-	/// This does the actual balance transfer from/to `origin` and `contract` based on the overall
-	/// storage consumption of the call. It also updates the supplied contract info.
+	/// This does the actual balance transfer from/to `origin` and `deposit_account` based on the
+	/// overall storage consumption of the call. It also updates the supplied contract info.
 	///
 	/// In case a contract reverted the child meter should just be dropped in order to revert
 	/// any changes it recorded.
@@ -277,7 +277,7 @@ where
 	///
 	/// - `absorbed`: The child storage meter that should be absorbed.
 	/// - `origin`: The origin that spawned the original root meter.
-	/// - `contract`: The contract that this sub call belongs to.
+	/// - `deposit_account`: The contract's deposit account that this sub call belongs to.
 	/// - `info`: The info of the contract in question. `None` if the contract was terminated.
 	pub fn absorb(
 		&mut self,
