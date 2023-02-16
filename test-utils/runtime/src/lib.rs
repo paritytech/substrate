@@ -1353,11 +1353,11 @@ mod tests {
 			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
 			.set_heap_pages(8)
 			.build();
-		let at_hash = client.chain_info().best_hash;
+		let best_hash = client.chain_info().best_hash;
 
 		// Try to allocate 1024k of memory on heap. This is going to fail since it is twice larger
 		// than the heap.
-		let ret = client.runtime_api().vec_with_capacity(at_hash, 1048576);
+		let ret = client.runtime_api().vec_with_capacity(best_hash, 1048576);
 		assert!(ret.is_err());
 
 		// Create a block that sets the `:heap_pages` to 32 pages of memory which corresponds to
@@ -1382,9 +1382,9 @@ mod tests {
 		let client =
 			TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
 		let runtime_api = client.runtime_api();
-		let at_hash = client.chain_info().best_hash;
+		let best_hash = client.chain_info().best_hash;
 
-		runtime_api.test_storage(at_hash).unwrap();
+		runtime_api.test_storage(best_hash).unwrap();
 	}
 
 	fn witness_backend() -> (sp_trie::MemoryDB<crate::Hashing>, crate::Hash) {
@@ -1409,8 +1409,8 @@ mod tests {
 		let client =
 			TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
 		let runtime_api = client.runtime_api();
-		let at_hash = client.chain_info().best_hash;
+		let best_hash = client.chain_info().best_hash;
 
-		runtime_api.test_witness(at_hash, proof, root).unwrap();
+		runtime_api.test_witness(best_hash, proof, root).unwrap();
 	}
 }
