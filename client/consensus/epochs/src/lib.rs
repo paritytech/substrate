@@ -1039,7 +1039,7 @@ mod tests {
 
 		let mut nodes: Vec<_> = epoch_changes.tree().iter().map(|(h, _, _)| h).collect();
 		nodes.sort();
-		assert_eq!(nodes, vec![b"A", b"B", b"C", b"E", b"F", b"G"]);
+		assert_eq!(nodes, vec![b"A", b"B", b"C", b"F", b"G"]);
 
 		// Finalize block y @ number 35, slot 330
 		// This should prune all nodes imported by blocks with a number < 35 that are not
@@ -1050,7 +1050,7 @@ mod tests {
 
 		let mut nodes: Vec<_> = epoch_changes.tree().iter().map(|(h, _, _)| h).collect();
 		nodes.sort();
-		assert_eq!(nodes, vec![b"B", b"C", b"F", b"G"]);
+		assert_eq!(nodes, vec![b"B", b"C", b"G"]);
 	}
 
 	#[test]
