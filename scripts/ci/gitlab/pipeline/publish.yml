@@ -55,7 +55,7 @@
     - .kubernetes-env
     - .publish-refs
   variables:
-    CI_IMAGE:                      paritytech/docker-description
+    CI_IMAGE:                      paritytech/dockerhub-description
     DOCKERHUB_REPOSITORY:          parity/$PRODUCT
     DOCKER_USERNAME:               $Docker_Hub_User_Parity
     DOCKER_PASSWORD:               $Docker_Hub_Pass_Parity
