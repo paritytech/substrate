@@ -59,15 +59,8 @@ use super::{Call, Config, Pallet, LOG_TARGET};
 /// using existing subsystems that are part of frame (type bounds described
 /// below) and will dispatch to them directly, it's only purpose is to wire all
 /// subsystems together.
-pub struct EquivocationHandler<T, R, L> {
-	_phantom: sp_std::marker::PhantomData<(T, R, L)>,
-}
-
-impl<T, R, L> Default for EquivocationHandler<T, R, L> {
-	fn default() -> Self {
-		Self { _phantom: Default::default() }
-	}
-}
+#[derive(Default)]
+pub struct EquivocationHandler<T, R, L>(sp_std::marker::PhantomData<(T, R, L)>);
 
 // We use the authorship pallet to fetch the current block author and use
 // `offchain::SendTransactionTypes` for unsigned extrinsic creation and
@@ -119,6 +112,24 @@ where
 	fn block_author() -> Option<Self::AccountId> {
 		<pallet_authorship::Pallet<T>>::author()
 	}
+}
+
+struct NullHandler<T>(sp_std::marker::PhantomData<T>);
+
+impl<T: Config> EquivocationHandlerT for NullHandler<T> {
+	type ReportLongevity = ();
+
+	type AccountId = T::AccountId;
+
+	type KeyOwnerIdentification = T::KeyOwnerIdentification;
+
+	type Offence = GrandpaEquivocationOffence<Self::KeyOwnerIdentification>;
+
+	type EquivocationProof = EquivocationProof<T::Hash, T::BlockNumber>;
+
+	type KeyOwnerProof = T::KeyOwnerProof;
+
+	type ReportOffence = ();
 }
 
 /// A round number and set id which point on the time of an offence.

@@ -55,15 +55,8 @@ use crate::{Call, Config, Pallet, LOG_TARGET};
 /// using existing subsystems that are part of frame (type bounds described
 /// below) and will dispatch to them directly, it's only purpose is to wire all
 /// subsystems together.
-pub struct EquivocationHandler<I, R, L> {
-	_phantom: sp_std::marker::PhantomData<(I, R, L)>,
-}
-
-impl<I, R, L> Default for EquivocationHandler<I, R, L> {
-	fn default() -> Self {
-		Self { _phantom: Default::default() }
-	}
-}
+#[derive(Default)]
+pub struct EquivocationHandler<I, R, L>(sp_std::marker::PhantomData<(I, R, L)>);
 
 // We use the authorship pallet to fetch the current block author and use
 // `offchain::SendTransactionTypes` for unsigned extrinsic creation and
@@ -116,6 +109,24 @@ where
 	fn block_author() -> Option<T::AccountId> {
 		<pallet_authorship::Pallet<T>>::author()
 	}
+}
+
+struct NullHandler<T>(sp_std::marker::PhantomData<T>);
+
+impl<T: Config> EquivocationHandlerT for NullHandler<T> {
+	type ReportLongevity = ();
+
+	type AccountId = T::AccountId;
+
+	type KeyOwnerIdentification = T::KeyOwnerIdentification;
+
+	type Offence = BabeEquivocationOffence<Self::KeyOwnerIdentification>;
+
+	type EquivocationProof = EquivocationProof<T::Header>;
+
+	type KeyOwnerProof = T::KeyOwnerProof;
+
+	type ReportOffence = ();
 }
 
 /// Methods for the `ValidateUnsigned` implementation:

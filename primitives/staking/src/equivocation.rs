@@ -1,6 +1,6 @@
 use crate::offence::{Offence, OffenceError, ReportOffence};
 use sp_core::Get;
-use sp_runtime::{DispatchError, DispatchResult};
+use sp_runtime::DispatchResult;
 use sp_std::vec::Vec;
 
 pub trait EquivocationHandler {
@@ -39,7 +39,7 @@ pub trait EquivocationHandler {
 		_equivocation_proof: Self::EquivocationProof,
 		_key_owner_proof: Self::KeyOwnerProof,
 	) -> DispatchResult {
-		Err(DispatchError::Other("Not implemented"))
+		Ok(())
 	}
 
 	/// Fetch the current block author id, if defined.
@@ -47,19 +47,3 @@ pub trait EquivocationHandler {
 		None
 	}
 }
-
-// impl<T: Offence<Id>, Id> EquivocationHandler for () {
-// 	type ReportLongevity = ();
-
-// 	type AccountId = ();
-
-// 	type Offence = T; // Offence<Self::KeyOwnerIdentification>;
-
-// 	type KeyOwnerIdentification = Id;
-
-// 	type EquivocationProof = ();
-
-// 	type KeyOwnerProof = ();
-
-// 	type ReportOffence = ();
-// }
