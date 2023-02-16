@@ -64,7 +64,6 @@ pub struct EquivocationHandler<I, R, L>(sp_std::marker::PhantomData<(I, R, L)>);
 impl<T, R, L> EquivocationHandlerT for EquivocationHandler<T, R, L>
 where
 	T: Config + pallet_authorship::Config + frame_system::offchain::SendTransactionTypes<Call<T>>,
-
 	R: ReportOffence<
 		T::AccountId,
 		T::KeyOwnerIdentification,
@@ -72,19 +71,19 @@ where
 	>,
 	L: Get<u64>,
 {
-	type ReportLongevity = L;
+	type ReporterId = T::AccountId;
 
-	type AccountId = T::AccountId;
+	type OffenderId = T::KeyOwnerIdentification;
 
-	type KeyOwnerIdentification = T::KeyOwnerIdentification;
-
-	type Offence = BabeEquivocationOffence<Self::KeyOwnerIdentification>;
+	type Offence = BabeEquivocationOffence<Self::OffenderId>;
 
 	type EquivocationProof = EquivocationProof<T::Header>;
 
 	type KeyOwnerProof = T::KeyOwnerProof;
 
 	type ReportOffence = R;
+
+	type ReportLongevity = L;
 
 	fn submit_unsigned_equivocation_report(
 		equivocation_proof: Self::EquivocationProof,
@@ -114,19 +113,19 @@ where
 struct NullHandler<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config> EquivocationHandlerT for NullHandler<T> {
-	type ReportLongevity = ();
+	type ReporterId = T::AccountId;
 
-	type AccountId = T::AccountId;
+	type OffenderId = T::KeyOwnerIdentification;
 
-	type KeyOwnerIdentification = T::KeyOwnerIdentification;
-
-	type Offence = BabeEquivocationOffence<Self::KeyOwnerIdentification>;
+	type Offence = BabeEquivocationOffence<Self::OffenderId>;
 
 	type EquivocationProof = EquivocationProof<T::Header>;
 
 	type KeyOwnerProof = T::KeyOwnerProof;
 
 	type ReportOffence = ();
+
+	type ReportLongevity = ();
 }
 
 /// Methods for the `ValidateUnsigned` implementation:

@@ -4,32 +4,32 @@ use sp_runtime::DispatchResult;
 use sp_std::vec::Vec;
 
 pub trait EquivocationHandler {
-	/// The longevity, in blocks, that the equivocation report is valid for. When using the staking
-	/// pallet this should be equal to the bonding duration (in blocks, not eras).
-	type ReportLongevity: Get<u64>;
+	type ReporterId;
 
-	type AccountId;
-
-	type Offence: Offence<Self::KeyOwnerIdentification>;
-
-	type KeyOwnerIdentification;
+	type OffenderId;
 
 	type EquivocationProof;
 
 	type KeyOwnerProof;
 
-	type ReportOffence: ReportOffence<Self::AccountId, Self::KeyOwnerIdentification, Self::Offence>;
+	type Offence: Offence<Self::OffenderId>;
+
+	type ReportOffence: ReportOffence<Self::ReporterId, Self::OffenderId, Self::Offence>;
+
+	/// The longevity, in blocks, that the equivocation report is valid for. When using the staking
+	/// pallet this should be equal to the bonding duration (in blocks, not eras).
+	type ReportLongevity: Get<u64>;
 
 	fn report_offence(
-		reporters: Vec<Self::AccountId>,
+		reporters: Vec<Self::ReporterId>,
 		offence: Self::Offence,
 	) -> Result<(), OffenceError> {
 		Self::ReportOffence::report_offence(reporters, offence)
 	}
 
 	fn is_known_offence(
-		offenders: &[Self::KeyOwnerIdentification],
-		time_slot: &<Self::Offence as Offence<Self::KeyOwnerIdentification>>::TimeSlot,
+		offenders: &[Self::OffenderId],
+		time_slot: &<Self::Offence as Offence<Self::OffenderId>>::TimeSlot,
 	) -> bool {
 		Self::ReportOffence::is_known_offence(offenders, time_slot)
 	}
@@ -43,7 +43,7 @@ pub trait EquivocationHandler {
 	}
 
 	/// Fetch the current block author id, if defined.
-	fn block_author() -> Option<Self::AccountId> {
+	fn block_author() -> Option<Self::ReporterId> {
 		None
 	}
 }

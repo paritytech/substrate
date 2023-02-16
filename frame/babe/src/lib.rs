@@ -173,9 +173,9 @@ pub mod pallet {
 		/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
 		/// definition.
 		type HandleEquivocation: EquivocationHandlerT<
-			AccountId = Self::AccountId,
+			ReporterId = Self::AccountId,
+			OffenderId = Self::KeyOwnerIdentification,
 			KeyOwnerProof = Self::KeyOwnerProof,
-			KeyOwnerIdentification = Self::KeyOwnerIdentification,
 			Offence = BabeEquivocationOffence<Self::KeyOwnerIdentification>,
 			EquivocationProof = EquivocationProof<Self::Header>,
 		>;
