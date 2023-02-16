@@ -155,7 +155,12 @@ pub mod pallet {
 		/// The next cycle begins.
 		Registered { who: T::AccountId, amount: BalanceOf<T, I> },
 		/// A payment happened.
-		Paid { who: T::AccountId, amount: BalanceOf<T, I>, id: <T::Paymaster as Pay>::Id },
+		Paid {
+			who: T::AccountId,
+			beneficiary: T::AccountId,
+			amount: BalanceOf<T, I>,
+			id: <T::Paymaster as Pay>::Id,
+		},
 		/// The next cycle begins.
 		CycleStarted { index: CycleIndexOf<T> },
 	}
@@ -281,7 +286,10 @@ pub mod pallet {
 		/// - `origin`: A `Signed` origin of an account which is a member of `Members`.
 		#[pallet::weight(T::WeightInfo::add_member())]
 		#[pallet::call_index(3)]
-		pub fn payout(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		pub fn payout(
+			origin: OriginFor<T>,
+			beneficiary: T::AccountId,
+		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
 			let mut status = Status::<T, I>::get().ok_or(Error::<T, I>::NotStarted)?;
@@ -326,12 +334,13 @@ pub mod pallet {
 			claimant.unpaid = None;
 			claimant.last_active = status.cycle_index;
 
-			let id = T::Paymaster::pay(&who, payout).map_err(|()| Error::<T, I>::PayError)?;
+			let id =
+				T::Paymaster::pay(&beneficiary, payout).map_err(|()| Error::<T, I>::PayError)?;
 
 			Claimant::<T, I>::insert(&who, &claimant);
 			Status::<T, I>::put(&status);
 
-			Self::deposit_event(Event::<T, I>::Paid { who, amount: payout, id });
+			Self::deposit_event(Event::<T, I>::Paid { who, beneficiary, amount: payout, id });
 			Ok(Pays::No.into())
 		}
 	}
