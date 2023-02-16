@@ -69,7 +69,7 @@ pub mod pallet {
 		/// Authority identifier type
 		type BeefyId: Member
 			+ Parameter
-			// todo: use custom signature hashing type
+			// todo: use custom signature hashing type instead of hardcoded `Keccak256`
 			+ BeefyAuthorityId<sp_runtime::traits::Keccak256>
 			+ MaybeSerializeDeserialize
 			+ MaxEncodedLen;

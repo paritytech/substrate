@@ -980,6 +980,7 @@ cfg_if! {
 				fn validator_set() -> Option<beefy_primitives::ValidatorSet<beefy_primitives::crypto::AuthorityId>> {
 					None
 				}
+
 				fn submit_report_equivocation_unsigned_extrinsic(
 					_equivocation_proof: beefy_primitives::EquivocationProof<
 						NumberFor<Block>,

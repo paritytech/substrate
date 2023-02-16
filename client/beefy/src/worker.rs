@@ -935,14 +935,7 @@ where
 		let (validators, validator_set_id) = (rounds.validators(), rounds.validator_set_id());
 		let offender_id = proof.offender_id().clone();
 
-		if proof.set_id() != validator_set_id {
-			debug!(
-				target: LOG_TARGET,
-				"🥩 Skip equivocation report for old set id: {:?}",
-				proof.set_id()
-			);
-			return Ok(())
-		} else if !check_equivocation_proof::<_, _, BeefySignatureHasher>(&proof) {
+		if !check_equivocation_proof::<_, _, BeefySignatureHasher>(&proof) {
 			debug!(target: LOG_TARGET, "🥩 Skip report for bad equivocation {:?}", proof);
 			return Ok(())
 		} else if let Some(local_id) = self.key_store.authority_id(validators) {
