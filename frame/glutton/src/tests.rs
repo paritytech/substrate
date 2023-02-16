@@ -47,7 +47,7 @@ fn initialize_pallet_works() {
 #[test]
 fn setting_compute_works() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(Compute::<Test>::get(), Perbill::from_percent(50));
+		assert_eq!(Compute::<Test>::get(), Perbill::from_percent(0));
 
 		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), Perbill::from_percent(70)));
 		assert_eq!(Compute::<Test>::get(), Perbill::from_percent(70));
@@ -69,7 +69,7 @@ fn setting_compute_works() {
 #[test]
 fn setting_storage_works() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(Storage::<Test>::get(), Perbill::from_percent(50));
+		assert_eq!(Storage::<Test>::get(), Perbill::from_percent(0));
 
 		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), Perbill::from_percent(30)));
 		assert_eq!(Storage::<Test>::get(), Perbill::from_percent(30));

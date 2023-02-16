@@ -21,10 +21,10 @@
 use grandpa_primitives::AuthorityId as GrandpaId;
 use kitchensink_runtime::{
 	constants::currency::*, wasm_binary_unwrap, AuthorityDiscoveryConfig, BabeConfig,
-	BalancesConfig, Block, CouncilConfig, DemocracyConfig, ElectionsConfig, GluttonConfig,
-	GrandpaConfig, ImOnlineConfig, IndicesConfig, MaxNominations, NominationPoolsConfig,
-	SessionConfig, SessionKeys, SocietyConfig, StakerStatus, StakingConfig, SudoConfig,
-	SystemConfig, TechnicalCommitteeConfig,
+	BalancesConfig, Block, CouncilConfig, DemocracyConfig, ElectionsConfig, GrandpaConfig,
+	ImOnlineConfig, IndicesConfig, MaxNominations, NominationPoolsConfig, SessionConfig,
+	SessionKeys, SocietyConfig, StakerStatus, StakingConfig, SudoConfig, SystemConfig,
+	TechnicalCommitteeConfig,
 };
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use sc_chain_spec::ChainSpecExtension;
@@ -371,10 +371,6 @@ pub fn testnet_genesis(
 			min_create_bond: 10 * DOLLARS,
 			min_join_bond: 1 * DOLLARS,
 			..Default::default()
-		},
-		glutton: GluttonConfig {
-			compute: Perbill::from_percent(0),
-			storage: Perbill::from_percent(0),
 		},
 	}
 }

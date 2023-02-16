@@ -76,29 +76,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type TrashData<T: Config> = StorageMap<_, Blake2_128Concat, u32, u32, OptionQuery>;
 
-	#[pallet::genesis_config]
-	pub struct GenesisConfig {
-		/// The initial percentage of the `ref_time` to waste.
-		pub compute: Perbill,
-		/// The initial percentage of the `proof_size` to consume.
-		pub storage: Perbill,
-	}
-
-	#[cfg(feature = "std")]
-	impl Default for GenesisConfig {
-		fn default() -> Self {
-			Self { compute: Default::default(), storage: Default::default() }
-		}
-	}
-
-	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
-		fn build(&self) {
-			Compute::<T>::set(self.compute);
-			Storage::<T>::set(self.storage);
-		}
-	}
-
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn integrity_test() {
@@ -143,6 +120,7 @@ pub mod pallet {
 				}
 			}
 
+			// Now we waste ref time.
 			Self::waste_at_most_ref_time(&mut meter);
 			meter.consumed
 		}
@@ -208,7 +186,6 @@ pub mod pallet {
 		///
 		/// Tries to come as close to the limit as possible.
 		pub(crate) fn waste_at_most_ref_time(meter: &mut WeightMeter) {
-			// Now we waste ref time.
 			let mut clobber = vec![0u8; 64]; // There isn't a previous result.
 			while meter.can_accrue(T::WeightInfo::waste_ref_time_iter()) {
 				clobber = Self::waste_ref_time_iter(clobber);

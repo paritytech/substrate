@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use frame_support::{pallet_prelude::Weight, traits::Hooks, weights::constants::*};
-use kitchensink_runtime::{Glutton, Runtime, System, RuntimeOrigin};
+use kitchensink_runtime::{Glutton, Runtime, RuntimeOrigin, System};
 use pallet_glutton::WeightInfo;
 use sp_runtime::Perbill;
 
