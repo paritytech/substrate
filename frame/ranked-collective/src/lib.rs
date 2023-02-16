@@ -633,8 +633,9 @@ pub mod pallet {
 
 		/// Promotes a member in the ranked collective into the next role.
 		///
-		/// A `maybe_max_rank` may be provided to check that the member does not get promoted beyond
-		/// a certain rank. Is `None` is provided, then the rank will be incremented without checks.
+		/// A `maybe_max_rank` may be provided to check that the rank of `who` is not higher than
+		/// a given `maybe_max_rank`, otherwise fails with `NoPermission` error. if `None` is
+		/// provided, then the rank of `who` will be incremented without the check.
 		pub fn do_promote_member(
 			who: T::AccountId,
 			maybe_max_rank: Option<Rank>,
@@ -666,8 +667,9 @@ pub mod pallet {
 		/// Decrement the rank of an existing member by one. If the member is already at rank zero,
 		/// then it is removed entirely.
 		///
-		/// A `maybe_max_rank` may be provided to check that the member does not get demoted beyond
-		/// a certain rank. Is `None` is provided, then the rank will be decremented without checks.
+		/// A `maybe_max_rank` may be provided to check that the rank of `who` is not higher than
+		/// a given `maybe_max_rank`, otherwise fails with `NoPermission` error. if `None` is
+		/// provided, then the rank of `who` will be decremented without the check.
 		pub fn do_demote_member(who: T::AccountId, maybe_max_rank: Option<Rank>) -> DispatchResult {
 			let mut record = Self::ensure_member(&who)?;
 			let rank = record.rank;
@@ -692,8 +694,9 @@ pub mod pallet {
 
 		/// Remove the member entirely.
 		///
-		/// A `maybe_max_rank` may be provided to check that the member does not get removed from
-		/// a certain rank. if `None` is provided, then the rank will be decremented without checks.
+		/// A `maybe_max_rank` may be provided to check that the rank of `who` is not higher than
+		/// a given `maybe_max_rank`, otherwise fails with `NoPermission` error. if `None` is
+		/// provided, then `who` will be removed from any rank without the check.
 		pub fn do_remove_member(who: T::AccountId, maybe_max_rank: Option<Rank>) -> DispatchResult {
 			let MemberRecord { rank, .. } = Self::ensure_member(&who)?;
 			if let Some(max_rank) = maybe_max_rank {
