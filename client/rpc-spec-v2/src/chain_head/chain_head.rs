@@ -55,7 +55,8 @@ use sp_blockchain::{
 use sp_core::{hexdisplay::HexDisplay, storage::well_known_keys, Bytes};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Header},
+	traits::{Block as BlockT, Header, One},
+	Saturating,
 };
 use std::{collections::HashSet, marker::PhantomData, sync::Arc};
 
@@ -356,6 +357,7 @@ async fn submit_events<EventStream, BE, Block, Client>(
 				&mut to_ignore,
 				&data.start_info,
 				&mut best_block_cache,
+				data.runtime_updates,
 			),
 		};
 
@@ -389,6 +391,61 @@ async fn submit_events<EventStream, BE, Block, Client>(
 	debug!(target: LOG_TARGET, "[follow][id={:?}] Subscription removed", sub_id);
 }
 
+/// Generate the "NewBlock" event and potentially the "BestBlockChanged" event for the
+/// given block hash.
+fn generate_import_event<Client, Block>(
+	client: &Arc<Client>,
+	runtime_updates: bool,
+	block_hash: Block::Hash,
+	parent_block_hash: Block::Hash,
+	is_best_block: bool,
+	best_block_cache: &mut Option<Block::Hash>,
+) -> Vec<FollowEvent<Block::Hash>>
+where
+	Block: BlockT + 'static,
+	Client: CallApiAt<Block> + 'static,
+{
+	let new_runtime = generate_runtime_event(
+		&client,
+		runtime_updates,
+		&BlockId::Hash(block_hash),
+		Some(&BlockId::Hash(parent_block_hash)),
+	);
+
+	// Note: `Block::Hash` will serialize to hexadecimal encoded string.
+	let new_block = FollowEvent::NewBlock(NewBlock {
+		block_hash,
+		parent_block_hash,
+		new_runtime,
+		runtime_updates,
+	});
+
+	if !is_best_block {
+		return vec![new_block]
+	}
+
+	// If this is the new best block, then we need to generate two events.
+	let best_block_event =
+		FollowEvent::BestBlockChanged(BestBlockChanged { best_block_hash: block_hash });
+
+	match *best_block_cache {
+		Some(block_cache) => {
+			// The RPC layer has not reported this block as best before.
+			// Note: This handles the race with the finalized branch.
+			if block_cache != block_hash {
+				*best_block_cache = Some(block_hash);
+				vec![new_block, best_block_event]
+			} else {
+				vec![new_block]
+			}
+		},
+		None => {
+			*best_block_cache = Some(block_hash);
+			vec![new_block, best_block_event]
+		},
+	}
+}
+
 /// Generate the "NewBlock" event and potentially the "BestBlockChanged" event for
 /// every notification.
 fn handle_import_blocks<Client, Block>(
@@ -402,52 +459,23 @@ where
 	Block: BlockT + 'static,
 	Client: CallApiAt<Block> + 'static,
 {
+	println!("New Block event: {:?}", notification.hash);
 	let is_new_pin = handle.pin_block(notification.hash)?;
 	// TODO: Also check number >= init info
 	if !is_new_pin {
-		// The block was already pinned by the initial block event in `generate_initial_events`.
+		// The block was already pinned by the initial block event in `generate_initial_events`,
+		// or by the finalized event in `handle_finalized_blocks`.
 		return Ok(vec![])
 	}
 
-	let new_runtime = generate_runtime_event(
-		&client,
+	Ok(generate_import_event(
+		client,
 		runtime_updates,
-		&BlockId::Hash(notification.hash),
-		Some(&BlockId::Hash(*notification.header.parent_hash())),
-	);
-
-	// Note: `Block::Hash` will serialize to hexadecimal encoded string.
-	let new_block = FollowEvent::NewBlock(NewBlock {
-		block_hash: notification.hash,
-		parent_block_hash: *notification.header.parent_hash(),
-		new_runtime,
-		runtime_updates,
-	});
-
-	if !notification.is_new_best {
-		return Ok(vec![new_block])
-	}
-
-	// If this is the new best block, then we need to generate two events.
-	let best_block_event =
-		FollowEvent::BestBlockChanged(BestBlockChanged { best_block_hash: notification.hash });
-
-	match *best_block_cache {
-		Some(block_cache) => {
-			// The RPC layer has not reported this block as best before.
-			// Note: This handles the race with the finalized branch.
-			if block_cache != notification.hash {
-				*best_block_cache = Some(notification.hash);
-				Ok(vec![new_block, best_block_event])
-			} else {
-				Ok(vec![new_block])
-			}
-		},
-		None => {
-			*best_block_cache = Some(notification.hash);
-			Ok(vec![new_block, best_block_event])
-		},
-	}
+		notification.hash,
+		*notification.header.parent_hash(),
+		notification.is_new_best,
+		best_block_cache,
+	))
 }
 
 /// Generate the "Finalized" event and potentially the "BestBlockChanged" for
@@ -459,26 +487,73 @@ fn handle_finalized_blocks<Client, Block>(
 	to_ignore: &mut HashSet<Block::Hash>,
 	start_info: &Info<Block>,
 	best_block_cache: &mut Option<Block::Hash>,
+	runtime_updates: bool,
 ) -> Result<Vec<FollowEvent<Block::Hash>>, SubscriptionManagementError>
 where
 	Block: BlockT + 'static,
-	Client: HeaderBackend<Block> + HeaderMetadata<Block, Error = BlockChainError> + 'static,
+	Client: HeaderBackend<Block>
+		+ HeaderMetadata<Block, Error = BlockChainError>
+		+ CallApiAt<Block>
+		+ 'static,
 {
+	println!("Finalized block event: {:?}", notification.hash);
 	let last_finalized = notification.hash;
-	let finalized_number = client.number(last_finalized.clone()).unwrap().unwrap();
+	let Some(finalized_number) = client.number(last_finalized)? else {
+		return Err(SubscriptionManagementError::Custom("Block number not present in the database".into()))
+	};
+
 	// Check if the finalized hash has been reported by the initial events.
 	if finalized_number < start_info.finalized_number {
 		return Ok(vec![])
 	}
 
-	// We might not receive all new blocks reports, also pin the block here.
-	handle.pin_block(last_finalized)?;
+	let mut events = Vec::new();
 
 	// The tree route contains the exclusive path from the last finalized block
 	// to the block reported by the notification. Ensure the finalized block is
 	// properly reported to that path.
 	let mut finalized_block_hashes = notification.tree_route.iter().cloned().collect::<Vec<_>>();
 	finalized_block_hashes.push(last_finalized);
+
+	// Find the parent hash of the first element from the vector such that
+	// we can group (finalized_hash, parent_hash) for the event generation.
+	let first_parent_hash = {
+		let hash = finalized_block_hashes.get(0).expect("Finalized hash was included; qed");
+		let Some(number) = client.number(*hash)? else {
+			return Err(SubscriptionManagementError::Custom("Block number not present in the database".into()))
+		};
+		let Some(parent) = client.hash(number.saturating_sub(One::one()))? else {
+			return Err(SubscriptionManagementError::Custom("Block hash not present in the database".into()))
+		};
+		// The parent of the finalized block hash was not reported by the `chianHead`.
+		if !handle.contains_block(&parent) {
+			return Err(SubscriptionManagementError::Custom(
+				"Parent of the finalized is missing".into(),
+			))
+		}
+
+		parent
+	};
+
+	let parents = std::iter::once(&first_parent_hash).chain(finalized_block_hashes.iter());
+	for (hash, parent) in finalized_block_hashes.iter().zip(parents) {
+		// We have reported this block before.
+		if !handle.pin_block(*hash)? {
+			continue
+		}
+
+		// This is the first time we see this block. We must generate the
+		// `NewBlock` event. Additionally, for the last event, we must
+		// also generate the `BestBlock` event.
+		events.extend(generate_import_event(
+			client,
+			runtime_updates,
+			*hash,
+			*parent,
+			*hash == last_finalized,
+			best_block_cache,
+		));
+	}
 
 	// Report all pruned blocks from the notification that are not
 	// part of the `pruned_forks`.
@@ -501,7 +576,8 @@ where
 			// Check if the current best block is also reported as pruned.
 			let reported_pruned = pruned_block_hashes.iter().find(|&&hash| hash == block_cache);
 			if reported_pruned.is_none() {
-				return Ok(vec![finalized_event])
+				events.push(finalized_event);
+				return Ok(events)
 			}
 
 			// The best block is reported as pruned. Therefore, we need to signal a new
@@ -513,7 +589,8 @@ where
 				// step of the finalization and it should be up to date.
 				// If the info is outdated, there is nothing the RPC can do for now.
 				error!(target: LOG_TARGET, "Client does not contain different best block");
-				Ok(vec![finalized_event])
+				events.push(finalized_event);
+				Ok(events)
 			} else {
 				let ancestor = sp_blockchain::lowest_common_ancestor(
 					&**client,
@@ -537,10 +614,14 @@ where
 				*best_block_cache = Some(best_block_hash);
 				let best_block_event =
 					FollowEvent::BestBlockChanged(BestBlockChanged { best_block_hash });
-				Ok(vec![best_block_event, finalized_event])
+				events.extend([best_block_event, finalized_event]);
+				Ok(events)
 			}
 		},
-		None => Ok(vec![finalized_event]),
+		None => {
+			events.push(finalized_event);
+			Ok(events)
+		},
 	}
 }
 

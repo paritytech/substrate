@@ -20,6 +20,7 @@
 
 use futures::channel::oneshot;
 use parking_lot::RwLock;
+use sp_blockchain::Error;
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	collections::{hash_map::Entry, HashMap, HashSet},
@@ -33,8 +34,16 @@ pub enum SubscriptionManagementError {
 	/// the subscription has exceeded the maximum number
 	/// of blocks pinned.
 	ExceededLimits,
+	/// Error originated from the blockchain (client or backend).
+	Blockchain(Error),
 	/// Custom error.
 	Custom(String),
+}
+
+impl From<Error> for SubscriptionManagementError {
+	fn from(err: Error) -> Self {
+		SubscriptionManagementError::Blockchain(err)
+	}
 }
 
 /// Inner subscription data structure.
