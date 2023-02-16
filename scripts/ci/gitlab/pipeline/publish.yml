@@ -61,7 +61,7 @@
     DOCKER_PASSWORD:               $Docker_Hub_Pass_Parity
     README_FILEPATH:               $CI_PROJECT_DIR/scripts/ci/docker/$PRODUCT.Dockerfile.README.md
   script:
-    - echo # Dummy command to satisfy GitLab CI linter.
+    - cd / && sh entrypoint.sh
 
 # publish image to docker.io/paritypr, (e.g. for later use in zombienet testing)
 .build-push-image-temporary:
