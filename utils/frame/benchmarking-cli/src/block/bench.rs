@@ -92,8 +92,8 @@ where
 
 		for i in self.params.from..=self.params.to {
 			let block_num = BlockId::Number(i.into());
-			let consumed = self.consumed_weight(&block_num)?;
 			let hash = self.client.expect_block_hash_from_id(&block_num)?;
+			let consumed = self.consumed_weight(hash)?;
 
 			let block = self.client.block(hash)?.ok_or(format!("Block {} not found", block_num))?;
 			let block = self.unsealed(block.block);
@@ -130,7 +130,7 @@ where
 	///
 	/// This is the post-dispatch corrected weight and is only available
 	/// after executing the block.
-	fn consumed_weight(&self, block: &BlockId<Block>) -> Result<NanoSeconds> {
+	fn consumed_weight(&self, block_hash: Block::Hash) -> Result<NanoSeconds> {
 		// Hard-coded key for System::BlockWeight. It could also be passed in as argument
 		// for the benchmark, but I think this should work as well.
 		let hash = array_bytes::hex2bytes(
@@ -138,11 +138,10 @@ where
 		)?;
 		let key = StorageKey(hash);
 
-		let block_hash = self.client.expect_block_hash_from_id(block)?;
 		let mut raw_weight = &self
 			.client
 			.storage(block_hash, &key)?
-			.ok_or(format!("Could not find System::BlockWeight for block: {}", block))?
+			.ok_or(format!("Could not find System::BlockWeight for block: {}", block_hash))?
 			.0[..];
 
 		let weight = ConsumedWeight::decode_all(&mut raw_weight)?;
