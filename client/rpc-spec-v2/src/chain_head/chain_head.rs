@@ -290,15 +290,12 @@ where
 	BE: Backend<Block> + 'static,
 {
 	let blockchain = backend.blockchain();
-	let leaves = blockchain
-		.leaves()
-		.map_err(|err| SubscriptionManagementError::Custom(err.to_string()))?;
+	let leaves = blockchain.leaves()?;
 	let finalized = info.finalized_hash;
 	let mut pruned_forks = HashSet::new();
 	let mut finalized_block_descendants = Vec::new();
 	for leaf in leaves {
-		let tree_route = sp_blockchain::tree_route(blockchain, finalized, leaf)
-			.map_err(|err| SubscriptionManagementError::Custom(err.to_string()))?;
+		let tree_route = sp_blockchain::tree_route(blockchain, finalized, leaf)?;
 
 		let blocks = tree_route.enacted().iter().map(|block| block.hash);
 		if !tree_route.retracted().is_empty() {
@@ -332,6 +329,7 @@ async fn submit_events<EventStream, BE, Block, Client>(
 		+ HeaderBackend<Block>
 		+ HeaderMetadata<Block, Error = BlockChainError>
 		+ 'static,
+	BE: Backend<Block> + 'static,
 {
 	let mut stream_item = stream.next();
 	let mut stop_event = data.rx_stop;
@@ -358,6 +356,7 @@ async fn submit_events<EventStream, BE, Block, Client>(
 				&data.start_info,
 				&mut best_block_cache,
 				data.runtime_updates,
+				&data.backend,
 			),
 		};
 
@@ -480,7 +479,7 @@ where
 
 /// Generate the "Finalized" event and potentially the "BestBlockChanged" for
 /// every notification.
-fn handle_finalized_blocks<Client, Block>(
+fn handle_finalized_blocks<Client, Block, BE>(
 	client: &Arc<Client>,
 	handle: &SubscriptionHandle<Block>,
 	notification: FinalityNotification<Block>,
@@ -488,8 +487,10 @@ fn handle_finalized_blocks<Client, Block>(
 	start_info: &Info<Block>,
 	best_block_cache: &mut Option<Block::Hash>,
 	runtime_updates: bool,
+	backend: &Arc<BE>,
 ) -> Result<Vec<FollowEvent<Block::Hash>>, SubscriptionManagementError>
 where
+	BE: Backend<Block> + 'static,
 	Block: BlockT + 'static,
 	Client: HeaderBackend<Block>
 		+ HeaderMetadata<Block, Error = BlockChainError>
@@ -556,14 +557,24 @@ where
 	}
 
 	// Report all pruned blocks from the notification that are not
-	// part of the `pruned_forks`.
+	// part of the fork we need to ignore.
 	let pruned_block_hashes: Vec<_> = {
-		notification
-			.stale_heads
-			.iter()
-			.filter(|hash| !to_ignore.remove(&hash))
-			.cloned()
-			.collect()
+		let blockchain = backend.blockchain();
+		let mut pruned = Vec::new();
+		for stale_head in notification.stale_heads.iter() {
+			// Find the path from the canonical chain to the stale head.
+			let tree_route = sp_blockchain::tree_route(blockchain, last_finalized, *stale_head)?;
+
+			// Collect only blocks that are not part of the canonical chain.
+			pruned.extend(
+				tree_route
+					.enacted()
+					.iter()
+					.filter_map(|block| (!to_ignore.remove(&block.hash)).then(|| block.hash)),
+			)
+		}
+
+		pruned
 	};
 
 	let finalized_event =
