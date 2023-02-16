@@ -53,7 +53,6 @@ use sp_consensus::BlockOrigin;
 use sp_core::{blake2_256, ed25519, sr25519, traits::SpawnNamed, ExecutionContext, Pair, Public};
 use sp_inherents::InherentData;
 use sp_runtime::{
-	generic::BlockId,
 	traits::{Block as BlockT, IdentifyAccount, Verify},
 	OpaqueExtrinsic,
 };
@@ -277,7 +276,7 @@ impl<'a> BlockContentIterator<'a> {
 		let runtime_version = client
 			.runtime_version_at(genesis_hash)
 			.expect("There should be runtime version at 0");
-    
+
 		BlockContentIterator { iteration: 0, content, keyring, runtime_version, genesis_hash }
 	}
 }
@@ -441,7 +440,7 @@ impl BenchDb {
 		client
 			.runtime_api()
 			.inherent_extrinsics_with_context(
-				client.info().genesis_hash,
+				client.chain_info().genesis_hash,
 				ExecutionContext::BlockConstruction,
 				inherent_data,
 			)
