@@ -3097,8 +3097,8 @@ benchmarks! {
 		{
 			let weight_limit = T::DeletionWeightLimit::get();
 			let max_queue_depth = T::DeletionQueueDepth::get() as usize;
-			let empty_queue_throughput = Storage::<T>::deletion_budget(0, weight_limit);
-			let full_queue_throughput = Storage::<T>::deletion_budget(max_queue_depth, weight_limit);
+			let empty_queue_throughput = ContractInfo::<T>::deletion_budget(0, weight_limit);
+			let full_queue_throughput = ContractInfo::<T>::deletion_budget(max_queue_depth, weight_limit);
 			println!("{:#?}", Schedule::<T>::default());
 			println!("###############################################");
 			println!("Lazy deletion weight per key: {}", empty_queue_throughput.0);
