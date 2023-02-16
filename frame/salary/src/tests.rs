@@ -236,7 +236,7 @@ fn induct_works() {
 }
 
 #[test]
-fn payment_works() {
+fn unregistered_payment_works() {
 	new_test_ext().execute_with(|| {
 		TestClub::change(&1, 1);
 		assert_noop!(Salary::induct(RuntimeOrigin::signed(1)), Error::<Test>::NotStarted);
@@ -266,29 +266,159 @@ fn payment_works() {
 		assert_eq!(Salary::status().unwrap().total_unregistered_paid, 1);
 	});
 }
-/*
+
+#[test]
+fn registered_payment_works() {
+	new_test_ext().execute_with(|| {
+		TestClub::change(&1, 1);
+		assert_noop!(Salary::induct(RuntimeOrigin::signed(1)), Error::<Test>::NotStarted);
+		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
+		assert_noop!(Salary::payout(RuntimeOrigin::signed(1)), Error::<Test>::NotInducted);
+		assert_ok!(Salary::induct(RuntimeOrigin::signed(1)));
+		// No claim on the cycle active during induction.
+		assert_noop!(Salary::register(RuntimeOrigin::signed(1)), Error::<Test>::NoClaim);
+		run_to(3);
+		assert_noop!(Salary::payout(RuntimeOrigin::signed(1)), Error::<Test>::NoClaim);
+
+		run_to(5);
+		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
+		assert_ok!(Salary::register(RuntimeOrigin::signed(1)));
+		assert_eq!(Salary::status().unwrap().total_registrations, 1);
+		run_to(7);
+		assert_ok!(Salary::payout(RuntimeOrigin::signed(1)));
+		assert_eq!(paid(1), 1);
+		assert_eq!(Salary::status().unwrap().total_unregistered_paid, 0);
+		assert_noop!(Salary::payout(RuntimeOrigin::signed(1)), Error::<Test>::NoClaim);
+
+		run_to(9);
+		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
+		assert_eq!(Salary::status().unwrap().total_registrations, 0);
+		assert_ok!(Salary::register(RuntimeOrigin::signed(1)));
+		assert_eq!(Salary::status().unwrap().total_registrations, 1);
+		run_to(11);
+		assert_ok!(Salary::payout(RuntimeOrigin::signed(1)));
+		assert_eq!(paid(1), 2);
+		assert_eq!(Salary::status().unwrap().total_unregistered_paid, 0);
+	});
+}
+
 #[test]
 fn zero_payment_fails() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
 		TestClub::change(&1, 0);
 		assert_ok!(Salary::induct(RuntimeOrigin::signed(1)));
-		run_to(5);
+		run_to(7);
 		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
 		assert_noop!(Salary::payout(RuntimeOrigin::signed(1)), Error::<Test>::ClaimZero);
 	});
 }
 
 #[test]
-fn bankrupt_fails_gracefully() {
+fn unregistered_bankrupcy_fails_gracefully() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
-		TestClub::change(&1, 11);
+		TestClub::change(&1, 2);
+		TestClub::change(&2, 6);
+		TestClub::change(&3, 12);
+
 		assert_ok!(Salary::induct(RuntimeOrigin::signed(1)));
-		run_to(5);
+		assert_ok!(Salary::induct(RuntimeOrigin::signed(2)));
+		assert_ok!(Salary::induct(RuntimeOrigin::signed(3)));
+
+		run_to(7);
 		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
-		assert_noop!(Salary::payout(RuntimeOrigin::signed(1)), Error::<Test>::Bankrupt);
-		assert_eq!(paid(1), 0);
+		assert_ok!(Salary::payout(RuntimeOrigin::signed(1)));
+		assert_ok!(Salary::payout(RuntimeOrigin::signed(2)));
+		assert_ok!(Salary::payout(RuntimeOrigin::signed(3)));
+
+		assert_eq!(paid(1), 2);
+		assert_eq!(paid(2), 6);
+		assert_eq!(paid(3), 2);
 	});
 }
-*/
+
+#[test]
+fn registered_bankrupcy_fails_gracefully() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
+		TestClub::change(&1, 2);
+		TestClub::change(&2, 6);
+		TestClub::change(&3, 12);
+
+		assert_ok!(Salary::induct(RuntimeOrigin::signed(1)));
+		assert_ok!(Salary::induct(RuntimeOrigin::signed(2)));
+		assert_ok!(Salary::induct(RuntimeOrigin::signed(3)));
+
+		run_to(5);
+		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
+		assert_ok!(Salary::register(RuntimeOrigin::signed(1)));
+		assert_ok!(Salary::register(RuntimeOrigin::signed(2)));
+		assert_ok!(Salary::register(RuntimeOrigin::signed(3)));
+
+		run_to(7);
+		assert_ok!(Salary::payout(RuntimeOrigin::signed(1)));
+		assert_ok!(Salary::payout(RuntimeOrigin::signed(2)));
+		assert_ok!(Salary::payout(RuntimeOrigin::signed(3)));
+
+		assert_eq!(paid(1), 1);
+		assert_eq!(paid(2), 3);
+		assert_eq!(paid(3), 6);
+	});
+}
+
+#[test]
+fn mixed_bankrupcy_fails_gracefully() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
+		TestClub::change(&1, 2);
+		TestClub::change(&2, 6);
+		TestClub::change(&3, 12);
+
+		assert_ok!(Salary::induct(RuntimeOrigin::signed(1)));
+		assert_ok!(Salary::induct(RuntimeOrigin::signed(2)));
+		assert_ok!(Salary::induct(RuntimeOrigin::signed(3)));
+
+		run_to(5);
+		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
+		assert_ok!(Salary::register(RuntimeOrigin::signed(1)));
+		assert_ok!(Salary::register(RuntimeOrigin::signed(2)));
+
+		run_to(7);
+		assert_ok!(Salary::payout(RuntimeOrigin::signed(3)));
+		assert_ok!(Salary::payout(RuntimeOrigin::signed(2)));
+		assert_ok!(Salary::payout(RuntimeOrigin::signed(1)));
+
+		assert_eq!(paid(1), 2);
+		assert_eq!(paid(2), 6);
+		assert_eq!(paid(3), 2);
+	});
+}
+
+#[test]
+fn other_mixed_bankrupcy_fails_gracefully() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
+		TestClub::change(&1, 2);
+		TestClub::change(&2, 6);
+		TestClub::change(&3, 12);
+
+		assert_ok!(Salary::induct(RuntimeOrigin::signed(1)));
+		assert_ok!(Salary::induct(RuntimeOrigin::signed(2)));
+		assert_ok!(Salary::induct(RuntimeOrigin::signed(3)));
+
+		run_to(5);
+		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
+		assert_ok!(Salary::register(RuntimeOrigin::signed(2)));
+		assert_ok!(Salary::register(RuntimeOrigin::signed(3)));
+
+		run_to(7);
+		assert_noop!(Salary::payout(RuntimeOrigin::signed(1)), Error::<Test>::ClaimZero);
+		assert_ok!(Salary::payout(RuntimeOrigin::signed(2)));
+		assert_ok!(Salary::payout(RuntimeOrigin::signed(3)));
+
+		assert_eq!(paid(1), 0);
+		assert_eq!(paid(2), 3);
+		assert_eq!(paid(3), 7);
+	});
+}
