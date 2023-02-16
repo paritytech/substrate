@@ -24,10 +24,11 @@ pub mod common;
 use self::common::*;
 
 #[test]
-fn expected_weight_same_as_consumed() {
+fn expected_weight_same_as_consumed_when_low_proof_size() {
 	let mut t = new_test_ext(compact_code_unwrap());
 
-	let expected_weight = <Runtime as pallet_glutton::Config>::WeightInfo::on_idle();
+	let expected_weight =
+		<Runtime as pallet_glutton::Config>::WeightInfo::on_idle_low_proof_waste();
 
 	t.execute_with(|| {
 		let _ = Glutton::set_compute(RuntimeOrigin::root(), Perbill::from_percent(100));
@@ -35,7 +36,7 @@ fn expected_weight_same_as_consumed() {
 
 		let consumed = Glutton::on_idle(
 			System::block_number(),
-			Weight::from_parts(WEIGHT_REF_TIME_PER_MILLIS * 100, WEIGHT_PROOF_SIZE_PER_MB * 5),
+			Weight::from_parts(WEIGHT_REF_TIME_PER_MILLIS * 100, WEIGHT_PROOF_SIZE_PER_KB * 20),
 		);
 
 		let ratio = Perbill::from_rational(consumed.proof_size(), expected_weight.proof_size());
@@ -48,6 +49,38 @@ fn expected_weight_same_as_consumed() {
 		let ratio = Perbill::from_rational(consumed.ref_time(), expected_weight.ref_time());
 		assert!(
 			ratio >= Perbill::from_percent(95),
+			"Too few ref time consumed, was only {:?} of expected",
+			ratio
+		);
+	});
+}
+
+#[test]
+fn expected_weight_close_to_consumed_when_high_proof_size() {
+	let mut t = new_test_ext(compact_code_unwrap());
+
+	let expected_weight =
+		<Runtime as pallet_glutton::Config>::WeightInfo::on_idle_high_proof_waste();
+
+	t.execute_with(|| {
+		let _ = Glutton::set_compute(RuntimeOrigin::root(), Perbill::from_percent(100));
+		let _ = Glutton::set_storage(RuntimeOrigin::root(), Perbill::from_percent(100));
+
+		let consumed = Glutton::on_idle(
+			System::block_number(),
+			Weight::from_parts(WEIGHT_REF_TIME_PER_MILLIS * 100, WEIGHT_PROOF_SIZE_PER_MB * 5),
+		);
+
+		let ratio = Perbill::from_rational(consumed.proof_size(), expected_weight.proof_size());
+		assert!(
+			ratio >= Perbill::from_percent(80),
+			"Too few proof size consumed, was only {:?} of expected",
+			ratio
+		);
+
+		let ratio = Perbill::from_rational(consumed.ref_time(), expected_weight.ref_time());
+		assert!(
+			ratio >= Perbill::from_percent(80),
 			"Too few ref time consumed, was only {:?} of expected",
 			ratio
 		);
