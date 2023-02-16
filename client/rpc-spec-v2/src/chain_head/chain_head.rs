@@ -129,7 +129,7 @@ impl<BE, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 /// This includes the "Initialized" event followed by the in-memory
 /// blocks via "NewBlock" and the "BestBlockChanged".
 fn generate_initial_events<BE, Block, Client>(
-	data: &FollowData<BE, Block, Client>,
+	data: &mut FollowData<BE, Block, Client>,
 ) -> Result<(Vec<FollowEvent<Block::Hash>>, HashSet<Block::Hash>), SubscriptionManagementError>
 where
 	Block: BlockT + 'static,
@@ -186,10 +186,7 @@ where
 	let best_block_hash = start_info.best_hash;
 	if best_block_hash != finalized_block_hash {
 		let best_block = FollowEvent::BestBlockChanged(BestBlockChanged { best_block_hash });
-
-		let mut best_block_cache = handle.best_block_write();
-		*best_block_cache = Some(best_block_hash);
-
+		data.best_block_cache = Some(best_block_hash);
 		in_memory_blocks.push(best_block);
 	};
 
@@ -338,6 +335,7 @@ async fn submit_events<EventStream, BE, Block, Client>(
 	let mut stream_item = stream.next();
 	let mut stop_event = data.rx_stop;
 	let mut sink = data.sink;
+	let mut best_block_cache = data.best_block_cache;
 
 	while let Either::Left((Some(event), next_stop_event)) =
 		futures_util::future::select(stream_item, stop_event).await
@@ -349,6 +347,7 @@ async fn submit_events<EventStream, BE, Block, Client>(
 				&data.sub_handle,
 				data.runtime_updates,
 				notification,
+				&mut best_block_cache,
 			),
 			NotificationType::Finalized(notification) => handle_finalized_blocks(
 				&data.client,
@@ -356,6 +355,7 @@ async fn submit_events<EventStream, BE, Block, Client>(
 				notification,
 				&mut to_ignore,
 				&data.start_info,
+				&mut best_block_cache,
 			),
 		};
 
@@ -396,6 +396,7 @@ fn handle_import_blocks<Client, Block>(
 	handle: &SubscriptionHandle<Block>,
 	runtime_updates: bool,
 	notification: BlockImportNotification<Block>,
+	best_block_cache: &mut Option<Block::Hash>,
 ) -> Result<Vec<FollowEvent<Block::Hash>>, SubscriptionManagementError>
 where
 	Block: BlockT + 'static,
@@ -431,7 +432,6 @@ where
 	let best_block_event =
 		FollowEvent::BestBlockChanged(BestBlockChanged { best_block_hash: notification.hash });
 
-	let mut best_block_cache = handle.best_block_write();
 	match *best_block_cache {
 		Some(block_cache) => {
 			// The RPC layer has not reported this block as best before.
@@ -458,6 +458,7 @@ fn handle_finalized_blocks<Client, Block>(
 	notification: FinalityNotification<Block>,
 	to_ignore: &mut HashSet<Block::Hash>,
 	start_info: &Info<Block>,
+	best_block_cache: &mut Option<Block::Hash>,
 ) -> Result<Vec<FollowEvent<Block::Hash>>, SubscriptionManagementError>
 where
 	Block: BlockT + 'static,
@@ -495,7 +496,6 @@ where
 
 	let pruned_block_hashes: Vec<_> = notification.stale_heads.iter().cloned().collect();
 
-	let mut best_block_cache = handle.best_block_write();
 	match *best_block_cache {
 		Some(block_cache) => {
 			// Check if the current best block is also reported as pruned.
@@ -563,7 +563,11 @@ struct FollowData<BE, Block: BlockT, Client> {
 	rx_stop: oneshot::Receiver<()>,
 	sink: SubscriptionSink,
 	runtime_updates: bool,
+	/// The starting point from which the blocks were generated from the
+	/// node's memory.
 	start_info: Info<Block>,
+	/// The best reported block by this subscription.
+	best_block_cache: Option<Block::Hash>,
 }
 
 #[async_trait]
@@ -631,9 +635,10 @@ where
 				sink,
 				runtime_updates,
 				start_info,
+				best_block_cache: None,
 			};
 
-			let (initial_events, pruned_forks) = match generate_initial_events(&follow_data) {
+			let (initial_events, pruned_forks) = match generate_initial_events(&mut follow_data) {
 				Ok(blocks) => blocks,
 				Err(err) => {
 					debug!(
