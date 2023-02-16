@@ -59,7 +59,7 @@ pub struct VoterMetrics {
 	/// Number of justifications dropped due to full buffers
 	pub beefy_buffered_justifications_dropped: Counter<U64>,
 	/// Trying to set Best Beefy block to old block
-	pub beefy_best_block_to_old_block: Gauge<U64>,
+	pub beefy_best_block_set_last_failure: Gauge<U64>,
 	/// Number of Successful handled votes
 	pub beefy_successful_handled_votes: Counter<U64>,
 }
@@ -151,7 +151,7 @@ impl PrometheusRegister for VoterMetrics {
 				)?,
 				registry,
 			)?,
-			beefy_best_block_to_old_block: register(
+			beefy_best_block_set_last_failure: register(
 				Gauge::new(
 					"substrate_beefy_best_block_to_old_block",
 					"Trying to set Best Beefy block to old block",

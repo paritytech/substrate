@@ -644,8 +644,8 @@ where
 				.notify(|| Ok::<_, ()>(finality_proof))
 				.expect("forwards closure result; the closure always returns Ok; qed.");
 		} else {
-			debug!(target: LOG_TARGET, "🥩 Can't set best beefy to older: {}", block_num);
-			metric_set!(self, beefy_best_block_to_old_block, block_num);
+			debug!(target: LOG_TARGET, "🥩 Can't set best beefy to old: {}", block_num);
+			metric_set!(self, beefy_best_block_set_last_failure, block_num);
 		}
 		Ok(())
 	}
