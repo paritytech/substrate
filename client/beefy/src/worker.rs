@@ -578,6 +578,7 @@ where
 				// We created the `finality_proof` and know to be valid.
 				// New state is persisted after finalization.
 				self.finalize(finality_proof)?;
+				metric_inc!(self, beefy_good_votes_processed);
 			},
 			VoteImportResult::Ok => {
 				// Persist state after handling mandatory block vote.
@@ -590,13 +591,15 @@ where
 					crate::aux_schema::write_voter_state(&*self.backend, &self.persisted_state)
 						.map_err(|e| Error::Backend(e.to_string()))?;
 				}
+				metric_inc!(self, beefy_good_votes_processed);
 			},
 			VoteImportResult::Equivocation(proof) => {
+				metric_inc!(self, beefy_equivocation_votes);
 				self.report_equivocation(proof)?;
 			},
-			VoteImportResult::Invalid | VoteImportResult::Stale => (),
+			VoteImportResult::Invalid => metric_inc!(self, beefy_invalid_votes),
+			VoteImportResult::Stale => metric_inc!(self, beefy_stale_votes),
 		};
-		metric_inc!(self, beefy_successful_handled_votes);
 		Ok(())
 	}
 
@@ -818,8 +821,6 @@ where
 		}
 
 		self.gossip_engine.gossip_message(topic::<B>(), encoded_message, false);
-		self.persisted_state.best_voted = target_number;
-		metric_set!(self, beefy_best_voted, target_number);
 
 		// Persist state after vote to avoid double voting in case of voter restarts.
 		self.persisted_state.best_voted = target_number;
