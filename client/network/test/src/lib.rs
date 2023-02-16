@@ -31,7 +31,7 @@ use std::{
 	time::Duration,
 };
 
-use futures::{future::BoxFuture, prelude::*};
+use futures::{channel::oneshot, future::BoxFuture, prelude::*};
 use libp2p::{build_multiaddr, PeerId};
 use log::trace;
 use parking_lot::Mutex;
@@ -56,7 +56,9 @@ use sc_network_common::{
 	},
 	protocol::{role::Roles, ProtocolName},
 	service::{NetworkBlock, NetworkStateInfo, NetworkSyncForkRequest},
-	sync::warp::{AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncProvider},
+	sync::warp::{
+		AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncParams, WarpSyncProvider,
+	},
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
@@ -722,6 +724,8 @@ pub struct FullPeerConfig {
 	pub extra_storage: Option<sp_core::storage::Storage>,
 	/// Enable transaction indexing.
 	pub storage_chain: bool,
+	/// Optional target block header to sync to
+	pub target_block: Option<<Block as BlockT>::Header>,
 }
 
 #[async_trait::async_trait]
@@ -867,6 +871,15 @@ where
 
 		let warp_sync = Arc::new(TestWarpSyncProvider(client.clone()));
 
+		let warp_sync_params = match config.target_block {
+			Some(target_block) => {
+				let (sender, receiver) = oneshot::channel::<<Block as BlockT>::Header>();
+				let _ = sender.send(target_block);
+				WarpSyncParams::WaitForTarget(receiver)
+			},
+			_ => WarpSyncParams::WithProvider(warp_sync.clone()),
+		};
+
 		let warp_protocol_config = {
 			let (handler, protocol_config) = warp_request_handler::RequestHandler::new(
 				protocol_id.clone(),
@@ -887,6 +900,7 @@ where
 			.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator));
 		let (chain_sync_network_provider, chain_sync_network_handle) =
 			NetworkServiceProvider::new();
+
 		let (chain_sync, chain_sync_service, block_announce_config) = ChainSync::new(
 			match network_config.sync_mode {
 				SyncMode::Full => sc_network_common::sync::SyncMode::Full,
@@ -903,7 +917,7 @@ where
 			Roles::from(if config.is_authority { &Role::Authority } else { &Role::Full }),
 			block_announce_validator,
 			network_config.max_parallel_downloads,
-			Some(warp_sync),
+			Some(warp_sync_params),
 			None,
 			chain_sync_network_handle,
 			import_queue.service(),
