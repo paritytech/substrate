@@ -238,3 +238,21 @@ publish-crates-manual:
   extends:                         .publish-crates-template
   when:                            manual
   interruptible:                   false
+
+publish-crates-locally:
+  stage:                           publish
+  extends:
+    - .test-refs
+    - .crates-publishing-template
+  # When lots of crates are taken into account (for example on master where all crates are tested)
+  # the job might take a long time, as evidenced by:
+  # https://gitlab.parity.io/parity/mirrors/substrate/-/jobs/2269364
+  timeout:                         4h
+  script:
+    - rusty-cachier snapshot create
+    - git clone
+        --depth 1
+        --branch "$RELENG_SCRIPTS_BRANCH"
+        https://github.com/paritytech/releng-scripts.git
+    - CRATESIO_TARGET_INSTANCE=local ./releng-scripts/publish-crates
+    - rusty-cachier cache upload
