@@ -623,6 +623,17 @@ impl<T: Config> Pallet<T> {
 			// of epochs to session
 			if let Some(session_index) = session_index {
 				SkippedEpochs::<T>::mutate(|skipped_epochs| {
+					if epoch_index < session_index as u64 {
+						log::warn!(
+							target: LOG_TARGET,
+							"Current epoch index {} is lower than session index {}.",
+							epoch_index,
+							session_index,
+						);
+
+						return
+					}
+
 					if skipped_epochs.is_full() {
 						// NOTE: this is O(n) but we currently don't have a bounded `VecDeque`.
 						// this vector is bounded to a small number of elements so performance
@@ -872,7 +883,7 @@ impl<T: Config> Pallet<T> {
 				// calculate the number of skipped epochs at this point by checking the difference
 				// between the epoch and session indices. epoch index should always be greater or
 				// equal to session index, this is because epochs can be skipped whereas sessions
-				// can't
+				// can't (this is enforced when pushing into `SkippedEpochs`)
 				let skipped_epochs = closest_skipped_epoch.0 - closest_skipped_epoch.1 as u64;
 				epoch_index.saturating_sub(skipped_epochs).saturated_into::<u32>()
 			},
