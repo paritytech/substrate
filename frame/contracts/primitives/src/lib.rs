@@ -47,7 +47,7 @@ pub struct ContractResult<R, Balance> {
 	/// Additionally, any `seal_call` or `seal_instantiate` makes use of pre-charging
 	/// when a non-zero `gas_limit` argument is supplied.
 	pub gas_required: Weight,
-	/// How much balance was payed by the origin into the contract's deposit account in order to
+	/// How much balance was paid by the origin into the contract's deposit account in order to
 	/// pay for storage.
 	///
 	/// The storage deposit is never actually charged from the origin in case of [`Self::result`]
