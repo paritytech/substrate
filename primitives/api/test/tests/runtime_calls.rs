@@ -169,7 +169,7 @@ fn record_proof_works() {
 
 	// Build the block and record proof
 	let mut builder = client
-		.new_block_at(&block_id, Default::default(), true)
+		.new_block_at(client.chain_info().best_hash, Default::default(), true)
 		.expect("Creates block builder");
 	builder.push(transaction.clone()).unwrap();
 	let (block, _, proof) = builder.build().expect("Bake block").into_inner();

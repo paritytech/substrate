@@ -58,7 +58,6 @@ use sp_keystore::{testing::KeyStore as TestKeystore, SyncCryptoStore, SyncCrypto
 use sp_mmr_primitives::{EncodableOpaqueLeaf, Error as MmrError, MmrApi, Proof};
 use sp_runtime::{
 	codec::Encode,
-	generic::BlockId,
 	traits::{Header as HeaderT, NumberFor},
 	BuildStorage, DigestItem, Justifications, Storage,
 };
@@ -732,8 +731,9 @@ async fn beefy_importing_blocks() {
 	};
 
 	let full_client = client.as_client();
-	let parent_id = BlockId::Number(0);
-	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
+	let builder = full_client
+		.new_block_at(full_client.chain_info().genesis_hash, Default::default(), false)
+		.unwrap();
 	let block = builder.build().unwrap().block;
 	let hashof1 = block.header.hash();
 
@@ -769,14 +769,13 @@ async fn beefy_importing_blocks() {
 	}
 
 	// Import with valid justification.
-	let parent_id = BlockId::Number(1);
 	let block_num = 2;
 	let proof = crate::justification::tests::new_finality_proof(block_num, &good_set, keys);
 	let versioned_proof: VersionedFinalityProof<NumberFor<Block>, Signature> = proof.into();
 	let encoded = versioned_proof.encode();
 	let justif = Some(Justifications::from((BEEFY_ENGINE_ID, encoded)));
 
-	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
+	let builder = full_client.new_block_at(hashof1, Default::default(), false).unwrap();
 	let block = builder.build().unwrap().block;
 	let hashof2 = block.header.hash();
 	let mut justif_recv = justif_stream.subscribe(100_000);
@@ -811,7 +810,6 @@ async fn beefy_importing_blocks() {
 	}
 
 	// Import with invalid justification (incorrect validator set).
-	let parent_id = BlockId::Number(2);
 	let block_num = 3;
 	let keys = &[BeefyKeyring::Alice];
 	let bad_set = ValidatorSet::new(make_beefy_ids(keys), 1).unwrap();
@@ -820,7 +818,7 @@ async fn beefy_importing_blocks() {
 	let encoded = versioned_proof.encode();
 	let justif = Some(Justifications::from((BEEFY_ENGINE_ID, encoded)));
 
-	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
+	let builder = full_client.new_block_at(hashof2, Default::default(), false).unwrap();
 	let block = builder.build().unwrap().block;
 	let hashof3 = block.header.hash();
 	let mut justif_recv = justif_stream.subscribe(100_000);

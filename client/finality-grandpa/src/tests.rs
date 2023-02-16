@@ -875,7 +875,7 @@ async fn allows_reimporting_change_blocks() {
 
 	let full_client = client.as_client();
 	let builder = full_client
-		.new_block_at(&BlockId::Number(0), Default::default(), false)
+		.new_block_at(full_client.chain_info().genesis_hash, Default::default(), false)
 		.unwrap();
 	let mut block = builder.build().unwrap().block;
 	add_scheduled_change(
@@ -922,7 +922,7 @@ async fn test_bad_justification() {
 
 	let full_client = client.as_client();
 	let builder = full_client
-		.new_block_at(&BlockId::Number(0), Default::default(), false)
+		.new_block_at(full_client.chain_info().genesis_hash, Default::default(), false)
 		.unwrap();
 	let mut block = builder.build().unwrap().block;
 
@@ -1854,7 +1854,7 @@ async fn imports_justification_for_regular_blocks_on_import() {
 
 	let full_client = client.as_client();
 	let builder = full_client
-		.new_block_at(&BlockId::Number(0), Default::default(), false)
+		.new_block_at(full_client.chain_info().genesis_hash, Default::default(), false)
 		.unwrap();
 	let block = builder.build().unwrap().block;
 
