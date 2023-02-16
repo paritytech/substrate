@@ -176,6 +176,7 @@ std = [
 	"sp-runtime/std",
 	"sp-staking/std",
 	"pallet-staking/std",
+	"pallet-staking-runtime-api/std",
 	"pallet-state-trie-migration/std",
 	"sp-session/std",
 	"pallet-sudo/std",
