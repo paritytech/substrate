@@ -233,11 +233,19 @@ publish-draft-release:
 
 publish-crates:
   extends:                         .publish-crates-template
+  # publish-crates should only be run if publish-crates-locally passes
+  needs:
+    - job:                         publish-crates-locally
+      artifacts:                   false
 
 publish-crates-manual:
   extends:                         .publish-crates-template
   when:                            manual
   interruptible:                   false
+  # publish-crates should only be run if publish-crates-locally passes
+  needs:
+    - job:                         publish-crates-locally
+      artifacts:                   false
 
 publish-crates-locally:
   stage:                           publish
