@@ -58,6 +58,9 @@ use sp_runtime::{
 	traits::{Block as BlockT, Header},
 };
 use std::{collections::HashSet, marker::PhantomData, sync::Arc};
+
+const LOG_TARGET: &str = "rpc-spec-v2";
+
 /// An API for chain head RPC calls.
 pub struct ChainHead<BE, Block: BlockT, Client> {
 	/// Substrate client.
@@ -140,9 +143,7 @@ where
 	let handle = &data.sub_handle;
 	let runtime_updates = data.runtime_updates;
 
-	let Ok(ret) = get_initial_blocks_with_forks(backend, start_info) else {
-		return Err(SubscriptionManagementError::Custom("Failed to fetch initial blocks".into()));
-	};
+	let ret = get_initial_blocks_with_forks(backend, start_info)?;
 	let initial_blocks = ret.finalized_block_descendants;
 
 	// The initialized event is the first one sent.
@@ -267,7 +268,7 @@ struct InitialBlocks<Block: BlockT> {
 	finalized_block_descendants: Vec<(Block::Hash, Block::Hash)>,
 	/// Blocks that should not be reported as pruned by the `Finalized` event.
 	///
-	/// The substrate database will perform the pruning of height N at
+	/// Substrate database will perform the pruning of height N at
 	/// the finalization N + 1. We could have the following block tree
 	/// when the user subscribes to the `follow` method:
 	///   [A] - [A1] - [A2] - [A3]
@@ -294,7 +295,6 @@ where
 	let leaves = blockchain
 		.leaves()
 		.map_err(|err| SubscriptionManagementError::Custom(err.to_string()))?;
-	let finalized_number = info.finalized_number;
 	let finalized = info.finalized_hash;
 	let mut pruned_forks = HashSet::new();
 	let mut finalized_block_descendants = Vec::new();
@@ -302,14 +302,10 @@ where
 		let tree_route = sp_blockchain::tree_route(blockchain, finalized, leaf)
 			.map_err(|err| SubscriptionManagementError::Custom(err.to_string()))?;
 
-		// When the common block number is smaller than the current finalized
-		// block, the tree route is a fork that should be pruned.
-		let common = tree_route.common_block();
-		let number = common.number;
 		let blocks = tree_route.enacted().iter().map(|block| block.hash);
-		if number < finalized_number {
+		if !tree_route.retracted().is_empty() {
 			pruned_forks.extend(blocks);
-		} else if number == finalized_number {
+		} else {
 			// Ensure a `NewBlock` event is generated for all children of the
 			// finalized block. Describe the tree route as (child_node, parent_node)
 			let parents = std::iter::once(finalized).chain(blocks.clone());
@@ -366,7 +362,7 @@ async fn submit_events<EventStream, BE, Block, Client>(
 		let events = match events {
 			Ok(events) => events,
 			Err(err) => {
-				debug!(target: "rpc-spec-v2", "Failed to handle stream notification {:?}", err);
+				debug!(target: LOG_TARGET, "Failed to handle stream notification {:?}", err);
 				break
 			},
 		};
@@ -390,7 +386,7 @@ async fn submit_events<EventStream, BE, Block, Client>(
 
 	let _ = sink.send(&FollowEvent::<String>::Stop);
 	data.subscriptions.remove_subscription(&sub_id);
-	debug!(target: "rpc-spec-v2", "[follow][id={:?}] Subscription removed", sub_id);
+	debug!(target: LOG_TARGET, "[follow][id={:?}] Subscription removed", sub_id);
 }
 
 /// Generate the "NewBlock" event and potentially the "BestBlockChanged" event for
@@ -489,15 +485,8 @@ where
 		notification
 			.stale_heads
 			.iter()
+			.filter(|hash| !to_ignore.remove(&hash))
 			.cloned()
-			.filter(|hash| {
-				if !to_ignore.contains(&hash) {
-					return true
-				}
-
-				to_ignore.remove(&hash);
-				false
-			})
 			.collect()
 	};
 
@@ -523,7 +512,7 @@ where
 				// The information from `.info()` is updated from the DB as the last
 				// step of the finalization and it should be up to date.
 				// If the info is outdated, there is nothing the RPC can do for now.
-				error!(target: "rpc-spec-v2", "Client does not contain different best block");
+				error!(target: LOG_TARGET, "Client does not contain different best block");
 				Ok(vec![finalized_event])
 			} else {
 				let ancestor = sp_blockchain::lowest_common_ancestor(
@@ -609,11 +598,11 @@ where
 		let Some((rx_stop, sub_handle)) = self.subscriptions.insert_subscription(sub_id.clone(), runtime_updates, self.max_pinned_blocks) else {
 			// Inserting the subscription can only fail if the JsonRPSee
 			// generated a duplicate subscription ID.
-			debug!(target: "rpc-spec-v2", "[follow][id={:?}] Subscription already accepted", sub_id);
+			debug!(target: LOG_TARGET, "[follow][id={:?}] Subscription already accepted", sub_id);
 			let _ = sink.send(&FollowEvent::<Block::Hash>::Stop);
 			return Ok(())
 		};
-		debug!(target: "rpc-spec-v2", "[follow][id={:?}] Subscription accepted", sub_id);
+		debug!(target: LOG_TARGET, "[follow][id={:?}] Subscription accepted", sub_id);
 
 		// Register for the new block and finalized notifications.
 		let stream_import = self
@@ -647,7 +636,10 @@ where
 			let (initial_events, pruned_forks) = match generate_initial_events(&follow_data) {
 				Ok(blocks) => blocks,
 				Err(err) => {
-					debug!(target: "rpc-spec-v2", "[follow][id={:?}] Failed to generate the initial events {:?}", sub_id, err);
+					debug!(
+						target: LOG_TARGET,
+						"[follow][id={:?}] Failed to generate the initial events {:?}", sub_id, err
+					);
 					let _ = follow_data.sink.send(&FollowEvent::<Block::Hash>::Stop);
 					follow_data.subscriptions.remove_subscription(&sub_id);
 					return
@@ -695,7 +687,12 @@ where
 				},
 				Ok(None) => {
 					// The block's body was pruned. This subscription ID has become invalid.
-					debug!(target: "rpc-spec-v2", "[body][id={:?}] Stopping subscription because hash={:?} was pruned", follow_subscription, hash);
+					debug!(
+						target: LOG_TARGET,
+						"[body][id={:?}] Stopping subscription because hash={:?} was pruned",
+						follow_subscription,
+						hash
+					);
 					handle.stop();
 					ChainHeadEvent::<String>::Disjoint
 				},
