@@ -235,7 +235,7 @@ publish-crates:
   extends:                         .publish-crates-template
   # publish-crates should only be run if publish-crates-locally passes
   needs:
-    - job:                         publish-crates-locally
+    - job:                         check-crate-publishing
       artifacts:                   false
 
 publish-crates-manual:
