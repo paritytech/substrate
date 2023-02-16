@@ -21,6 +21,7 @@
 use crate::{
 	chain_head::{
 		api::ChainHeadApiServer,
+		chain_head_follow::ChainHeadFollow,
 		error::Error as ChainHeadRpcError,
 		event::{
 			BestBlockChanged, ChainHeadEvent, ChainHeadResult, ErrorEvent, Finalized, FollowEvent,
@@ -700,53 +701,34 @@ where
 		};
 		debug!(target: LOG_TARGET, "[follow][id={:?}] Subscription accepted", sub_id);
 
-		// Register for the new block and finalized notifications.
-		let stream_import = self
-			.client
-			.import_notification_stream()
-			.map(|notification| NotificationType::NewBlock(notification));
+		// // Register for the new block and finalized notifications.
+		// let stream_import = self
+		// 	.client
+		// 	.import_notification_stream()
+		// 	.map(|notification| NotificationType::NewBlock(notification));
 
-		let stream_finalized = self
-			.client
-			.finality_notification_stream()
-			.map(|notification| NotificationType::Finalized(notification));
+		// let stream_finalized = self
+		// 	.client
+		// 	.finality_notification_stream()
+		// 	.map(|notification| NotificationType::Finalized(notification));
 
-		let merged = tokio_stream::StreamExt::merge(stream_import, stream_finalized);
+		// let merged = tokio_stream::StreamExt::merge(stream_import, stream_finalized);
 
 		let subscriptions = self.subscriptions.clone();
 		let backend = self.backend.clone();
 		let client = self.client.clone();
 		let fut = async move {
-			let start_info = client.info();
-			let mut follow_data = FollowData {
+			let mut chain_head_follow = ChainHeadFollow::new(
 				client,
 				backend,
 				subscriptions,
 				sub_handle,
-				rx_stop,
 				sink,
 				runtime_updates,
-				start_info,
-				best_block_cache: None,
-			};
+				sub_id,
+			);
 
-			let (initial_events, pruned_forks) = match generate_initial_events(&mut follow_data) {
-				Ok(blocks) => blocks,
-				Err(err) => {
-					debug!(
-						target: LOG_TARGET,
-						"[follow][id={:?}] Failed to generate the initial events {:?}", sub_id, err
-					);
-					let _ = follow_data.sink.send(&FollowEvent::<Block::Hash>::Stop);
-					follow_data.subscriptions.remove_subscription(&sub_id);
-					return
-				},
-			};
-
-			let initial = NotificationType::InitialEvents(initial_events);
-			let stream = stream::once(futures::future::ready(initial)).chain(merged);
-
-			submit_events(follow_data, stream.boxed(), pruned_forks, sub_id).await;
+			chain_head_follow.generate_events(rx_stop).await
 		};
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
