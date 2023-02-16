@@ -85,6 +85,7 @@
 
 #[macro_use]
 mod gas;
+mod address;
 mod benchmarking;
 mod exec;
 mod migration;
@@ -101,11 +102,11 @@ mod tests;
 use crate::{
 	exec::{AccountIdOf, ExecError, Executable, Stack as ExecStack},
 	gas::GasMeter,
-	storage::{meter::Meter as StorageMeter, ContractInfo, DeletedContract, Storage},
+	storage::{meter::Meter as StorageMeter, ContractInfo, DeletedContract},
 	wasm::{OwnerInfo, PrefabWasmModule, TryInstantiate},
 	weights::WeightInfo,
 };
-use codec::{Codec, Decode, Encode, HasCompact};
+use codec::{Codec, Encode, HasCompact};
 use frame_support::{
 	dispatch::{Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo},
 	ensure,
@@ -124,10 +125,11 @@ use pallet_contracts_primitives::{
 };
 use scale_info::TypeInfo;
 use smallvec::Array;
-use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup, TrailingZeroInput};
+use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup};
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 pub use crate::{
+	address::{AddressGenerator, DefaultAddressGenerator},
 	exec::{Frame, VarSizedKey as StorageKey},
 	migration::Migration,
 	pallet::*,
@@ -154,49 +156,6 @@ type DebugBufferVec<T> = BoundedVec<u8, <T as Config>::MaxDebugBufferLen>;
 /// sentinel because contracts are never allowed to use such a large amount of resources
 /// that this value makes sense for a memory location or length.
 const SENTINEL: u32 = u32::MAX;
-
-/// Provides the contract address generation method.
-///
-/// See [`DefaultAddressGenerator`] for the default implementation.
-pub trait AddressGenerator<T: Config> {
-	/// Generate the address of a contract based on the given instantiate parameters.
-	///
-	/// # Note for implementors
-	/// 1. Make sure that there are no collisions, different inputs never lead to the same output.
-	/// 2. Make sure that the same inputs lead to the same output.
-	/// 3. Changing the implementation through a runtime upgrade without a proper storage migration
-	/// would lead to catastrophic misbehavior.
-	fn generate_address(
-		deploying_address: &T::AccountId,
-		code_hash: &CodeHash<T>,
-		input_data: &[u8],
-		salt: &[u8],
-	) -> T::AccountId;
-}
-
-/// Default address generator.
-///
-/// This is the default address generator used by contract instantiation. Its result
-/// is only dependant on its inputs. It can therefore be used to reliably predict the
-/// address of a contract. This is akin to the formula of eth's CREATE2 opcode. There
-/// is no CREATE equivalent because CREATE2 is strictly more powerful.
-/// Formula:
-/// `hash("contract_addr_v1" ++ deploying_address ++ code_hash ++ input_data ++ salt)`
-pub struct DefaultAddressGenerator;
-
-impl<T: Config> AddressGenerator<T> for DefaultAddressGenerator {
-	fn generate_address(
-		deploying_address: &T::AccountId,
-		code_hash: &CodeHash<T>,
-		input_data: &[u8],
-		salt: &[u8],
-	) -> T::AccountId {
-		let entropy = (b"contract_addr_v1", deploying_address, code_hash, input_data, salt)
-			.using_encoded(T::Hashing::hash);
-		Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
-			.expect("infinite length input; no invalid inputs for type; qed")
-	}
-}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -365,7 +324,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_idle(_block: T::BlockNumber, remaining_weight: Weight) -> Weight {
-			Storage::<T>::process_deletion_queue_batch(remaining_weight)
+			ContractInfo::<T>::process_deletion_queue_batch(remaining_weight)
 				.saturating_add(T::WeightInfo::on_process_deletion_queue_batch())
 		}
 
@@ -381,7 +340,7 @@ pub mod pallet {
 					.max_block
 					.saturating_sub(System::<T>::block_weight().total())
 					.min(T::DeletionWeightLimit::get());
-				Storage::<T>::process_deletion_queue_batch(weight_limit)
+				ContractInfo::<T>::process_deletion_queue_batch(weight_limit)
 					.saturating_add(T::WeightInfo::on_process_deletion_queue_batch())
 			} else {
 				T::WeightInfo::on_process_deletion_queue_batch()
@@ -1129,8 +1088,7 @@ impl<T: Config> Pallet<T> {
 		let contract_info =
 			ContractInfoOf::<T>::get(&address).ok_or(ContractAccessError::DoesntExist)?;
 
-		let maybe_value = Storage::<T>::read(
-			&contract_info.trie_id,
+		let maybe_value = contract_info.read(
 			&StorageKey::<T>::try_from(key).map_err(|_| ContractAccessError::KeyDecodingFailed)?,
 		);
 		Ok(maybe_value)
@@ -1146,12 +1104,12 @@ impl<T: Config> Pallet<T> {
 		input_data: &[u8],
 		salt: &[u8],
 	) -> T::AccountId {
-		T::AddressGenerator::generate_address(deploying_address, code_hash, input_data, salt)
+		T::AddressGenerator::contract_address(deploying_address, code_hash, input_data, salt)
 	}
 
 	/// Returns the code hash of the contract specified by `account` ID.
 	pub fn code_hash(account: &AccountIdOf<T>) -> Option<CodeHash<T>> {
-		Storage::<T>::code_hash(account)
+		ContractInfo::<T>::load_code_hash(account)
 	}
 
 	/// Store code for benchmarks which does not check nor instrument the code.
