@@ -111,11 +111,9 @@ pub mod pallet {
 		/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
 		/// definition.
 		type HandleEquivocation: EquivocationHandlerT<
-			AccountId = Self::AccountId,
 			KeyOwnerProof = Self::KeyOwnerProof,
-			KeyOwnerIdentification = Self::KeyOwnerIdentification,
-			Offence = GrandpaEquivocationOffence<Self::KeyOwnerIdentification>,
-			EquivocationProof = EquivocationProof<Self::Hash, Self::BlockNumber>,
+			Offence = GrandpaEquivocationOffence<Self::KeyOwnerIdentification, Self::AccountId>,
+			OffenceProof = EquivocationProof<Self::Hash, Self::BlockNumber>,
 		>;
 
 		/// Weights for this pallet.
@@ -591,9 +589,10 @@ impl<T: Config> Pallet<T> {
 			session_index,
 			offender,
 			validator_count,
+			reporter,
 		};
 
-		T::HandleEquivocation::report_offence(reporter.into_iter().collect(), offence)
+		T::HandleEquivocation::report_offence(offence)
 			.map_err(|_| Error::<T>::DuplicateOffenceReport)?;
 
 		// waive the fee since the report is valid and beneficial
@@ -608,11 +607,7 @@ impl<T: Config> Pallet<T> {
 		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 		key_owner_proof: T::KeyOwnerProof,
 	) -> Option<()> {
-		T::HandleEquivocation::submit_unsigned_equivocation_report(
-			equivocation_proof,
-			key_owner_proof,
-		)
-		.ok()
+		T::HandleEquivocation::submit_offence_proof(equivocation_proof, key_owner_proof).ok()
 	}
 
 	fn on_stalled(further_wait: T::BlockNumber, median: T::BlockNumber) {

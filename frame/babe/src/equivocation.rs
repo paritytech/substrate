@@ -64,20 +64,12 @@ pub struct EquivocationHandler<I, R, L>(sp_std::marker::PhantomData<(I, R, L)>);
 impl<T, R, L> EquivocationHandlerT for EquivocationHandler<T, R, L>
 where
 	T: Config + pallet_authorship::Config + frame_system::offchain::SendTransactionTypes<Call<T>>,
-	R: ReportOffence<
-		T::AccountId,
-		T::KeyOwnerIdentification,
-		BabeEquivocationOffence<T::KeyOwnerIdentification>,
-	>,
+	R: ReportOffence<BabeEquivocationOffence<T::KeyOwnerIdentification, T::AccountId>>,
 	L: Get<u64>,
 {
-	type ReporterId = T::AccountId;
+	type Offence = BabeEquivocationOffence<T::KeyOwnerIdentification, T::AccountId>;
 
-	type OffenderId = T::KeyOwnerIdentification;
-
-	type Offence = BabeEquivocationOffence<Self::OffenderId>;
-
-	type EquivocationProof = EquivocationProof<T::Header>;
+	type OffenceProof = EquivocationProof<T::Header>;
 
 	type KeyOwnerProof = T::KeyOwnerProof;
 
@@ -85,8 +77,8 @@ where
 
 	type ReportLongevity = L;
 
-	fn submit_unsigned_equivocation_report(
-		equivocation_proof: Self::EquivocationProof,
+	fn submit_offence_proof(
+		equivocation_proof: Self::OffenceProof,
 		key_owner_proof: Self::KeyOwnerProof,
 	) -> DispatchResult {
 		use frame_system::offchain::SubmitTransaction;
@@ -113,18 +105,10 @@ where
 struct NullHandler<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config> EquivocationHandlerT for NullHandler<T> {
-	type ReporterId = T::AccountId;
-
-	type OffenderId = T::KeyOwnerIdentification;
-
-	type Offence = BabeEquivocationOffence<Self::OffenderId>;
-
-	type EquivocationProof = EquivocationProof<T::Header>;
-
-	type KeyOwnerProof = T::KeyOwnerProof;
-
+	type Offence = BabeEquivocationOffence<T::KeyOwnerIdentification, T::AccountId>;
+	type OffenceProof = ();
+	type KeyOwnerProof = ();
 	type ReportOffence = ();
-
 	type ReportLongevity = ();
 }
 
@@ -197,7 +181,7 @@ fn is_known_offence<T: Config>(
 /// A BABE equivocation offence report.
 ///
 /// When a validator released two or more blocks at the same slot.
-pub struct BabeEquivocationOffence<FullIdentification> {
+pub struct BabeEquivocationOffence<O, R> {
 	/// A babe slot in which this incident happened.
 	pub slot: Slot,
 	/// The session index in which the incident happened.
@@ -205,17 +189,23 @@ pub struct BabeEquivocationOffence<FullIdentification> {
 	/// The size of the validator set at the time of the offence.
 	pub validator_set_count: u32,
 	/// The authority that produced the equivocation.
-	pub offender: FullIdentification,
+	pub offender: O,
+	/// The offence reporter.
+	pub reporter: Option<R>,
 }
 
-impl<FullIdentification: Clone> Offence<FullIdentification>
-	for BabeEquivocationOffence<FullIdentification>
-{
+impl<O: Clone, R: Clone> Offence for BabeEquivocationOffence<O, R> {
 	const ID: Kind = *b"babe:equivocatio";
 	type TimeSlot = Slot;
+	type Offender = O;
+	type Reporter = R;
 
-	fn offenders(&self) -> Vec<FullIdentification> {
+	fn offenders(&self) -> Vec<O> {
 		vec![self.offender.clone()]
+	}
+
+	fn reporters(&self) -> Vec<R> {
+		self.reporter.clone().into_iter().collect()
 	}
 
 	fn session_index(&self) -> SessionIndex {

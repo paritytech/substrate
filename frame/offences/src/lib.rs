@@ -112,13 +112,14 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config, O: Offence<T::IdentificationTuple>>
-	ReportOffence<T::AccountId, T::IdentificationTuple, O> for Pallet<T>
+impl<T, O> ReportOffence<O> for Pallet<T>
 where
-	T::IdentificationTuple: Clone,
+	T: Config,
+	O: Offence<Offender = T::IdentificationTuple, Reporter = T::AccountId>,
 {
-	fn report_offence(reporters: Vec<T::AccountId>, offence: O) -> Result<(), OffenceError> {
+	fn report_offence(offence: O) -> Result<(), OffenceError> {
 		let offenders = offence.offenders();
+		let reporters = offence.reporters();
 		let time_slot = offence.time_slot();
 
 		// Go through all offenders in the offence report and find all offenders that were spotted
@@ -164,7 +165,7 @@ impl<T: Config> Pallet<T> {
 	/// Compute the ID for the given report properties.
 	///
 	/// The report id depends on the offence kind, time slot and the id of offender.
-	fn report_id<O: Offence<T::IdentificationTuple>>(
+	fn report_id<O: Offence>(
 		time_slot: &O::TimeSlot,
 		offender: &T::IdentificationTuple,
 	) -> ReportIdOf<T> {
@@ -173,7 +174,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Triages the offence report and returns the set of offenders that was involved in unique
 	/// reports along with the list of the concurrent offences.
-	fn triage_offence_report<O: Offence<T::IdentificationTuple>>(
+	fn triage_offence_report<O: Offence>(
 		reporters: Vec<T::AccountId>,
 		time_slot: &O::TimeSlot,
 		offenders: Vec<T::IdentificationTuple>,
@@ -223,13 +224,13 @@ struct TriageOutcome<T: Config> {
 /// This struct is responsible for aggregating storage writes and the underlying storage should not
 /// accessed directly meanwhile.
 #[must_use = "The changes are not saved without called `save`"]
-struct ReportIndexStorage<T: Config, O: Offence<T::IdentificationTuple>> {
+struct ReportIndexStorage<T: Config, O: Offence> {
 	opaque_time_slot: OpaqueTimeSlot,
 	concurrent_reports: Vec<ReportIdOf<T>>,
 	same_kind_reports: Vec<(O::TimeSlot, ReportIdOf<T>)>,
 }
 
-impl<T: Config, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
+impl<T: Config, O: Offence> ReportIndexStorage<T, O> {
 	/// Preload indexes from the storage for the specific `time_slot` and the kind of the offence.
 	fn load(time_slot: &O::TimeSlot) -> Self {
 		let opaque_time_slot = time_slot.encode();

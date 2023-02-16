@@ -68,29 +68,21 @@ pub struct EquivocationHandler<T, R, L>(sp_std::marker::PhantomData<(T, R, L)>);
 impl<T, R, L> EquivocationHandlerT for EquivocationHandler<T, R, L>
 where
 	T: Config + pallet_authorship::Config + frame_system::offchain::SendTransactionTypes<Call<T>>,
-	R: ReportOffence<
-		T::AccountId,
-		T::KeyOwnerIdentification,
-		GrandpaEquivocationOffence<T::KeyOwnerIdentification>,
-	>,
+	R: ReportOffence<GrandpaEquivocationOffence<T::KeyOwnerIdentification, T::AccountId>>,
 	L: Get<u64>,
 {
-	type ReportLongevity = L;
+	type Offence = GrandpaEquivocationOffence<T::KeyOwnerIdentification, T::AccountId>;
 
-	type AccountId = T::AccountId;
-
-	type KeyOwnerIdentification = T::KeyOwnerIdentification;
-
-	type Offence = GrandpaEquivocationOffence<T::KeyOwnerIdentification>;
-
-	type EquivocationProof = EquivocationProof<T::Hash, T::BlockNumber>;
+	type OffenceProof = EquivocationProof<T::Hash, T::BlockNumber>;
 
 	type KeyOwnerProof = T::KeyOwnerProof;
 
 	type ReportOffence = R;
 
-	fn submit_unsigned_equivocation_report(
-		equivocation_proof: Self::EquivocationProof,
+	type ReportLongevity = L;
+
+	fn submit_offence_proof(
+		equivocation_proof: Self::OffenceProof,
 		key_owner_proof: Self::KeyOwnerProof,
 	) -> DispatchResult {
 		use frame_system::offchain::SubmitTransaction;
@@ -109,7 +101,7 @@ where
 		Ok(())
 	}
 
-	fn block_author() -> Option<Self::AccountId> {
+	fn block_author() -> Option<T::AccountId> {
 		<pallet_authorship::Pallet<T>>::author()
 	}
 }
@@ -117,19 +109,14 @@ where
 struct NullHandler<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config> EquivocationHandlerT for NullHandler<T> {
-	type ReportLongevity = ();
+	// TODO: is possible to get rid of this? Like defining a default dummy Offence
+	// OR even better get rid of this EquivocationHandler trait...
+	type Offence = GrandpaEquivocationOffence<T::KeyOwnerIdentification, T::AccountId>;
 
-	type AccountId = T::AccountId;
-
-	type KeyOwnerIdentification = T::KeyOwnerIdentification;
-
-	type Offence = GrandpaEquivocationOffence<Self::KeyOwnerIdentification>;
-
-	type EquivocationProof = EquivocationProof<T::Hash, T::BlockNumber>;
-
-	type KeyOwnerProof = T::KeyOwnerProof;
-
+	type OffenceProof = ();
+	type KeyOwnerProof = ();
 	type ReportOffence = ();
+	type ReportLongevity = ();
 }
 
 /// A round number and set id which point on the time of an offence.
@@ -218,7 +205,7 @@ fn is_known_offence<T: Config>(
 }
 
 /// A GRANDPA equivocation offence report.
-pub struct GrandpaEquivocationOffence<FullIdentification> {
+pub struct GrandpaEquivocationOffence<O, R> {
 	/// Time slot at which this incident happened.
 	pub time_slot: GrandpaTimeSlot,
 	/// The session index in which the incident happened.
@@ -226,17 +213,23 @@ pub struct GrandpaEquivocationOffence<FullIdentification> {
 	/// The size of the validator set at the time of the offence.
 	pub validator_count: u32,
 	/// The authority which produced this equivocation.
-	pub offender: FullIdentification,
+	pub offender: O,
+	/// The offence reporter.
+	pub reporter: Option<R>,
 }
 
-impl<FullIdentification: Clone> Offence<FullIdentification>
-	for GrandpaEquivocationOffence<FullIdentification>
-{
+impl<O: Clone, R: Clone> Offence for GrandpaEquivocationOffence<O, R> {
 	const ID: Kind = *b"grandpa:equivoca";
 	type TimeSlot = GrandpaTimeSlot;
+	type Offender = O;
+	type Reporter = R;
 
-	fn offenders(&self) -> Vec<FullIdentification> {
+	fn offenders(&self) -> Vec<O> {
 		vec![self.offender.clone()]
+	}
+
+	fn reporters(&self) -> Vec<R> {
+		self.reporter.clone().into_iter().collect()
 	}
 
 	fn session_index(&self) -> SessionIndex {

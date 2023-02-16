@@ -173,11 +173,9 @@ pub mod pallet {
 		/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
 		/// definition.
 		type HandleEquivocation: EquivocationHandlerT<
-			ReporterId = Self::AccountId,
-			OffenderId = Self::KeyOwnerIdentification,
 			KeyOwnerProof = Self::KeyOwnerProof,
-			Offence = BabeEquivocationOffence<Self::KeyOwnerIdentification>,
-			EquivocationProof = EquivocationProof<Self::Header>,
+			Offence = BabeEquivocationOffence<Self::KeyOwnerIdentification, Self::AccountId>,
+			OffenceProof = EquivocationProof<Self::Header>,
 		>;
 
 		/// Helper for weights computations
@@ -854,10 +852,15 @@ impl<T: Config> Pallet<T> {
 		let offender = T::KeyOwnerProofSystem::check_proof(key, key_owner_proof)
 			.ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
 
-		let offence =
-			BabeEquivocationOffence { slot, validator_set_count, offender, session_index };
+		let offence = BabeEquivocationOffence {
+			slot,
+			validator_set_count,
+			offender,
+			session_index,
+			reporter,
+		};
 
-		T::HandleEquivocation::report_offence(reporter.into_iter().collect(), offence)
+		T::HandleEquivocation::report_offence(offence)
 			.map_err(|_| Error::<T>::DuplicateOffenceReport)?;
 
 		// waive the fee since the report is valid and beneficial
@@ -872,12 +875,7 @@ impl<T: Config> Pallet<T> {
 		equivocation_proof: EquivocationProof<T::Header>,
 		key_owner_proof: T::KeyOwnerProof,
 	) -> Option<()> {
-		// TODO: this should be submitted anyway...???
-		T::HandleEquivocation::submit_unsigned_equivocation_report(
-			equivocation_proof,
-			key_owner_proof,
-		)
-		.ok()
+		T::HandleEquivocation::submit_offence_proof(equivocation_proof, key_owner_proof).ok()
 	}
 }
 

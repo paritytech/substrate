@@ -18,10 +18,9 @@
 //! Common traits and types that are useful for describing offences for usage in environments
 //! that use staking.
 
-use sp_std::vec::Vec;
-
 use codec::{Decode, Encode};
 use sp_runtime::Perbill;
+use sp_std::vec::Vec;
 
 use crate::SessionIndex;
 
@@ -65,9 +64,15 @@ pub enum DisableStrategy {
 /// This trait assumes that the offence is legitimate and was validated already.
 ///
 /// Examples of offences include: a BABE equivocation or a GRANDPA unjustified vote.
-pub trait Offence<Offender> {
+pub trait Offence {
 	/// Identifier which is unique for this kind of an offence.
 	const ID: Kind;
+
+	/// Offender Identifier.
+	type Offender;
+
+	/// Reporter identifier.
+	type Reporter;
 
 	/// A type that represents a point in time on an abstract timescale.
 	///
@@ -76,9 +81,10 @@ pub trait Offence<Offender> {
 	type TimeSlot: Clone + codec::Codec + Ord;
 
 	/// The list of all offenders involved in this incident.
-	///
-	/// The list has no duplicates, so it is rather a set.
-	fn offenders(&self) -> Vec<Offender>;
+	fn offenders(&self) -> Vec<Self::Offender>;
+
+	/// The list of all reporters of this incident.
+	fn reporters(&self) -> Vec<Self::Reporter>;
 
 	/// The session index that is used for querying the validator set for the `slash_fraction`
 	/// function.
@@ -138,22 +144,22 @@ impl sp_runtime::traits::Printable for OffenceError {
 }
 
 /// A trait for decoupling offence reporters from the actual handling of offence reports.
-pub trait ReportOffence<Reporter, Offender, O: Offence<Offender>> {
+pub trait ReportOffence<O: Offence> {
 	/// Report an `offence` and reward given `reporters`.
-	fn report_offence(reporters: Vec<Reporter>, offence: O) -> Result<(), OffenceError>;
+	fn report_offence(offence: O) -> Result<(), OffenceError>;
 
 	/// Returns true iff all of the given offenders have been previously reported
 	/// at the given time slot. This function is useful to prevent the sending of
 	/// duplicate offence reports.
-	fn is_known_offence(offenders: &[Offender], time_slot: &O::TimeSlot) -> bool;
+	fn is_known_offence(offenders: &[O::Offender], time_slot: &O::TimeSlot) -> bool;
 }
 
-impl<Reporter, Offender, O: Offence<Offender>> ReportOffence<Reporter, Offender, O> for () {
-	fn report_offence(_reporters: Vec<Reporter>, _offence: O) -> Result<(), OffenceError> {
+impl<O: Offence> ReportOffence<O> for () {
+	fn report_offence(_offence: O) -> Result<(), OffenceError> {
 		Ok(())
 	}
 
-	fn is_known_offence(_offenders: &[Offender], _time_slot: &O::TimeSlot) -> bool {
+	fn is_known_offence(_offenders: &[O::Offender], _time_slot: &O::TimeSlot) -> bool {
 		true
 	}
 }
