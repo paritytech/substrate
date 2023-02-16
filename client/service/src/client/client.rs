@@ -491,8 +491,7 @@ where
 	}
 
 	/// Get the RuntimeVersion at a given block.
-	pub fn runtime_version_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
-		let hash = self.backend.blockchain().expect_block_hash_from_id(id)?;
+	pub fn runtime_version_at(&self, hash: Block::Hash) -> sp_blockchain::Result<RuntimeVersion> {
 		CallExecutor::runtime_version(&self.executor, hash)
 	}
 
