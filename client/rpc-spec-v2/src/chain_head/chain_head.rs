@@ -44,16 +44,13 @@ use jsonrpsee::{
 	SubscriptionSink,
 };
 use log::{debug, error};
-use parking_lot::RwLock;
 use sc_client_api::{
 	Backend, BlockBackend, BlockImportNotification, BlockchainEvents, CallExecutor, ChildInfo,
 	ExecutorProvider, FinalityNotification, StorageKey, StorageProvider,
 };
-use serde::Serialize;
 use sp_api::CallApiAt;
 use sp_blockchain::{
-	Backend as BlockChainBackend, Error as BlockChainError, HashAndNumber, HeaderBackend,
-	HeaderMetadata,
+	Backend as BlockChainBackend, Error as BlockChainError, HeaderBackend, HeaderMetadata, Info,
 };
 use sp_core::{hexdisplay::HexDisplay, storage::well_known_keys, Bytes};
 use sp_runtime::{
@@ -128,19 +125,26 @@ impl<BE, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 ///
 /// This includes the "Initialized" event followed by the in-memory
 /// blocks via "NewBlock" and the "BestBlockChanged".
-fn generate_initial_events<Block, Client>(
+fn generate_initial_events<Block, Client, BE>(
 	client: &Arc<Client>,
+	backend: &Arc<BE>,
 	handle: &SubscriptionHandle<Block>,
 	runtime_updates: bool,
-	initial_blocks: Vec<(Block::Hash, Block::Hash)>,
-) -> Result<Vec<FollowEvent<Block::Hash>>, SubscriptionManagementError>
+	info: &Info<Block>,
+) -> Result<(Vec<FollowEvent<Block::Hash>>, HashSet<Block::Hash>), SubscriptionManagementError>
 where
 	Block: BlockT + 'static,
 	Block::Header: Unpin,
+	BE: Backend<Block> + 'static,
 	Client: HeaderBackend<Block> + CallApiAt<Block> + 'static,
 {
+	let Ok(ret) = get_initial_blocks_with_forks(&backend, &info) else {
+		return Err(SubscriptionManagementError::Custom("Failed to fetch initial blocks".into()));
+	};
+	let initial_blocks = ret.in_memory;
+
 	// The initialized event is the first one sent.
-	let finalized_block_hash = client.info().finalized_hash;
+	let finalized_block_hash = info.finalized_hash;
 	handle.pin_block(finalized_block_hash)?;
 
 	let finalized_block_runtime = generate_runtime_event(
@@ -180,13 +184,17 @@ where
 	}
 
 	// Generate a new best block event.
-	let best_block_hash = client.info().best_hash;
+	let best_block_hash = info.best_hash;
 	if best_block_hash != finalized_block_hash {
 		let best_block = FollowEvent::BestBlockChanged(BestBlockChanged { best_block_hash });
+
+		let mut best_block_cache = handle.best_block_write();
+		*best_block_cache = Some(best_block_hash);
+
 		in_memory_blocks.push(best_block);
 	};
 
-	Ok(in_memory_blocks)
+	Ok((in_memory_blocks, ret.pruned_forks))
 }
 
 /// Parse hex-encoded string parameter as raw bytes.
@@ -278,7 +286,7 @@ struct InitialBlocks<Block: BlockT> {
 /// Get the in-memory blocks of the client, starting from the provided finalized hash.
 fn get_initial_blocks_with_forks<Block, BE>(
 	backend: &Arc<BE>,
-	finalized: HashAndNumber<Block>,
+	info: &Info<Block>,
 ) -> Result<InitialBlocks<Block>, SubscriptionManagementError>
 where
 	Block: BlockT + 'static,
@@ -288,8 +296,8 @@ where
 	let leaves = blockchain
 		.leaves()
 		.map_err(|err| SubscriptionManagementError::Custom(err.to_string()))?;
-	let finalized_number = finalized.number;
-	let finalized = finalized.hash;
+	let finalized_number = info.finalized_number;
+	let finalized = info.finalized_hash;
 	let mut pruned_forks = HashSet::new();
 	let mut in_memory = Vec::new();
 	for leaf in leaves {
@@ -319,13 +327,22 @@ where
 
 /// Submit the events from the provided stream to the RPC client
 /// for as long as the `rx_stop` event was not called.
-async fn submit_events<EventStream, T>(
+async fn submit_events<EventStream, Block, Client>(
 	sink: &mut SubscriptionSink,
 	mut stream: EventStream,
+	client: &Arc<Client>,
+	handle: &SubscriptionHandle<Block>,
+	runtime_updates: bool,
+	mut to_ignore: HashSet<Block::Hash>,
+	start_info: &Info<Block>,
 	rx_stop: oneshot::Receiver<()>,
 ) where
-	EventStream: Stream<Item = T> + Unpin,
-	T: Serialize,
+	EventStream: Stream<Item = NotificationType<Block>> + Unpin,
+	Block: BlockT + 'static,
+	Client: CallApiAt<Block>
+		+ HeaderBackend<Block>
+		+ HeaderMetadata<Block, Error = BlockChainError>
+		+ 'static,
 {
 	let mut stream_item = stream.next();
 	let mut stop_event = rx_stop;
@@ -333,18 +350,37 @@ async fn submit_events<EventStream, T>(
 	while let Either::Left((Some(event), next_stop_event)) =
 		futures_util::future::select(stream_item, stop_event).await
 	{
-		match sink.send(&event) {
-			Ok(true) => {
-				stream_item = stream.next();
-				stop_event = next_stop_event;
-			},
-			// Client disconnected.
-			Ok(false) => return,
-			Err(_) => {
-				// Failed to submit event.
+		let events = match event {
+			NotificationType::InitialEvents(events) => Ok(events),
+			NotificationType::NewBlock(notification) =>
+				handle_import_blocks(client, handle, runtime_updates, notification),
+			NotificationType::Finalized(notification) =>
+				handle_finalized_blocks(client, handle, notification, &mut to_ignore, &start_info),
+		};
+
+		let events = match events {
+			Ok(events) => events,
+			Err(err) => {
+				debug!(target: "rpc-spec-v2", "Failed to handle stream notification {:?}", err);
 				break
 			},
+		};
+
+		for event in events {
+			match sink.send(&event) {
+				// Submitted successfully.
+				Ok(true) => continue,
+				// Client disconnected.
+				Ok(false) => return,
+				Err(_) => {
+					// Failed to submit event.
+					break
+				},
+			}
 		}
+
+		stream_item = stream.next();
+		stop_event = next_stop_event;
 	}
 
 	let _ = sink.send(&FollowEvent::<String>::Stop);
@@ -357,12 +393,17 @@ fn handle_import_blocks<Client, Block>(
 	handle: &SubscriptionHandle<Block>,
 	runtime_updates: bool,
 	notification: BlockImportNotification<Block>,
-) -> Result<(FollowEvent<Block::Hash>, Option<FollowEvent<Block::Hash>>), SubscriptionManagementError>
+) -> Result<Vec<FollowEvent<Block::Hash>>, SubscriptionManagementError>
 where
 	Block: BlockT + 'static,
 	Client: CallApiAt<Block> + 'static,
 {
-	handle.pin_block(notification.hash)?;
+	let is_new_pin = handle.pin_block(notification.hash)?;
+	// TODO: Also check number >= init info
+	if !is_new_pin {
+		// The block was already pinned by the initial block event in `generate_initial_events`.
+		return Ok(vec![])
+	}
 
 	let new_runtime = generate_runtime_event(
 		&client,
@@ -380,7 +421,7 @@ where
 	});
 
 	if !notification.is_new_best {
-		return Ok((new_block, None))
+		return Ok(vec![new_block])
 	}
 
 	// If this is the new best block, then we need to generate two events.
@@ -394,14 +435,14 @@ where
 			// Note: This handles the race with the finalized branch.
 			if block_cache != notification.hash {
 				*best_block_cache = Some(notification.hash);
-				Ok((new_block, Some(best_block_event)))
+				Ok(vec![new_block, best_block_event])
 			} else {
-				Ok((new_block, None))
+				Ok(vec![new_block])
 			}
 		},
 		None => {
 			*best_block_cache = Some(notification.hash);
-			Ok((new_block, Some(best_block_event)))
+			Ok(vec![new_block, best_block_event])
 		},
 	}
 }
@@ -412,13 +453,20 @@ fn handle_finalized_blocks<Client, Block>(
 	client: &Arc<Client>,
 	handle: &SubscriptionHandle<Block>,
 	notification: FinalityNotification<Block>,
-	pruned_forks: &Arc<RwLock<HashSet<Block::Hash>>>,
-) -> Result<(FollowEvent<Block::Hash>, Option<FollowEvent<Block::Hash>>), SubscriptionManagementError>
+	to_ignore: &mut HashSet<Block::Hash>,
+	start_info: &Info<Block>,
+) -> Result<Vec<FollowEvent<Block::Hash>>, SubscriptionManagementError>
 where
 	Block: BlockT + 'static,
 	Client: HeaderBackend<Block> + HeaderMetadata<Block, Error = BlockChainError> + 'static,
 {
 	let last_finalized = notification.hash;
+	let finalized_number = client.number(last_finalized.clone()).unwrap().unwrap();
+	// Check if the finalized hash has been reported by the initial events.
+	if finalized_number < start_info.finalized_number {
+		return Ok(vec![])
+	}
+
 	// We might not receive all new blocks reports, also pin the block here.
 	handle.pin_block(last_finalized)?;
 
@@ -431,8 +479,6 @@ where
 	// Report all pruned blocks from the notification that are not
 	// part of the `pruned_forks`.
 	let pruned_block_hashes: Vec<_> = {
-		let mut to_ignore = pruned_forks.write();
-
 		notification
 			.stale_heads
 			.iter()
@@ -459,7 +505,7 @@ where
 			// Check if the current best block is also reported as pruned.
 			let reported_pruned = pruned_block_hashes.iter().find(|&&hash| hash == block_cache);
 			if reported_pruned.is_none() {
-				return Ok((finalized_event, None))
+				return Ok(vec![finalized_event])
 			}
 
 			// The best block is reported as pruned. Therefore, we need to signal a new
@@ -468,12 +514,10 @@ where
 			if best_block_hash == block_cache {
 				// The client doest not have any new information about the best block.
 				// The information from `.info()` is updated from the DB as the last
-				// step of the finalization and it should be up to date. Also, the
-				// displaced nodes (list of nodes reported) should be reported with
-				// an offset of 32 blocks for substrate.
+				// step of the finalization and it should be up to date.
 				// If the info is outdated, there is nothing the RPC can do for now.
 				error!(target: "rpc-spec-v2", "Client does not contain different best block");
-				Ok((finalized_event, None))
+				Ok(vec![finalized_event])
 			} else {
 				let ancestor = sp_blockchain::lowest_common_ancestor(
 					&**client,
@@ -497,11 +541,21 @@ where
 				*best_block_cache = Some(best_block_hash);
 				let best_block_event =
 					FollowEvent::BestBlockChanged(BestBlockChanged { best_block_hash });
-				Ok((finalized_event, Some(best_block_event)))
+				Ok(vec![best_block_event, finalized_event])
 			}
 		},
-		None => Ok((finalized_event, None)),
+		None => Ok(vec![finalized_event]),
 	}
+}
+
+/// Internal representation of a block notification.
+enum NotificationType<Block: BlockT> {
+	/// The initial events generated from the node's memory.
+	InitialEvents(Vec<FollowEvent<Block::Hash>>),
+	/// The new block notification obtained from `import_notification_stream`.
+	NewBlock(BlockImportNotification<Block>),
+	/// The finalized block notification obtained from `finality_notification_stream`.
+	Finalized(FinalityNotification<Block>),
 }
 
 #[async_trait]
@@ -542,73 +596,55 @@ where
 		};
 		debug!(target: "rpc-spec-v2", "[follow][id={:?}] Subscription accepted", sub_id);
 
-		// Get all block hashes from the node's memory.
-		let info = self.client.info();
-		let finalized = HashAndNumber { hash: info.finalized_hash, number: info.finalized_number };
-		let Ok(InitialBlocks { in_memory, pruned_forks}) = get_initial_blocks_with_forks(&self.backend, finalized) else {
-			// Note: This could be warp sync error.
-			debug!(target: "rpc-spec-v2", "[follow][id={:?}] Failed to get all in-memory blocks", sub_id);
-			let _ = sink.send(&FollowEvent::<Block::Hash>::Stop);
-			return Ok(())
-		};
-		let pruned_forks = Arc::new(RwLock::new(pruned_forks));
-
-		let client = self.client.clone();
-		let handle = sub_handle.clone();
-		let subscription_id = sub_id.clone();
-
+		// Register for the new block and finalized notifications.
 		let stream_import = self
 			.client
 			.import_notification_stream()
-			.map(move |notification| {
-				match handle_import_blocks(&client, &handle, runtime_updates, notification) {
-					Ok((new_block, None)) => stream::iter(vec![new_block]),
-					Ok((new_block, Some(best_block))) => stream::iter(vec![new_block, best_block]),
-					Err(_) => {
-						debug!(target: "rpc-spec-v2", "[follow][id={:?}] Failed to handle block import notification.", subscription_id);
-						handle.stop();
-						stream::iter(vec![])
-					},
-				}
-			})
-			.flatten();
-
-		let client = self.client.clone();
-		let handle = sub_handle.clone();
-		let subscription_id = sub_id.clone();
+			.map(|notification| NotificationType::NewBlock(notification));
 
 		let stream_finalized = self
 			.client
 			.finality_notification_stream()
-			.map(move |notification| {
-				match handle_finalized_blocks(&client, &handle, notification, &pruned_forks) {
-					Ok((finalized_event, None)) => stream::iter(vec![finalized_event]),
-					Ok((finalized_event, Some(best_block))) =>
-						stream::iter(vec![best_block, finalized_event]),
-					Err(_) => {
-						debug!(target: "rpc-spec-v2", "[follow][id={:?}] Failed to import finalized blocks", subscription_id);
-						handle.stop();
-						stream::iter(vec![])
-					},
-				}
-			})
-			.flatten();
+			.map(|notification| NotificationType::Finalized(notification));
 
 		let merged = tokio_stream::StreamExt::merge(stream_import, stream_finalized);
+
 		let subscriptions = self.subscriptions.clone();
+		let backend = self.backend.clone();
 		let client = self.client.clone();
 		let fut = async move {
-			let Ok(initial_events) = generate_initial_events(&client, &sub_handle, runtime_updates, in_memory) else {
-				// Stop the subscription if we exceeded the maximum number of blocks pinned.
-				debug!(target: "rpc-spec-v2", "[follow][id={:?}] Exceeded max pinned blocks from initial events", sub_id);
-				let _ = sink.send(&FollowEvent::<Block::Hash>::Stop);
-				return
+			let start_info = client.info();
+
+			let (initial_events, pruned_forks) = match generate_initial_events(
+				&client,
+				&backend,
+				&sub_handle,
+				runtime_updates,
+				&start_info,
+			) {
+				Ok(blocks) => blocks,
+				Err(err) => {
+					debug!(target: "rpc-spec-v2", "[follow][id={:?}] Failed to generate the initial events {:?}", sub_id, err);
+					let _ = sink.send(&FollowEvent::<Block::Hash>::Stop);
+					subscriptions.remove_subscription(&sub_id);
+					return
+				},
 			};
 
-			let stream = stream::iter(initial_events).chain(merged);
+			let initial = NotificationType::InitialEvents(initial_events);
+			let stream = stream::once(futures::future::ready(initial)).chain(merged);
 
-			submit_events(&mut sink, stream.boxed(), rx_stop).await;
-			// The client disconnected or called the unsubscribe method.
+			submit_events(
+				&mut sink,
+				stream.boxed(),
+				&client,
+				&sub_handle,
+				runtime_updates,
+				pruned_forks,
+				&start_info,
+				rx_stop,
+			)
+			.await;
 			subscriptions.remove_subscription(&sub_id);
 			debug!(target: "rpc-spec-v2", "[follow][id={:?}] Subscription removed", sub_id);
 		};
