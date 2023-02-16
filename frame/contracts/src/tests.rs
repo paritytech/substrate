@@ -383,7 +383,7 @@ impl Contains<RuntimeCall> for TestFilter {
 }
 
 parameter_types! {
-	pub const DeletionWeightLimit: Weight = Weight::from_ref_time(500_000_000_000);
+	pub const DeletionWeightLimit: Weight = GAS_LIMIT;
 	pub static UnstableInterface: bool = true;
 }
 
@@ -416,7 +416,7 @@ pub const BOB: AccountId32 = AccountId32::new([2u8; 32]);
 pub const CHARLIE: AccountId32 = AccountId32::new([3u8; 32]);
 pub const DJANGO: AccountId32 = AccountId32::new([4u8; 32]);
 
-pub const GAS_LIMIT: Weight = Weight::from_parts(100_000_000_000, 512 * 1024);
+pub const GAS_LIMIT: Weight = Weight::from_parts(100_000_000_000, 3 * 1024 * 1024);
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
@@ -2322,7 +2322,7 @@ fn lazy_removal_does_no_run_on_low_remaining_weight() {
 fn lazy_removal_does_not_use_all_weight() {
 	let (code, _hash) = compile_module::<Test>("self_destruct").unwrap();
 
-	let weight_limit = Weight::from_ref_time(5_000_000_000);
+	let weight_limit = Weight::from_parts(5_000_000_000, 100 * 1024);
 	let mut ext = ExtBuilder::default().existential_deposit(50).build();
 
 	let (trie, vals, weight_per_key) = ext.execute_with(|| {
@@ -2396,7 +2396,7 @@ fn lazy_removal_does_not_use_all_weight() {
 		let weight_used = Storage::<Test>::process_deletion_queue_batch(weight_limit);
 
 		// We have one less key in our trie than our weight limit suffices for
-		assert_eq!(weight_used, weight_limit - Weight::from_ref_time(weight_per_key));
+		assert_eq!(weight_used, weight_limit - weight_per_key);
 
 		// All the keys are removed
 		for val in vals {
