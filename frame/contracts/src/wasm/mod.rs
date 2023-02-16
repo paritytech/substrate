@@ -42,7 +42,7 @@ pub use crate::wasm::{
 use crate::{
 	exec::{ExecResult, Executable, ExportedFunction, Ext},
 	gas::GasMeter,
-	AccountIdOf, BalanceOf, CodeHash, CodeStorage, CodeVec, Config, Error, RelaxedCodeVec,
+	AccountIdOf, BalanceOf, CodeHash, CodeVec, Config, Error, OwnerInfoOf, RelaxedCodeVec,
 	Schedule,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -191,7 +191,7 @@ impl<T: Config> PrefabWasmModule<T> {
 	/// Returns `0` if the module is already in storage and hence no deposit will
 	/// be charged when storing it.
 	pub fn open_deposit(&self) -> BalanceOf<T> {
-		if <CodeStorage<T>>::contains_key(&self.code_hash) {
+		if <OwnerInfoOf<T>>::contains_key(&self.code_hash) {
 			0u32.into()
 		} else {
 			// Only already in-storage contracts have their `owner_info` set to `None`.

@@ -42,7 +42,7 @@ use node_primitives::Block;
 use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::{
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
-	ExecutionStrategy, HeaderBackend,
+	ExecutionStrategy,
 };
 use sc_client_db::PruningMode;
 use sc_consensus::{BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult, ImportedAux};
@@ -273,11 +273,11 @@ pub struct BlockContentIterator<'a> {
 
 impl<'a> BlockContentIterator<'a> {
 	fn new(content: BlockContent, keyring: &'a BenchKeyring, client: &Client) -> Self {
+		let genesis_hash = client.chain_info().genesis_hash;
 		let runtime_version = client
-			.runtime_version_at(&BlockId::number(0))
+			.runtime_version_at(genesis_hash)
 			.expect("There should be runtime version at 0");
-
-		let genesis_hash = client.info().genesis_hash;
+    
 		BlockContentIterator { iteration: 0, content, keyring, runtime_version, genesis_hash }
 	}
 }
