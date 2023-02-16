@@ -72,7 +72,7 @@ impl<T: Config> AddressGenerator<T> for DefaultAddressGenerator {
 			.expect("infinite length input; no invalid inputs for type; qed")
 	}
 
-	/// Formula: `hash("contract_deposit_v1" ++ contract_addr)`
+	/// Formula: `hash("contract_depo_v1" ++ contract_addr)`
 	fn deposit_address(contract_addr: &T::AccountId) -> T::AccountId {
 		let entropy = (b"contract_depo_v1", contract_addr).using_encoded(T::Hashing::hash);
 		Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
