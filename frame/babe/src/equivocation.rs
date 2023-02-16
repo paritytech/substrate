@@ -65,25 +65,18 @@ impl<I, R, L> Default for EquivocationHandler<I, R, L> {
 	}
 }
 
+// We use the authorship pallet to fetch the current block author and use
+// `offchain::SendTransactionTypes` for unsigned extrinsic creation and
+// submission.
 impl<T, R, L> EquivocationHandlerT for EquivocationHandler<T, R, L>
 where
-	// We use the authorship pallet
-	// to fetch the current block
-	// author and use
-	// `offchain::SendTransactionTypes`
-	// for unsigned extrinsic
-	// creation and submission.
 	T: Config + pallet_authorship::Config + frame_system::offchain::SendTransactionTypes<Call<T>>,
 
-	// A system for reporting offences after valid equivocation reports are
-	// processed.
 	R: ReportOffence<
 		T::AccountId,
 		T::KeyOwnerIdentification,
 		BabeEquivocationOffence<T::KeyOwnerIdentification>,
 	>,
-	// The longevity (in blocks) that the equivocation report is valid for. When using the staking
-	// pallet this should be the bonding duration.
 	L: Get<u64>,
 {
 	type ReportLongevity = L;

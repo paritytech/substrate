@@ -1,6 +1,7 @@
 use crate::offence::{Offence, OffenceError, ReportOffence};
 use sp_core::Get;
-use sp_runtime::DispatchResult;
+use sp_runtime::{DispatchError, DispatchResult};
+use sp_std::vec::Vec;
 
 pub trait EquivocationHandler {
 	/// The longevity, in blocks, that the equivocation report is valid for. When using the staking
@@ -35,9 +36,11 @@ pub trait EquivocationHandler {
 
 	/// Create and dispatch an equivocation report extrinsic.
 	fn submit_unsigned_equivocation_report(
-		equivocation_proof: Self::EquivocationProof,
-		key_owner_proof: Self::KeyOwnerProof,
-	) -> DispatchResult;
+		_equivocation_proof: Self::EquivocationProof,
+		_key_owner_proof: Self::KeyOwnerProof,
+	) -> DispatchResult {
+		Err(DispatchError::Other("Not implemented"))
+	}
 
 	/// Fetch the current block author id, if defined.
 	fn block_author() -> Option<Self::AccountId> {
@@ -45,30 +48,18 @@ pub trait EquivocationHandler {
 	}
 }
 
-// impl<T> HandleEquivocation2 for () {
+// impl<T: Offence<Id>, Id> EquivocationHandler for () {
 // 	type ReportLongevity = ();
+
 // 	type AccountId = ();
-//  type ReportOffence = ();
 
-// 	fn report_offence(
-// 		_reporters: Vec<T::AccountId>,
-// 		_offence: BabeEquivocationOffence<T::KeyOwnerIdentification>,
-// 	) -> Result<(), OffenceError> {
-// 		Ok(())
-// 	}
+// 	type Offence = T; // Offence<Self::KeyOwnerIdentification>;
 
-// 	fn is_known_offence(_offenders: &[T::KeyOwnerIdentification], _time_slot: &Slot) -> bool {
-// 		true
-// 	}
+// 	type KeyOwnerIdentification = Id;
 
-// 	fn submit_unsigned_equivocation_report(
-// 		_equivocation_proof: EquivocationProof<T::Header>,
-// 		_key_owner_proof: T::KeyOwnerProof,
-// 	) -> DispatchResult {
-// 		Ok(())
-// 	}
+// 	type EquivocationProof = ();
 
-// 	fn block_author() -> Option<T::AccountId> {
-// 		None
-// 	}
+// 	type KeyOwnerProof = ();
+
+// 	type ReportOffence = ();
 // }

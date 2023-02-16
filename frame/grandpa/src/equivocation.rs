@@ -206,8 +206,7 @@ fn is_known_offence<T: Config>(
 	}
 }
 
-/// A grandpa equivocation offence report.
-#[allow(dead_code)]
+/// A GRANDPA equivocation offence report.
 pub struct GrandpaEquivocationOffence<FullIdentification> {
 	/// Time slot at which this incident happened.
 	pub time_slot: GrandpaTimeSlot,
