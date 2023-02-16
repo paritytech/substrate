@@ -457,7 +457,7 @@ where
 			},
 			Poll::Ready(None) =>
 				return Poll::Ready(Err(NotificationsOutError::Io(io::Error::new(
-					io::ErrorKind::WriteZero,
+					io::ErrorKind::ConnectionAborted,
 					"substream was closed by the remote",
 				)))),
 		}
