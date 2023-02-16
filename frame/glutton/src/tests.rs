@@ -38,8 +38,8 @@ fn initialize_pallet_works() {
 
 		assert_ok!(Glutton::initialize_pallet(RuntimeOrigin::root(), 2));
 
-		assert_eq!(TrashData::<Test>::get(0), Some(0));
-		assert_eq!(TrashData::<Test>::get(1), Some(1));
+		assert_eq!(TrashData::<Test>::get(0), Some([0; 1024]));
+		assert_eq!(TrashData::<Test>::get(1), Some([0; 1024]));
 		assert_eq!(TrashData::<Test>::get(2), None);
 	});
 }

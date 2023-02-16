@@ -34,7 +34,7 @@ benchmarks! {
 	}
 
 	waste_proof_size_some {
-		(0..5000).for_each(|i| TrashData::<T>::insert(i, i));
+		(0..5000).for_each(|i| TrashData::<T>::insert(i, [i as u8; 1024]));
 	}: {
 		TrashData::<T>::get(2500);
 	}
@@ -53,12 +53,21 @@ benchmarks! {
 	}
 
 	// For manual verification only.
-	on_idle {
-		(0..5000).for_each(|i| TrashData::<T>::insert(i, i));
+	on_idle_high_proof_waste {
+		(0..5000).for_each(|i| TrashData::<T>::insert(i, [i as u8; 1024]));
 		let _ = Glutton::<T>::set_compute(SystemOrigin::Root.into(), Perbill::from_percent(100));
 		let _ = Glutton::<T>::set_storage(SystemOrigin::Root.into(), Perbill::from_percent(100));
 	}: {
 		let weight = Glutton::<T>::on_idle(System::<T>::block_number(), Weight::from_parts(WEIGHT_REF_TIME_PER_MILLIS * 100, WEIGHT_PROOF_SIZE_PER_MB * 5));
+	}
+
+	// For manual verification only.
+	on_idle_low_proof_waste {
+		(0..5000).for_each(|i| TrashData::<T>::insert(i, [i as u8; 1024]));
+		let _ = Glutton::<T>::set_compute(SystemOrigin::Root.into(), Perbill::from_percent(100));
+		let _ = Glutton::<T>::set_storage(SystemOrigin::Root.into(), Perbill::from_percent(100));
+	}: {
+		let weight = Glutton::<T>::on_idle(System::<T>::block_number(), Weight::from_parts(WEIGHT_REF_TIME_PER_MILLIS * 100, WEIGHT_PROOF_SIZE_PER_KB * 20));
 	}
 
 	empty_on_idle {

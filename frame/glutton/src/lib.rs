@@ -74,7 +74,8 @@ pub mod pallet {
 	pub(crate) type Storage<T: Config> = StorageValue<_, Perbill, ValueQuery>;
 
 	#[pallet::storage]
-	pub(super) type TrashData<T: Config> = StorageMap<_, Blake2_128Concat, u32, u32, OptionQuery>;
+	pub(super) type TrashData<T: Config> =
+		StorageMap<_, Twox64Concat, u32, [u8; 1024], OptionQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -137,7 +138,7 @@ pub mod pallet {
 			ensure_root(origin)?;
 
 			// Fill up the `TrashData` storage item.
-			(0..trash_count).for_each(|i| TrashData::<T>::insert(i, i));
+			(0..trash_count).for_each(|i| TrashData::<T>::insert(i, &[i as u8; 1024]));
 
 			Self::deposit_event(Event::PalletInitialized);
 			Ok(())
@@ -197,7 +198,7 @@ pub mod pallet {
 			// compiler does not know that (hopefully).
 			debug_assert!(clobber.len() == 64);
 			if clobber == vec![0u8; 65] {
-				TrashData::<T>::insert(0, clobber[0] as u32);
+				TrashData::<T>::insert(0, [clobber[0] as u8; 1024]);
 			}
 		}
 
@@ -209,7 +210,7 @@ pub mod pallet {
 
 			// Blake2 has a very high speed of hashing so we make multiple hashes with it to
 			// waste more `ref_time` at once.
-			(0..70_000).for_each(|_| {
+			(0..80_000).for_each(|_| {
 				hasher.update(clobber.as_slice());
 			});
 
