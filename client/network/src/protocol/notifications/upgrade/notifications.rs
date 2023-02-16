@@ -444,7 +444,7 @@ where
 	fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
 		let mut this = self.project();
 
-		// `Sink::poll_flush` does not expose stream closed error untill we write something into
+		// `Sink::poll_flush` does not expose stream closed error until we write something into
 		// the stream, so the code below makes sure we detect that the substream was closed
 		// even if we don't write anything into it.
 		match Stream::poll_next(this.socket.as_mut(), cx) {
