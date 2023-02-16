@@ -46,6 +46,14 @@ pub use weights::WeightInfo;
 /// Payroll cycle.
 pub type Cycle = u32;
 
+#[derive(Encode, Decode, Eq, PartialEq, Clone, TypeInfo, MaxEncodedLen, RuntimeDebug)]
+pub enum PaymentStatus {
+	InProgress,
+	Unknown,
+	Success,
+	Failure,
+}
+
 // Can be implemented by Pot pallet with a fixed Currency impl, but can also be implemented with
 // XCM/MultiAsset and made generic over assets.
 pub trait Pay {
@@ -54,10 +62,13 @@ pub trait Pay {
 	/// The type by which we identify the individuals to whom a payment may be made.
 	type AccountId;
 	/// An identifier given to an individual payment.
-	type Id: FullCodec + MaxEncodedLen + TypeInfo + Clone + Eq + PartialEq + Debug;
+	type Id: FullCodec + MaxEncodedLen + TypeInfo + Clone + Eq + PartialEq + Debug + Copy;
 	/// Make a payment and return an identifier for later evaluation of success in some off-chain
 	/// mechanism (likely an event, but possibly not on this chain).
 	fn pay(who: &Self::AccountId, amount: Self::Balance) -> Result<Self::Id, ()>;
+	/// Check how a payment has proceeded. `id` must have been a previously returned by `pay` for
+	/// the result of this call to be meaningful.
+	fn check_payment(id: Self::Id) -> PaymentStatus;
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, Clone, TypeInfo, MaxEncodedLen, RuntimeDebug)]
@@ -70,11 +81,22 @@ pub struct StatusType<CycleIndex, BlockNumber, Balance> {
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, Clone, TypeInfo, MaxEncodedLen, RuntimeDebug)]
-pub struct ClaimantStatus<CycleIndex, Balance> {
+pub enum ClaimStatus<Balance, Id> {
+	/// No claim recorded.
+	Nothing,
+	/// Amount reserved when last active.
+	Registered(Balance),
+	/// Amount attempted to be paid when last active as well as the identity of the payment.
+	Attempted { amount: Balance, id: Id },
+}
+
+use ClaimStatus::*;
+
+#[derive(Encode, Decode, Eq, PartialEq, Clone, TypeInfo, MaxEncodedLen, RuntimeDebug)]
+pub struct ClaimantStatus<CycleIndex, Balance, Id> {
 	/// The most recent cycle in which the claimant was active.
 	last_active: CycleIndex,
-	/// The amount reserved in `last_active` cycle, or `None` if paid.
-	unpaid: Option<Balance>,
+	status: ClaimStatus<Balance, Id>,
 }
 
 #[frame_support::pallet]
@@ -133,9 +155,10 @@ pub mod pallet {
 
 	pub type CycleIndexOf<T> = <T as frame_system::Config>::BlockNumber;
 	pub type BalanceOf<T, I> = <<T as Config<I>>::Paymaster as Pay>::Balance;
+	pub type IdOf<T, I> = <<T as Config<I>>::Paymaster as Pay>::Id;
 	pub type StatusOf<T, I> =
 		StatusType<CycleIndexOf<T>, <T as frame_system::Config>::BlockNumber, BalanceOf<T, I>>;
-	pub type ClaimantStatusOf<T, I> = ClaimantStatus<CycleIndexOf<T>, BalanceOf<T, I>>;
+	pub type ClaimantStatusOf<T, I> = ClaimantStatus<CycleIndexOf<T>, BalanceOf<T, I>, IdOf<T, I>>;
 
 	/// The overall status of the system.
 	#[pallet::storage]
@@ -204,7 +227,7 @@ pub mod pallet {
 
 			Claimant::<T, I>::insert(
 				&who,
-				ClaimantStatus { last_active: cycle_index, unpaid: None },
+				ClaimantStatus { last_active: cycle_index, status: Nothing },
 			);
 
 			Self::deposit_event(Event::<T, I>::Inducted { who });
@@ -268,7 +291,7 @@ pub mod pallet {
 			let payout = T::ActiveSalaryForRank::convert(rank);
 			ensure!(!payout.is_zero(), Error::<T, I>::ClaimZero);
 			claimant.last_active = status.cycle_index;
-			claimant.unpaid = Some(payout);
+			claimant.status = Registered(payout);
 			status.total_registrations.saturating_accrue(payout);
 
 			Claimant::<T, I>::insert(&who, &claimant);
@@ -298,44 +321,50 @@ pub mod pallet {
 			let now = frame_system::Pallet::<T>::block_number();
 			ensure!(
 				now >= status.cycle_start + T::RegistrationPeriod::get(),
-				Error::<T, I>::TooEarly
+				Error::<T, I>::TooEarly,
 			);
 
-			let payout = if let Some(unpaid) = claimant.unpaid {
-				ensure!(claimant.last_active == status.cycle_index, Error::<T, I>::NoClaim);
+			let payout = match claimant.status {
+				Attempted { amount, id } if claimant.last_active == status.cycle_index => {
+					let failed = matches!(T::Paymaster::check_payment(id), PaymentStatus::Failure);
+					ensure!(failed, Error::<T, I>::NoClaim);
+					amount
+				},
+				Registered(unpaid) if claimant.last_active == status.cycle_index => {
+					// Registered for this cycle. Pay accordingly.
+					if status.total_registrations <= status.budget {
+						// Can pay in full.
+						unpaid
+					} else {
+						// Must be reduced pro-rata
+						Perbill::from_rational(status.budget, status.total_registrations) * unpaid
+					}
+				},
+				Nothing | Attempted { .. } if claimant.last_active < status.cycle_index => {
+					// Not registered for this cycle. Pay from whatever is left.
+					let rank = T::Members::rank_of(&who).ok_or(Error::<T, I>::NotMember)?;
+					let ideal_payout = T::ActiveSalaryForRank::convert(rank);
 
-				// Registered for this cycle. Pay accordingly.
-				if status.total_registrations <= status.budget {
-					// Can pay in full.
-					unpaid
-				} else {
-					// Must be reduced pro-rata
-					Perbill::from_rational(status.budget, status.total_registrations) * unpaid
-				}
-			} else {
-				ensure!(claimant.last_active < status.cycle_index, Error::<T, I>::NoClaim);
+					let pot = status
+						.budget
+						.saturating_sub(status.total_registrations)
+						.saturating_sub(status.total_unregistered_paid);
 
-				// Not registered for this cycle. Pay from whatever is left.
-				let rank = T::Members::rank_of(&who).ok_or(Error::<T, I>::NotMember)?;
-				let ideal_payout = T::ActiveSalaryForRank::convert(rank);
+					let payout = ideal_payout.min(pot);
+					ensure!(!payout.is_zero(), Error::<T, I>::ClaimZero);
 
-				let pot = status
-					.budget
-					.saturating_sub(status.total_registrations)
-					.saturating_sub(status.total_unregistered_paid);
-
-				let payout = ideal_payout.min(pot);
-				ensure!(!payout.is_zero(), Error::<T, I>::ClaimZero);
-
-				status.total_unregistered_paid.saturating_accrue(payout);
-				payout
+					status.total_unregistered_paid.saturating_accrue(payout);
+					payout
+				},
+				_ => return Err(Error::<T, I>::NoClaim.into()),
 			};
 
-			claimant.unpaid = None;
 			claimant.last_active = status.cycle_index;
 
 			let id =
 				T::Paymaster::pay(&beneficiary, payout).map_err(|()| Error::<T, I>::PayError)?;
+
+			claimant.status = Attempted { amount: payout, id };
 
 			Claimant::<T, I>::insert(&who, &claimant);
 			Status::<T, I>::put(&status);

@@ -82,11 +82,15 @@ impl frame_system::Config for Test {
 
 thread_local! {
 	pub static PAID: RefCell<BTreeMap<u64, u64>> = RefCell::new(BTreeMap::new());
+	pub static STATUS: RefCell<BTreeMap<u64, PaymentStatus>> = RefCell::new(BTreeMap::new());
 	pub static LAST_ID: RefCell<u64> = RefCell::new(0u64);
 }
 
 fn paid(who: u64) -> u64 {
 	PAID.with(|p| p.borrow().get(&who).cloned().unwrap_or(0))
+}
+fn set_status(id: u64, s: PaymentStatus) {
+	STATUS.with(|m| m.borrow_mut().insert(id, s));
 }
 
 pub struct TestPay;
@@ -102,6 +106,9 @@ impl Pay for TestPay {
 			lid.replace(x + 1);
 			x
 		}))
+	}
+	fn check_payment(id: Self::Id) -> PaymentStatus {
+		STATUS.with(|s| s.borrow().get(&id).cloned().unwrap_or(PaymentStatus::Unknown))
 	}
 }
 
