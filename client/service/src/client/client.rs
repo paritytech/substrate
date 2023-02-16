@@ -1739,10 +1739,7 @@ where
 			.map_err(Into::into)
 	}
 
-	fn runtime_version_at(
-		&self,
-		hash: Block::Hash,
-	) -> Result<RuntimeVersion, sp_api::ApiError> {
+	fn runtime_version_at(&self, hash: Block::Hash) -> Result<RuntimeVersion, sp_api::ApiError> {
 		CallExecutor::runtime_version(&self.executor, hash).map_err(Into::into)
 	}
 
