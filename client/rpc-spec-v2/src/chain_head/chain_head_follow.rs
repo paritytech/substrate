@@ -327,8 +327,8 @@ where
 
 		// Ensure we are only reporting blocks after the starting point.
 		let Some(block_number) = self.client.number(notification.hash)? else {
-            return Err(SubscriptionManagementError::BlockNumberAbsent)
-        };
+			return Err(SubscriptionManagementError::BlockNumberAbsent)
+		};
 		if block_number < info.finalized_number {
 			return Ok(Default::default())
 		}
@@ -354,15 +354,15 @@ where
 
 		// Nothing to be done if no finalized hashes are provided.
 		let Some(first_hash) = finalized_block_hashes.get(0) else {
-            return Ok(Default::default())
-        };
+			return Ok(Default::default())
+		};
 
 		// Find the parent hash.
 		let Some(first_number) = self.client.number(*first_hash)? else {
-            return Err(SubscriptionManagementError::BlockNumberAbsent)
-        };
+			return Err(SubscriptionManagementError::BlockNumberAbsent)
+		};
 		let Some(parent) = self.client.hash(first_number.saturating_sub(One::one()))? else {
-            return Err(SubscriptionManagementError::BlockHashAbsent)
+			return Err(SubscriptionManagementError::BlockHashAbsent)
 		};
 		// The parent of the finalized block hash was not reported by the `chianHead`.
 		// There may be a gap in the notifications and we cannot guarantee that
@@ -427,13 +427,12 @@ where
 		to_ignore: &mut HashSet<Block::Hash>,
 		info: &Info<Block>,
 	) -> Result<Vec<FollowEvent<Block::Hash>>, SubscriptionManagementError> {
-		println!("Finalized block event: {:?}", notification.hash);
 		let last_finalized = notification.hash;
 
 		// Ensure we are only reporting blocks after the starting point.
 		let Some(block_number) = self.client.number(last_finalized)? else {
-            return Err(SubscriptionManagementError::BlockNumberAbsent)
-        };
+			return Err(SubscriptionManagementError::BlockNumberAbsent)
+		};
 		if block_number < info.finalized_number {
 			return Ok(vec![])
 		}

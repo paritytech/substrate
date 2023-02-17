@@ -1097,7 +1097,6 @@ async fn follow_forks_pruned_block() {
 
 	// Initialized must always be reported first.
 	let event: FollowEvent<String> = get_next_event(&mut sub).await;
-	println!("Event: {:?}", event);
 	let expected = FollowEvent::Initialized(Initialized {
 		finalized_block_hash: format!("{:?}", block_3_hash),
 		finalized_block_runtime: None,
@@ -1210,14 +1209,6 @@ async fn follow_report_multiple_pruned_block() {
 	let block_5 = block_builder.build().unwrap().block;
 	let block_5_hash = block_5.header.hash();
 	client.import(BlockOrigin::Own, block_5.clone()).await.unwrap();
-
-	println!("Fin {:?}", finalized_hash);
-	println!("block_1_hash {:?}", block_1_hash);
-	println!("block_2_hash {:?}", block_2_hash);
-	println!("block_3_hash {:?}", block_3_hash);
-	println!("block_4_hash {:?}", block_4_hash);
-	println!("block_5_hash {:?}", block_5_hash);
-
 	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
 
 	// Initialized must always be reported first.
