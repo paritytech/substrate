@@ -560,8 +560,6 @@ where
 		}
 
 		let _ = sink.send(&FollowEvent::<String>::Stop);
-		self.subscriptions.remove_subscription(&self.sub_id);
-		debug!(target: LOG_TARGET, "[follow][id={:?}] Subscription removed", self.sub_id);
 	}
 
 	/// Generate the block events for the `chainHead_follow` method.
@@ -592,7 +590,6 @@ where
 					err
 				);
 				let _ = sink.send(&FollowEvent::<Block::Hash>::Stop);
-				self.subscriptions.remove_subscription(&self.sub_id);
 				return
 			},
 		};
@@ -602,5 +599,12 @@ where
 		let stream = stream::once(futures::future::ready(initial)).chain(merged);
 
 		self.submit_events(&info, stream.boxed(), pruned_forks, sink, rx_stop).await;
+	}
+}
+
+impl<BE, Block: BlockT, Client> Drop for ChainHeadFollow<BE, Block, Client> {
+	fn drop(&mut self) {
+		self.subscriptions.remove_subscription(&self.sub_id);
+		debug!(target: LOG_TARGET, "[follow][id={:?}] Subscription removed", self.sub_id);
 	}
 }
