@@ -782,9 +782,6 @@ impl ConnectionHandler for NotifsHandler {
 		// performed before the code paths that can produce `Ready` (with some rare exceptions).
 		// Importantly, however, the flush is performed *after* notifications are queued with
 		// `Sink::start_send`.
-		// Note that we must call `poll_flush` on all substreams and not only on those we
-		// have called `Sink::start_send` on, because `NotificationsOutSubstream::poll_flush`
-		// also reports the substream termination (even if no data was written into it).
 		for protocol_index in 0..self.protocols.len() {
 			match &mut self.protocols[protocol_index].state {
 				State::Open { out_substream: out_substream @ Some(_), .. } => {
@@ -827,7 +824,7 @@ impl ConnectionHandler for NotifsHandler {
 				State::OpenDesiredByRemote { in_substream, pending_opening } =>
 					match NotificationsInSubstream::poll_process(Pin::new(in_substream), cx) {
 						Poll::Pending => {},
-						Poll::Ready(Ok(())) => {},
+						Poll::Ready(Ok(void)) => match void {},
 						Poll::Ready(Err(_)) => {
 							self.protocols[protocol_index].state =
 								State::Closed { pending_opening: *pending_opening };
@@ -843,7 +840,7 @@ impl ConnectionHandler for NotifsHandler {
 						cx,
 					) {
 						Poll::Pending => {},
-						Poll::Ready(Ok(())) => {},
+						Poll::Ready(Ok(void)) => match void {},
 						Poll::Ready(Err(_)) => *in_substream = None,
 					},
 			}
