@@ -447,7 +447,7 @@ macro_rules! call_zero {
 
 macro_rules! cost_args {
 	($name:ident, $( $arg: expr ),+) => {
-		(T::WeightInfo::$name($( $arg ),+).saturating_sub(call_zero!($name, $( $arg ),+))).ref_time()
+		(T::WeightInfo::$name($( $arg ),+).saturating_sub(call_zero!($name, $( $arg ),+)))
 	}
 }
 
@@ -459,7 +459,7 @@ macro_rules! cost_batched_args {
 
 macro_rules! cost_instr_no_params_with_batch_size {
 	($name:ident, $batch_size:expr) => {
-		(cost_args!($name, 1) / u64::from($batch_size)) as u32
+		(cost_args!($name, 1).ref_time() / u64::from($batch_size)) as u32
 	};
 }
 
@@ -514,12 +514,6 @@ macro_rules! cost_byte_batched {
 	};
 }
 
-macro_rules! to_weight {
-	($ref_time:expr $(, $proof_size:expr )?) => {
-		Weight::from_ref_time($ref_time)$(.set_proof_size($proof_size))?
-	};
-}
-
 impl Default for Limits {
 	fn default() -> Self {
 		Self {
@@ -554,8 +548,8 @@ impl<T: Config> Default for InstructionWeights<T> {
 			br_table_per_entry: cost_instr!(instr_br_table_per_entry, 0),
 			call: cost_instr!(instr_call, 2),
 			call_indirect: cost_instr!(instr_call_indirect, 3),
-			call_indirect_per_param: cost_instr!(instr_call_indirect_per_param, 1),
-			call_per_local: cost_instr!(instr_call_per_local, 1),
+			call_indirect_per_param: cost_instr!(instr_call_indirect_per_param, 0),
+			call_per_local: cost_instr!(instr_call_per_local, 0),
 			local_get: cost_instr!(instr_local_get, 1),
 			local_set: cost_instr!(instr_local_set, 1),
 			local_tee: cost_instr!(instr_local_tee, 2),
@@ -601,116 +595,91 @@ impl<T: Config> Default for InstructionWeights<T> {
 }
 
 impl<T: Config> Default for HostFnWeights<T> {
-	/// PoV should contain all trie nodes that are read during state transition (i.e. block
-	/// production). Hence we need to charge the `proof_size` weight for every host function which
-	/// reads storage, namely:
-	/// - get_storage,
-	/// - take_storage,
-	/// - contains_storage,
-	/// - clear_storage,
-	/// - set_storage.
-	///
-	/// The last two functions write to storage, but they also do read storage in order to return
-	/// the size of the pre-existed value. Till we have PoV benchmarks implemented, we approximate
-	/// `proof_size` as being equal to the size of storage read.
 	fn default() -> Self {
 		Self {
-			caller: to_weight!(cost_batched!(seal_caller)),
-			is_contract: to_weight!(cost_batched!(seal_is_contract)),
-			code_hash: to_weight!(cost_batched!(seal_code_hash)),
-			own_code_hash: to_weight!(cost_batched!(seal_own_code_hash)),
-			caller_is_origin: to_weight!(cost_batched!(seal_caller_is_origin)),
-			address: to_weight!(cost_batched!(seal_address)),
-			gas_left: to_weight!(cost_batched!(seal_gas_left)),
-			balance: to_weight!(cost_batched!(seal_balance)),
-			value_transferred: to_weight!(cost_batched!(seal_value_transferred)),
-			minimum_balance: to_weight!(cost_batched!(seal_minimum_balance)),
-			block_number: to_weight!(cost_batched!(seal_block_number)),
-			now: to_weight!(cost_batched!(seal_now)),
-			weight_to_fee: to_weight!(cost_batched!(seal_weight_to_fee)),
-			gas: to_weight!(cost_batched!(seal_gas)),
-			input: to_weight!(cost_batched!(seal_input)),
-			input_per_byte: to_weight!(cost_byte_batched!(seal_input_per_kb)),
-			r#return: to_weight!(cost!(seal_return)),
-			return_per_byte: to_weight!(cost_byte!(seal_return_per_kb)),
-			terminate: to_weight!(cost!(seal_terminate)),
-			random: to_weight!(cost_batched!(seal_random)),
-			deposit_event: to_weight!(cost_batched!(seal_deposit_event)),
-			deposit_event_per_topic: to_weight!(cost_batched_args!(
+			caller: cost_batched!(seal_caller),
+			is_contract: cost_batched!(seal_is_contract),
+			code_hash: cost_batched!(seal_code_hash),
+			own_code_hash: cost_batched!(seal_own_code_hash),
+			caller_is_origin: cost_batched!(seal_caller_is_origin),
+			address: cost_batched!(seal_address),
+			gas_left: cost_batched!(seal_gas_left),
+			balance: cost_batched!(seal_balance),
+			value_transferred: cost_batched!(seal_value_transferred),
+			minimum_balance: cost_batched!(seal_minimum_balance),
+			block_number: cost_batched!(seal_block_number),
+			now: cost_batched!(seal_now),
+			weight_to_fee: cost_batched!(seal_weight_to_fee),
+			// Manually remove proof size from basic block cost.
+			//
+			// Due to imperfect benchmarking some host functions incur a small
+			// amount of proof size. Usually this is ok. However, charging a basic block is such
+			// a frequent operation that this would be a vast overestimation.
+			gas: cost_batched!(seal_gas).set_proof_size(0),
+			input: cost_batched!(seal_input),
+			input_per_byte: cost_byte_batched!(seal_input_per_kb),
+			r#return: cost!(seal_return),
+			return_per_byte: cost_byte!(seal_return_per_kb),
+			terminate: cost!(seal_terminate),
+			random: cost_batched!(seal_random),
+			deposit_event: cost_batched!(seal_deposit_event),
+			deposit_event_per_topic: cost_batched_args!(seal_deposit_event_per_topic_and_kb, 1, 0),
+			deposit_event_per_byte: cost_byte_batched_args!(
 				seal_deposit_event_per_topic_and_kb,
-				1,
-				0
-			)),
-			deposit_event_per_byte: to_weight!(cost_byte_batched_args!(
-				seal_deposit_event_per_topic_and_kb,
 				0,
 				1
-			)),
-			debug_message: to_weight!(cost_batched!(seal_debug_message)),
-			debug_message_per_byte: to_weight!(cost_byte!(seal_debug_message_per_kb)),
-			set_storage: to_weight!(cost_batched!(seal_set_storage), 1024u64),
-			set_code_hash: to_weight!(cost_batched!(seal_set_code_hash)),
-			set_storage_per_new_byte: to_weight!(cost_byte_batched!(seal_set_storage_per_new_kb)),
-			set_storage_per_old_byte: to_weight!(
-				cost_byte_batched!(seal_set_storage_per_old_kb),
-				1u64
 			),
-			clear_storage: to_weight!(cost_batched!(seal_clear_storage), 1024u64),
-			clear_storage_per_byte: to_weight!(cost_byte_batched!(seal_clear_storage_per_kb), 1u64),
-			contains_storage: to_weight!(cost_batched!(seal_contains_storage), 1024u64),
-			contains_storage_per_byte: to_weight!(
-				cost_byte_batched!(seal_contains_storage_per_kb),
-				1u64
+			debug_message: cost_batched!(seal_debug_message),
+			debug_message_per_byte: cost_byte!(seal_debug_message_per_kb),
+			set_storage: cost_batched!(seal_set_storage),
+			set_code_hash: cost_batched!(seal_set_code_hash),
+			set_storage_per_new_byte: cost_byte_batched!(seal_set_storage_per_new_kb),
+			set_storage_per_old_byte: cost_byte_batched!(seal_set_storage_per_old_kb),
+			clear_storage: cost_batched!(seal_clear_storage),
+			clear_storage_per_byte: cost_byte_batched!(seal_clear_storage_per_kb),
+			contains_storage: cost_batched!(seal_contains_storage),
+			contains_storage_per_byte: cost_byte_batched!(seal_contains_storage_per_kb),
+			get_storage: cost_batched!(seal_get_storage),
+			get_storage_per_byte: cost_byte_batched!(seal_get_storage_per_kb),
+			take_storage: cost_batched!(seal_take_storage),
+			take_storage_per_byte: cost_byte_batched!(seal_take_storage_per_kb),
+			transfer: cost_batched!(seal_transfer),
+			call: cost_batched!(seal_call),
+			delegate_call: cost_batched!(seal_delegate_call),
+			call_transfer_surcharge: cost_batched_args!(seal_call_per_transfer_clone_kb, 1, 0),
+			call_per_cloned_byte: cost_byte_batched_args!(seal_call_per_transfer_clone_kb, 0, 1),
+			instantiate: cost_batched!(seal_instantiate),
+			instantiate_transfer_surcharge: cost_batched_args!(
+				seal_instantiate_per_transfer_input_salt_kb,
+				1,
+				0,
+				0
 			),
-			get_storage: to_weight!(cost_batched!(seal_get_storage), 1024u64),
-			get_storage_per_byte: to_weight!(cost_byte_batched!(seal_get_storage_per_kb), 1u64),
-			take_storage: to_weight!(cost_batched!(seal_take_storage), 1024u64),
-			take_storage_per_byte: to_weight!(cost_byte_batched!(seal_take_storage_per_kb), 1u64),
-			transfer: to_weight!(cost_batched!(seal_transfer)),
-			call: to_weight!(cost_batched!(seal_call)),
-			delegate_call: to_weight!(cost_batched!(seal_delegate_call)),
-			call_transfer_surcharge: to_weight!(cost_batched_args!(
-				seal_call_per_transfer_clone_kb,
-				1,
-				0
-			)),
-			call_per_cloned_byte: to_weight!(cost_batched_args!(
-				seal_call_per_transfer_clone_kb,
-				0,
-				1
-			)),
-			instantiate: to_weight!(cost_batched!(seal_instantiate)),
-			instantiate_transfer_surcharge: to_weight!(cost_byte_batched_args!(
-				seal_instantiate_per_transfer_input_salt_kb,
-				1,
-				0,
-				0
-			)),
-			instantiate_per_input_byte: to_weight!(cost_byte_batched_args!(
+			instantiate_per_input_byte: cost_byte_batched_args!(
 				seal_instantiate_per_transfer_input_salt_kb,
 				0,
 				1,
 				0
-			)),
-			instantiate_per_salt_byte: to_weight!(cost_byte_batched_args!(
+			),
+			instantiate_per_salt_byte: cost_byte_batched_args!(
 				seal_instantiate_per_transfer_input_salt_kb,
 				0,
 				0,
 				1
-			)),
-			hash_sha2_256: to_weight!(cost_batched!(seal_hash_sha2_256)),
-			hash_sha2_256_per_byte: to_weight!(cost_byte_batched!(seal_hash_sha2_256_per_kb)),
-			hash_keccak_256: to_weight!(cost_batched!(seal_hash_keccak_256)),
-			hash_keccak_256_per_byte: to_weight!(cost_byte_batched!(seal_hash_keccak_256_per_kb)),
-			hash_blake2_256: to_weight!(cost_batched!(seal_hash_blake2_256)),
-			hash_blake2_256_per_byte: to_weight!(cost_byte_batched!(seal_hash_blake2_256_per_kb)),
-			hash_blake2_128: to_weight!(cost_batched!(seal_hash_blake2_128)),
-			hash_blake2_128_per_byte: to_weight!(cost_byte_batched!(seal_hash_blake2_128_per_kb)),
-			ecdsa_recover: to_weight!(cost_batched!(seal_ecdsa_recover)),
-			ecdsa_to_eth_address: to_weight!(cost_batched!(seal_ecdsa_to_eth_address)),
-			reentrance_count: to_weight!(cost_batched!(seal_reentrance_count)),
-			account_reentrance_count: to_weight!(cost_batched!(seal_account_reentrance_count)),
-			instantiation_nonce: to_weight!(cost_batched!(seal_instantiation_nonce)),
+			),
+			hash_sha2_256: cost_batched!(seal_hash_sha2_256),
+			hash_sha2_256_per_byte: cost_byte_batched!(seal_hash_sha2_256_per_kb),
+			hash_keccak_256: cost_batched!(seal_hash_keccak_256),
+			hash_keccak_256_per_byte: cost_byte_batched!(seal_hash_keccak_256_per_kb),
+			hash_blake2_256: cost_batched!(seal_hash_blake2_256),
+			hash_blake2_256_per_byte: cost_byte_batched!(seal_hash_blake2_256_per_kb),
+			hash_blake2_128: cost_batched!(seal_hash_blake2_128),
+			hash_blake2_128_per_byte: cost_byte_batched!(seal_hash_blake2_128_per_kb),
+			ecdsa_recover: cost_batched!(seal_ecdsa_recover),
+			ecdsa_to_eth_address: cost_batched!(seal_ecdsa_to_eth_address),
+			reentrance_count: cost_batched!(seal_reentrance_count),
+			account_reentrance_count: cost_batched!(seal_account_reentrance_count),
+			instantiation_nonce: cost_batched!(seal_instantiation_nonce),
 			_phantom: PhantomData,
 		}
 	}
