@@ -130,7 +130,7 @@ impl<C: AsContextMut> sc_allocator::Memory for MemoryWrapper<'_, C> {
 			.map_err(|e| {
 				log::error!(
 					target: "wasm-executor",
-					"Failed to grow memory by {} pages: {:?}",
+					"Failed to grow memory by {} pages: {}",
 					additional,
 					e,
 				)
