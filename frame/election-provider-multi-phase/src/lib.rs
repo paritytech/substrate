@@ -2145,7 +2145,7 @@ mod tests {
 			assert_eq!(MultiPhase::round(), 1);
 
 			assert_ok!(MultiPhase::force_start_signed_phase(crate::mock::RuntimeOrigin::root()));
-            assert_eq!(MultiPhase::force_phase(), Some(Phase::Signed));
+			assert_eq!(MultiPhase::force_phase(), Some(Phase::Signed));
 
 			roll_to(3);
 			assert!(MultiPhase::current_phase().is_signed());
@@ -2159,7 +2159,7 @@ mod tests {
 					Event::PhaseTransitioned { from: Phase::Signed, to: Phase::Off, round: 2 },
 					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 2 },
 				]
-			);	
+			);
 		})
 	}
 
