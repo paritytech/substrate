@@ -525,7 +525,7 @@ impl FreeingBumpHeapAllocator {
 			let required_pages =
 				pages_from_size(required_size).ok_or_else(|| Error::AllocatorOutOfSpace)?;
 
-			let pages = memory.pages();
+			let current_pages = memory.pages();
 			let max_pages = memory.max_pages().unwrap_or(MAX_WASM_PAGES);
 			debug_assert!(pages <= max_pages);
 
