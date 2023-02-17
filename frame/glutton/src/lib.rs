@@ -121,10 +121,7 @@ pub mod pallet {
 			let proof_size_limit = Storage::<T>::get().mul_floor(meter.remaining().proof_size());
 			let computation_weight_limit =
 				Compute::<T>::get().mul_floor(meter.remaining().ref_time());
-			meter.check_accrue(Weight::from_parts(
-				computation_weight_limit,
-				proof_size_limit,
-			));
+			meter.check_accrue(Weight::from_parts(computation_weight_limit, proof_size_limit));
 
 			Self::waste_at_most_proof_size(&mut meter);
 			Self::waste_at_most_ref_time(&mut meter);
@@ -161,7 +158,8 @@ pub mod pallet {
 
 			let current_trash_count = TrashDataCount::<T>::get();
 
-			(current_trash_count..trash_count).for_each(|i| TrashData::<T>::insert(i, &[i as u8; 1024]));
+			(current_trash_count..trash_count)
+				.for_each(|i| TrashData::<T>::insert(i, &[i as u8; 1024]));
 			TrashDataCount::<T>::put(current_trash_count.saturating_add(trash_count));
 
 			Self::deposit_event(Event::TrashDataUpdated);
