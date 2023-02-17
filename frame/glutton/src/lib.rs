@@ -249,8 +249,7 @@ pub mod pallet {
 				.saturating_sub(base.ref_time())
 				.checked_div(slope.ref_time())
 			{
-				None => Err(()),
-				Some(0) => Err(()),
+				Some(0) | None => Err(()),
 				Some(i) => Ok(i as u32),
 			}
 		}
