@@ -56,7 +56,7 @@ fn expected_weight_same_as_consumed_when_low_proof_size() {
 }
 
 #[test]
-fn expected_weight_close_to_consumed_when_high_proof_size() {
+fn expected_weight_same_as_consumed_when_high_proof_size() {
 	let mut t = new_test_ext(compact_code_unwrap());
 
 	let expected_weight =
@@ -73,14 +73,14 @@ fn expected_weight_close_to_consumed_when_high_proof_size() {
 
 		let ratio = Perbill::from_rational(consumed.proof_size(), expected_weight.proof_size());
 		assert!(
-			ratio >= Perbill::from_percent(80),
+			ratio >= Perbill::from_percent(95),
 			"Too few proof size consumed, was only {:?} of expected",
 			ratio
 		);
 
 		let ratio = Perbill::from_rational(consumed.ref_time(), expected_weight.ref_time());
 		assert!(
-			ratio >= Perbill::from_percent(80),
+			ratio >= Perbill::from_percent(95),
 			"Too few ref time consumed, was only {:?} of expected",
 			ratio
 		);

@@ -78,9 +78,9 @@ pub mod pallet {
 	/// It contains no meaningful data - hence the name "Trash". The maximal number of entries is
 	/// set to 65k, which is just below the next jump at 16^4. This is important to reduce the proof
 	/// size benchmarking overestimate. The assumption here is that we won't have more than 65k *
-	/// 1KiB = 65MiB of proof size wasting in practice. However, this limit is not enforces, so the
+	/// 1KiB = 65MiB of proof size wasting in practice. However, this limit is not enforced, so the
 	/// pallet would also work out of the box with more entries, but its benchmarked proof sizes
-	/// would possibly be underestimates in that case.
+	/// would possibly be underestimated in that case.
 	#[pallet::storage]
 	pub(super) type TrashData<T: Config> = StorageMap<
 		Hasher = Twox64Concat,
