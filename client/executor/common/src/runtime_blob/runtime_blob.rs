@@ -157,7 +157,7 @@ impl RuntimeBlob {
 		Ok(())
 	}
 
-	/// Setup the memory instances according to the given `heap_alloc_strategy`.
+	/// Modifies the blob's memory section according to the given `heap_alloc_strategy`.
 	///
 	/// Will return an error in case there is no memory section present,
 	/// or if the memory section is empty.
