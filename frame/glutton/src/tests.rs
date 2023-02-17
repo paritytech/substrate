@@ -37,10 +37,31 @@ fn initialize_pallet_works() {
 		);
 
 		assert_ok!(Glutton::initialize_pallet(RuntimeOrigin::root(), 2));
+		System::assert_last_event(Event::PalletInitialized.into());
 
 		assert_eq!(TrashData::<Test>::get(0), Some([0; 1024]));
 		assert_eq!(TrashData::<Test>::get(1), Some([1; 1024]));
 		assert_eq!(TrashData::<Test>::get(2), None);
+
+		assert_eq!(TrashDataCount::<Test>::get(), 2);
+	});
+}
+
+#[test]
+fn expand_and_shrink_trash_data_works() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(TrashDataCount::<Test>::get(), 0);
+
+		assert_ok!(Glutton::initialize_pallet(RuntimeOrigin::root(), 5000));
+		assert_eq!(TrashDataCount::<Test>::get(), 5000);
+
+		assert_ok!(Glutton::expand_trash_data(RuntimeOrigin::root(), 3000));
+		assert_eq!(TrashDataCount::<Test>::get(), 8000);
+		System::assert_last_event(Event::TrashDataUpdated.into());
+
+		assert_ok!(Glutton::shrink_trash_data(RuntimeOrigin::root(), 2000));
+		assert_eq!(TrashDataCount::<Test>::get(), 6000);
+		System::assert_last_event(Event::TrashDataUpdated.into());
 	});
 }
 
