@@ -100,7 +100,7 @@ fn on_idle_works() {
 
 /// Check that the expected is close enough to the consumed weight.
 #[test]
-fn on_idle_weight_is_close_enough_works() {
+fn on_idle_weight_high_proof_is_close_enough_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), Perbill::from_percent(100)));
 		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), Perbill::from_percent(100)));
@@ -111,14 +111,41 @@ fn on_idle_weight_is_close_enough_works() {
 
 		let ratio = Perbill::from_rational(got.proof_size(), should.proof_size());
 		assert!(
-			ratio >= Perbill::from_percent(95),
+			ratio >= Perbill::from_percent(99),
 			"Too few proof size consumed, was only {:?} of expected",
 			ratio
 		);
 
 		let ratio = Perbill::from_rational(got.ref_time(), should.ref_time());
 		assert!(
-			ratio >= Perbill::from_percent(95),
+			ratio >= Perbill::from_percent(99),
+			"Too few ref time consumed, was only {:?} of expected",
+			ratio
+		);
+	});
+}
+
+#[test]
+fn on_idle_weight_low_proof_is_close_enough_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), Perbill::from_percent(100)));
+		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), Perbill::from_percent(100)));
+
+		let should = Weight::from_parts(WEIGHT_REF_TIME_PER_SECOND, WEIGHT_PROOF_SIZE_PER_KB * 20);
+		let got = Glutton::on_idle(1, should);
+		assert!(got.all_lte(should), "Consumed too much weight");
+
+		let ratio = Perbill::from_rational(got.proof_size(), should.proof_size());
+		// Just a sanity check here.
+		assert!(
+			ratio >= Perbill::from_percent(80),
+			"Too few proof size consumed, was only {:?} of expected",
+			ratio
+		);
+
+		let ratio = Perbill::from_rational(got.ref_time(), should.ref_time());
+		assert!(
+			ratio >= Perbill::from_percent(99),
 			"Too few ref time consumed, was only {:?} of expected",
 			ratio
 		);
@@ -133,9 +160,26 @@ fn waste_at_most_ref_time_weight_close_enough() {
 		// Over-spending fails defensively.
 		Glutton::waste_at_most_ref_time(&mut meter);
 
-		// We require it to be under-spend by at most 5%.
+		// We require it to be under-spend by at most 1%.
 		assert!(
-			meter.consumed_ratio() >= Perbill::from_percent(95),
+			meter.consumed_ratio() >= Perbill::from_percent(99),
+			"Consumed too few: {:?}",
+			meter.consumed_ratio()
+		);
+	});
+}
+
+#[test]
+fn waste_at_most_proof_size_weight_close_enough() {
+	new_test_ext().execute_with(|| {
+		let mut meter =
+			WeightMeter::from_limit(Weight::from_parts(u64::MAX, WEIGHT_PROOF_SIZE_PER_MB * 5));
+		// Over-spending fails defensively.
+		Glutton::waste_at_most_proof_size(&mut meter);
+
+		// We require it to be under-spend by at most 1%.
+		assert!(
+			meter.consumed_ratio() >= Perbill::from_percent(99),
 			"Consumed too few: {:?}",
 			meter.consumed_ratio()
 		);

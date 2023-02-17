@@ -73,13 +73,13 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type Storage<T: Config> = StorageValue<_, Perbill, ValueQuery>;
 
-	/// Storage map uses for wasting proof size.
+	/// Storage map used for wasting proof size.
 	///
 	/// It contains no meaningful data - hence the name "Trash". The maximal number of entries is
 	/// set to 65k, which is just below the next jump at 16^4. This is important to reduce the proof
 	/// size benchmarking overestimate. The assumption here is that we won't have more than 65k *
-	/// 1KiB = 65MiB of proof size wasting in practice. However, this limit is not enforced, so the
-	/// pallet would also work out of the box with more entries, but its benchmarked proof sizes
+	/// 1KiB = 65MiB of proof size wasting in practice. However, this limit is not enforces, so the
+	/// pallet would also work out of the box with more entries, but its benchmarked proof weight
 	/// would possibly be underestimated in that case.
 	#[pallet::storage]
 	pub(super) type TrashData<T: Config> = StorageMap<
@@ -117,11 +117,9 @@ pub mod pallet {
 				proof_size_limit,
 			));
 
-			// First we start by wasting proof size.
 			Self::waste_at_most_proof_size(&mut meter);
-
-			// Now we waste ref time.
 			Self::waste_at_most_ref_time(&mut meter);
+
 			meter.consumed
 		}
 	}
@@ -174,7 +172,7 @@ pub mod pallet {
 
 	impl<T: Config> Pallet<T> {
 		/// Wastes some `proof_size`. Receives a counter as an argument.
-		fn waste_at_most_proof_size(meter: &mut WeightMeter) {
+		pub(crate) fn waste_at_most_proof_size(meter: &mut WeightMeter) {
 			let Ok(n) = Self::calculate_proof_size_iters(&meter) else {
 				return;
 			};
@@ -186,6 +184,7 @@ pub mod pallet {
 			});
 		}
 
+		/// Calculate how many times `waste_proof_size_some` should be called to full up `meter`.
 		fn calculate_proof_size_iters(meter: &WeightMeter) -> Result<u32, ()> {
 			let base = T::WeightInfo::waste_proof_size_some(0);
 			let slope = T::WeightInfo::waste_proof_size_some(1).saturating_sub(base);
@@ -237,6 +236,7 @@ pub mod pallet {
 			hasher.finalize().to_vec()
 		}
 
+		/// Calculate how many times `waste_ref_time_iter` should be called to full up `meter`.
 		fn calculate_ref_time_iters(meter: &WeightMeter) -> Result<u32, ()> {
 			let base = T::WeightInfo::waste_ref_time_iter(0);
 			let slope = T::WeightInfo::waste_ref_time_iter(1).saturating_sub(base);
