@@ -15,6 +15,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! # Stake Tracker Pallet
+//!
+//! The Stake Tracker pallet is used to maintain a sorted list of voters by listening to the events
+//! that Staking emits.
+//!
+//! - [`Config`]
+//! - [`Pallet`]
+//!
+//! ## Overview
+//!
+//! The goal of Stake Tracker is to reduce the burden of Staking pallet by taking care of the
+//! [`Config::VoterList`] maintenance. This pallet implements [`OnStakingUpdate`] interface in order
+//! to be able to listen to the events that Staking emits and propagate the changes to the list
+//! accordingly. It also exposes [`TrackedList`] that stubs a subset of [`SortedListProvider`]
+//! methods out effectively disabling the user's ability to update the list. This wrapper should be
+//! used to pass the tracked entity to the consumer.
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(test)]
@@ -59,6 +76,7 @@ pub mod pallet {
 
 		type Staking: StakingInterface<AccountId = Self::AccountId>;
 
+		/// A sorted list of nominators and validators, by their stake and self-stake respectively.
 		type VoterList: SortedListProvider<Self::AccountId, Score = VoteWeight>;
 	}
 }
