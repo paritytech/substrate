@@ -171,10 +171,10 @@ struct ResultDef {
 impl BenchmarkDef {
 	/// Constructs a [`BenchmarkDef`] by traversing an existing [`ItemFn`] node.
 	pub fn from(item_fn: &ItemFn, extra: bool, skip_meta: bool) -> Result<BenchmarkDef> {
-		let empty_fn = || {
+		let missing_call = || {
 			return Err(Error::new(
-				item_fn.block.span(),
-				"Benchmark function definitions cannot be empty!",
+				item_fn.block.brace_token.span,
+				"No valid #[extrinsic_call] or #[block] annotation could be found in benchmark function body."
 			))
 		};
 
@@ -222,10 +222,6 @@ impl BenchmarkDef {
 			}
 
 			params.push(ParamDef { name, typ: typ.clone(), start, end });
-		}
-
-		if item_fn.block.stmts.is_empty() {
-			return empty_fn()
 		}
 
 		// ensure ReturnType is a Result<(), BenchmarkError>, if specified
@@ -284,14 +280,12 @@ impl BenchmarkDef {
 		}).collect::<Result<Vec<_>>>()?;
 		let (i, call_def) = match &call_defs[..] {
 			[(i, call_def)] => (*i, call_def.clone()), // = 1
-			[] => return Err(Error::new( // = 0
-				item_fn.block.brace_token.span,
-				"No valid #[extrinsic_call] or #[block] annotation could be found in benchmark function body."
-			)),
-			_ => return Err(Error::new( // > 1
-				call_defs[1].1.attr_span(),
-				"Only one #[extrinsic_call] or #[block] attribute is allowed per benchmark."
-			)),
+			[] => return missing_call(),
+			_ =>
+				return Err(Error::new(
+					call_defs[1].1.attr_span(),
+					"Only one #[extrinsic_call] or #[block] attribute is allowed per benchmark.",
+				)),
 		};
 
 		let (verify_stmts, last_stmt) = match item_fn.sig.output {
@@ -311,7 +305,7 @@ impl BenchmarkDef {
 						or change your signature to a blank return type.",
 					))
 				}
-				let Some(stmt) = item_fn.block.stmts.last() else { return empty_fn() };
+				let Some(stmt) = item_fn.block.stmts.last() else { return missing_call() };
 				(
 					Vec::from(&item_fn.block.stmts[(i + 1)..item_fn.block.stmts.len() - 1]),
 					Some(stmt.clone()),
