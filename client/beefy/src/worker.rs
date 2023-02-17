@@ -24,8 +24,8 @@ use crate::{
 	error::Error,
 	justification::BeefyVersionedFinalityProof,
 	keystore::BeefyKeystore,
-	metric_inc, metric_set,
-	metrics::Metrics,
+	metric_get, metric_inc, metric_set,
+	metrics::VoterMetrics,
 	round::{Rounds, VoteImportResult},
 	BeefyVoterLinks, LOG_TARGET,
 };
@@ -252,7 +252,7 @@ pub(crate) struct WorkerParams<B: Block, BE, P, N> {
 	pub gossip_validator: Arc<GossipValidator<B>>,
 	pub on_demand_justifications: OnDemandJustificationsEngine<B>,
 	pub links: BeefyVoterLinks<B>,
-	pub metrics: Option<Metrics>,
+	pub metrics: Option<VoterMetrics>,
 	pub persisted_state: PersistedState<B>,
 }
 
@@ -312,7 +312,7 @@ pub(crate) struct BeefyWorker<B: Block, BE, P, N> {
 
 	// voter state
 	/// BEEFY client metrics.
-	metrics: Option<Metrics>,
+	metrics: Option<VoterMetrics>,
 	/// Buffer holding votes for future processing.
 	pending_votes: BTreeMap<
 		NumberFor<B>,
@@ -407,6 +407,7 @@ where
 		if store.intersection(&active).count() == 0 {
 			let msg = "no authority public key found in store".to_string();
 			debug!(target: LOG_TARGET, "🥩 for block {:?} {}", block, msg);
+			metric_inc!(self, beefy_no_authority_found_in_store);
 			Err(Error::Keystore(msg))
 		} else {
 			Ok(())
@@ -494,17 +495,21 @@ where
 				debug!(target: LOG_TARGET, "🥩 Buffer vote for round: {:?}.", block_num);
 				if self.pending_votes.len() < MAX_BUFFERED_VOTE_ROUNDS {
 					let votes_vec = self.pending_votes.entry(block_num).or_default();
-					if votes_vec.try_push(vote).is_err() {
+					if votes_vec.try_push(vote).is_ok() {
+						metric_inc!(self, beefy_buffered_votes);
+					} else {
 						warn!(
 							target: LOG_TARGET,
 							"🥩 Buffer vote dropped for round: {:?}", block_num
-						)
+						);
+						metric_inc!(self, beefy_buffered_votes_dropped);
 					}
 				} else {
 					warn!(target: LOG_TARGET, "🥩 Buffer vote dropped for round: {:?}.", block_num);
+					metric_inc!(self, beefy_buffered_votes_dropped);
 				}
 			},
-			RoundAction::Drop => (),
+			RoundAction::Drop => metric_inc!(self, beefy_stale_votes),
 		};
 		Ok(())
 	}
@@ -524,20 +529,23 @@ where
 		match self.voting_oracle().triage_round(block_num, best_grandpa)? {
 			RoundAction::Process => {
 				debug!(target: LOG_TARGET, "🥩 Process justification for round: {:?}.", block_num);
+				metric_inc!(self, beefy_imported_justifications);
 				self.finalize(justification)?
 			},
 			RoundAction::Enqueue => {
 				debug!(target: LOG_TARGET, "🥩 Buffer justification for round: {:?}.", block_num);
 				if self.pending_justifications.len() < MAX_BUFFERED_JUSTIFICATIONS {
 					self.pending_justifications.entry(block_num).or_insert(justification);
+					metric_inc!(self, beefy_buffered_justifications);
 				} else {
+					metric_inc!(self, beefy_buffered_justifications_dropped);
 					warn!(
 						target: LOG_TARGET,
 						"🥩 Buffer justification dropped for round: {:?}.", block_num
 					);
 				}
 			},
-			RoundAction::Drop => (),
+			RoundAction::Drop => metric_inc!(self, beefy_stale_justifications),
 		};
 		Ok(())
 	}
@@ -555,8 +563,6 @@ where
 		let block_number = vote.commitment.block_number;
 		match rounds.add_vote(vote) {
 			VoteImportResult::RoundConcluded(signed_commitment) => {
-				metric_set!(self, beefy_round_concluded, block_number);
-
 				let finality_proof = VersionedFinalityProof::V1(signed_commitment);
 				info!(
 					target: LOG_TARGET,
@@ -584,6 +590,7 @@ where
 			},
 			VoteImportResult::Invalid | VoteImportResult::Stale => (),
 		};
+		metric_inc!(self, beefy_successful_handled_votes);
 		Ok(())
 	}
 
@@ -637,7 +644,8 @@ where
 				.notify(|| Ok::<_, ()>(finality_proof))
 				.expect("forwards closure result; the closure always returns Ok; qed.");
 		} else {
-			debug!(target: LOG_TARGET, "🥩 Can't set best beefy to older: {}", block_num);
+			debug!(target: LOG_TARGET, "🥩 Can't set best beefy to old: {}", block_num);
+			metric_set!(self, beefy_best_block_set_last_failure, block_num);
 		}
 		Ok(())
 	}
@@ -669,24 +677,32 @@ where
 			let justifs_to_handle = to_process_for(&mut self.pending_justifications, interval, _ph);
 			for (num, justification) in justifs_to_handle.into_iter() {
 				debug!(target: LOG_TARGET, "🥩 Handle buffered justification for: {:?}.", num);
+				metric_inc!(self, beefy_imported_justifications);
 				if let Err(err) = self.finalize(justification) {
 					error!(target: LOG_TARGET, "🥩 Error finalizing block: {}", err);
 				}
 			}
+			metric_set!(self, beefy_buffered_justifications, self.pending_justifications.len());
 			// Possibly new interval after processing justifications.
 			interval = self.voting_oracle().accepted_interval(best_grandpa)?;
 		}
 
 		// Process pending votes.
 		if !self.pending_votes.is_empty() {
+			let mut processed = 0u64;
 			let votes_to_handle = to_process_for(&mut self.pending_votes, interval, _ph);
 			for (num, votes) in votes_to_handle.into_iter() {
 				debug!(target: LOG_TARGET, "🥩 Handle buffered votes for: {:?}.", num);
+				processed += votes.len() as u64;
 				for v in votes.into_iter() {
 					if let Err(err) = self.handle_vote(v) {
 						error!(target: LOG_TARGET, "🥩 Error handling buffered vote: {}", err);
 					};
 				}
+			}
+			if let Some(previous) = metric_get!(self, beefy_buffered_votes) {
+				previous.sub(processed);
+				metric_set!(self, beefy_buffered_votes, previous.get());
 			}
 		}
 		Ok(())
@@ -1053,10 +1069,12 @@ pub(crate) mod tests {
 		let gossip_validator = Arc::new(GossipValidator::new(known_peers.clone()));
 		let gossip_engine =
 			GossipEngine::new(network.clone(), "/beefy/1", gossip_validator.clone(), None);
+		let metrics = None;
 		let on_demand_justifications = OnDemandJustificationsEngine::new(
 			network.clone(),
 			"/beefy/justifs/1".into(),
 			known_peers,
+			None,
 		);
 		let genesis_header = backend
 			.blockchain()
@@ -1077,7 +1095,7 @@ pub(crate) mod tests {
 			links,
 			gossip_engine,
 			gossip_validator,
-			metrics: None,
+			metrics,
 			network,
 			on_demand_justifications,
 			persisted_state,

@@ -28,6 +28,7 @@ use crate::{
 		},
 	},
 	import::BeefyBlockImport,
+	metrics::register_metrics,
 	round::Rounds,
 	worker::PersistedState,
 };
@@ -36,7 +37,7 @@ use beefy_primitives::{
 	GENESIS_AUTHORITY_SET_ID,
 };
 use futures::{stream::Fuse, StreamExt};
-use log::{debug, error, info};
+use log::{error, info};
 use parking_lot::Mutex;
 use prometheus::Registry;
 use sc_client_api::{Backend, BlockBackend, BlockchainEvents, FinalityNotifications, Finalizer};
@@ -133,6 +134,7 @@ pub fn beefy_block_import_and_links<B, BE, RuntimeApi, I>(
 	wrapped_block_import: I,
 	backend: Arc<BE>,
 	runtime: Arc<RuntimeApi>,
+	prometheus_registry: Option<Registry>,
 ) -> (BeefyBlockImport<B, BE, RuntimeApi, I>, BeefyVoterLinks<B>, BeefyRPCLinks<B>)
 where
 	B: Block,
@@ -152,10 +154,16 @@ where
 	// BlockImport -> Voter links
 	let (to_voter_justif_sender, from_block_import_justif_stream) =
 		BeefyVersionedFinalityProofStream::<B>::channel();
+	let metrics = register_metrics(prometheus_registry);
 
 	// BlockImport
-	let import =
-		BeefyBlockImport::new(backend, runtime, wrapped_block_import, to_voter_justif_sender);
+	let import = BeefyBlockImport::new(
+		backend,
+		runtime,
+		wrapped_block_import,
+		to_voter_justif_sender,
+		metrics,
+	);
 	let voter_links = BeefyVoterLinks {
 		from_block_import_justif_stream,
 		to_rpc_justif_sender,
@@ -242,27 +250,15 @@ where
 		gossip_validator.clone(),
 		None,
 	);
+	let metrics = register_metrics(prometheus_registry.clone());
 
 	// The `GossipValidator` adds and removes known peers based on valid votes and network events.
 	let on_demand_justifications = OnDemandJustificationsEngine::new(
 		network.clone(),
 		justifications_protocol_name,
 		known_peers,
+		prometheus_registry.clone(),
 	);
-
-	let metrics =
-		prometheus_registry.as_ref().map(metrics::Metrics::register).and_then(
-			|result| match result {
-				Ok(metrics) => {
-					debug!(target: LOG_TARGET, "🥩 Registered metrics");
-					Some(metrics)
-				},
-				Err(err) => {
-					debug!(target: LOG_TARGET, "🥩 Failed to register metrics: {:?}", err);
-					None
-				},
-			},
-		);
 
 	// Subscribe to finality notifications and justifications before waiting for runtime pallet and
 	// reuse the streams, so we don't miss notifications while waiting for pallet to be available.
