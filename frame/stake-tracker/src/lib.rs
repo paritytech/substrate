@@ -29,7 +29,6 @@ use sp_runtime::{
 	traits::{Bounded, Zero},
 	Saturating,
 };
-
 use sp_staking::{OnStakingUpdate, Stake, StakingInterface};
 
 use sp_std::{boxed::Box, vec::Vec};
