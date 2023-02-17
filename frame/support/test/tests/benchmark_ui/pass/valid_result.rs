@@ -6,12 +6,12 @@ mod benches {
 	use super::*;
 
 	#[benchmark]
-	fn bench() -> Result<bool, BenchmarkError> {
+	fn bench() -> Result<(), BenchmarkError> {
 		let a = 2 + 2;
 		#[block]
 		{}
 		assert_eq!(a, 4);
-		Ok(false)
+		Ok(())
 	}
 }
 

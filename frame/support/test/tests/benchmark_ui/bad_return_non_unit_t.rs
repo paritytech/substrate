@@ -1,17 +1,14 @@
 use frame_benchmarking::v2::*;
+#[allow(unused_imports)]
 use frame_support_test::Config;
 
 #[benchmarks]
-mod benches {
-	use super::*;
-
+mod benchmarks {
 	#[benchmark]
 	fn bench() -> Result<u32, BenchmarkError> {
-		let a = 2 + 2;
 		#[block]
 		{}
-		assert_eq!(a, 4);
-		Ok(8)
+		Ok(10)
 	}
 }
 

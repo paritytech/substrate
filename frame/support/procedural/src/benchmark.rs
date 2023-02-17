@@ -162,7 +162,7 @@ struct BenchmarkDef {
 struct ResultDef {
 	_result_kw: keywords::Result,
 	_lt: Token![<],
-	_t_type: Type,
+	unit: Type,
 	_comma: Comma,
 	e_type: TypePath,
 	_gt: Token![>],
@@ -228,13 +228,19 @@ impl BenchmarkDef {
 			return empty_fn()
 		}
 
-		// ensure ReturnType is a Result<T, BenchmarkError>, if specified
+		// ensure ReturnType is a Result<(), BenchmarkError>, if specified
 		if let ReturnType::Type(_, typ) = &item_fn.sig.output {
+			let non_unit = |span| return Err(Error::new(span, "expected `()`"));
 			// for this to parse as a ReturnType::Type, the contents must be a TypePath, QED
 			let Type::Path(TypePath { path, qself: _ }) = &**typ else { panic!("unreachable state") };
 			// for this to parse as a TypePath, it has to have at least one segment, QED
 			let Some(seg) = path.segments.last() else { panic!("unreachable state") };
 			let res: ResultDef = syn::parse2(seg.to_token_stream())?;
+			// ensure T in Result<T, E> is ()
+			let Type::Tuple(tup) = res.unit else { return non_unit(res.unit.span()) };
+			if !tup.elems.is_empty() {
+				return non_unit(tup.span())
+			}
 			let TypePath { path, qself: _ } = res.e_type;
 			// for this to parse as a TypePath, it has to have at least one segment, QED
 			let Some(seg) = path.segments.last() else { panic!("unreachable state") };
@@ -293,7 +299,7 @@ impl BenchmarkDef {
 			// no return type, last_stmt should be None
 				(Vec::from(&item_fn.block.stmts[(i + 1)..item_fn.block.stmts.len()]), None),
 			ReturnType::Type(_, _) => {
-				// defined return type, last_stmt should be Result<T, BenchmarkError>
+				// defined return type, last_stmt should be Result<(), BenchmarkError>
 				// compatible and should not be included in verify_stmts
 				if i + 1 >= item_fn.block.stmts.len() {
 					return Err(Error::new(
@@ -301,7 +307,7 @@ impl BenchmarkDef {
 						"Benchmark `#[block]` or `#[extrinsic_call]` item cannot be the \
 						last statement of your benchmark function definition if you have \
 						defined a return type. You should return something compatible \
-						with Result<T, BenchmarkError> (i.e. `Ok(T)`) as the last statement \
+						with Result<(), BenchmarkError> (i.e. `Ok(())`) as the last statement \
 						or change your signature to a blank return type.",
 					))
 				}
@@ -907,7 +913,7 @@ fn expand_benchmark(
 						)*
 					}
 					match #impl_last_stmt {
-						Ok(_) => Ok(()), // discard custom Result<T, BenchmarkError> type in this context
+						Ok(_) => Ok(()), // discard custom Result<(), BenchmarkError> type in this context
 						Err(err) => Err(err)
 					}
 				}))
