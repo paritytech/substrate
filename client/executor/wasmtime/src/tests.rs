@@ -345,7 +345,7 @@ fn test_max_memory_pages(
 	import_memory: bool,
 	precompile_runtime: bool,
 ) {
-	fn try_instantiate(
+	fn call(
 		heap_alloc_strategy: HeapAllocStrategy,
 		wat: String,
 		instantiation_strategy: InstantiationStrategy,
@@ -357,17 +357,13 @@ fn test_max_memory_pages(
 			.precompile_runtime(precompile_runtime);
 
 		let runtime = builder.build();
-		let mut instance = runtime.new_instance()?;
+		let mut instance = runtime.new_instance().unwrap();
 		let _ = instance.call_export("main", &[])?;
 		Ok(())
 	}
 
-	fn memory(initial: u32, maximum: Option<u32>, import: bool) -> String {
-		let memory = if let Some(maximum) = maximum {
-			format!("(memory $0 {} {})", initial, maximum)
-		} else {
-			format!("(memory $0 {})", initial)
-		};
+	fn memory(initial: u32, maximum: u32, import: bool) -> String {
+		let memory = format!("(memory $0 {} {})", initial, maximum);
 
 		if import {
 			format!("(import \"env\" \"memory\" {})", memory)
@@ -376,47 +372,11 @@ fn test_max_memory_pages(
 		}
 	}
 
-	// memory grow should work as long as it doesn't exceed 1025 pages in total.
-	try_instantiate(
-		HeapAllocStrategy::Dynamic { maximum_pages: Some(1025) },
-		format!(
-			r#"
-				(module
-					{}
-					(global (export "__heap_base") i32 (i32.const 0))
-					(func (export "main")
-						(param i32 i32) (result i64)
+	let assert_grow_ok = |alloc_strategy: HeapAllocStrategy, initial_pages: u32, max_pages: u32| {
+		eprintln!("assert_grow_ok({alloc_strategy:?}, {initial_pages}, {max_pages})");
 
-						;; assert(memory.grow returns != -1)
-						(if
-							(i32.eq
-								(memory.grow
-									(i32.const 25)
-								)
-								(i32.const -1)
-							)
-							(unreachable)
-						)
-
-						(i64.const 0)
-					)
-				)
-			"#,
-			// Zero starting pages.
-			memory(0, None, import_memory)
-		),
-		instantiation_strategy,
-		precompile_runtime,
-	)
-	.unwrap();
-
-	for alloc_strategy in &[
-		HeapAllocStrategy::Dynamic { maximum_pages: Some(1025) },
-		HeapAllocStrategy::Static { extra_pages: 0 },
-	] {
-		// We start with 1025 pages and try to grow at least one.
-		try_instantiate(
-			*alloc_strategy,
+		call(
+			alloc_strategy,
 			format!(
 				r#"
 					(module
@@ -425,9 +385,9 @@ fn test_max_memory_pages(
 						(func (export "main")
 							(param i32 i32) (result i64)
 
-							;; assert(memory.grow returns == -1)
+							;; assert(memory.grow returns != -1)
 							(if
-								(i32.ne
+								(i32.eq
 									(memory.grow
 										(i32.const 1)
 									)
@@ -439,15 +399,63 @@ fn test_max_memory_pages(
 							(i64.const 0)
 						)
 					)
-				"#,
-				// Initial=1025, meaning after heap pages mount the total will be already 1025.
-				memory(1025, None, import_memory)
+			"#,
+				memory(initial_pages, max_pages, import_memory)
 			),
 			instantiation_strategy,
 			precompile_runtime,
 		)
-		.unwrap();
-	}
+		.unwrap()
+	};
+
+	let assert_grow_fail =
+		|alloc_strategy: HeapAllocStrategy, initial_pages: u32, max_pages: u32| {
+			eprintln!("assert_grow_fail({alloc_strategy:?}, {initial_pages}, {max_pages})");
+
+			call(
+				alloc_strategy,
+				format!(
+					r#"
+						(module
+							{}
+							(global (export "__heap_base") i32 (i32.const 0))
+							(func (export "main")
+								(param i32 i32) (result i64)
+
+								;; assert(memory.grow returns == -1)
+								(if
+									(i32.ne
+										(memory.grow
+											(i32.const 1)
+										)
+										(i32.const -1)
+									)
+									(unreachable)
+								)
+
+								(i64.const 0)
+							)
+						)
+					"#,
+					memory(initial_pages, max_pages, import_memory)
+				),
+				instantiation_strategy,
+				precompile_runtime,
+			)
+			.unwrap()
+		};
+
+	assert_grow_ok(HeapAllocStrategy::Dynamic { maximum_pages: Some(10) }, 1, 10);
+	assert_grow_ok(HeapAllocStrategy::Dynamic { maximum_pages: Some(10) }, 9, 10);
+	assert_grow_fail(HeapAllocStrategy::Dynamic { maximum_pages: Some(10) }, 10, 10);
+
+	assert_grow_ok(HeapAllocStrategy::Dynamic { maximum_pages: None }, 1, 10);
+	assert_grow_ok(HeapAllocStrategy::Dynamic { maximum_pages: None }, 9, 10);
+	assert_grow_ok(HeapAllocStrategy::Dynamic { maximum_pages: None }, 10, 10);
+
+	assert_grow_fail(HeapAllocStrategy::Static { extra_pages: 10 }, 1, 10);
+	assert_grow_fail(HeapAllocStrategy::Static { extra_pages: 10 }, 9, 10);
+	assert_grow_fail(HeapAllocStrategy::Static { extra_pages: 10 }, 10, 10);
 }
 
 // This test takes quite a while to execute in a debug build (over 6 minutes on a TR 3970x)

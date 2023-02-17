@@ -176,9 +176,13 @@ impl RuntimeBlob {
 		for memory_ty in memory_section.entries_mut() {
 			let initial = memory_ty.limits().initial();
 			let (min, max) = match heap_alloc_strategy {
-				HeapAllocStrategy::Dynamic { maximum_pages } => (initial, maximum_pages),
-				HeapAllocStrategy::Static { extra_pages } =>
-					(initial + extra_pages, Some(initial + extra_pages)),
+				HeapAllocStrategy::Dynamic { maximum_pages } =>
+					// Ensure `initial <= maximum_pages`
+					(maximum_pages.map(|m| m.min(initial)).unwrap_or(initial), maximum_pages),
+				HeapAllocStrategy::Static { extra_pages } => {
+					let pages = initial.saturating_add(extra_pages);
+					(pages, Some(pages))
+				},
 			};
 			*memory_ty = MemoryType::new(min, max);
 		}

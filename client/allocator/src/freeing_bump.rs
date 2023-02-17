@@ -527,11 +527,24 @@ impl FreeingBumpHeapAllocator {
 
 			let current_pages = memory.pages();
 			let max_pages = memory.max_pages().unwrap_or(MAX_WASM_PAGES);
-			debug_assert!(pages <= max_pages);
+			debug_assert!(
+				current_pages < required_pages,
+				"current pages {current_pages} < required pages {required_pages}"
+			);
 
-			if pages >= MAX_WASM_PAGES {
-				log::debug!(target: LOG_TARGET, "Trying to grow wasm pages above maximum.",);
+			if current_pages >= max_pages {
+				log::debug!(
+					target: LOG_TARGET,
+					"Wasm pages ({current_pages}) are already at the maximum.",
+				);
 
+				return Err(Error::AllocatorOutOfSpace)
+			} else if required_pages > max_pages {
+				log::debug!(
+					target: LOG_TARGET,
+					"Failed to grow memory from {current_pages} pages to at least {required_pages}\
+						 pages due to the maximum limit of {max_pages} pages",
+				);
 				return Err(Error::AllocatorOutOfSpace)
 			}
 
@@ -541,21 +554,16 @@ impl FreeingBumpHeapAllocator {
 			// ...but if even more pages are required then try to allocate that many.
 			let next_pages = max(next_pages, required_pages);
 
-			if required_pages > max_pages {
-				log::debug!(
-					target: LOG_TARGET,
-					"Failed to grow memory from {pages} pages to at least {required_pages}\
-						 pages due to the maximum limit of {max_pages} pages",
-				);
-				return Err(Error::AllocatorOutOfSpace)
-			} else if memory.grow(next_pages - pages).is_err() {
+			if memory.grow(next_pages - current_pages).is_err() {
 				log::error!(
 					target: LOG_TARGET,
-					"Failed to grow memory from {pages} pages to {next_pages} pages",
+					"Failed to grow memory from {current_pages} pages to {next_pages} pages",
 				);
 
 				return Err(Error::AllocatorOutOfSpace)
 			}
+
+			debug_assert_eq!(memory.pages(), next_pages, "Number of pages should have increased!");
 		}
 
 		let res = *bumper;
@@ -661,8 +669,8 @@ mod tests {
 	}
 
 	impl MemoryInstance {
-		fn with_size(size: u32) -> Self {
-			Self { data: vec![0; size as usize], max_wasm_pages: MAX_WASM_PAGES }
+		fn with_pages(pages: u32) -> Self {
+			Self { data: vec![0; (pages * PAGE_SIZE) as usize], max_wasm_pages: MAX_WASM_PAGES }
 		}
 
 		fn set_max_wasm_pages(&mut self, max_pages: u32) {
@@ -680,7 +688,7 @@ mod tests {
 		}
 
 		fn pages(&self) -> u32 {
-			(self.data.len() as u32 + PAGE_SIZE - 1) / PAGE_SIZE
+			pages_from_size(self.data.len() as u64).unwrap()
 		}
 
 		fn max_pages(&self) -> Option<u32> {
@@ -710,7 +718,7 @@ mod tests {
 	#[test]
 	fn should_allocate_properly() {
 		// given
-		let mut mem = MemoryInstance::with_size(PAGE_SIZE);
+		let mut mem = MemoryInstance::with_pages(1);
 		let mut heap = FreeingBumpHeapAllocator::new(0);
 
 		// when
@@ -724,7 +732,7 @@ mod tests {
 	#[test]
 	fn should_always_align_pointers_to_multiples_of_8() {
 		// given
-		let mut mem = MemoryInstance::with_size(PAGE_SIZE);
+		let mut mem = MemoryInstance::with_pages(1);
 		let mut heap = FreeingBumpHeapAllocator::new(13);
 
 		// when
@@ -739,7 +747,7 @@ mod tests {
 	#[test]
 	fn should_increment_pointers_properly() {
 		// given
-		let mut mem = MemoryInstance::with_size(PAGE_SIZE);
+		let mut mem = MemoryInstance::with_pages(1);
 		let mut heap = FreeingBumpHeapAllocator::new(0);
 
 		// when
@@ -762,7 +770,7 @@ mod tests {
 	#[test]
 	fn should_free_properly() {
 		// given
-		let mut mem = MemoryInstance::with_size(PAGE_SIZE);
+		let mut mem = MemoryInstance::with_pages(1);
 		let mut heap = FreeingBumpHeapAllocator::new(0);
 		let ptr1 = heap.allocate(&mut mem, 1).unwrap();
 		// the prefix of 8 bytes is prepended to the pointer
@@ -784,7 +792,7 @@ mod tests {
 	#[test]
 	fn should_deallocate_and_reallocate_properly() {
 		// given
-		let mut mem = MemoryInstance::with_size(PAGE_SIZE);
+		let mut mem = MemoryInstance::with_pages(1);
 		let padded_offset = 16;
 		let mut heap = FreeingBumpHeapAllocator::new(13);
 
@@ -811,7 +819,7 @@ mod tests {
 	#[test]
 	fn should_build_linked_list_of_free_areas_properly() {
 		// given
-		let mut mem = MemoryInstance::with_size(PAGE_SIZE);
+		let mut mem = MemoryInstance::with_pages(1);
 		let mut heap = FreeingBumpHeapAllocator::new(0);
 
 		let ptr1 = heap.allocate(&mut mem, 8).unwrap();
@@ -835,7 +843,7 @@ mod tests {
 	#[test]
 	fn should_not_allocate_if_too_large() {
 		// given
-		let mut mem = MemoryInstance::with_size(PAGE_SIZE);
+		let mut mem = MemoryInstance::with_pages(1);
 		mem.set_max_wasm_pages(1);
 		let mut heap = FreeingBumpHeapAllocator::new(13);
 
@@ -843,16 +851,13 @@ mod tests {
 		let ptr = heap.allocate(&mut mem, PAGE_SIZE - 13);
 
 		// then
-		match ptr.unwrap_err() {
-			Error::AllocatorOutOfSpace => {},
-			e => panic!("Expected allocator out of space error, got: {:?}", e),
-		}
+		assert_eq!(Error::AllocatorOutOfSpace, ptr.unwrap_err());
 	}
 
 	#[test]
 	fn should_not_allocate_if_full() {
 		// given
-		let mut mem = MemoryInstance::with_size(PAGE_SIZE);
+		let mut mem = MemoryInstance::with_pages(1);
 		mem.set_max_wasm_pages(1);
 		let mut heap = FreeingBumpHeapAllocator::new(0);
 		let ptr1 = heap.allocate(&mut mem, (PAGE_SIZE / 2) - HEADER_SIZE).unwrap();
@@ -872,7 +877,7 @@ mod tests {
 	#[test]
 	fn should_allocate_max_possible_allocation_size() {
 		// given
-		let mut mem = MemoryInstance::with_size(MAX_POSSIBLE_ALLOCATION + PAGE_SIZE);
+		let mut mem = MemoryInstance::with_pages(1);
 		let mut heap = FreeingBumpHeapAllocator::new(0);
 
 		// when
@@ -885,23 +890,20 @@ mod tests {
 	#[test]
 	fn should_not_allocate_if_requested_size_too_large() {
 		// given
-		let mut mem = MemoryInstance::with_size(PAGE_SIZE);
+		let mut mem = MemoryInstance::with_pages(1);
 		let mut heap = FreeingBumpHeapAllocator::new(0);
 
 		// when
 		let ptr = heap.allocate(&mut mem, MAX_POSSIBLE_ALLOCATION + 1);
 
 		// then
-		match ptr.unwrap_err() {
-			Error::RequestedAllocationTooLarge => {},
-			e => panic!("Expected allocation size too large error, got: {:?}", e),
-		}
+		assert_eq!(Error::RequestedAllocationTooLarge, ptr.unwrap_err());
 	}
 
 	#[test]
 	fn should_return_error_when_bumper_greater_than_heap_size() {
 		// given
-		let mut mem = MemoryInstance::with_size(PAGE_SIZE);
+		let mut mem = MemoryInstance::with_pages(1);
 		mem.set_max_wasm_pages(1);
 		let mut heap = FreeingBumpHeapAllocator::new(0);
 
@@ -932,16 +934,13 @@ mod tests {
 		let ptr = heap.allocate(&mut mem, 8);
 
 		// then
-		match ptr.unwrap_err() {
-			Error::AllocatorOutOfSpace => {},
-			e => panic!("Expected allocator out of space error, got: {:?}", e),
-		}
+		assert_eq!(Error::AllocatorOutOfSpace, ptr.unwrap_err());
 	}
 
 	#[test]
 	fn should_include_prefixes_in_total_heap_size() {
 		// given
-		let mut mem = MemoryInstance::with_size(PAGE_SIZE);
+		let mut mem = MemoryInstance::with_pages(1);
 		let mut heap = FreeingBumpHeapAllocator::new(1);
 
 		// when
@@ -955,7 +954,7 @@ mod tests {
 	#[test]
 	fn should_calculate_total_heap_size_to_zero() {
 		// given
-		let mut mem = MemoryInstance::with_size(PAGE_SIZE);
+		let mut mem = MemoryInstance::with_pages(1);
 		let mut heap = FreeingBumpHeapAllocator::new(13);
 
 		// when
@@ -970,7 +969,7 @@ mod tests {
 	#[test]
 	fn should_calculate_total_size_of_zero() {
 		// given
-		let mut mem = MemoryInstance::with_size(PAGE_SIZE);
+		let mut mem = MemoryInstance::with_pages(1);
 		let mut heap = FreeingBumpHeapAllocator::new(19);
 
 		// when
@@ -986,7 +985,7 @@ mod tests {
 	#[test]
 	fn should_read_and_write_u64_correctly() {
 		// given
-		let mut mem = MemoryInstance::with_size(PAGE_SIZE);
+		let mut mem = MemoryInstance::with_pages(1);
 
 		// when
 		mem.write_le_u64(40, 4480113).unwrap();
@@ -1022,21 +1021,22 @@ mod tests {
 
 	#[test]
 	fn deallocate_needs_to_maintain_linked_list() {
-		let mut mem = MemoryInstance::with_size(8 * 2 * 4 + ALIGNMENT);
+		let mut mem = MemoryInstance::with_pages(1);
 		let mut heap = FreeingBumpHeapAllocator::new(0);
 
 		// Allocate and free some pointers
 		let ptrs = (0..4).map(|_| heap.allocate(&mut mem, 8).unwrap()).collect::<Vec<_>>();
-		ptrs.into_iter().for_each(|ptr| heap.deallocate(&mut mem, ptr).unwrap());
+		ptrs.iter().rev().for_each(|ptr| heap.deallocate(&mut mem, *ptr).unwrap());
 
-		// Second time we should be able to allocate all of them again.
-		let _ = (0..4).map(|_| heap.allocate(&mut mem, 8).unwrap()).collect::<Vec<_>>();
+		// Second time we should be able to allocate all of them again and get the same pointers!
+		let new_ptrs = (0..4).map(|_| heap.allocate(&mut mem, 8).unwrap()).collect::<Vec<_>>();
+		assert_eq!(ptrs, new_ptrs);
 	}
 
 	#[test]
 	fn header_read_write() {
 		let roundtrip = |header: Header| {
-			let mut memory = MemoryInstance::with_size(32);
+			let mut memory = MemoryInstance::with_pages(1);
 			header.write_into(&mut memory, 0).unwrap();
 
 			let read_header = Header::read_from(&memory, 0).unwrap();
@@ -1053,16 +1053,14 @@ mod tests {
 	#[test]
 	fn poison_oom() {
 		// given
-		// a heap of 32 bytes. Should be enough for two allocations.
-		let mut mem = MemoryInstance::with_size(32);
+		let mut mem = MemoryInstance::with_pages(1);
 		mem.set_max_wasm_pages(1);
 
 		let mut heap = FreeingBumpHeapAllocator::new(0);
 
 		// when
-		assert!(heap.allocate(&mut mem, 8).is_ok());
-		let alloc_ptr = heap.allocate(&mut mem, 8).unwrap();
-		assert!(heap.allocate(&mut mem, 8).is_err());
+		let alloc_ptr = heap.allocate(&mut mem, PAGE_SIZE / 2).unwrap();
+		assert_eq!(Error::AllocatorOutOfSpace, heap.allocate(&mut mem, PAGE_SIZE).unwrap_err());
 
 		// then
 		assert!(heap.poisoned);
@@ -1080,32 +1078,27 @@ mod tests {
 
 	#[test]
 	fn accepts_growing_memory() {
-		const ITEM_SIZE: u32 = 16;
-		const ITEM_ON_HEAP_SIZE: u32 = 16 + HEADER_SIZE;
-
-		let mut mem = MemoryInstance::with_size(ITEM_ON_HEAP_SIZE * 2);
+		let mut mem = MemoryInstance::with_pages(1);
 		let mut heap = FreeingBumpHeapAllocator::new(0);
 
-		heap.allocate(&mut mem, ITEM_SIZE).unwrap();
-		heap.allocate(&mut mem, ITEM_SIZE).unwrap();
+		heap.allocate(&mut mem, PAGE_SIZE / 2).unwrap();
+		heap.allocate(&mut mem, PAGE_SIZE / 2).unwrap();
 
-		mem.data.extend_from_slice(&[0u8; ITEM_ON_HEAP_SIZE as usize]);
+		mem.grow(1).unwrap();
 
-		heap.allocate(&mut mem, ITEM_SIZE).unwrap();
+		heap.allocate(&mut mem, PAGE_SIZE / 2).unwrap();
 	}
 
 	#[test]
 	fn doesnt_accept_shrinking_memory() {
-		const ITEM_SIZE: u32 = 16;
-
-		let mut mem = MemoryInstance::with_size(2 * PAGE_SIZE);
+		let mut mem = MemoryInstance::with_pages(2);
 		let mut heap = FreeingBumpHeapAllocator::new(0);
 
-		heap.allocate(&mut mem, ITEM_SIZE).unwrap();
+		heap.allocate(&mut mem, PAGE_SIZE / 2).unwrap();
 
 		mem.data.truncate(PAGE_SIZE as usize);
 
-		match heap.allocate(&mut mem, ITEM_SIZE).unwrap_err() {
+		match heap.allocate(&mut mem, PAGE_SIZE / 2).unwrap_err() {
 			Error::MemoryShrinked => (),
 			_ => panic!(),
 		}
@@ -1113,7 +1106,7 @@ mod tests {
 
 	#[test]
 	fn should_grow_memory_when_running_out_of_memory() {
-		let mut mem = MemoryInstance::with_size(PAGE_SIZE);
+		let mut mem = MemoryInstance::with_pages(1);
 		let mut heap = FreeingBumpHeapAllocator::new(0);
 
 		assert_eq!(1, mem.pages());

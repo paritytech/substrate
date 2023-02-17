@@ -458,7 +458,7 @@ impl WasmModule for WasmiRuntime {
 			host_functions: self.host_functions.clone(),
 			allow_missing_func_imports: self.allow_missing_func_imports,
 			missing_functions: Arc::new(missing_functions),
-			memoy_zeroed: true,
+			memory_zeroed: true,
 		}))
 	}
 }
@@ -505,7 +505,7 @@ pub struct WasmiInstance {
 	/// The memory instance of used by the wasm module.
 	memory: MemoryRef,
 	/// Is the memory zeroed?
-	memoy_zeroed: bool,
+	memory_zeroed: bool,
 	/// The snapshot of global variable values just after instantiation.
 	global_vals_snapshot: GlobalValsSnapshot,
 	/// The snapshot of data segments.
@@ -533,7 +533,7 @@ impl WasmiInstance {
 		// We reuse a single wasm instance for multiple calls and a previous call (if any)
 		// altered the state. Therefore, we need to restore the instance to original state.
 
-		if !self.memoy_zeroed {
+		if !self.memory_zeroed {
 			// First, zero initialize the linear memory.
 			self.memory.erase().map_err(|e| {
 				// Snapshot restoration failed. This is pretty unexpected since this can happen
@@ -563,7 +563,7 @@ impl WasmiInstance {
 		);
 
 		// If we couldn't unmap it, erase the memory.
-		self.memoy_zeroed = self.memory.erase().is_ok();
+		self.memory_zeroed = self.memory.erase().is_ok();
 
 		res
 	}
