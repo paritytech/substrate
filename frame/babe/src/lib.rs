@@ -64,7 +64,7 @@ mod mock;
 #[cfg(all(feature = "std", test))]
 mod tests;
 
-pub use equivocation::{BabeEquivocationOffence, EquivocationHandler};
+pub use equivocation::{EquivocationHandler, EquivocationOffence};
 #[allow(deprecated)]
 pub use randomness::CurrentBlockRandomness;
 pub use randomness::{
@@ -174,7 +174,7 @@ pub mod pallet {
 		/// definition.
 		type HandleEquivocation: EquivocationHandlerT<
 			KeyOwnerProof = Self::KeyOwnerProof,
-			Offence = BabeEquivocationOffence<Self::KeyOwnerIdentification, Self::AccountId>,
+			Offence = EquivocationOffence<Self::KeyOwnerIdentification, Self::AccountId>,
 			OffenceProof = EquivocationProof<Self::Header>,
 		>;
 
@@ -852,13 +852,8 @@ impl<T: Config> Pallet<T> {
 		let offender = T::KeyOwnerProofSystem::check_proof(key, key_owner_proof)
 			.ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
 
-		let offence = BabeEquivocationOffence {
-			slot,
-			validator_set_count,
-			offender,
-			session_index,
-			reporter,
-		};
+		let offence =
+			EquivocationOffence { slot, validator_set_count, offender, session_index, reporter };
 
 		T::HandleEquivocation::report_offence(offence)
 			.map_err(|_| Error::<T>::DuplicateOffenceReport)?;

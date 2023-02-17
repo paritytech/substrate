@@ -63,7 +63,9 @@ mod mock;
 #[cfg(all(feature = "std", test))]
 mod tests;
 
-pub use equivocation::{EquivocationHandler, GrandpaEquivocationOffence, GrandpaTimeSlot};
+pub use equivocation::{
+	EquivocationHandler, GrandpaEquivocationOffence, GrandpaTimeSlot, NullHandler,
+};
 
 pub use pallet::*;
 

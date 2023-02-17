@@ -64,10 +64,10 @@ pub struct EquivocationHandler<I, R, L>(sp_std::marker::PhantomData<(I, R, L)>);
 impl<T, R, L> EquivocationHandlerT for EquivocationHandler<T, R, L>
 where
 	T: Config + pallet_authorship::Config + frame_system::offchain::SendTransactionTypes<Call<T>>,
-	R: ReportOffence<BabeEquivocationOffence<T::KeyOwnerIdentification, T::AccountId>>,
+	R: ReportOffence<EquivocationOffence<T::KeyOwnerIdentification, T::AccountId>>,
 	L: Get<u64>,
 {
-	type Offence = BabeEquivocationOffence<T::KeyOwnerIdentification, T::AccountId>;
+	type Offence = EquivocationOffence<T::KeyOwnerIdentification, T::AccountId>;
 
 	type OffenceProof = EquivocationProof<T::Header>;
 
@@ -105,7 +105,7 @@ where
 struct NullHandler<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config> EquivocationHandlerT for NullHandler<T> {
-	type Offence = BabeEquivocationOffence<T::KeyOwnerIdentification, T::AccountId>;
+	type Offence = EquivocationOffence<T::KeyOwnerIdentification, T::AccountId>;
 	type OffenceProof = ();
 	type KeyOwnerProof = ();
 	type ReportOffence = ();
@@ -181,7 +181,7 @@ fn is_known_offence<T: Config>(
 /// A BABE equivocation offence report.
 ///
 /// When a validator released two or more blocks at the same slot.
-pub struct BabeEquivocationOffence<O, R> {
+pub struct EquivocationOffence<O, R> {
 	/// A babe slot in which this incident happened.
 	pub slot: Slot,
 	/// The session index in which the incident happened.
@@ -194,7 +194,7 @@ pub struct BabeEquivocationOffence<O, R> {
 	pub reporter: Option<R>,
 }
 
-impl<O: Clone, R: Clone> Offence for BabeEquivocationOffence<O, R> {
+impl<O: Clone, R: Clone> Offence for EquivocationOffence<O, R> {
 	const ID: Kind = *b"babe:equivocatio";
 	type TimeSlot = Slot;
 	type Offender = O;

@@ -79,14 +79,11 @@ fn should_report_offline_validators() {
 		let offences = Offences::take();
 		assert_eq!(
 			offences,
-			vec![(
-				vec![],
-				UnresponsivenessOffence {
-					session_index: 2,
-					validator_set_count: 3,
-					offenders: vec![(1, 1), (2, 2), (3, 3),],
-				}
-			)]
+			vec![UnresponsivenessOffence {
+				session_index: 2,
+				validator_set_count: 3,
+				offenders: vec![(1, 1), (2, 2), (3, 3),],
+			}]
 		);
 
 		// should not report when heartbeat is sent
@@ -99,14 +96,11 @@ fn should_report_offline_validators() {
 		let offences = Offences::take();
 		assert_eq!(
 			offences,
-			vec![(
-				vec![],
-				UnresponsivenessOffence {
-					session_index: 3,
-					validator_set_count: 6,
-					offenders: vec![(5, 5), (6, 6),],
-				}
-			)]
+			vec![UnresponsivenessOffence {
+				session_index: 3,
+				validator_set_count: 6,
+				offenders: vec![(5, 5), (6, 6),],
+			}]
 		);
 	});
 }

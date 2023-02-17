@@ -1,6 +1,45 @@
-use crate::offence::{Offence, OffenceError, ReportOffence};
+use crate::{
+	offence::{Offence, OffenceError, ReportOffence},
+	SessionIndex,
+};
 use sp_core::Get;
-use sp_runtime::DispatchResult;
+use sp_runtime::{DispatchResult, Perbill};
+use sp_std::vec::Vec;
+
+// Dummy offence implementation used by the "null" Offence reporter.
+// Should remain private...
+pub struct NullOffence;
+
+impl Offence for NullOffence {
+	const ID: crate::offence::Kind = [0; 16];
+	type TimeSlot = ();
+	type Offender = ();
+	type Reporter = ();
+
+	fn offenders(&self) -> Vec<Self::Offender> {
+		Default::default()
+	}
+
+	fn reporters(&self) -> Vec<Self::Reporter> {
+		Default::default()
+	}
+
+	fn validator_set_count(&self) -> u32 {
+		0
+	}
+
+	fn time_slot(&self) -> Self::TimeSlot {
+		()
+	}
+
+	fn session_index(&self) -> SessionIndex {
+		0
+	}
+
+	fn slash_fraction(&self, _offenders_count: u32) -> Perbill {
+		Default::default()
+	}
+}
 
 pub trait EquivocationHandler {
 	type Offence: Offence;
@@ -39,4 +78,16 @@ pub trait EquivocationHandler {
 	fn block_author() -> Option<<Self::Offence as Offence>::Reporter> {
 		None
 	}
+}
+
+impl EquivocationHandler for () {
+	type Offence = NullOffence;
+
+	type OffenceProof = ();
+
+	type KeyOwnerProof = ();
+
+	type ReportOffence = ();
+
+	type ReportLongevity = ();
 }

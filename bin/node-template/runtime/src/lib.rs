@@ -226,7 +226,7 @@ impl pallet_grandpa::Config for Runtime {
 		GrandpaId,
 	)>>::IdentificationTuple;
 
-	type HandleEquivocation = ();
+	type HandleEquivocation = pallet_grandpa::NullHandler<Self>;
 
 	type WeightInfo = ();
 	type MaxAuthorities = ConstU32<32>;

@@ -106,15 +106,15 @@ where
 	}
 }
 
-struct NullHandler<T>(sp_std::marker::PhantomData<T>);
+pub struct NullHandler<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config> EquivocationHandlerT for NullHandler<T> {
 	// TODO: is possible to get rid of this? Like defining a default dummy Offence
 	// OR even better get rid of this EquivocationHandler trait...
 	type Offence = GrandpaEquivocationOffence<T::KeyOwnerIdentification, T::AccountId>;
 
-	type OffenceProof = ();
-	type KeyOwnerProof = ();
+	type OffenceProof = EquivocationProof<T::Hash, T::BlockNumber>;
+	type KeyOwnerProof = T::KeyOwnerProof;
 	type ReportOffence = ();
 	type ReportLongevity = ();
 }
