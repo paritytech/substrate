@@ -215,7 +215,7 @@ pub mod pallet {
 			// out. Note that `Blake2b512` produces 64 bytes, this is therefore impossible - but the
 			// compiler does not know that (hopefully).
 			debug_assert!(clobber.len() == 64);
-			if clobber == vec![0u8; 65] {
+			if clobber.len() == 65 {
 				TrashData::<T>::insert(0, [clobber[0] as u8; 1024]);
 			}
 		}
