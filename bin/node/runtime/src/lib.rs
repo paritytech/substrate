@@ -25,7 +25,7 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::{
 	onchain, weights::SubstrateWeight, BalancingConfig, ElectionDataProvider, SequentialPhragmen,
-	VoteWeight,
+	VoteWeight, ApprovalVoting,
 };
 use frame_support::{
 	construct_runtime,
@@ -1037,7 +1037,7 @@ impl pallet_elections::Config for Runtime {
 	type MaxVoters = MaxVoters;
 	type MaxVotesPerVoter = MaxVotesPerVoter;
 	type MaxCandidates = MaxCandidates;
-	type ElectionSolver = SequentialPhragmen<Self::AccountId, Perbill>;
+	type ElectionSolver = ApprovalVoting<Self::AccountId, Perbill>;
 	type SolverWeightInfo = SubstrateWeight<Runtime>;
 	type WeightInfo = pallet_elections::weights::SubstrateWeight<Runtime>;
 }

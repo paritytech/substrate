@@ -18,11 +18,56 @@
 //! Tests for npos-elections.
 
 use crate::{
-	balancing, helpers::*, mock::*, seq_phragmen, seq_phragmen_core, setup_inputs, to_support_map,
-	Assignment, BalancingConfig, ElectionResult, ExtendedBalance, StakedAssignment, Support, Voter,
+	approval_voting::*, balancing, helpers::*, mock::*, seq_phragmen, seq_phragmen_core,
+	setup_inputs, to_support_map, Assignment, BalancingConfig, ElectionResult, ExtendedBalance,
+	StakedAssignment, Support, Voter,
 };
 use sp_arithmetic::{PerU16, Perbill, Percent, Permill};
 use substrate_test_utils::assert_eq_uvec;
+
+#[test]
+fn approval_voting_works() {
+	let candidates = vec![1, 2, 3, 4];
+	let voters = vec![(10, vec![1, 2]), (20, vec![1, 2]), (30, vec![1, 2, 3]), (40, vec![4])];
+	let stake_of = create_stake_of(&[(10, 10), (20, 20), (30, 30), (40, 40)]);
+
+	let voters = voters
+		.iter()
+		.map(|(ref v, ref vs)| (*v, stake_of(v), vs.clone()))
+		.collect::<Vec<_>>();
+
+	let ElectionResult::<_, Perbill> { winners, assignments } =
+		approval_voting(3, candidates, voters).unwrap();
+
+	assert_eq_uvec!(winners, vec![(1, 60), (2, 60), (4, 40)]);
+	assert_eq_uvec!(
+		assignments,
+		vec![
+			Assignment {
+				who: 10u64,
+				distribution: vec![
+					(1, Perbill::from_percent(100)),
+					(2, Perbill::from_percent(100))
+				]
+			},
+			Assignment {
+				who: 20u64,
+				distribution: vec![
+					(1, Perbill::from_percent(100)),
+					(2, Perbill::from_percent(100))
+				]
+			},
+			Assignment {
+				who: 30u64,
+				distribution: vec![
+					(1, Perbill::from_percent(100)),
+					(2, Perbill::from_percent(100))
+				]
+			},
+			Assignment { who: 40u64, distribution: vec![(4, Perbill::from_percent(100))] },
+		]
+	);
+}
 
 #[test]
 fn float_phragmen_poc_works() {

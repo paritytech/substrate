@@ -23,7 +23,7 @@
 
 use codec::Decode;
 use frame_benchmarking::v1::{benchmarks, Vec};
-use frame_election_provider_support::{NposSolver, PhragMMS, SequentialPhragmen};
+use frame_election_provider_support::{ApprovalVoting, NposSolver, PhragMMS, SequentialPhragmen};
 
 pub struct Pallet<T: Config>(frame_system::Pallet<T>);
 pub trait Config: frame_system::Config {}
@@ -85,6 +85,19 @@ benchmarks! {
 	}: {
 		assert!(
 			PhragMMS::<T::AccountId, sp_runtime::Perbill>
+				::solve(d as usize, targets, voters).is_ok()
+		);
+	}
+
+	approval_voting {
+		let v in (VOTERS[0]) .. VOTERS[1];
+		let t in (TARGETS[0]) .. TARGETS[1];
+		let d in (VOTES_PER_VOTER[0]) .. VOTES_PER_VOTER[1];
+
+		let (voters, targets) = set_up_voters_targets::<T::AccountId>(v, t, d as usize);
+	}: {
+		assert!(
+			ApprovalVoting::<T::AccountId, sp_runtime::Perbill>
 				::solve(d as usize, targets, voters).is_ok()
 		);
 	}

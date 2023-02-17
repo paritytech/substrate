@@ -1285,7 +1285,7 @@ impl<T: Config> ContainsLengthBound for Pallet<T> {
 mod tests {
 	use super::*;
 	use crate as elections;
-	use frame_election_provider_support::{weights::SubstrateWeight, SequentialPhragmen};
+	use frame_election_provider_support::{weights::SubstrateWeight, ApprovalVoting};
 	use frame_support::{
 		assert_noop, assert_ok,
 		dispatch::DispatchResultWithPostInfo,
@@ -1419,7 +1419,7 @@ mod tests {
 		type WeightInfo = ();
 		type MaxVoters = MaxVoters;
 		type MaxCandidates = MaxCandidates;
-		type ElectionSolver = SequentialPhragmen<Self::AccountId, Perbill>;
+		type ElectionSolver = ApprovalVoting<Self::AccountId, Perbill>;
 		type SolverWeightInfo = SubstrateWeight<Test>;
 		type MaxVotesPerVoter = ConstU32<16>;
 	}

@@ -24,6 +24,8 @@
 //! - [`balance`](balancing::balance): Implements the star balancing algorithm. This iterative
 //!   process can push a solution toward being more "balanced", which in turn can increase its
 //!   score.
+//! - [`approval_voting`](approval_voting::approval_voting): Implements an approval voting electoral
+//!   system where voters can back multiple candidates with the same stake.
 //!
 //! ### Terminology
 //!
@@ -89,6 +91,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+pub mod approval_voting;
 mod assignments;
 pub mod balancing;
 pub mod helpers;
@@ -99,6 +102,7 @@ pub mod pjr;
 pub mod reduce;
 pub mod traits;
 
+pub use approval_voting::*;
 pub use assignments::{Assignment, StakedAssignment};
 pub use balancing::*;
 pub use helpers::*;
