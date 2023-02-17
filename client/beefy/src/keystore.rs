@@ -123,7 +123,7 @@ pub mod tests {
 	use sc_keystore::LocalKeystore;
 	use sp_core::{ecdsa, Pair};
 
-	use beefy_primitives::{crypto, keyring::Keyring};
+	use beefy_primitives::{crypto, Keyring};
 
 	use super::*;
 	use crate::error::Error;

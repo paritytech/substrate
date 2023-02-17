@@ -19,7 +19,7 @@ use frame_support::{
 	dispatch::{
 		DispatchClass, DispatchInfo, GetDispatchInfo, Parameter, Pays, UnfilteredDispatchable,
 	},
-	pallet_prelude::ValueQuery,
+	pallet_prelude::{StorageInfoTrait, ValueQuery},
 	storage::unhashed,
 	traits::{
 		ConstU32, GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize,
@@ -1906,14 +1906,30 @@ fn assert_type_all_pallets_without_system_reversed_is_correct() {
 
 #[test]
 fn test_storage_alias() {
+	use frame_support::Twox64Concat;
+
 	#[frame_support::storage_alias]
 	type Value<T: pallet::Config>
 	where
 		<T as frame_system::Config>::AccountId: From<SomeType1> + SomeAssociation1,
 	= StorageValue<pallet::Pallet<T>, u32, ValueQuery>;
 
+	#[frame_support::storage_alias]
+	type SomeCountedStorageMap<T: pallet2::Config>
+	where
+		<T as frame_system::Config>::AccountId: From<SomeType1> + SomeAssociation1,
+	= CountedStorageMap<pallet2::Pallet<T>, Twox64Concat, u8, u32>;
+
 	TestExternalities::default().execute_with(|| {
 		pallet::Value::<Runtime>::put(10);
 		assert_eq!(10, Value::<Runtime>::get());
+
+		pallet2::SomeCountedStorageMap::<Runtime>::insert(10, 100);
+		assert_eq!(Some(100), SomeCountedStorageMap::<Runtime>::get(10));
+		assert_eq!(1, SomeCountedStorageMap::<Runtime>::count());
+		assert_eq!(
+			SomeCountedStorageMap::<Runtime>::storage_info(),
+			pallet2::SomeCountedStorageMap::<Runtime>::storage_info()
+		);
 	})
 }

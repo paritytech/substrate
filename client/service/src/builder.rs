@@ -44,7 +44,7 @@ use sc_network_common::{
 	config::SyncMode,
 	protocol::role::Roles,
 	service::{NetworkEventStream, NetworkStateInfo, NetworkStatusProvider},
-	sync::warp::WarpSyncProvider,
+	sync::warp::WarpSyncParams,
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
@@ -768,8 +768,8 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	/// A block announce validator builder.
 	pub block_announce_validator_builder:
 		Option<Box<dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send>>,
-	/// An optional warp sync provider.
-	pub warp_sync: Option<Arc<dyn WarpSyncProvider<TBl>>>,
+	/// Optional warp sync params.
+	pub warp_sync_params: Option<WarpSyncParams<TBl>>,
 }
 /// Build the network service, the network status sinks and an RPC sender.
 pub fn build_network<TBl, TExPool, TImpQu, TCl>(
@@ -805,12 +805,12 @@ where
 		spawn_handle,
 		import_queue,
 		block_announce_validator_builder,
-		warp_sync,
+		warp_sync_params,
 	} = params;
 
 	let mut request_response_protocol_configs = Vec::new();
 
-	if warp_sync.is_none() && config.network.sync_mode.is_warp() {
+	if warp_sync_params.is_none() && config.network.sync_mode.is_warp() {
 		return Err("Warp sync enabled, but no warp sync provider configured.".into())
 	}
 
@@ -855,8 +855,8 @@ where
 		protocol_config
 	};
 
-	let (warp_sync_provider, warp_sync_protocol_config) = warp_sync
-		.map(|provider| {
+	let warp_sync_protocol_config = match warp_sync_params.as_ref() {
+		Some(WarpSyncParams::WithProvider(warp_with_provider)) => {
 			// Allow both outgoing and incoming requests.
 			let (handler, protocol_config) = WarpSyncRequestHandler::new(
 				protocol_id.clone(),
@@ -866,12 +866,13 @@ where
 					.flatten()
 					.expect("Genesis block exists; qed"),
 				config.chain_spec.fork_id(),
-				provider.clone(),
+				warp_with_provider.clone(),
 			);
 			spawn_handle.spawn("warp-sync-request-handler", Some("networking"), handler.run());
-			(Some(provider), Some(protocol_config))
-		})
-		.unwrap_or_default();
+			Some(protocol_config)
+		},
+		_ => None,
+	};
 
 	let light_client_request_protocol_config = {
 		// Allow both outgoing and incoming requests.
@@ -893,7 +894,7 @@ where
 		protocol_id.clone(),
 		&config.chain_spec.fork_id().map(ToOwned::to_owned),
 		block_announce_validator,
-		warp_sync_provider,
+		warp_sync_params,
 		chain_sync_network_handle,
 		import_queue.service(),
 		block_request_protocol_config.name.clone(),

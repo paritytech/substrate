@@ -42,7 +42,7 @@ use node_primitives::Block;
 use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::{
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
-	BlockBackend, ExecutionStrategy,
+	ExecutionStrategy,
 };
 use sc_client_db::PruningMode;
 use sc_consensus::{BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult, ImportedAux};
@@ -54,7 +54,7 @@ use sp_core::{blake2_256, ed25519, sr25519, traits::SpawnNamed, ExecutionContext
 use sp_inherents::InherentData;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, IdentifyAccount, Verify, Zero},
+	traits::{Block as BlockT, IdentifyAccount, Verify},
 	OpaqueExtrinsic,
 };
 
@@ -273,14 +273,11 @@ pub struct BlockContentIterator<'a> {
 
 impl<'a> BlockContentIterator<'a> {
 	fn new(content: BlockContent, keyring: &'a BenchKeyring, client: &Client) -> Self {
-		let runtime_version = client
-			.runtime_version_at(&BlockId::number(0))
-			.expect("There should be runtime version at 0");
+		let genesis_hash = client.chain_info().genesis_hash;
 
-		let genesis_hash = client
-			.block_hash(Zero::zero())
-			.expect("Database error?")
-			.expect("Genesis block always exists; qed");
+		let runtime_version = client
+			.runtime_version_at(genesis_hash)
+			.expect("There should be runtime version at 0");
 
 		BlockContentIterator { iteration: 0, content, keyring, runtime_version, genesis_hash }
 	}
