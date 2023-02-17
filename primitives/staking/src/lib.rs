@@ -88,9 +88,6 @@ pub struct Stake<AccountId: Clone, Balance: Clone> {
 pub trait OnStakingUpdate<AccountId: Clone, Balance: Copy> {
 	/// Fired when the stake amount of someone updates.
 	///
-	/// Also called when someone stakes for the first time. (TODO: is it? this is why we need unit
-	/// tests for this pallet alone).
-	///
 	/// This is effectively any changes to the bond amount, such as bonding more funds, and
 	/// unbonding.
 	fn on_stake_update(who: &AccountId, prev_stake: Option<Stake<AccountId, Balance>>);
@@ -107,7 +104,11 @@ pub trait OnStakingUpdate<AccountId: Clone, Balance: Copy> {
 }
 
 #[impl_trait_for_tuples::impl_for_tuples(10)]
-impl<AccountId: Clone, Balance: Copy> OnStakingUpdate<AccountId, Balance> for Tuple {
+impl<AccountId, Balance> OnStakingUpdate<AccountId, Balance> for Tuple
+where
+	AccountId: Clone,
+	Balance: Copy,
+{
 	fn on_stake_update(who: &AccountId, prev_stake: Option<Stake<AccountId, Balance>>) {
 		for_tuples!( #( Tuple::on_stake_update(who, prev_stake.clone()); )* );
 	}

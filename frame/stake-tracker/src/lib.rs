@@ -65,7 +65,7 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	pub fn active_stake_of(who: &T::AccountId) -> BalanceOf<T> {
-		T::Staking::stake(&who).map(|l| l.active).unwrap_or_default()
+		T::Staking::stake(&who).map(|s| s.active).unwrap_or_default()
 	}
 
 	pub(crate) fn to_vote(balance: BalanceOf<T>) -> VoteWeight {
