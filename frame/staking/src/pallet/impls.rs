@@ -1380,8 +1380,8 @@ impl<T: Config> ScoreProvider<T::AccountId> for Pallet<T> {
 pub struct UseValidatorsMap<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
-	type Error = ();
 	type Score = BalanceOf<T>;
+	type Error = ();
 
 	/// Returns iterator over voter list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
@@ -1407,18 +1407,13 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 		Validators::<T>::contains_key(id)
 	}
 
-	fn get_score(id: &T::AccountId) -> Result<Self::Score, Self::Error> {
-		Ok(Pallet::<T>::weight_of(id).into())
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn try_state() -> Result<(), &'static str> {
-		Ok(())
-	}
-
 	fn on_insert(_: T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
 		// nothing to do on insert.
 		Ok(())
+	}
+
+	fn get_score(id: &T::AccountId) -> Result<Self::Score, Self::Error> {
+		Ok(Pallet::<T>::weight_of(id).into())
 	}
 
 	fn on_update(_: &T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
@@ -1431,6 +1426,19 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 		Ok(())
 	}
 
+	fn unsafe_regenerate(
+		_: impl IntoIterator<Item = T::AccountId>,
+		_: Box<dyn Fn(&T::AccountId) -> Self::Score>,
+	) -> u32 {
+		// nothing to do upon regenerate.
+		0
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn try_state() -> Result<(), &'static str> {
+		Ok(())
+	}
+
 	frame_election_provider_support::runtime_benchmarks_or_test_enabled! {
 		fn unsafe_clear() {
 			#[allow(deprecated)]
@@ -1440,14 +1448,6 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 		fn score_update_worst_case(_who: &T::AccountId, _is_increase: bool) -> Self::Score {
 			unimplemented!()
 		}
-	}
-
-	fn unsafe_regenerate(
-		_: impl IntoIterator<Item = T::AccountId>,
-		_: Box<dyn Fn(&T::AccountId) -> Self::Score>,
-	) -> u32 {
-		// nothing to do upon regenerate.
-		0
 	}
 }
 
@@ -1494,18 +1494,13 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 		Nominators::<T>::contains_key(id) || Validators::<T>::contains_key(id)
 	}
 
-	fn get_score(id: &T::AccountId) -> Result<Self::Score, Self::Error> {
-		Ok(Pallet::<T>::weight_of(id))
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn try_state() -> Result<(), &'static str> {
-		Ok(())
-	}
-
 	fn on_insert(_: T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
 		// nothing to do on insert.
 		Ok(())
+	}
+
+	fn get_score(id: &T::AccountId) -> Result<Self::Score, Self::Error> {
+		Ok(Pallet::<T>::weight_of(id))
 	}
 
 	fn on_update(_: &T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
@@ -1515,6 +1510,19 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 
 	fn on_remove(_: &T::AccountId) -> Result<(), Self::Error> {
 		// nothing to do on remove.
+		Ok(())
+	}
+
+	fn unsafe_regenerate(
+		_: impl IntoIterator<Item = T::AccountId>,
+		_: Box<dyn Fn(&T::AccountId) -> Self::Score>,
+	) -> u32 {
+		// nothing to do upon regenerate.
+		0
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn try_state() -> Result<(), &'static str> {
 		Ok(())
 	}
 
@@ -1532,24 +1540,29 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 			unimplemented!()
 		}
 	}
-
-	fn unsafe_regenerate(
-		_: impl IntoIterator<Item = T::AccountId>,
-		_: Box<dyn Fn(&T::AccountId) -> Self::Score>,
-	) -> u32 {
-		// nothing to do upon regenerate.
-		0
-	}
 }
 
 // NOTE: in this entire impl block, the assumption is that `who` is a stash account.
 impl<T: Config> StakingInterface for Pallet<T> {
-	type Balance = BalanceOf<T>;
 	type AccountId = T::AccountId;
+	type Balance = BalanceOf<T>;
 	type CurrencyToVote = T::CurrencyToVote;
 
 	fn minimum_nominator_bond() -> Self::Balance {
 		MinNominatorBond::<T>::get()
+	}
+
+	fn desired_validator_count() -> u32 {
+		ValidatorCount::<T>::get()
+	}
+
+	fn election_ongoing() -> bool {
+		T::ElectionProvider::ongoing()
+	}
+
+	fn force_unstake(who: Self::AccountId) -> sp_runtime::DispatchResult {
+		let num_slashing_spans = Self::slashing_spans(&who).map_or(0, |s| s.iter().count() as u32);
+		Self::force_unstake(RawOrigin::Root.into(), who.clone(), num_slashing_spans)
 	}
 
 	fn minimum_validator_bond() -> Self::Balance {
@@ -1560,6 +1573,12 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::ledger(controller)
 			.map(|l| l.stash)
 			.ok_or(Error::<T>::NotController.into())
+	}
+
+	fn is_exposed_in_era(who: &Self::AccountId, era: &EraIndex) -> bool {
+		ErasStakers::<T>::iter_prefix(era).any(|(validator, exposures)| {
+			validator == *who || exposures.others.iter().any(|i| i.who == *who)
+		})
 	}
 
 	fn bonding_duration() -> EraIndex {
@@ -1579,6 +1598,34 @@ impl<T: Config> StakingInterface for Pallet<T> {
 			.ok_or(Error::<T>::NotStash.into())
 	}
 
+	fn bond_extra(who: &Self::AccountId, extra: Self::Balance) -> DispatchResult {
+		Self::bond_extra(RawOrigin::Signed(who.clone()).into(), extra)
+	}
+
+	fn unbond(who: &Self::AccountId, value: Self::Balance) -> DispatchResult {
+		let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
+		Self::unbond(RawOrigin::Signed(ctrl).into(), value)
+			.map_err(|with_post| with_post.error)
+			.map(|_| ())
+	}
+
+	fn chill(who: &Self::AccountId) -> DispatchResult {
+		// defensive-only: any account bonded via this interface has the stash set as the
+		// controller, but we have to be sure. Same comment anywhere else that we read this.
+		let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
+		Self::chill(RawOrigin::Signed(ctrl).into())
+	}
+
+	fn withdraw_unbonded(
+		who: Self::AccountId,
+		num_slashing_spans: u32,
+	) -> Result<bool, DispatchError> {
+		let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
+		Self::withdraw_unbonded(RawOrigin::Signed(ctrl.clone()).into(), num_slashing_spans)
+			.map(|_| !Ledger::<T>::contains_key(&ctrl))
+			.map_err(|with_post| with_post.error)
+	}
+
 	fn bond(
 		who: &Self::AccountId,
 		value: Self::Balance,
@@ -1596,53 +1643,6 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
 		let targets = targets.into_iter().map(T::Lookup::unlookup).collect::<Vec<_>>();
 		Self::nominate(RawOrigin::Signed(ctrl).into(), targets)
-	}
-
-	fn chill(who: &Self::AccountId) -> DispatchResult {
-		// defensive-only: any account bonded via this interface has the stash set as the
-		// controller, but we have to be sure. Same comment anywhere else that we read this.
-		let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
-		Self::chill(RawOrigin::Signed(ctrl).into())
-	}
-
-	fn bond_extra(who: &Self::AccountId, extra: Self::Balance) -> DispatchResult {
-		Self::bond_extra(RawOrigin::Signed(who.clone()).into(), extra)
-	}
-
-	fn unbond(who: &Self::AccountId, value: Self::Balance) -> DispatchResult {
-		let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
-		Self::unbond(RawOrigin::Signed(ctrl).into(), value)
-			.map_err(|with_post| with_post.error)
-			.map(|_| ())
-	}
-
-	fn withdraw_unbonded(
-		who: Self::AccountId,
-		num_slashing_spans: u32,
-	) -> Result<bool, DispatchError> {
-		let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
-		Self::withdraw_unbonded(RawOrigin::Signed(ctrl.clone()).into(), num_slashing_spans)
-			.map(|_| !Ledger::<T>::contains_key(&ctrl))
-			.map_err(|with_post| with_post.error)
-	}
-
-	fn desired_validator_count() -> u32 {
-		ValidatorCount::<T>::get()
-	}
-
-	fn election_ongoing() -> bool {
-		T::ElectionProvider::ongoing()
-	}
-
-	fn force_unstake(who: Self::AccountId) -> sp_runtime::DispatchResult {
-		let num_slashing_spans = Self::slashing_spans(&who).map_or(0, |s| s.iter().count() as u32);
-		Self::force_unstake(RawOrigin::Root.into(), who.clone(), num_slashing_spans)
-	}
-
-	fn is_exposed_in_era(who: &Self::AccountId, era: &EraIndex) -> bool {
-		ErasStakers::<T>::iter_prefix(era).any(|(validator, exposures)| {
-			validator == *who || exposures.others.iter().any(|i| i.who == *who)
-		})
 	}
 
 	fn is_validator(who: &Self::AccountId) -> bool {
