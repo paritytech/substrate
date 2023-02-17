@@ -35,8 +35,7 @@ use itertools::Itertools;
 use jsonrpsee::SubscriptionSink;
 use log::{debug, error};
 use sc_client_api::{
-	Backend, BlockBackend, BlockImportNotification, BlockchainEvents, ExecutorProvider,
-	FinalityNotification, StorageProvider,
+	Backend, BlockBackend, BlockImportNotification, BlockchainEvents, FinalityNotification,
 };
 use sp_api::CallApiAt;
 use sp_blockchain::{
@@ -126,15 +125,12 @@ struct InitialBlocks<Block: BlockT> {
 impl<BE, Block, Client> ChainHeadFollow<BE, Block, Client>
 where
 	Block: BlockT + 'static,
-	Block::Header: Unpin,
 	BE: Backend<Block> + 'static,
 	Client: BlockBackend<Block>
-		+ ExecutorProvider<Block>
 		+ HeaderBackend<Block>
 		+ HeaderMetadata<Block, Error = BlockChainError>
 		+ BlockchainEvents<Block>
 		+ CallApiAt<Block>
-		+ StorageProvider<Block, BE>
 		+ 'static,
 {
 	/// Conditionally generate the runtime event of the given block.
@@ -142,11 +138,7 @@ where
 		&self,
 		block: &BlockId<Block>,
 		parent: Option<&BlockId<Block>>,
-	) -> Option<RuntimeEvent>
-	where
-		Block: BlockT + 'static,
-		Client: CallApiAt<Block> + 'static,
-	{
+	) -> Option<RuntimeEvent> {
 		// No runtime versions should be reported.
 		if !self.runtime_updates {
 			return None
@@ -315,11 +307,7 @@ where
 		&mut self,
 		notification: BlockImportNotification<Block>,
 		info: &Info<Block>,
-	) -> Result<Vec<FollowEvent<Block::Hash>>, SubscriptionManagementError>
-	where
-		Block: BlockT + 'static,
-		Client: CallApiAt<Block> + 'static,
-	{
+	) -> Result<Vec<FollowEvent<Block::Hash>>, SubscriptionManagementError> {
 		// The block was already pinned by the initial block events or by the finalized event.
 		if !self.sub_handle.pin_block(notification.hash)? {
 			return Ok(Default::default())
