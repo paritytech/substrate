@@ -535,10 +535,11 @@ impl FreeingBumpHeapAllocator {
 				return Err(Error::AllocatorOutOfSpace)
 			}
 
-			// Let us grow by at least pages * 2, but ensure we stay within the allowed maximum
-			// number of pages.
-			let min_grow = min(pages * 2, max_pages);
-			let next_pages = max(min_grow, required_pages);
+			// Ideally we want to double our current number of pages,
+			// as long as it's less than the absolute maximum we can have.
+			let next_pages = min(current_pages * 2, max_pages);
+			// ...but if even more pages are required then try to allocate that many.
+			let next_pages = max(next_pages, required_pages);
 
 			if required_pages > max_pages {
 				log::debug!(
