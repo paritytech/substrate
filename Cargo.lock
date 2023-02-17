@@ -2487,6 +2487,7 @@ dependencies = [
 name = "frame-system"
 version = "4.0.0-dev"
 dependencies = [
+ "cfg-if",
  "criterion",
  "frame-support",
  "log",

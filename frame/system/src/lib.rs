@@ -419,8 +419,13 @@ pub mod pallet {
 		///
 		/// ## Complexity
 		/// - `O(C)` where `C` length of `code`
+		/// - 1 storage write (codec `O(C)`).
+		/// - 1 digest item.
+		/// - 1 event.
+		/// The weight of this function is dependent on the runtime.
+		/// # </weight>
 		#[pallet::call_index(3)]
-		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
+		#[pallet::weight((T::SystemWeightInfo::set_code(), DispatchClass::Operational))]
 		pub fn set_code_without_checks(
 			origin: OriginFor<T>,
 			code: Vec<u8>,
@@ -1612,29 +1617,31 @@ impl<T: Config> Pallet<T> {
 	/// it and extracting the runtime version of it. It checks that the runtime version
 	/// of the old and new runtime has the same spec name and that the spec version is increasing.
 	pub fn can_set_code(code: &[u8]) -> Result<(), sp_runtime::DispatchError> {
-		#[cfg_attr(feature = "runtime-benchmarks", allow(unused_variables))]
-		let (current_version, new_version) = (
-			T::Version::get(),
-			sp_io::misc::runtime_version(code)
-				.and_then(|v| RuntimeVersion::decode(&mut &v[..]).ok())
-				.ok_or(Error::<T>::FailedToExtractRuntimeVersion)?,
-		);
+		let current_version = T::Version::get();
+		let new_version = sp_io::misc::runtime_version(code)
+			.and_then(|v| RuntimeVersion::decode(&mut &v[..]).ok())
+			.ok_or(Error::<T>::FailedToExtractRuntimeVersion)?;
 
-		// Disable checks if we are benchmarking `set_code` to make it possible to set arbitrary
-		// runtimes without modification
-		#[cfg(not(feature = "runtime-benchmarks"))]
-		{
-			if new_version.spec_name != current_version.spec_name {
-				log::debug!("New: {new_version:?}, Current: {current_version:?}");
-				return Err(Error::<T>::InvalidSpecName.into())
-			}
+		cfg_if::cfg_if! {
+			 if #[cfg(not(feature = "runtime-benchmarks"))] {
+				  if new_version.spec_name != current_version.spec_name {
+					  return Err(Error::<T>::InvalidSpecName.into())
+				   }
 
-			if new_version.spec_version <= current_version.spec_version {
-				return Err(Error::<T>::SpecVersionNeedsToIncrease.into())
-			}
+				   if new_version.spec_version <= current_version.spec_version {
+						return Err(Error::<T>::SpecVersionNeedsToIncrease.into())
+				   }
+
+				   Ok(())
+			  } else {
+				   // Let's ensure the compiler doesn't optimize our fetching of the runtime version away.
+				   if new_version.spec_name != current_version.spec_name || new_version.spec_version != current_version.spec_version {
+					  Ok(())
+				   } else {
+					  Err(Error::<T>::InvalidSpecName.into())
+				   }
+			  }
 		}
-
-		Ok(())
 	}
 }
 
