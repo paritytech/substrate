@@ -76,7 +76,7 @@ async fn normal_network_poll_no_peers() {
 		.build();
 
 	// perform one action on network
-	let _ = network.network().next_action();
+	let _ = network.network().next_action().await;
 }
 
 #[tokio::test]
@@ -107,7 +107,7 @@ async fn request_justification() {
 	network.service().request_justification(&hash, number);
 
 	// perform one action on network
-	let _ = network.network().next_action();
+	let _ = network.network().next_action().await;
 }
 
 #[tokio::test]
@@ -135,7 +135,7 @@ async fn clear_justification_requests() {
 	network.service().clear_justification_requests();
 
 	// perform one action on network
-	let _ = network.network().next_action();
+	let _ = network.network().next_action().await;
 }
 
 #[tokio::test]
@@ -171,7 +171,7 @@ async fn set_sync_fork_request() {
 	network.service().set_sync_fork_request(copy_peers, hash, number);
 
 	// perform one action on network
-	let _ = network.network().next_action();
+	let _ = network.network().next_action().await;
 }
 
 #[tokio::test]
@@ -213,7 +213,7 @@ async fn on_block_finalized() {
 	network.network().on_block_finalized(hash, header);
 
 	// perform one action on network
-	let _ = network.network().next_action();
+	let _ = network.network().next_action().await;
 }
 
 // report from mock import queue that importing a justification was not successful
