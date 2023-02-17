@@ -731,6 +731,7 @@ decl_runtime_apis! {
 	}
 
 	/// The `Metadata` api trait that returns metadata for the runtime.
+	#[api_version(2)]
 	pub trait Metadata {
 		/// Returns the metadata of a runtime.
 		fn metadata() -> OpaqueMetadata;
