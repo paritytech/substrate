@@ -16,6 +16,8 @@
 // limitations under the License.
 
 //! Glutton pallet benchmarking.
+//!
+//! Has to be compiled and run twice to bootstrap on new hardware.
 
 #[cfg(feature = "runtime-benchmarks")]
 use super::*;
@@ -29,27 +31,19 @@ use frame_system::Pallet as System;
 
 benchmarks! {
 	waste_ref_time_iter {
+		let i in 0..100_000;
 	}: {
-		Glutton::<T>::waste_ref_time_iter(vec![0u8; 64]);
+		Glutton::<T>::waste_ref_time_iter(vec![0u8; 64], i);
 	}
 
 	waste_proof_size_some {
+		let i in 0..5_000;
+
 		(0..5000).for_each(|i| TrashData::<T>::insert(i, [i as u8; 1024]));
 	}: {
-		TrashData::<T>::get(2500);
-	}
-
-	waste_proof_size_none {
-	}: {
-		TrashData::<T>::get(2500);
-	}
-
-	read_limits {
-		Compute::<T>::put(Perbill::from_percent(50));
-		Storage::<T>::put(Perbill::from_percent(25));
-	}: {
-		Compute::<T>::get();
-		Storage::<T>::get();
+		(0..i).for_each(|i| {
+			TrashData::<T>::get(i);
+		})
 	}
 
 	// For manual verification only.
@@ -72,7 +66,8 @@ benchmarks! {
 
 	empty_on_idle {
 	}: {
-		Glutton::<T>::on_idle(System::<T>::block_number(), Weight::zero());
+		// Enough weight do do nothing.
+		Glutton::<T>::on_idle(System::<T>::block_number(), T::WeightInfo::empty_on_idle());
 	}
 
 	impl_benchmark_test_suite!(Glutton, crate::mock::new_test_ext(), crate::mock::Test);

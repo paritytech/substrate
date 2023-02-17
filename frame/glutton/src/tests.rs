@@ -39,7 +39,7 @@ fn initialize_pallet_works() {
 		assert_ok!(Glutton::initialize_pallet(RuntimeOrigin::root(), 2));
 
 		assert_eq!(TrashData::<Test>::get(0), Some([0; 1024]));
-		assert_eq!(TrashData::<Test>::get(1), Some([0; 1024]));
+		assert_eq!(TrashData::<Test>::get(1), Some([1; 1024]));
 		assert_eq!(TrashData::<Test>::get(2), None);
 	});
 }
@@ -105,7 +105,7 @@ fn on_idle_weight_is_close_enough_works() {
 		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), Perbill::from_percent(100)));
 		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), Perbill::from_percent(100)));
 
-		let should = Weight::from_parts(WEIGHT_REF_TIME_PER_SECOND, WEIGHT_PROOF_SIZE_PER_MB);
+		let should = Weight::from_parts(WEIGHT_REF_TIME_PER_SECOND, WEIGHT_PROOF_SIZE_PER_MB * 5);
 		let got = Glutton::on_idle(1, should);
 		assert!(got.all_lte(should), "Consumed too much weight");
 
