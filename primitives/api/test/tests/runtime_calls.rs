@@ -147,13 +147,12 @@ fn record_proof_works() {
 		.set_execution_strategy(ExecutionStrategy::Both)
 		.build_with_longest_chain();
 
-	let block_id = BlockId::Number(client.chain_info().best_number);
 	let storage_root =
 		*futures::executor::block_on(longest_chain.best_chain()).unwrap().state_root();
 
 	let runtime_code = sp_core::traits::RuntimeCode {
 		code_fetcher: &sp_core::traits::WrappedRuntimeCode(
-			client.code_at(&block_id).unwrap().into(),
+			client.code_at(client.chain_info().best_hash).unwrap().into(),
 		),
 		hash: vec![1],
 		heap_pages: None,
@@ -167,6 +166,7 @@ fn record_proof_works() {
 	}
 	.into_signed_tx();
 
+	let block_id = BlockId::Hash(client.chain_info().best_hash);
 	// Build the block and record proof
 	let mut builder = client
 		.new_block_at(&block_id, Default::default(), true)
