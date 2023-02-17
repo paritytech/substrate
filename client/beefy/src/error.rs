@@ -22,14 +22,30 @@
 
 use std::fmt::Debug;
 
-#[derive(Debug, thiserror::Error, PartialEq)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
 	#[error("Backend: {0}")]
 	Backend(String),
 	#[error("Keystore error: {0}")]
 	Keystore(String),
+	#[error("Runtime api error: {0}")]
+	RuntimeApi(sp_api::ApiError),
 	#[error("Signature error: {0}")]
 	Signature(String),
 	#[error("Session uninitialized")]
 	UninitSession,
+}
+
+#[cfg(test)]
+impl PartialEq for Error {
+	fn eq(&self, other: &Self) -> bool {
+		match (self, other) {
+			(Error::Backend(s1), Error::Backend(s2)) => s1 == s2,
+			(Error::Keystore(s1), Error::Keystore(s2)) => s1 == s2,
+			(Error::RuntimeApi(_), Error::RuntimeApi(_)) => true,
+			(Error::Signature(s1), Error::Signature(s2)) => s1 == s2,
+			(Error::UninitSession, Error::UninitSession) => true,
+			_ => false,
+		}
+	}
 }

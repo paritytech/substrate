@@ -5500,9 +5500,16 @@ dependencies = [
 name = "pallet-beefy"
 version = "4.0.0-dev"
 dependencies = [
+ "frame-election-provider-support",
  "frame-support",
  "frame-system",
+ "pallet-authorship",
+ "pallet-balances",
+ "pallet-offences",
  "pallet-session",
+ "pallet-staking",
+ "pallet-staking-reward-curve",
+ "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -5510,6 +5517,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
+ "sp-session",
  "sp-staking",
  "sp-std",
 ]
