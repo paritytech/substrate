@@ -135,12 +135,11 @@ pub enum HeapAllocStrategy {
 		extra_pages: u32,
 	},
 	/// Allocate the initial heap pages as requested by the wasm file and then allow it to grow dynamically.
-	///
-	/// If `maximum_pages` is `Some(_)`, it will be taken as the maximum number of heap pages to
-	/// allocate. Other the maximum number of heap pages is restricted to the maximum number as
-	/// supported by wasm.
 	Dynamic {
-		/// The optional maximum number of heap pages to allocate.
+		/// The absolute maximum size of the linear memory (in pages).
+		///
+		/// When `Some(_)` the linear memory will be allowed to grow up to this limit.
+		/// When `None` the linear memory will be allowed to grow up to the maximum limit supported by WASM (4GB).
 		maximum_pages: Option<u32>,
 	},
 }
