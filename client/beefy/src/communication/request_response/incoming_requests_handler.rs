@@ -29,8 +29,13 @@ use sc_network_common::protocol::ProtocolName;
 use sp_runtime::traits::Block;
 use std::{marker::PhantomData, sync::Arc};
 
-use crate::communication::request_response::{
-	on_demand_justifications_protocol_config, Error, JustificationRequest, BEEFY_SYNC_LOG_TARGET,
+use crate::{
+	communication::request_response::{
+		on_demand_justifications_protocol_config, Error, JustificationRequest,
+		BEEFY_SYNC_LOG_TARGET,
+	},
+	metric_inc,
+	metrics::{register_metrics, OnDemandIncomingRequestsMetrics},
 };
 
 /// A request coming in, including a sender for sending responses.
@@ -119,6 +124,7 @@ pub struct BeefyJustifsRequestHandler<B, Client> {
 	pub(crate) request_receiver: IncomingRequestReceiver,
 	pub(crate) justif_protocol_name: ProtocolName,
 	pub(crate) client: Arc<Client>,
+	pub(crate) metrics: Option<OnDemandIncomingRequestsMetrics>,
 	pub(crate) _block: PhantomData<B>,
 }
 
@@ -132,12 +138,16 @@ where
 		genesis_hash: Hash,
 		fork_id: Option<&str>,
 		client: Arc<Client>,
+		prometheus_registry: Option<prometheus::Registry>,
 	) -> (Self, RequestResponseConfig) {
 		let (request_receiver, config) =
 			on_demand_justifications_protocol_config(genesis_hash, fork_id);
 		let justif_protocol_name = config.name.clone();
-
-		(Self { request_receiver, justif_protocol_name, client, _block: PhantomData }, config)
+		let metrics = register_metrics(prometheus_registry);
+		(
+			Self { request_receiver, justif_protocol_name, client, metrics, _block: PhantomData },
+			config,
+		)
 	}
 
 	/// Network request-response protocol name used by this handler.
@@ -180,12 +190,14 @@ where
 			let peer = request.peer;
 			match self.handle_request(request) {
 				Ok(()) => {
+					metric_inc!(self, beefy_successful_justification_responses);
 					debug!(
 						target: BEEFY_SYNC_LOG_TARGET,
 						"🥩 Handled BEEFY justification request from {:?}.", peer
 					)
 				},
 				Err(e) => {
+					metric_inc!(self, beefy_failed_justification_responses);
 					// TODO (issue #12293): apply reputation changes here based on error type.
 					debug!(
 						target: BEEFY_SYNC_LOG_TARGET,
