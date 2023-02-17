@@ -111,10 +111,7 @@ pub mod pallet {
 			let proof_size_limit = Storage::<T>::get().mul_floor(meter.remaining().proof_size());
 			let computation_weight_limit =
 				Compute::<T>::get().mul_floor(meter.remaining().ref_time());
-			let mut meter = WeightMeter::from_limit(Weight::from_parts(
-				computation_weight_limit,
-				proof_size_limit,
-			));
+			metere.check_accrue(Weight::from_parts(computation_weight_limit, computation_weight_limit));
 
 			Self::waste_at_most_proof_size(&mut meter);
 			Self::waste_at_most_ref_time(&mut meter);
