@@ -1222,7 +1222,11 @@ impl pallet_ddc_metrics_offchain_worker::Config for Runtime {
 	type Call = Call;
 }
 
-impl pallet_cere_staking::Config for Runtime {}
+impl pallet_cere_staking::Config for Runtime {
+	type BondingDuration = BondingDuration;
+	type Currency = Balances;
+	type Event = Event;
+}
 
 construct_runtime!(
 	pub enum Runtime where
