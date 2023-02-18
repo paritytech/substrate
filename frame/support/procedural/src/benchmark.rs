@@ -906,10 +906,7 @@ fn expand_benchmark(
 							#verify_stmts
 						)*
 					}
-					match #impl_last_stmt {
-						Ok(_) => Ok(()), // discard custom Result<(), BenchmarkError> type in this context
-						Err(err) => Err(err)
-					}
+					#impl_last_stmt
 				}))
 			}
 		}
