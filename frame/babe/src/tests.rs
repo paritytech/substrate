@@ -21,7 +21,7 @@ use super::{Call, *};
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
 	dispatch::{GetDispatchInfo, Pays},
-	traits::{Currency, EstimateNextSessionRotation, OnFinalize},
+	traits::{Currency, EstimateNextSessionRotation, KeyOwnerProofSystem, OnFinalize},
 };
 use mock::*;
 use pallet_session::ShouldEndSession;
@@ -465,7 +465,7 @@ fn report_equivocation_current_session_works() {
 		// report the equivocation
 		Babe::report_equivocation_unsigned(
 			RuntimeOrigin::none(),
-			Box::new(equivocation_proof),
+			equivocation_proof,
 			key_owner_proof,
 		)
 		.unwrap();
@@ -537,7 +537,7 @@ fn report_equivocation_old_session_works() {
 		// report the equivocation
 		Babe::report_equivocation_unsigned(
 			RuntimeOrigin::none(),
-			Box::new(equivocation_proof),
+			equivocation_proof,
 			key_owner_proof,
 		)
 		.unwrap();
@@ -589,7 +589,7 @@ fn report_equivocation_invalid_key_owner_proof() {
 		assert_err!(
 			Babe::report_equivocation_unsigned(
 				RuntimeOrigin::none(),
-				Box::new(equivocation_proof.clone()),
+				equivocation_proof.clone(),
 				key_owner_proof
 			),
 			Error::<Test>::InvalidKeyOwnershipProof,
@@ -609,7 +609,7 @@ fn report_equivocation_invalid_key_owner_proof() {
 		assert_err!(
 			Babe::report_equivocation_unsigned(
 				RuntimeOrigin::none(),
-				Box::new(equivocation_proof),
+				equivocation_proof,
 				key_owner_proof,
 			),
 			Error::<Test>::InvalidKeyOwnershipProof,
@@ -643,7 +643,7 @@ fn report_equivocation_invalid_equivocation_proof() {
 			assert_err!(
 				Babe::report_equivocation_unsigned(
 					RuntimeOrigin::none(),
-					Box::new(equivocation_proof),
+					equivocation_proof,
 					key_owner_proof.clone(),
 				),
 				Error::<Test>::InvalidEquivocationProof,
@@ -750,7 +750,7 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		let key_owner_proof = Historical::prove(key).unwrap();
 
 		let inner = Call::report_equivocation_unsigned {
-			equivocation_proof: Box::new(equivocation_proof.clone()),
+			equivocation_proof: equivocation_proof.clone(),
 			key_owner_proof: key_owner_proof.clone(),
 		};
 
@@ -764,7 +764,8 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		);
 
 		// the transaction is valid when passed as local
-		let tx_tag = (offending_authority_pair.public(), CurrentSlot::<Test>::get());
+		use codec::Encode;
+		let tag = equivocation_proof.using_encoded(|bytes| sp_io::hashing::blake2_256(bytes));
 		assert_eq!(
 			<Babe as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
 				TransactionSource::Local,
@@ -773,7 +774,7 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 			TransactionValidity::Ok(ValidTransaction {
 				priority: TransactionPriority::max_value(),
 				requires: vec![],
-				provides: vec![("BabeEquivocation", tx_tag).encode()],
+				provides: vec![("BabeEquivocation", tag).encode()],
 				longevity: ReportLongevity::get(),
 				propagate: false,
 			})
@@ -785,7 +786,7 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		// we submit the report
 		Babe::report_equivocation_unsigned(
 			RuntimeOrigin::none(),
-			Box::new(equivocation_proof),
+			equivocation_proof,
 			key_owner_proof,
 		)
 		.unwrap();
@@ -846,7 +847,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 
 		// check the dispatch info for the call.
 		let info = Call::<Test>::report_equivocation_unsigned {
-			equivocation_proof: Box::new(equivocation_proof.clone()),
+			equivocation_proof: equivocation_proof.clone(),
 			key_owner_proof: key_owner_proof.clone(),
 		}
 		.get_dispatch_info();
@@ -859,7 +860,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 		// report the equivocation.
 		let post_info = Babe::report_equivocation_unsigned(
 			RuntimeOrigin::none(),
-			Box::new(equivocation_proof.clone()),
+			equivocation_proof.clone(),
 			key_owner_proof.clone(),
 		)
 		.unwrap();
@@ -873,7 +874,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 		// duplicate.
 		let post_info = Babe::report_equivocation_unsigned(
 			RuntimeOrigin::none(),
-			Box::new(equivocation_proof),
+			equivocation_proof,
 			key_owner_proof,
 		)
 		.err()

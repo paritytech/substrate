@@ -112,14 +112,13 @@ pub mod pallet {
 	}
 }
 
-impl<T, O> ReportOffence<O> for Pallet<T>
+impl<T, O> ReportOffence<T::AccountId, O> for Pallet<T>
 where
 	T: Config,
-	O: Offence<Offender = T::IdentificationTuple, Reporter = T::AccountId>,
+	O: Offence<Offender = T::IdentificationTuple>,
 {
-	fn report_offence(offence: O) -> Result<(), OffenceError> {
+	fn report_offence(reporters: Vec<T::AccountId>, offence: O) -> Result<(), OffenceError> {
 		let offenders = offence.offenders();
-		let reporters = offence.reporters();
 		let time_slot = offence.time_slot();
 
 		// Go through all offenders in the offence report and find all offenders that were spotted

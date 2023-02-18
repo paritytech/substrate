@@ -144,14 +144,9 @@ impl offence::Offence for Offence {
 	const ID: offence::Kind = KIND;
 	type TimeSlot = u128;
 	type Offender = u64;
-	type Reporter = u64;
 
 	fn offenders(&self) -> Vec<Self::Offender> {
 		self.offenders.clone()
-	}
-
-	fn reporters(&self) -> Vec<Self::Reporter> {
-		Default::default()
 	}
 
 	fn validator_set_count(&self) -> u32 {

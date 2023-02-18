@@ -71,9 +71,6 @@ pub trait Offence {
 	/// Offender Identifier.
 	type Offender;
 
-	/// Reporter identifier.
-	type Reporter;
-
 	/// A type that represents a point in time on an abstract timescale.
 	///
 	/// See `Offence::time_slot` for details. The only requirement is that such timescale could be
@@ -82,9 +79,6 @@ pub trait Offence {
 
 	/// The list of all offenders involved in this incident.
 	fn offenders(&self) -> Vec<Self::Offender>;
-
-	/// The list of all reporters of this incident.
-	fn reporters(&self) -> Vec<Self::Reporter>;
 
 	/// The session index that is used for querying the validator set for the `slash_fraction`
 	/// function.
@@ -144,9 +138,9 @@ impl sp_runtime::traits::Printable for OffenceError {
 }
 
 /// A trait for decoupling offence reporters from the actual handling of offence reports.
-pub trait ReportOffence<O: Offence> {
+pub trait ReportOffence<R, O: Offence> {
 	/// Report an `offence` and reward given `reporters`.
-	fn report_offence(offence: O) -> Result<(), OffenceError>;
+	fn report_offence(reporters: Vec<R>, offence: O) -> Result<(), OffenceError>;
 
 	/// Returns true iff all of the given offenders have been previously reported
 	/// at the given time slot. This function is useful to prevent the sending of
@@ -154,8 +148,8 @@ pub trait ReportOffence<O: Offence> {
 	fn is_known_offence(offenders: &[O::Offender], time_slot: &O::TimeSlot) -> bool;
 }
 
-impl<O: Offence> ReportOffence<O> for () {
-	fn report_offence(_offence: O) -> Result<(), OffenceError> {
+impl<R, O: Offence> ReportOffence<R, O> for () {
+	fn report_offence(_reporters: Vec<R>, _offence: O) -> Result<(), OffenceError> {
 		Ok(())
 	}
 

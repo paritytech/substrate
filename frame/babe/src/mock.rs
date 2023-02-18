@@ -223,21 +223,15 @@ impl Config for Test {
 	type ExpectedBlockTime = ConstU64<1>;
 	type EpochChangeTrigger = crate::ExternalTrigger;
 	type DisabledValidators = Session;
-
-	type KeyOwnerProofSystem = Historical;
-
-	type KeyOwnerProof =
-		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, AuthorityId)>>::Proof;
-
-	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
-		KeyTypeId,
-		AuthorityId,
-	)>>::IdentificationTuple;
-
-	type HandleEquivocation = super::EquivocationHandler<Self, Offences, ReportLongevity>;
-
 	type WeightInfo = ();
 	type MaxAuthorities = ConstU32<10>;
+
+	type KeyOwnerProof = <Historical as KeyOwnerProofSystem<(KeyTypeId, AuthorityId)>>::Proof;
+
+	type EquivocationProof = sp_consensus_babe::EquivocationProof<Header>;
+
+	type OffenceReportSystem =
+		super::EquivocationHandler<Self, Offences, Historical, ReportLongevity>;
 }
 
 pub fn go_to_block(n: u64, s: u64) {

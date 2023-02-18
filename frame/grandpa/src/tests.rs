@@ -26,7 +26,7 @@ use fg_primitives::ScheduledChange;
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
 	dispatch::{GetDispatchInfo, Pays},
-	traits::{Currency, OnFinalize, OneSessionHandler},
+	traits::{Currency, KeyOwnerProofSystem, OnFinalize, OneSessionHandler},
 };
 use frame_system::{EventRecord, Phase};
 use sp_core::H256;
@@ -360,7 +360,7 @@ fn report_equivocation_current_set_works() {
 		// report the equivocation and the tx should be dispatched successfully
 		assert_ok!(Grandpa::report_equivocation_unsigned(
 			RuntimeOrigin::none(),
-			Box::new(equivocation_proof),
+			equivocation_proof,
 			key_owner_proof,
 		),);
 
@@ -438,7 +438,7 @@ fn report_equivocation_old_set_works() {
 		// the old set, the tx should be dispatched successfully
 		assert_ok!(Grandpa::report_equivocation_unsigned(
 			RuntimeOrigin::none(),
-			Box::new(equivocation_proof),
+			equivocation_proof,
 			key_owner_proof,
 		),);
 
@@ -501,7 +501,7 @@ fn report_equivocation_invalid_set_id() {
 		assert_err!(
 			Grandpa::report_equivocation_unsigned(
 				RuntimeOrigin::none(),
-				Box::new(equivocation_proof),
+				equivocation_proof,
 				key_owner_proof,
 			),
 			Error::<Test>::InvalidEquivocationProof,
@@ -542,7 +542,7 @@ fn report_equivocation_invalid_session() {
 		assert_err!(
 			Grandpa::report_equivocation_unsigned(
 				RuntimeOrigin::none(),
-				Box::new(equivocation_proof),
+				equivocation_proof,
 				key_owner_proof,
 			),
 			Error::<Test>::InvalidEquivocationProof,
@@ -587,7 +587,7 @@ fn report_equivocation_invalid_key_owner_proof() {
 		assert_err!(
 			Grandpa::report_equivocation_unsigned(
 				RuntimeOrigin::none(),
-				Box::new(equivocation_proof),
+				equivocation_proof,
 				invalid_key_owner_proof,
 			),
 			Error::<Test>::InvalidKeyOwnershipProof,
@@ -618,7 +618,7 @@ fn report_equivocation_invalid_equivocation_proof() {
 			assert_err!(
 				Grandpa::report_equivocation_unsigned(
 					RuntimeOrigin::none(),
-					Box::new(equivocation_proof),
+					equivocation_proof,
 					key_owner_proof.clone(),
 				),
 				Error::<Test>::InvalidEquivocationProof,
@@ -688,7 +688,7 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
 
 		let call = Call::report_equivocation_unsigned {
-			equivocation_proof: Box::new(equivocation_proof.clone()),
+			equivocation_proof: equivocation_proof.clone(),
 			key_owner_proof: key_owner_proof.clone(),
 		};
 
@@ -702,7 +702,10 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		);
 
 		// the transaction is valid when passed as local
-		let tx_tag = (equivocation_key, set_id, 1u64);
+		//let tx_tag = (equivocation_key, set_id, 1u64);
+		// TODO DAVXY: confirm that this is equally good...
+		use codec::Encode;
+		let tag = equivocation_proof.using_encoded(|bytes| sp_io::hashing::blake2_256(bytes));
 
 		assert_eq!(
 			<Grandpa as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
@@ -712,7 +715,7 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 			TransactionValidity::Ok(ValidTransaction {
 				priority: TransactionPriority::max_value(),
 				requires: vec![],
-				provides: vec![("GrandpaEquivocation", tx_tag).encode()],
+				provides: vec![("GrandpaEquivocation", tag).encode()],
 				longevity: ReportLongevity::get(),
 				propagate: false,
 			})
@@ -724,7 +727,7 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		// we submit the report
 		Grandpa::report_equivocation_unsigned(
 			RuntimeOrigin::none(),
-			Box::new(equivocation_proof),
+			equivocation_proof,
 			key_owner_proof,
 		)
 		.unwrap();
@@ -877,7 +880,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 
 		// check the dispatch info for the call.
 		let info = Call::<Test>::report_equivocation_unsigned {
-			equivocation_proof: Box::new(equivocation_proof.clone()),
+			equivocation_proof: equivocation_proof.clone(),
 			key_owner_proof: key_owner_proof.clone(),
 		}
 		.get_dispatch_info();
@@ -889,7 +892,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 		// report the equivocation.
 		let post_info = Grandpa::report_equivocation_unsigned(
 			RuntimeOrigin::none(),
-			Box::new(equivocation_proof.clone()),
+			equivocation_proof.clone(),
 			key_owner_proof.clone(),
 		)
 		.unwrap();
@@ -903,7 +906,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 		// duplicate.
 		let post_info = Grandpa::report_equivocation_unsigned(
 			RuntimeOrigin::none(),
-			Box::new(equivocation_proof),
+			equivocation_proof,
 			key_owner_proof,
 		)
 		.err()

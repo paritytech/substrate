@@ -25,29 +25,25 @@ use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, Pays},
 	ensure,
-	traits::{
-		ConstU32, DisabledValidators, FindAuthor, Get, KeyOwnerProofSystem, OnTimestampSet,
-		OneSessionHandler,
-	},
+	traits::{ConstU32, DisabledValidators, FindAuthor, Get, OnTimestampSet, OneSessionHandler},
 	weights::Weight,
 	BoundedVec, WeakBoundedVec,
 };
 use sp_application_crypto::ByteArray;
+use sp_consensus_babe::{
+	digests::{NextConfigDescriptor, NextEpochDescriptor, PreDigest},
+	AllowedSlots, BabeAuthorityWeight, BabeEpochConfiguration, ConsensusLog, Epoch, Slot,
+	BABE_ENGINE_ID,
+};
+use sp_consensus_vrf::schnorrkel;
 use sp_runtime::{
 	generic::DigestItem,
 	traits::{IsMember, One, SaturatedConversion, Saturating, Zero},
-	ConsensusEngineId, KeyTypeId, Permill,
+	ConsensusEngineId, Permill,
 };
 use sp_session::{GetSessionNumber, GetValidatorCount};
-use sp_staking::equivocation::EquivocationHandler as EquivocationHandlerT;
+use sp_staking::equivocation::OffenceReportSystem;
 use sp_std::prelude::*;
-
-use sp_consensus_babe::{
-	digests::{NextConfigDescriptor, NextEpochDescriptor, PreDigest},
-	AllowedSlots, BabeAuthorityWeight, BabeEpochConfiguration, ConsensusLog, Epoch,
-	EquivocationProof, Slot, BABE_ENGINE_ID,
-};
-use sp_consensus_vrf::schnorrkel;
 
 pub use sp_consensus_babe::{AuthorityId, PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH};
 
@@ -150,21 +146,20 @@ pub mod pallet {
 		/// initialization.
 		type DisabledValidators: DisabledValidators;
 
+		/// Helper for weights computations
+		type WeightInfo: WeightInfo;
+
+		/// Max number of authorities allowed
+		#[pallet::constant]
+		type MaxAuthorities: Get<u32>;
+
 		/// The proof of key ownership, used for validating equivocation reports.
 		/// The proof must include the session index and validator count of the
 		/// session at which the equivocation occurred.
 		type KeyOwnerProof: Parameter + GetSessionNumber + GetValidatorCount;
 
-		/// The identification of a key owner, used when reporting equivocations.
-		type KeyOwnerIdentification: Parameter;
-
-		/// A system for proving ownership of keys, i.e. that a given key was part
-		/// of a validator set, needed for validating equivocation reports.
-		type KeyOwnerProofSystem: KeyOwnerProofSystem<
-			(KeyTypeId, AuthorityId),
-			Proof = Self::KeyOwnerProof,
-			IdentificationTuple = Self::KeyOwnerIdentification,
-		>;
+		/// The equivocation proof
+		type EquivocationProof: Parameter;
 
 		/// The equivocation handling subsystem, defines methods to report an
 		/// offence (after the equivocation has been validated) and for submitting a
@@ -172,18 +167,11 @@ pub mod pallet {
 		/// NOTE: when enabling equivocation handling (i.e. this type isn't set to
 		/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
 		/// definition.
-		type HandleEquivocation: EquivocationHandlerT<
+		type OffenceReportSystem: OffenceReportSystem<
 			KeyOwnerProof = Self::KeyOwnerProof,
-			Offence = EquivocationOffence<Self::KeyOwnerIdentification, Self::AccountId>,
-			OffenceProof = EquivocationProof<Self::Header>,
+			OffenceProof = Self::EquivocationProof,
+			Reporter = Self::AccountId,
 		>;
-
-		/// Helper for weights computations
-		type WeightInfo: WeightInfo;
-
-		/// Max number of authorities allowed
-		#[pallet::constant]
-		type MaxAuthorities: Get<u32>;
 	}
 
 	#[pallet::error]
@@ -417,12 +405,13 @@ pub mod pallet {
 		))]
 		pub fn report_equivocation(
 			origin: OriginFor<T>,
-			equivocation_proof: Box<EquivocationProof<T::Header>>,
+			equivocation_proof: T::EquivocationProof,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
-			let reporter = ensure_signed(origin)?;
-
-			Self::do_report_equivocation(Some(reporter), *equivocation_proof, key_owner_proof)
+			let reporter = Some(ensure_signed(origin)?);
+			T::OffenceReportSystem::report_evidence(reporter, equivocation_proof, key_owner_proof)?;
+			// Waive the fee since the report is valid and beneficial
+			Ok(Pays::No.into())
 		}
 
 		/// Report authority equivocation/misbehavior. This method will verify
@@ -439,16 +428,13 @@ pub mod pallet {
 		))]
 		pub fn report_equivocation_unsigned(
 			origin: OriginFor<T>,
-			equivocation_proof: Box<EquivocationProof<T::Header>>,
+			equivocation_proof: T::EquivocationProof,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
-
-			Self::do_report_equivocation(
-				T::HandleEquivocation::block_author(),
-				*equivocation_proof,
-				key_owner_proof,
-			)
+			T::OffenceReportSystem::report_evidence(None, equivocation_proof, key_owner_proof)?;
+			// Waive the fee since the report is valid and beneficial
+			Ok(Pays::No.into())
 		}
 
 		/// Plan an epoch config change. The epoch config change is recorded and will be enacted on
@@ -822,55 +808,15 @@ impl<T: Config> Pallet<T> {
 		this_randomness
 	}
 
-	fn do_report_equivocation(
-		reporter: Option<T::AccountId>,
-		equivocation_proof: EquivocationProof<T::Header>,
-		key_owner_proof: T::KeyOwnerProof,
-	) -> DispatchResultWithPostInfo {
-		let offender = equivocation_proof.offender.clone();
-		let slot = equivocation_proof.slot;
-
-		// validate the equivocation proof
-		if !sp_consensus_babe::check_equivocation_proof(equivocation_proof) {
-			return Err(Error::<T>::InvalidEquivocationProof.into())
-		}
-
-		let validator_set_count = key_owner_proof.validator_count();
-		let session_index = key_owner_proof.session();
-
-		let epoch_index = (*slot.saturating_sub(GenesisSlot::<T>::get()) / T::EpochDuration::get())
-			.saturated_into::<u32>();
-
-		// check that the slot number is consistent with the session index
-		// in the key ownership proof (i.e. slot is for that epoch)
-		if epoch_index != session_index {
-			return Err(Error::<T>::InvalidKeyOwnershipProof.into())
-		}
-
-		// check the membership proof and extract the offender's id
-		let key = (sp_consensus_babe::KEY_TYPE, offender);
-		let offender = T::KeyOwnerProofSystem::check_proof(key, key_owner_proof)
-			.ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
-
-		let offence =
-			EquivocationOffence { slot, validator_set_count, offender, session_index, reporter };
-
-		T::HandleEquivocation::report_offence(offence)
-			.map_err(|_| Error::<T>::DuplicateOffenceReport)?;
-
-		// waive the fee since the report is valid and beneficial
-		Ok(Pays::No.into())
-	}
-
 	/// Submits an extrinsic to report an equivocation. This method will create
 	/// an unsigned extrinsic with a call to `report_equivocation_unsigned` and
 	/// will push the transaction to the pool. Only useful in an offchain
 	/// context.
 	pub fn submit_unsigned_equivocation_report(
-		equivocation_proof: EquivocationProof<T::Header>,
+		equivocation_proof: T::EquivocationProof,
 		key_owner_proof: T::KeyOwnerProof,
-	) -> Option<()> {
-		T::HandleEquivocation::submit_offence_proof(equivocation_proof, key_owner_proof).ok()
+	) -> bool {
+		T::OffenceReportSystem::submit_evidence(equivocation_proof, key_owner_proof)
 	}
 }
 

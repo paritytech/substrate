@@ -912,19 +912,19 @@ pub struct FilterHistoricalOffences<T, R> {
 	_inner: sp_std::marker::PhantomData<(T, R)>,
 }
 
-impl<T, R, O> ReportOffence<O> for FilterHistoricalOffences<Pallet<T>, R>
+impl<T, Reporter, R, O> ReportOffence<Reporter, O> for FilterHistoricalOffences<Pallet<T>, R>
 where
 	T: Config,
-	R: ReportOffence<O>,
+	R: ReportOffence<Reporter, O>,
 	O: Offence,
 {
-	fn report_offence(offence: O) -> Result<(), OffenceError> {
+	fn report_offence(reporters: Vec<Reporter>, offence: O) -> Result<(), OffenceError> {
 		// Disallow any slashing from before the current bonding period.
 		let offence_session = offence.session_index();
 		let bonded_eras = BondedEras::<T>::get();
 
 		if bonded_eras.first().filter(|(_, start)| offence_session >= *start).is_some() {
-			R::report_offence(offence)
+			R::report_offence(reporters, offence)
 		} else {
 			<Pallet<T>>::deposit_event(Event::<T>::OldSlashingReportDiscarded {
 				session_index: offence_session,
