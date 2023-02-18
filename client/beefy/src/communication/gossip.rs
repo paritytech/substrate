@@ -244,8 +244,8 @@ mod tests {
 
 	use crate::keystore::BeefyKeystore;
 	use beefy_primitives::{
-		crypto::Signature, keyring::Keyring, known_payloads, Commitment, MmrRootHash, Payload,
-		VoteMessage, KEY_TYPE,
+		crypto::Signature, known_payloads, Commitment, Keyring, MmrRootHash, Payload, VoteMessage,
+		KEY_TYPE,
 	};
 
 	use super::*;
