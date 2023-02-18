@@ -279,11 +279,8 @@ pub mod pallet {
 		///
 		/// Emits `RegistrarAdded` if successful.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(R)` where `R` registrar-count (governance-bounded and code-bounded).
-		/// - One storage mutation (codec `O(R)`).
-		/// - One event.
-		/// # </weight>
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::add_registrar(T::MaxRegistrars::get()))]
 		pub fn add_registrar(
@@ -322,14 +319,10 @@ pub mod pallet {
 		///
 		/// Emits `IdentitySet` if successful.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(X + X' + R)`
 		///   - where `X` additional-field-count (deposit-bounded and code-bounded)
 		///   - where `R` judgements-count (registrar-count-bounded)
-		/// - One balance reserve operation.
-		/// - One storage mutation (codec-read `O(X' + R)`, codec-write `O(X + R)`).
-		/// - One event.
-		/// # </weight>
 		#[pallet::call_index(1)]
 		#[pallet::weight( T::WeightInfo::set_identity(
 			T::MaxRegistrars::get(), // R
@@ -389,17 +382,10 @@ pub mod pallet {
 		///
 		/// - `subs`: The identity's (new) sub-accounts.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(P + S)`
 		///   - where `P` old-subs-count (hard- and deposit-bounded).
 		///   - where `S` subs-count (hard- and deposit-bounded).
-		/// - At most one balance operations.
-		/// - DB:
-		///   - `P + S` storage mutations (codec complexity `O(1)`)
-		///   - One storage read (codec complexity `O(P)`).
-		///   - One storage write (codec complexity `O(S)`).
-		///   - One storage-exists (`IdentityOf::contains_key`).
-		/// # </weight>
 		// TODO: This whole extrinsic screams "not optimized". For example we could
 		// filter any overlap between new and old subs, and avoid reading/writing
 		// to those values... We could also ideally avoid needing to write to
@@ -469,15 +455,11 @@ pub mod pallet {
 		///
 		/// Emits `IdentityCleared` if successful.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(R + S + X)`
 		///   - where `R` registrar-count (governance-bounded).
 		///   - where `S` subs-count (hard- and deposit-bounded).
 		///   - where `X` additional-field-count (deposit-bounded and code-bounded).
-		/// - One balance-unreserve operation.
-		/// - `2` storage reads and `S + 2` storage deletions.
-		/// - One event.
-		/// # </weight>
 		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::clear_identity(
 			T::MaxRegistrars::get(), // R
@@ -524,12 +506,10 @@ pub mod pallet {
 		///
 		/// Emits `JudgementRequested` if successful.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(R + X)`.
-		/// - One balance-reserve operation.
-		/// - Storage: 1 read `O(R)`, 1 mutate `O(X + R)`.
-		/// - One event.
-		/// # </weight>
+		///   - where `R` registrar-count (governance-bounded).
+		///   - where `X` additional-field-count (deposit-bounded and code-bounded).
 		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::request_judgement(
 			T::MaxRegistrars::get(), // R
@@ -587,12 +567,10 @@ pub mod pallet {
 		///
 		/// Emits `JudgementUnrequested` if successful.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(R + X)`.
-		/// - One balance-reserve operation.
-		/// - One storage mutation `O(R + X)`.
-		/// - One event
-		/// # </weight>
+		///   - where `R` registrar-count (governance-bounded).
+		///   - where `X` additional-field-count (deposit-bounded and code-bounded).
 		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::cancel_request(
 			T::MaxRegistrars::get(), // R
@@ -637,11 +615,9 @@ pub mod pallet {
 		/// - `index`: the index of the registrar whose fee is to be set.
 		/// - `fee`: the new fee.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(R)`.
-		/// - One storage mutation `O(R)`.
-		/// - Benchmark: 7.315 + R * 0.329 µs (min squares analysis)
-		/// # </weight>
+		///   - where `R` registrar-count (governance-bounded).
 		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::set_fee(T::MaxRegistrars::get()))] // R
 		pub fn set_fee(
@@ -676,11 +652,9 @@ pub mod pallet {
 		/// - `index`: the index of the registrar whose fee is to be set.
 		/// - `new`: the new account ID.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(R)`.
-		/// - One storage mutation `O(R)`.
-		/// - Benchmark: 8.823 + R * 0.32 µs (min squares analysis)
-		/// # </weight>
+		///   - where `R` registrar-count (governance-bounded).
 		#[pallet::call_index(7)]
 		#[pallet::weight(T::WeightInfo::set_account_id(T::MaxRegistrars::get()))] // R
 		pub fn set_account_id(
@@ -716,11 +690,9 @@ pub mod pallet {
 		/// - `index`: the index of the registrar whose fee is to be set.
 		/// - `fields`: the fields that the registrar concerns themselves with.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(R)`.
-		/// - One storage mutation `O(R)`.
-		/// - Benchmark: 7.464 + R * 0.325 µs (min squares analysis)
-		/// # </weight>
+		///   - where `R` registrar-count (governance-bounded).
 		#[pallet::call_index(8)]
 		#[pallet::weight(T::WeightInfo::set_fields(T::MaxRegistrars::get()))] // R
 		pub fn set_fields(
@@ -763,13 +735,10 @@ pub mod pallet {
 		///
 		/// Emits `JudgementGiven` if successful.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(R + X)`.
-		/// - One balance-transfer operation.
-		/// - Up to one account-lookup operation.
-		/// - Storage: 1 read `O(R)`, 1 mutate `O(R + X)`.
-		/// - One event.
-		/// # </weight>
+		///   - where `R` registrar-count (governance-bounded).
+		///   - where `X` additional-field-count (deposit-bounded and code-bounded).
 		#[pallet::call_index(9)]
 		#[pallet::weight(T::WeightInfo::provide_judgement(
 			T::MaxRegistrars::get(), // R
@@ -838,12 +807,11 @@ pub mod pallet {
 		///
 		/// Emits `IdentityKilled` if successful.
 		///
-		/// # <weight>
-		/// - `O(R + S + X)`.
-		/// - One balance-reserve operation.
-		/// - `S + 2` storage mutations.
-		/// - One event.
-		/// # </weight>
+		/// ## Complexity
+		/// - `O(R + S + X)`
+		///   - where `R` registrar-count (governance-bounded).
+		///   - where `S` subs-count (hard- and deposit-bounded).
+		///   - where `X` additional-field-count (deposit-bounded and code-bounded).
 		#[pallet::call_index(10)]
 		#[pallet::weight(T::WeightInfo::kill_identity(
 			T::MaxRegistrars::get(), // R

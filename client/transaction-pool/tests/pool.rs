@@ -45,6 +45,8 @@ use substrate_test_runtime_client::{
 };
 use substrate_test_runtime_transaction_pool::{uxt, TestApi};
 
+const LOG_TARGET: &str = "txpool";
+
 fn pool() -> Pool<TestApi> {
 	Pool::new(Default::default(), true.into(), TestApi::with_alice_nonce(209).into())
 }
@@ -505,7 +507,7 @@ fn fork_aware_finalization() {
 		canon_watchers.push((watcher, header.hash()));
 		assert_eq!(pool.status().ready, 1);
 
-		log::trace!(target:"txpool", ">> B1: {:?} {:?}", header.hash(), header);
+		log::trace!(target: LOG_TARGET, ">> B1: {:?} {:?}", header.hash(), header);
 		let event = ChainEvent::NewBestBlock { hash: header.hash(), tree_route: None };
 		b1 = header.hash();
 		block_on(pool.maintain(event));
@@ -521,7 +523,7 @@ fn fork_aware_finalization() {
 			block_on(pool.submit_and_watch(&BlockId::number(1), SOURCE, from_dave.clone()))
 				.expect("1. Imported");
 		assert_eq!(pool.status().ready, 1);
-		log::trace!(target:"txpool", ">> C2: {:?} {:?}", header.hash(), header);
+		log::trace!(target: LOG_TARGET, ">> C2: {:?} {:?}", header.hash(), header);
 		let event = ChainEvent::NewBestBlock { hash: header.hash(), tree_route: None };
 		c2 = header.hash();
 		block_on(pool.maintain(event));
@@ -536,7 +538,7 @@ fn fork_aware_finalization() {
 		assert_eq!(pool.status().ready, 1);
 		let header = pool.api().push_block_with_parent(c2, vec![from_bob.clone()], true);
 
-		log::trace!(target:"txpool", ">> D2: {:?} {:?}", header.hash(), header);
+		log::trace!(target: LOG_TARGET, ">> D2: {:?} {:?}", header.hash(), header);
 		let event = ChainEvent::NewBestBlock { hash: header.hash(), tree_route: None };
 		d2 = header.hash();
 		block_on(pool.maintain(event));
@@ -550,7 +552,7 @@ fn fork_aware_finalization() {
 				.expect("1.Imported");
 		assert_eq!(pool.status().ready, 1);
 		let header = pool.api().push_block_with_parent(b1, vec![from_charlie.clone()], true);
-		log::trace!(target:"txpool", ">> C1: {:?} {:?}", header.hash(), header);
+		log::trace!(target: LOG_TARGET, ">> C1: {:?} {:?}", header.hash(), header);
 		c1 = header.hash();
 		canon_watchers.push((watcher, header.hash()));
 		let event = block_event_with_retracted(header.clone(), d2, pool.api());
@@ -568,7 +570,7 @@ fn fork_aware_finalization() {
 			.expect("1. Imported");
 		assert_eq!(pool.status().ready, 3);
 		let header = pool.api().push_block_with_parent(c1, vec![xt.clone()], true);
-		log::trace!(target:"txpool", ">> D1: {:?} {:?}", header.hash(), header);
+		log::trace!(target: LOG_TARGET, ">> D1: {:?} {:?}", header.hash(), header);
 		d1 = header.hash();
 		canon_watchers.push((w, header.hash()));
 
@@ -584,7 +586,7 @@ fn fork_aware_finalization() {
 	// block E1
 	{
 		let header = pool.api().push_block_with_parent(d1, vec![from_dave, from_bob], true);
-		log::trace!(target:"txpool", ">> E1: {:?} {:?}", header.hash(), header);
+		log::trace!(target: LOG_TARGET, ">> E1: {:?} {:?}", header.hash(), header);
 		e1 = header.hash();
 		let event = ChainEvent::NewBestBlock { hash: header.hash(), tree_route: None };
 		block_on(pool.maintain(event));
@@ -1115,7 +1117,7 @@ fn switching_fork_with_finalized_works() {
 			pool.api()
 				.push_block_with_parent(a_header.hash(), vec![from_alice.clone()], true);
 		assert_eq!(pool.status().ready, 1);
-		log::trace!(target:"txpool", ">> B1: {:?} {:?}", header.hash(), header);
+		log::trace!(target: LOG_TARGET, ">> B1: {:?} {:?}", header.hash(), header);
 		b1_header = header;
 	}
 
@@ -1131,7 +1133,7 @@ fn switching_fork_with_finalized_works() {
 		);
 		assert_eq!(pool.status().ready, 2);
 
-		log::trace!(target:"txpool", ">> B2: {:?} {:?}", header.hash(), header);
+		log::trace!(target: LOG_TARGET, ">> B2: {:?} {:?}", header.hash(), header);
 		b2_header = header;
 	}
 
@@ -1193,7 +1195,7 @@ fn switching_fork_multiple_times_works() {
 			pool.api()
 				.push_block_with_parent(a_header.hash(), vec![from_alice.clone()], true);
 		assert_eq!(pool.status().ready, 1);
-		log::trace!(target:"txpool", ">> B1: {:?} {:?}", header.hash(), header);
+		log::trace!(target: LOG_TARGET, ">> B1: {:?} {:?}", header.hash(), header);
 		b1_header = header;
 	}
 
@@ -1209,7 +1211,7 @@ fn switching_fork_multiple_times_works() {
 		);
 		assert_eq!(pool.status().ready, 2);
 
-		log::trace!(target:"txpool", ">> B2: {:?} {:?}", header.hash(), header);
+		log::trace!(target: LOG_TARGET, ">> B2: {:?} {:?}", header.hash(), header);
 		b2_header = header;
 	}
 
@@ -1306,7 +1308,7 @@ fn two_blocks_delayed_finalization_works() {
 				.push_block_with_parent(a_header.hash(), vec![from_alice.clone()], true);
 		assert_eq!(pool.status().ready, 1);
 
-		log::trace!(target:"txpool", ">> B1: {:?} {:?}", header.hash(), header);
+		log::trace!(target: LOG_TARGET, ">> B1: {:?} {:?}", header.hash(), header);
 		b1_header = header;
 	}
 
@@ -1320,7 +1322,7 @@ fn two_blocks_delayed_finalization_works() {
 				.push_block_with_parent(b1_header.hash(), vec![from_bob.clone()], true);
 		assert_eq!(pool.status().ready, 2);
 
-		log::trace!(target:"txpool", ">> C1: {:?} {:?}", header.hash(), header);
+		log::trace!(target: LOG_TARGET, ">> C1: {:?} {:?}", header.hash(), header);
 		c1_header = header;
 	}
 
@@ -1334,7 +1336,7 @@ fn two_blocks_delayed_finalization_works() {
 				.push_block_with_parent(c1_header.hash(), vec![from_charlie.clone()], true);
 		assert_eq!(pool.status().ready, 3);
 
-		log::trace!(target:"txpool", ">> D1: {:?} {:?}", header.hash(), header);
+		log::trace!(target: LOG_TARGET, ">> D1: {:?} {:?}", header.hash(), header);
 		d1_header = header;
 	}
 
@@ -1418,7 +1420,7 @@ fn delayed_finalization_does_not_retract() {
 				.push_block_with_parent(a_header.hash(), vec![from_alice.clone()], true);
 		assert_eq!(pool.status().ready, 1);
 
-		log::trace!(target:"txpool", ">> B1: {:?} {:?}", header.hash(), header);
+		log::trace!(target: LOG_TARGET, ">> B1: {:?} {:?}", header.hash(), header);
 		b1_header = header;
 	}
 
@@ -1432,7 +1434,7 @@ fn delayed_finalization_does_not_retract() {
 				.push_block_with_parent(b1_header.hash(), vec![from_bob.clone()], true);
 		assert_eq!(pool.status().ready, 2);
 
-		log::trace!(target:"txpool", ">> C1: {:?} {:?}", header.hash(), header);
+		log::trace!(target: LOG_TARGET, ">> C1: {:?} {:?}", header.hash(), header);
 		c1_header = header;
 	}
 
@@ -1513,7 +1515,7 @@ fn best_block_after_finalization_does_not_retract() {
 				.push_block_with_parent(a_header.hash(), vec![from_alice.clone()], true);
 		assert_eq!(pool.status().ready, 1);
 
-		log::trace!(target:"txpool", ">> B1: {:?} {:?}", header.hash(), header);
+		log::trace!(target: LOG_TARGET, ">> B1: {:?} {:?}", header.hash(), header);
 		b1_header = header;
 	}
 
@@ -1527,7 +1529,7 @@ fn best_block_after_finalization_does_not_retract() {
 				.push_block_with_parent(b1_header.hash(), vec![from_bob.clone()], true);
 		assert_eq!(pool.status().ready, 2);
 
-		log::trace!(target:"txpool", ">> C1: {:?} {:?}", header.hash(), header);
+		log::trace!(target: LOG_TARGET, ">> C1: {:?} {:?}", header.hash(), header);
 		c1_header = header;
 	}
 

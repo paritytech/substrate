@@ -73,7 +73,7 @@ where
 }
 
 /// Groups a `ProtocolName` with a `usize`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ProtoNameWithUsize<T>(T, usize);
 
 impl<T: ProtocolName> ProtocolName for ProtoNameWithUsize<T> {
@@ -97,5 +97,83 @@ impl<T: Future<Output = Result<O, E>>, O, E> Future for FutWithUsize<T> {
 			Poll::Ready(Err(e)) => Poll::Ready(Err((e, *this.1))),
 			Poll::Pending => Poll::Pending,
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use libp2p::core::upgrade::{ProtocolName, UpgradeInfo};
+	use sc_network_common::protocol::ProtocolName as ProtoName;
+
+	// TODO: move to mocks
+	mockall::mock! {
+		pub ProtocolUpgrade<T> {}
+
+		impl<T: Clone + ProtocolName> UpgradeInfo for ProtocolUpgrade<T> {
+			type Info = T;
+			type InfoIter = vec::IntoIter<T>;
+			fn protocol_info(&self) -> vec::IntoIter<T>;
+		}
+	}
+
+	#[test]
+	fn protocol_info() {
+		let upgrades = (1..=3)
+			.map(|i| {
+				let mut upgrade = MockProtocolUpgrade::<ProtoNameWithUsize<ProtoName>>::new();
+				upgrade.expect_protocol_info().return_once(move || {
+					vec![ProtoNameWithUsize(ProtoName::from(format!("protocol{i}")), i)].into_iter()
+				});
+				upgrade
+			})
+			.collect::<Vec<_>>();
+
+		let upgrade: UpgradeCollec<_> = upgrades.into_iter().collect::<UpgradeCollec<_>>();
+		let protos = vec![
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from("protocol1".to_string()), 1), 0),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from("protocol2".to_string()), 2), 1),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from("protocol3".to_string()), 3), 2),
+		];
+		let upgrades = upgrade.protocol_info().collect::<Vec<_>>();
+
+		assert_eq!(upgrades, protos,);
+	}
+
+	#[test]
+	fn nested_protocol_info() {
+		let mut upgrades = (1..=2)
+			.map(|i| {
+				let mut upgrade = MockProtocolUpgrade::<ProtoNameWithUsize<ProtoName>>::new();
+				upgrade.expect_protocol_info().return_once(move || {
+					vec![ProtoNameWithUsize(ProtoName::from(format!("protocol{i}")), i)].into_iter()
+				});
+				upgrade
+			})
+			.collect::<Vec<_>>();
+
+		upgrades.push({
+			let mut upgrade = MockProtocolUpgrade::<ProtoNameWithUsize<ProtoName>>::new();
+			upgrade.expect_protocol_info().return_once(move || {
+				vec![
+					ProtoNameWithUsize(ProtoName::from("protocol22".to_string()), 1),
+					ProtoNameWithUsize(ProtoName::from("protocol33".to_string()), 2),
+					ProtoNameWithUsize(ProtoName::from("protocol44".to_string()), 3),
+				]
+				.into_iter()
+			});
+			upgrade
+		});
+
+		let upgrade: UpgradeCollec<_> = upgrades.into_iter().collect::<UpgradeCollec<_>>();
+		let protos = vec![
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from("protocol1".to_string()), 1), 0),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from("protocol2".to_string()), 2), 1),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from("protocol22".to_string()), 1), 2),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from("protocol33".to_string()), 2), 2),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from("protocol44".to_string()), 3), 2),
+		];
+		let upgrades = upgrade.protocol_info().collect::<Vec<_>>();
+		assert_eq!(upgrades, protos,);
 	}
 }
