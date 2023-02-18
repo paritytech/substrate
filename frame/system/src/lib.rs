@@ -374,8 +374,9 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Make some on-chain remark.
 		///
-		/// ## Complexity
+		/// # <weight>
 		/// - `O(1)`
+		/// # </weight>
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::SystemWeightInfo::remark(_remark.len() as u32))]
 		pub fn remark(origin: OriginFor<T>, _remark: Vec<u8>) -> DispatchResultWithPostInfo {
@@ -395,7 +396,7 @@ pub mod pallet {
 
 		/// Set the new runtime code.
 		///
-		/// ## Complexity
+		/// # <weight>
 		/// - `O(C + S)` where `C` length of `code` and `S` complexity of `can_set_code`
 		/// - 1 call to `can_set_code`: `O(S)` (calls `sp_io::misc::runtime_version` which is
 		///   expensive).
@@ -417,7 +418,7 @@ pub mod pallet {
 
 		/// Set the new runtime code without doing any checks of the given `code`.
 		///
-		/// ## Complexity
+		/// # <weight>
 		/// - `O(C)` where `C` length of `code`
 		/// - 1 storage write (codec `O(C)`).
 		/// - 1 digest item.
@@ -1423,8 +1424,10 @@ impl<T: Config> Pallet<T> {
 
 	/// Deposits a log and ensures it matches the block's log data.
 	///
-	/// ## Complexity
+	/// # <weight>
 	/// - `O(1)`
+	/// - 1 storage write (codec `O(1)`)
+	/// # </weight>
 	pub fn deposit_log(item: generic::DigestItem) {
 		<Digest<T>>::append(item);
 	}
@@ -1623,7 +1626,14 @@ impl<T: Config> Pallet<T> {
 			.ok_or(Error::<T>::FailedToExtractRuntimeVersion)?;
 
 		cfg_if::cfg_if! {
-			 if #[cfg(not(feature = "runtime-benchmarks"))] {
+			 if #[cfg(all(feature = "runtime-benchmarks", not(test)))] {
+				   // Let's ensure the compiler doesn't optimize our fetching of the runtime version away.
+				   if new_version.spec_name != current_version.spec_name || new_version.spec_version != current_version.spec_version {
+					  Ok(())
+				   } else {
+					  Err(Error::<T>::InvalidSpecName.into())
+				   }
+			  } else {
 				  if new_version.spec_name != current_version.spec_name {
 					  return Err(Error::<T>::InvalidSpecName.into())
 				   }
@@ -1633,13 +1643,6 @@ impl<T: Config> Pallet<T> {
 				   }
 
 				   Ok(())
-			  } else {
-				   // Let's ensure the compiler doesn't optimize our fetching of the runtime version away.
-				   if new_version.spec_name != current_version.spec_name || new_version.spec_version != current_version.spec_version {
-					  Ok(())
-				   } else {
-					  Err(Error::<T>::InvalidSpecName.into())
-				   }
 			  }
 		}
 	}
