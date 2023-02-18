@@ -321,15 +321,15 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 
 		let queue = if count_insertions {
 			// Highly scientific crafted number for deciding when to print the warning!
+			//
+			// Rocksdb doesn't support refcounting and requires that we load the entire pruning
+			// window into the memory.
 			if window_size > 1000 {
 				log::warn!(
 					target: LOG_TARGET,
-					"Detected large pruning window of {window_size} blocks while running with a database \n
-					that isn't supporting ref counting, e.g. RocksDb. \n\
-					This means that all the blocks in the pruning window are stored in memory which \n\
-					may leads to a high memory usage and to possible out of memory crashes. \n\
-					Use for example ParityDb to not store the entire pruning window in memory.\
-				");
+					"Large pruning window of {window_size} detected! THIS CAN LEAD TO HIGH MEMORY USAGE AND CRASHES. \
+					Reduce the pruning window or switch your database to paritydb."
+				);
 			}
 
 			DeathRowQueue::new_mem(&db, base)?
