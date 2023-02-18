@@ -200,10 +200,6 @@ impl<'a, T: EncodeLike<U> + EncodeLikeTuple<U>, U: Encode> EncodeLikeTuple<U>
 	for codec::Ref<'a, T, U>
 {
 }
-impl<'a, T: EncodeLike<U> + EncodeLikeTuple<U>, U: Encode> crate::storage::private::Sealed
-	for codec::Ref<'a, T, U>
-{
-}
 
 /// Trait to indicate that a tuple can be converted into an iterator of a vector of encoded bytes.
 pub trait TupleToEncodedIter {
