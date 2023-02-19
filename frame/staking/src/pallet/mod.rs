@@ -480,7 +480,7 @@ pub mod pallet {
 		Exposure<T::AccountId, BalanceOf<T>>,
 		ValueQuery,
 	>;
-	
+
 	/// Paginated exposure of a validator at given era.
 	///
 	/// This is keyed first by the era index to allow bulk deletion, then the tuple of stash account
@@ -788,7 +788,7 @@ pub mod pallet {
 			let exposure = if required_page_count as PageIndex > max_page_count {
 				// sort before clipping.
 				let mut exposure_clipped = exposure;
-				let clipped_max_len = max_page_count * page_size;
+				let clipped_max_len = max_page_count.saturating_mul(page_size);
 
 				exposure_clipped.others.sort_by(|a, b| b.value.cmp(&a.value));
 				exposure_clipped.others.truncate(clipped_max_len as usize);
