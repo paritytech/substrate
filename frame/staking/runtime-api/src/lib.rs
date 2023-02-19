@@ -20,6 +20,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::Codec;
+use sp_runtime::Perquintill;
 
 sp_api::decl_runtime_apis! {
 	#[api_version(1)]
@@ -27,6 +28,9 @@ sp_api::decl_runtime_apis! {
 		where
 			Balance: Codec,
 	{
+		/// Returns the current inflation rate.
+		fn inflation_rate() -> Perquintill;
+
 		/// Returns the nominations quota for a nominator with a given balance.
 		fn nominations_quota(balance: Balance) -> u32;
 	}

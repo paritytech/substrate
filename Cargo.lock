@@ -6361,6 +6361,7 @@ dependencies = [
  "pallet-balances",
  "pallet-session",
  "pallet-staking-reward-curve",
+ "pallet-staking-reward-fn",
  "pallet-timestamp",
  "parity-scale-codec",
  "rand_chacha 0.2.2",
@@ -6402,6 +6403,7 @@ version = "4.0.0-dev"
 dependencies = [
  "parity-scale-codec",
  "sp-api",
+ "sp-runtime",
 ]
 
 [[package]]

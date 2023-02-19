@@ -1985,6 +1985,12 @@ impl_runtime_apis! {
 	}
 
 	impl pallet_staking_runtime_api::StakingApi<Block, Balance> for Runtime {
+		fn inflation_rate() -> Perquintill {
+			Staking::api_inflation_rate(
+				Perquintill::from_rational(0_500_000_u64, 1_000_000_u64),
+				Perquintill::from_rational(0_050_000_u64, 1_000_000_u64)
+			)
+		}
 		fn nominations_quota(balance: Balance) -> u32 {
 			Staking::api_nominations_quota(balance)
 		}
