@@ -25,13 +25,12 @@ as a minor version bump.
 ### Added
 
 - Unlimited number of nominators can be rewarded.
-- New storage item `ExposurePageSize` to limit the number of nominators rewarded
   for a single call for reward payout.
-- New config item `MaxExposurePageCount` to limit the maximum number of exposure
-  pages that can be created. When set
-  to 1, we get the same behaviour of top n nominators eligible for reward as
+- New config item `MaxExposurePageCount` to weakly bound the maximum number of
+  exposure pages that can exist. When set to 1, we get the same behaviour of top
+  n nominators eligible for reward as
   today.
-- New storage item `ErasStakersPaged` that keeps up to `ExposurePageSize`
+- New storage item `ErasStakersPaged` that keeps up to `MaxExposurePageSize`
   individual nominator exposures by era, validator and page.
 - New storage item `ErasStakersOverview` which complements `ErasStakersPaged`
   and keeps track of validator's own stake and total backing stake for each era.
@@ -43,8 +42,8 @@ as a minor version bump.
 ### Changed
 
 - `payout_stakers` can be called multiple times for the same era if the
-  validator has more than `ExposurePageSize` nominators backing them.
-- `MaxExposurePageSize` is renamed to `MaxExposurePageSize`.
+  validator has more than `MaxExposurePageSize` nominators backing them.
+- `MaxNominatorRewardedPerValidator` is renamed to `MaxExposurePageSize`.
 
 ### Deprecated
 

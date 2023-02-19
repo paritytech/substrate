@@ -4245,7 +4245,7 @@ fn test_page_count_and_size() {
 		assert_eq!(EraInfo::<Test>::get_validator_exposure(2, &11, 1).unwrap().others().len(), 36);
 
 		// now lets decrease page size
-		ExposurePageSize::<Test>::put(32);
+		MaxExposurePageSize::set(32);
 		mock::start_active_era(3);
 		// now we expect 4 pages.
 		assert_eq!(EraInfo::<Test>::get_page_count(3, &11), 4);
@@ -4256,7 +4256,7 @@ fn test_page_count_and_size() {
 		assert_eq!(EraInfo::<Test>::get_validator_exposure(3, &11, 3).unwrap().others().len(), 4);
 
 		// now lets decrease page size even more
-		ExposurePageSize::<Test>::put(9);
+		MaxExposurePageSize::set(9);
 		mock::start_active_era(4);
 		// now we expect the max 10 pages with each page having 9 nominators.
 		assert_eq!(EraInfo::<Test>::get_page_count(4, &11), 10);
