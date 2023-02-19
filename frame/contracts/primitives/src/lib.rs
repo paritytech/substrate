@@ -47,10 +47,12 @@ pub struct ContractResult<R, Balance> {
 	/// Additionally, any `seal_call` or `seal_instantiate` makes use of pre-charging
 	/// when a non-zero `gas_limit` argument is supplied.
 	pub gas_required: Weight,
-	/// How much balance was deposited and reserved during execution in order to pay for storage.
+	/// How much balance was paid by the origin into the contract's deposit account in order to
+	/// pay for storage.
 	///
-	/// The storage deposit is never actually charged from the caller in case of [`Self::result`]
-	/// is `Err`. This is because on error all storage changes are rolled back.
+	/// The storage deposit is never actually charged from the origin in case of [`Self::result`]
+	/// is `Err`. This is because on error all storage changes are rolled back including the
+	/// payment of the deposit.
 	pub storage_deposit: StorageDeposit<Balance>,
 	/// An optional debug message. This message is only filled when explicitly requested
 	/// by the code that calls into the contract. Otherwise it is empty.
@@ -159,12 +161,12 @@ pub enum StorageDeposit<Balance> {
 	/// The transaction reduced storage consumption.
 	///
 	/// This means that the specified amount of balance was transferred from the involved
-	/// contracts to the call origin.
+	/// deposit accounts to the origin.
 	Refund(Balance),
-	/// The transaction increased overall storage usage.
+	/// The transaction increased storage consumption.
 	///
-	/// This means that the specified amount of balance was transferred from the call origin
-	/// to the contracts involved.
+	/// This means that the specified amount of balance was transferred from the origin
+	/// to the involved deposit accounts.
 	Charge(Balance),
 }
 
