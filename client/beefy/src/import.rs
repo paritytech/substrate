@@ -35,6 +35,9 @@ use sc_consensus::{BlockCheckParams, BlockImport, BlockImportParams, ImportResul
 use crate::{
 	communication::notification::BeefyVersionedFinalityProofSender,
 	justification::{decode_and_verify_finality_proof, BeefyVersionedFinalityProof},
+	metric_inc,
+	metrics::BlockImportMetrics,
+	LOG_TARGET,
 };
 
 /// A block-import handler for BEEFY.
@@ -48,6 +51,7 @@ pub struct BeefyBlockImport<Block: BlockT, Backend, RuntimeApi, I> {
 	runtime: Arc<RuntimeApi>,
 	inner: I,
 	justification_sender: BeefyVersionedFinalityProofSender<Block>,
+	metrics: Option<BlockImportMetrics>,
 }
 
 impl<Block: BlockT, BE, Runtime, I: Clone> Clone for BeefyBlockImport<Block, BE, Runtime, I> {
@@ -57,6 +61,7 @@ impl<Block: BlockT, BE, Runtime, I: Clone> Clone for BeefyBlockImport<Block, BE,
 			runtime: self.runtime.clone(),
 			inner: self.inner.clone(),
 			justification_sender: self.justification_sender.clone(),
+			metrics: self.metrics.clone(),
 		}
 	}
 }
@@ -68,8 +73,9 @@ impl<Block: BlockT, BE, Runtime, I> BeefyBlockImport<Block, BE, Runtime, I> {
 		runtime: Arc<Runtime>,
 		inner: I,
 		justification_sender: BeefyVersionedFinalityProofSender<Block>,
+		metrics: Option<BlockImportMetrics>,
 	) -> BeefyBlockImport<Block, BE, Runtime, I> {
-		BeefyBlockImport { backend, runtime, inner, justification_sender }
+		BeefyBlockImport { backend, runtime, inner, justification_sender, metrics }
 	}
 }
 
@@ -138,17 +144,24 @@ where
 			(Some(encoded), ImportResult::Imported(_)) => {
 				if let Ok(proof) = self.decode_and_verify(&encoded, number, hash) {
 					// The proof is valid and the block is imported and final, we can import.
-					debug!(target: "beefy", "🥩 import justif {:?} for block number {:?}.", proof, number);
+					debug!(
+						target: LOG_TARGET,
+						"🥩 import justif {:?} for block number {:?}.", proof, number
+					);
 					// Send the justification to the BEEFY voter for processing.
 					self.justification_sender
 						.notify(|| Ok::<_, ()>(proof))
 						.expect("forwards closure result; the closure always returns Ok; qed.");
+
+					metric_inc!(self, beefy_good_justification_imports);
 				} else {
 					debug!(
-						target: "beefy",
+						target: LOG_TARGET,
 						"🥩 error decoding justification: {:?} for imported block {:?}",
-						encoded, number,
+						encoded,
+						number,
 					);
+					metric_inc!(self, beefy_bad_justification_imports);
 				}
 			},
 			_ => (),

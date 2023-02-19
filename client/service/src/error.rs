@@ -48,6 +48,9 @@ pub enum Error {
 	#[error(transparent)]
 	Telemetry(#[from] sc_telemetry::Error),
 
+	#[error(transparent)]
+	Storage(#[from] sc_storage_monitor::Error),
+
 	#[error("Best chain selection strategy (SelectChain) is not provided.")]
 	SelectChainRequired,
 

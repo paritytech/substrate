@@ -25,10 +25,12 @@
 extern crate alloc;
 
 use alloc::{
+	collections::BTreeMap,
 	format,
 	string::{String, ToString},
 	vec::Vec,
 };
+use core::cmp::Reverse;
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned, ToTokens};
@@ -122,23 +124,26 @@ fn iterate_fields(data: &syn::DataStruct, fmt: impl Fn(&Ident) -> TokenStream2) 
 
 fn format_weight(field: &Ident) -> TokenStream2 {
 	quote_spanned! { field.span() =>
-		&if self.#field > 1_000_000_000 {
+		&if self.#field.ref_time() > 1_000_000_000 {
 			format!(
-				"{:.1?} ms",
-				Fixed::saturating_from_rational(self.#field, 1_000_000_000).to_float()
+				"{:.1?} ms, {} bytes",
+				Fixed::saturating_from_rational(self.#field.ref_time(), 1_000_000_000).to_float(),
+				self.#field.proof_size()
 			)
-		} else if self.#field > 1_000_000 {
+		} else if self.#field.ref_time() > 1_000_000 {
 			format!(
-				"{:.1?} µs",
-				Fixed::saturating_from_rational(self.#field, 1_000_000).to_float()
+				"{:.1?} µs, {} bytes",
+				Fixed::saturating_from_rational(self.#field.ref_time(), 1_000_000).to_float(),
+				self.#field.proof_size()
 			)
-		} else if self.#field > 1_000 {
+		} else if self.#field.ref_time() > 1_000 {
 			format!(
-				"{:.1?} ns",
-				Fixed::saturating_from_rational(self.#field, 1_000).to_float()
+				"{:.1?} ns, {} bytes",
+				Fixed::saturating_from_rational(self.#field.ref_time(), 1_000).to_float(),
+				self.#field.proof_size()
 			)
 		} else {
-			format!("{} ps", self.#field)
+			format!("{} ps, {} bytes", self.#field.ref_time(), self.#field.proof_size())
 		}
 	}
 }
@@ -157,11 +162,13 @@ struct EnvDef {
 /// Parsed host function definition.
 struct HostFn {
 	item: syn::ItemFn,
-	module: String,
+	version: u8,
 	name: String,
 	returns: HostFnReturn,
 	is_stable: bool,
 	alias_to: Option<String>,
+	/// Formulating the predicate inverted makes the expression using it simpler.
+	not_deprecated: bool,
 }
 
 enum HostFnReturn {
@@ -199,23 +206,23 @@ impl HostFn {
 
 		// process attributes
 		let msg =
-			"only #[version(<u8>)], #[unstable] and #[prefixed_alias] attributes are allowed.";
+			"only #[version(<u8>)], #[unstable], #[prefixed_alias] and #[deprecated] attributes are allowed.";
 		let span = item.span();
 		let mut attrs = item.attrs.clone();
 		attrs.retain(|a| !a.path.is_ident("doc"));
-		let mut maybe_module = None;
+		let mut maybe_version = None;
 		let mut is_stable = true;
 		let mut alias_to = None;
+		let mut not_deprecated = true;
 		while let Some(attr) = attrs.pop() {
 			let ident = attr.path.get_ident().ok_or(err(span, msg))?.to_string();
 			match ident.as_str() {
 				"version" => {
-					if maybe_module.is_some() {
+					if maybe_version.is_some() {
 						return Err(err(span, "#[version] can only be specified once"))
 					}
-					let ver: u8 =
-						attr.parse_args::<syn::LitInt>().and_then(|lit| lit.base10_parse())?;
-					maybe_module = Some(format!("seal{}", ver));
+					maybe_version =
+						Some(attr.parse_args::<syn::LitInt>().and_then(|lit| lit.base10_parse())?);
 				},
 				"unstable" => {
 					if !is_stable {
@@ -230,12 +237,22 @@ impl HostFn {
 						item.sig.ident.span(),
 					);
 				},
+				"deprecated" => {
+					if !not_deprecated {
+						return Err(err(span, "#[deprecated] can only be specified once"))
+					}
+					not_deprecated = false;
+				},
 				_ => return Err(err(span, msg)),
 			}
 		}
 		let name = item.sig.ident.to_string();
 
-		// process arguments: The first and second arg are treated differently (ctx, memory)
+		if !(is_stable || not_deprecated) {
+			return Err(err(span, "#[deprecated] is mutually exclusive with #[unstable]"))
+		}
+
+		// process arguments: The first and second args are treated differently (ctx, memory)
 		// they must exist and be `ctx: _` and `memory: _`.
 		let msg = "Every function must start with two inferred parameters: ctx: _ and memory: _";
 		let special_args = item
@@ -325,11 +342,12 @@ impl HostFn {
 
 						Ok(Self {
 							item,
-							module: maybe_module.unwrap_or_else(|| "seal0".to_string()),
+							version: maybe_version.unwrap_or_default(),
 							name,
 							returns,
 							is_stable,
 							alias_to,
+							not_deprecated,
 						})
 					},
 					_ => Err(err(span, &msg)),
@@ -337,6 +355,10 @@ impl HostFn {
 			},
 			_ => Err(err(span, &msg)),
 		}
+	}
+
+	fn module(&self) -> String {
+		format!("seal{}", self.version)
 	}
 }
 
@@ -392,83 +414,116 @@ fn is_valid_special_arg(idx: usize, arg: &FnArg) -> bool {
 	matches!(*pat.ty, syn::Type::Infer(_))
 }
 
-/// Expands documentation for host functions.
-fn expand_docs(def: &mut EnvDef) -> TokenStream2 {
-	let mut modules = def.host_funcs.iter().map(|f| f.module.clone()).collect::<Vec<_>>();
-	modules.sort();
-	modules.dedup();
-
-	let doc_selector = |a: &syn::Attribute| a.path.is_ident("doc");
-	let docs = modules.iter().map(|m| {
-		let funcs = def.host_funcs.iter_mut().map(|f| {
-			if *m == f.module {
-				// Remove auxiliary args: `ctx: _` and `memory: _`
-				f.item.sig.inputs = f
-					.item
-					.sig
-					.inputs
-					.iter()
-					.skip(2)
-					.map(|p| p.clone())
-					.collect::<Punctuated<FnArg, Comma>>();
-				let func_decl = f.item.sig.to_token_stream();
-				let func_doc = if let Some(origin_fn) = &f.alias_to {
-					let alias_doc = format!(
-						"This is just an alias function to [`{0}()`][`Self::{0}`] with backwards-compatible prefixed identifier.",
-						origin_fn,
-					);
-					quote! { #[doc = #alias_doc] }
-
-				} else {
-					let func_docs = f.item.attrs.iter().filter(|a| doc_selector(a)).map(|d| {
-						let docs = d.to_token_stream();
-						quote! { #docs }
-					});
-					let unstable_notice = if !f.is_stable {
-						let warning = "\n # Unstable\n\n \
-									    This function is unstable and it is a subject to change (or removal) in the future.\n \
-									    Do not deploy a contract using it to a production chain.";
-						quote! { #[doc = #warning] }
-					} else {
-						quote! {}
-					};
-					quote! {
-						#( #func_docs )*
-						#unstable_notice
-					}
-				};
-				quote! {
-					#func_doc
-					#func_decl;
-				}
-			} else {
-				quote! {}
-			}
-		});
-
-		let module = Ident::new(m, Span::call_site());
-		let module_doc = format!(
-			"Documentation of the API available to contracts by importing `{}` WASM module.",
-			module
-		);
-
+fn expand_func_doc(func: &HostFn) -> TokenStream2 {
+	// Remove auxiliary args: `ctx: _` and `memory: _`
+	let func_decl = {
+		let mut sig = func.item.sig.clone();
+		sig.inputs = sig
+			.inputs
+			.iter()
+			.skip(2)
+			.map(|p| p.clone())
+			.collect::<Punctuated<FnArg, Comma>>();
+		sig.to_token_stream()
+	};
+	let func_doc = {
+		let func_docs = if let Some(origin_fn) = &func.alias_to {
+			let alias_doc = format!(
+				"This is just an alias function to [`{0}()`][`Self::{0}`] with backwards-compatible prefixed identifier.",
+				origin_fn,
+			);
+			quote! { #[doc = #alias_doc] }
+		} else {
+			let docs = func.item.attrs.iter().filter(|a| a.path.is_ident("doc")).map(|d| {
+				let docs = d.to_token_stream();
+				quote! { #docs }
+			});
+			quote! { #( #docs )* }
+		};
+		let deprecation_notice = if !func.not_deprecated {
+			let warning = "\n # Deprecated\n\n \
+								This function is deprecated and will be removed in future versions.\n \
+								No new code or contracts with this API can be deployed.";
+			quote! { #[doc = #warning] }
+		} else {
+			quote! {}
+		};
+		let import_notice = {
+			let info = format!(
+				"\n# Wasm Import Statement\n```wat\n(import \"seal{}\" \"{}\" (func ...))\n```",
+				func.version, func.name,
+			);
+			quote! { #[doc = #info] }
+		};
+		let unstable_notice = if !func.is_stable {
+			let warning = "\n # Unstable\n\n \
+								This function is unstable and it is a subject to change (or removal) in the future.\n \
+								Do not deploy a contract using it to a production chain.";
+			quote! { #[doc = #warning] }
+		} else {
+			quote! {}
+		};
 		quote! {
-			#[doc = #module_doc]
-			pub mod #module {
-				use crate::wasm::runtime::{TrapReason, ReturnCode};
-				/// Every function in this trait represents (at least) one function that can be imported by a contract.
-				///
-				/// The function's identifier is to be set as the name in the import definition.
-				/// Where it is specifically indicated, an _alias_ function having `seal_`-prefixed identifier and
-				/// just the same signature and body, is also available (for backwards-compatibility purposes).
-				pub trait Api {
-					#( #funcs )*
-				}
+			#deprecation_notice
+			#func_docs
+			#import_notice
+			#unstable_notice
+		}
+	};
+	quote! {
+		#func_doc
+		#func_decl;
+	}
+}
+
+/// Expands documentation for host functions.
+fn expand_docs(def: &EnvDef) -> TokenStream2 {
+	// Create the `Current` trait with only the newest versions
+	// we sort so that only the newest versions make it into `docs`
+	let mut current_docs = BTreeMap::new();
+	let mut funcs: Vec<_> = def.host_funcs.iter().filter(|f| f.alias_to.is_none()).collect();
+	funcs.sort_unstable_by_key(|func| Reverse(func.version));
+	for func in funcs {
+		if current_docs.contains_key(&func.name) {
+			continue
+		}
+		current_docs.insert(func.name.clone(), expand_func_doc(&func));
+	}
+	let current_docs = current_docs.values();
+
+	// Create the `legacy` module with all functions
+	// Maps from version to list of functions that have this version
+	let mut legacy_doc = BTreeMap::<u8, Vec<TokenStream2>>::new();
+	for func in def.host_funcs.iter() {
+		legacy_doc.entry(func.version).or_default().push(expand_func_doc(&func));
+	}
+	let legacy_doc = legacy_doc.into_iter().map(|(version, funcs)| {
+		let doc = format!("All functions available in the **seal{}** module", version);
+		let version = Ident::new(&format!("Version{version}"), Span::call_site());
+		quote! {
+			#[doc = #doc]
+			pub trait #version {
+				#( #funcs )*
 			}
 		}
 	});
+
 	quote! {
-		  #( #docs )*
+		/// Contains only the latest version of each function.
+		///
+		/// In reality there are more functions available but they are all obsolete: When a function
+		/// is updated a new **version** is added and the old versions stays available as-is.
+		/// We only list the newest version here. Some functions are available under additional
+		/// names (aliases) for historic reasons which are omitted here.
+		///
+		/// If you want an overview of all the functions available to a contact all you need
+		/// to look at is this trait. It contains only the latest version of each
+		/// function and no aliases. If you are writing a contract(language) from scratch
+		/// this is where you should look at.
+		pub trait Current {
+			#( #current_docs )*
+		}
+		#( #legacy_doc )*
 	}
 }
 
@@ -476,25 +531,26 @@ fn expand_docs(def: &mut EnvDef) -> TokenStream2 {
 /// Should generate source code for:
 ///  - implementations of the host functions to be added to the wasm runtime environment (see
 ///    `expand_impls()`).
-fn expand_env(def: &mut EnvDef, docs: bool) -> TokenStream2 {
+fn expand_env(def: &EnvDef, docs: bool) -> TokenStream2 {
 	let impls = expand_impls(def);
 	let docs = docs.then_some(expand_docs(def)).unwrap_or(TokenStream2::new());
 
 	quote! {
 		pub struct Env;
 		#impls
-		/// Contains the documentation of the API available to contracts.
+		/// Documentation of the API (host functions) available to contracts.
 		///
-		/// In order to generate this documentation, pass `doc` attribute to the [`#[define_env]`][`macro@define_env`] macro:
-		/// `#[define_env(doc)]`, and then run `cargo doc`.
+		/// The `Current` trait might be the most useful doc to look at. The versioned
+		/// traits only exist for reference: If trying to find out if a specific version of
+		/// `pallet-contracts` contains a certain function.
 		///
-		/// This module is not meant to be used by any code. Rather, it is meant to be consumed by humans through rustdoc.
+		/// # Note
 		///
-		/// Every function described in this module's sub module's traits uses this sub module's identifier
-		/// as its imported module name. The identifier of the function is the function's imported name.
-		/// According to the [WASM spec of imports](https://webassembly.github.io/spec/core/text/modules.html#text-import).
+		/// This module is not meant to be used by any code. Rather, it is meant to be
+		/// consumed by humans through rustdoc.
 		#[cfg(doc)]
 		pub mod api_doc {
+			use super::{TrapReason, ReturnCode};
 			#docs
 		}
 	}
@@ -503,14 +559,19 @@ fn expand_env(def: &mut EnvDef, docs: bool) -> TokenStream2 {
 /// Generates for every host function:
 ///   - real implementation, to register it in the contract execution environment;
 ///   - dummy implementation, to be used as mocks for contract validation step.
-fn expand_impls(def: &mut EnvDef) -> TokenStream2 {
+fn expand_impls(def: &EnvDef) -> TokenStream2 {
 	let impls = expand_functions(def, true, quote! { crate::wasm::Runtime<E> });
 	let dummy_impls = expand_functions(def, false, quote! { () });
 
 	quote! {
 		impl<'a, E: Ext> crate::wasm::Environment<crate::wasm::runtime::Runtime<'a, E>> for Env
 		{
-			fn define(store: &mut ::wasmi::Store<crate::wasm::Runtime<E>>, linker: &mut ::wasmi::Linker<crate::wasm::Runtime<E>>, allow_unstable: bool) -> Result<(), ::wasmi::errors::LinkerError> {
+			fn define(
+				store: &mut ::wasmi::Store<crate::wasm::Runtime<E>>,
+				linker: &mut ::wasmi::Linker<crate::wasm::Runtime<E>>,
+				allow_unstable: AllowUnstableInterface,
+				allow_deprecated: AllowDeprecatedInterface,
+			) -> Result<(),::wasmi::errors::LinkerError> {
 				#impls
 				Ok(())
 			}
@@ -518,7 +579,12 @@ fn expand_impls(def: &mut EnvDef) -> TokenStream2 {
 
 		impl crate::wasm::Environment<()> for Env
 		{
-			fn define(store: &mut ::wasmi::Store<()>, linker: &mut ::wasmi::Linker<()>, allow_unstable: bool) -> Result<(), ::wasmi::errors::LinkerError> {
+			fn define(
+				store: &mut ::wasmi::Store<()>,
+				linker: &mut ::wasmi::Linker<()>,
+				allow_unstable: AllowUnstableInterface,
+				allow_deprecated: AllowDeprecatedInterface,
+			) -> Result<(), ::wasmi::errors::LinkerError> {
 				#dummy_impls
 				Ok(())
 			}
@@ -526,22 +592,19 @@ fn expand_impls(def: &mut EnvDef) -> TokenStream2 {
 	}
 }
 
-fn expand_functions(
-	def: &mut EnvDef,
-	expand_blocks: bool,
-	host_state: TokenStream2,
-) -> TokenStream2 {
+fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2) -> TokenStream2 {
 	let impls = def.host_funcs.iter().map(|f| {
 		// skip the context and memory argument
 		let params = f.item.sig.inputs.iter().skip(2);
 		let (module, name, body, wasm_output, output) = (
-			&f.module,
+			f.module(),
 			&f.name,
 			&f.item.block,
 			f.returns.to_wasm_sig(),
 			&f.item.sig.output
 		);
 		let is_stable = f.is_stable;
+		let not_deprecated = f.not_deprecated;
 
 		// If we don't expand blocks (implementing for `()`) we change a few things:
 		// - We replace any code by unreachable!
@@ -582,9 +645,13 @@ fn expand_functions(
 		};
 
 		quote! {
-			// We need to allow unstable functions when runtime benchmarks are performed because
-			// we generate the weights even when those interfaces are not enabled.
-			if ::core::cfg!(feature = "runtime-benchmarks") || #is_stable || allow_unstable {
+			// We need to allow all interfaces when runtime benchmarks are performed because
+			// we generate the weights even when those interfaces are not enabled. This
+			// is necessary as the decision whether we allow unstable or deprecated functions
+			// is a decision made at runtime. Generation of the weights happens statically.
+			if ::core::cfg!(feature = "runtime-benchmarks") ||
+				((#is_stable || __allow_unstable__) && (#not_deprecated || __allow_deprecated__))
+			{
 				#allow_unused
 				linker.define(#module, #name, ::wasmi::Func::wrap(&mut*store, |mut __caller__: ::wasmi::Caller<#host_state>, #( #params, )*| -> #wasm_output {
 					let mut func = #inner;
@@ -596,6 +663,8 @@ fn expand_functions(
 		}
 	});
 	quote! {
+		let __allow_unstable__ = matches!(allow_unstable, AllowUnstableInterface::Yes);
+		let __allow_deprecated__ = matches!(allow_deprecated, AllowDeprecatedInterface::Yes);
 		#( #impls )*
 	}
 }
@@ -690,6 +759,16 @@ fn expand_functions(
 /// additional `pallet_contracts::api_doc::seal0`, `pallet_contracts::api_doc::seal1`,
 /// `...` modules each having its `Api` trait containing functions holding documentation for every
 /// host function defined by the macro.
+///
+/// # Deprecated Interfaces
+///
+/// An interface can be annotated with `#[deprecated]`. It is mutually exclusive with `#[unstable]`.
+/// Deprecated interfaces have the following properties:
+/// 	- New contract codes utilizing those interfaces cannot be uploaded.
+/// 	- New contracts from existing codes utilizing those interfaces cannot be instantiated.
+/// - Existing contracts containing those interfaces still work.
+///
+/// Those interfaces will eventually be removed.
 ///
 /// To build up these docs, run:
 ///

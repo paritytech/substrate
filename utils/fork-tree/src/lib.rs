@@ -32,7 +32,7 @@ pub enum Error<E> {
 	UnfinalizedAncestor,
 	/// Imported or finalized node that is an ancestor of previously finalized node.
 	Revert,
-	/// Error throw by client when checking for node ancestry.
+	/// Error thrown by user when checking for node ancestry.
 	Client(E),
 }
 
@@ -48,11 +48,7 @@ impl<E: std::error::Error> fmt::Display for Error<E> {
 	}
 }
 
-impl<E: std::error::Error> std::error::Error for Error<E> {
-	fn cause(&self) -> Option<&dyn std::error::Error> {
-		None
-	}
-}
+impl<E: std::error::Error> std::error::Error for Error<E> {}
 
 impl<E: std::error::Error> From<E> for Error<E> {
 	fn from(err: E) -> Error<E> {
@@ -83,7 +79,7 @@ pub enum FilterAction {
 /// A tree data structure that stores several nodes across multiple branches.
 ///
 /// Top-level branches are called roots. The tree has functionality for
-/// finalizing nodes, which means that that node is traversed, and all competing
+/// finalizing nodes, which means that node is traversed, and all competing
 /// branches are pruned. It also guarantees that nodes in the tree are finalized
 /// in order. Each node is uniquely identified by its hash but can be ordered by
 /// its number. In order to build the tree an external function must be provided
@@ -99,12 +95,14 @@ where
 	H: PartialEq,
 	N: Ord,
 {
-	/// Create a new empty tree.
+	/// Create a new empty tree instance.
 	pub fn new() -> ForkTree<H, N, V> {
 		ForkTree { roots: Vec::new(), best_finalized_number: None }
 	}
 
-	/// Rebalance the tree, i.e. sort child nodes by max branch depth (decreasing).
+	/// Rebalance the tree.
+	///
+	/// For each tree level sort child nodes by max branch depth (decreasing).
 	///
 	/// Most operations in the tree are performed with depth-first search
 	/// starting from the leftmost node at every level, since this tree is meant
@@ -120,10 +118,12 @@ where
 		}
 	}
 
-	/// Import a new node into the tree. The given function `is_descendent_of`
-	/// should return `true` if the second hash (target) is a descendent of the
-	/// first hash (base). This method assumes that nodes in the same branch are
-	/// imported in order.
+	/// Import a new node into the tree.
+	///
+	/// The given function `is_descendent_of` should return `true` if the second
+	/// hash (target) is a descendent of the first hash (base).
+	///
+	/// This method assumes that nodes in the same branch are imported in order.
 	///
 	/// Returns `true` if the imported node is a root.
 	// WARNING: some users of this method (i.e. consensus epoch changes tree) currently silently
@@ -232,9 +232,10 @@ where
 	}
 
 	/// Find a node in the tree that is the deepest ancestor of the given
-	/// block hash and which passes the given predicate. The given function
-	/// `is_descendent_of` should return `true` if the second hash (target)
-	/// is a descendent of the first hash (base).
+	/// block hash and which passes the given predicate.
+	///
+	/// The given function `is_descendent_of` should return `true` if the
+	/// second hash (target) is a descendent of the first hash (base).
 	pub fn find_node_where<F, E, P>(
 		&self,
 		hash: &H,
@@ -281,10 +282,12 @@ where
 	/// Same as [`find_node_where`](ForkTree::find_node_where), but returns indices.
 	///
 	/// The returned indices represent the full path to reach the matching node starting
-	/// from first to last, i.e. the earliest index in the traverse path goes first, and the final
-	/// index in the traverse path goes last. If a node is found that matches the predicate
-	/// the returned path should always contain at least one index, otherwise `None` is
-	/// returned.
+	/// from one of the roots, i.e. the earliest index in the traverse path goes first,
+	/// and the final index in the traverse path goes last.
+	///
+	/// If a node is found that matches the predicate the returned path should always
+	/// contain at least one index, otherwise `None` is returned.
+	//
 	// WARNING: some users of this method (i.e. consensus epoch changes tree) currently silently
 	// rely on a **post-order DFS** traversal. If we are using instead a top-down traversal method
 	// then the `is_descendent_of` closure, when used after a warp-sync, will end up querying the
@@ -351,14 +354,16 @@ where
 		})
 	}
 
-	/// Prune the tree, removing all non-canonical nodes. We find the node in the
-	/// tree that is the deepest ancestor of the given hash and that passes the
-	/// given predicate. If such a node exists, we re-root the tree to this
-	/// node. Otherwise the tree remains unchanged. The given function
-	/// `is_descendent_of` should return `true` if the second hash (target) is a
-	/// descendent of the first hash (base).
+	/// Prune the tree, removing all non-canonical nodes.
 	///
-	/// Returns all pruned node data.
+	/// We find the node in the tree that is the deepest ancestor of the given hash
+	/// and that passes the given predicate. If such a node exists, we re-root the
+	/// tree to this node. Otherwise the tree remains unchanged.
+	///
+	/// The given function `is_descendent_of` should return `true` if the second
+	/// hash (target) is a descendent of the first hash (base).
+	///
+	/// Returns all pruned nodes data.
 	pub fn prune<F, E, P>(
 		&mut self,
 		hash: &H,
@@ -371,42 +376,59 @@ where
 		F: Fn(&H, &H) -> Result<bool, E>,
 		P: Fn(&V) -> bool,
 	{
-		let root_index =
+		let new_root_path =
 			match self.find_node_index_where(hash, number, is_descendent_of, predicate)? {
-				Some(idx) => idx,
+				Some(path) => path,
 				None => return Ok(RemovedIterator { stack: Vec::new() }),
 			};
 
-		let mut old_roots = std::mem::take(&mut self.roots);
+		let mut removed = std::mem::take(&mut self.roots);
 
-		let curr_children = root_index
+		// Find and detach the new root from the removed nodes
+		let root_siblings = new_root_path
 			.iter()
-			.take(root_index.len() - 1)
-			.fold(&mut old_roots, |curr, idx| &mut curr[*idx].children);
-		let mut root = curr_children.remove(root_index[root_index.len() - 1]);
+			.take(new_root_path.len() - 1)
+			.fold(&mut removed, |curr, idx| &mut curr[*idx].children);
+		let root = root_siblings.remove(new_root_path[new_root_path.len() - 1]);
+		self.roots = vec![root];
 
-		let mut removed = old_roots;
+		// If, because of the `predicate`, the new root is not the deepest ancestor
+		// of `hash` then we can remove all the nodes that are descendants of the new
+		// `root` but not ancestors of `hash`.
+		let mut curr = &mut self.roots[0];
+		loop {
+			let mut maybe_ancestor_idx = None;
+			for (idx, child) in curr.children.iter().enumerate() {
+				if child.number < *number && is_descendent_of(&child.hash, hash)? {
+					maybe_ancestor_idx = Some(idx);
+					break
+				}
+			}
+			let Some(ancestor_idx) = maybe_ancestor_idx else {
+				// Now we are positioned just above block identified by `hash`
+				break
+			};
+			// Preserve only the ancestor node, the siblings are removed
+			let mut next_siblings = std::mem::take(&mut curr.children);
+			let next = next_siblings.remove(ancestor_idx);
+			curr.children = vec![next];
+			removed.append(&mut next_siblings);
+			curr = &mut curr.children[0];
+		}
 
-		// we found the deepest ancestor of the finalized block, so we prune
-		// out any children that don't include the finalized block.
-		let root_children = std::mem::take(&mut root.children);
-		let mut is_first = true;
-
-		for child in root_children {
-			if is_first &&
-				(child.number == *number && child.hash == *hash ||
-					child.number < *number && is_descendent_of(&child.hash, hash)?)
+		// Curr now points to our direct ancestor, if necessary remove any node that is
+		// not a descendant of `hash`.
+		let children = std::mem::take(&mut curr.children);
+		for child in children {
+			if child.number == *number && child.hash == *hash ||
+				*number < child.number && is_descendent_of(hash, &child.hash)?
 			{
-				root.children.push(child);
-				// assuming that the tree is well formed only one child should pass this
-				// requirement due to ancestry restrictions (i.e. they must be different forks).
-				is_first = false;
+				curr.children.push(child);
 			} else {
 				removed.push(child);
 			}
 		}
 
-		self.roots = vec![root];
 		self.rebalance();
 
 		Ok(RemovedIterator { stack: removed })
@@ -836,21 +858,21 @@ mod test {
 	impl std::error::Error for TestError {}
 
 	fn test_fork_tree<'a>(
-	) -> (ForkTree<&'a str, u64, ()>, impl Fn(&&str, &&str) -> Result<bool, TestError>) {
+	) -> (ForkTree<&'a str, u64, u32>, impl Fn(&&str, &&str) -> Result<bool, TestError>) {
 		let mut tree = ForkTree::new();
 
 		#[rustfmt::skip]
 		//
-		//     - B - C - D - E
-		//    /
-		//   /   - G
-		//  /   /
-		// A - F - H - I
-		//  \       \
-		//   \       - L - M - N
-		//    \          \
-		//     \          - O
-		//      - J - K
+		//     +---B-c-C---D---E
+		//     |
+		//     |   +---G
+		//     |   | 
+		// 0---A---F---H---I
+		//     |       |
+		//     |       +---L-m-M---N
+		//     |           |
+		//     |           +---O
+		//     +---J---K
 		//
 		// (where N is not a part of fork tree)
 		//
@@ -859,9 +881,12 @@ mod test {
 		// will be on the leftmost side of the tree.
 		let is_descendent_of = |base: &&str, block: &&str| -> Result<bool, TestError> {
 			let letters = vec!["B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O"];
-			match (*base, *block) {
+			// This is a trick to have lowercase blocks be direct parents of their
+			// uppercase correspondent (A excluded)
+			let block = block.to_uppercase();
+			match (*base, block) {
 				("A", b) => Ok(letters.into_iter().any(|n| n == b)),
-				("B", b) => Ok(b == "C" || b == "D" || b == "E"),
+				("B" | "c", b) => Ok(b == "C" || b == "D" || b == "E"),
 				("C", b) => Ok(b == "D" || b == "E"),
 				("D", b) => Ok(b == "E"),
 				("E", _) => Ok(false),
@@ -872,7 +897,8 @@ mod test {
 				("I", _) => Ok(false),
 				("J", b) => Ok(b == "K"),
 				("K", _) => Ok(false),
-				("L", b) => Ok(b == "M" || b == "O" || b == "N"),
+				("L", b) => Ok(b == "M" || b == "N" || b == "O"),
+				("m", b) => Ok(b == "M" || b == "N"),
 				("M", b) => Ok(b == "N"),
 				("O", _) => Ok(false),
 				("0", _) => Ok(true),
@@ -880,24 +906,20 @@ mod test {
 			}
 		};
 
-		tree.import("A", 1, (), &is_descendent_of).unwrap();
-
-		tree.import("B", 2, (), &is_descendent_of).unwrap();
-		tree.import("C", 3, (), &is_descendent_of).unwrap();
-		tree.import("D", 4, (), &is_descendent_of).unwrap();
-		tree.import("E", 5, (), &is_descendent_of).unwrap();
-
-		tree.import("F", 2, (), &is_descendent_of).unwrap();
-		tree.import("G", 3, (), &is_descendent_of).unwrap();
-
-		tree.import("H", 3, (), &is_descendent_of).unwrap();
-		tree.import("I", 4, (), &is_descendent_of).unwrap();
-		tree.import("L", 4, (), &is_descendent_of).unwrap();
-		tree.import("M", 5, (), &is_descendent_of).unwrap();
-		tree.import("O", 5, (), &is_descendent_of).unwrap();
-
-		tree.import("J", 2, (), &is_descendent_of).unwrap();
-		tree.import("K", 3, (), &is_descendent_of).unwrap();
+		tree.import("A", 10, 1, &is_descendent_of).unwrap();
+		tree.import("B", 20, 2, &is_descendent_of).unwrap();
+		tree.import("C", 30, 3, &is_descendent_of).unwrap();
+		tree.import("D", 40, 4, &is_descendent_of).unwrap();
+		tree.import("E", 50, 5, &is_descendent_of).unwrap();
+		tree.import("F", 20, 2, &is_descendent_of).unwrap();
+		tree.import("G", 30, 3, &is_descendent_of).unwrap();
+		tree.import("H", 30, 3, &is_descendent_of).unwrap();
+		tree.import("I", 40, 4, &is_descendent_of).unwrap();
+		tree.import("L", 40, 4, &is_descendent_of).unwrap();
+		tree.import("M", 50, 5, &is_descendent_of).unwrap();
+		tree.import("O", 50, 5, &is_descendent_of).unwrap();
+		tree.import("J", 20, 2, &is_descendent_of).unwrap();
+		tree.import("K", 30, 3, &is_descendent_of).unwrap();
 
 		(tree, is_descendent_of)
 	}
@@ -908,22 +930,22 @@ mod test {
 
 		tree.finalize_root(&"A");
 
-		assert_eq!(tree.best_finalized_number, Some(1));
+		assert_eq!(tree.best_finalized_number, Some(10));
 
-		assert_eq!(tree.import("A", 1, (), &is_descendent_of), Err(Error::Revert));
+		assert_eq!(tree.import("A", 10, 1, &is_descendent_of), Err(Error::Revert));
 	}
 
 	#[test]
 	fn import_doesnt_add_duplicates() {
 		let (mut tree, is_descendent_of) = test_fork_tree();
 
-		assert_eq!(tree.import("A", 1, (), &is_descendent_of), Err(Error::Duplicate));
+		assert_eq!(tree.import("A", 10, 1, &is_descendent_of), Err(Error::Duplicate));
 
-		assert_eq!(tree.import("I", 4, (), &is_descendent_of), Err(Error::Duplicate));
+		assert_eq!(tree.import("I", 40, 4, &is_descendent_of), Err(Error::Duplicate));
 
-		assert_eq!(tree.import("G", 3, (), &is_descendent_of), Err(Error::Duplicate));
+		assert_eq!(tree.import("G", 30, 3, &is_descendent_of), Err(Error::Duplicate));
 
-		assert_eq!(tree.import("K", 3, (), &is_descendent_of), Err(Error::Duplicate));
+		assert_eq!(tree.import("K", 30, 3, &is_descendent_of), Err(Error::Duplicate));
 	}
 
 	#[test]
@@ -931,14 +953,14 @@ mod test {
 		let finalize_a = || {
 			let (mut tree, ..) = test_fork_tree();
 
-			assert_eq!(tree.roots().map(|(h, n, _)| (*h, *n)).collect::<Vec<_>>(), vec![("A", 1)]);
+			assert_eq!(tree.roots().map(|(h, n, _)| (*h, *n)).collect::<Vec<_>>(), vec![("A", 10)]);
 
 			// finalizing "A" opens up three possible forks
 			tree.finalize_root(&"A");
 
 			assert_eq!(
 				tree.roots().map(|(h, n, _)| (*h, *n)).collect::<Vec<_>>(),
-				vec![("B", 2), ("F", 2), ("J", 2)],
+				vec![("B", 20), ("F", 20), ("J", 20)],
 			);
 
 			tree
@@ -950,7 +972,7 @@ mod test {
 			// finalizing "B" will progress on its fork and remove any other competing forks
 			tree.finalize_root(&"B");
 
-			assert_eq!(tree.roots().map(|(h, n, _)| (*h, *n)).collect::<Vec<_>>(), vec![("C", 3)],);
+			assert_eq!(tree.roots().map(|(h, n, _)| (*h, *n)).collect::<Vec<_>>(), vec![("C", 30)],);
 
 			// all the other forks have been pruned
 			assert!(tree.roots.len() == 1);
@@ -962,7 +984,7 @@ mod test {
 			// finalizing "J" will progress on its fork and remove any other competing forks
 			tree.finalize_root(&"J");
 
-			assert_eq!(tree.roots().map(|(h, n, _)| (*h, *n)).collect::<Vec<_>>(), vec![("K", 3)],);
+			assert_eq!(tree.roots().map(|(h, n, _)| (*h, *n)).collect::<Vec<_>>(), vec![("K", 30)],);
 
 			// all the other forks have been pruned
 			assert!(tree.roots.len() == 1);
@@ -982,42 +1004,42 @@ mod test {
 
 		// finalizing "A" opens up three possible forks
 		assert_eq!(
-			tree.finalize(&"A", 1, &is_descendent_of),
-			Ok(FinalizationResult::Changed(Some(()))),
+			tree.finalize(&"A", 10, &is_descendent_of),
+			Ok(FinalizationResult::Changed(Some(1))),
 		);
 
 		assert_eq!(
 			tree.roots().map(|(h, n, _)| (*h, *n)).collect::<Vec<_>>(),
-			vec![("B", 2), ("F", 2), ("J", 2)],
+			vec![("B", 20), ("F", 20), ("J", 20)],
 		);
 
 		// finalizing anything lower than what we observed will fail
-		assert_eq!(tree.best_finalized_number, Some(1));
+		assert_eq!(tree.best_finalized_number, Some(10));
 
-		assert_eq!(tree.finalize(&"Z", 1, &is_descendent_of), Err(Error::Revert));
+		assert_eq!(tree.finalize(&"Z", 10, &is_descendent_of), Err(Error::Revert));
 
 		// trying to finalize a node without finalizing its ancestors first will fail
-		assert_eq!(tree.finalize(&"H", 3, &is_descendent_of), Err(Error::UnfinalizedAncestor));
+		assert_eq!(tree.finalize(&"H", 30, &is_descendent_of), Err(Error::UnfinalizedAncestor));
 
 		// after finalizing "F" we can finalize "H"
 		assert_eq!(
-			tree.finalize(&"F", 2, &is_descendent_of),
-			Ok(FinalizationResult::Changed(Some(()))),
+			tree.finalize(&"F", 20, &is_descendent_of),
+			Ok(FinalizationResult::Changed(Some(2))),
 		);
 
 		assert_eq!(
-			tree.finalize(&"H", 3, &is_descendent_of),
-			Ok(FinalizationResult::Changed(Some(()))),
+			tree.finalize(&"H", 30, &is_descendent_of),
+			Ok(FinalizationResult::Changed(Some(3))),
 		);
 
 		assert_eq!(
 			tree.roots().map(|(h, n, _)| (*h, *n)).collect::<Vec<_>>(),
-			vec![("L", 4), ("I", 4)],
+			vec![("L", 40), ("I", 40)],
 		);
 
 		// finalizing a node from another fork that isn't part of the tree clears the tree
 		assert_eq!(
-			tree.finalize(&"Z", 5, &is_descendent_of),
+			tree.finalize(&"Z", 50, &is_descendent_of),
 			Ok(FinalizationResult::Changed(None)),
 		);
 
@@ -1040,13 +1062,13 @@ mod test {
 
 		// finalizing "A" opens up three possible forks
 		assert_eq!(
-			tree.finalize_with_ancestors(&"A", 1, &is_descendent_of),
-			Ok(FinalizationResult::Changed(Some(()))),
+			tree.finalize_with_ancestors(&"A", 10, &is_descendent_of),
+			Ok(FinalizationResult::Changed(Some(1))),
 		);
 
 		assert_eq!(
 			tree.roots().map(|(h, n, _)| (*h, *n)).collect::<Vec<_>>(),
-			vec![("B", 2), ("F", 2), ("J", 2)],
+			vec![("B", 20), ("F", 20), ("J", 20)],
 		);
 
 		// finalizing H:
@@ -1054,16 +1076,16 @@ mod test {
 		// 2) opens root that is ancestor of H (F -> G+H)
 		// 3) finalizes the just opened root H (H -> I + L)
 		assert_eq!(
-			tree.finalize_with_ancestors(&"H", 3, &is_descendent_of),
-			Ok(FinalizationResult::Changed(Some(()))),
+			tree.finalize_with_ancestors(&"H", 30, &is_descendent_of),
+			Ok(FinalizationResult::Changed(Some(3))),
 		);
 
 		assert_eq!(
 			tree.roots().map(|(h, n, _)| (*h, *n)).collect::<Vec<_>>(),
-			vec![("L", 4), ("I", 4)],
+			vec![("L", 40), ("I", 40)],
 		);
 
-		assert_eq!(tree.best_finalized_number, Some(3));
+		assert_eq!(tree.best_finalized_number, Some(30));
 
 		// finalizing N (which is not a part of the tree):
 		// 1) removes roots that are not ancestors/descendants of N (I)
@@ -1071,13 +1093,13 @@ mod test {
 		// 3) removes roots that are not ancestors/descendants of N (O)
 		// 4) opens root that is ancestor of N (M -> {})
 		assert_eq!(
-			tree.finalize_with_ancestors(&"N", 6, &is_descendent_of),
+			tree.finalize_with_ancestors(&"N", 60, &is_descendent_of),
 			Ok(FinalizationResult::Changed(None)),
 		);
 
 		assert_eq!(tree.roots().map(|(h, n, _)| (*h, *n)).collect::<Vec<_>>(), vec![],);
 
-		assert_eq!(tree.best_finalized_number, Some(6));
+		assert_eq!(tree.best_finalized_number, Some(60));
 	}
 
 	#[test]
@@ -1209,20 +1231,20 @@ mod test {
 		assert_eq!(
 			tree.iter().map(|(h, n, _)| (*h, *n)).collect::<Vec<_>>(),
 			vec![
-				("A", 1),
-				("B", 2),
-				("C", 3),
-				("D", 4),
-				("E", 5),
-				("F", 2),
-				("H", 3),
-				("L", 4),
-				("M", 5),
-				("O", 5),
-				("I", 4),
-				("G", 3),
-				("J", 2),
-				("K", 3),
+				("A", 10),
+				("B", 20),
+				("C", 30),
+				("D", 40),
+				("E", 50),
+				("F", 20),
+				("H", 30),
+				("L", 40),
+				("M", 50),
+				("O", 50),
+				("I", 40),
+				("G", 30),
+				("J", 20),
+				("K", 30),
 			],
 		);
 	}
@@ -1289,9 +1311,9 @@ mod test {
 
 		// Extend the single root fork-tree to also excercise the roots order during map.
 		let is_descendent_of = |_: &&str, _: &&str| -> Result<bool, TestError> { Ok(false) };
-		let is_root = tree.import("A1", 1, (), &is_descendent_of).unwrap();
+		let is_root = tree.import("A1", 10, 1, &is_descendent_of).unwrap();
 		assert!(is_root);
-		let is_root = tree.import("A2", 1, (), &is_descendent_of).unwrap();
+		let is_root = tree.import("A2", 10, 1, &is_descendent_of).unwrap();
 		assert!(is_root);
 
 		let old_tree = tree.clone();
@@ -1306,10 +1328,10 @@ mod test {
 	}
 
 	#[test]
-	fn prune_works() {
+	fn prune_works_for_in_tree_hashes() {
 		let (mut tree, is_descendent_of) = test_fork_tree();
 
-		let removed = tree.prune(&"C", &3, &is_descendent_of, &|_| true).unwrap();
+		let removed = tree.prune(&"C", &30, &is_descendent_of, &|_| true).unwrap();
 
 		assert_eq!(tree.roots.iter().map(|node| node.hash).collect::<Vec<_>>(), vec!["B"]);
 
@@ -1323,13 +1345,68 @@ mod test {
 			vec!["A", "F", "H", "L", "M", "O", "I", "G", "J", "K"]
 		);
 
-		let removed = tree.prune(&"E", &5, &is_descendent_of, &|_| true).unwrap();
+		let removed = tree.prune(&"E", &50, &is_descendent_of, &|_| true).unwrap();
 
 		assert_eq!(tree.roots.iter().map(|node| node.hash).collect::<Vec<_>>(), vec!["D"]);
 
 		assert_eq!(tree.iter().map(|(hash, _, _)| *hash).collect::<Vec<_>>(), vec!["D", "E"]);
 
 		assert_eq!(removed.map(|(hash, _, _)| hash).collect::<Vec<_>>(), vec!["B", "C"]);
+	}
+
+	#[test]
+	fn prune_works_for_out_of_tree_hashes() {
+		let (mut tree, is_descendent_of) = test_fork_tree();
+
+		let removed = tree.prune(&"c", &25, &is_descendent_of, &|_| true).unwrap();
+
+		assert_eq!(tree.roots.iter().map(|node| node.hash).collect::<Vec<_>>(), vec!["B"]);
+
+		assert_eq!(
+			tree.iter().map(|(hash, _, _)| *hash).collect::<Vec<_>>(),
+			vec!["B", "C", "D", "E"],
+		);
+
+		assert_eq!(
+			removed.map(|(hash, _, _)| hash).collect::<Vec<_>>(),
+			vec!["A", "F", "H", "L", "M", "O", "I", "G", "J", "K"]
+		);
+	}
+
+	#[test]
+	fn prune_works_for_not_direct_ancestor() {
+		let (mut tree, is_descendent_of) = test_fork_tree();
+
+		// This is to re-root the tree not at the immediate ancestor, but the one just before.
+		let removed = tree.prune(&"m", &45, &is_descendent_of, &|height| *height == 3).unwrap();
+
+		assert_eq!(tree.roots.iter().map(|node| node.hash).collect::<Vec<_>>(), vec!["H"]);
+
+		assert_eq!(tree.iter().map(|(hash, _, _)| *hash).collect::<Vec<_>>(), vec!["H", "L", "M"],);
+
+		assert_eq!(
+			removed.map(|(hash, _, _)| hash).collect::<Vec<_>>(),
+			vec!["O", "I", "A", "B", "C", "D", "E", "F", "G", "J", "K"]
+		);
+	}
+
+	#[test]
+	fn prune_works_for_far_away_ancestor() {
+		let (mut tree, is_descendent_of) = test_fork_tree();
+
+		let removed = tree.prune(&"m", &45, &is_descendent_of, &|height| *height == 2).unwrap();
+
+		assert_eq!(tree.roots.iter().map(|node| node.hash).collect::<Vec<_>>(), vec!["F"]);
+
+		assert_eq!(
+			tree.iter().map(|(hash, _, _)| *hash).collect::<Vec<_>>(),
+			vec!["F", "H", "L", "M"],
+		);
+
+		assert_eq!(
+			removed.map(|(hash, _, _)| hash).collect::<Vec<_>>(),
+			vec!["O", "I", "G", "A", "B", "C", "D", "E", "J", "K"]
+		);
 	}
 
 	#[test]
@@ -1381,7 +1458,7 @@ mod test {
 			}
 		};
 
-		tree.import("P", 6, (), &is_descendent_of).unwrap();
+		tree.import("P", 60, 6, &is_descendent_of).unwrap();
 
 		// this should re-order the tree, since the branch "A -> B -> C -> D -> E" is no longer tied
 		// with 5 blocks depth. additionally "O" should be visited before "M" now, since it has one
@@ -1396,7 +1473,7 @@ mod test {
 	fn drain_filter_works() {
 		let (mut tree, _) = test_fork_tree();
 
-		let filter = |h: &&str, _: &u64, _: &()| match *h {
+		let filter = |h: &&str, _: &u64, _: &u32| match *h {
 			"A" | "B" | "F" | "G" => FilterAction::KeepNode,
 			"C" => FilterAction::KeepTree,
 			"H" | "J" => FilterAction::Remove,
@@ -1421,19 +1498,19 @@ mod test {
 		let (tree, is_descendent_of) = test_fork_tree();
 
 		let path = tree
-			.find_node_index_where(&"D", &4, &is_descendent_of, &|_| true)
+			.find_node_index_where(&"D", &40, &is_descendent_of, &|_| true)
 			.unwrap()
 			.unwrap();
 		assert_eq!(path, [0, 0, 0]);
 
 		let path = tree
-			.find_node_index_where(&"O", &5, &is_descendent_of, &|_| true)
+			.find_node_index_where(&"O", &50, &is_descendent_of, &|_| true)
 			.unwrap()
 			.unwrap();
 		assert_eq!(path, [0, 1, 0, 0]);
 
 		let path = tree
-			.find_node_index_where(&"N", &6, &is_descendent_of, &|_| true)
+			.find_node_index_where(&"N", &60, &is_descendent_of, &|_| true)
 			.unwrap()
 			.unwrap();
 		assert_eq!(path, [0, 1, 0, 0, 0]);
@@ -1489,17 +1566,17 @@ mod test {
 	fn find_node_works() {
 		let (tree, is_descendent_of) = test_fork_tree();
 
-		let node = tree.find_node_where(&"B", &2, &is_descendent_of, &|_| true).unwrap().unwrap();
-		assert_eq!((node.hash, node.number), ("A", 1));
+		let node = tree.find_node_where(&"B", &20, &is_descendent_of, &|_| true).unwrap().unwrap();
+		assert_eq!((node.hash, node.number), ("A", 10));
 
-		let node = tree.find_node_where(&"D", &4, &is_descendent_of, &|_| true).unwrap().unwrap();
-		assert_eq!((node.hash, node.number), ("C", 3));
+		let node = tree.find_node_where(&"D", &40, &is_descendent_of, &|_| true).unwrap().unwrap();
+		assert_eq!((node.hash, node.number), ("C", 30));
 
-		let node = tree.find_node_where(&"O", &5, &is_descendent_of, &|_| true).unwrap().unwrap();
-		assert_eq!((node.hash, node.number), ("L", 4));
+		let node = tree.find_node_where(&"O", &50, &is_descendent_of, &|_| true).unwrap().unwrap();
+		assert_eq!((node.hash, node.number), ("L", 40));
 
-		let node = tree.find_node_where(&"N", &6, &is_descendent_of, &|_| true).unwrap().unwrap();
-		assert_eq!((node.hash, node.number), ("M", 5));
+		let node = tree.find_node_where(&"N", &60, &is_descendent_of, &|_| true).unwrap().unwrap();
+		assert_eq!((node.hash, node.number), ("M", 50));
 	}
 
 	#[test]
@@ -1516,13 +1593,13 @@ mod test {
 
 		// Post order traversal requirement for `find_node_index_where`
 		let path = tree
-			.find_node_index_where(&"N", &6, &is_descendent_of_for_post_order, &|_| true)
+			.find_node_index_where(&"N", &60, &is_descendent_of_for_post_order, &|_| true)
 			.unwrap()
 			.unwrap();
 		assert_eq!(path, [0, 1, 0, 0, 0]);
 
 		// Post order traversal requirement for `import`
-		let res = tree.import(&"Z", 100, (), &is_descendent_of_for_post_order);
+		let res = tree.import(&"Z", 100, 10, &is_descendent_of_for_post_order);
 		assert_eq!(res, Ok(false));
 		assert_eq!(
 			tree.iter().map(|node| *node.0).collect::<Vec<_>>(),

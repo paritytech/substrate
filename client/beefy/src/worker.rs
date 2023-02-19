@@ -23,15 +23,16 @@ use crate::{
 	},
 	error::Error,
 	justification::BeefyVersionedFinalityProof,
-	keystore::BeefyKeystore,
-	metric_inc, metric_set,
-	metrics::Metrics,
-	round::Rounds,
-	BeefyVoterLinks,
+	keystore::{BeefyKeystore, BeefySignatureHasher},
+	metric_get, metric_inc, metric_set,
+	metrics::VoterMetrics,
+	round::{Rounds, VoteImportResult},
+	BeefyVoterLinks, LOG_TARGET,
 };
 use beefy_primitives::{
+	check_equivocation_proof,
 	crypto::{AuthorityId, Signature},
-	Commitment, ConsensusLog, Payload, PayloadProvider, SignedCommitment, ValidatorSet,
+	BeefyApi, Commitment, ConsensusLog, EquivocationProof, PayloadProvider, ValidatorSet,
 	VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
 };
 use codec::{Codec, Decode, Encode};
@@ -41,7 +42,7 @@ use sc_client_api::{Backend, FinalityNotification, FinalityNotifications, Header
 use sc_network_common::service::{NetworkEventStream, NetworkRequest};
 use sc_network_gossip::GossipEngine;
 use sc_utils::notification::NotificationReceiver;
-use sp_api::BlockId;
+use sp_api::{BlockId, ProvideRuntimeApi};
 use sp_arithmetic::traits::{AtLeast32Bit, Saturating};
 use sp_consensus::SyncOracle;
 use sp_runtime::{
@@ -55,6 +56,7 @@ use std::{
 	marker::PhantomData,
 	sync::Arc,
 };
+
 /// Bound for the number of buffered future voting rounds.
 const MAX_BUFFERED_VOTE_ROUNDS: usize = 600;
 /// Bound for the number of buffered votes per round number.
@@ -83,17 +85,14 @@ pub(crate) struct VoterOracle<B: Block> {
 	/// 3. lagging behind GRANDPA: queue has [1, N] elements, where all `mandatory_done == false`.
 	///    In this state, everytime a session gets its mandatory block BEEFY finalized, it's
 	///    popped off the queue, eventually getting to state `2. up-to-date`.
-	sessions: VecDeque<Rounds<Payload, B>>,
+	sessions: VecDeque<Rounds<B>>,
 	/// Min delta in block numbers between two blocks, BEEFY should vote on.
 	min_block_delta: u32,
 }
 
 impl<B: Block> VoterOracle<B> {
 	/// Verify provided `sessions` satisfies requirements, then build `VoterOracle`.
-	pub fn checked_new(
-		sessions: VecDeque<Rounds<Payload, B>>,
-		min_block_delta: u32,
-	) -> Option<Self> {
+	pub fn checked_new(sessions: VecDeque<Rounds<B>>, min_block_delta: u32) -> Option<Self> {
 		let mut prev_start = Zero::zero();
 		let mut prev_validator_id = None;
 		// verifies the
@@ -129,20 +128,20 @@ impl<B: Block> VoterOracle<B> {
 				min_block_delta: min_block_delta.max(1),
 			})
 		} else {
-			error!(target: "beefy", "🥩 Invalid sessions queue: {:?}.", sessions);
+			error!(target: LOG_TARGET, "🥩 Invalid sessions queue: {:?}.", sessions);
 			None
 		}
 	}
 
 	// Return reference to rounds pertaining to first session in the queue.
 	// Voting will always happen at the head of the queue.
-	fn active_rounds(&self) -> Option<&Rounds<Payload, B>> {
+	fn active_rounds(&self) -> Option<&Rounds<B>> {
 		self.sessions.front()
 	}
 
 	// Return mutable reference to rounds pertaining to first session in the queue.
 	// Voting will always happen at the head of the queue.
-	fn active_rounds_mut(&mut self) -> Option<&mut Rounds<Payload, B>> {
+	fn active_rounds_mut(&mut self) -> Option<&mut Rounds<B>> {
 		self.sessions.front_mut()
 	}
 
@@ -157,7 +156,7 @@ impl<B: Block> VoterOracle<B> {
 	}
 
 	/// Add new observed session to the Oracle.
-	pub fn add_session(&mut self, rounds: Rounds<Payload, B>) {
+	pub fn add_session(&mut self, rounds: Rounds<B>) {
 		self.sessions.push_back(rounds);
 		// Once we add a new session we can drop/prune previous session if it's been finalized.
 		self.try_prune();
@@ -227,7 +226,7 @@ impl<B: Block> VoterOracle<B> {
 		let rounds = if let Some(r) = self.sessions.front() {
 			r
 		} else {
-			debug!(target: "beefy", "🥩 No voting round started");
+			debug!(target: LOG_TARGET, "🥩 No voting round started");
 			return None
 		};
 
@@ -235,7 +234,7 @@ impl<B: Block> VoterOracle<B> {
 		let target =
 			vote_target(best_grandpa, best_beefy, rounds.session_start(), self.min_block_delta);
 		trace!(
-			target: "beefy",
+			target: LOG_TARGET,
 			"🥩 best beefy: #{:?}, best finalized: #{:?}, current_vote_target: {:?}",
 			best_beefy,
 			best_grandpa,
@@ -245,16 +244,17 @@ impl<B: Block> VoterOracle<B> {
 	}
 }
 
-pub(crate) struct WorkerParams<B: Block, BE, P, N> {
+pub(crate) struct WorkerParams<B: Block, BE, P, R, N> {
 	pub backend: Arc<BE>,
 	pub payload_provider: P,
+	pub runtime: Arc<R>,
 	pub network: N,
 	pub key_store: BeefyKeystore,
 	pub gossip_engine: GossipEngine<B>,
 	pub gossip_validator: Arc<GossipValidator<B>>,
 	pub on_demand_justifications: OnDemandJustificationsEngine<B>,
 	pub links: BeefyVoterLinks<B>,
-	pub metrics: Option<Metrics>,
+	pub metrics: Option<VoterMetrics>,
 	pub persisted_state: PersistedState<B>,
 }
 
@@ -264,6 +264,8 @@ pub(crate) struct PersistedState<B: Block> {
 	best_grandpa_block_header: <B as Block>::Header,
 	/// Best block a BEEFY voting round has been concluded for.
 	best_beefy_block: NumberFor<B>,
+	/// Best block we voted on.
+	best_voted: NumberFor<B>,
 	/// Chooses which incoming votes to accept and which votes to generate.
 	/// Keeps track of voting seen for current and future rounds.
 	voting_oracle: VoterOracle<B>,
@@ -273,12 +275,13 @@ impl<B: Block> PersistedState<B> {
 	pub fn checked_new(
 		grandpa_header: <B as Block>::Header,
 		best_beefy: NumberFor<B>,
-		sessions: VecDeque<Rounds<Payload, B>>,
+		sessions: VecDeque<Rounds<B>>,
 		min_block_delta: u32,
 	) -> Option<Self> {
 		VoterOracle::checked_new(sessions, min_block_delta).map(|voting_oracle| PersistedState {
 			best_grandpa_block_header: grandpa_header,
 			best_beefy_block: best_beefy,
+			best_voted: Zero::zero(),
 			voting_oracle,
 		})
 	}
@@ -293,10 +296,11 @@ impl<B: Block> PersistedState<B> {
 }
 
 /// A BEEFY worker plays the BEEFY protocol
-pub(crate) struct BeefyWorker<B: Block, BE, P, N> {
+pub(crate) struct BeefyWorker<B: Block, BE, P, RuntimeApi, N> {
 	// utilities
 	backend: Arc<BE>,
 	payload_provider: P,
+	runtime: Arc<RuntimeApi>,
 	network: N,
 	key_store: BeefyKeystore,
 
@@ -311,7 +315,7 @@ pub(crate) struct BeefyWorker<B: Block, BE, P, N> {
 
 	// voter state
 	/// BEEFY client metrics.
-	metrics: Option<Metrics>,
+	metrics: Option<VoterMetrics>,
 	/// Buffer holding votes for future processing.
 	pending_votes: BTreeMap<
 		NumberFor<B>,
@@ -326,11 +330,13 @@ pub(crate) struct BeefyWorker<B: Block, BE, P, N> {
 	persisted_state: PersistedState<B>,
 }
 
-impl<B, BE, P, N> BeefyWorker<B, BE, P, N>
+impl<B, BE, P, R, N> BeefyWorker<B, BE, P, R, N>
 where
 	B: Block + Codec,
 	BE: Backend<B>,
 	P: PayloadProvider<B>,
+	R: ProvideRuntimeApi<B>,
+	R::Api: BeefyApi<B>,
 	N: NetworkEventStream + NetworkRequest + SyncOracle + Send + Sync + Clone + 'static,
 {
 	/// Return a new BEEFY worker instance.
@@ -339,10 +345,11 @@ where
 	/// BEEFY pallet has been deployed on-chain.
 	///
 	/// The BEEFY pallet is needed in order to keep track of the BEEFY authority set.
-	pub(crate) fn new(worker_params: WorkerParams<B, BE, P, N>) -> Self {
+	pub(crate) fn new(worker_params: WorkerParams<B, BE, P, R, N>) -> Self {
 		let WorkerParams {
 			backend,
 			payload_provider,
+			runtime,
 			key_store,
 			network,
 			gossip_engine,
@@ -356,6 +363,7 @@ where
 		BeefyWorker {
 			backend,
 			payload_provider,
+			runtime,
 			network,
 			key_store,
 			gossip_engine,
@@ -381,7 +389,7 @@ where
 		&self.persisted_state.voting_oracle
 	}
 
-	fn active_rounds(&mut self) -> Option<&Rounds<Payload, B>> {
+	fn active_rounds(&mut self) -> Option<&Rounds<B>> {
 		self.persisted_state.voting_oracle.active_rounds()
 	}
 
@@ -405,7 +413,8 @@ where
 
 		if store.intersection(&active).count() == 0 {
 			let msg = "no authority public key found in store".to_string();
-			debug!(target: "beefy", "🥩 for block {:?} {}", block, msg);
+			debug!(target: LOG_TARGET, "🥩 for block {:?} {}", block, msg);
+			metric_inc!(self, beefy_no_authority_found_in_store);
 			Err(Error::Keystore(msg))
 		} else {
 			Ok(())
@@ -418,13 +427,14 @@ where
 		validator_set: ValidatorSet<AuthorityId>,
 		new_session_start: NumberFor<B>,
 	) {
-		debug!(target: "beefy", "🥩 New active validator set: {:?}", validator_set);
+		debug!(target: LOG_TARGET, "🥩 New active validator set: {:?}", validator_set);
 
 		// BEEFY should finalize a mandatory block during each session.
 		if let Some(active_session) = self.active_rounds() {
 			if !active_session.mandatory_done() {
 				debug!(
-					target: "beefy", "🥩 New session {} while active session {} is still lagging.",
+					target: LOG_TARGET,
+					"🥩 New session {} while active session {} is still lagging.",
 					validator_set.id(),
 					active_session.validator_set_id(),
 				);
@@ -432,7 +442,7 @@ where
 			}
 		}
 
-		if log_enabled!(target: "beefy", log::Level::Debug) {
+		if log_enabled!(target: LOG_TARGET, log::Level::Debug) {
 			// verify the new validator set - only do it if we're also logging the warning
 			let _ = self.verify_validator_set(&new_session_start, &validator_set);
 		}
@@ -443,14 +453,15 @@ where
 			.add_session(Rounds::new(new_session_start, validator_set));
 		metric_set!(self, beefy_validator_set_id, id);
 		info!(
-			target: "beefy",
+			target: LOG_TARGET,
 			"🥩 New Rounds for validator set id: {:?} with session_start {:?}",
-			id, new_session_start
+			id,
+			new_session_start
 		);
 	}
 
 	fn handle_finality_notification(&mut self, notification: &FinalityNotification<B>) {
-		debug!(target: "beefy", "🥩 Finality notification: {:?}", notification);
+		debug!(target: LOG_TARGET, "🥩 Finality notification: {:?}", notification);
 		let header = &notification.header;
 
 		if *header.number() > self.best_grandpa_block() {
@@ -484,24 +495,28 @@ where
 	) -> Result<(), Error> {
 		let block_num = vote.commitment.block_number;
 		let best_grandpa = self.best_grandpa_block();
+		self.gossip_validator.note_round(block_num);
 		match self.voting_oracle().triage_round(block_num, best_grandpa)? {
-			RoundAction::Process => self.handle_vote(
-				(vote.commitment.payload, vote.commitment.block_number),
-				(vote.id, vote.signature),
-				false,
-			)?,
+			RoundAction::Process => self.handle_vote(vote)?,
 			RoundAction::Enqueue => {
-				debug!(target: "beefy", "🥩 Buffer vote for round: {:?}.", block_num);
+				debug!(target: LOG_TARGET, "🥩 Buffer vote for round: {:?}.", block_num);
 				if self.pending_votes.len() < MAX_BUFFERED_VOTE_ROUNDS {
 					let votes_vec = self.pending_votes.entry(block_num).or_default();
-					if votes_vec.try_push(vote).is_err() {
-						warn!(target: "beefy", "🥩 Buffer vote dropped for round: {:?}", block_num)
+					if votes_vec.try_push(vote).is_ok() {
+						metric_inc!(self, beefy_buffered_votes);
+					} else {
+						warn!(
+							target: LOG_TARGET,
+							"🥩 Buffer vote dropped for round: {:?}", block_num
+						);
+						metric_inc!(self, beefy_buffered_votes_dropped);
 					}
 				} else {
-					error!(target: "beefy", "🥩 Buffer justification dropped for round: {:?}.", block_num);
+					warn!(target: LOG_TARGET, "🥩 Buffer vote dropped for round: {:?}.", block_num);
+					metric_inc!(self, beefy_buffered_votes_dropped);
 				}
 			},
-			RoundAction::Drop => (),
+			RoundAction::Drop => metric_inc!(self, beefy_stale_votes),
 		};
 		Ok(())
 	}
@@ -520,72 +535,71 @@ where
 		let best_grandpa = self.best_grandpa_block();
 		match self.voting_oracle().triage_round(block_num, best_grandpa)? {
 			RoundAction::Process => {
-				debug!(target: "beefy", "🥩 Process justification for round: {:?}.", block_num);
+				debug!(target: LOG_TARGET, "🥩 Process justification for round: {:?}.", block_num);
+				metric_inc!(self, beefy_imported_justifications);
 				self.finalize(justification)?
 			},
 			RoundAction::Enqueue => {
-				debug!(target: "beefy", "🥩 Buffer justification for round: {:?}.", block_num);
+				debug!(target: LOG_TARGET, "🥩 Buffer justification for round: {:?}.", block_num);
 				if self.pending_justifications.len() < MAX_BUFFERED_JUSTIFICATIONS {
 					self.pending_justifications.entry(block_num).or_insert(justification);
+					metric_inc!(self, beefy_buffered_justifications);
 				} else {
-					error!(target: "beefy", "🥩 Buffer justification dropped for round: {:?}.", block_num);
+					metric_inc!(self, beefy_buffered_justifications_dropped);
+					warn!(
+						target: LOG_TARGET,
+						"🥩 Buffer justification dropped for round: {:?}.", block_num
+					);
 				}
 			},
-			RoundAction::Drop => (),
+			RoundAction::Drop => metric_inc!(self, beefy_stale_justifications),
 		};
 		Ok(())
 	}
 
 	fn handle_vote(
 		&mut self,
-		round: (Payload, NumberFor<B>),
-		vote: (AuthorityId, Signature),
-		self_vote: bool,
+		vote: VoteMessage<NumberFor<B>, AuthorityId, Signature>,
 	) -> Result<(), Error> {
-		self.gossip_validator.note_round(round.1);
-
 		let rounds = self
 			.persisted_state
 			.voting_oracle
 			.active_rounds_mut()
 			.ok_or(Error::UninitSession)?;
 
-		if rounds.add_vote(&round, vote, self_vote) {
-			if let Some(signatures) = rounds.should_conclude(&round) {
-				self.gossip_validator.conclude_round(round.1);
-
-				let block_num = round.1;
-				let commitment = Commitment {
-					payload: round.0,
-					block_number: block_num,
-					validator_set_id: rounds.validator_set_id(),
-				};
-
-				let finality_proof =
-					VersionedFinalityProof::V1(SignedCommitment { commitment, signatures });
-
-				metric_set!(self, beefy_round_concluded, block_num);
-
-				info!(target: "beefy", "🥩 Round #{} concluded, finality_proof: {:?}.", round.1, finality_proof);
-
+		let block_number = vote.commitment.block_number;
+		match rounds.add_vote(vote) {
+			VoteImportResult::RoundConcluded(signed_commitment) => {
+				let finality_proof = VersionedFinalityProof::V1(signed_commitment);
+				info!(
+					target: LOG_TARGET,
+					"🥩 Round #{} concluded, finality_proof: {:?}.", block_number, finality_proof
+				);
 				// We created the `finality_proof` and know to be valid.
 				// New state is persisted after finalization.
 				self.finalize(finality_proof)?;
-			} else {
-				let mandatory_round = self
+				metric_inc!(self, beefy_good_votes_processed);
+			},
+			VoteImportResult::Ok => {
+				// Persist state after handling mandatory block vote.
+				if self
 					.voting_oracle()
 					.mandatory_pending()
-					.map(|p| p.0 == round.1)
-					.unwrap_or(false);
-				// Persist state after handling self vote to avoid double voting in case
-				// of voter restarts.
-				// Also persist state after handling mandatory block vote.
-				if self_vote || mandatory_round {
+					.map(|(mandatory_num, _)| mandatory_num == block_number)
+					.unwrap_or(false)
+				{
 					crate::aux_schema::write_voter_state(&*self.backend, &self.persisted_state)
 						.map_err(|e| Error::Backend(e.to_string()))?;
 				}
-			}
-		}
+				metric_inc!(self, beefy_good_votes_processed);
+			},
+			VoteImportResult::Equivocation(proof) => {
+				metric_inc!(self, beefy_equivocation_votes);
+				self.report_equivocation(proof)?;
+			},
+			VoteImportResult::Invalid => metric_inc!(self, beefy_invalid_votes),
+			VoteImportResult::Stale => metric_inc!(self, beefy_stale_votes),
+		};
 		Ok(())
 	}
 
@@ -603,6 +617,7 @@ where
 
 		// Finalize inner round and update voting_oracle state.
 		self.persisted_state.voting_oracle.finalize(block_num)?;
+		self.gossip_validator.conclude_round(block_num);
 
 		if block_num > self.best_beefy_block() {
 			// Set new best BEEFY block number.
@@ -627,7 +642,10 @@ where
 					self.backend
 						.append_justification(hash, (BEEFY_ENGINE_ID, finality_proof.encode()))
 				}) {
-				error!(target: "beefy", "🥩 Error {:?} on appending justification: {:?}", e, finality_proof);
+				error!(
+					target: LOG_TARGET,
+					"🥩 Error {:?} on appending justification: {:?}", e, finality_proof
+				);
 			}
 
 			self.links
@@ -635,7 +653,8 @@ where
 				.notify(|| Ok::<_, ()>(finality_proof))
 				.expect("forwards closure result; the closure always returns Ok; qed.");
 		} else {
-			debug!(target: "beefy", "🥩 Can't set best beefy to older: {}", block_num);
+			debug!(target: LOG_TARGET, "🥩 Can't set best beefy to old: {}", block_num);
+			metric_set!(self, beefy_best_block_set_last_failure, block_num);
 		}
 		Ok(())
 	}
@@ -666,29 +685,33 @@ where
 		if !self.pending_justifications.is_empty() {
 			let justifs_to_handle = to_process_for(&mut self.pending_justifications, interval, _ph);
 			for (num, justification) in justifs_to_handle.into_iter() {
-				debug!(target: "beefy", "🥩 Handle buffered justification for: {:?}.", num);
+				debug!(target: LOG_TARGET, "🥩 Handle buffered justification for: {:?}.", num);
+				metric_inc!(self, beefy_imported_justifications);
 				if let Err(err) = self.finalize(justification) {
-					error!(target: "beefy", "🥩 Error finalizing block: {}", err);
+					error!(target: LOG_TARGET, "🥩 Error finalizing block: {}", err);
 				}
 			}
+			metric_set!(self, beefy_buffered_justifications, self.pending_justifications.len());
 			// Possibly new interval after processing justifications.
 			interval = self.voting_oracle().accepted_interval(best_grandpa)?;
 		}
 
 		// Process pending votes.
 		if !self.pending_votes.is_empty() {
+			let mut processed = 0u64;
 			let votes_to_handle = to_process_for(&mut self.pending_votes, interval, _ph);
 			for (num, votes) in votes_to_handle.into_iter() {
-				debug!(target: "beefy", "🥩 Handle buffered votes for: {:?}.", num);
+				debug!(target: LOG_TARGET, "🥩 Handle buffered votes for: {:?}.", num);
+				processed += votes.len() as u64;
 				for v in votes.into_iter() {
-					if let Err(err) = self.handle_vote(
-						(v.commitment.payload, v.commitment.block_number),
-						(v.id, v.signature),
-						false,
-					) {
-						error!(target: "beefy", "🥩 Error handling buffered vote: {}", err);
+					if let Err(err) = self.handle_vote(v) {
+						error!(target: LOG_TARGET, "🥩 Error handling buffered vote: {}", err);
 					};
 				}
+			}
+			if let Some(previous) = metric_get!(self, beefy_buffered_votes) {
+				previous.sub(processed);
+				metric_set!(self, beefy_buffered_votes, previous.get());
 			}
 		}
 		Ok(())
@@ -702,7 +725,9 @@ where
 			.voting_target(self.best_beefy_block(), self.best_grandpa_block())
 		{
 			metric_set!(self, beefy_should_vote_on, target);
-			self.do_vote(target)?;
+			if target > self.persisted_state.best_voted {
+				self.do_vote(target)?;
+			}
 		}
 		Ok(())
 	}
@@ -711,7 +736,7 @@ where
 	///
 	/// Also handle this self vote by calling `self.handle_vote()` for it.
 	fn do_vote(&mut self, target_number: NumberFor<B>) -> Result<(), Error> {
-		debug!(target: "beefy", "🥩 Try voting on {}", target_number);
+		debug!(target: LOG_TARGET, "🥩 Try voting on {}", target_number);
 
 		// Most of the time we get here, `target` is actually `best_grandpa`,
 		// avoid getting header from backend in that case.
@@ -743,7 +768,7 @@ where
 		let payload = if let Some(hash) = self.payload_provider.payload(&target_header) {
 			hash
 		} else {
-			warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", target_hash);
+			warn!(target: LOG_TARGET, "🥩 No MMR root digest found for: {:?}", target_hash);
 			return Ok(())
 		};
 
@@ -752,17 +777,16 @@ where
 			.voting_oracle
 			.active_rounds_mut()
 			.ok_or(Error::UninitSession)?;
-		if !rounds.should_self_vote(&(payload.clone(), target_number)) {
-			debug!(target: "beefy", "🥩 Don't double vote for block number: {:?}", target_number);
-			return Ok(())
-		}
 		let (validators, validator_set_id) = (rounds.validators(), rounds.validator_set_id());
 
 		let authority_id = if let Some(id) = self.key_store.authority_id(validators) {
-			debug!(target: "beefy", "🥩 Local authority id: {:?}", id);
+			debug!(target: LOG_TARGET, "🥩 Local authority id: {:?}", id);
 			id
 		} else {
-			debug!(target: "beefy", "🥩 Missing validator id - can't vote for: {:?}", target_hash);
+			debug!(
+				target: LOG_TARGET,
+				"🥩 Missing validator id - can't vote for: {:?}", target_hash
+			);
 			return Ok(())
 		};
 
@@ -772,13 +796,13 @@ where
 		let signature = match self.key_store.sign(&authority_id, &encoded_commitment) {
 			Ok(sig) => sig,
 			Err(err) => {
-				warn!(target: "beefy", "🥩 Error signing commitment: {:?}", err);
+				warn!(target: LOG_TARGET, "🥩 Error signing commitment: {:?}", err);
 				return Ok(())
 			},
 		};
 
 		trace!(
-			target: "beefy",
+			target: LOG_TARGET,
 			"🥩 Produced signature using {:?}, is_valid: {:?}",
 			authority_id,
 			BeefyKeystore::verify(&authority_id, &signature, &encoded_commitment)
@@ -790,32 +814,32 @@ where
 
 		metric_inc!(self, beefy_votes_sent);
 
-		debug!(target: "beefy", "🥩 Sent vote message: {:?}", message);
+		debug!(target: LOG_TARGET, "🥩 Sent vote message: {:?}", message);
 
-		if let Err(err) = self.handle_vote(
-			(message.commitment.payload, message.commitment.block_number),
-			(message.id, message.signature),
-			true,
-		) {
-			error!(target: "beefy", "🥩 Error handling self vote: {}", err);
+		if let Err(err) = self.handle_vote(message) {
+			error!(target: LOG_TARGET, "🥩 Error handling self vote: {}", err);
 		}
 
 		self.gossip_engine.gossip_message(topic::<B>(), encoded_message, false);
 
-		Ok(())
+		// Persist state after vote to avoid double voting in case of voter restarts.
+		self.persisted_state.best_voted = target_number;
+		metric_set!(self, beefy_best_voted, target_number);
+		crate::aux_schema::write_voter_state(&*self.backend, &self.persisted_state)
+			.map_err(|e| Error::Backend(e.to_string()))
 	}
 
 	fn process_new_state(&mut self) {
 		// Handle pending justifications and/or votes for now GRANDPA finalized blocks.
 		if let Err(err) = self.try_pending_justif_and_votes() {
-			debug!(target: "beefy", "🥩 {}", err);
+			debug!(target: LOG_TARGET, "🥩 {}", err);
 		}
 
 		// Don't bother voting or requesting justifications during major sync.
 		if !self.network.is_major_syncing() {
 			// There were external events, 'state' is changed, author a vote if needed/possible.
 			if let Err(err) = self.try_to_vote() {
-				debug!(target: "beefy", "🥩 {}", err);
+				debug!(target: LOG_TARGET, "🥩 {}", err);
 			}
 			// If the current target is a mandatory block,
 			// make sure there's also an on-demand justification request out for it.
@@ -828,20 +852,23 @@ where
 
 	/// Main loop for BEEFY worker.
 	///
-	/// Wait for BEEFY runtime pallet to be available, then start the main async loop
-	/// which is driven by finality notifications and gossiped votes.
+	/// Run the main async loop which is driven by finality notifications and gossiped votes.
 	pub(crate) async fn run(
 		mut self,
 		mut block_import_justif: Fuse<NotificationReceiver<BeefyVersionedFinalityProof<B>>>,
 		mut finality_notifications: Fuse<FinalityNotifications<B>>,
 	) {
-		info!(target: "beefy", "🥩 run BEEFY worker, best grandpa: #{:?}.", self.best_grandpa_block());
+		info!(
+			target: LOG_TARGET,
+			"🥩 run BEEFY worker, best grandpa: #{:?}.",
+			self.best_grandpa_block()
+		);
 
 		let mut votes = Box::pin(
 			self.gossip_engine
 				.messages_for(topic::<B>())
 				.filter_map(|notification| async move {
-					trace!(target: "beefy", "🥩 Got vote message: {:?}", notification);
+					trace!(target: LOG_TARGET, "🥩 Got vote message: {:?}", notification);
 
 					VoteMessage::<NumberFor<B>, AuthorityId, Signature>::decode(
 						&mut &notification.message[..],
@@ -863,7 +890,7 @@ where
 				// Use `select_biased!` to prioritize order below.
 				// Make sure to pump gossip engine.
 				_ = gossip_engine => {
-					error!(target: "beefy", "🥩 Gossip engine has terminated, closing worker.");
+					error!(target: LOG_TARGET, "🥩 Gossip engine has terminated, closing worker.");
 					return;
 				},
 				// Process finality notifications first since these drive the voter.
@@ -871,7 +898,7 @@ where
 					if let Some(notification) = notification {
 						self.handle_finality_notification(&notification);
 					} else {
-						error!(target: "beefy", "🥩 Finality stream terminated, closing worker.");
+						error!(target: LOG_TARGET, "🥩 Finality stream terminated, closing worker.");
 						return;
 					}
 				},
@@ -879,7 +906,7 @@ where
 				justif = self.on_demand_justifications.next().fuse() => {
 					if let Some(justif) = justif {
 						if let Err(err) = self.triage_incoming_justif(justif) {
-							debug!(target: "beefy", "🥩 {}", err);
+							debug!(target: LOG_TARGET, "🥩 {}", err);
 						}
 					}
 				},
@@ -888,10 +915,10 @@ where
 						// Block import justifications have already been verified to be valid
 						// by `BeefyBlockImport`.
 						if let Err(err) = self.triage_incoming_justif(justif) {
-							debug!(target: "beefy", "🥩 {}", err);
+							debug!(target: LOG_TARGET, "🥩 {}", err);
 						}
 					} else {
-						error!(target: "beefy", "🥩 Block import stream terminated, closing worker.");
+						error!(target: LOG_TARGET, "🥩 Block import stream terminated, closing worker.");
 						return;
 					}
 				},
@@ -900,15 +927,69 @@ where
 					if let Some(vote) = vote {
 						// Votes have already been verified to be valid by the gossip validator.
 						if let Err(err) = self.triage_incoming_vote(vote) {
-							debug!(target: "beefy", "🥩 {}", err);
+							debug!(target: LOG_TARGET, "🥩 {}", err);
 						}
 					} else {
-						error!(target: "beefy", "🥩 Votes gossiping stream terminated, closing worker.");
+						error!(target: LOG_TARGET, "🥩 Votes gossiping stream terminated, closing worker.");
 						return;
 					}
 				},
 			}
 		}
+	}
+
+	/// Report the given equivocation to the BEEFY runtime module. This method
+	/// generates a session membership proof of the offender and then submits an
+	/// extrinsic to report the equivocation. In particular, the session membership
+	/// proof must be generated at the block at which the given set was active which
+	/// isn't necessarily the best block if there are pending authority set changes.
+	pub(crate) fn report_equivocation(
+		&self,
+		proof: EquivocationProof<NumberFor<B>, AuthorityId, Signature>,
+	) -> Result<(), Error> {
+		let rounds =
+			self.persisted_state.voting_oracle.active_rounds().ok_or(Error::UninitSession)?;
+		let (validators, validator_set_id) = (rounds.validators(), rounds.validator_set_id());
+		let offender_id = proof.offender_id().clone();
+
+		if !check_equivocation_proof::<_, _, BeefySignatureHasher>(&proof) {
+			debug!(target: LOG_TARGET, "🥩 Skip report for bad equivocation {:?}", proof);
+			return Ok(())
+		} else if let Some(local_id) = self.key_store.authority_id(validators) {
+			if offender_id == local_id {
+				debug!(target: LOG_TARGET, "🥩 Skip equivocation report for own equivocation");
+				return Ok(())
+			}
+		}
+
+		let number = *proof.round_number();
+		let runtime_api = self.runtime.runtime_api();
+		// generate key ownership proof at that block
+		let key_owner_proof = match runtime_api
+			.generate_key_ownership_proof(&BlockId::Number(number), validator_set_id, offender_id)
+			.map_err(Error::RuntimeApi)?
+		{
+			Some(proof) => proof,
+			None => {
+				debug!(
+					target: LOG_TARGET,
+					"🥩 Equivocation offender not part of the authority set."
+				);
+				return Ok(())
+			},
+		};
+
+		// submit equivocation report at **best** block
+		let best_block_hash = self.backend.blockchain().info().best_hash;
+		runtime_api
+			.submit_report_equivocation_unsigned_extrinsic(
+				&BlockId::Hash(best_block_hash),
+				proof,
+				key_owner_proof,
+			)
+			.map_err(Error::RuntimeApi)?;
+
+		Ok(())
 	}
 }
 
@@ -937,18 +1018,14 @@ where
 	// if the mandatory block (session_start) does not have a beefy justification yet,
 	// we vote on it
 	let target = if best_beefy < session_start {
-		debug!(
-			target: "beefy",
-			"🥩 vote target - mandatory block: #{:?}",
-			session_start,
-		);
+		debug!(target: LOG_TARGET, "🥩 vote target - mandatory block: #{:?}", session_start,);
 		session_start
 	} else {
 		let diff = best_grandpa.saturating_sub(best_beefy) + 1u32.into();
 		let diff = diff.saturated_into::<u32>() / 2;
 		let target = best_beefy + min_delta.max(diff.next_power_of_two()).into();
 		trace!(
-			target: "beefy",
+			target: LOG_TARGET,
 			"🥩 vote target - diff: {:?}, next_power_of_two: {:?}, target block: #{:?}",
 			diff,
 			diff.next_power_of_two(),
@@ -972,14 +1049,16 @@ pub(crate) mod tests {
 	use super::*;
 	use crate::{
 		communication::notification::{BeefyBestBlockStream, BeefyVersionedFinalityProofStream},
-		keystore::tests::Keyring,
 		tests::{
-			create_beefy_keystore, get_beefy_streams, make_beefy_ids, two_validators::TestApi,
-			BeefyPeer, BeefyTestNet,
+			create_beefy_keystore, get_beefy_streams, make_beefy_ids, BeefyPeer, BeefyTestNet,
+			TestApi,
 		},
 		BeefyRPCLinks, KnownPeers,
 	};
-	use beefy_primitives::{known_payloads, mmr::MmrRootProvider};
+	use beefy_primitives::{
+		generate_equivocation_proof, known_payloads, known_payloads::MMR_ROOT_ID,
+		mmr::MmrRootProvider, Keyring, Payload, SignedCommitment,
+	};
 	use futures::{future::poll_fn, task::Poll};
 	use parking_lot::Mutex;
 	use sc_client_api::{Backend as BackendT, HeaderBackend};
@@ -987,7 +1066,7 @@ pub(crate) mod tests {
 	use sc_network_test::TestNetFactory;
 	use sp_api::HeaderT;
 	use sp_blockchain::Backend as BlockchainBackendT;
-	use sp_runtime::traits::{One, Zero};
+	use sp_runtime::traits::One;
 	use substrate_test_runtime_client::{
 		runtime::{Block, Digest, DigestItem, Header, H256},
 		Backend,
@@ -998,7 +1077,7 @@ pub(crate) mod tests {
 			&self.voting_oracle
 		}
 
-		pub fn active_round(&self) -> Option<&Rounds<Payload, B>> {
+		pub fn active_round(&self) -> Option<&Rounds<B>> {
 			self.voting_oracle.active_rounds()
 		}
 
@@ -1012,7 +1091,7 @@ pub(crate) mod tests {
 	}
 
 	impl<B: super::Block> VoterOracle<B> {
-		pub fn sessions(&self) -> &VecDeque<Rounds<Payload, B>> {
+		pub fn sessions(&self) -> &VecDeque<Rounds<B>> {
 			&self.sessions
 		}
 	}
@@ -1026,6 +1105,7 @@ pub(crate) mod tests {
 		Block,
 		Backend,
 		MmrRootProvider<Block, TestApi>,
+		TestApi,
 		Arc<NetworkService<Block, H256>>,
 	> {
 		let keystore = create_beefy_keystore(*key);
@@ -1048,16 +1128,18 @@ pub(crate) mod tests {
 		};
 
 		let backend = peer.client().as_backend();
-		let api = Arc::new(TestApi {});
+		let api = Arc::new(TestApi::with_validator_set(&genesis_validator_set));
 		let network = peer.network_service().clone();
 		let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
 		let gossip_validator = Arc::new(GossipValidator::new(known_peers.clone()));
 		let gossip_engine =
 			GossipEngine::new(network.clone(), "/beefy/1", gossip_validator.clone(), None);
+		let metrics = None;
 		let on_demand_justifications = OnDemandJustificationsEngine::new(
 			network.clone(),
 			"/beefy/justifs/1".into(),
 			known_peers,
+			None,
 		);
 		let genesis_header = backend
 			.blockchain()
@@ -1070,20 +1152,21 @@ pub(crate) mod tests {
 			min_block_delta,
 		)
 		.unwrap();
-		let payload_provider = MmrRootProvider::new(api);
+		let payload_provider = MmrRootProvider::new(api.clone());
 		let worker_params = crate::worker::WorkerParams {
 			backend,
 			payload_provider,
+			runtime: api,
 			key_store: Some(keystore).into(),
 			links,
 			gossip_engine,
 			gossip_validator,
-			metrics: None,
+			metrics,
 			network,
 			on_demand_justifications,
 			persisted_state,
 		};
-		BeefyWorker::<_, _, _, _>::new(worker_params)
+		BeefyWorker::<_, _, _, _, _>::new(worker_params)
 	}
 
 	#[test]
@@ -1528,5 +1611,66 @@ pub(crate) mod tests {
 		let mut votes = worker.pending_votes.values();
 		assert_eq!(votes.next().unwrap().first().unwrap().commitment.block_number, 21);
 		assert_eq!(votes.next().unwrap().first().unwrap().commitment.block_number, 22);
+	}
+
+	#[tokio::test]
+	async fn should_not_report_bad_old_or_self_equivocations() {
+		let block_num = 1;
+		let set_id = 1;
+		let keys = [Keyring::Alice];
+		let validator_set = ValidatorSet::new(make_beefy_ids(&keys), set_id).unwrap();
+		// Alice votes on good MMR roots, equivocations are allowed/expected
+		let mut api_alice = TestApi::with_validator_set(&validator_set);
+		api_alice.allow_equivocations();
+		let api_alice = Arc::new(api_alice);
+
+		let mut net = BeefyTestNet::new(1);
+		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
+		worker.runtime = api_alice.clone();
+
+		let payload1 = Payload::from_single_entry(MMR_ROOT_ID, vec![42]);
+		let payload2 = Payload::from_single_entry(MMR_ROOT_ID, vec![128]);
+
+		// generate an equivocation proof, with Bob as perpetrator
+		let good_proof = generate_equivocation_proof(
+			(block_num, payload1.clone(), set_id, &Keyring::Bob),
+			(block_num, payload2.clone(), set_id, &Keyring::Bob),
+		);
+		{
+			// expect voter (Alice) to successfully report it
+			assert_eq!(worker.report_equivocation(good_proof.clone()), Ok(()));
+			// verify Alice reports Bob equivocation to runtime
+			let reported = api_alice.reported_equivocations.as_ref().unwrap().lock();
+			assert_eq!(reported.len(), 1);
+			assert_eq!(*reported.get(0).unwrap(), good_proof);
+		}
+		api_alice.reported_equivocations.as_ref().unwrap().lock().clear();
+
+		// now let's try with a bad proof
+		let mut bad_proof = good_proof.clone();
+		bad_proof.first.id = Keyring::Charlie.public();
+		// bad proofs are simply ignored
+		assert_eq!(worker.report_equivocation(bad_proof), Ok(()));
+		// verify nothing reported to runtime
+		assert!(api_alice.reported_equivocations.as_ref().unwrap().lock().is_empty());
+
+		// now let's try with old set it
+		let mut old_proof = good_proof.clone();
+		old_proof.first.commitment.validator_set_id = 0;
+		old_proof.second.commitment.validator_set_id = 0;
+		// old proofs are simply ignored
+		assert_eq!(worker.report_equivocation(old_proof), Ok(()));
+		// verify nothing reported to runtime
+		assert!(api_alice.reported_equivocations.as_ref().unwrap().lock().is_empty());
+
+		// now let's try reporting a self-equivocation
+		let self_proof = generate_equivocation_proof(
+			(block_num, payload1.clone(), set_id, &Keyring::Alice),
+			(block_num, payload2.clone(), set_id, &Keyring::Alice),
+		);
+		// equivocations done by 'self' are simply ignored (not reported)
+		assert_eq!(worker.report_equivocation(self_proof), Ok(()));
+		// verify nothing reported to runtime
+		assert!(api_alice.reported_equivocations.as_ref().unwrap().lock().is_empty());
 	}
 }

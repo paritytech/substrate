@@ -16,13 +16,6 @@
 // limitations under the License.
 
 //! # Primitives for transaction weighting.
-//!
-//! Latest machine specification used to benchmark are:
-//! - Digital Ocean: ubuntu-s-2vcpu-4gb-ams3-01
-//! - 2x Intel(R) Xeon(R) CPU E5-2650 v4 @ 2.20GHz
-//! - 4GB RAM
-//! - Ubuntu 19.10 (GNU/Linux 5.3.0-18-generic x86_64)
-//! - rustc 1.42.0 (b8cedc004 2020-03-09)
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
