@@ -20,7 +20,7 @@
 use super::*;
 use mock::{new_test_ext, Glutton, RuntimeOrigin, System, Test};
 
-use frame_support::{assert_noop, assert_ok, weights::constants::*};
+use frame_support::{assert_err, assert_noop, assert_ok, weights::constants::*};
 
 #[test]
 fn initialize_pallet_works() {
@@ -28,40 +28,58 @@ fn initialize_pallet_works() {
 		assert_eq!(TrashData::<Test>::get(0), None);
 
 		assert_noop!(
-			Glutton::initialize_pallet(RuntimeOrigin::signed(1), 3),
+			Glutton::initialize_pallet(RuntimeOrigin::signed(1), 3, false),
 			DispatchError::BadOrigin
 		);
 		assert_noop!(
-			Glutton::initialize_pallet(RuntimeOrigin::none(), 3),
+			Glutton::initialize_pallet(RuntimeOrigin::none(), 3, false),
 			DispatchError::BadOrigin
 		);
 
-		assert_ok!(Glutton::initialize_pallet(RuntimeOrigin::root(), 2));
-		System::assert_last_event(Event::PalletInitialized.into());
+		assert_ok!(Glutton::initialize_pallet(RuntimeOrigin::root(), 2, false));
+		System::assert_last_event(Event::PalletInitialized { force: false }.into());
+		assert_err!(
+			Glutton::initialize_pallet(RuntimeOrigin::root(), 2, false),
+			Error::<Test>::AlreadyInitialized
+		);
 
 		assert_eq!(TrashData::<Test>::get(0), Some([0; 1024]));
 		assert_eq!(TrashData::<Test>::get(1), Some([1; 1024]));
 		assert_eq!(TrashData::<Test>::get(2), None);
 
-		assert_eq!(TrashDataCount::<Test>::get(), 2);
+		assert_eq!(TrashData::<Test>::count(), 2);
+
+		assert_ok!(Glutton::initialize_pallet(RuntimeOrigin::root(), 20, true));
+
+		assert_eq!(TrashData::<Test>::count(), 20);
+		assert_eq!(TrashData::<Test>::iter_keys().count(), 20);
 	});
 }
 
 #[test]
 fn expand_and_shrink_trash_data_works() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(TrashDataCount::<Test>::get(), 0);
+		assert_eq!(TrashData::<Test>::count(), 0);
 
-		assert_ok!(Glutton::initialize_pallet(RuntimeOrigin::root(), 5000));
-		assert_eq!(TrashDataCount::<Test>::get(), 5000);
+		assert_ok!(Glutton::initialize_pallet(RuntimeOrigin::root(), 5000, true));
+		assert_eq!(TrashData::<Test>::count(), 5000);
+		assert_eq!(TrashData::<Test>::iter_keys().count(), 5000);
 
-		assert_ok!(Glutton::expand_trash_data(RuntimeOrigin::root(), 3000));
-		assert_eq!(TrashDataCount::<Test>::get(), 8000);
-		System::assert_last_event(Event::TrashDataUpdated.into());
+		assert_ok!(Glutton::initialize_pallet(RuntimeOrigin::root(), 8000, true));
+		assert_eq!(TrashData::<Test>::count(), 8000);
+		assert_eq!(TrashData::<Test>::iter_keys().count(), 8000);
 
-		assert_ok!(Glutton::shrink_trash_data(RuntimeOrigin::root(), 2000));
-		assert_eq!(TrashDataCount::<Test>::get(), 6000);
-		System::assert_last_event(Event::TrashDataUpdated.into());
+		assert_ok!(Glutton::initialize_pallet(RuntimeOrigin::root(), 6000, true));
+		assert_eq!(TrashData::<Test>::count(), 6000);
+		assert_eq!(TrashData::<Test>::iter_keys().count(), 6000);
+
+		assert_noop!(
+			Glutton::initialize_pallet(RuntimeOrigin::root(), 0, false),
+			Error::<Test>::AlreadyInitialized
+		);
+		assert_ok!(Glutton::initialize_pallet(RuntimeOrigin::root(), 0, true));
+		assert_eq!(TrashData::<Test>::count(), 0);
+		assert_eq!(TrashData::<Test>::iter_keys().count(), 0);
 	});
 }
 

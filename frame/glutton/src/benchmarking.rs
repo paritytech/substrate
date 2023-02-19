@@ -30,6 +30,13 @@ use crate::Pallet as Glutton;
 use frame_system::Pallet as System;
 
 benchmarks! {
+	initialize_pallet {
+		let n in 0 .. 10_000;
+	}: _(SystemOrigin::Root, n, false)
+	verify {
+		assert_eq!(TrashData::<T>::count(), n);
+	}
+
 	waste_ref_time_iter {
 		let i in 0..100_000;
 	}: {

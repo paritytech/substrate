@@ -59,13 +59,19 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event {
 		/// The pallet has been initialized by root.
-		PalletInitialized,
+		PalletInitialized { force: bool },
 		/// The computation limit has been updated by root.
 		ComputationLimitSet { compute: Perbill },
 		/// The storage limit has been updated by root.
 		StorageLimitSet { storage: Perbill },
-		/// `TrashData` got updated by root.
-		TrashDataUpdated,
+	}
+
+	#[pallet::error]
+	pub enum Error<T> {
+		/// The pallet was already initialized.
+		///
+		/// Use `force` to bypass this error.
+		AlreadyInitialized,
 	}
 
 	/// Storage value used to specify what percentage of the left over `ref_time`
@@ -87,17 +93,13 @@ pub mod pallet {
 	/// pallet would also work out of the box with more entries, but its benchmarked proof weight
 	/// would possibly be underestimated in that case.
 	#[pallet::storage]
-	pub(super) type TrashData<T: Config> = StorageMap<
+	pub(super) type TrashData<T: Config> = CountedStorageMap<
 		Hasher = Twox64Concat,
 		Key = u32,
 		Value = [u8; 1024],
 		QueryKind = OptionQuery,
 		MaxValues = ConstU32<65_000>,
 	>;
-
-	/// Keeps track of how many entries we have inside `TrashData`.
-	#[pallet::storage]
-	pub(crate) type TrashDataCount<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -139,50 +141,22 @@ pub mod pallet {
 		///
 		/// Only callable by Root. A good default for `trash_count` is `5_000`.
 		#[pallet::call_index(0)]
-		#[pallet::weight(T::DbWeight::get().writes((*trash_count).into()))]
-		pub fn initialize_pallet(origin: OriginFor<T>, trash_count: u32) -> DispatchResult {
+		#[pallet::weight(T::DbWeight::get().writes((*new_count).into()))]
+		pub fn initialize_pallet(
+			origin: OriginFor<T>,
+			new_count: u32,
+			force: bool,
+		) -> DispatchResult {
 			ensure_root(origin)?;
 
-			// Fill up the `TrashData` storage item.
-			(0..trash_count).for_each(|i| TrashData::<T>::insert(i, &[i as u8; 1024]));
-			TrashDataCount::<T>::put(trash_count);
+			let current_count = TrashData::<T>::count();
+			ensure!(force || current_count.is_zero(), Error::<T>::AlreadyInitialized);
 
-			Self::deposit_event(Event::PalletInitialized);
-			Ok(())
-		}
+			// Add or remove elements from `TrashData`.
+			(current_count..new_count).for_each(|i| TrashData::<T>::insert(i, &[i as u8; 1024]));
+			(new_count..current_count).rev().for_each(|i| TrashData::<T>::remove(i));
 
-		/// Expands `TrashData` by the specified amount. Limit is 65k entries.
-		///
-		/// Only callable by Root.
-		#[pallet::call_index(1)]
-		#[pallet::weight(T::DbWeight::get().writes((*trash_count).into()))]
-		pub fn expand_trash_data(origin: OriginFor<T>, trash_count: u32) -> DispatchResult {
-			ensure_root(origin)?;
-
-			let current_trash_count = TrashDataCount::<T>::get();
-
-			(current_trash_count..trash_count)
-				.for_each(|i| TrashData::<T>::insert(i, &[i as u8; 1024]));
-			TrashDataCount::<T>::put(current_trash_count.saturating_add(trash_count));
-
-			Self::deposit_event(Event::TrashDataUpdated);
-			Ok(())
-		}
-
-		/// Shrinks `TrashData` by the specified amount.
-		///
-		/// Only callable by Root.
-		#[pallet::call_index(2)]
-		#[pallet::weight(T::DbWeight::get().writes((*trash_count).into()))]
-		pub fn shrink_trash_data(origin: OriginFor<T>, trash_count: u32) -> DispatchResult {
-			ensure_root(origin)?;
-
-			let current_trash_count = TrashDataCount::<T>::get();
-
-			(0..trash_count).rev().for_each(|i| TrashData::<T>::remove(i));
-			TrashDataCount::<T>::put(current_trash_count.saturating_sub(trash_count));
-
-			Self::deposit_event(Event::TrashDataUpdated);
+			Self::deposit_event(Event::PalletInitialized { force });
 			Ok(())
 		}
 
@@ -190,7 +164,7 @@ pub mod pallet {
 		/// block's weight `ref_time` to use during `on_idle`.
 		///
 		/// Only callable by Root.
-		#[pallet::call_index(3)]
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::DbWeight::get().writes(1))]
 		pub fn set_compute(origin: OriginFor<T>, compute: Perbill) -> DispatchResult {
 			ensure_root(origin)?;
@@ -204,7 +178,7 @@ pub mod pallet {
 		/// for each block.
 		///
 		/// Only callable by Root.
-		#[pallet::call_index(4)]
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::DbWeight::get().writes(1))]
 		pub fn set_storage(origin: OriginFor<T>, storage: Perbill) -> DispatchResult {
 			ensure_root(origin)?;
