@@ -806,7 +806,7 @@ pub struct ExposureOverview<Balance: HasCompact> {
 /// Extended view of Exposure comprising of `ExposureOverview` and a single page of `ExposurePage`.
 ///
 /// This is useful where we need to take into account the validator's own stake and total exposure
-/// in consideration in addition to the individual nominators backing them.
+/// in consideration, in addition to the individual nominators backing them.
 #[derive(Encode, Decode, RuntimeDebug, TypeInfo, PartialEq, Eq)]
 struct ExposureExt<AccountId, Balance: HasCompact> {
 	exposure_overview: ExposureOverview<Balance>,
