@@ -396,23 +396,6 @@ enum BondType {
 	Later,
 }
 
-#[derive(Debug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo, PalletError)]
-pub enum CommissionError {
-	/// Commission change has been throttled.
-	CommissionChangeThrottled,
-	// Commission exceeds the pool's maximum commission.
-	CommissionExceedsMaximum,
-}
-
-impl<T> From<CommissionError> for Error<T> {
-	fn from(t: CommissionError) -> Self {
-		match t {
-			CommissionError::CommissionChangeThrottled => Error::<T>::CommissionChangeThrottled,
-			CommissionError::CommissionExceedsMaximum => Error::<T>::CommissionExceedsMaximum,
-		}
-	}
-}
-
 /// How to increase the bond of a member.
 #[derive(Encode, Decode, Clone, Copy, Debug, PartialEq, Eq, TypeInfo)]
 pub enum BondExtra<Balance> {
@@ -687,14 +670,14 @@ impl<T: Config> Commission<T> {
 	fn try_update_current(
 		&mut self,
 		current: &Option<(Perbill, T::AccountId)>,
-	) -> Result<(), CommissionError> {
+	) -> DispatchResult {
 		self.current = match current {
 			None => None,
 			Some((commission, payee)) => {
-				ensure!(!self.throttling(&commission), CommissionError::CommissionChangeThrottled);
+				ensure!(!self.throttling(&commission), Error::<T>::CommissionChangeThrottled);
 				ensure!(
 					self.max.map_or(true, |m| commission <= &m),
-					CommissionError::CommissionExceedsMaximum
+					Error::<T>::CommissionExceedsMaximum
 				);
 				if commission.is_zero() {
 					None
@@ -2407,11 +2390,7 @@ pub mod pallet {
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
 
-			bonded_pool
-				.commission
-				.try_update_current(&new_commission)
-				.map_err::<Error<T>, _>(Into::into)
-				.map_err::<DispatchError, _>(Into::into)?;
+			bonded_pool.commission.try_update_current(&new_commission)?;
 
 			bonded_pool.put();
 			Self::deposit_event(Event::<T>::PoolCommissionUpdated {
