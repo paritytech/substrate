@@ -28,8 +28,7 @@ as a minor version bump.
   for a single call for reward payout.
 - New config item `MaxExposurePageCount` to weakly bound the maximum number of
   exposure pages that can exist. When set to 1, we get the same behaviour of top
-  n nominators eligible for reward as
-  today.
+  n nominators eligible for reward as previously with non paged exposures.
 - New storage item `ErasStakersPaged` that keeps up to `MaxExposurePageSize`
   individual nominator exposures by era, validator and page.
 - New storage item `ErasStakersOverview` which complements `ErasStakersPaged`

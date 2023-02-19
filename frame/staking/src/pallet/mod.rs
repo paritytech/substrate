@@ -701,6 +701,7 @@ pub mod pallet {
 		///
 		/// This will always return at minimum one count of exposure to be backward compatible to
 		/// non-paged reward payouts.
+		// FIXME: No need to return minimum of one page after cleanup: #13034
 		pub(crate) fn get_page_count(era: EraIndex, validator: &T::AccountId) -> PageIndex {
 			<ErasStakersOverview<T>>::get(&era, validator).page_count.max(1)
 		}
@@ -742,6 +743,7 @@ pub mod pallet {
 		}
 
 		/// Creates an entry to track validator reward has been claimed for a given era and page.
+		/// Noop if already claimed.
 		pub(crate) fn set_rewards_as_claimed(
 			era: EraIndex,
 			validator: &T::AccountId,
