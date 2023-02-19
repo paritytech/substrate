@@ -174,7 +174,7 @@ impl<T: Config, S: Bounded + Saturating + Zero, P: SortedListProvider<T::Account
 
 	fn on_insert(id: T::AccountId, score: Self::Score) -> Result<(), Self::Error> {
 		defensive!("TrackedList on_insert should never be called");
-		P::on_increase(id, score)
+		P::on_insert(id, score)
 	}
 
 	fn on_update(id: &T::AccountId, score: Self::Score) -> Result<(), Self::Error> {
