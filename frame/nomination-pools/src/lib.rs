@@ -667,10 +667,7 @@ impl<T: Config> Commission<T> {
 	/// Update commission based on `current`. If a `None` is supplied, allow the commission to be
 	/// removed without any change rate restrictions. Updates `throttle_from` to the current block.
 	/// If the supplied commission is zero, `None` will be inserted and `payee` will be ignored.
-	fn try_update_current(
-		&mut self,
-		current: &Option<(Perbill, T::AccountId)>,
-	) -> DispatchResult {
+	fn try_update_current(&mut self, current: &Option<(Perbill, T::AccountId)>) -> DispatchResult {
 		self.current = match current {
 			None => None,
 			Some((commission, payee)) => {
