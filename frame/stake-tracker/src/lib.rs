@@ -137,7 +137,7 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 }
 
 /// A wrapper for a given `SortedListProvider` that introduces defensive checks  for insert, update
-/// and remove operations, effectively suggesting that it's read-only, except for unsafe operations.
+/// and remove operations, suggesting that it's read-only, except for unsafe operations.
 pub struct TrackedList<T, S, P>(sp_std::marker::PhantomData<(T, S, P)>);
 
 impl<T: Config, S: Bounded + Saturating + Zero, P: SortedListProvider<T::AccountId, Score = S>>
