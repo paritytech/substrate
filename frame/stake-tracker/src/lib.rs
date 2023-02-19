@@ -17,8 +17,8 @@
 
 //! # Stake Tracker Pallet
 //!
-//! The Stake Tracker pallet is used to maintain a sorted list of voters by listening to the events
-//! that Staking emits.
+//! The Stake Tracker pallet is used to maintain sorted lists of [`Pallet::AccountId`] by listening
+//! to the events that Staking emits.
 //!
 //! - [`Config`]
 //! - [`Pallet`]
