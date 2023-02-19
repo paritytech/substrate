@@ -25,12 +25,12 @@
 //!
 //! ## Overview
 //!
-//! The goal of Stake Tracker is to reduce the burden of Staking pallet by taking care of the
-//! [`Config::VoterList`] maintenance. This pallet implements [`OnStakingUpdate`] interface in order
-//! to be able to listen to the events that Staking emits and propagate the changes to the list
-//! accordingly. It also exposes [`TrackedList`] that stubs a subset of [`SortedListProvider`]
-//! methods out effectively disabling the user's ability to update the list. This wrapper should be
-//! used to pass the tracked entity to the consumer.
+//! The goal of Stake Tracker is to maintain [`SortedListProvider`] sorted list implementations
+//! based on [`SortedListProvider::Score`]. This pallet implements [`OnStakingUpdate`] interface in
+//! order to be able to listen to the events that Staking emits and propagate the changes to said
+//! lists accordingly. It also exposes [`TrackedList`] that adds defensive checks to a subset of
+//! [`SortedListProvider`] methods in order to spot unexpected list updates on the consumer side.
+//! This wrapper should beused to pass the tracked entity to the consumer.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -136,8 +136,8 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 	fn on_unstake(_who: &T::AccountId) {}
 }
 
-/// A wrapper for a given `SortedListProvider` that disables insert/update/remove operations,
-/// effectively rendering it read-only, except for unsafe operations.
+/// A wrapper for a given `SortedListProvider` that introduces defensive checks  for insert, update
+/// and remove operations, effectively suggesting that it's read-only, except for unsafe operations.
 pub struct TrackedList<T, S, P>(sp_std::marker::PhantomData<(T, S, P)>);
 
 impl<T: Config, S: Bounded + Saturating + Zero, P: SortedListProvider<T::AccountId, Score = S>>
