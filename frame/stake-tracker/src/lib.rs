@@ -40,7 +40,10 @@ pub(crate) mod mock;
 mod tests;
 
 use frame_election_provider_support::{SortedListProvider, VoteWeight};
-use frame_support::traits::{Currency, CurrencyToVote};
+use frame_support::{
+	defensive,
+	traits::{Currency, CurrencyToVote},
+};
 pub use pallet::*;
 use sp_runtime::{
 	traits::{Bounded, Zero},
@@ -169,24 +172,29 @@ impl<T: Config, S: Bounded + Saturating + Zero, P: SortedListProvider<T::Account
 		P::try_state()
 	}
 
-	fn on_insert(_id: T::AccountId, _score: Self::Score) -> Result<(), Self::Error> {
-		unreachable!()
+	fn on_insert(id: T::AccountId, score: Self::Score) -> Result<(), Self::Error> {
+		defensive!("TrackedList on_insert should never be called");
+		P::on_increase(id, score)
 	}
 
-	fn on_update(_id: &T::AccountId, _score: Self::Score) -> Result<(), Self::Error> {
-		unreachable!()
+	fn on_update(id: &T::AccountId, score: Self::Score) -> Result<(), Self::Error> {
+		defensive!("TrackedList on_update should never be called");
+		P::on_update(id, score)
 	}
 
-	fn on_increase(_id: &T::AccountId, _additional: Self::Score) -> Result<(), Self::Error> {
-		unreachable!()
+	fn on_increase(id: &T::AccountId, additional: Self::Score) -> Result<(), Self::Error> {
+		defensive!("TrackedList on_increase should never be called");
+		P::on_increase(id, additional)
 	}
 
-	fn on_decrease(_id: &T::AccountId, _decreased: Self::Score) -> Result<(), Self::Error> {
-		unreachable!()
+	fn on_decrease(id: &T::AccountId, decreased: Self::Score) -> Result<(), Self::Error> {
+		defensive!("TrackedList on_decrease should never be called");
+		P::on_decrease(id, decreased)
 	}
 
-	fn on_remove(_id: &T::AccountId) -> Result<(), Self::Error> {
-		unreachable!()
+	fn on_remove(id: &T::AccountId) -> Result<(), Self::Error> {
+		defensive!("TrackedList on_remove should never be called");
+		P::on_remove(id)
 	}
 
 	fn unsafe_regenerate(

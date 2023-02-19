@@ -5357,7 +5357,7 @@ fn change_of_max_nominations() {
 			// Impossible to re-nominate when not decodable.
 			assert_noop!(
 				Staking::nominate(RuntimeOrigin::signed(71), vec![1]),
-				Error::<Test>::NotDecodable
+				Error::<Test>::NotDecodableNominator
 			);
 
 			assert!(Nominators::<Test>::contains_key(101));
@@ -5366,7 +5366,7 @@ fn change_of_max_nominations() {
 			// Impossible to chill_other when not deodable.
 			assert_noop!(
 				Staking::chill_other(RuntimeOrigin::signed(70), 100),
-				Error::<Test>::NotDecodable
+				Error::<Test>::NotDecodableNominator
 			);
 		})
 }

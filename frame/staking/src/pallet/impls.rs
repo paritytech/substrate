@@ -914,9 +914,8 @@ impl<T: Config> Pallet<T> {
 	/// `Validators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
 	pub fn do_add_validator(who: &T::AccountId, prefs: ValidatorPrefs) {
-		if !Validators::<T>::contains_key(who) {
-			T::EventListeners::on_validator_update(who);
-		}
+		T::EventListeners::on_validator_update(who);
+
 		Validators::<T>::insert(who, prefs);
 	}
 
@@ -1649,6 +1648,10 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Validators::<T>::contains_key(who)
 	}
 
+	fn nominations(who: &Self::AccountId) -> Option<Vec<T::AccountId>> {
+		Nominators::<T>::get(who).map(|n| n.targets.into_inner())
+	}
+
 	sp_staking::runtime_benchmarks_enabled! {
 		fn add_era_stakers(
 			current_era: &EraIndex,
@@ -1666,10 +1669,6 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		fn set_current_era(era: EraIndex) {
 			CurrentEra::<T>::put(era);
 		}
-	}
-
-	fn nominations(who: &Self::AccountId) -> Option<Vec<T::AccountId>> {
-		Nominators::<T>::get(who).map(|n| n.targets.into_inner())
 	}
 }
 

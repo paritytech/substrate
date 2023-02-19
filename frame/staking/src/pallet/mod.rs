@@ -778,7 +778,7 @@ pub mod pallet {
 		BoundNotMet,
 		/// Nominations are not decodable. A nominator is then stuck until it's fixed, because we
 		/// can't forgo the bookkeeping.
-		NotDecodable,
+		NotDecodableNominator,
 	}
 
 	#[pallet::hooks]
@@ -1149,7 +1149,7 @@ pub mod pallet {
 			// fixes those nominations. Otherwise the Staking pallet ends up in an inconsistent
 			// state, because we cannot do proper bookkeeping.
 			if is_nominator && Nominators::<T>::get(stash).is_none() {
-				Err(Error::<T>::NotDecodable)?
+				Err(Error::<T>::NotDecodableNominator)?
 			}
 
 			// Only check limits if they are not already a nominator.
@@ -1705,7 +1705,7 @@ pub mod pallet {
 			// If the nominator is not decodable - a migration needs to be executed to fix the
 			// storage. We can't chill nominators without knowing their nominations.
 			if Nominators::<T>::contains_key(&stash) && Nominators::<T>::get(&stash).is_none() {
-				return Err(Error::<T>::NotDecodable)?
+				return Err(Error::<T>::NotDecodableNominator)?
 			}
 
 			if caller != controller {
