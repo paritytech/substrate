@@ -58,7 +58,7 @@ pub(crate) const SPECULATIVE_NUM_SPANS: u32 = 32;
 #[frame_support::pallet]
 pub mod pallet {
 	use frame_election_provider_support::ElectionDataProvider;
-	use frame_support::traits::DefensiveMax;
+	use frame_support::{defensive, traits::DefensiveMax};
 
 	use crate::{BenchmarkingConfig, ExposureExt, ExposureOverview};
 
@@ -665,7 +665,7 @@ pub mod pallet {
 		/// This is only used for paged rewards. Once older non-paged rewards are no longer
 		/// relevant, `is_rewards_claimed_temp` can be removed and this function can be made public.
 		fn is_rewards_claimed(era: EraIndex, validator: &T::AccountId, page: PageIndex) -> bool {
-			ClaimedRewards::<T>::get(era, validator).binary_search(&page).is_ok()
+			ClaimedRewards::<T>::get(era, validator).contains(&page)
 		}
 
 		/// Get exposure info for a validator at a given era and page.
@@ -722,18 +722,10 @@ pub mod pallet {
 
 			// Find next claimable page of paged exposure.
 			let page_count = Self::get_page_count(era, validator);
+			let all_claimable_pages: Vec<PageIndex> = (0..page_count).collect();
 			let claimed_pages = ClaimedRewards::<T>::get(era, validator);
-			let claimed_page_count = claimed_pages.len() as PageIndex;
 
-			// find the first page that is not claimed.
-			for page in 0..claimed_page_count as PageIndex {
-				debug_assert!(page <= claimed_pages[page as usize]);
-				if page < claimed_pages[page as usize] {
-					return Some(page)
-				}
-			}
-			// all pages are claimed
-			return if claimed_page_count < page_count { Some(claimed_page_count) } else { None }
+			all_claimable_pages.into_iter().filter(|p| !claimed_pages.contains(p)).next()
 		}
 
 		/// Checks if exposure is paged or not.
@@ -756,17 +748,17 @@ pub mod pallet {
 			page: PageIndex,
 		) {
 			let mut claimed_pages = ClaimedRewards::<T>::get(era, validator);
-			let search = claimed_pages.binary_search(&page);
-			// this should never be called if the reward has already been claimed
-			debug_assert!(search.is_err());
 
-			match search {
-				Err(index) => {
-					claimed_pages.insert(index, page);
-					ClaimedRewards::<T>::insert(era, validator, claimed_pages);
-				},
-				_ => {},
+			// this should never be called if the reward has already been claimed
+			if claimed_pages.contains(&page) {
+				defensive!("Trying to set an already claimed reward");
+				// nevertheless don't do anything since the page already exist in claimed rewards.
+				return
 			}
+
+			// add page to claimed entries
+			claimed_pages.push(page);
+			ClaimedRewards::<T>::insert(era, validator, claimed_pages);
 		}
 
 		/// Store exposure for elected validators at start of an era.

@@ -4159,7 +4159,7 @@ fn test_multi_page_payout_stakers_backward_compatible() {
 		// verify page 0 is claimed even when explicit page is not passed
 		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, last_reward_era,));
 
-		assert_eq!(Staking::claimed_rewards(last_reward_era, &11), vec![0, 1]);
+		assert_eq!(Staking::claimed_rewards(last_reward_era, &11), vec![1, 0]);
 
 		// cannot claim any more pages
 		assert_noop!(
@@ -4186,7 +4186,7 @@ fn test_multi_page_payout_stakers_backward_compatible() {
 		assert_eq!(Staking::claimed_rewards(test_era, &11), vec![2]);
 
 		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, test_era));
-		assert_eq!(Staking::claimed_rewards(test_era, &11), vec![0, 2]);
+		assert_eq!(Staking::claimed_rewards(test_era, &11), vec![2, 0]);
 
 		// cannot claim page 2 again
 		assert_noop!(
@@ -4195,10 +4195,10 @@ fn test_multi_page_payout_stakers_backward_compatible() {
 		);
 
 		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, test_era));
-		assert_eq!(Staking::claimed_rewards(test_era, &11), vec![0, 1, 2]);
+		assert_eq!(Staking::claimed_rewards(test_era, &11), vec![2, 0, 1]);
 
 		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, test_era));
-		assert_eq!(Staking::claimed_rewards(test_era, &11), vec![0, 1, 2, 3]);
+		assert_eq!(Staking::claimed_rewards(test_era, &11), vec![2, 0, 1, 3]);
 	});
 }
 
