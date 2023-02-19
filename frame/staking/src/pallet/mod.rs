@@ -58,6 +58,7 @@ pub(crate) const SPECULATIVE_NUM_SPANS: u32 = 32;
 #[frame_support::pallet]
 pub mod pallet {
 	use frame_election_provider_support::ElectionDataProvider;
+	use frame_support::traits::DefensiveMax;
 
 	use crate::{BenchmarkingConfig, ExposureExt, ExposureOverview};
 
@@ -204,9 +205,8 @@ pub mod pallet {
 
 		/// The maximum size of each `T::ExposurePage`.
 		///
-		/// An `ExposurePage` is bounded to a maximum of `MaxExposurePageSize`
-		/// nominators. The actual page size is a dynamic value that is determined by the storage
-		/// item `T::ExposurePageSize`.
+		/// An `ExposurePage` is weakly bounded to a maximum of `MaxExposurePageSize`
+		/// nominators.
 		///
 		/// For older non-paged exposure, a reward payout was restricted to the top
 		/// `MaxExposurePageSize` nominators. This is to limit the i/o cost for the
@@ -480,13 +480,7 @@ pub mod pallet {
 		Exposure<T::AccountId, BalanceOf<T>>,
 		ValueQuery,
 	>;
-
-	/// The nominator count each `ExposurePage` is capped at.
-	///
-	/// This cannot be greater than `T::MaxExposurePageSize`.
-	#[pallet::storage]
-	pub type ExposurePageSize<T> = StorageValue<_, u32, OptionQuery>;
-
+	
 	/// Paginated exposure of a validator at given era.
 	///
 	/// This is keyed first by the era index to allow bulk deletion, then the tuple of stash account
@@ -783,9 +777,7 @@ pub mod pallet {
 		) {
 			<ErasStakers<T>>::insert(era, &validator, &exposure);
 
-			let page_size = <ExposurePageSize<T>>::get()
-				.unwrap_or_else(|| T::MaxExposurePageSize::get())
-				.clamp(1, T::MaxExposurePageSize::get());
+			let page_size = T::MaxExposurePageSize::get().defensive_max(1);
 			let max_page_count = T::MaxExposurePageCount::get();
 
 			let nominator_count = exposure.others.len();
@@ -1722,7 +1714,6 @@ pub mod pallet {
 		///
 		/// - `validator_stash` is the stash account of the validator.
 		/// - `era` may be any era between `[current_era - history_depth; current_era]`.
-		///   `num_nominators / T::ExposurePageSize`.
 		///
 		/// The origin of this call must be _Signed_. Any account can call this function, even if
 		/// it is not one of the stakers.
