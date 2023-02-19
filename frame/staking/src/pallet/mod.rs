@@ -781,8 +781,9 @@ pub mod pallet {
 			let max_page_count = T::MaxExposurePageCount::get();
 
 			let nominator_count = exposure.others.len();
-			let required_page_count =
-				nominator_count.saturating_add(page_size as usize - 1) / page_size as usize;
+			let required_page_count = nominator_count
+				.defensive_saturating_add(page_size as usize - 1) /
+				page_size as usize;
 
 			// clip nominators if it exceeds the maximum page count.
 			let exposure = if required_page_count as PageIndex > max_page_count {
