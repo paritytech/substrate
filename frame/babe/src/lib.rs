@@ -415,13 +415,13 @@ pub mod pallet {
 		))]
 		pub fn report_equivocation(
 			origin: OriginFor<T>,
-			equivocation_proof: EquivocationProof<T::Header>,
+			equivocation_proof: Box<EquivocationProof<T::Header>>,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
-			let reporter = Some(ensure_signed(origin)?);
+			let reporter = ensure_signed(origin)?;
 			T::EquivocationReportSystem::report_evidence(
-				reporter,
-				equivocation_proof,
+				Some(reporter),
+				*equivocation_proof,
 				key_owner_proof,
 			)?;
 			// Waive the fee since the report is valid and beneficial
@@ -442,13 +442,13 @@ pub mod pallet {
 		))]
 		pub fn report_equivocation_unsigned(
 			origin: OriginFor<T>,
-			equivocation_proof: EquivocationProof<T::Header>,
+			equivocation_proof: Box<EquivocationProof<T::Header>>,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 			T::EquivocationReportSystem::report_evidence(
 				None,
-				equivocation_proof,
+				*equivocation_proof,
 				key_owner_proof,
 			)?;
 			// Waive the fee since the report is valid and beneficial

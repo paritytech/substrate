@@ -100,7 +100,6 @@ impl<Offender: Clone> Offence<Offender> for EquivocationOffence<Offender> {
 /// using existing subsystems that are part of frame (type bounds described
 /// below) and will dispatch to them directly, it's only purpose is to wire all
 /// subsystems together.
-#[derive(Default)]
 pub struct EquivocationReportSystem<T, R, P, L>(sp_std::marker::PhantomData<(T, R, P, L)>);
 
 // We use the authorship pallet to fetch the current block author and use
@@ -142,15 +141,15 @@ where
 		let epoch_index =
 			*slot.saturating_sub(crate::GenesisSlot::<T>::get()) / T::EpochDuration::get();
 
+		// TODO DAVXY: CAN ALL THESE VALIDITY CHECK BE PERFORMED ONLY BY CHECK-EVIDENCE???
+
 		// Check that the slot number is consistent with the session index
 		// in the key ownership proof (i.e. slot is for that epoch)
-		// TODO: this should be part of `check_evidence`...
 		if Pallet::<T>::session_index_for_epoch(epoch_index) != session_index {
 			return Err(Error::<T>::InvalidKeyOwnershipProof.into())
 		}
 
 		// Check the membership proof and extract the offender's id
-		// TODO: These checks were alread yperformed by check evidence...
 		let offender = P::check_proof((KEY_TYPE, offender), key_owner_proof)
 			.ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
 
@@ -185,7 +184,10 @@ where
 	) -> bool {
 		use frame_system::offchain::SubmitTransaction;
 
-		let call = Call::report_equivocation_unsigned { equivocation_proof, key_owner_proof };
+		let call = Call::report_equivocation_unsigned {
+			equivocation_proof: Box::new(equivocation_proof),
+			key_owner_proof,
+		};
 		let res = SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into());
 		match res {
 			Ok(()) => info!(target: LOG_TARGET, "Submitted equivocation report."),
@@ -216,7 +218,7 @@ impl<T: Config> Pallet<T> {
 			}
 
 			// Check report validity
-			// TODO DAVXY: propagate error
+			// TODO DAVXY: propagate check error
 			T::EquivocationReportSystem::check_evidence(equivocation_proof, key_owner_proof)
 				.map_err(|_| InvalidTransaction::Stale)?;
 

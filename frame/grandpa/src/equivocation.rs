@@ -110,7 +110,6 @@ impl<Offender: Clone> Offence<Offender> for EquivocationOffence<Offender> {
 /// using existing subsystems that are part of frame (type bounds described
 /// below) and will dispatch to them directly, it's only purpose is to wire all
 /// subsystems together.
-#[derive(Default)]
 pub struct EquivocationReportSystem<T, R, P, L>(sp_std::marker::PhantomData<(T, R, P, L)>);
 
 // We use the authorship pallet to fetch the current block author and use
@@ -221,7 +220,10 @@ where
 	) -> bool {
 		use frame_system::offchain::SubmitTransaction;
 
-		let call = Call::report_equivocation_unsigned { equivocation_proof, key_owner_proof };
+		let call = Call::report_equivocation_unsigned {
+			equivocation_proof: Box::new(equivocation_proof),
+			key_owner_proof,
+		};
 		let res = SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into());
 		match res {
 			Ok(()) => info!(target: LOG_TARGET, "Submitted equivocation report."),
