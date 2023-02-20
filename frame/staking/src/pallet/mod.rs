@@ -650,7 +650,7 @@ pub mod pallet {
 		/// removed once `$HistoryDepth` eras have passed and none of the older non-paged rewards
 		/// are relevant/claimable.
 		// Refer tracker issue for cleanup: #13034
-		pub(crate) fn is_rewards_claimed_temp(
+		pub(crate) fn is_rewards_claimed_with_legacy_fallback(
 			era: EraIndex,
 			ledger: &StakingLedger<T>,
 			validator: &T::AccountId,
@@ -663,7 +663,8 @@ pub mod pallet {
 		/// Check if the rewards for the given era and page index have been claimed.
 		///
 		/// This is only used for paged rewards. Once older non-paged rewards are no longer
-		/// relevant, `is_rewards_claimed_temp` can be removed and this function can be made public.
+		/// relevant, `is_rewards_claimed_with_legacy_fallback` can be removed and this function can
+		/// be made public.
 		fn is_rewards_claimed(era: EraIndex, validator: &T::AccountId, page: PageIndex) -> bool {
 			ClaimedRewards::<T>::get(era, validator).contains(&page)
 		}
@@ -734,8 +735,8 @@ pub mod pallet {
 						overview.page_count
 					}
 				})
-				// FIXME: Returns minimum of one page for backward compatibility with non paged
-				// exposure. Can be removed when we clean up issue #13034.
+				// Returns minimum of one page for backward compatibility with non paged exposure.
+				// FIXME: Can be cleaned up with issue #13034.
 				.unwrap_or(1)
 		}
 

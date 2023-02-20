@@ -3873,7 +3873,7 @@ fn test_multi_page_payout_stakers_by_page() {
 		// verify rewards are tracked to prevent double claims
 		for page in 0..EraInfo::<Test>::get_page_count(1, &11) {
 			assert_eq!(
-				EraInfo::<Test>::is_rewards_claimed_temp(1, ledger.as_ref().unwrap(), &11, page),
+				EraInfo::<Test>::is_rewards_claimed_with_legacy_fallback(1, ledger.as_ref().unwrap(), &11, page),
 				true
 			);
 		}
@@ -3898,7 +3898,7 @@ fn test_multi_page_payout_stakers_by_page() {
 			// verify we track rewards for each era and page
 			for page in 0..EraInfo::<Test>::get_page_count(i - 1, &11) {
 				assert_eq!(
-					EraInfo::<Test>::is_rewards_claimed_temp(
+					EraInfo::<Test>::is_rewards_claimed_with_legacy_fallback(
 						i - 1,
 						Staking::ledger(&10).as_ref().unwrap(),
 						&11,
@@ -4078,7 +4078,7 @@ fn test_multi_page_payout_stakers_backward_compatible() {
 		// verify rewards are tracked to prevent double claims
 		for page in 0..EraInfo::<Test>::get_page_count(1, &11) {
 			assert_eq!(
-				EraInfo::<Test>::is_rewards_claimed_temp(1, ledger.as_ref().unwrap(), &11, page),
+				EraInfo::<Test>::is_rewards_claimed_with_legacy_fallback(1, ledger.as_ref().unwrap(), &11, page),
 				true
 			);
 		}
@@ -4103,7 +4103,7 @@ fn test_multi_page_payout_stakers_backward_compatible() {
 			// verify we track rewards for each era and page
 			for page in 0..EraInfo::<Test>::get_page_count(i - 1, &11) {
 				assert_eq!(
-					EraInfo::<Test>::is_rewards_claimed_temp(
+					EraInfo::<Test>::is_rewards_claimed_with_legacy_fallback(
 						i - 1,
 						Staking::ledger(&10).as_ref().unwrap(),
 						&11,
@@ -6260,7 +6260,7 @@ fn test_legacy_claimed_rewards_is_checked_at_reward_payout() {
 
 		//verify rewards are not claimed
 		assert_eq!(
-			EraInfo::<Test>::is_rewards_claimed_temp(
+			EraInfo::<Test>::is_rewards_claimed_with_legacy_fallback(
 				1,
 				Staking::ledger(10).as_ref().unwrap(),
 				&11,
@@ -6269,7 +6269,7 @@ fn test_legacy_claimed_rewards_is_checked_at_reward_payout() {
 			false
 		);
 		assert_eq!(
-			EraInfo::<Test>::is_rewards_claimed_temp(
+			EraInfo::<Test>::is_rewards_claimed_with_legacy_fallback(
 				2,
 				Staking::ledger(10).as_ref().unwrap(),
 				&11,
@@ -6297,7 +6297,7 @@ fn test_legacy_claimed_rewards_is_checked_at_reward_payout() {
 				.with_weight(<Test as Config>::WeightInfo::payout_stakers_alive_staked(0)),
 		);
 		assert_eq!(
-			EraInfo::<Test>::is_rewards_claimed_temp(
+			EraInfo::<Test>::is_rewards_claimed_with_legacy_fallback(
 				1,
 				Staking::ledger(10).as_ref().unwrap(),
 				&11,
@@ -6309,7 +6309,7 @@ fn test_legacy_claimed_rewards_is_checked_at_reward_payout() {
 		// verify rewards for era 2 can be claimed
 		assert_ok!(Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, 2, 0));
 		assert_eq!(
-			EraInfo::<Test>::is_rewards_claimed_temp(
+			EraInfo::<Test>::is_rewards_claimed_with_legacy_fallback(
 				2,
 				Staking::ledger(10).as_ref().unwrap(),
 				&11,
