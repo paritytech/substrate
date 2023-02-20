@@ -297,7 +297,7 @@ pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
 }
 
 /// A type that can not be decoded.
-#[derive(PartialEq)]
+#[derive(PartialEq, TypeInfo)]
 pub struct DecodeFails<B: BlockT> {
 	_phantom: PhantomData<B>,
 }
@@ -973,12 +973,30 @@ cfg_if! {
 			}
 
 			impl beefy_primitives::BeefyApi<Block> for Runtime {
+				fn beefy_genesis() -> Option<BlockNumber> {
+					None
+				}
+
 				fn validator_set() -> Option<beefy_primitives::ValidatorSet<beefy_primitives::crypto::AuthorityId>> {
 					None
 				}
+
+				fn submit_report_equivocation_unsigned_extrinsic(
+					_equivocation_proof: beefy_primitives::EquivocationProof<
+						NumberFor<Block>,
+						beefy_primitives::crypto::AuthorityId,
+						beefy_primitives::crypto::Signature
+					>,
+					_key_owner_proof: beefy_primitives::OpaqueKeyOwnershipProof,
+				) -> Option<()> { None }
+
+				fn generate_key_ownership_proof(
+					_set_id: beefy_primitives::ValidatorSetId,
+					_authority_id: beefy_primitives::crypto::AuthorityId,
+				) -> Option<beefy_primitives::OpaqueKeyOwnershipProof> { None }
 			}
 
-			impl beefy_merkle_tree::BeefyMmrApi<Block, beefy_primitives::MmrRootHash> for Runtime {
+			impl pallet_beefy_mmr::BeefyMmrApi<Block, beefy_primitives::MmrRootHash> for Runtime {
 				fn authority_set_proof() -> beefy_primitives::mmr::BeefyAuthoritySet<beefy_primitives::MmrRootHash> {
 					Default::default()
 				}

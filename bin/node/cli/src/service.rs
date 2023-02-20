@@ -32,7 +32,9 @@ use sc_client_api::BlockBackend;
 use sc_consensus_babe::{self, SlotProportion};
 use sc_executor::NativeElseWasmExecutor;
 use sc_network::NetworkService;
-use sc_network_common::{protocol::event::Event, service::NetworkEventStream};
+use sc_network_common::{
+	protocol::event::Event, service::NetworkEventStream, sync::warp::WarpSyncParams,
+};
 use sc_service::{config::Configuration, error::Error as ServiceError, RpcHandlers, TaskManager};
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sp_api::ProvideRuntimeApi;
@@ -222,10 +224,7 @@ pub fn new_partial(
 					slot_duration,
 				);
 
-			let uncles =
-				sp_authorship::InherentDataProvider::<<Block as BlockT>::Header>::check_inherents();
-
-			Ok((slot, timestamp, uncles))
+			Ok((slot, timestamp))
 		},
 		&task_manager.spawn_essential_handle(),
 		config.prometheus_registry(),
@@ -362,7 +361,7 @@ pub fn new_full_base(
 			spawn_handle: task_manager.spawn_handle(),
 			import_queue,
 			block_announce_validator_builder: None,
-			warp_sync: Some(warp_sync),
+			warp_sync_params: Some(WarpSyncParams::WithProvider(warp_sync)),
 		})?;
 
 	if config.offchain_worker.enabled {
@@ -440,11 +439,6 @@ pub fn new_full_base(
 			create_inherent_data_providers: move |parent, ()| {
 				let client_clone = client_clone.clone();
 				async move {
-					let uncles = sc_consensus_uncles::create_uncles_inherent_data_provider(
-						&*client_clone,
-						parent,
-					)?;
-
 					let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 
 					let slot =
@@ -459,7 +453,7 @@ pub fn new_full_base(
 							&parent,
 						)?;
 
-					Ok((slot, timestamp, uncles, storage_proof))
+					Ok((slot, timestamp, storage_proof))
 				}
 			},
 			force_authoring,
@@ -593,7 +587,7 @@ mod tests {
 	use sp_keyring::AccountKeyring;
 	use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 	use sp_runtime::{
-		generic::{BlockId, Digest, Era, SignedPayload},
+		generic::{Digest, Era, SignedPayload},
 		key_types::BABE,
 		traits::{Block as BlockT, Header as HeaderT, IdentifyAccount, Verify},
 		RuntimeAppPublic,
@@ -760,9 +754,9 @@ mod tests {
 				let to: Address = AccountPublic::from(bob.public()).into_account().into();
 				let from: Address = AccountPublic::from(charlie.public()).into_account().into();
 				let genesis_hash = service.client().block_hash(0).unwrap().unwrap();
-				let best_block_id = BlockId::number(service.client().chain_info().best_number);
+				let best_hash = service.client().chain_info().best_hash;
 				let (spec_version, transaction_version) = {
-					let version = service.client().runtime_version_at(&best_block_id).unwrap();
+					let version = service.client().runtime_version_at(best_hash).unwrap();
 					(version.spec_version, version.transaction_version)
 				};
 				let signer = charlie.clone();

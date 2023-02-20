@@ -23,8 +23,8 @@
 //! While both BEEFY and Merkle Mountain Range (MMR) can be used separately,
 //! these tools were designed to work together in unison.
 //!
-//! The pallet provides a standardized MMR Leaf format that is can be used
-//! to bridge BEEFY+MMR-based networks (both standalone and polkadot-like).
+//! The pallet provides a standardized MMR Leaf format that can be used
+//! to bridge BEEFY+MMR-based networks (both standalone and Polkadot-like).
 //!
 //! The MMR leaf contains:
 //! 1. Block number and parent block hash.
@@ -200,10 +200,24 @@ impl<T: Config> Pallet<T> {
 			.map(T::BeefyAuthorityToMerkleLeaf::convert)
 			.collect::<Vec<_>>();
 		let len = beefy_addresses.len() as u32;
-		let root = beefy_merkle_tree::merkle_root::<<T as pallet_mmr::Config>::Hashing, _>(
+		let root = binary_merkle_tree::merkle_root::<<T as pallet_mmr::Config>::Hashing, _>(
 			beefy_addresses,
 		)
 		.into();
 		BeefyAuthoritySet { id, len, root }
+	}
+}
+
+sp_api::decl_runtime_apis! {
+	/// API useful for BEEFY light clients.
+	pub trait BeefyMmrApi<H>
+	where
+		BeefyAuthoritySet<H>: sp_api::Decode,
+	{
+		/// Return the currently active BEEFY authority set proof.
+		fn authority_set_proof() -> BeefyAuthoritySet<H>;
+
+		/// Return the next/queued BEEFY authority set proof.
+		fn next_authority_set_proof() -> BeefyNextAuthoritySet<H>;
 	}
 }

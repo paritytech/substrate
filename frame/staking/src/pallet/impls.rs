@@ -1217,22 +1217,12 @@ impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, 
 
 /// Add reward points to block authors:
 /// * 20 points to the block producer for producing a (non-uncle) block in the relay chain,
-/// * 2 points to the block producer for each reference to a previously unreferenced uncle, and
-/// * 1 point to the producer of each referenced uncle block.
 impl<T> pallet_authorship::EventHandler<T::AccountId, T::BlockNumber> for Pallet<T>
 where
 	T: Config + pallet_authorship::Config + pallet_session::Config,
 {
 	fn note_author(author: T::AccountId) {
 		Self::reward_by_ids(vec![(author, 20)])
-	}
-	fn note_uncle(uncle_author: T::AccountId, _age: T::BlockNumber) {
-		// defensive-only: block author must exist.
-		if let Some(block_author) = <pallet_authorship::Pallet<T>>::author() {
-			Self::reward_by_ids(vec![(block_author, 2), (uncle_author, 1)])
-		} else {
-			crate::log!(warn, "block author not set, this should never happen");
-		}
 	}
 }
 
@@ -1461,9 +1451,11 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 		// nothing to do upon regenerate.
 		0
 	}
+	#[cfg(feature = "try-runtime")]
 	fn try_state() -> Result<(), &'static str> {
 		Ok(())
 	}
+
 	fn unsafe_clear() {
 		#[allow(deprecated)]
 		Validators::<T>::remove_all();
@@ -1535,6 +1527,8 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 		// nothing to do upon regenerate.
 		0
 	}
+
+	#[cfg(feature = "try-runtime")]
 	fn try_state() -> Result<(), &'static str> {
 		Ok(())
 	}
