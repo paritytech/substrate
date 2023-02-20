@@ -63,7 +63,7 @@ fn test_struct_named_debug_print() {
 
 	assert_eq!(
 		format!("{:?}", a_1),
-		String::from("StructNamed { a: 1, b: 2, c: 3, phantom: PhantomData }")
+		String::from("StructNamed { a: 1, b: 2, c: 3, phantom: PhantomData<(derive_no_bound::ImplNone, derive_no_bound::ImplNone)> }")
 	);
 }
 
