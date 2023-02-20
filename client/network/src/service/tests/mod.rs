@@ -43,7 +43,7 @@ use substrate_test_runtime_client::{
 #[cfg(test)]
 mod service;
 
-type TestNetworkWorker = NetworkWorker<TestBlock, TestHash, TestClient>;
+type TestNetworkWorker = NetworkWorker<TestBlock, TestHash>;
 type TestNetworkService = NetworkService<TestBlock, TestHash>;
 
 const PROTOCOL_NAME: &str = "/foo";
@@ -222,7 +222,6 @@ impl TestNetworkBuilder {
 		let worker = NetworkWorker::<
 			substrate_test_runtime_client::runtime::Block,
 			substrate_test_runtime_client::runtime::Hash,
-			substrate_test_runtime_client::TestClient,
 		>::new(config::Params {
 			block_announce_config,
 			role: config::Role::Full,
@@ -258,7 +257,7 @@ impl TestNetworkBuilder {
 			}
 		});
 		let stream = worker.service().event_stream("syncing");
-		tokio::spawn(async move { engine.run(stream).await });
+		tokio::spawn(engine.run(stream));
 
 		TestNetwork::new(worker)
 	}

@@ -16,12 +16,15 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+//! `SyncingEngine` is the actor responsible for syncing Substrate chain
+//! to tip and keep the blockchain up to date with network updates.
+
 use crate::{
 	service::{self, chain_sync::ToServiceCommand},
 	ChainSync, ClientError, SyncingService,
 };
 
-use futures::{Stream, StreamExt};
+use futures::{FutureExt, Stream, StreamExt};
 use libp2p::PeerId;
 use lru::LruCache;
 use prometheus_endpoint::{
@@ -29,6 +32,7 @@ use prometheus_endpoint::{
 };
 
 use codec::{Decode, DecodeAll, Encode};
+use futures_timer::Delay;
 use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_consensus::import_queue::ImportQueueService;
 use sc_network_common::{
@@ -45,7 +49,7 @@ use sc_network_common::{
 		BadPeer, ChainSync as ChainSyncT, ExtendedPeerInfo, PollBlockAnnounceValidation, SyncEvent,
 		SyncMode,
 	},
-	utils::{interval, LruHashSet},
+	utils::LruHashSet,
 };
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain::HeaderMetadata;
@@ -198,7 +202,7 @@ pub struct SyncingEngine<B: BlockT, Client> {
 	event_streams: Vec<TracingUnboundedSender<SyncEvent>>,
 
 	/// Interval at which we call `tick`.
-	tick_timeout: Pin<Box<dyn Stream<Item = ()> + Send>>,
+	tick_timeout: Delay,
 
 	/// All connected peers. Contains both full and light node peers.
 	peers: HashMap<PeerId, Peer<B>>,
@@ -359,7 +363,7 @@ where
 				default_peers_set_num_full,
 				default_peers_set_num_light,
 				event_streams: Vec::new(),
-				tick_timeout: Box::pin(interval(TICK_TIMEOUT)),
+				tick_timeout: Delay::new(TICK_TIMEOUT),
 				metrics: if let Some(r) = metrics_registry {
 					match Metrics::register(r, is_major_syncing.clone()) {
 						Ok(metrics) => Some(metrics),
@@ -595,8 +599,9 @@ where
 		self.is_major_syncing
 			.store(self.chain_sync.status().state.is_major_syncing(), Ordering::Relaxed);
 
-		while let Poll::Ready(Some(())) = self.tick_timeout.poll_next_unpin(cx) {
+		while let Poll::Ready(()) = self.tick_timeout.poll_unpin(cx) {
 			self.report_metrics();
+			self.tick_timeout.reset(TICK_TIMEOUT);
 		}
 
 		while let Poll::Ready(Some(event)) = event_stream.poll_next_unpin(cx) {
@@ -714,51 +719,34 @@ where
 				ToServiceCommand::AnnounceBlock(hash, data) => self.announce_block(hash, data),
 				ToServiceCommand::NewBestBlockImported(hash, number) =>
 					self.new_best_block_imported(hash, number),
-				ToServiceCommand::Status(tx) =>
-					if let Err(_) = tx.send(self.chain_sync.status()) {
-						log::warn!(target: "sync", "Failed to respond to `Status` query");
-					},
+				ToServiceCommand::Status(tx) => {
+					let _ = tx.send(self.chain_sync.status());
+				},
 				ToServiceCommand::NumActivePeers(tx) => {
-					if let Err(_) = tx.send(self.chain_sync.num_active_peers()) {
-						log::warn!(target: "sync", "response channel closed for `NumActivePeers`");
-					}
+					let _ = tx.send(self.chain_sync.num_active_peers());
 				},
 				ToServiceCommand::SyncState(tx) => {
-					if let Err(_) = tx.send(self.chain_sync.status()) {
-						log::warn!(target: "sync", "response channel closed for `SyncState`");
-					}
+					let _ = tx.send(self.chain_sync.status());
 				},
 				ToServiceCommand::BestSeenBlock(tx) => {
-					if let Err(_) = tx.send(self.chain_sync.status().best_seen_block) {
-						log::warn!(target: "sync", "response channel closed for `BestSeenBlock`");
-					}
+					let _ = tx.send(self.chain_sync.status().best_seen_block);
 				},
 				ToServiceCommand::NumSyncPeers(tx) => {
-					if let Err(_) = tx.send(self.chain_sync.status().num_peers) {
-						log::warn!(target: "sync", "response channel closed for `NumSyncPeers`");
-					}
+					let _ = tx.send(self.chain_sync.status().num_peers);
 				},
 				ToServiceCommand::NumQueuedBlocks(tx) => {
-					if let Err(_) = tx.send(self.chain_sync.status().queued_blocks) {
-						log::warn!(target: "sync", "response channel closed for `NumQueuedBlocks`");
-					}
+					let _ = tx.send(self.chain_sync.status().queued_blocks);
 				},
 				ToServiceCommand::NumDownloadedBlocks(tx) => {
-					if let Err(_) = tx.send(self.chain_sync.num_downloaded_blocks()) {
-						log::warn!(target: "sync", "response channel closed for `NumDownloadedBlocks`");
-					}
+					let _ = tx.send(self.chain_sync.num_downloaded_blocks());
 				},
 				ToServiceCommand::NumSyncRequests(tx) => {
-					if let Err(_) = tx.send(self.chain_sync.num_sync_requests()) {
-						log::warn!(target: "sync", "response channel closed for `NumSyncRequests`");
-					}
+					let _ = tx.send(self.chain_sync.num_sync_requests());
 				},
 				ToServiceCommand::PeersInfo(tx) => {
 					let peers_info =
 						self.peers.iter().map(|(id, peer)| (*id, peer.info.clone())).collect();
-					if let Err(_) = tx.send(peers_info) {
-						log::warn!(target: "sync", "response channel closed for `PeersInfo`");
-					}
+					let _ = tx.send(peers_info);
 				},
 				ToServiceCommand::OnBlockFinalized(hash, header) =>
 					self.chain_sync.on_block_finalized(&hash, *header.number()),
@@ -782,7 +770,7 @@ where
 			log::debug!(target: "sync", "{} disconnected", peer);
 		}
 
-		if let Some(_peer_data) = self.peers.remove(&peer) {
+		if self.peers.remove(&peer).is_some() {
 			self.chain_sync.peer_disconnected(&peer);
 			self.default_peers_set_no_slot_connected_peers.remove(&peer);
 			self.event_streams
@@ -812,23 +800,31 @@ where
 		}
 
 		if status.genesis_hash != self.genesis_hash {
-			log::log!(
-				target: "sync",
-				if self.important_peers.contains(&who) { log::Level::Warn } else { log::Level::Debug },
-				"Peer is on different chain (our genesis: {} theirs: {})",
-				self.genesis_hash, status.genesis_hash
-			);
 			self.network_service.report_peer(who, rep::GENESIS_MISMATCH);
 			self.network_service
 				.disconnect_peer(who, self.block_announce_protocol_name.clone());
 
-			if self.boot_node_ids.contains(&who) {
+			if self.important_peers.contains(&who) {
+				log::error!(
+					target: "sync",
+					"Reserved peer id `{}` is on a different chain (our genesis: {} theirs: {})",
+					who,
+					self.genesis_hash,
+					status.genesis_hash,
+				);
+			} else if self.boot_node_ids.contains(&who) {
 				log::error!(
 					target: "sync",
 					"Bootnode with peer id `{}` is on a different chain (our genesis: {} theirs: {})",
 					who,
 					self.genesis_hash,
 					status.genesis_hash,
+				);
+			} else {
+				log::debug!(
+					target: "sync",
+					"Peer is on different chain (our genesis: {} theirs: {})",
+					self.genesis_hash, status.genesis_hash
 				);
 			}
 

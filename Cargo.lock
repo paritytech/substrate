@@ -8666,6 +8666,7 @@ dependencies = [
  "async-trait",
  "fork-tree",
  "futures",
+ "futures-timer",
  "libp2p",
  "log",
  "lru",

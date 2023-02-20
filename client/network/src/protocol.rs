@@ -31,14 +31,13 @@ use libp2p::{
 use log::{debug, error, warn};
 use message::{generic::Message as GenericMessage, Message};
 use notifications::{Notifications, NotificationsOut};
-use sc_client_api::HeaderBackend;
 use sc_network_common::{
 	config::NonReservedPeerMode,
 	error,
 	protocol::{role::Roles, ProtocolName},
 	sync::message::BlockAnnouncesHandshake,
 };
-use sp_runtime::traits::{Block as BlockT, NumberFor};
+use sp_runtime::traits::Block as BlockT;
 use std::{
 	collections::{HashMap, HashSet, VecDeque},
 	iter,
@@ -68,9 +67,9 @@ mod rep {
 }
 
 // Lock must always be taken in order declared here.
-pub struct Protocol<B: BlockT, Client> {
+pub struct Protocol<B: BlockT> {
 	/// Pending list of messages to return from `poll` as a priority.
-	pending_messages: VecDeque<CustomMessageOutcome<B>>,
+	pending_messages: VecDeque<CustomMessageOutcome>,
 	/// Used to report reputation changes.
 	peerset_handle: sc_peerset::PeersetHandle,
 	/// Handles opening the unique substream and sending and receiving raw messages.
@@ -84,15 +83,12 @@ pub struct Protocol<B: BlockT, Client> {
 	/// solve this, an entry is added to this map whenever an invalid handshake is received.
 	/// Entries are removed when the corresponding "substream closed" is later received.
 	bad_handshake_substreams: HashSet<(PeerId, sc_peerset::SetId)>,
+	/// Connected peers.
 	peers: HashMap<PeerId, Roles>,
-	_marker: std::marker::PhantomData<Client>,
+	_marker: std::marker::PhantomData<B>,
 }
 
-impl<B, Client> Protocol<B, Client>
-where
-	B: BlockT,
-	Client: HeaderBackend<B> + 'static,
-{
+impl<B: BlockT> Protocol<B> {
 	/// Create a new instance.
 	pub fn new(
 		roles: Roles,
@@ -180,8 +176,9 @@ where
 				.chain(network_config.extra_sets.iter().map(|s| s.notifications_protocol.clone()))
 				.collect(),
 			bad_handshake_substreams: Default::default(),
-			_marker: Default::default(),
 			peers: HashMap::new(),
+			// TODO: remove when `BlockAnnouncesHandshake` is moved away from `Protocol`
+			_marker: Default::default(),
 		};
 
 		Ok((protocol, peerset_handle, known_addresses))
@@ -340,7 +337,7 @@ where
 /// Outcome of an incoming custom message.
 #[derive(Debug)]
 #[must_use]
-pub enum CustomMessageOutcome<B: BlockT> {
+pub enum CustomMessageOutcome {
 	/// Notification protocols have been opened with a remote.
 	NotificationStreamOpened {
 		remote: PeerId,
@@ -361,19 +358,13 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	NotificationStreamClosed { remote: PeerId, protocol: ProtocolName },
 	/// Messages have been received on one or more notifications protocols.
 	NotificationsReceived { remote: PeerId, messages: Vec<(ProtocolName, Bytes)> },
-	/// Peer has a reported a new head of chain.
-	_PeerNewBest(PeerId, NumberFor<B>),
 	/// Now connected to a new peer for syncing purposes.
 	None,
 }
 
-impl<B, Client> NetworkBehaviour for Protocol<B, Client>
-where
-	B: BlockT,
-	Client: HeaderBackend<B> + 'static,
-{
+impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 	type ConnectionHandler = <Notifications as NetworkBehaviour>::ConnectionHandler;
-	type OutEvent = CustomMessageOutcome<B>;
+	type OutEvent = CustomMessageOutcome;
 
 	fn new_handler(&mut self) -> Self::ConnectionHandler {
 		self.behaviour.new_handler()
@@ -468,7 +459,7 @@ where
 							self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);
 							CustomMessageOutcome::None
 						},
-						Err(_err) => {
+						Err(err) => {
 							match <BlockAnnouncesHandshake<B> as DecodeAll>::decode_all(
 								&mut &received_handshake[..],
 							) {
@@ -486,13 +477,14 @@ where
 										notifications_sink,
 									}
 								},
-								Err(err) => {
+								Err(err2) => {
 									log::debug!(
 										target: "sync",
-										"Couldn't decode handshake sent by {}: {:?}: {}",
+										"Couldn't decode handshake sent by {}: {:?}: {} & {}",
 										peer_id,
 										received_handshake,
 										err,
+										err2,
 									);
 									self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);
 									CustomMessageOutcome::None
@@ -574,7 +566,7 @@ where
 			},
 		};
 
-		if !matches!(outcome, CustomMessageOutcome::<B>::None) {
+		if !matches!(outcome, CustomMessageOutcome::None) {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(outcome))
 		}
 

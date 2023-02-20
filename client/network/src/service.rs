@@ -129,18 +129,19 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	_block: PhantomData<B>,
 }
 
-impl<B, H, Client> NetworkWorker<B, H, Client>
+impl<B, H> NetworkWorker<B, H>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B> + 'static,
 {
 	/// Creates the network service.
 	///
 	/// Returns a `NetworkWorker` that implements `Future` and must be regularly polled in order
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
-	pub fn new(mut params: Params<Client>) -> Result<Self, Error> {
+	pub fn new<Client: HeaderBackend<B> + 'static>(
+		mut params: Params<Client>,
+	) -> Result<Self, Error> {
 		// Private and public keys configuration.
 		let local_identity = params.network_config.node_key.clone().into_keypair()?;
 		let local_public = local_identity.public();
@@ -256,7 +257,7 @@ where
 		let num_connected = Arc::new(AtomicUsize::new(0));
 
 		// Build the swarm.
-		let (mut swarm, bandwidth): (Swarm<Behaviour<B, Client>>, _) = {
+		let (mut swarm, bandwidth): (Swarm<Behaviour<B>>, _) = {
 			let user_agent = format!(
 				"{} ({})",
 				params.network_config.client_version, params.network_config.node_name
@@ -411,14 +412,14 @@ where
 
 		// Listen on multiaddresses.
 		for addr in &params.network_config.listen_addresses {
-			if let Err(err) = Swarm::<Behaviour<B, Client>>::listen_on(&mut swarm, addr.clone()) {
+			if let Err(err) = Swarm::<Behaviour<B>>::listen_on(&mut swarm, addr.clone()) {
 				warn!(target: "sub-libp2p", "Can't listen on {} because: {:?}", addr, err)
 			}
 		}
 
 		// Add external addresses.
 		for addr in &params.network_config.public_addresses {
-			Swarm::<Behaviour<B, Client>>::add_external_address(
+			Swarm::<Behaviour<B>>::add_external_address(
 				&mut swarm,
 				addr.clone(),
 				AddressScore::Infinite,
@@ -496,14 +497,14 @@ where
 
 	/// Returns the local `PeerId`.
 	pub fn local_peer_id(&self) -> &PeerId {
-		Swarm::<Behaviour<B, Client>>::local_peer_id(&self.network_service)
+		Swarm::<Behaviour<B>>::local_peer_id(&self.network_service)
 	}
 
 	/// Returns the list of addresses we are listening on.
 	///
 	/// Does **NOT** include a trailing `/p2p/` with our `PeerId`.
 	pub fn listen_addresses(&self) -> impl Iterator<Item = &Multiaddr> {
-		Swarm::<Behaviour<B, Client>>::listeners(&self.network_service)
+		Swarm::<Behaviour<B>>::listeners(&self.network_service)
 	}
 
 	/// Get network state.
@@ -583,7 +584,7 @@ where
 				.collect()
 		};
 
-		let peer_id = Swarm::<Behaviour<B, Client>>::local_peer_id(swarm).to_base58();
+		let peer_id = Swarm::<Behaviour<B>>::local_peer_id(swarm).to_base58();
 		let listened_addresses = swarm.listeners().cloned().collect();
 		let external_addresses = swarm.external_addresses().map(|r| &r.addr).cloned().collect();
 
@@ -1121,11 +1122,10 @@ enum ServiceToWorkerMsg {
 ///
 /// You are encouraged to poll this in a separate background thread or task.
 #[must_use = "The NetworkWorker must be polled in order for the network to advance"]
-pub struct NetworkWorker<B, H, Client>
+pub struct NetworkWorker<B, H>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B> + 'static,
 {
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
@@ -1134,7 +1134,7 @@ where
 	/// The network service that can be extracted and shared through the codebase.
 	service: Arc<NetworkService<B, H>>,
 	/// The *actual* network.
-	network_service: Swarm<Behaviour<B, Client>>,
+	network_service: Swarm<Behaviour<B>>,
 	/// Messages from the [`NetworkService`] that must be processed.
 	from_service: TracingUnboundedReceiver<ServiceToWorkerMsg>,
 	/// Senders for events that happen on the network.
@@ -1153,11 +1153,10 @@ where
 	_block: PhantomData<B>,
 }
 
-impl<B, H, Client> Future for NetworkWorker<B, H, Client>
+impl<B, H> Future for NetworkWorker<B, H>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B> + 'static,
 {
 	type Output = ();
 
@@ -1729,7 +1728,7 @@ where
 		this.num_connected.store(num_connected_peers, Ordering::Relaxed);
 		{
 			let external_addresses =
-				Swarm::<Behaviour<B, Client>>::external_addresses(&this.network_service)
+				Swarm::<Behaviour<B>>::external_addresses(&this.network_service)
 					.map(|r| &r.addr)
 					.cloned()
 					.collect();
@@ -1767,11 +1766,10 @@ where
 	}
 }
 
-impl<B, H, Client> Unpin for NetworkWorker<B, H, Client>
+impl<B, H> Unpin for NetworkWorker<B, H>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B> + 'static,
 {
 }
 

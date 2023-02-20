@@ -155,7 +155,7 @@ async fn build_network_future<
 	H: sc_network_common::ExHashT,
 >(
 	role: Role,
-	mut network: sc_network::NetworkWorker<B, H, C>,
+	mut network: sc_network::NetworkWorker<B, H>,
 	client: Arc<C>,
 	mut rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,
 	sync_service: Arc<SyncingService<B>>,
@@ -202,11 +202,16 @@ async fn build_network_future<
 			request = rpc_rx.select_next_some() => {
 				match request {
 					sc_rpc::system::Request::Health(sender) => {
-						let _ = sender.send(sc_rpc::system::Health {
-							peers: sync_service.peers_info().await.expect("syncing to stay active").len(),
-							is_syncing: sync_service.is_major_syncing(),
-							should_have_peers,
-						});
+						match sync_service.peers_info().await {
+							Ok(info) => {
+								let _ = sender.send(sc_rpc::system::Health {
+									peers: info.len(),
+									is_syncing: sync_service.is_major_syncing(),
+									should_have_peers,
+								});
+							}
+							Err(_) => log::error!("`SyncingEngine` shut down"),
+						}
 					},
 					sc_rpc::system::Request::LocalPeerId(sender) => {
 						let _ = sender.send(network.local_peer_id().to_base58());
@@ -220,14 +225,19 @@ async fn build_network_future<
 						let _ = sender.send(addresses);
 					},
 					sc_rpc::system::Request::Peers(sender) => {
-						let _ = sender.send(sync_service.peers_info().await.expect("syncing to stay active").into_iter().map(|(peer_id, p)|
-							sc_rpc::system::PeerInfo {
-								peer_id: peer_id.to_base58(),
-								roles: format!("{:?}", p.roles),
-								best_hash: p.best_hash,
-								best_number: p.best_number,
-							}
-						).collect());
+						match sync_service.peers_info().await {
+							Ok(info) => {
+								let _ = sender.send(info.into_iter().map(|(peer_id, p)|
+									sc_rpc::system::PeerInfo {
+										peer_id: peer_id.to_base58(),
+										roles: format!("{:?}", p.roles),
+										best_hash: p.best_hash,
+										best_number: p.best_number,
+									}
+								).collect());
+							},
+							Err(_) => log::error!("`SyncingEngine` shut down"),
+						}
 					}
 					sc_rpc::system::Request::NetworkState(sender) => {
 						if let Ok(network_state) = serde_json::to_value(&network.network_state()) {
@@ -278,13 +288,17 @@ async fn build_network_future<
 					sc_rpc::system::Request::SyncState(sender) => {
 						use sc_rpc::system::SyncState;
 
-						let best_number = client.info().best_number;
-
-						let _ = sender.send(SyncState {
-							starting_block,
-							current_block: best_number,
-							highest_block: sync_service.best_seen_block().await.expect("syncing to stay active").unwrap_or(best_number),
-						});
+						match sync_service.best_seen_block().await {
+							Ok(best_seen_block) => {
+								let best_number = client.info().best_number;
+								let _ = sender.send(SyncState {
+									starting_block,
+									current_block: best_number,
+									highest_block: best_seen_block.unwrap_or(best_number),
+								});
+							}
+							Err(_) => log::error!("`SyncingEngine` shut down"),
+						}
 					}
 				}
 			}

@@ -41,7 +41,6 @@ use sc_network_common::{
 	request_responses::{IfDisconnected, ProtocolConfig, RequestFailure},
 };
 use sc_peerset::{PeersetHandle, ReputationChange};
-use sp_blockchain::HeaderBackend;
 use sp_runtime::traits::Block as BlockT;
 use std::{collections::HashSet, time::Duration};
 
@@ -50,13 +49,9 @@ pub use crate::request_responses::{InboundFailure, OutboundFailure, RequestId, R
 /// General behaviour of the network. Combines all protocols together.
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "BehaviourOut")]
-pub struct Behaviour<B, Client>
-where
-	B: BlockT,
-	Client: HeaderBackend<B> + 'static,
-{
+pub struct Behaviour<B: BlockT> {
 	/// All the substrate-specific protocols.
-	substrate: Protocol<B, Client>,
+	substrate: Protocol<B>,
 	/// Periodically pings and identifies the nodes we are connected to, and store information in a
 	/// cache.
 	peer_info: peer_info::PeerInfoBehaviour,
@@ -173,14 +168,10 @@ pub enum BehaviourOut {
 	None,
 }
 
-impl<B, Client> Behaviour<B, Client>
-where
-	B: BlockT,
-	Client: HeaderBackend<B> + 'static,
-{
+impl<B: BlockT> Behaviour<B> {
 	/// Builds a new `Behaviour`.
 	pub fn new(
-		substrate: Protocol<B, Client>,
+		substrate: Protocol<B>,
 		user_agent: String,
 		local_public_key: PublicKey,
 		disco_config: DiscoveryConfig,
@@ -248,12 +239,12 @@ where
 	}
 
 	/// Returns a shared reference to the user protocol.
-	pub fn user_protocol(&self) -> &Protocol<B, Client> {
+	pub fn user_protocol(&self) -> &Protocol<B> {
 		&self.substrate
 	}
 
 	/// Returns a mutable reference to the user protocol.
-	pub fn user_protocol_mut(&mut self) -> &mut Protocol<B, Client> {
+	pub fn user_protocol_mut(&mut self) -> &mut Protocol<B> {
 		&mut self.substrate
 	}
 
@@ -291,8 +282,8 @@ fn reported_roles_to_observed_role(roles: Roles) -> ObservedRole {
 	}
 }
 
-impl<B: BlockT> From<CustomMessageOutcome<B>> for BehaviourOut {
-	fn from(event: CustomMessageOutcome<B>) -> Self {
+impl From<CustomMessageOutcome> for BehaviourOut {
+	fn from(event: CustomMessageOutcome) -> Self {
 		match event {
 			CustomMessageOutcome::NotificationStreamOpened {
 				remote,
@@ -318,7 +309,6 @@ impl<B: BlockT> From<CustomMessageOutcome<B>> for BehaviourOut {
 				BehaviourOut::NotificationStreamClosed { remote, protocol },
 			CustomMessageOutcome::NotificationsReceived { remote, messages } =>
 				BehaviourOut::NotificationsReceived { remote, messages },
-			CustomMessageOutcome::_PeerNewBest(_peer_id, _number) => BehaviourOut::None,
 			CustomMessageOutcome::None => BehaviourOut::None,
 		}
 	}

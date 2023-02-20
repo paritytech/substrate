@@ -81,6 +81,7 @@ impl<B: BlockT> SyncingService<B> {
 		Self { tx, num_connected, is_major_syncing }
 	}
 
+	/// Get the number of active peers.
 	pub async fn num_active_peers(&self) -> Result<usize, oneshot::Canceled> {
 		let (tx, rx) = oneshot::channel();
 		let _ = self.tx.unbounded_send(ToServiceCommand::NumActivePeers(tx));
@@ -88,6 +89,7 @@ impl<B: BlockT> SyncingService<B> {
 		rx.await
 	}
 
+	/// Get best seen block.
 	pub async fn best_seen_block(&self) -> Result<Option<NumberFor<B>>, oneshot::Canceled> {
 		let (tx, rx) = oneshot::channel();
 		let _ = self.tx.unbounded_send(ToServiceCommand::BestSeenBlock(tx));
@@ -95,6 +97,7 @@ impl<B: BlockT> SyncingService<B> {
 		rx.await
 	}
 
+	/// Get the number of sync peers.
 	pub async fn num_sync_peers(&self) -> Result<u32, oneshot::Canceled> {
 		let (tx, rx) = oneshot::channel();
 		let _ = self.tx.unbounded_send(ToServiceCommand::NumSyncPeers(tx));
@@ -102,6 +105,7 @@ impl<B: BlockT> SyncingService<B> {
 		rx.await
 	}
 
+	/// Get the number of queued blocks.
 	pub async fn num_queued_blocks(&self) -> Result<u32, oneshot::Canceled> {
 		let (tx, rx) = oneshot::channel();
 		let _ = self.tx.unbounded_send(ToServiceCommand::NumQueuedBlocks(tx));
@@ -109,6 +113,7 @@ impl<B: BlockT> SyncingService<B> {
 		rx.await
 	}
 
+	/// Get the number of downloaded blocks.
 	pub async fn num_downloaded_blocks(&self) -> Result<usize, oneshot::Canceled> {
 		let (tx, rx) = oneshot::channel();
 		let _ = self.tx.unbounded_send(ToServiceCommand::NumDownloadedBlocks(tx));
@@ -116,6 +121,7 @@ impl<B: BlockT> SyncingService<B> {
 		rx.await
 	}
 
+	/// Get the number of sync requests.
 	pub async fn num_sync_requests(&self) -> Result<usize, oneshot::Canceled> {
 		let (tx, rx) = oneshot::channel();
 		let _ = self.tx.unbounded_send(ToServiceCommand::NumSyncRequests(tx));
@@ -123,6 +129,7 @@ impl<B: BlockT> SyncingService<B> {
 		rx.await
 	}
 
+	/// Get peer information.
 	pub async fn peers_info(
 		&self,
 	) -> Result<Vec<(PeerId, ExtendedPeerInfo<B>)>, oneshot::Canceled> {
@@ -132,6 +139,7 @@ impl<B: BlockT> SyncingService<B> {
 		rx.await
 	}
 
+	/// Notify the `SyncingEngine` that a block has been finalized.
 	pub fn on_block_finalized(&self, hash: B::Hash, header: B::Header) {
 		let _ = self.tx.unbounded_send(ToServiceCommand::OnBlockFinalized(hash, header));
 	}
