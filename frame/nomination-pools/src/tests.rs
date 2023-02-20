@@ -4650,7 +4650,7 @@ mod bond_extra {
 
 			assert_ok!(Pools::set_reward_claim(
 				RuntimeOrigin::signed(10),
-				RewardClaim::Permissionless
+				ClaimPermission::Permissionless
 			));
 			assert_ok!(Pools::bond_extra_other(RuntimeOrigin::signed(50), 10, BondExtra::Rewards));
 			assert_eq!(Balances::free_balance(&default_reward_account()), 7);
