@@ -227,9 +227,10 @@ impl PartialOrd<u16> for StorageVersion {
 /// Special marker struct if no storage version is set for a pallet.
 ///
 /// If you (the reader) end up here, it probably means that you tried to compare
-/// [`GetStorageVersion::on_chain_storage_version`] against [`GetStorageVersion:current_storage_version`].
-/// This basically means that the [`storage_version`](crate::pallet_macros::storage_version) is
-/// missing in the pallet where the mentioned functions are being called.
+/// [`GetStorageVersion::on_chain_storage_version`] against
+/// [`GetStorageVersion::current_storage_version`]. This basically means that the
+/// [`storage_version`](crate::pallet_macros::storage_version) is missing in the pallet where the
+/// mentioned functions are being called.
 #[derive(Debug, Default)]
 pub struct NoStorageVersionSet;
 

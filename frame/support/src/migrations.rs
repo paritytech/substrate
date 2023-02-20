@@ -25,8 +25,8 @@ pub trait StoreCurrentStorageVersion<T: GetStorageVersion + PalletInfoAccess> {
 	fn store_current_storage_version();
 }
 
-impl<T: GetStorageVersion<CurrentStorageVersion = StorageVersion> + PalletInfoAccess> StoreCurrentStorageVersion<T>
-	for StorageVersion
+impl<T: GetStorageVersion<CurrentStorageVersion = StorageVersion> + PalletInfoAccess>
+	StoreCurrentStorageVersion<T> for StorageVersion
 {
 	fn store_current_storage_version() {
 		let version = <T as GetStorageVersion>::current_storage_version();
