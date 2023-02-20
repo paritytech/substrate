@@ -1493,8 +1493,8 @@ pub mod pallet {
 		PoolIdInUse,
 		/// Pool id provided is not correct/usable.
 		InvalidPoolId,
-		/// Restricted to pending rewards
-		CannotBondFreeBalanceOther,
+		/// Bonding extra is restricted to the exact pending reward amount.
+		BondExtraRestricted,
 	}
 
 	#[derive(Encode, Decode, PartialEq, TypeInfo, frame_support::PalletError, RuntimeDebug)]
