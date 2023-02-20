@@ -487,7 +487,7 @@ where
 	///
 	/// It is required that [`ChainSync::poll_block_announce_validation`] is
 	/// called later to check for finished validations. The result of the validation
-	/// needs to be passed to [`Protocol::process_block_announce_validation_result`]
+	/// needs to be passed to [`SyncingEngine::process_block_announce_validation_result`]
 	/// to finish the processing.
 	///
 	/// # Note
