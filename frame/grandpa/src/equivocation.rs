@@ -73,7 +73,7 @@ pub struct EquivocationOffence<Offender> {
 	/// The session index in which the incident happened.
 	pub session_index: SessionIndex,
 	/// The size of the validator set at the time of the offence.
-	pub validator_count: u32,
+	pub validator_set_count: u32,
 	/// The authority which produced this equivocation.
 	pub offender: Offender,
 }
@@ -91,7 +91,7 @@ impl<Offender: Clone> Offence<Offender> for EquivocationOffence<Offender> {
 	}
 
 	fn validator_set_count(&self) -> u32 {
-		self.validator_count
+		self.validator_set_count
 	}
 
 	fn time_slot(&self) -> Self::TimeSlot {
@@ -100,7 +100,7 @@ impl<Offender: Clone> Offence<Offender> for EquivocationOffence<Offender> {
 
 	fn slash_fraction(&self, offenders_count: u32) -> Perbill {
 		// the formula is min((3k / n)^2, 1)
-		let x = Perbill::from_rational(3 * offenders_count, self.validator_count);
+		let x = Perbill::from_rational(3 * offenders_count, self.validator_set_count);
 		// _ ^ 2
 		x.square()
 	}
@@ -147,7 +147,7 @@ where
 		let set_id = equivocation_proof.set_id();
 		let round = equivocation_proof.round();
 		let session_index = key_owner_proof.session();
-		let validator_count = key_owner_proof.validator_count();
+		let validator_set_count = key_owner_proof.validator_count();
 
 		// Validate equivocation proof (check votes are different and signatures are valid).
 		if !sp_finality_grandpa::check_equivocation_proof(equivocation_proof) {
@@ -185,7 +185,7 @@ where
 			time_slot: GrandpaTimeSlot { set_id, round },
 			session_index,
 			offender,
-			validator_count,
+			validator_set_count,
 		};
 
 		R::report_offence(reporter.into_iter().collect(), offence)
