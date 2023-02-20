@@ -114,7 +114,7 @@
 //!
 //! Rewards must be claimed for each era before it gets too old by `$HISTORY_DEPTH` using the
 //! `payout_stakers` call. Any account can call `payout_stakers`, which pays the reward to the
-//! validator as well as its nominators. Only the [`Config::MaxNominatorRewardedPerValidator`]
+//! validator as well as its nominators. Only the [`Config::MaxExposurePageSize`]
 //! biggest stakers can claim their reward. This is to limit the i/o cost to mutate storage for each
 //! nominator's account.
 //!
@@ -228,7 +228,7 @@
 //! validator, proportional to the value staked behind the validator (_i.e._ dividing the
 //! [`own`](Exposure::own) or [`others`](Exposure::others) by [`total`](Exposure::total) in
 //! [`Exposure`]). Note that payouts are made in pages with each page capped at
-//! [`Config::MaxNominatorRewardedPerValidator`] nominators. The distribution of nominators across
+//! [`Config::MaxExposurePageSize`] nominators. The distribution of nominators across
 //! pages are unsorted and depends on the election result provided by [`Config::ElectionProvider`].
 //!
 //! All entities who receive a reward have the option to choose their reward destination through the
@@ -466,6 +466,9 @@ pub struct StakingLedger<T: Config> {
 	pub unlocking: BoundedVec<UnlockChunk<BalanceOf<T>>, T::MaxUnlockingChunks>,
 	/// List of eras for which the stakers behind a validator have claimed rewards. Only updated
 	/// for validators.
+	///
+	/// This is deprecated as of V14 in favor of `T::ClaimedRewards` and will be removed in future.
+	/// Refer issue: #13034
 	pub legacy_claimed_rewards: BoundedVec<EraIndex, T::HistoryDepth>,
 }
 
@@ -746,17 +749,16 @@ impl<AccountId: Clone, Balance: HasCompact + AtLeast32BitUnsigned + Copy>
 
 		for chunk in individual_chunks {
 			let mut page_total: Balance = Zero::zero();
+			let mut others: Vec<IndividualExposure<AccountId, Balance>> = vec![];
 			for individual in chunk.iter() {
 				page_total = page_total.saturating_add(individual.value);
+				others.push(IndividualExposure {
+					who: individual.who.clone(),
+					value: individual.value,
+				})
 			}
 
-			exposure_pages.push(ExposurePage {
-				page_total,
-				others: chunk
-					.iter()
-					.map(|c| IndividualExposure { who: c.who.clone(), value: c.value })
-					.collect(),
-			});
+			exposure_pages.push(ExposurePage { page_total, others });
 		}
 
 		(
@@ -778,21 +780,16 @@ pub struct ExposurePage<AccountId, Balance: HasCompact> {
 	#[codec(compact)]
 	pub page_total: Balance,
 	/// The portions of nominators stashes that are exposed.
-	/// TODO(ank4n): BoundedVec touches lot of code, skip for now.
 	pub others: Vec<IndividualExposure<AccountId, Balance>>,
-}
-
-impl<AccountId, Balance: Default + HasCompact> Default for ExposurePage<AccountId, Balance> {
-	fn default() -> Self {
-		Self { page_total: Default::default(), others: vec![] }
-	}
 }
 
 /// An overview of stake backing a single validator.
 ///
 /// It, in combination with a list of `ExposurePage`s, can be used to reconstruct a full `Exposure`
 /// struct. This is useful for cases where we want to query a single page of `Exposure`s.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(
+	PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo, Default,
+)]
 pub struct ExposureOverview<Balance: HasCompact> {
 	/// The total balance backing this validator.
 	#[codec(compact)]
@@ -802,25 +799,14 @@ pub struct ExposureOverview<Balance: HasCompact> {
 	pub own: Balance,
 	/// Number of nominators backing this validator.
 	pub nominator_count: u32,
-	/// Number of pages of backers.
+	/// Number of pages of nominators.
 	pub page_count: PageIndex,
-}
-
-impl<Balance: Default + HasCompact> Default for ExposureOverview<Balance> {
-	fn default() -> Self {
-		Self {
-			total: Default::default(),
-			own: Default::default(),
-			nominator_count: Default::default(),
-			page_count: Default::default(),
-		}
-	}
 }
 
 /// Extended view of Exposure comprising of `ExposureOverview` and a single page of `ExposurePage`.
 ///
 /// This is useful where we need to take into account the validator's own stake and total exposure
-/// in consideration in addition to the individual nominators backing them.
+/// in consideration, in addition to the individual nominators backing them.
 #[derive(Encode, Decode, RuntimeDebug, TypeInfo, PartialEq, Eq)]
 struct ExposureExt<AccountId, Balance: HasCompact> {
 	exposure_overview: ExposureOverview<Balance>,
@@ -846,8 +832,8 @@ impl<AccountId, Balance: HasCompact + Copy + AtLeast32BitUnsigned> ExposureExt<A
 		self.exposure_overview.total
 	}
 
-	/// Returns total exposure of this validator for current page
-	pub fn current_total(&self) -> Balance {
+	/// Returns total exposure of this validator for the current page
+	pub fn page_total(&self) -> Balance {
 		self.exposure_page.page_total + self.exposure_overview.own
 	}
 

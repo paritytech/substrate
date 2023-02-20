@@ -2195,8 +2195,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 		let _ = Balances::make_free_balance_be(&11, stake);
 
 		let exposure = Exposure::<AccountId, Balance> { total: stake, own: stake, others: vec![] };
-		let (exposure_overview, _) =
-			exposure.clone().into_pages(MaxNominatorRewardedPerValidator::get());
+		let (exposure_overview, _) = exposure.clone().into_pages(MaxExposurePageSize::get());
 		let reward = EraRewardPoints::<AccountId> {
 			total: 1,
 			individual: vec![(11, 1)].into_iter().collect(),
@@ -3696,7 +3695,7 @@ fn six_session_delay() {
 fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward() {
 	// with max exposure page count set to 1, clipped exposure logic works exactly as before.
 	ExtBuilder::default().build_and_execute(|| {
-		for i in 0..=MaxNominatorRewardedPerValidator::get() {
+		for i in 0..=MaxExposurePageSize::get() {
 			let stash = 10_000 + i as AccountId;
 			let controller = 20_000 + i as AccountId;
 			let balance = 10_000 + i as Balance;
@@ -3719,7 +3718,7 @@ fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward(
 		mock::make_all_reward_payment(1);
 
 		// Assert only nominators from 1 to Max are rewarded
-		for i in 0..=MaxNominatorRewardedPerValidator::get() {
+		for i in 0..=MaxExposurePageSize::get() {
 			let stash = 10_000 + i as AccountId;
 			let balance = 10_000 + i as Balance;
 			if stash == 10_000 {
@@ -3738,7 +3737,7 @@ fn test_nominators_are_rewarded_for_all_exposure_page() {
 		allow_paged_rewards(3);
 
 		// 3 pages of exposure
-		let nominator_count = 2 * MaxNominatorRewardedPerValidator::get() + 1;
+		let nominator_count = 2 * MaxExposurePageSize::get() + 1;
 
 		for i in 0..nominator_count {
 			let stash = 10_000 + i as AccountId;
@@ -3806,7 +3805,7 @@ fn test_multi_page_payout_stakers_by_page() {
 		mock::start_active_era(1);
 		Staking::reward_by_ids(vec![(11, 1)]);
 
-		// Since `MaxNominatorRewardedPerValidator = 64`, there are two pages of validator exposure.
+		// Since `MaxExposurePageSize = 64`, there are two pages of validator exposure.
 		assert_eq!(EraInfo::<Test>::get_page_count(1, &11), 2);
 
 		// compute and ensure the reward amount is greater than zero.
@@ -4000,7 +3999,7 @@ fn test_multi_page_payout_stakers_backward_compatible() {
 		mock::start_active_era(1);
 		Staking::reward_by_ids(vec![(11, 1)]);
 
-		// Since `MaxNominatorRewardedPerValidator = 64`, there are two pages of validator exposure.
+		// Since `MaxExposurePageSize = 64`, there are two pages of validator exposure.
 		assert_eq!(EraInfo::<Test>::get_page_count(1, &11), 2);
 
 		// compute and ensure the reward amount is greater than zero.
@@ -4160,7 +4159,7 @@ fn test_multi_page_payout_stakers_backward_compatible() {
 		// verify page 0 is claimed even when explicit page is not passed
 		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, last_reward_era,));
 
-		assert_eq!(Staking::claimed_rewards(last_reward_era, &11), vec![0, 1]);
+		assert_eq!(Staking::claimed_rewards(last_reward_era, &11), vec![1, 0]);
 
 		// cannot claim any more pages
 		assert_noop!(
@@ -4187,7 +4186,7 @@ fn test_multi_page_payout_stakers_backward_compatible() {
 		assert_eq!(Staking::claimed_rewards(test_era, &11), vec![2]);
 
 		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, test_era));
-		assert_eq!(Staking::claimed_rewards(test_era, &11), vec![0, 2]);
+		assert_eq!(Staking::claimed_rewards(test_era, &11), vec![2, 0]);
 
 		// cannot claim page 2 again
 		assert_noop!(
@@ -4196,10 +4195,10 @@ fn test_multi_page_payout_stakers_backward_compatible() {
 		);
 
 		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, test_era));
-		assert_eq!(Staking::claimed_rewards(test_era, &11), vec![0, 1, 2]);
+		assert_eq!(Staking::claimed_rewards(test_era, &11), vec![2, 0, 1]);
 
 		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, test_era));
-		assert_eq!(Staking::claimed_rewards(test_era, &11), vec![0, 1, 2, 3]);
+		assert_eq!(Staking::claimed_rewards(test_era, &11), vec![2, 0, 1, 3]);
 	});
 }
 
@@ -4246,7 +4245,7 @@ fn test_page_count_and_size() {
 		assert_eq!(EraInfo::<Test>::get_validator_exposure(2, &11, 1).unwrap().others().len(), 36);
 
 		// now lets decrease page size
-		ExposurePageSize::<Test>::put(32);
+		MaxExposurePageSize::set(32);
 		mock::start_active_era(3);
 		// now we expect 4 pages.
 		assert_eq!(EraInfo::<Test>::get_page_count(3, &11), 4);
@@ -4257,7 +4256,7 @@ fn test_page_count_and_size() {
 		assert_eq!(EraInfo::<Test>::get_validator_exposure(3, &11, 3).unwrap().others().len(), 4);
 
 		// now lets decrease page size even more
-		ExposurePageSize::<Test>::put(9);
+		MaxExposurePageSize::set(9);
 		mock::start_active_era(4);
 		// now we expect the max 10 pages with each page having 9 nominators.
 		assert_eq!(EraInfo::<Test>::get_page_count(4, &11), 10);
@@ -4438,7 +4437,7 @@ fn test_commission_paid_across_pages() {
 		mock::start_active_era(1);
 		Staking::reward_by_ids(vec![(11, 1)]);
 
-		// Since `MaxNominatorRewardedPerValidator = 64`, there are four pages of validator
+		// Since `MaxExposurePageSize = 64`, there are four pages of validator
 		// exposure.
 		assert_eq!(EraInfo::<Test>::get_page_count(1, &11), 4);
 
@@ -4473,7 +4472,7 @@ fn payout_stakers_handles_weight_refund() {
 	// Note: this test relies on the assumption that `payout_stakers_alive_staked` is solely used by
 	// `payout_stakers` to calculate the weight of each payout op.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
-		let max_nom_rewarded = MaxNominatorRewardedPerValidator::get();
+		let max_nom_rewarded = MaxExposurePageSize::get();
 		// Make sure the configured value is meaningful for our use.
 		assert!(max_nom_rewarded >= 4);
 		let half_max_nom_rewarded = max_nom_rewarded / 2;
@@ -6341,7 +6340,7 @@ fn test_validator_exposure_is_backward_compatible_with_non_paged_rewards_payout(
 
 		// case 1: exposure exist in clipped.
 		// set page cap to 10
-		MaxNominatorRewardedPerValidator::set(10);
+		MaxExposurePageSize::set(10);
 		bond_validator(11, 10, 1000);
 		let mut expected_individual_exposures: Vec<IndividualExposure<AccountId, Balance>> = vec![];
 		let mut total_exposure: Balance = 0;

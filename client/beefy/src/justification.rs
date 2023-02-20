@@ -81,8 +81,7 @@ fn verify_with_validator_set<Block: BlockT>(
 #[cfg(test)]
 pub(crate) mod tests {
 	use beefy_primitives::{
-		keyring::Keyring, known_payloads, Commitment, Payload, SignedCommitment,
-		VersionedFinalityProof,
+		known_payloads, Commitment, Keyring, Payload, SignedCommitment, VersionedFinalityProof,
 	};
 	use substrate_test_runtime_client::runtime::Block;
 
