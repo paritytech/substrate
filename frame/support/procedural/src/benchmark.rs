@@ -229,8 +229,7 @@ impl BenchmarkDef {
 			let non_unit = |span| return Err(Error::new(span, "expected `()`"));
 			// for this to parse as a ReturnType::Type, the contents must be a TypePath, QED
 			let Type::Path(TypePath { path, qself: _ }) = &**typ else { panic!("unreachable state") };
-			// for this to parse as a TypePath, it has to have at least one segment, QED
-			let Some(seg) = path.segments.last() else { panic!("unreachable state") };
+			let seg = path.segments.last().expect("to be parsed as a TypePath, it must have at least one segment; qed");
 			let res: ResultDef = syn::parse2(seg.to_token_stream())?;
 			// ensure T in Result<T, E> is ()
 			let Type::Tuple(tup) = res.unit else { return non_unit(res.unit.span()) };
