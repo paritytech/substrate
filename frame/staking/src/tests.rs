@@ -6421,7 +6421,7 @@ fn test_validator_exposure_is_backward_compatible_with_non_paged_rewards_payout(
 		let actual_exposure = EraInfo::<Test>::get_validator_exposure(1, &11, 0).unwrap();
 		assert_eq!(actual_exposure.others(), &clipped_exposure);
 		assert_eq!(actual_exposure.own(), 1000);
-		assert_eq!(actual_exposure.page_count(), 1);
+		assert_eq!(actual_exposure.exposure_overview.page_count, 1);
 
 		// for pages other than 0, clipped storage returns empty exposure
 		assert_eq!(EraInfo::<Test>::get_validator_exposure(1, &11, 1), None);
