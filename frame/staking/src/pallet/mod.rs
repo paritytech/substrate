@@ -687,8 +687,11 @@ pub mod pallet {
 					let exposure_page =
 						<ErasStakersPaged<T>>::get(era, (validator, page)).unwrap_or_default();
 					let own = if page == 0 { overview.own } else { Zero::zero() };
-					Some(ExposureExt { exposure_overview: ExposureOverview { own, ..overview }, exposure_page })
-				}
+					Some(ExposureExt {
+						exposure_overview: ExposureOverview { own, ..overview },
+						exposure_page,
+					})
+				},
 				_ => None,
 			}
 		}
@@ -712,15 +715,19 @@ pub mod pallet {
 		///
 		/// This will always return at minimum one count of exposure to be backward compatible to
 		/// non-paged reward payouts.
-		// FIXME: No need to return minimum of one page after cleanup: #13034
 		pub(crate) fn get_page_count(era: EraIndex, validator: &T::AccountId) -> PageIndex {
-			if let Some(overview) = <ErasStakersOverview<T>>::get(&era, validator) {
-				// Paged exposure
-				overview.page_count.max(1)
-			} else {
-				// Non-paged exposure
-				1
-			}
+			<ErasStakersOverview<T>>::get(&era, validator)
+				.map(|overview| {
+					if overview.page_count == 0 && overview.own > Zero::zero() {
+						// this means the validator has their own stake but no nominators
+						1
+					} else {
+						overview.page_count
+					}
+				})
+				// FIXME: Returns minimum of one page for backward compatibility with non paged
+				// exposure. Can be removed when we clean up issue #13034.
+				.unwrap_or(1)
 		}
 
 		/// Returns the next page that can be claimed or `None` if nothing to claim.
