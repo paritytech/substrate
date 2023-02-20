@@ -189,7 +189,7 @@ impl<T: Config> Pallet<T> {
 			.retain(|&x| x >= current_era.saturating_sub(history_depth));
 		<Ledger<T>>::insert(&controller, &ledger);
 
-		if EraInfo::<T>::is_rewards_claimed_temp(era, &ledger, &ledger.stash, page) {
+		if EraInfo::<T>::is_rewards_claimed_with_legacy_fallback(era, &ledger, &ledger.stash, page) {
 			return Err(Error::<T>::AlreadyClaimed
 				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0)))
 		} else {
