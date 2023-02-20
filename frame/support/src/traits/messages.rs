@@ -92,6 +92,16 @@ pub trait ServiceQueues {
 	}
 }
 
+/// Services queues by doing nothing.
+pub struct NoopServiceQueues<OverweightAddr>(PhantomData<OverweightAddr>);
+impl<OverweightAddr> ServiceQueues for NoopServiceQueues<OverweightAddr> {
+	type OverweightMessageAddress = OverweightAddr;
+
+	fn service_queues(_: Weight) -> Weight {
+		Weight::zero()
+	}
+}
+
 /// The resource footprint of a queue.
 #[derive(Default, Copy, Clone, Eq, PartialEq, RuntimeDebug)]
 pub struct Footprint {
