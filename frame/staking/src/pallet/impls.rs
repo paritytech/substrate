@@ -997,29 +997,16 @@ impl<T: Config> Pallet<T> {
 		);
 	}
 
+	/// Returns full exposure of a validator for a given era.
+	///
+	/// History note: This used to be a getter for old storage item `ErasStakers` deprecated in v14.
+	/// Since this function is used in the codebase at various places, we kept it as a custom getter
+	/// that takes care of getting the full exposure of the validator in a backward compatible way.
 	pub fn eras_stakers(
 		era: EraIndex,
 		account: &T::AccountId,
 	) -> Exposure<T::AccountId, BalanceOf<T>> {
-		let overview = EraInfo::<T>::get_validator_overview(era, &account);
-
-		if overview.is_none() {
-			return ErasStakers::<T>::get(era, account)
-		}
-
-		let overview = overview.unwrap();
-
-		if overview.page_count == 0 {
-			return Exposure { total: overview.total, own: overview.own, others: vec![] }
-		}
-
-		let mut others = Vec::with_capacity(overview.nominator_count as usize);
-		for page in 0..overview.page_count {
-			let nominators = EraInfo::<T>::get_nominators_page(era, &account, page);
-			others.append(&mut nominators.map(|n| n.others).defensive_unwrap_or_default());
-		}
-
-		Exposure { total: overview.total, own: overview.own, others }
+		EraInfo::<T>::get_non_paged_validator_exposure(era, &account)
 	}
 }
 

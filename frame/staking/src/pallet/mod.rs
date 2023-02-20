@@ -417,8 +417,9 @@ pub mod pallet {
 	///
 	/// Is it removed after `HISTORY_DEPTH` eras.
 	/// If stakers hasn't been set or has been removed then empty exposure is returned.
+	///
+	/// Note: Deprecated since v14. Use `EraInfo` instead to work with exposures.
 	#[pallet::storage]
-	// #[pallet::getter(fn eras_stakers)]
 	#[pallet::unbounded]
 	pub type ErasStakers<T: Config> = StorageDoubleMap<
 		_,
@@ -706,19 +707,30 @@ pub mod pallet {
 			})
 		}
 
-		pub(crate) fn get_validator_overview(
+		/// Get complete exposure of the validator at a given era.
+		pub(crate) fn get_non_paged_validator_exposure(
 			era: EraIndex,
 			validator: &T::AccountId,
-		) -> Option<ExposureOverview<BalanceOf<T>>> {
-			<ErasStakersOverview<T>>::get(&era, validator)
-		}
+		) -> Exposure<T::AccountId, BalanceOf<T>> {
+			let overview = <ErasStakersOverview<T>>::get(&era, validator);
 
-		pub(crate) fn get_nominators_page(
-			era: EraIndex,
-			validator: &T::AccountId,
-			page: PageIndex,
-		) -> Option<ExposurePage<T::AccountId, BalanceOf<T>>> {
-			<ErasStakersPaged<T>>::get(era, (validator, page))
+			if overview.is_none() {
+				return ErasStakers::<T>::get(era, validator)
+			}
+
+			let overview = overview.unwrap();
+
+			if overview.page_count == 0 {
+				return Exposure { total: overview.total, own: overview.own, others: vec![] }
+			}
+
+			let mut others = Vec::with_capacity(overview.nominator_count as usize);
+			for page in 0..overview.page_count {
+				let nominators = <ErasStakersPaged<T>>::get(era, (validator, page));
+				others.append(&mut nominators.map(|n| n.others).defensive_unwrap_or_default());
+			}
+
+			Exposure { total: overview.total, own: overview.own, others }
 		}
 
 		/// Returns the number of pages of exposure a validator has for the given era.
