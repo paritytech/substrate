@@ -59,6 +59,9 @@ pub enum ToServiceCommand<B: BlockT> {
 	NumSyncRequests(oneshot::Sender<usize>),
 	PeersInfo(oneshot::Sender<Vec<(PeerId, ExtendedPeerInfo<B>)>>),
 	OnBlockFinalized(B::Hash, B::Header),
+	// Status {
+	// 	pending_response: oneshot::Sender<SyncStatus<B>>,
+	// },
 }
 
 /// Handle for communicating with `ChainSync` asynchronously
@@ -142,6 +145,16 @@ impl<B: BlockT> SyncingService<B> {
 	/// Notify the `SyncingEngine` that a block has been finalized.
 	pub fn on_block_finalized(&self, hash: B::Hash, header: B::Header) {
 		let _ = self.tx.unbounded_send(ToServiceCommand::OnBlockFinalized(hash, header));
+	}
+
+	/// Get sync status
+	///
+	/// Returns an error if `ChainSync` has terminated.
+	pub async fn status(&self) -> Result<SyncStatus<B>, ()> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.tx.unbounded_send(ToServiceCommand::Status(tx));
+
+		rx.await.map_err(|_| ())
 	}
 }
 

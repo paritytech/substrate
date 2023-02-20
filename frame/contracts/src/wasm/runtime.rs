@@ -115,7 +115,7 @@ pub enum ReturnCode {
 	/// The contract that was called is no contract (a plain account).
 	NotCallable = 8,
 	/// The call dispatched by `seal_call_runtime` was executed but returned an error.
-	CallRuntimeReturnedError = 10,
+	CallRuntimeFailed = 10,
 	/// ECDSA pubkey recovery failed (most probably wrong recovery id or signature), or
 	/// ECDSA compressed pubkey conversion into Ethereum address failed (most probably
 	/// wrong pubkey provided).
@@ -2404,21 +2404,21 @@ pub mod env {
 	///
 	/// # Parameters
 	///
-	/// - `input_ptr`: the pointer into the linear memory where the input data is placed.
-	/// - `input_len`: the length of the input data in bytes.
+	/// - `call_ptr`: the pointer into the linear memory where the input data is placed.
+	/// - `call_len`: the length of the input data in bytes.
 	///
 	/// # Return Value
 	///
 	/// Returns `ReturnCode::Success` when the dispatchable was succesfully executed and
 	/// returned `Ok`. When the dispatchable was exeuted but returned an error
-	/// `ReturnCode::CallRuntimeReturnedError` is returned. The full error is not
+	/// `ReturnCode::CallRuntimeFailed` is returned. The full error is not
 	/// provided because it is not guaranteed to be stable.
 	///
 	/// # Comparison with `ChainExtension`
 	///
 	/// Just as a chain extension this API allows the runtime to extend the functionality
-	/// of contracts. While making use of this function is generelly easier it cannot be
-	/// used in call cases. Consider writing a chain extension if you need to do perform
+	/// of contracts. While making use of this function is generally easier it cannot be
+	/// used in all cases. Consider writing a chain extension if you need to do perform
 	/// one of the following tasks:
 	///
 	/// - Return data.
@@ -2444,7 +2444,7 @@ pub mod env {
 		ctx.adjust_gas(charged, RuntimeCosts::CallRuntime(actual_weight));
 		match result {
 			Ok(_) => Ok(ReturnCode::Success),
-			Err(_) => Ok(ReturnCode::CallRuntimeReturnedError),
+			Err(_) => Ok(ReturnCode::CallRuntimeFailed),
 		}
 	}
 

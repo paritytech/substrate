@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	build_network_future,
+	build_network_future, build_system_rpc_future,
 	client::{Client, ClientConfig},
 	config::{Configuration, KeystoreConfig, PrometheusConfig},
 	error::Error,
@@ -974,16 +974,21 @@ where
 	spawn_handle.spawn("syncing", None, engine.run(event_stream));
 
 	let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc", 10_000);
-
-	let future = build_network_future(
-		config.role.clone(),
-		network_mut,
-		client,
-		system_rpc_rx,
-		sync_service.clone(),
-		has_bootnodes,
-		config.announce_block,
+	spawn_handle.spawn(
+		"system-rpc-handler",
+		Some("networking"),
+		build_system_rpc_future(
+			config.role.clone(),
+			network_mut.service().clone(),
+			sync_service.clone(),
+			client.clone(),
+			system_rpc_rx,
+			has_bootnodes,
+		),
 	);
+
+	let future =
+		build_network_future(network_mut, client, sync_service.clone(), config.announce_block);
 
 	// TODO: Normally, one is supposed to pass a list of notifications protocols supported by the
 	// node through the `NetworkConfiguration` struct. But because this function doesn't know in
