@@ -734,7 +734,7 @@ impl<AccountId, Balance: Default + HasCompact> Default for Exposure<AccountId, B
 	}
 }
 
-impl<AccountId: Clone, Balance: HasCompact + AtLeast32BitUnsigned + Copy>
+impl<AccountId: Clone, Balance: HasCompact + AtLeast32BitUnsigned + Copy + codec::MaxEncodedLen>
 	Exposure<AccountId, Balance>
 {
 	/// Splits an `Exposure` into `ExposureOverview` and multiple chunks of `IndividualExposure`
@@ -794,9 +794,19 @@ impl<A, B: Default + HasCompact> Default for ExposurePage<A, B> {
 /// It, in combination with a list of `ExposurePage`s, can be used to reconstruct a full `Exposure`
 /// struct. This is useful for cases where we want to query a single page of `Exposure`s.
 #[derive(
-	PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo, Default,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	Clone,
+	Encode,
+	Decode,
+	RuntimeDebug,
+	TypeInfo,
+	Default,
+	MaxEncodedLen,
 )]
-pub struct ExposureOverview<Balance: HasCompact> {
+pub struct ExposureOverview<Balance: HasCompact + codec::MaxEncodedLen> {
 	/// The total balance backing this validator.
 	#[codec(compact)]
 	pub total: Balance,
@@ -814,12 +824,12 @@ pub struct ExposureOverview<Balance: HasCompact> {
 /// This is useful where we need to take into account the validator's own stake and total exposure
 /// in consideration, in addition to the individual nominators backing them.
 #[derive(Encode, Decode, RuntimeDebug, TypeInfo, PartialEq, Eq)]
-struct ExposureExt<AccountId, Balance: HasCompact> {
+struct ExposureExt<AccountId, Balance: HasCompact + codec::MaxEncodedLen> {
 	exposure_overview: ExposureOverview<Balance>,
 	exposure_page: ExposurePage<AccountId, Balance>,
 }
 
-impl<AccountId, Balance: HasCompact + Copy + AtLeast32BitUnsigned> ExposureExt<AccountId, Balance> {
+impl<AccountId, Balance: HasCompact + Copy + AtLeast32BitUnsigned + codec::MaxEncodedLen> ExposureExt<AccountId, Balance> {
 	/// Create a new instance of `ExposureExt` from legacy clipped exposures.
 	pub fn from_clipped(exposure: Exposure<AccountId, Balance>) -> Self {
 		Self {
