@@ -171,8 +171,9 @@ fn service_queues_failing_messages_works() {
 		MessageQueue::enqueue_message(msg("badformat"), Here);
 		MessageQueue::enqueue_message(msg("corrupt"), Here);
 		MessageQueue::enqueue_message(msg("unsupported"), Here);
-		// Starts with three pages.
-		assert_pages(&[0, 1, 2]);
+		MessageQueue::enqueue_message(msg("yield"), Here);
+		// Starts with four pages.
+		assert_pages(&[0, 1, 2, 3]);
 
 		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
 		assert_last_event::<Test>(
@@ -201,8 +202,65 @@ fn service_queues_failing_messages_works() {
 			}
 			.into(),
 		);
-		// All pages removed.
-		assert_pages(&[]);
+		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
+		assert_eq!(System::events().len(), 3);
+		// Last page with the `yield` stays in.
+		assert_pages(&[3]);
+	});
+}
+
+#[test]
+fn service_queues_suspension_works() {
+	use MessageOrigin::*;
+	new_test_ext::<Test>().execute_with(|| {
+		MessageQueue::enqueue_messages(vec![msg("a"), msg("b"), msg("c")].into_iter(), Here);
+		MessageQueue::enqueue_messages(vec![msg("x"), msg("y"), msg("z")].into_iter(), There);
+		MessageQueue::enqueue_messages(
+			vec![msg("m"), msg("n"), msg("o")].into_iter(),
+			Everywhere(0),
+		);
+		assert_eq!(QueueChanges::take(), vec![(Here, 3, 3), (There, 3, 3), (Everywhere(0), 3, 3)]);
+
+		// Service one message from `Here`.
+		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
+		assert_eq!(MessagesProcessed::take(), vec![(vmsg("a"), Here)]);
+		assert_eq!(QueueChanges::take(), vec![(Here, 2, 2)]);
+
+		// Pause queue `Here` and `Everywhere(0)`.
+		SuspendedQueues::set(vec![Here, Everywhere(0)]);
+
+		// Service one message from `There`.
+		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
+		assert_eq!(MessagesProcessed::take(), vec![(vmsg("x"), There)]);
+		assert_eq!(QueueChanges::take(), vec![(There, 2, 2)]);
+
+		// Now it would normally swap to `Everywhere(0)` and `Here`, but they are paused so we
+		// expect `There` again.
+		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
+		assert_eq!(MessagesProcessed::take(), vec![(vmsg("y"), There), (vmsg("z"), There)]);
+
+		// Processing with max-weight won't do anything.
+		assert_eq!(MessageQueue::service_queues(Weight::MAX), Weight::zero());
+		assert_eq!(MessageQueue::service_queues(Weight::MAX), Weight::zero());
+
+		// ... until we resume `Here`:
+		SuspendedQueues::set(vec![Everywhere(0)]);
+		assert_eq!(MessageQueue::service_queues(Weight::MAX), 2.into_weight());
+		assert_eq!(MessagesProcessed::take(), vec![(vmsg("b"), Here), (vmsg("c"), Here)]);
+
+		// Everywhere still won't move.
+		assert_eq!(MessageQueue::service_queues(Weight::MAX), Weight::zero());
+		SuspendedQueues::take();
+		// Resume `Everywhere(0)` makes it work.
+		assert_eq!(MessageQueue::service_queues(Weight::MAX), 3.into_weight());
+		assert_eq!(
+			MessagesProcessed::take(),
+			vec![
+				(vmsg("m"), Everywhere(0)),
+				(vmsg("n"), Everywhere(0)),
+				(vmsg("o"), Everywhere(0))
+			]
+		);
 	});
 }
 
