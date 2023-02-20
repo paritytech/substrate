@@ -540,8 +540,9 @@ impl<T: Config> Pallet<T> {
 	pub fn submit_unsigned_equivocation_report(
 		equivocation_proof: T::EquivocationProof,
 		key_owner_proof: T::KeyOwnerProof,
-	) -> bool {
+	) -> Option<()> {
 		T::EquivocationReportSystem::submit_evidence(equivocation_proof, key_owner_proof)
+			.then_some(())
 	}
 
 	fn on_stalled(further_wait: T::BlockNumber, median: T::BlockNumber) {
