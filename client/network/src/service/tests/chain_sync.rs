@@ -75,12 +75,8 @@ async fn normal_network_poll_no_peers() {
 		.with_chain_sync((chain_sync, chain_sync_service))
 		.build();
 
-	// poll the network once
-	futures::future::poll_fn(|cx| {
-		let _ = network.network().poll_unpin(cx);
-		Poll::Ready(())
-	})
-	.await;
+	// perform one action on network
+	let _ = network.network().next_action().await;
 }
 
 #[tokio::test]
@@ -110,11 +106,8 @@ async fn request_justification() {
 	// send "request justifiction" message and poll the network
 	network.service().request_justification(&hash, number);
 
-	futures::future::poll_fn(|cx| {
-		let _ = network.network().poll_unpin(cx);
-		Poll::Ready(())
-	})
-	.await;
+	// perform one action on network
+	let _ = network.network().next_action().await;
 }
 
 #[tokio::test]
@@ -141,11 +134,8 @@ async fn clear_justification_requests() {
 	// send "request justifiction" message and poll the network
 	network.service().clear_justification_requests();
 
-	futures::future::poll_fn(|cx| {
-		let _ = network.network().poll_unpin(cx);
-		Poll::Ready(())
-	})
-	.await;
+	// perform one action on network
+	let _ = network.network().next_action().await;
 }
 
 #[tokio::test]
@@ -180,11 +170,8 @@ async fn set_sync_fork_request() {
 	// send "set sync fork request" message and poll the network
 	network.service().set_sync_fork_request(copy_peers, hash, number);
 
-	futures::future::poll_fn(|cx| {
-		let _ = network.network().poll_unpin(cx);
-		Poll::Ready(())
-	})
-	.await;
+	// perform one action on network
+	let _ = network.network().next_action().await;
 }
 
 #[tokio::test]
@@ -225,11 +212,8 @@ async fn on_block_finalized() {
 	// send "set sync fork request" message and poll the network
 	network.network().on_block_finalized(hash, header);
 
-	futures::future::poll_fn(|cx| {
-		let _ = network.network().poll_unpin(cx);
-		Poll::Ready(())
-	})
-	.await;
+	// perform one action on network
+	let _ = network.network().next_action().await;
 }
 
 // report from mock import queue that importing a justification was not successful
