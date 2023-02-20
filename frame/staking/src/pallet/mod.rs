@@ -443,8 +443,6 @@ pub mod pallet {
 	/// Is it removed after `HISTORY_DEPTH` eras.
 	/// If stakers hasn't been set or has been removed then empty overview is returned.
 	#[pallet::storage]
-	#[pallet::getter(fn eras_stakers_overview)]
-	#[pallet::unbounded]
 	pub type ErasStakersOverview<T: Config> = StorageDoubleMap<
 		_,
 		Twox64Concat,
@@ -469,6 +467,8 @@ pub mod pallet {
 	///
 	/// It is removed after `HISTORY_DEPTH` eras.
 	/// If stakers hasn't been set or has been removed then empty exposure is returned.
+	///
+	/// Note: Deprecated since v14. Use `EraInfo` instead to work with exposures.
 	#[pallet::storage]
 	#[pallet::unbounded]
 	#[pallet::getter(fn eras_stakers_clipped)]
@@ -489,8 +489,9 @@ pub mod pallet {
 	///
 	/// This uses DoubleMap instead of NMap to efficiently clear this after `HISTORY_DEPTH` eras.
 	/// If stakers hasn't been set or has been removed then empty exposure is returned.
+	///
+	/// TODO(ank4n): Use NMAP and make sure it can be cleared by 1st key.
 	#[pallet::storage]
-	#[pallet::getter(fn eras_stakers_paged)]
 	#[pallet::unbounded]
 	pub type ErasStakersPaged<T: Config> = StorageDoubleMap<
 		_,
@@ -815,8 +816,6 @@ pub mod pallet {
 			validator: &T::AccountId,
 			exposure: Exposure<T::AccountId, BalanceOf<T>>,
 		) {
-			// <ErasStakers<T>>::insert(era, &validator, &exposure);
-
 			let page_size = T::MaxExposurePageSize::get().defensive_max(1);
 			let max_page_count = T::MaxExposurePageCount::get();
 
