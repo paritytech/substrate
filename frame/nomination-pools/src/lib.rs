@@ -413,7 +413,7 @@ enum AccountType {
 
 /// Account to bond pending reward of a member.
 #[derive(Encode, Decode, MaxEncodedLen, Clone, Copy, Debug, PartialEq, Eq, TypeInfo)]
-pub enum RewardClaim {
+pub enum ClaimPermission {
 	/// Only the pool member themself can claim their reward.
 	Permissioned,
 	/// Anyone can claim the reward of this member.
@@ -1334,7 +1334,7 @@ pub mod pallet {
 	/// Map from a pool member account to their preference regarding reward payout.
 	#[pallet::storage]
 	pub type ClaimPermissions<T: Config> =
-		StorageMap<_, Twox64Concat, T::AccountId, RewardClaim, ValueQuery>;
+		StorageMap<_, Twox64Concat, T::AccountId, ClaimPermission, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -2116,12 +2116,14 @@ pub mod pallet {
 			T::Staking::chill(&bonded_pool.bonded_account())
 		}
 
-		/// `origin` bonds funds from `extra` for some pool member `member` into their respective pools.
+		/// `origin` bonds funds from `extra` for some pool member `member` into their respective
+		/// pools.
 		///
-		/// `origin` can bond extra funds from free balance or pending rewards when `origin == other`.
+		/// `origin` can bond extra funds from free balance or pending rewards when `origin ==
+		/// other`.
 		///
-		/// In the case of `origin != other`, `origin` can only bond extra pending rewards of `other`
-		/// members assuming set_reward_claim for the given member is `Permissionless`.
+		/// In the case of `origin != other`, `origin` can only bond extra pending rewards of
+		/// `other` members assuming set_reward_claim for the given member is `Permissionless`.
 		#[pallet::call_index(14)]
 		#[pallet::weight(
 			T::WeightInfo::bond_extra_transfer()
@@ -2150,7 +2152,10 @@ pub mod pallet {
 		/// * `actor` - Account to claim reward. // improve this
 		#[pallet::call_index(15)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
-		pub fn set_reward_claim(origin: OriginFor<T>, permission: ClaimPermission) -> DispatchResult {
+		pub fn set_reward_claim(
+			origin: OriginFor<T>,
+			permission: ClaimPermission,
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			ensure!(PoolMembers::<T>::contains_key(&who), Error::<T>::PoolMemberNotFound);
@@ -2471,7 +2476,7 @@ impl<T: Config> Pallet<T> {
 				matches!(ClaimPermissions::<T>::get(&who), ClaimPermission::Permissionless),
 				Error::<T>::DoesNotHavePermission
 			);
-			ensure!(extra == BondExtra::Rewards, Error::<T>::CannotBondFreeBalanceOther);
+			ensure!(extra == BondExtra::Rewards, Error::<T>::BondExtraRestricted);
 		}
 
 		let (mut member, mut bonded_pool, mut reward_pool) = Self::get_member_with_pools(&who)?;

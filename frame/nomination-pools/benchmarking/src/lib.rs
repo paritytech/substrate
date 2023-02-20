@@ -30,10 +30,9 @@ use frame_election_provider_support::SortedListProvider;
 use frame_support::{assert_ok, ensure, traits::Get};
 use frame_system::RawOrigin as RuntimeOrigin;
 use pallet_nomination_pools::{
-	BalanceOf, BondExtra, BondedPoolInner, BondedPools, ConfigOp, MaxPoolMembers,
-	MaxPoolMembersPerPool, MaxPools, Metadata, MinCreateBond, MinJoinBond, Pallet as Pools,
-	PoolMembers, PoolRoles, PoolState, RewardClaim, RewardClaimPermission, RewardPools,
-	SubPoolsStorage,
+	BalanceOf, BondExtra, BondedPoolInner, BondedPools, ClaimPermission, ClaimPermissions,
+	ConfigOp, MaxPoolMembers, MaxPoolMembersPerPool, MaxPools, Metadata, MinCreateBond,
+	MinJoinBond, Pallet as Pools, PoolMembers, PoolRoles, PoolState, RewardPools, SubPoolsStorage,
 };
 use sp_runtime::traits::{Bounded, StaticLookup, Zero};
 use sp_staking::{EraIndex, StakingInterface};
@@ -672,9 +671,9 @@ frame_benchmarking::benchmarks! {
 			T::Staking::active_stake(&pool_account).unwrap(),
 			min_create_bond + min_join_bond
 		);
-	}:_(RuntimeOrigin::Signed(joiner.clone()), RewardClaim::Permissionless)
+	}:_(RuntimeOrigin::Signed(joiner.clone()), ClaimPermission::Permissionless)
 	verify {
-		assert_eq!(RewardClaimPermission::<T>::get(joiner), RewardClaim::Permissionless);
+		assert_eq!(ClaimPermissions::<T>::get(joiner), ClaimPermission::Permissionless);
 	}
 
 	impl_benchmark_test_suite!(

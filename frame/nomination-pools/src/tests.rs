@@ -4274,7 +4274,10 @@ fn set_claimable_actor_works() {
 			Pools::set_reward_claim(RuntimeOrigin::signed(12), ClaimPermission::Permissionless),
 			Error::<T>::PoolMemberNotFound
 		);
-		assert_ok!(Pools::set_reward_claim(RuntimeOrigin::signed(11), ClaimPermission::Permissionless));
+		assert_ok!(Pools::set_reward_claim(
+			RuntimeOrigin::signed(11),
+			ClaimPermission::Permissionless
+		));
 
 		// then
 		assert_eq!(ClaimPermissions::<Runtime>::get(11), ClaimPermission::Permissionless);
