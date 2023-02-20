@@ -2116,15 +2116,12 @@ pub mod pallet {
 			T::Staking::chill(&bonded_pool.bonded_account())
 		}
 
-		/// Bond `extra` more funds from `origin` and
-		/// pending rewards of `other` members into their respective pools.
+		/// `origin` bonds funds from `extra` for some pool member `member` into their respective pools.
 		///
-		/// Origin can bond extra funds from free balance
-		/// or pending rewards when `origin == other`.
+		/// `origin` can bond extra funds from free balance or pending rewards when `origin == other`.
 		///
-		/// In the case of `origin != other`, `origin` can only bond extra
-		/// pending rewards of `other` members assuming set_reward_claim
-		/// for the given member is `Permissionless`.
+		/// In the case of `origin != other`, `origin` can only bond extra pending rewards of `other`
+		/// members assuming set_reward_claim for the given member is `Permissionless`.
 		#[pallet::call_index(14)]
 		#[pallet::weight(
 			T::WeightInfo::bond_extra_transfer()
@@ -2132,12 +2129,12 @@ pub mod pallet {
 		)]
 		pub fn bond_extra_other(
 			origin: OriginFor<T>,
-			other: AccountIdLookupOf<T>,
+			member: AccountIdLookupOf<T>,
 			extra: BondExtra<BalanceOf<T>>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			Self::do_bond_extra(who, T::Lookup::lookup(other)?, extra)
+			Self::do_bond_extra(who, T::Lookup::lookup(member)?, extra)
 		}
 
 		/// Sets permission to claim reward.
