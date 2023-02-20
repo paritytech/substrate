@@ -36,8 +36,8 @@ use sp_std::prelude::*;
 use codec::{self as codec, Decode, Encode, MaxEncodedLen};
 pub use fg_primitives::{AuthorityId, AuthorityList, AuthorityWeight, VersionedAuthorityList};
 use fg_primitives::{
-	ConsensusLog, ScheduledChange, SetId, GRANDPA_AUTHORITIES_KEY, GRANDPA_ENGINE_ID,
-	RUNTIME_LOG_TARGET as LOG_TARGET,
+	ConsensusLog, EquivocationProof, ScheduledChange, SetId, GRANDPA_AUTHORITIES_KEY,
+	GRANDPA_ENGINE_ID, RUNTIME_LOG_TARGET as LOG_TARGET,
 };
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, Pays},
@@ -109,9 +109,6 @@ pub mod pallet {
 		/// session at which the equivocation occurred.
 		type KeyOwnerProof: Parameter + GetSessionNumber + GetValidatorCount;
 
-		/// The equivocation proof
-		type EquivocationProof: Parameter;
-
 		/// The equivocation handling subsystem, defines methods to report an
 		/// offence (after the equivocation has been validated) and for submitting a
 		/// transaction to report an equivocation (from an offchain context).
@@ -120,8 +117,8 @@ pub mod pallet {
 		/// definition.
 		type EquivocationReportSystem: OffenceReportSystem<
 			Self::AccountId,
+			EquivocationProof<Self::Hash, Self::BlockNumber>,
 			KeyOwnerProof = Self::KeyOwnerProof,
-			OffenceProof = Self::EquivocationProof,
 		>;
 	}
 
@@ -199,7 +196,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
 		pub fn report_equivocation(
 			origin: OriginFor<T>,
-			equivocation_proof: T::EquivocationProof,
+			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			let reporter = Some(ensure_signed(origin)?);
@@ -226,7 +223,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
 		pub fn report_equivocation_unsigned(
 			origin: OriginFor<T>,
-			equivocation_proof: T::EquivocationProof,
+			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
@@ -538,7 +535,7 @@ impl<T: Config> Pallet<T> {
 	/// will push the transaction to the pool. Only useful in an offchain
 	/// context.
 	pub fn submit_unsigned_equivocation_report(
-		equivocation_proof: T::EquivocationProof,
+		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 		key_owner_proof: T::KeyOwnerProof,
 	) -> Option<()> {
 		T::EquivocationReportSystem::submit_evidence(equivocation_proof, key_owner_proof)

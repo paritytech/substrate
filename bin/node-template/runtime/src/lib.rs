@@ -221,7 +221,6 @@ impl pallet_grandpa::Config for Runtime {
 	type MaxSetIdSessionEntries = ConstU64<0>;
 
 	type KeyOwnerProof = sp_core::Void;
-	type EquivocationProof = ();
 	type EquivocationReportSystem = ();
 }
 

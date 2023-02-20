@@ -32,8 +32,8 @@ use frame_support::{
 use sp_application_crypto::ByteArray;
 use sp_consensus_babe::{
 	digests::{NextConfigDescriptor, NextEpochDescriptor, PreDigest},
-	AllowedSlots, BabeAuthorityWeight, BabeEpochConfiguration, ConsensusLog, Epoch, Slot,
-	BABE_ENGINE_ID,
+	AllowedSlots, BabeAuthorityWeight, BabeEpochConfiguration, ConsensusLog, Epoch,
+	EquivocationProof, Slot, BABE_ENGINE_ID,
 };
 use sp_consensus_vrf::schnorrkel;
 use sp_runtime::{
@@ -158,9 +158,6 @@ pub mod pallet {
 		/// session at which the equivocation occurred.
 		type KeyOwnerProof: Parameter + GetSessionNumber + GetValidatorCount;
 
-		/// The equivocation proof
-		type EquivocationProof: Parameter;
-
 		/// The equivocation handling subsystem, defines methods to report an
 		/// offence (after the equivocation has been validated) and for submitting a
 		/// transaction to report an equivocation (from an offchain context).
@@ -169,8 +166,8 @@ pub mod pallet {
 		/// definition.
 		type EquivocationReportSystem: OffenceReportSystem<
 			Self::AccountId,
+			EquivocationProof<Self::Header>,
 			KeyOwnerProof = Self::KeyOwnerProof,
-			OffenceProof = Self::EquivocationProof,
 		>;
 	}
 
@@ -405,7 +402,7 @@ pub mod pallet {
 		))]
 		pub fn report_equivocation(
 			origin: OriginFor<T>,
-			equivocation_proof: T::EquivocationProof,
+			equivocation_proof: EquivocationProof<T::Header>,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			let reporter = Some(ensure_signed(origin)?);
@@ -432,7 +429,7 @@ pub mod pallet {
 		))]
 		pub fn report_equivocation_unsigned(
 			origin: OriginFor<T>,
-			equivocation_proof: T::EquivocationProof,
+			equivocation_proof: EquivocationProof<T::Header>,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
@@ -821,7 +818,7 @@ impl<T: Config> Pallet<T> {
 	/// will push the transaction to the pool. Only useful in an offchain
 	/// context.
 	pub fn submit_unsigned_equivocation_report(
-		equivocation_proof: T::EquivocationProof,
+		equivocation_proof: EquivocationProof<T::Header>,
 		key_owner_proof: T::KeyOwnerProof,
 	) -> Option<()> {
 		T::EquivocationReportSystem::submit_evidence(equivocation_proof, key_owner_proof)

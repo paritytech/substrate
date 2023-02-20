@@ -231,8 +231,6 @@ impl Config for Test {
 
 	type KeyOwnerProof = <Historical as KeyOwnerProofSystem<(KeyTypeId, AuthorityId)>>::Proof;
 
-	type EquivocationProof = sp_finality_grandpa::EquivocationProof<H256, u64>;
-
 	type EquivocationReportSystem =
 		super::EquivocationReportSystem<Self, Offences, Historical, ReportLongevity>;
 }
