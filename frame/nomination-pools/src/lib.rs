@@ -2468,7 +2468,7 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		if signer != who {
 			ensure!(
-				matches!(RewardClaimPermission::<T>::get(&who), RewardClaim::Permissionless),
+				matches!(ClaimPermissions::<T>::get(&who), ClaimPermission::Permissionless),
 				Error::<T>::DoesNotHavePermission
 			);
 			ensure!(extra == BondExtra::Rewards, Error::<T>::CannotBondFreeBalanceOther);
