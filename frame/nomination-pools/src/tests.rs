@@ -4630,7 +4630,7 @@ mod bond_extra {
 	fn bond_extra_other() {
 		ExtBuilder::default().add_members(vec![(20, 20)]).build_and_execute(|| {
 			Balances::make_free_balance_be(&default_reward_account(), 8);
-			// ... if which only 3 is claimable to make sure the reward account does not die.
+			// ... of which only 3 are claimable to make sure the reward account does not die.
 			let claimable_reward = 8 - ExistentialDeposit::get();
 			// NOTE: easier to read if we use 3, so let's use the number instead of variable.
 			assert_eq!(claimable_reward, 3, "test is correct if rewards are divisible by 3");
