@@ -54,7 +54,7 @@ use sp_std::prelude::*;
 
 use crate::{Call, Config, Error, Pallet, LOG_TARGET};
 
-/// A BABE equivocation offence report.
+/// BABE equivocation offence report.
 ///
 /// When a validator released two or more blocks at the same slot.
 pub struct EquivocationOffence<Offender> {
