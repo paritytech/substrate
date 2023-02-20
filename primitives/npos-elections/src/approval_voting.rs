@@ -38,7 +38,7 @@ use sp_std::{cmp::Reverse, vec::Vec};
 ///   ExtendedBalance and may be slightly different that what will be computed from the support map,
 ///   due to accuracy loss.
 ///
-/// This can only fail of the normalization fails. This can happen if for any of the resulting
+/// This can only fail if the normalization fails. This can happen if for any of the resulting
 /// assignments, `assignment.distribution.map(|p| p.deconstruct()).sum()` fails to fit inside
 /// `UpperOf<P>`. A user of this crate may statically assert that this can never happen and safely
 /// `expect` this to return `Ok`.
