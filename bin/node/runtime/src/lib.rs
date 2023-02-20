@@ -24,8 +24,8 @@
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::{
-	onchain, weights::SubstrateWeight, BalancingConfig, ElectionDataProvider, SequentialPhragmen,
-	VoteWeight, ApprovalVoting,
+	onchain, weights::SubstrateWeight, ApprovalVoting, BalancingConfig, ElectionDataProvider,
+	SequentialPhragmen, VoteWeight,
 };
 use frame_support::{
 	construct_runtime,
