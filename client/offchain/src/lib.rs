@@ -270,6 +270,10 @@ mod tests {
 		fn local_peer_id(&self) -> PeerId {
 			PeerId::random()
 		}
+
+		fn listen_addresses(&self) -> Vec<Multiaddr> {
+			Vec::new()
+		}
 	}
 
 	impl NetworkPeers for TestNetwork {
