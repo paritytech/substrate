@@ -397,10 +397,6 @@ where
 				if !to_ignore.remove(&block.hash) {
 					Some(block.hash)
 				} else {
-					debug!(
-						target: LOG_TARGET,
-						"Excluding pruned forks from the finalized notification"
-					);
 					None
 				}
 			}))
