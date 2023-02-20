@@ -309,7 +309,8 @@ pub mod pallet {
 		type ExternalDefaultOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin from which the new proposal can be made.
-		/// The Success is the account id of the depositor.
+		///
+		/// The success variant is the account id of the depositor.
 		type SubmitOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Self::AccountId>;
 
 		/// Origin from which the next majority-carries (or more permissive) referendum may be
