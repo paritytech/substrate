@@ -17,7 +17,7 @@
 
 //! Various pieces of common functionality.
 
-use super::*;
+use crate::*;
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Get the owner of the item, if the item exists.

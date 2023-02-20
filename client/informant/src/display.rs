@@ -100,6 +100,11 @@ impl<B: BlockT> InformantDisplay<B> {
 					_,
 					Some(WarpSyncProgress { phase: WarpSyncPhase::DownloadingBlocks(n), .. }),
 				) => ("⏩", "Block history".into(), format!(", #{}", n)),
+				(
+					_,
+					_,
+					Some(WarpSyncProgress { phase: WarpSyncPhase::AwaitingTargetBlock, .. }),
+				) => ("⏩", "Waiting for pending target block".into(), "".into()),
 				(_, _, Some(warp)) => (
 					"⏩",
 					"Warping".into(),

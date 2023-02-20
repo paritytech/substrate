@@ -22,10 +22,10 @@ use codec::Encode;
 use frame_support::{
 	construct_runtime, parameter_types,
 	sp_io::TestExternalities,
-	traits::{ConstU16, ConstU32, ConstU64, GenesisBuild},
+	traits::{ConstU16, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem},
 	BasicExternalities,
 };
-use sp_core::{Hasher, H256};
+use sp_core::{crypto::KeyTypeId, Hasher, H256};
 use sp_runtime::{
 	app_crypto::ecdsa::Public,
 	impl_opaque_keys,
@@ -124,8 +124,17 @@ impl pallet_mmr::Config for Test {
 
 impl pallet_beefy::Config for Test {
 	type BeefyId = BeefyId;
+	type KeyOwnerProofSystem = ();
+	type KeyOwnerProof =
+		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, BeefyId)>>::Proof;
+	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
+		KeyTypeId,
+		BeefyId,
+	)>>::IdentificationTuple;
+	type HandleEquivocation = ();
 	type MaxAuthorities = ConstU32<100>;
 	type OnNewValidatorSet = BeefyMmr;
+	type WeightInfo = ();
 }
 
 parameter_types! {
