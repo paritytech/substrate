@@ -94,13 +94,13 @@ pub fn replace_wild_card_parameter_names(input: &mut Signature) {
 /// Fold the given `Signature` to make it usable on the client side.
 pub fn fold_fn_decl_for_client_side(
 	input: &mut Signature,
-	block_id: &TokenStream,
+	block_hash: &TokenStream,
 	crate_: &TokenStream,
 ) {
 	replace_wild_card_parameter_names(input);
 
-	// Add `&self, at:& BlockId` as parameters to each function at the beginning.
-	input.inputs.insert(0, parse_quote!( __runtime_api_at_param__: &#block_id ));
+	// Add `&self, at:& Block::Hash` as parameters to each function at the beginning.
+	input.inputs.insert(0, parse_quote!( __runtime_api_at_param__: #block_hash ));
 	input.inputs.insert(0, parse_quote!(&self));
 
 	// Wrap the output in a `Result`

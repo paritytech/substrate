@@ -29,7 +29,7 @@ use sc_consensus_babe::{authorship, Epoch};
 use sc_consensus_epochs::{descendent_query, Epoch as EpochT, SharedEpochChanges};
 use sc_rpc_api::DenyUnsafe;
 use serde::{Deserialize, Serialize};
-use sp_api::{BlockId, ProvideRuntimeApi};
+use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::AppKey;
 use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
 use sp_consensus::{Error as ConsensusError, SelectChain};
@@ -97,7 +97,7 @@ where
 		let epoch_start = self
 			.client
 			.runtime_api()
-			.current_epoch_start(&BlockId::Hash(header.hash()))
+			.current_epoch_start(header.hash())
 			.map_err(|err| Error::StringError(format!("{:?}", err)))?;
 
 		let epoch = epoch_data(

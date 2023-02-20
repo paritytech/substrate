@@ -51,10 +51,7 @@ use sc_offchain::OffchainDb;
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_mmr_primitives::{utils, LeafIndex, MmrApi};
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block, Header, NumberFor},
-};
+use sp_runtime::traits::{Block, Header, NumberFor};
 use std::{marker::PhantomData, sync::Arc};
 
 /// Logging target for the mmr gadget.
@@ -71,15 +68,16 @@ where
 {
 	/// Get the block number where the mmr pallet was added to the runtime.
 	fn first_mmr_block_num(&self, notification: &FinalityNotification<B>) -> Option<NumberFor<B>> {
-		let best_block = *notification.header.number();
-		match self.runtime_api().mmr_leaf_count(&BlockId::number(best_block)) {
+		let best_block_hash = notification.header.hash();
+		let best_block_number = *notification.header.number();
+		match self.runtime_api().mmr_leaf_count(best_block_hash) {
 			Ok(Ok(mmr_leaf_count)) => {
-				match utils::first_mmr_block_num::<B::Header>(best_block, mmr_leaf_count) {
+				match utils::first_mmr_block_num::<B::Header>(best_block_number, mmr_leaf_count) {
 					Ok(first_mmr_block) => {
 						debug!(
 							target: LOG_TARGET,
 							"pallet-mmr detected at block {:?} with genesis at block {:?}",
-							best_block,
+							best_block_number,
 							first_mmr_block
 						);
 						Some(first_mmr_block)
@@ -97,7 +95,7 @@ where
 				trace!(
 					target: LOG_TARGET,
 					"pallet-mmr not detected at block {:?} ... (best finalized {:?})",
-					best_block,
+					best_block_number,
 					notification.header.number()
 				);
 				None

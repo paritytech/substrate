@@ -32,7 +32,7 @@ use sp_api::ApiExt;
 use sp_block_builder::BlockBuilder;
 use sp_blockchain::HeaderBackend;
 use sp_core::{hexdisplay::HexDisplay, Bytes};
-use sp_runtime::{generic::BlockId, legacy, traits};
+use sp_runtime::{legacy, traits};
 
 pub use frame_system_rpc_runtime_api::AccountNonceApi;
 
@@ -101,9 +101,8 @@ where
 	async fn nonce(&self, account: AccountId) -> RpcResult<Index> {
 		let api = self.client.runtime_api();
 		let best = self.client.info().best_hash;
-		let at = BlockId::hash(best);
 
-		let nonce = api.account_nonce(&at, account.clone()).map_err(|e| {
+		let nonce = api.account_nonce(best, account.clone()).map_err(|e| {
 			CallError::Custom(ErrorObject::owned(
 				Error::RuntimeError.into(),
 				"Unable to query nonce.",
@@ -120,9 +119,9 @@ where
 	) -> RpcResult<Bytes> {
 		self.deny_unsafe.check_if_safe()?;
 		let api = self.client.runtime_api();
-		let at = BlockId::<Block>::hash(at.unwrap_or_else(||
+		let best_hash = at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
-			self.client.info().best_hash));
+			self.client.info().best_hash);
 
 		let uxt: <Block as traits::Block>::Extrinsic =
 			Decode::decode(&mut &*extrinsic).map_err(|e| {
@@ -134,7 +133,7 @@ where
 			})?;
 
 		let api_version = api
-			.api_version::<dyn BlockBuilder<Block>>(&at)
+			.api_version::<dyn BlockBuilder<Block>>(best_hash)
 			.map_err(|e| {
 				CallError::Custom(ErrorObject::owned(
 					Error::RuntimeError.into(),
@@ -146,13 +145,13 @@ where
 				CallError::Custom(ErrorObject::owned(
 					Error::RuntimeError.into(),
 					"Unable to dry run extrinsic.",
-					Some(format!("Could not find `BlockBuilder` api for block `{:?}`.", at)),
+					Some(format!("Could not find `BlockBuilder` api for block `{:?}`.", best_hash)),
 				))
 			})?;
 
 		let result = if api_version < 6 {
 			#[allow(deprecated)]
-			api.apply_extrinsic_before_version_6(&at, uxt)
+			api.apply_extrinsic_before_version_6(best_hash, uxt)
 				.map(legacy::byte_sized_error::convert_to_latest)
 				.map_err(|e| {
 					CallError::Custom(ErrorObject::owned(
@@ -162,7 +161,7 @@ where
 					))
 				})?
 		} else {
-			api.apply_extrinsic(&at, uxt).map_err(|e| {
+			api.apply_extrinsic(best_hash, uxt).map_err(|e| {
 				CallError::Custom(ErrorObject::owned(
 					Error::RuntimeError.into(),
 					"Unable to dry run extrinsic.",
@@ -220,6 +219,7 @@ mod tests {
 	use jsonrpsee::{core::Error as JsonRpseeError, types::error::CallError};
 	use sc_transaction_pool::BasicPool;
 	use sp_runtime::{
+		generic::BlockId,
 		transaction_validity::{InvalidTransaction, TransactionValidityError},
 		ApplyExtrinsicResult,
 	};
