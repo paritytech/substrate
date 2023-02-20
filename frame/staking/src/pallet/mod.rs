@@ -726,7 +726,7 @@ pub mod pallet {
 			let all_claimable_pages: Vec<PageIndex> = (0..page_count).collect();
 			let claimed_pages = ClaimedRewards::<T>::get(era, validator);
 
-			all_claimable_pages.into_iter().filter(|p| !claimed_pages.contains(p)).next()
+			all_claimable_pages.into_iter().find(|p| !claimed_pages.contains(p))
 		}
 
 		/// Checks if exposure is paged or not.
