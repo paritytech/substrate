@@ -5219,7 +5219,6 @@ mod commission {
 	#[test]
 	fn set_commission_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			
 			// Set a commission for pool 1.
 			assert_ok!(Pools::set_commission(
 				RuntimeOrigin::signed(900),
@@ -5255,12 +5254,10 @@ mod commission {
 			));
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![
-					Event::PoolCommissionUpdated {
-						pool_id: 1,
-						current: Some((Perbill::from_percent(25), 900))
-					},
-				]
+				vec![Event::PoolCommissionUpdated {
+					pool_id: 1,
+					current: Some((Perbill::from_percent(25), 900))
+				},]
 			);
 
 			// update payee only.
@@ -5271,12 +5268,10 @@ mod commission {
 			));
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![
-					Event::PoolCommissionUpdated {
-						pool_id: 1,
-						current: Some((Perbill::from_percent(25), 901))
-					},
-				]
+				vec![Event::PoolCommissionUpdated {
+					pool_id: 1,
+					current: Some((Perbill::from_percent(25), 901))
+				},]
 			);
 
 			// remove the commission for pool 1.
@@ -5284,9 +5279,7 @@ mod commission {
 
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![
-					Event::PoolCommissionUpdated { pool_id: 1, current: None },
-				]
+				vec![Event::PoolCommissionUpdated { pool_id: 1, current: None },]
 			);
 
 			// test whether supplying a 0% commission along with a payee results in a None `current`
@@ -5441,15 +5434,13 @@ mod commission {
 
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![
-					Event::PoolCommissionChangeRateUpdated {
-						pool_id: 1,
-						change_rate: CommissionChangeRate {
-							max_increase: Perbill::from_percent(1),
-							min_delay: 2
-						}
-					},
-				]
+				vec![Event::PoolCommissionChangeRateUpdated {
+					pool_id: 1,
+					change_rate: CommissionChangeRate {
+						max_increase: Perbill::from_percent(1),
+						min_delay: 2
+					}
+				},]
 			);
 
 			// Now try to increase commission to 10% (5% increase). This should be throttled.
@@ -5486,12 +5477,10 @@ mod commission {
 			);
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![
-					Event::PoolCommissionUpdated {
-						pool_id: 1,
-						current: Some((Perbill::from_percent(6), 900))
-					},
-				]
+				vec![Event::PoolCommissionUpdated {
+					pool_id: 1,
+					current: Some((Perbill::from_percent(6), 900))
+				},]
 			);
 
 			// Attempt to increase the commission an additional 1% (now 7%). this will fail as
@@ -5517,12 +5506,10 @@ mod commission {
 			));
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![
-					Event::PoolCommissionUpdated {
-						pool_id: 1,
-						current: Some((Perbill::from_percent(7), 900))
-					},
-				]
+				vec![Event::PoolCommissionUpdated {
+					pool_id: 1,
+					current: Some((Perbill::from_percent(7), 900))
+				},]
 			);
 
 			// Run 2 blocks into the future, to block 5.
@@ -5560,12 +5547,10 @@ mod commission {
 			);
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![
-					Event::PoolMaxCommissionUpdated {
-						pool_id: 1,
-						max_commission: Perbill::from_percent(5)
-					}
-				]
+				vec![Event::PoolMaxCommissionUpdated {
+					pool_id: 1,
+					max_commission: Perbill::from_percent(5)
+				}]
 			);
 
 			// Run 2 blocks into the future so we are eligible to update commission again.
