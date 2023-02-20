@@ -340,7 +340,6 @@ pub mod pallet {
 				T::MaxVoters::get(),
 				T::MaxVotesPerVoter::get() * T::MaxVoters::get(),
 			);
-
 			let election_weight = pre_solve_weight
 				.saturating_sub(post_solve_weight)
 				.saturating_add(election_weight);
@@ -1397,7 +1396,7 @@ mod tests {
 
 	parameter_types! {
 		pub const ElectionsPalletId: LockIdentifier = *b"phrelect";
-		pub const MaxVoters: u32 = 512;
+		pub const MaxVoters: u32 = 256;
 		pub const MaxCandidates: u32 = 64;
 	}
 
