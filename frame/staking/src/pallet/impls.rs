@@ -42,11 +42,7 @@ use sp_staking::{
 };
 use sp_std::prelude::*;
 
-use crate::{
-	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, Exposure, ExposureOf,
-	Forcing, IndividualExposure, MaxWinnersOf, Nominations, PositiveImbalanceOf, RewardDestination,
-	SessionInterface, StakingLedger, ValidatorPrefs,
-};
+use crate::{log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, Exposure, ExposureOf, Forcing, IndividualExposure, MaxWinnersOf, Nominations, PositiveImbalanceOf, RewardDestination, SessionInterface, StakingLedger, ValidatorPrefs};
 
 use super::{pallet::*, STAKING_ID};
 
@@ -994,6 +990,22 @@ impl<T: Config> Pallet<T> {
 			weight,
 			DispatchClass::Mandatory,
 		);
+	}
+
+	pub fn eras_stakers(era: EraIndex, account: &T::AccountId) -> Exposure<T::AccountId, BalanceOf<T>> {
+		let overview = EraInfo::<T>::get_validator_overview(era, &account).unwrap_or_default();
+		if overview.page_count == 0 {
+			return Exposure { total: overview.total, own: overview.own, others: vec![] };
+		}
+
+		let mut others = Vec::with_capacity(overview.nominator_count as usize);
+		for page in 0..overview.page_count {
+			let nominators = EraInfo::<T>::get_nominators_page(era, &account, page);
+			// TODO(ank4n) fix to defensive unwrap
+			others.append(&mut nominators.unwrap().others);
+		}
+
+		Exposure { total: overview.total, own: overview.own, others }
 	}
 }
 

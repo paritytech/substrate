@@ -418,7 +418,7 @@ pub mod pallet {
 	/// Is it removed after `HISTORY_DEPTH` eras.
 	/// If stakers hasn't been set or has been removed then empty exposure is returned.
 	#[pallet::storage]
-	#[pallet::getter(fn eras_stakers)]
+	// #[pallet::getter(fn eras_stakers)]
 	#[pallet::unbounded]
 	pub type ErasStakers<T: Config> = StorageDoubleMap<
 		_,
@@ -451,7 +451,7 @@ pub mod pallet {
 		Twox64Concat,
 		T::AccountId,
 		ExposureOverview<BalanceOf<T>>,
-		ValueQuery,
+		OptionQuery,
 	>;
 
 	/// Clipped Exposure of validator at era.
@@ -677,24 +677,35 @@ pub mod pallet {
 			validator: &T::AccountId,
 			page: PageIndex,
 		) -> Option<ExposureExt<T::AccountId, BalanceOf<T>>> {
-			match <ErasStakersPaged<T>>::get(era, (validator, page)) {
+			match <ErasStakersOverview<T>>::get(&era, validator) {
 				// return clipped exposure if page zero and paged exposure does not exist
 				None if page == 0 =>
 					Some(ExposureExt::from_clipped(<ErasStakersClipped<T>>::get(era, validator))),
 
 				// return paged exposure if it exists
-				Some(exposure_page) => {
-					let overview = <ErasStakersOverview<T>>::get(&era, validator);
-					// own stake is included only once in the first page.
+				Some(overview) => {
+					let exposure_page =
+						<ErasStakersPaged<T>>::get(era, (validator, page)).unwrap_or_default();
 					let own = if page == 0 { overview.own } else { Zero::zero() };
-
-					Some(ExposureExt {
-						exposure_overview: ExposureOverview { own, ..overview },
-						exposure_page,
-					})
-				},
+					Some(ExposureExt { exposure_overview: ExposureOverview { own, ..overview }, exposure_page })
+				}
 				_ => None,
 			}
+		}
+
+		pub(crate) fn get_validator_overview(
+			era: EraIndex,
+			validator: &T::AccountId,
+		) -> Option<ExposureOverview<BalanceOf<T>>> {
+			<ErasStakersOverview<T>>::get(&era, validator)
+		}
+
+		pub(crate) fn get_nominators_page(
+			era: EraIndex,
+			validator: &T::AccountId,
+			page: PageIndex,
+		) -> Option<ExposurePage<T::AccountId, BalanceOf<T>>> {
+			<ErasStakersPaged<T>>::get(era, (validator, page))
 		}
 
 		/// Returns the number of pages of exposure a validator has for the given era.
@@ -703,7 +714,13 @@ pub mod pallet {
 		/// non-paged reward payouts.
 		// FIXME: No need to return minimum of one page after cleanup: #13034
 		pub(crate) fn get_page_count(era: EraIndex, validator: &T::AccountId) -> PageIndex {
-			<ErasStakersOverview<T>>::get(&era, validator).page_count.max(1)
+			if let Some(overview) = <ErasStakersOverview<T>>::get(&era, validator) {
+				// Paged exposure
+				overview.page_count.max(1)
+			} else {
+				// Non-paged exposure
+				1
+			}
 		}
 
 		/// Returns the next page that can be claimed or `None` if nothing to claim.
