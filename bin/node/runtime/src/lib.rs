@@ -2359,8 +2359,8 @@ mod tests {
 		assert!(
 			size <= CALL_PARAMS_MAX_SIZE,
 			"size of RuntimeCall {} is more than {CALL_PARAMS_MAX_SIZE} bytes.
-			 Some calls have too big arguments, use Box to reduce the  size of RuntimeCall.
-			If the limit is too strong, maybe consider fine tune the limit.",
+			 Some calls have too big arguments, use Box to reduce the size of RuntimeCall.
+			 If the limit is too strong, maybe consider increase the limit.",
 			size,
 		);
 	}
