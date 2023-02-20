@@ -2101,7 +2101,7 @@ mod unbond {
 				assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, 15));
 				assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().active_points(), 0);
 				assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().unbonding_points(), 20);
-				assert_eq!(RewardClaimPermission::<Runtime>::get(20), RewardClaim::Permissioned);
+				assert_eq!(ClaimPermissions::<Runtime>::get(20), ClaimPermission::Permissioned);
 			})
 	}
 
