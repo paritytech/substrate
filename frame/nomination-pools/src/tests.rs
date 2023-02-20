@@ -4269,15 +4269,15 @@ fn set_claimable_actor_works() {
 		);
 
 		// Make permissionless
-		assert_eq!(RewardClaimPermission::<Runtime>::get(11), RewardClaim::Permissioned);
+		assert_eq!(ClaimPermissions::<Runtime>::get(11), ClaimPermission::Permissioned);
 		assert_noop!(
-			Pools::set_reward_claim(RuntimeOrigin::signed(12), RewardClaim::Permissionless),
+			Pools::set_reward_claim(RuntimeOrigin::signed(12), ClaimPermission::Permissionless),
 			Error::<T>::PoolMemberNotFound
 		);
-		assert_ok!(Pools::set_reward_claim(RuntimeOrigin::signed(11), RewardClaim::Permissionless));
+		assert_ok!(Pools::set_reward_claim(RuntimeOrigin::signed(11), ClaimPermission::Permissionless));
 
 		// then
-		assert_eq!(RewardClaimPermission::<Runtime>::get(11), RewardClaim::Permissionless);
+		assert_eq!(ClaimPermissions::<Runtime>::get(11), ClaimPermission::Permissionless);
 	});
 }
 
