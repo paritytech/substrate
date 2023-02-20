@@ -677,23 +677,32 @@ pub mod pallet {
 			validator: &T::AccountId,
 			page: PageIndex,
 		) -> Option<ExposureExt<T::AccountId, BalanceOf<T>>> {
-			match <ErasStakersOverview<T>>::get(&era, validator) {
-				// return clipped exposure if page zero and paged exposure does not exist
-				None if page == 0 =>
-					Some(ExposureExt::from_clipped(<ErasStakersClipped<T>>::get(era, validator))),
+			let overview = <ErasStakersOverview<T>>::get(&era, validator);
 
-				// return paged exposure if it exists
-				Some(overview) => {
-					let exposure_page =
-						<ErasStakersPaged<T>>::get(era, (validator, page)).unwrap_or_default();
-					let own = if page == 0 { overview.own } else { Zero::zero() };
-					Some(ExposureExt {
-						exposure_overview: ExposureOverview { own, ..overview },
-						exposure_page,
-					})
-				},
-				_ => None,
+			// return clipped exposure if page zero and paged exposure does not exist
+			// exists for backward compatibility and can be removed as part of #13034
+			if overview.is_none() && page == 0 {
+				return Some(ExposureExt::from_clipped(<ErasStakersClipped<T>>::get(era, validator)))
 			}
+
+			// no exposure for this validator
+			if overview.is_none() {
+				return None
+			}
+
+			let overview = overview.unwrap();
+
+			// validator stake is added only in page zero
+			let validator_stake = if page == 0 { overview.own } else { Zero::zero() };
+
+			let exposure_page =
+				<ErasStakersPaged<T>>::get(era, (validator, page)).unwrap_or_default();
+
+			// build the exposure
+			Some(ExposureExt {
+				exposure_overview: ExposureOverview { own: validator_stake, ..overview },
+				exposure_page,
+			})
 		}
 
 		pub(crate) fn get_validator_overview(
