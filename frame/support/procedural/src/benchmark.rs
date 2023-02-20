@@ -237,8 +237,7 @@ impl BenchmarkDef {
 				return non_unit(tup.span())
 			}
 			let TypePath { path, qself: _ } = res.e_type;
-			// for this to parse as a TypePath, it has to have at least one segment, QED
-			let Some(seg) = path.segments.last() else { panic!("unreachable state") };
+			let seg = path.segments.last().expect("to be parsed as a TypePath, it must have at least one segment; qed");
 			syn::parse2::<keywords::BenchmarkError>(seg.to_token_stream())?;
 		}
 
