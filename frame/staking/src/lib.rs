@@ -783,6 +783,12 @@ pub struct ExposurePage<AccountId, Balance: HasCompact> {
 	pub others: Vec<IndividualExposure<AccountId, Balance>>,
 }
 
+impl<A, B: Default + HasCompact> Default for ExposurePage<A, B> {
+	fn default() -> Self {
+		ExposurePage { page_total: Default::default(), others: vec![] }
+	}
+}
+
 /// An overview of stake backing a single validator.
 ///
 /// It, in combination with a list of `ExposurePage`s, can be used to reconstruct a full `Exposure`
