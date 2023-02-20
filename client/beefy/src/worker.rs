@@ -1635,6 +1635,9 @@ pub(crate) mod tests {
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
 		worker.runtime = api_alice.clone();
 
+		// let there be a block with num = 1:
+		let _ = net.peer(0).push_blocks(1, false);
+
 		let payload1 = Payload::from_single_entry(MMR_ROOT_ID, vec![42]);
 		let payload2 = Payload::from_single_entry(MMR_ROOT_ID, vec![128]);
 
