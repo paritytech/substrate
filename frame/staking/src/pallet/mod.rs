@@ -802,7 +802,7 @@ pub mod pallet {
 			validator: &T::AccountId,
 			exposure: Exposure<T::AccountId, BalanceOf<T>>,
 		) {
-			<ErasStakers<T>>::insert(era, &validator, &exposure);
+			// <ErasStakers<T>>::insert(era, &validator, &exposure);
 
 			let page_size = T::MaxExposurePageSize::get().defensive_max(1);
 			let max_page_count = T::MaxExposurePageCount::get();

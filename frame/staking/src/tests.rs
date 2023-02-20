@@ -617,7 +617,7 @@ fn nominating_and_rewards_should_work() {
 			assert_eq!(Balances::total_balance(&20), initial_balance_20 + total_payout_0 / 2);
 			initial_balance_20 = Balances::total_balance(&20);
 
-			assert_eq!(ErasStakers::<Test>::iter_prefix_values(active_era()).count(), 2);
+			assert_eq!(ErasStakersPaged::<Test>::iter_prefix_values(active_era()).count(), 2);
 			assert_eq!(
 				Staking::eras_stakers(active_era(), &11),
 				Exposure {
