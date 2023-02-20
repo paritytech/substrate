@@ -154,6 +154,7 @@ impl crate::weights::WeightInfo for MockedWeightInfo {
 
 parameter_types! {
 	pub static MessagesProcessed: Vec<(Vec<u8>, MessageOrigin)> = vec![];
+	pub static SuspendedQueues: Vec<MessageOrigin> = vec![];
 }
 
 /// A message processor which records all processed messages into [`MessagesProcessed`].
@@ -172,7 +173,7 @@ impl ProcessMessage for RecordingMessageProcessor {
 		origin: Self::Origin,
 		weight_limit: Weight,
 	) -> Result<(bool, Weight), ProcessMessageError> {
-		processing_message(message)?;
+		processing_message(message, &origin)?;
 
 		let weight = if message.starts_with(&b"weight="[..]) {
 			let mut w: u64 = 0;
@@ -200,9 +201,13 @@ impl ProcessMessage for RecordingMessageProcessor {
 	}
 }
 
-/// Processed a mocked message. Messages that end with `badformat`, `corrupt` or `unsupported` will
-/// fail with the respective error.
-fn processing_message(msg: &[u8]) -> Result<(), ProcessMessageError> {
+/// Processed a mocked message. Messages that end with `badformat`, `corrupt`, `unsupported` or
+/// `yield` will fail with an error respectively.
+fn processing_message(msg: &[u8], origin: &MessageOrigin) -> Result<(), ProcessMessageError> {
+	if SuspendedQueues::get().contains(&origin) {
+		return Err(ProcessMessageError::Yield)
+	}
+
 	let msg = String::from_utf8_lossy(msg);
 	if msg.ends_with("badformat") {
 		Err(ProcessMessageError::BadFormat)
@@ -210,6 +215,8 @@ fn processing_message(msg: &[u8]) -> Result<(), ProcessMessageError> {
 		Err(ProcessMessageError::Corrupt)
 	} else if msg.ends_with("unsupported") {
 		Err(ProcessMessageError::Unsupported)
+	} else if msg.ends_with("yield") {
+		Err(ProcessMessageError::Yield)
 	} else {
 		Ok(())
 	}
@@ -230,10 +237,10 @@ impl ProcessMessage for CountingMessageProcessor {
 
 	fn process_message(
 		message: &[u8],
-		_origin: Self::Origin,
+		origin: Self::Origin,
 		weight_limit: Weight,
 	) -> Result<(bool, Weight), ProcessMessageError> {
-		if let Err(e) = processing_message(message) {
+		if let Err(e) = processing_message(message, &origin) {
 			NumMessagesErrored::set(NumMessagesErrored::get() + 1);
 			return Err(e)
 		}
@@ -285,7 +292,7 @@ pub fn set_weight(name: &str, w: Weight) {
 
 /// Assert that exactly these pages are present. Assumes `Here` origin.
 pub fn assert_pages(indices: &[u32]) {
-	assert_eq!(Pages::<Test>::iter().count(), indices.len());
+	assert_eq!(Pages::<Test>::iter().count(), indices.len(), "Wrong number of pages in the queue");
 	for i in indices {
 		assert!(Pages::<Test>::contains_key(MessageOrigin::Here, i));
 	}
