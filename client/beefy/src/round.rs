@@ -20,7 +20,7 @@ use crate::LOG_TARGET;
 
 use beefy_primitives::{
 	crypto::{AuthorityId, Public, Signature},
-	Commitment, SignedCommitment, ValidatorSet, ValidatorSetId, VoteMessage,
+	Commitment, EquivocationProof, SignedCommitment, ValidatorSet, ValidatorSetId, VoteMessage,
 };
 use codec::{Decode, Encode};
 use log::debug;
@@ -61,7 +61,7 @@ pub fn threshold(authorities: usize) -> usize {
 pub enum VoteImportResult<B: Block> {
 	Ok,
 	RoundConcluded(SignedCommitment<NumberFor<B>, Signature>),
-	Equivocation, /* TODO: (EquivocationProof<NumberFor<B>, Public, Signature>) */
+	Equivocation(EquivocationProof<NumberFor<B>, Public, Signature>),
 	Invalid,
 	Stale,
 }
@@ -149,8 +149,10 @@ where
 					target: LOG_TARGET,
 					"🥩 detected equivocated vote: 1st: {:?}, 2nd: {:?}", previous_vote, vote
 				);
-				// TODO: build `EquivocationProof` and return it here.
-				return VoteImportResult::Equivocation
+				return VoteImportResult::Equivocation(EquivocationProof {
+					first: previous_vote.clone(),
+					second: vote,
+				})
 			}
 		} else {
 			// this is the first vote sent by `id` for `num`, all good
@@ -197,8 +199,8 @@ mod tests {
 	use sc_network_test::Block;
 
 	use beefy_primitives::{
-		crypto::Public, keyring::Keyring, known_payloads::MMR_ROOT_ID, Commitment, Payload,
-		SignedCommitment, ValidatorSet, VoteMessage,
+		crypto::Public, known_payloads::MMR_ROOT_ID, Commitment, EquivocationProof, Keyring,
+		Payload, SignedCommitment, ValidatorSet, VoteMessage,
 	};
 
 	use super::{threshold, Block as BlockT, RoundTracker, Rounds};
@@ -451,5 +453,43 @@ mod tests {
 		// conclude round 3
 		rounds.conclude(3);
 		assert!(rounds.previous_votes.is_empty());
+	}
+
+	#[test]
+	fn should_provide_equivocation_proof() {
+		sp_tracing::try_init_simple();
+
+		let validators = ValidatorSet::<Public>::new(
+			vec![Keyring::Alice.public(), Keyring::Bob.public()],
+			Default::default(),
+		)
+		.unwrap();
+		let validator_set_id = validators.id();
+		let session_start = 1u64.into();
+		let mut rounds = Rounds::<Block>::new(session_start, validators);
+
+		let payload1 = Payload::from_single_entry(MMR_ROOT_ID, vec![1, 1, 1, 1]);
+		let payload2 = Payload::from_single_entry(MMR_ROOT_ID, vec![2, 2, 2, 2]);
+		let commitment1 = Commitment { block_number: 1, payload: payload1, validator_set_id };
+		let commitment2 = Commitment { block_number: 1, payload: payload2, validator_set_id };
+
+		let alice_vote1 = VoteMessage {
+			id: Keyring::Alice.public(),
+			commitment: commitment1,
+			signature: Keyring::Alice.sign(b"I am committed"),
+		};
+		let mut alice_vote2 = alice_vote1.clone();
+		alice_vote2.commitment = commitment2;
+
+		let expected_result = VoteImportResult::Equivocation(EquivocationProof {
+			first: alice_vote1.clone(),
+			second: alice_vote2.clone(),
+		});
+
+		// vote on one payload - ok
+		assert_eq!(rounds.add_vote(alice_vote1), VoteImportResult::Ok);
+
+		// vote on _another_ commitment/payload -> expected equivocation proof
+		assert_eq!(rounds.add_vote(alice_vote2), expected_result);
 	}
 }

@@ -35,6 +35,8 @@ use sc_consensus::{BlockCheckParams, BlockImport, BlockImportParams, ImportResul
 use crate::{
 	communication::notification::BeefyVersionedFinalityProofSender,
 	justification::{decode_and_verify_finality_proof, BeefyVersionedFinalityProof},
+	metric_inc,
+	metrics::BlockImportMetrics,
 	LOG_TARGET,
 };
 
@@ -49,6 +51,7 @@ pub struct BeefyBlockImport<Block: BlockT, Backend, RuntimeApi, I> {
 	runtime: Arc<RuntimeApi>,
 	inner: I,
 	justification_sender: BeefyVersionedFinalityProofSender<Block>,
+	metrics: Option<BlockImportMetrics>,
 }
 
 impl<Block: BlockT, BE, Runtime, I: Clone> Clone for BeefyBlockImport<Block, BE, Runtime, I> {
@@ -58,6 +61,7 @@ impl<Block: BlockT, BE, Runtime, I: Clone> Clone for BeefyBlockImport<Block, BE,
 			runtime: self.runtime.clone(),
 			inner: self.inner.clone(),
 			justification_sender: self.justification_sender.clone(),
+			metrics: self.metrics.clone(),
 		}
 	}
 }
@@ -69,8 +73,9 @@ impl<Block: BlockT, BE, Runtime, I> BeefyBlockImport<Block, BE, Runtime, I> {
 		runtime: Arc<Runtime>,
 		inner: I,
 		justification_sender: BeefyVersionedFinalityProofSender<Block>,
+		metrics: Option<BlockImportMetrics>,
 	) -> BeefyBlockImport<Block, BE, Runtime, I> {
-		BeefyBlockImport { backend, runtime, inner, justification_sender }
+		BeefyBlockImport { backend, runtime, inner, justification_sender, metrics }
 	}
 }
 
@@ -87,13 +92,23 @@ where
 		number: NumberFor<Block>,
 		hash: <Block as BlockT>::Hash,
 	) -> Result<BeefyVersionedFinalityProof<Block>, ConsensusError> {
+		use ConsensusError::ClientImport as ImportError;
 		let block_id = BlockId::hash(hash);
+		let beefy_genesis = self
+			.runtime
+			.runtime_api()
+			.beefy_genesis(&block_id)
+			.map_err(|e| ImportError(e.to_string()))?
+			.ok_or_else(|| ImportError("Unknown BEEFY genesis".to_string()))?;
+		if number < beefy_genesis {
+			return Err(ImportError("BEEFY genesis is set for future block".to_string()))
+		}
 		let validator_set = self
 			.runtime
 			.runtime_api()
 			.validator_set(&block_id)
-			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
-			.ok_or_else(|| ConsensusError::ClientImport("Unknown validator set".to_string()))?;
+			.map_err(|e| ImportError(e.to_string()))?
+			.ok_or_else(|| ImportError("Unknown validator set".to_string()))?;
 
 		decode_and_verify_finality_proof::<Block>(&encoded[..], number, &validator_set)
 	}
@@ -137,23 +152,28 @@ where
 
 		match (beefy_encoded, &inner_import_result) {
 			(Some(encoded), ImportResult::Imported(_)) => {
-				if let Ok(proof) = self.decode_and_verify(&encoded, number, hash) {
-					// The proof is valid and the block is imported and final, we can import.
-					debug!(
-						target: LOG_TARGET,
-						"🥩 import justif {:?} for block number {:?}.", proof, number
-					);
-					// Send the justification to the BEEFY voter for processing.
-					self.justification_sender
-						.notify(|| Ok::<_, ()>(proof))
-						.expect("forwards closure result; the closure always returns Ok; qed.");
-				} else {
-					debug!(
-						target: LOG_TARGET,
-						"🥩 error decoding justification: {:?} for imported block {:?}",
-						encoded,
-						number,
-					);
+				match self.decode_and_verify(&encoded, number, hash) {
+					Ok(proof) => {
+						// The proof is valid and the block is imported and final, we can import.
+						debug!(
+							target: LOG_TARGET,
+							"🥩 import justif {:?} for block number {:?}.", proof, number
+						);
+						// Send the justification to the BEEFY voter for processing.
+						self.justification_sender
+							.notify(|| Ok::<_, ()>(proof))
+							.expect("the closure always returns Ok; qed.");
+						metric_inc!(self, beefy_good_justification_imports);
+					},
+					Err(err) => {
+						debug!(
+							target: LOG_TARGET,
+							"🥩 error importing BEEFY justification for block {:?}: {:?}",
+							number,
+							err,
+						);
+						metric_inc!(self, beefy_bad_justification_imports);
+					},
 				}
 			},
 			_ => (),

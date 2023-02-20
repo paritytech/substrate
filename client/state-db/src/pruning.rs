@@ -26,7 +26,7 @@
 
 use crate::{
 	noncanonical::LAST_CANONICAL, to_meta_key, CommitSet, Error, Hash, MetaDb, StateDbError,
-	DEFAULT_MAX_BLOCK_CONSTRAINT,
+	DEFAULT_MAX_BLOCK_CONSTRAINT, LOG_TARGET,
 };
 use codec::{Decode, Encode};
 use log::trace;
@@ -79,14 +79,24 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 			death_index: HashMap::new(),
 		};
 		// read the journal
-		trace!(target: "state-db", "Reading pruning journal for the memory queue. Pending #{}", base);
+		trace!(
+			target: LOG_TARGET,
+			"Reading pruning journal for the memory queue. Pending #{}",
+			base,
+		);
 		loop {
 			let journal_key = to_journal_key(block);
 			match db.get_meta(&journal_key).map_err(Error::Db)? {
 				Some(record) => {
 					let record: JournalRecord<BlockHash, Key> =
 						Decode::decode(&mut record.as_slice())?;
-					trace!(target: "state-db", "Pruning journal entry {} ({} inserted, {} deleted)", block, record.inserted.len(), record.deleted.len());
+					trace!(
+						target: LOG_TARGET,
+						"Pruning journal entry {} ({} inserted, {} deleted)",
+						block,
+						record.inserted.len(),
+						record.deleted.len(),
+					);
 					queue.import(base, block, record);
 				},
 				None => break,
@@ -107,7 +117,11 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 		// limit the cache capacity from 1 to `DEFAULT_MAX_BLOCK_CONSTRAINT`
 		let cache_capacity = window_size.clamp(1, DEFAULT_MAX_BLOCK_CONSTRAINT) as usize;
 		let mut cache = VecDeque::with_capacity(cache_capacity);
-		trace!(target: "state-db", "Reading pruning journal for the database-backed queue. Pending #{}", base);
+		trace!(
+			target: LOG_TARGET,
+			"Reading pruning journal for the database-backed queue. Pending #{}",
+			base
+		);
 		DeathRowQueue::load_batch_from_db(&db, &mut cache, base, cache_capacity)?;
 		Ok(DeathRowQueue::DbBacked { db, cache, cache_capacity, last })
 	}
@@ -115,13 +129,13 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 	/// import a new block to the back of the queue
 	fn import(&mut self, base: u64, num: u64, journal_record: JournalRecord<BlockHash, Key>) {
 		let JournalRecord { hash, inserted, deleted } = journal_record;
-		trace!(target: "state-db", "Importing {}, base={}", num, base);
+		trace!(target: LOG_TARGET, "Importing {}, base={}", num, base);
 		match self {
 			DeathRowQueue::DbBacked { cache, cache_capacity, last, .. } => {
 				// If the new block continues cached range and there is space, load it directly into
 				// cache.
 				if num == base + cache.len() as u64 && cache.len() < *cache_capacity {
-					trace!(target: "state-db", "Adding to DB backed cache {:?} (#{})", hash, num);
+					trace!(target: LOG_TARGET, "Adding to DB backed cache {:?} (#{})", hash, num);
 					cache.push_back(DeathRow { hash, deleted: deleted.into_iter().collect() });
 				}
 				*last = Some(num);
@@ -306,6 +320,18 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 			};
 
 		let queue = if count_insertions {
+			// Highly scientific crafted number for deciding when to print the warning!
+			//
+			// Rocksdb doesn't support refcounting and requires that we load the entire pruning
+			// window into the memory.
+			if window_size > 1000 {
+				log::warn!(
+					target: LOG_TARGET,
+					"Large pruning window of {window_size} detected! THIS CAN LEAD TO HIGH MEMORY USAGE AND CRASHES. \
+					Reduce the pruning window or switch your database to paritydb."
+				);
+			}
+
 			DeathRowQueue::new_mem(&db, base)?
 		} else {
 			let last = match last_canonicalized_number {

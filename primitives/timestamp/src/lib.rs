@@ -134,10 +134,12 @@ impl From<Duration> for Timestamp {
 #[derive(Encode, sp_runtime::RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode, thiserror::Error))]
 pub enum InherentError {
-	/// The timestamp is valid in the future.
-	/// This is a non-fatal-error and will not stop checking the inherents.
-	#[cfg_attr(feature = "std", error("Block will be valid at {0}."))]
-	ValidAtTimestamp(InherentType),
+	/// The time between the blocks is too short.
+	#[cfg_attr(
+		feature = "std",
+		error("The time since the last timestamp is lower than the minimum period.")
+	)]
+	TooEarly,
 	/// The block timestamp is too far in the future
 	#[cfg_attr(feature = "std", error("The timestamp of the block is too far in the future."))]
 	TooFarInFuture,
@@ -146,7 +148,7 @@ pub enum InherentError {
 impl IsFatalError for InherentError {
 	fn is_fatal_error(&self) -> bool {
 		match self {
-			InherentError::ValidAtTimestamp(_) => false,
+			InherentError::TooEarly => true,
 			InherentError::TooFarInFuture => true,
 		}
 	}
@@ -240,34 +242,8 @@ impl sp_inherents::InherentDataProvider for InherentDataProvider {
 		identifier: &InherentIdentifier,
 		error: &[u8],
 	) -> Option<Result<(), sp_inherents::Error>> {
-		if *identifier != INHERENT_IDENTIFIER {
-			return None
-		}
-
-		match InherentError::try_from(&INHERENT_IDENTIFIER, error)? {
-			InherentError::ValidAtTimestamp(valid) => {
-				let max_drift = self.max_drift;
-				let timestamp = self.timestamp;
-				// halt import until timestamp is valid.
-				// reject when too far ahead.
-				if valid > timestamp + max_drift {
-					return Some(Err(sp_inherents::Error::Application(Box::from(
-						InherentError::TooFarInFuture,
-					))))
-				}
-
-				let diff = valid.checked_sub(timestamp).unwrap_or_default();
-				log::info!(
-					target: "timestamp",
-					"halting for block {} milliseconds in the future",
-					diff.0,
-				);
-
-				futures_timer::Delay::new(diff.as_duration()).await;
-
-				Some(Ok(()))
-			},
-			o => Some(Err(sp_inherents::Error::Application(Box::from(o)))),
-		}
+		Some(Err(sp_inherents::Error::Application(Box::from(InherentError::try_from(
+			identifier, error,
+		)?))))
 	}
 }

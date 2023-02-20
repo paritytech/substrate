@@ -43,7 +43,7 @@ use sp_runtime::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		TransactionValidityError, ValidTransaction,
 	},
-	DispatchResult, KeyTypeId, Perbill, SaturatedConversion,
+	DispatchResult, KeyTypeId, Perbill,
 };
 use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_staking::{
@@ -139,14 +139,13 @@ where
 		let validator_set_count = key_owner_proof.validator_count();
 		let session_index = key_owner_proof.session();
 
-		let epoch_index = (*slot.saturating_sub(crate::GenesisSlot::<T>::get()) /
-			T::EpochDuration::get())
-		.saturated_into::<u32>();
+		let epoch_index =
+			*slot.saturating_sub(crate::GenesisSlot::<T>::get()) / T::EpochDuration::get();
 
 		// Check that the slot number is consistent with the session index
 		// in the key ownership proof (i.e. slot is for that epoch)
 		// TODO: this should be part of `check_evidence`...
-		if epoch_index != session_index {
+		if Pallet::<T>::session_index_for_epoch(epoch_index) != session_index {
 			return Err(Error::<T>::InvalidKeyOwnershipProof.into())
 		}
 
