@@ -17,7 +17,7 @@
 
 //! Glutton pallet benchmarking.
 //!
-//! Has to be compiled and run twice to bootstrap on new hardware.
+//! Has to be compiled and run twice to calibrate on new hardware.
 
 #[cfg(feature = "runtime-benchmarks")]
 use super::*;
@@ -31,20 +31,21 @@ use frame_system::Pallet as System;
 
 benchmarks! {
 	initialize_pallet_grow {
-		let n in 0 .. 10_000;
+		let n in 0 .. 1_000;
 	}: {
-		Glutton::<T>::initialize_pallet(SystemOrigin::Root.into(), n, false).unwrap()
+		Glutton::<T>::initialize_pallet(SystemOrigin::Root.into(), n, None).unwrap()
 	} verify {
-		assert_eq!(TrashData::<T>::count(), n);
+		assert_eq!(TrashDataCount::<T>::get(), n);
 	}
-	
+
 	initialize_pallet_shrink {
-		let n in 0 .. 10_000;
-		Glutton::<T>::initialize_pallet(SystemOrigin::Root.into(), n, false).unwrap();
+		let n in 0 .. 1_000;
+
+		Glutton::<T>::initialize_pallet(SystemOrigin::Root.into(), n, None).unwrap();
 	}: {
-		Glutton::<T>::initialize_pallet(SystemOrigin::Root.into(), 0, true).unwrap()
+		Glutton::<T>::initialize_pallet(SystemOrigin::Root.into(), 0, Some(n)).unwrap()
 	} verify {
-		assert_eq!(TrashData::<T>::count(), 0);
+		assert_eq!(TrashDataCount::<T>::get(), 0);
 	}
 
 	waste_ref_time_iter {
@@ -86,6 +87,12 @@ benchmarks! {
 		// Enough weight do do nothing.
 		Glutton::<T>::on_idle(System::<T>::block_number(), T::WeightInfo::empty_on_idle());
 	}
+
+	set_compute {
+	}: _(SystemOrigin::Root, Perbill::from_percent(50))
+
+	set_storage {
+	}: _(SystemOrigin::Root, Perbill::from_percent(50))
 
 	impl_benchmark_test_suite!(Glutton, crate::mock::new_test_ext(), crate::mock::Test);
 }

@@ -58,8 +58,8 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event {
-		/// The pallet has been initialized by root.
-		PalletInitialized { force: bool },
+		/// The pallet has been (re)initialized by root.
+		PalletInitialized { reinit: bool },
 		/// The computation limit has been updated by root.
 		ComputationLimitSet { compute: Perbill },
 		/// The storage limit has been updated by root.
@@ -93,13 +93,16 @@ pub mod pallet {
 	/// pallet would also work out of the box with more entries, but its benchmarked proof weight
 	/// would possibly be underestimated in that case.
 	#[pallet::storage]
-	pub(super) type TrashData<T: Config> = CountedStorageMap<
+	pub(super) type TrashData<T: Config> = StorageMap<
 		Hasher = Twox64Concat,
 		Key = u32,
 		Value = [u8; 1024],
 		QueryKind = OptionQuery,
 		MaxValues = ConstU32<65_000>,
 	>;
+
+	#[pallet::storage]
+	pub(crate) type TrashDataCount<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -141,22 +144,29 @@ pub mod pallet {
 		///
 		/// Only callable by Root. A good default for `trash_count` is `5_000`.
 		#[pallet::call_index(0)]
-		#[pallet::weight(T::DbWeight::get().writes((*new_count).into()))]
+		#[pallet::weight(
+			T::WeightInfo::initialize_pallet_grow(witness_count.unwrap_or_default())
+				.max(T::WeightInfo::initialize_pallet_shrink(witness_count.unwrap_or_default()))
+		)]
 		pub fn initialize_pallet(
 			origin: OriginFor<T>,
 			new_count: u32,
-			force: bool,
+			witness_count: Option<u32>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
-			let current_count = TrashData::<T>::count();
-			ensure!(force || current_count.is_zero(), Error::<T>::AlreadyInitialized);
+			let current_count = TrashDataCount::<T>::get();
+			ensure!(
+				current_count == witness_count.unwrap_or_default(),
+				Error::<T>::AlreadyInitialized
+			);
 
 			// Add or remove elements from `TrashData`.
-			(current_count..new_count).for_each(|i| TrashData::<T>::insert(i, &[i as u8; 1024]));
-			(new_count..current_count).rev().for_each(|i| TrashData::<T>::remove(i));
+			(new_count..current_count).for_each(|i| TrashData::<T>::remove(i));
+			(current_count..new_count).for_each(|i| TrashData::<T>::insert(i, [i as u8; 1024]));
 
-			Self::deposit_event(Event::PalletInitialized { force });
+			Self::deposit_event(Event::PalletInitialized { reinit: witness_count.is_some() });
+			TrashDataCount::<T>::set(new_count);
 			Ok(())
 		}
 
@@ -165,7 +175,7 @@ pub mod pallet {
 		///
 		/// Only callable by Root.
 		#[pallet::call_index(1)]
-		#[pallet::weight(T::DbWeight::get().writes(1))]
+		#[pallet::weight(T::WeightInfo::set_compute())]
 		pub fn set_compute(origin: OriginFor<T>, compute: Perbill) -> DispatchResult {
 			ensure_root(origin)?;
 			Compute::<T>::set(compute);
@@ -179,7 +189,7 @@ pub mod pallet {
 		///
 		/// Only callable by Root.
 		#[pallet::call_index(2)]
-		#[pallet::weight(T::DbWeight::get().writes(1))]
+		#[pallet::weight(T::WeightInfo::set_storage())]
 		pub fn set_storage(origin: OriginFor<T>, storage: Perbill) -> DispatchResult {
 			ensure_root(origin)?;
 			Storage::<T>::set(storage);
