@@ -28,7 +28,7 @@ pub mod v1 {
 		pub depositor: AccountId,
 		pub root: AccountId,
 		pub nominator: AccountId,
-		pub state_toggler: AccountId,
+		pub bouncer: AccountId,
 	}
 
 	impl<AccountId> OldPoolRoles<AccountId> {
@@ -37,7 +37,7 @@ pub mod v1 {
 				depositor: self.depositor,
 				root: Some(self.root),
 				nominator: Some(self.nominator),
-				state_toggler: Some(self.state_toggler),
+				bouncer: Some(self.bouncer),
 			}
 		}
 	}
