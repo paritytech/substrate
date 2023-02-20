@@ -24,8 +24,9 @@ use crate::{setup_inputs, ElectionResult, IdentifierT, PerThing128, VoteWeight};
 use sp_arithmetic::traits::Zero;
 use sp_std::{cmp::Reverse, vec::Vec};
 
-/// Execute an approvals voting election scheme. The return type is a list of winners and a weight
-/// distribution vector of all voters who contribute to the winners.
+/// Execute an approvals voting election scheme. The return type is a list of winners. The weight
+/// vector of all voters who contribute to the winners, which for this scheme is always 100% per
+/// vote.
 ///
 /// - The vote assignment distribution for each vote is always 100%, since a voter backs a candidate
 ///   with its full stake, regardless of how many candidates are backed by the same stake. However,
