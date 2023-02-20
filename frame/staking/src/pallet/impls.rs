@@ -975,7 +975,7 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> Pallet<T> {
 	/// Returns the current nominations quota for nominators.
 	///
-	/// Used by runtime API.
+	/// Used by the runtime API.
 	/// Note: for now, this api runtime will always return value of `T::MaxNominations` and thus it
 	/// is redundant. However, with the upcoming changes in
 	/// <https://github.com/paritytech/substrate/pull/12970>, the nominations quota will change
