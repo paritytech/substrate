@@ -5219,12 +5219,24 @@ mod commission {
 	#[test]
 	fn set_commission_works() {
 		ExtBuilder::default().build_and_execute(|| {
+			
 			// Set a commission for pool 1.
 			assert_ok!(Pools::set_commission(
 				RuntimeOrigin::signed(900),
 				1,
 				Some((Perbill::from_percent(50), 900))
 			));
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::PoolCommissionUpdated {
+						pool_id: 1,
+						current: Some((Perbill::from_percent(50), 900))
+					},
+				]
+			);
 
 			let commission_as_percent = BondedPool::<Runtime>::get(1)
 				.unwrap()
@@ -5241,6 +5253,15 @@ mod commission {
 				1,
 				Some((Perbill::from_percent(25), 900))
 			));
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::PoolCommissionUpdated {
+						pool_id: 1,
+						current: Some((Perbill::from_percent(25), 900))
+					},
+				]
+			);
 
 			// update payee only.
 			assert_ok!(Pools::set_commission(
@@ -5248,9 +5269,25 @@ mod commission {
 				1,
 				Some((Perbill::from_percent(25), 901))
 			));
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::PoolCommissionUpdated {
+						pool_id: 1,
+						current: Some((Perbill::from_percent(25), 901))
+					},
+				]
+			);
 
 			// remove the commission for pool 1.
 			assert_ok!(Pools::set_commission(RuntimeOrigin::signed(900), 1, None));
+
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::PoolCommissionUpdated { pool_id: 1, current: None },
+				]
+			);
 
 			// test whether supplying a 0% commission along with a payee results in a None `current`
 			// being inserted.
@@ -5279,6 +5316,24 @@ mod commission {
 				Some((Perbill::from_percent(0), 900))
 			));
 
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::PoolCommissionUpdated {
+						pool_id: 1,
+						current: Some((Perbill::from_percent(10), 900))
+					},
+					Event::PoolCommissionUpdated {
+						pool_id: 1,
+						current: Some((Perbill::from_percent(0), 900))
+					},
+					Event::PoolCommissionUpdated {
+						pool_id: 1,
+						current: Some((Perbill::from_percent(0), 900))
+					},
+				]
+			);
+
 			// test for updating payee only when commission = max commission
 			//
 			// set max commission to 10%
@@ -5305,33 +5360,6 @@ mod commission {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					Event::Created { depositor: 10, pool_id: 1 },
-					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::PoolCommissionUpdated {
-						pool_id: 1,
-						current: Some((Perbill::from_percent(50), 900))
-					},
-					Event::PoolCommissionUpdated {
-						pool_id: 1,
-						current: Some((Perbill::from_percent(25), 900))
-					},
-					Event::PoolCommissionUpdated {
-						pool_id: 1,
-						current: Some((Perbill::from_percent(25), 901))
-					},
-					Event::PoolCommissionUpdated { pool_id: 1, current: None },
-					Event::PoolCommissionUpdated {
-						pool_id: 1,
-						current: Some((Perbill::from_percent(10), 900))
-					},
-					Event::PoolCommissionUpdated {
-						pool_id: 1,
-						current: Some((Perbill::from_percent(0), 900))
-					},
-					Event::PoolCommissionUpdated {
-						pool_id: 1,
-						current: Some((Perbill::from_percent(0), 900))
-					},
 					Event::PoolMaxCommissionUpdated {
 						pool_id: 1,
 						max_commission: Perbill::from_percent(10)
@@ -5378,6 +5406,18 @@ mod commission {
 				Some((Perbill::from_percent(5), 900)),
 			));
 
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::PoolCommissionUpdated {
+						pool_id: 1,
+						current: Some((Perbill::from_percent(5), 900))
+					},
+				]
+			);
+
 			// Change rate test.
 			//
 			// Set a change rate to be a +1% commission increase every 2 blocks.
@@ -5397,6 +5437,19 @@ mod commission {
 					}),
 					throttle_from: Some(1_u64),
 				}
+			);
+
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::PoolCommissionChangeRateUpdated {
+						pool_id: 1,
+						change_rate: CommissionChangeRate {
+							max_increase: Perbill::from_percent(1),
+							min_delay: 2
+						}
+					},
+				]
 			);
 
 			// Now try to increase commission to 10% (5% increase). This should be throttled.
@@ -5431,6 +5484,15 @@ mod commission {
 					throttle_from: Some(3_u64),
 				}
 			);
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::PoolCommissionUpdated {
+						pool_id: 1,
+						current: Some((Perbill::from_percent(6), 900))
+					},
+				]
+			);
 
 			// Attempt to increase the commission an additional 1% (now 7%). this will fail as
 			// `throttle_from` is now the current block. At least 2 blocks need to pass before we
@@ -5453,6 +5515,15 @@ mod commission {
 				1,
 				Some((Perbill::from_percent(7), 900)),
 			));
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::PoolCommissionUpdated {
+						pool_id: 1,
+						current: Some((Perbill::from_percent(7), 900))
+					},
+				]
+			);
 
 			// Run 2 blocks into the future, to block 5.
 			run_blocks(2);
@@ -5487,6 +5558,15 @@ mod commission {
 					throttle_from: Some(7)
 				}
 			);
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::PoolMaxCommissionUpdated {
+						pool_id: 1,
+						max_commission: Perbill::from_percent(5)
+					}
+				]
+			);
 
 			// Run 2 blocks into the future so we are eligible to update commission again.
 			run_blocks(2);
@@ -5501,37 +5581,6 @@ mod commission {
 					Some((Perbill::from_percent(6), 900)),
 				),
 				Error::<Runtime>::CommissionExceedsMaximum
-			);
-
-			assert_eq!(
-				pool_events_since_last_call(),
-				vec![
-					Event::Created { depositor: 10, pool_id: 1 },
-					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::PoolCommissionUpdated {
-						pool_id: 1,
-						current: Some((Perbill::from_percent(5), 900))
-					},
-					Event::PoolCommissionChangeRateUpdated {
-						pool_id: 1,
-						change_rate: CommissionChangeRate {
-							max_increase: Perbill::from_percent(1),
-							min_delay: 2
-						}
-					},
-					Event::PoolCommissionUpdated {
-						pool_id: 1,
-						current: Some((Perbill::from_percent(6), 900))
-					},
-					Event::PoolCommissionUpdated {
-						pool_id: 1,
-						current: Some((Perbill::from_percent(7), 900))
-					},
-					Event::PoolMaxCommissionUpdated {
-						pool_id: 1,
-						max_commission: Perbill::from_percent(5)
-					}
-				]
 			);
 		});
 	}
@@ -5658,6 +5707,20 @@ mod commission {
 					min_delay: 10_u64
 				})
 			);
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::PoolCommissionChangeRateUpdated {
+						pool_id: 1,
+						change_rate: CommissionChangeRate {
+							max_increase: Perbill::from_percent(5),
+							min_delay: 10
+						}
+					},
+				]
+			);
 
 			// We now try to half the min_delay - this will be disallowed. A greater delay between
 			// commission changes is seen as more restrictive.
@@ -5711,15 +5774,6 @@ mod commission {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					Event::Created { depositor: 10, pool_id: 1 },
-					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::PoolCommissionChangeRateUpdated {
-						pool_id: 1,
-						change_rate: CommissionChangeRate {
-							max_increase: Perbill::from_percent(5),
-							min_delay: 10
-						}
-					},
 					Event::PoolCommissionChangeRateUpdated {
 						pool_id: 1,
 						change_rate: CommissionChangeRate {
