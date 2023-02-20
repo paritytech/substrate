@@ -2705,7 +2705,10 @@ fn garbage_collection_on_window_pruning() {
 		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
 
 		on_offence_now(
-			&[OffenceDetails { offender: (11, Staking::eras_stakers(now, &11)), reporters: vec![] }],
+			&[OffenceDetails {
+				offender: (11, Staking::eras_stakers(now, &11)),
+				reporters: vec![],
+			}],
 			&[Perbill::from_percent(10)],
 		);
 
