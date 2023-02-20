@@ -260,16 +260,16 @@ impl<T: Config> Pallet<T> {
 
 			let longevity =
 				<T::EquivocationReportSystem as OffenceReportSystem<_, _, _>>::Longevity::get();
-			// TODO DAVXY: is ok the hash of the serialized structure as an identifier?
-			// Was: (equivocation_proof.offender(), equivocation_proof.set_id(),
-			// equivocation_proof.round()) Oterwise we're going to introduce tag()
-			let tag = equivocation_proof.using_encoded(|bytes| sp_io::hashing::blake2_256(bytes));
 
 			ValidTransaction::with_tag_prefix("GrandpaEquivocation")
 				// We assign the maximum priority for any equivocation report.
 				.priority(TransactionPriority::max_value())
 				// Only one equivocation report for the same offender at the same slot.
-				.and_provides(tag)
+				.and_provides((
+					equivocation_proof.offender().clone(),
+					equivocation_proof.set_id(),
+					equivocation_proof.round(),
+				))
 				.longevity(longevity)
 				// We don't propagate this. This can never be included on a remote node.
 				.propagate(false)

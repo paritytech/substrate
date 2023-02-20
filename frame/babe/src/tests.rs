@@ -764,8 +764,7 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		);
 
 		// the transaction is valid when passed as local
-		use codec::Encode;
-		let tag = equivocation_proof.using_encoded(|bytes| sp_io::hashing::blake2_256(bytes));
+		let tx_tag = (offending_authority_pair.public(), CurrentSlot::<Test>::get());
 		assert_eq!(
 			<Babe as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
 				TransactionSource::Local,
@@ -774,7 +773,7 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 			TransactionValidity::Ok(ValidTransaction {
 				priority: TransactionPriority::max_value(),
 				requires: vec![],
-				provides: vec![("BabeEquivocation", tag).encode()],
+				provides: vec![("BabeEquivocation", tx_tag).encode()],
 				longevity: ReportLongevity::get(),
 				propagate: false,
 			})

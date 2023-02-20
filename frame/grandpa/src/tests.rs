@@ -701,10 +701,7 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		);
 
 		// the transaction is valid when passed as local
-		//let tx_tag = (equivocation_key, set_id, 1u64);
-		// TODO DAVXY: confirm that this is equally good...
-		use codec::Encode;
-		let tag = equivocation_proof.using_encoded(|bytes| sp_io::hashing::blake2_256(bytes));
+		let tx_tag = (equivocation_key, set_id, 1u64);
 
 		assert_eq!(
 			<Grandpa as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
@@ -714,7 +711,7 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 			TransactionValidity::Ok(ValidTransaction {
 				priority: TransactionPriority::max_value(),
 				requires: vec![],
-				provides: vec![("GrandpaEquivocation", tag).encode()],
+				provides: vec![("GrandpaEquivocation", tx_tag).encode()],
 				longevity: ReportLongevity::get(),
 				propagate: false,
 			})
