@@ -89,7 +89,7 @@ pub mod pallet {
 	/// It contains no meaningful data - hence the name "Trash". The maximal number of entries is
 	/// set to 65k, which is just below the next jump at 16^4. This is important to reduce the proof
 	/// size benchmarking overestimate. The assumption here is that we won't have more than 65k *
-	/// 1KiB = 65MiB of proof size wasting in practice. However, this limit is not enforces, so the
+	/// 1KiB = 65MiB of proof size wasting in practice. However, this limit is not enforced, so the
 	/// pallet would also work out of the box with more entries, but its benchmarked proof weight
 	/// would possibly be underestimated in that case.
 	#[pallet::storage]
@@ -162,9 +162,11 @@ pub mod pallet {
 				Error::<T>::AlreadyInitialized
 			);
 
-			// Add or remove elements from `TrashData`.
-			(new_count..current_count).for_each(|i| TrashData::<T>::remove(i));
-			(current_count..new_count).for_each(|i| TrashData::<T>::insert(i, [i as u8; 1024]));
+			if new_count > current_count {
+				(current_count..new_count).for_each(|i| TrashData::<T>::insert(i, [i as u8; 1024]));
+			} else {
+				(new_count..current_count).for_each(TrashData::<T>::remove);
+			}
 
 			Self::deposit_event(Event::PalletInitialized { reinit: witness_count.is_some() });
 			TrashDataCount::<T>::set(new_count);
@@ -226,10 +228,10 @@ pub mod pallet {
 				remaining.proof_size().checked_div(slope.proof_size()).ok_or(())?;
 			let iter_by_ref_time = remaining.ref_time().checked_div(slope.ref_time()).ok_or(())?;
 
-			match iter_by_proof_size {
-				0 => Err(()),
-				i if i <= iter_by_ref_time => Ok(i as u32),
-				_ => Err(()),
+			if iter_by_proof_size > 0 && iter_by_proof_size <= iter_by_ref_time {
+				Ok(iter_by_proof_size as u32)
+			} else {
+				Err(())
 			}
 		}
 
