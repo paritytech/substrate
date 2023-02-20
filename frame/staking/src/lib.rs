@@ -866,12 +866,6 @@ impl<AccountId, Balance: HasCompact + Copy + AtLeast32BitUnsigned + codec::MaxEn
 	pub fn others(&self) -> &Vec<IndividualExposure<AccountId, Balance>> {
 		&self.exposure_page.others
 	}
-
-	/// Returns the number of pages of nominators stashes that are exposed.
-	#[allow(dead_code)]
-	pub fn page_count(&self) -> PageIndex {
-		self.exposure_overview.page_count
-	}
 }
 
 /// A pending slash record. The value of the slash has been computed but not applied yet,
