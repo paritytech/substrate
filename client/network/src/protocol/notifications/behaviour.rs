@@ -2995,48 +2995,54 @@ mod tests {
 		}
 	}
 
-	// #[tokio::test]
-	// async fn write_notification() {
-	// 	let (mut notif, _peerset) = development_notifs();
-	// 	let peer = PeerId::random();
-	// 	let conn = ConnectionId::new(0usize);
-	// 	let set_id = sc_peerset::SetId::from(0);
-	// 	let connected = ConnectedPoint::Listener {
-	// 		local_addr: Multiaddr::empty(),
-	// 		send_back_addr: Multiaddr::empty(),
-	// 	};
-	// 	let mut conn_yielder = ConnectionYielder::new();
+	#[tokio::test]
+	async fn write_notification() {
+		let (mut notif, _peerset) = development_notifs();
+		let peer = PeerId::random();
+		let conn = ConnectionId::new(0usize);
+		let set_id = sc_peerset::SetId::from(0);
+		let connected = ConnectedPoint::Listener {
+			local_addr: Multiaddr::empty(),
+			send_back_addr: Multiaddr::empty(),
+		};
+		let mut conn_yielder = ConnectionYielder::new();
 
-	// 	notif.on_swarm_event(FromSwarm::ConnectionEstablished(
-	// 		libp2p::swarm::behaviour::ConnectionEstablished {
-	// 			peer_id: peer,
-	// 			connection_id: conn,
-	// 			endpoint: &connected,
-	// 			failed_addresses: &[],
-	// 			other_established: 0usize,
-	// 		},
-	// 	));
-	// 	assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Disabled { .. })));
+		notif.on_swarm_event(FromSwarm::ConnectionEstablished(
+			libp2p::swarm::behaviour::ConnectionEstablished {
+				peer_id: peer,
+				connection_id: conn,
+				endpoint: &connected,
+				failed_addresses: &[],
+				other_established: 0usize,
+			},
+		));
+		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Disabled { .. })));
 
-	// 	notif.peerset_report_connect(peer, set_id);
-	// 	assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Enabled { .. })));
+		notif.peerset_report_connect(peer, set_id);
+		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Enabled { .. })));
 
-	// 	notif.on_connection_handler_event(
-	// 		peer,
-	// 		conn,
-	// 		conn_yielder.open_substream(peer, 0, connected, vec![1, 2, 3, 4]),
-	// 	);
+		notif.on_connection_handler_event(
+			peer,
+			conn,
+			conn_yielder.open_substream(peer, 0, connected, vec![1, 2, 3, 4]),
+		);
 
-	// 	if let Some(PeerState::Enabled { ref connections, .. }) = notif.peers.get(&(peer, set_id)) {
-	// 		assert_eq!(connections[0].0, conn);
-	// 		assert!(std::matches!(connections[0].1, ConnectionState::Open(_)));
-	// 	} else {
-	// 		panic!("invalid state");
-	// 	}
+		if let Some(PeerState::Enabled { ref connections, .. }) = notif.peers.get(&(peer, set_id)) {
+			assert_eq!(connections[0].0, conn);
+			assert!(std::matches!(connections[0].1, ConnectionState::Open(_)));
+		} else {
+			panic!("invalid state");
+		}
 
-	// 	notif.write_sync_notification(&peer, set_id, vec![1, 3, 3, 7]);
-	// 	assert_eq!(conn_yielder.get_next_event(peer, set_id.into()).await, Some(vec![1, 3, 3, 7]));
-	// }
+		notif
+			.peers
+			.get(&(peer, set_id))
+			.unwrap()
+			.get_open()
+			.unwrap()
+			.send_sync_notification(vec![1, 3, 3, 7]);
+		assert_eq!(conn_yielder.get_next_event(peer, set_id.into()).await, Some(vec![1, 3, 3, 7]));
+	}
 
 	#[test]
 	fn peerset_report_connect_backoff_expired() {

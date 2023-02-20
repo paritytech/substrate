@@ -37,7 +37,7 @@ use sp_runtime::traits::{Block as BlockT, Header as _};
 use std::sync::Arc;
 use substrate_test_runtime_client::{
 	runtime::{Block as TestBlock, Hash as TestHash},
-	TestClient, TestClientBuilder, TestClientBuilderExt as _,
+	TestClientBuilder, TestClientBuilderExt as _,
 };
 
 #[cfg(test)]
