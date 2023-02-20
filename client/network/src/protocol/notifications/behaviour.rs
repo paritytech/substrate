@@ -413,9 +413,11 @@ impl Notifications {
 	}
 
 	/// Disconnects the given peer if we are connected to it.
+	/// 
+	/// Note the peer will be banned for 10s after this.
 	pub fn disconnect_peer(&mut self, peer_id: &PeerId, set_id: sc_peerset::SetId) {
 		trace!(target: "sub-libp2p", "External API => Disconnect({}, {:?})", peer_id, set_id);
-		self.disconnect_peer_inner(peer_id, set_id, None);
+		self.disconnect_peer_inner(peer_id, set_id, Some(Duration::from_secs(10)));
 	}
 
 	/// Inner implementation of `disconnect_peer`.
