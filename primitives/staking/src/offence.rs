@@ -19,7 +19,8 @@
 //! that use staking.
 
 use codec::{Decode, Encode};
-use sp_runtime::Perbill;
+use sp_core::Get;
+use sp_runtime::{DispatchResult, Perbill};
 use sp_std::vec::Vec;
 
 use crate::SessionIndex;
@@ -64,12 +65,9 @@ pub enum DisableStrategy {
 /// This trait assumes that the offence is legitimate and was validated already.
 ///
 /// Examples of offences include: a BABE equivocation or a GRANDPA unjustified vote.
-pub trait Offence {
+pub trait Offence<Offender> {
 	/// Identifier which is unique for this kind of an offence.
 	const ID: Kind;
-
-	/// Offender Identifier.
-	type Offender;
 
 	/// A type that represents a point in time on an abstract timescale.
 	///
@@ -78,7 +76,9 @@ pub trait Offence {
 	type TimeSlot: Clone + codec::Codec + Ord;
 
 	/// The list of all offenders involved in this incident.
-	fn offenders(&self) -> Vec<Self::Offender>;
+	///
+	/// The list has no duplicates, so it is rather a set.
+	fn offenders(&self) -> Vec<Offender>;
 
 	/// The session index that is used for querying the validator set for the `slash_fraction`
 	/// function.
@@ -138,22 +138,22 @@ impl sp_runtime::traits::Printable for OffenceError {
 }
 
 /// A trait for decoupling offence reporters from the actual handling of offence reports.
-pub trait ReportOffence<R, O: Offence> {
+pub trait ReportOffence<Reporter, Offender, O: Offence<Offender>> {
 	/// Report an `offence` and reward given `reporters`.
-	fn report_offence(reporters: Vec<R>, offence: O) -> Result<(), OffenceError>;
+	fn report_offence(reporters: Vec<Reporter>, offence: O) -> Result<(), OffenceError>;
 
 	/// Returns true iff all of the given offenders have been previously reported
 	/// at the given time slot. This function is useful to prevent the sending of
 	/// duplicate offence reports.
-	fn is_known_offence(offenders: &[O::Offender], time_slot: &O::TimeSlot) -> bool;
+	fn is_known_offence(offenders: &[Offender], time_slot: &O::TimeSlot) -> bool;
 }
 
-impl<R, O: Offence> ReportOffence<R, O> for () {
-	fn report_offence(_reporters: Vec<R>, _offence: O) -> Result<(), OffenceError> {
+impl<Reporter, Offender, O: Offence<Offender>> ReportOffence<Reporter, Offender, O> for () {
+	fn report_offence(_reporters: Vec<Reporter>, _offence: O) -> Result<(), OffenceError> {
 		Ok(())
 	}
 
-	fn is_known_offence(_offenders: &[O::Offender], _time_slot: &O::TimeSlot) -> bool {
+	fn is_known_offence(_offenders: &[Offender], _time_slot: &O::TimeSlot) -> bool {
 		true
 	}
 }
@@ -208,4 +208,110 @@ pub struct OffenceDetails<Reporter, Offender> {
 	/// A list of reporters of offences of this authority ID. Possibly empty where there are no
 	/// particular reporters.
 	pub reporters: Vec<Reporter>,
+}
+
+/// A system capable of construct, report and submit offences.
+///
+/// Implementors of this trait provide a wrapper for lower level operations.
+///
+/// It is assumed that this subsystem takes care of checking key ownership proof
+/// before report submission.
+pub trait OffenceReportSystem<Reporter> {
+	// /// Offence type
+	// type Offence: Offence;
+
+	/// Offence proof
+	type OffenceProof;
+
+	/// Offender key ownership proof.
+	/// This can be used by the offence report system to check for evidence validity.
+	type KeyOwnerProof;
+
+	/// Longevity, in blocks, for the report validity. When using the staking
+	/// pallet this should be equal to the bonding duration (in blocks, not eras).
+	type ReportLongevity: Get<u64>;
+
+	/// Report offence to the `ReportOffence` handler.
+	fn report_evidence(
+		_reporter: Option<Reporter>,
+		_offence_proof: Self::OffenceProof,
+		_key_owner_proof: Self::KeyOwnerProof,
+	) -> DispatchResult {
+		Ok(())
+	}
+
+	/// Check if is a known offence.
+	fn check_evidence(
+		_offence_proof: &Self::OffenceProof,
+		_key_owner_proof: &Self::KeyOwnerProof,
+	) -> DispatchResult {
+		Ok(())
+	}
+
+	/// Create and dispatch an offence report extrinsic.
+	fn submit_evidence(
+		_offence_proof: Self::OffenceProof,
+		_key_owner_proof: Self::KeyOwnerProof,
+	) -> bool {
+		true
+	}
+}
+
+// // Dummy offence type meant to be used by the dummy offence report system.
+// impl Offence for () {
+// 	const ID: crate::offence::Kind = [0; 16];
+// 	type TimeSlot = ();
+// 	type Offender = ();
+
+// 	fn offenders(&self) -> Vec<Self::Offender> {
+// 		Default::default()
+// 	}
+
+// 	fn validator_set_count(&self) -> u32 {
+// 		Default::default()
+// 	}
+
+// 	fn time_slot(&self) -> Self::TimeSlot {
+// 		Default::default()
+// 	}
+
+// 	fn session_index(&self) -> SessionIndex {
+// 		Default::default()
+// 	}
+
+// 	fn slash_fraction(&self, _offenders_count: u32) -> Perbill {
+// 		Default::default()
+// 	}
+// }
+
+// Dummy report system.
+// Should always give successful results
+impl<Reporter> OffenceReportSystem<Reporter> for () {
+	type OffenceProof = ();
+
+	type KeyOwnerProof = sp_core::Void;
+
+	type ReportLongevity = ();
+
+	fn report_evidence(
+		_reporter: Option<Reporter>,
+		_offence_proof: Self::OffenceProof,
+		_key_owner_proof: Self::KeyOwnerProof,
+	) -> DispatchResult {
+		Ok(())
+	}
+
+	fn check_evidence(
+		_offence_proof: &Self::OffenceProof,
+		_key_owner_proof: &Self::KeyOwnerProof,
+	) -> DispatchResult {
+		Ok(())
+	}
+
+	fn submit_evidence(
+		_offence_proof: Self::OffenceProof,
+		_key_owner_proof: Self::KeyOwnerProof,
+	) -> bool {
+		true
+	}
 }

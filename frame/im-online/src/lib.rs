@@ -353,6 +353,8 @@ pub mod pallet {
 
 		/// A type that gives us the ability to submit unresponsiveness offence reports.
 		type ReportUnresponsiveness: ReportOffence<
+			Self::AccountId,
+			IdentificationTuple<Self>,
 			UnresponsivenessOffence<IdentificationTuple<Self>>,
 		>;
 
@@ -907,7 +909,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 
 			let validator_set_count = keys.len() as u32;
 			let offence = UnresponsivenessOffence { session_index, validator_set_count, offenders };
-			if let Err(e) = T::ReportUnresponsiveness::report_offence(offence) {
+			if let Err(e) = T::ReportUnresponsiveness::report_offence(vec![], offence) {
 				sp_runtime::print(e);
 			}
 		}
@@ -933,18 +935,12 @@ pub struct UnresponsivenessOffence<Offender> {
 	pub offenders: Vec<Offender>,
 }
 
-impl<Offender: Clone> Offence for UnresponsivenessOffence<Offender> {
+impl<Offender: Clone> Offence<Offender> for UnresponsivenessOffence<Offender> {
 	const ID: Kind = *b"im-online:offlin";
 	type TimeSlot = SessionIndex;
-	type Offender = Offender;
-	type Reporter = ();
 
-	fn offenders(&self) -> Vec<Self::Offender> {
+	fn offenders(&self) -> Vec<Offender> {
 		self.offenders.clone()
-	}
-
-	fn reporters(&self) -> Vec<Self::Reporter> {
-		Default::default()
 	}
 
 	fn session_index(&self) -> SessionIndex {

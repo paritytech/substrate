@@ -233,8 +233,8 @@ impl Config for Test {
 
 	type EquivocationProof = sp_finality_grandpa::EquivocationProof<H256, u64>;
 
-	type OffenceReportSystem =
-		super::EquivocationHandler<Self, Offences, Historical, ReportLongevity>;
+	type EquivocationReportSystem =
+		super::EquivocationReportSystem<Self, Offences, Historical, ReportLongevity>;
 }
 
 pub fn grandpa_log(log: ConsensusLog<u64>) -> DigestItem {

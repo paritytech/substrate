@@ -88,14 +88,14 @@ type IdentificationTuple = (u64, u64);
 type Offence = crate::UnresponsivenessOffence<IdentificationTuple>;
 
 parameter_types! {
-	pub static Offences: Vec<Offence> = vec![];
+	pub static Offences: Vec<(Vec<u64>, Offence)> = vec![];
 }
 
 /// A mock offence report handler.
 pub struct OffenceHandler;
-impl ReportOffence<Offence> for OffenceHandler {
-	fn report_offence(offence: Offence) -> Result<(), OffenceError> {
-		Offences::mutate(|l| l.push(offence));
+impl ReportOffence<u64, IdentificationTuple, Offence> for OffenceHandler {
+	fn report_offence(reporters: Vec<u64>, offence: Offence) -> Result<(), OffenceError> {
+		Offences::mutate(|l| l.push((reporters, offence)));
 		Ok(())
 	}
 

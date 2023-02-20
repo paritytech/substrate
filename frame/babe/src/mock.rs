@@ -230,8 +230,8 @@ impl Config for Test {
 
 	type EquivocationProof = sp_consensus_babe::EquivocationProof<Header>;
 
-	type OffenceReportSystem =
-		super::EquivocationHandler<Self, Offences, Historical, ReportLongevity>;
+	type EquivocationReportSystem =
+		super::EquivocationReportSystem<Self, Offences, Historical, ReportLongevity>;
 }
 
 pub fn go_to_block(n: u64, s: u64) {

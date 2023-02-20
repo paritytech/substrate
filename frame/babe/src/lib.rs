@@ -42,7 +42,7 @@ use sp_runtime::{
 	ConsensusEngineId, Permill,
 };
 use sp_session::{GetSessionNumber, GetValidatorCount};
-use sp_staking::equivocation::OffenceReportSystem;
+use sp_staking::offence::OffenceReportSystem;
 use sp_std::prelude::*;
 
 pub use sp_consensus_babe::{AuthorityId, PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH};
@@ -60,7 +60,7 @@ mod mock;
 #[cfg(all(feature = "std", test))]
 mod tests;
 
-pub use equivocation::{EquivocationHandler, EquivocationOffence};
+pub use equivocation::{EquivocationOffence, EquivocationReportSystem};
 #[allow(deprecated)]
 pub use randomness::CurrentBlockRandomness;
 pub use randomness::{
@@ -167,10 +167,10 @@ pub mod pallet {
 		/// NOTE: when enabling equivocation handling (i.e. this type isn't set to
 		/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
 		/// definition.
-		type OffenceReportSystem: OffenceReportSystem<
+		type EquivocationReportSystem: OffenceReportSystem<
+			Self::AccountId,
 			KeyOwnerProof = Self::KeyOwnerProof,
 			OffenceProof = Self::EquivocationProof,
-			Reporter = Self::AccountId,
 		>;
 	}
 
@@ -409,7 +409,11 @@ pub mod pallet {
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			let reporter = Some(ensure_signed(origin)?);
-			T::OffenceReportSystem::report_evidence(reporter, equivocation_proof, key_owner_proof)?;
+			T::EquivocationReportSystem::report_evidence(
+				reporter,
+				equivocation_proof,
+				key_owner_proof,
+			)?;
 			// Waive the fee since the report is valid and beneficial
 			Ok(Pays::No.into())
 		}
@@ -432,7 +436,11 @@ pub mod pallet {
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
-			T::OffenceReportSystem::report_evidence(None, equivocation_proof, key_owner_proof)?;
+			T::EquivocationReportSystem::report_evidence(
+				None,
+				equivocation_proof,
+				key_owner_proof,
+			)?;
 			// Waive the fee since the report is valid and beneficial
 			Ok(Pays::No.into())
 		}
@@ -816,7 +824,7 @@ impl<T: Config> Pallet<T> {
 		equivocation_proof: T::EquivocationProof,
 		key_owner_proof: T::KeyOwnerProof,
 	) -> bool {
-		T::OffenceReportSystem::submit_evidence(equivocation_proof, key_owner_proof)
+		T::EquivocationReportSystem::submit_evidence(equivocation_proof, key_owner_proof)
 	}
 }
 

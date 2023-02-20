@@ -220,21 +220,9 @@ impl pallet_grandpa::Config for Runtime {
 	type MaxAuthorities = ConstU32<32>;
 	type MaxSetIdSessionEntries = ConstU64<0>;
 
-	type KeyOwnerProof = ();
+	type KeyOwnerProof = sp_core::Void;
 	type EquivocationProof = ();
-	type OffenceReportSystem = ();
-
-	// type KeyOwnerProofSystem = ();
-
-	// type KeyOwnerProof =
-	// 	<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
-
-	// type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
-	// 	KeyTypeId,
-	// 	GrandpaId,
-	// )>>::IdentificationTuple;
-
-	// type HandleEquivocation = pallet_grandpa::NullHandler<Self>;
+	type EquivocationReportSystem = ();
 }
 
 impl pallet_timestamp::Config for Runtime {

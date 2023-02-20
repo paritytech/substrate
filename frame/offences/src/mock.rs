@@ -140,12 +140,11 @@ pub struct Offence {
 	pub time_slot: u128,
 }
 
-impl offence::Offence for Offence {
+impl offence::Offence<u64> for Offence {
 	const ID: offence::Kind = KIND;
 	type TimeSlot = u128;
-	type Offender = u64;
 
-	fn offenders(&self) -> Vec<Self::Offender> {
+	fn offenders(&self) -> Vec<u64> {
 		self.offenders.clone()
 	}
 

@@ -171,7 +171,7 @@ fn reports_if_an_offence_is_dup() {
 
 		// the report for authority 0 at time slot 42 should not be a known
 		// offence
-		assert!(!<Offences as ReportOffence<_, Offence>>::is_known_offence(
+		assert!(!<Offences as ReportOffence<_, _, Offence>>::is_known_offence(
 			&test_offence.offenders,
 			&test_offence.time_slot
 		));
@@ -180,7 +180,7 @@ fn reports_if_an_offence_is_dup() {
 		Offences::report_offence(vec![], test_offence.clone()).unwrap();
 
 		// the same report should be a known offence now
-		assert!(<Offences as ReportOffence<_, Offence>>::is_known_offence(
+		assert!(<Offences as ReportOffence<_, _, Offence>>::is_known_offence(
 			&test_offence.offenders,
 			&test_offence.time_slot
 		));
@@ -195,7 +195,7 @@ fn reports_if_an_offence_is_dup() {
 		test_offence.offenders.push(1);
 
 		// it should not be a known offence anymore
-		assert!(!<Offences as ReportOffence<_, Offence>>::is_known_offence(
+		assert!(!<Offences as ReportOffence<_, _, Offence>>::is_known_offence(
 			&test_offence.offenders,
 			&test_offence.time_slot
 		));
@@ -206,7 +206,7 @@ fn reports_if_an_offence_is_dup() {
 		// creating a new offence for the same authorities on the next slot
 		// should be considered a new offence and thefore not known
 		let test_offence_next_slot = offence(time_slot + 1, vec![0, 1]);
-		assert!(!<Offences as ReportOffence<_, Offence>>::is_known_offence(
+		assert!(!<Offences as ReportOffence<_, _, Offence>>::is_known_offence(
 			&test_offence_next_slot.offenders,
 			&test_offence_next_slot.time_slot
 		));

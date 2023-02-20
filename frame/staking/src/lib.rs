@@ -912,11 +912,12 @@ pub struct FilterHistoricalOffences<T, R> {
 	_inner: sp_std::marker::PhantomData<(T, R)>,
 }
 
-impl<T, Reporter, R, O> ReportOffence<Reporter, O> for FilterHistoricalOffences<Pallet<T>, R>
+impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
+	for FilterHistoricalOffences<Pallet<T>, R>
 where
 	T: Config,
-	R: ReportOffence<Reporter, O>,
-	O: Offence,
+	R: ReportOffence<Reporter, Offender, O>,
+	O: Offence<Offender>,
 {
 	fn report_offence(reporters: Vec<Reporter>, offence: O) -> Result<(), OffenceError> {
 		// Disallow any slashing from before the current bonding period.
@@ -933,7 +934,7 @@ where
 		}
 	}
 
-	fn is_known_offence(offenders: &[O::Offender], time_slot: &O::TimeSlot) -> bool {
+	fn is_known_offence(offenders: &[Offender], time_slot: &O::TimeSlot) -> bool {
 		R::is_known_offence(offenders, time_slot)
 	}
 }

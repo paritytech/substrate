@@ -23,7 +23,6 @@
 use sp_runtime::{DispatchError, DispatchResult};
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
-pub mod equivocation;
 pub mod offence;
 
 /// Simple index type with which we can count sessions.
