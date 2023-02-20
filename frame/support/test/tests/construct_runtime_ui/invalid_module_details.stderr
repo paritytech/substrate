@@ -2,4 +2,4 @@ error: Unexpected tokens, expected one of `::$ident` `::{`, `exclude_parts`, `us
  --> tests/construct_runtime_ui/invalid_module_details.rs:9:17
   |
 9 |         system: System::(),
-  |                       ^^
+  |                       ^
