@@ -38,6 +38,13 @@ pub enum ProcessMessageError {
 	/// would be respected. The parameter gives the maximum weight which the message could take
 	/// to process.
 	Overweight(Weight),
+	/// The queue wants to give up its current processing slot.
+	///
+	/// Hints the message processor to cease servicing this queue and proceed to the next
+	/// one. This is seen as a *hint*, not an instruction. Implementations must therefore handle
+	/// the case that a queue is re-serviced within the same block after *yielding*. A queue is
+	/// not required to *yield* again when it is being re-serviced withing the same block.
+	Yield,
 }
 
 /// Can process messages from a specific origin.
