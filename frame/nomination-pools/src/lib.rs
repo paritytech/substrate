@@ -1715,7 +1715,7 @@ pub mod pallet {
 			// Now that we know everything has worked write the items to storage.
 			SubPoolsStorage::insert(&member.pool_id, sub_pools);
 			Self::put_member_with_pools(&member_account, member, bonded_pool, reward_pool);
-			<RewardClaimPermission<T>>::remove(member_account);
+			<ClaimPermissions<T>>::remove(member_account);
 
 			Ok(())
 		}
