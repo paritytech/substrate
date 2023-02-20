@@ -121,8 +121,8 @@
 //!   other members have left. Once they fully withdraw their funds, the pool is destroyed.
 //! * Nominator: can select which validators the pool nominates.
 //! * Bouncer: can change the pools state and kick members if the pool is blocked.
-//! * Root: can change the nominator, bouncer, or itself and can perform any of the actions
-//!   the nominator or bouncer can.
+//! * Root: can change the nominator, bouncer, or itself and can perform any of the actions the
+//!   nominator or bouncer can.
 //!
 //! ### Dismantling
 //!
@@ -735,10 +735,7 @@ impl<T: Config> BondedPool<T> {
 	}
 
 	fn is_bouncer(&self, who: &T::AccountId) -> bool {
-		self.roles
-			.bouncer
-			.as_ref()
-			.map_or(false, |bouncer| bouncer == who)
+		self.roles.bouncer.as_ref().map_or(false, |bouncer| bouncer == who)
 	}
 
 	fn can_update_roles(&self, who: &T::AccountId) -> bool {
@@ -1630,8 +1627,8 @@ pub mod pallet {
 		///
 		/// # Conditions for a permissionless dispatch.
 		///
-		/// * The pool is blocked and the caller is either the root or bouncer. This is
-		///   refereed to as a kick.
+		/// * The pool is blocked and the caller is either the root or bouncer. This is refereed to
+		///   as a kick.
 		/// * The pool is destroying and the member is not the depositor.
 		/// * The pool is destroying, the member is the depositor and no other members are in the
 		///   pool.

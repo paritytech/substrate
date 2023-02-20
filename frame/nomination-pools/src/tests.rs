@@ -4662,21 +4662,12 @@ mod update_roles {
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::RolesUpdated {
-						root: Some(5),
-						bouncer: Some(7),
-						nominator: Some(6)
-					}
+					Event::RolesUpdated { root: Some(5), bouncer: Some(7), nominator: Some(6) }
 				]
 			);
 			assert_eq!(
 				BondedPools::<Runtime>::get(1).unwrap().roles,
-				PoolRoles {
-					depositor: 10,
-					root: Some(5),
-					nominator: Some(6),
-					bouncer: Some(7)
-				},
+				PoolRoles { depositor: 10, root: Some(5), nominator: Some(6), bouncer: Some(7) },
 			);
 
 			// also root origin can
@@ -4690,20 +4681,11 @@ mod update_roles {
 
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::RolesUpdated {
-					root: Some(1),
-					bouncer: Some(3),
-					nominator: Some(2)
-				}]
+				vec![Event::RolesUpdated { root: Some(1), bouncer: Some(3), nominator: Some(2) }]
 			);
 			assert_eq!(
 				BondedPools::<Runtime>::get(1).unwrap().roles,
-				PoolRoles {
-					depositor: 10,
-					root: Some(1),
-					nominator: Some(2),
-					bouncer: Some(3)
-				},
+				PoolRoles { depositor: 10, root: Some(1), nominator: Some(2), bouncer: Some(3) },
 			);
 
 			// Noop works
@@ -4717,21 +4699,12 @@ mod update_roles {
 
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::RolesUpdated {
-					root: Some(11),
-					bouncer: Some(3),
-					nominator: Some(2)
-				}]
+				vec![Event::RolesUpdated { root: Some(11), bouncer: Some(3), nominator: Some(2) }]
 			);
 
 			assert_eq!(
 				BondedPools::<Runtime>::get(1).unwrap().roles,
-				PoolRoles {
-					depositor: 10,
-					root: Some(11),
-					nominator: Some(2),
-					bouncer: Some(3)
-				},
+				PoolRoles { depositor: 10, root: Some(11), nominator: Some(2), bouncer: Some(3) },
 			);
 
 			// Remove works
