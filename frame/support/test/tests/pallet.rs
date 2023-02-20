@@ -514,8 +514,8 @@ pub mod pallet2 {
 		fn on_runtime_upgrade() -> Weight {
 			Self::deposit_event(Event::Something(31));
 
-			if dbg!(UpdateStorageVersion::get()) {
-				dbg!(Self::current_storage_version()).put::<Self>();
+			if UpdateStorageVersion::get() {
+				Self::current_storage_version().put::<Self>();
 			}
 
 			Weight::zero()
