@@ -2150,12 +2150,12 @@ pub mod pallet {
 		/// * `actor` - Account to claim reward. // improve this
 		#[pallet::call_index(15)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
-		pub fn set_reward_claim(origin: OriginFor<T>, actor: RewardClaim) -> DispatchResult {
+		pub fn set_reward_claim(origin: OriginFor<T>, permission: ClaimPermission) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			ensure!(PoolMembers::<T>::contains_key(&who), Error::<T>::PoolMemberNotFound);
-			<RewardClaimPermission<T>>::mutate(who, |source| {
-				*source = actor;
+			<ClaimPermissions<T>>::mutate(who, |source| {
+				*source = permission;
 			});
 			Ok(())
 		}
