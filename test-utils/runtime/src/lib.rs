@@ -980,6 +980,20 @@ cfg_if! {
 				fn validator_set() -> Option<beefy_primitives::ValidatorSet<beefy_primitives::crypto::AuthorityId>> {
 					None
 				}
+
+				fn submit_report_equivocation_unsigned_extrinsic(
+					_equivocation_proof: beefy_primitives::EquivocationProof<
+						NumberFor<Block>,
+						beefy_primitives::crypto::AuthorityId,
+						beefy_primitives::crypto::Signature
+					>,
+					_key_owner_proof: beefy_primitives::OpaqueKeyOwnershipProof,
+				) -> Option<()> { None }
+
+				fn generate_key_ownership_proof(
+					_set_id: beefy_primitives::ValidatorSetId,
+					_authority_id: beefy_primitives::crypto::AuthorityId,
+				) -> Option<beefy_primitives::OpaqueKeyOwnershipProof> { None }
 			}
 
 			impl pallet_beefy_mmr::BeefyMmrApi<Block, beefy_primitives::MmrRootHash> for Runtime {

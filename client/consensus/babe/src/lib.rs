@@ -1086,7 +1086,7 @@ where
 			.map_err(|e| Error::Client(e.into()))?;
 
 		// generate a key ownership proof. we start by trying to generate the
-		// key owernship proof at the parent of the equivocating header, this
+		// key ownership proof at the parent of the equivocating header, this
 		// will make sure that proof generation is successful since it happens
 		// during the on-going session (i.e. session keys are available in the
 		// state to be able to generate the proof). this might fail if the

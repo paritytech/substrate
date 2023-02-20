@@ -279,6 +279,7 @@ where
 	let worker_params = worker::WorkerParams {
 		backend,
 		payload_provider,
+		runtime,
 		network,
 		key_store: key_store.into(),
 		gossip_engine,
@@ -289,7 +290,7 @@ where
 		persisted_state,
 	};
 
-	let worker = worker::BeefyWorker::<_, _, _, _>::new(worker_params);
+	let worker = worker::BeefyWorker::<_, _, _, _, _>::new(worker_params);
 
 	futures::future::join(
 		worker.run(block_import_justif, finality_notifications),
