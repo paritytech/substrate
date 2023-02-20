@@ -1333,7 +1333,7 @@ pub mod pallet {
 
 	/// Map from a pool member account to their preference regarding reward payout.
 	#[pallet::storage]
-	pub type RewardClaimPermission<T: Config> =
+	pub type ClaimPermissions<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, RewardClaim, ValueQuery>;
 
 	#[pallet::genesis_config]
