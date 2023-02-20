@@ -2094,7 +2094,7 @@ mod unbond {
 				assert_eq!(RewardClaimPermission::<Runtime>::get(10), RewardClaim::Permissioned);
 				assert_ok!(Pools::set_reward_claim(
 					RuntimeOrigin::signed(20),
-					RewardClaim::Permissionless
+					ClaimPermission::Permissionless
 				));
 
 				// but can go to 0
