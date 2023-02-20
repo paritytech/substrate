@@ -420,7 +420,7 @@ pub enum RewardClaim {
 	Permissionless,
 }
 
-impl Default for RewardClaim {
+impl Default for ClaimPermission {
 	fn default() -> Self {
 		Self::Permissioned
 	}
