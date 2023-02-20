@@ -734,8 +734,10 @@ impl<AccountId, Balance: Default + HasCompact> Default for Exposure<AccountId, B
 	}
 }
 
-impl<AccountId: Clone, Balance: HasCompact + AtLeast32BitUnsigned + Copy + codec::MaxEncodedLen>
-	Exposure<AccountId, Balance>
+impl<
+		AccountId: Clone,
+		Balance: HasCompact + AtLeast32BitUnsigned + Copy + codec::MaxEncodedLen,
+	> Exposure<AccountId, Balance>
 {
 	/// Splits an `Exposure` into `ExposureOverview` and multiple chunks of `IndividualExposure`
 	/// with each chunk having maximum of `page_size` elements.
@@ -829,7 +831,9 @@ struct ExposureExt<AccountId, Balance: HasCompact + codec::MaxEncodedLen> {
 	exposure_page: ExposurePage<AccountId, Balance>,
 }
 
-impl<AccountId, Balance: HasCompact + Copy + AtLeast32BitUnsigned + codec::MaxEncodedLen> ExposureExt<AccountId, Balance> {
+impl<AccountId, Balance: HasCompact + Copy + AtLeast32BitUnsigned + codec::MaxEncodedLen>
+	ExposureExt<AccountId, Balance>
+{
 	/// Create a new instance of `ExposureExt` from legacy clipped exposures.
 	pub fn from_clipped(exposure: Exposure<AccountId, Balance>) -> Self {
 		Self {
