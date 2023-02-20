@@ -216,20 +216,16 @@ pub struct OffenceDetails<Reporter, Offender> {
 ///
 /// It is assumed that this subsystem takes care of checking key ownership proof
 /// before report submission.
-pub trait OffenceReportSystem<Reporter, OffenceProof> {
-	/// Offender key ownership proof.
-	/// This can be used by the offence report system to check for evidence validity.
-	type KeyOwnerProof;
-
+pub trait OffenceReportSystem<Reporter, KeyOwnerProof, OffenceProof> {
 	/// Longevity, in blocks, for the report validity. When using the staking
 	/// pallet this should be equal to the bonding duration (in blocks, not eras).
-	type ReportLongevity: Get<u64>;
+	type Longevity: Get<u64>;
 
 	/// Report offence to the `ReportOffence` handler.
 	fn report_evidence(
 		_reporter: Option<Reporter>,
 		_offence_proof: OffenceProof,
-		_key_owner_proof: Self::KeyOwnerProof,
+		_key_owner_proof: KeyOwnerProof,
 	) -> DispatchResult {
 		Ok(())
 	}
@@ -237,46 +233,40 @@ pub trait OffenceReportSystem<Reporter, OffenceProof> {
 	/// Check if is a known offence.
 	fn check_evidence(
 		_offence_proof: &OffenceProof,
-		_key_owner_proof: &Self::KeyOwnerProof,
+		_key_owner_proof: &KeyOwnerProof,
 	) -> DispatchResult {
 		Ok(())
 	}
 
 	/// Create and dispatch an offence report extrinsic.
-	fn submit_evidence(
-		_offence_proof: OffenceProof,
-		_key_owner_proof: Self::KeyOwnerProof,
-	) -> bool {
+	fn submit_evidence(_offence_proof: OffenceProof, _key_owner_proof: KeyOwnerProof) -> bool {
 		true
 	}
 }
 
 // Dummy report system.
 // Should always give successful results
-impl<Reporter, OffenceProof> OffenceReportSystem<Reporter, OffenceProof> for () {
-	type KeyOwnerProof = sp_core::Void;
-
-	type ReportLongevity = ();
+impl<Reporter, KeyOwnerProof, OffenceProof>
+	OffenceReportSystem<Reporter, KeyOwnerProof, OffenceProof> for ()
+{
+	type Longevity = ();
 
 	fn report_evidence(
 		_reporter: Option<Reporter>,
 		_offence_proof: OffenceProof,
-		_key_owner_proof: Self::KeyOwnerProof,
+		_key_owner_proof: KeyOwnerProof,
 	) -> DispatchResult {
 		Ok(())
 	}
 
 	fn check_evidence(
 		_offence_proof: &OffenceProof,
-		_key_owner_proof: &Self::KeyOwnerProof,
+		_key_owner_proof: &KeyOwnerProof,
 	) -> DispatchResult {
 		Ok(())
 	}
 
-	fn submit_evidence(
-		_offence_proof: OffenceProof,
-		_key_owner_proof: Self::KeyOwnerProof,
-	) -> bool {
+	fn submit_evidence(_offence_proof: OffenceProof, _key_owner_proof: KeyOwnerProof) -> bool {
 		true
 	}
 }

@@ -106,12 +106,10 @@ pub struct EquivocationReportSystem<T, R, P, L>(sp_std::marker::PhantomData<(T, 
 // We use the authorship pallet to fetch the current block author and use
 // `offchain::SendTransactionTypes` for unsigned extrinsic creation and
 // submission.
-impl<T, R, P, L> OffenceReportSystem<T::AccountId, EquivocationProof<T::Header>>
+impl<T, R, P, L> OffenceReportSystem<T::AccountId, P::Proof, EquivocationProof<T::Header>>
 	for EquivocationReportSystem<T, R, P, L>
 where
-	T: Config //<EquivocationProof = EquivocationProof<<T as frame_system::Config>::Header>>
-		+ pallet_authorship::Config
-		+ frame_system::offchain::SendTransactionTypes<Call<T>>,
+	T: Config + pallet_authorship::Config + frame_system::offchain::SendTransactionTypes<Call<T>>,
 	R: ReportOffence<
 		T::AccountId,
 		P::IdentificationTuple,
@@ -121,14 +119,12 @@ where
 	P::IdentificationTuple: Clone,
 	L: Get<u64>,
 {
-	type KeyOwnerProof = P::Proof;
-
-	type ReportLongevity = L;
+	type Longevity = L;
 
 	fn report_evidence(
 		reporter: Option<T::AccountId>,
 		equivocation_proof: EquivocationProof<T::Header>,
-		key_owner_proof: Self::KeyOwnerProof,
+		key_owner_proof: T::KeyOwnerProof,
 	) -> DispatchResult {
 		let reporter = reporter.or_else(|| <pallet_authorship::Pallet<T>>::author());
 
@@ -169,7 +165,7 @@ where
 
 	fn check_evidence(
 		equivocation_proof: &EquivocationProof<T::Header>,
-		key_owner_proof: &Self::KeyOwnerProof,
+		key_owner_proof: &T::KeyOwnerProof,
 	) -> DispatchResult {
 		// Check the membership proof to extract the offender's id
 		let key = (sp_consensus_babe::KEY_TYPE, equivocation_proof.offender.clone());
@@ -186,7 +182,7 @@ where
 
 	fn submit_evidence(
 		equivocation_proof: EquivocationProof<T::Header>,
-		key_owner_proof: Self::KeyOwnerProof,
+		key_owner_proof: T::KeyOwnerProof,
 	) -> bool {
 		use frame_system::offchain::SubmitTransaction;
 
@@ -226,7 +222,7 @@ impl<T: Config> Pallet<T> {
 				.map_err(|_| InvalidTransaction::Stale)?;
 
 			let longevity =
-				<T::EquivocationReportSystem as OffenceReportSystem<_, _>>::ReportLongevity::get();
+				<T::EquivocationReportSystem as OffenceReportSystem<_, _, _>>::Longevity::get();
 			let tag = equivocation_proof.using_encoded(|bytes| sp_io::hashing::blake2_256(bytes));
 
 			ValidTransaction::with_tag_prefix("BabeEquivocation")

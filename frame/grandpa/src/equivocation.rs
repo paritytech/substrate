@@ -116,7 +116,8 @@ pub struct EquivocationReportSystem<T, R, P, L>(sp_std::marker::PhantomData<(T, 
 // We use the authorship pallet to fetch the current block author and use
 // `offchain::SendTransactionTypes` for unsigned extrinsic creation and
 // submission.
-impl<T, R, P, L> OffenceReportSystem<T::AccountId, EquivocationProof<T::Hash, T::BlockNumber>>
+impl<T, R, P, L>
+	OffenceReportSystem<T::AccountId, T::KeyOwnerProof, EquivocationProof<T::Hash, T::BlockNumber>>
 	for EquivocationReportSystem<T, R, P, L>
 where
 	T: Config + pallet_authorship::Config + frame_system::offchain::SendTransactionTypes<Call<T>>,
@@ -129,14 +130,12 @@ where
 	P::IdentificationTuple: Clone,
 	L: Get<u64>,
 {
-	type KeyOwnerProof = T::KeyOwnerProof;
-
-	type ReportLongevity = L;
+	type Longevity = L;
 
 	fn report_evidence(
 		reporter: Option<T::AccountId>,
 		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
-		key_owner_proof: Self::KeyOwnerProof,
+		key_owner_proof: T::KeyOwnerProof,
 	) -> DispatchResult {
 		let reporter = reporter.or_else(|| <pallet_authorship::Pallet<T>>::author());
 
@@ -197,7 +196,7 @@ where
 
 	fn check_evidence(
 		equivocation_proof: &EquivocationProof<T::Hash, T::BlockNumber>,
-		key_owner_proof: &Self::KeyOwnerProof,
+		key_owner_proof: &T::KeyOwnerProof,
 	) -> DispatchResult {
 		// Check the membership proof to extract the offender's id
 		let key = (sp_finality_grandpa::KEY_TYPE, equivocation_proof.offender().clone());
@@ -218,7 +217,7 @@ where
 
 	fn submit_evidence(
 		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
-		key_owner_proof: Self::KeyOwnerProof,
+		key_owner_proof: T::KeyOwnerProof,
 	) -> bool {
 		use frame_system::offchain::SubmitTransaction;
 
@@ -258,7 +257,7 @@ impl<T: Config> Pallet<T> {
 				.map_err(|_| InvalidTransaction::Stale)?;
 
 			let longevity =
-				<T::EquivocationReportSystem as OffenceReportSystem<_, _>>::ReportLongevity::get();
+				<T::EquivocationReportSystem as OffenceReportSystem<_, _, _>>::Longevity::get();
 			// TODO DAVXY: is ok the hash of the serialized structure as an identifier?
 			// Was: (equivocation_proof.offender(), equivocation_proof.set_id(),
 			// equivocation_proof.round()) Oterwise we're going to introduce tag()
