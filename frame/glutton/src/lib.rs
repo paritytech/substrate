@@ -70,7 +70,7 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// The pallet was already initialized.
 		///
-		/// Use `force` to bypass this error.
+		/// Set `witness_count` to `Some` to bypass this error.
 		AlreadyInitialized,
 	}
 
@@ -101,6 +101,7 @@ pub mod pallet {
 		MaxValues = ConstU32<65_000>,
 	>;
 
+	/// The current number of entries in `TrashData`.
 	#[pallet::storage]
 	pub(crate) type TrashDataCount<T: Config> = StorageValue<_, u32, ValueQuery>;
 
@@ -200,7 +201,9 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		/// Wastes some `proof_size`. Receives a counter as an argument.
+		/// Waste at most the remaining proof size of `meter`.
+		///
+		/// Tries to come as close to the limit as possible.
 		pub(crate) fn waste_at_most_proof_size(meter: &mut WeightMeter) {
 			let Ok(n) = Self::calculate_proof_size_iters(&meter) else {
 				return;
@@ -213,7 +216,7 @@ pub mod pallet {
 			});
 		}
 
-		/// Calculate how many times `waste_proof_size_some` should be called to full up `meter`.
+		/// Calculate how many times `waste_proof_size_some` should be called to fill up `meter`.
 		fn calculate_proof_size_iters(meter: &WeightMeter) -> Result<u32, ()> {
 			let base = T::WeightInfo::waste_proof_size_some(0);
 			let slope = T::WeightInfo::waste_proof_size_some(1).saturating_sub(base);
@@ -265,7 +268,7 @@ pub mod pallet {
 			hasher.finalize().to_vec()
 		}
 
-		/// Calculate how many times `waste_ref_time_iter` should be called to full up `meter`.
+		/// Calculate how many times `waste_ref_time_iter` should be called to fill up `meter`.
 		fn calculate_ref_time_iters(meter: &WeightMeter) -> Result<u32, ()> {
 			let base = T::WeightInfo::waste_ref_time_iter(0);
 			let slope = T::WeightInfo::waste_ref_time_iter(1).saturating_sub(base);
