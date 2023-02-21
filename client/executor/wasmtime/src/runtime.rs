@@ -298,6 +298,11 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 	config.cranelift_opt_level(wasmtime::OptLevel::SpeedAndSize);
 	config.cranelift_nan_canonicalization(semantics.canonicalize_nans);
 
+	// Since wasmtime 6.0.0 the default for this is `true`, but that heavily regresses
+	// the contracts pallet's performance, so disable it for now.
+	#[allow(deprecated)]
+	config.cranelift_use_egraphs(false);
+
 	let profiler = match std::env::var_os("WASMTIME_PROFILING_STRATEGY") {
 		Some(os_string) if os_string == "jitdump" => wasmtime::ProfilingStrategy::JitDump,
 		None => wasmtime::ProfilingStrategy::None,
