@@ -124,6 +124,13 @@ pub use v1::*;
 /// The valid syntax for defining a [Linear](`v2::Linear`) is `Linear<A, B>` where `A`, and `B`
 /// are valid integer literals (that fit in a `u32`), such that `B` >= `A`.
 ///
+/// Anywhere within a benchmark function you may use the generic `T: Config` parameter as well
+/// as `I` in the case of an `#[instance_benchmarks]` module. You should not add these to the
+/// function signature as this will be handled automatically for you based on whether this is a
+/// `#[benchmarks]` or `#[instance_benchmarks]` module and whatever [where clause](#where-clause)
+/// you have defined for the the module. You should not manually add any generics to the
+/// signature of your benchmark function.
+///
 /// Also note that the `// setup code` and `// verification code` comments shown above are not
 /// required and are included simply for demonstration purposes.
 ///
