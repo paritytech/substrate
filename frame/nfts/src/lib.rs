@@ -1261,8 +1261,8 @@ pub mod pallet {
 
 		/// Disallows changing the metadata or attributes of the item.
 		///
-		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
-		/// `collection`.
+		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner or
+		/// the Admin of the `collection`.
 		///
 		/// - `collection`: The collection if the `item`.
 		/// - `item`: An item to be locked.
@@ -1270,8 +1270,8 @@ pub mod pallet {
 		/// - `lock_attributes`: Specifies whether the attributes in the `CollectionOwner` namespace
 		///   should be locked.
 		///
-		/// Note: `lock_attributes` affects the attributes in the `CollectionOwner` namespace
-		/// only. When the metadata or attributes are locked, it won't be possible the unlock them.
+		/// Note: `lock_attributes` affects the attributes in the `CollectionOwner` namespace only.
+		/// When the metadata or attributes are locked, it won't be possible the unlock them.
 		///
 		/// Emits `ItemPropertiesLocked`.
 		///
