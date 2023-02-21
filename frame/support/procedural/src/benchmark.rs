@@ -231,7 +231,7 @@ impl BenchmarkDef {
 			let Type::Path(TypePath { path, qself: _ }) = &**typ else {
 				return Err(Error::new(
 					typ.span(),
-					"Only `Result<(), BenchmarkError>` or blank return types are allowed on benchmark function definitions",
+					"Only `Result<(), BenchmarkError>` or a blank return type is allowed on benchmark function definitions",
 				))
 			};
 			let seg = path
