@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -24,7 +24,6 @@ use sp_api::{ProvideRuntimeApi, TransactionFor};
 use sp_blockchain::well_known_cache_keys;
 use sp_consensus::Error as ConsensusError;
 use sp_runtime::{
-	generic::BlockId,
 	traits::{Block as BlockT, Header as HeaderT, NumberFor},
 	EncodedJustification,
 };
@@ -93,11 +92,10 @@ where
 		hash: <Block as BlockT>::Hash,
 	) -> Result<BeefyVersionedFinalityProof<Block>, ConsensusError> {
 		use ConsensusError::ClientImport as ImportError;
-		let block_id = BlockId::hash(hash);
 		let beefy_genesis = self
 			.runtime
 			.runtime_api()
-			.beefy_genesis(&block_id)
+			.beefy_genesis(hash)
 			.map_err(|e| ImportError(e.to_string()))?
 			.ok_or_else(|| ImportError("Unknown BEEFY genesis".to_string()))?;
 		if number < beefy_genesis {
@@ -106,7 +104,7 @@ where
 		let validator_set = self
 			.runtime
 			.runtime_api()
-			.validator_set(&block_id)
+			.validator_set(hash)
 			.map_err(|e| ImportError(e.to_string()))?
 			.ok_or_else(|| ImportError("Unknown validator set".to_string()))?;
 
