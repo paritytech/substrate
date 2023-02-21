@@ -1145,13 +1145,14 @@ impl<T: Config> Pallet<T> {
 		page_index: PageIndex,
 		message_index: T::Size,
 		message: &[u8],
-		weight: &mut WeightMeter,
+		meter: &mut WeightMeter,
 		overweight_limit: Weight,
 	) -> MessageExecutionStatus {
 		let hash = T::Hashing::hash(message);
 		use ProcessMessageError::*;
+		let prev_consumed = meter.consumed;
 
-		match T::MessageProcessor::process_message(message, origin.clone(), weight.remaining()) {
+		match T::MessageProcessor::process_message(message, origin.clone(), meter) {
 			Err(Overweight(w)) if w.any_gt(overweight_limit) => {
 				// Permanently overweight.
 				Self::deposit_event(Event::<T>::OverweightEnqueued {
@@ -1176,9 +1177,9 @@ impl<T: Config> Pallet<T> {
 				Self::deposit_event(Event::<T>::ProcessingFailed { hash, origin, error });
 				MessageExecutionStatus::Unprocessable { permanent: true }
 			},
-			Ok((success, weight_used)) => {
+			Ok(success) => {
 				// Success
-				weight.defensive_saturating_accrue(weight_used);
+				let weight_used = meter.consumed.saturating_sub(prev_consumed);
 				Self::deposit_event(Event::<T>::Processed { hash, origin, weight_used, success });
 				MessageExecutionStatus::Processed
 			},

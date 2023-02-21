@@ -171,8 +171,8 @@ impl ProcessMessage for RecordingMessageProcessor {
 	fn process_message(
 		message: &[u8],
 		origin: Self::Origin,
-		weight_limit: Weight,
-	) -> Result<(bool, Weight), ProcessMessageError> {
+		meter: &mut WeightMeter,
+	) -> Result<bool, ProcessMessageError> {
 		processing_message(message, &origin)?;
 
 		let weight = if message.starts_with(&b"weight="[..]) {
@@ -188,15 +188,15 @@ impl ProcessMessage for RecordingMessageProcessor {
 		} else {
 			1
 		};
-		let weight = Weight::from_parts(weight, weight);
+		let required = Weight::from_parts(weight, weight);
 
-		if weight.all_lte(weight_limit) {
+		if meter.check_accrue(required) {
 			let mut m = MessagesProcessed::get();
 			m.push((message.to_vec(), origin));
 			MessagesProcessed::set(m);
-			Ok((true, weight))
+			Ok(true)
 		} else {
-			Err(ProcessMessageError::Overweight(weight))
+			Err(ProcessMessageError::Overweight(required))
 		}
 	}
 }
@@ -238,19 +238,19 @@ impl ProcessMessage for CountingMessageProcessor {
 	fn process_message(
 		message: &[u8],
 		origin: Self::Origin,
-		weight_limit: Weight,
-	) -> Result<(bool, Weight), ProcessMessageError> {
+		meter: &mut WeightMeter,
+	) -> Result<bool, ProcessMessageError> {
 		if let Err(e) = processing_message(message, &origin) {
 			NumMessagesErrored::set(NumMessagesErrored::get() + 1);
 			return Err(e)
 		}
-		let weight = Weight::from_parts(1, 1);
+		let required = Weight::from_parts(1, 1);
 
-		if weight.all_lte(weight_limit) {
+		if meter.check_accrue(required) {
 			NumMessagesProcessed::set(NumMessagesProcessed::get() + 1);
-			Ok((true, weight))
+			Ok(true)
 		} else {
-			Err(ProcessMessageError::Overweight(weight))
+			Err(ProcessMessageError::Overweight(required))
 		}
 	}
 }

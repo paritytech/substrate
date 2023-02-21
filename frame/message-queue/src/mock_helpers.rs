@@ -60,16 +60,15 @@ where
 
 	fn process_message(
 		_message: &[u8],
-		origin: Self::Origin,
-		weight_limit: Weight,
-	) -> Result<(bool, Weight), ProcessMessageError> {
-		let weight = Weight::from_parts(REQUIRED_WEIGHT, REQUIRED_WEIGHT);
-		log::warn!("Processing message from {:?}", origin);
+		_origin: Self::Origin,
+		meter: &mut WeightMeter,
+	) -> Result<bool, ProcessMessageError> {
+		let required = Weight::from_parts(REQUIRED_WEIGHT, REQUIRED_WEIGHT);
 
-		if weight.all_lte(weight_limit) {
-			Ok((true, weight))
+		if meter.check_accrue(required) {
+			Ok(true)
 		} else {
-			Err(ProcessMessageError::Overweight(weight))
+			Err(ProcessMessageError::Overweight(required))
 		}
 	}
 }

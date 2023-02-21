@@ -22,7 +22,7 @@ use scale_info::TypeInfo;
 use sp_core::{ConstU32, Get, TypedGet};
 use sp_runtime::{traits::Convert, BoundedSlice, RuntimeDebug};
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
-use sp_weights::Weight;
+use sp_weights::{Weight, WeightMeter};
 
 /// Errors that can happen when attempting to process a message with
 /// [`ProcessMessage::process_message()`].
@@ -52,12 +52,14 @@ pub trait ProcessMessage {
 	/// The transport from where a message originates.
 	type Origin: FullCodec + MaxEncodedLen + Clone + Eq + PartialEq + TypeInfo + Debug;
 
-	/// Process the given message, using no more than `weight_limit` in weight to do so.
+	/// Process the given message, using no more than the remaining `meter` weight to do so.
+	///
+	/// Returns whether the message was processed.
 	fn process_message(
 		message: &[u8],
 		origin: Self::Origin,
-		weight_limit: Weight,
-	) -> Result<(bool, Weight), ProcessMessageError>;
+		meter: &mut WeightMeter,
+	) -> Result<bool, ProcessMessageError>;
 }
 
 /// Errors that can happen when attempting to execute an overweight message with
