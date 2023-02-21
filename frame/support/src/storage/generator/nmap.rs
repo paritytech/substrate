@@ -208,6 +208,13 @@ where
 		)
 	}
 
+	fn contains_prefix<KP>(partial_key: KP) -> bool
+	where
+		K: HasKeyPrefix<KP>,
+	{
+		unhashed::contains_prefixed_key(&Self::storage_n_map_partial_key(partial_key))
+	}
+
 	fn iter_prefix_values<KP>(partial_key: KP) -> PrefixIterator<V>
 	where
 		K: HasKeyPrefix<KP>,

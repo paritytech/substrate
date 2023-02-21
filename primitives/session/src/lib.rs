@@ -24,7 +24,7 @@ use codec::{Decode, Encode};
 #[cfg(feature = "std")]
 use sp_api::ProvideRuntimeApi;
 #[cfg(feature = "std")]
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use sp_runtime::traits::Block as BlockT;
 
 use sp_core::{crypto::KeyTypeId, RuntimeDebug};
 use sp_staking::SessionIndex;
@@ -125,7 +125,7 @@ where
 	let runtime_api = client.runtime_api();
 
 	for seed in seeds {
-		runtime_api.generate_session_keys(&BlockId::Hash(at), Some(seed.as_bytes().to_vec()))?;
+		runtime_api.generate_session_keys(at, Some(seed.as_bytes().to_vec()))?;
 	}
 
 	Ok(())

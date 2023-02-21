@@ -32,6 +32,12 @@ use sp_keyring::Sr25519Keyring;
 
 use std::sync::Arc;
 
+#[cfg(feature = "try-runtime")]
+use {
+	kitchensink_runtime::constants::time::SLOT_DURATION,
+	try_runtime_cli::block_building_info::substrate_info,
+};
+
 impl SubstrateCli for Cli {
 	fn impl_name() -> String {
 		"Substrate Node".into()
@@ -236,11 +242,13 @@ pub fn run() -> Result<()> {
 					sc_service::TaskManager::new(config.tokio_handle.clone(), registry)
 						.map_err(|e| sc_cli::Error::Service(sc_service::Error::Prometheus(e)))?;
 
+				let info_provider = substrate_info(SLOT_DURATION);
+
 				Ok((
 					cmd.run::<Block, ExtendedHostFunctions<
 						sp_io::SubstrateHostFunctions,
 						<ExecutorDispatch as NativeExecutionDispatch>::ExtendHostFunctions,
-					>>(),
+					>, _>(Some(info_provider)),
 					task_manager,
 				))
 			})

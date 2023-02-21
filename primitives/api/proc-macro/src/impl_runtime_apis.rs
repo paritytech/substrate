@@ -233,7 +233,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 
 			fn has_api<A: #crate_::RuntimeApiInfo + ?Sized>(
 				&self,
-				at: &#crate_::BlockId<Block>,
+				at: <Block as #crate_::BlockT>::Hash,
 			) -> std::result::Result<bool, #crate_::ApiError> where Self: Sized {
 				#crate_::CallApiAt::<Block>::runtime_version_at(self.call, at)
 					.map(|v| #crate_::RuntimeVersion::has_api_with(&v, &A::ID, |v| v == A::VERSION))
@@ -241,7 +241,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 
 			fn has_api_with<A: #crate_::RuntimeApiInfo + ?Sized, P: Fn(u32) -> bool>(
 				&self,
-				at: &#crate_::BlockId<Block>,
+				at: <Block as #crate_::BlockT>::Hash,
 				pred: P,
 			) -> std::result::Result<bool, #crate_::ApiError> where Self: Sized {
 				#crate_::CallApiAt::<Block>::runtime_version_at(self.call, at)
@@ -250,7 +250,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 
 			fn api_version<A: #crate_::RuntimeApiInfo + ?Sized>(
 				&self,
-				at: &#crate_::BlockId<Block>,
+				at: <Block as #crate_::BlockT>::Hash,
 			) -> std::result::Result<Option<u32>, #crate_::ApiError> where Self: Sized {
 				#crate_::CallApiAt::<Block>::runtime_version_at(self.call, at)
 					.map(|v| #crate_::RuntimeVersion::api_version(&v, &A::ID))
@@ -281,8 +281,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				#crate_::StorageChanges<C::StateBackend, Block>,
 				String
 			> where Self: Sized {
-				let at = #crate_::BlockId::Hash(std::clone::Clone::clone(&parent_hash));
-				let state_version = #crate_::CallApiAt::<Block>::runtime_version_at(self.call, &at)
+				let state_version = #crate_::CallApiAt::<Block>::runtime_version_at(self.call, std::clone::Clone::clone(&parent_hash))
 					.map(|v| #crate_::RuntimeVersion::state_version(&v))
 					.map_err(|e| format!("Failed to get state version: {}", e))?;
 
@@ -424,7 +423,7 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 		input.items.push(parse_quote! {
 			fn __runtime_api_internal_call_api_at(
 				&self,
-				at: &#crate_::BlockId<__SR_API_BLOCK__>,
+				at: <__SR_API_BLOCK__ as #crate_::BlockT>::Hash,
 				context: #crate_::ExecutionContext,
 				params: std::vec::Vec<u8>,
 				fn_name: &dyn Fn(#crate_::RuntimeVersion) -> &'static str,

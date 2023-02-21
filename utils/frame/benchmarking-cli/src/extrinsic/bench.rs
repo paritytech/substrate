@@ -20,13 +20,13 @@
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sc_cli::{Error, Result};
 use sc_client_api::Backend as ClientBackend;
-use sp_api::{ApiExt, BlockId, Core, ProvideRuntimeApi};
+use sp_api::{ApiExt, Core, ProvideRuntimeApi};
 use sp_blockchain::{
 	ApplyExtrinsicFailed::Validity,
 	Error::{ApplyExtrinsicFailed, RuntimeApiError},
 };
 use sp_runtime::{
-	traits::{Block as BlockT, Zero},
+	traits::Block as BlockT,
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
 	Digest, DigestItem, OpaqueExtrinsic,
 };
@@ -73,7 +73,9 @@ impl<Block, BA, C> Benchmark<Block, BA, C>
 where
 	Block: BlockT<Extrinsic = OpaqueExtrinsic>,
 	BA: ClientBackend<Block>,
-	C: BlockBuilderProvider<BA, Block, C> + ProvideRuntimeApi<Block>,
+	C: BlockBuilderProvider<BA, Block, C>
+		+ ProvideRuntimeApi<Block>
+		+ sp_blockchain::HeaderBackend<Block>,
 	C::Api: ApiExt<Block, StateBackend = BA::State> + BlockBuilderApi<Block>,
 {
 	/// Create a new [`Self`] from the arguments.
@@ -167,13 +169,13 @@ where
 	/// Measures the time that it take to execute a block or an extrinsic.
 	fn measure_block(&self, block: &Block) -> Result<BenchRecord> {
 		let mut record = BenchRecord::new();
-		let genesis = BlockId::Number(Zero::zero());
+		let genesis = self.client.info().genesis_hash;
 
 		info!("Running {} warmups...", self.params.warmup);
 		for _ in 0..self.params.warmup {
 			self.client
 				.runtime_api()
-				.execute_block(&genesis, block.clone())
+				.execute_block(genesis, block.clone())
 				.map_err(|e| Error::Client(RuntimeApiError(e)))?;
 		}
 
@@ -186,7 +188,7 @@ where
 			let start = Instant::now();
 
 			runtime_api
-				.execute_block(&genesis, block)
+				.execute_block(genesis, block)
 				.map_err(|e| Error::Client(RuntimeApiError(e)))?;
 
 			let elapsed = start.elapsed().as_nanos();

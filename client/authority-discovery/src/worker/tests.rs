@@ -184,6 +184,10 @@ impl NetworkStateInfo for TestNetwork {
 	fn external_addresses(&self) -> Vec<Multiaddr> {
 		self.external_addresses.clone()
 	}
+
+	fn listen_addresses(&self) -> Vec<Multiaddr> {
+		self.external_addresses.clone()
+	}
 }
 
 struct TestSigner<'a> {
