@@ -42,7 +42,6 @@ use sp_blockchain::{
 	Backend as BlockChainBackend, Error as BlockChainError, HeaderBackend, HeaderMetadata, Info,
 };
 use sp_runtime::{
-	generic::BlockId,
 	traits::{Block as BlockT, Header, One},
 	Saturating,
 };
@@ -136,8 +135,8 @@ where
 	/// Conditionally generate the runtime event of the given block.
 	fn generate_runtime_event(
 		&self,
-		block: &BlockId<Block>,
-		parent: Option<&BlockId<Block>>,
+		block: Block::Hash,
+		parent: Option<Block::Hash>,
 	) -> Option<RuntimeEvent> {
 		// No runtime versions should be reported.
 		if !self.runtime_updates {
@@ -217,8 +216,7 @@ where
 		let finalized_block_hash = info.finalized_hash;
 		self.sub_handle.pin_block(finalized_block_hash)?;
 
-		let finalized_block_runtime =
-			self.generate_runtime_event(&BlockId::Hash(finalized_block_hash), None);
+		let finalized_block_runtime = self.generate_runtime_event(finalized_block_hash, None);
 
 		let initialized_event = FollowEvent::Initialized(Initialized {
 			finalized_block_hash,
@@ -232,8 +230,7 @@ where
 		for (child, parent) in initial_blocks.into_iter() {
 			self.sub_handle.pin_block(child)?;
 
-			let new_runtime =
-				self.generate_runtime_event(&BlockId::Hash(child), Some(&BlockId::Hash(parent)));
+			let new_runtime = self.generate_runtime_event(child, Some(parent));
 
 			let event = FollowEvent::NewBlock(NewBlock {
 				block_hash: child,
@@ -264,10 +261,7 @@ where
 		parent_block_hash: Block::Hash,
 		is_best_block: bool,
 	) -> Vec<FollowEvent<Block::Hash>> {
-		let new_runtime = self.generate_runtime_event(
-			&BlockId::Hash(block_hash),
-			Some(&BlockId::Hash(parent_block_hash)),
-		);
+		let new_runtime = self.generate_runtime_event(block_hash, Some(parent_block_hash));
 
 		let new_block = FollowEvent::NewBlock(NewBlock {
 			block_hash,

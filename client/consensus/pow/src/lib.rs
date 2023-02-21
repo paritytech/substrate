@@ -267,7 +267,7 @@ where
 	async fn check_inherents(
 		&self,
 		block: B,
-		block_id: BlockId<B>,
+		at_hash: B::Hash,
 		inherent_data_providers: CIDP::InherentDataProviders,
 		execution_context: ExecutionContext,
 	) -> Result<(), Error<B>> {
@@ -283,7 +283,7 @@ where
 		let inherent_res = self
 			.client
 			.runtime_api()
-			.check_inherents_with_context(&block_id, execution_context, block, inherent_data)
+			.check_inherents_with_context(at_hash, execution_context, block, inherent_data)
 			.map_err(|e| Error::Client(e.into()))?;
 
 		if !inherent_res.ok() {
@@ -344,7 +344,7 @@ where
 			if !block.state_action.skip_execution_checks() {
 				self.check_inherents(
 					check_block.clone(),
-					BlockId::Hash(parent_hash),
+					parent_hash,
 					self.create_inherent_data_providers
 						.create_inherent_data_providers(parent_hash, ())
 						.await?,

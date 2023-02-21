@@ -55,7 +55,7 @@ use sp_blockchain::HeaderBackend;
 
 use sp_core::crypto::{key_types, CryptoTypePublicPair, Pair};
 use sp_keystore::CryptoStore;
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use sp_runtime::traits::Block as BlockT;
 
 mod addr_cache;
 /// Dht payload schemas generated from Protobuf definitions via Prost crate in build.rs.
@@ -171,7 +171,7 @@ where
 		&self,
 		at: Block::Hash,
 	) -> std::result::Result<Vec<AuthorityId>, ApiError> {
-		self.runtime_api().authorities(&BlockId::Hash(at))
+		self.runtime_api().authorities(at)
 	}
 }
 

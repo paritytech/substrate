@@ -28,7 +28,7 @@ use sc_rpc_api::{dev::error::Error, DenyUnsafe};
 use sp_api::{ApiExt, Core, ProvideRuntimeApi};
 use sp_core::Encode;
 use sp_runtime::{
-	generic::{BlockId, DigestItem},
+	generic::DigestItem,
 	traits::{Block as BlockT, Header},
 };
 use std::{
@@ -98,7 +98,7 @@ where
 		let mut runtime_api = self.client.runtime_api();
 		runtime_api.record_proof();
 		runtime_api
-			.execute_block(&BlockId::Hash(parent_header.hash()), block)
+			.execute_block(parent_header.hash(), block)
 			.map_err(|_| Error::BlockExecutionFailed)?;
 		let witness = runtime_api
 			.extract_proof()
