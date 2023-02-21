@@ -34,7 +34,6 @@ use sp_api::{
 use sp_blockchain::{ApplyExtrinsicFailed, Error};
 use sp_core::ExecutionContext;
 use sp_runtime::{
-	generic::BlockId,
 	legacy,
 	traits::{Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor, One},
 	Digest,

@@ -752,7 +752,9 @@ async fn beefy_importing_justifications() {
 			.and_then(|j| j.get(BEEFY_ENGINE_ID).cloned())
 	};
 
-	let builder = full_client.new_block_at(full_client.chain_info().genesis_hash, Default::default(), false).unwrap();
+	let builder = full_client
+		.new_block_at(full_client.chain_info().genesis_hash, Default::default(), false)
+		.unwrap();
 	let block = builder.build().unwrap().block;
 	let hashof1 = block.header.hash();
 
