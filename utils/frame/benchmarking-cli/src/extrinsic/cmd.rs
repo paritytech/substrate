@@ -94,7 +94,9 @@ impl ExtrinsicCmd {
 	where
 		Block: BlockT<Extrinsic = OpaqueExtrinsic>,
 		BA: ClientBackend<Block>,
-		C: BlockBuilderProvider<BA, Block, C> + ProvideRuntimeApi<Block>,
+		C: BlockBuilderProvider<BA, Block, C>
+			+ ProvideRuntimeApi<Block>
+			+ sp_blockchain::HeaderBackend<Block>,
 		C::Api: ApiExt<Block, StateBackend = BA::State> + BlockBuilderApi<Block>,
 	{
 		// Short circuit if --list was specified.

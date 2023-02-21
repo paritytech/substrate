@@ -34,7 +34,7 @@ use sp_consensus::{BlockOrigin, Error as ConsensusError, SelectChain};
 use sp_core::hashing::twox_128;
 use sp_finality_grandpa::{ConsensusLog, GrandpaApi, ScheduledChange, SetId, GRANDPA_ENGINE_ID};
 use sp_runtime::{
-	generic::{BlockId, OpaqueDigestItemId},
+	generic::OpaqueDigestItemId,
 	traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero},
 	Justification,
 };
@@ -424,8 +424,7 @@ where
 
 	/// Read current set id form a given state.
 	fn current_set_id(&self, hash: Block::Hash) -> Result<SetId, ConsensusError> {
-		let id = &BlockId::hash(hash);
-		let runtime_version = self.inner.runtime_api().version(id).map_err(|e| {
+		let runtime_version = self.inner.runtime_api().version(hash).map_err(|e| {
 			ConsensusError::ClientImport(format!(
 				"Unable to retrieve current runtime version. {}",
 				e
@@ -452,7 +451,7 @@ where
 		} else {
 			self.inner
 				.runtime_api()
-				.current_set_id(id)
+				.current_set_id(hash)
 				.map_err(|e| ConsensusError::ClientImport(e.to_string()))
 		}
 	}
@@ -477,7 +476,7 @@ where
 				let authorities = self
 					.inner
 					.runtime_api()
-					.grandpa_authorities(&BlockId::hash(hash))
+					.grandpa_authorities(hash)
 					.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
 				let set_id = self.current_set_id(hash)?;
 				let authority_set = AuthoritySet::new(

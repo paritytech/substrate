@@ -291,20 +291,14 @@ fn client_initializes_from_genesis_ok() {
 	assert_eq!(
 		client
 			.runtime_api()
-			.balance_of(
-				&BlockId::Number(client.chain_info().best_number),
-				AccountKeyring::Alice.into(),
-			)
+			.balance_of(client.chain_info().best_hash, AccountKeyring::Alice.into())
 			.unwrap(),
 		1000
 	);
 	assert_eq!(
 		client
 			.runtime_api()
-			.balance_of(
-				&BlockId::Number(client.chain_info().best_number),
-				AccountKeyring::Ferdie.into(),
-			)
+			.balance_of(client.chain_info().best_hash, AccountKeyring::Ferdie.into())
 			.unwrap(),
 		0
 	);
@@ -351,20 +345,14 @@ fn block_builder_works_with_transactions() {
 	assert_eq!(
 		client
 			.runtime_api()
-			.balance_of(
-				&BlockId::Number(client.chain_info().best_number),
-				AccountKeyring::Alice.into(),
-			)
+			.balance_of(client.chain_info().best_hash, AccountKeyring::Alice.into())
 			.unwrap(),
 		958
 	);
 	assert_eq!(
 		client
 			.runtime_api()
-			.balance_of(
-				&BlockId::Number(client.chain_info().best_number),
-				AccountKeyring::Ferdie.into(),
-			)
+			.balance_of(client.chain_info().best_hash, AccountKeyring::Ferdie.into())
 			.unwrap(),
 		42
 	);
@@ -1256,10 +1244,7 @@ fn state_reverted_on_reorg() {
 	let current_balance = |client: &substrate_test_runtime_client::TestClient| {
 		client
 			.runtime_api()
-			.balance_of(
-				&BlockId::number(client.chain_info().best_number),
-				AccountKeyring::Alice.into(),
-			)
+			.balance_of(client.chain_info().best_hash, AccountKeyring::Alice.into())
 			.unwrap()
 	};
 
@@ -1996,10 +1981,10 @@ fn use_dalek_ext_works() {
 	// On block zero it will use dalek and then on block 1 it will use zebra
 	assert!(!client
 		.runtime_api()
-		.verify_ed25519(&BlockId::Number(0), zero_ed_sig(), zero_ed_pub(), vec![])
+		.verify_ed25519(client.chain_info().genesis_hash, zero_ed_sig(), zero_ed_pub(), vec![])
 		.unwrap());
 	assert!(client
 		.runtime_api()
-		.verify_ed25519(&BlockId::Number(1), zero_ed_sig(), zero_ed_pub(), vec![])
+		.verify_ed25519(a1.hash(), zero_ed_sig(), zero_ed_pub(), vec![])
 		.unwrap());
 }
