@@ -28,7 +28,7 @@ pub mod v1 {
 		pub depositor: AccountId,
 		pub root: AccountId,
 		pub nominator: AccountId,
-		pub state_toggler: AccountId,
+		pub bouncer: AccountId,
 	}
 
 	impl<AccountId> OldPoolRoles<AccountId> {
@@ -37,7 +37,7 @@ pub mod v1 {
 				depositor: self.depositor,
 				root: Some(self.root),
 				nominator: Some(self.nominator),
-				state_toggler: Some(self.state_toggler),
+				bouncer: Some(self.bouncer),
 			}
 		}
 	}
@@ -63,7 +63,7 @@ pub mod v1 {
 
 	/// Trivial migration which makes the roles of each pool optional.
 	///
-	/// Note: The depositor is not optional since he can never change.
+	/// Note: The depositor is not optional since they can never change.
 	pub struct MigrateToV1<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV1<T> {
 		fn on_runtime_upgrade() -> Weight {

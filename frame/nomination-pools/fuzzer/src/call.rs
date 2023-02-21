@@ -143,9 +143,9 @@ fn random_call<R: Rng>(mut rng: &mut R) -> (pools::Call<T>, RuntimeOrigin) {
 			let amount = random_ed_multiple(&mut rng);
 			fund_account(&mut rng, &who);
 			let root = who;
-			let state_toggler = who;
+			let bouncer = who;
 			let nominator = who;
-			(PoolsCall::<T>::create { amount, root, state_toggler, nominator }, origin)
+			(PoolsCall::<T>::create { amount, root, bouncer, nominator }, origin)
 		},
 		7 => {
 			// nominate

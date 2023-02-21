@@ -53,7 +53,6 @@ use sp_core::crypto::{ByteArray, Pair, Public};
 use sp_inherents::CreateInherentDataProviders;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
-	generic::BlockId,
 	traits::{Block as BlockT, Header, Member, NumberFor, Zero},
 	DigestItem,
 };
@@ -121,8 +120,10 @@ where
 	C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
 	C::Api: AuraApi<B, A>,
 {
-	let best_block_id = BlockId::Hash(client.usage_info().chain.best_hash);
-	client.runtime_api().slot_duration(&best_block_id).map_err(|err| err.into())
+	client
+		.runtime_api()
+		.slot_duration(client.usage_info().chain.best_hash)
+		.map_err(|err| err.into())
 }
 
 /// Get slot author for given block along with authorities.
@@ -613,7 +614,7 @@ where
 			if *until > context_block_number {
 				runtime_api
 					.initialize_block(
-						&BlockId::Hash(parent_hash),
+						parent_hash,
 						&B::Header::new(
 							context_block_number,
 							Default::default(),
@@ -627,7 +628,7 @@ where
 	}
 
 	runtime_api
-		.authorities(&BlockId::Hash(parent_hash))
+		.authorities(parent_hash)
 		.ok()
 		.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)
 }

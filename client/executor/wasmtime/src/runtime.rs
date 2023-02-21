@@ -30,6 +30,7 @@ use sc_executor_common::{
 	runtime_blob::{
 		self, DataSegmentsSnapshot, ExposedMutableGlobalsSet, GlobalsSnapshot, RuntimeBlob,
 	},
+	util::checked_range,
 	wasm_runtime::{InvokeMethod, WasmInstance, WasmModule},
 };
 use sp_runtime_interface::unpack_ptr_and_len;
@@ -41,7 +42,7 @@ use std::{
 		Arc,
 	},
 };
-use wasmtime::{Engine, Memory, StoreLimits, Table};
+use wasmtime::{AsContext, Engine, Memory, StoreLimits, Table};
 
 pub(crate) struct StoreData {
 	/// The limits we apply to the store. We need to store it here to return a reference to this
@@ -365,29 +366,27 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 			MAX_WASM_PAGES
 		};
 
-		config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling {
-			strategy: wasmtime::PoolingAllocationStrategy::ReuseAffinity,
-
+		let mut pooling_config = wasmtime::PoolingAllocationConfig::default();
+		pooling_config
+			.strategy(wasmtime::PoolingAllocationStrategy::ReuseAffinity)
 			// Pooling needs a bunch of hard limits to be set; if we go over
 			// any of these then the instantiation will fail.
-			instance_limits: wasmtime::InstanceLimits {
-				// Current minimum values for kusama (as of 2022-04-14):
-				//   size: 32384
-				//   table_elements: 1249
-				//   memory_pages: 2070
-				size: 64 * 1024,
-				table_elements: 3072,
-				memory_pages,
+			//
+			// Current minimum values for kusama (as of 2022-04-14):
+			//   size: 32384
+			//   table_elements: 1249
+			//   memory_pages: 2070
+			.instance_size(128 * 1024)
+			.instance_table_elements(8192)
+			.instance_memory_pages(memory_pages)
+			// We can only have a single of those.
+			.instance_tables(1)
+			.instance_memories(1)
+			// This determines how many instances of the module can be
+			// instantiated in parallel from the same `Module`.
+			.instance_count(32);
 
-				// We can only have a single of those.
-				tables: 1,
-				memories: 1,
-
-				// This determines how many instances of the module can be
-				// instantiated in parallel from the same `Module`.
-				count: 32,
-			},
-		});
+		config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling(pooling_config));
 	}
 
 	Ok(config)
@@ -793,7 +792,19 @@ fn extract_output_data(
 	output_ptr: u32,
 	output_len: u32,
 ) -> Result<Vec<u8>> {
+	let ctx = instance.store();
+
+	// Do a length check before allocating. The returned output should not be bigger than the
+	// available WASM memory. Otherwise, a malicious parachain can trigger a large allocation,
+	// potentially causing memory exhaustion.
+	//
+	// Get the size of the WASM memory in bytes.
+	let memory_size = ctx.as_context().data().memory().data_size(ctx);
+	if checked_range(output_ptr as usize, output_len as usize, memory_size).is_none() {
+		Err(WasmError::Other("output exceeds bounds of wasm memory".into()))?
+	}
 	let mut output = vec![0; output_len as usize];
-	util::read_memory_into(instance.store(), Pointer::new(output_ptr), &mut output)?;
+
+	util::read_memory_into(ctx, Pointer::new(output_ptr), &mut output)?;
 	Ok(output)
 }

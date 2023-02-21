@@ -15,9 +15,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::{
-	parse::storage::{Metadata, QueryKind, StorageDef, StorageGenerics},
-	Def,
+use crate::{
+	counter_prefix,
+	pallet::{
+		parse::storage::{Metadata, QueryKind, StorageDef, StorageGenerics},
+		Def,
+	},
 };
 use quote::ToTokens;
 use std::{collections::HashMap, ops::IndexMut};
@@ -37,12 +40,6 @@ fn counter_prefix_ident(storage_ident: &syn::Ident) -> syn::Ident {
 		&format!("_GeneratedCounterPrefixForStorage{}", storage_ident),
 		storage_ident.span(),
 	)
-}
-
-/// Generate the counter_prefix related to the storage.
-/// counter_prefix is used by counted storage map.
-fn counter_prefix(prefix: &str) -> String {
-	format!("CounterFor{}", prefix)
 }
 
 /// Check for duplicated storage prefixes. This step is necessary since users can specify an
@@ -535,7 +532,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 							<T as #frame_system::Config>::PalletInfo
 							as #frame_support::traits::PalletInfo
 						>::name::<Pallet<#type_use_gen>>()
-							.expect("Every active pallet has a name in the runtime; qed")
+							.expect("No name found for the pallet in the runtime! This usually means that the pallet wasn't added to `construct_runtime!`.")
 					}
 					const STORAGE_PREFIX: &'static str = #counter_prefix_struct_const;
 				}
@@ -569,7 +566,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						<T as #frame_system::Config>::PalletInfo
 						as #frame_support::traits::PalletInfo
 					>::name::<Pallet<#type_use_gen>>()
-						.expect("Every active pallet has a name in the runtime; qed")
+						.expect("No name found for the pallet in the runtime! This usually means that the pallet wasn't added to `construct_runtime!`.")
 				}
 				const STORAGE_PREFIX: &'static str = #prefix_struct_const;
 			}
@@ -648,7 +645,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						<T as #frame_system::Config>::PalletInfo as
 						#frame_support::traits::PalletInfo
 					>::name::<#pallet_ident<#type_use_gen>>()
-						.expect("Every active pallet has a name in the runtime; qed"),
+						.expect("No name found for the pallet in the runtime! This usually means that the pallet wasn't added to `construct_runtime!`."),
 					entries: {
 						#[allow(unused_mut)]
 						let mut entries = #frame_support::sp_std::vec![];

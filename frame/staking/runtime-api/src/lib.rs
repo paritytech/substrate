@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) 2023 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,7 +23,6 @@ use codec::Codec;
 use sp_runtime::Perquintill;
 
 sp_api::decl_runtime_apis! {
-	#[api_version(1)]
 	pub trait StakingApi<Balance>
 		where
 			Balance: Codec,

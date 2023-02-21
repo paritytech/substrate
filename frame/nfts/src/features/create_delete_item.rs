@@ -22,10 +22,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn do_mint(
 		collection: T::CollectionId,
 		item: T::ItemId,
-		depositor: T::AccountId,
+		maybe_depositor: Option<T::AccountId>,
 		mint_to: T::AccountId,
 		item_config: ItemConfig,
-		deposit_collection_owner: bool,
 		with_details_and_config: impl FnOnce(
 			&CollectionDetailsFor<T, I>,
 			&CollectionConfigFor<T, I>,
@@ -55,9 +54,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					true => T::ItemDeposit::get(),
 					false => Zero::zero(),
 				};
-				let deposit_account = match deposit_collection_owner {
-					true => collection_details.owner.clone(),
-					false => depositor,
+				let deposit_account = match maybe_depositor {
+					None => collection_details.owner.clone(),
+					Some(depositor) => depositor,
 				};
 
 				let item_owner = mint_to.clone();
@@ -86,12 +85,69 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	pub(crate) fn do_mint_pre_signed(
+		mint_to: T::AccountId,
+		mint_data: PreSignedMintOf<T, I>,
+		signer: T::AccountId,
+	) -> DispatchResult {
+		let PreSignedMint { collection, item, attributes, metadata, deadline, only_account } =
+			mint_data;
+		let metadata = Self::construct_metadata(metadata)?;
+
+		ensure!(
+			attributes.len() <= T::MaxAttributesPerCall::get() as usize,
+			Error::<T, I>::MaxAttributesLimitReached
+		);
+		if let Some(account) = only_account {
+			ensure!(account == mint_to, Error::<T, I>::WrongOrigin);
+		}
+
+		let now = frame_system::Pallet::<T>::block_number();
+		ensure!(deadline >= now, Error::<T, I>::DeadlineExpired);
+
+		let collection_details =
+			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
+		ensure!(collection_details.owner == signer, Error::<T, I>::NoPermission);
+
+		let item_config = ItemConfig { settings: Self::get_default_item_settings(&collection)? };
+		Self::do_mint(
+			collection,
+			item,
+			Some(mint_to.clone()),
+			mint_to.clone(),
+			item_config,
+			|_, _| Ok(()),
+		)?;
+		for (key, value) in attributes {
+			Self::do_set_attribute(
+				collection_details.owner.clone(),
+				collection,
+				Some(item),
+				AttributeNamespace::CollectionOwner,
+				Self::construct_attribute_key(key)?,
+				Self::construct_attribute_value(value)?,
+				mint_to.clone(),
+			)?;
+		}
+		if !metadata.len().is_zero() {
+			Self::do_set_item_metadata(
+				Some(collection_details.owner.clone()),
+				collection,
+				item,
+				metadata,
+				Some(mint_to.clone()),
+			)?;
+		}
+		Ok(())
+	}
+
 	pub fn do_burn(
 		collection: T::CollectionId,
 		item: T::ItemId,
 		with_details: impl FnOnce(&ItemDetailsFor<T, I>) -> DispatchResult,
 	) -> DispatchResult {
 		ensure!(!T::Locker::is_locked(collection, item), Error::<T, I>::ItemLocked);
+		let item_config = Self::get_item_config(&collection, &item)?;
 		let owner = Collection::<T, I>::try_mutate(
 			&collection,
 			|maybe_collection_details| -> Result<T::AccountId, DispatchError> {
@@ -104,6 +160,24 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				// Return the deposit.
 				T::Currency::unreserve(&details.deposit.account, details.deposit.amount);
 				collection_details.items.saturating_dec();
+
+				// Clear the metadata if it's not locked.
+				if item_config.is_setting_enabled(ItemSetting::UnlockedMetadata) {
+					if let Some(metadata) = ItemMetadataOf::<T, I>::take(&collection, &item) {
+						let depositor_account =
+							metadata.deposit.account.unwrap_or(collection_details.owner.clone());
+
+						T::Currency::unreserve(&depositor_account, metadata.deposit.amount);
+						collection_details.item_metadatas.saturating_dec();
+
+						if depositor_account == collection_details.owner {
+							collection_details
+								.owner_deposit
+								.saturating_reduce(metadata.deposit.amount);
+						}
+					}
+				}
+
 				Ok(details.owner)
 			},
 		)?;
@@ -116,8 +190,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		// NOTE: if item's settings are not empty (e.g. item's metadata is locked)
 		// then we keep the record and don't remove it
-		let config = Self::get_item_config(&collection, &item)?;
-		if !config.has_disabled_settings() {
+		if !item_config.has_disabled_settings() {
 			ItemConfigOf::<T, I>::remove(&collection, &item);
 		}
 

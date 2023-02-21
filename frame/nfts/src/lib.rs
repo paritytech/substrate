@@ -67,6 +67,7 @@ pub mod pallet {
 	use super::*;
 	use frame_support::{pallet_prelude::*, traits::ExistenceRequirement};
 	use frame_system::pallet_prelude::*;
+	use sp_runtime::traits::{IdentifyAccount, Verify};
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -167,9 +168,23 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxDeadlineDuration: Get<<Self as SystemConfig>::BlockNumber>;
 
+		/// The max number of attributes a user could set per call.
+		#[pallet::constant]
+		type MaxAttributesPerCall: Get<u32>;
+
 		/// Disables some of pallet's features.
 		#[pallet::constant]
 		type Features: Get<PalletFeatures>;
+
+		/// Off-Chain signature type.
+		///
+		/// Can verify whether an `Self::OffchainPublic` created a signature.
+		type OffchainSignature: Verify<Signer = Self::OffchainPublic> + Parameter;
+
+		/// Off-Chain public key.
+		///
+		/// Must identify as an on-chain `Self::AccountId`.
+		type OffchainPublic: IdentifyAccount<AccountId = Self::AccountId>;
 
 		#[cfg(feature = "runtime-benchmarks")]
 		/// A set of helper functions for benchmarking.
@@ -263,7 +278,7 @@ pub mod pallet {
 		T::CollectionId,
 		Blake2_128Concat,
 		T::ItemId,
-		ItemMetadata<DepositBalanceOf<T, I>, T::StringLimit>,
+		ItemMetadata<ItemMetadataDepositOf<T, I>, T::StringLimit>,
 		OptionQuery,
 	>;
 
@@ -559,6 +574,10 @@ pub mod pallet {
 		UnknownItem,
 		/// Swap doesn't exist.
 		UnknownSwap,
+		/// The given item has no metadata set.
+		MetadataNotFound,
+		/// The provided attribute can't be found.
+		AttributeNotFound,
 		/// Item is not for sale.
 		NotForSale,
 		/// The provided bid is too low.
@@ -587,6 +606,14 @@ pub mod pallet {
 		AlreadyClaimed,
 		/// The provided data is incorrect.
 		IncorrectData,
+		/// The extrinsic was sent by the wrong origin.
+		WrongOrigin,
+		/// The provided signature is incorrect.
+		WrongSignature,
+		/// The provided metadata might be too long.
+		IncorrectMetadata,
+		/// Can't set more attributes per one call.
+		MaxAttributesLimitReached,
 	}
 
 	#[pallet::call]
@@ -738,18 +765,15 @@ pub mod pallet {
 		) -> DispatchResult {
 			let caller = ensure_signed(origin)?;
 			let mint_to = T::Lookup::lookup(mint_to)?;
-
-			let collection_config = Self::get_collection_config(&collection)?;
-			let item_settings = collection_config.mint_settings.default_item_settings;
-			let item_config = ItemConfig { settings: item_settings };
+			let item_config =
+				ItemConfig { settings: Self::get_default_item_settings(&collection)? };
 
 			Self::do_mint(
 				collection,
 				item,
-				caller.clone(),
+				Some(caller.clone()),
 				mint_to.clone(),
 				item_config,
-				false,
 				|collection_details, collection_config| {
 					// Issuer can mint regardless of mint settings
 					if Self::has_role(&collection, &caller, CollectionRole::Issuer) {
@@ -849,9 +873,7 @@ pub mod pallet {
 					Error::<T, I>::NoPermission
 				);
 			}
-			Self::do_mint(collection, item, mint_to.clone(), mint_to, item_config, true, |_, _| {
-				Ok(())
-			})
+			Self::do_mint(collection, item, None, mint_to, item_config, |_, _| Ok(()))
 		}
 
 		/// Destroy a single item.
@@ -1324,7 +1346,15 @@ pub mod pallet {
 			value: BoundedVec<u8, T::ValueLimit>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			Self::do_set_attribute(origin, collection, maybe_item, namespace, key, value)
+			Self::do_set_attribute(
+				origin.clone(),
+				collection,
+				maybe_item,
+				namespace,
+				key,
+				value,
+				origin,
+			)
 		}
 
 		/// Force-set an attribute for a collection or item.
@@ -1362,7 +1392,7 @@ pub mod pallet {
 		/// Clear an attribute for a collection or item.
 		///
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
-		/// `collection`.
+		/// attribute.
 		///
 		/// Any deposit is freed for the collection's owner.
 		///
@@ -1464,7 +1494,7 @@ pub mod pallet {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
-			Self::do_set_item_metadata(maybe_check_owner, collection, item, data)
+			Self::do_set_item_metadata(maybe_check_owner, collection, item, data, None)
 		}
 
 		/// Clear the metadata for an item.
@@ -1766,6 +1796,33 @@ pub mod pallet {
 				receive_item,
 				witness_price,
 			)
+		}
+
+		/// Mint an item by providing the pre-signed approval.
+		///
+		/// Origin must be Signed.
+		///
+		/// - `mint_data`: The pre-signed approval that consists of the information about the item,
+		///   its metadata, attributes, who can mint it (`None` for anyone) and until what block
+		///   number.
+		/// - `signature`: The signature of the `data` object.
+		/// - `signer`: The `data` object's signer. Should be an owner of the collection.
+		///
+		/// Emits `Issued` on success.
+		/// Emits `AttributeSet` if the attributes were provided.
+		/// Emits `ItemMetadataSet` if the metadata was not empty.
+		#[pallet::call_index(37)]
+		#[pallet::weight(T::WeightInfo::mint_pre_signed(mint_data.attributes.len() as u32))]
+		pub fn mint_pre_signed(
+			origin: OriginFor<T>,
+			mint_data: PreSignedMintOf<T, I>,
+			signature: T::OffchainSignature,
+			signer: T::AccountId,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			let msg = Encode::encode(&mint_data);
+			ensure!(signature.verify(&*msg, &signer), Error::<T, I>::WrongSignature);
+			Self::do_mint_pre_signed(origin, mint_data, signer)
 		}
 	}
 }

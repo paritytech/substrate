@@ -129,6 +129,8 @@ pub use extensions::check_mortality::CheckMortality as CheckEra;
 pub use frame_support::dispatch::RawOrigin;
 pub use weights::WeightInfo;
 
+const LOG_TARGET: &str = "runtime::system";
+
 /// Compute the trie root of a list of extrinsics.
 ///
 /// The merkle proof is using the same trie as runtime state with
@@ -372,9 +374,8 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Make some on-chain remark.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`
-		/// # </weight>
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::SystemWeightInfo::remark(_remark.len() as u32))]
 		pub fn remark(origin: OriginFor<T>, _remark: Vec<u8>) -> DispatchResultWithPostInfo {
@@ -394,16 +395,8 @@ pub mod pallet {
 
 		/// Set the new runtime code.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(C + S)` where `C` length of `code` and `S` complexity of `can_set_code`
-		/// - 1 call to `can_set_code`: `O(S)` (calls `sp_io::misc::runtime_version` which is
-		///   expensive).
-		/// - 1 storage write (codec `O(C)`).
-		/// - 1 digest item.
-		/// - 1 event.
-		/// The weight of this function is dependent on the runtime, but generally this is very
-		/// expensive. We will treat this as a full block.
-		/// # </weight>
 		#[pallet::call_index(2)]
 		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
 		pub fn set_code(origin: OriginFor<T>, code: Vec<u8>) -> DispatchResultWithPostInfo {
@@ -415,13 +408,8 @@ pub mod pallet {
 
 		/// Set the new runtime code without doing any checks of the given `code`.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(C)` where `C` length of `code`
-		/// - 1 storage write (codec `O(C)`).
-		/// - 1 digest item.
-		/// - 1 event.
-		/// The weight of this function is dependent on the runtime. We will treat this as a full
-		/// block. # </weight>
 		#[pallet::call_index(3)]
 		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
 		pub fn set_code_without_checks(
@@ -1075,7 +1063,7 @@ impl<T: Config> Pallet<T> {
 				if account.providers == 0 {
 					// Logic error - cannot decrement beyond zero.
 					log::error!(
-						target: "runtime::system",
+						target: LOG_TARGET,
 						"Logic error: Unexpected underflow in reducing provider",
 					);
 					account.providers = 1;
@@ -1101,7 +1089,7 @@ impl<T: Config> Pallet<T> {
 				}
 			} else {
 				log::error!(
-					target: "runtime::system",
+					target: LOG_TARGET,
 					"Logic error: Account already dead when reducing provider",
 				);
 				Ok(DecRefStatus::Reaped)
@@ -1133,7 +1121,7 @@ impl<T: Config> Pallet<T> {
 				if account.sufficients == 0 {
 					// Logic error - cannot decrement beyond zero.
 					log::error!(
-						target: "runtime::system",
+						target: LOG_TARGET,
 						"Logic error: Unexpected underflow in reducing sufficients",
 					);
 				}
@@ -1150,7 +1138,7 @@ impl<T: Config> Pallet<T> {
 				}
 			} else {
 				log::error!(
-					target: "runtime::system",
+					target: LOG_TARGET,
 					"Logic error: Account already dead when reducing provider",
 				);
 				DecRefStatus::Reaped
@@ -1215,7 +1203,7 @@ impl<T: Config> Pallet<T> {
 				a.consumers -= 1;
 			} else {
 				log::error!(
-					target: "runtime::system",
+					target: LOG_TARGET,
 					"Logic error: Unexpected underflow in reducing consumer",
 				);
 			}
@@ -1245,6 +1233,8 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Deposits an event into this block's event record.
+	///
+	/// NOTE: Events not registered at the genesis block and quietly omitted.
 	pub fn deposit_event(event: impl Into<T::RuntimeEvent>) {
 		Self::deposit_event_indexed(&[], event.into());
 	}
@@ -1254,6 +1244,8 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This will update storage entries that correspond to the specified topics.
 	/// It is expected that light-clients could subscribe to this topics.
+	///
+	/// NOTE: Events not registered at the genesis block and quietly omitted.
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::RuntimeEvent) {
 		let block_number = Self::block_number();
 		// Don't populate events on genesis.
@@ -1315,7 +1307,7 @@ impl<T: Config> Pallet<T> {
 	/// Another potential use-case could be for the `on_initialize` and `on_finalize` hooks.
 	pub fn register_extra_weight_unchecked(weight: Weight, class: DispatchClass) {
 		BlockWeight::<T>::mutate(|current_weight| {
-			current_weight.add(weight, class);
+			current_weight.accrue(weight, class);
 		});
 	}
 
@@ -1337,7 +1329,7 @@ impl<T: Config> Pallet<T> {
 	/// resulting header for this block.
 	pub fn finalize() -> T::Header {
 		log::debug!(
-			target: "runtime::system",
+			target: LOG_TARGET,
 			"[{:?}] {} extrinsics, length: {} (normal {}%, op: {}%, mandatory {}%) / normal weight:\
 			 {} ({}%) op weight {} ({}%) / mandatory weight {} ({}%)",
 			Self::block_number(),
@@ -1417,10 +1409,8 @@ impl<T: Config> Pallet<T> {
 
 	/// Deposits a log and ensures it matches the block's log data.
 	///
-	/// # <weight>
+	/// ## Complexity
 	/// - `O(1)`
-	/// - 1 storage write (codec `O(1)`)
-	/// # </weight>
 	pub fn deposit_log(item: generic::DigestItem) {
 		<Digest<T>>::append(item);
 	}
@@ -1443,8 +1433,14 @@ impl<T: Config> Pallet<T> {
 	/// NOTE: This should only be used in tests. Reading events from the runtime can have a large
 	/// impact on the PoV size of a block. Users should use alternative and well bounded storage
 	/// items for any behavior like this.
+	///
+	/// NOTE: Events not registered at the genesis block and quietly omitted.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
 	pub fn events() -> Vec<EventRecord<T::RuntimeEvent, T::Hash>> {
+		debug_assert!(
+			!Self::block_number().is_zero(),
+			"events not registered at the genesis block"
+		);
 		// Dereferencing the events here is fine since we are not in the
 		// memory-restricted runtime.
 		Self::read_events_no_consensus().map(|e| *e).collect()
@@ -1499,15 +1495,27 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Assert the given `event` exists.
+	///
+	/// NOTE: Events not registered at the genesis block and quietly omitted.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
 	pub fn assert_has_event(event: T::RuntimeEvent) {
-		assert!(Self::events().iter().any(|record| record.event == event))
+		let events = Self::events();
+		assert!(
+			events.iter().any(|record| record.event == event),
+			"expected event {event:?} not found in events {events:?}",
+		);
 	}
 
 	/// Assert the last event equal to the given `event`.
+	///
+	/// NOTE: Events not registered at the genesis block and quietly omitted.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
 	pub fn assert_last_event(event: T::RuntimeEvent) {
-		assert_eq!(Self::events().last().expect("events expected").event, event);
+		let last_event = Self::events().last().expect("events expected").event.clone();
+		assert_eq!(
+			last_event, event,
+			"expected event {event:?} is not equal to the last event {last_event:?}",
+		);
 	}
 
 	/// Return the chain's current runtime version.
@@ -1547,7 +1555,7 @@ impl<T: Config> Pallet<T> {
 			Ok(_) => Event::ExtrinsicSuccess { dispatch_info: info },
 			Err(err) => {
 				log::trace!(
-					target: "runtime::system",
+					target: LOG_TARGET,
 					"Extrinsic failed at block({:?}): {:?}",
 					Self::block_number(),
 					err,
