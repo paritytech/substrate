@@ -25,7 +25,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		lock_settings: CollectionSettings,
 	) -> DispatchResult {
 		ensure!(
-			Self::has_role(&collection, &origin, CollectionRole::Freezer),
+			Self::collection_owner(collection.clone()) == Some(origin),
 			Error::<T, I>::NoPermission
 		);
 		ensure!(

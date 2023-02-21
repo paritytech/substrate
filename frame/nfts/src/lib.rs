@@ -1050,12 +1050,13 @@ pub mod pallet {
 
 		/// Disallows specified settings for the whole collection.
 		///
-		/// Origin must be Signed and the sender should be the Freezer of the `collection`.
+		/// Origin must be Signed and the sender should be the Owner of the `collection`.
 		///
 		/// - `collection`: The collection to be locked.
 		/// - `lock_settings`: The settings to be locked.
 		///
 		/// Note: it's possible to only lock(set) the setting, but not to unset it.
+		///
 		/// Emits `CollectionLocked`.
 		///
 		/// Weight: `O(1)`
