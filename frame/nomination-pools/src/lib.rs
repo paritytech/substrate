@@ -416,8 +416,12 @@ enum AccountType {
 pub enum ClaimPermission {
 	/// Only the pool member themself can claim their reward.
 	Permissioned,
-	/// Anyone can claim the reward of this member.
-	Permissionless,
+	/// Anyone can compound rewards on a pool member's behalf.
+	PermissionlessCompound,
+	/// Anyone can withdraw rewards on a pool member's behalf.
+	PermissionlessWithdraw,
+	/// Anyone can withdraw and compound rewards on a member's behalf.
+	PermissionlessAll,
 }
 
 impl Default for ClaimPermission {
@@ -1592,11 +1596,10 @@ pub mod pallet {
 		#[pallet::call_index(1)]
 		#[pallet::weight(
 			T::WeightInfo::bond_extra_transfer()
-			.max(T::WeightInfo::bond_extra_reward())
+			.max(T::WeightInfo::bond_extra_other())
 		)]
 		pub fn bond_extra(origin: OriginFor<T>, extra: BondExtra<BalanceOf<T>>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-
 			Self::do_bond_extra(who.clone(), who, extra)
 		}
 
@@ -1609,13 +1612,8 @@ pub mod pallet {
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::claim_payout())]
 		pub fn claim_payout(origin: OriginFor<T>) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			let (mut member, mut bonded_pool, mut reward_pool) = Self::get_member_with_pools(&who)?;
-
-			let _ = Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
-
-			Self::put_member_with_pools(&who, member, bonded_pool, reward_pool);
-			Ok(())
+			let signer = ensure_signed(origin)?;
+			Self::do_claim_payout(signer.clone(), signer)
 		}
 
 		/// Unbond up to `unbonding_points` of the `member_account`'s funds from the pool. It
@@ -2123,11 +2121,11 @@ pub mod pallet {
 		/// other`.
 		///
 		/// In the case of `origin != other`, `origin` can only bond extra pending rewards of
-		/// `other` members assuming set_reward_claim for the given member is `Permissionless`.
+		/// `other` members assuming set_reward_claim for the given member is `PermissionlessAll`.
 		#[pallet::call_index(14)]
 		#[pallet::weight(
 			T::WeightInfo::bond_extra_transfer()
-			.max(T::WeightInfo::bond_extra_reward())
+			.max(T::WeightInfo::bond_extra_other())
 		)]
 		pub fn bond_extra_other(
 			origin: OriginFor<T>,
@@ -2135,7 +2133,6 @@ pub mod pallet {
 			extra: BondExtra<BalanceOf<T>>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-
 			Self::do_bond_extra(who, T::Lookup::lookup(member)?, extra)
 		}
 
@@ -2143,7 +2140,7 @@ pub mod pallet {
 		///
 		/// Lets a pool member to choose who can claim pending rewards on their behalf. By default,
 		/// this is `Permissioned` which implies only the pool member themselves can claim their
-		/// pending rewards. If a pool member wishes so, they can set this to `Permissionless` to
+		/// pending rewards. If a pool member wishes so, they can set this to `PermissionlessAll` to
 		/// allow any account to claim their rewards and bond extra to the pool.
 		///
 		/// # Arguments
@@ -2163,6 +2160,14 @@ pub mod pallet {
 				*source = permission;
 			});
 			Ok(())
+		}
+
+		/// `origin` can claim payouts on some pool member `member`'s behalf.
+		#[pallet::call_index(16)]
+		#[pallet::weight(T::WeightInfo::claim_payout_other())]
+		pub fn claim_payout_other(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
+			let signer = ensure_signed(origin)?;
+			Self::do_claim_payout(signer, who)
 		}
 	}
 
@@ -2473,7 +2478,10 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		if signer != who {
 			ensure!(
-				matches!(ClaimPermissions::<T>::get(&who), ClaimPermission::Permissionless),
+				matches!(
+					ClaimPermissions::<T>::get(&who),
+					ClaimPermission::PermissionlessAll | ClaimPermission::PermissionlessCompound
+				),
 				Error::<T>::DoesNotHavePermission
 			);
 			ensure!(extra == BondExtra::Rewards, Error::<T>::BondExtraRestricted);
@@ -2506,6 +2514,24 @@ impl<T: Config> Pallet<T> {
 		});
 		Self::put_member_with_pools(&who, member, bonded_pool, reward_pool);
 
+		Ok(())
+	}
+
+	fn do_claim_payout(signer: T::AccountId, who: T::AccountId) -> DispatchResult {
+		if signer != who {
+			ensure!(
+				matches!(
+					ClaimPermissions::<T>::get(&who),
+					ClaimPermission::PermissionlessAll | ClaimPermission::PermissionlessWithdraw
+				),
+				Error::<T>::DoesNotHavePermission
+			);
+		}
+		let (mut member, mut bonded_pool, mut reward_pool) = Self::get_member_with_pools(&who)?;
+
+		let _ = Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
+
+		Self::put_member_with_pools(&who, member, bonded_pool, reward_pool);
 		Ok(())
 	}
 

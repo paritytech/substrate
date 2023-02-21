@@ -2094,7 +2094,7 @@ mod unbond {
 				assert_eq!(ClaimPermissions::<Runtime>::get(10), ClaimPermission::Permissioned);
 				assert_ok!(Pools::set_reward_claim(
 					RuntimeOrigin::signed(20),
-					ClaimPermission::Permissionless
+					ClaimPermission::PermissionlessAll
 				));
 
 				// but can go to 0
@@ -4271,16 +4271,16 @@ fn set_claimable_actor_works() {
 		// Make permissionless
 		assert_eq!(ClaimPermissions::<Runtime>::get(11), ClaimPermission::Permissioned);
 		assert_noop!(
-			Pools::set_reward_claim(RuntimeOrigin::signed(12), ClaimPermission::Permissionless),
+			Pools::set_reward_claim(RuntimeOrigin::signed(12), ClaimPermission::PermissionlessAll),
 			Error::<T>::PoolMemberNotFound
 		);
 		assert_ok!(Pools::set_reward_claim(
 			RuntimeOrigin::signed(11),
-			ClaimPermission::Permissionless
+			ClaimPermission::PermissionlessAll
 		));
 
 		// then
-		assert_eq!(ClaimPermissions::<Runtime>::get(11), ClaimPermission::Permissionless);
+		assert_eq!(ClaimPermissions::<Runtime>::get(11), ClaimPermission::PermissionlessAll);
 	});
 }
 
@@ -4653,7 +4653,7 @@ mod bond_extra {
 
 			assert_ok!(Pools::set_reward_claim(
 				RuntimeOrigin::signed(10),
-				ClaimPermission::Permissionless
+				ClaimPermission::PermissionlessAll
 			));
 			assert_ok!(Pools::bond_extra_other(RuntimeOrigin::signed(50), 10, BondExtra::Rewards));
 			assert_eq!(Balances::free_balance(&default_reward_account()), 7);
