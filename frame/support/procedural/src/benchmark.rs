@@ -228,7 +228,12 @@ impl BenchmarkDef {
 		if let ReturnType::Type(_, typ) = &item_fn.sig.output {
 			let non_unit = |span| return Err(Error::new(span, "expected `()`"));
 			// for this to parse as a ReturnType::Type, the contents must be a TypePath, QED
-			let Type::Path(TypePath { path, qself: _ }) = &**typ else { panic!("unreachable state") };
+			let Type::Path(TypePath { path, qself: _ }) = &**typ else {
+				return Err(Error::new(
+					typ.span(),
+					"Only `Result<(), BenchmarkError>` or blank return types are allowed on benchmark function definitions",
+				))
+			};
 			let seg = path
 				.segments
 				.last()
