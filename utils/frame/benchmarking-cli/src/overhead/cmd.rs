@@ -108,7 +108,9 @@ impl OverheadCmd {
 	where
 		Block: BlockT<Extrinsic = OpaqueExtrinsic>,
 		BA: ClientBackend<Block>,
-		C: BlockBuilderProvider<BA, Block, C> + ProvideRuntimeApi<Block>,
+		C: BlockBuilderProvider<BA, Block, C>
+			+ ProvideRuntimeApi<Block>
+			+ sp_blockchain::HeaderBackend<Block>,
 		C::Api: ApiExt<Block, StateBackend = BA::State> + BlockBuilderApi<Block>,
 	{
 		if ext_builder.pallet() != "system" || ext_builder.extrinsic() != "remark" {
