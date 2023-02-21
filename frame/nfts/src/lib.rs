@@ -1787,7 +1787,7 @@ pub mod pallet {
 		///   its metadata, attributes, who can mint it (`None` for anyone) and until what block
 		///   number.
 		/// - `signature`: The signature of the `data` object.
-		/// - `signer`: The `data` object's signer. Should be an owner of the collection.
+		/// - `signer`: The `data` object's signer. Should be an Issuer of the collection.
 		///
 		/// Emits `Issued` on success.
 		/// Emits `AttributeSet` if the attributes were provided.

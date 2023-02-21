@@ -3008,6 +3008,7 @@ fn add_remove_item_attributes_approval_should_work() {
 #[test]
 fn pre_signed_mints_should_work() {
 	new_test_ext().execute_with(|| {
+		let user_0 = account(0);
 		let user_1_pair = sp_core::sr25519::Pair::from_string("//Alice", None).unwrap();
 		let user_1_signer = MultiSigner::Sr25519(user_1_pair.public());
 		let user_1 = user_1_signer.clone().into_account();
@@ -3024,10 +3025,10 @@ fn pre_signed_mints_should_work() {
 		let user_2 = account(2);
 		let user_3 = account(3);
 
-		Balances::make_free_balance_be(&user_1, 100);
+		Balances::make_free_balance_be(&user_0, 100);
 		Balances::make_free_balance_be(&user_2, 100);
 		assert_ok!(Nfts::create(
-			RuntimeOrigin::signed(user_1.clone()),
+			RuntimeOrigin::signed(user_0.clone()),
 			user_1.clone(),
 			collection_config_with_all_settings_enabled(),
 		));
@@ -3064,7 +3065,7 @@ fn pre_signed_mints_should_work() {
 		assert_eq!(deposit.account, Some(user_2.clone()));
 		assert_eq!(deposit.amount, 3);
 
-		assert_eq!(Balances::free_balance(&user_1), 100 - 2); // 2 - collection deposit
+		assert_eq!(Balances::free_balance(&user_0), 100 - 2); // 2 - collection deposit
 		assert_eq!(Balances::free_balance(&user_2), 100 - 1 - 3 - 6); // 1 - item deposit, 3 - metadata, 6 - attributes
 
 		assert_noop!(

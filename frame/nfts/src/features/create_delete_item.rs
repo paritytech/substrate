@@ -107,7 +107,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let collection_details =
 			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-		ensure!(collection_details.owner == signer, Error::<T, I>::NoPermission);
+
+		ensure!(
+			Self::has_role(&collection, &signer, CollectionRole::Issuer),
+			Error::<T, I>::NoPermission
+		);
 
 		let item_config = ItemConfig { settings: Self::get_default_item_settings(&collection)? };
 		Self::do_mint(
@@ -118,9 +122,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			item_config,
 			|_, _| Ok(()),
 		)?;
+		let origin = Self::find_account_by_role(&collection, CollectionRole::Admin)
+			.unwrap_or(collection_details.owner.clone());
 		for (key, value) in attributes {
 			Self::do_set_attribute(
-				collection_details.owner.clone(),
+				origin.clone(),
 				collection,
 				Some(item),
 				AttributeNamespace::CollectionOwner,
@@ -131,7 +137,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 		if !metadata.len().is_zero() {
 			Self::do_set_item_metadata(
-				Some(collection_details.owner.clone()),
+				Some(origin.clone()),
 				collection,
 				item,
 				metadata,
