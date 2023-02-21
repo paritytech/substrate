@@ -198,63 +198,70 @@ fn ensure_valid_return_type(item_fn: &ItemFn) -> Result<()> {
 	Ok(())
 }
 
+/// Parses params such as `x: Linear<0, 1>`
+fn parse_params(item_fn: &ItemFn) -> Result<Vec<ParamDef>> {
+	let mut params: Vec<ParamDef> = Vec::new();
+	for arg in &item_fn.sig.inputs {
+		let invalid_param = |span| {
+			return Err(Error::new(
+				span,
+				"Invalid benchmark function param. A valid example would be `x: Linear<5, 10>`.",
+			))
+		};
+
+		let FnArg::Typed(arg) = arg else { return invalid_param(arg.span()) };
+		let Pat::Ident(ident) = &*arg.pat else { return invalid_param(arg.span()) };
+
+		// check param name
+		let var_span = ident.span();
+		let invalid_param_name = || {
+			return Err(Error::new(
+					var_span,
+					"Benchmark parameter names must consist of a single lowercase letter (a-z) and no other characters.",
+				))
+		};
+		let name = ident.ident.to_token_stream().to_string();
+		if name.len() > 1 {
+			return invalid_param_name()
+		};
+		let Some(name_char) = name.chars().next() else { return invalid_param_name() };
+		if !name_char.is_alphabetic() || !name_char.is_lowercase() {
+			return invalid_param_name()
+		}
+
+		// parse type
+		let typ = &*arg.ty;
+		let Type::Path(tpath) = typ else { return invalid_param(typ.span()) };
+		let Some(segment) = tpath.path.segments.last() else { return invalid_param(typ.span()) };
+		let args = segment.arguments.to_token_stream().into();
+		let Ok(args) = syn::parse::<RangeArgs>(args) else { return invalid_param(typ.span()) };
+		let Ok(start) = args.start.base10_parse::<u32>() else { return invalid_param(args.start.span()) };
+		let Ok(end) = args.end.base10_parse::<u32>() else { return invalid_param(args.end.span()) };
+
+		if end < start {
+			return Err(Error::new(
+				args.start.span(),
+				"The start of a `ParamRange` must be less than or equal to the end",
+			))
+		}
+
+		params.push(ParamDef { name, typ: typ.clone(), start, end });
+	}
+	Ok(params)
+}
+
 impl BenchmarkDef {
 	/// Constructs a [`BenchmarkDef`] by traversing an existing [`ItemFn`] node.
 	pub fn from(item_fn: &ItemFn, extra: bool, skip_meta: bool) -> Result<BenchmarkDef> {
+		let params = parse_params(item_fn)?;
+		ensure_valid_return_type(item_fn)?;
+
 		let missing_call = || {
 			return Err(Error::new(
 				item_fn.block.brace_token.span,
 				"No valid #[extrinsic_call] or #[block] annotation could be found in benchmark function body."
 			))
 		};
-
-		// parse params such as "x: Linear<0, 1>"
-		let mut params: Vec<ParamDef> = Vec::new();
-		for arg in &item_fn.sig.inputs {
-			let invalid_param = |span| {
-				return Err(Error::new(span, "Invalid benchmark function param. A valid example would be `x: Linear<5, 10>`.", ))
-			};
-
-			let FnArg::Typed(arg) = arg else { return invalid_param(arg.span()) };
-			let Pat::Ident(ident) = &*arg.pat else { return invalid_param(arg.span()) };
-
-			// check param name
-			let var_span = ident.span();
-			let invalid_param_name = || {
-				return Err(Error::new(
-					var_span,
-					"Benchmark parameter names must consist of a single lowercase letter (a-z) and no other characters.",
-				))
-			};
-			let name = ident.ident.to_token_stream().to_string();
-			if name.len() > 1 {
-				return invalid_param_name()
-			};
-			let Some(name_char) = name.chars().next() else { return invalid_param_name() };
-			if !name_char.is_alphabetic() || !name_char.is_lowercase() {
-				return invalid_param_name()
-			}
-
-			// parse type
-			let typ = &*arg.ty;
-			let Type::Path(tpath) = typ else { return invalid_param(typ.span()) };
-			let Some(segment) = tpath.path.segments.last() else { return invalid_param(typ.span()) };
-			let args = segment.arguments.to_token_stream().into();
-			let Ok(args) = syn::parse::<RangeArgs>(args) else { return invalid_param(typ.span()) };
-			let Ok(start) = args.start.base10_parse::<u32>() else { return invalid_param(args.start.span()) };
-			let Ok(end) = args.end.base10_parse::<u32>() else { return invalid_param(args.end.span()) };
-
-			if end < start {
-				return Err(Error::new(
-					args.start.span(),
-					"The start of a `ParamRange` must be less than or equal to the end",
-				))
-			}
-
-			params.push(ParamDef { name, typ: typ.clone(), start, end });
-		}
-
-		ensure_valid_return_type(item_fn)?;
 
 		// #[extrinsic_call] / #[block] handling
 		let call_defs = item_fn.block.stmts.iter().enumerate().filter_map(|(i, child)| {
