@@ -60,7 +60,7 @@ use sp_runtime::{
 	codec::Encode,
 	generic::BlockId,
 	traits::{Header as HeaderT, NumberFor},
-	BuildStorage, DigestItem, Justifications, Storage,
+	BuildStorage, DigestItem, EncodedJustification, Justifications, Storage,
 };
 use std::{collections::HashMap, marker::PhantomData, sync::Arc, task::Poll};
 use substrate_test_runtime_client::{runtime::Header, ClientExt};
@@ -107,11 +107,13 @@ pub(crate) struct PeerData {
 #[derive(Default)]
 pub(crate) struct BeefyTestNet {
 	peers: Vec<BeefyPeer>,
+	pub beefy_genesis: NumberFor<Block>,
 }
 
 impl BeefyTestNet {
 	pub(crate) fn new(n_authority: usize) -> Self {
-		let mut net = BeefyTestNet { peers: Vec::with_capacity(n_authority) };
+		let beefy_genesis = 1;
+		let mut net = BeefyTestNet { peers: Vec::with_capacity(n_authority), beefy_genesis };
 
 		for i in 0..n_authority {
 			let (rx, cfg) = on_demand_justifications_protocol_config(GENESIS_HASH, None);
@@ -202,7 +204,7 @@ impl TestNetFactory for BeefyTestNet {
 	) {
 		let keys = &[BeefyKeyring::Alice, BeefyKeyring::Bob];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-		let api = Arc::new(TestApi::with_validator_set(&validator_set));
+		let api = Arc::new(TestApi::new(self.beefy_genesis, &validator_set, GOOD_MMR_ROOT));
 		let inner = BlockImportAdapter::new(client.clone());
 		let (block_import, voter_links, rpc_links) =
 			beefy_block_import_and_links(inner, client.as_backend(), api, None);
@@ -716,7 +718,7 @@ async fn correct_beefy_payload() {
 }
 
 #[tokio::test]
-async fn beefy_importing_blocks() {
+async fn beefy_importing_justifications() {
 	use futures::{future::poll_fn, task::Poll};
 	use sc_block_builder::BlockBuilderProvider;
 	use sc_client_api::BlockBackend;
@@ -726,11 +728,15 @@ async fn beefy_importing_blocks() {
 	let mut net = BeefyTestNet::new(2);
 	let keys = &[BeefyKeyring::Alice, BeefyKeyring::Bob];
 	let good_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
+	// Set BEEFY genesis to block 3.
+	net.beefy_genesis = 3;
 
 	let client = net.peer(0).client().clone();
+	let full_client = client.as_client();
 	let (mut block_import, _, peer_data) = net.make_block_import(client.clone());
 	let PeerData { beefy_voter_links, .. } = peer_data;
 	let justif_stream = beefy_voter_links.lock().take().unwrap().from_block_import_justif_stream;
+	let mut justif_recv = justif_stream.subscribe(100_000);
 
 	let params = |block: Block, justifications: Option<Justifications>| {
 		let mut import = BlockImportParams::new(BlockOrigin::File, block.header);
@@ -740,15 +746,19 @@ async fn beefy_importing_blocks() {
 		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 		import
 	};
+	let backend_justif_for = |block_hash: H256| -> Option<EncodedJustification> {
+		full_client
+			.justifications(block_hash)
+			.unwrap()
+			.and_then(|j| j.get(BEEFY_ENGINE_ID).cloned())
+	};
 
-	let full_client = client.as_client();
 	let parent_id = BlockId::Number(0);
 	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
 	let block = builder.build().unwrap().block;
 	let hashof1 = block.header.hash();
 
-	// Import without justifications.
-	let mut justif_recv = justif_stream.subscribe(100_000);
+	// Import block 1 without justifications.
 	assert_eq!(
 		block_import
 			.import_block(params(block.clone(), None), HashMap::new())
@@ -760,16 +770,32 @@ async fn beefy_importing_blocks() {
 		block_import.import_block(params(block, None), HashMap::new()).await.unwrap(),
 		ImportResult::AlreadyInChain,
 	);
-	// Verify no BEEFY justifications present:
+
+	// Import block 2 with "valid" justification (beefy pallet genesis block not yet reached).
+	let parent_id = BlockId::Number(1);
+	let block_num = 2;
+	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
+	let block = builder.build().unwrap().block;
+	let hashof2 = block.header.hash();
+
+	let proof = crate::justification::tests::new_finality_proof(block_num, &good_set, keys);
+	let versioned_proof: VersionedFinalityProof<NumberFor<Block>, Signature> = proof.into();
+	let encoded = versioned_proof.encode();
+	let justif = Some(Justifications::from((BEEFY_ENGINE_ID, encoded)));
+	assert_eq!(
+		block_import.import_block(params(block, justif), HashMap::new()).await.unwrap(),
+		ImportResult::Imported(ImportedAux {
+			bad_justification: false,
+			is_new_best: true,
+			..Default::default()
+		}),
+	);
+
+	// Verify no BEEFY justifications present (for either block 1 or 2):
 	{
 		// none in backend,
-		assert_eq!(
-			full_client
-				.justifications(hashof1)
-				.unwrap()
-				.and_then(|j| j.get(BEEFY_ENGINE_ID).cloned()),
-			None
-		);
+		assert_eq!(backend_justif_for(hashof1), None);
+		assert_eq!(backend_justif_for(hashof2), None);
 		// and none sent to BEEFY worker.
 		poll_fn(move |cx| {
 			assert_eq!(justif_recv.poll_next_unpin(cx), Poll::Pending);
@@ -778,17 +804,16 @@ async fn beefy_importing_blocks() {
 		.await;
 	}
 
-	// Import with valid justification.
-	let parent_id = BlockId::Number(1);
-	let block_num = 2;
+	// Import block 3 with valid justification.
+	let parent_id = BlockId::Number(2);
+	let block_num = 3;
+	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
+	let block = builder.build().unwrap().block;
+	let hashof3 = block.header.hash();
 	let proof = crate::justification::tests::new_finality_proof(block_num, &good_set, keys);
 	let versioned_proof: VersionedFinalityProof<NumberFor<Block>, Signature> = proof.into();
 	let encoded = versioned_proof.encode();
 	let justif = Some(Justifications::from((BEEFY_ENGINE_ID, encoded)));
-
-	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
-	let block = builder.build().unwrap().block;
-	let hashof2 = block.header.hash();
 	let mut justif_recv = justif_stream.subscribe(100_000);
 	assert_eq!(
 		block_import.import_block(params(block, justif), HashMap::new()).await.unwrap(),
@@ -801,13 +826,7 @@ async fn beefy_importing_blocks() {
 	// Verify BEEFY justification successfully imported:
 	{
 		// still not in backend (worker is responsible for appending to backend),
-		assert_eq!(
-			full_client
-				.justifications(hashof2)
-				.unwrap()
-				.and_then(|j| j.get(BEEFY_ENGINE_ID).cloned()),
-			None
-		);
+		assert_eq!(backend_justif_for(hashof3), None);
 		// but sent to BEEFY worker
 		// (worker will append it to backend when all previous mandatory justifs are there as well).
 		poll_fn(move |cx| {
@@ -820,19 +839,18 @@ async fn beefy_importing_blocks() {
 		.await;
 	}
 
-	// Import with invalid justification (incorrect validator set).
-	let parent_id = BlockId::Number(2);
-	let block_num = 3;
+	// Import block 4 with invalid justification (incorrect validator set).
+	let parent_id = BlockId::Number(3);
+	let block_num = 4;
+	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
+	let block = builder.build().unwrap().block;
+	let hashof4 = block.header.hash();
 	let keys = &[BeefyKeyring::Alice];
 	let bad_set = ValidatorSet::new(make_beefy_ids(keys), 1).unwrap();
 	let proof = crate::justification::tests::new_finality_proof(block_num, &bad_set, keys);
 	let versioned_proof: VersionedFinalityProof<NumberFor<Block>, Signature> = proof.into();
 	let encoded = versioned_proof.encode();
 	let justif = Some(Justifications::from((BEEFY_ENGINE_ID, encoded)));
-
-	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
-	let block = builder.build().unwrap().block;
-	let hashof3 = block.header.hash();
 	let mut justif_recv = justif_stream.subscribe(100_000);
 	assert_eq!(
 		block_import.import_block(params(block, justif), HashMap::new()).await.unwrap(),
@@ -846,13 +864,7 @@ async fn beefy_importing_blocks() {
 	// Verify bad BEEFY justifications was not imported:
 	{
 		// none in backend,
-		assert_eq!(
-			full_client
-				.justifications(hashof3)
-				.unwrap()
-				.and_then(|j| j.get(BEEFY_ENGINE_ID).cloned()),
-			None
-		);
+		assert_eq!(backend_justif_for(hashof4), None);
 		// and none sent to BEEFY worker.
 		poll_fn(move |cx| {
 			assert_eq!(justif_recv.poll_next_unpin(cx), Poll::Pending);

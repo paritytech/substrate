@@ -316,7 +316,7 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 
 /// Modify the given runtime api declaration to be usable on the client side.
 struct ToClientSideDecl<'a> {
-	block_id: &'a TokenStream,
+	block_hash: &'a TokenStream,
 	crate_: &'a TokenStream,
 	found_attributes: &'a mut HashMap<&'static str, Attribute>,
 	/// Any error that we found while converting this declaration.
@@ -329,7 +329,7 @@ impl<'a> ToClientSideDecl<'a> {
 	fn process(mut self, decl: ItemTrait) -> ItemTrait {
 		let mut decl = self.fold_item_trait(decl);
 
-		let block_id = self.block_id;
+		let block_hash = self.block_hash;
 		let crate_ = self.crate_;
 
 		// Add the special method that will be implemented by the `impl_runtime_apis!` macro
@@ -339,7 +339,7 @@ impl<'a> ToClientSideDecl<'a> {
 			#[doc(hidden)]
 			fn __runtime_api_internal_call_api_at(
 				&self,
-				at: &#block_id,
+				at: #block_hash,
 				context: #crate_::ExecutionContext,
 				params: std::vec::Vec<u8>,
 				fn_name: &dyn Fn(#crate_::RuntimeVersion) -> &'static str,
@@ -420,7 +420,7 @@ impl<'a> ToClientSideDecl<'a> {
 		};
 		let ret_type = return_type_extract_type(&method.sig.output);
 
-		fold_fn_decl_for_client_side(&mut method.sig, self.block_id, self.crate_);
+		fold_fn_decl_for_client_side(&mut method.sig, self.block_hash, self.crate_);
 
 		let crate_ = self.crate_;
 
@@ -621,14 +621,14 @@ fn generate_client_side_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 		let decl = decl.clone();
 
 		let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
-		let block_id = quote!( #crate_::BlockId<Block> );
+		let block_hash = quote!( <Block as #crate_::BlockT>::Hash );
 		let mut found_attributes = HashMap::new();
 		let mut errors = Vec::new();
 		let trait_ = decl.ident.clone();
 
 		let decl = ToClientSideDecl {
 			crate_: &crate_,
-			block_id: &block_id,
+			block_hash: &block_hash,
 			found_attributes: &mut found_attributes,
 			errors: &mut errors,
 			trait_: &trait_,

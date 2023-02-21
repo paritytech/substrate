@@ -963,10 +963,21 @@ where
 		}
 
 		let number = *proof.round_number();
+		let hash = self
+			.backend
+			.blockchain()
+			.expect_block_hash_from_id(&BlockId::Number(number))
+			.map_err(|err| {
+				let err_msg = format!(
+					"Couldn't get hash for block #{:?} (error: {:?}), skipping report for equivocation",
+					number, err
+				);
+				Error::Backend(err_msg)
+			})?;
 		let runtime_api = self.runtime.runtime_api();
 		// generate key ownership proof at that block
 		let key_owner_proof = match runtime_api
-			.generate_key_ownership_proof(&BlockId::Number(number), validator_set_id, offender_id)
+			.generate_key_ownership_proof(hash, validator_set_id, offender_id)
 			.map_err(Error::RuntimeApi)?
 		{
 			Some(proof) => proof,
@@ -982,11 +993,7 @@ where
 		// submit equivocation report at **best** block
 		let best_block_hash = self.backend.blockchain().info().best_hash;
 		runtime_api
-			.submit_report_equivocation_unsigned_extrinsic(
-				&BlockId::Hash(best_block_hash),
-				proof,
-				key_owner_proof,
-			)
+			.submit_report_equivocation_unsigned_extrinsic(best_block_hash, proof, key_owner_proof)
 			.map_err(Error::RuntimeApi)?;
 
 		Ok(())
@@ -1627,6 +1634,9 @@ pub(crate) mod tests {
 		let mut net = BeefyTestNet::new(1);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
 		worker.runtime = api_alice.clone();
+
+		// let there be a block with num = 1:
+		let _ = net.peer(0).push_blocks(1, false);
 
 		let payload1 = Payload::from_single_entry(MMR_ROOT_ID, vec![42]);
 		let payload2 = Payload::from_single_entry(MMR_ROOT_ID, vec![128]);
