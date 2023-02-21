@@ -297,7 +297,7 @@ frame_benchmarking::benchmarks! {
 		);
 
 		whitelist_account!(depositor);
-	}:_(RuntimeOrigin::Signed(claimer), depositor.clone())
+	}:claim_payout_other(RuntimeOrigin::Signed(claimer), depositor.clone())
 	verify {
 		assert_eq!(
 			CurrencyOf::<T>::free_balance(&depositor),
