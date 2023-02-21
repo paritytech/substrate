@@ -144,19 +144,40 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 					#frame_support::sp_tracing::trace_span!("on_runtime_update")
 				);
 
-				// log info about the upgrade.
 				let pallet_name = <
 					<T as #frame_system::Config>::PalletInfo
 					as
 					#frame_support::traits::PalletInfo
 				>::name::<Self>().unwrap_or("<unknown pallet name>");
+
+				// if a pallet was added post genesis we need to initialize its storage version
+				let key = #frame_support::traits::StorageVersion::storage_key::<Self>();
+				let base_weight = if !#frame_support::storage::unhashed::exists(&key) {
+					let current_version = <Self as #frame_support::traits::GetStorageVersion>::current_storage_version();
+					#frame_support::log::info!(
+						target: #frame_support::LOG_TARGET,
+						"⚠️ {} has no storage version set (pallet probably added in runtime upgrade). \
+						 Initializing to current version: `{:?}`",
+						pallet_name,
+						current_version,
+					);
+					frame_support::storage::unhashed::put(
+						&key,
+						&<Self as #frame_support::traits::GetStorageVersion>::current_storage_version(),
+					);
+					<T as #frame_system::Config>::DbWeight::get().reads_writes(1, 1)
+				} else {
+					<T as #frame_system::Config>::DbWeight::get().reads(1)
+				};
+
+				// log info about the upgrade.
 				#log_runtime_upgrade
 
 				<
 					Self as #frame_support::traits::Hooks<
 						<T as #frame_system::Config>::BlockNumber
 					>
-				>::on_runtime_upgrade()
+				>::on_runtime_upgrade().saturating_add(base_weight)
 			}
 
 			#[cfg(feature = "try-runtime")]
