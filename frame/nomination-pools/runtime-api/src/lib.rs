@@ -25,7 +25,6 @@ use pallet_nomination_pools::PoolId;
 
 sp_api::decl_runtime_apis! {
 	/// Runtime api for accessing information about nomination pools.
-	#[api_version(1)]
 	pub trait NominationPoolsApi<AccountId, Balance>
 		where
 			AccountId: Codec,
