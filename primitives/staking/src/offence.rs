@@ -226,22 +226,16 @@ pub trait OffenceReportSystem<Reporter, KeyOwnerProof, OffenceProof> {
 		_reporter: Option<Reporter>,
 		_offence_proof: OffenceProof,
 		_key_owner_proof: KeyOwnerProof,
-	) -> DispatchResult {
-		Ok(())
-	}
+	) -> DispatchResult;
 
 	/// Check if is a known offence.
 	fn check_evidence(
 		_offence_proof: &OffenceProof,
 		_key_owner_proof: &KeyOwnerProof,
-	) -> DispatchResult {
-		Ok(())
-	}
+	) -> DispatchResult;
 
 	/// Create and dispatch an offence report extrinsic.
-	fn submit_evidence(_offence_proof: OffenceProof, _key_owner_proof: KeyOwnerProof) -> bool {
-		true
-	}
+	fn submit_evidence(_offence_proof: OffenceProof, _key_owner_proof: KeyOwnerProof) -> bool;
 }
 
 // Dummy report system.
