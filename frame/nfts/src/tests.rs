@@ -536,13 +536,13 @@ fn transfer_owner_should_work() {
 
 		// Mint and set metadata now and make sure that deposit gets transferred back.
 		assert_ok!(Nfts::set_collection_metadata(
-			RuntimeOrigin::signed(account(2)),
+			RuntimeOrigin::signed(account(1)),
 			0,
 			bvec![0u8; 20],
 		));
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(account(1)), 0, 42, account(1), None));
 		assert_eq!(Balances::reserved_balance(&account(1)), 1);
-		assert_ok!(Nfts::set_metadata(RuntimeOrigin::signed(account(2)), 0, 42, bvec![0u8; 20]));
+		assert_ok!(Nfts::set_metadata(RuntimeOrigin::signed(account(1)), 0, 42, bvec![0u8; 20]));
 		assert_ok!(Nfts::set_accept_ownership(RuntimeOrigin::signed(account(3)), Some(0)));
 		assert_ok!(Nfts::transfer_ownership(RuntimeOrigin::signed(account(2)), 0, account(3)));
 		assert_eq!(collections(), vec![(account(3), 0)]);
@@ -592,7 +592,7 @@ fn set_collection_metadata_should_work() {
 		// Cannot add metadata to unknown item
 		assert_noop!(
 			Nfts::set_collection_metadata(RuntimeOrigin::signed(account(1)), 0, bvec![0u8; 20]),
-			Error::<Test>::NoConfig,
+			Error::<Test>::NoPermission,
 		);
 		assert_ok!(Nfts::force_create(
 			RuntimeOrigin::root(),
@@ -666,7 +666,7 @@ fn set_collection_metadata_should_work() {
 		);
 		assert_noop!(
 			Nfts::clear_collection_metadata(RuntimeOrigin::signed(account(1)), 1),
-			Error::<Test>::UnknownCollection
+			Error::<Test>::NoPermission
 		);
 		assert_noop!(
 			Nfts::clear_collection_metadata(RuntimeOrigin::signed(account(1)), 0),
@@ -741,7 +741,7 @@ fn set_item_metadata_should_work() {
 		);
 		assert_noop!(
 			Nfts::clear_metadata(RuntimeOrigin::signed(account(1)), 1, 42),
-			Error::<Test>::MetadataNotFound,
+			Error::<Test>::NoPermission,
 		);
 		assert_ok!(Nfts::clear_metadata(RuntimeOrigin::root(), 0, 42));
 		assert!(!ItemMetadataOf::<Test>::contains_key(0, 42));
@@ -1403,6 +1403,7 @@ fn force_update_collection_should_work() {
 
 		Balances::make_free_balance_be(&account(5), 100);
 		assert_ok!(Nfts::force_collection_owner(RuntimeOrigin::root(), 0, account(5)));
+		assert_ok!(Nfts::set_team(RuntimeOrigin::root(), 0, account(2), account(5), account(4)));
 		assert_eq!(collections(), vec![(account(5), 0)]);
 		assert_eq!(Balances::reserved_balance(account(1)), 2);
 		assert_eq!(Balances::reserved_balance(account(5)), 63);

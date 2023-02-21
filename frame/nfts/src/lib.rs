@@ -1453,7 +1453,7 @@ pub mod pallet {
 
 		/// Set the metadata for an item.
 		///
-		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
+		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Admin of the
 		/// `collection`.
 		///
 		/// If the origin is Signed, then funds of signer are reserved according to the formula:
@@ -1475,15 +1475,15 @@ pub mod pallet {
 			item: T::ItemId,
 			data: BoundedVec<u8, T::StringLimit>,
 		) -> DispatchResult {
-			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
+			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
-			Self::do_set_item_metadata(maybe_check_owner, collection, item, data, None)
+			Self::do_set_item_metadata(maybe_check_origin, collection, item, data, None)
 		}
 
 		/// Clear the metadata for an item.
 		///
-		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
+		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Admin of the
 		/// `collection`.
 		///
 		/// Any deposit is freed for the collection's owner.
@@ -1501,15 +1501,15 @@ pub mod pallet {
 			collection: T::CollectionId,
 			item: T::ItemId,
 		) -> DispatchResult {
-			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
+			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
-			Self::do_clear_item_metadata(maybe_check_owner, collection, item)
+			Self::do_clear_item_metadata(maybe_check_origin, collection, item)
 		}
 
 		/// Set the metadata for a collection.
 		///
-		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Owner of
+		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Admin of
 		/// the `collection`.
 		///
 		/// If the origin is `Signed`, then funds of signer are reserved according to the formula:
@@ -1529,15 +1529,15 @@ pub mod pallet {
 			collection: T::CollectionId,
 			data: BoundedVec<u8, T::StringLimit>,
 		) -> DispatchResult {
-			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
+			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
-			Self::do_set_collection_metadata(maybe_check_owner, collection, data)
+			Self::do_set_collection_metadata(maybe_check_origin, collection, data)
 		}
 
 		/// Clear the metadata for a collection.
 		///
-		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Owner of
+		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Admin of
 		/// the `collection`.
 		///
 		/// Any deposit is freed for the collection's owner.
@@ -1553,10 +1553,10 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 		) -> DispatchResult {
-			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
+			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
-			Self::do_clear_collection_metadata(maybe_check_owner, collection)
+			Self::do_clear_collection_metadata(maybe_check_origin, collection)
 		}
 
 		/// Set (or reset) the acceptance of ownership for a particular account.
