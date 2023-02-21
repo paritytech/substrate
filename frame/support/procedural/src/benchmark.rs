@@ -250,6 +250,7 @@ fn parse_params(item_fn: &ItemFn) -> Result<Vec<ParamDef>> {
 	Ok(params)
 }
 
+/// Used in several places where the `#[extrinsic_call]` or `#[body]` annotation is missing
 fn missing_call<T>(item_fn: &ItemFn) -> Result<T> {
 	return Err(Error::new(
 		item_fn.block.brace_token.span,
