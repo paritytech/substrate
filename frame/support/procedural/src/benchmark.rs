@@ -227,7 +227,6 @@ impl BenchmarkDef {
 		// ensure ReturnType is a Result<(), BenchmarkError>, if specified
 		if let ReturnType::Type(_, typ) = &item_fn.sig.output {
 			let non_unit = |span| return Err(Error::new(span, "expected `()`"));
-			// for this to parse as a ReturnType::Type, the contents must be a TypePath, QED
 			let Type::Path(TypePath { path, qself: _ }) = &**typ else {
 				return Err(Error::new(
 					typ.span(),
