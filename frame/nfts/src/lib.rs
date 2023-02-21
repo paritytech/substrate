@@ -1300,7 +1300,7 @@ pub mod pallet {
 		/// Set an attribute for a collection or item.
 		///
 		/// Origin must be Signed and must conform to the namespace ruleset:
-		/// - `CollectionOwner` namespace could be modified by the `collection` owner only;
+		/// - `CollectionOwner` namespace could be modified by the `collection` Admin only;
 		/// - `ItemOwner` namespace could be modified by the `maybe_item` owner only. `maybe_item`
 		///   should be set in that case;
 		/// - `Account(AccountId)` namespace could be modified only when the `origin` was given a
@@ -1330,15 +1330,12 @@ pub mod pallet {
 			value: BoundedVec<u8, T::ValueLimit>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			Self::do_set_attribute(
-				origin.clone(),
-				collection,
-				maybe_item,
-				namespace,
-				key,
-				value,
-				origin,
-			)
+			let depositor = match namespace {
+				AttributeNamespace::CollectionOwner =>
+					Self::collection_owner(collection).ok_or(Error::<T, I>::UnknownCollection)?,
+				_ => origin.clone(),
+			};
+			Self::do_set_attribute(origin, collection, maybe_item, namespace, key, value, depositor)
 		}
 
 		/// Force-set an attribute for a collection or item.
