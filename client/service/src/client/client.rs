@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -481,8 +481,7 @@ where
 	}
 
 	/// Get the code at a given block.
-	pub fn code_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Vec<u8>> {
-		let hash = self.backend.blockchain().expect_block_hash_from_id(id)?;
+	pub fn code_at(&self, hash: Block::Hash) -> sp_blockchain::Result<Vec<u8>> {
 		Ok(StorageProvider::storage(self, hash, &StorageKey(well_known_keys::CODE.to_vec()))?
 			.expect(
 				"None is returned if there's no value stored for the given key;\
@@ -492,8 +491,7 @@ where
 	}
 
 	/// Get the RuntimeVersion at a given block.
-	pub fn runtime_version_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
-		let hash = self.backend.blockchain().expect_block_hash_from_id(id)?;
+	pub fn runtime_version_at(&self, hash: Block::Hash) -> sp_blockchain::Result<RuntimeVersion> {
 		CallExecutor::runtime_version(&self.executor, hash)
 	}
 
@@ -840,7 +838,6 @@ where
 			CoreApi<Block> + ApiExt<Block, StateBackend = B::State>,
 	{
 		let parent_hash = import_block.header.parent_hash();
-		let at = BlockId::Hash(*parent_hash);
 		let state_action = std::mem::replace(&mut import_block.state_action, StateAction::Skip);
 		let (enact_state, storage_changes) = match (self.block_status(*parent_hash)?, state_action)
 		{
@@ -872,7 +869,7 @@ where
 				let execution_context = import_block.origin.into();
 
 				runtime_api.execute_block_with_context(
-					&at,
+					*parent_hash,
 					execution_context,
 					Block::new(import_block.header.clone(), body.clone()),
 				)?;
@@ -1411,14 +1408,14 @@ where
 {
 	fn new_block_at<R: Into<RecordProof>>(
 		&self,
-		parent: &BlockId<Block>,
+		parent: Block::Hash,
 		inherent_digests: Digest,
 		record_proof: R,
 	) -> sp_blockchain::Result<sc_block_builder::BlockBuilder<Block, Self, B>> {
 		sc_block_builder::BlockBuilder::new(
 			self,
-			self.expect_block_hash_from_id(parent)?,
-			self.expect_block_number_from_id(parent)?,
+			parent,
+			self.expect_block_number_from_id(&BlockId::Hash(parent))?,
 			record_proof.into(),
 			inherent_digests,
 			&self.backend,
@@ -1727,10 +1724,9 @@ where
 		&self,
 		params: CallApiAtParams<Block, B::State>,
 	) -> Result<Vec<u8>, sp_api::ApiError> {
-		let at_hash = self.expect_block_hash_from_id(params.at)?;
 		self.executor
 			.contextual_call(
-				at_hash,
+				params.at,
 				params.function,
 				&params.arguments,
 				params.overlayed_changes,
@@ -1741,14 +1737,12 @@ where
 			.map_err(Into::into)
 	}
 
-	fn runtime_version_at(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, sp_api::ApiError> {
-		let hash = self.backend.blockchain().expect_block_hash_from_id(at)?;
+	fn runtime_version_at(&self, hash: Block::Hash) -> Result<RuntimeVersion, sp_api::ApiError> {
 		CallExecutor::runtime_version(&self.executor, hash).map_err(Into::into)
 	}
 
-	fn state_at(&self, at: &BlockId<Block>) -> Result<Self::StateBackend, sp_api::ApiError> {
-		let hash = self.backend.blockchain().expect_block_hash_from_id(at)?;
-		self.state_at(hash).map_err(Into::into)
+	fn state_at(&self, at: Block::Hash) -> Result<Self::StateBackend, sp_api::ApiError> {
+		self.state_at(at).map_err(Into::into)
 	}
 }
 

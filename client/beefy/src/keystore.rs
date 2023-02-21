@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -123,7 +123,7 @@ pub mod tests {
 	use sc_keystore::LocalKeystore;
 	use sp_core::{ecdsa, Pair};
 
-	use beefy_primitives::{crypto, keyring::Keyring};
+	use beefy_primitives::{crypto, Keyring};
 
 	use super::*;
 	use crate::error::Error;

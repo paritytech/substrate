@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -34,7 +34,6 @@ use sp_api::{
 use sp_blockchain::{ApplyExtrinsicFailed, Error};
 use sp_core::ExecutionContext;
 use sp_runtime::{
-	generic::BlockId,
 	legacy,
 	traits::{Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor, One},
 	Digest,
@@ -120,7 +119,7 @@ where
 	/// output of this block builder without having access to the full storage.
 	fn new_block_at<R: Into<RecordProof>>(
 		&self,
-		parent: &BlockId<Block>,
+		parent: Block::Hash,
 		inherent_digests: Digest,
 		record_proof: R,
 	) -> sp_blockchain::Result<BlockBuilder<Block, RA, B>>;
@@ -137,7 +136,6 @@ pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi<Block>, B> {
 	extrinsics: Vec<Block::Extrinsic>,
 	api: ApiRef<'a, A::Api>,
 	version: u32,
-	block_id: BlockId<Block>,
 	parent_hash: Block::Hash,
 	backend: &'a B,
 	/// The estimated size of the block header.
@@ -181,12 +179,14 @@ where
 			api.record_proof();
 		}
 
-		let block_id = BlockId::Hash(parent_hash);
-
-		api.initialize_block_with_context(&block_id, ExecutionContext::BlockConstruction, &header)?;
+		api.initialize_block_with_context(
+			parent_hash,
+			ExecutionContext::BlockConstruction,
+			&header,
+		)?;
 
 		let version = api
-			.api_version::<dyn BlockBuilderApi<Block>>(&block_id)?
+			.api_version::<dyn BlockBuilderApi<Block>>(parent_hash)?
 			.ok_or_else(|| Error::VersionInvalid("BlockBuilderApi".to_string()))?;
 
 		Ok(Self {
@@ -194,7 +194,6 @@ where
 			extrinsics: Vec::new(),
 			api,
 			version,
-			block_id,
 			backend,
 			estimated_header_size,
 		})
@@ -204,7 +203,7 @@ where
 	///
 	/// This will ensure the extrinsic can be validly executed (by executing it).
 	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> Result<(), Error> {
-		let block_id = &self.block_id;
+		let parent_hash = self.parent_hash;
 		let extrinsics = &mut self.extrinsics;
 		let version = self.version;
 
@@ -212,14 +211,14 @@ where
 			let res = if version < 6 {
 				#[allow(deprecated)]
 				api.apply_extrinsic_before_version_6_with_context(
-					block_id,
+					parent_hash,
 					ExecutionContext::BlockConstruction,
 					xt.clone(),
 				)
 				.map(legacy::byte_sized_error::convert_to_latest)
 			} else {
 				api.apply_extrinsic_with_context(
-					block_id,
+					parent_hash,
 					ExecutionContext::BlockConstruction,
 					xt.clone(),
 				)
@@ -246,7 +245,7 @@ where
 	pub fn build(mut self) -> Result<BuiltBlock<Block, backend::StateBackendFor<B, Block>>, Error> {
 		let header = self
 			.api
-			.finalize_block_with_context(&self.block_id, ExecutionContext::BlockConstruction)?;
+			.finalize_block_with_context(self.parent_hash, ExecutionContext::BlockConstruction)?;
 
 		debug_assert_eq!(
 			header.extrinsics_root().clone(),
@@ -279,13 +278,13 @@ where
 		&mut self,
 		inherent_data: sp_inherents::InherentData,
 	) -> Result<Vec<Block::Extrinsic>, Error> {
-		let block_id = self.block_id;
+		let parent_hash = self.parent_hash;
 		self.api
 			.execute_in_transaction(move |api| {
 				// `create_inherents` should not change any state, to ensure this we always rollback
 				// the transaction.
 				TransactionOutcome::Rollback(api.inherent_extrinsics_with_context(
-					&block_id,
+					parent_hash,
 					ExecutionContext::BlockConstruction,
 					inherent_data,
 				))

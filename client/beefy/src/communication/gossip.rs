@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -244,8 +244,8 @@ mod tests {
 
 	use crate::keystore::BeefyKeystore;
 	use beefy_primitives::{
-		crypto::Signature, keyring::Keyring, known_payloads, Commitment, MmrRootHash, Payload,
-		VoteMessage, KEY_TYPE,
+		crypto::Signature, known_payloads, Commitment, Keyring, MmrRootHash, Payload, VoteMessage,
+		KEY_TYPE,
 	};
 
 	use super::*;
