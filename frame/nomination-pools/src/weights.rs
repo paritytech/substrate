@@ -53,7 +53,6 @@ pub trait WeightInfo {
 	fn bond_extra_transfer() -> Weight;
 	fn bond_extra_other() -> Weight;
 	fn claim_payout() -> Weight;
-	fn claim_payout_other() -> Weight;
 	fn unbond() -> Weight;
 	fn pool_withdraw_unbonded(s: u32, ) -> Weight;
 	fn withdraw_unbonded_update(s: u32, ) -> Weight;
@@ -165,24 +164,6 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(15_u64))
 			.saturating_add(T::DbWeight::get().writes(13_u64))
 	}
-	/// Storage: NominationPools PoolMembers (r:1 w:1)
-	/// Proof: NominationPools PoolMembers (max_values: None, max_size: Some(237), added: 2712, mode: MaxEncodedLen)
-	/// Storage: NominationPools BondedPools (r:1 w:1)
-	/// Proof: NominationPools BondedPools (max_values: None, max_size: Some(164), added: 2639, mode: MaxEncodedLen)
-	/// Storage: NominationPools RewardPools (r:1 w:1)
-	/// Proof: NominationPools RewardPools (max_values: None, max_size: Some(60), added: 2535, mode: MaxEncodedLen)
-	/// Storage: System Account (r:1 w:1)
-	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
-	fn claim_payout() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `1189`
-		//  Estimated: `10489`
-		// Minimum execution time: 57_430 nanoseconds.
-		Weight::from_ref_time(59_161_000)
-			.saturating_add(Weight::from_proof_size(10489))
-			.saturating_add(T::DbWeight::get().reads(4_u64))
-			.saturating_add(T::DbWeight::get().writes(4_u64))
-	}
 	/// Storage: NominationPools ClaimPermissions (r:1 w:0)
 	/// Proof: NominationPools ClaimPermissions (max_values: None, max_size: Some(41), added: 2516, mode: MaxEncodedLen)
 	/// Storage: NominationPools PoolMembers (r:1 w:1)
@@ -193,7 +174,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Proof: NominationPools RewardPools (max_values: None, max_size: Some(60), added: 2535, mode: MaxEncodedLen)
 	/// Storage: System Account (r:1 w:1)
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
-	fn claim_payout_other() -> Weight {
+	fn claim_payout() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `1254`
 		//  Estimated: `13005`
@@ -645,24 +626,6 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(15_u64))
 			.saturating_add(RocksDbWeight::get().writes(13_u64))
 	}
-	/// Storage: NominationPools PoolMembers (r:1 w:1)
-	/// Proof: NominationPools PoolMembers (max_values: None, max_size: Some(237), added: 2712, mode: MaxEncodedLen)
-	/// Storage: NominationPools BondedPools (r:1 w:1)
-	/// Proof: NominationPools BondedPools (max_values: None, max_size: Some(164), added: 2639, mode: MaxEncodedLen)
-	/// Storage: NominationPools RewardPools (r:1 w:1)
-	/// Proof: NominationPools RewardPools (max_values: None, max_size: Some(60), added: 2535, mode: MaxEncodedLen)
-	/// Storage: System Account (r:1 w:1)
-	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
-	fn claim_payout() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `1189`
-		//  Estimated: `10489`
-		// Minimum execution time: 57_430 nanoseconds.
-		Weight::from_ref_time(59_161_000)
-			.saturating_add(Weight::from_proof_size(10489))
-			.saturating_add(RocksDbWeight::get().reads(4_u64))
-			.saturating_add(RocksDbWeight::get().writes(4_u64))
-	}
 	/// Storage: NominationPools ClaimPermissions (r:1 w:0)
 	/// Proof: NominationPools ClaimPermissions (max_values: None, max_size: Some(41), added: 2516, mode: MaxEncodedLen)
 	/// Storage: NominationPools PoolMembers (r:1 w:1)
@@ -673,7 +636,7 @@ impl WeightInfo for () {
 	/// Proof: NominationPools RewardPools (max_values: None, max_size: Some(60), added: 2535, mode: MaxEncodedLen)
 	/// Storage: System Account (r:1 w:1)
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
-	fn claim_payout_other() -> Weight {
+	fn claim_payout() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `1254`
 		//  Estimated: `13005`

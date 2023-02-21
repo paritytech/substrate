@@ -2164,7 +2164,7 @@ pub mod pallet {
 
 		/// `origin` can claim payouts on some pool member `member`'s behalf.
 		#[pallet::call_index(16)]
-		#[pallet::weight(T::WeightInfo::claim_payout_other())]
+		#[pallet::weight(T::WeightInfo::claim_payout())]
 		pub fn claim_payout_other(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			Self::do_claim_payout(signer, who)

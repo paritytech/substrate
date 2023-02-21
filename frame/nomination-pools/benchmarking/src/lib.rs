@@ -276,34 +276,6 @@ frame_benchmarking::benchmarks! {
 	}
 
 	claim_payout {
-		let origin_weight = Pools::<T>::depositor_min_bond() * 2u32.into();
-		let ed = CurrencyOf::<T>::minimum_balance();
-		let (depositor, pool_account) = create_pool_account::<T>(0, origin_weight);
-		let reward_account = Pools::<T>::create_reward_account(1);
-
-		// Send funds to the reward account of the pool
-		CurrencyOf::<T>::make_free_balance_be(&reward_account, ed + origin_weight);
-
-		// Sanity check
-		assert_eq!(
-			CurrencyOf::<T>::free_balance(&depositor),
-			origin_weight
-		);
-
-		whitelist_account!(depositor);
-	}:_(RuntimeOrigin::Signed(depositor.clone()))
-	verify {
-		assert_eq!(
-			CurrencyOf::<T>::free_balance(&depositor),
-			origin_weight * 2u32.into()
-		);
-		assert_eq!(
-			CurrencyOf::<T>::free_balance(&reward_account),
-			ed + Zero::zero()
-		);
-	}
-
-	claim_payout_other {
 		let claimer: T::AccountId = account("claimer", USER_SEED + 4, 0);
 
 		let origin_weight = Pools::<T>::depositor_min_bond() * 2u32.into();
@@ -317,6 +289,12 @@ frame_benchmarking::benchmarks! {
 		// set claim preferences to `PermissionlessAll` so any account can claim rewards on member's
 		// behalf.
 		let _ = Pools::<T>::set_reward_claim(RuntimeOrigin::Signed(depositor.clone()).into(), ClaimPermission::PermissionlessAll);
+
+		// Sanity check
+		assert_eq!(
+			CurrencyOf::<T>::free_balance(&depositor),
+			origin_weight
+		);
 
 		whitelist_account!(depositor);
 	}:_(RuntimeOrigin::Signed(claimer), depositor.clone())
