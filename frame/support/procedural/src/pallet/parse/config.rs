@@ -31,6 +31,7 @@ mod keyword {
 	syn::custom_keyword!(RuntimeEvent);
 	syn::custom_keyword!(Event);
 	syn::custom_keyword!(constant);
+	syn::custom_keyword!(no_default);
 	syn::custom_keyword!(frame_system);
 	syn::custom_keyword!(disable_frame_system_supertrait_check);
 }
@@ -52,6 +53,11 @@ pub struct ConfigDef {
 	pub where_clause: Option<syn::WhereClause>,
 	/// The span of the pallet::config attribute.
 	pub attr_span: proc_macro2::Span,
+	/// Whether a default sub-trait should be generated.
+	///
+	/// No, if `None`.
+	/// Yes, if `Some(_)`, with the inner items that should be included.
+	pub default_sub_trait: Option<Vec<syn::TraitItem>>,
 }
 
 /// Input definition for a constant in pallet config.
@@ -141,6 +147,61 @@ impl syn::parse::Parse for TypeAttrConst {
 		content.parse::<syn::Token![::]>()?;
 
 		Ok(TypeAttrConst(content.parse::<keyword::constant>()?.span()))
+	}
+}
+
+/// Parse for `#[pallet::no_default]`.
+pub struct TypeAttrNoDefault(proc_macro2::Span);
+
+impl Spanned for TypeAttrNoDefault {
+	fn span(&self) -> proc_macro2::Span {
+		self.0
+	}
+}
+
+impl syn::parse::Parse for TypeAttrNoDefault {
+	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+		input.parse::<syn::Token![#]>()?;
+		let content;
+		syn::bracketed!(content in input);
+		content.parse::<syn::Ident>()?;
+		content.parse::<syn::Token![::]>()?;
+
+		Ok(TypeAttrNoDefault(content.parse::<keyword::no_default>()?.span()))
+	}
+}
+
+pub enum TypeAttrNoDefaultOrConst {
+	NoDefault(TypeAttrNoDefault),
+	Const(TypeAttrConst),
+}
+
+impl Spanned for TypeAttrNoDefaultOrConst {
+	fn span(&self) -> proc_macro2::Span {
+		match self {
+			Self::Const(i) => i.0,
+			Self::NoDefault(i) => i.0,
+		}
+	}
+}
+
+impl syn::parse::Parse for TypeAttrNoDefaultOrConst {
+	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+		input.parse::<syn::Token![#]>()?;
+		let content;
+		syn::bracketed!(content in input);
+		content.parse::<syn::Ident>()?;
+		content.parse::<syn::Token![::]>()?;
+
+		Ok(if content.peek(keyword::no_default) {
+			TypeAttrNoDefaultOrConst::NoDefault(TypeAttrNoDefault(
+				content.parse::<keyword::no_default>()?.span(),
+			))
+		} else {
+			TypeAttrNoDefaultOrConst::Const(TypeAttrConst(
+				content.parse::<keyword::constant>()?.span(),
+			))
+		})
 	}
 }
 
@@ -332,38 +393,52 @@ impl ConfigDef {
 
 		let mut has_event_type = false;
 		let mut consts_metadata = vec![];
+		let mut default_subtrait_items = vec![];
 		for trait_item in &mut item.items {
 			// Parse for event
-			has_event_type =
-				has_event_type || check_event_type(frame_system, trait_item, has_instance)?;
+			let is_event = check_event_type(frame_system, trait_item, has_instance)?;
+			let mut no_default = false;
+			has_event_type = has_event_type || is_event;
 
-			// Parse for constant
-			let type_attrs_const: Vec<TypeAttrConst> = helper::take_item_pallet_attrs(trait_item)?;
-
-			if type_attrs_const.len() > 1 {
-				let msg = "Invalid attribute in pallet::config, only one attribute is expected";
-				return Err(syn::Error::new(type_attrs_const[1].span(), msg))
-			}
-
-			if type_attrs_const.len() == 1 {
-				match trait_item {
-					syn::TraitItem::Type(ref type_) => {
-						let constant = ConstMetadataDef::try_from(type_)?;
-						consts_metadata.push(constant);
+			// TODO: lots of extra checking that needs to be done.. this is just POC
+			let mut process_attr = || {
+				let no_default_or_const: Option<TypeAttrNoDefaultOrConst> =
+					helper::take_first_item_pallet_attr(trait_item)?;
+				match no_default_or_const {
+					Some(TypeAttrNoDefaultOrConst::Const(_)) => match trait_item {
+						syn::TraitItem::Type(ref type_) => {
+							let constant = ConstMetadataDef::try_from(type_)?;
+							consts_metadata.push(constant);
+						},
+						_ => {
+							let msg =
+								"Invalid pallet::constant in pallet::config, expected type trait item";
+							return Err(syn::Error::new(trait_item.span(), msg))
+						},
 					},
-					_ => {
-						let msg =
-							"Invalid pallet::constant in pallet::config, expected type trait \
-							item";
-						return Err(syn::Error::new(trait_item.span(), msg))
+					Some(TypeAttrNoDefaultOrConst::NoDefault(_)) => {
+						no_default = true;
 					},
+					None => {},
 				}
+				Ok(())
+			};
+
+			// process at most twice.
+			process_attr()?;
+			process_attr()?;
+
+			// TODO: if we call this again, we should expect `Err(_)`.
+
+			if !no_default && !is_event {
+				default_subtrait_items.push(trait_item.clone());
 			}
 		}
 
+		let default_sub_trait = Some(default_subtrait_items);
+
 		let attr: Option<DisableFrameSystemSupertraitCheck> =
 			helper::take_first_item_pallet_attr(&mut item.attrs)?;
-
 		let disable_system_supertrait_check = attr.is_some();
 
 		let has_frame_system_supertrait = item.supertraits.iter().any(|s| {
@@ -395,6 +470,14 @@ impl ConfigDef {
 			return Err(syn::Error::new(item.span(), msg))
 		}
 
-		Ok(Self { index, has_instance, consts_metadata, has_event_type, where_clause, attr_span })
+		Ok(Self {
+			index,
+			has_instance,
+			consts_metadata,
+			has_event_type,
+			where_clause,
+			attr_span,
+			default_sub_trait,
+		})
 	}
 }

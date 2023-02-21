@@ -219,6 +219,7 @@ pub mod pallet {
 			+ FixedPointOperand;
 
 		/// Handler for the unbalanced reduction when removing a dust account.
+		#[pallet::no_default]
 		type DustRemoval: OnUnbalanced<NegativeImbalance<Self, I>>;
 
 		/// The overarching event type.
@@ -230,6 +231,7 @@ pub mod pallet {
 		type ExistentialDeposit: Get<Self::Balance>;
 
 		/// The means of storing the balances of an account.
+		#[pallet::no_default]
 		type AccountStore: StoredMap<Self::AccountId, AccountData<Self::Balance>>;
 
 		/// Weight information for extrinsics in this pallet.
