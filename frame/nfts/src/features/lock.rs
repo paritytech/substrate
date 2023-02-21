@@ -85,15 +85,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	pub(crate) fn do_lock_item_properties(
-		maybe_check_owner: Option<T::AccountId>,
+		maybe_check_origin: Option<T::AccountId>,
 		collection: T::CollectionId,
 		item: T::ItemId,
 		lock_metadata: bool,
 		lock_attributes: bool,
 	) -> DispatchResult {
-		if let Some(check_owner) = &maybe_check_owner {
+		if let Some(check_origin) = &maybe_check_origin {
 			ensure!(
-				Self::has_role(&collection, &check_owner, CollectionRole::Admin),
+				Self::has_role(&collection, &check_origin, CollectionRole::Admin),
 				Error::<T, I>::NoPermission
 			);
 		}

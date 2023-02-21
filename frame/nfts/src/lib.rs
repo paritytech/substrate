@@ -1285,11 +1285,11 @@ pub mod pallet {
 			lock_metadata: bool,
 			lock_attributes: bool,
 		) -> DispatchResult {
-			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
+			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
 			Self::do_lock_item_properties(
-				maybe_check_owner,
+				maybe_check_origin,
 				collection,
 				item,
 				lock_metadata,
@@ -1621,10 +1621,10 @@ pub mod pallet {
 				T::CollectionId,
 			>,
 		) -> DispatchResult {
-			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
+			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
-			Self::do_update_mint_settings(maybe_check_owner, collection, mint_settings)
+			Self::do_update_mint_settings(maybe_check_origin, collection, mint_settings)
 		}
 
 		/// Set (or reset) the price for an item.
