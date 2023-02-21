@@ -298,10 +298,10 @@ pub use v1::*;
 /// 		// verification code
 /// 		assert_eq!(MyPallet::<T>::my_var(), z);
 ///
-///         // we must return a valid `Result<(), BenchmarkError>` as the last line of our benchmark
-///         // function definition. This line is not included as part of the verification code that
-///         // appears above it.
-///         Ok(())
+/// 		// we must return a valid `Result<(), BenchmarkError>` as the last line of our benchmark
+/// 		// function definition. This line is not included as part of the verification code that
+/// 		// appears above it.
+/// 		Ok(())
 /// 	}
 /// }
 /// ```
