@@ -212,34 +212,38 @@ pub struct OffenceDetails<Reporter, Offender> {
 
 /// A system capable of construct, report and submit offences.
 ///
-/// Implementors of this trait provide a wrapper for lower level operations.
+/// Implementors of this trait provide a wrapper to some low level operations
+/// which mechanics are left open by this trait. That is, implementation details
+/// of the provider are left opaque at this level.
 ///
-/// It is assumed that this subsystem takes care of checking key ownership proof
-/// before report submission.
+/// It is assumed that this subsystem takes care of checking offender key
+/// ownership proof before report submission.
+/// Key ownership checks are done using the `key_owner_proof` argument which
+/// always comes together with the `offence_proof`.
 pub trait OffenceReportSystem<Reporter, KeyOwnerProof, OffenceProof> {
 	/// Longevity, in blocks, for the report validity. When using the staking
 	/// pallet this should be equal to the bonding duration (in blocks, not eras).
 	type Longevity: Get<u64>;
 
-	/// Report offence to the `ReportOffence` handler.
+	/// Report a valid offence.
+	/// TODO DAVXY: reported information should have already been checked via `check_evidence`.
 	fn report_evidence(
-		_reporter: Option<Reporter>,
-		_offence_proof: OffenceProof,
-		_key_owner_proof: KeyOwnerProof,
+		reporter: Option<Reporter>,
+		offence_proof: OffenceProof,
+		key_owner_proof: KeyOwnerProof,
 	) -> DispatchResult;
 
-	/// Check if is a known offence.
+	/// Check for evidence validity.
 	fn check_evidence(
-		_offence_proof: &OffenceProof,
-		_key_owner_proof: &KeyOwnerProof,
+		offence_proof: &OffenceProof,
+		key_owner_proof: &KeyOwnerProof,
 	) -> DispatchResult;
 
 	/// Create and dispatch an offence report extrinsic.
-	fn submit_evidence(_offence_proof: OffenceProof, _key_owner_proof: KeyOwnerProof) -> bool;
+	fn submit_evidence(offence_proof: OffenceProof, key_owner_proof: KeyOwnerProof) -> bool;
 }
 
 // Dummy report system.
-// Should always give successful results
 impl<Reporter, KeyOwnerProof, OffenceProof>
 	OffenceReportSystem<Reporter, KeyOwnerProof, OffenceProof> for ()
 {
