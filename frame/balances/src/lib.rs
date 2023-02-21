@@ -233,6 +233,7 @@ pub mod pallet {
 			+ FixedPointOperand;
 
 		/// Handler for the unbalanced reduction when removing a dust account.
+		#[pallet::no_default]
 		type DustRemoval: OnUnbalanced<CreditOf<Self, I>>;
 
 		/// The minimum amount required to keep an account open. MUST BE GREATER THAN ZERO!
@@ -247,6 +248,7 @@ pub mod pallet {
 		type ExistentialDeposit: Get<Self::Balance>;
 
 		/// The means of storing the balances of an account.
+		#[pallet::no_default]
 		type AccountStore: StoredMap<Self::AccountId, AccountData<Self::Balance>>;
 
 		/// The ID type for reserves.

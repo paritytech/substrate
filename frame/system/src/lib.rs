@@ -153,12 +153,13 @@ pub type ConsumedWeight = PerDispatchClass<Weight>;
 pub use pallet::*;
 
 /// Do something when we should be setting the code.
-pub trait SetCode<T: Config> {
+pub trait SetCode {
 	/// Set the code to the given blob.
 	fn set_code(code: Vec<u8>) -> DispatchResult;
 }
 
-impl<T: Config> SetCode<T> for () {
+pub struct DefaultSetCode<T>(sp_std::marker::PhantomData<T>);
+impl<T: Config> SetCode for DefaultSetCode<T> {
 	fn set_code(code: Vec<u8>) -> DispatchResult {
 		<Pallet<T>>::update_code_in_storage(&code)?;
 		Ok(())
@@ -200,65 +201,35 @@ pub mod pallet {
 	use crate::{self as frame_system, pallet_prelude::*, *};
 	use frame_support::pallet_prelude::*;
 
-	pub mod preludes {
-		use super::*;
-		pub mod testing {
-			type AccountId = u64;
-			use sp_runtime::traits::IdentityLookup;
+	// pub mod preludes {
+	// 	use super::*;
+	// 	pub mod testing {
+	// 		type AccountId = u64;
+	// 		use sp_runtime::traits::IdentityLookup;
+	// 		use super::*;
 
-			use super::*;
-
-			// things that cannot have default are made into generics.
-			#[derive(frame_support::CloneNoBound, frame_support::EqNoBound, frame_support::PartialEqNoBound)]
-			pub struct Impl<RuntimeCall, RuntimeOrigin, RuntimeEvent, PalletInfo>(
-				sp_std::marker::PhantomData<(RuntimeCall, RuntimeOrigin, RuntimeEvent, PalletInfo)>,
-			);
-			impl<RuntimeCall, RuntimeOrigin, RuntimeEvent, PalletInfo> Config
-				for Impl<RuntimeCall, RuntimeOrigin, RuntimeEvent, PalletInfo>
-			where
-				RuntimeCall: Parameter
-					+ Dispatchable<RuntimeOrigin = RuntimeOrigin>
-					+ Debug
-					+ 'static
-					+ From<Call<Self>>
-					+ Sync
-					+ Send,
-				RuntimeOrigin: Into<Result<RawOrigin<AccountId>, RuntimeOrigin>>
-					+ From<RawOrigin<AccountId>>
-					+ OriginTrait<Call = RuntimeCall>
-					+ Clone
-					+ 'static,
-				RuntimeEvent: Parameter + Member + From<Event<Self>> + Debug + IsType<RuntimeEvent>,
-				PalletInfo: frame_support::traits::PalletInfo + 'static,
-			{
-				type RuntimeOrigin = RuntimeOrigin;
-				type RuntimeEvent = RuntimeEvent;
-				type RuntimeCall = RuntimeCall;
-
-				type Version = ();
-				type BaseCallFilter = frame_support::traits::Everything;
-				type BlockWeights = ();
-				type BlockLength = ();
-				type DbWeight = ();
-				type Index = u64;
-				type BlockNumber = u64;
-				type Hash = sp_core::hash::H256;
-				type Hashing = sp_runtime::traits::BlakeTwo256;
-				type AccountId = AccountId;
-				type Lookup = IdentityLookup<AccountId>;
-				type Header = <crate::mocking::MockBlock<Self> as sp_runtime::traits::Block>::Header;
-				type BlockHashCount = frame_support::traits::ConstU64<10>;
-				type PalletInfo = PalletInfo;
-				type AccountData = u32;
-				type OnNewAccount = ();
-				type OnKilledAccount = ();
-				type SystemWeightInfo = ();
-				type SS58Prefix = ();
-				type OnSetCode = ();
-				type MaxConsumers = ConstU32<16>;
-			}
-		}
-	}
+	// 		pub struct Impl {}
+	// 		impl DefaultConfig for Impl {
+	// 			type Version = ();
+	// 			type BlockWeights = ();
+	// 			type BlockLength = ();
+	// 			type DbWeight = ();
+	// 			type Index = u64;
+	// 			type BlockNumber = u64;
+	// 			type Hash = sp_core::hash::H256;
+	// 			type Hashing = sp_runtime::traits::BlakeTwo256;
+	// 			type AccountId = AccountId;
+	// 			type Lookup = IdentityLookup<AccountId>;
+	// 			type BlockHashCount = frame_support::traits::ConstU64<10>;
+	// 			type AccountData = u32;
+	// 			type OnNewAccount = ();
+	// 			type OnKilledAccount = ();
+	// 			type SystemWeightInfo = ();
+	// 			type SS58Prefix = ();
+	// 			type MaxConsumers = ConstU32<16>;
+	// 		}
+	// 	}
+	// }
 
 	/// System configuration trait. Implemented by runtime.
 	#[pallet::config]
@@ -273,6 +244,7 @@ pub mod pallet {
 
 		/// The basic call filter to use in Origin. All origins are built with this filter as base,
 		/// except Root.
+		#[pallet::no_default]
 		type BaseCallFilter: Contains<Self::RuntimeCall>;
 
 		/// Block & extrinsics weights: base values and limits.
@@ -284,12 +256,14 @@ pub mod pallet {
 		type BlockLength: Get<limits::BlockLength>;
 
 		/// The `RuntimeOrigin` type used by dispatchable calls.
+		#[pallet::no_default]
 		type RuntimeOrigin: Into<Result<RawOrigin<Self::AccountId>, Self::RuntimeOrigin>>
 			+ From<RawOrigin<Self::AccountId>>
 			+ Clone
 			+ OriginTrait<Call = Self::RuntimeCall>;
 
 		/// The aggregated `RuntimeCall` type.
+		#[pallet::no_default]
 		type RuntimeCall: Parameter
 			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin>
 			+ Debug
@@ -410,7 +384,7 @@ pub mod pallet {
 		/// [`Pallet::update_code_in_storage`]).
 		/// It's unlikely that this needs to be customized, unless you are writing a parachain using
 		/// `Cumulus`, where the actual code change is deferred.
-		type OnSetCode: SetCode<Self>;
+		type OnSetCode: SetCode;
 
 		/// The maximum number of consumers allowed on a single account.
 		type MaxConsumers: ConsumerLimits;

@@ -367,6 +367,8 @@ pub mod pallet {
 	pub trait Config: pallet_balances::Config + frame_system::Config {
 		// Setting a constant config parameter from the runtime
 		#[pallet::constant]
+		#[pallet::no_default]
+		// It is very unfortunate that we cannot have this have a default either, because it relies on `<Self as pallet_balances::Config>`
 		type MagicNumber: Get<Self::Balance>;
 
 		/// The overarching event type.
@@ -374,6 +376,7 @@ pub mod pallet {
 
 		/// Type representing the weight of this pallet
 		type WeightInfo: WeightInfo;
+
 	}
 
 	// Simple declaration of the `Pallet` type. It is placeholder we use to implement traits and

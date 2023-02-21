@@ -41,5 +41,16 @@ pub fn expand_config(def: &mut Def) -> proc_macro2::TokenStream {
 		));
 	}
 
-	Default::default()
+	if let Some(trait_items) = &config.default_sub_trait {
+		use quote::ToTokens;
+		let items = trait_items.into_iter().map(|i| i.into_token_stream()).collect::<proc_macro2::TokenStream>();
+		quote::quote!(
+			pub trait DefaultConfig {
+				#items
+			}
+		)
+	} else {
+		Default::default()
+	}
+
 }
