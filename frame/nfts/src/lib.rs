@@ -878,38 +878,25 @@ pub mod pallet {
 
 		/// Destroy a single item.
 		///
-		/// Origin must be Signed and the signing account must be either:
-		/// - the Admin of the `collection`;
-		/// - the Owner of the `item`;
+		/// Origin must be Signed and the signing account must be the owner of the `item`.
 		///
 		/// - `collection`: The collection of the item to be burned.
 		/// - `item`: The item to be burned.
-		/// - `check_owner`: If `Some` then the operation will fail with `WrongOwner` unless the
-		///   item is owned by this value.
 		///
-		/// Emits `Burned` with the actual amount burned.
+		/// Emits `Burned`.
 		///
 		/// Weight: `O(1)`
-		/// Modes: `check_owner.is_some()`.
 		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::burn())]
 		pub fn burn(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			item: T::ItemId,
-			check_owner: Option<AccountIdLookupOf<T>>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			let check_owner = check_owner.map(T::Lookup::lookup).transpose()?;
 
 			Self::do_burn(collection, item, |details| {
-				let is_admin = Self::has_role(&collection, &origin, CollectionRole::Admin);
-				let is_permitted = is_admin || details.owner == origin;
-				ensure!(is_permitted, Error::<T, I>::NoPermission);
-				ensure!(
-					check_owner.map_or(true, |o| o == details.owner),
-					Error::<T, I>::WrongOwner
-				);
+				ensure!(details.owner == origin, Error::<T, I>::NoPermission);
 				Ok(())
 			})
 		}
@@ -917,7 +904,6 @@ pub mod pallet {
 		/// Move an item from the sender account to another.
 		///
 		/// Origin must be Signed and the signing account must be either:
-		/// - the Admin of the `collection`;
 		/// - the Owner of the `item`;
 		/// - the approved delegate for the `item` (in this case, the approval is reset).
 		///
@@ -941,8 +927,7 @@ pub mod pallet {
 			let dest = T::Lookup::lookup(dest)?;
 
 			Self::do_transfer(collection, item, dest, |_, details| {
-				let is_admin = Self::has_role(&collection, &origin, CollectionRole::Admin);
-				if details.owner != origin && !is_admin {
+				if details.owner != origin {
 					let deadline =
 						details.approvals.get(&origin).ok_or(Error::<T, I>::NoPermission)?;
 					if let Some(d) = deadline {
@@ -1222,7 +1207,6 @@ pub mod pallet {
 		///
 		/// Origin must be either:
 		/// - the `Force` origin;
-		/// - `Signed` with the signer being the Admin of the `collection`;
 		/// - `Signed` with the signer being the Owner of the `item`;
 		///
 		/// Arguments:
@@ -1252,7 +1236,6 @@ pub mod pallet {
 		///
 		/// Origin must be either:
 		/// - the `Force` origin;
-		/// - `Signed` with the signer being the Admin of the `collection`;
 		/// - `Signed` with the signer being the Owner of the `item`;
 		///
 		/// Arguments:
@@ -1645,7 +1628,7 @@ pub mod pallet {
 
 		/// Set (or reset) the price for an item.
 		///
-		/// Origin must be Signed and must be the owner of the asset `item`.
+		/// Origin must be Signed and must be the owner of the `item`.
 		///
 		/// - `collection`: The collection of the item.
 		/// - `item`: The item to set the price for.

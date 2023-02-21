@@ -234,9 +234,9 @@ benchmarks_instance_pallet! {
 	}
 
 	burn {
-		let (collection, caller, caller_lookup) = create_collection::<T, I>();
+		let (collection, caller, _) = create_collection::<T, I>();
 		let (item, ..) = mint_item::<T, I>(0);
-	}: _(SystemOrigin::Signed(caller.clone()), collection, item, Some(caller_lookup))
+	}: _(SystemOrigin::Signed(caller.clone()), collection, item)
 	verify {
 		assert_last_event::<T, I>(Event::Burned { collection, item, owner: caller }.into());
 	}

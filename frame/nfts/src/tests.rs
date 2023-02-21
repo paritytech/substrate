@@ -492,7 +492,7 @@ fn origin_guards_should_work() {
 			Error::<Test>::NoPermission
 		);
 		assert_noop!(
-			Nfts::burn(RuntimeOrigin::signed(account(2)), 0, 42, None),
+			Nfts::burn(RuntimeOrigin::signed(account(2)), 0, 42),
 			Error::<Test>::NoPermission
 		);
 		let w = Nfts::get_destroy_witness(&0).unwrap();
@@ -583,8 +583,6 @@ fn set_team_should_work() {
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(account(2)), 0, 42, account(2), None));
 		assert_ok!(Nfts::lock_item_transfer(RuntimeOrigin::signed(account(4)), 0, 42));
 		assert_ok!(Nfts::unlock_item_transfer(RuntimeOrigin::signed(account(4)), 0, 42));
-		assert_ok!(Nfts::transfer(RuntimeOrigin::signed(account(3)), 0, 42, account(3)));
-		assert_ok!(Nfts::burn(RuntimeOrigin::signed(account(3)), 0, 42, None));
 	});
 }
 
@@ -997,7 +995,7 @@ fn set_item_owner_attributes_should_work() {
 		assert_eq!(Balances::reserved_balance(account(3)), 13);
 
 		// validate attributes on item deletion
-		assert_ok!(Nfts::burn(RuntimeOrigin::signed(account(3)), 0, 0, None));
+		assert_ok!(Nfts::burn(RuntimeOrigin::signed(account(3)), 0, 0));
 		assert_eq!(
 			attributes(0),
 			vec![
@@ -1317,7 +1315,7 @@ fn preserve_config_for_frozen_items() {
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(account(1)), 0, 1, account(1), None));
 
 		// if the item is not locked/frozen then the config gets deleted on item burn
-		assert_ok!(Nfts::burn(RuntimeOrigin::signed(account(1)), 0, 1, Some(account(1))));
+		assert_ok!(Nfts::burn(RuntimeOrigin::signed(account(1)), 0, 1));
 		assert!(!ItemConfigOf::<Test>::contains_key(0, 1));
 
 		// lock the item and ensure the config stays unchanged
@@ -1329,7 +1327,7 @@ fn preserve_config_for_frozen_items() {
 		let config = ItemConfigOf::<Test>::get(0, 0).unwrap();
 		assert_eq!(config, expect_config);
 
-		assert_ok!(Nfts::burn(RuntimeOrigin::signed(account(1)), 0, 0, Some(account(1))));
+		assert_ok!(Nfts::burn(RuntimeOrigin::signed(account(1)), 0, 0));
 		let config = ItemConfigOf::<Test>::get(0, 0).unwrap();
 		assert_eq!(config, expect_config);
 
@@ -1475,7 +1473,7 @@ fn burn_works() {
 		));
 
 		assert_noop!(
-			Nfts::burn(RuntimeOrigin::signed(account(5)), 0, 42, Some(account(5))),
+			Nfts::burn(RuntimeOrigin::signed(account(5)), 0, 42),
 			Error::<Test>::UnknownItem
 		);
 
@@ -1496,16 +1494,12 @@ fn burn_works() {
 		assert_eq!(Balances::reserved_balance(account(1)), 2);
 
 		assert_noop!(
-			Nfts::burn(RuntimeOrigin::signed(account(0)), 0, 42, None),
+			Nfts::burn(RuntimeOrigin::signed(account(0)), 0, 42),
 			Error::<Test>::NoPermission
 		);
-		assert_noop!(
-			Nfts::burn(RuntimeOrigin::signed(account(5)), 0, 42, Some(account(6))),
-			Error::<Test>::WrongOwner
-		);
 
-		assert_ok!(Nfts::burn(RuntimeOrigin::signed(account(5)), 0, 42, Some(account(5))));
-		assert_ok!(Nfts::burn(RuntimeOrigin::signed(account(3)), 0, 69, Some(account(5))));
+		assert_ok!(Nfts::burn(RuntimeOrigin::signed(account(5)), 0, 42));
+		assert_ok!(Nfts::burn(RuntimeOrigin::signed(account(5)), 0, 69));
 		assert_eq!(Balances::reserved_balance(account(1)), 0);
 	});
 }
@@ -1819,21 +1813,21 @@ fn cancel_approval_works_with_admin() {
 			None
 		));
 		assert_noop!(
-			Nfts::cancel_approval(RuntimeOrigin::signed(account(1)), 1, 42, account(1)),
+			Nfts::cancel_approval(RuntimeOrigin::signed(account(2)), 1, 42, account(1)),
 			Error::<Test>::UnknownItem
 		);
 		assert_noop!(
-			Nfts::cancel_approval(RuntimeOrigin::signed(account(1)), 0, 43, account(1)),
+			Nfts::cancel_approval(RuntimeOrigin::signed(account(2)), 0, 43, account(1)),
 			Error::<Test>::UnknownItem
 		);
 		assert_noop!(
-			Nfts::cancel_approval(RuntimeOrigin::signed(account(1)), 0, 42, account(4)),
+			Nfts::cancel_approval(RuntimeOrigin::signed(account(2)), 0, 42, account(4)),
 			Error::<Test>::NotDelegate
 		);
 
-		assert_ok!(Nfts::cancel_approval(RuntimeOrigin::signed(account(1)), 0, 42, account(3)));
+		assert_ok!(Nfts::cancel_approval(RuntimeOrigin::signed(account(2)), 0, 42, account(3)));
 		assert_noop!(
-			Nfts::cancel_approval(RuntimeOrigin::signed(account(1)), 0, 42, account(1)),
+			Nfts::cancel_approval(RuntimeOrigin::signed(account(2)), 0, 42, account(1)),
 			Error::<Test>::NotDelegate
 		);
 	});
@@ -3082,7 +3076,7 @@ fn pre_signed_mints_should_work() {
 			Error::<Test>::AlreadyExists
 		);
 
-		assert_ok!(Nfts::burn(RuntimeOrigin::signed(user_2.clone()), 0, 0, Some(user_2.clone())));
+		assert_ok!(Nfts::burn(RuntimeOrigin::signed(user_2.clone()), 0, 0));
 		assert_eq!(Balances::free_balance(&user_2), 100 - 6);
 
 		// validate the `only_account` field
