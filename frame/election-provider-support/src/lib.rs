@@ -200,7 +200,7 @@ pub use sp_arithmetic;
 pub use sp_std;
 
 #[cfg(feature = "runtime-benchmarks")]
-mod benchmarking;
+pub mod benchmarking;
 
 pub mod weights;
 pub use weights::WeightInfo;
