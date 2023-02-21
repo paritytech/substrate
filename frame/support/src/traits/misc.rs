@@ -49,7 +49,7 @@ macro_rules! defensive {
 		);
 		debug_assert!(false, "{}", $crate::traits::DEFENSIVE_OP_INTERNAL_ERROR);
 	};
-	($error:tt) => {
+	($error:expr $(,)?) => {
 		frame_support::log::error!(
 			target: "runtime",
 			"{}: {:?}",
@@ -58,7 +58,7 @@ macro_rules! defensive {
 		);
 		debug_assert!(false, "{}: {:?}", $crate::traits::DEFENSIVE_OP_INTERNAL_ERROR, $error);
 	};
-	($error:tt, $proof:tt) => {
+	($error:expr, $proof:expr $(,)?) => {
 		frame_support::log::error!(
 			target: "runtime",
 			"{}: {:?}: {:?}",
@@ -68,6 +68,25 @@ macro_rules! defensive {
 		);
 		debug_assert!(false, "{}: {:?}: {:?}", $crate::traits::DEFENSIVE_OP_INTERNAL_ERROR, $error, $proof);
 	}
+}
+
+/// Trigger a defensive failure if a condition is not met.
+///
+/// Similar to [`assert!`] but will print an error without `debug_assertions` instead of silently
+/// ignoring it. Only accepts one instead of variable formatting arguments.
+///
+/// # Example
+///
+/// ```should_panic
+/// frame_support::defensive_assert!(1 == 0, "Must fail")
+/// ```
+#[macro_export]
+macro_rules! defensive_assert {
+	($cond:expr $(, $proof:expr )? $(,)?) => {
+		if !($cond) {
+			$crate::defensive!(::core::stringify!($cond) $(, $proof )?);
+		}
+	};
 }
 
 /// Prelude module for all defensive traits to be imported at once.
@@ -1140,6 +1159,27 @@ mod test {
 	use super::*;
 	use sp_core::bounded::{BoundedSlice, BoundedVec};
 	use sp_std::marker::PhantomData;
+
+	#[test]
+	fn defensive_assert_works() {
+		defensive_assert!(true);
+		defensive_assert!(true,);
+		defensive_assert!(true, "must work");
+		defensive_assert!(true, "must work",);
+	}
+
+	#[test]
+	#[cfg(debug_assertions)]
+	#[should_panic(expected = "Defensive failure has been triggered!: \"1 == 0\": \"Must fail\"")]
+	fn defensive_assert_panics() {
+		defensive_assert!(1 == 0, "Must fail");
+	}
+
+	#[test]
+	#[cfg(not(debug_assertions))]
+	fn defensive_assert_does_not_panic() {
+		defensive_assert!(1 == 0, "Must fail");
+	}
 
 	#[test]
 	#[cfg(not(debug_assertions))]
