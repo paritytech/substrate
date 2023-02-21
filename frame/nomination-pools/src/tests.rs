@@ -196,6 +196,46 @@ mod bonded_pool {
 	}
 
 	#[test]
+	fn api_points_to_balance_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert!(BondedPool::<Runtime>::get(1).is_some());
+			assert_eq!(Pallet::<Runtime>::api_points_to_balance(1, 10), 10);
+
+			// slash half of the pool's balance. expected result of `fn api_points_to_balance`
+			// to be 1/2 of the pool's balance.
+			StakingMock::set_bonded_balance(
+				default_bonded_account(),
+				Pools::depositor_min_bond() / 2,
+			);
+			assert_eq!(Pallet::<Runtime>::api_points_to_balance(1, 10), 5);
+
+			// if pool does not exist, points to balance ratio is 0.
+			assert_eq!(BondedPool::<Runtime>::get(2), None);
+			assert_eq!(Pallet::<Runtime>::api_points_to_balance(2, 10), 0);
+		})
+	}
+
+	#[test]
+	fn api_balance_to_points_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(Pallet::<Runtime>::api_balance_to_points(1, 0), 0);
+			assert_eq!(Pallet::<Runtime>::api_balance_to_points(1, 10), 10);
+
+			// slash half of the pool's balance. expect result of `fn api_balance_to_points`
+			// to be 2 * of the balance to add to the pool.
+			StakingMock::set_bonded_balance(
+				default_bonded_account(),
+				Pools::depositor_min_bond() / 2,
+			);
+			assert_eq!(Pallet::<Runtime>::api_balance_to_points(1, 10), 20);
+
+			// if pool does not exist, balance to points ratio is 0.
+			assert_eq!(BondedPool::<Runtime>::get(2), None);
+			assert_eq!(Pallet::<Runtime>::api_points_to_balance(2, 10), 0);
+		})
+	}
+
+	#[test]
 	fn ok_to_join_with_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			let pool = BondedPool::<Runtime> {
@@ -1305,51 +1345,51 @@ mod claim_payout {
 		ExtBuilder::default().build_and_execute(|| {
 			let ed = Balances::minimum_balance();
 
-			assert_eq!(Pools::pending_rewards(10), Some(0));
+			assert_eq!(Pools::api_pending_rewards(10), Some(0));
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 30).unwrap();
-			assert_eq!(Pools::pending_rewards(10), Some(30));
-			assert_eq!(Pools::pending_rewards(20), None);
+			assert_eq!(Pools::api_pending_rewards(10), Some(30));
+			assert_eq!(Pools::api_pending_rewards(20), None);
 
 			Balances::make_free_balance_be(&20, ed + 10);
 			assert_ok!(Pools::join(RuntimeOrigin::signed(20), 10, 1));
 
-			assert_eq!(Pools::pending_rewards(10), Some(30));
-			assert_eq!(Pools::pending_rewards(20), Some(0));
+			assert_eq!(Pools::api_pending_rewards(10), Some(30));
+			assert_eq!(Pools::api_pending_rewards(20), Some(0));
 
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 100).unwrap();
 
-			assert_eq!(Pools::pending_rewards(10), Some(30 + 50));
-			assert_eq!(Pools::pending_rewards(20), Some(50));
-			assert_eq!(Pools::pending_rewards(30), None);
+			assert_eq!(Pools::api_pending_rewards(10), Some(30 + 50));
+			assert_eq!(Pools::api_pending_rewards(20), Some(50));
+			assert_eq!(Pools::api_pending_rewards(30), None);
 
 			Balances::make_free_balance_be(&30, ed + 10);
 			assert_ok!(Pools::join(RuntimeOrigin::signed(30), 10, 1));
 
-			assert_eq!(Pools::pending_rewards(10), Some(30 + 50));
-			assert_eq!(Pools::pending_rewards(20), Some(50));
-			assert_eq!(Pools::pending_rewards(30), Some(0));
+			assert_eq!(Pools::api_pending_rewards(10), Some(30 + 50));
+			assert_eq!(Pools::api_pending_rewards(20), Some(50));
+			assert_eq!(Pools::api_pending_rewards(30), Some(0));
 
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 60).unwrap();
 
-			assert_eq!(Pools::pending_rewards(10), Some(30 + 50 + 20));
-			assert_eq!(Pools::pending_rewards(20), Some(50 + 20));
-			assert_eq!(Pools::pending_rewards(30), Some(20));
+			assert_eq!(Pools::api_pending_rewards(10), Some(30 + 50 + 20));
+			assert_eq!(Pools::api_pending_rewards(20), Some(50 + 20));
+			assert_eq!(Pools::api_pending_rewards(30), Some(20));
 
 			// 10 should claim 10, 20 should claim nothing.
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
-			assert_eq!(Pools::pending_rewards(10), Some(0));
-			assert_eq!(Pools::pending_rewards(20), Some(50 + 20));
-			assert_eq!(Pools::pending_rewards(30), Some(20));
+			assert_eq!(Pools::api_pending_rewards(10), Some(0));
+			assert_eq!(Pools::api_pending_rewards(20), Some(50 + 20));
+			assert_eq!(Pools::api_pending_rewards(30), Some(20));
 
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
-			assert_eq!(Pools::pending_rewards(10), Some(0));
-			assert_eq!(Pools::pending_rewards(20), Some(0));
-			assert_eq!(Pools::pending_rewards(30), Some(20));
+			assert_eq!(Pools::api_pending_rewards(10), Some(0));
+			assert_eq!(Pools::api_pending_rewards(20), Some(0));
+			assert_eq!(Pools::api_pending_rewards(30), Some(20));
 
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(30)));
-			assert_eq!(Pools::pending_rewards(10), Some(0));
-			assert_eq!(Pools::pending_rewards(20), Some(0));
-			assert_eq!(Pools::pending_rewards(30), Some(0));
+			assert_eq!(Pools::api_pending_rewards(10), Some(0));
+			assert_eq!(Pools::api_pending_rewards(20), Some(0));
+			assert_eq!(Pools::api_pending_rewards(30), Some(0));
 		});
 	}
 
