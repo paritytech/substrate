@@ -61,7 +61,7 @@
 //!
 //! After joining a pool, a member can claim rewards by calling [`Call::claim_payout`].
 //!
-//! A pool member can also set a `ClaimPermission` with [`Call:set_claim_permission`], to allow
+//! A pool member can also set a `ClaimPermission` with [`Call::set_claim_permission`], to allow
 //! other members to permissionlessly bond or withdraw their rewards by calling
 //! [`Call::bond_extra_other`] or [`Call::claim_payout_other`] respectively.
 //!
