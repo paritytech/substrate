@@ -111,6 +111,7 @@ parameter_types! {
 	pub const Period: u64 = 1;
 	pub const ReportLongevity: u64 =
 		BondingDuration::get() as u64 * SessionsPerEra::get() as u64 * Period::get();
+	pub const MaxSetIdSessionEntries: u32 = BondingDuration::get() * SessionsPerEra::get();
 }
 
 impl pallet_beefy::Config for Test {
@@ -125,6 +126,7 @@ impl pallet_beefy::Config for Test {
 	type HandleEquivocation =
 		super::EquivocationHandler<u64, Self::KeyOwnerIdentification, Offences, ReportLongevity>;
 	type MaxAuthorities = ConstU32<100>;
+	type MaxSetIdSessionEntries = MaxSetIdSessionEntries;
 	type OnNewValidatorSet = ();
 	type WeightInfo = ();
 }
