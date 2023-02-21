@@ -250,21 +250,19 @@ fn parse_params(item_fn: &ItemFn) -> Result<Vec<ParamDef>> {
 	Ok(params)
 }
 
-impl BenchmarkDef {
-	/// Constructs a [`BenchmarkDef`] by traversing an existing [`ItemFn`] node.
-	pub fn from(item_fn: &ItemFn, extra: bool, skip_meta: bool) -> Result<BenchmarkDef> {
-		let params = parse_params(item_fn)?;
-		ensure_valid_return_type(item_fn)?;
+fn missing_call<T>(item_fn: &ItemFn) -> Result<T> {
+	return Err(Error::new(
+		item_fn.block.brace_token.span,
+		"No valid #[extrinsic_call] or #[block] annotation could be found in benchmark function body."
+	))
+}
 
-		let missing_call = || {
-			return Err(Error::new(
-				item_fn.block.brace_token.span,
-				"No valid #[extrinsic_call] or #[block] annotation could be found in benchmark function body."
-			))
-		};
-
-		// #[extrinsic_call] / #[block] handling
-		let call_defs = item_fn.block.stmts.iter().enumerate().filter_map(|(i, child)| {
+/// Finds the `BenchmarkCallDef` and its index (within the list of stmts for the fn) and
+/// returns them. Also handles parsing errors for invalid / extra call defs. AKA this is
+/// general handling for `#[extrinsic_call]` and `#[block]`
+fn parse_call_def(item_fn: &ItemFn) -> Result<(usize, BenchmarkCallDef)> {
+	// #[extrinsic_call] / #[block] handling
+	let call_defs = item_fn.block.stmts.iter().enumerate().filter_map(|(i, child)| {
 			if let Stmt::Semi(Expr::Call(expr_call), _semi) = child {
 				// #[extrinsic_call] case
 				expr_call.attrs.iter().enumerate().find_map(|(k, attr)| {
@@ -298,15 +296,23 @@ impl BenchmarkDef {
 				None
 			}
 		}).collect::<Result<Vec<_>>>()?;
-		let (i, call_def) = match &call_defs[..] {
-			[(i, call_def)] => (*i, call_def.clone()), // = 1
-			[] => return missing_call(),
-			_ =>
-				return Err(Error::new(
-					call_defs[1].1.attr_span(),
-					"Only one #[extrinsic_call] or #[block] attribute is allowed per benchmark.",
-				)),
-		};
+	Ok(match &call_defs[..] {
+		[(i, call_def)] => (*i, call_def.clone()), // = 1
+		[] => return missing_call(item_fn),
+		_ =>
+			return Err(Error::new(
+				call_defs[1].1.attr_span(),
+				"Only one #[extrinsic_call] or #[block] attribute is allowed per benchmark.",
+			)),
+	})
+}
+
+impl BenchmarkDef {
+	/// Constructs a [`BenchmarkDef`] by traversing an existing [`ItemFn`] node.
+	pub fn from(item_fn: &ItemFn, extra: bool, skip_meta: bool) -> Result<BenchmarkDef> {
+		let params = parse_params(item_fn)?;
+		ensure_valid_return_type(item_fn)?;
+		let (i, call_def) = parse_call_def(&item_fn)?;
 
 		let (verify_stmts, last_stmt) = match item_fn.sig.output {
 			ReturnType::Default =>
@@ -325,13 +331,14 @@ impl BenchmarkDef {
 						or change your signature to a blank return type.",
 					))
 				}
-				let Some(stmt) = item_fn.block.stmts.last() else { return missing_call() };
+				let Some(stmt) = item_fn.block.stmts.last() else { return missing_call(item_fn) };
 				(
 					Vec::from(&item_fn.block.stmts[(i + 1)..item_fn.block.stmts.len() - 1]),
 					Some(stmt.clone()),
 				)
 			},
 		};
+
 		Ok(BenchmarkDef {
 			params,
 			setup_stmts: Vec::from(&item_fn.block.stmts[0..i]),
