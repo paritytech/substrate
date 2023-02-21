@@ -91,13 +91,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		lock_metadata: bool,
 		lock_attributes: bool,
 	) -> DispatchResult {
-		let collection_details =
-			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-
 		if let Some(check_owner) = &maybe_check_owner {
-			let is_admin = Self::has_role(&collection, &check_owner, CollectionRole::Admin);
-			let is_permitted = is_admin || check_owner == &collection_details.owner;
-			ensure!(is_permitted, Error::<T, I>::NoPermission);
+			ensure!(
+				Self::has_role(&collection, &check_owner, CollectionRole::Admin),
+				Error::<T, I>::NoPermission
+			);
 		}
 
 		ItemConfigOf::<T, I>::try_mutate(collection, item, |maybe_config| {

@@ -1261,8 +1261,8 @@ pub mod pallet {
 
 		/// Disallows changing the metadata or attributes of the item.
 		///
-		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner or
-		/// the Admin of the `collection`.
+		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Admin
+		/// of the `collection`.
 		///
 		/// - `collection`: The collection if the `item`.
 		/// - `item`: An item to be locked.
