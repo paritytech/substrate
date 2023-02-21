@@ -1603,8 +1603,8 @@ pub mod pallet {
 
 		/// Update mint settings.
 		///
-		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Owner of
-		/// the `collection`.
+		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Issuer
+		/// of the `collection`.
 		///
 		/// - `collection`: The identifier of the collection to change.
 		/// - `mint_settings`: The new mint settings.

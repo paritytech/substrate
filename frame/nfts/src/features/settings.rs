@@ -65,10 +65,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			T::CollectionId,
 		>,
 	) -> DispatchResult {
-		let details =
-			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 		if let Some(check_owner) = &maybe_check_owner {
-			ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
+			ensure!(
+				Self::has_role(&collection, &check_owner, CollectionRole::Issuer),
+				Error::<T, I>::NoPermission
+			);
 		}
 
 		CollectionConfigOf::<T, I>::try_mutate(collection, |maybe_config| {
