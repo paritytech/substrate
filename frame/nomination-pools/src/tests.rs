@@ -2064,6 +2064,36 @@ mod claim_payout {
 				);
 			})
 	}
+
+	#[test]
+	fn claim_payout_other_works() {
+		ExtBuilder::default().add_members(vec![(20, 20)]).build_and_execute(|| {
+			Balances::make_free_balance_be(&default_reward_account(), 8);
+			// ... of which only 3 are claimable to make sure the reward account does not die.
+			let claimable_reward = 8 - ExistentialDeposit::get();
+			// NOTE: easier to read if we use 3, so let's use the number instead of variable.
+			assert_eq!(claimable_reward, 3, "test is correct if rewards are divisible by 3");
+
+			// given
+			assert_eq!(Balances::free_balance(10), 35);
+
+			// Permissioned by default
+			assert_noop!(
+				Pools::claim_payout_other(RuntimeOrigin::signed(80), 10),
+				Error::<Runtime>::DoesNotHavePermission
+			);
+
+			assert_ok!(Pools::set_reward_claim(
+				RuntimeOrigin::signed(10),
+				ClaimPermission::PermissionlessWithdraw
+			));
+			assert_ok!(Pools::claim_payout_other(RuntimeOrigin::signed(80), 10));
+
+			// then
+			assert_eq!(Balances::free_balance(10), 36);
+			assert_eq!(Balances::free_balance(&default_reward_account()), 7);
+		})
+	}
 }
 
 mod unbond {
