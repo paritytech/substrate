@@ -1,0 +1,9 @@
+version: '3.8'
+
+services:
+  cere-chain:
+    image: "cerebellumnetwork/pos-node:v2.33.0"
+    container_name: cere-chain
+    command: bash -c "/usr/local/bin/cere --dev --alice --ws-external --rpc-external"
+    ports:
+      - "9944:9944"
