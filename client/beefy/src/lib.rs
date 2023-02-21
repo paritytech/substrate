@@ -52,10 +52,7 @@ use sp_blockchain::{
 use sp_consensus::{Error as ConsensusError, SyncOracle};
 use sp_keystore::SyncCryptoStorePtr;
 use sp_mmr_primitives::MmrApi;
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block, Zero},
-};
+use sp_runtime::traits::{Block, Zero};
 use std::{collections::VecDeque, marker::PhantomData, sync::Arc};
 
 mod aux_schema;
@@ -282,6 +279,7 @@ where
 	let worker_params = worker::WorkerParams {
 		backend,
 		payload_provider,
+		runtime,
 		network,
 		key_store: key_store.into(),
 		gossip_engine,
@@ -292,7 +290,7 @@ where
 		persisted_state,
 	};
 
-	let worker = worker::BeefyWorker::<_, _, _, _>::new(worker_params);
+	let worker = worker::BeefyWorker::<_, _, _, _, _>::new(worker_params);
 
 	futures::future::join(
 		worker.run(block_import_justif, finality_notifications),
@@ -344,7 +342,7 @@ where
 {
 	let beefy_genesis = runtime
 		.runtime_api()
-		.beefy_genesis(&BlockId::hash(best_grandpa.hash()))
+		.beefy_genesis(best_grandpa.hash())
 		.ok()
 		.flatten()
 		.ok_or_else(|| ClientError::Backend("BEEFY pallet expected to be active.".into()))?;
@@ -368,7 +366,7 @@ where
 			let best_beefy = *header.number();
 			// If no session boundaries detected so far, just initialize new rounds here.
 			if sessions.is_empty() {
-				let active_set = expect_validator_set(runtime, BlockId::hash(header.hash()))?;
+				let active_set = expect_validator_set(runtime, header.hash())?;
 				let mut rounds = Rounds::new(best_beefy, active_set);
 				// Mark the round as already finalized.
 				rounds.conclude(best_beefy);
@@ -382,8 +380,8 @@ where
 
 		if *header.number() == beefy_genesis {
 			// We've reached BEEFY genesis, initialize voter here.
-			let genesis_set = expect_validator_set(runtime, BlockId::hash(header.hash()))
-				.and_then(genesis_set_sanity_check)?;
+			let genesis_set =
+				expect_validator_set(runtime, header.hash()).and_then(genesis_set_sanity_check)?;
 			info!(
 				target: LOG_TARGET,
 				"🥩 Loading BEEFY voter state from genesis on what appears to be first startup. \
@@ -408,16 +406,11 @@ where
 
 		// Check if state is still available if we move up the chain.
 		let parent_hash = *header.parent_hash();
-		runtime
-			.runtime_api()
-			.validator_set(&BlockId::hash(parent_hash))
-			.ok()
-			.flatten()
-			.ok_or_else(|| {
-				let msg = format!("{}. Could not initialize BEEFY voter.", parent_hash);
-				error!(target: LOG_TARGET, "🥩 {}", msg);
-				ClientError::Consensus(sp_consensus::Error::StateUnavailable(msg))
-			})?;
+		runtime.runtime_api().validator_set(parent_hash).ok().flatten().ok_or_else(|| {
+			let msg = format!("{}. Could not initialize BEEFY voter.", parent_hash);
+			error!(target: LOG_TARGET, "🥩 {}", msg);
+			ClientError::Consensus(sp_consensus::Error::StateUnavailable(msg))
+		})?;
 
 		// Move up the chain.
 		header = blockchain.expect_header(parent_hash)?;
@@ -448,8 +441,8 @@ where
 					Some(notif) => notif,
 					None => break
 				};
-				let at = BlockId::hash(notif.header.hash());
-				if let Some(start) = runtime.runtime_api().beefy_genesis(&at).ok().flatten() {
+				let at = notif.header.hash();
+				if let Some(start) = runtime.runtime_api().beefy_genesis(at).ok().flatten() {
 					if *notif.header.number() >= start {
 						// Beefy pallet available, return header for best grandpa at the time.
 						info!(
@@ -484,7 +477,7 @@ fn genesis_set_sanity_check(
 
 fn expect_validator_set<B, R>(
 	runtime: &R,
-	at: BlockId<B>,
+	at_hash: B::Hash,
 ) -> ClientResult<ValidatorSet<AuthorityId>>
 where
 	B: Block,
@@ -493,7 +486,7 @@ where
 {
 	runtime
 		.runtime_api()
-		.validator_set(&at)
+		.validator_set(at_hash)
 		.ok()
 		.flatten()
 		.ok_or_else(|| ClientError::Backend("BEEFY pallet expected to be active.".into()))

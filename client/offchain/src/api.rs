@@ -419,6 +419,10 @@ mod tests {
 		fn local_peer_id(&self) -> PeerId {
 			PeerId::random()
 		}
+
+		fn listen_addresses(&self) -> Vec<Multiaddr> {
+			Vec::new()
+		}
 	}
 
 	fn offchain_api() -> (Api, AsyncApi) {

@@ -46,10 +46,7 @@ use sp_finality_grandpa::{
 	AuthorityId, AuthoritySignature, Equivocation, EquivocationProof, GrandpaApi, RoundNumber,
 	SetId, GRANDPA_ENGINE_ID,
 };
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero},
-};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 
 use crate::{
 	authorities::{AuthoritySet, SharedAuthoritySet},
@@ -543,7 +540,7 @@ where
 			.client
 			.runtime_api()
 			.generate_key_ownership_proof(
-				&BlockId::Hash(current_set_latest_hash),
+				current_set_latest_hash,
 				authority_set.set_id,
 				equivocation.offender().clone(),
 			)
@@ -565,7 +562,7 @@ where
 		self.client
 			.runtime_api()
 			.submit_report_equivocation_unsigned_extrinsic(
-				&BlockId::Hash(best_block_hash),
+				best_block_hash,
 				equivocation_proof,
 				key_owner_proof,
 			)

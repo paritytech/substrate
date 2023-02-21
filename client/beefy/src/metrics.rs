@@ -46,10 +46,16 @@ pub struct VoterMetrics {
 	pub beefy_no_authority_found_in_store: Counter<U64>,
 	/// Number of currently buffered votes
 	pub beefy_buffered_votes: Gauge<U64>,
-	/// Number of valid but stale votes received
-	pub beefy_stale_votes: Counter<U64>,
 	/// Number of votes dropped due to full buffers
 	pub beefy_buffered_votes_dropped: Counter<U64>,
+	/// Number of good votes successfully handled
+	pub beefy_good_votes_processed: Counter<U64>,
+	/// Number of equivocation votes received
+	pub beefy_equivocation_votes: Counter<U64>,
+	/// Number of invalid votes received
+	pub beefy_invalid_votes: Counter<U64>,
+	/// Number of valid but stale votes received
+	pub beefy_stale_votes: Counter<U64>,
 	/// Number of currently buffered justifications
 	pub beefy_buffered_justifications: Gauge<U64>,
 	/// Number of valid but stale justifications received
@@ -60,8 +66,6 @@ pub struct VoterMetrics {
 	pub beefy_buffered_justifications_dropped: Counter<U64>,
 	/// Trying to set Best Beefy block to old block
 	pub beefy_best_block_set_last_failure: Gauge<U64>,
-	/// Number of Successful handled votes
-	pub beefy_successful_handled_votes: Counter<U64>,
 }
 
 impl PrometheusRegister for VoterMetrics {
@@ -109,17 +113,35 @@ impl PrometheusRegister for VoterMetrics {
 				Gauge::new("substrate_beefy_buffered_votes", "Number of currently buffered votes")?,
 				registry,
 			)?,
-			beefy_stale_votes: register(
-				Counter::new(
-					"substrate_beefy_stale_votes",
-					"Number of valid but stale votes received",
-				)?,
-				registry,
-			)?,
 			beefy_buffered_votes_dropped: register(
 				Counter::new(
 					"substrate_beefy_buffered_votes_dropped",
 					"Number of votes dropped due to full buffers",
+				)?,
+				registry,
+			)?,
+			beefy_good_votes_processed: register(
+				Counter::new(
+					"substrate_beefy_successful_handled_votes",
+					"Number of good votes successfully handled",
+				)?,
+				registry,
+			)?,
+			beefy_equivocation_votes: register(
+				Counter::new(
+					"substrate_beefy_stale_votes",
+					"Number of equivocation votes received",
+				)?,
+				registry,
+			)?,
+			beefy_invalid_votes: register(
+				Counter::new("substrate_beefy_stale_votes", "Number of invalid votes received")?,
+				registry,
+			)?,
+			beefy_stale_votes: register(
+				Counter::new(
+					"substrate_beefy_stale_votes",
+					"Number of valid but stale votes received",
 				)?,
 				registry,
 			)?,
@@ -155,13 +177,6 @@ impl PrometheusRegister for VoterMetrics {
 				Gauge::new(
 					"substrate_beefy_best_block_to_old_block",
 					"Trying to set Best Beefy block to old block",
-				)?,
-				registry,
-			)?,
-			beefy_successful_handled_votes: register(
-				Counter::new(
-					"substrate_beefy_successful_handled_votes",
-					"Number of Successful handled votes",
 				)?,
 				registry,
 			)?,

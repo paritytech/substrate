@@ -1358,6 +1358,12 @@ where
 						);
 					}
 				},
+				ToServiceCommand::BlockFinalized(hash, number) => {
+					self.on_block_finalized(&hash, number);
+				},
+				ToServiceCommand::Status { pending_response } => {
+					let _ = pending_response.send(self.status());
+				},
 			}
 		}
 

@@ -485,7 +485,7 @@ mod tests {
 			)
 			.expect("Creates a client");
 
-		let version = client.runtime_version_at(&BlockId::Number(0)).unwrap();
+		let version = client.runtime_version_at(client.chain_info().genesis_hash).unwrap();
 
 		assert_eq!(SUBSTITUTE_SPEC_NAME, &*version.spec_name);
 	}

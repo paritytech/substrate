@@ -123,7 +123,7 @@ where
 		let best_block_hash = self.client.info().best_hash;
 		self.client
 			.runtime_api()
-			.generate_session_keys(&generic::BlockId::Hash(best_block_hash), None)
+			.generate_session_keys(best_block_hash, None)
 			.map(Into::into)
 			.map_err(|api_err| Error::Client(Box::new(api_err)).into())
 	}
@@ -135,7 +135,7 @@ where
 		let keys = self
 			.client
 			.runtime_api()
-			.decode_session_keys(&generic::BlockId::Hash(best_block_hash), session_keys.to_vec())
+			.decode_session_keys(best_block_hash, session_keys.to_vec())
 			.map_err(|e| Error::Client(Box::new(e)))?
 			.ok_or(Error::InvalidSessionKeys)?;
 
