@@ -3538,6 +3538,7 @@ dependencies = [
  "pallet-election-provider-support-benchmarking",
  "pallet-elections-phragmen",
  "pallet-fast-unstake",
+ "pallet-glutton",
  "pallet-grandpa",
  "pallet-identity",
  "pallet-im-online",
@@ -4850,6 +4851,7 @@ dependencies = [
  "node-testing",
  "pallet-balances",
  "pallet-contracts",
+ "pallet-glutton",
  "pallet-im-online",
  "pallet-root-testing",
  "pallet-sudo",
@@ -5811,6 +5813,24 @@ dependencies = [
  "sp-std",
  "sp-tracing",
  "substrate-test-utils",
+]
+
+[[package]]
+name = "pallet-glutton"
+version = "4.0.0-dev"
+dependencies = [
+ "blake2",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "pallet-balances",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]
