@@ -37,7 +37,6 @@ use sp_blockchain::{ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed}
 use sp_consensus::BlockOrigin;
 use sp_keyring::Sr25519Keyring;
 use sp_runtime::{
-	generic::BlockId,
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
 	AccountId32, MultiAddress, OpaqueExtrinsic,
 };

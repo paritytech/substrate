@@ -45,7 +45,7 @@ use sp_keystore::{
 	SyncCryptoStore,
 };
 use sp_runtime::{
-	generic::{BlockId, Digest, DigestItem},
+	generic::{Digest, DigestItem},
 	traits::Block as BlockT,
 };
 use sp_timestamp::Timestamp;
