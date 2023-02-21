@@ -61,6 +61,10 @@
 //!
 //! After joining a pool, a member can claim rewards by calling [`Call::claim_payout`].
 //!
+//! A pool member can also set a `ClaimPermission` with [`Call:set_claim_permission`], to allow
+//! other members to permissionlessly bond or withdraw their rewards by calling
+//! [`Call::bond_extra_other`] or [`Call::claim_payout_other`] respectively.
+//!
 //! For design docs see the [reward pool](#reward-pool) section.
 //!
 //! ### Leave
@@ -411,10 +415,10 @@ enum AccountType {
 	Reward,
 }
 
-/// Account to bond pending reward of a member.
+/// The permission a pool member can set for other accounts to claim rewards on their behalf.
 #[derive(Encode, Decode, MaxEncodedLen, Clone, Copy, Debug, PartialEq, Eq, TypeInfo)]
 pub enum ClaimPermission {
-	/// Only the pool member themself can claim their reward.
+	/// Only the pool member themself can claim their rewards.
 	Permissioned,
 	/// Anyone can compound rewards on a pool member's behalf.
 	PermissionlessCompound,
@@ -1335,7 +1339,7 @@ pub mod pallet {
 	pub type ReversePoolIdLookup<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, PoolId, OptionQuery>;
 
-	/// Map from a pool member account to their preference regarding reward payout.
+	/// Map from a pool member account to their opted claim permission.
 	#[pallet::storage]
 	pub type ClaimPermissions<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, ClaimPermission, ValueQuery>;
@@ -1609,6 +1613,8 @@ pub mod pallet {
 		///
 		/// The member will earn rewards pro rata based on the members stake vs the sum of the
 		/// members in the pools stake. Rewards do not "expire".
+		///
+		/// See `claim_payout_other` to caim rewards on bahalf of some `other` pool member.
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::claim_payout())]
 		pub fn claim_payout(origin: OriginFor<T>) -> DispatchResult {
@@ -2121,7 +2127,8 @@ pub mod pallet {
 		/// other`.
 		///
 		/// In the case of `origin != other`, `origin` can only bond extra pending rewards of
-		/// `other` members assuming set_reward_claim for the given member is `PermissionlessAll`.
+		/// `other` members assuming set_claim_permission for the given member is
+		/// `PermissionlessAll` or `PermissionlessCompound`.
 		#[pallet::call_index(14)]
 		#[pallet::weight(
 			T::WeightInfo::bond_extra_transfer()
@@ -2136,12 +2143,13 @@ pub mod pallet {
 			Self::do_bond_extra(who, T::Lookup::lookup(member)?, extra)
 		}
 
-		/// Sets permission to claim reward.
+		/// Allows a pool member to set a claim permission to allow or disallow permissionless
+		/// bonding and withdrawing.
 		///
-		/// Lets a pool member to choose who can claim pending rewards on their behalf. By default,
-		/// this is `Permissioned` which implies only the pool member themselves can claim their
-		/// pending rewards. If a pool member wishes so, they can set this to `PermissionlessAll` to
-		/// allow any account to claim their rewards and bond extra to the pool.
+		/// By default, this is `Permissioned`, which implies only the pool member themselves can
+		/// claim their pending rewards. If a pool member wishes so, they can set this to
+		/// `PermissionlessAll` to allow any account to claim their rewards and bond extra to the
+		/// pool.
 		///
 		/// # Arguments
 		///
@@ -2149,7 +2157,7 @@ pub mod pallet {
 		/// * `actor` - Account to claim reward. // improve this
 		#[pallet::call_index(15)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
-		pub fn set_reward_claim(
+		pub fn set_claim_permission(
 			origin: OriginFor<T>,
 			permission: ClaimPermission,
 		) -> DispatchResult {
@@ -2162,12 +2170,15 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// `origin` can claim payouts on some pool member `member`'s behalf.
+		/// `origin` can claim payouts on some pool member `other`'s behalf.
+		///
+		/// Pool member `other` must have a `PermissionlessAll` or `PermissionlessWithdraw` in order
+		/// for this call to be successful.
 		#[pallet::call_index(16)]
 		#[pallet::weight(T::WeightInfo::claim_payout())]
-		pub fn claim_payout_other(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
+		pub fn claim_payout_other(origin: OriginFor<T>, other: T::AccountId) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
-			Self::do_claim_payout(signer, who)
+			Self::do_claim_payout(signer, other)
 		}
 	}
 

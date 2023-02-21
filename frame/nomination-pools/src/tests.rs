@@ -2083,7 +2083,7 @@ mod claim_payout {
 				Error::<Runtime>::DoesNotHavePermission
 			);
 
-			assert_ok!(Pools::set_reward_claim(
+			assert_ok!(Pools::set_claim_permission(
 				RuntimeOrigin::signed(10),
 				ClaimPermission::PermissionlessWithdraw
 			));
@@ -2122,7 +2122,7 @@ mod unbond {
 
 				// Make permissionless
 				assert_eq!(ClaimPermissions::<Runtime>::get(10), ClaimPermission::Permissioned);
-				assert_ok!(Pools::set_reward_claim(
+				assert_ok!(Pools::set_claim_permission(
 					RuntimeOrigin::signed(20),
 					ClaimPermission::PermissionlessAll
 				));
@@ -4301,10 +4301,13 @@ fn set_claimable_actor_works() {
 		// Make permissionless
 		assert_eq!(ClaimPermissions::<Runtime>::get(11), ClaimPermission::Permissioned);
 		assert_noop!(
-			Pools::set_reward_claim(RuntimeOrigin::signed(12), ClaimPermission::PermissionlessAll),
+			Pools::set_claim_permission(
+				RuntimeOrigin::signed(12),
+				ClaimPermission::PermissionlessAll
+			),
 			Error::<T>::PoolMemberNotFound
 		);
-		assert_ok!(Pools::set_reward_claim(
+		assert_ok!(Pools::set_claim_permission(
 			RuntimeOrigin::signed(11),
 			ClaimPermission::PermissionlessAll
 		));
@@ -4681,7 +4684,7 @@ mod bond_extra {
 				Error::<Runtime>::DoesNotHavePermission
 			);
 
-			assert_ok!(Pools::set_reward_claim(
+			assert_ok!(Pools::set_claim_permission(
 				RuntimeOrigin::signed(10),
 				ClaimPermission::PermissionlessAll
 			));

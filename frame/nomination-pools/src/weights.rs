@@ -64,7 +64,7 @@ pub trait WeightInfo {
 	fn set_configs() -> Weight;
 	fn update_roles() -> Weight;
 	fn chill() -> Weight;
-	fn set_reward_claim() -> Weight;
+	fn set_claim_permission() -> Weight;
 }
 
 /// Weights for pallet_nomination_pools using the Substrate node and recommended hardware.
@@ -518,7 +518,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Proof: NominationPools PoolMembers (max_values: None, max_size: Some(237), added: 2712, mode: MaxEncodedLen)
 	/// Storage: NominationPools ClaimPermissions (r:1 w:1)
 	/// Proof: NominationPools ClaimPermissions (max_values: None, max_size: Some(41), added: 2516, mode: MaxEncodedLen)
-	fn set_reward_claim() -> Weight {
+	fn set_claim_permission() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `542`
 		//  Estimated: `5228`
@@ -980,7 +980,7 @@ impl WeightInfo for () {
 	/// Proof: NominationPools PoolMembers (max_values: None, max_size: Some(237), added: 2712, mode: MaxEncodedLen)
 	/// Storage: NominationPools ClaimPermissions (r:1 w:1)
 	/// Proof: NominationPools ClaimPermissions (max_values: None, max_size: Some(41), added: 2516, mode: MaxEncodedLen)
-	fn set_reward_claim() -> Weight {
+	fn set_claim_permission() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `542`
 		//  Estimated: `5228`

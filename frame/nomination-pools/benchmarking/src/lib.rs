@@ -260,7 +260,7 @@ frame_benchmarking::benchmarks! {
 		let extra = (scenario.dest_weight - origin_weight).max(CurrencyOf::<T>::minimum_balance());
 
 		// set claim preferences to `PermissionlessAll` to any account to bond extra on member's behalf.
-		let _ = Pools::<T>::set_reward_claim(RuntimeOrigin::Signed(scenario.creator1.clone()).into(), ClaimPermission::PermissionlessAll);
+		let _ = Pools::<T>::set_claim_permission(RuntimeOrigin::Signed(scenario.creator1.clone()).into(), ClaimPermission::PermissionlessAll);
 
 		// transfer exactly `extra` to the depositor of the src pool (1),
 		let reward_account1 = Pools::<T>::create_reward_account(1);
@@ -288,7 +288,7 @@ frame_benchmarking::benchmarks! {
 
 		// set claim preferences to `PermissionlessAll` so any account can claim rewards on member's
 		// behalf.
-		let _ = Pools::<T>::set_reward_claim(RuntimeOrigin::Signed(depositor.clone()).into(), ClaimPermission::PermissionlessAll);
+		let _ = Pools::<T>::set_claim_permission(RuntimeOrigin::Signed(depositor.clone()).into(), ClaimPermission::PermissionlessAll);
 
 		// Sanity check
 		assert_eq!(
@@ -666,7 +666,7 @@ frame_benchmarking::benchmarks! {
 		assert!(T::Staking::nominations(Pools::<T>::create_bonded_account(1)).is_none());
 	}
 
-	set_reward_claim {
+	set_claim_permission {
 		// Create a pool
 		let min_create_bond = Pools::<T>::depositor_min_bond();
 		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
