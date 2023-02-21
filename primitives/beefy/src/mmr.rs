@@ -145,7 +145,6 @@ mod mmr_root_provider {
 	use crate::{known_payloads, payload::PayloadProvider, Payload};
 	use sp_api::{NumberFor, ProvideRuntimeApi};
 	use sp_mmr_primitives::MmrApi;
-	use sp_runtime::generic::BlockId;
 	use sp_std::{marker::PhantomData, sync::Arc};
 
 	/// A [`crate::Payload`] provider where payload is Merkle Mountain Range root hash.
@@ -170,11 +169,7 @@ mod mmr_root_provider {
 		/// Simple wrapper that gets MMR root from header digests or from client state.
 		fn mmr_root_from_digest_or_runtime(&self, header: &B::Header) -> Option<MmrRootHash> {
 			find_mmr_root_digest::<B>(header).or_else(|| {
-				self.runtime
-					.runtime_api()
-					.mmr_root(&BlockId::hash(header.hash()))
-					.ok()
-					.and_then(|r| r.ok())
+				self.runtime.runtime_api().mmr_root(header.hash()).ok().and_then(|r| r.ok())
 			})
 		}
 	}
