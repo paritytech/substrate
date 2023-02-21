@@ -251,9 +251,10 @@ pub use v1::*;
 /// 4. A `verify: bool` param is added as the last argument. Specifying `true` will result in
 ///    the verification section of your function executing, while a value of `false` will skip
 ///    verification.
-/// 5. If you specify a return type on the function definition, it must conform to the rules
-///    specified below in the next section, and the last statement of the function definition
-///    must resolve to something compatible with `Result<(), BenchmarkError>`.
+/// 5. If you specify a return type on the function definition, it must conform to the [rules
+///    below](#support-for-result-benchmarkerror-and-the--operator), and the last statement of
+///    the function definition must resolve to something compatible with `Result<(),
+///    BenchmarkError>`.
 ///
 /// The reason we generate an actual function as part of the expansion is to allow the compiler
 /// to enforce several constraints that would otherwise be difficult to enforce and to reduce
