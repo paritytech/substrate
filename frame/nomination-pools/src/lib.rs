@@ -1719,8 +1719,6 @@ pub mod pallet {
 			// Now that we know everything has worked write the items to storage.
 			SubPoolsStorage::insert(&member.pool_id, sub_pools);
 			Self::put_member_with_pools(&member_account, member, bonded_pool, reward_pool);
-			<ClaimPermissions<T>>::remove(member_account);
-
 			Ok(())
 		}
 
@@ -1845,6 +1843,9 @@ pub mod pallet {
 			});
 
 			let post_info_weight = if member.total_points().is_zero() {
+				// remove any `ClaimPermission` associated with the member.
+				ClaimPermissions::<T>::remove(&member_account);
+
 				// member being reaped.
 				PoolMembers::<T>::remove(&member_account);
 				Self::deposit_event(Event::<T>::MemberRemoved {
@@ -2164,7 +2165,7 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 
 			ensure!(PoolMembers::<T>::contains_key(&who), Error::<T>::PoolMemberNotFound);
-			<ClaimPermissions<T>>::mutate(who, |source| {
+			ClaimPermissions::<T>::mutate(who, |source| {
 				*source = permission;
 			});
 			Ok(())
