@@ -168,6 +168,36 @@ struct ResultDef {
 	_gt: Token![>],
 }
 
+/// Ensures that `ReturnType` is a `Result<(), BenchmarkError>`, if specified
+fn ensure_valid_return_type(item_fn: &ItemFn) -> Result<()> {
+	if let ReturnType::Type(_, typ) = &item_fn.sig.output {
+		let non_unit = |span| return Err(Error::new(span, "expected `()`"));
+		let Type::Path(TypePath { path, qself: _ }) = &**typ else {
+				return Err(Error::new(
+					typ.span(),
+					"Only `Result<(), BenchmarkError>` or a blank return type is allowed on benchmark function definitions",
+				))
+			};
+		let seg = path
+			.segments
+			.last()
+			.expect("to be parsed as a TypePath, it must have at least one segment; qed");
+		let res: ResultDef = syn::parse2(seg.to_token_stream())?;
+		// ensure T in Result<T, E> is ()
+		let Type::Tuple(tup) = res.unit else { return non_unit(res.unit.span()) };
+		if !tup.elems.is_empty() {
+			return non_unit(tup.span())
+		}
+		let TypePath { path, qself: _ } = res.e_type;
+		let seg = path
+			.segments
+			.last()
+			.expect("to be parsed as a TypePath, it must have at least one segment; qed");
+		syn::parse2::<keywords::BenchmarkError>(seg.to_token_stream())?;
+	}
+	Ok(())
+}
+
 impl BenchmarkDef {
 	/// Constructs a [`BenchmarkDef`] by traversing an existing [`ItemFn`] node.
 	pub fn from(item_fn: &ItemFn, extra: bool, skip_meta: bool) -> Result<BenchmarkDef> {
@@ -224,32 +254,7 @@ impl BenchmarkDef {
 			params.push(ParamDef { name, typ: typ.clone(), start, end });
 		}
 
-		// ensure ReturnType is a Result<(), BenchmarkError>, if specified
-		if let ReturnType::Type(_, typ) = &item_fn.sig.output {
-			let non_unit = |span| return Err(Error::new(span, "expected `()`"));
-			let Type::Path(TypePath { path, qself: _ }) = &**typ else {
-				return Err(Error::new(
-					typ.span(),
-					"Only `Result<(), BenchmarkError>` or a blank return type is allowed on benchmark function definitions",
-				))
-			};
-			let seg = path
-				.segments
-				.last()
-				.expect("to be parsed as a TypePath, it must have at least one segment; qed");
-			let res: ResultDef = syn::parse2(seg.to_token_stream())?;
-			// ensure T in Result<T, E> is ()
-			let Type::Tuple(tup) = res.unit else { return non_unit(res.unit.span()) };
-			if !tup.elems.is_empty() {
-				return non_unit(tup.span())
-			}
-			let TypePath { path, qself: _ } = res.e_type;
-			let seg = path
-				.segments
-				.last()
-				.expect("to be parsed as a TypePath, it must have at least one segment; qed");
-			syn::parse2::<keywords::BenchmarkError>(seg.to_token_stream())?;
-		}
+		ensure_valid_return_type(item_fn)?;
 
 		// #[extrinsic_call] / #[block] handling
 		let call_defs = item_fn.block.stmts.iter().enumerate().filter_map(|(i, child)| {
