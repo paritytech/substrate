@@ -67,7 +67,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> DispatchResult {
 		if let Some(check_origin) = &maybe_check_origin {
 			ensure!(
-				Self::has_role(&collection, &check_owner, CollectionRole::Issuer),
+				Self::has_role(&collection, &check_origin, CollectionRole::Issuer),
 				Error::<T, I>::NoPermission
 			);
 		}
