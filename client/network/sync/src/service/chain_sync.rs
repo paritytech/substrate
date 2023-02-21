@@ -16,9 +16,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use futures::channel::oneshot;
 use libp2p::PeerId;
 use sc_consensus::{BlockImportError, BlockImportStatus, JustificationSyncLink, Link};
-use sc_network_common::service::NetworkSyncForkRequest;
+use sc_network_common::{service::NetworkSyncForkRequest, sync::SyncStatus};
 use sc_utils::mpsc::TracingUnboundedSender;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
@@ -34,6 +35,10 @@ pub enum ToServiceCommand<B: BlockT> {
 		Vec<(Result<BlockImportStatus<NumberFor<B>>, BlockImportError>, B::Hash)>,
 	),
 	JustificationImported(PeerId, B::Hash, NumberFor<B>, bool),
+	BlockFinalized(B::Hash, NumberFor<B>),
+	Status {
+		pending_response: oneshot::Sender<SyncStatus<B>>,
+	},
 }
 
 /// Handle for communicating with `ChainSync` asynchronously
@@ -46,6 +51,21 @@ impl<B: BlockT> ChainSyncInterfaceHandle<B> {
 	/// Create new handle
 	pub fn new(tx: TracingUnboundedSender<ToServiceCommand<B>>) -> Self {
 		Self { tx }
+	}
+
+	/// Notify ChainSync about finalized block
+	pub fn on_block_finalized(&self, hash: B::Hash, number: NumberFor<B>) {
+		let _ = self.tx.unbounded_send(ToServiceCommand::BlockFinalized(hash, number));
+	}
+
+	/// Get sync status
+	///
+	/// Returns an error if `ChainSync` has terminated.
+	pub async fn status(&self) -> Result<SyncStatus<B>, ()> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.tx.unbounded_send(ToServiceCommand::Status { pending_response: tx });
+
+		rx.await.map_err(|_| ())
 	}
 }
 

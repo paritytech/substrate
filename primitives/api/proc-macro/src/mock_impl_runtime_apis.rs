@@ -38,7 +38,7 @@ const HIDDEN_INCLUDES_ID: &str = "MOCK_IMPL_RUNTIME_APIS";
 
 /// The `advanced` attribute.
 ///
-/// If this attribute is given to a function, the function gets access to the `BlockId` as first
+/// If this attribute is given to a function, the function gets access to the `Hash` as first
 /// parameter and needs to return a `Result` with the appropriate error type.
 const ADVANCED_ATTRIBUTE: &str = "advanced";
 
@@ -80,14 +80,14 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 
 			fn has_api<A: #crate_::RuntimeApiInfo + ?Sized>(
 				&self,
-				_: &#crate_::BlockId<#block_type>,
+				_: <Block as #crate_::BlockT>::Hash,
 			) -> std::result::Result<bool, #crate_::ApiError> where Self: Sized {
 				Ok(true)
 			}
 
 			fn has_api_with<A: #crate_::RuntimeApiInfo + ?Sized, P: Fn(u32) -> bool>(
 				&self,
-				_: &#crate_::BlockId<#block_type>,
+				_: <Block as #crate_::BlockT>::Hash,
 				pred: P,
 			) -> std::result::Result<bool, #crate_::ApiError> where Self: Sized {
 				Ok(pred(A::VERSION))
@@ -95,7 +95,7 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 
 			fn api_version<A: #crate_::RuntimeApiInfo + ?Sized>(
 				&self,
-				_: &#crate_::BlockId<#block_type>,
+				_: <Block as #crate_::BlockT>::Hash,
 			) -> std::result::Result<Option<u32>, #crate_::ApiError> where Self: Sized {
 				Ok(Some(A::VERSION))
 			}
@@ -129,7 +129,7 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 		impl #crate_::Core<#block_type> for #self_ty {
 			fn __runtime_api_internal_call_api_at(
 				&self,
-				_: &#crate_::BlockId<#block_type>,
+				_: <#block_type as #crate_::BlockT>::Hash,
 				_: #crate_::ExecutionContext,
 				_: std::vec::Vec<u8>,
 				_: &dyn Fn(#crate_::RuntimeVersion) -> &'static str,
@@ -139,14 +139,14 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 
 			fn version(
 				&self,
-				_: &#crate_::BlockId<#block_type>,
+				_: <#block_type as #crate_::BlockT>::Hash,
 			) -> std::result::Result<#crate_::RuntimeVersion, #crate_::ApiError> {
 				unimplemented!("`Core::version` not implemented for runtime api mocks")
 			}
 
 			fn version_with_context(
 				&self,
-				_: &#crate_::BlockId<#block_type>,
+				_: <#block_type as #crate_::BlockT>::Hash,
 				_: #crate_::ExecutionContext,
 			) -> std::result::Result<#crate_::RuntimeVersion, #crate_::ApiError> {
 				unimplemented!("`Core::version` not implemented for runtime api mocks")
@@ -154,7 +154,7 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 
 			fn execute_block(
 				&self,
-				_: &#crate_::BlockId<#block_type>,
+				_: <#block_type as #crate_::BlockT>::Hash,
 				_: #block_type,
 			) -> std::result::Result<(), #crate_::ApiError> {
 				unimplemented!("`Core::execute_block` not implemented for runtime api mocks")
@@ -162,7 +162,7 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 
 			fn execute_block_with_context(
 				&self,
-				_: &#crate_::BlockId<#block_type>,
+				_: <#block_type as #crate_::BlockT>::Hash,
 				_: #crate_::ExecutionContext,
 				_: #block_type,
 			) -> std::result::Result<(), #crate_::ApiError> {
@@ -171,7 +171,7 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 
 			fn initialize_block(
 				&self,
-				_: &#crate_::BlockId<#block_type>,
+				_: <#block_type as #crate_::BlockT>::Hash,
 				_: &<#block_type as #crate_::BlockT>::Header,
 			) -> std::result::Result<(), #crate_::ApiError> {
 				unimplemented!("`Core::initialize_block` not implemented for runtime api mocks")
@@ -179,7 +179,7 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 
 			fn initialize_block_with_context(
 				&self,
-				_: &#crate_::BlockId<#block_type>,
+				_: <#block_type as #crate_::BlockT>::Hash,
 				_: #crate_::ExecutionContext,
 				_: &<#block_type as #crate_::BlockT>::Header,
 			) -> std::result::Result<(), #crate_::ApiError> {
@@ -214,7 +214,7 @@ fn get_at_param_name(
 	param_names: &mut Vec<Pat>,
 	param_types_and_borrows: &mut Vec<(TokenStream, bool)>,
 	function_span: Span,
-	default_block_id_type: &TokenStream,
+	default_hash_type: &TokenStream,
 ) -> Result<(TokenStream, TokenStream)> {
 	if is_advanced {
 		if param_names.is_empty() {
@@ -222,7 +222,7 @@ fn get_at_param_name(
 				function_span,
 				format!(
 					"If using the `{}` attribute, it is required that the function \
-					 takes at least one argument, the `BlockId`.",
+					 takes at least one argument, the `Hash`.",
 					ADVANCED_ATTRIBUTE,
 				),
 			))
@@ -232,17 +232,14 @@ fn get_at_param_name(
 		// `param_types` can not be empty as well.
 		let ptype_and_borrows = param_types_and_borrows.remove(0);
 		let span = ptype_and_borrows.1.span();
-		if !ptype_and_borrows.1 {
-			return Err(Error::new(
-				span,
-				"`BlockId` needs to be taken by reference and not by value!",
-			))
+		if ptype_and_borrows.1 {
+			return Err(Error::new(span, "`Hash` needs to be taken by value and not by reference!"))
 		}
 
 		let name = param_names.remove(0);
 		Ok((quote!( #name ), ptype_and_borrows.0))
 	} else {
-		Ok((quote!(_), default_block_id_type.clone()))
+		Ok((quote!(_), default_hash_type.clone()))
 	}
 }
 
@@ -279,7 +276,7 @@ impl<'a> FoldRuntimeApiImpl<'a> {
 		impl_item.items.push(parse_quote! {
 			fn __runtime_api_internal_call_api_at(
 				&self,
-				_: &#crate_::BlockId<#block_type>,
+				_: <#block_type as #crate_::BlockT>::Hash,
 				_: #crate_::ExecutionContext,
 				_: std::vec::Vec<u8>,
 				_: &dyn Fn(#crate_::RuntimeVersion) -> &'static str,
@@ -325,19 +322,19 @@ impl<'a> Fold for FoldRuntimeApiImpl<'a> {
 				};
 
 			let block_type = &self.block_type;
-			let block_id_type = quote!( &#crate_::BlockId<#block_type> );
+			let hash_type = quote!( <#block_type as #crate_::BlockT>::Hash );
 
-			let (at_param_name, block_id_type) = match get_at_param_name(
+			let (at_param_name, hash_type) = match get_at_param_name(
 				is_advanced,
 				&mut param_names,
 				&mut param_types_and_borrows,
 				input.span(),
-				&block_id_type,
+				&hash_type,
 			) {
 				Ok(res) => res,
 				Err(e) => {
 					errors.push(e.to_compile_error());
-					(quote!(_), block_id_type)
+					(quote!(_), hash_type)
 				},
 			};
 
@@ -345,7 +342,7 @@ impl<'a> Fold for FoldRuntimeApiImpl<'a> {
 			// Rewrite the input parameters.
 			input.sig.inputs = parse_quote! {
 				&self,
-				#at_param_name: #block_id_type,
+				#at_param_name: #hash_type,
 				#( #param_names: #param_types ),*
 			};
 

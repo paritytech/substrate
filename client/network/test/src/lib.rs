@@ -31,7 +31,7 @@ use std::{
 	time::Duration,
 };
 
-use futures::{channel::oneshot, future::BoxFuture, prelude::*};
+use futures::{channel::oneshot, future::BoxFuture, pin_mut, prelude::*};
 use libp2p::{build_multiaddr, PeerId};
 use log::trace;
 use parking_lot::Mutex;
@@ -83,7 +83,7 @@ use sp_runtime::{
 };
 use substrate_test_runtime_client::AccountKeyring;
 pub use substrate_test_runtime_client::{
-	runtime::{Block, Extrinsic, Hash, Transfer},
+	runtime::{Block, Extrinsic, Hash, Header, Transfer},
 	TestClient, TestClientBuilder, TestClientBuilderExt,
 };
 use tokio::time::timeout;
@@ -1078,8 +1078,17 @@ where
 		self.mut_peers(|peers| {
 			for (i, peer) in peers.iter_mut().enumerate() {
 				trace!(target: "sync", "-- Polling {}: {}", i, peer.id());
-				if let Poll::Ready(()) = peer.network.poll_unpin(cx) {
-					panic!("NetworkWorker has terminated unexpectedly.")
+				loop {
+					// The code below is not quite correct, because we are polling a different
+					// instance of the future every time. But as long as
+					// `NetworkWorker::next_action()` contains just streams polling not interleaved
+					// with other `.await`s, dropping the future and recreating it works the same as
+					// polling a single instance.
+					let net_poll_future = peer.network.next_action();
+					pin_mut!(net_poll_future);
+					if let Poll::Pending = net_poll_future.poll(cx) {
+						break
+					}
 				}
 				trace!(target: "sync", "-- Polling complete {}: {}", i, peer.id());
 

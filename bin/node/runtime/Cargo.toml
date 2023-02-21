@@ -97,6 +97,7 @@ pallet-session = { version = "4.0.0-dev", features = [ "historical" ], path = ".
 pallet-session-benchmarking = { version = "4.0.0-dev", path = "../../../frame/session/benchmarking", default-features = false, optional = true }
 pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/staking" }
 pallet-staking-reward-curve = { version = "4.0.0-dev", default-features = false, path = "../../../frame/staking/reward-curve" }
+pallet-staking-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/staking/runtime-api" }
 pallet-state-trie-migration = { version = "4.0.0-dev", default-features = false, path = "../../../frame/state-trie-migration" }
 pallet-scheduler = { version = "4.0.0-dev", default-features = false, path = "../../../frame/scheduler" }
 pallet-society = { version = "4.0.0-dev", default-features = false, path = "../../../frame/society" }
@@ -175,6 +176,7 @@ std = [
 	"sp-runtime/std",
 	"sp-staking/std",
 	"pallet-staking/std",
+	"pallet-staking-runtime-api/std",
 	"pallet-state-trie-migration/std",
 	"sp-session/std",
 	"pallet-sudo/std",

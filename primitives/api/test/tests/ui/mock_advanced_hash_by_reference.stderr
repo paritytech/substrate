@@ -1,10 +1,10 @@
-error: `BlockId` needs to be taken by reference and not by value!
-  --> tests/ui/mock_advanced_block_id_by_value.rs:12:1
+error: `Hash` needs to be taken by value and not by reference!
+  --> tests/ui/mock_advanced_hash_by_reference.rs:12:1
    |
 12 | / sp_api::mock_impl_runtime_apis! {
 13 | |     impl Api<Block> for MockApi {
 14 | |         #[advanced]
-15 | |         fn test(&self, _: BlockId<Block>) -> Result<(), ApiError> {
+15 | |         fn test(&self, _: &Hash) -> Result<(), ApiError> {
 ...  |
 18 | |     }
 19 | | }

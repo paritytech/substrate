@@ -65,7 +65,7 @@ impl log::Log for RuntimeLogger {
 
 #[cfg(test)]
 mod tests {
-	use sp_api::{BlockId, ProvideRuntimeApi};
+	use sp_api::ProvideRuntimeApi;
 	use std::{env, str::FromStr};
 	use substrate_test_runtime_client::{
 		runtime::TestAPI, DefaultTestClientBuilderExt, ExecutionStrategy, TestClientBuilder,
@@ -82,8 +82,9 @@ mod tests {
 				.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
 				.build();
 			let runtime_api = client.runtime_api();
-			let block_id = BlockId::Number(0);
-			runtime_api.do_trace_log(&block_id).expect("Logging should not fail");
+			runtime_api
+				.do_trace_log(client.chain_info().genesis_hash)
+				.expect("Logging should not fail");
 		} else {
 			for (level, should_print) in &[("trace", true), ("info", false)] {
 				let executable = std::env::current_exe().unwrap();

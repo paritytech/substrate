@@ -48,7 +48,7 @@ use sp_core::{
 	},
 	Bytes,
 };
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use sp_runtime::traits::Block as BlockT;
 use sp_version::RuntimeVersion;
 
 /// The maximum time allowed for an RPC call when running without unsafe RPC enabled.
@@ -321,7 +321,7 @@ where
 		self.block_or_best(block).map_err(client_err).and_then(|block| {
 			self.client
 				.runtime_api()
-				.metadata(&BlockId::Hash(block))
+				.metadata(block)
 				.map(Into::into)
 				.map_err(|e| Error::Client(Box::new(e)))
 		})
@@ -332,9 +332,7 @@ where
 		block: Option<Block::Hash>,
 	) -> std::result::Result<RuntimeVersion, Error> {
 		self.block_or_best(block).map_err(client_err).and_then(|block| {
-			self.client
-				.runtime_version_at(&BlockId::Hash(block))
-				.map_err(|e| Error::Client(Box::new(e)))
+			self.client.runtime_version_at(block).map_err(|e| Error::Client(Box::new(e)))
 		})
 	}
 
@@ -383,9 +381,7 @@ where
 
 		let initial = match self
 			.block_or_best(None)
-			.and_then(|block| {
-				self.client.runtime_version_at(&BlockId::Hash(block)).map_err(Into::into)
-			})
+			.and_then(|block| self.client.runtime_version_at(block).map_err(Into::into))
 			.map_err(|e| Error::Client(Box::new(e)))
 		{
 			Ok(initial) => initial,
@@ -402,9 +398,8 @@ where
 			.import_notification_stream()
 			.filter(|n| future::ready(n.is_new_best))
 			.filter_map(move |n| {
-				let version = client
-					.runtime_version_at(&BlockId::hash(n.hash))
-					.map_err(|e| Error::Client(Box::new(e)));
+				let version =
+					client.runtime_version_at(n.hash).map_err(|e| Error::Client(Box::new(e)));
 
 				match version {
 					Ok(version) if version != previous_version => {

@@ -99,7 +99,17 @@ pub mod pallet {
 		type HandleEquivocation: HandleEquivocation<Self>;
 
 		/// The maximum number of authorities that can be added.
+		#[pallet::constant]
 		type MaxAuthorities: Get<u32>;
+
+		/// The maximum number of entries to keep in the set id to session index mapping.
+		///
+		/// Since the `SetIdSession` map is only used for validating equivocations this
+		/// value should relate to the bonding duration of whatever staking system is
+		/// being used (if any). If equivocation handling is not enabled then this value
+		/// can be zero.
+		#[pallet::constant]
+		type MaxSetIdSessionEntries: Get<u64>;
 
 		/// A hook to act on the new BEEFY validator set.
 		///
@@ -135,6 +145,12 @@ pub mod pallet {
 
 	/// A mapping from BEEFY set ID to the index of the *most recent* session for which its
 	/// members were responsible.
+	///
+	/// This is only used for validating equivocation proofs. An equivocation proof must
+	/// contains a key-ownership proof for a given session, therefore we need a way to tie
+	/// together sessions and BEEFY set ids, i.e. we need to validate that a validator
+	/// was the owner of a given key on a given session, and what the active set ID was
+	/// during that session.
 	///
 	/// TWOX-NOTE: `ValidatorSetId` is not under user control.
 	#[pallet::storage]
@@ -462,9 +478,15 @@ where
 		// We want to have at least one BEEFY mandatory block per session.
 		Self::change_authorities(bounded_next_authorities, bounded_next_queued_authorities);
 
+		let validator_set_id = Self::validator_set_id();
 		// Update the mapping for the new set id that corresponds to the latest session (i.e. now).
 		let session_index = <pallet_session::Pallet<T>>::current_index();
-		SetIdSession::<T>::insert(Self::validator_set_id(), &session_index);
+		SetIdSession::<T>::insert(validator_set_id, &session_index);
+		// Prune old entry if limit reached.
+		let max_set_id_session_entries = T::MaxSetIdSessionEntries::get().max(1);
+		if validator_set_id >= max_set_id_session_entries {
+			SetIdSession::<T>::remove(validator_set_id - max_set_id_session_entries);
+		}
 	}
 
 	fn on_disabled(i: u32) {

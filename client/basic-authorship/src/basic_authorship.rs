@@ -731,7 +731,7 @@ mod tests {
 		assert_eq!(proposal.block.extrinsics().len(), 1);
 
 		let api = client.runtime_api();
-		api.execute_block(&BlockId::Hash(genesis_hash), proposal.block).unwrap();
+		api.execute_block(genesis_hash, proposal.block).unwrap();
 
 		let state = backend.state_at(genesis_hash).unwrap();
 

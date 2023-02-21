@@ -34,7 +34,7 @@ use sp_api::{NumberFor, ProvideRuntimeApi};
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
 use sp_mmr_primitives::{Error as MmrError, Proof};
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use sp_runtime::traits::Block as BlockT;
 
 pub use sp_mmr_primitives::MmrApi as MmrRuntimeApi;
 
@@ -154,7 +154,7 @@ where
 			self.client.info().best_hash);
 		let api = self.client.runtime_api();
 		let mmr_root = api
-			.mmr_root(&BlockId::Hash(block_hash))
+			.mmr_root(block_hash)
 			.map_err(runtime_error_into_rpc_error)?
 			.map_err(mmr_error_into_rpc_error)?;
 		Ok(mmr_root)
@@ -173,7 +173,7 @@ where
 
 		let (leaves, proof) = api
 			.generate_proof_with_context(
-				&BlockId::hash(block_hash),
+				block_hash,
 				sp_core::ExecutionContext::OffchainCall(None),
 				block_numbers,
 				best_known_block_number,
@@ -194,7 +194,7 @@ where
 			.map_err(|e| CallError::InvalidParams(anyhow::Error::new(e)))?;
 
 		api.verify_proof_with_context(
-			&BlockId::hash(proof.block_hash),
+			proof.block_hash,
 			sp_core::ExecutionContext::OffchainCall(None),
 			leaves,
 			decoded_proof,
@@ -218,14 +218,9 @@ where
 		let decoded_proof = Decode::decode(&mut &proof.proof.0[..])
 			.map_err(|e| CallError::InvalidParams(anyhow::Error::new(e)))?;
 
-		api.verify_proof_stateless(
-			&BlockId::hash(proof.block_hash),
-			mmr_root,
-			leaves,
-			decoded_proof,
-		)
-		.map_err(runtime_error_into_rpc_error)?
-		.map_err(mmr_error_into_rpc_error)?;
+		api.verify_proof_stateless(proof.block_hash, mmr_root, leaves, decoded_proof)
+			.map_err(runtime_error_into_rpc_error)?
+			.map_err(mmr_error_into_rpc_error)?;
 
 		Ok(true)
 	}
