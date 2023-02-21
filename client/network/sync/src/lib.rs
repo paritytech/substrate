@@ -3212,7 +3212,6 @@ mod test {
 	};
 	use sp_blockchain::HeaderBackend;
 	use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
-	use sp_runtime::generic::BlockId;
 	use substrate_test_runtime_client::{
 		runtime::{Block, Hash, Header},
 		BlockBuilderExt, ClientBlockImportExt, ClientExt, DefaultTestClientBuilderExt, TestClient,
@@ -3449,8 +3448,7 @@ mod test {
 	fn build_block(client: &mut Arc<TestClient>, at: Option<Hash>, fork: bool) -> Block {
 		let at = at.unwrap_or_else(|| client.info().best_hash);
 
-		let mut block_builder =
-			client.new_block_at(&BlockId::Hash(at), Default::default(), false).unwrap();
+		let mut block_builder = client.new_block_at(at, Default::default(), false).unwrap();
 
 		if fork {
 			block_builder.push_storage_change(vec![1, 2, 3], Some(vec![4, 5, 6])).unwrap();
@@ -3503,8 +3501,7 @@ mod test {
 
 		let mut client2 = client.clone();
 		let mut build_block_at = |at, import| {
-			let mut block_builder =
-				client2.new_block_at(&BlockId::Hash(at), Default::default(), false).unwrap();
+			let mut block_builder = client2.new_block_at(at, Default::default(), false).unwrap();
 			// Make sure we generate a different block as fork
 			block_builder.push_storage_change(vec![1, 2, 3], Some(vec![4, 5, 6])).unwrap();
 

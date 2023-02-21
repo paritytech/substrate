@@ -37,7 +37,6 @@ use sp_blockchain::{ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed}
 use sp_consensus::BlockOrigin;
 use sp_keyring::Sr25519Keyring;
 use sp_runtime::{
-	generic::BlockId,
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
 	AccountId32, MultiAddress, OpaqueExtrinsic,
 };
@@ -206,14 +205,14 @@ fn block_production(c: &mut Criterion) {
 	group.sample_size(10);
 	group.throughput(Throughput::Elements(max_transfer_count as u64));
 
-	let block_id = BlockId::Hash(client.chain_info().best_hash);
+	let best_hash = client.chain_info().best_hash;
 
 	group.bench_function(format!("{} transfers (no proof)", max_transfer_count), |b| {
 		b.iter_batched(
 			|| extrinsics.clone(),
 			|extrinsics| {
 				let mut block_builder =
-					client.new_block_at(&block_id, Default::default(), RecordProof::No).unwrap();
+					client.new_block_at(best_hash, Default::default(), RecordProof::No).unwrap();
 				for extrinsic in extrinsics {
 					block_builder.push(extrinsic).unwrap();
 				}
@@ -228,7 +227,7 @@ fn block_production(c: &mut Criterion) {
 			|| extrinsics.clone(),
 			|extrinsics| {
 				let mut block_builder =
-					client.new_block_at(&block_id, Default::default(), RecordProof::Yes).unwrap();
+					client.new_block_at(best_hash, Default::default(), RecordProof::Yes).unwrap();
 				for extrinsic in extrinsics {
 					block_builder.push(extrinsic).unwrap();
 				}

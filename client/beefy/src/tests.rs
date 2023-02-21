@@ -58,7 +58,6 @@ use sp_keystore::{testing::KeyStore as TestKeystore, SyncCryptoStore, SyncCrypto
 use sp_mmr_primitives::{Error as MmrError, MmrApi};
 use sp_runtime::{
 	codec::Encode,
-	generic::BlockId,
 	traits::{Header as HeaderT, NumberFor},
 	BuildStorage, DigestItem, EncodedJustification, Justifications, Storage,
 };
@@ -753,8 +752,9 @@ async fn beefy_importing_justifications() {
 			.and_then(|j| j.get(BEEFY_ENGINE_ID).cloned())
 	};
 
-	let parent_id = BlockId::Number(0);
-	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
+	let builder = full_client
+		.new_block_at(full_client.chain_info().genesis_hash, Default::default(), false)
+		.unwrap();
 	let block = builder.build().unwrap().block;
 	let hashof1 = block.header.hash();
 
@@ -772,9 +772,8 @@ async fn beefy_importing_justifications() {
 	);
 
 	// Import block 2 with "valid" justification (beefy pallet genesis block not yet reached).
-	let parent_id = BlockId::Number(1);
 	let block_num = 2;
-	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
+	let builder = full_client.new_block_at(hashof1, Default::default(), false).unwrap();
 	let block = builder.build().unwrap().block;
 	let hashof2 = block.header.hash();
 
@@ -805,9 +804,8 @@ async fn beefy_importing_justifications() {
 	}
 
 	// Import block 3 with valid justification.
-	let parent_id = BlockId::Number(2);
 	let block_num = 3;
-	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
+	let builder = full_client.new_block_at(hashof2, Default::default(), false).unwrap();
 	let block = builder.build().unwrap().block;
 	let hashof3 = block.header.hash();
 	let proof = crate::justification::tests::new_finality_proof(block_num, &good_set, keys);
@@ -840,9 +838,8 @@ async fn beefy_importing_justifications() {
 	}
 
 	// Import block 4 with invalid justification (incorrect validator set).
-	let parent_id = BlockId::Number(3);
 	let block_num = 4;
-	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
+	let builder = full_client.new_block_at(hashof3, Default::default(), false).unwrap();
 	let block = builder.build().unwrap().block;
 	let hashof4 = block.header.hash();
 	let keys = &[BeefyKeyring::Alice];

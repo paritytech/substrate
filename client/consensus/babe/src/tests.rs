@@ -45,7 +45,7 @@ use sp_keystore::{
 	SyncCryptoStore,
 };
 use sp_runtime::{
-	generic::{BlockId, Digest, DigestItem},
+	generic::{Digest, DigestItem},
 	traits::Block as BlockT,
 };
 use sp_timestamp::Timestamp;
@@ -123,11 +123,8 @@ impl DummyProposer {
 			Error,
 		>,
 	> {
-		let block_builder = self
-			.factory
-			.client
-			.new_block_at(&BlockId::Hash(self.parent_hash), pre_digests, false)
-			.unwrap();
+		let block_builder =
+			self.factory.client.new_block_at(self.parent_hash, pre_digests, false).unwrap();
 
 		let mut block = match block_builder.build().map_err(|e| e.into()) {
 			Ok(b) => b.block,

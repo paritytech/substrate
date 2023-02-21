@@ -377,8 +377,7 @@ where
 		let full_client = self.client.as_client();
 		let mut at = full_client.block_hash_from_id(&at).unwrap().unwrap();
 		for _ in 0..count {
-			let builder =
-				full_client.new_block_at(&BlockId::Hash(at), Default::default(), false).unwrap();
+			let builder = full_client.new_block_at(at, Default::default(), false).unwrap();
 			let block = edit_block(builder);
 			let hash = block.header.hash();
 			trace!(

@@ -34,10 +34,7 @@ use sc_network_common::{
 };
 use sc_network_sync::{mock::MockChainSync, service::mock::MockChainSyncInterface, ChainSync};
 use sp_core::H256;
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, Header as _},
-};
+use sp_runtime::traits::{Block as BlockT, Header as _};
 use std::{
 	sync::{Arc, RwLock},
 	task::Poll,
@@ -188,7 +185,7 @@ async fn on_block_finalized() {
 
 	let at = client.header(client.info().best_hash).unwrap().unwrap().hash();
 	let block = client
-		.new_block_at(&BlockId::Hash(at), Default::default(), false)
+		.new_block_at(at, Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()

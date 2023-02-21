@@ -16,10 +16,7 @@
 // limitations under the License.
 
 use sp_api::{Core, ProvideRuntimeApi};
-use sp_runtime::{
-	generic::BlockId,
-	traits::{HashFor, Header as HeaderT},
-};
+use sp_runtime::traits::{HashFor, Header as HeaderT};
 use sp_state_machine::{
 	create_proof_check_backend, execution_proof_check_on_trie_backend, ExecutionStrategy,
 };
@@ -166,10 +163,9 @@ fn record_proof_works() {
 	}
 	.into_signed_tx();
 
-	let block_id = BlockId::Hash(client.chain_info().best_hash);
 	// Build the block and record proof
 	let mut builder = client
-		.new_block_at(&block_id, Default::default(), true)
+		.new_block_at(client.chain_info().best_hash, Default::default(), true)
 		.expect("Creates block builder");
 	builder.push(transaction.clone()).unwrap();
 	let (block, _, proof) = builder.build().expect("Bake block").into_inner();

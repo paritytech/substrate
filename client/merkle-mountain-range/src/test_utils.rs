@@ -124,7 +124,8 @@ impl MockClient {
 	) -> MmrBlock {
 		let mut client = self.client.lock();
 
-		let mut block_builder = client.new_block_at(at, Default::default(), false).unwrap();
+		let hash = client.expect_block_hash_from_id(&at).unwrap();
+		let mut block_builder = client.new_block_at(hash, Default::default(), false).unwrap();
 		// Make sure the block has a different hash than its siblings
 		block_builder
 			.push_storage_change(b"name".to_vec(), Some(name.to_vec()))
