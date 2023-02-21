@@ -120,9 +120,9 @@
 //! * Depositor: creates the pool and is the initial member. They can only leave the pool once all
 //!   other members have left. Once they fully withdraw their funds, the pool is destroyed.
 //! * Nominator: can select which validators the pool nominates.
-//! * State-Toggler: can change the pools state and kick members if the pool is blocked.
-//! * Root: can change the nominator, state-toggler, or itself and can perform any of the actions
-//!   the nominator or state-toggler can.
+//! * Bouncer: can change the pools state and kick members if the pool is blocked.
+//! * Root: can change the nominator, bouncer, or itself and can perform any of the actions the
+//!   nominator or bouncer can.
 //!
 //! ### Dismantling
 //!
@@ -573,13 +573,13 @@ pub struct PoolRoles<AccountId> {
 	/// Creates the pool and is the initial member. They can only leave the pool once all other
 	/// members have left. Once they fully leave, the pool is destroyed.
 	pub depositor: AccountId,
-	/// Can change the nominator, state-toggler, or itself and can perform any of the actions the
-	/// nominator or state-toggler can.
+	/// Can change the nominator, bouncer, or itself and can perform any of the actions the
+	/// nominator or bouncer can.
 	pub root: Option<AccountId>,
 	/// Can select which validators the pool nominates.
 	pub nominator: Option<AccountId>,
 	/// Can change the pools state and kick members if the pool is blocked.
-	pub state_toggler: Option<AccountId>,
+	pub bouncer: Option<AccountId>,
 }
 
 /// Pool permissions and state
@@ -734,11 +734,8 @@ impl<T: Config> BondedPool<T> {
 		self.roles.root.as_ref().map_or(false, |root| root == who)
 	}
 
-	fn is_state_toggler(&self, who: &T::AccountId) -> bool {
-		self.roles
-			.state_toggler
-			.as_ref()
-			.map_or(false, |state_toggler| state_toggler == who)
+	fn is_bouncer(&self, who: &T::AccountId) -> bool {
+		self.roles.bouncer.as_ref().map_or(false, |bouncer| bouncer == who)
 	}
 
 	fn can_update_roles(&self, who: &T::AccountId) -> bool {
@@ -751,15 +748,15 @@ impl<T: Config> BondedPool<T> {
 	}
 
 	fn can_kick(&self, who: &T::AccountId) -> bool {
-		self.state == PoolState::Blocked && (self.is_root(who) || self.is_state_toggler(who))
+		self.state == PoolState::Blocked && (self.is_root(who) || self.is_bouncer(who))
 	}
 
 	fn can_toggle_state(&self, who: &T::AccountId) -> bool {
-		(self.is_root(who) || self.is_state_toggler(who)) && !self.is_destroying()
+		(self.is_root(who) || self.is_bouncer(who)) && !self.is_destroying()
 	}
 
 	fn can_set_metadata(&self, who: &T::AccountId) -> bool {
-		self.is_root(who) || self.is_state_toggler(who)
+		self.is_root(who) || self.is_bouncer(who)
 	}
 
 	fn is_destroying(&self) -> bool {
@@ -1407,7 +1404,7 @@ pub mod pallet {
 		/// can never change.
 		RolesUpdated {
 			root: Option<T::AccountId>,
-			state_toggler: Option<T::AccountId>,
+			bouncer: Option<T::AccountId>,
 			nominator: Option<T::AccountId>,
 		},
 		/// The active balance of pool `pool_id` has been slashed to `balance`.
@@ -1630,8 +1627,8 @@ pub mod pallet {
 		///
 		/// # Conditions for a permissionless dispatch.
 		///
-		/// * The pool is blocked and the caller is either the root or state-toggler. This is
-		///   refereed to as a kick.
+		/// * The pool is blocked and the caller is either the root or bouncer. This is refereed to
+		///   as a kick.
 		/// * The pool is destroying and the member is not the depositor.
 		/// * The pool is destroying, the member is the depositor and no other members are in the
 		///   pool.
@@ -1754,7 +1751,7 @@ pub mod pallet {
 		///
 		/// * The pool is in destroy mode and the target is not the depositor.
 		/// * The target is the depositor and they are the only member in the sub pools.
-		/// * The pool is blocked and the caller is either the root or state-toggler.
+		/// * The pool is blocked and the caller is either the root or bouncer.
 		///
 		/// # Conditions for permissioned dispatch
 		///
@@ -1879,7 +1876,7 @@ pub mod pallet {
 		///   creating multiple pools in the same extrinsic.
 		/// * `root` - The account to set as [`PoolRoles::root`].
 		/// * `nominator` - The account to set as the [`PoolRoles::nominator`].
-		/// * `state_toggler` - The account to set as the [`PoolRoles::state_toggler`].
+		/// * `bouncer` - The account to set as the [`PoolRoles::bouncer`].
 		///
 		/// # Note
 		///
@@ -1892,7 +1889,7 @@ pub mod pallet {
 			#[pallet::compact] amount: BalanceOf<T>,
 			root: AccountIdLookupOf<T>,
 			nominator: AccountIdLookupOf<T>,
-			state_toggler: AccountIdLookupOf<T>,
+			bouncer: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let depositor = ensure_signed(origin)?;
 
@@ -1901,7 +1898,7 @@ pub mod pallet {
 				Ok(*id)
 			})?;
 
-			Self::do_create(depositor, amount, root, nominator, state_toggler, pool_id)
+			Self::do_create(depositor, amount, root, nominator, bouncer, pool_id)
 		}
 
 		/// Create a new delegation pool with a previously used pool id
@@ -1917,7 +1914,7 @@ pub mod pallet {
 			#[pallet::compact] amount: BalanceOf<T>,
 			root: AccountIdLookupOf<T>,
 			nominator: AccountIdLookupOf<T>,
-			state_toggler: AccountIdLookupOf<T>,
+			bouncer: AccountIdLookupOf<T>,
 			pool_id: PoolId,
 		) -> DispatchResult {
 			let depositor = ensure_signed(origin)?;
@@ -1925,7 +1922,7 @@ pub mod pallet {
 			ensure!(!BondedPools::<T>::contains_key(pool_id), Error::<T>::PoolIdInUse);
 			ensure!(pool_id < LastPoolId::<T>::get(), Error::<T>::InvalidPoolId);
 
-			Self::do_create(depositor, amount, root, nominator, state_toggler, pool_id)
+			Self::do_create(depositor, amount, root, nominator, bouncer, pool_id)
 		}
 
 		/// Nominate on behalf of the pool.
@@ -1955,7 +1952,7 @@ pub mod pallet {
 		///
 		/// The dispatch origin of this call must be either:
 		///
-		/// 1. signed by the state toggler, or the root role of the pool,
+		/// 1. signed by the bouncer, or the root role of the pool,
 		/// 2. if the pool conditions to be open are NOT met (as described by `ok_to_be_open`), and
 		///    then the state of the pool can be permissionlessly changed to `Destroying`.
 		#[pallet::call_index(9)]
@@ -1985,7 +1982,7 @@ pub mod pallet {
 
 		/// Set a new metadata for the pool.
 		///
-		/// The dispatch origin of this call must be signed by the state toggler, or the root role
+		/// The dispatch origin of this call must be signed by the bouncer, or the root role
 		/// of the pool.
 		#[pallet::call_index(10)]
 		#[pallet::weight(T::WeightInfo::set_metadata(metadata.len() as u32))]
@@ -2063,7 +2060,7 @@ pub mod pallet {
 			pool_id: PoolId,
 			new_root: ConfigOp<T::AccountId>,
 			new_nominator: ConfigOp<T::AccountId>,
-			new_state_toggler: ConfigOp<T::AccountId>,
+			new_bouncer: ConfigOp<T::AccountId>,
 		) -> DispatchResult {
 			let mut bonded_pool = match ensure_root(origin.clone()) {
 				Ok(()) => BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?,
@@ -2086,16 +2083,16 @@ pub mod pallet {
 				ConfigOp::Remove => bonded_pool.roles.nominator = None,
 				ConfigOp::Set(v) => bonded_pool.roles.nominator = Some(v),
 			};
-			match new_state_toggler {
+			match new_bouncer {
 				ConfigOp::Noop => (),
-				ConfigOp::Remove => bonded_pool.roles.state_toggler = None,
-				ConfigOp::Set(v) => bonded_pool.roles.state_toggler = Some(v),
+				ConfigOp::Remove => bonded_pool.roles.bouncer = None,
+				ConfigOp::Set(v) => bonded_pool.roles.bouncer = Some(v),
 			};
 
 			Self::deposit_event(Event::<T>::RolesUpdated {
 				root: bonded_pool.roles.root.clone(),
 				nominator: bonded_pool.roles.nominator.clone(),
-				state_toggler: bonded_pool.roles.state_toggler.clone(),
+				bouncer: bonded_pool.roles.bouncer.clone(),
 			});
 
 			bonded_pool.put();
@@ -2336,12 +2333,12 @@ impl<T: Config> Pallet<T> {
 		amount: BalanceOf<T>,
 		root: AccountIdLookupOf<T>,
 		nominator: AccountIdLookupOf<T>,
-		state_toggler: AccountIdLookupOf<T>,
+		bouncer: AccountIdLookupOf<T>,
 		pool_id: PoolId,
 	) -> DispatchResult {
 		let root = T::Lookup::lookup(root)?;
 		let nominator = T::Lookup::lookup(nominator)?;
-		let state_toggler = T::Lookup::lookup(state_toggler)?;
+		let bouncer = T::Lookup::lookup(bouncer)?;
 
 		ensure!(amount >= Pallet::<T>::depositor_min_bond(), Error::<T>::MinimumBondNotMet);
 		ensure!(
@@ -2354,7 +2351,7 @@ impl<T: Config> Pallet<T> {
 			PoolRoles {
 				root: Some(root),
 				nominator: Some(nominator),
-				state_toggler: Some(state_toggler),
+				bouncer: Some(bouncer),
 				depositor: who.clone(),
 			},
 		);

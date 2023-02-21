@@ -37,7 +37,7 @@ macro_rules! member_unbonding_eras {
 }
 
 pub const DEFAULT_ROLES: PoolRoles<AccountId> =
-	PoolRoles { depositor: 10, root: Some(900), nominator: Some(901), state_toggler: Some(902) };
+	PoolRoles { depositor: 10, root: Some(900), nominator: Some(901), bouncer: Some(902) };
 
 #[test]
 fn test_setup_works() {
@@ -2148,7 +2148,7 @@ mod unbond {
 			.add_members(vec![(20, 20)])
 			.build_and_execute(|| {
 				unsafe_set_state(1, PoolState::Blocked);
-				let kicker = DEFAULT_ROLES.state_toggler.unwrap();
+				let kicker = DEFAULT_ROLES.bouncer.unwrap();
 
 				// cannot be kicked to above the limit.
 				assert_noop!(
@@ -2251,7 +2251,7 @@ mod unbond {
 
 			// set the stage
 			unsafe_set_state(1, PoolState::Blocked);
-			let kicker = DEFAULT_ROLES.state_toggler.unwrap();
+			let kicker = DEFAULT_ROLES.bouncer.unwrap();
 
 			// cannot be kicked to above limit.
 			assert_noop!(
@@ -2590,7 +2590,7 @@ mod unbond {
 
 	#[test]
 	fn unbond_kick_works() {
-		// Kick: the pool is blocked and the caller is either the root or state-toggler.
+		// Kick: the pool is blocked and the caller is either the root or bouncer.
 		ExtBuilder::default()
 			.add_members(vec![(100, 100), (200, 200)])
 			.build_and_execute(|| {
@@ -2599,7 +2599,7 @@ mod unbond {
 				let bonded_pool = BondedPool::<Runtime>::get(1).unwrap();
 				assert_eq!(bonded_pool.roles.root.unwrap(), 900);
 				assert_eq!(bonded_pool.roles.nominator.unwrap(), 901);
-				assert_eq!(bonded_pool.roles.state_toggler.unwrap(), 902);
+				assert_eq!(bonded_pool.roles.bouncer.unwrap(), 902);
 
 				// When the nominator tries to kick, then its a noop
 				assert_noop!(
@@ -2627,7 +2627,7 @@ mod unbond {
 					]
 				);
 
-				// When the state toggler kicks then its ok
+				// When the bouncer kicks then its ok
 				assert_ok!(Pools::fully_unbond(RuntimeOrigin::signed(902), 200));
 
 				assert_eq!(
@@ -3558,7 +3558,7 @@ mod withdraw_unbonded {
 				// Can kick as root
 				assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(900), 100, 0));
 
-				// Can kick as state toggler
+				// Can kick as bouncer
 				assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(900), 200, 0));
 
 				assert_eq!(Balances::free_balance(100), 100 + 100);
@@ -4148,7 +4148,7 @@ mod create {
 							depositor: 11,
 							root: Some(123),
 							nominator: Some(456),
-							state_toggler: Some(789)
+							bouncer: Some(789)
 						}
 					}
 				}
@@ -4232,7 +4232,7 @@ mod create {
 				amount: 20,
 				root: 11,
 				nominator: 11,
-				state_toggler: 11,
+				bouncer: 11,
 			});
 			assert_noop!(
 				create.dispatch(RuntimeOrigin::signed(11)),
@@ -4292,7 +4292,7 @@ mod nominate {
 				Error::<Runtime>::NotNominator
 			);
 
-			// State toggler can't nominate
+			// bouncer can't nominate
 			assert_noop!(
 				Pools::nominate(RuntimeOrigin::signed(902), 1, vec![21]),
 				Error::<Runtime>::NotNominator
@@ -4324,7 +4324,7 @@ mod set_state {
 			// Given
 			assert_ok!(BondedPool::<Runtime>::get(1).unwrap().ok_to_be_open());
 
-			// Only the root and state toggler can change the state when the pool is ok to be open.
+			// Only the root and bouncer can change the state when the pool is ok to be open.
 			assert_noop!(
 				Pools::set_state(RuntimeOrigin::signed(10), 1, PoolState::Blocked),
 				Error::<Runtime>::CanNotChangeState
@@ -4348,7 +4348,7 @@ mod set_state {
 
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().state, PoolState::Blocked);
 
-			// State toggler can change state
+			// bouncer can change state
 			assert_ok!(Pools::set_state(RuntimeOrigin::signed(902), 1, PoolState::Destroying));
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().state, PoolState::Destroying);
 
@@ -4412,7 +4412,7 @@ mod set_metadata {
 			assert_ok!(Pools::set_metadata(RuntimeOrigin::signed(900), 1, vec![1, 1]));
 			assert_eq!(Metadata::<Runtime>::get(1), vec![1, 1]);
 
-			// State toggler can set metadata
+			// bouncer can set metadata
 			assert_ok!(Pools::set_metadata(RuntimeOrigin::signed(902), 1, vec![2, 2]));
 			assert_eq!(Metadata::<Runtime>::get(1), vec![2, 2]);
 
@@ -4637,7 +4637,7 @@ mod update_roles {
 					depositor: 10,
 					root: Some(900),
 					nominator: Some(901),
-					state_toggler: Some(902)
+					bouncer: Some(902)
 				},
 			);
 
@@ -4676,7 +4676,7 @@ mod update_roles {
 				),
 				Error::<Runtime>::DoesNotHavePermission,
 			);
-			// state-toggler
+			// bouncer
 			assert_noop!(
 				Pools::update_roles(
 					RuntimeOrigin::signed(902),
@@ -4702,21 +4702,12 @@ mod update_roles {
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::RolesUpdated {
-						root: Some(5),
-						state_toggler: Some(7),
-						nominator: Some(6)
-					}
+					Event::RolesUpdated { root: Some(5), bouncer: Some(7), nominator: Some(6) }
 				]
 			);
 			assert_eq!(
 				BondedPools::<Runtime>::get(1).unwrap().roles,
-				PoolRoles {
-					depositor: 10,
-					root: Some(5),
-					nominator: Some(6),
-					state_toggler: Some(7)
-				},
+				PoolRoles { depositor: 10, root: Some(5), nominator: Some(6), bouncer: Some(7) },
 			);
 
 			// also root origin can
@@ -4730,20 +4721,11 @@ mod update_roles {
 
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::RolesUpdated {
-					root: Some(1),
-					state_toggler: Some(3),
-					nominator: Some(2)
-				}]
+				vec![Event::RolesUpdated { root: Some(1), bouncer: Some(3), nominator: Some(2) }]
 			);
 			assert_eq!(
 				BondedPools::<Runtime>::get(1).unwrap().roles,
-				PoolRoles {
-					depositor: 10,
-					root: Some(1),
-					nominator: Some(2),
-					state_toggler: Some(3)
-				},
+				PoolRoles { depositor: 10, root: Some(1), nominator: Some(2), bouncer: Some(3) },
 			);
 
 			// Noop works
@@ -4757,21 +4739,12 @@ mod update_roles {
 
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::RolesUpdated {
-					root: Some(11),
-					state_toggler: Some(3),
-					nominator: Some(2)
-				}]
+				vec![Event::RolesUpdated { root: Some(11), bouncer: Some(3), nominator: Some(2) }]
 			);
 
 			assert_eq!(
 				BondedPools::<Runtime>::get(1).unwrap().roles,
-				PoolRoles {
-					depositor: 10,
-					root: Some(11),
-					nominator: Some(2),
-					state_toggler: Some(3)
-				},
+				PoolRoles { depositor: 10, root: Some(11), nominator: Some(2), bouncer: Some(3) },
 			);
 
 			// Remove works
@@ -4785,12 +4758,12 @@ mod update_roles {
 
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::RolesUpdated { root: Some(69), state_toggler: None, nominator: None }]
+				vec![Event::RolesUpdated { root: Some(69), bouncer: None, nominator: None }]
 			);
 
 			assert_eq!(
 				BondedPools::<Runtime>::get(1).unwrap().roles,
-				PoolRoles { depositor: 10, root: Some(69), nominator: None, state_toggler: None },
+				PoolRoles { depositor: 10, root: Some(69), nominator: None, bouncer: None },
 			);
 		})
 	}
