@@ -18,16 +18,13 @@
 
 //! Substrate Client
 
-use super::{
-	block_rules::{BlockRules, LookupResult as BlockLookupResult},
-	genesis::BuildGenesisBlock,
-};
+use super::block_rules::{BlockRules, LookupResult as BlockLookupResult};
 use futures::{FutureExt, StreamExt};
 use log::{error, info, trace, warn};
 use parking_lot::{Mutex, RwLock};
 use prometheus_endpoint::Registry;
 use rand::Rng;
-use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider, RecordProof};
+use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider, BuildGenesisBlock, RecordProof};
 use sc_client_api::{
 	backend::{
 		self, apply_aux, BlockImportOperation, ClientImportOperation, FinalizeSummary, Finalizer,
