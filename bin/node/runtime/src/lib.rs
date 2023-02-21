@@ -2277,7 +2277,7 @@ impl_runtime_apis! {
 			// which is why we need these two lines below.
 			use pallet_session_benchmarking::Pallet as SessionBench;
 			use pallet_offences_benchmarking::Pallet as OffencesBench;
-			use frame_election_provider_support::Pallet as EPSBench;
+			use frame_election_provider_support::benchmarking::Pallet as EPSBench;
 			use frame_system_benchmarking::Pallet as SystemBench;
 			use baseline::Pallet as BaselineBench;
 			use pallet_nomination_pools_benchmarking::Pallet as NominationPoolsBench;
@@ -2300,14 +2300,14 @@ impl_runtime_apis! {
 			// which is why we need these two lines below.
 			use pallet_session_benchmarking::Pallet as SessionBench;
 			use pallet_offences_benchmarking::Pallet as OffencesBench;
-			use frame_election_provider_support::Pallet as EPSBench;
+			use frame_election_provider_support::benchmarking::Pallet as EPSBench;
 			use frame_system_benchmarking::Pallet as SystemBench;
 			use baseline::Pallet as BaselineBench;
 			use pallet_nomination_pools_benchmarking::Pallet as NominationPoolsBench;
 
 			impl pallet_session_benchmarking::Config for Runtime {}
 			impl pallet_offences_benchmarking::Config for Runtime {}
-			impl frame_election_provider_support::Config for Runtime {}
+			impl frame_election_provider_support::benchmarking::Config for Runtime {}
 			impl frame_system_benchmarking::Config for Runtime {}
 			impl baseline::Config for Runtime {}
 			impl pallet_nomination_pools_benchmarking::Config for Runtime {}
