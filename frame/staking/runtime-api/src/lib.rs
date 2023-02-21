@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) 2023 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,28 +15,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Runtime API definition for nomination-pools pallet.
-//! Currently supports only one rpc endpoint.
+//! Runtime API definition for the staking pallet.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::Codec;
-use pallet_nomination_pools::PoolId;
 
 sp_api::decl_runtime_apis! {
-	/// Runtime api for accessing information about nomination pools.
-	pub trait NominationPoolsApi<AccountId, Balance>
+	pub trait StakingApi<Balance>
 		where
-			AccountId: Codec,
 			Balance: Codec,
 	{
-		/// Returns the pending rewards for the member that the AccountId was given for.
-		fn pending_rewards(who: AccountId) -> Balance;
-
-		/// Returns the equivalent balance of `points` for a given pool.
-		fn points_to_balance(pool_id: PoolId, points: Balance) -> Balance;
-
-		/// Returns the equivalent points of `new_funds` for a given pool.
-		fn balance_to_points(pool_id: PoolId, new_funds: Balance) -> Balance;
+		/// Returns the nominations quota for a nominator with a given balance.
+		fn nominations_quota(balance: Balance) -> u32;
 	}
 }

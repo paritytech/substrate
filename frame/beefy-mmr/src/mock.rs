@@ -133,6 +133,7 @@ impl pallet_beefy::Config for Test {
 	)>>::IdentificationTuple;
 	type HandleEquivocation = ();
 	type MaxAuthorities = ConstU32<100>;
+	type MaxSetIdSessionEntries = ConstU64<100>;
 	type OnNewValidatorSet = BeefyMmr;
 	type WeightInfo = ();
 }

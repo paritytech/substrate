@@ -225,19 +225,19 @@ where
 {
 	sp_tracing::within_span!(sp_tracing::Level::TRACE, "validate_transaction";
 	{
+		let block_hash = client.to_hash(at)
+			.map_err(|e| Error::RuntimeApi(e.to_string()))?
+			.ok_or_else(|| Error::RuntimeApi(format!("Could not get hash for block `{:?}`.", at)))?;
+
 		let runtime_api = client.runtime_api();
 		let api_version = sp_tracing::within_span! { sp_tracing::Level::TRACE, "check_version";
 			runtime_api
-				.api_version::<dyn TaggedTransactionQueue<Block>>(at)
+				.api_version::<dyn TaggedTransactionQueue<Block>>(block_hash)
 				.map_err(|e| Error::RuntimeApi(e.to_string()))?
 				.ok_or_else(|| Error::RuntimeApi(
 					format!("Could not find `TaggedTransactionQueue` api for block `{:?}`.", at)
 				))
 		}?;
-
-		let block_hash = client.to_hash(at)
-			.map_err(|e| Error::RuntimeApi(e.to_string()))?
-			.ok_or_else(|| Error::RuntimeApi(format!("Could not get hash for block `{:?}`.", at)))?;
 
 		use sp_api::Core;
 
@@ -245,7 +245,7 @@ where
 			sp_tracing::Level::TRACE, "runtime::validate_transaction";
 		{
 			if api_version >= 3 {
-				runtime_api.validate_transaction(at, source, uxt, block_hash)
+				runtime_api.validate_transaction(block_hash, source, uxt, block_hash)
 					.map_err(|e| Error::RuntimeApi(e.to_string()))
 			} else {
 				let block_number = client.to_number(at)
@@ -255,7 +255,7 @@ where
 					)?;
 
 				// The old versions require us to call `initialize_block` before.
-				runtime_api.initialize_block(at, &sp_runtime::traits::Header::new(
+				runtime_api.initialize_block(block_hash, &sp_runtime::traits::Header::new(
 					block_number + sp_runtime::traits::One::one(),
 					Default::default(),
 					Default::default(),
@@ -265,11 +265,11 @@ where
 
 				if api_version == 2 {
 					#[allow(deprecated)] // old validate_transaction
-					runtime_api.validate_transaction_before_version_3(at, source, uxt)
+					runtime_api.validate_transaction_before_version_3(block_hash, source, uxt)
 						.map_err(|e| Error::RuntimeApi(e.to_string()))
 				} else {
 					#[allow(deprecated)] // old validate_transaction
-					runtime_api.validate_transaction_before_version_2(at, uxt)
+					runtime_api.validate_transaction_before_version_2(block_hash, uxt)
 						.map_err(|e| Error::RuntimeApi(e.to_string()))
 				}
 			}
