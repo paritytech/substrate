@@ -77,12 +77,8 @@ macro_rules! defensive {
 ///
 /// # Example
 ///
-/// ```
-/// use frame_support::defensive_assert;
-///
-/// std::panic::catch_unwind(|| {
-/// 	defensive_assert!(1 == 0, "Must fail")
-/// }).unwrap_err();
+/// ```should_panic
+/// frame_support::defensive_assert!(1 == 0, "Must fail")
 /// ```
 #[macro_export]
 macro_rules! defensive_assert {
