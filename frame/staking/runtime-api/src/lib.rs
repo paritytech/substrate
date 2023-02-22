@@ -23,6 +23,7 @@ use codec::Codec;
 use sp_runtime::Perquintill;
 
 sp_api::decl_runtime_apis! {
+	#[api_version(2)]
 	pub trait StakingApi<Balance>
 		where
 			Balance: Codec,
