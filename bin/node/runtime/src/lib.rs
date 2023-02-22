@@ -362,6 +362,11 @@ impl pallet_scheduler::Config for Runtime {
 	type Preimages = Preimage;
 }
 
+impl pallet_glutton::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = pallet_glutton::weights::SubstrateWeight<Runtime>;
+}
+
 parameter_types! {
 	pub const PreimageMaxSize: u32 = 4096 * 1024;
 	pub const PreimageBaseDeposit: Balance = 1 * DOLLARS;
@@ -943,6 +948,7 @@ impl pallet_democracy::Config for Runtime {
 	/// (NTB) vote.
 	type ExternalDefaultOrigin =
 		pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 1, 1>;
+	type SubmitOrigin = EnsureSigned<AccountId>;
 	/// Two thirds of the technical committee can have an ExternalMajority/ExternalDefault vote
 	/// be tabled immediately and with a shorter voting/enactment period.
 	type FastTrackOrigin =
@@ -1747,6 +1753,7 @@ construct_runtime!(
 		Recovery: pallet_recovery,
 		Vesting: pallet_vesting,
 		Scheduler: pallet_scheduler,
+		Glutton: pallet_glutton,
 		Preimage: pallet_preimage,
 		Proxy: pallet_proxy,
 		Multisig: pallet_multisig,
@@ -1878,6 +1885,7 @@ mod benches {
 		[pallet_recovery, Recovery]
 		[pallet_remark, Remark]
 		[pallet_scheduler, Scheduler]
+		[pallet_glutton, Glutton]
 		[pallet_session, SessionBench::<Runtime>]
 		[pallet_staking, Staking]
 		[pallet_state_trie_migration, StateTrieMigration]

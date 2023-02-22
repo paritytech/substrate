@@ -241,7 +241,12 @@ where
 	H::Out: Ord + codec::Codec,
 {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		write!(f, "overlay: {:?}\nbackend: {:?}", self.overlay, self.backend.pairs())
+		let pairs: Vec<_> = self
+			.backend
+			.pairs(Default::default())
+			.expect("creating an iterator over all of the pairs doesn't fail in tests")
+			.collect();
+		write!(f, "overlay: {:?}\nbackend: {:?}", self.overlay, pairs)
 	}
 }
 

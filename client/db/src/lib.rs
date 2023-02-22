@@ -86,8 +86,9 @@ use sp_runtime::{
 };
 use sp_state_machine::{
 	backend::{AsTrieBackend, Backend as StateBackend},
-	ChildStorageCollection, DBValue, IndexOperation, OffchainChangesCollection, StateMachineStats,
-	StorageCollection, UsageInfo as StateUsageInfo,
+	ChildStorageCollection, DBValue, IndexOperation, IterArgs, OffchainChangesCollection,
+	StateMachineStats, StorageCollection, StorageIterator, StorageKey, StorageValue,
+	UsageInfo as StateUsageInfo,
 };
 use sp_trie::{cache::SharedTrieCache, prefixed_key, MemoryDB, PrefixedMemoryDB};
 
@@ -159,10 +160,36 @@ impl<Block: BlockT> std::fmt::Debug for RefTrackingState<Block> {
 	}
 }
 
+/// A raw iterator over the `RefTrackingState`.
+pub struct RawIter<B: BlockT> {
+	inner: <DbState<B> as StateBackend<HashFor<B>>>::RawIter,
+}
+
+impl<B: BlockT> StorageIterator<HashFor<B>> for RawIter<B> {
+	type Backend = RefTrackingState<B>;
+	type Error = <DbState<B> as StateBackend<HashFor<B>>>::Error;
+
+	fn next_key(&mut self, backend: &Self::Backend) -> Option<Result<StorageKey, Self::Error>> {
+		self.inner.next_key(&backend.state)
+	}
+
+	fn next_pair(
+		&mut self,
+		backend: &Self::Backend,
+	) -> Option<Result<(StorageKey, StorageValue), Self::Error>> {
+		self.inner.next_pair(&backend.state)
+	}
+
+	fn was_complete(&self) -> bool {
+		self.inner.was_complete()
+	}
+}
+
 impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 	type Error = <DbState<B> as StateBackend<HashFor<B>>>::Error;
 	type Transaction = <DbState<B> as StateBackend<HashFor<B>>>::Transaction;
 	type TrieBackendStorage = <DbState<B> as StateBackend<HashFor<B>>>::TrieBackendStorage;
+	type RawIter = RawIter<B>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.storage(key)
@@ -212,45 +239,6 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		self.state.next_child_storage_key(child_info, key)
 	}
 
-	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
-		self.state.for_keys_with_prefix(prefix, f)
-	}
-
-	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
-		self.state.for_key_values_with_prefix(prefix, f)
-	}
-
-	fn apply_to_key_values_while<F: FnMut(Vec<u8>, Vec<u8>) -> bool>(
-		&self,
-		child_info: Option<&ChildInfo>,
-		prefix: Option<&[u8]>,
-		start_at: Option<&[u8]>,
-		f: F,
-		allow_missing: bool,
-	) -> Result<bool, Self::Error> {
-		self.state
-			.apply_to_key_values_while(child_info, prefix, start_at, f, allow_missing)
-	}
-
-	fn apply_to_keys_while<F: FnMut(&[u8]) -> bool>(
-		&self,
-		child_info: Option<&ChildInfo>,
-		prefix: Option<&[u8]>,
-		start_at: Option<&[u8]>,
-		f: F,
-	) {
-		self.state.apply_to_keys_while(child_info, prefix, start_at, f)
-	}
-
-	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
-		&self,
-		child_info: &ChildInfo,
-		prefix: &[u8],
-		f: F,
-	) {
-		self.state.for_child_keys_with_prefix(child_info, prefix, f)
-	}
-
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
@@ -274,16 +262,8 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		self.state.child_storage_root(child_info, delta, state_version)
 	}
 
-	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.state.pairs()
-	}
-
-	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
-		self.state.keys(prefix)
-	}
-
-	fn child_keys(&self, child_info: &ChildInfo, prefix: &[u8]) -> Vec<Vec<u8>> {
-		self.state.child_keys(child_info, prefix)
+	fn raw_iter(&self, args: IterArgs) -> Result<Self::RawIter, Self::Error> {
+		self.state.raw_iter(args).map(|inner| RawIter { inner })
 	}
 
 	fn register_overlay_stats(&self, stats: &StateMachineStats) {

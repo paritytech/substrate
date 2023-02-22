@@ -30,9 +30,9 @@ use frame_election_provider_support::SortedListProvider;
 use frame_support::{assert_ok, ensure, traits::Get};
 use frame_system::RawOrigin as RuntimeOrigin;
 use pallet_nomination_pools::{
-	BalanceOf, BondExtra, BondedPoolInner, BondedPools, ConfigOp, MaxPoolMembers,
-	MaxPoolMembersPerPool, MaxPools, Metadata, MinCreateBond, MinJoinBond, Pallet as Pools,
-	PoolMembers, PoolRoles, PoolState, RewardPools, SubPoolsStorage,
+	BalanceOf, BondExtra, BondedPoolInner, BondedPools, ClaimPermission, ClaimPermissions,
+	ConfigOp, MaxPoolMembers, MaxPoolMembersPerPool, MaxPools, Metadata, MinCreateBond,
+	MinJoinBond, Pallet as Pools, PoolMembers, PoolRoles, PoolState, RewardPools, SubPoolsStorage,
 };
 use sp_runtime::traits::{Bounded, StaticLookup, Zero};
 use sp_staking::{EraIndex, StakingInterface};
@@ -252,17 +252,22 @@ frame_benchmarking::benchmarks! {
 		);
 	}
 
-	bond_extra_reward {
+	bond_extra_other {
+		let claimer: T::AccountId = account("claimer", USER_SEED + 4, 0);
+
 		let origin_weight = Pools::<T>::depositor_min_bond() * 2u32.into();
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		let extra = (scenario.dest_weight - origin_weight).max(CurrencyOf::<T>::minimum_balance());
+
+		// set claim preferences to `PermissionlessAll` to any account to bond extra on member's behalf.
+		let _ = Pools::<T>::set_claim_permission(RuntimeOrigin::Signed(scenario.creator1.clone()).into(), ClaimPermission::PermissionlessAll);
 
 		// transfer exactly `extra` to the depositor of the src pool (1),
 		let reward_account1 = Pools::<T>::create_reward_account(1);
 		assert!(extra >= CurrencyOf::<T>::minimum_balance());
 		CurrencyOf::<T>::deposit_creating(&reward_account1, extra);
 
-	}: bond_extra(RuntimeOrigin::Signed(scenario.creator1.clone()), BondExtra::Rewards)
+	}: _(RuntimeOrigin::Signed(claimer), T::Lookup::unlookup(scenario.creator1.clone()), BondExtra::Rewards)
 	verify {
 		assert!(
 			T::Staking::active_stake(&scenario.origin1).unwrap() >=
@@ -271,6 +276,8 @@ frame_benchmarking::benchmarks! {
 	}
 
 	claim_payout {
+		let claimer: T::AccountId = account("claimer", USER_SEED + 4, 0);
+
 		let origin_weight = Pools::<T>::depositor_min_bond() * 2u32.into();
 		let ed = CurrencyOf::<T>::minimum_balance();
 		let (depositor, pool_account) = create_pool_account::<T>(0, origin_weight);
@@ -279,6 +286,10 @@ frame_benchmarking::benchmarks! {
 		// Send funds to the reward account of the pool
 		CurrencyOf::<T>::make_free_balance_be(&reward_account, ed + origin_weight);
 
+		// set claim preferences to `PermissionlessAll` so any account can claim rewards on member's
+		// behalf.
+		let _ = Pools::<T>::set_claim_permission(RuntimeOrigin::Signed(depositor.clone()).into(), ClaimPermission::PermissionlessAll);
+
 		// Sanity check
 		assert_eq!(
 			CurrencyOf::<T>::free_balance(&depositor),
@@ -286,7 +297,7 @@ frame_benchmarking::benchmarks! {
 		);
 
 		whitelist_account!(depositor);
-	}:_(RuntimeOrigin::Signed(depositor.clone()))
+	}:claim_payout_other(RuntimeOrigin::Signed(claimer), depositor.clone())
 	verify {
 		assert_eq!(
 			CurrencyOf::<T>::free_balance(&depositor),
@@ -297,6 +308,7 @@ frame_benchmarking::benchmarks! {
 			ed + Zero::zero()
 		);
 	}
+
 
 	unbond {
 		// The weight the nominator will start at. The value used here is expected to be
@@ -652,6 +664,28 @@ frame_benchmarking::benchmarks! {
 	}:_(RuntimeOrigin::Signed(depositor.clone()), 1)
 	verify {
 		assert!(T::Staking::nominations(Pools::<T>::create_bonded_account(1)).is_none());
+	}
+
+	set_claim_permission {
+		// Create a pool
+		let min_create_bond = Pools::<T>::depositor_min_bond();
+		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
+
+		// Join pool
+		let min_join_bond = MinJoinBond::<T>::get().max(CurrencyOf::<T>::minimum_balance());
+		let joiner = create_funded_user_with_balance::<T>("joiner", 0, min_join_bond * 4u32.into());
+		let joiner_lookup = T::Lookup::unlookup(joiner.clone());
+		Pools::<T>::join(RuntimeOrigin::Signed(joiner.clone()).into(), min_join_bond, 1)
+			.unwrap();
+
+		// Sanity check join worked
+		assert_eq!(
+			T::Staking::active_stake(&pool_account).unwrap(),
+			min_create_bond + min_join_bond
+		);
+	}:_(RuntimeOrigin::Signed(joiner.clone()), ClaimPermission::PermissionlessAll)
+	verify {
+		assert_eq!(ClaimPermissions::<T>::get(joiner), ClaimPermission::PermissionlessAll);
 	}
 
 	impl_benchmark_test_suite!(

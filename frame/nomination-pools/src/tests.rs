@@ -2104,6 +2104,36 @@ mod claim_payout {
 				);
 			})
 	}
+
+	#[test]
+	fn claim_payout_other_works() {
+		ExtBuilder::default().add_members(vec![(20, 20)]).build_and_execute(|| {
+			Balances::make_free_balance_be(&default_reward_account(), 8);
+			// ... of which only 3 are claimable to make sure the reward account does not die.
+			let claimable_reward = 8 - ExistentialDeposit::get();
+			// NOTE: easier to read if we use 3, so let's use the number instead of variable.
+			assert_eq!(claimable_reward, 3, "test is correct if rewards are divisible by 3");
+
+			// given
+			assert_eq!(Balances::free_balance(10), 35);
+
+			// Permissioned by default
+			assert_noop!(
+				Pools::claim_payout_other(RuntimeOrigin::signed(80), 10),
+				Error::<Runtime>::DoesNotHavePermission
+			);
+
+			assert_ok!(Pools::set_claim_permission(
+				RuntimeOrigin::signed(10),
+				ClaimPermission::PermissionlessWithdraw
+			));
+			assert_ok!(Pools::claim_payout_other(RuntimeOrigin::signed(80), 10));
+
+			// then
+			assert_eq!(Balances::free_balance(10), 36);
+			assert_eq!(Balances::free_balance(&default_reward_account()), 7);
+		})
+	}
 }
 
 mod unbond {
@@ -2130,10 +2160,21 @@ mod unbond {
 					Error::<T>::MinimumBondNotMet
 				);
 
+				// Make permissionless
+				assert_eq!(ClaimPermissions::<Runtime>::get(10), ClaimPermission::Permissioned);
+				assert_ok!(Pools::set_claim_permission(
+					RuntimeOrigin::signed(20),
+					ClaimPermission::PermissionlessAll
+				));
+
 				// but can go to 0
 				assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, 15));
 				assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().active_points(), 0);
 				assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().unbonding_points(), 20);
+				assert_eq!(
+					ClaimPermissions::<Runtime>::get(20),
+					ClaimPermission::PermissionlessAll
+				);
 			})
 	}
 
@@ -4098,6 +4139,49 @@ mod withdraw_unbonded {
 			assert!(!Metadata::<T>::contains_key(1));
 		})
 	}
+
+	#[test]
+	fn withdraw_unbonded_removes_claim_permissions_on_leave() {
+		ExtBuilder::default().add_members(vec![(20, 20)]).build_and_execute(|| {
+			// Given
+			CurrentEra::set(1);
+			assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().points, 20);
+
+			assert_ok!(Pools::set_claim_permission(
+				RuntimeOrigin::signed(20),
+				ClaimPermission::PermissionlessAll
+			));
+			assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, 20));
+			assert_eq!(ClaimPermissions::<Runtime>::get(20), ClaimPermission::PermissionlessAll);
+
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
+					Event::Unbonded { member: 20, pool_id: 1, balance: 20, points: 20, era: 4 },
+				]
+			);
+
+			CurrentEra::set(5);
+
+			// When
+			assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(20), 20, 0));
+
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Withdrawn { member: 20, pool_id: 1, balance: 20, points: 20 },
+					Event::MemberRemoved { pool_id: 1, member: 20 }
+				]
+			);
+
+			// Then
+			assert_eq!(PoolMembers::<Runtime>::get(20), None);
+			assert_eq!(ClaimPermissions::<Runtime>::contains_key(20), false);
+		});
+	}
 }
 
 mod create {
@@ -4278,6 +4362,45 @@ mod create {
 			assert_ok!(Pools::create_with_pool_id(RuntimeOrigin::signed(10), 20, 234, 654, 783, 1));
 		});
 	}
+}
+
+#[test]
+fn set_claimable_actor_works() {
+	ExtBuilder::default().build_and_execute(|| {
+		// Given
+		Balances::make_free_balance_be(&11, ExistentialDeposit::get() + 2);
+		assert!(!PoolMembers::<Runtime>::contains_key(&11));
+
+		// When
+		assert_ok!(Pools::join(RuntimeOrigin::signed(11), 2, 1));
+
+		// Then
+		assert_eq!(
+			pool_events_since_last_call(),
+			vec![
+				Event::Created { depositor: 10, pool_id: 1 },
+				Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+				Event::Bonded { member: 11, pool_id: 1, bonded: 2, joined: true },
+			]
+		);
+
+		// Make permissionless
+		assert_eq!(ClaimPermissions::<Runtime>::get(11), ClaimPermission::Permissioned);
+		assert_noop!(
+			Pools::set_claim_permission(
+				RuntimeOrigin::signed(12),
+				ClaimPermission::PermissionlessAll
+			),
+			Error::<T>::PoolMemberNotFound
+		);
+		assert_ok!(Pools::set_claim_permission(
+			RuntimeOrigin::signed(11),
+			ClaimPermission::PermissionlessAll
+		));
+
+		// then
+		assert_eq!(ClaimPermissions::<Runtime>::get(11), ClaimPermission::PermissionlessAll);
+	});
 }
 
 mod nominate {
@@ -4592,6 +4715,7 @@ mod bond_extra {
 
 			// when
 			assert_ok!(Pools::bond_extra(RuntimeOrigin::signed(10), BondExtra::Rewards));
+			assert_eq!(Balances::free_balance(&default_reward_account()), 7);
 
 			// then
 			assert_eq!(Balances::free_balance(10), 35);
@@ -4621,6 +4745,61 @@ mod bond_extra {
 					Event::Bonded { member: 20, pool_id: 1, bonded: 2, joined: false }
 				]
 			);
+		})
+	}
+
+	#[test]
+	fn bond_extra_other() {
+		ExtBuilder::default().add_members(vec![(20, 20)]).build_and_execute(|| {
+			Balances::make_free_balance_be(&default_reward_account(), 8);
+			// ... of which only 3 are claimable to make sure the reward account does not die.
+			let claimable_reward = 8 - ExistentialDeposit::get();
+			// NOTE: easier to read if we use 3, so let's use the number instead of variable.
+			assert_eq!(claimable_reward, 3, "test is correct if rewards are divisible by 3");
+
+			// given
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().points, 10);
+			assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().points, 20);
+			assert_eq!(BondedPools::<Runtime>::get(1).unwrap().points, 30);
+			assert_eq!(Balances::free_balance(10), 35);
+			assert_eq!(Balances::free_balance(20), 20);
+
+			// Permissioned by default
+			assert_noop!(
+				Pools::bond_extra_other(RuntimeOrigin::signed(80), 20, BondExtra::Rewards),
+				Error::<Runtime>::DoesNotHavePermission
+			);
+
+			assert_ok!(Pools::set_claim_permission(
+				RuntimeOrigin::signed(10),
+				ClaimPermission::PermissionlessAll
+			));
+			assert_ok!(Pools::bond_extra_other(RuntimeOrigin::signed(50), 10, BondExtra::Rewards));
+			assert_eq!(Balances::free_balance(&default_reward_account()), 7);
+
+			// then
+			assert_eq!(Balances::free_balance(10), 35);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().points, 10 + 1);
+			assert_eq!(BondedPools::<Runtime>::get(1).unwrap().points, 30 + 1);
+
+			// when
+			assert_noop!(
+				Pools::bond_extra_other(RuntimeOrigin::signed(40), 40, BondExtra::Rewards),
+				Error::<Runtime>::PoolMemberNotFound
+			);
+
+			// when
+			assert_ok!(Pools::bond_extra_other(
+				RuntimeOrigin::signed(20),
+				20,
+				BondExtra::FreeBalance(10)
+			));
+
+			// then
+			assert_eq!(Balances::free_balance(20), 12);
+			assert_eq!(Balances::free_balance(&default_reward_account()), 5);
+			assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().points, 30);
+			assert_eq!(BondedPools::<Runtime>::get(1).unwrap().points, 41);
 		})
 	}
 }

@@ -114,21 +114,22 @@ pub use v1::*;
 /// Within a `#[benchmarks]` or `#[instance_benchmarks]` module, you can define individual
 /// benchmarks using the `#[benchmark]` attribute, as shown in the example above.
 ///
-/// The `#[benchmark]` attribute expects a function definition with a blank return type and
-/// zero or more arguments whose names are valid
-/// [BenchmarkParameter](`crate::BenchmarkParameter`) parameters, such as `x`, `y`, `a`, `b`,
-/// etc., and whose param types must implement [ParamRange](`v2::ParamRange`). At the moment
-/// the only valid type that implements [ParamRange](`v2::ParamRange`) is
-/// [Linear](`v2::Linear`).
+/// The `#[benchmark]` attribute expects a function definition with a blank return type (or a
+/// return type compatible with `Result<(), BenchmarkError>`, as discussed below) and zero or
+/// more arguments whose names are valid [BenchmarkParameter](`crate::BenchmarkParameter`)
+/// parameters, such as `x`, `y`, `a`, `b`, etc., and whose param types must implement
+/// [ParamRange](`v2::ParamRange`). At the moment the only valid type that implements
+/// [ParamRange](`v2::ParamRange`) is [Linear](`v2::Linear`).
 ///
-/// The valid syntax for defining a [Linear](`v2::Linear`)is `Linear<A, B>` where `A`, and `B`
+/// The valid syntax for defining a [Linear](`v2::Linear`) is `Linear<A, B>` where `A`, and `B`
 /// are valid integer literals (that fit in a `u32`), such that `B` >= `A`.
 ///
-/// Note that the benchmark function definition does not actually expand as a function
-/// definition, but rather is used to automatically create a number of impls and structs
-/// required by the benchmarking engine. For this reason, the visibility of the function
-/// definition as well as the return type are not used for any purpose and are discarded by the
-/// expansion code.
+/// Anywhere within a benchmark function you may use the generic `T: Config` parameter as well
+/// as `I` in the case of an `#[instance_benchmarks]` module. You should not add these to the
+/// function signature as this will be handled automatically for you based on whether this is a
+/// `#[benchmarks]` or `#[instance_benchmarks]` module and whatever [where clause](#where-clause)
+/// you have defined for the the module. You should not manually add any generics to the
+/// signature of your benchmark function.
 ///
 /// Also note that the `// setup code` and `// verification code` comments shown above are not
 /// required and are included simply for demonstration purposes.
@@ -189,10 +190,10 @@ pub use v1::*;
 ///
 /// #### `skip_meta`
 ///
-/// Specifies that the benchmarking framework should not analyze the storage keys that
+/// Specifies that the benchmarking framework should not analyze the storage keys that the
 /// benchmarked code read or wrote. This useful to suppress the prints in the form of unknown
-/// 0x… in case a storage key that does not have metadata. Note that this skips the analysis
-/// of all accesses, not just ones without metadata.
+/// 0x… in case a storage key that does not have metadata. Note that this skips the analysis of
+/// all accesses, not just ones without metadata.
 ///
 /// ## Where Clause
 ///
@@ -231,6 +232,79 @@ pub use v1::*;
 /// 	);
 /// }
 /// ```
+///
+/// ## Benchmark Function Generation
+///
+/// The benchmark function definition that you provide is used to automatically create a number
+/// of impls and structs required by the benchmarking engine. Additionally, a benchmark
+/// function is also generated that resembles the function definition you provide, with a few
+/// modifications:
+/// 1. The function name is transformed from i.e. `original_name` to `_original_name` so as not
+///    to collide with the struct `original_name` that is created for some of the benchmarking
+///    engine impls.
+/// 2. Appropriate `T: Config` and `I` (if this is an instance benchmark) generics are added to
+///    the function automatically during expansion, so you should not add these manually on
+///    your function definition (but you may make use of `T` and `I` anywhere within your
+///    benchmark function, in any of the three sections (setup, call, verification).
+/// 3. Arguments such as `u: Linear<10, 100>` are converted to `u: u32` to make the function
+///    directly callable.
+/// 4. A `verify: bool` param is added as the last argument. Specifying `true` will result in
+///    the verification section of your function executing, while a value of `false` will skip
+///    verification.
+/// 5. If you specify a return type on the function definition, it must conform to the [rules
+///    below](#support-for-result-benchmarkerror-and-the--operator), and the last statement of
+///    the function definition must resolve to something compatible with `Result<(),
+///    BenchmarkError>`.
+///
+/// The reason we generate an actual function as part of the expansion is to allow the compiler
+/// to enforce several constraints that would otherwise be difficult to enforce and to reduce
+/// developer confusion (especially regarding the use of the `?` operator, as covered below).
+///
+/// Note that any attributes, comments, and doc comments attached to your benchmark function
+/// definition are also carried over onto the resulting benchmark function and the struct for
+/// that benchmark. As a result you should be careful about what attributes you attach here as
+/// they will be replicated in multiple places.
+///
+/// ### Support for `Result<(), BenchmarkError>` and the `?` operator
+///
+/// You may optionally specify `Result<(), BenchmarkError>` as the return type of your
+/// benchmark function definition. If you do so, you must return a compatible `Result<(),
+/// BenchmarkError>` as the *last statement* of your benchmark function definition. You may
+/// also use the `?` operator throughout your benchmark function definition if you choose to
+/// follow this route. See the example below:
+///
+/// ```ignore
+/// #![cfg(feature = "runtime-benchmarks")]
+///
+/// use super::{mock_helpers::*, Pallet as MyPallet};
+/// use frame_benchmarking::v2::*;
+///
+/// #[benchmarks]
+/// mod benchmarks {
+/// 	use super::*;
+///
+/// 	#[benchmark]
+/// 	fn bench_name(x: Linear<5, 25>) -> Result<(), BenchmarkError> {
+/// 		// setup code
+/// 		let z = x + 4;
+/// 		let caller = whitelisted_caller();
+///
+/// 		// note we can make use of the ? operator here because of the return type
+/// 		something(z)?;
+///
+/// 		#[extrinsic_call]
+/// 		extrinsic_name(SystemOrigin::Signed(caller), other, arguments);
+///
+/// 		// verification code
+/// 		assert_eq!(MyPallet::<T>::my_var(), z);
+///
+/// 		// we must return a valid `Result<(), BenchmarkError>` as the last line of our benchmark
+/// 		// function definition. This line is not included as part of the verification code that
+/// 		// appears above it.
+/// 		Ok(())
+/// 	}
+/// }
+/// ```
 pub mod v2 {
 	pub use super::*;
 	pub use frame_support_procedural::{
@@ -240,7 +314,7 @@ pub mod v2 {
 	// Used in #[benchmark] implementation to ensure that benchmark function arguments
 	// implement [`ParamRange`].
 	#[doc(hidden)]
-	pub use static_assertions::assert_impl_all;
+	pub use static_assertions::{assert_impl_all, assert_type_eq_all};
 
 	/// Used by the new benchmarking code to specify that a benchmarking variable is linear
 	/// over some specified range, i.e. `Linear<0, 1_000>` means that the corresponding variable
