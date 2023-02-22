@@ -188,6 +188,8 @@ pub trait AssetsCallback<AssetId, AccountId> {
 impl<AssetId, AccountId> AssetsCallback<AssetId, AccountId> for () {}
 
 #[frame_support::pallet]
+#[doc = include_str!("../README.md")]
+/// Hello
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
