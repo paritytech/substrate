@@ -51,7 +51,7 @@ pub use trie_db::{
 	nibble_ops,
 	node::{NodePlan, ValuePlan},
 	CError, DBValue, Query, Recorder, Trie, TrieCache, TrieConfiguration, TrieDBIterator,
-	TrieDBKeyIterator, TrieLayout, TrieMut, TrieRecorder,
+	TrieDBKeyIterator, TrieDBRawIterator, TrieLayout, TrieMut, TrieRecorder,
 };
 /// The Substrate format implementation of `TrieStream`.
 pub use trie_stream::TrieStream;
@@ -442,6 +442,7 @@ fn keyspace_as_prefix_alloc(ks: &[u8], prefix: Prefix) -> (Vec<u8>, Option<u8>) 
 
 impl<'a, DB: ?Sized, H> KeySpacedDB<'a, DB, H> {
 	/// instantiate new keyspaced db
+	#[inline]
 	pub fn new(db: &'a DB, ks: &'a [u8]) -> Self {
 		KeySpacedDB(db, ks, PhantomData)
 	}

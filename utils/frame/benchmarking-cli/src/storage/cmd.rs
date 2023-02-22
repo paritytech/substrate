@@ -20,7 +20,6 @@ use sc_client_api::{Backend as ClientBackend, StorageProvider, UsageProvider};
 use sc_client_db::DbHash;
 use sc_service::Configuration;
 use sp_blockchain::HeaderBackend;
-use sp_core::storage::StorageKey;
 use sp_database::{ColumnId, Database};
 use sp_runtime::traits::{Block as BlockT, HashFor};
 use sp_state_machine::Storage;
@@ -192,8 +191,7 @@ impl StorageCmd {
 		BA: ClientBackend<B>,
 	{
 		let hash = client.usage_info().chain.best_hash;
-		let empty_prefix = StorageKey(Vec::new());
-		let mut keys = client.storage_keys(hash, &empty_prefix)?;
+		let mut keys: Vec<_> = client.storage_keys(hash, None, None)?.collect();
 		let (mut rng, _) = new_rng(None);
 		keys.shuffle(&mut rng);
 

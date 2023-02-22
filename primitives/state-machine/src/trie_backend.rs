@@ -20,6 +20,7 @@
 #[cfg(feature = "std")]
 use crate::backend::AsTrieBackend;
 use crate::{
+	backend::IterArgs,
 	trie_backend_essence::{TrieBackendEssence, TrieBackendStorage},
 	Backend, StorageKey, StorageValue,
 };
@@ -28,7 +29,6 @@ use codec::Codec;
 use hash_db::HashDB;
 use hash_db::Hasher;
 use sp_core::storage::{ChildInfo, StateVersion};
-use sp_std::vec::Vec;
 #[cfg(feature = "std")]
 use sp_trie::{cache::LocalTrieCache, recorder::Recorder};
 #[cfg(feature = "std")]
@@ -51,6 +51,7 @@ pub trait AsLocalTrieCache<H: Hasher>: sealed::Sealed {
 
 impl<H: Hasher> AsLocalTrieCache<H> for LocalTrieCache<H> {
 	#[cfg(feature = "std")]
+	#[inline]
 	fn as_local_trie_cache(&self) -> &LocalTrieCache<H> {
 		self
 	}
@@ -58,6 +59,7 @@ impl<H: Hasher> AsLocalTrieCache<H> for LocalTrieCache<H> {
 
 #[cfg(feature = "std")]
 impl<H: Hasher> AsLocalTrieCache<H> for &LocalTrieCache<H> {
+	#[inline]
 	fn as_local_trie_cache(&self) -> &LocalTrieCache<H> {
 		self
 	}
@@ -236,6 +238,7 @@ where
 	type Error = crate::DefaultError;
 	type Transaction = S::Overlay;
 	type TrieBackendStorage = S;
+	type RawIter = crate::trie_backend_essence::RawIter<S, H, C>;
 
 	fn storage_hash(&self, key: &[u8]) -> Result<Option<H::Out>, Self::Error> {
 		self.essence.storage_hash(key)
@@ -273,51 +276,8 @@ where
 		self.essence.next_child_storage_key(child_info, key)
 	}
 
-	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
-		self.essence.for_keys_with_prefix(prefix, f)
-	}
-
-	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
-		self.essence.for_key_values_with_prefix(prefix, f)
-	}
-
-	fn apply_to_key_values_while<F: FnMut(Vec<u8>, Vec<u8>) -> bool>(
-		&self,
-		child_info: Option<&ChildInfo>,
-		prefix: Option<&[u8]>,
-		start_at: Option<&[u8]>,
-		f: F,
-		allow_missing: bool,
-	) -> Result<bool, Self::Error> {
-		self.essence
-			.apply_to_key_values_while(child_info, prefix, start_at, f, allow_missing)
-	}
-
-	fn apply_to_keys_while<F: FnMut(&[u8]) -> bool>(
-		&self,
-		child_info: Option<&ChildInfo>,
-		prefix: Option<&[u8]>,
-		start_at: Option<&[u8]>,
-		f: F,
-	) {
-		self.essence.apply_to_keys_while(child_info, prefix, start_at, f)
-	}
-
-	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
-		&self,
-		child_info: &ChildInfo,
-		prefix: &[u8],
-		f: F,
-	) {
-		self.essence.for_child_keys_with_prefix(child_info, prefix, f)
-	}
-
-	fn pairs(&self) -> Vec<(StorageKey, StorageValue)> {
-		self.essence.pairs()
-	}
-
-	fn keys(&self, prefix: &[u8]) -> Vec<StorageKey> {
-		self.essence.keys(prefix)
+	fn raw_iter(&self, args: IterArgs) -> Result<Self::RawIter, Self::Error> {
+		self.essence.raw_iter(args)
 	}
 
 	fn storage_root<'a>(
@@ -579,7 +539,11 @@ pub mod tests {
 		cache: Option<Cache>,
 		recorder: Option<Recorder>,
 	) {
-		assert!(!test_trie(state_version, cache, recorder).pairs().is_empty());
+		assert!(!test_trie(state_version, cache, recorder)
+			.pairs(Default::default())
+			.unwrap()
+			.next()
+			.is_none());
 	}
 
 	#[test]
@@ -589,8 +553,163 @@ pub mod tests {
 			Default::default(),
 		)
 		.build()
-		.pairs()
-		.is_empty());
+		.pairs(Default::default())
+		.unwrap()
+		.next()
+		.is_none());
+	}
+
+	parameterized_test!(storage_iteration_works, storage_iteration_works_inner);
+	fn storage_iteration_works_inner(
+		state_version: StateVersion,
+		cache: Option<Cache>,
+		recorder: Option<Recorder>,
+	) {
+		let trie = test_trie(state_version, cache, recorder);
+
+		// Fetch everything.
+		assert_eq!(
+			trie.keys(Default::default())
+				.unwrap()
+				.map(|result| result.unwrap())
+				.take(5)
+				.collect::<Vec<_>>(),
+			vec![
+				b":child_storage:default:sub1".to_vec(),
+				b":code".to_vec(),
+				b"key".to_vec(),
+				b"value1".to_vec(),
+				b"value2".to_vec(),
+			]
+		);
+
+		// Fetch starting at a given key (full key).
+		assert_eq!(
+			trie.keys(IterArgs { start_at: Some(b"key"), ..IterArgs::default() })
+				.unwrap()
+				.map(|result| result.unwrap())
+				.take(3)
+				.collect::<Vec<_>>(),
+			vec![b"key".to_vec(), b"value1".to_vec(), b"value2".to_vec(),]
+		);
+
+		// Fetch starting at a given key (partial key).
+		assert_eq!(
+			trie.keys(IterArgs { start_at: Some(b"ke"), ..IterArgs::default() })
+				.unwrap()
+				.map(|result| result.unwrap())
+				.take(3)
+				.collect::<Vec<_>>(),
+			vec![b"key".to_vec(), b"value1".to_vec(), b"value2".to_vec(),]
+		);
+
+		// Fetch starting at a given key (empty key).
+		assert_eq!(
+			trie.keys(IterArgs { start_at: Some(b""), ..IterArgs::default() })
+				.unwrap()
+				.map(|result| result.unwrap())
+				.take(5)
+				.collect::<Vec<_>>(),
+			vec![
+				b":child_storage:default:sub1".to_vec(),
+				b":code".to_vec(),
+				b"key".to_vec(),
+				b"value1".to_vec(),
+				b"value2".to_vec(),
+			]
+		);
+
+		// Fetch starting at a given key and with prefix which doesn't match that key.
+		assert!(trie
+			.keys(IterArgs {
+				prefix: Some(b"value"),
+				start_at: Some(b"key"),
+				..IterArgs::default()
+			})
+			.unwrap()
+			.map(|result| result.unwrap())
+			.next()
+			.is_none());
+
+		// Fetch starting at a given key and with prefix which does match that key.
+		assert_eq!(
+			trie.keys(IterArgs {
+				prefix: Some(b"value"),
+				start_at: Some(b"value"),
+				..IterArgs::default()
+			})
+			.unwrap()
+			.map(|result| result.unwrap())
+			.collect::<Vec<_>>(),
+			vec![b"value1".to_vec(), b"value2".to_vec(),]
+		);
+
+		// Also test out the wrapper methods.
+		// TODO: Remove this once these methods are gone.
+
+		let mut list = Vec::new();
+		assert!(trie
+			.apply_to_key_values_while(
+				None,
+				None,
+				Some(b"key"),
+				|key, _| {
+					list.push(key);
+					true
+				},
+				false
+			)
+			.unwrap());
+		assert_eq!(list[0..3], vec![b"key".to_vec(), b"value1".to_vec(), b"value2".to_vec(),]);
+
+		let mut list = Vec::new();
+		trie.apply_to_keys_while(None, None, Some(b"key"), |key| {
+			list.push(key.to_vec());
+			true
+		})
+		.unwrap();
+		assert_eq!(list[0..3], vec![b"key".to_vec(), b"value1".to_vec(), b"value2".to_vec(),]);
+
+		let mut list = Vec::new();
+		trie.apply_to_keys_while(None, None, Some(b"k"), |key| {
+			list.push(key.to_vec());
+			true
+		})
+		.unwrap();
+		assert_eq!(list[0..3], vec![b"key".to_vec(), b"value1".to_vec(), b"value2".to_vec(),]);
+
+		let mut list = Vec::new();
+		trie.apply_to_keys_while(None, None, Some(b""), |key| {
+			list.push(key.to_vec());
+			true
+		})
+		.unwrap();
+		assert_eq!(
+			list[0..5],
+			vec![
+				b":child_storage:default:sub1".to_vec(),
+				b":code".to_vec(),
+				b"key".to_vec(),
+				b"value1".to_vec(),
+				b"value2".to_vec(),
+			]
+		);
+
+		let mut list = Vec::new();
+		trie.apply_to_keys_while(None, Some(b"value"), Some(b"key"), |key| {
+			list.push(key.to_vec());
+			true
+		})
+		.unwrap();
+		assert!(list.is_empty());
+
+		let mut list = Vec::new();
+		trie.apply_to_keys_while(None, Some(b"value"), Some(b"value"), |key| {
+			list.push(key.to_vec());
+			true
+		})
+		.unwrap();
+		assert_eq!(list, vec![b"value1".to_vec(), b"value2".to_vec(),]);
 	}
 
 	parameterized_test!(storage_root_is_non_default, storage_root_is_non_default_inner);
@@ -638,7 +757,8 @@ pub mod tests {
 		trie.for_keys_with_prefix(b"value", |key| {
 			let for_first_time = seen.insert(key.to_vec());
 			assert!(for_first_time, "Seen key '{:?}' more than once", key);
-		});
+		})
+		.unwrap();
 
 		let mut expected = HashSet::new();
 		expected.insert(b"value1".to_vec());
@@ -664,7 +784,8 @@ pub mod tests {
 			.collect::<Vec<_>>();
 
 		let trie = test_trie(state_version, cache, recorder);
-		let keys = trie.keys(&[]);
+		let keys: Vec<_> =
+			trie.keys(Default::default()).unwrap().map(|result| result.unwrap()).collect();
 
 		assert_eq!(expected, keys);
 	}
@@ -724,7 +845,18 @@ pub mod tests {
 			.with_recorder(Recorder::default())
 			.build();
 		assert_eq!(trie_backend.storage(b"key").unwrap(), proving_backend.storage(b"key").unwrap());
-		assert_eq!(trie_backend.pairs(), proving_backend.pairs());
+		assert_eq!(
+			trie_backend
+				.pairs(Default::default())
+				.unwrap()
+				.map(|result| result.unwrap())
+				.collect::<Vec<_>>(),
+			proving_backend
+				.pairs(Default::default())
+				.unwrap()
+				.map(|result| result.unwrap())
+				.collect::<Vec<_>>()
+		);
 
 		let (trie_root, mut trie_mdb) =
 			trie_backend.storage_root(std::iter::empty(), state_version);

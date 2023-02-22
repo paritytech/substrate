@@ -308,6 +308,11 @@ pub mod pallet {
 		/// of a negative-turnout-bias (default-carries) referendum.
 		type ExternalDefaultOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
+		/// Origin from which the new proposal can be made.
+		///
+		/// The success variant is the account id of the depositor.
+		type SubmitOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Self::AccountId>;
+
 		/// Origin from which the next majority-carries (or more permissive) referendum may be
 		/// tabled to vote according to the `FastTrackVotingPeriod` asynchronously in a similar
 		/// manner to the emergency origin. It retains its threshold method.
@@ -590,7 +595,7 @@ pub mod pallet {
 			proposal: BoundedCallOf<T>,
 			#[pallet::compact] value: BalanceOf<T>,
 		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
+			let who = T::SubmitOrigin::ensure_origin(origin)?;
 			ensure!(value >= T::MinimumDeposit::get(), Error::<T>::ValueLow);
 
 			let index = Self::public_prop_count();

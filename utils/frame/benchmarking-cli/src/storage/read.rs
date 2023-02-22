@@ -17,7 +17,6 @@
 
 use sc_cli::Result;
 use sc_client_api::{Backend as ClientBackend, StorageProvider, UsageProvider};
-use sp_core::storage::StorageKey;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
 use log::info;
@@ -42,8 +41,7 @@ impl StorageCmd {
 
 		info!("Preparing keys from block {}", best_hash);
 		// Load all keys and randomly shuffle them.
-		let empty_prefix = StorageKey(Vec::new());
-		let mut keys = client.storage_keys(best_hash, &empty_prefix)?;
+		let mut keys: Vec<_> = client.storage_keys(best_hash, None, None)?.collect();
 		let (mut rng, _) = new_rng(None);
 		keys.shuffle(&mut rng);
 
@@ -55,8 +53,7 @@ impl StorageCmd {
 			match (self.params.include_child_trees, self.is_child_key(key.clone().0)) {
 				(true, Some(info)) => {
 					// child tree key
-					let child_keys = client.child_storage_keys(best_hash, &info, &empty_prefix)?;
-					for ck in child_keys {
+					for ck in client.child_storage_keys(best_hash, info.clone(), None, None)? {
 						child_nodes.push((ck.clone(), info.clone()));
 					}
 				},
