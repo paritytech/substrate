@@ -524,8 +524,8 @@ impl pallet_session::historical::Config for Runtime {
 	type FullIdentificationOf = pallet_staking::ExposureOf<Runtime>;
 }
 
-	// NOTE: Changes to `ideal_stake` and `falloff` must also be applied in pallet_staking_runtime_api
-	// `inflation_rate`.
+// NOTE: Changes to `ideal_stake` and `falloff` must also be applied in pallet_staking_runtime_api
+// `inflation_rate`.
 pallet_staking_reward_curve::build! {
 	const REWARD_CURVE: PiecewiseLinear<'static> = curve!(
 		min_inflation: 0_025_000,
@@ -2010,7 +2010,7 @@ impl_runtime_apis! {
 	}
 
 	impl pallet_staking_runtime_api::StakingApi<Block, Balance> for Runtime {
-    fn inflation_rate() -> Perquintill {
+	fn inflation_rate() -> Perquintill {
 			// NOTE: Changes to `ideal_stake` and `falloff` must also be applied in `REWARD_CURVE` config.
 			let ideal_stake = 0_500_000;
 			let falloff = 0_050_000;
