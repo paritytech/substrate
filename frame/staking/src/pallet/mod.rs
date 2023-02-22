@@ -484,21 +484,19 @@ pub mod pallet {
 
 	/// Paginated exposure of a validator at given era.
 	///
-	/// This is keyed first by the era index to allow bulk deletion, then the tuple of stash account
-	/// and page.
+	/// This is keyed first by the era index to allow bulk deletion, then stash account and finally
+	/// the page.
 	///
-	/// This uses DoubleMap instead of NMap to efficiently clear this after `HISTORY_DEPTH` eras.
-	/// If stakers hasn't been set or has been removed then empty exposure is returned.
-	///
-	/// TODO(ank4n): Use NMAP and make sure it can be cleared by 1st key.
+	/// This is cleared after `HISTORY_DEPTH` eras.
 	#[pallet::storage]
 	#[pallet::unbounded]
-	pub type ErasStakersPaged<T: Config> = StorageDoubleMap<
+	pub type ErasStakersPaged<T: Config> = StorageNMap<
 		_,
-		Twox64Concat,
-		EraIndex,
-		Twox64Concat,
-		(T::AccountId, PageIndex),
+		(
+			NMapKey<Twox64Concat, EraIndex>,
+			NMapKey<Twox64Concat, T::AccountId>,
+			NMapKey<Twox64Concat, PageIndex>,
+		),
 		ExposurePage<T::AccountId, BalanceOf<T>>,
 		OptionQuery,
 	>;
@@ -699,7 +697,7 @@ pub mod pallet {
 			let validator_stake = if page == 0 { overview.own } else { Zero::zero() };
 
 			let exposure_page =
-				<ErasStakersPaged<T>>::get(era, (validator, page)).unwrap_or_default();
+				<ErasStakersPaged<T>>::get((era, validator, page)).unwrap_or_default();
 
 			// build the exposure
 			Some(ExposureExt {
@@ -727,7 +725,7 @@ pub mod pallet {
 
 			let mut others = Vec::with_capacity(overview.nominator_count as usize);
 			for page in 0..overview.page_count {
-				let nominators = <ErasStakersPaged<T>>::get(era, (validator, page));
+				let nominators = <ErasStakersPaged<T>>::get((era, validator, page));
 				others.append(&mut nominators.map(|n| n.others).defensive_unwrap_or_default());
 			}
 
@@ -841,7 +839,7 @@ pub mod pallet {
 
 			<ErasStakersOverview<T>>::insert(era, &validator, &exposure_overview);
 			exposure_pages.iter().enumerate().for_each(|(page, paged_exposure)| {
-				<ErasStakersPaged<T>>::insert(era, (&validator, page as u32), &paged_exposure);
+				<ErasStakersPaged<T>>::insert((era, &validator, page as u32), &paged_exposure);
 			});
 		}
 
