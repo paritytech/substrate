@@ -107,6 +107,7 @@ use crate::{
 	weights::WeightInfo,
 };
 use codec::{Codec, Encode, HasCompact};
+use environmental::*;
 use frame_support::{
 	dispatch::{Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo},
 	ensure,
@@ -125,6 +126,7 @@ use pallet_contracts_primitives::{
 };
 use scale_info::TypeInfo;
 use smallvec::Array;
+use sp_core::defer;
 use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup};
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
@@ -156,6 +158,10 @@ type DebugBufferVec<T> = BoundedVec<u8, <T as Config>::MaxDebugBufferLen>;
 /// sentinel because contracts are never allowed to use such a large amount of resources
 /// that this value makes sense for a memory location or length.
 const SENTINEL: u32 = u32::MAX;
+
+// TODO doc
+// TODO think on renaming to reentrancy_guard
+environmental!(executing_contract: bool);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -1248,13 +1254,25 @@ impl<T: Config> Pallet<T> {
 		input: I,
 		debug_message: Option<&mut DebugBufferVec<T>>,
 	) -> I::Output {
-		// check global here
-		// set global here
-
+		// check global here: fail if trying to re-enter
+		executing_contract::using(&mut false, || {
+			executing_contract::with(|f| {
+				if *f {
+					return Err::<(), Error<T>>(<Error<T>>::ContractNotFound.into()) // TODO: new Err
+				}
+				Ok(())
+			})
+			.unwrap()
+		})
+		.unwrap(); // TODO: refactor
+		   // we are entering the contract: set global here
+		executing_contract::using(&mut false, || executing_contract::with(|f| *f = true));
+		// set global back when exiting the contract
+		defer! {
+			executing_contract::with(|f| *f = false);
+		};
 		// do stuff
 		input.run(debug_message)
-
-		// set global here
 	}
 
 	/// Deposit a pallet contracts event. Handles the conversion to the overarching event type.
