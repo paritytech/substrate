@@ -1,0 +1,5 @@
+error: expected `()`
+ --> tests/benchmark_ui/bad_return_non_unit_t.rs:8:23
+  |
+8 |     fn bench() -> Result<u32, BenchmarkError> {
+  |                          ^^^

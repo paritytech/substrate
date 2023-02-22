@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,7 +27,7 @@ use frame_support::{
 	},
 	weights::Weight,
 };
-use frame_system::{EnsureRoot, EnsureSignedBy};
+use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
 use pallet_balances::{BalanceLock, Error as BalancesError};
 use sp_core::H256;
 use sp_runtime::{
@@ -177,6 +177,7 @@ impl Config for Test {
 	type MinimumDeposit = ConstU64<1>;
 	type MaxDeposits = ConstU32<1000>;
 	type MaxBlacklisted = ConstU32<5>;
+	type SubmitOrigin = EnsureSigned<Self::AccountId>;
 	type ExternalOrigin = EnsureSignedBy<Two, u64>;
 	type ExternalMajorityOrigin = EnsureSignedBy<Three, u64>;
 	type ExternalDefaultOrigin = EnsureSignedBy<One, u64>;

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -159,6 +159,39 @@ fn validator_set_updates_work() {
 		assert_eq!(vs.id(), 2u64);
 		assert_eq!(want[1], vs.validators()[0]);
 		assert_eq!(want[3], vs.validators()[1]);
+	});
+}
+
+#[test]
+fn cleans_up_old_set_id_session_mappings() {
+	new_test_ext(vec![1, 2, 3, 4]).execute_with(|| {
+		let max_set_id_session_entries = MaxSetIdSessionEntries::get();
+
+		// we have 3 sessions per era
+		let era_limit = max_set_id_session_entries / 3;
+		// sanity check against division precision loss
+		assert_eq!(0, max_set_id_session_entries % 3);
+		// go through `max_set_id_session_entries` sessions
+		start_era(era_limit);
+
+		// we should have a session id mapping for all the set ids from
+		// `max_set_id_session_entries` eras we have observed
+		for i in 1..=max_set_id_session_entries {
+			assert!(Beefy::session_for_set(i as u64).is_some());
+		}
+
+		// go through another `max_set_id_session_entries` sessions
+		start_era(era_limit * 2);
+
+		// we should keep tracking the new mappings for new sessions
+		for i in max_set_id_session_entries + 1..=max_set_id_session_entries * 2 {
+			assert!(Beefy::session_for_set(i as u64).is_some());
+		}
+
+		// but the old ones should have been pruned by now
+		for i in 1..=max_set_id_session_entries {
+			assert!(Beefy::session_for_set(i as u64).is_none());
+		}
 	});
 }
 
