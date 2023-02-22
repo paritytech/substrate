@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -88,7 +88,8 @@ pub struct NotificationsInSubstream<TSubstream> {
 }
 
 /// State of the handshake sending back process.
-enum NotificationsInSubstreamHandshake {
+#[derive(Debug)]
+pub enum NotificationsInSubstreamHandshake {
 	/// Waiting for the user to give us the handshake message.
 	NotSent,
 	/// User gave us the handshake message. Trying to push it in the socket.
@@ -109,6 +110,13 @@ pub struct NotificationsOutSubstream<TSubstream> {
 	/// Substream where to send messages.
 	#[pin]
 	socket: Framed<TSubstream, UviBytes<io::Cursor<Vec<u8>>>>,
+}
+
+#[cfg(test)]
+impl<TSubstream> NotificationsOutSubstream<TSubstream> {
+	pub fn new(socket: Framed<TSubstream, UviBytes<io::Cursor<Vec<u8>>>>) -> Self {
+		Self { socket }
+	}
 }
 
 impl NotificationsIn {
@@ -193,6 +201,14 @@ impl<TSubstream> NotificationsInSubstream<TSubstream>
 where
 	TSubstream: AsyncRead + AsyncWrite + Unpin,
 {
+	#[cfg(test)]
+	pub fn new(
+		socket: Framed<TSubstream, UviBytes<io::Cursor<Vec<u8>>>>,
+		handshake: NotificationsInSubstreamHandshake,
+	) -> Self {
+		Self { socket, handshake }
+	}
+
 	/// Sends the handshake in order to inform the remote that we accept the substream.
 	pub fn send_handshake(&mut self, message: impl Into<Vec<u8>>) {
 		if !matches!(self.handshake, NotificationsInSubstreamHandshake::NotSent) {

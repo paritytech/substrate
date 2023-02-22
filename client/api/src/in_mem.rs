@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -788,6 +788,12 @@ where
 	fn requires_full_sync(&self) -> bool {
 		false
 	}
+
+	fn pin_block(&self, _: <Block as BlockT>::Hash) -> blockchain::Result<()> {
+		Ok(())
+	}
+
+	fn unpin_block(&self, _: <Block as BlockT>::Hash) {}
 }
 
 impl<Block: BlockT> backend::LocalBackend<Block> for Backend<Block> where Block::Hash: Ord {}

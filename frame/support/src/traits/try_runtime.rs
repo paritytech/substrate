@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +22,7 @@ use sp_arithmetic::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
 
 /// Which state tests to execute.
-#[derive(codec::Encode, codec::Decode, Clone)]
+#[derive(codec::Encode, codec::Decode, Clone, scale_info::TypeInfo)]
 pub enum Select {
 	/// None of them.
 	None,
@@ -82,7 +82,7 @@ impl sp_std::str::FromStr for Select {
 }
 
 /// Select which checks should be run when trying a runtime upgrade upgrade.
-#[derive(codec::Encode, codec::Decode, Clone, Debug, Copy)]
+#[derive(codec::Encode, codec::Decode, Clone, Debug, Copy, scale_info::TypeInfo)]
 pub enum UpgradeCheckSelect {
 	/// Run no checks.
 	None,
