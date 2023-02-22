@@ -7,8 +7,12 @@ mod benches {
 	use super::*;
 
 	#[benchmark]
-	fn bench() {
-		assert_eq!(2 + 2, 4);
+	fn bench(y: Linear<1, 2>) -> String {
+		let a = 2 + 2;
+		#[block]
+		{}
+		assert_eq!(a, 4);
+		String::from("test")
 	}
 }
 

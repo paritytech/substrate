@@ -7,8 +7,9 @@ mod benches {
 	use super::*;
 
 	#[benchmark]
-	fn bench() {
-		assert_eq!(2 + 2, 4);
+	fn bench() -> Result<(), BenchmarkError> {
+		#[block]
+		{}
 	}
 }
 

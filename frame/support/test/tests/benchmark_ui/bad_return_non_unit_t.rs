@@ -3,12 +3,12 @@ use frame_benchmarking::v2::*;
 use frame_support_test::Config;
 
 #[benchmarks]
-mod benches {
-	use super::*;
-
+mod benchmarks {
 	#[benchmark]
-	fn bench() {
-		assert_eq!(2 + 2, 4);
+	fn bench() -> Result<u32, BenchmarkError> {
+		#[block]
+		{}
+		Ok(10)
 	}
 }
 

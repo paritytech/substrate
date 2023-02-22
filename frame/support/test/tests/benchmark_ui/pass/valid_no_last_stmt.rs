@@ -8,7 +8,8 @@ mod benches {
 
 	#[benchmark]
 	fn bench() {
-		assert_eq!(2 + 2, 4);
+		#[block]
+		{}
 	}
 }
 
