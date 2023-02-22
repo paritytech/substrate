@@ -59,38 +59,6 @@ use super::{pallet::*, STAKING_ID};
 const NPOS_MAX_ITERATIONS_COEFFICIENT: u32 = 2;
 
 impl<T: Config> Pallet<T> {
-	/// Returns the current nominations quota for nominators.
-	///
-	/// Used by runtime API.
-	/// Note: for now, this api runtime will always return value of `T::MaxNominations` and thus it
-	/// is redundant. However, with the upcoming changes in https://github.com/paritytech/substrate/pull/12970
-	/// the nominations quota will change depending on the nominators balance. We're introducing
-	/// this runtime API now to prepare the community to use it before rolling out PR#12970.
-	pub fn api_nominations_quota(_balance: BalanceOf<T>) -> u32 {
-		T::MaxNominations::get()
-	}
-
-	/// Returns the current inflation rate.
-	///
-	/// The staked amount as a PerThing is calculated and provided to `compute_inflation` alongside
-	/// the provided `ideal_staked` and `falloff` values.
-	pub fn api_inflation_rate(ideal_staked: Perquintill, falloff: Perquintill) -> Perquintill {
-		match ActiveEra::<T>::get() {
-			Some(active_era) => {
-				let staked = ErasTotalStake::<T>::get(active_era.index);
-				let total_issuance = T::Currency::total_issuance();
-				let staked_as_percent = Perquintill::from_rational(staked, total_issuance);
-
-				pallet_staking_reward_fn::compute_inflation(
-					staked_as_percent,
-					ideal_staked,
-					falloff,
-				)
-			},
-			None => Perquintill::zero(),
-		}
-	}
-
 	/// The total balance that can be slashed from a stash account as of right now.
 	pub fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
 		// Weight note: consider making the stake accessible through stash.
@@ -1005,6 +973,26 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Returns the current inflation rate.
+	///
+	/// The staked amount as a PerThing is calculated and provided to `compute_inflation` alongside
+	/// the provided `ideal_staked` and `falloff` values.
+	pub fn api_inflation_rate(ideal_staked: Perquintill, falloff: Perquintill) -> Perquintill {
+		match ActiveEra::<T>::get() {
+			Some(active_era) => {
+				let staked = ErasTotalStake::<T>::get(active_era.index);
+				let total_issuance = T::Currency::total_issuance();
+				let staked_as_percent = Perquintill::from_rational(staked, total_issuance);
+
+				pallet_staking_reward_fn::compute_inflation(
+					staked_as_percent,
+					ideal_staked,
+					falloff,
+				)
+			},
+			None => Perquintill::zero(),
+		}
+	}
 	/// Returns the current nominations quota for nominators.
 	///
 	/// Used by the runtime API.
