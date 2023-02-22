@@ -94,6 +94,8 @@ pub enum InvalidTransaction {
 	/// Unlock fee has failed either due to no fee locks or fee lock cant be unlocked yet or an
 	/// unexpected error
 	UnlockFee,
+	/// Tipping is not allowed for swaps and multiswaps
+	TippingNotAllowedForSwaps
 }
 
 impl InvalidTransaction {
@@ -132,6 +134,7 @@ impl From<InvalidTransaction> for &'static str {
 			InvalidTransaction::SwapPrevalidation => "The swap prevalidation has failed",
 			InvalidTransaction::ProcessFeeLock => "Fee lock processing has failed either due to not enough funds to reserve or an unexpected error",
 			InvalidTransaction::UnlockFee => "Unlock fee has failed either due to no fee locks or fee lock cant be unlocked yet or an unexpected error",
+			InvalidTransaction::TippingNotAllowedForSwaps => "Tipping is not allowed for swaps and multiswaps",
 		}
 	}
 }
