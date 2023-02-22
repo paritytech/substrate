@@ -1,1 +1,0 @@
-# Cere Staking Pallet

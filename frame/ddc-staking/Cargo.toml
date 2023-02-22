@@ -1,5 +1,5 @@
 [package]
-name = "pallet-cere-staking"
+name = "pallet-ddc-staking"
 version = "0.1.0"
 edition = "2021"
 

@@ -95,7 +95,7 @@ pallet-cere-ddc = { version = "7.3.0", default-features = false, path = "../../.
 pallet-erc721 = { version = "2.0.0", default-features = false, path = "../../../frame/erc721" }
 pallet-erc20 = { version = "2.0.0", default-features = false, path = "../../../frame/erc20" }
 pallet-ddc-metrics-offchain-worker = { version = "2.0.0", default-features = false, path = "../../../frame/ddc-metrics-offchain-worker" }
-pallet-cere-staking = { version = "0.1.0", default-features = false, path = "../../../frame/cere-staking" }
+pallet-ddc-staking = { version = "0.1.0", default-features = false, path = "../../../frame/ddc-staking" }
 
 [build-dependencies]
 substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder" }
@@ -169,7 +169,7 @@ std = [
 	"sp-io/std",
 	"pallet-child-bounties/std",
 	"pallet-ddc-metrics-offchain-worker/std",
-	"pallet-cere-staking/std",
+	"pallet-ddc-staking/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",

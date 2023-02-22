@@ -16,7 +16,7 @@ use sp_std::prelude::*;
 
 pub use pallet::*;
 
-const CERE_STAKING_ID: LockIdentifier = *b"cnmstake"; // Cere Network Maintainer's stake
+const DDC_STAKING_ID: LockIdentifier = *b"cnmstake"; // DDC maintainer's stake
 
 /// The balance type of this pallet.
 pub type BalanceOf<T> =
@@ -393,7 +393,7 @@ pub mod pallet {
 				// left. We can now safely remove all staking-related information.
 				Self::kill_stash(&stash)?;
 				// Remove the lock.
-				T::Currency::remove_lock(CERE_STAKING_ID, &stash);
+				T::Currency::remove_lock(DDC_STAKING_ID, &stash);
 			} else {
 				// This was the consequence of a partial unbond. just update the ledger and move on.
 				Self::update_ledger(&controller, &ledger);
@@ -500,7 +500,7 @@ pub mod pallet {
 			ledger: &StakingLedger<T::AccountId, BalanceOf<T>>,
 		) {
 			T::Currency::set_lock(
-				CERE_STAKING_ID,
+				DDC_STAKING_ID,
 				&ledger.stash,
 				ledger.total,
 				WithdrawReasons::all(),
