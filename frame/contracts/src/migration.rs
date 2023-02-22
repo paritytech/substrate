@@ -15,51 +15,91 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{BalanceOf, CodeHash, Config, Pallet, TrieId, Weight};
-use codec::{Decode, Encode};
+mod v9;
+
+use crate::{Config, Error, MigrationInProgress, Pallet, Weight, LOG_TARGET};
+use codec::{Codec, Decode};
 use frame_support::{
 	codec,
 	pallet_prelude::*,
-	storage::migration,
-	storage_alias,
-	traits::{Get, OnRuntimeUpgrade},
-	Identity, Twox64Concat,
+	traits::{ConstU32, Get, OnRuntimeUpgrade},
 };
-use sp_runtime::traits::Saturating;
 use sp_std::{marker::PhantomData, prelude::*};
+
+const PROOF_ENCODE: &str = "Tuple::max_encoded_len() < Cursor::max_encoded_len()` is verified in `Self::integrity_test()`; qed";
+const PROOF_DECODE: &str =
+	"We encode to the same type in this trait only. No other code touches this item; qed";
+const PROOF_EXISTS: &str = "Required migration not supported by this runtime. This is a bug.";
+
+pub type Cursor = BoundedVec<u8, ConstU32<1024>>;
+type Migrations<T> = (v9::Migration<T>,);
+
+enum IsFinished {
+	Yes,
+	No,
+}
+
+trait Migrate<T: Config>: Codec + MaxEncodedLen + Default {
+	const VERSION: u16;
+
+	fn max_step_weight() -> Weight;
+
+	fn step(&mut self) -> (IsFinished, Option<Weight>);
+}
+
+trait MigrateSequence<T: Config> {
+	const VERSION_RANGE: Option<(u16, u16)>;
+
+	fn new(version: StorageVersion) -> Cursor;
+
+	fn steps(version: StorageVersion, cursor: &[u8], weight_left: &mut Weight) -> Option<Cursor>;
+
+	fn integrity_test();
+
+	fn is_upgrade_supported(in_storage: StorageVersion, target: StorageVersion) -> bool {
+		if in_storage == target {
+			return true
+		}
+		if in_storage > target {
+			return false
+		}
+		let Some((low, high)) = Self::VERSION_RANGE else {
+			return false
+		};
+		let Some(first_supported) = low.checked_sub(1) else {
+			return false
+		};
+		in_storage == first_supported && target == high
+	}
+}
 
 /// Performs all necessary migrations based on `StorageVersion`.
 pub struct Migration<T: Config>(PhantomData<T>);
+
 impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> Weight {
-		let version = <Pallet<T>>::on_chain_storage_version();
-		let mut weight = Weight::zero();
+		let latest_version = <Pallet<T>>::current_storage_version();
+		let storage_version = <Pallet<T>>::on_chain_storage_version();
+		let mut weight = T::DbWeight::get().reads(1);
 
-		if version < 4 {
-			v4::migrate::<T>(&mut weight);
+		if storage_version == latest_version {
+			return weight
 		}
 
-		if version < 5 {
-			v5::migrate::<T>(&mut weight);
+		// In case a migration is already in progress we create the next migration
+		// (if any) right when the current one finishes.
+		weight.saturating_accrue(T::DbWeight::get().reads(1));
+		if Self::in_progress() {
+			return weight
 		}
 
-		if version < 6 {
-			v6::migrate::<T>(&mut weight);
-		}
+		log::info!(
+			target: LOG_TARGET,
+			"RuntimeUpgraded. Upgrading storage from {storage_version:?} to {latest_version:?}.",
+		);
 
-		if version < 7 {
-			v7::migrate::<T>(&mut weight);
-		}
-
-		if version < 8 {
-			v8::migrate::<T>(&mut weight);
-		}
-
-		if version < 9 {
-			v9::migrate::<T>(&mut weight);
-		}
-
-		StorageVersion::new(9).put::<Pallet<T>>();
+		let cursor = Migrations::<T>::new(storage_version + 1);
+		MigrationInProgress::<T>::set(Some(cursor));
 		weight.saturating_accrue(T::DbWeight::get().writes(1));
 
 		weight
@@ -67,407 +107,176 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-		let version = <Pallet<T>>::on_chain_storage_version();
-
-		if version == 7 {
-			v8::pre_upgrade::<T>()?;
+		// We can't really do much here as our migrations do not happen during the runtime upgrade.
+		// Instead, we call the migrations `pre_upgrade` and `post_upgrade` hooks when we iterate
+		// over our migrations.
+		let storage_version = <Pallet<T>>::on_chain_storage_version();
+		let target_version = <Pallet<T>>::current_storage_version();
+		if Migrations::<T>::is_upgrade_supported(storage_version, target_version) {
+			Ok(Vec::new())
+		} else {
+			Err("New runtime does not contain the required migrations to perform this upgrade.")
 		}
-
-		Ok(version.encode())
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
-		let version = Decode::decode(&mut state.as_ref()).map_err(|_| "Cannot decode version")?;
-		post_checks::post_upgrade::<T>(version)
 	}
 }
 
-/// V4: `Schedule` is changed to be a config item rather than an in-storage value.
-mod v4 {
-	use super::*;
-
-	pub fn migrate<T: Config>(weight: &mut Weight) {
-		#[allow(deprecated)]
-		migration::remove_storage_prefix(<Pallet<T>>::name().as_bytes(), b"CurrentSchedule", b"");
-		weight.saturating_accrue(T::DbWeight::get().writes(1));
-	}
-}
-
-/// V5: State rent is removed which obsoletes some fields in `ContractInfo`.
-mod v5 {
-	use super::*;
-
-	type AliveContractInfo<T> =
-		RawAliveContractInfo<CodeHash<T>, BalanceOf<T>, <T as frame_system::Config>::BlockNumber>;
-	type TombstoneContractInfo<T> = RawTombstoneContractInfo<
-		<T as frame_system::Config>::Hash,
-		<T as frame_system::Config>::Hashing,
-	>;
-
-	#[derive(Decode)]
-	enum OldContractInfo<T: Config> {
-		Alive(AliveContractInfo<T>),
-		Tombstone(TombstoneContractInfo<T>),
+impl<T: Config> Migration<T> {
+	pub(crate) fn integrity_test() {
+		Migrations::<T>::integrity_test()
 	}
 
-	#[derive(Decode)]
-	struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
-		trie_id: TrieId,
-		_storage_size: u32,
-		_pair_count: u32,
-		code_hash: CodeHash,
-		_rent_allowance: Balance,
-		_rent_paid: Balance,
-		_deduct_block: BlockNumber,
-		_last_write: Option<BlockNumber>,
-		_reserved: Option<()>,
-	}
+	pub(crate) fn migrate(weight_limit: Weight) -> Result<Weight, (Weight, DispatchError)> {
+		let mut weight_left = weight_limit;
 
-	#[derive(Decode)]
-	struct RawTombstoneContractInfo<H, Hasher>(H, PhantomData<Hasher>);
+		// for mutating `MigrationInProgress` and `StorageVersion`
+		weight_left
+			.checked_reduce(T::DbWeight::get().reads_writes(2, 2))
+			.ok_or_else(|| (0.into(), Error::<T>::NoMigrationPerformed.into()))?;
 
-	#[derive(Decode)]
-	struct OldDeletedContract {
-		_pair_count: u32,
-		trie_id: TrieId,
-	}
+		MigrationInProgress::<T>::try_mutate_exists(|progress| {
+			let cursor_before = progress.as_mut().ok_or_else(|| {
+				(weight_limit.saturating_sub(weight_left), Error::<T>::NoMigrationPerformed.into())
+			})?;
 
-	pub type ContractInfo<T> = RawContractInfo<CodeHash<T>>;
+			// if a migration is running it is always upgrading to the next version
+			let storage_version = <Pallet<T>>::on_chain_storage_version();
+			let in_progress_version = storage_version + 1;
 
-	#[derive(Encode, Decode)]
-	pub struct RawContractInfo<CodeHash> {
-		pub trie_id: TrieId,
-		pub code_hash: CodeHash,
-		pub _reserved: Option<()>,
-	}
-
-	#[derive(Encode, Decode)]
-	struct DeletedContract {
-		trie_id: TrieId,
-	}
-
-	#[storage_alias]
-	type ContractInfoOf<T: Config> = StorageMap<
-		Pallet<T>,
-		Twox64Concat,
-		<T as frame_system::Config>::AccountId,
-		ContractInfo<T>,
-	>;
-
-	#[storage_alias]
-	type DeletionQueue<T: Config> = StorageValue<Pallet<T>, Vec<DeletedContract>>;
-
-	pub fn migrate<T: Config>(weight: &mut Weight) {
-		<ContractInfoOf<T>>::translate(|_key, old: OldContractInfo<T>| {
-			weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
-			match old {
-				OldContractInfo::Alive(old) => Some(ContractInfo::<T> {
-					trie_id: old.trie_id,
-					code_hash: old.code_hash,
-					_reserved: old._reserved,
-				}),
-				OldContractInfo::Tombstone(_) => None,
-			}
-		});
-
-		DeletionQueue::<T>::translate(|old: Option<Vec<OldDeletedContract>>| {
-			weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
-			old.map(|old| old.into_iter().map(|o| DeletedContract { trie_id: o.trie_id }).collect())
-		})
-		.ok();
-	}
-}
-
-/// V6: Added storage deposits
-mod v6 {
-	use super::*;
-
-	#[derive(Encode, Decode)]
-	struct OldPrefabWasmModule {
-		#[codec(compact)]
-		instruction_weights_version: u32,
-		#[codec(compact)]
-		initial: u32,
-		#[codec(compact)]
-		maximum: u32,
-		#[codec(compact)]
-		refcount: u64,
-		_reserved: Option<()>,
-		code: Vec<u8>,
-		original_code_len: u32,
-	}
-
-	#[derive(Encode, Decode)]
-	pub struct PrefabWasmModule {
-		#[codec(compact)]
-		pub instruction_weights_version: u32,
-		#[codec(compact)]
-		pub initial: u32,
-		#[codec(compact)]
-		pub maximum: u32,
-		pub code: Vec<u8>,
-	}
-
-	use v5::ContractInfo as OldContractInfo;
-
-	#[derive(Encode, Decode)]
-	pub struct RawContractInfo<CodeHash, Balance> {
-		pub trie_id: TrieId,
-		pub code_hash: CodeHash,
-		pub storage_deposit: Balance,
-	}
-
-	#[derive(Encode, Decode)]
-	pub struct OwnerInfo<T: Config> {
-		owner: T::AccountId,
-		#[codec(compact)]
-		deposit: BalanceOf<T>,
-		#[codec(compact)]
-		refcount: u64,
-	}
-
-	pub type ContractInfo<T> = RawContractInfo<CodeHash<T>, BalanceOf<T>>;
-
-	#[storage_alias]
-	type ContractInfoOf<T: Config> = StorageMap<
-		Pallet<T>,
-		Twox64Concat,
-		<T as frame_system::Config>::AccountId,
-		ContractInfo<T>,
-	>;
-
-	#[storage_alias]
-	type CodeStorage<T: Config> = StorageMap<Pallet<T>, Identity, CodeHash<T>, PrefabWasmModule>;
-
-	#[storage_alias]
-	type OwnerInfoOf<T: Config> = StorageMap<Pallet<T>, Identity, CodeHash<T>, OwnerInfo<T>>;
-
-	pub fn migrate<T: Config>(weight: &mut Weight) {
-		<ContractInfoOf<T>>::translate(|_key, old: OldContractInfo<T>| {
-			weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
-			Some(ContractInfo::<T> {
-				trie_id: old.trie_id,
-				code_hash: old.code_hash,
-				storage_deposit: Default::default(),
-			})
-		});
-
-		let nobody = T::AccountId::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes())
-			.expect("Infinite input; no dead input space; qed");
-
-		<CodeStorage<T>>::translate(|key, old: OldPrefabWasmModule| {
-			weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 2));
-			<OwnerInfoOf<T>>::insert(
-				key,
-				OwnerInfo {
-					refcount: old.refcount,
-					owner: nobody.clone(),
-					deposit: Default::default(),
+			*progress = match Migrations::<T>::steps(
+				in_progress_version,
+				cursor_before.as_ref(),
+				&mut weight_left,
+			) {
+				// ongoing
+				Some(cursor) => {
+					// refund as we did not update the storage version
+					weight_left.saturating_accrue(T::DbWeight::get().writes(1));
+					// we still have a cursor which keeps the pallet disabled
+					Some(cursor)
 				},
-			);
-			Some(PrefabWasmModule {
-				instruction_weights_version: old.instruction_weights_version,
-				initial: old.initial,
-				maximum: old.maximum,
-				code: old.code,
-			})
-		});
+				// finished
+				None => {
+					in_progress_version.put::<Pallet<T>>();
+					if <Pallet<T>>::current_storage_version() != in_progress_version {
+						// chain the next migration
+						log::info!(
+							target: LOG_TARGET,
+							"Started migrating to {:?},",
+							in_progress_version + 1,
+						);
+						Some(Migrations::<T>::new(in_progress_version + 1))
+					} else {
+						// enable pallet by removing the storage item
+						log::info!(
+							target: LOG_TARGET,
+							"All migrations done. At version {:?},",
+							in_progress_version + 1,
+						);
+						None
+					}
+				},
+			};
+
+			Ok(weight_limit.saturating_sub(weight_left))
+		})
+	}
+
+	pub(crate) fn ensure_migrated() -> DispatchResult {
+		if Self::in_progress() {
+			Err(Error::<T>::MigrationInProgress.into())
+		} else {
+			Ok(())
+		}
+	}
+
+	fn in_progress() -> bool {
+		MigrationInProgress::<T>::exists()
 	}
 }
 
-/// Rename `AccountCounter` to `Nonce`.
-mod v7 {
-	use super::*;
+#[impl_trait_for_tuples::impl_for_tuples(10)]
+#[tuple_types_custom_trait_bound(Migrate<T>)]
+impl<T: Config> MigrateSequence<T> for Tuple {
+	const VERSION_RANGE: Option<(u16, u16)> = {
+		let mut versions: Option<(u16, u16)> = None;
+		for_tuples!(
+			#(
+				match versions {
+					None => {
+						versions = Some((Tuple::VERSION, Tuple::VERSION));
+					},
+					Some((min_version, last_version)) if Tuple::VERSION == last_version + 1 => {
+						versions = Some((min_version, Tuple::VERSION));
+					},
+					_ => panic!("Migrations must be ordered by their versions with no gaps.")
+				}
+			)*
+		);
+		versions
+	};
 
-	pub fn migrate<T: Config>(weight: &mut Weight) {
-		#[storage_alias]
-		type AccountCounter<T: Config> = StorageValue<Pallet<T>, u64, ValueQuery>;
-		#[storage_alias]
-		type Nonce<T: Config> = StorageValue<Pallet<T>, u64, ValueQuery>;
+	fn new(version: StorageVersion) -> Cursor {
+		for_tuples!(
+			#(
+				if version == Tuple::VERSION {
+					return Tuple::default().encode().try_into().expect(PROOF_ENCODE)
+				}
+			)*
+		);
+		panic!("{PROOF_EXISTS}")
+	}
 
-		Nonce::<T>::set(AccountCounter::<T>::take());
-		weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 2))
+	fn steps(
+		version: StorageVersion,
+		mut cursor: &[u8],
+		weight_left: &mut Weight,
+	) -> Option<Cursor> {
+		for_tuples!(
+			#(
+				if version == Tuple::VERSION {
+					let mut migration = <Tuple as Decode>::decode(&mut cursor)
+						.expect(PROOF_DECODE);
+					let max_weight = Tuple::max_step_weight();
+					while weight_left.all_gt(max_weight) {
+						let (finished, weight) = migration.step();
+						weight_left.saturating_reduce(weight.unwrap_or(max_weight));
+						if matches!(finished, IsFinished::Yes) {
+							return None
+						}
+					}
+					return Some(migration.encode().try_into().expect(PROOF_ENCODE))
+				}
+			)*
+		);
+		panic!("{PROOF_EXISTS}")
+	}
+
+	fn integrity_test() {
+		for_tuples!(
+			#(
+				let len = <Tuple as MaxEncodedLen>::max_encoded_len();
+				let max = Cursor::bound();
+				if len > max {
+					let version = Tuple::VERSION;
+					panic!(
+						"Migration {} has size {} which is bigger than the maximum of {}",
+						version, len, max,
+					);
+				}
+			)*
+		);
 	}
 }
 
-/// Update `ContractInfo` with new fields that track storage deposits.
-mod v8 {
+#[cfg(test)]
+mod test {
 	use super::*;
-	use sp_io::default_child_storage as child;
-	use v6::ContractInfo as OldContractInfo;
+	use crate::tests::Test;
 
-	#[derive(Encode, Decode)]
-	pub struct ContractInfo<T: Config> {
-		pub trie_id: TrieId,
-		pub code_hash: CodeHash<T>,
-		pub storage_bytes: u32,
-		pub storage_items: u32,
-		pub storage_byte_deposit: BalanceOf<T>,
-		pub storage_item_deposit: BalanceOf<T>,
-		pub storage_base_deposit: BalanceOf<T>,
-	}
-
-	#[storage_alias]
-	type ContractInfoOf<T: Config, V> =
-		StorageMap<Pallet<T>, Twox64Concat, <T as frame_system::Config>::AccountId, V>;
-
-	pub fn migrate<T: Config>(weight: &mut Weight) {
-		<ContractInfoOf<T, ContractInfo<T>>>::translate_values(|old: OldContractInfo<T>| {
-			// Count storage items of this contract
-			let mut storage_bytes = 0u32;
-			let mut storage_items = 0u32;
-			let mut key = Vec::new();
-			while let Some(next) = child::next_key(&old.trie_id, &key) {
-				key = next;
-				let mut val_out = [];
-				let len = child::read(&old.trie_id, &key, &mut val_out, 0)
-					.expect("The loop conditions checks for existence of the key; qed");
-				storage_bytes.saturating_accrue(len);
-				storage_items.saturating_accrue(1);
-			}
-
-			let storage_byte_deposit =
-				T::DepositPerByte::get().saturating_mul(storage_bytes.into());
-			let storage_item_deposit =
-				T::DepositPerItem::get().saturating_mul(storage_items.into());
-			let storage_base_deposit = old
-				.storage_deposit
-				.saturating_sub(storage_byte_deposit)
-				.saturating_sub(storage_item_deposit);
-
-			// Reads: One read for each storage item plus the contract info itself.
-			// Writes: Only the new contract info.
-			weight.saturating_accrue(
-				T::DbWeight::get().reads_writes(u64::from(storage_items) + 1, 1),
-			);
-
-			Some(ContractInfo {
-				trie_id: old.trie_id,
-				code_hash: old.code_hash,
-				storage_bytes,
-				storage_items,
-				storage_byte_deposit,
-				storage_item_deposit,
-				storage_base_deposit,
-			})
-		});
-	}
-
-	#[cfg(feature = "try-runtime")]
-	pub fn pre_upgrade<T: Config>() -> Result<(), &'static str> {
-		use frame_support::traits::ReservableCurrency;
-		for (key, value) in ContractInfoOf::<T, OldContractInfo<T>>::iter() {
-			let reserved = T::Currency::reserved_balance(&key);
-			ensure!(reserved >= value.storage_deposit, "Reserved balance out of sync.");
-		}
-		Ok(())
-	}
-}
-
-/// Update `CodeStorage` with the new `determinism` field.
-mod v9 {
-	use super::*;
-	use crate::Determinism;
-	use v6::PrefabWasmModule as OldPrefabWasmModule;
-
-	#[derive(Encode, Decode)]
-	pub struct PrefabWasmModule {
-		#[codec(compact)]
-		pub instruction_weights_version: u32,
-		#[codec(compact)]
-		pub initial: u32,
-		#[codec(compact)]
-		pub maximum: u32,
-		pub code: Vec<u8>,
-		pub determinism: Determinism,
-	}
-
-	#[storage_alias]
-	type CodeStorage<T: Config> = StorageMap<Pallet<T>, Identity, CodeHash<T>, PrefabWasmModule>;
-
-	pub fn migrate<T: Config>(weight: &mut Weight) {
-		<CodeStorage<T>>::translate_values(|old: OldPrefabWasmModule| {
-			weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
-			Some(PrefabWasmModule {
-				instruction_weights_version: old.instruction_weights_version,
-				initial: old.initial,
-				maximum: old.maximum,
-				code: old.code,
-				determinism: Determinism::Enforced,
-			})
-		});
-	}
-}
-
-// Post checks always need to be run against the latest storage version. This is why we
-// do not scope them in the per version modules. They always need to be ported to the latest
-// version.
-#[cfg(feature = "try-runtime")]
-mod post_checks {
-	use super::*;
-	use crate::Determinism;
-	use sp_io::default_child_storage as child;
-	use v8::ContractInfo;
-	use v9::PrefabWasmModule;
-
-	#[storage_alias]
-	type CodeStorage<T: Config> = StorageMap<Pallet<T>, Identity, CodeHash<T>, PrefabWasmModule>;
-
-	#[storage_alias]
-	type ContractInfoOf<T: Config, V> =
-		StorageMap<Pallet<T>, Twox64Concat, <T as frame_system::Config>::AccountId, V>;
-
-	pub fn post_upgrade<T: Config>(old_version: StorageVersion) -> Result<(), &'static str> {
-		if old_version < 7 {
-			return Ok(())
-		}
-
-		if old_version < 8 {
-			v8::<T>()?;
-		}
-
-		if old_version < 9 {
-			v9::<T>()?;
-		}
-
-		Ok(())
-	}
-
-	fn v8<T: Config>() -> Result<(), &'static str> {
-		use frame_support::traits::ReservableCurrency;
-		for (key, value) in ContractInfoOf::<T, ContractInfo<T>>::iter() {
-			let reserved = T::Currency::reserved_balance(&key);
-			let stored = value
-				.storage_base_deposit
-				.saturating_add(value.storage_byte_deposit)
-				.saturating_add(value.storage_item_deposit);
-			ensure!(reserved >= stored, "Reserved balance out of sync.");
-
-			let mut storage_bytes = 0u32;
-			let mut storage_items = 0u32;
-			let mut key = Vec::new();
-			while let Some(next) = child::next_key(&value.trie_id, &key) {
-				key = next;
-				let mut val_out = [];
-				let len = child::read(&value.trie_id, &key, &mut val_out, 0)
-					.expect("The loop conditions checks for existence of the key; qed");
-				storage_bytes.saturating_accrue(len);
-				storage_items.saturating_accrue(1);
-			}
-			ensure!(storage_bytes == value.storage_bytes, "Storage bytes do not match.",);
-			ensure!(storage_items == value.storage_items, "Storage items do not match.",);
-		}
-		Ok(())
-	}
-
-	fn v9<T: Config>() -> Result<(), &'static str> {
-		for value in CodeStorage::<T>::iter_values() {
-			ensure!(
-				value.determinism == Determinism::Enforced,
-				"All pre-existing codes need to be deterministic."
-			);
-		}
-		Ok(())
+	#[test]
+	fn check_versions() {
+		// this fails the compilation when running local tests
+		// otherwise it will only be evaluated when the whole runtime is build
+		let _ = Migrations::<Test>::VERSION_RANGE;
 	}
 }

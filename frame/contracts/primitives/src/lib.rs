@@ -95,6 +95,20 @@ pub enum ContractAccessError {
 	DoesntExist,
 	/// Storage key cannot be decoded from the provided input data.
 	KeyDecodingFailed,
+	/// Storage is migrating. Try again later.
+	MigrationInProgress,
+}
+
+impl<T, B: Zero> From<DispatchError> for ContractResult<Result<T, DispatchError>, B> {
+	fn from(error: DispatchError) -> Self {
+		ContractResult {
+			gas_consumed: Zero::zero(),
+			gas_required: Zero::zero(),
+			storage_deposit: Default::default(),
+			debug_message: Vec::new(),
+			result: Err(error),
+		}
+	}
 }
 
 bitflags! {

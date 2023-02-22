@@ -108,7 +108,7 @@ use crate::{
 use codec::{Codec, Encode, HasCompact};
 use environmental::*;
 use frame_support::{
-	dispatch::{Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo},
+	dispatch::{Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo, WithPostDispatchInfo},
 	ensure,
 	traits::{
 		tokens::fungible::Inspect, ConstU32, Contains, Currency, Get, Randomness,
@@ -314,11 +314,17 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_idle(_block: T::BlockNumber, remaining_weight: Weight) -> Weight {
+			// TODO: run migration here
+			if Migration::<T>::ensure_migrated().is_err() {
+				return T::DbWeight::get().reads(1)
+			}
 			ContractInfo::<T>::process_deletion_queue_batch(remaining_weight)
 				.saturating_add(T::WeightInfo::on_process_deletion_queue_batch())
 		}
 
 		fn integrity_test() {
+			Migration::<T>::integrity_test();
+
 			// Total runtime memory limit
 			let max_runtime_mem: u32 = T::Schedule::get().limits.runtime_memory;
 			// Memory limits for a single contract:
@@ -497,6 +503,7 @@ pub mod pallet {
 			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			determinism: Determinism,
 		) -> DispatchResult {
+			Migration::<T>::ensure_migrated()?;
 			let origin = ensure_signed(origin)?;
 			Self::bare_upload_code(origin, code, storage_deposit_limit.map(Into::into), determinism)
 				.map(|_| ())
@@ -512,6 +519,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			code_hash: CodeHash<T>,
 		) -> DispatchResultWithPostInfo {
+			Migration::<T>::ensure_migrated()?;
 			let origin = ensure_signed(origin)?;
 			<PrefabWasmModule<T>>::remove(&origin, code_hash)?;
 			// we waive the fee because removing unused code is beneficial
@@ -535,6 +543,7 @@ pub mod pallet {
 			dest: AccountIdLookupOf<T>,
 			code_hash: CodeHash<T>,
 		) -> DispatchResult {
+			Migration::<T>::ensure_migrated()?;
 			ensure_root(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 			<ContractInfoOf<T>>::try_mutate(&dest, |contract| {
@@ -584,6 +593,7 @@ pub mod pallet {
 			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			data: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
+			Migration::<T>::ensure_migrated()?;
 			let gas_limit: Weight = gas_limit.into();
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
@@ -645,6 +655,7 @@ pub mod pallet {
 			data: Vec<u8>,
 			salt: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
+			Migration::<T>::ensure_migrated()?;
 			let origin = ensure_signed(origin)?;
 			let code_len = code.len() as u32;
 			let data_len = data.len() as u32;
@@ -688,6 +699,7 @@ pub mod pallet {
 			data: Vec<u8>,
 			salt: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
+			Migration::<T>::ensure_migrated()?;
 			let origin = ensure_signed(origin)?;
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
@@ -710,6 +722,17 @@ pub mod pallet {
 				output.result.map(|(_address, output)| output),
 				T::WeightInfo::instantiate(data_len, salt_len),
 			)
+		}
+
+		/// TODO: add benchmark for base weight
+		/// TODO: add a minimum weight limit so that people don't spam small free extrinsics
+		#[pallet::call_index(9)]
+		#[pallet::weight(*weight_limit)]
+		pub fn migrate(origin: OriginFor<T>, weight_limit: Weight) -> DispatchResultWithPostInfo {
+			ensure_signed(origin)?;
+			Migration::<T>::migrate(weight_limit)
+				.map(|weight| PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::No })
+				.map_err(|(weight, error)| error.with_weight(weight))
 		}
 	}
 
@@ -863,6 +886,8 @@ pub mod pallet {
 		CodeRejected,
 		/// An indetermistic code was used in a context where this is not permitted.
 		Indeterministic,
+		MigrationInProgress,
+		NoMigrationPerformed,
 	}
 
 	/// A mapping from an original code hash to the original code, untouched by instrumentation.
@@ -922,6 +947,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type DeletionQueueCounter<T: Config> =
 		StorageValue<_, DeletionQueueManager<T>, ValueQuery>;
+
+	#[pallet::storage]
+	pub(crate) type MigrationInProgress<T: Config> =
+		StorageValue<_, migration::Cursor, OptionQuery>;
 }
 
 /// Context of a contract invocation.
@@ -1137,6 +1166,9 @@ impl<T: Config> Pallet<T> {
 		debug: bool,
 		determinism: Determinism,
 	) -> ContractExecResult<BalanceOf<T>> {
+		if let Err(err) = Migration::<T>::ensure_migrated() {
+			return err.into()
+		}
 		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
 		let common = CommonInput {
 			origin,
@@ -1178,6 +1210,9 @@ impl<T: Config> Pallet<T> {
 		salt: Vec<u8>,
 		debug: bool,
 	) -> ContractInstantiateResult<T::AccountId, BalanceOf<T>> {
+		if let Err(err) = Migration::<T>::ensure_migrated() {
+			return err.into()
+		}
 		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
 		let common = CommonInput {
 			origin,
@@ -1210,6 +1245,7 @@ impl<T: Config> Pallet<T> {
 		storage_deposit_limit: Option<BalanceOf<T>>,
 		determinism: Determinism,
 	) -> CodeUploadResult<CodeHash<T>, BalanceOf<T>> {
+		Migration::<T>::ensure_migrated()?;
 		let schedule = T::Schedule::get();
 		let module = PrefabWasmModule::from_code(
 			code,
@@ -1230,6 +1266,9 @@ impl<T: Config> Pallet<T> {
 
 	/// Query storage of a specified contract under a specified key.
 	pub fn get_storage(address: T::AccountId, key: Vec<u8>) -> GetStorageResult {
+		if let Err(_) = Migration::<T>::ensure_migrated() {
+			return Err(ContractAccessError::MigrationInProgress)
+		}
 		let contract_info =
 			ContractInfoOf::<T>::get(&address).ok_or(ContractAccessError::DoesntExist)?;
 
