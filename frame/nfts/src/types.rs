@@ -490,7 +490,7 @@ impl_codec_bitflags!(CollectionRoles, u8, CollectionRole);
 pub struct PreSignedMint<CollectionId, ItemId, AccountId, Deadline> {
 	/// A collection of the item to be minted.
 	pub(super) collection: CollectionId,
-	/// Item's id.
+	/// Item's ID.
 	pub(super) item: ItemId,
 	/// Additional item's key-value attributes.
 	pub(super) attributes: Vec<(Vec<u8>, Vec<u8>)>,
