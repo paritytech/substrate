@@ -70,7 +70,7 @@ use sp_core::{crypto::ByteArray, ExecutionContext, Pair};
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
-	generic::{BlockId, OpaqueDigestItemId},
+	generic::OpaqueDigestItemId,
 	traits::{Block as BlockT, Header, NumberFor, One, Zero},
 	DigestItem,
 };
@@ -264,7 +264,7 @@ where
 		info.genesis_hash
 	});
 
-	let epoch = client.runtime_api().current_epoch(&BlockId::Hash(hash))?;
+	let epoch = client.runtime_api().current_epoch(hash)?;
 	Ok(epoch.config)
 }
 

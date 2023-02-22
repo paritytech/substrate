@@ -199,12 +199,12 @@ impl frame_system::Config for Runtime {
 impl pallet_sassafras::Config for Runtime {
 	type SlotDuration = ConstU64<SLOT_DURATION_IN_MILLISECONDS>;
 	type EpochDuration = ConstU64<EPOCH_DURATION_IN_SLOTS>;
+	type MaxAuthorities = ConstU32<MAX_AUTHORITIES>;
+	type MaxTickets = ConstU32<{ EPOCH_DURATION_IN_SLOTS as u32 }>;
 	#[cfg(feature = "use-session-pallet")]
 	type EpochChangeTrigger = pallet_sassafras::ExternalTrigger;
 	#[cfg(not(feature = "use-session-pallet"))]
 	type EpochChangeTrigger = pallet_sassafras::SameAuthoritiesForever;
-	type MaxAuthorities = ConstU32<MAX_AUTHORITIES>;
-	type MaxTickets = ConstU32<{ EPOCH_DURATION_IN_SLOTS as u32 }>;
 }
 
 impl pallet_grandpa::Config for Runtime {
@@ -219,6 +219,7 @@ impl pallet_grandpa::Config for Runtime {
 	type HandleEquivocation = ();
 	type WeightInfo = ();
 	type MaxAuthorities = ConstU32<MAX_AUTHORITIES>;
+	type MaxSetIdSessionEntries = ConstU64<0>;
 }
 
 impl pallet_timestamp::Config for Runtime {
@@ -466,11 +467,20 @@ impl_runtime_apis! {
 		) -> pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo<Balance> {
 			TransactionPayment::query_info(uxt, len)
 		}
+
 		fn query_fee_details(
 			uxt: <Block as BlockT>::Extrinsic,
 			len: u32,
 		) -> pallet_transaction_payment::FeeDetails<Balance> {
 			TransactionPayment::query_fee_details(uxt, len)
+		}
+
+		fn query_weight_to_fee(weight: Weight) -> Balance {
+			TransactionPayment::weight_to_fee(weight)
+		}
+
+		fn query_length_to_fee(length: u32) -> Balance {
+			TransactionPayment::length_to_fee(length)
 		}
 	}
 
@@ -481,11 +491,20 @@ impl_runtime_apis! {
 		) -> pallet_transaction_payment::RuntimeDispatchInfo<Balance> {
 			TransactionPayment::query_call_info(call, len)
 		}
+
 		fn query_call_fee_details(
 			call: RuntimeCall,
 			len: u32,
 		) -> pallet_transaction_payment::FeeDetails<Balance> {
 			TransactionPayment::query_call_fee_details(call, len)
+		}
+
+		fn query_weight_to_fee(weight: Weight) -> Balance {
+			TransactionPayment::weight_to_fee(weight)
+		}
+
+		fn query_length_to_fee(length: u32) -> Balance {
+			TransactionPayment::length_to_fee(length)
 		}
 	}
 

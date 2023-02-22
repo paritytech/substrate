@@ -172,7 +172,7 @@ where
 	async fn check_inherents(
 		&self,
 		block: Block,
-		block_id: BlockId<Block>,
+		at_hash: Block::Hash,
 		inherent_data: InherentData,
 		create_inherent_data_providers: CIDP::InherentDataProviders,
 		execution_context: ExecutionContext,
@@ -180,7 +180,7 @@ where
 		let inherent_res = self
 			.client
 			.runtime_api()
-			.check_inherents_with_context(&block_id, execution_context, block, inherent_data)
+			.check_inherents_with_context(at_hash, execution_context, block, inherent_data)
 			.map_err(Error::RuntimeApi)?;
 
 		if !inherent_res.ok() {
@@ -232,11 +232,11 @@ where
 		);
 
 		// Get the best block on which we will build and send the equivocation report.
-		let best_id = self
+		let best_hash = self
 			.select_chain
 			.best_chain()
 			.await
-			.map(|h| BlockId::Hash(h.hash()))
+			.map(|h| h.hash())
 			.map_err(|e| Error::Client(e.into()))?;
 
 		// Generate a key ownership proof. We start by trying to generate the key owernship proof
@@ -246,17 +246,17 @@ where
 		// happens on the first block of the session, in which case its parent would be on the
 		// previous session. If generation on the parent header fails we try with best block as
 		// well.
-		let generate_key_owner_proof = |block_id: &BlockId<Block>| {
+		let generate_key_owner_proof = |at_hash: Block::Hash| {
 			self.client
 				.runtime_api()
-				.generate_key_ownership_proof(block_id, slot, equivocation_proof.offender.clone())
+				.generate_key_ownership_proof(at_hash, slot, equivocation_proof.offender.clone())
 				.map_err(Error::RuntimeApi)
 		};
 
-		let parent_id = BlockId::Hash(*header.parent_hash());
-		let key_owner_proof = match generate_key_owner_proof(&parent_id)? {
+		let parent_hash = *header.parent_hash();
+		let key_owner_proof = match generate_key_owner_proof(parent_hash)? {
 			Some(proof) => proof,
-			None => match generate_key_owner_proof(&best_id)? {
+			None => match generate_key_owner_proof(best_hash)? {
 				Some(proof) => proof,
 				None => {
 					debug!(target: "babe", "Equivocation offender is not part of the authority set.");
@@ -269,7 +269,7 @@ where
 		self.client
 			.runtime_api()
 			.submit_report_equivocation_unsigned_extrinsic(
-				&best_id,
+				best_hash,
 				equivocation_proof,
 				key_owner_proof,
 			)
@@ -360,7 +360,7 @@ where
 			let ticket = self
 				.client
 				.runtime_api()
-				.slot_ticket(&BlockId::Hash(parent_hash), pre_digest.slot)
+				.slot_ticket(parent_hash, pre_digest.slot)
 				.ok()
 				.unwrap_or_else(|| None);
 
@@ -410,7 +410,7 @@ where
 						inherent_data.sassafras_replace_inherent_data(pre_digest.slot);
 						self.check_inherents(
 							new_block.clone(),
-							BlockId::Hash(parent_hash),
+							parent_hash,
 							inherent_data,
 							create_inherent_data_providers,
 							block.origin.into(),

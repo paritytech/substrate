@@ -282,11 +282,10 @@ where
 		};
 
 		// Read epoch info from the imported state
-		let block_id = BlockId::Hash(hash);
-		let curr_epoch = self.client.runtime_api().current_epoch(&block_id).map_err(|e| {
+		let curr_epoch = self.client.runtime_api().current_epoch(hash).map_err(|e| {
 			ConsensusError::ClientImport(sassafras_err::<Block>(Error::RuntimeApi(e)).into())
 		})?;
-		let next_epoch = self.client.runtime_api().next_epoch(&block_id).map_err(|e| {
+		let next_epoch = self.client.runtime_api().next_epoch(hash).map_err(|e| {
 			ConsensusError::ClientImport(sassafras_err::<Block>(Error::RuntimeApi(e)).into())
 		})?;
 

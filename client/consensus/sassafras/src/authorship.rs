@@ -229,8 +229,7 @@ where
 		debug!(target: "sassafras", "🌳 Attempting to claim slot {}", slot);
 
 		// Get the next slot ticket from the runtime.
-		let block_id = BlockId::Hash(parent_header.hash());
-		let ticket = self.client.runtime_api().slot_ticket(&block_id, slot).ok()?;
+		let ticket = self.client.runtime_api().slot_ticket(parent_header.hash(), slot).ok()?;
 
 		// TODO-SASS-P2: remove me
 		debug!(target: "sassafras", "🌳 parent {}", parent_header.hash());
@@ -419,15 +418,15 @@ async fn start_tickets_worker<B, C, SC>(
 		}
 
 		// Get the best block on which we will publish the tickets.
-		let best_id = match select_chain.best_chain().await {
-			Ok(header) => BlockId::Hash(header.hash()),
+		let best_hash = match select_chain.best_chain().await {
+			Ok(header) => header.hash(),
 			Err(err) => {
 				error!(target: "🌳 sassafras", "Error fetching best chain block id: {}", err);
 				continue
 			},
 		};
 
-		let err = match client.runtime_api().submit_tickets_unsigned_extrinsic(&best_id, tickets) {
+		let err = match client.runtime_api().submit_tickets_unsigned_extrinsic(best_hash, tickets) {
 			Err(err) => Some(err.to_string()),
 			Ok(false) => Some("Unknown reason".to_string()),
 			_ => None,
