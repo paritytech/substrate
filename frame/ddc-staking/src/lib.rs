@@ -424,7 +424,7 @@ pub mod pallet {
 			ensure!(ledger.active >= MinStorageBond::<T>::get(), Error::<T>::InsufficientBond);
 			let stash = &ledger.stash;
 
-			// Can't participate in storate network if already participating in CDN.
+			// Can't participate in storage network if already participating in CDN.
 			ensure!(!Edges::<T>::contains_key(&stash), Error::<T>::AlreadyInRole);
 
 			Self::do_add_storage(stash, prefs);
@@ -445,7 +445,7 @@ pub mod pallet {
 			ensure!(ledger.active >= MinEdgeBond::<T>::get(), Error::<T>::InsufficientBond);
 			let stash = &ledger.stash;
 
-			// Can't participate in CDN if already participating in storate network.
+			// Can't participate in CDN if already participating in storage network.
 			ensure!(!Storages::<T>::contains_key(&stash), Error::<T>::AlreadyInRole);
 
 			Self::do_add_edge(stash, prefs);
@@ -580,7 +580,7 @@ pub mod pallet {
 
 		/// This function will remove a CDN participant from the `Edges` storage map.
 		///
-		/// Returns true if `who` was removed from `StoEdgesrages`, otherwise false.
+		/// Returns true if `who` was removed from `Edges`, otherwise false.
 		///
 		/// NOTE: you must ALWAYS use this function to remove a storage network participant from the
 		/// system. Any access to `Edges` outside of this function is almost certainly
