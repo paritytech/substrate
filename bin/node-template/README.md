@@ -162,20 +162,23 @@ First, install [Docker](https://docs.docker.com/get-docker/) and [Docker Compose
 
 Then run the following command to start a single node development chain.
 
+> If you get an error that tcp port address is already in use then find an available port to use for the host port in docker-compose.yml (i.e. "<HOST_PORT>:9944").
+
 ```sh
 ./scripts/docker_run.sh
 ```
 
 This command compiles the code and starts a local development network.
 You can also replace the default command (`cargo build --release && ./target/release/node-template --dev --ws-external`) by appending your own.
+Note: It is recommended to provide a custom `--base-path` to store the chain database.
 For example:
 
 ```sh
 # Run Substrate node without re-compiling
-./scripts/docker_run.sh ./target/release/node-template --dev --ws-external
+./scripts/docker_run.sh ./target/release/node-template --dev --ws-external --base-path=/data
 
 # Purge the local dev chain
-./scripts/docker_run.sh ./target/release/node-template purge-chain --dev
+./scripts/docker_run.sh ./target/release/node-template purge-chain --dev --base-path=/data -y
 
 # Check whether the code is compilable
 ./scripts/docker_run.sh cargo check
