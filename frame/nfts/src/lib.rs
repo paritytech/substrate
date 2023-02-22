@@ -741,7 +741,7 @@ pub mod pallet {
 
 		/// Mint an item of a particular collection.
 		///
-		/// The origin must be Signed and the sender must be the Issuer of the `collection`.
+		/// The origin must be Signed and the sender must comply with the `mint_settings` rules.
 		///
 		/// - `collection`: The collection of the item to be minted.
 		/// - `item`: An identifier of the new item.
@@ -775,11 +775,6 @@ pub mod pallet {
 				mint_to.clone(),
 				item_config,
 				|collection_details, collection_config| {
-					// Issuer can mint regardless of mint settings
-					if Self::has_role(&collection, &caller, CollectionRole::Issuer) {
-						return Ok(())
-					}
-
 					let mint_settings = collection_config.mint_settings;
 					let now = frame_system::Pallet::<T>::block_number();
 
@@ -791,7 +786,12 @@ pub mod pallet {
 					}
 
 					match mint_settings.mint_type {
-						MintType::Issuer => return Err(Error::<T, I>::NoPermission.into()),
+						MintType::Issuer => {
+							ensure!(
+								Self::has_role(&collection, &caller, CollectionRole::Issuer),
+								Error::<T, I>::NoPermission
+							);
+						},
 						MintType::HolderOf(collection_id) => {
 							let MintWitness { owner_of_item } =
 								witness_data.ok_or(Error::<T, I>::BadWitness)?;
