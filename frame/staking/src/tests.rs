@@ -497,7 +497,7 @@ fn less_than_needed_candidates_works() {
 
 			// But the exposure is updated in a simple way. No external votes exists.
 			// This is purely self-vote.
-			assert!(ErasStakersPaged::<Test>::iter_prefix_values(active_era())
+			assert!(ErasStakersPaged::<Test>::iter_prefix_values((active_era(),))
 				.all(|exposure| exposure.others.is_empty()));
 		});
 }
@@ -617,7 +617,7 @@ fn nominating_and_rewards_should_work() {
 			assert_eq!(Balances::total_balance(&20), initial_balance_20 + total_payout_0 / 2);
 			initial_balance_20 = Balances::total_balance(&20);
 
-			assert_eq!(ErasStakersPaged::<Test>::iter_prefix_values(active_era()).count(), 2);
+			assert_eq!(ErasStakersPaged::<Test>::iter_prefix_values((active_era(),)).count(), 2);
 			assert_eq!(
 				Staking::eras_stakers(active_era(), &11),
 				Exposure {
@@ -6234,8 +6234,7 @@ fn should_retain_era_info_only_upto_history_depth() {
 			ClaimedRewards::<Test>::insert(era, &validator_stash, vec![0, 1, 2]);
 			for page in 0..3 {
 				ErasStakersPaged::<Test>::insert(
-					era,
-					(&validator_stash, page),
+					(era, &validator_stash, page),
 					ExposurePage { page_total: 100, others: vec![] },
 				);
 			}
@@ -6247,14 +6246,14 @@ fn should_retain_era_info_only_upto_history_depth() {
 			// 1 claimed_rewards entry for each era
 			assert_eq!(ClaimedRewards::<Test>::iter_prefix(i as EraIndex).count(), 1);
 			// 3 entries (pages) for each era
-			assert_eq!(ErasStakersPaged::<Test>::iter_prefix(i as EraIndex).count(), 3);
+			assert_eq!(ErasStakersPaged::<Test>::iter_prefix((i as EraIndex,)).count(), 3);
 
 			// when clear era info
 			Pallet::<Test>::clear_era_information(i as EraIndex);
 
 			// then all era entries are cleared
 			assert_eq!(ClaimedRewards::<Test>::iter_prefix(i as EraIndex).count(), 0);
-			assert_eq!(ErasStakersPaged::<Test>::iter_prefix(i as EraIndex).count(), 0);
+			assert_eq!(ErasStakersPaged::<Test>::iter_prefix((i as EraIndex,)).count(), 0);
 		}
 	});
 }
@@ -6384,8 +6383,8 @@ fn test_validator_exposure_is_backward_compatible_with_non_paged_rewards_payout(
 		mock::start_active_era(2);
 		// verify exposure for era 1 is stored in paged storage, that each exposure is stored in
 		// one and only one page, and no exposure is repeated.
-		let actual_exposure_page_0 = ErasStakersPaged::<Test>::get(1, (11, 0)).unwrap();
-		let actual_exposure_page_1 = ErasStakersPaged::<Test>::get(1, (11, 1)).unwrap();
+		let actual_exposure_page_0 = ErasStakersPaged::<Test>::get((1, 11, 0)).unwrap();
+		let actual_exposure_page_1 = ErasStakersPaged::<Test>::get((1, 11, 1)).unwrap();
 		expected_individual_exposures.iter().for_each(|exposure| {
 			assert!(
 				actual_exposure_page_0.others.contains(exposure) ||
@@ -6409,8 +6408,8 @@ fn test_validator_exposure_is_backward_compatible_with_non_paged_rewards_payout(
 
 		// case 2: exposure exist in ErasStakers and ErasStakersClipped (legacy).
 		// delete paged storage and add exposure to clipped storage
-		<ErasStakersPaged<Test>>::remove(1, (11, 0));
-		<ErasStakersPaged<Test>>::remove(1, (11, 1));
+		<ErasStakersPaged<Test>>::remove((1, 11, 0));
+		<ErasStakersPaged<Test>>::remove((1, 11, 1));
 		<ErasStakersOverview<Test>>::remove(1, 11);
 
 		<ErasStakers<Test>>::insert(
