@@ -148,9 +148,9 @@ pub mod v12 {
 	#[storage_alias]
 	type HistoryDepth<T: Config> = StorageValue<Pallet<T>, u32, ValueQuery>;
 
-	/// Clean up `HistoryDepth` from storage.
+	/// Clean up `T::HistoryDepth` from storage.
 	///
-	/// We will be depending on the configurable value of `HistoryDepth` post
+	/// We will be depending on the configurable value of `T::HistoryDepth` post
 	/// this release.
 	pub struct MigrateToV12<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV12<T> {
