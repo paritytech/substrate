@@ -2766,8 +2766,7 @@ fn gas_estimation_nested_call_fixed_limit() {
 }
 
 #[test]
-fn gas_estimation_call_runtime() {
-	use codec::Decode;
+fn gas_call_runtime_reentrancy_guarded() {
 	let (caller_code, _caller_hash) = compile_module::<Test>("call_runtime").unwrap();
 	let (callee_code, _callee_hash) = compile_module::<Test>("dummy").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
@@ -2803,8 +2802,7 @@ fn gas_estimation_call_runtime() {
 		.unwrap()
 		.account_id;
 
-		// Call something trivial with a huge gas limit so that we can observe the effects
-		// of pre-charging. This should create a difference between consumed and required.
+		// Call pallet_contracts call() dispatchable
 		let call = RuntimeCall::Contracts(crate::Call::call {
 			dest: addr_callee,
 			value: 0,
@@ -2812,6 +2810,9 @@ fn gas_estimation_call_runtime() {
 			storage_deposit_limit: None,
 			data: vec![],
 		});
+
+		// Call to call_runtime contract which calls runtime to re-enter contracts stack by
+		// calling dummy contract
 		let result = Contracts::bare_call(
 			ALICE,
 			addr_caller.clone(),
@@ -2821,26 +2822,11 @@ fn gas_estimation_call_runtime() {
 			call.encode(),
 			false,
 			Determinism::Deterministic,
-		);
-		// contract encodes the result of the dispatch runtime
-		let outcome = u32::decode(&mut result.result.unwrap().data.as_ref()).unwrap();
-		assert_eq!(outcome, 0);
-		assert!(result.gas_required.ref_time() > result.gas_consumed.ref_time());
-
-		// Make the same call using the required gas. Should succeed.
-		assert_ok!(
-			Contracts::bare_call(
-				ALICE,
-				addr_caller,
-				0,
-				result.gas_required,
-				None,
-				call.encode(),
-				false,
-				Determinism::Deterministic,
-			)
-			.result
-		);
+		)
+		.result
+		.unwrap();
+		// Call to runtime should fail because of the re-entrancy guard
+		assert_return_code!(result, RuntimeReturnCode::CallRuntimeFailed);
 	});
 }
 

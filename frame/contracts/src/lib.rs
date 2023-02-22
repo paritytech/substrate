@@ -100,7 +100,7 @@ pub mod weights;
 mod tests;
 
 use crate::{
-	exec::{AccountIdOf, ExecError, Executable, Stack as ExecStack},
+	exec::{AccountIdOf, ErrorOrigin, ExecError, Executable, Stack as ExecStack},
 	gas::GasMeter,
 	storage::{meter::Meter as StorageMeter, ContractInfo, DeletedContract},
 	wasm::{OwnerInfo, PrefabWasmModule, TryInstantiate},
@@ -159,9 +159,7 @@ type DebugBufferVec<T> = BoundedVec<u8, <T as Config>::MaxDebugBufferLen>;
 /// that this value makes sense for a memory location or length.
 const SENTINEL: u32 = u32::MAX;
 
-// TODO doc
-// TODO think on renaming to reentrancy_guard
-environmental!(executing_contract: bool);
+environmental!(reentrancy_guard: bool);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -637,6 +635,7 @@ pub mod pallet {
 					output.result = Err(<Error<T>>::ContractReverted.into());
 				}
 			}
+			//	println!("<fn call>: result = {:?}", &output.result);
 			output.gas_meter.into_dispatch_result(output.result, T::WeightInfo::call())
 		}
 
@@ -878,6 +877,7 @@ pub mod pallet {
 		/// This can be triggered by a call to `seal_terminate`.
 		TerminatedInConstructor,
 		/// A call tried to invoke a contract that is flagged as non-reentrant.
+		/// Or, a call to runtime tried to re-enter a contract.
 		ReentranceDenied,
 		/// Origin doesn't have enough balance to pay the required storage deposits.
 		StorageDepositNotEnoughFunds,
@@ -957,7 +957,7 @@ pub mod pallet {
 		StorageValue<_, BoundedVec<DeletedContract, T::DeletionQueueDepth>, ValueQuery>;
 }
 
-/// TODO: put into primitives
+/// Input of a call into contract.
 struct CallInput<T: Config> {
 	origin: T::AccountId,
 	dest: T::AccountId,
@@ -968,7 +968,7 @@ struct CallInput<T: Config> {
 	determinism: Determinism,
 }
 
-/// TODO: put into primitives
+/// Input of a contract instantiation invocation.
 struct InstantiateInput<T: Config> {
 	origin: T::AccountId,
 	value: BalanceOf<T>,
@@ -989,22 +989,40 @@ struct InternalOutput<T: Config, O> {
 	result: Result<O, ExecError>,
 }
 
-/// TODO: put into primitives
-/// Helper trait to wrap contract execution entry points into a signle function [`internal_run`]
+/// Helper trait to wrap contract execution entry points into a signle function [`Pallet::internal_run`].
 trait Invokable<T: Config> {
 	type Output;
 
-	fn run(&self, debug_message: Option<&mut DebugBufferVec<T>>) -> Self::Output;
+	fn run(
+		&self,
+		debug_message: Option<&mut DebugBufferVec<T>>,
+		gas_meter: GasMeter<T>,
+	) -> Self::Output;
+
+	fn fallback(&self, err: ExecError, gas_meter: GasMeter<T>) -> Self::Output;
+
+	fn gas_limit(&self) -> Weight;
 }
 
 impl<T: Config> Invokable<T> for CallInput<T> {
 	type Output = InternalOutput<T, ExecReturnValue>;
 
-	/// Internal function that does the actual call to contract.
+	fn gas_limit(&self) -> Weight {
+		self.gas_limit
+	}
+
+	fn fallback(&self, err: ExecError, gas_meter: GasMeter<T>) -> Self::Output {
+		InternalOutput { gas_meter, storage_deposit: Default::default(), result: Err(err) }
+	}
+
+	/// Method that does the actual call to contract.
 	///
-	/// Called by dispatchables and public functions.
-	fn run(&self, debug_message: Option<&mut DebugBufferVec<T>>) -> Self::Output {
-		let mut gas_meter = GasMeter::new(self.gas_limit);
+	/// Called by dispatchables and public functions through the [`Pallet::internal_run`].
+	fn run(
+		&self,
+		debug_message: Option<&mut DebugBufferVec<T>>,
+		mut gas_meter: GasMeter<T>,
+	) -> Self::Output {
 		let mut storage_meter =
 			match StorageMeter::new(&self.origin, self.storage_deposit_limit, self.value) {
 				Ok(meter) => meter,
@@ -1035,12 +1053,22 @@ impl<T: Config> Invokable<T> for CallInput<T> {
 impl<T: Config> Invokable<T> for InstantiateInput<T> {
 	type Output = InternalOutput<T, (AccountIdOf<T>, ExecReturnValue)>;
 
-	/// Internal function that does the actual contract instantiation.
+	fn gas_limit(&self) -> Weight {
+		self.gas_limit
+	}
+
+	fn fallback(&self, err: ExecError, gas_meter: GasMeter<T>) -> Self::Output {
+		InternalOutput { gas_meter, storage_deposit: Default::default(), result: Err(err) }
+	}
+	/// Method that does the actual contract instantiation.
 	///
-	/// Called by dispatchables and public functions.
-	fn run(&self, mut debug_message: Option<&mut DebugBufferVec<T>>) -> Self::Output {
+	/// Called by dispatchables and public functions through the [`Pallet::internal_run`].
+	fn run(
+		&self,
+		mut debug_message: Option<&mut DebugBufferVec<T>>,
+		mut gas_meter: GasMeter<T>,
+	) -> Self::Output {
 		let mut storage_deposit = Default::default();
-		let mut gas_meter = GasMeter::new(self.gas_limit);
 		let try_exec = || {
 			let schedule = T::Schedule::get();
 			let (extra_deposit, executable) = match &self.code {
@@ -1246,33 +1274,46 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Single entry point to contract execution.
-	/// Downstream execution flow is branched by implementations of [`Ivokable`] trait:
+	/// Downstream execution flow is branched by implementations of [`Invokable`] trait:
+	///
 	/// - [`InstantiateInput::run`] runs contract instantiation,
 	/// - [`CallInput::run`] runs contract call.
-	/// TODO check and polish docs
+	///
+	/// We enforce a re-entrancy guard here by initializing and checking a boolean flag through a
+	/// global reference.
 	fn internal_run<I: Invokable<T>>(
 		input: I,
 		debug_message: Option<&mut DebugBufferVec<T>>,
 	) -> I::Output {
-		// check global here: fail if trying to re-enter
-		executing_contract::using(&mut false, || {
-			executing_contract::with(|f| {
+		let gas_meter = GasMeter::new(input.gas_limit());
+		reentrancy_guard::using_once(&mut false, || {
+			let res = reentrancy_guard::with(|f| {
+				// Check re-entrancy guard
 				if *f {
-					return Err::<(), Error<T>>(<Error<T>>::ContractNotFound.into()) // TODO: new Err
+					return Err(())
 				}
+				// Set re-entracy guard
+				*f = true;
 				Ok(())
 			})
-			.unwrap()
+			.unwrap_or(Ok(()));
+
+			// Remove re-entrancy guard when dropping this scope
+			defer! {
+					reentrancy_guard::with(|f| {println!("NOW F IS {:?}", f); *f = false});
+			};
+
+			if res.is_err() {
+				let err = ExecError {
+					error: <Error<T>>::ReentranceDenied.into(),
+					origin: ErrorOrigin::Caller,
+				};
+				input.fallback(err, gas_meter)
+			} else {
+				// Enter the contract call
+				input.run(debug_message, gas_meter)
+			}
 		})
-		.unwrap(); // TODO: refactor
-		   // we are entering the contract: set global here
-		executing_contract::using(&mut false, || executing_contract::with(|f| *f = true));
-		// set global back when exiting the contract
-		defer! {
-			executing_contract::with(|f| *f = false);
-		};
-		// do stuff
-		input.run(debug_message)
 	}
 
 	/// Deposit a pallet contracts event. Handles the conversion to the overarching event type.
