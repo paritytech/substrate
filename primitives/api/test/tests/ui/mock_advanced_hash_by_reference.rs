@@ -12,7 +12,7 @@ struct MockApi;
 sp_api::mock_impl_runtime_apis! {
 	impl Api<Block> for MockApi {
 		#[advanced]
-		fn test(&self, _: BlockId<Block>) -> Result<(), ApiError> {
+		fn test(&self, _: &Hash) -> Result<(), ApiError> {
 			Ok(().into())
 		}
 	}
