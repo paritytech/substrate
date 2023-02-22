@@ -139,7 +139,8 @@ pub mod pallet {
 		/// Following information is kept for eras in `[current_era -
 		/// HistoryDepth, current_era]`: `ErasStakers`, `ErasStakersClipped`,
 		/// `ErasValidatorPrefs`, `ErasValidatorReward`, `ErasRewardPoints`,
-		/// `ErasTotalStake`, `ErasStartSessionIndex`, `ClaimedRewards`.
+		/// `ErasTotalStake`, `ErasStartSessionIndex`, `ClaimedRewards`, `ErasStakersPaged`,
+		/// `ErasStakersOverview`.
 		///
 		/// Must be more than the number of eras delayed by session.
 		/// I.e. active era must always be in history. I.e. `active_era >
@@ -403,7 +404,7 @@ pub mod pallet {
 	#[pallet::getter(fn active_era)]
 	pub type ActiveEra<T> = StorageValue<_, ActiveEraInfo>;
 
-	/// The session index at which the era start for the last `HISTORY_DEPTH` eras.
+	/// The session index at which the era start for the last [`Config::HistoryDepth`] eras.
 	///
 	/// Note: This tracks the starting session (i.e. session index when era start being active)
 	/// for the eras in `[CurrentEra - HISTORY_DEPTH, CurrentEra]`.
@@ -415,7 +416,7 @@ pub mod pallet {
 	///
 	/// This is keyed first by the era index to allow bulk deletion and then the stash account.
 	///
-	/// Is it removed after `HISTORY_DEPTH` eras.
+	/// Is it removed after [`Config::HistoryDepth`] eras.
 	/// If stakers hasn't been set or has been removed then empty exposure is returned.
 	///
 	/// Note: Deprecated since v14. Use `EraInfo` instead to work with exposures.
@@ -440,7 +441,7 @@ pub mod pallet {
 	///
 	/// This is keyed first by the era index to allow bulk deletion and then the stash account.
 	///
-	/// Is it removed after `HISTORY_DEPTH` eras.
+	/// Is it removed after [`Config::HistoryDepth`] eras.
 	/// If stakers hasn't been set or has been removed then empty overview is returned.
 	#[pallet::storage]
 	pub type ErasStakersOverview<T: Config> = StorageDoubleMap<
@@ -465,7 +466,7 @@ pub mod pallet {
 	///
 	/// This is keyed fist by the era index to allow bulk deletion and then the stash account.
 	///
-	/// It is removed after `HISTORY_DEPTH` eras.
+	/// It is removed after [`Config::HistoryDepth`] eras.
 	/// If stakers hasn't been set or has been removed then empty exposure is returned.
 	///
 	/// Note: Deprecated since v14. Use `EraInfo` instead to work with exposures.
@@ -487,7 +488,7 @@ pub mod pallet {
 	/// This is keyed first by the era index to allow bulk deletion, then stash account and finally
 	/// the page.
 	///
-	/// This is cleared after `HISTORY_DEPTH` eras.
+	/// This is cleared after [`Config::HistoryDepth`] eras.
 	#[pallet::storage]
 	#[pallet::unbounded]
 	pub type ErasStakersPaged<T: Config> = StorageNMap<
@@ -506,7 +507,7 @@ pub mod pallet {
 	/// This is keyed by era and validator stash which maps to the set of page indexes which have
 	/// been claimed.
 	///
-	/// It is removed after `HISTORY_DEPTH` eras.
+	/// It is removed after [`Config::HistoryDepth`] eras.
 	#[pallet::storage]
 	#[pallet::getter(fn claimed_rewards)]
 	#[pallet::unbounded]
@@ -524,7 +525,7 @@ pub mod pallet {
 	///
 	/// This is keyed first by the era index to allow bulk deletion and then the stash account.
 	///
-	/// Is it removed after `HISTORY_DEPTH` eras.
+	/// Is it removed after [`Config::HistoryDepth`] eras.
 	// If prefs hasn't been set or has been removed then 0 commission is returned.
 	#[pallet::storage]
 	#[pallet::getter(fn eras_validator_prefs)]
@@ -538,14 +539,14 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// The total validator era payout for the last `HISTORY_DEPTH` eras.
+	/// The total validator era payout for the last [`Config::HistoryDepth`] eras.
 	///
 	/// Eras that haven't finished yet or has been removed doesn't have reward.
 	#[pallet::storage]
 	#[pallet::getter(fn eras_validator_reward)]
 	pub type ErasValidatorReward<T: Config> = StorageMap<_, Twox64Concat, EraIndex, BalanceOf<T>>;
 
-	/// Rewards for the last `HISTORY_DEPTH` eras.
+	/// Rewards for the last [`Config::HistoryDepth`] eras.
 	/// If reward hasn't been set or has been removed then 0 reward is returned.
 	#[pallet::storage]
 	#[pallet::unbounded]
@@ -553,7 +554,7 @@ pub mod pallet {
 	pub type ErasRewardPoints<T: Config> =
 		StorageMap<_, Twox64Concat, EraIndex, EraRewardPoints<T::AccountId>, ValueQuery>;
 
-	/// The total amount staked for the last `HISTORY_DEPTH` eras.
+	/// The total amount staked for the last [`Config::HistoryDepth`] eras.
 	/// If total hasn't been set or has been removed then 0 stake is returned.
 	#[pallet::storage]
 	#[pallet::getter(fn eras_total_stake)]
@@ -647,7 +648,7 @@ pub mod pallet {
 	impl<T: Config> EraInfo<T> {
 		/// Temporary function which looks at both (1) passed param `T::StakingLedger` for legacy
 		/// non-paged rewards, and (2) `T::ClaimedRewards` for paged rewards. This function can be
-		/// removed once `$HistoryDepth` eras have passed and none of the older non-paged rewards
+		/// removed once `T::HistoryDepth` eras have passed and none of the older non-paged rewards
 		/// are relevant/claimable.
 		// Refer tracker issue for cleanup: #13034
 		pub(crate) fn is_rewards_claimed_with_legacy_fallback(
@@ -1759,13 +1760,14 @@ pub mod pallet {
 		/// This pays out the earliest exposure page not claimed for the era. If all pages are
 		/// claimed, it returns an error `InvalidPage`.
 		///
-		/// If a validator has more than `T::MaxExposurePageSize` nominators backing
+		/// If a validator has more than [`Config::MaxExposurePageSize`] nominators backing
 		/// them, then the list of nominators is paged, with each page being capped at
-		/// `T::MaxExposurePageSize`. If a validator has more than one page of
+		/// [`Config::MaxExposurePageSize`]. If a validator has more than one page of
 		/// nominators, the call needs to be made for each page separately in order for all the
 		/// nominators backing a validator receive the reward. The nominators are not sorted across
 		/// pages and so it should not be assumed the highest staker would be on the topmost page
-		/// and vice versa. If rewards are not claimed in `${HistoryDepth}` eras, they are lost.
+		/// and vice versa. If rewards are not claimed in [`Config::HistoryDepth`] eras, they are
+		/// lost.
 		///
 		/// # <weight>
 		/// - Time complexity: at most O(MaxExposurePageSize).
@@ -2090,13 +2092,14 @@ pub mod pallet {
 		/// The origin of this call must be _Signed_. Any account can call this function, even if
 		/// it is not one of the stakers.
 		///
-		/// If a validator has more than `T::MaxExposurePageSize` nominators backing
+		/// If a validator has more than [`Config::MaxExposurePageSize`] nominators backing
 		/// them, then the list of nominators is paged, with each page being capped at
-		/// `T::MaxExposurePageSize`. If a validator has more than one page of
+		/// [`Config::MaxExposurePageSize`.] If a validator has more than one page of
 		/// nominators, the call needs to be made for each page separately in order for all the
 		/// nominators backing a validator receive the reward. The nominators are not sorted across
 		/// pages and so it should not be assumed the highest staker would be on the topmost page
-		/// and vice versa. If rewards are not claimed in `${HistoryDepth}` eras, they are lost.
+		/// and vice versa. If rewards are not claimed in [`Config::HistoryDepth`] eras, they are
+		/// lost.
 		///
 		/// # <weight>
 		/// - Time complexity: at most O(MaxExposurePageSize).

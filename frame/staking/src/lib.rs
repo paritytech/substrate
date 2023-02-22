@@ -112,11 +112,17 @@
 //! The **reward and slashing** procedure is the core of the Staking pallet, attempting to _embrace
 //! valid behavior_ while _punishing any misbehavior or lack of availability_.
 //!
-//! Rewards must be claimed for each era before it gets too old by `$HISTORY_DEPTH` using the
-//! `payout_stakers` call. Any account can call `payout_stakers`, which pays the reward to the
-//! validator as well as its nominators. Only the [`Config::MaxExposurePageSize`]
-//! biggest stakers can claim their reward. This is to limit the i/o cost to mutate storage for each
-//! nominator's account.
+//! Rewards must be claimed for each era before it gets too old by
+//! [`HistoryDepth`](`Config::HistoryDepth`) using the `payout_stakers` call. Any account can call
+//! `payout_stakers`, which pays the reward to the validator as well as its nominators. Only the
+//! [`Config::MaxExposurePageSize`] nominator rewards can be claimed in a single call. When the
+//! number of nominators exceeds [`Config::MaxExposurePageSize`], then the nominators are stored in
+//! multiple pages of [`Config::MaxExposurePageSize`] each with upto maximum of
+//! [`Config::MaxExposurePageCount`] pages. To pay out all nominators, `payout_stakers` must be
+//! called once for each available page. In a scenario where number of nominators N exceed M where M
+//! = [`Config::MaxExposurePageSize`] * [`Config::MaxExposurePageCount`], only top M nominators by
+//! stake balance are paid out. The rest of the nominators are not paid out. Paging exists to limit
+//! the i/o cost to mutate storage for each nominator's account.
 //!
 //! Slashing can occur at any point in time, once misbehavior is reported. Once slashing is
 //! determined, a value is deducted from the balance of the validator and all the nominators who
@@ -229,7 +235,8 @@
 //! [`own`](Exposure::own) or [`others`](Exposure::others) by [`total`](Exposure::total) in
 //! [`Exposure`]). Note that payouts are made in pages with each page capped at
 //! [`Config::MaxExposurePageSize`] nominators. The distribution of nominators across
-//! pages are unsorted and depends on the election result provided by [`Config::ElectionProvider`].
+//! pages may be unsorted. The total commission is paid out proportionally across pages based on the
+//! total stake of the page.
 //!
 //! All entities who receive a reward have the option to choose their reward destination through the
 //! [`Payee`] storage item (see
