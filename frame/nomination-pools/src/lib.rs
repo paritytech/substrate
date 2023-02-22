@@ -428,6 +428,24 @@ pub enum ClaimPermission {
 	PermissionlessAll,
 }
 
+impl ClaimPermission {
+	fn can_bond_extra(&self) -> bool {
+		match self {
+			ClaimPermission::PermissionlessAll => true,
+			ClaimPermission::PermissionlessCompound => true,
+			_ => false,
+		}
+	}
+
+	fn can_claim_payout(&self) -> bool {
+		match self {
+			ClaimPermission::PermissionlessAll => true,
+			ClaimPermission::PermissionlessWithdraw => true,
+			_ => false,
+		}
+	}
+}
+
 impl Default for ClaimPermission {
 	fn default() -> Self {
 		Self::Permissioned
@@ -2469,10 +2487,7 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		if signer != who {
 			ensure!(
-				matches!(
-					ClaimPermissions::<T>::get(&who),
-					ClaimPermission::PermissionlessAll | ClaimPermission::PermissionlessCompound
-				),
+				ClaimPermissions::<T>::get(&who).can_bond_extra(),
 				Error::<T>::DoesNotHavePermission
 			);
 			ensure!(extra == BondExtra::Rewards, Error::<T>::BondExtraRestricted);
@@ -2511,10 +2526,7 @@ impl<T: Config> Pallet<T> {
 	fn do_claim_payout(signer: T::AccountId, who: T::AccountId) -> DispatchResult {
 		if signer != who {
 			ensure!(
-				matches!(
-					ClaimPermissions::<T>::get(&who),
-					ClaimPermission::PermissionlessAll | ClaimPermission::PermissionlessWithdraw
-				),
+				ClaimPermissions::<T>::get(&who).can_claim_payout(),
 				Error::<T>::DoesNotHavePermission
 			);
 		}
