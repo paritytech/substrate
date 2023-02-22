@@ -166,6 +166,7 @@ members = [
 	"frame/uniques",
 	"frame/utility",
 	"frame/vesting",
+	"frame/glutton",
 	"frame/whitelist",
 	"primitives/api",
 	"primitives/api/proc-macro",
