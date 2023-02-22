@@ -497,7 +497,7 @@ fn less_than_needed_candidates_works() {
 
 			// But the exposure is updated in a simple way. No external votes exists.
 			// This is purely self-vote.
-			assert!(ErasStakers::<Test>::iter_prefix_values(active_era())
+			assert!(ErasStakersPaged::<Test>::iter_prefix_values(active_era())
 				.all(|exposure| exposure.others.is_empty()));
 		});
 }
@@ -1736,7 +1736,7 @@ fn reward_to_stake_works() {
 			let _ = Balances::make_free_balance_be(&20, 1000);
 
 			// Bypass logic and change current exposure
-			ErasStakers::<Test>::insert(0, 21, Exposure { total: 69, own: 69, others: vec![] });
+			EraInfo::<Test>::set_validator_exposure(0, &21, Exposure { total: 69, own: 69, others: vec![] });
 			<Ledger<Test>>::insert(
 				&20,
 				StakingLedger {
@@ -6403,11 +6403,13 @@ fn test_validator_exposure_is_backward_compatible_with_non_paged_rewards_payout(
 		);
 		assert_eq!(EraInfo::<Test>::get_page_count(1, &11), 2);
 
-		// case 2: exposure exist in clipped storage.
+		// case 2: exposure exist in ErasStakers and ErasStakersClipped (legacy).
 		// delete paged storage and add exposure to clipped storage
 		<ErasStakersPaged<Test>>::remove(1, (11, 0));
 		<ErasStakersPaged<Test>>::remove(1, (11, 1));
 		<ErasStakersOverview<Test>>::remove(1, 11);
+
+		<ErasStakers<Test>>::insert(1, 11, Exposure { total: total_exposure, own: 1000, others: expected_individual_exposures.clone() });
 		let mut clipped_exposure = expected_individual_exposures.clone();
 		clipped_exposure.sort_by(|a, b| b.who.cmp(&a.who));
 		clipped_exposure.truncate(10);
@@ -6418,10 +6420,15 @@ fn test_validator_exposure_is_backward_compatible_with_non_paged_rewards_payout(
 		);
 
 		// verify `EraInfo` returns exposure from clipped storage
-		let actual_exposure = EraInfo::<Test>::get_validator_exposure(1, &11, 0).unwrap();
-		assert_eq!(actual_exposure.others(), &clipped_exposure);
-		assert_eq!(actual_exposure.own(), 1000);
-		assert_eq!(actual_exposure.exposure_overview.page_count, 1);
+		let actual_exposure_paged = EraInfo::<Test>::get_validator_exposure(1, &11, 0).unwrap();
+		assert_eq!(actual_exposure_paged.others(), &clipped_exposure);
+		assert_eq!(actual_exposure_paged.own(), 1000);
+		assert_eq!(actual_exposure_paged.exposure_overview.page_count, 1);
+
+		let actual_exposure_full = EraInfo::<Test>::get_non_paged_validator_exposure(1, &11);
+		assert_eq!(actual_exposure_full.others, expected_individual_exposures);
+		assert_eq!(actual_exposure_full.own, 1000);
+		assert_eq!(actual_exposure_full.total, total_exposure);
 
 		// for pages other than 0, clipped storage returns empty exposure
 		assert_eq!(EraInfo::<Test>::get_validator_exposure(1, &11, 1), None);
