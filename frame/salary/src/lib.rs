@@ -46,11 +46,16 @@ pub use weights::WeightInfo;
 /// Payroll cycle.
 pub type Cycle = u32;
 
+/// Status for making a payment via the `Pay::pay` trait function.
 #[derive(Encode, Decode, Eq, PartialEq, Clone, TypeInfo, MaxEncodedLen, RuntimeDebug)]
 pub enum PaymentStatus {
+	/// Payment is in progress. Nothing to report yet.
 	InProgress,
+	/// Payment status is unknowable. It will never be reported successful or failed.
 	Unknown,
+	/// Payment happened successfully.
 	Success,
+	/// Payment failed. It may safely be retried.
 	Failure,
 }
 
@@ -71,17 +76,24 @@ pub trait Pay {
 	fn check_payment(id: Self::Id) -> PaymentStatus;
 }
 
+/// The status of the pallet instance.
 #[derive(Encode, Decode, Eq, PartialEq, Clone, TypeInfo, MaxEncodedLen, RuntimeDebug)]
 pub struct StatusType<CycleIndex, BlockNumber, Balance> {
+	/// The index of the "current cycle" (i.e. the last cycle being processed).
 	cycle_index: CycleIndex,
+	/// The first block of the "current cycle" (i.e. the last cycle being processed)
 	cycle_start: BlockNumber,
+	/// The total budget available for all payments in the current cycle.
 	budget: Balance,
+	/// The total amount of the payments registered in the current cycle.
 	total_registrations: Balance,
+	/// The total amount of unregistered payments which have been made in the current cycle.
 	total_unregistered_paid: Balance,
 }
 
+/// The state of a specific payment claim.
 #[derive(Encode, Decode, Eq, PartialEq, Clone, TypeInfo, MaxEncodedLen, RuntimeDebug)]
-pub enum ClaimStatus<Balance, Id> {
+pub enum ClaimState<Balance, Id> {
 	/// No claim recorded.
 	Nothing,
 	/// Amount reserved when last active.
@@ -90,13 +102,15 @@ pub enum ClaimStatus<Balance, Id> {
 	Attempted { amount: Balance, id: Id },
 }
 
-use ClaimStatus::*;
+use ClaimState::*;
 
+/// The status of a single payee/claimant.
 #[derive(Encode, Decode, Eq, PartialEq, Clone, TypeInfo, MaxEncodedLen, RuntimeDebug)]
 pub struct ClaimantStatus<CycleIndex, Balance, Id> {
 	/// The most recent cycle in which the claimant was active.
 	last_active: CycleIndex,
-	status: ClaimStatus<Balance, Id>,
+	/// The state of the payment/claim with in the above cycle.
+	status: ClaimState<Balance, Id>,
 }
 
 #[frame_support::pallet]
