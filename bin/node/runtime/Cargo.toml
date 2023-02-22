@@ -85,6 +85,7 @@ pallet-nomination-pools-benchmarking = { version = "1.0.0", default-features = f
 pallet-nomination-pools-runtime-api = { version = "1.0.0-dev", default-features = false, path = "../../../frame/nomination-pools/runtime-api" }
 pallet-offences = { version = "4.0.0-dev", default-features = false, path = "../../../frame/offences" }
 pallet-offences-benchmarking = { version = "4.0.0-dev", path = "../../../frame/offences/benchmarking", default-features = false, optional = true }
+pallet-glutton = { version = "4.0.0-dev", default-features = false, path = "../../../frame/glutton" }
 pallet-preimage = { version = "4.0.0-dev", default-features = false, path = "../../../frame/preimage" }
 pallet-proxy = { version = "4.0.0-dev", default-features = false, path = "../../../frame/proxy" }
 pallet-insecure-randomness-collective-flip = { version = "4.0.0-dev", default-features = false, path = "../../../frame/insecure-randomness-collective-flip" }
@@ -165,6 +166,7 @@ std = [
 	"node-primitives/std",
 	"sp-offchain/std",
 	"pallet-offences/std",
+	"pallet-glutton/std",
 	"pallet-preimage/std",
 	"pallet-proxy/std",
 	"sp-core/std",
@@ -244,6 +246,7 @@ runtime-benchmarks = [
 	"pallet-multisig/runtime-benchmarks",
 	"pallet-nomination-pools-benchmarking/runtime-benchmarks",
 	"pallet-offences-benchmarking/runtime-benchmarks",
+	"pallet-glutton/runtime-benchmarks",
 	"pallet-preimage/runtime-benchmarks",
 	"pallet-proxy/runtime-benchmarks",
 	"pallet-scheduler/runtime-benchmarks",
@@ -300,6 +303,7 @@ try-runtime = [
 	"pallet-multisig/try-runtime",
 	"pallet-nomination-pools/try-runtime",
 	"pallet-offences/try-runtime",
+	"pallet-glutton/try-runtime",
 	"pallet-preimage/try-runtime",
 	"pallet-proxy/try-runtime",
 	"pallet-insecure-randomness-collective-flip/try-runtime",
