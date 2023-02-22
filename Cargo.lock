@@ -4953,7 +4953,7 @@ dependencies = [
 
 [[package]]
 name = "node-sassafras"
-version = "0.3.1-dev"
+version = "0.3.2-dev"
 dependencies = [
  "clap 4.1.4",
  "frame-benchmarking",
@@ -4995,7 +4995,7 @@ dependencies = [
 
 [[package]]
 name = "node-sassafras-runtime"
-version = "0.3.1-dev"
+version = "0.3.2-dev"
 dependencies = [
  "frame-benchmarking",
  "frame-executive",
@@ -6453,7 +6453,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-sassafras"
-version = "0.3.1-dev"
+version = "0.3.2-dev"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -8439,7 +8439,7 @@ dependencies = [
 
 [[package]]
 name = "sc-consensus-sassafras"
-version = "0.3.1-dev"
+version = "0.3.2-dev"
 dependencies = [
  "async-trait",
  "fork-tree",
@@ -10016,7 +10016,7 @@ dependencies = [
 
 [[package]]
 name = "sp-consensus-sassafras"
-version = "0.3.1-dev"
+version = "0.3.2-dev"
 dependencies = [
  "async-trait",
  "merlin",

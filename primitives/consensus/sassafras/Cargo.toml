@@ -1,6 +1,6 @@
 [package]
 name = "sp-consensus-sassafras"
-version = "0.3.1-dev"
+version = "0.3.2-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Primitives for Sassafras consensus"
 edition = "2021"
@@ -28,7 +28,8 @@ sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../
 sp-keystore = { version = "0.13.0", default-features = false, optional = true, path = "../../keystore" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../runtime" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../std" }
- sp-timestamp = { version = "4.0.0-dev", optional = true, path = "../../timestamp" }
+sp-timestamp = { version = "4.0.0-dev", optional = true, path = "../../timestamp" }
+#vrf-ad-kc = { git = "https://github.com/w3f/ring-vrf", default-features = false }
 
 [features]
 default = ["std"]
