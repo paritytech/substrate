@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -61,6 +61,10 @@
 //!
 //! After joining a pool, a member can claim rewards by calling [`Call::claim_payout`].
 //!
+//! A pool member can also set a `ClaimPermission` with [`Call::set_claim_permission`], to allow
+//! other members to permissionlessly bond or withdraw their rewards by calling
+//! [`Call::bond_extra_other`] or [`Call::claim_payout_other`] respectively.
+//!
 //! For design docs see the [reward pool](#reward-pool) section.
 //!
 //! ### Leave
@@ -120,9 +124,9 @@
 //! * Depositor: creates the pool and is the initial member. They can only leave the pool once all
 //!   other members have left. Once they fully withdraw their funds, the pool is destroyed.
 //! * Nominator: can select which validators the pool nominates.
-//! * State-Toggler: can change the pools state and kick members if the pool is blocked.
-//! * Root: can change the nominator, state-toggler, or itself and can perform any of the actions
-//!   the nominator or state-toggler can.
+//! * Bouncer: can change the pools state and kick members if the pool is blocked.
+//! * Root: can change the nominator, bouncer, or itself and can perform any of the actions the
+//!   nominator or bouncer can.
 //!
 //! ### Dismantling
 //!
@@ -411,6 +415,43 @@ enum AccountType {
 	Reward,
 }
 
+/// The permission a pool member can set for other accounts to claim rewards on their behalf.
+#[derive(Encode, Decode, MaxEncodedLen, Clone, Copy, Debug, PartialEq, Eq, TypeInfo)]
+pub enum ClaimPermission {
+	/// Only the pool member themself can claim their rewards.
+	Permissioned,
+	/// Anyone can compound rewards on a pool member's behalf.
+	PermissionlessCompound,
+	/// Anyone can withdraw rewards on a pool member's behalf.
+	PermissionlessWithdraw,
+	/// Anyone can withdraw and compound rewards on a member's behalf.
+	PermissionlessAll,
+}
+
+impl ClaimPermission {
+	fn can_bond_extra(&self) -> bool {
+		match self {
+			ClaimPermission::PermissionlessAll => true,
+			ClaimPermission::PermissionlessCompound => true,
+			_ => false,
+		}
+	}
+
+	fn can_claim_payout(&self) -> bool {
+		match self {
+			ClaimPermission::PermissionlessAll => true,
+			ClaimPermission::PermissionlessWithdraw => true,
+			_ => false,
+		}
+	}
+}
+
+impl Default for ClaimPermission {
+	fn default() -> Self {
+		Self::Permissioned
+	}
+}
+
 /// A member in a pool.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound, CloneNoBound)]
 #[cfg_attr(feature = "std", derive(frame_support::PartialEqNoBound, DefaultNoBound))]
@@ -573,13 +614,13 @@ pub struct PoolRoles<AccountId> {
 	/// Creates the pool and is the initial member. They can only leave the pool once all other
 	/// members have left. Once they fully leave, the pool is destroyed.
 	pub depositor: AccountId,
-	/// Can change the nominator, state-toggler, or itself and can perform any of the actions the
-	/// nominator or state-toggler can.
+	/// Can change the nominator, bouncer, or itself and can perform any of the actions the
+	/// nominator or bouncer can.
 	pub root: Option<AccountId>,
 	/// Can select which validators the pool nominates.
 	pub nominator: Option<AccountId>,
 	/// Can change the pools state and kick members if the pool is blocked.
-	pub state_toggler: Option<AccountId>,
+	pub bouncer: Option<AccountId>,
 }
 
 /// Pool permissions and state
@@ -734,11 +775,8 @@ impl<T: Config> BondedPool<T> {
 		self.roles.root.as_ref().map_or(false, |root| root == who)
 	}
 
-	fn is_state_toggler(&self, who: &T::AccountId) -> bool {
-		self.roles
-			.state_toggler
-			.as_ref()
-			.map_or(false, |state_toggler| state_toggler == who)
+	fn is_bouncer(&self, who: &T::AccountId) -> bool {
+		self.roles.bouncer.as_ref().map_or(false, |bouncer| bouncer == who)
 	}
 
 	fn can_update_roles(&self, who: &T::AccountId) -> bool {
@@ -751,15 +789,15 @@ impl<T: Config> BondedPool<T> {
 	}
 
 	fn can_kick(&self, who: &T::AccountId) -> bool {
-		self.state == PoolState::Blocked && (self.is_root(who) || self.is_state_toggler(who))
+		self.state == PoolState::Blocked && (self.is_root(who) || self.is_bouncer(who))
 	}
 
 	fn can_toggle_state(&self, who: &T::AccountId) -> bool {
-		(self.is_root(who) || self.is_state_toggler(who)) && !self.is_destroying()
+		(self.is_root(who) || self.is_bouncer(who)) && !self.is_destroying()
 	}
 
 	fn can_set_metadata(&self, who: &T::AccountId) -> bool {
-		self.is_root(who) || self.is_state_toggler(who)
+		self.is_root(who) || self.is_bouncer(who)
 	}
 
 	fn is_destroying(&self) -> bool {
@@ -1316,6 +1354,11 @@ pub mod pallet {
 	pub type ReversePoolIdLookup<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, PoolId, OptionQuery>;
 
+	/// Map from a pool member account to their opted claim permission.
+	#[pallet::storage]
+	pub type ClaimPermissions<T: Config> =
+		StorageMap<_, Twox64Concat, T::AccountId, ClaimPermission, ValueQuery>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub min_join_bond: BalanceOf<T>,
@@ -1407,7 +1450,7 @@ pub mod pallet {
 		/// can never change.
 		RolesUpdated {
 			root: Option<T::AccountId>,
-			state_toggler: Option<T::AccountId>,
+			bouncer: Option<T::AccountId>,
 			nominator: Option<T::AccountId>,
 		},
 		/// The active balance of pool `pool_id` has been slashed to `balance`.
@@ -1473,6 +1516,8 @@ pub mod pallet {
 		PoolIdInUse,
 		/// Pool id provided is not correct/usable.
 		InvalidPoolId,
+		/// Bonding extra is restricted to the exact pending reward amount.
+		BondExtraRestricted,
 	}
 
 	#[derive(Encode, Decode, PartialEq, TypeInfo, frame_support::PalletError, RuntimeDebug)]
@@ -1563,44 +1608,18 @@ pub mod pallet {
 		/// accumulated rewards, see [`BondExtra`].
 		///
 		/// Bonding extra funds implies an automatic payout of all pending rewards as well.
+		/// See `bond_extra_other` to bond pending rewards of `other` members.
 		// NOTE: this transaction is implemented with the sole purpose of readability and
 		// correctness, not optimization. We read/write several storage items multiple times instead
 		// of just once, in the spirit reusing code.
 		#[pallet::call_index(1)]
 		#[pallet::weight(
 			T::WeightInfo::bond_extra_transfer()
-			.max(T::WeightInfo::bond_extra_reward())
+			.max(T::WeightInfo::bond_extra_other())
 		)]
 		pub fn bond_extra(origin: OriginFor<T>, extra: BondExtra<BalanceOf<T>>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let (mut member, mut bonded_pool, mut reward_pool) = Self::get_member_with_pools(&who)?;
-
-			// payout related stuff: we must claim the payouts, and updated recorded payout data
-			// before updating the bonded pool points, similar to that of `join` transaction.
-			reward_pool.update_records(bonded_pool.id, bonded_pool.points)?;
-			let claimed =
-				Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
-
-			let (points_issued, bonded) = match extra {
-				BondExtra::FreeBalance(amount) =>
-					(bonded_pool.try_bond_funds(&who, amount, BondType::Later)?, amount),
-				BondExtra::Rewards =>
-					(bonded_pool.try_bond_funds(&who, claimed, BondType::Later)?, claimed),
-			};
-
-			bonded_pool.ok_to_be_open()?;
-			member.points =
-				member.points.checked_add(&points_issued).ok_or(Error::<T>::OverflowRisk)?;
-
-			Self::deposit_event(Event::<T>::Bonded {
-				member: who.clone(),
-				pool_id: member.pool_id,
-				bonded,
-				joined: false,
-			});
-			Self::put_member_with_pools(&who, member, bonded_pool, reward_pool);
-
-			Ok(())
+			Self::do_bond_extra(who.clone(), who, extra)
 		}
 
 		/// A bonded member can use this to claim their payout based on the rewards that the pool
@@ -1609,16 +1628,13 @@ pub mod pallet {
 		///
 		/// The member will earn rewards pro rata based on the members stake vs the sum of the
 		/// members in the pools stake. Rewards do not "expire".
+		///
+		/// See `claim_payout_other` to caim rewards on bahalf of some `other` pool member.
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::claim_payout())]
 		pub fn claim_payout(origin: OriginFor<T>) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			let (mut member, mut bonded_pool, mut reward_pool) = Self::get_member_with_pools(&who)?;
-
-			let _ = Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
-
-			Self::put_member_with_pools(&who, member, bonded_pool, reward_pool);
-			Ok(())
+			let signer = ensure_signed(origin)?;
+			Self::do_claim_payout(signer.clone(), signer)
 		}
 
 		/// Unbond up to `unbonding_points` of the `member_account`'s funds from the pool. It
@@ -1630,8 +1646,8 @@ pub mod pallet {
 		///
 		/// # Conditions for a permissionless dispatch.
 		///
-		/// * The pool is blocked and the caller is either the root or state-toggler. This is
-		///   refereed to as a kick.
+		/// * The pool is blocked and the caller is either the root or bouncer. This is refereed to
+		///   as a kick.
 		/// * The pool is destroying and the member is not the depositor.
 		/// * The pool is destroying, the member is the depositor and no other members are in the
 		///   pool.
@@ -1718,7 +1734,6 @@ pub mod pallet {
 			// Now that we know everything has worked write the items to storage.
 			SubPoolsStorage::insert(&member.pool_id, sub_pools);
 			Self::put_member_with_pools(&member_account, member, bonded_pool, reward_pool);
-
 			Ok(())
 		}
 
@@ -1754,7 +1769,7 @@ pub mod pallet {
 		///
 		/// * The pool is in destroy mode and the target is not the depositor.
 		/// * The target is the depositor and they are the only member in the sub pools.
-		/// * The pool is blocked and the caller is either the root or state-toggler.
+		/// * The pool is blocked and the caller is either the root or bouncer.
 		///
 		/// # Conditions for permissioned dispatch
 		///
@@ -1843,6 +1858,9 @@ pub mod pallet {
 			});
 
 			let post_info_weight = if member.total_points().is_zero() {
+				// remove any `ClaimPermission` associated with the member.
+				ClaimPermissions::<T>::remove(&member_account);
+
 				// member being reaped.
 				PoolMembers::<T>::remove(&member_account);
 				Self::deposit_event(Event::<T>::MemberRemoved {
@@ -1879,7 +1897,7 @@ pub mod pallet {
 		///   creating multiple pools in the same extrinsic.
 		/// * `root` - The account to set as [`PoolRoles::root`].
 		/// * `nominator` - The account to set as the [`PoolRoles::nominator`].
-		/// * `state_toggler` - The account to set as the [`PoolRoles::state_toggler`].
+		/// * `bouncer` - The account to set as the [`PoolRoles::bouncer`].
 		///
 		/// # Note
 		///
@@ -1892,7 +1910,7 @@ pub mod pallet {
 			#[pallet::compact] amount: BalanceOf<T>,
 			root: AccountIdLookupOf<T>,
 			nominator: AccountIdLookupOf<T>,
-			state_toggler: AccountIdLookupOf<T>,
+			bouncer: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let depositor = ensure_signed(origin)?;
 
@@ -1901,7 +1919,7 @@ pub mod pallet {
 				Ok(*id)
 			})?;
 
-			Self::do_create(depositor, amount, root, nominator, state_toggler, pool_id)
+			Self::do_create(depositor, amount, root, nominator, bouncer, pool_id)
 		}
 
 		/// Create a new delegation pool with a previously used pool id
@@ -1917,7 +1935,7 @@ pub mod pallet {
 			#[pallet::compact] amount: BalanceOf<T>,
 			root: AccountIdLookupOf<T>,
 			nominator: AccountIdLookupOf<T>,
-			state_toggler: AccountIdLookupOf<T>,
+			bouncer: AccountIdLookupOf<T>,
 			pool_id: PoolId,
 		) -> DispatchResult {
 			let depositor = ensure_signed(origin)?;
@@ -1925,7 +1943,7 @@ pub mod pallet {
 			ensure!(!BondedPools::<T>::contains_key(pool_id), Error::<T>::PoolIdInUse);
 			ensure!(pool_id < LastPoolId::<T>::get(), Error::<T>::InvalidPoolId);
 
-			Self::do_create(depositor, amount, root, nominator, state_toggler, pool_id)
+			Self::do_create(depositor, amount, root, nominator, bouncer, pool_id)
 		}
 
 		/// Nominate on behalf of the pool.
@@ -1955,7 +1973,7 @@ pub mod pallet {
 		///
 		/// The dispatch origin of this call must be either:
 		///
-		/// 1. signed by the state toggler, or the root role of the pool,
+		/// 1. signed by the bouncer, or the root role of the pool,
 		/// 2. if the pool conditions to be open are NOT met (as described by `ok_to_be_open`), and
 		///    then the state of the pool can be permissionlessly changed to `Destroying`.
 		#[pallet::call_index(9)]
@@ -1985,7 +2003,7 @@ pub mod pallet {
 
 		/// Set a new metadata for the pool.
 		///
-		/// The dispatch origin of this call must be signed by the state toggler, or the root role
+		/// The dispatch origin of this call must be signed by the bouncer, or the root role
 		/// of the pool.
 		#[pallet::call_index(10)]
 		#[pallet::weight(T::WeightInfo::set_metadata(metadata.len() as u32))]
@@ -2063,7 +2081,7 @@ pub mod pallet {
 			pool_id: PoolId,
 			new_root: ConfigOp<T::AccountId>,
 			new_nominator: ConfigOp<T::AccountId>,
-			new_state_toggler: ConfigOp<T::AccountId>,
+			new_bouncer: ConfigOp<T::AccountId>,
 		) -> DispatchResult {
 			let mut bonded_pool = match ensure_root(origin.clone()) {
 				Ok(()) => BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?,
@@ -2086,16 +2104,16 @@ pub mod pallet {
 				ConfigOp::Remove => bonded_pool.roles.nominator = None,
 				ConfigOp::Set(v) => bonded_pool.roles.nominator = Some(v),
 			};
-			match new_state_toggler {
+			match new_bouncer {
 				ConfigOp::Noop => (),
-				ConfigOp::Remove => bonded_pool.roles.state_toggler = None,
-				ConfigOp::Set(v) => bonded_pool.roles.state_toggler = Some(v),
+				ConfigOp::Remove => bonded_pool.roles.bouncer = None,
+				ConfigOp::Set(v) => bonded_pool.roles.bouncer = Some(v),
 			};
 
 			Self::deposit_event(Event::<T>::RolesUpdated {
 				root: bonded_pool.roles.root.clone(),
 				nominator: bonded_pool.roles.nominator.clone(),
-				state_toggler: bonded_pool.roles.state_toggler.clone(),
+				bouncer: bonded_pool.roles.bouncer.clone(),
 			});
 
 			bonded_pool.put();
@@ -2116,6 +2134,67 @@ pub mod pallet {
 			let bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_nominate(&who), Error::<T>::NotNominator);
 			T::Staking::chill(&bonded_pool.bonded_account())
+		}
+
+		/// `origin` bonds funds from `extra` for some pool member `member` into their respective
+		/// pools.
+		///
+		/// `origin` can bond extra funds from free balance or pending rewards when `origin ==
+		/// other`.
+		///
+		/// In the case of `origin != other`, `origin` can only bond extra pending rewards of
+		/// `other` members assuming set_claim_permission for the given member is
+		/// `PermissionlessAll` or `PermissionlessCompound`.
+		#[pallet::call_index(14)]
+		#[pallet::weight(
+			T::WeightInfo::bond_extra_transfer()
+			.max(T::WeightInfo::bond_extra_other())
+		)]
+		pub fn bond_extra_other(
+			origin: OriginFor<T>,
+			member: AccountIdLookupOf<T>,
+			extra: BondExtra<BalanceOf<T>>,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			Self::do_bond_extra(who, T::Lookup::lookup(member)?, extra)
+		}
+
+		/// Allows a pool member to set a claim permission to allow or disallow permissionless
+		/// bonding and withdrawing.
+		///
+		/// By default, this is `Permissioned`, which implies only the pool member themselves can
+		/// claim their pending rewards. If a pool member wishes so, they can set this to
+		/// `PermissionlessAll` to allow any account to claim their rewards and bond extra to the
+		/// pool.
+		///
+		/// # Arguments
+		///
+		/// * `origin` - Member of a pool.
+		/// * `actor` - Account to claim reward. // improve this
+		#[pallet::call_index(15)]
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+		pub fn set_claim_permission(
+			origin: OriginFor<T>,
+			permission: ClaimPermission,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+
+			ensure!(PoolMembers::<T>::contains_key(&who), Error::<T>::PoolMemberNotFound);
+			ClaimPermissions::<T>::mutate(who, |source| {
+				*source = permission;
+			});
+			Ok(())
+		}
+
+		/// `origin` can claim payouts on some pool member `other`'s behalf.
+		///
+		/// Pool member `other` must have a `PermissionlessAll` or `PermissionlessWithdraw` in order
+		/// for this call to be successful.
+		#[pallet::call_index(16)]
+		#[pallet::weight(T::WeightInfo::claim_payout())]
+		pub fn claim_payout_other(origin: OriginFor<T>, other: T::AccountId) -> DispatchResult {
+			let signer = ensure_signed(origin)?;
+			Self::do_claim_payout(signer, other)
 		}
 	}
 
@@ -2142,24 +2221,6 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	/// Returns the pending rewards for the specified `member_account`.
-	///
-	/// In the case of error, `None` is returned.
-	pub fn pending_rewards(member_account: T::AccountId) -> Option<BalanceOf<T>> {
-		if let Some(pool_member) = PoolMembers::<T>::get(member_account) {
-			if let Some((reward_pool, bonded_pool)) = RewardPools::<T>::get(pool_member.pool_id)
-				.zip(BondedPools::<T>::get(pool_member.pool_id))
-			{
-				let current_reward_counter = reward_pool
-					.current_reward_counter(pool_member.pool_id, bonded_pool.points)
-					.ok()?;
-				return pool_member.pending_rewards(current_reward_counter).ok()
-			}
-		}
-
-		None
-	}
-
 	/// The amount of bond that MUST REMAIN IN BONDED in ALL POOLS.
 	///
 	/// It is the responsibility of the depositor to put these funds into the pool initially. Upon
@@ -2354,12 +2415,12 @@ impl<T: Config> Pallet<T> {
 		amount: BalanceOf<T>,
 		root: AccountIdLookupOf<T>,
 		nominator: AccountIdLookupOf<T>,
-		state_toggler: AccountIdLookupOf<T>,
+		bouncer: AccountIdLookupOf<T>,
 		pool_id: PoolId,
 	) -> DispatchResult {
 		let root = T::Lookup::lookup(root)?;
 		let nominator = T::Lookup::lookup(nominator)?;
-		let state_toggler = T::Lookup::lookup(state_toggler)?;
+		let bouncer = T::Lookup::lookup(bouncer)?;
 
 		ensure!(amount >= Pallet::<T>::depositor_min_bond(), Error::<T>::MinimumBondNotMet);
 		ensure!(
@@ -2372,7 +2433,7 @@ impl<T: Config> Pallet<T> {
 			PoolRoles {
 				root: Some(root),
 				nominator: Some(nominator),
-				state_toggler: Some(state_toggler),
+				bouncer: Some(bouncer),
 				depositor: who.clone(),
 			},
 		);
@@ -2416,6 +2477,64 @@ impl<T: Config> Pallet<T> {
 		});
 		bonded_pool.put();
 
+		Ok(())
+	}
+
+	fn do_bond_extra(
+		signer: T::AccountId,
+		who: T::AccountId,
+		extra: BondExtra<BalanceOf<T>>,
+	) -> DispatchResult {
+		if signer != who {
+			ensure!(
+				ClaimPermissions::<T>::get(&who).can_bond_extra(),
+				Error::<T>::DoesNotHavePermission
+			);
+			ensure!(extra == BondExtra::Rewards, Error::<T>::BondExtraRestricted);
+		}
+
+		let (mut member, mut bonded_pool, mut reward_pool) = Self::get_member_with_pools(&who)?;
+
+		// payout related stuff: we must claim the payouts, and updated recorded payout data
+		// before updating the bonded pool points, similar to that of `join` transaction.
+		reward_pool.update_records(bonded_pool.id, bonded_pool.points)?;
+		let claimed =
+			Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
+
+		let (points_issued, bonded) = match extra {
+			BondExtra::FreeBalance(amount) =>
+				(bonded_pool.try_bond_funds(&who, amount, BondType::Later)?, amount),
+			BondExtra::Rewards =>
+				(bonded_pool.try_bond_funds(&who, claimed, BondType::Later)?, claimed),
+		};
+
+		bonded_pool.ok_to_be_open()?;
+		member.points =
+			member.points.checked_add(&points_issued).ok_or(Error::<T>::OverflowRisk)?;
+
+		Self::deposit_event(Event::<T>::Bonded {
+			member: who.clone(),
+			pool_id: member.pool_id,
+			bonded,
+			joined: false,
+		});
+		Self::put_member_with_pools(&who, member, bonded_pool, reward_pool);
+
+		Ok(())
+	}
+
+	fn do_claim_payout(signer: T::AccountId, who: T::AccountId) -> DispatchResult {
+		if signer != who {
+			ensure!(
+				ClaimPermissions::<T>::get(&who).can_claim_payout(),
+				Error::<T>::DoesNotHavePermission
+			);
+		}
+		let (mut member, mut bonded_pool, mut reward_pool) = Self::get_member_with_pools(&who)?;
+
+		let _ = Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
+
+		Self::put_member_with_pools(&who, member, bonded_pool, reward_pool);
 		Ok(())
 	}
 
@@ -2576,6 +2695,50 @@ impl<T: Config> Pallet<T> {
 		let points = PoolMembers::<T>::get(&member).map(|d| d.active_points()).unwrap_or_default();
 		let member_lookup = T::Lookup::unlookup(member);
 		Self::unbond(origin, member_lookup, points)
+	}
+}
+
+impl<T: Config> Pallet<T> {
+	/// Returns the pending rewards for the specified `who` account.
+	///
+	/// In the case of error, `None` is returned. Used by runtime API.
+	pub fn api_pending_rewards(who: T::AccountId) -> Option<BalanceOf<T>> {
+		if let Some(pool_member) = PoolMembers::<T>::get(who) {
+			if let Some((reward_pool, bonded_pool)) = RewardPools::<T>::get(pool_member.pool_id)
+				.zip(BondedPools::<T>::get(pool_member.pool_id))
+			{
+				let current_reward_counter = reward_pool
+					.current_reward_counter(pool_member.pool_id, bonded_pool.points)
+					.ok()?;
+				return pool_member.pending_rewards(current_reward_counter).ok()
+			}
+		}
+
+		None
+	}
+
+	/// Returns the points to balance conversion for a specified pool.
+	///
+	/// If the pool ID does not exist, it returns 0 ratio points to balance. Used by runtime API.
+	pub fn api_points_to_balance(pool_id: PoolId, points: BalanceOf<T>) -> BalanceOf<T> {
+		if let Some(pool) = BondedPool::<T>::get(pool_id) {
+			pool.points_to_balance(points)
+		} else {
+			Zero::zero()
+		}
+	}
+
+	/// Returns the equivalent `new_funds` balance to point conversion for a specified pool.
+	///
+	/// If the pool ID does not exist, returns 0 ratio balance to points. Used by runtime API.
+	pub fn api_balance_to_points(pool_id: PoolId, new_funds: BalanceOf<T>) -> BalanceOf<T> {
+		if let Some(pool) = BondedPool::<T>::get(pool_id) {
+			let bonded_balance =
+				T::Staking::active_stake(&pool.bonded_account()).unwrap_or(Zero::zero());
+			Pallet::<T>::balance_to_point(bonded_balance, pool.points, new_funds)
+		} else {
+			Zero::zero()
+		}
 	}
 }
 
