@@ -27,7 +27,7 @@ The image can be used by passing the selected binary followed by the appropriate
 
 To get started to pass the `--help flag`. Here are a few examples:
 
-- `./run.sh substrate --version` //
+- `./run.sh substrate --version`
 - `./run.sh subkey --help`
 - `./run.sh node-template --version`
 - `./run.sh chain-spec-builder --help`
