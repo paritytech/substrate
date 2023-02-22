@@ -214,7 +214,7 @@ fn lifecycle_should_work() {
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(account(1)), 0, 70, account(1), None));
 		assert_eq!(items(), vec![(account(1), 0, 70), (account(10), 0, 42), (account(20), 0, 69)]);
 		assert_eq!(Collection::<Test>::get(0).unwrap().items, 3);
-		assert_eq!(Collection::<Test>::get(0).unwrap().item_metadatas, 0);
+		assert_eq!(Collection::<Test>::get(0).unwrap().item_configs, 3);
 
 		assert_eq!(Balances::reserved_balance(&account(2)), 0);
 		assert_ok!(Nfts::transfer(RuntimeOrigin::signed(account(1)), 0, 70, account(2)));
@@ -226,10 +226,22 @@ fn lifecycle_should_work() {
 		assert_ok!(Nfts::set_metadata(RuntimeOrigin::signed(account(1)), 0, 69, bvec![69, 69]));
 		assert_eq!(Balances::reserved_balance(&account(1)), 13);
 		assert!(ItemMetadataOf::<Test>::contains_key(0, 69));
+		assert!(ItemConfigOf::<Test>::contains_key(0, 69));
+		assert_ok!(Nfts::set_attribute(
+			RuntimeOrigin::signed(account(1)),
+			0,
+			Some(69),
+			AttributeNamespace::CollectionOwner,
+			bvec![0],
+			bvec![0],
+		));
+		assert_ok!(Nfts::burn(RuntimeOrigin::signed(account(10)), 0, 42));
+		assert_ok!(Nfts::burn(RuntimeOrigin::signed(account(20)), 0, 69));
+		assert_ok!(Nfts::burn(RuntimeOrigin::root(), 0, 70));
 
 		let w = Nfts::get_destroy_witness(&0).unwrap();
-		assert_eq!(w.items, 3);
-		assert_eq!(w.item_metadatas, 2);
+		assert_eq!(w.attributes, 1);
+		assert_eq!(w.item_configs, 0);
 		assert_ok!(Nfts::destroy(RuntimeOrigin::signed(account(1)), 0, w));
 		assert_eq!(Balances::reserved_balance(&account(1)), 0);
 
@@ -240,6 +252,8 @@ fn lifecycle_should_work() {
 		assert!(!CollectionMetadataOf::<Test>::contains_key(0));
 		assert!(!ItemMetadataOf::<Test>::contains_key(0, 42));
 		assert!(!ItemMetadataOf::<Test>::contains_key(0, 69));
+		assert!(!ItemConfigOf::<Test>::contains_key(0, 69));
+		assert_eq!(attributes(0), vec![]);
 		assert_eq!(collections(), vec![]);
 		assert_eq!(items(), vec![]);
 	});
@@ -256,11 +270,45 @@ fn destroy_with_bad_witness_should_not_work() {
 		));
 
 		let w = Collection::<Test>::get(0).unwrap().destroy_witness();
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(account(1)), 0, 42, account(1), None));
 		assert_noop!(
-			Nfts::destroy(RuntimeOrigin::signed(account(1)), 0, w),
+			Nfts::destroy(
+				RuntimeOrigin::signed(account(1)),
+				0,
+				DestroyWitness { item_configs: 1, ..w }
+			),
 			Error::<Test>::BadWitness
 		);
+	});
+}
+
+#[test]
+fn destroy_should_work() {
+	new_test_ext().execute_with(|| {
+		Balances::make_free_balance_be(&account(1), 100);
+		assert_ok!(Nfts::create(
+			RuntimeOrigin::signed(account(1)),
+			account(1),
+			collection_config_with_all_settings_enabled()
+		));
+
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(account(1)), 0, 42, account(2), None));
+		assert_noop!(
+			Nfts::destroy(
+				RuntimeOrigin::signed(account(1)),
+				0,
+				Nfts::get_destroy_witness(&0).unwrap()
+			),
+			Error::<Test>::CollectionNotEmpty
+		);
+		assert_ok!(Nfts::lock_item_transfer(RuntimeOrigin::signed(account(1)), 0, 42));
+		assert_ok!(Nfts::burn(RuntimeOrigin::signed(account(2)), 0, 42));
+		assert!(ItemConfigOf::<Test>::contains_key(0, 42));
+		assert_ok!(Nfts::destroy(
+			RuntimeOrigin::signed(account(1)),
+			0,
+			Nfts::get_destroy_witness(&0).unwrap()
+		));
+		assert!(!ItemConfigOf::<Test>::contains_key(0, 42));
 	});
 }
 
@@ -491,8 +539,9 @@ fn origin_guards_should_work() {
 			Nfts::mint(RuntimeOrigin::signed(account(2)), 0, 69, account(2), None),
 			Error::<Test>::NoPermission
 		);
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(account(1)), 0, 43, account(2), None));
 		assert_noop!(
-			Nfts::burn(RuntimeOrigin::signed(account(2)), 0, 42),
+			Nfts::burn(RuntimeOrigin::signed(account(1)), 0, 43),
 			Error::<Test>::NoPermission
 		);
 		let w = Nfts::get_destroy_witness(&0).unwrap();
@@ -830,6 +879,7 @@ fn set_collection_owner_attributes_should_work() {
 		);
 		assert_eq!(Balances::reserved_balance(account(1)), 16);
 
+		assert_ok!(Nfts::burn(RuntimeOrigin::root(), 0, 0));
 		let w = Nfts::get_destroy_witness(&0).unwrap();
 		assert_ok!(Nfts::destroy(RuntimeOrigin::signed(account(1)), 0, w));
 		assert_eq!(attributes(0), vec![]);

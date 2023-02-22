@@ -90,8 +90,8 @@ pub struct CollectionDetails<AccountId, DepositBalance> {
 	pub(super) owner_deposit: DepositBalance,
 	/// The total number of outstanding items of this collection.
 	pub(super) items: u32,
-	/// The total number of outstanding item metadata of this collection.
-	pub(super) item_metadatas: u32,
+	/// The total number of outstanding item configs of this collection.
+	pub(super) item_configs: u32,
 	/// The total number of attributes for this collection.
 	pub(super) attributes: u32,
 }
@@ -99,12 +99,9 @@ pub struct CollectionDetails<AccountId, DepositBalance> {
 /// Witness data for the destroy transactions.
 #[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct DestroyWitness {
-	/// The total number of outstanding items of this collection.
+	/// The total number of outstanding item configs of this collection.
 	#[codec(compact)]
-	pub items: u32,
-	/// The total number of items in this collection that have outstanding item metadata.
-	#[codec(compact)]
-	pub item_metadatas: u32,
+	pub item_configs: u32,
 	/// The total number of attributes for this collection.
 	#[codec(compact)]
 	pub attributes: u32,
@@ -112,11 +109,7 @@ pub struct DestroyWitness {
 
 impl<AccountId, DepositBalance> CollectionDetails<AccountId, DepositBalance> {
 	pub fn destroy_witness(&self) -> DestroyWitness {
-		DestroyWitness {
-			items: self.items,
-			item_metadatas: self.item_metadatas,
-			attributes: self.attributes,
-		}
+		DestroyWitness { item_configs: self.item_configs, attributes: self.attributes }
 	}
 }
 

@@ -622,6 +622,8 @@ pub mod pallet {
 		MaxAttributesLimitReached,
 		/// The provided namespace isn't supported in this call.
 		WrongNamespace,
+		/// Can't delete non-empty collections.
+		CollectionNotEmpty,
 	}
 
 	#[pallet::call]
@@ -713,20 +715,20 @@ pub mod pallet {
 		/// The origin must conform to `ForceOrigin` or must be `Signed` and the sender must be the
 		/// owner of the `collection`.
 		///
+		/// NOTE: The collection must have 0 items to be destroyed.
+		///
 		/// - `collection`: The identifier of the collection to be destroyed.
 		/// - `witness`: Information on the items minted in the collection. This must be
 		/// correct.
 		///
 		/// Emits `Destroyed` event when successful.
 		///
-		/// Weight: `O(n + m)` where:
-		/// - `n = witness.items`
-		/// - `m = witness.item_metadatas`
+		/// Weight: `O(n + a)` where:
+		/// - `n = witness.item_configs`
 		/// - `a = witness.attributes`
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::destroy(
-			witness.items,
- 			witness.item_metadatas,
+			witness.item_configs,
 			witness.attributes,
  		))]
 		pub fn destroy(
@@ -739,12 +741,7 @@ pub mod pallet {
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
 			let details = Self::do_destroy_collection(collection, witness, maybe_check_owner)?;
 
-			Ok(Some(T::WeightInfo::destroy(
-				details.items,
-				details.item_metadatas,
-				details.attributes,
-			))
-			.into())
+			Ok(Some(T::WeightInfo::destroy(details.item_configs, details.attributes)).into())
 		}
 
 		/// Mint an item of a particular collection.
@@ -886,7 +883,8 @@ pub mod pallet {
 
 		/// Destroy a single item.
 		///
-		/// Origin must be Signed and the signing account must be the owner of the `item`.
+		/// The origin must conform to `ForceOrigin` or must be Signed and the signing account must
+		/// be the owner of the `item`.
 		///
 		/// - `collection`: The collection of the item to be burned.
 		/// - `item`: The item to be burned.
@@ -901,10 +899,14 @@ pub mod pallet {
 			collection: T::CollectionId,
 			item: T::ItemId,
 		) -> DispatchResult {
-			let origin = ensure_signed(origin)?;
+			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
+				.map(|_| None)
+				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
 
 			Self::do_burn(collection, item, |details| {
-				ensure!(details.owner == origin, Error::<T, I>::NoPermission);
+				if let Some(check_origin) = maybe_check_origin {
+					ensure!(details.owner == check_origin, Error::<T, I>::NoPermission);
+				}
 				Ok(())
 			})
 		}
@@ -1821,7 +1823,7 @@ pub mod pallet {
 		/// - `data`: The pre-signed approval that consists of the information about the item,
 		///   attributes to update and until what block number.
 		/// - `signature`: The signature of the `data` object.
-		/// - `signer`: The `data` object's signer. Should be an owner of the collection for the
+		/// - `signer`: The `data` object's signer. Should be an Admin of the collection for the
 		///   `CollectionOwner` namespace.
 		///
 		/// Emits `AttributeSet` for each provided attribute.

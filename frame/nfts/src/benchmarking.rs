@@ -89,6 +89,40 @@ fn mint_item<T: Config<I>, I: 'static>(
 	(item, caller, caller_lookup)
 }
 
+fn lock_item<T: Config<I>, I: 'static>(
+	index: u16,
+) -> (T::ItemId, T::AccountId, AccountIdLookupOf<T>) {
+	let caller = Collection::<T, I>::get(T::Helper::collection(0)).unwrap().owner;
+	if caller != whitelisted_caller() {
+		whitelist_account!(caller);
+	}
+	let caller_lookup = T::Lookup::unlookup(caller.clone());
+	let item = T::Helper::item(index);
+	assert_ok!(Nfts::<T, I>::lock_item_transfer(
+		SystemOrigin::Signed(caller.clone()).into(),
+		T::Helper::collection(0),
+		item,
+	));
+	(item, caller, caller_lookup)
+}
+
+fn burn_item<T: Config<I>, I: 'static>(
+	index: u16,
+) -> (T::ItemId, T::AccountId, AccountIdLookupOf<T>) {
+	let caller = Collection::<T, I>::get(T::Helper::collection(0)).unwrap().owner;
+	if caller != whitelisted_caller() {
+		whitelist_account!(caller);
+	}
+	let caller_lookup = T::Lookup::unlookup(caller.clone());
+	let item = T::Helper::item(index);
+	assert_ok!(Nfts::<T, I>::burn(
+		SystemOrigin::Signed(caller.clone()).into(),
+		T::Helper::collection(0),
+		item,
+	));
+	(item, caller, caller_lookup)
+}
+
 fn add_item_metadata<T: Config<I>, I: 'static>(
 	item: T::ItemId,
 ) -> (T::AccountId, AccountIdLookupOf<T>) {
@@ -119,6 +153,26 @@ fn add_item_attribute<T: Config<I>, I: 'static>(
 		SystemOrigin::Signed(caller.clone()).into(),
 		T::Helper::collection(0),
 		Some(item),
+		AttributeNamespace::CollectionOwner,
+		key.clone(),
+		vec![0; T::ValueLimit::get() as usize].try_into().unwrap(),
+	));
+	(key, caller, caller_lookup)
+}
+
+fn add_collection_attribute<T: Config<I>, I: 'static>(
+	i: u16,
+) -> (BoundedVec<u8, T::KeyLimit>, T::AccountId, AccountIdLookupOf<T>) {
+	let caller = Collection::<T, I>::get(T::Helper::collection(0)).unwrap().owner;
+	if caller != whitelisted_caller() {
+		whitelist_account!(caller);
+	}
+	let caller_lookup = T::Lookup::unlookup(caller.clone());
+	let key: BoundedVec<_, _> = make_filled_vec(i, T::KeyLimit::get() as usize).try_into().unwrap();
+	assert_ok!(Nfts::<T, I>::set_attribute(
+		SystemOrigin::Signed(caller.clone()).into(),
+		T::Helper::collection(0),
+		None,
 		AttributeNamespace::CollectionOwner,
 		key.clone(),
 		vec![0; T::ValueLimit::get() as usize].try_into().unwrap(),
@@ -191,25 +245,17 @@ benchmarks_instance_pallet! {
 
 	destroy {
 		let n in 0 .. 1_000;
-		let m in 0 .. 1_000;
 		let a in 0 .. 1_000;
 
 		let (collection, caller, _) = create_collection::<T, I>();
 		add_collection_metadata::<T, I>();
 		for i in 0..n {
 			mint_item::<T, I>(i as u16);
-		}
-		for i in 0..m {
-			if !Item::<T, I>::contains_key(collection, T::Helper::item(i as u16)) {
-				mint_item::<T, I>(i as u16);
-			}
-			add_item_metadata::<T, I>(T::Helper::item(i as u16));
+			lock_item::<T, I>(i as u16);
+			burn_item::<T, I>(i as u16);
 		}
 		for i in 0..a {
-			if !Item::<T, I>::contains_key(collection, T::Helper::item(i as u16)) {
-				mint_item::<T, I>(i as u16);
-			}
-			add_item_attribute::<T, I>(T::Helper::item(i as u16));
+			add_collection_attribute::<T, I>(i as u16);
 		}
 		let witness = Collection::<T, I>::get(collection).unwrap().destroy_witness();
 	}: _(SystemOrigin::Signed(caller), collection, witness)

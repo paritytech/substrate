@@ -66,6 +66,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					ensure!(existing_config == item_config, Error::<T, I>::InconsistentItemConfig);
 				} else {
 					ItemConfigOf::<T, I>::insert(&collection, &item, item_config);
+					collection_details.item_configs.saturating_inc();
 				}
 
 				T::Currency::reserve(&deposit_account, deposit_amount)?;
@@ -154,6 +155,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> DispatchResult {
 		ensure!(!T::Locker::is_locked(collection, item), Error::<T, I>::ItemLocked);
 		let item_config = Self::get_item_config(&collection, &item)?;
+		// NOTE: if item's settings are not empty (e.g. item's metadata is locked)
+		// then we keep the config record and don't remove it
+		let remove_config = !item_config.has_disabled_settings();
 		let owner = Collection::<T, I>::try_mutate(
 			&collection,
 			|maybe_collection_details| -> Result<T::AccountId, DispatchError> {
@@ -167,6 +171,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				T::Currency::unreserve(&details.deposit.account, details.deposit.amount);
 				collection_details.items.saturating_dec();
 
+				if remove_config {
+					collection_details.item_configs.saturating_dec();
+				}
+
 				// Clear the metadata if it's not locked.
 				if item_config.is_setting_enabled(ItemSetting::UnlockedMetadata) {
 					if let Some(metadata) = ItemMetadataOf::<T, I>::take(&collection, &item) {
@@ -174,7 +182,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							metadata.deposit.account.unwrap_or(collection_details.owner.clone());
 
 						T::Currency::unreserve(&depositor_account, metadata.deposit.amount);
-						collection_details.item_metadatas.saturating_dec();
 
 						if depositor_account == collection_details.owner {
 							collection_details
@@ -194,9 +201,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		PendingSwapOf::<T, I>::remove(&collection, &item);
 		ItemAttributesApprovalsOf::<T, I>::remove(&collection, &item);
 
-		// NOTE: if item's settings are not empty (e.g. item's metadata is locked)
-		// then we keep the record and don't remove it
-		if !item_config.has_disabled_settings() {
+		if remove_config {
 			ItemConfigOf::<T, I>::remove(&collection, &item);
 		}
 
