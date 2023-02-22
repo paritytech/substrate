@@ -83,6 +83,7 @@ impl<H: Hasher> Recorder<H> {
 	///
 	/// - `storage_root`: The storage root of the trie for which accesses are recorded. This is
 	///   important when recording access to different tries at once (like top and child tries).
+	#[inline]
 	pub fn as_trie_recorder(
 		&self,
 		storage_root: H::Out,
@@ -147,7 +148,7 @@ struct TrieRecorder<H: Hasher, I> {
 impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecorder<H::Out>
 	for TrieRecorder<H, I>
 {
-	fn record<'b>(&mut self, access: TrieAccess<'b, H::Out>) {
+	fn record(&mut self, access: TrieAccess<H::Out>) {
 		let mut encoded_size_update = 0;
 
 		match access {

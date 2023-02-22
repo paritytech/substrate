@@ -40,8 +40,8 @@ use sc_client_api::{
 	},
 	execution_extensions::ExecutionExtensions,
 	notifications::{StorageEventStream, StorageNotifications},
-	CallExecutor, ExecutorProvider, KeyIterator, OnFinalityAction, OnImportAction, ProofProvider,
-	UsageProvider,
+	CallExecutor, ExecutorProvider, KeysIter, OnFinalityAction, OnImportAction, PairsIter,
+	ProofProvider, UsageProvider,
 };
 use sc_consensus::{
 	BlockCheckParams, BlockImportParams, ForkChoiceStrategy, ImportResult, StateAction,
@@ -1463,51 +1463,36 @@ where
 {
 	fn storage_keys(
 		&self,
-		hash: Block::Hash,
-		key_prefix: &StorageKey,
-	) -> sp_blockchain::Result<Vec<StorageKey>> {
-		let keys = self.state_at(hash)?.keys(&key_prefix.0).into_iter().map(StorageKey).collect();
-		Ok(keys)
-	}
-
-	fn storage_pairs(
-		&self,
-		hash: <Block as BlockT>::Hash,
-		key_prefix: &StorageKey,
-	) -> sp_blockchain::Result<Vec<(StorageKey, StorageData)>> {
-		let state = self.state_at(hash)?;
-		let keys = state
-			.keys(&key_prefix.0)
-			.into_iter()
-			.map(|k| {
-				let d = state.storage(&k).ok().flatten().unwrap_or_default();
-				(StorageKey(k), StorageData(d))
-			})
-			.collect();
-		Ok(keys)
-	}
-
-	fn storage_keys_iter(
-		&self,
 		hash: <Block as BlockT>::Hash,
 		prefix: Option<&StorageKey>,
 		start_key: Option<&StorageKey>,
-	) -> sp_blockchain::Result<KeyIterator<B::State, Block>> {
+	) -> sp_blockchain::Result<KeysIter<B::State, Block>> {
 		let state = self.state_at(hash)?;
-		let start_key = start_key.or(prefix).map(|key| key.0.clone()).unwrap_or_else(Vec::new);
-		Ok(KeyIterator::new(state, prefix.cloned(), start_key))
+		KeysIter::new(state, prefix, start_key)
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
 	}
 
-	fn child_storage_keys_iter(
+	fn child_storage_keys(
 		&self,
 		hash: <Block as BlockT>::Hash,
 		child_info: ChildInfo,
 		prefix: Option<&StorageKey>,
 		start_key: Option<&StorageKey>,
-	) -> sp_blockchain::Result<KeyIterator<B::State, Block>> {
+	) -> sp_blockchain::Result<KeysIter<B::State, Block>> {
 		let state = self.state_at(hash)?;
-		let start_key = start_key.or(prefix).map(|key| key.0.clone()).unwrap_or_else(Vec::new);
-		Ok(KeyIterator::new_child(state, child_info, prefix.cloned(), start_key))
+		KeysIter::new_child(state, child_info, prefix, start_key)
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
+	}
+
+	fn storage_pairs(
+		&self,
+		hash: <Block as BlockT>::Hash,
+		prefix: Option<&StorageKey>,
+		start_key: Option<&StorageKey>,
+	) -> sp_blockchain::Result<PairsIter<B::State, Block>> {
+		let state = self.state_at(hash)?;
+		PairsIter::new(state, prefix, start_key)
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
 	}
 
 	fn storage(
@@ -1530,21 +1515,6 @@ where
 		self.state_at(hash)?
 			.storage_hash(&key.0)
 			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
-	}
-
-	fn child_storage_keys(
-		&self,
-		hash: <Block as BlockT>::Hash,
-		child_info: &ChildInfo,
-		key_prefix: &StorageKey,
-	) -> sp_blockchain::Result<Vec<StorageKey>> {
-		let keys = self
-			.state_at(hash)?
-			.child_keys(child_info, &key_prefix.0)
-			.into_iter()
-			.map(StorageKey)
-			.collect();
-		Ok(keys)
 	}
 
 	fn child_storage(

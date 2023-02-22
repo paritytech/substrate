@@ -21,7 +21,7 @@ log = { version = "0.4.17", default-features = false }
 sp-core = { path = "../../../../primitives/core" }
 sp-state-machine = { path = "../../../../primitives/state-machine" }
 sp-trie = { path = "../../../../primitives/trie" }
-trie-db = "0.24.0"
+trie-db = "0.25.1"
 
 jsonrpsee = { version = "0.16.2", features = ["client-core", "server", "macros"] }
 

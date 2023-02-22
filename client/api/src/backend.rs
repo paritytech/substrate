@@ -31,14 +31,13 @@ use sp_runtime::{
 	Justification, Justifications, StateVersion, Storage,
 };
 use sp_state_machine::{
-	backend::AsTrieBackend, ChildStorageCollection, IndexOperation, OffchainChangesCollection,
-	StorageCollection,
+	backend::AsTrieBackend, ChildStorageCollection, IndexOperation, IterArgs,
+	OffchainChangesCollection, StorageCollection, StorageIterator,
 };
 use sp_storage::{ChildInfo, StorageData, StorageKey};
 use std::collections::{HashMap, HashSet};
 
 pub use sp_state_machine::{Backend as StateBackend, KeyValueStates};
-use std::marker::PhantomData;
 
 /// Extracts the state backend type for the given backend.
 pub type StateBackendFor<B, Block> = <B as Backend<Block>>::State;
@@ -303,32 +302,61 @@ pub trait AuxStore {
 }
 
 /// An `Iterator` that iterates keys in a given block under a prefix.
-pub struct KeyIterator<State, Block> {
+pub struct KeysIter<State, Block>
+where
+	State: StateBackend<HashFor<Block>>,
+	Block: BlockT,
+{
+	inner: <State as StateBackend<HashFor<Block>>>::RawIter,
 	state: State,
-	child_storage: Option<ChildInfo>,
-	prefix: Option<StorageKey>,
-	current_key: Vec<u8>,
-	_phantom: PhantomData<Block>,
+	skip_if_first: Option<StorageKey>,
 }
 
-impl<State, Block> KeyIterator<State, Block> {
-	/// create a KeyIterator instance
-	pub fn new(state: State, prefix: Option<StorageKey>, current_key: Vec<u8>) -> Self {
-		Self { state, child_storage: None, prefix, current_key, _phantom: PhantomData }
+impl<State, Block> KeysIter<State, Block>
+where
+	State: StateBackend<HashFor<Block>>,
+	Block: BlockT,
+{
+	/// Create a new iterator over storage keys.
+	pub fn new(
+		state: State,
+		prefix: Option<&StorageKey>,
+		start_at: Option<&StorageKey>,
+	) -> Result<Self, State::Error> {
+		let mut args = IterArgs::default();
+		args.prefix = prefix.as_ref().map(|prefix| prefix.0.as_slice());
+		args.start_at = start_at.as_ref().map(|start_at| start_at.0.as_slice());
+
+		let start_at = args.start_at;
+		Ok(Self {
+			inner: state.raw_iter(args)?,
+			state,
+			skip_if_first: start_at.map(|key| StorageKey(key.to_vec())),
+		})
 	}
 
-	/// Create a `KeyIterator` instance for a child storage.
+	/// Create a new iterator over a child storage's keys.
 	pub fn new_child(
 		state: State,
 		child_info: ChildInfo,
-		prefix: Option<StorageKey>,
-		current_key: Vec<u8>,
-	) -> Self {
-		Self { state, child_storage: Some(child_info), prefix, current_key, _phantom: PhantomData }
+		prefix: Option<&StorageKey>,
+		start_at: Option<&StorageKey>,
+	) -> Result<Self, State::Error> {
+		let mut args = IterArgs::default();
+		args.prefix = prefix.as_ref().map(|prefix| prefix.0.as_slice());
+		args.start_at = start_at.as_ref().map(|start_at| start_at.0.as_slice());
+		args.child_info = Some(child_info);
+
+		let start_at = args.start_at;
+		Ok(Self {
+			inner: state.raw_iter(args)?,
+			state,
+			skip_if_first: start_at.map(|key| StorageKey(key.to_vec())),
+		})
 	}
 }
 
-impl<State, Block> Iterator for KeyIterator<State, Block>
+impl<State, Block> Iterator for KeysIter<State, Block>
 where
 	Block: BlockT,
 	State: StateBackend<HashFor<Block>>,
@@ -336,25 +364,78 @@ where
 	type Item = StorageKey;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		let next_key = if let Some(child_info) = self.child_storage.as_ref() {
-			self.state.next_child_storage_key(child_info, &self.current_key)
-		} else {
-			self.state.next_storage_key(&self.current_key)
-		}
-		.ok()
-		.flatten()?;
-		// this terminates the iterator the first time it fails.
-		if let Some(ref prefix) = self.prefix {
-			if !next_key.starts_with(&prefix.0[..]) {
-				return None
+		let key = self.inner.next_key(&self.state)?.ok().map(StorageKey)?;
+
+		if let Some(skipped_key) = self.skip_if_first.take() {
+			if key == skipped_key {
+				return self.next()
 			}
 		}
-		self.current_key = next_key.clone();
-		Some(StorageKey(next_key))
+
+		Some(key)
 	}
 }
 
-/// Provides acess to storage primitives
+/// An `Iterator` that iterates keys and values in a given block under a prefix.
+pub struct PairsIter<State, Block>
+where
+	State: StateBackend<HashFor<Block>>,
+	Block: BlockT,
+{
+	inner: <State as StateBackend<HashFor<Block>>>::RawIter,
+	state: State,
+	skip_if_first: Option<StorageKey>,
+}
+
+impl<State, Block> Iterator for PairsIter<State, Block>
+where
+	Block: BlockT,
+	State: StateBackend<HashFor<Block>>,
+{
+	type Item = (StorageKey, StorageData);
+
+	fn next(&mut self) -> Option<Self::Item> {
+		let (key, value) = self
+			.inner
+			.next_pair(&self.state)?
+			.ok()
+			.map(|(key, value)| (StorageKey(key), StorageData(value)))?;
+
+		if let Some(skipped_key) = self.skip_if_first.take() {
+			if key == skipped_key {
+				return self.next()
+			}
+		}
+
+		Some((key, value))
+	}
+}
+
+impl<State, Block> PairsIter<State, Block>
+where
+	State: StateBackend<HashFor<Block>>,
+	Block: BlockT,
+{
+	/// Create a new iterator over storage key and value pairs.
+	pub fn new(
+		state: State,
+		prefix: Option<&StorageKey>,
+		start_at: Option<&StorageKey>,
+	) -> Result<Self, State::Error> {
+		let mut args = IterArgs::default();
+		args.prefix = prefix.as_ref().map(|prefix| prefix.0.as_slice());
+		args.start_at = start_at.as_ref().map(|start_at| start_at.0.as_slice());
+
+		let start_at = args.start_at;
+		Ok(Self {
+			inner: state.raw_iter(args)?,
+			state,
+			skip_if_first: start_at.map(|key| StorageKey(key.to_vec())),
+		})
+	}
+}
+
+/// Provides access to storage primitives
 pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 	/// Given a block's `Hash` and a key, return the value under the key in that block.
 	fn storage(
@@ -363,13 +444,6 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<StorageData>>;
 
-	/// Given a block's `Hash` and a key prefix, return the matching storage keys in that block.
-	fn storage_keys(
-		&self,
-		hash: Block::Hash,
-		key_prefix: &StorageKey,
-	) -> sp_blockchain::Result<Vec<StorageKey>>;
-
 	/// Given a block's `Hash` and a key, return the value under the hash in that block.
 	fn storage_hash(
 		&self,
@@ -377,22 +451,23 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<Block::Hash>>;
 
-	/// Given a block's `Hash` and a key prefix, return the matching child storage keys and values
-	/// in that block.
-	fn storage_pairs(
-		&self,
-		hash: Block::Hash,
-		key_prefix: &StorageKey,
-	) -> sp_blockchain::Result<Vec<(StorageKey, StorageData)>>;
-
-	/// Given a block's `Hash` and a key prefix, return a `KeyIterator` iterates matching storage
+	/// Given a block's `Hash` and a key prefix, returns a `KeysIter` iterates matching storage
 	/// keys in that block.
-	fn storage_keys_iter(
+	fn storage_keys(
 		&self,
 		hash: Block::Hash,
 		prefix: Option<&StorageKey>,
 		start_key: Option<&StorageKey>,
-	) -> sp_blockchain::Result<KeyIterator<B::State, Block>>;
+	) -> sp_blockchain::Result<KeysIter<B::State, Block>>;
+
+	/// Given a block's `Hash` and a key prefix, returns an iterator over the storage keys and
+	/// values in that block.
+	fn storage_pairs(
+		&self,
+		hash: <Block as BlockT>::Hash,
+		prefix: Option<&StorageKey>,
+		start_key: Option<&StorageKey>,
+	) -> sp_blockchain::Result<PairsIter<B::State, Block>>;
 
 	/// Given a block's `Hash`, a key and a child storage key, return the value under the key in
 	/// that block.
@@ -403,24 +478,15 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<StorageData>>;
 
-	/// Given a block's `Hash`, a key prefix, and a child storage key, return the matching child
-	/// storage keys.
-	fn child_storage_keys(
-		&self,
-		hash: Block::Hash,
-		child_info: &ChildInfo,
-		key_prefix: &StorageKey,
-	) -> sp_blockchain::Result<Vec<StorageKey>>;
-
 	/// Given a block's `Hash` and a key `prefix` and a child storage key,
-	/// return a `KeyIterator` that iterates matching storage keys in that block.
-	fn child_storage_keys_iter(
+	/// returns a `KeysIter` that iterates matching storage keys in that block.
+	fn child_storage_keys(
 		&self,
 		hash: Block::Hash,
 		child_info: ChildInfo,
 		prefix: Option<&StorageKey>,
 		start_key: Option<&StorageKey>,
-	) -> sp_blockchain::Result<KeyIterator<B::State, Block>>;
+	) -> sp_blockchain::Result<KeysIter<B::State, Block>>;
 
 	/// Given a block's `Hash`, a key and a child storage key, return the hash under the key in that
 	/// block.

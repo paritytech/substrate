@@ -61,7 +61,7 @@ impl StorageCmd {
 
 		info!("Preparing keys from block {}", best_hash);
 		// Load all KV pairs and randomly shuffle them.
-		let mut kvs = trie.pairs();
+		let mut kvs: Vec<_> = trie.pairs(Default::default())?.collect();
 		let (mut rng, _) = new_rng(None);
 		kvs.shuffle(&mut rng);
 		info!("Writing {} keys", kvs.len());
@@ -70,11 +70,12 @@ impl StorageCmd {
 
 		// Generate all random values first; Make sure there are no collisions with existing
 		// db entries, so we can rollback all additions without corrupting existing entries.
-		for (k, original_v) in kvs {
+		for key_value in kvs {
+			let (k, original_v) = key_value?;
 			match (self.params.include_child_trees, self.is_child_key(k.to_vec())) {
 				(true, Some(info)) => {
 					let child_keys =
-						client.child_storage_keys_iter(best_hash, info.clone(), None, None)?;
+						client.child_storage_keys(best_hash, info.clone(), None, None)?;
 					for ck in child_keys {
 						child_nodes.push((ck.clone(), info.clone()));
 					}

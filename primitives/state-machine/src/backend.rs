@@ -24,11 +24,134 @@ use crate::{
 	StorageKey, StorageValue, UsageInfo,
 };
 use codec::Encode;
+use core::marker::PhantomData;
 use hash_db::Hasher;
 use sp_core::storage::{ChildInfo, StateVersion, TrackedStorageKey};
 #[cfg(feature = "std")]
 use sp_core::traits::RuntimeCode;
 use sp_std::vec::Vec;
+
+/// A struct containing arguments for iterating over the storage.
+#[derive(Default)]
+#[non_exhaustive]
+pub struct IterArgs<'a> {
+	/// The prefix of the keys over which to iterate.
+	pub prefix: Option<&'a [u8]>,
+
+	/// The prefix from which to start the iteration from.
+	///
+	/// This is inclusive and the iteration will include the key which is specified here.
+	pub start_at: Option<&'a [u8]>,
+
+	/// The info of the child trie over which to iterate over.
+	pub child_info: Option<ChildInfo>,
+
+	/// Whether to stop iteration when a missing trie node is reached.
+	///
+	/// When a missing trie node is reached the iterator will:
+	///   - return an error if this is set to `false` (default)
+	///   - return `None` if this is set to `true`
+	pub stop_on_incomplete_database: bool,
+}
+
+/// A trait for a raw storage iterator.
+pub trait StorageIterator<H>
+where
+	H: Hasher,
+{
+	/// The state backend over which the iterator is iterating.
+	type Backend;
+
+	/// The error type.
+	type Error;
+
+	/// Fetches the next key from the storage.
+	fn next_key(
+		&mut self,
+		backend: &Self::Backend,
+	) -> Option<core::result::Result<StorageKey, Self::Error>>;
+
+	/// Fetches the next key and value from the storage.
+	fn next_pair(
+		&mut self,
+		backend: &Self::Backend,
+	) -> Option<core::result::Result<(StorageKey, StorageValue), Self::Error>>;
+
+	/// Returns whether the end of iteration was reached without an error.
+	fn was_complete(&self) -> bool;
+}
+
+/// An iterator over storage keys and values.
+pub struct PairsIter<'a, H, I>
+where
+	H: Hasher,
+	I: StorageIterator<H>,
+{
+	backend: Option<&'a I::Backend>,
+	raw_iter: I,
+	_phantom: PhantomData<H>,
+}
+
+impl<'a, H, I> Iterator for PairsIter<'a, H, I>
+where
+	H: Hasher,
+	I: StorageIterator<H>,
+{
+	type Item = Result<(Vec<u8>, Vec<u8>), <I as StorageIterator<H>>::Error>;
+	fn next(&mut self) -> Option<Self::Item> {
+		self.raw_iter.next_pair(self.backend.as_ref()?)
+	}
+}
+
+impl<'a, H, I> Default for PairsIter<'a, H, I>
+where
+	H: Hasher,
+	I: StorageIterator<H> + Default,
+{
+	fn default() -> Self {
+		Self {
+			backend: Default::default(),
+			raw_iter: Default::default(),
+			_phantom: Default::default(),
+		}
+	}
+}
+
+/// An iterator over storage keys.
+pub struct KeysIter<'a, H, I>
+where
+	H: Hasher,
+	I: StorageIterator<H>,
+{
+	backend: Option<&'a I::Backend>,
+	raw_iter: I,
+	_phantom: PhantomData<H>,
+}
+
+impl<'a, H, I> Iterator for KeysIter<'a, H, I>
+where
+	H: Hasher,
+	I: StorageIterator<H>,
+{
+	type Item = Result<Vec<u8>, <I as StorageIterator<H>>::Error>;
+	fn next(&mut self) -> Option<Self::Item> {
+		self.raw_iter.next_key(self.backend.as_ref()?)
+	}
+}
+
+impl<'a, H, I> Default for KeysIter<'a, H, I>
+where
+	H: Hasher,
+	I: StorageIterator<H> + Default,
+{
+	fn default() -> Self {
+		Self {
+			backend: Default::default(),
+			raw_iter: Default::default(),
+			_phantom: Default::default(),
+		}
+	}
+}
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
@@ -43,6 +166,9 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 
 	/// Type of trie backend storage.
 	type TrieBackendStorage: TrieBackendStorage<H, Overlay = Self::Transaction>;
+
+	/// Type of the raw storage iterator.
+	type RawIter: StorageIterator<H, Backend = Self, Error = Self::Error>;
 
 	/// Get keyed storage or None if there is nothing associated.
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error>;
@@ -95,43 +221,103 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	/// Otherwise an error is produced.
 	///
 	/// Returns `true` if trie end is reached.
+	// TODO: Remove this.
 	fn apply_to_key_values_while<F: FnMut(Vec<u8>, Vec<u8>) -> bool>(
 		&self,
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
 		start_at: Option<&[u8]>,
-		f: F,
+		mut f: F,
 		allow_missing: bool,
-	) -> Result<bool, Self::Error>;
+	) -> Result<bool, Self::Error> {
+		let args = IterArgs {
+			child_info: child_info.cloned(),
+			prefix,
+			start_at,
+			stop_on_incomplete_database: allow_missing,
+			..IterArgs::default()
+		};
+		let mut iter = self.pairs(args)?;
+		while let Some(key_value) = iter.next() {
+			let (key, value) = key_value?;
+			if !f(key, value) {
+				return Ok(false)
+			}
+		}
+		Ok(iter.raw_iter.was_complete())
+	}
 
 	/// Retrieve all entries keys of storage and call `f` for each of those keys.
 	/// Aborts as soon as `f` returns false.
+	// TODO: Remove this.
 	fn apply_to_keys_while<F: FnMut(&[u8]) -> bool>(
 		&self,
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
 		start_at: Option<&[u8]>,
-		f: F,
-	);
+		mut f: F,
+	) -> Result<(), Self::Error> {
+		let args =
+			IterArgs { child_info: child_info.cloned(), prefix, start_at, ..IterArgs::default() };
+
+		for key in self.keys(args)? {
+			if !f(&key?) {
+				return Ok(())
+			}
+		}
+		Ok(())
+	}
 
 	/// Retrieve all entries keys which start with the given prefix and
 	/// call `f` for each of those keys.
-	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], mut f: F) {
-		self.for_key_values_with_prefix(prefix, |k, _v| f(k))
+	// TODO: Remove this.
+	fn for_keys_with_prefix<F: FnMut(&[u8])>(
+		&self,
+		prefix: &[u8],
+		mut f: F,
+	) -> Result<(), Self::Error> {
+		let args = IterArgs { prefix: Some(prefix), ..IterArgs::default() };
+		self.keys(args)?.try_for_each(|key| {
+			f(&key?);
+			Ok(())
+		})
 	}
 
 	/// Retrieve all entries keys and values of which start with the given prefix and
 	/// call `f` for each of those keys.
-	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F);
+	// TODO: Remove this.
+	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(
+		&self,
+		prefix: &[u8],
+		mut f: F,
+	) -> Result<(), Self::Error> {
+		let args = IterArgs { prefix: Some(prefix), ..IterArgs::default() };
+		self.pairs(args)?.try_for_each(|key_value| {
+			let (key, value) = key_value?;
+			f(&key, &value);
+			Ok(())
+		})
+	}
 
 	/// Retrieve all child entries keys which start with the given prefix and
 	/// call `f` for each of those keys.
+	// TODO: Remove this.
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
 		child_info: &ChildInfo,
 		prefix: &[u8],
-		f: F,
-	);
+		mut f: F,
+	) -> Result<(), Self::Error> {
+		let args = IterArgs {
+			child_info: Some(child_info.clone()),
+			prefix: Some(prefix),
+			..IterArgs::default()
+		};
+		self.keys(args)?.try_for_each(|key| {
+			f(&key?);
+			Ok(())
+		})
+	}
 
 	/// Calculate the storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit.
@@ -156,21 +342,25 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	where
 		H::Out: Ord;
 
-	/// Get all key/value pairs into a Vec.
-	fn pairs(&self) -> Vec<(StorageKey, StorageValue)>;
+	/// Returns a lifetimeless raw storage iterator.
+	fn raw_iter(&self, args: IterArgs) -> Result<Self::RawIter, Self::Error>;
 
-	/// Get all keys with given prefix
-	fn keys(&self, prefix: &[u8]) -> Vec<StorageKey> {
-		let mut all = Vec::new();
-		self.for_keys_with_prefix(prefix, |k| all.push(k.to_vec()));
-		all
+	/// Get an iterator over key/value pairs.
+	fn pairs<'a>(&'a self, args: IterArgs) -> Result<PairsIter<'a, H, Self::RawIter>, Self::Error> {
+		Ok(PairsIter {
+			backend: Some(self),
+			raw_iter: self.raw_iter(args)?,
+			_phantom: Default::default(),
+		})
 	}
 
-	/// Get all keys of child storage with given prefix
-	fn child_keys(&self, child_info: &ChildInfo, prefix: &[u8]) -> Vec<StorageKey> {
-		let mut all = Vec::new();
-		self.for_child_keys_with_prefix(child_info, prefix, |k| all.push(k.to_vec()));
-		all
+	/// Get an iterator over keys.
+	fn keys<'a>(&'a self, args: IterArgs) -> Result<KeysIter<'a, H, Self::RawIter>, Self::Error> {
+		Ok(KeysIter {
+			backend: Some(self),
+			raw_iter: self.raw_iter(args)?,
+			_phantom: Default::default(),
+		})
 	}
 
 	/// Calculate the storage root, with given delta over what is already stored
@@ -309,7 +499,7 @@ where
 #[cfg(feature = "std")]
 pub struct BackendRuntimeCode<'a, B, H> {
 	backend: &'a B,
-	_marker: std::marker::PhantomData<H>,
+	_marker: PhantomData<H>,
 }
 
 #[cfg(feature = "std")]
@@ -332,7 +522,7 @@ where
 {
 	/// Create a new instance.
 	pub fn new(backend: &'a B) -> Self {
-		Self { backend, _marker: std::marker::PhantomData }
+		Self { backend, _marker: PhantomData }
 	}
 
 	/// Return the [`RuntimeCode`] build from the wrapped `backend`.

@@ -2902,6 +2902,9 @@ name = "hashbrown"
 version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "43a3c133739dddd0d2990f9a4bdf8eb4b21ef50e4851ca85ab661199821d510e"
+dependencies = [
+ "ahash 0.8.3",
+]
 
 [[package]]
 name = "heck"
@@ -8090,6 +8093,7 @@ dependencies = [
 name = "sc-client-db"
 version = "0.10.0-dev"
 dependencies = [
+ "array-bytes",
  "criterion",
  "hash-db",
  "kitchensink-runtime",
@@ -11354,9 +11358,9 @@ dependencies = [
 
 [[package]]
 name = "trie-bench"
-version = "0.34.0"
+version = "0.35.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fbb0a830db7c42ae97ce4e21b30e2cf9dbcc1b4f7853bd1aedad3d806c281d0"
+checksum = "22c1d18c423077531e693e87ace54ed9e4af1e4ce0a3ea8c9aa6608741074e2b"
 dependencies = [
  "criterion",
  "hash-db",
@@ -11370,12 +11374,12 @@ dependencies = [
 
 [[package]]
 name = "trie-db"
-version = "0.24.0"
+version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "004e1e8f92535694b4cb1444dc5a8073ecf0815e3357f729638b9f8fc4062908"
+checksum = "3390c0409daaa6027d6681393316f4ccd3ff82e1590a1e4725014e3ae2bf1920"
 dependencies = [
  "hash-db",
- "hashbrown 0.12.3",
+ "hashbrown 0.13.2",
  "log",
  "rustc-hex",
  "smallvec",
