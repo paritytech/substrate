@@ -89,6 +89,9 @@ thread_local! {
 fn paid(who: u64) -> u64 {
 	PAID.with(|p| p.borrow().get(&who).cloned().unwrap_or(0))
 }
+fn unpay(who: u64, amount: u64) {
+	PAID.with(|p| p.borrow_mut().entry(who).or_default().saturating_reduce(amount))
+}
 fn set_status(id: u64, s: PaymentStatus) {
 	STATUS.with(|m| m.borrow_mut().insert(id, s));
 }
@@ -262,6 +265,40 @@ fn unregistered_payment_works() {
 		assert_ok!(Salary::payout(RuntimeOrigin::signed(1), 1));
 		assert_eq!(paid(1), 1);
 		assert_eq!(Salary::status().unwrap().total_unregistered_paid, 1);
+		assert_noop!(Salary::payout(RuntimeOrigin::signed(1), 1), Error::<Test>::NoClaim);
+		run_to(8);
+		assert_noop!(Salary::bump(RuntimeOrigin::signed(1)), Error::<Test>::NotYet);
+		run_to(9);
+		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
+		run_to(11);
+		assert_ok!(Salary::payout(RuntimeOrigin::signed(1), 10));
+		assert_eq!(paid(1), 1);
+		assert_eq!(paid(10), 1);
+		assert_eq!(Salary::status().unwrap().total_unregistered_paid, 1);
+	});
+}
+
+#[test]
+fn retry_payment_works() {
+	new_test_ext().execute_with(|| {
+		TestClub::change(&1, 1);
+		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
+		assert_ok!(Salary::induct(RuntimeOrigin::signed(1)));
+		run_to(6);
+		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
+		run_to(7);
+		assert_ok!(Salary::payout(RuntimeOrigin::signed(1), 1));
+
+		// Payment failed.
+		unpay(1, 1);
+		set_status(0, PaymentStatus::Failure);
+
+		// Allowed to try again.
+		assert_ok!(Salary::payout(RuntimeOrigin::signed(1), 1));
+
+		assert_eq!(paid(1), 1);
+		assert_eq!(Salary::status().unwrap().total_unregistered_paid, 1);
+
 		assert_noop!(Salary::payout(RuntimeOrigin::signed(1), 1), Error::<Test>::NoClaim);
 		run_to(8);
 		assert_noop!(Salary::bump(RuntimeOrigin::signed(1)), Error::<Test>::NotYet);
