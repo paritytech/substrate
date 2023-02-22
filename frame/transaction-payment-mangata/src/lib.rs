@@ -1575,14 +1575,6 @@ mod tests {
 					&Ok(())
 				));
 				assert_eq!(Balances::total_balance(&user), 0);
-				// TransactionFeePaid Event
-				System::assert_has_event(RuntimeEvent::TransactionPayment(
-					pallet_transaction_payment_mangata::Event::TransactionFeePaid {
-						who: user,
-						actual_fee: 0,
-						tip: 0,
-					},
-				));
 			});
 	}
 

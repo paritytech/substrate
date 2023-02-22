@@ -95,7 +95,7 @@ pub enum InvalidTransaction {
 	/// unexpected error
 	UnlockFee,
 	/// Tipping is not allowed for swaps and multiswaps
-	TippingNotAllowedForSwaps
+	TippingNotAllowedForSwaps,
 }
 
 impl InvalidTransaction {

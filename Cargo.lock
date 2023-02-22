@@ -3891,7 +3891,7 @@ dependencies = [
 [[package]]
 name = "mangata-types"
 version = "0.1.0"
-source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v0.9.36#9d7d46c8cf2c6db4495122c4dbbbd6b5303ed7c3"
+source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev#faf83fea9f6a196034622346b596808864078572"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
@@ -4512,12 +4512,12 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 [[package]]
 name = "orml-tokens"
 version = "0.4.1-dev"
-source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev-v0.9.36#ae089c28d24d50bfd2ece00b4ed68b5331a634fa"
+source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev#08d15fe245770cb63850dd3057eb521bf589051e"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "mangata-types 0.1.0 (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v0.9.36)",
+ "mangata-types 0.1.0 (git+https://github.com/mangata-finance/substrate?branch=mangata-dev)",
  "orml-traits",
  "parity-scale-codec",
  "scale-info",
@@ -4529,7 +4529,7 @@ dependencies = [
 [[package]]
 name = "orml-traits"
 version = "0.4.1-dev"
-source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev-v0.9.36#ae089c28d24d50bfd2ece00b4ed68b5331a634fa"
+source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev#08d15fe245770cb63850dd3057eb521bf589051e"
 dependencies = [
  "frame-support",
  "impl-trait-for-tuples",
@@ -4547,7 +4547,7 @@ dependencies = [
 [[package]]
 name = "orml-utilities"
 version = "0.4.1-dev"
-source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev-v0.9.36#ae089c28d24d50bfd2ece00b4ed68b5331a634fa"
+source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev#08d15fe245770cb63850dd3057eb521bf589051e"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4621,6 +4621,28 @@ dependencies = [
  "pallet-authorship",
  "pallet-balances",
  "pallet-transaction-payment",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "serde_json",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sp-storage",
+]
+
+[[package]]
+name = "pallet-asset-tx-payment-mangata"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-assets",
+ "pallet-authorship",
+ "pallet-balances",
+ "pallet-transaction-payment-mangata",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -5904,6 +5926,49 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+]
+
+[[package]]
+name = "pallet-transaction-payment-mangata"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "serde_json",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-transaction-payment-mangata-rpc"
+version = "4.0.0-dev"
+dependencies = [
+ "jsonrpsee",
+ "pallet-transaction-payment-mangata-rpc-runtime-api",
+ "parity-scale-codec",
+ "sp-api",
+ "sp-blockchain",
+ "sp-core",
+ "sp-rpc",
+ "sp-runtime",
+ "sp-weights",
+]
+
+[[package]]
+name = "pallet-transaction-payment-mangata-rpc-runtime-api"
+version = "4.0.0-dev"
+dependencies = [
+ "pallet-transaction-payment-mangata",
+ "parity-scale-codec",
+ "sp-api",
+ "sp-runtime",
+ "sp-weights",
 ]
 
 [[package]]

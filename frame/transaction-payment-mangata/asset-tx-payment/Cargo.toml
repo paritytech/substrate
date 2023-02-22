@@ -1,5 +1,5 @@
 [package]
-name = "pallet-asset-tx-payment"
+name = "pallet-asset-tx-payment-mangata"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"

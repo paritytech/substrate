@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use super::*;
-use crate as pallet_asset_tx_payment;
+use crate as pallet_asset_tx_payment_mangata;
 
 use codec;
 use frame_support::{
@@ -52,7 +52,7 @@ frame_support::construct_runtime!(
 		TransactionPayment: pallet_transaction_payment_mangata::{Pallet, Storage, Event<T>},
 		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>},
 		Authorship: pallet_authorship::{Pallet, Call, Storage},
-		AssetTxPayment: pallet_asset_tx_payment::{Pallet, Event<T>},
+		AssetTxPayment: pallet_asset_tx_payment_mangata::{Pallet, Event<T>},
 	}
 );
 
