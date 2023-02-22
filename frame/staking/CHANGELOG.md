@@ -7,7 +7,7 @@ on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). We maintain a
 single integer version number for staking pallet to keep track of all storage
 migrations.
 
-## [14] - UNRELEASED
+## [14]
 
 ### Added
 
