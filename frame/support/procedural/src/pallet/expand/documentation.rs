@@ -15,9 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::Def;
+use crate::pallet::{parse::event::PalletEventDepositAttr, Def};
 use proc_macro2::{Ident, TokenStream};
-use quote::ToTokens;
+use quote::{ToTokens, spanned::Spanned};
 use syn::{
 	parenthesized,
 	parse::{self, Parse, ParseStream},
@@ -26,6 +26,24 @@ use syn::{
 
 const DOC: &'static str = "doc";
 const INCLUDE_STR: &'static str = "include_str";
+const PALLET_DOC: &'static str = "pallet_doc";
+
+/// Get the documentation file path from the `pallet_doc` attribute.
+///
+/// Supported format:
+/// `#[pallet_doc(PATH)]`: The path of the file from which the documentation is loaded
+fn parse_pallet_doc_value(attr: &Attribute) -> syn::Result<DocMetaValue> {
+	let meta = attr.parse_meta()?;
+	let span = meta.ident
+
+	match meta {
+    syn::Meta::List(metalist) => {
+		metalist.__span();
+	}
+	_ => syn::Error::new(proc_macro2::Span::call_site(), "Unexpected arguments for `pallet_doc` attribute. Supported version: `pallet_doc(PATH)`");
+	}
+
+}
 
 /// Get the value from the `doc` comment attribute:
 ///
@@ -110,27 +128,48 @@ impl ToTokens for DocMetaValue {
 ///
 /// Implement a `pallet_documentation_metadata` function to fetch the
 /// documentation that is included in the metadata.
-pub fn expand_documentation(def: &Def) -> proc_macro2::TokenStream {
+pub fn expand_documentation(def: &mut Def) -> proc_macro2::TokenStream {
 	let frame_support = &def.frame_support;
 	let type_impl_gen = &def.type_impl_generics(proc_macro2::Span::call_site());
 	let type_use_gen = &def.type_use_generics(proc_macro2::Span::call_site());
 	let pallet_ident = &def.pallet_struct.pallet;
-	let mut where_clauses = vec![&def.config.where_clause];
-	where_clauses.extend(def.extra_constants.iter().map(|d| &d.where_clause));
-	let completed_where_clause = super::merge_where_clauses(&where_clauses);
+	let where_clauses = &def.config.where_clause;
 
+	// TODO: Use [drain_filter](https://doc.rust-lang.org/std/vec/struct.Vec.html#method.drain_filter) when it is stable.
+
+	// The `pallet_doc` attributes are excluded from the generation of the pallet,
+	// but they are included in the runtime metadata.
+	let mut pallet_docs = Vec::with_capacity(def.item.attrs.len());
+	let mut index = 0;
+	while index < def.item.attrs.len() {
+		let attr = &def.item.attrs[index];
+
+		if let Some(ident) = attr.path.get_ident() {
+			if ident == PALLET_DOC {
+				let elem = def.item.attrs.remove(index);
+				pallet_docs.push(elem);
+				// Do not increment the index, we have just removed the
+				// element from the attributes.
+				continue
+			}
+		}
+
+		index += 1;
+	}
+
+	// Capture the `#[doc = include_str!("../README.md")]` and `#[doc = "Documentation"]`.
 	let docs: Vec<_> = def.item.attrs.iter().filter_map(parse_doc_value).collect();
 
 	let res = quote::quote!(
-		// impl<#type_impl_gen> #pallet_ident<#type_use_gen> #completed_where_clause{
+		impl<#type_impl_gen> #pallet_ident<#type_use_gen> #where_clauses{
 
-		// 	#[doc(hidden)]
-		// 	pub fn pallet_documentation_metadata()
-		// 		-> #frame_support::sp_std::vec::Vec<&'static str>
-		// 	{
-		// 		#frame_support::sp_std::vec![ #( #docs ),* ]
-		// 	}
-		// }
+			#[doc(hidden)]
+			pub fn pallet_documentation_metadata()
+				-> #frame_support::sp_std::vec::Vec<&'static str>
+			{
+				#frame_support::sp_std::vec![ #( #docs ),* ]
+			}
+		}
 	);
 	println!("Res is {}", res);
 	res

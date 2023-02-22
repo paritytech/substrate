@@ -57,7 +57,7 @@ pub fn expand_runtime_metadata(
 				}
 			});
 
-			// let pallet_docs = expand_pallet_metadata_documentation(runtime, decl);
+			let pallet_docs = expand_pallet_metadata_documentation(runtime, decl);
 			(
 				quote! {
 					#attr
@@ -72,22 +72,31 @@ pub fn expand_runtime_metadata(
 					}
 				},
 				quote! {
-					()
-					// #pallet_docs
+					#attr
+					#scrate::metadata::v15::PalletMetadata {
+						name: stringify!(#name),
+						index: #index,
+						storage: #storage,
+						calls: #calls,
+						event: #event,
+						constants: #constants,
+						error: #errors,
+						docs: #pallet_docs,
+					}
 				},
 			)
 		})
 		.collect::<Vec<_>>();
 
 	// -> Vec<&'static str> per item
-	let pallets_docs = pallets.iter().map(|(_pallet, docs)| docs);
-	let pallets_md: Vec<_> = pallets.iter().map(|(pallet, _docs)| pallet).collect();
+	let pallets_v15 = pallets.iter().map(|(_pallet, pallet_v15)| pallet_v15);
+	let pallets_v14: Vec<_> = pallets.iter().map(|(pallet, _pallet_v15)| pallet).collect();
 
 	quote! {
 		impl #runtime {
 			pub fn metadata() -> #scrate::metadata::RuntimeMetadataPrefixed {
 				#scrate::metadata::RuntimeMetadataLastVersion::new(
-					#scrate::sp_std::vec![ #(#pallets_md),* ],
+					#scrate::sp_std::vec![ #(#pallets_v14),* ],
 					#scrate::metadata::ExtrinsicMetadata {
 						ty: #scrate::scale_info::meta_type::<#extrinsic>(),
 						version: <#extrinsic as #scrate::sp_runtime::traits::ExtrinsicMetadata>::VERSION,
@@ -123,13 +132,9 @@ pub fn expand_runtime_metadata(
 
 			fn metadata_v15() -> #scrate::metadata::RuntimeMetadataPrefixed {
 				let rt = #runtime;
-				// let docs_vec = #scrate::sp_std::vec![ #(#pallets_docs),* ];
-				let docs_vec = #scrate::sp_std::vec![ #scrate::sp_std::vec![ ] ];
-
-				// let docs: #scrate::sp_std::vec::Vec<#scrate::sp_std::vec::Vec<_>> = docs_vec.iter().map(|inner| inner.iter().map(|s| s.to_string()).collect()).collect();
 
 				#scrate::metadata::v15::RuntimeMetadataLastVersion::new(
-					#scrate::sp_std::vec![ #(#pallets_md),* ],
+					#scrate::sp_std::vec![ #(#pallets_v15),* ],
 					#scrate::metadata::ExtrinsicMetadata {
 						ty: #scrate::scale_info::meta_type::<#extrinsic>(),
 						version: <#extrinsic as #scrate::sp_runtime::traits::ExtrinsicMetadata>::VERSION,
@@ -148,7 +153,6 @@ pub fn expand_runtime_metadata(
 					},
 					#scrate::scale_info::meta_type::<#runtime>(),
 					(&rt).runtime_metadata(),
-					docs_vec,
 				).into()
 			}
 		}

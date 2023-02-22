@@ -53,6 +53,7 @@ pub fn merge_where_clauses(clauses: &[&Option<syn::WhereClause>]) -> Option<syn:
 /// * create some new types,
 /// * impl stuff on them.
 pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
+	let metadata_docs = documentation::expand_documentation(&mut def);
 	let constants = constants::expand_constants(&mut def);
 	let pallet_struct = pallet_struct::expand_pallet_struct(&mut def);
 	let config = config::expand_config(&mut def);
@@ -70,7 +71,6 @@ pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
 	let origins = origin::expand_origins(&mut def);
 	let validate_unsigned = validate_unsigned::expand_validate_unsigned(&mut def);
 	let tt_default_parts = tt_default_parts::expand_tt_default_parts(&mut def);
-	let metadata_docs = documentation::expand_documentation(&mut def);
 
 	if get_doc_literals(&def.item.attrs).is_empty() {
 		def.item.attrs.push(syn::parse_quote!(
