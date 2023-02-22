@@ -24,7 +24,7 @@ sp-trie = { version = "7.0.0", default-features = false, optional = true, path =
 hash-db = { version = "0.15.2", optional = true }
 thiserror = { version = "1.0.30", optional = true }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
-frame-metadata = { version = "15.0.0", git = "https://github.com/paritytech/frame-metadata/", branch = "lexnv/md_v15_test", default-features = false, features = ["v14", "v15-unstable"] }
+frame-metadata = { version = "15.0.0", path = "/home/lexnv/workspace/frame-metadata/frame-metadata", default-features = false, features = ["v14", "v15-unstable"] }
 
 log = { version = "0.4.17", default-features = false }
 

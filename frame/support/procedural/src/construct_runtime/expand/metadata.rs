@@ -57,26 +57,37 @@ pub fn expand_runtime_metadata(
 				}
 			});
 
-			quote! {
-				#attr
-				#scrate::metadata::PalletMetadata {
-					name: stringify!(#name),
-					index: #index,
-					storage: #storage,
-					calls: #calls,
-					event: #event,
-					constants: #constants,
-					error: #errors,
-				}
-			}
+			// let pallet_docs = expand_pallet_metadata_documentation(runtime, decl);
+			(
+				quote! {
+					#attr
+					#scrate::metadata::PalletMetadata {
+						name: stringify!(#name),
+						index: #index,
+						storage: #storage,
+						calls: #calls,
+						event: #event,
+						constants: #constants,
+						error: #errors,
+					}
+				},
+				quote! {
+					()
+					// #pallet_docs
+				},
+			)
 		})
 		.collect::<Vec<_>>();
+
+	// -> Vec<&'static str> per item
+	let pallets_docs = pallets.iter().map(|(_pallet, docs)| docs);
+	let pallets_md: Vec<_> = pallets.iter().map(|(pallet, _docs)| pallet).collect();
 
 	quote! {
 		impl #runtime {
 			pub fn metadata() -> #scrate::metadata::RuntimeMetadataPrefixed {
 				#scrate::metadata::RuntimeMetadataLastVersion::new(
-					#scrate::sp_std::vec![ #(#pallets),* ],
+					#scrate::sp_std::vec![ #(#pallets_md),* ],
 					#scrate::metadata::ExtrinsicMetadata {
 						ty: #scrate::scale_info::meta_type::<#extrinsic>(),
 						version: <#extrinsic as #scrate::sp_runtime::traits::ExtrinsicMetadata>::VERSION,
@@ -112,9 +123,13 @@ pub fn expand_runtime_metadata(
 
 			fn metadata_v15() -> #scrate::metadata::RuntimeMetadataPrefixed {
 				let rt = #runtime;
+				// let docs_vec = #scrate::sp_std::vec![ #(#pallets_docs),* ];
+				let docs_vec = #scrate::sp_std::vec![ #scrate::sp_std::vec![ ] ];
+
+				// let docs: #scrate::sp_std::vec::Vec<#scrate::sp_std::vec::Vec<_>> = docs_vec.iter().map(|inner| inner.iter().map(|s| s.to_string()).collect()).collect();
 
 				#scrate::metadata::v15::RuntimeMetadataLastVersion::new(
-					#scrate::sp_std::vec![ #(#pallets),* ],
+					#scrate::sp_std::vec![ #(#pallets_md),* ],
 					#scrate::metadata::ExtrinsicMetadata {
 						ty: #scrate::scale_info::meta_type::<#extrinsic>(),
 						version: <#extrinsic as #scrate::sp_runtime::traits::ExtrinsicMetadata>::VERSION,
@@ -133,6 +148,7 @@ pub fn expand_runtime_metadata(
 					},
 					#scrate::scale_info::meta_type::<#runtime>(),
 					(&rt).runtime_metadata(),
+					docs_vec,
 				).into()
 			}
 		}
@@ -170,6 +186,15 @@ fn expand_pallet_metadata_calls(
 		}
 	} else {
 		quote!(None)
+	}
+}
+
+fn expand_pallet_metadata_documentation(runtime: &Ident, decl: &Pallet) -> TokenStream {
+	let instance = decl.instance.as_ref().into_iter();
+	let path = &decl.path;
+
+	quote! {
+		#path::Pallet::<#runtime #(, #path::#instance)*>::pallet_documentation_metadata()
 	}
 }
 

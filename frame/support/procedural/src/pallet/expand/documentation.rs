@@ -115,20 +115,22 @@ pub fn expand_documentation(def: &Def) -> proc_macro2::TokenStream {
 	let type_impl_gen = &def.type_impl_generics(proc_macro2::Span::call_site());
 	let type_use_gen = &def.type_use_generics(proc_macro2::Span::call_site());
 	let pallet_ident = &def.pallet_struct.pallet;
-	let where_clauses = &def.config.where_clause;
+	let mut where_clauses = vec![&def.config.where_clause];
+	where_clauses.extend(def.extra_constants.iter().map(|d| &d.where_clause));
+	let completed_where_clause = super::merge_where_clauses(&where_clauses);
 
 	let docs: Vec<_> = def.item.attrs.iter().filter_map(parse_doc_value).collect();
 
 	let res = quote::quote!(
-		impl<#type_impl_gen> #pallet_ident<#type_use_gen> #where_clauses{
+		// impl<#type_impl_gen> #pallet_ident<#type_use_gen> #completed_where_clause{
 
-			#[doc(hidden)]
-			pub fn pallet_documentation_metadata()
-				-> #frame_support::sp_std::vec::Vec<&'static str>
-			{
-				#frame_support::sp_std::vec![ #( #docs ),* ]
-			}
-		}
+		// 	#[doc(hidden)]
+		// 	pub fn pallet_documentation_metadata()
+		// 		-> #frame_support::sp_std::vec::Vec<&'static str>
+		// 	{
+		// 		#frame_support::sp_std::vec![ #( #docs ),* ]
+		// 	}
+		// }
 	);
 	println!("Res is {}", res);
 	res
