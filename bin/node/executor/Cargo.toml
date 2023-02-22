@@ -26,7 +26,7 @@ sp-tracing = { version = "6.0.0", path = "../../../primitives/tracing" }
 sp-trie = { version = "7.0.0", path = "../../../primitives/trie" }
 
 [dev-dependencies]
-criterion = "0.3.0"
+criterion = "0.4.0"
 futures = "0.3.21"
 wat = "1.0"
 frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
@@ -35,6 +35,7 @@ node-testing = { version = "3.0.0-dev", path = "../testing" }
 pallet-balances = { version = "4.0.0-dev", path = "../../../frame/balances" }
 pallet-contracts = { version = "4.0.0-dev", path = "../../../frame/contracts" }
 pallet-im-online = { version = "4.0.0-dev", path = "../../../frame/im-online" }
+pallet-glutton = { version = "4.0.0-dev", path = "../../../frame/glutton" }
 pallet-sudo = { version = "4.0.0-dev", path = "../../../frame/sudo" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../../frame/timestamp" }
 pallet-treasury = { version = "4.0.0-dev", path = "../../../frame/treasury" }

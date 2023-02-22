@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2023 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,8 +22,8 @@
 
 use super::{mock_helpers::*, Pallet as MessageQueue, *};
 
-use frame_benchmarking::{impl_benchmark_test_suite, whitelisted_caller};
-use frame_support::{benchmarking::*, traits::Get};
+use frame_benchmarking::v2::*;
+use frame_support::traits::Get;
 use frame_system::RawOrigin;
 use sp_std::prelude::*;
 

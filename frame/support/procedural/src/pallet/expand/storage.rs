@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,9 +15,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::{
-	parse::storage::{Metadata, QueryKind, StorageDef, StorageGenerics},
-	Def,
+use crate::{
+	counter_prefix,
+	pallet::{
+		parse::storage::{Metadata, QueryKind, StorageDef, StorageGenerics},
+		Def,
+	},
 };
 use quote::ToTokens;
 use std::{collections::HashMap, ops::IndexMut};
@@ -37,12 +40,6 @@ fn counter_prefix_ident(storage_ident: &syn::Ident) -> syn::Ident {
 		&format!("_GeneratedCounterPrefixForStorage{}", storage_ident),
 		storage_ident.span(),
 	)
-}
-
-/// Generate the counter_prefix related to the storage.
-/// counter_prefix is used by counted storage map.
-fn counter_prefix(prefix: &str) -> String {
-	format!("CounterFor{}", prefix)
 }
 
 /// Check for duplicated storage prefixes. This step is necessary since users can specify an

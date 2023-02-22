@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,7 @@
 //! Benchmarks for the GRANDPA pallet.
 
 use super::{Pallet as Grandpa, *};
-use frame_benchmarking::benchmarks;
+use frame_benchmarking::v1::benchmarks;
 use frame_system::RawOrigin;
 use sp_core::H256;
 

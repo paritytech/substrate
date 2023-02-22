@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -117,6 +117,11 @@ impl Weight {
 		Self { ref_time, proof_size }
 	}
 
+	/// Construct [`Weight`] from the same weight for all parts.
+	pub const fn from_all(value: u64) -> Self {
+		Self { ref_time: value, proof_size: value }
+	}
+
 	/// Saturating [`Weight`] addition. Computes `self + rhs`, saturating at the numeric bounds of
 	/// all fields instead of overflowing.
 	pub const fn saturating_add(self, rhs: Self) -> Self {
@@ -165,6 +170,11 @@ impl Weight {
 	/// Increment [`Weight`] by `amount` via saturating addition.
 	pub fn saturating_accrue(&mut self, amount: Self) {
 		*self = self.saturating_add(amount);
+	}
+
+	/// Reduce [`Weight`] by `amount` via saturating subtraction.
+	pub fn saturating_reduce(&mut self, amount: Self) {
+		*self = self.saturating_sub(amount);
 	}
 
 	/// Checked [`Weight`] addition. Computes `self + rhs`, returning `None` if overflow occurred.
@@ -222,23 +232,79 @@ impl Weight {
 		Some(Self { ref_time, proof_size })
 	}
 
+	/// Calculates how many `other` fit into `self`.
+	///
+	/// Divides each component of `self` against the same component of `other`. Returns the minimum
+	/// of all those divisions. Returns `None` in case **all** components of `other` are zero.
+	///
+	/// This returns `Some` even if some components of `other` are zero as long as there is at least
+	/// one non-zero component in `other`. The devision for this particular component will then
+	/// yield the maximum value (e.g u64::MAX). This is because we assume not every operation and
+	/// hence each `Weight` will necessarily use each resource.
+	pub const fn checked_div_per_component(self, other: &Self) -> Option<u64> {
+		let mut all_zero = true;
+		let ref_time = match self.ref_time.checked_div(other.ref_time) {
+			Some(ref_time) => {
+				all_zero = false;
+				ref_time
+			},
+			None => u64::MAX,
+		};
+		let proof_size = match self.proof_size.checked_div(other.proof_size) {
+			Some(proof_size) => {
+				all_zero = false;
+				proof_size
+			},
+			None => u64::MAX,
+		};
+		if all_zero {
+			None
+		} else {
+			Some(if ref_time < proof_size { ref_time } else { proof_size })
+		}
+	}
+
+	/// Try to increase `self` by `amount` via checked addition.
+	pub fn checked_accrue(&mut self, amount: Self) -> Option<()> {
+		self.checked_add(&amount).map(|new_self| *self = new_self)
+	}
+
+	/// Try to reduce `self` by `amount` via checked subtraction.
+	pub fn checked_reduce(&mut self, amount: Self) -> Option<()> {
+		self.checked_sub(&amount).map(|new_self| *self = new_self)
+	}
+
 	/// Return a [`Weight`] where all fields are zero.
 	pub const fn zero() -> Self {
 		Self { ref_time: 0, proof_size: 0 }
 	}
 
-	/// Constant version of Add with u64.
+	/// Constant version of Add for `ref_time` component with u64.
 	///
 	/// Is only overflow safe when evaluated at compile-time.
-	pub const fn add(self, scalar: u64) -> Self {
-		Self { ref_time: self.ref_time + scalar, proof_size: self.proof_size + scalar }
+	pub const fn add_ref_time(self, scalar: u64) -> Self {
+		Self { ref_time: self.ref_time + scalar, proof_size: self.proof_size }
 	}
 
-	/// Constant version of Sub with u64.
+	/// Constant version of Add for `proof_size` component with u64.
 	///
 	/// Is only overflow safe when evaluated at compile-time.
-	pub const fn sub(self, scalar: u64) -> Self {
-		Self { ref_time: self.ref_time - scalar, proof_size: self.proof_size - scalar }
+	pub const fn add_proof_size(self, scalar: u64) -> Self {
+		Self { ref_time: self.ref_time, proof_size: self.proof_size + scalar }
+	}
+
+	/// Constant version of Sub for `ref_time` component with u64.
+	///
+	/// Is only overflow safe when evaluated at compile-time.
+	pub const fn sub_ref_time(self, scalar: u64) -> Self {
+		Self { ref_time: self.ref_time - scalar, proof_size: self.proof_size }
+	}
+
+	/// Constant version of Sub for `proof_size` component with u64.
+	///
+	/// Is only overflow safe when evaluated at compile-time.
+	pub const fn sub_proof_size(self, scalar: u64) -> Self {
+		Self { ref_time: self.ref_time, proof_size: self.proof_size - scalar }
 	}
 
 	/// Constant version of Div with u64.
@@ -352,6 +418,20 @@ where
 	}
 }
 
+#[cfg(any(test, feature = "std", feature = "runtime-benchmarks"))]
+impl From<u64> for Weight {
+	fn from(value: u64) -> Self {
+		Self::from_parts(value, value)
+	}
+}
+
+#[cfg(any(test, feature = "std", feature = "runtime-benchmarks"))]
+impl From<(u64, u64)> for Weight {
+	fn from(value: (u64, u64)) -> Self {
+		Self::from_parts(value.0, value.1)
+	}
+}
+
 macro_rules! weight_mul_per_impl {
 	($($t:ty),* $(,)?) => {
 		$(
@@ -458,5 +538,124 @@ mod tests {
 		assert!(!Weight::from_parts(1, 0).is_zero());
 		assert!(!Weight::from_parts(0, 1).is_zero());
 		assert!(!Weight::MAX.is_zero());
+	}
+
+	#[test]
+	fn from_parts_works() {
+		assert_eq!(Weight::from_parts(0, 0), Weight { ref_time: 0, proof_size: 0 });
+		assert_eq!(Weight::from_parts(5, 5), Weight { ref_time: 5, proof_size: 5 });
+		assert_eq!(
+			Weight::from_parts(u64::MAX, u64::MAX),
+			Weight { ref_time: u64::MAX, proof_size: u64::MAX }
+		);
+	}
+
+	#[test]
+	fn from_all_works() {
+		assert_eq!(Weight::from_all(0), Weight::from_parts(0, 0));
+		assert_eq!(Weight::from_all(5), Weight::from_parts(5, 5));
+		assert_eq!(Weight::from_all(u64::MAX), Weight::from_parts(u64::MAX, u64::MAX));
+	}
+
+	#[test]
+	fn from_u64_works() {
+		assert_eq!(Weight::from_all(0), 0_u64.into());
+		assert_eq!(Weight::from_all(123), 123_u64.into());
+		assert_eq!(Weight::from_all(u64::MAX), u64::MAX.into());
+	}
+
+	#[test]
+	fn from_u64_pair_works() {
+		assert_eq!(Weight::from_parts(0, 1), (0, 1).into());
+		assert_eq!(Weight::from_parts(123, 321), (123u64, 321u64).into());
+		assert_eq!(Weight::from_parts(u64::MAX, 0), (u64::MAX, 0).into());
+	}
+
+	#[test]
+	fn saturating_reduce_works() {
+		let mut weight = Weight::from_parts(10, 20);
+		weight.saturating_reduce(Weight::from_all(5));
+		assert_eq!(weight, Weight::from_parts(5, 15));
+		weight.saturating_reduce(Weight::from_all(5));
+		assert_eq!(weight, Weight::from_parts(0, 10));
+		weight.saturating_reduce(Weight::from_all(11));
+		assert!(weight.is_zero());
+		weight.saturating_reduce(Weight::from_all(u64::MAX));
+		assert!(weight.is_zero());
+	}
+
+	#[test]
+	fn checked_accrue_works() {
+		let mut weight = Weight::from_parts(10, 20);
+		assert!(weight.checked_accrue(Weight::from_all(2)).is_some());
+		assert_eq!(weight, Weight::from_parts(12, 22));
+		assert!(weight.checked_accrue(Weight::from_parts(u64::MAX, 0)).is_none());
+		assert!(weight.checked_accrue(Weight::from_parts(0, u64::MAX)).is_none());
+		assert_eq!(weight, Weight::from_parts(12, 22));
+		assert!(weight
+			.checked_accrue(Weight::from_parts(u64::MAX - 12, u64::MAX - 22))
+			.is_some());
+		assert_eq!(weight, Weight::MAX);
+		assert!(weight.checked_accrue(Weight::from_parts(1, 0)).is_none());
+		assert!(weight.checked_accrue(Weight::from_parts(0, 1)).is_none());
+		assert_eq!(weight, Weight::MAX);
+	}
+
+	#[test]
+	fn checked_reduce_works() {
+		let mut weight = Weight::from_parts(10, 20);
+		assert!(weight.checked_reduce(Weight::from_all(2)).is_some());
+		assert_eq!(weight, Weight::from_parts(8, 18));
+		assert!(weight.checked_reduce(Weight::from_parts(9, 0)).is_none());
+		assert!(weight.checked_reduce(Weight::from_parts(0, 19)).is_none());
+		assert_eq!(weight, Weight::from_parts(8, 18));
+		assert!(weight.checked_reduce(Weight::from_parts(8, 0)).is_some());
+		assert_eq!(weight, Weight::from_parts(0, 18));
+		assert!(weight.checked_reduce(Weight::from_parts(0, 18)).is_some());
+		assert!(weight.is_zero());
+	}
+
+	#[test]
+	fn checked_div_per_component_works() {
+		assert_eq!(
+			Weight::from_parts(10, 20).checked_div_per_component(&Weight::from_parts(2, 10)),
+			Some(2)
+		);
+		assert_eq!(
+			Weight::from_parts(10, 200).checked_div_per_component(&Weight::from_parts(2, 10)),
+			Some(5)
+		);
+		assert_eq!(
+			Weight::from_parts(10, 200).checked_div_per_component(&Weight::from_parts(1, 10)),
+			Some(10)
+		);
+		assert_eq!(
+			Weight::from_parts(10, 200).checked_div_per_component(&Weight::from_parts(2, 1)),
+			Some(5)
+		);
+		assert_eq!(
+			Weight::from_parts(10, 200).checked_div_per_component(&Weight::from_parts(0, 10)),
+			Some(20)
+		);
+		assert_eq!(
+			Weight::from_parts(10, 200).checked_div_per_component(&Weight::from_parts(1, 0)),
+			Some(10)
+		);
+		assert_eq!(
+			Weight::from_parts(0, 200).checked_div_per_component(&Weight::from_parts(2, 3)),
+			Some(0)
+		);
+		assert_eq!(
+			Weight::from_parts(10, 0).checked_div_per_component(&Weight::from_parts(2, 3)),
+			Some(0)
+		);
+		assert_eq!(
+			Weight::from_parts(10, 200).checked_div_per_component(&Weight::from_parts(0, 0)),
+			None,
+		);
+		assert_eq!(
+			Weight::from_parts(0, 0).checked_div_per_component(&Weight::from_parts(0, 0)),
+			None,
+		);
 	}
 }

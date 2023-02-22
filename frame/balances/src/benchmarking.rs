@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2023 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,8 +22,7 @@
 use super::*;
 use crate::Pallet as Balances;
 
-use frame_benchmarking::{account, impl_benchmark_test_suite, whitelisted_caller};
-use frame_support::benchmarking::*;
+use frame_benchmarking::v2::*;
 use frame_system::RawOrigin;
 
 const SEED: u32 = 0;

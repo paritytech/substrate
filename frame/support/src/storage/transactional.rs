@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -32,6 +32,8 @@ use sp_runtime::{DispatchError, TransactionOutcome, TransactionalError};
 /// The type that is being used to store the current number of active layers.
 pub type Layer = u32;
 /// The key that is holds the current number of active layers.
+///
+/// Encodes to `0x3a7472616e73616374696f6e5f6c6576656c3a`.
 pub const TRANSACTION_LEVEL_KEY: &[u8] = b":transaction_level:";
 /// The maximum number of nested layers.
 pub const TRANSACTIONAL_LIMIT: Layer = 255;

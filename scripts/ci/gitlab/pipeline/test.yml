@@ -411,28 +411,10 @@ cargo-check-each-crate:
     CI_JOB_NAME:                   cargo-check-each-crate
   script:
     - rusty-cachier snapshot create
-    - time ./scripts/ci/gitlab/check-each-crate.sh "$CI_NODE_INDEX" "$CI_NODE_TOTAL"
+    - PYTHONUNBUFFERED=x time ./scripts/ci/gitlab/check-each-crate.py "$CI_NODE_INDEX" "$CI_NODE_TOTAL"
     # need to update cache only from one job
     - if [ "$CI_NODE_INDEX" == 1 ]; then rusty-cachier cache upload; fi
   parallel: 2
-
-publish-crates-locally:
-  stage:                           test
-  extends:
-    - .test-refs
-    - .crates-publishing-template
-  # When lots of crates are taken into account (for example on master where all crates are tested)
-  # the job might take a long time, as evidenced by:
-  # https://gitlab.parity.io/parity/mirrors/substrate/-/jobs/2269364
-  timeout:                         4h
-  script:
-    - rusty-cachier snapshot create
-    - git clone
-        --depth 1
-        --branch "$RELENG_SCRIPTS_BRANCH"
-        https://github.com/paritytech/releng-scripts.git
-    - CRATESIO_TARGET_INSTANCE=local ./releng-scripts/publish-crates
-    - rusty-cachier cache upload
 
 cargo-check-each-crate-macos:
   stage: test
@@ -449,6 +431,7 @@ cargo-check-each-crate-macos:
   script:
     # TODO: enable rusty-cachier once it supports Mac
     # TODO: use parallel jobs, as per cargo-check-each-crate, once more Mac runners are available
-    - time ./scripts/ci/gitlab/check-each-crate.sh 1 1
+    # - time ./scripts/ci/gitlab/check-each-crate.py 1 1
+    - time cargo check --workspace --locked
   tags:
     - osx

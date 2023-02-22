@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -81,12 +81,12 @@ fn verify_with_validator_set<Block: BlockT>(
 #[cfg(test)]
 pub(crate) mod tests {
 	use beefy_primitives::{
-		known_payloads, Commitment, Payload, SignedCommitment, VersionedFinalityProof,
+		known_payloads, Commitment, Keyring, Payload, SignedCommitment, VersionedFinalityProof,
 	};
 	use substrate_test_runtime_client::runtime::Block;
 
 	use super::*;
-	use crate::{keystore::tests::Keyring, tests::make_beefy_ids};
+	use crate::tests::make_beefy_ids;
 
 	pub(crate) fn new_finality_proof(
 		block_num: NumberFor<Block>,

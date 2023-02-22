@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2023 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -438,6 +438,9 @@ pub fn benchmarks(
 						#krate::BenchmarkMetadata {
 							name: benchmark.as_bytes().to_vec(),
 							components,
+							// TODO: Not supported by V2 syntax as of yet.
+							// https://github.com/paritytech/substrate/issues/13132
+							pov_modes: vec![],
 						}
 					}).collect::<#krate::Vec<_>>()
 				}
@@ -635,7 +638,7 @@ fn expand_benchmark(
 		Ok(ident) => ident,
 		Err(err) => return err.to_compile_error().into(),
 	};
-	let home = quote!(#krate::frame_support::benchmarking);
+	let home = quote!(#krate::v2);
 	let codec = quote!(#krate::frame_support::codec);
 	let traits = quote!(#krate::frame_support::traits);
 	let setup_stmts = benchmark_def.setup_stmts;

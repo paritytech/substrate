@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,7 +23,9 @@
 #[cfg(test)]
 mod mock;
 
-use frame_benchmarking::{account, frame_support::traits::Currency, vec, whitelist_account, Vec};
+use frame_benchmarking::v1::{
+	account, frame_support::traits::Currency, vec, whitelist_account, Vec,
+};
 use frame_election_provider_support::SortedListProvider;
 use frame_support::{assert_ok, ensure, traits::Get};
 use frame_system::RawOrigin as RuntimeOrigin;
@@ -516,7 +518,7 @@ frame_benchmarking::benchmarks! {
 					depositor: depositor.clone(),
 					root: Some(depositor.clone()),
 					nominator: Some(depositor.clone()),
-					state_toggler: Some(depositor.clone()),
+					bouncer: Some(depositor.clone()),
 				},
 			}
 		);
@@ -555,7 +557,7 @@ frame_benchmarking::benchmarks! {
 					depositor: depositor.clone(),
 					root: Some(depositor.clone()),
 					nominator: Some(depositor.clone()),
-					state_toggler: Some(depositor.clone()),
+					bouncer: Some(depositor.clone()),
 				}
 			}
 		);
@@ -628,7 +630,7 @@ frame_benchmarking::benchmarks! {
 			pallet_nomination_pools::PoolRoles {
 				depositor: root,
 				nominator: Some(random.clone()),
-				state_toggler: Some(random.clone()),
+				bouncer: Some(random.clone()),
 				root: Some(random),
 			},
 		)
