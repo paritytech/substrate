@@ -1736,7 +1736,11 @@ fn reward_to_stake_works() {
 			let _ = Balances::make_free_balance_be(&20, 1000);
 
 			// Bypass logic and change current exposure
-			EraInfo::<Test>::set_validator_exposure(0, &21, Exposure { total: 69, own: 69, others: vec![] });
+			EraInfo::<Test>::set_validator_exposure(
+				0,
+				&21,
+				Exposure { total: 69, own: 69, others: vec![] },
+			);
 			<Ledger<Test>>::insert(
 				&20,
 				StakingLedger {
@@ -6409,7 +6413,15 @@ fn test_validator_exposure_is_backward_compatible_with_non_paged_rewards_payout(
 		<ErasStakersPaged<Test>>::remove(1, (11, 1));
 		<ErasStakersOverview<Test>>::remove(1, 11);
 
-		<ErasStakers<Test>>::insert(1, 11, Exposure { total: total_exposure, own: 1000, others: expected_individual_exposures.clone() });
+		<ErasStakers<Test>>::insert(
+			1,
+			11,
+			Exposure {
+				total: total_exposure,
+				own: 1000,
+				others: expected_individual_exposures.clone(),
+			},
+		);
 		let mut clipped_exposure = expected_individual_exposures.clone();
 		clipped_exposure.sort_by(|a, b| b.who.cmp(&a.who));
 		clipped_exposure.truncate(10);
