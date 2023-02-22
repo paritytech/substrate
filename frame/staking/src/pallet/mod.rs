@@ -65,8 +65,7 @@ pub mod pallet {
 	use super::*;
 
 	/// The current storage version.
-	/// TODO(ank4n) bump up
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(13);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(14);
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
@@ -223,6 +222,7 @@ pub mod pallet {
 		///
 		/// When this is set to 1, the reward payout behaviour is similar to how it used to work
 		/// before we had paged exposures.
+		#[pallet::constant]
 		type MaxExposurePageCount: Get<u32>;
 
 		/// The fraction of the validator set that is safe to be offending.

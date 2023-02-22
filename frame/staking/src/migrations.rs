@@ -52,6 +52,47 @@ impl Default for ObsoleteReleases {
 #[storage_alias]
 type StorageVersion<T: Config> = StorageValue<Pallet<T>, ObsoleteReleases, ValueQuery>;
 
+pub mod v14 {
+	use super::*;
+
+	pub struct MigrateToV14<T>(sp_std::marker::PhantomData<T>);
+	impl<T: Config> OnRuntimeUpgrade for MigrateToV14<T> {
+		fn on_runtime_upgrade() -> Weight {
+			let current = Pallet::<T>::current_storage_version();
+			let on_chain = Pallet::<T>::on_chain_storage_version();
+
+			if current == 14 && on_chain == 13 {
+				current.put::<Pallet<T>>();
+
+				log!(info, "v14 applied successfully.");
+				T::DbWeight::get().reads_writes(1, 1)
+			} else {
+				log!(warn, "v14 not applied.");
+				T::DbWeight::get().reads(1)
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+			frame_support::ensure!(
+				Pallet::<T>::on_chain_storage_version() == 13,
+				"Required v13 before upgrading to v14."
+			);
+
+			Ok(Default::default())
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
+			frame_support::ensure!(
+				Pallet::<T>::on_chain_storage_version() == 14,
+				"v14 not applied"
+			);
+			Ok(())
+		}
+	}
+}
+
 pub mod v13 {
 	use super::*;
 
