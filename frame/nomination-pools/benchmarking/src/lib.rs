@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -530,7 +530,7 @@ frame_benchmarking::benchmarks! {
 					depositor: depositor.clone(),
 					root: Some(depositor.clone()),
 					nominator: Some(depositor.clone()),
-					state_toggler: Some(depositor.clone()),
+					bouncer: Some(depositor.clone()),
 				},
 			}
 		);
@@ -569,7 +569,7 @@ frame_benchmarking::benchmarks! {
 					depositor: depositor.clone(),
 					root: Some(depositor.clone()),
 					nominator: Some(depositor.clone()),
-					state_toggler: Some(depositor.clone()),
+					bouncer: Some(depositor.clone()),
 				}
 			}
 		);
@@ -642,7 +642,7 @@ frame_benchmarking::benchmarks! {
 			pallet_nomination_pools::PoolRoles {
 				depositor: root,
 				nominator: Some(random.clone()),
-				state_toggler: Some(random.clone()),
+				bouncer: Some(random.clone()),
 				root: Some(random),
 			},
 		)

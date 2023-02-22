@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -1408,14 +1408,14 @@ where
 {
 	fn new_block_at<R: Into<RecordProof>>(
 		&self,
-		parent: &BlockId<Block>,
+		parent: Block::Hash,
 		inherent_digests: Digest,
 		record_proof: R,
 	) -> sp_blockchain::Result<sc_block_builder::BlockBuilder<Block, Self, B>> {
 		sc_block_builder::BlockBuilder::new(
 			self,
-			self.expect_block_hash_from_id(parent)?,
-			self.expect_block_number_from_id(parent)?,
+			parent,
+			self.expect_block_number_from_id(&BlockId::Hash(parent))?,
 			record_proof.into(),
 			inherent_digests,
 			&self.backend,

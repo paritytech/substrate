@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -37,7 +37,7 @@ macro_rules! member_unbonding_eras {
 }
 
 pub const DEFAULT_ROLES: PoolRoles<AccountId> =
-	PoolRoles { depositor: 10, root: Some(900), nominator: Some(901), state_toggler: Some(902) };
+	PoolRoles { depositor: 10, root: Some(900), nominator: Some(901), bouncer: Some(902) };
 
 #[test]
 fn test_setup_works() {
@@ -192,6 +192,46 @@ mod bonded_pool {
 			StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 400);
 			bonded_pool.points = 900;
 			assert_eq!(bonded_pool.points_to_balance(90), 40);
+		})
+	}
+
+	#[test]
+	fn api_points_to_balance_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert!(BondedPool::<Runtime>::get(1).is_some());
+			assert_eq!(Pallet::<Runtime>::api_points_to_balance(1, 10), 10);
+
+			// slash half of the pool's balance. expected result of `fn api_points_to_balance`
+			// to be 1/2 of the pool's balance.
+			StakingMock::set_bonded_balance(
+				default_bonded_account(),
+				Pools::depositor_min_bond() / 2,
+			);
+			assert_eq!(Pallet::<Runtime>::api_points_to_balance(1, 10), 5);
+
+			// if pool does not exist, points to balance ratio is 0.
+			assert_eq!(BondedPool::<Runtime>::get(2), None);
+			assert_eq!(Pallet::<Runtime>::api_points_to_balance(2, 10), 0);
+		})
+	}
+
+	#[test]
+	fn api_balance_to_points_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(Pallet::<Runtime>::api_balance_to_points(1, 0), 0);
+			assert_eq!(Pallet::<Runtime>::api_balance_to_points(1, 10), 10);
+
+			// slash half of the pool's balance. expect result of `fn api_balance_to_points`
+			// to be 2 * of the balance to add to the pool.
+			StakingMock::set_bonded_balance(
+				default_bonded_account(),
+				Pools::depositor_min_bond() / 2,
+			);
+			assert_eq!(Pallet::<Runtime>::api_balance_to_points(1, 10), 20);
+
+			// if pool does not exist, balance to points ratio is 0.
+			assert_eq!(BondedPool::<Runtime>::get(2), None);
+			assert_eq!(Pallet::<Runtime>::api_points_to_balance(2, 10), 0);
 		})
 	}
 
@@ -1305,51 +1345,51 @@ mod claim_payout {
 		ExtBuilder::default().build_and_execute(|| {
 			let ed = Balances::minimum_balance();
 
-			assert_eq!(Pools::pending_rewards(10), Some(0));
+			assert_eq!(Pools::api_pending_rewards(10), Some(0));
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 30).unwrap();
-			assert_eq!(Pools::pending_rewards(10), Some(30));
-			assert_eq!(Pools::pending_rewards(20), None);
+			assert_eq!(Pools::api_pending_rewards(10), Some(30));
+			assert_eq!(Pools::api_pending_rewards(20), None);
 
 			Balances::make_free_balance_be(&20, ed + 10);
 			assert_ok!(Pools::join(RuntimeOrigin::signed(20), 10, 1));
 
-			assert_eq!(Pools::pending_rewards(10), Some(30));
-			assert_eq!(Pools::pending_rewards(20), Some(0));
+			assert_eq!(Pools::api_pending_rewards(10), Some(30));
+			assert_eq!(Pools::api_pending_rewards(20), Some(0));
 
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 100).unwrap();
 
-			assert_eq!(Pools::pending_rewards(10), Some(30 + 50));
-			assert_eq!(Pools::pending_rewards(20), Some(50));
-			assert_eq!(Pools::pending_rewards(30), None);
+			assert_eq!(Pools::api_pending_rewards(10), Some(30 + 50));
+			assert_eq!(Pools::api_pending_rewards(20), Some(50));
+			assert_eq!(Pools::api_pending_rewards(30), None);
 
 			Balances::make_free_balance_be(&30, ed + 10);
 			assert_ok!(Pools::join(RuntimeOrigin::signed(30), 10, 1));
 
-			assert_eq!(Pools::pending_rewards(10), Some(30 + 50));
-			assert_eq!(Pools::pending_rewards(20), Some(50));
-			assert_eq!(Pools::pending_rewards(30), Some(0));
+			assert_eq!(Pools::api_pending_rewards(10), Some(30 + 50));
+			assert_eq!(Pools::api_pending_rewards(20), Some(50));
+			assert_eq!(Pools::api_pending_rewards(30), Some(0));
 
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 60).unwrap();
 
-			assert_eq!(Pools::pending_rewards(10), Some(30 + 50 + 20));
-			assert_eq!(Pools::pending_rewards(20), Some(50 + 20));
-			assert_eq!(Pools::pending_rewards(30), Some(20));
+			assert_eq!(Pools::api_pending_rewards(10), Some(30 + 50 + 20));
+			assert_eq!(Pools::api_pending_rewards(20), Some(50 + 20));
+			assert_eq!(Pools::api_pending_rewards(30), Some(20));
 
 			// 10 should claim 10, 20 should claim nothing.
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
-			assert_eq!(Pools::pending_rewards(10), Some(0));
-			assert_eq!(Pools::pending_rewards(20), Some(50 + 20));
-			assert_eq!(Pools::pending_rewards(30), Some(20));
+			assert_eq!(Pools::api_pending_rewards(10), Some(0));
+			assert_eq!(Pools::api_pending_rewards(20), Some(50 + 20));
+			assert_eq!(Pools::api_pending_rewards(30), Some(20));
 
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
-			assert_eq!(Pools::pending_rewards(10), Some(0));
-			assert_eq!(Pools::pending_rewards(20), Some(0));
-			assert_eq!(Pools::pending_rewards(30), Some(20));
+			assert_eq!(Pools::api_pending_rewards(10), Some(0));
+			assert_eq!(Pools::api_pending_rewards(20), Some(0));
+			assert_eq!(Pools::api_pending_rewards(30), Some(20));
 
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(30)));
-			assert_eq!(Pools::pending_rewards(10), Some(0));
-			assert_eq!(Pools::pending_rewards(20), Some(0));
-			assert_eq!(Pools::pending_rewards(30), Some(0));
+			assert_eq!(Pools::api_pending_rewards(10), Some(0));
+			assert_eq!(Pools::api_pending_rewards(20), Some(0));
+			assert_eq!(Pools::api_pending_rewards(30), Some(0));
 		});
 	}
 
@@ -2149,7 +2189,7 @@ mod unbond {
 			.add_members(vec![(20, 20)])
 			.build_and_execute(|| {
 				unsafe_set_state(1, PoolState::Blocked);
-				let kicker = DEFAULT_ROLES.state_toggler.unwrap();
+				let kicker = DEFAULT_ROLES.bouncer.unwrap();
 
 				// cannot be kicked to above the limit.
 				assert_noop!(
@@ -2252,7 +2292,7 @@ mod unbond {
 
 			// set the stage
 			unsafe_set_state(1, PoolState::Blocked);
-			let kicker = DEFAULT_ROLES.state_toggler.unwrap();
+			let kicker = DEFAULT_ROLES.bouncer.unwrap();
 
 			// cannot be kicked to above limit.
 			assert_noop!(
@@ -2591,7 +2631,7 @@ mod unbond {
 
 	#[test]
 	fn unbond_kick_works() {
-		// Kick: the pool is blocked and the caller is either the root or state-toggler.
+		// Kick: the pool is blocked and the caller is either the root or bouncer.
 		ExtBuilder::default()
 			.add_members(vec![(100, 100), (200, 200)])
 			.build_and_execute(|| {
@@ -2600,7 +2640,7 @@ mod unbond {
 				let bonded_pool = BondedPool::<Runtime>::get(1).unwrap();
 				assert_eq!(bonded_pool.roles.root.unwrap(), 900);
 				assert_eq!(bonded_pool.roles.nominator.unwrap(), 901);
-				assert_eq!(bonded_pool.roles.state_toggler.unwrap(), 902);
+				assert_eq!(bonded_pool.roles.bouncer.unwrap(), 902);
 
 				// When the nominator tries to kick, then its a noop
 				assert_noop!(
@@ -2628,7 +2668,7 @@ mod unbond {
 					]
 				);
 
-				// When the state toggler kicks then its ok
+				// When the bouncer kicks then its ok
 				assert_ok!(Pools::fully_unbond(RuntimeOrigin::signed(902), 200));
 
 				assert_eq!(
@@ -3559,7 +3599,7 @@ mod withdraw_unbonded {
 				// Can kick as root
 				assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(900), 100, 0));
 
-				// Can kick as state toggler
+				// Can kick as bouncer
 				assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(900), 200, 0));
 
 				assert_eq!(Balances::free_balance(100), 100 + 100);
@@ -4149,7 +4189,7 @@ mod create {
 							depositor: 11,
 							root: Some(123),
 							nominator: Some(456),
-							state_toggler: Some(789)
+							bouncer: Some(789)
 						}
 					}
 				}
@@ -4233,7 +4273,7 @@ mod create {
 				amount: 20,
 				root: 11,
 				nominator: 11,
-				state_toggler: 11,
+				bouncer: 11,
 			});
 			assert_noop!(
 				create.dispatch(RuntimeOrigin::signed(11)),
@@ -4332,7 +4372,7 @@ mod nominate {
 				Error::<Runtime>::NotNominator
 			);
 
-			// State toggler can't nominate
+			// bouncer can't nominate
 			assert_noop!(
 				Pools::nominate(RuntimeOrigin::signed(902), 1, vec![21]),
 				Error::<Runtime>::NotNominator
@@ -4364,7 +4404,7 @@ mod set_state {
 			// Given
 			assert_ok!(BondedPool::<Runtime>::get(1).unwrap().ok_to_be_open());
 
-			// Only the root and state toggler can change the state when the pool is ok to be open.
+			// Only the root and bouncer can change the state when the pool is ok to be open.
 			assert_noop!(
 				Pools::set_state(RuntimeOrigin::signed(10), 1, PoolState::Blocked),
 				Error::<Runtime>::CanNotChangeState
@@ -4388,7 +4428,7 @@ mod set_state {
 
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().state, PoolState::Blocked);
 
-			// State toggler can change state
+			// bouncer can change state
 			assert_ok!(Pools::set_state(RuntimeOrigin::signed(902), 1, PoolState::Destroying));
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().state, PoolState::Destroying);
 
@@ -4452,7 +4492,7 @@ mod set_metadata {
 			assert_ok!(Pools::set_metadata(RuntimeOrigin::signed(900), 1, vec![1, 1]));
 			assert_eq!(Metadata::<Runtime>::get(1), vec![1, 1]);
 
-			// State toggler can set metadata
+			// bouncer can set metadata
 			assert_ok!(Pools::set_metadata(RuntimeOrigin::signed(902), 1, vec![2, 2]));
 			assert_eq!(Metadata::<Runtime>::get(1), vec![2, 2]);
 
@@ -4733,7 +4773,7 @@ mod update_roles {
 					depositor: 10,
 					root: Some(900),
 					nominator: Some(901),
-					state_toggler: Some(902)
+					bouncer: Some(902)
 				},
 			);
 
@@ -4772,7 +4812,7 @@ mod update_roles {
 				),
 				Error::<Runtime>::DoesNotHavePermission,
 			);
-			// state-toggler
+			// bouncer
 			assert_noop!(
 				Pools::update_roles(
 					RuntimeOrigin::signed(902),
@@ -4798,21 +4838,12 @@ mod update_roles {
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::RolesUpdated {
-						root: Some(5),
-						state_toggler: Some(7),
-						nominator: Some(6)
-					}
+					Event::RolesUpdated { root: Some(5), bouncer: Some(7), nominator: Some(6) }
 				]
 			);
 			assert_eq!(
 				BondedPools::<Runtime>::get(1).unwrap().roles,
-				PoolRoles {
-					depositor: 10,
-					root: Some(5),
-					nominator: Some(6),
-					state_toggler: Some(7)
-				},
+				PoolRoles { depositor: 10, root: Some(5), nominator: Some(6), bouncer: Some(7) },
 			);
 
 			// also root origin can
@@ -4826,20 +4857,11 @@ mod update_roles {
 
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::RolesUpdated {
-					root: Some(1),
-					state_toggler: Some(3),
-					nominator: Some(2)
-				}]
+				vec![Event::RolesUpdated { root: Some(1), bouncer: Some(3), nominator: Some(2) }]
 			);
 			assert_eq!(
 				BondedPools::<Runtime>::get(1).unwrap().roles,
-				PoolRoles {
-					depositor: 10,
-					root: Some(1),
-					nominator: Some(2),
-					state_toggler: Some(3)
-				},
+				PoolRoles { depositor: 10, root: Some(1), nominator: Some(2), bouncer: Some(3) },
 			);
 
 			// Noop works
@@ -4853,21 +4875,12 @@ mod update_roles {
 
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::RolesUpdated {
-					root: Some(11),
-					state_toggler: Some(3),
-					nominator: Some(2)
-				}]
+				vec![Event::RolesUpdated { root: Some(11), bouncer: Some(3), nominator: Some(2) }]
 			);
 
 			assert_eq!(
 				BondedPools::<Runtime>::get(1).unwrap().roles,
-				PoolRoles {
-					depositor: 10,
-					root: Some(11),
-					nominator: Some(2),
-					state_toggler: Some(3)
-				},
+				PoolRoles { depositor: 10, root: Some(11), nominator: Some(2), bouncer: Some(3) },
 			);
 
 			// Remove works
@@ -4881,12 +4894,12 @@ mod update_roles {
 
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::RolesUpdated { root: Some(69), state_toggler: None, nominator: None }]
+				vec![Event::RolesUpdated { root: Some(69), bouncer: None, nominator: None }]
 			);
 
 			assert_eq!(
 				BondedPools::<Runtime>::get(1).unwrap().roles,
-				PoolRoles { depositor: 10, root: Some(69), nominator: None, state_toggler: None },
+				PoolRoles { depositor: 10, root: Some(69), nominator: None, bouncer: None },
 			);
 		})
 	}
