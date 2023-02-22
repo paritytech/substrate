@@ -504,9 +504,9 @@ pub struct PreSignedMint<CollectionId, ItemId, AccountId, Deadline> {
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct PreSignedAttributes<CollectionId, ItemId, AccountId, Deadline> {
-	/// Collection's id.
+	/// Collection's ID.
 	pub(super) collection: CollectionId,
-	/// Item's id.
+	/// Item's ID.
 	pub(super) item: ItemId,
 	/// Key-value attributes.
 	pub(super) attributes: Vec<(Vec<u8>, Vec<u8>)>,
