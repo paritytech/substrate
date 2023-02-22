@@ -3,12 +3,14 @@ use frame_benchmarking::v2::*;
 use frame_support_test::Config;
 
 #[benchmarks]
-mod benches {
+mod benchmarks {
 	use super::*;
 
 	#[benchmark]
-	fn bench() {
-		assert_eq!(2 + 2, 4);
+	fn bench() -> (String, u32) {
+		#[block]
+		{}
+		(String::from("hey"), 23)
 	}
 }
 

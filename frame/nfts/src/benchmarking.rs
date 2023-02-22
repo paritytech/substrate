@@ -773,5 +773,55 @@ benchmarks_instance_pallet! {
 		assert_last_event::<T, I>(Event::ItemMetadataSet { collection, item, data: metadata }.into());
 	}
 
+	set_attributes_pre_signed {
+		let n in 0 .. T::MaxAttributesPerCall::get() as u32;
+		let (collection, _, _) = create_collection::<T, I>();
+
+		let item_owner: T::AccountId = account("item_owner", 0, SEED);
+		let item_owner_lookup = T::Lookup::unlookup(item_owner.clone());
+
+		let signer_public = sr25519_generate(0.into(), None);
+		let signer: T::AccountId = MultiSigner::Sr25519(signer_public).into_account().into();
+
+		T::Currency::make_free_balance_be(&item_owner, DepositBalanceOf::<T, I>::max_value());
+
+		let item = T::Helper::item(0);
+		assert_ok!(Nfts::<T, I>::force_mint(
+			SystemOrigin::Root.into(),
+			collection,
+			item,
+			item_owner_lookup.clone(),
+			default_item_config(),
+		));
+
+		let mut attributes = vec![];
+		let attribute_value = vec![0u8; T::ValueLimit::get() as usize];
+		for i in 0..n {
+			let attribute_key = make_filled_vec(i as u16, T::KeyLimit::get() as usize);
+			attributes.push((attribute_key, attribute_value.clone()));
+		}
+		let pre_signed_data = PreSignedAttributes {
+			collection,
+			item,
+			attributes,
+			namespace: AttributeNamespace::Account(signer.clone()),
+			deadline: One::one(),
+		};
+		let message = Encode::encode(&pre_signed_data);
+		let signature = MultiSignature::Sr25519(sr25519_sign(0.into(), &signer_public, &message).unwrap());
+
+		frame_system::Pallet::<T>::set_block_number(One::one());
+	}: _(SystemOrigin::Signed(item_owner.clone()), pre_signed_data, signature.into(), signer.clone())
+	verify {
+		assert_last_event::<T, I>(
+			Event::PreSignedAttributesSet {
+				collection,
+				item,
+				namespace: AttributeNamespace::Account(signer.clone()),
+			}
+			.into(),
+		);
+	}
+
 	impl_benchmark_test_suite!(Nfts, crate::mock::new_test_ext(), crate::mock::Test);
 }

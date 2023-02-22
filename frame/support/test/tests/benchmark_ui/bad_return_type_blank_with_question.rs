@@ -6,8 +6,15 @@ use frame_support_test::Config;
 mod benches {
 	use super::*;
 
+	fn something() -> Result<(), BenchmarkError> {
+		Ok(())
+	}
+
 	#[benchmark]
 	fn bench() {
+		something()?;
+		#[block]
+		{}
 		assert_eq!(2 + 2, 4);
 	}
 }
