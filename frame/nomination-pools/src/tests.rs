@@ -4139,6 +4139,49 @@ mod withdraw_unbonded {
 			assert!(!Metadata::<T>::contains_key(1));
 		})
 	}
+
+	#[test]
+	fn withdraw_unbonded_removes_claim_permissions_on_leave() {
+		ExtBuilder::default().add_members(vec![(20, 20)]).build_and_execute(|| {
+			// Given
+			CurrentEra::set(1);
+			assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().points, 20);
+
+			assert_ok!(Pools::set_claim_permission(
+				RuntimeOrigin::signed(20),
+				ClaimPermission::PermissionlessAll
+			));
+			assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, 20));
+			assert_eq!(ClaimPermissions::<Runtime>::get(20), ClaimPermission::PermissionlessAll);
+
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
+					Event::Unbonded { member: 20, pool_id: 1, balance: 20, points: 20, era: 4 },
+				]
+			);
+
+			CurrentEra::set(5);
+
+			// When
+			assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(20), 20, 0));
+
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Withdrawn { member: 20, pool_id: 1, balance: 20, points: 20 },
+					Event::MemberRemoved { pool_id: 1, member: 20 }
+				]
+			);
+
+			// Then
+			assert_eq!(PoolMembers::<Runtime>::get(20), None);
+			assert_eq!(ClaimPermissions::<Runtime>::contains_key(20), false);
+		});
+	}
 }
 
 mod create {
