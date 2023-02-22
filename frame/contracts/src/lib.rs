@@ -1135,7 +1135,7 @@ impl<T: Config> Pallet<T> {
 	/// If set to `true` it returns additional human readable debugging information.
 	///
 	/// It returns the execution result and the amount of used weight.
-	pub fn bare_call<'a>(
+	pub fn bare_call(
 		origin: T::AccountId,
 		dest: T::AccountId,
 		value: BalanceOf<T>,
