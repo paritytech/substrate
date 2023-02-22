@@ -23,6 +23,7 @@ pub type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 parameter_types! {
+	/// A limit to the number of pending unlocks an account may have in parallel.
 	pub MaxUnlockingChunks: u32 = 32;
 }
 
