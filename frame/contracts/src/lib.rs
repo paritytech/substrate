@@ -635,7 +635,6 @@ pub mod pallet {
 					output.result = Err(<Error<T>>::ContractReverted.into());
 				}
 			}
-			//	println!("<fn call>: result = {:?}", &output.result);
 			output.gas_meter.into_dispatch_result(output.result, T::WeightInfo::call())
 		}
 
@@ -989,7 +988,8 @@ struct InternalOutput<T: Config, O> {
 	result: Result<O, ExecError>,
 }
 
-/// Helper trait to wrap contract execution entry points into a signle function [`Pallet::internal_run`].
+/// Helper trait to wrap contract execution entry points into a signle function
+/// [`Pallet::internal_run`].
 trait Invokable<T: Config> {
 	type Output;
 
@@ -1300,7 +1300,7 @@ impl<T: Config> Pallet<T> {
 
 			// Remove re-entrancy guard when dropping this scope
 			defer! {
-					reentrancy_guard::with(|f| {println!("NOW F IS {:?}", f); *f = false});
+					reentrancy_guard::with(|f| *f = false);
 			};
 
 			if res.is_err() {

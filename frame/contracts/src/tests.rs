@@ -2811,7 +2811,7 @@ fn gas_call_runtime_reentrancy_guarded() {
 			data: vec![],
 		});
 
-		// Call to call_runtime contract which calls runtime to re-enter contracts stack by
+		// Call runtime to re-enter back to contracts engine by
 		// calling dummy contract
 		let result = Contracts::bare_call(
 			ALICE,
