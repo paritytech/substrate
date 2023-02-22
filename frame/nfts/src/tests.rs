@@ -3176,3 +3176,311 @@ fn pre_signed_mints_should_work() {
 		);
 	})
 }
+
+#[test]
+fn pre_signed_attributes_should_work() {
+	new_test_ext().execute_with(|| {
+		let user_1_pair = sp_core::sr25519::Pair::from_string("//Alice", None).unwrap();
+		let user_1_signer = MultiSigner::Sr25519(user_1_pair.public());
+		let user_1 = user_1_signer.clone().into_account();
+		let user_2 = account(2);
+		let user_3_pair = sp_core::sr25519::Pair::from_string("//Bob", None).unwrap();
+		let user_3_signer = MultiSigner::Sr25519(user_3_pair.public());
+		let user_3 = user_3_signer.clone().into_account();
+		let collection_id = 0;
+		let item_id = 0;
+
+		Balances::make_free_balance_be(&user_1, 100);
+		Balances::make_free_balance_be(&user_2, 100);
+		Balances::make_free_balance_be(&user_3, 100);
+		assert_ok!(Nfts::create(
+			RuntimeOrigin::signed(user_1.clone()),
+			user_1.clone(),
+			collection_config_with_all_settings_enabled(),
+		));
+		assert_ok!(Nfts::mint(
+			RuntimeOrigin::signed(user_1.clone()),
+			collection_id,
+			item_id,
+			user_2.clone(),
+			None,
+		));
+
+		// validate the CollectionOwner namespace
+		let pre_signed_data = PreSignedAttributes {
+			collection: 0,
+			item: 0,
+			attributes: vec![(vec![0], vec![1]), (vec![2], vec![3])],
+			namespace: AttributeNamespace::CollectionOwner,
+			deadline: 10000000,
+		};
+		let message = Encode::encode(&pre_signed_data);
+		let signature = MultiSignature::Sr25519(user_1_pair.sign(&message));
+
+		assert_ok!(Nfts::set_attributes_pre_signed(
+			RuntimeOrigin::signed(user_2.clone()),
+			pre_signed_data.clone(),
+			signature.clone(),
+			user_1.clone(),
+		));
+
+		assert_eq!(
+			attributes(0),
+			vec![
+				(Some(0), AttributeNamespace::CollectionOwner, bvec![0], bvec![1]),
+				(Some(0), AttributeNamespace::CollectionOwner, bvec![2], bvec![3]),
+			]
+		);
+		let attribute_key: BoundedVec<_, _> = bvec![0];
+		let (_, deposit) = Attribute::<Test>::get((
+			0,
+			Some(0),
+			AttributeNamespace::CollectionOwner,
+			&attribute_key,
+		))
+		.unwrap();
+		assert_eq!(deposit.account, Some(user_2.clone()));
+		assert_eq!(deposit.amount, 3);
+
+		assert_eq!(Balances::free_balance(&user_1), 100 - 2 - 1); // 2 - collection deposit, 1 - item deposit
+		assert_eq!(Balances::free_balance(&user_2), 100 - 6); // 6 - attributes
+
+		// validate the deposit gets returned on attribute update from collection's owner
+		assert_ok!(Nfts::set_attribute(
+			RuntimeOrigin::signed(user_1.clone()),
+			collection_id,
+			Some(item_id),
+			AttributeNamespace::CollectionOwner,
+			bvec![0],
+			bvec![1],
+		));
+		let (_, deposit) = Attribute::<Test>::get((
+			0,
+			Some(0),
+			AttributeNamespace::CollectionOwner,
+			&attribute_key,
+		))
+		.unwrap();
+		assert_eq!(deposit.account, None);
+		assert_eq!(deposit.amount, 3);
+
+		// validate we don't partially modify the state
+		assert_eq!(item_attributes_approvals(collection_id, item_id), vec![]);
+		let pre_signed_data = PreSignedAttributes {
+			collection: 0,
+			item: 0,
+			attributes: vec![(vec![0], vec![1]), (vec![2; 51], vec![3])],
+			namespace: AttributeNamespace::Account(user_3.clone()),
+			deadline: 10000000,
+		};
+		let message = Encode::encode(&pre_signed_data);
+		let signature = MultiSignature::Sr25519(user_3_pair.sign(&message));
+
+		assert_noop!(
+			Nfts::set_attributes_pre_signed(
+				RuntimeOrigin::signed(user_2.clone()),
+				pre_signed_data.clone(),
+				signature.clone(),
+				user_3.clone(),
+			),
+			Error::<Test>::IncorrectData
+		);
+
+		// no new approval was set
+		assert_eq!(item_attributes_approvals(collection_id, item_id), vec![]);
+
+		// no new attributes were added
+		assert_eq!(
+			attributes(0),
+			vec![
+				(Some(0), AttributeNamespace::CollectionOwner, bvec![0], bvec![1]),
+				(Some(0), AttributeNamespace::CollectionOwner, bvec![2], bvec![3]),
+			]
+		);
+
+		// validate the Account namespace
+		let pre_signed_data = PreSignedAttributes {
+			collection: 0,
+			item: 0,
+			attributes: vec![(vec![0], vec![1]), (vec![2], vec![3])],
+			namespace: AttributeNamespace::Account(user_3.clone()),
+			deadline: 10000000,
+		};
+		let message = Encode::encode(&pre_signed_data);
+		let signature = MultiSignature::Sr25519(user_3_pair.sign(&message));
+
+		assert_ok!(Nfts::set_attributes_pre_signed(
+			RuntimeOrigin::signed(user_2.clone()),
+			pre_signed_data.clone(),
+			signature.clone(),
+			user_3.clone(),
+		));
+
+		assert_eq!(
+			attributes(0),
+			vec![
+				(Some(0), AttributeNamespace::CollectionOwner, bvec![0], bvec![1]),
+				(Some(0), AttributeNamespace::Account(user_3.clone()), bvec![0], bvec![1]),
+				(Some(0), AttributeNamespace::CollectionOwner, bvec![2], bvec![3]),
+				(Some(0), AttributeNamespace::Account(user_3.clone()), bvec![2], bvec![3]),
+			]
+		);
+		assert_eq!(item_attributes_approvals(collection_id, item_id), vec![user_3.clone()]);
+
+		let attribute_key: BoundedVec<_, _> = bvec![0];
+		let (_, deposit) = Attribute::<Test>::get((
+			0,
+			Some(0),
+			AttributeNamespace::Account(user_3.clone()),
+			&attribute_key,
+		))
+		.unwrap();
+		assert_eq!(deposit.account, Some(user_2.clone()));
+		assert_eq!(deposit.amount, 3);
+
+		assert_eq!(Balances::free_balance(&user_2), 100 - 9);
+		assert_eq!(Balances::free_balance(&user_3), 100);
+
+		// validate the deposit gets returned on attribute update from user_3
+		assert_ok!(Nfts::set_attribute(
+			RuntimeOrigin::signed(user_3.clone()),
+			collection_id,
+			Some(item_id),
+			AttributeNamespace::Account(user_3.clone()),
+			bvec![0],
+			bvec![1],
+		));
+		let (_, deposit) = Attribute::<Test>::get((
+			0,
+			Some(0),
+			AttributeNamespace::Account(user_3.clone()),
+			&attribute_key,
+		))
+		.unwrap();
+		assert_eq!(deposit.account, Some(user_3.clone()));
+		assert_eq!(deposit.amount, 3);
+
+		assert_eq!(Balances::free_balance(&user_2), 100 - 6);
+		assert_eq!(Balances::free_balance(&user_3), 100 - 3);
+
+		// can't update with the wrong signature
+		assert_noop!(
+			Nfts::set_attributes_pre_signed(
+				RuntimeOrigin::signed(user_2.clone()),
+				pre_signed_data.clone(),
+				signature.clone(),
+				user_1.clone(),
+			),
+			Error::<Test>::WrongSignature
+		);
+
+		// can't update if I don't own that item
+		assert_noop!(
+			Nfts::set_attributes_pre_signed(
+				RuntimeOrigin::signed(user_3.clone()),
+				pre_signed_data.clone(),
+				signature.clone(),
+				user_3.clone(),
+			),
+			Error::<Test>::NoPermission
+		);
+
+		// can't update the CollectionOwner namespace if the signer is not an owner of that
+		// collection
+		let pre_signed_data = PreSignedAttributes {
+			collection: 0,
+			item: 0,
+			attributes: vec![(vec![0], vec![1]), (vec![2], vec![3])],
+			namespace: AttributeNamespace::CollectionOwner,
+			deadline: 10000000,
+		};
+		let message = Encode::encode(&pre_signed_data);
+		let signature = MultiSignature::Sr25519(user_3_pair.sign(&message));
+
+		assert_noop!(
+			Nfts::set_attributes_pre_signed(
+				RuntimeOrigin::signed(user_2.clone()),
+				pre_signed_data.clone(),
+				signature.clone(),
+				user_3.clone(),
+			),
+			Error::<Test>::NoPermission
+		);
+
+		// validate signature's expiration
+		System::set_block_number(10000001);
+		assert_noop!(
+			Nfts::set_attributes_pre_signed(
+				RuntimeOrigin::signed(user_2.clone()),
+				pre_signed_data.clone(),
+				signature.clone(),
+				user_3.clone(),
+			),
+			Error::<Test>::DeadlineExpired
+		);
+		System::set_block_number(1);
+
+		// validate item & collection
+		let pre_signed_data = PreSignedAttributes {
+			collection: 1,
+			item: 1,
+			attributes: vec![(vec![0], vec![1]), (vec![2], vec![3])],
+			namespace: AttributeNamespace::CollectionOwner,
+			deadline: 10000000,
+		};
+		let message = Encode::encode(&pre_signed_data);
+		let signature = MultiSignature::Sr25519(user_1_pair.sign(&message));
+
+		assert_noop!(
+			Nfts::set_attributes_pre_signed(
+				RuntimeOrigin::signed(user_2.clone()),
+				pre_signed_data.clone(),
+				signature.clone(),
+				user_1.clone(),
+			),
+			Error::<Test>::UnknownItem
+		);
+
+		// validate max attributes limit
+		let pre_signed_data = PreSignedAttributes {
+			collection: 1,
+			item: 1,
+			attributes: vec![(vec![0], vec![1]), (vec![2], vec![3]), (vec![2], vec![3])],
+			namespace: AttributeNamespace::CollectionOwner,
+			deadline: 10000000,
+		};
+		let message = Encode::encode(&pre_signed_data);
+		let signature = MultiSignature::Sr25519(user_1_pair.sign(&message));
+
+		assert_noop!(
+			Nfts::set_attributes_pre_signed(
+				RuntimeOrigin::signed(user_2.clone()),
+				pre_signed_data.clone(),
+				signature.clone(),
+				user_1.clone(),
+			),
+			Error::<Test>::MaxAttributesLimitReached
+		);
+
+		// validate the attribute's value length
+		let pre_signed_data = PreSignedAttributes {
+			collection: 0,
+			item: 0,
+			attributes: vec![(vec![0], vec![1]), (vec![2], vec![3; 51])],
+			namespace: AttributeNamespace::CollectionOwner,
+			deadline: 10000000,
+		};
+		let message = Encode::encode(&pre_signed_data);
+		let signature = MultiSignature::Sr25519(user_1_pair.sign(&message));
+
+		assert_noop!(
+			Nfts::set_attributes_pre_signed(
+				RuntimeOrigin::signed(user_2.clone()),
+				pre_signed_data.clone(),
+				signature.clone(),
+				user_1.clone(),
+			),
+			Error::<Test>::IncorrectData
+		);
+	})
+}
