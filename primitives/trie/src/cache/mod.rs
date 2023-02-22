@@ -438,8 +438,8 @@ enum ValueCache<'a, H: Hasher> {
 
 impl<H: Hasher> ValueCache<'_, H> {
 	/// Get the value for the given `key`.
-	fn get<'a>(
-		&'a mut self,
+	fn get(
+		&mut self,
 		key: &[u8],
 		shared_cache: &SharedTrieCache<H>,
 		stats: &HitStats,
