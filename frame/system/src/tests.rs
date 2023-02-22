@@ -524,7 +524,6 @@ fn prunes_block_hash_mappings() {
 	})
 }
 
-#[cfg(not(feature = "runtime-benchmarks"))]
 #[test]
 fn set_code_checks_works() {
 	struct ReadRuntimeVersion(Vec<u8>);
