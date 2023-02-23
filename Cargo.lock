@@ -3558,6 +3558,7 @@ dependencies = [
  "pallet-mmr",
  "pallet-multisig",
  "pallet-nfts",
+ "pallet-nfts-runtime-api",
  "pallet-nis",
  "pallet-nomination-pools",
  "pallet-nomination-pools-benchmarking",
@@ -6036,6 +6037,16 @@ dependencies = [
  "sp-keystore",
  "sp-runtime",
  "sp-std",
+]
+
+[[package]]
+name = "pallet-nfts-runtime-api"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-support",
+ "pallet-nfts",
+ "parity-scale-codec",
+ "sp-api",
 ]
 
 [[package]]

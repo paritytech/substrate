@@ -50,16 +50,46 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 	fn attribute(
 		collection: &Self::CollectionId,
 		item: &Self::ItemId,
-		namespace: &AttributeNamespace<<T as SystemConfig>::AccountId>,
 		key: &[u8],
 	) -> Option<Vec<u8>> {
 		if key.is_empty() {
 			// We make the empty key map to the item metadata value.
 			ItemMetadataOf::<T, I>::get(collection, item).map(|m| m.data.into())
 		} else {
+			let namespace = AttributeNamespace::CollectionOwner;
 			let key = BoundedSlice::<_, _>::try_from(key).ok()?;
 			Attribute::<T, I>::get((collection, Some(item), namespace, key)).map(|a| a.0.into())
 		}
+	}
+
+	/// Returns the custom attribute value of `item` of `collection` corresponding to `key`.
+	///
+	/// By default this is `None`; no attributes are defined.
+	fn custom_attribute(
+		account: &T::AccountId,
+		collection: &Self::CollectionId,
+		item: &Self::ItemId,
+		key: &[u8],
+	) -> Option<Vec<u8>> {
+		let namespace = Account::<T, I>::get((account, collection, item))
+			.map(|_| AttributeNamespace::ItemOwner)
+			.unwrap_or_else(|| AttributeNamespace::Account(account.clone()));
+
+		let key = BoundedSlice::<_, _>::try_from(key).ok()?;
+		Attribute::<T, I>::get((collection, Some(item), namespace, key)).map(|a| a.0.into())
+	}
+
+	/// Returns the system attribute value of `item` of `collection` corresponding to `key`.
+	///
+	/// By default this is `None`; no attributes are defined.
+	fn system_attribute(
+		collection: &Self::CollectionId,
+		item: &Self::ItemId,
+		key: &[u8],
+	) -> Option<Vec<u8>> {
+		let namespace = AttributeNamespace::Pallet;
+		let key = BoundedSlice::<_, _>::try_from(key).ok()?;
+		Attribute::<T, I>::get((collection, Some(item), namespace, key)).map(|a| a.0.into())
 	}
 
 	/// Returns the attribute value of `item` of `collection` corresponding to `key`.
