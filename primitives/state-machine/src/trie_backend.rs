@@ -357,7 +357,7 @@ pub mod tests {
 		trie_types::{TrieDBBuilder, TrieDBMutBuilderV0, TrieDBMutBuilderV1},
 		KeySpacedDBMut, PrefixedKey, PrefixedMemoryDB, Trie, TrieCache, TrieMut,
 	};
-	use std::{collections::HashSet, iter};
+	use std::iter;
 	use trie_db::NodeCodec;
 
 	const CHILD_KEY_1: &[u8] = b"sub1";
