@@ -17,7 +17,7 @@
 
 //! Implementation of `fungible` traits for Balances pallet.
 use super::*;
-use frame_support::traits::tokens::KeepAlive::{self, Keep, NoKill};
+use frame_support::traits::tokens::{KeepAlive::{self, Keep, NoKill}, Privilege};
 
 impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> {
 	type Balance = T::Balance;
@@ -40,7 +40,7 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 	fn reducible_balance(who: &T::AccountId, keep_alive: KeepAlive, force: Privilege) -> Self::Balance {
 		let a = Self::account(who);
 		let mut untouchable = Zero::zero();
-		if !force {
+		if force == Regular {
 			// Frozen balance applies to total. Anything on hold therefore gets discounted from the
 			// limit given by the freezes.
 			untouchable = a.frozen.saturating_sub(a.reserved);
@@ -104,7 +104,7 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 			None => return WithdrawConsequence::BalanceLow,
 		};
 
-		let liquid = Self::reducible_balance(who, CanKill, false);
+		let liquid = Self::reducible_balance(who, CanKill, Regular);
 		if amount > liquid {
 			return WithdrawConsequence::Frozen
 		}
@@ -144,7 +144,7 @@ impl<T: Config<I>, I: 'static> fungible::Unbalanced<T::AccountId> for Pallet<T, 
 		amount: Self::Balance,
 	) -> Result<Option<Self::Balance>, DispatchError> {
 		let max_reduction =
-			<Self as fungible::Inspect<_>>::reducible_balance(who, KeepAlive::CanKill, true);
+			<Self as fungible::Inspect<_>>::reducible_balance(who, CanKill, Force);
 		let (result, maybe_dust) = Self::mutate_account(who, |account| -> DispatchResult {
 			// Make sure the reduction (if there is one) is no more than the maximum allowed.
 			let reduction = account.free.saturating_sub(amount);
@@ -203,7 +203,7 @@ impl<T: Config<I>, I: 'static> fungible::InspectHold<T::AccountId> for Pallet<T,
 	fn reducible_total_balance_on_hold(who: &T::AccountId, force: Privilege) -> Self::Balance {
 		// The total balance must never drop below the freeze requirements if we're not forcing:
 		let a = Self::account(who);
-		let unavailable = if force {
+		let unavailable = if force == Force {
 			Self::Balance::zero()
 		} else {
 			// The freeze lock applies to the total balance, so we can discount the free balance

@@ -18,7 +18,7 @@
 //! Tests regarding the reentrancy functionality.
 
 use super::*;
-use frame_support::traits::tokens::KeepAlive::{CanKill, NoKill};
+use frame_support::traits::tokens::{KeepAlive::{CanKill, NoKill}, Privilege::Force, Precision::BestEffort};
 use fungible::Balanced;
 
 #[test]
@@ -167,7 +167,7 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 			]
 		);
 
-		let res = Balances::withdraw(&1, 98, true, NoKill, true);
+		let res = Balances::withdraw(&1, 98, BestEffort, NoKill, Force);
 		assert_eq!(res.unwrap().peek(), 98);
 
 		// no events
@@ -176,7 +176,7 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 			[RuntimeEvent::Balances(crate::Event::Withdraw { who: 1, amount: 98 })]
 		);
 
-		let res = Balances::withdraw(&1, 1, true, CanKill, true);
+		let res = Balances::withdraw(&1, 1, BestEffort, CanKill, Force);
 		assert_eq!(res.unwrap().peek(), 1);
 
 		assert_eq!(

@@ -17,7 +17,7 @@
 
 //! Implementations for fungibles trait.
 
-use frame_support::traits::tokens::KeepAlive;
+use frame_support::traits::tokens::{KeepAlive::{self, CanKill}, Privilege, Precision::{self, BestEffort}};
 
 use super::*;
 
@@ -102,15 +102,14 @@ impl<T: Config<I>, I: 'static> fungibles::Unbalanced<T::AccountId> for Pallet<T,
 		asset: T::AssetId,
 		who: &T::AccountId,
 		amount: Self::Balance,
-		best_effort: Precision,
+		precision: Precision,
 		keep_alive: KeepAlive,
 		_force: Privilege,
 	) -> Result<Self::Balance, DispatchError> {
-		let keep_alive = match keep_alive {
-			KeepAlive::CanKill => false,
-			_ => true,
+		let f = DebitFlags {
+			keep_alive: keep_alive != CanKill,
+			best_effort: precision == BestEffort,
 		};
-		let f = DebitFlags { keep_alive, best_effort };
 		Self::decrease_balance(asset, who, amount, f, |_, _| Ok(()))
 	}
 	fn increase_balance(
