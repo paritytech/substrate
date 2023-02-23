@@ -783,7 +783,7 @@ where
 			};
 
 			if maybe_limit.map_or(false, |limit| loop_count == limit) {
-				maybe_next_key = Some(key.to_vec());
+				maybe_next_key = Some(key);
 				break
 			}
 			let overlay = match child_info {
@@ -793,9 +793,9 @@ where
 			if !matches!(overlay, Some(None)) {
 				// not pending deletion from the backend - delete it.
 				if let Some(child_info) = child_info {
-					self.overlay.set_child_storage(child_info, key.to_vec(), None);
+					self.overlay.set_child_storage(child_info, key, None);
 				} else {
-					self.overlay.set_storage(key.to_vec(), None);
+					self.overlay.set_storage(key, None);
 				}
 				delete_count = delete_count.saturating_add(1);
 			}

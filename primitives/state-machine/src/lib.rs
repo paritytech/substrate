@@ -1169,7 +1169,7 @@ mod execution {
 
 		while let Some(item) = iter.next() {
 			let (key, value) = item.map_err(|e| Box::new(e) as Box<dyn Error>)?;
-			values.push((key.to_vec(), value.to_vec()));
+			values.push((key, value));
 			if !count.as_ref().map_or(true, |c| (values.len() as u32) < *c) {
 				break
 			}
