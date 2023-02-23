@@ -648,21 +648,6 @@ pub mod tests {
 		// TODO: Remove this once these methods are gone.
 
 		let mut list = Vec::new();
-		assert!(trie
-			.apply_to_key_values_while(
-				None,
-				None,
-				Some(b"key"),
-				|key, _| {
-					list.push(key);
-					true
-				},
-				false
-			)
-			.unwrap());
-		assert_eq!(list[0..3], vec![b"key".to_vec(), b"value1".to_vec(), b"value2".to_vec(),]);
-
-		let mut list = Vec::new();
 		trie.apply_to_keys_while(None, None, Some(b"key"), |key| {
 			list.push(key.to_vec());
 			true

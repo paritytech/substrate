@@ -844,46 +844,40 @@ mod execution {
 			let start_at_ref = start_at.as_ref().map(AsRef::as_ref);
 			let mut switch_child_key = None;
 			let mut first = start_at.is_some();
-			let completed = proving_backend
-				.apply_to_key_values_while(
-					child_info.as_ref(),
-					None,
-					start_at_ref,
-					|key, value| {
-						if first &&
-							start_at_ref
-								.as_ref()
-								.map(|start| &key.as_slice() > start)
-								.unwrap_or(true)
-						{
-							first = false;
-						}
-
-						if first {
-							true
-						} else if depth < MAX_NESTED_TRIE_DEPTH &&
-							sp_core::storage::well_known_keys::is_child_storage_key(
-								key.as_slice(),
-							) {
-							count += 1;
-							if !child_roots.contains(value.as_slice()) {
-								child_roots.insert(value);
-								switch_child_key = Some(key);
-								false
-							} else {
-								// do not add two child trie with same root
-								true
-							}
-						} else if recorder.estimate_encoded_size() <= size_limit {
-							count += 1;
-							true
-						} else {
-							false
-						}
-					},
-					false,
-				)
+			let mut iter = proving_backend
+				.pairs(IterArgs { child_info, start_at: start_at_ref, ..IterArgs::default() })
 				.map_err(|e| Box::new(e) as Box<dyn Error>)?;
+
+			while let Some(item) = iter.next() {
+				let (key, value) = item.map_err(|e| Box::new(e) as Box<dyn Error>)?;
+				if first &&
+					start_at_ref.as_ref().map(|start| &key.as_slice() > start).unwrap_or(true)
+				{
+					first = false;
+				}
+
+				if first {
+					continue
+				}
+
+				if depth < MAX_NESTED_TRIE_DEPTH &&
+					sp_core::storage::well_known_keys::is_child_storage_key(key.as_slice())
+				{
+					count += 1;
+					// do not add two child trie with same root
+					if !child_roots.contains(value.as_slice()) {
+						child_roots.insert(value);
+						switch_child_key = Some(key);
+						break
+					}
+				} else if recorder.estimate_encoded_size() <= size_limit {
+					count += 1;
+				} else {
+					break
+				}
+			}
+
+			let completed = iter.was_complete();
 
 			if switch_child_key.is_none() {
 				if depth == 1 {
@@ -945,22 +939,23 @@ mod execution {
 		let proving_backend =
 			TrieBackendBuilder::wrap(trie_backend).with_recorder(recorder.clone()).build();
 		let mut count = 0;
-		proving_backend
-			.apply_to_key_values_while(
-				child_info,
+		let iter = proving_backend
+			.keys(IterArgs {
+				child_info: child_info.cloned(),
 				prefix,
 				start_at,
-				|_key, _value| {
-					if count == 0 || recorder.estimate_encoded_size() <= size_limit {
-						count += 1;
-						true
-					} else {
-						false
-					}
-				},
-				false,
-			)
+				..IterArgs::default()
+			})
 			.map_err(|e| Box::new(e) as Box<dyn Error>)?;
+
+		for item in iter {
+			item.map_err(|e| Box::new(e) as Box<dyn Error>)?;
+			if count == 0 || recorder.estimate_encoded_size() <= size_limit {
+				count += 1;
+			} else {
+				break
+			}
+		}
 
 		let proof = proving_backend
 			.extract_proof()
@@ -1167,20 +1162,25 @@ mod execution {
 		H::Out: Ord + Codec,
 	{
 		let mut values = Vec::new();
-		let result = proving_backend.apply_to_key_values_while(
-			child_info,
-			prefix,
-			start_at,
-			|key, value| {
-				values.push((key.to_vec(), value.to_vec()));
-				count.as_ref().map_or(true, |c| (values.len() as u32) < *c)
-			},
-			true,
-		);
-		match result {
-			Ok(completed) => Ok((values, completed)),
-			Err(e) => Err(Box::new(e) as Box<dyn Error>),
+		let mut iter = proving_backend
+			.pairs(IterArgs {
+				child_info: child_info.cloned(),
+				prefix,
+				start_at,
+				stop_on_incomplete_database: true,
+				..IterArgs::default()
+			})
+			.map_err(|e| Box::new(e) as Box<dyn Error>)?;
+
+		while let Some(item) = iter.next() {
+			let (key, value) = item.map_err(|e| Box::new(e) as Box<dyn Error>)?;
+			values.push((key.to_vec(), value.to_vec()));
+			if !count.as_ref().map_or(true, |c| (values.len() as u32) < *c) {
+				break
+			}
 		}
+
+		Ok((values, iter.was_complete()))
 	}
 
 	/// Check storage range proof on pre-created proving backend.
@@ -1250,45 +1250,43 @@ mod execution {
 			let start_at_ref = start_at.as_ref().map(AsRef::as_ref);
 			let mut switch_child_key = None;
 			let mut first = start_at.is_some();
-			let completed = proving_backend
-				.apply_to_key_values_while(
-					child_info.as_ref(),
-					None,
-					start_at_ref,
-					|key, value| {
-						if first &&
-							start_at_ref
-								.as_ref()
-								.map(|start| &key.as_slice() > start)
-								.unwrap_or(true)
-						{
-							first = false;
-						}
 
-						if !first {
-							values.push((key.to_vec(), value.to_vec()));
-						}
-						if first {
-							true
-						} else if depth < MAX_NESTED_TRIE_DEPTH &&
-							sp_core::storage::well_known_keys::is_child_storage_key(
-								key.as_slice(),
-							) {
-							if child_roots.contains(value.as_slice()) {
-								// Do not add two chid trie with same root.
-								true
-							} else {
-								child_roots.insert(value.clone());
-								switch_child_key = Some((key, value));
-								false
-							}
-						} else {
-							true
-						}
-					},
-					true,
-				)
+			let mut iter = proving_backend
+				.pairs(IterArgs {
+					child_info,
+					start_at: start_at_ref,
+					stop_on_incomplete_database: true,
+					..IterArgs::default()
+				})
 				.map_err(|e| Box::new(e) as Box<dyn Error>)?;
+
+			while let Some(item) = iter.next() {
+				let (key, value) = item.map_err(|e| Box::new(e) as Box<dyn Error>)?;
+				if first &&
+					start_at_ref.as_ref().map(|start| &key.as_slice() > start).unwrap_or(true)
+				{
+					first = false;
+				}
+
+				if first {
+					continue
+				}
+
+				values.push((key.to_vec(), value.to_vec()));
+
+				if depth < MAX_NESTED_TRIE_DEPTH &&
+					sp_core::storage::well_known_keys::is_child_storage_key(key.as_slice())
+				{
+					// Do not add two chid trie with same root.
+					if !child_roots.contains(value.as_slice()) {
+						child_roots.insert(value.clone());
+						switch_child_key = Some((key, value));
+						break
+					}
+				}
+			}
+
+			let completed = iter.was_complete();
 
 			if switch_child_key.is_none() {
 				if !completed {

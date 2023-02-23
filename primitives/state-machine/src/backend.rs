@@ -117,6 +117,16 @@ where
 	}
 }
 
+impl<'a, H, I> PairsIter<'a, H, I>
+where
+	H: Hasher,
+	I: StorageIterator<H> + Default,
+{
+	pub(crate) fn was_complete(&self) -> bool {
+		self.raw_iter.was_complete()
+	}
+}
+
 /// An iterator over storage keys.
 pub struct KeysIter<'a, H, I>
 where
@@ -213,39 +223,6 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageKey>, Self::Error>;
-
-	/// Iterate over storage starting at key, for a given prefix and child trie.
-	/// Aborts as soon as `f` returns false.
-	/// Warning, this fails at first error when usual iteration skips errors.
-	/// If `allow_missing` is true, iteration stops when it reaches a missing trie node.
-	/// Otherwise an error is produced.
-	///
-	/// Returns `true` if trie end is reached.
-	// TODO: Remove this.
-	fn apply_to_key_values_while<F: FnMut(Vec<u8>, Vec<u8>) -> bool>(
-		&self,
-		child_info: Option<&ChildInfo>,
-		prefix: Option<&[u8]>,
-		start_at: Option<&[u8]>,
-		mut f: F,
-		allow_missing: bool,
-	) -> Result<bool, Self::Error> {
-		let args = IterArgs {
-			child_info: child_info.cloned(),
-			prefix,
-			start_at,
-			stop_on_incomplete_database: allow_missing,
-			..IterArgs::default()
-		};
-		let mut iter = self.pairs(args)?;
-		while let Some(key_value) = iter.next() {
-			let (key, value) = key_value?;
-			if !f(key, value) {
-				return Ok(false)
-			}
-		}
-		Ok(iter.raw_iter.was_complete())
-	}
 
 	/// Retrieve all entries keys of storage and call `f` for each of those keys.
 	/// Aborts as soon as `f` returns false.
