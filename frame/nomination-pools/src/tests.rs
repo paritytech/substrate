@@ -5412,6 +5412,7 @@ mod reward_counter_precision {
 }
 
 mod commission {
+
 	use super::*;
 
 	#[test]
@@ -5464,13 +5465,30 @@ mod commission {
 				},]
 			);
 
+			let current = BondedPools::<Runtime>::get(bonded_pool.id).unwrap()
+				.commission
+				.current
+				.as_ref()
+				.map_or(Perbill::zero(), |(c, _)| c.clone())
+				.min(GlobalMaxCommission::<T>::get().unwrap_or(Bounded::max_value()));
+			assert_eq!(current, Perbill::from_percent(25));
+
 			// Pool earns 40 points, payout is triggered.
 			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 40));
-
 			assert_eq!(
 				PoolMembers::<Runtime>::get(10).unwrap(),
 				PoolMember::<Runtime> { pool_id: bonded_pool.id, points: 10, ..Default::default() }
 			);
+
+			let (current_reward_counter, share_commission) = reward_pool
+				.current_reward_counter(bonded_pool.id, bonded_pool.points, &BondedPools::<Runtime>::get(bonded_pool.id).unwrap().commission)
+				.unwrap();
+
+			let pending_rewards = PoolMembers::<Runtime>::get(10)
+				.unwrap()
+				.pending_rewards(current_reward_counter)
+				.unwrap();
+			assert_eq!(pending_rewards, 30);
 
 			assert_ok!(Pools::do_reward_payout(
 				&10,
@@ -5488,23 +5506,28 @@ mod commission {
 				}]
 			);
 
-			let (mut member, bonded_pool, mut reward_pool) =
-				Pools::get_member_with_pools(&10).unwrap();
+			assert_eq!(RewardPool::<Runtime>::current_balance(bonded_pool.id), 10);
 
-			let (current_reward_counter, _) = reward_pool
-				.current_reward_counter(bonded_pool.id, bonded_pool.points, &bonded_pool.commission)
-				.unwrap();
-
-			assert_eq!(current_reward_counter, Zero::zero());
+			// uncomment to check reward_pool state
+			assert_eq!(
+				reward_pool,
+				RewardPool {
+					last_recorded_reward_counter: Zero::zero(),
+					last_recorded_total_payouts: 0,
+					total_rewards_claimed: 30,
+					total_commission_pending: 0,
+					total_commission_claimed: 0
+				}
+			);
 
 			// update payee only.
 			assert_ok!(Pools::set_commission(
 				RuntimeOrigin::signed(900),
-				1,
+				bonded_pool.id,
 				Some((Perbill::from_percent(25), 901))
 			));
 
-			let current = bonded_pool
+			let current = BondedPools::<Runtime>::get(bonded_pool.id).unwrap()
 				.commission
 				.current
 				.as_ref()
@@ -5512,6 +5535,41 @@ mod commission {
 				.min(GlobalMaxCommission::<T>::get().unwrap_or(Bounded::max_value()));
 
 			assert_eq!(current, Perbill::from_percent(25));
+			let payouts_since_last_record = RewardPool::<Runtime>::current_balance(bonded_pool.id)
+				.saturating_add(reward_pool.total_rewards_claimed)
+				.saturating_add(reward_pool.total_commission_pending)
+				.saturating_add(reward_pool.total_commission_claimed)
+				.saturating_sub(reward_pool.last_recorded_total_payouts);
+
+			let share_commission = current * payouts_since_last_record;
+			assert_eq!(payouts_since_last_record, 40);
+			assert_eq!(share_commission, 10);
+
+			assert_eq!(RewardPool::<Runtime>::current_balance(bonded_pool.id), 10);
+
+			assert_eq!(
+				reward_pool,
+				RewardPool {
+					last_recorded_reward_counter: Zero::zero(),
+					last_recorded_total_payouts: 0,
+					total_rewards_claimed: 30,
+					total_commission_pending: 0,
+					total_commission_claimed: 0
+				}
+			);
+		
+
+			// let (current_reward_counter, share_commission) = reward_pool
+			// 	.current_reward_counter(bonded_pool.id, bonded_pool.points, &bonded_pool.commission)
+			// 	.unwrap();
+
+			// assert_eq!(share_commission, 10);
+			// let pending_rewards = member.pending_rewards(current_reward_counter).unwrap();
+
+			// assert_eq!(reward_pool, Default::default());
+			assert_eq!(reward_pool.last_recorded_total_payouts, 30);
+			assert_eq!(reward_pool.total_rewards_claimed, 30);
+			assert_eq!(reward_pool.total_commission_pending, 10);
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -5520,8 +5578,6 @@ mod commission {
 					current: Some((Perbill::from_percent(25), 901))
 				},]
 			);
-
-			assert_eq!(reward_pool.total_commission_pending, 10);
 
 			// Pool earns 100 points, payout is triggered.
 			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 100));
