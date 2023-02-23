@@ -106,7 +106,7 @@ where
 	executor: E,
 	storage_notifications: StorageNotifications<Block>,
 	import_notification_sinks: NotificationSinks<BlockImportNotification<Block>>,
-	every_block_import_notification_sinks: NotificationSinks<BlockImportNotification<Block>>,
+	every_import_notification_sinks: NotificationSinks<BlockImportNotification<Block>>,
 	finality_notification_sinks: NotificationSinks<FinalityNotification<Block>>,
 	// Collects auxiliary operations to be performed atomically together with
 	// block import operations.
@@ -455,7 +455,7 @@ where
 			executor,
 			storage_notifications: StorageNotifications::new(prometheus_registry),
 			import_notification_sinks: Default::default(),
-			every_block_import_notification_sinks: Default::default(),
+			every_import_notification_sinks: Default::default(),
 			finality_notification_sinks: Default::default(),
 			import_actions: Default::default(),
 			finality_actions: Default::default(),
@@ -774,8 +774,7 @@ where
 
 		operation.op.insert_aux(aux)?;
 
-		let should_notify_every_block =
-			!self.every_block_import_notification_sinks.lock().is_empty();
+		let should_notify_every_block = !self.every_import_notification_sinks.lock().is_empty();
 
 		// Notify when we are already synced to the tip of the chain
 		// or if this import triggers a re-org
@@ -1047,9 +1046,7 @@ where
 				// from consensus code).
 				self.import_notification_sinks.lock().retain(|sink| !sink.is_closed());
 
-				self.every_block_import_notification_sinks
-					.lock()
-					.retain(|sink| !sink.is_closed());
+				self.every_import_notification_sinks.lock().retain(|sink| !sink.is_closed());
 
 				return Ok(())
 			},
@@ -1070,7 +1067,7 @@ where
 					.lock()
 					.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
 
-				self.every_block_import_notification_sinks
+				self.every_import_notification_sinks
 					.lock()
 					.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
 			},
@@ -1080,7 +1077,7 @@ where
 					.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
 			},
 			ImportNotificationAction::EveryBlock => {
-				self.every_block_import_notification_sinks
+				self.every_import_notification_sinks
 					.lock()
 					.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
 			},
@@ -2022,7 +2019,7 @@ where
 
 	fn every_import_notification_stream(&self) -> ImportNotifications<Block> {
 		let (sink, stream) = tracing_unbounded("mpsc_every_import_notification_stream", 100_000);
-		self.every_block_import_notification_sinks.lock().push(sink);
+		self.every_import_notification_sinks.lock().push(sink);
 		stream
 	}
 
