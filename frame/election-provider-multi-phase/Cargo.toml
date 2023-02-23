@@ -33,7 +33,6 @@ frame-election-provider-support = { version = "4.0.0-dev", default-features = fa
 
 # Optional imports for benchmarking
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
-pallet-election-provider-support-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../election-provider-support/benchmarking", optional = true }
 rand = { version = "0.8.5", default-features = false, features = ["alloc", "small_rng"], optional = true }
 strum = { version = "0.24.1",  default-features = false, features = ["derive"], optional = true }
 
@@ -50,7 +49,6 @@ frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
 [features]
 default = ["std"]
 std = [
-	"pallet-election-provider-support-benchmarking?/std",
 	"codec/std",
 	"scale-info/std",
 	"log/std",
