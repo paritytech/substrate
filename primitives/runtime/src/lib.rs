@@ -607,7 +607,8 @@ impl From<crate::traits::BadOrigin> for DispatchError {
 pub enum TokenError {
 	/// Funds are unavailable.
 	FundsUnavailable,
-	/// Balance is needed to fund a needed provider reference.
+	/// Some part of the balance gives the only provider reference to the account and thus cannot
+	/// be (re)moved.
 	OnlyProvider,
 	/// Account cannot exist with the funds that would be given.
 	BelowMinimum,

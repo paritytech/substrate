@@ -773,7 +773,6 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 			let id: T::AssetId = id.into();
-
 			Self::do_mint(id, &beneficiary, amount, Some(origin))?;
 			Ok(())
 		}

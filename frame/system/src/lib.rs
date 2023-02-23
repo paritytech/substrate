@@ -1680,8 +1680,8 @@ impl<T: Config> StoredMap<T::AccountId, T::AccountData> for Pallet<T> {
 		f: impl FnOnce(&mut Option<T::AccountData>) -> Result<R, E>,
 	) -> Result<R, E> {
 		let account = Account::<T>::get(k);
-		let was_something = account.data != T::AccountData::default();
-		let mut some_data = if was_something { Some(account.data) } else { None };
+		let is_default = account.data == T::AccountData::default();
+		let mut some_data = if is_default { None } else { Some(account.data) };
 		let result = f(&mut some_data)?;
 		if Self::providers(k) > 0 {
 			Account::<T>::mutate(k, |a| a.data = some_data.unwrap_or_default());

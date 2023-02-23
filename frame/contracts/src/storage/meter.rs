@@ -25,7 +25,10 @@ use codec::Encode;
 use frame_support::{
 	dispatch::DispatchError,
 	ensure,
-	traits::{tokens::{WithdrawConsequence, KeepAlive}, Currency, ExistenceRequirement, Get},
+	traits::{
+		tokens::{KeepAlive, WithdrawConsequence},
+		Currency, ExistenceRequirement, Get,
+	},
 	DefaultNoBound, RuntimeDebugNoBound,
 };
 use pallet_contracts_primitives::StorageDeposit as Deposit;

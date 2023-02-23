@@ -25,7 +25,9 @@ use frame_support::{
 	crypto::ecdsa::ECDSAExt,
 	dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable},
 	storage::{with_transaction, TransactionOutcome},
-	traits::{Contains, Currency, ExistenceRequirement, OriginTrait, Randomness, Time, tokens::KeepAlive},
+	traits::{
+		tokens::KeepAlive, Contains, Currency, ExistenceRequirement, OriginTrait, Randomness, Time,
+	},
 	weights::Weight,
 	Blake2_128Concat, BoundedVec, StorageHasher,
 };
