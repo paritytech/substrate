@@ -16,8 +16,8 @@
 // limitations under the License.
 
 //! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION 4.0.0-dev
-//! DATE: 2023-02-22 (Y/M/D)
-//! HOSTNAME: `bm3`, CPU: `Intel(R) Core(TM) i7-7700K CPU @ 4.20GHz`
+//! DATE: 2023-02-23 (Y/M/D)
+//! HOSTNAME: `bm4`, CPU: `Intel(R) Core(TM) i7-7700K CPU @ 4.20GHz`
 //!
 //! SHORT-NAME: `extrinsic`, LONG-NAME: `ExtrinsicBase`, RUNTIME: `Development`
 //! WARMUPS: `10`, REPEAT: `100`
@@ -25,7 +25,7 @@
 //! WEIGHT-METRIC: `Average`, WEIGHT-MUL: `1.0`, WEIGHT-ADD: `0`
 
 // Executed Command:
-//   /home/benchbot/cargo_target_dir/production/substrate
+//   ./target/production/substrate
 //   benchmark
 //   overhead
 //   --chain=dev
@@ -44,17 +44,17 @@ parameter_types! {
 	/// Calculated by multiplying the *Average* with `1.0` and adding `0`.
 	///
 	/// Stats nanoseconds:
-	///   Min, Max: 101_452, 109_965
-	///   Average:  102_489
-	///   Median:   102_175
-	///   Std-Dev:  1101.19
+	///   Min, Max: 102_255, 103_793
+	///   Average:  102_705
+	///   Median:   102_618
+	///   Std-Dev:  320.21
 	///
 	/// Percentiles nanoseconds:
-	///   99th: 105_983
-	///   95th: 103_849
-	///   75th: 102_898
+	///   99th: 103_727
+	///   95th: 103_366
+	///   75th: 102_789
 	pub const ExtrinsicBaseWeight: Weight =
-		Weight::from_ref_time(WEIGHT_REF_TIME_PER_NANOS.saturating_mul(102_489));
+		Weight::from_ref_time(WEIGHT_REF_TIME_PER_NANOS.saturating_mul(102_705));
 }
 
 #[cfg(test)]
