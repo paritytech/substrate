@@ -2012,11 +2012,11 @@ impl_runtime_apis! {
 	impl pallet_staking_runtime_api::StakingApi<Block, Balance> for Runtime {
 	fn inflation_rate() -> Perquintill {
 			// NOTE: Changes to `ideal_stake` and `falloff` must also be applied in `REWARD_CURVE` config.
-			let ideal_stake = 0_500_000;
-			let falloff = 0_050_000;
+			let ideal_stake = 0_500_000_u64;
+			let falloff = 0_050_000_u64;
 			Staking::api_inflation_rate(
-				Perquintill::from_rational(ideal_stake, 1_000_000),
-				Perquintill::from_rational(falloff, 1_000_000)
+				Perquintill::from_rational(ideal_stake, 1_000_000_u64),
+				Perquintill::from_rational(falloff, 1_000_000_u64)
 			)
 		}
 		fn nominations_quota(balance: Balance) -> u32 {
