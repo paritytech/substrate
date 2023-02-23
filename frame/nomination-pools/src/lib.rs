@@ -735,7 +735,8 @@ impl<T: Config> Commission<T> {
 	///
 	/// If `current.0` is larger than the updated max commission value, `current.0` will also be
 	/// updated to the new maximum. This will also register a `throttle_from` update.
-	fn try_update_max(&mut self, new_max: Perbill) -> DispatchResult {
+	/// A `PoolCommissionUpdated` event is triggered if `current.0` is updated.
+	fn try_update_max(&mut self, pool_id: PoolId, new_max: Perbill) -> DispatchResult {
 		if let Some(old) = self.max.as_mut() {
 			if new_max > *old {
 				return Err(Error::<T>::MaxCommissionRestricted.into())
@@ -755,6 +756,12 @@ impl<T: Config> Commission<T> {
 			.unwrap_or(false);
 
 		if updated_current {
+			if let Some((_, payee)) = self.current.as_ref() {
+				Pallet::<T>::deposit_event(Event::<T>::PoolCommissionUpdated {
+					pool_id,
+					current: Some((new_max, payee.clone())),
+				});
+			}
 			self.register_update();
 		}
 		Ok(())
@@ -2494,7 +2501,7 @@ pub mod pallet {
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
 
-			bonded_pool.commission.try_update_max(max_commission)?;
+			bonded_pool.commission.try_update_max(pool_id, max_commission)?;
 			bonded_pool.put();
 
 			Self::deposit_event(Event::<T>::PoolMaxCommissionUpdated { pool_id, max_commission });

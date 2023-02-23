@@ -5781,10 +5781,16 @@ mod commission {
 			);
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::PoolMaxCommissionUpdated {
-					pool_id: 1,
-					max_commission: Perbill::from_percent(5)
-				}]
+				vec![
+					Event::PoolCommissionUpdated {
+						pool_id: 1,
+						current: Some((Perbill::from_percent(5), 900))
+					},
+					Event::PoolMaxCommissionUpdated {
+						pool_id: 1,
+						max_commission: Perbill::from_percent(5)
+					}
+				]
 			);
 
 			// Run 2 blocks into the future so we are eligible to update commission again.
@@ -5875,6 +5881,10 @@ mod commission {
 					Event::PoolCommissionUpdated {
 						pool_id: 1,
 						current: Some((Perbill::from_percent(75), 900))
+					},
+					Event::PoolCommissionUpdated {
+						pool_id: 1,
+						current: Some((Perbill::from_percent(50), 900))
 					},
 					Event::PoolMaxCommissionUpdated {
 						pool_id: 1,
