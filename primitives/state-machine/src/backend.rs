@@ -126,6 +126,7 @@ where
 	H: Hasher,
 	I: StorageIterator<H> + Default,
 {
+	#[cfg(feature = "std")]
 	pub(crate) fn was_complete(&self) -> bool {
 		self.raw_iter.was_complete()
 	}
