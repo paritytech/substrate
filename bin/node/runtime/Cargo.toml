@@ -79,6 +79,7 @@ pallet-message-queue = { version = "7.0.0-dev", default-features = false, path =
 pallet-mmr = { version = "4.0.0-dev", default-features = false, path = "../../../frame/merkle-mountain-range" }
 pallet-multisig = { version = "4.0.0-dev", default-features = false, path = "../../../frame/multisig" }
 pallet-nfts = { version = "4.0.0-dev", default-features = false, path = "../../../frame/nfts" }
+pallet-nfts-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/nfts/runtime-api" }
 pallet-nomination-pools = { version = "1.0.0", default-features = false, path = "../../../frame/nomination-pools"}
 pallet-nomination-pools-benchmarking = { version = "1.0.0", default-features = false, optional = true, path = "../../../frame/nomination-pools/benchmarking" }
 pallet-nomination-pools-runtime-api = { version = "1.0.0-dev", default-features = false, path = "../../../frame/nomination-pools/runtime-api" }
@@ -203,6 +204,7 @@ std = [
 	"pallet-recovery/std",
 	"pallet-uniques/std",
 	"pallet-nfts/std",
+	"pallet-nfts-runtime-api/std",
 	"pallet-vesting/std",
 	"log/std",
 	"frame-try-runtime?/std",
