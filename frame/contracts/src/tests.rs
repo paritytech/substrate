@@ -48,7 +48,7 @@ use sp_keystore::{testing::KeyStore, KeystoreExt};
 use sp_runtime::{
 	testing::{Header, H256},
 	traits::{BlakeTwo256, Convert, Hash, IdentityLookup},
-	AccountId32,
+	AccountId32, TokenError,
 };
 use std::{ops::Deref, sync::Arc};
 
@@ -1058,7 +1058,7 @@ fn transfer_allow_death_cannot_kill_account() {
 				total_balance,
 				ExistenceRequirement::AllowDeath,
 			),
-			pallet_balances::Error::<Test>::KeepAlive,
+			TokenError::Frozen,
 		);
 
 		assert_eq!(<Test as Config>::Currency::total_balance(&addr), total_balance);

@@ -25,7 +25,7 @@ use frame_support::{
 	crypto::ecdsa::ECDSAExt,
 	dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable},
 	storage::{with_transaction, TransactionOutcome},
-	traits::{Contains, Currency, ExistenceRequirement, OriginTrait, Randomness, Time},
+	traits::{Contains, Currency, ExistenceRequirement, OriginTrait, Randomness, Time, tokens::KeepAlive},
 	weights::Weight,
 	Blake2_128Concat, BoundedVec, StorageHasher,
 };
@@ -1216,7 +1216,7 @@ where
 		T::Currency::transfer(
 			&frame.account_id,
 			beneficiary,
-			T::Currency::reducible_balance(&frame.account_id, false),
+			T::Currency::reducible_balance(&frame.account_id, KeepAlive::CanKill, false),
 			ExistenceRequirement::AllowDeath,
 		)?;
 		info.queue_trie_for_deletion()?;
