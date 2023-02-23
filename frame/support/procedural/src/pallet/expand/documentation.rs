@@ -15,9 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::{parse::event::PalletEventDepositAttr, Def};
+use crate::pallet::Def;
 use proc_macro2::{Ident, TokenStream};
-use quote::{ToTokens, spanned::Spanned};
+use quote::ToTokens;
 use syn::{
 	parenthesized,
 	parse::{self, Parse, ParseStream},
@@ -33,16 +33,34 @@ const PALLET_DOC: &'static str = "pallet_doc";
 /// Supported format:
 /// `#[pallet_doc(PATH)]`: The path of the file from which the documentation is loaded
 fn parse_pallet_doc_value(attr: &Attribute) -> syn::Result<DocMetaValue> {
+	let span = proc_macro2::Span::call_site();
+	let msg =
+		"Unexpected arguments for `pallet_doc` attribute. Supported version: `pallet_doc(PATH)`";
+	let err = syn::Error::new(span, msg);
+
 	let meta = attr.parse_meta()?;
-	let span = meta.ident
+	let syn::Meta::List(metalist) = meta else {
+		return Err(err)
+	};
 
-	match meta {
-    syn::Meta::List(metalist) => {
-		metalist.__span();
-	}
-	_ => syn::Error::new(proc_macro2::Span::call_site(), "Unexpected arguments for `pallet_doc` attribute. Supported version: `pallet_doc(PATH)`");
+	let paths: Vec<_> = metalist
+		.nested
+		.into_iter()
+		.map(|nested| {
+			let syn::NestedMeta::Lit(lit) = nested else {
+			return Err(err.clone())
+		};
+
+			Ok(lit)
+		})
+		.collect::<syn::Result<_>>()?;
+
+	if paths.len() != 1 {
+		let msg = "The `pallet_doc` attribute supports only one path";
+		return Err(syn::Error::new(span, msg))
 	}
 
+	Ok(DocMetaValue::Path(paths[0].clone()))
 }
 
 /// Get the value from the `doc` comment attribute:
@@ -74,7 +92,7 @@ enum DocMetaValue {
 	/// The string literal represents the file `PATH`.
 	///
 	/// `#[doc = include_str!(PATH)]`
-	IncludeStr(Lit),
+	Path(Lit),
 }
 
 impl Parse for DocMetaValue {
@@ -94,7 +112,7 @@ impl Parse for DocMetaValue {
 		// We must have a path literal inside `(...)`
 		let content;
 		parenthesized!(content in input);
-		content.parse().map(DocMetaValue::IncludeStr)
+		content.parse().map(DocMetaValue::Path)
 	}
 }
 
@@ -102,7 +120,7 @@ impl ToTokens for DocMetaValue {
 	fn to_tokens(&self, tokens: &mut TokenStream) {
 		match self {
 			DocMetaValue::Lit(lit) => lit.to_tokens(tokens),
-			DocMetaValue::IncludeStr(path_lit) => {
+			DocMetaValue::Path(path_lit) => {
 				let decl = quote::quote!(include_str!(#path_lit));
 				tokens.extend(decl)
 			},
@@ -143,7 +161,6 @@ pub fn expand_documentation(def: &mut Def) -> proc_macro2::TokenStream {
 	let mut index = 0;
 	while index < def.item.attrs.len() {
 		let attr = &def.item.attrs[index];
-
 		if let Some(ident) = attr.path.get_ident() {
 			if ident == PALLET_DOC {
 				let elem = def.item.attrs.remove(index);
@@ -160,6 +177,16 @@ pub fn expand_documentation(def: &mut Def) -> proc_macro2::TokenStream {
 	// Capture the `#[doc = include_str!("../README.md")]` and `#[doc = "Documentation"]`.
 	let docs: Vec<_> = def.item.attrs.iter().filter_map(parse_doc_value).collect();
 
+	// Capture the `#[pallet_doc("../README.md")]`.
+	let pallet_docs: Vec<_> = match pallet_docs
+		.into_iter()
+		.map(|attr| parse_pallet_doc_value(&attr))
+		.collect::<syn::Result<_>>()
+	{
+		Ok(docs) => docs,
+		Err(err) => return err.into_compile_error(),
+	};
+
 	let res = quote::quote!(
 		impl<#type_impl_gen> #pallet_ident<#type_use_gen> #where_clauses{
 
@@ -167,7 +194,10 @@ pub fn expand_documentation(def: &mut Def) -> proc_macro2::TokenStream {
 			pub fn pallet_documentation_metadata()
 				-> #frame_support::sp_std::vec::Vec<&'static str>
 			{
-				#frame_support::sp_std::vec![ #( #docs ),* ]
+				#frame_support::sp_std::vec![
+					#( #docs ),*
+					#( #pallet_docs ),*
+				]
 			}
 		}
 	);
