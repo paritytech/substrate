@@ -5411,25 +5411,31 @@ mod commission {
 	#[test]
 	fn set_commission_works() {
 		ExtBuilder::default().build_and_execute(|| {
+			let (mut member, bonded_pool, mut reward_pool) =
+				Pools::get_member_with_pools(&10).unwrap();
+
+			// top up commission payee account to existential deposit
+			let _ = Balances::deposit_creating(&900, 5);
+
 			// Set a commission for pool 1.
 			assert_ok!(Pools::set_commission(
 				RuntimeOrigin::signed(900),
-				1,
+				bonded_pool.id,
 				Some((Perbill::from_percent(50), 900))
 			));
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					Event::Created { depositor: 10, pool_id: 1 },
-					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Created { depositor: 10, pool_id: bonded_pool.id },
+					Event::Bonded { member: 10, pool_id: bonded_pool.id, bonded: 10, joined: true },
 					Event::PoolCommissionUpdated {
-						pool_id: 1,
+						pool_id: bonded_pool.id,
 						current: Some((Perbill::from_percent(50), 900))
 					},
 				]
 			);
 
-			let commission_as_percent = BondedPool::<Runtime>::get(1)
+			let commission_as_percent = BondedPool::<Runtime>::get(bonded_pool.id)
 				.unwrap()
 				.commission
 				.current
@@ -5447,8 +5453,26 @@ mod commission {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![Event::PoolCommissionUpdated {
-					pool_id: 1,
+					pool_id: bonded_pool.id,
 					current: Some((Perbill::from_percent(25), 900))
+				},]
+			);
+
+			// Pool earns 40 points, payout is triggered.
+			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 40));
+			assert_ok!(Pools::do_reward_payout(
+				&10,
+				&mut member,
+				&mut BondedPool::<Runtime>::get(1).unwrap(),
+				&mut reward_pool
+			));
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![Event::PaidOut {
+					member: 10,
+					pool_id: bonded_pool.id,
+					payout: 30,
+					commission: 10
 				},]
 			);
 
@@ -5461,17 +5485,35 @@ mod commission {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![Event::PoolCommissionUpdated {
-					pool_id: 1,
+					pool_id: bonded_pool.id,
 					current: Some((Perbill::from_percent(25), 901))
 				},]
 			);
 
 			// remove the commission for pool 1.
-			assert_ok!(Pools::set_commission(RuntimeOrigin::signed(900), 1, None));
+			assert_ok!(Pools::set_commission(RuntimeOrigin::signed(900), bonded_pool.id, None));
 
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::PoolCommissionUpdated { pool_id: 1, current: None },]
+				vec![Event::PoolCommissionUpdated { pool_id: bonded_pool.id, current: None },]
+			);
+
+			// Pool earns 100 points, payout is triggered.
+			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 100));
+			assert_ok!(Pools::do_reward_payout(
+				&10,
+				&mut member,
+				&mut BondedPool::<Runtime>::get(1).unwrap(),
+				&mut reward_pool
+			));
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![Event::PaidOut {
+					member: 10,
+					pool_id: bonded_pool.id,
+					payout: 100,
+					commission: 0
+				},]
 			);
 
 			// test whether supplying a 0% commission along with a payee results in a None `current`
@@ -5486,7 +5528,7 @@ mod commission {
 			// set the commission to 0%
 			assert_ok!(Pools::set_commission(
 				RuntimeOrigin::signed(900),
-				1,
+				bonded_pool.id,
 				Some((Perbill::from_percent(0), 900))
 			));
 			// commssion current should now be None, and `throttle_from` the current block.
@@ -5497,7 +5539,7 @@ mod commission {
 			// set the commission to 0%
 			assert_ok!(Pools::set_commission(
 				RuntimeOrigin::signed(900),
-				1,
+				bonded_pool.id,
 				Some((Perbill::from_percent(0), 900))
 			));
 
@@ -5505,15 +5547,15 @@ mod commission {
 				pool_events_since_last_call(),
 				vec![
 					Event::PoolCommissionUpdated {
-						pool_id: 1,
+						pool_id: bonded_pool.id,
 						current: Some((Perbill::from_percent(10), 900))
 					},
 					Event::PoolCommissionUpdated {
-						pool_id: 1,
+						pool_id: bonded_pool.id,
 						current: Some((Perbill::from_percent(0), 900))
 					},
 					Event::PoolCommissionUpdated {
-						pool_id: 1,
+						pool_id: bonded_pool.id,
 						current: Some((Perbill::from_percent(0), 900))
 					},
 				]
@@ -5524,21 +5566,21 @@ mod commission {
 			// set max commission to 10%
 			assert_ok!(Pools::set_commission_max(
 				RuntimeOrigin::signed(900),
-				1,
+				bonded_pool.id,
 				Perbill::from_percent(10)
 			));
 
 			// set commission to 10%
 			assert_ok!(Pools::set_commission(
 				RuntimeOrigin::signed(900),
-				1,
+				bonded_pool.id,
 				Some((Perbill::from_percent(10), 900))
 			));
 
 			// update payee only and keep current commission
 			assert_ok!(Pools::set_commission(
 				RuntimeOrigin::signed(900),
-				1,
+				bonded_pool.id,
 				Some((Perbill::from_percent(10), 901))
 			));
 
@@ -5546,15 +5588,15 @@ mod commission {
 				pool_events_since_last_call(),
 				vec![
 					Event::PoolMaxCommissionUpdated {
-						pool_id: 1,
+						pool_id: bonded_pool.id,
 						max_commission: Perbill::from_percent(10)
 					},
 					Event::PoolCommissionUpdated {
-						pool_id: 1,
+						pool_id: bonded_pool.id,
 						current: Some((Perbill::from_percent(10), 900))
 					},
 					Event::PoolCommissionUpdated {
-						pool_id: 1,
+						pool_id: bonded_pool.id,
 						current: Some((Perbill::from_percent(10), 901))
 					}
 				]
