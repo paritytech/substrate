@@ -678,27 +678,6 @@ pub mod tests {
 		);
 	}
 
-	parameterized_test!(prefix_walking_works, prefix_walking_works_inner);
-	fn prefix_walking_works_inner(
-		state_version: StateVersion,
-		cache: Option<Cache>,
-		recorder: Option<Recorder>,
-	) {
-		let trie = test_trie(state_version, cache, recorder);
-
-		let mut seen = HashSet::new();
-		trie.for_keys_with_prefix(b"value", |key| {
-			let for_first_time = seen.insert(key.to_vec());
-			assert!(for_first_time, "Seen key '{:?}' more than once", key);
-		})
-		.unwrap();
-
-		let mut expected = HashSet::new();
-		expected.insert(b"value1".to_vec());
-		expected.insert(b"value2".to_vec());
-		assert_eq!(seen, expected);
-	}
-
 	parameterized_test!(
 		keys_with_empty_prefix_returns_all_keys,
 		keys_with_empty_prefix_returns_all_keys_inner

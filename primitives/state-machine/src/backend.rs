@@ -228,57 +228,6 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		key: &[u8],
 	) -> Result<Option<StorageKey>, Self::Error>;
 
-	/// Retrieve all entries keys which start with the given prefix and
-	/// call `f` for each of those keys.
-	// TODO: Remove this.
-	fn for_keys_with_prefix<F: FnMut(&[u8])>(
-		&self,
-		prefix: &[u8],
-		mut f: F,
-	) -> Result<(), Self::Error> {
-		let args = IterArgs { prefix: Some(prefix), ..IterArgs::default() };
-		self.keys(args)?.try_for_each(|key| {
-			f(&key?);
-			Ok(())
-		})
-	}
-
-	/// Retrieve all entries keys and values of which start with the given prefix and
-	/// call `f` for each of those keys.
-	// TODO: Remove this.
-	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(
-		&self,
-		prefix: &[u8],
-		mut f: F,
-	) -> Result<(), Self::Error> {
-		let args = IterArgs { prefix: Some(prefix), ..IterArgs::default() };
-		self.pairs(args)?.try_for_each(|key_value| {
-			let (key, value) = key_value?;
-			f(&key, &value);
-			Ok(())
-		})
-	}
-
-	/// Retrieve all child entries keys which start with the given prefix and
-	/// call `f` for each of those keys.
-	// TODO: Remove this.
-	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
-		&self,
-		child_info: &ChildInfo,
-		prefix: &[u8],
-		mut f: F,
-	) -> Result<(), Self::Error> {
-		let args = IterArgs {
-			child_info: Some(child_info.clone()),
-			prefix: Some(prefix),
-			..IterArgs::default()
-		};
-		self.keys(args)?.try_for_each(|key| {
-			f(&key?);
-			Ok(())
-		})
-	}
-
 	/// Calculate the storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit.
 	/// Does not include child storage updates.
