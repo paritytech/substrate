@@ -37,6 +37,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				owner: owner.clone(),
 				owner_deposit: deposit,
 				items: 0,
+				item_metadatas: 0,
 				item_configs: 0,
 				attributes: 0,
 			},
@@ -74,9 +75,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ensure!(collection_details.items == 0, Error::<T, I>::CollectionNotEmpty);
 			ensure!(collection_details.attributes == witness.attributes, Error::<T, I>::BadWitness);
 			ensure!(
+				collection_details.item_metadatas == witness.item_metadatas,
+				Error::<T, I>::BadWitness
+			);
+			ensure!(
 				collection_details.item_configs == witness.item_configs,
 				Error::<T, I>::BadWitness
 			);
+
+			for (_, metadata) in ItemMetadataOf::<T, I>::drain_prefix(&collection) {
+				if let Some(depositor) = metadata.deposit.account {
+					T::Currency::unreserve(&depositor, metadata.deposit.amount);
+				}
+			}
 
 			CollectionMetadataOf::<T, I>::remove(&collection);
 			Self::clear_roles(&collection)?;
@@ -97,6 +108,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Self::deposit_event(Event::Destroyed { collection });
 
 			Ok(DestroyWitness {
+				item_metadatas: collection_details.item_metadatas,
 				item_configs: collection_details.item_configs,
 				attributes: collection_details.attributes,
 			})

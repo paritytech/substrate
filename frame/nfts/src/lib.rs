@@ -723,11 +723,13 @@ pub mod pallet {
 		///
 		/// Emits `Destroyed` event when successful.
 		///
-		/// Weight: `O(n + a)` where:
-		/// - `n = witness.item_configs`
+		/// Weight: `O(m + c + a)` where:
+		/// - `m = witness.item_metadatas`
+		/// - `c = witness.item_configs`
 		/// - `a = witness.attributes`
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::destroy(
+			witness.item_metadatas,
 			witness.item_configs,
 			witness.attributes,
  		))]
@@ -741,7 +743,12 @@ pub mod pallet {
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
 			let details = Self::do_destroy_collection(collection, witness, maybe_check_owner)?;
 
-			Ok(Some(T::WeightInfo::destroy(details.item_configs, details.attributes)).into())
+			Ok(Some(T::WeightInfo::destroy(
+				details.item_metadatas,
+				details.item_configs,
+				details.attributes,
+			))
+			.into())
 		}
 
 		/// Mint an item of a particular collection.

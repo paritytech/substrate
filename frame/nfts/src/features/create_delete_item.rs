@@ -182,6 +182,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							metadata.deposit.account.unwrap_or(collection_details.owner.clone());
 
 						T::Currency::unreserve(&depositor_account, metadata.deposit.amount);
+						collection_details.item_metadatas.saturating_dec();
 
 						if depositor_account == collection_details.owner {
 							collection_details

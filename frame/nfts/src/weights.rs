@@ -51,7 +51,7 @@ use sp_std::marker::PhantomData;
 pub trait WeightInfo {
 	fn create() -> Weight;
 	fn force_create() -> Weight;
-	fn destroy(n: u32, a: u32, ) -> Weight;
+	fn destroy(m: u32, c: u32, a: u32, ) -> Weight;
 	fn mint() -> Weight;
 	fn force_mint() -> Weight;
 	fn burn() -> Weight;
@@ -153,10 +153,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Proof: Nfts Account (max_values: None, max_size: Some(88), added: 2563, mode: MaxEncodedLen)
 	/// Storage: Nfts CollectionAccount (r:0 w:1)
 	/// Proof: Nfts CollectionAccount (max_values: None, max_size: Some(68), added: 2543, mode: MaxEncodedLen)
-	/// The range of component `n` is `[0, 1000]`.
 	/// The range of component `m` is `[0, 1000]`.
+	/// The range of component `c` is `[0, 1000]`.
 	/// The range of component `a` is `[0, 1000]`.
-	fn destroy(_n: u32, a: u32, ) -> Weight {
+	fn destroy(_m: u32, _c: u32, a: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `172781 + m * (127 ±0) + a * (402 ±0)`
 		//  Estimated: `3347427 + m * (2615 ±0) + a * (2921 ±0)`
@@ -875,9 +875,10 @@ impl WeightInfo for () {
 	/// Proof: Nfts Account (max_values: None, max_size: Some(88), added: 2563, mode: MaxEncodedLen)
 	/// Storage: Nfts CollectionAccount (r:0 w:1)
 	/// Proof: Nfts CollectionAccount (max_values: None, max_size: Some(68), added: 2543, mode: MaxEncodedLen)
-	/// The range of component `n` is `[0, 1000]`.
+	/// The range of component `m` is `[0, 1000]`.
+	/// The range of component `c` is `[0, 1000]`.
 	/// The range of component `a` is `[0, 1000]`.
-	fn destroy(_n: u32, a: u32, ) -> Weight {
+	fn destroy(_m: u32, _c: u32, a: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `172781 + m * (127 ±0) + a * (402 ±0)`
 		//  Estimated: `3347427 + m * (2615 ±0) + a * (2921 ±0)`

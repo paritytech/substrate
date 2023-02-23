@@ -214,6 +214,7 @@ fn lifecycle_should_work() {
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(account(1)), 0, 70, account(1), None));
 		assert_eq!(items(), vec![(account(1), 0, 70), (account(10), 0, 42), (account(20), 0, 69)]);
 		assert_eq!(Collection::<Test>::get(0).unwrap().items, 3);
+		assert_eq!(Collection::<Test>::get(0).unwrap().item_metadatas, 0);
 		assert_eq!(Collection::<Test>::get(0).unwrap().item_configs, 3);
 
 		assert_eq!(Balances::reserved_balance(&account(2)), 0);
@@ -227,6 +228,10 @@ fn lifecycle_should_work() {
 		assert_eq!(Balances::reserved_balance(&account(1)), 13);
 		assert!(ItemMetadataOf::<Test>::contains_key(0, 69));
 		assert!(ItemConfigOf::<Test>::contains_key(0, 69));
+		let w = Nfts::get_destroy_witness(&0).unwrap();
+		assert_eq!(w.item_metadatas, 2);
+		assert_eq!(w.item_configs, 3);
+
 		assert_ok!(Nfts::set_attribute(
 			RuntimeOrigin::signed(account(1)),
 			0,
@@ -241,6 +246,7 @@ fn lifecycle_should_work() {
 
 		let w = Nfts::get_destroy_witness(&0).unwrap();
 		assert_eq!(w.attributes, 1);
+		assert_eq!(w.item_metadatas, 0);
 		assert_eq!(w.item_configs, 0);
 		assert_ok!(Nfts::destroy(RuntimeOrigin::signed(account(1)), 0, w));
 		assert_eq!(Balances::reserved_balance(&account(1)), 0);

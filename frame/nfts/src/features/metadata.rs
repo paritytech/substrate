@@ -47,6 +47,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let collection_config = Self::get_collection_config(&collection)?;
 
 		ItemMetadataOf::<T, I>::try_mutate_exists(collection, item, |metadata| {
+			if metadata.is_none() {
+				collection_details.item_metadatas.saturating_inc();
+			}
+
 			let old_deposit = metadata
 				.take()
 				.map_or(ItemMetadataDeposit { account: None, amount: Zero::zero() }, |m| m.deposit);
@@ -114,6 +118,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		ensure!(is_root || !is_locked, Error::<T, I>::LockedItemMetadata);
 
+		collection_details.item_metadatas.saturating_dec();
 		T::Currency::unreserve(&depositor_account, metadata.deposit.amount);
 
 		if depositor_account == collection_details.owner {
