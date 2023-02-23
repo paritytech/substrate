@@ -3,3 +3,5 @@ error: Expected binding: `Accuracy = ...`
   |
 6 |     Perbill,
   |     ^^^^^^^
+
+fail

@@ -9,3 +9,5 @@ error: Previous version with the same number defined here
   |
 5 |     #[version(2)]
   |     ^
+
+fail

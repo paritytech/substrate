@@ -3,3 +3,5 @@ error: Invalid pallet macro call: unexpected attribute. Macro call must be bare,
   |
 1 | #[frame_support::pallet [foo]]
   |                          ^^^
+
+fail

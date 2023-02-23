@@ -3,3 +3,5 @@ error: `self` as argument not supported.
   |
 3 |         fn test(&self);
   |                 ^
+
+fail
