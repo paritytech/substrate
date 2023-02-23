@@ -84,6 +84,7 @@ fn unwrap_heap_pages(pages: Option<HeapAllocStrategy>) -> HeapAllocStrategy {
 	pages.unwrap_or_else(|| DEFAULT_HEAP_ALLOC_STRATEGY)
 }
 
+/// Builder for creating a [`WasmExecutor`] instance.
 pub struct WasmExecutorBuilder<H> {
 	_phantom: PhantomData<H>,
 	method: WasmExecutionMethod,
@@ -98,7 +99,7 @@ pub struct WasmExecutorBuilder<H> {
 impl<H> WasmExecutorBuilder<H> {
 	/// Create a new instance of `Self`
 	///
-	/// - `method`: The wasm execution method that should be used by the
+	/// - `method`: The wasm execution method that should be used by the executor.
 	pub fn new(method: WasmExecutionMethod) -> Self {
 		Self {
 			_phantom: PhantomData,

@@ -67,7 +67,7 @@
 //!   wasted. This is more pronounced (in terms of absolute heap amounts) with larger allocation
 //!   sizes.
 
-use crate::{Error, Memory};
+use crate::{Error, Memory, MAX_WASM_PAGES, PAGE_SIZE};
 pub use sp_core::MAX_POSSIBLE_ALLOCATION;
 use sp_wasm_interface::{Pointer, WordSize};
 use std::{
@@ -104,15 +104,6 @@ const LOG_TARGET: &str = "wasm-heap";
 // maximum possible allocation, or: 2^3...2^25 (both ends inclusive, hence 23).
 const N_ORDERS: usize = 23;
 const MIN_POSSIBLE_ALLOCATION: u32 = 8; // 2^3 bytes, 8 bytes
-
-/// The size of one wasm page in bytes.
-///
-/// The wasm memory is divided into pages, meaning the minimum size of a memory is one page.
-const PAGE_SIZE: u32 = 65536;
-/// The maximum number of wasm pages that can be allocated.
-///
-/// 4GiB / [`PAGE_SIZE`].
-const MAX_WASM_PAGES: u32 = (4u64 * 1024 * 1024 * 1024 / PAGE_SIZE as u64) as u32;
 
 /// The exponent for the power of two sized block adjusted to the minimum size.
 ///

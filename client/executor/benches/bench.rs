@@ -51,13 +51,13 @@ fn initialize(
 ) -> Arc<dyn WasmModule> {
 	let blob = RuntimeBlob::uncompress_if_needed(runtime).unwrap();
 	let host_functions = sp_io::SubstrateHostFunctions::host_functions();
-	let heap_pages = 2048;
+	let extra_pages = 2048;
 	let allow_missing_func_imports = true;
 
 	match method {
 		Method::Interpreted => sc_executor_wasmi::create_runtime(
 			blob,
-			HeapAllocStrategy::Static { extra_pages: heap_pages },
+			HeapAllocStrategy::Static { extra_pages },
 			host_functions,
 			allow_missing_func_imports,
 		)
@@ -67,7 +67,7 @@ fn initialize(
 				allow_missing_func_imports,
 				cache_path: None,
 				semantics: sc_executor_wasmtime::Semantics {
-					heap_alloc_strategy: HeapAllocStrategy::Static { extra_pages: heap_pages },
+					heap_alloc_strategy: HeapAllocStrategy::Static { extra_pages },
 					instantiation_strategy,
 					deterministic_stack_limit: None,
 					canonicalize_nans: false,

@@ -28,6 +28,16 @@ mod freeing_bump;
 pub use error::Error;
 pub use freeing_bump::{AllocationStats, FreeingBumpHeapAllocator};
 
+/// The size of one wasm page in bytes.
+///
+/// The wasm memory is divided into pages, meaning the minimum size of a memory is one page.
+const PAGE_SIZE: u32 = 65536;
+
+/// The maximum number of wasm pages that can be allocated.
+///
+/// 4GiB / [`PAGE_SIZE`].
+const MAX_WASM_PAGES: u32 = (4u64 * 1024 * 1024 * 1024 / PAGE_SIZE as u64) as u32;
+
 /// Grants access to the memory for the allocator.
 ///
 /// Memory of wasm is allocated in pages. A page has a constant size of 64KiB. The maximum allowed
