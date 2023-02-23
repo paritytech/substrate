@@ -212,35 +212,37 @@ pub struct OffenceDetails<Reporter, Offender> {
 
 /// A system capable of construct, report and submit offences.
 ///
-/// Implementors of this trait provide a wrapper to some low level operations
+/// Implementors of this trait provide a wrapper for some low level operations
 /// which mechanics are left open by this trait. That is, implementation details
-/// of the provider are left opaque at this level.
+/// are left opaque at this level.
 ///
 /// It is assumed that this subsystem takes care of checking offender key
-/// ownership proof before report submission.
-/// Key ownership checks are done using the `key_owner_proof` argument which
-/// always comes together with the `offence_proof`.
+/// ownership proof during evidence report. Key ownership checks are done using
+/// the `key_owner_proof` argument which comes together with the an `offence_proof`.
 pub trait OffenceReportSystem<Reporter, KeyOwnerProof, OffenceProof> {
-	/// Longevity, in blocks, for the report validity. When using the staking
-	/// pallet this should be equal to the bonding duration (in blocks, not eras).
+	/// Longevity, in blocks, for the report validity.
+	/// For example, when using the staking pallet this should be set equal
+	/// to the bonding durationin blocks, not eras).
 	type Longevity: Get<u64>;
 
-	/// Report a valid offence.
-	/// TODO DAVXY: reported information should have already been checked via `check_evidence`.
+	/// Report offence evidence.
 	fn report_evidence(
 		reporter: Option<Reporter>,
 		offence_proof: OffenceProof,
 		key_owner_proof: KeyOwnerProof,
 	) -> DispatchResult;
 
-	/// Check for evidence validity.
+	/// Check offence evidence.
 	fn check_evidence(
 		offence_proof: &OffenceProof,
 		key_owner_proof: &KeyOwnerProof,
 	) -> DispatchResult;
 
-	/// Create and dispatch an offence report extrinsic.
-	fn submit_evidence(offence_proof: OffenceProof, key_owner_proof: KeyOwnerProof) -> bool;
+	/// Create and submit an offence report extrinsic.
+	fn submit_evidence(
+		offence_proof: OffenceProof,
+		key_owner_proof: KeyOwnerProof,
+	) -> Result<(), ()>;
 }
 
 // Dummy report system.
@@ -264,7 +266,10 @@ impl<Reporter, KeyOwnerProof, OffenceProof>
 		Ok(())
 	}
 
-	fn submit_evidence(_offence_proof: OffenceProof, _key_owner_proof: KeyOwnerProof) -> bool {
-		true
+	fn submit_evidence(
+		_offence_proof: OffenceProof,
+		_key_owner_proof: KeyOwnerProof,
+	) -> Result<(), ()> {
+		Ok(())
 	}
 }

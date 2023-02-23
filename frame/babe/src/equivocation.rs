@@ -180,7 +180,7 @@ where
 	fn submit_evidence(
 		equivocation_proof: EquivocationProof<T::Header>,
 		key_owner_proof: T::KeyOwnerProof,
-	) -> bool {
+	) -> Result<(), ()> {
 		use frame_system::offchain::SubmitTransaction;
 
 		let call = Call::report_equivocation_unsigned {
@@ -192,7 +192,7 @@ where
 			Ok(()) => info!(target: LOG_TARGET, "Submitted equivocation report."),
 			Err(e) => error!(target: LOG_TARGET, "Error submitting equivocation report: {:?}", e),
 		}
-		res.is_ok()
+		res
 	}
 }
 

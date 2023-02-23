@@ -894,8 +894,7 @@ impl<T: Config> Pallet<T> {
 		equivocation_proof: EquivocationProof<T::Header>,
 		key_owner_proof: T::KeyOwnerProof,
 	) -> Option<()> {
-		T::EquivocationReportSystem::submit_evidence(equivocation_proof, key_owner_proof)
-			.then_some(())
+		T::EquivocationReportSystem::submit_evidence(equivocation_proof, key_owner_proof).ok()
 	}
 }
 
