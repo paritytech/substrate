@@ -30,6 +30,15 @@ pub mod currency {
 	}
 }
 
+/// Inflation parameters.
+pub mod inflation {
+	use sp_runtime::Perquintill;
+	// NOTE: Changes to these parameters must also be applied in
+	// `pallet_staking_reward_curve::build!`.
+	pub const IDEAL_STAKE_BASE: Perquintill = Perquintill::from_percent(75);
+	pub const FALLOFF: Perquintill = Perquintill::from_percent(5);
+}
+
 /// Time.
 pub mod time {
 	use node_primitives::{BlockNumber, Moment};
