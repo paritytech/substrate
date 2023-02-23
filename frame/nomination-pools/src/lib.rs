@@ -1280,6 +1280,7 @@ impl<T: Config> RewardPool<T> {
 		let balance = Self::current_balance(id);
 		let payouts_since_last_record = balance
 			.saturating_add(self.total_rewards_claimed)
+			.saturating_add(self.total_commission_pending)
 			.saturating_add(self.total_commission_claimed)
 			.saturating_sub(self.last_recorded_total_payouts);
 
