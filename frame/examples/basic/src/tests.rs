@@ -17,16 +17,13 @@
 
 //! Tests for pallet-example-basic.
 
-use core::hash::Hash;
-
 use crate::*;
 use frame_support::{
 	assert_ok,
 	dispatch::{DispatchInfo, GetDispatchInfo},
-	traits::{ConstU64, Hash as _, OnInitialize},
+	traits::{ConstU64, OnInitialize},
 };
 use sp_core::H256;
-use sp_io::DefaultChildStorage;
 // The testing primitives are very useful for avoiding having to work with signatures
 // or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 use sp_runtime::{
@@ -53,102 +50,62 @@ frame_support::construct_runtime!(
 	}
 );
 
-// Overall goal: implement config of a pallet for some struct `Impl`, while implementing the
-// `Config` for `Runtime`, use `Impl` to get the defaults. We first do it manually, later on we will
-// use a derive macro.w
-//
-// 3 approaches:
-// 1. implement the real config using generics for things that cannot be mocked.
-//   - lead to unexpected compiler issues.
-// 2. implement the real config using fake types for things that cannot be a
-//   - not fully explored.
-// 3. generate a sub `DefaultConfig` that only has the things that can have a default, implement
-//    that.
-//
-// Option 3 seems to be the best at the end of the day because it will also avoid the need to
-// implement `system::Config`.
-
-// parameterize `testing::Impl` with the items that cannot have a default.
-type SystemRuntime = frame_system::pallet::preludes::testing::Impl<
-	RuntimeCall,
-	RuntimeOrigin,
-	RuntimeEvent,
-	PalletInfo,
->;
-
-// a bit of extra boilerplate needed to make the compiler happy.
-impl From<frame_system::Call<SystemRuntime>> for RuntimeCall {
-	fn from(_: frame_system::Call<SystemRuntime>) -> Self {
-		unreachable!()
-	}
-}
-impl From<frame_system::Event<SystemRuntime>> for RuntimeEvent {
-	fn from(_: frame_system::Event<SystemRuntime>) -> Self {
-		unreachable!()
-	}
-}
-
-type SystemRuntime2 = frame_system::preludes::testing::Impl2;
-
-// Once this impl block can almost gully be delegated to `SystemRuntime`, we can move it to a
-// proc-macro. That's the easy part.
-type __AccountId = <SystemRuntime as frame_system::Config>::AccountId;
-type __Hash = <SystemRuntime as frame_system::Config>::Hash;
-
-
-
-
-
-
-
-
-
-
-
-
-#[frame_system::derive_impl(test)]
+#[frame_support::derive_impl(frame_system::preludes::testing::Impl)]
 impl frame_system::Config for Test {
-	// these cannot be overwritten.
-	type RuntimeOrigin = RuntimeOrigin;
-	type RuntimeCall = RuntimeCall;
-	type RuntimeEvent = RuntimeEvent;
-	type PalletInfo = PalletInfo;
+	// These are all defined by system as mandatory.
 	type BaseCallFilter = frame_support::traits::Everything;
-	type OnSetCode = ();
-	type Header = <Block as sp_runtime::traits::Block>::Header;
-
-	// type AccountId = u32;
-	// type AccountId = <frame_system::prelude::testing::Impl as frame_system::DefaultConfig>::AccountId;
-	type X = <frame_system::prelude::testing::Impl as frame_system::DefaultConfig>::X;
-	type Y = <frame_system::prelude::testing::Impl as frame_system::DefaultConfig>::Y;
-	type Z = <frame_system::prelude::testing::Impl as frame_system::DefaultConfig>::Z;
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type RuntimeOrigin = RuntimeOrigin;
+	type OnSetCode = frame_system::DefaultSetCode<Self>;
+	type PalletInfo = PalletInfo;
+	type Header = Header;
+	// We decide to override this one.
+	type AccountData = pallet_balances::AccountData<u64>;
 }
 
-
-
-
-
-
-
-
-
-
+// impl frame_system::Config for Test {
+// 	type BaseCallFilter = frame_support::traits::Everything;
+// 	type BlockWeights = ();
+// 	type BlockLength = ();
+// 	type DbWeight = ();
+// 	type RuntimeOrigin = RuntimeOrigin;
+// 	type Index = u64;
+// 	type BlockNumber = u64;
+// 	type Hash = H256;
+// 	type RuntimeCall = RuntimeCall;
+// 	type Hashing = BlakeTwo256;
+// 	type AccountId = u64;
+// 	type Lookup = IdentityLookup<Self::AccountId>;
+// 	type Header = Header;
+// 	type RuntimeEvent = RuntimeEvent;
+// 	type BlockHashCount = ConstU64<250>;
+// 	type Version = ();
+// 	type PalletInfo = PalletInfo;
+// 	type AccountData = pallet_balances::AccountData<u64>;
+// 	type OnNewAccount = ();
+// 	type OnKilledAccount = ();
+// 	type SystemWeightInfo = ();
+// 	type SS58Prefix = ();
+// 	type OnSetCode = frame_system::DefaultSetCode<Self>;
+// 	type MaxConsumers = frame_support::traits::ConstU32<16>;
+// }
 
 impl pallet_balances::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type MaxLocks = ();
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type Balance = u64;
 	type DustRemoval = ();
+	type RuntimeEvent = RuntimeEvent;
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 }
 
 impl Config for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type MagicNumber = ConstU64<1_000_000_000>;
+	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
 }
 
