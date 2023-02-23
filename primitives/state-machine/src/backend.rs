@@ -228,27 +228,6 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		key: &[u8],
 	) -> Result<Option<StorageKey>, Self::Error>;
 
-	/// Retrieve all entries keys of storage and call `f` for each of those keys.
-	/// Aborts as soon as `f` returns false.
-	// TODO: Remove this.
-	fn apply_to_keys_while<F: FnMut(&[u8]) -> bool>(
-		&self,
-		child_info: Option<&ChildInfo>,
-		prefix: Option<&[u8]>,
-		start_at: Option<&[u8]>,
-		mut f: F,
-	) -> Result<(), Self::Error> {
-		let args =
-			IterArgs { child_info: child_info.cloned(), prefix, start_at, ..IterArgs::default() };
-
-		for key in self.keys(args)? {
-			if !f(&key?) {
-				return Ok(())
-			}
-		}
-		Ok(())
-	}
-
 	/// Retrieve all entries keys which start with the given prefix and
 	/// call `f` for each of those keys.
 	// TODO: Remove this.

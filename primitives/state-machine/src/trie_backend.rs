@@ -643,58 +643,6 @@ pub mod tests {
 			.collect::<Vec<_>>(),
 			vec![b"value1".to_vec(), b"value2".to_vec(),]
 		);
-
-		// Also test out the wrapper methods.
-		// TODO: Remove this once these methods are gone.
-
-		let mut list = Vec::new();
-		trie.apply_to_keys_while(None, None, Some(b"key"), |key| {
-			list.push(key.to_vec());
-			true
-		})
-		.unwrap();
-		assert_eq!(list[0..3], vec![b"key".to_vec(), b"value1".to_vec(), b"value2".to_vec(),]);
-
-		let mut list = Vec::new();
-		trie.apply_to_keys_while(None, None, Some(b"k"), |key| {
-			list.push(key.to_vec());
-			true
-		})
-		.unwrap();
-		assert_eq!(list[0..3], vec![b"key".to_vec(), b"value1".to_vec(), b"value2".to_vec(),]);
-
-		let mut list = Vec::new();
-		trie.apply_to_keys_while(None, None, Some(b""), |key| {
-			list.push(key.to_vec());
-			true
-		})
-		.unwrap();
-		assert_eq!(
-			list[0..5],
-			vec![
-				b":child_storage:default:sub1".to_vec(),
-				b":code".to_vec(),
-				b"key".to_vec(),
-				b"value1".to_vec(),
-				b"value2".to_vec(),
-			]
-		);
-
-		let mut list = Vec::new();
-		trie.apply_to_keys_while(None, Some(b"value"), Some(b"key"), |key| {
-			list.push(key.to_vec());
-			true
-		})
-		.unwrap();
-		assert!(list.is_empty());
-
-		let mut list = Vec::new();
-		trie.apply_to_keys_while(None, Some(b"value"), Some(b"value"), |key| {
-			list.push(key.to_vec());
-			true
-		})
-		.unwrap();
-		assert_eq!(list, vec![b"value1".to_vec(), b"value2".to_vec(),]);
 	}
 
 	parameterized_test!(storage_root_is_non_default, storage_root_is_non_default_inner);
