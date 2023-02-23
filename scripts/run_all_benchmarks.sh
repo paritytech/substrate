@@ -67,8 +67,6 @@ SUBSTRATE=./target/production/substrate
 
 # Manually exclude some pallets.
 EXCLUDED_PALLETS=(
-  # Helper pallets
-  "pallet_election_provider_support_benchmarking"
   # Pallets without automatic benchmarking
   "pallet_babe"
   "pallet_grandpa"
