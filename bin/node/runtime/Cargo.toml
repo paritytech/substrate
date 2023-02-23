@@ -66,7 +66,8 @@ pallet-contracts-primitives = { version = "7.0.0", default-features = false, pat
 pallet-conviction-voting = { version = "4.0.0-dev", default-features = false, path = "../../../frame/conviction-voting" }
 pallet-democracy = { version = "4.0.0-dev", default-features = false, path = "../../../frame/democracy" }
 pallet-election-provider-multi-phase = { version = "4.0.0-dev", default-features = false, path = "../../../frame/election-provider-multi-phase" }
-pallet-elections = { version = "5.0.0-dev", default-features = false, path = "../../../frame/elections" }
+pallet-election-provider-support-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/election-provider-support/benchmarking", optional = true }
+pallet-elections-phragmen = { version = "5.0.0-dev", default-features = false, path = "../../../frame/elections-phragmen" }
 pallet-fast-unstake = { version = "4.0.0-dev", default-features = false, path = "../../../frame/fast-unstake" }
 pallet-nis = { version = "4.0.0-dev", default-features = false, path = "../../../frame/nis" }
 pallet-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../../frame/grandpa" }
@@ -124,6 +125,7 @@ with-tracing = ["frame-executive/with-tracing"]
 std = [
 	"pallet-whitelist/std",
 	"pallet-offences-benchmarking?/std",
+	"pallet-election-provider-support-benchmarking?/std",
 	"pallet-asset-tx-payment/std",
 	"frame-system-benchmarking?/std",
 	"frame-election-provider-support/std",
@@ -144,7 +146,7 @@ std = [
 	"pallet-contracts-primitives/std",
 	"pallet-conviction-voting/std",
 	"pallet-democracy/std",
-	"pallet-elections/std",
+	"pallet-elections-phragmen/std",
 	"pallet-fast-unstake/std",
 	"frame-executive/std",
 	"pallet-nis/std",
@@ -218,7 +220,6 @@ runtime-benchmarks = [
 	"frame-benchmarking-pallet-pov/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
-	"frame-election-provider-support/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 	"pallet-alliance/runtime-benchmarks",
 	"pallet-assets/runtime-benchmarks",
@@ -232,7 +233,8 @@ runtime-benchmarks = [
 	"pallet-conviction-voting/runtime-benchmarks",
 	"pallet-democracy/runtime-benchmarks",
 	"pallet-election-provider-multi-phase/runtime-benchmarks",
-	"pallet-elections/runtime-benchmarks",
+	"pallet-election-provider-support-benchmarking/runtime-benchmarks",
+	"pallet-elections-phragmen/runtime-benchmarks",
 	"pallet-fast-unstake/runtime-benchmarks",
 	"pallet-nis/runtime-benchmarks",
 	"pallet-grandpa/runtime-benchmarks",
@@ -289,7 +291,7 @@ try-runtime = [
 	"pallet-conviction-voting/try-runtime",
 	"pallet-democracy/try-runtime",
 	"pallet-election-provider-multi-phase/try-runtime",
-	"pallet-elections/try-runtime",
+	"pallet-elections-phragmen/try-runtime",
 	"pallet-fast-unstake/try-runtime",
 	"pallet-nis/try-runtime",
 	"pallet-grandpa/try-runtime",
