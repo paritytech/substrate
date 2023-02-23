@@ -23,8 +23,6 @@ sp-runtime = { version = "7.0.0", default-features = false, path = "../../primit
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
 
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
-
 [dev-dependencies]
 rand = { version = "0.8.5", features = ["small_rng"] }
 sp-io = { version = "7.0.0", path = "../../primitives/io" }
@@ -43,10 +41,6 @@ std = [
 	"sp-core/std",
 	"sp-runtime/std",
 	"sp-std/std",
-
-	"frame-benchmarking?/std",
 ]
-runtime-benchmarks = [
-	"frame-benchmarking/runtime-benchmarks",
-]
+runtime-benchmarks = []
 try-runtime = []
