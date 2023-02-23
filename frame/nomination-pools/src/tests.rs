@@ -5510,7 +5510,7 @@ mod commission {
 
 			// uncomment to check reward_pool state
 			assert_eq!(
-				reward_pool,
+				RewardPools::<Runtime>::get(bonded_pool.id).unwrap(),
 				RewardPool {
 					last_recorded_reward_counter: Zero::zero(),
 					last_recorded_total_payouts: 0,
@@ -5527,6 +5527,17 @@ mod commission {
 				Some((Perbill::from_percent(25), 901))
 			));
 
+			assert_eq!(
+				RewardPools::<Runtime>::get(bonded_pool.id).unwrap(),
+				RewardPool {
+					last_recorded_reward_counter: Zero::zero(),
+					last_recorded_total_payouts: 30,
+					total_rewards_claimed: 30,
+					total_commission_pending: 10,
+					total_commission_claimed: 0
+				}
+			);
+			
 			let current = BondedPools::<Runtime>::get(bonded_pool.id).unwrap()
 				.commission
 				.current
