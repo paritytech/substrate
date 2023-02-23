@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use parity_scale_codec::Encode;
-use sc_finality_grandpa::GrandpaJustification;
+use sc_consensus_grandpa::GrandpaJustification;
 use serde::{Deserialize, Serialize};
 use sp_runtime::traits::Block as BlockT;
 

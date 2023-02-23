@@ -32,7 +32,7 @@ use sc_telemetry::TelemetryHandle;
 use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_blockchain::HeaderMetadata;
 use sp_consensus::SelectChain;
-use sp_finality_grandpa::AuthorityId;
+use sp_consensus_grandpa::AuthorityId;
 use sp_keystore::SyncCryptoStorePtr;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 

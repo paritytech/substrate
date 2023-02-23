@@ -945,29 +945,29 @@ cfg_if! {
 				}
 			}
 
-			impl sp_finality_grandpa::GrandpaApi<Block> for Runtime {
-				fn grandpa_authorities() -> sp_finality_grandpa::AuthorityList {
+			impl sp_consensus_grandpa::GrandpaApi<Block> for Runtime {
+				fn grandpa_authorities() -> sp_consensus_grandpa::AuthorityList {
 					Vec::new()
 				}
 
-				fn current_set_id() -> sp_finality_grandpa::SetId {
+				fn current_set_id() -> sp_consensus_grandpa::SetId {
 					0
 				}
 
 				fn submit_report_equivocation_unsigned_extrinsic(
-					_equivocation_proof: sp_finality_grandpa::EquivocationProof<
+					_equivocation_proof: sp_consensus_grandpa::EquivocationProof<
 						<Block as BlockT>::Hash,
 						NumberFor<Block>,
 					>,
-					_key_owner_proof: sp_finality_grandpa::OpaqueKeyOwnershipProof,
+					_key_owner_proof: sp_consensus_grandpa::OpaqueKeyOwnershipProof,
 				) -> Option<()> {
 					None
 				}
 
 				fn generate_key_ownership_proof(
-					_set_id: sp_finality_grandpa::SetId,
-					_authority_id: sp_finality_grandpa::AuthorityId,
-				) -> Option<sp_finality_grandpa::OpaqueKeyOwnershipProof> {
+					_set_id: sp_consensus_grandpa::SetId,
+					_authority_id: sp_consensus_grandpa::AuthorityId,
+				) -> Option<sp_consensus_grandpa::OpaqueKeyOwnershipProof> {
 					None
 				}
 			}

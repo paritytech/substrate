@@ -38,7 +38,7 @@ use parking_lot::Mutex;
 use prometheus_endpoint::{register, Gauge, PrometheusError, Registry, U64};
 use sc_client_api::{BlockImportNotification, ImportNotifications};
 use sc_utils::mpsc::TracingUnboundedReceiver;
-use sp_finality_grandpa::AuthorityId;
+use sp_consensus_grandpa::AuthorityId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 
 use std::{

@@ -76,7 +76,7 @@ use sp_application_crypto::AppKey;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult};
 use sp_consensus::SelectChain;
 use sp_core::crypto::ByteArray;
-use sp_finality_grandpa::{
+use sp_consensus_grandpa::{
 	AuthorityList, AuthoritySignature, SetId, CLIENT_LOG_TARGET as LOG_TARGET,
 };
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
@@ -146,7 +146,7 @@ use environment::{Environment, VoterSetState};
 use until_imported::UntilGlobalMessageBlocksImported;
 
 // Re-export these two because it's just so damn convenient.
-pub use sp_finality_grandpa::{
+pub use sp_consensus_grandpa::{
 	AuthorityId, AuthorityPair, CatchUp, Commit, CompactCommit, GrandpaApi, Message, Precommit,
 	Prevote, PrimaryPropose, ScheduledChange, SignedMessage,
 };
