@@ -1,12 +1,12 @@
 [package]
-name = "pallet-elections-phragmen"
+name = "pallet-elections"
 version = "5.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
-description = "FRAME pallet based on seq-Phragmén election method."
+description = "FRAME pallet for generic elections."
 readme = "README.md"
 
 [package.metadata.docs.rs]
@@ -24,6 +24,7 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../sys
 sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
+frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../election-provider-support" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 
