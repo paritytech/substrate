@@ -225,7 +225,7 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn force_unreserve() {
+	fn force_unreserve() -> Result<(), BenchmarkError> {
 		let user: T::AccountId = account("user", 0, SEED);
 		let user_lookup = T::Lookup::unlookup(user.clone());
 
@@ -244,6 +244,8 @@ mod benchmarks {
 
 		assert!(Balances::<T, I>::reserved_balance(&user).is_zero());
 		assert_eq!(Balances::<T, I>::free_balance(&user), balance);
+
+		Ok(())
 	}
 
 	impl_benchmark_test_suite! {

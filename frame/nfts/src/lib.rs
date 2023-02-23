@@ -526,6 +526,12 @@ pub mod pallet {
 			price: Option<PriceWithDirection<ItemPrice<T, I>>>,
 			deadline: <T as SystemConfig>::BlockNumber,
 		},
+		/// New attributes have been set for an `item` of the `collection`.
+		PreSignedAttributesSet {
+			collection: T::CollectionId,
+			item: T::ItemId,
+			namespace: AttributeNamespace<T::AccountId>,
+		},
 	}
 
 	#[pallet::error]
@@ -614,6 +620,8 @@ pub mod pallet {
 		IncorrectMetadata,
 		/// Can't set more attributes per one call.
 		MaxAttributesLimitReached,
+		/// The provided namespace isn't supported in this call.
+		WrongNamespace,
 	}
 
 	#[pallet::call]
@@ -1823,6 +1831,33 @@ pub mod pallet {
 			let msg = Encode::encode(&mint_data);
 			ensure!(signature.verify(&*msg, &signer), Error::<T, I>::WrongSignature);
 			Self::do_mint_pre_signed(origin, mint_data, signer)
+		}
+
+		/// Set attributes for an item by providing the pre-signed approval.
+		///
+		/// Origin must be Signed and must be an owner of the `data.item`.
+		///
+		/// - `data`: The pre-signed approval that consists of the information about the item,
+		///   attributes to update and until what block number.
+		/// - `signature`: The signature of the `data` object.
+		/// - `signer`: The `data` object's signer. Should be an owner of the collection for the
+		///   `CollectionOwner` namespace.
+		///
+		/// Emits `AttributeSet` for each provided attribute.
+		/// Emits `ItemAttributesApprovalAdded` if the approval wasn't set before.
+		/// Emits `PreSignedAttributesSet` on success.
+		#[pallet::call_index(38)]
+		#[pallet::weight(T::WeightInfo::set_attributes_pre_signed(data.attributes.len() as u32))]
+		pub fn set_attributes_pre_signed(
+			origin: OriginFor<T>,
+			data: PreSignedAttributesOf<T, I>,
+			signature: T::OffchainSignature,
+			signer: T::AccountId,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			let msg = Encode::encode(&data);
+			ensure!(signature.verify(&*msg, &signer), Error::<T, I>::WrongSignature);
+			Self::do_set_attributes_pre_signed(origin, data, signer)
 		}
 	}
 }

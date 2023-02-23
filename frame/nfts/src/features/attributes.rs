@@ -165,6 +165,59 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	pub(crate) fn do_set_attributes_pre_signed(
+		origin: T::AccountId,
+		data: PreSignedAttributesOf<T, I>,
+		signer: T::AccountId,
+	) -> DispatchResult {
+		let PreSignedAttributes { collection, item, attributes, namespace, deadline } = data;
+
+		ensure!(
+			attributes.len() <= T::MaxAttributesPerCall::get() as usize,
+			Error::<T, I>::MaxAttributesLimitReached
+		);
+
+		let now = frame_system::Pallet::<T>::block_number();
+		ensure!(deadline >= now, Error::<T, I>::DeadlineExpired);
+
+		let item_details =
+			Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
+		ensure!(item_details.owner == origin, Error::<T, I>::NoPermission);
+
+		// Only the CollectionOwner and Account() namespaces could be updated in this way.
+		// For the Account() namespace we check and set the approval if it wasn't set before.
+		match &namespace {
+			AttributeNamespace::CollectionOwner => {},
+			AttributeNamespace::Account(account) => {
+				ensure!(account == &signer, Error::<T, I>::NoPermission);
+				let approvals = ItemAttributesApprovalsOf::<T, I>::get(&collection, &item);
+				if !approvals.contains(account) {
+					Self::do_approve_item_attributes(
+						origin.clone(),
+						collection,
+						item,
+						account.clone(),
+					)?;
+				}
+			},
+			_ => return Err(Error::<T, I>::WrongNamespace.into()),
+		}
+
+		for (key, value) in attributes {
+			Self::do_set_attribute(
+				signer.clone(),
+				collection,
+				Some(item),
+				namespace.clone(),
+				Self::construct_attribute_key(key)?,
+				Self::construct_attribute_value(value)?,
+				origin.clone(),
+			)?;
+		}
+		Self::deposit_event(Event::PreSignedAttributesSet { collection, item, namespace });
+		Ok(())
+	}
+
 	pub(crate) fn do_clear_attribute(
 		maybe_check_owner: Option<T::AccountId>,
 		collection: T::CollectionId,
