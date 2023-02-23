@@ -18,6 +18,7 @@
 mod call;
 mod config;
 mod constants;
+mod documentation;
 mod error;
 mod event;
 mod genesis_build;
