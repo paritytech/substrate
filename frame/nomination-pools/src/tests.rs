@@ -4314,6 +4314,7 @@ mod create {
 							nominator: Some(456),
 							bouncer: Some(789)
 						},
+						state: PoolState::Open,
 					}
 				}
 			);

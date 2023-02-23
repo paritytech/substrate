@@ -31,9 +31,9 @@ use frame_support::{assert_ok, ensure, traits::Get};
 use frame_system::RawOrigin as RuntimeOrigin;
 use pallet_nomination_pools::{
 	BalanceOf, BondExtra, BondedPoolInner, BondedPools, ClaimPermission, ClaimPermissions,
-	Commission, CommissionChangeRate, ConfigOp, GlobalMaxCommission, MaxPoolMembers, MaxPoolMembersPerPool, 
-  MaxPools, Metadata, MinCreateBond, MinJoinBond, Pallet as Pools, PoolMembers, PoolRoles, PoolState, 
-  RewardPools, SubPoolsStorage,
+	Commission, CommissionChangeRate, ConfigOp, GlobalMaxCommission, MaxPoolMembers,
+	MaxPoolMembersPerPool, MaxPools, Metadata, MinCreateBond, MinJoinBond, Pallet as Pools,
+	PoolMembers, PoolRoles, PoolState, RewardPools, SubPoolsStorage,
 };
 use sp_staking::{EraIndex, StakingInterface};
 // `frame_benchmarking::benchmarks!` macro needs this

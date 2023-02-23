@@ -2387,85 +2387,6 @@ pub mod pallet {
 			T::Staking::chill(&bonded_pool.bonded_account())
 		}
 
-		/// Set the commission of a pool.
-		///
-		/// The dispatch origin of this call must be signed by the `root` role of the pool. Both a
-		/// commission percentage and a commission payee must be provided in the `current` tuple.
-		/// Where a `current` of `None` is provided, any current commission will be removed.
-		///
-		/// - If a `None` is supplied to `new_commission`, existing commission will be removed.
-		#[pallet::call_index(14)]
-		#[pallet::weight(T::WeightInfo::set_commission())]
-		pub fn set_commission(
-			origin: OriginFor<T>,
-			pool_id: PoolId,
-			new_commission: Option<(Perbill, T::AccountId)>,
-		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
-			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
-
-			bonded_pool.commission.try_update_current(&new_commission)?;
-
-			bonded_pool.put();
-			Self::deposit_event(Event::<T>::PoolCommissionUpdated {
-				pool_id,
-				current: new_commission,
-			});
-			Ok(())
-		}
-
-		/// Set the maximum commission of a pool.
-		///
-		/// The dispatch origin of this call must be signed by the `root` role of the pool.
-		///
-		/// - Initial max can be set to any `Perbill`, and only smaller values thereafter.
-		/// - Current commission will be lowered in the event it is higher than a new max
-		///   commission.
-		#[pallet::call_index(15)]
-		#[pallet::weight(T::WeightInfo::set_commission_max())]
-		pub fn set_commission_max(
-			origin: OriginFor<T>,
-			pool_id: PoolId,
-			max_commission: Perbill,
-		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
-			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
-
-			bonded_pool.commission.try_update_max(max_commission)?;
-			bonded_pool.put();
-
-			Self::deposit_event(Event::<T>::PoolMaxCommissionUpdated { pool_id, max_commission });
-			Ok(())
-		}
-
-		/// Set the commission change rate for a pool.
-		///
-		/// The dispatch origin of this call must be signed by the `root` role of the pool. Initial
-		/// change rate is not bounded, whereas subsequent updates can only be more restrictive than
-		/// the current.
-		#[pallet::call_index(16)]
-		#[pallet::weight(T::WeightInfo::set_commission_change_rate())]
-		pub fn set_commission_change_rate(
-			origin: OriginFor<T>,
-			pool_id: PoolId,
-			change_rate: CommissionChangeRate<T::BlockNumber>,
-		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
-			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
-
-			bonded_pool.commission.try_update_change_rate(change_rate)?;
-			bonded_pool.put();
-
-			Self::deposit_event(Event::<T>::PoolCommissionChangeRateUpdated {
-				pool_id,
-				change_rate,
-			});
-			Ok(())
-    }
-      
 		/// `origin` bonds funds from `extra` for some pool member `member` into their respective
 		/// pools.
 		///
@@ -2525,6 +2446,85 @@ pub mod pallet {
 		pub fn claim_payout_other(origin: OriginFor<T>, other: T::AccountId) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			Self::do_claim_payout(signer, other)
+		}
+
+		/// Set the commission of a pool.
+		///
+		/// The dispatch origin of this call must be signed by the `root` role of the pool. Both a
+		/// commission percentage and a commission payee must be provided in the `current` tuple.
+		/// Where a `current` of `None` is provided, any current commission will be removed.
+		///
+		/// - If a `None` is supplied to `new_commission`, existing commission will be removed.
+		#[pallet::call_index(17)]
+		#[pallet::weight(T::WeightInfo::set_commission())]
+		pub fn set_commission(
+			origin: OriginFor<T>,
+			pool_id: PoolId,
+			new_commission: Option<(Perbill, T::AccountId)>,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
+
+			bonded_pool.commission.try_update_current(&new_commission)?;
+
+			bonded_pool.put();
+			Self::deposit_event(Event::<T>::PoolCommissionUpdated {
+				pool_id,
+				current: new_commission,
+			});
+			Ok(())
+		}
+
+		/// Set the maximum commission of a pool.
+		///
+		/// The dispatch origin of this call must be signed by the `root` role of the pool.
+		///
+		/// - Initial max can be set to any `Perbill`, and only smaller values thereafter.
+		/// - Current commission will be lowered in the event it is higher than a new max
+		///   commission.
+		#[pallet::call_index(18)]
+		#[pallet::weight(T::WeightInfo::set_commission_max())]
+		pub fn set_commission_max(
+			origin: OriginFor<T>,
+			pool_id: PoolId,
+			max_commission: Perbill,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
+
+			bonded_pool.commission.try_update_max(max_commission)?;
+			bonded_pool.put();
+
+			Self::deposit_event(Event::<T>::PoolMaxCommissionUpdated { pool_id, max_commission });
+			Ok(())
+		}
+
+		/// Set the commission change rate for a pool.
+		///
+		/// The dispatch origin of this call must be signed by the `root` role of the pool. Initial
+		/// change rate is not bounded, whereas subsequent updates can only be more restrictive than
+		/// the current.
+		#[pallet::call_index(19)]
+		#[pallet::weight(T::WeightInfo::set_commission_change_rate())]
+		pub fn set_commission_change_rate(
+			origin: OriginFor<T>,
+			pool_id: PoolId,
+			change_rate: CommissionChangeRate<T::BlockNumber>,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
+
+			bonded_pool.commission.try_update_change_rate(change_rate)?;
+			bonded_pool.put();
+
+			Self::deposit_event(Event::<T>::PoolCommissionChangeRateUpdated {
+				pool_id,
+				change_rate,
+			});
+			Ok(())
 		}
 	}
 
