@@ -1052,17 +1052,20 @@ where
 			},
 		};
 
-		if let Some(storage_changes) = storage_changes {
-			// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
-			self.storage_notifications.trigger(
-				&notification.hash,
-				storage_changes.0.into_iter(),
-				storage_changes.1.into_iter().map(|(sk, v)| (sk, v.into_iter())),
-			);
-		}
+		let trigger_storage_changes_notification = || {
+			if let Some(storage_changes) = storage_changes {
+				// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
+				self.storage_notifications.trigger(
+					&notification.hash,
+					storage_changes.0.into_iter(),
+					storage_changes.1.into_iter().map(|(sk, v)| (sk, v.into_iter())),
+				);
+			}
+		};
 
 		match import_notification_action {
 			ImportNotificationAction::Both => {
+				trigger_storage_changes_notification();
 				self.import_notification_sinks
 					.lock()
 					.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
@@ -1072,16 +1075,28 @@ where
 					.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
 			},
 			ImportNotificationAction::RecentBlock => {
+				trigger_storage_changes_notification();
 				self.import_notification_sinks
 					.lock()
 					.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+
+				self.every_import_notification_sinks.lock().retain(|sink| !sink.is_closed());
 			},
 			ImportNotificationAction::EveryBlock => {
 				self.every_import_notification_sinks
 					.lock()
 					.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+
+				self.import_notification_sinks.lock().retain(|sink| !sink.is_closed());
 			},
-			ImportNotificationAction::None => {},
+			ImportNotificationAction::None => {
+				// This branch is unreachable in fact because the block import notification must be
+				// Some(_) instead of None (it's already handled at the beginning of this function)
+				// at this point.
+				self.import_notification_sinks.lock().retain(|sink| !sink.is_closed());
+
+				self.every_import_notification_sinks.lock().retain(|sink| !sink.is_closed());
+			},
 		}
 
 		Ok(())
