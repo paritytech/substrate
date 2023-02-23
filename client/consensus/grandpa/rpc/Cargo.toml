@@ -1,5 +1,5 @@
 [package]
-name = "sc-finality-grandpa-rpc"
+name = "sc-consensus-grandpa-rpc"
 version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "RPC extensions for the GRANDPA finality gadget"
@@ -18,7 +18,7 @@ parity-scale-codec = { version = "3.2.2", features = ["derive"] }
 serde = { version = "1.0.105", features = ["derive"] }
 thiserror = "1.0"
 sc-client-api = { version = "4.0.0-dev", path = "../../../api" }
-sc-finality-grandpa = { version = "0.10.0-dev", path = "../" }
+sc-consensus-grandpa = { version = "0.10.0-dev", path = "../" }
 sc-rpc = { version = "4.0.0-dev", path = "../../../rpc" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../../primitives/blockchain" }
 sp-core = { version = "7.0.0", path = "../../../../primitives/core" }
@@ -28,7 +28,7 @@ sp-runtime = { version = "7.0.0", path = "../../../../primitives/runtime" }
 sc-block-builder = { version = "0.10.0-dev", path = "../../../block-builder" }
 sc-rpc = { version = "4.0.0-dev", features = ["test-helpers"], path = "../../../rpc" }
 sp-core = { version = "7.0.0", path = "../../../../primitives/core" }
-sp-finality-grandpa = { version = "4.0.0-dev", path = "../../../../primitives/consensus/finality-grandpa" }
+sp-consensus-grandpa = { version = "4.0.0-dev", path = "../../../../primitives/consensus/grandpa" }
 sp-keyring = { version = "7.0.0", path = "../../../../primitives/keyring" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../../test-utils/runtime/client" }
 tokio = { version = "1.22.0", features = ["macros"] }

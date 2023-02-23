@@ -1090,7 +1090,7 @@ where
 			Poll::Ready(Ok(())) => {
 				// voters don't conclude naturally
 				return Poll::Ready(Err(Error::Safety(
-					"finality-grandpa inner voter has concluded.".into(),
+					"consensus-grandpa inner voter has concluded.".into(),
 				)))
 			},
 			Poll::Ready(Err(CommandOrError::Error(e))) => {

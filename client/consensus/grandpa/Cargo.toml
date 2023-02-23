@@ -1,5 +1,5 @@
 [package]
-name = "sc-finality-grandpa"
+name = "sc-consensus-grandpa"
 version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
@@ -7,7 +7,7 @@ license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "Integration of the GRANDPA finality gadget into substrate."
-documentation = "https://docs.rs/sc-finality-grandpa"
+documentation = "https://docs.rs/sc-consensus-grandpa"
 readme = "README.md"
 
 [package.metadata.docs.rs]
@@ -44,7 +44,7 @@ sp-arithmetic = { version = "6.0.0", path = "../../../primitives/arithmetic" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-core = { version = "7.0.0", path = "../../../primitives/core" }
-sp-finality-grandpa = { version = "4.0.0-dev", path = "../../../primitives/consensus/finality-grandpa" }
+sp-consensus-grandpa = { version = "4.0.0-dev", path = "../../../primitives/consensus/grandpa" }
 sp-keystore = { version = "0.13.0", path = "../../../primitives/keystore" }
 sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 
