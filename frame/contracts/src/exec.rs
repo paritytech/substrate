@@ -26,7 +26,8 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable},
 	storage::{with_transaction, TransactionOutcome},
 	traits::{
-		tokens::KeepAlive, Contains, Currency, ExistenceRequirement, OriginTrait, Randomness, Time,
+		tokens::{KeepAlive, Privilege},
+		Contains, Currency, ExistenceRequirement, OriginTrait, Randomness, Time,
 	},
 	weights::Weight,
 	Blake2_128Concat, BoundedVec, StorageHasher,
@@ -1218,7 +1219,11 @@ where
 		T::Currency::transfer(
 			&frame.account_id,
 			beneficiary,
-			T::Currency::reducible_balance(&frame.account_id, KeepAlive::CanKill, false),
+			T::Currency::reducible_balance(
+				&frame.account_id,
+				KeepAlive::CanKill,
+				Privilege::Regular,
+			),
 			ExistenceRequirement::AllowDeath,
 		)?;
 		info.queue_trie_for_deletion()?;
