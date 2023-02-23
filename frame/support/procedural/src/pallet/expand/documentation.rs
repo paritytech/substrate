@@ -143,20 +143,17 @@ impl ToTokens for DocMetaValue {
 /// #[doc = "Documentation for pallet"]
 /// #[doc = include_str!("../README.md")]
 /// #[pallet_doc("../documentation1.md")]
-/// #[pallet_doc("../documentation1.md")]
+/// #[pallet_doc("../documentation2.md")]
 /// pub mod pallet {}
 /// ```
 ///
 /// # pallet_doc
 ///
-/// The `pallet_doc` attribute accepts only one argument: the path to a file
-/// containing the documentation that should be included in the metadata.
+/// The `pallet_doc` attribute can only be provided with one argument,
+/// which is the file path that holds the documentation to be added to the metadata.
 ///
-/// Argument is similar to `include_str`.
-///
-/// The documentation parsed by this attribute is not expanded on the pallet
-/// definition. In contract, #[doc = include_str!("../README.md")] is expanded
-/// on the pallet definition as well as included in the metadata.
+/// Unlike the `doc` attribute, the documentation provided to the `proc_macro` attribute is
+/// not inserted at the beginning of the module.
 pub fn expand_documentation(def: &mut Def) -> proc_macro2::TokenStream {
 	let frame_support = &def.frame_support;
 	let type_impl_gen = &def.type_impl_generics(proc_macro2::Span::call_site());

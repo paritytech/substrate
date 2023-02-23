@@ -481,6 +481,49 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 /// </pre></div>
 ///
 /// See `frame_support::pallet` docs for more info.
+///
+/// ## Runtime Metadata Documentation
+///
+/// The documentation added to this pallet is included in the runtime metadata.
+///
+/// The documentation can be defined in the following ways:
+///
+/// ```ignore
+/// #[pallet::pallet]
+/// /// Documentation for pallet 1
+/// #[doc = "Documentation for pallet 2"]
+/// #[doc = include_str!("../README.md")]
+/// #[pallet_doc("../doc1.md")]
+/// #[pallet_doc("../doc2.md")]
+/// pub struct Pallet<T>(_);
+/// ```
+///
+/// The runtime metadata for this pallet contains the following
+///  - " Documentation for pallet 1" (captured from `///`)
+///  - "Documentation for pallet 2"  (captured from `#[doc]`)
+///  - content of ../README.md       (captured from `#[doc]` with `include_str!`)
+///  - content of "../doc1.md"       (captured from `pallet_doc`)
+///  - content of "../doc1.md"       (captured from `pallet_doc`)
+///
+/// ### `doc` attribute
+///
+/// The value of the `doc` attribute is included in the runtime metadata, as well as
+/// expanded on the pallet module. The previous example is expanded to:
+///
+/// ```ignore
+/// /// Documentation for pallet 1
+/// /// Documentation for pallet 2
+/// /// Content of README.md
+/// pub struct Pallet<T>(_);
+/// ```
+///
+/// ### `pallet_doc` attribute
+///
+/// The `pallet_doc` attribute can only be provided with one argument,
+/// which is the file path that holds the documentation to be added to the metadata.
+///
+/// Unlike the `doc` attribute, the documentation provided to the `proc_macro` attribute is
+/// not inserted at the beginning of the module.
 #[proc_macro_attribute]
 pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
 	pallet::pallet(attr, item)
