@@ -843,22 +843,17 @@ mod execution {
 
 			let start_at_ref = start_at.as_ref().map(AsRef::as_ref);
 			let mut switch_child_key = None;
-			let mut first = start_at.is_some();
 			let mut iter = proving_backend
-				.pairs(IterArgs { child_info, start_at: start_at_ref, ..IterArgs::default() })
+				.pairs(IterArgs {
+					child_info,
+					start_at: start_at_ref,
+					start_at_exclusive: true,
+					..IterArgs::default()
+				})
 				.map_err(|e| Box::new(e) as Box<dyn Error>)?;
 
 			while let Some(item) = iter.next() {
 				let (key, value) = item.map_err(|e| Box::new(e) as Box<dyn Error>)?;
-				if first &&
-					start_at_ref.as_ref().map(|start| &key.as_slice() > start).unwrap_or(true)
-				{
-					first = false;
-				}
-
-				if first {
-					continue
-				}
 
 				if depth < MAX_NESTED_TRIE_DEPTH &&
 					sp_core::storage::well_known_keys::is_child_storage_key(key.as_slice())
@@ -1249,12 +1244,12 @@ mod execution {
 			};
 			let start_at_ref = start_at.as_ref().map(AsRef::as_ref);
 			let mut switch_child_key = None;
-			let mut first = start_at.is_some();
 
 			let mut iter = proving_backend
 				.pairs(IterArgs {
 					child_info,
 					start_at: start_at_ref,
+					start_at_exclusive: true,
 					stop_on_incomplete_database: true,
 					..IterArgs::default()
 				})
@@ -1262,16 +1257,6 @@ mod execution {
 
 			while let Some(item) = iter.next() {
 				let (key, value) = item.map_err(|e| Box::new(e) as Box<dyn Error>)?;
-				if first &&
-					start_at_ref.as_ref().map(|start| &key.as_slice() > start).unwrap_or(true)
-				{
-					first = false;
-				}
-
-				if first {
-					continue
-				}
-
 				values.push((key.to_vec(), value.to_vec()));
 
 				if depth < MAX_NESTED_TRIE_DEPTH &&
