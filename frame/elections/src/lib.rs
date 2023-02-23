@@ -341,7 +341,7 @@ pub mod pallet {
 				T::MaxVotesPerVoter::get() * T::MaxVoters::get(),
 			);
 			let election_weight = pre_solve_weight
-				.saturating_sub(post_solve_weight)
+				.saturating_add(post_solve_weight)
 				.saturating_add(election_weight);
 
 			let to_seconds = |w: &Weight| {
