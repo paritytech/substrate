@@ -1232,6 +1232,10 @@ pub struct RewardPool<T: Config> {
 	last_recorded_total_payouts: BalanceOf<T>,
 	/// Total amount that this pool has paid out so far to the members.
 	total_rewards_claimed: BalanceOf<T>,
+	/// The amount of commission pending to be claimed.
+	total_commission_pending: BalanceOf<T>,
+	/// The amount of commission that has been claimed.
+	total_commission_claimed: BalanceOf<T>,
 }
 
 impl<T: Config> RewardPool<T> {
@@ -1246,11 +1250,21 @@ impl<T: Config> RewardPool<T> {
 	}
 
 	/// Update the recorded values of the pool.
-	fn update_records(&mut self, id: PoolId, bonded_points: BalanceOf<T>) -> Result<(), Error<T>> {
+	fn update_records(
+		&mut self,
+		id: PoolId,
+		bonded_points: BalanceOf<T>,
+		commission: &Commission<T>,
+	) -> Result<(), Error<T>> {
 		let balance = Self::current_balance(id);
-		self.last_recorded_reward_counter = self.current_reward_counter(id, bonded_points)?;
+		let (current_reward_counter, newly_earned_commission) =
+			self.current_reward_counter(id, bonded_points, commission)?;
+
+		self.last_recorded_reward_counter = current_reward_counter;
+		self.total_commission_pending += newly_earned_commission;
+
 		self.last_recorded_total_payouts = balance
-			.checked_add(&self.total_rewards_claimed)
+			.checked_add(&self.total_rewards_claimed.saturating_add(self.total_commission_claimed))
 			.ok_or(Error::<T>::OverflowRisk)?;
 		Ok(())
 	}
@@ -1261,11 +1275,24 @@ impl<T: Config> RewardPool<T> {
 		&self,
 		id: PoolId,
 		bonded_points: BalanceOf<T>,
-	) -> Result<T::RewardCounter, Error<T>> {
+		commission: &Commission<T>,
+	) -> Result<(T::RewardCounter, BalanceOf<T>), Error<T>> {
 		let balance = Self::current_balance(id);
 		let payouts_since_last_record = balance
 			.saturating_add(self.total_rewards_claimed)
+			.saturating_add(self.total_commission_claimed)
 			.saturating_sub(self.last_recorded_total_payouts);
+
+		// Split the `payouts_since_last_record` into regular rewards and commission according to
+		// the current commission rate.
+		let current = commission
+			.current
+			.as_ref()
+			.map_or(Perbill::zero(), |(c, _)| c.clone())
+			.min(GlobalMaxCommission::<T>::get().unwrap_or(Bounded::max_value()));
+
+		let share_commission = current * payouts_since_last_record;
+		let share_rewards = payouts_since_last_record - share_commission;
 
 		// * accuracy notes regarding the multiplication in `checked_from_rational`:
 		// `payouts_since_last_record` is a subset of the total_issuance at the very
@@ -1300,9 +1327,12 @@ impl<T: Config> RewardPool<T> {
 		// x = 100
 		//
 		// which is basically 10^-8 DOTs. See `smallest_claimable_reward` for an example of this.
-		T::RewardCounter::checked_from_rational(payouts_since_last_record, bonded_points)
-			.and_then(|ref r| self.last_recorded_reward_counter.checked_add(r))
-			.ok_or(Error::<T>::OverflowRisk)
+		let current_reward_counter =
+			T::RewardCounter::checked_from_rational(share_rewards, bonded_points)
+				.and_then(|ref r| self.last_recorded_reward_counter.checked_add(r))
+				.ok_or(Error::<T>::OverflowRisk)?;
+
+		Ok((current_reward_counter, share_commission))
 	}
 
 	/// Current free balance of the reward pool.
@@ -1827,7 +1857,7 @@ pub mod pallet {
 			let mut reward_pool = RewardPools::<T>::get(pool_id)
 				.defensive_ok_or::<Error<T>>(DefensiveError::RewardPoolNotFound.into())?;
 			// IMPORTANT: reward pool records must be updated with the old points.
-			reward_pool.update_records(pool_id, bonded_pool.points)?;
+			reward_pool.update_records(pool_id, bonded_pool.points, &bonded_pool.commission)?;
 
 			bonded_pool.try_inc_members()?;
 			let points_issued = bonded_pool.try_bond_funds(&who, amount, BondType::Later)?;
@@ -1940,7 +1970,11 @@ pub mod pallet {
 			// Claim the the payout prior to unbonding. Once the user is unbonding their points no
 			// longer exist in the bonded pool and thus they can no longer claim their payouts. It
 			// is not strictly necessary to claim the rewards, but we do it here for UX.
-			let _ = reward_pool.update_records(bonded_pool.id, bonded_pool.points)?;
+			let _ = reward_pool.update_records(
+				bonded_pool.id,
+				bonded_pool.points,
+				&bonded_pool.commission,
+			)?;
 			let _ = Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
 
 			let current_era = T::Staking::current_era();
@@ -2473,8 +2507,13 @@ pub mod pallet {
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
 
-			bonded_pool.commission.try_update_current(&new_commission)?;
+			let mut reward_pool = RewardPools::<T>::get(pool_id)
+				.defensive_ok_or::<Error<T>>(DefensiveError::RewardPoolNotFound.into())?;
+			// IMPORTANT: make sure that everything up to this point is using the current commission
+			// before it updates. Note that `try_update_current` could still fail at this point.
+			reward_pool.update_records(pool_id, bonded_pool.points, &bonded_pool.commission)?;
 
+			bonded_pool.commission.try_update_current(&new_commission)?;
 			bonded_pool.put();
 			Self::deposit_event(Event::<T>::PoolCommissionUpdated {
 				pool_id,
@@ -2716,9 +2755,12 @@ impl<T: Config> Pallet<T> {
 		// a member who has no skin in the game anymore cannot claim any rewards.
 		ensure!(!member.active_points().is_zero(), Error::<T>::FullyUnbonding);
 
-		let current_reward_counter =
-			reward_pool.current_reward_counter(bonded_pool.id, bonded_pool.points)?;
-		let mut pending_rewards = member.pending_rewards(current_reward_counter)?;
+		let (current_reward_counter, _) = reward_pool.current_reward_counter(
+			bonded_pool.id,
+			bonded_pool.points,
+			&bonded_pool.commission,
+		)?;
+		let pending_rewards = member.pending_rewards(current_reward_counter)?;
 
 		if pending_rewards.is_zero() {
 			return Ok(pending_rewards)
@@ -2728,24 +2770,27 @@ impl<T: Config> Pallet<T> {
 		member.last_recorded_reward_counter = current_reward_counter;
 		reward_pool.register_claimed_reward(pending_rewards);
 
+		// TODO: Remove once new commission refactor is working as intended.
+		// Legacy code to split and payout commission upon reward payout.
+
 		// Gets the commission percentage and payee to be paid if commission has been set.
 		// Otherwise, `None` is returned.
-		let maybe_commission = &bonded_pool.commission.maybe_commission_and_payee(&pending_rewards);
+		// let maybe_commission =
+		// &bonded_pool.commission.maybe_commission_and_payee(&pending_rewards);
+		// if let Some((pool_commission, payee)) = maybe_commission {
+		// 	// Deduct any outstanding commission from the reward being claimed.
+		// 	pending_rewards = pending_rewards.saturating_sub(*pool_commission);
 
-		if let Some((pool_commission, payee)) = maybe_commission {
-			// Deduct any outstanding commission from the reward being claimed.
-			pending_rewards = pending_rewards.saturating_sub(*pool_commission);
-
-			// Send any non-zero `pool_commission` to the commission `payee`.
-			if pool_commission > &Zero::zero() {
-				T::Currency::transfer(
-					&bonded_pool.reward_account(),
-					&payee,
-					*pool_commission,
-					ExistenceRequirement::KeepAlive,
-				)?;
-			}
-		}
+		// 	// Send any non-zero `pool_commission` to the commission `payee`.
+		// 	if pool_commission > &Zero::zero() {
+		// 		T::Currency::transfer(
+		// 			&bonded_pool.reward_account(),
+		// 			&payee,
+		// 			*pool_commission,
+		// 			ExistenceRequirement::KeepAlive,
+		// 		)?;
+		// 	}
+		// }
 
 		// Transfer remaining payout to the member.
 		//
@@ -2766,7 +2811,9 @@ impl<T: Config> Pallet<T> {
 			member: member_account.clone(),
 			pool_id: member.pool_id,
 			payout: pending_rewards,
-			commission: maybe_commission.as_ref().map(|(c, _)| *c).unwrap_or(Zero::zero()),
+			// TODO: Remove once new commission refactor is working as intended.
+			// commission: maybe_commission.as_ref().map(|(c, _)| *c).unwrap_or(Zero::zero()),
+			commission: Zero::zero(),
 		});
 
 		Ok(pending_rewards)
@@ -2825,6 +2872,8 @@ impl<T: Config> Pallet<T> {
 				last_recorded_reward_counter: Zero::zero(),
 				last_recorded_total_payouts: Zero::zero(),
 				total_rewards_claimed: Zero::zero(),
+				total_commission_claimed: Zero::zero(),
+				total_commission_pending: Zero::zero(),
 			},
 		);
 		ReversePoolIdLookup::<T>::insert(bonded_pool.bonded_account(), pool_id);
@@ -2859,7 +2908,7 @@ impl<T: Config> Pallet<T> {
 
 		// payout related stuff: we must claim the payouts, and updated recorded payout data
 		// before updating the bonded pool points, similar to that of `join` transaction.
-		reward_pool.update_records(bonded_pool.id, bonded_pool.points)?;
+		reward_pool.update_records(bonded_pool.id, bonded_pool.points, &bonded_pool.commission)?;
 		let claimed =
 			Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
 
@@ -2977,8 +3026,9 @@ impl<T: Config> Pallet<T> {
 
 			let reward_pool = RewardPools::<T>::get(d.pool_id).unwrap();
 			if !bonded_pool.points.is_zero() {
-				let current_rc =
-					reward_pool.current_reward_counter(d.pool_id, bonded_pool.points).unwrap();
+				let (current_rc, _) = reward_pool
+					.current_reward_counter(d.pool_id, bonded_pool.points, &bonded_pool.commission)
+					.unwrap();
 				*pools_members_pending_rewards.entry(d.pool_id).or_default() +=
 					d.pending_rewards(current_rc).unwrap();
 			} // else this pool has been heavily slashed and cannot have any rewards anymore.
@@ -3069,8 +3119,12 @@ impl<T: Config> Pallet<T> {
 			if let Some((reward_pool, bonded_pool)) = RewardPools::<T>::get(pool_member.pool_id)
 				.zip(BondedPools::<T>::get(pool_member.pool_id))
 			{
-				let current_reward_counter = reward_pool
-					.current_reward_counter(pool_member.pool_id, bonded_pool.points)
+				let (current_reward_counter, _) = reward_pool
+					.current_reward_counter(
+						pool_member.pool_id,
+						bonded_pool.points,
+						&bonded_pool.commission,
+					)
 					.ok()?;
 				return pool_member.pending_rewards(current_reward_counter).ok()
 			}

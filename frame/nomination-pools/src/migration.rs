@@ -311,6 +311,8 @@ pub mod v2 {
 						last_recorded_reward_counter: Zero::zero(),
 						last_recorded_total_payouts: Zero::zero(),
 						total_rewards_claimed: Zero::zero(),
+						total_commission_claimed: Zero::zero(),
+						total_commission_pending: Zero::zero(),
 					})
 				},
 			);

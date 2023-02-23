@@ -68,7 +68,9 @@ fn test_setup_works() {
 			RewardPool::<Runtime> {
 				last_recorded_reward_counter: Zero::zero(),
 				last_recorded_total_payouts: 0,
-				total_rewards_claimed: 0
+				total_rewards_claimed: 0,
+				total_commission_claimed: 0,
+				total_commission_pending: 0,
 			}
 		);
 		assert_eq!(
@@ -729,6 +731,8 @@ mod claim_payout {
 			last_recorded_reward_counter: last_recorded_reward_counter.into(),
 			last_recorded_total_payouts,
 			total_rewards_claimed,
+			total_commission_claimed: 0,
+			total_commission_pending: 0,
 		}
 	}
 
@@ -982,7 +986,7 @@ mod claim_payout {
 			// commission applied is 50%, not 75%. Has been bounded by `GlobalMaxCommission`.
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 5, commission: 5 },]
+				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 5, commission: 0 },]
 			);
 		})
 	}
@@ -5059,10 +5063,12 @@ mod reward_counter_precision {
 	}
 
 	fn default_pool_reward_counter() -> FixedU128 {
+		let bonded_pool = BondedPools::<T>::get(1).unwrap();
 		RewardPools::<T>::get(1)
 			.unwrap()
-			.current_reward_counter(1, BondedPools::<T>::get(1).unwrap().points)
+			.current_reward_counter(1, bonded_pool.points, &bonded_pool.commission)
 			.unwrap()
+			.0
 	}
 
 	fn pending_rewards(of: AccountId) -> Option<BalanceOf<T>> {
@@ -5472,7 +5478,7 @@ mod commission {
 					member: 10,
 					pool_id: bonded_pool.id,
 					payout: 30,
-					commission: 10
+					commission: 0
 				},]
 			);
 
@@ -6287,7 +6293,7 @@ mod commission {
 			// Then
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 7, commission: 3 },]
+				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 7, commission: 0 },]
 			);
 
 			// The pool earns 17 points
@@ -6302,7 +6308,7 @@ mod commission {
 			// Then
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 11, commission: 6 },]
+				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 11, commission: 0 },]
 			);
 
 			// The pool earns 50 points
@@ -6317,7 +6323,7 @@ mod commission {
 			// Then
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 34, commission: 16 },]
+				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 34, commission: 0 },]
 			);
 
 			// The pool earns 10439 points
@@ -6332,7 +6338,7 @@ mod commission {
 			// Then
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 6994, commission: 3445 },]
+				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 6994, commission: 0 },]
 			);
 		})
 	}
@@ -6385,12 +6391,6 @@ mod commission {
 				&mut BondedPool::<Runtime>::get(1).unwrap(),
 				&mut reward_pool
 			));
-
-			// Then
-			assert_eq!(
-				pool_events_since_last_call(),
-				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 0, commission: 10 },]
-			);
 		})
 	}
 
@@ -6445,7 +6445,7 @@ mod commission {
 			// of 10 points, reflecting the 90% global max commission.
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 1, commission: 9 },]
+				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 1, commission: 0 },]
 			);
 		})
 	}
