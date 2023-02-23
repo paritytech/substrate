@@ -35,6 +35,7 @@ mod storage;
 mod storage_alias;
 mod transactional;
 mod tt_macro;
+mod derive_impl;
 
 use proc_macro::TokenStream;
 use quote::quote;
@@ -772,6 +773,20 @@ pub fn __create_tt_macro(input: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 	storage_alias::storage_alias(input.into())
+		.unwrap_or_else(|r| r.into_compile_error())
+		.into()
+}
+
+#[proc_macro_attribute]
+pub fn derive_impl(attrs: TokenStream, input: TokenStream) -> TokenStream {
+	derive_impl::derive_impl(attrs.into(), input.into())
+		.unwrap_or_else(|r| r.into_compile_error())
+		.into()
+}
+
+#[proc_macro]
+pub fn derive_impl_inner(input: TokenStream) -> TokenStream {
+	derive_impl::derive_impl_inner(input.into())
 		.unwrap_or_else(|r| r.into_compile_error())
 		.into()
 }

@@ -42,15 +42,43 @@ pub fn expand_config(def: &mut Def) -> proc_macro2::TokenStream {
 	}
 
 	if let Some(trait_items) = &config.default_sub_trait {
-		use quote::ToTokens;
-		let items = trait_items.into_iter().map(|i| i.into_token_stream()).collect::<proc_macro2::TokenStream>();
+		let associated_type_names = config_item
+			.items
+			.iter()
+			.filter_map(
+				|i| if let syn::TraitItem::Type(t) = i { Some(t.ident.clone()) } else { None },
+			)
+			.collect::<Vec<_>>();
+
+		// we rarely use const and fns in config traits anyways... maybe not supporting them is good enough.
+		let const_names = Vec::<syn::Ident>::default();
+		let fn_names = Vec::<syn::Ident>::default();
+
 		quote::quote!(
 			pub trait DefaultConfig {
-				#items
+				#(#trait_items)*
 			}
+
+			#[macro_export]
+			#[doc(hidden)]
+			// TODO: naming probably needs to be unique
+			macro_rules! tt_config_items {
+				{
+					$caller:tt
+					frame_support = [{$($frame_support:ident)::*}]
+				} => {
+					$( $frame_support )*::tt_return! {
+						$caller
+						type_items = [{ #(#associated_type_names),* }]
+						fn_items = [{  }]
+						const_items = [{  }]
+					}
+				}
+			}
+
+			pub use tt_config_items as tt_config_items;
 		)
 	} else {
 		Default::default()
 	}
-
 }

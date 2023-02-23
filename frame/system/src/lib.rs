@@ -201,38 +201,39 @@ pub mod pallet {
 	use crate::{self as frame_system, pallet_prelude::*, *};
 	use frame_support::pallet_prelude::*;
 
-	// pub mod preludes {
-	// 	use super::*;
-	// 	pub mod testing {
-	// 		type AccountId = u64;
-	// 		use sp_runtime::traits::IdentityLookup;
-	// 		use super::*;
+	pub mod preludes {
+		use super::*;
+		pub mod testing {
+			type AccountId = u64;
+			use sp_runtime::traits::IdentityLookup;
+			use super::*;
 
-	// 		pub struct Impl {}
-	// 		impl DefaultConfig for Impl {
-	// 			type Version = ();
-	// 			type BlockWeights = ();
-	// 			type BlockLength = ();
-	// 			type DbWeight = ();
-	// 			type Index = u64;
-	// 			type BlockNumber = u64;
-	// 			type Hash = sp_core::hash::H256;
-	// 			type Hashing = sp_runtime::traits::BlakeTwo256;
-	// 			type AccountId = AccountId;
-	// 			type Lookup = IdentityLookup<AccountId>;
-	// 			type BlockHashCount = frame_support::traits::ConstU64<10>;
-	// 			type AccountData = u32;
-	// 			type OnNewAccount = ();
-	// 			type OnKilledAccount = ();
-	// 			type SystemWeightInfo = ();
-	// 			type SS58Prefix = ();
-	// 			type MaxConsumers = ConstU32<16>;
-	// 		}
-	// 	}
-	// }
+			pub struct Impl {}
+			impl DefaultConfig for Impl {
+				type Version = ();
+				type BlockWeights = ();
+				type BlockLength = ();
+				type DbWeight = ();
+				type Index = u64;
+				type BlockNumber = u64;
+				type Hash = sp_core::hash::H256;
+				type Hashing = sp_runtime::traits::BlakeTwo256;
+				type AccountId = AccountId;
+				type Lookup = IdentityLookup<AccountId>;
+				type BlockHashCount = frame_support::traits::ConstU64<10>;
+				type AccountData = u32;
+				type OnNewAccount = ();
+				type OnKilledAccount = ();
+				type SystemWeightInfo = ();
+				type SS58Prefix = ();
+				type MaxConsumers = ConstU32<16>;
+			}
+		}
+	}
 
 	/// System configuration trait. Implemented by runtime.
 	#[pallet::config]
+	// TODO: #[pallet::default_config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: 'static + Eq + Clone {
 		/// The aggregated event type of the runtime.
@@ -245,6 +246,7 @@ pub mod pallet {
 		/// The basic call filter to use in Origin. All origins are built with this filter as base,
 		/// except Root.
 		#[pallet::no_default]
+		// enum Everything is a reasonable default, but it is not possible.
 		type BaseCallFilter: Contains<Self::RuntimeCall>;
 
 		/// Block & extrinsics weights: base values and limits.
@@ -333,6 +335,7 @@ pub mod pallet {
 		type Lookup: StaticLookup<Target = Self::AccountId>;
 
 		/// The block header.
+		#[pallet::no_default]
 		type Header: Parameter + traits::Header<Number = Self::BlockNumber, Hash = Self::Hash>;
 
 		/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
@@ -353,6 +356,7 @@ pub mod pallet {
 		/// runtime.
 		///
 		/// For tests it is okay to use `()` as type, however it will provide "useless" data.
+		#[pallet::no_default]
 		type PalletInfo: PalletInfo;
 
 		/// Data to be associated with an account (other than nonce/transaction counter, which this
@@ -384,6 +388,7 @@ pub mod pallet {
 		/// [`Pallet::update_code_in_storage`]).
 		/// It's unlikely that this needs to be customized, unless you are writing a parachain using
 		/// `Cumulus`, where the actual code change is deferred.
+		#[pallet::no_default]
 		type OnSetCode: SetCode;
 
 		/// The maximum number of consumers allowed on a single account.
