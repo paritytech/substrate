@@ -413,7 +413,7 @@ impl Notifications {
 	}
 
 	/// Disconnects the given peer if we are connected to it.
-	/// 
+	///
 	/// Note the peer will be banned for 10s after this.
 	pub fn disconnect_peer(&mut self, peer_id: &PeerId, set_id: sc_peerset::SetId) {
 		trace!(target: "sub-libp2p", "External API => Disconnect({}, {:?})", peer_id, set_id);
@@ -1592,6 +1592,12 @@ impl NetworkBehaviour for Notifications {
 
 					// Disabled => Disabled | Incoming
 					PeerState::Disabled { mut connections, backoff_until } => {
+						// Do not accept incoming connections if the peer is still banned.
+						if backoff_until.map_or(false, |t| t > Instant::now()) {
+							*entry.into_mut() = PeerState::Disabled { connections, backoff_until };
+							return
+						}
+
 						if let Some((_, connec_state)) =
 							connections.iter_mut().find(|(c, _)| *c == connection_id)
 						{
