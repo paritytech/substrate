@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -56,6 +56,8 @@ use std::{
 	fmt,
 };
 
+const LOG_TARGET: &str = "state-db";
+const LOG_TARGET_PIN: &str = "state-db::pin";
 const PRUNING_MODE: &[u8] = b"mode";
 const PRUNING_MODE_ARCHIVE: &[u8] = b"archive";
 const PRUNING_MODE_ARCHIVE_CANON: &[u8] = b"archive_canonical";
@@ -152,6 +154,7 @@ impl<E> From<StateDbError> for Error<E> {
 }
 
 /// Pinning error type.
+#[derive(Debug)]
 pub enum PinError {
 	/// Trying to pin invalid block.
 	InvalidBlock,
@@ -308,7 +311,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDbSync<BlockHash, Key, D> {
 		ref_counting: bool,
 		db: D,
 	) -> Result<StateDbSync<BlockHash, Key, D>, Error<D::Error>> {
-		trace!(target: "state-db", "StateDb settings: {:?}. Ref-counting: {}", mode, ref_counting);
+		trace!(target: LOG_TARGET, "StateDb settings: {:?}. Ref-counting: {}", mode, ref_counting);
 
 		let non_canonical: NonCanonicalOverlay<BlockHash, Key> = NonCanonicalOverlay::new(&db)?;
 		let pruning: Option<RefWindow<BlockHash, Key, D>> = match mode {
@@ -389,7 +392,8 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDbSync<BlockHash, Key, D> {
 					}
 				} else {
 					match self.pruning.as_ref() {
-						None => IsPruned::NotPruned,
+						// We don't know for sure.
+						None => IsPruned::MaybePruned,
 						Some(pruning) => match pruning.have_block(hash, number) {
 							HaveBlock::No => IsPruned::Pruned,
 							HaveBlock::Yes => IsPruned::NotPruned,
@@ -457,13 +461,14 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDbSync<BlockHash, Key, D> {
 			PruningMode::ArchiveAll => Ok(()),
 			PruningMode::ArchiveCanonical | PruningMode::Constrained(_) => {
 				let have_block = self.non_canonical.have_block(hash) ||
-					self.pruning.as_ref().map_or(false, |pruning| {
-						match pruning.have_block(hash, number) {
+					self.pruning.as_ref().map_or_else(
+						|| hint(),
+						|pruning| match pruning.have_block(hash, number) {
 							HaveBlock::No => false,
 							HaveBlock::Yes => true,
 							HaveBlock::Maybe => hint(),
-						}
-					});
+						},
+					);
 				if have_block {
 					let refs = self.pinned.entry(hash.clone()).or_default();
 					if *refs == 0 {
@@ -642,7 +647,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDb<BlockHash, Key, D> {
 
 	/// Check if block is pruned away.
 	pub fn is_pruned(&self, hash: &BlockHash, number: u64) -> IsPruned {
-		return self.db.read().is_pruned(hash, number)
+		self.db.read().is_pruned(hash, number)
 	}
 
 	/// Reset in-memory changes to the last disk-backed state.

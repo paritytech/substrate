@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	build_network_future,
+	build_network_future, build_system_rpc_future,
 	client::{Client, ClientConfig},
 	config::{Configuration, KeystoreConfig, PrometheusConfig},
 	error::Error,
@@ -43,7 +43,7 @@ use sc_network_bitswap::BitswapRequestHandler;
 use sc_network_common::{
 	protocol::role::Roles,
 	service::{NetworkStateInfo, NetworkStatusProvider},
-	sync::warp::WarpSyncProvider,
+	sync::warp::WarpSyncParams,
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
@@ -759,8 +759,8 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	/// A block announce validator builder.
 	pub block_announce_validator_builder:
 		Option<Box<dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send>>,
-	/// An optional warp sync provider.
-	pub warp_sync: Option<Arc<dyn WarpSyncProvider<TBl>>>,
+	/// Optional warp sync params.
+	pub warp_sync_params: Option<WarpSyncParams<TBl>>,
 }
 /// Build the network service, the network status sinks and an RPC sender.
 pub fn build_network<TBl, TExPool, TImpQu, TCl>(
@@ -795,12 +795,12 @@ where
 		spawn_handle,
 		import_queue,
 		block_announce_validator_builder,
-		warp_sync,
+		warp_sync_params,
 	} = params;
 
 	let mut request_response_protocol_configs = Vec::new();
 
-	if warp_sync.is_none() && config.network.sync_mode.is_warp() {
+	if warp_sync_params.is_none() && config.network.sync_mode.is_warp() {
 		return Err("Warp sync enabled, but no warp sync provider configured.".into())
 	}
 
@@ -845,8 +845,8 @@ where
 		protocol_config
 	};
 
-	let (warp_sync_provider, warp_sync_protocol_config) = warp_sync
-		.map(|provider| {
+	let warp_sync_protocol_config = match warp_sync_params.as_ref() {
+		Some(WarpSyncParams::WithProvider(warp_with_provider)) => {
 			// Allow both outgoing and incoming requests.
 			let (handler, protocol_config) = WarpSyncRequestHandler::new(
 				protocol_id.clone(),
@@ -856,12 +856,13 @@ where
 					.flatten()
 					.expect("Genesis block exists; qed"),
 				config.chain_spec.fork_id(),
-				provider.clone(),
+				warp_with_provider.clone(),
 			);
 			spawn_handle.spawn("warp-sync-request-handler", Some("networking"), handler.run());
-			(Some(provider), Some(protocol_config))
-		})
-		.unwrap_or_default();
+			Some(protocol_config)
+		},
+		_ => None,
+	};
 
 	let light_client_request_protocol_config = {
 		// Allow both outgoing and incoming requests.
@@ -888,7 +889,7 @@ where
 		Roles::from(&config.role),
 		block_announce_validator,
 		config.network.max_parallel_downloads,
-		warp_sync_provider,
+		warp_sync_params,
 		config.prometheus_config.as_ref().map(|config| config.registry.clone()).as_ref(),
 		chain_sync_network_handle,
 		import_queue.service(),
@@ -962,18 +963,28 @@ where
 		Some("networking"),
 		chain_sync_network_provider.run(network.clone()),
 	);
-	spawn_handle.spawn("import-queue", None, import_queue.run(Box::new(chain_sync_service)));
+	spawn_handle.spawn(
+		"import-queue",
+		None,
+		import_queue.run(Box::new(chain_sync_service.clone())),
+	);
 
 	let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc", 10_000);
-
-	let future = build_network_future(
-		config.role.clone(),
-		network_mut,
-		client,
-		system_rpc_rx,
-		has_bootnodes,
-		config.announce_block,
+	spawn_handle.spawn(
+		"system-rpc-handler",
+		Some("networking"),
+		build_system_rpc_future(
+			config.role.clone(),
+			network_mut.service().clone(),
+			chain_sync_service.clone(),
+			client.clone(),
+			system_rpc_rx,
+			has_bootnodes,
+		),
 	);
+
+	let future =
+		build_network_future(network_mut, client, chain_sync_service, config.announce_block);
 
 	// TODO: Normally, one is supposed to pass a list of notifications protocols supported by the
 	// node through the `NetworkConfiguration` struct. But because this function doesn't know in

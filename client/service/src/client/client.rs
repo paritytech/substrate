@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -40,8 +40,8 @@ use sc_client_api::{
 	},
 	execution_extensions::ExecutionExtensions,
 	notifications::{StorageEventStream, StorageNotifications},
-	CallExecutor, ExecutorProvider, KeyIterator, OnFinalityAction, OnImportAction, ProofProvider,
-	UsageProvider,
+	CallExecutor, ExecutorProvider, KeysIter, OnFinalityAction, OnImportAction, PairsIter,
+	ProofProvider, UsageProvider,
 };
 use sc_consensus::{
 	BlockCheckParams, BlockImportParams, ForkChoiceStrategy, ImportResult, StateAction,
@@ -481,8 +481,7 @@ where
 	}
 
 	/// Get the code at a given block.
-	pub fn code_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Vec<u8>> {
-		let hash = self.backend.blockchain().expect_block_hash_from_id(id)?;
+	pub fn code_at(&self, hash: Block::Hash) -> sp_blockchain::Result<Vec<u8>> {
 		Ok(StorageProvider::storage(self, hash, &StorageKey(well_known_keys::CODE.to_vec()))?
 			.expect(
 				"None is returned if there's no value stored for the given key;\
@@ -492,8 +491,7 @@ where
 	}
 
 	/// Get the RuntimeVersion at a given block.
-	pub fn runtime_version_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
-		let hash = self.backend.blockchain().expect_block_hash_from_id(id)?;
+	pub fn runtime_version_at(&self, hash: Block::Hash) -> sp_blockchain::Result<RuntimeVersion> {
 		CallExecutor::runtime_version(&self.executor, hash)
 	}
 
@@ -840,7 +838,6 @@ where
 			CoreApi<Block> + ApiExt<Block, StateBackend = B::State>,
 	{
 		let parent_hash = import_block.header.parent_hash();
-		let at = BlockId::Hash(*parent_hash);
 		let state_action = std::mem::replace(&mut import_block.state_action, StateAction::Skip);
 		let (enact_state, storage_changes) = match (self.block_status(*parent_hash)?, state_action)
 		{
@@ -872,7 +869,7 @@ where
 				let execution_context = import_block.origin.into();
 
 				runtime_api.execute_block_with_context(
-					&at,
+					*parent_hash,
 					execution_context,
 					Block::new(import_block.header.clone(), body.clone()),
 				)?;
@@ -1411,14 +1408,14 @@ where
 {
 	fn new_block_at<R: Into<RecordProof>>(
 		&self,
-		parent: &BlockId<Block>,
+		parent: Block::Hash,
 		inherent_digests: Digest,
 		record_proof: R,
 	) -> sp_blockchain::Result<sc_block_builder::BlockBuilder<Block, Self, B>> {
 		sc_block_builder::BlockBuilder::new(
 			self,
-			self.expect_block_hash_from_id(parent)?,
-			self.expect_block_number_from_id(parent)?,
+			parent,
+			self.expect_block_number_from_id(&BlockId::Hash(parent))?,
 			record_proof.into(),
 			inherent_digests,
 			&self.backend,
@@ -1466,51 +1463,36 @@ where
 {
 	fn storage_keys(
 		&self,
-		hash: Block::Hash,
-		key_prefix: &StorageKey,
-	) -> sp_blockchain::Result<Vec<StorageKey>> {
-		let keys = self.state_at(hash)?.keys(&key_prefix.0).into_iter().map(StorageKey).collect();
-		Ok(keys)
-	}
-
-	fn storage_pairs(
-		&self,
-		hash: <Block as BlockT>::Hash,
-		key_prefix: &StorageKey,
-	) -> sp_blockchain::Result<Vec<(StorageKey, StorageData)>> {
-		let state = self.state_at(hash)?;
-		let keys = state
-			.keys(&key_prefix.0)
-			.into_iter()
-			.map(|k| {
-				let d = state.storage(&k).ok().flatten().unwrap_or_default();
-				(StorageKey(k), StorageData(d))
-			})
-			.collect();
-		Ok(keys)
-	}
-
-	fn storage_keys_iter(
-		&self,
 		hash: <Block as BlockT>::Hash,
 		prefix: Option<&StorageKey>,
 		start_key: Option<&StorageKey>,
-	) -> sp_blockchain::Result<KeyIterator<B::State, Block>> {
+	) -> sp_blockchain::Result<KeysIter<B::State, Block>> {
 		let state = self.state_at(hash)?;
-		let start_key = start_key.or(prefix).map(|key| key.0.clone()).unwrap_or_else(Vec::new);
-		Ok(KeyIterator::new(state, prefix.cloned(), start_key))
+		KeysIter::new(state, prefix, start_key)
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
 	}
 
-	fn child_storage_keys_iter(
+	fn child_storage_keys(
 		&self,
 		hash: <Block as BlockT>::Hash,
 		child_info: ChildInfo,
 		prefix: Option<&StorageKey>,
 		start_key: Option<&StorageKey>,
-	) -> sp_blockchain::Result<KeyIterator<B::State, Block>> {
+	) -> sp_blockchain::Result<KeysIter<B::State, Block>> {
 		let state = self.state_at(hash)?;
-		let start_key = start_key.or(prefix).map(|key| key.0.clone()).unwrap_or_else(Vec::new);
-		Ok(KeyIterator::new_child(state, child_info, prefix.cloned(), start_key))
+		KeysIter::new_child(state, child_info, prefix, start_key)
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
+	}
+
+	fn storage_pairs(
+		&self,
+		hash: <Block as BlockT>::Hash,
+		prefix: Option<&StorageKey>,
+		start_key: Option<&StorageKey>,
+	) -> sp_blockchain::Result<PairsIter<B::State, Block>> {
+		let state = self.state_at(hash)?;
+		PairsIter::new(state, prefix, start_key)
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
 	}
 
 	fn storage(
@@ -1533,21 +1515,6 @@ where
 		self.state_at(hash)?
 			.storage_hash(&key.0)
 			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
-	}
-
-	fn child_storage_keys(
-		&self,
-		hash: <Block as BlockT>::Hash,
-		child_info: &ChildInfo,
-		key_prefix: &StorageKey,
-	) -> sp_blockchain::Result<Vec<StorageKey>> {
-		let keys = self
-			.state_at(hash)?
-			.child_keys(child_info, &key_prefix.0)
-			.into_iter()
-			.map(StorageKey)
-			.collect();
-		Ok(keys)
 	}
 
 	fn child_storage(
@@ -1727,10 +1694,9 @@ where
 		&self,
 		params: CallApiAtParams<Block, B::State>,
 	) -> Result<Vec<u8>, sp_api::ApiError> {
-		let at_hash = self.expect_block_hash_from_id(params.at)?;
 		self.executor
 			.contextual_call(
-				at_hash,
+				params.at,
 				params.function,
 				&params.arguments,
 				params.overlayed_changes,
@@ -1741,14 +1707,12 @@ where
 			.map_err(Into::into)
 	}
 
-	fn runtime_version_at(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, sp_api::ApiError> {
-		let hash = self.backend.blockchain().expect_block_hash_from_id(at)?;
+	fn runtime_version_at(&self, hash: Block::Hash) -> Result<RuntimeVersion, sp_api::ApiError> {
 		CallExecutor::runtime_version(&self.executor, hash).map_err(Into::into)
 	}
 
-	fn state_at(&self, at: &BlockId<Block>) -> Result<Self::StateBackend, sp_api::ApiError> {
-		let hash = self.backend.blockchain().expect_block_hash_from_id(at)?;
-		self.state_at(hash).map_err(Into::into)
+	fn state_at(&self, at: Block::Hash) -> Result<Self::StateBackend, sp_api::ApiError> {
+		self.state_at(at).map_err(Into::into)
 	}
 }
 

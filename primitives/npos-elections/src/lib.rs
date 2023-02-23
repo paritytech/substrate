@@ -1,6 +1,7 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd. SPDX-License-Identifier: Apache-2.0
+// Copyright (C) Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 // in compliance with the License. You may obtain a copy of the License at
@@ -24,6 +25,8 @@
 //! - [`balance`](balancing::balance): Implements the star balancing algorithm. This iterative
 //!   process can push a solution toward being more "balanced", which in turn can increase its
 //!   score.
+//! - [`approval_voting`](approval_voting::approval_voting): Implements an approval voting electoral
+//!   system where voters can back multiple candidates with the same stake.
 //!
 //! ### Terminology
 //!
@@ -89,6 +92,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+pub mod approval_voting;
 mod assignments;
 pub mod balancing;
 pub mod helpers;
@@ -99,6 +103,7 @@ pub mod pjr;
 pub mod reduce;
 pub mod traits;
 
+pub use approval_voting::*;
 pub use assignments::{Assignment, StakedAssignment};
 pub use balancing::*;
 pub use helpers::*;

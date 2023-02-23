@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -57,7 +57,7 @@ const DEN: ExtendedBalance = ExtendedBalance::max_value();
 /// - The returning weight distribution is _normalized_, meaning that it is guaranteed that the sum
 ///   of the ratios in each voter's distribution sums up to exactly `P::one()`.
 ///
-/// This can only fail of the normalization fails. This can happen if for any of the resulting
+/// This can only fail if the normalization fails. This can happen if for any of the resulting
 /// assignments, `assignment.distribution.map(|p| p.deconstruct()).sum()` fails to fit inside
 /// `UpperOf<P>`. A user of this crate may statically assert that this can never happen and safely
 /// `expect` this to return `Ok`.

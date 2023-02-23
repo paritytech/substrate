@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -42,7 +42,7 @@ use node_primitives::Block;
 use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::{
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
-	BlockBackend, ExecutionStrategy,
+	ExecutionStrategy,
 };
 use sc_client_db::PruningMode;
 use sc_consensus::{BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult, ImportedAux};
@@ -53,8 +53,7 @@ use sp_consensus::BlockOrigin;
 use sp_core::{blake2_256, ed25519, sr25519, traits::SpawnNamed, ExecutionContext, Pair, Public};
 use sp_inherents::InherentData;
 use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, IdentifyAccount, Verify, Zero},
+	traits::{Block as BlockT, IdentifyAccount, Verify},
 	OpaqueExtrinsic,
 };
 
@@ -273,14 +272,10 @@ pub struct BlockContentIterator<'a> {
 
 impl<'a> BlockContentIterator<'a> {
 	fn new(content: BlockContent, keyring: &'a BenchKeyring, client: &Client) -> Self {
+		let genesis_hash = client.chain_info().genesis_hash;
 		let runtime_version = client
-			.runtime_version_at(&BlockId::number(0))
+			.runtime_version_at(genesis_hash)
 			.expect("There should be runtime version at 0");
-
-		let genesis_hash = client
-			.block_hash(Zero::zero())
-			.expect("Database error?")
-			.expect("Genesis block always exists; qed");
 
 		BlockContentIterator { iteration: 0, content, keyring, runtime_version, genesis_hash }
 	}
@@ -445,7 +440,7 @@ impl BenchDb {
 		client
 			.runtime_api()
 			.inherent_extrinsics_with_context(
-				&BlockId::number(0),
+				client.chain_info().genesis_hash,
 				ExecutionContext::BlockConstruction,
 				inherent_data,
 			)

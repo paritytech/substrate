@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -386,7 +386,6 @@ pub mod v8 {
 				Nominators::<T>::iter().map(|(id, _)| id),
 				Pallet::<T>::weight_of_fn(),
 			);
-			debug_assert_eq!(T::VoterList::try_state(), Ok(()));
 
 			StorageVersion::<T>::put(ObsoleteReleases::V8_0_0);
 			crate::log!(

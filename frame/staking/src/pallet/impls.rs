@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -972,6 +972,20 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
+impl<T: Config> Pallet<T> {
+	/// Returns the current nominations quota for nominators.
+	///
+	/// Used by the runtime API.
+	/// Note: for now, this api runtime will always return value of `T::MaxNominations` and thus it
+	/// is redundant. However, with the upcoming changes in
+	/// <https://github.com/paritytech/substrate/pull/12970>, the nominations quota will change
+	/// depending on the nominators balance. We're introducing this runtime API now to prepare the
+	/// community to use it before rolling out PR#12970.
+	pub fn api_nominations_quota(_balance: BalanceOf<T>) -> u32 {
+		T::MaxNominations::get()
+	}
+}
+
 impl<T: Config> ElectionDataProvider for Pallet<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = BlockNumberFor<T>;
@@ -1451,9 +1465,11 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 		// nothing to do upon regenerate.
 		0
 	}
+	#[cfg(feature = "try-runtime")]
 	fn try_state() -> Result<(), &'static str> {
 		Ok(())
 	}
+
 	fn unsafe_clear() {
 		#[allow(deprecated)]
 		Validators::<T>::remove_all();
@@ -1525,6 +1541,8 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 		// nothing to do upon regenerate.
 		0
 	}
+
+	#[cfg(feature = "try-runtime")]
 	fn try_state() -> Result<(), &'static str> {
 		Ok(())
 	}
