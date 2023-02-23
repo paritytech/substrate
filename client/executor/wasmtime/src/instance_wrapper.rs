@@ -402,8 +402,7 @@ fn decommit_works() {
 	let code = wat::parse_str("(module (memory (export \"memory\") 1 4))").unwrap();
 	let module = wasmtime::Module::new(&engine, code).unwrap();
 	let linker = wasmtime::Linker::new(&engine);
-	let mut store = create_store(&engine, None);
-	let instance_pre = linker.instantiate_pre(&mut store, &module).unwrap();
+	let instance_pre = linker.instantiate_pre(&module).unwrap();
 	let mut wrapper = InstanceWrapper::new(&engine, &instance_pre, None).unwrap();
 	unsafe { *wrapper.memory.data_ptr(&wrapper.store) = 42 };
 	assert_eq!(unsafe { *wrapper.memory.data_ptr(&wrapper.store) }, 42);
