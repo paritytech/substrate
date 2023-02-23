@@ -24,8 +24,7 @@
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::{
-	onchain, weights::SubstrateWeight, ApprovalVoting, BalancingConfig, ElectionDataProvider,
-	SequentialPhragmen, VoteWeight,
+	onchain, BalancingConfig, ElectionDataProvider, SequentialPhragmen, VoteWeight,
 };
 use frame_support::{
 	construct_runtime,
@@ -1011,21 +1010,18 @@ parameter_types! {
 	pub const TermDuration: BlockNumber = 7 * DAYS;
 	pub const DesiredMembers: u32 = 13;
 	pub const DesiredRunnersUp: u32 = 7;
+	pub const MaxVotesPerVoter: u32 = 16;
 	pub const MaxVoters: u32 = 512;
 	pub const MaxCandidates: u32 = 64;
-	pub const MaxVotesPerVoter: u32 = 16;
-	// The ElectionsPalletId parameter name was changed along with the renaming of the elections
-	// pallet, but we keep the same lock ID to prevent a migration from current runtimes.
-	// Related to https://github.com/paritytech/substrate/issues/8250
-	pub const ElectionsPalletId: LockIdentifier = *b"phrelect";
+	pub const ElectionsPhragmenPalletId: LockIdentifier = *b"phrelect";
 }
 
 // Make sure that there are no more than `MaxMembers` members elected via elections-phragmen.
 const_assert!(DesiredMembers::get() <= CouncilMaxMembers::get());
 
-impl pallet_elections::Config for Runtime {
+impl pallet_elections_phragmen::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type PalletId = ElectionsPalletId;
+	type PalletId = ElectionsPhragmenPalletId;
 	type Currency = Balances;
 	type ChangeMembers = Council;
 	// NOTE: this implies that council's genesis members cannot be set directly and must come from
@@ -1043,9 +1039,7 @@ impl pallet_elections::Config for Runtime {
 	type MaxVoters = MaxVoters;
 	type MaxVotesPerVoter = MaxVotesPerVoter;
 	type MaxCandidates = MaxCandidates;
-	type ElectionSolver = ApprovalVoting<Self::AccountId, Perbill>;
-	type SolverWeightInfo = SubstrateWeight<Runtime>;
-	type WeightInfo = pallet_elections::weights::SubstrateWeight<Runtime>;
+	type WeightInfo = pallet_elections_phragmen::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
@@ -1743,7 +1737,7 @@ construct_runtime!(
 		Democracy: pallet_democracy,
 		Council: pallet_collective::<Instance1>,
 		TechnicalCommittee: pallet_collective::<Instance2>,
-		Elections: pallet_elections,
+		Elections: pallet_elections_phragmen,
 		TechnicalMembership: pallet_membership::<Instance1>,
 		Grandpa: pallet_grandpa,
 		Treasury: pallet_treasury,
@@ -1857,7 +1851,6 @@ mod benches {
 	frame_benchmarking::define_benchmarks!(
 		[frame_benchmarking, BaselineBench::<Runtime>]
 		[frame_benchmarking_pallet_pov, Pov]
-		[frame_election_provider_support, EPSBench::<Runtime>]
 		[pallet_alliance, Alliance]
 		[pallet_assets, Assets]
 		[pallet_babe, Babe]
@@ -1870,7 +1863,8 @@ mod benches {
 		[pallet_contracts, Contracts]
 		[pallet_democracy, Democracy]
 		[pallet_election_provider_multi_phase, ElectionProviderMultiPhase]
-		[pallet_elections, Elections]
+		[pallet_election_provider_support_benchmarking, EPSBench::<Runtime>]
+		[pallet_elections_phragmen, Elections]
 		[pallet_fast_unstake, FastUnstake]
 		[pallet_nis, Nis]
 		[pallet_grandpa, Grandpa]
@@ -2329,7 +2323,7 @@ impl_runtime_apis! {
 			// which is why we need these two lines below.
 			use pallet_session_benchmarking::Pallet as SessionBench;
 			use pallet_offences_benchmarking::Pallet as OffencesBench;
-			use frame_election_provider_support::benchmarking::Pallet as EPSBench;
+			use pallet_election_provider_support_benchmarking::Pallet as EPSBench;
 			use frame_system_benchmarking::Pallet as SystemBench;
 			use baseline::Pallet as BaselineBench;
 			use pallet_nomination_pools_benchmarking::Pallet as NominationPoolsBench;
@@ -2352,14 +2346,14 @@ impl_runtime_apis! {
 			// which is why we need these two lines below.
 			use pallet_session_benchmarking::Pallet as SessionBench;
 			use pallet_offences_benchmarking::Pallet as OffencesBench;
-			use frame_election_provider_support::benchmarking::Pallet as EPSBench;
+			use pallet_election_provider_support_benchmarking::Pallet as EPSBench;
 			use frame_system_benchmarking::Pallet as SystemBench;
 			use baseline::Pallet as BaselineBench;
 			use pallet_nomination_pools_benchmarking::Pallet as NominationPoolsBench;
 
 			impl pallet_session_benchmarking::Config for Runtime {}
 			impl pallet_offences_benchmarking::Config for Runtime {}
-			impl frame_election_provider_support::benchmarking::Config for Runtime {}
+			impl pallet_election_provider_support_benchmarking::Config for Runtime {}
 			impl frame_system_benchmarking::Config for Runtime {}
 			impl baseline::Config for Runtime {}
 			impl pallet_nomination_pools_benchmarking::Config for Runtime {}
