@@ -43,6 +43,10 @@ pub struct IterArgs<'a> {
 	/// This is inclusive and the iteration will include the key which is specified here.
 	pub start_at: Option<&'a [u8]>,
 
+	/// If this is `true` then the iteration will *not* include
+	/// the key specified in `start_at`, if there is such a key.
+	pub start_at_exclusive: bool,
+
 	/// The info of the child trie over which to iterate over.
 	pub child_info: Option<ChildInfo>,
 
