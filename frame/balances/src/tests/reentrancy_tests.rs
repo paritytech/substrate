@@ -18,7 +18,11 @@
 //! Tests regarding the reentrancy functionality.
 
 use super::*;
-use frame_support::traits::tokens::{KeepAlive::{CanKill, NoKill}, Privilege::Force, Precision::BestEffort};
+use frame_support::traits::tokens::{
+	KeepAlive::{CanKill, NoKill},
+	Precision::BestEffort,
+	Privilege::Force,
+};
 use fungible::Balanced;
 
 #[test]

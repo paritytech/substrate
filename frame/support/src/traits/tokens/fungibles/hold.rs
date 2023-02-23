@@ -19,7 +19,12 @@
 
 use crate::{
 	ensure,
-	traits::tokens::{DepositConsequence::Success, KeepAlive, Privilege::{self, Force}, Precision::{self, Exact, BestEffort}},
+	traits::tokens::{
+		DepositConsequence::Success,
+		KeepAlive,
+		Precision::{self, BestEffort, Exact},
+		Privilege::{self, Force},
+	},
 };
 use scale_info::TypeInfo;
 use sp_arithmetic::{
@@ -258,8 +263,8 @@ pub trait Mutate<AccountId>:
 	///
 	/// The actual amount released is returned with `Ok`.
 	///
-	/// If `precision` is `BestEffort`, then the amount actually unreserved and returned as the inner
-	/// value of `Ok` may be smaller than the `amount` passed.
+	/// If `precision` is `BestEffort`, then the amount actually unreserved and returned as the
+	/// inner value of `Ok` may be smaller than the `amount` passed.
 	fn release(
 		asset: Self::AssetId,
 		reason: &Self::Reason,

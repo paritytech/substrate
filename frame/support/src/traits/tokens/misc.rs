@@ -56,8 +56,8 @@ impl From<Privilege> for bool {
 
 #[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
 pub enum Precision {
-	/// The operation should must either proceed either exactly according to the amounts involved or
-	/// not at all.
+	/// The operation should must either proceed either exactly according to the amounts involved
+	/// or not at all.
 	Exact,
 	/// The operation may be considered successful even if less than the specified amounts are
 	/// available to be used. In this case a best effort will be made.

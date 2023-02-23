@@ -171,7 +171,7 @@ use frame_support::{
 		tokens::{
 			fungible, BalanceStatus as Status, DepositConsequence,
 			KeepAlive::{CanKill, Keep, NoKill},
-			Privilege::{self, Regular, Force},
+			Privilege::{self, Force, Regular},
 			WithdrawConsequence,
 		},
 		Currency, Defensive, Get, OnUnbalanced, ReservableCurrency, StoredMap,
@@ -636,8 +636,11 @@ pub mod pallet {
 		) -> DispatchResult {
 			let transactor = ensure_signed(origin)?;
 			let keep_alive = if keep_alive { Keep } else { CanKill };
-			let reducible_balance =
-				<Self as fungible::Inspect<_>>::reducible_balance(&transactor, keep_alive, Privilege::Regular);
+			let reducible_balance = <Self as fungible::Inspect<_>>::reducible_balance(
+				&transactor,
+				keep_alive,
+				Privilege::Regular,
+			);
 			let dest = T::Lookup::lookup(dest)?;
 			<Self as fungible::Mutate<_>>::transfer(
 				&transactor,

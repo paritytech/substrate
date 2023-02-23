@@ -22,7 +22,12 @@ use crate::{
 	ensure,
 	traits::{
 		tokens::{
-			misc::{Balance, DepositConsequence, KeepAlive, WithdrawConsequence, Privilege::{self, Force, Regular}, Precision::{self, Exact, BestEffort}},
+			misc::{
+				Balance, DepositConsequence, KeepAlive,
+				Precision::{self, BestEffort, Exact},
+				Privilege::{self, Force, Regular},
+				WithdrawConsequence,
+			},
 			Imbalance as ImbalanceT,
 		},
 		SameOrOther, TryDrop,
@@ -75,7 +80,8 @@ pub trait Inspect<AccountId>: Sized {
 	/// and potentially go below user-level restrictions on the minimum amount of the account.
 	///
 	/// Always less than or equal to `balance()`.
-	fn reducible_balance(who: &AccountId, keep_alive: KeepAlive, force: Privilege) -> Self::Balance;
+	fn reducible_balance(who: &AccountId, keep_alive: KeepAlive, force: Privilege)
+		-> Self::Balance;
 
 	/// Returns `true` if the balance of `who` may be increased by `amount`.
 	///
@@ -397,10 +403,10 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 
 	/// Mints `value` into the account of `who`, creating it as needed.
 	///
-	/// If `precision` is `BestEffort` and `value` in full could not be minted (e.g. due to overflow),
-	/// then the maximum is minted, up to `value`. If `precision` is `Exact`, then exactly `value`
-	/// must be minted into the account of `who` or the operation will fail with an `Err` and
-	/// nothing will change.
+	/// If `precision` is `BestEffort` and `value` in full could not be minted (e.g. due to
+	/// overflow), then the maximum is minted, up to `value`. If `precision` is `Exact`, then
+	/// exactly `value` must be minted into the account of `who` or the operation will fail with an
+	/// `Err` and nothing will change.
 	///
 	/// If the operation is successful, this will return `Ok` with a `Debt` of the total value
 	/// added to the account.
@@ -416,10 +422,10 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 
 	/// Removes `value` balance from `who` account if possible.
 	///
-	/// If `precision` is `BestEffort` and `value` in full could not be removed (e.g. due to underflow),
-	/// then the maximum is removed, up to `value`. If `precision` is `Exact`, then exactly
-	/// `value` must be removed from the account of `who` or the operation will fail with an `Err`
-	/// and nothing will change.
+	/// If `precision` is `BestEffort` and `value` in full could not be removed (e.g. due to
+	/// underflow), then the maximum is removed, up to `value`. If `precision` is `Exact`, then
+	/// exactly `value` must be removed from the account of `who` or the operation will fail with an
+	/// `Err` and nothing will change.
 	///
 	/// If the removal is needed but not possible, then it returns `Err` and nothing is changed.
 	/// If the account needed to be deleted, then slightly more than `value` may be removed from the

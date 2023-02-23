@@ -18,7 +18,11 @@
 //! Tests regarding the functionality of the `fungible` trait set implementations.
 
 use super::*;
-use frame_support::traits::tokens::{KeepAlive::CanKill, Precision::{Exact, BestEffort}, Privilege::{Regular, Force}};
+use frame_support::traits::tokens::{
+	KeepAlive::CanKill,
+	Precision::{BestEffort, Exact},
+	Privilege::{Force, Regular},
+};
 use fungible::{Inspect, InspectFreeze, InspectHold, MutateFreeze, MutateHold, Unbalanced};
 
 #[test]
@@ -212,7 +216,15 @@ fn frozen_hold_balance_best_effort_transfer_works() {
 			assert_ok!(Balances::hold(&TestId::Foo, &1, 9));
 			assert_eq!(Balances::reducible_total_balance_on_hold(&1, Force), 9);
 			assert_eq!(Balances::reducible_total_balance_on_hold(&1, Regular), 5);
-			assert_ok!(Balances::transfer_on_hold(&TestId::Foo, &1, &2, 10, BestEffort, false, Regular));
+			assert_ok!(Balances::transfer_on_hold(
+				&TestId::Foo,
+				&1,
+				&2,
+				10,
+				BestEffort,
+				false,
+				Regular
+			));
 			assert_eq!(Balances::total_balance(&1), 5);
 			assert_eq!(Balances::total_balance(&2), 25);
 		});

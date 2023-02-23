@@ -24,7 +24,12 @@ use crate::{
 	ensure,
 	traits::{
 		tokens::{
-			misc::{Balance, DepositConsequence, KeepAlive, WithdrawConsequence, Privilege::{self, Force, Regular}, Precision::{self, Exact, BestEffort}},
+			misc::{
+				Balance, DepositConsequence, KeepAlive,
+				Precision::{self, BestEffort, Exact},
+				Privilege::{self, Force, Regular},
+				WithdrawConsequence,
+			},
 			AssetId,
 		},
 		SameOrOther, TryDrop,
@@ -274,7 +279,8 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		Self::total_issuance(asset)
 			.checked_sub(&actual)
 			.ok_or(ArithmeticError::Overflow)?;
-		let actual = Self::decrease_balance(asset, who, actual, BestEffort, KeepAlive::CanKill, force)?;
+		let actual =
+			Self::decrease_balance(asset, who, actual, BestEffort, KeepAlive::CanKill, force)?;
 		Self::set_total_issuance(asset, Self::total_issuance(asset).saturating_sub(actual));
 		Self::done_burn_from(asset, who, actual);
 		Ok(actual)
@@ -300,7 +306,8 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		Self::total_issuance(asset)
 			.checked_sub(&actual)
 			.ok_or(ArithmeticError::Overflow)?;
-		let actual = Self::decrease_balance(asset, who, actual, BestEffort, KeepAlive::CanKill, Regular)?;
+		let actual =
+			Self::decrease_balance(asset, who, actual, BestEffort, KeepAlive::CanKill, Regular)?;
 		Self::set_total_issuance(asset, Self::total_issuance(asset).saturating_sub(actual));
 		Self::done_shelve(asset, who, actual);
 		Ok(actual)
@@ -357,7 +364,8 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	fn set_balance(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> Self::Balance {
 		let b = Self::balance(asset, who);
 		if b > amount {
-			Self::burn_from(asset, who, b - amount, BestEffort, Force).map(|d| amount.saturating_sub(d))
+			Self::burn_from(asset, who, b - amount, BestEffort, Force)
+				.map(|d| amount.saturating_sub(d))
 		} else {
 			Self::mint_into(asset, who, amount - b).map(|d| amount.saturating_add(d))
 		}
@@ -455,10 +463,10 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 
 	/// Mints `value` into the account of `who`, creating it as needed.
 	///
-	/// If `precision` is `BestEffort` and `value` in full could not be minted (e.g. due to overflow),
-	/// then the maximum is minted, up to `value`. If `precision` is `Exact`, then exactly `value`
-	/// must be minted into the account of `who` or the operation will fail with an `Err` and
-	/// nothing will change.
+	/// If `precision` is `BestEffort` and `value` in full could not be minted (e.g. due to
+	/// overflow), then the maximum is minted, up to `value`. If `precision` is `Exact`, then
+	/// exactly `value` must be minted into the account of `who` or the operation will fail with an
+	/// `Err` and nothing will change.
 	///
 	/// If the operation is successful, this will return `Ok` with a `Debt` of the total value
 	/// added to the account.
@@ -477,10 +485,10 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 
 	/// Removes `value` balance from `who` account if possible.
 	///
-	/// If `precision` is `BestEffort` and `value` in full could not be removed (e.g. due to underflow),
-	/// then the maximum is removed, up to `value`. If `precision` is `Exact`, then exactly
-	/// `value` must be removed from the account of `who` or the operation will fail with an `Err`
-	/// and nothing will change.
+	/// If `precision` is `BestEffort` and `value` in full could not be removed (e.g. due to
+	/// underflow), then the maximum is removed, up to `value`. If `precision` is `Exact`, then
+	/// exactly `value` must be removed from the account of `who` or the operation will fail with an
+	/// `Err` and nothing will change.
 	///
 	/// If the removal is needed but not possible, then it returns `Err` and nothing is changed.
 	/// If the account needed to be deleted, then slightly more than `value` may be removed from the

@@ -19,7 +19,12 @@
 
 use crate::{
 	ensure,
-	traits::tokens::{DepositConsequence::Success, KeepAlive, Privilege::{self, Force}, Precision::{self, Exact, BestEffort}},
+	traits::tokens::{
+		DepositConsequence::Success,
+		KeepAlive,
+		Precision::{self, BestEffort, Exact},
+		Privilege::{self, Force},
+	},
 };
 use scale_info::TypeInfo;
 use sp_arithmetic::{
@@ -203,8 +208,8 @@ pub trait Mutate<AccountId>:
 	///
 	/// The actual amount released is returned with `Ok`.
 	///
-	/// If `precision` is `BestEffort`, then the amount actually unreserved and returned as the inner
-	/// value of `Ok` may be smaller than the `amount` passed.
+	/// If `precision` is `BestEffort`, then the amount actually unreserved and returned as the
+	/// inner value of `Ok` may be smaller than the `amount` passed.
 	///
 	/// NOTE! The inner of the `Ok` result variant returns the *actual* amount released. This is the
 	/// opposite of the `ReservableCurrency::unreserve()` result, which gives the amount not able
@@ -374,8 +379,8 @@ pub trait Balanced<AccountId>: super::Balanced<AccountId> + Unbalanced<AccountId
 		who: &AccountId,
 		amount: Self::Balance,
 	) -> (Credit<AccountId, Self>, Self::Balance) {
-		let decrease =
-			Self::decrease_balance_on_hold(reason, who, amount, BestEffort).unwrap_or(Default::default());
+		let decrease = Self::decrease_balance_on_hold(reason, who, amount, BestEffort)
+			.unwrap_or(Default::default());
 		let credit =
 			Imbalance::<Self::Balance, Self::OnDropCredit, Self::OnDropDebt>::new(decrease);
 		Self::done_slash(reason, who, decrease);

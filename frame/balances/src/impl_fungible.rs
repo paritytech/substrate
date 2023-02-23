@@ -17,7 +17,10 @@
 
 //! Implementation of `fungible` traits for Balances pallet.
 use super::*;
-use frame_support::traits::tokens::{KeepAlive::{self, Keep, NoKill}, Privilege};
+use frame_support::traits::tokens::{
+	KeepAlive::{self, Keep, NoKill},
+	Privilege,
+};
 
 impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> {
 	type Balance = T::Balance;
@@ -37,7 +40,11 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 	fn balance(who: &T::AccountId) -> Self::Balance {
 		Self::account(who).free
 	}
-	fn reducible_balance(who: &T::AccountId, keep_alive: KeepAlive, force: Privilege) -> Self::Balance {
+	fn reducible_balance(
+		who: &T::AccountId,
+		keep_alive: KeepAlive,
+		force: Privilege,
+	) -> Self::Balance {
 		let a = Self::account(who);
 		let mut untouchable = Zero::zero();
 		if force == Regular {
@@ -143,8 +150,7 @@ impl<T: Config<I>, I: 'static> fungible::Unbalanced<T::AccountId> for Pallet<T, 
 		who: &T::AccountId,
 		amount: Self::Balance,
 	) -> Result<Option<Self::Balance>, DispatchError> {
-		let max_reduction =
-			<Self as fungible::Inspect<_>>::reducible_balance(who, CanKill, Force);
+		let max_reduction = <Self as fungible::Inspect<_>>::reducible_balance(who, CanKill, Force);
 		let (result, maybe_dust) = Self::mutate_account(who, |account| -> DispatchResult {
 			// Make sure the reduction (if there is one) is no more than the maximum allowed.
 			let reduction = account.free.saturating_sub(amount);
