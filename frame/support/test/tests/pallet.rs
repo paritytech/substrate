@@ -98,6 +98,10 @@ impl SomeAssociation2 for u64 {
 }
 
 #[frame_support::pallet]
+/// Pallet documentation
+// Comments should not be included in the pallet documentation
+#[pallet_doc("../../README.md")]
+#[doc = include_str!("../../README.md")]
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
@@ -1612,6 +1616,14 @@ fn metadata_at_version() {
 #[test]
 fn metadata_versions() {
 	assert_eq!(vec![14], Runtime::metadata_versions());
+}
+
+#[test]
+fn test_pallet_runtime_docs() {
+	let docs = crate::pallet::Pallet::<Runtime>::pallet_documentation_metadata();
+	let readme = "Support code for the runtime.\n\nLicense: Apache-2.0";
+	let expected = vec![" Pallet documentation", readme, readme];
+	assert_eq!(docs, expected);
 }
 
 #[test]

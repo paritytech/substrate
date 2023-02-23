@@ -21,6 +21,7 @@ use quote::ToTokens;
 use syn::{
 	parenthesized,
 	parse::{self, Parse, ParseStream},
+	spanned::Spanned,
 	Attribute, Lit, Token,
 };
 
@@ -33,14 +34,13 @@ const PALLET_DOC: &'static str = "pallet_doc";
 /// Supported format:
 /// `#[pallet_doc(PATH)]`: The path of the file from which the documentation is loaded
 fn parse_pallet_doc_value(attr: &Attribute) -> syn::Result<DocMetaValue> {
-	let span = proc_macro2::Span::call_site();
-	let msg =
-		"Unexpected arguments for `pallet_doc` attribute. Supported version: `pallet_doc(PATH)`";
-	let err = syn::Error::new(span, msg);
+	let span = attr.span();
 
 	let meta = attr.parse_meta()?;
 	let syn::Meta::List(metalist) = meta else {
-		return Err(err)
+		let msg =
+			"The `pallet_doc` attribute must receive arguments as a list. Supported format: `pallet_doc(PATH)`";
+		return Err(syn::Error::new(span, msg))
 	};
 
 	let paths: Vec<_> = metalist
@@ -48,7 +48,8 @@ fn parse_pallet_doc_value(attr: &Attribute) -> syn::Result<DocMetaValue> {
 		.into_iter()
 		.map(|nested| {
 			let syn::NestedMeta::Lit(lit) = nested else {
-			return Err(err.clone())
+				let msg = "The `pallet_doc` received an unsupported argument. Supported format: `pallet_doc(PATH)`";
+			return Err(syn::Error::new(span, msg))
 		};
 
 			Ok(lit)
@@ -56,7 +57,7 @@ fn parse_pallet_doc_value(attr: &Attribute) -> syn::Result<DocMetaValue> {
 		.collect::<syn::Result<_>>()?;
 
 	if paths.len() != 1 {
-		let msg = "The `pallet_doc` attribute supports only one path";
+		let msg = "The `pallet_doc` attribute must receive only one argument. Supported format: `pallet_doc(PATH)`";
 		return Err(syn::Error::new(span, msg))
 	}
 
@@ -175,7 +176,7 @@ pub fn expand_documentation(def: &mut Def) -> proc_macro2::TokenStream {
 	}
 
 	// Capture the `#[doc = include_str!("../README.md")]` and `#[doc = "Documentation"]`.
-	let docs: Vec<_> = def.item.attrs.iter().filter_map(parse_doc_value).collect();
+	let mut docs: Vec<_> = def.item.attrs.iter().filter_map(parse_doc_value).collect();
 
 	// Capture the `#[pallet_doc("../README.md")]`.
 	let pallet_docs: Vec<_> = match pallet_docs
@@ -187,6 +188,8 @@ pub fn expand_documentation(def: &mut Def) -> proc_macro2::TokenStream {
 		Err(err) => return err.into_compile_error(),
 	};
 
+	docs.extend(pallet_docs);
+
 	let res = quote::quote!(
 		impl<#type_impl_gen> #pallet_ident<#type_use_gen> #where_clauses{
 
@@ -196,11 +199,10 @@ pub fn expand_documentation(def: &mut Def) -> proc_macro2::TokenStream {
 			{
 				#frame_support::sp_std::vec![
 					#( #docs ),*
-					#( #pallet_docs ),*
 				]
 			}
 		}
 	);
-	println!("Res is {}", res);
+	// println!("Res is {}", res);
 	res
 }

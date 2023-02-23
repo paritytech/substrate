@@ -197,9 +197,12 @@ fn expand_pallet_metadata_documentation(runtime: &Ident, decl: &Pallet) -> Token
 	let instance = decl.instance.as_ref().into_iter();
 	let path = &decl.path;
 
-	quote! {
+	let r = quote! {
 		#path::Pallet::<#runtime #(, #path::#instance)*>::pallet_documentation_metadata()
-	}
+	};
+
+	// println!("   -------- {}", r);
+	r
 }
 
 fn expand_pallet_metadata_events(

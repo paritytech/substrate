@@ -250,6 +250,7 @@ pub mod pallet {
 
 // Test that a instantiable pallet with a generic genesis_config is correctly handled
 #[frame_support::pallet]
+/// Pallet 2 docs
 pub mod pallet2 {
 	use frame_support::pallet_prelude::*;
 
@@ -379,6 +380,13 @@ fn call_expand() {
 		&["foo", "foo_storage_layer"],
 	);
 }
+
+// #[test]
+// fn test_pallet_runtime_docs() {
+// 	let docs = pallet2::Pallet::<Runtime>::pallet_documentation_metadata();
+// 	let expected = vec![" Pallet documentation"];
+// 	assert_eq!(docs, expected);
+// }
 
 #[test]
 fn error_expand() {
