@@ -1257,11 +1257,14 @@ impl<T: Config> RewardPool<T> {
 		commission: &Commission<T>,
 	) -> Result<(), Error<T>> {
 		let balance = Self::current_balance(id);
-		let (current_reward_counter, newly_earned_commission) =
+
+		let (current_reward_counter, share_commission) =
 			self.current_reward_counter(id, bonded_points, commission)?;
 
 		self.last_recorded_reward_counter = current_reward_counter;
-		self.total_commission_pending += newly_earned_commission;
+
+		self.total_commission_pending =
+			self.total_commission_pending.saturating_add(share_commission);
 
 		self.last_recorded_total_payouts = balance
 			.checked_add(&self.total_rewards_claimed.saturating_add(self.total_commission_claimed))
@@ -2873,8 +2876,8 @@ impl<T: Config> Pallet<T> {
 				last_recorded_reward_counter: Zero::zero(),
 				last_recorded_total_payouts: Zero::zero(),
 				total_rewards_claimed: Zero::zero(),
-				total_commission_claimed: Zero::zero(),
 				total_commission_pending: Zero::zero(),
+				total_commission_claimed: Zero::zero(),
 			},
 		);
 		ReversePoolIdLookup::<T>::insert(bonded_pool.bonded_account(), pool_id);
