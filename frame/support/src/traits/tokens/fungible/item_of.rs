@@ -22,7 +22,7 @@ use sp_runtime::{DispatchError, DispatchResult};
 
 use super::*;
 use crate::traits::tokens::{
-	fungibles, DepositConsequence, Imbalance as ImbalanceT, KeepAlive, WithdrawConsequence,
+	fungibles, DepositConsequence, Imbalance as ImbalanceT, KeepAlive, WithdrawConsequence, Privilege, Precision,
 };
 
 /// Convert a `fungibles` trait implementation into a `fungible` trait implementation by identifying
@@ -55,7 +55,7 @@ impl<
 	fn total_balance(who: &AccountId) -> Self::Balance {
 		<F as fungibles::Inspect<AccountId>>::total_balance(A::get(), who)
 	}
-	fn reducible_balance(who: &AccountId, keep_alive: KeepAlive, force: bool) -> Self::Balance {
+	fn reducible_balance(who: &AccountId, keep_alive: KeepAlive, force: Privilege) -> Self::Balance {
 		<F as fungibles::Inspect<AccountId>>::reducible_balance(A::get(), who, keep_alive, force)
 	}
 	fn can_deposit(who: &AccountId, amount: Self::Balance, mint: bool) -> DepositConsequence {
@@ -74,7 +74,7 @@ impl<
 {
 	type Reason = F::Reason;
 
-	fn reducible_total_balance_on_hold(who: &AccountId, force: bool) -> Self::Balance {
+	fn reducible_total_balance_on_hold(who: &AccountId, force: Privilege) -> Self::Balance {
 		<F as fungibles::InspectHold<AccountId>>::reducible_total_balance_on_hold(
 			A::get(),
 			who,
@@ -137,15 +137,15 @@ impl<
 	fn decrease_balance(
 		who: &AccountId,
 		amount: Self::Balance,
-		best_effort: bool,
+		precision: Precision,
 		keep_alive: KeepAlive,
-		force: bool,
+		force: Privilege,
 	) -> Result<Self::Balance, DispatchError> {
 		<F as fungibles::Unbalanced<AccountId>>::decrease_balance(
 			A::get(),
 			who,
 			amount,
-			best_effort,
+			precision,
 			keep_alive,
 			force,
 		)
@@ -153,13 +153,13 @@ impl<
 	fn increase_balance(
 		who: &AccountId,
 		amount: Self::Balance,
-		best_effort: bool,
+		precision: Precision,
 	) -> Result<Self::Balance, DispatchError> {
 		<F as fungibles::Unbalanced<AccountId>>::increase_balance(
 			A::get(),
 			who,
 			amount,
-			best_effort,
+			precision,
 		)
 	}
 }
@@ -186,28 +186,28 @@ impl<
 		reason: &Self::Reason,
 		who: &AccountId,
 		amount: Self::Balance,
-		best_effort: bool,
+		precision: Precision,
 	) -> Result<Self::Balance, DispatchError> {
 		<F as fungibles::UnbalancedHold<AccountId>>::decrease_balance_on_hold(
 			A::get(),
 			reason,
 			who,
 			amount,
-			best_effort,
+			precision,
 		)
 	}
 	fn increase_balance_on_hold(
 		reason: &Self::Reason,
 		who: &AccountId,
 		amount: Self::Balance,
-		best_effort: bool,
+		precision: Precision,
 	) -> Result<Self::Balance, DispatchError> {
 		<F as fungibles::UnbalancedHold<AccountId>>::increase_balance_on_hold(
 			A::get(),
 			reason,
 			who,
 			amount,
-			best_effort,
+			precision,
 		)
 	}
 }
@@ -224,10 +224,10 @@ impl<
 	fn burn_from(
 		who: &AccountId,
 		amount: Self::Balance,
-		best_effort: bool,
-		force: bool,
+		precision: Precision,
+		force: Privilege,
 	) -> Result<Self::Balance, DispatchError> {
-		<F as fungibles::Mutate<AccountId>>::burn_from(A::get(), who, amount, best_effort, force)
+		<F as fungibles::Mutate<AccountId>>::burn_from(A::get(), who, amount, precision, force)
 	}
 	fn shelve(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
 		<F as fungibles::Mutate<AccountId>>::shelve(A::get(), who, amount)
@@ -262,23 +262,23 @@ impl<
 		reason: &Self::Reason,
 		who: &AccountId,
 		amount: Self::Balance,
-		best_effort: bool,
+		precision: Precision,
 	) -> Result<Self::Balance, DispatchError> {
-		<F as fungibles::MutateHold<AccountId>>::release(A::get(), reason, who, amount, best_effort)
+		<F as fungibles::MutateHold<AccountId>>::release(A::get(), reason, who, amount, precision)
 	}
 	fn burn_held(
 		reason: &Self::Reason,
 		who: &AccountId,
 		amount: Self::Balance,
-		best_effort: bool,
-		force: bool,
+		precision: Precision,
+		force: Privilege,
 	) -> Result<Self::Balance, DispatchError> {
 		<F as fungibles::MutateHold<AccountId>>::burn_held(
 			A::get(),
 			reason,
 			who,
 			amount,
-			best_effort,
+			precision,
 			force,
 		)
 	}
@@ -287,9 +287,9 @@ impl<
 		source: &AccountId,
 		dest: &AccountId,
 		amount: Self::Balance,
-		best_effort: bool,
+		precision: Precision,
 		on_hold: bool,
-		force: bool,
+		force: Privilege,
 	) -> Result<Self::Balance, DispatchError> {
 		<F as fungibles::MutateHold<AccountId>>::transfer_on_hold(
 			A::get(),
@@ -297,7 +297,7 @@ impl<
 			source,
 			dest,
 			amount,
-			best_effort,
+			precision,
 			on_hold,
 			force,
 		)
@@ -307,9 +307,9 @@ impl<
 		source: &AccountId,
 		dest: &AccountId,
 		amount: Self::Balance,
-		best_effort: bool,
+		precision: Precision,
 		keep_alive: KeepAlive,
-		force: bool,
+		force: Privilege,
 	) -> Result<Self::Balance, DispatchError> {
 		<F as fungibles::MutateHold<AccountId>>::transfer_and_hold(
 			A::get(),
@@ -317,7 +317,7 @@ impl<
 			source,
 			dest,
 			amount,
-			best_effort,
+			precision,
 			keep_alive,
 			force,
 		)
@@ -374,9 +374,9 @@ impl<
 	fn deposit(
 		who: &AccountId,
 		value: Self::Balance,
-		best_effort: bool,
+		precision: Precision,
 	) -> Result<Debt<AccountId, Self>, DispatchError> {
-		<F as fungibles::Balanced<AccountId>>::deposit(A::get(), who, value, best_effort)
+		<F as fungibles::Balanced<AccountId>>::deposit(A::get(), who, value, precision)
 			.map(|debt| Imbalance::new(debt.peek()))
 	}
 	fn issue(amount: Self::Balance) -> Credit<AccountId, Self> {
@@ -410,15 +410,15 @@ impl<
 	fn withdraw(
 		who: &AccountId,
 		value: Self::Balance,
-		best_effort: bool,
+		precision: Precision,
 		keep_alive: KeepAlive,
-		force: bool,
+		force: Privilege,
 	) -> Result<Credit<AccountId, Self>, DispatchError> {
 		<F as fungibles::Balanced<AccountId>>::withdraw(
 			A::get(),
 			who,
 			value,
-			best_effort,
+			precision,
 			keep_alive,
 			force,
 		)

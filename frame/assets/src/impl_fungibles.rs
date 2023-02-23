@@ -45,7 +45,7 @@ impl<T: Config<I>, I: 'static> fungibles::Inspect<<T as SystemConfig>::AccountId
 		asset: Self::AssetId,
 		who: &<T as SystemConfig>::AccountId,
 		keep_alive: KeepAlive,
-		_force: bool,
+		_force: Privilege,
 	) -> Self::Balance {
 		Pallet::<T, I>::reducible_balance(asset, who, keep_alive.into()).unwrap_or(Zero::zero())
 	}
@@ -102,9 +102,9 @@ impl<T: Config<I>, I: 'static> fungibles::Unbalanced<T::AccountId> for Pallet<T,
 		asset: T::AssetId,
 		who: &T::AccountId,
 		amount: Self::Balance,
-		best_effort: bool,
+		best_effort: Precision,
 		keep_alive: KeepAlive,
-		_force: bool,
+		_force: Privilege,
 	) -> Result<Self::Balance, DispatchError> {
 		let keep_alive = match keep_alive {
 			KeepAlive::CanKill => false,
@@ -117,7 +117,7 @@ impl<T: Config<I>, I: 'static> fungibles::Unbalanced<T::AccountId> for Pallet<T,
 		asset: T::AssetId,
 		who: &T::AccountId,
 		amount: Self::Balance,
-		_best_effort: bool,
+		_best_effort: Precision,
 	) -> Result<Self::Balance, DispatchError> {
 		Self::increase_balance(asset, who, amount, |_| Ok(()))?;
 		Ok(amount)

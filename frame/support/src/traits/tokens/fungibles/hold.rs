@@ -19,7 +19,7 @@
 
 use crate::{
 	ensure,
-	traits::tokens::{DepositConsequence::Success, KeepAlive},
+	traits::tokens::{DepositConsequence::Success, KeepAlive, Privilege::{self, Force}, Precision::{self, Exact, BestEffort}},
 };
 use scale_info::TypeInfo;
 use sp_arithmetic::{
@@ -49,7 +49,7 @@ pub trait Inspect<AccountId>: super::Inspect<AccountId> {
 	fn reducible_total_balance_on_hold(
 		asset: Self::AssetId,
 		who: &AccountId,
-		force: bool,
+		force: Privilege,
 	) -> Self::Balance;
 
 	/// Amount of funds on hold (for the given reason) of `who`.
@@ -92,7 +92,7 @@ pub trait Inspect<AccountId>: super::Inspect<AccountId> {
 	) -> DispatchResult {
 		ensure!(Self::hold_available(asset, reason, who), TokenError::CannotCreateHold);
 		ensure!(
-			amount <= Self::reducible_balance(asset, who, KeepAlive::NoKill, true),
+			amount <= Self::reducible_balance(asset, who, KeepAlive::NoKill, Force),
 			TokenError::FundsUnavailable
 		);
 		Ok(())
@@ -152,8 +152,8 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 
 	/// Reduce the balance on hold of `who` by `amount`.
 	///
-	/// If `best_effort` is `false` and it cannot be reduced by that amount for
-	/// some reason, return `Err` and don't reduce it at all. If `best_effort` is `true`, then
+	/// If `precision` is `false` and it cannot be reduced by that amount for
+	/// some reason, return `Err` and don't reduce it at all. If `precision` is `BestEffort`, then
 	/// reduce the balance of `who` by the most that is possible, up to `amount`.
 	///
 	/// In either case, if `Ok` is returned then the inner is the amount by which is was reduced.
@@ -162,10 +162,10 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		reason: &Self::Reason,
 		who: &AccountId,
 		mut amount: Self::Balance,
-		best_effort: bool,
+		precision: Precision,
 	) -> Result<Self::Balance, DispatchError> {
 		let old_balance = Self::balance_on_hold(asset, reason, who);
-		if best_effort {
+		if let BestEffort = precision {
 			amount = amount.min(old_balance);
 		}
 		let new_balance = old_balance.checked_sub(&amount).ok_or(TokenError::FundsUnavailable)?;
@@ -182,10 +182,10 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		reason: &Self::Reason,
 		who: &AccountId,
 		amount: Self::Balance,
-		best_effort: bool,
+		precision: Precision,
 	) -> Result<Self::Balance, DispatchError> {
 		let old_balance = Self::balance_on_hold(asset, reason, who);
-		let new_balance = if best_effort {
+		let new_balance = if let BestEffort = precision {
 			old_balance.saturating_add(amount)
 		} else {
 			old_balance.checked_add(&amount).ok_or(ArithmeticError::Overflow)?
@@ -212,7 +212,7 @@ pub trait Balanced<AccountId>: super::Balanced<AccountId> + Unbalanced<AccountId
 		who: &AccountId,
 		amount: Self::Balance,
 	) -> (Credit<AccountId, Self>, Self::Balance) {
-		let decrease = Self::decrease_balance_on_hold(asset, reason, who, amount, true)
+		let decrease = Self::decrease_balance_on_hold(asset, reason, who, amount, BestEffort)
 			.unwrap_or(Default::default());
 		let credit =
 			Imbalance::<Self::AssetId, Self::Balance, Self::OnDropCredit, Self::OnDropDebt>::new(
@@ -248,8 +248,8 @@ pub trait Mutate<AccountId>:
 
 		Self::ensure_can_hold(asset, reason, who, amount)?;
 		// Should be infallible now, but we proceed softly anyway.
-		Self::decrease_balance(asset, who, amount, false, KeepAlive::NoKill, true)?;
-		Self::increase_balance_on_hold(asset, reason, who, amount, true)?;
+		Self::decrease_balance(asset, who, amount, Exact, KeepAlive::NoKill, Force)?;
+		Self::increase_balance_on_hold(asset, reason, who, amount, BestEffort)?;
 		Self::done_hold(asset, reason, who, amount);
 		Ok(())
 	}
@@ -258,14 +258,14 @@ pub trait Mutate<AccountId>:
 	///
 	/// The actual amount released is returned with `Ok`.
 	///
-	/// If `best_effort` is `true`, then the amount actually unreserved and returned as the inner
+	/// If `precision` is `BestEffort`, then the amount actually unreserved and returned as the inner
 	/// value of `Ok` may be smaller than the `amount` passed.
 	fn release(
 		asset: Self::AssetId,
 		reason: &Self::Reason,
 		who: &AccountId,
 		amount: Self::Balance,
-		best_effort: bool,
+		precision: Precision,
 	) -> Result<Self::Balance, DispatchError> {
 		// NOTE: This doesn't change the total balance of the account so there's no need to
 		// check liquidity.
@@ -275,21 +275,21 @@ pub trait Mutate<AccountId>:
 		ensure!(Self::can_deposit(asset, who, amount, false) == Success, TokenError::CannotCreate);
 		// Get the amount we can actually take from the hold. This might be less than what we want
 		// if we're only doing a best-effort.
-		let amount = Self::decrease_balance_on_hold(asset, reason, who, amount, best_effort)?;
+		let amount = Self::decrease_balance_on_hold(asset, reason, who, amount, precision)?;
 		// Increase the main balance by what we took. We always do a best-effort here because we
 		// already checked that we can deposit before.
-		let actual = Self::increase_balance(asset, who, amount, true)?;
+		let actual = Self::increase_balance(asset, who, amount, BestEffort)?;
 		Self::done_release(asset, reason, who, actual);
 		Ok(actual)
 	}
 
 	/// Attempt to decrease the balance of `who` which is held for the given `reason` by `amount`.
 	///
-	/// If `best_effort` is true, then as much as possible is reduced, up to `amount`, and the
+	/// If `precision` is true, then as much as possible is reduced, up to `amount`, and the
 	/// amount of tokens reduced is returned. Otherwise, if the total amount can be reduced, then it
 	/// is and the amount returned, and if not, then nothing changes and `Err` is returned.
 	///
-	/// If `force` is true, then locks/freezes will be ignored. This should only be used when
+	/// If `force` is `Force`, then locks/freezes will be ignored. This should only be used when
 	/// conducting slashing or other activity which materially disadvantages the account holder
 	/// since it could provide a means of circumventing freezes.
 	fn burn_held(
@@ -297,17 +297,17 @@ pub trait Mutate<AccountId>:
 		reason: &Self::Reason,
 		who: &AccountId,
 		mut amount: Self::Balance,
-		best_effort: bool,
-		force: bool,
+		precision: Precision,
+		force: Privilege,
 	) -> Result<Self::Balance, DispatchError> {
 		// We must check total-balance requirements if `!force`.
 		let liquid = Self::reducible_total_balance_on_hold(asset, who, force);
-		if best_effort {
+		if let BestEffort = precision {
 			amount = amount.min(liquid);
 		} else {
 			ensure!(amount <= liquid, TokenError::Frozen);
 		}
-		let amount = Self::decrease_balance_on_hold(asset, reason, who, amount, best_effort)?;
+		let amount = Self::decrease_balance_on_hold(asset, reason, who, amount, precision)?;
 		Self::set_total_issuance(asset, Self::total_issuance(asset).saturating_sub(amount));
 		Self::done_burn_held(asset, reason, who, amount);
 		Ok(amount)
@@ -319,12 +319,12 @@ pub trait Mutate<AccountId>:
 	/// transferred will still be on hold in the destination account. If not, then the destination
 	/// account need not already exist, but must be creatable.
 	///
-	/// If `best_effort` is `true`, then an amount less than `amount` may be transferred without
+	/// If `precision` is `BestEffort`, then an amount less than `amount` may be transferred without
 	/// error.
 	///
-	/// If `force` is `true`, then other fund-locking mechanisms may be disregarded. It should be
-	/// left as `false` in most circumstances, but when you want the same power as a `slash`, it
-	/// may be `true`.
+	/// If `force` is `Force`, then other fund-locking mechanisms may be disregarded. It should be
+	/// left as `Regular` in most circumstances, but when you want the same power as a `slash`, it
+	/// may be `Force`.
 	///
 	/// The actual amount transferred is returned, or `Err` in the case of error and nothing is
 	/// changed.
@@ -334,14 +334,14 @@ pub trait Mutate<AccountId>:
 		source: &AccountId,
 		dest: &AccountId,
 		mut amount: Self::Balance,
-		best_effort: bool,
+		precision: Precision,
 		on_hold: bool,
-		force: bool,
+		force: Privilege,
 	) -> Result<Self::Balance, DispatchError> {
 		// We must check total-balance requirements if `!force`.
 		let have = Self::balance_on_hold(asset, reason, source);
 		let liquid = Self::reducible_total_balance_on_hold(asset, source, force);
-		if best_effort {
+		if let BestEffort = precision {
 			amount = amount.min(liquid).min(have);
 		} else {
 			ensure!(amount <= liquid, TokenError::Frozen);
@@ -356,11 +356,11 @@ pub trait Mutate<AccountId>:
 			TokenError::CannotCreateHold
 		);
 
-		let amount = Self::decrease_balance_on_hold(asset, reason, source, amount, best_effort)?;
+		let amount = Self::decrease_balance_on_hold(asset, reason, source, amount, precision)?;
 		let actual = if on_hold {
-			Self::increase_balance_on_hold(asset, reason, dest, amount, best_effort)?
+			Self::increase_balance_on_hold(asset, reason, dest, amount, precision)?
 		} else {
-			Self::increase_balance(asset, dest, amount, best_effort)?
+			Self::increase_balance(asset, dest, amount, precision)?
 		};
 		Self::done_transfer_on_hold(asset, reason, source, dest, actual);
 		Ok(actual)
@@ -370,14 +370,14 @@ pub trait Mutate<AccountId>:
 	/// for `reason`.
 	/// for `reason`.
 	///
-	/// If `best_effort` is `true`, then an amount less than `amount` may be transferred without
+	/// If `precision` is `BestEffort`, then an amount less than `amount` may be transferred without
 	/// error.
 	///
 	/// `source` must obey the requirements of `keep_alive`.
 	///
-	/// If `force` is `true`, then other fund-locking mechanisms may be disregarded. It should be
-	/// left as `false` in most circumstances, but when you want the same power as a `slash`, it
-	/// may be `true`.
+	/// If `force` is `Force`, then other fund-locking mechanisms may be disregarded. It should be
+	/// left as `Regular` in most circumstances, but when you want the same power as a `slash`, it
+	/// may be `Force`.
 	///
 	/// The amount placed on hold is returned or `Err` in the case of error and nothing is changed.
 	///
@@ -389,14 +389,14 @@ pub trait Mutate<AccountId>:
 		source: &AccountId,
 		dest: &AccountId,
 		amount: Self::Balance,
-		best_effort: bool,
+		precision: Precision,
 		keep_alive: KeepAlive,
-		force: bool,
+		force: Privilege,
 	) -> Result<Self::Balance, DispatchError> {
 		ensure!(Self::hold_available(asset, reason, dest), TokenError::CannotCreateHold);
 		ensure!(Self::can_deposit(asset, dest, amount, false) == Success, TokenError::CannotCreate);
-		let actual = Self::decrease_balance(asset, source, amount, best_effort, keep_alive, force)?;
-		Self::increase_balance_on_hold(asset, reason, dest, actual, best_effort)?;
+		let actual = Self::decrease_balance(asset, source, amount, precision, keep_alive, force)?;
+		Self::increase_balance_on_hold(asset, reason, dest, actual, precision)?;
 		Self::done_transfer_on_hold(asset, reason, source, dest, actual);
 		Ok(actual)
 	}

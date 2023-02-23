@@ -39,6 +39,37 @@ impl From<KeepAlive> for bool {
 	}
 }
 
+#[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
+pub enum Privilege {
+	/// The operation should execute with regular privilege.
+	Regular,
+	/// The operation should be forced to succeed if possible. This is usually employed for system-
+	/// level security-critical events such as slashing.
+	Force,
+}
+
+impl From<Privilege> for bool {
+	fn from(k: Privilege) -> bool {
+		matches!(k, Privilege::Force)
+	}
+}
+
+#[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
+pub enum Precision {
+	/// The operation should must either proceed either exactly according to the amounts involved or
+	/// not at all.
+	Exact,
+	/// The operation may be considered successful even if less than the specified amounts are
+	/// available to be used. In this case a best effort will be made.
+	BestEffort,
+}
+
+impl From<Precision> for bool {
+	fn from(k: Precision) -> bool {
+		matches!(k, Precision::BestEffort)
+	}
+}
+
 /// One of a number of consequences of withdrawing a fungible from an account.
 #[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
 pub enum WithdrawConsequence<Balance> {

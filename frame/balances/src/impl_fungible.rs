@@ -37,7 +37,7 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 	fn balance(who: &T::AccountId) -> Self::Balance {
 		Self::account(who).free
 	}
-	fn reducible_balance(who: &T::AccountId, keep_alive: KeepAlive, force: bool) -> Self::Balance {
+	fn reducible_balance(who: &T::AccountId, keep_alive: KeepAlive, force: Privilege) -> Self::Balance {
 		let a = Self::account(who);
 		let mut untouchable = Zero::zero();
 		if !force {
@@ -200,7 +200,7 @@ impl<T: Config<I>, I: 'static> fungible::InspectHold<T::AccountId> for Pallet<T,
 	fn total_balance_on_hold(who: &T::AccountId) -> T::Balance {
 		Self::account(who).reserved
 	}
-	fn reducible_total_balance_on_hold(who: &T::AccountId, force: bool) -> Self::Balance {
+	fn reducible_total_balance_on_hold(who: &T::AccountId, force: Privilege) -> Self::Balance {
 		// The total balance must never drop below the freeze requirements if we're not forcing:
 		let a = Self::account(who);
 		let unavailable = if force {
