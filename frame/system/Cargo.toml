@@ -44,6 +44,7 @@ std = [
 	"sp-std/std",
 	"sp-version/std",
 	"sp-weights/std",
+	"frame-support/wrong"
 ]
 runtime-benchmarks = [
 	"frame-support/runtime-benchmarks",

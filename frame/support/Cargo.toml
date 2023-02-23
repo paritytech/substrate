@@ -68,6 +68,8 @@ std = [
 	"frame-support-procedural/std",
 	"log/std",
 ]
+wrong = ["wrong2"]
+wrong2 = ["try-runtime"]
 runtime-benchmarks = []
 try-runtime = []
 # By default some types have documentation, `no-metadata-docs` allows to reduce the documentation
