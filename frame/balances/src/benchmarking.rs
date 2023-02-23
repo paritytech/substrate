@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2023 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -225,7 +225,7 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn force_unreserve() {
+	fn force_unreserve() -> Result<(), BenchmarkError> {
 		let user: T::AccountId = account("user", 0, SEED);
 		let user_lookup = T::Lookup::unlookup(user.clone());
 
@@ -244,6 +244,8 @@ mod benchmarks {
 
 		assert!(Balances::<T, I>::reserved_balance(&user).is_zero());
 		assert_eq!(Balances::<T, I>::free_balance(&user), balance);
+
+		Ok(())
 	}
 
 	impl_benchmark_test_suite! {

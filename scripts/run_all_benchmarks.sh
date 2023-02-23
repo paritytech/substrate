@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # This file is part of Substrate.
-# Copyright (C) 2022 Parity Technologies (UK) Ltd.
+# Copyright (C) Parity Technologies (UK) Ltd.
 # SPDX-License-Identifier: Apache-2.0
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -67,8 +67,6 @@ SUBSTRATE=./target/production/substrate
 
 # Manually exclude some pallets.
 EXCLUDED_PALLETS=(
-  # Helper pallets
-  "pallet_election_provider_support_benchmarking"
   # Pallets without automatic benchmarking
   "pallet_babe"
   "pallet_grandpa"

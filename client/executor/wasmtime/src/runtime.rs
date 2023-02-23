@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -289,6 +289,11 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 	config.cranelift_opt_level(wasmtime::OptLevel::SpeedAndSize);
 	config.cranelift_nan_canonicalization(semantics.canonicalize_nans);
 
+	// Since wasmtime 6.0.0 the default for this is `true`, but that heavily regresses
+	// the contracts pallet's performance, so disable it for now.
+	#[allow(deprecated)]
+	config.cranelift_use_egraphs(false);
+
 	let profiler = match std::env::var_os("WASMTIME_PROFILING_STRATEGY") {
 		Some(os_string) if os_string == "jitdump" => wasmtime::ProfilingStrategy::JitDump,
 		None => wasmtime::ProfilingStrategy::None,
@@ -356,7 +361,7 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 
 		let mut pooling_config = wasmtime::PoolingAllocationConfig::default();
 		pooling_config
-			.strategy(wasmtime::PoolingAllocationStrategy::ReuseAffinity)
+			.max_unused_warm_slots(4)
 			// Pooling needs a bunch of hard limits to be set; if we go over
 			// any of these then the instantiation will fail.
 			//
@@ -651,10 +656,9 @@ where
 	let mut linker = wasmtime::Linker::new(&engine);
 	crate::imports::prepare_imports::<H>(&mut linker, &module, config.allow_missing_func_imports)?;
 
-	let mut store = Store::new(module.engine(), Default::default());
 	let instance_pre = linker
-		.instantiate_pre(&mut store, &module)
-		.map_err(|e| WasmError::Other(format!("cannot pre-instantiate module: {:#}", e)))?;
+		.instantiate_pre(&module)
+		.map_err(|e| WasmError::Other(format!("cannot preinstantiate module: {:#}", e)))?;
 
 	Ok(WasmtimeRuntime { engine, instance_pre: Arc::new(instance_pre), instantiation_strategy })
 }

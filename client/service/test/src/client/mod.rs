@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -297,20 +297,14 @@ fn client_initializes_from_genesis_ok() {
 	assert_eq!(
 		client
 			.runtime_api()
-			.balance_of(
-				&BlockId::Number(client.chain_info().best_number),
-				AccountKeyring::Alice.into(),
-			)
+			.balance_of(client.chain_info().best_hash, AccountKeyring::Alice.into())
 			.unwrap(),
 		1000
 	);
 	assert_eq!(
 		client
 			.runtime_api()
-			.balance_of(
-				&BlockId::Number(client.chain_info().best_number),
-				AccountKeyring::Ferdie.into(),
-			)
+			.balance_of(client.chain_info().best_hash, AccountKeyring::Ferdie.into())
 			.unwrap(),
 		0
 	);
@@ -353,24 +347,31 @@ fn block_builder_works_with_transactions() {
 		.expect("block 1 was just imported. qed");
 
 	assert_eq!(client.chain_info().best_number, 1);
-	assert_ne!(client.state_at(hash1).unwrap().pairs(), client.state_at(hash0).unwrap().pairs());
+	assert_ne!(
+		client
+			.state_at(hash1)
+			.unwrap()
+			.pairs(Default::default())
+			.unwrap()
+			.collect::<Vec<_>>(),
+		client
+			.state_at(hash0)
+			.unwrap()
+			.pairs(Default::default())
+			.unwrap()
+			.collect::<Vec<_>>()
+	);
 	assert_eq!(
 		client
 			.runtime_api()
-			.balance_of(
-				&BlockId::Number(client.chain_info().best_number),
-				AccountKeyring::Alice.into(),
-			)
+			.balance_of(client.chain_info().best_hash, AccountKeyring::Alice.into())
 			.unwrap(),
 		958
 	);
 	assert_eq!(
 		client
 			.runtime_api()
-			.balance_of(
-				&BlockId::Number(client.chain_info().best_number),
-				AccountKeyring::Ferdie.into(),
-			)
+			.balance_of(client.chain_info().best_hash, AccountKeyring::Ferdie.into())
 			.unwrap(),
 		42
 	);
@@ -412,8 +413,18 @@ fn block_builder_does_not_include_invalid() {
 
 	assert_eq!(client.chain_info().best_number, 1);
 	assert_ne!(
-		client.state_at(hashof1).unwrap().pairs(),
-		client.state_at(hashof0).unwrap().pairs()
+		client
+			.state_at(hashof1)
+			.unwrap()
+			.pairs(Default::default())
+			.unwrap()
+			.collect::<Vec<_>>(),
+		client
+			.state_at(hashof0)
+			.unwrap()
+			.pairs(Default::default())
+			.unwrap()
+			.collect::<Vec<_>>()
 	);
 	assert_eq!(client.body(hashof1).unwrap().unwrap().len(), 1)
 }
@@ -465,7 +476,7 @@ fn uncles_with_multiple_forks() {
 
 	// A1 -> A2
 	let a2 = client
-		.new_block_at(&BlockId::Hash(a1.hash()), Default::default(), false)
+		.new_block_at(a1.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -474,7 +485,7 @@ fn uncles_with_multiple_forks() {
 
 	// A2 -> A3
 	let a3 = client
-		.new_block_at(&BlockId::Hash(a2.hash()), Default::default(), false)
+		.new_block_at(a2.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -483,7 +494,7 @@ fn uncles_with_multiple_forks() {
 
 	// A3 -> A4
 	let a4 = client
-		.new_block_at(&BlockId::Hash(a3.hash()), Default::default(), false)
+		.new_block_at(a3.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -492,7 +503,7 @@ fn uncles_with_multiple_forks() {
 
 	// A4 -> A5
 	let a5 = client
-		.new_block_at(&BlockId::Hash(a4.hash()), Default::default(), false)
+		.new_block_at(a4.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -500,9 +511,7 @@ fn uncles_with_multiple_forks() {
 	block_on(client.import(BlockOrigin::Own, a5.clone())).unwrap();
 
 	// A1 -> B2
-	let mut builder = client
-		.new_block_at(&BlockId::Hash(a1.hash()), Default::default(), false)
-		.unwrap();
+	let mut builder = client.new_block_at(a1.hash(), Default::default(), false).unwrap();
 	// this push is required as otherwise B2 has the same hash as A2 and won't get imported
 	builder
 		.push_transfer(Transfer {
@@ -517,7 +526,7 @@ fn uncles_with_multiple_forks() {
 
 	// B2 -> B3
 	let b3 = client
-		.new_block_at(&BlockId::Hash(b2.hash()), Default::default(), false)
+		.new_block_at(b2.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -526,7 +535,7 @@ fn uncles_with_multiple_forks() {
 
 	// B3 -> B4
 	let b4 = client
-		.new_block_at(&BlockId::Hash(b3.hash()), Default::default(), false)
+		.new_block_at(b3.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -534,9 +543,7 @@ fn uncles_with_multiple_forks() {
 	block_on(client.import(BlockOrigin::Own, b4.clone())).unwrap();
 
 	// // B2 -> C3
-	let mut builder = client
-		.new_block_at(&BlockId::Hash(b2.hash()), Default::default(), false)
-		.unwrap();
+	let mut builder = client.new_block_at(b2.hash(), Default::default(), false).unwrap();
 	// this push is required as otherwise C3 has the same hash as B3 and won't get imported
 	builder
 		.push_transfer(Transfer {
@@ -550,9 +557,7 @@ fn uncles_with_multiple_forks() {
 	block_on(client.import(BlockOrigin::Own, c3.clone())).unwrap();
 
 	// A1 -> D2
-	let mut builder = client
-		.new_block_at(&BlockId::Hash(a1.hash()), Default::default(), false)
-		.unwrap();
+	let mut builder = client.new_block_at(a1.hash(), Default::default(), false).unwrap();
 	// this push is required as otherwise D2 has the same hash as B2 and won't get imported
 	builder
 		.push_transfer(Transfer {
@@ -626,7 +631,7 @@ fn finality_target_on_longest_chain_with_multiple_forks() {
 
 	// A1 -> A2
 	let a2 = client
-		.new_block_at(&BlockId::Hash(a1.hash()), Default::default(), false)
+		.new_block_at(a1.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -635,7 +640,7 @@ fn finality_target_on_longest_chain_with_multiple_forks() {
 
 	// A2 -> A3
 	let a3 = client
-		.new_block_at(&BlockId::Hash(a2.hash()), Default::default(), false)
+		.new_block_at(a2.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -644,7 +649,7 @@ fn finality_target_on_longest_chain_with_multiple_forks() {
 
 	// A3 -> A4
 	let a4 = client
-		.new_block_at(&BlockId::Hash(a3.hash()), Default::default(), false)
+		.new_block_at(a3.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -653,7 +658,7 @@ fn finality_target_on_longest_chain_with_multiple_forks() {
 
 	// A4 -> A5
 	let a5 = client
-		.new_block_at(&BlockId::Hash(a4.hash()), Default::default(), false)
+		.new_block_at(a4.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -661,9 +666,7 @@ fn finality_target_on_longest_chain_with_multiple_forks() {
 	block_on(client.import(BlockOrigin::Own, a5.clone())).unwrap();
 
 	// A1 -> B2
-	let mut builder = client
-		.new_block_at(&BlockId::Hash(a1.hash()), Default::default(), false)
-		.unwrap();
+	let mut builder = client.new_block_at(a1.hash(), Default::default(), false).unwrap();
 	// this push is required as otherwise B2 has the same hash as A2 and won't get imported
 	builder
 		.push_transfer(Transfer {
@@ -678,7 +681,7 @@ fn finality_target_on_longest_chain_with_multiple_forks() {
 
 	// B2 -> B3
 	let b3 = client
-		.new_block_at(&BlockId::Hash(b2.hash()), Default::default(), false)
+		.new_block_at(b2.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -687,7 +690,7 @@ fn finality_target_on_longest_chain_with_multiple_forks() {
 
 	// B3 -> B4
 	let b4 = client
-		.new_block_at(&BlockId::Hash(b3.hash()), Default::default(), false)
+		.new_block_at(b3.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -695,9 +698,7 @@ fn finality_target_on_longest_chain_with_multiple_forks() {
 	block_on(client.import(BlockOrigin::Own, b4.clone())).unwrap();
 
 	// B2 -> C3
-	let mut builder = client
-		.new_block_at(&BlockId::Hash(b2.hash()), Default::default(), false)
-		.unwrap();
+	let mut builder = client.new_block_at(b2.hash(), Default::default(), false).unwrap();
 	// this push is required as otherwise C3 has the same hash as B3 and won't get imported
 	builder
 		.push_transfer(Transfer {
@@ -711,9 +712,7 @@ fn finality_target_on_longest_chain_with_multiple_forks() {
 	block_on(client.import(BlockOrigin::Own, c3.clone())).unwrap();
 
 	// A1 -> D2
-	let mut builder = client
-		.new_block_at(&BlockId::Hash(a1.hash()), Default::default(), false)
-		.unwrap();
+	let mut builder = client.new_block_at(a1.hash(), Default::default(), false).unwrap();
 	// this push is required as otherwise D2 has the same hash as B2 and won't get imported
 	builder
 		.push_transfer(Transfer {
@@ -889,9 +888,7 @@ fn finality_target_with_best_not_on_longest_chain() {
 	block_on(client.import(BlockOrigin::Own, a5.clone())).unwrap();
 
 	// A1 -> B2
-	let mut builder = client
-		.new_block_at(&BlockId::Hash(a1.hash()), Default::default(), false)
-		.unwrap();
+	let mut builder = client.new_block_at(a1.hash(), Default::default(), false).unwrap();
 	// this push is required as otherwise B2 has the same hash as A2 and won't get imported
 	builder
 		.push_transfer(Transfer {
@@ -913,7 +910,7 @@ fn finality_target_with_best_not_on_longest_chain() {
 
 	// B2 -> B3
 	let b3 = client
-		.new_block_at(&BlockId::Hash(b2.hash()), Default::default(), false)
+		.new_block_at(b2.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -922,7 +919,7 @@ fn finality_target_with_best_not_on_longest_chain() {
 
 	// B3 -> B4
 	let b4 = client
-		.new_block_at(&BlockId::Hash(b3.hash()), Default::default(), false)
+		.new_block_at(b3.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -958,7 +955,7 @@ fn import_with_justification() {
 
 	// A1 -> A2
 	let a2 = client
-		.new_block_at(&BlockId::Hash(a1.hash()), Default::default(), false)
+		.new_block_at(a1.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -969,7 +966,7 @@ fn import_with_justification() {
 	// A2 -> A3
 	let justification = Justifications::from((TEST_ENGINE_ID, vec![1, 2, 3]));
 	let a3 = client
-		.new_block_at(&BlockId::Hash(a2.hash()), Default::default(), false)
+		.new_block_at(a2.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -1000,7 +997,7 @@ fn importing_diverged_finalized_block_should_trigger_reorg() {
 	let mut finality_notifications = client.finality_notification_stream();
 
 	let a1 = client
-		.new_block_at(&BlockId::Number(0), Default::default(), false)
+		.new_block_at(client.chain_info().genesis_hash, Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -1008,14 +1005,16 @@ fn importing_diverged_finalized_block_should_trigger_reorg() {
 	block_on(client.import(BlockOrigin::Own, a1.clone())).unwrap();
 
 	let a2 = client
-		.new_block_at(&BlockId::Hash(a1.hash()), Default::default(), false)
+		.new_block_at(a1.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, a2.clone())).unwrap();
 
-	let mut b1 = client.new_block_at(&BlockId::Number(0), Default::default(), false).unwrap();
+	let mut b1 = client
+		.new_block_at(client.chain_info().genesis_hash, Default::default(), false)
+		.unwrap();
 	// needed to make sure B1 gets a different hash from A1
 	b1.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
@@ -1053,7 +1052,7 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 	let mut finality_notifications = client.finality_notification_stream();
 
 	let a1 = client
-		.new_block_at(&BlockId::Number(0), Default::default(), false)
+		.new_block_at(client.chain_info().genesis_hash, Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -1061,14 +1060,16 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 	block_on(client.import(BlockOrigin::Own, a1.clone())).unwrap();
 
 	let a2 = client
-		.new_block_at(&BlockId::Hash(a1.hash()), Default::default(), false)
+		.new_block_at(a1.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, a2.clone())).unwrap();
 
-	let mut b1 = client.new_block_at(&BlockId::Number(0), Default::default(), false).unwrap();
+	let mut b1 = client
+		.new_block_at(client.chain_info().genesis_hash, Default::default(), false)
+		.unwrap();
 	// needed to make sure B1 gets a different hash from A1
 	b1.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
@@ -1081,7 +1082,7 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 	block_on(client.import(BlockOrigin::Own, b1.clone())).unwrap();
 
 	let b2 = client
-		.new_block_at(&BlockId::Hash(b1.hash()), Default::default(), false)
+		.new_block_at(b1.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -1107,7 +1108,7 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 
 	// after we build B3 on top of B2 and import it, it should be the new best block
 	let b3 = client
-		.new_block_at(&BlockId::Hash(b2.hash()), Default::default(), false)
+		.new_block_at(b2.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -1139,7 +1140,7 @@ fn finality_notifications_content() {
 	let mut finality_notifications = client.finality_notification_stream();
 
 	let a1 = client
-		.new_block_at(&BlockId::Number(0), Default::default(), false)
+		.new_block_at(client.chain_info().genesis_hash, Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -1147,7 +1148,7 @@ fn finality_notifications_content() {
 	block_on(client.import(BlockOrigin::Own, a1.clone())).unwrap();
 
 	let a2 = client
-		.new_block_at(&BlockId::Hash(a1.hash()), Default::default(), false)
+		.new_block_at(a1.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -1155,14 +1156,16 @@ fn finality_notifications_content() {
 	block_on(client.import(BlockOrigin::Own, a2.clone())).unwrap();
 
 	let a3 = client
-		.new_block_at(&BlockId::Hash(a2.hash()), Default::default(), false)
+		.new_block_at(a2.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, a3.clone())).unwrap();
 
-	let mut b1 = client.new_block_at(&BlockId::Number(0), Default::default(), false).unwrap();
+	let mut b1 = client
+		.new_block_at(client.chain_info().genesis_hash, Default::default(), false)
+		.unwrap();
 	// needed to make sure B1 gets a different hash from A1
 	b1.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
@@ -1175,14 +1178,16 @@ fn finality_notifications_content() {
 	block_on(client.import(BlockOrigin::Own, b1.clone())).unwrap();
 
 	let b2 = client
-		.new_block_at(&BlockId::Hash(b1.hash()), Default::default(), false)
+		.new_block_at(b1.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, b2.clone())).unwrap();
 
-	let mut c1 = client.new_block_at(&BlockId::Number(0), Default::default(), false).unwrap();
+	let mut c1 = client
+		.new_block_at(client.chain_info().genesis_hash, Default::default(), false)
+		.unwrap();
 	// needed to make sure B1 gets a different hash from A1
 	c1.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
@@ -1194,9 +1199,7 @@ fn finality_notifications_content() {
 	let c1 = c1.build().unwrap().block;
 	block_on(client.import(BlockOrigin::Own, c1.clone())).unwrap();
 
-	let mut d3 = client
-		.new_block_at(&BlockId::Hash(a2.hash()), Default::default(), false)
-		.unwrap();
+	let mut d3 = client.new_block_at(a2.hash(), Default::default(), false).unwrap();
 	// needed to make sure D3 gets a different hash from A3
 	d3.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
@@ -1209,7 +1212,7 @@ fn finality_notifications_content() {
 	block_on(client.import(BlockOrigin::Own, d3.clone())).unwrap();
 
 	let d4 = client
-		.new_block_at(&BlockId::Hash(d3.hash()), Default::default(), false)
+		.new_block_at(d3.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -1262,17 +1265,16 @@ fn state_reverted_on_reorg() {
 	let current_balance = |client: &substrate_test_runtime_client::TestClient| {
 		client
 			.runtime_api()
-			.balance_of(
-				&BlockId::number(client.chain_info().best_number),
-				AccountKeyring::Alice.into(),
-			)
+			.balance_of(client.chain_info().best_hash, AccountKeyring::Alice.into())
 			.unwrap()
 	};
 
 	// G -> A1 -> A2
 	//   \
 	//    -> B1
-	let mut a1 = client.new_block_at(&BlockId::Number(0), Default::default(), false).unwrap();
+	let mut a1 = client
+		.new_block_at(client.chain_info().genesis_hash, Default::default(), false)
+		.unwrap();
 	a1.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Bob.into(),
@@ -1283,7 +1285,9 @@ fn state_reverted_on_reorg() {
 	let a1 = a1.build().unwrap().block;
 	block_on(client.import(BlockOrigin::Own, a1.clone())).unwrap();
 
-	let mut b1 = client.new_block_at(&BlockId::Number(0), Default::default(), false).unwrap();
+	let mut b1 = client
+		.new_block_at(client.chain_info().genesis_hash, Default::default(), false)
+		.unwrap();
 	b1.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Ferdie.into(),
@@ -1296,9 +1300,7 @@ fn state_reverted_on_reorg() {
 	block_on(client.import_as_best(BlockOrigin::Own, b1.clone())).unwrap();
 
 	assert_eq!(950, current_balance(&client));
-	let mut a2 = client
-		.new_block_at(&BlockId::Hash(a1.hash()), Default::default(), false)
-		.unwrap();
+	let mut a2 = client.new_block_at(a1.hash(), Default::default(), false).unwrap();
 	a2.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Charlie.into(),
@@ -1343,7 +1345,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 	//    -> B1 -> B2 -> B3
 
 	let a1 = client
-		.new_block_at(&BlockId::Number(0), Default::default(), false)
+		.new_block_at(client.chain_info().genesis_hash, Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -1351,14 +1353,16 @@ fn doesnt_import_blocks_that_revert_finality() {
 	block_on(client.import(BlockOrigin::Own, a1.clone())).unwrap();
 
 	let a2 = client
-		.new_block_at(&BlockId::Hash(a1.hash()), Default::default(), false)
+		.new_block_at(a1.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, a2.clone())).unwrap();
 
-	let mut b1 = client.new_block_at(&BlockId::Number(0), Default::default(), false).unwrap();
+	let mut b1 = client
+		.new_block_at(client.chain_info().genesis_hash, Default::default(), false)
+		.unwrap();
 
 	// needed to make sure B1 gets a different hash from A1
 	b1.push_transfer(Transfer {
@@ -1372,7 +1376,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 	block_on(client.import(BlockOrigin::Own, b1.clone())).unwrap();
 
 	let b2 = client
-		.new_block_at(&BlockId::Hash(b1.hash()), Default::default(), false)
+		.new_block_at(b1.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -1382,7 +1386,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 	// prepare B3 before we finalize A2, because otherwise we won't be able to
 	// read changes trie configuration after A2 is finalized
 	let b3 = client
-		.new_block_at(&BlockId::Hash(b2.hash()), Default::default(), false)
+		.new_block_at(b2.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -1400,7 +1404,9 @@ fn doesnt_import_blocks_that_revert_finality() {
 
 	// adding a C1 block which is lower than the last finalized should also
 	// fail (with a cheaper check that doesn't require checking ancestry).
-	let mut c1 = client.new_block_at(&BlockId::Number(0), Default::default(), false).unwrap();
+	let mut c1 = client
+		.new_block_at(client.chain_info().genesis_hash, Default::default(), false)
+		.unwrap();
 
 	// needed to make sure C1 gets a different hash from A1 and B1
 	c1.push_transfer(Transfer {
@@ -1419,7 +1425,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 	assert_eq!(import_err.to_string(), expected_err.to_string());
 
 	let a3 = client
-		.new_block_at(&BlockId::Hash(a2.hash()), Default::default(), false)
+		.new_block_at(a2.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -1449,16 +1455,34 @@ fn respects_block_rules() {
 				.build()
 		};
 
+		// test modus operandi:
+		//
+		//            B[2]
+		//           /
+		// G[0]--B[1]
+		//     \     \
+		//      \     B'[2]
+		//       \
+		//        B'[1]
+		//
+		// B[1]  - block ok
+		// B'[1] - block not ok, added to block_rules::bad
+		//
+		// B[2]  - block ok, correct fork for block height==2, added to block_rules::forks
+		// B'[2] - block not ok, (incorrect fork)
+
+		// build B[1]
 		let block_ok = client
-			.new_block_at(&BlockId::Number(0), Default::default(), false)
+			.new_block_at(client.chain_info().genesis_hash, Default::default(), false)
 			.unwrap()
 			.build()
 			.unwrap()
 			.block;
+		let block_ok_1_hash = block_ok.hash();
 
 		let params = BlockCheckParams {
 			hash: block_ok.hash(),
-			number: 0,
+			number: 1,
 			parent_hash: *block_ok.header().parent_hash(),
 			allow_missing_state: false,
 			allow_missing_parent: false,
@@ -1466,15 +1490,16 @@ fn respects_block_rules() {
 		};
 		assert_eq!(block_on(client.check_block(params)).unwrap(), ImportResult::imported(false));
 
-		// this is 0x0d6d6612a10485370d9e085aeea7ec427fb3f34d961c6a816cdbe5cde2278864
-		let mut block_not_ok =
-			client.new_block_at(&BlockId::Number(0), Default::default(), false).unwrap();
+		// build B'[1]
+		let mut block_not_ok = client
+			.new_block_at(client.chain_info().genesis_hash, Default::default(), false)
+			.unwrap();
 		block_not_ok.push_storage_change(vec![0], Some(vec![1])).unwrap();
 		let block_not_ok = block_not_ok.build().unwrap().block;
 
 		let params = BlockCheckParams {
 			hash: block_not_ok.hash(),
-			number: 0,
+			number: 1,
 			parent_hash: *block_not_ok.header().parent_hash(),
 			allow_missing_state: false,
 			allow_missing_parent: false,
@@ -1489,34 +1514,35 @@ fn respects_block_rules() {
 		// Now going to the fork
 		block_on(client.import_as_final(BlockOrigin::Own, block_ok)).unwrap();
 
-		// And check good fork
-		let mut block_ok =
-			client.new_block_at(&BlockId::Number(1), Default::default(), false).unwrap();
+		// And check good fork (build B[2])
+		let mut block_ok = client.new_block_at(block_ok_1_hash, Default::default(), false).unwrap();
 		block_ok.push_storage_change(vec![0], Some(vec![2])).unwrap();
 		let block_ok = block_ok.build().unwrap().block;
+		assert_eq!(*block_ok.header().number(), 2);
 
 		let params = BlockCheckParams {
 			hash: block_ok.hash(),
-			number: 1,
+			number: 2,
 			parent_hash: *block_ok.header().parent_hash(),
 			allow_missing_state: false,
 			allow_missing_parent: false,
 			import_existing: false,
 		};
 		if record_only {
-			fork_rules.push((1, block_ok.hash()));
+			fork_rules.push((2, block_ok.hash()));
 		}
 		assert_eq!(block_on(client.check_block(params)).unwrap(), ImportResult::imported(false));
 
-		// And now try bad fork
+		// And now try bad fork (build B'[2])
 		let mut block_not_ok =
-			client.new_block_at(&BlockId::Number(1), Default::default(), false).unwrap();
+			client.new_block_at(block_ok_1_hash, Default::default(), false).unwrap();
 		block_not_ok.push_storage_change(vec![0], Some(vec![3])).unwrap();
 		let block_not_ok = block_not_ok.build().unwrap().block;
+		assert_eq!(*block_not_ok.header().number(), 2);
 
 		let params = BlockCheckParams {
 			hash: block_not_ok.hash(),
-			number: 1,
+			number: 2,
 			parent_hash: *block_not_ok.header().parent_hash(),
 			allow_missing_state: false,
 			allow_missing_parent: false,
@@ -1561,13 +1587,15 @@ fn returns_status_for_pruned_blocks() {
 	let mut client = TestClientBuilder::with_backend(backend).build();
 
 	let a1 = client
-		.new_block_at(&BlockId::Number(0), Default::default(), false)
+		.new_block_at(client.chain_info().genesis_hash, Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
 		.block;
 
-	let mut b1 = client.new_block_at(&BlockId::Number(0), Default::default(), false).unwrap();
+	let mut b1 = client
+		.new_block_at(client.chain_info().genesis_hash, Default::default(), false)
+		.unwrap();
 
 	// b1 is created, but not imported
 	b1.push_transfer(Transfer {
@@ -1603,7 +1631,7 @@ fn returns_status_for_pruned_blocks() {
 	assert_eq!(client.block_status(check_block_a1.hash).unwrap(), BlockStatus::InChainWithState);
 
 	let a2 = client
-		.new_block_at(&BlockId::Hash(a1.hash()), Default::default(), false)
+		.new_block_at(a1.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -1631,7 +1659,7 @@ fn returns_status_for_pruned_blocks() {
 	assert_eq!(client.block_status(check_block_a2.hash).unwrap(), BlockStatus::InChainWithState);
 
 	let a3 = client
-		.new_block_at(&BlockId::Hash(a2.hash()), Default::default(), false)
+		.new_block_at(a2.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -1689,7 +1717,7 @@ fn returns_status_for_pruned_blocks() {
 }
 
 #[test]
-fn storage_keys_iter_prefix_and_start_key_works() {
+fn storage_keys_prefix_and_start_key_works() {
 	let child_info = ChildInfo::new_default(b"child");
 	let client = TestClientBuilder::new()
 		.add_extra_child_storage(&child_info, b"first".to_vec(), vec![0u8; 32])
@@ -1704,7 +1732,7 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 	let child_prefix = StorageKey(b"sec".to_vec());
 
 	let res: Vec<_> = client
-		.storage_keys_iter(block_hash, Some(&prefix), None)
+		.storage_keys(block_hash, Some(&prefix), None)
 		.unwrap()
 		.map(|x| x.0)
 		.collect();
@@ -1718,7 +1746,7 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 	);
 
 	let res: Vec<_> = client
-		.storage_keys_iter(
+		.storage_keys(
 			block_hash,
 			Some(&prefix),
 			Some(&StorageKey(array_bytes::hex2bytes_unchecked("3a636f6465"))),
@@ -1729,7 +1757,7 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 	assert_eq!(res, [array_bytes::hex2bytes_unchecked("3a686561707061676573")]);
 
 	let res: Vec<_> = client
-		.storage_keys_iter(
+		.storage_keys(
 			block_hash,
 			Some(&prefix),
 			Some(&StorageKey(array_bytes::hex2bytes_unchecked("3a686561707061676573"))),
@@ -1740,19 +1768,14 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 	assert_eq!(res, Vec::<Vec<u8>>::new());
 
 	let res: Vec<_> = client
-		.child_storage_keys_iter(block_hash, child_info.clone(), Some(&child_prefix), None)
+		.child_storage_keys(block_hash, child_info.clone(), Some(&child_prefix), None)
 		.unwrap()
 		.map(|x| x.0)
 		.collect();
 	assert_eq!(res, [b"second".to_vec()]);
 
 	let res: Vec<_> = client
-		.child_storage_keys_iter(
-			block_hash,
-			child_info,
-			None,
-			Some(&StorageKey(b"second".to_vec())),
-		)
+		.child_storage_keys(block_hash, child_info, None, Some(&StorageKey(b"second".to_vec())))
 		.unwrap()
 		.map(|x| x.0)
 		.collect();
@@ -1760,7 +1783,7 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 }
 
 #[test]
-fn storage_keys_iter_works() {
+fn storage_keys_works() {
 	let client = substrate_test_runtime_client::new();
 
 	let block_hash = client.info().best_hash;
@@ -1768,7 +1791,7 @@ fn storage_keys_iter_works() {
 	let prefix = StorageKey(array_bytes::hex2bytes_unchecked(""));
 
 	let res: Vec<_> = client
-		.storage_keys_iter(block_hash, Some(&prefix), None)
+		.storage_keys(block_hash, Some(&prefix), None)
 		.unwrap()
 		.take(9)
 		.map(|x| array_bytes::bytes2hex("", &x.0))
@@ -1788,8 +1811,56 @@ fn storage_keys_iter_works() {
 		]
 	);
 
+	// Starting at an empty key nothing gets skipped.
 	let res: Vec<_> = client
-		.storage_keys_iter(
+		.storage_keys(block_hash, Some(&prefix), Some(&StorageKey("".into())))
+		.unwrap()
+		.take(9)
+		.map(|x| array_bytes::bytes2hex("", &x.0))
+		.collect();
+	assert_eq!(
+		res,
+		[
+			"00c232cf4e70a5e343317016dc805bf80a6a8cd8ad39958d56f99891b07851e0",
+			"085b2407916e53a86efeb8b72dbe338c4b341dab135252f96b6ed8022209b6cb",
+			"0befda6e1ca4ef40219d588a727f1271",
+			"1a560ecfd2a62c2b8521ef149d0804eb621050e3988ed97dca55f0d7c3e6aa34",
+			"1d66850d32002979d67dd29dc583af5b2ae2a1f71c1f35ad90fff122be7a3824",
+			"237498b98d8803334286e9f0483ef513098dd3c1c22ca21c4dc155b4ef6cc204",
+			"26aa394eea5630e07c48ae0c9558cef75e0621c4869aa60c02be9adcc98a0d1d",
+			"29b9db10ec5bf7907d8f74b5e60aa8140c4fbdd8127a1ee5600cb98e5ec01729",
+			"3a636f6465",
+		]
+	);
+
+	// Starting at an incomplete key nothing gets skipped.
+	let res: Vec<_> = client
+		.storage_keys(
+			block_hash,
+			Some(&prefix),
+			Some(&StorageKey(array_bytes::hex2bytes_unchecked("3a636f64"))),
+		)
+		.unwrap()
+		.take(8)
+		.map(|x| array_bytes::bytes2hex("", &x.0))
+		.collect();
+	assert_eq!(
+		res,
+		[
+			"3a636f6465",
+			"3a686561707061676573",
+			"52008686cc27f6e5ed83a216929942f8bcd32a396f09664a5698f81371934b56",
+			"5348d72ac6cc66e5d8cbecc27b0e0677503b845fe2382d819f83001781788fd5",
+			"5c2d5fda66373dabf970e4fb13d277ce91c5233473321129d32b5a8085fa8133",
+			"6644b9b8bc315888ac8e41a7968dc2b4141a5403c58acdf70b7e8f7e07bf5081",
+			"66484000ed3f75c95fc7b03f39c20ca1e1011e5999278247d3b2f5e3c3273808",
+			"7d5007603a7f5dd729d51d93cf695d6465789443bb967c0d1fe270e388c96eaa",
+		]
+	);
+
+	// Starting at a complete key the first key is skipped.
+	let res: Vec<_> = client
+		.storage_keys(
 			block_hash,
 			Some(&prefix),
 			Some(&StorageKey(array_bytes::hex2bytes_unchecked("3a636f6465"))),
@@ -1812,7 +1883,7 @@ fn storage_keys_iter_works() {
 	);
 
 	let res: Vec<_> = client
-		.storage_keys_iter(
+		.storage_keys(
 			block_hash,
 			Some(&prefix),
 			Some(&StorageKey(array_bytes::hex2bytes_unchecked(
@@ -1928,7 +1999,7 @@ fn reorg_triggers_a_notification_even_for_sources_that_should_not_trigger_notifi
 		futures::executor::block_on_stream(client.import_notification_stream());
 
 	let a1 = client
-		.new_block_at(&BlockId::Number(0), Default::default(), false)
+		.new_block_at(client.chain_info().genesis_hash, Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -1936,14 +2007,16 @@ fn reorg_triggers_a_notification_even_for_sources_that_should_not_trigger_notifi
 	block_on(client.import(BlockOrigin::NetworkInitialSync, a1.clone())).unwrap();
 
 	let a2 = client
-		.new_block_at(&BlockId::Hash(a1.hash()), Default::default(), false)
+		.new_block_at(a1.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::NetworkInitialSync, a2.clone())).unwrap();
 
-	let mut b1 = client.new_block_at(&BlockId::Number(0), Default::default(), false).unwrap();
+	let mut b1 = client
+		.new_block_at(client.chain_info().genesis_hash, Default::default(), false)
+		.unwrap();
 	// needed to make sure B1 gets a different hash from A1
 	b1.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
@@ -1956,7 +2029,7 @@ fn reorg_triggers_a_notification_even_for_sources_that_should_not_trigger_notifi
 	block_on(client.import(BlockOrigin::NetworkInitialSync, b1.clone())).unwrap();
 
 	let b2 = client
-		.new_block_at(&BlockId::Hash(b1.hash()), Default::default(), false)
+		.new_block_at(b1.hash(), Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -1992,7 +2065,7 @@ fn use_dalek_ext_works() {
 	);
 
 	let a1 = client
-		.new_block_at(&BlockId::Number(0), Default::default(), false)
+		.new_block_at(client.chain_info().genesis_hash, Default::default(), false)
 		.unwrap()
 		.build()
 		.unwrap()
@@ -2002,10 +2075,10 @@ fn use_dalek_ext_works() {
 	// On block zero it will use dalek and then on block 1 it will use zebra
 	assert!(!client
 		.runtime_api()
-		.verify_ed25519(&BlockId::Number(0), zero_ed_sig(), zero_ed_pub(), vec![])
+		.verify_ed25519(client.chain_info().genesis_hash, zero_ed_sig(), zero_ed_pub(), vec![])
 		.unwrap());
 	assert!(client
 		.runtime_api()
-		.verify_ed25519(&BlockId::Number(1), zero_ed_sig(), zero_ed_pub(), vec![])
+		.verify_ed25519(a1.hash(), zero_ed_sig(), zero_ed_pub(), vec![])
 		.unwrap());
 }
