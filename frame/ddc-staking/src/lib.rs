@@ -16,7 +16,7 @@ use sp_std::prelude::*;
 
 pub use pallet::*;
 
-const DDC_STAKING_ID: LockIdentifier = *b"cnmstake"; // DDC maintainer's stake
+const DDC_STAKING_ID: LockIdentifier = *b"ddcstake"; // DDC maintainer's stake
 
 /// The balance type of this pallet.
 pub type BalanceOf<T> =
