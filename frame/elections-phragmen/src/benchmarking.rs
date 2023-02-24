@@ -15,14 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Elections pallet benchmarking.
+//! Elections-Phragmen pallet benchmarking.
 
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
 
 use frame_benchmarking::v1::{account, benchmarks, whitelist, BenchmarkError, BenchmarkResult};
-use frame_support::dispatch::DispatchResultWithPostInfo;
+use frame_support::{dispatch::DispatchResultWithPostInfo, traits::OnInitialize};
 use frame_system::RawOrigin;
 
 use crate::Pallet as Elections;
@@ -37,7 +37,7 @@ fn endowed_account<T: Config>(name: &'static str, index: u32) -> T::AccountId {
 	let amount = default_stake::<T>(T::MaxVoters::get()) * BalanceOf::<T>::from(BALANCE_FACTOR);
 	let _ = T::Currency::make_free_balance_be(&account, amount);
 	// important to increase the total issuance since T::CurrencyToVote will need it to be sane for
-	// the election to work.
+	// phragmen to work.
 	T::Currency::issue(amount);
 
 	account
@@ -122,7 +122,7 @@ fn distribute_voters<T: Config>(
 fn fill_seats_up_to<T: Config>(m: u32) -> Result<Vec<T::AccountId>, &'static str> {
 	let _ = submit_candidates_with_self_vote::<T>(m, "fill_seats_up_to")?;
 	assert_eq!(<Elections<T>>::candidates().len() as u32, m, "wrong number of candidates.");
-	<Elections<T>>::do_election();
+	<Elections<T>>::do_phragmen();
 	assert_eq!(<Elections<T>>::candidates().len(), 0, "some candidates remaining.");
 	assert_eq!(
 		<Elections<T>>::members().len() + <Elections<T>>::runners_up().len(),
@@ -382,11 +382,11 @@ benchmarks! {
 		assert_eq!(<Voting<T>>::iter().count() as u32, 0);
 	}
 
-	pre_solve_election {
-		// We always select 20 members, this is hard-coded in the runtime and cannot be trivially
-		// changed at this stage. Yet, change the number of voters, candidates and edge per voter
-		// to see the impact. Note that we give all candidates a self vote to make sure they are
-		// all considered.
+	election_phragmen {
+		// This is just to focus on phragmen in the context of this module. We always select 20
+		// members, this is hard-coded in the runtime and cannot be trivially changed at this stage.
+		// Yet, change the number of voters, candidates and edge per voter to see the impact. Note
+		// that we give all candidates a self vote to make sure they are all considered.
 		let c in 1 .. T::MaxCandidates::get();
 		let v in 1 .. T::MaxVoters::get();
 		let e in (T::MaxVoters::get()) .. T::MaxVoters::get() * T::MaxVotesPerVoter::get();
@@ -404,44 +404,7 @@ benchmarks! {
 		let all_candidates = submit_candidates_with_self_vote::<T>(c, "candidates")?;
 		let _ = distribute_voters::<T>(all_candidates, v.saturating_sub(c), votes_per_voter as usize)?;
 	}: {
-		<Elections<T>>::do_pre_solve_election().unwrap();
-	}
-
-	post_solve_election {
-		// We always select 20 members, this is hard-coded in the runtime and cannot be trivially
-		// changed at this stage. Yet, change the number of voters, candidates and edge per voter
-		// to see the impact. Note that we give all candidates a self vote to make sure they are
-		// all considered.
-		let c in 1 .. T::MaxCandidates::get();
-		let v in 1 .. T::MaxVoters::get();
-		let e in (T::MaxVoters::get()) .. T::MaxVoters::get() as u32 * T::MaxVotesPerVoter::get() as u32;
-		clean::<T>();
-
-		// so we have a situation with v and e. we want e to basically always be in the range of `e
-		// -> e * T::MaxVotesPerVoter`, but we cannot express that now with the benchmarks. So what we do
-		// is: when c is being iterated, v, and e are max and fine. when v is being iterated, e is
-		// being set to max and this is a problem. In these cases, we cap e to a lower value, namely
-		// v * `T::MaxVotesPerVoter`. when e is being iterated, v is at max, and again fine. all in all,
-		// votes_per_voter can never be more than `T::MaxVotesPerVoter`. Note that this might cause `v` to be
-		// an overestimate.
-		let votes_per_voter = (e / v).min(T::MaxVotesPerVoter::get() as u32);
-
-		let all_candidates = submit_candidates_with_self_vote::<T>(c, "candidates")?;
-		let _ = distribute_voters::<T>(all_candidates, v.saturating_sub(c), votes_per_voter as usize)?;
-
-		let pre_election_result = <Elections<T>>::do_pre_solve_election().unwrap();
-		let election_result = T::ElectionSolver::solve(
-			pre_election_result.num_to_elect,
-			pre_election_result.candidate_ids,
-			pre_election_result.voters_and_votes,
-		).unwrap();
-
-	}: {
-		<Elections<T>>::do_post_solve_election(
-			election_result.winners,
-			pre_election_result.candidates_and_deposit,
-			pre_election_result.voters_and_stakes,
-		);
+		<Elections<T>>::on_initialize(T::TermDuration::get());
 	}
 	verify {
 		assert_eq!(<Elections<T>>::members().len() as u32, T::DesiredMembers::get().min(c));

@@ -1,0 +1,37 @@
+[package]
+name = "pallet-election-provider-support-benchmarking"
+version = "4.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Apache-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "Benchmarking for election provider support onchain config trait"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = [
+	"derive",
+] }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../../benchmarking" }
+frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = ".." }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
+sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/npos-elections" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime" }
+
+[features]
+default = ["std"]
+std = [
+	"codec/std",
+	"frame-benchmarking?/std",
+	"frame-election-provider-support/std",
+	"frame-system/std",
+	"sp-npos-elections/std",
+	"sp-runtime/std",
+]
+runtime-benchmarks = [
+	"frame-benchmarking/runtime-benchmarks",
+	"frame-election-provider-support/runtime-benchmarks",
+]
