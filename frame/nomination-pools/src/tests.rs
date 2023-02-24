@@ -19,7 +19,7 @@ use super::*;
 use crate::{mock::*, Event};
 use frame_support::{assert_err, assert_noop, assert_ok, assert_storage_noop, bounded_btree_map};
 use pallet_balances::Event as BEvent;
-use sp_runtime::traits::Dispatchable;
+use sp_runtime::{traits::Dispatchable, FixedU128};
 
 macro_rules! unbonding_pools_with_era {
 	($($k:expr => $v:expr),* $(,)?) => {{
@@ -5045,8 +5045,6 @@ mod update_roles {
 }
 
 mod reward_counter_precision {
-	use sp_runtime::FixedU128;
-
 	use super::*;
 
 	const DOT: Balance = 10u128.pow(10u32);
@@ -5066,16 +5064,17 @@ mod reward_counter_precision {
 		let bonded_pool = BondedPools::<T>::get(1).unwrap();
 		RewardPools::<T>::get(1)
 			.unwrap()
-			.current_reward_counter(1, bonded_pool.points, &bonded_pool.commission)
+			.current_reward_counter(1, bonded_pool.points, bonded_pool.commission.current())
 			.unwrap()
 			.0
 	}
 
 	fn pending_rewards(of: AccountId) -> Option<BalanceOf<T>> {
 		let member = PoolMembers::<T>::get(of).unwrap();
+		let bonded_pool = BondedPools::<T>::get(member.pool_id).unwrap();
 		assert_eq!(member.pool_id, 1);
 		let rc = default_pool_reward_counter();
-		member.pending_rewards(rc).ok()
+		member.pending_rewards(rc, bonded_pool.commission.current()).ok()
 	}
 
 	#[test]
@@ -5412,14 +5411,12 @@ mod reward_counter_precision {
 }
 
 mod commission {
-
 	use super::*;
 
 	#[test]
 	fn set_commission_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			let (mut member, bonded_pool, mut reward_pool) =
-				Pools::get_member_with_pools(&10).unwrap();
+			let pool_id = 1;
 
 			// top up commission payee account to existential deposit
 			let _ = Balances::deposit_creating(&900, 5);
@@ -5427,22 +5424,22 @@ mod commission {
 			// Set a commission for pool 1.
 			assert_ok!(Pools::set_commission(
 				RuntimeOrigin::signed(900),
-				bonded_pool.id,
+				pool_id,
 				Some((Perbill::from_percent(50), 900))
 			));
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					Event::Created { depositor: 10, pool_id: bonded_pool.id },
-					Event::Bonded { member: 10, pool_id: bonded_pool.id, bonded: 10, joined: true },
+					Event::Created { depositor: 10, pool_id },
+					Event::Bonded { member: 10, pool_id, bonded: 10, joined: true },
 					Event::PoolCommissionUpdated {
-						pool_id: bonded_pool.id,
+						pool_id,
 						current: Some((Perbill::from_percent(50), 900))
 					},
 				]
 			);
 
-			let commission_as_percent = BondedPool::<Runtime>::get(bonded_pool.id)
+			let commission_as_percent = BondedPool::<Runtime>::get(pool_id)
 				.unwrap()
 				.commission
 				.current
@@ -5460,12 +5457,13 @@ mod commission {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![Event::PoolCommissionUpdated {
-					pool_id: bonded_pool.id,
+					pool_id,
 					current: Some((Perbill::from_percent(25), 900))
 				},]
 			);
 
-			let current = BondedPools::<Runtime>::get(bonded_pool.id).unwrap()
+			let current = BondedPools::<Runtime>::get(pool_id)
+				.unwrap()
 				.commission
 				.current
 				.as_ref()
@@ -5477,40 +5475,20 @@ mod commission {
 			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 40));
 			assert_eq!(
 				PoolMembers::<Runtime>::get(10).unwrap(),
-				PoolMember::<Runtime> { pool_id: bonded_pool.id, points: 10, ..Default::default() }
+				PoolMember::<Runtime> { pool_id, points: 10, ..Default::default() }
 			);
 
-			let (current_reward_counter, share_commission) = reward_pool
-				.current_reward_counter(bonded_pool.id, bonded_pool.points, &BondedPools::<Runtime>::get(bonded_pool.id).unwrap().commission)
-				.unwrap();
-
-			let pending_rewards = PoolMembers::<Runtime>::get(10)
-				.unwrap()
-				.pending_rewards(current_reward_counter)
-				.unwrap();
-			assert_eq!(pending_rewards, 30);
-
-			assert_ok!(Pools::do_reward_payout(
-				&10,
-				&mut member,
-				&mut BondedPool::<Runtime>::get(1).unwrap(),
-				&mut reward_pool
-			));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::PaidOut {
-					member: 10,
-					pool_id: bonded_pool.id,
-					payout: 30,
-					commission: 0
-				}]
+				vec![Event::PaidOut { member: 10, pool_id, payout: 30, commission: 0 }]
 			);
 
-			assert_eq!(RewardPool::<Runtime>::current_balance(bonded_pool.id), 10);
+			assert_eq!(RewardPool::<Runtime>::current_balance(pool_id), 10);
 
 			// uncomment to check reward_pool state
 			assert_eq!(
-				RewardPools::<Runtime>::get(bonded_pool.id).unwrap(),
+				RewardPools::<Runtime>::get(pool_id).unwrap(),
 				RewardPool {
 					last_recorded_reward_counter: Zero::zero(),
 					last_recorded_total_payouts: 0,
@@ -5523,69 +5501,16 @@ mod commission {
 			// update payee only.
 			assert_ok!(Pools::set_commission(
 				RuntimeOrigin::signed(900),
-				bonded_pool.id,
+				pool_id,
 				Some((Perbill::from_percent(25), 901))
 			));
 
-			assert_eq!(
-				RewardPools::<Runtime>::get(bonded_pool.id).unwrap(),
-				RewardPool {
-					last_recorded_reward_counter: Zero::zero(),
-					last_recorded_total_payouts: 30,
-					total_rewards_claimed: 30,
-					total_commission_pending: 10,
-					total_commission_claimed: 0
-				}
-			);
-			
-			let current = BondedPools::<Runtime>::get(bonded_pool.id).unwrap()
-				.commission
-				.current
-				.as_ref()
-				.map_or(Perbill::zero(), |(c, _)| c.clone())
-				.min(GlobalMaxCommission::<T>::get().unwrap_or(Bounded::max_value()));
-
-			assert_eq!(current, Perbill::from_percent(25));
-			let payouts_since_last_record = RewardPool::<Runtime>::current_balance(bonded_pool.id)
-				.saturating_add(reward_pool.total_rewards_claimed)
-				.saturating_add(reward_pool.total_commission_pending)
-				.saturating_add(reward_pool.total_commission_claimed)
-				.saturating_sub(reward_pool.last_recorded_total_payouts);
-
-			let share_commission = current * payouts_since_last_record;
-			assert_eq!(payouts_since_last_record, 40);
-			assert_eq!(share_commission, 10);
-
-			assert_eq!(RewardPool::<Runtime>::current_balance(bonded_pool.id), 10);
-
-			assert_eq!(
-				reward_pool,
-				RewardPool {
-					last_recorded_reward_counter: Zero::zero(),
-					last_recorded_total_payouts: 0,
-					total_rewards_claimed: 30,
-					total_commission_pending: 0,
-					total_commission_claimed: 0
-				}
-			);
-		
-
-			// let (current_reward_counter, share_commission) = reward_pool
-			// 	.current_reward_counter(bonded_pool.id, bonded_pool.points, &bonded_pool.commission)
-			// 	.unwrap();
-
-			// assert_eq!(share_commission, 10);
-			// let pending_rewards = member.pending_rewards(current_reward_counter).unwrap();
-
-			// assert_eq!(reward_pool, Default::default());
-			assert_eq!(reward_pool.last_recorded_total_payouts, 30);
-			assert_eq!(reward_pool.total_rewards_claimed, 30);
-			assert_eq!(reward_pool.total_commission_pending, 10);
+			assert_eq!(RewardPool::<Runtime>::current_balance(pool_id), 10);
 
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![Event::PoolCommissionUpdated {
-					pool_id: bonded_pool.id,
+					pool_id,
 					current: Some((Perbill::from_percent(25), 901))
 				},]
 			);
@@ -5594,15 +5519,15 @@ mod commission {
 			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 100));
 
 			// remove the commission for pool 1.
-			assert_ok!(Pools::set_commission(RuntimeOrigin::signed(900), bonded_pool.id, None));
+			assert_ok!(Pools::set_commission(RuntimeOrigin::signed(900), pool_id, None));
 
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::PoolCommissionUpdated { pool_id: bonded_pool.id, current: None },]
+				vec![Event::PoolCommissionUpdated { pool_id, current: None },]
 			);
 
 			assert_eq!(
-				BondedPools::<Runtime>::get(bonded_pool.id).unwrap(),
+				BondedPools::<Runtime>::get(pool_id).unwrap(),
 				BondedPoolInner {
 					commission: Commission {
 						current: None,
@@ -5622,20 +5547,10 @@ mod commission {
 				}
 			);
 
-			assert_ok!(Pools::do_reward_payout(
-				&10,
-				&mut member,
-				&mut BondedPool::<Runtime>::get(1).unwrap(),
-				&mut reward_pool
-			));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::PaidOut {
-					member: 10,
-					pool_id: bonded_pool.id,
-					payout: 100,
-					commission: 0
-				},]
+				vec![Event::PaidOut { member: 10, pool_id, payout: 100, commission: 0 },]
 			);
 
 			// test whether supplying a 0% commission along with a payee results in a None `current`
@@ -5650,7 +5565,7 @@ mod commission {
 			// set the commission to 0%
 			assert_ok!(Pools::set_commission(
 				RuntimeOrigin::signed(900),
-				bonded_pool.id,
+				pool_id,
 				Some((Perbill::from_percent(0), 900))
 			));
 			// commssion current should now be None, and `throttle_from` the current block.
@@ -5661,7 +5576,7 @@ mod commission {
 			// set the commission to 0%
 			assert_ok!(Pools::set_commission(
 				RuntimeOrigin::signed(900),
-				bonded_pool.id,
+				pool_id,
 				Some((Perbill::from_percent(0), 900))
 			));
 
@@ -5669,15 +5584,15 @@ mod commission {
 				pool_events_since_last_call(),
 				vec![
 					Event::PoolCommissionUpdated {
-						pool_id: bonded_pool.id,
+						pool_id,
 						current: Some((Perbill::from_percent(10), 900))
 					},
 					Event::PoolCommissionUpdated {
-						pool_id: bonded_pool.id,
+						pool_id,
 						current: Some((Perbill::from_percent(0), 900))
 					},
 					Event::PoolCommissionUpdated {
-						pool_id: bonded_pool.id,
+						pool_id,
 						current: Some((Perbill::from_percent(0), 900))
 					},
 				]
@@ -5688,21 +5603,21 @@ mod commission {
 			// set max commission to 10%
 			assert_ok!(Pools::set_commission_max(
 				RuntimeOrigin::signed(900),
-				bonded_pool.id,
+				pool_id,
 				Perbill::from_percent(10)
 			));
 
 			// set commission to 10%
 			assert_ok!(Pools::set_commission(
 				RuntimeOrigin::signed(900),
-				bonded_pool.id,
+				pool_id,
 				Some((Perbill::from_percent(10), 900))
 			));
 
 			// update payee only and keep current commission
 			assert_ok!(Pools::set_commission(
 				RuntimeOrigin::signed(900),
-				bonded_pool.id,
+				pool_id,
 				Some((Perbill::from_percent(10), 901))
 			));
 
@@ -5710,20 +5625,51 @@ mod commission {
 				pool_events_since_last_call(),
 				vec![
 					Event::PoolMaxCommissionUpdated {
-						pool_id: bonded_pool.id,
+						pool_id,
 						max_commission: Perbill::from_percent(10)
 					},
 					Event::PoolCommissionUpdated {
-						pool_id: bonded_pool.id,
+						pool_id,
 						current: Some((Perbill::from_percent(10), 900))
 					},
 					Event::PoolCommissionUpdated {
-						pool_id: bonded_pool.id,
+						pool_id,
 						current: Some((Perbill::from_percent(10), 901))
 					}
 				]
 			);
 		});
+	}
+
+	#[test]
+	fn commission_reward_counter_works_one_member() {
+		ExtBuilder::default().build_and_execute(|| {
+			let pool_id = 1;
+			assert_ok!(Pools::set_commission(
+				RuntimeOrigin::signed(900),
+				1,
+				Some((Perbill::from_percent(10), 900)),
+			));
+
+			// Pool earns 40 points
+			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 40));
+
+			assert_eq!(
+				PoolMembers::<Runtime>::get(10).unwrap(),
+				PoolMember::<Runtime> { pool_id, points: 10, ..Default::default() }
+			);
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+
+			//10% balance (commission) should still be in the pool.
+			assert_eq!(RewardPool::<Runtime>::current_balance(pool_id), 4);
+
+			assert_ok!(Pools::set_commission(
+				RuntimeOrigin::signed(900),
+				1,
+				Some((Perbill::from_percent(20), 900)),
+			));
+			assert_eq!(Pools::api_pending_rewards(10).unwrap(), 0);
+		})
 	}
 
 	#[test]
