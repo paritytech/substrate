@@ -82,7 +82,8 @@
 //! [`run_in_context`] will be handled by FRAME for you.
 
 use sp_std::{
-	any::{Any, TypeId}, boxed::Box,
+	any::{Any, TypeId},
+	boxed::Box,
 	collections::btree_map::{BTreeMap, Entry},
 };
 
