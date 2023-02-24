@@ -769,6 +769,31 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(ClaimPermissions::<T>::get(joiner), ClaimPermission::PermissionlessAll);
 	}
 
+	claim_commission {
+		let claimer: T::AccountId = account("claimer_member", USER_SEED + 4, 0);
+
+		let origin_weight = Pools::<T>::depositor_min_bond() * 2u32.into();
+		let ed = CurrencyOf::<T>::minimum_balance();
+		let (depositor, pool_account) = create_pool_account::<T>(0, origin_weight, Some(Perbill::from_percent(50)));
+		let reward_account = Pools::<T>::create_reward_account(1);
+		CurrencyOf::<T>::make_free_balance_be(&reward_account, ed + origin_weight);
+
+		// member claims a payout to make some commission available.
+		let _ = Pools::<T>::claim_payout(RuntimeOrigin::Signed(claimer).into());
+
+		whitelist_account!(depositor);
+	}:_(RuntimeOrigin::Signed(depositor.clone()), 1u32.into())
+	verify {
+		assert_eq!(
+			CurrencyOf::<T>::free_balance(&depositor),
+			origin_weight * 1u32.into()
+		);
+		assert_eq!(
+			CurrencyOf::<T>::free_balance(&reward_account),
+			ed + Zero::zero()
+		);
+	}
+
 	impl_benchmark_test_suite!(
 		Pallet,
 		crate::mock::new_test_ext(),
