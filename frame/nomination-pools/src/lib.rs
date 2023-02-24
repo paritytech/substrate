@@ -477,7 +477,7 @@ impl<T: Config> PoolMember<T> {
 		&self,
 		current_reward_counter: T::RewardCounter,
 		commission: Perbill,
-	) -> Result<BalanceOf<T>, Error<T>> {
+	) -> Result<(BalanceOf<T>, BalanceOf<T>), Error<T>> {
 		// accuracy note: Reward counters are `FixedU128` with base of 10^18. This value is being
 		// multiplied by a point. The worse case of a point is 10x the granularity of the balance
 		// (10x is the common configuration of `MaxPointsToBalance`).
@@ -499,8 +499,10 @@ impl<T: Config> PoolMember<T> {
 			.defensive_saturating_sub(self.last_recorded_reward_counter))
 		.checked_mul_int(self.active_points())
 		.ok_or(Error::<T>::OverflowRisk)?;
-
-		Ok(pending_total.saturating_sub(commission * pending_total))
+		
+		let pending_after_commission = pending_total.saturating_sub(commission * pending_total);
+		let commission_amount = pending_total.saturating_sub(pending_after_commission);
+		Ok((pending_after_commission, commission_amount))
 	}
 
 	/// Active balance of the member.
@@ -799,23 +801,6 @@ impl<T: Config> Commission<T> {
 		}
 		self.change_rate = Some(change_rate);
 		Ok(())
-	}
-
-	/// Gets the current commission (if any) and payee to be paid.
-	///
-	/// `None` is returned if a commission has not been set. Commission is bounded to
-	/// `GlobalMaxCommission`.
-	fn maybe_commission_and_payee(
-		&self,
-		pending_rewards: &BalanceOf<T>,
-	) -> Option<(BalanceOf<T>, T::AccountId)> {
-		self.current.as_ref().map(|(commission, payee)| {
-			(
-				*commission.min(&GlobalMaxCommission::<T>::get().unwrap_or(Bounded::max_value())) *
-					*pending_rewards,
-				payee.clone(),
-			)
-		})
 	}
 
 	/// Updates a commission's `throttle_from` field to the current block.
@@ -2778,7 +2763,7 @@ impl<T: Config> Pallet<T> {
 			bonded_pool.points,
 			bonded_pool.commission.current(),
 		)?;
-		let pending_rewards =
+		let (pending_rewards, commission) =
 			member.pending_rewards(current_reward_counter, bonded_pool.commission.current())?;
 
 		if pending_rewards.is_zero() {
@@ -2788,28 +2773,6 @@ impl<T: Config> Pallet<T> {
 		// IFF the reward is non-zero alter the member and reward pool info.
 		member.last_recorded_reward_counter = current_reward_counter;
 		reward_pool.register_claimed_reward(pending_rewards);
-
-		// TODO: Remove once new commission refactor is working as intended.
-		// Legacy code to split and payout commission upon reward payout.
-
-		// Gets the commission percentage and payee to be paid if commission has been set.
-		// Otherwise, `None` is returned.
-		// let maybe_commission =
-		// &bonded_pool.commission.maybe_commission_and_payee(&pending_rewards);
-		// if let Some((pool_commission, payee)) = maybe_commission {
-		// 	// Deduct any outstanding commission from the reward being claimed.
-		// 	pending_rewards = pending_rewards.saturating_sub(*pool_commission);
-
-		// 	// Send any non-zero `pool_commission` to the commission `payee`.
-		// 	if pool_commission > &Zero::zero() {
-		// 		T::Currency::transfer(
-		// 			&bonded_pool.reward_account(),
-		// 			&payee,
-		// 			*pool_commission,
-		// 			ExistenceRequirement::KeepAlive,
-		// 		)?;
-		// 	}
-		// }
 
 		// Transfer remaining payout to the member.
 		//
@@ -2830,9 +2793,7 @@ impl<T: Config> Pallet<T> {
 			member: member_account.clone(),
 			pool_id: member.pool_id,
 			payout: pending_rewards,
-			// TODO: Remove once new commission refactor is working as intended.
-			// commission: maybe_commission.as_ref().map(|(c, _)| *c).unwrap_or(Zero::zero()),
-			commission: Zero::zero(),
+			commission,
 		});
 
 		Ok(pending_rewards)
@@ -3057,8 +3018,8 @@ impl<T: Config> Pallet<T> {
 						commission,
 					)
 					.unwrap();
-				*pools_members_pending_rewards.entry(d.pool_id).or_default() +=
-					d.pending_rewards(current_rc, commission).unwrap();
+				let (pending_rewards, _) = d.pending_rewards(current_rc, commission).unwrap();
+				*pools_members_pending_rewards.entry(d.pool_id).or_default() += pending_rewards;
 			} // else this pool has been heavily slashed and cannot have any rewards anymore.
 		});
 
@@ -3151,7 +3112,8 @@ impl<T: Config> Pallet<T> {
 				let (current_reward_counter, _) = reward_pool
 					.current_reward_counter(pool_member.pool_id, bonded_pool.points, commission)
 					.ok()?;
-				return pool_member.pending_rewards(current_reward_counter, commission).ok()
+				let (pending_rewards, _) = pool_member.pending_rewards(current_reward_counter, commission).ok()?;
+				return Some(pending_rewards);
 			}
 		}
 
