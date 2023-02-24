@@ -152,15 +152,10 @@ where
 	/// Enumerate all keys in the map.
 	fn iter_keys() -> Self::KeyIterator {
 		let prefix = G::prefix_hash();
-		KeyPrefixIterator {
-			prefix: prefix.clone(),
-			previous_key: prefix,
-			drain: false,
-			closure: |raw_key_without_prefix| {
-				let mut key_material = G::Hasher::reverse(raw_key_without_prefix);
-				K::decode(&mut key_material)
-			},
-		}
+		KeyPrefixIterator::new(prefix.clone(), prefix, |raw_key_without_prefix| {
+			let mut key_material = G::Hasher::reverse(raw_key_without_prefix);
+			K::decode(&mut key_material)
+		})
 	}
 
 	/// Enumerate all keys in the map after a given key.

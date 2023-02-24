@@ -356,12 +356,7 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 		K: HasReversibleKeyPrefix<KP>,
 	{
 		let prefix = G::storage_n_map_partial_key(kp);
-		KeyPrefixIterator {
-			prefix: prefix.clone(),
-			previous_key: prefix,
-			drain: false,
-			closure: K::decode_partial_key,
-		}
+		KeyPrefixIterator::new(prefix.clone(), prefix, K::decode_partial_key)
 	}
 
 	fn iter_key_prefix_from<KP>(
@@ -409,15 +404,10 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 
 	fn iter_keys_from(starting_raw_key: Vec<u8>) -> Self::KeyIterator {
 		let prefix = G::prefix_hash();
-		Self::KeyIterator {
-			prefix,
-			previous_key: starting_raw_key,
-			drain: false,
-			closure: |raw_key_without_prefix| {
-				let (final_key, _) = K::decode_final_key(raw_key_without_prefix)?;
-				Ok(final_key)
-			},
-		}
+		Self::KeyIterator::new(prefix, starting_raw_key, |raw_key_without_prefix| {
+			let (final_key, _) = K::decode_final_key(raw_key_without_prefix)?;
+			Ok(final_key)
+		})
 	}
 
 	fn drain() -> Self::Iterator {

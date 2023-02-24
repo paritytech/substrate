@@ -970,9 +970,7 @@ impl<T, OnRemoval: PrefixIteratorOnRemoval> Iterator for PrefixIterator<T, OnRem
 }
 
 /// Iterate over a prefix and decode raw_key into `T`.
-///
-/// If any decoding fails it skips it and continues to the next key.
-pub struct KeyPrefixIterator<T> {
+pub struct TryKeyPrefixIterator<T> {
 	prefix: Vec<u8>,
 	previous_key: Vec<u8>,
 	/// If true then value are removed while iterating
@@ -982,7 +980,7 @@ pub struct KeyPrefixIterator<T> {
 	closure: fn(&[u8]) -> Result<T, codec::Error>,
 }
 
-impl<T> KeyPrefixIterator<T> {
+impl<T> TryKeyPrefixIterator<T> {
 	/// Creates a new `KeyPrefixIterator`, iterating after `previous_key` and filtering out keys
 	/// that are not prefixed with `prefix`.
 	///
@@ -995,7 +993,7 @@ impl<T> KeyPrefixIterator<T> {
 		previous_key: Vec<u8>,
 		decode_fn: fn(&[u8]) -> Result<T, codec::Error>,
 	) -> Self {
-		KeyPrefixIterator { prefix, previous_key, drain: false, closure: decode_fn }
+		TryKeyPrefixIterator { prefix, previous_key, drain: false, closure: decode_fn }
 	}
 
 	/// Get the last key that has been iterated upon and return it.
@@ -1020,31 +1018,84 @@ impl<T> KeyPrefixIterator<T> {
 	}
 }
 
+impl<T> Iterator for TryKeyPrefixIterator<T> {
+	type Item = Result<T, codec::Error>;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		let maybe_next =
+			sp_io::storage::next_key(&self.previous_key).filter(|n| n.starts_with(&self.prefix));
+
+		if let Some(next) = maybe_next {
+			self.previous_key = next;
+			if self.drain {
+				unhashed::kill(&self.previous_key);
+			}
+			let raw_key_without_prefix = &self.previous_key[self.prefix.len()..];
+
+			return Some((self.closure)(raw_key_without_prefix))
+		}
+
+		return None
+	}
+}
+
+/// Iterate over a prefix and decode raw_key into `T`.
+///
+/// If any decoding fails it skips it and continues to the next key.
+pub struct KeyPrefixIterator<T> {
+	iter: TryKeyPrefixIterator<T>,
+}
+
+impl<T> KeyPrefixIterator<T> {
+	/// Creates a new `KeyPrefixIterator`, iterating after `previous_key` and filtering out keys
+	/// that are not prefixed with `prefix`.
+	///
+	/// A `decode_fn` function must also be supplied, and it takes in a `&[u8]` parameter, returning
+	/// a `Result` containing the decoded key type `T` if successful, and a `codec::Error` on
+	/// failure. The `&[u8]` argument represents the raw, undecoded key without the prefix of the
+	/// current item.
+	pub fn new(
+		prefix: Vec<u8>,
+		previous_key: Vec<u8>,
+		decode_fn: fn(&[u8]) -> Result<T, codec::Error>,
+	) -> Self {
+		Self { iter: TryKeyPrefixIterator::new(prefix, previous_key, decode_fn) }
+	}
+
+	/// Get the last key that has been iterated upon and return it.
+	pub fn last_raw_key(&self) -> &[u8] {
+		self.iter.last_raw_key()
+	}
+
+	/// Get the prefix that is being iterated upon for this iterator and return it.
+	pub fn prefix(&self) -> &[u8] {
+		self.iter.prefix()
+	}
+
+	/// Set the key that the iterator should start iterating after.
+	pub fn set_last_raw_key(&mut self, previous_key: Vec<u8>) {
+		self.iter.set_last_raw_key(previous_key);
+	}
+
+	/// Mutate this iterator into a draining iterator; items iterated are removed from storage.
+	pub fn drain(self) -> Self {
+		Self { iter: self.iter.drain() }
+	}
+}
+
 impl<T> Iterator for KeyPrefixIterator<T> {
 	type Item = T;
 
 	fn next(&mut self) -> Option<Self::Item> {
 		loop {
-			let maybe_next = sp_io::storage::next_key(&self.previous_key)
-				.filter(|n| n.starts_with(&self.prefix));
-
-			if let Some(next) = maybe_next {
-				self.previous_key = next;
-				if self.drain {
-					unhashed::kill(&self.previous_key);
-				}
-				let raw_key_without_prefix = &self.previous_key[self.prefix.len()..];
-
-				match (self.closure)(raw_key_without_prefix) {
-					Ok(item) => return Some(item),
-					Err(e) => {
-						log::error!("key failed to decode at {:?}: {:?}", self.previous_key, e);
-						continue
-					},
-				}
+			let item = self.iter.next()?;
+			match item {
+				Ok(item) => return Some(item),
+				Err(e) => {
+					log::error!("key failed to decode at {:?}: {:?}", self.iter.previous_key, e);
+					continue
+				},
 			}
-
-			return None
 		}
 	}
 }

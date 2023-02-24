@@ -392,15 +392,10 @@ where
 
 	fn iter_key_prefix(k1: impl EncodeLike<K1>) -> Self::PartialKeyIterator {
 		let prefix = G::storage_double_map_final_key1(k1);
-		Self::PartialKeyIterator {
-			prefix: prefix.clone(),
-			previous_key: prefix,
-			drain: false,
-			closure: |raw_key_without_prefix| {
-				let mut key_material = G::Hasher2::reverse(raw_key_without_prefix);
-				K2::decode(&mut key_material)
-			},
-		}
+		Self::PartialKeyIterator::new(prefix.clone(), prefix, |raw_key_without_prefix| {
+			let mut key_material = G::Hasher2::reverse(raw_key_without_prefix);
+			K2::decode(&mut key_material)
+		})
 	}
 
 	fn iter_key_prefix_from(
@@ -443,18 +438,13 @@ where
 
 	fn iter_keys() -> Self::FullKeyIterator {
 		let prefix = G::prefix_hash();
-		Self::FullKeyIterator {
-			prefix: prefix.clone(),
-			previous_key: prefix,
-			drain: false,
-			closure: |raw_key_without_prefix| {
-				let mut k1_k2_material = G::Hasher1::reverse(raw_key_without_prefix);
-				let k1 = K1::decode(&mut k1_k2_material)?;
-				let mut k2_material = G::Hasher2::reverse(k1_k2_material);
-				let k2 = K2::decode(&mut k2_material)?;
-				Ok((k1, k2))
-			},
-		}
+		Self::FullKeyIterator::new(prefix.clone(), prefix, |raw_key_without_prefix| {
+			let mut k1_k2_material = G::Hasher1::reverse(raw_key_without_prefix);
+			let k1 = K1::decode(&mut k1_k2_material)?;
+			let mut k2_material = G::Hasher2::reverse(k1_k2_material);
+			let k2 = K2::decode(&mut k2_material)?;
+			Ok((k1, k2))
+		})
 	}
 
 	fn iter_keys_from(starting_raw_key: Vec<u8>) -> Self::FullKeyIterator {
