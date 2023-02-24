@@ -2588,7 +2588,7 @@ pub mod pallet {
 		/// commission is paid out and added to total claimed commission`. Total pending commission
 		/// is reset to zero. the current.
 		#[pallet::call_index(20)]
-		#[pallet::weight(T::WeightInfo::set_commission_change_rate())]
+		#[pallet::weight(0)]
 		pub fn claim_commission(origin: OriginFor<T>, pool_id: PoolId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::do_claim_commission(who, pool_id)
