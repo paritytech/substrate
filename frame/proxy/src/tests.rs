@@ -168,7 +168,7 @@ impl Config for Test {
 
 use super::{Call as ProxyCall, Event as ProxyEvent};
 use frame_system::Call as SystemCall;
-use pallet_balances::{Call as BalancesCall, Error as BalancesError, Event as BalancesEvent};
+use pallet_balances::{Call as BalancesCall, Event as BalancesEvent};
 use pallet_utility::{Call as UtilityCall, Event as UtilityEvent};
 
 type SystemError = frame_system::Error<Test>;
@@ -176,7 +176,7 @@ type SystemError = frame_system::Error<Test>;
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	pallet_balances::GenesisConfig::<Test> {
-		balances: vec![(1, 10), (2, 10), (3, 10), (4, 10), (5, 2)],
+		balances: vec![(1, 10), (2, 10), (3, 10), (4, 10), (5, 3)],
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();
@@ -523,7 +523,7 @@ fn cannot_add_proxy_without_balance() {
 		assert_eq!(Balances::reserved_balance(5), 2);
 		assert_noop!(
 			Proxy::add_proxy(RuntimeOrigin::signed(5), 4, ProxyType::Any, 0),
-			BalancesError::<Test, _>::InsufficientBalance
+			DispatchError::ConsumerRemaining,
 		);
 	});
 }
@@ -571,6 +571,7 @@ fn proxying_works() {
 #[test]
 fn pure_works() {
 	new_test_ext().execute_with(|| {
+		Balances::make_free_balance_be(&1, 11);	// An extra one for the ED.
 		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 0));
 		let anon = Proxy::pure_account(&1, &ProxyType::Any, 0, None);
 		System::assert_last_event(
@@ -618,9 +619,9 @@ fn pure_works() {
 			Proxy::kill_pure(RuntimeOrigin::signed(1), 1, ProxyType::Any, 0, 1, 0),
 			Error::<Test>::NoPermission
 		);
-		assert_eq!(Balances::free_balance(1), 0);
+		assert_eq!(Balances::free_balance(1), 1);
 		assert_ok!(Proxy::proxy(RuntimeOrigin::signed(1), anon, None, call.clone()));
-		assert_eq!(Balances::free_balance(1), 2);
+		assert_eq!(Balances::free_balance(1), 3);
 		assert_noop!(
 			Proxy::proxy(RuntimeOrigin::signed(1), anon, None, call.clone()),
 			Error::<Test>::NotProxy

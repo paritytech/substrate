@@ -39,6 +39,16 @@ macro_rules! member_unbonding_eras {
 pub const DEFAULT_ROLES: PoolRoles<AccountId> =
 	PoolRoles { depositor: 10, root: Some(900), nominator: Some(901), bouncer: Some(902) };
 
+fn deposit_rewards(r: u128) {
+	let b = Balances::free_balance(&default_reward_account()).checked_add(r).unwrap();
+	Balances::make_free_balance_be(&default_reward_account(), b);
+}
+
+fn remove_rewards(r: u128) {
+	let b = Balances::free_balance(&default_reward_account()).checked_sub(r).unwrap();
+	Balances::make_free_balance_be(&default_reward_account(), b);
+}
+
 #[test]
 fn test_setup_works() {
 	ExtBuilder::default().build_and_execute(|| {
@@ -463,7 +473,9 @@ mod sub_pools {
 }
 
 mod join {
-	use super::*;
+	use sp_runtime::TokenError;
+
+use super::*;
 
 	#[test]
 	fn join_works() {
@@ -584,7 +596,7 @@ mod join {
 			// Balance needs to be gt Balance::MAX / `MaxPointsToBalance`
 			assert_noop!(
 				Pools::join(RuntimeOrigin::signed(11), 5, 123),
-				pallet_balances::Error::<Runtime>::InsufficientBalance,
+				TokenError::FundsUnavailable,
 			);
 
 			StakingMock::set_bonded_balance(Pools::create_bonded_account(1), max_points_to_balance);
@@ -738,7 +750,7 @@ mod claim_payout {
 
 				// and the reward pool has earned 100 in rewards
 				assert_eq!(Balances::free_balance(default_reward_account()), ed);
-				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 100));
+				deposit_rewards(100);
 
 				let _ = pool_events_since_last_call();
 
@@ -785,7 +797,7 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 0);
 
 				// Given the reward pool has some new rewards
-				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 50));
+				deposit_rewards(50);
 
 				// When
 				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
@@ -814,7 +826,7 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 25);
 
 				// Given del 50 hasn't claimed and the reward pools has just earned 50
-				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 50));
+				deposit_rewards(50);
 				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 75);
 
 				// When
@@ -844,7 +856,7 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 20);
 
 				// Given del 40 hasn't claimed and the reward pool has just earned 400
-				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 400));
+				deposit_rewards(400);
 				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 420);
 
 				// When
@@ -863,7 +875,7 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 380);
 
 				// Given del 40 + del 50 haven't claimed and the reward pool has earned 20
-				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 20));
+				deposit_rewards(20);
 				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 400);
 
 				// When
@@ -949,7 +961,7 @@ mod claim_payout {
 			assert_eq!(reward_pool, rew(0, 0, 0));
 
 			// Given the pool has earned some rewards for the first time
-			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 5));
+			deposit_rewards(5);
 
 			// When
 			let payout =
@@ -970,7 +982,7 @@ mod claim_payout {
 			assert_eq!(member, del(0.5));
 
 			// Given the pool has earned rewards again
-			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 10));
+			deposit_rewards(10);
 
 			// When
 			let payout =
@@ -1029,7 +1041,7 @@ mod claim_payout {
 				assert_eq!(bonded_pool.points, 100);
 
 				// and the reward pool has earned 100 in rewards
-				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 100));
+				deposit_rewards(100);
 
 				// When
 				let payout =
@@ -1074,7 +1086,7 @@ mod claim_payout {
 				assert_eq!(reward_pool, rew(0, 0, 100));
 
 				// Given the reward pool has some new rewards
-				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 50));
+				deposit_rewards(50);
 
 				// When
 				let payout =
@@ -1105,7 +1117,7 @@ mod claim_payout {
 				assert_eq!(reward_pool, rew(0, 0, 125));
 
 				// Given del_50 hasn't claimed and the reward pools has just earned 50
-				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 50));
+				deposit_rewards(50);
 
 				// When
 				let payout =
@@ -1136,7 +1148,7 @@ mod claim_payout {
 				assert_eq!(reward_pool, rew(0, 0, 180));
 
 				// Given del_40 hasn't claimed and the reward pool has just earned 400
-				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 400));
+				deposit_rewards(400);
 
 				// When
 				let payout =
@@ -1153,7 +1165,7 @@ mod claim_payout {
 				assert_eq!(reward_pool, rew(0, 0, 220));
 
 				// Given del_40 + del_50 haven't claimed and the reward pool has earned 20
-				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 20));
+				deposit_rewards(20);
 
 				// When
 				let payout =
@@ -1191,14 +1203,14 @@ mod claim_payout {
 	fn rewards_distribution_is_fair_basic() {
 		ExtBuilder::default().build_and_execute(|| {
 			// reward pool by 10.
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 10).unwrap();
+			deposit_rewards(10);
 
 			// 20 joins afterwards.
 			Balances::make_free_balance_be(&20, Balances::minimum_balance() + 10);
 			assert_ok!(Pools::join(RuntimeOrigin::signed(20), 10, 1));
 
 			// reward by another 20
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 20).unwrap();
+			deposit_rewards(20);
 
 			// 10 should claim 10 + 10, 20 should claim 20 / 2.
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
@@ -1215,7 +1227,7 @@ mod claim_payout {
 			);
 
 			// any upcoming rewards are shared equally.
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 20).unwrap();
+			deposit_rewards(20);
 
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
@@ -1235,12 +1247,12 @@ mod claim_payout {
 		// basically checks the case where the amount of rewards is less than the pool shares. for
 		// this, we have to rely on fixed point arithmetic.
 		ExtBuilder::default().build_and_execute(|| {
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 3).unwrap();
+			deposit_rewards(3);
 
 			Balances::make_free_balance_be(&20, Balances::minimum_balance() + 10);
 			assert_ok!(Pools::join(RuntimeOrigin::signed(20), 10, 1));
 
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 6).unwrap();
+			deposit_rewards(6);
 
 			// 10 should claim 3, 20 should claim 3 + 3.
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
@@ -1258,7 +1270,7 @@ mod claim_payout {
 			);
 
 			// any upcoming rewards are shared equally.
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 8).unwrap();
+			deposit_rewards(8);
 
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
@@ -1272,7 +1284,7 @@ mod claim_payout {
 			);
 
 			// uneven upcoming rewards are shared equally, rounded down.
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 7).unwrap();
+			deposit_rewards(7);
 
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
@@ -1292,17 +1304,17 @@ mod claim_payout {
 		ExtBuilder::default().build_and_execute(|| {
 			let ed = Balances::minimum_balance();
 
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 30).unwrap();
+			deposit_rewards(30);
 
 			Balances::make_free_balance_be(&20, ed + 10);
 			assert_ok!(Pools::join(RuntimeOrigin::signed(20), 10, 1));
 
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 100).unwrap();
+			deposit_rewards(100);
 
 			Balances::make_free_balance_be(&30, ed + 10);
 			assert_ok!(Pools::join(RuntimeOrigin::signed(30), 10, 1));
 
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 60).unwrap();
+			deposit_rewards(60);
 
 			// 10 should claim 10, 20 should claim nothing.
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
@@ -1323,7 +1335,7 @@ mod claim_payout {
 			);
 
 			// any upcoming rewards are shared equally.
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 30).unwrap();
+			deposit_rewards(30);
 
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
@@ -1346,7 +1358,7 @@ mod claim_payout {
 			let ed = Balances::minimum_balance();
 
 			assert_eq!(Pools::api_pending_rewards(10), Some(0));
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 30).unwrap();
+			deposit_rewards(30);
 			assert_eq!(Pools::api_pending_rewards(10), Some(30));
 			assert_eq!(Pools::api_pending_rewards(20), None);
 
@@ -1356,7 +1368,7 @@ mod claim_payout {
 			assert_eq!(Pools::api_pending_rewards(10), Some(30));
 			assert_eq!(Pools::api_pending_rewards(20), Some(0));
 
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 100).unwrap();
+			deposit_rewards(100);
 
 			assert_eq!(Pools::api_pending_rewards(10), Some(30 + 50));
 			assert_eq!(Pools::api_pending_rewards(20), Some(50));
@@ -1369,7 +1381,7 @@ mod claim_payout {
 			assert_eq!(Pools::api_pending_rewards(20), Some(50));
 			assert_eq!(Pools::api_pending_rewards(30), Some(0));
 
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 60).unwrap();
+			deposit_rewards(60);
 
 			assert_eq!(Pools::api_pending_rewards(10), Some(30 + 50 + 20));
 			assert_eq!(Pools::api_pending_rewards(20), Some(50 + 20));
@@ -1403,7 +1415,7 @@ mod claim_payout {
 			Balances::make_free_balance_be(&30, ed + 20);
 			assert_ok!(Pools::join(RuntimeOrigin::signed(30), 10, 1));
 
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 40).unwrap();
+			deposit_rewards(40);
 
 			// everyone claims.
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
@@ -1427,7 +1439,7 @@ mod claim_payout {
 			assert_ok!(Pools::bond_extra(RuntimeOrigin::signed(30), BondExtra::FreeBalance(10)));
 
 			// more rewards come in.
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 100).unwrap();
+			deposit_rewards(100);
 
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
@@ -1453,7 +1465,7 @@ mod claim_payout {
 			Balances::make_free_balance_be(&20, ed + 20);
 			assert_ok!(Pools::join(RuntimeOrigin::signed(20), 20, 1));
 
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 30).unwrap();
+			deposit_rewards(30);
 
 			// everyone claims.
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
@@ -1474,7 +1486,7 @@ mod claim_payout {
 			assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, 10));
 
 			// more rewards come in.
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 100).unwrap();
+			deposit_rewards(100);
 
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
@@ -1501,7 +1513,7 @@ mod claim_payout {
 			assert_ok!(Pools::join(RuntimeOrigin::signed(30), 10, 1));
 
 			// 10 gets 10, 20 gets 20, 30 gets 10
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 40).unwrap();
+			deposit_rewards(40);
 
 			// some claim.
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
@@ -1520,7 +1532,7 @@ mod claim_payout {
 			);
 
 			// 10 gets 20, 20 gets 40, 30 gets 20
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 80).unwrap();
+			deposit_rewards(80);
 
 			// some claim.
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
@@ -1535,7 +1547,7 @@ mod claim_payout {
 			);
 
 			// 10 gets 20, 20 gets 40, 30 gets 20
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 80).unwrap();
+			deposit_rewards(80);
 
 			// some claim.
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
@@ -1568,7 +1580,7 @@ mod claim_payout {
 			assert_ok!(Pools::join(RuntimeOrigin::signed(20), 20, 1));
 
 			// 10 gets 10, 20 gets 20, 30 gets 10
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 30).unwrap();
+			deposit_rewards(30);
 
 			// some claim.
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
@@ -1584,7 +1596,7 @@ mod claim_payout {
 			);
 
 			// 20 has not claimed yet, more reward comes
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 60).unwrap();
+			deposit_rewards(60);
 
 			// and 20 bonds more -- they should not have more share of this reward.
 			assert_ok!(Pools::bond_extra(RuntimeOrigin::signed(20), BondExtra::FreeBalance(10)));
@@ -1604,7 +1616,7 @@ mod claim_payout {
 			);
 
 			// but in the next round of rewards, the extra10 they bonded has an impact.
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 60).unwrap();
+			deposit_rewards(60);
 
 			// everyone claim.
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
@@ -1634,7 +1646,7 @@ mod claim_payout {
 			assert_eq!(member_10.last_recorded_reward_counter, 0.into());
 
 			// transfer some reward to pool 1.
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 60).unwrap();
+			deposit_rewards(60);
 
 			// create pool 2
 			Balances::make_free_balance_be(&20, 100);
@@ -1718,7 +1730,7 @@ mod claim_payout {
 			}
 
 			// transfer some reward to pool 1.
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 60).unwrap();
+			deposit_rewards(60);
 
 			{
 				join(30, 10);
@@ -1788,7 +1800,7 @@ mod claim_payout {
 
 			// 10 bonds extra again with some rewards. This reward should be split equally between
 			// 10 and 20, as they both have equal points now.
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 30).unwrap();
+			deposit_rewards(30);
 
 			{
 				assert_ok!(Pools::bond_extra(
@@ -1844,7 +1856,7 @@ mod claim_payout {
 			MaxPoolMembersPerPool::<Runtime>::set(None);
 
 			// pool receives some rewards.
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 30).unwrap();
+			deposit_rewards(30);
 			System::reset_events();
 
 			// 10 cashes it out, and bonds it.
@@ -1914,7 +1926,7 @@ mod claim_payout {
 				}
 
 				// some rewards come in.
-				Balances::mutate_account(&default_reward_account(), |f| f.free += 30).unwrap();
+				deposit_rewards(30);
 
 				// and 30 also unbonds half.
 				{
@@ -1997,7 +2009,7 @@ mod claim_payout {
 			);
 
 			// some rewards come in.
-			Balances::mutate_account(&default_reward_account(), |f| f.free += 40).unwrap();
+			deposit_rewards(40);
 
 			// everyone claims
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
@@ -2059,8 +2071,7 @@ mod claim_payout {
 			.build_and_execute(|| {
 				// some rewards come in.
 				assert_eq!(Balances::free_balance(&default_reward_account()), unit);
-				Balances::mutate_account(&default_reward_account(), |f| f.free += unit / 1000)
-					.unwrap();
+				deposit_rewards(unit / 1000);
 
 				// everyone claims
 				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
@@ -4994,18 +5005,15 @@ mod reward_counter_precision {
 			let expected_smallest_reward = inflation(50) / 10u128.pow(18);
 
 			// tad bit less. cannot be paid out.
-			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free +=
-				expected_smallest_reward - 1));
+			deposit_rewards(expected_smallest_reward - 1);
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 			assert_eq!(pool_events_since_last_call(), vec![]);
 			// revert it.
 
-			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free -=
-				expected_smallest_reward - 1));
+			remove_rewards(expected_smallest_reward - 1);
 
 			// tad bit more. can be claimed.
-			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free +=
-				expected_smallest_reward + 1));
+			deposit_rewards(expected_smallest_reward + 1);
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -5030,9 +5038,7 @@ mod reward_counter_precision {
 			assert_ok!(Pools::join(RuntimeOrigin::signed(20), tiny_bond / 2, 1));
 
 			// Suddenly, add a shit ton of rewards.
-			assert_ok!(
-				Balances::mutate_account(&default_reward_account(), |a| a.free += inflation(1))
-			);
+			deposit_rewards(inflation(1));
 
 			// now claim.
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
@@ -5071,8 +5077,7 @@ mod reward_counter_precision {
 			// is earning all of the inflation per year (which is really unrealistic, but worse
 			// case), that will be:
 			let pool_total_earnings_10_years = inflation(10) - POLKADOT_TOTAL_ISSUANCE_GENESIS;
-			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free +=
-				pool_total_earnings_10_years));
+			deposit_rewards(pool_total_earnings_10_years);
 
 			// some whale now joins with the other half ot the total issuance. This will bloat all
 			// the calculation regarding current reward counter.
@@ -5102,7 +5107,7 @@ mod reward_counter_precision {
 			assert_ok!(Pools::join(RuntimeOrigin::signed(30), 10 * DOT, 1));
 
 			// and give a reasonably small reward to the pool.
-			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += DOT));
+			deposit_rewards(DOT);
 
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(30)));
 			assert_eq!(
@@ -5174,9 +5179,7 @@ mod reward_counter_precision {
 				assert_ok!(Pools::join(RuntimeOrigin::signed(20), 10 * DOT, 1));
 
 				// earn some small rewards
-				assert_ok!(
-					Balances::mutate_account(&default_reward_account(), |a| a.free += DOT / 1000)
-				);
+				deposit_rewards(DOT / 1000);
 
 				// no point in claiming for 20 (nonetheless, it should be harmless)
 				assert!(pending_rewards(20).unwrap().is_zero());
@@ -5196,9 +5199,7 @@ mod reward_counter_precision {
 
 				// earn some small more, still nothing can be claimed for 20, but 10 claims their
 				// share.
-				assert_ok!(
-					Balances::mutate_account(&default_reward_account(), |a| a.free += DOT / 1000)
-				);
+				deposit_rewards(DOT / 1000);
 				assert!(pending_rewards(20).unwrap().is_zero());
 				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 				assert_eq!(
@@ -5207,9 +5208,7 @@ mod reward_counter_precision {
 				);
 
 				// earn some more rewards, this time 20 can also claim.
-				assert_ok!(
-					Balances::mutate_account(&default_reward_account(), |a| a.free += DOT / 1000)
-				);
+				deposit_rewards(DOT / 1000);
 				assert_eq!(pending_rewards(20).unwrap(), 1);
 				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
@@ -5248,9 +5247,7 @@ mod reward_counter_precision {
 				assert_ok!(Pools::join(RuntimeOrigin::signed(20), 10 * DOT, 1));
 
 				// earn some small rewards
-				assert_ok!(
-					Balances::mutate_account(&default_reward_account(), |a| a.free += DOT / 1000)
-				);
+				deposit_rewards(DOT / 1000);
 
 				// if 20 claims now, their reward counter should stay the same, so that they have a
 				// chance of claiming this if they let it accumulate. Also see

@@ -23,8 +23,7 @@ use mock::{
 	new_test_ext, run_to_block, Balances, BalancesCall, Lottery, RuntimeCall, RuntimeOrigin,
 	SystemCall, Test,
 };
-use pallet_balances::Error as BalancesError;
-use sp_runtime::traits::BadOrigin;
+use sp_runtime::{traits::BadOrigin, TokenError};
 
 #[test]
 fn initial_state() {
@@ -235,7 +234,7 @@ fn buy_ticket_works_as_simple_passthrough() {
 		}));
 		assert_noop!(
 			Lottery::buy_ticket(RuntimeOrigin::signed(1), fail_call),
-			BalancesError::<Test, _>::InsufficientBalance,
+			ArithmeticError::Underflow,
 		);
 
 		let bad_origin_call = Box::new(RuntimeCall::Balances(BalancesCall::force_transfer {
@@ -380,7 +379,7 @@ fn do_buy_ticket_insufficient_balance() {
 		// Buying fails with InsufficientBalance.
 		assert_noop!(
 			Lottery::do_buy_ticket(&1, &calls[0]),
-			BalancesError::<Test, _>::InsufficientBalance
+			TokenError::FundsUnavailable,
 		);
 		assert!(TicketsCount::<Test>::get().is_zero());
 	});
@@ -396,7 +395,7 @@ fn do_buy_ticket_keep_alive() {
 		assert_ok!(Lottery::start_lottery(RuntimeOrigin::root(), 100, 10, 10, false));
 
 		// Buying fails with Expendability.
-		assert_noop!(Lottery::do_buy_ticket(&1, &calls[0]), BalancesError::<Test, _>::Expendability);
+		assert_noop!(Lottery::do_buy_ticket(&1, &calls[0]), TokenError::UnwantedRemoval);
 		assert!(TicketsCount::<Test>::get().is_zero());
 	});
 }

@@ -29,7 +29,7 @@ use frame_support::{
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, IdentityLookup}, TokenError,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -111,7 +111,7 @@ impl Config for Test {
 	type WeightInfo = ();
 }
 
-use pallet_balances::{Call as BalancesCall, Error as BalancesError};
+use pallet_balances::Call as BalancesCall;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
@@ -486,14 +486,13 @@ fn multisig_2_of_3_cannot_reissue_same_call() {
 			call_weight
 		));
 
-		let err = DispatchError::from(BalancesError::<Test, _>::InsufficientBalance).stripped();
 		System::assert_last_event(
 			pallet_multisig::Event::MultisigExecuted {
 				approving: 3,
 				timepoint: now(),
 				multisig: multi,
 				call_hash: hash,
-				result: Err(err),
+				result: Err(TokenError::FundsUnavailable.into()),
 			}
 			.into(),
 		);
