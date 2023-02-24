@@ -2380,6 +2380,7 @@ version = "4.0.0-dev"
 dependencies = [
  "assert_matches",
  "bitflags",
+ "environmental",
  "frame-metadata",
  "frame-support-procedural",
  "frame-system",
@@ -6676,6 +6677,7 @@ dependencies = [
  "frame-system",
  "impl-trait-for-tuples",
  "pallet-balances",
+ "pallet-utility",
  "parity-scale-codec",
  "scale-info",
  "serde",
