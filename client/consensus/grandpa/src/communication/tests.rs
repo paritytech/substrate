@@ -631,7 +631,7 @@ fn local_chain_spec() -> Box<dyn sc_chain_spec::ChainSpec> {
 		}
 	}
 	let chain_spec = GenericChainSpec::<Genesis>::from_json_bytes(
-		&include_bytes!("../../../chain-spec/res/chain_spec.json")[..],
+		&include_bytes!("../../../../chain-spec/res/chain_spec.json")[..],
 	)
 	.unwrap();
 	chain_spec.cloned_box()
