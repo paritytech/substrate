@@ -1015,7 +1015,7 @@ impl<T: Config> BondedPool<T> {
 		self.is_root(who) || self.is_bouncer(who)
 	}
 
-	fn can_set_commission(&self, who: &T::AccountId) -> bool {
+	fn can_manage_commission(&self, who: &T::AccountId) -> bool {
 		self.is_root(who)
 	}
 
@@ -1729,6 +1729,8 @@ pub mod pallet {
 			pool_id: PoolId,
 			change_rate: CommissionChangeRate<T::BlockNumber>,
 		},
+		/// Pool commission has been claimed.
+		PoolCommissionClaimed { pool_id: PoolId, commission: BalanceOf<T> },
 	}
 
 	#[pallet::error]
@@ -1792,6 +1794,10 @@ pub mod pallet {
 		CommissionChangeThrottled,
 		/// The submitted changes to commission change rate are not allowed.
 		CommissionChangeRateNotAllowed,
+		/// There is no pending commission to claim.
+		NoPendingCommission,
+		/// No commission current has been set.
+		NoCommissionCurrentSet,
 		/// Pool id currently in use.
 		PoolIdInUse,
 		/// Pool id provided is not correct/usable.
@@ -2504,7 +2510,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
-			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
+			ensure!(bonded_pool.can_manage_commission(&who), Error::<T>::DoesNotHavePermission);
 
 			let mut reward_pool = RewardPools::<T>::get(pool_id)
 				.defensive_ok_or::<Error<T>>(DefensiveError::RewardPoolNotFound.into())?;
@@ -2541,7 +2547,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
-			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
+			ensure!(bonded_pool.can_manage_commission(&who), Error::<T>::DoesNotHavePermission);
 
 			bonded_pool.commission.try_update_max(pool_id, max_commission)?;
 			bonded_pool.put();
@@ -2564,7 +2570,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
-			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
+			ensure!(bonded_pool.can_manage_commission(&who), Error::<T>::DoesNotHavePermission);
 
 			bonded_pool.commission.try_update_change_rate(change_rate)?;
 			bonded_pool.put();
@@ -2574,6 +2580,18 @@ pub mod pallet {
 				change_rate,
 			});
 			Ok(())
+		}
+
+		/// Claim pending commission.
+		///
+		/// The dispatch origin of this call must be signed by the `root` role of the pool. Pending
+		/// commission is paid out and added to total claimed commission`. Total pending commission
+		/// is reset to zero. the current.
+		#[pallet::call_index(20)]
+		#[pallet::weight(T::WeightInfo::set_commission_change_rate())]
+		pub fn claim_commission(origin: OriginFor<T>, pool_id: PoolId) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			Self::do_claim_commission(who, pool_id)
 		}
 	}
 
@@ -2914,6 +2932,51 @@ impl<T: Config> Pallet<T> {
 			joined: false,
 		});
 		Self::put_member_with_pools(&who, member, bonded_pool, reward_pool);
+
+		Ok(())
+	}
+
+	fn do_claim_commission(who: T::AccountId, pool_id: PoolId) -> DispatchResult {
+		let bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+		ensure!(bonded_pool.can_manage_commission(&who), Error::<T>::DoesNotHavePermission);
+
+		let mut reward_pool = RewardPools::<T>::get(pool_id)
+			.defensive_ok_or::<Error<T>>(DefensiveError::RewardPoolNotFound.into())?;
+
+		// IMPORTANT: make sure that any newly pending commission not yet processed is added to
+		// `total_commission_pending`.
+		reward_pool.update_records(
+			pool_id,
+			bonded_pool.points,
+			bonded_pool.commission.current(),
+		)?;
+
+		ensure!(!reward_pool.total_commission_pending.is_zero(), Error::<T>::NoPendingCommission);
+
+		let payee = bonded_pool
+			.commission
+			.current
+			.as_ref()
+			.map(|(_, p)| p.clone())
+			.ok_or(Error::<T>::NoCommissionCurrentSet)?;
+
+		// Payout claimed commission.
+		T::Currency::transfer(
+			&bonded_pool.reward_account(),
+			&payee,
+			reward_pool.total_commission_pending,
+			ExistenceRequirement::KeepAlive,
+		)?;
+
+		reward_pool.total_commission_claimed = reward_pool
+			.total_commission_claimed
+			.saturating_add(reward_pool.total_commission_pending);
+		reward_pool.total_commission_pending = Zero::zero();
+
+		Self::deposit_event(Event::<T>::PoolCommissionClaimed {
+			pool_id,
+			commission: Zero::zero(),
+		});
 
 		Ok(())
 	}
