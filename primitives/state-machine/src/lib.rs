@@ -163,7 +163,7 @@ mod execution {
 	use sp_core::{
 		hexdisplay::HexDisplay,
 		storage::{ChildInfo, ChildType, PrefixedStorageKey},
-		traits::{CodeExecutor, ReadRuntimeVersionExt, RuntimeCode, SpawnNamed},
+		traits::{CallContext, CodeExecutor, ReadRuntimeVersionExt, RuntimeCode, SpawnNamed},
 	};
 	use sp_externalities::Extensions;
 	use std::{
@@ -295,6 +295,7 @@ mod execution {
 		///
 		/// Used for logging.
 		parent_hash: Option<H::Out>,
+		context: CallContext,
 	}
 
 	impl<'a, B, H, Exec> Drop for StateMachine<'a, B, H, Exec>
@@ -324,6 +325,7 @@ mod execution {
 			mut extensions: Extensions,
 			runtime_code: &'a RuntimeCode,
 			spawn_handle: impl SpawnNamed + Send + 'static,
+			context: CallContext,
 		) -> Self {
 			extensions.register(ReadRuntimeVersionExt::new(exec.clone()));
 			extensions.register(sp_core::traits::TaskExecutorExt::new(spawn_handle));
@@ -339,6 +341,7 @@ mod execution {
 				runtime_code,
 				stats: StateMachineStats::default(),
 				parent_hash: None,
+				context,
 			}
 		}
 
@@ -408,6 +411,7 @@ mod execution {
 				self.method,
 				self.call_data,
 				use_native,
+				self.context,
 			);
 
 			self.overlay
@@ -574,6 +578,7 @@ mod execution {
 			extensions,
 			runtime_code,
 			spawn_handle,
+			CallContext::Offchain,
 		)
 		.execute_using_consensus_failure_handler::<_>(always_wasm())?;
 
@@ -638,6 +643,7 @@ mod execution {
 			Extensions::default(),
 			runtime_code,
 			spawn_handle,
+			CallContext::Offchain,
 		)
 		.execute_using_consensus_failure_handler(always_untrusted_wasm())
 	}
@@ -1318,7 +1324,7 @@ mod tests {
 		map,
 		storage::{ChildInfo, StateVersion},
 		testing::TaskExecutor,
-		traits::{CodeExecutor, Externalities, RuntimeCode},
+		traits::{CallContext, CodeExecutor, Externalities, RuntimeCode},
 	};
 	use sp_runtime::traits::BlakeTwo256;
 	use sp_trie::trie_types::{TrieDBMutBuilderV0, TrieDBMutBuilderV1};
@@ -1341,6 +1347,7 @@ mod tests {
 			_method: &str,
 			_data: &[u8],
 			use_native: bool,
+			_: CallContext,
 		) -> (CallResult<Self::Error>, bool) {
 			let using_native = use_native && self.native_available;
 			match (using_native, self.native_succeeds, self.fallback_succeeds) {
@@ -1388,6 +1395,7 @@ mod tests {
 			Default::default(),
 			&wasm_code,
 			TaskExecutor::new(),
+			CallContext::Offchain,
 		);
 
 		assert_eq!(state_machine.execute(ExecutionStrategy::NativeWhenPossible).unwrap(), vec![66]);
@@ -1416,6 +1424,7 @@ mod tests {
 			Default::default(),
 			&wasm_code,
 			TaskExecutor::new(),
+			CallContext::Offchain,
 		);
 
 		assert_eq!(state_machine.execute(ExecutionStrategy::NativeElseWasm).unwrap(), vec![66]);
@@ -1445,6 +1454,7 @@ mod tests {
 			Default::default(),
 			&wasm_code,
 			TaskExecutor::new(),
+			CallContext::Offchain,
 		);
 
 		assert!(state_machine
