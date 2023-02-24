@@ -26,7 +26,7 @@ use frame_support::{
 	dispatch::DispatchError,
 	ensure,
 	traits::{
-		tokens::{KeepAlive, Privilege, WithdrawConsequence},
+		tokens::{Expendability, Privilege, WithdrawConsequence},
 		Currency, ExistenceRequirement, Get,
 	},
 	DefaultNoBound, RuntimeDebugNoBound,
@@ -459,7 +459,7 @@ impl<T: Config> Ext<T> for ReservingExt {
 		// We are sending the `min_leftover` and the `min_balance` from the origin
 		// account as part of a contract call. Hence origin needs to have those left over
 		// as free balance after accounting for all deposits.
-		let max = T::Currency::reducible_balance(origin, KeepAlive::NoKill, Privilege::Regular)
+		let max = T::Currency::reducible_balance(origin, Expendability::Protected, Privilege::Regular)
 			.saturating_sub(min_leftover)
 			.saturating_sub(Pallet::<T>::min_balance());
 		let limit = limit.unwrap_or(max);

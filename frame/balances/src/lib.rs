@@ -170,7 +170,7 @@ use frame_support::{
 	traits::{
 		tokens::{
 			fungible, BalanceStatus as Status, DepositConsequence,
-			KeepAlive::{CanKill, Keep, NoKill},
+			Expendability::{Expendable, Undustable, Protected},
 			Privilege::{self, Force, Regular},
 			WithdrawConsequence,
 		},
@@ -331,7 +331,7 @@ pub mod pallet {
 		/// Value too low to create account due to existential deposit.
 		ExistentialDeposit,
 		/// Transfer/payment would kill account.
-		KeepAlive,
+		Expendability,
 		/// A vesting schedule already exists for this account.
 		ExistingVestingSchedule,
 		/// Beneficiary account must pre-exist.
@@ -527,7 +527,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let source = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
-			<Self as fungible::Mutate<_>>::transfer(&source, &dest, value, CanKill)?;
+			<Self as fungible::Mutate<_>>::transfer(&source, &dest, value, Expendable)?;
 			Ok(().into())
 		}
 
@@ -587,7 +587,7 @@ pub mod pallet {
 			ensure_root(origin)?;
 			let source = T::Lookup::lookup(source)?;
 			let dest = T::Lookup::lookup(dest)?;
-			<Self as fungible::Mutate<_>>::transfer(&source, &dest, value, CanKill)?;
+			<Self as fungible::Mutate<_>>::transfer(&source, &dest, value, Expendable)?;
 			Ok(().into())
 		}
 
@@ -606,7 +606,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let source = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
-			<Self as fungible::Mutate<_>>::transfer(&source, &dest, value, Keep)?;
+			<Self as fungible::Mutate<_>>::transfer(&source, &dest, value, Undustable)?;
 			Ok(().into())
 		}
 
@@ -635,7 +635,7 @@ pub mod pallet {
 			keep_alive: bool,
 		) -> DispatchResult {
 			let transactor = ensure_signed(origin)?;
-			let keep_alive = if keep_alive { Keep } else { CanKill };
+			let keep_alive = if keep_alive { Undustable } else { Expendable };
 			let reducible_balance = <Self as fungible::Inspect<_>>::reducible_balance(
 				&transactor,
 				keep_alive,
@@ -737,7 +737,7 @@ pub mod pallet {
 		/// Get the balance of an account that can be used for transfers, reservations, or any other
 		/// non-locking, non-transaction-fee activity. Will be at most `free_balance`.
 		pub fn usable_balance(who: impl sp_std::borrow::Borrow<T::AccountId>) -> T::Balance {
-			<Self as fungible::Inspect<_>>::reducible_balance(who.borrow(), CanKill, Regular)
+			<Self as fungible::Inspect<_>>::reducible_balance(who.borrow(), Expendable, Regular)
 		}
 
 		/// Get the balance of an account that can be used for paying transaction fees (not tipping,
@@ -747,7 +747,7 @@ pub mod pallet {
 		pub fn usable_balance_for_fees(
 			who: impl sp_std::borrow::Borrow<T::AccountId>,
 		) -> T::Balance {
-			<Self as fungible::Inspect<_>>::reducible_balance(who.borrow(), NoKill, Regular)
+			<Self as fungible::Inspect<_>>::reducible_balance(who.borrow(), Protected, Regular)
 		}
 
 		/// Get the reserved balance of an account.

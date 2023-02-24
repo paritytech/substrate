@@ -22,8 +22,8 @@ use sp_runtime::{DispatchError, DispatchResult};
 
 use super::*;
 use crate::traits::tokens::{
-	fungibles, DepositConsequence, Imbalance as ImbalanceT, KeepAlive, Precision, Privilege,
-	WithdrawConsequence,
+	fungibles, DepositConsequence, Imbalance as ImbalanceT, Expendability, Precision, Privilege,
+	WithdrawConsequence, Provenance,
 };
 
 /// Convert a `fungibles` trait implementation into a `fungible` trait implementation by identifying
@@ -58,13 +58,13 @@ impl<
 	}
 	fn reducible_balance(
 		who: &AccountId,
-		keep_alive: KeepAlive,
+		keep_alive: Expendability,
 		force: Privilege,
 	) -> Self::Balance {
 		<F as fungibles::Inspect<AccountId>>::reducible_balance(A::get(), who, keep_alive, force)
 	}
-	fn can_deposit(who: &AccountId, amount: Self::Balance, mint: bool) -> DepositConsequence {
-		<F as fungibles::Inspect<AccountId>>::can_deposit(A::get(), who, amount, mint)
+	fn can_deposit(who: &AccountId, amount: Self::Balance, provenance: Provenance) -> DepositConsequence {
+		<F as fungibles::Inspect<AccountId>>::can_deposit(A::get(), who, amount, provenance)
 	}
 	fn can_withdraw(who: &AccountId, amount: Self::Balance) -> WithdrawConsequence<Self::Balance> {
 		<F as fungibles::Inspect<AccountId>>::can_withdraw(A::get(), who, amount)
@@ -143,7 +143,7 @@ impl<
 		who: &AccountId,
 		amount: Self::Balance,
 		precision: Precision,
-		keep_alive: KeepAlive,
+		keep_alive: Expendability,
 		force: Privilege,
 	) -> Result<Self::Balance, DispatchError> {
 		<F as fungibles::Unbalanced<AccountId>>::decrease_balance(
@@ -239,7 +239,7 @@ impl<
 		source: &AccountId,
 		dest: &AccountId,
 		amount: Self::Balance,
-		keep_alive: KeepAlive,
+		keep_alive: Expendability,
 	) -> Result<Self::Balance, DispatchError> {
 		<F as fungibles::Mutate<AccountId>>::transfer(A::get(), source, dest, amount, keep_alive)
 	}
@@ -308,7 +308,7 @@ impl<
 		dest: &AccountId,
 		amount: Self::Balance,
 		precision: Precision,
-		keep_alive: KeepAlive,
+		keep_alive: Expendability,
 		force: Privilege,
 	) -> Result<Self::Balance, DispatchError> {
 		<F as fungibles::MutateHold<AccountId>>::transfer_and_hold(
@@ -400,7 +400,7 @@ impl<
 	fn settle(
 		who: &AccountId,
 		debt: Debt<AccountId, Self>,
-		keep_alive: KeepAlive,
+		keep_alive: Expendability,
 	) -> Result<Credit<AccountId, Self>, Debt<AccountId, Self>> {
 		let debt = fungibles::Imbalance::new(A::get(), debt.peek());
 		<F as fungibles::Balanced<AccountId>>::settle(who, debt, keep_alive)
@@ -411,7 +411,7 @@ impl<
 		who: &AccountId,
 		value: Self::Balance,
 		precision: Precision,
-		keep_alive: KeepAlive,
+		keep_alive: Expendability,
 		force: Privilege,
 	) -> Result<Credit<AccountId, Self>, DispatchError> {
 		<F as fungibles::Balanced<AccountId>>::withdraw(

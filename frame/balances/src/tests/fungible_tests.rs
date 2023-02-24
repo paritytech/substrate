@@ -19,7 +19,7 @@
 
 use super::*;
 use frame_support::traits::tokens::{
-	KeepAlive::CanKill,
+	Expendability::Expendable,
 	Precision::{BestEffort, Exact},
 	Privilege::{Force, Regular},
 };
@@ -74,7 +74,7 @@ fn unbalanced_trait_decrease_balance_simple_works() {
 		assert_ok!(<Balances as fungible::MutateHold<_>>::hold(&TestId::Foo, &1337, 50));
 		assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 50);
 		// and is decreased by 20
-		assert_ok!(Balances::decrease_balance(&1337, 20, Exact, CanKill, Regular));
+		assert_ok!(Balances::decrease_balance(&1337, 20, Exact, Expendable, Regular));
 		assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 30);
 	});
 }
@@ -86,10 +86,10 @@ fn unbalanced_trait_decrease_balance_works_1() {
 		assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 100);
 
 		assert_noop!(
-			Balances::decrease_balance(&1337, 101, Exact, CanKill, Regular),
+			Balances::decrease_balance(&1337, 101, Exact, Expendable, Regular),
 			TokenError::FundsUnavailable
 		);
-		assert_eq!(Balances::decrease_balance(&1337, 100, Exact, CanKill, Regular), Ok(100));
+		assert_eq!(Balances::decrease_balance(&1337, 100, Exact, Expendable, Regular), Ok(100));
 		assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 0);
 	});
 }
@@ -103,10 +103,10 @@ fn unbalanced_trait_decrease_balance_works_2() {
 		assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 40);
 		assert_eq!(Balances::total_balance_on_hold(&1337), 60);
 		assert_noop!(
-			Balances::decrease_balance(&1337, 40, Exact, CanKill, Regular),
+			Balances::decrease_balance(&1337, 40, Exact, Expendable, Regular),
 			Error::<Test>::InsufficientBalance
 		);
-		assert_eq!(Balances::decrease_balance(&1337, 39, Exact, CanKill, Regular), Ok(39));
+		assert_eq!(Balances::decrease_balance(&1337, 39, Exact, Expendable, Regular), Ok(39));
 		assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 1);
 		assert_eq!(Balances::total_balance_on_hold(&1337), 60);
 	});
@@ -118,7 +118,7 @@ fn unbalanced_trait_decrease_balance_at_most_works_1() {
 		assert_ok!(Balances::write_balance(&1337, 100));
 		assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 100);
 
-		assert_eq!(Balances::decrease_balance(&1337, 101, BestEffort, CanKill, Regular), Ok(100));
+		assert_eq!(Balances::decrease_balance(&1337, 101, BestEffort, Expendable, Regular), Ok(100));
 		assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 0);
 	});
 }
@@ -127,7 +127,7 @@ fn unbalanced_trait_decrease_balance_at_most_works_1() {
 fn unbalanced_trait_decrease_balance_at_most_works_2() {
 	ExtBuilder::default().build_and_execute_with(|| {
 		assert_ok!(Balances::write_balance(&1337, 99));
-		assert_eq!(Balances::decrease_balance(&1337, 99, BestEffort, CanKill, Regular), Ok(99));
+		assert_eq!(Balances::decrease_balance(&1337, 99, BestEffort, Expendable, Regular), Ok(99));
 		assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 0);
 	});
 }
@@ -140,12 +140,12 @@ fn unbalanced_trait_decrease_balance_at_most_works_3() {
 		assert_ok!(Balances::hold(&TestId::Foo, &1337, 60));
 		assert_eq!(Balances::free_balance(1337), 40);
 		assert_eq!(Balances::total_balance_on_hold(&1337), 60);
-		assert_eq!(Balances::decrease_balance(&1337, 0, BestEffort, CanKill, Regular), Ok(0));
+		assert_eq!(Balances::decrease_balance(&1337, 0, BestEffort, Expendable, Regular), Ok(0));
 		assert_eq!(Balances::free_balance(1337), 40);
 		assert_eq!(Balances::total_balance_on_hold(&1337), 60);
-		assert_eq!(Balances::decrease_balance(&1337, 10, BestEffort, CanKill, Regular), Ok(10));
+		assert_eq!(Balances::decrease_balance(&1337, 10, BestEffort, Expendable, Regular), Ok(10));
 		assert_eq!(Balances::free_balance(1337), 30);
-		assert_eq!(Balances::decrease_balance(&1337, 200, BestEffort, CanKill, Regular), Ok(29));
+		assert_eq!(Balances::decrease_balance(&1337, 200, BestEffort, Expendable, Regular), Ok(29));
 		assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 1);
 		assert_eq!(Balances::free_balance(1337), 1);
 		assert_eq!(Balances::total_balance_on_hold(&1337), 60);
@@ -238,9 +238,9 @@ fn partial_freezing_should_work() {
 		.build_and_execute_with(|| {
 			assert_ok!(Balances::set_freeze(&TestId::Foo, &1, 5));
 			assert_eq!(System::consumers(&1), 1);
-			assert_ok!(<Balances as fungible::Mutate<_>>::transfer(&1, &2, 5, CanKill));
+			assert_ok!(<Balances as fungible::Mutate<_>>::transfer(&1, &2, 5, Expendable));
 			assert_noop!(
-				<Balances as fungible::Mutate<_>>::transfer(&1, &2, 1, CanKill),
+				<Balances as fungible::Mutate<_>>::transfer(&1, &2, 1, Expendable),
 				TokenError::Frozen
 			);
 		});
@@ -257,7 +257,7 @@ fn thaw_should_work() {
 			assert_eq!(System::consumers(&1), 0);
 			assert_eq!(Balances::balance_frozen(&TestId::Foo, &1), 0);
 			assert_eq!(Balances::account(&1).frozen, 0);
-			assert_ok!(<Balances as fungible::Mutate<_>>::transfer(&1, &2, 10, CanKill));
+			assert_ok!(<Balances as fungible::Mutate<_>>::transfer(&1, &2, 10, Expendable));
 		});
 }
 
@@ -272,7 +272,7 @@ fn set_freeze_zero_should_work() {
 			assert_eq!(System::consumers(&1), 0);
 			assert_eq!(Balances::balance_frozen(&TestId::Foo, &1), 0);
 			assert_eq!(Balances::account(&1).frozen, 0);
-			assert_ok!(<Balances as fungible::Mutate<_>>::transfer(&1, &2, 10, CanKill));
+			assert_ok!(<Balances as fungible::Mutate<_>>::transfer(&1, &2, 10, Expendable));
 		});
 }
 
@@ -284,9 +284,9 @@ fn set_freeze_should_work() {
 		.build_and_execute_with(|| {
 			assert_ok!(Balances::set_freeze(&TestId::Foo, &1, u64::MAX));
 			assert_ok!(Balances::set_freeze(&TestId::Foo, &1, 5));
-			assert_ok!(<Balances as fungible::Mutate<_>>::transfer(&1, &2, 5, CanKill));
+			assert_ok!(<Balances as fungible::Mutate<_>>::transfer(&1, &2, 5, Expendable));
 			assert_noop!(
-				<Balances as fungible::Mutate<_>>::transfer(&1, &2, 1, CanKill),
+				<Balances as fungible::Mutate<_>>::transfer(&1, &2, 1, Expendable),
 				TokenError::Frozen
 			);
 		});
@@ -303,7 +303,7 @@ fn extend_freeze_should_work() {
 			assert_eq!(Balances::account(&1).frozen, 10);
 			assert_eq!(Balances::balance_frozen(&TestId::Foo, &1), 10);
 			assert_noop!(
-				<Balances as fungible::Mutate<_>>::transfer(&1, &2, 1, CanKill),
+				<Balances as fungible::Mutate<_>>::transfer(&1, &2, 1, Expendable),
 				TokenError::Frozen
 			);
 		});
@@ -318,9 +318,9 @@ fn double_freezing_should_work() {
 			assert_ok!(Balances::set_freeze(&TestId::Foo, &1, 5));
 			assert_ok!(Balances::set_freeze(&TestId::Bar, &1, 5));
 			assert_eq!(System::consumers(&1), 1);
-			assert_ok!(<Balances as fungible::Mutate<_>>::transfer(&1, &2, 5, CanKill));
+			assert_ok!(<Balances as fungible::Mutate<_>>::transfer(&1, &2, 5, Expendable));
 			assert_noop!(
-				<Balances as fungible::Mutate<_>>::transfer(&1, &2, 1, CanKill),
+				<Balances as fungible::Mutate<_>>::transfer(&1, &2, 1, Expendable),
 				TokenError::Frozen
 			);
 		});

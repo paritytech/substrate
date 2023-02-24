@@ -395,8 +395,8 @@ fn do_buy_ticket_keep_alive() {
 		// Price set to 100.
 		assert_ok!(Lottery::start_lottery(RuntimeOrigin::root(), 100, 10, 10, false));
 
-		// Buying fails with KeepAlive.
-		assert_noop!(Lottery::do_buy_ticket(&1, &calls[0]), BalancesError::<Test, _>::KeepAlive);
+		// Buying fails with Expendability.
+		assert_noop!(Lottery::do_buy_ticket(&1, &calls[0]), BalancesError::<Test, _>::Expendability);
 		assert!(TicketsCount::<Test>::get().is_zero());
 	});
 }

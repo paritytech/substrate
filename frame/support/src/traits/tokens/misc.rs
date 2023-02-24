@@ -23,22 +23,35 @@ use sp_core::RuntimeDebug;
 use sp_runtime::{ArithmeticError, DispatchError, TokenError};
 use sp_std::fmt::Debug;
 
+/// The origin of funds to be used for a deposit operation.
 #[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
-pub enum KeepAlive {
-	/// We don't care if the account gets killed.
-	CanKill,
-	/// The account may not be killed, but we don't care if the balance gets dusted.
-	NoKill,
-	/// The account may not be killed and our provider reference must remain.
-	Keep,
+pub enum Provenance {
+	/// The funds will be minted into the system, increasing total issuance (and potentially
+	/// causing an overflow there).
+	Minted,
+	/// The funds already exist in the system, therefore will not affect total issuance.
+	Extant,
 }
 
-impl From<KeepAlive> for bool {
-	fn from(k: KeepAlive) -> bool {
-		matches!(k, KeepAlive::CanKill)
+/// The mode by which we describe whether an operation should keep an account alive.
+#[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
+pub enum Expendability {
+	/// We don't care if the account gets killed by this operation.
+	Expendable,
+	/// The account may not be killed, but we don't care if the balance gets dusted.
+	Protected,
+	/// The account may not be killed and our provider reference must remain (in the context of
+	/// tokens, this means that the account may not be dusted).
+	Undustable,
+}
+
+impl From<Expendability> for bool {
+	fn from(k: Expendability) -> bool {
+		matches!(k, Expendability::Expendable)
 	}
 }
 
+/// The privilege with which a withdraw operation is conducted.
 #[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
 pub enum Privilege {
 	/// The operation should execute with regular privilege.
@@ -48,12 +61,8 @@ pub enum Privilege {
 	Force,
 }
 
-impl From<Privilege> for bool {
-	fn from(k: Privilege) -> bool {
-		matches!(k, Privilege::Force)
-	}
-}
-
+/// The precision required of an operation generally involving some aspect of quantitative fund
+/// withdrawal or transfer.
 #[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
 pub enum Precision {
 	/// The operation should must either proceed either exactly according to the amounts involved
@@ -62,12 +71,6 @@ pub enum Precision {
 	/// The operation may be considered successful even if less than the specified amounts are
 	/// available to be used. In this case a best effort will be made.
 	BestEffort,
-}
-
-impl From<Precision> for bool {
-	fn from(k: Precision) -> bool {
-		matches!(k, Precision::BestEffort)
-	}
 }
 
 /// One of a number of consequences of withdrawing a fungible from an account.

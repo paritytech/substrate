@@ -176,7 +176,7 @@ pub trait Currency<AccountId> {
 	}
 
 	/// Removes some free balance from `who` account for `reason` if possible. If `liveness` is
-	/// `KeepAlive`, then no less than `ExistentialDeposit` must be left remaining.
+	/// `Expendability`, then no less than `ExistentialDeposit` must be left remaining.
 	///
 	/// This checks any locks, vesting, and liquidity requirements. If the removal is not possible,
 	/// then it returns `Err`.

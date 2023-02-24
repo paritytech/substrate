@@ -19,7 +19,7 @@
 
 use super::*;
 use frame_support::traits::tokens::{
-	KeepAlive::{CanKill, NoKill},
+	Expendability::{Expendable, Protected},
 	Precision::BestEffort,
 	Privilege::Force,
 };
@@ -171,7 +171,7 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 			]
 		);
 
-		let res = Balances::withdraw(&1, 98, BestEffort, NoKill, Force);
+		let res = Balances::withdraw(&1, 98, BestEffort, Protected, Force);
 		assert_eq!(res.unwrap().peek(), 98);
 
 		// no events
@@ -180,7 +180,7 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 			[RuntimeEvent::Balances(crate::Event::Withdraw { who: 1, amount: 98 })]
 		);
 
-		let res = Balances::withdraw(&1, 1, BestEffort, CanKill, Force);
+		let res = Balances::withdraw(&1, 1, BestEffort, Expendable, Force);
 		assert_eq!(res.unwrap().peek(), 1);
 
 		assert_eq!(

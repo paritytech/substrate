@@ -305,8 +305,8 @@ where
 			return Ok(())
 		}
 		let keep_alive = match existence_requirement {
-			ExistenceRequirement::KeepAlive => Keep,
-			ExistenceRequirement::AllowDeath => CanKill,
+			ExistenceRequirement::KeepAlive => Undustable,
+			ExistenceRequirement::AllowDeath => Expendable,
 		};
 		<Self as fungible::Mutate<_>>::transfer(transactor, dest, value, keep_alive)?;
 		Ok(())
@@ -434,7 +434,7 @@ where
 				let ed = T::ExistentialDeposit::get();
 				let would_be_dead = new_free_account + account.reserved < ed;
 				let would_kill = would_be_dead && account.free + account.reserved >= ed;
-				ensure!(liveness == AllowDeath || !would_kill, Error::<T, I>::KeepAlive);
+				ensure!(liveness == AllowDeath || !would_kill, Error::<T, I>::Expendability);
 
 				Self::ensure_can_withdraw(who, value, reasons, new_free_account)?;
 

@@ -1,5 +1,5 @@
 use crate::{
-	benchmarking::{inherent_benchmark_data, RemarkBuilder, TransferKeepAliveBuilder},
+	benchmarking::{inherent_benchmark_data, RemarkBuilder, TransferExpendabilityBuilder},
 	chain_spec,
 	cli::{Cli, Subcommand},
 	service,
@@ -161,7 +161,7 @@ pub fn run() -> sc_cli::Result<()> {
 						// Register the *Remark* and *TKA* builders.
 						let ext_factory = ExtrinsicFactory(vec![
 							Box::new(RemarkBuilder::new(client.clone())),
-							Box::new(TransferKeepAliveBuilder::new(
+							Box::new(TransferExpendabilityBuilder::new(
 								client.clone(),
 								Sr25519Keyring::Alice.to_account_id(),
 								EXISTENTIAL_DEPOSIT,

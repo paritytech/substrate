@@ -18,7 +18,7 @@
 //! Tests regarding the functionality of the dispatchables/extrinsics.
 
 use super::*;
-use frame_support::traits::tokens::KeepAlive::CanKill;
+use frame_support::traits::tokens::Expendability::Expendable;
 use fungible::{hold::Mutate as HoldMutate, Inspect, Mutate};
 
 #[test]
@@ -216,7 +216,7 @@ fn upgrade_accounts_should_work() {
 			assert_eq!(System::consumers(&7), 1);
 
 			<Balances as frame_support::traits::ReservableCurrency<_>>::unreserve(&7, 5);
-			assert_ok!(<Balances as fungible::Mutate<_>>::transfer(&7, &1, 10, CanKill));
+			assert_ok!(<Balances as fungible::Mutate<_>>::transfer(&7, &1, 10, Expendable));
 			assert_eq!(Balances::total_balance(&7), 0);
 			assert_eq!(System::providers(&7), 0);
 			assert_eq!(System::consumers(&7), 0);

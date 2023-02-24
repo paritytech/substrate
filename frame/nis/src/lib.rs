@@ -78,7 +78,7 @@
 
 use frame_support::traits::{
 	fungible::{self, Inspect as FunInspect, Mutate as FunMutate},
-	tokens::{KeepAlive, Privilege},
+	tokens::{Expendability, Privilege, DepositConsequence, WithdrawConsequence, Provenance},
 };
 pub use pallet::*;
 use sp_arithmetic::{traits::Unsigned, RationalArg};
@@ -131,14 +131,14 @@ impl<T> FunInspect<T> for NoCounterpart<T> {
 	fn total_balance(_: &T) -> u32 {
 		0
 	}
-	fn reducible_balance(_: &T, _: KeepAlive, _: Privilege) -> u32 {
+	fn reducible_balance(_: &T, _: Expendability, _: Privilege) -> u32 {
 		0
 	}
-	fn can_deposit(_: &T, _: u32, _: bool) -> frame_support::traits::tokens::DepositConsequence {
-		frame_support::traits::tokens::DepositConsequence::Success
+	fn can_deposit(_: &T, _: u32, _: Provenance) -> DepositConsequence {
+		DepositConsequence::Success
 	}
-	fn can_withdraw(_: &T, _: u32) -> frame_support::traits::tokens::WithdrawConsequence<u32> {
-		frame_support::traits::tokens::WithdrawConsequence::Success
+	fn can_withdraw(_: &T, _: u32) -> WithdrawConsequence<u32> {
+		WithdrawConsequence::Success
 	}
 }
 impl<T> fungible::Unbalanced<T> for NoCounterpart<T> {
@@ -168,7 +168,7 @@ pub mod pallet {
 				Balanced as FunBalanced,
 			},
 			nonfungible::{Inspect as NftInspect, Transfer as NftTransfer},
-			tokens::{KeepAlive::CanKill, Privilege::Regular, Precision::{BestEffort, Exact}},
+			tokens::{Expendability::Expendable, Privilege::Regular, Precision::{BestEffort, Exact}},
 			Defensive, DefensiveSaturating, OnUnbalanced,
 		},
 		PalletId,
@@ -716,7 +716,7 @@ pub mod pallet {
 				// Try to transfer deficit from pot to receipt owner.
 				summary.receipts_on_hold.saturating_reduce(on_hold);
 				on_hold = Zero::zero();
-				T::Currency::transfer(&our_account, &who, deficit, CanKill)
+				T::Currency::transfer(&our_account, &who, deficit, Expendable)
 					.map_err(|_| Error::<T>::Unfunded)?;
 			} else {
 				on_hold.saturating_reduce(amount);
@@ -795,7 +795,7 @@ pub mod pallet {
 			summary.proportion_owed.saturating_reduce(receipt.proportion);
 
 			// Try to transfer amount owed from pot to receipt owner.
-			T::Currency::transfer(&our_account, &who, amount, CanKill)
+			T::Currency::transfer(&our_account, &who, amount, Expendable)
 				.map_err(|_| Error::<T>::Unfunded)?;
 
 			Receipts::<T>::remove(index);
@@ -881,7 +881,7 @@ pub mod pallet {
 			// Transfer the funds from the pot to the owner and reserve
 			let reason = T::HoldReason::get();
 			let us = Self::account_id();
-			T::Currency::transfer_and_hold(&reason, &us, &who, amount, Exact, CanKill, Regular)?;
+			T::Currency::transfer_and_hold(&reason, &us, &who, amount, Exact, Expendable, Regular)?;
 
 			// Record that we've moved the amount reserved.
 			summary.receipts_on_hold.saturating_accrue(amount);

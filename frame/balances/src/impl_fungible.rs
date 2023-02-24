@@ -18,8 +18,9 @@
 //! Implementation of `fungible` traits for Balances pallet.
 use super::*;
 use frame_support::traits::tokens::{
-	KeepAlive::{self, Keep, NoKill},
+	Expendability::{self, Undustable, Protected},
 	Privilege,
+	Provenance::{self, Minted},
 };
 
 impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> {
@@ -42,7 +43,7 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 	}
 	fn reducible_balance(
 		who: &T::AccountId,
-		keep_alive: KeepAlive,
+		keep_alive: Expendability,
 		force: Privilege,
 	) -> Self::Balance {
 		let a = Self::account(who);
@@ -53,12 +54,12 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 			untouchable = a.frozen.saturating_sub(a.reserved);
 		}
 		// If we want to keep our provider ref..
-		if keep_alive == Keep
+		if keep_alive == Undustable
 			// ..or we don't want the account to die and our provider ref is needed for it to live..
-			|| keep_alive == NoKill && !a.free.is_zero() &&
+			|| keep_alive == Protected && !a.free.is_zero() &&
 				frame_system::Pallet::<T>::providers(who) == 1
 			// ..or we don't care about the account dying but our provider ref is required..
-			|| keep_alive == CanKill && !a.free.is_zero() &&
+			|| keep_alive == Expendable && !a.free.is_zero() &&
 				!frame_system::Pallet::<T>::can_dec_provider(who)
 		{
 			// ..then the ED needed..
@@ -67,12 +68,12 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 		// Liquid balance is what is neither on hold nor frozen/required for provider.
 		a.free.saturating_sub(untouchable)
 	}
-	fn can_deposit(who: &T::AccountId, amount: Self::Balance, mint: bool) -> DepositConsequence {
+	fn can_deposit(who: &T::AccountId, amount: Self::Balance, provenance: Provenance) -> DepositConsequence {
 		if amount.is_zero() {
 			return DepositConsequence::Success
 		}
 
-		if mint && TotalIssuance::<T, I>::get().checked_add(&amount).is_none() {
+		if provenance == Minted && TotalIssuance::<T, I>::get().checked_add(&amount).is_none() {
 			return DepositConsequence::Overflow
 		}
 
@@ -111,7 +112,7 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 			None => return WithdrawConsequence::BalanceLow,
 		};
 
-		let liquid = Self::reducible_balance(who, CanKill, Regular);
+		let liquid = Self::reducible_balance(who, Expendable, Regular);
 		if amount > liquid {
 			return WithdrawConsequence::Frozen
 		}
@@ -150,7 +151,7 @@ impl<T: Config<I>, I: 'static> fungible::Unbalanced<T::AccountId> for Pallet<T, 
 		who: &T::AccountId,
 		amount: Self::Balance,
 	) -> Result<Option<Self::Balance>, DispatchError> {
-		let max_reduction = <Self as fungible::Inspect<_>>::reducible_balance(who, CanKill, Force);
+		let max_reduction = <Self as fungible::Inspect<_>>::reducible_balance(who, Expendable, Force);
 		let (result, maybe_dust) = Self::mutate_account(who, |account| -> DispatchResult {
 			// Make sure the reduction (if there is one) is no more than the maximum allowed.
 			let reduction = account.free.saturating_sub(amount);

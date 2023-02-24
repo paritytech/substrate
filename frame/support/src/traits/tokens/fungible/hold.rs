@@ -21,9 +21,10 @@ use crate::{
 	ensure,
 	traits::tokens::{
 		DepositConsequence::Success,
-		KeepAlive,
+		Expendability,
 		Precision::{self, BestEffort, Exact},
 		Privilege::{self, Force},
+		Provenance::Extant,
 	},
 };
 use scale_info::TypeInfo;
@@ -88,7 +89,7 @@ pub trait Inspect<AccountId>: super::Inspect<AccountId> {
 	) -> DispatchResult {
 		ensure!(Self::hold_available(reason, who), TokenError::CannotCreateHold);
 		ensure!(
-			amount <= Self::reducible_balance(who, KeepAlive::NoKill, Force),
+			amount <= Self::reducible_balance(who, Expendability::Protected, Force),
 			TokenError::FundsUnavailable
 		);
 		Ok(())
@@ -198,7 +199,7 @@ pub trait Mutate<AccountId>:
 
 		Self::ensure_can_hold(reason, who, amount)?;
 		// Should be infallible now, but we proceed softly anyway.
-		Self::decrease_balance(who, amount, Exact, KeepAlive::NoKill, Force)?;
+		Self::decrease_balance(who, amount, Exact, Expendability::Protected, Force)?;
 		Self::increase_balance_on_hold(reason, who, amount, BestEffort)?;
 		Self::done_hold(reason, who, amount);
 		Ok(())
@@ -225,7 +226,7 @@ pub trait Mutate<AccountId>:
 
 		// We want to make sure we can deposit the amount in advance. If we can't then something is
 		// very wrong.
-		ensure!(Self::can_deposit(who, amount, false) == Success, TokenError::CannotCreate);
+		ensure!(Self::can_deposit(who, amount, Extant) == Success, TokenError::CannotCreate);
 		// Get the amount we can actually take from the hold. This might be less than what we want
 		// if we're only doing a best-effort.
 		let amount = Self::decrease_balance_on_hold(reason, who, amount, precision)?;
@@ -301,7 +302,7 @@ pub trait Mutate<AccountId>:
 
 		// We want to make sure we can deposit the amount in advance. If we can't then something is
 		// very wrong.
-		ensure!(Self::can_deposit(dest, amount, false) == Success, TokenError::CannotCreate);
+		ensure!(Self::can_deposit(dest, amount, Extant) == Success, TokenError::CannotCreate);
 		ensure!(!on_hold || Self::hold_available(reason, dest), TokenError::CannotCreateHold);
 
 		let amount = Self::decrease_balance_on_hold(reason, source, amount, precision)?;
@@ -336,11 +337,11 @@ pub trait Mutate<AccountId>:
 		dest: &AccountId,
 		amount: Self::Balance,
 		precision: Precision,
-		keep_alive: KeepAlive,
+		keep_alive: Expendability,
 		force: Privilege,
 	) -> Result<Self::Balance, DispatchError> {
 		ensure!(Self::hold_available(reason, dest), TokenError::CannotCreateHold);
-		ensure!(Self::can_deposit(dest, amount, false) == Success, TokenError::CannotCreate);
+		ensure!(Self::can_deposit(dest, amount, Extant) == Success, TokenError::CannotCreate);
 		let actual = Self::decrease_balance(source, amount, precision, keep_alive, force)?;
 		Self::increase_balance_on_hold(reason, dest, actual, precision)?;
 		Self::done_transfer_on_hold(reason, source, dest, actual);

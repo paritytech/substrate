@@ -188,7 +188,7 @@ impl Clone for BenchDb {
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum BlockType {
 	/// Bunch of random transfers.
-	RandomTransfersKeepAlive,
+	RandomTransfersExpendability,
 	/// Bunch of random transfers that drain all of the source balance.
 	RandomTransfersReaping,
 	/// Bunch of "no-op" calls.
@@ -302,7 +302,7 @@ impl<'a> Iterator for BlockContentIterator<'a> {
 					signed_extra(0, kitchensink_runtime::ExistentialDeposit::get() + 1),
 				)),
 				function: match self.content.block_type {
-					BlockType::RandomTransfersKeepAlive =>
+					BlockType::RandomTransfersExpendability =>
 						RuntimeCall::Balances(BalancesCall::transfer_keep_alive {
 							dest: sp_runtime::MultiAddress::Id(receiver),
 							value: kitchensink_runtime::ExistentialDeposit::get() + 1,

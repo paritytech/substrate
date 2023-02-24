@@ -18,9 +18,9 @@
 //! Implementations for fungibles trait.
 
 use frame_support::traits::tokens::{
-	KeepAlive::{self, CanKill},
+	Expendability::{self, Expendable},
 	Precision::{self, BestEffort},
-	Privilege,
+	Privilege, Provenance::{self, Minted},
 };
 
 use super::*;
@@ -48,7 +48,7 @@ impl<T: Config<I>, I: 'static> fungibles::Inspect<<T as SystemConfig>::AccountId
 	fn reducible_balance(
 		asset: Self::AssetId,
 		who: &<T as SystemConfig>::AccountId,
-		keep_alive: KeepAlive,
+		keep_alive: Expendability,
 		_force: Privilege,
 	) -> Self::Balance {
 		Pallet::<T, I>::reducible_balance(asset, who, keep_alive.into()).unwrap_or(Zero::zero())
@@ -58,9 +58,9 @@ impl<T: Config<I>, I: 'static> fungibles::Inspect<<T as SystemConfig>::AccountId
 		asset: Self::AssetId,
 		who: &<T as SystemConfig>::AccountId,
 		amount: Self::Balance,
-		mint: bool,
+		provenance: Provenance,
 	) -> DepositConsequence {
-		Pallet::<T, I>::can_increase(asset, who, amount, mint)
+		Pallet::<T, I>::can_increase(asset, who, amount, provenance == Minted)
 	}
 
 	fn can_withdraw(
@@ -107,11 +107,11 @@ impl<T: Config<I>, I: 'static> fungibles::Unbalanced<T::AccountId> for Pallet<T,
 		who: &T::AccountId,
 		amount: Self::Balance,
 		precision: Precision,
-		keep_alive: KeepAlive,
+		keep_alive: Expendability,
 		_force: Privilege,
 	) -> Result<Self::Balance, DispatchError> {
 		let f =
-			DebitFlags { keep_alive: keep_alive != CanKill, best_effort: precision == BestEffort };
+			DebitFlags { keep_alive: keep_alive != Expendable, best_effort: precision == BestEffort };
 		Self::decrease_balance(asset, who, amount, f, |_, _| Ok(()))
 	}
 	fn increase_balance(
