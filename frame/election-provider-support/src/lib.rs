@@ -199,9 +199,6 @@ pub use sp_arithmetic;
 #[doc(hidden)]
 pub use sp_std;
 
-#[cfg(feature = "runtime-benchmarks")]
-pub mod benchmarking;
-
 pub mod weights;
 pub use weights::WeightInfo;
 
@@ -660,29 +657,6 @@ impl<AccountId: IdentifierT, Accuracy: PerThing128, Balancing: Get<Option<Balanc
 
 	fn weight<T: WeightInfo>(voters: u32, targets: u32, vote_degree: u32) -> Weight {
 		T::phragmms(voters, targets, vote_degree)
-	}
-}
-
-/// A wrapper for [`sp_npos_elections::approval_voting()`] that implements [`NposSolver`]. See the
-/// documentation of [`sp_npos_elections::approval_voting()`] for more info.
-pub struct ApprovalVoting<AccountId, Accuracy>(sp_std::marker::PhantomData<(AccountId, Accuracy)>);
-
-impl<AccountId: IdentifierT, Accuracy: PerThing128> NposSolver
-	for ApprovalVoting<AccountId, Accuracy>
-{
-	type AccountId = AccountId;
-	type Accuracy = Accuracy;
-	type Error = sp_npos_elections::Error;
-	fn solve(
-		winners: usize,
-		targets: Vec<Self::AccountId>,
-		voters: Vec<(Self::AccountId, VoteWeight, impl IntoIterator<Item = Self::AccountId>)>,
-	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error> {
-		sp_npos_elections::approval_voting(winners, targets, voters)
-	}
-
-	fn weight<T: WeightInfo>(voters: u32, targets: u32, vote_degree: u32) -> Weight {
-		T::approval_voting(voters, targets, vote_degree)
 	}
 }
 
