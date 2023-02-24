@@ -60,6 +60,10 @@
     DOCKER_USERNAME:               $Docker_Hub_User_Parity
     DOCKER_PASSWORD:               $Docker_Hub_Pass_Parity
     README_FILEPATH:               $CI_PROJECT_DIR/scripts/ci/docker/$PRODUCT.Dockerfile.README.md
+  rules:
+  - if: $CI_COMMIT_REF_NAME == "master"
+    changes:
+    - scripts/ci/docker/$PRODUCT.Dockerfile.README.md
   script:
     - cd / && sh entrypoint.sh
 
@@ -80,6 +84,12 @@ publish-docker-substrate:
       artifacts:                   true
   variables:
     PRODUCT:                       substrate
+
+publish-docker-description-substrate:
+  extends:                         .push-docker-image-description
+  variables:
+    PRODUCT:                       substrate
+    SHORT_DESCRIPTION:             "Substrate Docker Image."
 
 publish-docker-substrate-temporary:
   extends:                         .build-push-image-temporary
@@ -105,8 +115,6 @@ publish-docker-subkey:
 
 publish-docker-description-subkey:
   extends:                         .push-docker-image-description
-  needs:
-    - job:                         build-subkey-linux
   variables:
     PRODUCT:                       subkey
     SHORT_DESCRIPTION:             "The subkey program is a key management utility for Substrate-based blockchains."

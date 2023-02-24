@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -60,7 +60,7 @@ pub fn fetch_nonce(client: &FullClient, account: sp_core::sr25519::Pair) -> u32 
 	let best_hash = client.chain_info().best_hash;
 	client
 		.runtime_api()
-		.account_nonce(&generic::BlockId::Hash(best_hash), account.public().into())
+		.account_nonce(best_hash, account.public().into())
 		.expect("Fetching account nonce works; qed")
 }
 
