@@ -20,4 +20,6 @@
 mod types;
 pub use types::*;
 
+pub mod api;
+
 mod v14;
