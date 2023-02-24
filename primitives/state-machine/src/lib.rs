@@ -1926,12 +1926,14 @@ mod tests {
 		// Always contains at least some nodes.
 		assert_eq!(proof.to_memory_db::<BlakeTwo256>().drain().len(), 3);
 		assert_eq!(count, 1);
+		assert_eq!(proof.encoded_size(), 443);
 
 		let remote_backend = trie_backend::tests::test_trie(state_version, None, None);
 		let (proof, count) =
 			prove_range_read_with_size(remote_backend, None, None, 800, Some(&[])).unwrap();
 		assert_eq!(proof.to_memory_db::<BlakeTwo256>().drain().len(), 9);
 		assert_eq!(count, 85);
+		assert_eq!(proof.encoded_size(), 857);
 		let (results, completed) = read_range_proof_check::<BlakeTwo256>(
 			remote_root,
 			proof.clone(),
@@ -1955,6 +1957,8 @@ mod tests {
 			prove_range_read_with_size(remote_backend, None, None, 50000, Some(&[])).unwrap();
 		assert_eq!(proof.to_memory_db::<BlakeTwo256>().drain().len(), 11);
 		assert_eq!(count, 132);
+		assert_eq!(proof.encoded_size(), 990);
+
 		let (results, completed) =
 			read_range_proof_check::<BlakeTwo256>(remote_root, proof, None, None, None, None)
 				.unwrap();
