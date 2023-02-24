@@ -156,7 +156,7 @@ where
 		}
 	}
 
-	fn consume_evidence(
+	fn process_evidence(
 		reporter: Option<T::AccountId>,
 		evidence: (EquivocationProof<T::Header>, T::KeyOwnerProof),
 	) -> Result<(), DispatchError> {

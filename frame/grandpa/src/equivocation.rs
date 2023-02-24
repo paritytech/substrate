@@ -172,7 +172,7 @@ where
 		}
 	}
 
-	fn consume_evidence(
+	fn process_evidence(
 		reporter: Option<T::AccountId>,
 		evidence: (EquivocationProof<T::Hash, T::BlockNumber>, T::KeyOwnerProof),
 	) -> Result<(), DispatchError> {

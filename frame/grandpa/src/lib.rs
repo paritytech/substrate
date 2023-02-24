@@ -197,7 +197,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let reporter = ensure_signed(origin)?;
 
-			T::EquivocationReportSystem::consume_evidence(
+			T::EquivocationReportSystem::process_evidence(
 				Some(reporter),
 				(*equivocation_proof, key_owner_proof),
 			)?;
@@ -223,7 +223,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 
-			T::EquivocationReportSystem::consume_evidence(
+			T::EquivocationReportSystem::process_evidence(
 				None,
 				(*equivocation_proof, key_owner_proof),
 			)?;

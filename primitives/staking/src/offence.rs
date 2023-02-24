@@ -210,7 +210,7 @@ pub struct OffenceDetails<Reporter, Offender> {
 	pub reporters: Vec<Reporter>,
 }
 
-/// An abstract system capable of publish, check and consume offence evidences.
+/// An abstract system capable of publish, check and process offence evidences.
 ///
 /// Implementation details are left opaque at this level and we don't assume
 /// any specific usage scenario for this trait. The main goal for this trait is
@@ -229,7 +229,7 @@ pub struct OffenceDetails<Reporter, Offender> {
 ///    place to call the [`check_evidence`] method.
 ///
 /// 3. Finally the extrinsic is executed on-chain. At this point the user may wish
-///    to call [`consume_evidence`] to digest the offence report and enact the
+///    to call [`process_evidence`] to digest the offence report and enact the
 ///    required actions.
 pub trait OffenceReportSystem<Reporter, Evidence> {
 	/// Longevity, in blocks, for the evidence report validity.
@@ -249,12 +249,12 @@ pub trait OffenceReportSystem<Reporter, Evidence> {
 	/// (e.g. for unsigned extrinsic quick checks).
 	fn check_evidence(evidence: Evidence) -> Result<(), TransactionValidityError>;
 
-	/// Report an offence evidence.
+	/// Process an offence evidence.
 	///
 	/// Common usage: enact some form of slashing directly or by forwarding
 	/// the evidence to a lower level specialized subsystem (e.g. a handler
 	/// implementing `ReportOffence` trait).
-	fn consume_evidence(reporter: Reporter, evidence: Evidence) -> Result<(), DispatchError>;
+	fn process_evidence(reporter: Reporter, evidence: Evidence) -> Result<(), DispatchError>;
 }
 
 /// Dummy offence report system.
@@ -276,7 +276,7 @@ impl<Reporter, Evidence> OffenceReportSystem<Reporter, Evidence> for () {
 		Ok(())
 	}
 
-	fn consume_evidence(_reporter: Reporter, _evidence: Evidence) -> Result<(), DispatchError> {
+	fn process_evidence(_reporter: Reporter, _evidence: Evidence) -> Result<(), DispatchError> {
 		Ok(())
 	}
 }
