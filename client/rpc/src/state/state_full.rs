@@ -66,6 +66,7 @@ pub struct FullState<BE, Block: BlockT, Client> {
 	_executor: SubscriptionTaskExecutor,
 	_phantom: PhantomData<(BE, Block)>,
 	rpc_max_payload: Option<usize>,
+	count: Arc<()>,
 }
 
 impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
@@ -83,7 +84,13 @@ where
 		executor: SubscriptionTaskExecutor,
 		rpc_max_payload: Option<usize>,
 	) -> Self {
-		Self { client, _executor: executor, _phantom: PhantomData, rpc_max_payload }
+		Self {
+			client,
+			_executor: executor,
+			_phantom: PhantomData,
+			rpc_max_payload,
+			count: Arc::new(()),
+		}
 	}
 
 	/// Returns given block hash or best block hash if None is passed.
@@ -378,7 +385,7 @@ where
 			.map_err(client_err)
 	}
 
-	async fn subscribe_runtime_version(&self, pending: PendingSubscriptionSink) -> Result<()> {
+	async fn subscribe_runtime_version(&self, pending: PendingSubscriptionSink) {
 		let initial = match self
 			.block_or_best(None)
 			.and_then(|block| {
@@ -389,7 +396,7 @@ where
 			Ok(initial) => initial,
 			Err(e) => {
 				_ = pending.reject(JsonRpseeError::from(e)).await;
-				return Ok(())
+				return
 			},
 		};
 
@@ -418,21 +425,22 @@ where
 		let stream = futures::stream::once(future::ready(initial)).chain(version_stream);
 
 		_ = accept_and_pipe_from_stream(pending, stream).await;
-		Ok(())
 	}
 
 	async fn subscribe_storage(
 		&self,
 		pending: PendingSubscriptionSink,
 		keys: Option<Vec<StorageKey>>,
-	) -> Result<()> {
+	) {
+		let c = self.count.clone();
+		log::info!("Starting a storage subscription; count={}", Arc::strong_count(&c) - 1);
 		let stream = match self.client.storage_changes_notification_stream(keys.as_deref(), None) {
 			Ok(stream) => stream,
 			Err(blockchain_err) => {
 				let _ = pending
 					.reject(JsonRpseeError::from(Error::Client(Box::new(blockchain_err))))
 					.await;
-				return Ok(())
+				return
 			},
 		};
 
@@ -463,7 +471,7 @@ where
 			.filter(|storage| future::ready(!storage.changes.is_empty()));
 
 		_ = accept_and_pipe_from_stream(pending, stream).await;
-		Ok(())
+		log::info!("Dropping a storage subscription; count={}", Arc::strong_count(&c) - 1);
 	}
 
 	fn trace_block(

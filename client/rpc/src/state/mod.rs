@@ -29,7 +29,7 @@ use std::sync::Arc;
 use crate::SubscriptionTaskExecutor;
 
 use jsonrpsee::{
-	core::{async_trait, Error as JsonRpseeError, RpcResult, SubscriptionResult},
+	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	PendingSubscriptionSink,
 };
 
@@ -158,17 +158,14 @@ where
 	) -> Result<sp_rpc::tracing::TraceBlockResponse, Error>;
 
 	/// New runtime version subscription
-	async fn subscribe_runtime_version(
-		&self,
-		pending: PendingSubscriptionSink,
-	) -> Result<(), Error>;
+	async fn subscribe_runtime_version(&self, pending: PendingSubscriptionSink);
 
 	/// New storage subscription
 	async fn subscribe_storage(
 		&self,
 		pending: PendingSubscriptionSink,
 		keys: Option<Vec<StorageKey>>,
-	) -> Result<(), Error>;
+	);
 }
 
 /// Create new state API that works on full node.
@@ -336,28 +333,23 @@ where
 			.map_err(Into::into)
 	}
 
-	async fn subscribe_runtime_version(
-		&self,
-		pending: PendingSubscriptionSink,
-	) -> SubscriptionResult {
+	async fn subscribe_runtime_version(&self, pending: PendingSubscriptionSink) {
 		_ = self.backend.subscribe_runtime_version(pending).await;
-		Ok(())
 	}
 
 	async fn subscribe_storage(
 		&self,
 		pending: PendingSubscriptionSink,
 		keys: Option<Vec<StorageKey>>,
-	) -> SubscriptionResult {
+	) {
 		if keys.is_none() {
 			if let Err(err) = self.deny_unsafe.check_if_safe() {
 				let _ = pending.reject(JsonRpseeError::from(err)).await;
-				return Ok(())
+				return
 			}
 		}
 
 		_ = self.backend.subscribe_storage(pending, keys).await;
-		Ok(())
 	}
 }
 

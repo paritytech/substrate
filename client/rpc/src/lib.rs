@@ -48,7 +48,7 @@ pub type SubscriptionTaskExecutor = std::sync::Arc<dyn sp_core::traits::SpawnNam
 pub mod utils {
 	use futures::{Stream, StreamExt};
 	use jsonrpsee::{
-		core::SubscriptionResult, PendingSubscriptionSink, SendTimeoutError, SubscriptionMessage,
+		core::RpcResult, PendingSubscriptionSink, SendTimeoutError, SubscriptionMessage,
 		SubscriptionSink,
 	};
 	use sp_runtime::Serialize;
@@ -57,7 +57,7 @@ pub mod utils {
 	pub async fn accept_and_pipe_from_stream<S, T>(
 		pending: PendingSubscriptionSink,
 		stream: S,
-	) -> SubscriptionResult
+	) -> RpcResult<()>
 	where
 		S: Stream<Item = T> + Unpin,
 		T: Serialize,
@@ -67,7 +67,7 @@ pub mod utils {
 	}
 
 	/// todo..
-	pub async fn pipe_from_stream<S, T>(sink: SubscriptionSink, mut stream: S) -> SubscriptionResult
+	pub async fn pipe_from_stream<S, T>(sink: SubscriptionSink, mut stream: S) -> RpcResult<()>
 	where
 		S: Stream<Item = T> + Unpin,
 		T: Serialize,

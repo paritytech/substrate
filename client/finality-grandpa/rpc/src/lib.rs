@@ -24,7 +24,7 @@ use log::warn;
 use std::sync::Arc;
 
 use jsonrpsee::{
-	core::{async_trait, RpcResult, SubscriptionResult},
+	core::{async_trait, RpcResult},
 	proc_macros::rpc,
 	PendingSubscriptionSink,
 };
@@ -108,17 +108,14 @@ where
 		ReportedRoundStates::from(&self.authority_set, &self.voter_state).map_err(Into::into)
 	}
 
-	async fn subscribe_justifications(
-		&self,
-		pending: PendingSubscriptionSink,
-	) -> SubscriptionResult {
+	async fn subscribe_justifications(&self, pending: PendingSubscriptionSink) {
 		let stream = self.justification_stream.subscribe(100_000).map(
 			|x: sc_finality_grandpa::GrandpaJustification<Block>| {
 				JustificationNotification::from(x)
 			},
 		);
 
-		accept_and_pipe_from_stream(pending, stream).await
+		let _ = accept_and_pipe_from_stream(pending, stream).await;
 	}
 
 	async fn prove_finality(

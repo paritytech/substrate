@@ -28,7 +28,7 @@ use sp_runtime::traits::Block as BlockT;
 
 use futures::{task::SpawnError, FutureExt, StreamExt};
 use jsonrpsee::{
-	core::{async_trait, Error as JsonRpseeError, RpcResult, SubscriptionResult},
+	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
 	types::{error::CallError, ErrorObject},
 	PendingSubscriptionSink,
@@ -138,16 +138,13 @@ impl<Block> BeefyApiServer<notification::EncodedVersionedFinalityProof, Block::H
 where
 	Block: BlockT,
 {
-	async fn subscribe_justifications(
-		&self,
-		pending: PendingSubscriptionSink,
-	) -> SubscriptionResult {
+	async fn subscribe_justifications(&self, pending: PendingSubscriptionSink) {
 		let stream = self
 			.finality_proof_stream
 			.subscribe(100_000)
 			.map(|vfp| notification::EncodedVersionedFinalityProof::new::<Block>(vfp));
 
-		accept_and_pipe_from_stream(pending, stream).await
+		let _ = accept_and_pipe_from_stream(pending, stream).await;
 	}
 
 	async fn latest_finalized(&self) -> RpcResult<Block::Hash> {

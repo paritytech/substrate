@@ -28,7 +28,7 @@ use crate::{utils::accept_and_pipe_from_stream, SubscriptionTaskExecutor};
 use codec::{Decode, Encode};
 use futures::TryFutureExt;
 use jsonrpsee::{
-	core::{async_trait, Error as JsonRpseeError, RpcResult, SubscriptionResult},
+	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	PendingSubscriptionSink,
 };
 use sc_rpc_api::DenyUnsafe;
@@ -176,17 +176,13 @@ where
 			.collect())
 	}
 
-	async fn watch_extrinsic(
-		&self,
-		pending: PendingSubscriptionSink,
-		xt: Bytes,
-	) -> SubscriptionResult {
+	async fn watch_extrinsic(&self, pending: PendingSubscriptionSink, xt: Bytes) {
 		let best_block_hash = self.client.info().best_hash;
 		let dxt = match TransactionFor::<P>::decode(&mut &xt[..]).map_err(|e| Error::from(e)) {
 			Ok(dxt) => dxt,
 			Err(e) => {
 				let _ = pending.reject(JsonRpseeError::from(e)).await;
-				return Ok(())
+				return
 			},
 		};
 
@@ -203,10 +199,10 @@ where
 			Ok(stream) => stream,
 			Err(err) => {
 				let _ = pending.reject(JsonRpseeError::from(err)).await;
-				return Ok(())
+				return
 			},
 		};
 
-		accept_and_pipe_from_stream(pending, stream).await
+		let _ = accept_and_pipe_from_stream(pending, stream).await;
 	}
 }

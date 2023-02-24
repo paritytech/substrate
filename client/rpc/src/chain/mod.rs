@@ -28,7 +28,7 @@ use std::sync::Arc;
 use crate::SubscriptionTaskExecutor;
 
 use jsonrpsee::{
-	core::{async_trait, RpcResult, SubscriptionResult},
+	core::{async_trait, RpcResult},
 	PendingSubscriptionSink, SubscriptionSink,
 };
 use sc_client_api::BlockchainEvents;
@@ -161,25 +161,25 @@ where
 		self.backend.finalized_head().map_err(Into::into)
 	}
 
-	async fn subscribe_all_heads(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
-		let sink = pending.accept().await?;
+	async fn subscribe_all_heads(&self, pending: PendingSubscriptionSink) {
+		let Ok(sink) = pending.accept().await else {
+			return;
+		};
 		self.backend.subscribe_all_heads(sink).await;
-		Ok(())
 	}
 
-	async fn subscribe_new_heads(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
-		let sink = pending.accept().await?;
+	async fn subscribe_new_heads(&self, pending: PendingSubscriptionSink) {
+		let Ok(sink) = pending.accept().await else {
+			return;
+		};
 		self.backend.subscribe_new_heads(sink).await;
-		Ok(())
 	}
 
-	async fn subscribe_finalized_heads(
-		&self,
-		pending: PendingSubscriptionSink,
-	) -> SubscriptionResult {
-		let sink = pending.accept().await?;
+	async fn subscribe_finalized_heads(&self, pending: PendingSubscriptionSink) {
+		let Ok(sink) = pending.accept().await else {
+			return;
+		};
 		self.backend.subscribe_finalized_heads(sink).await;
-		Ok(())
 	}
 }
 
