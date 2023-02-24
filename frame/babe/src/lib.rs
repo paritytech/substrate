@@ -166,8 +166,8 @@ pub mod pallet {
 		/// definition.
 		type EquivocationReportSystem: OffenceReportSystem<
 			Self::AccountId,
-			Self::KeyOwnerProof,
 			EquivocationProof<Self::Header>,
+			Self::KeyOwnerProof,
 		>;
 	}
 

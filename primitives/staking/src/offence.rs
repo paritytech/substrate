@@ -20,7 +20,7 @@
 
 use codec::{Decode, Encode};
 use sp_core::Get;
-use sp_runtime::{DispatchResult, Perbill};
+use sp_runtime::{transaction_validity::TransactionValidityError, DispatchError, Perbill};
 use sp_std::vec::Vec;
 
 use crate::SessionIndex;
@@ -219,7 +219,7 @@ pub struct OffenceDetails<Reporter, Offender> {
 /// It is assumed that this subsystem takes care of checking offender key
 /// ownership proof during evidence report. Key ownership checks are done using
 /// the `key_owner_proof` argument which comes together with the an `offence_proof`.
-pub trait OffenceReportSystem<Reporter, KeyOwnerProof, OffenceProof> {
+pub trait OffenceReportSystem<Reporter, OffenceProof, KeyOwnerProof> {
 	/// Longevity, in blocks, for the report validity.
 	/// For example, when using the staking pallet this should be set equal
 	/// to the bonding durationin blocks, not eras).
@@ -230,13 +230,13 @@ pub trait OffenceReportSystem<Reporter, KeyOwnerProof, OffenceProof> {
 		reporter: Option<Reporter>,
 		offence_proof: OffenceProof,
 		key_owner_proof: KeyOwnerProof,
-	) -> DispatchResult;
+	) -> Result<(), DispatchError>;
 
 	/// Check offence evidence.
 	fn check_evidence(
 		offence_proof: &OffenceProof,
 		key_owner_proof: &KeyOwnerProof,
-	) -> DispatchResult;
+	) -> Result<(), TransactionValidityError>;
 
 	/// Create and submit an offence report extrinsic.
 	fn submit_evidence(
@@ -246,29 +246,31 @@ pub trait OffenceReportSystem<Reporter, KeyOwnerProof, OffenceProof> {
 }
 
 // Dummy report system.
-impl<Reporter, KeyOwnerProof, OffenceProof>
-	OffenceReportSystem<Reporter, KeyOwnerProof, OffenceProof> for ()
-{
+//
+// `KeyOwnerProof` type has been coercivelly set as `sp_core::Void`, that is a
+// type that can't be regularly instantiated. The idea is to prevent the report
+// and submission of evidence in cause of usage of this report system.
+impl<Reporter, OffenceProof> OffenceReportSystem<Reporter, OffenceProof, sp_core::Void> for () {
 	type Longevity = ();
 
 	fn report_evidence(
 		_reporter: Option<Reporter>,
 		_offence_proof: OffenceProof,
-		_key_owner_proof: KeyOwnerProof,
-	) -> DispatchResult {
+		_key_owner_proof: sp_core::Void,
+	) -> Result<(), DispatchError> {
 		Ok(())
 	}
 
 	fn check_evidence(
 		_offence_proof: &OffenceProof,
-		_key_owner_proof: &KeyOwnerProof,
-	) -> DispatchResult {
+		_key_owner_proof: &sp_core::Void,
+	) -> Result<(), TransactionValidityError> {
 		Ok(())
 	}
 
 	fn submit_evidence(
 		_offence_proof: OffenceProof,
-		_key_owner_proof: KeyOwnerProof,
+		_key_owner_proof: sp_core::Void,
 	) -> Result<(), ()> {
 		Ok(())
 	}

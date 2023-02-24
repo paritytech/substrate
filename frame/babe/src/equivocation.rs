@@ -42,7 +42,7 @@ use sp_runtime::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		TransactionValidityError, ValidTransaction,
 	},
-	DispatchResult, KeyTypeId, Perbill,
+	DispatchError, KeyTypeId, Perbill,
 };
 use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_staking::{
@@ -104,7 +104,7 @@ pub struct EquivocationReportSystem<T, R, P, L>(sp_std::marker::PhantomData<(T, 
 // We use the authorship pallet to fetch the current block author and use
 // `offchain::SendTransactionTypes` for unsigned extrinsic creation and
 // submission.
-impl<T, R, P, L> OffenceReportSystem<T::AccountId, P::Proof, EquivocationProof<T::Header>>
+impl<T, R, P, L> OffenceReportSystem<T::AccountId, EquivocationProof<T::Header>, P::Proof>
 	for EquivocationReportSystem<T, R, P, L>
 where
 	T: Config + pallet_authorship::Config + frame_system::offchain::SendTransactionTypes<Call<T>>,
@@ -123,9 +123,8 @@ where
 		reporter: Option<T::AccountId>,
 		equivocation_proof: EquivocationProof<T::Header>,
 		key_owner_proof: T::KeyOwnerProof,
-	) -> DispatchResult {
+	) -> Result<(), DispatchError> {
 		let reporter = reporter.or_else(|| <pallet_authorship::Pallet<T>>::author());
-
 		let offender = equivocation_proof.offender.clone();
 		let slot = equivocation_proof.slot;
 
@@ -139,8 +138,6 @@ where
 
 		let epoch_index =
 			*slot.saturating_sub(crate::GenesisSlot::<T>::get()) / T::EpochDuration::get();
-
-		// TODO DAVXY: CAN ALL THESE VALIDITY CHECK BE PERFORMED ONLY BY CHECK-EVIDENCE???
 
 		// Check that the slot number is consistent with the session index
 		// in the key ownership proof (i.e. slot is for that epoch)
@@ -163,15 +160,15 @@ where
 	fn check_evidence(
 		equivocation_proof: &EquivocationProof<T::Header>,
 		key_owner_proof: &T::KeyOwnerProof,
-	) -> DispatchResult {
+	) -> Result<(), TransactionValidityError> {
 		// Check the membership proof to extract the offender's id
 		let key = (sp_consensus_babe::KEY_TYPE, equivocation_proof.offender.clone());
-		let offender = P::check_proof(key, key_owner_proof.clone())
-			.ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
+		let offender =
+			P::check_proof(key, key_owner_proof.clone()).ok_or(InvalidTransaction::BadProof)?;
 
 		// Check if the offence has already been reported, and if so then we can discard the report.
 		if R::is_known_offence(&[offender], &equivocation_proof.slot) {
-			Err(Error::<T>::DuplicateOffenceReport.into())
+			Err(InvalidTransaction::Stale.into())
 		} else {
 			Ok(())
 		}
@@ -217,9 +214,7 @@ impl<T: Config> Pallet<T> {
 			}
 
 			// Check report validity
-			// TODO DAVXY: propagate check error
-			T::EquivocationReportSystem::check_evidence(equivocation_proof, key_owner_proof)
-				.map_err(|_| InvalidTransaction::Stale)?;
+			T::EquivocationReportSystem::check_evidence(equivocation_proof, key_owner_proof)?;
 
 			let longevity =
 				<T::EquivocationReportSystem as OffenceReportSystem<_, _, _>>::Longevity::get();
@@ -240,9 +235,7 @@ impl<T: Config> Pallet<T> {
 
 	pub fn pre_dispatch(call: &Call<T>) -> Result<(), TransactionValidityError> {
 		if let Call::report_equivocation_unsigned { equivocation_proof, key_owner_proof } = call {
-			// TODO DAVXY: propagate error
 			T::EquivocationReportSystem::check_evidence(equivocation_proof, key_owner_proof)
-				.map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Stale))
 		} else {
 			Err(InvalidTransaction::Call.into())
 		}

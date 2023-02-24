@@ -45,7 +45,7 @@ use sp_runtime::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		TransactionValidityError, ValidTransaction,
 	},
-	DispatchResult, KeyTypeId, Perbill,
+	DispatchError, KeyTypeId, Perbill,
 };
 use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_staking::{
@@ -116,7 +116,7 @@ pub struct EquivocationReportSystem<T, R, P, L>(sp_std::marker::PhantomData<(T, 
 // `offchain::SendTransactionTypes` for unsigned extrinsic creation and
 // submission.
 impl<T, R, P, L>
-	OffenceReportSystem<T::AccountId, T::KeyOwnerProof, EquivocationProof<T::Hash, T::BlockNumber>>
+	OffenceReportSystem<T::AccountId, EquivocationProof<T::Hash, T::BlockNumber>, T::KeyOwnerProof>
 	for EquivocationReportSystem<T, R, P, L>
 where
 	T: Config + pallet_authorship::Config + frame_system::offchain::SendTransactionTypes<Call<T>>,
@@ -135,7 +135,7 @@ where
 		reporter: Option<T::AccountId>,
 		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 		key_owner_proof: T::KeyOwnerProof,
-	) -> DispatchResult {
+	) -> Result<(), DispatchError> {
 		let reporter = reporter.or_else(|| <pallet_authorship::Pallet<T>>::author());
 
 		// We check the equivocation within the context of its set id (and
@@ -196,11 +196,11 @@ where
 	fn check_evidence(
 		equivocation_proof: &EquivocationProof<T::Hash, T::BlockNumber>,
 		key_owner_proof: &T::KeyOwnerProof,
-	) -> DispatchResult {
+	) -> Result<(), TransactionValidityError> {
 		// Check the membership proof to extract the offender's id
 		let key = (sp_finality_grandpa::KEY_TYPE, equivocation_proof.offender().clone());
-		let offender = P::check_proof(key, key_owner_proof.clone())
-			.ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
+		let offender =
+			P::check_proof(key, key_owner_proof.clone()).ok_or(InvalidTransaction::BadProof)?;
 
 		// Check if the offence has already been reported, and if so then we can discard the report.
 		let time_slot = GrandpaTimeSlot {
@@ -208,7 +208,7 @@ where
 			round: equivocation_proof.round(),
 		};
 		if R::is_known_offence(&[offender], &time_slot) {
-			Err(Error::<T>::DuplicateOffenceReport.into())
+			Err(InvalidTransaction::Stale.into())
 		} else {
 			Ok(())
 		}
@@ -254,9 +254,7 @@ impl<T: Config> Pallet<T> {
 			}
 
 			// Check report validity
-			// TODO DAVXY: propagate error
-			T::EquivocationReportSystem::check_evidence(equivocation_proof, key_owner_proof)
-				.map_err(|_| InvalidTransaction::Stale)?;
+			T::EquivocationReportSystem::check_evidence(equivocation_proof, key_owner_proof)?;
 
 			let longevity =
 				<T::EquivocationReportSystem as OffenceReportSystem<_, _, _>>::Longevity::get();
@@ -281,9 +279,7 @@ impl<T: Config> Pallet<T> {
 
 	pub fn pre_dispatch(call: &Call<T>) -> Result<(), TransactionValidityError> {
 		if let Call::report_equivocation_unsigned { equivocation_proof, key_owner_proof } = call {
-			// TODO DAVXY: propagate error
 			T::EquivocationReportSystem::check_evidence(equivocation_proof, key_owner_proof)
-				.map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Stale))
 		} else {
 			Err(InvalidTransaction::Call.into())
 		}
