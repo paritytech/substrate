@@ -26,11 +26,7 @@ use std::ops::Range;
 /// Returns None if the end of the range would exceed some maximum offset.
 pub fn checked_range(offset: usize, len: usize, max: usize) -> Option<Range<usize>> {
 	let end = offset.checked_add(len)?;
-	if end <= max {
-		Some(offset..end)
-	} else {
-		None
-	}
+	(end <= max).then(|| offset..end)
 }
 
 /// Provides safe memory access interface using an external buffer

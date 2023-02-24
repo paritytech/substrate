@@ -52,7 +52,7 @@ use sp_api::CallApiAt;
 use sp_blockchain::{
 	Backend as BlockChainBackend, Error as BlockChainError, HeaderBackend, HeaderMetadata,
 };
-use sp_core::{hexdisplay::HexDisplay, storage::well_known_keys, Bytes};
+use sp_core::{hexdisplay::HexDisplay, storage::well_known_keys, traits::CallContext, Bytes};
 use sp_runtime::traits::{Block as BlockT, Header};
 use std::{marker::PhantomData, sync::Arc};
 
@@ -736,6 +736,7 @@ where
 					&function,
 					&call_parameters,
 					client.execution_extensions().strategies().other,
+					CallContext::Offchain,
 				)
 				.map(|result| {
 					let result = format!("0x{:?}", HexDisplay::from(&result));
