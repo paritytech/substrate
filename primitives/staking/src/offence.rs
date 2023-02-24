@@ -210,32 +210,30 @@ pub struct OffenceDetails<Reporter, Offender> {
 	pub reporters: Vec<Reporter>,
 }
 
-/// A system to construct, report and submit offences.
+/// An abstract system capable of publish, check and consume offence evidences.
 ///
-/// Implementors of this trait provide a wrapper for some low level operations
-/// which mechanics are left open to the implementation. That is, implementation
-/// details are opaque at this level.
+/// Implementation details are left opaque at this level and we don't assume
+/// any specific usage scenario for this trait. The main goal for this trait is
+/// to group together some common behaviors required during a typical offence
+/// report flow.
 ///
-/// It is assumed that this offence subsystem if able of checking offender key
-/// ownership proof during evidence report. Key ownership checks are done using
-/// the `key_owner_proof` argument which comes together with the an `offence_proof`.
+/// Even tough this trait doesn't assume too much, a general guideline for a typical
+/// usage scenario:
 ///
-/// At this level we also don't assume the usage context of this trait, but
-/// as a general guideline we provide a typical usage scenario:
+/// 1. An offence is detected and an evidence is submitted onchain via the
+///    [`publish_evidence`] method. This will construct and submit an extrinsic
+///    transaction containing the offence evidence information.
 ///
-/// 1. An equivocation offence is detected by a participant.
-///    Offence evidence is submitted onchain via the [`publish_evidence`] method.
-///    This will construct and submit an extrinsic transaction containing the offence
-///    information.
-///
-/// 2. If the extrinsic was unsigned then receivers of the transaction may want to
-///    perform a preliminary sanity check before further processing. This is a good
+/// 2. If the extrinsic was unsigned the transaction receivers may want to perform
+///    some preliminary sanity check before further processing. This is a good
 ///    place to call the [`check_evidence`] method.
 ///
-/// 3. Finally the extrinsic is executed on-chain. At this point the user calls
-///    the [`consume_evidence`] to digest the offence report and enact the required actions.
-pub trait OffenceReportSystem<Reporter, OffenceProof, KeyOwnerProof> {
-	/// Longevity, in blocks, for the report validity.
+/// 3. Finally the extrinsic is executed on-chain. At this point the user may wish
+///    to call [`consume_evidence`] to digest the offence report and enact the
+///    required actions.
+pub trait OffenceReportSystem<Reporter, Evidence> {
+	/// Longevity, in blocks, for the evidence report validity.
+	///
 	/// For example, when using the staking pallet this should be set equal
 	/// to the bonding durationin blocks, not eras).
 	type Longevity: Get<u64>;
@@ -243,30 +241,20 @@ pub trait OffenceReportSystem<Reporter, OffenceProof, KeyOwnerProof> {
 	/// Publish an offence evidence.
 	///
 	/// Common usage: submit the evidence on-chain via some kind of extrinsic.
-	fn publish_evidence(
-		offence_proof: OffenceProof,
-		key_owner_proof: KeyOwnerProof,
-	) -> Result<(), ()>;
+	fn publish_evidence(evidence: Evidence) -> Result<(), ()>;
 
 	/// Check an offence evidence.
 	///
 	/// Common usage: preliminary validity check before execution
 	/// (e.g. for unsigned extrinsic quick checks).
-	fn check_evidence(
-		offence_proof: &OffenceProof,
-		key_owner_proof: &KeyOwnerProof,
-	) -> Result<(), TransactionValidityError>;
+	fn check_evidence(evidence: Evidence) -> Result<(), TransactionValidityError>;
 
 	/// Report an offence evidence.
 	///
-	/// Typical usage: enact some form of slashing directly or by forwarding
+	/// Common usage: enact some form of slashing directly or by forwarding
 	/// the evidence to a lower level specialized subsystem (e.g. a handler
 	/// implementing `ReportOffence` trait).
-	fn consume_evidence(
-		reporter: Option<Reporter>,
-		offence_proof: OffenceProof,
-		key_owner_proof: KeyOwnerProof,
-	) -> Result<(), DispatchError>;
+	fn consume_evidence(reporter: Reporter, evidence: Evidence) -> Result<(), DispatchError>;
 }
 
 /// Dummy offence report system.
@@ -277,28 +265,18 @@ pub trait OffenceReportSystem<Reporter, OffenceProof, KeyOwnerProof> {
 ///
 /// Nevertheless, because of the generic [`Reporter`] and [`OffenceProof`] this dummy
 /// system can be used in any place requiring the association with an `OffenceReportSystem`.
-impl<Reporter, OffenceProof> OffenceReportSystem<Reporter, OffenceProof, sp_core::Void> for () {
+impl<Reporter, Evidence> OffenceReportSystem<Reporter, Evidence> for () {
 	type Longevity = ();
 
-	fn publish_evidence(
-		_offence_proof: OffenceProof,
-		_key_owner_proof: sp_core::Void,
-	) -> Result<(), ()> {
+	fn publish_evidence(_evidence: Evidence) -> Result<(), ()> {
 		Ok(())
 	}
 
-	fn check_evidence(
-		_offence_proof: &OffenceProof,
-		_key_owner_proof: &sp_core::Void,
-	) -> Result<(), TransactionValidityError> {
+	fn check_evidence(_evidence: Evidence) -> Result<(), TransactionValidityError> {
 		Ok(())
 	}
 
-	fn consume_evidence(
-		_reporter: Option<Reporter>,
-		_offence_proof: OffenceProof,
-		_key_owner_proof: sp_core::Void,
-	) -> Result<(), DispatchError> {
+	fn consume_evidence(_reporter: Reporter, _evidence: Evidence) -> Result<(), DispatchError> {
 		Ok(())
 	}
 }

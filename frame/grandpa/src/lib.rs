@@ -113,9 +113,8 @@ pub mod pallet {
 		/// offence and for submitting a transaction to report an equivocation
 		/// (from an offchain context).
 		type EquivocationReportSystem: OffenceReportSystem<
-			Self::AccountId,
-			EquivocationProof<Self::Hash, Self::BlockNumber>,
-			Self::KeyOwnerProof,
+			Option<Self::AccountId>,
+			(EquivocationProof<Self::Hash, Self::BlockNumber>, Self::KeyOwnerProof),
 		>;
 	}
 
@@ -200,8 +199,7 @@ pub mod pallet {
 
 			T::EquivocationReportSystem::consume_evidence(
 				Some(reporter),
-				*equivocation_proof,
-				key_owner_proof,
+				(*equivocation_proof, key_owner_proof),
 			)?;
 			// Waive the fee since the report is valid and beneficial
 			Ok(Pays::No.into())
@@ -227,8 +225,7 @@ pub mod pallet {
 
 			T::EquivocationReportSystem::consume_evidence(
 				None,
-				*equivocation_proof,
-				key_owner_proof,
+				(*equivocation_proof, key_owner_proof),
 			)?;
 			Ok(Pays::No.into())
 		}
@@ -534,7 +531,7 @@ impl<T: Config> Pallet<T> {
 		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 		key_owner_proof: T::KeyOwnerProof,
 	) -> Option<()> {
-		T::EquivocationReportSystem::publish_evidence(equivocation_proof, key_owner_proof).ok()
+		T::EquivocationReportSystem::publish_evidence((equivocation_proof, key_owner_proof)).ok()
 	}
 
 	fn on_stalled(further_wait: T::BlockNumber, median: T::BlockNumber) {

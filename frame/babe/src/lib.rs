@@ -162,9 +162,8 @@ pub mod pallet {
 		/// offence and for submitting a transaction to report an equivocation
 		/// (from an offchain context).
 		type EquivocationReportSystem: OffenceReportSystem<
-			Self::AccountId,
-			EquivocationProof<Self::Header>,
-			Self::KeyOwnerProof,
+			Option<Self::AccountId>,
+			(EquivocationProof<Self::Header>, Self::KeyOwnerProof),
 		>;
 	}
 
@@ -418,8 +417,7 @@ pub mod pallet {
 			let reporter = ensure_signed(origin)?;
 			T::EquivocationReportSystem::consume_evidence(
 				Some(reporter),
-				*equivocation_proof,
-				key_owner_proof,
+				(*equivocation_proof, key_owner_proof),
 			)?;
 			// Waive the fee since the report is valid and beneficial
 			Ok(Pays::No.into())
@@ -445,8 +443,7 @@ pub mod pallet {
 			ensure_none(origin)?;
 			T::EquivocationReportSystem::consume_evidence(
 				None,
-				*equivocation_proof,
-				key_owner_proof,
+				(*equivocation_proof, key_owner_proof),
 			)?;
 			Ok(Pays::No.into())
 		}
@@ -890,7 +887,7 @@ impl<T: Config> Pallet<T> {
 		equivocation_proof: EquivocationProof<T::Header>,
 		key_owner_proof: T::KeyOwnerProof,
 	) -> Option<()> {
-		T::EquivocationReportSystem::publish_evidence(equivocation_proof, key_owner_proof).ok()
+		T::EquivocationReportSystem::publish_evidence((equivocation_proof, key_owner_proof)).ok()
 	}
 }
 
