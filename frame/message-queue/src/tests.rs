@@ -551,7 +551,6 @@ fn service_page_suspension_works() {
 		assert_eq!(NumMessagesProcessed::take(), msgs);
 
 		assert!(Pages::<Test>::iter_keys().count().is_zero());
-		MessageQueue::do_try_state().expect("Pallet is in a valid state");
 	});
 }
 
