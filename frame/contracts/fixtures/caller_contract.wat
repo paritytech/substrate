@@ -16,27 +16,11 @@
 		)
 	)
 
-	(func $current_balance (param $sp i32) (result i64)
-		(i32.store
-			(i32.sub (get_local $sp) (i32.const 16))
-			(i32.const 8)
-		)
-		(call $seal_balance
-			(i32.sub (get_local $sp) (i32.const 8))
-			(i32.sub (get_local $sp) (i32.const 16))
-		)
-		(call $assert
-			(i32.eq (i32.load (i32.sub (get_local $sp) (i32.const 16))) (i32.const 8))
-		)
-		(i64.load (i32.sub (get_local $sp) (i32.const 8)))
-	)
-
 	(func (export "deploy"))
 
 	(func (export "call")
 		(local $sp i32)
 		(local $exit_code i32)
-		(local $balance i64)
 
 		;; Length of the buffer
 		(i32.store (i32.const 20) (i32.const 32))
@@ -54,9 +38,6 @@
 
 		;; Read current balance into local variable.
 		(set_local $sp (i32.const 1024))
-		(set_local $balance
-			(call $current_balance (get_local $sp))
-		)
 
 		;; Fail to deploy the contract since it returns a non-zero exit status.
 		(set_local $exit_code
@@ -82,11 +63,6 @@
 			(i32.eq (get_local $exit_code) (i32.const 2)) ;; ReturnCode::CalleeReverted
 		)
 
-		;; Check that balance has not changed.
-		(call $assert
-			(i64.eq (get_local $balance) (call $current_balance (get_local $sp)))
-		)
-
 		;; Fail to deploy the contract due to insufficient gas.
 		(set_local $exit_code
 			(call $seal_instantiate
@@ -110,11 +86,6 @@
 		;; Check for special trap exit status.
 		(call $assert
 			(i32.eq (get_local $exit_code) (i32.const 1)) ;; ReturnCode::CalleeTrapped
-		)
-
-		;; Check that balance has not changed.
-		(call $assert
-			(i64.eq (get_local $balance) (call $current_balance (get_local $sp)))
 		)
 
 		;; Length of the output buffer
@@ -151,14 +122,6 @@
 		;; Check that address has the expected length
 		(call $assert
 			(i32.eq (i32.load (i32.sub (get_local $sp) (i32.const 4))) (i32.const 32))
-		)
-
-		;; Check that balance has been deducted.
-		(set_local $balance
-			(i64.sub (get_local $balance) (i64.load (i32.const 0)))
-		)
-		(call $assert
-			(i64.eq (get_local $balance) (call $current_balance (get_local $sp)))
 		)
 
 		;; Zero out destination buffer of output
@@ -204,11 +167,6 @@
 			)
 		)
 
-		;; Check that balance has not changed.
-		(call $assert
-			(i64.eq (get_local $balance) (call $current_balance (get_local $sp)))
-		)
-
 		;; Fail to call the contract due to insufficient gas.
 		(set_local $exit_code
 			(call $seal_call
@@ -227,11 +185,6 @@
 		;; Check for special trap exit status.
 		(call $assert
 			(i32.eq (get_local $exit_code) (i32.const 1)) ;; ReturnCode::CalleeTrapped
-		)
-
-		;; Check that balance has not changed.
-		(call $assert
-			(i64.eq (get_local $balance) (call $current_balance (get_local $sp)))
 		)
 
 		;; Zero out destination buffer of output
@@ -275,14 +228,6 @@
 				(i32.load (i32.sub (get_local $sp) (i32.const 4)))
 				(i32.const 0x77665544)
 			)
-		)
-
-		;; Check that balance has been deducted.
-		(set_local $balance
-			(i64.sub (get_local $balance) (i64.load (i32.const 0)))
-		)
-		(call $assert
-			(i64.eq (get_local $balance) (call $current_balance (get_local $sp)))
 		)
 	)
 

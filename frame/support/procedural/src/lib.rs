@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -67,6 +67,12 @@ fn get_cargo_env_var<T: FromStr>(version_env: &str) -> std::result::Result<T, ()
 		.unwrap_or_else(|_| panic!("`{}` is always set by cargo; qed", version_env));
 
 	T::from_str(&version).map_err(drop)
+}
+
+/// Generate the counter_prefix related to the storage.
+/// counter_prefix is used by counted storage map.
+fn counter_prefix(prefix: &str) -> String {
+	format!("CounterFor{}", prefix)
 }
 
 /// Declares strongly-typed wrappers around codec-compatible types in storage.

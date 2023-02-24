@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -679,10 +679,13 @@ fn ensure_signed_stuff_works() {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	{
-		let successful_origin: RuntimeOrigin = EnsureSigned::successful_origin();
+		let successful_origin: RuntimeOrigin = EnsureSigned::try_successful_origin()
+			.expect("EnsureSigned has no successful origin required for the test");
 		assert_ok!(EnsureSigned::try_origin(successful_origin));
 
-		let successful_origin: RuntimeOrigin = EnsureSignedBy::<Members, _>::successful_origin();
+		let successful_origin: RuntimeOrigin =
+			EnsureSignedBy::<Members, _>::try_successful_origin()
+				.expect("EnsureSignedBy has no successful origin required for the test");
 		assert_ok!(EnsureSignedBy::<Members, _>::try_origin(successful_origin));
 	}
 }

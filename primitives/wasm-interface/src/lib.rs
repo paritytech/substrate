@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -41,6 +41,9 @@ macro_rules! if_wasmtime_is_enabled {
 if_wasmtime_is_enabled! {
 	// Reexport wasmtime so that its types are accessible from the procedural macro.
 	pub use wasmtime;
+
+	// Wasmtime uses anyhow types but doesn't reexport them.
+	pub use anyhow;
 }
 
 /// Result type used by traits in this crate.

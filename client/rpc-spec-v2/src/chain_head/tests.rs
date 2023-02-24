@@ -8,7 +8,6 @@ use jsonrpsee::{
 };
 use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::ChildInfo;
-use sp_api::BlockId;
 use sp_blockchain::HeaderBackend;
 use sp_consensus::BlockOrigin;
 use sp_core::{
@@ -639,9 +638,8 @@ async fn follow_generates_initial_blocks() {
 	let block_2_hash = block_2.header.hash();
 	client.import(BlockOrigin::Own, block_2.clone()).await.unwrap();
 
-	let mut block_builder = client
-		.new_block_at(&BlockId::Hash(block_1.header.hash()), Default::default(), false)
-		.unwrap();
+	let mut block_builder =
+		client.new_block_at(block_1.header.hash(), Default::default(), false).unwrap();
 	// This push is required as otherwise block 3 has the same hash as block 2 and won't get
 	// imported
 	block_builder
@@ -921,9 +919,7 @@ async fn follow_prune_best_block() {
 	client.import(BlockOrigin::Own, block_4.clone()).await.unwrap();
 
 	// Import block 2 as best on the fork.
-	let mut block_builder = client
-		.new_block_at(&BlockId::Hash(block_1.header.hash()), Default::default(), false)
-		.unwrap();
+	let mut block_builder = client.new_block_at(block_1_hash, Default::default(), false).unwrap();
 	// This push is required as otherwise block 3 has the same hash as block 2 and won't get
 	// imported
 	block_builder

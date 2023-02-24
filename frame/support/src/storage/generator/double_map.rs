@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -231,6 +231,13 @@ where
 			maybe_cursor,
 		)
 		.into()
+	}
+
+	fn contains_prefix<KArg1>(k1: KArg1) -> bool
+	where
+		KArg1: EncodeLike<K1>,
+	{
+		unhashed::contains_prefixed_key(Self::storage_double_map_final_key1(k1).as_ref())
 	}
 
 	fn iter_prefix_values<KArg1>(k1: KArg1) -> storage::PrefixIterator<V>
