@@ -1265,7 +1265,12 @@ impl<T: Config> RewardPool<T> {
 			self.total_commission_pending.saturating_add(new_pending_commission);
 
 		self.last_recorded_total_payouts = balance
-			.checked_add(&self.total_rewards_claimed.saturating_add(self.total_commission_claimed))
+			.checked_add(
+				&self
+					.total_rewards_claimed
+					.saturating_add(self.total_commission_pending)
+					.saturating_add(self.total_commission_claimed),
+			)
 			.ok_or(Error::<T>::OverflowRisk)?;
 		Ok(())
 	}
