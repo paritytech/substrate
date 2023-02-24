@@ -935,7 +935,10 @@ mod execution {
 			TrieBackendBuilder::wrap(trie_backend).with_recorder(recorder.clone()).build();
 		let mut count = 0;
 		let iter = proving_backend
-			.keys(IterArgs {
+			// NOTE: Even though the loop below doesn't use these values
+			//       this *must* fetch both the keys and the values so that
+			//       the proof is correct.
+			.pairs(IterArgs {
 				child_info: child_info.cloned(),
 				prefix,
 				start_at,
@@ -1302,9 +1305,13 @@ mod tests {
 		storage::{ChildInfo, StateVersion},
 		testing::TaskExecutor,
 		traits::{CodeExecutor, Externalities, RuntimeCode},
+		H256,
 	};
 	use sp_runtime::traits::BlakeTwo256;
-	use sp_trie::trie_types::{TrieDBMutBuilderV0, TrieDBMutBuilderV1};
+	use sp_trie::{
+		trie_types::{TrieDBMutBuilderV0, TrieDBMutBuilderV1},
+		KeySpacedDBMut, PrefixedMemoryDB,
+	};
 	use std::collections::{BTreeMap, HashMap};
 
 	#[derive(Clone)]
@@ -1964,6 +1971,32 @@ mod tests {
 				.unwrap();
 		assert_eq!(results.len() as u32, count);
 		assert_eq!(completed, true);
+	}
+
+	#[test]
+	fn prove_read_with_size_limit_proof_size() {
+		let mut root = H256::default();
+		let mut mdb = PrefixedMemoryDB::<BlakeTwo256>::default();
+		{
+			let mut mdb = KeySpacedDBMut::new(&mut mdb, b"");
+			let mut trie = TrieDBMutBuilderV1::new(&mut mdb, &mut root).build();
+			trie.insert(b"value1", &[123; 1]).unwrap();
+			trie.insert(b"value2", &[123; 10]).unwrap();
+			trie.insert(b"value3", &[123; 100]).unwrap();
+			trie.insert(b"value4", &[123; 1000]).unwrap();
+		}
+
+		let remote_backend: TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> =
+			TrieBackendBuilder::new(mdb, root)
+				.with_optional_cache(None)
+				.with_optional_recorder(None)
+				.build();
+
+		let (proof, count) =
+			prove_range_read_with_size(remote_backend, None, None, 1000, None).unwrap();
+
+		assert_eq!(proof.encoded_size(), 1267);
+		assert_eq!(count, 3);
 	}
 
 	#[test]
