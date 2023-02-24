@@ -79,10 +79,10 @@ pub mod inherent;
 pub mod error;
 pub mod crypto;
 pub mod instances;
+pub mod metadata_ir;
 pub mod migrations;
 pub mod traits;
 pub mod weights;
-
 #[doc(hidden)]
 pub mod unsigned {
 	#[doc(hidden)]
