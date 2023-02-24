@@ -327,7 +327,7 @@ frame_benchmarking::benchmarks! {
 		);
 		assert_eq!(
 			CurrencyOf::<T>::free_balance(&reward_account),
-			ed + commission * origin_weight 
+			ed + commission * origin_weight
 		);
 	}
 
