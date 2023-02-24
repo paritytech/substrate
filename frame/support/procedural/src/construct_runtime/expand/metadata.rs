@@ -88,7 +88,7 @@ pub fn expand_runtime_metadata(
 								>::SignedExtensions as #scrate::sp_runtime::traits::SignedExtension
 							>::metadata()
 								.into_iter()
-								.map(|meta| #scrate::metadata_ir::SignedExtensionMetadata {
+								.map(|meta| #scrate::metadata_ir::SignedExtensionMetadataIR {
 									identifier: meta.identifier,
 									ty: meta.ty,
 									additional_signed: meta.additional_signed,
@@ -107,7 +107,9 @@ pub fn expand_runtime_metadata(
 			}
 
 			pub fn metadata_at_version(version: u32) -> Option<#scrate::OpaqueMetadata> {
-				#scrate::metadata_ir::api::to_version(#runtime::metadata_ir(), version).map(#scrate::OpaqueMetadata::new)
+				#scrate::metadata_ir::api::to_version(#runtime::metadata_ir(), version).map(|prefixed| {
+					#scrate::OpaqueMetadata::new(prefixed.into())
+				});
 			}
 
 			pub fn metadata_versions() -> #scrate::sp_std::vec::Vec<u32> {
