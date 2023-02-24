@@ -35,10 +35,10 @@ use sc_network_test::{
 };
 use sp_api::{ApiRef, ProvideRuntimeApi};
 use sp_consensus::{BlockOrigin, Error as ConsensusError, SelectChain};
-use sp_core::H256;
 use sp_consensus_grandpa::{
 	AuthorityList, EquivocationProof, GrandpaApi, OpaqueKeyOwnershipProof, GRANDPA_ENGINE_ID,
 };
+use sp_core::H256;
 use sp_keyring::Ed25519Keyring;
 use sp_keystore::{testing::KeyStore as TestKeyStore, SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
