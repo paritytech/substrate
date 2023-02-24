@@ -19,9 +19,9 @@
 
 use super::*;
 use frame_support::traits::tokens::{
-	Expendability::{Expendable, Protected},
+	Preservation::{Expendable, Protect},
 	Precision::BestEffort,
-	Privilege::Force,
+	Fortitude::Force,
 };
 use fungible::Balanced;
 
@@ -171,7 +171,7 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 			]
 		);
 
-		let res = Balances::withdraw(&1, 98, BestEffort, Protected, Force);
+		let res = Balances::withdraw(&1, 98, BestEffort, Protect, Force);
 		assert_eq!(res.unwrap().peek(), 98);
 
 		// no events

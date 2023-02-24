@@ -18,8 +18,8 @@
 //! Implementation of `fungible` traits for Balances pallet.
 use super::*;
 use frame_support::traits::tokens::{
-	Expendability::{self, Undustable, Protected},
-	Privilege,
+	Preservation::{self, Preserve, Protect},
+	Fortitude,
 	Provenance::{self, Minted},
 };
 
@@ -43,20 +43,20 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 	}
 	fn reducible_balance(
 		who: &T::AccountId,
-		keep_alive: Expendability,
-		force: Privilege,
+		keep_alive: Preservation,
+		force: Fortitude,
 	) -> Self::Balance {
 		let a = Self::account(who);
 		let mut untouchable = Zero::zero();
-		if force == Regular {
+		if force == Polite {
 			// Frozen balance applies to total. Anything on hold therefore gets discounted from the
 			// limit given by the freezes.
 			untouchable = a.frozen.saturating_sub(a.reserved);
 		}
 		// If we want to keep our provider ref..
-		if keep_alive == Undustable
+		if keep_alive == Preserve
 			// ..or we don't want the account to die and our provider ref is needed for it to live..
-			|| keep_alive == Protected && !a.free.is_zero() &&
+			|| keep_alive == Protect && !a.free.is_zero() &&
 				frame_system::Pallet::<T>::providers(who) == 1
 			// ..or we don't care about the account dying but our provider ref is required..
 			|| keep_alive == Expendable && !a.free.is_zero() &&
@@ -112,7 +112,7 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 			None => return WithdrawConsequence::BalanceLow,
 		};
 
-		let liquid = Self::reducible_balance(who, Expendable, Regular);
+		let liquid = Self::reducible_balance(who, Expendable, Polite);
 		if amount > liquid {
 			return WithdrawConsequence::Frozen
 		}
@@ -207,7 +207,7 @@ impl<T: Config<I>, I: 'static> fungible::InspectHold<T::AccountId> for Pallet<T,
 	fn total_balance_on_hold(who: &T::AccountId) -> T::Balance {
 		Self::account(who).reserved
 	}
-	fn reducible_total_balance_on_hold(who: &T::AccountId, force: Privilege) -> Self::Balance {
+	fn reducible_total_balance_on_hold(who: &T::AccountId, force: Fortitude) -> Self::Balance {
 		// The total balance must never drop below the freeze requirements if we're not forcing:
 		let a = Self::account(who);
 		let unavailable = if force == Force {

@@ -33,29 +33,38 @@ pub enum Provenance {
 	Extant,
 }
 
+/// The mode under which usage of funds may be restricted.
+#[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
+pub enum Restriction {
+	/// Funds are under the normal conditions.
+	Free,
+	/// Funds are on hold.
+	OnHold,
+}
+
 /// The mode by which we describe whether an operation should keep an account alive.
 #[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
-pub enum Expendability {
+pub enum Preservation {
 	/// We don't care if the account gets killed by this operation.
 	Expendable,
 	/// The account may not be killed, but we don't care if the balance gets dusted.
-	Protected,
+	Protect,
 	/// The account may not be killed and our provider reference must remain (in the context of
 	/// tokens, this means that the account may not be dusted).
-	Undustable,
+	Preserve,
 }
 
-impl From<Expendability> for bool {
-	fn from(k: Expendability) -> bool {
-		matches!(k, Expendability::Expendable)
+impl From<Preservation> for bool {
+	fn from(k: Preservation) -> bool {
+		matches!(k, Preservation::Expendable)
 	}
 }
 
 /// The privilege with which a withdraw operation is conducted.
 #[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
-pub enum Privilege {
+pub enum Fortitude {
 	/// The operation should execute with regular privilege.
-	Regular,
+	Polite,
 	/// The operation should be forced to succeed if possible. This is usually employed for system-
 	/// level security-critical events such as slashing.
 	Force,

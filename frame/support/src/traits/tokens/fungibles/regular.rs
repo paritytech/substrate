@@ -25,9 +25,9 @@ use crate::{
 	traits::{
 		tokens::{
 			misc::{
-				Balance, DepositConsequence, Expendability,
+				Balance, DepositConsequence, Preservation::{self, Expendable},
 				Precision::{self, BestEffort, Exact},
-				Privilege::{self, Force, Regular},
+				Fortitude::{self, Force, Polite},
 				Provenance::{self, Extant},
 				WithdrawConsequence,
 			},
@@ -88,8 +88,8 @@ pub trait Inspect<AccountId>: Sized {
 	fn reducible_balance(
 		asset: Self::AssetId,
 		who: &AccountId,
-		keep_alive: Expendability,
-		force: Privilege,
+		keep_alive: Preservation,
+		force: Fortitude,
 	) -> Self::Balance;
 
 	/// Returns `true` if the `asset` balance of `who` may be increased by `amount`.
@@ -188,8 +188,8 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		who: &AccountId,
 		mut amount: Self::Balance,
 		precision: Precision,
-		keep_alive: Expendability,
-		force: Privilege,
+		keep_alive: Preservation,
+		force: Fortitude,
 	) -> Result<Self::Balance, DispatchError> {
 		let old_balance = Self::balance(asset, who);
 		let free = Self::reducible_balance(asset, who, keep_alive, force);
@@ -273,15 +273,15 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		who: &AccountId,
 		amount: Self::Balance,
 		precision: Precision,
-		force: Privilege,
+		force: Fortitude,
 	) -> Result<Self::Balance, DispatchError> {
-		let actual = Self::reducible_balance(asset, who, Expendability::Expendable, force).min(amount);
+		let actual = Self::reducible_balance(asset, who, Expendable, force).min(amount);
 		ensure!(actual == amount || precision == BestEffort, TokenError::FundsUnavailable);
 		Self::total_issuance(asset)
 			.checked_sub(&actual)
 			.ok_or(ArithmeticError::Overflow)?;
 		let actual =
-			Self::decrease_balance(asset, who, actual, BestEffort, Expendability::Expendable, force)?;
+			Self::decrease_balance(asset, who, actual, BestEffort, Expendable, force)?;
 		Self::set_total_issuance(asset, Self::total_issuance(asset).saturating_sub(actual));
 		Self::done_burn_from(asset, who, actual);
 		Ok(actual)
@@ -302,13 +302,13 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		who: &AccountId,
 		amount: Self::Balance,
 	) -> Result<Self::Balance, DispatchError> {
-		let actual = Self::reducible_balance(asset, who, Expendability::Expendable, Regular).min(amount);
+		let actual = Self::reducible_balance(asset, who, Expendable, Polite).min(amount);
 		ensure!(actual == amount, TokenError::FundsUnavailable);
 		Self::total_issuance(asset)
 			.checked_sub(&actual)
 			.ok_or(ArithmeticError::Overflow)?;
 		let actual =
-			Self::decrease_balance(asset, who, actual, BestEffort, Expendability::Expendable, Regular)?;
+			Self::decrease_balance(asset, who, actual, BestEffort, Expendable, Polite)?;
 		Self::set_total_issuance(asset, Self::total_issuance(asset).saturating_sub(actual));
 		Self::done_shelve(asset, who, actual);
 		Ok(actual)
@@ -344,12 +344,12 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		source: &AccountId,
 		dest: &AccountId,
 		amount: Self::Balance,
-		keep_alive: Expendability,
+		keep_alive: Preservation,
 	) -> Result<Self::Balance, DispatchError> {
 		let _extra = Self::can_withdraw(asset, source, amount)
-			.into_result(keep_alive != Expendability::Expendable)?;
+			.into_result(keep_alive != Expendable)?;
 		Self::can_deposit(asset, dest, amount, Extant).into_result()?;
-		Self::decrease_balance(asset, source, amount, BestEffort, keep_alive, Regular)?;
+		Self::decrease_balance(asset, source, amount, BestEffort, keep_alive, Polite)?;
 		// This should never fail as we checked `can_deposit` earlier. But we do a best-effort
 		// anyway.
 		let _ = Self::increase_balance(asset, dest, amount, BestEffort);
@@ -502,8 +502,8 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		who: &AccountId,
 		value: Self::Balance,
 		precision: Precision,
-		keep_alive: Expendability,
-		force: Privilege,
+		keep_alive: Preservation,
+		force: Fortitude,
 	) -> Result<Credit<AccountId, Self>, DispatchError> {
 		let decrease = Self::decrease_balance(asset, who, value, precision, keep_alive, force)?;
 		Self::done_withdraw(asset, who, decrease);
@@ -542,11 +542,11 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	fn settle(
 		who: &AccountId,
 		debt: Debt<AccountId, Self>,
-		keep_alive: Expendability,
+		keep_alive: Preservation,
 	) -> Result<Credit<AccountId, Self>, Debt<AccountId, Self>> {
 		let amount = debt.peek();
 		let asset = debt.asset();
-		let credit = match Self::withdraw(asset, who, amount, Exact, keep_alive, Regular) {
+		let credit = match Self::withdraw(asset, who, amount, Exact, keep_alive, Polite) {
 			Err(_) => return Err(debt),
 			Ok(d) => d,
 		};

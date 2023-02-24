@@ -21,10 +21,11 @@ use crate::{
 	ensure,
 	traits::tokens::{
 		DepositConsequence::Success,
-		Expendability,
+		Preservation::{self, Protect},
 		Precision::{self, BestEffort, Exact},
-		Privilege::{self, Force},
+		Fortitude::{self, Force},
 		Provenance::Extant,
+		Restriction::{self, Free, OnHold},
 	},
 };
 use scale_info::TypeInfo;
@@ -52,7 +53,7 @@ pub trait Inspect<AccountId>: super::Inspect<AccountId> {
 	/// an inconsistent state with regards any required existential deposit.
 	///
 	/// Always less than `total_balance_on_hold()`.
-	fn reducible_total_balance_on_hold(who: &AccountId, force: Privilege) -> Self::Balance;
+	fn reducible_total_balance_on_hold(who: &AccountId, force: Fortitude) -> Self::Balance;
 
 	/// Amount of funds on hold (for the given reason) of `who`.
 	fn balance_on_hold(reason: &Self::Reason, who: &AccountId) -> Self::Balance;
@@ -89,7 +90,7 @@ pub trait Inspect<AccountId>: super::Inspect<AccountId> {
 	) -> DispatchResult {
 		ensure!(Self::hold_available(reason, who), TokenError::CannotCreateHold);
 		ensure!(
-			amount <= Self::reducible_balance(who, Expendability::Protected, Force),
+			amount <= Self::reducible_balance(who, Protect, Force),
 			TokenError::FundsUnavailable
 		);
 		Ok(())
@@ -199,7 +200,7 @@ pub trait Mutate<AccountId>:
 
 		Self::ensure_can_hold(reason, who, amount)?;
 		// Should be infallible now, but we proceed softly anyway.
-		Self::decrease_balance(who, amount, Exact, Expendability::Protected, Force)?;
+		Self::decrease_balance(who, amount, Exact, Protect, Force)?;
 		Self::increase_balance_on_hold(reason, who, amount, BestEffort)?;
 		Self::done_hold(reason, who, amount);
 		Ok(())
@@ -251,7 +252,7 @@ pub trait Mutate<AccountId>:
 		who: &AccountId,
 		mut amount: Self::Balance,
 		precision: Precision,
-		force: Privilege,
+		force: Fortitude,
 	) -> Result<Self::Balance, DispatchError> {
 		// We must check total-balance requirements if `!force`.
 		let liquid = Self::reducible_total_balance_on_hold(who, force);
@@ -287,8 +288,8 @@ pub trait Mutate<AccountId>:
 		dest: &AccountId,
 		mut amount: Self::Balance,
 		precision: Precision,
-		on_hold: bool,
-		force: Privilege,
+		mode: Restriction,
+		force: Fortitude,
 	) -> Result<Self::Balance, DispatchError> {
 		// We must check total-balance requirements if `!force`.
 		let have = Self::balance_on_hold(reason, source);
@@ -303,10 +304,10 @@ pub trait Mutate<AccountId>:
 		// We want to make sure we can deposit the amount in advance. If we can't then something is
 		// very wrong.
 		ensure!(Self::can_deposit(dest, amount, Extant) == Success, TokenError::CannotCreate);
-		ensure!(!on_hold || Self::hold_available(reason, dest), TokenError::CannotCreateHold);
+		ensure!(mode == Free || Self::hold_available(reason, dest), TokenError::CannotCreateHold);
 
 		let amount = Self::decrease_balance_on_hold(reason, source, amount, precision)?;
-		let actual = if on_hold {
+		let actual = if mode == OnHold {
 			Self::increase_balance_on_hold(reason, dest, amount, precision)?
 		} else {
 			Self::increase_balance(dest, amount, precision)?
@@ -337,12 +338,12 @@ pub trait Mutate<AccountId>:
 		dest: &AccountId,
 		amount: Self::Balance,
 		precision: Precision,
-		keep_alive: Expendability,
-		force: Privilege,
+		expendability: Preservation,
+		force: Fortitude,
 	) -> Result<Self::Balance, DispatchError> {
 		ensure!(Self::hold_available(reason, dest), TokenError::CannotCreateHold);
 		ensure!(Self::can_deposit(dest, amount, Extant) == Success, TokenError::CannotCreate);
-		let actual = Self::decrease_balance(source, amount, precision, keep_alive, force)?;
+		let actual = Self::decrease_balance(source, amount, precision, expendability, force)?;
 		Self::increase_balance_on_hold(reason, dest, actual, precision)?;
 		Self::done_transfer_on_hold(reason, source, dest, actual);
 		Ok(actual)

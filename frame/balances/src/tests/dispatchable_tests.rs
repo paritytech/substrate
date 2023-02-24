@@ -18,7 +18,7 @@
 //! Tests regarding the functionality of the dispatchables/extrinsics.
 
 use super::*;
-use frame_support::traits::tokens::Expendability::Expendable;
+use frame_support::traits::tokens::Preservation::Expendable;
 use fungible::{hold::Mutate as HoldMutate, Inspect, Mutate};
 
 #[test]

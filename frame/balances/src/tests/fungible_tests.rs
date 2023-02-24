@@ -19,9 +19,10 @@
 
 use super::*;
 use frame_support::traits::tokens::{
-	Expendability::Expendable,
+	Preservation::Expendable,
 	Precision::{BestEffort, Exact},
-	Privilege::{Force, Regular},
+	Fortitude::{Force, Polite},
+	Restriction::Free,
 };
 use fungible::{Inspect, InspectFreeze, InspectHold, MutateFreeze, MutateHold, Unbalanced};
 
@@ -74,7 +75,7 @@ fn unbalanced_trait_decrease_balance_simple_works() {
 		assert_ok!(<Balances as fungible::MutateHold<_>>::hold(&TestId::Foo, &1337, 50));
 		assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 50);
 		// and is decreased by 20
-		assert_ok!(Balances::decrease_balance(&1337, 20, Exact, Expendable, Regular));
+		assert_ok!(Balances::decrease_balance(&1337, 20, Exact, Expendable, Polite));
 		assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 30);
 	});
 }
@@ -86,10 +87,10 @@ fn unbalanced_trait_decrease_balance_works_1() {
 		assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 100);
 
 		assert_noop!(
-			Balances::decrease_balance(&1337, 101, Exact, Expendable, Regular),
+			Balances::decrease_balance(&1337, 101, Exact, Expendable, Polite),
 			TokenError::FundsUnavailable
 		);
-		assert_eq!(Balances::decrease_balance(&1337, 100, Exact, Expendable, Regular), Ok(100));
+		assert_eq!(Balances::decrease_balance(&1337, 100, Exact, Expendable, Polite), Ok(100));
 		assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 0);
 	});
 }
@@ -103,10 +104,10 @@ fn unbalanced_trait_decrease_balance_works_2() {
 		assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 40);
 		assert_eq!(Balances::total_balance_on_hold(&1337), 60);
 		assert_noop!(
-			Balances::decrease_balance(&1337, 40, Exact, Expendable, Regular),
+			Balances::decrease_balance(&1337, 40, Exact, Expendable, Polite),
 			Error::<Test>::InsufficientBalance
 		);
-		assert_eq!(Balances::decrease_balance(&1337, 39, Exact, Expendable, Regular), Ok(39));
+		assert_eq!(Balances::decrease_balance(&1337, 39, Exact, Expendable, Polite), Ok(39));
 		assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 1);
 		assert_eq!(Balances::total_balance_on_hold(&1337), 60);
 	});
@@ -118,7 +119,7 @@ fn unbalanced_trait_decrease_balance_at_most_works_1() {
 		assert_ok!(Balances::write_balance(&1337, 100));
 		assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 100);
 
-		assert_eq!(Balances::decrease_balance(&1337, 101, BestEffort, Expendable, Regular), Ok(100));
+		assert_eq!(Balances::decrease_balance(&1337, 101, BestEffort, Expendable, Polite), Ok(100));
 		assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 0);
 	});
 }
@@ -127,7 +128,7 @@ fn unbalanced_trait_decrease_balance_at_most_works_1() {
 fn unbalanced_trait_decrease_balance_at_most_works_2() {
 	ExtBuilder::default().build_and_execute_with(|| {
 		assert_ok!(Balances::write_balance(&1337, 99));
-		assert_eq!(Balances::decrease_balance(&1337, 99, BestEffort, Expendable, Regular), Ok(99));
+		assert_eq!(Balances::decrease_balance(&1337, 99, BestEffort, Expendable, Polite), Ok(99));
 		assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 0);
 	});
 }
@@ -140,12 +141,12 @@ fn unbalanced_trait_decrease_balance_at_most_works_3() {
 		assert_ok!(Balances::hold(&TestId::Foo, &1337, 60));
 		assert_eq!(Balances::free_balance(1337), 40);
 		assert_eq!(Balances::total_balance_on_hold(&1337), 60);
-		assert_eq!(Balances::decrease_balance(&1337, 0, BestEffort, Expendable, Regular), Ok(0));
+		assert_eq!(Balances::decrease_balance(&1337, 0, BestEffort, Expendable, Polite), Ok(0));
 		assert_eq!(Balances::free_balance(1337), 40);
 		assert_eq!(Balances::total_balance_on_hold(&1337), 60);
-		assert_eq!(Balances::decrease_balance(&1337, 10, BestEffort, Expendable, Regular), Ok(10));
+		assert_eq!(Balances::decrease_balance(&1337, 10, BestEffort, Expendable, Polite), Ok(10));
 		assert_eq!(Balances::free_balance(1337), 30);
-		assert_eq!(Balances::decrease_balance(&1337, 200, BestEffort, Expendable, Regular), Ok(29));
+		assert_eq!(Balances::decrease_balance(&1337, 200, BestEffort, Expendable, Polite), Ok(29));
 		assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 1);
 		assert_eq!(Balances::free_balance(1337), 1);
 		assert_eq!(Balances::total_balance_on_hold(&1337), 60);
@@ -196,13 +197,13 @@ fn frozen_hold_balance_cannot_be_moved_without_force() {
 			assert_ok!(Balances::set_freeze(&TestId::Foo, &1, 10));
 			assert_ok!(Balances::hold(&TestId::Foo, &1, 9));
 			assert_eq!(Balances::reducible_total_balance_on_hold(&1, Force), 9);
-			assert_eq!(Balances::reducible_total_balance_on_hold(&1, Regular), 0);
+			assert_eq!(Balances::reducible_total_balance_on_hold(&1, Polite), 0);
 			let e = TokenError::Frozen;
 			assert_noop!(
-				Balances::transfer_on_hold(&TestId::Foo, &1, &2, 1, Exact, false, Regular),
+				Balances::transfer_on_hold(&TestId::Foo, &1, &2, 1, Exact, Free, Polite),
 				e
 			);
-			assert_ok!(Balances::transfer_on_hold(&TestId::Foo, &1, &2, 1, Exact, false, Force));
+			assert_ok!(Balances::transfer_on_hold(&TestId::Foo, &1, &2, 1, Exact, Free, Force));
 		});
 }
 
@@ -215,15 +216,15 @@ fn frozen_hold_balance_best_effort_transfer_works() {
 			assert_ok!(Balances::set_freeze(&TestId::Foo, &1, 5));
 			assert_ok!(Balances::hold(&TestId::Foo, &1, 9));
 			assert_eq!(Balances::reducible_total_balance_on_hold(&1, Force), 9);
-			assert_eq!(Balances::reducible_total_balance_on_hold(&1, Regular), 5);
+			assert_eq!(Balances::reducible_total_balance_on_hold(&1, Polite), 5);
 			assert_ok!(Balances::transfer_on_hold(
 				&TestId::Foo,
 				&1,
 				&2,
 				10,
 				BestEffort,
-				false,
-				Regular
+				Free,
+				Polite
 			));
 			assert_eq!(Balances::total_balance(&1), 5);
 			assert_eq!(Balances::total_balance(&2), 25);

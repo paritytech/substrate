@@ -305,7 +305,7 @@ where
 			return Ok(())
 		}
 		let keep_alive = match existence_requirement {
-			ExistenceRequirement::KeepAlive => Undustable,
+			ExistenceRequirement::KeepAlive => Preserve,
 			ExistenceRequirement::AllowDeath => Expendable,
 		};
 		<Self as fungible::Mutate<_>>::transfer(transactor, dest, value, keep_alive)?;

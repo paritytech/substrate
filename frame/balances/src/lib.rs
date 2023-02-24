@@ -170,8 +170,8 @@ use frame_support::{
 	traits::{
 		tokens::{
 			fungible, BalanceStatus as Status, DepositConsequence,
-			Expendability::{Expendable, Undustable, Protected},
-			Privilege::{self, Force, Regular},
+			Preservation::{Expendable, Preserve, Protect},
+			Fortitude::{self, Force, Polite},
 			WithdrawConsequence,
 		},
 		Currency, Defensive, Get, OnUnbalanced, ReservableCurrency, StoredMap,
@@ -606,7 +606,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let source = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
-			<Self as fungible::Mutate<_>>::transfer(&source, &dest, value, Undustable)?;
+			<Self as fungible::Mutate<_>>::transfer(&source, &dest, value, Preserve)?;
 			Ok(().into())
 		}
 
@@ -635,11 +635,11 @@ pub mod pallet {
 			keep_alive: bool,
 		) -> DispatchResult {
 			let transactor = ensure_signed(origin)?;
-			let keep_alive = if keep_alive { Undustable } else { Expendable };
+			let keep_alive = if keep_alive { Preserve } else { Expendable };
 			let reducible_balance = <Self as fungible::Inspect<_>>::reducible_balance(
 				&transactor,
 				keep_alive,
-				Privilege::Regular,
+				Fortitude::Polite,
 			);
 			let dest = T::Lookup::lookup(dest)?;
 			<Self as fungible::Mutate<_>>::transfer(
@@ -737,7 +737,7 @@ pub mod pallet {
 		/// Get the balance of an account that can be used for transfers, reservations, or any other
 		/// non-locking, non-transaction-fee activity. Will be at most `free_balance`.
 		pub fn usable_balance(who: impl sp_std::borrow::Borrow<T::AccountId>) -> T::Balance {
-			<Self as fungible::Inspect<_>>::reducible_balance(who.borrow(), Expendable, Regular)
+			<Self as fungible::Inspect<_>>::reducible_balance(who.borrow(), Expendable, Polite)
 		}
 
 		/// Get the balance of an account that can be used for paying transaction fees (not tipping,
@@ -747,7 +747,7 @@ pub mod pallet {
 		pub fn usable_balance_for_fees(
 			who: impl sp_std::borrow::Borrow<T::AccountId>,
 		) -> T::Balance {
-			<Self as fungible::Inspect<_>>::reducible_balance(who.borrow(), Protected, Regular)
+			<Self as fungible::Inspect<_>>::reducible_balance(who.borrow(), Protect, Polite)
 		}
 
 		/// Get the reserved balance of an account.

@@ -78,7 +78,7 @@
 
 use frame_support::traits::{
 	fungible::{self, Inspect as FunInspect, Mutate as FunMutate},
-	tokens::{Expendability, Privilege, DepositConsequence, WithdrawConsequence, Provenance},
+	tokens::{Preservation, Fortitude, DepositConsequence, WithdrawConsequence, Provenance},
 };
 pub use pallet::*;
 use sp_arithmetic::{traits::Unsigned, RationalArg};
@@ -131,7 +131,7 @@ impl<T> FunInspect<T> for NoCounterpart<T> {
 	fn total_balance(_: &T) -> u32 {
 		0
 	}
-	fn reducible_balance(_: &T, _: Expendability, _: Privilege) -> u32 {
+	fn reducible_balance(_: &T, _: Preservation, _: Fortitude) -> u32 {
 		0
 	}
 	fn can_deposit(_: &T, _: u32, _: Provenance) -> DepositConsequence {
@@ -168,7 +168,7 @@ pub mod pallet {
 				Balanced as FunBalanced,
 			},
 			nonfungible::{Inspect as NftInspect, Transfer as NftTransfer},
-			tokens::{Expendability::Expendable, Privilege::Regular, Precision::{BestEffort, Exact}},
+			tokens::{Preservation::Expendable, Fortitude::Polite, Precision::{BestEffort, Exact}, Restriction::{Free, OnHold}},
 			Defensive, DefensiveSaturating, OnUnbalanced,
 		},
 		PalletId,
@@ -731,8 +731,8 @@ pub mod pallet {
 						&our_account,
 						on_hold,
 						Exact,
-						false,
-						Regular,
+						Free,
+						Polite,
 					)?;
 					summary.receipts_on_hold.saturating_reduce(on_hold);
 				}
@@ -785,7 +785,7 @@ pub mod pallet {
 			ensure!(summary.thawed <= throttle, Error::<T>::Throttled);
 
 			let cp_amount = T::CounterpartAmount::convert(receipt.proportion);
-			T::Counterpart::burn_from(&who, cp_amount, Exact, Regular)?;
+			T::Counterpart::burn_from(&who, cp_amount, Exact, Polite)?;
 
 			// Multiply the proportion it is by the total issued.
 			let our_account = Self::account_id();
@@ -830,7 +830,7 @@ pub mod pallet {
 			// Unreserve and transfer the funds to the pot.
 			let reason = T::HoldReason::get();
 			let us = Self::account_id();
-			T::Currency::transfer_on_hold(&reason, &who, &us, on_hold, Exact, false, Regular)
+			T::Currency::transfer_on_hold(&reason, &who, &us, on_hold, Exact, Free, Polite)
 				.map_err(|_| Error::<T>::Unfunded)?;
 
 			// Record that we've moved the amount reserved.
@@ -875,13 +875,13 @@ pub mod pallet {
 				&who,
 				T::CounterpartAmount::convert(receipt.proportion),
 				Exact,
-				Regular,
+				Polite,
 			)?;
 
 			// Transfer the funds from the pot to the owner and reserve
 			let reason = T::HoldReason::get();
 			let us = Self::account_id();
-			T::Currency::transfer_and_hold(&reason, &us, &who, amount, Exact, Expendable, Regular)?;
+			T::Currency::transfer_and_hold(&reason, &us, &who, amount, Exact, Expendable, Polite)?;
 
 			// Record that we've moved the amount reserved.
 			summary.receipts_on_hold.saturating_accrue(amount);
@@ -936,7 +936,7 @@ pub mod pallet {
 			let (owner, on_hold) = item.owner.take().ok_or(Error::<T>::AlreadyCommunal)?;
 
 			let reason = T::HoldReason::get();
-			T::Currency::transfer_on_hold(&reason, &owner, dest, on_hold, Exact, true, Regular)?;
+			T::Currency::transfer_on_hold(&reason, &owner, dest, on_hold, Exact, OnHold, Polite)?;
 
 			item.owner = Some((dest.clone(), on_hold));
 			Receipts::<T>::insert(&index, &item);

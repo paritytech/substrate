@@ -26,7 +26,7 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable},
 	storage::{with_transaction, TransactionOutcome},
 	traits::{
-		tokens::{Expendability, Privilege},
+		tokens::{Preservation::Expendable, Fortitude::Polite},
 		Contains, Currency, ExistenceRequirement, OriginTrait, Randomness, Time,
 	},
 	weights::Weight,
@@ -1221,8 +1221,8 @@ where
 			beneficiary,
 			T::Currency::reducible_balance(
 				&frame.account_id,
-				Expendability::Expendable,
-				Privilege::Regular,
+				Expendable,
+				Polite,
 			),
 			ExistenceRequirement::AllowDeath,
 		)?;
