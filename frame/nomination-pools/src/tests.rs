@@ -5469,7 +5469,7 @@ mod commission {
 				.commission
 				.current
 				.as_ref()
-				.map_or(Perbill::zero(), |(c, _)| c.clone())
+				.map_or(Perbill::zero(), |(c, _)| *c)
 				.min(GlobalMaxCommission::<T>::get().unwrap_or(Bounded::max_value()));
 			assert_eq!(current, Perbill::from_percent(25));
 

@@ -714,7 +714,7 @@ impl<T: Config> Commission<T> {
 	fn current(&self) -> Perbill {
 		self.current
 			.as_ref()
-			.map_or(Perbill::zero(), |(c, _)| c.clone())
+			.map_or(Perbill::zero(), |(c, _)| *c)
 			.min(GlobalMaxCommission::<T>::get().unwrap_or(Bounded::max_value()))
 	}
 
