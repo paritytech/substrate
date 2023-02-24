@@ -61,9 +61,7 @@ pub use self::{
 	error::Error,
 };
 
-pub use sc_block_builder::{
-	resolve_state_version_from_wasm, BuildGenesisBlock, GenesisBlockBuilder,
-};
+pub use sc_chain_spec::{construct_genesis_block, resolve_state_version_from_wasm, BuildGenesisBlock, GenesisBlockBuilder};
 
 pub use config::{
 	BasePath, BlocksPruning, Configuration, DatabaseSource, PruningMode, Role, RpcMethods, TaskType,

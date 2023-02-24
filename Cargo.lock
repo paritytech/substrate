@@ -7952,7 +7952,6 @@ version = "0.10.0-dev"
 dependencies = [
  "parity-scale-codec",
  "sc-client-api",
- "sc-executor",
  "sp-api",
  "sp-block-builder",
  "sp-blockchain",
@@ -7969,12 +7968,16 @@ version = "4.0.0-dev"
 dependencies = [
  "memmap2",
  "sc-chain-spec-derive",
+ "sc-client-api",
+ "sc-executor",
  "sc-network-common",
  "sc-telemetry",
  "serde",
  "serde_json",
+ "sp-blockchain",
  "sp-core",
  "sp-runtime",
+ "sp-state-machine",
 ]
 
 [[package]]
@@ -10762,6 +10765,7 @@ dependencies = [
  "futures",
  "parity-scale-codec",
  "sc-block-builder",
+ "sc-chain-spec",
  "sc-client-api",
  "sc-consensus",
  "sp-api",

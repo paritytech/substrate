@@ -52,7 +52,7 @@ mod wasm_substitutes;
 
 pub use self::{
 	call_executor::LocalCallExecutor,
-	client::{resolve_state_version_from_wasm, Client, ClientConfig},
+	client::{Client, ClientConfig},
 };
 
 #[cfg(feature = "test-helpers")]
