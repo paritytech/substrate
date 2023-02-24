@@ -36,6 +36,7 @@ use pallet_nomination_pools::{
 	PoolMembers, PoolRoles, PoolState, RewardPools, SubPoolsStorage,
 };
 use sp_staking::{EraIndex, StakingInterface};
+use sp_runtime::{traits::{Bounded, StaticLookup, Zero}, Perbill};
 // `frame_benchmarking::benchmarks!` macro needs this
 use pallet_nomination_pools::Call;
 
@@ -86,7 +87,7 @@ fn create_pool_account<T: pallet_nomination_pools::Config>(
 	.unwrap();
 
 	if let Some(c) = commission {
-		let pool_id = LastPoolId::<T>::get();
+		let pool_id = pallet_nomination_pools::LastPoolId::<T>::get();
 		Pools::<T>::set_commission(
 			RuntimeOrigin::Signed(pool_creator.clone()).into(),
 			pool_id,
@@ -749,7 +750,7 @@ frame_benchmarking::benchmarks! {
 	set_claim_permission {
 		// Create a pool
 		let min_create_bond = Pools::<T>::depositor_min_bond();
-		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
+		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond, None);
 
 		// Join pool
 		let min_join_bond = MinJoinBond::<T>::get().max(CurrencyOf::<T>::minimum_balance());
