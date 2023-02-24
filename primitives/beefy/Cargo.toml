@@ -23,6 +23,8 @@ sp-mmr-primitives = { version = "4.0.0-dev", default-features = false, path = ".
 sp-runtime = { version = "7.0.0", default-features = false, path = "../runtime" }
 sp-std = { version = "5.0.0", default-features = false, path = "../std" }
 bls-like = {git = "https://github.com/w3f/bls", branch = "skalman-hash-to-curve-wb", default-features = false}
+apk-proofs = {git = "https://github.com/w3f/apk-proofs", branch = "skalman-commitment-serialization", default-features = false}
+ark-serialize = { version = "0.4.0", default-features = false, features = [ "derive" ] }
 
 [dev-dependencies]
 array-bytes = "4.1"

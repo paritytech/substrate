@@ -27,12 +27,87 @@
 //! or are completely standalone, but heavily inspired by Polkadot.
 
 use crate::{ecdsa_crypto::AuthorityId, ConsensusLog, MmrRootHash, Vec, BEEFY_ENGINE_ID};
-use codec::{Decode, Encode, MaxEncodedLen};
-use scale_info::TypeInfo;
+use codec::{Decode, Encode, Error as CodecError, Input, MaxEncodedLen, Output};
+use scale_info::{build::Fields, Path, Type, TypeInfo};
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
 	traits::{Block, Header},
 };
+
+use apk_proofs::KeysetCommitment;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+#[cfg(feature = "std")]
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+
+/// Wrapper around keyset commitment to provide scale codec for the commitment
+//#[cfg_attr(feature = "std", derive(Deserialize))]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct AuthoritySetCommitment(pub KeysetCommitment);
+
+impl Encode for AuthoritySetCommitment {
+	fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
+		let mut serialized_representation: Vec<u8> = Vec::new();
+		self.0.serialize_compressed(&mut serialized_representation[..]).unwrap();
+		<Vec<u8> as Encode>::encode_to(&serialized_representation, dest);
+	}
+}
+
+impl Decode for AuthoritySetCommitment {
+	fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+		let mut descaled_bytes: Vec<u8> = Vec::with_capacity(input.remaining_len()?.unwrap());
+		input.read(descaled_bytes.as_mut_slice())?;
+		match <KeysetCommitment as CanonicalDeserialize>::deserialize_compressed(
+			descaled_bytes.as_slice(),
+		) {
+			Ok(keyset_commitment) => Ok(AuthoritySetCommitment(keyset_commitment)),
+			_ => Err("unable to deserialze compressed commitment".into()),
+		}
+	}
+}
+
+//TODO: This is a place holder as I didn't know if there isn't
+// a better way to derive this
+impl TypeInfo for AuthoritySetCommitment {
+	type Identity = Self;
+
+	fn type_info() -> Type {
+		Type::builder()
+			.path(Path::new("AuthoritySetCommitment", module_path!()))
+			.composite(Fields::unnamed().field(|f| f.ty::<u32>().type_name("u32")))
+	}
+}
+
+impl MaxEncodedLen for AuthoritySetCommitment {
+	fn max_encoded_len() -> usize {
+		//Two G1 points on BW6_761 and a u32
+		return 96 * 2 + 4
+	}
+}
+
+#[cfg(feature = "std")]
+impl Serialize for AuthoritySetCommitment {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		serializer.serialize_bytes(self.encode().as_slice())
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'de> Deserialize<'de> for AuthoritySetCommitment {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		let encoded_auth_set = Vec::<u8>::deserialize(deserializer)?;
+		//         let encoded_auth_set = deserializer.deserialize_bytes(encoded_auth_set)?;
+		match AuthoritySetCommitment::decode(&mut &encoded_auth_set[..]) {
+			Ok(authority_set_commtment) => Ok(authority_set_commtment),
+			_ => Err(de::Error::custom("i32 out of range: {}")),
+		}
+	}
+}
 
 /// A provider for extra data that gets added to the Mmr leaf
 pub trait BeefyDataProvider<ExtraData> {
@@ -121,6 +196,11 @@ pub struct BeefyAuthoritySet<MerkleRoot> {
 	/// validator set. Light Clients using interactive protocol, might verify only subset of
 	/// signatures, hence don't require the full list here (will receive inclusion proofs).
 	pub root: MerkleRoot,
+
+	/// polynomial commitment to the polynomial interpolating AuthorityIds
+	/// This is used by APK proof based light clients to verify the validity
+	/// of aggregated BLS keys using APK proofs.
+	pub keyset_commitment: AuthoritySetCommitment,
 }
 
 /// Details of the next BEEFY authority set.

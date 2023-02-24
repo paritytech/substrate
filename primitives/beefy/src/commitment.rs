@@ -253,10 +253,9 @@ mod tests {
 	use sp_keystore::{testing::KeyStore, SyncCryptoStore, SyncCryptoStorePtr};
 
 	use super::*;
-	use crate::{crypto, known_payloads, KEY_TYPE};
 	use codec::Decode;
 
-	use crate::{bls_crypto::Signature as BLSSignature, ecdsa_crypto, KEY_TYPE};
+	use crate::{bls_crypto::Signature as BLSSignature, ecdsa_crypto, known_payloads, KEY_TYPE};
 	use bls_like::{
 		pop::SignatureAggregatorAssumingPoP, Keypair, SerializableToBytes, Signed,
 		SignedMessage as BLSSignedMessage, BLS377,
