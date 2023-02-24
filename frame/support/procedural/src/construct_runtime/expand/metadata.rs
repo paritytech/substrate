@@ -59,7 +59,7 @@ pub fn expand_runtime_metadata(
 
 			quote! {
 				#attr
-				#scrate::metadata::PalletMetadata {
+				#scrate::metadata_ir::PalletMetadataIR {
 					name: stringify!(#name),
 					index: #index,
 					storage: #storage,
@@ -67,6 +67,8 @@ pub fn expand_runtime_metadata(
 					event: #event,
 					constants: #constants,
 					error: #errors,
+					// No docs collected for now.
+					docs: Default::default(),
 				}
 			}
 		})
@@ -74,10 +76,10 @@ pub fn expand_runtime_metadata(
 
 	quote! {
 		impl #runtime {
-			pub fn metadata() -> #scrate::metadata::RuntimeMetadataPrefixed {
-				#scrate::metadata::RuntimeMetadataLastVersion::new(
-					#scrate::sp_std::vec![ #(#pallets),* ],
-					#scrate::metadata::ExtrinsicMetadata {
+			fn metadata_ir() -> #scrate::metadata_ir::MetadataIR {
+				#scrate::metadata_ir::MetadataIR {
+					pallets: #scrate::sp_std::vec![ #(#pallets),* ],
+					extrinsic: #scrate::metadata_ir::ExtrinsicMetadataIR {
 						ty: #scrate::scale_info::meta_type::<#extrinsic>(),
 						version: <#extrinsic as #scrate::sp_runtime::traits::ExtrinsicMetadata>::VERSION,
 						signed_extensions: <
@@ -86,30 +88,30 @@ pub fn expand_runtime_metadata(
 								>::SignedExtensions as #scrate::sp_runtime::traits::SignedExtension
 							>::metadata()
 								.into_iter()
-								.map(|meta| #scrate::metadata::SignedExtensionMetadata {
+								.map(|meta| #scrate::metadata_ir::SignedExtensionMetadata {
 									identifier: meta.identifier,
 									ty: meta.ty,
 									additional_signed: meta.additional_signed,
 								})
 								.collect(),
 					},
-					#scrate::scale_info::meta_type::<#runtime>()
-				).into()
-			}
-
-			pub fn metadata_at_version(version: u32) -> Option<#scrate::OpaqueMetadata> {
-				match version {
-					#[cfg(feature = "metadata-v14")]
-					14 => Some(#scrate::OpaqueMetadata::new(#runtime::metadata().into())),
-					_ => None,
+					ty: #scrate::scale_info::meta_type::<#runtime>()
 				}
 			}
 
+			pub fn metadata() -> #scrate::metadata::RuntimeMetadataPrefixed {
+				// Note: `metadata-v14` feature active by default until we stabilize v15,
+				// to keep backwards compatibility.
+				let v14: #scrate::metadata::RuntimeMetadataV14 = #runtime::metadata_ir().into();
+				v14.into()
+			}
+
+			pub fn metadata_at_version(version: u32) -> Option<#scrate::OpaqueMetadata> {
+				#scrate::metadata_ir::api::to_version(#runtime::metadata_ir(), version).map(#scrate::OpaqueMetadata::new)
+			}
+
 			pub fn metadata_versions() -> #scrate::sp_std::vec::Vec<u32> {
-				#scrate::sp_std::vec![
-					#[cfg(feature = "metadata-v14")]
-					14,
-				]
+				#scrate::metadata_ir::api::supported_versions()
 			}
 		}
 	}
@@ -172,7 +174,7 @@ fn expand_pallet_metadata_events(
 
 		quote! {
 			Some(
-				#scrate::metadata::PalletEventMetadata {
+				#scrate::metadata_ir::PalletEventMetadataIR {
 					ty: #scrate::scale_info::meta_type::<#pallet_event>()
 				}
 			)

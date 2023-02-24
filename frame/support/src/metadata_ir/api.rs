@@ -39,8 +39,8 @@ pub fn to_version(metadata: MetadataIR, version: u32) -> Option<RuntimeMetadataP
 }
 
 /// Returns the supported versions of metadata.
-pub fn supported_versions() -> Vec<u32> {
-	vec![
+pub fn supported_versions() -> sp_std::vec::Vec<u32> {
+	sp_std::vec![
 		#[cfg(feature = "metadata-v14")]
 		V14,
 	]

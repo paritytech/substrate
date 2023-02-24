@@ -19,7 +19,7 @@
 //! StoragePrefixedDoubleMap traits and their methods directly.
 
 use crate::{
-	metadata::{StorageEntryMetadata, StorageEntryType},
+	metadata_ir::{StorageEntryMetadataIR, StorageEntryTypeIR},
 	storage::{
 		types::{
 			EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, OptionQuery, QueryKindTrait,
@@ -550,13 +550,13 @@ where
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
 {
-	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>) {
+	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadataIR>) {
 		let docs = if cfg!(feature = "no-metadata-docs") { vec![] } else { docs };
 
-		let entry = StorageEntryMetadata {
+		let entry = StorageEntryMetadataIR {
 			name: Prefix::STORAGE_PREFIX,
 			modifier: QueryKind::METADATA,
-			ty: StorageEntryType::Map {
+			ty: StorageEntryTypeIR::Map {
 				key: scale_info::meta_type::<Key::Key>(),
 				hashers: Key::HASHER_METADATA.to_vec(),
 				value: scale_info::meta_type::<Value>(),
@@ -620,7 +620,7 @@ mod test {
 	use super::*;
 	use crate::{
 		hash::{StorageHasher as _, *},
-		metadata::{StorageEntryModifier, StorageHasher},
+		metadata_ir::{StorageEntryModifierIR, StorageHasherIR},
 		storage::types::{Key as NMapKey, ValueQuery},
 	};
 	use sp_io::{hashing::twox_128, TestExternalities};
@@ -791,22 +791,22 @@ mod test {
 			assert_eq!(
 				entries,
 				vec![
-					StorageEntryMetadata {
+					StorageEntryMetadataIR {
 						name: "Foo",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Map {
-							hashers: vec![StorageHasher::Blake2_128Concat],
+						modifier: StorageEntryModifierIR::Optional,
+						ty: StorageEntryTypeIR::Map {
+							hashers: vec![StorageHasherIR::Blake2_128Concat],
 							key: scale_info::meta_type::<u16>(),
 							value: scale_info::meta_type::<u32>(),
 						},
 						default: Option::<u32>::None.encode(),
 						docs: vec![],
 					},
-					StorageEntryMetadata {
+					StorageEntryMetadataIR {
 						name: "Foo",
-						modifier: StorageEntryModifier::Default,
-						ty: StorageEntryType::Map {
-							hashers: vec![StorageHasher::Blake2_128Concat],
+						modifier: StorageEntryModifierIR::Default,
+						ty: StorageEntryTypeIR::Map {
+							hashers: vec![StorageHasherIR::Blake2_128Concat],
 							key: scale_info::meta_type::<u16>(),
 							value: scale_info::meta_type::<u32>(),
 						},
@@ -991,13 +991,13 @@ mod test {
 			assert_eq!(
 				entries,
 				vec![
-					StorageEntryMetadata {
+					StorageEntryMetadataIR {
 						name: "Foo",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Map {
+						modifier: StorageEntryModifierIR::Optional,
+						ty: StorageEntryTypeIR::Map {
 							hashers: vec![
-								StorageHasher::Blake2_128Concat,
-								StorageHasher::Twox64Concat
+								StorageHasherIR::Blake2_128Concat,
+								StorageHasherIR::Twox64Concat
 							],
 							key: scale_info::meta_type::<(u16, u8)>(),
 							value: scale_info::meta_type::<u32>(),
@@ -1005,13 +1005,13 @@ mod test {
 						default: Option::<u32>::None.encode(),
 						docs: vec![],
 					},
-					StorageEntryMetadata {
+					StorageEntryMetadataIR {
 						name: "Foo",
-						modifier: StorageEntryModifier::Default,
-						ty: StorageEntryType::Map {
+						modifier: StorageEntryModifierIR::Default,
+						ty: StorageEntryTypeIR::Map {
 							hashers: vec![
-								StorageHasher::Blake2_128Concat,
-								StorageHasher::Twox64Concat
+								StorageHasherIR::Blake2_128Concat,
+								StorageHasherIR::Twox64Concat
 							],
 							key: scale_info::meta_type::<(u16, u8)>(),
 							value: scale_info::meta_type::<u32>(),
@@ -1232,14 +1232,14 @@ mod test {
 			assert_eq!(
 				entries,
 				vec![
-					StorageEntryMetadata {
+					StorageEntryMetadataIR {
 						name: "Foo",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Map {
+						modifier: StorageEntryModifierIR::Optional,
+						ty: StorageEntryTypeIR::Map {
 							hashers: vec![
-								StorageHasher::Blake2_128Concat,
-								StorageHasher::Blake2_128Concat,
-								StorageHasher::Twox64Concat
+								StorageHasherIR::Blake2_128Concat,
+								StorageHasherIR::Blake2_128Concat,
+								StorageHasherIR::Twox64Concat
 							],
 							key: scale_info::meta_type::<(u16, u16, u16)>(),
 							value: scale_info::meta_type::<u32>(),
@@ -1247,14 +1247,14 @@ mod test {
 						default: Option::<u32>::None.encode(),
 						docs: vec![],
 					},
-					StorageEntryMetadata {
+					StorageEntryMetadataIR {
 						name: "Foo",
-						modifier: StorageEntryModifier::Default,
-						ty: StorageEntryType::Map {
+						modifier: StorageEntryModifierIR::Default,
+						ty: StorageEntryTypeIR::Map {
 							hashers: vec![
-								StorageHasher::Blake2_128Concat,
-								StorageHasher::Blake2_128Concat,
-								StorageHasher::Twox64Concat
+								StorageHasherIR::Blake2_128Concat,
+								StorageHasherIR::Blake2_128Concat,
+								StorageHasherIR::Twox64Concat
 							],
 							key: scale_info::meta_type::<(u16, u16, u16)>(),
 							value: scale_info::meta_type::<u32>(),
