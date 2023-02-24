@@ -210,27 +210,26 @@ pub struct OffenceDetails<Reporter, Offender> {
 	pub reporters: Vec<Reporter>,
 }
 
-/// An abstract system capable of publish, check and process offence evidences.
+/// An abstract system to publish, check and process offence evidences.
 ///
-/// Implementation details are left opaque at this level and we don't assume
-/// any specific usage scenario for this trait. The main goal for this trait is
-/// to group together some common behaviors required during a typical offence
-/// report flow.
+/// Implementation details are left opaque and we don't assume any specific usage
+/// scenario for this trait at this level. The main goal is to group together some
+/// common actions required during a typical offence report flow.
 ///
-/// Even tough this trait doesn't assume too much, a general guideline for a typical
-/// usage scenario:
+/// Even though this trait doesn't assume too much, this is a general guideline
+/// for a typical usage scenario:
 ///
-/// 1. An offence is detected and an evidence is submitted onchain via the
+/// 1. An offence is detected and an evidence is submitted on-chain via the
 ///    [`publish_evidence`] method. This will construct and submit an extrinsic
 ///    transaction containing the offence evidence information.
 ///
-/// 2. If the extrinsic was unsigned the transaction receivers may want to perform
-///    some preliminary sanity check before further processing. This is a good
+/// 2. If the extrinsic is unsigned then the transaction receiver may want to
+///    perform some preliminary checks before further processing. This is a good
 ///    place to call the [`check_evidence`] method.
 ///
-/// 3. Finally the extrinsic is executed on-chain. At this point the user may wish
-///    to call [`process_evidence`] to digest the offence report and enact the
-///    required actions.
+/// 3. Finally the report extrinsic is executed on-chain. This is where the user
+///    calls the [`process_evidence`] to consume the offence report and enact any
+///    required action.
 pub trait OffenceReportSystem<Reporter, Evidence> {
 	/// Longevity, in blocks, for the evidence report validity.
 	///
