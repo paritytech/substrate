@@ -437,7 +437,7 @@ fn service_page_works() {
 				assert_eq!(status, Bailed);
 			}
 		}
-		assert!(!Pages::<Test>::contains_key(Here, 0), "The page got removed");
+		assert_pages(&[]);
 	});
 }
 
@@ -500,6 +500,58 @@ fn service_page_item_bails() {
 			),
 			ItemExecutionStatus::Bailed
 		);
+	});
+}
+
+#[test]
+fn service_page_suspension_works() {
+	use super::integration_test::Test; // Run with larger page size.
+	use MessageOrigin::*;
+	use PageExecutionStatus::*;
+
+	new_test_ext::<Test>().execute_with(|| {
+		let (page, mut msgs) = full_page::<Test>();
+		assert!(msgs >= 10, "pre-condition: need at least 10 msgs per page");
+		let mut book = book_for::<Test>(&page);
+		Pages::<Test>::insert(Here, 0, page);
+
+		// First we process 5 messages from this page.
+		let mut meter = WeightMeter::from_limit(5.into_weight());
+		let (_, status) =
+			crate::Pallet::<Test>::service_page(&Here, &mut book, &mut meter, Weight::MAX);
+
+		assert_eq!(NumMessagesProcessed::take(), 5);
+		assert!(meter.remaining().is_zero());
+		assert_eq!(status, Bailed); // It bailed since weight is missing.
+		msgs -= 5;
+
+		// Then we pause the queue.
+		SuspendedQueues::set(vec![Here]);
+		// Noting happens...
+		for _ in 0..5 {
+			let (_, status) = crate::Pallet::<Test>::service_page(
+				&Here,
+				&mut book,
+				&mut WeightMeter::max_limit(),
+				Weight::MAX,
+			);
+			assert_eq!(status, NoProgress);
+			assert!(NumMessagesProcessed::take().is_zero());
+		}
+
+		// Resume and process all remaining.
+		SuspendedQueues::take();
+		let (_, status) = crate::Pallet::<Test>::service_page(
+			&Here,
+			&mut book,
+			&mut WeightMeter::max_limit(),
+			Weight::MAX,
+		);
+		assert_eq!(status, NoMore);
+		assert_eq!(NumMessagesProcessed::take(), msgs);
+
+		assert!(Pages::<Test>::iter_keys().count().is_zero());
+		MessageQueue::do_try_state().expect("Pallet is in a valid state");
 	});
 }
 

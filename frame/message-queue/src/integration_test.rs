@@ -21,7 +21,10 @@
 #![cfg(test)]
 
 use crate::{
-	mock::{new_test_ext, IntoWeight, MockedWeightInfo, NumMessagesProcessed, SuspendedQueues},
+	mock::{
+		new_test_ext, CountingMessageProcessor, IntoWeight, MockedWeightInfo, NumMessagesProcessed,
+		SuspendedQueues,
+	},
 	mock_helpers::MessageOrigin,
 	*,
 };
@@ -90,7 +93,7 @@ parameter_types! {
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = MockedWeightInfo;
-	type MessageProcessor = mock::CountingMessageProcessor;
+	type MessageProcessor = CountingMessageProcessor;
 	type Size = u32;
 	type QueueChangeHandler = ();
 	type HeapSize = HeapSize;

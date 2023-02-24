@@ -292,7 +292,11 @@ pub fn set_weight(name: &str, w: Weight) {
 
 /// Assert that exactly these pages are present. Assumes `Here` origin.
 pub fn assert_pages(indices: &[u32]) {
-	assert_eq!(Pages::<Test>::iter().count(), indices.len(), "Wrong number of pages in the queue");
+	assert_eq!(
+		Pages::<Test>::iter_keys().count(),
+		indices.len(),
+		"Wrong number of pages in the queue"
+	);
 	for i in indices {
 		assert!(Pages::<Test>::contains_key(MessageOrigin::Here, i));
 	}
