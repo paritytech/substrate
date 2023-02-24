@@ -5074,7 +5074,8 @@ mod reward_counter_precision {
 		let bonded_pool = BondedPools::<T>::get(member.pool_id).unwrap();
 		assert_eq!(member.pool_id, 1);
 		let rc = default_pool_reward_counter();
-		let (pending_after_commission, _) = member.pending_rewards(rc, bonded_pool.commission.current()).ok()?;
+		let (pending_after_commission, _) =
+			member.pending_rewards(rc, bonded_pool.commission.current()).ok()?;
 		Some(pending_after_commission)
 	}
 

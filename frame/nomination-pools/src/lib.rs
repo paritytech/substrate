@@ -499,7 +499,7 @@ impl<T: Config> PoolMember<T> {
 			.defensive_saturating_sub(self.last_recorded_reward_counter))
 		.checked_mul_int(self.active_points())
 		.ok_or(Error::<T>::OverflowRisk)?;
-		
+
 		let pending_after_commission = pending_total.saturating_sub(commission * pending_total);
 		let commission_amount = pending_total.saturating_sub(pending_after_commission);
 		Ok((pending_after_commission, commission_amount))
@@ -3012,11 +3012,7 @@ impl<T: Config> Pallet<T> {
 			if !bonded_pool.points.is_zero() {
 				let commission = bonded_pool.commission.current();
 				let (current_rc, _) = reward_pool
-					.current_reward_counter(
-						d.pool_id,
-						bonded_pool.points,
-						commission,
-					)
+					.current_reward_counter(d.pool_id, bonded_pool.points, commission)
 					.unwrap();
 				let (pending_rewards, _) = d.pending_rewards(current_rc, commission).unwrap();
 				*pools_members_pending_rewards.entry(d.pool_id).or_default() += pending_rewards;
@@ -3112,8 +3108,9 @@ impl<T: Config> Pallet<T> {
 				let (current_reward_counter, _) = reward_pool
 					.current_reward_counter(pool_member.pool_id, bonded_pool.points, commission)
 					.ok()?;
-				let (pending_rewards, _) = pool_member.pending_rewards(current_reward_counter, commission).ok()?;
-				return Some(pending_rewards);
+				let (pending_rewards, _) =
+					pool_member.pending_rewards(current_reward_counter, commission).ok()?;
+				return Some(pending_rewards)
 			}
 		}
 
