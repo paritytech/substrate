@@ -158,12 +158,9 @@ pub mod pallet {
 		/// session at which the equivocation occurred.
 		type KeyOwnerProof: Parameter + GetSessionNumber + GetValidatorCount;
 
-		/// The equivocation handling subsystem, defines methods to report an
-		/// offence (after the equivocation has been validated) and for submitting a
-		/// transaction to report an equivocation (from an offchain context).
-		/// NOTE: when enabling equivocation handling (i.e. this type isn't set to
-		/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
-		/// definition.
+		/// The equivocation handling subsystem, defines methods to check/report an
+		/// offence and for submitting a transaction to report an equivocation
+		/// (from an offchain context).
 		type EquivocationReportSystem: OffenceReportSystem<
 			Self::AccountId,
 			EquivocationProof<Self::Header>,
@@ -419,7 +416,7 @@ pub mod pallet {
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			let reporter = ensure_signed(origin)?;
-			T::EquivocationReportSystem::report_evidence(
+			T::EquivocationReportSystem::consume_evidence(
 				Some(reporter),
 				*equivocation_proof,
 				key_owner_proof,
@@ -446,12 +443,11 @@ pub mod pallet {
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
-			T::EquivocationReportSystem::report_evidence(
+			T::EquivocationReportSystem::consume_evidence(
 				None,
 				*equivocation_proof,
 				key_owner_proof,
 			)?;
-			// Waive the fee since the report is valid and beneficial
 			Ok(Pays::No.into())
 		}
 
@@ -894,7 +890,7 @@ impl<T: Config> Pallet<T> {
 		equivocation_proof: EquivocationProof<T::Header>,
 		key_owner_proof: T::KeyOwnerProof,
 	) -> Option<()> {
-		T::EquivocationReportSystem::submit_evidence(equivocation_proof, key_owner_proof).ok()
+		T::EquivocationReportSystem::publish_evidence(equivocation_proof, key_owner_proof).ok()
 	}
 }
 

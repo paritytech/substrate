@@ -119,7 +119,42 @@ where
 {
 	type Longevity = L;
 
-	fn report_evidence(
+	fn publish_evidence(
+		equivocation_proof: EquivocationProof<T::Header>,
+		key_owner_proof: T::KeyOwnerProof,
+	) -> Result<(), ()> {
+		use frame_system::offchain::SubmitTransaction;
+
+		let call = Call::report_equivocation_unsigned {
+			equivocation_proof: Box::new(equivocation_proof),
+			key_owner_proof,
+		};
+		let res = SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into());
+		match res {
+			Ok(()) => info!(target: LOG_TARGET, "Submitted equivocation report."),
+			Err(e) => error!(target: LOG_TARGET, "Error submitting equivocation report: {:?}", e),
+		}
+		res
+	}
+
+	fn check_evidence(
+		equivocation_proof: &EquivocationProof<T::Header>,
+		key_owner_proof: &T::KeyOwnerProof,
+	) -> Result<(), TransactionValidityError> {
+		// Check the membership proof to extract the offender's id
+		let key = (sp_consensus_babe::KEY_TYPE, equivocation_proof.offender.clone());
+		let offender =
+			P::check_proof(key, key_owner_proof.clone()).ok_or(InvalidTransaction::BadProof)?;
+
+		// Check if the offence has already been reported, and if so then we can discard the report.
+		if R::is_known_offence(&[offender], &equivocation_proof.slot) {
+			Err(InvalidTransaction::Stale.into())
+		} else {
+			Ok(())
+		}
+	}
+
+	fn consume_evidence(
 		reporter: Option<T::AccountId>,
 		equivocation_proof: EquivocationProof<T::Header>,
 		key_owner_proof: T::KeyOwnerProof,
@@ -155,41 +190,6 @@ where
 			.map_err(|_| Error::<T>::DuplicateOffenceReport)?;
 
 		Ok(())
-	}
-
-	fn check_evidence(
-		equivocation_proof: &EquivocationProof<T::Header>,
-		key_owner_proof: &T::KeyOwnerProof,
-	) -> Result<(), TransactionValidityError> {
-		// Check the membership proof to extract the offender's id
-		let key = (sp_consensus_babe::KEY_TYPE, equivocation_proof.offender.clone());
-		let offender =
-			P::check_proof(key, key_owner_proof.clone()).ok_or(InvalidTransaction::BadProof)?;
-
-		// Check if the offence has already been reported, and if so then we can discard the report.
-		if R::is_known_offence(&[offender], &equivocation_proof.slot) {
-			Err(InvalidTransaction::Stale.into())
-		} else {
-			Ok(())
-		}
-	}
-
-	fn submit_evidence(
-		equivocation_proof: EquivocationProof<T::Header>,
-		key_owner_proof: T::KeyOwnerProof,
-	) -> Result<(), ()> {
-		use frame_system::offchain::SubmitTransaction;
-
-		let call = Call::report_equivocation_unsigned {
-			equivocation_proof: Box::new(equivocation_proof),
-			key_owner_proof,
-		};
-		let res = SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into());
-		match res {
-			Ok(()) => info!(target: LOG_TARGET, "Submitted equivocation report."),
-			Err(e) => error!(target: LOG_TARGET, "Error submitting equivocation report: {:?}", e),
-		}
-		res
 	}
 }
 
