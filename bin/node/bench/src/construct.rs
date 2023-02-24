@@ -71,7 +71,7 @@ impl core::BenchmarkDescription for ConstructionBenchmarkDescription {
 		}
 
 		match self.block_type {
-			BlockType::RandomTransfersExpendability => path.push("transfer"),
+			BlockType::RandomTransfersKeepAlive => path.push("transfer"),
 			BlockType::RandomTransfersReaping => path.push("transfer_reaping"),
 			BlockType::Noop => path.push("noop"),
 		}

@@ -95,7 +95,7 @@ fn main() {
 			SizeType::Custom(opt.transactions.unwrap_or(0)),
 		] {
 			for block_type in [
-				BlockType::RandomTransfersExpendability,
+				BlockType::RandomTransfersKeepAlive,
 				BlockType::RandomTransfersReaping,
 				BlockType::Noop,
 			] {
@@ -140,14 +140,14 @@ fn main() {
 		ConstructionBenchmarkDescription {
 			profile: Profile::Wasm,
 			key_types: KeyTypes::Sr25519,
-			block_type: BlockType::RandomTransfersExpendability,
+			block_type: BlockType::RandomTransfersKeepAlive,
 			size: SizeType::Medium,
 			database_type: BenchDataBaseType::RocksDb,
 		},
 		ConstructionBenchmarkDescription {
 			profile: Profile::Wasm,
 			key_types: KeyTypes::Sr25519,
-			block_type: BlockType::RandomTransfersExpendability,
+			block_type: BlockType::RandomTransfersKeepAlive,
 			size: SizeType::Large,
 			database_type: BenchDataBaseType::RocksDb,
 		},
