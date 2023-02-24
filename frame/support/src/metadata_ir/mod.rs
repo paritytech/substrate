@@ -22,4 +22,6 @@ pub use types::*;
 
 pub mod api;
 
+// Conversion modules.
+#[cfg(feature = "metadata-v14")]
 mod v14;

@@ -41,8 +41,6 @@ impl From<MetadataIR> for RuntimeMetadataV14 {
 	}
 }
 
-
-
 impl From<PalletMetadataIR> for PalletMetadata {
 	fn from(ir: PalletMetadataIR) -> Self {
 		PalletMetadata {
