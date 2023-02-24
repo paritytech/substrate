@@ -258,12 +258,7 @@ pub trait OffenceReportSystem<Reporter, Evidence> {
 
 /// Dummy offence report system.
 ///
-/// `KeyOwnerProof` type is coercivelly set as `sp_core::Void`, i.e. a type that
-/// can't be regularly instantiated. The idea is to prevent the creation of offences
-/// targeting this subsystem in the first place and thus preventing any spammy behavior.
-///
-/// Nevertheless, because of the generic [`Reporter`] and [`OffenceProof`] this dummy
-/// system can be used in any place requiring the association with an `OffenceReportSystem`.
+/// Doesn't do anything special and returns `Ok(())` for all the actions.
 impl<Reporter, Evidence> OffenceReportSystem<Reporter, Evidence> for () {
 	type Longevity = ();
 
