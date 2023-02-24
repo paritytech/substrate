@@ -240,19 +240,28 @@ pub trait OffenceReportSystem<Reporter, OffenceProof, KeyOwnerProof> {
 	/// to the bonding durationin blocks, not eras).
 	type Longevity: Get<u64>;
 
-	/// Create and submit an offence report.
+	/// Publish an offence evidence.
+	///
+	/// Common usage: submit the evidence on-chain via some kind of extrinsic.
 	fn publish_evidence(
 		offence_proof: OffenceProof,
 		key_owner_proof: KeyOwnerProof,
 	) -> Result<(), ()>;
 
-	/// Check an offence evidence validity.
+	/// Check an offence evidence.
+	///
+	/// Common usage: preliminary validity check before execution
+	/// (e.g. for unsigned extrinsic quick checks).
 	fn check_evidence(
 		offence_proof: &OffenceProof,
 		key_owner_proof: &KeyOwnerProof,
 	) -> Result<(), TransactionValidityError>;
 
 	/// Report an offence evidence.
+	///
+	/// Typical usage: enact some form of slashing directly or by forwarding
+	/// the evidence to a lower level specialized subsystem (e.g. a handler
+	/// implementing `ReportOffence` trait).
 	fn consume_evidence(
 		reporter: Option<Reporter>,
 		offence_proof: OffenceProof,
@@ -260,11 +269,14 @@ pub trait OffenceReportSystem<Reporter, OffenceProof, KeyOwnerProof> {
 	) -> Result<(), DispatchError>;
 }
 
-// Dummy report system.
-//
-// `KeyOwnerProof` type has been coercivelly set as `sp_core::Void`, that is a
-// type that can't be regularly instantiated. The idea is to prevent the report
-// and submission of evidence in cause of usage of this report system.
+/// Dummy offence report system.
+///
+/// `KeyOwnerProof` type is coercivelly set as `sp_core::Void`, i.e. a type that
+/// can't be regularly instantiated. The idea is to prevent the creation of offences
+/// targeting this subsystem in the first place and thus preventing any spammy behavior.
+///
+/// Nevertheless, because of the generic [`Reporter`] and [`OffenceProof`] this dummy
+/// system can be used in any place requiring the association with an `OffenceReportSystem`.
 impl<Reporter, OffenceProof> OffenceReportSystem<Reporter, OffenceProof, sp_core::Void> for () {
 	type Longevity = ();
 
