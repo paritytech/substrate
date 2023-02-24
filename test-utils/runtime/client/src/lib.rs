@@ -150,7 +150,7 @@ impl GenesisInit for GenesisParameters {
 				storage.top.clone().into_iter().chain(child_roots).collect(),
 				sp_runtime::StateVersion::V1,
 			);
-		let block: runtime::Block = construct_genesis_block(state_root, StateVersion::V0);
+		let block: runtime::Block = construct_genesis_block(state_root, StateVersion::V1);
 		storage.top.extend(additional_storage_with_genesis(&block));
 
 		storage
