@@ -107,7 +107,7 @@ pub fn insert_genesis_block(storage: &mut Storage) -> sp_core::hash::H256 {
 		storage.top.clone().into_iter().collect(),
 		sp_runtime::StateVersion::V1,
 	);
-	let block: crate::Block = construct_genesis_block(state_root, StateVersion::V0);
+	let block: crate::Block = construct_genesis_block(state_root, StateVersion::V1);
 	let genesis_hash = block.header.hash();
 	storage.top.extend(additional_storage_with_genesis(&block));
 	genesis_hash
