@@ -17,10 +17,11 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use clap::Args;
-use nix::{errno::Errno, sys::statvfs::statvfs};
+use fs4::statvfs;
 use sc_client_db::DatabaseSource;
 use sp_core::traits::SpawnEssentialNamed;
 use std::{
+	io,
 	path::{Path, PathBuf},
 	time::Duration,
 };
@@ -31,7 +32,7 @@ const LOG_TARGET: &str = "storage-monitor";
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
 	#[error("IO Error")]
-	IOError(#[from] Errno),
+	IOError(#[from] io::Error),
 	#[error("Out of storage space: available {0}MB, required {1}MB")]
 	StorageOutOfSpace(u64, u64),
 }
@@ -117,12 +118,8 @@ impl StorageMonitorService {
 
 	/// Returns free space in MB, or error if statvfs failed.
 	fn free_space(path: &Path) -> Result<u64, Error> {
-		statvfs(path)
-			.map(|stats| {
-				u64::from(stats.blocks_available()).saturating_mul(u64::from(stats.block_size())) /
-					1_000_000
-			})
-			.map_err(Error::from)
+		let amount = statvfs(path)?;
+		Ok(amount.available_space() / (1024 * 1024))
 	}
 
 	/// Checks if the amount of free space for given `path` is above given `threshold`.
