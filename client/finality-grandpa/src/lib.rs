@@ -75,7 +75,7 @@ use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::AppKey;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult};
 use sp_consensus::SelectChain;
-use sp_core::crypto::ByteArray;
+use sp_core::{crypto::ByteArray, traits::CallContext};
 use sp_finality_grandpa::{
 	AuthorityList, AuthoritySignature, SetId, CLIENT_LOG_TARGET as LOG_TARGET,
 };
@@ -479,6 +479,7 @@ where
 				"GrandpaApi_grandpa_authorities",
 				&[],
 				ExecutionStrategy::NativeElseWasm,
+				CallContext::Offchain,
 			)
 			.and_then(|call_result| {
 				Decode::decode(&mut &call_result[..]).map_err(|err| {
