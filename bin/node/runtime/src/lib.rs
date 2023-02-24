@@ -1537,8 +1537,6 @@ impl pallet_nis::Config for Runtime {
 	type CounterpartAmount = WithMaximumOf<ConstU128<21_000_000_000_000_000_000u128>>;
 	type Deficit = ();
 	type IgnoredIssuance = ();
-	// ^^^ TODO: Make a note in the PR description that this should be replicated in all chains
-	// since we now use active issuance, not total issuance.
 	type Target = Target;
 	type PalletId = NisPalletId;
 	type QueueCount = QueueCount;
