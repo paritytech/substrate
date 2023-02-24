@@ -1242,6 +1242,15 @@ impl<T: Config> RewardPool<T> {
 		self.last_recorded_reward_counter
 	}
 
+	/// The total amount of pool balance that has been∑ accounted for.
+	/// 
+	/// The combined total of claimed rewards and commission counters.
+	pub(crate) fn total_rewards_acounted(&self) -> BalanceOf<T> {
+		self.total_rewards_claimed
+			.saturating_add(self.total_commission_pending)
+			.saturating_add(self.total_commission_claimed)
+	}
+
 	/// Register some rewards that are claimed from the pool by the members.
 	fn register_claimed_reward(&mut self, reward: BalanceOf<T>) {
 		self.total_rewards_claimed = self.total_rewards_claimed.saturating_add(reward);
@@ -1265,12 +1274,7 @@ impl<T: Config> RewardPool<T> {
 			self.total_commission_pending.saturating_add(new_pending_commission);
 
 		self.last_recorded_total_payouts = balance
-			.checked_add(
-				&self
-					.total_rewards_claimed
-					.saturating_add(self.total_commission_pending)
-					.saturating_add(self.total_commission_claimed),
-			)
+			.checked_add(&self.total_rewards_acounted())
 			.ok_or(Error::<T>::OverflowRisk)?;
 		Ok(())
 	}
@@ -1285,9 +1289,7 @@ impl<T: Config> RewardPool<T> {
 	) -> Result<(T::RewardCounter, BalanceOf<T>), Error<T>> {
 		let balance = Self::current_balance(id);
 		let payouts_since_last_record = balance
-			.saturating_add(self.total_rewards_claimed)
-			.saturating_add(self.total_commission_pending)
-			.saturating_add(self.total_commission_claimed)
+			.saturating_add(self.total_rewards_acounted())
 			.saturating_sub(self.last_recorded_total_payouts);
 
 		// Split the `payouts_since_last_record` into regular rewards and commission according to
