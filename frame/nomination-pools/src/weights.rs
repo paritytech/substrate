@@ -68,6 +68,7 @@ pub trait WeightInfo {
 	fn set_commission() -> Weight;
 	fn set_commission_max() -> Weight;
 	fn set_commission_change_rate() -> Weight;
+	fn claim_commission() -> Weight;
 }
 
 /// Weights for pallet_nomination_pools using the Substrate node and recommended hardware.
@@ -551,7 +552,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			Weight::from_ref_time(23_000_000)
 				.saturating_add(T::DbWeight::get().reads(1))
 				.saturating_add(T::DbWeight::get().writes(1))
-		}	
+		}
+		fn claim_commission() -> Weight {
+			Weight::zero()
+		}
 }
 
 // For backwards compatibility and tests
@@ -1034,5 +1038,8 @@ impl WeightInfo for () {
 		Weight::from_ref_time(23_000_000)
 			.saturating_add(RocksDbWeight::get().reads(1))
 			.saturating_add(RocksDbWeight::get().writes(1))
+	}
+	fn claim_commission() -> Weight {
+		Weight::zero()
 	}
 }
