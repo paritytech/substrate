@@ -327,3 +327,6 @@ impl From<MetaType> for PalletErrorMetadataIR {
 		Self { ty }
 	}
 }
+
+#[cfg(feature = "metadata-v14")]
+pub use super::v14::*;

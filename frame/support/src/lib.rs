@@ -1393,7 +1393,10 @@ pub mod tests {
 					name: "GenericData2DM",
 					modifier: StorageEntryModifierIR::Optional,
 					ty: StorageEntryTypeIR::Map {
-						hashers: vec![StorageHasherIR::Blake2_128Concat, StorageHasherIR::Twox64Concat],
+						hashers: vec![
+							StorageHasherIR::Blake2_128Concat,
+							StorageHasherIR::Twox64Concat,
+						],
 						key: scale_info::meta_type::<(u32, u32)>(),
 						value: scale_info::meta_type::<u32>(),
 					},
