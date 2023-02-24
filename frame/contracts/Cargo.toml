@@ -81,6 +81,7 @@ std = [
 	"log/std",
 	"rand/std",
 	"wasmparser/std",
+	"environmental/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",

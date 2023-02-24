@@ -126,7 +126,6 @@ use pallet_contracts_primitives::{
 };
 use scale_info::TypeInfo;
 use smallvec::Array;
-use sp_core::defer;
 use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup};
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
@@ -158,8 +157,8 @@ type DebugBufferVec<T> = BoundedVec<u8, <T as Config>::MaxDebugBufferLen>;
 /// sentinel because contracts are never allowed to use such a large amount of resources
 /// that this value makes sense for a memory location or length.
 const SENTINEL: u32 = u32::MAX;
-
-environmental!(reentrancy_guard: bool);
+// Set up a global reference to the boolean flag used for the re-entrancy guard.
+environmental!(executing_contract: bool);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -876,7 +875,9 @@ pub mod pallet {
 		/// This can be triggered by a call to `seal_terminate`.
 		TerminatedInConstructor,
 		/// A call tried to invoke a contract that is flagged as non-reentrant.
-		/// Or, a call to runtime tried to re-enter a contract.
+		/// The only other cause is that a call from a contract into the runtime tried to call back
+		/// into `pallet-contracts`. This would make the whole pallet reentrant with regard to
+		/// contract code execution which is not supported.
 		ReentranceDenied,
 		/// Origin doesn't have enough balance to pay the required storage deposits.
 		StorageDepositNotEnoughFunds,
@@ -1286,22 +1287,17 @@ impl<T: Config> Pallet<T> {
 		debug_message: Option<&mut DebugBufferVec<T>>,
 	) -> I::Output {
 		let gas_meter = GasMeter::new(input.gas_limit());
-		reentrancy_guard::using_once(&mut false, || {
-			let res = reentrancy_guard::with(|f| {
-				// Check re-entrancy guard
+		executing_contract::using_once(&mut false, || {
+			let res = executing_contract::with(|f| {
+				// Fail if already entered contract execution
 				if *f {
 					return Err(())
 				}
-				// Set re-entracy guard
+				// We are entering contract execution
 				*f = true;
 				Ok(())
 			})
 			.unwrap_or(Ok(()));
-
-			// Remove re-entrancy guard when dropping this scope
-			defer! {
-					reentrancy_guard::with(|f| *f = false);
-			};
 
 			if res.is_err() {
 				let err = ExecError {
