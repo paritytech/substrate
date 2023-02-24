@@ -21,7 +21,7 @@ use codec::FullCodec;
 use frame_support::{
 	traits::{
 		fungibles::{Balanced, Credit, Inspect},
-		tokens::{Balance, BalanceConversion, KeepAlive},
+		tokens::{Balance, BalanceConversion, KeepAlive::NoKill, Privilege::Regular, Precision::Exact},
 	},
 	unsigned::TransactionValidityError,
 };
@@ -130,9 +130,9 @@ where
 			asset_id,
 			who,
 			converted_fee,
-			false,
-			KeepAlive::NoKill,
-			false,
+			Exact,
+			NoKill,
+			Regular,
 		)
 		.map_err(|_| TransactionValidityError::from(InvalidTransaction::Payment))
 	}

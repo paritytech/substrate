@@ -24,6 +24,7 @@ use frame_support::{
 	traits::{
 		fungible::{hold::Inspect as InspectHold, Inspect as FunInspect, Mutate as FunMutate},
 		nonfungible::{Inspect, Transfer},
+		tokens::{Precision::Exact, Privilege::Force},
 	},
 };
 use sp_arithmetic::Perquintill;
@@ -645,9 +646,9 @@ fn thaw_when_issuance_lower_works() {
 		enlarge(100, 1);
 
 		// Everybody else's balances goes down by 25%
-		assert_ok!(Balances::burn_from(&2, 25, false, true));
-		assert_ok!(Balances::burn_from(&3, 25, false, true));
-		assert_ok!(Balances::burn_from(&4, 25, false, true));
+		assert_ok!(Balances::burn_from(&2, 25, Exact, Force));
+		assert_ok!(Balances::burn_from(&3, 25, Exact, Force));
+		assert_ok!(Balances::burn_from(&4, 25, Exact, Force));
 
 		run_to_block(4);
 		assert_ok!(Nis::thaw_private(signed(1), 0, None));

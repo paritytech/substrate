@@ -78,7 +78,7 @@
 
 use frame_support::traits::{
 	fungible::{self, Inspect as FunInspect, Mutate as FunMutate},
-	tokens::KeepAlive,
+	tokens::{KeepAlive, Privilege},
 };
 pub use pallet::*;
 use sp_arithmetic::{traits::Unsigned, RationalArg};
@@ -131,7 +131,7 @@ impl<T> FunInspect<T> for NoCounterpart<T> {
 	fn total_balance(_: &T) -> u32 {
 		0
 	}
-	fn reducible_balance(_: &T, _: KeepAlive, _: bool) -> u32 {
+	fn reducible_balance(_: &T, _: KeepAlive, _: Privilege) -> u32 {
 		0
 	}
 	fn can_deposit(_: &T, _: u32, _: bool) -> frame_support::traits::tokens::DepositConsequence {
@@ -168,7 +168,7 @@ pub mod pallet {
 				Balanced as FunBalanced,
 			},
 			nonfungible::{Inspect as NftInspect, Transfer as NftTransfer},
-			tokens::KeepAlive::CanKill,
+			tokens::{KeepAlive::CanKill, Privilege::Regular, Precision::{BestEffort, Exact}},
 			Defensive, DefensiveSaturating, OnUnbalanced,
 		},
 		PalletId,
@@ -563,7 +563,7 @@ pub mod pallet {
 					let net = if queue_full {
 						sp_std::mem::swap(&mut q[0], &mut bid);
 						let _ =
-							T::Currency::release(&T::HoldReason::get(), &bid.who, bid.amount, true);
+							T::Currency::release(&T::HoldReason::get(), &bid.who, bid.amount, BestEffort);
 						Self::deposit_event(Event::<T>::BidDropped {
 							who: bid.who,
 							amount: bid.amount,
@@ -620,7 +620,7 @@ pub mod pallet {
 			queue.remove(pos);
 			let new_len = queue.len() as u32;
 
-			T::Currency::release(&T::HoldReason::get(), &bid.who, bid.amount, true)?;
+			T::Currency::release(&T::HoldReason::get(), &bid.who, bid.amount, BestEffort)?;
 
 			Queues::<T>::insert(duration, queue);
 			QueueTotals::<T>::mutate(|qs| {
@@ -646,7 +646,7 @@ pub mod pallet {
 			let issuance = Self::issuance_with(&our_account, &summary);
 			let deficit = issuance.required.saturating_sub(issuance.holdings);
 			ensure!(!deficit.is_zero(), Error::<T>::AlreadyFunded);
-			T::Deficit::on_unbalanced(T::Currency::deposit(&our_account, deficit, false)?);
+			T::Deficit::on_unbalanced(T::Currency::deposit(&our_account, deficit, Exact)?);
 			Self::deposit_event(Event::<T>::Funded { deficit });
 			Ok(())
 		}
@@ -711,7 +711,7 @@ pub mod pallet {
 			let dropped = receipt.proportion.is_zero();
 
 			if amount > on_hold {
-				T::Currency::release(&T::HoldReason::get(), &who, on_hold, false)?;
+				T::Currency::release(&T::HoldReason::get(), &who, on_hold, Exact)?;
 				let deficit = amount - on_hold;
 				// Try to transfer deficit from pot to receipt owner.
 				summary.receipts_on_hold.saturating_reduce(on_hold);
@@ -730,13 +730,13 @@ pub mod pallet {
 						&who,
 						&our_account,
 						on_hold,
+						Exact,
 						false,
-						false,
-						false,
+						Regular,
 					)?;
 					summary.receipts_on_hold.saturating_reduce(on_hold);
 				}
-				T::Currency::release(&T::HoldReason::get(), &who, amount, false)?;
+				T::Currency::release(&T::HoldReason::get(), &who, amount, Exact)?;
 			}
 
 			if dropped {
@@ -785,7 +785,7 @@ pub mod pallet {
 			ensure!(summary.thawed <= throttle, Error::<T>::Throttled);
 
 			let cp_amount = T::CounterpartAmount::convert(receipt.proportion);
-			T::Counterpart::burn_from(&who, cp_amount, false, false)?;
+			T::Counterpart::burn_from(&who, cp_amount, Exact, Regular)?;
 
 			// Multiply the proportion it is by the total issued.
 			let our_account = Self::account_id();
@@ -830,7 +830,7 @@ pub mod pallet {
 			// Unreserve and transfer the funds to the pot.
 			let reason = T::HoldReason::get();
 			let us = Self::account_id();
-			T::Currency::transfer_on_hold(&reason, &who, &us, on_hold, false, false, false)
+			T::Currency::transfer_on_hold(&reason, &who, &us, on_hold, Exact, false, Regular)
 				.map_err(|_| Error::<T>::Unfunded)?;
 
 			// Record that we've moved the amount reserved.
@@ -874,14 +874,14 @@ pub mod pallet {
 			T::Counterpart::burn_from(
 				&who,
 				T::CounterpartAmount::convert(receipt.proportion),
-				false,
-				false,
+				Exact,
+				Regular,
 			)?;
 
 			// Transfer the funds from the pot to the owner and reserve
 			let reason = T::HoldReason::get();
 			let us = Self::account_id();
-			T::Currency::transfer_and_hold(&reason, &us, &who, amount, false, CanKill, false)?;
+			T::Currency::transfer_and_hold(&reason, &us, &who, amount, Exact, CanKill, Regular)?;
 
 			// Record that we've moved the amount reserved.
 			summary.receipts_on_hold.saturating_accrue(amount);
@@ -936,7 +936,7 @@ pub mod pallet {
 			let (owner, on_hold) = item.owner.take().ok_or(Error::<T>::AlreadyCommunal)?;
 
 			let reason = T::HoldReason::get();
-			T::Currency::transfer_on_hold(&reason, &owner, dest, on_hold, false, true, false)?;
+			T::Currency::transfer_on_hold(&reason, &owner, dest, on_hold, Exact, true, Regular)?;
 
 			item.owner = Some((dest.clone(), on_hold));
 			Receipts::<T>::insert(&index, &item);
