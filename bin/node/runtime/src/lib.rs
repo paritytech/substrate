@@ -33,10 +33,7 @@ use frame_support::{
 	parameter_types,
 	traits::{
 		fungible::ItemOf,
-		tokens::{
-			nonfungibles_v2::{Inspect, LockableNonfungible, Mutate},
-			AttributeNamespace,
-		},
+		tokens::nonfungibles_v2::{Inspect, Mutate},
 		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, Currency, EitherOfDiverse,
 		EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter, KeyOwnerProofSystem,
 		LockIdentifier, Locker, Nothing, OnUnbalanced, U128CurrencyToVote, WithdrawReasons,
@@ -1587,7 +1584,18 @@ type CollectionId = <Runtime as pallet_nfts::Config>::CollectionId;
 pub struct NftLocker;
 impl Locker<CollectionId, ItemId> for NftLocker {
 	fn is_locked(collection: CollectionId, item: ItemId) -> bool {
-		Nfts::attribute(&collection, &item, &AttributeNamespace::Pallet, LOCKED_NFT_KEY).is_some()
+		<Nfts as Inspect<AccountId>>::system_attribute(&collection, &item, LOCKED_NFT_KEY).is_some()
+	}
+	fn lock(collection: &CollectionId, item: &ItemId) -> DispatchResult {
+		<Nfts as Mutate<AccountId, ItemConfig>>::set_attribute(
+			collection,
+			item,
+			LOCKED_NFT_KEY,
+			&[1],
+		)
+	}
+	fn unlock(collection: &CollectionId, item: &ItemId) -> DispatchResult {
+		<Nfts as Mutate<AccountId, ItemConfig>>::clear_attribute(collection, item, LOCKED_NFT_KEY)
 	}
 }
 
@@ -1626,21 +1634,6 @@ parameter_types! {
 	pub NewAssetName: Vec<u8> = (*b"Frac").into();
 }
 
-pub struct RuntimeLockableNonfungible;
-impl LockableNonfungible<CollectionId, ItemId> for RuntimeLockableNonfungible {
-	fn lock(collection: &CollectionId, item: &ItemId) -> DispatchResult {
-		<Nfts as Mutate<AccountId, ItemConfig>>::set_attribute(
-			collection,
-			item,
-			LOCKED_NFT_KEY,
-			&[1],
-		)
-	}
-	fn unlock(collection: &CollectionId, item: &ItemId) -> DispatchResult {
-		<Nfts as Mutate<AccountId, ItemConfig>>::clear_attribute(collection, item, LOCKED_NFT_KEY)
-	}
-}
-
 impl pallet_nft_fractionalization::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Deposit = AssetDeposit;
@@ -1653,7 +1646,7 @@ impl pallet_nft_fractionalization::Config for Runtime {
 	type AssetId = <Self as pallet_assets::Config>::AssetId;
 	type Assets = Assets;
 	type Nfts = Nfts;
-	type NftLocker = RuntimeLockableNonfungible;
+	type NftLocker = NftLocker;
 	type PalletId = NftFractionalizationPalletId;
 	type WeightInfo = pallet_nft_fractionalization::weights::SubstrateWeight<Runtime>;
 }

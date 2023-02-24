@@ -23,10 +23,7 @@ use crate as pallet_nft_fractionalization;
 use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{
-		tokens::{
-			nonfungibles_v2::{Inspect, LockableNonfungible, Mutate},
-			AttributeNamespace,
-		},
+		tokens::nonfungibles_v2::{Inspect, Mutate},
 		AsEnsureOriginWithArg, ConstU32, ConstU64, Locker,
 	},
 	PalletId,
@@ -36,13 +33,15 @@ use pallet_nfts::{ItemConfig, PalletFeatures};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
-	DispatchResult,
+	traits::{BlakeTwo256, IdentifyAccount, IdentityLookup, Verify},
+	DispatchResult, MultiSignature,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
-type AccountId = <Test as frame_system::Config>::AccountId;
+type Signature = MultiSignature;
+type AccountPublic = <Signature as Verify>::Signer;
+type AccountId = <AccountPublic as IdentifyAccount>::AccountId;
 type ItemId = <Test as pallet_nfts::Config>::ItemId;
 type CollectionId = <Test as pallet_nfts::Config>::CollectionId;
 
@@ -70,7 +69,7 @@ impl frame_system::Config for Test {
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type AccountId = u64;
+	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type RuntimeEvent = RuntimeEvent;
@@ -106,8 +105,8 @@ impl pallet_assets::Config for Test {
 	type AssetId = u32;
 	type AssetIdParameter = u32;
 	type Currency = Balances;
-	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<u64>>;
-	type ForceOrigin = frame_system::EnsureRoot<u64>;
+	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<Self::AccountId>>;
+	type ForceOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type AssetDeposit = ConstU64<1>;
 	type AssetAccountDeposit = ConstU64<10>;
 	type MetadataDepositBase = ConstU64<1>;
@@ -132,7 +131,18 @@ const LOCKED_NFT_KEY: &[u8; 6] = b"locked";
 pub struct TestLocker;
 impl Locker<CollectionId, ItemId> for TestLocker {
 	fn is_locked(collection: CollectionId, item: ItemId) -> bool {
-		Nfts::attribute(&collection, &item, &AttributeNamespace::Pallet, LOCKED_NFT_KEY).is_some()
+		<Nfts as Inspect<AccountId>>::system_attribute(&collection, &item, LOCKED_NFT_KEY).is_some()
+	}
+	fn lock(collection: &CollectionId, item: &ItemId) -> DispatchResult {
+		<Nfts as Mutate<AccountId, ItemConfig>>::set_attribute(
+			collection,
+			item,
+			LOCKED_NFT_KEY,
+			&[1],
+		)
+	}
+	fn unlock(collection: &CollectionId, item: &ItemId) -> DispatchResult {
+		<Nfts as Mutate<AccountId, ItemConfig>>::clear_attribute(collection, item, LOCKED_NFT_KEY)
 	}
 }
 
@@ -141,8 +151,8 @@ impl pallet_nfts::Config for Test {
 	type CollectionId = u32;
 	type ItemId = u32;
 	type Currency = Balances;
-	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<u64>>;
-	type ForceOrigin = frame_system::EnsureRoot<u64>;
+	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<Self::AccountId>>;
+	type ForceOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type Locker = TestLocker;
 	type CollectionDeposit = ConstU64<2>;
 	type ItemDeposit = ConstU64<1>;
@@ -156,7 +166,10 @@ impl pallet_nfts::Config for Test {
 	type ItemAttributesApprovalsLimit = ConstU32<2>;
 	type MaxTips = ConstU32<10>;
 	type MaxDeadlineDuration = ConstU64<10000>;
+	type MaxAttributesPerCall = ConstU32<2>;
 	type Features = Features;
+	type OffchainSignature = Signature;
+	type OffchainPublic = AccountPublic;
 	type WeightInfo = ();
 	pallet_nfts::runtime_benchmarks_enabled! {
 		type Helper = ();
@@ -167,21 +180,6 @@ parameter_types! {
 	pub const NftFractionalizationPalletId: PalletId = PalletId(*b"fraction");
 	pub NewAssetSymbol: Vec<u8> = (*b"FRAC").into();
 	pub NewAssetName: Vec<u8> = (*b"Frac").into();
-}
-
-pub struct MockLockableNonfungible;
-impl LockableNonfungible<CollectionId, ItemId> for MockLockableNonfungible {
-	fn lock(collection: &CollectionId, item: &ItemId) -> DispatchResult {
-		<Nfts as Mutate<AccountId, ItemConfig>>::set_attribute(
-			collection,
-			item,
-			LOCKED_NFT_KEY,
-			&[1],
-		)
-	}
-	fn unlock(collection: &CollectionId, item: &ItemId) -> DispatchResult {
-		<Nfts as Mutate<AccountId, ItemConfig>>::clear_attribute(collection, item, LOCKED_NFT_KEY)
-	}
 }
 
 impl Config for Test {
@@ -197,7 +195,7 @@ impl Config for Test {
 	type Assets = Assets;
 	type Nfts = Nfts;
 	type PalletId = NftFractionalizationPalletId;
-	type NftLocker = MockLockableNonfungible;
+	type NftLocker = TestLocker;
 	type WeightInfo = ();
 }
 

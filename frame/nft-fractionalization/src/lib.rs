@@ -56,10 +56,6 @@ pub use weights::WeightInfo;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{
-		pallet_prelude::*,
-		traits::tokens::{AssetId, Balance as AssetBalance},
-	};
 	use frame_system::pallet_prelude::*;
 	use scale_info::prelude::{format, string::String};
 	use sp_runtime::traits::{One, Zero};
@@ -67,16 +63,18 @@ pub mod pallet {
 
 	use frame_support::{
 		dispatch::DispatchResult,
+		pallet_prelude::*,
 		sp_runtime::traits::{AccountIdConversion, StaticLookup},
 		traits::{
 			fungibles::{
 				metadata::{CalcMetadataDeposit, Mutate as MutateMetadata},
 				Create, Destroy, Inspect, Mutate,
 			},
-			tokens::nonfungibles_v2::{
-				Inspect as NonFungiblesInspect, LockableNonfungible, Transfer,
+			tokens::{
+				nonfungibles_v2::{Inspect as NonFungiblesInspect, Transfer},
+				AssetId, Balance as AssetBalance,
 			},
-			Currency, ExistenceRequirement, ReservableCurrency,
+			Currency, ExistenceRequirement, Locker, ReservableCurrency,
 		},
 		PalletId,
 	};
@@ -132,7 +130,7 @@ pub mod pallet {
 			> + Transfer<Self::AccountId>;
 
 		/// Locker trait to enable NFT's locking.
-		type NftLocker: LockableNonfungible<Self::NftCollectionId, Self::NftId>;
+		type NftLocker: Locker<Self::NftCollectionId, Self::NftId>;
 
 		/// The pallet's id, used for deriving its sovereign account ID.
 		#[pallet::constant]
