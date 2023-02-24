@@ -924,7 +924,7 @@ fn deploy_and_call_other_contract() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Balances(pallet_balances::Event::Endowed {
 						account: callee_addr.clone(),
-						free_balance: min_balance + 1,
+						free_balance: min_balance,
 					}),
 					topics: vec![],
 				},
@@ -933,7 +933,7 @@ fn deploy_and_call_other_contract() {
 					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: callee_addr.clone(),
-						amount: min_balance + 1,
+						amount: min_balance,
 					}),
 					topics: vec![],
 				},
@@ -1483,7 +1483,7 @@ fn transfer_return_code() {
 		// threshold when transfering 100 balance but this balance is reserved so
 		// the transfer still fails.
 		Balances::make_free_balance_be(&addr, min_balance + 100);
-		Balances::reserve(&addr, min_balance + 100).unwrap();
+		Balances::reserve(&addr, 100).unwrap();
 		let result = Contracts::bare_call(
 			ALICE,
 			addr,
@@ -1577,7 +1577,7 @@ fn call_return_code() {
 		// threshold when transfering 100 balance but this balance is reserved so
 		// the transfer still fails.
 		Balances::make_free_balance_be(&addr_bob, min_balance + 100);
-		Balances::reserve(&addr_bob, min_balance + 100).unwrap();
+		Balances::reserve(&addr_bob, 100).unwrap();
 		let result = Contracts::bare_call(
 			ALICE,
 			addr_bob.clone(),
@@ -1691,7 +1691,7 @@ fn instantiate_return_code() {
 		// threshold when transfering the balance but this balance is reserved so
 		// the transfer still fails.
 		Balances::make_free_balance_be(&addr, min_balance + 10_000);
-		Balances::reserve(&addr, min_balance + 10_000).unwrap();
+		Balances::reserve(&addr, 10_000).unwrap();
 		let result = Contracts::bare_call(
 			ALICE,
 			addr.clone(),
