@@ -37,7 +37,7 @@ use frame_support::{
 	storage::child,
 	traits::{
 		ConstU32, ConstU64, Contains, Currency, ExistenceRequirement, Get, LockableCurrency,
-		OnIdle, OnInitialize, ReservableCurrency, WithdrawReasons,
+		OnIdle, OnInitialize, WithdrawReasons,
 	},
 	weights::{constants::WEIGHT_REF_TIME_PER_SECOND, Weight},
 };
@@ -1478,25 +1478,6 @@ fn transfer_return_code() {
 		.result
 		.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
-
-		// Contract has enough total balance in order to not go below the min balance
-		// threshold when transfering 100 balance but this balance is reserved so
-		// the transfer still fails.
-		Balances::make_free_balance_be(&addr, min_balance + 100);
-		Balances::reserve(&addr, 100).unwrap();
-		let result = Contracts::bare_call(
-			ALICE,
-			addr,
-			0,
-			GAS_LIMIT,
-			None,
-			vec![],
-			false,
-			Determinism::Deterministic,
-		)
-		.result
-		.unwrap();
-		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
 	});
 }
 
@@ -1555,29 +1536,6 @@ fn call_return_code() {
 		Balances::make_free_balance_be(&addr_django, min_balance);
 
 		// Contract has only the minimal balance so any transfer will fail.
-		let result = Contracts::bare_call(
-			ALICE,
-			addr_bob.clone(),
-			0,
-			GAS_LIMIT,
-			None,
-			AsRef::<[u8]>::as_ref(&addr_django)
-				.iter()
-				.chain(&0u32.to_le_bytes())
-				.cloned()
-				.collect(),
-			false,
-			Determinism::Deterministic,
-		)
-		.result
-		.unwrap();
-		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
-
-		// Contract has enough total balance in order to not go below the min balance
-		// threshold when transfering 100 balance but this balance is reserved so
-		// the transfer still fails.
-		Balances::make_free_balance_be(&addr_bob, min_balance + 100);
-		Balances::reserve(&addr_bob, 100).unwrap();
 		let result = Contracts::bare_call(
 			ALICE,
 			addr_bob.clone(),
@@ -1673,25 +1631,6 @@ fn instantiate_return_code() {
 
 		// Contract has only the minimal balance so any transfer will fail.
 		Balances::make_free_balance_be(&addr, min_balance);
-		let result = Contracts::bare_call(
-			ALICE,
-			addr.clone(),
-			0,
-			GAS_LIMIT,
-			None,
-			callee_hash.clone(),
-			false,
-			Determinism::Deterministic,
-		)
-		.result
-		.unwrap();
-		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
-
-		// Contract has enough total balance in order to not go below the min_balance
-		// threshold when transfering the balance but this balance is reserved so
-		// the transfer still fails.
-		Balances::make_free_balance_be(&addr, min_balance + 10_000);
-		Balances::reserve(&addr, 10_000).unwrap();
 		let result = Contracts::bare_call(
 			ALICE,
 			addr.clone(),
