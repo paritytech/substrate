@@ -151,9 +151,9 @@ pub struct StorageEntryMetadataIR<T: Form = MetaForm> {
 	/// Variable name of the storage entry.
 	pub name: T::String,
 	/// An `Option` modifier of that storage entry.
-	pub modifier: StorageEntryModifier,
+	pub modifier: StorageEntryModifierIR,
 	/// Type of the value stored in the entry.
-	pub ty: StorageEntryType<T>,
+	pub ty: StorageEntryTypeIR<T>,
 	/// Default value (SCALE encoded).
 	pub default: Vec<u8>,
 	/// Storage entry documentation.
@@ -182,7 +182,7 @@ impl IntoPortable for StorageEntryMetadataIR {
 /// present. `Default` means you should expect a `T` with the default value of default if the key is
 /// not present.
 #[derive(Clone, PartialEq, Eq, Encode, Debug)]
-pub enum StorageEntryModifier {
+pub enum StorageEntryModifierIR {
 	/// The storage entry returns an `Option<T>`, with `None` if the key is not present.
 	Optional,
 	/// The storage entry returns `T::Default` if the key is not present.
@@ -191,7 +191,7 @@ pub enum StorageEntryModifier {
 
 /// Hasher used by storage maps
 #[derive(Clone, PartialEq, Eq, Encode, Debug)]
-pub enum StorageHasher {
+pub enum StorageHasherIR {
 	/// 128-bit Blake2 hash.
 	Blake2_128,
 	/// 256-bit Blake2 hash.
@@ -210,13 +210,13 @@ pub enum StorageHasher {
 
 /// A type of storage value.
 #[derive(Clone, PartialEq, Eq, Encode, Debug)]
-pub enum StorageEntryType<T: Form = MetaForm> {
+pub enum StorageEntryTypeIR<T: Form = MetaForm> {
 	/// Plain storage entry (just the value).
 	Plain(T::Type),
 	/// A storage map.
 	Map {
 		/// One or more hashers, should be one hasher per key element.
-		hashers: Vec<StorageHasher>,
+		hashers: Vec<StorageHasherIR>,
 		/// The type of the key, can be a tuple with elements for each of the hashers.
 		key: T::Type,
 		/// The type of the value.
@@ -224,13 +224,13 @@ pub enum StorageEntryType<T: Form = MetaForm> {
 	},
 }
 
-impl IntoPortable for StorageEntryType {
-	type Output = StorageEntryType<PortableForm>;
+impl IntoPortable for StorageEntryTypeIR {
+	type Output = StorageEntryTypeIR<PortableForm>;
 
 	fn into_portable(self, registry: &mut Registry) -> Self::Output {
 		match self {
-			Self::Plain(plain) => StorageEntryType::Plain(registry.register_type(&plain)),
-			Self::Map { hashers, key, value } => StorageEntryType::Map {
+			Self::Plain(plain) => StorageEntryTypeIR::Plain(registry.register_type(&plain)),
+			Self::Map { hashers, key, value } => StorageEntryTypeIR::Map {
 				hashers,
 				key: registry.register_type(&key),
 				value: registry.register_type(&value),
