@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -811,7 +811,7 @@ fn return_max_memory_offset(wasm_method: WasmExecutionMethod) {
 
 	assert_eq!(
 		call_in_wasm("test_return_max_memory_offset", &[], wasm_method, &mut ext).unwrap(),
-		().encode()
+		(u8::MAX).encode()
 	);
 }
 

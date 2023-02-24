@@ -29,8 +29,6 @@ use sp_runtime::{
 	print,
 	traits::{BlakeTwo256, Hash},
 };
-#[cfg(not(feature = "std"))]
-use sp_runtime_interface::pack_ptr_and_len;
 
 extern "C" {
 	#[allow(dead_code)]
@@ -344,31 +342,48 @@ sp_core::wasm_export_functions! {
 	}
 }
 
-// Returns a huge len. It should result in an error, and not an allocation.
-#[no_mangle]
-#[cfg(not(feature = "std"))]
-pub extern "C" fn test_return_huge_len(_params: *const u8, _len: usize) -> u64 {
-	pack_ptr_and_len(0, u32::MAX)
-}
+// Tests that check output validity. We explicitly return the ptr and len, so we avoid using the
+// `wasm_export_functions` macro.
+mod output_validity {
+	#[cfg(not(feature = "std"))]
+	use super::WASM_PAGE_SIZE;
 
-// Returns an offset right at the edge of the wasm memory boundary. With length 0, it should
-// succeed.
-#[no_mangle]
-#[cfg(not(feature = "std"))]
-pub extern "C" fn test_return_max_memory_offset(_params: *const u8, _len: usize) -> u64 {
-	pack_ptr_and_len((core::arch::wasm32::memory_size(0) * WASM_PAGE_SIZE) as u32, 0)
-}
+	#[cfg(not(feature = "std"))]
+	use sp_runtime_interface::pack_ptr_and_len;
 
-// Returns an offset right at the edge of the wasm memory boundary. With length 1, it should fail.
-#[no_mangle]
-#[cfg(not(feature = "std"))]
-pub extern "C" fn test_return_max_memory_offset_plus_one(_params: *const u8, _len: usize) -> u64 {
-	pack_ptr_and_len((core::arch::wasm32::memory_size(0) * WASM_PAGE_SIZE) as u32, 1)
-}
+	// Returns a huge len. It should result in an error, and not an allocation.
+	#[no_mangle]
+	#[cfg(not(feature = "std"))]
+	pub extern "C" fn test_return_huge_len(_params: *const u8, _len: usize) -> u64 {
+		pack_ptr_and_len(0, u32::MAX)
+	}
 
-// Returns an output that overflows the u32 range. It should result in an error.
-#[no_mangle]
-#[cfg(not(feature = "std"))]
-pub extern "C" fn test_return_overflow(_params: *const u8, _len: usize) -> u64 {
-	pack_ptr_and_len(u32::MAX, 1)
+	// Returns an offset right before the edge of the wasm memory boundary. It should succeed.
+	#[no_mangle]
+	#[cfg(not(feature = "std"))]
+	pub extern "C" fn test_return_max_memory_offset(_params: *const u8, _len: usize) -> u64 {
+		let output_ptr = (core::arch::wasm32::memory_size(0) * WASM_PAGE_SIZE) as u32 - 1;
+		let ptr = output_ptr as *mut u8;
+		unsafe {
+			ptr.write(u8::MAX);
+		}
+		pack_ptr_and_len(output_ptr, 1)
+	}
+
+	// Returns an offset right after the edge of the wasm memory boundary. It should fail.
+	#[no_mangle]
+	#[cfg(not(feature = "std"))]
+	pub extern "C" fn test_return_max_memory_offset_plus_one(
+		_params: *const u8,
+		_len: usize,
+	) -> u64 {
+		pack_ptr_and_len((core::arch::wasm32::memory_size(0) * WASM_PAGE_SIZE) as u32, 1)
+	}
+
+	// Returns an output that overflows the u32 range. It should result in an error.
+	#[no_mangle]
+	#[cfg(not(feature = "std"))]
+	pub extern "C" fn test_return_overflow(_params: *const u8, _len: usize) -> u64 {
+		pack_ptr_and_len(u32::MAX, 1)
+	}
 }

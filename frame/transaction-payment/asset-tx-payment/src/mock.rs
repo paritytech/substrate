@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -45,12 +45,12 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: system::{Pallet, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		TransactionPayment: pallet_transaction_payment::{Pallet, Storage, Event<T>},
-		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>},
-		Authorship: pallet_authorship::{Pallet, Call, Storage},
-		AssetTxPayment: pallet_asset_tx_payment::{Pallet, Event<T>},
+		System: system,
+		Balances: pallet_balances,
+		TransactionPayment: pallet_transaction_payment,
+		Assets: pallet_assets,
+		Authorship: pallet_authorship,
+		AssetTxPayment: pallet_asset_tx_payment,
 	}
 );
 
@@ -187,8 +187,6 @@ impl FindAuthor<AccountId> for HardcodedAuthor {
 
 impl pallet_authorship::Config for Runtime {
 	type FindAuthor = HardcodedAuthor;
-	type UncleGenerations = ();
-	type FilterUncle = ();
 	type EventHandler = ();
 }
 

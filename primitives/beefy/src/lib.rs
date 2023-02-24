@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,16 +34,20 @@
 mod commitment;
 pub mod mmr;
 mod payload;
+#[cfg(feature = "std")]
+mod test_utils;
 pub mod witness;
 
 pub use commitment::{Commitment, SignedCommitment, VersionedFinalityProof};
 pub use payload::{known_payloads, BeefyPayloadId, Payload, PayloadProvider};
+#[cfg(feature = "std")]
+pub use test_utils::*;
 
 use codec::{Codec, Decode, Encode};
 use scale_info::TypeInfo;
 use sp_application_crypto::RuntimeAppPublic;
 use sp_core::H256;
-use sp_runtime::traits::Hash;
+use sp_runtime::traits::{Hash, NumberFor};
 use sp_std::prelude::*;
 
 /// Key type for BEEFY module.
@@ -173,7 +177,7 @@ pub enum ConsensusLog<AuthorityId: Codec> {
 ///
 /// A vote message is a direct vote created by a BEEFY node on every voting round
 /// and is gossiped to its peers.
-#[derive(Debug, Decode, Encode, TypeInfo)]
+#[derive(Clone, Debug, Decode, Encode, PartialEq, TypeInfo)]
 pub struct VoteMessage<Number, Id, Signature> {
 	/// Commit to information extracted from a finalized block
 	pub commitment: Commitment<Number>,
@@ -181,6 +185,83 @@ pub struct VoteMessage<Number, Id, Signature> {
 	pub id: Id,
 	/// Node signature
 	pub signature: Signature,
+}
+
+/// Proof of voter misbehavior on a given set id. Misbehavior/equivocation in
+/// BEEFY happens when a voter votes on the same round/block for different payloads.
+/// Proving is achieved by collecting the signed commitments of conflicting votes.
+#[derive(Clone, Debug, Decode, Encode, PartialEq, TypeInfo)]
+pub struct EquivocationProof<Number, Id, Signature> {
+	/// The first vote in the equivocation.
+	pub first: VoteMessage<Number, Id, Signature>,
+	/// The second vote in the equivocation.
+	pub second: VoteMessage<Number, Id, Signature>,
+}
+
+impl<Number, Id, Signature> EquivocationProof<Number, Id, Signature> {
+	/// Returns the authority id of the equivocator.
+	pub fn offender_id(&self) -> &Id {
+		&self.first.id
+	}
+	/// Returns the round number at which the equivocation occurred.
+	pub fn round_number(&self) -> &Number {
+		&self.first.commitment.block_number
+	}
+	/// Returns the set id at which the equivocation occurred.
+	pub fn set_id(&self) -> ValidatorSetId {
+		self.first.commitment.validator_set_id
+	}
+}
+
+/// Check a commitment signature by encoding the commitment and
+/// verifying the provided signature using the expected authority id.
+pub fn check_commitment_signature<Number, Id, MsgHash>(
+	commitment: &Commitment<Number>,
+	authority_id: &Id,
+	signature: &<Id as RuntimeAppPublic>::Signature,
+) -> bool
+where
+	Id: BeefyAuthorityId<MsgHash>,
+	Number: Clone + Encode + PartialEq,
+	MsgHash: Hash,
+{
+	let encoded_commitment = commitment.encode();
+	BeefyAuthorityId::<MsgHash>::verify(authority_id, signature, &encoded_commitment)
+}
+
+/// Verifies the equivocation proof by making sure that both votes target
+/// different blocks and that its signatures are valid.
+pub fn check_equivocation_proof<Number, Id, MsgHash>(
+	report: &EquivocationProof<Number, Id, <Id as RuntimeAppPublic>::Signature>,
+) -> bool
+where
+	Id: BeefyAuthorityId<MsgHash> + PartialEq,
+	Number: Clone + Encode + PartialEq,
+	MsgHash: Hash,
+{
+	let first = &report.first;
+	let second = &report.second;
+
+	// if votes
+	//   come from different authorities,
+	//   are for different rounds,
+	//   have different validator set ids,
+	//   or both votes have the same commitment,
+	//     --> the equivocation is invalid.
+	if first.id != second.id ||
+		first.commitment.block_number != second.commitment.block_number ||
+		first.commitment.validator_set_id != second.commitment.validator_set_id ||
+		first.commitment.payload == second.commitment.payload
+	{
+		return false
+	}
+
+	// check signatures on both votes are valid
+	let valid_first = check_commitment_signature(&first.commitment, &first.id, &first.signature);
+	let valid_second =
+		check_commitment_signature(&second.commitment, &second.id, &second.signature);
+
+	return valid_first && valid_second
 }
 
 /// New BEEFY validator set notification hook.
@@ -197,12 +278,67 @@ impl<AuthorityId> OnNewValidatorSet<AuthorityId> for () {
 	fn on_new_validator_set(_: &ValidatorSet<AuthorityId>, _: &ValidatorSet<AuthorityId>) {}
 }
 
+/// An opaque type used to represent the key ownership proof at the runtime API
+/// boundary. The inner value is an encoded representation of the actual key
+/// ownership proof which will be parameterized when defining the runtime. At
+/// the runtime API boundary this type is unknown and as such we keep this
+/// opaque representation, implementors of the runtime API will have to make
+/// sure that all usages of `OpaqueKeyOwnershipProof` refer to the same type.
+#[derive(Decode, Encode, PartialEq)]
+pub struct OpaqueKeyOwnershipProof(Vec<u8>);
+impl OpaqueKeyOwnershipProof {
+	/// Create a new `OpaqueKeyOwnershipProof` using the given encoded
+	/// representation.
+	pub fn new(inner: Vec<u8>) -> OpaqueKeyOwnershipProof {
+		OpaqueKeyOwnershipProof(inner)
+	}
+
+	/// Try to decode this `OpaqueKeyOwnershipProof` into the given concrete key
+	/// ownership proof type.
+	pub fn decode<T: Decode>(self) -> Option<T> {
+		codec::Decode::decode(&mut &self.0[..]).ok()
+	}
+}
+
 sp_api::decl_runtime_apis! {
 	/// API necessary for BEEFY voters.
 	pub trait BeefyApi
 	{
+		/// Return the block number where BEEFY consensus is enabled/started
+		fn beefy_genesis() -> Option<NumberFor<Block>>;
+
 		/// Return the current active BEEFY validator set
 		fn validator_set() -> Option<ValidatorSet<crypto::AuthorityId>>;
+
+		/// Submits an unsigned extrinsic to report an equivocation. The caller
+		/// must provide the equivocation proof and a key ownership proof
+		/// (should be obtained using `generate_key_ownership_proof`). The
+		/// extrinsic will be unsigned and should only be accepted for local
+		/// authorship (not to be broadcast to the network). This method returns
+		/// `None` when creation of the extrinsic fails, e.g. if equivocation
+		/// reporting is disabled for the given runtime (i.e. this method is
+		/// hardcoded to return `None`). Only useful in an offchain context.
+		fn submit_report_equivocation_unsigned_extrinsic(
+			equivocation_proof:
+				EquivocationProof<NumberFor<Block>, crypto::AuthorityId, crypto::Signature>,
+			key_owner_proof: OpaqueKeyOwnershipProof,
+		) -> Option<()>;
+
+		/// Generates a proof of key ownership for the given authority in the
+		/// given set. An example usage of this module is coupled with the
+		/// session historical module to prove that a given authority key is
+		/// tied to a given staking identity during a specific session. Proofs
+		/// of key ownership are necessary for submitting equivocation reports.
+		/// NOTE: even though the API takes a `set_id` as parameter the current
+		/// implementations ignores this parameter and instead relies on this
+		/// method being called at the correct block height, i.e. any point at
+		/// which the given set id is live on-chain. Future implementations will
+		/// instead use indexed data through an offchain worker, not requiring
+		/// older states to be available.
+		fn generate_key_ownership_proof(
+			set_id: ValidatorSetId,
+			authority_id: crypto::AuthorityId,
+		) -> Option<OpaqueKeyOwnershipProof>;
 	}
 }
 

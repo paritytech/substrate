@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -298,6 +298,11 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 	config.cranelift_opt_level(wasmtime::OptLevel::SpeedAndSize);
 	config.cranelift_nan_canonicalization(semantics.canonicalize_nans);
 
+	// Since wasmtime 6.0.0 the default for this is `true`, but that heavily regresses
+	// the contracts pallet's performance, so disable it for now.
+	#[allow(deprecated)]
+	config.cranelift_use_egraphs(false);
+
 	let profiler = match std::env::var_os("WASMTIME_PROFILING_STRATEGY") {
 		Some(os_string) if os_string == "jitdump" => wasmtime::ProfilingStrategy::JitDump,
 		None => wasmtime::ProfilingStrategy::None,
@@ -366,29 +371,27 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 			MAX_WASM_PAGES
 		};
 
-		config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling {
-			strategy: wasmtime::PoolingAllocationStrategy::ReuseAffinity,
-
+		let mut pooling_config = wasmtime::PoolingAllocationConfig::default();
+		pooling_config
+			.max_unused_warm_slots(4)
 			// Pooling needs a bunch of hard limits to be set; if we go over
 			// any of these then the instantiation will fail.
-			instance_limits: wasmtime::InstanceLimits {
-				// Current minimum values for kusama (as of 2022-04-14):
-				//   size: 32384
-				//   table_elements: 1249
-				//   memory_pages: 2070
-				size: 64 * 1024,
-				table_elements: 3072,
-				memory_pages,
+			//
+			// Current minimum values for kusama (as of 2022-04-14):
+			//   size: 32384
+			//   table_elements: 1249
+			//   memory_pages: 2070
+			.instance_size(128 * 1024)
+			.instance_table_elements(8192)
+			.instance_memory_pages(memory_pages)
+			// We can only have a single of those.
+			.instance_tables(1)
+			.instance_memories(1)
+			// This determines how many instances of the module can be
+			// instantiated in parallel from the same `Module`.
+			.instance_count(32);
 
-				// We can only have a single of those.
-				tables: 1,
-				memories: 1,
-
-				// This determines how many instances of the module can be
-				// instantiated in parallel from the same `Module`.
-				count: 32,
-			},
-		});
+		config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling(pooling_config));
 	}
 
 	Ok(config)
@@ -682,10 +685,8 @@ where
 	let mut linker = wasmtime::Linker::new(&engine);
 	crate::imports::prepare_imports::<H>(&mut linker, &module, config.allow_missing_func_imports)?;
 
-	let mut store =
-		crate::instance_wrapper::create_store(module.engine(), config.semantics.max_memory_size);
 	let instance_pre = linker
-		.instantiate_pre(&mut store, &module)
+		.instantiate_pre(&module)
 		.map_err(|e| WasmError::Other(format!("cannot preinstantiate module: {:#}", e)))?;
 
 	Ok(WasmtimeRuntime {

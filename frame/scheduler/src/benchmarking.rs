@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,7 @@
 //! Scheduler pallet benchmarking.
 
 use super::*;
-use frame_benchmarking::{account, benchmarks};
+use frame_benchmarking::v1::{account, benchmarks, BenchmarkError};
 use frame_support::{
 	ensure,
 	traits::{schedule::Priority, BoundedInline},
@@ -244,7 +244,8 @@ benchmarks! {
 
 		fill_schedule::<T>(when, s)?;
 		assert_eq!(Agenda::<T>::get(when).len(), s as usize);
-		let schedule_origin = T::ScheduleOrigin::successful_origin();
+		let schedule_origin =
+			T::ScheduleOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	}: _<SystemOrigin<T>>(schedule_origin, when, 0)
 	verify {
 		ensure!(

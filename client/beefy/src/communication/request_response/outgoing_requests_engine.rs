@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -34,6 +34,8 @@ use std::{collections::VecDeque, result::Result, sync::Arc};
 use crate::{
 	communication::request_response::{Error, JustificationRequest, BEEFY_SYNC_LOG_TARGET},
 	justification::{decode_and_verify_finality_proof, BeefyVersionedFinalityProof},
+	metric_inc,
+	metrics::{register_metrics, OnDemandOutgoingRequestsMetrics},
 	KnownPeers,
 };
 
@@ -61,6 +63,7 @@ pub struct OnDemandJustificationsEngine<B: Block> {
 	peers_cache: VecDeque<PeerId>,
 
 	state: State<B>,
+	metrics: Option<OnDemandOutgoingRequestsMetrics>,
 }
 
 impl<B: Block> OnDemandJustificationsEngine<B> {
@@ -68,19 +71,22 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 		network: Arc<dyn NetworkRequest + Send + Sync>,
 		protocol_name: ProtocolName,
 		live_peers: Arc<Mutex<KnownPeers<B>>>,
+		prometheus_registry: Option<prometheus::Registry>,
 	) -> Self {
+		let metrics = register_metrics(prometheus_registry);
 		Self {
 			network,
 			protocol_name,
 			live_peers,
 			peers_cache: VecDeque::new(),
 			state: State::Idle,
+			metrics,
 		}
 	}
 
 	fn reset_peers_cache_for_block(&mut self, block: NumberFor<B>) {
 		// TODO (issue #12296): replace peer selection with generic one that involves all protocols.
-		self.peers_cache = self.live_peers.lock().at_least_at_block(block);
+		self.peers_cache = self.live_peers.lock().further_than(block);
 	}
 
 	fn try_next_peer(&mut self) -> Option<PeerId> {
@@ -130,6 +136,7 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 		if let Some(peer) = self.try_next_peer() {
 			self.request_from_peer(peer, RequestInfo { block, active_set });
 		} else {
+			metric_inc!(self, beefy_on_demand_justification_no_peer_to_request_from);
 			debug!(
 				target: BEEFY_SYNC_LOG_TARGET,
 				"🥩 no good peers to request justif #{:?} from", block
@@ -159,6 +166,7 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 	) -> Result<BeefyVersionedFinalityProof<B>, Error> {
 		response
 			.map_err(|e| {
+				metric_inc!(self, beefy_on_demand_justification_peer_hang_up);
 				debug!(
 					target: BEEFY_SYNC_LOG_TARGET,
 					"🥩 for on demand justification #{:?}, peer {:?} hung up: {:?}",
@@ -169,6 +177,7 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 				Error::InvalidResponse
 			})?
 			.map_err(|e| {
+				metric_inc!(self, beefy_on_demand_justification_peer_error);
 				debug!(
 					target: BEEFY_SYNC_LOG_TARGET,
 					"🥩 for on demand justification #{:?}, peer {:?} error: {:?}",
@@ -185,6 +194,7 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 					&req_info.active_set,
 				)
 				.map_err(|e| {
+					metric_inc!(self, beefy_on_demand_justification_invalid_proof);
 					debug!(
 						target: BEEFY_SYNC_LOG_TARGET,
 						"🥩 for on demand justification #{:?}, peer {:?} responded with invalid proof: {:?}",
@@ -199,7 +209,6 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 		let (peer, req_info, resp) = match &mut self.state {
 			State::Idle => {
 				futures::pending!();
-				// Doesn't happen as 'futures::pending!()' is an 'await' barrier that never passes.
 				return None
 			},
 			State::AwaitingResponse(peer, req_info, receiver) => {
@@ -225,6 +234,7 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 				}
 			})
 			.map(|proof| {
+				metric_inc!(self, beefy_on_demand_justification_good_proof);
 				debug!(
 					target: BEEFY_SYNC_LOG_TARGET,
 					"🥩 received valid on-demand justif #{:?} from {:?}", block, peer

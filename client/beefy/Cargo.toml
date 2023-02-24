@@ -39,7 +39,6 @@ sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
 
 [dev-dependencies]
 serde = "1.0.136"
-strum = { version = "0.24.1", features = ["derive"] }
 tempfile = "3.1.0"
 tokio = "1.22.0"
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }

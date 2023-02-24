@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -363,10 +363,6 @@ pub mod pallet {
 		}
 
 		/// Anonymously schedule a task after a delay.
-		///
-		/// # <weight>
-		/// Same as [`schedule`].
-		/// # </weight>
 		#[pallet::call_index(4)]
 		#[pallet::weight(<T as Config>::WeightInfo::schedule(T::MaxScheduledPerBlock::get()))]
 		pub fn schedule_after(
@@ -389,10 +385,6 @@ pub mod pallet {
 		}
 
 		/// Schedule a named task after a delay.
-		///
-		/// # <weight>
-		/// Same as [`schedule_named`](Self::schedule_named).
-		/// # </weight>
 		#[pallet::call_index(5)]
 		#[pallet::weight(<T as Config>::WeightInfo::schedule_named(T::MaxScheduledPerBlock::get()))]
 		pub fn schedule_named_after(
@@ -777,6 +769,8 @@ impl<T: Config> Pallet<T> {
 	) -> Result<TaskAddress<T::BlockNumber>, DispatchError> {
 		let when = Self::resolve_time(when)?;
 
+		let lookup_hash = call.lookup_hash();
+
 		// sanitize maybe_periodic
 		let maybe_periodic = maybe_periodic
 			.filter(|p| p.1 > 1 && !p.0.is_zero())
@@ -790,7 +784,14 @@ impl<T: Config> Pallet<T> {
 			origin,
 			_phantom: PhantomData,
 		};
-		Self::place_task(when, task).map_err(|x| x.0)
+		let res = Self::place_task(when, task).map_err(|x| x.0)?;
+
+		if let Some(hash) = lookup_hash {
+			// Request the call to be made available.
+			T::Preimages::request(&hash);
+		}
+
+		Ok(res)
 	}
 
 	fn do_cancel(
@@ -862,6 +863,8 @@ impl<T: Config> Pallet<T> {
 
 		let when = Self::resolve_time(when)?;
 
+		let lookup_hash = call.lookup_hash();
+
 		// sanitize maybe_periodic
 		let maybe_periodic = maybe_periodic
 			.filter(|p| p.1 > 1 && !p.0.is_zero())
@@ -876,7 +879,14 @@ impl<T: Config> Pallet<T> {
 			origin,
 			_phantom: Default::default(),
 		};
-		Self::place_task(when, task).map_err(|x| x.0)
+		let res = Self::place_task(when, task).map_err(|x| x.0)?;
+
+		if let Some(hash) = lookup_hash {
+			// Request the call to be made available.
+			T::Preimages::request(&hash);
+		}
+
+		Ok(res)
 	}
 
 	fn do_cancel_named(origin: Option<T::PalletsOrigin>, id: TaskName) -> DispatchResult {
@@ -1027,6 +1037,7 @@ impl<T: Config> Pallet<T> {
 		} else {
 			Agenda::<T>::remove(when);
 		}
+
 		postponed == 0
 	}
 

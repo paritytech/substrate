@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -28,6 +28,7 @@ use crate::{
 		},
 	},
 	import::BeefyBlockImport,
+	metrics::register_metrics,
 	round::Rounds,
 	worker::PersistedState,
 };
@@ -36,7 +37,7 @@ use beefy_primitives::{
 	GENESIS_AUTHORITY_SET_ID,
 };
 use futures::{stream::Fuse, StreamExt};
-use log::{debug, error, info};
+use log::{error, info};
 use parking_lot::Mutex;
 use prometheus::Registry;
 use sc_client_api::{Backend, BlockBackend, BlockchainEvents, FinalityNotifications, Finalizer};
@@ -51,10 +52,7 @@ use sp_blockchain::{
 use sp_consensus::{Error as ConsensusError, SyncOracle};
 use sp_keystore::SyncCryptoStorePtr;
 use sp_mmr_primitives::MmrApi;
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block, One, Zero},
-};
+use sp_runtime::traits::{Block, Zero};
 use std::{collections::VecDeque, marker::PhantomData, sync::Arc};
 
 mod aux_schema;
@@ -133,6 +131,7 @@ pub fn beefy_block_import_and_links<B, BE, RuntimeApi, I>(
 	wrapped_block_import: I,
 	backend: Arc<BE>,
 	runtime: Arc<RuntimeApi>,
+	prometheus_registry: Option<Registry>,
 ) -> (BeefyBlockImport<B, BE, RuntimeApi, I>, BeefyVoterLinks<B>, BeefyRPCLinks<B>)
 where
 	B: Block,
@@ -152,10 +151,16 @@ where
 	// BlockImport -> Voter links
 	let (to_voter_justif_sender, from_block_import_justif_stream) =
 		BeefyVersionedFinalityProofStream::<B>::channel();
+	let metrics = register_metrics(prometheus_registry);
 
 	// BlockImport
-	let import =
-		BeefyBlockImport::new(backend, runtime, wrapped_block_import, to_voter_justif_sender);
+	let import = BeefyBlockImport::new(
+		backend,
+		runtime,
+		wrapped_block_import,
+		to_voter_justif_sender,
+		metrics,
+	);
 	let voter_links = BeefyVoterLinks {
 		from_block_import_justif_stream,
 		to_rpc_justif_sender,
@@ -242,27 +247,15 @@ where
 		gossip_validator.clone(),
 		None,
 	);
+	let metrics = register_metrics(prometheus_registry.clone());
 
 	// The `GossipValidator` adds and removes known peers based on valid votes and network events.
 	let on_demand_justifications = OnDemandJustificationsEngine::new(
 		network.clone(),
 		justifications_protocol_name,
 		known_peers,
+		prometheus_registry.clone(),
 	);
-
-	let metrics =
-		prometheus_registry.as_ref().map(metrics::Metrics::register).and_then(
-			|result| match result {
-				Ok(metrics) => {
-					debug!(target: LOG_TARGET, "🥩 Registered metrics");
-					Some(metrics)
-				},
-				Err(err) => {
-					debug!(target: LOG_TARGET, "🥩 Failed to register metrics: {:?}", err);
-					None
-				},
-			},
-		);
 
 	// Subscribe to finality notifications and justifications before waiting for runtime pallet and
 	// reuse the streams, so we don't miss notifications while waiting for pallet to be available.
@@ -286,6 +279,7 @@ where
 	let worker_params = worker::WorkerParams {
 		backend,
 		payload_provider,
+		runtime,
 		network,
 		key_store: key_store.into(),
 		gossip_engine,
@@ -296,7 +290,7 @@ where
 		persisted_state,
 	};
 
-	let worker = worker::BeefyWorker::<_, _, _, _>::new(worker_params);
+	let worker = worker::BeefyWorker::<_, _, _, _, _>::new(worker_params);
 
 	futures::future::join(
 		worker.run(block_import_justif, finality_notifications),
@@ -346,6 +340,12 @@ where
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B>,
 {
+	let beefy_genesis = runtime
+		.runtime_api()
+		.beefy_genesis(best_grandpa.hash())
+		.ok()
+		.flatten()
+		.ok_or_else(|| ClientError::Backend("BEEFY pallet expected to be active.".into()))?;
 	// Walk back the imported blocks and initialize voter either, at the last block with
 	// a BEEFY justification, or at pallet genesis block; voter will resume from there.
 	let blockchain = backend.blockchain();
@@ -366,7 +366,7 @@ where
 			let best_beefy = *header.number();
 			// If no session boundaries detected so far, just initialize new rounds here.
 			if sessions.is_empty() {
-				let active_set = expect_validator_set(runtime, BlockId::hash(header.hash()))?;
+				let active_set = expect_validator_set(runtime, header.hash())?;
 				let mut rounds = Rounds::new(best_beefy, active_set);
 				// Mark the round as already finalized.
 				rounds.conclude(best_beefy);
@@ -378,20 +378,19 @@ where
 			break state
 		}
 
-		if *header.number() == One::one() {
-			// We've reached chain genesis, initialize voter here.
-			let genesis_num = *header.number();
-			let genesis_set = expect_validator_set(runtime, BlockId::hash(header.hash()))
-				.and_then(genesis_set_sanity_check)?;
+		if *header.number() == beefy_genesis {
+			// We've reached BEEFY genesis, initialize voter here.
+			let genesis_set =
+				expect_validator_set(runtime, header.hash()).and_then(genesis_set_sanity_check)?;
 			info!(
 				target: LOG_TARGET,
 				"🥩 Loading BEEFY voter state from genesis on what appears to be first startup. \
 				Starting voting rounds at block {:?}, genesis validator set {:?}.",
-				genesis_num,
+				beefy_genesis,
 				genesis_set,
 			);
 
-			sessions.push_front(Rounds::new(genesis_num, genesis_set));
+			sessions.push_front(Rounds::new(beefy_genesis, genesis_set));
 			break PersistedState::checked_new(best_grandpa, Zero::zero(), sessions, min_block_delta)
 				.ok_or_else(|| ClientError::Backend("Invalid BEEFY chain".into()))?
 		}
@@ -407,16 +406,11 @@ where
 
 		// Check if state is still available if we move up the chain.
 		let parent_hash = *header.parent_hash();
-		runtime
-			.runtime_api()
-			.validator_set(&BlockId::hash(parent_hash))
-			.ok()
-			.flatten()
-			.ok_or_else(|| {
-				let msg = format!("{}. Could not initialize BEEFY voter.", parent_hash);
-				error!(target: LOG_TARGET, "🥩 {}", msg);
-				ClientError::Consensus(sp_consensus::Error::StateUnavailable(msg))
-			})?;
+		runtime.runtime_api().validator_set(parent_hash).ok().flatten().ok_or_else(|| {
+			let msg = format!("{}. Could not initialize BEEFY voter.", parent_hash);
+			error!(target: LOG_TARGET, "🥩 {}", msg);
+			ClientError::Consensus(sp_consensus::Error::StateUnavailable(msg))
+		})?;
 
 		// Move up the chain.
 		header = blockchain.expect_header(parent_hash)?;
@@ -447,14 +441,17 @@ where
 					Some(notif) => notif,
 					None => break
 				};
-				let at = BlockId::hash(notif.header.hash());
-				if let Some(active) = runtime.runtime_api().validator_set(&at).ok().flatten() {
-					// Beefy pallet available, return best grandpa at the time.
-					info!(
-						target: LOG_TARGET, "🥩 BEEFY pallet available: block {:?} validator set {:?}",
-						notif.header.number(), active
-					);
-					return Ok(notif.header)
+				let at = notif.header.hash();
+				if let Some(start) = runtime.runtime_api().beefy_genesis(at).ok().flatten() {
+					if *notif.header.number() >= start {
+						// Beefy pallet available, return header for best grandpa at the time.
+						info!(
+							target: LOG_TARGET,
+							"🥩 BEEFY pallet available: block {:?} beefy genesis {:?}",
+							notif.header.number(), start
+						);
+						return Ok(notif.header)
+					}
 				}
 			},
 			_ = gossip_engine => {
@@ -480,7 +477,7 @@ fn genesis_set_sanity_check(
 
 fn expect_validator_set<B, R>(
 	runtime: &R,
-	at: BlockId<B>,
+	at_hash: B::Hash,
 ) -> ClientResult<ValidatorSet<AuthorityId>>
 where
 	B: Block,
@@ -489,7 +486,7 @@ where
 {
 	runtime
 		.runtime_api()
-		.validator_set(&at)
+		.validator_set(at_hash)
 		.ok()
 		.flatten()
 		.ok_or_else(|| ClientError::Backend("BEEFY pallet expected to be active.".into()))
