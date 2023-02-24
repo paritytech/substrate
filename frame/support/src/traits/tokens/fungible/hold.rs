@@ -21,9 +21,9 @@ use crate::{
 	ensure,
 	traits::tokens::{
 		DepositConsequence::Success,
-		Preservation::{self, Protect},
-		Precision::{self, BestEffort, Exact},
 		Fortitude::{self, Force},
+		Precision::{self, BestEffort, Exact},
+		Preservation::{self, Protect},
 		Provenance::Extant,
 		Restriction::{self, Free, OnHold},
 	},

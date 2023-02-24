@@ -21,11 +21,11 @@ use crate::{
 	ensure,
 	traits::tokens::{
 		DepositConsequence::Success,
-		Preservation::{self, Protect},
-		Precision::{self, BestEffort, Exact},
 		Fortitude::{self, Force},
-		Restriction::{self, Free, OnHold},
+		Precision::{self, BestEffort, Exact},
+		Preservation::{self, Protect},
 		Provenance::Extant,
+		Restriction::{self, Free, OnHold},
 	},
 };
 use scale_info::TypeInfo;
@@ -357,7 +357,10 @@ pub trait Mutate<AccountId>:
 
 		// We want to make sure we can deposit the amount in advance. If we can't then something is
 		// very wrong.
-		ensure!(Self::can_deposit(asset, dest, amount, Extant) == Success, TokenError::CannotCreate);
+		ensure!(
+			Self::can_deposit(asset, dest, amount, Extant) == Success,
+			TokenError::CannotCreate
+		);
 		ensure!(
 			mode == Free || Self::hold_available(asset, reason, dest),
 			TokenError::CannotCreateHold
@@ -401,8 +404,12 @@ pub trait Mutate<AccountId>:
 		force: Fortitude,
 	) -> Result<Self::Balance, DispatchError> {
 		ensure!(Self::hold_available(asset, reason, dest), TokenError::CannotCreateHold);
-		ensure!(Self::can_deposit(asset, dest, amount, Extant) == Success, TokenError::CannotCreate);
-		let actual = Self::decrease_balance(asset, source, amount, precision, expendability, force)?;
+		ensure!(
+			Self::can_deposit(asset, dest, amount, Extant) == Success,
+			TokenError::CannotCreate
+		);
+		let actual =
+			Self::decrease_balance(asset, source, amount, precision, expendability, force)?;
 		Self::increase_balance_on_hold(asset, reason, dest, actual, precision)?;
 		Self::done_transfer_on_hold(asset, reason, source, dest, actual);
 		Ok(actual)

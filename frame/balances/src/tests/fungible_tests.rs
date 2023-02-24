@@ -19,9 +19,9 @@
 
 use super::*;
 use frame_support::traits::tokens::{
-	Preservation::Expendable,
-	Precision::{BestEffort, Exact},
 	Fortitude::{Force, Polite},
+	Precision::{BestEffort, Exact},
+	Preservation::Expendable,
 	Restriction::Free,
 };
 use fungible::{Inspect, InspectFreeze, InspectHold, MutateFreeze, MutateHold, Unbalanced};

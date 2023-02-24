@@ -24,7 +24,7 @@ use frame_support::{
 	traits::{
 		fungible::{hold::Inspect as InspectHold, Inspect as FunInspect, Mutate as FunMutate},
 		nonfungible::{Inspect, Transfer},
-		tokens::{Precision::Exact, Fortitude::Force},
+		tokens::{Fortitude::Force, Precision::Exact},
 	},
 };
 use sp_arithmetic::Perquintill;

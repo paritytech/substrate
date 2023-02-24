@@ -29,7 +29,8 @@ use frame_support::{
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup}, TokenError,
+	traits::{BlakeTwo256, IdentityLookup},
+	TokenError,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;

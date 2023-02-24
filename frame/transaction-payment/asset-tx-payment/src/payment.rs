@@ -21,7 +21,9 @@ use codec::FullCodec;
 use frame_support::{
 	traits::{
 		fungibles::{Balanced, Credit, Inspect},
-		tokens::{Balance, BalanceConversion, Preservation::Protect, Fortitude::Polite, Precision::Exact},
+		tokens::{
+			Balance, BalanceConversion, Fortitude::Polite, Precision::Exact, Preservation::Protect,
+		},
 	},
 	unsigned::TransactionValidityError,
 };

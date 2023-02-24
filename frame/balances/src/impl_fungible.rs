@@ -18,8 +18,8 @@
 //! Implementation of `fungible` traits for Balances pallet.
 use super::*;
 use frame_support::traits::tokens::{
-	Preservation::{self, Preserve, Protect},
 	Fortitude,
+	Preservation::{self, Preserve, Protect},
 	Provenance::{self, Minted},
 };
 
@@ -68,7 +68,11 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 		// Liquid balance is what is neither on hold nor frozen/required for provider.
 		a.free.saturating_sub(untouchable)
 	}
-	fn can_deposit(who: &T::AccountId, amount: Self::Balance, provenance: Provenance) -> DepositConsequence {
+	fn can_deposit(
+		who: &T::AccountId,
+		amount: Self::Balance,
+		provenance: Provenance,
+	) -> DepositConsequence {
 		if amount.is_zero() {
 			return DepositConsequence::Success
 		}
@@ -151,7 +155,8 @@ impl<T: Config<I>, I: 'static> fungible::Unbalanced<T::AccountId> for Pallet<T, 
 		who: &T::AccountId,
 		amount: Self::Balance,
 	) -> Result<Option<Self::Balance>, DispatchError> {
-		let max_reduction = <Self as fungible::Inspect<_>>::reducible_balance(who, Expendable, Force);
+		let max_reduction =
+			<Self as fungible::Inspect<_>>::reducible_balance(who, Expendable, Force);
 		let (result, maybe_dust) = Self::mutate_account(who, |account| -> DispatchResult {
 			// Make sure the reduction (if there is one) is no more than the maximum allowed.
 			let reduction = account.free.saturating_sub(amount);

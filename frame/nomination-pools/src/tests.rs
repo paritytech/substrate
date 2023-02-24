@@ -475,7 +475,7 @@ mod sub_pools {
 mod join {
 	use sp_runtime::TokenError;
 
-use super::*;
+	use super::*;
 
 	#[test]
 	fn join_works() {

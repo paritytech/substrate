@@ -25,9 +25,10 @@ use crate::{
 	traits::{
 		tokens::{
 			misc::{
-				Balance, DepositConsequence, Preservation::{self, Expendable},
-				Precision::{self, BestEffort, Exact},
+				Balance, DepositConsequence,
 				Fortitude::{self, Force, Polite},
+				Precision::{self, BestEffort, Exact},
+				Preservation::{self, Expendable},
 				Provenance::{self, Extant},
 				WithdrawConsequence,
 			},
@@ -280,8 +281,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		Self::total_issuance(asset)
 			.checked_sub(&actual)
 			.ok_or(ArithmeticError::Overflow)?;
-		let actual =
-			Self::decrease_balance(asset, who, actual, BestEffort, Expendable, force)?;
+		let actual = Self::decrease_balance(asset, who, actual, BestEffort, Expendable, force)?;
 		Self::set_total_issuance(asset, Self::total_issuance(asset).saturating_sub(actual));
 		Self::done_burn_from(asset, who, actual);
 		Ok(actual)
@@ -307,8 +307,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		Self::total_issuance(asset)
 			.checked_sub(&actual)
 			.ok_or(ArithmeticError::Overflow)?;
-		let actual =
-			Self::decrease_balance(asset, who, actual, BestEffort, Expendable, Polite)?;
+		let actual = Self::decrease_balance(asset, who, actual, BestEffort, Expendable, Polite)?;
 		Self::set_total_issuance(asset, Self::total_issuance(asset).saturating_sub(actual));
 		Self::done_shelve(asset, who, actual);
 		Ok(actual)
@@ -346,8 +345,8 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		amount: Self::Balance,
 		keep_alive: Preservation,
 	) -> Result<Self::Balance, DispatchError> {
-		let _extra = Self::can_withdraw(asset, source, amount)
-			.into_result(keep_alive != Expendable)?;
+		let _extra =
+			Self::can_withdraw(asset, source, amount).into_result(keep_alive != Expendable)?;
 		Self::can_deposit(asset, dest, amount, Extant).into_result()?;
 		Self::decrease_balance(asset, source, amount, BestEffort, keep_alive, Polite)?;
 		// This should never fail as we checked `can_deposit` earlier. But we do a best-effort

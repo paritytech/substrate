@@ -23,11 +23,12 @@ use crate::{
 	traits::{
 		tokens::{
 			misc::{
-				Balance, DepositConsequence, Preservation::{self, Expendable},
-				Precision::{self, BestEffort, Exact},
+				Balance, DepositConsequence,
 				Fortitude::{self, Force, Polite},
-				WithdrawConsequence,
+				Precision::{self, BestEffort, Exact},
+				Preservation::{self, Expendable},
 				Provenance::{self, Extant},
+				WithdrawConsequence,
 			},
 			Imbalance as ImbalanceT,
 		},
@@ -81,15 +82,22 @@ pub trait Inspect<AccountId>: Sized {
 	/// and potentially go below user-level restrictions on the minimum amount of the account.
 	///
 	/// Always less than or equal to `balance()`.
-	fn reducible_balance(who: &AccountId, keep_alive: Preservation, force: Fortitude)
-		-> Self::Balance;
+	fn reducible_balance(
+		who: &AccountId,
+		keep_alive: Preservation,
+		force: Fortitude,
+	) -> Self::Balance;
 
 	/// Returns `true` if the balance of `who` may be increased by `amount`.
 	///
 	/// - `who`: The account of which the balance should be increased by `amount`.
 	/// - `amount`: How much should the balance be increased?
 	/// - `mint`: Will `amount` be minted to deposit it into `account`?
-	fn can_deposit(who: &AccountId, amount: Self::Balance, provenance: Provenance) -> DepositConsequence;
+	fn can_deposit(
+		who: &AccountId,
+		amount: Self::Balance,
+		provenance: Provenance,
+	) -> DepositConsequence;
 
 	/// Returns `Failed` if the balance of `who` may not be decreased by `amount`, otherwise
 	/// the consequence.
@@ -299,8 +307,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		amount: Self::Balance,
 		keep_alive: Preservation,
 	) -> Result<Self::Balance, DispatchError> {
-		let _extra =
-			Self::can_withdraw(source, amount).into_result(keep_alive != Expendable)?;
+		let _extra = Self::can_withdraw(source, amount).into_result(keep_alive != Expendable)?;
 		Self::can_deposit(dest, amount, Extant).into_result()?;
 		Self::decrease_balance(source, amount, BestEffort, keep_alive, Polite)?;
 		// This should never fail as we checked `can_deposit` earlier. But we do a best-effort

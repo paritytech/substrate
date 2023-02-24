@@ -170,8 +170,8 @@ use frame_support::{
 	traits::{
 		tokens::{
 			fungible, BalanceStatus as Status, DepositConsequence,
-			Preservation::{Expendable, Preserve, Protect},
 			Fortitude::{self, Force, Polite},
+			Preservation::{Expendable, Preserve, Protect},
 			WithdrawConsequence,
 		},
 		Currency, Defensive, Get, OnUnbalanced, ReservableCurrency, StoredMap,

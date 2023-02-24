@@ -26,7 +26,7 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable},
 	storage::{with_transaction, TransactionOutcome},
 	traits::{
-		tokens::{Preservation::Expendable, Fortitude::Polite},
+		tokens::{Fortitude::Polite, Preservation::Expendable},
 		Contains, Currency, ExistenceRequirement, OriginTrait, Randomness, Time,
 	},
 	weights::Weight,
@@ -1219,11 +1219,7 @@ where
 		T::Currency::transfer(
 			&frame.account_id,
 			beneficiary,
-			T::Currency::reducible_balance(
-				&frame.account_id,
-				Expendable,
-				Polite,
-			),
+			T::Currency::reducible_balance(&frame.account_id, Expendable, Polite),
 			ExistenceRequirement::AllowDeath,
 		)?;
 		info.queue_trie_for_deletion()?;

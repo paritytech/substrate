@@ -352,7 +352,7 @@ fn proxy_announced_removes_announcement_and_returns_deposit() {
 #[test]
 fn filtering_works() {
 	new_test_ext().execute_with(|| {
-		assert!(Balances::mutate_account(&1, |a| a.free = 1000).is_ok());
+		Balances::make_free_balance_be(&1, 1000);
 		assert_ok!(Proxy::add_proxy(RuntimeOrigin::signed(1), 2, ProxyType::Any, 0));
 		assert_ok!(Proxy::add_proxy(RuntimeOrigin::signed(1), 3, ProxyType::JustTransfer, 0));
 		assert_ok!(Proxy::add_proxy(RuntimeOrigin::signed(1), 4, ProxyType::JustUtility, 0));
@@ -368,7 +368,7 @@ fn filtering_works() {
 		);
 
 		let derivative_id = Utility::derivative_account_id(1, 0);
-		assert!(Balances::mutate_account(&derivative_id, |a| a.free = 1000).is_ok());
+		Balances::make_free_balance_be(&derivative_id, 1000);
 		let inner = Box::new(call_transfer(6, 1));
 
 		let call = Box::new(RuntimeCall::Utility(UtilityCall::as_derivative {
@@ -571,7 +571,7 @@ fn proxying_works() {
 #[test]
 fn pure_works() {
 	new_test_ext().execute_with(|| {
-		Balances::make_free_balance_be(&1, 11);	// An extra one for the ED.
+		Balances::make_free_balance_be(&1, 11); // An extra one for the ED.
 		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 0));
 		let anon = Proxy::pure_account(&1, &ProxyType::Any, 0, None);
 		System::assert_last_event(

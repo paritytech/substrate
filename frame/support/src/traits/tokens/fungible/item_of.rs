@@ -22,8 +22,8 @@ use sp_runtime::{DispatchError, DispatchResult};
 
 use super::*;
 use crate::traits::tokens::{
-	fungibles, DepositConsequence, Imbalance as ImbalanceT, Preservation, Precision, Fortitude,
-	WithdrawConsequence, Provenance, Restriction,
+	fungibles, DepositConsequence, Fortitude, Imbalance as ImbalanceT, Precision, Preservation,
+	Provenance, Restriction, WithdrawConsequence,
 };
 
 /// Convert a `fungibles` trait implementation into a `fungible` trait implementation by identifying
@@ -63,7 +63,11 @@ impl<
 	) -> Self::Balance {
 		<F as fungibles::Inspect<AccountId>>::reducible_balance(A::get(), who, keep_alive, force)
 	}
-	fn can_deposit(who: &AccountId, amount: Self::Balance, provenance: Provenance) -> DepositConsequence {
+	fn can_deposit(
+		who: &AccountId,
+		amount: Self::Balance,
+		provenance: Provenance,
+	) -> DepositConsequence {
 		<F as fungibles::Inspect<AccountId>>::can_deposit(A::get(), who, amount, provenance)
 	}
 	fn can_withdraw(who: &AccountId, amount: Self::Balance) -> WithdrawConsequence<Self::Balance> {

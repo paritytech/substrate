@@ -2391,7 +2391,12 @@ impl<T: Config> Pallet<T> {
 		member.last_recorded_reward_counter = current_reward_counter;
 		reward_pool.register_claimed_reward(pending_rewards);
 
-		println!("transferring... {:?} from balance of {:?} (ED: {:?})", pending_rewards, T::Currency::free_balance(&bonded_pool.reward_account()), T::Currency::minimum_balance());
+		println!(
+			"transferring... {:?} from balance of {:?} (ED: {:?})",
+			pending_rewards,
+			T::Currency::free_balance(&bonded_pool.reward_account()),
+			T::Currency::minimum_balance()
+		);
 
 		// Transfer payout to the member.
 		T::Currency::transfer(

@@ -19,9 +19,9 @@
 
 use super::*;
 use frame_support::traits::tokens::{
-	Preservation::{Expendable, Protect},
-	Precision::BestEffort,
 	Fortitude::Force,
+	Precision::BestEffort,
+	Preservation::{Expendable, Protect},
 };
 use fungible::Balanced;
 

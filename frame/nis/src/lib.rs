@@ -78,7 +78,7 @@
 
 use frame_support::traits::{
 	fungible::{self, Inspect as FunInspect, Mutate as FunMutate},
-	tokens::{Preservation, Fortitude, DepositConsequence, WithdrawConsequence, Provenance},
+	tokens::{DepositConsequence, Fortitude, Preservation, Provenance, WithdrawConsequence},
 };
 pub use pallet::*;
 use sp_arithmetic::{traits::Unsigned, RationalArg};
@@ -168,7 +168,12 @@ pub mod pallet {
 				Balanced as FunBalanced,
 			},
 			nonfungible::{Inspect as NftInspect, Transfer as NftTransfer},
-			tokens::{Preservation::Expendable, Fortitude::Polite, Precision::{BestEffort, Exact}, Restriction::{Free, OnHold}},
+			tokens::{
+				Fortitude::Polite,
+				Precision::{BestEffort, Exact},
+				Preservation::Expendable,
+				Restriction::{Free, OnHold},
+			},
 			Defensive, DefensiveSaturating, OnUnbalanced,
 		},
 		PalletId,
@@ -562,8 +567,12 @@ pub mod pallet {
 					let mut bid = Bid { amount, who: who.clone() };
 					let net = if queue_full {
 						sp_std::mem::swap(&mut q[0], &mut bid);
-						let _ =
-							T::Currency::release(&T::HoldReason::get(), &bid.who, bid.amount, BestEffort);
+						let _ = T::Currency::release(
+							&T::HoldReason::get(),
+							&bid.who,
+							bid.amount,
+							BestEffort,
+						);
 						Self::deposit_event(Event::<T>::BidDropped {
 							who: bid.who,
 							amount: bid.amount,

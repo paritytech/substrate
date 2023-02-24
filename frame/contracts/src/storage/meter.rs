@@ -26,7 +26,7 @@ use frame_support::{
 	dispatch::DispatchError,
 	ensure,
 	traits::{
-		tokens::{Preservation::Protect, Fortitude::Polite, WithdrawConsequence},
+		tokens::{Fortitude::Polite, Preservation::Protect, WithdrawConsequence},
 		Currency, ExistenceRequirement, Get,
 	},
 	DefaultNoBound, RuntimeDebugNoBound,

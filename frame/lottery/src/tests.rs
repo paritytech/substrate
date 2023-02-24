@@ -377,10 +377,7 @@ fn do_buy_ticket_insufficient_balance() {
 		assert_ok!(Lottery::start_lottery(RuntimeOrigin::root(), 101, 10, 10, false));
 
 		// Buying fails with InsufficientBalance.
-		assert_noop!(
-			Lottery::do_buy_ticket(&1, &calls[0]),
-			TokenError::FundsUnavailable,
-		);
+		assert_noop!(Lottery::do_buy_ticket(&1, &calls[0]), TokenError::FundsUnavailable,);
 		assert!(TicketsCount::<Test>::get().is_zero());
 	});
 }

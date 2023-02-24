@@ -18,9 +18,10 @@
 //! Implementations for fungibles trait.
 
 use frame_support::traits::tokens::{
-	Preservation::{self, Expendable},
+	Fortitude,
 	Precision::{self, BestEffort},
-	Fortitude, Provenance::{self, Minted},
+	Preservation::{self, Expendable},
+	Provenance::{self, Minted},
 };
 
 use super::*;
@@ -110,8 +111,10 @@ impl<T: Config<I>, I: 'static> fungibles::Unbalanced<T::AccountId> for Pallet<T,
 		keep_alive: Preservation,
 		_force: Fortitude,
 	) -> Result<Self::Balance, DispatchError> {
-		let f =
-			DebitFlags { keep_alive: keep_alive != Expendable, best_effort: precision == BestEffort };
+		let f = DebitFlags {
+			keep_alive: keep_alive != Expendable,
+			best_effort: precision == BestEffort,
+		};
 		Self::decrease_balance(asset, who, amount, f, |_, _| Ok(()))
 	}
 	fn increase_balance(
