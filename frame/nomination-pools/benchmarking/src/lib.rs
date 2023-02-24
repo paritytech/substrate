@@ -299,10 +299,10 @@ frame_benchmarking::benchmarks! {
 
 	claim_payout {
 		let claimer: T::AccountId = account("claimer", USER_SEED + 4, 0);
-
+		let commission = Perbill::from_percent(50);
 		let origin_weight = Pools::<T>::depositor_min_bond() * 2u32.into();
 		let ed = CurrencyOf::<T>::minimum_balance();
-		let (depositor, pool_account) = create_pool_account::<T>(0, origin_weight, Some(Perbill::from_percent(50)));
+		let (depositor, pool_account) = create_pool_account::<T>(0, origin_weight, Some(commission));
 		let reward_account = Pools::<T>::create_reward_account(1);
 
 		// Send funds to the reward account of the pool
@@ -323,11 +323,11 @@ frame_benchmarking::benchmarks! {
 	verify {
 		assert_eq!(
 			CurrencyOf::<T>::free_balance(&depositor),
-			origin_weight * 2u32.into()
+			origin_weight + commission * origin_weight
 		);
 		assert_eq!(
 			CurrencyOf::<T>::free_balance(&reward_account),
-			ed + Zero::zero()
+			ed + commission * origin_weight 
 		);
 	}
 
@@ -774,10 +774,10 @@ frame_benchmarking::benchmarks! {
 
 	claim_commission {
 		let claimer: T::AccountId = account("claimer_member", USER_SEED + 4, 0);
-
+		let commission = Perbill::from_percent(50);
 		let origin_weight = Pools::<T>::depositor_min_bond() * 2u32.into();
 		let ed = CurrencyOf::<T>::minimum_balance();
-		let (depositor, pool_account) = create_pool_account::<T>(0, origin_weight, Some(Perbill::from_percent(50)));
+		let (depositor, pool_account) = create_pool_account::<T>(0, origin_weight, Some(commission));
 		let reward_account = Pools::<T>::create_reward_account(1);
 		CurrencyOf::<T>::make_free_balance_be(&reward_account, ed + origin_weight);
 
@@ -789,11 +789,11 @@ frame_benchmarking::benchmarks! {
 	verify {
 		assert_eq!(
 			CurrencyOf::<T>::free_balance(&depositor),
-			origin_weight * 1u32.into()
+			origin_weight + commission * origin_weight
 		);
 		assert_eq!(
 			CurrencyOf::<T>::free_balance(&reward_account),
-			ed + Zero::zero()
+			ed + commission * origin_weight
 		);
 	}
 
