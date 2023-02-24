@@ -994,6 +994,7 @@ struct InternalOutput<T: Config, O> {
 trait Invokable<T: Config> {
 	type Output;
 
+	/// Invoke a contract execution.
 	fn run(
 		&self,
 		debug_message: Option<&mut DebugBufferVec<T>>,
@@ -1286,9 +1287,8 @@ impl<T: Config> Pallet<T> {
 		input: I,
 		debug_message: Option<&mut DebugBufferVec<T>>,
 	) -> I::Output {
-		let gas_meter = GasMeter::new(input.gas_limit());
 		executing_contract::using_once(&mut false, || {
-			let res = executing_contract::with(|f| {
+			executing_contract::with(|f| {
 				// Fail if already entered contract execution
 				if *f {
 					return Err(())
@@ -1297,18 +1297,20 @@ impl<T: Config> Pallet<T> {
 				*f = true;
 				Ok(())
 			})
-			.unwrap_or(Ok(()));
-
-			if res.is_err() {
-				let err = ExecError {
-					error: <Error<T>>::ReentranceDenied.into(),
-					origin: ErrorOrigin::Caller,
-				};
-				input.fallback(err, gas_meter)
-			} else {
-				// Enter the contract call
-				input.run(debug_message, gas_meter)
-			}
+			.unwrap_or(Ok(())) // Should always be `Some`, still we make it safe.
+			.map_or_else(
+				|_| {
+					input.fallback(
+						ExecError {
+							error: <Error<T>>::ReentranceDenied.into(),
+							origin: ErrorOrigin::Caller,
+						},
+						GasMeter::new(input.gas_limit()),
+					)
+				},
+				// Enter contract call.
+				|_| input.run(debug_message, GasMeter::new(input.gas_limit())),
+			)
 		})
 	}
 
