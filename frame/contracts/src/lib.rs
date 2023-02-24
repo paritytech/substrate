@@ -1015,7 +1015,7 @@ trait Invokable<T: Config, O> {
 			.unwrap_or(Ok(())) // Should always be `Some`, still we make it safe.
 			.map_or_else(
 				|_| InternalOutput {
-					gas_meter: GasMeter::new(gas_limit.clone()),
+					gas_meter: GasMeter::new(gas_limit),
 					storage_deposit: Default::default(),
 					result: Err(ExecError {
 						error: <Error<T>>::ReentranceDenied.into(),
@@ -1108,7 +1108,7 @@ impl<T: Config> Invokable<T, (AccountIdOf<T>, ExecReturnValue)> for InstantiateI
 				},
 				Code::Existing(hash) => (
 					Default::default(),
-					PrefabWasmModule::from_storage(hash.clone(), &schedule, &mut gas_meter)?,
+					PrefabWasmModule::from_storage(*hash, &schedule, &mut gas_meter)?,
 				),
 			};
 			let mut storage_meter = StorageMeter::new(
@@ -1125,7 +1125,7 @@ impl<T: Config> Invokable<T, (AccountIdOf<T>, ExecReturnValue)> for InstantiateI
 				&mut gas_meter,
 				&mut storage_meter,
 				&schedule,
-				value.clone(),
+				value,
 				data.clone(),
 				&salt,
 				debug_message,
