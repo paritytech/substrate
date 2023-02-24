@@ -68,7 +68,7 @@ impl frame_benchmarking_cli::ExtrinsicBuilder for RemarkBuilder {
 	}
 }
 
-/// Generates `Balances::TransferExpendability` extrinsics for the benchmarks.
+/// Generates `Balances::TransferKeepAlive` extrinsics for the benchmarks.
 ///
 /// Note: Should only be used for benchmarking.
 pub struct TransferKeepAliveBuilder {
