@@ -907,7 +907,7 @@ impl<T: Config> BondedPool<T> {
 
 	/// Consume self and put into storage.
 	fn put(self) {
-		BondedPools::<T>::insert(self.id, BondedPoolInner { ..self.inner });
+		BondedPools::<T>::insert(self.id, self.inner);
 	}
 
 	/// Consume self and remove from storage.
@@ -2530,11 +2530,13 @@ pub mod pallet {
 				.defensive_ok_or::<Error<T>>(DefensiveError::RewardPoolNotFound.into())?;
 			// IMPORTANT: make sure that everything up to this point is using the current commission
 			// before it updates. Note that `try_update_current` could still fail at this point.
-			let _ = reward_pool.update_records(
+			reward_pool.update_records(
 				pool_id,
 				bonded_pool.points,
 				bonded_pool.commission.current(),
 			)?;
+			println!("reward pool: {:?}", reward_pool);
+			RewardPools::insert(pool_id, reward_pool);
 
 			bonded_pool.commission.try_update_current(&new_commission)?;
 			bonded_pool.put();
