@@ -2963,11 +2963,12 @@ impl<T: Config> Pallet<T> {
 			.saturating_add(reward_pool.total_commission_pending);
 		reward_pool.total_commission_pending = Zero::zero();
 
+		RewardPools::<T>::insert(pool_id, reward_pool);
+
 		Self::deposit_event(Event::<T>::PoolCommissionClaimed {
 			pool_id,
 			commission: Zero::zero(),
 		});
-
 		Ok(())
 	}
 
