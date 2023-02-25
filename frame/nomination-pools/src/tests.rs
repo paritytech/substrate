@@ -775,7 +775,7 @@ mod claim_payout {
 				// Then
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![Event::PaidOut { member: 40, pool_id: 1, payout: 40}]
+					vec![Event::PaidOut { member: 40, pool_id: 1, payout: 40 }]
 				);
 				assert_eq!(PoolMembers::<Runtime>::get(40).unwrap(), del(40, 1));
 				assert_eq!(RewardPools::<Runtime>::get(&1).unwrap(), rew(0, 0, 50));
@@ -788,7 +788,7 @@ mod claim_payout {
 				// Then
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![Event::PaidOut { member: 50, pool_id: 1, payout: 50}]
+					vec![Event::PaidOut { member: 50, pool_id: 1, payout: 50 }]
 				);
 				assert_eq!(PoolMembers::<Runtime>::get(50).unwrap(), del(50, 1));
 				assert_eq!(RewardPools::<Runtime>::get(&1).unwrap(), rew(0, 0, 100));
@@ -817,7 +817,7 @@ mod claim_payout {
 				// Then
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![Event::PaidOut { member: 40, pool_id: 1, payout: 20}]
+					vec![Event::PaidOut { member: 40, pool_id: 1, payout: 20 }]
 				);
 				assert_eq!(PoolMembers::<Runtime>::get(40).unwrap(), del_float(40, 1.5));
 				assert_eq!(RewardPools::<Runtime>::get(&1).unwrap(), rew(0, 0, 125));
@@ -1327,8 +1327,8 @@ mod claim_payout {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					Event::PaidOut { member: 10, pool_id: 1, payout: 4, },
-					Event::PaidOut { member: 20, pool_id: 1, payout: 4, },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 4 },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 4 },
 				]
 			);
 
@@ -1341,8 +1341,8 @@ mod claim_payout {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					Event::PaidOut { member: 10, pool_id: 1, payout: 3, },
-					Event::PaidOut { member: 20, pool_id: 1, payout: 3, },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 3 },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 3 },
 				]
 			);
 		});
@@ -1377,16 +1377,8 @@ mod claim_payout {
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { member: 20, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { member: 30, pool_id: 1, bonded: 10, joined: true },
-					Event::PaidOut {
-						member: 10,
-						pool_id: 1,
-						payout: 30 + 100 / 2 + 60 / 3,
-					},
-					Event::PaidOut {
-						member: 20,
-						pool_id: 1,
-						payout: 100 / 2 + 60 / 3,
-					},
+					Event::PaidOut { member: 10, pool_id: 1, payout: 30 + 100 / 2 + 60 / 3 },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 100 / 2 + 60 / 3 },
 					Event::PaidOut { member: 30, pool_id: 1, payout: 60 / 3 },
 				]
 			);
@@ -1486,8 +1478,8 @@ mod claim_payout {
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
 					Event::Bonded { member: 30, pool_id: 1, bonded: 10, joined: true },
-					Event::PaidOut { member: 10, pool_id: 1, payout: 10, },
-					Event::PaidOut { member: 20, pool_id: 1 , payout: 20, },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 10 },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 20 },
 					Event::PaidOut { member: 30, pool_id: 1, payout: 10 }
 				]
 			);
@@ -1508,7 +1500,7 @@ mod claim_payout {
 					Event::Bonded { member: 30, pool_id: 1, bonded: 10, joined: false },
 					Event::PaidOut { member: 10, pool_id: 1, payout: 20 },
 					Event::PaidOut { member: 20, pool_id: 1, payout: 40 },
-					Event::PaidOut { member: 30, pool_id: 1, payout: 40, }
+					Event::PaidOut { member: 30, pool_id: 1, payout: 40 }
 				]
 			);
 		});
@@ -1623,11 +1615,7 @@ mod claim_payout {
 
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::PaidOut {
-					member: 30,
-					pool_id: 1,
-					payout: 10 + 20 + 20,
-				}]
+				vec![Event::PaidOut { member: 30, pool_id: 1, payout: 10 + 20 + 20 }]
 			);
 		});
 	}
@@ -4771,11 +4759,7 @@ mod bond_extra {
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::PaidOut {
-						member: 10,
-						pool_id: 1,
-						payout: claimable_reward,
-					},
+					Event::PaidOut { member: 10, pool_id: 1, payout: claimable_reward },
 					Event::Bonded {
 						member: 10,
 						pool_id: 1,
@@ -5143,16 +5127,8 @@ mod reward_counter_precision {
 				pool_events_since_last_call(),
 				vec![
 					Event::Bonded { member: 20, pool_id: 1, bonded: 5000000000000, joined: true },
-					Event::PaidOut {
-						member: 10,
-						pool_id: 1,
-						payout: 7333333333333333333,
-					},
-					Event::PaidOut {
-						member: 20,
-						pool_id: 1,
-						payout: 3666666666666666666,
-					}
+					Event::PaidOut { member: 10, pool_id: 1, payout: 7333333333333333333 },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 3666666666666666666 }
 				]
 			);
 		})
@@ -5203,11 +5179,7 @@ mod reward_counter_precision {
 
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::PaidOut {
-					member: 10,
-					pool_id: 1,
-					payout: 15937424600999999996,
-				}]
+				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 15937424600999999996 }]
 			);
 
 			// now let a small member join with 10 DOTs.
@@ -5316,11 +5288,7 @@ mod reward_counter_precision {
 				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![Event::PaidOut {
-						member: 10,
-						pool_id: 1,
-						payout: 10000000,
-					}]
+					vec![Event::PaidOut { member: 10, pool_id: 1, payout: 10000000 }]
 				);
 
 				// earn some more rewards, this time 20 can also claim.
@@ -5616,6 +5584,7 @@ mod commission {
 	fn commission_reward_counter_works_one_member() {
 		ExtBuilder::default().build_and_execute(|| {
 			let pool_id = 1;
+			println!("SET COMMISSION 1");
 			assert_ok!(Pools::set_commission(
 				RuntimeOrigin::signed(900),
 				1,
@@ -5629,17 +5598,37 @@ mod commission {
 				PoolMembers::<Runtime>::get(10).unwrap(),
 				PoolMember::<Runtime> { pool_id, points: 10, ..Default::default() }
 			);
+			println!("CLAIM PAYOUT 1");
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 
 			//10% balance (commission) should still be in the pool.
 			assert_eq!(RewardPool::<Runtime>::current_balance(pool_id), 4);
 
+			println!("SET COMMISSION 2");
 			assert_ok!(Pools::set_commission(
 				RuntimeOrigin::signed(900),
 				1,
 				Some((Perbill::from_percent(20), 900)),
 			));
-			assert_eq!(Pools::api_pending_rewards(10).unwrap(), 0);
+			println!("PENDING REWARDS");
+			println!("{:?}", RewardPools::<Runtime>::get(pool_id).unwrap());
+
+			let (current_reward_counter, _) = RewardPools::<Runtime>::get(pool_id)
+				.unwrap()
+				.current_reward_counter(
+					pool_id,
+					BondedPools::<Runtime>::get(pool_id).unwrap().points,
+					Perbill::from_percent(20),
+				)
+				.unwrap();
+
+			assert_eq!(
+				PoolMembers::<Runtime>::get(10)
+					.unwrap()
+					.pending_rewards(current_reward_counter, Perbill::from_percent(20))
+					.unwrap(),
+				0
+			);
 		})
 	}
 
