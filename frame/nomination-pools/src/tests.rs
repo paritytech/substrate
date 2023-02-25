@@ -5445,18 +5445,6 @@ mod commission {
 
 			assert_eq!(RewardPool::<Runtime>::current_balance(pool_id), 20);
 
-			// uncomment to check reward_pool state
-			assert_eq!(
-				RewardPools::<Runtime>::get(pool_id).unwrap(),
-				RewardPool {
-					last_recorded_reward_counter: Zero::zero(),
-					last_recorded_total_payouts: 0,
-					total_rewards_claimed: 60,
-					total_commission_pending: 0,
-					total_commission_claimed: 0
-				}
-			);
-
 			// update payee only.
 			assert_ok!(Pools::set_commission(
 				RuntimeOrigin::signed(900),
@@ -5466,12 +5454,18 @@ mod commission {
 
 			assert_eq!(RewardPool::<Runtime>::current_balance(pool_id), 20);
 
+			// Pending commission is claimed.
+			assert_ok!(Pools::claim_commission(RuntimeOrigin::signed(900), pool_id));
+
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::PoolCommissionUpdated {
-					pool_id,
-					current: Some((Perbill::from_percent(25), 901))
-				},]
+				vec![
+					Event::PoolCommissionUpdated {
+						pool_id: 1,
+						current: Some((Perbill::from_percent(25), 901))
+					},
+					Event::PoolCommissionClaimed { pool_id: 1, commission: 0 }
+				]
 			);
 
 			// remove the commission for pool 1.
@@ -6459,6 +6453,71 @@ mod commission {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 1 },]
+			);
+		})
+	}
+
+	#[test]
+	fn claim_commission_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			let pool_id = 1;
+
+			let _ = Balances::deposit_creating(&900, 5);
+			assert_ok!(Pools::set_commission(
+				RuntimeOrigin::signed(900),
+				pool_id,
+				Some((Perbill::from_percent(50), 900))
+			));
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id },
+					Event::Bonded { member: 10, pool_id, bonded: 10, joined: true },
+					Event::PoolCommissionUpdated {
+						pool_id,
+						current: Some((Perbill::from_percent(50), 900))
+					},
+				]
+			);
+
+			// Pool earns 80 points, payout is triggered.
+			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 80));
+			assert_eq!(
+				PoolMembers::<Runtime>::get(10).unwrap(),
+				PoolMember::<Runtime> { pool_id, points: 10, ..Default::default() }
+			);
+
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![Event::PaidOut { member: 10, pool_id, payout: 40 }]
+			);
+
+			// Given:
+			assert_eq!(RewardPool::<Runtime>::current_balance(pool_id), 40);
+
+			// Pool does not exist
+			assert_noop!(
+				Pools::claim_commission(RuntimeOrigin::signed(900), 9999,),
+				Error::<Runtime>::PoolNotFound
+			);
+
+			// Does not have permission.
+			assert_noop!(
+				Pools::claim_commission(RuntimeOrigin::signed(10), pool_id,),
+				Error::<Runtime>::DoesNotHavePermission
+			);
+
+			// When:
+			assert_ok!(Pools::claim_commission(RuntimeOrigin::signed(900), pool_id));
+
+			// Then:
+			assert_eq!(RewardPool::<Runtime>::current_balance(pool_id), 0);
+
+			// No more pending commission.
+			assert_noop!(
+				Pools::claim_commission(RuntimeOrigin::signed(900), pool_id,),
+				Error::<Runtime>::NoPendingCommission
 			);
 		})
 	}
