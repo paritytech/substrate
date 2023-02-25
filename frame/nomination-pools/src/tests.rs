@@ -5611,7 +5611,7 @@ mod commission {
 				Some((Perbill::from_percent(20), 900)),
 			));
 			println!("PENDING REWARDS");
-			println!("{:?}", RewardPools::<Runtime>::get(pool_id).unwrap());
+			println!("reward pool {:?}: {:?}", pool_id, RewardPools::<Runtime>::get(pool_id).unwrap());
 
 			let (current_reward_counter, _) = RewardPools::<Runtime>::get(pool_id)
 				.unwrap()
@@ -5621,7 +5621,6 @@ mod commission {
 					Perbill::from_percent(20),
 				)
 				.unwrap();
-
 			assert_eq!(
 				PoolMembers::<Runtime>::get(10)
 					.unwrap()

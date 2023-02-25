@@ -1274,7 +1274,7 @@ impl<T: Config> RewardPool<T> {
 		println!("rc end of update_records: {:?}", current_reward_counter);
 		println!("last recorded total payouts: {:?}", self.last_recorded_total_payouts);
 
-		println!("RP: {:?}", self);
+		println!("RP id {:?}: {:?}", id, self);
 
 		Ok(())
 	}
@@ -1872,7 +1872,7 @@ pub mod pallet {
 			let mut reward_pool = RewardPools::<T>::get(pool_id)
 				.defensive_ok_or::<Error<T>>(DefensiveError::RewardPoolNotFound.into())?;
 			// IMPORTANT: reward pool records must be updated with the old points.
-			reward_pool.update_records(
+			let _ = reward_pool.update_records(
 				pool_id,
 				bonded_pool.points,
 				bonded_pool.commission.current(),
@@ -2530,7 +2530,7 @@ pub mod pallet {
 				.defensive_ok_or::<Error<T>>(DefensiveError::RewardPoolNotFound.into())?;
 			// IMPORTANT: make sure that everything up to this point is using the current commission
 			// before it updates. Note that `try_update_current` could still fail at this point.
-			reward_pool.update_records(
+			let _ = reward_pool.update_records(
 				pool_id,
 				bonded_pool.points,
 				bonded_pool.commission.current(),
@@ -2543,6 +2543,7 @@ pub mod pallet {
 				current: new_commission,
 			});
 			println!("end call");
+			println!("reward pool: {:?}", reward_pool);
 			Ok(())
 		}
 
@@ -2927,7 +2928,7 @@ impl<T: Config> Pallet<T> {
 
 		// payout related stuff: we must claim the payouts, and updated recorded payout data
 		// before updating the bonded pool points, similar to that of `join` transaction.
-		reward_pool.update_records(
+		let _ = reward_pool.update_records(
 			bonded_pool.id,
 			bonded_pool.points,
 			bonded_pool.commission.current(),
@@ -2966,7 +2967,7 @@ impl<T: Config> Pallet<T> {
 
 		// IMPORTANT: make sure that any newly pending commission not yet processed is added to
 		// `total_commission_pending`.
-		reward_pool.update_records(
+		let _ = reward_pool.update_records(
 			pool_id,
 			bonded_pool.points,
 			bonded_pool.commission.current(),
