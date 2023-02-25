@@ -476,7 +476,6 @@ impl<T: Config> PoolMember<T> {
 	fn pending_rewards(
 		&self,
 		current_reward_counter: T::RewardCounter,
-		commission: Perbill,
 	) -> Result<BalanceOf<T>, Error<T>> {
 		// accuracy note: Reward counters are `FixedU128` with base of 10^18. This value is being
 		// multiplied by a point. The worse case of a point is 10x the granularity of the balance
@@ -494,8 +493,6 @@ impl<T: Config> PoolMember<T> {
 		// than u128::max. Given that RC is interpreted as reward per unit of point, and unit of
 		// point is equal to balance (normally), and rewards are usually a proportion of the points
 		// in the pool, the likelihood of rc reaching near u128::MAX is near impossible.
-
-		println!("current reward counter pending rewards: {:?}", current_reward_counter);
 
 		(current_reward_counter.defensive_saturating_sub(self.last_recorded_reward_counter))
 			.checked_mul_int(self.active_points())
@@ -1256,25 +1253,14 @@ impl<T: Config> RewardPool<T> {
 		let (current_reward_counter, new_pending_commission) =
 			self.current_reward_counter(id, bonded_points, commission)?;
 
-		println!("rc in update_records: {:?}", current_reward_counter);
 		self.last_recorded_reward_counter = current_reward_counter;
 
 		self.total_commission_pending =
 			self.total_commission_pending.saturating_add(new_pending_commission);
 
-		println!(
-			"updating LRTP: {:?} + {:?} + {:?}",
-			balance, self.total_rewards_claimed, self.total_commission_claimed
-		);
-
 		self.last_recorded_total_payouts = balance
 			.checked_add(&self.total_rewards_claimed.saturating_add(self.total_commission_claimed))
 			.ok_or(Error::<T>::OverflowRisk)?;
-
-		println!("rc end of update_records: {:?}", current_reward_counter);
-		println!("last recorded total payouts: {:?}", self.last_recorded_total_payouts);
-
-		println!("RP id {:?}: {:?}", id, self);
 
 		Ok(())
 	}
@@ -1293,18 +1279,9 @@ impl<T: Config> RewardPool<T> {
 			.saturating_add(self.total_commission_claimed)
 			.saturating_sub(self.last_recorded_total_payouts);
 
-		println!(
-			"{:?} + {:?} + {:?} - {:?}",
-			balance,
-			self.total_rewards_claimed,
-			self.total_commission_claimed,
-			self.last_recorded_total_payouts
-		);
-
 		// Split the `payouts_since_last_record` into regular rewards and commission according to
 		// the current commission rate.
 		let new_pending_commission = commission * payouts_since_last_record;
-		println!("new pending commission: {:?}", new_pending_commission);
 		let payouts_deducting_commission =
 			payouts_since_last_record.saturating_sub(new_pending_commission);
 
@@ -2535,7 +2512,6 @@ pub mod pallet {
 				bonded_pool.points,
 				bonded_pool.commission.current(),
 			)?;
-			println!("reward pool: {:?}", reward_pool);
 			RewardPools::insert(pool_id, reward_pool);
 
 			bonded_pool.commission.try_update_current(&new_commission)?;
@@ -2544,7 +2520,6 @@ pub mod pallet {
 				pool_id,
 				current: new_commission,
 			});
-			println!("end call");
 			Ok(())
 		}
 
@@ -2793,21 +2768,13 @@ impl<T: Config> Pallet<T> {
 		// a member who has no skin in the game anymore cannot claim any rewards.
 		ensure!(!member.active_points().is_zero(), Error::<T>::FullyUnbonding);
 
-		println!(
-			"rc with {:?}, {:?} and {:?}",
-			bonded_pool.id,
-			bonded_pool.points,
-			bonded_pool.commission.current()
-		);
 		let (current_reward_counter, _) = reward_pool.current_reward_counter(
 			bonded_pool.id,
 			bonded_pool.points,
 			bonded_pool.commission.current(),
 		)?;
-		println!("current reward counter before pending rewards: {:?}", current_reward_counter);
 
-		let pending_rewards =
-			member.pending_rewards(current_reward_counter, bonded_pool.commission.current())?;
+		let pending_rewards = member.pending_rewards(current_reward_counter)?;
 		if pending_rewards.is_zero() {
 			return Ok(pending_rewards)
 		}
@@ -3097,16 +3064,10 @@ impl<T: Config> Pallet<T> {
 			let reward_pool = RewardPools::<T>::get(d.pool_id).unwrap();
 			if !bonded_pool.points.is_zero() {
 				let commission = bonded_pool.commission.current();
-
-				println!(
-					"do try state: {:?} + {:?} + {:?}",
-					d.pool_id, bonded_pool.points, commission
-				);
-				println!("{:?}", reward_pool);
 				let (current_rc, _) = reward_pool
 					.current_reward_counter(d.pool_id, bonded_pool.points, commission)
 					.unwrap();
-				let pending_rewards = d.pending_rewards(current_rc, commission).unwrap();
+				let pending_rewards = d.pending_rewards(current_rc).unwrap();
 				*pools_members_pending_rewards.entry(d.pool_id).or_default() += pending_rewards;
 			} // else this pool has been heavily slashed and cannot have any rewards anymore.
 		});
@@ -3197,15 +3158,10 @@ impl<T: Config> Pallet<T> {
 				.zip(BondedPools::<T>::get(pool_member.pool_id))
 			{
 				let commission = bonded_pool.commission.current();
-				println!(
-					"rc with {:?}, {:?} and {:?}",
-					pool_member.pool_id, bonded_pool.points, commission
-				);
 				let (current_reward_counter, _) = reward_pool
 					.current_reward_counter(pool_member.pool_id, bonded_pool.points, commission)
 					.ok()?;
-				println!("rc in api_pending_rewards: {:?}", current_reward_counter);
-				return pool_member.pending_rewards(current_reward_counter, commission).ok()
+				return pool_member.pending_rewards(current_reward_counter).ok()
 			}
 		}
 

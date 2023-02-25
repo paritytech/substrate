@@ -5054,7 +5054,7 @@ mod reward_counter_precision {
 		let bonded_pool = BondedPools::<T>::get(member.pool_id).unwrap();
 		assert_eq!(member.pool_id, 1);
 		let rc = default_pool_reward_counter();
-		member.pending_rewards(rc, bonded_pool.commission.current()).ok()
+		member.pending_rewards(rc).ok()
 	}
 
 	#[test]
@@ -5431,7 +5431,7 @@ mod commission {
 				.min(GlobalMaxCommission::<T>::get().unwrap_or(Bounded::max_value()));
 			assert_eq!(current, Perbill::from_percent(25));
 
-			// Pool earns 40 points, payout is triggered.
+			// Pool earns 80 points, payout is triggered.
 			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 80));
 			assert_eq!(
 				PoolMembers::<Runtime>::get(10).unwrap(),
@@ -5486,7 +5486,13 @@ mod commission {
 				vec![Event::PoolCommissionUpdated { pool_id, current: None },]
 			);
 
+			println!("{:?}", Balances::free_balance(&default_reward_account()));
+			println!("REWARD POOL CHECK: {:?}", RewardPools::<Runtime>::get(pool_id).unwrap());
+
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+
+			println!("REWARD POOL CHECK: {:?}", RewardPools::<Runtime>::get(pool_id).unwrap());
+
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![Event::PaidOut { member: 10, pool_id, payout: 100 },]
@@ -5611,7 +5617,11 @@ mod commission {
 				Some((Perbill::from_percent(20), 900)),
 			));
 			println!("PENDING REWARDS");
-			println!("reward pool {:?}: {:?}", pool_id, RewardPools::<Runtime>::get(pool_id).unwrap());
+			println!(
+				"reward pool {:?}: {:?}",
+				pool_id,
+				RewardPools::<Runtime>::get(pool_id).unwrap()
+			);
 
 			let (current_reward_counter, _) = RewardPools::<Runtime>::get(pool_id)
 				.unwrap()
@@ -5622,21 +5632,21 @@ mod commission {
 				)
 				.unwrap();
 
-				assert_eq!(
-					RewardPools::<Runtime>::get(pool_id).unwrap(),
-					RewardPool {
-						last_recorded_reward_counter: FixedU128::from_float(3.6),
-						last_recorded_total_payouts: 40,
-						total_rewards_claimed: 36,
-						total_commission_pending: 4,
-						total_commission_claimed: 0
-					}
-				);
+			assert_eq!(
+				RewardPools::<Runtime>::get(pool_id).unwrap(),
+				RewardPool {
+					last_recorded_reward_counter: FixedU128::from_float(3.6),
+					last_recorded_total_payouts: 40,
+					total_rewards_claimed: 36,
+					total_commission_pending: 4,
+					total_commission_claimed: 0
+				}
+			);
 
 			assert_eq!(
 				PoolMembers::<Runtime>::get(10)
 					.unwrap()
-					.pending_rewards(current_reward_counter, Perbill::from_percent(20))
+					.pending_rewards(current_reward_counter)
 					.unwrap(),
 				0
 			);
