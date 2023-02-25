@@ -5454,7 +5454,7 @@ mod commission {
 
 			assert_eq!(RewardPool::<Runtime>::current_balance(pool_id), 20);
 
-			// Pending commission is claimed.
+			// Pending commission is claimed
 			assert_ok!(Pools::claim_commission(RuntimeOrigin::signed(900), pool_id));
 
 			assert_eq!(
