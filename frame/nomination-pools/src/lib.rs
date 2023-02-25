@@ -347,7 +347,7 @@ use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, ops::Div, vec::Vec};
 
 /// The log target of this pallet.
-pub const LOG_TARGET: &'static str = "runtime::nomination-pools";
+pub const LOG_TARGET: &str = "runtime::nomination-pools";
 
 // syntactic sugar for logging.
 #[macro_export]
@@ -690,12 +690,12 @@ impl<T: Config> Commission<T> {
 				|f| {
 					// if `min_delay` is zero (no delay), not throttling.
 					if t.min_delay == Zero::zero() {
-						return false
+						false
 					} else {
 						// throttling if blocks passed is less than `min_delay`.
 						let blocks_surpassed =
 							<frame_system::Pallet<T>>::block_number().saturating_sub(f);
-						return blocks_surpassed < t.min_delay
+						blocks_surpassed < t.min_delay
 					}
 				},
 			)
@@ -721,7 +721,7 @@ impl<T: Config> Commission<T> {
 		self.current = match current {
 			None => None,
 			Some((commission, payee)) => {
-				ensure!(!self.throttling(&commission), Error::<T>::CommissionChangeThrottled);
+				ensure!(!self.throttling(commission), Error::<T>::CommissionChangeThrottled);
 				ensure!(
 					self.max.map_or(true, |m| commission <= &m),
 					Error::<T>::CommissionExceedsMaximum
@@ -733,7 +733,7 @@ impl<T: Config> Commission<T> {
 				}
 			},
 		};
-		let _ = self.register_update();
+		self.register_update();
 		Ok(())
 	}
 
@@ -1165,7 +1165,7 @@ impl<T: Config> BondedPool<T> {
 		// Cache the value
 		let bonded_account = self.bonded_account();
 		T::Currency::transfer(
-			&who,
+			who,
 			&bonded_account,
 			amount,
 			match ty {
@@ -1849,7 +1849,7 @@ pub mod pallet {
 			let mut reward_pool = RewardPools::<T>::get(pool_id)
 				.defensive_ok_or::<Error<T>>(DefensiveError::RewardPoolNotFound.into())?;
 			// IMPORTANT: reward pool records must be updated with the old points.
-			let _ = reward_pool.update_records(
+			reward_pool.update_records(
 				pool_id,
 				bonded_pool.points,
 				bonded_pool.commission.current(),
@@ -1966,7 +1966,7 @@ pub mod pallet {
 			// Claim the the payout prior to unbonding. Once the user is unbonding their points no
 			// longer exist in the bonded pool and thus they can no longer claim their payouts. It
 			// is not strictly necessary to claim the rewards, but we do it here for UX.
-			let _ = reward_pool.update_records(
+			reward_pool.update_records(
 				bonded_pool.id,
 				bonded_pool.points,
 				bonded_pool.commission.current(),
@@ -2017,7 +2017,7 @@ pub mod pallet {
 			});
 
 			// Now that we know everything has worked write the items to storage.
-			SubPoolsStorage::insert(&member.pool_id, sub_pools);
+			SubPoolsStorage::insert(member.pool_id, sub_pools);
 			Self::put_member_with_pools(&member_account, member, bonded_pool, reward_pool);
 			Ok(())
 		}
@@ -2106,10 +2106,10 @@ pub mod pallet {
 				.iter()
 				.fold(BalanceOf::<T>::zero(), |accumulator, (era, unlocked_points)| {
 					sum_unlocked_points = sum_unlocked_points.saturating_add(*unlocked_points);
-					if let Some(era_pool) = sub_pools.with_era.get_mut(&era) {
+					if let Some(era_pool) = sub_pools.with_era.get_mut(era) {
 						let balance_to_unbond = era_pool.dissolve(*unlocked_points);
 						if era_pool.points.is_zero() {
-							sub_pools.with_era.remove(&era);
+							sub_pools.with_era.remove(era);
 						}
 						accumulator.saturating_add(balance_to_unbond)
 					} else {
@@ -2158,12 +2158,12 @@ pub mod pallet {
 					None
 				} else {
 					bonded_pool.dec_members().put();
-					SubPoolsStorage::<T>::insert(&member.pool_id, sub_pools);
+					SubPoolsStorage::<T>::insert(member.pool_id, sub_pools);
 					Some(T::WeightInfo::withdraw_unbonded_update(num_slashing_spans))
 				}
 			} else {
 				// we certainly don't need to delete any pools, because no one is being removed.
-				SubPoolsStorage::<T>::insert(&member.pool_id, sub_pools);
+				SubPoolsStorage::<T>::insert(member.pool_id, sub_pools);
 				PoolMembers::<T>::insert(&member_account, member);
 				Some(T::WeightInfo::withdraw_unbonded_update(num_slashing_spans))
 			};
@@ -2685,7 +2685,7 @@ impl<T: Config> Pallet<T> {
 	fn get_member_with_pools(
 		who: &T::AccountId,
 	) -> Result<(PoolMember<T>, BondedPool<T>, RewardPool<T>), Error<T>> {
-		let member = PoolMembers::<T>::get(&who).ok_or(Error::<T>::PoolMemberNotFound)?;
+		let member = PoolMembers::<T>::get(who).ok_or(Error::<T>::PoolMemberNotFound)?;
 		let bonded_pool =
 			BondedPool::<T>::get(member.pool_id).defensive_ok_or(DefensiveError::PoolNotFound)?;
 		let reward_pool =
@@ -2713,8 +2713,8 @@ impl<T: Config> Pallet<T> {
 		current_points: BalanceOf<T>,
 		new_funds: BalanceOf<T>,
 	) -> BalanceOf<T> {
-		let u256 = |x| T::BalanceToU256::convert(x);
-		let balance = |x| T::U256ToBalance::convert(x);
+		let u256 = T::BalanceToU256::convert;
+		let balance = T::U256ToBalance::convert;
 		match (current_balance.is_zero(), current_points.is_zero()) {
 			(_, true) => new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into()),
 			(true, false) => {
@@ -2741,8 +2741,8 @@ impl<T: Config> Pallet<T> {
 		current_points: BalanceOf<T>,
 		points: BalanceOf<T>,
 	) -> BalanceOf<T> {
-		let u256 = |x| T::BalanceToU256::convert(x);
-		let balance = |x| T::U256ToBalance::convert(x);
+		let u256 = T::BalanceToU256::convert;
+		let balance = T::U256ToBalance::convert;
 		if current_balance.is_zero() || current_points.is_zero() || points.is_zero() {
 			// There is nothing to unbond
 			return Zero::zero()
@@ -2790,7 +2790,7 @@ impl<T: Config> Pallet<T> {
 		if pending_rewards > Zero::zero() {
 			T::Currency::transfer(
 				&bonded_pool.reward_account(),
-				&member_account,
+				member_account,
 				pending_rewards,
 				// defensive: the depositor has put existential deposit into the pool and it stays
 				// untouched, reward account shall not die.
@@ -2896,7 +2896,7 @@ impl<T: Config> Pallet<T> {
 
 		// payout related stuff: we must claim the payouts, and updated recorded payout data
 		// before updating the bonded pool points, similar to that of `join` transaction.
-		let _ = reward_pool.update_records(
+		reward_pool.update_records(
 			bonded_pool.id,
 			bonded_pool.points,
 			bonded_pool.commission.current(),
@@ -2935,7 +2935,7 @@ impl<T: Config> Pallet<T> {
 
 		// IMPORTANT: make sure that any newly pending commission not yet processed is added to
 		// `total_commission_pending`.
-		let _ = reward_pool.update_records(
+		reward_pool.update_records(
 			pool_id,
 			bonded_pool.points,
 			bonded_pool.commission.current(),
@@ -3057,7 +3057,7 @@ impl<T: Config> Pallet<T> {
 		let mut all_members = 0u32;
 		PoolMembers::<T>::iter().for_each(|(_, d)| {
 			let bonded_pool = BondedPools::<T>::get(d.pool_id).unwrap();
-			assert!(!d.total_points().is_zero(), "no member should have zero points: {:?}", d);
+			assert!(!d.total_points().is_zero(), "no member should have zero points: {d:?}");
 			*pools_members.entry(d.pool_id).or_default() += 1;
 			all_members += 1;
 
@@ -3084,14 +3084,14 @@ impl<T: Config> Pallet<T> {
 			);
 			assert!(
 				RewardPool::<T>::current_balance(id) >=
-					pools_members_pending_rewards.get(&id).map(|x| *x).unwrap_or_default()
+					pools_members_pending_rewards.get(&id).copied().unwrap_or_default()
 			)
 		});
 
 		BondedPools::<T>::iter().for_each(|(id, inner)| {
 			let bonded_pool = BondedPool { id, inner };
 			assert_eq!(
-				pools_members.get(&id).map(|x| *x).unwrap_or_default(),
+				pools_members.get(&id).copied().unwrap_or_default(),
 				bonded_pool.member_counter
 			);
 			assert!(MaxPoolMembersPerPool::<T>::get()
@@ -3121,12 +3121,7 @@ impl<T: Config> Pallet<T> {
 
 			assert!(
 				total_balance >= bonded_balance + sum_unbonding_balance,
-				"faulty pool: {:?} / {:?}, total_balance {:?} >= bonded_balance {:?} + sum_unbonding_balance {:?}",
-				pool_id,
-				_pool,
-				total_balance,
-				bonded_balance,
-				sum_unbonding_balance
+				"faulty pool: {pool_id:?} / {_pool:?}, total_balance {total_balance:?} >= bonded_balance {bonded_balance:?} + sum_unbonding_balance {sum_unbonding_balance:?}"
 			);
 		}
 

@@ -118,8 +118,8 @@ impl sp_staking::StakingInterface for StakingMock {
 
 	fn stake(who: &Self::AccountId) -> Result<Stake<Self>, DispatchError> {
 		match (
-			UnbondingBalanceMap::get().get(who).map(|v| *v),
-			BondedBalanceMap::get().get(who).map(|v| *v),
+			UnbondingBalanceMap::get().get(who).copied(),
+			BondedBalanceMap::get().get(who).copied(),
 		) {
 			(None, None) => Err(DispatchError::Other("balance not found")),
 			(Some(v), None) => Ok(Stake { total: v, active: 0, stash: *who }),
@@ -344,7 +344,7 @@ impl ExtBuilder {
 		ext
 	}
 
-	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
+	pub fn build_and_execute(self, test: impl FnOnce()) {
 		self.build().execute_with(|| {
 			test();
 			Pools::do_try_state(CheckLevel::get()).unwrap();
@@ -409,7 +409,7 @@ pub fn balances_events_since_last_call() -> Vec<pallet_balances::Event<Runtime>>
 
 /// Same as `fully_unbond`, in permissioned setting.
 pub fn fully_unbond_permissioned(member: AccountId) -> DispatchResult {
-	let points = PoolMembers::<Runtime>::get(&member)
+	let points = PoolMembers::<Runtime>::get(member)
 		.map(|d| d.active_points())
 		.unwrap_or_default();
 	Pools::unbond(RuntimeOrigin::signed(member), member, points)

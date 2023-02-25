@@ -238,7 +238,7 @@ pub mod v2 {
 					let mut sum_paid_out = BalanceOf::<T>::zero();
 
 					members
-						.into_iter()
+						.iter()
 						.filter_map(|(who, points)| {
 							let bonded_pool = match BondedPool::<T>::get(id) {
 								Some(x) => x,
@@ -271,7 +271,7 @@ pub mod v2 {
 						.for_each(|(who, last_claim)| {
 							let outcome = T::Currency::transfer(
 								&reward_account,
-								&who,
+								who,
 								last_claim,
 								ExistenceRequirement::KeepAlive,
 							);
@@ -414,13 +414,13 @@ pub mod v3 {
 				Metadata::<T>::iter_keys()
 					.filter(|id| {
 						metadata_iterated += 1;
-						!BondedPools::<T>::contains_key(&id)
+						!BondedPools::<T>::contains_key(id)
 					})
 					.collect::<Vec<_>>()
 					.into_iter()
 					.for_each(|id| {
 						metadata_removed += 1;
-						Metadata::<T>::remove(&id);
+						Metadata::<T>::remove(id);
 					});
 				current.put::<Pallet<T>>();
 				// metadata iterated + bonded pools read + a storage version read
