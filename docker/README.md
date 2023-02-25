@@ -31,12 +31,6 @@ To get started to pass the `--help flag`. Here are a few examples:
 - `./run.sh subkey --help`
 - `./run.sh node-template --version`
 - `./run.sh chain-spec-builder --help`
-- `./run.sh rustup update && rustup default stable && cargo --version`
-- `./run.sh rustup update && rustup default stable && rustc --version`
-- `./run.sh rustup --version`
-
-> If you get error `unable to get local issuer certificate`
-> Note that it may be necessary to run `rustup update`
 
 Then try running the following command to start a single node development chain using the Substrate Node Template binary `node-template`:
 
@@ -56,7 +50,4 @@ Note: It is recommended to provide a custom `--base-path` to store the chain dat
 ```sh
 # Purge the local dev chain
 ./run.sh node-template purge-chain --dev --base-path=/data -y
-
-# Check whether the code is compilable
-./run.sh cargo check
 ```

@@ -8,6 +8,6 @@ if [ "$args" = "" ] ; then
     exit 1
 else
     printf "*** Running Substrate Docker container with provided arguments: $args\n\n"
-    docker run --rm -it parity/substrate $args
+    docker run --rm -it b64e1411c1f1 $args
 fi
 
