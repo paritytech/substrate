@@ -31,14 +31,18 @@ To get started to pass the `--help flag`. Here are a few examples:
 - `./run.sh subkey --help`
 - `./run.sh node-template --version`
 - `./run.sh chain-spec-builder --help`
+- `./run.sh rustup update && rustup default stable && cargo --version`
+- `./run.sh rustup update && rustup default stable && rustc --version`
+- `./run.sh rustup --version`
+
+> If you get error `unable to get local issuer certificate`
+> Note that it may be necessary to run `rustup update`
 
 Then try running the following command to start a single node development chain using the Substrate Node Template binary `node-template`:
 
 ```sh
 ./run.sh node-template --dev --ws-external
 ```
-
-> If you do not want the Docker container to be deleted until you are ready then you may modify the run.sh script to remove the Docker `--rm` option before running it. Then you may enter the shell of the last container that was created with `docker exec -it $(docker ps -n=1 -q) /bin/sh` to execute further commands.
 
 Note: It is recommended to provide a custom `--base-path` to store the chain database. For example:
 
