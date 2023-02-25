@@ -1155,7 +1155,7 @@ impl pallet_message_queue::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
 	/// NOTE: Always set this to `NoopMessageProcessor` for benchmarking.
-	type MessageProcessor = pallet_message_queue::mock_helpers::NoopMessageProcessor;
+	type MessageProcessor = pallet_message_queue::mock_helpers::NoopMessageProcessor<u32>;
 	type Size = u32;
 	type QueueChangeHandler = ();
 	type HeapSize = ConstU32<{ 64 * 1024 }>;
