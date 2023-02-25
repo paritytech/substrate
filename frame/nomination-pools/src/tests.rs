@@ -5051,7 +5051,6 @@ mod reward_counter_precision {
 
 	fn pending_rewards(of: AccountId) -> Option<BalanceOf<T>> {
 		let member = PoolMembers::<T>::get(of).unwrap();
-		let bonded_pool = BondedPools::<T>::get(member.pool_id).unwrap();
 		assert_eq!(member.pool_id, 1);
 		let rc = default_pool_reward_counter();
 		member.pending_rewards(rc).ok()
@@ -5475,15 +5474,14 @@ mod commission {
 				},]
 			);
 
-			
 			// remove the commission for pool 1.
 			assert_ok!(Pools::set_commission(RuntimeOrigin::signed(900), pool_id, None));
-			
+
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![Event::PoolCommissionUpdated { pool_id, current: None },]
 			);
-			
+
 			// Pool earns 100 points, payout is triggered.
 			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 100));
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
