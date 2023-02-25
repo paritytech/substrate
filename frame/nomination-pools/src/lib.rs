@@ -2545,7 +2545,6 @@ pub mod pallet {
 				current: new_commission,
 			});
 			println!("end call");
-			println!("reward pool: {:?}", reward_pool);
 			Ok(())
 		}
 

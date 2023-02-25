@@ -5621,6 +5621,18 @@ mod commission {
 					Perbill::from_percent(20),
 				)
 				.unwrap();
+
+				assert_eq!(
+					RewardPools::<Runtime>::get(pool_id).unwrap(),
+					RewardPool {
+						last_recorded_reward_counter: FixedU128::from_float(3.6),
+						last_recorded_total_payouts: 40,
+						total_rewards_claimed: 36,
+						total_commission_pending: 4,
+						total_commission_claimed: 0
+					}
+				);
+
 			assert_eq!(
 				PoolMembers::<Runtime>::get(10)
 					.unwrap()
