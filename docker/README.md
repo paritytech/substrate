@@ -25,7 +25,7 @@ Then to generate the latest parity/substrate image. Please run:
 
 The image can be used by passing the selected binary followed by the appropriate tags for this binary.
 
-To get started to pass the `--help flag`. Here are a few examples:
+Your best guess to get started is to pass the `--help flag`. Here are a few examples:
 
 - `./run.sh substrate --version`
 - `./run.sh subkey --help`
