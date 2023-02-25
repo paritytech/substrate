@@ -5475,23 +5475,18 @@ mod commission {
 				},]
 			);
 
-			// Pool earns 100 points, payout is triggered.
-			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 100));
-
+			
 			// remove the commission for pool 1.
 			assert_ok!(Pools::set_commission(RuntimeOrigin::signed(900), pool_id, None));
-
+			
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![Event::PoolCommissionUpdated { pool_id, current: None },]
 			);
-
-			println!("{:?}", Balances::free_balance(&default_reward_account()));
-			println!("REWARD POOL CHECK: {:?}", RewardPools::<Runtime>::get(pool_id).unwrap());
-
+			
+			// Pool earns 100 points, payout is triggered.
+			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 100));
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
-
-			println!("REWARD POOL CHECK: {:?}", RewardPools::<Runtime>::get(pool_id).unwrap());
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -5590,7 +5585,6 @@ mod commission {
 	fn commission_reward_counter_works_one_member() {
 		ExtBuilder::default().build_and_execute(|| {
 			let pool_id = 1;
-			println!("SET COMMISSION 1");
 			assert_ok!(Pools::set_commission(
 				RuntimeOrigin::signed(900),
 				1,
@@ -5604,24 +5598,16 @@ mod commission {
 				PoolMembers::<Runtime>::get(10).unwrap(),
 				PoolMember::<Runtime> { pool_id, points: 10, ..Default::default() }
 			);
-			println!("CLAIM PAYOUT 1");
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 
 			//10% balance (commission) should still be in the pool.
 			assert_eq!(RewardPool::<Runtime>::current_balance(pool_id), 4);
 
-			println!("SET COMMISSION 2");
 			assert_ok!(Pools::set_commission(
 				RuntimeOrigin::signed(900),
 				1,
 				Some((Perbill::from_percent(20), 900)),
 			));
-			println!("PENDING REWARDS");
-			println!(
-				"reward pool {:?}: {:?}",
-				pool_id,
-				RewardPools::<Runtime>::get(pool_id).unwrap()
-			);
 
 			let (current_reward_counter, _) = RewardPools::<Runtime>::get(pool_id)
 				.unwrap()
