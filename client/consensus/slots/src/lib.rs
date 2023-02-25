@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -524,13 +524,7 @@ pub async fn start_slot_worker<B, C, W, SO, CIDP, Proof>(
 	let mut slots = Slots::new(slot_duration.as_duration(), create_inherent_data_providers, client);
 
 	loop {
-		let slot_info = match slots.next_slot().await {
-			Ok(r) => r,
-			Err(e) => {
-				warn!(target: LOG_TARGET, "Error while polling for next slot: {}", e);
-				return
-			},
-		};
+		let slot_info = slots.next_slot().await;
 
 		if sync_oracle.is_major_syncing() {
 			debug!(target: LOG_TARGET, "Skipping proposal slot due to sync.");

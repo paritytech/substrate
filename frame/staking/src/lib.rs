@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -878,31 +878,6 @@ pub enum Forcing {
 impl Default for Forcing {
 	fn default() -> Self {
 		Forcing::NotForcing
-	}
-}
-
-// A value placed in storage that represents the current version of the Staking storage. This value
-// is used by the `on_runtime_upgrade` logic to determine whether we run storage migration logic.
-// This should match directly with the semantic versions of the Rust crate.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-enum Releases {
-	V1_0_0Ancient,
-	V2_0_0,
-	V3_0_0,
-	V4_0_0,
-	V5_0_0,  // blockable validators.
-	V6_0_0,  // removal of all storage associated with offchain phragmen.
-	V7_0_0,  // keep track of number of nominators / validators in map
-	V8_0_0,  // populate `VoterList`.
-	V9_0_0,  // inject validators into `VoterList` as well.
-	V10_0_0, // remove `EarliestUnappliedSlash`.
-	V11_0_0, // Move pallet storage prefix, e.g. BagsList -> VoterBagsList
-	V12_0_0, // remove `HistoryDepth`.
-}
-
-impl Default for Releases {
-	fn default() -> Self {
-		Releases::V11_0_0
 	}
 }
 

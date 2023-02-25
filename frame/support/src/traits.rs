@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -121,4 +121,4 @@ pub use messages::{
 #[cfg(feature = "try-runtime")]
 mod try_runtime;
 #[cfg(feature = "try-runtime")]
-pub use try_runtime::{Select as TryStateSelect, TryState};
+pub use try_runtime::{Select as TryStateSelect, TryState, UpgradeCheckSelect};

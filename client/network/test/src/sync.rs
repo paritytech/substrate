@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -1241,6 +1241,44 @@ async fn warp_sync() {
 	futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 		if net.peer(3).has_body(gap_end) && net.peer(3).has_body(target) {
+			Poll::Ready(())
+		} else {
+			Poll::Pending
+		}
+	})
+	.await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn warp_sync_to_target_block() {
+	sp_tracing::try_init_simple();
+	let mut net = TestNet::new(0);
+	// Create 3 synced peers and 1 peer trying to warp sync.
+	net.add_full_peer_with_config(Default::default());
+	net.add_full_peer_with_config(Default::default());
+	net.add_full_peer_with_config(Default::default());
+
+	let blocks = net.peer(0).push_blocks(64, false);
+	let target = blocks[63];
+	net.peer(1).push_blocks(64, false);
+	net.peer(2).push_blocks(64, false);
+
+	let target_block = net.peer(0).client.header(target).unwrap().unwrap();
+
+	net.add_full_peer_with_config(FullPeerConfig {
+		sync_mode: SyncMode::Warp,
+		target_block: Some(target_block),
+		..Default::default()
+	});
+
+	net.run_until_sync().await;
+	assert!(net.peer(3).client().has_state_at(&BlockId::Number(64)));
+
+	// Wait for peer 1 download block history
+	futures::future::poll_fn::<(), _>(|cx| {
+		net.poll(cx);
+		let peer = net.peer(3);
+		if blocks.iter().all(|b| peer.has_body(*b)) {
 			Poll::Ready(())
 		} else {
 			Poll::Pending

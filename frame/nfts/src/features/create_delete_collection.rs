@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -82,12 +82,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Account::<T, I>::remove((&details.owner, &collection, &item));
 				T::Currency::unreserve(&details.deposit.account, details.deposit.amount);
 			}
-			#[allow(deprecated)]
-			ItemMetadataOf::<T, I>::remove_prefix(&collection, None);
-			#[allow(deprecated)]
-			ItemPriceOf::<T, I>::remove_prefix(&collection, None);
-			#[allow(deprecated)]
-			PendingSwapOf::<T, I>::remove_prefix(&collection, None);
+			for (_, metadata) in ItemMetadataOf::<T, I>::drain_prefix(&collection) {
+				if let Some(depositor) = metadata.deposit.account {
+					T::Currency::unreserve(&depositor, metadata.deposit.amount);
+				}
+			}
+			let _ = ItemPriceOf::<T, I>::clear_prefix(&collection, witness.items, None);
+			let _ = PendingSwapOf::<T, I>::clear_prefix(&collection, witness.items, None);
 			CollectionMetadataOf::<T, I>::remove(&collection);
 			Self::clear_roles(&collection)?;
 
