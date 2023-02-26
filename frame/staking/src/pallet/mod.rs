@@ -440,6 +440,7 @@ pub mod pallet {
 	/// pages of rewards that needs to be claimed.
 	///
 	/// This is keyed first by the era index to allow bulk deletion and then the stash account.
+	/// Should only be accessed through `EraInfo`.
 	///
 	/// Is it removed after [`Config::HistoryDepth`] eras.
 	/// If stakers hasn't been set or has been removed then empty overview is returned.
@@ -486,7 +487,7 @@ pub mod pallet {
 	/// Paginated exposure of a validator at given era.
 	///
 	/// This is keyed first by the era index to allow bulk deletion, then stash account and finally
-	/// the page.
+	/// the page. Should only be accessed through `EraInfo`.
 	///
 	/// This is cleared after [`Config::HistoryDepth`] eras.
 	#[pallet::storage]
@@ -697,6 +698,8 @@ pub mod pallet {
 			// validator stake is added only in page zero
 			let validator_stake = if page == 0 { overview.own } else { Zero::zero() };
 
+			// since overview is present, paged exposure will always be present except when a
+			// validator has only own stake and no nominator stake.
 			let exposure_page =
 				<ErasStakersPaged<T>>::get((era, validator, page)).unwrap_or_default();
 
