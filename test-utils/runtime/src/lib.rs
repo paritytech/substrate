@@ -601,7 +601,7 @@ parameter_types! {
 	pub RuntimeBlockLength: BlockLength =
 		BlockLength::max(4 * 1024 * 1024);
 	pub RuntimeBlockWeights: BlockWeights =
-		BlockWeights::with_sensible_defaults(Weight::from_ref_time(4 * 1024 * 1024), Perbill::from_percent(75));
+		BlockWeights::with_sensible_defaults(Weight::from_parts(4 * 1024 * 1024, 0), Perbill::from_percent(75));
 }
 
 impl From<frame_system::Call<Runtime>> for Extrinsic {

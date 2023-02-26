@@ -49,7 +49,7 @@ frame_support::construct_runtime!(
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(
-			frame_support::weights::Weight::from_ref_time(1024).set_proof_size(u64::MAX),
+			frame_support::weights::Weight::from_parts(1024, u64::MAX),
 		);
 	pub static ExistentialDeposit: u64 = 0;
 }
