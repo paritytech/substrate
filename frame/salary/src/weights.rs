@@ -45,17 +45,49 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_ranked_collective.
 pub trait WeightInfo {
-	fn add_member() -> Weight;
+	fn init() -> Weight;
+	fn bump() -> Weight;
+	fn induct() -> Weight;
+	fn register() -> Weight;
+	fn payout() -> Weight;
+	fn payout_other() -> Weight;
+	fn check_payment() -> Weight;
 }
 
 /// Weights for pallet_ranked_collective using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
-	// Storage: RankedCollective Members (r:1 w:1)
-	// Storage: RankedCollective MemberCount (r:1 w:1)
-	// Storage: RankedCollective IndexToId (r:0 w:1)
-	// Storage: RankedCollective IdToIndex (r:0 w:1)
-	fn add_member() -> Weight {
+	fn init() -> Weight {
+		Weight::from_ref_time(11_000_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(2 as u64))
+			.saturating_add(T::DbWeight::get().writes(4 as u64))
+	}
+	fn bump() -> Weight {
+		Weight::from_ref_time(11_000_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(2 as u64))
+			.saturating_add(T::DbWeight::get().writes(4 as u64))
+	}
+	fn induct() -> Weight {
+		Weight::from_ref_time(11_000_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(2 as u64))
+			.saturating_add(T::DbWeight::get().writes(4 as u64))
+	}
+	fn register() -> Weight {
+		Weight::from_ref_time(11_000_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(2 as u64))
+			.saturating_add(T::DbWeight::get().writes(4 as u64))
+	}
+	fn payout() -> Weight {
+		Weight::from_ref_time(11_000_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(2 as u64))
+			.saturating_add(T::DbWeight::get().writes(4 as u64))
+	}
+	fn payout_other() -> Weight {
+		Weight::from_ref_time(11_000_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(2 as u64))
+			.saturating_add(T::DbWeight::get().writes(4 as u64))
+	}
+	fn check_payment() -> Weight {
 		Weight::from_ref_time(11_000_000 as u64)
 			.saturating_add(T::DbWeight::get().reads(2 as u64))
 			.saturating_add(T::DbWeight::get().writes(4 as u64))
@@ -64,11 +96,37 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	// Storage: RankedCollective Members (r:1 w:1)
-	// Storage: RankedCollective MemberCount (r:1 w:1)
-	// Storage: RankedCollective IndexToId (r:0 w:1)
-	// Storage: RankedCollective IdToIndex (r:0 w:1)
-	fn add_member() -> Weight {
+	fn init() -> Weight {
+		Weight::from_ref_time(11_000_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(2 as u64))
+			.saturating_add(RocksDbWeight::get().writes(4 as u64))
+	}
+	fn bump() -> Weight {
+		Weight::from_ref_time(11_000_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(2 as u64))
+			.saturating_add(RocksDbWeight::get().writes(4 as u64))
+	}
+	fn induct() -> Weight {
+		Weight::from_ref_time(11_000_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(2 as u64))
+			.saturating_add(RocksDbWeight::get().writes(4 as u64))
+	}
+	fn register() -> Weight {
+		Weight::from_ref_time(11_000_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(2 as u64))
+			.saturating_add(RocksDbWeight::get().writes(4 as u64))
+	}
+	fn payout() -> Weight {
+		Weight::from_ref_time(11_000_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(2 as u64))
+			.saturating_add(RocksDbWeight::get().writes(4 as u64))
+	}
+	fn payout_other() -> Weight {
+		Weight::from_ref_time(11_000_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(2 as u64))
+			.saturating_add(RocksDbWeight::get().writes(4 as u64))
+	}
+	fn check_payment() -> Weight {
 		Weight::from_ref_time(11_000_000 as u64)
 			.saturating_add(RocksDbWeight::get().reads(2 as u64))
 			.saturating_add(RocksDbWeight::get().writes(4 as u64))

@@ -276,7 +276,7 @@ pub mod pallet {
 		/// Start the first payout cycle.
 		///
 		/// - `origin`: A `Signed` origin of an account which is a member of `Members`.
-		#[pallet::weight(T::WeightInfo::add_member())]
+		#[pallet::weight(T::WeightInfo::init())]
 		#[pallet::call_index(0)]
 		pub fn init(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
@@ -298,7 +298,7 @@ pub mod pallet {
 		/// Move to next payout cycle, assuming that the present block is now within that cycle.
 		///
 		/// - `origin`: A `Signed` origin of an account which is a member of `Members`.
-		#[pallet::weight(T::WeightInfo::add_member())]
+		#[pallet::weight(T::WeightInfo::bump())]
 		#[pallet::call_index(1)]
 		pub fn bump(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
@@ -318,7 +318,7 @@ pub mod pallet {
 		}
 
 		/// Induct oneself into the payout system.
-		#[pallet::weight(T::WeightInfo::add_member())]
+		#[pallet::weight(T::WeightInfo::induct())]
 		#[pallet::call_index(2)]
 		pub fn induct(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
@@ -341,7 +341,7 @@ pub mod pallet {
 		/// started.
 		///
 		/// - `origin`: A `Signed` origin of an account which is a member of `Members`.
-		#[pallet::weight(T::WeightInfo::add_member())]
+		#[pallet::weight(T::WeightInfo::register())]
 		#[pallet::call_index(3)]
 		pub fn register(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
@@ -373,7 +373,7 @@ pub mod pallet {
 		/// started but by no more than `PayoutPeriod` blocks.
 		///
 		/// - `origin`: A `Signed` origin of an account which is a member of `Members`.
-		#[pallet::weight(T::WeightInfo::add_member())]
+		#[pallet::weight(T::WeightInfo::payout())]
 		#[pallet::call_index(4)]
 		pub fn payout(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
@@ -388,7 +388,7 @@ pub mod pallet {
 		///
 		/// - `origin`: A `Signed` origin of an account which is a member of `Members`.
 		/// - `beneficiary`: The account to receive payment.
-		#[pallet::weight(T::WeightInfo::add_member())]
+		#[pallet::weight(T::WeightInfo::payout_other())]
 		#[pallet::call_index(5)]
 		pub fn payout_other(
 			origin: OriginFor<T>,
@@ -406,7 +406,7 @@ pub mod pallet {
 		///
 		/// - `origin`: A `Signed` origin of an account which is a member of `Members` who has
 		///   received a payment this cycle.
-		#[pallet::weight(T::WeightInfo::add_member())]
+		#[pallet::weight(T::WeightInfo::check_payment())]
 		#[pallet::call_index(6)]
 		pub fn check_payment(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
