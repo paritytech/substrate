@@ -3571,6 +3571,7 @@ dependencies = [
  "pallet-referenda",
  "pallet-remark",
  "pallet-root-testing",
+ "pallet-salary",
  "pallet-scheduler",
  "pallet-session",
  "pallet-session-benchmarking",

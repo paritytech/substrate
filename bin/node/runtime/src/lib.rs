@@ -63,7 +63,7 @@ pub use pallet_transaction_payment::{CurrencyAdapter, Multiplier, TargetedFeeAdj
 use pallet_transaction_payment::{FeeDetails, RuntimeDispatchInfo};
 use sp_api::impl_runtime_apis;
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
-use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
+use sp_core::{crypto::KeyTypeId, ConstU64, OpaqueMetadata};
 use sp_inherents::{CheckInherentsResult, InherentData};
 use sp_runtime::{
 	create_runtime_str,
@@ -1565,6 +1565,29 @@ impl pallet_uniques::Config for Runtime {
 }
 
 parameter_types! {
+	pub const Budget: Balance = 10_000 * DOLLARS;
+	pub TreasuryAccount: AccountId = Treasury::account_id();
+}
+
+pub struct SalaryForRank;
+impl Convert<u16, Balance> for SalaryForRank {
+	fn convert(a: u16) -> Balance {
+		Balance::from(a) * 1000 * DOLLARS
+	}
+}
+
+impl pallet_salary::Config for Runtime {
+	type WeightInfo = ();
+	type RuntimeEvent = RuntimeEvent;
+	type Paymaster = pallet_salary::PayFromAccount<Balances, TreasuryAccount>;
+	type Members = RankedCollective;
+	type ActiveSalaryForRank = SalaryForRank;
+	type RegistrationPeriod = ConstU32<200>;
+	type PayoutPeriod = ConstU32<200>;
+	type Budget = Budget;
+}
+
+parameter_types! {
 	pub Features: PalletFeatures = PalletFeatures::all_enabled();
 }
 
@@ -1754,6 +1777,7 @@ construct_runtime!(
 		Nis: pallet_nis,
 		Uniques: pallet_uniques,
 		Nfts: pallet_nfts,
+		Salary: pallet_salary,
 		TransactionStorage: pallet_transaction_storage,
 		VoterList: pallet_bags_list::<Instance1>,
 		StateTrieMigration: pallet_state_trie_migration,
@@ -1873,6 +1897,7 @@ mod benches {
 		[pallet_referenda, Referenda]
 		[pallet_recovery, Recovery]
 		[pallet_remark, Remark]
+		[pallet_salary, Salary]
 		[pallet_scheduler, Scheduler]
 		[pallet_session, SessionBench::<Runtime>]
 		[pallet_staking, Staking]

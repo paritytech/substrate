@@ -93,6 +93,7 @@ pallet-recovery = { version = "4.0.0-dev", default-features = false, path = "../
 pallet-referenda = { version = "4.0.0-dev", default-features = false, path = "../../../frame/referenda" }
 pallet-remark = { version = "4.0.0-dev", default-features = false, path = "../../../frame/remark" }
 pallet-root-testing = { version = "1.0.0-dev", default-features = false, path = "../../../frame/root-testing" }
+pallet-salary = { version = "4.0.0-dev", default-features = false, path = "../../../frame/salary" }
 pallet-session = { version = "4.0.0-dev", features = [ "historical" ], path = "../../../frame/session", default-features = false }
 pallet-session-benchmarking = { version = "4.0.0-dev", path = "../../../frame/session/benchmarking", default-features = false, optional = true }
 pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/staking" }
@@ -176,6 +177,7 @@ std = [
 	"sp-staking/std",
 	"pallet-staking/std",
 	"pallet-state-trie-migration/std",
+	"pallet-salary/std",
 	"sp-session/std",
 	"pallet-sudo/std",
 	"frame-support/std",
@@ -249,6 +251,7 @@ runtime-benchmarks = [
 	"pallet-referenda/runtime-benchmarks",
 	"pallet-recovery/runtime-benchmarks",
 	"pallet-remark/runtime-benchmarks",
+	"pallet-salary/runtime-benchmarks",
 	"pallet-session-benchmarking/runtime-benchmarks",
 	"pallet-society/runtime-benchmarks",
 	"pallet-staking/runtime-benchmarks",
@@ -306,6 +309,7 @@ try-runtime = [
 	"pallet-referenda/try-runtime",
 	"pallet-remark/try-runtime",
 	"pallet-root-testing/try-runtime",
+	"pallet-salary/try-runtime",
 	"pallet-session/try-runtime",
 	"pallet-staking/try-runtime",
 	"pallet-state-trie-migration/try-runtime",
