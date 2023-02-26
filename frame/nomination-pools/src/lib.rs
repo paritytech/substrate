@@ -145,8 +145,8 @@
 //! [`Call::set_commission_change_rate`] can not be removed once set, and can only be set to more
 //! restrictive values (i.e. a lower max commission or a slower change rate) in subsequent updates.
 //!
-//! All commissions are bound to [`GlobalMaxCommission`] when they are applied to rewards, a storage
-//! value intended to be updated via governance.
+//! If set, a pool's commission is bound to [`GlobalMaxCommission`] at the time it is applied to
+//! pending rewards. [`GlobalMaxCommission`] is intended to be updated only via governance.
 //!
 //! When a pool is dissolved, any outstanding pending commission that has not been claimed will be
 //! transferred to the depositor.
