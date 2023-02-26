@@ -1,29 +1,28 @@
 # This file is part of .gitlab-ci.yml
 # Here are all jobs that are executed during "test" stage
 
-
 # It's more like a check and it belongs to the previous stage, but we want to run this job with real tests in parallel
 find-fail-ci-phrase:
-  stage:                           test
+  stage: test
   variables:
-    CI_IMAGE:                      "paritytech/tools:latest"
-    ASSERT_REGEX:                  "FAIL-CI"
-    GIT_DEPTH:                     1
+    CI_IMAGE: "paritytech/tools:latest"
+    ASSERT_REGEX: "FAIL-CI"
+    GIT_DEPTH: 1
   extends:
     - .kubernetes-env
   script:
     - set +e
     - rg --line-number --hidden --type rust --glob '!{.git,target}' "$ASSERT_REGEX" .; exit_status=$?
     - if [ $exit_status -eq 0 ]; then
-        echo "$ASSERT_REGEX was found, exiting with 1";
-        exit 1;
+      echo "$ASSERT_REGEX was found, exiting with 1";
+      exit 1;
       else
-        echo "No $ASSERT_REGEX was found, exiting with 0";
-        exit 0;
+      echo "No $ASSERT_REGEX was found, exiting with 0";
+      exit 0;
       fi
 
 cargo-deny:
-  stage:                           test
+  stage: test
   extends:
     - .docker-env
     - .nightly-pipeline
@@ -36,16 +35,16 @@ cargo-deny:
     - echo "___The complete log is in the artifacts___"
     - cargo deny check -c ./scripts/ci/deny.toml 2> deny.log
   artifacts:
-    name:                          $CI_COMMIT_SHORT_SHA
-    expire_in:                     3 days
-    when:                          always
+    name: $CI_COMMIT_SHORT_SHA
+    expire_in: 3 days
+    when: always
     paths:
       - deny.log
   # FIXME: Temporarily allow to fail.
-  allow_failure:                   true
+  allow_failure: true
 
 cargo-fmt:
-  stage:                           test
+  stage: test
   variables:
     RUSTY_CACHIER_TOOLCHAIN: nightly
   extends:
@@ -57,11 +56,11 @@ cargo-fmt:
     - rusty-cachier cache upload
 
 cargo-clippy:
-  stage:                           test
+  stage: test
   # this is an artificial job dependency, for pipeline optimization using GitLab's DAGs
   needs:
-    - job:                         cargo-fmt
-      artifacts:                   false
+    - job: cargo-fmt
+      artifacts: false
   variables:
     RUSTY_CACHIER_TOOLCHAIN: nightly
   extends:
@@ -73,11 +72,11 @@ cargo-clippy:
     - rusty-cachier cache upload
 
 cargo-check-benches:
-  stage:                           test
+  stage: test
   variables:
     # Override to use nightly toolchain
-    RUSTY_CACHIER_TOOLCHAIN:       "nightly"
-    CI_JOB_NAME:                   "cargo-check-benches"
+    RUSTY_CACHIER_TOOLCHAIN: "nightly"
+    CI_JOB_NAME: "cargo-check-benches"
   extends:
     - .docker-env
     - .test-refs-check-benches
@@ -93,11 +92,11 @@ cargo-check-benches:
     - |
       export BASE=$(curl -s -H "Authorization: Bearer ${GITHUB_PR_TOKEN}" https://api.github.com/repos/paritytech/substrate/pulls/${$CI_COMMIT_REF_NAME} | jq .base.ref)
     - if [ $CI_COMMIT_REF_NAME != "master" ]; then
-        git fetch origin +${BASE}:${BASE};
-        git fetch origin +$CI_COMMIT_REF_NAME:$CI_COMMIT_REF_NAME;
-        git checkout ${BASE};
-        git config user.email "ci@gitlab.parity.io";
-        git merge $CI_COMMIT_REF_NAME --verbose --no-edit;
+      git fetch origin +${BASE}:${BASE};
+      git fetch origin +$CI_COMMIT_REF_NAME:$CI_COMMIT_REF_NAME;
+      git checkout ${BASE};
+      git config user.email "ci@gitlab.parity.io";
+      git merge $CI_COMMIT_REF_NAME --verbose --no-edit;
       fi
   parallel: 2
   script:
@@ -106,18 +105,18 @@ cargo-check-benches:
     # this job is executed in parallel on two runners
     - echo "___Running benchmarks___";
     - case ${CI_NODE_INDEX} in
-        1)
-          SKIP_WASM_BUILD=1 time cargo +nightly check --locked --benches --all;
-          cargo run --locked --release -p node-bench -- ::trie::read::small --json
-            | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::trie::read::small.json;
-          echo "___Uploading cache for rusty-cachier___";
-          rusty-cachier cache upload
-          ;;
-        2)
-          cargo run --locked --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small --json
-            | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::node::import::native::sr25519::transfer_keep_alive::paritydb::small.json
-          ;;
-        esac
+      1)
+      SKIP_WASM_BUILD=1 time cargo +nightly check --locked --benches --all;
+      cargo run --locked --release -p node-bench -- ::trie::read::small --json
+      | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::trie::read::small.json;
+      echo "___Uploading cache for rusty-cachier___";
+      rusty-cachier cache upload
+      ;;
+      2)
+      cargo run --locked --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small --json
+      | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::node::import::native::sr25519::transfer_keep_alive::paritydb::small.json
+      ;;
+      esac
   tags:
     - linux-docker-benches
 
@@ -125,38 +124,38 @@ node-bench-regression-guard:
   # it's not belong to `build` semantically, but dag jobs can't depend on each other
   # within the single stage - https://gitlab.com/gitlab-org/gitlab/-/issues/30632
   # more: https://github.com/paritytech/substrate/pull/8519#discussion_r608012402
-  stage:                           build
+  stage: build
   extends:
     - .docker-env
     - .test-refs-no-trigger-prs-only
   needs:
     # this is a DAG
-    - job:                         cargo-check-benches
-      artifacts:                   true
+    - job: cargo-check-benches
+      artifacts: true
     # polls artifact from master to compare with current result
     # need to specify both parallel jobs from master because of the bug
     # https://gitlab.com/gitlab-org/gitlab/-/issues/39063
-    - project:                     $CI_PROJECT_PATH
-      job:                         "cargo-check-benches 1/2"
-      ref:                         master
-      artifacts:                   true
-    - project:                     $CI_PROJECT_PATH
-      job:                         "cargo-check-benches 2/2"
-      ref:                         master
-      artifacts:                   true
+    - project: $CI_PROJECT_PATH
+      job: "cargo-check-benches 1/2"
+      ref: master
+      artifacts: true
+    - project: $CI_PROJECT_PATH
+      job: "cargo-check-benches 2/2"
+      ref: master
+      artifacts: true
   variables:
-    CI_IMAGE:                      "paritytech/node-bench-regression-guard:latest"
+    CI_IMAGE: "paritytech/node-bench-regression-guard:latest"
   before_script: [""]
   script:
     - echo "------- IMPORTANT -------"
     - echo "node-bench-regression-guard depends on the results of a cargo-check-benches job"
     - echo "In case of this job failure, check your pipeline's cargo-check-benches"
-    - 'node-bench-regression-guard --reference artifacts/benches/master-*
-       --compare-with artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA'
+    - "node-bench-regression-guard --reference artifacts/benches/master-*
+      --compare-with artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA"
   after_script: [""]
 
 cargo-check-try-runtime:
-  stage:                           test
+  stage: test
   extends:
     - .docker-env
     - .test-refs
@@ -166,18 +165,18 @@ cargo-check-try-runtime:
     - rusty-cachier cache upload
 
 test-deterministic-wasm:
-  stage:                           test
+  stage: test
   # this is an artificial job dependency, for pipeline optimization using GitLab's DAGs
   needs:
-    - job:                         cargo-check-try-runtime
-      artifacts:                   false
+    - job: cargo-check-try-runtime
+      artifacts: false
   extends:
     - .docker-env
     - .test-refs
   variables:
-    WASM_BUILD_NO_COLOR:           1
+    WASM_BUILD_NO_COLOR: 1
     # this variable gets overriden by "rusty-cachier environment inject", use the value as default
-    CARGO_TARGET_DIR:              "$CI_PROJECT_DIR/target"
+    CARGO_TARGET_DIR: "$CI_PROJECT_DIR/target"
   script:
     - rusty-cachier snapshot create
     # build runtime
@@ -195,7 +194,7 @@ test-deterministic-wasm:
     - rusty-cachier cache upload
 
 test-linux-stable:
-  stage:                           test
+  stage: test
   extends:
     - .docker-env
     - .test-refs
@@ -203,14 +202,14 @@ test-linux-stable:
   variables:
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
-    RUST_BACKTRACE:                1
-    WASM_BUILD_NO_COLOR:           1
-    WASM_BUILD_RUSTFLAGS:          "-Cdebug-assertions=y -Dwarnings"
+    RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    RUST_BACKTRACE: 1
+    WASM_BUILD_NO_COLOR: 1
+    WASM_BUILD_RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
     # Ensure we run the UI tests.
-    RUN_UI_TESTS:                  1
+    RUN_UI_TESTS: 1
     # needed for rusty-cachier to keep cache in test-linux-stable folder and not in test-linux-stable-1/3
-    CI_JOB_NAME:                   "test-linux-stable"
+    CI_JOB_NAME: "test-linux-stable"
   parallel: 3
   script:
     - rusty-cachier snapshot create
@@ -219,30 +218,30 @@ test-linux-stable:
     # node-cli is excluded until https://github.com/paritytech/substrate/issues/11321 fixed
     - echo "Node index - ${CI_NODE_INDEX}. Total amount - ${CI_NODE_TOTAL}"
     - time cargo nextest run --workspace
-                             --locked
-                             --release
-                             --verbose
-                             --features runtime-benchmarks
-                             --manifest-path ./bin/node/cli/Cargo.toml
-                             --exclude node-cli
-                             --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
+      --locked
+      --release
+      --verbose
+      --features runtime-benchmarks
+      --manifest-path ./bin/node/cli/Cargo.toml
+      --exclude node-cli
+      --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
     # we need to update cache only from one job
     - if [ ${CI_NODE_INDEX} == 1 ]; then rusty-cachier cache upload; fi
 
 test-frame-support:
-  stage:                           test
+  stage: test
   extends:
     - .docker-env
     - .test-refs
   variables:
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
-    RUST_BACKTRACE:                1
-    WASM_BUILD_NO_COLOR:           1
-    WASM_BUILD_RUSTFLAGS:          "-Cdebug-assertions=y -Dwarnings"
+    RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    RUST_BACKTRACE: 1
+    WASM_BUILD_NO_COLOR: 1
+    WASM_BUILD_RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
     # Ensure we run the UI tests.
-    RUN_UI_TESTS:                  1
+    RUN_UI_TESTS: 1
   script:
     - rusty-cachier snapshot create
     - time cargo test --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
@@ -252,19 +251,19 @@ test-frame-support:
 
 # This job runs tests that don't work with cargo-nextest in test-linux-stable
 test-linux-stable-extra:
-  stage:                           test
+  stage: test
   extends:
     - .docker-env
     - .test-refs
   variables:
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
-    RUST_BACKTRACE:                1
-    WASM_BUILD_NO_COLOR:           1
-    WASM_BUILD_RUSTFLAGS:          "-Cdebug-assertions=y -Dwarnings"
+    RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    RUST_BACKTRACE: 1
+    WASM_BUILD_NO_COLOR: 1
+    WASM_BUILD_RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
     # Ensure we run the UI tests.
-    RUN_UI_TESTS:                  1
+    RUN_UI_TESTS: 1
   script:
     - rusty-cachier snapshot create
     # Run node-cli tests
@@ -277,17 +276,17 @@ test-linux-stable-extra:
 
 # This job runs all benchmarks defined in the `/bin/node/runtime` once to check that there are no errors.
 quick-benchmarks:
-  stage:                           test
+  stage: test
   extends:
     - .docker-env
     - .test-refs
   variables:
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
-    RUST_BACKTRACE:                "full"
-    WASM_BUILD_NO_COLOR:           1
-    WASM_BUILD_RUSTFLAGS:          "-Cdebug-assertions=y -Dwarnings"
+    RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    RUST_BACKTRACE: "full"
+    WASM_BUILD_NO_COLOR: 1
+    WASM_BUILD_RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
   script:
     - rusty-cachier snapshot create
     - time cargo run --locked --release --features runtime-benchmarks -- benchmark pallet --execution wasm --wasm-execution compiled --chain dev --pallet "*" --extrinsic "*" --steps 2 --repeat 1
@@ -295,16 +294,15 @@ quick-benchmarks:
 
 test-frame-examples-compile-to-wasm:
   # into one job
-  stage:                           test
-  variables:
-    RUSTY_CACHIER_TOOLCHAIN: nightly
+  stage: test
   extends:
     - .docker-env
     - .test-refs
   variables:
+    RUSTY_CACHIER_TOOLCHAIN: nightly
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS:                     "-Cdebug-assertions=y"
+    RUSTFLAGS: "-Cdebug-assertions=y"
     RUST_BACKTRACE: 1
   script:
     - rusty-cachier snapshot create
@@ -315,7 +313,7 @@ test-frame-examples-compile-to-wasm:
     - rusty-cachier cache upload
 
 test-linux-stable-int:
-  stage:                           test
+  stage: test
   extends:
     - .docker-env
     - .test-refs
@@ -323,27 +321,27 @@ test-linux-stable-int:
   variables:
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
-    RUST_BACKTRACE:                1
-    WASM_BUILD_NO_COLOR:           1
-    WASM_BUILD_RUSTFLAGS:          "-Cdebug-assertions=y -Dwarnings"
+    RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    RUST_BACKTRACE: 1
+    WASM_BUILD_NO_COLOR: 1
+    WASM_BUILD_RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
     # Ensure we run the UI tests.
-    RUN_UI_TESTS:                  1
+    RUN_UI_TESTS: 1
   script:
     - rusty-cachier snapshot create
     - WASM_BUILD_NO_COLOR=1
       RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
-        time cargo test -p node-cli --release --verbose --locked -- --ignored
+      time cargo test -p node-cli --release --verbose --locked -- --ignored
     - rusty-cachier cache upload
 
 # more information about this job can be found here:
 # https://github.com/paritytech/substrate/pull/6916
 check-tracing:
-  stage:                           test
+  stage: test
   # this is an artificial job dependency, for pipeline optimization using GitLab's DAGs
   needs:
-    - job:                         test-linux-stable-int
-      artifacts:                   false
+    - job: test-linux-stable-int
+      artifacts: false
   variables:
     RUSTY_CACHIER_TOOLCHAIN: nightly
   extends:
@@ -360,20 +358,19 @@ check-tracing:
 # more information about this job can be found here:
 # https://github.com/paritytech/substrate/pull/3778
 test-full-crypto-feature:
-  stage:                           test
+  stage: test
   # this is an artificial job dependency, for pipeline optimization using GitLab's DAGs
   needs:
-    - job:                         check-tracing
-      artifacts:                   false
-  variables:
-    RUSTY_CACHIER_TOOLCHAIN: nightly
+    - job: check-tracing
+      artifacts: false
   extends:
     - .docker-env
     - .test-refs
   variables:
+    RUSTY_CACHIER_TOOLCHAIN: nightly
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS:                     "-Cdebug-assertions=y"
+    RUSTFLAGS: "-Cdebug-assertions=y"
     RUST_BACKTRACE: 1
   script:
     - rusty-cachier snapshot create
@@ -384,22 +381,21 @@ test-full-crypto-feature:
     - rusty-cachier cache upload
 
 check-rustdoc:
-  stage:                           test
-  variables:
-    RUSTY_CACHIER_TOOLCHAIN: nightly
+  stage: test
   extends:
     - .docker-env
     - .test-refs
   variables:
-    SKIP_WASM_BUILD:               1
-    RUSTDOCFLAGS:                  "-Dwarnings"
+    RUSTY_CACHIER_TOOLCHAIN: nightly
+    SKIP_WASM_BUILD: 1
+    RUSTDOCFLAGS: "-Dwarnings"
   script:
     - rusty-cachier snapshot create
     - time cargo +nightly doc --locked --workspace --all-features --verbose --no-deps
     - rusty-cachier cache upload
 
 cargo-check-each-crate:
-  stage:                           test
+  stage: test
   extends:
     - .docker-env
     - .test-refs
@@ -408,7 +404,7 @@ cargo-check-each-crate:
   variables:
     # $CI_JOB_NAME is set manually so that rusty-cachier can share the cache for all
     # "cargo-check-each-crate I/N" jobs
-    CI_JOB_NAME:                   cargo-check-each-crate
+    CI_JOB_NAME: cargo-check-each-crate
   script:
     - rusty-cachier snapshot create
     - PYTHONUNBUFFERED=x time ./scripts/ci/gitlab/check-each-crate.py "$CI_NODE_INDEX" "$CI_NODE_TOTAL"
@@ -427,7 +423,7 @@ cargo-check-each-crate-macos:
     - !reference [.rust-info-script, script]
     - !reference [.pipeline-stopper-vars, script]
   variables:
-    SKIP_WASM_BUILD:               1
+    SKIP_WASM_BUILD: 1
   script:
     # TODO: enable rusty-cachier once it supports Mac
     # TODO: use parallel jobs, as per cargo-check-each-crate, once more Mac runners are available

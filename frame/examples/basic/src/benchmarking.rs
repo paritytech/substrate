@@ -21,11 +21,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use crate::*;
-use frame_benchmarking::v1::{
-	impl_benchmark_test_suite,
-	v2::{benchmarks, Linear},
-	whitelisted_caller,
-};
+use frame_benchmarking::v2::*;
 use frame_system::RawOrigin;
 
 // To actually run this benchmark on pallet-example-basic, we need to put this pallet into the
@@ -55,19 +51,31 @@ mod benchmarks {
 		assert_eq!(Pallet::<T>::dummy(), Some(value))
 	}
 
+	// An example method that returns a Result that can be called within a benchmark
+	fn example_result_method() -> Result<(), BenchmarkError> {
+		Ok(())
+	}
+
 	// This will measure the execution time of `accumulate_dummy`.
 	// The benchmark execution phase is shorthanded. When the name of the benchmark case is the same
 	// as the extrinsic call. `_(...)` is used to represent the extrinsic name.
 	// The benchmark verification phase is omitted.
 	#[benchmark]
-	fn accumulate_dummy() {
+	fn accumulate_dummy() -> Result<(), BenchmarkError> {
 		let value = 1000u32.into();
 		// The caller account is whitelisted for DB reads/write by the benchmarking macro.
 		let caller: T::AccountId = whitelisted_caller();
 
+		// an example of calling something result-based within a benchmark using the ? operator
+		// this necessitates specifying the `Result<(), BenchmarkError>` return type
+		example_result_method()?;
+
 		// You can use `_` if the name of the Call matches the benchmark name.
 		#[extrinsic_call]
 		_(RawOrigin::Signed(caller), value);
+
+		// need this to be compatible with the return type
+		Ok(())
 	}
 
 	/// You can write helper functions in here since its a normal Rust module.

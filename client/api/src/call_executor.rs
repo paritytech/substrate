@@ -19,6 +19,7 @@
 //! A method call executor interface.
 
 use sc_executor::{RuntimeVersion, RuntimeVersionOf};
+use sp_core::traits::CallContext;
 use sp_runtime::traits::Block as BlockT;
 use sp_state_machine::{ExecutionStrategy, OverlayedChanges, StorageProof};
 use std::cell::RefCell;
@@ -58,6 +59,7 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 		method: &str,
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
+		context: CallContext,
 	) -> Result<Vec<u8>, sp_blockchain::Error>;
 
 	/// Execute a contextual call on top of state in a block of a given hash.

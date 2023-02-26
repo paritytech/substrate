@@ -154,6 +154,7 @@ impl crate::weights::WeightInfo for MockedWeightInfo {
 
 parameter_types! {
 	pub static MessagesProcessed: Vec<(Vec<u8>, MessageOrigin)> = vec![];
+	pub static SuspendedQueues: Vec<MessageOrigin> = vec![];
 }
 
 /// A message processor which records all processed messages into [`MessagesProcessed`].
@@ -170,9 +171,9 @@ impl ProcessMessage for RecordingMessageProcessor {
 	fn process_message(
 		message: &[u8],
 		origin: Self::Origin,
-		weight_limit: Weight,
-	) -> Result<(bool, Weight), ProcessMessageError> {
-		processing_message(message)?;
+		meter: &mut WeightMeter,
+	) -> Result<bool, ProcessMessageError> {
+		processing_message(message, &origin)?;
 
 		let weight = if message.starts_with(&b"weight="[..]) {
 			let mut w: u64 = 0;
@@ -187,22 +188,26 @@ impl ProcessMessage for RecordingMessageProcessor {
 		} else {
 			1
 		};
-		let weight = Weight::from_parts(weight, weight);
+		let required = Weight::from_parts(weight, weight);
 
-		if weight.all_lte(weight_limit) {
+		if meter.check_accrue(required) {
 			let mut m = MessagesProcessed::get();
 			m.push((message.to_vec(), origin));
 			MessagesProcessed::set(m);
-			Ok((true, weight))
+			Ok(true)
 		} else {
-			Err(ProcessMessageError::Overweight(weight))
+			Err(ProcessMessageError::Overweight(required))
 		}
 	}
 }
 
-/// Processed a mocked message. Messages that end with `badformat`, `corrupt` or `unsupported` will
-/// fail with the respective error.
-fn processing_message(msg: &[u8]) -> Result<(), ProcessMessageError> {
+/// Processed a mocked message. Messages that end with `badformat`, `corrupt`, `unsupported` or
+/// `yield` will fail with an error respectively.
+fn processing_message(msg: &[u8], origin: &MessageOrigin) -> Result<(), ProcessMessageError> {
+	if SuspendedQueues::get().contains(&origin) {
+		return Err(ProcessMessageError::Yield)
+	}
+
 	let msg = String::from_utf8_lossy(msg);
 	if msg.ends_with("badformat") {
 		Err(ProcessMessageError::BadFormat)
@@ -210,6 +215,8 @@ fn processing_message(msg: &[u8]) -> Result<(), ProcessMessageError> {
 		Err(ProcessMessageError::Corrupt)
 	} else if msg.ends_with("unsupported") {
 		Err(ProcessMessageError::Unsupported)
+	} else if msg.ends_with("yield") {
+		Err(ProcessMessageError::Yield)
 	} else {
 		Ok(())
 	}
@@ -230,20 +237,20 @@ impl ProcessMessage for CountingMessageProcessor {
 
 	fn process_message(
 		message: &[u8],
-		_origin: Self::Origin,
-		weight_limit: Weight,
-	) -> Result<(bool, Weight), ProcessMessageError> {
-		if let Err(e) = processing_message(message) {
+		origin: Self::Origin,
+		meter: &mut WeightMeter,
+	) -> Result<bool, ProcessMessageError> {
+		if let Err(e) = processing_message(message, &origin) {
 			NumMessagesErrored::set(NumMessagesErrored::get() + 1);
 			return Err(e)
 		}
-		let weight = Weight::from_parts(1, 1);
+		let required = Weight::from_parts(1, 1);
 
-		if weight.all_lte(weight_limit) {
+		if meter.check_accrue(required) {
 			NumMessagesProcessed::set(NumMessagesProcessed::get() + 1);
-			Ok((true, weight))
+			Ok(true)
 		} else {
-			Err(ProcessMessageError::Overweight(weight))
+			Err(ProcessMessageError::Overweight(required))
 		}
 	}
 }
@@ -285,7 +292,11 @@ pub fn set_weight(name: &str, w: Weight) {
 
 /// Assert that exactly these pages are present. Assumes `Here` origin.
 pub fn assert_pages(indices: &[u32]) {
-	assert_eq!(Pages::<Test>::iter().count(), indices.len());
+	assert_eq!(
+		Pages::<Test>::iter_keys().count(),
+		indices.len(),
+		"Wrong number of pages in the queue"
+	);
 	for i in indices {
 		assert!(Pages::<Test>::contains_key(MessageOrigin::Here, i));
 	}
