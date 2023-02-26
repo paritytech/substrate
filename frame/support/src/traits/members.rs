@@ -18,7 +18,8 @@
 //! Traits for dealing with the idea of membership.
 
 use impl_trait_for_tuples::impl_for_tuples;
-use sp_arithmetic::traits::AtLeast32BitUnsigned;
+use sp_arithmetic::traits::AtLeast16BitUnsigned;
+use sp_runtime::DispatchResult;
 use sp_std::{marker::PhantomData, prelude::*};
 
 /// A trait for querying whether a type can be said to "contain" a value.
@@ -269,15 +270,23 @@ pub trait ContainsLengthBound {
 /// Ranked membership data structure.
 pub trait RankedMembers {
 	type AccountId;
-	type Rank: AtLeast32BitUnsigned;
+	type Rank: AtLeast16BitUnsigned;
+
+	/// The lowest rank possible in this membership organisation.
+	fn lowest_rank() -> Self::Rank;
 
 	/// Return the rank of the given ID, or `None` if they are not a member.
 	fn rank_of(who: &Self::AccountId) -> Option<Self::Rank>;
 
-	/// Remove a member from the group. This does not result in a call to `removed`.
-	fn remove(who: &Self::AccountId);
-	/// Change a member's rank. This does not result in a call to `changed`.
-	fn change(who: &Self::AccountId, rank: Self::Rank);
+	/// Add a member to the group at the `lowest_rank()`.
+	fn induct(who: &Self::AccountId) -> DispatchResult;
+
+	/// Promote a member to the next higher rank.
+	fn promote(who: &Self::AccountId) -> DispatchResult;
+
+	/// Demote a member to the next lower rank; demoting beyond the `lowest_rank` removes the
+	/// member entirely.
+	fn demote(who: &Self::AccountId) -> DispatchResult;
 }
 
 /// Trait for type that can handle the initialization of account IDs at genesis.
