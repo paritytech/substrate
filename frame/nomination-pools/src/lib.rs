@@ -50,6 +50,11 @@
 //!   not nominating proper validators.
 //! * reward account: A similar key-less account, that is set as the `Payee` account for the bonded
 //!   account for all staking rewards.
+//! * change rate: The rate at which pool commission can be changed. A change rate consists of a
+//!   `max_increase` and `min_delay`, dictating the maximum percentage increase that can be applied
+//!   to the commission per number of blocks.
+//! * throttle: An attempted commission increase is throttled if the attempted change falls outside
+//!   the change rate bounds.
 //!
 //! ## Usage
 //!
@@ -125,8 +130,30 @@
 //!   other members have left. Once they fully withdraw their funds, the pool is destroyed.
 //! * Nominator: can select which validators the pool nominates.
 //! * Bouncer: can change the pools state and kick members if the pool is blocked.
-//! * Root: can change the nominator, bouncer, or itself and can perform any of the actions the
-//!   nominator or bouncer can.
+//! * Root: can change the nominator, bouncer, or itself, manage and claim commission, and can
+//!   perform any of the actions the nominator or bouncer can.
+//!
+//! ## Commission
+//!
+//! A pool can optionally have a commission configuration, via the `root` role, set with
+//! [`Call::set_commission`]. A payee account must be supplied with the desired commission
+//! percentage. Beyond the commission itself, a pool can have a maximum commission and a change rate
+//! - the maximum commission and the rate at which the commission can be changed respectively.
+//!
+//! Importantly, both max commission and change rate can not be removed once set, and can only be
+//! set to more restrictive values (i.e. a lower max commission or a slower change rate) in
+//! subsequent updates.
+//!
+//! All commissions are bound to [`GlobalMaxCommission`] when they are applied to rewards, a storage
+//! value intended to be updated via governance.
+//!
+//! When a pool is dissolved, any outstanding pending commission that has not been claimed will be
+//! transferred to the depositor.
+//!
+//! Implementation note: Commission is applied to rewards based on the current commission in effect
+//! at the time the reward was transferred to the reward pool. This is to prevent the malicious
+//! behaviour of changing the commission rate to a very high value after rewards are accumulated,
+//! and thus claim an unexpectedly high chunk of the reward.
 //!
 //! ### Dismantling
 //!
@@ -236,7 +263,8 @@
 //! destination.
 //!
 //! The reward pool is not really a pool anymore, as it does not track points anymore. Instead, it
-//! tracks, a virtual value called `reward_counter`, among a few other values.
+//! tracks, a virtual value called `reward_counter`, among a few other values including commission
+//! counters.
 //!
 //! See [this link](https://hackmd.io/PFGn6wI5TbCmBYoEA_f2Uw) for an in-depth explanation of the
 //! reward pool mechanism.
@@ -247,13 +275,12 @@
 //!
 //! ### Unbonding sub pools
 //!
-//! When a member unbonds, it's balance is unbonded in the bonded pool's account and tracked in
-//! an unbonding pool associated with the active era. If no such pool exists, one is created. To
-//! track which unbonding sub pool a member belongs too, a member tracks it's
-//! `unbonding_era`.
+//! When a member unbonds, it's balance is unbonded in the bonded pool's account and tracked in an
+//! unbonding pool associated with the active era. If no such pool exists, one is created. To track
+//! which unbonding sub pool a member belongs too, a member tracks it's `unbonding_era`.
 //!
-//! When a member initiates unbonding it's claim on the bonded pool
-//! (`balance_to_unbond`) is computed as:
+//! When a member initiates unbonding it's claim on the bonded pool (`balance_to_unbond`) is
+//! computed as:
 //!
 //! ```text
 //! balance_to_unbond = (bonded_pool.balance / bonded_pool.points) * member.points;
@@ -262,8 +289,8 @@
 //! If this is the first transfer into an unbonding pool arbitrary amount of points can be issued
 //! per balance. In this implementation unbonding pools are initialized with a 1 point to 1 balance
 //! ratio (see [`POINTS_TO_BALANCE_INIT_RATIO`]). Otherwise, the unbonding pools hold the same
-//! points to balance ratio properties as the bonded pool, so member points in the
-//! unbonding pool are issued based on
+//! points to balance ratio properties as the bonded pool, so member points in the unbonding pool
+//! are issued based on
 //!
 //! ```text
 //! new_points_issued = (points_before_transfer / balance_before_transfer) * balance_to_unbond;
@@ -296,14 +323,14 @@
 //! `pallet_staking::StakingLedger::slash`, which passes the information to this pallet via
 //! [`sp_staking::OnStakerSlash::on_slash`].
 //!
-//! Unbonding pools need to be slashed to ensure all nominators whom where in the bonded pool
-//! while it was backing a validator that equivocated are punished. Without these measures a
-//! member could unbond right after a validator equivocated with no consequences.
+//! Unbonding pools need to be slashed to ensure all nominators whom where in the bonded pool while
+//! it was backing a validator that equivocated are punished. Without these measures a member could
+//! unbond right after a validator equivocated with no consequences.
 //!
-//! This strategy is unfair to members who joined after the slash, because they get slashed as
-//! well, but spares members who unbond. The latter is much more important for security: if a
-//! pool's validators are attacking the network, their members need to unbond fast! Avoiding
-//! slashes gives them an incentive to do that if validators get repeatedly slashed.
+//! This strategy is unfair to members who joined after the slash, because they get slashed as well,
+//! but spares members who unbond. The latter is much more important for security: if a pool's
+//! validators are attacking the network, their members need to unbond fast! Avoiding slashes gives
+//! them an incentive to do that if validators get repeatedly slashed.
 //!
 //! To be fair to joiners, this implementation also need joining pools, which are actively staking,
 //! in addition to the unbonding pools. For maintenance simplicity these are not implemented.
@@ -2486,10 +2513,9 @@ pub mod pallet {
 		}
 
 		/// Set the commission of a pool.
-		///
-		/// The dispatch origin of this call must be signed by the `root` role of the pool. Both a
-		/// commission percentage and a commission payee must be provided in the `current` tuple.
-		/// Where a `current` of `None` is provided, any current commission will be removed.
+		//
+		/// Both a commission percentage and a commission payee must be provided in the `current`
+		/// tuple. Where a `current` of `None` is provided, any current commission will be removed.
 		///
 		/// - If a `None` is supplied to `new_commission`, existing commission will be removed.
 		#[pallet::call_index(17)]
@@ -2525,8 +2551,6 @@ pub mod pallet {
 
 		/// Set the maximum commission of a pool.
 		///
-		/// The dispatch origin of this call must be signed by the `root` role of the pool.
-		///
 		/// - Initial max can be set to any `Perbill`, and only smaller values thereafter.
 		/// - Current commission will be lowered in the event it is higher than a new max
 		///   commission.
@@ -2550,9 +2574,8 @@ pub mod pallet {
 
 		/// Set the commission change rate for a pool.
 		///
-		/// The dispatch origin of this call must be signed by the `root` role of the pool. Initial
-		/// change rate is not bounded, whereas subsequent updates can only be more restrictive than
-		/// the current.
+		/// Initial change rate is not bounded, whereas subsequent updates can only be more
+		/// restrictive than the current.
 		#[pallet::call_index(19)]
 		#[pallet::weight(T::WeightInfo::set_commission_change_rate())]
 		pub fn set_commission_change_rate(
@@ -2649,7 +2672,8 @@ impl<T: Config> Pallet<T> {
 			Zero::zero()
 		);
 
-		// This shouldn't fail, but if it does we don't really care
+		// This shouldn't fail, but if it does we don't really care. Remaining balance can consist
+		// of unclaimed pending commission, errorneous transfers to the reward account, etc.
 		let reward_pool_remaining = T::Currency::free_balance(&reward_account);
 		let _ = T::Currency::transfer(
 			&reward_account,
