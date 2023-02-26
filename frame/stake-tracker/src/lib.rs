@@ -30,7 +30,7 @@
 //! order to be able to listen to the events that Staking emits and propagate the changes to said
 //! lists accordingly. It also exposes [`TrackedList`] that adds defensive checks to a subset of
 //! [`SortedListProvider`] methods in order to spot unexpected list updates on the consumer side.
-//! This wrapper should beused to pass the tracked entity to the consumer.
+//! This wrapper should be used to pass the tracked entity to the consumer.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
