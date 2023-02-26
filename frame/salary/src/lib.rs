@@ -23,6 +23,7 @@
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::{Saturating, Zero};
+use sp_core::TypedGet;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Convert},
 	Perbill,
@@ -30,7 +31,10 @@ use sp_runtime::{
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 use frame_support::{
-	dispatch::DispatchResultWithPostInfo, ensure, traits::RankedMembers, RuntimeDebug,
+	dispatch::DispatchResultWithPostInfo,
+	ensure,
+	traits::{tokens::fungible, RankedMembers},
+	RuntimeDebug,
 };
 
 #[cfg(test)]
@@ -74,6 +78,20 @@ pub trait Pay {
 	/// Check how a payment has proceeded. `id` must have been a previously returned by `pay` for
 	/// the result of this call to be meaningful.
 	fn check_payment(id: Self::Id) -> PaymentStatus;
+}
+
+pub struct Pot<F, A>(sp_std::marker::PhantomData<(F, A)>);
+impl<A: TypedGet, F: fungible::Transfer<A::Type>> Pay for Pot<F, A> {
+	type Balance = F::Balance;
+	type AccountId = A::Type;
+	type Id = ();
+	fn pay(who: &Self::AccountId, amount: Self::Balance) -> Result<Self::Id, ()> {
+		F::transfer(&A::get(), who, amount, false).map_err(|_| ())?;
+		Ok(())
+	}
+	fn check_payment(_: ()) -> PaymentStatus {
+		PaymentStatus::Success
+	}
 }
 
 /// The status of the pallet instance.

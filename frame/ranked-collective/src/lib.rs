@@ -699,7 +699,7 @@ pub mod pallet {
 		type AccountId = T::AccountId;
 		type Rank = Rank;
 
-		fn lowest_rank() -> Self::Rank {
+		fn min_rank() -> Self::Rank {
 			0
 		}
 

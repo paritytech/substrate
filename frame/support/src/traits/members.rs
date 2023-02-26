@@ -273,18 +273,18 @@ pub trait RankedMembers {
 	type Rank: AtLeast16BitUnsigned;
 
 	/// The lowest rank possible in this membership organisation.
-	fn lowest_rank() -> Self::Rank;
+	fn min_rank() -> Self::Rank;
 
 	/// Return the rank of the given ID, or `None` if they are not a member.
 	fn rank_of(who: &Self::AccountId) -> Option<Self::Rank>;
 
-	/// Add a member to the group at the `lowest_rank()`.
+	/// Add a member to the group at the `min_rank()`.
 	fn induct(who: &Self::AccountId) -> DispatchResult;
 
 	/// Promote a member to the next higher rank.
 	fn promote(who: &Self::AccountId) -> DispatchResult;
 
-	/// Demote a member to the next lower rank; demoting beyond the `lowest_rank` removes the
+	/// Demote a member to the next lower rank; demoting beyond the `min_rank` removes the
 	/// member entirely.
 	fn demote(who: &Self::AccountId) -> DispatchResult;
 }

@@ -29,6 +29,7 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, Identity, IdentityLookup},
+	DispatchResult,
 };
 use sp_std::cell::RefCell;
 
@@ -123,15 +124,39 @@ pub struct TestClub;
 impl RankedMembers for TestClub {
 	type AccountId = u64;
 	type Rank = u64;
+	fn min_rank() -> Self::Rank {
+		0
+	}
 	fn rank_of(who: &Self::AccountId) -> Option<Self::Rank> {
 		CLUB.with(|club| club.borrow().get(who).cloned())
 	}
-	fn remove(who: &Self::AccountId) {
-		CLUB.with(|club| club.borrow_mut().remove(&who));
+	fn induct(who: &Self::AccountId) -> DispatchResult {
+		CLUB.with(|club| club.borrow_mut().insert(*who, 0));
+		Ok(())
 	}
-	fn change(who: &Self::AccountId, rank: Self::Rank) {
-		CLUB.with(|club| club.borrow_mut().insert(*who, rank));
+	fn promote(who: &Self::AccountId) -> DispatchResult {
+		CLUB.with(|club| {
+			club.borrow_mut().entry(*who).and_modify(|r| *r += 1);
+		});
+		Ok(())
 	}
+	fn demote(who: &Self::AccountId) -> DispatchResult {
+		CLUB.with(|club| match club.borrow().get(who) {
+			None => Err(sp_runtime::DispatchError::Unavailable),
+			Some(&0) => {
+				club.borrow_mut().remove(&who);
+				Ok(())
+			},
+			Some(_) => {
+				club.borrow_mut().entry(*who).and_modify(|x| *x -= 1);
+				Ok(())
+			},
+		})
+	}
+}
+
+fn set_rank(who: u64, rank: u64) {
+	CLUB.with(|club| club.borrow_mut().insert(who, rank));
 }
 
 parameter_types! {
@@ -237,7 +262,7 @@ fn induct_works() {
 		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
 
 		assert_noop!(Salary::induct(RuntimeOrigin::signed(1)), Error::<Test>::NotMember);
-		TestClub::change(&1, 1);
+		set_rank(1, 1);
 		assert!(Salary::last_active(&1).is_err());
 		assert_ok!(Salary::induct(RuntimeOrigin::signed(1)));
 		assert_eq!(Salary::last_active(&1).unwrap(), 0);
@@ -248,7 +273,7 @@ fn induct_works() {
 #[test]
 fn unregistered_payment_works() {
 	new_test_ext().execute_with(|| {
-		TestClub::change(&1, 1);
+		set_rank(1, 1);
 		assert_noop!(Salary::induct(RuntimeOrigin::signed(1)), Error::<Test>::NotStarted);
 		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
 		assert_noop!(Salary::payout(RuntimeOrigin::signed(1), 1), Error::<Test>::NotInducted);
@@ -281,7 +306,7 @@ fn unregistered_payment_works() {
 #[test]
 fn retry_payment_works() {
 	new_test_ext().execute_with(|| {
-		TestClub::change(&1, 1);
+		set_rank(1, 1);
 		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
 		assert_ok!(Salary::induct(RuntimeOrigin::signed(1)));
 		run_to(6);
@@ -315,7 +340,7 @@ fn retry_payment_works() {
 #[test]
 fn registered_payment_works() {
 	new_test_ext().execute_with(|| {
-		TestClub::change(&1, 1);
+		set_rank(1, 1);
 		assert_noop!(Salary::induct(RuntimeOrigin::signed(1)), Error::<Test>::NotStarted);
 		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
 		assert_noop!(Salary::payout(RuntimeOrigin::signed(1), 1), Error::<Test>::NotInducted);
@@ -351,7 +376,7 @@ fn registered_payment_works() {
 fn zero_payment_fails() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
-		TestClub::change(&1, 0);
+		set_rank(1, 0);
 		assert_ok!(Salary::induct(RuntimeOrigin::signed(1)));
 		run_to(7);
 		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
@@ -363,9 +388,9 @@ fn zero_payment_fails() {
 fn unregistered_bankrupcy_fails_gracefully() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
-		TestClub::change(&1, 2);
-		TestClub::change(&2, 6);
-		TestClub::change(&3, 12);
+		set_rank(1, 2);
+		set_rank(2, 6);
+		set_rank(3, 12);
 
 		assert_ok!(Salary::induct(RuntimeOrigin::signed(1)));
 		assert_ok!(Salary::induct(RuntimeOrigin::signed(2)));
@@ -387,9 +412,9 @@ fn unregistered_bankrupcy_fails_gracefully() {
 fn registered_bankrupcy_fails_gracefully() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
-		TestClub::change(&1, 2);
-		TestClub::change(&2, 6);
-		TestClub::change(&3, 12);
+		set_rank(1, 2);
+		set_rank(2, 6);
+		set_rank(3, 12);
 
 		assert_ok!(Salary::induct(RuntimeOrigin::signed(1)));
 		assert_ok!(Salary::induct(RuntimeOrigin::signed(2)));
@@ -416,9 +441,9 @@ fn registered_bankrupcy_fails_gracefully() {
 fn mixed_bankrupcy_fails_gracefully() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
-		TestClub::change(&1, 2);
-		TestClub::change(&2, 6);
-		TestClub::change(&3, 12);
+		set_rank(1, 2);
+		set_rank(2, 6);
+		set_rank(3, 12);
 
 		assert_ok!(Salary::induct(RuntimeOrigin::signed(1)));
 		assert_ok!(Salary::induct(RuntimeOrigin::signed(2)));
@@ -444,9 +469,9 @@ fn mixed_bankrupcy_fails_gracefully() {
 fn other_mixed_bankrupcy_fails_gracefully() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Salary::bump(RuntimeOrigin::signed(1)));
-		TestClub::change(&1, 2);
-		TestClub::change(&2, 6);
-		TestClub::change(&3, 12);
+		set_rank(1, 2);
+		set_rank(2, 6);
+		set_rank(3, 12);
 
 		assert_ok!(Salary::induct(RuntimeOrigin::signed(1)));
 		assert_ok!(Salary::induct(RuntimeOrigin::signed(2)));
