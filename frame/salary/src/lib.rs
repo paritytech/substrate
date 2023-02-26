@@ -78,20 +78,37 @@ pub trait Pay {
 	/// Check how a payment has proceeded. `id` must have been a previously returned by `pay` for
 	/// the result of this call to be meaningful.
 	fn check_payment(id: Self::Id) -> PaymentStatus;
+	/// Ensure that a call to pay with the given parameters will be successful if done immediately
+	/// after this call. Used in benchmarking code.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn ensure_successful(who: &Self::AccountId, amount: Self::Balance);
+	/// Ensure that a call to [check_payment] with the given parameters will return either [Success]
+	/// or [Failure].
+	#[cfg(feature = "runtime-benchmarks")]
+	fn ensure_concluded(id: Self::Id);
 }
 
-pub struct Pot<F, A>(sp_std::marker::PhantomData<(F, A)>);
-impl<A: TypedGet, F: fungible::Transfer<A::Type>> Pay for Pot<F, A> {
+/// Simple implementation of `Pay` which makes a payment from a "pot" - i.e. a single account.
+pub struct PayFromAccount<F, A>(sp_std::marker::PhantomData<(F, A)>);
+impl<A: TypedGet, F: fungible::Transfer<A::Type> + fungible::Mutate<A::Type>> Pay
+	for PayFromAccount<F, A>
+{
 	type Balance = F::Balance;
 	type AccountId = A::Type;
 	type Id = ();
 	fn pay(who: &Self::AccountId, amount: Self::Balance) -> Result<Self::Id, ()> {
-		F::transfer(&A::get(), who, amount, false).map_err(|_| ())?;
+		<F as fungible::Transfer<_>>::transfer(&A::get(), who, amount, false).map_err(|_| ())?;
 		Ok(())
 	}
 	fn check_payment(_: ()) -> PaymentStatus {
 		PaymentStatus::Success
 	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn ensure_successful(_: &Self::AccountId, amount: Self::Balance) {
+		<F as fungible::Mutate<_>>::mint_into(&A::get(), amount).unwrap();
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn ensure_concluded(_: Self::Id) {}
 }
 
 /// The status of the pallet instance.
@@ -117,7 +134,7 @@ pub enum ClaimState<Balance, Id> {
 	/// Amount reserved when last active.
 	Registered(Balance),
 	/// Amount attempted to be paid when last active as well as the identity of the payment.
-	Attempted { amount: Balance, id: Id },
+	Attempted { registered: Option<Balance>, id: Id, amount: Balance },
 }
 
 use ClaimState::*;
@@ -158,6 +175,8 @@ pub mod pallet {
 		type Members: RankedMembers<AccountId = <Self as frame_system::Config>::AccountId>;
 
 		/// The maximum payout to be made for a single period to an active member of the given rank.
+		///
+		/// The benchmarks require that this be non-zero for some rank at most 255.
 		type ActiveSalaryForRank: Convert<
 			<Self::Members as RankedMembers>::Rank,
 			<Self::Paymaster as Pay>::Balance,
@@ -222,6 +241,8 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T, I = ()> {
+		/// The salary system has already been started.
+		AlreadyStarted,
 		/// The account is not a ranked member.
 		NotMember,
 		/// The account is already inducted.
@@ -244,13 +265,61 @@ pub mod pallet {
 		Bankrupt,
 		/// There was some issue with the mechanism of payment.
 		PayError,
+		/// The payment has neither failed nor succeeded yet.
+		Inconclusive,
+		/// The cycle is after that in which the payment was made.
+		NotCurrent,
 	}
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		/// Induct oneself into the payout system.
+		/// Start the first payout cycle.
+		///
+		/// - `origin`: A `Signed` origin of an account which is a member of `Members`.
 		#[pallet::weight(T::WeightInfo::add_member())]
 		#[pallet::call_index(0)]
+		pub fn init(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			let _ = ensure_signed(origin)?;
+			let now = frame_system::Pallet::<T>::block_number();
+			ensure!(!Status::<T, I>::exists(), Error::<T, I>::AlreadyStarted);
+			let status = StatusType {
+				cycle_index: Zero::zero(),
+				cycle_start: now,
+				budget: T::Budget::get(),
+				total_registrations: Zero::zero(),
+				total_unregistered_paid: Zero::zero(),
+			};
+			Status::<T, I>::put(&status);
+
+			Self::deposit_event(Event::<T, I>::CycleStarted { index: status.cycle_index });
+			Ok(Pays::No.into())
+		}
+
+		/// Move to next payout cycle, assuming that the present block is now within that cycle.
+		///
+		/// - `origin`: A `Signed` origin of an account which is a member of `Members`.
+		#[pallet::weight(T::WeightInfo::add_member())]
+		#[pallet::call_index(1)]
+		pub fn bump(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			let _ = ensure_signed(origin)?;
+			let now = frame_system::Pallet::<T>::block_number();
+			let cycle_period = Self::cycle_period();
+			let mut status = Status::<T, I>::get().ok_or(Error::<T, I>::NotStarted)?;
+			status.cycle_start.saturating_accrue(cycle_period);
+			ensure!(now >= status.cycle_start, Error::<T, I>::NotYet);
+			status.cycle_index.saturating_inc();
+			status.budget = T::Budget::get();
+			status.total_registrations = Zero::zero();
+			status.total_unregistered_paid = Zero::zero();
+			Status::<T, I>::put(&status);
+
+			Self::deposit_event(Event::<T, I>::CycleStarted { index: status.cycle_index });
+			Ok(Pays::No.into())
+		}
+
+		/// Induct oneself into the payout system.
+		#[pallet::weight(T::WeightInfo::add_member())]
+		#[pallet::call_index(2)]
 		pub fn induct(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let cycle_index = Status::<T, I>::get().ok_or(Error::<T, I>::NotStarted)?.cycle_index;
@@ -266,41 +335,6 @@ pub mod pallet {
 			Ok(Pays::No.into())
 		}
 
-		/// Move to next payout cycle, assuming that the present block is now within that cycle.
-		///
-		/// - `origin`: A `Signed` origin of an account which is a member of `Members`.
-		#[pallet::weight(T::WeightInfo::add_member())]
-		#[pallet::call_index(1)]
-		pub fn bump(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-			let _ = ensure_signed(origin)?;
-			let now = frame_system::Pallet::<T>::block_number();
-			let cycle_period = T::RegistrationPeriod::get() + T::PayoutPeriod::get();
-			let status = match Status::<T, I>::get() {
-				// Not first time... (move along start block and bump index)
-				Some(mut status) => {
-					status.cycle_start.saturating_accrue(cycle_period);
-					ensure!(now >= status.cycle_start, Error::<T, I>::NotYet);
-					status.cycle_index.saturating_inc();
-					status.budget = T::Budget::get();
-					status.total_registrations = Zero::zero();
-					status.total_unregistered_paid = Zero::zero();
-					status
-				},
-				// First time... (initialize)
-				None => StatusType {
-					cycle_index: Zero::zero(),
-					cycle_start: now,
-					budget: T::Budget::get(),
-					total_registrations: Zero::zero(),
-					total_unregistered_paid: Zero::zero(),
-				},
-			};
-			Status::<T, I>::put(&status);
-
-			Self::deposit_event(Event::<T, I>::CycleStarted { index: status.cycle_index });
-			Ok(Pays::No.into())
-		}
-
 		/// Register for a payout.
 		///
 		/// Will only work if we are in the first `RegistrationPeriod` blocks since the cycle
@@ -308,7 +342,7 @@ pub mod pallet {
 		///
 		/// - `origin`: A `Signed` origin of an account which is a member of `Members`.
 		#[pallet::weight(T::WeightInfo::add_member())]
-		#[pallet::call_index(2)]
+		#[pallet::call_index(3)]
 		pub fn register(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let rank = T::Members::rank_of(&who).ok_or(Error::<T, I>::NotMember)?;
@@ -340,13 +374,87 @@ pub mod pallet {
 		///
 		/// - `origin`: A `Signed` origin of an account which is a member of `Members`.
 		#[pallet::weight(T::WeightInfo::add_member())]
-		#[pallet::call_index(3)]
-		pub fn payout(
+		#[pallet::call_index(4)]
+		pub fn payout(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+			Self::do_payout(who.clone(), who)?;
+			Ok(Pays::No.into())
+		}
+
+		/// Request a payout to a secondary account.
+		///
+		/// Will only work if we are after the first `RegistrationPeriod` blocks since the cycle
+		/// started but by no more than `PayoutPeriod` blocks.
+		///
+		/// - `origin`: A `Signed` origin of an account which is a member of `Members`.
+		/// - `beneficiary`: The account to receive payment.
+		#[pallet::weight(T::WeightInfo::add_member())]
+		#[pallet::call_index(5)]
+		pub fn payout_other(
 			origin: OriginFor<T>,
 			beneficiary: T::AccountId,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
+			Self::do_payout(who, beneficiary)?;
+			Ok(Pays::No.into())
+		}
 
+		/// Update a payment's status; if it failed, alter the state so the payment can be retried.
+		///
+		/// This must be called within the same cycle as the failed payment. It will fail with
+		/// [Event::NotCurrent] otherwise.
+		///
+		/// - `origin`: A `Signed` origin of an account which is a member of `Members` who has
+		///   received a payment this cycle.
+		#[pallet::weight(T::WeightInfo::add_member())]
+		#[pallet::call_index(6)]
+		pub fn check_payment(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+
+			let mut status = Status::<T, I>::get().ok_or(Error::<T, I>::NotStarted)?;
+			let mut claimant = Claimant::<T, I>::get(&who).ok_or(Error::<T, I>::NotInducted)?;
+			ensure!(claimant.last_active == status.cycle_index, Error::<T, I>::NotCurrent);
+			let (id, registered, amount) = match claimant.status {
+				Attempted { id, registered, amount } => (id, registered, amount),
+				_ => return Err(Error::<T, I>::NoClaim.into()),
+			};
+			match T::Paymaster::check_payment(id) {
+				PaymentStatus::Failure => {
+					// Payment failed: we reset back to the status prior to payment.
+					if let Some(amount) = registered {
+						// Account registered; this makes it simple to roll back and allow retry.
+						claimant.status = ClaimState::Registered(amount);
+					} else {
+						// Account didn't register; we set it to `Nothing` but must decrement
+						// the `last_active` also to ensure a retry works.
+						claimant.last_active.saturating_reduce(1u32.into());
+						claimant.status = ClaimState::Nothing;
+						// Since it is not registered, we must walk back our counter for what has
+						// been paid.
+						status.total_unregistered_paid.saturating_reduce(amount);
+					}
+				},
+				PaymentStatus::Success => claimant.status = ClaimState::Nothing,
+				_ => return Err(Error::<T, I>::Inconclusive.into()),
+			}
+			Claimant::<T, I>::insert(&who, &claimant);
+			Status::<T, I>::put(&status);
+
+			Ok(Pays::No.into())
+		}
+	}
+
+	impl<T: Config<I>, I: 'static> Pallet<T, I> {
+		pub fn status() -> Option<StatusOf<T, I>> {
+			Status::<T, I>::get()
+		}
+		pub fn last_active(who: &T::AccountId) -> Result<CycleIndexOf<T>, DispatchError> {
+			Ok(Claimant::<T, I>::get(&who).ok_or(Error::<T, I>::NotInducted)?.last_active)
+		}
+		pub fn cycle_period() -> T::BlockNumber {
+			T::RegistrationPeriod::get() + T::PayoutPeriod::get()
+		}
+		fn do_payout(who: T::AccountId, beneficiary: T::AccountId) -> DispatchResult {
 			let mut status = Status::<T, I>::get().ok_or(Error::<T, I>::NotStarted)?;
 			let mut claimant = Claimant::<T, I>::get(&who).ok_or(Error::<T, I>::NotInducted)?;
 
@@ -356,21 +464,17 @@ pub mod pallet {
 				Error::<T, I>::TooEarly,
 			);
 
-			let payout = match claimant.status {
-				Attempted { amount, id } if claimant.last_active == status.cycle_index => {
-					let failed = matches!(T::Paymaster::check_payment(id), PaymentStatus::Failure);
-					ensure!(failed, Error::<T, I>::NoClaim);
-					amount
-				},
+			let (payout, registered) = match claimant.status {
 				Registered(unpaid) if claimant.last_active == status.cycle_index => {
 					// Registered for this cycle. Pay accordingly.
-					if status.total_registrations <= status.budget {
+					let payout = if status.total_registrations <= status.budget {
 						// Can pay in full.
 						unpaid
 					} else {
 						// Must be reduced pro-rata
 						Perbill::from_rational(status.budget, status.total_registrations) * unpaid
-					}
+					};
+					(payout, Some(unpaid))
 				},
 				Nothing | Attempted { .. } if claimant.last_active < status.cycle_index => {
 					// Not registered for this cycle. Pay from whatever is left.
@@ -386,7 +490,7 @@ pub mod pallet {
 					ensure!(!payout.is_zero(), Error::<T, I>::ClaimZero);
 
 					status.total_unregistered_paid.saturating_accrue(payout);
-					payout
+					(payout, None)
 				},
 				_ => return Err(Error::<T, I>::NoClaim.into()),
 			};
@@ -396,22 +500,13 @@ pub mod pallet {
 			let id =
 				T::Paymaster::pay(&beneficiary, payout).map_err(|()| Error::<T, I>::PayError)?;
 
-			claimant.status = Attempted { amount: payout, id };
+			claimant.status = Attempted { registered, id, amount: payout };
 
 			Claimant::<T, I>::insert(&who, &claimant);
 			Status::<T, I>::put(&status);
 
 			Self::deposit_event(Event::<T, I>::Paid { who, beneficiary, amount: payout, id });
-			Ok(Pays::No.into())
-		}
-	}
-
-	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		pub fn status() -> Option<StatusOf<T, I>> {
-			Status::<T, I>::get()
-		}
-		pub fn last_active(who: &T::AccountId) -> Result<CycleIndexOf<T>, DispatchError> {
-			Ok(Claimant::<T, I>::get(&who).ok_or(Error::<T, I>::NotInducted)?.last_active)
+			Ok(())
 		}
 	}
 }
