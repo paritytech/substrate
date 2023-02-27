@@ -15,12 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{BalanceOf, Config, Pallet, SeatHolder, Weight, MAXIMUM_VOTE};
+use crate::{BalanceOf, Config, Pallet, SeatHolder, Weight};
 use codec::{Decode, Encode};
 use frame_support::{
-	pallet_prelude::StorageVersion,
-	traits::{ConstU32, OnRuntimeUpgrade},
-	BoundedVec, RuntimeDebug,
+	pallet_prelude::StorageVersion, traits::OnRuntimeUpgrade, BoundedVec, RuntimeDebug,
 };
 use sp_core::Get;
 use sp_runtime::Saturating;
@@ -67,7 +65,7 @@ pub fn migrate_voting<T: Config>() -> Weight {
 	let mut translated = 0u64;
 	crate::Voting::<T>::translate::<DeprecatedVoter<T::AccountId, BalanceOf<T>>, _>(|_, voter| {
 		translated.saturating_inc();
-		let bounded_votes: BoundedVec<T::AccountId, ConstU32<{ MAXIMUM_VOTE as u32 }>> =
+		let bounded_votes: BoundedVec<T::AccountId, T::MaxVotesPerVoter> =
 			voter.votes.try_into().unwrap();
 		Some(crate::Voter { votes: bounded_votes, stake: voter.stake, deposit: voter.deposit })
 	});

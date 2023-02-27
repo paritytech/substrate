@@ -101,7 +101,7 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	traits::{
-		defensive_prelude::*, ChangeMembers, ConstU32, Contains, ContainsLengthBound, Currency,
+		defensive_prelude::*, ChangeMembers, Contains, ContainsLengthBound, Currency,
 		CurrencyToVote, Get, InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced,
 		ReservableCurrency, SortedMembers, WithdrawReasons,
 	},
@@ -144,9 +144,10 @@ pub enum Renouncing {
 
 /// An active voter.
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, TypeInfo, MaxEncodedLen)]
-pub struct Voter<AccountId, Balance> {
+#[scale_info(skip_type_params(MaxVotesPerVoter))]
+pub struct Voter<AccountId, Balance, MaxVotesPerVoter: Get<u32>> {
 	/// The members being backed.
-	pub votes: BoundedVec<AccountId, ConstU32<{ MAXIMUM_VOTE as u32 }>>,
+	pub votes: BoundedVec<AccountId, MaxVotesPerVoter>,
 	/// The amount of stake placed on this vote.
 	pub stake: Balance,
 	/// The amount of deposit reserved for this vote.
@@ -155,7 +156,9 @@ pub struct Voter<AccountId, Balance> {
 	pub deposit: Balance,
 }
 
-impl<AccountId, Balance: Default> Default for Voter<AccountId, Balance> {
+impl<AccountId, Balance: Default, MaxVotesPerVoter: Get<u32>> Default
+	for Voter<AccountId, Balance, MaxVotesPerVoter>
+{
 	fn default() -> Self {
 		Self {
 			votes: BoundedVec::default(),
@@ -361,15 +364,14 @@ pub mod pallet {
 		)]
 		pub fn vote(
 			origin: OriginFor<T>,
-			votes: BoundedVec<T::AccountId, ConstU32<{ MAXIMUM_VOTE as u32 }>>,
+			votes: Vec<T::AccountId>,
 			#[pallet::compact] value: BalanceOf<T>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
-			ensure!(
-				votes.len() <= T::MaxVotesPerVoter::get() as usize,
-				Error::<T>::MaximumVotesExceeded
-			);
+			let votes: BoundedVec<T::AccountId, T::MaxVotesPerVoter> =
+				votes.try_into().map_err(|_| Error::<T>::MaximumVotesExceeded)?;
+
 			ensure!(!votes.is_empty(), Error::<T>::NoVotes);
 
 			let candidates_count = <Candidates<T>>::decode_len().unwrap_or(0);
@@ -713,8 +715,13 @@ pub mod pallet {
 	/// TWOX-NOTE: SAFE as `AccountId` is a crypto hash.
 	#[pallet::storage]
 	#[pallet::getter(fn voting)]
-	pub type Voting<T: Config> =
-		StorageMap<_, Twox64Concat, T::AccountId, Voter<T::AccountId, BalanceOf<T>>, ValueQuery>;
+	pub type Voting<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		T::AccountId,
+		Voter<T::AccountId, BalanceOf<T>, T::MaxVotesPerVoter>,
+		ValueQuery,
+	>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -1575,7 +1582,7 @@ mod tests {
 		Elections::vote(origin, votes.try_into().unwrap(), stake)
 	}
 
-	fn votes_of(who: &u64) -> BoundedVec<u64, ConstU32<{ MAXIMUM_VOTE as u32 }>> {
+	fn votes_of(who: &u64) -> BoundedVec<u64, <Test as Config>::MaxVotesPerVoter> {
 		Voting::<Test>::get(who).votes
 	}
 
