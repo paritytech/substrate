@@ -22,7 +22,7 @@
 use super::*;
 use crate::Pallet as Salary;
 
-use frame_benchmarking::v2::*;
+use frame_benchmarking::v1::*;
 use frame_system::{Pallet as System, RawOrigin};
 use sp_core::Get;
 
@@ -43,46 +43,34 @@ fn ensure_member_with_salary<T: Config<I>, I: 'static>(who: &T::AccountId) {
 	}
 }
 
-#[instance_benchmarks]
-mod benchmarks {
-	use super::*;
-
-	#[benchmark]
-	fn init() {
+benchmarks_instance_pallet! {
+	init {
 		let caller: T::AccountId = whitelisted_caller();
-
-		#[extrinsic_call]
-		_(RawOrigin::Signed(caller.clone()));
-
+	}: _(RawOrigin::Signed(caller.clone()))
+	verify {
 		assert!(Salary::<T, I>::status().is_some());
 	}
 
-	#[benchmark]
-	fn bump() {
+	bump {
 		let caller: T::AccountId = whitelisted_caller();
 		Salary::<T, I>::init(RawOrigin::Signed(caller.clone()).into()).unwrap();
 		System::<T>::set_block_number(System::<T>::block_number() + Salary::<T, I>::cycle_period());
-
-		#[extrinsic_call]
-		_(RawOrigin::Signed(caller.clone()));
-
+	}: _(RawOrigin::Signed(caller.clone()))
+	verify {
 		assert_eq!(Salary::<T, I>::status().unwrap().cycle_index, 1u32.into());
 	}
 
-	#[benchmark]
-	fn induct() {
+	induct {
 		let caller = whitelisted_caller();
 		ensure_member_with_salary::<T, I>(&caller);
 		Salary::<T, I>::init(RawOrigin::Signed(caller.clone()).into()).unwrap();
 
-		#[extrinsic_call]
-		_(RawOrigin::Signed(caller.clone()));
-
+	}: _(RawOrigin::Signed(caller.clone()))
+	verify {
 		assert!(Salary::<T, I>::last_active(&caller).is_ok());
 	}
 
-	#[benchmark]
-	fn register() {
+	register {
 		let caller = whitelisted_caller();
 		ensure_member_with_salary::<T, I>(&caller);
 		Salary::<T, I>::init(RawOrigin::Signed(caller.clone()).into()).unwrap();
@@ -90,14 +78,12 @@ mod benchmarks {
 		System::<T>::set_block_number(System::<T>::block_number() + Salary::<T, I>::cycle_period());
 		Salary::<T, I>::bump(RawOrigin::Signed(caller.clone()).into()).unwrap();
 
-		#[extrinsic_call]
-		_(RawOrigin::Signed(caller.clone()));
-
+	}: _(RawOrigin::Signed(caller.clone()))
+	verify {
 		assert_eq!(Salary::<T, I>::last_active(&caller).unwrap(), 1u32.into());
 	}
 
-	#[benchmark]
-	fn payout() {
+	payout {
 		let caller = whitelisted_caller();
 		ensure_member_with_salary::<T, I>(&caller);
 		Salary::<T, I>::init(RawOrigin::Signed(caller.clone()).into()).unwrap();
@@ -109,9 +95,8 @@ mod benchmarks {
 		let salary = T::Salary::get_salary(T::Members::rank_of(&caller).unwrap(), &caller);
 		T::Paymaster::ensure_successful(&caller, salary);
 
-		#[extrinsic_call]
-		_(RawOrigin::Signed(caller.clone()));
-
+	}: _(RawOrigin::Signed(caller.clone()))
+	verify {
 		match Claimant::<T, I>::get(&caller) {
 			Some(ClaimantStatus { last_active, status: Attempted { id, .. } }) => {
 				assert_eq!(last_active, 1u32.into());
@@ -122,8 +107,7 @@ mod benchmarks {
 		assert!(Salary::<T, I>::payout(RawOrigin::Signed(caller.clone()).into()).is_err());
 	}
 
-	#[benchmark]
-	fn payout_other() {
+	payout_other {
 		let caller = whitelisted_caller();
 		ensure_member_with_salary::<T, I>(&caller);
 		Salary::<T, I>::init(RawOrigin::Signed(caller.clone()).into()).unwrap();
@@ -136,9 +120,8 @@ mod benchmarks {
 		let recipient: T::AccountId = account("recipient", 0, SEED);
 		T::Paymaster::ensure_successful(&recipient, salary);
 
-		#[extrinsic_call]
-		_(RawOrigin::Signed(caller.clone()), recipient.clone());
-
+	}: _(RawOrigin::Signed(caller.clone()), recipient.clone())
+	verify {
 		match Claimant::<T, I>::get(&caller) {
 			Some(ClaimantStatus { last_active, status: Attempted { id, .. } }) => {
 				assert_eq!(last_active, 1u32.into());
@@ -149,8 +132,7 @@ mod benchmarks {
 		assert!(Salary::<T, I>::payout(RawOrigin::Signed(caller.clone()).into()).is_err());
 	}
 
-	#[benchmark]
-	fn check_payment() {
+	check_payment {
 		let caller = whitelisted_caller();
 		ensure_member_with_salary::<T, I>(&caller);
 		Salary::<T, I>::init(RawOrigin::Signed(caller.clone()).into()).unwrap();
@@ -169,15 +151,14 @@ mod benchmarks {
 		};
 		T::Paymaster::ensure_concluded(id);
 
-		#[extrinsic_call]
-		_(RawOrigin::Signed(caller.clone()));
-
+	}: _(RawOrigin::Signed(caller.clone()))
+	verify {
 		assert!(!matches!(Claimant::<T, I>::get(&caller).unwrap().status, Attempted { .. }));
 	}
+}
 
-	impl_benchmark_test_suite! {
-		Salary,
-		crate::tests::new_test_ext(),
-		crate::tests::Test,
-	}
+impl_benchmark_test_suite! {
+	Salary,
+	crate::tests::new_test_ext(),
+	crate::tests::Test,
 }
