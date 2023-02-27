@@ -1149,7 +1149,7 @@ mod tests {
 					assert_eq!(
 						<frame_system::Pallet<Runtime>>::block_weight().total(),
 						//--------------------- on_initialize + block_execution + extrinsic_base weight
-						Weight::from_parts((encoded_len + 5, 0) * (nonce + 1)) + base_block_weight,
+						Weight::from_parts((encoded_len + 5) * (nonce + 1), 0) + base_block_weight,
 					);
 					assert_eq!(
 						<frame_system::Pallet<Runtime>>::extrinsic_index(),
