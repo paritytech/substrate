@@ -364,13 +364,10 @@ pub mod pallet {
 		)]
 		pub fn vote(
 			origin: OriginFor<T>,
-			votes: Vec<T::AccountId>,
+			votes: BoundedVec<T::AccountId, T::MaxVotesPerVoter>,
 			#[pallet::compact] value: BalanceOf<T>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-
-			let votes: BoundedVec<T::AccountId, T::MaxVotesPerVoter> =
-				votes.try_into().map_err(|_| Error::<T>::MaximumVotesExceeded)?;
 
 			ensure!(!votes.is_empty(), Error::<T>::NoVotes);
 
