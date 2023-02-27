@@ -1147,6 +1147,11 @@ where
 					if self.on_sync_peer_disconnected(peer_id).is_ok() {
 						CustomMessageOutcome::SyncDisconnected(peer_id)
 					} else {
+						log::trace!(
+							target: "sync",
+							"Disconnected peer which had earlier been refused by on_sync_peer_connected {}",
+							peer_id
+						);
 						CustomMessageOutcome::None
 					}
 				} else if self.bad_handshake_substreams.remove(&(peer_id, set_id)) {
