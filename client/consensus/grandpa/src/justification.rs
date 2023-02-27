@@ -25,7 +25,7 @@ use std::{
 use finality_grandpa::{voter_set::VoterSet, Error as GrandpaError};
 use parity_scale_codec::{Decode, Encode};
 use sp_blockchain::{Error as ClientError, HeaderBackend};
-use sp_finality_grandpa::AuthorityId;
+use sp_consensus_grandpa::AuthorityId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 
 use crate::{AuthorityList, Commit, Error};
@@ -41,22 +41,22 @@ use crate::{AuthorityList, Commit, Error};
 #[derive(Clone, Encode, Decode, PartialEq, Eq, Debug)]
 pub struct GrandpaJustification<Block: BlockT> {
 	/// The GRANDPA justification for block finality.
-	pub justification: sp_finality_grandpa::GrandpaJustification<Block::Header>,
+	pub justification: sp_consensus_grandpa::GrandpaJustification<Block::Header>,
 	_block: PhantomData<Block>,
 }
 
-impl<Block: BlockT> From<sp_finality_grandpa::GrandpaJustification<Block::Header>>
+impl<Block: BlockT> From<sp_consensus_grandpa::GrandpaJustification<Block::Header>>
 	for GrandpaJustification<Block>
 {
-	fn from(justification: sp_finality_grandpa::GrandpaJustification<Block::Header>) -> Self {
+	fn from(justification: sp_consensus_grandpa::GrandpaJustification<Block::Header>) -> Self {
 		Self { justification, _block: Default::default() }
 	}
 }
 
-impl<Block: BlockT> Into<sp_finality_grandpa::GrandpaJustification<Block::Header>>
+impl<Block: BlockT> Into<sp_consensus_grandpa::GrandpaJustification<Block::Header>>
 	for GrandpaJustification<Block>
 {
-	fn into(self) -> sp_finality_grandpa::GrandpaJustification<Block::Header> {
+	fn into(self) -> sp_consensus_grandpa::GrandpaJustification<Block::Header> {
 		self.justification
 	}
 }
@@ -122,7 +122,7 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 			}
 		}
 
-		Ok(sp_finality_grandpa::GrandpaJustification { round, commit, votes_ancestries }.into())
+		Ok(sp_consensus_grandpa::GrandpaJustification { round, commit, votes_ancestries }.into())
 	}
 
 	/// Decode a GRANDPA justification and validate the commit and the votes'
@@ -205,7 +205,7 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 		let mut buf = Vec::new();
 		let mut visited_hashes = HashSet::new();
 		for signed in self.justification.commit.precommits.iter() {
-			if !sp_finality_grandpa::check_message_signature_with_buffer(
+			if !sp_consensus_grandpa::check_message_signature_with_buffer(
 				&finality_grandpa::Message::Precommit(signed.precommit.clone()),
 				&signed.id,
 				&signed.signature,

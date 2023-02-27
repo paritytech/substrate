@@ -75,10 +75,10 @@ use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::AppKey;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult};
 use sp_consensus::SelectChain;
-use sp_core::{crypto::ByteArray, traits::CallContext};
-use sp_finality_grandpa::{
+use sp_consensus_grandpa::{
 	AuthorityList, AuthoritySignature, SetId, CLIENT_LOG_TARGET as LOG_TARGET,
 };
+use sp_core::{crypto::ByteArray, traits::CallContext};
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
@@ -146,7 +146,7 @@ use environment::{Environment, VoterSetState};
 use until_imported::UntilGlobalMessageBlocksImported;
 
 // Re-export these two because it's just so damn convenient.
-pub use sp_finality_grandpa::{
+pub use sp_consensus_grandpa::{
 	AuthorityId, AuthorityPair, CatchUp, Commit, CompactCommit, GrandpaApi, Message, Precommit,
 	Prevote, PrimaryPropose, ScheduledChange, SignedMessage,
 };
@@ -1091,7 +1091,7 @@ where
 			Poll::Ready(Ok(())) => {
 				// voters don't conclude naturally
 				return Poll::Ready(Err(Error::Safety(
-					"finality-grandpa inner voter has concluded.".into(),
+					"consensus-grandpa inner voter has concluded.".into(),
 				)))
 			},
 			Poll::Ready(Err(CommandOrError::Error(e))) => {

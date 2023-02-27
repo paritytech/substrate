@@ -24,7 +24,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-use sc_finality_grandpa::{report, AuthorityId, SharedAuthoritySet, SharedVoterState};
+use sc_consensus_grandpa::{report, AuthorityId, SharedAuthoritySet, SharedVoterState};
 
 use crate::error::Error;
 

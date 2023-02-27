@@ -50,14 +50,14 @@ benchmarks! {
 			251, 129, 29, 45, 32, 29, 6
 		];
 
-		let equivocation_proof1: sp_finality_grandpa::EquivocationProof<H256, u64> =
+		let equivocation_proof1: sp_consensus_grandpa::EquivocationProof<H256, u64> =
 			Decode::decode(&mut &EQUIVOCATION_PROOF_BLOB[..]).unwrap();
 
 		let equivocation_proof2 = equivocation_proof1.clone();
 	}: {
-		sp_finality_grandpa::check_equivocation_proof(equivocation_proof1);
+		sp_consensus_grandpa::check_equivocation_proof(equivocation_proof1);
 	} verify {
-		assert!(sp_finality_grandpa::check_equivocation_proof(equivocation_proof2));
+		assert!(sp_consensus_grandpa::check_equivocation_proof(equivocation_proof2));
 	}
 
 	note_stalled {

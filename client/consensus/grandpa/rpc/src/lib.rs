@@ -35,7 +35,7 @@ mod finality;
 mod notification;
 mod report;
 
-use sc_finality_grandpa::GrandpaJustificationStream;
+use sc_consensus_grandpa::GrandpaJustificationStream;
 use sc_rpc::SubscriptionTaskExecutor;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
@@ -105,7 +105,7 @@ where
 
 	fn subscribe_justifications(&self, mut sink: SubscriptionSink) -> SubscriptionResult {
 		let stream = self.justification_stream.subscribe(100_000).map(
-			|x: sc_finality_grandpa::GrandpaJustification<Block>| {
+			|x: sc_consensus_grandpa::GrandpaJustification<Block>| {
 				JustificationNotification::from(x)
 			},
 		);
@@ -143,7 +143,7 @@ mod tests {
 	};
 	use parity_scale_codec::{Decode, Encode};
 	use sc_block_builder::{BlockBuilder, RecordProof};
-	use sc_finality_grandpa::{
+	use sc_consensus_grandpa::{
 		report, AuthorityId, FinalityProof, GrandpaJustification, GrandpaJustificationSender,
 	};
 	use sp_blockchain::HeaderBackend;
@@ -200,7 +200,7 @@ mod tests {
 		fn rpc_prove_finality(
 			&self,
 			_block: NumberFor<Block>,
-		) -> Result<Option<EncodedFinalityProof>, sc_finality_grandpa::FinalityProofError> {
+		) -> Result<Option<EncodedFinalityProof>, sc_consensus_grandpa::FinalityProofError> {
 			Ok(Some(EncodedFinalityProof(
 				self.finality_proof
 					.as_ref()
@@ -216,7 +216,7 @@ mod tests {
 			let voter_id_1 = AuthorityId::from_slice(&[1; 32]).unwrap();
 			let voters_best: HashSet<_> = vec![voter_id_1].into_iter().collect();
 
-			let best_round_state = sc_finality_grandpa::report::RoundState {
+			let best_round_state = sc_consensus_grandpa::report::RoundState {
 				total_weight: 100_u64.try_into().unwrap(),
 				threshold_weight: 67_u64.try_into().unwrap(),
 				prevote_current_weight: 50.into(),
@@ -225,7 +225,7 @@ mod tests {
 				precommit_ids: HashSet::new(),
 			};
 
-			let past_round_state = sc_finality_grandpa::report::RoundState {
+			let past_round_state = sc_consensus_grandpa::report::RoundState {
 				total_weight: 100_u64.try_into().unwrap(),
 				threshold_weight: 67_u64.try_into().unwrap(),
 				prevote_current_weight: 100.into(),
@@ -364,7 +364,7 @@ mod tests {
 			};
 
 			let msg = finality_grandpa::Message::Precommit(precommit.clone());
-			let encoded = sp_finality_grandpa::localized_payload(round, set_id, &msg);
+			let encoded = sp_consensus_grandpa::localized_payload(round, set_id, &msg);
 			let signature = peers[0].sign(&encoded[..]).into();
 
 			let precommit = finality_grandpa::SignedPrecommit {
