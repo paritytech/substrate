@@ -67,7 +67,7 @@ pub enum PaymentStatus {
 // XCM/MultiAsset and made generic over assets.
 pub trait Pay {
 	/// The type by which we measure units of the currency in which we make payments.
-	type Balance: AtLeast32BitUnsigned + FullCodec + MaxEncodedLen + TypeInfo + Debug + Copy;
+	type Balance: Balance;
 	/// The type by which we identify the individuals to whom a payment may be made.
 	type AccountId;
 	/// An identifier given to an individual payment.
