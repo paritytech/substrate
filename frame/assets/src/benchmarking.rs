@@ -471,5 +471,12 @@ benchmarks_instance_pallet! {
 		assert_last_event::<T, I>(Event::ApprovalCancelled { asset_id: asset_id.into(), owner: caller, delegate }.into());
 	}
 
+	set_min_balance {
+		let (asset_id, caller, caller_lookup) = create_default_asset::<T, I>(true);
+	}: _(SystemOrigin::Signed(caller.clone()), asset_id, 50u32.into())
+	verify {
+		assert_last_event::<T, I>(Event::AssetStatusChanged { asset_id: asset_id.into() }.into());
+	}
+
 	impl_benchmark_test_suite!(Assets, crate::mock::new_test_ext(), crate::mock::Test)
 }

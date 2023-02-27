@@ -1511,6 +1511,36 @@ pub mod pallet {
 			let id: T::AssetId = id.into();
 			Self::do_refund(id, ensure_signed(origin)?, allow_burn)
 		}
+
+		/// Sets the minimum balance of an asset. Only works if there aren't any
+		/// accounts that are holding the asset.
+		///
+		/// Origin must be Signed and the sender has to be the Owner of the asset `id`.
+		///
+		/// - `id`: The identifier of the asset.
+		/// - `min_balance`: The new value of `min_balance`.
+		///
+		/// Emits `AssetStatusChanged` event when successful.
+		#[pallet::call_index(28)]
+		#[pallet::weight(T::WeightInfo::mint())]
+		pub fn set_min_balance(
+			origin: OriginFor<T>,
+			id: T::AssetIdParameter,
+			min_balance: T::Balance,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			let id: T::AssetId = id.into();
+
+			let mut details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+			ensure!(origin == details.owner, Error::<T, I>::NoPermission);
+			ensure!(details.accounts == 0, Error::<T, I>::NoPermission);
+
+			details.min_balance = min_balance;
+			Asset::<T, I>::insert(&id, details);
+
+			Self::deposit_event(Event::AssetStatusChanged { asset_id: id });
+			Ok(())
+		}
 	}
 }
 
