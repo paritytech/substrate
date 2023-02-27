@@ -1576,8 +1576,8 @@ parameter_types! {
 }
 
 pub struct SalaryForRank;
-impl Convert<u16, Balance> for SalaryForRank {
-	fn convert(a: u16) -> Balance {
+impl pallet_salary::GetSalary<u16, AccountId, Balance> for SalaryForRank {
+	fn get_salary(a: u16, _: &AccountId) -> Balance {
 		Balance::from(a) * 1000 * DOLLARS
 	}
 }
@@ -1587,7 +1587,7 @@ impl pallet_salary::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Paymaster = pallet_salary::PayFromAccount<Balances, TreasuryAccount>;
 	type Members = RankedCollective;
-	type ActiveSalaryForRank = SalaryForRank;
+	type Salary = SalaryForRank;
 	type RegistrationPeriod = ConstU32<200>;
 	type PayoutPeriod = ConstU32<200>;
 	type Budget = Budget;

@@ -174,7 +174,7 @@ impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Paymaster = TestPay;
 	type Members = TestClub;
-	type ActiveSalaryForRank = Identity;
+	type Salary = ConvertRank<Identity>;
 	type RegistrationPeriod = ConstU64<2>;
 	type PayoutPeriod = ConstU64<2>;
 	type Budget = Budget;

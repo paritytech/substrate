@@ -36,7 +36,7 @@ fn ensure_member_with_salary<T: Config<I>, I: 'static>(who: &T::AccountId) {
 	// promote until they have a salary.
 	for _ in 0..255 {
 		let r = T::Members::rank_of(who).expect("prior guard ensures `who` is a member; qed");
-		if !T::ActiveSalaryForRank::convert(r).is_zero() {
+		if !T::Salary::get_salary(r, &who).is_zero() {
 			break
 		}
 		T::Members::promote(who).unwrap();
@@ -106,7 +106,7 @@ mod benchmarks {
 		Salary::<T, I>::bump(RawOrigin::Signed(caller.clone()).into()).unwrap();
 		System::<T>::set_block_number(System::<T>::block_number() + T::RegistrationPeriod::get());
 
-		let salary = T::ActiveSalaryForRank::convert(T::Members::rank_of(&caller).unwrap());
+		let salary = T::Salary::get_salary(T::Members::rank_of(&caller).unwrap(), &caller);
 		T::Paymaster::ensure_successful(&caller, salary);
 
 		#[extrinsic_call]
@@ -132,7 +132,7 @@ mod benchmarks {
 		Salary::<T, I>::bump(RawOrigin::Signed(caller.clone()).into()).unwrap();
 		System::<T>::set_block_number(System::<T>::block_number() + T::RegistrationPeriod::get());
 
-		let salary = T::ActiveSalaryForRank::convert(T::Members::rank_of(&caller).unwrap());
+		let salary = T::Salary::get_salary(T::Members::rank_of(&caller).unwrap(), &caller);
 		let recipient: T::AccountId = account("recipient", 0, SEED);
 		T::Paymaster::ensure_successful(&recipient, salary);
 
@@ -159,7 +159,7 @@ mod benchmarks {
 		Salary::<T, I>::bump(RawOrigin::Signed(caller.clone()).into()).unwrap();
 		System::<T>::set_block_number(System::<T>::block_number() + T::RegistrationPeriod::get());
 
-		let salary = T::ActiveSalaryForRank::convert(T::Members::rank_of(&caller).unwrap());
+		let salary = T::Salary::get_salary(T::Members::rank_of(&caller).unwrap(), &caller);
 		let recipient: T::AccountId = account("recipient", 0, SEED);
 		T::Paymaster::ensure_successful(&recipient, salary);
 		Salary::<T, I>::payout(RawOrigin::Signed(caller.clone()).into()).unwrap();

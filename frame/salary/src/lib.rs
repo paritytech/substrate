@@ -24,10 +24,7 @@ use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::{Saturating, Zero};
 use sp_core::TypedGet;
-use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, Convert},
-	Perbill,
-};
+use sp_runtime::{traits::Convert, Perbill};
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 use frame_support::{
@@ -52,6 +49,21 @@ pub use weights::WeightInfo;
 
 /// Payroll cycle.
 pub type Cycle = u32;
+
+/// Retrieve the salary for a member of a particular rank.
+pub trait GetSalary<Rank, AccountId, Balance> {
+	/// Retrieve the salary for a given rank. The account ID is also supplied in case this changes
+	/// things.
+	fn get_salary(rank: Rank, who: &AccountId) -> Balance;
+}
+
+/// Adapter for a rank-to-salary `Convert` implementation into a `GetSalary` implementation.
+pub struct ConvertRank<C>(sp_std::marker::PhantomData<C>);
+impl<A, R, B, C: Convert<R, B>> GetSalary<R, A, B> for ConvertRank<C> {
+	fn get_salary(rank: R, _: &A) -> B {
+		C::convert(rank)
+	}
+}
 
 /// Status for making a payment via the `Pay::pay` trait function.
 #[derive(Encode, Decode, Eq, PartialEq, Clone, TypeInfo, MaxEncodedLen, RuntimeDebug)]
@@ -180,8 +192,9 @@ pub mod pallet {
 		/// The maximum payout to be made for a single period to an active member of the given rank.
 		///
 		/// The benchmarks require that this be non-zero for some rank at most 255.
-		type ActiveSalaryForRank: Convert<
+		type Salary: GetSalary<
 			<Self::Members as RankedMembers>::Rank,
+			Self::AccountId,
 			<Self::Paymaster as Pay>::Balance,
 		>;
 
@@ -357,7 +370,7 @@ pub mod pallet {
 				Error::<T, I>::TooLate
 			);
 			ensure!(claimant.last_active < status.cycle_index, Error::<T, I>::NoClaim);
-			let payout = T::ActiveSalaryForRank::convert(rank);
+			let payout = T::Salary::get_salary(rank, &who);
 			ensure!(!payout.is_zero(), Error::<T, I>::ClaimZero);
 			claimant.last_active = status.cycle_index;
 			claimant.status = Registered(payout);
@@ -482,7 +495,7 @@ pub mod pallet {
 				Nothing | Attempted { .. } if claimant.last_active < status.cycle_index => {
 					// Not registered for this cycle. Pay from whatever is left.
 					let rank = T::Members::rank_of(&who).ok_or(Error::<T, I>::NotMember)?;
-					let ideal_payout = T::ActiveSalaryForRank::convert(rank);
+					let ideal_payout = T::Salary::get_salary(rank, &who);
 
 					let pot = status
 						.budget
