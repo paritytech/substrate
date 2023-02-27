@@ -33,7 +33,7 @@ use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
-	traits::{tokens::fungible, RankedMembers},
+	traits::{tokens::{Balance, fungible}, RankedMembers},
 	RuntimeDebug,
 };
 
