@@ -119,7 +119,7 @@ impl<A: TypedGet, F: fungible::Transfer<A::Type> + fungible::Mutate<A::Type>> Pa
 pub struct StatusType<CycleIndex, BlockNumber, Balance> {
 	/// The index of the "current cycle" (i.e. the last cycle being processed).
 	cycle_index: CycleIndex,
-	/// The first block of the "current cycle" (i.e. the last cycle being processed)
+	/// The first block of the "current cycle" (i.e. the last cycle being processed).
 	cycle_start: BlockNumber,
 	/// The total budget available for all payments in the current cycle.
 	budget: Balance,
