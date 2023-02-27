@@ -153,9 +153,9 @@ impl<
 /// Arithmetic types do all the usual stuff you'd expect numbers to do. They are guaranteed to
 /// be able to represent at least `u16` values without loss, hence the trait implies `From<u16>`
 /// and smaller integers. All other conversions are fallible.
-pub trait AtLeast16Bit: BaseArithmetic + From<u16> + From<u16> {}
+pub trait AtLeast16Bit: BaseArithmetic + From<u16> {}
 
-impl<T: BaseArithmetic + From<u16> + From<u16>> AtLeast16Bit for T {}
+impl<T: BaseArithmetic + From<u16>> AtLeast16Bit for T {}
 
 /// A meta trait for arithmetic.  Same as [`AtLeast16Bit `], but also bounded to be unsigned.
 pub trait AtLeast16BitUnsigned: AtLeast16Bit + Unsigned {}
