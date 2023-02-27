@@ -59,8 +59,8 @@ use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_core::{
 	storage::{
-		well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, StorageChild,
-		StorageData, StorageKey,
+		well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, StorageChild, StorageData,
+		StorageKey,
 	},
 	traits::SpawnNamed,
 };

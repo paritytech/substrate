@@ -30,6 +30,8 @@ pub use substrate_test_runtime as runtime;
 
 pub use self::block_builder_ext::BlockBuilderExt;
 
+use sc_chain_spec::construct_genesis_block;
+use sp_api::StateVersion;
 use sp_core::{
 	sr25519,
 	storage::{ChildInfo, Storage, StorageChild},
@@ -37,8 +39,6 @@ use sp_core::{
 };
 use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 use substrate_test_runtime::genesismap::{additional_storage_with_genesis, GenesisConfig};
-use sc_chain_spec::construct_genesis_block;
-use sp_api::StateVersion;
 
 /// A prelude to import in tests.
 pub mod prelude {
@@ -291,10 +291,5 @@ pub fn new() -> Client<Backend> {
 
 /// Create a new native executor.
 pub fn new_native_executor() -> NativeElseWasmExecutor<LocalExecutorDispatch> {
-	NativeElseWasmExecutor::new(
-		sc_executor::WasmExecutionMethod::Interpreted,
-		None,
-		8,
-		2,
-	)
+	NativeElseWasmExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None, 8, 2)
 }

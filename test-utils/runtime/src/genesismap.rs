@@ -20,15 +20,14 @@
 use super::{system, wasm_binary_unwrap, AccountId, AuthorityId, Runtime};
 use codec::{Encode, Joiner, KeyedVec};
 use frame_support::traits::GenesisBuild;
+use sc_service::construct_genesis_block;
 use sp_core::{
 	map,
-	storage::{well_known_keys, Storage},
+	storage::{well_known_keys, StateVersion, Storage},
 };
 use sp_io::hashing::{blake2_256, twox_128};
 use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 use std::collections::BTreeMap;
-use sc_service::construct_genesis_block;
-use sp_core::storage::StateVersion;
 
 /// Configuration of a general Substrate test genesis block.
 pub struct GenesisConfig {
