@@ -152,7 +152,7 @@
 //! transferred to the depositor.
 //!
 //! Implementation note: Commission is applied to rewards based on the current commission in effect
-//! at the time the reward was transferred to the reward pool. This is to prevent the malicious
+//! at the time rewards are transferred into the reward pool. This is to prevent the malicious
 //! behaviour of changing the commission rate to a very high value after rewards are accumulated,
 //! and thus claim an unexpectedly high chunk of the reward.
 //!
