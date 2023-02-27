@@ -278,7 +278,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Start the first payout cycle.
 		///
-		/// - `origin`: A `Signed` origin of an account which is a member of `Members`.
+		/// - `origin`: A `Signed` origin of an account.
 		#[pallet::weight(T::WeightInfo::init())]
 		#[pallet::call_index(0)]
 		pub fn init(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
