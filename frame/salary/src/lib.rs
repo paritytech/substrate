@@ -300,7 +300,7 @@ pub mod pallet {
 
 		/// Move to next payout cycle, assuming that the present block is now within that cycle.
 		///
-		/// - `origin`: A `Signed` origin of an account which is a member of `Members`.
+		/// - `origin`: A `Signed` origin of an account.
 		#[pallet::weight(T::WeightInfo::bump())]
 		#[pallet::call_index(1)]
 		pub fn bump(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
