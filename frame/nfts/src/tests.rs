@@ -310,6 +310,7 @@ fn destroy_should_work() {
 		assert_ok!(Nfts::lock_item_transfer(RuntimeOrigin::signed(account(1)), 0, 42));
 		assert_ok!(Nfts::burn(RuntimeOrigin::signed(account(2)), 0, 42));
 		assert_eq!(Collection::<Test>::get(0).unwrap().item_configs, 1);
+		assert_eq!(ItemConfigOf::<Test>::iter_prefix(0).count() as u32, 1);
 		assert!(ItemConfigOf::<Test>::contains_key(0, 42));
 		assert_ok!(Nfts::destroy(
 			RuntimeOrigin::signed(account(1)),
