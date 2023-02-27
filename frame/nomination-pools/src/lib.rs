@@ -1310,7 +1310,7 @@ impl<T: Config> RewardPool<T> {
 		// Split the `current_payout_balance` into regular rewards and commission according to
 		// the current commission rate.
 		let new_pending_commission = commission * current_payout_balance;
-		let payouts_minus_commission =
+		let new_pending_rewards =
 			current_payout_balance.saturating_sub(new_pending_commission);
 
 		// * accuracy notes regarding the multiplication in `checked_from_rational`:
@@ -1348,7 +1348,7 @@ impl<T: Config> RewardPool<T> {
 		//
 		// which is basically 10^-8 DOTs. See `smallest_claimable_reward` for an example of this.
 		let current_reward_counter =
-			T::RewardCounter::checked_from_rational(payouts_minus_commission, bonded_points)
+			T::RewardCounter::checked_from_rational(new_pending_rewards, bonded_points)
 				.and_then(|ref r| self.last_recorded_reward_counter.checked_add(r))
 				.ok_or(Error::<T>::OverflowRisk)?;
 
