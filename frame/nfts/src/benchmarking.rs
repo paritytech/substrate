@@ -271,11 +271,11 @@ benchmarks_instance_pallet! {
 			lock_item::<T, I>(i as u16);
 			burn_item::<T, I>(i as u16);
 		}
-		// for i in 0..c {
-			// mint_item::<T, I>(i as u16);
-			// lock_item::<T, I>(i as u16);
-			// burn_item::<T, I>(i as u16);
-		// }
+		for i in 0..c {
+			mint_item::<T, I>(i as u16);
+			lock_item::<T, I>(i as u16);
+			burn_item::<T, I>(i as u16);
+		}
 		for i in 0..a {
 			add_collection_attribute::<T, I>(i as u16);
 		}

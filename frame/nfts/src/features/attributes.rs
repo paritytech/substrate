@@ -34,7 +34,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 
 		ensure!(
-			Self::is_valid_namespace(&origin, &namespace, &collection, &maybe_item,)?,
+			Self::is_valid_namespace(&origin, &namespace, &collection, &maybe_item)?,
 			Error::<T, I>::NoPermission
 		);
 
@@ -241,7 +241,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							collection_config
 								.is_setting_enabled(CollectionSetting::UnlockedAttributes),
 							Error::<T, I>::LockedCollectionAttributes
-						);
+						)
 					},
 					Some(item) => {
 						// NOTE: if the item was previously burned, the ItemConfigOf record
