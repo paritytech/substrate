@@ -33,7 +33,10 @@ use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
-	traits::{tokens::{Balance, fungible}, RankedMembers},
+	traits::{
+		tokens::{fungible, Balance},
+		RankedMembers,
+	},
 	RuntimeDebug,
 };
 
@@ -63,7 +66,7 @@ pub enum PaymentStatus {
 	Failure,
 }
 
-/// Can be implemented by Pot pallet with a fixed Currency impl, but can also be implemented with
+/// Can be implemented by `PayFromAccount` using a `fungible` impl, but can also be implemented with
 /// XCM/MultiAsset and made generic over assets.
 pub trait Pay {
 	/// The type by which we measure units of the currency in which we make payments.
