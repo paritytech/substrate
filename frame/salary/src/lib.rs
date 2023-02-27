@@ -229,7 +229,7 @@ pub mod pallet {
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// A member is inducted into the payroll.
 		Inducted { who: T::AccountId },
-		/// The next cycle begins.
+		/// A member registered for a payout.
 		Registered { who: T::AccountId, amount: BalanceOf<T, I> },
 		/// A payment happened.
 		Paid {
