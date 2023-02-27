@@ -17,7 +17,6 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use clap::Args;
-use fs4::statvfs;
 use sc_client_db::DatabaseSource;
 use sp_core::traits::SpawnEssentialNamed;
 use std::{
@@ -118,8 +117,7 @@ impl StorageMonitorService {
 
 	/// Returns free space in MB, or error if statvfs failed.
 	fn free_space(path: &Path) -> Result<u64, Error> {
-		let amount = statvfs(path)?;
-		Ok(amount.available_space() / (1024 * 1024))
+		Ok(fs4::available_space(path).map(|s| s / 1_000_000)?)
 	}
 
 	/// Checks if the amount of free space for given `path` is above given `threshold`.
