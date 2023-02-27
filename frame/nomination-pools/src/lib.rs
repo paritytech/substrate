@@ -1302,20 +1302,20 @@ impl<T: Config> RewardPool<T> {
 		commission: Perbill,
 	) -> Result<(T::RewardCounter, BalanceOf<T>), Error<T>> {
 		let balance = Self::current_balance(id);
-		let payouts_since_last_record = balance
+		let current_payout_balance = balance
 			.saturating_add(self.total_rewards_claimed)
 			.saturating_add(self.total_commission_claimed)
 			.saturating_sub(self.last_recorded_total_payouts);
 
-		// Split the `payouts_since_last_record` into regular rewards and commission according to
+		// Split the `current_payout_balance` into regular rewards and commission according to
 		// the current commission rate.
-		let new_pending_commission = commission * payouts_since_last_record;
+		let new_pending_commission = commission * current_payout_balance;
 		let payouts_minus_commission =
-			payouts_since_last_record.saturating_sub(new_pending_commission);
+			current_payout_balance.saturating_sub(new_pending_commission);
 
 		// * accuracy notes regarding the multiplication in `checked_from_rational`:
-		// `payouts_since_last_record` is a subset of the total_issuance at the very
-		// worse. `bonded_points` are similarly, in a non-slashed pool, have the same granularity as
+		// `current_payout_balance` is a subset of the total_issuance at the very worse.
+		// `bonded_points` are similarly, in a non-slashed pool, have the same granularity as
 		// balance, and are thus below within the range of total_issuance. In the worse case
 		// scenario, for `saturating_from_rational`, we have:
 		//
@@ -1333,13 +1333,14 @@ impl<T: Config> RewardPool<T> {
 		// represented as `FixedU128`, which means it is less than `total_issuance * 10^18`.
 		//
 		// * accuracy notes regarding `checked_from_rational` collapsing to zero, meaning that no
-		// reward can be claimed:
+		//   reward
+		// can be claimed:
 		//
-		// largest `bonded_points`, such that the reward counter is non-zero, with `FixedU128`
-		// will be when the payout is being computed. This essentially means `payout/bonded_points`
-		// needs to be more than 1/1^18. Thus, assuming that `bonded_points` will always be less
-		// than `10 * dot_total_issuance`, if the reward_counter is the smallest possible value,
-		// the value of the reward being calculated is:
+		// largest `bonded_points`, such that the reward counter is non-zero, with `FixedU128` will
+		// be when the payout is being computed. This essentially means `payout/bonded_points` needs
+		// to be more than 1/1^18. Thus, assuming that `bonded_points` will always be less than `10
+		// * dot_total_issuance`, if the reward_counter is the smallest possible value, the value of
+		// the reward being calculated is:
 		//
 		// x / 10^20 = 1/ 10^18
 		//
