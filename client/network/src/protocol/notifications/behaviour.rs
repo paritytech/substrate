@@ -419,11 +419,7 @@ impl Notifications {
 	}
 
 	/// Inner implementation of `disconnect_peer`.
-	fn disconnect_peer_inner(
-		&mut self,
-		peer_id: &PeerId,
-		set_id: sc_peerset::SetId,
-	) {
+	fn disconnect_peer_inner(&mut self, peer_id: &PeerId, set_id: sc_peerset::SetId) {
 		let mut entry = if let Entry::Occupied(entry) = self.peers.entry((*peer_id, set_id)) {
 			entry
 		} else {
@@ -441,7 +437,8 @@ impl Notifications {
 			PeerState::DisabledPendingEnable { connections, timer_deadline, timer: _ } => {
 				trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
 				self.peerset.dropped(set_id, *peer_id, DropReason::Unknown);
-				*entry.into_mut() = PeerState::Disabled { connections, backoff_until: Some(timer_deadline) }
+				*entry.into_mut() =
+					PeerState::Disabled { connections, backoff_until: Some(timer_deadline) }
 			},
 
 			// Enabled => Disabled.
