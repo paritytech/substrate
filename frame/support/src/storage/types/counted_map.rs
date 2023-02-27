@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -542,6 +542,16 @@ mod test {
 		fn get() -> u32 {
 			97
 		}
+	}
+	#[crate::storage_alias]
+	type ExampleCountedMap = CountedStorageMap<Prefix, Twox64Concat, u16, u32>;
+
+	#[test]
+	fn storage_alias_works() {
+		TestExternalities::default().execute_with(|| {
+			assert_eq!(ExampleCountedMap::count(), 0);
+			ExampleCountedMap::insert(3, 10);
+		})
 	}
 
 	#[test]

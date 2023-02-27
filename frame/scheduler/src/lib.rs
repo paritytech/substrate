@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -363,10 +363,6 @@ pub mod pallet {
 		}
 
 		/// Anonymously schedule a task after a delay.
-		///
-		/// # <weight>
-		/// Same as [`schedule`].
-		/// # </weight>
 		#[pallet::call_index(4)]
 		#[pallet::weight(<T as Config>::WeightInfo::schedule(T::MaxScheduledPerBlock::get()))]
 		pub fn schedule_after(
@@ -389,10 +385,6 @@ pub mod pallet {
 		}
 
 		/// Schedule a named task after a delay.
-		///
-		/// # <weight>
-		/// Same as [`schedule_named`](Self::schedule_named).
-		/// # </weight>
 		#[pallet::call_index(5)]
 		#[pallet::weight(<T as Config>::WeightInfo::schedule_named(T::MaxScheduledPerBlock::get()))]
 		pub fn schedule_named_after(
