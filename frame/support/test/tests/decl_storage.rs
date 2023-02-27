@@ -19,7 +19,7 @@
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
 mod tests {
-	use frame_support::{metadata_ir::*};
+	use frame_support::metadata_ir::*;
 	use sp_io::TestExternalities;
 
 	frame_support::decl_module! {
