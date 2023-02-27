@@ -459,19 +459,11 @@ pub enum ClaimPermission {
 
 impl ClaimPermission {
 	fn can_bond_extra(&self) -> bool {
-		match self {
-			ClaimPermission::PermissionlessAll => true,
-			ClaimPermission::PermissionlessCompound => true,
-			_ => false,
-		}
+		matches!(self, ClaimPermission::PermissionlessAll | ClaimPermission::PermissionlessCompound)
 	}
 
 	fn can_claim_payout(&self) -> bool {
-		match self {
-			ClaimPermission::PermissionlessAll => true,
-			ClaimPermission::PermissionlessWithdraw => true,
-			_ => false,
-		}
+		matches!(self, ClaimPermission::PermissionlessAll | ClaimPermission::PermissionlessWithdraw)
 	}
 }
 
