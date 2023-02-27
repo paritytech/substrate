@@ -1,5 +1,5 @@
 [package]
-name = "beefy-gadget"
+name = "sc-consensus-beefy"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
@@ -18,7 +18,6 @@ log = "0.4"
 parking_lot = "0.12.1"
 thiserror = "1.0"
 wasm-timer = "0.2.5"
-beefy-primitives = { version = "4.0.0-dev", path = "../../../primitives/consensus/beefy", package = "sp-beefy" }
 prometheus = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../../utils/prometheus" }
 sc-client-api = { version = "4.0.0-dev", path = "../../api" }
 sc-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }
@@ -32,6 +31,7 @@ sp-application-crypto = { version = "7.0.0", path = "../../../primitives/applica
 sp-arithmetic = { version = "6.0.0", path = "../../../primitives/arithmetic" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
+sp-consensus-beefy = { version = "4.0.0-dev", path = "../../../primitives/consensus/beefy" }
 sp-core = { version = "7.0.0", path = "../../../primitives/core" }
 sp-keystore = { version = "0.13.0", path = "../../../primitives/keystore" }
 sp-mmr-primitives = { version = "4.0.0-dev", path = "../../../primitives/merkle-mountain-range" }
