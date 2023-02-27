@@ -1310,8 +1310,7 @@ impl<T: Config> RewardPool<T> {
 		// Split the `current_payout_balance` into regular rewards and commission according to
 		// the current commission rate.
 		let new_pending_commission = commission * current_payout_balance;
-		let new_pending_rewards =
-			current_payout_balance.saturating_sub(new_pending_commission);
+		let new_pending_rewards = current_payout_balance.saturating_sub(new_pending_commission);
 
 		// * accuracy notes regarding the multiplication in `checked_from_rational`:
 		// `current_payout_balance` is a subset of the total_issuance at the very worse.
@@ -1333,14 +1332,14 @@ impl<T: Config> RewardPool<T> {
 		// represented as `FixedU128`, which means it is less than `total_issuance * 10^18`.
 		//
 		// * accuracy notes regarding `checked_from_rational` collapsing to zero, meaning that no
-		//   reward
-		// can be claimed:
+		//   reward can be claimed:
 		//
 		// largest `bonded_points`, such that the reward counter is non-zero, with `FixedU128` will
 		// be when the payout is being computed. This essentially means `payout/bonded_points` needs
 		// to be more than 1/1^18. Thus, assuming that `bonded_points` will always be less than `10
 		// * dot_total_issuance`, if the reward_counter is the smallest possible value, the value of
-		// the reward being calculated is:
+		//   the
+		// reward being calculated is:
 		//
 		// x / 10^20 = 1/ 10^18
 		//
