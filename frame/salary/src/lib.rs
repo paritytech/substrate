@@ -63,8 +63,8 @@ pub enum PaymentStatus {
 	Failure,
 }
 
-// Can be implemented by Pot pallet with a fixed Currency impl, but can also be implemented with
-// XCM/MultiAsset and made generic over assets.
+/// Can be implemented by Pot pallet with a fixed Currency impl, but can also be implemented with
+/// XCM/MultiAsset and made generic over assets.
 pub trait Pay {
 	/// The type by which we measure units of the currency in which we make payments.
 	type Balance: Balance;
