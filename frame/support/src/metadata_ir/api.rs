@@ -20,12 +20,16 @@
 use super::types::MetadataIR;
 use frame_metadata::RuntimeMetadataPrefixed;
 
+#[cfg(feature = "metadata-v14")]
 const V14: u32 = 14;
 
 /// Transform the IR to the specified version.
 ///
 /// Use [`supported_versions`] to find supported versions.
-pub fn to_version(metadata: MetadataIR, version: u32) -> Option<RuntimeMetadataPrefixed> {
+pub fn to_version(
+	#[allow(unused_variables)] metadata: MetadataIR,
+	version: u32,
+) -> Option<RuntimeMetadataPrefixed> {
 	match version {
 		#[cfg(feature = "metadata-v14")]
 		V14 => {
