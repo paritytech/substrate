@@ -87,6 +87,7 @@ members = [
 	"frame/election-provider-support/solution-type/fuzzer",
 	"frame/ddc-metrics-offchain-worker",
 	"frame/ddc-pallet",
+	"frame/ddc-staking",
 	"frame/executive",
 	"frame/gilt",
 	"frame/grandpa",

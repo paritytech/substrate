@@ -80,6 +80,7 @@ use static_assertions::const_assert;
 pub use pallet_cere_ddc;
 pub use pallet_chainbridge;
 pub use pallet_ddc_metrics_offchain_worker;
+pub use pallet_ddc_staking;
 
 #[cfg(any(feature = "std", test))]
 pub use frame_system::Call as SystemCall;
@@ -1221,6 +1222,12 @@ impl pallet_ddc_metrics_offchain_worker::Config for Runtime {
 	type Call = Call;
 }
 
+impl pallet_ddc_staking::Config for Runtime {
+	type BondingDuration = BondingDuration;
+	type Currency = Balances;
+	type Event = Event;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -1270,6 +1277,7 @@ construct_runtime!(
 		Erc721: pallet_erc721::{Pallet, Call, Storage, Event<T>},
 		Erc20: pallet_erc20::{Pallet, Call, Storage, Event<T>},
 		DdcMetricsOffchainWorker: pallet_ddc_metrics_offchain_worker::{Pallet, Call, Storage, Event<T>},
+		DdcStaking: pallet_ddc_staking,
 	}
 );
 
