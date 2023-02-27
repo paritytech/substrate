@@ -172,7 +172,7 @@ impl WeightInfo for TestWeightInfo {
 		Weight::from_parts(0b0000_0001, 0)
 	}
 	fn service_agenda_base(i: u32) -> Weight {
-		Weight::from_parts((i << 8, 0) as u64 + 0b0000_0010)
+		Weight::from_parts((i << 8) as u64 + 0b0000_0010, 0)
 	}
 	fn service_task_base() -> Weight {
 		Weight::from_parts(0b0000_0100, 0)
@@ -184,7 +184,7 @@ impl WeightInfo for TestWeightInfo {
 		Weight::from_parts(0b0001_0100, 0)
 	}
 	fn service_task_fetched(s: u32) -> Weight {
-		Weight::from_parts((s << 8, 0) as u64 + 0b0010_0100)
+		Weight::from_parts((s << 8) as u64 + 0b0010_0100, 0)
 	}
 	fn execute_dispatch_signed() -> Weight {
 		Weight::from_parts(0b0100_0000, 0)

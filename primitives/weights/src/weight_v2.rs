@@ -103,13 +103,13 @@ impl Weight {
 	}
 
 	/// Construct [`Weight`] with reference time weight and 0 storage size weight.
-	#[deprecated = "Will be removed soon; use `from_parts` instead."]
+	#[deprecated = "Use `from_parts` instead."]
 	pub const fn from_ref_time(ref_time: u64) -> Self {
 		Self { ref_time, proof_size: 0 }
 	}
 
 	/// Construct [`Weight`] with storage size weight and 0 reference time weight.
-	#[deprecated = "Will be removed soon; use `from_parts` instead."]
+	#[deprecated = "Use `from_parts` instead."]
 	pub const fn from_proof_size(proof_size: u64) -> Self {
 		Self { ref_time: 0, proof_size }
 	}
@@ -240,7 +240,7 @@ impl Weight {
 	/// of all those divisions. Returns `None` in case **all** components of `other` are zero.
 	///
 	/// This returns `Some` even if some components of `other` are zero as long as there is at least
-	/// one non-zero component in `other`. The division for this particular component will then
+	/// one non-zero component in `other`. The devision for this particular component will then
 	/// yield the maximum value (e.g u64::MAX). This is because we assume not every operation and
 	/// hence each `Weight` will necessarily use each resource.
 	pub const fn checked_div_per_component(self, other: &Self) -> Option<u64> {
