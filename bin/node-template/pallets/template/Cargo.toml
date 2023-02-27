@@ -27,7 +27,7 @@ sp-io = { version = "7.0.0", path = "../../../../primitives/io" }
 sp-runtime = { version = "7.0.0", path = "../../../../primitives/runtime" }
 
 [features]
-default = ["std"]
+default = ["std", "metadata-v14"]
 std = [
 	"codec/std",
 	"frame-benchmarking?/std",
@@ -37,3 +37,4 @@ std = [
 ]
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
 try-runtime = ["frame-support/try-runtime"]
+metadata-v14 = ["frame-support/metadata-v14"]

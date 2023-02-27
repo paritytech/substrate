@@ -54,7 +54,7 @@ pallet-template = { version = "4.0.0-dev", default-features = false, path = "../
 substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder", optional = true }
 
 [features]
-default = ["std"]
+default = ["std", "metadata-v14"]
 std = [
 	"frame-try-runtime?/std",
 	"frame-system-benchmarking?/std",
@@ -87,6 +87,7 @@ std = [
 	"sp-transaction-pool/std",
 	"sp-version/std",
 	"substrate-wasm-builder",
+	"metadata-v14",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
@@ -98,6 +99,7 @@ runtime-benchmarks = [
 	"pallet-template/runtime-benchmarks",
 	"pallet-timestamp/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
+	"metadata-v14",
 ]
 try-runtime = [
 	"frame-try-runtime/try-runtime",
@@ -112,4 +114,6 @@ try-runtime = [
 	"pallet-template/try-runtime",
 	"pallet-timestamp/try-runtime",
 	"pallet-transaction-payment/try-runtime",
+	"metadata-v14",
 ]
+metadata-v14 = ["frame-support/metadata-v14"]

@@ -17,7 +17,7 @@ codec = { package = "parity-scale-codec", version = "3.2.2", default-features = 
 	"derive",
 ] }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-support = { version = "4.0.0-dev", default-features = false, features = ["metadata-v14"], path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-session = { version = "4.0.0-dev", default-features = false, features = [
 	"historical",
