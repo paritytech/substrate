@@ -289,7 +289,7 @@ quick-benchmarks:
     WASM_BUILD_RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
   script:
     - rusty-cachier snapshot create
-    - time cargo run --locked --release --features runtime-benchmarks,metadata-v14 -- benchmark pallet --execution wasm --wasm-execution compiled --chain dev --pallet "*" --extrinsic "*" --steps 2 --repeat 1
+    - time cargo run --locked --release --features runtime-benchmarks -- benchmark pallet --execution wasm --wasm-execution compiled --chain dev --pallet "*" --extrinsic "*" --steps 2 --repeat 1
     - rusty-cachier cache upload
 
 test-frame-examples-compile-to-wasm:

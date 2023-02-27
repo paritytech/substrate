@@ -70,8 +70,8 @@ std = [
 ]
 # The runtime supports the metadata V14.
 metadata-v14 = ["frame-metadata/v14"]
-runtime-benchmarks = []
-try-runtime = []
+runtime-benchmarks = ["metadata-v14"]
+try-runtime = ["metadata-v14"]
 # By default some types have documentation, `no-metadata-docs` allows to reduce the documentation
 # in the metadata.
 no-metadata-docs = ["frame-support-procedural/no-metadata-docs"]
