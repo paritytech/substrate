@@ -984,6 +984,13 @@ impl<T: Config> Pallet<T> {
 				let total_issuance = T::Currency::total_issuance();
 				let staked_as_percent = Perquintill::from_rational(staked, total_issuance);
 
+				/* TODO: calculation in JS:
+				const inflation = 100 * (minInflation + (
+					stakedFraction <= idealStake
+						? (stakedFraction * (idealInterest - (minInflation / idealStake)))
+						: (((idealInterest * idealStake) - minInflation) * Math.pow(2, (idealStake - stakedFraction) / falloff))
+				));
+				*/
 				pallet_staking_reward_fn::compute_inflation(
 					staked_as_percent,
 					ideal_staked,
