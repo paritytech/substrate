@@ -21,8 +21,11 @@ use sc_client_api::{
 	backend, call_executor::CallExecutor, execution_extensions::ExecutionExtensions, HeaderBackend,
 };
 use sc_executor::{RuntimeVersion, RuntimeVersionOf};
-use sp_api::{ExecutionContext, ProofRecorder, StorageTransactionCache};
-use sp_core::traits::{CodeExecutor, RuntimeCode, SpawnNamed};
+use sp_api::{ProofRecorder, StorageTransactionCache};
+use sp_core::{
+	traits::{CallContext, CodeExecutor, RuntimeCode, SpawnNamed},
+	ExecutionContext,
+};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_state_machine::{
 	backend::AsTrieBackend, ExecutionStrategy, Ext, OverlayedChanges, StateMachine, StorageProof,
@@ -166,6 +169,7 @@ where
 		method: &str,
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
+		context: CallContext,
 	) -> sp_blockchain::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
 		let at_number =
@@ -193,6 +197,7 @@ where
 			extensions,
 			&runtime_code,
 			self.spawn_handle.clone(),
+			context,
 		)
 		.set_parent_hash(at_hash);
 
@@ -215,6 +220,11 @@ where
 		let at_number =
 			self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(at_hash))?;
 		let state = self.backend.state_at(at_hash)?;
+
+		let call_context = match context {
+			ExecutionContext::OffchainCall(_) => CallContext::Offchain,
+			_ => CallContext::Onchain,
+		};
 
 		let (execution_manager, extensions) =
 			self.execution_extensions.manager_and_extensions(at_hash, at_number, context);
@@ -247,6 +257,7 @@ where
 					extensions,
 					&runtime_code,
 					self.spawn_handle.clone(),
+					call_context,
 				)
 				.with_storage_transaction_cache(storage_transaction_cache.as_deref_mut())
 				.set_parent_hash(at_hash);
@@ -262,6 +273,7 @@ where
 					extensions,
 					&runtime_code,
 					self.spawn_handle.clone(),
+					call_context,
 				)
 				.with_storage_transaction_cache(storage_transaction_cache.as_deref_mut())
 				.set_parent_hash(at_hash);

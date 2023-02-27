@@ -24,13 +24,27 @@ use std::{
 
 pub use sp_externalities::{Externalities, ExternalitiesExt};
 
+/// The context in which a call is done.
+///
+/// Depending on the context the executor may chooses different kind of heap sizes for the runtime
+/// instance.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Ord, PartialOrd)]
+pub enum CallContext {
+	/// The call is happening in some offchain context.
+	Offchain,
+	/// The call is happening in some on-chain context like building or importing a block.
+	Onchain,
+}
+
 /// Code execution engine.
 pub trait CodeExecutor: Sized + Send + Sync + ReadRuntimeVersion + Clone + 'static {
 	/// Externalities error type.
 	type Error: Display + Debug + Send + Sync + 'static;
 
-	/// Call a given method in the runtime. Returns a tuple of the result (either the output data
-	/// or an execution error) together with a `bool`, which is true if native execution was used.
+	/// Call a given method in the runtime.
+	///
+	/// Returns a tuple of the result (either the output data or an execution error) together with a
+	/// `bool`, which is true if native execution was used.
 	fn call(
 		&self,
 		ext: &mut dyn Externalities,
@@ -38,6 +52,7 @@ pub trait CodeExecutor: Sized + Send + Sync + ReadRuntimeVersion + Clone + 'stat
 		method: &str,
 		data: &[u8],
 		use_native: bool,
+		context: CallContext,
 	) -> (Result<Vec<u8>, Self::Error>, bool);
 }
 

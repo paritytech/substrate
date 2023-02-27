@@ -17,7 +17,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 lru = "0.8.1"
 parking_lot = "0.12.1"
 tracing = "0.1.29"
-wasmi = "0.13"
+wasmi = "0.13.2"
 
 codec = { package = "parity-scale-codec", version = "3.2.2" }
 sc-executor-common = { version = "0.10.0-dev", path = "common" }
@@ -43,6 +43,7 @@ sp-state-machine = { version = "0.13.0", path = "../../primitives/state-machine"
 sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
 sp-maybe-compressed-blob = { version = "4.1.0-dev", path = "../../primitives/maybe-compressed-blob" }
 sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
+sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
 tracing-subscriber = "0.2.19"
 paste = "1.0"
 regex = "1.6.0"

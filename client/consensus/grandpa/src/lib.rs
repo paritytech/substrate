@@ -78,7 +78,7 @@ use sp_consensus::SelectChain;
 use sp_consensus_grandpa::{
 	AuthorityList, AuthoritySignature, SetId, CLIENT_LOG_TARGET as LOG_TARGET,
 };
-use sp_core::crypto::ByteArray;
+use sp_core::{crypto::ByteArray, traits::CallContext};
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
@@ -479,6 +479,7 @@ where
 				"GrandpaApi_grandpa_authorities",
 				&[],
 				ExecutionStrategy::NativeElseWasm,
+				CallContext::Offchain,
 			)
 			.and_then(|call_result| {
 				Decode::decode(&mut &call_result[..]).map_err(|err| {

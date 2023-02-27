@@ -27,7 +27,7 @@ use lru::LruCache;
 use parking_lot::Mutex;
 use sc_executor_common::{
 	runtime_blob::RuntimeBlob,
-	wasm_runtime::{WasmInstance, WasmModule},
+	wasm_runtime::{HeapAllocStrategy, WasmInstance, WasmModule},
 };
 use sp_core::traits::{Externalities, FetchRuntimeCode, RuntimeCode};
 use sp_version::RuntimeVersion;
@@ -64,8 +64,8 @@ struct VersionedRuntimeId {
 	code_hash: Vec<u8>,
 	/// Wasm runtime type.
 	wasm_method: WasmExecutionMethod,
-	/// The number of WebAssembly heap pages this instance was created with.
-	heap_pages: u64,
+	/// The heap allocation strategy this runtime was created with.
+	heap_alloc_strategy: HeapAllocStrategy,
 }
 
 /// A Wasm runtime object along with its cached runtime version.
@@ -197,9 +197,11 @@ impl RuntimeCache {
 	///
 	/// `runtime_code` - The runtime wasm code used setup the runtime.
 	///
-	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
+	/// `ext` - The externalities to access the state.
 	///
 	/// `wasm_method` - Type of WASM backend to use.
+	///
+	/// `heap_alloc_strategy` - The heap allocation strategy to use.
 	///
 	/// `allow_missing_func_imports` - Ignore missing function imports.
 	///
@@ -219,7 +221,7 @@ impl RuntimeCache {
 		runtime_code: &'c RuntimeCode<'c>,
 		ext: &mut dyn Externalities,
 		wasm_method: WasmExecutionMethod,
-		default_heap_pages: u64,
+		heap_alloc_strategy: HeapAllocStrategy,
 		allow_missing_func_imports: bool,
 		f: F,
 	) -> Result<Result<R, Error>, Error>
@@ -233,10 +235,9 @@ impl RuntimeCache {
 		) -> Result<R, Error>,
 	{
 		let code_hash = &runtime_code.hash;
-		let heap_pages = runtime_code.heap_pages.unwrap_or(default_heap_pages);
 
 		let versioned_runtime_id =
-			VersionedRuntimeId { code_hash: code_hash.clone(), heap_pages, wasm_method };
+			VersionedRuntimeId { code_hash: code_hash.clone(), heap_alloc_strategy, wasm_method };
 
 		let mut runtimes = self.runtimes.lock(); // this must be released prior to calling f
 		let versioned_runtime = if let Some(versioned_runtime) = runtimes.get(&versioned_runtime_id)
@@ -251,7 +252,7 @@ impl RuntimeCache {
 				&code,
 				ext,
 				wasm_method,
-				heap_pages,
+				heap_alloc_strategy,
 				allow_missing_func_imports,
 				self.max_runtime_instances,
 				self.cache_path.as_deref(),
@@ -289,7 +290,7 @@ impl RuntimeCache {
 /// Create a wasm runtime with the given `code`.
 pub fn create_wasm_runtime_with_code<H>(
 	wasm_method: WasmExecutionMethod,
-	heap_pages: u64,
+	heap_alloc_strategy: HeapAllocStrategy,
 	blob: RuntimeBlob,
 	allow_missing_func_imports: bool,
 	cache_path: Option<&Path>,
@@ -307,7 +308,7 @@ where
 
 			sc_executor_wasmi::create_runtime(
 				blob,
-				heap_pages,
+				heap_alloc_strategy,
 				H::host_functions(),
 				allow_missing_func_imports,
 			)
@@ -320,12 +321,11 @@ where
 					allow_missing_func_imports,
 					cache_path: cache_path.map(ToOwned::to_owned),
 					semantics: sc_executor_wasmtime::Semantics {
-						extra_heap_pages: heap_pages,
+						heap_alloc_strategy,
 						instantiation_strategy,
 						deterministic_stack_limit: None,
 						canonicalize_nans: false,
 						parallel_compilation: true,
-						max_memory_size: None,
 					},
 				},
 			)
@@ -393,7 +393,7 @@ fn create_versioned_wasm_runtime<H>(
 	code: &[u8],
 	ext: &mut dyn Externalities,
 	wasm_method: WasmExecutionMethod,
-	heap_pages: u64,
+	heap_alloc_strategy: HeapAllocStrategy,
 	allow_missing_func_imports: bool,
 	max_instances: usize,
 	cache_path: Option<&Path>,
@@ -408,11 +408,11 @@ where
 	// Use the runtime blob to scan if there is any metadata embedded into the wasm binary
 	// pertaining to runtime version. We do it before consuming the runtime blob for creating the
 	// runtime.
-	let mut version: Option<_> = read_embedded_version(&blob)?;
+	let mut version = read_embedded_version(&blob)?;
 
 	let runtime = create_wasm_runtime_with_code::<H>(
 		wasm_method,
-		heap_pages,
+		heap_alloc_strategy,
 		blob,
 		allow_missing_func_imports,
 		cache_path,
