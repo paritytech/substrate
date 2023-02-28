@@ -20,10 +20,10 @@
 use super::{system, wasm_binary_unwrap, AccountId, AuthorityId, Runtime};
 use codec::{Encode, Joiner, KeyedVec};
 use frame_support::traits::GenesisBuild;
-use sc_service::client::genesis;
+use sc_service::construct_genesis_block;
 use sp_core::{
 	map,
-	storage::{well_known_keys, Storage},
+	storage::{well_known_keys, StateVersion, Storage},
 };
 use sp_io::hashing::{blake2_256, twox_128};
 use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
@@ -106,7 +106,7 @@ pub fn insert_genesis_block(storage: &mut Storage) -> sp_core::hash::H256 {
 		storage.top.clone().into_iter().collect(),
 		sp_runtime::StateVersion::V1,
 	);
-	let block: crate::Block = genesis::construct_genesis_block(state_root);
+	let block: crate::Block = construct_genesis_block(state_root, StateVersion::V1);
 	let genesis_hash = block.header.hash();
 	storage.top.extend(additional_storage_with_genesis(&block));
 	genesis_hash

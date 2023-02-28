@@ -61,12 +61,15 @@ pub use self::{
 		new_full_parts, spawn_tasks, BuildNetworkParams, KeystoreContainer, NetworkStarter,
 		SpawnTasksParams, TFullBackend, TFullCallExecutor, TFullClient,
 	},
-	client::{
-		genesis::{BuildGenesisBlock, GenesisBlockBuilder},
-		resolve_state_version_from_wasm, ClientConfig, LocalCallExecutor,
-	},
+	client::{ClientConfig, LocalCallExecutor},
 	error::Error,
 };
+
+pub use sc_chain_spec::{
+	construct_genesis_block, resolve_state_version_from_wasm, BuildGenesisBlock,
+	GenesisBlockBuilder,
+};
+
 pub use config::{
 	BasePath, BlocksPruning, Configuration, DatabaseSource, PruningMode, Role, RpcMethods, TaskType,
 };
