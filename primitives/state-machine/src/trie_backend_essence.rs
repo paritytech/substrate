@@ -87,6 +87,7 @@ where
 	H: Hasher,
 {
 	stop_on_incomplete_database: bool,
+	skip_if_first: Option<StorageKey>,
 	root: H::Out,
 	child_info: Option<ChildInfo>,
 	trie_iter: TrieDBRawIterator<Layout<H>>,
@@ -144,6 +145,7 @@ where
 	fn default() -> Self {
 		Self {
 			stop_on_incomplete_database: false,
+			skip_if_first: None,
 			child_info: None,
 			root: Default::default(),
 			trie_iter: TrieDBRawIterator::empty(),
@@ -165,12 +167,34 @@ where
 
 	#[inline]
 	fn next_key(&mut self, backend: &Self::Backend) -> Option<Result<StorageKey>> {
-		self.prepare(&backend.essence, |trie, trie_iter| trie_iter.next_key(&trie))
+		let skip_if_first = self.skip_if_first.take();
+		self.prepare(&backend.essence, |trie, trie_iter| {
+			let mut result = trie_iter.next_key(&trie);
+			if let Some(skipped_key) = skip_if_first {
+				if let Some(Ok(ref key)) = result {
+					if *key == skipped_key {
+						result = trie_iter.next_key(&trie);
+					}
+				}
+			}
+			result
+		})
 	}
 
 	#[inline]
 	fn next_pair(&mut self, backend: &Self::Backend) -> Option<Result<(StorageKey, StorageValue)>> {
-		self.prepare(&backend.essence, |trie, trie_iter| trie_iter.next_item(&trie))
+		let skip_if_first = self.skip_if_first.take();
+		self.prepare(&backend.essence, |trie, trie_iter| {
+			let mut result = trie_iter.next_item(&trie);
+			if let Some(skipped_key) = skip_if_first {
+				if let Some(Ok((ref key, _))) = result {
+					if *key == skipped_key {
+						result = trie_iter.next_item(&trie);
+					}
+				}
+			}
+			result
+		})
 	}
 
 	fn was_complete(&self) -> bool {
@@ -574,6 +598,11 @@ where
 
 		Ok(RawIter {
 			stop_on_incomplete_database: args.stop_on_incomplete_database,
+			skip_if_first: if args.start_at_exclusive {
+				args.start_at.map(|key| key.to_vec())
+			} else {
+				None
+			},
 			child_info: args.child_info,
 			root,
 			trie_iter,

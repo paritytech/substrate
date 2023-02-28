@@ -16,7 +16,7 @@
 // limitations under the License.
 
 /// The error type used by the allocators.
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, PartialEq)]
 pub enum Error {
 	/// Someone tried to allocate more memory than the allowed maximum per allocation.
 	#[error("Requested allocation size is too large")]
