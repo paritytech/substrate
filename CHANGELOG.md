@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.34.0]
 ### Changed
 - Updated the ss58 prefix to custom one from [ss58 registry](https://github.com/paritytech/ss58-registry/blob/main/ss58-registry.json#L491)
+- New `spec_version` format. Mainnet runtime specification upgrade increments the second and third digits and resets two least significant digits now. Other upgrades should update these two least significant digits only.
 
 ## [2.33.0]
 ### Changed
