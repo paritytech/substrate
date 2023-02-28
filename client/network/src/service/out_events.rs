@@ -31,13 +31,13 @@
 //! - Send events by calling [`OutChannels::send`]. Events are cloned for each sender in the
 //! collection.
 
-use backtrace::Backtrace;
 use futures::{prelude::*, ready, stream::FusedStream};
 use log::error;
 use parking_lot::Mutex;
 use prometheus_endpoint::{register, CounterVec, GaugeVec, Opts, PrometheusError, Registry, U64};
 use sc_network_common::protocol::event::Event;
 use std::{
+	backtrace::Backtrace,
 	cell::RefCell,
 	fmt,
 	pin::Pin,
@@ -57,7 +57,7 @@ pub fn channel(name: &'static str, queue_size_warning: usize) -> (Sender, Receiv
 		name,
 		queue_size_warning,
 		warning_fired: false,
-		creation_backtrace: Backtrace::new_unresolved(),
+		creation_backtrace: Backtrace::force_capture(),
 		metrics: metrics.clone(),
 	};
 	let rx = Receiver { inner: rx, name, metrics };
@@ -181,15 +181,14 @@ impl OutChannels {
 		self.event_streams.retain_mut(|sender| {
 			if sender.inner.len() >= sender.queue_size_warning && !sender.warning_fired {
 				sender.warning_fired = true;
-				sender.creation_backtrace.resolve();
 				error!(
 					"The number of unprocessed events in channel `{}` exceeded {}.\n\
-					 The channel was created at:\n{:?}\n
-					 The last event was sent from:\n{:?}",
+					 The channel was created at:\n{:}\n
+					 The last event was sent from:\n{:}",
 					sender.name,
 					sender.queue_size_warning,
 					sender.creation_backtrace,
-					Backtrace::new(),
+					Backtrace::force_capture(),
 				);
 			}
 			sender.inner.try_send(event.clone()).is_ok()
