@@ -18,12 +18,12 @@
 
 use crate::LOG_TARGET;
 
-use beefy_primitives::{
+use codec::{Decode, Encode};
+use log::debug;
+use sp_consensus_beefy::{
 	crypto::{AuthorityId, Public, Signature},
 	Commitment, EquivocationProof, SignedCommitment, ValidatorSet, ValidatorSetId, VoteMessage,
 };
-use codec::{Decode, Encode};
-use log::debug;
 use sp_runtime::traits::{Block, NumberFor};
 use std::collections::BTreeMap;
 
@@ -198,7 +198,7 @@ where
 mod tests {
 	use sc_network_test::Block;
 
-	use beefy_primitives::{
+	use sp_consensus_beefy::{
 		crypto::Public, known_payloads::MMR_ROOT_ID, Commitment, EquivocationProof, Keyring,
 		Payload, SignedCommitment, ValidatorSet, VoteMessage,
 	};

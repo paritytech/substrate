@@ -18,7 +18,6 @@
 
 //! Generating request logic for request/response protocol for syncing BEEFY justifications.
 
-use beefy_primitives::{crypto::AuthorityId, ValidatorSet};
 use codec::Encode;
 use futures::channel::{oneshot, oneshot::Canceled};
 use log::{debug, warn};
@@ -28,6 +27,7 @@ use sc_network_common::{
 	request_responses::{IfDisconnected, RequestFailure},
 	service::NetworkRequest,
 };
+use sp_consensus_beefy::{crypto::AuthorityId, ValidatorSet};
 use sp_runtime::traits::{Block, NumberFor};
 use std::{collections::VecDeque, result::Result, sync::Arc};
 

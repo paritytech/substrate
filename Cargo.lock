@@ -494,69 +494,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "beefy-gadget"
-version = "4.0.0-dev"
-dependencies = [
- "array-bytes",
- "async-trait",
- "fnv",
- "futures",
- "log",
- "parity-scale-codec",
- "parking_lot 0.12.1",
- "sc-block-builder",
- "sc-client-api",
- "sc-consensus",
- "sc-keystore",
- "sc-network",
- "sc-network-common",
- "sc-network-gossip",
- "sc-network-test",
- "sc-utils",
- "serde",
- "sp-api",
- "sp-application-crypto",
- "sp-arithmetic",
- "sp-beefy",
- "sp-blockchain",
- "sp-consensus",
- "sp-consensus-grandpa",
- "sp-core",
- "sp-keyring",
- "sp-keystore",
- "sp-mmr-primitives",
- "sp-runtime",
- "sp-tracing",
- "substrate-prometheus-endpoint",
- "substrate-test-runtime-client",
- "tempfile",
- "thiserror",
- "tokio",
- "wasm-timer",
-]
-
-[[package]]
-name = "beefy-gadget-rpc"
-version = "4.0.0-dev"
-dependencies = [
- "beefy-gadget",
- "futures",
- "jsonrpsee",
- "log",
- "parity-scale-codec",
- "parking_lot 0.12.1",
- "sc-rpc",
- "serde",
- "serde_json",
- "sp-beefy",
- "sp-core",
- "sp-runtime",
- "substrate-test-runtime-client",
- "thiserror",
- "tokio",
-]
-
-[[package]]
 name = "binary-merkle-tree"
 version = "4.0.0-dev"
 dependencies = [
@@ -4492,9 +4429,9 @@ dependencies = [
  "sc-client-api",
  "sc-offchain",
  "sp-api",
- "sp-beefy",
  "sp-blockchain",
  "sp-consensus",
+ "sp-consensus-beefy",
  "sp-core",
  "sp-mmr-primitives",
  "sp-runtime",
@@ -5555,7 +5492,7 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-beefy",
+ "sp-consensus-beefy",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -5580,7 +5517,7 @@ dependencies = [
  "scale-info",
  "serde",
  "sp-api",
- "sp-beefy",
+ "sp-consensus-beefy",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -8334,6 +8271,69 @@ dependencies = [
 ]
 
 [[package]]
+name = "sc-consensus-beefy"
+version = "4.0.0-dev"
+dependencies = [
+ "array-bytes",
+ "async-trait",
+ "fnv",
+ "futures",
+ "log",
+ "parity-scale-codec",
+ "parking_lot 0.12.1",
+ "sc-block-builder",
+ "sc-client-api",
+ "sc-consensus",
+ "sc-keystore",
+ "sc-network",
+ "sc-network-common",
+ "sc-network-gossip",
+ "sc-network-test",
+ "sc-utils",
+ "serde",
+ "sp-api",
+ "sp-application-crypto",
+ "sp-arithmetic",
+ "sp-blockchain",
+ "sp-consensus",
+ "sp-consensus-beefy",
+ "sp-consensus-grandpa",
+ "sp-core",
+ "sp-keyring",
+ "sp-keystore",
+ "sp-mmr-primitives",
+ "sp-runtime",
+ "sp-tracing",
+ "substrate-prometheus-endpoint",
+ "substrate-test-runtime-client",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "wasm-timer",
+]
+
+[[package]]
+name = "sc-consensus-beefy-rpc"
+version = "4.0.0-dev"
+dependencies = [
+ "futures",
+ "jsonrpsee",
+ "log",
+ "parity-scale-codec",
+ "parking_lot 0.12.1",
+ "sc-consensus-beefy",
+ "sc-rpc",
+ "serde",
+ "serde_json",
+ "sp-consensus-beefy",
+ "sp-core",
+ "sp-runtime",
+ "substrate-test-runtime-client",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "sc-consensus-epochs"
 version = "0.10.0-dev"
 dependencies = [
@@ -9830,26 +9830,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sp-beefy"
-version = "4.0.0-dev"
-dependencies = [
- "array-bytes",
- "lazy_static",
- "parity-scale-codec",
- "scale-info",
- "serde",
- "sp-api",
- "sp-application-crypto",
- "sp-core",
- "sp-io",
- "sp-keystore",
- "sp-mmr-primitives",
- "sp-runtime",
- "sp-std",
- "strum",
-]
-
-[[package]]
 name = "sp-block-builder"
 version = "4.0.0-dev"
 dependencies = [
@@ -9932,6 +9912,26 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "sp-timestamp",
+]
+
+[[package]]
+name = "sp-consensus-beefy"
+version = "4.0.0-dev"
+dependencies = [
+ "array-bytes",
+ "lazy_static",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-api",
+ "sp-application-crypto",
+ "sp-core",
+ "sp-io",
+ "sp-keystore",
+ "sp-mmr-primitives",
+ "sp-runtime",
+ "sp-std",
+ "strum",
 ]
 
 [[package]]
@@ -10837,11 +10837,11 @@ dependencies = [
  "serde",
  "sp-api",
  "sp-application-crypto",
- "sp-beefy",
  "sp-block-builder",
  "sp-consensus",
  "sp-consensus-aura",
  "sp-consensus-babe",
+ "sp-consensus-beefy",
  "sp-consensus-grandpa",
  "sp-core",
  "sp-externalities",
