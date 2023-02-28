@@ -28,8 +28,6 @@ use codec::Codec;
 #[cfg(feature = "std")]
 use hash_db::HashDB;
 use hash_db::Hasher;
-#[cfg(feature = "std")]
-use parking_lot::Mutex;
 use sp_core::storage::{ChildInfo, StateVersion};
 #[cfg(feature = "std")]
 use sp_trie::{cache::LocalTrieCache, recorder::Recorder};
@@ -183,7 +181,10 @@ where
 	pub fn build(self) -> TrieBackend<S, H, C> {
 		let _ = self.cache;
 
-		TrieBackend { essence: TrieBackendEssence::new(self.storage, self.root) }
+		TrieBackend {
+			essence: TrieBackendEssence::new(self.storage, self.root),
+			next_storage_key_cache: Default::default(),
+		}
 	}
 }
 
@@ -205,11 +206,26 @@ where
 	}
 }
 
+#[cfg(feature = "std")]
+type CacheCell<T> = parking_lot::Mutex<T>;
+
+#[cfg(not(feature = "std"))]
+type CacheCell<T> = core::cell::RefCell<T>;
+
+#[cfg(feature = "std")]
+fn access_cache<T, R>(cell: &CacheCell<T>, callback: impl FnOnce(&mut T) -> R) -> R {
+	callback(&mut *cell.lock())
+}
+
+#[cfg(not(feature = "std"))]
+fn access_cache<T, R>(cell: &CacheCell<T>, callback: impl FnOnce(&mut T) -> R) -> R {
+	callback(&mut *cell.borrow_mut())
+}
+
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher, C = LocalTrieCache<H>> {
 	pub(crate) essence: TrieBackendEssence<S, H, C>,
-	#[cfg(feature = "std")]
-	next_storage_key_cache: Mutex<Option<CachedIter<S, H, C>>>,
+	next_storage_key_cache: CacheCell<Option<CachedIter<S, H, C>>>,
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H> + Send + Sync> TrieBackend<S, H, C>
@@ -293,16 +309,12 @@ where
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
-		#[cfg(feature = "std")]
-		let (is_cached, mut cache) = self
-			.next_storage_key_cache
-			.lock()
-			.take()
-			.map(|cache| (true, cache))
-			.unwrap_or_else(|| (false, Default::default()));
-
-		#[cfg(not(feature = "std"))]
-		let (is_cached, mut cache) = (false, CachedIter::default());
+		let (is_cached, mut cache) = access_cache(&self.next_storage_key_cache, |cache_cell| {
+			cache_cell
+				.take()
+				.map(|cache| (true, cache))
+				.unwrap_or_else(|| (false, Default::default()))
+		});
 
 		if !is_cached || cache.last_key != key {
 			let args =
@@ -316,12 +328,9 @@ where
 			Some(Ok(next_key)) => next_key,
 		};
 
-		#[cfg(feature = "std")]
-		{
-			cache.last_key.clear();
-			cache.last_key.extend_from_slice(&next_key);
-			*self.next_storage_key_cache.lock() = Some(cache);
-		}
+		cache.last_key.clear();
+		cache.last_key.extend_from_slice(&next_key);
+		access_cache(&self.next_storage_key_cache, |cache_cell| *cache_cell = Some(cache));
 
 		#[cfg(debug_assertions)]
 		debug_assert_eq!(
