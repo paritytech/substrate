@@ -24,10 +24,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		collection: T::CollectionId,
 		lock_settings: CollectionSettings,
 	) -> DispatchResult {
-		ensure!(
-			Self::collection_owner(collection.clone()) == Some(origin),
-			Error::<T, I>::NoPermission
-		);
+		ensure!(Self::collection_owner(collection) == Some(origin), Error::<T, I>::NoPermission);
 		ensure!(
 			!lock_settings.is_disabled(CollectionSetting::DepositRequired),
 			Error::<T, I>::WrongSetting
