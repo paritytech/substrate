@@ -34,7 +34,7 @@ use sc_consensus_slots::{check_equivocation, CheckedHeader, InherentDataProvider
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_TRACE};
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
-use sp_blockchain::{well_known_cache_keys::Id as CacheKeyId, HeaderBackend};
+use sp_blockchain::HeaderBackend;
 use sp_consensus::Error as ConsensusError;
 use sp_consensus_aura::{digests::CompatibleDigestItem, inherents::AuraInherentData, AuraApi};
 use sp_consensus_slots::Slot;
@@ -184,7 +184,7 @@ where
 	async fn verify(
 		&mut self,
 		mut block: BlockImportParams<B, ()>,
-	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> Result<BlockImportParams<B, ()>, String> {
 		// Skip checks that include execution, if being told so or when importing only state.
 		//
 		// This is done for example when gap syncing and it is expected that the block after the gap
@@ -194,7 +194,7 @@ where
 			// When we are importing only the state of a block, it will be the best block.
 			block.fork_choice = Some(ForkChoiceStrategy::Custom(block.with_state()));
 
-			return Ok((block, Default::default()))
+			return Ok(block)
 		}
 
 		let hash = block.header.hash();
@@ -278,7 +278,7 @@ where
 				block.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 				block.post_hash = Some(hash);
 
-				Ok((block, None))
+				Ok(block)
 			},
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: LOG_TARGET, "Checking {:?} failed; {:?}, {:?}.", hash, a, b);

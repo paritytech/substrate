@@ -47,10 +47,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT},
 	Justifications,
 };
-use std::{
-	collections::{HashMap, HashSet},
-	pin::Pin,
-};
+use std::{collections::HashSet, pin::Pin};
 use substrate_test_runtime_client::runtime::BlockNumber;
 use tokio::runtime::Handle;
 
@@ -893,7 +890,7 @@ async fn allows_reimporting_change_blocks() {
 	};
 
 	assert_eq!(
-		block_import.import_block(block(), HashMap::new()).await.unwrap(),
+		block_import.import_block(block()).await.unwrap(),
 		ImportResult::Imported(ImportedAux {
 			needs_justification: true,
 			clear_justification_requests: false,
@@ -903,10 +900,7 @@ async fn allows_reimporting_change_blocks() {
 		}),
 	);
 
-	assert_eq!(
-		block_import.import_block(block(), HashMap::new()).await.unwrap(),
-		ImportResult::AlreadyInChain
-	);
+	assert_eq!(block_import.import_block(block()).await.unwrap(), ImportResult::AlreadyInChain);
 }
 
 #[tokio::test]
@@ -942,7 +936,7 @@ async fn test_bad_justification() {
 	};
 
 	assert_eq!(
-		block_import.import_block(block(), HashMap::new()).await.unwrap(),
+		block_import.import_block(block()).await.unwrap(),
 		ImportResult::Imported(ImportedAux {
 			needs_justification: true,
 			clear_justification_requests: false,
@@ -952,10 +946,7 @@ async fn test_bad_justification() {
 		}),
 	);
 
-	assert_eq!(
-		block_import.import_block(block(), HashMap::new()).await.unwrap(),
-		ImportResult::AlreadyInChain
-	);
+	assert_eq!(block_import.import_block(block()).await.unwrap(), ImportResult::AlreadyInChain);
 }
 
 #[tokio::test]
@@ -1896,7 +1887,7 @@ async fn imports_justification_for_regular_blocks_on_import() {
 	import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
 	assert_eq!(
-		block_import.import_block(import, HashMap::new()).await.unwrap(),
+		block_import.import_block(import).await.unwrap(),
 		ImportResult::Imported(ImportedAux {
 			needs_justification: false,
 			clear_justification_requests: false,
