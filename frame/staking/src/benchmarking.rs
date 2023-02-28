@@ -334,7 +334,7 @@ benchmarks! {
 
 	validate {
 		let (stash, controller) = create_stash_controller::<T>(
-			AbsoluteMaxNominationsOf::<T>::get() - 1,
+			MaxNominationsOf::<T>::get() - 1,
 			100,
 			Default::default(),
 		)?;
@@ -358,11 +358,11 @@ benchmarks! {
 
 		// these are the other validators; there are `T::MaxNominations::get() - 1` of them, so
 		// there are a total of `T::MaxNominations::get()` validators in the system.
-		let rest_of_validators = create_validators_with_seed::<T>(AbsoluteMaxNominationsOf::<T>::get() - 1, 100, 415)?;
+		let rest_of_validators = create_validators_with_seed::<T>(MaxNominationsOf::<T>::get() - 1, 100, 415)?;
 
 		// this is the validator that will be kicking.
 		let (stash, controller) = create_stash_controller::<T>(
-			AbsoluteMaxNominationsOf::<T>::get() - 1,
+			MaxNominationsOf::<T>::get() - 1,
 			100,
 			Default::default(),
 		)?;
@@ -377,7 +377,7 @@ benchmarks! {
 		for i in 0 .. k {
 			// create a nominator stash.
 			let (n_stash, n_controller) = create_stash_controller::<T>(
-				AbsoluteMaxNominationsOf::<T>::get() + i,
+				MaxNominationsOf::<T>::get() + i,
 				100,
 				Default::default(),
 			)?;
@@ -414,7 +414,7 @@ benchmarks! {
 
 	// Worst case scenario, T::MaxNominations::get()
 	nominate {
-		let n in 1 .. AbsoluteMaxNominationsOf::<T>::get();
+		let n in 1 .. MaxNominationsOf::<T>::get();
 
 		// clean up any existing state.
 		clear_validators_and_nominators::<T>();
@@ -425,7 +425,7 @@ benchmarks! {
 		// we are just doing an insert into the origin position.
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		let (stash, controller) = create_stash_controller_with_balance::<T>(
-			SEED + AbsoluteMaxNominationsOf::<T>::get() + 1, // make sure the account does not conflict with others
+			SEED + MaxNominationsOf::<T>::get() + 1, // make sure the account does not conflict with others
 			origin_weight,
 			Default::default(),
 		).unwrap();
@@ -702,7 +702,7 @@ benchmarks! {
 		create_validators_with_nominators_for_era::<T>(
 			v,
 			n,
-			AbsoluteMaxNominationsOf::<T>::get() as usize,
+			MaxNominationsOf::<T>::get() as usize,
 			false,
 			None,
 		)?;
@@ -720,7 +720,7 @@ benchmarks! {
 		create_validators_with_nominators_for_era::<T>(
 			v,
 			n,
-			AbsoluteMaxNominationsOf::<T>::get() as usize,
+			MaxNominationsOf::<T>::get() as usize,
 			false,
 			None,
 		)?;
@@ -799,7 +799,7 @@ benchmarks! {
 		let n in (MaxNominators::<T>::get() / 2) .. MaxNominators::<T>::get();
 
 		let validators = create_validators_with_nominators_for_era::<T>(
-			v, n, AbsoluteMaxNominationsOf::<T>::get() as usize, false, None
+			v, n, MaxNominationsOf::<T>::get() as usize, false, None
 		)?
 		.into_iter()
 		.map(|v| T::Lookup::lookup(v).unwrap())
@@ -821,7 +821,7 @@ benchmarks! {
 		let n = MaxNominators::<T>::get();
 
 		let _ = create_validators_with_nominators_for_era::<T>(
-			v, n, AbsoluteMaxNominationsOf::<T>::get() as usize, false, None
+			v, n, MaxNominationsOf::<T>::get() as usize, false, None
 		)?;
 	}: {
 		let targets = <Staking<T>>::get_npos_targets(DataProviderBounds::new_unbounded());

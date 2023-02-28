@@ -44,8 +44,8 @@ mod impls;
 pub use impls::*;
 
 use crate::{
-	slashing, weights::WeightInfo, AbsoluteMaxNominationsOf, AccountIdLookupOf, ActiveEraInfo,
-	BalanceOf, EraPayout, EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations,
+	slashing, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo, BalanceOf, EraPayout,
+	EraRewardPoints, Exposure, Forcing, MaxNominationsOf, NegativeImbalanceOf, Nominations,
 	NominationsQuota, PositiveImbalanceOf, RewardDestination, SessionInterface, StakingLedger,
 	UnappliedSlash, UnlockChunk, ValidatorPrefs,
 };
@@ -275,9 +275,9 @@ pub mod pallet {
 	/// Maximum limit of nominations per nominator, regardless of `T::NominationsQuota`.
 	#[pallet::extra_constants]
 	impl<T: Config> Pallet<T> {
-		#[pallet::constant_name(AbsoluteMaxNominations)]
+		#[pallet::constant_name(MaxNominations)]
 		fn absolute_max_nominations() -> u32 {
-			<T::NominationsQuota as NominationsQuota<BalanceOf<T>>>::AbsoluteMaxNominations::get()
+			<T::NominationsQuota as NominationsQuota<BalanceOf<T>>>::MaxNominations::get()
 		}
 	}
 
@@ -355,7 +355,7 @@ pub mod pallet {
 	/// they wish to support.
 	///
 	/// Note that the keys of this storage map might become non-decodable in case the
-	/// account's [`NominationsQuota::ABSOLUTE_MAX_NOMINATIONS`] configuration is decreased.
+	/// account's [`NominationsQuota::MaxNominations`] configuration is decreased.
 	/// In this rare case, these nominators
 	/// are still existent in storage, their key is correct and retrievable (i.e. `contains_key`
 	/// indicates that they exist), but their value cannot be decoded. Therefore, the non-decodable
@@ -813,11 +813,11 @@ pub mod pallet {
 		fn integrity_test() {
 			// ensure that we funnel the correct value to the `DataProvider::MaxVotesPerVoter`;
 			assert_eq!(
-				AbsoluteMaxNominationsOf::<T>::get(),
+				MaxNominationsOf::<T>::get(),
 				<Self as ElectionDataProvider>::MaxVotesPerVoter::get()
 			);
 			// and that MaxNominations is always greater than 1, since we count on this.
-			assert!(!AbsoluteMaxNominationsOf::<T>::get().is_zero());
+			assert!(!MaxNominationsOf::<T>::get().is_zero());
 
 			// ensure election results are always bounded with the same value
 			assert!(

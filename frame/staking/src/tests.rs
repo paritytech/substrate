@@ -5146,7 +5146,7 @@ fn nomination_quota_max_changes_decoding() {
 		.balance_factor(10)
 		.build_and_execute(|| {
 			// pre-condition
-			assert_eq!(AbsoluteMaxNominationsOf::<Test>::get(), 16);
+			assert_eq!(MaxNominationsOf::<Test>::get(), 16);
 
 			let unbonded_election = DataProviderBounds::new_unbounded();
 

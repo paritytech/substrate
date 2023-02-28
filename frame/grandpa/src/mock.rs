@@ -167,6 +167,7 @@ parameter_types! {
 	pub const BondingDuration: EraIndex = 3;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
+	pub const ElectionsBoundsOnChain: ElectionBounds = ElectionBoundsBuilder::new().build();
 }
 
 pub struct OnChainSeqPhragmen;
@@ -176,12 +177,10 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = Staking;
 	type WeightInfo = ();
 	type MaxWinners = ConstU32<100>;
-	type VotersBound = ConstU32<{ u32::MAX }>;
-	type TargetsBound = ConstU32<{ u32::MAX }>;
+	type ElectionBounds = ElectionsBoundsOnChain;
 }
 
 impl pallet_staking::Config for Test {
-	type MaxNominations = ConstU32<16>;
 	type RewardRemainder = ();
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type RuntimeEvent = RuntimeEvent;
@@ -203,6 +202,7 @@ impl pallet_staking::Config for Test {
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
 	type TargetList = pallet_staking::UseValidatorsMap<Self>;
+	type NominationsQuota = pallet_staking::FixedNominationsQuota<16>;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type HistoryDepth = ConstU32<84>;
 	type OnStakerSlash = ();

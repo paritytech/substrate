@@ -19,7 +19,9 @@
 
 use crate::{self as pallet_babe, Config, CurrentSlot};
 use codec::Encode;
-use frame_election_provider_support::{onchain, SequentialPhragmen, ElectionBoundsBuilder, ElectionBounds};
+use frame_election_provider_support::{
+	onchain, ElectionBounds, ElectionBoundsBuilder, SequentialPhragmen,
+};
 use frame_support::{
 	parameter_types,
 	traits::{ConstU128, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, OnInitialize},
@@ -199,12 +201,12 @@ impl pallet_staking::Config for Test {
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
 	type TargetList = pallet_staking::UseValidatorsMap<Self>;
+	type NominationsQuota = FixedNominationsQuota<16>;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type HistoryDepth = ConstU32<84>;
 	type OnStakerSlash = ();
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
-	type NominationsQuota = FixedNominationsQuota<16>;
 }
 
 impl pallet_offences::Config for Test {

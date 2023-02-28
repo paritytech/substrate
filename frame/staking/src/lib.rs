@@ -339,9 +339,9 @@ macro_rules! log {
 /// pallet.
 pub type MaxWinnersOf<T> = <<T as Config>::ElectionProvider as frame_election_provider_support::ElectionProviderBase>::MaxWinners;
 
-/// Absolute maximum number of nominations per nominator.
-pub type AbsoluteMaxNominationsOf<T> =
-	<<T as Config>::NominationsQuota as NominationsQuota<BalanceOf<T>>>::AbsoluteMaxNominations;
+/// Maximum number of nominations per nominator.
+pub type MaxNominationsOf<T> =
+	<<T as Config>::NominationsQuota as NominationsQuota<BalanceOf<T>>>::MaxNominations;
 
 /// Counter for the number of "reward" points earned by a given validator.
 pub type RewardPoint = u32;
@@ -697,7 +697,7 @@ impl<T: Config> StakingLedger<T> {
 #[scale_info(skip_type_params(T))]
 pub struct Nominations<T: Config> {
 	/// The targets of nomination.
-	pub targets: BoundedVec<T::AccountId, AbsoluteMaxNominationsOf<T>>,
+	pub targets: BoundedVec<T::AccountId, MaxNominationsOf<T>>,
 	/// The era the nominations were submitted.
 	///
 	/// Except for initial nominations which are considered submitted at era 0.
@@ -769,17 +769,15 @@ impl<AccountId, Balance: HasCompact + Zero> UnappliedSlash<AccountId, Balance> {
 
 /// Something that defines the maximum number of nominations per nominator.
 pub trait NominationsQuota<Balance> {
-	const ABSOLUTE_MAX_NOMINATIONS: u32;
-
 	/// Maximum number of nominations. The method `get_quota` may return a larger number of
-	/// nominations than `ABSOLUTE_MAX_NOMINATIONS`. However, `get_quota_safe` returns the bounded
+	/// nominations than `Self::MaxNominations`. However, `get_quota_safe` returns the bounded
 	/// maximum number of nominations.
-	type AbsoluteMaxNominations: Get<u32>;
+	type MaxNominations: Get<u32>;
 
 	/// Returns the voter's nomination quota within reasonable bounds [`min`, `max`], where `min`
-	/// is 1 and `max` is ABSOLUTE_MAX_NOMINATIONS.
+	/// is 1 and `max` is `Self::MaxNominations`.
 	fn get_quota_safe(balance: Balance) -> u32 {
-		Self::get_quota(balance).max(1).min(Self::ABSOLUTE_MAX_NOMINATIONS)
+		Self::get_quota(balance).max(1).min(Self::MaxNominations::get())
 	}
 
 	// Returns the voter's nomination quota based on the quota implementation.
@@ -789,9 +787,7 @@ pub trait NominationsQuota<Balance> {
 /// A nomination quota that allows up to MAX nominations for all validators.
 pub struct FixedNominationsQuota<const MAX: u32>;
 impl<Balance, const MAX: u32> NominationsQuota<Balance> for FixedNominationsQuota<MAX> {
-	const ABSOLUTE_MAX_NOMINATIONS: u32 = MAX;
-
-	type AbsoluteMaxNominations = Self;
+	type MaxNominations = Self;
 
 	fn get_quota(_: Balance) -> u32 {
 		MAX
