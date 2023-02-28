@@ -39,7 +39,7 @@ use sp_std::prelude::*;
 
 use codec::{self as codec, Decode, Encode};
 use frame_support::traits::{Get, KeyOwnerProofSystem};
-use sp_finality_grandpa::{EquivocationProof, RoundNumber, SetId};
+use sp_consensus_grandpa::{EquivocationProof, RoundNumber, SetId};
 use sp_runtime::{
 	transaction_validity::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
@@ -251,7 +251,7 @@ fn is_known_offence<T: Config>(
 	key_owner_proof: &T::KeyOwnerProof,
 ) -> Result<(), TransactionValidityError> {
 	// check the membership proof to extract the offender's id
-	let key = (sp_finality_grandpa::KEY_TYPE, equivocation_proof.offender().clone());
+	let key = (sp_consensus_grandpa::KEY_TYPE, equivocation_proof.offender().clone());
 
 	let offender = T::KeyOwnerProofSystem::check_proof(key, key_owner_proof.clone())
 		.ok_or(InvalidTransaction::BadProof)?;

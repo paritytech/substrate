@@ -16,7 +16,7 @@
 
 use codec::{Decode, Encode};
 use futures::channel::oneshot;
-pub use sp_finality_grandpa::{AuthorityList, SetId};
+pub use sp_consensus_grandpa::{AuthorityList, SetId};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{fmt, sync::Arc};
 
