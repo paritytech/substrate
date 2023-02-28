@@ -329,7 +329,7 @@ where
 
 		cache.last_key.clear();
 		cache.last_key.extend_from_slice(&next_key);
-		access_cache(&self.next_storage_key_cache, |cache_cell| *cache_cell = Some(cache));
+		access_cache(&self.next_storage_key_cache, |cache_cell| cache_cell.replace(cache));
 
 		#[cfg(debug_assertions)]
 		debug_assert_eq!(
