@@ -78,6 +78,7 @@ pub mod inherent;
 #[macro_use]
 pub mod error;
 pub mod crypto;
+pub mod dispatch_context;
 pub mod instances;
 pub mod migrations;
 pub mod traits;

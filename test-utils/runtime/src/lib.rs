@@ -945,29 +945,29 @@ cfg_if! {
 				}
 			}
 
-			impl sp_finality_grandpa::GrandpaApi<Block> for Runtime {
-				fn grandpa_authorities() -> sp_finality_grandpa::AuthorityList {
+			impl sp_consensus_grandpa::GrandpaApi<Block> for Runtime {
+				fn grandpa_authorities() -> sp_consensus_grandpa::AuthorityList {
 					Vec::new()
 				}
 
-				fn current_set_id() -> sp_finality_grandpa::SetId {
+				fn current_set_id() -> sp_consensus_grandpa::SetId {
 					0
 				}
 
 				fn submit_report_equivocation_unsigned_extrinsic(
-					_equivocation_proof: sp_finality_grandpa::EquivocationProof<
+					_equivocation_proof: sp_consensus_grandpa::EquivocationProof<
 						<Block as BlockT>::Hash,
 						NumberFor<Block>,
 					>,
-					_key_owner_proof: sp_finality_grandpa::OpaqueKeyOwnershipProof,
+					_key_owner_proof: sp_consensus_grandpa::OpaqueKeyOwnershipProof,
 				) -> Option<()> {
 					None
 				}
 
 				fn generate_key_ownership_proof(
-					_set_id: sp_finality_grandpa::SetId,
-					_authority_id: sp_finality_grandpa::AuthorityId,
-				) -> Option<sp_finality_grandpa::OpaqueKeyOwnershipProof> {
+					_set_id: sp_consensus_grandpa::SetId,
+					_authority_id: sp_consensus_grandpa::AuthorityId,
+				) -> Option<sp_consensus_grandpa::OpaqueKeyOwnershipProof> {
 					None
 				}
 			}
@@ -1352,7 +1352,7 @@ mod tests {
 	use sc_block_builder::BlockBuilderProvider;
 	use sp_api::ProvideRuntimeApi;
 	use sp_consensus::BlockOrigin;
-	use sp_core::storage::well_known_keys::HEAP_PAGES;
+	use sp_core::{storage::well_known_keys::HEAP_PAGES, ExecutionContext};
 	use sp_state_machine::ExecutionStrategy;
 	use substrate_test_runtime_client::{
 		prelude::*, runtime::TestAPI, DefaultTestClientBuilderExt, TestClientBuilder,
@@ -1371,7 +1371,12 @@ mod tests {
 
 		// Try to allocate 1024k of memory on heap. This is going to fail since it is twice larger
 		// than the heap.
-		let ret = client.runtime_api().vec_with_capacity(best_hash, 1048576);
+		let ret = client.runtime_api().vec_with_capacity_with_context(
+			best_hash,
+			// Use `BlockImport` to ensure we use the on chain heap pages as configured above.
+			ExecutionContext::Importing,
+			1048576,
+		);
 		assert!(ret.is_err());
 
 		// Create a block that sets the `:heap_pages` to 32 pages of memory which corresponds to

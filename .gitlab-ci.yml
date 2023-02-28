@@ -43,57 +43,57 @@ workflow:
     - if: $CI_COMMIT_BRANCH
 
 variables:
-  GIT_STRATEGY:                    fetch
-  GIT_DEPTH:                       100
-  CARGO_INCREMENTAL:               0
-  DOCKER_OS:                       "debian:stretch"
-  ARCH:                            "x86_64"
-  CI_IMAGE:                        "paritytech/ci-linux:production"
-  BUILDAH_IMAGE:                   "quay.io/buildah/stable:v1.27"
-  RUSTY_CACHIER_SINGLE_BRANCH:     master
+  GIT_STRATEGY: fetch
+  GIT_DEPTH: 100
+  CARGO_INCREMENTAL: 0
+  DOCKER_OS: "debian:stretch"
+  ARCH: "x86_64"
+  CI_IMAGE: "paritytech/ci-linux:production"
+  BUILDAH_IMAGE: "quay.io/buildah/stable:v1.27"
+  RUSTY_CACHIER_SINGLE_BRANCH: master
   RUSTY_CACHIER_DONT_OPERATE_ON_MAIN_BRANCH: "true"
   RUSTY_CACHIER_COMPRESSION_METHOD: zstd
-  NEXTEST_FAILURE_OUTPUT:          immediate-final
-  NEXTEST_SUCCESS_OUTPUT:          final
-  ZOMBIENET_IMAGE:                 "docker.io/paritytech/zombienet:v1.3.34"
+  NEXTEST_FAILURE_OUTPUT: immediate-final
+  NEXTEST_SUCCESS_OUTPUT: final
+  ZOMBIENET_IMAGE: "docker.io/paritytech/zombienet:v1.3.34"
 
-.shared-default:                   &shared-default
+.shared-default: &shared-default
   retry:
     max: 2
     when:
       - runner_system_failure
       - unknown_failure
       - api_failure
-  cache:                           {}
+  cache: {}
 
 .default-pipeline-definitions:
   default:
-    <<:                            *shared-default
-    interruptible:                 true
+    <<: *shared-default
+    interruptible: true
 
 .crate-publishing-pipeline-definitions:
   default:
-    <<:                            *shared-default
+    <<: *shared-default
     # The crate-publishing pipeline defaults to `interruptible: false` so that we'll be able to
     # reach and run the publishing jobs despite the "Auto-cancel redundant pipelines" CI setting.
     # The setting is relevant because the crate-publishing pipeline runs on `master`, thus future
     # pipelines on `master` (e.g. created for new commits or other schedules) might unintendedly
     # cancel the publishing jobs or its dependencies before we get to actually publish the crates.
-    interruptible:                 false
+    interruptible: false
 
 .collect-artifacts:
   artifacts:
-    name:                          "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}"
-    when:                          on_success
-    expire_in:                     7 days
+    name: "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}"
+    when: on_success
+    expire_in: 7 days
     paths:
       - artifacts/
 
 .collect-artifacts-short:
   artifacts:
-    name:                          "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}"
-    when:                          on_success
-    expire_in:                     3 hours
+    name: "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}"
+    when: on_success
+    expire_in: 3 hours
     paths:
       - artifacts/
 
@@ -111,7 +111,7 @@ variables:
     - if echo "$CI_DISABLED_JOBS" | grep -xF "$CI_JOB_NAME"; then echo "The job has been cancelled in CI settings"; exit 0; fi
 
 .kubernetes-env:
-  image:                           "${CI_IMAGE}"
+  image: "${CI_IMAGE}"
   before_script:
     - !reference [.job-switcher, before_script]
     - !reference [.prepare-env, before_script]
@@ -139,7 +139,7 @@ variables:
       dotenv: pipeline-stopper.env
 
 .docker-env:
-  image:                           "${CI_IMAGE}"
+  image: "${CI_IMAGE}"
   before_script:
     - !reference [.job-switcher, before_script]
     - !reference [.prepare-env, before_script]
@@ -167,8 +167,8 @@ variables:
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/ # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/ # i.e. v1.0, v2.1rc1
 
 # handle the specific case where benches could store incorrect bench data because of the downstream staging runs
 # exclude cargo-check-benches from such runs
@@ -179,8 +179,8 @@ variables:
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/ # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/ # i.e. v1.0, v2.1rc1
 
 .test-refs-no-trigger:
   rules:
@@ -189,8 +189,8 @@ variables:
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/ # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/ # i.e. v1.0, v2.1rc1
     - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
 
 .test-refs-no-trigger-prs-only:
@@ -199,7 +199,7 @@ variables:
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "schedule"
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/ # PRs
 
 .publish-refs:
   rules:
@@ -208,7 +208,7 @@ variables:
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/ # i.e. v1.0, v2.1rc1
 
 .build-refs:
   # publish-refs + PRs
@@ -218,8 +218,8 @@ variables:
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/ # i.e. v1.0, v2.1rc1
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/ # PRs
 
 .zombienet-refs:
   extends: .build-refs
@@ -231,12 +231,12 @@ variables:
 
 .crates-publishing-variables:
   variables:
-    CRATESIO_CRATES_OWNER:         parity-crate-owner
-    REPO:                          substrate
-    REPO_OWNER:                    paritytech
+    CRATESIO_CRATES_OWNER: parity-crate-owner
+    REPO: substrate
+    REPO_OWNER: paritytech
 
 .crates-publishing-pipeline:
-  extends:                         .crates-publishing-variables
+  extends: .crates-publishing-variables
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_REF_NAME == "master" && $PIPELINE == "automatic-crate-publishing"
 
@@ -247,40 +247,40 @@ variables:
   # collect artifacts even on failure so that we know how the crates were generated (they'll be
   # generated to the artifacts folder according to SPUB_TMP further down)
   artifacts:
-    name:                          "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}"
-    when:                          always
-    expire_in:                     7 days
+    name: "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}"
+    when: always
+    expire_in: 7 days
     paths:
       - artifacts/
   variables:
-    SPUB_TMP:                      artifacts
+    SPUB_TMP: artifacts
 
 #### stage:                       .pre
 
 skip-if-draft:
-  extends:                         .kubernetes-env
+  extends: .kubernetes-env
   variables:
-    CI_IMAGE:                      "paritytech/tools:latest"
-  stage:                           .pre
+    CI_IMAGE: "paritytech/tools:latest"
+  stage: .pre
   rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/ # PRs
   script:
-     - echo "Commit message is ${CI_COMMIT_MESSAGE}"
-     - echo "Ref is ${CI_COMMIT_REF_NAME}"
-     - echo "pipeline source is ${CI_PIPELINE_SOURCE}"
-     - ./scripts/ci/gitlab/skip_if_draft.sh
-  allow_failure:                   true
+    - echo "Commit message is ${CI_COMMIT_MESSAGE}"
+    - echo "Ref is ${CI_COMMIT_REF_NAME}"
+    - echo "pipeline source is ${CI_PIPELINE_SOURCE}"
+    - ./scripts/ci/gitlab/skip_if_draft.sh
+  allow_failure: true
 
 check-crates-publishing-pipeline:
-  stage:                           .pre
+  stage: .pre
   extends:
     - .kubernetes-env
     - .crates-publishing-pipeline
   script:
     - git clone
-        --depth 1
-        --branch "$RELENG_SCRIPTS_BRANCH"
-        https://github.com/paritytech/releng-scripts.git
+      --depth 1
+      --branch "$RELENG_SCRIPTS_BRANCH"
+      https://github.com/paritytech/releng-scripts.git
     - ONLY_CHECK_PIPELINE=true ./releng-scripts/publish-crates
 
 include:
@@ -314,17 +314,17 @@ include:
 #### stage:                        deploy
 
 deploy-prometheus-alerting-rules:
-  stage:                           deploy
+  stage: deploy
   needs:
-    - job:                         test-prometheus-alerting-rules
-      artifacts:                   false
-  allow_failure:                   true
+    - job: test-prometheus-alerting-rules
+      artifacts: false
+  allow_failure: true
   trigger:
-    project:  parity/infrastructure/cloud-infra
+    project: parity/infrastructure/cloud-infra
   variables:
-    SUBSTRATE_CI_COMMIT_NAME:       "${CI_COMMIT_REF_NAME}"
-    SUBSTRATE_CI_COMMIT_REF:        "${CI_COMMIT_SHORT_SHA}"
-    UPSTREAM_TRIGGER_PROJECT:       "${CI_PROJECT_PATH}"
+    SUBSTRATE_CI_COMMIT_NAME: "${CI_COMMIT_REF_NAME}"
+    SUBSTRATE_CI_COMMIT_REF: "${CI_COMMIT_SHORT_SHA}"
+    UPSTREAM_TRIGGER_PROJECT: "${CI_PROJECT_PATH}"
   rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
@@ -339,12 +339,12 @@ deploy-prometheus-alerting-rules:
 # This info is later used for the cache distribution and an overlay creation.
 # Note that we don't use any .rusty-cachier references as we assume that a pipeline has reached this stage with working rusty-cachier.
 rusty-cachier-notify:
-  stage:                           notify
-  extends:                         .kubernetes-env
+  stage: notify
+  extends: .kubernetes-env
   variables:
-    CI_IMAGE:                      paritytech/rusty-cachier-env:latest
-    GIT_STRATEGY:                  none
-  dependencies:                    []
+    CI_IMAGE: paritytech/rusty-cachier-env:latest
+    GIT_STRATEGY: none
+  dependencies: []
   script:
     - curl -s https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.parity.io/parity/infrastructure/ci_cd/rusty-cachier/client/-/raw/release/util/install.sh | bash
     - rusty-cachier cache notify
@@ -355,83 +355,83 @@ rusty-cachier-notify:
 # In a DAG, every jobs chain is executed independently of others. The `fail_fast` principle suggests
 # to fail the pipeline as soon as possible to shorten the feedback loop.
 .cancel-pipeline-template:
-  stage:                           .post
+  stage: .post
   rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/ # PRs
       when: on_failure
   variables:
-    PROJECT_ID:                    "${CI_PROJECT_ID}"
-    PROJECT_NAME:                  "${CI_PROJECT_NAME}"
-    PIPELINE_ID:                   "${CI_PIPELINE_ID}"
-    FAILED_JOB_URL:                "${FAILED_JOB_URL}"
-    FAILED_JOB_NAME:               "${FAILED_JOB_NAME}"
-    PR_NUM:                        "${PR_NUM}"
+    PROJECT_ID: "${CI_PROJECT_ID}"
+    PROJECT_NAME: "${CI_PROJECT_NAME}"
+    PIPELINE_ID: "${CI_PIPELINE_ID}"
+    FAILED_JOB_URL: "${FAILED_JOB_URL}"
+    FAILED_JOB_NAME: "${FAILED_JOB_NAME}"
+    PR_NUM: "${PR_NUM}"
   trigger:
-    project:                       "parity/infrastructure/ci_cd/pipeline-stopper"
+    project: "parity/infrastructure/ci_cd/pipeline-stopper"
 
 remove-cancel-pipeline-message:
   stage: .post
   rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/ # PRs
   variables:
-    PROJECT_ID:                    "${CI_PROJECT_ID}"
-    PROJECT_NAME:                  "${CI_PROJECT_NAME}"
-    PIPELINE_ID:                   "${CI_PIPELINE_ID}"
-    FAILED_JOB_URL:                "https://gitlab.com"
-    FAILED_JOB_NAME:               "nope"
-    PR_NUM:                        "${CI_COMMIT_REF_NAME}"
+    PROJECT_ID: "${CI_PROJECT_ID}"
+    PROJECT_NAME: "${CI_PROJECT_NAME}"
+    PIPELINE_ID: "${CI_PIPELINE_ID}"
+    FAILED_JOB_URL: "https://gitlab.com"
+    FAILED_JOB_NAME: "nope"
+    PR_NUM: "${CI_COMMIT_REF_NAME}"
   trigger:
-    project:                       "parity/infrastructure/ci_cd/pipeline-stopper"
-    branch:                        "as-improve"
+    project: "parity/infrastructure/ci_cd/pipeline-stopper"
+    branch: "as-improve"
 
 # need to copy jobs this way because otherwise gitlab will wait
 # for all 3 jobs to finish instead of cancelling if one fails
 cancel-pipeline-test-linux-stable1:
-  extends:                         .cancel-pipeline-template
+  extends: .cancel-pipeline-template
   needs:
-    - job:                         "test-linux-stable 1/3"
+    - job: "test-linux-stable 1/3"
 
 cancel-pipeline-test-linux-stable2:
-  extends:                         .cancel-pipeline-template
+  extends: .cancel-pipeline-template
   needs:
-    - job:                         "test-linux-stable 2/3"
+    - job: "test-linux-stable 2/3"
 
 cancel-pipeline-test-linux-stable3:
-  extends:                         .cancel-pipeline-template
+  extends: .cancel-pipeline-template
   needs:
-    - job:                         "test-linux-stable 3/3"
+    - job: "test-linux-stable 3/3"
 
 cancel-pipeline-cargo-check-benches1:
-  extends:                         .cancel-pipeline-template
+  extends: .cancel-pipeline-template
   needs:
-    - job:                         "cargo-check-benches 1/2"
+    - job: "cargo-check-benches 1/2"
 
 cancel-pipeline-cargo-check-benches2:
-  extends:                         .cancel-pipeline-template
+  extends: .cancel-pipeline-template
   needs:
-    - job:                         "cargo-check-benches 2/2"
+    - job: "cargo-check-benches 2/2"
 
 cancel-pipeline-test-linux-stable-int:
-  extends:                         .cancel-pipeline-template
+  extends: .cancel-pipeline-template
   needs:
-    - job:                         test-linux-stable-int
+    - job: test-linux-stable-int
 
 cancel-pipeline-cargo-check-each-crate-1:
-  extends:                         .cancel-pipeline-template
+  extends: .cancel-pipeline-template
   needs:
-    - job:                         "cargo-check-each-crate 1/2"
+    - job: "cargo-check-each-crate 1/2"
 
 cancel-pipeline-cargo-check-each-crate-2:
-  extends:                         .cancel-pipeline-template
+  extends: .cancel-pipeline-template
   needs:
-    - job:                         "cargo-check-each-crate 2/2"
+    - job: "cargo-check-each-crate 2/2"
 
 cancel-pipeline-cargo-check-each-crate-macos:
-  extends:                         .cancel-pipeline-template
+  extends: .cancel-pipeline-template
   needs:
-    - job:                         cargo-check-each-crate-macos
+    - job: cargo-check-each-crate-macos
 
 cancel-pipeline-check-tracing:
-  extends:                         .cancel-pipeline-template
+  extends: .cancel-pipeline-template
   needs:
-    - job:                         check-tracing
+    - job: check-tracing

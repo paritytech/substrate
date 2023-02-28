@@ -42,7 +42,7 @@ use sc_client_api::{
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use sp_blockchain::HeaderMetadata;
 use sp_consensus::SelectChain as SelectChainT;
-use sp_finality_grandpa::{
+use sp_consensus_grandpa::{
 	AuthorityId, AuthoritySignature, Equivocation, EquivocationProof, GrandpaApi, RoundNumber,
 	SetId, GRANDPA_ENGINE_ID,
 };

@@ -38,7 +38,7 @@ pallet-babe = { version = "4.0.0-dev", default-features = false, path = "../../f
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../frame/system" }
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../frame/system/rpc/runtime-api" }
 pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../frame/timestamp" }
-sp-finality-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../primitives/finality-grandpa" }
+sp-consensus-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../primitives/consensus/grandpa" }
 sp-trie = { version = "7.0.0", default-features = false, path = "../../primitives/trie" }
 sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../primitives/transaction-pool" }
 trie-db = { version = "0.25.1", default-features = false }
@@ -97,7 +97,7 @@ std = [
 	"frame-system/std",
 	"pallet-timestamp/std",
 	"sc-service",
-	"sp-finality-grandpa/std",
+	"sp-consensus-grandpa/std",
 	"sp-trie/std",
 	"sp-transaction-pool/std",
 	"trie-db/std",
