@@ -1516,7 +1516,7 @@ pub mod pallet {
 
 		/// Sets the minimum balance of an asset.
 		///
-		/// Only works if there aren't any accounts that are holding the asset or if 
+		/// Only works if there aren't any accounts that are holding the asset or if
 		/// the new value of `min_balance` is less than the old one.
 		///
 		/// Origin must be Signed and the sender has to be the Owner of the
@@ -1527,7 +1527,7 @@ pub mod pallet {
 		///
 		/// Emits `AssetMinBalanceChanged` event when successful.
 		#[pallet::call_index(28)]
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::set_min_balance())]
 		pub fn set_min_balance(
 			origin: OriginFor<T>,
 			id: T::AssetIdParameter,
