@@ -214,9 +214,12 @@ fn construct_runtime_final_expansion(
 	let ExplicitRuntimeDeclaration {
 		name,
 		where_section: WhereSection { block, node_block, unchecked_extrinsic },
-		pallets,
+		mut pallets,
 		pallets_token,
 	} = definition;
+
+	// Ensure that the code is generated based on the pallet index ordering:
+	pallets.sort_by_key(|p| p.index);
 
 	let system_pallet =
 		pallets.iter().find(|decl| decl.name == SYSTEM_PALLET_NAME).ok_or_else(|| {
