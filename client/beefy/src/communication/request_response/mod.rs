@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -39,6 +39,8 @@ const JUSTIF_CHANNEL_SIZE: usize = 10;
 
 const MAX_RESPONSE_SIZE: u64 = 1024 * 1024;
 const JUSTIF_REQUEST_TIMEOUT: Duration = Duration::from_secs(3);
+
+const BEEFY_SYNC_LOG_TARGET: &str = "beefy::sync";
 
 /// Get the configuration for the BEEFY justifications Request/response protocol.
 ///

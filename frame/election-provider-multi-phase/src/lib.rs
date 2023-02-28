@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -754,7 +754,7 @@ pub mod pallet {
 					// NOTE: if signed-phase length is zero, second part of the if-condition fails.
 					match Self::create_snapshot() {
 						Ok(_) => {
-							Self::on_initialize_open_signed();
+							Self::phase_transition(Phase::Signed);
 							T::WeightInfo::on_initialize_open_signed()
 						},
 						Err(why) => {
@@ -793,7 +793,7 @@ pub mod pallet {
 					if need_snapshot {
 						match Self::create_snapshot() {
 							Ok(_) => {
-								Self::on_initialize_open_unsigned(enabled, now);
+								Self::phase_transition(Phase::Unsigned((enabled, now)));
 								T::WeightInfo::on_initialize_open_unsigned()
 							},
 							Err(why) => {
@@ -802,7 +802,7 @@ pub mod pallet {
 							},
 						}
 					} else {
-						Self::on_initialize_open_unsigned(enabled, now);
+						Self::phase_transition(Phase::Unsigned((enabled, now)));
 						T::WeightInfo::on_initialize_open_unsigned()
 					}
 				},
@@ -927,6 +927,7 @@ pub mod pallet {
 			<QueuedSolution<T>>::put(ready);
 			Self::deposit_event(Event::SolutionStored {
 				compute: ElectionCompute::Unsigned,
+				origin: None,
 				prev_ejected: ejected_a_solution,
 			});
 
@@ -979,6 +980,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::SolutionStored {
 				compute: ElectionCompute::Emergency,
+				origin: None,
 				prev_ejected: QueuedSolution::<T>::exists(),
 			});
 
@@ -1056,6 +1058,7 @@ pub mod pallet {
 			signed_submissions.put();
 			Self::deposit_event(Event::SolutionStored {
 				compute: ElectionCompute::Signed,
+				origin: Some(who),
 				prev_ejected: ejected_a_solution,
 			});
 			Ok(())
@@ -1102,6 +1105,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::SolutionStored {
 				compute: ElectionCompute::Fallback,
+				origin: None,
 				prev_ejected: QueuedSolution::<T>::exists(),
 			});
 
@@ -1115,11 +1119,16 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// A solution was stored with the given compute.
 		///
-		/// If the solution is signed, this means that it hasn't yet been processed. If the
-		/// solution is unsigned, this means that it has also been processed.
-		///
-		/// The `bool` is `true` when a previous solution was ejected to make room for this one.
-		SolutionStored { compute: ElectionCompute, prev_ejected: bool },
+		/// The `origin` indicates the origin of the solution. If `origin` is `Some(AccountId)`,
+		/// the stored solution was submited in the signed phase by a miner with the `AccountId`.
+		/// Otherwise, the solution was stored either during the unsigned phase or by
+		/// `T::ForceOrigin`. The `bool` is `true` when a previous solution was ejected to make
+		/// room for this one.
+		SolutionStored {
+			compute: ElectionCompute,
+			origin: Option<T::AccountId>,
+			prev_ejected: bool,
+		},
 		/// The election has been finalized, with the given computation and score.
 		ElectionFinalized { compute: ElectionCompute, score: ElectionScore },
 		/// An election failed.
@@ -1130,10 +1139,8 @@ pub mod pallet {
 		Rewarded { account: <T as frame_system::Config>::AccountId, value: BalanceOf<T> },
 		/// An account has been slashed for submitting an invalid signed submission.
 		Slashed { account: <T as frame_system::Config>::AccountId, value: BalanceOf<T> },
-		/// The signed phase of the given round has started.
-		SignedPhaseStarted { round: u32 },
-		/// The unsigned phase of the given round has started.
-		UnsignedPhaseStarted { round: u32 },
+		/// There was a phase transition in a given round.
+		PhaseTransitioned { from: Phase<T::BlockNumber>, to: Phase<T::BlockNumber>, round: u32 },
 	}
 
 	/// Error of the pallet that can be returned in response to dispatches.
@@ -1349,19 +1356,15 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Logic for `<Pallet as Hooks>::on_initialize` when signed phase is being opened.
-	pub fn on_initialize_open_signed() {
-		log!(info, "Starting signed phase round {}.", Self::round());
-		<CurrentPhase<T>>::put(Phase::Signed);
-		Self::deposit_event(Event::SignedPhaseStarted { round: Self::round() });
-	}
-
-	/// Logic for `<Pallet as Hooks<T>>::on_initialize` when unsigned phase is being opened.
-	pub fn on_initialize_open_unsigned(enabled: bool, now: T::BlockNumber) {
-		let round = Self::round();
-		log!(info, "Starting unsigned phase round {} enabled {}.", round, enabled);
-		<CurrentPhase<T>>::put(Phase::Unsigned((enabled, now)));
-		Self::deposit_event(Event::UnsignedPhaseStarted { round });
+	/// Phase transition helper.
+	pub(crate) fn phase_transition(to: Phase<T::BlockNumber>) {
+		log!(info, "Starting phase {:?}, round {}.", to, Self::round());
+		Self::deposit_event(Event::PhaseTransitioned {
+			from: <CurrentPhase<T>>::get(),
+			to,
+			round: Self::round(),
+		});
+		<CurrentPhase<T>>::put(to);
 	}
 
 	/// Parts of [`create_snapshot`] that happen inside of this pallet.
@@ -1574,7 +1577,7 @@ impl<T: Config> Pallet<T> {
 		<Round<T>>::mutate(|r| *r += 1);
 
 		// Phase is off now.
-		<CurrentPhase<T>>::put(Phase::Off);
+		Self::phase_transition(Phase::Off);
 
 		// Kill snapshots.
 		Self::kill_snapshot();
@@ -1658,7 +1661,7 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 			},
 			Err(why) => {
 				log!(error, "Entering emergency mode: {:?}", why);
-				<CurrentPhase<T>>::put(Phase::Emergency);
+				Self::phase_transition(Phase::Emergency);
 				Err(why)
 			},
 		}
@@ -1904,7 +1907,10 @@ mod tests {
 
 			roll_to_signed();
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
-			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
+			assert_eq!(
+				multi_phase_events(),
+				vec![Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 }]
+			);
 			assert!(MultiPhase::snapshot().is_some());
 			assert_eq!(MultiPhase::round(), 1);
 
@@ -1918,8 +1924,12 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
-					Event::UnsignedPhaseStarted { round: 1 }
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::PhaseTransitioned {
+						from: Phase::Signed,
+						to: Phase::Unsigned((true, 25)),
+						round: 1
+					},
 				],
 			);
 			assert!(MultiPhase::snapshot().is_some());
@@ -1955,8 +1965,12 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
-					Event::UnsignedPhaseStarted { round: 1 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::PhaseTransitioned {
+						from: Phase::Signed,
+						to: Phase::Unsigned((true, 25)),
+						round: 1
+					},
 					Event::ElectionFinalized {
 						compute: ElectionCompute::Fallback,
 						score: ElectionScore {
@@ -1965,8 +1979,17 @@ mod tests {
 							sum_stake_squared: 0
 						}
 					},
-					Event::SignedPhaseStarted { round: 2 },
-					Event::UnsignedPhaseStarted { round: 2 }
+					Event::PhaseTransitioned {
+						from: Phase::Unsigned((true, 25)),
+						to: Phase::Off,
+						round: 2
+					},
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 2 },
+					Event::PhaseTransitioned {
+						from: Phase::Signed,
+						to: Phase::Unsigned((true, 55)),
+						round: 2
+					},
 				]
 			);
 		})
@@ -1996,7 +2019,11 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::UnsignedPhaseStarted { round: 1 },
+					Event::PhaseTransitioned {
+						from: Phase::Off,
+						to: Phase::Unsigned((true, 20)),
+						round: 1
+					},
 					Event::ElectionFinalized {
 						compute: ElectionCompute::Fallback,
 						score: ElectionScore {
@@ -2004,7 +2031,12 @@ mod tests {
 							sum_stake: 0,
 							sum_stake_squared: 0
 						}
-					}
+					},
+					Event::PhaseTransitioned {
+						from: Phase::Unsigned((true, 20)),
+						to: Phase::Off,
+						round: 2
+					},
 				]
 			);
 		});
@@ -2034,7 +2066,7 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
 					Event::ElectionFinalized {
 						compute: ElectionCompute::Fallback,
 						score: ElectionScore {
@@ -2042,7 +2074,8 @@ mod tests {
 							sum_stake: 0,
 							sum_stake_squared: 0
 						}
-					}
+					},
+					Event::PhaseTransitioned { from: Phase::Signed, to: Phase::Off, round: 2 },
 				]
 			)
 		});
@@ -2070,10 +2103,17 @@ mod tests {
 
 			assert_eq!(
 				multi_phase_events(),
-				vec![Event::ElectionFinalized {
-					compute: ElectionCompute::Fallback,
-					score: ElectionScore { minimal_stake: 0, sum_stake: 0, sum_stake_squared: 0 }
-				}]
+				vec![
+					Event::ElectionFinalized {
+						compute: ElectionCompute::Fallback,
+						score: ElectionScore {
+							minimal_stake: 0,
+							sum_stake: 0,
+							sum_stake_squared: 0
+						}
+					},
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Off, round: 2 },
+				]
 			);
 		});
 	}
@@ -2085,7 +2125,10 @@ mod tests {
 			// Signed phase started at block 15 and will end at 25.
 
 			roll_to_signed();
-			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
+			assert_eq!(
+				multi_phase_events(),
+				vec![Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 }]
+			);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 			assert_eq!(MultiPhase::round(), 1);
 
@@ -2096,11 +2139,12 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
 					Event::ElectionFinalized {
 						compute: ElectionCompute::Fallback,
 						score: Default::default()
-					}
+					},
+					Event::PhaseTransitioned { from: Phase::Signed, to: Phase::Off, round: 2 },
 				],
 			);
 			// All storage items must be cleared.
@@ -2120,7 +2164,10 @@ mod tests {
 			// signed phase started at block 15 and will end at 25.
 
 			roll_to_signed();
-			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
+			assert_eq!(
+				multi_phase_events(),
+				vec![Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 }]
+			);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 			assert_eq!(MultiPhase::round(), 1);
 
@@ -2150,12 +2197,32 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						origin: Some(99),
+						prev_ejected: false
+					},
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						origin: Some(99),
+						prev_ejected: false
+					},
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						origin: Some(99),
+						prev_ejected: false
+					},
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						origin: Some(99),
+						prev_ejected: false
+					},
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						origin: Some(99),
+						prev_ejected: false
+					},
 					Event::Slashed { account: 99, value: 5 },
 					Event::Slashed { account: 99, value: 5 },
 					Event::Slashed { account: 99, value: 5 },
@@ -2168,7 +2235,8 @@ mod tests {
 							sum_stake: 0,
 							sum_stake_squared: 0
 						}
-					}
+					},
+					Event::PhaseTransitioned { from: Phase::Signed, to: Phase::Off, round: 2 },
 				]
 			);
 		})
@@ -2192,10 +2260,18 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						origin: Some(99),
+						prev_ejected: false
+					},
 					Event::Rewarded { account: 99, value: 7 },
-					Event::UnsignedPhaseStarted { round: 1 },
+					Event::PhaseTransitioned {
+						from: Phase::Signed,
+						to: Phase::Unsigned((true, 25)),
+						round: 1
+					},
 					Event::ElectionFinalized {
 						compute: ElectionCompute::Signed,
 						score: ElectionScore {
@@ -2203,7 +2279,12 @@ mod tests {
 							sum_stake: 100,
 							sum_stake_squared: 5200
 						}
-					}
+					},
+					Event::PhaseTransitioned {
+						from: Phase::Unsigned((true, 25)),
+						to: Phase::Off,
+						round: 2
+					},
 				],
 			);
 		})
@@ -2236,10 +2317,15 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
-					Event::UnsignedPhaseStarted { round: 1 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::PhaseTransitioned {
+						from: Phase::Signed,
+						to: Phase::Unsigned((true, 25)),
+						round: 1
+					},
 					Event::SolutionStored {
 						compute: ElectionCompute::Unsigned,
+						origin: None,
 						prev_ejected: false
 					},
 					Event::ElectionFinalized {
@@ -2249,7 +2335,12 @@ mod tests {
 							sum_stake: 100,
 							sum_stake_squared: 5200
 						}
-					}
+					},
+					Event::PhaseTransitioned {
+						from: Phase::Unsigned((true, 25)),
+						to: Phase::Off,
+						round: 2
+					},
 				],
 			);
 		})
@@ -2276,8 +2367,12 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
-					Event::UnsignedPhaseStarted { round: 1 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::PhaseTransitioned {
+						from: Phase::Signed,
+						to: Phase::Unsigned((true, 25)),
+						round: 1
+					},
 					Event::ElectionFinalized {
 						compute: ElectionCompute::Fallback,
 						score: ElectionScore {
@@ -2285,7 +2380,12 @@ mod tests {
 							sum_stake: 0,
 							sum_stake_squared: 0
 						}
-					}
+					},
+					Event::PhaseTransitioned {
+						from: Phase::Unsigned((true, 25)),
+						to: Phase::Off,
+						round: 2
+					},
 				]
 			);
 		});
@@ -2305,9 +2405,18 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
-					Event::UnsignedPhaseStarted { round: 1 },
-					Event::ElectionFailed
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::PhaseTransitioned {
+						from: Phase::Signed,
+						to: Phase::Unsigned((true, 25)),
+						round: 1
+					},
+					Event::ElectionFailed,
+					Event::PhaseTransitioned {
+						from: Phase::Unsigned((true, 25)),
+						to: Phase::Emergency,
+						round: 1
+					},
 				]
 			);
 		})
@@ -2345,17 +2454,28 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
-					Event::UnsignedPhaseStarted { round: 1 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::PhaseTransitioned {
+						from: Phase::Signed,
+						to: Phase::Unsigned((true, 25)),
+						round: 1
+					},
 					Event::ElectionFailed,
+					Event::PhaseTransitioned {
+						from: Phase::Unsigned((true, 25)),
+						to: Phase::Emergency,
+						round: 1
+					},
 					Event::SolutionStored {
 						compute: ElectionCompute::Fallback,
+						origin: None,
 						prev_ejected: false
 					},
 					Event::ElectionFinalized {
 						compute: ElectionCompute::Fallback,
 						score: Default::default()
-					}
+					},
+					Event::PhaseTransitioned { from: Phase::Emergency, to: Phase::Off, round: 2 },
 				]
 			);
 		})
@@ -2385,10 +2505,17 @@ mod tests {
 
 			assert_eq!(
 				multi_phase_events(),
-				vec![Event::ElectionFinalized {
-					compute: ElectionCompute::Fallback,
-					score: ElectionScore { minimal_stake: 0, sum_stake: 0, sum_stake_squared: 0 }
-				}]
+				vec![
+					Event::ElectionFinalized {
+						compute: ElectionCompute::Fallback,
+						score: ElectionScore {
+							minimal_stake: 0,
+							sum_stake: 0,
+							sum_stake_squared: 0
+						}
+					},
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Off, round: 2 },
+				]
 			);
 		});
 	}
@@ -2418,7 +2545,13 @@ mod tests {
 			assert_eq!(err, ElectionError::Fallback("NoFallback."));
 			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
 
-			assert_eq!(multi_phase_events(), vec![Event::ElectionFailed]);
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::ElectionFailed,
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Emergency, round: 1 }
+				]
+			);
 		});
 	}
 

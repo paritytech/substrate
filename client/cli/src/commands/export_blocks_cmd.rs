@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@ use crate::{
 };
 use clap::Parser;
 use log::info;
-use sc_client_api::{BlockBackend, UsageProvider};
+use sc_client_api::{BlockBackend, HeaderBackend, UsageProvider};
 use sc_service::{chain_ops::export_blocks, config::DatabaseSource};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::{fmt::Debug, fs, io, path::PathBuf, str::FromStr, sync::Arc};
@@ -73,7 +73,7 @@ impl ExportBlocksCmd {
 	) -> error::Result<()>
 	where
 		B: BlockT,
-		C: BlockBackend<B> + UsageProvider<B> + 'static,
+		C: HeaderBackend<B> + BlockBackend<B> + UsageProvider<B> + 'static,
 		<<B::Header as HeaderT>::Number as FromStr>::Err: Debug,
 	{
 		if let Some(path) = database_config.path() {

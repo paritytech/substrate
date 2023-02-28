@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,10 +27,7 @@
 //! Implementations of these traits may be converted to implementations of corresponding
 //! `nonfungible` traits by using the `nonfungible::ItemOf` type adapter.
 
-use crate::{
-	dispatch::{DispatchError, DispatchResult},
-	traits::tokens::misc::AttributeNamespace,
-};
+use crate::dispatch::{DispatchError, DispatchResult};
 use codec::{Decode, Encode};
 use sp_runtime::TokenError;
 use sp_std::prelude::*;
@@ -61,7 +58,29 @@ pub trait Inspect<AccountId> {
 	fn attribute(
 		_collection: &Self::CollectionId,
 		_item: &Self::ItemId,
-		_namespace: &AttributeNamespace<AccountId>,
+		_key: &[u8],
+	) -> Option<Vec<u8>> {
+		None
+	}
+
+	/// Returns the custom attribute value of `item` of `collection` corresponding to `key`.
+	///
+	/// By default this is `None`; no attributes are defined.
+	fn custom_attribute(
+		_account: &AccountId,
+		_collection: &Self::CollectionId,
+		_item: &Self::ItemId,
+		_key: &[u8],
+	) -> Option<Vec<u8>> {
+		None
+	}
+
+	/// Returns the system attribute value of `item` of `collection` corresponding to `key`.
+	///
+	/// By default this is `None`; no attributes are defined.
+	fn system_attribute(
+		_collection: &Self::CollectionId,
+		_item: &Self::ItemId,
 		_key: &[u8],
 	) -> Option<Vec<u8>> {
 		None
@@ -74,10 +93,36 @@ pub trait Inspect<AccountId> {
 	fn typed_attribute<K: Encode, V: Decode>(
 		collection: &Self::CollectionId,
 		item: &Self::ItemId,
-		namespace: &AttributeNamespace<AccountId>,
 		key: &K,
 	) -> Option<V> {
-		key.using_encoded(|d| Self::attribute(collection, item, namespace, d))
+		key.using_encoded(|d| Self::attribute(collection, item, d))
+			.and_then(|v| V::decode(&mut &v[..]).ok())
+	}
+
+	/// Returns the strongly-typed custom attribute value of `item` of `collection` corresponding to
+	/// `key`.
+	///
+	/// By default this just attempts to use `custom_attribute`.
+	fn typed_custom_attribute<K: Encode, V: Decode>(
+		account: &AccountId,
+		collection: &Self::CollectionId,
+		item: &Self::ItemId,
+		key: &K,
+	) -> Option<V> {
+		key.using_encoded(|d| Self::custom_attribute(account, collection, item, d))
+			.and_then(|v| V::decode(&mut &v[..]).ok())
+	}
+
+	/// Returns the strongly-typed system attribute value of `item` of `collection` corresponding to
+	/// `key`.
+	///
+	/// By default this just attempts to use `system_attribute`.
+	fn typed_system_attribute<K: Encode, V: Decode>(
+		collection: &Self::CollectionId,
+		item: &Self::ItemId,
+		key: &K,
+	) -> Option<V> {
+		key.using_encoded(|d| Self::system_attribute(collection, item, d))
 			.and_then(|v| V::decode(&mut &v[..]).ok())
 	}
 
@@ -243,6 +288,45 @@ pub trait Mutate<AccountId, ItemConfig>: Inspect<AccountId> {
 		key.using_encoded(|k| {
 			value.using_encoded(|v| Self::set_collection_attribute(collection, k, v))
 		})
+	}
+
+	/// Clear attribute of `item` of `collection`'s `key`.
+	///
+	/// By default, this is not a supported operation.
+	fn clear_attribute(
+		_collection: &Self::CollectionId,
+		_item: &Self::ItemId,
+		_key: &[u8],
+	) -> DispatchResult {
+		Err(TokenError::Unsupported.into())
+	}
+
+	/// Attempt to clear the strongly-typed attribute of `item` of `collection`'s `key`.
+	///
+	/// By default this just attempts to use `clear_attribute`.
+	fn clear_typed_attribute<K: Encode>(
+		collection: &Self::CollectionId,
+		item: &Self::ItemId,
+		key: &K,
+	) -> DispatchResult {
+		key.using_encoded(|k| Self::clear_attribute(collection, item, k))
+	}
+
+	/// Clear attribute of `collection`'s `key`.
+	///
+	/// By default, this is not a supported operation.
+	fn clear_collection_attribute(_collection: &Self::CollectionId, _key: &[u8]) -> DispatchResult {
+		Err(TokenError::Unsupported.into())
+	}
+
+	/// Attempt to clear the strongly-typed attribute of `collection`'s `key`.
+	///
+	/// By default this just attempts to use `clear_attribute`.
+	fn clear_typed_collection_attribute<K: Encode>(
+		collection: &Self::CollectionId,
+		key: &K,
+	) -> DispatchResult {
+		key.using_encoded(|k| Self::clear_collection_attribute(collection, k))
 	}
 }
 

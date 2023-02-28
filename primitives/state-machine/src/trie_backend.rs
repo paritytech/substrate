@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,6 +20,7 @@
 #[cfg(feature = "std")]
 use crate::backend::AsTrieBackend;
 use crate::{
+	backend::IterArgs,
 	trie_backend_essence::{TrieBackendEssence, TrieBackendStorage},
 	Backend, StorageKey, StorageValue,
 };
@@ -28,7 +29,6 @@ use codec::Codec;
 use hash_db::HashDB;
 use hash_db::Hasher;
 use sp_core::storage::{ChildInfo, StateVersion};
-use sp_std::vec::Vec;
 #[cfg(feature = "std")]
 use sp_trie::{cache::LocalTrieCache, recorder::Recorder};
 #[cfg(feature = "std")]
@@ -51,6 +51,7 @@ pub trait AsLocalTrieCache<H: Hasher>: sealed::Sealed {
 
 impl<H: Hasher> AsLocalTrieCache<H> for LocalTrieCache<H> {
 	#[cfg(feature = "std")]
+	#[inline]
 	fn as_local_trie_cache(&self) -> &LocalTrieCache<H> {
 		self
 	}
@@ -58,6 +59,7 @@ impl<H: Hasher> AsLocalTrieCache<H> for LocalTrieCache<H> {
 
 #[cfg(feature = "std")]
 impl<H: Hasher> AsLocalTrieCache<H> for &LocalTrieCache<H> {
+	#[inline]
 	fn as_local_trie_cache(&self) -> &LocalTrieCache<H> {
 		self
 	}
@@ -236,6 +238,7 @@ where
 	type Error = crate::DefaultError;
 	type Transaction = S::Overlay;
 	type TrieBackendStorage = S;
+	type RawIter = crate::trie_backend_essence::RawIter<S, H, C>;
 
 	fn storage_hash(&self, key: &[u8]) -> Result<Option<H::Out>, Self::Error> {
 		self.essence.storage_hash(key)
@@ -273,51 +276,8 @@ where
 		self.essence.next_child_storage_key(child_info, key)
 	}
 
-	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
-		self.essence.for_keys_with_prefix(prefix, f)
-	}
-
-	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
-		self.essence.for_key_values_with_prefix(prefix, f)
-	}
-
-	fn apply_to_key_values_while<F: FnMut(Vec<u8>, Vec<u8>) -> bool>(
-		&self,
-		child_info: Option<&ChildInfo>,
-		prefix: Option<&[u8]>,
-		start_at: Option<&[u8]>,
-		f: F,
-		allow_missing: bool,
-	) -> Result<bool, Self::Error> {
-		self.essence
-			.apply_to_key_values_while(child_info, prefix, start_at, f, allow_missing)
-	}
-
-	fn apply_to_keys_while<F: FnMut(&[u8]) -> bool>(
-		&self,
-		child_info: Option<&ChildInfo>,
-		prefix: Option<&[u8]>,
-		start_at: Option<&[u8]>,
-		f: F,
-	) {
-		self.essence.apply_to_keys_while(child_info, prefix, start_at, f)
-	}
-
-	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
-		&self,
-		child_info: &ChildInfo,
-		prefix: &[u8],
-		f: F,
-	) {
-		self.essence.for_child_keys_with_prefix(child_info, prefix, f)
-	}
-
-	fn pairs(&self) -> Vec<(StorageKey, StorageValue)> {
-		self.essence.pairs()
-	}
-
-	fn keys(&self, prefix: &[u8]) -> Vec<StorageKey> {
-		self.essence.keys(prefix)
+	fn raw_iter(&self, args: IterArgs) -> Result<Self::RawIter, Self::Error> {
+		self.essence.raw_iter(args)
 	}
 
 	fn storage_root<'a>(
@@ -397,7 +357,7 @@ pub mod tests {
 		trie_types::{TrieDBBuilder, TrieDBMutBuilderV0, TrieDBMutBuilderV1},
 		KeySpacedDBMut, PrefixedKey, PrefixedMemoryDB, Trie, TrieCache, TrieMut,
 	};
-	use std::{collections::HashSet, iter};
+	use std::iter;
 	use trie_db::NodeCodec;
 
 	const CHILD_KEY_1: &[u8] = b"sub1";
@@ -412,19 +372,19 @@ pub mod tests {
 			fn $name() {
 				let parameters = vec![
 					(StateVersion::V0, None, None),
-					(StateVersion::V0, Some(SharedCache::new(CacheSize::Unlimited)), None),
+					(StateVersion::V0, Some(SharedCache::new(CacheSize::unlimited())), None),
 					(StateVersion::V0, None, Some(Recorder::default())),
 					(
 						StateVersion::V0,
-						Some(SharedCache::new(CacheSize::Unlimited)),
+						Some(SharedCache::new(CacheSize::unlimited())),
 						Some(Recorder::default()),
 					),
 					(StateVersion::V1, None, None),
-					(StateVersion::V1, Some(SharedCache::new(CacheSize::Unlimited)), None),
+					(StateVersion::V1, Some(SharedCache::new(CacheSize::unlimited())), None),
 					(StateVersion::V1, None, Some(Recorder::default())),
 					(
 						StateVersion::V1,
-						Some(SharedCache::new(CacheSize::Unlimited)),
+						Some(SharedCache::new(CacheSize::unlimited())),
 						Some(Recorder::default()),
 					),
 				];
@@ -579,7 +539,11 @@ pub mod tests {
 		cache: Option<Cache>,
 		recorder: Option<Recorder>,
 	) {
-		assert!(!test_trie(state_version, cache, recorder).pairs().is_empty());
+		assert!(!test_trie(state_version, cache, recorder)
+			.pairs(Default::default())
+			.unwrap()
+			.next()
+			.is_none());
 	}
 
 	#[test]
@@ -589,8 +553,96 @@ pub mod tests {
 			Default::default(),
 		)
 		.build()
-		.pairs()
-		.is_empty());
+		.pairs(Default::default())
+		.unwrap()
+		.next()
+		.is_none());
+	}
+
+	parameterized_test!(storage_iteration_works, storage_iteration_works_inner);
+	fn storage_iteration_works_inner(
+		state_version: StateVersion,
+		cache: Option<Cache>,
+		recorder: Option<Recorder>,
+	) {
+		let trie = test_trie(state_version, cache, recorder);
+
+		// Fetch everything.
+		assert_eq!(
+			trie.keys(Default::default())
+				.unwrap()
+				.map(|result| result.unwrap())
+				.take(5)
+				.collect::<Vec<_>>(),
+			vec![
+				b":child_storage:default:sub1".to_vec(),
+				b":code".to_vec(),
+				b"key".to_vec(),
+				b"value1".to_vec(),
+				b"value2".to_vec(),
+			]
+		);
+
+		// Fetch starting at a given key (full key).
+		assert_eq!(
+			trie.keys(IterArgs { start_at: Some(b"key"), ..IterArgs::default() })
+				.unwrap()
+				.map(|result| result.unwrap())
+				.take(3)
+				.collect::<Vec<_>>(),
+			vec![b"key".to_vec(), b"value1".to_vec(), b"value2".to_vec(),]
+		);
+
+		// Fetch starting at a given key (partial key).
+		assert_eq!(
+			trie.keys(IterArgs { start_at: Some(b"ke"), ..IterArgs::default() })
+				.unwrap()
+				.map(|result| result.unwrap())
+				.take(3)
+				.collect::<Vec<_>>(),
+			vec![b"key".to_vec(), b"value1".to_vec(), b"value2".to_vec(),]
+		);
+
+		// Fetch starting at a given key (empty key).
+		assert_eq!(
+			trie.keys(IterArgs { start_at: Some(b""), ..IterArgs::default() })
+				.unwrap()
+				.map(|result| result.unwrap())
+				.take(5)
+				.collect::<Vec<_>>(),
+			vec![
+				b":child_storage:default:sub1".to_vec(),
+				b":code".to_vec(),
+				b"key".to_vec(),
+				b"value1".to_vec(),
+				b"value2".to_vec(),
+			]
+		);
+
+		// Fetch starting at a given key and with prefix which doesn't match that key.
+		assert!(trie
+			.keys(IterArgs {
+				prefix: Some(b"value"),
+				start_at: Some(b"key"),
+				..IterArgs::default()
+			})
+			.unwrap()
+			.map(|result| result.unwrap())
+			.next()
+			.is_none());
+
+		// Fetch starting at a given key and with prefix which does match that key.
+		assert_eq!(
+			trie.keys(IterArgs {
+				prefix: Some(b"value"),
+				start_at: Some(b"value"),
+				..IterArgs::default()
+			})
+			.unwrap()
+			.map(|result| result.unwrap())
+			.collect::<Vec<_>>(),
+			vec![b"value1".to_vec(), b"value2".to_vec(),]
+		);
 	}
 
 	parameterized_test!(storage_root_is_non_default, storage_root_is_non_default_inner);
@@ -626,26 +678,6 @@ pub mod tests {
 		);
 	}
 
-	parameterized_test!(prefix_walking_works, prefix_walking_works_inner);
-	fn prefix_walking_works_inner(
-		state_version: StateVersion,
-		cache: Option<Cache>,
-		recorder: Option<Recorder>,
-	) {
-		let trie = test_trie(state_version, cache, recorder);
-
-		let mut seen = HashSet::new();
-		trie.for_keys_with_prefix(b"value", |key| {
-			let for_first_time = seen.insert(key.to_vec());
-			assert!(for_first_time, "Seen key '{:?}' more than once", key);
-		});
-
-		let mut expected = HashSet::new();
-		expected.insert(b"value1".to_vec());
-		expected.insert(b"value2".to_vec());
-		assert_eq!(seen, expected);
-	}
-
 	parameterized_test!(
 		keys_with_empty_prefix_returns_all_keys,
 		keys_with_empty_prefix_returns_all_keys_inner
@@ -664,7 +696,8 @@ pub mod tests {
 			.collect::<Vec<_>>();
 
 		let trie = test_trie(state_version, cache, recorder);
-		let keys = trie.keys(&[]);
+		let keys: Vec<_> =
+			trie.keys(Default::default()).unwrap().map(|result| result.unwrap()).collect();
 
 		assert_eq!(expected, keys);
 	}
@@ -724,7 +757,18 @@ pub mod tests {
 			.with_recorder(Recorder::default())
 			.build();
 		assert_eq!(trie_backend.storage(b"key").unwrap(), proving_backend.storage(b"key").unwrap());
-		assert_eq!(trie_backend.pairs(), proving_backend.pairs());
+		assert_eq!(
+			trie_backend
+				.pairs(Default::default())
+				.unwrap()
+				.map(|result| result.unwrap())
+				.collect::<Vec<_>>(),
+			proving_backend
+				.pairs(Default::default())
+				.unwrap()
+				.map(|result| result.unwrap())
+				.collect::<Vec<_>>()
+		);
 
 		let (trie_root, mut trie_mdb) =
 			trie_backend.storage_root(std::iter::empty(), state_version);
@@ -760,7 +804,7 @@ pub mod tests {
 			.clone()
 			.for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i; size_content]));
 
-		for cache in [Some(SharedTrieCache::new(CacheSize::Unlimited)), None] {
+		for cache in [Some(SharedTrieCache::new(CacheSize::unlimited())), None] {
 			// Run multiple times to have a different cache conditions.
 			for i in 0..5 {
 				if let Some(cache) = &cache {
@@ -793,7 +837,7 @@ pub mod tests {
 		proof_record_works_with_iter_inner(StateVersion::V1);
 	}
 	fn proof_record_works_with_iter_inner(state_version: StateVersion) {
-		for cache in [Some(SharedTrieCache::new(CacheSize::Unlimited)), None] {
+		for cache in [Some(SharedTrieCache::new(CacheSize::unlimited())), None] {
 			// Run multiple times to have a different cache conditions.
 			for i in 0..5 {
 				if let Some(cache) = &cache {
@@ -870,7 +914,7 @@ pub mod tests {
 			assert_eq!(in_memory.child_storage(child_info_2, &[i]).unwrap().unwrap(), vec![i])
 		});
 
-		for cache in [Some(SharedTrieCache::new(CacheSize::Unlimited)), None] {
+		for cache in [Some(SharedTrieCache::new(CacheSize::unlimited())), None] {
 			// Run multiple times to have a different cache conditions.
 			for i in 0..5 {
 				eprintln!("Running with cache {}, iteration {}", cache.is_some(), i);
@@ -1002,7 +1046,7 @@ pub mod tests {
 			nodes
 		};
 
-		let cache = SharedTrieCache::<BlakeTwo256>::new(CacheSize::Unlimited);
+		let cache = SharedTrieCache::<BlakeTwo256>::new(CacheSize::unlimited());
 		{
 			let local_cache = cache.local_cache();
 			let mut trie_cache = local_cache.as_trie_db_cache(child_1_root);
@@ -1093,7 +1137,7 @@ pub mod tests {
 
 	#[test]
 	fn new_data_is_added_to_the_cache() {
-		let shared_cache = SharedTrieCache::new(CacheSize::Unlimited);
+		let shared_cache = SharedTrieCache::new(CacheSize::unlimited());
 		let new_data = vec![
 			(&b"new_data0"[..], Some(&b"0"[..])),
 			(&b"new_data1"[..], Some(&b"1"[..])),
@@ -1159,7 +1203,7 @@ pub mod tests {
 		assert_eq!(in_memory.child_storage(child_info_1, &key).unwrap().unwrap(), child_trie_1_val);
 		assert_eq!(in_memory.child_storage(child_info_2, &key).unwrap().unwrap(), child_trie_2_val);
 
-		for cache in [Some(SharedTrieCache::new(CacheSize::Unlimited)), None] {
+		for cache in [Some(SharedTrieCache::new(CacheSize::unlimited())), None] {
 			// Run multiple times to have a different cache conditions.
 			for i in 0..5 {
 				eprintln!("Running with cache {}, iteration {}", cache.is_some(), i);

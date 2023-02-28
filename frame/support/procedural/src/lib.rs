@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,6 +19,7 @@
 
 #![recursion_limit = "512"]
 
+mod benchmark;
 mod clone_no_bound;
 mod construct_runtime;
 mod crate_version;
@@ -66,6 +67,12 @@ fn get_cargo_env_var<T: FromStr>(version_env: &str) -> std::result::Result<T, ()
 		.unwrap_or_else(|_| panic!("`{}` is always set by cargo; qed", version_env));
 
 	T::from_str(&version).map_err(drop)
+}
+
+/// Generate the counter_prefix related to the storage.
+/// counter_prefix is used by counted storage map.
+fn counter_prefix(prefix: &str) -> String {
+	format!("CounterFor{}", prefix)
 }
 
 /// Declares strongly-typed wrappers around codec-compatible types in storage.
@@ -477,6 +484,69 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
 	pallet::pallet(attr, item)
+}
+
+/// An attribute macro that can be attached to a (non-empty) module declaration. Doing so will
+/// designate that module as a benchmarking module.
+///
+/// See `frame_benchmarking::v2` for more info.
+#[proc_macro_attribute]
+pub fn benchmarks(attr: TokenStream, tokens: TokenStream) -> TokenStream {
+	match benchmark::benchmarks(attr, tokens, false) {
+		Ok(tokens) => tokens,
+		Err(err) => err.to_compile_error().into(),
+	}
+}
+
+/// An attribute macro that can be attached to a (non-empty) module declaration. Doing so will
+/// designate that module as an instance benchmarking module.
+///
+/// See `frame_benchmarking::v2` for more info.
+#[proc_macro_attribute]
+pub fn instance_benchmarks(attr: TokenStream, tokens: TokenStream) -> TokenStream {
+	match benchmark::benchmarks(attr, tokens, true) {
+		Ok(tokens) => tokens,
+		Err(err) => err.to_compile_error().into(),
+	}
+}
+
+/// An attribute macro used to declare a benchmark within a benchmarking module. Must be
+/// attached to a function definition containing an `#[extrinsic_call]` or `#[block]`
+/// attribute.
+///
+/// See `frame_benchmarking::v2` for more info.
+#[proc_macro_attribute]
+pub fn benchmark(_attrs: TokenStream, _tokens: TokenStream) -> TokenStream {
+	quote!(compile_error!(
+		"`#[benchmark]` must be in a module labeled with #[benchmarks] or #[instance_benchmarks]."
+	))
+	.into()
+}
+
+/// An attribute macro used to specify the extrinsic call inside a benchmark function, and also
+/// used as a boundary designating where the benchmark setup code ends, and the benchmark
+/// verification code begins.
+///
+/// See `frame_benchmarking::v2` for more info.
+#[proc_macro_attribute]
+pub fn extrinsic_call(_attrs: TokenStream, _tokens: TokenStream) -> TokenStream {
+	quote!(compile_error!(
+		"`#[extrinsic_call]` must be in a benchmark function definition labeled with `#[benchmark]`."
+	);)
+	.into()
+}
+
+/// An attribute macro used to specify that a block should be the measured portion of the
+/// enclosing benchmark function, This attribute is also used as a boundary designating where
+/// the benchmark setup code ends, and the benchmark verification code begins.
+///
+/// See `frame_benchmarking::v2` for more info.
+#[proc_macro_attribute]
+pub fn block(_attrs: TokenStream, _tokens: TokenStream) -> TokenStream {
+	quote!(compile_error!(
+		"`#[block]` must be in a benchmark function definition labeled with `#[benchmark]`."
+	))
+	.into()
 }
 
 /// Execute the annotated function in a new storage transaction.

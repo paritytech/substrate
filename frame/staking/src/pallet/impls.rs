@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -345,7 +345,7 @@ impl<T: Config> Pallet<T> {
 			if maybe_new_era_validators.is_some() &&
 				matches!(ForceEra::<T>::get(), Forcing::ForceNew)
 			{
-				ForceEra::<T>::put(Forcing::NotForcing);
+				Self::set_force_era(Forcing::NotForcing);
 			}
 
 			maybe_new_era_validators
@@ -723,11 +723,18 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
+	/// Helper to set a new `ForceEra` mode.
+	pub(crate) fn set_force_era(mode: Forcing) {
+		log!(info, "Setting force era mode {:?}.", mode);
+		ForceEra::<T>::put(mode);
+		Self::deposit_event(Event::<T>::ForceEra { mode });
+	}
+
 	/// Ensures that at the end of the current session there will be a new era.
 	pub(crate) fn ensure_new_era() {
 		match ForceEra::<T>::get() {
 			Forcing::ForceAlways | Forcing::ForceNew => (),
-			_ => ForceEra::<T>::put(Forcing::ForceNew),
+			_ => Self::set_force_era(Forcing::ForceNew),
 		}
 	}
 
@@ -834,8 +841,8 @@ impl<T: Config> Pallet<T> {
 				// this can only happen if: 1. there a bug in the bags-list (or whatever is the
 				// sorted list) logic and the state of the two pallets is no longer compatible, or
 				// because the nominators is not decodable since they have more nomination than
-				// `T::MaxNominations`. The latter can rarely happen, and is not really an emergency
-				// or bug if it does.
+				// `T::NominationsQuota::get_quota`. The latter can rarely happen, and is not
+				// really an emergency or bug if it does.
 				log!(
 					warn,
 					"DEFENSIVE: invalid item in `VoterList`: {:?}, this nominator probably has too many nominations now",
@@ -1000,6 +1007,15 @@ impl<T: Config> Pallet<T> {
 			weight,
 			DispatchClass::Mandatory,
 		);
+	}
+}
+
+impl<T: Config> Pallet<T> {
+	/// Returns the current nominations quota for nominators.
+	///
+	/// Used by the runtime API.
+	pub fn api_nominations_quota(balance: BalanceOf<T>) -> u32 {
+		T::NominationsQuota::get_quota_safe(balance)
 	}
 }
 
@@ -1252,22 +1268,12 @@ impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, 
 
 /// Add reward points to block authors:
 /// * 20 points to the block producer for producing a (non-uncle) block in the relay chain,
-/// * 2 points to the block producer for each reference to a previously unreferenced uncle, and
-/// * 1 point to the producer of each referenced uncle block.
 impl<T> pallet_authorship::EventHandler<T::AccountId, T::BlockNumber> for Pallet<T>
 where
 	T: Config + pallet_authorship::Config + pallet_session::Config,
 {
 	fn note_author(author: T::AccountId) {
 		Self::reward_by_ids(vec![(author, 20)])
-	}
-	fn note_uncle(uncle_author: T::AccountId, _age: T::BlockNumber) {
-		// defensive-only: block author must exist.
-		if let Some(block_author) = <pallet_authorship::Pallet<T>>::author() {
-			Self::reward_by_ids(vec![(block_author, 2), (uncle_author, 1)])
-		} else {
-			crate::log!(warn, "block author not set, this should never happen");
-		}
 	}
 }
 
@@ -1496,9 +1502,11 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 		// nothing to do upon regenerate.
 		0
 	}
+	#[cfg(feature = "try-runtime")]
 	fn try_state() -> Result<(), &'static str> {
 		Ok(())
 	}
+
 	fn unsafe_clear() {
 		#[allow(deprecated)]
 		Validators::<T>::remove_all();
@@ -1570,6 +1578,8 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 		// nothing to do upon regenerate.
 		0
 	}
+
+	#[cfg(feature = "try-runtime")]
 	fn try_state() -> Result<(), &'static str> {
 		Ok(())
 	}

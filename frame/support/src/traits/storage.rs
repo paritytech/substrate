@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -53,7 +53,9 @@ pub trait StorageInstance {
 }
 
 /// Metadata about storage from the runtime.
-#[derive(codec::Encode, codec::Decode, crate::RuntimeDebug, Eq, PartialEq, Clone)]
+#[derive(
+	codec::Encode, codec::Decode, crate::RuntimeDebug, Eq, PartialEq, Clone, scale_info::TypeInfo,
+)]
 pub struct StorageInfo {
 	/// Encoded string of pallet name.
 	pub pallet_name: Vec<u8>,

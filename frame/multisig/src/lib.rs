@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -39,9 +39,6 @@
 //!   number of signed origins.
 //! * `approve_as_multi` - Approve a call from a composite origin.
 //! * `cancel_as_multi` - Cancel a call from a composite origin.
-//!
-//! [`Call`]: ./enum.Call.html
-//! [`Config`]: ./trait.Config.html
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -266,12 +263,8 @@ pub mod pallet {
 		///
 		/// Result is equivalent to the dispatched result.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// O(Z + C) where Z is the length of the call and C its execution weight.
-		/// -------------------------------
-		/// - DB Weight: None
-		/// - Plus Call Weight
-		/// # </weight>
 		#[pallet::call_index(0)]
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
@@ -347,7 +340,7 @@ pub mod pallet {
 		/// on success, result is `Ok` and the result from the interior call, if it was executed,
 		/// may be found in the deposited `MultisigExecuted` event.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(S + Z + Call)`.
 		/// - Up to one balance-reserve or unreserve operation.
 		/// - One passthrough operation, one insert, both `O(S)` where `S` is the number of
@@ -360,12 +353,6 @@ pub mod pallet {
 		/// - The weight of the `call`.
 		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a deposit
 		///   taken for its lifetime of `DepositBase + threshold * DepositFactor`.
-		/// -------------------------------
-		/// - DB Weight:
-		///     - Reads: Multisig Storage, [Caller Account]
-		///     - Writes: Multisig Storage, [Caller Account]
-		/// - Plus Call Weight
-		/// # </weight>
 		#[pallet::call_index(1)]
 		#[pallet::weight({
 			let s = other_signatories.len() as u32;
@@ -414,7 +401,7 @@ pub mod pallet {
 		///
 		/// NOTE: If this is the final approval, you will want to use `as_multi` instead.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(S)`.
 		/// - Up to one balance-reserve or unreserve operation.
 		/// - One passthrough operation, one insert, both `O(S)` where `S` is the number of
@@ -425,11 +412,6 @@ pub mod pallet {
 		/// - One event.
 		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a deposit
 		///   taken for its lifetime of `DepositBase + threshold * DepositFactor`.
-		/// ----------------------------------
-		/// - DB Weight:
-		///     - Read: Multisig Storage, [Caller Account]
-		///     - Write: Multisig Storage, [Caller Account]
-		/// # </weight>
 		#[pallet::call_index(2)]
 		#[pallet::weight({
 			let s = other_signatories.len() as u32;
@@ -469,7 +451,7 @@ pub mod pallet {
 		/// transaction for this dispatch.
 		/// - `call_hash`: The hash of the call to be executed.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(S)`.
 		/// - Up to one balance-reserve or unreserve operation.
 		/// - One passthrough operation, one insert, both `O(S)` where `S` is the number of
@@ -478,11 +460,6 @@ pub mod pallet {
 		/// - One event.
 		/// - I/O: 1 read `O(S)`, one remove.
 		/// - Storage: removes one item.
-		/// ----------------------------------
-		/// - DB Weight:
-		///     - Read: Multisig Storage, [Caller Account], Refund Account
-		///     - Write: Multisig Storage, [Caller Account], Refund Account
-		/// # </weight>
 		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::cancel_as_multi(other_signatories.len() as u32))]
 		pub fn cancel_as_multi(

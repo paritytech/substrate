@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -901,7 +901,7 @@ fn forcing_new_era_works() {
 		assert_eq!(active_era(), 1);
 
 		// no era change.
-		ForceEra::<Test>::put(Forcing::ForceNone);
+		Staking::set_force_era(Forcing::ForceNone);
 
 		start_session(4);
 		assert_eq!(active_era(), 1);
@@ -917,7 +917,7 @@ fn forcing_new_era_works() {
 
 		// back to normal.
 		// this immediately starts a new session.
-		ForceEra::<Test>::put(Forcing::NotForcing);
+		Staking::set_force_era(Forcing::NotForcing);
 
 		start_session(8);
 		assert_eq!(active_era(), 1);
@@ -925,7 +925,7 @@ fn forcing_new_era_works() {
 		start_session(9);
 		assert_eq!(active_era(), 2);
 		// forceful change
-		ForceEra::<Test>::put(Forcing::ForceAlways);
+		Staking::set_force_era(Forcing::ForceAlways);
 
 		start_session(10);
 		assert_eq!(active_era(), 2);
@@ -937,7 +937,7 @@ fn forcing_new_era_works() {
 		assert_eq!(active_era(), 4);
 
 		// just one forceful change
-		ForceEra::<Test>::put(Forcing::ForceNew);
+		Staking::set_force_era(Forcing::ForceNew);
 		start_session(13);
 		assert_eq!(active_era(), 5);
 		assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
@@ -1903,7 +1903,7 @@ fn wrong_vote_is_moot() {
 #[test]
 fn bond_with_no_staked_value() {
 	// Behavior when someone bonds with no staked value.
-	// Particularly when she votes and the candidate is elected.
+	// Particularly when they votes and the candidate is elected.
 	ExtBuilder::default()
 		.validator_count(3)
 		.existential_deposit(5)
@@ -2239,9 +2239,7 @@ fn reward_from_authorship_event_handler_works() {
 		assert_eq!(<pallet_authorship::Pallet<Test>>::author(), Some(11));
 
 		Pallet::<Test>::note_author(11);
-		Pallet::<Test>::note_uncle(21, 1);
-		// Rewarding the same two times works.
-		Pallet::<Test>::note_uncle(11, 1);
+		Pallet::<Test>::note_author(11);
 
 		// Not mandatory but must be coherent with rewards
 		assert_eq_uvec!(Session::validators(), vec![11, 21]);
@@ -2250,10 +2248,7 @@ fn reward_from_authorship_event_handler_works() {
 		// 11 is rewarded as a block producer and uncle referencer and uncle producer
 		assert_eq!(
 			ErasRewardPoints::<Test>::get(active_era()),
-			EraRewardPoints {
-				individual: vec![(11, 20 + 2 * 2 + 1), (21, 1)].into_iter().collect(),
-				total: 26,
-			},
+			EraRewardPoints { individual: vec![(11, 20 * 2)].into_iter().collect(), total: 40 },
 		);
 	})
 }
@@ -2305,7 +2300,7 @@ fn era_is_always_same_length() {
 		);
 
 		let session = Session::current_index();
-		ForceEra::<Test>::put(Forcing::ForceNew);
+		Staking::set_force_era(Forcing::ForceNew);
 		advance_session();
 		advance_session();
 		assert_eq!(current_era(), 3);
@@ -2916,7 +2911,10 @@ fn deferred_slashes_are_deferred() {
 			staking_events_since_last_call().as_slice(),
 			&[
 				Event::Chilled { stash: 11 },
+				Event::ForceEra { mode: Forcing::ForceNew },
 				Event::SlashReported { validator: 11, slash_era: 1, .. },
+				Event::StakersElected,
+				Event::ForceEra { mode: Forcing::NotForcing },
 				..,
 				Event::Slashed { staker: 11, amount: 100 },
 				Event::Slashed { staker: 101, amount: 12 }
@@ -2951,6 +2949,7 @@ fn retroactive_deferred_slashes_two_eras_before() {
 			staking_events_since_last_call().as_slice(),
 			&[
 				Event::Chilled { stash: 11 },
+				Event::ForceEra { mode: Forcing::ForceNew },
 				Event::SlashReported { validator: 11, slash_era: 1, .. },
 				..,
 				Event::Slashed { staker: 11, amount: 100 },
@@ -3253,6 +3252,7 @@ fn slash_kicks_validators_not_nominators_and_disables_nominator_for_kicked_valid
 				Event::StakersElected,
 				Event::EraPaid { era_index: 0, validator_payout: 11075, remainder: 33225 },
 				Event::Chilled { stash: 11 },
+				Event::ForceEra { mode: Forcing::ForceNew },
 				Event::SlashReported {
 					validator: 11,
 					fraction: Perbill::from_percent(10),
@@ -3320,6 +3320,7 @@ fn non_slashable_offence_doesnt_disable_validator() {
 				Event::StakersElected,
 				Event::EraPaid { era_index: 0, validator_payout: 11075, remainder: 33225 },
 				Event::Chilled { stash: 11 },
+				Event::ForceEra { mode: Forcing::ForceNew },
 				Event::SlashReported {
 					validator: 11,
 					fraction: Perbill::from_percent(0),
@@ -3382,6 +3383,7 @@ fn slashing_independent_of_disabling_validator() {
 				Event::StakersElected,
 				Event::EraPaid { era_index: 0, validator_payout: 11075, remainder: 33225 },
 				Event::Chilled { stash: 11 },
+				Event::ForceEra { mode: Forcing::ForceNew },
 				Event::SlashReported {
 					validator: 11,
 					fraction: Perbill::from_percent(0),
@@ -4742,8 +4744,15 @@ mod election_data_provider {
 			MinimumValidatorCount::<Test>::put(2);
 			run_to_block(55);
 			assert_eq!(Staking::next_election_prediction(System::block_number()), 55 + 25);
-			assert_eq!(staking_events().len(), 6);
-			assert_eq!(*staking_events().last().unwrap(), Event::StakersElected);
+			assert_eq!(staking_events().len(), 10);
+			assert_eq!(
+				*staking_events().last().unwrap(),
+				Event::ForceEra { mode: Forcing::NotForcing }
+			);
+			assert_eq!(
+				*staking_events().get(staking_events().len() - 2).unwrap(),
+				Event::StakersElected
+			);
 			// The new era has been planned, forcing is changed from `ForceNew` to `NotForcing`.
 			assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
 		})

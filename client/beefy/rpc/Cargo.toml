@@ -9,7 +9,7 @@ description = "RPC for the BEEFY Client gadget for substrate"
 homepage = "https://substrate.io"
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.2.2", features = ["derive"] }
 futures = "0.3.21"
 jsonrpsee = { version = "0.16.2", features = ["client-core", "server", "macros"] }
 log = "0.4"

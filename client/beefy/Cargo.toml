@@ -11,7 +11,7 @@ homepage = "https://substrate.io"
 [dependencies]
 array-bytes = "4.1"
 async-trait = "0.1.57"
-codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.2.2", features = ["derive"] }
 fnv = "1.0.6"
 futures = "0.3"
 log = "0.4"
@@ -39,12 +39,11 @@ sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
 
 [dev-dependencies]
 serde = "1.0.136"
-strum = { version = "0.24.1", features = ["derive"] }
 tempfile = "3.1.0"
 tokio = "1.22.0"
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 sc-network-test = { version = "0.8.0", path = "../network/test" }
-sp-finality-grandpa = { version = "4.0.0-dev", path = "../../primitives/finality-grandpa" }
+sp-consensus-grandpa = { version = "4.0.0-dev", path = "../../primitives/consensus/grandpa" }
 sp-keyring = { version = "7.0.0", path = "../../primitives/keyring" }
 sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }

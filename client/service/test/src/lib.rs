@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -220,7 +220,7 @@ fn node_config<
 	);
 
 	network_config.transport =
-		TransportConfig::Normal { enable_mdns: false, allow_private_ipv4: true };
+		TransportConfig::Normal { enable_mdns: false, allow_private_ip: true };
 
 	Configuration {
 		impl_name: String::from("network-test-impl"),
