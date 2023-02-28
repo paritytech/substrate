@@ -2295,6 +2295,7 @@ dependencies = [
 name = "frame-election-provider-support"
 version = "4.0.0-dev"
 dependencies = [
+ "frame-benchmarking",
  "frame-election-provider-solution-type",
  "frame-support",
  "frame-system",
@@ -2366,7 +2367,7 @@ dependencies = [
  "frame-support",
  "futures",
  "log",
- "pallet-elections-phragmen",
+ "pallet-elections",
  "parity-scale-codec",
  "serde",
  "sp-core",
@@ -3565,8 +3566,7 @@ dependencies = [
  "pallet-conviction-voting",
  "pallet-democracy",
  "pallet-election-provider-multi-phase",
- "pallet-election-provider-support-benchmarking",
- "pallet-elections-phragmen",
+ "pallet-elections",
  "pallet-fast-unstake",
  "pallet-glutton",
  "pallet-grandpa",
@@ -5749,7 +5749,6 @@ dependencies = [
  "frame-system",
  "log",
  "pallet-balances",
- "pallet-election-provider-support-benchmarking",
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "rand 0.8.5",
@@ -5765,22 +5764,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-election-provider-support-benchmarking"
-version = "4.0.0-dev"
-dependencies = [
- "frame-benchmarking",
- "frame-election-provider-support",
- "frame-system",
- "parity-scale-codec",
- "sp-npos-elections",
- "sp-runtime",
-]
-
-[[package]]
-name = "pallet-elections-phragmen"
+name = "pallet-elections"
 version = "5.0.0-dev"
 dependencies = [
  "frame-benchmarking",
+ "frame-election-provider-support",
  "frame-support",
  "frame-system",
  "log",
