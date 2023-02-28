@@ -813,13 +813,13 @@ pub mod pallet {
 							);
 						},
 						MintType::HolderOf(collection_id) => {
-							let MintWitness { owner_of_item } =
+							let MintWitness { owned_item } =
 								witness_data.ok_or(Error::<T, I>::BadWitness)?;
 
 							let has_item = Account::<T, I>::contains_key((
 								&caller,
 								&collection_id,
-								&owner_of_item,
+								&owned_item,
 							));
 							ensure!(has_item, Error::<T, I>::BadWitness);
 
@@ -830,7 +830,7 @@ pub mod pallet {
 
 							let key = (
 								&collection_id,
-								Some(owner_of_item),
+								Some(owned_item),
 								AttributeNamespace::Pallet,
 								&attribute_key,
 							);
