@@ -192,7 +192,6 @@ struct CachedIter<S, H, C>
 where
 	H: Hasher,
 {
-	is_cached: bool,
 	last_key: sp_std::vec::Vec<u8>,
 	iter: RawIter<S, H, C>,
 }
@@ -202,7 +201,7 @@ where
 	H: Hasher,
 {
 	fn default() -> Self {
-		Self { is_cached: false, last_key: Default::default(), iter: Default::default() }
+		Self { last_key: Default::default(), iter: Default::default() }
 	}
 }
 
@@ -210,7 +209,7 @@ where
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher, C = LocalTrieCache<H>> {
 	pub(crate) essence: TrieBackendEssence<S, H, C>,
 	#[cfg(feature = "std")]
-	next_storage_key_cache: Mutex<CachedIter<S, H, C>>,
+	next_storage_key_cache: Mutex<Option<CachedIter<S, H, C>>>,
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H> + Send + Sync> TrieBackend<S, H, C>
@@ -295,12 +294,17 @@ where
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
 		#[cfg(feature = "std")]
-		let mut cache = std::mem::take(&mut *self.next_storage_key_cache.lock());
+		let (is_cached, mut cache) = self
+			.next_storage_key_cache
+			.lock()
+			.take()
+			.map(|cache| (true, cache))
+			.unwrap_or_else(|| (false, Default::default()));
 
 		#[cfg(not(feature = "std"))]
-		let mut cache = CachedIter::default();
+		let (is_cached, mut cache) = (false, CachedIter::default());
 
-		if !cache.is_cached || cache.last_key != key {
+		if !is_cached || cache.last_key != key {
 			let args =
 				IterArgs { start_at: Some(key), start_at_exclusive: true, ..IterArgs::default() };
 			cache.iter = self.raw_iter(args)?
@@ -316,8 +320,7 @@ where
 		{
 			cache.last_key.clear();
 			cache.last_key.extend_from_slice(&next_key);
-			cache.is_cached = true;
-			*self.next_storage_key_cache.lock() = cache;
+			*self.next_storage_key_cache.lock() = Some(cache);
 		}
 
 		#[cfg(debug_assertions)]
