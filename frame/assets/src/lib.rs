@@ -1524,7 +1524,7 @@ pub mod pallet {
 		/// - `id`: The identifier of the asset.
 		/// - `min_balance`: The new value of `min_balance`.
 		///
-		/// Emits `AssetStatusChanged` event when successful.
+		/// Emits `AssetMinBalanceChanged` event when successful.
 		#[pallet::call_index(28)]
 		#[pallet::weight(10_000)]
 		pub fn set_min_balance(
