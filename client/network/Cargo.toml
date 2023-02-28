@@ -15,6 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 array-bytes = "4.1"
+async-channel = "1.8.0"
 async-trait = "0.1"
 asynchronous-codec = "0.6"
 backtrace = "0.3.67"
