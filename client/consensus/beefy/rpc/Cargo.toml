@@ -1,5 +1,5 @@
 [package]
-name = "beefy-gadget-rpc"
+name = "sc-consensus-beefy-rpc"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
@@ -16,16 +16,14 @@ log = "0.4"
 parking_lot = "0.12.1"
 serde = { version = "1.0.136", features = ["derive"] }
 thiserror = "1.0"
-beefy-gadget = { version = "4.0.0-dev", path = "../." }
-beefy-primitives = { version = "4.0.0-dev", path = "../../../primitives/beefy", package = "sp-beefy" }
-sc-rpc = { version = "4.0.0-dev", path = "../../rpc" }
-sp-core = { version = "7.0.0", path = "../../../primitives/core" }
-sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
+sc-consensus-beefy = { version = "4.0.0-dev", path = "../" }
+sp-consensus-beefy = { version = "4.0.0-dev", path = "../../../../primitives/consensus/beefy" }
+sc-rpc = { version = "4.0.0-dev", path = "../../../rpc" }
+sp-core = { version = "7.0.0", path = "../../../../primitives/core" }
+sp-runtime = { version = "7.0.0", path = "../../../../primitives/runtime" }
 
 [dev-dependencies]
 serde_json = "1.0.85"
-sc-rpc = { version = "4.0.0-dev", features = [
-	"test-helpers",
-], path = "../../rpc" }
-substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
+sc-rpc = { version = "4.0.0-dev", features = ["test-helpers"], path = "../../../rpc" }
+substrate-test-runtime-client = { version = "2.0.0", path = "../../../../test-utils/runtime/client" }
 tokio = { version = "1.22.0", features = ["macros"] }

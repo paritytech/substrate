@@ -29,14 +29,6 @@ use crate::{
 	load_or_init_voter_state, wait_for_runtime_pallet, BeefyRPCLinks, BeefyVoterLinks, KnownPeers,
 	PersistedState,
 };
-use beefy_primitives::{
-	crypto::{AuthorityId, Signature},
-	known_payloads,
-	mmr::MmrRootProvider,
-	BeefyApi, Commitment, ConsensusLog, EquivocationProof, Keyring as BeefyKeyring, MmrRootHash,
-	OpaqueKeyOwnershipProof, Payload, SignedCommitment, ValidatorSet, ValidatorSetId,
-	VersionedFinalityProof, BEEFY_ENGINE_ID, KEY_TYPE as BeefyKeyType,
-};
 use futures::{future, stream::FuturesUnordered, Future, StreamExt};
 use parking_lot::Mutex;
 use sc_client_api::{Backend as BackendT, BlockchainEvents, FinalityNotifications, HeaderBackend};
@@ -53,6 +45,14 @@ use sc_utils::notification::NotificationReceiver;
 use serde::{Deserialize, Serialize};
 use sp_api::{ApiRef, ProvideRuntimeApi};
 use sp_consensus::BlockOrigin;
+use sp_consensus_beefy::{
+	crypto::{AuthorityId, Signature},
+	known_payloads,
+	mmr::MmrRootProvider,
+	BeefyApi, Commitment, ConsensusLog, EquivocationProof, Keyring as BeefyKeyring, MmrRootHash,
+	OpaqueKeyOwnershipProof, Payload, SignedCommitment, ValidatorSet, ValidatorSetId,
+	VersionedFinalityProof, BEEFY_ENGINE_ID, KEY_TYPE as BeefyKeyType,
+};
 use sp_core::H256;
 use sp_keystore::{testing::KeyStore as TestKeystore, SyncCryptoStore, SyncCryptoStorePtr};
 use sp_mmr_primitives::{Error as MmrError, MmrApi};
@@ -484,7 +484,7 @@ async fn wait_for_beefy_signed_commitments(
 			let expected = expected.next();
 			async move {
 				let signed_commitment = match versioned_finality_proof {
-					beefy_primitives::VersionedFinalityProof::V1(sc) => sc,
+					sp_consensus_beefy::VersionedFinalityProof::V1(sc) => sc,
 				};
 				let commitment_block_num = signed_commitment.commitment.block_number;
 				assert_eq!(expected, Some(commitment_block_num).as_ref());

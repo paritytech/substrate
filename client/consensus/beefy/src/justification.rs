@@ -17,17 +17,17 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::keystore::BeefyKeystore;
-use beefy_primitives::{
+use codec::{Decode, Encode};
+use sp_consensus::Error as ConsensusError;
+use sp_consensus_beefy::{
 	crypto::{AuthorityId, Signature},
 	ValidatorSet, VersionedFinalityProof,
 };
-use codec::{Decode, Encode};
-use sp_consensus::Error as ConsensusError;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 /// A finality proof with matching BEEFY authorities' signatures.
 pub type BeefyVersionedFinalityProof<Block> =
-	beefy_primitives::VersionedFinalityProof<NumberFor<Block>, Signature>;
+	sp_consensus_beefy::VersionedFinalityProof<NumberFor<Block>, Signature>;
 
 /// Decode and verify a Beefy FinalityProof.
 pub(crate) fn decode_and_verify_finality_proof<Block: BlockT>(
@@ -80,7 +80,7 @@ fn verify_with_validator_set<Block: BlockT>(
 
 #[cfg(test)]
 pub(crate) mod tests {
-	use beefy_primitives::{
+	use sp_consensus_beefy::{
 		known_payloads, Commitment, Keyring, Payload, SignedCommitment, VersionedFinalityProof,
 	};
 	use substrate_test_runtime_client::runtime::Block;

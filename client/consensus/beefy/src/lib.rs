@@ -32,10 +32,6 @@ use crate::{
 	round::Rounds,
 	worker::PersistedState,
 };
-use beefy_primitives::{
-	crypto::AuthorityId, BeefyApi, MmrRootHash, PayloadProvider, ValidatorSet, BEEFY_ENGINE_ID,
-	GENESIS_AUTHORITY_SET_ID,
-};
 use futures::{stream::Fuse, StreamExt};
 use log::{error, info};
 use parking_lot::Mutex;
@@ -50,6 +46,10 @@ use sp_blockchain::{
 	Backend as BlockchainBackend, Error as ClientError, HeaderBackend, Result as ClientResult,
 };
 use sp_consensus::{Error as ConsensusError, SyncOracle};
+use sp_consensus_beefy::{
+	crypto::AuthorityId, BeefyApi, MmrRootHash, PayloadProvider, ValidatorSet, BEEFY_ENGINE_ID,
+	GENESIS_AUTHORITY_SET_ID,
+};
 use sp_keystore::SyncCryptoStorePtr;
 use sp_mmr_primitives::MmrApi;
 use sp_runtime::traits::{Block, Zero};

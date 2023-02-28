@@ -22,7 +22,7 @@ use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 
 use log::warn;
 
-use beefy_primitives::{
+use sp_consensus_beefy::{
 	crypto::{Public, Signature},
 	BeefyAuthorityId, KEY_TYPE,
 };
@@ -89,8 +89,8 @@ impl BeefyKeystore {
 		Ok(sig)
 	}
 
-	/// Returns a vector of [`beefy_primitives::crypto::Public`] keys which are currently supported
-	/// (i.e. found in the keystore).
+	/// Returns a vector of [`sp_consensus_beefy::crypto::Public`] keys which are currently
+	/// supported (i.e. found in the keystore).
 	pub fn public_keys(&self) -> Result<Vec<Public>, error::Error> {
 		let store = self.0.clone().ok_or_else(|| error::Error::Keystore("no Keystore".into()))?;
 
@@ -123,7 +123,7 @@ pub mod tests {
 	use sc_keystore::LocalKeystore;
 	use sp_core::{ecdsa, Pair};
 
-	use beefy_primitives::{crypto, Keyring};
+	use sp_consensus_beefy::{crypto, Keyring};
 
 	use super::*;
 	use crate::error::Error;

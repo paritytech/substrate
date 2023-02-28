@@ -29,7 +29,7 @@ use parking_lot::{Mutex, RwLock};
 use wasm_timer::Instant;
 
 use crate::{communication::peers::KnownPeers, keystore::BeefyKeystore, LOG_TARGET};
-use beefy_primitives::{
+use sp_consensus_beefy::{
 	crypto::{Public, Signature},
 	VoteMessage,
 };
@@ -243,7 +243,7 @@ mod tests {
 	use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 
 	use crate::keystore::BeefyKeystore;
-	use beefy_primitives::{
+	use sp_consensus_beefy::{
 		crypto::Signature, known_payloads, Commitment, Keyring, MmrRootHash, Payload, VoteMessage,
 		KEY_TYPE,
 	};
