@@ -20,7 +20,7 @@
 #![cfg(test)]
 
 use super::*;
-use frame_election_provider_support::{onchain, SequentialPhragmen};
+use frame_election_provider_support::{onchain, SequentialPhragmen, ElectionBounds, ElectionBoundsBuilder};
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64},
@@ -138,6 +138,7 @@ pallet_staking_reward_curve::build! {
 }
 parameter_types! {
 	pub const RewardCurve: &'static sp_runtime::curve::PiecewiseLinear<'static> = &I_NPOS;
+	pub static ElectionsBounds: ElectionBounds = ElectionBoundsBuilder::new().build();
 }
 
 pub type Extrinsic = sp_runtime::testing::TestXt<RuntimeCall, ()>;
@@ -149,12 +150,10 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = Staking;
 	type WeightInfo = ();
 	type MaxWinners = ConstU32<100>;
-	type VotersBound = ConstU32<{ u32::MAX }>;
-	type TargetsBound = ConstU32<{ u32::MAX }>;
+	type ElectionBounds = ElectionsBounds;
 }
 
 impl pallet_staking::Config for Test {
-	type MaxNominations = ConstU32<16>;
 	type Currency = Balances;
 	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
 	type UnixTime = pallet_timestamp::Pallet<Self>;
@@ -176,6 +175,7 @@ impl pallet_staking::Config for Test {
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
 	type TargetList = pallet_staking::UseValidatorsMap<Self>;
+	type NominationsQuota = pallet_staking::FixedNominationsQuota<16>;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type HistoryDepth = ConstU32<84>;
 	type OnStakerSlash = ();

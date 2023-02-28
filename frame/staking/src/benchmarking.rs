@@ -952,7 +952,7 @@ mod tests {
 			create_validators_with_nominators_for_era::<Test>(
 				v,
 				n,
-				<Test as Config>::MaxNominations::get() as usize,
+				MaxNominationsOf::<Test>::get() as usize,
 				false,
 				None,
 			)

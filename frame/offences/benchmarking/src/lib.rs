@@ -48,8 +48,8 @@ use pallet_session::{
 #[cfg(test)]
 use pallet_staking::Event as StakingEvent;
 use pallet_staking::{
-	Config as StakingConfig, Event as StakingEvent, Exposure, IndividualExposure, NominationsOf,
-	Pallet as Staking, RewardDestination, ValidatorPrefs,
+	Config as StakingConfig, Exposure, IndividualExposure, MaxNominationsOf, Pallet as Staking,
+	RewardDestination, ValidatorPrefs,
 };
 
 const SEED: u32 = 0;
