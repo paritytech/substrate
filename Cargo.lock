@@ -8636,7 +8636,6 @@ dependencies = [
  "async-channel",
  "async-trait",
  "asynchronous-codec",
- "backtrace",
  "bytes",
  "either",
  "fnv",
