@@ -44,7 +44,7 @@ use sc_client_api::{
 use sc_consensus::{
 	BlockCheckParams, BlockImportParams, ForkChoiceStrategy, ImportResult, StateAction,
 };
-use sc_executor::{RuntimeVersion, RuntimeVersionOf};
+use sc_executor::RuntimeVersion;
 use sc_telemetry::{telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sp_api::{
 	ApiExt, ApiRef, CallApiAt, CallApiAtParams, ConstructRuntimeApi, Core as CoreApi,
@@ -169,7 +169,7 @@ pub fn new_in_mem<E, Block, G, RA>(
 	Client<in_mem::Backend<Block>, LocalCallExecutor<Block, in_mem::Backend<Block>, E>, Block, RA>,
 >
 where
-	E: CodeExecutor + RuntimeVersionOf,
+	E: CodeExecutor + sc_executor::RuntimeVersionOf,
 	Block: BlockT,
 	G: BuildGenesisBlock<
 			Block,
@@ -230,7 +230,7 @@ pub fn new_with_backend<B, E, Block, G, RA>(
 	config: ClientConfig<Block>,
 ) -> sp_blockchain::Result<Client<B, LocalCallExecutor<Block, B, E>, Block, RA>>
 where
-	E: CodeExecutor + RuntimeVersionOf,
+	E: CodeExecutor + sc_executor::RuntimeVersionOf,
 	G: BuildGenesisBlock<
 		Block,
 		BlockImportOperation = <B as backend::Backend<Block>>::BlockImportOperation,
