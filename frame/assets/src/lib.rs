@@ -1514,9 +1514,10 @@ pub mod pallet {
 			Self::do_refund(id, ensure_signed(origin)?, allow_burn)
 		}
 
-		/// Sets the minimum balance of an asset. Only works if there aren't any
-		/// accounts that are holding the asset or if the new vlaue of new_balance
-		/// is less than the old one.
+		/// Sets the minimum balance of an asset.
+		///
+		/// Only works if there aren't any accounts that are holding the asset or if 
+		/// the new value of `min_balance` is less than the old one.
 		///
 		/// Origin must be Signed and the sender has to be the Owner of the
 		/// asset `id`.
