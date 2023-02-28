@@ -60,11 +60,6 @@ use super::{pallet::*, STAKING_ID};
 const NPOS_MAX_ITERATIONS_COEFFICIENT: u32 = 2;
 
 impl<T: Config> Pallet<T> {
-	/// Query nominations quota for a given balance.
-	pub fn query_nominations_quota(balance: BalanceOf<T>) -> u32 {
-		T::NominationsQuota::get_quota_safe(balance)
-	}
-
 	/// The total balance that can be slashed from a stash account as of right now.
 	pub fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
 		// Weight note: consider making the stake accessible through stash.
@@ -792,10 +787,13 @@ impl<T: Config> Pallet<T> {
 				// if this voter is a nominator:
 				let voter_weight = weight_of(&voter);
 				if !targets.is_empty() {
-					// select only targets allowed by voter's nomination quota
+					// select only targets allowed by voter's nomination quota.
 					let nominations_quota =
 						T::NominationsQuota::get_quota_safe(voter_weight.into());
 
+					// if the current number of targets exceeds the nomination quota, emit an event
+					// but proceed without truncating or failing. The nomination quota checks are
+					// lazy and only fail when setting/updating the nominations.
 					if targets.len() > nominations_quota as usize {
 						Self::deposit_event(Event::<T>::NominationsQuotaExceeded {
 							staker: voter.clone(),

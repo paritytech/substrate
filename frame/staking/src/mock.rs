@@ -317,7 +317,7 @@ where
 
 	fn get_quota(balance: Balance) -> u32 {
 		match balance.into() {
-			// random quota per balance for testing
+			// random curve for testing.
 			0..=110 => MAX,
 			111 => 0,
 			222 => 2,

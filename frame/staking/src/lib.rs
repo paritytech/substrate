@@ -780,7 +780,7 @@ pub trait NominationsQuota<Balance> {
 		Self::get_quota(balance).max(1).min(Self::MaxNominations::get())
 	}
 
-	// Returns the voter's nomination quota based on the quota implementation.
+	// Returns the voter's nomination quota based on the quota curve.
 	fn get_quota(balance: Balance) -> u32;
 }
 
@@ -807,9 +807,9 @@ impl<const MAX: u32> Get<u32> for FixedNominationsQuota<MAX> {
 ///
 /// ## Details
 ///
-/// The snapshot has a the form `Vec<Voter>` where `Voter = (Account, u64, Vec<Account>)`. For each
-/// voter added to the snapshot, [`try_register_voter`] should be called, with the number of votes
-/// (length of the internal `Vec`).
+/// The snapshot has the form of `Vec<Voter>` where `Voter = (Account, u64, Vec<Account>)`. For
+/// each voter added to the snapshot, [`try_register_voter`] should be called, with the number
+/// of votes (length of the internal `Vec`).
 ///
 /// Whilst doing this, [`size`] will track the entire size of the `Vec<Voter>`, except for the
 /// length prefix of the outer `Vec`. To get the final size at any point, use
@@ -825,7 +825,7 @@ impl<AccountId> ElectionSizeTracker<AccountId> {
 	}
 
 	/// Attempts to register a new voter with `votes` for a given election `bounds`. Returns an
-	/// error if the size of the new votes exceed the capacity of the tracker.
+	/// error if the new size exceeds the capacity of the tracker.
 	pub(crate) fn try_register_voter(
 		&mut self,
 		votes: usize,

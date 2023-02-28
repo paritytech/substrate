@@ -720,9 +720,6 @@ pub struct ElectionBounds {
 }
 
 /// Utility builder for [`ElectionBounds`].
-///
-/// The main purpose of this is to prevent mixing the order of similarly typed arguments (e.g. u32
-/// size and count).
 #[derive(Copy, Clone)]
 pub struct ElectionBoundsBuilder {
 	voters: Option<DataProviderBounds>,
@@ -730,7 +727,7 @@ pub struct ElectionBoundsBuilder {
 }
 
 impl ElectionBoundsBuilder {
-	/// Returns a new election bounds builder
+	/// Returns a new election bounds builder, initialized with unbounded voter and target limits.
 	pub fn new() -> Self {
 		ElectionBoundsBuilder { voters: None, targets: None }
 	}

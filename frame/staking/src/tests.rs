@@ -5165,6 +5165,8 @@ fn nomination_quota_max_changes_decoding() {
 		});
 }
 
+// TOOD(gpestana): test runtime api call `api_nominations_quota`
+
 mod sorted_list_provider {
 	use super::*;
 	use frame_election_provider_support::SortedListProvider;

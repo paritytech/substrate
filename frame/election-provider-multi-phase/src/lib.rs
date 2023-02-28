@@ -231,8 +231,9 @@
 
 use codec::{Decode, Encode};
 use frame_election_provider_support::{
-	BoundedSupportsOf, ElectionBounds, ElectionBoundsBuilder, ElectionDataProvider,
-	ElectionProvider, ElectionProviderBase, InstantElectionProvider, NposSolution,
+	BoundedSupportsOf, DataProviderBounds, ElectionBounds, ElectionBoundsBuilder,
+	ElectionDataProvider, ElectionProvider, ElectionProviderBase, InstantElectionProvider,
+	NposSolution,
 };
 use frame_support::{
 	dispatch::DispatchClass,
@@ -1596,8 +1597,8 @@ impl<T: Config> Pallet<T> {
 			.ok_or(ElectionError::<T>::NothingQueued)
 			.or_else(|_| {
 				T::Fallback::instant_elect(
-					ElectionBoundsBuilder::new().build().voters,
-					ElectionBoundsBuilder::new().build().targets,
+					DataProviderBounds::new_unbounded(),
+					DataProviderBounds::new_unbounded(),
 				)
 				.map_err(|fe| ElectionError::Fallback(fe))
 				.and_then(|supports| {
