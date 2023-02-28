@@ -357,7 +357,7 @@ pub mod tests {
 		trie_types::{TrieDBBuilder, TrieDBMutBuilderV0, TrieDBMutBuilderV1},
 		KeySpacedDBMut, PrefixedKey, PrefixedMemoryDB, Trie, TrieCache, TrieMut,
 	};
-	use std::{collections::HashSet, iter};
+	use std::iter;
 	use trie_db::NodeCodec;
 
 	const CHILD_KEY_1: &[u8] = b"sub1";
@@ -643,73 +643,6 @@ pub mod tests {
 			.collect::<Vec<_>>(),
 			vec![b"value1".to_vec(), b"value2".to_vec(),]
 		);
-
-		// Also test out the wrapper methods.
-		// TODO: Remove this once these methods are gone.
-
-		let mut list = Vec::new();
-		assert!(trie
-			.apply_to_key_values_while(
-				None,
-				None,
-				Some(b"key"),
-				|key, _| {
-					list.push(key);
-					true
-				},
-				false
-			)
-			.unwrap());
-		assert_eq!(list[0..3], vec![b"key".to_vec(), b"value1".to_vec(), b"value2".to_vec(),]);
-
-		let mut list = Vec::new();
-		trie.apply_to_keys_while(None, None, Some(b"key"), |key| {
-			list.push(key.to_vec());
-			true
-		})
-		.unwrap();
-		assert_eq!(list[0..3], vec![b"key".to_vec(), b"value1".to_vec(), b"value2".to_vec(),]);
-
-		let mut list = Vec::new();
-		trie.apply_to_keys_while(None, None, Some(b"k"), |key| {
-			list.push(key.to_vec());
-			true
-		})
-		.unwrap();
-		assert_eq!(list[0..3], vec![b"key".to_vec(), b"value1".to_vec(), b"value2".to_vec(),]);
-
-		let mut list = Vec::new();
-		trie.apply_to_keys_while(None, None, Some(b""), |key| {
-			list.push(key.to_vec());
-			true
-		})
-		.unwrap();
-		assert_eq!(
-			list[0..5],
-			vec![
-				b":child_storage:default:sub1".to_vec(),
-				b":code".to_vec(),
-				b"key".to_vec(),
-				b"value1".to_vec(),
-				b"value2".to_vec(),
-			]
-		);
-
-		let mut list = Vec::new();
-		trie.apply_to_keys_while(None, Some(b"value"), Some(b"key"), |key| {
-			list.push(key.to_vec());
-			true
-		})
-		.unwrap();
-		assert!(list.is_empty());
-
-		let mut list = Vec::new();
-		trie.apply_to_keys_while(None, Some(b"value"), Some(b"value"), |key| {
-			list.push(key.to_vec());
-			true
-		})
-		.unwrap();
-		assert_eq!(list, vec![b"value1".to_vec(), b"value2".to_vec(),]);
 	}
 
 	parameterized_test!(storage_root_is_non_default, storage_root_is_non_default_inner);
@@ -743,27 +676,6 @@ pub mod tests {
 					.storage_root(iter::empty(), state_version)
 					.0
 		);
-	}
-
-	parameterized_test!(prefix_walking_works, prefix_walking_works_inner);
-	fn prefix_walking_works_inner(
-		state_version: StateVersion,
-		cache: Option<Cache>,
-		recorder: Option<Recorder>,
-	) {
-		let trie = test_trie(state_version, cache, recorder);
-
-		let mut seen = HashSet::new();
-		trie.for_keys_with_prefix(b"value", |key| {
-			let for_first_time = seen.insert(key.to_vec());
-			assert!(for_first_time, "Seen key '{:?}' more than once", key);
-		})
-		.unwrap();
-
-		let mut expected = HashSet::new();
-		expected.insert(b"value1".to_vec());
-		expected.insert(b"value2".to_vec());
-		assert_eq!(seen, expected);
 	}
 
 	parameterized_test!(

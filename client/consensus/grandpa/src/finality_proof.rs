@@ -42,7 +42,7 @@ use std::sync::Arc;
 use parity_scale_codec::{Decode, Encode};
 use sc_client_api::backend::Backend;
 use sp_blockchain::{Backend as BlockchainBackend, HeaderBackend};
-use sp_finality_grandpa::GRANDPA_ENGINE_ID;
+use sp_consensus_grandpa::GRANDPA_ENGINE_ID;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header as HeaderT, NumberFor, One},
@@ -264,8 +264,8 @@ mod tests {
 	use sc_block_builder::BlockBuilderProvider;
 	use sc_client_api::{apply_aux, LockImportRun};
 	use sp_consensus::BlockOrigin;
+	use sp_consensus_grandpa::GRANDPA_ENGINE_ID as ID;
 	use sp_core::crypto::UncheckedFrom;
-	use sp_finality_grandpa::GRANDPA_ENGINE_ID as ID;
 	use sp_keyring::Ed25519Keyring;
 	use substrate_test_runtime_client::{
 		runtime::{Block, Header, H256},
@@ -279,7 +279,7 @@ mod tests {
 	/// AND if at least one of those headers is invalid, all other MUST be considered invalid.
 	fn check_finality_proof<Block: BlockT>(
 		current_set_id: SetId,
-		current_authorities: sp_finality_grandpa::AuthorityList,
+		current_authorities: sp_consensus_grandpa::AuthorityList,
 		remote_proof: Vec<u8>,
 	) -> sp_blockchain::Result<super::FinalityProof<Block::Header>>
 	where
@@ -402,7 +402,7 @@ mod tests {
 		};
 
 		let grandpa_just: GrandpaJustification<Block> =
-			sp_finality_grandpa::GrandpaJustification::<Header> {
+			sp_consensus_grandpa::GrandpaJustification::<Header> {
 				round: 8,
 				votes_ancestries: Vec::new(),
 				commit,
@@ -442,7 +442,7 @@ mod tests {
 			};
 
 			let msg = finality_grandpa::Message::Precommit(precommit.clone());
-			let encoded = sp_finality_grandpa::localized_payload(round, set_id, &msg);
+			let encoded = sp_consensus_grandpa::localized_payload(round, set_id, &msg);
 			let signature = voter.sign(&encoded[..]).into();
 
 			let signed_precommit = finality_grandpa::SignedPrecommit {

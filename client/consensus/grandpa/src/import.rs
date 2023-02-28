@@ -31,8 +31,8 @@ use sc_utils::mpsc::TracingUnboundedSender;
 use sp_api::{Core, RuntimeApiInfo, TransactionFor};
 use sp_blockchain::{well_known_cache_keys, BlockStatus};
 use sp_consensus::{BlockOrigin, Error as ConsensusError, SelectChain};
+use sp_consensus_grandpa::{ConsensusLog, GrandpaApi, ScheduledChange, SetId, GRANDPA_ENGINE_ID};
 use sp_core::hashing::twox_128;
-use sp_finality_grandpa::{ConsensusLog, GrandpaApi, ScheduledChange, SetId, GRANDPA_ENGINE_ID};
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
 	traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero},

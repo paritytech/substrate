@@ -37,7 +37,7 @@ use sc_network_common::{
 use sc_network_gossip::Validator;
 use sc_network_test::{Block, Hash};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
-use sp_finality_grandpa::AuthorityList;
+use sp_consensus_grandpa::AuthorityList;
 use sp_keyring::Ed25519Keyring;
 use sp_runtime::traits::NumberFor;
 use std::{
@@ -237,8 +237,8 @@ fn config() -> crate::Config {
 fn voter_set_state() -> SharedVoterSetState<Block> {
 	use crate::{authorities::AuthoritySet, environment::VoterSetState};
 	use finality_grandpa::round::State as RoundState;
+	use sp_consensus_grandpa::AuthorityId;
 	use sp_core::{crypto::ByteArray, H256};
-	use sp_finality_grandpa::AuthorityId;
 
 	let state = RoundState::genesis((H256::zero(), 0));
 	let base = state.prevote_ghost.unwrap();
@@ -306,7 +306,7 @@ fn good_commit_leads_to_relay() {
 		let target_number = 500;
 
 		let precommit = finality_grandpa::Precommit { target_hash, target_number };
-		let payload = sp_finality_grandpa::localized_payload(
+		let payload = sp_consensus_grandpa::localized_payload(
 			round,
 			set_id,
 			&finality_grandpa::Message::Precommit(precommit.clone()),
@@ -318,7 +318,7 @@ fn good_commit_leads_to_relay() {
 		for (i, key) in private.iter().enumerate() {
 			precommits.push(precommit.clone());
 
-			let signature = sp_finality_grandpa::AuthoritySignature::from(key.sign(&payload[..]));
+			let signature = sp_consensus_grandpa::AuthoritySignature::from(key.sign(&payload[..]));
 			auth_data.push((signature, public[i].0.clone()))
 		}
 
@@ -456,7 +456,7 @@ fn bad_commit_leads_to_report() {
 		let target_number = 500;
 
 		let precommit = finality_grandpa::Precommit { target_hash, target_number };
-		let payload = sp_finality_grandpa::localized_payload(
+		let payload = sp_consensus_grandpa::localized_payload(
 			round,
 			set_id,
 			&finality_grandpa::Message::Precommit(precommit.clone()),
@@ -468,7 +468,7 @@ fn bad_commit_leads_to_report() {
 		for (i, key) in private.iter().enumerate() {
 			precommits.push(precommit.clone());
 
-			let signature = sp_finality_grandpa::AuthoritySignature::from(key.sign(&payload[..]));
+			let signature = sp_consensus_grandpa::AuthoritySignature::from(key.sign(&payload[..]));
 			auth_data.push((signature, public[i].0.clone()))
 		}
 
@@ -631,7 +631,7 @@ fn local_chain_spec() -> Box<dyn sc_chain_spec::ChainSpec> {
 		}
 	}
 	let chain_spec = GenericChainSpec::<Genesis>::from_json_bytes(
-		&include_bytes!("../../../chain-spec/res/chain_spec.json")[..],
+		&include_bytes!("../../../../chain-spec/res/chain_spec.json")[..],
 	)
 	.unwrap();
 	chain_spec.cloned_box()

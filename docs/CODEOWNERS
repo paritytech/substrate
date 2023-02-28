@@ -41,7 +41,7 @@
 # GRANDPA, BABE, consensus stuff
 /frame/babe/ @andresilva
 /frame/grandpa/ @andresilva
-/client/finality-grandpa/ @andresilva
+/client/consensus/grandpa/ @andresilva
 /client/consensus/babe/ @andresilva
 /client/consensus/slots/ @andresilva
 /client/consensus/pow/ @sorpaas
