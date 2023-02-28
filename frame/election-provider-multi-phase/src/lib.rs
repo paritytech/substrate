@@ -1078,8 +1078,8 @@ pub mod pallet {
 			T::ForceOrigin::ensure_origin(origin)?;
 			ensure!(Self::current_phase().is_emergency(), <Error<T>>::CallNotAllowed);
 			let election_bounds = ElectionBoundsBuilder::new()
-				.voters_count(maybe_max_voters)
-				.targets_count(maybe_max_targets)
+				.voters_count(maybe_max_voters.unwrap_or(0))
+				.targets_count(maybe_max_targets.unwrap_or(0))
 				.build();
 			let supports = T::GovernanceFallback::instant_elect(
 				election_bounds.voters,
@@ -2486,7 +2486,7 @@ mod tests {
 		// the `MockStaking` is designed such that if it has too many targets, it simply fails.
 		ExtBuilder::default().build_and_execute(|| {
 			// sets bounds on number of targets.
-			let new_bounds = ElectionBoundsBuilder::new().targets_count(1_000.into()).build();
+			let new_bounds = ElectionBoundsBuilder::new().targets_count(1_000).build();
 			crate::mock::ElectionsBounds::set(new_bounds);
 
 			Targets::set((0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>());
@@ -2525,7 +2525,7 @@ mod tests {
 		// and if the backup mode is nothing, we go into the emergency mode..
 		ExtBuilder::default().onchain_fallback(false).build_and_execute(|| {
 			// sets bounds on number of targets.
-			let new_bounds = ElectionBoundsBuilder::new().targets_count(1_000.into()).build();
+			let new_bounds = ElectionBoundsBuilder::new().targets_count(1_000).build();
 			crate::mock::ElectionsBounds::set(new_bounds);
 
 			crate::mock::Targets::set(
@@ -2562,7 +2562,7 @@ mod tests {
 			// we have 8 voters in total.
 			assert_eq!(crate::mock::Voters::get().len(), 8);
 			// but we want to take 2.
-			let new_bounds = ElectionBoundsBuilder::new().voters_count(2.into()).build();
+			let new_bounds = ElectionBoundsBuilder::new().voters_count(2).build();
 			crate::mock::ElectionsBounds::set(new_bounds);
 
 			// Signed phase opens just fine.
@@ -2574,7 +2574,7 @@ mod tests {
 				SolutionOrSnapshotSize { voters: 2, targets: 4 }
 			);
 		})
-	} 
+	}
 
 	#[test]
 	fn untrusted_score_verification_is_respected() {

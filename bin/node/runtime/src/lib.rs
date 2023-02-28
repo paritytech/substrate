@@ -638,10 +638,10 @@ frame_election_provider_support::generate_solution_type!(
 );
 
 parameter_types! {
-	pub ElectionBoundsMultiPhase: ElectionBounds = ElectionBoundsBuilder::new().voters_count(40_000.into()).targets_count(10_000.into()).build();
+	pub ElectionBoundsMultiPhase: ElectionBounds = ElectionBoundsBuilder::new().voters_count(40_000).targets_count(10_000).build();
 	pub MaxNominations: u32 = <NposSolution16 as frame_election_provider_support::NposSolution>::LIMIT as u32;
 	// OnChain values are lower.
-	pub ElectionBoundsOnChain: ElectionBounds = ElectionBoundsBuilder::new().voters_count(5_000.into()).targets_count(1_250.into()).build();
+	pub ElectionBoundsOnChain: ElectionBounds = ElectionBoundsBuilder::new().voters_count(5_000).targets_count(1_250).build();
 	// The maximum winners that can be elected by the Election pallet which is equivalent to the
 	// maximum active validators the staking pallet can have.
 	pub MaxActiveValidators: u32 = 1000;

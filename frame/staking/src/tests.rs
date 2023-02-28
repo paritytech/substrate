@@ -4514,7 +4514,7 @@ mod election_data_provider {
 
 				// remove staker with lower bond by limiting the number of voters and check
 				// `MinimumActiveStake` again after electing voters.
-				let bounds = ElectionBoundsBuilder::new().voters_count(Some(5)).build();
+				let bounds = ElectionBoundsBuilder::new().voters_count(5).build();
 				assert_ok!(<Staking as ElectionDataProvider>::electing_voters(bounds.voters));
 				assert_eq!(MinimumActiveStake::<Test>::get(), 50);
 			});
@@ -4554,7 +4554,7 @@ mod election_data_provider {
 
 				// if limits is less..
 				assert_eq!(
-					Staking::electing_voters(bounds_builder.voters_count(Some(1)).build().voters)
+					Staking::electing_voters(bounds_builder.voters_count(1).build().voters)
 						.unwrap()
 						.len(),
 					1
@@ -4562,7 +4562,7 @@ mod election_data_provider {
 
 				// if limit is equal..
 				assert_eq!(
-					Staking::electing_voters(bounds_builder.voters_count(Some(5)).build().voters)
+					Staking::electing_voters(bounds_builder.voters_count(5).build().voters)
 						.unwrap()
 						.len(),
 					5
@@ -4570,7 +4570,7 @@ mod election_data_provider {
 
 				// if limit is more.
 				assert_eq!(
-					Staking::electing_voters(bounds_builder.voters_count(Some(55)).build().voters)
+					Staking::electing_voters(bounds_builder.voters_count(55).build().voters)
 						.unwrap()
 						.len(),
 					5
@@ -4578,28 +4578,22 @@ mod election_data_provider {
 
 				// if target limit is more..
 				assert_eq!(
-					Staking::electable_targets(
-						bounds_builder.targets_count(Some(6)).build().targets
-					)
-					.unwrap()
-					.len(),
+					Staking::electable_targets(bounds_builder.targets_count(6).build().targets)
+						.unwrap()
+						.len(),
 					4
 				);
 				assert_eq!(
-					Staking::electable_targets(
-						bounds_builder.targets_count(Some(4)).build().targets
-					)
-					.unwrap()
-					.len(),
+					Staking::electable_targets(bounds_builder.targets_count(4).build().targets)
+						.unwrap()
+						.len(),
 					4
 				);
 
 				// if target limit is less, then we return an error.
 				assert_eq!(
-					Staking::electable_targets(
-						bounds_builder.targets_count(Some(1)).build().targets
-					)
-					.unwrap_err(),
+					Staking::electable_targets(bounds_builder.targets_count(1).build().targets)
+						.unwrap_err(),
 					"Target snapshot too big"
 				);
 			});
@@ -4610,7 +4604,7 @@ mod election_data_provider {
 		ExtBuilder::default().build_and_execute(|| {
 			let bounds_builder = ElectionBoundsBuilder::new();
 			assert_eq!(
-				Staking::electing_voters(bounds_builder.voters_size(Some(25)).build().voters)
+				Staking::electing_voters(bounds_builder.voters_size(25).build().voters)
 					.unwrap()
 					.len(),
 				1
@@ -4681,7 +4675,7 @@ mod election_data_provider {
 			)
 			.build_and_execute(|| {
 				// nominations of controller 70 won't be added due to voter size limit exceeded.
-				let bounds = ElectionBoundsBuilder::new().voters_size(100.into()).build();
+				let bounds = ElectionBoundsBuilder::new().voters_size(100).build();
 				assert_eq!(
 					Staking::electing_voters(bounds.voters)
 						.unwrap()
@@ -5797,7 +5791,7 @@ mod election_size_tracker {
 	#[test]
 	pub fn election_size_tracker_works() {
 		let mut size_tracker = ElectionSizeTracker::<AccountId>::new();
-		let voter_bounds = ElectionBoundsBuilder::new().voters_size(1_00.into()).build().voters;
+		let voter_bounds = ElectionBoundsBuilder::new().voters_size(1_00).build().voters;
 
 		assert!(size_tracker.try_register_voter(1, voter_bounds).is_ok());
 		assert!(size_tracker.try_register_voter(2, voter_bounds).is_ok());

@@ -561,7 +561,7 @@ mod tests {
 	fn data_provider_should_respect_target_limits() {
 		ExtBuilder::default().build_and_execute(|| {
 			// given a reduced expectation of maximum electable targets
-			let new_bounds = crate::ElectionBoundsBuilder::new().targets_count(2.into()).build();
+			let new_bounds = crate::ElectionBoundsBuilder::new().targets_count(2).build();
 			ElectionsBounds::set(new_bounds);
 			// and a data provider that does not respect limits
 			DataProviderAllowBadData::set(true);
@@ -577,7 +577,7 @@ mod tests {
 	fn data_provider_should_respect_voter_limits() {
 		ExtBuilder::default().build_and_execute(|| {
 			// given a reduced expectation of maximum electing voters
-			let new_bounds = crate::ElectionBoundsBuilder::new().voters_count(2.into()).build();
+			let new_bounds = crate::ElectionBoundsBuilder::new().voters_count(2).build();
 			ElectionsBounds::set(new_bounds);
 			// and a data provider that does not respect limits
 			DataProviderAllowBadData::set(true);

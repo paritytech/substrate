@@ -159,8 +159,8 @@ impl<T: Config> InstantElectionProvider for OnChainExecution<T> {
 		targets_bounds: DataProviderBounds,
 	) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		let elections_bounds = ElectionBoundsBuilder::from(T::ElectionBounds::get())
-			.clamp_voters(voters_bounds)
-			.clamp_targets(targets_bounds)
+			.max_voters(voters_bounds)
+			.max_targets(targets_bounds)
 			.build();
 		elect_with_input_bounds::<T>(elections_bounds)
 	}
@@ -234,7 +234,7 @@ mod tests {
 	parameter_types! {
 		pub static MaxWinners: u32 = 10;
 		pub static DesiredTargets: u32 = 2;
-		pub static ElectionBounds: crate::ElectionBounds = ElectionBoundsBuilder::new().voters_count(Some(600)).targets_count(Some(400)).build();
+		pub static ElectionBounds: crate::ElectionBounds = ElectionBoundsBuilder::new().voters_count(600).targets_count(400).build();
 	}
 
 	impl Config for PhragmenParams {

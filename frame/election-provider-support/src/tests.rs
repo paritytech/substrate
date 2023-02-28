@@ -469,10 +469,10 @@ mod elections_bounds {
 		// voter bounds exhausts if count > 100 or size > 1_000; target bounds exhausts if count >
 		// 200 or size > 2_000.
 		let bounds = ElectionBoundsBuilder::new()
-			.voters_count(100.into())
-			.voters_size(1_000.into())
-			.targets_count(200.into())
-			.targets_size(2_000.into())
+			.voters_count(100)
+			.voters_size(1_000)
+			.targets_count(200)
+			.targets_size(2_000)
 			.build();
 
 		assert!(!bounds.voters.exhausted(None, None));
@@ -493,12 +493,11 @@ mod elections_bounds {
 	#[test]
 	fn election_bounds_clamp_works() {
 		let bounds = ElectionBoundsBuilder::new()
-			.voters_count(10.into())
-			.voters_size(10.into())
-			.clamp_voters(DataProviderBounds { count: 5.into(), size: 20.into() })
-			.targets_count(20.into())
-			.targets_size(None)
-			.clamp_targets(DataProviderBounds { count: 30.into(), size: 30.into() })
+			.voters_count(10)
+			.voters_size(10)
+			.max_voters(DataProviderBounds { count: 5.into(), size: 20.into() })
+			.targets_count(20)
+			.max_targets(DataProviderBounds { count: 30.into(), size: 30.into() })
 			.build();
 
 		assert_eq!(bounds.voters.count, 5.into());

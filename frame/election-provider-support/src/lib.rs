@@ -283,9 +283,6 @@ pub trait ElectionDataProvider {
 	/// All possible targets for the election, i.e. the targets that could become elected, thus
 	/// "electable".
 	///
-	/// If `bounds` are defined, then the resulting vector MUST NOT be longer or larger in MB than
-	/// `v` items long.
-	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
 	fn electable_targets(bounds: DataProviderBounds)
@@ -294,9 +291,6 @@ pub trait ElectionDataProvider {
 	/// All the voters that participate in the election, thus "electing".
 	///
 	/// Note that if a notion of self-vote exists, it should be represented here.
-	///
-	/// If `bounds` are defined, then the resulting vector MUST NOT be longer or larger in bytes
-	/// than `v` items long.
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
@@ -662,24 +656,26 @@ impl<AccountId: IdentifierT, Accuracy: PerThing128, Balancing: Get<Option<Balanc
 
 /// A voter, at the level of abstraction of this crate.
 pub type Voter<AccountId, Bound> = (AccountId, VoteWeight, BoundedVec<AccountId, Bound>);
-
 /// Same as [`Voter`], but parameterized by an [`ElectionDataProvider`].
 pub type VoterOf<D> =
 	Voter<<D as ElectionDataProvider>::AccountId, <D as ElectionDataProvider>::MaxVotesPerVoter>;
-
 /// Same as `BoundedSupports` but parameterized by a `ElectionProviderBase`.
 pub type BoundedSupportsOf<E> = BoundedSupports<
 	<E as ElectionProviderBase>::AccountId,
 	<E as ElectionProviderBase>::MaxWinners,
 >;
+/// Count bound of data provider bounds.
+pub type CountBound = u32;
+/// Size bound of data provider bounds.
+pub type SizeBound = u32;
 
 sp_core::generate_feature_enabled_macro!(runtime_benchmarks_enabled, feature = "runtime-benchmarks", $);
 sp_core::generate_feature_enabled_macro!(runtime_benchmarks_or_fuzz_enabled, any(feature = "runtime-benchmarks", feature = "fuzzing"), $);
 
 #[derive(Clone, Copy, Default, Debug)]
 pub struct DataProviderBounds {
-	pub count: Option<u32>,
-	pub size: Option<u32>,
+	pub count: Option<CountBound>,
+	pub size: Option<SizeBound>,
 }
 
 impl DataProviderBounds {
@@ -689,24 +685,34 @@ impl DataProviderBounds {
 	}
 
 	///  Returns true if `given_count` exhausts `self.count`.
-	pub fn count_exhausted(self, given_count: Option<u32>) -> bool {
-		self.count.map_or(false, |count| given_count.unwrap_or(0) > count)
+	pub fn count_exhausted(self, given_count: CountBound) -> bool {
+		self.count.map_or(false, |count| given_count > count)
 	}
 
 	///  Returns true if `given_size` exhausts `self.size`.
-	pub fn size_exhausted(self, given_size: Option<u32>) -> bool {
-		self.size.map_or(false, |size| given_size.unwrap_or(0) > size)
+	pub fn size_exhausted(self, given_size: SizeBound) -> bool {
+		self.size.map_or(false, |size| given_size > size)
 	}
 
-	/// Returns true if `given_size` or `given_count` exhausts `self.size` or `self_count`
+	/// Returns true if `given_size` or `given_count` exhausts `self.size` or `self_count`,
 	/// respectively.
-	pub fn exhausted(self, given_size: Option<u32>, given_count: Option<u32>) -> bool {
-		self.count_exhausted(given_count) || self.size_exhausted(given_size)
+	pub fn exhausted(self, given_size: Option<SizeBound>, given_count: Option<CountBound>) -> bool {
+		self.count_exhausted(given_count.unwrap_or(0)) ||
+			self.size_exhausted(given_size.unwrap_or(0))
+	}
+
+	/// Returns an instance of `Self` that is constructed by capping both the `count` and `size`
+	/// fields.
+	pub fn max(self, bounds: DataProviderBounds) -> Self {
+		DataProviderBounds {
+			count: self.count.map(|c| c.clamp(0, bounds.count.unwrap_or(u32::MAX)).into()),
+			size: self.size.map(|c| c.clamp(0, bounds.size.unwrap_or(u32::MAX)).into()),
+		}
 	}
 }
 
 /// The limits of an election result. The bounds are defined over the count of element of the
-/// election (voters or targets) or the overall datastructure size.
+/// election (voters or targets) or the overall size of the elements in MB.
 #[derive(Clone, Debug)]
 pub struct ElectionBounds {
 	pub voters: DataProviderBounds,
@@ -735,46 +741,50 @@ impl ElectionBoundsBuilder {
 	}
 
 	// Sets the voters count bounds.
-	pub fn voters_count(mut self, count: Option<u32>) -> Self {
-		self.voters =
-			self.voters
-				.map_or(Some(DataProviderBounds { count, size: None }), |mut bounds| {
-					bounds.count = count;
-					Some(bounds)
-				});
+	pub fn voters_count(mut self, count: CountBound) -> Self {
+		self.voters = self.voters.map_or(
+			Some(DataProviderBounds { count: Some(count), size: None }),
+			|mut bounds| {
+				bounds.count = Some(count);
+				Some(bounds)
+			},
+		);
 		self
 	}
 
 	// Sets the voters size bounds.
-	pub fn voters_size(mut self, size: Option<u32>) -> Self {
-		self.voters =
-			self.voters
-				.map_or(Some(DataProviderBounds { count: None, size }), |mut bounds| {
-					bounds.size = size;
-					Some(bounds)
-				});
+	pub fn voters_size(mut self, size: SizeBound) -> Self {
+		self.voters = self.voters.map_or(
+			Some(DataProviderBounds { count: None, size: Some(size) }),
+			|mut bounds| {
+				bounds.size = Some(size);
+				Some(bounds)
+			},
+		);
 		self
 	}
 
 	// Sets the targets count bounds.
-	pub fn targets_count(mut self, count: Option<u32>) -> Self {
-		self.targets =
-			self.targets
-				.map_or(Some(DataProviderBounds { count, size: None }), |mut bounds| {
-					bounds.count = count;
-					Some(bounds)
-				});
+	pub fn targets_count(mut self, count: CountBound) -> Self {
+		self.targets = self.targets.map_or(
+			Some(DataProviderBounds { count: Some(count), size: None }),
+			|mut bounds| {
+				bounds.count = Some(count);
+				Some(bounds)
+			},
+		);
 		self
 	}
 
 	// Sets the targets size bounds.
-	pub fn targets_size(mut self, size: Option<u32>) -> Self {
-		self.targets =
-			self.targets
-				.map_or(Some(DataProviderBounds { count: None, size }), |mut bounds| {
-					bounds.size = size;
-					Some(bounds)
-				});
+	pub fn targets_size(mut self, size: SizeBound) -> Self {
+		self.targets = self.targets.map_or(
+			Some(DataProviderBounds { count: None, size: Some(size) }),
+			|mut bounds| {
+				bounds.size = Some(size);
+				Some(bounds)
+			},
+		);
 		self
 	}
 
@@ -792,25 +802,15 @@ impl ElectionBoundsBuilder {
 
 	/// Caps the maximum number of the voters bounds to `voters`. If `voters` bounds are less than
 	/// the current value, keeps it.
-	pub fn clamp_voters(mut self, voters: DataProviderBounds) -> Self {
-		self.voters = self.voters.map_or(None, |v| {
-			Some(DataProviderBounds {
-				count: v.count.map(|c| c.clamp(0, voters.count.unwrap_or(u32::MAX)).into()),
-				size: v.size.map(|c| c.clamp(0, voters.size.unwrap_or(u32::MAX)).into()),
-			})
-		});
+	pub fn max_voters(mut self, voters: DataProviderBounds) -> Self {
+		self.voters = self.voters.map_or(None, |v| Some(v.max(voters)));
 		self
 	}
 
 	/// Caps the maximum number of the targets to `targets`. If `targets` bounds are less than the
 	/// current value, keeps it.
-	pub fn clamp_targets(mut self, targets: DataProviderBounds) -> Self {
-		self.targets = self.targets.map_or(None, |t| {
-			Some(DataProviderBounds {
-				count: t.count.map(|c| c.clamp(0, targets.count.unwrap_or(u32::MAX)).into()),
-				size: t.size.map(|c| c.clamp(0, targets.size.unwrap_or(u32::MAX)).into()),
-			})
-		});
+	pub fn max_targets(mut self, targets: DataProviderBounds) -> Self {
+		self.targets = self.targets.map_or(None, |t| Some(t.max(targets)));
 		self
 	}
 
