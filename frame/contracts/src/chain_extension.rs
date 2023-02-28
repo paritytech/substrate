@@ -71,7 +71,6 @@
 //! on how to use a chain extension in order to provide new features to ink! contracts.
 
 use crate::{
-	gas::ChargedAmount,
 	wasm::{Runtime, RuntimeCosts},
 	Error,
 };
