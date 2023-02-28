@@ -309,17 +309,16 @@ where
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
-		let (is_cached, mut cache) = access_cache(&self.next_storage_key_cache, |cache_cell| {
-			cache_cell
-				.take()
-				.map(|cache| (true, cache))
-				.unwrap_or_else(|| (false, Default::default()))
-		});
+		let (is_cached, mut cache) = access_cache(&self.next_storage_key_cache, Option::take)
+			.map(|cache| (cache.last_key == key, cache))
+			.unwrap_or_default();
 
-		if !is_cached || cache.last_key != key {
-			let args =
-				IterArgs { start_at: Some(key), start_at_exclusive: true, ..IterArgs::default() };
-			cache.iter = self.raw_iter(args)?
+		if !is_cached {
+			cache.iter = self.raw_iter(IterArgs {
+				start_at: Some(key),
+				start_at_exclusive: true,
+				..IterArgs::default()
+			})?
 		};
 
 		let next_key = match cache.iter.next_key(self) {
