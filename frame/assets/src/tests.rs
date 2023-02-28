@@ -1105,6 +1105,10 @@ fn set_min_balance_should_work() {
 			Error::<Test>::NoPermission
 		);
 
+		// will execute because the new value of min_balance is less than the
+		// old value. 10 < 30
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), id, 1, 10));
+
 		assert_ok!(Assets::burn(RuntimeOrigin::signed(1), id, 1, 50));
 		assert_noop!(
 			Assets::set_min_balance(RuntimeOrigin::signed(2), id, 50),

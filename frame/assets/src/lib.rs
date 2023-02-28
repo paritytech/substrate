@@ -1513,16 +1513,18 @@ pub mod pallet {
 		}
 
 		/// Sets the minimum balance of an asset. Only works if there aren't any
-		/// accounts that are holding the asset.
+		/// accounts that are holding the asset or if the new vlaue of new_balance
+		/// is less than the old one.
 		///
-		/// Origin must be Signed and the sender has to be the Owner of the asset `id`.
+		/// Origin must be Signed and the sender has to be the Owner of the
+		/// asset `id`.
 		///
 		/// - `id`: The identifier of the asset.
 		/// - `min_balance`: The new value of `min_balance`.
 		///
 		/// Emits `AssetStatusChanged` event when successful.
 		#[pallet::call_index(28)]
-		#[pallet::weight(T::WeightInfo::mint())]
+		#[pallet::weight(10_000)]
 		pub fn set_min_balance(
 			origin: OriginFor<T>,
 			id: T::AssetIdParameter,
@@ -1533,7 +1535,14 @@ pub mod pallet {
 
 			let mut details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 			ensure!(origin == details.owner, Error::<T, I>::NoPermission);
-			ensure!(details.accounts == 0, Error::<T, I>::NoPermission);
+
+			let old_min_balance = details.min_balance;
+			// Ensure that either the new min_balance is less than old min_balance or there aren't
+			// any accounts holding the asset.
+			ensure!(
+				min_balance < old_min_balance || details.accounts == 0,
+				Error::<T, I>::NoPermission
+			);
 
 			details.min_balance = min_balance;
 			Asset::<T, I>::insert(&id, details);
