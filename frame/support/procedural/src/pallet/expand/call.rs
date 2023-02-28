@@ -333,22 +333,24 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 				self,
 				origin: Self::RuntimeOrigin
 			) -> #frame_support::dispatch::DispatchResultWithPostInfo {
-				match self {
-					#(
-						Self::#fn_name { #( #args_name_pattern, )* } => {
-							#frame_support::sp_tracing::enter_span!(
-								#frame_support::sp_tracing::trace_span!(stringify!(#fn_name))
-							);
-							#maybe_allow_attrs
-							<#pallet_ident<#type_use_gen>>::#fn_name(origin, #( #args_name, )* )
-								.map(Into::into).map_err(Into::into)
+				#frame_support::dispatch_context::run_in_context(|| {
+					match self {
+						#(
+							Self::#fn_name { #( #args_name_pattern, )* } => {
+								#frame_support::sp_tracing::enter_span!(
+									#frame_support::sp_tracing::trace_span!(stringify!(#fn_name))
+								);
+								#maybe_allow_attrs
+								<#pallet_ident<#type_use_gen>>::#fn_name(origin, #( #args_name, )* )
+									.map(Into::into).map_err(Into::into)
+							},
+						)*
+						Self::__Ignore(_, _) => {
+							let _ = origin; // Use origin for empty Call enum
+							unreachable!("__PhantomItem cannot be used.");
 						},
-					)*
-					Self::__Ignore(_, _) => {
-						let _ = origin; // Use origin for empty Call enum
-						unreachable!("__PhantomItem cannot be used.");
-					},
-				}
+					}
+				})
 			}
 		}
 

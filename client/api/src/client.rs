@@ -59,9 +59,15 @@ pub trait BlockOf {
 
 /// A source of blockchain events.
 pub trait BlockchainEvents<Block: BlockT> {
-	/// Get block import event stream. Not guaranteed to be fired for every
-	/// imported block.
+	/// Get block import event stream.
+	///
+	/// Not guaranteed to be fired for every imported block, only fired when the node
+	/// has synced to the tip or there is a re-org. Use `every_import_notification_stream()`
+	/// if you want a notification of every imported block regardless.
 	fn import_notification_stream(&self) -> ImportNotifications<Block>;
+
+	/// Get a stream of every imported block.
+	fn every_import_notification_stream(&self) -> ImportNotifications<Block>;
 
 	/// Get a stream of finality notifications. Not guaranteed to be fired for every
 	/// finalized block.

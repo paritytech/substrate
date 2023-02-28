@@ -23,7 +23,7 @@ pallet-authorship = { version = "4.0.0-dev", default-features = false, path = ".
 pallet-session = { version = "4.0.0-dev", default-features = false, path = "../session" }
 sp-application-crypto = { version = "7.0.0", default-features = false, path = "../../primitives/application-crypto" }
 sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
-sp-finality-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../primitives/finality-grandpa" }
+sp-consensus-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../primitives/consensus/grandpa" }
 sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }
@@ -54,7 +54,7 @@ std = [
 	"scale-info/std",
 	"sp-application-crypto/std",
 	"sp-core/std",
-	"sp-finality-grandpa/std",
+	"sp-consensus-grandpa/std",
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-session/std",
