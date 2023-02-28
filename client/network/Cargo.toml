@@ -18,7 +18,6 @@ array-bytes = "4.1"
 async-channel = "1.8.0"
 async-trait = "0.1"
 asynchronous-codec = "0.6"
-backtrace = "0.3.67"
 bytes = "1"
 codec = { package = "parity-scale-codec", version = "3.2.2", features = ["derive"] }
 either = "1.5.3"
