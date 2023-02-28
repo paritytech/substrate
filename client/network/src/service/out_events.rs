@@ -179,7 +179,7 @@ impl OutChannels {
 	/// Sends an event.
 	pub fn send(&mut self, event: Event) {
 		self.event_streams.retain_mut(|sender| {
-			if sender.inner.len() == sender.queue_size_warning && !sender.warning_fired {
+			if sender.inner.len() >= sender.queue_size_warning && !sender.warning_fired {
 				sender.warning_fired = true;
 				sender.creation_backtrace.resolve();
 				error!(
