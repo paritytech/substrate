@@ -514,6 +514,8 @@ pub mod pallet {
 		},
 		/// An asset has had its attributes changed by the `Force` origin.
 		AssetStatusChanged { asset_id: T::AssetId },
+		/// The min_balance of an asset has been updated by the asset owner.
+		AssetMinBalanceChanged { asset_id: T::AssetId, new_min_balance: T::Balance },
 	}
 
 	#[pallet::error]
@@ -1547,7 +1549,10 @@ pub mod pallet {
 			details.min_balance = min_balance;
 			Asset::<T, I>::insert(&id, details);
 
-			Self::deposit_event(Event::AssetStatusChanged { asset_id: id });
+			Self::deposit_event(Event::AssetMinBalanceChanged {
+				asset_id: id,
+				new_min_balance: min_balance,
+			});
 			Ok(())
 		}
 	}
