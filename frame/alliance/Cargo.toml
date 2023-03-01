@@ -26,7 +26,7 @@ sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
 
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
-frame-support = { version = "4.0.0-dev", default-features = false, features = ["metadata-v14"], path = "../support" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 
 pallet-identity = { version = "4.0.0-dev", path = "../identity", default-features = false }

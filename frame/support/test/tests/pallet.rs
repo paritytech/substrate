@@ -1600,7 +1600,6 @@ fn metadata() {
 	pretty_assertions::assert_eq!(actual_metadata.pallets, expected_metadata.pallets);
 }
 
-#[cfg(feature = "metadata-v14")]
 #[test]
 fn metadata_at_version() {
 	use frame_support::metadata::*;
@@ -1619,22 +1618,9 @@ fn metadata_at_version() {
 	assert_eq!(metadata_v14, at_metadata);
 }
 
-#[cfg(not(feature = "metadata-v14"))]
-#[test]
-fn metadata_at_version() {
-	assert!(Runtime::metadata_at_version(14).is_none());
-}
-
-#[cfg(feature = "metadata-v14")]
 #[test]
 fn metadata_versions() {
 	assert_eq!(vec![14], Runtime::metadata_versions());
-}
-
-#[cfg(not(feature = "metadata-v14"))]
-#[test]
-fn metadata_versions() {
-	assert_eq!(vec![], Runtime::metadata_versions());
 }
 
 #[test]

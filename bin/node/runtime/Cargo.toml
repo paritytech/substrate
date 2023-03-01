@@ -121,8 +121,8 @@ pallet-whitelist = { version = "4.0.0-dev", default-features = false, path = "..
 substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder", optional = true }
 
 [features]
-default = ["std", "metadata-v14"]
-with-tracing = ["frame-executive/with-tracing", "metadata-v14"]
+default = ["std"]
+with-tracing = ["frame-executive/with-tracing"]
 std = [
 	"pallet-whitelist/std",
 	"pallet-offences-benchmarking?/std",
@@ -216,7 +216,6 @@ std = [
 	"pallet-child-bounties/std",
 	"pallet-alliance/std",
 	"substrate-wasm-builder",
-	"metadata-v14",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
@@ -273,7 +272,6 @@ runtime-benchmarks = [
 	"pallet-vesting/runtime-benchmarks",
 	"pallet-whitelist/runtime-benchmarks",
 	"frame-system-benchmarking/runtime-benchmarks",
-	"metadata-v14",
 ]
 try-runtime = [
 	"frame-try-runtime/try-runtime",
@@ -335,6 +333,4 @@ try-runtime = [
 	"pallet-nfts/try-runtime",
 	"pallet-vesting/try-runtime",
 	"pallet-whitelist/try-runtime",
-	"metadata-v14",
 ]
-metadata-v14 = ["frame-support/metadata-v14"]

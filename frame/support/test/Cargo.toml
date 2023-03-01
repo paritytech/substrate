@@ -32,7 +32,7 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../../
 test-pallet = { package = "frame-support-test-pallet", default-features = false, path = "pallet" }
 
 [features]
-default = ["std", "metadata-v14"]
+default = ["std"]
 std = [
 	"serde/std",
 	"codec/std",
@@ -49,7 +49,6 @@ std = [
 	"sp-version/std",
 ]
 # The runtime supports the metadata V14.
-metadata-v14 = ["frame-support/metadata-v14"]
 try-runtime = ["frame-support/try-runtime"]
 # WARNING:
 # Only CI runs with this feature enabled. This feature is for testing stuff related to the FRAME macros

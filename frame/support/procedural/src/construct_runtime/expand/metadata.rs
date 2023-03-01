@@ -100,8 +100,6 @@ pub fn expand_runtime_metadata(
 			}
 
 			pub fn metadata() -> #scrate::metadata::RuntimeMetadataPrefixed {
-				// Note: `metadata-v14` feature active by default until we stabilize v15,
-				// to keep backwards compatibility.
 				let v14: #scrate::metadata::RuntimeMetadataV14 = #runtime::metadata_ir().into();
 				v14.into()
 			}

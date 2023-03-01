@@ -21,7 +21,7 @@ sp-runtime = { version = "7.0.0", default-features = false, path = "../../../../
 sp-version = { version = "5.0.0", default-features = false, path = "../../../../primitives/version" }
 
 [features]
-default = ["std", "metadata-v14"]
+default = ["std"]
 std = [
 	"codec/std",
 	"frame-support/std",
@@ -31,4 +31,3 @@ std = [
 	"sp-runtime/std",
 	"sp-version/std",
 ]
-metadata-v14 = ["frame-support/metadata-v14"]

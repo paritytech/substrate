@@ -22,5 +22,4 @@ pub use types::*;
 
 pub mod api;
 
-#[cfg(feature = "metadata-v14")]
 mod v14;

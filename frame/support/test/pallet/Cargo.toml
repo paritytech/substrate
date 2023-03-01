@@ -18,11 +18,10 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../..
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../../system" }
 
 [features]
-default = ["std", "metadata-v14"]
+default = ["std"]
 std = [
 	"codec/std",
 	"frame-support/std",
 	"frame-system/std",
 	"scale-info/std",
 ]
-metadata-v14 = ["frame-support/metadata-v14"]

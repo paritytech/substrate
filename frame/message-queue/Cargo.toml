@@ -22,7 +22,7 @@ sp-arithmetic = { version = "6.0.0", default-features = false, path = "../../pri
 sp-weights = { version = "4.0.0", default-features = false, path = "../../primitives/weights" }
 
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
-frame-support = { version = "4.0.0-dev", default-features = false, features = ["metadata-v14"], path = "../support" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 
 [dev-dependencies]

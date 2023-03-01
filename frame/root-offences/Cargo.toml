@@ -19,7 +19,7 @@ scale-info = { version = "2.1.1", default-features = false, features = ["derive"
 pallet-session = { version = "4.0.0-dev", features = [ "historical" ], path = "../../frame/session", default-features = false }
 pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../../frame/staking" }
 
-frame-support = { version = "4.0.0-dev", default-features = false, features = ["metadata-v14"], path = "../support" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }

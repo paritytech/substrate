@@ -20,7 +20,6 @@
 use super::types::MetadataIR;
 use frame_metadata::RuntimeMetadataPrefixed;
 
-#[cfg(feature = "metadata-v14")]
 const V14: u32 = 14;
 
 /// Transform the IR to the specified version.
@@ -31,7 +30,6 @@ pub fn to_version(
 	version: u32,
 ) -> Option<RuntimeMetadataPrefixed> {
 	match version {
-		#[cfg(feature = "metadata-v14")]
 		V14 => {
 			let v14: frame_metadata::v14::RuntimeMetadataV14 = metadata.into();
 			Some(v14.into())
@@ -42,19 +40,14 @@ pub fn to_version(
 
 /// Returns the supported versions of metadata.
 pub fn supported_versions() -> sp_std::vec::Vec<u32> {
-	sp_std::vec![
-		#[cfg(feature = "metadata-v14")]
-		V14,
-	]
+	sp_std::vec![V14,]
 }
 
 #[cfg(test)]
 mod test {
 	use super::*;
 	use crate::metadata_ir::ExtrinsicMetadataIR;
-	#[cfg(feature = "metadata-v14")]
-	use frame_metadata::v14::META_RESERVED;
-	use frame_metadata::RuntimeMetadata;
+	use frame_metadata::{v14::META_RESERVED, RuntimeMetadata};
 	use scale_info::meta_type;
 
 	fn ir_metadata() -> MetadataIR {
