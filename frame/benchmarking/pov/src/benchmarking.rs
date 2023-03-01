@@ -316,6 +316,19 @@ frame_benchmarking::benchmarks! {
 		call.dispatch_bypass_filter(RawOrigin::Root.into()).unwrap();
 	}
 
+	storage_iteration {
+		for i in 0..65000 {
+			UnboundedMapTwox::<T>::insert(i, sp_std::vec![0; 64]);
+		}
+	}: {
+		for (key, value) in UnboundedMapTwox::<T>::iter() {
+			unsafe {
+				core::ptr::read_volatile(&key);
+				core::ptr::read_volatile(value.as_ptr());
+			}
+		}
+	}
+
 	impl_benchmark_test_suite!(
 		Pallet,
 		mock::new_test_ext(),
