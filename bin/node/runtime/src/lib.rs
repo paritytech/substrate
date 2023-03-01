@@ -35,7 +35,7 @@ use frame_support::{
 		fungible::ItemOf, tokens::nonfungibles_v2::Inspect, AsEnsureOriginWithArg, ConstBool,
 		ConstU128, ConstU16, ConstU32, Currency, EitherOfDiverse, EqualPrivilegeOnly, Everything,
 		Imbalance, InstanceFilter, KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced,
-		U128CurrencyToVote, WithdrawReasons,
+		U128CurrencyToVote, WithdrawReasons, tokens::GetSalary,
 	},
 	weights::{
 		constants::{
@@ -1576,7 +1576,7 @@ parameter_types! {
 }
 
 pub struct SalaryForRank;
-impl pallet_salary::GetSalary<u16, AccountId, Balance> for SalaryForRank {
+impl GetSalary<u16, AccountId, Balance> for SalaryForRank {
 	fn get_salary(a: u16, _: &AccountId) -> Balance {
 		Balance::from(a) * 1000 * DOLLARS
 	}
