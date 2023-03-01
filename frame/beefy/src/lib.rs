@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -40,7 +40,7 @@ use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_staking::SessionIndex;
 use sp_std::prelude::*;
 
-use beefy_primitives::{
+use sp_consensus_beefy::{
 	AuthorityIndex, BeefyAuthorityId, ConsensusLog, EquivocationProof, OnNewValidatorSet,
 	ValidatorSet, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
 };
@@ -99,7 +99,17 @@ pub mod pallet {
 		type HandleEquivocation: HandleEquivocation<Self>;
 
 		/// The maximum number of authorities that can be added.
+		#[pallet::constant]
 		type MaxAuthorities: Get<u32>;
+
+		/// The maximum number of entries to keep in the set id to session index mapping.
+		///
+		/// Since the `SetIdSession` map is only used for validating equivocations this
+		/// value should relate to the bonding duration of whatever staking system is
+		/// being used (if any). If equivocation handling is not enabled then this value
+		/// can be zero.
+		#[pallet::constant]
+		type MaxSetIdSessionEntries: Get<u64>;
 
 		/// A hook to act on the new BEEFY validator set.
 		///
@@ -125,7 +135,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn validator_set_id)]
 	pub(super) type ValidatorSetId<T: Config> =
-		StorageValue<_, beefy_primitives::ValidatorSetId, ValueQuery>;
+		StorageValue<_, sp_consensus_beefy::ValidatorSetId, ValueQuery>;
 
 	/// Authorities set scheduled to be used with the next session
 	#[pallet::storage]
@@ -136,11 +146,17 @@ pub mod pallet {
 	/// A mapping from BEEFY set ID to the index of the *most recent* session for which its
 	/// members were responsible.
 	///
+	/// This is only used for validating equivocation proofs. An equivocation proof must
+	/// contains a key-ownership proof for a given session, therefore we need a way to tie
+	/// together sessions and BEEFY set ids, i.e. we need to validate that a validator
+	/// was the owner of a given key on a given session, and what the active set ID was
+	/// during that session.
+	///
 	/// TWOX-NOTE: `ValidatorSetId` is not under user control.
 	#[pallet::storage]
 	#[pallet::getter(fn session_for_set)]
 	pub(super) type SetIdSession<T: Config> =
-		StorageMap<_, Twox64Concat, beefy_primitives::ValidatorSetId, SessionIndex>;
+		StorageMap<_, Twox64Concat, sp_consensus_beefy::ValidatorSetId, SessionIndex>;
 
 	/// Block number where BEEFY consensus is enabled/started.
 	/// If changing this, make sure `Self::ValidatorSetId` is also reset to
@@ -264,7 +280,7 @@ impl<T: Config> Pallet<T> {
 	/// Return the current active BEEFY validator set.
 	pub fn validator_set() -> Option<ValidatorSet<T::BeefyId>> {
 		let validators: BoundedVec<T::BeefyId, T::MaxAuthorities> = Self::authorities();
-		let id: beefy_primitives::ValidatorSetId = Self::validator_set_id();
+		let id: sp_consensus_beefy::ValidatorSetId = Self::validator_set_id();
 		ValidatorSet::<T::BeefyId>::new(validators, id)
 	}
 
@@ -374,13 +390,13 @@ impl<T: Config> Pallet<T> {
 
 		// validate the key ownership proof extracting the id of the offender.
 		let offender = T::KeyOwnerProofSystem::check_proof(
-			(beefy_primitives::KEY_TYPE, offender_id),
+			(sp_consensus_beefy::KEY_TYPE, offender_id),
 			key_owner_proof,
 		)
 		.ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
 
 		// validate equivocation proof (check votes are different and signatures are valid).
-		if !beefy_primitives::check_equivocation_proof(&equivocation_proof) {
+		if !sp_consensus_beefy::check_equivocation_proof(&equivocation_proof) {
 			return Err(Error::<T>::InvalidEquivocationProof.into())
 		}
 
@@ -462,9 +478,15 @@ where
 		// We want to have at least one BEEFY mandatory block per session.
 		Self::change_authorities(bounded_next_authorities, bounded_next_queued_authorities);
 
+		let validator_set_id = Self::validator_set_id();
 		// Update the mapping for the new set id that corresponds to the latest session (i.e. now).
 		let session_index = <pallet_session::Pallet<T>>::current_index();
-		SetIdSession::<T>::insert(Self::validator_set_id(), &session_index);
+		SetIdSession::<T>::insert(validator_set_id, &session_index);
+		// Prune old entry if limit reached.
+		let max_set_id_session_entries = T::MaxSetIdSessionEntries::get().max(1);
+		if validator_set_id >= max_set_id_session_entries {
+			SetIdSession::<T>::remove(validator_set_id - max_set_id_session_entries);
+		}
 	}
 
 	fn on_disabled(i: u32) {

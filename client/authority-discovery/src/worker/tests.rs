@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -182,6 +182,10 @@ impl NetworkStateInfo for TestNetwork {
 	}
 
 	fn external_addresses(&self) -> Vec<Multiaddr> {
+		self.external_addresses.clone()
+	}
+
+	fn listen_addresses(&self) -> Vec<Multiaddr> {
 		self.external_addresses.clone()
 	}
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -40,7 +40,7 @@ use sp_staking::{EraIndex, SessionIndex};
 
 use crate as pallet_beefy;
 
-pub use beefy_primitives::{
+pub use sp_consensus_beefy::{
 	crypto::{AuthorityId as BeefyId, AuthoritySignature as BeefySignature},
 	ConsensusLog, EquivocationProof, BEEFY_ENGINE_ID,
 };
@@ -111,6 +111,7 @@ parameter_types! {
 	pub const Period: u64 = 1;
 	pub const ReportLongevity: u64 =
 		BondingDuration::get() as u64 * SessionsPerEra::get() as u64 * Period::get();
+	pub const MaxSetIdSessionEntries: u32 = BondingDuration::get() * SessionsPerEra::get();
 }
 
 impl pallet_beefy::Config for Test {
@@ -125,6 +126,7 @@ impl pallet_beefy::Config for Test {
 	type HandleEquivocation =
 		super::EquivocationHandler<u64, Self::KeyOwnerIdentification, Offences, ReportLongevity>;
 	type MaxAuthorities = ConstU32<100>;
+	type MaxSetIdSessionEntries = MaxSetIdSessionEntries;
 	type OnNewValidatorSet = ();
 	type WeightInfo = ();
 }

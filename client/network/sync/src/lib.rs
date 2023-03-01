@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -1015,7 +1015,7 @@ where
 		let peer = if let Some(peer) = self.peers.get_mut(&who) {
 			peer
 		} else {
-			error!(target: "sync", "💔 Called on_block_justification with a bad peer ID");
+			error!(target: "sync", "💔 Called on_block_justification with a peer ID of an unknown peer");
 			return Ok(OnBlockJustification::Nothing)
 		};
 
@@ -1357,6 +1357,12 @@ where
 							sc_peerset::ReputationChange::new_fatal("Invalid justification"),
 						);
 					}
+				},
+				ToServiceCommand::BlockFinalized(hash, number) => {
+					self.on_block_finalized(&hash, number);
+				},
+				ToServiceCommand::Status { pending_response } => {
+					let _ = pending_response.send(self.status());
 				},
 			}
 		}
@@ -3206,7 +3212,6 @@ mod test {
 	};
 	use sp_blockchain::HeaderBackend;
 	use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
-	use sp_runtime::generic::BlockId;
 	use substrate_test_runtime_client::{
 		runtime::{Block, Hash, Header},
 		BlockBuilderExt, ClientBlockImportExt, ClientExt, DefaultTestClientBuilderExt, TestClient,
@@ -3443,8 +3448,7 @@ mod test {
 	fn build_block(client: &mut Arc<TestClient>, at: Option<Hash>, fork: bool) -> Block {
 		let at = at.unwrap_or_else(|| client.info().best_hash);
 
-		let mut block_builder =
-			client.new_block_at(&BlockId::Hash(at), Default::default(), false).unwrap();
+		let mut block_builder = client.new_block_at(at, Default::default(), false).unwrap();
 
 		if fork {
 			block_builder.push_storage_change(vec![1, 2, 3], Some(vec![4, 5, 6])).unwrap();
@@ -3497,8 +3501,7 @@ mod test {
 
 		let mut client2 = client.clone();
 		let mut build_block_at = |at, import| {
-			let mut block_builder =
-				client2.new_block_at(&BlockId::Hash(at), Default::default(), false).unwrap();
+			let mut block_builder = client2.new_block_at(at, Default::default(), false).unwrap();
 			// Make sure we generate a different block as fork
 			block_builder.push_storage_change(vec![1, 2, 3], Some(vec![4, 5, 6])).unwrap();
 

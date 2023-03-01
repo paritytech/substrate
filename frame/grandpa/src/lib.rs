@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,7 +29,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 // re-export since this is necessary for `impl_apis` in runtime.
-pub use sp_finality_grandpa as fg_primitives;
+pub use sp_consensus_grandpa as fg_primitives;
 
 use sp_std::prelude::*;
 
@@ -555,7 +555,7 @@ impl<T: Config> Pallet<T> {
 
 		// validate equivocation proof (check votes are different and
 		// signatures are valid).
-		if !sp_finality_grandpa::check_equivocation_proof(equivocation_proof) {
+		if !sp_consensus_grandpa::check_equivocation_proof(equivocation_proof) {
 			return Err(Error::<T>::InvalidEquivocationProof.into())
 		}
 
