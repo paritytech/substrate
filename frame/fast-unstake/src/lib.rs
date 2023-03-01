@@ -142,7 +142,7 @@ pub mod pallet {
 
 		/// Use only for benchmarking.
 		#[cfg(feature = "runtime-benchmarks")]
-		type MaxBackersPerValidator: Get<u32>;
+		type MaxExposurePageSize: Get<u32>;
 	}
 
 	/// The current "head of the queue" being unstaked.
