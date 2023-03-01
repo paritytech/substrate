@@ -59,7 +59,7 @@ pub mod weights;
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{extract_actual_weight, GetDispatchInfo, PostDispatchInfo},
-	traits::{IsSubType, OriginTrait, UnfilteredDispatchable},
+	traits::{Contains, IsSubType, OriginTrait, UnfilteredDispatchable},
 };
 use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
@@ -72,7 +72,7 @@ pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{dispatch::DispatchErrorWithPostInfo, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -100,6 +100,9 @@ pub mod pallet {
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
+
+		/// Filtering calls.
+		type CallFilter: Contains<<Self as Config>::RuntimeCall>;
 	}
 
 	#[pallet::event]
@@ -215,12 +218,26 @@ pub mod pallet {
 			let mut weight = Weight::zero();
 			for (index, call) in calls.into_iter().enumerate() {
 				let info = call.get_dispatch_info();
+
+				let result =
+					(!(is_root || <T as Config>::CallFilter::contains(&call))).then(|| {
+						DispatchErrorWithPostInfo {
+							post_info: None::<Weight>.into(),
+							error: <frame_system::Error<T>>::CallFiltered.into(),
+						}
+					});
+
 				// If origin is root, don't apply any dispatch filters; root can call anything.
-				let result = if is_root {
-					call.dispatch_bypass_filter(origin.clone())
+				let result = if let Some(error) = result {
+					Err(error)
 				} else {
-					call.dispatch(origin.clone())
+					if is_root {
+						call.dispatch_bypass_filter(origin.clone())
+					} else {
+						call.dispatch(origin.clone())
+					}
 				};
+
 				// Add the weight of this call.
 				weight = weight.saturating_add(extract_actual_weight(&result, &info));
 				if let Err(e) = result {
