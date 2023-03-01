@@ -64,10 +64,10 @@ pub trait WeightInfo {
 	fn set_configs() -> Weight;
 	fn update_roles() -> Weight;
 	fn chill() -> Weight;
+	fn set_claim_permission() -> Weight;
 	fn set_commission() -> Weight;
 	fn set_commission_max() -> Weight;
 	fn set_commission_change_rate() -> Weight;
-	fn set_claim_permission() -> Weight;
 	fn claim_commission() -> Weight;
 }
 
@@ -532,6 +532,20 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(9_u64))
 			.saturating_add(T::DbWeight::get().writes(5_u64))
 	}
+	/// Storage: NominationPools PoolMembers (r:1 w:0)
+	/// Proof: NominationPools PoolMembers (max_values: None, max_size: Some(237), added: 2712, mode: MaxEncodedLen)
+	/// Storage: NominationPools ClaimPermissions (r:1 w:1)
+	/// Proof: NominationPools ClaimPermissions (max_values: None, max_size: Some(41), added: 2516, mode: MaxEncodedLen)
+	fn set_claim_permission() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `542`
+		//  Estimated: `5228`
+		// Minimum execution time: 15_312 nanoseconds.
+		Weight::from_ref_time(15_595_000)
+			.saturating_add(Weight::from_proof_size(5228))
+			.saturating_add(T::DbWeight::get().reads(2_u64))
+			.saturating_add(T::DbWeight::get().writes(1_u64))
+	}
 	/// Storage: NominationPools BondedPools (r:1 w:1)
 	/// Proof: NominationPools BondedPools (max_values: None, max_size: Some(220), added: 2695, mode: MaxEncodedLen)
 	/// Storage: NominationPools RewardPools (r:1 w:0)
@@ -572,20 +586,6 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		Weight::from_ref_time(21_017_000)
 			.saturating_add(Weight::from_proof_size(2695))
 			.saturating_add(T::DbWeight::get().reads(1_u64))
-			.saturating_add(T::DbWeight::get().writes(1_u64))
-	}
-	/// Storage: NominationPools PoolMembers (r:1 w:0)
-	/// Proof: NominationPools PoolMembers (max_values: None, max_size: Some(237), added: 2712, mode: MaxEncodedLen)
-	/// Storage: NominationPools ClaimPermissions (r:1 w:1)
-	/// Proof: NominationPools ClaimPermissions (max_values: None, max_size: Some(41), added: 2516, mode: MaxEncodedLen)
-	fn set_claim_permission() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `542`
-		//  Estimated: `5228`
-		// Minimum execution time: 15_312 nanoseconds.
-		Weight::from_ref_time(15_595_000)
-			.saturating_add(Weight::from_proof_size(5228))
-			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
 	/// Storage: NominationPools BondedPools (r:1 w:0)
@@ -1068,6 +1068,20 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(9_u64))
 			.saturating_add(RocksDbWeight::get().writes(5_u64))
 	}
+	/// Storage: NominationPools PoolMembers (r:1 w:0)
+	/// Proof: NominationPools PoolMembers (max_values: None, max_size: Some(237), added: 2712, mode: MaxEncodedLen)
+	/// Storage: NominationPools ClaimPermissions (r:1 w:1)
+	/// Proof: NominationPools ClaimPermissions (max_values: None, max_size: Some(41), added: 2516, mode: MaxEncodedLen)
+	fn set_claim_permission() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `542`
+		//  Estimated: `5228`
+		// Minimum execution time: 15_312 nanoseconds.
+		Weight::from_ref_time(15_595_000)
+			.saturating_add(Weight::from_proof_size(5228))
+			.saturating_add(RocksDbWeight::get().reads(2_u64))
+			.saturating_add(RocksDbWeight::get().writes(1_u64))
+	}
 	/// Storage: NominationPools BondedPools (r:1 w:1)
 	/// Proof: NominationPools BondedPools (max_values: None, max_size: Some(220), added: 2695, mode: MaxEncodedLen)
 	/// Storage: NominationPools RewardPools (r:1 w:0)
@@ -1108,20 +1122,6 @@ impl WeightInfo for () {
 		Weight::from_ref_time(21_017_000)
 			.saturating_add(Weight::from_proof_size(2695))
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
-	}
-	/// Storage: NominationPools PoolMembers (r:1 w:0)
-	/// Proof: NominationPools PoolMembers (max_values: None, max_size: Some(237), added: 2712, mode: MaxEncodedLen)
-	/// Storage: NominationPools ClaimPermissions (r:1 w:1)
-	/// Proof: NominationPools ClaimPermissions (max_values: None, max_size: Some(41), added: 2516, mode: MaxEncodedLen)
-	fn set_claim_permission() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `542`
-		//  Estimated: `5228`
-		// Minimum execution time: 15_312 nanoseconds.
-		Weight::from_ref_time(15_595_000)
-			.saturating_add(Weight::from_proof_size(5228))
-			.saturating_add(RocksDbWeight::get().reads(2_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
 	/// Storage: NominationPools BondedPools (r:1 w:0)
