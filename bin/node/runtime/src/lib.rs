@@ -209,8 +209,8 @@ const_assert!(NORMAL_DISPATCH_RATIO.deconstruct() >= AVERAGE_ON_INITIALIZE_RATIO
 /// Filter to block balance pallet calls
 /// Used for both SafeMode and TxPause pallets
 /// Therefor we include both so they cannot affect each other
-pub struct WhitelistCalls;
-impl Contains<RuntimeCall> for WhitelistCalls {
+pub struct WhitelistedCalls;
+impl Contains<RuntimeCall> for WhitelistedCalls {
 	fn contains(call: &RuntimeCall) -> bool {
 		match call {
 			RuntimeCall::System(_) | RuntimeCall::SafeMode(_) | RuntimeCall::TxPause(_) => true,
@@ -256,7 +256,7 @@ impl pallet_tx_pause::Config for Runtime {
 }
 
 /// An origin that can enable the safe-mode by force.
-pub enum ForceActivateOrigin {
+pub enum ForceEnterOrigin {
 	Weak,
 	Medium,
 	Strong,
@@ -269,7 +269,7 @@ pub enum ForceExtendOrigin {
 	Strong,
 }
 
-impl ForceActivateOrigin {
+impl ForceEnterOrigin {
 	/// The duration of how long the safe-mode will be activated.
 	pub fn duration(&self) -> u32 {
 		match self {
@@ -320,25 +320,25 @@ impl ForceExtendOrigin {
 }
 
 impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>> EnsureOrigin<O>
-	for ForceActivateOrigin
+	for ForceEnterOrigin
 {
 	type Success = u32;
 
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
-			RawOrigin::Signed(acc) if acc == ForceActivateOrigin::Weak.acc() =>
-				Ok(ForceActivateOrigin::Weak.duration()),
-			RawOrigin::Signed(acc) if acc == ForceActivateOrigin::Medium.acc() =>
-				Ok(ForceActivateOrigin::Medium.duration()),
-			RawOrigin::Signed(acc) if acc == ForceActivateOrigin::Strong.acc() =>
-				Ok(ForceActivateOrigin::Strong.duration()),
+			RawOrigin::Signed(acc) if acc == ForceEnterOrigin::Weak.acc() =>
+				Ok(ForceEnterOrigin::Weak.duration()),
+			RawOrigin::Signed(acc) if acc == ForceEnterOrigin::Medium.acc() =>
+				Ok(ForceEnterOrigin::Medium.duration()),
+			RawOrigin::Signed(acc) if acc == ForceEnterOrigin::Strong.acc() =>
+				Ok(ForceEnterOrigin::Strong.duration()),
 			r => Err(O::from(r)),
 		})
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<O, ()> {
-		Ok(O::from(RawOrigin::Signed(ForceActivateOrigin::Strong.acc())))
+		Ok(O::from(RawOrigin::Signed(ForceEnterOrigin::Strong.acc())))
 	}
 }
 
@@ -361,12 +361,12 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>> Ensu
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<O, ()> {
-		Ok(O::from(RawOrigin::Signed(ForceActivateOrigin::Strong.acc())))
+		Ok(O::from(RawOrigin::Signed(ForceEnterOrigin::Strong.acc())))
 	}
 }
 
 parameter_types! {
-	pub const SignedActivationDuration: u32 = 10;
+	pub const SignedEnterDuration: u32 = 10;
 	pub const ExtendDuration: u32 = 20;
 	pub const ActivateReservationAmount: Balance = 10 * DOLLARS;
 	pub const ExtendReservationAmount: Balance = 15 * DOLLARS;
@@ -376,21 +376,21 @@ parameter_types! {
 impl pallet_safe_mode::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
-	type WhitelistCalls = WhitelistCalls;
-	type ActivationDuration = ConstU32<{ 2 * DAYS }>;
+	type WhitelistedCalls = WhitelistedCalls;
+	type EnterDuration = ConstU32<{ 2 * DAYS }>;
 	type ActivateReservationAmount = ActivateReservationAmount;
 	type ExtendDuration = ConstU32<{ 1 * DAYS }>;
 	type ExtendReservationAmount = ExtendReservationAmount;
-	type ForceActivateOrigin = ForceActivateOrigin;
+	type ForceEnterOrigin = ForceEnterOrigin;
 	type ForceExtendOrigin = ForceExtendOrigin;
-	type ForceDeactivateOrigin = EnsureRoot<Self::AccountId>;
-	type ForceReservationOrigin = EnsureRoot<Self::AccountId>;
+	type ForceExitOrigin = EnsureRoot<Self::AccountId>;
+	type ReservationSlashOrigin = EnsureRoot<Self::AccountId>;
 	type ReleaseDelay = ReleaseDelay;
 	type WeightInfo = pallet_safe_mode::weights::SubstrateWeight<Runtime>;
 }
 
 impl frame_system::Config for Runtime {
-	type BaseCallFilter = InsideBoth<SafeMode, TxPause>; // TODO consider Exclude or NotInside for WhitelistCalls -> see TheseExcept )
+	type BaseCallFilter = InsideBoth<SafeMode, TxPause>; // TODO consider Exclude or NotInside for WhitelistedCalls -> see TheseExcept )
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
 	type DbWeight = RocksDbWeight;

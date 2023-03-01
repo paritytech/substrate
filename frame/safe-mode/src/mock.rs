@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -137,8 +137,8 @@ impl pallet_proxy::Config for Test {
 }
 
 /// Filter to allow all everything except balance calls
-pub struct WhitelistCalls;
-impl Contains<RuntimeCall> for WhitelistCalls {
+pub struct WhitelistedCalls;
+impl Contains<RuntimeCall> for WhitelistedCalls {
 	fn contains(call: &RuntimeCall) -> bool {
 		match call {
 			RuntimeCall::Balances(_) => false,
@@ -148,7 +148,7 @@ impl Contains<RuntimeCall> for WhitelistCalls {
 }
 
 /// An origin that can enable the safe-mode by force.
-pub enum ForceActivateOrigin {
+pub enum ForceEnterOrigin {
 	Weak,
 	Medium,
 	Strong,
@@ -161,7 +161,7 @@ pub enum ForceExtendOrigin {
 	Strong,
 }
 
-impl ForceActivateOrigin {
+impl ForceEnterOrigin {
 	/// The duration of how long the safe-mode will be activated.
 	pub fn duration(&self) -> u64 {
 		match self {
@@ -212,25 +212,25 @@ impl ForceExtendOrigin {
 }
 
 impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>>> EnsureOrigin<O>
-	for ForceActivateOrigin
+	for ForceEnterOrigin
 {
 	type Success = u64;
 
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
-			RawOrigin::Signed(acc) if acc == ForceActivateOrigin::Weak.acc() =>
-				Ok(ForceActivateOrigin::Weak.duration()),
-			RawOrigin::Signed(acc) if acc == ForceActivateOrigin::Medium.acc() =>
-				Ok(ForceActivateOrigin::Medium.duration()),
-			RawOrigin::Signed(acc) if acc == ForceActivateOrigin::Strong.acc() =>
-				Ok(ForceActivateOrigin::Strong.duration()),
+			RawOrigin::Signed(acc) if acc == ForceEnterOrigin::Weak.acc() =>
+				Ok(ForceEnterOrigin::Weak.duration()),
+			RawOrigin::Signed(acc) if acc == ForceEnterOrigin::Medium.acc() =>
+				Ok(ForceEnterOrigin::Medium.duration()),
+			RawOrigin::Signed(acc) if acc == ForceEnterOrigin::Strong.acc() =>
+				Ok(ForceEnterOrigin::Strong.duration()),
 			r => Err(O::from(r)),
 		})
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<O, ()> {
-		Ok(O::from(RawOrigin::Signed(ForceActivateOrigin::Strong.acc())))
+		Ok(O::from(RawOrigin::Signed(ForceEnterOrigin::Strong.acc())))
 	}
 }
 
@@ -258,24 +258,24 @@ impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>>> EnsureOrigin<O>
 }
 
 parameter_types! {
-	pub const ActivationDuration: u64 = 3;
+	pub const EnterDuration: u64 = 3;
 	pub const ExtendDuration: u64 = 30;
 	pub const ActivateReservationAmount: u64 = 100;
 	pub const ExtendReservationAmount: u64 = 100;
-	pub const ForceDeactivateOrigin: u64 = 3;
-	pub const ForceReservationOrigin: u64 = 4;
+	pub const ForceExitOrigin: u64 = 3;
+	pub const ReservationSlashOrigin: u64 = 4;
 	pub const ReleaseDelay: u64 = 2;
 }
 
 // Required impl to use some <Configured Origin>::get() in tests
-impl SortedMembers<u64> for ForceDeactivateOrigin {
+impl SortedMembers<u64> for ForceExitOrigin {
 	fn sorted_members() -> Vec<u64> {
 		vec![Self::get()]
 	}
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add(_m: &u64) {}
 }
-impl SortedMembers<u64> for ForceReservationOrigin {
+impl SortedMembers<u64> for ReservationSlashOrigin {
 	fn sorted_members() -> Vec<u64> {
 		vec![Self::get()]
 	}
@@ -286,15 +286,15 @@ impl SortedMembers<u64> for ForceReservationOrigin {
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
-	type WhitelistCalls = WhitelistCalls;
-	type ActivationDuration = ActivationDuration;
+	type WhitelistedCalls = WhitelistedCalls;
+	type EnterDuration = EnterDuration;
 	type ActivateReservationAmount = ActivateReservationAmount;
 	type ExtendDuration = ExtendDuration;
 	type ExtendReservationAmount = ExtendReservationAmount;
-	type ForceActivateOrigin = ForceActivateOrigin;
+	type ForceEnterOrigin = ForceEnterOrigin;
 	type ForceExtendOrigin = ForceExtendOrigin;
-	type ForceDeactivateOrigin = EnsureSignedBy<ForceDeactivateOrigin, Self::AccountId>;
-	type ForceReservationOrigin = EnsureSignedBy<ForceReservationOrigin, Self::AccountId>;
+	type ForceExitOrigin = EnsureSignedBy<ForceExitOrigin, Self::AccountId>;
+	type ReservationSlashOrigin = EnsureSignedBy<ReservationSlashOrigin, Self::AccountId>;
 	type ReleaseDelay = ReleaseDelay;
 	type WeightInfo = ();
 }
@@ -327,7 +327,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	.unwrap();
 
 	GenesisBuild::<Test>::assimilate_storage(
-		&pallet_safe_mode::GenesisConfig { active: None, _phantom: Default::default() },
+		&pallet_safe_mode::GenesisConfig { entered_until: None, _phantom: Default::default() },
 		&mut t,
 	)
 	.unwrap();

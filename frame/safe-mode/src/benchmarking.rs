@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,169 +19,238 @@
 
 use super::{Pallet as SafeMode, *};
 
-use frame_benchmarking::{benchmarks, whitelisted_caller, BenchmarkError};
+use frame_benchmarking::v2::*;
 use frame_support::traits::{Currency, UnfilteredDispatchable};
 use frame_system::{Pallet as System, RawOrigin};
-use sp_runtime::traits::{Bounded, One};
+use sp_runtime::traits::{Bounded, One, Zero};
 
-benchmarks! {
-	activate {
+#[benchmarks]
+mod benchmarks {
+	use super::*;
+
+	/// `on_initialize` exiting since the until block is in the past.
+	#[benchmark]
+	fn on_initialize_exit() {
+		EnteredUntil::<T>::put(&T::BlockNumber::zero());
+		assert!(SafeMode::<T>::is_entered());
+
+		#[block]
+		{
+			SafeMode::<T>::on_initialize(1u32.into());
+		}
+	}
+
+	/// `on_initialize` doing nothing.
+	#[benchmark]
+	fn on_initialize_noop() {
+		#[block]
+		{
+			SafeMode::<T>::on_initialize(1u32.into());
+		}
+	}
+
+	#[benchmark]
+	fn enter() {
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = RawOrigin::Signed(caller.clone());
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-	}: _(origin)
-	verify {
+
+		#[extrinsic_call]
+		_(origin);
+
 		assert_eq!(
 			SafeMode::<T>::active_until().unwrap(),
-			System::<T>::block_number() + T::ActivationDuration::get()
+			System::<T>::block_number() + T::EnterDuration::get()
 		);
 	}
 
-	force_activate {
-		let force_origin = T::ForceActivateOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
-		let duration = T::ForceActivateOrigin::ensure_origin(force_origin.clone()).unwrap();
-		let call = Call::<T>::force_activate {};
-	}: { call.dispatch_bypass_filter(force_origin)? }
-	verify {
-		assert_eq!(
-			SafeMode::<T>::active_until().unwrap(),
-			System::<T>::block_number() +
-			duration
-		);
+	#[benchmark]
+	fn force_enter() {
+		let force_origin =
+			T::ForceEnterOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+		let duration = T::ForceEnterOrigin::ensure_origin(force_origin.clone()).unwrap();
+		let call = Call::<T>::force_enter {};
+
+		#[block]
+		{
+			call.dispatch_bypass_filter(force_origin)?;
+		}
+
+		assert_eq!(SafeMode::<T>::active_until().unwrap(), System::<T>::block_number() + duration);
 	}
 
-	extend {
+	#[benchmark]
+	fn extend() {
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = RawOrigin::Signed(caller.clone());
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 		System::<T>::set_block_number(1u32.into());
-		assert!(SafeMode::<T>::activate(origin.clone().into()).is_ok());
-	}: _(origin)
-	verify {
+		assert!(SafeMode::<T>::enter(origin.clone().into()).is_ok());
+
+		#[extrinsic_call]
+		_(origin);
+
 		assert_eq!(
 			SafeMode::<T>::active_until().unwrap(),
-			System::<T>::block_number() + T::ActivationDuration::get() + T::ExtendDuration::get()
+			System::<T>::block_number() + T::EnterDuration::get() + T::ExtendDuration::get()
 		);
 	}
 
-	force_extend {
+	#[benchmark]
+	fn force_extend() -> Result<(), BenchmarkError> {
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = RawOrigin::Signed(caller.clone());
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 		System::<T>::set_block_number(1u32.into());
-		assert!(SafeMode::<T>::activate(origin.clone().into()).is_ok());
+		assert!(SafeMode::<T>::enter(origin.clone().into()).is_ok());
 
-		let force_origin = T::ForceExtendOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+		let force_origin = T::ForceExtendOrigin::try_successful_origin()
+			.map_err(|_| BenchmarkError::Weightless)?;
 		let extension = T::ForceExtendOrigin::ensure_origin(force_origin.clone()).unwrap();
 		let call = Call::<T>::force_extend {};
-	}: { call.dispatch_bypass_filter(force_origin)? }
-	verify {
+
+		#[block]
+		{
+			call.dispatch_bypass_filter(force_origin)?;
+		}
+
 		assert_eq!(
 			SafeMode::<T>::active_until().unwrap(),
-			System::<T>::block_number() +  T::ActivationDuration::get() + extension
+			System::<T>::block_number() + T::EnterDuration::get() + extension
 		);
 	}
 
-	force_deactivate {
+	#[benchmark]
+	fn force_exit() {
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = RawOrigin::Signed(caller.clone());
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
-		assert!(SafeMode::<T>::activate(origin.clone().into()).is_ok());
+		assert!(SafeMode::<T>::enter(origin.clone().into()).is_ok());
 
-		let force_origin = T::ForceDeactivateOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
-		let call = Call::<T>::force_deactivate {};
-	}: { call.dispatch_bypass_filter(force_origin)? }
-	verify {
-		assert_eq!(
-			SafeMode::<T>::active_until(),
-			None
-		);
+		let force_origin =
+			T::ForceExitOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+		let call = Call::<T>::force_exit {};
+
+		#[block]
+		{
+			call.dispatch_bypass_filter(force_origin)?;
+		}
+
+		assert_eq!(SafeMode::<T>::active_until(), None);
 	}
 
-	release_reservation {
+	#[benchmark]
+	fn release_reservation() -> Result<(), BenchmarkError> {
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = RawOrigin::Signed(caller.clone());
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
-		let activated_at_block: T::BlockNumber = System::<T>::block_number();
-		assert!(SafeMode::<T>::activate(origin.clone().into()).is_ok());
-		let current_reservation = Reservations::<T>::get(&caller, activated_at_block).unwrap_or_default();
+		let enterd_at_block: T::BlockNumber = System::<T>::block_number();
+		assert!(SafeMode::<T>::enter(origin.clone().into()).is_ok());
+		let current_reservation =
+			Reservations::<T>::get(&caller, enterd_at_block).unwrap_or_default();
 		assert_eq!(
 			T::Currency::free_balance(&caller),
 			BalanceOf::<T>::max_value() - T::ActivateReservationAmount::get().unwrap()
 		);
 
-		let force_origin = T::ForceDeactivateOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
-		assert!(SafeMode::<T>::force_deactivate(force_origin.clone()).is_ok());
+		let force_origin =
+			T::ForceExitOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+		assert!(SafeMode::<T>::force_exit(force_origin.clone()).is_ok());
 
-		System::<T>::set_block_number(System::<T>::block_number() + T::ReleaseDelay::get().unwrap() + One::one());
+		System::<T>::set_block_number(
+			System::<T>::block_number() + T::ReleaseDelay::get().unwrap() + One::one(),
+		);
 		System::<T>::on_initialize(System::<T>::block_number());
 		SafeMode::<T>::on_initialize(System::<T>::block_number());
 
-		let call = Call::<T>::release_reservation { account: caller.clone(), block: activated_at_block.clone()};
-	}: { call.dispatch_bypass_filter(origin.into())? }
-	verify {
-		assert_eq!(
-			T::Currency::free_balance(&caller),
-			BalanceOf::<T>::max_value()
-		);
+		let call = Call::<T>::release_reservation {
+			account: caller.clone(),
+			block: enterd_at_block.clone(),
+		};
+
+		#[block]
+		{
+			call.dispatch_bypass_filter(origin.into())?;
+		}
+
+		assert_eq!(T::Currency::free_balance(&caller), BalanceOf::<T>::max_value());
 	}
 
-	force_release_reservation {
+	#[benchmark]
+	fn force_release_reservation() -> Result<(), BenchmarkError> {
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = RawOrigin::Signed(caller.clone());
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
-		let activated_at_block: T::BlockNumber = System::<T>::block_number();
-		assert!(SafeMode::<T>::activate(origin.clone().into()).is_ok());
-		let current_reservation = Reservations::<T>::get(&caller, activated_at_block).unwrap_or_default();
+		let enterd_at_block: T::BlockNumber = System::<T>::block_number();
+		assert!(SafeMode::<T>::enter(origin.clone().into()).is_ok());
+		let current_reservation =
+			Reservations::<T>::get(&caller, enterd_at_block).unwrap_or_default();
 		assert_eq!(
 			T::Currency::free_balance(&caller),
 			BalanceOf::<T>::max_value() - T::ActivateReservationAmount::get().unwrap()
 		);
 
 		// TODO
-		let force_origin = T::ForceDeactivateOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
-		assert!(SafeMode::<T>::force_deactivate(force_origin.clone()).is_ok());
+		let force_origin =
+			T::ForceExitOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+		assert!(SafeMode::<T>::force_exit(force_origin.clone()).is_ok());
 
 		System::<T>::set_block_number(System::<T>::block_number() + One::one());
 		System::<T>::on_initialize(System::<T>::block_number());
 		SafeMode::<T>::on_initialize(System::<T>::block_number());
 
-		let release_origin = T::ForceReservationOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
-		let call = Call::<T>::force_release_reservation { account: caller.clone(), block: activated_at_block.clone()};
-	}: { call.dispatch_bypass_filter(release_origin)? }
-	verify {
-		assert_eq!(
-			T::Currency::free_balance(&caller),
-			BalanceOf::<T>::max_value()
-		);
+		let release_origin = T::ReservationSlashOrigin::try_successful_origin()
+			.map_err(|_| BenchmarkError::Weightless)?;
+		let call = Call::<T>::force_release_reservation {
+			account: caller.clone(),
+			block: enterd_at_block.clone(),
+		};
+
+		#[block]
+		{
+			call.dispatch_bypass_filter(release_origin)?;
+		}
+
+		assert_eq!(T::Currency::free_balance(&caller), BalanceOf::<T>::max_value());
 	}
 
-	slash_reservation {
+	#[benchmark]
+	fn force_slash_reservation() -> Result<(), BenchmarkError> {
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = RawOrigin::Signed(caller.clone());
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
-		let activated_at_block: T::BlockNumber = System::<T>::block_number();
-		assert!(SafeMode::<T>::activate(origin.clone().into()).is_ok());
-		let current_reservation = Reservations::<T>::get(&caller, activated_at_block).unwrap_or_default();
+		let enterd_at_block: T::BlockNumber = System::<T>::block_number();
+		assert!(SafeMode::<T>::enter(origin.clone().into()).is_ok());
+		let current_reservation =
+			Reservations::<T>::get(&caller, enterd_at_block).unwrap_or_default();
 		assert_eq!(
 			T::Currency::free_balance(&caller),
 			BalanceOf::<T>::max_value() - T::ActivateReservationAmount::get().unwrap()
 		);
 
 		// TODO
-		let force_origin = T::ForceDeactivateOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
-		assert!(SafeMode::<T>::force_deactivate(force_origin.clone()).is_ok());
+		let force_origin =
+			T::ForceExitOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+		assert!(SafeMode::<T>::force_exit(force_origin.clone()).is_ok());
 
-		let release_origin = T::ForceReservationOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
-		let call = Call::<T>::slash_reservation { account: caller.clone(), block: activated_at_block.clone()};
-	}: { call.dispatch_bypass_filter(release_origin)? }
-	verify {
+		let release_origin = T::ReservationSlashOrigin::try_successful_origin()
+			.map_err(|_| BenchmarkError::Weightless)?;
+		let call = Call::<T>::force_slash_reservation {
+			account: caller.clone(),
+			block: enterd_at_block.clone(),
+		};
+
+		#[block]
+		{
+			call.dispatch_bypass_filter(release_origin)?;
+		}
+
 		assert_eq!(
 			T::Currency::free_balance(&caller),
 			BalanceOf::<T>::max_value() - T::ActivateReservationAmount::get().unwrap()

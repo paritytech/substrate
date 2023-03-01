@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,13 +21,36 @@ use super::*;
 use crate::mock::{RuntimeCall, *};
 
 use frame_support::{assert_err, assert_noop, assert_ok, dispatch::Dispatchable};
+use sp_runtime::TransactionOutcome;
+
+/// Do something hypothetically by rolling back any changes afterwards.
+///
+/// Returns the original result of the closure.
+macro_rules! hypothetically {
+	( $e:expr ) => {
+		frame_support::storage::transactional::with_transaction(
+			|| -> TransactionOutcome<Result<_, sp_runtime::DispatchError>> {
+				sp_runtime::TransactionOutcome::Rollback(Ok($e))
+			},
+		)
+		.expect("Always returning Ok; qed")
+	};
+}
+
+/// Assert something to be [*hypothetically*] `Ok`.
+macro_rules! hypothetically_ok {
+	($e:expr $(, $args:expr)* $(,)?) => {
+		let result = hypothetically!($e);
+		assert_ok!(result $(, $args)*);
+	};
+}
 
 // GENERAL FAIL/NEGATIVE TESTS ---------------------
 
 #[test]
 fn fails_to_filter_calls_to_safe_mode_pallet() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(SafeMode::activate(RuntimeOrigin::signed(0)));
+		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
 		let activated_at_block = System::block_number();
 
 		assert_err!(
@@ -43,26 +66,22 @@ fn fails_to_filter_calls_to_safe_mode_pallet() {
 			call_transfer().dispatch(RuntimeOrigin::signed(0)),
 			frame_system::Error::<Test>::CallFiltered
 		);
-		assert_ok!(SafeMode::force_deactivate(RuntimeOrigin::signed(
-			mock::ForceDeactivateOrigin::get()
-		)));
+		assert_ok!(SafeMode::force_exit(RuntimeOrigin::signed(mock::ForceExitOrigin::get())));
 		assert_ok!(SafeMode::force_release_reservation(
-			RuntimeOrigin::signed(mock::ForceReservationOrigin::get()),
+			RuntimeOrigin::signed(mock::ReservationSlashOrigin::get()),
 			0,
 			activated_at_block
 		));
 
 		next_block();
-		assert_ok!(SafeMode::activate(RuntimeOrigin::signed(0)));
+		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
 		assert_err!(
 			call_transfer().dispatch(RuntimeOrigin::signed(0)),
 			frame_system::Error::<Test>::CallFiltered
 		);
-		assert_ok!(SafeMode::force_deactivate(RuntimeOrigin::signed(
-			mock::ForceDeactivateOrigin::get()
-		)));
-		assert_ok!(SafeMode::slash_reservation(
-			RuntimeOrigin::signed(mock::ForceReservationOrigin::get()),
+		assert_ok!(SafeMode::force_exit(RuntimeOrigin::signed(mock::ForceExitOrigin::get())));
+		assert_ok!(SafeMode::force_slash_reservation(
+			RuntimeOrigin::signed(mock::ReservationSlashOrigin::get()),
 			0,
 			activated_at_block + 2
 		));
@@ -72,8 +91,8 @@ fn fails_to_filter_calls_to_safe_mode_pallet() {
 #[test]
 fn fails_to_activate_if_activated() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(SafeMode::activate(RuntimeOrigin::signed(0)));
-		assert_noop!(SafeMode::activate(RuntimeOrigin::signed(2)), Error::<Test>::IsActive);
+		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
+		assert_noop!(SafeMode::enter(RuntimeOrigin::signed(2)), Error::<Test>::Entered);
 	});
 }
 
@@ -81,7 +100,7 @@ fn fails_to_activate_if_activated() {
 fn fails_to_extend_if_not_activated() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(SafeMode::active_until(), None);
-		assert_noop!(SafeMode::extend(RuntimeOrigin::signed(2)), Error::<Test>::IsInactive);
+		assert_noop!(SafeMode::extend(RuntimeOrigin::signed(2)), Error::<Test>::Exited);
 	});
 }
 
@@ -89,12 +108,12 @@ fn fails_to_extend_if_not_activated() {
 fn fails_to_force_release_reservations_with_wrong_block() {
 	new_test_ext().execute_with(|| {
 		let activated_at_block = System::block_number();
-		assert_ok!(SafeMode::activate(RuntimeOrigin::signed(0)));
-		run_to(mock::ActivationDuration::get() + activated_at_block + 1);
+		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
+		run_to(mock::EnterDuration::get() + activated_at_block + 1);
 
 		assert_err!(
 			SafeMode::force_release_reservation(
-				RuntimeOrigin::signed(mock::ForceReservationOrigin::get()),
+				RuntimeOrigin::signed(mock::ReservationSlashOrigin::get()),
 				0,
 				activated_at_block + 1
 			),
@@ -102,8 +121,8 @@ fn fails_to_force_release_reservations_with_wrong_block() {
 		);
 
 		assert_err!(
-			SafeMode::slash_reservation(
-				RuntimeOrigin::signed(mock::ForceReservationOrigin::get()),
+			SafeMode::force_slash_reservation(
+				RuntimeOrigin::signed(mock::ReservationSlashOrigin::get()),
 				0,
 				activated_at_block + 1
 			),
@@ -116,10 +135,8 @@ fn fails_to_force_release_reservations_with_wrong_block() {
 fn fails_to_release_reservations_too_early() {
 	new_test_ext().execute_with(|| {
 		let activated_at_block = System::block_number();
-		assert_ok!(SafeMode::activate(RuntimeOrigin::signed(0)));
-		assert_ok!(SafeMode::force_deactivate(RuntimeOrigin::signed(
-			mock::ForceDeactivateOrigin::get()
-		)));
+		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
+		assert_ok!(SafeMode::force_exit(RuntimeOrigin::signed(mock::ForceExitOrigin::get())));
 		assert_err!(
 			SafeMode::release_reservation(RuntimeOrigin::signed(2), 0, activated_at_block),
 			Error::<Test>::CannotReleaseYet
@@ -135,8 +152,8 @@ fn fails_to_release_reservations_too_early() {
 fn can_automatically_deactivate_after_timeout() {
 	new_test_ext().execute_with(|| {
 		let activated_at_block = System::block_number();
-		assert_ok!(SafeMode::force_activate(ForceActivateOrigin::Weak.signed()));
-		run_to(ForceActivateOrigin::Weak.duration() + activated_at_block + 1);
+		assert_ok!(SafeMode::force_enter(ForceEnterOrigin::Weak.signed()));
+		run_to(ForceEnterOrigin::Weak.duration() + activated_at_block + 1);
 
 		assert_eq!(SafeMode::active_until(), None);
 	});
@@ -146,7 +163,7 @@ fn can_automatically_deactivate_after_timeout() {
 fn can_filter_balance_calls_when_activated() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(call_transfer().dispatch(RuntimeOrigin::signed(0)));
-		assert_ok!(SafeMode::activate(RuntimeOrigin::signed(0)));
+		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
 		assert_err!(
 			call_transfer().dispatch(RuntimeOrigin::signed(0)),
 			frame_system::Error::<Test>::CallFiltered
@@ -163,7 +180,7 @@ fn can_filter_balance_in_batch_when_activated() {
 
 		assert_ok!(batch_call.clone().dispatch(RuntimeOrigin::signed(0)));
 
-		assert_ok!(SafeMode::activate(RuntimeOrigin::signed(0)));
+		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
 
 		assert_ok!(batch_call.clone().dispatch(RuntimeOrigin::signed(0)));
 		System::assert_last_event(
@@ -184,7 +201,7 @@ fn can_filter_balance_in_proxy_when_activated() {
 		assert_ok!(Proxy::proxy(RuntimeOrigin::signed(2), 1, None, Box::new(call_transfer())));
 		System::assert_last_event(pallet_proxy::Event::ProxyExecuted { result: Ok(()) }.into());
 
-		assert_ok!(SafeMode::force_activate(ForceActivateOrigin::Weak.signed()));
+		assert_ok!(SafeMode::force_enter(ForceEnterOrigin::Weak.signed()));
 
 		assert_ok!(Proxy::proxy(RuntimeOrigin::signed(2), 1, None, Box::new(call_transfer())));
 		System::assert_last_event(
@@ -199,13 +216,13 @@ fn can_filter_balance_in_proxy_when_activated() {
 #[test]
 fn can_activate() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(SafeMode::activate(RuntimeOrigin::signed(0)));
+		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
 		assert_eq!(
 			SafeMode::active_until().unwrap(),
-			System::block_number() + mock::ActivationDuration::get()
+			System::block_number() + mock::EnterDuration::get()
 		);
 		assert_eq!(Balances::reserved_balance(0), mock::ActivateReservationAmount::get());
-		assert_noop!(SafeMode::activate(RuntimeOrigin::signed(0)), Error::<Test>::IsActive);
+		assert_noop!(SafeMode::enter(RuntimeOrigin::signed(0)), Error::<Test>::Entered);
 		// Assert the stake.
 		assert_eq!(Reservations::<Test>::get(0, 1), Some(mock::ActivateReservationAmount::get()));
 	});
@@ -214,11 +231,11 @@ fn can_activate() {
 #[test]
 fn can_extend() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(SafeMode::activate(RuntimeOrigin::signed(0)));
+		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
 		assert_ok!(SafeMode::extend(RuntimeOrigin::signed(0)));
 		assert_eq!(
 			SafeMode::active_until().unwrap(),
-			System::block_number() + mock::ActivationDuration::get() + mock::ExtendDuration::get()
+			System::block_number() + mock::EnterDuration::get() + mock::ExtendDuration::get()
 		);
 		assert_eq!(
 			Balances::reserved_balance(0),
@@ -228,23 +245,36 @@ fn can_extend() {
 }
 
 #[test]
+fn can_extend_twice_in_same_block() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
+		assert_ok!(SafeMode::extend(RuntimeOrigin::signed(0)));
+		assert_ok!(SafeMode::extend(RuntimeOrigin::signed(0)));
+		assert_eq!(
+			SafeMode::active_until().unwrap(),
+			System::block_number() + mock::EnterDuration::get() + mock::ExtendDuration::get() * 2
+		);
+		assert_eq!(
+			Balances::reserved_balance(0),
+			mock::ActivateReservationAmount::get() + mock::ExtendReservationAmount::get() * 2
+		);
+	});
+}
+
+#[test]
 fn can_release_independent_reservations_by_block() {
 	new_test_ext().execute_with(|| {
 		let activated_at_block_0 = System::block_number();
-		assert_ok!(SafeMode::activate(RuntimeOrigin::signed(0)));
+		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
 
-		run_to(
-			mock::ActivationDuration::get() + mock::ReleaseDelay::get() + activated_at_block_0 + 1,
-		);
+		run_to(mock::EnterDuration::get() + mock::ReleaseDelay::get() + activated_at_block_0 + 1);
 
 		let activated_at_block_1 = System::block_number();
-		assert_ok!(SafeMode::activate(RuntimeOrigin::signed(0)));
+		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
 
 		assert_eq!(Balances::free_balance(&0), 1234 - (2 * mock::ActivateReservationAmount::get())); // accounts set in mock genesis
 
-		assert_ok!(SafeMode::force_deactivate(RuntimeOrigin::signed(
-			mock::ForceDeactivateOrigin::get()
-		)));
+		assert_ok!(SafeMode::force_exit(RuntimeOrigin::signed(mock::ForceExitOrigin::get())));
 
 		assert_ok!(SafeMode::release_reservation(
 			RuntimeOrigin::signed(2),
@@ -257,9 +287,7 @@ fn can_release_independent_reservations_by_block() {
 		);
 		assert_eq!(Balances::free_balance(&0), 1234 - mock::ActivateReservationAmount::get()); // accounts set in mock genesis
 
-		run_to(
-			mock::ActivationDuration::get() + mock::ReleaseDelay::get() + activated_at_block_1 + 1,
-		);
+		run_to(mock::EnterDuration::get() + mock::ReleaseDelay::get() + activated_at_block_1 + 1);
 
 		assert_ok!(SafeMode::release_reservation(
 			RuntimeOrigin::signed(2),
@@ -276,11 +304,11 @@ fn fails_signed_origin_when_explicit_origin_required() {
 		assert_eq!(SafeMode::active_until(), None);
 		let activated_at_block = System::block_number();
 
-		assert_err!(SafeMode::force_activate(RuntimeOrigin::signed(0)), DispatchError::BadOrigin);
+		assert_err!(SafeMode::force_enter(RuntimeOrigin::signed(0)), DispatchError::BadOrigin);
 		assert_err!(SafeMode::force_extend(RuntimeOrigin::signed(0)), DispatchError::BadOrigin);
-		assert_err!(SafeMode::force_deactivate(RuntimeOrigin::signed(0)), DispatchError::BadOrigin);
+		assert_err!(SafeMode::force_exit(RuntimeOrigin::signed(0)), DispatchError::BadOrigin);
 		assert_err!(
-			SafeMode::slash_reservation(RuntimeOrigin::signed(0), 0, activated_at_block),
+			SafeMode::force_slash_reservation(RuntimeOrigin::signed(0), 0, activated_at_block),
 			DispatchError::BadOrigin
 		);
 		assert_err!(
@@ -296,12 +324,12 @@ fn fails_signed_origin_when_explicit_origin_required() {
 fn fails_force_deactivate_if_not_activated() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			SafeMode::force_deactivate(RuntimeOrigin::signed(mock::ForceDeactivateOrigin::get())),
-			Error::<Test>::IsInactive
+			SafeMode::force_exit(RuntimeOrigin::signed(mock::ForceExitOrigin::get())),
+			Error::<Test>::Exited
 		);
 		assert_noop!(
-			SafeMode::force_deactivate(RuntimeOrigin::signed(mock::ForceDeactivateOrigin::get())),
-			Error::<Test>::IsInactive
+			SafeMode::force_exit(RuntimeOrigin::signed(mock::ForceExitOrigin::get())),
+			Error::<Test>::Exited
 		);
 	});
 }
@@ -309,16 +337,16 @@ fn fails_force_deactivate_if_not_activated() {
 #[test]
 fn can_force_activate_with_config_origin() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(SafeMode::force_activate(ForceActivateOrigin::Weak.signed()));
+		assert_ok!(SafeMode::force_enter(ForceEnterOrigin::Weak.signed()));
 		assert_eq!(
 			SafeMode::active_until().unwrap(),
-			System::block_number() + ForceActivateOrigin::Weak.duration()
+			System::block_number() + ForceEnterOrigin::Weak.duration()
 		);
 		assert_noop!(
-			SafeMode::force_activate(ForceActivateOrigin::Weak.signed()),
-			Error::<Test>::IsActive
+			SafeMode::force_enter(ForceEnterOrigin::Weak.signed()),
+			Error::<Test>::Entered
 		);
-		assert_eq!(Balances::reserved_balance(ForceActivateOrigin::Weak.acc()), 0);
+		assert_eq!(Balances::reserved_balance(ForceEnterOrigin::Weak.acc()), 0);
 	});
 }
 
@@ -327,14 +355,12 @@ fn can_force_deactivate_with_config_origin() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(SafeMode::active_until(), None);
 		assert_err!(
-			SafeMode::force_deactivate(RuntimeOrigin::signed(mock::ForceDeactivateOrigin::get())),
-			Error::<Test>::IsInactive
+			SafeMode::force_exit(RuntimeOrigin::signed(mock::ForceExitOrigin::get())),
+			Error::<Test>::Exited
 		);
-		assert_ok!(SafeMode::force_activate(ForceActivateOrigin::Weak.signed()));
-		assert_eq!(Balances::reserved_balance(ForceActivateOrigin::Weak.acc()), 0);
-		assert_ok!(SafeMode::force_deactivate(RuntimeOrigin::signed(
-			mock::ForceDeactivateOrigin::get()
-		)));
+		assert_ok!(SafeMode::force_enter(ForceEnterOrigin::Weak.signed()));
+		assert_eq!(Balances::reserved_balance(ForceEnterOrigin::Weak.acc()), 0);
+		assert_ok!(SafeMode::force_exit(RuntimeOrigin::signed(mock::ForceExitOrigin::get())));
 	});
 }
 
@@ -342,19 +368,19 @@ fn can_force_deactivate_with_config_origin() {
 fn can_force_extend_with_config_origin() {
 	new_test_ext().execute_with(|| {
 		// Activated by `Weak` and extended by `Medium`.
-		assert_ok!(SafeMode::force_activate(ForceActivateOrigin::Weak.signed()));
+		assert_ok!(SafeMode::force_enter(ForceEnterOrigin::Weak.signed()));
 		assert_eq!(
 			SafeMode::active_until().unwrap(),
-			System::block_number() + ForceActivateOrigin::Weak.duration()
+			System::block_number() + ForceEnterOrigin::Weak.duration()
 		);
 		assert_ok!(SafeMode::force_extend(ForceExtendOrigin::Medium.signed()));
 		assert_eq!(
 			SafeMode::active_until().unwrap(),
 			System::block_number() +
-				ForceActivateOrigin::Weak.duration() +
+				ForceEnterOrigin::Weak.duration() +
 				ForceExtendOrigin::Medium.duration()
 		);
-		assert_eq!(Balances::reserved_balance(ForceActivateOrigin::Weak.acc()), 0);
+		assert_eq!(Balances::reserved_balance(ForceEnterOrigin::Weak.acc()), 0);
 		assert_eq!(Balances::reserved_balance(mock::ExtendDuration::get()), 0);
 	});
 }
@@ -363,19 +389,16 @@ fn can_force_extend_with_config_origin() {
 fn can_force_release_reservation_with_config_origin() {
 	new_test_ext().execute_with(|| {
 		let activated_at_block = System::block_number();
-		assert_ok!(SafeMode::activate(RuntimeOrigin::signed(0)));
-		assert_err!(
-			SafeMode::force_release_reservation(
-				RuntimeOrigin::signed(mock::ForceReservationOrigin::get()),
-				0,
-				activated_at_block
-			),
-			Error::<Test>::IsActive
-		);
-		run_to(mock::ActivationDuration::get() + activated_at_block + 1);
+		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
+		hypothetically_ok!(SafeMode::force_release_reservation(
+			RuntimeOrigin::signed(mock::ReservationSlashOrigin::get()),
+			0,
+			activated_at_block
+		),);
+		run_to(mock::EnterDuration::get() + activated_at_block + 1);
 
 		assert_ok!(SafeMode::force_release_reservation(
-			RuntimeOrigin::signed(mock::ForceReservationOrigin::get()),
+			RuntimeOrigin::signed(mock::ReservationSlashOrigin::get()),
 			0,
 			activated_at_block
 		));
@@ -383,17 +406,17 @@ fn can_force_release_reservation_with_config_origin() {
 
 		Balances::make_free_balance_be(&0, 1234);
 		let activated_and_extended_at_block = System::block_number();
-		assert_ok!(SafeMode::activate(RuntimeOrigin::signed(0)));
+		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
 		assert_ok!(SafeMode::extend(RuntimeOrigin::signed(0)));
 		run_to(
-			mock::ActivationDuration::get() +
+			mock::EnterDuration::get() +
 				mock::ExtendDuration::get() +
 				activated_and_extended_at_block +
 				1,
 		);
 
 		assert_ok!(SafeMode::force_release_reservation(
-			RuntimeOrigin::signed(mock::ForceReservationOrigin::get()),
+			RuntimeOrigin::signed(mock::ReservationSlashOrigin::get()),
 			0,
 			activated_and_extended_at_block
 		));
@@ -402,22 +425,123 @@ fn can_force_release_reservation_with_config_origin() {
 }
 
 #[test]
+fn can_release_reservation_while_entered() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(System::block_number(), 1);
+		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
+		assert!(SafeMode::is_entered());
+
+		assert_eq!(Balances::free_balance(&0), 1234 - mock::ActivateReservationAmount::get());
+
+		// We could slash in the same block or any later.
+		for i in 0..mock::EnterDuration::get() + 10 {
+			run_to(i);
+			hypothetically_ok!(SafeMode::force_release_reservation(
+				RuntimeOrigin::signed(mock::ReservationSlashOrigin::get()),
+				0,
+				1
+			));
+		}
+		// Now once we slash once
+		assert_ok!(SafeMode::force_release_reservation(
+			RuntimeOrigin::signed(mock::ReservationSlashOrigin::get()),
+			0,
+			1
+		),);
+		assert_eq!(Balances::free_balance(&0), 1234);
+		// ... it wont work ever again.
+		assert_err!(
+			SafeMode::force_release_reservation(
+				RuntimeOrigin::signed(mock::ReservationSlashOrigin::get()),
+				0,
+				1
+			),
+			Error::<Test>::NoReservation
+		);
+	});
+}
+
+#[test]
+fn can_slash_reservation_while_entered() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(System::block_number(), 1);
+		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
+		assert!(SafeMode::is_entered());
+
+		// We could slash in the same block or any later.
+		for i in 0..mock::EnterDuration::get() + 10 {
+			run_to(i);
+			hypothetically_ok!(SafeMode::force_slash_reservation(
+				RuntimeOrigin::signed(mock::ReservationSlashOrigin::get()),
+				0,
+				1
+			));
+		}
+		// Now once we slash once
+		assert_ok!(SafeMode::force_slash_reservation(
+			RuntimeOrigin::signed(mock::ReservationSlashOrigin::get()),
+			0,
+			1
+		),);
+		// ... it wont work ever again.
+		assert_err!(
+			SafeMode::force_slash_reservation(
+				RuntimeOrigin::signed(mock::ReservationSlashOrigin::get()),
+				0,
+				1
+			),
+			Error::<Test>::NoReservation
+		);
+	});
+}
+
+#[test]
+fn can_slash_reservation_from_extend_block() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
+		assert_ok!(SafeMode::extend(RuntimeOrigin::signed(0)));
+		assert_eq!(
+			Balances::free_balance(&0),
+			1234 - mock::ActivateReservationAmount::get() - mock::ExtendReservationAmount::get()
+		);
+
+		// Now once we slash once since the enter and extend are treated as one reservation.
+		assert_ok!(SafeMode::force_slash_reservation(
+			RuntimeOrigin::signed(mock::ReservationSlashOrigin::get()),
+			0,
+			1
+		),);
+		assert_eq!(
+			Balances::free_balance(&0),
+			1234 - mock::ExtendReservationAmount::get() - mock::ActivateReservationAmount::get()
+		);
+
+		// But never again.
+		assert_err!(
+			SafeMode::force_slash_reservation(
+				RuntimeOrigin::signed(mock::ReservationSlashOrigin::get()),
+				0,
+				1
+			),
+			Error::<Test>::NoReservation
+		);
+	});
+}
+
+#[test]
 fn can_slash_reservation_with_config_origin() {
 	new_test_ext().execute_with(|| {
 		let activated_at_block = System::block_number();
-		assert_ok!(SafeMode::activate(RuntimeOrigin::signed(0)));
-		assert_err!(
-			SafeMode::slash_reservation(
-				RuntimeOrigin::signed(mock::ForceReservationOrigin::get()),
-				0,
-				activated_at_block
-			),
-			Error::<Test>::IsActive
-		);
-		run_to(mock::ActivationDuration::get() + activated_at_block + 1);
+		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
+		hypothetically_ok!(SafeMode::force_slash_reservation(
+			RuntimeOrigin::signed(mock::ReservationSlashOrigin::get()),
+			0,
+			activated_at_block
+		),);
+		run_to(mock::EnterDuration::get() + activated_at_block + 1);
 
-		assert_ok!(SafeMode::slash_reservation(
-			RuntimeOrigin::signed(mock::ForceReservationOrigin::get()),
+		assert_ok!(SafeMode::force_slash_reservation(
+			RuntimeOrigin::signed(mock::ReservationSlashOrigin::get()),
 			0,
 			activated_at_block
 		));
@@ -425,17 +549,17 @@ fn can_slash_reservation_with_config_origin() {
 
 		Balances::make_free_balance_be(&0, 1234);
 		let activated_and_extended_at_block = System::block_number();
-		assert_ok!(SafeMode::activate(RuntimeOrigin::signed(0)));
+		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
 		assert_ok!(SafeMode::extend(RuntimeOrigin::signed(0)));
 		run_to(
-			mock::ActivationDuration::get() +
+			mock::EnterDuration::get() +
 				mock::ExtendDuration::get() +
 				activated_and_extended_at_block +
 				1,
 		);
 
-		assert_ok!(SafeMode::slash_reservation(
-			RuntimeOrigin::signed(mock::ForceReservationOrigin::get()),
+		assert_ok!(SafeMode::force_slash_reservation(
+			RuntimeOrigin::signed(mock::ReservationSlashOrigin::get()),
 			0,
 			activated_and_extended_at_block
 		));
@@ -453,20 +577,24 @@ fn fails_when_explicit_origin_required() {
 		let activated_at_block = System::block_number();
 
 		assert_err!(
-			SafeMode::force_extend(ForceActivateOrigin::Weak.signed()),
+			SafeMode::force_extend(ForceEnterOrigin::Weak.signed()),
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::force_deactivate(ForceActivateOrigin::Weak.signed()),
+			SafeMode::force_exit(ForceEnterOrigin::Weak.signed()),
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::slash_reservation(ForceActivateOrigin::Weak.signed(), 0, activated_at_block),
+			SafeMode::force_slash_reservation(
+				ForceEnterOrigin::Weak.signed(),
+				0,
+				activated_at_block
+			),
 			DispatchError::BadOrigin
 		);
 		assert_err!(
 			SafeMode::force_release_reservation(
-				ForceActivateOrigin::Weak.signed(),
+				ForceEnterOrigin::Weak.signed(),
 				0,
 				activated_at_block
 			),
@@ -474,15 +602,19 @@ fn fails_when_explicit_origin_required() {
 		);
 
 		assert_err!(
-			SafeMode::force_activate(ForceExtendOrigin::Weak.signed()),
+			SafeMode::force_enter(ForceExtendOrigin::Weak.signed()),
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::force_deactivate(ForceExtendOrigin::Weak.signed()),
+			SafeMode::force_exit(ForceExtendOrigin::Weak.signed()),
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::slash_reservation(ForceExtendOrigin::Weak.signed(), 0, activated_at_block),
+			SafeMode::force_slash_reservation(
+				ForceExtendOrigin::Weak.signed(),
+				0,
+				activated_at_block
+			),
 			DispatchError::BadOrigin
 		);
 		assert_err!(
@@ -495,16 +627,16 @@ fn fails_when_explicit_origin_required() {
 		);
 
 		assert_err!(
-			SafeMode::force_activate(RuntimeOrigin::signed(mock::ForceDeactivateOrigin::get())),
+			SafeMode::force_enter(RuntimeOrigin::signed(mock::ForceExitOrigin::get())),
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::force_extend(RuntimeOrigin::signed(mock::ForceDeactivateOrigin::get())),
+			SafeMode::force_extend(RuntimeOrigin::signed(mock::ForceExitOrigin::get())),
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::slash_reservation(
-				RuntimeOrigin::signed(mock::ForceDeactivateOrigin::get()),
+			SafeMode::force_slash_reservation(
+				RuntimeOrigin::signed(mock::ForceExitOrigin::get()),
 				0,
 				activated_at_block
 			),
@@ -512,7 +644,7 @@ fn fails_when_explicit_origin_required() {
 		);
 		assert_err!(
 			SafeMode::force_release_reservation(
-				RuntimeOrigin::signed(mock::ForceDeactivateOrigin::get()),
+				RuntimeOrigin::signed(mock::ForceExitOrigin::get()),
 				0,
 				activated_at_block
 			),
@@ -520,15 +652,15 @@ fn fails_when_explicit_origin_required() {
 		);
 
 		assert_err!(
-			SafeMode::force_activate(RuntimeOrigin::signed(mock::ForceReservationOrigin::get())),
+			SafeMode::force_enter(RuntimeOrigin::signed(mock::ReservationSlashOrigin::get())),
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::force_extend(RuntimeOrigin::signed(mock::ForceReservationOrigin::get())),
+			SafeMode::force_extend(RuntimeOrigin::signed(mock::ReservationSlashOrigin::get())),
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::force_deactivate(RuntimeOrigin::signed(mock::ForceReservationOrigin::get())),
+			SafeMode::force_exit(RuntimeOrigin::signed(mock::ReservationSlashOrigin::get())),
 			DispatchError::BadOrigin
 		);
 	});
