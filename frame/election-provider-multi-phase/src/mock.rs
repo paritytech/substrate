@@ -470,7 +470,6 @@ impl ElectionDataProvider for StakingMock {
 		voters: Vec<VoterOf<Runtime>>,
 		targets: Vec<AccountId>,
 		_target_stake: Option<VoteWeight>,
-		/* TODO(gpestana): this is the absolute max nomination, make it more explicit */
 	) {
 		Targets::set(targets);
 		Voters::set(voters);
