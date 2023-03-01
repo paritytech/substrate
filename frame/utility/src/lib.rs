@@ -173,8 +173,9 @@ pub mod pallet {
 		/// - `calls`: The calls to be dispatched from the same origin. The number of call must not
 		///   exceed the constant: `batched_calls_limit` (available in constant metadata).
 		///
-		/// If origin is root then the calls are dispatched without checking origin filter. (This
-		/// includes bypassing `frame_system::Config::BaseCallFilter`).
+		/// If the source is root, then calls are sent without checking the origin and call filters.
+		/// (This involves bypassing `frame_system::Config::BaseCallFilter` and
+		/// `Config::CallFilter`).
 		///
 		/// ## Complexity
 		/// - O(C) where C is the number of calls to be batched.
@@ -306,8 +307,9 @@ pub mod pallet {
 		/// - `calls`: The calls to be dispatched from the same origin. The number of call must not
 		///   exceed the constant: `batched_calls_limit` (available in constant metadata).
 		///
-		/// If origin is root then the calls are dispatched without checking origin filter. (This
-		/// includes bypassing `frame_system::Config::BaseCallFilter`).
+		/// If the source is root, then calls are sent without checking the origin and call filters.
+		/// (This involves bypassing `frame_system::Config::BaseCallFilter` and
+		/// `Config::CallFilter`).
 		///
 		/// ## Complexity
 		/// - O(C) where C is the number of calls to be batched.
@@ -418,8 +420,9 @@ pub mod pallet {
 		/// - `calls`: The calls to be dispatched from the same origin. The number of call must not
 		///   exceed the constant: `batched_calls_limit` (available in constant metadata).
 		///
-		/// If origin is root then the calls are dispatch without checking origin filter. (This
-		/// includes bypassing `frame_system::Config::BaseCallFilter`).
+		/// If the source is root, then calls are sent without checking the origin and call filters.
+		/// (This involves bypassing `frame_system::Config::BaseCallFilter` and
+		/// `Config::CallFilter`).
 		///
 		/// ## Complexity
 		/// - O(C) where C is the number of calls to be batched.
