@@ -444,7 +444,11 @@ where
 					// The information from `.info()` is updated from the DB as the last
 					// step of the finalization and it should be up to date.
 					// If the info is outdated, there is nothing the RPC can do for now.
-					error!(target: LOG_TARGET, "Client does not contain different best block");
+					error!(
+						target: LOG_TARGET,
+						"[follow][id={:?}] Client does not contain different best block",
+						self.sub_id,
+					);
 					events.push(finalized_event);
 					Ok(events)
 				} else {
@@ -507,7 +511,12 @@ where
 			let events = match events {
 				Ok(events) => events,
 				Err(err) => {
-					debug!(target: LOG_TARGET, "Failed to handle stream notification {:?}", err);
+					debug!(
+						target: LOG_TARGET,
+						"[follow][id={:?}] Failed to handle stream notification {:?}",
+						self.sub_id,
+						err
+					);
 					break
 				},
 			};
@@ -518,8 +527,12 @@ where
 					Ok(true) => continue,
 					// Client disconnected.
 					Ok(false) => return,
-					Err(_) => {
+					Err(err) => {
 						// Failed to submit event.
+						debug!(
+							target: LOG_TARGET,
+							"[follow][id={:?}] Failed to send event {:?}", self.sub_id, err
+						);
 						break
 					},
 				}
