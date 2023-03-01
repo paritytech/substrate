@@ -28,7 +28,9 @@ use std::{
 	io::Read,
 	path::PathBuf,
 	process::{Command, Stdio},
+	time::Duration
 };
+use futures_timer::Delay;
 
 pub mod common;
 
@@ -59,5 +61,15 @@ async fn temp_base_path_works() {
 	let re = Regex::new(r"Database: .+ at (\S+)").unwrap();
 	let db_path = PathBuf::from(re.captures(data.as_str()).unwrap().get(1).unwrap().as_str());
 
-	assert!(!db_path.exists());
+	// Give the OS 15 seconds to actually delete the database path.
+	// Under high load this may can take a moment.
+	for _ in 0..5 {
+		Delay::new(Duration::from_secs(3)).await;
+
+		if !db_path.exists() {
+			return
+		}
+	}
+
+	panic!("Database path `{}` wasn't deleted?", db_path.display());
 }
