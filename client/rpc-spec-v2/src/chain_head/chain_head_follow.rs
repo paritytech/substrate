@@ -355,7 +355,7 @@ where
 		let Some(parent) = self.client.hash(first_number.saturating_sub(One::one()))? else {
 			return Err(SubscriptionManagementError::BlockHashAbsent)
 		};
-		// The parent of the finalized block hash was not reported by the `chianHead`.
+		// The parent of the finalized block hash was not reported by the `chainHead`.
 		// There may be a gap in the notifications and we cannot guarantee that
 		// every new block has a parent reported by an event.
 		if !self.sub_handle.contains_block(&parent) {
@@ -408,7 +408,7 @@ where
 		Ok(pruned)
 	}
 
-	/// Handle the finalization notification by generating the "Finalized" event.
+	/// Handle the finalization notification by generating the `Finalized` event.
 	///
 	/// If the block of the notification was not reported yet, this method also
 	/// generates the events similar to `handle_import_blocks`.
