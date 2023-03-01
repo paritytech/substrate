@@ -2307,8 +2307,8 @@ pub mod pallet {
 
 		/// Set a new metadata for the pool.
 		///
-		/// The dispatch origin of this call must be signed by the bouncer, or the root role
-		/// of the pool.
+		/// The dispatch origin of this call must be signed by the bouncer, or the root role of the
+		/// pool.
 		#[pallet::call_index(10)]
 		#[pallet::weight(T::WeightInfo::set_metadata(metadata.len() as u32))]
 		pub fn set_metadata(
