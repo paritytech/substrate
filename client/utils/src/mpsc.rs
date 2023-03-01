@@ -35,8 +35,8 @@ mod inner {
 #[cfg(feature = "metered")]
 mod inner {
 	// tracing implementation
-	use async_channel::{Receiver, Sender, TrySendError, TryRecvError};
 	use crate::metrics::UNBOUNDED_CHANNELS_COUNTER;
+	use async_channel::{Receiver, Sender, TryRecvError, TrySendError};
 	use futures::{
 		stream::{FusedStream, Stream},
 		task::{Context, Poll},
@@ -127,7 +127,7 @@ mod inner {
 					// that the warning is fired few times before the `warning_fired` is seen
 					// by all threads. This seems better than introducing a mutex guarding them.
 					error!(
-						"The number of unprocessed messages in channel `{}` reached {}.\n\
+						"The number of unprocessed messages in channel `{}` exceeded {}.\n\
 						 The channel was created at:\n{}\n
 						 Last message was sent from:\n{}",
 						self.name,

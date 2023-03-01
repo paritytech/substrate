@@ -131,47 +131,47 @@ impl PeersetHandle {
 	/// > **Note**: Keep in mind that the networking has to know an address for this node,
 	/// > otherwise it will not be able to connect to it.
 	pub fn add_reserved_peer(&self, set_id: SetId, peer_id: PeerId) {
-		let _ = self.tx.unbounded_send(Action::AddReservedPeer(set_id, peer_id));
+		let _ = self.tx.try_send(Action::AddReservedPeer(set_id, peer_id));
 	}
 
 	/// Remove a previously-added reserved peer.
 	///
 	/// Has no effect if the node was not a reserved peer.
 	pub fn remove_reserved_peer(&self, set_id: SetId, peer_id: PeerId) {
-		let _ = self.tx.unbounded_send(Action::RemoveReservedPeer(set_id, peer_id));
+		let _ = self.tx.try_send(Action::RemoveReservedPeer(set_id, peer_id));
 	}
 
 	/// Sets whether or not the peerset only has connections with nodes marked as reserved for
 	/// the given set.
 	pub fn set_reserved_only(&self, set_id: SetId, reserved: bool) {
-		let _ = self.tx.unbounded_send(Action::SetReservedOnly(set_id, reserved));
+		let _ = self.tx.try_send(Action::SetReservedOnly(set_id, reserved));
 	}
 
 	/// Set reserved peers to the new set.
 	pub fn set_reserved_peers(&self, set_id: SetId, peer_ids: HashSet<PeerId>) {
-		let _ = self.tx.unbounded_send(Action::SetReservedPeers(set_id, peer_ids));
+		let _ = self.tx.try_send(Action::SetReservedPeers(set_id, peer_ids));
 	}
 
 	/// Reports an adjustment to the reputation of the given peer.
 	pub fn report_peer(&self, peer_id: PeerId, score_diff: ReputationChange) {
-		let _ = self.tx.unbounded_send(Action::ReportPeer(peer_id, score_diff));
+		let _ = self.tx.try_send(Action::ReportPeer(peer_id, score_diff));
 	}
 
 	/// Add a peer to a set.
 	pub fn add_to_peers_set(&self, set_id: SetId, peer_id: PeerId) {
-		let _ = self.tx.unbounded_send(Action::AddToPeersSet(set_id, peer_id));
+		let _ = self.tx.try_send(Action::AddToPeersSet(set_id, peer_id));
 	}
 
 	/// Remove a peer from a set.
 	pub fn remove_from_peers_set(&self, set_id: SetId, peer_id: PeerId) {
-		let _ = self.tx.unbounded_send(Action::RemoveFromPeersSet(set_id, peer_id));
+		let _ = self.tx.try_send(Action::RemoveFromPeersSet(set_id, peer_id));
 	}
 
 	/// Returns the reputation value of the peer.
 	pub async fn peer_reputation(self, peer_id: PeerId) -> Result<i32, ()> {
 		let (tx, rx) = oneshot::channel();
 
-		let _ = self.tx.unbounded_send(Action::PeerReputation(peer_id, tx));
+		let _ = self.tx.try_send(Action::PeerReputation(peer_id, tx));
 
 		// The channel can only be closed if the peerset no longer exists.
 		rx.await.map_err(|_| ())
@@ -678,7 +678,7 @@ impl Peerset {
 		// We don't immediately perform the adjustments in order to have state consistency. We
 		// don't want the reporting here to take priority over messages sent using the
 		// `PeersetHandle`.
-		let _ = self.tx.unbounded_send(Action::ReportPeer(peer_id, score_diff));
+		let _ = self.tx.try_send(Action::ReportPeer(peer_id, score_diff));
 	}
 
 	/// Produces a JSON object containing the state of the peerset manager, for debugging purposes.

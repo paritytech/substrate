@@ -237,9 +237,8 @@ impl HttpApi {
 				HttpApiRequest::NotDispatched(request, sender) => {
 					tracing::debug!(target: LOG_TARGET, id = %request_id.0, "Added new body chunk");
 					// If the request is not dispatched yet, dispatch it and loop again.
-					let _ = self
-						.to_worker
-						.unbounded_send(ApiToWorker::Dispatch { id: request_id, request });
+					let _ =
+						self.to_worker.try_send(ApiToWorker::Dispatch { id: request_id, request });
 					HttpApiRequest::Dispatched(Some(sender))
 				},
 
@@ -348,7 +347,7 @@ impl HttpApi {
 				_ => unreachable!("we checked for NotDispatched above; qed"),
 			};
 
-			let _ = self.to_worker.unbounded_send(ApiToWorker::Dispatch { id: *id, request });
+			let _ = self.to_worker.try_send(ApiToWorker::Dispatch { id: *id, request });
 
 			// We also destroy the sender in order to forbid writing more data.
 			self.requests.insert(*id, HttpApiRequest::Dispatched(None));
@@ -665,7 +664,7 @@ impl Future for HttpWorker {
 						},
 						Poll::Ready(Ok(response)) => response,
 						Poll::Ready(Err(error)) => {
-							let _ = me.to_api.unbounded_send(WorkerToApi::Fail { id, error });
+							let _ = me.to_api.try_send(WorkerToApi::Fail { id, error });
 							continue // don't insert the request back
 						},
 					};
@@ -675,7 +674,7 @@ impl Future for HttpWorker {
 					let (status_code, headers) = (head.status, head.headers);
 
 					let (body_tx, body_rx) = mpsc::channel(3);
-					let _ = me.to_api.unbounded_send(WorkerToApi::Response {
+					let _ = me.to_api.try_send(WorkerToApi::Response {
 						id,
 						status_code,
 						headers,

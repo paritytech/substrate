@@ -129,6 +129,6 @@ impl<H: Clone, BH: Clone> Sender<H, BH> {
 	}
 
 	fn send(&mut self, status: TransactionStatus<H, BH>) {
-		self.receivers.retain(|sender| sender.unbounded_send(status.clone()).is_ok())
+		self.receivers.retain(|sender| sender.try_send(status.clone()).is_ok())
 	}
 }

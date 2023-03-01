@@ -9101,6 +9101,7 @@ name = "sc-service-test"
 version = "2.0.0"
 dependencies = [
  "array-bytes",
+ "async-channel",
  "fdlimit",
  "futures",
  "log",

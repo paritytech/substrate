@@ -16,6 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use async_channel::TryRecvError;
 use futures::executor::block_on;
 use parity_scale_codec::{Decode, Encode, Joiner};
 use sc_block_builder::BlockBuilderProvider;
@@ -175,16 +176,17 @@ fn finality_notification_check(
 	finalized: &[Hash],
 	stale_heads: &[Hash],
 ) {
-	match notifications.try_next() {
-		Ok(Some(notif)) => {
+	match notifications.try_recv() {
+		Ok(notif) => {
 			let stale_heads_expected: HashSet<_> = stale_heads.iter().collect();
 			let stale_heads: HashSet<_> = notif.stale_heads.iter().collect();
 			assert_eq!(notif.tree_route.as_ref(), &finalized[..finalized.len() - 1]);
 			assert_eq!(notif.hash, *finalized.last().unwrap());
 			assert_eq!(stale_heads, stale_heads_expected);
 		},
-		Ok(None) => panic!("unexpected notification result, client send channel was closed"),
-		Err(_) => assert!(finalized.is_empty()),
+		Err(TryRecvError::Closed) =>
+			panic!("unexpected notification result, client send channel was closed"),
+		Err(TryRecvError::Empty) => assert!(finalized.is_empty()),
 	}
 }
 
@@ -983,7 +985,7 @@ fn import_with_justification() {
 
 	finality_notification_check(&mut finality_notifications, &[a1.hash(), a2.hash()], &[]);
 	finality_notification_check(&mut finality_notifications, &[a3.hash()], &[]);
-	assert!(finality_notifications.try_next().is_err());
+	assert!(matches!(finality_notifications.try_recv().unwrap_err(), TryRecvError::Empty));
 }
 
 #[test]
@@ -1038,7 +1040,7 @@ fn importing_diverged_finalized_block_should_trigger_reorg() {
 	assert_eq!(client.chain_info().finalized_hash, b1.hash());
 
 	finality_notification_check(&mut finality_notifications, &[b1.hash()], &[a2.hash()]);
-	assert!(finality_notifications.try_next().is_err());
+	assert!(matches!(finality_notifications.try_recv().unwrap_err(), TryRecvError::Empty));
 }
 
 #[test]
@@ -1124,7 +1126,7 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 
 	finality_notification_check(&mut finality_notifications, &[b1.hash()], &[]);
 	finality_notification_check(&mut finality_notifications, &[b2.hash(), b3.hash()], &[a2.hash()]);
-	assert!(finality_notifications.try_next().is_err());
+	assert!(matches!(finality_notifications.try_recv().unwrap_err(), TryRecvError::Empty));
 }
 
 #[test]
@@ -1227,7 +1229,7 @@ fn finality_notifications_content() {
 
 	finality_notification_check(&mut finality_notifications, &[a1.hash(), a2.hash()], &[c1.hash()]);
 	finality_notification_check(&mut finality_notifications, &[d3.hash(), d4.hash()], &[b2.hash()]);
-	assert!(finality_notifications.try_next().is_err());
+	assert!(matches!(finality_notifications.try_recv().unwrap_err(), TryRecvError::Empty));
 }
 
 #[test]
@@ -1437,7 +1439,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 
 	finality_notification_check(&mut finality_notifications, &[a3.hash()], &[b2.hash()]);
 
-	assert!(finality_notifications.try_next().is_err());
+	assert!(matches!(finality_notifications.try_recv().unwrap_err(), TryRecvError::Empty));
 }
 
 #[test]

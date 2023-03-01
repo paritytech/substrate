@@ -497,9 +497,7 @@ where
 				.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
 				let new_set =
 					NewAuthoritySet { canon_number: number, canon_hash: hash, set_id, authorities };
-				let _ = self
-					.send_voter_commands
-					.unbounded_send(VoterCommand::ChangeAuthorities(new_set));
+				let _ = self.send_voter_commands.try_send(VoterCommand::ChangeAuthorities(new_set));
 				Ok(ImportResult::Imported(aux))
 			},
 			Ok(r) => Ok(r),
@@ -608,7 +606,7 @@ where
 
 		// Send the pause signal after import but BEFORE sending a `ChangeAuthorities` message.
 		if do_pause {
-			let _ = self.send_voter_commands.unbounded_send(VoterCommand::Pause(
+			let _ = self.send_voter_commands.try_send(VoterCommand::Pause(
 				"Forced change scheduled after inactivity".to_string(),
 			));
 		}
@@ -628,8 +626,7 @@ where
 				// they should import the block and discard the justification, and they will
 				// then request a justification from sync if it's necessary (which they should
 				// then be able to successfully validate).
-				let _ =
-					self.send_voter_commands.unbounded_send(VoterCommand::ChangeAuthorities(new));
+				let _ = self.send_voter_commands.try_send(VoterCommand::ChangeAuthorities(new));
 
 				// we must clear all pending justifications requests, presumably they won't be
 				// finalized hence why this forced changes was triggered
@@ -808,7 +805,7 @@ where
 				);
 
 				// send the command to the voter
-				let _ = self.send_voter_commands.unbounded_send(command);
+				let _ = self.send_voter_commands.try_send(command);
 			},
 			Err(CommandOrError::Error(e)) =>
 				return Err(match e {

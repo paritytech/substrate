@@ -1024,7 +1024,7 @@ where
 			"best" => ?notification.hash,
 		);
 
-		sinks.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+		sinks.retain(|sink| sink.try_send(notification.clone()).is_ok());
 
 		Ok(())
 	}
@@ -1068,24 +1068,24 @@ where
 				trigger_storage_changes_notification();
 				self.import_notification_sinks
 					.lock()
-					.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+					.retain(|sink| sink.try_send(notification.clone()).is_ok());
 
 				self.every_import_notification_sinks
 					.lock()
-					.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+					.retain(|sink| sink.try_send(notification.clone()).is_ok());
 			},
 			ImportNotificationAction::RecentBlock => {
 				trigger_storage_changes_notification();
 				self.import_notification_sinks
 					.lock()
-					.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+					.retain(|sink| sink.try_send(notification.clone()).is_ok());
 
 				self.every_import_notification_sinks.lock().retain(|sink| !sink.is_closed());
 			},
 			ImportNotificationAction::EveryBlock => {
 				self.every_import_notification_sinks
 					.lock()
-					.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+					.retain(|sink| sink.try_send(notification.clone()).is_ok());
 
 				self.import_notification_sinks.lock().retain(|sink| !sink.is_closed());
 			},

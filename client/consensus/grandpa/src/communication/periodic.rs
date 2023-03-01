@@ -47,7 +47,7 @@ impl<B: BlockT> NeighborPacketSender<B> {
 		who: Vec<sc_network::PeerId>,
 		neighbor_packet: NeighborPacket<NumberFor<B>>,
 	) {
-		if let Err(err) = self.0.unbounded_send((who, neighbor_packet)) {
+		if let Err(err) = self.0.try_send((who, neighbor_packet)) {
 			debug!(target: LOG_TARGET, "Failed to send neighbor packet: {:?}", err);
 		}
 	}

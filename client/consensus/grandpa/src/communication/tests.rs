@@ -74,7 +74,7 @@ impl NetworkPeers for TestNetwork {
 	}
 
 	fn report_peer(&self, who: PeerId, cost_benefit: ReputationChange) {
-		let _ = self.sender.unbounded_send(Event::Report(who, cost_benefit));
+		let _ = self.sender.try_send(Event::Report(who, cost_benefit));
 	}
 
 	fn disconnect_peer(&self, _who: PeerId, _protocol: ProtocolName) {}
@@ -136,14 +136,14 @@ impl NetworkEventStream for TestNetwork {
 		_name: &'static str,
 	) -> Pin<Box<dyn Stream<Item = NetworkEvent> + Send>> {
 		let (tx, rx) = tracing_unbounded("test", 100_000);
-		let _ = self.sender.unbounded_send(Event::EventStream(tx));
+		let _ = self.sender.try_send(Event::EventStream(tx));
 		Box::pin(rx)
 	}
 }
 
 impl NetworkNotification for TestNetwork {
 	fn write_notification(&self, target: PeerId, _protocol: ProtocolName, message: Vec<u8>) {
-		let _ = self.sender.unbounded_send(Event::WriteNotification(target, message));
+		let _ = self.sender.try_send(Event::WriteNotification(target, message));
 	}
 
 	fn notification_sender(
@@ -157,7 +157,7 @@ impl NetworkNotification for TestNetwork {
 
 impl NetworkBlock<Hash, NumberFor<Block>> for TestNetwork {
 	fn announce_block(&self, hash: Hash, _data: Option<Vec<u8>>) {
-		let _ = self.sender.unbounded_send(Event::Announce(hash));
+		let _ = self.sender.try_send(Event::Announce(hash));
 	}
 
 	fn new_best_block_imported(&self, _hash: Hash, _number: NumberFor<Block>) {
@@ -365,14 +365,14 @@ fn good_commit_leads_to_relay() {
 			let send_message = tester.filter_network_events(move |event| match event {
 				Event::EventStream(sender) => {
 					// Add the sending peer and send the commit
-					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
+					let _ = sender.try_send(NetworkEvent::NotificationStreamOpened {
 						remote: sender_id,
 						protocol: grandpa_protocol_name::NAME.into(),
 						negotiated_fallback: None,
 						role: ObservedRole::Full,
 					});
 
-					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
+					let _ = sender.try_send(NetworkEvent::NotificationsReceived {
 						remote: sender_id,
 						messages: vec![(
 							grandpa_protocol_name::NAME.into(),
@@ -382,7 +382,7 @@ fn good_commit_leads_to_relay() {
 
 					// Add a random peer which will be the recipient of this message
 					let receiver_id = PeerId::random();
-					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
+					let _ = sender.try_send(NetworkEvent::NotificationStreamOpened {
 						remote: receiver_id,
 						protocol: grandpa_protocol_name::NAME.into(),
 						negotiated_fallback: None,
@@ -400,7 +400,7 @@ fn good_commit_leads_to_relay() {
 
 						let msg = gossip::GossipMessage::<Block>::Neighbor(update);
 
-						sender.unbounded_send(NetworkEvent::NotificationsReceived {
+						sender.try_send(NetworkEvent::NotificationsReceived {
 							remote: receiver_id,
 							messages: vec![(
 								grandpa_protocol_name::NAME.into(),
@@ -514,13 +514,13 @@ fn bad_commit_leads_to_report() {
 			let sender_id = id;
 			let send_message = tester.filter_network_events(move |event| match event {
 				Event::EventStream(sender) => {
-					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
+					let _ = sender.try_send(NetworkEvent::NotificationStreamOpened {
 						remote: sender_id,
 						protocol: grandpa_protocol_name::NAME.into(),
 						negotiated_fallback: None,
 						role: ObservedRole::Full,
 					});
-					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
+					let _ = sender.try_send(NetworkEvent::NotificationsReceived {
 						remote: sender_id,
 						messages: vec![(
 							grandpa_protocol_name::NAME.into(),
