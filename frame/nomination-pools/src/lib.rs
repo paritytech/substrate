@@ -1578,7 +1578,7 @@ pub mod pallet {
 	pub type MaxPoolMembersPerPool<T: Config> = StorageValue<_, u32, OptionQuery>;
 
 	/// The maximum commission that can be charged by a pool. Used on commission payouts to bound
-	/// pool commissions that are > GlobalMaxCommission, necessary if a future `GlobalMaxCommission`
+	/// pool commissions that are > `GlobalMaxCommission`, necessary if a future `GlobalMaxCommission`
 	/// is lower than some current pool commissions.
 	#[pallet::storage]
 	pub type GlobalMaxCommission<T: Config> = StorageValue<_, Perbill, OptionQuery>;
