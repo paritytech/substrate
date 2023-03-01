@@ -9879,14 +9879,11 @@ dependencies = [
  "async-trait",
  "futures",
  "log",
- "parity-scale-codec",
  "sp-core",
  "sp-inherents",
  "sp-runtime",
  "sp-state-machine",
- "sp-std",
  "sp-test-primitives",
- "sp-version",
  "thiserror",
 ]
 
