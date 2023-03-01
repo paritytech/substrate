@@ -40,7 +40,7 @@ use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_staking::SessionIndex;
 use sp_std::prelude::*;
 
-use beefy_primitives::{
+use sp_consensus_beefy::{
 	AuthorityIndex, BeefyAuthorityId, ConsensusLog, EquivocationProof, OnNewValidatorSet,
 	ValidatorSet, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
 };
@@ -135,7 +135,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn validator_set_id)]
 	pub(super) type ValidatorSetId<T: Config> =
-		StorageValue<_, beefy_primitives::ValidatorSetId, ValueQuery>;
+		StorageValue<_, sp_consensus_beefy::ValidatorSetId, ValueQuery>;
 
 	/// Authorities set scheduled to be used with the next session
 	#[pallet::storage]
@@ -156,7 +156,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn session_for_set)]
 	pub(super) type SetIdSession<T: Config> =
-		StorageMap<_, Twox64Concat, beefy_primitives::ValidatorSetId, SessionIndex>;
+		StorageMap<_, Twox64Concat, sp_consensus_beefy::ValidatorSetId, SessionIndex>;
 
 	/// Block number where BEEFY consensus is enabled/started.
 	/// If changing this, make sure `Self::ValidatorSetId` is also reset to
@@ -280,7 +280,7 @@ impl<T: Config> Pallet<T> {
 	/// Return the current active BEEFY validator set.
 	pub fn validator_set() -> Option<ValidatorSet<T::BeefyId>> {
 		let validators: BoundedVec<T::BeefyId, T::MaxAuthorities> = Self::authorities();
-		let id: beefy_primitives::ValidatorSetId = Self::validator_set_id();
+		let id: sp_consensus_beefy::ValidatorSetId = Self::validator_set_id();
 		ValidatorSet::<T::BeefyId>::new(validators, id)
 	}
 
@@ -390,13 +390,13 @@ impl<T: Config> Pallet<T> {
 
 		// validate the key ownership proof extracting the id of the offender.
 		let offender = T::KeyOwnerProofSystem::check_proof(
-			(beefy_primitives::KEY_TYPE, offender_id),
+			(sp_consensus_beefy::KEY_TYPE, offender_id),
 			key_owner_proof,
 		)
 		.ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
 
 		// validate equivocation proof (check votes are different and signatures are valid).
-		if !beefy_primitives::check_equivocation_proof(&equivocation_proof) {
+		if !sp_consensus_beefy::check_equivocation_proof(&equivocation_proof) {
 			return Err(Error::<T>::InvalidEquivocationProof.into())
 		}
 

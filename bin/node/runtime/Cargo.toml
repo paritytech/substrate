@@ -27,6 +27,7 @@ log = { version = "0.4.17", default-features = false }
 # primitives
 sp-authority-discovery = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/authority-discovery" }
 sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/consensus/babe" }
+sp-consensus-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/consensus/grandpa" }
 sp-block-builder = { path = "../../../primitives/block-builder", default-features = false, version = "4.0.0-dev" }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/inherents" }
 node-primitives = { version = "2.0.0", default-features = false, path = "../primitives" }
@@ -134,6 +135,7 @@ std = [
 	"pallet-authority-discovery/std",
 	"pallet-authorship/std",
 	"sp-consensus-babe/std",
+	"sp-consensus-grandpa/std",
 	"pallet-babe/std",
 	"pallet-bags-list/std",
 	"pallet-balances/std",

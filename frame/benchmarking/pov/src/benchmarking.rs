@@ -39,6 +39,17 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(Value::<T>::get(), Some(123));
 	}
 
+	#[pov_mode = MaxEncodedLen {
+		Pov::Value2: Ignored
+	}]
+	storage_single_value_ignored_some_read {
+		Value::<T>::put(123);
+		Value2::<T>::put(123);
+	}: {
+		assert_eq!(Value::<T>::get(), Some(123));
+		assert_eq!(Value2::<T>::get(), Some(123));
+	}
+
 	storage_single_value_read_twice {
 		Value::<T>::put(123);
 	}: {
