@@ -48,7 +48,7 @@ use sp_runtime::{
 use std::{collections::HashSet, sync::Arc};
 
 /// Generates the events of the `chainHead_follow` method.
-pub struct ChainHeadFollow<BE, Block: BlockT, Client> {
+pub struct ChainHeadFollower<BE, Block: BlockT, Client> {
 	/// Substrate client.
 	client: Arc<Client>,
 	/// Backend of the chain.
@@ -65,8 +65,8 @@ pub struct ChainHeadFollow<BE, Block: BlockT, Client> {
 	best_block_cache: Option<Block::Hash>,
 }
 
-impl<BE, Block: BlockT, Client> ChainHeadFollow<BE, Block, Client> {
-	/// Create a new [`ChainHeadFollow`].
+impl<BE, Block: BlockT, Client> ChainHeadFollower<BE, Block, Client> {
+	/// Create a new [`ChainHeadFollower`].
 	pub fn new(
 		client: Arc<Client>,
 		backend: Arc<BE>,
@@ -121,7 +121,7 @@ struct InitialBlocks<Block: BlockT> {
 	pruned_forks: HashSet<Block::Hash>,
 }
 
-impl<BE, Block, Client> ChainHeadFollow<BE, Block, Client>
+impl<BE, Block, Client> ChainHeadFollower<BE, Block, Client>
 where
 	Block: BlockT + 'static,
 	BE: Backend<Block> + 'static,
@@ -583,7 +583,7 @@ where
 	}
 }
 
-impl<BE, Block: BlockT, Client> Drop for ChainHeadFollow<BE, Block, Client> {
+impl<BE, Block: BlockT, Client> Drop for ChainHeadFollower<BE, Block, Client> {
 	fn drop(&mut self) {
 		self.subscriptions.remove_subscription(&self.sub_id);
 		debug!(target: LOG_TARGET, "[follow][id={:?}] Subscription removed", self.sub_id);

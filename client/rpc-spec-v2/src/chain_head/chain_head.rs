@@ -21,7 +21,7 @@
 use crate::{
 	chain_head::{
 		api::ChainHeadApiServer,
-		chain_head_follow::ChainHeadFollow,
+		chain_head_follow::ChainHeadFollower,
 		error::Error as ChainHeadRpcError,
 		event::{ChainHeadEvent, ChainHeadResult, ErrorEvent, FollowEvent, NetworkConfig},
 		subscription::SubscriptionManagement,
@@ -174,7 +174,7 @@ where
 		let backend = self.backend.clone();
 		let client = self.client.clone();
 		let fut = async move {
-			let mut chain_head_follow = ChainHeadFollow::new(
+			let mut chain_head_follow = ChainHeadFollower::new(
 				client,
 				backend,
 				subscriptions,
