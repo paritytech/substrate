@@ -23,7 +23,7 @@ use super::*;
 
 use crate as utility;
 use frame_support::{
-	assert_err_ignore_postinfo, assert_noop, assert_ok,
+	assert_err, assert_err_ignore_postinfo, assert_noop, assert_ok,
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, Dispatchable, Pays},
 	error::BadOrigin,
 	parameter_types, storage,
@@ -778,6 +778,30 @@ fn batch_all_does_not_nest() {
 		);
 		assert_eq!(Balances::free_balance(1), 10);
 		assert_eq!(Balances::free_balance(2), 10);
+	});
+}
+
+#[test]
+fn batch_all_with_signed_call_filters() {
+	new_test_ext().execute_with(|| {
+		assert_err_ignore_postinfo!(
+			Utility::batch_all(
+				RuntimeOrigin::signed(1),
+				vec![RuntimeCall::Example(example::Call::not_batchable { arg: 0 })]
+			),
+			DispatchError::from(frame_system::Error::<Test>::CallFiltered)
+		);
+	});
+}
+
+#[test]
+fn batch_all_with_root_call_filters() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Utility::batch_all(
+			RuntimeOrigin::root(),
+			vec![RuntimeCall::Example(example::Call::not_batchable { arg: 0 })]
+		),);
+		System::assert_last_event(utility::Event::BatchCompleted.into());
 	});
 }
 

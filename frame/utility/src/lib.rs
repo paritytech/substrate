@@ -361,19 +361,32 @@ pub mod pallet {
 			let mut weight = Weight::zero();
 			for (index, call) in calls.into_iter().enumerate() {
 				let info = call.get_dispatch_info();
+
+				let result =
+					(!(is_root || <T as Config>::CallFilter::contains(&call))).then(|| {
+						DispatchErrorWithPostInfo {
+							post_info: None::<Weight>.into(),
+							error: <frame_system::Error<T>>::CallFiltered.into(),
+						}
+					});
+
 				// If origin is root, bypass any dispatch filter; root can call anything.
-				let result = if is_root {
-					call.dispatch_bypass_filter(origin.clone())
+				let result = if let Some(error) = result {
+					Err(error)
 				} else {
-					let mut filtered_origin = origin.clone();
-					// Don't allow users to nest `batch_all` calls.
-					filtered_origin.add_filter(
-						move |c: &<T as frame_system::Config>::RuntimeCall| {
-							let c = <T as Config>::RuntimeCall::from_ref(c);
-							!matches!(c.is_sub_type(), Some(Call::batch_all { .. }))
-						},
-					);
-					call.dispatch(filtered_origin)
+					if is_root {
+						call.dispatch_bypass_filter(origin.clone())
+					} else {
+						let mut filtered_origin = origin.clone();
+						// Don't allow users to nest `batch_all` calls.
+						filtered_origin.add_filter(
+							move |c: &<T as frame_system::Config>::RuntimeCall| {
+								let c = <T as Config>::RuntimeCall::from_ref(c);
+								!matches!(c.is_sub_type(), Some(Call::batch_all { .. }))
+							},
+						);
+						call.dispatch(filtered_origin)
+					}
 				};
 				// Add the weight of this call.
 				weight = weight.saturating_add(extract_actual_weight(&result, &info));
