@@ -405,7 +405,7 @@ where
 			return Err(SubscriptionManagementError::BlockNumberAbsent)
 		};
 		if block_number < info.finalized_number {
-			return Ok(vec![])
+			return Ok(Default::default())
 		}
 
 		// The tree route contains the exclusive path from the last finalized block to the block
