@@ -20,7 +20,7 @@
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use sp_arithmetic::traits::{AtLeast32BitUnsigned, Zero};
 use sp_core::RuntimeDebug;
-use sp_runtime::{ArithmeticError, DispatchError, DispatchResult, TokenError};
+use sp_runtime::{ArithmeticError, DispatchError, TokenError};
 use sp_std::fmt::Debug;
 
 /// One of a number of consequences of withdrawing a fungible from an account.
@@ -215,10 +215,6 @@ pub trait BalanceConversion<InBalance, AssetId, OutBalance> {
 pub trait Locker<CollectionId, ItemId> {
 	/// Check if the asset should be locked and prevent interactions with the asset from executing.
 	fn is_locked(collection: CollectionId, item: ItemId) -> bool;
-	/// Lock `item` of `collection`.
-	fn lock(collection: &CollectionId, item: &ItemId) -> DispatchResult;
-	/// Unlock `item` of `collection`.
-	fn unlock(collection: &CollectionId, item: &ItemId) -> DispatchResult;
 }
 
 impl<CollectionId, ItemId> Locker<CollectionId, ItemId> for () {
@@ -227,17 +223,5 @@ impl<CollectionId, ItemId> Locker<CollectionId, ItemId> for () {
 	// to work.
 	fn is_locked(_collection: CollectionId, _item: ItemId) -> bool {
 		false
-	}
-	/// Lock `item` of `collection`.
-	///
-	/// By default, this is not a supported operation.
-	fn lock(_collection: &CollectionId, _item: &ItemId) -> DispatchResult {
-		Err(TokenError::Unsupported.into())
-	}
-	/// Unlock `item` of `collection`.
-	///
-	/// By default, this is not a supported operation.
-	fn unlock(_collection: &CollectionId, _item: &ItemId) -> DispatchResult {
-		Err(TokenError::Unsupported.into())
 	}
 }

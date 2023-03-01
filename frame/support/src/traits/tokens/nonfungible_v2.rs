@@ -170,10 +170,14 @@ pub trait Mutate<AccountId, ItemConfig>: Inspect<AccountId> {
 	}
 }
 
-/// Trait for transferring a non-fungible item.
+/// Trait for transferring and locking/unlocking non-fungible sets of items.
 pub trait Transfer<AccountId>: Inspect<AccountId> {
 	/// Transfer `item` into `destination` account.
 	fn transfer(item: &Self::ItemId, destination: &AccountId) -> DispatchResult;
+	/// Disable the `item` transfer.
+	fn lock(item: &Self::ItemId) -> DispatchResult;
+	/// Re-enable the `item` transfer.
+	fn unlock(item: &Self::ItemId) -> DispatchResult;
 }
 
 /// Convert a `nonfungibles` trait implementation into a `nonfungible` trait implementation by
@@ -308,5 +312,11 @@ impl<
 {
 	fn transfer(item: &Self::ItemId, destination: &AccountId) -> DispatchResult {
 		<F as nonfungibles::Transfer<AccountId>>::transfer(&A::get(), item, destination)
+	}
+	fn lock(item: &Self::ItemId) -> DispatchResult {
+		<F as nonfungibles::Transfer<AccountId>>::lock(&A::get(), item)
+	}
+	fn unlock(item: &Self::ItemId) -> DispatchResult {
+		<F as nonfungibles::Transfer<AccountId>>::unlock(&A::get(), item)
 	}
 }

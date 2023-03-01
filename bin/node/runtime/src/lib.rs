@@ -32,11 +32,10 @@ use frame_support::{
 	pallet_prelude::Get,
 	parameter_types,
 	traits::{
-		fungible::ItemOf,
-		tokens::nonfungibles_v2::{Inspect, Mutate},
-		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, Currency, EitherOfDiverse,
-		EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter, KeyOwnerProofSystem,
-		LockIdentifier, Locker, Nothing, OnUnbalanced, U128CurrencyToVote, WithdrawReasons,
+		fungible::ItemOf, tokens::nonfungibles_v2::Inspect, AsEnsureOriginWithArg, ConstBool,
+		ConstU128, ConstU16, ConstU32, Currency, EitherOfDiverse, EqualPrivilegeOnly, Everything,
+		Imbalance, InstanceFilter, KeyOwnerProofSystem, LockIdentifier, Locker, Nothing,
+		OnUnbalanced, U128CurrencyToVote, WithdrawReasons,
 	},
 	weights::{
 		constants::{
@@ -57,7 +56,7 @@ use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
-use pallet_nfts::{ItemConfig, PalletFeatures};
+use pallet_nfts::{PalletFeatures, LOCKED_NFT_KEY};
 use pallet_nis::WithMaximumOf;
 use pallet_session::historical::{self as pallet_session_historical};
 pub use pallet_transaction_payment::{CurrencyAdapter, Multiplier, TargetedFeeAdjustment};
@@ -75,8 +74,7 @@ use sp_runtime::{
 		SaturatedConversion, StaticLookup,
 	},
 	transaction_validity::{TransactionPriority, TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult, DispatchResult, FixedPointNumber, FixedU128, Perbill, Percent, Permill,
-	Perquintill,
+	ApplyExtrinsicResult, FixedPointNumber, FixedU128, Perbill, Percent, Permill, Perquintill,
 };
 use sp_std::prelude::*;
 #[cfg(any(feature = "std", test))]
@@ -1577,7 +1575,6 @@ parameter_types! {
 	pub const MaxAttributesPerCall: u32 = 10;
 }
 
-const LOCKED_NFT_KEY: &[u8; 6] = b"locked";
 type ItemId = <Runtime as pallet_nfts::Config>::ItemId;
 type CollectionId = <Runtime as pallet_nfts::Config>::CollectionId;
 
@@ -1585,17 +1582,6 @@ pub struct NftLocker;
 impl Locker<CollectionId, ItemId> for NftLocker {
 	fn is_locked(collection: CollectionId, item: ItemId) -> bool {
 		<Nfts as Inspect<AccountId>>::system_attribute(&collection, &item, LOCKED_NFT_KEY).is_some()
-	}
-	fn lock(collection: &CollectionId, item: &ItemId) -> DispatchResult {
-		<Nfts as Mutate<AccountId, ItemConfig>>::set_attribute(
-			collection,
-			item,
-			LOCKED_NFT_KEY,
-			&[1],
-		)
-	}
-	fn unlock(collection: &CollectionId, item: &ItemId) -> DispatchResult {
-		<Nfts as Mutate<AccountId, ItemConfig>>::clear_attribute(collection, item, LOCKED_NFT_KEY)
 	}
 }
 
@@ -1646,7 +1632,6 @@ impl pallet_nft_fractionalization::Config for Runtime {
 	type AssetId = <Self as pallet_assets::Config>::AssetId;
 	type Assets = Assets;
 	type Nfts = Nfts;
-	type NftLocker = NftLocker;
 	type PalletId = NftFractionalizationPalletId;
 	type WeightInfo = pallet_nft_fractionalization::weights::SubstrateWeight<Runtime>;
 }

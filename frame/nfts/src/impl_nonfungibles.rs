@@ -322,6 +322,23 @@ impl<T: Config<I>, I: 'static> Transfer<T::AccountId> for Pallet<T, I> {
 	) -> DispatchResult {
 		Self::do_transfer(*collection, *item, destination.clone(), |_, _| Ok(()))
 	}
+
+	fn lock(collection: &Self::CollectionId, item: &Self::ItemId) -> DispatchResult {
+		<Self as Mutate<T::AccountId, ItemConfig>>::set_attribute(
+			collection,
+			item,
+			LOCKED_NFT_KEY,
+			&[1],
+		)
+	}
+
+	fn unlock(collection: &Self::CollectionId, item: &Self::ItemId) -> DispatchResult {
+		<Self as Mutate<T::AccountId, ItemConfig>>::clear_attribute(
+			collection,
+			item,
+			LOCKED_NFT_KEY,
+		)
+	}
 }
 
 impl<T: Config<I>, I: 'static> InspectEnumerable<T::AccountId> for Pallet<T, I> {

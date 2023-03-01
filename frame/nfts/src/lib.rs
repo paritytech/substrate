@@ -61,6 +61,7 @@ pub use types::*;
 pub use weights::WeightInfo;
 
 type AccountIdLookupOf<T> = <<T as SystemConfig>::Lookup as StaticLookup>::Source;
+pub const LOCKED_NFT_KEY: &[u8; 6] = b"locked";
 
 #[frame_support::pallet]
 pub mod pallet {
