@@ -285,6 +285,16 @@ where
 	ext
 }
 
+pub fn build_and_execute<T: Config>(test: impl FnOnce() -> ())
+where
+	<T as frame_system::Config>::BlockNumber: From<u32>,
+{
+	new_test_ext::<T>().execute_with(|| {
+		test();
+		MessageQueue::do_try_state().unwrap();
+	})
+}
+
 /// Set the weight of a specific weight function.
 pub fn set_weight(name: &str, w: Weight) {
 	MockedWeightInfo::set_weight::<Test>(name, w);

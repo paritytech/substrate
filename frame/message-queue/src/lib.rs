@@ -571,6 +571,11 @@ pub mod pallet {
 			}
 		}
 
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), &'static str> {
+			Self::do_try_state()
+		}
+
 		/// Check all assumptions about [`crate::Config`].
 		fn integrity_test() {
 			assert!(!MaxMessageLenOf::<T>::get().is_zero(), "HeapSize too low");
@@ -1083,6 +1088,100 @@ impl<T: Config> Pallet<T> {
 		}
 		page.skip_first(is_processed);
 		ItemExecutionStatus::Executed(is_processed)
+	}
+
+	/// Ensure the correctness of state of this pallet.
+	///
+	/// # Assumptions-
+	///
+	/// If `serviceHead` points to a ready Queue, then BookState of that Queue has:
+	///
+	/// * `message_count` > 0
+	/// * `size` > 0
+	/// * `end` > begin
+	/// * Some(ready_neighbours)
+	/// * If `ready_neighbours.next` == self.origin, then `ready_neighbours.prev` == self.origin
+	///   (only queue in ring)
+	///
+	/// For Pages(begin to end-1) in BookState:
+	///
+	/// * `remaining` > 0
+	/// * `remaining_size` > 0
+	/// * `first` <= `last`
+	/// * Every page can be decoded into peek_* functions
+
+	pub fn do_try_state() -> Result<(), &'static str> {
+		// No state to check
+		if ServiceHead::<T>::get().is_none() {
+			return Ok(())
+		}
+
+		//loop around this origin
+		let starting_origin = ServiceHead::<T>::get().unwrap();
+
+		let mut service_head = ServiceHead::<T>::get();
+
+		loop {
+			if let Some(head) = service_head {
+				let head_book_state = BookStateFor::<T>::get(&head);
+				assert!(
+					head_book_state.message_count > 0,
+					"There must be some messages if in ReadyRing"
+				);
+				assert!(head_book_state.size > 0, "There must be some messages if in ReadyRing");
+				assert!(
+					head_book_state.end > head_book_state.begin,
+					"End > Begin if unprocessed messages exists"
+				);
+				assert!(
+					head_book_state.ready_neighbours.is_some(),
+					"There must be neighbours if in ReadyRing"
+				);
+
+				if head_book_state.ready_neighbours.as_ref().unwrap().next == head {
+					assert_eq!(
+						head_book_state.ready_neighbours.as_ref().unwrap().prev,
+						head,
+						"Can only happen if only queue in ReadyRing"
+					);
+				}
+
+				for page_index in head_book_state.begin..head_book_state.end {
+					let page = Pages::<T>::get(&head, page_index).unwrap();
+					let remaining_messages = page.remaining;
+					let mut counted_remaining_messages = 0;
+					assert!(
+						remaining_messages > 0.into(),
+						"These must be some messages that have not been processed yet!"
+					);
+
+					for i in 0..u32::MAX {
+						if let Some((_, processed, _)) = page.peek_index(i as usize) {
+							if !processed {
+								counted_remaining_messages += 1;
+							}
+						} else {
+							break
+						}
+					}
+
+					assert_eq!(
+						remaining_messages,
+						counted_remaining_messages.into(),
+						"Memory Corruption"
+					);
+				}
+
+				if head_book_state.ready_neighbours.as_ref().unwrap().next == starting_origin {
+					break
+				} else {
+					service_head =
+						Some(head_book_state.ready_neighbours.as_ref().unwrap().next.clone());
+				}
+			}
+		}
+
+		Ok(())
 	}
 
 	/// Print the pages in each queue and the messages in each page.
