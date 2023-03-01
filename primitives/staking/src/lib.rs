@@ -184,14 +184,18 @@ pub trait StakingInterface {
 	fn nominations(who: Self::AccountId) -> Option<Vec<Self::AccountId>>;
 
 	#[cfg(feature = "runtime-benchmarks")]
+	fn max_exposure_page_size() -> PageIndex;
+
+	#[cfg(feature = "runtime-benchmarks")]
 	fn add_era_stakers(
-		current_era: &EraIndex,
-		stash: &Self::AccountId,
-		exposures: Vec<(Self::AccountId, Self::Balance)>,
+	current_era: &EraIndex,
+	stash: &Self::AccountId,
+	exposures: Vec<(Self::AccountId, Self::Balance)>,
 	);
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_current_era(era: EraIndex);
+
 }
 
 sp_core::generate_feature_enabled_macro!(runtime_benchmarks_enabled, feature = "runtime-benchmarks", $);

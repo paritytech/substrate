@@ -1715,11 +1715,15 @@ impl<T: Config> StakingInterface for Pallet<T> {
 				.map(|(who, value)| IndividualExposure { who: who.clone(), value: value.clone() })
 				.collect::<Vec<_>>();
 			let exposure = Exposure { total: Default::default(), own: Default::default(), others };
-			<ErasStakers<T>>::insert(&current_era, &stash, &exposure);
+			EraInfo::<T>::set_validator_exposure(*current_era, stash, exposure);
 		}
 
 		fn set_current_era(era: EraIndex) {
 			CurrentEra::<T>::put(era);
+		}
+
+		fn max_exposure_page_size() -> PageIndex {
+			T::MaxExposurePageSize::get()
 		}
 	}
 }
