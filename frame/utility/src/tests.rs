@@ -853,6 +853,28 @@ fn force_batch_works() {
 }
 
 #[test]
+fn force_batch_with_signed_call_filters() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Utility::force_batch(
+			RuntimeOrigin::signed(1),
+			vec![RuntimeCall::Example(example::Call::not_batchable { arg: 0 })]
+		),);
+		System::assert_last_event(utility::Event::BatchCompletedWithErrors.into());
+	});
+}
+
+#[test]
+fn force_batch_with_root_call_filters() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Utility::force_batch(
+			RuntimeOrigin::root(),
+			vec![RuntimeCall::Example(example::Call::not_batchable { arg: 0 })]
+		),);
+		System::assert_last_event(utility::Event::BatchCompleted.into());
+	});
+}
+
+#[test]
 fn none_origin_does_not_work() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(Utility::force_batch(RuntimeOrigin::none(), vec![]), BadOrigin);

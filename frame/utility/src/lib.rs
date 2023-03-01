@@ -485,11 +485,24 @@ pub mod pallet {
 			let mut has_error: bool = false;
 			for call in calls.into_iter() {
 				let info = call.get_dispatch_info();
+
+				let result =
+					(!(is_root || <T as Config>::CallFilter::contains(&call))).then(|| {
+						DispatchErrorWithPostInfo {
+							post_info: None::<Weight>.into(),
+							error: <frame_system::Error<T>>::CallFiltered.into(),
+						}
+					});
+
 				// If origin is root, don't apply any dispatch filters; root can call anything.
-				let result = if is_root {
-					call.dispatch_bypass_filter(origin.clone())
+				let result = if let Some(error) = result {
+					Err(error)
 				} else {
-					call.dispatch(origin.clone())
+					if is_root {
+						call.dispatch_bypass_filter(origin.clone())
+					} else {
+						call.dispatch(origin.clone())
+					}
 				};
 				// Add the weight of this call.
 				weight = weight.saturating_add(extract_actual_weight(&result, &info));
