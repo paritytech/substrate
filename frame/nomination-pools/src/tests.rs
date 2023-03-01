@@ -5511,7 +5511,7 @@ mod commission {
 			);
 
 			// When set commission is called again, update_records is called and
-			// total_commission_pending is updated, based on the current reward counter and pool
+			// `total_commission_pending` is updated, based on the current reward counter and pool
 			// balance.
 			//
 			// Note that commission is now 0%, so it should not come into play with subsequent
