@@ -749,6 +749,7 @@ pub mod pallet {
 						<ForcePhase<T>>::kill();
 
 						return Self::start_signed_phase()
+							.saturating_add(T::DbWeight::get().reads_writes(1, 1))
 					},
 					Some(Phase::Emergency) => {
 						<QueuedSolution<T>>::kill();
