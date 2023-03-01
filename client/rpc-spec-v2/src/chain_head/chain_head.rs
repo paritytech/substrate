@@ -177,13 +177,15 @@ where
 			let mut chain_head_follow = ChainHeadFollower::new(
 				client,
 				backend,
-				subscriptions,
 				sub_handle,
 				runtime_updates,
-				sub_id,
+				sub_id.clone(),
 			);
 
-			chain_head_follow.generate_events(sink, rx_stop).await
+			chain_head_follow.generate_events(sink, rx_stop).await;
+
+			subscriptions.remove_subscription(&sub_id);
+			debug!(target: LOG_TARGET, "[follow][id={:?}] Subscription removed", sub_id);
 		};
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());

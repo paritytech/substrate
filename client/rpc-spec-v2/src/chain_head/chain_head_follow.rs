@@ -24,7 +24,7 @@ use crate::chain_head::{
 		BestBlockChanged, Finalized, FollowEvent, Initialized, NewBlock, RuntimeEvent,
 		RuntimeVersionEvent,
 	},
-	subscription::{SubscriptionHandle, SubscriptionManagement, SubscriptionManagementError},
+	subscription::{SubscriptionHandle, SubscriptionManagementError},
 };
 use futures::{
 	channel::oneshot,
@@ -53,8 +53,6 @@ pub struct ChainHeadFollower<BE, Block: BlockT, Client> {
 	client: Arc<Client>,
 	/// Backend of the chain.
 	backend: Arc<BE>,
-	/// Keep track of the pinned blocks for each subscription.
-	subscriptions: Arc<SubscriptionManagement<Block>>,
 	/// Subscription handle.
 	sub_handle: SubscriptionHandle<Block>,
 	/// Subscription was started with the runtime updates flag.
@@ -70,20 +68,11 @@ impl<BE, Block: BlockT, Client> ChainHeadFollower<BE, Block, Client> {
 	pub fn new(
 		client: Arc<Client>,
 		backend: Arc<BE>,
-		subscriptions: Arc<SubscriptionManagement<Block>>,
 		sub_handle: SubscriptionHandle<Block>,
 		runtime_updates: bool,
 		sub_id: String,
 	) -> Self {
-		Self {
-			client,
-			backend,
-			subscriptions,
-			sub_handle,
-			runtime_updates,
-			sub_id,
-			best_block_cache: None,
-		}
+		Self { client, backend, sub_handle, runtime_updates, sub_id, best_block_cache: None }
 	}
 }
 
@@ -580,12 +569,5 @@ where
 		let stream = stream::once(futures::future::ready(initial)).chain(merged);
 
 		self.submit_events(&info, stream.boxed(), pruned_forks, sink, rx_stop).await;
-	}
-}
-
-impl<BE, Block: BlockT, Client> Drop for ChainHeadFollower<BE, Block, Client> {
-	fn drop(&mut self) {
-		self.subscriptions.remove_subscription(&self.sub_id);
-		debug!(target: LOG_TARGET, "[follow][id={:?}] Subscription removed", self.sub_id);
 	}
 }
