@@ -777,7 +777,7 @@ pub trait NominationsQuota<Balance> {
 	/// Returns the voter's nomination quota within reasonable bounds [`min`, `max`], where `min`
 	/// is 1 and `max` is `Self::MaxNominations`.
 	fn get_quota(balance: Balance) -> u32 {
-		Self::curve(balance).max(1).min(Self::MaxNominations::get())
+		Self::curve(balance).clamp(1, Self::MaxNominations::get())
 	}
 
 	// Returns the voter's nomination quota based on its balance and a curve.
