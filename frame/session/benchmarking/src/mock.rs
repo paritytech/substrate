@@ -19,7 +19,9 @@
 
 #![cfg(test)]
 
-use frame_election_provider_support::{onchain, SequentialPhragmen, ElectionBounds, ElectionBoundsBuilder};
+use frame_election_provider_support::{
+	onchain, ElectionBounds, ElectionBoundsBuilder, SequentialPhragmen,
+};
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64},

@@ -22,7 +22,9 @@
 use crate::{self as pallet_grandpa, AuthorityId, AuthorityList, Config, ConsensusLog};
 use ::grandpa as finality_grandpa;
 use codec::Encode;
-use frame_election_provider_support::{onchain, SequentialPhragmen, ElectionBounds, ElectionBoundsBuilder};
+use frame_election_provider_support::{
+	onchain, ElectionBounds, ElectionBoundsBuilder, SequentialPhragmen,
+};
 use frame_support::{
 	parameter_types,
 	traits::{
