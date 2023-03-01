@@ -19,6 +19,7 @@
 #![cfg(unix)]
 
 use assert_cmd::cargo::cargo_bin;
+use futures_timer::Delay;
 use nix::{
 	sys::signal::{kill, Signal::SIGINT},
 	unistd::Pid,
@@ -28,9 +29,8 @@ use std::{
 	io::Read,
 	path::PathBuf,
 	process::{Command, Stdio},
-	time::Duration
+	time::Duration,
 };
-use futures_timer::Delay;
 
 pub mod common;
 
