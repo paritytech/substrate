@@ -1,4 +1,4 @@
-// Copyright 2022 Parity Technologies (UK) Ltd.
+// Copyright Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 
 use codec::{Decode, Encode};
 use futures::channel::oneshot;
-pub use sp_finality_grandpa::{AuthorityList, SetId};
+pub use sp_consensus_grandpa::{AuthorityList, SetId};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{fmt, sync::Arc};
 

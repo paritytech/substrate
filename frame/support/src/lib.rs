@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -78,6 +78,7 @@ pub mod inherent;
 #[macro_use]
 pub mod error;
 pub mod crypto;
+pub mod dispatch_context;
 pub mod instances;
 pub mod migrations;
 pub mod traits;

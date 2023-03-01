@@ -12,7 +12,7 @@ homepage = "https://substrate.io"
 clap = { version = "4.0.9", features = ["derive", "string"] }
 futures = "0.3.21"
 log = "0.4.17"
-nix = { version = "0.26.1", features = ["fs"] }
+fs4 = "0.6.3"
 sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../db" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-core = { version = "7.0.0", path = "../../primitives/core" }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -37,6 +37,17 @@ frame_benchmarking::benchmarks! {
 		Value::<T>::put(123);
 	}: {
 		assert_eq!(Value::<T>::get(), Some(123));
+	}
+
+	#[pov_mode = MaxEncodedLen {
+		Pov::Value2: Ignored
+	}]
+	storage_single_value_ignored_some_read {
+		Value::<T>::put(123);
+		Value2::<T>::put(123);
+	}: {
+		assert_eq!(Value::<T>::get(), Some(123));
+		assert_eq!(Value2::<T>::get(), Some(123));
 	}
 
 	storage_single_value_read_twice {

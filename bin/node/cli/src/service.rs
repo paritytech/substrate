@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -560,7 +560,8 @@ pub fn new_full(config: Configuration, cli: Cli) -> Result<TaskManager, ServiceE
 		cli.storage_monitor,
 		database_source,
 		&task_manager.spawn_essential_handle(),
-	)?;
+	)
+	.map_err(|e| ServiceError::Application(e.into()))?;
 
 	Ok(task_manager)
 }
