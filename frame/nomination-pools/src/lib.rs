@@ -138,8 +138,7 @@
 //! A pool can optionally have a commission configuration, via the `root` role, set with
 //! [`Call::set_commission`] and claimed with [`Call::claim_commission`]. A payee account must be
 //! supplied with the desired commission percentage. Beyond the commission itself, a pool can have a
-//! maximum commission and a change rate
-//! - the maximum commission and the rate at which the commission can be changed respectively.
+//! maximum commission and a change rate.
 //!
 //! Importantly, both max commission  [`Call::set_commission_max`] and change rate
 //! [`Call::set_commission_change_rate`] can not be removed once set, and can only be set to more
@@ -1578,8 +1577,8 @@ pub mod pallet {
 	pub type MaxPoolMembersPerPool<T: Config> = StorageValue<_, u32, OptionQuery>;
 
 	/// The maximum commission that can be charged by a pool. Used on commission payouts to bound
-	/// pool commissions that are > `GlobalMaxCommission`, necessary if a future `GlobalMaxCommission`
-	/// is lower than some current pool commissions.
+	/// pool commissions that are > `GlobalMaxCommission`, necessary if a future
+	/// `GlobalMaxCommission` is lower than some current pool commissions.
 	#[pallet::storage]
 	pub type GlobalMaxCommission<T: Config> = StorageValue<_, Perbill, OptionQuery>;
 
