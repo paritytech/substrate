@@ -58,7 +58,9 @@ pub mod weights;
 
 use codec::{Decode, Encode};
 use frame_support::{
-	dispatch::{extract_actual_weight, GetDispatchInfo, PostDispatchInfo},
+	dispatch::{
+		extract_actual_weight, DispatchErrorWithPostInfo, GetDispatchInfo, PostDispatchInfo,
+	},
 	traits::{Contains, IsSubType, OriginTrait, UnfilteredDispatchable},
 };
 use sp_core::TypeId;
@@ -72,7 +74,7 @@ pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{dispatch::DispatchErrorWithPostInfo, pallet_prelude::*};
+	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -219,24 +221,14 @@ pub mod pallet {
 			for (index, call) in calls.into_iter().enumerate() {
 				let info = call.get_dispatch_info();
 
-				let result =
-					(!(is_root || <T as Config>::CallFilter::contains(&call))).then(|| {
-						DispatchErrorWithPostInfo {
-							post_info: None::<Weight>.into(),
-							error: <frame_system::Error<T>>::CallFiltered.into(),
-						}
-					});
-
-				// If origin is root, don't apply any dispatch filters; root can call anything.
-				let result = if let Some(error) = result {
-					Err(error)
-				} else {
+				let result = Self::check_call_filter(is_root, &call).and_then(|_| {
+					// If origin is root, don't apply any dispatch filters; root can call anything.
 					if is_root {
 						call.dispatch_bypass_filter(origin.clone())
 					} else {
 						call.dispatch(origin.clone())
 					}
-				};
+				});
 
 				// Add the weight of this call.
 				weight = weight.saturating_add(extract_actual_weight(&result, &info));
@@ -292,13 +284,7 @@ pub mod pallet {
 			origin.set_caller_from(frame_system::RawOrigin::Signed(pseudonym));
 			let info = call.get_dispatch_info();
 
-			let result =
-				(!<T as Config>::CallFilter::contains(&call)).then(|| DispatchErrorWithPostInfo {
-					post_info: None::<Weight>.into(),
-					error: <frame_system::Error<T>>::CallFiltered.into(),
-				});
-
-			let result = if let Some(error) = result { Err(error) } else { call.dispatch(origin) };
+			let result = Self::check_call_filter(false, &call).and_then(|_| call.dispatch(origin));
 			// Always take into account the base weight of this call.
 			let mut weight = T::WeightInfo::as_derivative()
 				.saturating_add(T::DbWeight::get().reads_writes(1, 1));
@@ -362,18 +348,8 @@ pub mod pallet {
 			for (index, call) in calls.into_iter().enumerate() {
 				let info = call.get_dispatch_info();
 
-				let result =
-					(!(is_root || <T as Config>::CallFilter::contains(&call))).then(|| {
-						DispatchErrorWithPostInfo {
-							post_info: None::<Weight>.into(),
-							error: <frame_system::Error<T>>::CallFiltered.into(),
-						}
-					});
-
-				// If origin is root, bypass any dispatch filter; root can call anything.
-				let result = if let Some(error) = result {
-					Err(error)
-				} else {
+				let result = Self::check_call_filter(is_root, &call).and_then(|_| {
+					// If origin is root, bypass any dispatch filter; root can call anything.
 					if is_root {
 						call.dispatch_bypass_filter(origin.clone())
 					} else {
@@ -387,7 +363,7 @@ pub mod pallet {
 						);
 						call.dispatch(filtered_origin)
 					}
-				};
+				});
 				// Add the weight of this call.
 				weight = weight.saturating_add(extract_actual_weight(&result, &info));
 				result.map_err(|mut err| {
@@ -486,24 +462,14 @@ pub mod pallet {
 			for call in calls.into_iter() {
 				let info = call.get_dispatch_info();
 
-				let result =
-					(!(is_root || <T as Config>::CallFilter::contains(&call))).then(|| {
-						DispatchErrorWithPostInfo {
-							post_info: None::<Weight>.into(),
-							error: <frame_system::Error<T>>::CallFiltered.into(),
-						}
-					});
-
-				// If origin is root, don't apply any dispatch filters; root can call anything.
-				let result = if let Some(error) = result {
-					Err(error)
-				} else {
+				let result = Self::check_call_filter(is_root, &call).and_then(|_| {
+					// If origin is root, don't apply any dispatch filters; root can call anything.
 					if is_root {
 						call.dispatch_bypass_filter(origin.clone())
 					} else {
 						call.dispatch(origin.clone())
 					}
-				};
+				});
 				// Add the weight of this call.
 				weight = weight.saturating_add(extract_actual_weight(&result, &info));
 				if let Err(e) = result {
@@ -556,5 +522,19 @@ impl<T: Config> Pallet<T> {
 		let entropy = (b"modlpy/utilisuba", who, index).using_encoded(blake2_256);
 		Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
 			.expect("infinite length input; no invalid inputs for type; qed")
+	}
+
+	fn check_call_filter(
+		is_root: bool,
+		call: &<T as Config>::RuntimeCall,
+	) -> Result<(), DispatchErrorWithPostInfo> {
+		if is_root || <T as Config>::CallFilter::contains(call) {
+			return Ok(())
+		}
+
+		Err(DispatchErrorWithPostInfo {
+			post_info: None::<frame_support::pallet_prelude::Weight>.into(),
+			error: <frame_system::Error<T>>::CallFiltered.into(),
+		})
 	}
 }
