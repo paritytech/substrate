@@ -722,7 +722,7 @@ impl<T: Config> Commission<T> {
 		false
 	}
 
-	/// Get's the pool's current commission, or returns Perbill::zero if none is set.
+	/// Gets the pool's current commission, or returns Perbill::zero if none is set.
 	/// Bounded to global max if current is greater than `GlobalMaxCommission`.
 	fn current(&self) -> Perbill {
 		self.current
