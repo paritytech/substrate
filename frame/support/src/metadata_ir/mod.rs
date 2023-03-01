@@ -18,8 +18,59 @@
 //! Intermediate representation of the runtime metadata.
 
 mod types;
+use frame_metadata::RuntimeMetadataPrefixed;
 pub use types::*;
 
-pub mod api;
-
 mod v14;
+
+/// Metadata V14.
+const V14: u32 = 14;
+
+/// Transform the IR to the specified version.
+///
+/// Use [`supported_versions`] to find supported versions.
+pub fn to_version(metadata: MetadataIR, version: u32) -> Option<RuntimeMetadataPrefixed> {
+	match version {
+		// Latest stable version.
+		V14 => {
+			let v14: frame_metadata::v14::RuntimeMetadataV14 = metadata.into();
+			Some(v14.into())
+		},
+		_ => None,
+	}
+}
+
+/// Returns the supported versions of metadata.
+pub fn supported_versions() -> sp_std::vec::Vec<u32> {
+	sp_std::vec![V14,]
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+	use crate::metadata_ir::ExtrinsicMetadataIR;
+	use frame_metadata::{v14::META_RESERVED, RuntimeMetadata};
+	use scale_info::meta_type;
+
+	fn ir_metadata() -> MetadataIR {
+		MetadataIR {
+			pallets: vec![],
+			extrinsic: ExtrinsicMetadataIR {
+				ty: meta_type::<()>(),
+				version: 0,
+				signed_extensions: vec![],
+			},
+			ty: meta_type::<()>(),
+		}
+	}
+
+	#[test]
+	fn to_version_14() {
+		let ir = ir_metadata();
+		let metadata = to_version(ir, V14).expect("Should return prefixed metadata");
+
+		assert_eq!(metadata.0, META_RESERVED);
+
+		assert!(matches!(metadata.1, RuntimeMetadata::V14(_)));
+	}
+}
