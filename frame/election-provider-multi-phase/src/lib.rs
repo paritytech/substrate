@@ -738,6 +738,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(now: T::BlockNumber) -> Weight {
+			// First we check whether there is phase that should be forced.
 			if Self::force_phase().is_some() {
 				match Self::force_phase() {
 					Some(Phase::Signed) => {
