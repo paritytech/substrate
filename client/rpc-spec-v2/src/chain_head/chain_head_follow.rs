@@ -233,9 +233,9 @@ where
 			runtime_updates: self.runtime_updates,
 		});
 
-		let mut in_memory_blocks = Vec::with_capacity(initial_blocks.len() + 1);
+		let mut finalized_block_descendants = Vec::with_capacity(initial_blocks.len() + 1);
 
-		in_memory_blocks.push(initialized_event);
+		finalized_block_descendants.push(initialized_event);
 		for (child, parent) in initial_blocks.into_iter() {
 			self.sub_handle.pin_block(child)?;
 
@@ -248,7 +248,7 @@ where
 				runtime_updates: self.runtime_updates,
 			});
 
-			in_memory_blocks.push(event);
+			finalized_block_descendants.push(event);
 		}
 
 		// Generate a new best block event.
@@ -256,10 +256,10 @@ where
 		if best_block_hash != finalized_block_hash {
 			let best_block = FollowEvent::BestBlockChanged(BestBlockChanged { best_block_hash });
 			self.best_block_cache = Some(best_block_hash);
-			in_memory_blocks.push(best_block);
+			finalized_block_descendants.push(best_block);
 		};
 
-		Ok((in_memory_blocks, init.pruned_forks))
+		Ok((finalized_block_descendants, init.pruned_forks))
 	}
 
 	/// Generate the "NewBlock" event and potentially the "BestBlockChanged" event for the
