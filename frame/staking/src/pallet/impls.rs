@@ -788,8 +788,7 @@ impl<T: Config> Pallet<T> {
 				let voter_weight = weight_of(&voter);
 				if !targets.is_empty() {
 					// select only targets allowed by voter's nomination quota.
-					let nominations_quota =
-						T::NominationsQuota::get_quota_safe(voter_weight.into());
+					let nominations_quota = T::NominationsQuota::get_quota(voter_weight.into());
 
 					// if the current number of targets exceeds the nomination quota, emit an event
 					// but proceed without truncating or failing. The nomination quota checks are
@@ -1013,7 +1012,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Used by the runtime API.
 	pub fn api_nominations_quota(balance: BalanceOf<T>) -> u32 {
-		T::NominationsQuota::get_quota_safe(balance)
+		T::NominationsQuota::get_quota(balance)
 	}
 }
 

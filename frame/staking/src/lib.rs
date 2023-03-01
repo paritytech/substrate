@@ -767,21 +767,21 @@ impl<AccountId, Balance: HasCompact + Zero> UnappliedSlash<AccountId, Balance> {
 	}
 }
 
-/// Something that defines the maximum number of nominations per nominator.
+/// Something that defines the maximum number of nominations per nominator based on a curve.
 pub trait NominationsQuota<Balance> {
-	/// Maximum number of nominations. The method `get_quota` may return a larger number of
-	/// nominations than `Self::MaxNominations`. However, `get_quota_safe` returns the bounded
-	/// maximum number of nominations.
+	/// Maximum number of nominations. The method `curve` implements the nomination quota curve and
+	/// should not be used directly. However, `get_quota` returns the bounded maximum number of
+	// nominations based on `fn curve` and the nominator's balance.
 	type MaxNominations: Get<u32>;
 
 	/// Returns the voter's nomination quota within reasonable bounds [`min`, `max`], where `min`
 	/// is 1 and `max` is `Self::MaxNominations`.
-	fn get_quota_safe(balance: Balance) -> u32 {
-		Self::get_quota(balance).max(1).min(Self::MaxNominations::get())
+	fn get_quota(balance: Balance) -> u32 {
+		Self::curve(balance).max(1).min(Self::MaxNominations::get())
 	}
 
-	// Returns the voter's nomination quota based on the quota curve.
-	fn get_quota(balance: Balance) -> u32;
+	// Returns the voter's nomination quota based on its balance and a curve.
+	fn curve(balance: Balance) -> u32;
 }
 
 /// A nomination quota that allows up to MAX nominations for all validators.
@@ -789,7 +789,7 @@ pub struct FixedNominationsQuota<const MAX: u32>;
 impl<Balance, const MAX: u32> NominationsQuota<Balance> for FixedNominationsQuota<MAX> {
 	type MaxNominations = Self;
 
-	fn get_quota(_: Balance) -> u32 {
+	fn curve(_: Balance) -> u32 {
 		MAX
 	}
 }

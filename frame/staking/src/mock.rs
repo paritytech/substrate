@@ -315,7 +315,7 @@ where
 {
 	type MaxNominations = MaxNominations;
 
-	fn get_quota(balance: Balance) -> u32 {
+	fn curve(balance: Balance) -> u32 {
 		match balance.into() {
 			// random curve for testing.
 			0..=110 => MAX,
