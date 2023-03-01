@@ -1602,8 +1602,8 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 
 // NOTE: in this entire impl block, the assumption is that `who` is a stash account.
 impl<T: Config> StakingInterface for Pallet<T> {
-	type AccountId = T::AccountId;
 	type Balance = BalanceOf<T>;
+	type AccountId = T::AccountId;
 
 	fn minimum_nominator_bond() -> Self::Balance {
 		MinNominatorBond::<T>::get()
@@ -1613,29 +1613,10 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		MinValidatorBond::<T>::get()
 	}
 
-	fn desired_validator_count() -> u32 {
-		ValidatorCount::<T>::get()
-	}
-
-	fn election_ongoing() -> bool {
-		T::ElectionProvider::ongoing()
-	}
-
-	fn force_unstake(who: Self::AccountId) -> sp_runtime::DispatchResult {
-		let num_slashing_spans = Self::slashing_spans(&who).map_or(0, |s| s.iter().count() as u32);
-		Self::force_unstake(RawOrigin::Root.into(), who.clone(), num_slashing_spans)
-	}
-
 	fn stash_by_ctrl(controller: &Self::AccountId) -> Result<Self::AccountId, DispatchError> {
 		Self::ledger(controller)
 			.map(|l| l.stash)
 			.ok_or(Error::<T>::NotController.into())
-	}
-
-	fn is_exposed_in_era(who: &Self::AccountId, era: &EraIndex) -> bool {
-		ErasStakers::<T>::iter_prefix(era).any(|(validator, exposures)| {
-			validator == *who || exposures.others.iter().any(|i| i.who == *who)
-		})
 	}
 
 	fn bonding_duration() -> EraIndex {
@@ -1651,34 +1632,6 @@ impl<T: Config> StakingInterface for Pallet<T> {
 			.and_then(|c| Self::ledger(c))
 			.map(|l| Stake { stash: l.stash, total: l.total, active: l.active })
 			.ok_or(Error::<T>::NotStash.into())
-	}
-
-	fn bond_extra(who: &Self::AccountId, extra: Self::Balance) -> DispatchResult {
-		Self::bond_extra(RawOrigin::Signed(who.clone()).into(), extra)
-	}
-
-	fn unbond(who: &Self::AccountId, value: Self::Balance) -> DispatchResult {
-		let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
-		Self::unbond(RawOrigin::Signed(ctrl).into(), value)
-			.map_err(|with_post| with_post.error)
-			.map(|_| ())
-	}
-
-	fn chill(who: &Self::AccountId) -> DispatchResult {
-		// defensive-only: any account bonded via this interface has the stash set as the
-		// controller, but we have to be sure. Same comment anywhere else that we read this.
-		let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
-		Self::chill(RawOrigin::Signed(ctrl).into())
-	}
-
-	fn withdraw_unbonded(
-		who: Self::AccountId,
-		num_slashing_spans: u32,
-	) -> Result<bool, DispatchError> {
-		let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
-		Self::withdraw_unbonded(RawOrigin::Signed(ctrl.clone()).into(), num_slashing_spans)
-			.map(|_| !Ledger::<T>::contains_key(&ctrl))
-			.map_err(|with_post| with_post.error)
 	}
 
 	fn bond(
@@ -1698,6 +1651,53 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
 		let targets = targets.into_iter().map(T::Lookup::unlookup).collect::<Vec<_>>();
 		Self::nominate(RawOrigin::Signed(ctrl).into(), targets)
+	}
+
+	fn chill(who: &Self::AccountId) -> DispatchResult {
+		// defensive-only: any account bonded via this interface has the stash set as the
+		// controller, but we have to be sure. Same comment anywhere else that we read this.
+		let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
+		Self::chill(RawOrigin::Signed(ctrl).into())
+	}
+
+	fn bond_extra(who: &Self::AccountId, extra: Self::Balance) -> DispatchResult {
+		Self::bond_extra(RawOrigin::Signed(who.clone()).into(), extra)
+	}
+
+	fn unbond(who: &Self::AccountId, value: Self::Balance) -> DispatchResult {
+		let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
+		Self::unbond(RawOrigin::Signed(ctrl).into(), value)
+			.map_err(|with_post| with_post.error)
+			.map(|_| ())
+	}
+
+	fn withdraw_unbonded(
+		who: Self::AccountId,
+		num_slashing_spans: u32,
+	) -> Result<bool, DispatchError> {
+		let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
+		Self::withdraw_unbonded(RawOrigin::Signed(ctrl.clone()).into(), num_slashing_spans)
+			.map(|_| !Ledger::<T>::contains_key(&ctrl))
+			.map_err(|with_post| with_post.error)
+	}
+
+	fn desired_validator_count() -> u32 {
+		ValidatorCount::<T>::get()
+	}
+
+	fn election_ongoing() -> bool {
+		T::ElectionProvider::ongoing()
+	}
+
+	fn force_unstake(who: Self::AccountId) -> sp_runtime::DispatchResult {
+		let num_slashing_spans = Self::slashing_spans(&who).map_or(0, |s| s.iter().count() as u32);
+		Self::force_unstake(RawOrigin::Root.into(), who.clone(), num_slashing_spans)
+	}
+
+	fn is_exposed_in_era(who: &Self::AccountId, era: &EraIndex) -> bool {
+		ErasStakers::<T>::iter_prefix(era).any(|(validator, exposures)| {
+			validator == *who || exposures.others.iter().any(|i| i.who == *who)
+		})
 	}
 
 	sp_staking::runtime_benchmarks_enabled! {
