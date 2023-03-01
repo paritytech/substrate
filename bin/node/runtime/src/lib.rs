@@ -599,7 +599,7 @@ impl pallet_fast_unstake::Config for Runtime {
 	type Staking = Staking;
 	type MaxErasToCheckPerBlock = ConstU32<1>;
 	#[cfg(feature = "runtime-benchmarks")]
-	type MaxExposurePageSize = MaxExposurePageSize;
+	type MaxExposurePageSize = <Runtime as pallet_staking::Config>::MaxExposurePageSize;
 	type WeightInfo = ();
 }
 
