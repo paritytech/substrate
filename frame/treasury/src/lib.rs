@@ -67,10 +67,10 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
 use sp_runtime::{
-	traits::{AccountIdConversion, Saturating, StaticLookup, Zero},
+	traits::{AccountIdConversion, CheckedAdd, Saturating, StaticLookup, Zero},
 	Permill, RuntimeDebug,
 };
-use sp_std::prelude::*;
+use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use frame_support::{
 	print,
@@ -136,7 +136,7 @@ pub struct Proposal<AccountId, Balance> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{dispatch_context::with_context, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -339,6 +339,11 @@ pub mod pallet {
 		}
 	}
 
+	#[derive(Default)]
+	struct SpendContext<Balance> {
+		spend_in_context: BTreeMap<Balance, Balance>,
+	}
+
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Put forward a suggestion for spending. A deposit proportional to the value
@@ -433,9 +438,29 @@ pub mod pallet {
 			beneficiary: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let max_amount = T::SpendOrigin::ensure_origin(origin)?;
-			let beneficiary = T::Lookup::lookup(beneficiary)?;
-
 			ensure!(amount <= max_amount, Error::<T, I>::InsufficientPermission);
+
+			with_context::<SpendContext<BalanceOf<T, I>>, _>(|v| {
+				let context = v.or_default();
+
+				// We group based on `max_amount`, to dinstinguish between different kind of
+				// origins. (assumes that all origins have different `max_amount`)
+				//
+				// Worst case is that we reject some "valid" request.
+				let spend = context.spend_in_context.entry(max_amount).or_default();
+
+				// Ensure that we don't overflow nor use more than `max_amount`
+				if spend.checked_add(&amount).map(|s| s > max_amount).unwrap_or(true) {
+					Err(Error::<T, I>::InsufficientPermission)
+				} else {
+					*spend = spend.saturating_add(amount);
+
+					Ok(())
+				}
+			})
+			.unwrap_or(Ok(()))?;
+
+			let beneficiary = T::Lookup::lookup(beneficiary)?;
 			let proposal_index = Self::proposal_count();
 			Approvals::<T, I>::try_append(proposal_index)
 				.map_err(|_| Error::<T, I>::TooManyApprovals)?;

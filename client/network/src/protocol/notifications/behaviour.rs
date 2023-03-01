@@ -415,17 +415,11 @@ impl Notifications {
 	/// Disconnects the given peer if we are connected to it.
 	pub fn disconnect_peer(&mut self, peer_id: &PeerId, set_id: sc_peerset::SetId) {
 		trace!(target: "sub-libp2p", "External API => Disconnect({}, {:?})", peer_id, set_id);
-		self.disconnect_peer_inner(peer_id, set_id, None);
+		self.disconnect_peer_inner(peer_id, set_id);
 	}
 
-	/// Inner implementation of `disconnect_peer`. If `ban` is `Some`, we ban the peer
-	/// for the specific duration.
-	fn disconnect_peer_inner(
-		&mut self,
-		peer_id: &PeerId,
-		set_id: sc_peerset::SetId,
-		ban: Option<Duration>,
-	) {
+	/// Inner implementation of `disconnect_peer`.
+	fn disconnect_peer_inner(&mut self, peer_id: &PeerId, set_id: sc_peerset::SetId) {
 		let mut entry = if let Entry::Occupied(entry) = self.peers.entry((*peer_id, set_id)) {
 			entry
 		} else {
@@ -443,12 +437,8 @@ impl Notifications {
 			PeerState::DisabledPendingEnable { connections, timer_deadline, timer: _ } => {
 				trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
 				self.peerset.dropped(set_id, *peer_id, DropReason::Unknown);
-				let backoff_until = Some(if let Some(ban) = ban {
-					cmp::max(timer_deadline, Instant::now() + ban)
-				} else {
-					timer_deadline
-				});
-				*entry.into_mut() = PeerState::Disabled { connections, backoff_until }
+				*entry.into_mut() =
+					PeerState::Disabled { connections, backoff_until: Some(timer_deadline) }
 			},
 
 			// Enabled => Disabled.
@@ -496,8 +486,7 @@ impl Notifications {
 					.iter()
 					.any(|(_, s)| matches!(s, ConnectionState::Opening)));
 
-				let backoff_until = ban.map(|dur| Instant::now() + dur);
-				*entry.into_mut() = PeerState::Disabled { connections, backoff_until }
+				*entry.into_mut() = PeerState::Disabled { connections, backoff_until: None }
 			},
 
 			// Incoming => Disabled.
@@ -531,13 +520,6 @@ impl Notifications {
 					});
 					*connec_state = ConnectionState::Closing;
 				}
-
-				let backoff_until = match (backoff_until, ban) {
-					(Some(a), Some(b)) => Some(cmp::max(a, Instant::now() + b)),
-					(Some(a), None) => Some(a),
-					(None, Some(b)) => Some(Instant::now() + b),
-					(None, None) => None,
-				};
 
 				debug_assert!(!connections
 					.iter()

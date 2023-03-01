@@ -26,7 +26,7 @@ use sp_consensus_babe::{
 use sp_core::{
 	crypto::KeyTypeId,
 	sr25519::Signature,
-	traits::{CodeExecutor, RuntimeCode},
+	traits::{CallContext, CodeExecutor, RuntimeCode},
 };
 use sp_runtime::{
 	traits::{BlakeTwo256, Header as HeaderT},
@@ -114,7 +114,7 @@ pub fn executor_call(
 		heap_pages: heap_pages.and_then(|hp| Decode::decode(&mut &hp[..]).ok()),
 	};
 	sp_tracing::try_init_simple();
-	executor().call(&mut t, &runtime_code, method, data, use_native)
+	executor().call(&mut t, &runtime_code, method, data, use_native, CallContext::Onchain)
 }
 
 pub fn new_test_ext(code: &[u8]) -> TestExternalities<BlakeTwo256> {
