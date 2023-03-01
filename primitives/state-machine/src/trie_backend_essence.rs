@@ -415,8 +415,12 @@ where
 		})
 	}
 
-	/// Return the next key in the trie i.e. the minimum key that is strictly superior to `key` in
+	/// Returns the next key in the trie i.e. the minimum key that is strictly superior to `key` in
 	/// lexicographic order.
+	///
+	/// Will always traverse the trie from scratch in search of the key, which is slow.
+	/// Used only when debug assertions are enabled to crosscheck the results of finding
+	/// the next key through an iterator.
 	#[cfg(debug_assertions)]
 	pub fn next_storage_key_slow(&self, key: &[u8]) -> Result<Option<StorageKey>> {
 		self.next_storage_key_from_root(&self.root, None, key)
