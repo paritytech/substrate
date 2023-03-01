@@ -100,18 +100,17 @@ pub fn expand_runtime_metadata(
 			}
 
 			pub fn metadata() -> #scrate::metadata::RuntimeMetadataPrefixed {
-				let v14: #scrate::metadata::RuntimeMetadataV14 = #runtime::metadata_ir().into();
-				v14.into()
+				#scrate::metadata_ir::into_latest(#runtime::metadata_ir())
 			}
 
 			pub fn metadata_at_version(version: u32) -> Option<#scrate::OpaqueMetadata> {
-				#scrate::metadata_ir::api::to_version(#runtime::metadata_ir(), version).map(|prefixed| {
+				#scrate::metadata_ir::into_version(#runtime::metadata_ir(), version).map(|prefixed| {
 					#scrate::OpaqueMetadata::new(prefixed.into())
 				})
 			}
 
 			pub fn metadata_versions() -> #scrate::sp_std::vec::Vec<u32> {
-				#scrate::metadata_ir::api::supported_versions()
+				#scrate::metadata_ir::supported_versions()
 			}
 		}
 	}
