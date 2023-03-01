@@ -517,32 +517,42 @@ where
 						self.sub_id,
 						err
 					);
-					break
+					let _ = sink.send(&FollowEvent::<String>::Stop);
+					return
 				},
 			};
 
 			for event in events {
-				match sink.send(&event) {
-					// Submitted successfully.
-					Ok(true) => continue,
-					// Client disconnected.
-					Ok(false) => return,
-					Err(err) => {
-						// Failed to submit event.
-						debug!(
-							target: LOG_TARGET,
-							"[follow][id={:?}] Failed to send event {:?}", self.sub_id, err
-						);
-						break
-					},
+				let result = sink.send(&event);
+
+				// Migration note: the new version of jsonrpsee returns Result<(), DisconnectError>
+				// The logic from `Err(err)` should be moved when building the new
+				// `SubscriptionMessage`.
+
+				// For now, jsonrpsee returns:
+				// Ok(true): message sent
+				// Ok(false): client disconnected or subscription closed
+				// Err(err): serder serialization error of the event
+				if let Err(err) = result {
+					// Failed to submit event.
+					debug!(
+						target: LOG_TARGET,
+						"[follow][id={:?}] Failed to send event {:?}", self.sub_id, err
+					);
+
+					let _ = sink.send(&FollowEvent::<String>::Stop);
+					return
+				}
+
+				if let Ok(false) = result {
+					// Client disconnected or subscription was closed.
+					return
 				}
 			}
 
 			stream_item = stream.next();
 			stop_event = next_stop_event;
 		}
-
-		let _ = sink.send(&FollowEvent::<String>::Stop);
 	}
 
 	/// Generate the block events for the `chainHead_follow` method.
