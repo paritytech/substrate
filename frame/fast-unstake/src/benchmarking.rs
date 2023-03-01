@@ -74,7 +74,7 @@ fn setup_staking<T: Config>(v: u32, until: EraIndex) {
 		.collect::<Vec<_>>();
 
 	for era in 0..=until {
-		let others = (0..T::MaxExposurePageSize::get())
+		let others = (0..T::Staking::max_exposure_page_size())
 			.map(|s| {
 				let who = frame_benchmarking::account::<T::AccountId>("nominator", era, s);
 				let value = ed;
