@@ -18,6 +18,7 @@
 
 //! BEEFY Prometheus metrics definition
 
+use crate::LOG_TARGET;
 use log::{debug, error};
 use prometheus::{register, Counter, Gauge, PrometheusError, Registry, U64};
 
@@ -309,11 +310,16 @@ pub(crate) fn register_metrics<T: PrometheusRegister>(
 ) -> Option<T> {
 	prometheus_registry.as_ref().map(T::register).and_then(|result| match result {
 		Ok(metrics) => {
-			debug!(target: "beefy", "🥩 Registered {} metrics", T::DESCRIPTION);
+			debug!(target: LOG_TARGET, "🥩 Registered {} metrics", T::DESCRIPTION);
 			Some(metrics)
 		},
 		Err(err) => {
-			error!(target: "beefy", "🥩 Failed to register {} metrics: {:?}", T::DESCRIPTION, err);
+			error!(
+				target: LOG_TARGET,
+				"🥩 Failed to register {} metrics: {:?}",
+				T::DESCRIPTION,
+				err
+			);
 			None
 		},
 	})
