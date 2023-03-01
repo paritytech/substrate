@@ -18,7 +18,8 @@
 
 //! BEEFY Prometheus metrics definition
 
-use log::debug;
+use crate::LOG_TARGET;
+use log::{debug, error};
 use prometheus::{register, Counter, Gauge, PrometheusError, Registry, U64};
 
 /// Helper trait for registering BEEFY metrics to Prometheus registry.
@@ -129,13 +130,13 @@ impl PrometheusRegister for VoterMetrics {
 			)?,
 			beefy_equivocation_votes: register(
 				Counter::new(
-					"substrate_beefy_stale_votes",
+					"substrate_beefy_equivocation_votes",
 					"Number of equivocation votes received",
 				)?,
 				registry,
 			)?,
 			beefy_invalid_votes: register(
-				Counter::new("substrate_beefy_stale_votes", "Number of invalid votes received")?,
+				Counter::new("substrate_beefy_invalid_votes", "Number of invalid votes received")?,
 				registry,
 			)?,
 			beefy_stale_votes: register(
@@ -200,14 +201,14 @@ impl PrometheusRegister for BlockImportMetrics {
 			beefy_good_justification_imports: register(
 				Counter::new(
 					"substrate_beefy_good_justification_imports",
-					"Number of Good Justification imports",
+					"Number of good justifications on block-import",
 				)?,
 				registry,
 			)?,
 			beefy_bad_justification_imports: register(
 				Counter::new(
 					"substrate_beefy_bad_justification_imports",
-					"Number of Bad Justification imports",
+					"Number of bad justifications on block-import",
 				)?,
 				registry,
 			)?,
@@ -309,11 +310,16 @@ pub(crate) fn register_metrics<T: PrometheusRegister>(
 ) -> Option<T> {
 	prometheus_registry.as_ref().map(T::register).and_then(|result| match result {
 		Ok(metrics) => {
-			debug!(target: "beefy", "🥩 Registered {} metrics", T::DESCRIPTION);
+			debug!(target: LOG_TARGET, "🥩 Registered {} metrics", T::DESCRIPTION);
 			Some(metrics)
 		},
 		Err(err) => {
-			debug!(target: "beefy", "🥩 Failed to register {} metrics: {:?}", T::DESCRIPTION, err);
+			error!(
+				target: LOG_TARGET,
+				"🥩 Failed to register {} metrics: {:?}",
+				T::DESCRIPTION,
+				err
+			);
 			None
 		},
 	})
@@ -346,4 +352,18 @@ macro_rules! metric_get {
 	($self:ident, $m:ident) => {{
 		$self.metrics.as_ref().map(|metrics| metrics.$m.clone())
 	}};
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+	use super::*;
+
+	#[test]
+	fn should_register_metrics() {
+		let registry = Some(Registry::new());
+		assert!(register_metrics::<VoterMetrics>(registry.clone()).is_some());
+		assert!(register_metrics::<BlockImportMetrics>(registry.clone()).is_some());
+		assert!(register_metrics::<OnDemandIncomingRequestsMetrics>(registry.clone()).is_some());
+		assert!(register_metrics::<OnDemandOutgoingRequestsMetrics>(registry.clone()).is_some());
+	}
 }
