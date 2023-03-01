@@ -745,19 +745,18 @@ pub mod pallet {
 						if !Self::current_phase().is_off() {
 							Self::do_force_rotate_round();
 						}
-
-						match Self::create_snapshot() {
-							Ok(_) => Self::phase_transition(Phase::Signed),
-							Err(why) => {
-								log!(warn, "failed to open signed phase due to {:?}", why);
-								return T::WeightInfo::on_initialize_nothing()
-							},
-						}
 						<ForcePhase<T>>::kill();
-						return T::WeightInfo::on_initialize_open_signed()
+
+						return Self::start_signed_phase()
+					},
+					Some(Phase::Emergency) => {
+						<QueuedSolution<T>>::kill();
+						<CurrentPhase<T>>::put(Phase::Emergency);
+
+						return T::DbWeight::get().writes(2)
 					},
 					_ => {},
-				}
+				};
 			}
 
 			let next_election = T::DataProvider::next_election_prediction(now).max(now);
@@ -778,17 +777,7 @@ pub mod pallet {
 			match current_phase {
 				Phase::Off if remaining <= signed_deadline && remaining > unsigned_deadline => {
 					// NOTE: if signed-phase length is zero, second part of the if-condition fails.
-					match Self::create_snapshot() {
-						Ok(_) => {
-							Self::phase_transition(Phase::Signed);
-							T::WeightInfo::on_initialize_open_signed()
-						},
-						Err(why) => {
-							// Not much we can do about this at this point.
-							log!(warn, "failed to open signed phase due to {:?}", why);
-							T::WeightInfo::on_initialize_nothing()
-						},
-					}
+					Self::start_signed_phase()
 				},
 				Phase::Signed | Phase::Off
 					if remaining <= unsigned_deadline && remaining > Zero::zero() =>
@@ -1159,8 +1148,8 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Initializes an open signed phase. If the current phase is not
-		/// `Phase::Off` proceeds to the next round.
+		/// Indicates that by the end of the current session the phase will be
+		/// forced to a signed phase.
 		///
 		/// The dispatch origin for this call must be root.
 		#[pallet::call_index(6)]
@@ -1172,17 +1161,17 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Sets the current phase to `Phase::Emergency` and removes the current
-		/// queued solution.
+		/// Indicates that by the end of the current session the phase will be
+		/// forced to an emergency phase. That will result in the removal of the
+		/// current queued solution.
 		///
 		/// The dispatch origin for this call must be `ForceOrigin`.
-		#[pallet::call_index(8)]
+		#[pallet::call_index(7)]
 		#[pallet::weight((T::DbWeight::get().writes(2), DispatchClass::Operational))]
 		pub fn force_start_emergency_phase(origin: OriginFor<T>) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
-			<QueuedSolution<T>>::kill();
-			<CurrentPhase<T>>::put(Phase::Emergency);
+			<ForcePhase<T>>::put(Phase::Emergency);
 			Ok(())
 		}
 	}
@@ -1444,6 +1433,21 @@ impl<T: Config> Pallet<T> {
 
 		<QueuedSolution<T>>::kill();
 		Self::rotate_round();
+	}
+
+	/// Treis to create a snapshot and transitions to the signed phase if successful.
+	fn start_signed_phase() -> Weight {
+		match Self::create_snapshot() {
+			Ok(_) => {
+				Self::phase_transition(Phase::Signed);
+				T::WeightInfo::on_initialize_open_signed()
+			},
+			Err(why) => {
+				// Not much we can do about this at this point.
+				log!(warn, "failed to open signed phase due to {:?}", why);
+				T::WeightInfo::on_initialize_nothing()
+			},
+		}
 	}
 
 	/// Phase transition helper.
@@ -2180,7 +2184,10 @@ mod tests {
 			);
 
 			assert_ok!(MultiPhase::force_start_emergency_phase(crate::mock::RuntimeOrigin::root()));
+
+			roll_to(3);
 			assert!(MultiPhase::current_phase().is_emergency());
+			assert!(MultiPhase::queued_solution().is_none());
 		})
 	}
 
