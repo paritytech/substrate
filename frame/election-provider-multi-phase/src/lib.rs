@@ -1883,7 +1883,7 @@ mod tests {
 		mock::{
 			multi_phase_events, raw_solution, roll_to, roll_to_signed, roll_to_unsigned, AccountId,
 			ExtBuilder, MockWeightInfo, MockedWeightInfo, MultiPhase, Runtime, RuntimeOrigin,
-			SignedMaxSubmissions, System, TargetIndex, Targets,
+			SignedMaxSubmissions, System,
 		},
 		Phase,
 	};
@@ -2490,7 +2490,7 @@ mod tests {
 			let new_bounds = ElectionBoundsBuilder::new().targets_count(1_000).build();
 			crate::mock::ElectionsBounds::set(new_bounds);
 
-			Targets::set((0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>());
+			crate::mock::Targets::set((0..(1_000 as AccountId) + 1).collect::<Vec<_>>());
 
 			// Signed phase failed to open.
 			roll_to(15);
@@ -2529,9 +2529,7 @@ mod tests {
 			let new_bounds = ElectionBoundsBuilder::new().targets_count(1_000).build();
 			crate::mock::ElectionsBounds::set(new_bounds);
 
-			crate::mock::Targets::set(
-				(0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>(),
-			);
+			crate::mock::Targets::set((0..(1_000 as AccountId) + 1).collect::<Vec<_>>());
 
 			// Signed phase failed to open.
 			roll_to(15);
