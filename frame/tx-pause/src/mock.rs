@@ -146,30 +146,16 @@ parameter_types! {
 #[derive(Copy, Clone, Encode, Decode, RuntimeDebug, MaxEncodedLen, scale_info::TypeInfo)]
 pub struct WhitelistCallNames;
 
-/// Contains used by `BaseCallFiler` so this impl whitelists `Balances::transfer_keep_alive`
-/// and all DummyPallet calls. All others may be paused.
+/// Contains used by `BaseCallFiler` so this impl whitelists `Balances::transfer_keep_alive`. All
+/// others may be paused.
 impl Contains<FullNameOf<Test>> for WhitelistCallNames {
 	fn contains(full_name: &FullNameOf<Test>) -> bool {
-		let unpausables: Vec<FullNameOf<Test>> = vec![
-			(
-				b"Balances".to_vec().try_into().unwrap(),
-				Some(b"transfer_keep_alive".to_vec().try_into().unwrap()),
-			),
-			(b"DummyPallet".to_vec().try_into().unwrap(), None),
-		];
+		let unpausables: Vec<FullNameOf<Test>> = vec![(
+			b"Balances".to_vec().try_into().unwrap(),
+			b"transfer_keep_alive".to_vec().try_into().unwrap(),
+		)];
 
-		for unpausable_call in unpausables {
-			let (pallet_name, maybe_call_name) = full_name;
-			if unpausable_call.1.is_none() {
-				return &unpausable_call.0 == pallet_name
-			} else {
-				if &unpausable_call.0 == pallet_name {
-					return &unpausable_call.1 == maybe_call_name
-				}
-			}
-		}
-
-		false
+		unpausables.contains(full_name)
 	}
 }
 

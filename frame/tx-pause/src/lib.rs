@@ -102,9 +102,10 @@ pub type PalletNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLen>;
 /// The stringy name of a call (within a pallet) from [`GetCallMetadata`] for
 /// [`Config::RuntimeCall`] variants.
 pub type CallNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLen>;
+
 /// A sully specified pallet ([`PalletNameOf`]) and optional call ([`CallNameOf`])
 /// to partially or fully specify an item a variant of a  [`Config::RuntimeCall`].
-pub type FullNameOf<T> = (PalletNameOf<T>, Option<CallNameOf<T>>);
+pub type FullNameOf<T> = (PalletNameOf<T>, CallNameOf<T>);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -169,7 +170,7 @@ pub mod pallet {
 		IsUnpaused,
 
 		/// The call is listed as safe and cannot be paused.
-		IsUnpausable,
+		Unpausable,
 
 		// The pallet or call does not exist in the runtime.
 		NotFound,
@@ -178,10 +179,10 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// This pallet, or a specific call is now paused. \[pallet_name, Option<call_name>\]
-		SomethingPaused { full_name: FullNameOf<T> },
-		/// This pallet, or a specific call is now unpaused. \[pallet_name, Option<call_name>\]
-		SomethingUnpaused { full_name: FullNameOf<T> },
+		/// This pallet, or a specific call is now paused.
+		CallPaused { full_name: FullNameOf<T> },
+		/// This pallet, or a specific call is now unpaused.
+		CallUnpaused { full_name: FullNameOf<T> },
 	}
 
 	/// The set of calls that are explicitly paused.
@@ -221,7 +222,7 @@ pub mod pallet {
 		/// Pause a call.
 		///
 		/// Can only be called by [`Config::PauseOrigin`].
-		/// Emits an [`Event::SomethingPaused`] event on success.
+		/// Emits an [`Event::CallPaused`] event on success.
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::pause())]
 		pub fn pause(origin: OriginFor<T>, full_name: FullNameOf<T>) -> DispatchResult {
@@ -229,7 +230,7 @@ pub mod pallet {
 
 			Self::ensure_can_pause(&full_name)?;
 			PausedCalls::<T>::insert(&full_name, ());
-			Self::deposit_event(Event::SomethingPaused { full_name });
+			Self::deposit_event(Event::CallPaused { full_name });
 
 			Ok(())
 		}
@@ -237,7 +238,7 @@ pub mod pallet {
 		/// Un-pause a call.
 		///
 		/// Can only be called by [`Config::UnpauseOrigin`].
-		/// Emits an [`Event::SomethingUnpaused`] event on success.
+		/// Emits an [`Event::CallUnpaused`] event on success.
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::unpause())]
 		pub fn unpause(origin: OriginFor<T>, full_name: FullNameOf<T>) -> DispatchResult {
@@ -245,43 +246,31 @@ pub mod pallet {
 
 			Self::ensure_can_unpause(&full_name)?;
 			PausedCalls::<T>::remove(&full_name);
-			Self::deposit_event(Event::SomethingUnpaused { full_name });
+			Self::deposit_event(Event::CallUnpaused { full_name });
 			Ok(())
 		}
 	}
 }
 
 impl<T: Config> Pallet<T> {
-	/// Return whether this pallet or call is paused.
+	/// Return whether this call is paused.
 	pub fn is_paused_unbound(pallet_name: Vec<u8>, call_name: Vec<u8>) -> bool {
 		let pallet_name = PalletNameOf::<T>::try_from(pallet_name);
 		let call_name = CallNameOf::<T>::try_from(call_name);
 
 		match (pallet_name, call_name) {
-			(Ok(pallet_name), Ok(call_name)) => Self::is_paused(&&<FullNameOf<T>>::from((
-				pallet_name.clone(),
-				Some(call_name.clone()),
-			))),
+			(Ok(pallet_name), Ok(call_name)) =>
+				Self::is_paused(&&<FullNameOf<T>>::from((pallet_name.clone(), call_name.clone()))),
 			_ => T::PauseTooLongNames::get(),
 		}
 	}
 
-	/// Return whether this pallet or call is paused
+	/// Return whether this call is paused.
 	pub fn is_paused(full_name: &FullNameOf<T>) -> bool {
-		let (pallet_name, maybe_call_name) = full_name;
-		// SAFETY: Everything that is whitelisted cannot be paused,
-		// including calls within paused pallets.
-		if T::WhitelistCallNames::contains(&<FullNameOf<T>>::from((
-			pallet_name.clone(),
-			maybe_call_name.clone(),
-		))) {
+		if T::WhitelistCallNames::contains(full_name) {
 			return false
-		};
-		// Check is pallet is paused.
-		if <PausedCalls<T>>::contains_key(<FullNameOf<T>>::from((pallet_name.clone(), None))) {
-			return true
-		};
-		// Check if call in a pallet is paused
+		}
+		
 		<PausedCalls<T>>::contains_key(full_name)
 	}
 
@@ -289,13 +278,14 @@ impl<T: Config> Pallet<T> {
 	pub fn ensure_can_pause(full_name: &FullNameOf<T>) -> Result<(), Error<T>> {
 		// The `TxPause` pallet can never be paused.
 		if full_name.0.as_ref() == <Self as PalletInfoAccess>::name().as_bytes().to_vec() {
-			return Err(Error::<T>::IsUnpausable)
+			return Err(Error::<T>::Unpausable)
+		}
+
+		if T::WhitelistCallNames::contains(&full_name) {
+			return Err(Error::<T>::Unpausable)
 		}
 		if Self::is_paused(&full_name) {
 			return Err(Error::<T>::IsPaused)
-		}
-		if T::WhitelistCallNames::contains(&full_name) {
-			return Err(Error::<T>::IsUnpausable)
 		}
 		Ok(())
 	}
