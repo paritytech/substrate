@@ -402,7 +402,7 @@ fn as_derivative_handles_weight_refund() {
 }
 
 #[test]
-fn as_derivative_filters() {
+fn as_derivative_basic_filters() {
 	new_test_ext().execute_with(|| {
 		assert_err_ignore_postinfo!(
 			Utility::as_derivative(
@@ -412,6 +412,20 @@ fn as_derivative_filters() {
 					dest: 2,
 					value: 1
 				})),
+			),
+			DispatchError::from(frame_system::Error::<Test>::CallFiltered),
+		);
+	});
+}
+
+#[test]
+fn as_derivative_call_filters() {
+	new_test_ext().execute_with(|| {
+		assert_err_ignore_postinfo!(
+			Utility::as_derivative(
+				RuntimeOrigin::signed(1),
+				1,
+				Box::new(RuntimeCall::Example(example::Call::not_batchable { arg: 0 })),
 			),
 			DispatchError::from(frame_system::Error::<Test>::CallFiltered),
 		);
