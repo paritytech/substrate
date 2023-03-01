@@ -23,13 +23,13 @@ use sp_runtime::traits::Block as BlockT;
 
 /// An encoded finality proof proving that the given header has been finalized.
 /// The given bytes should be the SCALE-encoded representation of a
-/// `beefy_primitives::VersionedFinalityProof`.
+/// `sp_consensus_beefy::VersionedFinalityProof`.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct EncodedVersionedFinalityProof(sp_core::Bytes);
 
 impl EncodedVersionedFinalityProof {
 	pub fn new<Block>(
-		finality_proof: beefy_gadget::justification::BeefyVersionedFinalityProof<Block>,
+		finality_proof: sc_consensus_beefy::justification::BeefyVersionedFinalityProof<Block>,
 	) -> Self
 	where
 		Block: BlockT,

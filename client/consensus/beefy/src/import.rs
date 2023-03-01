@@ -16,8 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use beefy_primitives::{BeefyApi, BEEFY_ENGINE_ID};
 use log::debug;
+use sp_consensus_beefy::{BeefyApi, BEEFY_ENGINE_ID};
 use std::{collections::HashMap, sync::Arc};
 
 use sp_api::{ProvideRuntimeApi, TransactionFor};
