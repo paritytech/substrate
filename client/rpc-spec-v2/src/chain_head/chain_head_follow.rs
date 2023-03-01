@@ -42,7 +42,7 @@ use sp_blockchain::{
 	Backend as BlockChainBackend, Error as BlockChainError, HeaderBackend, HeaderMetadata, Info,
 };
 use sp_runtime::{
-	traits::{Block as BlockT, Header, One},
+	traits::{Block as BlockT, Header as HeaderT, One},
 	Saturating,
 };
 use std::{collections::HashSet, sync::Arc};
@@ -110,6 +110,26 @@ struct InitialBlocks<Block: BlockT> {
 	pruned_forks: HashSet<Block::Hash>,
 }
 
+/// The startup point from which chainHead started to generate events.
+struct StartupPoint<Block: BlockT> {
+	/// Best block hash.
+	pub best_hash: Block::Hash,
+	/// The head of the finalized chain.
+	pub finalized_hash: Block::Hash,
+	/// Last finalized block number.
+	pub finalized_number: <<Block as BlockT>::Header as HeaderT>::Number,
+}
+
+impl<Block: BlockT> From<Info<Block>> for StartupPoint<Block> {
+	fn from(info: Info<Block>) -> Self {
+		StartupPoint::<Block> {
+			best_hash: info.best_hash,
+			finalized_hash: info.finalized_hash,
+			finalized_number: info.finalized_number,
+		}
+	}
+}
+
 impl<BE, Block, Client> ChainHeadFollower<BE, Block, Client>
 where
 	Block: BlockT + 'static,
@@ -159,11 +179,11 @@ where
 	/// Get the in-memory blocks of the client, starting from the provided finalized hash.
 	fn get_init_blocks_with_forks(
 		&self,
-		info: &Info<Block>,
+		startup_point: &StartupPoint<Block>,
 	) -> Result<InitialBlocks<Block>, SubscriptionManagementError> {
 		let blockchain = self.backend.blockchain();
 		let leaves = blockchain.leaves()?;
-		let finalized = info.finalized_hash;
+		let finalized = startup_point.finalized_hash;
 		let mut pruned_forks = HashSet::new();
 		let mut finalized_block_descendants = Vec::new();
 		for leaf in leaves {
@@ -194,15 +214,15 @@ where
 	/// block hashes that should be ignored by the `Finalized` event.
 	fn generate_init_events(
 		&mut self,
-		info: &Info<Block>,
+		startup_point: &StartupPoint<Block>,
 	) -> Result<(Vec<FollowEvent<Block::Hash>>, HashSet<Block::Hash>), SubscriptionManagementError>
 	{
-		let init = self.get_init_blocks_with_forks(info)?;
+		let init = self.get_init_blocks_with_forks(startup_point)?;
 
 		let initial_blocks = init.finalized_block_descendants;
 
 		// The initialized event is the first one sent.
-		let finalized_block_hash = info.finalized_hash;
+		let finalized_block_hash = startup_point.finalized_hash;
 		self.sub_handle.pin_block(finalized_block_hash)?;
 
 		let finalized_block_runtime = self.generate_runtime_event(finalized_block_hash, None);
@@ -232,7 +252,7 @@ where
 		}
 
 		// Generate a new best block event.
-		let best_block_hash = info.best_hash;
+		let best_block_hash = startup_point.best_hash;
 		if best_block_hash != finalized_block_hash {
 			let best_block = FollowEvent::BestBlockChanged(BestBlockChanged { best_block_hash });
 			self.best_block_cache = Some(best_block_hash);
@@ -289,7 +309,7 @@ where
 	fn handle_import_blocks(
 		&mut self,
 		notification: BlockImportNotification<Block>,
-		info: &Info<Block>,
+		startup_point: &StartupPoint<Block>,
 	) -> Result<Vec<FollowEvent<Block::Hash>>, SubscriptionManagementError> {
 		// The block was already pinned by the initial block events or by the finalized event.
 		if !self.sub_handle.pin_block(notification.hash)? {
@@ -300,7 +320,7 @@ where
 		let Some(block_number) = self.client.number(notification.hash)? else {
 			return Err(SubscriptionManagementError::BlockNumberAbsent)
 		};
-		if block_number < info.finalized_number {
+		if block_number < startup_point.finalized_number {
 			return Ok(Default::default())
 		}
 
@@ -396,7 +416,7 @@ where
 		&mut self,
 		notification: FinalityNotification<Block>,
 		to_ignore: &mut HashSet<Block::Hash>,
-		info: &Info<Block>,
+		startup_point: &StartupPoint<Block>,
 	) -> Result<Vec<FollowEvent<Block::Hash>>, SubscriptionManagementError> {
 		let last_finalized = notification.hash;
 
@@ -404,7 +424,7 @@ where
 		let Some(block_number) = self.client.number(last_finalized)? else {
 			return Err(SubscriptionManagementError::BlockNumberAbsent)
 		};
-		if block_number < info.finalized_number {
+		if block_number < startup_point.finalized_number {
 			return Ok(Default::default())
 		}
 
@@ -486,7 +506,7 @@ where
 	/// for as long as the `rx_stop` event was not called.
 	async fn submit_events<EventStream>(
 		&mut self,
-		info: &Info<Block>,
+		startup_point: &StartupPoint<Block>,
 		mut stream: EventStream,
 		mut to_ignore: HashSet<Block::Hash>,
 		mut sink: SubscriptionSink,
@@ -503,9 +523,9 @@ where
 			let events = match event {
 				NotificationType::InitialEvents(events) => Ok(events),
 				NotificationType::NewBlock(notification) =>
-					self.handle_import_blocks(notification, &info),
+					self.handle_import_blocks(notification, &startup_point),
 				NotificationType::Finalized(notification) =>
-					self.handle_finalized_blocks(notification, &mut to_ignore, &info),
+					self.handle_finalized_blocks(notification, &mut to_ignore, &startup_point),
 			};
 
 			let events = match events {
@@ -572,8 +592,8 @@ where
 			.finality_notification_stream()
 			.map(|notification| NotificationType::Finalized(notification));
 
-		let info = self.client.info();
-		let (initial_events, pruned_forks) = match self.generate_init_events(&info) {
+		let startup_point = StartupPoint::from(self.client.info());
+		let (initial_events, pruned_forks) = match self.generate_init_events(&startup_point) {
 			Ok(blocks) => blocks,
 			Err(err) => {
 				debug!(
@@ -591,6 +611,7 @@ where
 		let merged = tokio_stream::StreamExt::merge(stream_import, stream_finalized);
 		let stream = stream::once(futures::future::ready(initial)).chain(merged);
 
-		self.submit_events(&info, stream.boxed(), pruned_forks, sink, rx_stop).await;
+		self.submit_events(&startup_point, stream.boxed(), pruned_forks, sink, rx_stop)
+			.await;
 	}
 }
