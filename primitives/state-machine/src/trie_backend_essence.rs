@@ -415,9 +415,14 @@ where
 		})
 	}
 
-	/// Return the next key in the trie i.e. the minimum key that is strictly superior to `key` in
+	/// Returns the next key in the trie i.e. the minimum key that is strictly superior to `key` in
 	/// lexicographic order.
-	pub fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>> {
+	///
+	/// Will always traverse the trie from scratch in search of the key, which is slow.
+	/// Used only when debug assertions are enabled to crosscheck the results of finding
+	/// the next key through an iterator.
+	#[cfg(debug_assertions)]
+	pub fn next_storage_key_slow(&self, key: &[u8]) -> Result<Option<StorageKey>> {
 		self.next_storage_key_from_root(&self.root, None, key)
 	}
 
@@ -859,6 +864,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H> + Send + Sync>
 #[cfg(test)]
 mod test {
 	use super::*;
+	use crate::{Backend, TrieBackend};
 	use sp_core::{Blake2Hasher, H256};
 	use sp_trie::{
 		cache::LocalTrieCache, trie_types::TrieDBMutBuilderV1 as TrieDBMutBuilder, KeySpacedDBMut,
@@ -897,6 +903,8 @@ mod test {
 		};
 
 		let essence_1 = TrieBackendEssence::<_, _, LocalTrieCache<_>>::new(mdb, root_1);
+		let mdb = essence_1.backend_storage().clone();
+		let essence_1 = TrieBackend::from_essence(essence_1);
 
 		assert_eq!(essence_1.next_storage_key(b"2"), Ok(Some(b"3".to_vec())));
 		assert_eq!(essence_1.next_storage_key(b"3"), Ok(Some(b"4".to_vec())));
@@ -904,7 +912,6 @@ mod test {
 		assert_eq!(essence_1.next_storage_key(b"5"), Ok(Some(b"6".to_vec())));
 		assert_eq!(essence_1.next_storage_key(b"6"), Ok(None));
 
-		let mdb = essence_1.backend_storage().clone();
 		let essence_2 = TrieBackendEssence::<_, _, LocalTrieCache<_>>::new(mdb, root_2);
 
 		assert_eq!(essence_2.next_child_storage_key(child_info, b"2"), Ok(Some(b"3".to_vec())));
