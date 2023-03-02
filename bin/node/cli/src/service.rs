@@ -560,7 +560,8 @@ pub fn new_full(config: Configuration, cli: Cli) -> Result<TaskManager, ServiceE
 		cli.storage_monitor,
 		database_source,
 		&task_manager.spawn_essential_handle(),
-	)?;
+	)
+	.map_err(|e| ServiceError::Application(e.into()))?;
 
 	Ok(task_manager)
 }

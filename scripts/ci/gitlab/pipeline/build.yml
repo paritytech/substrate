@@ -4,63 +4,63 @@
 # PIPELINE_SCRIPTS_TAG can be found in the project variables
 
 .check-dependent-project:
-  stage:                           build
+  stage: build
   # DAG: this is artificial dependency
   needs:
-    - job:                         cargo-clippy
-      artifacts:                   false
+    - job: cargo-clippy
+      artifacts: false
   extends:
     - .docker-env
     - .test-refs-no-trigger-prs-only
   script:
     - git clone
-        --depth=1
-        --branch="$PIPELINE_SCRIPTS_TAG"
-        https://github.com/paritytech/pipeline-scripts
+      --depth=1
+      --branch="$PIPELINE_SCRIPTS_TAG"
+      https://github.com/paritytech/pipeline-scripts
     - ./pipeline-scripts/check_dependent_project.sh
-        --org paritytech
-        --dependent-repo "$DEPENDENT_REPO"
-        --github-api-token "$GITHUB_PR_TOKEN"
-        --extra-dependencies "$EXTRA_DEPENDENCIES"
-        --companion-overrides "$COMPANION_OVERRIDES"
+      --org paritytech
+      --dependent-repo "$DEPENDENT_REPO"
+      --github-api-token "$GITHUB_PR_TOKEN"
+      --extra-dependencies "$EXTRA_DEPENDENCIES"
+      --companion-overrides "$COMPANION_OVERRIDES"
 
 # Individual jobs are set up for each dependent project so that they can be ran in parallel.
 # Arguably we could generate a job for each companion in the PR's description using Gitlab's
 # parent-child pipelines but that's more complicated.
 
 check-dependent-polkadot:
-  extends:                         .check-dependent-project
+  extends: .check-dependent-project
   variables:
-    DEPENDENT_REPO:                polkadot
+    DEPENDENT_REPO: polkadot
     COMPANION_OVERRIDES: |
       substrate: polkadot-v*
       polkadot: release-v*
   rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/  #PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/ #PRs
 
 check-dependent-cumulus:
-  extends:                         .check-dependent-project
+  extends: .check-dependent-project
   variables:
-    DEPENDENT_REPO:                cumulus
-    EXTRA_DEPENDENCIES:            polkadot
+    DEPENDENT_REPO: cumulus
+    EXTRA_DEPENDENCIES: polkadot
     COMPANION_OVERRIDES: |
       substrate: polkadot-v*
       polkadot: release-v*
   rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/  #PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/ #PRs
 
 build-linux-substrate:
-  stage:                           build
+  stage: build
   extends:
     - .collect-artifacts
     - .docker-env
     - .build-refs
   variables:
     # this variable gets overriden by "rusty-cachier environment inject", use the value as default
-    CARGO_TARGET_DIR:              "$CI_PROJECT_DIR/target"
+    CARGO_TARGET_DIR: "$CI_PROJECT_DIR/target"
   needs:
-    - job:                         test-linux-stable
-      artifacts:                   false
+    - job: test-linux-stable
+      artifacts: false
   before_script:
     - !reference [.job-switcher, before_script]
     - mkdir -p ./artifacts/substrate/
@@ -74,10 +74,10 @@ build-linux-substrate:
     - mv $CARGO_TARGET_DIR/release/substrate ./artifacts/substrate/.
     - echo -n "Substrate version = "
     - if [ "${CI_COMMIT_TAG}" ]; then
-        echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
+      echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
       else
-        ./artifacts/substrate/substrate --version |
-          cut -d ' ' -f 2 | tee ./artifacts/substrate/VERSION;
+      ./artifacts/substrate/substrate --version |
+      cut -d ' ' -f 2 | tee ./artifacts/substrate/VERSION;
       fi
     - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
     - cp -r ./scripts/ci/docker/substrate.Dockerfile ./artifacts/substrate/
@@ -86,14 +86,14 @@ build-linux-substrate:
     - rusty-cachier cache upload
 
 .build-subkey:
-  stage:                           build
+  stage: build
   extends:
     - .collect-artifacts
     - .docker-env
     - .publish-refs
   variables:
     # this variable gets overriden by "rusty-cachier environment inject", use the value as default
-    CARGO_TARGET_DIR:              "$CI_PROJECT_DIR/target"
+    CARGO_TARGET_DIR: "$CI_PROJECT_DIR/target"
   before_script:
     - !reference [.job-switcher, before_script]
     - mkdir -p ./artifacts/subkey
@@ -106,17 +106,17 @@ build-linux-substrate:
     - mv $CARGO_TARGET_DIR/release/subkey ./artifacts/subkey/.
     - echo -n "Subkey version = "
     - ./artifacts/subkey/subkey --version |
-        sed -n -E 's/^subkey ([0-9.]+.*)/\1/p' |
-          tee ./artifacts/subkey/VERSION;
+      sed -n -E 's/^subkey ([0-9.]+.*)/\1/p' |
+      tee ./artifacts/subkey/VERSION;
     - sha256sum ./artifacts/subkey/subkey | tee ./artifacts/subkey/subkey.sha256
     - cp -r ./scripts/ci/docker/subkey.Dockerfile ./artifacts/subkey/
     - rusty-cachier cache upload
 
 build-subkey-linux:
-  extends:                         .build-subkey
+  extends: .build-subkey
 
 build-subkey-macos:
-  extends:                         .build-subkey
+  extends: .build-subkey
   # duplicating before_script & script sections from .build-subkey hidden job
   # to overwrite rusty-cachier integration as it doesn't work on macos
   before_script:
@@ -129,8 +129,8 @@ build-subkey-macos:
     - mv ./target/release/subkey ./artifacts/subkey/.
     - echo -n "Subkey version = "
     - ./artifacts/subkey/subkey --version |
-        sed -n -E 's/^subkey ([0-9.]+.*)/\1/p' |
-          tee ./artifacts/subkey/VERSION;
+      sed -n -E 's/^subkey ([0-9.]+.*)/\1/p' |
+      tee ./artifacts/subkey/VERSION;
     - sha256sum ./artifacts/subkey/subkey | tee ./artifacts/subkey/subkey.sha256
     - cp -r ./scripts/ci/docker/subkey.Dockerfile ./artifacts/subkey/
   after_script: [""]
@@ -138,26 +138,26 @@ build-subkey-macos:
     - osx
 
 build-rustdoc:
-  stage:                           build
+  stage: build
   extends:
     - .docker-env
     - .test-refs
   variables:
-    SKIP_WASM_BUILD:               1
-    DOC_INDEX_PAGE:                "sc_service/index.html" # default redirected page
-    RUSTY_CACHIER_TOOLCHAIN:       nightly
+    SKIP_WASM_BUILD: 1
+    DOC_INDEX_PAGE: "sc_service/index.html" # default redirected page
+    RUSTY_CACHIER_TOOLCHAIN: nightly
     # this variable gets overriden by "rusty-cachier environment inject", use the value as default
-    CARGO_TARGET_DIR:              "$CI_PROJECT_DIR/target"
+    CARGO_TARGET_DIR: "$CI_PROJECT_DIR/target"
   artifacts:
-    name:                          "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}-doc"
-    when:                          on_success
-    expire_in:                     7 days
+    name: "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}-doc"
+    when: on_success
+    expire_in: 7 days
     paths:
-    - ./crate-docs/
+      - ./crate-docs/
   # DAG: this is artificial dependency
   needs:
-    - job:                         cargo-clippy
-      artifacts:                   false
+    - job: cargo-clippy
+      artifacts: false
   script:
     - rusty-cachier snapshot create
     - time cargo +nightly doc --locked --workspace --all-features --verbose --no-deps
