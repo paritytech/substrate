@@ -1029,7 +1029,10 @@ trait Invokable<T: Config> {
 		})
 	}
 
-	/// Invoke a contract execution.
+	/// Method that does the actual call to a contract. It can be either a call to a deployed
+	/// contract or a instantiation of a new one.
+	///
+	/// Called by dispatchables and public functions through the [`Invokable::run_guarded`].
 	fn run(
 		&self,
 		context: ExecContext<T>,
@@ -1039,9 +1042,7 @@ trait Invokable<T: Config> {
 
 impl<T: Config> Invokable<T> for CallInput<T> {
 	type Output = ExecReturnValue;
-	/// Method that does the actual call to contract.
-	///
-	/// Called by dispatchables and public functions through the [`Pallet::internal_run`].
+
 	fn run(
 		&self,
 		context: ExecContext<T>,
@@ -1080,9 +1081,7 @@ impl<T: Config> Invokable<T> for CallInput<T> {
 
 impl<T: Config> Invokable<T> for InstantiateInput<T> {
 	type Output = (AccountIdOf<T>, ExecReturnValue);
-	/// Method that does the actual contract instantiation.
-	///
-	/// Called by dispatchables and public functions through the [`Pallet::internal_run`].
+
 	fn run(
 		&self,
 		mut context: ExecContext<T>,
