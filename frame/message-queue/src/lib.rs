@@ -1121,7 +1121,7 @@ impl<T: Config> Pallet<T> {
 
 		let mut service_head = ServiceHead::<T>::get();
 
-		loop {
+		while let Some(head) = Self::bump_service_head(&mut WeightMeter::max_limit()) {
 			if let Some(head) = service_head {
 				let head_book_state = BookStateFor::<T>::get(&head);
 				assert!(
