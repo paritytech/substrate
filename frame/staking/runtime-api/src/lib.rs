@@ -19,14 +19,20 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::Codec;
+use codec::{Codec, Decode, HasCompact, Encode};
 
 sp_api::decl_runtime_apis! {
-	pub trait StakingApi<Balance>
+	pub trait StakingApi<Balance, AccountId>
 		where
-			Balance: Codec,
+			Balance: Codec + HasCompact,
+			AccountId: Encode + Decode,
 	{
 		/// Returns the nominations quota for a nominator with a given balance.
 		fn nominations_quota(balance: Balance) -> u32;
+
+		/// Returns the nominations quota for a nominator with a given balance.
+		fn eras_stakers(era: sp_staking::EraIndex, account: AccountId) -> pallet_staking::Exposure<AccountId, Balance>;
+
+		fn era_page_count(era: sp_staking::EraIndex, account: AccountId) -> sp_staking::PageIndex;
 	}
 }

@@ -1022,6 +1022,14 @@ impl<T: Config> Pallet<T> {
 	pub fn api_nominations_quota(_balance: BalanceOf<T>) -> u32 {
 		T::MaxNominations::get()
 	}
+
+	pub fn api_eras_stakers(era: EraIndex, account: T::AccountId) -> Exposure<T::AccountId, BalanceOf<T>>{
+		Self::eras_stakers(era, &account)
+	}
+
+	pub fn api_era_page_count(era: EraIndex, account: T::AccountId) -> PageIndex {
+		EraInfo::<T>::get_page_count(era, &account)
+	}
 }
 
 impl<T: Config> ElectionDataProvider for Pallet<T> {

@@ -3,7 +3,7 @@ use crate::{self as pools};
 use frame_support::{assert_ok, parameter_types, PalletId};
 use frame_system::RawOrigin;
 use sp_runtime::FixedU128;
-use sp_staking::{PageIndex, Stake};
+use sp_staking::Stake;
 
 pub type BlockNumber = u64;
 pub type AccountId = u128;
@@ -141,7 +141,7 @@ impl sp_staking::StakingInterface for StakingMock {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn max_exposure_page_size() -> PageIndex {
+	fn max_exposure_page_size() -> sp_staking::PageIndex {
 		unimplemented!("method currently not used in testing")
 	}
 
