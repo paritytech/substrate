@@ -228,7 +228,7 @@ mod on_idle {
 			assert_eq!(Queue::<T>::get(1), Some(Deposit::get()));
 
 			// call on_idle with no remaining weight
-			FastUnstake::on_idle(System::block_number(), Weight::from_ref_time(0));
+			FastUnstake::on_idle(System::block_number(), Weight::from_parts(0, 0));
 
 			// assert nothing changed in Queue and Head
 			assert_eq!(Head::<T>::get(), None);
@@ -1091,8 +1091,9 @@ mod batched {
 #[test]
 fn kusama_estimate() {
 	use crate::WeightInfo;
-	let block_time = frame_support::weights::Weight::from_ref_time(
+	let block_time = frame_support::weights::Weight::from_parts(
 		frame_support::weights::constants::WEIGHT_REF_TIME_PER_SECOND * 2,
+		0,
 	)
 	.ref_time() as f32;
 	let on_idle = crate::weights::SubstrateWeight::<T>::on_idle_check(1000, 64).ref_time() as f32;
@@ -1102,8 +1103,9 @@ fn kusama_estimate() {
 #[test]
 fn polkadot_estimate() {
 	use crate::WeightInfo;
-	let block_time = frame_support::weights::Weight::from_ref_time(
+	let block_time = frame_support::weights::Weight::from_parts(
 		frame_support::weights::constants::WEIGHT_REF_TIME_PER_SECOND * 2,
+		0,
 	)
 	.ref_time() as f32;
 	let on_idle = crate::weights::SubstrateWeight::<T>::on_idle_check(300, 64).ref_time() as f32;
