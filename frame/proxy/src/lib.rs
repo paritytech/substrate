@@ -49,7 +49,6 @@ use sp_runtime::{
 	DispatchResult,
 };
 use sp_std::prelude::*;
-use system::Origin;
 pub use weights::WeightInfo;
 
 type CallHashOf<T> = <<T as Config>::CallHasher as Hash>::Output;
@@ -266,7 +265,12 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::remove_proxies(T::MaxProxies::get()))]
 		pub fn remove_proxies(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			Self::remove_all_proxy_delegates(&who);
+			let result = Self::remove_all_proxy_delegates(&who);
+			if let Result::Ok(_val) = result {
+				println!("Successfully removed all proxy delegates.");
+			} else {
+				println!("Couldn't remove all proxy delegates");
+			}
 			Ok(())
 		}
 
