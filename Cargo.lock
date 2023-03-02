@@ -9312,6 +9312,7 @@ dependencies = [
  "log",
  "parking_lot 0.12.1",
  "prometheus",
+ "sp-arithmetic",
  "tokio-test",
 ]
 

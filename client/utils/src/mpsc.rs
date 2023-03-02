@@ -63,6 +63,7 @@ mod inner {
 		task::{Context, Poll},
 	};
 	use log::error;
+	use sp_arithmetic::traits::SaturatedConversion;
 	use std::{
 		backtrace::Backtrace,
 		pin::Pin,
@@ -165,23 +166,13 @@ mod inner {
 
 	impl<T> TracingUnboundedReceiver<T> {
 		fn consume(&mut self) {
-			// consume all items, make sure to reflect the updated count
-			let mut count = 0;
-			loop {
-				if self.inner.is_terminated() {
-					break
-				}
-
-				match self.try_recv() {
-					Ok(_) => count += 1,
-					_ => break,
-				}
-			}
-			// and discount the messages
+			// the number of messages about to be dropped
+			let count = self.inner.len();
+			// discount the messages
 			if count > 0 {
 				UNBOUNDED_CHANNELS_COUNTER
 					.with_label_values(&[self.name, "dropped"])
-					.inc_by(count);
+					.inc_by(count.saturated_into());
 			}
 		}
 
