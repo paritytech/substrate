@@ -1,6 +1,17 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![recursion_limit = "256"]
+
+#[cfg(feature = "runtime-benchmarks")]
+pub mod benchmarking;
+
+#[cfg(any(feature = "runtime-benchmarks", test))]
+pub mod testing_utils;
+
+pub mod weights;
+use crate::weights::WeightInfo;
 
 use codec::{Decode, Encode, HasCompact};
+
 use frame_support::{
 	parameter_types,
 	traits::{Currency, DefensiveSaturating, LockIdentifier, WithdrawReasons},
@@ -11,6 +22,7 @@ use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, CheckedSub, Saturating, Zero},
 	RuntimeDebug,
 };
+
 use sp_staking::EraIndex;
 use sp_std::prelude::*;
 
@@ -122,6 +134,8 @@ pub mod pallet {
 		/// Number of eras that staked funds must remain bonded for.
 		#[pallet::constant]
 		type BondingDuration: Get<EraIndex>;
+		/// Weight information for extrinsics in this pallet.
+		type WeightInfo: WeightInfo;
 	}
 
 	/// Map from all locked "stash" accounts to the controller account.
@@ -215,7 +229,7 @@ pub mod pallet {
 		/// The dispatch origin for this call must be _Signed_ by the stash account.
 		///
 		/// Emits `Bonded`.
-		#[pallet::weight(100_000)]
+		#[pallet::weight(T::WeightInfo::bond())]
 		pub fn bond(
 			origin: OriginFor<T>,
 			controller: <T::Lookup as StaticLookup>::Source,
@@ -263,7 +277,7 @@ pub mod pallet {
 		/// any limitation on the amount that can be added.
 		///
 		/// Emits `Bonded`.
-		#[pallet::weight(100_000)]
+		#[pallet::weight(T::WeightInfo::bond_extra())]
 		pub fn bond_extra(
 			origin: OriginFor<T>,
 			#[pallet::compact] max_additional: BalanceOf<T>,
@@ -311,7 +325,7 @@ pub mod pallet {
 		/// Emits `Unbonded`.
 		///
 		/// See also [`Call::withdraw_unbonded`].
-		#[pallet::weight(100_000)]
+		#[pallet::weight(T::WeightInfo::unbond())]
 		pub fn unbond(
 			origin: OriginFor<T>,
 			#[pallet::compact] value: BalanceOf<T>,
@@ -379,7 +393,7 @@ pub mod pallet {
 		/// Emits `Withdrawn`.
 		///
 		/// See also [`Call::unbond`].
-		#[pallet::weight(100_000)]
+		#[pallet::weight(T::WeightInfo::withdraw_unbonded())]
 		pub fn withdraw_unbonded(origin: OriginFor<T>) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
@@ -416,7 +430,7 @@ pub mod pallet {
 		/// Effects will be felt at the beginning of the next era.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
-		#[pallet::weight(100_000)]
+		#[pallet::weight(T::WeightInfo::store())]
 		pub fn store(origin: OriginFor<T>, prefs: StoragePrefs) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 
@@ -437,7 +451,7 @@ pub mod pallet {
 		/// Effects will be felt at the beginning of the next era.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
-		#[pallet::weight(100_000)]
+		#[pallet::weight(T::WeightInfo::serve())]
 		pub fn serve(origin: OriginFor<T>, prefs: EdgePrefs) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 
@@ -458,7 +472,7 @@ pub mod pallet {
 		/// Effects will be felt at the beginning of the next era.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
-		#[pallet::weight(100_000)]
+		#[pallet::weight(T::WeightInfo::chill())]
 		pub fn chill(origin: OriginFor<T>) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
@@ -471,7 +485,7 @@ pub mod pallet {
 		/// Effects will be felt at the beginning of the next era.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the stash, not the controller.
-		#[pallet::weight(100_000)]
+		#[pallet::weight(T::WeightInfo::set_controller())]
 		pub fn set_controller(
 			origin: OriginFor<T>,
 			controller: <T::Lookup as StaticLookup>::Source,

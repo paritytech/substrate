@@ -13,15 +13,22 @@ sp-runtime = { version = "6.0.0", default-features = false, path = "../../primit
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
+
+[dev-dependencies]
+substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
+
 [features]
 default = ["std"]
 std = [
   "codec/std",
   "frame-support/std",
   "frame-system/std",
+  "frame-benchmarking/std",
   "scale-info/std",
   "sp-io/std",
   "sp-runtime/std",
   "sp-staking/std",
   "sp-std/std",
 ]
+runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]

@@ -1226,6 +1226,7 @@ impl pallet_ddc_staking::Config for Runtime {
 	type BondingDuration = BondingDuration;
 	type Currency = Balances;
 	type Event = Event;
+	type WeightInfo = pallet_ddc_staking::weights::SubstrateWeight<Runtime>;
 }
 
 construct_runtime!(
@@ -1351,6 +1352,7 @@ mod benches {
 		[pallet_scheduler, Scheduler]
 		[pallet_session, SessionBench::<Runtime>]
 		[pallet_staking, Staking]
+		[pallet_ddc_staking, DdcStaking]
 		[frame_system, SystemBench::<Runtime>]
 		[pallet_timestamp, Timestamp]
 		[pallet_tips, Tips]
