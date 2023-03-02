@@ -142,7 +142,7 @@ impl EnvBuilder {
 		}
 	}
 
-	pub fn execute<R, F: FnOnce() -> R>(mut self, f: F) -> R {
+	pub fn execute(mut self, f: impl FnOnce() -> ()) {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		self.balances.push((Society::account_id(), self.balance.max(self.pot)));
 		pallet_balances::GenesisConfig::<Test> { balances: self.balances }
@@ -156,8 +156,11 @@ impl EnvBuilder {
 		.assimilate_storage(&mut t)
 		.unwrap();
 		let mut ext: sp_io::TestExternalities = t.into();
-		ext.execute_with(f)
+		ext.execute_with(|| {
+			f();
+		})
 	}
+
 	#[allow(dead_code)]
 	pub fn with_members(mut self, m: Vec<u128>) -> Self {
 		self.members = m;

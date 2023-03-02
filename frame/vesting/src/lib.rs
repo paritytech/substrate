@@ -192,6 +192,11 @@ pub mod pallet {
 		fn integrity_test() {
 			assert!(T::MAX_VESTING_SCHEDULES > 0, "`MaxVestingSchedules` must ge greater than 0");
 		}
+
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), &'static str> {
+			Self::do_try_state()
+		}
 	}
 
 	/// Information regarding the vesting of a given account.
@@ -648,6 +653,25 @@ impl<T: Config> Pallet<T> {
 		);
 
 		Ok((schedules, locked_now))
+	}
+
+	#[cfg(any(feature = "try-runtime", feature = "fuzzing", test, debug_assertions))]
+	pub fn do_try_state() -> Result<(), &'static str> {
+		
+		Vesting::<T>::iter().for_each(|(_, d)| {
+			let vesting = d.to_vec();
+			let mut total_per_block: BalanceOf<T> = Zero::zero();
+			let mut total_locked_now: BalanceOf<T> = Zero::zero();
+			for info in vesting.iter() {
+				// get the number of remaining vesting blocks<>balance
+				let payments_left: BalanceOf<T> = info.ending_block_as_balance::<T::BlockNumberToBalance>();
+				total_per_block += info.per_block().saturating_mul(payments_left);
+				total_locked_now += info.locked_at::<T::BlockNumberToBalance>(<frame_system::Pallet<T>>::block_number());
+			};
+			let one_extra = total_per_block.saturating_sub(total_locked_now);
+			assert_eq!(total_per_block, total_locked_now.saturating_add(one_extra));
+		});
+		Ok(())
 	}
 }
 
