@@ -40,8 +40,6 @@ pub enum SubscriptionManagementError {
 	BlockNumberAbsent,
 	/// The database does not contain a block hash.
 	BlockHashAbsent,
-	/// Block was expected to be pinned.
-	BlockNotPinned,
 	/// Custom error.
 	Custom(String),
 }
