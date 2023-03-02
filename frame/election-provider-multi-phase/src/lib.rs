@@ -318,8 +318,8 @@ pub trait BenchmarkingConfig {
 pub enum Phase<Bn> {
 	/// Nothing, the election is not happening.
 	Off,
-	/// Signed phase is open and block number corresponding to when it started.
-	Signed(Bn),
+	/// Signed phase is open.
+	Signed,
 	/// Unsigned phase. First element is whether it is active or not, second the starting block
 	/// number.
 	///
@@ -351,7 +351,7 @@ impl<Bn: PartialEq + Eq> Phase<Bn> {
 
 	/// Whether the phase is signed or not.
 	pub fn is_signed(&self) -> bool {
-		matches!(self, Phase::Signed(_))
+		matches!(self, Phase::Signed)
 	}
 
 	/// Whether the phase is unsigned or not.
@@ -762,7 +762,7 @@ pub mod pallet {
 					// NOTE: if signed-phase length is zero, second part of the if-condition fails.
 					match Self::create_snapshot() {
 						Ok(_) => {
-							Self::on_initialize_open_signed(now);
+							Self::on_initialize_open_signed();
 							T::WeightInfo::on_initialize_open_signed()
 						},
 						Err(why) => {
@@ -772,7 +772,7 @@ pub mod pallet {
 						},
 					}
 				},
-				Phase::Signed(_) | Phase::Off
+				Phase::Signed | Phase::Off
 					if remaining <= unsigned_deadline && remaining > Zero::zero() =>
 				{
 					// our needs vary according to whether or not the unsigned phase follows a
@@ -1244,6 +1244,10 @@ pub mod pallet {
 	#[pallet::getter(fn current_phase)]
 	pub type CurrentPhase<T: Config> = StorageValue<_, Phase<T::BlockNumber>, ValueQuery>;
 
+	/// Block number of last successful election.
+	#[pallet::storage]
+	pub type LastElection<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+
 	/// Current best solution, signed or unsigned, queued to be returned upon `elect`.
 	#[pallet::storage]
 	#[pallet::getter(fn queued_solution)]
@@ -1357,9 +1361,9 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Logic for `<Pallet as Hooks>::on_initialize` when signed phase is being opened.
-	pub fn on_initialize_open_signed(now: T::BlockNumber) {
+	pub fn on_initialize_open_signed() {
 		log!(info, "Starting signed phase round {}.", Self::round());
-		<CurrentPhase<T>>::put(Phase::Signed(now));
+		<CurrentPhase<T>>::put(Phase::Signed);
 		Self::deposit_event(Event::SignedPhaseStarted { round: Self::round() });
 	}
 
@@ -1589,8 +1593,8 @@ impl<T: Config> Pallet<T> {
 	fn minimum_blocks_signed_phase() -> bool {
 		match CurrentPhase::<T>::get() {
 			Phase::Off => false,
-			Phase::Signed(started_at) =>
-				(frame_system::Pallet::<T>::block_number() - started_at) >
+			Phase::Signed =>
+				(frame_system::Pallet::<T>::block_number() - <LastElection<T>>::get()) >
 					T::MinSignedBlocksBeforeEmergency::get() * T::SignedPhase::get(),
 			_ => true,
 		}
@@ -1675,9 +1679,12 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		match Self::do_elect() {
 			Ok(supports) => {
-				// All went okay, record the weight, put sign to be Off, clean snapshot, etc.
+				// All went okay, record the weight, put sign to be Off, clean snapshot, set the
+				// block of the last successful election, etc.
 				Self::weigh_supports(&supports);
 				Self::rotate_round();
+				<LastElection<T>>::put(<frame_system::Pallet<T>>::block_number());
+
 				Ok(supports)
 			},
 			Err(why) => {

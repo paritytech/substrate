@@ -105,7 +105,7 @@ pub fn roll_to_unsigned() {
 	}
 }
 pub fn roll_to_signed() {
-	while !matches!(MultiPhase::current_phase(), Phase::Signed(_)) {
+	while !matches!(MultiPhase::current_phase(), Phase::Signed) {
 		roll_to(System::block_number() + 1);
 	}
 }
