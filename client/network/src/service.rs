@@ -713,7 +713,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 		let _ = self
 			.to_worker
-			.try_send(ServiceToWorkerMsg::NetworkState { pending_response: tx });
+			.unbounded_send(ServiceToWorkerMsg::NetworkState { pending_response: tx });
 
 		match rx.await {
 			Ok(v) => v.map_err(|_| ()),
@@ -730,7 +730,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 		let _ = self
 			.to_worker
-			.try_send(ServiceToWorkerMsg::PeersDebugInfo { pending_response: tx });
+			.unbounded_send(ServiceToWorkerMsg::PeersDebugInfo { pending_response: tx });
 
 		// The channel can only be closed if the network worker no longer exists.
 		rx.await.map_err(|_| ())
@@ -744,7 +744,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 		let _ = self
 			.to_worker
-			.try_send(ServiceToWorkerMsg::ReservedPeers { pending_response: tx });
+			.unbounded_send(ServiceToWorkerMsg::ReservedPeers { pending_response: tx });
 
 		// The channel can only be closed if the network worker no longer exists.
 		rx.await.map_err(|_| ())
@@ -844,7 +844,7 @@ where
 	/// This will generate either a `ValueFound` or a `ValueNotFound` event and pass it as an
 	/// item on the [`NetworkWorker`] stream.
 	fn get_value(&self, key: &KademliaKey) {
-		let _ = self.to_worker.try_send(ServiceToWorkerMsg::GetValue(key.clone()));
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::GetValue(key.clone()));
 	}
 
 	/// Start putting a value in the DHT.
@@ -852,7 +852,7 @@ where
 	/// This will generate either a `ValuePut` or a `ValuePutFailed` event and pass it as an
 	/// item on the [`NetworkWorker`] stream.
 	fn put_value(&self, key: KademliaKey, value: Vec<u8>) {
-		let _ = self.to_worker.try_send(ServiceToWorkerMsg::PutValue(key, value));
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::PutValue(key, value));
 	}
 }
 
@@ -883,7 +883,7 @@ where
 
 		let _ = self
 			.to_worker
-			.try_send(ServiceToWorkerMsg::NetworkStatus { pending_response: tx });
+			.unbounded_send(ServiceToWorkerMsg::NetworkStatus { pending_response: tx });
 
 		match rx.await {
 			Ok(v) => v.map_err(|_| ()),
@@ -899,15 +899,19 @@ where
 	H: ExHashT,
 {
 	fn set_authorized_peers(&self, peers: HashSet<PeerId>) {
-		let _ = self.to_worker.try_send(ServiceToWorkerMsg::SetReserved(peers));
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::SetReserved(peers));
 	}
 
 	fn set_authorized_only(&self, reserved_only: bool) {
-		let _ = self.to_worker.try_send(ServiceToWorkerMsg::SetReservedOnly(reserved_only));
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::SetReservedOnly(reserved_only));
 	}
 
 	fn add_known_address(&self, peer_id: PeerId, addr: Multiaddr) {
-		let _ = self.to_worker.try_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
 	}
 
 	fn report_peer(&self, who: PeerId, cost_benefit: ReputationChange) {
@@ -915,15 +919,15 @@ where
 	}
 
 	fn disconnect_peer(&self, who: PeerId, protocol: ProtocolName) {
-		let _ = self.to_worker.try_send(ServiceToWorkerMsg::DisconnectPeer(who, protocol));
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::DisconnectPeer(who, protocol));
 	}
 
 	fn accept_unreserved_peers(&self) {
-		let _ = self.to_worker.try_send(ServiceToWorkerMsg::SetReservedOnly(false));
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::SetReservedOnly(false));
 	}
 
 	fn deny_unreserved_peers(&self) {
-		let _ = self.to_worker.try_send(ServiceToWorkerMsg::SetReservedOnly(true));
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::SetReservedOnly(true));
 	}
 
 	fn add_reserved_peer(&self, peer: MultiaddrWithPeerId) -> Result<(), String> {
@@ -934,13 +938,13 @@ where
 
 		let _ = self
 			.to_worker
-			.try_send(ServiceToWorkerMsg::AddKnownAddress(peer.peer_id, peer.multiaddr));
-		let _ = self.to_worker.try_send(ServiceToWorkerMsg::AddReserved(peer.peer_id));
+			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer.peer_id, peer.multiaddr));
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::AddReserved(peer.peer_id));
 		Ok(())
 	}
 
 	fn remove_reserved_peer(&self, peer_id: PeerId) {
-		let _ = self.to_worker.try_send(ServiceToWorkerMsg::RemoveReserved(peer_id));
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::RemoveReserved(peer_id));
 	}
 
 	fn set_reserved_peers(
@@ -961,11 +965,15 @@ where
 			peers.insert(peer_id);
 
 			if !addr.is_empty() {
-				let _ = self.to_worker.try_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
+				let _ = self
+					.to_worker
+					.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
 			}
 		}
 
-		let _ = self.to_worker.try_send(ServiceToWorkerMsg::SetPeersetReserved(protocol, peers));
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::SetPeersetReserved(protocol, peers));
 
 		Ok(())
 	}
@@ -984,11 +992,13 @@ where
 			}
 
 			if !addr.is_empty() {
-				let _ = self.to_worker.try_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
+				let _ = self
+					.to_worker
+					.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
 			}
 			let _ = self
 				.to_worker
-				.try_send(ServiceToWorkerMsg::AddSetReserved(protocol.clone(), peer_id));
+				.unbounded_send(ServiceToWorkerMsg::AddSetReserved(protocol.clone(), peer_id));
 		}
 
 		Ok(())
@@ -998,7 +1008,7 @@ where
 		for peer_id in peers.into_iter() {
 			let _ = self
 				.to_worker
-				.try_send(ServiceToWorkerMsg::RemoveSetReserved(protocol.clone(), peer_id));
+				.unbounded_send(ServiceToWorkerMsg::RemoveSetReserved(protocol.clone(), peer_id));
 		}
 	}
 
@@ -1016,11 +1026,13 @@ where
 			}
 
 			if !addr.is_empty() {
-				let _ = self.to_worker.try_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
+				let _ = self
+					.to_worker
+					.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
 			}
 			let _ = self
 				.to_worker
-				.try_send(ServiceToWorkerMsg::AddToPeersSet(protocol.clone(), peer_id));
+				.unbounded_send(ServiceToWorkerMsg::AddToPeersSet(protocol.clone(), peer_id));
 		}
 
 		Ok(())
@@ -1030,7 +1042,7 @@ where
 		for peer_id in peers.into_iter() {
 			let _ = self
 				.to_worker
-				.try_send(ServiceToWorkerMsg::RemoveFromPeersSet(protocol.clone(), peer_id));
+				.unbounded_send(ServiceToWorkerMsg::RemoveFromPeersSet(protocol.clone(), peer_id));
 		}
 	}
 
@@ -1046,7 +1058,7 @@ where
 {
 	fn event_stream(&self, name: &'static str) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
 		let (tx, rx) = out_events::channel(name, 100_000);
-		let _ = self.to_worker.try_send(ServiceToWorkerMsg::EventStream(tx));
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::EventStream(tx));
 		Box::pin(rx)
 	}
 }
@@ -1149,7 +1161,7 @@ where
 		tx: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 		connect: IfDisconnected,
 	) {
-		let _ = self.to_worker.try_send(ServiceToWorkerMsg::Request {
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::Request {
 			target,
 			protocol: protocol.into(),
 			request,
@@ -1165,11 +1177,13 @@ where
 	H: ExHashT,
 {
 	fn announce_block(&self, hash: B::Hash, data: Option<Vec<u8>>) {
-		let _ = self.to_worker.try_send(ServiceToWorkerMsg::AnnounceBlock(hash, data));
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::AnnounceBlock(hash, data));
 	}
 
 	fn new_best_block_imported(&self, hash: B::Hash, number: NumberFor<B>) {
-		let _ = self.to_worker.try_send(ServiceToWorkerMsg::NewBestBlockImported(hash, number));
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::NewBestBlockImported(hash, number));
 	}
 }
 

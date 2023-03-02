@@ -106,19 +106,19 @@ impl<B: traits::Block> SystemApiServer<B::Hash, <B::Header as HeaderT>::Number> 
 
 	async fn system_health(&self) -> RpcResult<Health> {
 		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.try_send(Request::Health(tx));
+		let _ = self.send_back.unbounded_send(Request::Health(tx));
 		rx.await.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 
 	async fn system_local_peer_id(&self) -> RpcResult<String> {
 		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.try_send(Request::LocalPeerId(tx));
+		let _ = self.send_back.unbounded_send(Request::LocalPeerId(tx));
 		rx.await.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 
 	async fn system_local_listen_addresses(&self) -> RpcResult<Vec<String>> {
 		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.try_send(Request::LocalListenAddresses(tx));
+		let _ = self.send_back.unbounded_send(Request::LocalListenAddresses(tx));
 		rx.await.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 
@@ -127,21 +127,21 @@ impl<B: traits::Block> SystemApiServer<B::Hash, <B::Header as HeaderT>::Number> 
 	) -> RpcResult<Vec<PeerInfo<B::Hash, <B::Header as HeaderT>::Number>>> {
 		self.deny_unsafe.check_if_safe()?;
 		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.try_send(Request::Peers(tx));
+		let _ = self.send_back.unbounded_send(Request::Peers(tx));
 		rx.await.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 
 	async fn system_network_state(&self) -> RpcResult<JsonValue> {
 		self.deny_unsafe.check_if_safe()?;
 		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.try_send(Request::NetworkState(tx));
+		let _ = self.send_back.unbounded_send(Request::NetworkState(tx));
 		rx.await.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 
 	async fn system_add_reserved_peer(&self, peer: String) -> RpcResult<()> {
 		self.deny_unsafe.check_if_safe()?;
 		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.try_send(Request::NetworkAddReservedPeer(peer, tx));
+		let _ = self.send_back.unbounded_send(Request::NetworkAddReservedPeer(peer, tx));
 		match rx.await {
 			Ok(Ok(())) => Ok(()),
 			Ok(Err(e)) => Err(JsonRpseeError::from(e)),
@@ -152,7 +152,7 @@ impl<B: traits::Block> SystemApiServer<B::Hash, <B::Header as HeaderT>::Number> 
 	async fn system_remove_reserved_peer(&self, peer: String) -> RpcResult<()> {
 		self.deny_unsafe.check_if_safe()?;
 		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.try_send(Request::NetworkRemoveReservedPeer(peer, tx));
+		let _ = self.send_back.unbounded_send(Request::NetworkRemoveReservedPeer(peer, tx));
 		match rx.await {
 			Ok(Ok(())) => Ok(()),
 			Ok(Err(e)) => Err(JsonRpseeError::from(e)),
@@ -162,19 +162,19 @@ impl<B: traits::Block> SystemApiServer<B::Hash, <B::Header as HeaderT>::Number> 
 
 	async fn system_reserved_peers(&self) -> RpcResult<Vec<String>> {
 		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.try_send(Request::NetworkReservedPeers(tx));
+		let _ = self.send_back.unbounded_send(Request::NetworkReservedPeers(tx));
 		rx.await.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 
 	async fn system_node_roles(&self) -> RpcResult<Vec<NodeRole>> {
 		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.try_send(Request::NodeRoles(tx));
+		let _ = self.send_back.unbounded_send(Request::NodeRoles(tx));
 		rx.await.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 
 	async fn system_sync_state(&self) -> RpcResult<SyncState<<B::Header as HeaderT>::Number>> {
 		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.try_send(Request::SyncState(tx));
+		let _ = self.send_back.unbounded_send(Request::SyncState(tx));
 		rx.await.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 

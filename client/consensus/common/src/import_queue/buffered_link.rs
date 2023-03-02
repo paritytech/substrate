@@ -97,7 +97,7 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 	) {
 		let _ = self
 			.tx
-			.try_send(BlockImportWorkerMsg::BlocksProcessed(imported, count, results));
+			.unbounded_send(BlockImportWorkerMsg::BlocksProcessed(imported, count, results));
 	}
 
 	fn justification_imported(
@@ -108,11 +108,13 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 		success: bool,
 	) {
 		let msg = BlockImportWorkerMsg::JustificationImported(who, *hash, number, success);
-		let _ = self.tx.try_send(msg);
+		let _ = self.tx.unbounded_send(msg);
 	}
 
 	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		let _ = self.tx.try_send(BlockImportWorkerMsg::RequestJustification(*hash, number));
+		let _ = self
+			.tx
+			.unbounded_send(BlockImportWorkerMsg::RequestJustification(*hash, number));
 	}
 }
 

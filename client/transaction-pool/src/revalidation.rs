@@ -340,7 +340,7 @@ where
 		}
 
 		if let Some(ref to_worker) = self.background {
-			if let Err(e) = to_worker.try_send(WorkerPayload { at, transactions }) {
+			if let Err(e) = to_worker.unbounded_send(WorkerPayload { at, transactions }) {
 				log::warn!(target: LOG_TARGET, "Failed to update background worker: {:?}", e);
 			}
 		} else {

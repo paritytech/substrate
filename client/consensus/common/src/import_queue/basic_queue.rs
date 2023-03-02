@@ -130,7 +130,9 @@ impl<B: BlockT> ImportQueueService<B> for BasicQueueHandle<B> {
 		}
 
 		trace!(target: LOG_TARGET, "Scheduling {} blocks for import", blocks.len());
-		let res = self.block_import_sender.try_send(worker_messages::ImportBlocks(origin, blocks));
+		let res = self
+			.block_import_sender
+			.unbounded_send(worker_messages::ImportBlocks(origin, blocks));
 
 		if res.is_err() {
 			log::error!(
@@ -148,12 +150,9 @@ impl<B: BlockT> ImportQueueService<B> for BasicQueueHandle<B> {
 		justifications: Justifications,
 	) {
 		for justification in justifications {
-			let res = self.justification_sender.try_send(worker_messages::ImportJustification(
-				who,
-				hash,
-				number,
-				justification,
-			));
+			let res = self.justification_sender.unbounded_send(
+				worker_messages::ImportJustification(who, hash, number, justification),
+			);
 
 			if res.is_err() {
 				log::error!(
@@ -614,7 +613,7 @@ mod tests {
 			let hash = header.hash();
 
 			block_import_sender
-				.try_send(worker_messages::ImportBlocks(
+				.unbounded_send(worker_messages::ImportBlocks(
 					BlockOrigin::Own,
 					vec![IncomingBlock {
 						hash,
@@ -637,7 +636,7 @@ mod tests {
 		let import_justification = || {
 			let hash = Hash::random();
 			finality_sender
-				.try_send(worker_messages::ImportJustification(
+				.unbounded_send(worker_messages::ImportJustification(
 					libp2p::PeerId::random(),
 					hash,
 					1,

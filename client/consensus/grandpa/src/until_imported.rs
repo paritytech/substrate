@@ -596,7 +596,7 @@ mod tests {
 			let (tx, _rx) = tracing_unbounded("unpin-worker-channel", 10_000);
 			self.known_blocks.lock().insert(hash, number);
 			self.sender
-				.try_send(BlockImportNotification::<Block>::new(
+				.unbounded_send(BlockImportNotification::<Block>::new(
 					hash,
 					BlockOrigin::File,
 					header,
@@ -692,7 +692,7 @@ mod tests {
 			None,
 		);
 
-		global_tx.try_send(msg).unwrap();
+		global_tx.unbounded_send(msg).unwrap();
 
 		let work = until_imported.into_future();
 
@@ -720,7 +720,7 @@ mod tests {
 			None,
 		);
 
-		global_tx.try_send(msg).unwrap();
+		global_tx.unbounded_send(msg).unwrap();
 
 		// NOTE: needs to be cloned otherwise it is moved to the stream and
 		// dropped too early.
@@ -930,7 +930,7 @@ mod tests {
 			|| voter::CommunicationIn::Commit(0, unknown_commit.clone(), voter::Callback::Blank);
 
 		// we send the commit message and spawn the until_imported stream
-		global_tx.try_send(unknown_commit()).unwrap();
+		global_tx.unbounded_send(unknown_commit()).unwrap();
 
 		let threads_pool = futures::executor::ThreadPool::new().unwrap();
 		threads_pool.spawn_ok(until_imported.into_future().map(|_| ()));

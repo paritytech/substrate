@@ -409,7 +409,7 @@ impl Telemetry {
 		let endpoints = self.endpoints.take().ok_or(Error::TelemetryAlreadyInitialized)?;
 
 		self.register_sender
-			.try_send(Register::Telemetry { id: self.id, endpoints, connection_message })
+			.unbounded_send(Register::Telemetry { id: self.id, endpoints, connection_message })
 			.map_err(|_| Error::TelemetryWorkerDropped)
 	}
 
@@ -469,7 +469,7 @@ pub struct TelemetryConnectionNotifier {
 impl TelemetryConnectionNotifier {
 	fn on_connect_stream(&self) -> ConnectionNotifierReceiver {
 		let (message_sender, message_receiver) = connection_notifier_channel();
-		if let Err(err) = self.register_sender.try_send(Register::Notifier {
+		if let Err(err) = self.register_sender.unbounded_send(Register::Notifier {
 			addresses: self.addresses.clone(),
 			connection_notifier: message_sender,
 		}) {

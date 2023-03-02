@@ -55,7 +55,7 @@ impl<B: BlockT> ChainSyncInterfaceHandle<B> {
 
 	/// Notify ChainSync about finalized block
 	pub fn on_block_finalized(&self, hash: B::Hash, number: NumberFor<B>) {
-		let _ = self.tx.try_send(ToServiceCommand::BlockFinalized(hash, number));
+		let _ = self.tx.unbounded_send(ToServiceCommand::BlockFinalized(hash, number));
 	}
 
 	/// Get sync status
@@ -63,7 +63,7 @@ impl<B: BlockT> ChainSyncInterfaceHandle<B> {
 	/// Returns an error if `ChainSync` has terminated.
 	pub async fn status(&self) -> Result<SyncStatus<B>, ()> {
 		let (tx, rx) = oneshot::channel();
-		let _ = self.tx.try_send(ToServiceCommand::Status { pending_response: tx });
+		let _ = self.tx.unbounded_send(ToServiceCommand::Status { pending_response: tx });
 
 		rx.await.map_err(|_| ())
 	}
@@ -81,7 +81,9 @@ impl<B: BlockT + 'static> NetworkSyncForkRequest<B::Hash, NumberFor<B>>
 	///
 	/// Passing empty `peers` set effectively removes the sync request.
 	fn set_sync_fork_request(&self, peers: Vec<PeerId>, hash: B::Hash, number: NumberFor<B>) {
-		let _ = self.tx.try_send(ToServiceCommand::SetSyncForkRequest(peers, hash, number));
+		let _ = self
+			.tx
+			.unbounded_send(ToServiceCommand::SetSyncForkRequest(peers, hash, number));
 	}
 }
 
@@ -91,11 +93,11 @@ impl<B: BlockT> JustificationSyncLink<B> for ChainSyncInterfaceHandle<B> {
 	/// On success, the justification will be passed to the import queue that was part at
 	/// initialization as part of the configuration.
 	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
-		let _ = self.tx.try_send(ToServiceCommand::RequestJustification(*hash, number));
+		let _ = self.tx.unbounded_send(ToServiceCommand::RequestJustification(*hash, number));
 	}
 
 	fn clear_justification_requests(&self) {
-		let _ = self.tx.try_send(ToServiceCommand::ClearJustificationRequests);
+		let _ = self.tx.unbounded_send(ToServiceCommand::ClearJustificationRequests);
 	}
 }
 
@@ -106,7 +108,9 @@ impl<B: BlockT> Link<B> for ChainSyncInterfaceHandle<B> {
 		count: usize,
 		results: Vec<(Result<BlockImportStatus<NumberFor<B>>, BlockImportError>, B::Hash)>,
 	) {
-		let _ = self.tx.try_send(ToServiceCommand::BlocksProcessed(imported, count, results));
+		let _ = self
+			.tx
+			.unbounded_send(ToServiceCommand::BlocksProcessed(imported, count, results));
 	}
 
 	fn justification_imported(
@@ -118,10 +122,10 @@ impl<B: BlockT> Link<B> for ChainSyncInterfaceHandle<B> {
 	) {
 		let _ = self
 			.tx
-			.try_send(ToServiceCommand::JustificationImported(who, *hash, number, success));
+			.unbounded_send(ToServiceCommand::JustificationImported(who, *hash, number, success));
 	}
 
 	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		let _ = self.tx.try_send(ToServiceCommand::RequestJustification(*hash, number));
+		let _ = self.tx.unbounded_send(ToServiceCommand::RequestJustification(*hash, number));
 	}
 }

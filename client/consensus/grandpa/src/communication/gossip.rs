@@ -1424,7 +1424,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 	}
 
 	fn report(&self, who: PeerId, cost_benefit: ReputationChange) {
-		let _ = self.report_sender.try_send(PeerReport { who, cost_benefit });
+		let _ = self.report_sender.unbounded_send(PeerReport { who, cost_benefit });
 	}
 
 	pub(super) fn do_validate(

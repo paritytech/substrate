@@ -73,12 +73,12 @@ impl NetworkServiceHandle {
 
 	/// Report peer
 	pub fn report_peer(&self, who: PeerId, cost_benefit: ReputationChange) {
-		let _ = self.tx.try_send(ToServiceCommand::ReportPeer(who, cost_benefit));
+		let _ = self.tx.unbounded_send(ToServiceCommand::ReportPeer(who, cost_benefit));
 	}
 
 	/// Disconnect peer
 	pub fn disconnect_peer(&self, who: PeerId, protocol: ProtocolName) {
-		let _ = self.tx.try_send(ToServiceCommand::DisconnectPeer(who, protocol));
+		let _ = self.tx.unbounded_send(ToServiceCommand::DisconnectPeer(who, protocol));
 	}
 
 	/// Send request to peer
@@ -92,7 +92,7 @@ impl NetworkServiceHandle {
 	) {
 		let _ = self
 			.tx
-			.try_send(ToServiceCommand::StartRequest(who, protocol, request, tx, connect));
+			.unbounded_send(ToServiceCommand::StartRequest(who, protocol, request, tx, connect));
 	}
 }
 

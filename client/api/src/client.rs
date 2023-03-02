@@ -290,7 +290,7 @@ impl<Block: BlockT> UnpinHandleInner<Block> {
 
 impl<Block: BlockT> Drop for UnpinHandleInner<Block> {
 	fn drop(&mut self) {
-		if let Err(err) = self.unpin_worker_sender.try_send(self.hash) {
+		if let Err(err) = self.unpin_worker_sender.unbounded_send(self.hash) {
 			log::debug!(target: "db", "Unable to unpin block with hash: {}, error: {:?}", self.hash, err);
 		};
 	}
