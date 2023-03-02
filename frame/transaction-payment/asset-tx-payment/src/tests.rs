@@ -41,7 +41,7 @@ impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
 			balance_factor: 1,
-			base_weight: Weight::from_ref_time(0),
+			base_weight: Weight::from_parts(0, 0),
 			byte_fee: 1,
 			weight_to_fee: 1,
 		}
@@ -112,19 +112,19 @@ fn transaction_payment_in_native_possible() {
 	let balance_factor = 100;
 	ExtBuilder::default()
 		.balance_factor(balance_factor)
-		.base_weight(Weight::from_ref_time(5))
+		.base_weight(Weight::from_parts(5, 0))
 		.build()
 		.execute_with(|| {
 			let len = 10;
 			let pre = ChargeAssetTxPayment::<Runtime>::from(0, None)
-				.pre_dispatch(&1, CALL, &info_from_weight(Weight::from_ref_time(5)), len)
+				.pre_dispatch(&1, CALL, &info_from_weight(Weight::from_parts(5, 0)), len)
 				.unwrap();
 			let initial_balance = 10 * balance_factor;
 			assert_eq!(Balances::free_balance(1), initial_balance - 5 - 5 - 10);
 
 			assert_ok!(ChargeAssetTxPayment::<Runtime>::post_dispatch(
 				Some(pre),
-				&info_from_weight(Weight::from_ref_time(5)),
+				&info_from_weight(Weight::from_parts(5, 0)),
 				&default_post_info(),
 				len,
 				&Ok(())
@@ -132,15 +132,15 @@ fn transaction_payment_in_native_possible() {
 			assert_eq!(Balances::free_balance(1), initial_balance - 5 - 5 - 10);
 
 			let pre = ChargeAssetTxPayment::<Runtime>::from(5 /* tipped */, None)
-				.pre_dispatch(&2, CALL, &info_from_weight(Weight::from_ref_time(100)), len)
+				.pre_dispatch(&2, CALL, &info_from_weight(Weight::from_parts(100, 0)), len)
 				.unwrap();
 			let initial_balance_for_2 = 20 * balance_factor;
 			assert_eq!(Balances::free_balance(2), initial_balance_for_2 - 5 - 10 - 100 - 5);
 
 			assert_ok!(ChargeAssetTxPayment::<Runtime>::post_dispatch(
 				Some(pre),
-				&info_from_weight(Weight::from_ref_time(100)),
-				&post_info_from_weight(Weight::from_ref_time(50)),
+				&info_from_weight(Weight::from_parts(100, 0)),
+				&post_info_from_weight(Weight::from_parts(50, 0)),
 				len,
 				&Ok(())
 			));
@@ -154,7 +154,7 @@ fn transaction_payment_in_asset_possible() {
 	let balance_factor = 100;
 	ExtBuilder::default()
 		.balance_factor(balance_factor)
-		.base_weight(Weight::from_ref_time(base_weight))
+		.base_weight(Weight::from_parts(base_weight, 0))
 		.build()
 		.execute_with(|| {
 			// create the asset
@@ -180,7 +180,7 @@ fn transaction_payment_in_asset_possible() {
 			// existential deposit
 			let fee = (base_weight + weight + len as u64) * min_balance / ExistentialDeposit::get();
 			let pre = ChargeAssetTxPayment::<Runtime>::from(0, Some(asset_id))
-				.pre_dispatch(&caller, CALL, &info_from_weight(Weight::from_ref_time(weight)), len)
+				.pre_dispatch(&caller, CALL, &info_from_weight(Weight::from_parts(weight, 0)), len)
 				.unwrap();
 			// assert that native balance is not used
 			assert_eq!(Balances::free_balance(caller), 10 * balance_factor);
@@ -190,7 +190,7 @@ fn transaction_payment_in_asset_possible() {
 
 			assert_ok!(ChargeAssetTxPayment::<Runtime>::post_dispatch(
 				Some(pre),
-				&info_from_weight(Weight::from_ref_time(weight)),
+				&info_from_weight(Weight::from_parts(weight, 0)),
 				&default_post_info(),
 				len,
 				&Ok(())
@@ -207,7 +207,7 @@ fn transaction_payment_without_fee() {
 	let balance_factor = 100;
 	ExtBuilder::default()
 		.balance_factor(balance_factor)
-		.base_weight(Weight::from_ref_time(base_weight))
+		.base_weight(Weight::from_parts(base_weight, 0))
 		.build()
 		.execute_with(|| {
 			// create the asset
@@ -233,7 +233,7 @@ fn transaction_payment_without_fee() {
 			// existential deposit
 			let fee = (base_weight + weight + len as u64) * min_balance / ExistentialDeposit::get();
 			let pre = ChargeAssetTxPayment::<Runtime>::from(0, Some(asset_id))
-				.pre_dispatch(&caller, CALL, &info_from_weight(Weight::from_ref_time(weight)), len)
+				.pre_dispatch(&caller, CALL, &info_from_weight(Weight::from_parts(weight, 0)), len)
 				.unwrap();
 			// assert that native balance is not used
 			assert_eq!(Balances::free_balance(caller), 10 * balance_factor);
@@ -243,7 +243,7 @@ fn transaction_payment_without_fee() {
 
 			assert_ok!(ChargeAssetTxPayment::<Runtime>::post_dispatch(
 				Some(pre),
-				&info_from_weight(Weight::from_ref_time(weight)),
+				&info_from_weight(Weight::from_parts(weight, 0)),
 				&post_info_from_pays(Pays::No),
 				len,
 				&Ok(())
@@ -260,7 +260,7 @@ fn asset_transaction_payment_with_tip_and_refund() {
 	let base_weight = 5;
 	ExtBuilder::default()
 		.balance_factor(100)
-		.base_weight(Weight::from_ref_time(base_weight))
+		.base_weight(Weight::from_parts(base_weight, 0))
 		.build()
 		.execute_with(|| {
 			// create the asset
@@ -288,15 +288,15 @@ fn asset_transaction_payment_with_tip_and_refund() {
 			let fee_with_tip =
 				(base_weight + weight + len as u64 + tip) * min_balance / ExistentialDeposit::get();
 			let pre = ChargeAssetTxPayment::<Runtime>::from(tip, Some(asset_id))
-				.pre_dispatch(&caller, CALL, &info_from_weight(Weight::from_ref_time(weight)), len)
+				.pre_dispatch(&caller, CALL, &info_from_weight(Weight::from_parts(weight, 0)), len)
 				.unwrap();
 			assert_eq!(Assets::balance(asset_id, caller), balance - fee_with_tip);
 
 			let final_weight = 50;
 			assert_ok!(ChargeAssetTxPayment::<Runtime>::post_dispatch(
 				Some(pre),
-				&info_from_weight(Weight::from_ref_time(weight)),
-				&post_info_from_weight(Weight::from_ref_time(final_weight)),
+				&info_from_weight(Weight::from_parts(weight, 0)),
+				&post_info_from_weight(Weight::from_parts(final_weight, 0)),
 				len,
 				&Ok(())
 			));
@@ -312,7 +312,7 @@ fn payment_from_account_with_only_assets() {
 	let base_weight = 5;
 	ExtBuilder::default()
 		.balance_factor(100)
-		.base_weight(Weight::from_ref_time(base_weight))
+		.base_weight(Weight::from_parts(base_weight, 0))
 		.build()
 		.execute_with(|| {
 			// create the asset
@@ -340,7 +340,7 @@ fn payment_from_account_with_only_assets() {
 			// existential deposit
 			let fee = (base_weight + weight + len as u64) * min_balance / ExistentialDeposit::get();
 			let pre = ChargeAssetTxPayment::<Runtime>::from(0, Some(asset_id))
-				.pre_dispatch(&caller, CALL, &info_from_weight(Weight::from_ref_time(weight)), len)
+				.pre_dispatch(&caller, CALL, &info_from_weight(Weight::from_parts(weight, 0)), len)
 				.unwrap();
 			assert_eq!(Balances::free_balance(caller), 0);
 			// check that fee was charged in the given asset
@@ -348,7 +348,7 @@ fn payment_from_account_with_only_assets() {
 
 			assert_ok!(ChargeAssetTxPayment::<Runtime>::post_dispatch(
 				Some(pre),
-				&info_from_weight(Weight::from_ref_time(weight)),
+				&info_from_weight(Weight::from_parts(weight, 0)),
 				&default_post_info(),
 				len,
 				&Ok(())
@@ -363,7 +363,7 @@ fn payment_only_with_existing_sufficient_asset() {
 	let base_weight = 5;
 	ExtBuilder::default()
 		.balance_factor(100)
-		.base_weight(Weight::from_ref_time(base_weight))
+		.base_weight(Weight::from_parts(base_weight, 0))
 		.build()
 		.execute_with(|| {
 			let asset_id = 1;
@@ -372,7 +372,7 @@ fn payment_only_with_existing_sufficient_asset() {
 			let len = 10;
 			// pre_dispatch fails for non-existent asset
 			assert!(ChargeAssetTxPayment::<Runtime>::from(0, Some(asset_id))
-				.pre_dispatch(&caller, CALL, &info_from_weight(Weight::from_ref_time(weight)), len)
+				.pre_dispatch(&caller, CALL, &info_from_weight(Weight::from_parts(weight, 0)), len)
 				.is_err());
 
 			// create the non-sufficient asset
@@ -386,7 +386,7 @@ fn payment_only_with_existing_sufficient_asset() {
 			));
 			// pre_dispatch fails for non-sufficient asset
 			assert!(ChargeAssetTxPayment::<Runtime>::from(0, Some(asset_id))
-				.pre_dispatch(&caller, CALL, &info_from_weight(Weight::from_ref_time(weight)), len)
+				.pre_dispatch(&caller, CALL, &info_from_weight(Weight::from_parts(weight, 0)), len)
 				.is_err());
 		});
 }
@@ -396,7 +396,7 @@ fn converted_fee_is_never_zero_if_input_fee_is_not() {
 	let base_weight = 1;
 	ExtBuilder::default()
 		.balance_factor(100)
-		.base_weight(Weight::from_ref_time(base_weight))
+		.base_weight(Weight::from_parts(base_weight, 0))
 		.build()
 		.execute_with(|| {
 			// create the asset
@@ -440,14 +440,14 @@ fn converted_fee_is_never_zero_if_input_fee_is_not() {
 				assert_eq!(Assets::balance(asset_id, caller), balance);
 			}
 			let pre = ChargeAssetTxPayment::<Runtime>::from(0, Some(asset_id))
-				.pre_dispatch(&caller, CALL, &info_from_weight(Weight::from_ref_time(weight)), len)
+				.pre_dispatch(&caller, CALL, &info_from_weight(Weight::from_parts(weight, 0)), len)
 				.unwrap();
 			// check that at least one coin was charged in the given asset
 			assert_eq!(Assets::balance(asset_id, caller), balance - 1);
 
 			assert_ok!(ChargeAssetTxPayment::<Runtime>::post_dispatch(
 				Some(pre),
-				&info_from_weight(Weight::from_ref_time(weight)),
+				&info_from_weight(Weight::from_parts(weight, 0)),
 				&default_post_info(),
 				len,
 				&Ok(())
@@ -461,7 +461,7 @@ fn post_dispatch_fee_is_zero_if_pre_dispatch_fee_is_zero() {
 	let base_weight = 1;
 	ExtBuilder::default()
 		.balance_factor(100)
-		.base_weight(Weight::from_ref_time(base_weight))
+		.base_weight(Weight::from_parts(base_weight, 0))
 		.build()
 		.execute_with(|| {
 			// create the asset
@@ -518,7 +518,7 @@ fn post_dispatch_fee_is_zero_if_unsigned_pre_dispatch_fee_is_zero() {
 	let base_weight = 1;
 	ExtBuilder::default()
 		.balance_factor(100)
-		.base_weight(Weight::from_ref_time(base_weight))
+		.base_weight(Weight::from_parts(base_weight, 0))
 		.build()
 		.execute_with(|| {
 			// create the asset
@@ -542,7 +542,7 @@ fn post_dispatch_fee_is_zero_if_unsigned_pre_dispatch_fee_is_zero() {
 			let len = 1;
 			ChargeAssetTxPayment::<Runtime>::pre_dispatch_unsigned(
 				CALL,
-				&info_from_weight(Weight::from_ref_time(weight)),
+				&info_from_weight(Weight::from_parts(weight, 0)),
 				len,
 			)
 			.unwrap();
@@ -553,7 +553,7 @@ fn post_dispatch_fee_is_zero_if_unsigned_pre_dispatch_fee_is_zero() {
 			// initial fee)
 			assert_ok!(ChargeAssetTxPayment::<Runtime>::post_dispatch(
 				None,
-				&info_from_weight(Weight::from_ref_time(weight)),
+				&info_from_weight(Weight::from_parts(weight, 0)),
 				&post_info_from_pays(Pays::Yes),
 				len,
 				&Ok(())

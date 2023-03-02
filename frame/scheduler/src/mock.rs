@@ -121,7 +121,7 @@ impl Contains<RuntimeCall> for BaseFilter {
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(
-			Weight::from_ref_time(2_000_000_000_000).set_proof_size(u64::MAX),
+			Weight::from_parts(2_000_000_000_000, u64::MAX),
 		);
 }
 impl system::Config for Test {
@@ -169,40 +169,40 @@ impl pallet_preimage::Config for Test {
 pub struct TestWeightInfo;
 impl WeightInfo for TestWeightInfo {
 	fn service_agendas_base() -> Weight {
-		Weight::from_ref_time(0b0000_0001)
+		Weight::from_parts(0b0000_0001, 0)
 	}
 	fn service_agenda_base(i: u32) -> Weight {
-		Weight::from_ref_time((i << 8) as u64 + 0b0000_0010)
+		Weight::from_parts((i << 8) as u64 + 0b0000_0010, 0)
 	}
 	fn service_task_base() -> Weight {
-		Weight::from_ref_time(0b0000_0100)
+		Weight::from_parts(0b0000_0100, 0)
 	}
 	fn service_task_periodic() -> Weight {
-		Weight::from_ref_time(0b0000_1100)
+		Weight::from_parts(0b0000_1100, 0)
 	}
 	fn service_task_named() -> Weight {
-		Weight::from_ref_time(0b0001_0100)
+		Weight::from_parts(0b0001_0100, 0)
 	}
 	fn service_task_fetched(s: u32) -> Weight {
-		Weight::from_ref_time((s << 8) as u64 + 0b0010_0100)
+		Weight::from_parts((s << 8) as u64 + 0b0010_0100, 0)
 	}
 	fn execute_dispatch_signed() -> Weight {
-		Weight::from_ref_time(0b0100_0000)
+		Weight::from_parts(0b0100_0000, 0)
 	}
 	fn execute_dispatch_unsigned() -> Weight {
-		Weight::from_ref_time(0b1000_0000)
+		Weight::from_parts(0b1000_0000, 0)
 	}
 	fn schedule(_s: u32) -> Weight {
-		Weight::from_ref_time(50)
+		Weight::from_parts(50, 0)
 	}
 	fn cancel(_s: u32) -> Weight {
-		Weight::from_ref_time(50)
+		Weight::from_parts(50, 0)
 	}
 	fn schedule_named(_s: u32) -> Weight {
-		Weight::from_ref_time(50)
+		Weight::from_parts(50, 0)
 	}
 	fn cancel_named(_s: u32) -> Weight {
-		Weight::from_ref_time(50)
+		Weight::from_parts(50, 0)
 	}
 }
 parameter_types! {
