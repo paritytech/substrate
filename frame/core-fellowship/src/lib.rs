@@ -23,11 +23,11 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "128"]
 
-use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
+use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::{Saturating, Zero};
 use sp_runtime::{traits::AtLeast32BitUnsigned};
-use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
+use sp_std::{marker::PhantomData, prelude::*};
 
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
@@ -50,10 +50,8 @@ pub use pallet::*;
 pub use weights::WeightInfo;
 
 /// The status of the pallet instance.
-#[derive(Encode, Decode, Eq, PartialEq, Clone, TypeInfo, MaxEncodedLen, RuntimeDebug)]
+#[derive(Encode, Decode, Eq, PartialEq, Clone, TypeInfo, MaxEncodedLen, RuntimeDebug, Default)]
 pub struct ParamsType<Balance, BlockNumber> {
-	/// The total amount of funding per payment cycle.
-	budget: Balance,
 	/// The amounts to be paid when a given grade is active.
 	active_salary: [Balance; 9],
 	/// The minimum percent discount when passive.
@@ -64,13 +62,14 @@ pub struct ParamsType<Balance, BlockNumber> {
 	min_promotion_period: [BlockNumber; 9],
 }
 
+/*
+// move to benchmark code. No need for it here.
 impl<
 	Balance: BalanceTrait,
 	BlockNumber: AtLeast32BitUnsigned + Copy,
 > Default for ParamsType<Balance, BlockNumber> {
 	fn default() -> Self {
 		Self {
-			budget: 1000u32.into(),
 			active_salary: [100u32.into(); 9],
 			passive_salary: [10u32.into(); 9],
 			demotion_period: [100u32.into(); 9],
@@ -78,6 +77,7 @@ impl<
 		}
 	}
 }
+*/
 
 /// The status of a single member.
 #[derive(Encode, Decode, Eq, PartialEq, Clone, TypeInfo, MaxEncodedLen, RuntimeDebug)]
@@ -85,16 +85,17 @@ pub struct MemberStatus<BlockNumber> {
 	/// Are they currently active>
 	is_active: bool,
 	/// The block number at which we last promoted them.
-	last_promotion: Option<BlockNumber>,
+	last_promotion: BlockNumber,
 	/// The last time a member was demoted, promoted or proved their rank.
-	last_proof: Option<BlockNumber>,
+	last_proof: BlockNumber,
 }
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{dispatch::Pays, pallet_prelude::*, traits::{EnsureOrigin, tokens::GetSalary, EnsureOriginWithArg}};
+	use frame_support::{dispatch::Pays, pallet_prelude::*, traits::{EnsureOrigin, tokens::GetSalary}};
 	use frame_system::pallet_prelude::*;
+	use sp_core::Get;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -110,7 +111,7 @@ pub mod pallet {
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The current membership of the fellowship.
-		type Members: RankedMembers<AccountId = <Self as frame_system::Config>::AccountId>;
+		type Members: RankedMembers<AccountId = <Self as frame_system::Config>::AccountId, Rank = u16>;
 
 		/// The type in which salaries/budgets are measured.
 		type Balance: BalanceTrait;
@@ -128,13 +129,13 @@ pub mod pallet {
 
 		/// The period before auto-demotion that a member can be (re-)approved for their rank.
 		#[pallet::constant]
-		type ApprovePeriod = Get<Self::BlockNumber>;
+		type ApprovePeriod: Get<Self::BlockNumber>;
 	}
 
 	pub type ParamsOf<T, I> =
 		ParamsType<<T as Config<I>>::Balance, <T as frame_system::Config>::BlockNumber>;
 	pub type MemberStatusOf<T> = MemberStatus<<T as frame_system::Config>::BlockNumber>;
-	pub type RankOf<T, I> = <<T as Config<I>>::Members as RankedMembers<_>>::Rank;
+	pub type RankOf<T, I> = <<T as Config<I>>::Members as RankedMembers>::Rank;
 
 	/// The overall status of the system.
 	#[pallet::storage]
@@ -145,7 +146,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type Member<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, T::AccountId, MemberStatusOf<T>, OptionQuery>;
-/*
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -172,6 +173,8 @@ pub mod pallet {
 		Ranked,
 		/// Member's rank is not as expected.
 		UnexpectedRank,
+		/// The given rank is invalid - this generally means it's not between 1 and 9.
+		InvalidRank,
 		/// The account is not a member of the collective.
 		NotMember,
 		/// The member is not tracked by this pallet (call `prove` on member first).
@@ -185,11 +188,12 @@ pub mod pallet {
 		AlreadyInducted,
 		/// The candidate has not been inducted, so cannot be offboarded from this pallet.
 		NotInducted,
+		/// Operation cannot be done yet since not enough time has passed.
+		TooSoon,
 	}
-*/
+
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		/*
 		/// Bump the state of a member.
 		///
 		/// This will demote a member whose `last_proof` is now beyond their rank's
@@ -205,14 +209,15 @@ pub mod pallet {
 			let rank = T::Members::rank_of(&who).ok_or(Error::<T, I>::NotMember)?;
 			
 			let params = Params::<T, I>::get();
-			let demotion_period = params.demotion_period[Self::rank_to_index(rank)];
+			let rank_index = Self::rank_to_index(rank).ok_or(Error::<T, I>::InvalidRank)?;
+			let demotion_period = params.demotion_period[rank_index];
 			let demotion_block = member.last_proof.saturating_add(demotion_period);
 			
 			// Ensure enough time has passed.
 			let now = frame_system::Pallet::<T>::block_number();
 			if now >= demotion_block {
-				let to_rank = rank.saturating_sub(1u32.into());
-				T::Members::demote(&who);
+				let to_rank = rank.clone().saturating_less_one();
+				T::Members::demote(&who)?;
 				let event = if to_rank.is_zero() {
 					Member::<T, I>::remove(&who);
 					Event::<T, I>::Offboarded { who }
@@ -222,7 +227,7 @@ pub mod pallet {
 					Event::<T, I>::Demoted { who, to_rank }
 				};
 				Self::deposit_event(event);
-				Ok(Pays::No.into())
+				return Ok(Pays::No.into());
 			}
 
 			Err(Error::<T, I>::NothingDoing.into())
@@ -237,7 +242,7 @@ pub mod pallet {
 		pub fn set_params(origin: OriginFor<T>, params: ParamsOf<T, I>) -> DispatchResultWithPostInfo {
 			T::ParamsOrigin::ensure_origin(origin)?;
 			Params::<T, I>::put(&params);
-			Self::deposit_event(Events::<T, I>::ParamsChanged { params });
+			Self::deposit_event(Event::<T, I>::ParamsChanged { params });
 			Ok(Pays::No.into())
 		}
 
@@ -296,23 +301,19 @@ pub mod pallet {
 		#[pallet::call_index(4)]
 		pub fn induct(origin: OriginFor<T>, who: T::AccountId) -> DispatchResultWithPostInfo {
 			let allow_rank = T::PromoteOrigin::ensure_origin(origin)?;
-			ensure!(allow_rank >= 1u32.into(), Error::<T, I>::NoPermission);
+			ensure!(allow_rank >= 1, Error::<T, I>::NoPermission);
 			let rank = T::Members::rank_of(&who).ok_or(Error::<T, I>::NotMember)?;
 			ensure!(rank.is_zero(), Error::<T, I>::UnexpectedRank);
 			ensure!(!Member::<T, I>::contains_key(&who), Error::<T, I>::AlreadyInducted);
 
+			T::Members::promote(&who)?;
 			let now = frame_system::Pallet::<T>::block_number();
-
-			T::Members::promote(&who);
-
 			Member::<T, I>::insert(&who, MemberStatus {
 				is_active: true,
 				last_promotion: now,
 				last_proof: now,
 			});
-
 			Self::deposit_event(Event::<T, I>::Inducted { who });
-
 			Ok(Pays::No.into())
 		}
 
@@ -329,17 +330,18 @@ pub mod pallet {
 			ensure!(allow_rank >= to_rank, Error::<T, I>::NoPermission);
 
 			let rank = T::Members::rank_of(&who).ok_or(Error::<T, I>::NotMember)?;
-			ensure!(rank + One::one() == to_rank, Error::<T, I>::UnexpectedRank);
+			ensure!(rank.checked_add(1).map_or(false, |i| i == to_rank), Error::<T, I>::UnexpectedRank);
 
-			let mut member = Member::<T, I>::get(&who).ok_or(Error::<T, I>::Unranked);
+			let mut member = Member::<T, I>::get(&who).ok_or(Error::<T, I>::Unranked)?;
 			let now = frame_system::Pallet::<T>::block_number();
 
 			let params = Params::<T, I>::get();
-			let min_period = params.min_promotion_period[Self::rank_to_index(to_rank)];
+			let rank_index = Self::rank_to_index(to_rank).ok_or(Error::<T, I>::InvalidRank)?;
+			let min_period = params.min_promotion_period[rank_index];
 			// Ensure enough time has passed.
 			ensure!(member.last_promotion.saturating_add(min_period) < now, Error::<T, I>::TooSoon);
 
-			T::Members::promote(&who);
+			T::Members::promote(&who)?;
 			member.last_promotion = now;
 			member.last_proof = now;
 			Member::<T, I>::insert(&who, &member);
@@ -358,40 +360,34 @@ pub mod pallet {
 		#[pallet::call_index(6)]
 		pub fn offboard(origin: OriginFor<T>, who: T::AccountId) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
-			ensure!(T::Members::rank_of(&who).is_zero(), Error::<T, I>::Ranked);
+			ensure!(T::Members::rank_of(&who).map_or(true, |r| r.is_zero()), Error::<T, I>::Ranked);
 			ensure!(Member::<T, I>::contains_key(&who), Error::<T, I>::NotInducted);
 			Member::<T, I>::remove(&who);
 			Self::deposit_event(Event::<T, I>::Offboarded { who });
 			Ok(Pays::No.into())
 		}
-		*/
 	}
 
-/*
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Convert a rank into a 0..9 index suitable for the arrays in Params.
 		///
 		/// Rank 1 becomes index 0, rank 9 becomes index 8. Any rank not in the range 1..=9 is
 		/// `None`.
-		fn rank_to_index(rank: RankOf<T, I>) -> Option<usize> {
-			match usize::try_from(rank) {
+		pub(crate) fn rank_to_index(rank: RankOf<T, I>) -> Option<usize> {
+			match TryInto::<usize>::try_into(rank) {
 				Ok(r) if r <= 9 && r > 0 => Some(r - 1),
 				_ => return None,
-			};
-		}
-	}
-*/
-/*
-	impl<T: Config<I>, I: 'static> GetSalary<RankOf<T, I>, T::AccountId, T::Balance> for Pallet<T, I> {
-		fn get_salary(rank: RankOf<T, I>, who: &T::AccountId) -> T::Balance {
-			let index = match Self::rank_to_index(rank) { Some(i) => i, None => return Zero::zero() };
-			let params = T::Params::get();
-			if Member::<T, I>::get(who).is_active {
-				params.active_salary[index]
-			} else {
-				params.passive_salary[index]
 			}
 		}
 	}
-	*/
+
+	impl<T: Config<I>, I: 'static> GetSalary<RankOf<T, I>, T::AccountId, T::Balance> for Pallet<T, I> {
+		fn get_salary(rank: RankOf<T, I>, who: &T::AccountId) -> T::Balance {
+			let index = match Self::rank_to_index(rank) { Some(i) => i, None => return Zero::zero() };
+			let member = match Member::<T, I>::get(who) { Some(m) => m, None => return Zero::zero() };
+			let params = Params::<T, I>::get();
+			let salary = if member.is_active { params.active_salary } else { params.passive_salary };
+			salary[index]
+		}
+	}
 }

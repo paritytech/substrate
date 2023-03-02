@@ -22,9 +22,9 @@
 
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_arithmetic::traits::{Saturating, Zero, AtLeast16BitUnsigned};
+use sp_arithmetic::traits::{Saturating, Zero};
 use sp_core::TypedGet;
-use sp_runtime::{traits::Convert, Perbill};
+use sp_runtime::Perbill;
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 use frame_support::{
