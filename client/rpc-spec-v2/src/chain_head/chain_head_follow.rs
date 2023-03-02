@@ -31,7 +31,6 @@ use futures::{
 	stream::{self, Stream, StreamExt},
 };
 use futures_util::future::Either;
-use itertools::Itertools;
 use jsonrpsee::SubscriptionSink;
 use log::{debug, error};
 use sc_client_api::{
@@ -186,6 +185,7 @@ where
 		let finalized = startup_point.finalized_hash;
 		let mut pruned_forks = HashSet::new();
 		let mut finalized_block_descendants = Vec::new();
+		let mut unique_descendants = HashSet::new();
 		for leaf in leaves {
 			let tree_route = sp_blockchain::tree_route(blockchain, finalized, leaf)?;
 
@@ -197,13 +197,14 @@ where
 				// finalized block. Describe the tree route as (child_node, parent_node)
 				// Note: the order of elements matters here.
 				let parents = std::iter::once(finalized).chain(blocks.clone());
-				finalized_block_descendants.extend(blocks.zip(parents));
+
+				for pair in blocks.zip(parents) {
+					if unique_descendants.insert(pair) {
+						finalized_block_descendants.push(pair);
+					}
+				}
 			}
 		}
-
-		// Keep unique blocks.
-		let finalized_block_descendants: Vec<_> =
-			finalized_block_descendants.into_iter().unique().collect();
 
 		Ok(InitialBlocks { finalized_block_descendants, pruned_forks })
 	}
