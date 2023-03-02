@@ -49,6 +49,7 @@ use sp_runtime::{
 	DispatchResult,
 };
 use sp_std::prelude::*;
+use system::Origin;
 pub use weights::WeightInfo;
 
 type CallHashOf<T> = <<T as Config>::CallHasher as Hash>::Output;
@@ -97,7 +98,7 @@ pub struct Announcement<AccountId, Hash, BlockNumber> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::{DispatchResult, *};
-	use frame_support::{pallet_prelude::*};
+	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -265,10 +266,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::remove_proxies(T::MaxProxies::get()))]
 		pub fn remove_proxies(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-
-			// Call the `remove_all_proxy_delegates` method to remove all proxies associated with
 			Self::remove_all_proxy_delegates(&who);
-
 			Ok(())
 		}
 
@@ -801,17 +799,10 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::ProxyExecuted { result: e.map(|_| ()).map_err(|e| e.error) });
 	}
 
-	fn remove_all_proxy_delegates(who: &T::AccountId) {
-		<Proxies<T>>::mutate(| proxies: &mut <Proxies<T>> | 
-			{
-			if let Some(delegates) = proxies.get_mut(&who) {
-				let old_deposit = proxies.take(&who); 
-				delegates.clear(); 
-				if let Some(old_deposit) = old_deposit {
-					// Return the deposit back to the sender account
-					T::Currency::unreserve(&who, old_deposit);
-				}
-			}
-		});
+	pub fn remove_all_proxy_delegates(who: &T::AccountId)-> DispatchResult {
+		let mut proxies = Proxies::<T>::get();
+		let old_deposit = proxies.remove(&who);
+		T::Currency::unreserve(&who, old_deposit.unwrap_or_else(Zero::zero));
+		Ok(())
 	}
 }
