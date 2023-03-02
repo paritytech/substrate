@@ -70,7 +70,7 @@ impl<T> StatusSinks<T> {
 	///
 	/// The `interval` is the time period between two pushes on the sender.
 	pub fn push(&self, interval: Duration, sender: TracingUnboundedSender<T>) {
-		let _ = self.entries_tx.try_send(YieldAfter {
+		let _ = self.entries_tx.unbounded_send(YieldAfter {
 			delay: Delay::new(interval),
 			interval,
 			sender: Some(sender),
@@ -132,8 +132,8 @@ impl<'a, T> ReadySinkEvent<'a, T> {
 	/// Sends an element on the sender.
 	pub fn send(mut self, element: T) {
 		if let Some(sender) = self.sender.take() {
-			if sender.try_send(element).is_ok() {
-				let _ = self.sinks.entries_tx.try_send(YieldAfter {
+			if sender.unbounded_send(element).is_ok() {
+				let _ = self.sinks.entries_tx.unbounded_send(YieldAfter {
 					// Note that since there's a small delay between the moment a task is
 					// woken up and the moment it is polled, the period is actually not
 					// `interval` but `interval + <delay>`. We ignore this problem in
@@ -154,7 +154,7 @@ impl<'a, T> Drop for ReadySinkEvent<'a, T> {
 				return
 			}
 
-			let _ = self.sinks.entries_tx.try_send(YieldAfter {
+			let _ = self.sinks.entries_tx.unbounded_send(YieldAfter {
 				delay: Delay::new(self.interval),
 				interval: self.interval,
 				sender: Some(sender),

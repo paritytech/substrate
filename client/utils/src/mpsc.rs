@@ -20,15 +20,36 @@
 
 #[cfg(not(feature = "metered"))]
 mod inner {
-	// just aliased, non performance implications
-	pub type TracingUnboundedSender<T> = async_channel::Sender<T>;
+	/// Simple wrapper around [`async_channel::Sender`], no performance implications.
+	pub struct TracingUnboundedSender<T>(async_channel::Sender<T>);
+
+	/// Just alias for [`async_channel::Receiver`], no performance implications.
 	pub type TracingUnboundedReceiver<T> = async_channel::Receiver<T>;
 
-	/// Alias `async_channel::unbounded`
+	/// Proxy to [`async_channel::unbounded`].
 	pub fn tracing_unbounded<T>(
 		_key: &'static str,
 	) -> (TracingUnboundedSender<T>, TracingUnboundedReceiver<T>) {
-		async_channel::unbounded()
+		let (tx, rx) = async_channel::unbounded();
+		(TracingUnboundedSender(tx), rx)
+	}
+
+	// The only reason this impl is needed is because we rename `try_send` -> `unbounded_send`
+	impl<T> TracingUnboundedSender<T> {
+		/// Proxy function to [`async_channel::Sender`].
+		pub fn is_closed(&self) -> bool {
+			self.0.is_closed()
+		}
+
+		/// Proxy function to [`async_channel::Sender`].
+		pub fn close(&self) -> bool {
+			self.0.close()
+		}
+
+		/// Proxy function to `async_channel::Sender::try_send`.
+		pub fn unbounded_send(&self, msg: T) -> Result<(), TrySendError<T>> {
+			self.0.try_send(msg)
+		}
 	}
 }
 
@@ -51,8 +72,8 @@ mod inner {
 		},
 	};
 
-	/// Wrapper Type around `async_channel::Sender` that increases the global
-	/// measure when a message is added
+	/// Wrapper Type around [`async_channel::Sender`] that increases the global
+	/// measure when a message is added.
 	#[derive(Debug)]
 	pub struct TracingUnboundedSender<T> {
 		inner: Sender<T>,
@@ -75,15 +96,15 @@ mod inner {
 		}
 	}
 
-	/// Wrapper Type around `async_channel::Receiver` that decreases the global
-	/// measure when a message is polled
+	/// Wrapper Type around [`async_channel::Receiver`] that decreases the global
+	/// measure when a message is polled.
 	#[derive(Debug)]
 	pub struct TracingUnboundedReceiver<T> {
 		inner: Receiver<T>,
 		name: &'static str,
 	}
 
-	/// Wrapper around `async_channel::unbounded` that tracks the in- and outflow via
+	/// Wrapper around [`async_channel::unbounded`] that tracks the in- and outflow via
 	/// `UNBOUNDED_CHANNELS_COUNTER` and warns if the message queue grows
 	/// above the warning threshold.
 	pub fn tracing_unbounded<T>(
@@ -103,18 +124,18 @@ mod inner {
 	}
 
 	impl<T> TracingUnboundedSender<T> {
-		/// Proxy function to `async_channel::Sender`
+		/// Proxy function to [`async_channel::Sender`].
 		pub fn is_closed(&self) -> bool {
 			self.inner.is_closed()
 		}
 
-		/// Proxy function to `async_channel::Sender`
+		/// Proxy function to [`async_channel::Sender`].
 		pub fn close(&self) -> bool {
 			self.inner.close()
 		}
 
-		/// Proxy function to `async_channel::Sender`
-		pub fn try_send(&self, msg: T) -> Result<(), TrySendError<T>> {
+		/// Proxy function to `async_channel::Sender::try_send`.
+		pub fn unbounded_send(&self, msg: T) -> Result<(), TrySendError<T>> {
 			self.inner.try_send(msg).map(|s| {
 				UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[self.name, "send"]).inc();
 
@@ -164,15 +185,15 @@ mod inner {
 			}
 		}
 
-		/// Proxy function to `async_channel::Receiver`
-		/// that consumes all messages first and updates the counter
+		/// Proxy function to [`async_channel::Receiver`]
+		/// that consumes all messages first and updates the counter.
 		pub fn close(&mut self) -> bool {
 			self.consume();
 			self.inner.close()
 		}
 
-		/// Proxy function to `async_channel::Receiver`
-		/// that discounts the messages taken out
+		/// Proxy function to [`async_channel::Receiver`]
+		/// that discounts the messages taken out.
 		pub fn try_recv(&mut self) -> Result<T, TryRecvError> {
 			self.inner.try_recv().map(|s| {
 				UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[self.name, "received"]).inc();

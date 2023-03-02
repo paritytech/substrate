@@ -197,7 +197,7 @@ impl<M, R> Hub<M, R> {
 
 		registry.dispatch(trigger, |subs_id, item| {
 			if let Some(tx) = sinks.get_mut(subs_id) {
-				if let Err(send_err) = tx.try_send(item) {
+				if let Err(send_err) = tx.unbounded_send(item) {
 					log::warn!("Sink with SubsID = {} failed to perform unbounded_send: {} ({} as Dispatch<{}, Item = {}>::dispatch(...))", subs_id, send_err, std::any::type_name::<R>(),
 					std::any::type_name::<Trigger>(),
 					std::any::type_name::<M>());
