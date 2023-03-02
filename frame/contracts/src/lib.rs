@@ -157,8 +157,6 @@ type DebugBufferVec<T> = BoundedVec<u8, <T as Config>::MaxDebugBufferLen>;
 /// sentinel because contracts are never allowed to use such a large amount of resources
 /// that this value makes sense for a memory location or length.
 const SENTINEL: u32 = u32::MAX;
-// Set up a global reference to the boolean flag used for the re-entrancy guard.
-environmental!(executing_contract: bool);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -1001,6 +999,9 @@ trait Invokable<T: Config, O> {
 	/// We enforce a re-entrancy guard here by initializing and checking a boolean flag through a
 	/// global reference.
 	fn run_guarded(&self, context: ExecContext<T>) -> InternalOutput<T, O> {
+		// Set up a global reference to the boolean flag used for the re-entrancy guard.
+		environmental!(executing_contract: bool);
+
 		let gas_limit = context.gas_limit;
 		executing_contract::using_once(&mut false, || {
 			executing_contract::with(|f| {
@@ -1012,7 +1013,7 @@ trait Invokable<T: Config, O> {
 				*f = true;
 				Ok(())
 			})
-			.unwrap_or(Ok(())) // Should always be `Some`, still we make it safe.
+			.expect("Returns `Ok` if called within `using_once`. It is syntactically obvious that this is the case; qed")
 			.map_or_else(
 				|_| InternalOutput {
 					gas_meter: GasMeter::new(gas_limit),
