@@ -47,22 +47,28 @@ impl From<u32> for MessageOrigin {
 	}
 }
 
-/// Processes any message and consumes (1, 1) weight per message.
-pub struct NoopMessageProcessor;
-impl ProcessMessage for NoopMessageProcessor {
-	type Origin = MessageOrigin;
+/// Processes any message and consumes `(REQUIRED_WEIGHT, REQUIRED_WEIGHT)` weight.
+///
+/// Returns [ProcessMessageError::Overweight] error if the weight limit is not sufficient.
+pub struct NoopMessageProcessor<Origin, const REQUIRED_WEIGHT: u64 = 1>(PhantomData<Origin>);
+impl<Origin, const REQUIRED_WEIGHT: u64> ProcessMessage
+	for NoopMessageProcessor<Origin, REQUIRED_WEIGHT>
+where
+	Origin: codec::FullCodec + MaxEncodedLen + Clone + Eq + PartialEq + TypeInfo + Debug,
+{
+	type Origin = Origin;
 
 	fn process_message(
 		_message: &[u8],
 		_origin: Self::Origin,
-		weight_limit: Weight,
-	) -> Result<(bool, Weight), ProcessMessageError> {
-		let weight = Weight::from_parts(1, 1);
+		meter: &mut WeightMeter,
+	) -> Result<bool, ProcessMessageError> {
+		let required = Weight::from_parts(REQUIRED_WEIGHT, REQUIRED_WEIGHT);
 
-		if weight.all_lte(weight_limit) {
-			Ok((true, weight))
+		if meter.check_accrue(required) {
+			Ok(true)
 		} else {
-			Err(ProcessMessageError::Overweight(weight))
+			Err(ProcessMessageError::Overweight(required))
 		}
 	}
 }

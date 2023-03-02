@@ -12,11 +12,11 @@ homepage = "https://substrate.io"
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 serde = { version = "1.0.136", optional = true }
-beefy-primitives = { version = "4.0.0-dev", default-features = false, path = "../../primitives/beefy", package = "sp-beefy" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-authorship = { version = "4.0.0-dev", default-features = false, path = "../authorship" }
 pallet-session = { version = "4.0.0-dev", default-features = false, path = "../session" }
+sp-consensus-beefy = { version = "4.0.0-dev", default-features = false, path = "../../primitives/consensus/beefy" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
@@ -36,7 +36,6 @@ sp-staking = { version = "4.0.0-dev", path = "../../primitives/staking" }
 [features]
 default = ["std"]
 std = [
-	"beefy-primitives/std",
 	"codec/std",
 	"frame-support/std",
 	"frame-system/std",
@@ -44,6 +43,7 @@ std = [
 	"pallet-session/std",
 	"scale-info/std",
 	"serde",
+	"sp-consensus-beefy/std",
 	"sp-runtime/std",
 	"sp-session/std",
 	"sp-staking/std",

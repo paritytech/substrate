@@ -15,12 +15,12 @@ log = { version = "0.4.17", default-features = false }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 serde = { version = "1.0.136", optional = true }
 binary-merkle-tree = { version = "4.0.0-dev", default-features = false, path = "../../utils/binary-merkle-tree" }
-beefy-primitives = { version = "4.0.0-dev", default-features = false, path = "../../primitives/beefy", package = "sp-beefy" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-beefy = { version = "4.0.0-dev", default-features = false, path = "../beefy" }
 pallet-mmr = { version = "4.0.0-dev", default-features = false, path = "../merkle-mountain-range" }
 pallet-session = { version = "4.0.0-dev", default-features = false, path = "../session" }
+sp-consensus-beefy = { version = "4.0.0-dev", default-features = false, path = "../../primitives/consensus/beefy" }
 sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
@@ -36,7 +36,6 @@ default = ["std"]
 std = [
 	"array-bytes",
 	"binary-merkle-tree/std",
-	"beefy-primitives/std",
 	"codec/std",
 	"frame-support/std",
 	"frame-system/std",
@@ -46,6 +45,7 @@ std = [
 	"pallet-session/std",
 	"scale-info/std",
 	"serde",
+	"sp-consensus-beefy/std",
 	"sp-core/std",
 	"sp-io/std",
 	"sp-runtime/std",
