@@ -1125,12 +1125,6 @@ fn set_min_balance_should_work() {
 			Error::<Test>::NoPermission
 		);
 
-		assert_ok!(Assets::burn(RuntimeOrigin::signed(1), id, 1, 100));
-
-		// Works because there are no asset holders.
-		assert_ok!(Assets::set_min_balance(RuntimeOrigin::signed(1), id, 60));
-		assert_eq!(Asset::<Test>::get(id).unwrap().min_balance, 60);
-
 		// Make the asset not sufficient.
 		assert_ok!(Assets::force_asset_status(
 			RuntimeOrigin::root(),
@@ -1143,9 +1137,6 @@ fn set_min_balance_should_work() {
 			false,
 			false
 		));
-
-		// We mint the asset again.
-		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), id, 1, 100));
 
 		// Will execute because the new value of min_balance is less than the
 		// old value. 10 < 30
