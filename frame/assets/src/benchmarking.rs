@@ -472,7 +472,7 @@ benchmarks_instance_pallet! {
 	}
 
 	set_min_balance {
-		let (asset_id, caller, caller_lookup) = create_default_asset::<T, I>(true);
+		let (asset_id, caller, caller_lookup) = create_default_asset::<T, I>(false);
 	}: _(SystemOrigin::Signed(caller.clone()), asset_id, 50u32.into())
 	verify {
 		assert_last_event::<T, I>(Event::AssetMinBalanceChanged { asset_id: asset_id.into(), new_min_balance: 50u32.into() }.into());
