@@ -373,9 +373,42 @@ where
 				continue
 			}
 
+			// Generate only the `NewBlock` event for this block.
+			if hash != last_finalized {
+				events.extend(self.generate_import_events(*hash, *parent, false));
+				continue
+			}
+
+			// Determine if a `BestBlock` event should be generated for the last finalized block.
+			let is_best_block = match self.best_block_cache {
+				Some(best_block_hash) => {
+					// If the best reported block is a children of the last finalized,
+					// then do not report a `BestBlock` event older than what was previously
+					// reported.
+					let ancestor = sp_blockchain::lowest_common_ancestor(
+						&*self.client,
+						*last_finalized,
+						best_block_hash,
+					)?;
+
+					// A best block on this branch was already reported.
+					if ancestor.hash == *last_finalized {
+						false
+					} else {
+						self.best_block_cache = Some(*hash);
+						true
+					}
+				},
+				// This is the first best block event that we generate.
+				None => {
+					self.best_block_cache = Some(*hash);
+					true
+				},
+			};
+
 			// This is the first time we see this block. Generate the `NewBlock` event; if this is
 			// the last block, also generate the `BestBlock` event.
-			events.extend(self.generate_import_events(*hash, *parent, hash == last_finalized))
+			events.extend(self.generate_import_events(*hash, *parent, is_best_block))
 		}
 
 		Ok(events)
