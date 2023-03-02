@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@
 mod database_params;
 mod import_params;
 mod keystore_params;
+mod message_params;
 mod network_params;
 mod node_key_params;
 mod offchain_worker_params;
@@ -35,7 +36,7 @@ use sp_runtime::{
 use std::{fmt::Debug, str::FromStr};
 
 pub use crate::params::{
-	database_params::*, import_params::*, keystore_params::*, network_params::*,
+	database_params::*, import_params::*, keystore_params::*, message_params::*, network_params::*,
 	node_key_params::*, offchain_worker_params::*, pruning_params::*, shared_params::*,
 	transaction_pool_params::*,
 };

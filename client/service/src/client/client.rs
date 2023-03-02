@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,19 +18,18 @@
 
 //! Substrate Client
 
-use super::{
-	block_rules::{BlockRules, LookupResult as BlockLookupResult},
-	genesis::BuildGenesisBlock,
-};
-use log::{info, trace, warn};
+use super::block_rules::{BlockRules, LookupResult as BlockLookupResult};
+use futures::{FutureExt, StreamExt};
+use log::{error, info, trace, warn};
 use parking_lot::{Mutex, RwLock};
 use prometheus_endpoint::Registry;
 use rand::Rng;
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider, RecordProof};
+use sc_chain_spec::{resolve_state_version_from_wasm, BuildGenesisBlock};
 use sc_client_api::{
 	backend::{
 		self, apply_aux, BlockImportOperation, ClientImportOperation, FinalizeSummary, Finalizer,
-		ImportSummary, LockImportRun, NewBlockState, StorageProvider,
+		ImportNotificationAction, ImportSummary, LockImportRun, NewBlockState, StorageProvider,
 	},
 	client::{
 		BadBlocks, BlockBackend, BlockImportNotification, BlockOf, BlockchainEvents, ClientInfo,
@@ -39,13 +38,13 @@ use sc_client_api::{
 	},
 	execution_extensions::ExecutionExtensions,
 	notifications::{StorageEventStream, StorageNotifications},
-	CallExecutor, ExecutorProvider, KeyIterator, OnFinalityAction, OnImportAction, ProofProvider,
-	UsageProvider,
+	CallExecutor, ExecutorProvider, KeysIter, OnFinalityAction, OnImportAction, PairsIter,
+	ProofProvider, UsageProvider,
 };
 use sc_consensus::{
 	BlockCheckParams, BlockImportParams, ForkChoiceStrategy, ImportResult, StateAction,
 };
-use sc_executor::{RuntimeVersion, RuntimeVersionOf};
+use sc_executor::RuntimeVersion;
 use sc_telemetry::{telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sp_api::{
 	ApiExt, ApiRef, CallApiAt, CallApiAtParams, ConstructRuntimeApi, Core as CoreApi,
@@ -58,9 +57,12 @@ use sp_blockchain::{
 use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError};
 
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
-use sp_core::storage::{
-	well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, Storage, StorageChild, StorageData,
-	StorageKey,
+use sp_core::{
+	storage::{
+		well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, StorageChild, StorageData,
+		StorageKey,
+	},
+	traits::SpawnNamed,
 };
 #[cfg(feature = "test-helpers")]
 use sp_keystore::SyncCryptoStorePtr;
@@ -80,7 +82,7 @@ use sp_state_machine::{
 };
 use sp_trie::{CompactProof, StorageProof};
 use std::{
-	collections::{hash_map::DefaultHasher, HashMap, HashSet},
+	collections::{HashMap, HashSet},
 	marker::PhantomData,
 	path::PathBuf,
 	sync::Arc,
@@ -88,9 +90,7 @@ use std::{
 
 #[cfg(feature = "test-helpers")]
 use {
-	super::call_executor::LocalCallExecutor,
-	sc_client_api::in_mem,
-	sp_core::traits::{CodeExecutor, SpawnNamed},
+	super::call_executor::LocalCallExecutor, sc_client_api::in_mem, sp_core::traits::CodeExecutor,
 };
 
 type NotificationSinks<T> = Mutex<Vec<TracingUnboundedSender<T>>>;
@@ -104,6 +104,7 @@ where
 	executor: E,
 	storage_notifications: StorageNotifications<Block>,
 	import_notification_sinks: NotificationSinks<BlockImportNotification<Block>>,
+	every_import_notification_sinks: NotificationSinks<BlockImportNotification<Block>>,
 	finality_notification_sinks: NotificationSinks<FinalityNotification<Block>>,
 	// Collects auxiliary operations to be performed atomically together with
 	// block import operations.
@@ -116,6 +117,7 @@ where
 	block_rules: BlockRules<Block>,
 	config: ClientConfig<Block>,
 	telemetry: Option<TelemetryHandle>,
+	unpin_worker_sender: TracingUnboundedSender<Block::Hash>,
 	_phantom: PhantomData<RA>,
 }
 
@@ -168,7 +170,7 @@ pub fn new_in_mem<E, Block, G, RA>(
 	Client<in_mem::Backend<Block>, LocalCallExecutor<Block, in_mem::Backend<Block>, E>, Block, RA>,
 >
 where
-	E: CodeExecutor + RuntimeVersionOf,
+	E: CodeExecutor + sc_executor::RuntimeVersionOf,
 	Block: BlockT,
 	G: BuildGenesisBlock<
 			Block,
@@ -229,7 +231,7 @@ pub fn new_with_backend<B, E, Block, G, RA>(
 	config: ClientConfig<Block>,
 ) -> sp_blockchain::Result<Client<B, LocalCallExecutor<Block, B, E>, Block, RA>>
 where
-	E: CodeExecutor + RuntimeVersionOf,
+	E: CodeExecutor + sc_executor::RuntimeVersionOf,
 	G: BuildGenesisBlock<
 		Block,
 		BlockImportOperation = <B as backend::Backend<Block>>::BlockImportOperation,
@@ -246,7 +248,7 @@ where
 	let call_executor = LocalCallExecutor::new(
 		backend.clone(),
 		executor,
-		spawn_handle,
+		spawn_handle.clone(),
 		config.clone(),
 		extensions,
 	)?;
@@ -254,6 +256,7 @@ where
 	Client::new(
 		backend,
 		call_executor,
+		spawn_handle,
 		genesis_block_builder,
 		Default::default(),
 		Default::default(),
@@ -296,14 +299,26 @@ where
 
 			let ClientImportOperation { mut op, notify_imported, notify_finalized } = op;
 
-			let finality_notification = notify_finalized.map(|summary| summary.into());
-			let (import_notification, storage_changes) = match notify_imported {
-				Some(mut summary) => {
-					let storage_changes = summary.storage_changes.take();
-					(Some(summary.into()), storage_changes)
-				},
-				None => (None, None),
-			};
+			let finality_notification = notify_finalized.map(|summary| {
+				FinalityNotification::from_summary(summary, self.unpin_worker_sender.clone())
+			});
+
+			let (import_notification, storage_changes, import_notification_action) =
+				match notify_imported {
+					Some(mut summary) => {
+						let import_notification_action = summary.import_notification_action;
+						let storage_changes = summary.storage_changes.take();
+						(
+							Some(BlockImportNotification::from_summary(
+								summary,
+								self.unpin_worker_sender.clone(),
+							)),
+							storage_changes,
+							import_notification_action,
+						)
+					},
+					None => (None, None, ImportNotificationAction::None),
+				};
 
 			if let Some(ref notification) = finality_notification {
 				for action in self.finality_actions.lock().iter_mut() {
@@ -318,8 +333,29 @@ where
 
 			self.backend.commit_operation(op)?;
 
+			// We need to pin the block in the backend once
+			// for each notification. Once all notifications are
+			// dropped, the block will be unpinned automatically.
+			if let Some(ref notification) = finality_notification {
+				if let Err(err) = self.backend.pin_block(notification.hash) {
+					error!(
+						"Unable to pin block for finality notification. hash: {}, Error: {}",
+						notification.hash, err
+					);
+				};
+			}
+
+			if let Some(ref notification) = import_notification {
+				if let Err(err) = self.backend.pin_block(notification.hash) {
+					error!(
+						"Unable to pin block for import notification. hash: {}, Error: {}",
+						notification.hash, err
+					);
+				};
+			}
+
 			self.notify_finalized(finality_notification)?;
-			self.notify_imported(import_notification, storage_changes)?;
+			self.notify_imported(import_notification, import_notification_action, storage_changes)?;
 
 			Ok(r)
 		};
@@ -357,6 +393,7 @@ where
 	pub fn new<G>(
 		backend: Arc<B>,
 		executor: E,
+		spawn_handle: Box<dyn SpawnNamed>,
 		genesis_block_builder: G,
 		fork_blocks: ForkBlocks<Block>,
 		bad_blocks: BadBlocks<Block>,
@@ -369,6 +406,7 @@ where
 			Block,
 			BlockImportOperation = <B as backend::Backend<Block>>::BlockImportOperation,
 		>,
+		B: 'static,
 	{
 		let info = backend.blockchain().info();
 		if info.finalized_state.is_none() {
@@ -390,11 +428,32 @@ where
 			backend.commit_operation(op)?;
 		}
 
+		let (unpin_worker_sender, mut rx) =
+			tracing_unbounded::<Block::Hash>("unpin-worker-channel", 10_000);
+		let task_backend = Arc::downgrade(&backend);
+		spawn_handle.spawn(
+			"unpin-worker",
+			None,
+			async move {
+				while let Some(message) = rx.next().await {
+					if let Some(backend) = task_backend.upgrade() {
+						backend.unpin_block(message);
+					} else {
+						log::debug!("Terminating unpin-worker, backend reference was dropped.");
+						return
+					}
+				}
+				log::debug!("Terminating unpin-worker, stream terminated.")
+			}
+			.boxed(),
+		);
+
 		Ok(Client {
 			backend,
 			executor,
 			storage_notifications: StorageNotifications::new(prometheus_registry),
 			import_notification_sinks: Default::default(),
+			every_import_notification_sinks: Default::default(),
 			finality_notification_sinks: Default::default(),
 			import_actions: Default::default(),
 			finality_actions: Default::default(),
@@ -402,6 +461,7 @@ where
 			block_rules: BlockRules::new(fork_blocks, bad_blocks),
 			config,
 			telemetry,
+			unpin_worker_sender,
 			_phantom: Default::default(),
 		})
 	}
@@ -424,8 +484,7 @@ where
 	}
 
 	/// Get the code at a given block.
-	pub fn code_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Vec<u8>> {
-		let hash = self.backend.blockchain().expect_block_hash_from_id(id)?;
+	pub fn code_at(&self, hash: Block::Hash) -> sp_blockchain::Result<Vec<u8>> {
 		Ok(StorageProvider::storage(self, hash, &StorageKey(well_known_keys::CODE.to_vec()))?
 			.expect(
 				"None is returned if there's no value stored for the given key;\
@@ -435,8 +494,8 @@ where
 	}
 
 	/// Get the RuntimeVersion at a given block.
-	pub fn runtime_version_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
-		CallExecutor::runtime_version(&self.executor, id)
+	pub fn runtime_version_at(&self, hash: Block::Hash) -> sp_blockchain::Result<RuntimeVersion> {
+		CallExecutor::runtime_version(&self.executor, hash)
 	}
 
 	/// Apply a checked and validated block to an operation. If a justification is provided
@@ -713,11 +772,15 @@ where
 
 		operation.op.insert_aux(aux)?;
 
-		// We only notify when we are already synced to the tip of the chain
+		let should_notify_every_block = !self.every_import_notification_sinks.lock().is_empty();
+
+		// Notify when we are already synced to the tip of the chain
 		// or if this import triggers a re-org
-		if make_notifications || tree_route.is_some() {
+		let should_notify_recent_block = make_notifications || tree_route.is_some();
+
+		if should_notify_every_block || should_notify_recent_block {
 			let header = import_headers.into_post();
-			if finalized {
+			if finalized && should_notify_recent_block {
 				let mut summary = match operation.notify_finalized.take() {
 					Some(mut summary) => {
 						summary.header = header.clone();
@@ -754,6 +817,16 @@ where
 				operation.notify_finalized = Some(summary);
 			}
 
+			let import_notification_action = if should_notify_every_block {
+				if should_notify_recent_block {
+					ImportNotificationAction::Both
+				} else {
+					ImportNotificationAction::EveryBlock
+				}
+			} else {
+				ImportNotificationAction::RecentBlock
+			};
+
 			operation.notify_imported = Some(ImportSummary {
 				hash,
 				origin,
@@ -761,6 +834,7 @@ where
 				is_new_best,
 				storage_changes,
 				tree_route,
+				import_notification_action,
 			})
 		}
 
@@ -782,9 +856,9 @@ where
 			CoreApi<Block> + ApiExt<Block, StateBackend = B::State>,
 	{
 		let parent_hash = import_block.header.parent_hash();
-		let at = BlockId::Hash(*parent_hash);
 		let state_action = std::mem::replace(&mut import_block.state_action, StateAction::Skip);
-		let (enact_state, storage_changes) = match (self.block_status(&at)?, state_action) {
+		let (enact_state, storage_changes) = match (self.block_status(*parent_hash)?, state_action)
+		{
 			(BlockStatus::KnownBad, _) =>
 				return Ok(PrepareStorageChangesResult::Discard(ImportResult::KnownBad)),
 			(
@@ -813,7 +887,7 @@ where
 				let execution_context = import_block.origin.into();
 
 				runtime_api.execute_block_with_context(
-					&at,
+					*parent_hash,
 					execution_context,
 					Block::new(import_block.header.clone(), body.clone()),
 				)?;
@@ -956,6 +1030,7 @@ where
 	fn notify_imported(
 		&self,
 		notification: Option<BlockImportNotification<Block>>,
+		import_notification_action: ImportNotificationAction,
 		storage_changes: Option<(StorageCollection, ChildStorageCollection)>,
 	) -> sp_blockchain::Result<()> {
 		let notification = match notification {
@@ -968,22 +1043,59 @@ where
 				// temporary leak of closed/discarded notification sinks (e.g.
 				// from consensus code).
 				self.import_notification_sinks.lock().retain(|sink| !sink.is_closed());
+
+				self.every_import_notification_sinks.lock().retain(|sink| !sink.is_closed());
+
 				return Ok(())
 			},
 		};
 
-		if let Some(storage_changes) = storage_changes {
-			// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
-			self.storage_notifications.trigger(
-				&notification.hash,
-				storage_changes.0.into_iter(),
-				storage_changes.1.into_iter().map(|(sk, v)| (sk, v.into_iter())),
-			);
-		}
+		let trigger_storage_changes_notification = || {
+			if let Some(storage_changes) = storage_changes {
+				// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
+				self.storage_notifications.trigger(
+					&notification.hash,
+					storage_changes.0.into_iter(),
+					storage_changes.1.into_iter().map(|(sk, v)| (sk, v.into_iter())),
+				);
+			}
+		};
 
-		self.import_notification_sinks
-			.lock()
-			.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+		match import_notification_action {
+			ImportNotificationAction::Both => {
+				trigger_storage_changes_notification();
+				self.import_notification_sinks
+					.lock()
+					.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+
+				self.every_import_notification_sinks
+					.lock()
+					.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+			},
+			ImportNotificationAction::RecentBlock => {
+				trigger_storage_changes_notification();
+				self.import_notification_sinks
+					.lock()
+					.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+
+				self.every_import_notification_sinks.lock().retain(|sink| !sink.is_closed());
+			},
+			ImportNotificationAction::EveryBlock => {
+				self.every_import_notification_sinks
+					.lock()
+					.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+
+				self.import_notification_sinks.lock().retain(|sink| !sink.is_closed());
+			},
+			ImportNotificationAction::None => {
+				// This branch is unreachable in fact because the block import notification must be
+				// Some(_) instead of None (it's already handled at the beginning of this function)
+				// at this point.
+				self.import_notification_sinks.lock().retain(|sink| !sink.is_closed());
+
+				self.every_import_notification_sinks.lock().retain(|sink| !sink.is_closed());
+			},
+		}
 
 		Ok(())
 	}
@@ -1025,17 +1137,18 @@ where
 	}
 
 	/// Get block status.
-	pub fn block_status(&self, id: &BlockId<Block>) -> sp_blockchain::Result<BlockStatus> {
+	pub fn block_status(&self, hash: Block::Hash) -> sp_blockchain::Result<BlockStatus> {
 		// this can probably be implemented more efficiently
-		if let BlockId::Hash(ref h) = id {
-			if self.importing_block.read().as_ref().map_or(false, |importing| h == importing) {
-				return Ok(BlockStatus::Queued)
-			}
+		if self
+			.importing_block
+			.read()
+			.as_ref()
+			.map_or(false, |importing| &hash == importing)
+		{
+			return Ok(BlockStatus::Queued)
 		}
-		let hash_and_number = match *id {
-			BlockId::Hash(hash) => self.backend.blockchain().number(hash)?.map(|n| (hash, n)),
-			BlockId::Number(n) => self.backend.blockchain().hash(n)?.map(|hash| (hash, n)),
-		};
+
+		let hash_and_number = self.backend.blockchain().number(hash)?.map(|n| (hash, n));
 		match hash_and_number {
 			Some((hash, number)) =>
 				if self.backend.have_state_at(hash, number) {
@@ -1107,38 +1220,6 @@ where
 	}
 }
 
-/// Return the genesis state version given the genesis storage and executor.
-pub fn resolve_state_version_from_wasm<E>(
-	storage: &Storage,
-	executor: &E,
-) -> sp_blockchain::Result<StateVersion>
-where
-	E: RuntimeVersionOf,
-{
-	if let Some(wasm) = storage.top.get(well_known_keys::CODE) {
-		let mut ext = sp_state_machine::BasicExternalities::new_empty(); // just to read runtime version.
-
-		let code_fetcher = sp_core::traits::WrappedRuntimeCode(wasm.as_slice().into());
-		let runtime_code = sp_core::traits::RuntimeCode {
-			code_fetcher: &code_fetcher,
-			heap_pages: None,
-			hash: {
-				use std::hash::{Hash, Hasher};
-				let mut state = DefaultHasher::new();
-				wasm.hash(&mut state);
-				state.finish().to_le_bytes().to_vec()
-			},
-		};
-		let runtime_version = RuntimeVersionOf::runtime_version(executor, &mut ext, &runtime_code)
-			.map_err(|e| sp_blockchain::Error::VersionInvalid(e.to_string()))?;
-		Ok(runtime_version.state_version())
-	} else {
-		Err(sp_blockchain::Error::VersionInvalid(
-			"Runtime missing from initial storage, could not read state version.".to_string(),
-		))
-	}
-}
-
 impl<B, E, Block, RA> UsageProvider<Block> for Client<B, E, Block, RA>
 where
 	B: backend::Backend<Block>,
@@ -1182,7 +1263,7 @@ where
 		method: &str,
 		call_data: &[u8],
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
-		self.executor.prove_execution(&BlockId::Hash(hash), method, call_data)
+		self.executor.prove_execution(hash, method, call_data)
 	}
 
 	fn read_proof_collection(
@@ -1351,14 +1432,14 @@ where
 {
 	fn new_block_at<R: Into<RecordProof>>(
 		&self,
-		parent: &BlockId<Block>,
+		parent: Block::Hash,
 		inherent_digests: Digest,
 		record_proof: R,
 	) -> sp_blockchain::Result<sc_block_builder::BlockBuilder<Block, Self, B>> {
 		sc_block_builder::BlockBuilder::new(
 			self,
-			self.expect_block_hash_from_id(parent)?,
-			self.expect_block_number_from_id(parent)?,
+			parent,
+			self.expect_block_number_from_id(&BlockId::Hash(parent))?,
 			record_proof.into(),
 			inherent_digests,
 			&self.backend,
@@ -1406,51 +1487,36 @@ where
 {
 	fn storage_keys(
 		&self,
-		hash: Block::Hash,
-		key_prefix: &StorageKey,
-	) -> sp_blockchain::Result<Vec<StorageKey>> {
-		let keys = self.state_at(hash)?.keys(&key_prefix.0).into_iter().map(StorageKey).collect();
-		Ok(keys)
+		hash: <Block as BlockT>::Hash,
+		prefix: Option<&StorageKey>,
+		start_key: Option<&StorageKey>,
+	) -> sp_blockchain::Result<KeysIter<B::State, Block>> {
+		let state = self.state_at(hash)?;
+		KeysIter::new(state, prefix, start_key)
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
+	}
+
+	fn child_storage_keys(
+		&self,
+		hash: <Block as BlockT>::Hash,
+		child_info: ChildInfo,
+		prefix: Option<&StorageKey>,
+		start_key: Option<&StorageKey>,
+	) -> sp_blockchain::Result<KeysIter<B::State, Block>> {
+		let state = self.state_at(hash)?;
+		KeysIter::new_child(state, child_info, prefix, start_key)
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
 	}
 
 	fn storage_pairs(
 		&self,
 		hash: <Block as BlockT>::Hash,
-		key_prefix: &StorageKey,
-	) -> sp_blockchain::Result<Vec<(StorageKey, StorageData)>> {
-		let state = self.state_at(hash)?;
-		let keys = state
-			.keys(&key_prefix.0)
-			.into_iter()
-			.map(|k| {
-				let d = state.storage(&k).ok().flatten().unwrap_or_default();
-				(StorageKey(k), StorageData(d))
-			})
-			.collect();
-		Ok(keys)
-	}
-
-	fn storage_keys_iter<'a>(
-		&self,
-		hash: <Block as BlockT>::Hash,
-		prefix: Option<&'a StorageKey>,
+		prefix: Option<&StorageKey>,
 		start_key: Option<&StorageKey>,
-	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>> {
+	) -> sp_blockchain::Result<PairsIter<B::State, Block>> {
 		let state = self.state_at(hash)?;
-		let start_key = start_key.or(prefix).map(|key| key.0.clone()).unwrap_or_else(Vec::new);
-		Ok(KeyIterator::new(state, prefix, start_key))
-	}
-
-	fn child_storage_keys_iter<'a>(
-		&self,
-		hash: <Block as BlockT>::Hash,
-		child_info: ChildInfo,
-		prefix: Option<&'a StorageKey>,
-		start_key: Option<&StorageKey>,
-	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>> {
-		let state = self.state_at(hash)?;
-		let start_key = start_key.or(prefix).map(|key| key.0.clone()).unwrap_or_else(Vec::new);
-		Ok(KeyIterator::new_child(state, child_info, prefix, start_key))
+		PairsIter::new(state, prefix, start_key)
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
 	}
 
 	fn storage(
@@ -1473,21 +1539,6 @@ where
 		self.state_at(hash)?
 			.storage_hash(&key.0)
 			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
-	}
-
-	fn child_storage_keys(
-		&self,
-		hash: <Block as BlockT>::Hash,
-		child_info: &ChildInfo,
-		key_prefix: &StorageKey,
-	) -> sp_blockchain::Result<Vec<StorageKey>> {
-		let keys = self
-			.state_at(hash)?
-			.child_keys(child_info, &key_prefix.0)
-			.into_iter()
-			.map(StorageKey)
-			.collect();
-		Ok(keys)
 	}
 
 	fn child_storage(
@@ -1680,13 +1731,12 @@ where
 			.map_err(Into::into)
 	}
 
-	fn runtime_version_at(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, sp_api::ApiError> {
-		CallExecutor::runtime_version(&self.executor, at).map_err(Into::into)
+	fn runtime_version_at(&self, hash: Block::Hash) -> Result<RuntimeVersion, sp_api::ApiError> {
+		CallExecutor::runtime_version(&self.executor, hash).map_err(Into::into)
 	}
 
-	fn state_at(&self, at: &BlockId<Block>) -> Result<Self::StateBackend, sp_api::ApiError> {
-		let hash = self.backend.blockchain().expect_block_hash_from_id(at)?;
-		self.state_at(hash).map_err(Into::into)
+	fn state_at(&self, at: Block::Hash) -> Result<Self::StateBackend, sp_api::ApiError> {
+		self.state_at(at).map_err(Into::into)
 	}
 }
 
@@ -1779,7 +1829,7 @@ where
 		// Own status must be checked first. If the block and ancestry is pruned
 		// this function must return `AlreadyInChain` rather than `MissingState`
 		match self
-			.block_status(&BlockId::Hash(hash))
+			.block_status(hash)
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 		{
 			BlockStatus::InChainWithState | BlockStatus::Queued =>
@@ -1792,7 +1842,7 @@ where
 		}
 
 		match self
-			.block_status(&BlockId::Hash(parent_hash))
+			.block_status(parent_hash)
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 		{
 			BlockStatus::InChainWithState | BlockStatus::Queued => {},
@@ -1918,6 +1968,12 @@ where
 		stream
 	}
 
+	fn every_import_notification_stream(&self) -> ImportNotifications<Block> {
+		let (sink, stream) = tracing_unbounded("mpsc_every_import_notification_stream", 100_000);
+		self.every_import_notification_sinks.lock().push(sink);
+		stream
+	}
+
 	fn finality_notification_stream(&self) -> FinalityNotifications<Block> {
 		let (sink, stream) = tracing_unbounded("mpsc_finality_notification_stream", 100_000);
 		self.finality_notification_sinks.lock().push(sink);
@@ -1947,20 +2003,16 @@ where
 		self.body(hash)
 	}
 
-	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>> {
-		Ok(match self.backend.blockchain().block_hash_from_id(id)? {
-			Some(hash) =>
-				match (self.header(hash)?, self.body(hash)?, self.justifications(hash)?) {
-					(Some(header), Some(extrinsics), justifications) =>
-						Some(SignedBlock { block: Block::new(header, extrinsics), justifications }),
-					_ => None,
-				},
-			None => None,
+	fn block(&self, hash: Block::Hash) -> sp_blockchain::Result<Option<SignedBlock<Block>>> {
+		Ok(match (self.header(hash)?, self.body(hash)?, self.justifications(hash)?) {
+			(Some(header), Some(extrinsics), justifications) =>
+				Some(SignedBlock { block: Block::new(header, extrinsics), justifications }),
+			_ => None,
 		})
 	}
 
-	fn block_status(&self, id: &BlockId<Block>) -> sp_blockchain::Result<BlockStatus> {
-		Client::block_status(self, id)
+	fn block_status(&self, hash: Block::Hash) -> sp_blockchain::Result<BlockStatus> {
+		Client::block_status(self, hash)
 	}
 
 	fn justifications(&self, hash: Block::Hash) -> sp_blockchain::Result<Option<Justifications>> {
@@ -2055,9 +2107,9 @@ where
 {
 	fn block_status(
 		&self,
-		id: &BlockId<B>,
+		hash: B::Hash,
 	) -> Result<BlockStatus, Box<dyn std::error::Error + Send>> {
-		Client::block_status(self, id).map_err(|e| Box::new(e) as Box<_>)
+		Client::block_status(self, hash).map_err(|e| Box::new(e) as Box<_>)
 	}
 }
 

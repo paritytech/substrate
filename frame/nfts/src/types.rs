@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -43,6 +43,8 @@ pub(super) type ItemDepositOf<T, I> =
 	ItemDeposit<DepositBalanceOf<T, I>, <T as SystemConfig>::AccountId>;
 pub(super) type AttributeDepositOf<T, I> =
 	AttributeDeposit<DepositBalanceOf<T, I>, <T as SystemConfig>::AccountId>;
+pub(super) type ItemMetadataDepositOf<T, I> =
+	ItemMetadataDeposit<DepositBalanceOf<T, I>, <T as SystemConfig>::AccountId>;
 pub(super) type ItemDetailsFor<T, I> =
 	ItemDetails<<T as SystemConfig>::AccountId, ItemDepositOf<T, I>, ApprovalsOf<T, I>>;
 pub(super) type BalanceOf<T, I = ()> =
@@ -58,6 +60,18 @@ pub(super) type CollectionConfigFor<T, I = ()> = CollectionConfig<
 	BalanceOf<T, I>,
 	<T as SystemConfig>::BlockNumber,
 	<T as Config<I>>::CollectionId,
+>;
+pub(super) type PreSignedMintOf<T, I = ()> = PreSignedMint<
+	<T as Config<I>>::CollectionId,
+	<T as Config<I>>::ItemId,
+	<T as SystemConfig>::AccountId,
+	<T as SystemConfig>::BlockNumber,
+>;
+pub(super) type PreSignedAttributesOf<T, I = ()> = PreSignedAttributes<
+	<T as Config<I>>::CollectionId,
+	<T as Config<I>>::ItemId,
+	<T as SystemConfig>::AccountId,
+	<T as SystemConfig>::BlockNumber,
 >;
 
 pub trait Incrementable {
@@ -137,12 +151,12 @@ pub struct ItemDeposit<DepositBalance, AccountId> {
 /// Information about the collection's metadata.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(StringLimit))]
-#[codec(mel_bound(DepositBalance: MaxEncodedLen))]
-pub struct CollectionMetadata<DepositBalance, StringLimit: Get<u32>> {
+#[codec(mel_bound(Deposit: MaxEncodedLen))]
+pub struct CollectionMetadata<Deposit, StringLimit: Get<u32>> {
 	/// The balance deposited for this metadata.
 	///
 	/// This pays for the data stored in this struct.
-	pub(super) deposit: DepositBalance,
+	pub(super) deposit: Deposit,
 	/// General information concerning this collection. Limited in length by `StringLimit`. This
 	/// will generally be either a JSON dump or the hash of some JSON which can be found on a
 	/// hash-addressable global publication system such as IPFS.
@@ -152,12 +166,11 @@ pub struct CollectionMetadata<DepositBalance, StringLimit: Get<u32>> {
 /// Information about the item's metadata.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(StringLimit))]
-#[codec(mel_bound(DepositBalance: MaxEncodedLen))]
-pub struct ItemMetadata<DepositBalance, StringLimit: Get<u32>> {
+pub struct ItemMetadata<Deposit, StringLimit: Get<u32>> {
 	/// The balance deposited for this metadata.
 	///
 	/// This pays for the data stored in this struct.
-	pub(super) deposit: DepositBalance,
+	pub(super) deposit: Deposit,
 	/// General information concerning this item. Limited in length by `StringLimit`. This will
 	/// generally be either a JSON dump or the hash of some JSON which can be found on a
 	/// hash-addressable global publication system such as IPFS.
@@ -186,7 +199,7 @@ pub struct PendingSwap<CollectionId, ItemId, ItemPriceWithDirection, Deadline> {
 	pub(super) desired_item: Option<ItemId>,
 	/// A price for the desired `item` with the direction.
 	pub(super) price: Option<ItemPriceWithDirection>,
-	/// An optional deadline for the swap.
+	/// A deadline for the swap.
 	pub(super) deadline: Deadline,
 }
 
@@ -194,6 +207,15 @@ pub struct PendingSwap<CollectionId, ItemId, ItemPriceWithDirection, Deadline> {
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct AttributeDeposit<DepositBalance, AccountId> {
 	/// A depositor account.
+	pub(super) account: Option<AccountId>,
+	/// An amount that gets reserved.
+	pub(super) amount: DepositBalance,
+}
+
+/// Information about the reserved item's metadata deposit.
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub struct ItemMetadataDeposit<DepositBalance, AccountId> {
+	/// A depositor account, None means the deposit is collection's owner.
 	pub(super) account: Option<AccountId>,
 	/// An amount that gets reserved.
 	pub(super) amount: DepositBalance,
@@ -272,15 +294,15 @@ pub enum MintType<CollectionId> {
 #[derive(Clone, Copy, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct MintSettings<Price, BlockNumber, CollectionId> {
 	/// Whether anyone can mint or if minters are restricted to some subset.
-	pub(super) mint_type: MintType<CollectionId>,
+	pub mint_type: MintType<CollectionId>,
 	/// An optional price per mint.
-	pub(super) price: Option<Price>,
+	pub price: Option<Price>,
 	/// When the mint starts.
-	pub(super) start_block: Option<BlockNumber>,
+	pub start_block: Option<BlockNumber>,
 	/// When the mint ends.
-	pub(super) end_block: Option<BlockNumber>,
+	pub end_block: Option<BlockNumber>,
 	/// Default settings each item will get during the mint.
-	pub(super) default_item_settings: ItemSettings,
+	pub default_item_settings: ItemSettings,
 }
 
 impl<Price, BlockNumber, CollectionId> Default for MintSettings<Price, BlockNumber, CollectionId> {
@@ -315,11 +337,11 @@ pub enum PalletAttributes<CollectionId> {
 )]
 pub struct CollectionConfig<Price, BlockNumber, CollectionId> {
 	/// Collection's settings.
-	pub(super) settings: CollectionSettings,
+	pub settings: CollectionSettings,
 	/// Collection's max supply.
-	pub(super) max_supply: Option<u32>,
+	pub max_supply: Option<u32>,
 	/// Default settings each item will get during the mint.
-	pub(super) mint_settings: MintSettings<Price, BlockNumber, CollectionId>,
+	pub mint_settings: MintSettings<Price, BlockNumber, CollectionId>,
 }
 
 impl<Price, BlockNumber, CollectionId> CollectionConfig<Price, BlockNumber, CollectionId> {
@@ -463,3 +485,33 @@ impl CollectionRoles {
 	}
 }
 impl_codec_bitflags!(CollectionRoles, u8, CollectionRole);
+
+#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
+pub struct PreSignedMint<CollectionId, ItemId, AccountId, Deadline> {
+	/// A collection of the item to be minted.
+	pub(super) collection: CollectionId,
+	/// Item's ID.
+	pub(super) item: ItemId,
+	/// Additional item's key-value attributes.
+	pub(super) attributes: Vec<(Vec<u8>, Vec<u8>)>,
+	/// Additional item's metadata.
+	pub(super) metadata: Vec<u8>,
+	/// Restrict the claim to a particular account.
+	pub(super) only_account: Option<AccountId>,
+	/// A deadline for the signature.
+	pub(super) deadline: Deadline,
+}
+
+#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
+pub struct PreSignedAttributes<CollectionId, ItemId, AccountId, Deadline> {
+	/// Collection's ID.
+	pub(super) collection: CollectionId,
+	/// Item's ID.
+	pub(super) item: ItemId,
+	/// Key-value attributes.
+	pub(super) attributes: Vec<(Vec<u8>, Vec<u8>)>,
+	/// Attributes' namespace.
+	pub(super) namespace: AttributeNamespace<AccountId>,
+	/// A deadline for the signature.
+	pub(super) deadline: Deadline,
+}

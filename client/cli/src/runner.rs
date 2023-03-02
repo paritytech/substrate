@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -228,7 +228,7 @@ impl<C: SubstrateCli> Runner<C> {
 pub fn print_node_infos<C: SubstrateCli>(config: &Configuration) {
 	info!("{}", C::impl_name());
 	info!("✌️  version {}", C::impl_version());
-	info!("❤️  by {}, {}-{}", C::author(), C::copyright_start_year(), Local::today().year());
+	info!("❤️  by {}, {}-{}", C::author(), C::copyright_start_year(), Local::now().year());
 	info!("📋 Chain specification: {}", config.chain_spec.name());
 	info!("🏷  Node name: {}", config.network.node_name);
 	info!("👤 Role: {}", config.display_role());

@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 
 # third-party dependencies
-codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
+codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = [
 	"derive",
 	"max-encoded-len",
 ] }
@@ -27,6 +27,7 @@ log = { version = "0.4.17", default-features = false }
 # primitives
 sp-authority-discovery = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/authority-discovery" }
 sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/consensus/babe" }
+sp-consensus-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/consensus/grandpa" }
 sp-block-builder = { path = "../../../primitives/block-builder", default-features = false, version = "4.0.0-dev" }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/inherents" }
 node-primitives = { version = "2.0.0", default-features = false, path = "../primitives" }
@@ -43,7 +44,8 @@ sp-io = { version = "7.0.0", default-features = false, path = "../../../primitiv
 
 # frame dependencies
 frame-executive = { version = "4.0.0-dev", default-features = false, path = "../../../frame/executive" }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/benchmarking", optional = true }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/benchmarking" }
+frame-benchmarking-pallet-pov = { version = "4.0.0-dev", default-features = false, path = "../../../frame/benchmarking/pov" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../../frame/support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../../frame/system" }
 frame-system-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/system/benchmarking", optional = true }
@@ -79,14 +81,16 @@ pallet-message-queue = { version = "7.0.0-dev", default-features = false, path =
 pallet-mmr = { version = "4.0.0-dev", default-features = false, path = "../../../frame/merkle-mountain-range" }
 pallet-multisig = { version = "4.0.0-dev", default-features = false, path = "../../../frame/multisig" }
 pallet-nfts = { version = "4.0.0-dev", default-features = false, path = "../../../frame/nfts" }
+pallet-nfts-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/nfts/runtime-api" }
 pallet-nomination-pools = { version = "1.0.0", default-features = false, path = "../../../frame/nomination-pools"}
 pallet-nomination-pools-benchmarking = { version = "1.0.0", default-features = false, optional = true, path = "../../../frame/nomination-pools/benchmarking" }
 pallet-nomination-pools-runtime-api = { version = "1.0.0-dev", default-features = false, path = "../../../frame/nomination-pools/runtime-api" }
 pallet-offences = { version = "4.0.0-dev", default-features = false, path = "../../../frame/offences" }
 pallet-offences-benchmarking = { version = "4.0.0-dev", path = "../../../frame/offences/benchmarking", default-features = false, optional = true }
+pallet-glutton = { version = "4.0.0-dev", default-features = false, path = "../../../frame/glutton" }
 pallet-preimage = { version = "4.0.0-dev", default-features = false, path = "../../../frame/preimage" }
 pallet-proxy = { version = "4.0.0-dev", default-features = false, path = "../../../frame/proxy" }
-pallet-randomness-collective-flip = { version = "4.0.0-dev", default-features = false, path = "../../../frame/randomness-collective-flip" }
+pallet-insecure-randomness-collective-flip = { version = "4.0.0-dev", default-features = false, path = "../../../frame/insecure-randomness-collective-flip" }
 pallet-ranked-collective = { version = "4.0.0-dev", default-features = false, path = "../../../frame/ranked-collective" }
 pallet-recovery = { version = "4.0.0-dev", default-features = false, path = "../../../frame/recovery" }
 pallet-referenda = { version = "4.0.0-dev", default-features = false, path = "../../../frame/referenda" }
@@ -96,6 +100,7 @@ pallet-session = { version = "4.0.0-dev", features = [ "historical" ], path = ".
 pallet-session-benchmarking = { version = "4.0.0-dev", path = "../../../frame/session/benchmarking", default-features = false, optional = true }
 pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/staking" }
 pallet-staking-reward-curve = { version = "4.0.0-dev", default-features = false, path = "../../../frame/staking/reward-curve" }
+pallet-staking-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/staking/runtime-api" }
 pallet-state-trie-migration = { version = "4.0.0-dev", default-features = false, path = "../../../frame/state-trie-migration" }
 pallet-scheduler = { version = "4.0.0-dev", default-features = false, path = "../../../frame/scheduler" }
 pallet-society = { version = "4.0.0-dev", default-features = false, path = "../../../frame/society" }
@@ -113,7 +118,7 @@ pallet-vesting = { version = "4.0.0-dev", default-features = false, path = "../.
 pallet-whitelist = { version = "4.0.0-dev", default-features = false, path = "../../../frame/whitelist" }
 
 [build-dependencies]
-substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder" }
+substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder", optional = true }
 
 [features]
 default = ["std"]
@@ -130,6 +135,7 @@ std = [
 	"pallet-authority-discovery/std",
 	"pallet-authorship/std",
 	"sp-consensus-babe/std",
+	"sp-consensus-grandpa/std",
 	"pallet-babe/std",
 	"pallet-bags-list/std",
 	"pallet-balances/std",
@@ -163,10 +169,11 @@ std = [
 	"node-primitives/std",
 	"sp-offchain/std",
 	"pallet-offences/std",
+	"pallet-glutton/std",
 	"pallet-preimage/std",
 	"pallet-proxy/std",
 	"sp-core/std",
-	"pallet-randomness-collective-flip/std",
+	"pallet-insecure-randomness-collective-flip/std",
 	"sp-std/std",
 	"pallet-session/std",
 	"pallet-session-benchmarking?/std",
@@ -174,11 +181,13 @@ std = [
 	"sp-runtime/std",
 	"sp-staking/std",
 	"pallet-staking/std",
+	"pallet-staking-runtime-api/std",
 	"pallet-state-trie-migration/std",
 	"sp-session/std",
 	"pallet-sudo/std",
 	"frame-support/std",
-	"frame-benchmarking?/std",
+	"frame-benchmarking/std",
+	"frame-benchmarking-pallet-pov/std",
 	"frame-system-rpc-runtime-api/std",
 	"frame-system/std",
 	"pallet-election-provider-multi-phase/std",
@@ -199,15 +208,18 @@ std = [
 	"pallet-recovery/std",
 	"pallet-uniques/std",
 	"pallet-nfts/std",
+	"pallet-nfts-runtime-api/std",
 	"pallet-vesting/std",
 	"log/std",
 	"frame-try-runtime?/std",
 	"sp-io/std",
 	"pallet-child-bounties/std",
 	"pallet-alliance/std",
+	"substrate-wasm-builder",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
+	"frame-benchmarking-pallet-pov/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
@@ -238,6 +250,7 @@ runtime-benchmarks = [
 	"pallet-multisig/runtime-benchmarks",
 	"pallet-nomination-pools-benchmarking/runtime-benchmarks",
 	"pallet-offences-benchmarking/runtime-benchmarks",
+	"pallet-glutton/runtime-benchmarks",
 	"pallet-preimage/runtime-benchmarks",
 	"pallet-proxy/runtime-benchmarks",
 	"pallet-scheduler/runtime-benchmarks",
@@ -262,6 +275,7 @@ runtime-benchmarks = [
 ]
 try-runtime = [
 	"frame-try-runtime/try-runtime",
+	"frame-benchmarking-pallet-pov/try-runtime",
 	"frame-executive/try-runtime",
 	"frame-system/try-runtime",
 	"frame-support/try-runtime",
@@ -293,9 +307,10 @@ try-runtime = [
 	"pallet-multisig/try-runtime",
 	"pallet-nomination-pools/try-runtime",
 	"pallet-offences/try-runtime",
+	"pallet-glutton/try-runtime",
 	"pallet-preimage/try-runtime",
 	"pallet-proxy/try-runtime",
-	"pallet-randomness-collective-flip/try-runtime",
+	"pallet-insecure-randomness-collective-flip/try-runtime",
 	"pallet-ranked-collective/try-runtime",
 	"pallet-recovery/try-runtime",
 	"pallet-referenda/try-runtime",

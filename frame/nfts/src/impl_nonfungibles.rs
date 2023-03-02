@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -50,16 +50,46 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 	fn attribute(
 		collection: &Self::CollectionId,
 		item: &Self::ItemId,
-		namespace: &AttributeNamespace<<T as SystemConfig>::AccountId>,
 		key: &[u8],
 	) -> Option<Vec<u8>> {
 		if key.is_empty() {
 			// We make the empty key map to the item metadata value.
 			ItemMetadataOf::<T, I>::get(collection, item).map(|m| m.data.into())
 		} else {
+			let namespace = AttributeNamespace::CollectionOwner;
 			let key = BoundedSlice::<_, _>::try_from(key).ok()?;
 			Attribute::<T, I>::get((collection, Some(item), namespace, key)).map(|a| a.0.into())
 		}
+	}
+
+	/// Returns the custom attribute value of `item` of `collection` corresponding to `key`.
+	///
+	/// By default this is `None`; no attributes are defined.
+	fn custom_attribute(
+		account: &T::AccountId,
+		collection: &Self::CollectionId,
+		item: &Self::ItemId,
+		key: &[u8],
+	) -> Option<Vec<u8>> {
+		let namespace = Account::<T, I>::get((account, collection, item))
+			.map(|_| AttributeNamespace::ItemOwner)
+			.unwrap_or_else(|| AttributeNamespace::Account(account.clone()));
+
+		let key = BoundedSlice::<_, _>::try_from(key).ok()?;
+		Attribute::<T, I>::get((collection, Some(item), namespace, key)).map(|a| a.0.into())
+	}
+
+	/// Returns the system attribute value of `item` of `collection` corresponding to `key`.
+	///
+	/// By default this is `None`; no attributes are defined.
+	fn system_attribute(
+		collection: &Self::CollectionId,
+		item: &Self::ItemId,
+		key: &[u8],
+	) -> Option<Vec<u8>> {
+		let namespace = AttributeNamespace::Pallet;
+		let key = BoundedSlice::<_, _>::try_from(key).ok()?;
+		Attribute::<T, I>::get((collection, Some(item), namespace, key)).map(|a| a.0.into())
 	}
 
 	/// Returns the attribute value of `item` of `collection` corresponding to `key`.
@@ -157,10 +187,12 @@ impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId, ItemConfig
 		Self::do_mint(
 			*collection,
 			*item,
-			who.clone(),
+			match deposit_collection_owner {
+				true => None,
+				false => Some(who.clone()),
+			},
 			who.clone(),
 			*item_config,
-			deposit_collection_owner,
 			|_, _| Ok(()),
 		)
 	}
@@ -235,6 +267,49 @@ impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId, ItemConfig
 					collection, k, v,
 				)
 			})
+		})
+	}
+
+	fn clear_attribute(
+		collection: &Self::CollectionId,
+		item: &Self::ItemId,
+		key: &[u8],
+	) -> DispatchResult {
+		Self::do_clear_attribute(
+			None,
+			*collection,
+			Some(*item),
+			AttributeNamespace::Pallet,
+			Self::construct_attribute_key(key.to_vec())?,
+		)
+	}
+
+	fn clear_typed_attribute<K: Encode>(
+		collection: &Self::CollectionId,
+		item: &Self::ItemId,
+		key: &K,
+	) -> DispatchResult {
+		key.using_encoded(|k| {
+			<Self as Mutate<T::AccountId, ItemConfig>>::clear_attribute(collection, item, k)
+		})
+	}
+
+	fn clear_collection_attribute(collection: &Self::CollectionId, key: &[u8]) -> DispatchResult {
+		Self::do_clear_attribute(
+			None,
+			*collection,
+			None,
+			AttributeNamespace::Pallet,
+			Self::construct_attribute_key(key.to_vec())?,
+		)
+	}
+
+	fn clear_typed_collection_attribute<K: Encode>(
+		collection: &Self::CollectionId,
+		key: &K,
+	) -> DispatchResult {
+		key.using_encoded(|k| {
+			<Self as Mutate<T::AccountId, ItemConfig>>::clear_collection_attribute(collection, k)
 		})
 	}
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -137,7 +137,7 @@ where
 				pallet: vec![],
 				child_tree: true,
 			});
-			let ext = state.into_ext::<Block, HostFns>(&shared, &executor, None).await?;
+			let ext = state.into_ext::<Block, HostFns>(&shared, &executor, None, true).await?;
 			maybe_state_ext = Some(ext);
 		}
 

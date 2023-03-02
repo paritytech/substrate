@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -123,7 +123,7 @@ impl sp_std::fmt::Display for DefaultError {
 }
 
 pub use crate::{
-	backend::Backend,
+	backend::{Backend, IterArgs, KeysIter, PairsIter, StorageIterator},
 	error::{Error, ExecutionError},
 	ext::Ext,
 	overlayed_changes::{
@@ -163,7 +163,7 @@ mod execution {
 	use sp_core::{
 		hexdisplay::HexDisplay,
 		storage::{ChildInfo, ChildType, PrefixedStorageKey},
-		traits::{CodeExecutor, ReadRuntimeVersionExt, RuntimeCode, SpawnNamed},
+		traits::{CallContext, CodeExecutor, ReadRuntimeVersionExt, RuntimeCode, SpawnNamed},
 	};
 	use sp_externalities::Extensions;
 	use std::{
@@ -295,6 +295,7 @@ mod execution {
 		///
 		/// Used for logging.
 		parent_hash: Option<H::Out>,
+		context: CallContext,
 	}
 
 	impl<'a, B, H, Exec> Drop for StateMachine<'a, B, H, Exec>
@@ -324,6 +325,7 @@ mod execution {
 			mut extensions: Extensions,
 			runtime_code: &'a RuntimeCode,
 			spawn_handle: impl SpawnNamed + Send + 'static,
+			context: CallContext,
 		) -> Self {
 			extensions.register(ReadRuntimeVersionExt::new(exec.clone()));
 			extensions.register(sp_core::traits::TaskExecutorExt::new(spawn_handle));
@@ -339,6 +341,7 @@ mod execution {
 				runtime_code,
 				stats: StateMachineStats::default(),
 				parent_hash: None,
+				context,
 			}
 		}
 
@@ -408,6 +411,7 @@ mod execution {
 				self.method,
 				self.call_data,
 				use_native,
+				self.context,
 			);
 
 			self.overlay
@@ -574,6 +578,7 @@ mod execution {
 			extensions,
 			runtime_code,
 			spawn_handle,
+			CallContext::Offchain,
 		)
 		.execute_using_consensus_failure_handler::<_>(always_wasm())?;
 
@@ -638,6 +643,7 @@ mod execution {
 			Extensions::default(),
 			runtime_code,
 			spawn_handle,
+			CallContext::Offchain,
 		)
 		.execute_using_consensus_failure_handler(always_untrusted_wasm())
 	}
@@ -843,47 +849,36 @@ mod execution {
 
 			let start_at_ref = start_at.as_ref().map(AsRef::as_ref);
 			let mut switch_child_key = None;
-			let mut first = start_at.is_some();
-			let completed = proving_backend
-				.apply_to_key_values_while(
-					child_info.as_ref(),
-					None,
-					start_at_ref,
-					|key, value| {
-						if first &&
-							start_at_ref
-								.as_ref()
-								.map(|start| &key.as_slice() > start)
-								.unwrap_or(true)
-						{
-							first = false;
-						}
-
-						if first {
-							true
-						} else if depth < MAX_NESTED_TRIE_DEPTH &&
-							sp_core::storage::well_known_keys::is_child_storage_key(
-								key.as_slice(),
-							) {
-							count += 1;
-							if !child_roots.contains(value.as_slice()) {
-								child_roots.insert(value);
-								switch_child_key = Some(key);
-								false
-							} else {
-								// do not add two child trie with same root
-								true
-							}
-						} else if recorder.estimate_encoded_size() <= size_limit {
-							count += 1;
-							true
-						} else {
-							false
-						}
-					},
-					false,
-				)
+			let mut iter = proving_backend
+				.pairs(IterArgs {
+					child_info,
+					start_at: start_at_ref,
+					start_at_exclusive: true,
+					..IterArgs::default()
+				})
 				.map_err(|e| Box::new(e) as Box<dyn Error>)?;
+
+			while let Some(item) = iter.next() {
+				let (key, value) = item.map_err(|e| Box::new(e) as Box<dyn Error>)?;
+
+				if depth < MAX_NESTED_TRIE_DEPTH &&
+					sp_core::storage::well_known_keys::is_child_storage_key(key.as_slice())
+				{
+					count += 1;
+					// do not add two child trie with same root
+					if !child_roots.contains(value.as_slice()) {
+						child_roots.insert(value);
+						switch_child_key = Some(key);
+						break
+					}
+				} else if recorder.estimate_encoded_size() <= size_limit {
+					count += 1;
+				} else {
+					break
+				}
+			}
+
+			let completed = iter.was_complete();
 
 			if switch_child_key.is_none() {
 				if depth == 1 {
@@ -945,22 +940,26 @@ mod execution {
 		let proving_backend =
 			TrieBackendBuilder::wrap(trie_backend).with_recorder(recorder.clone()).build();
 		let mut count = 0;
-		proving_backend
-			.apply_to_key_values_while(
-				child_info,
+		let iter = proving_backend
+			// NOTE: Even though the loop below doesn't use these values
+			//       this *must* fetch both the keys and the values so that
+			//       the proof is correct.
+			.pairs(IterArgs {
+				child_info: child_info.cloned(),
 				prefix,
 				start_at,
-				|_key, _value| {
-					if count == 0 || recorder.estimate_encoded_size() <= size_limit {
-						count += 1;
-						true
-					} else {
-						false
-					}
-				},
-				false,
-			)
+				..IterArgs::default()
+			})
 			.map_err(|e| Box::new(e) as Box<dyn Error>)?;
+
+		for item in iter {
+			item.map_err(|e| Box::new(e) as Box<dyn Error>)?;
+			if count == 0 || recorder.estimate_encoded_size() <= size_limit {
+				count += 1;
+			} else {
+				break
+			}
+		}
 
 		let proof = proving_backend
 			.extract_proof()
@@ -1167,20 +1166,25 @@ mod execution {
 		H::Out: Ord + Codec,
 	{
 		let mut values = Vec::new();
-		let result = proving_backend.apply_to_key_values_while(
-			child_info,
-			prefix,
-			start_at,
-			|key, value| {
-				values.push((key.to_vec(), value.to_vec()));
-				count.as_ref().map_or(true, |c| (values.len() as u32) < *c)
-			},
-			true,
-		);
-		match result {
-			Ok(completed) => Ok((values, completed)),
-			Err(e) => Err(Box::new(e) as Box<dyn Error>),
+		let mut iter = proving_backend
+			.pairs(IterArgs {
+				child_info: child_info.cloned(),
+				prefix,
+				start_at,
+				stop_on_incomplete_database: true,
+				..IterArgs::default()
+			})
+			.map_err(|e| Box::new(e) as Box<dyn Error>)?;
+
+		while let Some(item) = iter.next() {
+			let (key, value) = item.map_err(|e| Box::new(e) as Box<dyn Error>)?;
+			values.push((key, value));
+			if !count.as_ref().map_or(true, |c| (values.len() as u32) < *c) {
+				break
+			}
 		}
+
+		Ok((values, iter.was_complete()))
 	}
 
 	/// Check storage range proof on pre-created proving backend.
@@ -1249,46 +1253,34 @@ mod execution {
 			};
 			let start_at_ref = start_at.as_ref().map(AsRef::as_ref);
 			let mut switch_child_key = None;
-			let mut first = start_at.is_some();
-			let completed = proving_backend
-				.apply_to_key_values_while(
-					child_info.as_ref(),
-					None,
-					start_at_ref,
-					|key, value| {
-						if first &&
-							start_at_ref
-								.as_ref()
-								.map(|start| &key.as_slice() > start)
-								.unwrap_or(true)
-						{
-							first = false;
-						}
 
-						if !first {
-							values.push((key.to_vec(), value.to_vec()));
-						}
-						if first {
-							true
-						} else if depth < MAX_NESTED_TRIE_DEPTH &&
-							sp_core::storage::well_known_keys::is_child_storage_key(
-								key.as_slice(),
-							) {
-							if child_roots.contains(value.as_slice()) {
-								// Do not add two chid trie with same root.
-								true
-							} else {
-								child_roots.insert(value.clone());
-								switch_child_key = Some((key, value));
-								false
-							}
-						} else {
-							true
-						}
-					},
-					true,
-				)
+			let mut iter = proving_backend
+				.pairs(IterArgs {
+					child_info,
+					start_at: start_at_ref,
+					start_at_exclusive: true,
+					stop_on_incomplete_database: true,
+					..IterArgs::default()
+				})
 				.map_err(|e| Box::new(e) as Box<dyn Error>)?;
+
+			while let Some(item) = iter.next() {
+				let (key, value) = item.map_err(|e| Box::new(e) as Box<dyn Error>)?;
+				values.push((key.to_vec(), value.to_vec()));
+
+				if depth < MAX_NESTED_TRIE_DEPTH &&
+					sp_core::storage::well_known_keys::is_child_storage_key(key.as_slice())
+				{
+					// Do not add two chid trie with same root.
+					if !child_roots.contains(value.as_slice()) {
+						child_roots.insert(value.clone());
+						switch_child_key = Some((key, value));
+						break
+					}
+				}
+			}
+
+			let completed = iter.was_complete();
 
 			if switch_child_key.is_none() {
 				if !completed {
@@ -1318,10 +1310,14 @@ mod tests {
 		map,
 		storage::{ChildInfo, StateVersion},
 		testing::TaskExecutor,
-		traits::{CodeExecutor, Externalities, RuntimeCode},
+		traits::{CallContext, CodeExecutor, Externalities, RuntimeCode},
+		H256,
 	};
 	use sp_runtime::traits::BlakeTwo256;
-	use sp_trie::trie_types::{TrieDBMutBuilderV0, TrieDBMutBuilderV1};
+	use sp_trie::{
+		trie_types::{TrieDBMutBuilderV0, TrieDBMutBuilderV1},
+		KeySpacedDBMut, PrefixedMemoryDB,
+	};
 	use std::collections::{BTreeMap, HashMap};
 
 	#[derive(Clone)]
@@ -1341,6 +1337,7 @@ mod tests {
 			_method: &str,
 			_data: &[u8],
 			use_native: bool,
+			_: CallContext,
 		) -> (CallResult<Self::Error>, bool) {
 			let using_native = use_native && self.native_available;
 			match (using_native, self.native_succeeds, self.fallback_succeeds) {
@@ -1388,6 +1385,7 @@ mod tests {
 			Default::default(),
 			&wasm_code,
 			TaskExecutor::new(),
+			CallContext::Offchain,
 		);
 
 		assert_eq!(state_machine.execute(ExecutionStrategy::NativeWhenPossible).unwrap(), vec![66]);
@@ -1416,6 +1414,7 @@ mod tests {
 			Default::default(),
 			&wasm_code,
 			TaskExecutor::new(),
+			CallContext::Offchain,
 		);
 
 		assert_eq!(state_machine.execute(ExecutionStrategy::NativeElseWasm).unwrap(), vec![66]);
@@ -1445,6 +1444,7 @@ mod tests {
 			Default::default(),
 			&wasm_code,
 			TaskExecutor::new(),
+			CallContext::Offchain,
 		);
 
 		assert!(state_machine
@@ -1943,12 +1943,14 @@ mod tests {
 		// Always contains at least some nodes.
 		assert_eq!(proof.to_memory_db::<BlakeTwo256>().drain().len(), 3);
 		assert_eq!(count, 1);
+		assert_eq!(proof.encoded_size(), 443);
 
 		let remote_backend = trie_backend::tests::test_trie(state_version, None, None);
 		let (proof, count) =
 			prove_range_read_with_size(remote_backend, None, None, 800, Some(&[])).unwrap();
 		assert_eq!(proof.to_memory_db::<BlakeTwo256>().drain().len(), 9);
 		assert_eq!(count, 85);
+		assert_eq!(proof.encoded_size(), 857);
 		let (results, completed) = read_range_proof_check::<BlakeTwo256>(
 			remote_root,
 			proof.clone(),
@@ -1972,11 +1974,39 @@ mod tests {
 			prove_range_read_with_size(remote_backend, None, None, 50000, Some(&[])).unwrap();
 		assert_eq!(proof.to_memory_db::<BlakeTwo256>().drain().len(), 11);
 		assert_eq!(count, 132);
+		assert_eq!(proof.encoded_size(), 990);
+
 		let (results, completed) =
 			read_range_proof_check::<BlakeTwo256>(remote_root, proof, None, None, None, None)
 				.unwrap();
 		assert_eq!(results.len() as u32, count);
 		assert_eq!(completed, true);
+	}
+
+	#[test]
+	fn prove_read_with_size_limit_proof_size() {
+		let mut root = H256::default();
+		let mut mdb = PrefixedMemoryDB::<BlakeTwo256>::default();
+		{
+			let mut mdb = KeySpacedDBMut::new(&mut mdb, b"");
+			let mut trie = TrieDBMutBuilderV1::new(&mut mdb, &mut root).build();
+			trie.insert(b"value1", &[123; 1]).unwrap();
+			trie.insert(b"value2", &[123; 10]).unwrap();
+			trie.insert(b"value3", &[123; 100]).unwrap();
+			trie.insert(b"value4", &[123; 1000]).unwrap();
+		}
+
+		let remote_backend: TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> =
+			TrieBackendBuilder::new(mdb, root)
+				.with_optional_cache(None)
+				.with_optional_recorder(None)
+				.build();
+
+		let (proof, count) =
+			prove_range_read_with_size(remote_backend, None, None, 1000, None).unwrap();
+
+		assert_eq!(proof.encoded_size(), 1267);
+		assert_eq!(count, 3);
 	}
 
 	#[test]

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -94,6 +94,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let config = ItemConfigOf::<T, I>::get(&collection_id, &item_id)
 			.ok_or(Error::<T, I>::UnknownItem)?;
 		Ok(config)
+	}
+
+	pub(crate) fn get_default_item_settings(
+		collection_id: &T::CollectionId,
+	) -> Result<ItemSettings, DispatchError> {
+		let collection_config = Self::get_collection_config(collection_id)?;
+		Ok(collection_config.mint_settings.default_item_settings)
 	}
 
 	pub(crate) fn is_pallet_feature_enabled(feature: PalletFeature) -> bool {
