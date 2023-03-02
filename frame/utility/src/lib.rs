@@ -61,8 +61,11 @@ use frame_support::{
 	dispatch::{
 		extract_actual_weight, DispatchErrorWithPostInfo, GetDispatchInfo, PostDispatchInfo,
 	},
+	pallet_prelude::DispatchResultWithPostInfo,
 	traits::{Contains, IsSubType, OriginTrait, UnfilteredDispatchable},
+	weights::Weight,
 };
+use frame_system::pallet_prelude::OriginFor;
 use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
 use sp_runtime::traits::{BadOrigin, Dispatchable, TrailingZeroInput};
@@ -222,14 +225,12 @@ pub mod pallet {
 			for (index, call) in calls.into_iter().enumerate() {
 				let info = call.get_dispatch_info();
 
-				let result = Self::check_call_filter(is_root, &call).and_then(|_| {
-					// If origin is root, don't apply any dispatch filters; root can call anything.
-					if is_root {
-						call.dispatch_bypass_filter(origin.clone())
-					} else {
-						call.dispatch(origin.clone())
-					}
-				});
+				// If origin is root, don't apply any dispatch filters; root can call anything.
+				let result = if is_root {
+					call.dispatch_bypass_filter(origin.clone())
+				} else {
+					Self::dispatch_filtered(origin.clone(), call)
+				};
 
 				// Add the weight of this call.
 				weight = weight.saturating_add(extract_actual_weight(&result, &info));
@@ -285,7 +286,7 @@ pub mod pallet {
 			origin.set_caller_from(frame_system::RawOrigin::Signed(pseudonym));
 			let info = call.get_dispatch_info();
 
-			let result = Self::check_call_filter(false, &call).and_then(|_| call.dispatch(origin));
+			let result = Self::dispatch_filtered(origin, *call);
 			// Always take into account the base weight of this call.
 			let mut weight = T::WeightInfo::as_derivative()
 				.saturating_add(T::DbWeight::get().reads_writes(1, 1));
@@ -350,22 +351,20 @@ pub mod pallet {
 			for (index, call) in calls.into_iter().enumerate() {
 				let info = call.get_dispatch_info();
 
-				let result = Self::check_call_filter(is_root, &call).and_then(|_| {
-					// If origin is root, bypass any dispatch filter; root can call anything.
-					if is_root {
-						call.dispatch_bypass_filter(origin.clone())
-					} else {
-						let mut filtered_origin = origin.clone();
-						// Don't allow users to nest `batch_all` calls.
-						filtered_origin.add_filter(
-							move |c: &<T as frame_system::Config>::RuntimeCall| {
-								let c = <T as Config>::RuntimeCall::from_ref(c);
-								!matches!(c.is_sub_type(), Some(Call::batch_all { .. }))
-							},
-						);
-						call.dispatch(filtered_origin)
-					}
-				});
+				// If origin is root, bypass any dispatch filter; root can call anything.
+				let result = if is_root {
+					call.dispatch_bypass_filter(origin.clone())
+				} else {
+					let mut filtered_origin = origin.clone();
+					// Don't allow users to nest `batch_all` calls.
+					filtered_origin.add_filter(
+						move |c: &<T as frame_system::Config>::RuntimeCall| {
+							let c = <T as Config>::RuntimeCall::from_ref(c);
+							!matches!(c.is_sub_type(), Some(Call::batch_all { .. }))
+						},
+					);
+					Self::dispatch_filtered(filtered_origin, call)
+				};
 				// Add the weight of this call.
 				weight = weight.saturating_add(extract_actual_weight(&result, &info));
 				result.map_err(|mut err| {
@@ -465,14 +464,13 @@ pub mod pallet {
 			for call in calls.into_iter() {
 				let info = call.get_dispatch_info();
 
-				let result = Self::check_call_filter(is_root, &call).and_then(|_| {
-					// If origin is root, don't apply any dispatch filters; root can call anything.
-					if is_root {
-						call.dispatch_bypass_filter(origin.clone())
-					} else {
-						call.dispatch(origin.clone())
-					}
-				});
+				// If origin is root, don't apply any dispatch filters; root can call anything.
+				let result = if is_root {
+					call.dispatch_bypass_filter(origin.clone())
+				} else {
+					Self::dispatch_filtered(origin.clone(), call)
+				};
+
 				// Add the weight of this call.
 				weight = weight.saturating_add(extract_actual_weight(&result, &info));
 				if let Err(e) = result {
@@ -527,16 +525,16 @@ impl<T: Config> Pallet<T> {
 			.expect("infinite length input; no invalid inputs for type; qed")
 	}
 
-	fn check_call_filter(
-		is_root: bool,
-		call: &<T as Config>::RuntimeCall,
-	) -> Result<(), DispatchErrorWithPostInfo> {
-		if is_root || <T as Config>::CallFilter::contains(call) {
-			return Ok(())
+	fn dispatch_filtered(
+		origin: OriginFor<T>,
+		call: <T as Config>::RuntimeCall,
+	) -> DispatchResultWithPostInfo {
+		if <T as Config>::CallFilter::contains(&call) {
+			return call.dispatch(origin)
 		}
 
 		Err(DispatchErrorWithPostInfo {
-			post_info: None::<frame_support::pallet_prelude::Weight>.into(),
+			post_info: Some(Weight::default()).into(),
 			error: <frame_system::Error<T>>::CallFiltered.into(),
 		})
 	}
