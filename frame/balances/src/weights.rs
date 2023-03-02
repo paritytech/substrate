@@ -65,10 +65,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
 	fn transfer() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `1761`
-		//  Estimated: `2603`
-		// Minimum execution time: 58_294_000 picoseconds.
-		Weight::from_parts(59_094_000, 2603)
+		//  Measured:  `0`
+		//  Estimated: `3593`
+		// Minimum execution time: 37_815 nanoseconds.
+		Weight::from_ref_time(38_109_000)
+			.saturating_add(Weight::from_proof_size(3593))
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
@@ -76,10 +77,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
 	fn transfer_keep_alive() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `1607`
-		//  Estimated: `2603`
-		// Minimum execution time: 43_355_000 picoseconds.
-		Weight::from_parts(44_104_000, 2603)
+		//  Measured:  `0`
+		//  Estimated: `3593`
+		// Minimum execution time: 28_184 nanoseconds.
+		Weight::from_ref_time(49_250_000)
+			.saturating_add(Weight::from_proof_size(3593))
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
@@ -87,10 +89,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
 	fn set_balance_creating() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `1795`
-		//  Estimated: `2603`
-		// Minimum execution time: 32_664_000 picoseconds.
-		Weight::from_parts(33_217_000, 2603)
+		//  Measured:  `206`
+		//  Estimated: `3593`
+		// Minimum execution time: 17_474 nanoseconds.
+		Weight::from_ref_time(17_777_000)
+			.saturating_add(Weight::from_proof_size(3593))
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
@@ -98,10 +101,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
 	fn set_balance_killing() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `1795`
-		//  Estimated: `2603`
-		// Minimum execution time: 37_388_000 picoseconds.
-		Weight::from_parts(37_931_000, 2603)
+		//  Measured:  `206`
+		//  Estimated: `3593`
+		// Minimum execution time: 20_962 nanoseconds.
+		Weight::from_ref_time(21_419_000)
+			.saturating_add(Weight::from_proof_size(3593))
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
@@ -109,10 +113,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
 	fn force_transfer() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `1757`
-		//  Estimated: `5206`
-		// Minimum execution time: 54_998_000 picoseconds.
-		Weight::from_parts(55_921_000, 5206)
+		//  Measured:  `135`
+		//  Estimated: `6196`
+		// Minimum execution time: 39_713 nanoseconds.
+		Weight::from_ref_time(40_360_000)
+			.saturating_add(Weight::from_proof_size(6196))
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(2_u64))
 	}
@@ -120,10 +125,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
 	fn transfer_all() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `1607`
-		//  Estimated: `2603`
-		// Minimum execution time: 49_369_000 picoseconds.
-		Weight::from_parts(50_431_000, 2603)
+		//  Measured:  `0`
+		//  Estimated: `3593`
+		// Minimum execution time: 34_878 nanoseconds.
+		Weight::from_ref_time(35_121_000)
+			.saturating_add(Weight::from_proof_size(3593))
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
@@ -131,10 +137,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
 	fn force_unreserve() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `1641`
-		//  Estimated: `2603`
-		// Minimum execution time: 27_579_000 picoseconds.
-		Weight::from_parts(28_079_000, 2603)
+		//  Measured:  `206`
+		//  Estimated: `3593`
+		// Minimum execution time: 16_790 nanoseconds.
+		Weight::from_ref_time(17_029_000)
+			.saturating_add(Weight::from_proof_size(3593))
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
@@ -146,10 +153,11 @@ impl WeightInfo for () {
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
 	fn transfer() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `1761`
-		//  Estimated: `2603`
-		// Minimum execution time: 58_294_000 picoseconds.
-		Weight::from_parts(59_094_000, 2603)
+		//  Measured:  `0`
+		//  Estimated: `3593`
+		// Minimum execution time: 37_815 nanoseconds.
+		Weight::from_ref_time(38_109_000)
+			.saturating_add(Weight::from_proof_size(3593))
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
@@ -157,10 +165,11 @@ impl WeightInfo for () {
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
 	fn transfer_keep_alive() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `1607`
-		//  Estimated: `2603`
-		// Minimum execution time: 43_355_000 picoseconds.
-		Weight::from_parts(44_104_000, 2603)
+		//  Measured:  `0`
+		//  Estimated: `3593`
+		// Minimum execution time: 28_184 nanoseconds.
+		Weight::from_ref_time(49_250_000)
+			.saturating_add(Weight::from_proof_size(3593))
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
@@ -168,10 +177,11 @@ impl WeightInfo for () {
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
 	fn set_balance_creating() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `1795`
-		//  Estimated: `2603`
-		// Minimum execution time: 32_664_000 picoseconds.
-		Weight::from_parts(33_217_000, 2603)
+		//  Measured:  `206`
+		//  Estimated: `3593`
+		// Minimum execution time: 17_474 nanoseconds.
+		Weight::from_ref_time(17_777_000)
+			.saturating_add(Weight::from_proof_size(3593))
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
@@ -179,10 +189,11 @@ impl WeightInfo for () {
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
 	fn set_balance_killing() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `1795`
-		//  Estimated: `2603`
-		// Minimum execution time: 37_388_000 picoseconds.
-		Weight::from_parts(37_931_000, 2603)
+		//  Measured:  `206`
+		//  Estimated: `3593`
+		// Minimum execution time: 20_962 nanoseconds.
+		Weight::from_ref_time(21_419_000)
+			.saturating_add(Weight::from_proof_size(3593))
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
@@ -190,10 +201,11 @@ impl WeightInfo for () {
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
 	fn force_transfer() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `1757`
-		//  Estimated: `5206`
-		// Minimum execution time: 54_998_000 picoseconds.
-		Weight::from_parts(55_921_000, 5206)
+		//  Measured:  `135`
+		//  Estimated: `6196`
+		// Minimum execution time: 39_713 nanoseconds.
+		Weight::from_ref_time(40_360_000)
+			.saturating_add(Weight::from_proof_size(6196))
 			.saturating_add(RocksDbWeight::get().reads(2_u64))
 			.saturating_add(RocksDbWeight::get().writes(2_u64))
 	}
@@ -201,10 +213,11 @@ impl WeightInfo for () {
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
 	fn transfer_all() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `1607`
-		//  Estimated: `2603`
-		// Minimum execution time: 49_369_000 picoseconds.
-		Weight::from_parts(50_431_000, 2603)
+		//  Measured:  `0`
+		//  Estimated: `3593`
+		// Minimum execution time: 34_878 nanoseconds.
+		Weight::from_ref_time(35_121_000)
+			.saturating_add(Weight::from_proof_size(3593))
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
@@ -212,10 +225,11 @@ impl WeightInfo for () {
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
 	fn force_unreserve() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `1641`
-		//  Estimated: `2603`
-		// Minimum execution time: 27_579_000 picoseconds.
-		Weight::from_parts(28_079_000, 2603)
+		//  Measured:  `206`
+		//  Estimated: `3593`
+		// Minimum execution time: 16_790 nanoseconds.
+		Weight::from_ref_time(17_029_000)
+			.saturating_add(Weight::from_proof_size(3593))
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}

@@ -20,8 +20,8 @@
 #[cfg(feature = "std")]
 use crate::backend::AsTrieBackend;
 use crate::{
-	backend::IterArgs,
-	trie_backend_essence::{TrieBackendEssence, TrieBackendStorage},
+	backend::{IterArgs, StorageIterator},
+	trie_backend_essence::{RawIter, TrieBackendEssence, TrieBackendStorage},
 	Backend, StorageKey, StorageValue,
 };
 use codec::Codec;
@@ -172,6 +172,7 @@ where
 				self.cache,
 				self.recorder,
 			),
+			next_storage_key_cache: Default::default(),
 		}
 	}
 
@@ -180,19 +181,62 @@ where
 	pub fn build(self) -> TrieBackend<S, H, C> {
 		let _ = self.cache;
 
-		TrieBackend { essence: TrieBackendEssence::new(self.storage, self.root) }
+		TrieBackend {
+			essence: TrieBackendEssence::new(self.storage, self.root),
+			next_storage_key_cache: Default::default(),
+		}
 	}
+}
+
+/// A cached iterator.
+struct CachedIter<S, H, C>
+where
+	H: Hasher,
+{
+	last_key: sp_std::vec::Vec<u8>,
+	iter: RawIter<S, H, C>,
+}
+
+impl<S, H, C> Default for CachedIter<S, H, C>
+where
+	H: Hasher,
+{
+	fn default() -> Self {
+		Self { last_key: Default::default(), iter: Default::default() }
+	}
+}
+
+#[cfg(feature = "std")]
+type CacheCell<T> = parking_lot::Mutex<T>;
+
+#[cfg(not(feature = "std"))]
+type CacheCell<T> = core::cell::RefCell<T>;
+
+#[cfg(feature = "std")]
+fn access_cache<T, R>(cell: &CacheCell<T>, callback: impl FnOnce(&mut T) -> R) -> R {
+	callback(&mut *cell.lock())
+}
+
+#[cfg(not(feature = "std"))]
+fn access_cache<T, R>(cell: &CacheCell<T>, callback: impl FnOnce(&mut T) -> R) -> R {
+	callback(&mut *cell.borrow_mut())
 }
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher, C = LocalTrieCache<H>> {
 	pub(crate) essence: TrieBackendEssence<S, H, C>,
+	next_storage_key_cache: CacheCell<Option<CachedIter<S, H, C>>>,
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H> + Send + Sync> TrieBackend<S, H, C>
 where
 	H::Out: Codec,
 {
+	#[cfg(test)]
+	pub(crate) fn from_essence(essence: TrieBackendEssence<S, H, C>) -> Self {
+		Self { essence, next_storage_key_cache: Default::default() }
+	}
+
 	/// Get backend essence reference.
 	pub fn essence(&self) -> &TrieBackendEssence<S, H, C> {
 		&self.essence
@@ -265,7 +309,40 @@ where
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
-		self.essence.next_storage_key(key)
+		let (is_cached, mut cache) = access_cache(&self.next_storage_key_cache, Option::take)
+			.map(|cache| (cache.last_key == key, cache))
+			.unwrap_or_default();
+
+		if !is_cached {
+			cache.iter = self.raw_iter(IterArgs {
+				start_at: Some(key),
+				start_at_exclusive: true,
+				..IterArgs::default()
+			})?
+		};
+
+		let next_key = match cache.iter.next_key(self) {
+			None => return Ok(None),
+			Some(Err(error)) => return Err(error),
+			Some(Ok(next_key)) => next_key,
+		};
+
+		cache.last_key.clear();
+		cache.last_key.extend_from_slice(&next_key);
+		access_cache(&self.next_storage_key_cache, |cache_cell| cache_cell.replace(cache));
+
+		#[cfg(debug_assertions)]
+		debug_assert_eq!(
+			self.essence
+				.next_storage_key_slow(key)
+				.expect(
+					"fetching the next key through iterator didn't fail so this shouldn't either"
+				)
+				.as_ref(),
+			Some(&next_key)
+		);
+
+		Ok(Some(next_key))
 	}
 
 	fn next_child_storage_key(

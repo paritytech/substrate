@@ -39,9 +39,8 @@ use sp_runtime::{
 	Digest,
 };
 
-pub use sp_block_builder::BlockBuilder as BlockBuilderApi;
-
 use sc_client_api::backend;
+pub use sp_block_builder::BlockBuilder as BlockBuilderApi;
 
 /// Used as parameter to [`BlockBuilderProvider`] to express if proof recording should be enabled.
 ///

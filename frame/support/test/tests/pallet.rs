@@ -16,9 +16,12 @@
 // limitations under the License.
 
 use frame_support::{
+	assert_ok,
 	dispatch::{
-		DispatchClass, DispatchInfo, GetDispatchInfo, Parameter, Pays, UnfilteredDispatchable,
+		DispatchClass, DispatchInfo, Dispatchable, GetDispatchInfo, Parameter, Pays,
+		UnfilteredDispatchable,
 	},
+	dispatch_context::with_context,
 	pallet_prelude::{StorageInfoTrait, ValueQuery},
 	storage::unhashed,
 	traits::{
@@ -102,6 +105,7 @@ pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+	use sp_runtime::DispatchResult;
 
 	type BalanceOf<T> = <T as Config>::Balance;
 
@@ -226,6 +230,12 @@ pub mod pallet {
 		#[pallet::weight(1)]
 		pub fn foo_no_post_info(_origin: OriginFor<T>) -> DispatchResult {
 			Ok(())
+		}
+
+		#[pallet::call_index(3)]
+		#[pallet::weight(1)]
+		pub fn check_for_dispatch_context(_origin: OriginFor<T>) -> DispatchResult {
+			with_context::<(), _>(|_| ()).ok_or_else(|| DispatchError::Unavailable)
 		}
 	}
 
@@ -713,7 +723,7 @@ fn call_expand() {
 	assert_eq!(call_foo.get_call_name(), "foo");
 	assert_eq!(
 		pallet::Call::<Runtime>::get_call_names(),
-		&["foo", "foo_storage_layer", "foo_no_post_info"],
+		&["foo", "foo_storage_layer", "foo_no_post_info", "check_for_dispatch_context"],
 	);
 }
 
@@ -1932,4 +1942,22 @@ fn test_storage_alias() {
 			pallet2::SomeCountedStorageMap::<Runtime>::storage_info()
 		);
 	})
+}
+
+#[test]
+fn test_dispatch_context() {
+	TestExternalities::default().execute_with(|| {
+		// By default there is no context
+		assert!(with_context::<(), _>(|_| ()).is_none());
+
+		// When not using `dispatch`, there should be no dispatch context
+		assert_eq!(
+			DispatchError::Unavailable,
+			Example::check_for_dispatch_context(RuntimeOrigin::root()).unwrap_err(),
+		);
+
+		// When using `dispatch`, there should be a dispatch context
+		assert_ok!(RuntimeCall::from(pallet::Call::<Runtime>::check_for_dispatch_context {})
+			.dispatch(RuntimeOrigin::root()));
+	});
 }

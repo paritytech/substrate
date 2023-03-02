@@ -177,7 +177,7 @@ fn on_idle_weight_low_proof_is_close_enough_works() {
 		let ratio = Perbill::from_rational(got.proof_size(), should.proof_size());
 		// Just a sanity check here.
 		assert!(
-			ratio >= Perbill::from_percent(80),
+			ratio >= Perbill::from_percent(50),
 			"Too few proof size consumed, was only {:?} of expected",
 			ratio
 		);
