@@ -622,10 +622,9 @@ pub mod pallet {
 				value,
 				gas_limit,
 				storage_deposit_limit: storage_deposit_limit.map(Into::into),
-				data,
 				debug_message: None,
 			};
-			let mut output = CallInput::<T> { dest, determinism: Determinism::Deterministic }
+			let mut output = CallInput::<T> { dest, data, determinism: Determinism::Deterministic }
 				.run_guarded(context);
 			if let Ok(retval) = &output.result {
 				if retval.did_revert() {
@@ -684,11 +683,10 @@ pub mod pallet {
 				value,
 				gas_limit,
 				storage_deposit_limit: storage_deposit_limit.map(Into::into),
-				data,
 				debug_message: None,
 			};
 			let mut output =
-				InstantiateInput::<T> { code: Code::Upload(code), salt }.run_guarded(context);
+				InstantiateInput::<T> { code: Code::Upload(code), data, salt }.run_guarded(context);
 			if let Ok(retval) = &output.result {
 				if retval.1.did_revert() {
 					output.result = Err(<Error<T>>::ContractReverted.into());
@@ -726,10 +724,9 @@ pub mod pallet {
 				value,
 				gas_limit,
 				storage_deposit_limit: storage_deposit_limit.map(Into::into),
-				data,
 				debug_message: None,
 			};
-			let mut output = InstantiateInput::<T> { code: Code::Existing(code_hash), salt }
+			let mut output = InstantiateInput::<T> { code: Code::Existing(code_hash), data, salt }
 				.run_guarded(context);
 			if let Ok(retval) = &output.result {
 				if retval.1.did_revert() {
@@ -961,19 +958,20 @@ struct ExecContext<'a, T: Config> {
 	value: BalanceOf<T>,
 	gas_limit: Weight,
 	storage_deposit_limit: Option<BalanceOf<T>>,
-	data: Vec<u8>,
 	debug_message: Option<&'a mut DebugBufferVec<T>>,
 }
 
 /// Input specific to a call into contract.
 struct CallInput<T: Config> {
 	dest: T::AccountId,
+	data: Vec<u8>,
 	determinism: Determinism,
 }
 
 /// Input specific to a contract instantiation invocation.
 struct InstantiateInput<T: Config> {
 	code: Code<CodeHash<T>>,
+	data: Vec<u8>,
 	salt: Vec<u8>,
 }
 
@@ -1063,8 +1061,8 @@ impl<T: Config> Invokable<T> for CallInput<T> {
 				},
 		};
 		let schedule = T::Schedule::get();
-		let CallInput { dest, determinism } = self;
-		let ExecContext { origin, value, data, debug_message, .. } = context;
+		let CallInput { dest, data, determinism } = self;
+		let ExecContext { origin, value, debug_message, .. } = context;
 		let result = ExecStack::<T, PrefabWasmModule<T>>::run_call(
 			origin.clone(),
 			dest.clone(),
@@ -1126,8 +1124,8 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 				context.value.saturating_add(extra_deposit),
 			)?;
 
-			let InstantiateInput { salt, .. } = self;
-			let ExecContext { origin, value, data, debug_message, .. } = context;
+			let InstantiateInput { salt, data, .. } = self;
+			let ExecContext { origin, value, debug_message, .. } = context;
 			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
 				origin.clone(),
 				executable,
@@ -1177,10 +1175,9 @@ impl<T: Config> Pallet<T> {
 			value,
 			gas_limit,
 			storage_deposit_limit,
-			data,
 			debug_message: debug_message.as_mut(),
 		};
-		let output = CallInput::<T> { dest, determinism }.run_guarded(context);
+		let output = CallInput::<T> { dest, data, determinism }.run_guarded(context);
 		ContractExecResult {
 			result: output.result.map_err(|r| r.error),
 			gas_consumed: output.gas_meter.gas_consumed(),
@@ -1218,10 +1215,9 @@ impl<T: Config> Pallet<T> {
 			value,
 			gas_limit,
 			storage_deposit_limit,
-			data,
 			debug_message: debug_message.as_mut(),
 		};
-		let output = InstantiateInput::<T> { code, salt }.run_guarded(context);
+		let output = InstantiateInput::<T> { code, data, salt }.run_guarded(context);
 		ContractInstantiateResult {
 			result: output
 				.result
