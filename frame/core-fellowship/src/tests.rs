@@ -125,7 +125,7 @@ fn set_rank(who: u64, rank: u16) {
 }
 
 parameter_types! {
-	pub OneToNine: Vec<u64> = vec![1u64, 2, 3, 4, 5, 6, 7, 8, 9];
+	pub ZeroToNine: Vec<u64> = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 }
 ord_parameter_types! {
 	pub const One: u64 = 1;
@@ -137,15 +137,24 @@ impl Config for Test {
 	type Members = TestClub;
 	type Balance = u64;
 	type ParamsOrigin = EnsureSignedBy<One, u64>;
-	type ProofOrigin = TryMapSuccess<EnsureSignedBy<IsInVec<OneToNine>, u64>, TryMorphInto<u16>>;
-	type PromoteOrigin = TryMapSuccess<EnsureSignedBy<IsInVec<OneToNine>, u64>, TryMorphInto<u16>>;
+	type ProofOrigin = TryMapSuccess<EnsureSignedBy<IsInVec<ZeroToNine>, u64>, TryMorphInto<u16>>;
+	type PromoteOrigin = TryMapSuccess<EnsureSignedBy<IsInVec<ZeroToNine>, u64>, TryMorphInto<u16>>;
 	type ApprovePeriod = ConstU64<2>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	let mut ext = sp_io::TestExternalities::new(t);
-	ext.execute_with(|| System::set_block_number(1));
+	ext.execute_with(|| {
+		let params = ParamsType {
+			active_salary: [10, 20, 30, 40, 50, 60, 70, 80, 90],
+			passive_salary: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+			demotion_period: [3, 3, 3, 6, 6, 6, 1000, 1000, 1000],
+			min_promotion_period: [1, 1, 1, 1, 2, 2, 6, 10, 20],
+		};
+		assert_ok!(CoreFellowship::set_params(signed(1), params));
+		System::set_block_number(1);
+	});
 	ext
 }
 
@@ -171,7 +180,6 @@ fn basic_stuff() {
 		assert_eq!(CoreFellowship::rank_to_index(1), Some(0));
 		assert_eq!(CoreFellowship::rank_to_index(9), Some(8));
 		assert_eq!(CoreFellowship::rank_to_index(10), None);
-		assert_noop!(CoreFellowship::induct(signed(1), 1), Error::<Test>::NotMember);
 		assert_eq!(CoreFellowship::get_salary(0, &1), 0);
 	});
 }
@@ -191,15 +199,12 @@ fn set_params_works() {
 }
 
 #[test]
-fn set_params_works() {
+fn induct_works() {
 	new_test_ext().execute_with(|| {
-		let params = ParamsType {
-			active_salary: [10, 20, 30, 40, 50, 60, 70, 80, 90],
-			passive_salary: [1, 2, 3, 4, 5, 6, 7, 8, 9],
-			demotion_period: [3, 3, 3, 6, 6, 6, 1000, 1000, 1000],
-			min_promotion_period: [1, 1, 1, 1, 2, 2, 6, 10, 20],
-		};
-		assert_noop!(CoreFellowship::set_params(signed(2), params.clone()), DispatchError::BadOrigin);
-		assert_ok!(CoreFellowship::set_params(signed(1), params));
+		assert_noop!(CoreFellowship::induct(signed(1), 10), Error::<Test>::NotCandidate);
+		set_rank(10, 0);
+		assert_noop!(CoreFellowship::induct(signed(10), 10), DispatchError::BadOrigin);
+		assert_noop!(CoreFellowship::induct(signed(0), 10), Error::<Test>::NoPermission);
+		assert_ok!(CoreFellowship::induct(signed(1), 10));
 	});
 }

@@ -26,7 +26,6 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::{Saturating, Zero};
-use sp_runtime::{traits::AtLeast32BitUnsigned};
 use sp_std::{marker::PhantomData, prelude::*};
 
 use frame_support::{
@@ -175,6 +174,8 @@ pub mod pallet {
 		UnexpectedRank,
 		/// The given rank is invalid - this generally means it's not between 1 and 9.
 		InvalidRank,
+		/// The account is not a candidate in the collective.
+		NotCandidate,
 		/// The account is not a member of the collective.
 		NotMember,
 		/// The member is not tracked by this pallet (call `prove` on member first).
@@ -302,7 +303,7 @@ pub mod pallet {
 		pub fn induct(origin: OriginFor<T>, who: T::AccountId) -> DispatchResultWithPostInfo {
 			let allow_rank = T::PromoteOrigin::ensure_origin(origin)?;
 			ensure!(allow_rank >= 1, Error::<T, I>::NoPermission);
-			let rank = T::Members::rank_of(&who).ok_or(Error::<T, I>::NotMember)?;
+			let rank = T::Members::rank_of(&who).ok_or(Error::<T, I>::NotCandidate)?;
 			ensure!(rank.is_zero(), Error::<T, I>::UnexpectedRank);
 			ensure!(!Member::<T, I>::contains_key(&who), Error::<T, I>::AlreadyInducted);
 
