@@ -145,7 +145,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type Member<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, T::AccountId, MemberStatusOf<T>, OptionQuery>;
-
+/*
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -186,9 +186,10 @@ pub mod pallet {
 		/// The candidate has not been inducted, so cannot be offboarded from this pallet.
 		NotInducted,
 	}
-
+*/
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
+		/*
 		/// Bump the state of a member.
 		///
 		/// This will demote a member whose `last_proof` is now beyond their rank's
@@ -363,8 +364,10 @@ pub mod pallet {
 			Self::deposit_event(Event::<T, I>::Offboarded { who });
 			Ok(Pays::No.into())
 		}
+		*/
 	}
 
+/*
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Convert a rank into a 0..9 index suitable for the arrays in Params.
 		///
@@ -377,7 +380,8 @@ pub mod pallet {
 			};
 		}
 	}
-
+*/
+/*
 	impl<T: Config<I>, I: 'static> GetSalary<RankOf<T, I>, T::AccountId, T::Balance> for Pallet<T, I> {
 		fn get_salary(rank: RankOf<T, I>, who: &T::AccountId) -> T::Balance {
 			let index = match Self::rank_to_index(rank) { Some(i) => i, None => return Zero::zero() };
@@ -389,4 +393,5 @@ pub mod pallet {
 			}
 		}
 	}
+	*/
 }
