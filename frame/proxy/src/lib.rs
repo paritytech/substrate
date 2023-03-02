@@ -266,12 +266,7 @@ pub mod pallet {
 		pub fn remove_proxies(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let result = Self::remove_all_proxy_delegates(&who);
-			if let Result::Ok(_val) = result {
-				println!("Successfully removed all proxy delegates.");
-			} else {
-				println!("Couldn't remove all proxy delegates");
-			}
-			Ok(())
+			result
 		}
 
 		/// Spawn a fresh new account that is guaranteed to be otherwise inaccessible, and
