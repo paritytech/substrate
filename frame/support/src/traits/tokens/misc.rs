@@ -20,7 +20,7 @@
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use sp_arithmetic::traits::{AtLeast32BitUnsigned, Zero};
 use sp_core::RuntimeDebug;
-use sp_runtime::{ArithmeticError, DispatchError, TokenError};
+use sp_runtime::{ArithmeticError, DispatchError, TokenError, traits::Convert};
 use sp_std::fmt::Debug;
 
 /// One of a number of consequences of withdrawing a fungible from an account.
