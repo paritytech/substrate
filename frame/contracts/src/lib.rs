@@ -989,7 +989,9 @@ struct InternalOutput<T: Config, O> {
 
 /// Helper trait to wrap contract execution entry points into a signle function
 /// [`Invokable::run_guarded`].
-trait Invokable<T: Config, O> {
+trait Invokable<T: Config> {
+	/// What is returned as a result of a succeed invocation.
+	type Output;
 	/// Single entry point to contract execution.
 	/// Downstream execution flow is branched by implementations of [`Invokable`] trait:
 	///
@@ -998,7 +1000,7 @@ trait Invokable<T: Config, O> {
 	///
 	/// We enforce a re-entrancy guard here by initializing and checking a boolean flag through a
 	/// global reference.
-	fn run_guarded(&self, context: ExecContext<T>) -> InternalOutput<T, O> {
+	fn run_guarded(&self, context: ExecContext<T>) -> InternalOutput<T, Self::Output> {
 		// Set up a global reference to the boolean flag used for the re-entrancy guard.
 		environmental!(executing_contract: bool);
 
@@ -1030,10 +1032,15 @@ trait Invokable<T: Config, O> {
 	}
 
 	/// Invoke a contract execution.
-	fn run(&self, context: ExecContext<T>, gas_meter: GasMeter<T>) -> InternalOutput<T, O>;
+	fn run(
+		&self,
+		context: ExecContext<T>,
+		gas_meter: GasMeter<T>,
+	) -> InternalOutput<T, Self::Output>;
 }
 
-impl<T: Config> Invokable<T, ExecReturnValue> for CallInput<T> {
+impl<T: Config> Invokable<T> for CallInput<T> {
+	type Output = ExecReturnValue;
 	/// Method that does the actual call to contract.
 	///
 	/// Called by dispatchables and public functions through the [`Pallet::internal_run`].
@@ -1073,7 +1080,8 @@ impl<T: Config> Invokable<T, ExecReturnValue> for CallInput<T> {
 	}
 }
 
-impl<T: Config> Invokable<T, (AccountIdOf<T>, ExecReturnValue)> for InstantiateInput<T> {
+impl<T: Config> Invokable<T> for InstantiateInput<T> {
+	type Output = (AccountIdOf<T>, ExecReturnValue);
 	/// Method that does the actual contract instantiation.
 	///
 	/// Called by dispatchables and public functions through the [`Pallet::internal_run`].
