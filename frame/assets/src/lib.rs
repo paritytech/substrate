@@ -1540,10 +1540,9 @@ pub mod pallet {
 			ensure!(origin == details.owner, Error::<T, I>::NoPermission);
 
 			let old_min_balance = details.min_balance;
-			let is_sufficient = details.is_sufficient;
 			// If the asset is marked as sufficient it won't be allowed to
 			// change the min_balance.
-			ensure!(!is_sufficient, Error::<T, I>::NoPermission);
+			ensure!(!details.is_sufficient, Error::<T, I>::NoPermission);
 
 			// Ensure that either the new min_balance is less than old
 			// min_balance or there aren't any accounts holding the asset.
