@@ -1152,6 +1152,8 @@ pub mod key_types {
 	pub const STAKING: KeyTypeId = KeyTypeId(*b"stak");
 	/// A key type for signing statements
 	pub const STATEMENT: KeyTypeId = KeyTypeId(*b"stmt");
+	/// Key type for Mixnet module, used to sign key-exchange public keys. Identified as `mixn`.
+	pub const MIXNET: KeyTypeId = KeyTypeId(*b"mixn");
 	/// A key type ID useful for tests.
 	pub const DUMMY: KeyTypeId = KeyTypeId(*b"dumy");
 }
