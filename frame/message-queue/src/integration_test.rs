@@ -23,7 +23,7 @@
 use crate::{
 	mock::{
 		build_and_execute, new_test_ext, CountingMessageProcessor, IntoWeight, MockedWeightInfo,
-		NumMessagesProcessed,
+		NumMessagesProcessed, SuspendedQueues,
 
 	},
 	mock_helpers::MessageOrigin,
@@ -179,7 +179,7 @@ fn stress_test_queue_suspension() {
 	let max_msg_len = MaxMessageLenOf::<Test>::get();
 	let mut rng = StdRng::seed_from_u64(41);
 
-	new_test_ext::<Test>().execute_with(|| {
+	build_and_execute::<Test>(|| {
 		let mut suspended = BTreeSet::<u32>::new();
 		let mut msgs_remaining = 0;
 

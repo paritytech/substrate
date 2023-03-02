@@ -560,7 +560,7 @@ fn service_page_suspension_works() {
 #[test]
 fn bump_service_head_works() {
 	use MessageOrigin::*;
-	build_and_execute::<Test>(|| {
+	new_test_ext::<Test>().execute_with(|| {
 		// Create a ready ring with three queues.
 		BookStateFor::<Test>::insert(Here, empty_book::<Test>());
 		knit(&Here);
@@ -583,7 +583,7 @@ fn bump_service_head_works() {
 /// `bump_service_head` does nothing when called with an insufficient weight limit.
 #[test]
 fn bump_service_head_bails() {
-	build_and_execute::<Test>(|| {
+	new_test_ext::<Test>().execute_with(|| {
 		set_weight("bump_service_head", 2.into_weight());
 		setup_bump_service_head::<Test>(0.into(), 10.into());
 

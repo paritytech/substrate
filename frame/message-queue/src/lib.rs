@@ -1098,7 +1098,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// * `message_count` > 0
 	/// * `size` > 0
-	/// * `end` > begin
+	/// * `end` > `begin`
 	/// * Some(ready_neighbours)
 	/// * If `ready_neighbours.next` == self.origin, then `ready_neighbours.prev` == self.origin
 	///   (only queue in ring)
@@ -1111,6 +1111,20 @@ impl<T: Config> Pallet<T> {
 	/// * Every page can be decoded into peek_* functions
 
 	pub fn do_try_state() -> Result<(), &'static str> {
+		// Checking memory corruption for BookStateFor
+		assert_eq!(
+			BookStateFor::<T>::iter_keys().count(),
+			BookStateFor::<T>::iter_values().count(),
+			"Memory Corruption in BookStateFor"
+		);
+
+		// Checking memory corruption for Pages
+		assert_eq!(
+			Pages::<T>::iter_keys().count(),
+			Pages::<T>::iter_values().count(),
+			"Memory Corruption in Pages"
+		);
+
 		// No state to check
 		if ServiceHead::<T>::get().is_none() {
 			return Ok(())
@@ -1119,68 +1133,65 @@ impl<T: Config> Pallet<T> {
 		//loop around this origin
 		let starting_origin = ServiceHead::<T>::get().unwrap();
 
-		let mut service_head = ServiceHead::<T>::get();
-
 		while let Some(head) = Self::bump_service_head(&mut WeightMeter::max_limit()) {
-			if let Some(head) = service_head {
-				let head_book_state = BookStateFor::<T>::get(&head);
-				assert!(
-					head_book_state.message_count > 0,
-					"There must be some messages if in ReadyRing"
+			assert!(
+				BookStateFor::<T>::contains_key(&head),
+				"Service head must point to an existing book"
+			);
+
+			let head_book_state = BookStateFor::<T>::get(&head);
+			assert!(
+				head_book_state.message_count > 0,
+				"There must be some messages if in ReadyRing"
+			);
+			assert!(head_book_state.size > 0, "There must be some messages if in ReadyRing");
+			assert!(
+				head_book_state.end > head_book_state.begin,
+				"End > Begin if unprocessed messages exists"
+			);
+			assert!(
+				head_book_state.ready_neighbours.is_some(),
+				"There must be neighbours if in ReadyRing"
+			);
+
+			if head_book_state.ready_neighbours.as_ref().unwrap().next == head {
+				assert_eq!(
+					head_book_state.ready_neighbours.as_ref().unwrap().prev,
+					head,
+					"Can only happen if only queue in ReadyRing"
 				);
-				assert!(head_book_state.size > 0, "There must be some messages if in ReadyRing");
+			}
+
+			for page_index in head_book_state.begin..head_book_state.end {
+				let page = Pages::<T>::get(&head, page_index).unwrap();
+				let remaining_messages = page.remaining;
+				let mut counted_remaining_messages = 0;
 				assert!(
-					head_book_state.end > head_book_state.begin,
-					"End > Begin if unprocessed messages exists"
-				);
-				assert!(
-					head_book_state.ready_neighbours.is_some(),
-					"There must be neighbours if in ReadyRing"
+					remaining_messages > 0.into(),
+					"These must be some messages that have not been processed yet!"
 				);
 
-				if head_book_state.ready_neighbours.as_ref().unwrap().next == head {
-					assert_eq!(
-						head_book_state.ready_neighbours.as_ref().unwrap().prev,
-						head,
-						"Can only happen if only queue in ReadyRing"
-					);
-				}
-
-				for page_index in head_book_state.begin..head_book_state.end {
-					let page = Pages::<T>::get(&head, page_index).unwrap();
-					let remaining_messages = page.remaining;
-					let mut counted_remaining_messages = 0;
-					assert!(
-						remaining_messages > 0.into(),
-						"These must be some messages that have not been processed yet!"
-					);
-
-					for i in 0..u32::MAX {
-						if let Some((_, processed, _)) = page.peek_index(i as usize) {
-							if !processed {
-								counted_remaining_messages += 1;
-							}
-						} else {
-							break
+				for i in 0..u32::MAX {
+					if let Some((_, processed, _)) = page.peek_index(i as usize) {
+						if !processed {
+							counted_remaining_messages += 1;
 						}
+					} else {
+						break
 					}
-
-					assert_eq!(
-						remaining_messages,
-						counted_remaining_messages.into(),
-						"Memory Corruption"
-					);
 				}
 
-				if head_book_state.ready_neighbours.as_ref().unwrap().next == starting_origin {
-					break
-				} else {
-					service_head =
-						Some(head_book_state.ready_neighbours.as_ref().unwrap().next.clone());
-				}
+				assert_eq!(
+					remaining_messages,
+					counted_remaining_messages.into(),
+					"Memory Corruption"
+				);
+			}
+
+			if head_book_state.ready_neighbours.as_ref().unwrap().next == starting_origin {
+				break
 			}
 		}
-
 		Ok(())
 	}
 
