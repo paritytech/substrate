@@ -270,7 +270,7 @@ impl<T: Config> Pallet<T> {
 		if T::WhitelistCallNames::contains(full_name) {
 			return false
 		}
-		
+
 		<PausedCalls<T>>::contains_key(full_name)
 	}
 
