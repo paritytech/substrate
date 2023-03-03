@@ -191,7 +191,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type RegistrationPeriod: Get<Self::BlockNumber>;
 
-		/// The number of block within a cycle which accounts have to claim the payout.
+		/// The number of blocks within a cycle which accounts have to claim the payout.
 		///
 		/// The number of blocks between sequential payout cycles is the sum of this and
 		/// `RegistrationPeriod`.
