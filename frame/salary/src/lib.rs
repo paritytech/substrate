@@ -473,7 +473,8 @@ pub mod pallet {
 						unpaid
 					} else {
 						// Must be reduced pro-rata
-						Perbill::from_rational(status.budget, status.total_registrations).mul_floor(unpaid)
+						Perbill::from_rational(status.budget, status.total_registrations)
+							.mul_floor(unpaid)
 					};
 					(payout, Some(unpaid))
 				},

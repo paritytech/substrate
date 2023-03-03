@@ -20,16 +20,17 @@
 use std::collections::BTreeMap;
 
 use frame_support::{
+	assert_noop, assert_ok, ord_parameter_types,
 	pallet_prelude::Weight,
 	parameter_types,
-	traits::{ConstU32, ConstU64, Everything, IsInVec, TryMapSuccess, tokens::GetSalary}, ord_parameter_types, assert_noop, assert_ok,
+	traits::{tokens::GetSalary, ConstU32, ConstU64, Everything, IsInVec, TryMapSuccess},
 };
 use frame_system::EnsureSignedBy;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup, TryMorphInto},
-	DispatchResult, DispatchError,
+	DispatchError, DispatchResult,
 };
 use sp_std::cell::RefCell;
 
@@ -173,6 +174,12 @@ fn signed(who: u64) -> RuntimeOrigin {
 	RuntimeOrigin::signed(who)
 }
 
+fn next_demotion(who: u64) -> u64 {
+	let member = Member::<Test>::get(who).unwrap();
+	let demotion_period = Params::<Test>::get().demotion_period;
+	member.last_promotion + demotion_period[TestClub::rank_of(&who).unwrap() as usize - 1]
+}
+
 #[test]
 fn basic_stuff() {
 	new_test_ext().execute_with(|| {
@@ -190,10 +197,13 @@ fn set_params_works() {
 		let params = ParamsType {
 			active_salary: [10, 20, 30, 40, 50, 60, 70, 80, 90],
 			passive_salary: [1, 2, 3, 4, 5, 6, 7, 8, 9],
-			demotion_period: [3, 3, 3, 6, 6, 6, 1000, 1000, 1000],
-			min_promotion_period: [1, 1, 1, 1, 2, 2, 6, 10, 20],
+			demotion_period: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+			min_promotion_period: [1, 2, 3, 4, 5, 10, 15, 20, 30],
 		};
-		assert_noop!(CoreFellowship::set_params(signed(2), params.clone()), DispatchError::BadOrigin);
+		assert_noop!(
+			CoreFellowship::set_params(signed(2), params.clone()),
+			DispatchError::BadOrigin
+		);
 		assert_ok!(CoreFellowship::set_params(signed(1), params));
 	});
 }
@@ -206,5 +216,52 @@ fn induct_works() {
 		assert_noop!(CoreFellowship::induct(signed(10), 10), DispatchError::BadOrigin);
 		assert_noop!(CoreFellowship::induct(signed(0), 10), Error::<Test>::NoPermission);
 		assert_ok!(CoreFellowship::induct(signed(1), 10));
+		assert_noop!(CoreFellowship::induct(signed(1), 10), Error::<Test>::AlreadyInducted);
+	});
+}
+
+#[test]
+fn promote_works() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(CoreFellowship::promote(signed(2), 10, 2), Error::<Test>::NotMember);
+		set_rank(10, 0);
+		assert_ok!(CoreFellowship::induct(signed(1), 10));
+		assert_noop!(CoreFellowship::promote(signed(10), 10, 2), DispatchError::BadOrigin);
+		assert_noop!(CoreFellowship::promote(signed(1), 10, 2), Error::<Test>::NoPermission);
+		assert_noop!(CoreFellowship::promote(signed(3), 10, 3), Error::<Test>::UnexpectedRank);
+		assert_noop!(CoreFellowship::promote(signed(2), 10, 2), Error::<Test>::TooSoon);
+		run_to(2);
+		assert_ok!(CoreFellowship::promote(signed(2), 10, 2));
+		set_rank(11, 1);
+		assert_noop!(CoreFellowship::promote(signed(2), 11, 2), Error::<Test>::Unranked);
+	});
+}
+
+#[test]
+fn proof_into_high_rank_works() {
+	new_test_ext().execute_with(|| {
+		set_rank(10, 5);
+		assert_noop!(CoreFellowship::prove(signed(4), 10, 5), Error::<Test>::NoPermission);
+		assert_noop!(CoreFellowship::prove(signed(6), 10, 6), Error::<Test>::UnexpectedRank);
+		assert_ok!(CoreFellowship::prove(signed(5), 10, 5));
+		assert!(Member::<Test>::contains_key(10));
+		assert_eq!(next_demotion(10), 6);
+	});
+}
+
+#[test]
+fn auto_demote_works() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(CoreFellowship::promote(signed(2), 10, 2), Error::<Test>::NotMember);
+		set_rank(10, 0);
+		assert_ok!(CoreFellowship::induct(signed(1), 10));
+		assert_noop!(CoreFellowship::promote(signed(10), 10, 2), DispatchError::BadOrigin);
+		assert_noop!(CoreFellowship::promote(signed(1), 10, 2), Error::<Test>::NoPermission);
+		assert_noop!(CoreFellowship::promote(signed(3), 10, 3), Error::<Test>::UnexpectedRank);
+		assert_noop!(CoreFellowship::promote(signed(2), 10, 2), Error::<Test>::TooSoon);
+		run_to(2);
+		assert_ok!(CoreFellowship::promote(signed(2), 10, 2));
+		set_rank(11, 1);
+		assert_noop!(CoreFellowship::promote(signed(2), 11, 2), Error::<Test>::Unranked);
 	});
 }

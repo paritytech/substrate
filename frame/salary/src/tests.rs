@@ -23,7 +23,7 @@ use frame_support::{
 	assert_noop, assert_ok,
 	pallet_prelude::Weight,
 	parameter_types,
-	traits::{ConstU32, ConstU64, Everything, tokens::ConvertRank},
+	traits::{tokens::ConvertRank, ConstU32, ConstU64, Everything},
 };
 use sp_core::H256;
 use sp_runtime::{
