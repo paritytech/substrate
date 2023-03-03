@@ -144,12 +144,12 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Minimum execution time: 33_246 nanoseconds.
 		Weight::from_parts(34_560_391, 176657)
 			// Standard Error: 63_925
-			.saturating_add(Weight::from_ref_time(34_500_408).saturating_mul(r.into()))
+			.saturating_add(Weight::from_parts(34_500_408, 0).saturating_mul(r.into()))
 			.saturating_add(T::DbWeight::get().reads(4_u64))
 			.saturating_add(T::DbWeight::get().reads((3_u64).saturating_mul(r.into())))
 			.saturating_add(T::DbWeight::get().writes(4_u64))
 			.saturating_add(T::DbWeight::get().writes((3_u64).saturating_mul(r.into())))
-			.saturating_add(Weight::from_proof_size(110917).saturating_mul(r.into()))
+			.saturating_add(Weight::from_parts(0, 110917).saturating_mul(r.into()))
 	}
 	/// Storage: ConvictionVoting VotingFor (r:2 w:2)
 	/// Proof: ConvictionVoting VotingFor (max_values: None, max_size: Some(27241), added: 29716, mode: MaxEncodedLen)
@@ -165,12 +165,12 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Minimum execution time: 20_508 nanoseconds.
 		Weight::from_parts(21_240_024, 170349)
 			// Standard Error: 37_314
-			.saturating_add(Weight::from_ref_time(30_890_875).saturating_mul(r.into()))
+			.saturating_add(Weight::from_parts(30_890_875, 0).saturating_mul(r.into()))
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().reads((3_u64).saturating_mul(r.into())))
 			.saturating_add(T::DbWeight::get().writes(2_u64))
 			.saturating_add(T::DbWeight::get().writes((3_u64).saturating_mul(r.into())))
-			.saturating_add(Weight::from_proof_size(110917).saturating_mul(r.into()))
+			.saturating_add(Weight::from_parts(0, 110917).saturating_mul(r.into()))
 	}
 	/// Storage: ConvictionVoting VotingFor (r:1 w:1)
 	/// Proof: ConvictionVoting VotingFor (max_values: None, max_size: Some(27241), added: 29716, mode: MaxEncodedLen)
@@ -275,12 +275,12 @@ impl WeightInfo for () {
 		// Minimum execution time: 33_246 nanoseconds.
 		Weight::from_parts(34_560_391, 176657)
 			// Standard Error: 63_925
-			.saturating_add(Weight::from_ref_time(34_500_408).saturating_mul(r.into()))
+			.saturating_add(Weight::from_parts(34_500_408, 0).saturating_mul(r.into()))
 			.saturating_add(RocksDbWeight::get().reads(4_u64))
 			.saturating_add(RocksDbWeight::get().reads((3_u64).saturating_mul(r.into())))
 			.saturating_add(RocksDbWeight::get().writes(4_u64))
 			.saturating_add(RocksDbWeight::get().writes((3_u64).saturating_mul(r.into())))
-			.saturating_add(Weight::from_proof_size(110917).saturating_mul(r.into()))
+			.saturating_add(Weight::from_parts(0, 110917).saturating_mul(r.into()))
 	}
 	/// Storage: ConvictionVoting VotingFor (r:2 w:2)
 	/// Proof: ConvictionVoting VotingFor (max_values: None, max_size: Some(27241), added: 29716, mode: MaxEncodedLen)
@@ -296,12 +296,12 @@ impl WeightInfo for () {
 		// Minimum execution time: 20_508 nanoseconds.
 		Weight::from_parts(21_240_024, 170349)
 			// Standard Error: 37_314
-			.saturating_add(Weight::from_ref_time(30_890_875).saturating_mul(r.into()))
+			.saturating_add(Weight::from_parts(30_890_875, 0).saturating_mul(r.into()))
 			.saturating_add(RocksDbWeight::get().reads(2_u64))
 			.saturating_add(RocksDbWeight::get().reads((3_u64).saturating_mul(r.into())))
 			.saturating_add(RocksDbWeight::get().writes(2_u64))
 			.saturating_add(RocksDbWeight::get().writes((3_u64).saturating_mul(r.into())))
-			.saturating_add(Weight::from_proof_size(110917).saturating_mul(r.into()))
+			.saturating_add(Weight::from_parts(0, 110917).saturating_mul(r.into()))
 	}
 	/// Storage: ConvictionVoting VotingFor (r:1 w:1)
 	/// Proof: ConvictionVoting VotingFor (max_values: None, max_size: Some(27241), added: 29716, mode: MaxEncodedLen)

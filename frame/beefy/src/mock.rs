@@ -40,7 +40,7 @@ use sp_staking::{EraIndex, SessionIndex};
 
 use crate as pallet_beefy;
 
-pub use beefy_primitives::{
+pub use sp_consensus_beefy::{
 	crypto::{AuthorityId as BeefyId, AuthoritySignature as BeefySignature},
 	ConsensusLog, EquivocationProof, BEEFY_ENGINE_ID,
 };

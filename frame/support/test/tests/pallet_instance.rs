@@ -54,10 +54,10 @@ pub mod pallet {
 		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
 			if TypeId::of::<I>() == TypeId::of::<()>() {
 				Self::deposit_event(Event::Something(10));
-				Weight::from_ref_time(10)
+				Weight::from_parts(10, 0)
 			} else {
 				Self::deposit_event(Event::Something(11));
-				Weight::from_ref_time(11)
+				Weight::from_parts(11, 0)
 			}
 		}
 		fn on_finalize(_: BlockNumberFor<T>) {
@@ -70,10 +70,10 @@ pub mod pallet {
 		fn on_runtime_upgrade() -> Weight {
 			if TypeId::of::<I>() == TypeId::of::<()>() {
 				Self::deposit_event(Event::Something(30));
-				Weight::from_ref_time(30)
+				Weight::from_parts(30, 0)
 			} else {
 				Self::deposit_event(Event::Something(31));
-				Weight::from_ref_time(31)
+				Weight::from_parts(31, 0)
 			}
 		}
 		fn integrity_test() {}
@@ -83,7 +83,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Doc comment put in metadata
 		#[pallet::call_index(0)]
-		#[pallet::weight(Weight::from_ref_time(*_foo as u64))]
+		#[pallet::weight(Weight::from_parts(*_foo as u64, 0))]
 		pub fn foo(
 			origin: OriginFor<T>,
 			#[pallet::compact] _foo: u32,
@@ -356,7 +356,7 @@ fn call_expand() {
 	assert_eq!(
 		call_foo.get_dispatch_info(),
 		DispatchInfo {
-			weight: Weight::from_ref_time(3),
+			weight: Weight::from_parts(3, 0),
 			class: DispatchClass::Normal,
 			pays_fee: Pays::Yes
 		}
@@ -368,7 +368,7 @@ fn call_expand() {
 	assert_eq!(
 		call_foo.get_dispatch_info(),
 		DispatchInfo {
-			weight: Weight::from_ref_time(3),
+			weight: Weight::from_parts(3, 0),
 			class: DispatchClass::Normal,
 			pays_fee: Pays::Yes
 		}
@@ -649,10 +649,10 @@ fn pallet_hooks_expand() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), Weight::from_ref_time(21));
+		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), Weight::from_parts(21, 0));
 		AllPalletsWithoutSystem::on_finalize(1);
 
-		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), Weight::from_ref_time(61));
+		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), Weight::from_parts(61, 0));
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,

@@ -282,7 +282,7 @@ impl RuntimeCosts {
 	fn token<T: Config>(&self, s: &HostFnWeights<T>) -> RuntimeToken {
 		use self::RuntimeCosts::*;
 		let weight = match *self {
-			MeteringBlock(amount) => s.gas.saturating_add(Weight::from_ref_time(amount)),
+			MeteringBlock(amount) => s.gas.saturating_add(Weight::from_parts(amount, 0)),
 			CopyFromContract(len) => s.return_per_byte.saturating_mul(len.into()),
 			CopyToContract(len) => s.input_per_byte.saturating_mul(len.into()),
 			Caller => s.caller,
@@ -903,7 +903,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 					self.charge_gas(RuntimeCosts::CallSurchargeTransfer)?;
 				}
 				self.ext.call(
-					Weight::from_ref_time(gas),
+					Weight::from_parts(gas, 0),
 					callee,
 					value,
 					input_data,
@@ -958,7 +958,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 		salt_ptr: u32,
 		salt_len: u32,
 	) -> Result<ReturnCode, TrapReason> {
-		let gas = Weight::from_ref_time(gas);
+		let gas = Weight::from_parts(gas, 0);
 		self.charge_gas(RuntimeCosts::InstantiateBase { input_data_len, salt_len })?;
 		let value: BalanceOf<<E as Ext>::T> = self.read_sandbox_memory_as(memory, value_ptr)?;
 		if value > 0u32.into() {
@@ -1802,7 +1802,7 @@ pub mod env {
 		out_ptr: u32,
 		out_len_ptr: u32,
 	) -> Result<(), TrapReason> {
-		let gas = Weight::from_ref_time(gas);
+		let gas = Weight::from_parts(gas, 0);
 		ctx.charge_gas(RuntimeCosts::WeightToFee)?;
 		Ok(ctx.write_sandbox_output(
 			memory,

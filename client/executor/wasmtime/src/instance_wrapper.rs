@@ -26,8 +26,7 @@ use sc_executor_common::{
 };
 use sp_wasm_interface::{Pointer, Value, WordSize};
 use wasmtime::{
-	AsContext, AsContextMut, Engine, Extern, Func, Global, Instance, InstancePre, Memory, Table,
-	Val,
+	AsContext, AsContextMut, Engine, Extern, Instance, InstancePre, Memory, Table, Val,
 };
 
 /// Invoked entrypoint format.
@@ -113,66 +112,58 @@ impl EntryPoint {
 	}
 }
 
+/// Wrapper around [`Memory`] that implements [`sc_allocator::Memory`].
+pub(crate) struct MemoryWrapper<'a, C>(pub &'a wasmtime::Memory, pub &'a mut C);
+
+impl<C: AsContextMut> sc_allocator::Memory for MemoryWrapper<'_, C> {
+	fn with_access<R>(&self, run: impl FnOnce(&[u8]) -> R) -> R {
+		run(self.0.data(&self.1))
+	}
+
+	fn with_access_mut<R>(&mut self, run: impl FnOnce(&mut [u8]) -> R) -> R {
+		run(self.0.data_mut(&mut self.1))
+	}
+
+	fn grow(&mut self, additional: u32) -> std::result::Result<(), ()> {
+		self.0
+			.grow(&mut self.1, additional as u64)
+			.map_err(|e| {
+				log::error!(
+					target: "wasm-executor",
+					"Failed to grow memory by {} pages: {}",
+					additional,
+					e,
+				)
+			})
+			.map(drop)
+	}
+
+	fn pages(&self) -> u32 {
+		self.0.size(&self.1) as u32
+	}
+
+	fn max_pages(&self) -> Option<u32> {
+		self.0.ty(&self.1).maximum().map(|p| p as _)
+	}
+}
+
 /// Wrap the given WebAssembly Instance of a wasm module with Substrate-runtime.
 ///
 /// This struct is a handy wrapper around a wasmtime `Instance` that provides substrate specific
 /// routines.
 pub struct InstanceWrapper {
 	instance: Instance,
+	/// The memory instance of the `instance`.
+	///
+	/// It is important to make sure that we don't make any copies of this to make it easier to
+	/// proof
 	memory: Memory,
 	store: Store,
 }
 
-fn extern_memory(extern_: &Extern) -> Option<&Memory> {
-	match extern_ {
-		Extern::Memory(mem) => Some(mem),
-		_ => None,
-	}
-}
-
-fn extern_global(extern_: &Extern) -> Option<&Global> {
-	match extern_ {
-		Extern::Global(glob) => Some(glob),
-		_ => None,
-	}
-}
-
-fn extern_table(extern_: &Extern) -> Option<&Table> {
-	match extern_ {
-		Extern::Table(table) => Some(table),
-		_ => None,
-	}
-}
-
-fn extern_func(extern_: &Extern) -> Option<&Func> {
-	match extern_ {
-		Extern::Func(func) => Some(func),
-		_ => None,
-	}
-}
-
-pub(crate) fn create_store(engine: &wasmtime::Engine, max_memory_size: Option<usize>) -> Store {
-	let limits = if let Some(max_memory_size) = max_memory_size {
-		wasmtime::StoreLimitsBuilder::new().memory_size(max_memory_size).build()
-	} else {
-		Default::default()
-	};
-
-	let mut store =
-		Store::new(engine, StoreData { limits, host_state: None, memory: None, table: None });
-	if max_memory_size.is_some() {
-		store.limiter(|s| &mut s.limits);
-	}
-	store
-}
-
 impl InstanceWrapper {
-	pub(crate) fn new(
-		engine: &Engine,
-		instance_pre: &InstancePre<StoreData>,
-		max_memory_size: Option<usize>,
-	) -> Result<Self> {
-		let mut store = create_store(engine, max_memory_size);
+	pub(crate) fn new(engine: &Engine, instance_pre: &InstancePre<StoreData>) -> Result<Self> {
+		let mut store = Store::new(engine, Default::default());
 		let instance = instance_pre.instantiate(&mut store).map_err(|error| {
 			WasmError::Other(format!(
 				"failed to instantiate a new WASM module instance: {:#}",
@@ -201,9 +192,10 @@ impl InstanceWrapper {
 					self.instance.get_export(&mut self.store, method).ok_or_else(|| {
 						Error::from(format!("Exported method {} is not found", method))
 					})?;
-				let func = extern_func(&export)
+				let func = export
+					.into_func()
 					.ok_or_else(|| Error::from(format!("Export {} is not a function", method)))?;
-				EntryPoint::direct(*func, &self.store).map_err(|_| {
+				EntryPoint::direct(func, &self.store).map_err(|_| {
 					Error::from(format!("Exported function '{}' has invalid signature.", method))
 				})?
 			},
@@ -259,7 +251,8 @@ impl InstanceWrapper {
 			.get_export(&mut self.store, "__heap_base")
 			.ok_or_else(|| Error::from("__heap_base is not found"))?;
 
-		let heap_base_global = extern_global(&heap_base_export)
+		let heap_base_global = heap_base_export
+			.into_global()
 			.ok_or_else(|| Error::from("__heap_base is not a global"))?;
 
 		let heap_base = heap_base_global
@@ -277,7 +270,7 @@ impl InstanceWrapper {
 			None => return Ok(None),
 		};
 
-		let global = extern_global(&global).ok_or_else(|| format!("`{}` is not a global", name))?;
+		let global = global.into_global().ok_or_else(|| format!("`{}` is not a global", name))?;
 
 		match global.get(&mut self.store) {
 			Val::I32(val) => Ok(Some(Value::I32(val))),
@@ -300,7 +293,8 @@ fn get_linear_memory(instance: &Instance, ctx: impl AsContextMut) -> Result<Memo
 		.get_export(ctx, "memory")
 		.ok_or_else(|| Error::from("memory is not exported under `memory` name"))?;
 
-	let memory = *extern_memory(&memory_export)
+	let memory = memory_export
+		.into_memory()
 		.ok_or_else(|| Error::from("the `memory` export should have memory type"))?;
 
 	Ok(memory)
@@ -311,8 +305,8 @@ fn get_table(instance: &Instance, ctx: &mut Store) -> Option<Table> {
 	instance
 		.get_export(ctx, "__indirect_function_table")
 		.as_ref()
-		.and_then(extern_table)
 		.cloned()
+		.and_then(Extern::into_table)
 }
 
 /// Functions related to memory.
@@ -403,7 +397,7 @@ fn decommit_works() {
 	let module = wasmtime::Module::new(&engine, code).unwrap();
 	let linker = wasmtime::Linker::new(&engine);
 	let instance_pre = linker.instantiate_pre(&module).unwrap();
-	let mut wrapper = InstanceWrapper::new(&engine, &instance_pre, None).unwrap();
+	let mut wrapper = InstanceWrapper::new(&engine, &instance_pre).unwrap();
 	unsafe { *wrapper.memory.data_ptr(&wrapper.store) = 42 };
 	assert_eq!(unsafe { *wrapper.memory.data_ptr(&wrapper.store) }, 42);
 	wrapper.decommit();

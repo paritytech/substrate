@@ -31,7 +31,7 @@ use sc_executor::{
 };
 use sp_core::{
 	storage::well_known_keys,
-	traits::{CodeExecutor, RuntimeCode},
+	traits::{CallContext, CodeExecutor, RuntimeCode},
 };
 use sp_runtime::traits::BlakeTwo256;
 use sp_state_machine::TestExternalities as CoreTestExternalities;
@@ -112,20 +112,41 @@ fn construct_block<E: Externalities>(
 
 	// execute the block to get the real header.
 	executor
-		.call(ext, &runtime_code, "Core_initialize_block", &header.encode(), true)
+		.call(
+			ext,
+			&runtime_code,
+			"Core_initialize_block",
+			&header.encode(),
+			true,
+			CallContext::Offchain,
+		)
 		.0
 		.unwrap();
 
 	for i in extrinsics.iter() {
 		executor
-			.call(ext, &runtime_code, "BlockBuilder_apply_extrinsic", &i.encode(), true)
+			.call(
+				ext,
+				&runtime_code,
+				"BlockBuilder_apply_extrinsic",
+				&i.encode(),
+				true,
+				CallContext::Offchain,
+			)
 			.0
 			.unwrap();
 	}
 
 	let header = Header::decode(
 		&mut &executor
-			.call(ext, &runtime_code, "BlockBuilder_finalize_block", &[0u8; 0], true)
+			.call(
+				ext,
+				&runtime_code,
+				"BlockBuilder_finalize_block",
+				&[0u8; 0],
+				true,
+				CallContext::Offchain,
+			)
 			.0
 			.unwrap()[..],
 	)
@@ -201,6 +222,7 @@ fn bench_execute_block(c: &mut Criterion) {
 								"Core_execute_block",
 								&block.0,
 								use_native,
+								CallContext::Offchain,
 							)
 							.0
 							.unwrap();

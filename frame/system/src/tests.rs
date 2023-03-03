@@ -235,7 +235,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 		let normal_base = <Test as crate::Config>::BlockWeights::get()
 			.get(DispatchClass::Normal)
 			.base_extrinsic;
-		let pre_info = DispatchInfo { weight: Weight::from_ref_time(1000), ..Default::default() };
+		let pre_info = DispatchInfo { weight: Weight::from_parts(1000, 0), ..Default::default() };
 		System::note_applied_extrinsic(&Ok(Some(300).into()), pre_info);
 		System::note_applied_extrinsic(&Ok(Some(1000).into()), pre_info);
 		System::note_applied_extrinsic(
@@ -248,7 +248,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 		System::note_applied_extrinsic(&Ok((Some(2_500_000), Pays::No).into()), pre_info);
 		System::note_applied_extrinsic(&Ok((Some(500), Pays::No).into()), pre_info);
 		System::note_applied_extrinsic(
-			&Err(DispatchError::BadOrigin.with_weight(Weight::from_ref_time(999))),
+			&Err(DispatchError::BadOrigin.with_weight(Weight::from_parts(999, 0))),
 			pre_info,
 		);
 
@@ -262,7 +262,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 		System::note_applied_extrinsic(
 			&Err(DispatchErrorWithPostInfo {
 				post_info: PostDispatchInfo {
-					actual_weight: Some(Weight::from_ref_time(800)),
+					actual_weight: Some(Weight::from_parts(800, 0)),
 					pays_fee: Pays::Yes,
 				},
 				error: DispatchError::BadOrigin,
@@ -272,7 +272,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 		System::note_applied_extrinsic(
 			&Err(DispatchErrorWithPostInfo {
 				post_info: PostDispatchInfo {
-					actual_weight: Some(Weight::from_ref_time(800)),
+					actual_weight: Some(Weight::from_parts(800, 0)),
 					pays_fee: Pays::No,
 				},
 				error: DispatchError::BadOrigin,
@@ -285,7 +285,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 			.base_extrinsic;
 		assert!(normal_base != operational_base, "Test pre-condition violated");
 		let pre_info = DispatchInfo {
-			weight: Weight::from_ref_time(1000),
+			weight: Weight::from_parts(1000, 0),
 			class: DispatchClass::Operational,
 			..Default::default()
 		};
@@ -297,7 +297,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 				phase: Phase::ApplyExtrinsic(0),
 				event: SysEvent::ExtrinsicSuccess {
 					dispatch_info: DispatchInfo {
-						weight: Weight::from_ref_time(300).saturating_add(normal_base),
+						weight: Weight::from_parts(300, 0).saturating_add(normal_base),
 						..Default::default()
 					},
 				}
@@ -308,7 +308,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 				phase: Phase::ApplyExtrinsic(1),
 				event: SysEvent::ExtrinsicSuccess {
 					dispatch_info: DispatchInfo {
-						weight: Weight::from_ref_time(1000).saturating_add(normal_base),
+						weight: Weight::from_parts(1000, 0).saturating_add(normal_base),
 						..Default::default()
 					},
 				}
@@ -319,7 +319,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 				phase: Phase::ApplyExtrinsic(2),
 				event: SysEvent::ExtrinsicSuccess {
 					dispatch_info: DispatchInfo {
-						weight: Weight::from_ref_time(1000).saturating_add(normal_base),
+						weight: Weight::from_parts(1000, 0).saturating_add(normal_base),
 						..Default::default()
 					},
 				}
@@ -330,7 +330,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 				phase: Phase::ApplyExtrinsic(3),
 				event: SysEvent::ExtrinsicSuccess {
 					dispatch_info: DispatchInfo {
-						weight: Weight::from_ref_time(1000).saturating_add(normal_base),
+						weight: Weight::from_parts(1000, 0).saturating_add(normal_base),
 						pays_fee: Pays::Yes,
 						..Default::default()
 					},
@@ -342,7 +342,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 				phase: Phase::ApplyExtrinsic(4),
 				event: SysEvent::ExtrinsicSuccess {
 					dispatch_info: DispatchInfo {
-						weight: Weight::from_ref_time(1000).saturating_add(normal_base),
+						weight: Weight::from_parts(1000, 0).saturating_add(normal_base),
 						pays_fee: Pays::No,
 						..Default::default()
 					},
@@ -354,7 +354,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 				phase: Phase::ApplyExtrinsic(5),
 				event: SysEvent::ExtrinsicSuccess {
 					dispatch_info: DispatchInfo {
-						weight: Weight::from_ref_time(1000).saturating_add(normal_base),
+						weight: Weight::from_parts(1000, 0).saturating_add(normal_base),
 						pays_fee: Pays::No,
 						..Default::default()
 					},
@@ -366,7 +366,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 				phase: Phase::ApplyExtrinsic(6),
 				event: SysEvent::ExtrinsicSuccess {
 					dispatch_info: DispatchInfo {
-						weight: Weight::from_ref_time(500).saturating_add(normal_base),
+						weight: Weight::from_parts(500, 0).saturating_add(normal_base),
 						pays_fee: Pays::No,
 						..Default::default()
 					},
@@ -379,7 +379,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 				event: SysEvent::ExtrinsicFailed {
 					dispatch_error: DispatchError::BadOrigin.into(),
 					dispatch_info: DispatchInfo {
-						weight: Weight::from_ref_time(999).saturating_add(normal_base),
+						weight: Weight::from_parts(999, 0).saturating_add(normal_base),
 						..Default::default()
 					},
 				}
@@ -391,7 +391,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 				event: SysEvent::ExtrinsicFailed {
 					dispatch_error: DispatchError::BadOrigin.into(),
 					dispatch_info: DispatchInfo {
-						weight: Weight::from_ref_time(1000).saturating_add(normal_base),
+						weight: Weight::from_parts(1000, 0).saturating_add(normal_base),
 						pays_fee: Pays::Yes,
 						..Default::default()
 					},
@@ -404,7 +404,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 				event: SysEvent::ExtrinsicFailed {
 					dispatch_error: DispatchError::BadOrigin.into(),
 					dispatch_info: DispatchInfo {
-						weight: Weight::from_ref_time(800).saturating_add(normal_base),
+						weight: Weight::from_parts(800, 0).saturating_add(normal_base),
 						pays_fee: Pays::Yes,
 						..Default::default()
 					},
@@ -417,7 +417,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 				event: SysEvent::ExtrinsicFailed {
 					dispatch_error: DispatchError::BadOrigin.into(),
 					dispatch_info: DispatchInfo {
-						weight: Weight::from_ref_time(800).saturating_add(normal_base),
+						weight: Weight::from_parts(800, 0).saturating_add(normal_base),
 						pays_fee: Pays::No,
 						..Default::default()
 					},
@@ -429,7 +429,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 				phase: Phase::ApplyExtrinsic(11),
 				event: SysEvent::ExtrinsicSuccess {
 					dispatch_info: DispatchInfo {
-						weight: Weight::from_ref_time(300).saturating_add(operational_base),
+						weight: Weight::from_parts(300, 0).saturating_add(operational_base),
 						class: DispatchClass::Operational,
 						..Default::default()
 					},
