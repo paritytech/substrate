@@ -1015,7 +1015,7 @@ where
 		let peer = if let Some(peer) = self.peers.get_mut(&who) {
 			peer
 		} else {
-			error!(target: "sync", "💔 Called on_block_justification with a bad peer ID");
+			error!(target: "sync", "💔 Called on_block_justification with a peer ID of an unknown peer");
 			return Ok(OnBlockJustification::Nothing)
 		};
 

@@ -36,13 +36,13 @@
 
 use sp_std::prelude::*;
 
-use beefy_primitives::{EquivocationProof, ValidatorSetId};
 use codec::{self as codec, Decode, Encode};
 use frame_support::{
 	log,
 	traits::{Get, KeyOwnerProofSystem},
 };
 use frame_system::pallet_prelude::BlockNumberFor;
+use sp_consensus_beefy::{EquivocationProof, ValidatorSetId};
 use sp_runtime::{
 	transaction_validity::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
@@ -271,7 +271,7 @@ fn is_known_offence<T: Config>(
 ) -> Result<(), TransactionValidityError> {
 	// check the membership proof to extract the offender's id,
 	// equivocation validity will be fully checked during the call.
-	let key = (beefy_primitives::KEY_TYPE, equivocation_proof.offender_id().clone());
+	let key = (sp_consensus_beefy::KEY_TYPE, equivocation_proof.offender_id().clone());
 
 	let offender = T::KeyOwnerProofSystem::check_proof(key, key_owner_proof.clone())
 		.ok_or(InvalidTransaction::BadProof)?;
