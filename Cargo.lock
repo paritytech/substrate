@@ -3542,6 +3542,7 @@ dependencies = [
  "pallet-referenda",
  "pallet-remark",
  "pallet-root-testing",
+ "pallet-salary",
  "pallet-scheduler",
  "pallet-session",
  "pallet-session-benchmarking",
@@ -6356,6 +6357,23 @@ dependencies = [
  "frame-system",
  "parity-scale-codec",
  "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-salary"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-arithmetic",
  "sp-core",
  "sp-io",
  "sp-runtime",

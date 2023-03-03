@@ -134,6 +134,7 @@ members = [
 	"frame/recovery",
 	"frame/referenda",
 	"frame/remark",
+	"frame/salary",
 	"frame/scheduler",
 	"frame/scored-pool",
 	"frame/session",
