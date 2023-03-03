@@ -286,7 +286,7 @@ pub mod pallet {
 			origin.set_caller_from(frame_system::RawOrigin::Signed(pseudonym));
 			let info = call.get_dispatch_info();
 
-			let result = Self::dispatch_filtered(origin, *call);
+			let result = call.dispatch(origin);
 			// Always take into account the base weight of this call.
 			let mut weight = T::WeightInfo::as_derivative()
 				.saturating_add(T::DbWeight::get().reads_writes(1, 1));

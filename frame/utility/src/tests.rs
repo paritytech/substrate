@@ -419,20 +419,6 @@ fn as_derivative_basic_filters() {
 }
 
 #[test]
-fn as_derivative_call_filters() {
-	new_test_ext().execute_with(|| {
-		assert_err_ignore_postinfo!(
-			Utility::as_derivative(
-				RuntimeOrigin::signed(1),
-				1,
-				Box::new(RuntimeCall::Example(example::Call::not_batchable { arg: 0 })),
-			),
-			DispatchError::from(frame_system::Error::<Test>::CallFiltered),
-		);
-	});
-}
-
-#[test]
 fn batch_with_root_works() {
 	new_test_ext().execute_with(|| {
 		let k = b"a".to_vec();
