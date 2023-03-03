@@ -636,6 +636,6 @@ fn other_mixed_bankrupcy_fails_gracefully() {
 
 		assert_eq!(paid(1), 0);
 		assert_eq!(paid(2), 3);
-		assert_eq!(paid(3), 7);
+		assert_eq!(paid(3), 6);
 	});
 }
