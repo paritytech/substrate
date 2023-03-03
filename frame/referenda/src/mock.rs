@@ -23,8 +23,8 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	assert_ok, ord_parameter_types, parameter_types,
 	traits::{
-		ConstU32, ConstU64, Contains, EqualPrivilegeOnly, OnInitialize, OriginTrait, Polling,
-		SortedMembers,
+		ConstU32, ConstU64, Contains, EqualPrivilegeOnly, Everything, OnInitialize, OriginTrait,
+		Polling, SortedMembers,
 	},
 	weights::Weight,
 };
@@ -109,6 +109,7 @@ impl pallet_scheduler::Config for Test {
 	type WeightInfo = ();
 	type OriginPrivilegeCmp = EqualPrivilegeOnly;
 	type Preimages = Preimage;
+	type CallFilter = Everything;
 }
 impl pallet_balances::Config for Test {
 	type MaxReserves = ();

@@ -728,7 +728,7 @@ fn fails_to_schedule_filtered_task() {
 			frame_system::Error::<Test>::CallFiltered
 		);
 		assert_err!(
-			Scheduler::schedule_after(RuntimeOrigin::root(), 4, None, 127, call,),
+			Scheduler::schedule_after(RuntimeOrigin::root(), 4, None, 127, call.clone(),),
 			frame_system::Error::<Test>::CallFiltered
 		);
 		assert_err!(

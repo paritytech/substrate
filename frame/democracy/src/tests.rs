@@ -22,7 +22,7 @@ use crate as pallet_democracy;
 use frame_support::{
 	assert_noop, assert_ok, ord_parameter_types, parameter_types,
 	traits::{
-		ConstU32, ConstU64, Contains, EqualPrivilegeOnly, GenesisBuild, OnInitialize,
+		ConstU32, ConstU64, Contains, EqualPrivilegeOnly, Everything, GenesisBuild, OnInitialize,
 		SortedMembers, StorePreimage,
 	},
 	weights::Weight,
@@ -132,6 +132,7 @@ impl pallet_scheduler::Config for Test {
 	type WeightInfo = ();
 	type OriginPrivilegeCmp = EqualPrivilegeOnly;
 	type Preimages = ();
+	type CallFilter = Everything;
 }
 
 impl pallet_balances::Config for Test {
