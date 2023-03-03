@@ -35,51 +35,22 @@ pub fn blake2_512_into(data: &[u8], dest: &mut [u8; 64]) {
 
 /// Do a Blake2 512-bit hash and return result.
 pub fn blake2_512(data: &[u8]) -> [u8; 64] {
-	let mut h = blake2::Blake2b512::new();
-	h.update(data);
-	h.finalize().into()
-}
-
-type Blake2b256 = blake2::Blake2b<U32>;
-
-/// Do a Blake2 256-bit hash and place result in `dest`.
-pub fn blake2_256_into(data: &[u8], dest: &mut [u8; 32]) {
-	dest.copy_from_slice(Blake2b256::digest(data).as_slice());
+	blake2::Blake2b512::digest(data).into()
 }
 
 /// Do a Blake2 256-bit hash and return result.
 pub fn blake2_256(data: &[u8]) -> [u8; 32] {
-	let mut h = Blake2b256::new();
-	h.update(data);
-	h.finalize().into()
-}
-
-type Blake2b128 = blake2::Blake2b<U16>;
-
-/// Do a Blake2 128-bit hash and place result in `dest`.
-pub fn blake2_128_into(data: &[u8], dest: &mut [u8; 16]) {
-	dest.copy_from_slice(Blake2b128::digest(data).as_slice());
+	blake2::Blake2b::<U32>::digest(data).into()
 }
 
 /// Do a Blake2 128-bit hash and return result.
 pub fn blake2_128(data: &[u8]) -> [u8; 16] {
-	let mut h = Blake2b128::new();
-	h.update(data);
-	h.finalize().into()
-}
-
-type Blake2b64 = blake2::Blake2b<U8>;
-
-/// Do a Blake2 64-bit hash and place result in `dest`.
-pub fn blake2_64_into(data: &[u8], dest: &mut [u8; 8]) {
-	dest.copy_from_slice(Blake2b64::digest(data).as_slice());
+	blake2::Blake2b::<U16>::digest(data).into()
 }
 
 /// Do a Blake2 64-bit hash and return result.
 pub fn blake2_64(data: &[u8]) -> [u8; 8] {
-	let mut h = Blake2b64::new();
-	h.update(data);
-	h.finalize().into()
+	blake2::Blake2b::<U8>::digest(data).into()
 }
 
 /// Do a XX 64-bit hash and place result in `dest`.
@@ -131,21 +102,15 @@ pub fn twox_256(data: &[u8]) -> [u8; 32] {
 
 /// Do a keccak 256-bit hash and return result.
 pub fn keccak_256(data: &[u8]) -> [u8; 32] {
-	let mut h = sha3::Keccak256::new();
-	h.update(data);
-	h.finalize().into()
+	sha3::Keccak256::digest(data).into()
 }
 
 /// Do a keccak 512-bit hash and return result.
 pub fn keccak_512(data: &[u8]) -> [u8; 64] {
-	let mut h = sha3::Keccak512::new();
-	h.update(data);
-	h.finalize().into()
+	sha3::Keccak512::digest(data).into()
 }
 
 /// Do a sha2 256-bit hash and return result.
 pub fn sha2_256(data: &[u8]) -> [u8; 32] {
-	let mut h = sha2::Sha256::new();
-	h.update(data);
-	h.finalize().into()
+	sha2::Sha256::digest(data).into()
 }
