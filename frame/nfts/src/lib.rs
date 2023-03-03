@@ -831,7 +831,7 @@ pub mod pallet {
 							let already_claimed = Attribute::<T, I>::contains_key(key.clone());
 							ensure!(!already_claimed, Error::<T, I>::AlreadyClaimed);
 
-							let attribute_value = Self::construct_attribute_value(vec![0])?;
+							let attribute_value = Self::construct_attribute_value(vec![])?;
 							Attribute::<T, I>::insert(
 								key,
 								(
