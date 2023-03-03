@@ -14,7 +14,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 array-bytes = { version = "4.1", optional = true }
-sha2 = { version = "0.10.1", default-features = false, optional = true }
 log = { version = "0.4.14", default-features = false }
 
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
@@ -34,7 +33,6 @@ pallet-collective = { version = "4.0.0-dev", path = "../collective", default-fea
 
 [dev-dependencies]
 array-bytes = "4.1"
-sha2 = "0.10.1"
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-collective = { version = "4.0.0-dev", path = "../collective" }
 
@@ -56,7 +54,6 @@ std = [
 ]
 runtime-benchmarks = [
 	"array-bytes",
-	"sha2",
 	"frame-benchmarking/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",

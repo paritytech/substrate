@@ -5273,7 +5273,6 @@ dependencies = [
  "pallet-identity",
  "parity-scale-codec",
  "scale-info",
- "sha2 0.10.6",
  "sp-core",
  "sp-io",
  "sp-runtime",
