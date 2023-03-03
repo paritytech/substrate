@@ -988,8 +988,9 @@ struct InternalOutput<T: Config, O> {
 /// Helper trait to wrap contract execution entry points into a signle function
 /// [`Invokable::run_guarded`].
 trait Invokable<T: Config> {
-	/// What is returned as a result of a succeed invocation.
+	/// What is returned as a result of a successful invocation.
 	type Output;
+
 	/// Single entry point to contract execution.
 	/// Downstream execution flow is branched by implementations of [`Invokable`] trait:
 	///
@@ -1047,7 +1048,7 @@ impl<T: Config> Invokable<T> for CallInput<T> {
 		&self,
 		context: ExecContext<T>,
 		mut gas_meter: GasMeter<T>,
-	) -> InternalOutput<T, ExecReturnValue> {
+	) -> InternalOutput<T, Self::Output> {
 		let mut storage_meter = match StorageMeter::new(
 			&context.origin,
 			context.storage_deposit_limit,
@@ -1086,7 +1087,7 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 		&self,
 		mut context: ExecContext<T>,
 		mut gas_meter: GasMeter<T>,
-	) -> InternalOutput<T, (AccountIdOf<T>, ExecReturnValue)> {
+	) -> InternalOutput<T, Self::Output> {
 		let mut storage_deposit = Default::default();
 		let try_exec = || {
 			let schedule = T::Schedule::get();
