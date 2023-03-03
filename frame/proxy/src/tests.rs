@@ -26,7 +26,7 @@ use codec::{Decode, Encode};
 use frame_support::{
 	assert_noop, assert_ok,
 	dispatch::DispatchError,
-	traits::{ConstU32, ConstU64, Contains},
+	traits::{ConstU32, ConstU64, Contains, Everything},
 	RuntimeDebug,
 };
 use sp_core::H256;
@@ -98,6 +98,7 @@ impl pallet_utility::Config for Test {
 	type RuntimeCall = RuntimeCall;
 	type PalletsOrigin = OriginCaller;
 	type WeightInfo = ();
+	type CallFilter = Everything;
 }
 
 #[derive(

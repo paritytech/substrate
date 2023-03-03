@@ -40,6 +40,8 @@ use frame_support::{
 	traits::{
 		ConstU32, ConstU64, Contains, Currency, ExistenceRequirement, LockableCurrency, OnIdle,
 		OnInitialize, WithdrawReasons,
+		ConstU32, ConstU64, Contains, Currency, Everything, ExistenceRequirement, Get,
+		LockableCurrency, OnIdle, OnInitialize, WithdrawReasons,
 	},
 	weights::{constants::WEIGHT_REF_TIME_PER_SECOND, Weight},
 };
@@ -337,6 +339,7 @@ impl pallet_utility::Config for Test {
 	type RuntimeCall = RuntimeCall;
 	type PalletsOrigin = OriginCaller;
 	type WeightInfo = ();
+	type CallFilter = Everything;
 }
 
 impl pallet_proxy::Config for Test {

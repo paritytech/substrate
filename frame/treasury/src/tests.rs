@@ -29,7 +29,7 @@ use frame_support::{
 	assert_err_ignore_postinfo, assert_noop, assert_ok,
 	pallet_prelude::GenesisBuild,
 	parameter_types,
-	traits::{ConstU32, ConstU64, OnInitialize},
+	traits::{ConstU32, ConstU64, Everything, OnInitialize},
 	PalletId,
 };
 
@@ -101,6 +101,7 @@ impl pallet_utility::Config for Test {
 	type RuntimeCall = RuntimeCall;
 	type PalletsOrigin = OriginCaller;
 	type WeightInfo = ();
+	type CallFilter = Everything;
 }
 
 parameter_types! {
