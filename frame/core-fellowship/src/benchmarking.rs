@@ -43,6 +43,23 @@ fn ensure_member_with_salary<T: Config<I>, I: 'static>(who: &T::AccountId) {
 	}
 }
 
+/*
+// move to benchmark code. No need for it here.
+impl<
+	Balance: BalanceTrait,
+	BlockNumber: AtLeast32BitUnsigned + Copy,
+> Default for ParamsType<Balance, BlockNumber> {
+	fn default() -> Self {
+		Self {
+			active_salary: [100u32.into(); 9],
+			passive_salary: [10u32.into(); 9],
+			demotion_period: [100u32.into(); 9],
+			min_promotion_period: [100u32.into(); 9],
+		}
+	}
+}
+*/
+
 #[instance_benchmarks]
 mod benchmarks {
 	use super::*;

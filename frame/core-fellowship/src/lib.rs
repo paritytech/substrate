@@ -58,23 +58,6 @@ pub struct ParamsType<Balance, BlockNumber> {
 	min_promotion_period: [BlockNumber; 9],
 }
 
-/*
-// move to benchmark code. No need for it here.
-impl<
-	Balance: BalanceTrait,
-	BlockNumber: AtLeast32BitUnsigned + Copy,
-> Default for ParamsType<Balance, BlockNumber> {
-	fn default() -> Self {
-		Self {
-			active_salary: [100u32.into(); 9],
-			passive_salary: [10u32.into(); 9],
-			demotion_period: [100u32.into(); 9],
-			min_promotion_period: [100u32.into(); 9],
-		}
-	}
-}
-*/
-
 /// The status of a single member.
 #[derive(Encode, Decode, Eq, PartialEq, Clone, TypeInfo, MaxEncodedLen, RuntimeDebug)]
 pub struct MemberStatus<BlockNumber> {
@@ -300,16 +283,19 @@ pub mod pallet {
 
 			// Maybe consider requiring it be at least `ApprovePeriod` prior to the auto-demotion.
 			let now = frame_system::Pallet::<T>::block_number();
-			let maybe_member = Member::<T, I>::get(&who);
-			let existed = maybe_member.is_some();
-			let mut member = maybe_member.map_or_else(
-				|| MemberStatus { is_active: true, last_promotion: 0u32.into(), last_proof: now },
-				|mut m| {
+			let existed = Member::<T, I>::mutate(&who, |maybe| {
+				if let Some(m) = maybe {
 					m.last_proof = now;
-					m
-				},
-			);
-			Member::<T, I>::insert(&who, &member);
+					true
+				} else {
+					*maybe = Some(MemberStatus {
+						is_active: true,
+						last_promotion: 0u32.into(),
+						last_proof: now,
+					});
+					false
+				}
+			});
 			Self::deposit_event(Event::<T, I>::Proven { who, at_rank, new: !existed });
 
 			Ok(Pays::No.into())

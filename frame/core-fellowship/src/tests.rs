@@ -53,7 +53,7 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(Weight::from_ref_time(1_000_000));
+		frame_system::limits::BlockWeights::simple_max(Weight::from_parts(1_000_000, u64::max_value()));
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = Everything;
@@ -107,9 +107,9 @@ impl RankedMembers for TestClub {
 		Ok(())
 	}
 	fn demote(who: &Self::AccountId) -> DispatchResult {
-		CLUB.with(|club| match club.borrow().get(who) {
+		CLUB.with(|club| match Self::rank_of(who) {
 			None => Err(sp_runtime::DispatchError::Unavailable),
-			Some(&0) => {
+			Some(0) => {
 				club.borrow_mut().remove(&who);
 				Ok(())
 			},
@@ -150,8 +150,8 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		let params = ParamsType {
 			active_salary: [10, 20, 30, 40, 50, 60, 70, 80, 90],
 			passive_salary: [1, 2, 3, 4, 5, 6, 7, 8, 9],
-			demotion_period: [3, 3, 3, 6, 6, 6, 1000, 1000, 1000],
-			min_promotion_period: [1, 1, 1, 1, 2, 2, 6, 10, 20],
+			demotion_period: [2, 4, 6, 8, 10, 12, 14, 16, 18],
+			min_promotion_period: [3, 6, 9, 12, 15, 18, 21, 24, 27],
 		};
 		assert_ok!(CoreFellowship::set_params(signed(1), params));
 		System::set_block_number(1);
@@ -177,7 +177,7 @@ fn signed(who: u64) -> RuntimeOrigin {
 fn next_demotion(who: u64) -> u64 {
 	let member = Member::<Test>::get(who).unwrap();
 	let demotion_period = Params::<Test>::get().demotion_period;
-	member.last_promotion + demotion_period[TestClub::rank_of(&who).unwrap() as usize - 1]
+	member.last_proof + demotion_period[TestClub::rank_of(&who).unwrap() as usize - 1]
 }
 
 #[test]
@@ -229,8 +229,9 @@ fn promote_works() {
 		assert_noop!(CoreFellowship::promote(signed(10), 10, 2), DispatchError::BadOrigin);
 		assert_noop!(CoreFellowship::promote(signed(1), 10, 2), Error::<Test>::NoPermission);
 		assert_noop!(CoreFellowship::promote(signed(3), 10, 3), Error::<Test>::UnexpectedRank);
+		run_to(6);
 		assert_noop!(CoreFellowship::promote(signed(2), 10, 2), Error::<Test>::TooSoon);
-		run_to(2);
+		run_to(7);
 		assert_ok!(CoreFellowship::promote(signed(2), 10, 2));
 		set_rank(11, 1);
 		assert_noop!(CoreFellowship::promote(signed(2), 11, 2), Error::<Test>::Unranked);
@@ -245,23 +246,48 @@ fn proof_into_high_rank_works() {
 		assert_noop!(CoreFellowship::prove(signed(6), 10, 6), Error::<Test>::UnexpectedRank);
 		assert_ok!(CoreFellowship::prove(signed(5), 10, 5));
 		assert!(Member::<Test>::contains_key(10));
-		assert_eq!(next_demotion(10), 6);
+		assert_eq!(next_demotion(10), 11);
 	});
 }
 
 #[test]
 fn auto_demote_works() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(CoreFellowship::promote(signed(2), 10, 2), Error::<Test>::NotMember);
-		set_rank(10, 0);
-		assert_ok!(CoreFellowship::induct(signed(1), 10));
-		assert_noop!(CoreFellowship::promote(signed(10), 10, 2), DispatchError::BadOrigin);
-		assert_noop!(CoreFellowship::promote(signed(1), 10, 2), Error::<Test>::NoPermission);
-		assert_noop!(CoreFellowship::promote(signed(3), 10, 3), Error::<Test>::UnexpectedRank);
-		assert_noop!(CoreFellowship::promote(signed(2), 10, 2), Error::<Test>::TooSoon);
-		run_to(2);
-		assert_ok!(CoreFellowship::promote(signed(2), 10, 2));
-		set_rank(11, 1);
-		assert_noop!(CoreFellowship::promote(signed(2), 11, 2), Error::<Test>::Unranked);
+		set_rank(10, 5);
+		assert_ok!(CoreFellowship::prove(signed(5), 10, 5));
+
+		run_to(10);
+		assert_noop!(CoreFellowship::bump(signed(0), 10), Error::<Test>::NothingDoing);
+		run_to(11);
+		assert_ok!(CoreFellowship::bump(signed(0), 10));
+		assert_eq!(TestClub::rank_of(&10), Some(4));
+		assert_noop!(CoreFellowship::bump(signed(0), 10), Error::<Test>::NothingDoing);
+		assert_eq!(next_demotion(10), 19);
+	});
+}
+
+#[test]
+fn proof_postpones_auto_demote() {
+	new_test_ext().execute_with(|| {
+		set_rank(10, 5);
+		assert_ok!(CoreFellowship::prove(signed(5), 10, 5));
+
+		run_to(11);
+		assert_ok!(CoreFellowship::prove(signed(5), 10, 5));
+		assert_eq!(next_demotion(10), 21);
+		assert_noop!(CoreFellowship::bump(signed(0), 10), Error::<Test>::NothingDoing);
+	});
+}
+
+#[test]
+fn promote_postpones_auto_demote() {
+	new_test_ext().execute_with(|| {
+		set_rank(10, 5);
+		assert_ok!(CoreFellowship::prove(signed(5), 10, 5));
+
+		run_to(19);
+		assert_ok!(CoreFellowship::promote(signed(6), 10, 6));
+		assert_eq!(next_demotion(10), 31);
+		assert_noop!(CoreFellowship::bump(signed(0), 10), Error::<Test>::NothingDoing);
 	});
 }
