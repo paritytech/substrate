@@ -1101,22 +1101,52 @@ fn set_min_balance_should_work() {
 		Balances::make_free_balance_be(&1, 10);
 		assert_ok!(Assets::create(RuntimeOrigin::signed(1), id, 1, 30));
 
-		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), id, 1, 50));
-		// won't execute because there is an asset holder.
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), id, 1, 100));
+		// Won't execute because there is an asset holder.
 		assert_noop!(
 			Assets::set_min_balance(RuntimeOrigin::signed(1), id, 50),
 			Error::<Test>::NoPermission
 		);
 
-		// will execute because the new value of min_balance is less than the
-		// old value. 10 < 30
-		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), id, 1, 10));
+		// Force asset status to make this a sufficient asset.
+		assert_ok!(Assets::force_asset_status(
+			RuntimeOrigin::root(),
+			id,
+			1,
+			1,
+			1,
+			1,
+			30,
+			true,
+			false
+		));
 
-		assert_ok!(Assets::burn(RuntimeOrigin::signed(1), id, 1, 50));
+		// Won't execute because there is an account holding the asset and the asset is marked as
+		// sufficient.
 		assert_noop!(
-			Assets::set_min_balance(RuntimeOrigin::signed(2), id, 50),
+			Assets::set_min_balance(RuntimeOrigin::signed(1), id, 10),
 			Error::<Test>::NoPermission
 		);
+
+		// Make the asset not sufficient.
+		assert_ok!(Assets::force_asset_status(
+			RuntimeOrigin::root(),
+			id,
+			1,
+			1,
+			1,
+			1,
+			60,
+			false,
+			false
+		));
+
+		// Will execute because the new value of min_balance is less than the
+		// old value. 10 < 30
+		assert_ok!(Assets::set_min_balance(RuntimeOrigin::signed(1), id, 10));
+		assert_eq!(Asset::<Test>::get(id).unwrap().min_balance, 10);
+
+		assert_ok!(Assets::burn(RuntimeOrigin::signed(1), id, 1, 100));
 
 		assert_ok!(Assets::set_min_balance(RuntimeOrigin::signed(1), id, 50));
 		assert_eq!(Asset::<Test>::get(id).unwrap().min_balance, 50);
