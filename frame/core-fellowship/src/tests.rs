@@ -267,6 +267,36 @@ fn auto_demote_works() {
 }
 
 #[test]
+fn auto_demote_offboard_works() {
+	new_test_ext().execute_with(|| {
+		set_rank(10, 1);
+		assert_ok!(CoreFellowship::prove(signed(1), 10, 1));
+
+		run_to(3);
+		assert_ok!(CoreFellowship::bump(signed(0), 10));
+		assert_eq!(TestClub::rank_of(&10), Some(0));
+		assert_noop!(CoreFellowship::bump(signed(0), 10), Error::<Test>::NotProved);
+	});
+}
+
+#[test]
+fn offboard_works() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(CoreFellowship::offboard(signed(0), 10), Error::<Test>::NotInducted);
+		set_rank(10, 1);
+		assert_noop!(CoreFellowship::offboard(signed(0), 10), Error::<Test>::Ranked);
+
+		assert_ok!(CoreFellowship::prove(signed(1), 10, 1));
+		assert_noop!(CoreFellowship::offboard(signed(0), 10), Error::<Test>::Ranked);
+
+		set_rank(10, 0);
+		assert_ok!(CoreFellowship::offboard(signed(0), 10));
+		assert_noop!(CoreFellowship::offboard(signed(0), 10), Error::<Test>::NotInducted);
+		assert_noop!(CoreFellowship::bump(signed(0), 10), Error::<Test>::NotProved);
+	});
+}
+
+#[test]
 fn proof_postpones_auto_demote() {
 	new_test_ext().execute_with(|| {
 		set_rank(10, 5);
@@ -289,5 +319,30 @@ fn promote_postpones_auto_demote() {
 		assert_ok!(CoreFellowship::promote(signed(6), 10, 6));
 		assert_eq!(next_demotion(10), 31);
 		assert_noop!(CoreFellowship::bump(signed(0), 10), Error::<Test>::NothingDoing);
+	});
+}
+
+#[test]
+fn get_salary_works() {
+	new_test_ext().execute_with(|| {
+		for i in 1..=9 {
+			set_rank(10, i);
+			assert_ok!(CoreFellowship::prove(signed(i as u64), 10, i));
+			assert_eq!(CoreFellowship::get_salary(i, &10), i as u64 * 10);
+		}
+	});
+}
+
+#[test]
+fn active_changing_get_salary_works() {
+	new_test_ext().execute_with(|| {
+		for i in 1..=9 {
+			set_rank(10, i);
+			assert_ok!(CoreFellowship::prove(signed(i as u64), 10, i));
+			assert_ok!(CoreFellowship::set_active(signed(10), false));
+			assert_eq!(CoreFellowship::get_salary(i, &10), i as u64);
+			assert_ok!(CoreFellowship::set_active(signed(10), true));
+			assert_eq!(CoreFellowship::get_salary(i, &10), i as u64 * 10);
+		}
 	});
 }

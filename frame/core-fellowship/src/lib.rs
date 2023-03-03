@@ -369,11 +369,11 @@ pub mod pallet {
 			Ok(Pays::No.into())
 		}
 
-		/// Make a "promotion" from a candiate (rank zero) into a member (rank one).
+		/// Stop tracking an prior member who is now not a ranked member of the collective.
 		///
-		/// - `origin`: An origin which satisfies `PromoteOrigin` with a `Success` result of 1 or
-		///   more.
-		/// - `who`: The account ID of the candidate to be inducted and become a member.
+		/// - `origin`: A `Signed` origin of an account.
+		/// - `who`: The ID of an account which was tracked in this pallet but which is now not a
+		///   ranked member of the collective.
 		#[pallet::weight(T::WeightInfo::init())]
 		#[pallet::call_index(6)]
 		pub fn offboard(origin: OriginFor<T>, who: T::AccountId) -> DispatchResultWithPostInfo {
