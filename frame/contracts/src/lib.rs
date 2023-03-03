@@ -617,15 +617,16 @@ pub mod pallet {
 			let gas_limit: Weight = gas_limit.into();
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
-			let context = ExecContext {
+			let common = CommonInput {
 				origin,
 				value,
+				data,
 				gas_limit,
 				storage_deposit_limit: storage_deposit_limit.map(Into::into),
 				debug_message: None,
 			};
-			let mut output = CallInput::<T> { dest, data, determinism: Determinism::Deterministic }
-				.run_guarded(context);
+			let mut output = CallInput::<T> { dest, determinism: Determinism::Deterministic }
+				.run_guarded(common);
 			if let Ok(retval) = &output.result {
 				if retval.did_revert() {
 					output.result = Err(<Error<T>>::ContractReverted.into());
@@ -678,15 +679,16 @@ pub mod pallet {
 			let code_len = code.len() as u32;
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
-			let context = ExecContext {
+			let common = CommonInput {
 				origin,
 				value,
+				data,
 				gas_limit,
 				storage_deposit_limit: storage_deposit_limit.map(Into::into),
 				debug_message: None,
 			};
 			let mut output =
-				InstantiateInput::<T> { code: Code::Upload(code), data, salt }.run_guarded(context);
+				InstantiateInput::<T> { code: Code::Upload(code), salt }.run_guarded(common);
 			if let Ok(retval) = &output.result {
 				if retval.1.did_revert() {
 					output.result = Err(<Error<T>>::ContractReverted.into());
@@ -719,15 +721,16 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
-			let context = ExecContext {
+			let common = CommonInput {
 				origin,
 				value,
+				data,
 				gas_limit,
 				storage_deposit_limit: storage_deposit_limit.map(Into::into),
 				debug_message: None,
 			};
-			let mut output = InstantiateInput::<T> { code: Code::Existing(code_hash), data, salt }
-				.run_guarded(context);
+			let mut output =
+				InstantiateInput::<T> { code: Code::Existing(code_hash), salt }.run_guarded(common);
 			if let Ok(retval) = &output.result {
 				if retval.1.did_revert() {
 					output.result = Err(<Error<T>>::ContractReverted.into());
@@ -953,9 +956,10 @@ pub mod pallet {
 }
 
 /// Context of a contract invocation.
-struct ExecContext<'a, T: Config> {
+struct CommonInput<'a, T: Config> {
 	origin: T::AccountId,
 	value: BalanceOf<T>,
+	data: Vec<u8>,
 	gas_limit: Weight,
 	storage_deposit_limit: Option<BalanceOf<T>>,
 	debug_message: Option<&'a mut DebugBufferVec<T>>,
@@ -964,14 +968,12 @@ struct ExecContext<'a, T: Config> {
 /// Input specific to a call into contract.
 struct CallInput<T: Config> {
 	dest: T::AccountId,
-	data: Vec<u8>,
 	determinism: Determinism,
 }
 
 /// Input specific to a contract instantiation invocation.
 struct InstantiateInput<T: Config> {
 	code: Code<CodeHash<T>>,
-	data: Vec<u8>,
 	salt: Vec<u8>,
 }
 
@@ -999,11 +1001,11 @@ trait Invokable<T: Config> {
 	///
 	/// We enforce a re-entrancy guard here by initializing and checking a boolean flag through a
 	/// global reference.
-	fn run_guarded(&self, context: ExecContext<T>) -> InternalOutput<T, Self::Output> {
+	fn run_guarded(&self, common: CommonInput<T>) -> InternalOutput<T, Self::Output> {
 		// Set up a global reference to the boolean flag used for the re-entrancy guard.
 		environmental!(executing_contract: bool);
 
-		let gas_limit = context.gas_limit;
+		let gas_limit = common.gas_limit;
 		executing_contract::using_once(&mut false, || {
 			executing_contract::with(|f| {
 				// Fail if already entered contract execution
@@ -1025,7 +1027,7 @@ trait Invokable<T: Config> {
 					}),
 				},
 				// Enter contract call.
-				|_| self.run(context, GasMeter::new(gas_limit)),
+				|_| self.run(common, GasMeter::new(gas_limit)),
 			)
 		})
 	}
@@ -1036,7 +1038,7 @@ trait Invokable<T: Config> {
 	/// Called by dispatchables and public functions through the [`Invokable::run_guarded`].
 	fn run(
 		&self,
-		context: ExecContext<T>,
+		common: CommonInput<T>,
 		gas_meter: GasMeter<T>,
 	) -> InternalOutput<T, Self::Output>;
 }
@@ -1046,25 +1048,22 @@ impl<T: Config> Invokable<T> for CallInput<T> {
 
 	fn run(
 		&self,
-		context: ExecContext<T>,
+		common: CommonInput<T>,
 		mut gas_meter: GasMeter<T>,
 	) -> InternalOutput<T, Self::Output> {
-		let mut storage_meter = match StorageMeter::new(
-			&context.origin,
-			context.storage_deposit_limit,
-			context.value,
-		) {
-			Ok(meter) => meter,
-			Err(err) =>
-				return InternalOutput {
-					result: Err(err.into()),
-					gas_meter,
-					storage_deposit: Default::default(),
-				},
-		};
+		let mut storage_meter =
+			match StorageMeter::new(&common.origin, common.storage_deposit_limit, common.value) {
+				Ok(meter) => meter,
+				Err(err) =>
+					return InternalOutput {
+						result: Err(err.into()),
+						gas_meter,
+						storage_deposit: Default::default(),
+					},
+			};
 		let schedule = T::Schedule::get();
-		let CallInput { dest, data, determinism } = self;
-		let ExecContext { origin, value, debug_message, .. } = context;
+		let CallInput { dest, determinism } = self;
+		let CommonInput { origin, value, data, debug_message, .. } = common;
 		let result = ExecStack::<T, PrefabWasmModule<T>>::run_call(
 			origin.clone(),
 			dest.clone(),
@@ -1085,7 +1084,7 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 
 	fn run(
 		&self,
-		mut context: ExecContext<T>,
+		mut common: CommonInput<T>,
 		mut gas_meter: GasMeter<T>,
 	) -> InternalOutput<T, Self::Output> {
 		let mut storage_deposit = Default::default();
@@ -1096,12 +1095,12 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 					let executable = PrefabWasmModule::from_code(
 						binary.clone(),
 						&schedule,
-						context.origin.clone(),
+						common.origin.clone(),
 						Determinism::Deterministic,
 						TryInstantiate::Skip,
 					)
 					.map_err(|(err, msg)| {
-						context
+						common
 							.debug_message
 							.as_mut()
 							.map(|buffer| buffer.try_extend(&mut msg.bytes()));
@@ -1119,13 +1118,13 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 				),
 			};
 			let mut storage_meter = StorageMeter::new(
-				&context.origin,
-				context.storage_deposit_limit,
-				context.value.saturating_add(extra_deposit),
+				&common.origin,
+				common.storage_deposit_limit,
+				common.value.saturating_add(extra_deposit),
 			)?;
 
-			let InstantiateInput { salt, data, .. } = self;
-			let ExecContext { origin, value, debug_message, .. } = context;
+			let InstantiateInput { salt, .. } = self;
+			let CommonInput { origin, value, data, debug_message, .. } = common;
 			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
 				origin.clone(),
 				executable,
@@ -1170,14 +1169,15 @@ impl<T: Config> Pallet<T> {
 		determinism: Determinism,
 	) -> ContractExecResult<BalanceOf<T>> {
 		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
-		let context = ExecContext {
+		let common = CommonInput {
 			origin,
 			value,
+			data,
 			gas_limit,
 			storage_deposit_limit,
 			debug_message: debug_message.as_mut(),
 		};
-		let output = CallInput::<T> { dest, data, determinism }.run_guarded(context);
+		let output = CallInput::<T> { dest, determinism }.run_guarded(common);
 		ContractExecResult {
 			result: output.result.map_err(|r| r.error),
 			gas_consumed: output.gas_meter.gas_consumed(),
@@ -1210,14 +1210,15 @@ impl<T: Config> Pallet<T> {
 		debug: bool,
 	) -> ContractInstantiateResult<T::AccountId, BalanceOf<T>> {
 		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
-		let context = ExecContext {
+		let common = CommonInput {
 			origin,
 			value,
+			data,
 			gas_limit,
 			storage_deposit_limit,
 			debug_message: debug_message.as_mut(),
 		};
-		let output = InstantiateInput::<T> { code, data, salt }.run_guarded(context);
+		let output = InstantiateInput::<T> { code, salt }.run_guarded(common);
 		ContractInstantiateResult {
 			result: output
 				.result
