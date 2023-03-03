@@ -713,6 +713,39 @@ fn root_calls_works() {
 }
 
 #[test]
+fn fails_to_schedule_filtered_task() {
+	new_test_ext().execute_with(|| {
+		let call = Box::new(RuntimeCall::Logger(LoggerCall::log_not_sheduled {
+			i: 42,
+			weight: Weight::from_ref_time(10),
+		}));
+		assert_err!(
+			Scheduler::schedule(RuntimeOrigin::root(), 4, None, 127, call.clone(),),
+			frame_system::Error::<Test>::CallFiltered
+		);
+		assert_err!(
+			Scheduler::schedule_named(RuntimeOrigin::root(), [1u8; 32], 4, None, 127, call.clone(),),
+			frame_system::Error::<Test>::CallFiltered
+		);
+		assert_err!(
+			Scheduler::schedule_after(RuntimeOrigin::root(), 4, None, 127, call,),
+			frame_system::Error::<Test>::CallFiltered
+		);
+		assert_err!(
+			Scheduler::schedule_named_after(
+				RuntimeOrigin::root(),
+				[1u8; 32],
+				4,
+				None,
+				127,
+				call.clone(),
+			),
+			frame_system::Error::<Test>::CallFiltered
+		);
+	});
+}
+
+#[test]
 fn fails_to_schedule_task_in_the_past() {
 	new_test_ext().execute_with(|| {
 		run_to_block(3);

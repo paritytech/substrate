@@ -90,6 +90,16 @@ pub mod logger {
 			});
 			Ok(())
 		}
+
+		#[pallet::call_index(2)]
+		#[pallet::weight(*weight)]
+		pub fn log_not_sheduled(origin: OriginFor<T>, i: u32, weight: Weight) -> DispatchResult {
+			Self::deposit_event(Event::Logged(i, weight));
+			Log::mutate(|log| {
+				log.push((origin.caller().clone(), i));
+			});
+			Ok(())
+		}
 	}
 }
 
@@ -114,6 +124,13 @@ pub struct BaseFilter;
 impl Contains<RuntimeCall> for BaseFilter {
 	fn contains(call: &RuntimeCall) -> bool {
 		!matches!(call, RuntimeCall::Logger(LoggerCall::log { .. }))
+	}
+}
+
+pub struct CallFilter;
+impl Contains<RuntimeCall> for CallFilter {
+	fn contains(call: &RuntimeCall) -> bool {
+		!matches!(call, RuntimeCall::Logger(LoggerCall::log_not_sheduled { .. }))
 	}
 }
 
@@ -220,6 +237,7 @@ impl Config for Test {
 	type WeightInfo = TestWeightInfo;
 	type OriginPrivilegeCmp = EqualPrivilegeOnly;
 	type Preimages = Preimage;
+	type CallFilter = CallFilter;
 }
 
 pub type LoggerCall = logger::Call<Test>;

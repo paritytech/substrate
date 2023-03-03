@@ -67,8 +67,8 @@ use frame_support::{
 	ensure,
 	traits::{
 		schedule::{self, DispatchTime, MaybeHashed},
-		Bounded, CallerTrait, EnsureOrigin, Get, Hash as PreimageHash, IsType, OriginTrait,
-		PalletInfoAccess, PrivilegeCmp, QueryPreimage, StorageVersion, StorePreimage,
+		Bounded, CallerTrait, Contains, EnsureOrigin, Get, Hash as PreimageHash, IsType,
+		OriginTrait, PalletInfoAccess, PrivilegeCmp, QueryPreimage, StorageVersion, StorePreimage,
 	},
 	weights::{Weight, WeightMeter},
 };
@@ -165,7 +165,7 @@ impl<T: WeightInfo> MarginalWeightInfo for T {}
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{dispatch::PostDispatchInfo, pallet_prelude::*};
+	use frame_support::{dispatch::PostDispatchInfo, pallet_prelude::*, traits::Contains};
 	use frame_system::pallet_prelude::*;
 
 	/// The current storage version.
@@ -228,6 +228,9 @@ pub mod pallet {
 
 		/// The preimage provider with which we look up call hashes to get the call.
 		type Preimages: QueryPreimage + StorePreimage;
+
+		/// Filtering calls.
+		type CallFilter: Contains<<Self as Config>::RuntimeCall>;
 	}
 
 	#[pallet::storage]
@@ -311,6 +314,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Config>::RuntimeOrigin::from(origin);
+			Self::check_call_filter(&call)?;
 			Self::do_schedule(
 				DispatchTime::At(when),
 				maybe_periodic,
@@ -344,6 +348,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Config>::RuntimeOrigin::from(origin);
+			Self::check_call_filter(&call)?;
 			Self::do_schedule_named(
 				id,
 				DispatchTime::At(when),
@@ -377,6 +382,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Config>::RuntimeOrigin::from(origin);
+			Self::check_call_filter(&call)?;
 			Self::do_schedule(
 				DispatchTime::After(after),
 				maybe_periodic,
@@ -400,6 +406,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Config>::RuntimeOrigin::from(origin);
+			Self::check_call_filter(&call)?;
 			Self::do_schedule_named(
 				id,
 				DispatchTime::After(after),
@@ -940,6 +947,14 @@ impl<T: Config> Pallet<T> {
 		Self::cleanup_agenda(when);
 		Self::deposit_event(Event::Canceled { when, index });
 		Self::place_task(new_time, task).map_err(|x| x.0)
+	}
+
+	fn check_call_filter(call: &<T as Config>::RuntimeCall) -> DispatchResult {
+		if !<T as Config>::CallFilter::contains(call) {
+			return Err(<frame_system::Error<T>>::CallFiltered.into())
+		}
+
+		Ok(())
 	}
 }
 
