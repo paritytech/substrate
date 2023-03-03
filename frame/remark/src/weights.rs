@@ -60,9 +60,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 8_404 nanoseconds.
-		Weight::from_ref_time(343_031)
+		Weight::from_parts(343_031, 0)
 			// Standard Error: 1
-			.saturating_add(Weight::from_ref_time(1_404).saturating_mul(l.into()))
+			.saturating_add(Weight::from_parts(1_404, 0).saturating_mul(l.into()))
 	}
 }
 
@@ -74,8 +74,8 @@ impl WeightInfo for () {
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 8_404 nanoseconds.
-		Weight::from_ref_time(343_031)
+		Weight::from_parts(343_031, 0)
 			// Standard Error: 1
-			.saturating_add(Weight::from_ref_time(1_404).saturating_mul(l.into()))
+			.saturating_add(Weight::from_parts(1_404, 0).saturating_mul(l.into()))
 	}
 }

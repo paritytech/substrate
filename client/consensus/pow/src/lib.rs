@@ -331,7 +331,8 @@ where
 			.select_chain
 			.best_chain()
 			.await
-			.map_err(|e| format!("Fetch best chain failed via select chain: {}", e))?;
+			.map_err(|e| format!("Fetch best chain failed via select chain: {}", e))
+			.map_err(ConsensusError::ChainLookup)?;
 		let best_hash = best_header.hash();
 
 		let parent_hash = *block.header.parent_hash();
