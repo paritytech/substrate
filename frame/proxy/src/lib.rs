@@ -265,8 +265,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::remove_proxies(T::MaxProxies::get()))]
 		pub fn remove_proxies(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let result = Self::remove_all_proxy_delegates(&who);
-			result
+			Self::remove_all_proxy_delegates(&who)
 		}
 
 		/// Spawn a fresh new account that is guaranteed to be otherwise inaccessible, and
