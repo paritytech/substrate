@@ -21,6 +21,7 @@ scale-info = { version = "2.0.1", default-features = false, features = ["derive"
 
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
+sp-core-hashing = { version = "5.0.0", default-features = false, path = "../../primitives/core/hashing", optional = true }
 sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
 
@@ -39,7 +40,7 @@ pallet-collective = { version = "4.0.0-dev", path = "../collective" }
 [features]
 default = ["std"]
 std = [
-	"sp-core/full_crypto",
+	"sp-core-hashing?/std",
 	"pallet-collective?/std",
 	"frame-benchmarking?/std",
 	"log/std",
@@ -55,7 +56,7 @@ std = [
 ]
 runtime-benchmarks = [
 	"array-bytes",
-	"sp-core/full_crypto",
+	"sp-core-hashing",
 	"frame-benchmarking/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",

@@ -40,7 +40,7 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 }
 
 fn cid(input: impl AsRef<[u8]>) -> Cid {
-	let result = sp_core::hashing::sha2_256(input.as_ref());
+	let result = sp_core_hashing::sha2_256(input.as_ref());
 	Cid::new_v0(result)
 }
 
