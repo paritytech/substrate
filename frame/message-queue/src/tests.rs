@@ -1164,19 +1164,40 @@ fn permanently_overweight_book_unknits_multiple() {
 /// We don't want empty books in the ready ring, but if they somehow make their way in there, it
 /// should not panic.
 #[test]
-#[cfg(not(debug_assertions))]
+#[cfg(not(debug_assertions))] // Would trigger a defensive failure otherwise.
 fn ready_but_empty_does_not_panic() {
 	use MessageOrigin::*;
 
 	new_test_ext::<Test>().execute_with(|| {
-		// One empty book in the ring.
 		BookStateFor::<Test>::insert(Here, empty_book::<Test>());
 		BookStateFor::<Test>::insert(There, empty_book::<Test>());
-		BookStateFor::<Test>::insert(Everywhere(0), empty_book::<Test>());
 
+		knit(&Here);
+		knit(&There);
+		assert_ring(&[Here, There]);
+
+		assert_eq!(MessageQueue::service_queues(Weight::MAX), 0.into_weight());
+		assert_ring(&[]);
+	});
+}
+
+/// We don't want permanently books in the ready ring, but if they somehow make their way in there,
+/// it should not panic.
+#[test]
+#[cfg(not(debug_assertions))] // Would trigger a defensive failure otherwise.
+fn ready_but_perm_overweight_does_not_panic() {
+	use MessageOrigin::*;
+
+	new_test_ext::<Test>().execute_with(|| {
+		MessageQueue::enqueue_message(msg("weight=9"), Here);
+		assert_eq!(MessageQueue::service_queues(8.into_weight()), 0.into_weight());
+		assert_ring(&[]);
+		// Force it back into the ready ring.
 		knit(&Here);
 		assert_ring(&[Here]);
 		assert_eq!(MessageQueue::service_queues(Weight::MAX), 0.into_weight());
+		// Unready again.
+		assert_ring(&[]);
 	});
 }
 
