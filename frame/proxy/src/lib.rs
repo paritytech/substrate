@@ -265,7 +265,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::remove_proxies(T::MaxProxies::get()))]
 		pub fn remove_proxies(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			Self::remove_all_proxy_delegates(&who)
+			Self::remove_all_proxy_delegates(&who);
+			Ok(())
 		}
 
 		/// Spawn a fresh new account that is guaranteed to be otherwise inaccessible, and
@@ -797,9 +798,8 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::ProxyExecuted { result: e.map(|_| ()).map_err(|e| e.error) });
 	}
 
-	pub fn remove_all_proxy_delegates(who: &T::AccountId) -> DispatchResult {
+	pub fn remove_all_proxy_delegates(who: &T::AccountId) {
 		let (_, old_deposit) = Proxies::<T>::take(&who);
 		T::Currency::unreserve(&who, old_deposit);
-		Ok(())
 	}
 }
