@@ -39,6 +39,7 @@ pallet-collective = { version = "4.0.0-dev", path = "../collective" }
 [features]
 default = ["std"]
 std = [
+	"sp-core/full_crypto",
 	"pallet-collective?/std",
 	"frame-benchmarking?/std",
 	"log/std",
@@ -54,6 +55,7 @@ std = [
 ]
 runtime-benchmarks = [
 	"array-bytes",
+	"sp-core/full_crypto",
 	"frame-benchmarking/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
