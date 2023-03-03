@@ -1161,7 +1161,8 @@ fn permanently_overweight_book_unknits_multiple() {
 	});
 }
 
-/// We don't want empty books in the ready ring, but if they somehow make their way in there, it should not panic.
+/// We don't want empty books in the ready ring, but if they somehow make their way in there, it
+/// should not panic.
 #[test]
 #[cfg(not(debug_assertions))]
 fn ready_but_empty_does_not_panic() {
