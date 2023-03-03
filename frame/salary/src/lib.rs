@@ -183,7 +183,7 @@ pub mod pallet {
 			<Self::Paymaster as Pay>::Balance,
 		>;
 
-		/// The number of block within a cycle which accounts have to register their intent to
+		/// The number of blocks within a cycle which accounts have to register their intent to
 		/// claim.
 		///
 		/// The number of blocks between sequential payout cycles is the sum of this and
