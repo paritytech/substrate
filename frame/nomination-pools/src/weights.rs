@@ -432,7 +432,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(12_u64))
 			.saturating_add(T::DbWeight::get().reads((1_u64).saturating_mul(n.into())))
 			.saturating_add(T::DbWeight::get().writes(5_u64))
-			.saturating_add(Weight::from_proof_size(2520).saturating_mul(n.into()))
+			.saturating_add(Weight::from_parts(0, 2520).saturating_mul(n.into()))
 	}
 	/// Storage: NominationPools BondedPools (r:1 w:1)
 	/// Proof: NominationPools BondedPools (max_values: None, max_size: Some(220), added: 2695, mode: MaxEncodedLen)
@@ -966,7 +966,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(12_u64))
 			.saturating_add(RocksDbWeight::get().reads((1_u64).saturating_mul(n.into())))
 			.saturating_add(RocksDbWeight::get().writes(5_u64))
-			.saturating_add(Weight::from_proof_size(2520).saturating_mul(n.into()))
+			.saturating_add(Weight::from_parts(0, 2520).saturating_mul(n.into()))
 	}
 	/// Storage: NominationPools BondedPools (r:1 w:1)
 	/// Proof: NominationPools BondedPools (max_values: None, max_size: Some(220), added: 2695, mode: MaxEncodedLen)
