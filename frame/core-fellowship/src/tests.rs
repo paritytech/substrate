@@ -140,7 +140,6 @@ impl Config for Test {
 	type ParamsOrigin = EnsureSignedBy<One, u64>;
 	type ProofOrigin = TryMapSuccess<EnsureSignedBy<IsInVec<ZeroToNine>, u64>, TryMorphInto<u16>>;
 	type PromoteOrigin = TryMapSuccess<EnsureSignedBy<IsInVec<ZeroToNine>, u64>, TryMorphInto<u16>>;
-	type ApprovePeriod = ConstU64<2>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
