@@ -170,6 +170,13 @@ pub struct MemberRecord {
 	rank: Rank,
 }
 
+impl MemberRecord {
+	// Constructs a new instance of [`MemberRecord`].
+	pub fn new(rank: Rank) -> Self {
+		Self { rank }
+	}
+}
+
 /// Record needed for every vote.
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum VoteRecord {

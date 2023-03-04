@@ -16,9 +16,12 @@
 // limitations under the License.
 
 use frame_support::{
+	assert_ok,
 	dispatch::{
-		DispatchClass, DispatchInfo, GetDispatchInfo, Parameter, Pays, UnfilteredDispatchable,
+		DispatchClass, DispatchInfo, Dispatchable, GetDispatchInfo, Parameter, Pays,
+		UnfilteredDispatchable,
 	},
+	dispatch_context::with_context,
 	pallet_prelude::{StorageInfoTrait, ValueQuery},
 	storage::unhashed,
 	traits::{
@@ -102,6 +105,7 @@ pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+	use sp_runtime::DispatchResult;
 
 	type BalanceOf<T> = <T as Config>::Balance;
 
@@ -167,7 +171,7 @@ pub mod pallet {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType2); // Test for where clause
 			Self::deposit_event(Event::Something(10));
-			Weight::from_ref_time(10)
+			Weight::from_parts(10, 0)
 		}
 		fn on_finalize(_: BlockNumberFor<T>) {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
@@ -178,7 +182,7 @@ pub mod pallet {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType2); // Test for where clause
 			Self::deposit_event(Event::Something(30));
-			Weight::from_ref_time(30)
+			Weight::from_parts(30, 0)
 		}
 		fn integrity_test() {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
@@ -193,7 +197,7 @@ pub mod pallet {
 	{
 		/// Doc comment put in metadata
 		#[pallet::call_index(0)]
-		#[pallet::weight(Weight::from_ref_time(*_foo as u64))]
+		#[pallet::weight(Weight::from_parts(*_foo as u64, 0))]
 		pub fn foo(
 			origin: OriginFor<T>,
 			#[pallet::compact] _foo: u32,
@@ -226,6 +230,12 @@ pub mod pallet {
 		#[pallet::weight(1)]
 		pub fn foo_no_post_info(_origin: OriginFor<T>) -> DispatchResult {
 			Ok(())
+		}
+
+		#[pallet::call_index(3)]
+		#[pallet::weight(1)]
+		pub fn check_for_dispatch_context(_origin: OriginFor<T>) -> DispatchResult {
+			with_context::<(), _>(|_| ()).ok_or_else(|| DispatchError::Unavailable)
 		}
 	}
 
@@ -705,7 +715,7 @@ fn call_expand() {
 	assert_eq!(
 		call_foo.get_dispatch_info(),
 		DispatchInfo {
-			weight: frame_support::weights::Weight::from_ref_time(3),
+			weight: frame_support::weights::Weight::from_parts(3, 0),
 			class: DispatchClass::Normal,
 			pays_fee: Pays::Yes
 		}
@@ -713,7 +723,7 @@ fn call_expand() {
 	assert_eq!(call_foo.get_call_name(), "foo");
 	assert_eq!(
 		pallet::Call::<Runtime>::get_call_names(),
-		&["foo", "foo_storage_layer", "foo_no_post_info"],
+		&["foo", "foo_storage_layer", "foo_no_post_info", "check_for_dispatch_context"],
 	);
 }
 
@@ -1086,10 +1096,10 @@ fn pallet_hooks_expand() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), Weight::from_ref_time(10));
+		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), Weight::from_parts(10, 0));
 		AllPalletsWithoutSystem::on_finalize(1);
 
-		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), Weight::from_ref_time(30));
+		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), Weight::from_parts(30, 0));
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
@@ -1127,13 +1137,13 @@ fn all_pallets_type_reversed_order_is_correct() {
 		{
 			assert_eq!(
 				AllPalletsWithoutSystemReversed::on_initialize(1),
-				Weight::from_ref_time(10)
+				Weight::from_parts(10, 0)
 			);
 			AllPalletsWithoutSystemReversed::on_finalize(1);
 
 			assert_eq!(
 				AllPalletsWithoutSystemReversed::on_runtime_upgrade(),
-				Weight::from_ref_time(30)
+				Weight::from_parts(30, 0)
 			);
 		}
 
@@ -1209,7 +1219,7 @@ fn migrate_from_pallet_version_to_storage_version() {
 		};
 
 		// `pallet_num` pallets, 2 writes and every write costs 5 weight.
-		assert_eq!(Weight::from_ref_time(pallet_num * 2 * 5), weight);
+		assert_eq!(Weight::from_parts(pallet_num * 2 * 5, 0), weight);
 
 		// All pallet versions should be removed
 		assert!(sp_io::storage::get(&pallet_version_key(Example::name())).is_none());
@@ -1932,4 +1942,22 @@ fn test_storage_alias() {
 			pallet2::SomeCountedStorageMap::<Runtime>::storage_info()
 		);
 	})
+}
+
+#[test]
+fn test_dispatch_context() {
+	TestExternalities::default().execute_with(|| {
+		// By default there is no context
+		assert!(with_context::<(), _>(|_| ()).is_none());
+
+		// When not using `dispatch`, there should be no dispatch context
+		assert_eq!(
+			DispatchError::Unavailable,
+			Example::check_for_dispatch_context(RuntimeOrigin::root()).unwrap_err(),
+		);
+
+		// When using `dispatch`, there should be a dispatch context
+		assert_ok!(RuntimeCall::from(pallet::Call::<Runtime>::check_for_dispatch_context {})
+			.dispatch(RuntimeOrigin::root()));
+	});
 }

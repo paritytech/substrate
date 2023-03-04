@@ -82,8 +82,8 @@ pub trait Pay {
 	/// after this call. Used in benchmarking code.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn ensure_successful(who: &Self::AccountId, amount: Self::Balance);
-	/// Ensure that a call to [check_payment] with the given parameters will return either [Success]
-	/// or [Failure].
+	/// Ensure that a call to `check_payment` with the given parameters will return either `Success`
+	/// or `Failure`.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn ensure_concluded(id: Self::Id);
 }
@@ -403,7 +403,7 @@ pub mod pallet {
 		/// Update a payment's status; if it failed, alter the state so the payment can be retried.
 		///
 		/// This must be called within the same cycle as the failed payment. It will fail with
-		/// [Event::NotCurrent] otherwise.
+		/// `Event::NotCurrent` otherwise.
 		///
 		/// - `origin`: A `Signed` origin of an account which is a member of `Members` who has
 		///   received a payment this cycle.

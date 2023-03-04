@@ -107,6 +107,11 @@ pub mod pallet {
 	pub(crate) type UnboundedMap2<T: Config> =
 		StorageMap<Hasher = Blake2_256, Key = u32, Value = Vec<u32>, QueryKind = OptionQuery>;
 
+	#[pallet::storage]
+	#[pallet::unbounded]
+	pub(crate) type UnboundedMapTwox<T: Config> =
+		StorageMap<Hasher = Twox64Concat, Key = u32, Value = Vec<u32>, QueryKind = OptionQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {

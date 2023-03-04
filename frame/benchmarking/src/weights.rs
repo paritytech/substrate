@@ -65,7 +65,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 138 nanoseconds.
-		Weight::from_ref_time(199_805)
+		Weight::from_parts(199_805, 0)
 	}
 	/// The range of component `i` is `[0, 1000000]`.
 	fn subtraction(_i: u32, ) -> Weight {
@@ -73,7 +73,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 142 nanoseconds.
-		Weight::from_ref_time(201_435)
+		Weight::from_parts(201_435, 0)
 	}
 	/// The range of component `i` is `[0, 1000000]`.
 	fn multiplication(_i: u32, ) -> Weight {
@@ -81,7 +81,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 138 nanoseconds.
-		Weight::from_ref_time(207_037)
+		Weight::from_parts(207_037, 0)
 	}
 	/// The range of component `i` is `[0, 1000000]`.
 	fn division(_i: u32, ) -> Weight {
@@ -89,14 +89,14 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 151 nanoseconds.
-		Weight::from_ref_time(205_150)
+		Weight::from_parts(205_150, 0)
 	}
 	fn hashing() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 21_950_884 nanoseconds.
-		Weight::from_ref_time(21_994_001_000)
+		Weight::from_parts(21_994_001_000, 0)
 	}
 	/// The range of component `i` is `[0, 100]`.
 	fn sr25519_verification(i: u32, ) -> Weight {
@@ -104,9 +104,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 168 nanoseconds.
-		Weight::from_ref_time(1_680_898)
+		Weight::from_parts(1_680_898, 0)
 			// Standard Error: 10_291
-			.saturating_add(Weight::from_ref_time(46_867_301).saturating_mul(i.into()))
+			.saturating_add(Weight::from_parts(46_867_301, 0).saturating_mul(i.into()))
 	}
 }
 
@@ -118,7 +118,7 @@ impl WeightInfo for () {
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 138 nanoseconds.
-		Weight::from_ref_time(199_805)
+		Weight::from_parts(199_805, 0)
 	}
 	/// The range of component `i` is `[0, 1000000]`.
 	fn subtraction(_i: u32, ) -> Weight {
@@ -126,7 +126,7 @@ impl WeightInfo for () {
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 142 nanoseconds.
-		Weight::from_ref_time(201_435)
+		Weight::from_parts(201_435, 0)
 	}
 	/// The range of component `i` is `[0, 1000000]`.
 	fn multiplication(_i: u32, ) -> Weight {
@@ -134,7 +134,7 @@ impl WeightInfo for () {
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 138 nanoseconds.
-		Weight::from_ref_time(207_037)
+		Weight::from_parts(207_037, 0)
 	}
 	/// The range of component `i` is `[0, 1000000]`.
 	fn division(_i: u32, ) -> Weight {
@@ -142,14 +142,14 @@ impl WeightInfo for () {
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 151 nanoseconds.
-		Weight::from_ref_time(205_150)
+		Weight::from_parts(205_150, 0)
 	}
 	fn hashing() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 21_950_884 nanoseconds.
-		Weight::from_ref_time(21_994_001_000)
+		Weight::from_parts(21_994_001_000, 0)
 	}
 	/// The range of component `i` is `[0, 100]`.
 	fn sr25519_verification(i: u32, ) -> Weight {
@@ -157,8 +157,8 @@ impl WeightInfo for () {
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 168 nanoseconds.
-		Weight::from_ref_time(1_680_898)
+		Weight::from_parts(1_680_898, 0)
 			// Standard Error: 10_291
-			.saturating_add(Weight::from_ref_time(46_867_301).saturating_mul(i.into()))
+			.saturating_add(Weight::from_parts(46_867_301, 0).saturating_mul(i.into()))
 	}
 }
