@@ -738,7 +738,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(now: T::BlockNumber) -> Weight {
-			// First we check whether there is phase that should be forced.
+			// First we check whether there is a phase that should be forced.
 			if Self::force_phase().is_some() {
 				match Self::force_phase() {
 					Some(Phase::Signed) => {
@@ -752,6 +752,7 @@ pub mod pallet {
 							.saturating_add(T::DbWeight::get().reads_writes(1, 1))
 					},
 					Some(Phase::Emergency) => {
+						// We remove the current best solution.
 						<QueuedSolution<T>>::kill();
 						<CurrentPhase<T>>::put(Phase::Emergency);
 
@@ -1151,29 +1152,18 @@ pub mod pallet {
 		}
 
 		/// Indicates that by the end of the current session the phase will be
-		/// forced to a signed phase.
+		/// forced to the specified phase.
 		///
 		/// The dispatch origin for this call must be root.
 		#[pallet::call_index(6)]
 		#[pallet::weight((T::DbWeight::get().writes(1), DispatchClass::Operational))]
-		pub fn force_start_signed_phase(origin: OriginFor<T>) -> DispatchResult {
+		pub fn force_start_phase(
+			origin: OriginFor<T>,
+			phase: Phase<T::BlockNumber>,
+		) -> DispatchResult {
 			ensure_root(origin)?;
 
-			<ForcePhase<T>>::put(Phase::Signed);
-			Ok(())
-		}
-
-		/// Indicates that by the end of the current session the phase will be
-		/// forced to an emergency phase. That will result in the removal of the
-		/// current queued solution.
-		///
-		/// The dispatch origin for this call must be `ForceOrigin`.
-		#[pallet::call_index(7)]
-		#[pallet::weight((T::DbWeight::get().writes(2), DispatchClass::Operational))]
-		pub fn force_start_emergency_phase(origin: OriginFor<T>) -> DispatchResult {
-			T::ForceOrigin::ensure_origin(origin)?;
-
-			<ForcePhase<T>>::put(Phase::Emergency);
+			<ForcePhase<T>>::put(phase);
 			Ok(())
 		}
 	}
@@ -2132,15 +2122,18 @@ mod tests {
 			assert_eq!(MultiPhase::round(), 1);
 
 			assert_noop!(
-				MultiPhase::force_start_signed_phase(crate::mock::RuntimeOrigin::none(),),
+				MultiPhase::force_start_phase(crate::mock::RuntimeOrigin::none(), Phase::Signed),
 				DispatchError::BadOrigin
 			);
 			assert_noop!(
-				MultiPhase::force_start_signed_phase(crate::mock::RuntimeOrigin::signed(1),),
+				MultiPhase::force_start_phase(crate::mock::RuntimeOrigin::signed(1), Phase::Signed),
 				DispatchError::BadOrigin
 			);
 
-			assert_ok!(MultiPhase::force_start_signed_phase(crate::mock::RuntimeOrigin::root(),));
+			assert_ok!(MultiPhase::force_start_phase(
+				crate::mock::RuntimeOrigin::root(),
+				Phase::Signed
+			));
 			assert_eq!(MultiPhase::force_phase(), Some(Phase::Signed));
 
 			roll_to(2);
@@ -2150,7 +2143,10 @@ mod tests {
 			// Didn't proceed to following round since the previos phase was `Phase::Off`.
 			assert_eq!(MultiPhase::round(), 1);
 
-			assert_ok!(MultiPhase::force_start_signed_phase(crate::mock::RuntimeOrigin::root()));
+			assert_ok!(MultiPhase::force_start_phase(
+				crate::mock::RuntimeOrigin::root(),
+				Phase::Signed
+			));
 			assert_eq!(MultiPhase::force_phase(), Some(Phase::Signed));
 
 			roll_to(3);
@@ -2177,15 +2173,21 @@ mod tests {
 			assert_eq!(MultiPhase::round(), 1);
 
 			assert_noop!(
-				MultiPhase::force_start_emergency_phase(crate::mock::RuntimeOrigin::none()),
+				MultiPhase::force_start_phase(crate::mock::RuntimeOrigin::none(), Phase::Emergency),
 				DispatchError::BadOrigin
 			);
 			assert_noop!(
-				MultiPhase::force_start_emergency_phase(crate::mock::RuntimeOrigin::signed(1)),
+				MultiPhase::force_start_phase(
+					crate::mock::RuntimeOrigin::signed(1),
+					Phase::Emergency
+				),
 				DispatchError::BadOrigin
 			);
 
-			assert_ok!(MultiPhase::force_start_emergency_phase(crate::mock::RuntimeOrigin::root()));
+			assert_ok!(MultiPhase::force_start_phase(
+				crate::mock::RuntimeOrigin::root(),
+				Phase::Emergency
+			));
 
 			roll_to(3);
 			assert!(MultiPhase::current_phase().is_emergency());
