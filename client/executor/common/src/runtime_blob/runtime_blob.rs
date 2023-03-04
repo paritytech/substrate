@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::error::WasmError;
+use crate::{error::WasmError, wasm_runtime::HeapAllocStrategy};
 use wasm_instrument::{
 	export_mutable_globals,
 	parity_wasm::elements::{
@@ -157,18 +157,13 @@ impl RuntimeBlob {
 		Ok(())
 	}
 
-	/// Increases the number of memory pages requested by the WASM blob by
-	/// the given amount of `extra_heap_pages`.
+	/// Modifies the blob's memory section according to the given `heap_alloc_strategy`.
 	///
 	/// Will return an error in case there is no memory section present,
 	/// or if the memory section is empty.
-	///
-	/// Only modifies the initial size of the memory; the maximum is unmodified
-	/// unless it's smaller than the initial size, in which case it will be increased
-	/// so that it's at least as big as the initial size.
-	pub fn add_extra_heap_pages_to_memory_section(
+	pub fn setup_memory_according_to_heap_alloc_strategy(
 		&mut self,
-		extra_heap_pages: u32,
+		heap_alloc_strategy: HeapAllocStrategy,
 	) -> Result<(), WasmError> {
 		let memory_section = self
 			.raw_module
@@ -179,8 +174,17 @@ impl RuntimeBlob {
 			return Err(WasmError::Other("memory section is empty".into()))
 		}
 		for memory_ty in memory_section.entries_mut() {
-			let min = memory_ty.limits().initial().saturating_add(extra_heap_pages);
-			let max = memory_ty.limits().maximum().map(|max| std::cmp::max(min, max));
+			let initial = memory_ty.limits().initial();
+			let (min, max) = match heap_alloc_strategy {
+				HeapAllocStrategy::Dynamic { maximum_pages } => {
+					// Ensure `initial <= maximum_pages`
+					(maximum_pages.map(|m| m.min(initial)).unwrap_or(initial), maximum_pages)
+				},
+				HeapAllocStrategy::Static { extra_pages } => {
+					let pages = initial.saturating_add(extra_pages);
+					(pages, Some(pages))
+				},
+			};
 			*memory_ty = MemoryType::new(min, max);
 		}
 		Ok(())

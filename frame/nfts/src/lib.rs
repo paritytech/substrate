@@ -526,6 +526,20 @@ pub mod pallet {
 			price: Option<PriceWithDirection<ItemPrice<T, I>>>,
 			deadline: <T as SystemConfig>::BlockNumber,
 		},
+		/// New attributes have been set for an `item` of the `collection`.
+		PreSignedAttributesSet {
+			collection: T::CollectionId,
+			item: T::ItemId,
+			namespace: AttributeNamespace<T::AccountId>,
+		},
+		/// A new attribute in the `Pallet` namespace was set for the `collection` or an `item`
+		/// within that `collection`.
+		PalletAttributeSet {
+			collection: T::CollectionId,
+			item: Option<T::ItemId>,
+			attribute: PalletAttributes<T::CollectionId>,
+			value: BoundedVec<u8, T::ValueLimit>,
+		},
 	}
 
 	#[pallet::error]
@@ -614,6 +628,8 @@ pub mod pallet {
 		IncorrectMetadata,
 		/// Can't set more attributes per one call.
 		MaxAttributesLimitReached,
+		/// The provided namespace isn't supported in this call.
+		WrongNamespace,
 	}
 
 	#[pallet::call]
@@ -796,32 +812,39 @@ pub mod pallet {
 							let MintWitness { owner_of_item } =
 								witness_data.ok_or(Error::<T, I>::BadWitness)?;
 
-							let has_item = Account::<T, I>::contains_key((
+							let owns_item = Account::<T, I>::contains_key((
 								&caller,
 								&collection_id,
 								&owner_of_item,
 							));
-							ensure!(has_item, Error::<T, I>::BadWitness);
+							ensure!(owns_item, Error::<T, I>::BadWitness);
 
-							let attribute_key = Self::construct_attribute_key(
-								PalletAttributes::<T::CollectionId>::UsedToClaim(collection)
-									.encode(),
-							)?;
+							let pallet_attribute =
+								PalletAttributes::<T::CollectionId>::UsedToClaim(collection);
 
 							let key = (
 								&collection_id,
 								Some(owner_of_item),
 								AttributeNamespace::Pallet,
-								&attribute_key,
+								&Self::construct_attribute_key(pallet_attribute.encode())?,
 							);
 							let already_claimed = Attribute::<T, I>::contains_key(key.clone());
 							ensure!(!already_claimed, Error::<T, I>::AlreadyClaimed);
 
-							let value = Self::construct_attribute_value(vec![0])?;
+							let attribute_value = Self::construct_attribute_value(vec![])?;
 							Attribute::<T, I>::insert(
 								key,
-								(value, AttributeDeposit { account: None, amount: Zero::zero() }),
+								(
+									attribute_value.clone(),
+									AttributeDeposit { account: None, amount: Zero::zero() },
+								),
 							);
+							Self::deposit_event(Event::PalletAttributeSet {
+								collection,
+								item: Some(item),
+								attribute: pallet_attribute,
+								value: attribute_value,
+							});
 						},
 						_ => {},
 					}
@@ -1823,6 +1846,33 @@ pub mod pallet {
 			let msg = Encode::encode(&mint_data);
 			ensure!(signature.verify(&*msg, &signer), Error::<T, I>::WrongSignature);
 			Self::do_mint_pre_signed(origin, mint_data, signer)
+		}
+
+		/// Set attributes for an item by providing the pre-signed approval.
+		///
+		/// Origin must be Signed and must be an owner of the `data.item`.
+		///
+		/// - `data`: The pre-signed approval that consists of the information about the item,
+		///   attributes to update and until what block number.
+		/// - `signature`: The signature of the `data` object.
+		/// - `signer`: The `data` object's signer. Should be an owner of the collection for the
+		///   `CollectionOwner` namespace.
+		///
+		/// Emits `AttributeSet` for each provided attribute.
+		/// Emits `ItemAttributesApprovalAdded` if the approval wasn't set before.
+		/// Emits `PreSignedAttributesSet` on success.
+		#[pallet::call_index(38)]
+		#[pallet::weight(T::WeightInfo::set_attributes_pre_signed(data.attributes.len() as u32))]
+		pub fn set_attributes_pre_signed(
+			origin: OriginFor<T>,
+			data: PreSignedAttributesOf<T, I>,
+			signature: T::OffchainSignature,
+			signer: T::AccountId,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			let msg = Encode::encode(&data);
+			ensure!(signature.verify(&*msg, &signer), Error::<T, I>::WrongSignature);
+			Self::do_set_attributes_pre_signed(origin, data, signer)
 		}
 	}
 }

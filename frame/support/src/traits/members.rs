@@ -18,6 +18,8 @@
 //! Traits for dealing with the idea of membership.
 
 use impl_trait_for_tuples::impl_for_tuples;
+use sp_arithmetic::traits::AtLeast16BitUnsigned;
+use sp_runtime::DispatchResult;
 use sp_std::{marker::PhantomData, prelude::*};
 
 /// A trait for querying whether a type can be said to "contain" a value.
@@ -263,6 +265,28 @@ pub trait ContainsLengthBound {
 	fn min_len() -> usize;
 	/// Maximum number of elements contained
 	fn max_len() -> usize;
+}
+
+/// Ranked membership data structure.
+pub trait RankedMembers {
+	type AccountId;
+	type Rank: AtLeast16BitUnsigned;
+
+	/// The lowest rank possible in this membership organisation.
+	fn min_rank() -> Self::Rank;
+
+	/// Return the rank of the given ID, or `None` if they are not a member.
+	fn rank_of(who: &Self::AccountId) -> Option<Self::Rank>;
+
+	/// Add a member to the group at the `min_rank()`.
+	fn induct(who: &Self::AccountId) -> DispatchResult;
+
+	/// Promote a member to the next higher rank.
+	fn promote(who: &Self::AccountId) -> DispatchResult;
+
+	/// Demote a member to the next lower rank; demoting beyond the `min_rank` removes the
+	/// member entirely.
+	fn demote(who: &Self::AccountId) -> DispatchResult;
 }
 
 /// Trait for type that can handle the initialization of account IDs at genesis.
