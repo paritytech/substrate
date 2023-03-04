@@ -20,8 +20,8 @@
 #[cfg(feature = "std")]
 use crate::backend::AsTrieBackend;
 use crate::{
-	backend::IterArgs,
-	trie_backend_essence::{TrieBackendEssence, TrieBackendStorage},
+	backend::{IterArgs, StorageIterator},
+	trie_backend_essence::{RawIter, TrieBackendEssence, TrieBackendStorage},
 	Backend, StorageKey, StorageValue,
 };
 use codec::Codec;
@@ -172,6 +172,7 @@ where
 				self.cache,
 				self.recorder,
 			),
+			next_storage_key_cache: Default::default(),
 		}
 	}
 
@@ -180,19 +181,62 @@ where
 	pub fn build(self) -> TrieBackend<S, H, C> {
 		let _ = self.cache;
 
-		TrieBackend { essence: TrieBackendEssence::new(self.storage, self.root) }
+		TrieBackend {
+			essence: TrieBackendEssence::new(self.storage, self.root),
+			next_storage_key_cache: Default::default(),
+		}
 	}
+}
+
+/// A cached iterator.
+struct CachedIter<S, H, C>
+where
+	H: Hasher,
+{
+	last_key: sp_std::vec::Vec<u8>,
+	iter: RawIter<S, H, C>,
+}
+
+impl<S, H, C> Default for CachedIter<S, H, C>
+where
+	H: Hasher,
+{
+	fn default() -> Self {
+		Self { last_key: Default::default(), iter: Default::default() }
+	}
+}
+
+#[cfg(feature = "std")]
+type CacheCell<T> = parking_lot::Mutex<T>;
+
+#[cfg(not(feature = "std"))]
+type CacheCell<T> = core::cell::RefCell<T>;
+
+#[cfg(feature = "std")]
+fn access_cache<T, R>(cell: &CacheCell<T>, callback: impl FnOnce(&mut T) -> R) -> R {
+	callback(&mut *cell.lock())
+}
+
+#[cfg(not(feature = "std"))]
+fn access_cache<T, R>(cell: &CacheCell<T>, callback: impl FnOnce(&mut T) -> R) -> R {
+	callback(&mut *cell.borrow_mut())
 }
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher, C = LocalTrieCache<H>> {
 	pub(crate) essence: TrieBackendEssence<S, H, C>,
+	next_storage_key_cache: CacheCell<Option<CachedIter<S, H, C>>>,
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H> + Send + Sync> TrieBackend<S, H, C>
 where
 	H::Out: Codec,
 {
+	#[cfg(test)]
+	pub(crate) fn from_essence(essence: TrieBackendEssence<S, H, C>) -> Self {
+		Self { essence, next_storage_key_cache: Default::default() }
+	}
+
 	/// Get backend essence reference.
 	pub fn essence(&self) -> &TrieBackendEssence<S, H, C> {
 		&self.essence
@@ -265,7 +309,40 @@ where
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
-		self.essence.next_storage_key(key)
+		let (is_cached, mut cache) = access_cache(&self.next_storage_key_cache, Option::take)
+			.map(|cache| (cache.last_key == key, cache))
+			.unwrap_or_default();
+
+		if !is_cached {
+			cache.iter = self.raw_iter(IterArgs {
+				start_at: Some(key),
+				start_at_exclusive: true,
+				..IterArgs::default()
+			})?
+		};
+
+		let next_key = match cache.iter.next_key(self) {
+			None => return Ok(None),
+			Some(Err(error)) => return Err(error),
+			Some(Ok(next_key)) => next_key,
+		};
+
+		cache.last_key.clear();
+		cache.last_key.extend_from_slice(&next_key);
+		access_cache(&self.next_storage_key_cache, |cache_cell| cache_cell.replace(cache));
+
+		#[cfg(debug_assertions)]
+		debug_assert_eq!(
+			self.essence
+				.next_storage_key_slow(key)
+				.expect(
+					"fetching the next key through iterator didn't fail so this shouldn't either"
+				)
+				.as_ref(),
+			Some(&next_key)
+		);
+
+		Ok(Some(next_key))
 	}
 
 	fn next_child_storage_key(
@@ -357,7 +434,7 @@ pub mod tests {
 		trie_types::{TrieDBBuilder, TrieDBMutBuilderV0, TrieDBMutBuilderV1},
 		KeySpacedDBMut, PrefixedKey, PrefixedMemoryDB, Trie, TrieCache, TrieMut,
 	};
-	use std::{collections::HashSet, iter};
+	use std::iter;
 	use trie_db::NodeCodec;
 
 	const CHILD_KEY_1: &[u8] = b"sub1";
@@ -643,73 +720,6 @@ pub mod tests {
 			.collect::<Vec<_>>(),
 			vec![b"value1".to_vec(), b"value2".to_vec(),]
 		);
-
-		// Also test out the wrapper methods.
-		// TODO: Remove this once these methods are gone.
-
-		let mut list = Vec::new();
-		assert!(trie
-			.apply_to_key_values_while(
-				None,
-				None,
-				Some(b"key"),
-				|key, _| {
-					list.push(key);
-					true
-				},
-				false
-			)
-			.unwrap());
-		assert_eq!(list[0..3], vec![b"key".to_vec(), b"value1".to_vec(), b"value2".to_vec(),]);
-
-		let mut list = Vec::new();
-		trie.apply_to_keys_while(None, None, Some(b"key"), |key| {
-			list.push(key.to_vec());
-			true
-		})
-		.unwrap();
-		assert_eq!(list[0..3], vec![b"key".to_vec(), b"value1".to_vec(), b"value2".to_vec(),]);
-
-		let mut list = Vec::new();
-		trie.apply_to_keys_while(None, None, Some(b"k"), |key| {
-			list.push(key.to_vec());
-			true
-		})
-		.unwrap();
-		assert_eq!(list[0..3], vec![b"key".to_vec(), b"value1".to_vec(), b"value2".to_vec(),]);
-
-		let mut list = Vec::new();
-		trie.apply_to_keys_while(None, None, Some(b""), |key| {
-			list.push(key.to_vec());
-			true
-		})
-		.unwrap();
-		assert_eq!(
-			list[0..5],
-			vec![
-				b":child_storage:default:sub1".to_vec(),
-				b":code".to_vec(),
-				b"key".to_vec(),
-				b"value1".to_vec(),
-				b"value2".to_vec(),
-			]
-		);
-
-		let mut list = Vec::new();
-		trie.apply_to_keys_while(None, Some(b"value"), Some(b"key"), |key| {
-			list.push(key.to_vec());
-			true
-		})
-		.unwrap();
-		assert!(list.is_empty());
-
-		let mut list = Vec::new();
-		trie.apply_to_keys_while(None, Some(b"value"), Some(b"value"), |key| {
-			list.push(key.to_vec());
-			true
-		})
-		.unwrap();
-		assert_eq!(list, vec![b"value1".to_vec(), b"value2".to_vec(),]);
 	}
 
 	parameterized_test!(storage_root_is_non_default, storage_root_is_non_default_inner);
@@ -743,27 +753,6 @@ pub mod tests {
 					.storage_root(iter::empty(), state_version)
 					.0
 		);
-	}
-
-	parameterized_test!(prefix_walking_works, prefix_walking_works_inner);
-	fn prefix_walking_works_inner(
-		state_version: StateVersion,
-		cache: Option<Cache>,
-		recorder: Option<Recorder>,
-	) {
-		let trie = test_trie(state_version, cache, recorder);
-
-		let mut seen = HashSet::new();
-		trie.for_keys_with_prefix(b"value", |key| {
-			let for_first_time = seen.insert(key.to_vec());
-			assert!(for_first_time, "Seen key '{:?}' more than once", key);
-		})
-		.unwrap();
-
-		let mut expected = HashSet::new();
-		expected.insert(b"value1".to_vec());
-		expected.insert(b"value2".to_vec());
-		assert_eq!(seen, expected);
 	}
 
 	parameterized_test!(

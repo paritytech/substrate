@@ -1,0 +1,34 @@
+[package]
+name = "sc-consensus-grandpa-rpc"
+version = "0.10.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "RPC extensions for the GRANDPA finality gadget"
+repository = "https://github.com/paritytech/substrate/"
+edition = "2021"
+license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+readme = "README.md"
+homepage = "https://substrate.io"
+
+[dependencies]
+finality-grandpa = { version = "0.16.1", features = ["derive-codec"] }
+futures = "0.3.16"
+jsonrpsee = { version = "0.16.2", features = ["client-core", "server", "macros"] }
+log = "0.4.8"
+parity-scale-codec = { version = "3.2.2", features = ["derive"] }
+serde = { version = "1.0.105", features = ["derive"] }
+thiserror = "1.0"
+sc-client-api = { version = "4.0.0-dev", path = "../../../api" }
+sc-consensus-grandpa = { version = "0.10.0-dev", path = "../" }
+sc-rpc = { version = "4.0.0-dev", path = "../../../rpc" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../../../primitives/blockchain" }
+sp-core = { version = "7.0.0", path = "../../../../primitives/core" }
+sp-runtime = { version = "7.0.0", path = "../../../../primitives/runtime" }
+
+[dev-dependencies]
+sc-block-builder = { version = "0.10.0-dev", path = "../../../block-builder" }
+sc-rpc = { version = "4.0.0-dev", features = ["test-helpers"], path = "../../../rpc" }
+sp-core = { version = "7.0.0", path = "../../../../primitives/core" }
+sp-consensus-grandpa = { version = "4.0.0-dev", path = "../../../../primitives/consensus/grandpa" }
+sp-keyring = { version = "7.0.0", path = "../../../../primitives/keyring" }
+substrate-test-runtime-client = { version = "2.0.0", path = "../../../../test-utils/runtime/client" }
+tokio = { version = "1.22.0", features = ["macros"] }
