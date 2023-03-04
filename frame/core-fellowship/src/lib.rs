@@ -78,7 +78,6 @@ pub mod pallet {
 		traits::{tokens::GetSalary, EnsureOrigin},
 	};
 	use frame_system::{ensure_root, pallet_prelude::*};
-	use sp_core::Get;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -112,10 +111,6 @@ pub mod pallet {
 		/// The origin which has permission to promote a member. The `Success` value is the maximum
 		/// rank to which it can promote.
 		type PromoteOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = RankOf<Self, I>>;
-
-		/// The period before auto-demotion that a member can be (re-)approved for their rank.
-		#[pallet::constant]
-		type ApprovePeriod: Get<Self::BlockNumber>;
 	}
 
 	pub type ParamsOf<T, I> =
@@ -283,7 +278,6 @@ pub mod pallet {
 			let rank = T::Members::rank_of(&who).ok_or(Error::<T, I>::NotMember)?;
 			ensure!(rank == at_rank, Error::<T, I>::UnexpectedRank);
 
-			// Maybe consider requiring it be at least `ApprovePeriod` prior to the auto-demotion.
 			let now = frame_system::Pallet::<T>::block_number();
 			let existed = Member::<T, I>::mutate(&who, |maybe| {
 				if let Some(m) = maybe {
