@@ -70,7 +70,6 @@ pub mod pallet {
 	use sp_runtime::traits::{IdentifyAccount, Verify};
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(_);
 
 	#[cfg(feature = "runtime-benchmarks")]
