@@ -588,7 +588,7 @@ pub mod pallet {
 		/// Minimum duration of the signed phase before trying `T::Fallback` election and
 		/// potentially entering in `Phase::Emergency` in case of election error.
 		#[pallet::constant]
-		type MinSignedBlocksBeforeEmergency: Get<Perbill>;
+		type MinBlocksBeforeEmergency: Get<Perbill>;
 
 		/// The minimum amount of improvement to the solution score that defines a solution as
 		/// "better" in the Signed phase.
@@ -1375,6 +1375,7 @@ impl<T: Config> Pallet<T> {
 			to,
 			round: Self::round(),
 		});
+
 		<CurrentPhase<T>>::put(to);
 	}
 
@@ -1591,16 +1592,11 @@ impl<T: Config> Pallet<T> {
 		Self::kill_snapshot();
 	}
 
-	// Returns `true` if signed phase has been running for at least
-	// `T::MinSignedBlocksBeforeEmergency`.
+	// Returns `true` the minimum number of blocks have passed since last successful election.
 	fn minimum_blocks_signed_phase() -> bool {
-		match CurrentPhase::<T>::get() {
-			Phase::Off => false,
-			Phase::Signed =>
-				(frame_system::Pallet::<T>::block_number() - <LastElection<T>>::get()) >
-					T::MinSignedBlocksBeforeEmergency::get() * T::SignedPhase::get(),
-			_ => true,
-		}
+		(frame_system::Pallet::<T>::block_number() - <LastElection<T>>::get()) >=
+			T::MinBlocksBeforeEmergency::get() *
+				(T::SignedPhase::get() + T::UnsignedPhase::get())
 	}
 
 	fn do_elect() -> Result<BoundedSupportsOf<Self>, ElectionError<T>> {
@@ -1692,10 +1688,10 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 			},
 			Err(why) => {
 				// Enters in emergency phase only if election failed and the signed phase has been
-				// active for at least `T::MinSignedBlocksBeforeEmergency`.
+				// active for at least `T::MinBlocksBeforeEmergency`.
 				if Self::minimum_blocks_signed_phase() {
 					log!(error, "Entering emergency mode: {:?}", why);
-				    Self::phase_transition(Phase::Emergency);
+					Self::phase_transition(Phase::Emergency);
 				};
 				Err(why)
 			},
@@ -1916,12 +1912,13 @@ mod tests {
 	use crate::{
 		mock::{
 			multi_phase_events, raw_solution, roll_to, roll_to_signed, roll_to_unsigned, AccountId,
-			ExtBuilder, MockWeightInfo, MockedWeightInfo, MultiPhase, Runtime, RuntimeOrigin,
-			SignedMaxSubmissions, System, TargetIndex, Targets,
+			ExtBuilder, MinBlocksBeforeEmergency, MockWeightInfo, MockedWeightInfo, MultiPhase,
+			Runtime, RuntimeOrigin, SignedMaxSubmissions, SignedPhase, System, TargetIndex,
+			Targets, UnsignedPhase,
 		},
 		Phase,
 	};
-	use frame_support::{assert_noop, assert_ok};
+	use frame_support::{assert_err, assert_noop, assert_ok};
 	use sp_npos_elections::{BalancingConfig, Support};
 
 	#[test]
@@ -1942,7 +1939,8 @@ mod tests {
 
 			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
-			assert_eq!(multi_phase_events(),
+			assert_eq!(
+				multi_phase_events(),
 				vec![Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 }]
 			);
 			assert!(MultiPhase::snapshot().is_some());
@@ -2150,6 +2148,44 @@ mod tests {
 				]
 			);
 		});
+	}
+
+	#[test]
+	fn emergency_throttling_works() {
+		ExtBuilder::default()
+			.onchain_fallback(false)
+			.phases(10, 10)
+			.build_and_execute(|| {
+				// election successful at block 10.
+				roll_to_signed();
+				<LastElection<Runtime>>::set(10);
+
+				MultiPhase::rotate_round();
+				assert!(MultiPhase::current_phase().is_off());
+
+				// call elect while snapshot does not exist during off phase but emergency phase is
+				// throttled because not enough blocks since last election passed (phase off).
+				assert!(!MultiPhase::minimum_blocks_signed_phase());
+				assert_noop!(MultiPhase::elect(), ElectionError::NothingQueued);
+				assert!(MultiPhase::current_phase().is_off());
+
+				// same as above.
+				roll_to_signed();
+				assert!(!MultiPhase::minimum_blocks_signed_phase());
+				assert_err!(MultiPhase::elect(), ElectionError::NothingQueued);
+				assert!(MultiPhase::current_phase().is_signed());
+
+				// however, if `MinBlocksBeforeEmergency` have passed and the election fails, EPM
+				// transitions to emergency phase (provided that the election is not in phase off).
+				let min_blocks =
+					MinBlocksBeforeEmergency::get() * (SignedPhase::get() + UnsignedPhase::get());
+				roll_to_signed();
+				roll_to(System::block_number() + min_blocks);
+
+				assert!(MultiPhase::minimum_blocks_signed_phase());
+				assert_err!(MultiPhase::elect(), ElectionError::NothingQueued);
+				assert!(MultiPhase::current_phase().is_emergency());
+			})
 	}
 
 	#[test]
@@ -2569,11 +2605,14 @@ mod tests {
 			roll_to(29);
 			let err = MultiPhase::elect().unwrap_err();
 			assert_eq!(err, ElectionError::Fallback("NoFallback."));
-			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
 
 			assert_eq!(
 				multi_phase_events(),
-				vec![Event::ElectionFailed, Event::EmergencyPhaseThrottled]
+				vec![
+					Event::ElectionFailed,
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Emergency, round: 1 }
+				]
 			);
 		});
 	}

@@ -282,7 +282,7 @@ parameter_types! {
 	pub static SignedPhase: BlockNumber = 10;
 	pub static UnsignedPhase: BlockNumber = 5;
 	// We expect a successful election to take at least 25% of the signed hase blocks.
-	pub static MinSignedBlocksBeforeEmergency: Perbill = Perbill::from_percent(25);
+	pub static MinBlocksBeforeEmergency: Perbill = Perbill::from_percent(25);
 	pub static SignedMaxSubmissions: u32 = 5;
 	pub static SignedMaxRefunds: u32 = 1;
 	pub static SignedDepositBase: Balance = 5;
@@ -382,7 +382,7 @@ impl crate::Config for Runtime {
 	type EstimateCallFee = frame_support::traits::ConstU32<8>;
 	type SignedPhase = SignedPhase;
 	type UnsignedPhase = UnsignedPhase;
-	type MinSignedBlocksBeforeEmergency = MinSignedBlocksBeforeEmergency;
+	type MinBlocksBeforeEmergency = MinBlocksBeforeEmergency;
 	type BetterUnsignedThreshold = BetterUnsignedThreshold;
 	type BetterSignedThreshold = BetterSignedThreshold;
 	type OffchainRepeat = OffchainRepeat;

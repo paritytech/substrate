@@ -643,7 +643,7 @@ parameter_types! {
 	// The maximum winners that can be elected by the Election pallet which is equivalent to the
 	// maximum active validators the staking pallet can have.
 	pub MaxActiveValidators: u32 = 1000;
-	pub MinSignedBlocksBeforeEmergency: Perbill = Perbill::from_percent(25);
+	pub MinBlocksBeforeEmergency: Perbill = Perbill::from_percent(25);
 }
 
 /// The numbers configured here could always be more than the the maximum limits of staking pallet
@@ -724,7 +724,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type EstimateCallFee = TransactionPayment;
 	type SignedPhase = SignedPhase;
 	type UnsignedPhase = UnsignedPhase;
-	type MinSignedBlocksBeforeEmergency = MinSignedBlocksBeforeEmergency;
+	type MinBlocksBeforeEmergency = MinBlocksBeforeEmergency;
 	type BetterUnsignedThreshold = BetterUnsignedThreshold;
 	type BetterSignedThreshold = ();
 	type OffchainRepeat = OffchainRepeat;
