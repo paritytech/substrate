@@ -118,7 +118,6 @@ pub mod pallet {
 
 	/// The BABE Pallet
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
