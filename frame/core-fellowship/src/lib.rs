@@ -77,7 +77,7 @@ pub mod pallet {
 		pallet_prelude::*,
 		traits::{tokens::GetSalary, EnsureOrigin},
 	};
-	use frame_system::pallet_prelude::*;
+	use frame_system::{ensure_root, pallet_prelude::*};
 	use sp_core::Get;
 
 	#[pallet::pallet]
@@ -234,7 +234,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			params: ParamsOf<T, I>,
 		) -> DispatchResultWithPostInfo {
-			T::ParamsOrigin::ensure_origin(origin)?;
+			T::ParamsOrigin::try_origin(origin).map(|_| ()).or_else(|o| ensure_root(o))?;
 			Params::<T, I>::put(&params);
 			Self::deposit_event(Event::<T, I>::ParamsChanged { params });
 			Ok(Pays::No.into())
@@ -276,8 +276,10 @@ pub mod pallet {
 			who: T::AccountId,
 			at_rank: RankOf<T, I>,
 		) -> DispatchResultWithPostInfo {
-			let allow_rank = T::ProofOrigin::ensure_origin(origin)?;
-			ensure!(allow_rank >= at_rank, Error::<T, I>::NoPermission);
+			match T::PromoteOrigin::try_origin(origin) {
+				Ok(allow_rank) => ensure!(allow_rank >= at_rank, Error::<T, I>::NoPermission),
+				Err(origin) => ensure_root(origin)?,
+			}
 			let rank = T::Members::rank_of(&who).ok_or(Error::<T, I>::NotMember)?;
 			ensure!(rank == at_rank, Error::<T, I>::UnexpectedRank);
 
@@ -309,8 +311,10 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::init())]
 		#[pallet::call_index(4)]
 		pub fn induct(origin: OriginFor<T>, who: T::AccountId) -> DispatchResultWithPostInfo {
-			let allow_rank = T::PromoteOrigin::ensure_origin(origin)?;
-			ensure!(allow_rank >= 1, Error::<T, I>::NoPermission);
+			match T::PromoteOrigin::try_origin(origin) {
+				Ok(allow_rank) => ensure!(allow_rank >= 1, Error::<T, I>::NoPermission),
+				Err(origin) => ensure_root(origin)?,
+			}
 			ensure!(!Member::<T, I>::contains_key(&who), Error::<T, I>::AlreadyInducted);
 			let rank = T::Members::rank_of(&who).ok_or(Error::<T, I>::NotCandidate)?;
 			ensure!(rank.is_zero(), Error::<T, I>::UnexpectedRank);
@@ -338,9 +342,10 @@ pub mod pallet {
 			who: T::AccountId,
 			to_rank: RankOf<T, I>,
 		) -> DispatchResultWithPostInfo {
-			let allow_rank = T::PromoteOrigin::ensure_origin(origin)?;
-			ensure!(allow_rank >= to_rank, Error::<T, I>::NoPermission);
-
+			match T::PromoteOrigin::try_origin(origin) {
+				Ok(allow_rank) => ensure!(allow_rank >= to_rank, Error::<T, I>::NoPermission),
+				Err(origin) => ensure_root(origin)?,
+			}
 			let rank = T::Members::rank_of(&who).ok_or(Error::<T, I>::NotMember)?;
 			ensure!(
 				rank.checked_add(1).map_or(false, |i| i == to_rank),

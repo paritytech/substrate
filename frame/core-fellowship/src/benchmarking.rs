@@ -20,180 +20,161 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use crate::Pallet as Salary;
+use crate::Pallet as CoreFellowship;
 
 use frame_benchmarking::v2::*;
-use frame_system::{Pallet as System, RawOrigin};
-use sp_core::Get;
+use frame_system::RawOrigin;
+use sp_arithmetic::traits::Bounded;
 
 const SEED: u32 = 0;
-
-fn ensure_member_with_salary<T: Config<I>, I: 'static>(who: &T::AccountId) {
-	// induct if not a member.
-	if T::Members::rank_of(who).is_none() {
-		T::Members::induct(who).unwrap();
-	}
-	// promote until they have a salary.
-	for _ in 0..255 {
-		let r = T::Members::rank_of(who).expect("prior guard ensures `who` is a member; qed");
-		if !T::Salary::get_salary(r, &who).is_zero() {
-			break
-		}
-		T::Members::promote(who).unwrap();
-	}
-}
-
-/*
-// move to benchmark code. No need for it here.
-impl<
-	Balance: BalanceTrait,
-	BlockNumber: AtLeast32BitUnsigned + Copy,
-> Default for ParamsType<Balance, BlockNumber> {
-	fn default() -> Self {
-		Self {
-			active_salary: [100u32.into(); 9],
-			passive_salary: [10u32.into(); 9],
-			demotion_period: [100u32.into(); 9],
-			min_promotion_period: [100u32.into(); 9],
-		}
-	}
-}
-*/
 
 #[instance_benchmarks]
 mod benchmarks {
 	use super::*;
 
 	#[benchmark]
-	fn init() {
-		let caller: T::AccountId = whitelisted_caller();
+	fn set_params() {
+		let params = ParamsType {
+			active_salary: [100u32.into(); 9],
+			passive_salary: [10u32.into(); 9],
+			demotion_period: [100u32.into(); 9],
+			min_promotion_period: [100u32.into(); 9],
+		};
 
 		#[extrinsic_call]
-		_(RawOrigin::Signed(caller.clone()));
+		_(RawOrigin::Root, params.clone());
 
-		assert!(Salary::<T, I>::status().is_some());
+		assert_eq!(Params::<T, I>::get(), params);
 	}
 
 	#[benchmark]
-	fn bump() {
-		let caller: T::AccountId = whitelisted_caller();
-		Salary::<T, I>::init(RawOrigin::Signed(caller.clone()).into()).unwrap();
-		System::<T>::set_block_number(System::<T>::block_number() + Salary::<T, I>::cycle_period());
+	fn bump_offboard() {
+		let member = account("member", 0, SEED);
+		T::Members::induct(&member).unwrap();
+		T::Members::promote(&member).unwrap();
+		CoreFellowship::<T, I>::prove(RawOrigin::Root.into(), member.clone(), 1u8.into()).unwrap();
+
+		// Set it to the max value to ensure that any possible auto-demotion period has passed.
+		frame_system::Pallet::<T>::set_block_number(T::BlockNumber::max_value());
+		assert!(Member::<T, I>::contains_key(&member));
 
 		#[extrinsic_call]
-		_(RawOrigin::Signed(caller.clone()));
+		CoreFellowship::<T, I>::bump(RawOrigin::Signed(member.clone()), member.clone());
 
-		assert_eq!(Salary::<T, I>::status().unwrap().cycle_index, 1u32.into());
+		assert!(!Member::<T, I>::contains_key(&member));
+	}
+
+	#[benchmark]
+	fn bump_demote() {
+		let member = account("member", 0, SEED);
+		T::Members::induct(&member).unwrap();
+		T::Members::promote(&member).unwrap();
+		T::Members::promote(&member).unwrap();
+		CoreFellowship::<T, I>::prove(RawOrigin::Root.into(), member.clone(), 2u8.into()).unwrap();
+
+		// Set it to the max value to ensure that any possible auto-demotion period has passed.
+		frame_system::Pallet::<T>::set_block_number(T::BlockNumber::max_value());
+		assert!(Member::<T, I>::contains_key(&member));
+		assert_eq!(T::Members::rank_of(&member), Some(2));
+
+		#[extrinsic_call]
+		CoreFellowship::<T, I>::bump(RawOrigin::Signed(member.clone()), member.clone());
+
+		assert!(Member::<T, I>::contains_key(&member));
+		assert_eq!(T::Members::rank_of(&member), Some(1));
+	}
+
+	#[benchmark]
+	fn set_active() {
+		let member = account("member", 0, SEED);
+		T::Members::induct(&member).unwrap();
+		T::Members::promote(&member).unwrap();
+		CoreFellowship::<T, I>::prove(RawOrigin::Root.into(), member.clone(), 1u8.into()).unwrap();
+		assert!(Member::<T, I>::get(&member).unwrap().is_active);
+
+		#[extrinsic_call]
+		_(RawOrigin::Signed(member.clone()), false);
+
+		assert!(!Member::<T, I>::get(&member).unwrap().is_active);
 	}
 
 	#[benchmark]
 	fn induct() {
-		let caller = whitelisted_caller();
-		ensure_member_with_salary::<T, I>(&caller);
-		Salary::<T, I>::init(RawOrigin::Signed(caller.clone()).into()).unwrap();
+		let candidate = account("candidate", 0, SEED);
+		T::Members::induct(&candidate).unwrap();
+		assert_eq!(T::Members::rank_of(&candidate), Some(0));
 
 		#[extrinsic_call]
-		_(RawOrigin::Signed(caller.clone()));
+		_(RawOrigin::Root, candidate.clone());
 
-		assert!(Salary::<T, I>::last_active(&caller).is_ok());
+		assert_eq!(T::Members::rank_of(&candidate), Some(1));
 	}
 
 	#[benchmark]
-	fn register() {
-		let caller = whitelisted_caller();
-		ensure_member_with_salary::<T, I>(&caller);
-		Salary::<T, I>::init(RawOrigin::Signed(caller.clone()).into()).unwrap();
-		Salary::<T, I>::induct(RawOrigin::Signed(caller.clone()).into()).unwrap();
-		System::<T>::set_block_number(System::<T>::block_number() + Salary::<T, I>::cycle_period());
-		Salary::<T, I>::bump(RawOrigin::Signed(caller.clone()).into()).unwrap();
+	fn promote() {
+		let member = account("member", 0, SEED);
+		T::Members::induct(&member).unwrap();
+		T::Members::promote(&member).unwrap();
+		CoreFellowship::<T, I>::prove(RawOrigin::Root.into(), member.clone(), 1u8.into()).unwrap();
+		assert_eq!(T::Members::rank_of(&member), Some(1));
 
 		#[extrinsic_call]
-		_(RawOrigin::Signed(caller.clone()));
+		_(RawOrigin::Root, member.clone(), 2u8.into());
 
-		assert_eq!(Salary::<T, I>::last_active(&caller).unwrap(), 1u32.into());
+		assert_eq!(T::Members::rank_of(&member), Some(2));
 	}
 
 	#[benchmark]
-	fn payout() {
-		let caller = whitelisted_caller();
-		ensure_member_with_salary::<T, I>(&caller);
-		Salary::<T, I>::init(RawOrigin::Signed(caller.clone()).into()).unwrap();
-		Salary::<T, I>::induct(RawOrigin::Signed(caller.clone()).into()).unwrap();
-		System::<T>::set_block_number(System::<T>::block_number() + Salary::<T, I>::cycle_period());
-		Salary::<T, I>::bump(RawOrigin::Signed(caller.clone()).into()).unwrap();
-		System::<T>::set_block_number(System::<T>::block_number() + T::RegistrationPeriod::get());
+	fn offboard() {
+		let member = account("member", 0, SEED);
+		T::Members::induct(&member).unwrap();
+		T::Members::promote(&member).unwrap();
+		CoreFellowship::<T, I>::prove(RawOrigin::Root.into(), member.clone(), 1u8.into()).unwrap();
+		T::Members::demote(&member).unwrap();
 
-		let salary = T::Salary::get_salary(T::Members::rank_of(&caller).unwrap(), &caller);
-		T::Paymaster::ensure_successful(&caller, salary);
+		assert_eq!(T::Members::rank_of(&member), Some(0));
+		assert!(Member::<T, I>::contains_key(&member));
 
 		#[extrinsic_call]
-		_(RawOrigin::Signed(caller.clone()));
+		_(RawOrigin::Signed(member.clone()), member.clone());
 
-		match Claimant::<T, I>::get(&caller) {
-			Some(ClaimantStatus { last_active, status: Attempted { id, .. } }) => {
-				assert_eq!(last_active, 1u32.into());
-				assert_ne!(T::Paymaster::check_payment(id), PaymentStatus::Failure);
-			},
-			_ => panic!("No claim made"),
-		}
-		assert!(Salary::<T, I>::payout(RawOrigin::Signed(caller.clone()).into()).is_err());
+		assert!(!Member::<T, I>::contains_key(&member));
 	}
 
 	#[benchmark]
-	fn payout_other() {
-		let caller = whitelisted_caller();
-		ensure_member_with_salary::<T, I>(&caller);
-		Salary::<T, I>::init(RawOrigin::Signed(caller.clone()).into()).unwrap();
-		Salary::<T, I>::induct(RawOrigin::Signed(caller.clone()).into()).unwrap();
-		System::<T>::set_block_number(System::<T>::block_number() + Salary::<T, I>::cycle_period());
-		Salary::<T, I>::bump(RawOrigin::Signed(caller.clone()).into()).unwrap();
-		System::<T>::set_block_number(System::<T>::block_number() + T::RegistrationPeriod::get());
-
-		let salary = T::Salary::get_salary(T::Members::rank_of(&caller).unwrap(), &caller);
-		let recipient: T::AccountId = account("recipient", 0, SEED);
-		T::Paymaster::ensure_successful(&recipient, salary);
+	fn prove_new() {
+		let member = account("member", 0, SEED);
+		T::Members::induct(&member).unwrap();
+		T::Members::promote(&member).unwrap();
+		assert!(!Member::<T, I>::contains_key(&member));
 
 		#[extrinsic_call]
-		_(RawOrigin::Signed(caller.clone()), recipient.clone());
+		CoreFellowship::<T, I>::prove(RawOrigin::Root, member.clone(), 1u8.into());
 
-		match Claimant::<T, I>::get(&caller) {
-			Some(ClaimantStatus { last_active, status: Attempted { id, .. } }) => {
-				assert_eq!(last_active, 1u32.into());
-				assert_ne!(T::Paymaster::check_payment(id), PaymentStatus::Failure);
-			},
-			_ => panic!("No claim made"),
-		}
-		assert!(Salary::<T, I>::payout(RawOrigin::Signed(caller.clone()).into()).is_err());
+		assert!(Member::<T, I>::contains_key(&member));
 	}
 
 	#[benchmark]
-	fn check_payment() {
-		let caller = whitelisted_caller();
-		ensure_member_with_salary::<T, I>(&caller);
-		Salary::<T, I>::init(RawOrigin::Signed(caller.clone()).into()).unwrap();
-		Salary::<T, I>::induct(RawOrigin::Signed(caller.clone()).into()).unwrap();
-		System::<T>::set_block_number(System::<T>::block_number() + Salary::<T, I>::cycle_period());
-		Salary::<T, I>::bump(RawOrigin::Signed(caller.clone()).into()).unwrap();
-		System::<T>::set_block_number(System::<T>::block_number() + T::RegistrationPeriod::get());
+	fn prove_existing() {
+		let member = account("member", 0, SEED);
+		T::Members::induct(&member).unwrap();
+		T::Members::promote(&member).unwrap();
+		CoreFellowship::<T, I>::prove(RawOrigin::Root.into(), member.clone(), 1u8.into()).unwrap();
 
-		let salary = T::Salary::get_salary(T::Members::rank_of(&caller).unwrap(), &caller);
-		let recipient: T::AccountId = account("recipient", 0, SEED);
-		T::Paymaster::ensure_successful(&recipient, salary);
-		Salary::<T, I>::payout(RawOrigin::Signed(caller.clone()).into()).unwrap();
-		let id = match Claimant::<T, I>::get(&caller).unwrap().status {
-			Attempted { id, .. } => id,
-			_ => panic!("No claim made"),
-		};
-		T::Paymaster::ensure_concluded(id);
+		let then = frame_system::Pallet::<T>::block_number();
+		let now = then.saturating_plus_one();
+		frame_system::Pallet::<T>::set_block_number(now);
+
+		assert_eq!(Member::<T, I>::get(&member).unwrap().last_proof, then);
 
 		#[extrinsic_call]
-		_(RawOrigin::Signed(caller.clone()));
+		CoreFellowship::<T, I>::prove(RawOrigin::Root, member.clone(), 1u8.into());
 
-		assert!(!matches!(Claimant::<T, I>::get(&caller).unwrap().status, Attempted { .. }));
+		assert_eq!(Member::<T, I>::get(&member).unwrap().last_proof, now);
 	}
 
 	impl_benchmark_test_suite! {
-		Salary,
+		CoreFellowship,
 		crate::tests::new_test_ext(),
 		crate::tests::Test,
 	}
