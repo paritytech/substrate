@@ -192,7 +192,7 @@ pub mod pallet {
 		///
 		/// - `origin`: A `Signed` origin of an account.
 		/// - `who`: A member account whose state is to be updated.
-		#[pallet::weight(T::WeightInfo::init())]
+		#[pallet::weight(T::WeightInfo::bump_offboard().max(T::WeightInfo::bump_demote()))]
 		#[pallet::call_index(0)]
 		pub fn bump(origin: OriginFor<T>, who: T::AccountId) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
@@ -228,7 +228,7 @@ pub mod pallet {
 		///
 		/// - `origin`: A origin complying with `ParamsOrigin`.
 		/// - `params`: The new parameters for the pallet.
-		#[pallet::weight(T::WeightInfo::init())]
+		#[pallet::weight(T::WeightInfo::set_params())]
 		#[pallet::call_index(1)]
 		pub fn set_params(
 			origin: OriginFor<T>,
@@ -244,7 +244,7 @@ pub mod pallet {
 		///
 		/// - `origin`: A `Signed` origin of a member's account.
 		/// - `active`: `true` iff the member is active.
-		#[pallet::weight(T::WeightInfo::init())]
+		#[pallet::weight(T::WeightInfo::set_active())]
 		#[pallet::call_index(2)]
 		pub fn set_active(origin: OriginFor<T>, is_active: bool) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -269,7 +269,7 @@ pub mod pallet {
 		/// - `origin`: An origin which satisfies `ProofOrigin`.
 		/// - `who`: A member (i.e. of non-zero rank).
 		/// - `at_rank`: The rank of member.
-		#[pallet::weight(T::WeightInfo::init())]
+		#[pallet::weight(T::WeightInfo::prove_existing().max(T::WeightInfo::prove_new()))]
 		#[pallet::call_index(3)]
 		pub fn prove(
 			origin: OriginFor<T>,
@@ -308,7 +308,7 @@ pub mod pallet {
 		/// - `origin`: An origin which satisfies `PromoteOrigin` with a `Success` result of 1 or
 		///   more.
 		/// - `who`: The account ID of the candidate to be inducted and become a member.
-		#[pallet::weight(T::WeightInfo::init())]
+		#[pallet::weight(T::WeightInfo::induct())]
 		#[pallet::call_index(4)]
 		pub fn induct(origin: OriginFor<T>, who: T::AccountId) -> DispatchResultWithPostInfo {
 			match T::PromoteOrigin::try_origin(origin) {
@@ -335,7 +335,7 @@ pub mod pallet {
 		///   `to_rank` or more.
 		/// - `who`: The account ID of the member to be promoted to `to_rank`.
 		/// - `to_rank`: One more than the current rank of `who`.
-		#[pallet::weight(T::WeightInfo::init())]
+		#[pallet::weight(T::WeightInfo::promote())]
 		#[pallet::call_index(5)]
 		pub fn promote(
 			origin: OriginFor<T>,
@@ -379,7 +379,7 @@ pub mod pallet {
 		/// - `origin`: A `Signed` origin of an account.
 		/// - `who`: The ID of an account which was tracked in this pallet but which is now not a
 		///   ranked member of the collective.
-		#[pallet::weight(T::WeightInfo::init())]
+		#[pallet::weight(T::WeightInfo::offboard())]
 		#[pallet::call_index(6)]
 		pub fn offboard(origin: OriginFor<T>, who: T::AccountId) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;

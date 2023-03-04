@@ -49,36 +49,40 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_salary.
 pub trait WeightInfo {
-	fn init() -> Weight;
+	fn set_params() -> Weight;
+	fn bump_offboard() -> Weight;
+	fn bump_demote() -> Weight;
+	fn set_active() -> Weight;
+	fn induct() -> Weight;
+	fn promote() -> Weight;
+	fn offboard() -> Weight;
+	fn prove_new() -> Weight;
+	fn prove_existing()	 -> Weight;
 }
 
 /// Weights for pallet_salary using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
-	/// Storage: Salary Status (r:1 w:1)
-	/// Proof: Salary Status (max_values: Some(1), max_size: Some(56), added: 551, mode: MaxEncodedLen)
-	fn init() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `1120`
-		//  Estimated: `551`
-		// Minimum execution time: 21_058 nanoseconds.
-		Weight::from_parts(21_381_000, 551)
-			.saturating_add(T::DbWeight::get().reads(1_u64))
-			.saturating_add(T::DbWeight::get().writes(1_u64))
-	}
+	fn set_params() -> Weight { Weight::from_parts(0, 0) }
+	fn bump_offboard() -> Weight { Weight::from_parts(0, 0) }
+	fn bump_demote() -> Weight { Weight::from_parts(0, 0) }
+	fn set_active() -> Weight { Weight::from_parts(0, 0) }
+	fn induct() -> Weight { Weight::from_parts(0, 0) }
+	fn promote() -> Weight { Weight::from_parts(0, 0) }
+	fn offboard() -> Weight { Weight::from_parts(0, 0) }
+	fn prove_new() -> Weight { Weight::from_parts(0, 0) }
+	fn prove_existing()	 -> Weight { Weight::from_parts(0, 0) }
 }
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	/// Storage: Salary Status (r:1 w:1)
-	/// Proof: Salary Status (max_values: Some(1), max_size: Some(56), added: 551, mode: MaxEncodedLen)
-	fn init() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `1120`
-		//  Estimated: `551`
-		// Minimum execution time: 21_058 nanoseconds.
-		Weight::from_parts(21_381_000, 551)
-			.saturating_add(RocksDbWeight::get().reads(1_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
-	}
+	fn set_params() -> Weight { Weight::from_parts(0, 0) }
+	fn bump_offboard() -> Weight { Weight::from_parts(0, 0) }
+	fn bump_demote() -> Weight { Weight::from_parts(0, 0) }
+	fn set_active() -> Weight { Weight::from_parts(0, 0) }
+	fn induct() -> Weight { Weight::from_parts(0, 0) }
+	fn promote() -> Weight { Weight::from_parts(0, 0) }
+	fn offboard() -> Weight { Weight::from_parts(0, 0) }
+	fn prove_new() -> Weight { Weight::from_parts(0, 0) }
+	fn prove_existing()	 -> Weight { Weight::from_parts(0, 0) }
 }
