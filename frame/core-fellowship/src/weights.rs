@@ -65,13 +65,13 @@ pub trait WeightInfo {
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Storage: CoreFellowship Params (r:0 w:1)
-	/// Proof: CoreFellowship Params (max_values: Some(1), max_size: Some(360), added: 855, mode: MaxEncodedLen)
+	/// Proof: CoreFellowship Params (max_values: Some(1), max_size: Some(364), added: 859, mode: MaxEncodedLen)
 	fn set_params() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 10_826_000 picoseconds.
-		Weight::from_parts(11_146_000, 0)
+		// Minimum execution time: 10_531_000 picoseconds.
+		Weight::from_parts(11_372_000, 0)
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
 	/// Storage: CoreFellowship Member (r:1 w:1)
@@ -79,38 +79,42 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Storage: RankedCollective Members (r:1 w:1)
 	/// Proof: RankedCollective Members (max_values: None, max_size: Some(42), added: 2517, mode: MaxEncodedLen)
 	/// Storage: CoreFellowship Params (r:1 w:0)
-	/// Proof: CoreFellowship Params (max_values: Some(1), max_size: Some(360), added: 855, mode: MaxEncodedLen)
+	/// Proof: CoreFellowship Params (max_values: Some(1), max_size: Some(364), added: 859, mode: MaxEncodedLen)
 	/// Storage: RankedCollective MemberCount (r:1 w:1)
 	/// Proof: RankedCollective MemberCount (max_values: None, max_size: Some(14), added: 2489, mode: MaxEncodedLen)
 	/// Storage: RankedCollective IdToIndex (r:1 w:0)
 	/// Proof: RankedCollective IdToIndex (max_values: None, max_size: Some(54), added: 2529, mode: MaxEncodedLen)
+	/// Storage: CoreFellowship MemberEvidence (r:1 w:1)
+	/// Proof: CoreFellowship MemberEvidence (max_values: None, max_size: Some(1067), added: 3542, mode: MaxEncodedLen)
 	fn bump_offboard() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `457`
-		//  Estimated: `15864`
-		// Minimum execution time: 38_282_000 picoseconds.
-		Weight::from_parts(38_776_000, 15864)
-			.saturating_add(T::DbWeight::get().reads(5_u64))
-			.saturating_add(T::DbWeight::get().writes(3_u64))
+		//  Measured:  `1522`
+		//  Estimated: `20400`
+		// Minimum execution time: 49_578_000 picoseconds.
+		Weight::from_parts(50_469_000, 20400)
+			.saturating_add(T::DbWeight::get().reads(6_u64))
+			.saturating_add(T::DbWeight::get().writes(4_u64))
 	}
 	/// Storage: CoreFellowship Member (r:1 w:1)
 	/// Proof: CoreFellowship Member (max_values: None, max_size: Some(49), added: 2524, mode: MaxEncodedLen)
 	/// Storage: RankedCollective Members (r:1 w:1)
 	/// Proof: RankedCollective Members (max_values: None, max_size: Some(42), added: 2517, mode: MaxEncodedLen)
 	/// Storage: CoreFellowship Params (r:1 w:0)
-	/// Proof: CoreFellowship Params (max_values: Some(1), max_size: Some(360), added: 855, mode: MaxEncodedLen)
+	/// Proof: CoreFellowship Params (max_values: Some(1), max_size: Some(364), added: 859, mode: MaxEncodedLen)
 	/// Storage: RankedCollective MemberCount (r:1 w:1)
 	/// Proof: RankedCollective MemberCount (max_values: None, max_size: Some(14), added: 2489, mode: MaxEncodedLen)
 	/// Storage: RankedCollective IdToIndex (r:1 w:0)
 	/// Proof: RankedCollective IdToIndex (max_values: None, max_size: Some(54), added: 2529, mode: MaxEncodedLen)
+	/// Storage: CoreFellowship MemberEvidence (r:1 w:1)
+	/// Proof: CoreFellowship MemberEvidence (max_values: None, max_size: Some(1067), added: 3542, mode: MaxEncodedLen)
 	fn bump_demote() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `509`
-		//  Estimated: `15864`
-		// Minimum execution time: 39_384_000 picoseconds.
-		Weight::from_parts(39_788_000, 15864)
-			.saturating_add(T::DbWeight::get().reads(5_u64))
-			.saturating_add(T::DbWeight::get().writes(3_u64))
+		//  Measured:  `1632`
+		//  Estimated: `20400`
+		// Minimum execution time: 50_790_000 picoseconds.
+		Weight::from_parts(51_949_000, 20400)
+			.saturating_add(T::DbWeight::get().reads(6_u64))
+			.saturating_add(T::DbWeight::get().writes(4_u64))
 	}
 	/// Storage: RankedCollective Members (r:1 w:0)
 	/// Proof: RankedCollective Members (max_values: None, max_size: Some(42), added: 2517, mode: MaxEncodedLen)
@@ -120,8 +124,8 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `355`
 		//  Estimated: `7021`
-		// Minimum execution time: 19_412_000 picoseconds.
-		Weight::from_parts(19_687_000, 7021)
+		// Minimum execution time: 19_258_000 picoseconds.
+		Weight::from_parts(19_501_000, 7021)
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
@@ -137,10 +141,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Proof: RankedCollective IdToIndex (max_values: None, max_size: Some(54), added: 2529, mode: MaxEncodedLen)
 	fn induct() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `281`
+		//  Measured:  `113`
 		//  Estimated: `10500`
-		// Minimum execution time: 32_505_000 picoseconds.
-		Weight::from_parts(33_049_000, 10500)
+		// Minimum execution time: 28_917_000 picoseconds.
+		Weight::from_parts(29_617_000, 10500)
 			.saturating_add(T::DbWeight::get().reads(3_u64))
 			.saturating_add(T::DbWeight::get().writes(5_u64))
 	}
@@ -149,21 +153,23 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Storage: CoreFellowship Member (r:1 w:1)
 	/// Proof: CoreFellowship Member (max_values: None, max_size: Some(49), added: 2524, mode: MaxEncodedLen)
 	/// Storage: CoreFellowship Params (r:1 w:0)
-	/// Proof: CoreFellowship Params (max_values: Some(1), max_size: Some(360), added: 855, mode: MaxEncodedLen)
+	/// Proof: CoreFellowship Params (max_values: Some(1), max_size: Some(364), added: 859, mode: MaxEncodedLen)
 	/// Storage: RankedCollective MemberCount (r:1 w:1)
 	/// Proof: RankedCollective MemberCount (max_values: None, max_size: Some(14), added: 2489, mode: MaxEncodedLen)
+	/// Storage: CoreFellowship MemberEvidence (r:1 w:1)
+	/// Proof: CoreFellowship MemberEvidence (max_values: None, max_size: Some(1067), added: 3542, mode: MaxEncodedLen)
 	/// Storage: RankedCollective IndexToId (r:0 w:1)
 	/// Proof: RankedCollective IndexToId (max_values: None, max_size: Some(54), added: 2529, mode: MaxEncodedLen)
 	/// Storage: RankedCollective IdToIndex (r:0 w:1)
 	/// Proof: RankedCollective IdToIndex (max_values: None, max_size: Some(54), added: 2529, mode: MaxEncodedLen)
 	fn promote() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `377`
-		//  Estimated: `12345`
-		// Minimum execution time: 35_992_000 picoseconds.
-		Weight::from_parts(37_227_000, 12345)
-			.saturating_add(T::DbWeight::get().reads(4_u64))
-			.saturating_add(T::DbWeight::get().writes(5_u64))
+		//  Measured:  `1500`
+		//  Estimated: `16881`
+		// Minimum execution time: 46_681_000 picoseconds.
+		Weight::from_parts(47_940_000, 16881)
+			.saturating_add(T::DbWeight::get().reads(5_u64))
+			.saturating_add(T::DbWeight::get().writes(6_u64))
 	}
 	/// Storage: RankedCollective Members (r:1 w:0)
 	/// Proof: RankedCollective Members (max_values: None, max_size: Some(42), added: 2517, mode: MaxEncodedLen)
@@ -171,23 +177,21 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Proof: CoreFellowship Member (max_values: None, max_size: Some(49), added: 2524, mode: MaxEncodedLen)
 	fn offboard() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `355`
+		//  Measured:  `292`
 		//  Estimated: `7021`
-		// Minimum execution time: 18_963_000 picoseconds.
-		Weight::from_parts(19_313_000, 7021)
+		// Minimum execution time: 17_703_000 picoseconds.
+		Weight::from_parts(17_980_000, 7021)
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
-	/// Storage: RankedCollective Members (r:1 w:0)
-	/// Proof: RankedCollective Members (max_values: None, max_size: Some(42), added: 2517, mode: MaxEncodedLen)
 	/// Storage: CoreFellowship Member (r:1 w:1)
 	/// Proof: CoreFellowship Member (max_values: None, max_size: Some(49), added: 2524, mode: MaxEncodedLen)
 	fn import() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `280`
 		//  Estimated: `7021`
-		// Minimum execution time: 17_849_000 picoseconds.
-		Weight::from_parts(18_163_000, 7021)
+		// Minimum execution time: 18_578_000 picoseconds.
+		Weight::from_parts(19_109_000, 7021)
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
@@ -195,30 +199,42 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Proof: RankedCollective Members (max_values: None, max_size: Some(42), added: 2517, mode: MaxEncodedLen)
 	/// Storage: CoreFellowship Member (r:1 w:1)
 	/// Proof: CoreFellowship Member (max_values: None, max_size: Some(49), added: 2524, mode: MaxEncodedLen)
+	/// Storage: CoreFellowship MemberEvidence (r:1 w:1)
+	/// Proof: CoreFellowship MemberEvidence (max_values: None, max_size: Some(1067), added: 3542, mode: MaxEncodedLen)
 	fn approve() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `355`
-		//  Estimated: `7021`
-		// Minimum execution time: 19_178_000 picoseconds.
-		Weight::from_parts(19_509_000, 7021)
+		//  Measured:  `1478`
+		//  Estimated: `11553`
+		// Minimum execution time: 30_248_000 picoseconds.
+		Weight::from_parts(30_541_000, 11553)
+			.saturating_add(T::DbWeight::get().reads(3_u64))
+			.saturating_add(T::DbWeight::get().writes(2_u64))
+	}
+	/// Storage: CoreFellowship Member (r:1 w:0)
+	/// Proof: CoreFellowship Member (max_values: None, max_size: Some(49), added: 2524, mode: MaxEncodedLen)
+	/// Storage: CoreFellowship MemberEvidence (r:1 w:1)
+	/// Proof: CoreFellowship MemberEvidence (max_values: None, max_size: Some(1067), added: 3542, mode: MaxEncodedLen)
+	fn submit_evidence() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `79`
+		//  Estimated: `8046`
+		// Minimum execution time: 16_630_000 picoseconds.
+		Weight::from_parts(16_849_000, 8046)
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
-	}
-	fn submit_evidence() -> Weight {
-		Weight::from_parts(0, 0)
 	}
 }
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
 	/// Storage: CoreFellowship Params (r:0 w:1)
-	/// Proof: CoreFellowship Params (max_values: Some(1), max_size: Some(360), added: 855, mode: MaxEncodedLen)
+	/// Proof: CoreFellowship Params (max_values: Some(1), max_size: Some(364), added: 859, mode: MaxEncodedLen)
 	fn set_params() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 10_826_000 picoseconds.
-		Weight::from_parts(11_146_000, 0)
+		// Minimum execution time: 10_531_000 picoseconds.
+		Weight::from_parts(11_372_000, 0)
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
 	/// Storage: CoreFellowship Member (r:1 w:1)
@@ -226,38 +242,42 @@ impl WeightInfo for () {
 	/// Storage: RankedCollective Members (r:1 w:1)
 	/// Proof: RankedCollective Members (max_values: None, max_size: Some(42), added: 2517, mode: MaxEncodedLen)
 	/// Storage: CoreFellowship Params (r:1 w:0)
-	/// Proof: CoreFellowship Params (max_values: Some(1), max_size: Some(360), added: 855, mode: MaxEncodedLen)
+	/// Proof: CoreFellowship Params (max_values: Some(1), max_size: Some(364), added: 859, mode: MaxEncodedLen)
 	/// Storage: RankedCollective MemberCount (r:1 w:1)
 	/// Proof: RankedCollective MemberCount (max_values: None, max_size: Some(14), added: 2489, mode: MaxEncodedLen)
 	/// Storage: RankedCollective IdToIndex (r:1 w:0)
 	/// Proof: RankedCollective IdToIndex (max_values: None, max_size: Some(54), added: 2529, mode: MaxEncodedLen)
+	/// Storage: CoreFellowship MemberEvidence (r:1 w:1)
+	/// Proof: CoreFellowship MemberEvidence (max_values: None, max_size: Some(1067), added: 3542, mode: MaxEncodedLen)
 	fn bump_offboard() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `457`
-		//  Estimated: `15864`
-		// Minimum execution time: 38_282_000 picoseconds.
-		Weight::from_parts(38_776_000, 15864)
-			.saturating_add(RocksDbWeight::get().reads(5_u64))
-			.saturating_add(RocksDbWeight::get().writes(3_u64))
+		//  Measured:  `1522`
+		//  Estimated: `20400`
+		// Minimum execution time: 49_578_000 picoseconds.
+		Weight::from_parts(50_469_000, 20400)
+			.saturating_add(RocksDbWeight::get().reads(6_u64))
+			.saturating_add(RocksDbWeight::get().writes(4_u64))
 	}
 	/// Storage: CoreFellowship Member (r:1 w:1)
 	/// Proof: CoreFellowship Member (max_values: None, max_size: Some(49), added: 2524, mode: MaxEncodedLen)
 	/// Storage: RankedCollective Members (r:1 w:1)
 	/// Proof: RankedCollective Members (max_values: None, max_size: Some(42), added: 2517, mode: MaxEncodedLen)
 	/// Storage: CoreFellowship Params (r:1 w:0)
-	/// Proof: CoreFellowship Params (max_values: Some(1), max_size: Some(360), added: 855, mode: MaxEncodedLen)
+	/// Proof: CoreFellowship Params (max_values: Some(1), max_size: Some(364), added: 859, mode: MaxEncodedLen)
 	/// Storage: RankedCollective MemberCount (r:1 w:1)
 	/// Proof: RankedCollective MemberCount (max_values: None, max_size: Some(14), added: 2489, mode: MaxEncodedLen)
 	/// Storage: RankedCollective IdToIndex (r:1 w:0)
 	/// Proof: RankedCollective IdToIndex (max_values: None, max_size: Some(54), added: 2529, mode: MaxEncodedLen)
+	/// Storage: CoreFellowship MemberEvidence (r:1 w:1)
+	/// Proof: CoreFellowship MemberEvidence (max_values: None, max_size: Some(1067), added: 3542, mode: MaxEncodedLen)
 	fn bump_demote() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `509`
-		//  Estimated: `15864`
-		// Minimum execution time: 39_384_000 picoseconds.
-		Weight::from_parts(39_788_000, 15864)
-			.saturating_add(RocksDbWeight::get().reads(5_u64))
-			.saturating_add(RocksDbWeight::get().writes(3_u64))
+		//  Measured:  `1632`
+		//  Estimated: `20400`
+		// Minimum execution time: 50_790_000 picoseconds.
+		Weight::from_parts(51_949_000, 20400)
+			.saturating_add(RocksDbWeight::get().reads(6_u64))
+			.saturating_add(RocksDbWeight::get().writes(4_u64))
 	}
 	/// Storage: RankedCollective Members (r:1 w:0)
 	/// Proof: RankedCollective Members (max_values: None, max_size: Some(42), added: 2517, mode: MaxEncodedLen)
@@ -267,8 +287,8 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `355`
 		//  Estimated: `7021`
-		// Minimum execution time: 19_412_000 picoseconds.
-		Weight::from_parts(19_687_000, 7021)
+		// Minimum execution time: 19_258_000 picoseconds.
+		Weight::from_parts(19_501_000, 7021)
 			.saturating_add(RocksDbWeight::get().reads(2_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
@@ -284,10 +304,10 @@ impl WeightInfo for () {
 	/// Proof: RankedCollective IdToIndex (max_values: None, max_size: Some(54), added: 2529, mode: MaxEncodedLen)
 	fn induct() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `281`
+		//  Measured:  `113`
 		//  Estimated: `10500`
-		// Minimum execution time: 32_505_000 picoseconds.
-		Weight::from_parts(33_049_000, 10500)
+		// Minimum execution time: 28_917_000 picoseconds.
+		Weight::from_parts(29_617_000, 10500)
 			.saturating_add(RocksDbWeight::get().reads(3_u64))
 			.saturating_add(RocksDbWeight::get().writes(5_u64))
 	}
@@ -296,21 +316,23 @@ impl WeightInfo for () {
 	/// Storage: CoreFellowship Member (r:1 w:1)
 	/// Proof: CoreFellowship Member (max_values: None, max_size: Some(49), added: 2524, mode: MaxEncodedLen)
 	/// Storage: CoreFellowship Params (r:1 w:0)
-	/// Proof: CoreFellowship Params (max_values: Some(1), max_size: Some(360), added: 855, mode: MaxEncodedLen)
+	/// Proof: CoreFellowship Params (max_values: Some(1), max_size: Some(364), added: 859, mode: MaxEncodedLen)
 	/// Storage: RankedCollective MemberCount (r:1 w:1)
 	/// Proof: RankedCollective MemberCount (max_values: None, max_size: Some(14), added: 2489, mode: MaxEncodedLen)
+	/// Storage: CoreFellowship MemberEvidence (r:1 w:1)
+	/// Proof: CoreFellowship MemberEvidence (max_values: None, max_size: Some(1067), added: 3542, mode: MaxEncodedLen)
 	/// Storage: RankedCollective IndexToId (r:0 w:1)
 	/// Proof: RankedCollective IndexToId (max_values: None, max_size: Some(54), added: 2529, mode: MaxEncodedLen)
 	/// Storage: RankedCollective IdToIndex (r:0 w:1)
 	/// Proof: RankedCollective IdToIndex (max_values: None, max_size: Some(54), added: 2529, mode: MaxEncodedLen)
 	fn promote() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `377`
-		//  Estimated: `12345`
-		// Minimum execution time: 35_992_000 picoseconds.
-		Weight::from_parts(37_227_000, 12345)
-			.saturating_add(RocksDbWeight::get().reads(4_u64))
-			.saturating_add(RocksDbWeight::get().writes(5_u64))
+		//  Measured:  `1500`
+		//  Estimated: `16881`
+		// Minimum execution time: 46_681_000 picoseconds.
+		Weight::from_parts(47_940_000, 16881)
+			.saturating_add(RocksDbWeight::get().reads(5_u64))
+			.saturating_add(RocksDbWeight::get().writes(6_u64))
 	}
 	/// Storage: RankedCollective Members (r:1 w:0)
 	/// Proof: RankedCollective Members (max_values: None, max_size: Some(42), added: 2517, mode: MaxEncodedLen)
@@ -318,23 +340,21 @@ impl WeightInfo for () {
 	/// Proof: CoreFellowship Member (max_values: None, max_size: Some(49), added: 2524, mode: MaxEncodedLen)
 	fn offboard() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `355`
+		//  Measured:  `292`
 		//  Estimated: `7021`
-		// Minimum execution time: 18_963_000 picoseconds.
-		Weight::from_parts(19_313_000, 7021)
+		// Minimum execution time: 17_703_000 picoseconds.
+		Weight::from_parts(17_980_000, 7021)
 			.saturating_add(RocksDbWeight::get().reads(2_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
-	/// Storage: RankedCollective Members (r:1 w:0)
-	/// Proof: RankedCollective Members (max_values: None, max_size: Some(42), added: 2517, mode: MaxEncodedLen)
 	/// Storage: CoreFellowship Member (r:1 w:1)
 	/// Proof: CoreFellowship Member (max_values: None, max_size: Some(49), added: 2524, mode: MaxEncodedLen)
 	fn import() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `280`
 		//  Estimated: `7021`
-		// Minimum execution time: 17_849_000 picoseconds.
-		Weight::from_parts(18_163_000, 7021)
+		// Minimum execution time: 18_578_000 picoseconds.
+		Weight::from_parts(19_109_000, 7021)
 			.saturating_add(RocksDbWeight::get().reads(2_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
@@ -342,16 +362,28 @@ impl WeightInfo for () {
 	/// Proof: RankedCollective Members (max_values: None, max_size: Some(42), added: 2517, mode: MaxEncodedLen)
 	/// Storage: CoreFellowship Member (r:1 w:1)
 	/// Proof: CoreFellowship Member (max_values: None, max_size: Some(49), added: 2524, mode: MaxEncodedLen)
+	/// Storage: CoreFellowship MemberEvidence (r:1 w:1)
+	/// Proof: CoreFellowship MemberEvidence (max_values: None, max_size: Some(1067), added: 3542, mode: MaxEncodedLen)
 	fn approve() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `355`
-		//  Estimated: `7021`
-		// Minimum execution time: 19_178_000 picoseconds.
-		Weight::from_parts(19_509_000, 7021)
+		//  Measured:  `1478`
+		//  Estimated: `11553`
+		// Minimum execution time: 30_248_000 picoseconds.
+		Weight::from_parts(30_541_000, 11553)
+			.saturating_add(RocksDbWeight::get().reads(3_u64))
+			.saturating_add(RocksDbWeight::get().writes(2_u64))
+	}
+	/// Storage: CoreFellowship Member (r:1 w:0)
+	/// Proof: CoreFellowship Member (max_values: None, max_size: Some(49), added: 2524, mode: MaxEncodedLen)
+	/// Storage: CoreFellowship MemberEvidence (r:1 w:1)
+	/// Proof: CoreFellowship MemberEvidence (max_values: None, max_size: Some(1067), added: 3542, mode: MaxEncodedLen)
+	fn submit_evidence() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `79`
+		//  Estimated: `8046`
+		// Minimum execution time: 16_630_000 picoseconds.
+		Weight::from_parts(16_849_000, 8046)
 			.saturating_add(RocksDbWeight::get().reads(2_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
-	}
-	fn submit_evidence() -> Weight {
-		Weight::from_parts(0, 0)
 	}
 }
