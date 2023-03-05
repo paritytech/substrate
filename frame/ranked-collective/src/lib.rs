@@ -431,9 +431,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		// TODO: permissionless `submit_candidacy` which requires a deposit (but keep deposit logic
-		// in trait outside of here - don't want to have to bring in Currency).
-
 		/// Introduce a new member.
 		///
 		/// - `origin`: Must be the `AdminOrigin`.
