@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2023 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -138,7 +138,7 @@ impl Metrics {
 pub struct MajorSyncingGauge(Arc<AtomicBool>);
 
 impl MajorSyncingGauge {
-	/// Registers the `MajorSyncGauge` metric whose value is
+	/// Registers the [`MajorSyncGauge`] metric whose value is
 	/// obtained from the given `AtomicBool`.
 	fn register(registry: &Registry, value: Arc<AtomicBool>) -> Result<(), PrometheusError> {
 		prometheus_endpoint::register(
