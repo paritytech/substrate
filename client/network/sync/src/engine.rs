@@ -138,7 +138,7 @@ impl Metrics {
 pub struct MajorSyncingGauge(Arc<AtomicBool>);
 
 impl MajorSyncingGauge {
-	/// Registers the `MajorSyncGauge` metric whose value is
+	/// Registers the [`MajorSyncGauge`] metric whose value is
 	/// obtained from the given `AtomicBool`.
 	fn register(registry: &Registry, value: Arc<AtomicBool>) -> Result<(), PrometheusError> {
 		prometheus_endpoint::register(
