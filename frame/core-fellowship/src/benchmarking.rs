@@ -42,7 +42,7 @@ mod benchmarks {
 		};
 
 		#[extrinsic_call]
-		_(RawOrigin::Root, params.clone());
+		_(RawOrigin::Root, Box::new(params.clone()));
 
 		assert_eq!(Params::<T, I>::get(), params);
 	}

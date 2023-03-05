@@ -152,7 +152,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			demotion_period: [2, 4, 6, 8, 10, 12, 14, 16, 18],
 			min_promotion_period: [3, 6, 9, 12, 15, 18, 21, 24, 27],
 		};
-		assert_ok!(CoreFellowship::set_params(signed(1), params));
+		assert_ok!(CoreFellowship::set_params(signed(1), Box::new(params)));
 		System::set_block_number(1);
 	});
 	ext
@@ -200,10 +200,10 @@ fn set_params_works() {
 			min_promotion_period: [1, 2, 3, 4, 5, 10, 15, 20, 30],
 		};
 		assert_noop!(
-			CoreFellowship::set_params(signed(2), params.clone()),
+			CoreFellowship::set_params(signed(2), Box::new(params.clone())),
 			DispatchError::BadOrigin
 		);
-		assert_ok!(CoreFellowship::set_params(signed(1), params));
+		assert_ok!(CoreFellowship::set_params(signed(1), Box::new(params)));
 	});
 }
 

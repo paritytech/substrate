@@ -227,11 +227,11 @@ pub mod pallet {
 		#[pallet::call_index(1)]
 		pub fn set_params(
 			origin: OriginFor<T>,
-			params: ParamsOf<T, I>,
+			params: Box<ParamsOf<T, I>>,
 		) -> DispatchResultWithPostInfo {
 			T::ParamsOrigin::try_origin(origin).map(|_| ()).or_else(|o| ensure_root(o))?;
-			Params::<T, I>::put(&params);
-			Self::deposit_event(Event::<T, I>::ParamsChanged { params });
+			Params::<T, I>::put(params.as_ref());
+			Self::deposit_event(Event::<T, I>::ParamsChanged { params: *params });
 			Ok(Pays::No.into())
 		}
 
