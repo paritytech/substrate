@@ -267,6 +267,7 @@ impl fmt::Debug for OpaqueBlockResponse {
 	}
 }
 
+/// Provides high-level status of syncing.
 #[async_trait::async_trait]
 pub trait SyncStatusProvider<Block: BlockT>: Send + Sync {
 	/// Get high-level view of the syncing status.
