@@ -19,6 +19,16 @@
 //! and handles promotion and demotion periods.
 //!
 //! This only handles members of non-zero rank.
+//!
+//! # Process Flow
+//! - Begin with a call to `induct`, where some privileged origin (perhaps a pre-existing member of
+//!   `rank > 1`) is able to make a candidate from an account and introduce it to be tracked in this
+//!   pallet in order to allow evidence to be submitted and promotion voted on.
+//! - `submit_evidence`
+//! - `promote`
+//! - `approve`...
+//! - `promote`...
+//! - `bump`
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "128"]
@@ -26,13 +36,14 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::{Saturating, Zero};
+use sp_core::ConstU32;
 use sp_std::{marker::PhantomData, prelude::*};
 
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
-	traits::{tokens::Balance as BalanceTrait, RankedMembers},
-	RuntimeDebug,
+	traits::{tokens::Balance as BalanceTrait, EnsureOrigin, RankedMembers},
+	BoundedVec, RuntimeDebug,
 };
 
 #[cfg(test)]
@@ -45,6 +56,17 @@ pub mod weights;
 pub use pallet::*;
 pub use weights::WeightInfo;
 
+/// The "career" wish of a member.
+#[derive(Encode, Decode, Eq, PartialEq, Copy, Clone, TypeInfo, MaxEncodedLen, RuntimeDebug)]
+pub enum Wish {
+	/// Member wishes only to retain their current rank.
+	Retention,
+	/// Member wishes to be promoted.
+	Promotion,
+}
+
+pub type Evidence = BoundedVec<u8, ConstU32<1024>>;
+
 /// The status of the pallet instance.
 #[derive(Encode, Decode, Eq, PartialEq, Clone, TypeInfo, MaxEncodedLen, RuntimeDebug, Default)]
 pub struct ParamsType<Balance, BlockNumber> {
@@ -56,6 +78,8 @@ pub struct ParamsType<Balance, BlockNumber> {
 	demotion_period: [BlockNumber; 9],
 	/// The period between which members must wait before they may proceed to this rank.
 	min_promotion_period: [BlockNumber; 9],
+	/// Off-board period.
+	offboard_period: BlockNumber,
 }
 
 /// The status of a single member.
@@ -104,6 +128,13 @@ pub mod pallet {
 		/// The origin which has permission update the parameters.
 		type ParamsOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
+		/// The origin which has permission to move a candidate into being tracked in this pallet.
+		/// Generally a very low-permission, such as a pre-existing member of rank 1 or above.
+		///
+		/// This allows the candidate to deposit evidence for their request to be promoted to a
+		/// member.
+		type InductOrigin: EnsureOrigin<Self::RuntimeOrigin>;
+
 		/// The origin which has permission to issue a proof that a member may retain their rank.
 		/// The `Success` value is the maximum rank of members it is able to prove.
 		type ProofOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = RankOf<Self, I>>;
@@ -128,6 +159,10 @@ pub mod pallet {
 	pub(super) type Member<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, T::AccountId, MemberStatusOf<T>, OptionQuery>;
 
+	#[pallet::storage]
+	pub(super) type MemberEvidence<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, T::AccountId, (Wish, Evidence), OptionQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -135,7 +170,7 @@ pub mod pallet {
 		ParamsChanged { params: ParamsOf<T, I> },
 		/// Member activity flag has been set.
 		ActiveChanged { who: T::AccountId, is_active: bool },
-		/// Member has begun being tracked in this pallet (i.e. because rank is now non-zero).
+		/// Member has begun being tracked in this pallet.
 		Inducted { who: T::AccountId },
 		/// Member has been removed from being tracked in this pallet (i.e. because rank is now
 		/// zero).
@@ -146,7 +181,18 @@ pub mod pallet {
 		Demoted { who: T::AccountId, to_rank: RankOf<T, I> },
 		/// Member has been proven at their current rank, postponing auto-demotion. `new` is `true`
 		/// if this pallet did not previously track the member.
-		Proven { who: T::AccountId, at_rank: RankOf<T, I>, new: bool },
+		Proven { who: T::AccountId, at_rank: RankOf<T, I> },
+		/// Member has stated evidence of their efforts their request for rank.
+		Requested { who: T::AccountId, wish: Wish },
+		EvidenceJudged {
+			who: T::AccountId,
+			wish: Wish,
+			evidence: Evidence,
+			old_rank: u16,
+			new_rank: u16,
+		},
+		/// Pre-ranked account has been inducted at their current rank.
+		Synced { who: T::AccountId, rank: RankOf<T, I> },
 	}
 
 	#[pallet::error]
@@ -173,9 +219,11 @@ pub mod pallet {
 		/// require a candidate (rank 0) to already be tracked in the pallet.
 		AlreadyInducted,
 		/// The candidate has not been inducted, so cannot be offboarded from this pallet.
-		NotInducted,
+		NotTracked,
 		/// Operation cannot be done yet since not enough time has passed.
 		TooSoon,
+		/// A candidate cannot be off-boarded while evidence is submitted.
+		EvidenceSubmitted,
 	}
 
 	#[pallet::call]
@@ -192,18 +240,25 @@ pub mod pallet {
 		pub fn bump(origin: OriginFor<T>, who: T::AccountId) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
 			let mut member = Member::<T, I>::get(&who).ok_or(Error::<T, I>::NotProved)?;
-			let rank = T::Members::rank_of(&who).ok_or(Error::<T, I>::NotMember)?;
+			let rank = T::Members::rank_of(&who).ok_or(Error::<T, I>::Unranked)?;
 
 			let params = Params::<T, I>::get();
-			let rank_index = Self::rank_to_index(rank).ok_or(Error::<T, I>::InvalidRank)?;
-			let demotion_period = params.demotion_period[rank_index];
+			let demotion_period = if rank == 0 {
+				params.offboard_period
+			} else {
+				let rank_index = Self::rank_to_index(rank).ok_or(Error::<T, I>::InvalidRank)?;
+				params.demotion_period[rank_index]
+			};
 			let demotion_block = member.last_proof.saturating_add(demotion_period);
 
 			// Ensure enough time has passed.
 			let now = frame_system::Pallet::<T>::block_number();
 			if now >= demotion_block {
 				let to_rank = rank.clone().saturating_less_one();
-				T::Members::demote(&who)?;
+				Self::dispose_evidence(who.clone(), rank, to_rank);
+				if rank > 0 {
+					T::Members::demote(&who)?;
+				}
 				let event = if to_rank.is_zero() {
 					Member::<T, I>::remove(&who);
 					Event::<T, I>::Offboarded { who }
@@ -221,7 +276,7 @@ pub mod pallet {
 
 		/// Set the parameters.
 		///
-		/// - `origin`: A origin complying with `ParamsOrigin`.
+		/// - `origin`: A origin complying with `ParamsOrigin` or root.
 		/// - `params`: The new parameters for the pallet.
 		#[pallet::weight(T::WeightInfo::set_params())]
 		#[pallet::call_index(1)]
@@ -261,11 +316,12 @@ pub mod pallet {
 		/// If `who` is not already tracked by this pallet, then it will become tracked.
 		/// `last_promotion` will be set to zero.
 		///
-		/// - `origin`: An origin which satisfies `ProofOrigin`.
+		/// - `origin`: An origin which satisfies `ProofOrigin` or root.
 		/// - `who`: A member (i.e. of non-zero rank).
 		/// - `at_rank`: The rank of member.
 		#[pallet::weight(T::WeightInfo::prove_existing().max(T::WeightInfo::prove_new()))]
 		#[pallet::call_index(3)]
+		// TODO: Rename to approve
 		pub fn prove(
 			origin: OriginFor<T>,
 			who: T::AccountId,
@@ -275,45 +331,35 @@ pub mod pallet {
 				Ok(allow_rank) => ensure!(allow_rank >= at_rank, Error::<T, I>::NoPermission),
 				Err(origin) => ensure_root(origin)?,
 			}
-			let rank = T::Members::rank_of(&who).ok_or(Error::<T, I>::NotMember)?;
+			ensure!(at_rank > 0, Error::<T, I>::InvalidRank);
+			let rank = T::Members::rank_of(&who).ok_or(Error::<T, I>::Unranked)?;
 			ensure!(rank == at_rank, Error::<T, I>::UnexpectedRank);
+			let mut member = Member::<T, I>::get(&who).ok_or(Error::<T, I>::NotTracked)?;
 
-			let now = frame_system::Pallet::<T>::block_number();
-			let existed = Member::<T, I>::mutate(&who, |maybe| {
-				if let Some(m) = maybe {
-					m.last_proof = now;
-					true
-				} else {
-					*maybe = Some(MemberStatus {
-						is_active: true,
-						last_promotion: 0u32.into(),
-						last_proof: now,
-					});
-					false
-				}
-			});
-			Self::deposit_event(Event::<T, I>::Proven { who, at_rank, new: !existed });
+			member.last_proof = frame_system::Pallet::<T>::block_number();
+			Member::<T, I>::insert(&who, &member);
+
+			Self::dispose_evidence(who.clone(), at_rank, at_rank);
+			Self::deposit_event(Event::<T, I>::Proven { who, at_rank });
 
 			Ok(Pays::No.into())
 		}
 
-		/// Make a "promotion" from a candiate (rank zero) into a member (rank one).
+		/// Introduce a new and unranked candidate (rank zero).
 		///
-		/// - `origin`: An origin which satisfies `PromoteOrigin` with a `Success` result of 1 or
-		///   more.
+		/// - `origin`: An origin which satisfies `InductOrigin` or root.
 		/// - `who`: The account ID of the candidate to be inducted and become a member.
 		#[pallet::weight(T::WeightInfo::induct())]
 		#[pallet::call_index(4)]
 		pub fn induct(origin: OriginFor<T>, who: T::AccountId) -> DispatchResultWithPostInfo {
-			match T::PromoteOrigin::try_origin(origin) {
-				Ok(allow_rank) => ensure!(allow_rank >= 1, Error::<T, I>::NoPermission),
+			match T::InductOrigin::try_origin(origin) {
+				Ok(_) => {},
 				Err(origin) => ensure_root(origin)?,
 			}
 			ensure!(!Member::<T, I>::contains_key(&who), Error::<T, I>::AlreadyInducted);
-			let rank = T::Members::rank_of(&who).ok_or(Error::<T, I>::NotCandidate)?;
-			ensure!(rank.is_zero(), Error::<T, I>::UnexpectedRank);
+			ensure!(T::Members::rank_of(&who).is_none(), Error::<T, I>::Ranked);
 
-			T::Members::promote(&who)?;
+			T::Members::induct(&who)?;
 			let now = frame_system::Pallet::<T>::block_number();
 			Member::<T, I>::insert(
 				&who,
@@ -323,10 +369,10 @@ pub mod pallet {
 			Ok(Pays::No.into())
 		}
 
-		/// Make a promotion from a non-zero rank.
+		/// Increment the rank of a ranked and tracked account.
 		///
 		/// - `origin`: An origin which satisfies `PromoteOrigin` with a `Success` result of
-		///   `to_rank` or more.
+		///   `to_rank` or more or root.
 		/// - `who`: The account ID of the member to be promoted to `to_rank`.
 		/// - `to_rank`: One more than the current rank of `who`.
 		#[pallet::weight(T::WeightInfo::promote())]
@@ -340,13 +386,13 @@ pub mod pallet {
 				Ok(allow_rank) => ensure!(allow_rank >= to_rank, Error::<T, I>::NoPermission),
 				Err(origin) => ensure_root(origin)?,
 			}
-			let rank = T::Members::rank_of(&who).ok_or(Error::<T, I>::NotMember)?;
+			let rank = T::Members::rank_of(&who).ok_or(Error::<T, I>::Unranked)?;
 			ensure!(
 				rank.checked_add(1).map_or(false, |i| i == to_rank),
 				Error::<T, I>::UnexpectedRank
 			);
 
-			let mut member = Member::<T, I>::get(&who).ok_or(Error::<T, I>::Unranked)?;
+			let mut member = Member::<T, I>::get(&who).ok_or(Error::<T, I>::NotTracked)?;
 			let now = frame_system::Pallet::<T>::block_number();
 
 			let params = Params::<T, I>::get();
@@ -355,20 +401,21 @@ pub mod pallet {
 			// Ensure enough time has passed.
 			ensure!(
 				member.last_promotion.saturating_add(min_period) <= now,
-				Error::<T, I>::TooSoon
+				Error::<T, I>::TooSoon,
 			);
 
 			T::Members::promote(&who)?;
 			member.last_promotion = now;
 			member.last_proof = now;
 			Member::<T, I>::insert(&who, &member);
+			Self::dispose_evidence(who.clone(), rank, to_rank);
 
 			Self::deposit_event(Event::<T, I>::Promoted { who, to_rank });
 
 			Ok(Pays::No.into())
 		}
 
-		/// Stop tracking an prior member who is now not a ranked member of the collective.
+		/// Stop tracking a prior member who is now not a ranked member of the collective.
 		///
 		/// - `origin`: A `Signed` origin of an account.
 		/// - `who`: The ID of an account which was tracked in this pallet but which is now not a
@@ -377,10 +424,58 @@ pub mod pallet {
 		#[pallet::call_index(6)]
 		pub fn offboard(origin: OriginFor<T>, who: T::AccountId) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
-			ensure!(T::Members::rank_of(&who).map_or(true, |r| r.is_zero()), Error::<T, I>::Ranked);
-			ensure!(Member::<T, I>::contains_key(&who), Error::<T, I>::NotInducted);
+			ensure!(T::Members::rank_of(&who).is_none(), Error::<T, I>::Ranked);
+			ensure!(Member::<T, I>::contains_key(&who), Error::<T, I>::NotTracked);
 			Member::<T, I>::remove(&who);
 			Self::deposit_event(Event::<T, I>::Offboarded { who });
+			Ok(Pays::No.into())
+		}
+
+		/// Provide evidence for peers.
+		///
+		/// - `origin`: A `Signed` origin of an inducted and ranked account.
+		/// - `wish`: The stated desire of the member.
+		/// - `evidence`: A freeform dump of evidence to be considered.
+		#[pallet::weight(T::WeightInfo::offboard())]
+		#[pallet::call_index(7)]
+		pub fn submit_evidence(
+			origin: OriginFor<T>,
+			wish: Wish,
+			evidence: Evidence,
+		) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+			ensure!(Member::<T, I>::contains_key(&who), Error::<T, I>::NotTracked);
+			let replaced = MemberEvidence::<T, I>::contains_key(&who);
+			MemberEvidence::<T, I>::insert(&who, (wish, evidence));
+			Self::deposit_event(Event::<T, I>::Requested { who, wish });
+			Ok(if replaced { Pays::Yes } else { Pays::No }.into())
+		}
+
+		/// Introduce an already-ranked individual of the collective into this pallet. The rank may
+		/// still be zero.
+		///
+		/// This resets `last_proof` to the current block, thereby delaying any automatic demotion.
+		///
+		/// If `who` is not already tracked by this pallet, then it will become tracked.
+		/// `last_promotion` will be set to zero.
+		///
+		/// - `origin`: A signed origin of a ranked but not yet inducted account.
+		/// - `who`: A member (i.e. of non-zero rank).
+		/// - `at_rank`: The rank of member.
+		#[pallet::weight(T::WeightInfo::offboard())]
+		#[pallet::call_index(8)]
+		pub fn sync(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+			ensure!(!Member::<T, I>::contains_key(&who), Error::<T, I>::AlreadyInducted);
+			let rank = T::Members::rank_of(&who).ok_or(Error::<T, I>::Unranked)?;
+
+			let now = frame_system::Pallet::<T>::block_number();
+			Member::<T, I>::insert(
+				&who,
+				MemberStatus { is_active: true, last_promotion: 0u32.into(), last_proof: now },
+			);
+			Self::deposit_event(Event::<T, I>::Synced { who, rank });
+
 			Ok(Pays::No.into())
 		}
 	}
@@ -394,6 +489,13 @@ pub mod pallet {
 			match TryInto::<usize>::try_into(rank) {
 				Ok(r) if r <= 9 && r > 0 => Some(r - 1),
 				_ => return None,
+			}
+		}
+
+		fn dispose_evidence(who: T::AccountId, old_rank: u16, new_rank: u16) {
+			if let Some((wish, evidence)) = MemberEvidence::<T, I>::take(&who) {
+				let e = Event::<T, I>::EvidenceJudged { who, wish, evidence, old_rank, new_rank };
+				Self::deposit_event(e);
 			}
 		}
 	}
@@ -413,5 +515,36 @@ pub mod pallet {
 				if member.is_active { params.active_salary } else { params.passive_salary };
 			salary[index]
 		}
+	}
+}
+
+/// Guard to ensure that the given origin is inducted into this pallet with a given minimum rank.
+/// The account ID of the member is the `Success` value.
+pub struct EnsureInducted<T, I, const MIN_RANK: u16>(PhantomData<(T, I)>);
+impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigin>
+	for EnsureInducted<T, I, MIN_RANK>
+{
+	type Success = T::AccountId;
+
+	fn try_origin(o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
+		let who = frame_system::EnsureSigned::try_origin(o)?;
+		match T::Members::rank_of(&who) {
+			Some(rank) if rank >= MIN_RANK && Member::<T, I>::contains_key(&who) => Ok(who),
+			_ => Err(frame_system::RawOrigin::Signed(who).into()),
+		}
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn try_successful_origin() -> Result<T::RuntimeOrigin, ()> {
+		let who = frame_benchmarking::account::<T::AccountId>("successful_origin", 0, 0);
+		if T::Members::rank_of(&who).is_none() {
+			T::Members::induct(&who).map_err(|_| ())?;
+		}
+		for _ in 0..MIN_RANK {
+			if T::Members::rank_of(&who).ok_or(())? < MIN_RANK {
+				T::Members::promote(&who).map_err(|_| ())?;
+			}
+		}
+		Ok(frame_system::RawOrigin::Signed(who).into())
 	}
 }

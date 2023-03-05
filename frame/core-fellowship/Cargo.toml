@@ -6,7 +6,7 @@ edition = "2021"
 license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
-description = "Paymaster"
+description = "Logic as per the description of The Fellowship for core Polkadot technology"
 readme = "README.md"
 
 [package.metadata.docs.rs]
