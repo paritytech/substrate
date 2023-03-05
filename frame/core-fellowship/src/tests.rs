@@ -253,8 +253,8 @@ fn promote_works() {
 fn sync_works() {
 	new_test_ext().execute_with(|| {
 		set_rank(10, 5);
-		assert_noop!(CoreFellowship::prove(signed(4), 10, 5), Error::<Test>::NoPermission);
-		assert_noop!(CoreFellowship::prove(signed(6), 10, 6), Error::<Test>::UnexpectedRank);
+		assert_noop!(CoreFellowship::approve(signed(4), 10, 5), Error::<Test>::NoPermission);
+		assert_noop!(CoreFellowship::approve(signed(6), 10, 6), Error::<Test>::UnexpectedRank);
 		assert_ok!(CoreFellowship::sync(signed(10)));
 		assert!(Member::<Test>::contains_key(10));
 		assert_eq!(next_demotion(10), 11);
@@ -286,6 +286,9 @@ fn auto_demote_offboard_works() {
 		run_to(3);
 		assert_ok!(CoreFellowship::bump(signed(0), 10));
 		assert_eq!(TestClub::rank_of(&10), Some(0));
+		assert_noop!(CoreFellowship::bump(signed(0), 10), Error::<Test>::NothingDoing);
+		run_to(4);
+		assert_ok!(CoreFellowship::bump(signed(0), 10));
 		assert_noop!(CoreFellowship::bump(signed(0), 10), Error::<Test>::NotProved);
 	});
 }
@@ -314,7 +317,7 @@ fn proof_postpones_auto_demote() {
 		assert_ok!(CoreFellowship::sync(signed(10)));
 
 		run_to(11);
-		assert_ok!(CoreFellowship::prove(signed(5), 10, 5));
+		assert_ok!(CoreFellowship::approve(signed(5), 10, 5));
 		assert_eq!(next_demotion(10), 21);
 		assert_noop!(CoreFellowship::bump(signed(0), 10), Error::<Test>::NothingDoing);
 	});

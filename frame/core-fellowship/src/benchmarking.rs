@@ -42,6 +42,16 @@ mod benchmarks {
 		assert!(MemberEvidence::<T, I>::contains_key(who));
 	}
 
+	fn make_member<T: Config<I>, I: 'static>(rank: u16) -> T::AccountId {
+		let member = account("member", 0, SEED);
+		T::Members::induct(&member).unwrap();
+		for _ in 0..rank {
+			T::Members::promote(&member).unwrap();
+		}
+		CoreFellowship::<T, I>::sync(RawOrigin::Signed(member.clone()).into()).unwrap();
+		member
+	}
+
 	#[benchmark]
 	fn set_params() {
 		let params = ParamsType {
@@ -60,10 +70,7 @@ mod benchmarks {
 
 	#[benchmark]
 	fn bump_offboard() {
-		let member = account("member", 0, SEED);
-		T::Members::induct(&member).unwrap();
-		T::Members::promote(&member).unwrap();
-		CoreFellowship::<T, I>::prove(RawOrigin::Root.into(), member.clone(), 1u8.into()).unwrap();
+		let member = make_member::<T, I>(0);
 
 		// Set it to the max value to ensure that any possible auto-demotion period has passed.
 		frame_system::Pallet::<T>::set_block_number(T::BlockNumber::max_value());
@@ -79,11 +86,7 @@ mod benchmarks {
 
 	#[benchmark]
 	fn bump_demote() {
-		let member = account("member", 0, SEED);
-		T::Members::induct(&member).unwrap();
-		T::Members::promote(&member).unwrap();
-		T::Members::promote(&member).unwrap();
-		CoreFellowship::<T, I>::prove(RawOrigin::Root.into(), member.clone(), 2u8.into()).unwrap();
+		let member = make_member::<T, I>(2);
 
 		// Set it to the max value to ensure that any possible auto-demotion period has passed.
 		frame_system::Pallet::<T>::set_block_number(T::BlockNumber::max_value());
@@ -101,10 +104,7 @@ mod benchmarks {
 
 	#[benchmark]
 	fn set_active() {
-		let member = account("member", 0, SEED);
-		T::Members::induct(&member).unwrap();
-		T::Members::promote(&member).unwrap();
-		CoreFellowship::<T, I>::prove(RawOrigin::Root.into(), member.clone(), 1u8.into()).unwrap();
+		let member = make_member::<T, I>(1);
 		assert!(Member::<T, I>::get(&member).unwrap().is_active);
 
 		#[extrinsic_call]
@@ -115,25 +115,18 @@ mod benchmarks {
 
 	#[benchmark]
 	fn induct() {
-		let candidate = account("candidate", 0, SEED);
-		T::Members::induct(&candidate).unwrap();
-		assert_eq!(T::Members::rank_of(&candidate), Some(0));
-		ensure_evidence::<T, I>(&candidate);
+		let candidate: T::AccountId = account("candidate", 0, SEED);
 
 		#[extrinsic_call]
 		_(RawOrigin::Root, candidate.clone());
 
-		assert_eq!(T::Members::rank_of(&candidate), Some(1));
-		assert!(!MemberEvidence::<T, I>::contains_key(&candidate));
+		assert_eq!(T::Members::rank_of(&candidate), Some(0));
+		assert!(Member::<T, I>::contains_key(&candidate));
 	}
 
 	#[benchmark]
 	fn promote() {
-		let member = account("member", 0, SEED);
-		T::Members::induct(&member).unwrap();
-		T::Members::promote(&member).unwrap();
-		CoreFellowship::<T, I>::prove(RawOrigin::Root.into(), member.clone(), 1u8.into()).unwrap();
-		assert_eq!(T::Members::rank_of(&member), Some(1));
+		let member = make_member::<T, I>(1);
 		ensure_evidence::<T, I>(&member);
 
 		#[extrinsic_call]
@@ -145,13 +138,10 @@ mod benchmarks {
 
 	#[benchmark]
 	fn offboard() {
-		let member = account("member", 0, SEED);
-		T::Members::induct(&member).unwrap();
-		T::Members::promote(&member).unwrap();
-		CoreFellowship::<T, I>::prove(RawOrigin::Root.into(), member.clone(), 1u8.into()).unwrap();
+		let member = make_member::<T, I>(0);
 		T::Members::demote(&member).unwrap();
 
-		assert_eq!(T::Members::rank_of(&member), Some(0));
+		assert!(T::Members::rank_of(&member).is_none());
 		assert!(Member::<T, I>::contains_key(&member));
 
 		#[extrinsic_call]
@@ -161,7 +151,7 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn prove_new() {
+	fn sync() {
 		let member = account("member", 0, SEED);
 		T::Members::induct(&member).unwrap();
 		T::Members::promote(&member).unwrap();
@@ -169,17 +159,14 @@ mod benchmarks {
 		assert!(!Member::<T, I>::contains_key(&member));
 
 		#[extrinsic_call]
-		CoreFellowship::<T, I>::prove(RawOrigin::Root, member.clone(), 1u8.into());
+		_(RawOrigin::Signed(member.clone()));
 
 		assert!(Member::<T, I>::contains_key(&member));
 	}
 
 	#[benchmark]
-	fn prove_existing() {
-		let member = account("member", 0, SEED);
-		T::Members::induct(&member).unwrap();
-		T::Members::promote(&member).unwrap();
-		CoreFellowship::<T, I>::prove(RawOrigin::Root.into(), member.clone(), 1u8.into()).unwrap();
+	fn approve() {
+		let member = make_member::<T, I>(1);
 
 		let then = frame_system::Pallet::<T>::block_number();
 		let now = then.saturating_plus_one();
@@ -190,7 +177,7 @@ mod benchmarks {
 		assert_eq!(Member::<T, I>::get(&member).unwrap().last_proof, then);
 
 		#[extrinsic_call]
-		CoreFellowship::<T, I>::prove(RawOrigin::Root, member.clone(), 1u8.into());
+		_(RawOrigin::Root, member.clone(), 1u8.into());
 
 		assert_eq!(Member::<T, I>::get(&member).unwrap().last_proof, now);
 		assert!(!MemberEvidence::<T, I>::contains_key(&member));
@@ -198,10 +185,7 @@ mod benchmarks {
 
 	#[benchmark]
 	fn submit_evidence() {
-		let member = account("member", 0, SEED);
-		T::Members::induct(&member).unwrap();
-		T::Members::promote(&member).unwrap();
-		CoreFellowship::<T, I>::prove(RawOrigin::Root.into(), member.clone(), 1u8.into()).unwrap();
+		let member = make_member::<T, I>(1);
 		let evidence = vec![0; Evidence::bound()].try_into().unwrap();
 
 		assert!(!MemberEvidence::<T, I>::contains_key(&member));

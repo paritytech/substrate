@@ -188,8 +188,10 @@ pub mod pallet {
 			who: T::AccountId,
 			wish: Wish,
 			evidence: Evidence,
+			/// The old rank, prior to this change.
 			old_rank: u16,
-			new_rank: u16,
+			/// New rank. If `None` then candidate record was removed entirely.
+			new_rank: Option<u16>,
 		},
 		/// Pre-ranked account has been inducted at their current rank.
 		Synced { who: T::AccountId, rank: RankOf<T, I> },
@@ -254,18 +256,16 @@ pub mod pallet {
 			// Ensure enough time has passed.
 			let now = frame_system::Pallet::<T>::block_number();
 			if now >= demotion_block {
-				let to_rank = rank.clone().saturating_less_one();
-				Self::dispose_evidence(who.clone(), rank, to_rank);
-				if rank > 0 {
-					T::Members::demote(&who)?;
-				}
-				let event = if to_rank.is_zero() {
-					Member::<T, I>::remove(&who);
-					Event::<T, I>::Offboarded { who }
-				} else {
+				T::Members::demote(&who)?;
+				let maybe_to_rank = T::Members::rank_of(&who);
+				Self::dispose_evidence(who.clone(), rank, maybe_to_rank);
+				let event = if let Some(to_rank) = maybe_to_rank {
 					member.last_proof = now;
 					Member::<T, I>::insert(&who, &member);
 					Event::<T, I>::Demoted { who, to_rank }
+				} else {
+					Member::<T, I>::remove(&who);
+					Event::<T, I>::Offboarded { who }
 				};
 				Self::deposit_event(event);
 				return Ok(Pays::No.into())
@@ -319,10 +319,9 @@ pub mod pallet {
 		/// - `origin`: An origin which satisfies `ProofOrigin` or root.
 		/// - `who`: A member (i.e. of non-zero rank).
 		/// - `at_rank`: The rank of member.
-		#[pallet::weight(T::WeightInfo::prove_existing().max(T::WeightInfo::prove_new()))]
+		#[pallet::weight(T::WeightInfo::approve())]
 		#[pallet::call_index(3)]
-		// TODO: Rename to approve
-		pub fn prove(
+		pub fn approve(
 			origin: OriginFor<T>,
 			who: T::AccountId,
 			at_rank: RankOf<T, I>,
@@ -339,7 +338,7 @@ pub mod pallet {
 			member.last_proof = frame_system::Pallet::<T>::block_number();
 			Member::<T, I>::insert(&who, &member);
 
-			Self::dispose_evidence(who.clone(), at_rank, at_rank);
+			Self::dispose_evidence(who.clone(), at_rank, Some(at_rank));
 			Self::deposit_event(Event::<T, I>::Proven { who, at_rank });
 
 			Ok(Pays::No.into())
@@ -408,7 +407,7 @@ pub mod pallet {
 			member.last_promotion = now;
 			member.last_proof = now;
 			Member::<T, I>::insert(&who, &member);
-			Self::dispose_evidence(who.clone(), rank, to_rank);
+			Self::dispose_evidence(who.clone(), rank, Some(to_rank));
 
 			Self::deposit_event(Event::<T, I>::Promoted { who, to_rank });
 
@@ -436,7 +435,7 @@ pub mod pallet {
 		/// - `origin`: A `Signed` origin of an inducted and ranked account.
 		/// - `wish`: The stated desire of the member.
 		/// - `evidence`: A freeform dump of evidence to be considered.
-		#[pallet::weight(T::WeightInfo::offboard())]
+		#[pallet::weight(T::WeightInfo::submit_evidence())]
 		#[pallet::call_index(7)]
 		pub fn submit_evidence(
 			origin: OriginFor<T>,
@@ -462,7 +461,7 @@ pub mod pallet {
 		/// - `origin`: A signed origin of a ranked but not yet inducted account.
 		/// - `who`: A member (i.e. of non-zero rank).
 		/// - `at_rank`: The rank of member.
-		#[pallet::weight(T::WeightInfo::offboard())]
+		#[pallet::weight(T::WeightInfo::sync())]
 		#[pallet::call_index(8)]
 		pub fn sync(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
@@ -492,7 +491,7 @@ pub mod pallet {
 			}
 		}
 
-		fn dispose_evidence(who: T::AccountId, old_rank: u16, new_rank: u16) {
+		fn dispose_evidence(who: T::AccountId, old_rank: u16, new_rank: Option<u16>) {
 			if let Some((wish, evidence)) = MemberEvidence::<T, I>::take(&who) {
 				let e = Event::<T, I>::EvidenceJudged { who, wish, evidence, old_rank, new_rank };
 				Self::deposit_event(e);

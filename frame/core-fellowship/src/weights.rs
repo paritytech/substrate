@@ -56,8 +56,9 @@ pub trait WeightInfo {
 	fn induct() -> Weight;
 	fn promote() -> Weight;
 	fn offboard() -> Weight;
-	fn prove_new() -> Weight;
-	fn prove_existing() -> Weight;
+	fn sync() -> Weight;
+	fn approve() -> Weight;
+	fn submit_evidence() -> Weight;
 }
 
 /// Weights for pallet_core_fellowship using the Substrate node and recommended hardware.
@@ -181,7 +182,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Proof: RankedCollective Members (max_values: None, max_size: Some(42), added: 2517, mode: MaxEncodedLen)
 	/// Storage: CoreFellowship Member (r:1 w:1)
 	/// Proof: CoreFellowship Member (max_values: None, max_size: Some(49), added: 2524, mode: MaxEncodedLen)
-	fn prove_new() -> Weight {
+	fn sync() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `280`
 		//  Estimated: `7021`
@@ -194,7 +195,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Proof: RankedCollective Members (max_values: None, max_size: Some(42), added: 2517, mode: MaxEncodedLen)
 	/// Storage: CoreFellowship Member (r:1 w:1)
 	/// Proof: CoreFellowship Member (max_values: None, max_size: Some(49), added: 2524, mode: MaxEncodedLen)
-	fn prove_existing() -> Weight {
+	fn approve() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `355`
 		//  Estimated: `7021`
@@ -202,6 +203,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		Weight::from_parts(19_509_000, 7021)
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
+	}
+	fn submit_evidence() -> Weight {
+		Weight::from_parts(0, 0)
 	}
 }
 
@@ -325,7 +329,7 @@ impl WeightInfo for () {
 	/// Proof: RankedCollective Members (max_values: None, max_size: Some(42), added: 2517, mode: MaxEncodedLen)
 	/// Storage: CoreFellowship Member (r:1 w:1)
 	/// Proof: CoreFellowship Member (max_values: None, max_size: Some(49), added: 2524, mode: MaxEncodedLen)
-	fn prove_new() -> Weight {
+	fn sync() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `280`
 		//  Estimated: `7021`
@@ -338,7 +342,7 @@ impl WeightInfo for () {
 	/// Proof: RankedCollective Members (max_values: None, max_size: Some(42), added: 2517, mode: MaxEncodedLen)
 	/// Storage: CoreFellowship Member (r:1 w:1)
 	/// Proof: CoreFellowship Member (max_values: None, max_size: Some(49), added: 2524, mode: MaxEncodedLen)
-	fn prove_existing() -> Weight {
+	fn approve() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `355`
 		//  Estimated: `7021`
@@ -346,5 +350,8 @@ impl WeightInfo for () {
 		Weight::from_parts(19_509_000, 7021)
 			.saturating_add(RocksDbWeight::get().reads(2_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
+	}
+	fn submit_evidence() -> Weight {
+		Weight::from_parts(0, 0)
 	}
 }
