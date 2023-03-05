@@ -54,7 +54,7 @@ use frame_support::{
 	codec::{Decode, Encode, MaxEncodedLen},
 	dispatch::{DispatchError, DispatchResultWithPostInfo, PostDispatchInfo},
 	ensure,
-	traits::{EnsureOrigin, PollStatus, Polling, VoteTally},
+	traits::{EnsureOrigin, PollStatus, Polling, RankedMembers, VoteTally},
 	CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 
@@ -472,24 +472,7 @@ pub mod pallet {
 		pub fn demote_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			let max_rank = T::DemoteOrigin::ensure_origin(origin)?;
 			let who = T::Lookup::lookup(who)?;
-			let mut record = Self::ensure_member(&who)?;
-			let rank = record.rank;
-			ensure!(max_rank >= rank, Error::<T, I>::NoPermission);
-
-			Self::remove_from_rank(&who, rank)?;
-			let maybe_rank = rank.checked_sub(1);
-			match maybe_rank {
-				None => {
-					Members::<T, I>::remove(&who);
-					Self::deposit_event(Event::MemberRemoved { who, rank: 0 });
-				},
-				Some(rank) => {
-					record.rank = rank;
-					Members::<T, I>::insert(&who, &record);
-					Self::deposit_event(Event::RankChanged { who, rank });
-				},
-			}
-			Ok(())
+			Self::do_demote_member(who, Some(max_rank))
 		}
 
 		/// Remove the member entirely.
@@ -659,7 +642,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Promotes a member in the ranked collective into the next role.
+		/// Promotes a member in the ranked collective into the next higher rank.
 		///
 		/// A `maybe_max_rank` may be provided to check that the member does not get promoted beyond
 		/// a certain rank. Is `None` is provided, then the rank will be incremented without checks.
@@ -681,6 +664,33 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Demotes a member in the ranked collective into the next lower rank.
+		///
+		/// A `maybe_max_rank` may be provided to check that the member does not get demoted from
+		/// a certain rank. Is `None` is provided, then the rank will be decremented without checks.
+		fn do_demote_member(who: T::AccountId, maybe_max_rank: Option<Rank>) -> DispatchResult {
+			let mut record = Self::ensure_member(&who)?;
+			let rank = record.rank;
+			if let Some(max_rank) = maybe_max_rank {
+				ensure!(max_rank >= rank, Error::<T, I>::NoPermission);
+			}
+
+			Self::remove_from_rank(&who, rank)?;
+			let maybe_rank = rank.checked_sub(1);
+			match maybe_rank {
+				None => {
+					Members::<T, I>::remove(&who);
+					Self::deposit_event(Event::MemberRemoved { who, rank: 0 });
+				},
+				Some(rank) => {
+					record.rank = rank;
+					Members::<T, I>::insert(&who, &record);
+					Self::deposit_event(Event::RankChanged { who, rank });
+				},
+			}
+			Ok(())
+		}
+
 		/// Add a member to the rank collective, and continue to promote them until a certain rank
 		/// is reached.
 		pub fn do_add_member_to_rank(who: T::AccountId, rank: Rank) -> DispatchResult {
@@ -689,6 +699,31 @@ pub mod pallet {
 				Self::do_promote_member(who.clone(), None)?;
 			}
 			Ok(())
+		}
+	}
+
+	impl<T: Config<I>, I: 'static> RankedMembers for Pallet<T, I> {
+		type AccountId = T::AccountId;
+		type Rank = Rank;
+
+		fn min_rank() -> Self::Rank {
+			0
+		}
+
+		fn rank_of(who: &Self::AccountId) -> Option<Self::Rank> {
+			Some(Self::ensure_member(&who).ok()?.rank)
+		}
+
+		fn induct(who: &Self::AccountId) -> DispatchResult {
+			Self::do_add_member(who.clone())
+		}
+
+		fn promote(who: &Self::AccountId) -> DispatchResult {
+			Self::do_promote_member(who.clone(), None)
+		}
+
+		fn demote(who: &Self::AccountId) -> DispatchResult {
+			Self::do_demote_member(who.clone(), None)
 		}
 	}
 }

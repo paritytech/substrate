@@ -532,6 +532,14 @@ pub mod pallet {
 			item: T::ItemId,
 			namespace: AttributeNamespace<T::AccountId>,
 		},
+		/// A new attribute in the `Pallet` namespace was set for the `collection` or an `item`
+		/// within that `collection`.
+		PalletAttributeSet {
+			collection: T::CollectionId,
+			item: Option<T::ItemId>,
+			attribute: PalletAttributes<T::CollectionId>,
+			value: BoundedVec<u8, T::ValueLimit>,
+		},
 	}
 
 	#[pallet::error]
@@ -804,32 +812,39 @@ pub mod pallet {
 							let MintWitness { owner_of_item } =
 								witness_data.ok_or(Error::<T, I>::BadWitness)?;
 
-							let has_item = Account::<T, I>::contains_key((
+							let owns_item = Account::<T, I>::contains_key((
 								&caller,
 								&collection_id,
 								&owner_of_item,
 							));
-							ensure!(has_item, Error::<T, I>::BadWitness);
+							ensure!(owns_item, Error::<T, I>::BadWitness);
 
-							let attribute_key = Self::construct_attribute_key(
-								PalletAttributes::<T::CollectionId>::UsedToClaim(collection)
-									.encode(),
-							)?;
+							let pallet_attribute =
+								PalletAttributes::<T::CollectionId>::UsedToClaim(collection);
 
 							let key = (
 								&collection_id,
 								Some(owner_of_item),
 								AttributeNamespace::Pallet,
-								&attribute_key,
+								&Self::construct_attribute_key(pallet_attribute.encode())?,
 							);
 							let already_claimed = Attribute::<T, I>::contains_key(key.clone());
 							ensure!(!already_claimed, Error::<T, I>::AlreadyClaimed);
 
-							let value = Self::construct_attribute_value(vec![0])?;
+							let attribute_value = Self::construct_attribute_value(vec![])?;
 							Attribute::<T, I>::insert(
 								key,
-								(value, AttributeDeposit { account: None, amount: Zero::zero() }),
+								(
+									attribute_value.clone(),
+									AttributeDeposit { account: None, amount: Zero::zero() },
+								),
 							);
+							Self::deposit_event(Event::PalletAttributeSet {
+								collection,
+								item: Some(item),
+								attribute: pallet_attribute,
+								value: attribute_value,
+							});
 						},
 						_ => {},
 					}
