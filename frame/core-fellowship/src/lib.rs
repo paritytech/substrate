@@ -29,6 +29,20 @@
 //! - `approve`...
 //! - `promote`...
 //! - `bump`
+//!
+//! Note there is a difference between having a rank of 0 (whereby the account is a *candidate*) and
+//! having no rank at all (whereby we consider it *unranked*). An account can be demoted from rank
+//! 0 to become unranked. This process is called being offboarded and there is an extrinsic to do
+//! this explicitly when external factors to this pallet have caused the tracked account to become
+//! unranked. At rank 0, there is not a "demotion" period after which the account may be bumped to
+//! become offboarded but rather a "offboard timeout".
+//!
+//! Candidates may be introduced (i.e. an account to go from unranked to rank of 0) by an origin
+//! of a different privilege to that for promotion. This allows the possibility for even a single
+//! existing member to introduce a new candidate without payment.
+//!
+//! Only tracked/ranked accounts may submit evidence for their proof and promotion. Candidates
+//! cannot be approved - they must proceed only to promotion prior to the offboard timeout elapsing.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "128"]
@@ -78,8 +92,8 @@ pub struct ParamsType<Balance, BlockNumber> {
 	demotion_period: [BlockNumber; 9],
 	/// The period between which members must wait before they may proceed to this rank.
 	min_promotion_period: [BlockNumber; 9],
-	/// Off-board period.
-	offboard_period: BlockNumber,
+	/// Amount by which an account can remain at rank 0 (candidate before being offboard entirely).
+	offboard_timeout: BlockNumber,
 }
 
 /// The status of a single member.
@@ -246,7 +260,7 @@ pub mod pallet {
 
 			let params = Params::<T, I>::get();
 			let demotion_period = if rank == 0 {
-				params.offboard_period
+				params.offboard_timeout
 			} else {
 				let rank_index = Self::rank_to_index(rank).ok_or(Error::<T, I>::InvalidRank)?;
 				params.demotion_period[rank_index]
