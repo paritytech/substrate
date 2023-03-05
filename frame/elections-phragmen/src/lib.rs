@@ -1156,6 +1156,7 @@ impl<T: Config> Pallet<T> {
 								who: who.clone(),
 								stake: *stake,
 							})
+							.take(T::DesiredMembers::get() as usize)
 							.collect::<Vec<_>>()
 							.try_into()
 							.expect("number members will never exceed T::DesiredMembers. qed."),
@@ -1169,6 +1170,7 @@ impl<T: Config> Pallet<T> {
 								who,
 								stake,
 							})
+							.take(T::DesiredRunnersUp::get() as usize)
 							.collect::<Vec<_>>()
 							.try_into()
 							.expect(
