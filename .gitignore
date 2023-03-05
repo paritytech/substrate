@@ -25,3 +25,4 @@ rls*.log
 *.bin
 *.iml
 scripts/ci/node-template-release/Cargo.lock
+substrate.code-workspace

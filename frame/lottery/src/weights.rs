@@ -90,9 +90,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 7_650 nanoseconds.
-		Weight::from_ref_time(8_344_960)
+		Weight::from_parts(8_344_960, 0)
 			// Standard Error: 2_629
-			.saturating_add(Weight::from_ref_time(268_557).saturating_mul(n.into()))
+			.saturating_add(Weight::from_parts(268_557, 0).saturating_mul(n.into()))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
 	/// Storage: Lottery Lottery (r:1 w:1)
@@ -196,9 +196,9 @@ impl WeightInfo for () {
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 7_650 nanoseconds.
-		Weight::from_ref_time(8_344_960)
+		Weight::from_parts(8_344_960, 0)
 			// Standard Error: 2_629
-			.saturating_add(Weight::from_ref_time(268_557).saturating_mul(n.into()))
+			.saturating_add(Weight::from_parts(268_557, 0).saturating_mul(n.into()))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
 	/// Storage: Lottery Lottery (r:1 w:1)
