@@ -22,11 +22,11 @@
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
+	traits::{BadOrigin, BlakeTwo256, Dispatchable, IdentityLookup},
 };
 
 use frame_support::{
-	assert_noop, assert_ok,
+	assert_err_ignore_postinfo, assert_noop, assert_ok,
 	pallet_prelude::GenesisBuild,
 	parameter_types,
 	traits::{ConstU32, ConstU64, OnInitialize},
@@ -38,6 +38,8 @@ use crate as treasury;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
+type UtilityCall = pallet_utility::Call<Test>;
+type TreasuryCall = crate::Call<Test>;
 
 frame_support::construct_runtime!(
 	pub enum Test where
@@ -48,6 +50,7 @@ frame_support::construct_runtime!(
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Treasury: treasury::{Pallet, Call, Storage, Config, Event<T>},
+		Utility: pallet_utility,
 	}
 );
 
@@ -88,6 +91,14 @@ impl pallet_balances::Config for Test {
 	type AccountStore = System;
 	type WeightInfo = ();
 }
+
+impl pallet_utility::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type PalletsOrigin = OriginCaller;
+	type WeightInfo = ();
+}
+
 parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);
 	pub const Burn: Permill = Permill::from_percent(50);
@@ -469,4 +480,29 @@ fn remove_already_removed_approval_fails() {
 			Error::<Test, _>::ProposalNotApproved
 		);
 	});
+}
+
+#[test]
+fn spending_in_batch_respects_max_total() {
+	new_test_ext().execute_with(|| {
+		// Respect the `max_total` for the given origin.
+		assert_ok!(RuntimeCall::from(UtilityCall::batch_all {
+			calls: vec![
+				RuntimeCall::from(TreasuryCall::spend { amount: 2, beneficiary: 100 }),
+				RuntimeCall::from(TreasuryCall::spend { amount: 2, beneficiary: 101 })
+			]
+		})
+		.dispatch(RuntimeOrigin::signed(10)));
+
+		assert_err_ignore_postinfo!(
+			RuntimeCall::from(UtilityCall::batch_all {
+				calls: vec![
+					RuntimeCall::from(TreasuryCall::spend { amount: 2, beneficiary: 100 }),
+					RuntimeCall::from(TreasuryCall::spend { amount: 4, beneficiary: 101 })
+				]
+			})
+			.dispatch(RuntimeOrigin::signed(10)),
+			Error::<Test, _>::InsufficientPermission
+		);
+	})
 }

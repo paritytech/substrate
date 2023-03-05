@@ -39,6 +39,17 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(Value::<T>::get(), Some(123));
 	}
 
+	#[pov_mode = MaxEncodedLen {
+		Pov::Value2: Ignored
+	}]
+	storage_single_value_ignored_some_read {
+		Value::<T>::put(123);
+		Value2::<T>::put(123);
+	}: {
+		assert_eq!(Value::<T>::get(), Some(123));
+		assert_eq!(Value2::<T>::get(), Some(123));
+	}
+
 	storage_single_value_read_twice {
 		Value::<T>::put(123);
 	}: {
@@ -303,6 +314,19 @@ frame_benchmarking::benchmarks! {
 		let call = Call::<T>::noop { };
 	}: {
 		call.dispatch_bypass_filter(RawOrigin::Root.into()).unwrap();
+	}
+
+	storage_iteration {
+		for i in 0..65000 {
+			UnboundedMapTwox::<T>::insert(i, sp_std::vec![0; 64]);
+		}
+	}: {
+		for (key, value) in UnboundedMapTwox::<T>::iter() {
+			unsafe {
+				core::ptr::read_volatile(&key);
+				core::ptr::read_volatile(value.as_ptr());
+			}
+		}
 	}
 
 	impl_benchmark_test_suite!(

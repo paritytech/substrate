@@ -601,7 +601,7 @@ parameter_types! {
 	pub RuntimeBlockLength: BlockLength =
 		BlockLength::max(4 * 1024 * 1024);
 	pub RuntimeBlockWeights: BlockWeights =
-		BlockWeights::with_sensible_defaults(Weight::from_ref_time(4 * 1024 * 1024), Perbill::from_percent(75));
+		BlockWeights::with_sensible_defaults(Weight::from_parts(4 * 1024 * 1024, 0), Perbill::from_percent(75));
 }
 
 impl From<frame_system::Call<Runtime>> for Extrinsic {
@@ -945,63 +945,63 @@ cfg_if! {
 				}
 			}
 
-			impl sp_finality_grandpa::GrandpaApi<Block> for Runtime {
-				fn grandpa_authorities() -> sp_finality_grandpa::AuthorityList {
+			impl sp_consensus_grandpa::GrandpaApi<Block> for Runtime {
+				fn grandpa_authorities() -> sp_consensus_grandpa::AuthorityList {
 					Vec::new()
 				}
 
-				fn current_set_id() -> sp_finality_grandpa::SetId {
+				fn current_set_id() -> sp_consensus_grandpa::SetId {
 					0
 				}
 
 				fn submit_report_equivocation_unsigned_extrinsic(
-					_equivocation_proof: sp_finality_grandpa::EquivocationProof<
+					_equivocation_proof: sp_consensus_grandpa::EquivocationProof<
 						<Block as BlockT>::Hash,
 						NumberFor<Block>,
 					>,
-					_key_owner_proof: sp_finality_grandpa::OpaqueKeyOwnershipProof,
+					_key_owner_proof: sp_consensus_grandpa::OpaqueKeyOwnershipProof,
 				) -> Option<()> {
 					None
 				}
 
 				fn generate_key_ownership_proof(
-					_set_id: sp_finality_grandpa::SetId,
-					_authority_id: sp_finality_grandpa::AuthorityId,
-				) -> Option<sp_finality_grandpa::OpaqueKeyOwnershipProof> {
+					_set_id: sp_consensus_grandpa::SetId,
+					_authority_id: sp_consensus_grandpa::AuthorityId,
+				) -> Option<sp_consensus_grandpa::OpaqueKeyOwnershipProof> {
 					None
 				}
 			}
 
-			impl beefy_primitives::BeefyApi<Block> for Runtime {
+			impl sp_consensus_beefy::BeefyApi<Block> for Runtime {
 				fn beefy_genesis() -> Option<BlockNumber> {
 					None
 				}
 
-				fn validator_set() -> Option<beefy_primitives::ValidatorSet<beefy_primitives::crypto::AuthorityId>> {
+				fn validator_set() -> Option<sp_consensus_beefy::ValidatorSet<sp_consensus_beefy::crypto::AuthorityId>> {
 					None
 				}
 
 				fn submit_report_equivocation_unsigned_extrinsic(
-					_equivocation_proof: beefy_primitives::EquivocationProof<
+					_equivocation_proof: sp_consensus_beefy::EquivocationProof<
 						NumberFor<Block>,
-						beefy_primitives::crypto::AuthorityId,
-						beefy_primitives::crypto::Signature
+						sp_consensus_beefy::crypto::AuthorityId,
+						sp_consensus_beefy::crypto::Signature
 					>,
-					_key_owner_proof: beefy_primitives::OpaqueKeyOwnershipProof,
+					_key_owner_proof: sp_consensus_beefy::OpaqueKeyOwnershipProof,
 				) -> Option<()> { None }
 
 				fn generate_key_ownership_proof(
-					_set_id: beefy_primitives::ValidatorSetId,
-					_authority_id: beefy_primitives::crypto::AuthorityId,
-				) -> Option<beefy_primitives::OpaqueKeyOwnershipProof> { None }
+					_set_id: sp_consensus_beefy::ValidatorSetId,
+					_authority_id: sp_consensus_beefy::crypto::AuthorityId,
+				) -> Option<sp_consensus_beefy::OpaqueKeyOwnershipProof> { None }
 			}
 
-			impl pallet_beefy_mmr::BeefyMmrApi<Block, beefy_primitives::MmrRootHash> for Runtime {
-				fn authority_set_proof() -> beefy_primitives::mmr::BeefyAuthoritySet<beefy_primitives::MmrRootHash> {
+			impl pallet_beefy_mmr::BeefyMmrApi<Block, sp_consensus_beefy::MmrRootHash> for Runtime {
+				fn authority_set_proof() -> sp_consensus_beefy::mmr::BeefyAuthoritySet<sp_consensus_beefy::MmrRootHash> {
 					Default::default()
 				}
 
-				fn next_authority_set_proof() -> beefy_primitives::mmr::BeefyNextAuthoritySet<beefy_primitives::MmrRootHash> {
+				fn next_authority_set_proof() -> sp_consensus_beefy::mmr::BeefyNextAuthoritySet<sp_consensus_beefy::MmrRootHash> {
 					Default::default()
 				}
 			}

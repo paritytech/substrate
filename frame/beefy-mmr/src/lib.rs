@@ -36,11 +36,11 @@
 use sp_runtime::traits::{Convert, Member};
 use sp_std::prelude::*;
 
-use beefy_primitives::{
+use pallet_mmr::{LeafDataProvider, ParentNumberAndHash};
+use sp_consensus_beefy::{
 	mmr::{BeefyAuthoritySet, BeefyDataProvider, BeefyNextAuthoritySet, MmrLeaf, MmrLeafVersion},
 	ValidatorSet as BeefyValidatorSet,
 };
-use pallet_mmr::{LeafDataProvider, ParentNumberAndHash};
 
 use frame_support::{crypto::ecdsa::ECDSAExt, traits::Get};
 
@@ -54,15 +54,15 @@ mod tests;
 /// A BEEFY consensus digest item with MMR root hash.
 pub struct DepositBeefyDigest<T>(sp_std::marker::PhantomData<T>);
 
-impl<T> pallet_mmr::primitives::OnNewRoot<beefy_primitives::MmrRootHash> for DepositBeefyDigest<T>
+impl<T> pallet_mmr::primitives::OnNewRoot<sp_consensus_beefy::MmrRootHash> for DepositBeefyDigest<T>
 where
-	T: pallet_mmr::Config<Hash = beefy_primitives::MmrRootHash>,
+	T: pallet_mmr::Config<Hash = sp_consensus_beefy::MmrRootHash>,
 	T: pallet_beefy::Config,
 {
 	fn on_new_root(root: &<T as pallet_mmr::Config>::Hash) {
 		let digest = sp_runtime::generic::DigestItem::Consensus(
-			beefy_primitives::BEEFY_ENGINE_ID,
-			codec::Encode::encode(&beefy_primitives::ConsensusLog::<
+			sp_consensus_beefy::BEEFY_ENGINE_ID,
+			codec::Encode::encode(&sp_consensus_beefy::ConsensusLog::<
 				<T as pallet_beefy::Config>::BeefyId,
 			>::MmrRoot(*root)),
 		);
@@ -72,8 +72,8 @@ where
 
 /// Convert BEEFY secp256k1 public keys into Ethereum addresses
 pub struct BeefyEcdsaToEthereum;
-impl Convert<beefy_primitives::crypto::AuthorityId, Vec<u8>> for BeefyEcdsaToEthereum {
-	fn convert(beefy_id: beefy_primitives::crypto::AuthorityId) -> Vec<u8> {
+impl Convert<sp_consensus_beefy::crypto::AuthorityId, Vec<u8>> for BeefyEcdsaToEthereum {
+	fn convert(beefy_id: sp_consensus_beefy::crypto::AuthorityId) -> Vec<u8> {
 		sp_core::ecdsa::Public::from(beefy_id)
 			.to_eth_address()
 			.map(|v| v.to_vec())
@@ -156,7 +156,7 @@ impl<T: Config> LeafDataProvider for Pallet<T> {
 	}
 }
 
-impl<T> beefy_primitives::OnNewValidatorSet<<T as pallet_beefy::Config>::BeefyId> for Pallet<T>
+impl<T> sp_consensus_beefy::OnNewValidatorSet<<T as pallet_beefy::Config>::BeefyId> for Pallet<T>
 where
 	T: pallet::Config,
 {

@@ -208,7 +208,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
 		fn on_idle(_: T::BlockNumber, remaining_weight: Weight) -> Weight {
 			if remaining_weight.any_lt(T::DbWeight::get().reads(2)) {
-				return Weight::from_ref_time(0)
+				return Weight::from_parts(0, 0)
 			}
 
 			Self::do_on_idle(remaining_weight)
@@ -356,7 +356,7 @@ pub mod pallet {
 		/// checked, we don't finish the process.
 		pub(crate) fn do_on_idle(remaining_weight: Weight) -> Weight {
 			// any weight that is unaccounted for
-			let mut unaccounted_weight = Weight::from_ref_time(0);
+			let mut unaccounted_weight = Weight::from_parts(0, 0);
 
 			let eras_to_check_per_block = ErasToCheckPerBlock::<T>::get();
 			if eras_to_check_per_block.is_zero() {

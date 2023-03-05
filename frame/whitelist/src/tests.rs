@@ -119,7 +119,7 @@ fn test_whitelist_call_and_execute() {
 				RuntimeOrigin::root(),
 				call_hash,
 				call_encoded_len,
-				call_weight - Weight::from_ref_time(1)
+				call_weight - Weight::from_parts(1, 0)
 			),
 			crate::Error::<Test>::InvalidCallWeightWitness,
 		);
