@@ -511,15 +511,14 @@ where
 				return
 			},
 		};
-
 		peer.known_blocks.insert(hash);
 
-		let is_best = match announce.state.unwrap_or(BlockState::Best) {
-			BlockState::Best => true,
-			BlockState::Normal => false,
-		};
-
 		if peer.info.roles.is_full() {
+			let is_best = match announce.state.unwrap_or(BlockState::Best) {
+				BlockState::Best => true,
+				BlockState::Normal => false,
+			};
+
 			self.chain_sync.push_block_announce_validation(who, hash, announce, is_best);
 		}
 	}
