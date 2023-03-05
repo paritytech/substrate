@@ -143,8 +143,9 @@ impl Config for Test {
 	type Balance = u64;
 	type ParamsOrigin = EnsureSignedBy<One, u64>;
 	type InductOrigin = EnsureInducted<Test, (), 1>;
-	type ProofOrigin = TryMapSuccess<EnsureSignedBy<IsInVec<ZeroToNine>, u64>, TryMorphInto<u16>>;
+	type ApproveOrigin = TryMapSuccess<EnsureSignedBy<IsInVec<ZeroToNine>, u64>, TryMorphInto<u16>>;
 	type PromoteOrigin = TryMapSuccess<EnsureSignedBy<IsInVec<ZeroToNine>, u64>, TryMorphInto<u16>>;
+	type EvidenceSize = ConstU32<1024>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -218,9 +219,9 @@ fn set_params_works() {
 fn induct_works() {
 	new_test_ext().execute_with(|| {
 		set_rank(0, 0);
-		assert_ok!(CoreFellowship::sync(signed(0)));
+		assert_ok!(CoreFellowship::import(signed(0)));
 		set_rank(1, 1);
-		assert_ok!(CoreFellowship::sync(signed(1)));
+		assert_ok!(CoreFellowship::import(signed(1)));
 
 		assert_noop!(CoreFellowship::induct(signed(10), 10), DispatchError::BadOrigin);
 		assert_noop!(CoreFellowship::induct(signed(0), 10), DispatchError::BadOrigin);
@@ -233,7 +234,7 @@ fn induct_works() {
 fn promote_works() {
 	new_test_ext().execute_with(|| {
 		set_rank(1, 1);
-		assert_ok!(CoreFellowship::sync(signed(1)));
+		assert_ok!(CoreFellowship::import(signed(1)));
 		assert_noop!(CoreFellowship::promote(signed(1), 10, 1), Error::<Test>::Unranked);
 
 		assert_ok!(CoreFellowship::induct(signed(1), 10));
@@ -255,7 +256,7 @@ fn sync_works() {
 		set_rank(10, 5);
 		assert_noop!(CoreFellowship::approve(signed(4), 10, 5), Error::<Test>::NoPermission);
 		assert_noop!(CoreFellowship::approve(signed(6), 10, 6), Error::<Test>::UnexpectedRank);
-		assert_ok!(CoreFellowship::sync(signed(10)));
+		assert_ok!(CoreFellowship::import(signed(10)));
 		assert!(Member::<Test>::contains_key(10));
 		assert_eq!(next_demotion(10), 11);
 	});
@@ -265,7 +266,7 @@ fn sync_works() {
 fn auto_demote_works() {
 	new_test_ext().execute_with(|| {
 		set_rank(10, 5);
-		assert_ok!(CoreFellowship::sync(signed(10)));
+		assert_ok!(CoreFellowship::import(signed(10)));
 
 		run_to(10);
 		assert_noop!(CoreFellowship::bump(signed(0), 10), Error::<Test>::NothingDoing);
@@ -281,7 +282,7 @@ fn auto_demote_works() {
 fn auto_demote_offboard_works() {
 	new_test_ext().execute_with(|| {
 		set_rank(10, 1);
-		assert_ok!(CoreFellowship::sync(signed(10)));
+		assert_ok!(CoreFellowship::import(signed(10)));
 
 		run_to(3);
 		assert_ok!(CoreFellowship::bump(signed(0), 10));
@@ -289,7 +290,7 @@ fn auto_demote_offboard_works() {
 		assert_noop!(CoreFellowship::bump(signed(0), 10), Error::<Test>::NothingDoing);
 		run_to(4);
 		assert_ok!(CoreFellowship::bump(signed(0), 10));
-		assert_noop!(CoreFellowship::bump(signed(0), 10), Error::<Test>::NotProved);
+		assert_noop!(CoreFellowship::bump(signed(0), 10), Error::<Test>::NotTracked);
 	});
 }
 
@@ -300,13 +301,13 @@ fn offboard_works() {
 		set_rank(10, 0);
 		assert_noop!(CoreFellowship::offboard(signed(0), 10), Error::<Test>::Ranked);
 
-		assert_ok!(CoreFellowship::sync(signed(10)));
+		assert_ok!(CoreFellowship::import(signed(10)));
 		assert_noop!(CoreFellowship::offboard(signed(0), 10), Error::<Test>::Ranked);
 
 		unrank(10);
 		assert_ok!(CoreFellowship::offboard(signed(0), 10));
 		assert_noop!(CoreFellowship::offboard(signed(0), 10), Error::<Test>::NotTracked);
-		assert_noop!(CoreFellowship::bump(signed(0), 10), Error::<Test>::NotProved);
+		assert_noop!(CoreFellowship::bump(signed(0), 10), Error::<Test>::NotTracked);
 	});
 }
 
@@ -314,7 +315,7 @@ fn offboard_works() {
 fn proof_postpones_auto_demote() {
 	new_test_ext().execute_with(|| {
 		set_rank(10, 5);
-		assert_ok!(CoreFellowship::sync(signed(10)));
+		assert_ok!(CoreFellowship::import(signed(10)));
 
 		run_to(11);
 		assert_ok!(CoreFellowship::approve(signed(5), 10, 5));
@@ -327,7 +328,7 @@ fn proof_postpones_auto_demote() {
 fn promote_postpones_auto_demote() {
 	new_test_ext().execute_with(|| {
 		set_rank(10, 5);
-		assert_ok!(CoreFellowship::sync(signed(10)));
+		assert_ok!(CoreFellowship::import(signed(10)));
 
 		run_to(19);
 		assert_ok!(CoreFellowship::promote(signed(6), 10, 6));
@@ -341,7 +342,7 @@ fn get_salary_works() {
 	new_test_ext().execute_with(|| {
 		for i in 1..=9u64 {
 			set_rank(10 + i, i as u16);
-			assert_ok!(CoreFellowship::sync(signed(10 + i)));
+			assert_ok!(CoreFellowship::import(signed(10 + i)));
 			assert_eq!(CoreFellowship::get_salary(i as u16, &(10 + i)), i * 10);
 		}
 	});
@@ -352,7 +353,7 @@ fn active_changing_get_salary_works() {
 	new_test_ext().execute_with(|| {
 		for i in 1..=9u64 {
 			set_rank(10 + i, i as u16);
-			assert_ok!(CoreFellowship::sync(signed(10 + i)));
+			assert_ok!(CoreFellowship::import(signed(10 + i)));
 			assert_ok!(CoreFellowship::set_active(signed(10 + i), false));
 			assert_eq!(CoreFellowship::get_salary(i as u16, &(10 + i)), i);
 			assert_ok!(CoreFellowship::set_active(signed(10 + i), true));

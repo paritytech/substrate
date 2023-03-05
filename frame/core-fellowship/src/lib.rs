@@ -24,11 +24,22 @@
 //! - Begin with a call to `induct`, where some privileged origin (perhaps a pre-existing member of
 //!   `rank > 1`) is able to make a candidate from an account and introduce it to be tracked in this
 //!   pallet in order to allow evidence to be submitted and promotion voted on.
-//! - `submit_evidence`
-//! - `promote`
-//! - `approve`...
-//! - `promote`...
-//! - `bump`
+//! - The candidate then calls `submit_evidence` to apply for their promotion to rank 1.
+//! - A `PromoteOrigin` of at least rank 1 calls `promote` on the candidate to elevate it to rank 1.
+//! - Some time later but before rank 1's `demotion_period` elapses, candidate calls
+//!   `submit_evidence` with evidence of their efforts to apply for approval to stay at rank 1.
+//! - An `ApproveOrigin` of at least rank 1 calls `approve` on the candidate to avoid imminent
+//!   demotion and keep it at rank 1.
+//! - These last two steps continue until the candidate is ready to apply for a promotion, at which
+//!   point the previous two steps are repeated with a higher rank.
+//! - If the member fails to get an approval within the `demotion_period` then anyone may call
+//!   `bump` to demote the candidate by one rank.
+//! - If a candidate fails to be promoted to a member within the `offboard_timeout` period, then
+//!   anyone may call `bump` to remove the account's candidacy.
+//! - Pre-existing members may call `import` to have their rank recognised and be inducted into this
+//!   pallet (to gain a salary and allow for eventual promotion).
+//! - If, externally to this pallet, a member or candidate has their rank removed completely, then
+//!   `offboard` may be called to remove them entirely from this pallet.
 //!
 //! Note there is a difference between having a rank of 0 (whereby the account is a *candidate*) and
 //! having no rank at all (whereby we consider it *unranked*). An account can be demoted from rank
@@ -50,13 +61,12 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::{Saturating, Zero};
-use sp_core::ConstU32;
 use sp_std::{marker::PhantomData, prelude::*};
 
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
-	traits::{tokens::Balance as BalanceTrait, EnsureOrigin, RankedMembers},
+	traits::{tokens::Balance as BalanceTrait, EnsureOrigin, Get, RankedMembers},
 	BoundedVec, RuntimeDebug,
 };
 
@@ -70,7 +80,7 @@ pub mod weights;
 pub use pallet::*;
 pub use weights::WeightInfo;
 
-/// The "career" wish of a member.
+/// The desired outcome for which evidence is presented.
 #[derive(Encode, Decode, Eq, PartialEq, Copy, Clone, TypeInfo, MaxEncodedLen, RuntimeDebug)]
 pub enum Wish {
 	/// Member wishes only to retain their current rank.
@@ -79,7 +89,7 @@ pub enum Wish {
 	Promotion,
 }
 
-pub type Evidence = BoundedVec<u8, ConstU32<1024>>;
+pub type Evidence<T, I> = BoundedVec<u8, <T as Config<I>>::EvidenceSize>;
 
 /// The status of the pallet instance.
 #[derive(Encode, Decode, Eq, PartialEq, Clone, TypeInfo, MaxEncodedLen, RuntimeDebug, Default)]
@@ -151,11 +161,15 @@ pub mod pallet {
 
 		/// The origin which has permission to issue a proof that a member may retain their rank.
 		/// The `Success` value is the maximum rank of members it is able to prove.
-		type ProofOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = RankOf<Self, I>>;
+		type ApproveOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = RankOf<Self, I>>;
 
 		/// The origin which has permission to promote a member. The `Success` value is the maximum
 		/// rank to which it can promote.
 		type PromoteOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = RankOf<Self, I>>;
+
+		#[pallet::constant]
+		/// The maximum size in bytes submitted evidence is allowed to be.
+		type EvidenceSize: Get<u32>;
 	}
 
 	pub type ParamsOf<T, I> =
@@ -173,9 +187,10 @@ pub mod pallet {
 	pub(super) type Member<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, T::AccountId, MemberStatusOf<T>, OptionQuery>;
 
+	/// Some evidence together with the desired outcome for which it was presented.
 	#[pallet::storage]
 	pub(super) type MemberEvidence<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, T::AccountId, (Wish, Evidence), OptionQuery>;
+		StorageMap<_, Twox64Concat, T::AccountId, (Wish, Evidence<T, I>), OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -198,10 +213,15 @@ pub mod pallet {
 		Proven { who: T::AccountId, at_rank: RankOf<T, I> },
 		/// Member has stated evidence of their efforts their request for rank.
 		Requested { who: T::AccountId, wish: Wish },
+		/// Some submitted evidence was judged and removed. There may or may not have been a change
+		/// to the rank, but in any case, `last_proof` is reset.
 		EvidenceJudged {
+			/// The member/candidate.
 			who: T::AccountId,
+			/// The desired outcome for which the evidence was presented.
 			wish: Wish,
-			evidence: Evidence,
+			/// The evidence of efforts.
+			evidence: Evidence<T, I>,
 			/// The old rank, prior to this change.
 			old_rank: u16,
 			/// New rank. If `None` then candidate record was removed entirely.
@@ -217,16 +237,11 @@ pub mod pallet {
 		Unranked,
 		/// Member's rank is not zero.
 		Ranked,
-		/// Member's rank is not as expected.
+		/// Member's rank is not as expected - generally means that the rank provided to the call
+		/// does not agree with the state of the system.
 		UnexpectedRank,
 		/// The given rank is invalid - this generally means it's not between 1 and 9.
 		InvalidRank,
-		/// The account is not a candidate in the collective.
-		NotCandidate,
-		/// The account is not a member of the collective.
-		NotMember,
-		/// The member is not tracked by this pallet (call `prove` on member first).
-		NotProved,
 		/// The origin does not have enough permission to do this operation.
 		NoPermission,
 		/// No work needs to be done at present for this member.
@@ -238,8 +253,6 @@ pub mod pallet {
 		NotTracked,
 		/// Operation cannot be done yet since not enough time has passed.
 		TooSoon,
-		/// A candidate cannot be off-boarded while evidence is submitted.
-		EvidenceSubmitted,
 	}
 
 	#[pallet::call]
@@ -255,7 +268,7 @@ pub mod pallet {
 		#[pallet::call_index(0)]
 		pub fn bump(origin: OriginFor<T>, who: T::AccountId) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
-			let mut member = Member::<T, I>::get(&who).ok_or(Error::<T, I>::NotProved)?;
+			let mut member = Member::<T, I>::get(&who).ok_or(Error::<T, I>::NotTracked)?;
 			let rank = T::Members::rank_of(&who).ok_or(Error::<T, I>::Unranked)?;
 
 			let params = Params::<T, I>::get();
@@ -307,7 +320,7 @@ pub mod pallet {
 		/// Set whether a member is active or not.
 		///
 		/// - `origin`: A `Signed` origin of a member's account.
-		/// - `active`: `true` iff the member is active.
+		/// - `is_active`: `true` iff the member is active.
 		#[pallet::weight(T::WeightInfo::set_active())]
 		#[pallet::call_index(2)]
 		pub fn set_active(origin: OriginFor<T>, is_active: bool) -> DispatchResult {
@@ -316,7 +329,7 @@ pub mod pallet {
 				T::Members::rank_of(&who).map_or(false, |r| !r.is_zero()),
 				Error::<T, I>::Unranked
 			);
-			let mut member = Member::<T, I>::get(&who).ok_or(Error::<T, I>::NotProved)?;
+			let mut member = Member::<T, I>::get(&who).ok_or(Error::<T, I>::NotTracked)?;
 			member.is_active = is_active;
 			Member::<T, I>::insert(&who, &member);
 			Self::deposit_event(Event::<T, I>::ActiveChanged { who, is_active });
@@ -330,7 +343,7 @@ pub mod pallet {
 		/// If `who` is not already tracked by this pallet, then it will become tracked.
 		/// `last_promotion` will be set to zero.
 		///
-		/// - `origin`: An origin which satisfies `ProofOrigin` or root.
+		/// - `origin`: An origin which satisfies `ApproveOrigin` or root.
 		/// - `who`: A member (i.e. of non-zero rank).
 		/// - `at_rank`: The rank of member.
 		#[pallet::weight(T::WeightInfo::approve())]
@@ -444,17 +457,22 @@ pub mod pallet {
 			Ok(Pays::No.into())
 		}
 
-		/// Provide evidence for peers.
+		/// Provide evidence that a rank is deserved.
+		///
+		/// This is free as long as no evidence for the forthcoming judgement is already submitted.
+		/// Evidence is cleared after an outcome (either demotion, promotion of approval).
 		///
 		/// - `origin`: A `Signed` origin of an inducted and ranked account.
 		/// - `wish`: The stated desire of the member.
-		/// - `evidence`: A freeform dump of evidence to be considered.
+		/// - `evidence`: A dump of evidence to be considered. This should generally be either a
+		///   Markdown-encoded document or a series of 32-byte hashes which can be found on a
+		///   decentralised content-based-indexing system such as IPFS.
 		#[pallet::weight(T::WeightInfo::submit_evidence())]
 		#[pallet::call_index(7)]
 		pub fn submit_evidence(
 			origin: OriginFor<T>,
 			wish: Wish,
-			evidence: Evidence,
+			evidence: Evidence<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			ensure!(Member::<T, I>::contains_key(&who), Error::<T, I>::NotTracked);
@@ -467,17 +485,13 @@ pub mod pallet {
 		/// Introduce an already-ranked individual of the collective into this pallet. The rank may
 		/// still be zero.
 		///
-		/// This resets `last_proof` to the current block, thereby delaying any automatic demotion.
+		/// This resets `last_proof` to the current block and `last_promotion` will be set to zero,
+		/// thereby delaying any automatic demotion but allowing immediate promotion.
 		///
-		/// If `who` is not already tracked by this pallet, then it will become tracked.
-		/// `last_promotion` will be set to zero.
-		///
-		/// - `origin`: A signed origin of a ranked but not yet inducted account.
-		/// - `who`: A member (i.e. of non-zero rank).
-		/// - `at_rank`: The rank of member.
-		#[pallet::weight(T::WeightInfo::sync())]
+		/// - `origin`: A signed origin of a ranked, but not tracked, account.
+		#[pallet::weight(T::WeightInfo::import())]
 		#[pallet::call_index(8)]
-		pub fn sync(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		pub fn import(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			ensure!(!Member::<T, I>::contains_key(&who), Error::<T, I>::AlreadyInducted);
 			let rank = T::Members::rank_of(&who).ok_or(Error::<T, I>::Unranked)?;

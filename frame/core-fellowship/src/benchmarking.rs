@@ -35,7 +35,7 @@ mod benchmarks {
 	use super::*;
 
 	fn ensure_evidence<T: Config<I>, I: 'static>(who: &T::AccountId) {
-		let evidence = BoundedVec::try_from(vec![0; Evidence::bound()]).unwrap();
+		let evidence = BoundedVec::try_from(vec![0; Evidence::<T, I>::bound()]).unwrap();
 		let wish = Wish::Retention;
 		let origin = RawOrigin::Signed(who.clone()).into();
 		CoreFellowship::<T, I>::submit_evidence(origin, wish, evidence).unwrap();
@@ -48,7 +48,7 @@ mod benchmarks {
 		for _ in 0..rank {
 			T::Members::promote(&member).unwrap();
 		}
-		CoreFellowship::<T, I>::sync(RawOrigin::Signed(member.clone()).into()).unwrap();
+		CoreFellowship::<T, I>::import(RawOrigin::Signed(member.clone()).into()).unwrap();
 		member
 	}
 
@@ -151,7 +151,7 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn sync() {
+	fn import() {
 		let member = account("member", 0, SEED);
 		T::Members::induct(&member).unwrap();
 		T::Members::promote(&member).unwrap();
@@ -186,7 +186,7 @@ mod benchmarks {
 	#[benchmark]
 	fn submit_evidence() {
 		let member = make_member::<T, I>(1);
-		let evidence = vec![0; Evidence::bound()].try_into().unwrap();
+		let evidence = vec![0; Evidence::<T, I>::bound()].try_into().unwrap();
 
 		assert!(!MemberEvidence::<T, I>::contains_key(&member));
 

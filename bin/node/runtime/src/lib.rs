@@ -1602,8 +1602,9 @@ impl pallet_core_fellowship::Config for Runtime {
 	type Balance = Balance;
 	type ParamsOrigin = frame_system::EnsureRoot<AccountId>;
 	type InductOrigin = pallet_core_fellowship::EnsureInducted<Runtime, (), 1>;
-	type ProofOrigin = frame_system::EnsureRootWithSuccess<AccountId, ConstU16<9>>;
+	type ApproveOrigin = frame_system::EnsureRootWithSuccess<AccountId, ConstU16<9>>;
 	type PromoteOrigin = frame_system::EnsureRootWithSuccess<AccountId, ConstU16<9>>;
+	type EvidenceSize = ConstU32<16_384>;
 }
 
 parameter_types! {
