@@ -59,7 +59,7 @@ mod benchmarks {
 			passive_salary: [10u32.into(); 9],
 			demotion_period: [100u32.into(); 9],
 			min_promotion_period: [100u32.into(); 9],
-			offboard_period: 1u32.into(),
+			offboard_timeout: 1u32.into(),
 		};
 
 		#[extrinsic_call]

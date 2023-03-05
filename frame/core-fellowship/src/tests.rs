@@ -156,7 +156,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			passive_salary: [1, 2, 3, 4, 5, 6, 7, 8, 9],
 			demotion_period: [2, 4, 6, 8, 10, 12, 14, 16, 18],
 			min_promotion_period: [3, 6, 9, 12, 15, 18, 21, 24, 27],
-			offboard_period: 1,
+			offboard_timeout: 1,
 		};
 		assert_ok!(CoreFellowship::set_params(signed(1), Box::new(params)));
 		System::set_block_number(1);
@@ -204,7 +204,7 @@ fn set_params_works() {
 			passive_salary: [1, 2, 3, 4, 5, 6, 7, 8, 9],
 			demotion_period: [1, 2, 3, 4, 5, 6, 7, 8, 9],
 			min_promotion_period: [1, 2, 3, 4, 5, 10, 15, 20, 30],
-			offboard_period: 1,
+			offboard_timeout: 1,
 		};
 		assert_noop!(
 			CoreFellowship::set_params(signed(2), Box::new(params.clone())),
