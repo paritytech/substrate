@@ -190,7 +190,7 @@ impl ChainExtension<Test> for TestExtension {
 			},
 			2 => {
 				let mut env = env.buf_in_buf_out();
-				let weight = Weight::from_ref_time(env.read(5)?[4].into());
+				let weight = Weight::from_parts(env.read(5)?[4].into(), 0);
 				env.charge_weight(weight)?;
 				Ok(RetVal::Converging(id))
 			},
@@ -705,7 +705,7 @@ fn run_out_of_gas() {
 				RuntimeOrigin::signed(ALICE),
 				addr, // newly created account
 				0,
-				Weight::from_ref_time(1_000_000_000_000).set_proof_size(u64::MAX),
+				Weight::from_parts(1_000_000_000_000, u64::MAX),
 				None,
 				vec![],
 			),
@@ -2115,7 +2115,7 @@ fn lazy_removal_partial_remove_works() {
 
 	// We create a contract with some extra keys above the weight limit
 	let extra_keys = 7u32;
-	let weight_limit = Weight::from_ref_time(5_000_000_000);
+	let weight_limit = Weight::from_parts(5_000_000_000, 0);
 	let (_, max_keys) = ContractInfo::<Test>::deletion_budget(1, weight_limit);
 	let vals: Vec<_> = (0..max_keys + extra_keys)
 		.map(|i| (blake2_256(&i.encode()), (i as u32), (i as u32).encode()))

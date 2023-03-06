@@ -308,8 +308,8 @@ fn as_derivative_works() {
 #[test]
 fn as_derivative_handles_weight_refund() {
 	new_test_ext().execute_with(|| {
-		let start_weight = Weight::from_ref_time(100);
-		let end_weight = Weight::from_ref_time(75);
+		let start_weight = Weight::from_parts(100, 0);
+		let end_weight = Weight::from_parts(75, 0);
 		let diff = start_weight - end_weight;
 
 		// Full weight when ok
@@ -495,8 +495,8 @@ fn batch_weight_calculation_doesnt_overflow() {
 #[test]
 fn batch_handles_weight_refund() {
 	new_test_ext().execute_with(|| {
-		let start_weight = Weight::from_ref_time(100);
-		let end_weight = Weight::from_ref_time(75);
+		let start_weight = Weight::from_parts(100, 0);
+		let end_weight = Weight::from_parts(75, 0);
 		let diff = start_weight - end_weight;
 		let batch_len = 4;
 
@@ -611,8 +611,8 @@ fn batch_all_revert() {
 #[test]
 fn batch_all_handles_weight_refund() {
 	new_test_ext().execute_with(|| {
-		let start_weight = Weight::from_ref_time(100);
-		let end_weight = Weight::from_ref_time(75);
+		let start_weight = Weight::from_parts(100, 0);
+		let end_weight = Weight::from_parts(75, 0);
 		let diff = start_weight - end_weight;
 		let batch_len = 4;
 
@@ -739,7 +739,7 @@ fn force_batch_works() {
 			RuntimeOrigin::signed(1),
 			vec![
 				call_transfer(2, 5),
-				call_foobar(true, Weight::from_ref_time(75), None),
+				call_foobar(true, Weight::from_parts(75, 0), None),
 				call_transfer(2, 10),
 				call_transfer(2, 5),
 			]

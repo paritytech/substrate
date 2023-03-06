@@ -129,18 +129,18 @@ fn default_post_info() -> PostDispatchInfo {
 fn signed_extension_transaction_payment_work() {
 	ExtBuilder::default()
 		.balance_factor(10)
-		.base_weight(Weight::from_ref_time(5))
+		.base_weight(Weight::from_parts(5, 0))
 		.build()
 		.execute_with(|| {
 			let len = 10;
 			let pre = ChargeTransactionPayment::<Runtime>::from(0)
-				.pre_dispatch(&1, CALL, &info_from_weight(Weight::from_ref_time(5)), len)
+				.pre_dispatch(&1, CALL, &info_from_weight(Weight::from_parts(5, 0)), len)
 				.unwrap();
 			assert_eq!(Balances::free_balance(1), 100 - 5 - 5 - 10);
 
 			assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(
 				Some(pre),
-				&info_from_weight(Weight::from_ref_time(5)),
+				&info_from_weight(Weight::from_parts(5, 0)),
 				&default_post_info(),
 				len,
 				&Ok(())
@@ -152,14 +152,14 @@ fn signed_extension_transaction_payment_work() {
 			FeeUnbalancedAmount::mutate(|a| *a = 0);
 
 			let pre = ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
-				.pre_dispatch(&2, CALL, &info_from_weight(Weight::from_ref_time(100)), len)
+				.pre_dispatch(&2, CALL, &info_from_weight(Weight::from_parts(100, 0)), len)
 				.unwrap();
 			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 100 - 5);
 
 			assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(
 				Some(pre),
-				&info_from_weight(Weight::from_ref_time(100)),
-				&post_info_from_weight(Weight::from_ref_time(50)),
+				&info_from_weight(Weight::from_parts(100, 0)),
+				&post_info_from_weight(Weight::from_parts(50, 0)),
 				len,
 				&Ok(())
 			));
@@ -173,22 +173,22 @@ fn signed_extension_transaction_payment_work() {
 fn signed_extension_transaction_payment_multiplied_refund_works() {
 	ExtBuilder::default()
 		.balance_factor(10)
-		.base_weight(Weight::from_ref_time(5))
+		.base_weight(Weight::from_parts(5, 0))
 		.build()
 		.execute_with(|| {
 			let len = 10;
 			<NextFeeMultiplier<Runtime>>::put(Multiplier::saturating_from_rational(3, 2));
 
 			let pre = ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
-				.pre_dispatch(&2, CALL, &info_from_weight(Weight::from_ref_time(100)), len)
+				.pre_dispatch(&2, CALL, &info_from_weight(Weight::from_parts(100, 0)), len)
 				.unwrap();
 			// 5 base fee, 10 byte fee, 3/2 * 100 weight fee, 5 tip
 			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 150 - 5);
 
 			assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(
 				Some(pre),
-				&info_from_weight(Weight::from_ref_time(100)),
-				&post_info_from_weight(Weight::from_ref_time(50)),
+				&info_from_weight(Weight::from_parts(100, 0)),
+				&post_info_from_weight(Weight::from_parts(50, 0)),
 				len,
 				&Ok(())
 			));
@@ -219,7 +219,7 @@ fn signed_extension_transaction_payment_is_bounded() {
 #[test]
 fn signed_extension_allows_free_transactions() {
 	ExtBuilder::default()
-		.base_weight(Weight::from_ref_time(100))
+		.base_weight(Weight::from_parts(100, 0))
 		.balance_factor(0)
 		.build()
 		.execute_with(|| {
@@ -230,7 +230,7 @@ fn signed_extension_allows_free_transactions() {
 
 			// This is a completely free (and thus wholly insecure/DoS-ridden) transaction.
 			let operational_transaction = DispatchInfo {
-				weight: Weight::from_ref_time(0),
+				weight: Weight::from_parts(0, 0),
 				class: DispatchClass::Operational,
 				pays_fee: Pays::No,
 			};
@@ -243,7 +243,7 @@ fn signed_extension_allows_free_transactions() {
 
 			// like a InsecureFreeNormal
 			let free_transaction = DispatchInfo {
-				weight: Weight::from_ref_time(0),
+				weight: Weight::from_parts(0, 0),
 				class: DispatchClass::Normal,
 				pays_fee: Pays::Yes,
 			};
@@ -262,7 +262,7 @@ fn signed_extension_allows_free_transactions() {
 #[test]
 fn signed_ext_length_fee_is_also_updated_per_congestion() {
 	ExtBuilder::default()
-		.base_weight(Weight::from_ref_time(5))
+		.base_weight(Weight::from_parts(5, 0))
 		.balance_factor(10)
 		.build()
 		.execute_with(|| {
@@ -271,7 +271,7 @@ fn signed_ext_length_fee_is_also_updated_per_congestion() {
 			let len = 10;
 
 			assert_ok!(ChargeTransactionPayment::<Runtime>::from(10) // tipped
-				.pre_dispatch(&1, CALL, &info_from_weight(Weight::from_ref_time(3)), len));
+				.pre_dispatch(&1, CALL, &info_from_weight(Weight::from_parts(3, 0)), len));
 			assert_eq!(
 				Balances::free_balance(1),
 				100 // original
@@ -297,7 +297,7 @@ fn query_info_and_fee_details_works() {
 	let unsigned_xt_info = unsigned_xt.get_dispatch_info();
 
 	ExtBuilder::default()
-        .base_weight(Weight::from_ref_time(5))
+        .base_weight(Weight::from_parts(5, 0))
         .weight_fee(2)
         .build()
         .execute_with(|| {
@@ -354,7 +354,7 @@ fn query_call_info_and_fee_details_works() {
 	let len = encoded_call.len() as u32;
 
 	ExtBuilder::default()
-        .base_weight(Weight::from_ref_time(5))
+        .base_weight(Weight::from_parts(5, 0))
         .weight_fee(2)
         .build()
         .execute_with(|| {
@@ -392,7 +392,7 @@ fn query_call_info_and_fee_details_works() {
 #[test]
 fn compute_fee_works_without_multiplier() {
 	ExtBuilder::default()
-		.base_weight(Weight::from_ref_time(100))
+		.base_weight(Weight::from_parts(100, 0))
 		.byte_fee(10)
 		.balance_factor(0)
 		.build()
@@ -402,14 +402,14 @@ fn compute_fee_works_without_multiplier() {
 
 			// Tip only, no fees works
 			let dispatch_info = DispatchInfo {
-				weight: Weight::from_ref_time(0),
+				weight: Weight::from_parts(0, 0),
 				class: DispatchClass::Operational,
 				pays_fee: Pays::No,
 			};
 			assert_eq!(Pallet::<Runtime>::compute_fee(0, &dispatch_info, 10), 10);
 			// No tip, only base fee works
 			let dispatch_info = DispatchInfo {
-				weight: Weight::from_ref_time(0),
+				weight: Weight::from_parts(0, 0),
 				class: DispatchClass::Operational,
 				pays_fee: Pays::Yes,
 			};
@@ -420,7 +420,7 @@ fn compute_fee_works_without_multiplier() {
 			assert_eq!(Pallet::<Runtime>::compute_fee(42, &dispatch_info, 0), 520);
 			// Weight fee + base fee works
 			let dispatch_info = DispatchInfo {
-				weight: Weight::from_ref_time(1000),
+				weight: Weight::from_parts(1000, 0),
 				class: DispatchClass::Operational,
 				pays_fee: Pays::Yes,
 			};
@@ -431,7 +431,7 @@ fn compute_fee_works_without_multiplier() {
 #[test]
 fn compute_fee_works_with_multiplier() {
 	ExtBuilder::default()
-		.base_weight(Weight::from_ref_time(100))
+		.base_weight(Weight::from_parts(100, 0))
 		.byte_fee(10)
 		.balance_factor(0)
 		.build()
@@ -440,7 +440,7 @@ fn compute_fee_works_with_multiplier() {
 			<NextFeeMultiplier<Runtime>>::put(Multiplier::saturating_from_rational(3, 2));
 			// Base fee is unaffected by multiplier
 			let dispatch_info = DispatchInfo {
-				weight: Weight::from_ref_time(0),
+				weight: Weight::from_parts(0, 0),
 				class: DispatchClass::Operational,
 				pays_fee: Pays::Yes,
 			};
@@ -448,7 +448,7 @@ fn compute_fee_works_with_multiplier() {
 
 			// Everything works together :)
 			let dispatch_info = DispatchInfo {
-				weight: Weight::from_ref_time(123),
+				weight: Weight::from_parts(123, 0),
 				class: DispatchClass::Operational,
 				pays_fee: Pays::Yes,
 			};
@@ -463,7 +463,7 @@ fn compute_fee_works_with_multiplier() {
 #[test]
 fn compute_fee_works_with_negative_multiplier() {
 	ExtBuilder::default()
-		.base_weight(Weight::from_ref_time(100))
+		.base_weight(Weight::from_parts(100, 0))
 		.byte_fee(10)
 		.balance_factor(0)
 		.build()
@@ -473,7 +473,7 @@ fn compute_fee_works_with_negative_multiplier() {
 
 			// Base fee is unaffected by multiplier.
 			let dispatch_info = DispatchInfo {
-				weight: Weight::from_ref_time(0),
+				weight: Weight::from_parts(0, 0),
 				class: DispatchClass::Operational,
 				pays_fee: Pays::Yes,
 			};
@@ -481,7 +481,7 @@ fn compute_fee_works_with_negative_multiplier() {
 
 			// Everything works together.
 			let dispatch_info = DispatchInfo {
-				weight: Weight::from_ref_time(123),
+				weight: Weight::from_parts(123, 0),
 				class: DispatchClass::Operational,
 				pays_fee: Pays::Yes,
 			};
@@ -496,7 +496,7 @@ fn compute_fee_works_with_negative_multiplier() {
 #[test]
 fn compute_fee_does_not_overflow() {
 	ExtBuilder::default()
-		.base_weight(Weight::from_ref_time(100))
+		.base_weight(Weight::from_parts(100, 0))
 		.byte_fee(10)
 		.balance_factor(0)
 		.build()
@@ -518,14 +518,14 @@ fn compute_fee_does_not_overflow() {
 fn refund_does_not_recreate_account() {
 	ExtBuilder::default()
 		.balance_factor(10)
-		.base_weight(Weight::from_ref_time(5))
+		.base_weight(Weight::from_parts(5, 0))
 		.build()
 		.execute_with(|| {
 			// So events are emitted
 			System::set_block_number(10);
 			let len = 10;
 			let pre = ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
-				.pre_dispatch(&2, CALL, &info_from_weight(Weight::from_ref_time(100)), len)
+				.pre_dispatch(&2, CALL, &info_from_weight(Weight::from_parts(100, 0)), len)
 				.unwrap();
 			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 100 - 5);
 
@@ -535,8 +535,8 @@ fn refund_does_not_recreate_account() {
 
 			assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(
 				Some(pre),
-				&info_from_weight(Weight::from_ref_time(100)),
-				&post_info_from_weight(Weight::from_ref_time(50)),
+				&info_from_weight(Weight::from_parts(100, 0)),
+				&post_info_from_weight(Weight::from_parts(50, 0)),
 				len,
 				&Ok(())
 			));
@@ -558,19 +558,19 @@ fn refund_does_not_recreate_account() {
 fn actual_weight_higher_than_max_refunds_nothing() {
 	ExtBuilder::default()
 		.balance_factor(10)
-		.base_weight(Weight::from_ref_time(5))
+		.base_weight(Weight::from_parts(5, 0))
 		.build()
 		.execute_with(|| {
 			let len = 10;
 			let pre = ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
-				.pre_dispatch(&2, CALL, &info_from_weight(Weight::from_ref_time(100)), len)
+				.pre_dispatch(&2, CALL, &info_from_weight(Weight::from_parts(100, 0)), len)
 				.unwrap();
 			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 100 - 5);
 
 			assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(
 				Some(pre),
-				&info_from_weight(Weight::from_ref_time(100)),
-				&post_info_from_weight(Weight::from_ref_time(101)),
+				&info_from_weight(Weight::from_parts(100, 0)),
+				&post_info_from_weight(Weight::from_parts(101, 0)),
 				len,
 				&Ok(())
 			));
@@ -582,14 +582,14 @@ fn actual_weight_higher_than_max_refunds_nothing() {
 fn zero_transfer_on_free_transaction() {
 	ExtBuilder::default()
 		.balance_factor(10)
-		.base_weight(Weight::from_ref_time(5))
+		.base_weight(Weight::from_parts(5, 0))
 		.build()
 		.execute_with(|| {
 			// So events are emitted
 			System::set_block_number(10);
 			let len = 10;
 			let dispatch_info = DispatchInfo {
-				weight: Weight::from_ref_time(100),
+				weight: Weight::from_parts(100, 0),
 				pays_fee: Pays::No,
 				class: DispatchClass::Normal,
 			};
@@ -621,11 +621,11 @@ fn zero_transfer_on_free_transaction() {
 fn refund_consistent_with_actual_weight() {
 	ExtBuilder::default()
 		.balance_factor(10)
-		.base_weight(Weight::from_ref_time(7))
+		.base_weight(Weight::from_parts(7, 0))
 		.build()
 		.execute_with(|| {
-			let info = info_from_weight(Weight::from_ref_time(100));
-			let post_info = post_info_from_weight(Weight::from_ref_time(33));
+			let info = info_from_weight(Weight::from_parts(100, 0));
+			let post_info = post_info_from_weight(Weight::from_parts(33, 0));
 			let prev_balance = Balances::free_balance(2);
 			let len = 10;
 			let tip = 5;
@@ -662,7 +662,7 @@ fn should_alter_operational_priority() {
 
 	ExtBuilder::default().balance_factor(100).build().execute_with(|| {
 		let normal = DispatchInfo {
-			weight: Weight::from_ref_time(100),
+			weight: Weight::from_parts(100, 0),
 			class: DispatchClass::Normal,
 			pays_fee: Pays::Yes,
 		};
@@ -683,7 +683,7 @@ fn should_alter_operational_priority() {
 
 	ExtBuilder::default().balance_factor(100).build().execute_with(|| {
 		let op = DispatchInfo {
-			weight: Weight::from_ref_time(100),
+			weight: Weight::from_parts(100, 0),
 			class: DispatchClass::Operational,
 			pays_fee: Pays::Yes,
 		};
@@ -708,7 +708,7 @@ fn no_tip_has_some_priority() {
 
 	ExtBuilder::default().balance_factor(100).build().execute_with(|| {
 		let normal = DispatchInfo {
-			weight: Weight::from_ref_time(100),
+			weight: Weight::from_parts(100, 0),
 			class: DispatchClass::Normal,
 			pays_fee: Pays::Yes,
 		};
@@ -722,7 +722,7 @@ fn no_tip_has_some_priority() {
 
 	ExtBuilder::default().balance_factor(100).build().execute_with(|| {
 		let op = DispatchInfo {
-			weight: Weight::from_ref_time(100),
+			weight: Weight::from_parts(100, 0),
 			class: DispatchClass::Operational,
 			pays_fee: Pays::Yes,
 		};
@@ -742,7 +742,7 @@ fn higher_tip_have_higher_priority() {
 		let len = 10;
 		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
 			let normal = DispatchInfo {
-				weight: Weight::from_ref_time(100),
+				weight: Weight::from_parts(100, 0),
 				class: DispatchClass::Normal,
 				pays_fee: Pays::Yes,
 			};
@@ -754,7 +754,7 @@ fn higher_tip_have_higher_priority() {
 
 		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
 			let op = DispatchInfo {
-				weight: Weight::from_ref_time(100),
+				weight: Weight::from_parts(100, 0),
 				class: DispatchClass::Operational,
 				pays_fee: Pays::Yes,
 			};
@@ -781,10 +781,10 @@ fn higher_tip_have_higher_priority() {
 fn post_info_can_change_pays_fee() {
 	ExtBuilder::default()
 		.balance_factor(10)
-		.base_weight(Weight::from_ref_time(7))
+		.base_weight(Weight::from_parts(7, 0))
 		.build()
 		.execute_with(|| {
-			let info = info_from_weight(Weight::from_ref_time(100));
+			let info = info_from_weight(Weight::from_parts(100, 0));
 			let post_info = post_info_from_pays(Pays::No);
 			let prev_balance = Balances::free_balance(2);
 			let len = 10;

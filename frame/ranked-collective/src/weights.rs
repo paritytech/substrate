@@ -92,12 +92,12 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Minimum execution time: 26_177 nanoseconds.
 		Weight::from_parts(29_245_248, 10064)
 			// Standard Error: 18_611
-			.saturating_add(Weight::from_ref_time(10_916_516).saturating_mul(r.into()))
+			.saturating_add(Weight::from_parts(10_916_516, 0).saturating_mul(r.into()))
 			.saturating_add(T::DbWeight::get().reads(4_u64))
 			.saturating_add(T::DbWeight::get().reads((3_u64).saturating_mul(r.into())))
 			.saturating_add(T::DbWeight::get().writes(4_u64))
 			.saturating_add(T::DbWeight::get().writes((3_u64).saturating_mul(r.into())))
-			.saturating_add(Weight::from_proof_size(7547).saturating_mul(r.into()))
+			.saturating_add(Weight::from_parts(0, 7547).saturating_mul(r.into()))
 	}
 	/// Storage: RankedCollective Members (r:1 w:1)
 	/// Proof: RankedCollective Members (max_values: None, max_size: Some(42), added: 2517, mode: MaxEncodedLen)
@@ -115,7 +115,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Minimum execution time: 18_953 nanoseconds.
 		Weight::from_parts(19_570_567, 5006)
 			// Standard Error: 4_156
-			.saturating_add(Weight::from_ref_time(263_843).saturating_mul(r.into()))
+			.saturating_add(Weight::from_parts(263_843, 0).saturating_mul(r.into()))
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(4_u64))
 	}
@@ -135,7 +135,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Minimum execution time: 26_243 nanoseconds.
 		Weight::from_parts(28_532_816, 10064)
 			// Standard Error: 22_689
-			.saturating_add(Weight::from_ref_time(614_464).saturating_mul(r.into()))
+			.saturating_add(Weight::from_parts(614_464, 0).saturating_mul(r.into()))
 			.saturating_add(T::DbWeight::get().reads(4_u64))
 			.saturating_add(T::DbWeight::get().writes(4_u64))
 	}
@@ -170,7 +170,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Minimum execution time: 13_245 nanoseconds.
 		Weight::from_parts(17_420_271, 5394)
 			// Standard Error: 1_503
-			.saturating_add(Weight::from_ref_time(952_500).saturating_mul(n.into()))
+			.saturating_add(Weight::from_parts(952_500, 0).saturating_mul(n.into()))
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes((1_u64).saturating_mul(n.into())))
 	}
@@ -211,12 +211,12 @@ impl WeightInfo for () {
 		// Minimum execution time: 26_177 nanoseconds.
 		Weight::from_parts(29_245_248, 10064)
 			// Standard Error: 18_611
-			.saturating_add(Weight::from_ref_time(10_916_516).saturating_mul(r.into()))
+			.saturating_add(Weight::from_parts(10_916_516, 0).saturating_mul(r.into()))
 			.saturating_add(RocksDbWeight::get().reads(4_u64))
 			.saturating_add(RocksDbWeight::get().reads((3_u64).saturating_mul(r.into())))
 			.saturating_add(RocksDbWeight::get().writes(4_u64))
 			.saturating_add(RocksDbWeight::get().writes((3_u64).saturating_mul(r.into())))
-			.saturating_add(Weight::from_proof_size(7547).saturating_mul(r.into()))
+			.saturating_add(Weight::from_parts(0, 7547).saturating_mul(r.into()))
 	}
 	/// Storage: RankedCollective Members (r:1 w:1)
 	/// Proof: RankedCollective Members (max_values: None, max_size: Some(42), added: 2517, mode: MaxEncodedLen)
@@ -234,7 +234,7 @@ impl WeightInfo for () {
 		// Minimum execution time: 18_953 nanoseconds.
 		Weight::from_parts(19_570_567, 5006)
 			// Standard Error: 4_156
-			.saturating_add(Weight::from_ref_time(263_843).saturating_mul(r.into()))
+			.saturating_add(Weight::from_parts(263_843, 0).saturating_mul(r.into()))
 			.saturating_add(RocksDbWeight::get().reads(2_u64))
 			.saturating_add(RocksDbWeight::get().writes(4_u64))
 	}
@@ -254,7 +254,7 @@ impl WeightInfo for () {
 		// Minimum execution time: 26_243 nanoseconds.
 		Weight::from_parts(28_532_816, 10064)
 			// Standard Error: 22_689
-			.saturating_add(Weight::from_ref_time(614_464).saturating_mul(r.into()))
+			.saturating_add(Weight::from_parts(614_464, 0).saturating_mul(r.into()))
 			.saturating_add(RocksDbWeight::get().reads(4_u64))
 			.saturating_add(RocksDbWeight::get().writes(4_u64))
 	}
@@ -289,7 +289,7 @@ impl WeightInfo for () {
 		// Minimum execution time: 13_245 nanoseconds.
 		Weight::from_parts(17_420_271, 5394)
 			// Standard Error: 1_503
-			.saturating_add(Weight::from_ref_time(952_500).saturating_mul(n.into()))
+			.saturating_add(Weight::from_parts(952_500, 0).saturating_mul(n.into()))
 			.saturating_add(RocksDbWeight::get().reads(2_u64))
 			.saturating_add(RocksDbWeight::get().writes((1_u64).saturating_mul(n.into())))
 	}

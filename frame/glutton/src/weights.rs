@@ -73,10 +73,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		//  Measured:  `4`
 		//  Estimated: `1489`
 		// Minimum execution time: 10_218 nanoseconds.
-		Weight::from_ref_time(10_510_000)
-			.saturating_add(Weight::from_proof_size(1489))
+		Weight::from_parts(10_510_000, 0)
+			.saturating_add(Weight::from_parts(0, 1489))
 			// Standard Error: 1_582
-			.saturating_add(Weight::from_ref_time(1_577_660).saturating_mul(n.into()))
+			.saturating_add(Weight::from_parts(1_577_660, 0).saturating_mul(n.into()))
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 			.saturating_add(T::DbWeight::get().writes((1_u64).saturating_mul(n.into())))
@@ -91,10 +91,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		//  Measured:  `65`
 		//  Estimated: `1489`
 		// Minimum execution time: 10_993 nanoseconds.
-		Weight::from_ref_time(11_208_000)
-			.saturating_add(Weight::from_proof_size(1489))
+		Weight::from_parts(11_208_000, 0)
+			.saturating_add(Weight::from_parts(0, 1489))
 			// Standard Error: 1_386
-			.saturating_add(Weight::from_ref_time(1_072_330).saturating_mul(n.into()))
+			.saturating_add(Weight::from_parts(1_072_330, 0).saturating_mul(n.into()))
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 			.saturating_add(T::DbWeight::get().writes((1_u64).saturating_mul(n.into())))
@@ -105,10 +105,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 740 nanoseconds.
-		Weight::from_ref_time(770_000)
-			.saturating_add(Weight::from_proof_size(0))
+		Weight::from_parts(770_000, 0)
+			.saturating_add(Weight::from_parts(0, 0))
 			// Standard Error: 24
-			.saturating_add(Weight::from_ref_time(96_434).saturating_mul(i.into()))
+			.saturating_add(Weight::from_parts(96_434, 0).saturating_mul(i.into()))
 	}
 	/// Storage: Glutton TrashData (r:5000 w:0)
 	/// Proof: Glutton TrashData (max_values: Some(65000), max_size: Some(1036), added: 3016, mode: MaxEncodedLen)
@@ -118,12 +118,12 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		//  Measured:  `119036 + i * (1053 ±0)`
 		//  Estimated: `990 + i * (3016 ±0)`
 		// Minimum execution time: 630 nanoseconds.
-		Weight::from_ref_time(712_000)
-			.saturating_add(Weight::from_proof_size(990))
+		Weight::from_parts(712_000, 0)
+			.saturating_add(Weight::from_parts(0, 990))
 			// Standard Error: 4_326
-			.saturating_add(Weight::from_ref_time(5_500_880).saturating_mul(i.into()))
+			.saturating_add(Weight::from_parts(5_500_880, 0).saturating_mul(i.into()))
 			.saturating_add(T::DbWeight::get().reads((1_u64).saturating_mul(i.into())))
-			.saturating_add(Weight::from_proof_size(3016).saturating_mul(i.into()))
+			.saturating_add(Weight::from_parts(0, 3016).saturating_mul(i.into()))
 	}
 	/// Storage: Glutton Storage (r:1 w:0)
 	/// Proof: Glutton Storage (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
@@ -136,8 +136,8 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		//  Measured:  `1954313`
 		//  Estimated: `5242760`
 		// Minimum execution time: 56_743_236 nanoseconds.
-		Weight::from_ref_time(57_088_040_000)
-			.saturating_add(Weight::from_proof_size(5242760))
+		Weight::from_parts(57_088_040_000, 0)
+			.saturating_add(Weight::from_parts(0, 5242760))
 			.saturating_add(T::DbWeight::get().reads(1739_u64))
 	}
 	/// Storage: Glutton Storage (r:1 w:0)
@@ -151,8 +151,8 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		//  Measured:  `9671`
 		//  Estimated: `19048`
 		// Minimum execution time: 100_387_042 nanoseconds.
-		Weight::from_ref_time(100_987_577_000)
-			.saturating_add(Weight::from_proof_size(19048))
+		Weight::from_parts(100_987_577_000, 0)
+			.saturating_add(Weight::from_parts(0, 19048))
 			.saturating_add(T::DbWeight::get().reads(7_u64))
 	}
 	/// Storage: Glutton Storage (r:1 w:0)
@@ -164,8 +164,8 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		//  Measured:  `4`
 		//  Estimated: `2978`
 		// Minimum execution time: 4_256 nanoseconds.
-		Weight::from_ref_time(4_447_000)
-			.saturating_add(Weight::from_proof_size(2978))
+		Weight::from_parts(4_447_000, 0)
+			.saturating_add(Weight::from_parts(0, 2978))
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 	}
 	/// Storage: Glutton Compute (r:0 w:1)
@@ -175,8 +175,8 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 8_663 nanoseconds.
-		Weight::from_ref_time(8_864_000)
-			.saturating_add(Weight::from_proof_size(0))
+		Weight::from_parts(8_864_000, 0)
+			.saturating_add(Weight::from_parts(0, 0))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
 	/// Storage: Glutton Storage (r:0 w:1)
@@ -186,8 +186,8 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 8_653 nanoseconds.
-		Weight::from_ref_time(8_998_000)
-			.saturating_add(Weight::from_proof_size(0))
+		Weight::from_parts(8_998_000, 0)
+			.saturating_add(Weight::from_parts(0, 0))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
 }
@@ -204,10 +204,10 @@ impl WeightInfo for () {
 		//  Measured:  `4`
 		//  Estimated: `1489`
 		// Minimum execution time: 10_218 nanoseconds.
-		Weight::from_ref_time(10_510_000)
-			.saturating_add(Weight::from_proof_size(1489))
+		Weight::from_parts(10_510_000, 0)
+			.saturating_add(Weight::from_parts(0, 1489))
 			// Standard Error: 1_582
-			.saturating_add(Weight::from_ref_time(1_577_660).saturating_mul(n.into()))
+			.saturating_add(Weight::from_parts(1_577_660, 0).saturating_mul(n.into()))
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 			.saturating_add(RocksDbWeight::get().writes((1_u64).saturating_mul(n.into())))
@@ -222,10 +222,10 @@ impl WeightInfo for () {
 		//  Measured:  `65`
 		//  Estimated: `1489`
 		// Minimum execution time: 10_993 nanoseconds.
-		Weight::from_ref_time(11_208_000)
-			.saturating_add(Weight::from_proof_size(1489))
+		Weight::from_parts(11_208_000, 0)
+			.saturating_add(Weight::from_parts(0, 1489))
 			// Standard Error: 1_386
-			.saturating_add(Weight::from_ref_time(1_072_330).saturating_mul(n.into()))
+			.saturating_add(Weight::from_parts(1_072_330, 0).saturating_mul(n.into()))
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 			.saturating_add(RocksDbWeight::get().writes((1_u64).saturating_mul(n.into())))
@@ -236,10 +236,10 @@ impl WeightInfo for () {
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 740 nanoseconds.
-		Weight::from_ref_time(770_000)
-			.saturating_add(Weight::from_proof_size(0))
+		Weight::from_parts(770_000, 0)
+			.saturating_add(Weight::from_parts(0, 0))
 			// Standard Error: 24
-			.saturating_add(Weight::from_ref_time(96_434).saturating_mul(i.into()))
+			.saturating_add(Weight::from_parts(96_434, 0).saturating_mul(i.into()))
 	}
 	/// Storage: Glutton TrashData (r:5000 w:0)
 	/// Proof: Glutton TrashData (max_values: Some(65000), max_size: Some(1036), added: 3016, mode: MaxEncodedLen)
@@ -249,12 +249,12 @@ impl WeightInfo for () {
 		//  Measured:  `119036 + i * (1053 ±0)`
 		//  Estimated: `990 + i * (3016 ±0)`
 		// Minimum execution time: 630 nanoseconds.
-		Weight::from_ref_time(712_000)
-			.saturating_add(Weight::from_proof_size(990))
+		Weight::from_parts(712_000, 0)
+			.saturating_add(Weight::from_parts(0, 990))
 			// Standard Error: 4_326
-			.saturating_add(Weight::from_ref_time(5_500_880).saturating_mul(i.into()))
+			.saturating_add(Weight::from_parts(5_500_880, 0).saturating_mul(i.into()))
 			.saturating_add(RocksDbWeight::get().reads((1_u64).saturating_mul(i.into())))
-			.saturating_add(Weight::from_proof_size(3016).saturating_mul(i.into()))
+			.saturating_add(Weight::from_parts(0, 3016).saturating_mul(i.into()))
 	}
 	/// Storage: Glutton Storage (r:1 w:0)
 	/// Proof: Glutton Storage (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
@@ -267,8 +267,8 @@ impl WeightInfo for () {
 		//  Measured:  `1954313`
 		//  Estimated: `5242760`
 		// Minimum execution time: 56_743_236 nanoseconds.
-		Weight::from_ref_time(57_088_040_000)
-			.saturating_add(Weight::from_proof_size(5242760))
+		Weight::from_parts(57_088_040_000, 0)
+			.saturating_add(Weight::from_parts(0, 5242760))
 			.saturating_add(RocksDbWeight::get().reads(1739_u64))
 	}
 	/// Storage: Glutton Storage (r:1 w:0)
@@ -282,8 +282,8 @@ impl WeightInfo for () {
 		//  Measured:  `9671`
 		//  Estimated: `19048`
 		// Minimum execution time: 100_387_042 nanoseconds.
-		Weight::from_ref_time(100_987_577_000)
-			.saturating_add(Weight::from_proof_size(19048))
+		Weight::from_parts(100_987_577_000, 0)
+			.saturating_add(Weight::from_parts(0, 19048))
 			.saturating_add(RocksDbWeight::get().reads(7_u64))
 	}
 	/// Storage: Glutton Storage (r:1 w:0)
@@ -295,8 +295,8 @@ impl WeightInfo for () {
 		//  Measured:  `4`
 		//  Estimated: `2978`
 		// Minimum execution time: 4_256 nanoseconds.
-		Weight::from_ref_time(4_447_000)
-			.saturating_add(Weight::from_proof_size(2978))
+		Weight::from_parts(4_447_000, 0)
+			.saturating_add(Weight::from_parts(0, 2978))
 			.saturating_add(RocksDbWeight::get().reads(2_u64))
 	}
 	/// Storage: Glutton Compute (r:0 w:1)
@@ -306,8 +306,8 @@ impl WeightInfo for () {
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 8_663 nanoseconds.
-		Weight::from_ref_time(8_864_000)
-			.saturating_add(Weight::from_proof_size(0))
+		Weight::from_parts(8_864_000, 0)
+			.saturating_add(Weight::from_parts(0, 0))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
 	/// Storage: Glutton Storage (r:0 w:1)
@@ -317,8 +317,8 @@ impl WeightInfo for () {
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 8_653 nanoseconds.
-		Weight::from_ref_time(8_998_000)
-			.saturating_add(Weight::from_proof_size(0))
+		Weight::from_parts(8_998_000, 0)
+			.saturating_add(Weight::from_parts(0, 0))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
 }
