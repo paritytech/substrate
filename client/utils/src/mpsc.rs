@@ -109,8 +109,8 @@ impl<T> TracingUnboundedSender<T> {
 			{
 				error!(
 					"The number of unprocessed messages in channel `{}` exceeded {}.\n\
-						The channel was created at:\n{}\n
-						Last message was sent from:\n{}",
+					 The channel was created at:\n{}\n
+					 Last message was sent from:\n{}",
 					self.name,
 					self.queue_size_warning,
 					self.creation_backtrace,
