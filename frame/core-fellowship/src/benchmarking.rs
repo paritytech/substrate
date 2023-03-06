@@ -165,11 +165,9 @@ mod benchmarks {
 	#[benchmark]
 	fn approve() {
 		let member = make_member::<T, I>(1);
-
 		let then = frame_system::Pallet::<T>::block_number();
 		let now = then.saturating_plus_one();
 		frame_system::Pallet::<T>::set_block_number(now);
-
 		ensure_evidence::<T, I>(&member);
 
 		assert_eq!(Member::<T, I>::get(&member).unwrap().last_proof, then);

@@ -46,7 +46,7 @@
 //! 0 to become unranked. This process is called being offboarded and there is an extrinsic to do
 //! this explicitly when external factors to this pallet have caused the tracked account to become
 //! unranked. At rank 0, there is not a "demotion" period after which the account may be bumped to
-//! become offboarded but rather a "offboard timeout".
+//! become offboarded but rather an "offboard timeout".
 //!
 //! Candidates may be introduced (i.e. an account to go from unranked to rank of 0) by an origin
 //! of a different privilege to that for promotion. This allows the possibility for even a single
@@ -109,7 +109,7 @@ pub struct ParamsType<Balance, BlockNumber> {
 /// The status of a single member.
 #[derive(Encode, Decode, Eq, PartialEq, Clone, TypeInfo, MaxEncodedLen, RuntimeDebug)]
 pub struct MemberStatus<BlockNumber> {
-	/// Are they currently active>
+	/// Are they currently active?
 	is_active: bool,
 	/// The block number at which we last promoted them.
 	last_promotion: BlockNumber,
