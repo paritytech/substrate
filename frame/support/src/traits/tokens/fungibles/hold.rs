@@ -159,8 +159,8 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 
 	/// Reduce the balance on hold of `who` by `amount`.
 	///
-	/// If `precision` is `false` and it cannot be reduced by that amount for
-	/// some reason, return `Err` and don't reduce it at all. If `precision` is `BestEffort`, then
+	/// If `precision` is `Precision::Exact` and it cannot be reduced by that amount for
+	/// some reason, return `Err` and don't reduce it at all. If `precision` is `Precision::BestEffort`, then
 	/// reduce the balance of `who` by the most that is possible, up to `amount`.
 	///
 	/// In either case, if `Ok` is returned then the inner is the amount by which is was reduced.
