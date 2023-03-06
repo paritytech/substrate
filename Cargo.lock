@@ -505,69 +505,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "beefy-gadget"
-version = "4.0.0-dev"
-dependencies = [
- "array-bytes",
- "async-trait",
- "fnv",
- "futures",
- "log",
- "parity-scale-codec",
- "parking_lot 0.12.1",
- "sc-block-builder",
- "sc-client-api",
- "sc-consensus",
- "sc-keystore",
- "sc-network",
- "sc-network-common",
- "sc-network-gossip",
- "sc-network-test",
- "sc-utils",
- "serde",
- "sp-api",
- "sp-application-crypto",
- "sp-arithmetic",
- "sp-beefy",
- "sp-blockchain",
- "sp-consensus",
- "sp-consensus-grandpa",
- "sp-core",
- "sp-keyring",
- "sp-keystore",
- "sp-mmr-primitives",
- "sp-runtime",
- "sp-tracing",
- "substrate-prometheus-endpoint",
- "substrate-test-runtime-client",
- "tempfile",
- "thiserror",
- "tokio",
- "wasm-timer",
-]
-
-[[package]]
-name = "beefy-gadget-rpc"
-version = "4.0.0-dev"
-dependencies = [
- "beefy-gadget",
- "futures",
- "jsonrpsee",
- "log",
- "parity-scale-codec",
- "parking_lot 0.12.1",
- "sc-rpc",
- "serde",
- "serde_json",
- "sp-beefy",
- "sp-core",
- "sp-runtime",
- "substrate-test-runtime-client",
- "thiserror",
- "tokio",
-]
-
-[[package]]
 name = "binary-merkle-tree"
 version = "4.0.0-dev"
 dependencies = [
@@ -3373,9 +3310,9 @@ checksum = "fad582f4b9e86b6caa621cabeb0963332d92eea04729ab12892c2533951e6440"
 
 [[package]]
 name = "jobserver"
-version = "0.1.25"
+version = "0.1.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "068b1ee6743e4d11fb9c6a1e6064b3693a1b600e7f5f5988047d98b3dc9fb90b"
+checksum = "936cfd212a0155903bcbc060e316fb6cc7cbf2e1907329391ebadc1fe0ce77c2"
 dependencies = [
  "libc",
 ]
@@ -3605,6 +3542,7 @@ dependencies = [
  "pallet-referenda",
  "pallet-remark",
  "pallet-root-testing",
+ "pallet-salary",
  "pallet-scheduler",
  "pallet-session",
  "pallet-session-benchmarking",
@@ -4411,9 +4349,9 @@ dependencies = [
 
 [[package]]
 name = "memmap2"
-version = "0.5.8"
+version = "0.5.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b182332558b18d807c4ce1ca8ca983b34c3ee32765e47b3f0f69b90355cc1dc"
+checksum = "83faa42c0a078c393f6b29d5db232d8be22776a891f8f56e5284faee4a20b327"
 dependencies = [
  "libc",
 ]
@@ -4503,9 +4441,9 @@ dependencies = [
  "sc-client-api",
  "sc-offchain",
  "sp-api",
- "sp-beefy",
  "sp-blockchain",
  "sp-consensus",
+ "sp-consensus-beefy",
  "sp-core",
  "sp-mmr-primitives",
  "sp-runtime",
@@ -5566,7 +5504,7 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-beefy",
+ "sp-consensus-beefy",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -5591,7 +5529,7 @@ dependencies = [
  "scale-info",
  "serde",
  "sp-api",
- "sp-beefy",
+ "sp-consensus-beefy",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -5660,6 +5598,7 @@ dependencies = [
  "assert_matches",
  "bitflags",
  "env_logger 0.9.3",
+ "environmental",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -6426,6 +6365,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-salary"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-arithmetic",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-scheduler"
 version = "4.0.0-dev"
 dependencies = [
@@ -6823,9 +6779,9 @@ dependencies = [
 
 [[package]]
 name = "parity-db"
-version = "0.4.3"
+version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd684a725651d9588ef21f140a328b6b4f64e646b2e931f3e6f14f75eedf9980"
+checksum = "df89dd8311063c54ae4e03d9aeb597b04212a57e82c339344130a9cad9b3e2d9"
 dependencies = [
  "blake2",
  "crc32fast",
@@ -6837,6 +6793,7 @@ dependencies = [
  "memmap2",
  "parking_lot 0.12.1",
  "rand 0.8.5",
+ "siphasher",
  "snap",
 ]
 
@@ -8085,12 +8042,16 @@ version = "4.0.0-dev"
 dependencies = [
  "memmap2",
  "sc-chain-spec-derive",
+ "sc-client-api",
+ "sc-executor",
  "sc-network-common",
  "sc-telemetry",
  "serde",
  "serde_json",
+ "sp-blockchain",
  "sp-core",
  "sp-runtime",
+ "sp-state-machine",
 ]
 
 [[package]]
@@ -8340,6 +8301,69 @@ dependencies = [
  "sp-runtime",
  "substrate-test-runtime-client",
  "tempfile",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "sc-consensus-beefy"
+version = "4.0.0-dev"
+dependencies = [
+ "array-bytes",
+ "async-trait",
+ "fnv",
+ "futures",
+ "log",
+ "parity-scale-codec",
+ "parking_lot 0.12.1",
+ "sc-block-builder",
+ "sc-client-api",
+ "sc-consensus",
+ "sc-keystore",
+ "sc-network",
+ "sc-network-common",
+ "sc-network-gossip",
+ "sc-network-test",
+ "sc-utils",
+ "serde",
+ "sp-api",
+ "sp-application-crypto",
+ "sp-arithmetic",
+ "sp-blockchain",
+ "sp-consensus",
+ "sp-consensus-beefy",
+ "sp-consensus-grandpa",
+ "sp-core",
+ "sp-keyring",
+ "sp-keystore",
+ "sp-mmr-primitives",
+ "sp-runtime",
+ "sp-tracing",
+ "substrate-prometheus-endpoint",
+ "substrate-test-runtime-client",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "wasm-timer",
+]
+
+[[package]]
+name = "sc-consensus-beefy-rpc"
+version = "4.0.0-dev"
+dependencies = [
+ "futures",
+ "jsonrpsee",
+ "log",
+ "parity-scale-codec",
+ "parking_lot 0.12.1",
+ "sc-consensus-beefy",
+ "sc-rpc",
+ "serde",
+ "serde_json",
+ "sp-consensus-beefy",
+ "sp-core",
+ "sp-runtime",
+ "substrate-test-runtime-client",
  "thiserror",
  "tokio",
 ]
@@ -8633,9 +8657,9 @@ version = "0.10.0-dev"
 dependencies = [
  "array-bytes",
  "assert_matches",
+ "async-channel",
  "async-trait",
  "asynchronous-codec",
- "backtrace",
  "bytes",
  "either",
  "fnv",
@@ -9659,6 +9683,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "siphasher"
+version = "0.3.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7bd3e3206899af3f8b12af284fafc038cc1dc2b41d1b89dd17297221c5d225de"
+
+[[package]]
 name = "slab"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9843,26 +9873,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sp-beefy"
-version = "4.0.0-dev"
-dependencies = [
- "array-bytes",
- "lazy_static",
- "parity-scale-codec",
- "scale-info",
- "serde",
- "sp-api",
- "sp-application-crypto",
- "sp-core",
- "sp-io",
- "sp-keystore",
- "sp-mmr-primitives",
- "sp-runtime",
- "sp-std",
- "strum",
-]
-
-[[package]]
 name = "sp-block-builder"
 version = "4.0.0-dev"
 dependencies = [
@@ -9897,14 +9907,11 @@ dependencies = [
  "async-trait",
  "futures",
  "log",
- "parity-scale-codec",
  "sp-core",
  "sp-inherents",
  "sp-runtime",
  "sp-state-machine",
- "sp-std",
  "sp-test-primitives",
- "sp-version",
  "thiserror",
 ]
 
@@ -9945,6 +9952,26 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "sp-timestamp",
+]
+
+[[package]]
+name = "sp-consensus-beefy"
+version = "4.0.0-dev"
+dependencies = [
+ "array-bytes",
+ "lazy_static",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-api",
+ "sp-application-crypto",
+ "sp-core",
+ "sp-io",
+ "sp-keystore",
+ "sp-mmr-primitives",
+ "sp-runtime",
+ "sp-std",
+ "strum",
 ]
 
 [[package]]
@@ -10850,11 +10877,11 @@ dependencies = [
  "serde",
  "sp-api",
  "sp-application-crypto",
- "sp-beefy",
  "sp-block-builder",
  "sp-consensus",
  "sp-consensus-aura",
  "sp-consensus-babe",
+ "sp-consensus-beefy",
  "sp-consensus-grandpa",
  "sp-core",
  "sp-externalities",
@@ -10882,6 +10909,7 @@ dependencies = [
  "futures",
  "parity-scale-codec",
  "sc-block-builder",
+ "sc-chain-spec",
  "sc-client-api",
  "sc-consensus",
  "sp-api",
@@ -11445,9 +11473,9 @@ dependencies = [
 
 [[package]]
 name = "trie-bench"
-version = "0.35.0"
+version = "0.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22c1d18c423077531e693e87ace54ed9e4af1e4ce0a3ea8c9aa6608741074e2b"
+checksum = "ac2b7695feb8041efc0adaa09ed3a692ca7b7c997395954fdc838b5b078346f6"
 dependencies = [
  "criterion",
  "hash-db",
@@ -11461,9 +11489,9 @@ dependencies = [
 
 [[package]]
 name = "trie-db"
-version = "0.25.1"
+version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3390c0409daaa6027d6681393316f4ccd3ff82e1590a1e4725014e3ae2bf1920"
+checksum = "879380c0061b165ba1f036325b7f3478bc1a947814d9fc36d22c5d8e960b11bd"
 dependencies = [
  "hash-db",
  "hashbrown 0.13.2",
@@ -11629,7 +11657,7 @@ checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
  "digest 0.10.6",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 

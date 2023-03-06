@@ -35,6 +35,7 @@ rand = { version = "0.8", optional = true, default-features = false }
 rand_pcg = { version = "0.3", optional = true }
 
 # Substrate Dependencies
+environmental = { version = "1.1.4", default-features = false }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
@@ -80,6 +81,7 @@ std = [
 	"log/std",
 	"rand/std",
 	"wasmparser/std",
+	"environmental/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
