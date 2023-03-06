@@ -689,13 +689,11 @@ mod tests {
 	use frame_support::{
 		assert_err, parameter_types,
 		traits::{
-			fungible, /*LockIdentifier, LockableCurrency,
-			           *			WithdrawReasons, */
-			ConstU32, ConstU64, ConstU8, Currency,
+			fungible, ConstU32, ConstU64, ConstU8, Currency,
 		},
 		weights::{ConstantMultiplier, IdentityFee, RuntimeDbWeight, Weight, WeightToFee},
 	};
-	use frame_system::{/* Call as SystemCall, */ ChainContext, LastRuntimeUpgradeInfo};
+	use frame_system::{ChainContext, LastRuntimeUpgradeInfo};
 	use pallet_balances::Call as BalancesCall;
 	use pallet_transaction_payment::CurrencyAdapter;
 
