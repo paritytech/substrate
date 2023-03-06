@@ -689,9 +689,9 @@ mod tests {
 	use frame_support::{
 		assert_err, parameter_types,
 		traits::{
-			ConstU32, ConstU64, ConstU8,
-			Currency, /*LockIdentifier, LockableCurrency,
-			          *			WithdrawReasons, */
+			fungible, /*LockIdentifier, LockableCurrency,
+			           *			WithdrawReasons, */
+			ConstU32, ConstU64, ConstU8, Currency,
 		},
 		weights::{ConstantMultiplier, IdentityFee, RuntimeDbWeight, Weight, WeightToFee},
 	};
@@ -902,9 +902,9 @@ mod tests {
 		type ReserveIdentifier = [u8; 8];
 		type WeightInfo = ();
 		type FreezeIdentifier = ();
-		type MaxFreezes = ();
+		type MaxFreezes = ConstU32<1>;
 		type HoldIdentifier = ();
-		type MaxHolds = ();
+		type MaxHolds = ConstU32<1>;
 	}
 
 	parameter_types! {
@@ -1265,54 +1265,34 @@ mod tests {
 			);
 		});
 	}
-	/*
-		#[test]
-		fn can_pay_for_tx_fee_on_full_lock() {
-			let id: LockIdentifier = *b"0       ";
-			let execute_with_lock = |lock: WithdrawReasons| {
-				let mut t = new_test_ext(1);
-				t.execute_with(|| {
-					<pallet_balances::Pallet<Runtime> as LockableCurrency<Balance>>::set_lock(
-						id, &1, 110, lock,
-					);
-					let xt = TestXt::new(
-						RuntimeCall::System(SystemCall::remark { remark: vec![1u8] }),
-						sign_extra(1, 0, 0),
-					);
-					let weight = xt.get_dispatch_info().weight +
-						<Runtime as frame_system::Config>::BlockWeights::get()
-							.get(DispatchClass::Normal)
-							.base_extrinsic;
-					let fee: Balance =
-						<Runtime as pallet_transaction_payment::Config>::WeightToFee::weight_to_fee(
-							&weight,
-						);
-					Executive::initialize_block(&Header::new(
-						1,
-						H256::default(),
-						H256::default(),
-						[69u8; 32].into(),
-						Digest::default(),
-					));
 
-					if lock == WithdrawReasons::except(WithdrawReasons::TRANSACTION_PAYMENT) {
-						assert!(Executive::apply_extrinsic(xt).unwrap().is_ok());
-						// tx fee has been deducted.
-						assert_eq!(<pallet_balances::Pallet<Runtime>>::total_balance(&1), 111 - fee);
-					} else {
-						assert_eq!(
-							Executive::apply_extrinsic(xt),
-							Err(InvalidTransaction::Payment.into()),
-						);
-						assert_eq!(<pallet_balances::Pallet<Runtime>>::total_balance(&1), 111);
-					}
-				});
-			};
+	#[test]
+	fn can_not_pay_for_tx_fee_on_full_lock() {
+		let mut t = new_test_ext(1);
+		t.execute_with(|| {
+			<pallet_balances::Pallet<Runtime> as fungible::MutateFreeze<u64>>::set_freeze(
+				&(),
+				&1,
+				110,
+			)
+			.unwrap();
+			let xt = TestXt::new(
+				RuntimeCall::System(frame_system::Call::remark { remark: vec![1u8] }),
+				sign_extra(1, 0, 0),
+			);
+			Executive::initialize_block(&Header::new(
+				1,
+				H256::default(),
+				H256::default(),
+				[69u8; 32].into(),
+				Digest::default(),
+			));
 
-			execute_with_lock(WithdrawReasons::all());
-			execute_with_lock(WithdrawReasons::except(WithdrawReasons::TRANSACTION_PAYMENT));
-		}
-	*/
+			assert_eq!(Executive::apply_extrinsic(xt), Err(InvalidTransaction::Payment.into()),);
+			assert_eq!(<pallet_balances::Pallet<Runtime>>::total_balance(&1), 111);
+		});
+	}
+
 	#[test]
 	fn block_hooks_weight_is_stored() {
 		new_test_ext(1).execute_with(|| {
