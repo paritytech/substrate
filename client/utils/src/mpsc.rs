@@ -107,9 +107,6 @@ impl<T> TracingUnboundedSender<T> {
 					.compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
 					.is_ok()
 			{
-				// `warning_fired` and `len()` are not synchronized, so it's possible
-				// that the warning is fired few times before the `warning_fired` is seen
-				// by all threads. This seems better than introducing a mutex guarding them.
 				error!(
 					"The number of unprocessed messages in channel `{}` exceeded {}.\n\
 						The channel was created at:\n{}\n
@@ -127,21 +124,8 @@ impl<T> TracingUnboundedSender<T> {
 }
 
 impl<T> TracingUnboundedReceiver<T> {
-	fn consume(&mut self) {
-		// the number of messages about to be dropped
-		let count = self.inner.len();
-		// discount the messages
-		if count > 0 {
-			UNBOUNDED_CHANNELS_COUNTER
-				.with_label_values(&[self.name, "dropped"])
-				.inc_by(count.saturated_into());
-		}
-	}
-
-	/// Proxy function to [`async_channel::Receiver`]
-	/// that consumes all messages first and updates the counter.
+	/// Proxy function to [`async_channel::Receiver`].
 	pub fn close(&mut self) -> bool {
-		self.consume();
 		self.inner.close()
 	}
 
@@ -157,7 +141,15 @@ impl<T> TracingUnboundedReceiver<T> {
 
 impl<T> Drop for TracingUnboundedReceiver<T> {
 	fn drop(&mut self) {
-		self.consume();
+		self.close();
+		// the number of messages about to be dropped
+		let count = self.inner.len();
+		// discount the messages
+		if count > 0 {
+			UNBOUNDED_CHANNELS_COUNTER
+				.with_label_values(&[self.name, "dropped"])
+				.inc_by(count.saturated_into());
+		}
 	}
 }
 
