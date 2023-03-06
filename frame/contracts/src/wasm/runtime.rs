@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +21,7 @@ use crate::{
 	exec::{ExecError, ExecResult, Ext, FixSizedKey, TopicOf, VarSizedKey},
 	gas::{ChargedAmount, Token},
 	schedule::HostFnWeights,
-	BalanceOf, CodeHash, Config, Error, SENTINEL,
+	BalanceOf, CodeHash, Config, DebugBufferVec, Error, SENTINEL,
 };
 
 use bitflags::bitflags;
@@ -37,6 +37,22 @@ use wasmi::{core::HostError, errors::LinkerError, Linker, Memory, Store};
 /// The maximum nesting depth a contract can use when encoding types.
 const MAX_DECODE_NESTING: u32 = 256;
 
+/// Passed to [`Environment`] to determine whether it should expose deprecated interfaces.
+pub enum AllowDeprecatedInterface {
+	/// No deprecated interfaces are exposed.
+	No,
+	/// Deprecated interfaces are exposed.
+	Yes,
+}
+
+/// Passed to [`Environment`] to determine whether it should expose unstable interfaces.
+pub enum AllowUnstableInterface {
+	/// No unstable interfaces are exposed.
+	No,
+	/// Unstable interfaces are exposed.
+	Yes,
+}
+
 /// Trait implemented by the [`define_env`](pallet_contracts_proc_macro::define_env) macro for the
 /// emitted `Env` struct.
 pub trait Environment<HostState> {
@@ -45,14 +61,15 @@ pub trait Environment<HostState> {
 	fn define(
 		store: &mut Store<HostState>,
 		linker: &mut Linker<HostState>,
-		allow_unstable: bool,
+		allow_unstable: AllowUnstableInterface,
+		allow_deprecated: AllowDeprecatedInterface,
 	) -> Result<(), LinkerError>;
 }
 
 /// Type of a storage key.
 #[allow(dead_code)]
 enum KeyType {
-	/// Deprecated fix sized key `[u8;32]`.
+	/// Legacy fix sized key `[u8;32]`.
 	Fix,
 	/// Variable sized key used in transparent hashing,
 	/// cannot be larger than MaxStorageKeyLen.
@@ -91,21 +108,14 @@ pub enum ReturnCode {
 	CalleeReverted = 2,
 	/// The passed key does not exist in storage.
 	KeyNotFound = 3,
-	/// Deprecated and no longer returned: There is only the minimum balance.
-	_BelowSubsistenceThreshold = 4,
 	/// See [`Error::TransferFailed`].
 	TransferFailed = 5,
-	/// Deprecated and no longer returned: Endowment is no longer required.
-	_EndowmentTooLow = 6,
 	/// No code could be found at the supplied code hash.
 	CodeNotFound = 7,
 	/// The contract that was called is no contract (a plain account).
 	NotCallable = 8,
-	/// The call to `seal_debug_message` had no effect because debug message
-	/// recording was disabled.
-	LoggingDisabled = 9,
 	/// The call dispatched by `seal_call_runtime` was executed but returned an error.
-	CallRuntimeReturnedError = 10,
+	CallRuntimeFailed = 10,
 	/// ECDSA pubkey recovery failed (most probably wrong recovery id or signature), or
 	/// ECDSA compressed pubkey conversion into Ethereum address failed (most probably
 	/// wrong pubkey provided).
@@ -216,8 +226,8 @@ pub enum RuntimeCosts {
 	Random,
 	/// Weight of calling `seal_deposit_event` with the given number of topics and event size.
 	DepositEvent { num_topic: u32, len: u32 },
-	/// Weight of calling `seal_debug_message`.
-	DebugMessage,
+	/// Weight of calling `seal_debug_message` per byte of passed message.
+	DebugMessage(u32),
 	/// Weight of calling `seal_set_storage` for the given storage item sizes.
 	SetStorage { old_bytes: u32, new_bytes: u32 },
 	/// Weight of calling `seal_clear_storage` per cleared byte.
@@ -272,7 +282,7 @@ impl RuntimeCosts {
 	fn token<T: Config>(&self, s: &HostFnWeights<T>) -> RuntimeToken {
 		use self::RuntimeCosts::*;
 		let weight = match *self {
-			MeteringBlock(amount) => s.gas.saturating_add(Weight::from_ref_time(amount)),
+			MeteringBlock(amount) => s.gas.saturating_add(Weight::from_parts(amount, 0)),
 			CopyFromContract(len) => s.return_per_byte.saturating_mul(len.into()),
 			CopyToContract(len) => s.input_per_byte.saturating_mul(len.into()),
 			Caller => s.caller,
@@ -296,7 +306,9 @@ impl RuntimeCosts {
 				.deposit_event
 				.saturating_add(s.deposit_event_per_topic.saturating_mul(num_topic.into()))
 				.saturating_add(s.deposit_event_per_byte.saturating_mul(len.into())),
-			DebugMessage => s.debug_message,
+			DebugMessage(len) => s
+				.debug_message
+				.saturating_add(s.deposit_event_per_byte.saturating_mul(len.into())),
 			SetStorage { new_bytes, old_bytes } => s
 				.set_storage
 				.saturating_add(s.set_storage_per_new_byte.saturating_mul(new_bytes.into()))
@@ -891,7 +903,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 					self.charge_gas(RuntimeCosts::CallSurchargeTransfer)?;
 				}
 				self.ext.call(
-					Weight::from_ref_time(gas),
+					Weight::from_parts(gas, 0),
 					callee,
 					value,
 					input_data,
@@ -946,7 +958,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 		salt_ptr: u32,
 		salt_len: u32,
 	) -> Result<ReturnCode, TrapReason> {
-		let gas = Weight::from_ref_time(gas);
+		let gas = Weight::from_parts(gas, 0);
 		self.charge_gas(RuntimeCosts::InstantiateBase { input_data_len, salt_len })?;
 		let value: BalanceOf<<E as Ext>::T> = self.read_sandbox_memory_as(memory, value_ptr)?;
 		if value > 0u32.into() {
@@ -1280,7 +1292,7 @@ pub mod env {
 
 	/// Make a call to another contract.
 	///
-	/// # Deprecation
+	/// # New version available
 	///
 	/// This is equivalent to calling the newer version of this function with
 	/// `flags` set to `ALLOW_REENTRY`. See the newer version for documentation.
@@ -1418,7 +1430,7 @@ pub mod env {
 
 	/// Instantiate a contract with the specified code hash.
 	///
-	/// # Deprecation
+	/// # New version available
 	///
 	/// This is equivalent to calling the newer version of this function. The newer version
 	/// drops the now unnecessary length fields.
@@ -1538,7 +1550,7 @@ pub mod env {
 
 	/// Remove the calling account and transfer remaining balance.
 	///
-	/// # Deprecation
+	/// # New version available
 	///
 	/// This is equivalent to calling the newer version of this function. The newer version
 	/// drops the now unnecessary length fields.
@@ -1790,7 +1802,7 @@ pub mod env {
 		out_ptr: u32,
 		out_len_ptr: u32,
 	) -> Result<(), TrapReason> {
-		let gas = Weight::from_ref_time(gas);
+		let gas = Weight::from_parts(gas, 0);
 		ctx.charge_gas(RuntimeCosts::WeightToFee)?;
 		Ok(ctx.write_sandbox_output(
 			memory,
@@ -1879,12 +1891,8 @@ pub mod env {
 	/// space at `out_ptr` is less than the size of the value a trap is triggered.
 	///
 	/// The data is encoded as `T::Hash`.
-	///
-	/// # Deprecation
-	///
-	/// This function is deprecated. Users should migrate to the [`super::seal1::Api::random()`]
-	/// version.
 	#[prefixed_alias]
+	#[deprecated]
 	fn random(
 		ctx: _,
 		memory: _,
@@ -1931,6 +1939,7 @@ pub mod env {
 	/// commitment.
 	#[version(1)]
 	#[prefixed_alias]
+	#[deprecated]
 	fn random(
 		ctx: _,
 		memory: _,
@@ -2001,10 +2010,11 @@ pub mod env {
 	/// `out_ptr`. This call overwrites it with the size of the value. If the available
 	/// space at `out_ptr` is less than the size of the value a trap is triggered.
 	///
-	/// # Deprecation
+	/// # Note
 	///
 	/// There is no longer a tombstone deposit. This function always returns `0`.
 	#[prefixed_alias]
+	#[deprecated]
 	fn tombstone_deposit(
 		ctx: _,
 		memory: _,
@@ -2030,6 +2040,7 @@ pub mod env {
 	/// The state rent functionality was removed. This is stub only exists for
 	/// backwards compatiblity
 	#[prefixed_alias]
+	#[deprecated]
 	fn restore_to(
 		ctx: _,
 		memory: _,
@@ -2042,7 +2053,7 @@ pub mod env {
 		_delta_ptr: u32,
 		_delta_count: u32,
 	) -> Result<(), TrapReason> {
-		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
+		ctx.charge_gas(RuntimeCosts::DebugMessage(0))?;
 		Ok(())
 	}
 
@@ -2054,6 +2065,7 @@ pub mod env {
 	/// backwards compatiblity
 	#[version(1)]
 	#[prefixed_alias]
+	#[deprecated]
 	fn restore_to(
 		ctx: _,
 		memory: _,
@@ -2063,8 +2075,61 @@ pub mod env {
 		_delta_ptr: u32,
 		_delta_count: u32,
 	) -> Result<(), TrapReason> {
-		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
+		ctx.charge_gas(RuntimeCosts::DebugMessage(0))?;
 		Ok(())
+	}
+
+	/// Was used to set rent allowance of the contract.
+	///
+	/// # Note
+	///
+	/// The state rent functionality was removed. This is stub only exists for
+	/// backwards compatiblity.
+	#[prefixed_alias]
+	#[deprecated]
+	fn set_rent_allowance(
+		ctx: _,
+		memory: _,
+		_value_ptr: u32,
+		_value_len: u32,
+	) -> Result<(), TrapReason> {
+		ctx.charge_gas(RuntimeCosts::DebugMessage(0))?;
+		Ok(())
+	}
+
+	/// Was used to set rent allowance of the contract.
+	///
+	/// # Note
+	///
+	/// The state rent functionality was removed. This is stub only exists for
+	/// backwards compatiblity.
+	#[version(1)]
+	#[prefixed_alias]
+	#[deprecated]
+	fn set_rent_allowance(ctx: _, _memory: _, _value_ptr: u32) -> Result<(), TrapReason> {
+		ctx.charge_gas(RuntimeCosts::DebugMessage(0))?;
+		Ok(())
+	}
+
+	/// Was used to store the rent allowance into the supplied buffer.
+	///
+	/// # Note
+	///
+	/// The state rent functionality was removed. This is stub only exists for
+	/// backwards compatiblity.
+	#[prefixed_alias]
+	#[deprecated]
+	fn rent_allowance(ctx: _, memory: _, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
+		ctx.charge_gas(RuntimeCosts::Balance)?;
+		let rent_allowance = <BalanceOf<E::T>>::max_value().encode();
+		Ok(ctx.write_sandbox_output(
+			memory,
+			out_ptr,
+			out_len_ptr,
+			&rent_allowance,
+			false,
+			already_charged,
+		)?)
 	}
 
 	/// Deposit a contract event with the data buffer and optional list of topics. There is a limit
@@ -2108,56 +2173,6 @@ pub mod env {
 		ctx.ext.deposit_event(topics, event_data);
 
 		Ok(())
-	}
-
-	/// Was used to set rent allowance of the contract.
-	///
-	/// # Note
-	///
-	/// The state rent functionality was removed. This is stub only exists for
-	/// backwards compatiblity.
-	#[prefixed_alias]
-	fn set_rent_allowance(
-		ctx: _,
-		memory: _,
-		_value_ptr: u32,
-		_value_len: u32,
-	) -> Result<(), TrapReason> {
-		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
-		Ok(())
-	}
-
-	/// Was used to set rent allowance of the contract.
-	///
-	/// # Note
-	///
-	/// The state rent functionality was removed. This is stub only exists for
-	/// backwards compatiblity.
-	#[version(1)]
-	#[prefixed_alias]
-	fn set_rent_allowance(ctx: _, _memory: _, _value_ptr: u32) -> Result<(), TrapReason> {
-		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
-		Ok(())
-	}
-
-	/// Was used to store the rent allowance into the supplied buffer.
-	///
-	/// # Note
-	///
-	/// The state rent functionality was removed. This is stub only exists for
-	/// backwards compatiblity.
-	#[prefixed_alias]
-	fn rent_allowance(ctx: _, memory: _, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
-		ctx.charge_gas(RuntimeCosts::Balance)?;
-		let rent_allowance = <BalanceOf<E::T>>::max_value().encode();
-		Ok(ctx.write_sandbox_output(
-			memory,
-			out_ptr,
-			out_len_ptr,
-			&rent_allowance,
-			false,
-			already_charged,
-		)?)
 	}
 
 	/// Stores the current block number of the current contract into the supplied buffer.
@@ -2346,7 +2361,7 @@ pub mod env {
 	/// Emit a custom debug message.
 	///
 	/// No newlines are added to the supplied message.
-	/// Specifying invalid UTF-8 triggers a trap.
+	/// Specifying invalid UTF-8 just drops the message with no trap.
 	///
 	/// This is a no-op if debug message recording is disabled which is always the case
 	/// when the code is executing on-chain. The message is interpreted as UTF-8 and
@@ -2367,15 +2382,15 @@ pub mod env {
 		str_ptr: u32,
 		str_len: u32,
 	) -> Result<ReturnCode, TrapReason> {
-		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
+		let str_len = str_len.min(DebugBufferVec::<E::T>::bound() as u32);
+		ctx.charge_gas(RuntimeCosts::DebugMessage(str_len))?;
 		if ctx.ext.append_debug_buffer("") {
 			let data = ctx.read_sandbox_memory(memory, str_ptr, str_len)?;
-			let msg =
-				core::str::from_utf8(&data).map_err(|_| <Error<E::T>>::DebugMessageInvalidUTF8)?;
-			ctx.ext.append_debug_buffer(msg);
-			return Ok(ReturnCode::Success)
+			if let Some(msg) = core::str::from_utf8(&data).ok() {
+				ctx.ext.append_debug_buffer(msg);
+			}
 		}
-		Ok(ReturnCode::LoggingDisabled)
+		Ok(ReturnCode::Success)
 	}
 
 	/// Call some dispatchable of the runtime.
@@ -2389,21 +2404,21 @@ pub mod env {
 	///
 	/// # Parameters
 	///
-	/// - `input_ptr`: the pointer into the linear memory where the input data is placed.
-	/// - `input_len`: the length of the input data in bytes.
+	/// - `call_ptr`: the pointer into the linear memory where the input data is placed.
+	/// - `call_len`: the length of the input data in bytes.
 	///
 	/// # Return Value
 	///
 	/// Returns `ReturnCode::Success` when the dispatchable was succesfully executed and
 	/// returned `Ok`. When the dispatchable was exeuted but returned an error
-	/// `ReturnCode::CallRuntimeReturnedError` is returned. The full error is not
+	/// `ReturnCode::CallRuntimeFailed` is returned. The full error is not
 	/// provided because it is not guaranteed to be stable.
 	///
 	/// # Comparison with `ChainExtension`
 	///
 	/// Just as a chain extension this API allows the runtime to extend the functionality
-	/// of contracts. While making use of this function is generelly easier it cannot be
-	/// used in call cases. Consider writing a chain extension if you need to do perform
+	/// of contracts. While making use of this function is generally easier it cannot be
+	/// used in all cases. Consider writing a chain extension if you need to do perform
 	/// one of the following tasks:
 	///
 	/// - Return data.
@@ -2429,7 +2444,7 @@ pub mod env {
 		ctx.adjust_gas(charged, RuntimeCosts::CallRuntime(actual_weight));
 		match result {
 			Ok(_) => Ok(ReturnCode::Success),
-			Err(_) => Ok(ReturnCode::CallRuntimeReturnedError),
+			Err(_) => Ok(ReturnCode::CallRuntimeFailed),
 		}
 	}
 

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -354,18 +354,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if let Some(check_issuer) = maybe_check_issuer {
 				ensure!(check_issuer == details.issuer, Error::<T, I>::NoPermission);
 			}
-			debug_assert!(
-				T::Balance::max_value() - details.supply >= amount,
-				"checked in prep; qed"
-			);
+			debug_assert!(details.supply.checked_add(&amount).is_some(), "checked in prep; qed");
+
 			details.supply = details.supply.saturating_add(amount);
+
 			Ok(())
 		})?;
-		Self::deposit_event(Event::Issued {
-			asset_id: id,
-			owner: beneficiary.clone(),
-			total_supply: amount,
-		});
+
+		Self::deposit_event(Event::Issued { asset_id: id, owner: beneficiary.clone(), amount });
+
 		Ok(())
 	}
 
@@ -926,5 +923,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			});
 			Ok(())
 		})
+	}
+
+	/// Returns all the non-zero balances for all assets of the given `account`.
+	pub fn account_balances(account: T::AccountId) -> Vec<(T::AssetId, T::Balance)> {
+		Asset::<T, I>::iter_keys()
+			.filter_map(|id| Self::maybe_balance(id, account.clone()).map(|balance| (id, balance)))
+			.collect::<Vec<_>>()
 	}
 }

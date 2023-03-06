@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -188,14 +188,14 @@ macro_rules! decl_tests {
 						ChargeTransactionPayment::from(1),
 						&1,
 						CALL,
-						&info_from_weight(Weight::from_ref_time(1)),
+						&info_from_weight(Weight::from_parts(1, 0)),
 						1,
 					).is_err());
 					assert_ok!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
 						ChargeTransactionPayment::from(0),
 						&1,
 						CALL,
-						&info_from_weight(Weight::from_ref_time(1)),
+						&info_from_weight(Weight::from_parts(1, 0)),
 						1,
 					));
 
@@ -206,14 +206,14 @@ macro_rules! decl_tests {
 						ChargeTransactionPayment::from(1),
 						&1,
 						CALL,
-						&info_from_weight(Weight::from_ref_time(1)),
+						&info_from_weight(Weight::from_parts(1, 0)),
 						1,
 					).is_err());
 					assert!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
 						ChargeTransactionPayment::from(0),
 						&1,
 						CALL,
-						&info_from_weight(Weight::from_ref_time(1)),
+						&info_from_weight(Weight::from_parts(1, 0)),
 						1,
 					).is_err());
 				});

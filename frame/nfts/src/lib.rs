@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -67,6 +67,7 @@ pub mod pallet {
 	use super::*;
 	use frame_support::{pallet_prelude::*, traits::ExistenceRequirement};
 	use frame_system::pallet_prelude::*;
+	use sp_runtime::traits::{IdentifyAccount, Verify};
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -167,9 +168,23 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxDeadlineDuration: Get<<Self as SystemConfig>::BlockNumber>;
 
+		/// The max number of attributes a user could set per call.
+		#[pallet::constant]
+		type MaxAttributesPerCall: Get<u32>;
+
 		/// Disables some of pallet's features.
 		#[pallet::constant]
 		type Features: Get<PalletFeatures>;
+
+		/// Off-Chain signature type.
+		///
+		/// Can verify whether an `Self::OffchainPublic` created a signature.
+		type OffchainSignature: Verify<Signer = Self::OffchainPublic> + Parameter;
+
+		/// Off-Chain public key.
+		///
+		/// Must identify as an on-chain `Self::AccountId`.
+		type OffchainPublic: IdentifyAccount<AccountId = Self::AccountId>;
 
 		#[cfg(feature = "runtime-benchmarks")]
 		/// A set of helper functions for benchmarking.
@@ -511,6 +526,20 @@ pub mod pallet {
 			price: Option<PriceWithDirection<ItemPrice<T, I>>>,
 			deadline: <T as SystemConfig>::BlockNumber,
 		},
+		/// New attributes have been set for an `item` of the `collection`.
+		PreSignedAttributesSet {
+			collection: T::CollectionId,
+			item: T::ItemId,
+			namespace: AttributeNamespace<T::AccountId>,
+		},
+		/// A new attribute in the `Pallet` namespace was set for the `collection` or an `item`
+		/// within that `collection`.
+		PalletAttributeSet {
+			collection: T::CollectionId,
+			item: Option<T::ItemId>,
+			attribute: PalletAttributes<T::CollectionId>,
+			value: BoundedVec<u8, T::ValueLimit>,
+		},
 	}
 
 	#[pallet::error]
@@ -591,6 +620,16 @@ pub mod pallet {
 		AlreadyClaimed,
 		/// The provided data is incorrect.
 		IncorrectData,
+		/// The extrinsic was sent by the wrong origin.
+		WrongOrigin,
+		/// The provided signature is incorrect.
+		WrongSignature,
+		/// The provided metadata might be too long.
+		IncorrectMetadata,
+		/// Can't set more attributes per one call.
+		MaxAttributesLimitReached,
+		/// The provided namespace isn't supported in this call.
+		WrongNamespace,
 	}
 
 	#[pallet::call]
@@ -742,10 +781,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let caller = ensure_signed(origin)?;
 			let mint_to = T::Lookup::lookup(mint_to)?;
-
-			let collection_config = Self::get_collection_config(&collection)?;
-			let item_settings = collection_config.mint_settings.default_item_settings;
-			let item_config = ItemConfig { settings: item_settings };
+			let item_config =
+				ItemConfig { settings: Self::get_default_item_settings(&collection)? };
 
 			Self::do_mint(
 				collection,
@@ -775,32 +812,39 @@ pub mod pallet {
 							let MintWitness { owner_of_item } =
 								witness_data.ok_or(Error::<T, I>::BadWitness)?;
 
-							let has_item = Account::<T, I>::contains_key((
+							let owns_item = Account::<T, I>::contains_key((
 								&caller,
 								&collection_id,
 								&owner_of_item,
 							));
-							ensure!(has_item, Error::<T, I>::BadWitness);
+							ensure!(owns_item, Error::<T, I>::BadWitness);
 
-							let attribute_key = Self::construct_attribute_key(
-								PalletAttributes::<T::CollectionId>::UsedToClaim(collection)
-									.encode(),
-							)?;
+							let pallet_attribute =
+								PalletAttributes::<T::CollectionId>::UsedToClaim(collection);
 
 							let key = (
 								&collection_id,
 								Some(owner_of_item),
 								AttributeNamespace::Pallet,
-								&attribute_key,
+								&Self::construct_attribute_key(pallet_attribute.encode())?,
 							);
 							let already_claimed = Attribute::<T, I>::contains_key(key.clone());
 							ensure!(!already_claimed, Error::<T, I>::AlreadyClaimed);
 
-							let value = Self::construct_attribute_value(vec![0])?;
+							let attribute_value = Self::construct_attribute_value(vec![])?;
 							Attribute::<T, I>::insert(
 								key,
-								(value, AttributeDeposit { account: None, amount: Zero::zero() }),
+								(
+									attribute_value.clone(),
+									AttributeDeposit { account: None, amount: Zero::zero() },
+								),
 							);
+							Self::deposit_event(Event::PalletAttributeSet {
+								collection,
+								item: Some(item),
+								attribute: pallet_attribute,
+								value: attribute_value,
+							});
 						},
 						_ => {},
 					}
@@ -1325,7 +1369,15 @@ pub mod pallet {
 			value: BoundedVec<u8, T::ValueLimit>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			Self::do_set_attribute(origin, collection, maybe_item, namespace, key, value)
+			Self::do_set_attribute(
+				origin.clone(),
+				collection,
+				maybe_item,
+				namespace,
+				key,
+				value,
+				origin,
+			)
 		}
 
 		/// Force-set an attribute for a collection or item.
@@ -1767,6 +1819,60 @@ pub mod pallet {
 				receive_item,
 				witness_price,
 			)
+		}
+
+		/// Mint an item by providing the pre-signed approval.
+		///
+		/// Origin must be Signed.
+		///
+		/// - `mint_data`: The pre-signed approval that consists of the information about the item,
+		///   its metadata, attributes, who can mint it (`None` for anyone) and until what block
+		///   number.
+		/// - `signature`: The signature of the `data` object.
+		/// - `signer`: The `data` object's signer. Should be an owner of the collection.
+		///
+		/// Emits `Issued` on success.
+		/// Emits `AttributeSet` if the attributes were provided.
+		/// Emits `ItemMetadataSet` if the metadata was not empty.
+		#[pallet::call_index(37)]
+		#[pallet::weight(T::WeightInfo::mint_pre_signed(mint_data.attributes.len() as u32))]
+		pub fn mint_pre_signed(
+			origin: OriginFor<T>,
+			mint_data: PreSignedMintOf<T, I>,
+			signature: T::OffchainSignature,
+			signer: T::AccountId,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			let msg = Encode::encode(&mint_data);
+			ensure!(signature.verify(&*msg, &signer), Error::<T, I>::WrongSignature);
+			Self::do_mint_pre_signed(origin, mint_data, signer)
+		}
+
+		/// Set attributes for an item by providing the pre-signed approval.
+		///
+		/// Origin must be Signed and must be an owner of the `data.item`.
+		///
+		/// - `data`: The pre-signed approval that consists of the information about the item,
+		///   attributes to update and until what block number.
+		/// - `signature`: The signature of the `data` object.
+		/// - `signer`: The `data` object's signer. Should be an owner of the collection for the
+		///   `CollectionOwner` namespace.
+		///
+		/// Emits `AttributeSet` for each provided attribute.
+		/// Emits `ItemAttributesApprovalAdded` if the approval wasn't set before.
+		/// Emits `PreSignedAttributesSet` on success.
+		#[pallet::call_index(38)]
+		#[pallet::weight(T::WeightInfo::set_attributes_pre_signed(data.attributes.len() as u32))]
+		pub fn set_attributes_pre_signed(
+			origin: OriginFor<T>,
+			data: PreSignedAttributesOf<T, I>,
+			signature: T::OffchainSignature,
+			signer: T::AccountId,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			let msg = Encode::encode(&data);
+			ensure!(signature.verify(&*msg, &signer), Error::<T, I>::WrongSignature);
+			Self::do_set_attributes_pre_signed(origin, data, signer)
 		}
 	}
 }

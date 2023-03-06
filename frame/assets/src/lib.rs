@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -151,9 +151,7 @@ pub use types::*;
 
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{
-		AtLeast32BitUnsigned, Bounded, CheckedAdd, CheckedSub, Saturating, StaticLookup, Zero,
-	},
+	traits::{AtLeast32BitUnsigned, CheckedAdd, CheckedSub, Saturating, StaticLookup, Zero},
 	ArithmeticError, TokenError,
 };
 use sp_std::{borrow::Borrow, prelude::*};
@@ -427,7 +425,7 @@ pub mod pallet {
 					*amount,
 					|details| -> DispatchResult {
 						debug_assert!(
-							T::Balance::max_value() - details.supply >= *amount,
+							details.supply.checked_add(&amount).is_some(),
 							"checked in prep; qed"
 						);
 						details.supply = details.supply.saturating_add(*amount);
@@ -445,7 +443,7 @@ pub mod pallet {
 		/// Some asset class was created.
 		Created { asset_id: T::AssetId, creator: T::AccountId, owner: T::AccountId },
 		/// Some assets were issued.
-		Issued { asset_id: T::AssetId, owner: T::AccountId, total_supply: T::Balance },
+		Issued { asset_id: T::AssetId, owner: T::AccountId, amount: T::Balance },
 		/// Some assets were transferred.
 		Transferred {
 			asset_id: T::AssetId,
@@ -516,6 +514,8 @@ pub mod pallet {
 		},
 		/// An asset has had its attributes changed by the `Force` origin.
 		AssetStatusChanged { asset_id: T::AssetId },
+		/// The min_balance of an asset has been updated by the asset owner.
+		AssetMinBalanceChanged { asset_id: T::AssetId, new_min_balance: T::Balance },
 	}
 
 	#[pallet::error]
@@ -1512,6 +1512,53 @@ pub mod pallet {
 		) -> DispatchResult {
 			let id: T::AssetId = id.into();
 			Self::do_refund(id, ensure_signed(origin)?, allow_burn)
+		}
+
+		/// Sets the minimum balance of an asset.
+		///
+		/// Only works if there aren't any accounts that are holding the asset or if
+		/// the new value of `min_balance` is less than the old one.
+		///
+		/// Origin must be Signed and the sender has to be the Owner of the
+		/// asset `id`.
+		///
+		/// - `id`: The identifier of the asset.
+		/// - `min_balance`: The new value of `min_balance`.
+		///
+		/// Emits `AssetMinBalanceChanged` event when successful.
+		#[pallet::call_index(28)]
+		#[pallet::weight(T::WeightInfo::set_min_balance())]
+		pub fn set_min_balance(
+			origin: OriginFor<T>,
+			id: T::AssetIdParameter,
+			min_balance: T::Balance,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			let id: T::AssetId = id.into();
+
+			let mut details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+			ensure!(origin == details.owner, Error::<T, I>::NoPermission);
+
+			let old_min_balance = details.min_balance;
+			// If the asset is marked as sufficient it won't be allowed to
+			// change the min_balance.
+			ensure!(!details.is_sufficient, Error::<T, I>::NoPermission);
+
+			// Ensure that either the new min_balance is less than old
+			// min_balance or there aren't any accounts holding the asset.
+			ensure!(
+				min_balance < old_min_balance || details.accounts == 0,
+				Error::<T, I>::NoPermission
+			);
+
+			details.min_balance = min_balance;
+			Asset::<T, I>::insert(&id, details);
+
+			Self::deposit_event(Event::AssetMinBalanceChanged {
+				asset_id: id,
+				new_min_balance: min_balance,
+			});
+			Ok(())
 		}
 	}
 }

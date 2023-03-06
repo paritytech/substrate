@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -31,7 +31,7 @@ use std::{
 	time::Duration,
 };
 
-use futures::{future::BoxFuture, prelude::*};
+use futures::{channel::oneshot, future::BoxFuture, pin_mut, prelude::*};
 use libp2p::{build_multiaddr, PeerId};
 use log::trace;
 use parking_lot::Mutex;
@@ -56,7 +56,9 @@ use sc_network_common::{
 	},
 	protocol::{role::Roles, ProtocolName},
 	service::{NetworkBlock, NetworkStateInfo, NetworkSyncForkRequest},
-	sync::warp::{AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncProvider},
+	sync::warp::{
+		AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncParams, WarpSyncProvider,
+	},
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
@@ -81,7 +83,7 @@ use sp_runtime::{
 };
 use substrate_test_runtime_client::AccountKeyring;
 pub use substrate_test_runtime_client::{
-	runtime::{Block, Extrinsic, Hash, Transfer},
+	runtime::{Block, Extrinsic, Hash, Header, Transfer},
 	TestClient, TestClientBuilder, TestClientBuilderExt,
 };
 use tokio::time::timeout;
@@ -375,8 +377,7 @@ where
 		let full_client = self.client.as_client();
 		let mut at = full_client.block_hash_from_id(&at).unwrap().unwrap();
 		for _ in 0..count {
-			let builder =
-				full_client.new_block_at(&BlockId::Hash(at), Default::default(), false).unwrap();
+			let builder = full_client.new_block_at(at, Default::default(), false).unwrap();
 			let block = edit_block(builder);
 			let hash = block.header.hash();
 			trace!(
@@ -722,6 +723,8 @@ pub struct FullPeerConfig {
 	pub extra_storage: Option<sp_core::storage::Storage>,
 	/// Enable transaction indexing.
 	pub storage_chain: bool,
+	/// Optional target block header to sync to
+	pub target_block: Option<<Block as BlockT>::Header>,
 }
 
 #[async_trait::async_trait]
@@ -867,6 +870,15 @@ where
 
 		let warp_sync = Arc::new(TestWarpSyncProvider(client.clone()));
 
+		let warp_sync_params = match config.target_block {
+			Some(target_block) => {
+				let (sender, receiver) = oneshot::channel::<<Block as BlockT>::Header>();
+				let _ = sender.send(target_block);
+				WarpSyncParams::WaitForTarget(receiver)
+			},
+			_ => WarpSyncParams::WithProvider(warp_sync.clone()),
+		};
+
 		let warp_protocol_config = {
 			let (handler, protocol_config) = warp_request_handler::RequestHandler::new(
 				protocol_id.clone(),
@@ -887,6 +899,7 @@ where
 			.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator));
 		let (chain_sync_network_provider, chain_sync_network_handle) =
 			NetworkServiceProvider::new();
+
 		let (chain_sync, chain_sync_service, block_announce_config) = ChainSync::new(
 			match network_config.sync_mode {
 				SyncMode::Full => sc_network_common::sync::SyncMode::Full,
@@ -903,7 +916,7 @@ where
 			Roles::from(if config.is_authority { &Role::Authority } else { &Role::Full }),
 			block_announce_validator,
 			network_config.max_parallel_downloads,
-			Some(warp_sync),
+			Some(warp_sync_params),
 			None,
 			chain_sync_network_handle,
 			import_queue.service(),
@@ -1064,8 +1077,17 @@ where
 		self.mut_peers(|peers| {
 			for (i, peer) in peers.iter_mut().enumerate() {
 				trace!(target: "sync", "-- Polling {}: {}", i, peer.id());
-				if let Poll::Ready(()) = peer.network.poll_unpin(cx) {
-					panic!("NetworkWorker has terminated unexpectedly.")
+				loop {
+					// The code below is not quite correct, because we are polling a different
+					// instance of the future every time. But as long as
+					// `NetworkWorker::next_action()` contains just streams polling not interleaved
+					// with other `.await`s, dropping the future and recreating it works the same as
+					// polling a single instance.
+					let net_poll_future = peer.network.next_action();
+					pin_mut!(net_poll_future);
+					if let Poll::Pending = net_poll_future.poll(cx) {
+						break
+					}
 				}
 				trace!(target: "sync", "-- Polling complete {}: {}", i, peer.id());
 

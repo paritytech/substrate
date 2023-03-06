@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -56,6 +56,9 @@ fn test_unresponsiveness_slash_fraction() {
 		dummy_offence.slash_fraction(17),
 		Perbill::from_parts(46200000), // 4.62%
 	);
+
+	// Offline offences should never lead to being disabled.
+	assert_eq!(dummy_offence.disable_strategy(), DisableStrategy::Never);
 }
 
 #[test]
@@ -308,11 +311,10 @@ fn should_mark_online_validator_when_block_is_authored() {
 
 		// when
 		ImOnline::note_author(1);
-		ImOnline::note_uncle(2, 0);
 
 		// then
 		assert!(ImOnline::is_online(0));
-		assert!(ImOnline::is_online(1));
+		assert!(!ImOnline::is_online(1));
 		assert!(!ImOnline::is_online(2));
 	});
 }
@@ -338,7 +340,7 @@ fn should_not_send_a_report_if_already_online() {
 		assert_eq!(Session::current_index(), 2);
 		assert_eq!(Session::validators(), vec![1, 2, 3]);
 		ImOnline::note_author(2);
-		ImOnline::note_uncle(3, 0);
+		ImOnline::note_author(3);
 
 		// when
 		UintAuthorityId::set_all_keys(vec![1, 2, 3]);

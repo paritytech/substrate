@@ -1,0 +1,5 @@
+error: Invalid benchmark function param. A valid example would be `x: Linear<5, 10>`.
+  --> tests/benchmark_ui/bad_params.rs:10:31
+   |
+10 |     fn bench(y: Linear<1, 2>, x: u32) {
+   |                                  ^^^

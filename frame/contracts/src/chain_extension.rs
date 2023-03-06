@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -71,7 +71,6 @@
 //! on how to use a chain extension in order to provide new features to ink! contracts.
 
 use crate::{
-	gas::ChargedAmount,
 	wasm::{Runtime, RuntimeCosts},
 	Error,
 };
@@ -80,7 +79,7 @@ use frame_support::weights::Weight;
 use sp_runtime::DispatchError;
 use sp_std::{marker::PhantomData, vec::Vec};
 
-pub use crate::{exec::Ext, Config};
+pub use crate::{exec::Ext, gas::ChargedAmount, Config};
 pub use frame_system::Config as SysConfig;
 pub use pallet_contracts_primitives::ReturnFlags;
 
