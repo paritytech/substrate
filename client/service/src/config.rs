@@ -22,11 +22,14 @@ pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionStra
 pub use sc_client_db::{BlocksPruning, Database, DatabaseSource, PruningMode};
 pub use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 pub use sc_network::{
-	config::{NetworkConfiguration, NodeKeyConfig, Role},
+	config::{NetworkConfiguration, Role},
 	Multiaddr,
 };
 pub use sc_network_common::{
-	config::{MultiaddrWithPeerId, NonDefaultSetConfig, ProtocolId, SetConfig, TransportConfig},
+	config::{
+		MultiaddrWithPeerId, NodeKeyConfig, NonDefaultSetConfig, ProtocolId, SetConfig,
+		TransportConfig,
+	},
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
@@ -34,7 +37,7 @@ pub use sc_network_common::{
 
 use prometheus_endpoint::Registry;
 use sc_chain_spec::ChainSpec;
-use sc_network::config::SyncMode;
+use sc_network_common::config::SyncMode;
 pub use sc_telemetry::TelemetryEndpoints;
 pub use sc_transaction_pool::Options as TransactionPoolOptions;
 use sp_core::crypto::SecretString;

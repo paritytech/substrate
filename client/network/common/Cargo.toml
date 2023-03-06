@@ -16,6 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 prost-build = "0.11"
 
 [dependencies]
+array-bytes = "4.1"
 async-trait = "0.1.57"
 bitflags = "1.3.2"
 bytes = "1"
@@ -30,9 +31,14 @@ prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.
 smallvec = "1.8.0"
 sc-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }
 sc-peerset = { version = "4.0.0-dev", path = "../../peerset" }
+sc-utils = { version = "4.0.0-dev", path = "../../utils" }
 serde = { version = "1.0.136", features = ["derive"] }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-consensus-grandpa = { version = "4.0.0-dev", path = "../../../primitives/consensus/grandpa" }
 sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 thiserror = "1.0"
+zeroize = "1.4.3"
+
+[dev-dependencies]
+tempfile = "3.1.0"

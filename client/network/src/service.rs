@@ -34,8 +34,8 @@ use crate::{
 	network_state::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
-	protocol::{self, NotificationsSink, NotifsHandlerError, PeerInfo, Protocol, Ready},
-	transport, ChainSyncInterface, ReputationChange,
+	protocol::{self, NotificationsSink, NotifsHandlerError, Protocol, Ready},
+	transport, ReputationChange,
 };
 
 use futures::{channel::oneshot, prelude::*};
@@ -65,17 +65,16 @@ use sc_network_common::{
 	request_responses::{IfDisconnected, RequestFailure},
 	service::{
 		NetworkDHTProvider, NetworkEventStream, NetworkNotification, NetworkPeers, NetworkSigner,
-		NetworkStateInfo, NetworkStatus, NetworkStatusProvider, NetworkSyncForkRequest,
+		NetworkStateInfo, NetworkStatus, NetworkStatusProvider,
 		NotificationSender as NotificationSenderT, NotificationSenderError,
 		NotificationSenderReady as NotificationSenderReadyT, Signature, SigningError,
 	},
-	sync::SyncStatus,
 	ExHashT,
 };
 use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain::HeaderBackend;
-use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
+use sp_runtime::traits::{Block as BlockT, Zero};
 use std::{
 	cmp,
 	collections::{HashMap, HashSet},
@@ -85,7 +84,7 @@ use std::{
 	pin::Pin,
 	str,
 	sync::{
-		atomic::{AtomicBool, AtomicUsize, Ordering},
+		atomic::{AtomicUsize, Ordering},
 		Arc,
 	},
 };
@@ -98,7 +97,7 @@ mod out_events;
 mod tests;
 
 pub use libp2p::identity::{error::DecodingError, Keypair, PublicKey};
-use sc_network_common::service::{NetworkBlock, NetworkRequest};
+use sc_network_common::service::NetworkRequest;
 
 /// Custom error that can be produced by the [`ConnectionHandler`] of the [`NetworkBehaviour`].
 /// Used as a template parameter of [`SwarmEvent`] below.
@@ -114,8 +113,6 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
 	/// Listen addresses. Do **NOT** include a trailing `/p2p/` with our `PeerId`.
 	listen_addresses: Arc<Mutex<Vec<Multiaddr>>>,
-	/// Are we actively catching up with the chain?
-	is_major_syncing: Arc<AtomicBool>,
 	/// Local copy of the `PeerId` of the local node.
 	local_peer_id: PeerId,
 	/// The `KeyPair` that defines the `PeerId` of the local node.
@@ -126,9 +123,7 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	/// nodes it should be connected to or not.
 	peerset: PeersetHandle,
 	/// Channel that sends messages to the actual worker.
-	to_worker: TracingUnboundedSender<ServiceToWorkerMsg<B>>,
-	/// Interface that can be used to delegate calls to `ChainSync`
-	chain_sync_service: Box<dyn ChainSyncInterface<B>>,
+	to_worker: TracingUnboundedSender<ServiceToWorkerMsg>,
 	/// For each peer and protocol combination, an object that allows sending notifications to
 	/// that peer. Updated by the [`NetworkWorker`].
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ProtocolName), NotificationsSink>>>,
@@ -138,20 +133,23 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	/// Marker to pin the `H` generic. Serves no purpose except to not break backwards
 	/// compatibility.
 	_marker: PhantomData<H>,
+	/// Marker for block type
+	_block: PhantomData<B>,
 }
 
-impl<B, H, Client> NetworkWorker<B, H, Client>
+impl<B, H> NetworkWorker<B, H>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B> + 'static,
 {
 	/// Creates the network service.
 	///
 	/// Returns a `NetworkWorker` that implements `Future` and must be regularly polled in order
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
-	pub fn new(mut params: Params<B, Client>) -> Result<Self, Error> {
+	pub fn new<Client: HeaderBackend<B> + 'static>(
+		mut params: Params<Client>,
+	) -> Result<Self, Error> {
 		// Private and public keys configuration.
 		let local_identity = params.network_config.node_key.clone().into_keypair()?;
 		let local_public = local_identity.public();
@@ -230,10 +228,7 @@ where
 
 		let (protocol, peerset_handle, mut known_addresses) = Protocol::new(
 			From::from(&params.role),
-			params.chain.clone(),
 			&params.network_config,
-			params.metrics_registry.as_ref(),
-			params.chain_sync,
 			params.block_announce_config,
 		)?;
 
@@ -268,10 +263,9 @@ where
 		})?;
 
 		let num_connected = Arc::new(AtomicUsize::new(0));
-		let is_major_syncing = Arc::new(AtomicBool::new(false));
 
 		// Build the swarm.
-		let (mut swarm, bandwidth): (Swarm<Behaviour<B, Client>>, _) = {
+		let (mut swarm, bandwidth): (Swarm<Behaviour<B>>, _) = {
 			let user_agent = format!(
 				"{} ({})",
 				params.network_config.client_version, params.network_config.node_name
@@ -418,7 +412,6 @@ where
 				registry,
 				MetricSources {
 					bandwidth: bandwidth.clone(),
-					major_syncing: is_major_syncing.clone(),
 					connected_peers: num_connected.clone(),
 				},
 			)?),
@@ -427,14 +420,14 @@ where
 
 		// Listen on multiaddresses.
 		for addr in &params.network_config.listen_addresses {
-			if let Err(err) = Swarm::<Behaviour<B, Client>>::listen_on(&mut swarm, addr.clone()) {
+			if let Err(err) = Swarm::<Behaviour<B>>::listen_on(&mut swarm, addr.clone()) {
 				warn!(target: "sub-libp2p", "Can't listen on {} because: {:?}", addr, err)
 			}
 		}
 
 		// Add external addresses.
 		for addr in &params.network_config.public_addresses {
-			Swarm::<Behaviour<B, Client>>::add_external_address(
+			Swarm::<Behaviour<B>>::add_external_address(
 				&mut swarm,
 				addr.clone(),
 				AddressScore::Infinite,
@@ -450,24 +443,22 @@ where
 			external_addresses: external_addresses.clone(),
 			listen_addresses: listen_addresses.clone(),
 			num_connected: num_connected.clone(),
-			is_major_syncing: is_major_syncing.clone(),
 			peerset: peerset_handle,
 			local_peer_id,
 			local_identity,
 			to_worker,
-			chain_sync_service: params.chain_sync_service,
 			peers_notifications_sinks: peers_notifications_sinks.clone(),
 			notifications_sizes_metric: metrics
 				.as_ref()
 				.map(|metrics| metrics.notifications_sizes.clone()),
 			_marker: PhantomData,
+			_block: Default::default(),
 		});
 
 		Ok(NetworkWorker {
 			external_addresses,
 			listen_addresses,
 			num_connected,
-			is_major_syncing,
 			network_service: swarm,
 			service,
 			from_service,
@@ -476,22 +467,16 @@ where
 			metrics,
 			boot_node_ids,
 			_marker: Default::default(),
+			_block: Default::default(),
 		})
 	}
 
 	/// High-level network status information.
-	pub fn status(&self) -> NetworkStatus<B> {
-		let status = self.sync_state();
+	pub fn status(&self) -> NetworkStatus {
 		NetworkStatus {
-			sync_state: status.state,
-			best_seen_block: self.best_seen_block(),
-			num_sync_peers: self.num_sync_peers(),
 			num_connected_peers: self.num_connected_peers(),
-			num_active_peers: self.num_active_peers(),
 			total_bytes_inbound: self.total_bytes_inbound(),
 			total_bytes_outbound: self.total_bytes_outbound(),
-			state_sync: status.state_sync,
-			warp_sync: status.warp_sync,
 		}
 	}
 
@@ -510,42 +495,7 @@ where
 		self.network_service.behaviour().user_protocol().num_connected_peers()
 	}
 
-	/// Returns the number of peers we're connected to and that are being queried.
-	pub fn num_active_peers(&self) -> usize {
-		self.network_service.behaviour().user_protocol().num_active_peers()
-	}
-
-	/// Current global sync state.
-	pub fn sync_state(&self) -> SyncStatus<B> {
-		self.network_service.behaviour().user_protocol().sync_state()
-	}
-
-	/// Target sync block number.
-	pub fn best_seen_block(&self) -> Option<NumberFor<B>> {
-		self.network_service.behaviour().user_protocol().best_seen_block()
-	}
-
-	/// Number of peers participating in syncing.
-	pub fn num_sync_peers(&self) -> u32 {
-		self.network_service.behaviour().user_protocol().num_sync_peers()
-	}
-
-	/// Number of blocks in the import queue.
-	pub fn num_queued_blocks(&self) -> u32 {
-		self.network_service.behaviour().user_protocol().num_queued_blocks()
-	}
-
-	/// Returns the number of downloaded blocks.
-	pub fn num_downloaded_blocks(&self) -> usize {
-		self.network_service.behaviour().user_protocol().num_downloaded_blocks()
-	}
-
-	/// Number of active sync requests.
-	pub fn num_sync_requests(&self) -> usize {
-		self.network_service.behaviour().user_protocol().num_sync_requests()
-	}
-
-	/// Adds an address known to a node.
+	/// Adds an address for a node.
 	pub fn add_known_address(&mut self, peer_id: PeerId, addr: Multiaddr) {
 		self.network_service.behaviour_mut().add_known_address(peer_id, addr);
 	}
@@ -556,32 +506,16 @@ where
 		&self.service
 	}
 
-	/// You must call this when a new block is finalized by the client.
-	pub fn on_block_finalized(&mut self, hash: B::Hash, header: B::Header) {
-		self.network_service
-			.behaviour_mut()
-			.user_protocol_mut()
-			.on_block_finalized(hash, &header);
-	}
-
-	/// Inform the network service about new best imported block.
-	pub fn new_best_block_imported(&mut self, hash: B::Hash, number: NumberFor<B>) {
-		self.network_service
-			.behaviour_mut()
-			.user_protocol_mut()
-			.new_best_block_imported(hash, number);
-	}
-
 	/// Returns the local `PeerId`.
 	pub fn local_peer_id(&self) -> &PeerId {
-		Swarm::<Behaviour<B, Client>>::local_peer_id(&self.network_service)
+		Swarm::<Behaviour<B>>::local_peer_id(&self.network_service)
 	}
 
 	/// Returns the list of addresses we are listening on.
 	///
 	/// Does **NOT** include a trailing `/p2p/` with our `PeerId`.
 	pub fn listen_addresses(&self) -> impl Iterator<Item = &Multiaddr> {
-		Swarm::<Behaviour<B, Client>>::listeners(&self.network_service)
+		Swarm::<Behaviour<B>>::listeners(&self.network_service)
 	}
 
 	/// Get network state.
@@ -661,7 +595,7 @@ where
 				.collect()
 		};
 
-		let peer_id = Swarm::<Behaviour<B, Client>>::local_peer_id(swarm).to_base58();
+		let peer_id = Swarm::<Behaviour<B>>::local_peer_id(swarm).to_base58();
 		let listened_addresses = swarm.listeners().cloned().collect();
 		let external_addresses = swarm.external_addresses().map(|r| &r.addr).cloned().collect();
 
@@ -673,16 +607,6 @@ where
 			not_connected_peers,
 			peerset: swarm.behaviour_mut().user_protocol_mut().peerset_debug_info(),
 		}
-	}
-
-	/// Get currently connected peers.
-	pub fn peers_debug_info(&mut self) -> Vec<(PeerId, PeerInfo<B>)> {
-		self.network_service
-			.behaviour_mut()
-			.user_protocol_mut()
-			.peers_info()
-			.map(|(id, info)| (*id, info.clone()))
-			.collect()
 	}
 
 	/// Removes a `PeerId` from the list of reserved peers.
@@ -720,20 +644,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			// The channel can only be closed if the network worker no longer exists.
 			Err(_) => Err(()),
 		}
-	}
-
-	/// Get connected peers debug information.
-	///
-	/// Returns an error if the `NetworkWorker` is no longer running.
-	pub async fn peers_debug_info(&self) -> Result<Vec<(PeerId, PeerInfo<B>)>, ()> {
-		let (tx, rx) = oneshot::channel();
-
-		let _ = self
-			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::PeersDebugInfo { pending_response: tx });
-
-		// The channel can only be closed if the network worker no longer exists.
-		rx.await.map_err(|_| ())
 	}
 
 	/// Get the list of reserved peers.
@@ -776,30 +686,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 				}
 			})
 			.collect::<Result<Vec<(PeerId, Multiaddr)>, String>>()
-	}
-}
-
-impl<B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle for NetworkService<B, H> {
-	fn is_major_syncing(&self) -> bool {
-		self.is_major_syncing.load(Ordering::Relaxed)
-	}
-
-	fn is_offline(&self) -> bool {
-		self.num_connected.load(Ordering::Relaxed) == 0
-	}
-}
-
-impl<B: BlockT, H: ExHashT> sc_consensus::JustificationSyncLink<B> for NetworkService<B, H> {
-	/// Request a justification for the given block from the network.
-	///
-	/// On success, the justification will be passed to the import queue that was part at
-	/// initialization as part of the configuration.
-	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
-		let _ = self.chain_sync_service.request_justification(hash, number);
-	}
-
-	fn clear_justification_requests(&self) {
-		let _ = self.chain_sync_service.clear_justification_requests();
 	}
 }
 
@@ -856,29 +742,13 @@ where
 	}
 }
 
-impl<B, H> NetworkSyncForkRequest<B::Hash, NumberFor<B>> for NetworkService<B, H>
-where
-	B: BlockT + 'static,
-	H: ExHashT,
-{
-	/// Configure an explicit fork sync request.
-	/// Note that this function should not be used for recent blocks.
-	/// Sync should be able to download all the recent forks normally.
-	/// `set_sync_fork_request` should only be used if external code detects that there's
-	/// a stale fork missing.
-	/// Passing empty `peers` set effectively removes the sync request.
-	fn set_sync_fork_request(&self, peers: Vec<PeerId>, hash: B::Hash, number: NumberFor<B>) {
-		self.chain_sync_service.set_sync_fork_request(peers, hash, number);
-	}
-}
-
 #[async_trait::async_trait]
-impl<B, H> NetworkStatusProvider<B> for NetworkService<B, H>
+impl<B, H> NetworkStatusProvider for NetworkService<B, H>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
 {
-	async fn status(&self) -> Result<NetworkStatus<B>, ()> {
+	async fn status(&self) -> Result<NetworkStatus, ()> {
 		let (tx, rx) = oneshot::channel();
 
 		let _ = self
@@ -1125,6 +995,12 @@ where
 
 		Ok(Box::new(NotificationSender { sink, protocol_name: protocol, notification_size_metric }))
 	}
+
+	fn set_notification_handshake(&self, protocol: ProtocolName, handshake: Vec<u8>) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::SetNotificationHandshake(protocol, handshake));
+	}
 }
 
 #[async_trait::async_trait]
@@ -1168,22 +1044,6 @@ where
 			pending_response: tx,
 			connect,
 		});
-	}
-}
-
-impl<B, H> NetworkBlock<B::Hash, NumberFor<B>> for NetworkService<B, H>
-where
-	B: BlockT + 'static,
-	H: ExHashT,
-{
-	fn announce_block(&self, hash: B::Hash, data: Option<Vec<u8>>) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::AnnounceBlock(hash, data));
-	}
-
-	fn new_best_block_imported(&self, hash: B::Hash, number: NumberFor<B>) {
-		let _ = self
-			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::NewBestBlockImported(hash, number));
 	}
 }
 
@@ -1257,8 +1117,7 @@ impl<'a> NotificationSenderReadyT for NotificationSenderReady<'a> {
 /// Messages sent from the `NetworkService` to the `NetworkWorker`.
 ///
 /// Each entry corresponds to a method of `NetworkService`.
-enum ServiceToWorkerMsg<B: BlockT> {
-	AnnounceBlock(B::Hash, Option<Vec<u8>>),
+enum ServiceToWorkerMsg {
 	GetValue(KademliaKey),
 	PutValue(KademliaKey, Vec<u8>),
 	AddKnownAddress(PeerId, Multiaddr),
@@ -1280,16 +1139,13 @@ enum ServiceToWorkerMsg<B: BlockT> {
 		connect: IfDisconnected,
 	},
 	NetworkStatus {
-		pending_response: oneshot::Sender<Result<NetworkStatus<B>, RequestFailure>>,
+		pending_response: oneshot::Sender<Result<NetworkStatus, RequestFailure>>,
 	},
 	NetworkState {
 		pending_response: oneshot::Sender<Result<NetworkState, RequestFailure>>,
 	},
 	DisconnectPeer(PeerId, ProtocolName),
-	NewBestBlockImported(B::Hash, NumberFor<B>),
-	PeersDebugInfo {
-		pending_response: oneshot::Sender<Vec<(PeerId, PeerInfo<B>)>>,
-	},
+	SetNotificationHandshake(ProtocolName, Vec<u8>),
 	ReservedPeers {
 		pending_response: oneshot::Sender<Vec<PeerId>>,
 	},
@@ -1299,11 +1155,10 @@ enum ServiceToWorkerMsg<B: BlockT> {
 ///
 /// You are encouraged to poll this in a separate background thread or task.
 #[must_use = "The NetworkWorker must be polled in order for the network to advance"]
-pub struct NetworkWorker<B, H, Client>
+pub struct NetworkWorker<B, H>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B> + 'static,
 {
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
@@ -1311,14 +1166,12 @@ where
 	listen_addresses: Arc<Mutex<Vec<Multiaddr>>>,
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	num_connected: Arc<AtomicUsize>,
-	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
-	is_major_syncing: Arc<AtomicBool>,
 	/// The network service that can be extracted and shared through the codebase.
 	service: Arc<NetworkService<B, H>>,
 	/// The *actual* network.
-	network_service: Swarm<Behaviour<B, Client>>,
+	network_service: Swarm<Behaviour<B>>,
 	/// Messages from the [`NetworkService`] that must be processed.
-	from_service: TracingUnboundedReceiver<ServiceToWorkerMsg<B>>,
+	from_service: TracingUnboundedReceiver<ServiceToWorkerMsg>,
 	/// Senders for events that happen on the network.
 	event_streams: out_events::OutChannels,
 	/// Prometheus network metrics.
@@ -1331,13 +1184,14 @@ where
 	/// Marker to pin the `H` generic. Serves no purpose except to not break backwards
 	/// compatibility.
 	_marker: PhantomData<H>,
+	/// Marker for block type
+	_block: PhantomData<B>,
 }
 
-impl<B, H, Client> NetworkWorker<B, H, Client>
+impl<B, H> NetworkWorker<B, H>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B> + 'static,
 {
 	/// Run the network.
 	pub async fn run(mut self) {
@@ -1364,10 +1218,9 @@ where
 			},
 		};
 
+		// Update the variables shared with the `NetworkService`.
 		let num_connected_peers =
 			self.network_service.behaviour_mut().user_protocol_mut().num_connected_peers();
-
-		// Update the variables shared with the `NetworkService`.
 		self.num_connected.store(num_connected_peers, Ordering::Relaxed);
 		{
 			let external_addresses =
@@ -1378,16 +1231,6 @@ where
 				self.network_service.listeners().map(ToOwned::to_owned).collect();
 			*self.listen_addresses.lock() = listen_addresses;
 		}
-
-		let is_major_syncing = self
-			.network_service
-			.behaviour_mut()
-			.user_protocol_mut()
-			.sync_state()
-			.state
-			.is_major_syncing();
-
-		self.is_major_syncing.store(is_major_syncing, Ordering::Relaxed);
 
 		if let Some(metrics) = self.metrics.as_ref() {
 			if let Some(buckets) = self.network_service.behaviour_mut().num_entries_per_kbucket() {
@@ -1420,13 +1263,8 @@ where
 	}
 
 	/// Process the next message coming from the `NetworkService`.
-	fn handle_worker_message(&mut self, msg: ServiceToWorkerMsg<B>) {
+	fn handle_worker_message(&mut self, msg: ServiceToWorkerMsg) {
 		match msg {
-			ServiceToWorkerMsg::AnnounceBlock(hash, data) => self
-				.network_service
-				.behaviour_mut()
-				.user_protocol_mut()
-				.announce_block(hash, data),
 			ServiceToWorkerMsg::GetValue(key) =>
 				self.network_service.behaviour_mut().get_value(key),
 			ServiceToWorkerMsg::PutValue(key, value) =>
@@ -1505,14 +1343,11 @@ where
 				.behaviour_mut()
 				.user_protocol_mut()
 				.disconnect_peer(&who, protocol_name),
-			ServiceToWorkerMsg::NewBestBlockImported(hash, number) => self
+			ServiceToWorkerMsg::SetNotificationHandshake(protocol, handshake) => self
 				.network_service
 				.behaviour_mut()
 				.user_protocol_mut()
-				.new_best_block_imported(hash, number),
-			ServiceToWorkerMsg::PeersDebugInfo { pending_response } => {
-				let _ = pending_response.send(self.peers_debug_info());
-			},
+				.set_notification_handshake(protocol, handshake),
 			ServiceToWorkerMsg::ReservedPeers { pending_response } => {
 				let _ =
 					pending_response.send(self.reserved_peers().map(ToOwned::to_owned).collect());
@@ -1523,7 +1358,7 @@ where
 	/// Process the next event coming from `Swarm`.
 	fn handle_swarm_event(
 		&mut self,
-		event: SwarmEvent<BehaviourOut, ConnectionHandlerErr<Behaviour<B, Client>>>,
+		event: SwarmEvent<BehaviourOut, ConnectionHandlerErr<Behaviour<B>>>,
 	) {
 		match event {
 			SwarmEvent::Behaviour(BehaviourOut::InboundRequest { protocol, result, .. }) => {
@@ -1642,6 +1477,7 @@ where
 				negotiated_fallback,
 				notifications_sink,
 				role,
+				received_handshake,
 			}) => {
 				if let Some(metrics) = self.metrics.as_ref() {
 					metrics
@@ -1660,6 +1496,7 @@ where
 					protocol,
 					negotiated_fallback,
 					role,
+					received_handshake,
 				});
 			},
 			SwarmEvent::Behaviour(BehaviourOut::NotificationStreamReplaced {
@@ -1724,12 +1561,6 @@ where
 					}
 				}
 				self.event_streams.send(Event::NotificationsReceived { remote, messages });
-			},
-			SwarmEvent::Behaviour(BehaviourOut::SyncConnected(remote)) => {
-				self.event_streams.send(Event::SyncConnected { remote });
-			},
-			SwarmEvent::Behaviour(BehaviourOut::SyncDisconnected(remote)) => {
-				self.event_streams.send(Event::SyncDisconnected { remote });
 			},
 			SwarmEvent::Behaviour(BehaviourOut::Dht(event, duration)) => {
 				if let Some(metrics) = self.metrics.as_ref() {
@@ -1925,11 +1756,10 @@ where
 	}
 }
 
-impl<B, H, Client> Unpin for NetworkWorker<B, H, Client>
+impl<B, H> Unpin for NetworkWorker<B, H>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B> + 'static,
 {
 }
 
