@@ -614,7 +614,7 @@ where
 
 	/// Compute the length portion of a fee by invoking the configured `LengthToFee` impl.
 	pub fn length_to_fee(length: u32) -> BalanceOf<T> {
-		T::LengthToFee::weight_to_fee(&Weight::from_ref_time(length as u64))
+		T::LengthToFee::weight_to_fee(&Weight::from_parts(length as u64, 0))
 	}
 
 	/// Compute the unadjusted portion of the weight fee by invoking the configured `WeightToFee`
