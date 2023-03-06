@@ -24,12 +24,11 @@ use bytes::BytesMut;
 use fnv::FnvHashMap;
 use futures::prelude::*;
 use libp2p::{
-	core::{connection::ConnectionId, Multiaddr, PeerId},
+	core::{Endpoint, Multiaddr, PeerId},
 	swarm::{
 		behaviour::{ConnectionClosed, ConnectionEstablished, DialFailure, FromSwarm},
-		handler::ConnectionHandler,
-		DialError, IntoConnectionHandler, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler,
-		PollParameters,
+		ConnectionDenied, ConnectionId, DialError, NetworkBehaviour, NetworkBehaviourAction,
+		NotifyHandler, PollParameters, THandler, THandlerOutEvent,
 	},
 };
 use log::{error, trace, warn};
@@ -546,7 +545,6 @@ impl Notifications {
 	/// Function that is called when the peerset wants us to connect to a peer.
 	fn peerset_report_connect(&mut self, peer_id: PeerId, set_id: sc_peerset::SetId) {
 		// If `PeerId` is unknown to us, insert an entry, start dialing, and return early.
-		let handler = self.new_handler();
 		let mut occ_entry = match self.peers.entry((peer_id, set_id)) {
 			Entry::Occupied(entry) => entry,
 			Entry::Vacant(entry) => {
@@ -558,10 +556,8 @@ impl Notifications {
 					set_id,
 				);
 				trace!(target: "sub-libp2p", "Libp2p <= Dial {}", entry.key().0);
-				self.events.push_back(NetworkBehaviourAction::Dial {
-					opts: entry.key().0.into(),
-					handler,
-				});
+				self.events
+					.push_back(NetworkBehaviourAction::Dial { opts: entry.key().0.into() });
 				entry.insert(PeerState::Requested);
 				return
 			},
@@ -994,12 +990,34 @@ impl NetworkBehaviour for Notifications {
 	type ConnectionHandler = NotifsHandlerProto;
 	type OutEvent = NotificationsOut;
 
-	fn new_handler(&mut self) -> Self::ConnectionHandler {
-		NotifsHandlerProto::new(self.notif_protocols.clone())
+	fn handle_established_inbound_connection(
+		&mut self,
+		connection_id: ConnectionId,
+		peer: PeerId,
+		local_addr: &Multiaddr,
+		remote_addr: &Multiaddr,
+	) -> Result<THandler<Self>, ConnectionDenied> {
+		unimplemented!("todo");
 	}
 
-	fn addresses_of_peer(&mut self, _: &PeerId) -> Vec<Multiaddr> {
-		Vec::new()
+	fn handle_established_outbound_connection(
+		&mut self,
+		connection_id: ConnectionId,
+		peer: PeerId,
+		addr: &Multiaddr,
+		role_override: Endpoint,
+	) -> Result<THandler<Self>, ConnectionDenied> {
+		unimplemented!("todo");
+	}
+
+	fn handle_pending_outbound_connection(
+		&mut self,
+		_connection_id: ConnectionId,
+		_maybe_peer: Option<PeerId>,
+		_addresses: &[Multiaddr],
+		_effective_role: Endpoint,
+	) -> Result<Vec<Multiaddr>, ConnectionDenied> {
+		Ok(Vec::new())
 	}
 
 	fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
@@ -1432,8 +1450,7 @@ impl NetworkBehaviour for Notifications {
 		&mut self,
 		peer_id: PeerId,
 		connection_id: ConnectionId,
-		event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as
-		ConnectionHandler>::OutEvent,
+		event: THandlerOutEvent<Self>,
 	) {
 		match event {
 			NotifsHandlerOut::OpenDesiredByRemote { protocol_index } => {
@@ -1954,7 +1971,7 @@ impl NetworkBehaviour for Notifications {
 		&mut self,
 		cx: &mut Context,
 		_params: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
+	) -> Poll<NetworkBehaviourAction<Self::OutEvent, THandlerInEvent<Self>>> {
 		if let Some(event) = self.events.pop_front() {
 			return Poll::Ready(event)
 		}
@@ -1986,8 +2003,6 @@ impl NetworkBehaviour for Notifications {
 		while let Poll::Ready(Some((delay_id, peer_id, set_id))) =
 			Pin::new(&mut self.delays).poll_next(cx)
 		{
-			let handler = self.new_handler();
-
 			let peer_state = match self.peers.get_mut(&(peer_id, set_id)) {
 				Some(s) => s,
 				// We intentionally never remove elements from `delays`, and it may
@@ -2003,8 +2018,7 @@ impl NetworkBehaviour for Notifications {
 
 				PeerState::PendingRequest { timer, .. } if *timer == delay_id => {
 					trace!(target: "sub-libp2p", "Libp2p <= Dial {:?} now that ban has expired", peer_id);
-					self.events
-						.push_back(NetworkBehaviourAction::Dial { opts: peer_id.into(), handler });
+					self.events.push_back(NetworkBehaviourAction::Dial { opts: peer_id.into() });
 					*peer_state = PeerState::Requested;
 				},
 

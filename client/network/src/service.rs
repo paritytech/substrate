@@ -38,17 +38,17 @@ use crate::{
 	transport, ReputationChange,
 };
 
+use either::Either;
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
-	core::{either::EitherError, upgrade, ConnectedPoint},
+	core::{upgrade, ConnectedPoint},
 	identify::Info as IdentifyInfo,
 	kad::record::Key as KademliaKey,
 	multiaddr,
 	ping::Failure as PingFailure,
 	swarm::{
 		AddressScore, ConnectionError, ConnectionHandler, ConnectionLimits, DialError, Executor,
-		IntoConnectionHandler, NetworkBehaviour, PendingConnectionError, Swarm, SwarmBuilder,
-		SwarmEvent,
+		ListenError, NetworkBehaviour, Swarm, SwarmBuilder, SwarmEvent,
 	},
 	Multiaddr, PeerId,
 };
@@ -1586,6 +1586,7 @@ where
 				endpoint,
 				num_established,
 				concurrent_dial_errors,
+				established_in,
 			} => {
 				if let Some(errors) = concurrent_dial_errors {
 					debug!(target: "sub-libp2p", "Libp2p => Connected({:?}) with errors: {:?}", peer_id, errors);
@@ -1614,11 +1615,11 @@ where
 					};
 					let reason = match cause {
 						Some(ConnectionError::IO(_)) => "transport-error",
-						Some(ConnectionError::Handler(EitherError::A(EitherError::A(
-							EitherError::B(EitherError::A(PingFailure::Timeout)),
+						Some(ConnectionError::Handler(Either::Left(Either::Left(
+							Either::Right(Either::Left(PingFailure::Timeout)),
 						)))) => "ping-timeout",
-						Some(ConnectionError::Handler(EitherError::A(EitherError::A(
-							EitherError::A(NotifsHandlerError::SyncNotificationsClogged),
+						Some(ConnectionError::Handler(Either::Left(Either::Left(
+							Either::Left(NotifsHandlerError::SyncNotificationsClogged),
 						)))) => "sync-notifications-clogged",
 						Some(ConnectionError::Handler(_)) => "protocol-error",
 						Some(ConnectionError::KeepAliveTimeout) => "keep-alive-timeout",
@@ -1702,11 +1703,10 @@ where
 				);
 				if let Some(metrics) = self.metrics.as_ref() {
 					let reason = match error {
-						PendingConnectionError::ConnectionLimit(_) => Some("limit-reached"),
-						PendingConnectionError::WrongPeerId { .. } => Some("invalid-peer-id"),
-						PendingConnectionError::Transport(_) | PendingConnectionError::IO(_) =>
-							Some("transport-error"),
-						PendingConnectionError::Aborted => None, // ignore it
+						ListenError::ConnectionLimit(_) => Some("limit-reached"),
+						ListenError::WrongPeerId { .. } => Some("invalid-peer-id"),
+						ListenError::Transport(_) | ListenError::IO(_) => Some("transport-error"),
+						ListenError::Aborted => None, // ignore it
 					};
 
 					if let Some(reason) = reason {

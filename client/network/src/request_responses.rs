@@ -40,7 +40,7 @@ use futures::{
 	prelude::*,
 };
 use libp2p::{
-	core::{connection::ConnectionId, Multiaddr, PeerId},
+	core::{Multiaddr, PeerId},
 	request_response::{
 		handler::RequestResponseHandler, ProtocolSupport, RequestResponse, RequestResponseCodec,
 		RequestResponseConfig, RequestResponseEvent, RequestResponseMessage, ResponseChannel,
@@ -48,8 +48,8 @@ use libp2p::{
 	swarm::{
 		behaviour::{ConnectionClosed, DialFailure, FromSwarm, ListenFailure},
 		handler::multi::MultiHandler,
-		ConnectionHandler, IntoConnectionHandler, NetworkBehaviour, NetworkBehaviourAction,
-		PollParameters,
+		ConnectionHandler, ConnectionId, NetworkBehaviour, NetworkBehaviourAction, PollParameters,
+		THandlerOutEvent,
 	},
 };
 use sc_network_common::{
@@ -415,8 +415,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 		&mut self,
 		peer_id: PeerId,
 		connection_id: ConnectionId,
-		(p_name, event): <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as
-      ConnectionHandler>::OutEvent,
+		event: THandlerOutEvent<Self>,
 	) {
 		if let Some((proto, _)) = self.protocols.get_mut(&*p_name) {
 			return proto.on_connection_handler_event(peer_id, connection_id, event)
@@ -433,7 +432,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 		&mut self,
 		cx: &mut Context,
 		params: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
+	) -> Poll<NetworkBehaviourAction<Self::OutEvent, THandlerInEvent<Self>>> {
 		'poll_all: loop {
 			if let Some(message_request) = self.message_request.take() {
 				// Now we can can poll `MessageRequest` until we get the reputation

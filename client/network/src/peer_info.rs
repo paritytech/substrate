@@ -16,10 +16,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use either::Either;
 use fnv::FnvHashMap;
 use futures::prelude::*;
 use libp2p::{
-	core::{connection::ConnectionId, either::EitherOutput, ConnectedPoint, PeerId, PublicKey},
+	core::{ConnectedPoint, Endpoint, PeerId, PublicKey},
 	identify::{
 		Behaviour as Identify, Config as IdentifyConfig, Event as IdentifyEvent,
 		Info as IdentifyInfo,
@@ -30,8 +31,9 @@ use libp2p::{
 			AddressChange, ConnectionClosed, ConnectionEstablished, DialFailure, FromSwarm,
 			ListenFailure,
 		},
-		ConnectionHandler, IntoConnectionHandler, IntoConnectionHandlerSelect, NetworkBehaviour,
-		NetworkBehaviourAction, PollParameters,
+		ConnectionDenied, ConnectionHandler, ConnectionId, IntoConnectionHandlerSelect,
+		NetworkBehaviour, NetworkBehaviourAction, PollParameters, THandler, THandlerInEvent,
+		THandlerOutEvent,
 	},
 	Multiaddr,
 };
@@ -180,14 +182,70 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 	>;
 	type OutEvent = PeerInfoEvent;
 
-	fn new_handler(&mut self) -> Self::ConnectionHandler {
-		IntoConnectionHandler::select(self.ping.new_handler(), self.identify.new_handler())
+	fn handle_pending_inbound_connection(
+		&mut self,
+		connection_id: ConnectionId,
+		local_addr: &Multiaddr,
+		remote_addr: &Multiaddr,
+	) -> Result<(), ConnectionDenied> {
+		self.ping
+			.handle_pending_inbound_connection(connection_id, local_addr, remote_addr)?;
+		self.identify
+			.handle_pending_inbound_connection(connection_id, local_addr, remote_addr)
 	}
 
-	fn addresses_of_peer(&mut self, _: &PeerId) -> Vec<Multiaddr> {
-		// Only `Discovery::addresses_of_peer` must be returning addresses to ensure that we
-		// don't return unwanted addresses.
-		Vec::new()
+	fn handle_pending_outbound_connection(
+		&mut self,
+		connection_id: ConnectionId,
+		maybe_peer: Option<PeerId>,
+		addresses: &[Multiaddr],
+		effective_role: Endpoint,
+	) -> Result<Vec<Multiaddr>, ConnectionDenied> {
+		// Only `Discovery::handle_pending_outbound_connection` must be returning addresses to
+		// ensure that we don't return unwanted addresses.
+		Ok(Vec::new())
+	}
+
+	fn handle_established_inbound_connection(
+		&mut self,
+		connection_id: ConnectionId,
+		peer: PeerId,
+		local_addr: &Multiaddr,
+		remote_addr: &Multiaddr,
+	) -> Result<THandler<Self>, ConnectionDenied> {
+		self.ping.handle_established_inbound_connection(
+			connection_id,
+			peer,
+			local_addr,
+			remote_addr,
+		)?;
+		self.identify.handle_established_inbound_connection(
+			connection_id,
+			peer,
+			local_addr,
+			remote_addr,
+		)
+	}
+
+	fn handle_established_outbound_connection(
+		&mut self,
+		connection_id: ConnectionId,
+		peer: PeerId,
+		addr: &Multiaddr,
+		role_override: Endpoint,
+	) -> Result<THandler<Self>, ConnectionDenied> {
+		self.ping.handle_established_outbound_connection(
+			connection_id,
+			peer,
+			addr,
+			role_override,
+		)?;
+		self.identify.handle_established_outbound_connection(
+			connection_id,
+			peer,
+			addr,
+			role_override,
+		)
 	}
 
 	fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
@@ -247,34 +305,39 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 						"Unknown connection to {:?} closed: {:?}", peer_id, endpoint);
 				}
 			},
-			FromSwarm::DialFailure(DialFailure { peer_id, handler, error }) => {
-				let (ping_handler, identity_handler) = handler.into_inner();
+			FromSwarm::DialFailure(DialFailure { peer_id, error, connection_id }) => {
 				self.ping.on_swarm_event(FromSwarm::DialFailure(DialFailure {
 					peer_id,
-					handler: ping_handler,
 					error,
+					connection_id,
 				}));
 				self.identify.on_swarm_event(FromSwarm::DialFailure(DialFailure {
 					peer_id,
-					handler: identity_handler,
 					error,
+					connection_id,
 				}));
 			},
 			FromSwarm::ListenerClosed(e) => {
 				self.ping.on_swarm_event(FromSwarm::ListenerClosed(e));
 				self.identify.on_swarm_event(FromSwarm::ListenerClosed(e));
 			},
-			FromSwarm::ListenFailure(ListenFailure { local_addr, send_back_addr, handler }) => {
-				let (ping_handler, identity_handler) = handler.into_inner();
+			FromSwarm::ListenFailure(ListenFailure {
+				local_addr,
+				send_back_addr,
+				error,
+				connection_id,
+			}) => {
 				self.ping.on_swarm_event(FromSwarm::ListenFailure(ListenFailure {
 					local_addr,
 					send_back_addr,
-					handler: ping_handler,
+					error,
+					connection_id,
 				}));
 				self.identify.on_swarm_event(FromSwarm::ListenFailure(ListenFailure {
 					local_addr,
 					send_back_addr,
-					handler: identity_handler,
+					error,
+					connection_id,
 				}));
 			},
 			FromSwarm::ListenerError(e) => {
@@ -324,13 +387,12 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 		&mut self,
 		peer_id: PeerId,
 		connection_id: ConnectionId,
-		event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as
-		ConnectionHandler>::OutEvent,
+		event: THandlerOutEvent<Self>,
 	) {
 		match event {
-			EitherOutput::First(event) =>
+			Either::Left(event) =>
 				self.ping.on_connection_handler_event(peer_id, connection_id, event),
-			EitherOutput::Second(event) =>
+			Either::Right(event) =>
 				self.identify.on_connection_handler_event(peer_id, connection_id, event),
 		}
 	}
@@ -339,7 +401,7 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 		&mut self,
 		cx: &mut Context,
 		params: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
+	) -> Poll<NetworkBehaviourAction<Self::OutEvent, THandlerInEvent<Self>>> {
 		loop {
 			match self.ping.poll(cx, params) {
 				Poll::Pending => break,
@@ -348,16 +410,13 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 						self.handle_ping_report(&peer, rtt)
 					}
 				},
-				Poll::Ready(NetworkBehaviourAction::Dial { opts, handler }) => {
-					let handler =
-						IntoConnectionHandler::select(handler, self.identify.new_handler());
-					return Poll::Ready(NetworkBehaviourAction::Dial { opts, handler })
-				},
+				Poll::Ready(NetworkBehaviourAction::Dial { opts }) =>
+					return Poll::Ready(NetworkBehaviourAction::Dial { opts }),
 				Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
 					return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 						peer_id,
 						handler,
-						event: EitherOutput::First(event),
+						event: Either::Left(event),
 					}),
 				Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }) =>
 					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
@@ -387,15 +446,13 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 					IdentifyEvent::Pushed { .. } => {},
 					IdentifyEvent::Sent { .. } => {},
 				},
-				Poll::Ready(NetworkBehaviourAction::Dial { opts, handler }) => {
-					let handler = IntoConnectionHandler::select(self.ping.new_handler(), handler);
-					return Poll::Ready(NetworkBehaviourAction::Dial { opts, handler })
-				},
+				Poll::Ready(NetworkBehaviourAction::Dial { opts }) =>
+					return Poll::Ready(NetworkBehaviourAction::Dial { opts }),
 				Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
 					return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 						peer_id,
 						handler,
-						event: EitherOutput::Second(event),
+						event: Either::Right(event),
 					}),
 				Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }) =>
 					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {

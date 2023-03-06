@@ -51,9 +51,9 @@ use futures::prelude::*;
 use futures_timer::Delay;
 use ip_network::IpNetwork;
 use libp2p::{
-	core::{connection::ConnectionId, Multiaddr, PeerId, PublicKey},
+	core::{Multiaddr, PeerId, PublicKey},
 	kad::{
-		handler::KademliaHandlerProto,
+		handler::KademliaHandlerIn,
 		record::{
 			self,
 			store::{MemoryStore, RecordStore},
@@ -65,11 +65,11 @@ use libp2p::{
 	multiaddr::Protocol,
 	swarm::{
 		behaviour::{
-			toggle::{Toggle, ToggleIntoConnectionHandler},
+			toggle::{Toggle, ToggleConnectionHandler},
 			DialFailure, FromSwarm, NewExternalAddr,
 		},
-		ConnectionHandler, DialError, IntoConnectionHandler, NetworkBehaviour,
-		NetworkBehaviourAction, PollParameters,
+		ConnectionHandler, ConnectionId, DialError, NetworkBehaviour, NetworkBehaviourAction,
+		PollParameters, THandler, THandlerOutEvent,
 	},
 };
 use log::{debug, info, trace, warn};
@@ -483,14 +483,36 @@ pub enum DiscoveryOut {
 }
 
 impl NetworkBehaviour for DiscoveryBehaviour {
-	type ConnectionHandler = ToggleIntoConnectionHandler<KademliaHandlerProto<QueryId>>;
+	type ConnectionHandler = ToggleConnectionHandler<KademliaHandlerIn<QueryId>>;
 	type OutEvent = DiscoveryOut;
 
-	fn new_handler(&mut self) -> Self::ConnectionHandler {
-		self.kademlia.new_handler()
+	fn handle_established_inbound_connection(
+		&mut self,
+		connection_id: ConnectionId,
+		peer: PeerId,
+		local_addr: &Multiaddr,
+		remote_addr: &Multiaddr,
+	) -> Result<THandler<Self>, ConnectionDenied> {
+		unimplemented!("");
 	}
 
-	fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
+	fn handle_established_outbound_connection(
+		&mut self,
+		connection_id: ConnectionId,
+		peer: PeerId,
+		addr: &Multiaddr,
+		role_override: Endpoint,
+	) -> Result<THandler<Self>, ConnectionDenied> {
+		unimplemented!("");
+	}
+
+	fn handle_pending_outbound_connection(
+		&mut self,
+		_connection_id: ConnectionId,
+		_maybe_peer: Option<PeerId>,
+		_addresses: &[Multiaddr],
+		_effective_role: Endpoint,
+	) -> Result<Vec<Multiaddr>, ConnectionDenied> {
 		let mut list = self
 			.permanent_addresses
 			.iter()
@@ -521,7 +543,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
 		trace!(target: "sub-libp2p", "Addresses of {:?}: {:?}", peer_id, list);
 
-		list
+		Ok(list)
 	}
 
 	fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
@@ -602,8 +624,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		&mut self,
 		peer_id: PeerId,
 		connection_id: ConnectionId,
-		event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as
-      ConnectionHandler>::OutEvent,
+		event: THandlerOutEvent<Self>,
 	) {
 		self.kademlia.on_connection_handler_event(peer_id, connection_id, event);
 	}
@@ -612,7 +633,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		&mut self,
 		cx: &mut Context,
 		params: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
+	) -> Poll<NetworkBehaviourAction<Self::OutEvent, THandlerInEvent<Self>>> {
 		// Immediately process the content of `discovered`.
 		if let Some(ev) = self.pending_events.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
@@ -820,8 +841,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 						warn!(target: "sub-libp2p", "Libp2p => Unhandled Kademlia event: {:?}", e)
 					},
 				},
-				NetworkBehaviourAction::Dial { opts, handler } =>
-					return Poll::Ready(NetworkBehaviourAction::Dial { opts, handler }),
+				NetworkBehaviourAction::Dial { opts } =>
+					return Poll::Ready(NetworkBehaviourAction::Dial { opts }),
 				NetworkBehaviourAction::NotifyHandler { peer_id, handler, event } =>
 					return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 						peer_id,

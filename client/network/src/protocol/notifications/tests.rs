@@ -146,10 +146,6 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 	type ConnectionHandler = <Notifications as NetworkBehaviour>::ConnectionHandler;
 	type OutEvent = <Notifications as NetworkBehaviour>::OutEvent;
 
-	fn new_handler(&mut self) -> Self::ConnectionHandler {
-		self.inner.new_handler()
-	}
-
 	fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
 		let mut list = self.inner.addresses_of_peer(peer_id);
 		for (p, a) in self.addrs.iter() {
@@ -178,7 +174,7 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 		&mut self,
 		cx: &mut Context,
 		params: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
+	) -> Poll<NetworkBehaviourAction<Self::OutEvent, THandlerInEvent<Self>>> {
 		self.inner.poll(cx, params)
 	}
 }

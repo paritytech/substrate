@@ -16,20 +16,19 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use either::Either;
 use libp2p::{
-	bandwidth,
 	core::{
 		self,
-		either::EitherTransport,
 		muxing::StreamMuxerBox,
 		transport::{Boxed, OptionalTransport},
 		upgrade,
 	},
-	dns, identity, mplex, noise, tcp, websocket, PeerId, Transport,
+	dns, identity, mplex, noise, tcp, websocket, PeerId, Transport, TransportExt,
 };
 use std::{sync::Arc, time::Duration};
 
-pub use self::bandwidth::BandwidthSinks;
+pub use libp2p::bandwidth::BandwidthSinks;
 
 /// Builds the transport that serves as a common ground for all connections.
 ///
@@ -59,7 +58,7 @@ pub fn build_transport(
 		let tcp_trans = tcp::tokio::Transport::new(tcp_config.clone());
 		let dns_init = dns::TokioDnsConfig::system(tcp_trans);
 
-		EitherTransport::Left(if let Ok(dns) = dns_init {
+		Either::Left(if let Ok(dns) = dns_init {
 			// WS + WSS transport
 			//
 			// Main transport can't be used for `/wss` addresses because WSS transport needs
@@ -68,21 +67,17 @@ pub fn build_transport(
 			let tcp_trans = tcp::tokio::Transport::new(tcp_config);
 			let dns_for_wss = dns::TokioDnsConfig::system(tcp_trans)
 				.expect("same system_conf & resolver to work");
-			EitherTransport::Left(websocket::WsConfig::new(dns_for_wss).or_transport(dns))
+			Either::Left(websocket::WsConfig::new(dns_for_wss).or_transport(dns))
 		} else {
 			// In case DNS can't be constructed, fallback to TCP + WS (WSS won't work)
 			let tcp_trans = tcp::tokio::Transport::new(tcp_config.clone());
 			let desktop_trans = websocket::WsConfig::new(tcp_trans)
 				.or_transport(tcp::tokio::Transport::new(tcp_config));
-			EitherTransport::Right(desktop_trans)
+			Either::Right(desktop_trans)
 		})
 	} else {
-		EitherTransport::Right(OptionalTransport::some(
-			libp2p::core::transport::MemoryTransport::default(),
-		))
+		Either::Right(OptionalTransport::some(libp2p::core::transport::MemoryTransport::default()))
 	};
-
-	let (transport, bandwidth) = bandwidth::BandwidthLogging::new(transport);
 
 	let authentication_config =
 		{
@@ -95,11 +90,11 @@ pub fn build_transport(
 				rare panic here is basically zero");
 
 			// Legacy noise configurations for backward compatibility.
-			let noise_legacy =
-				noise::LegacyConfig { recv_legacy_handshake: true, ..Default::default() };
+			// let noise_legacy =
+			// 	noise::LegacyConfig { recv_legacy_handshake: true, ..Default::default() };
 
 			let mut xx_config = noise::NoiseConfig::xx(noise_keypair);
-			xx_config.set_legacy_config(noise_legacy);
+			// xx_config.set_legacy_config(noise_legacy);
 			xx_config.into_authenticated()
 		};
 
@@ -128,5 +123,5 @@ pub fn build_transport(
 		.timeout(Duration::from_secs(20))
 		.boxed();
 
-	(transport, bandwidth)
+	transport.with_bandwidth_logging()
 }
