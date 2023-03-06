@@ -690,8 +690,7 @@ mod tests {
 		assert_err, parameter_types,
 		traits::{
 			ConstU32, ConstU64, ConstU8,
-			Currency, /*LockIdentifier, LockableCurrency,
-			          *			WithdrawReasons, */
+			Currency,
 		},
 		weights::{ConstantMultiplier, IdentityFee, RuntimeDbWeight, Weight, WeightToFee},
 	};
