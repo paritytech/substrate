@@ -27,6 +27,7 @@ use frame_system::RawOrigin;
 use sp_arithmetic::traits::Bounded;
 
 const SEED: u32 = 0;
+
 #[instance_benchmarks]
 mod benchmarks {
 	use super::*;
