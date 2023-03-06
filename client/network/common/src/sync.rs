@@ -22,7 +22,11 @@ pub mod message;
 pub mod metrics;
 pub mod warp;
 
+use crate::protocol::role::Roles;
+use futures::Stream;
+
 use libp2p::PeerId;
+
 use message::{BlockAnnounce, BlockData, BlockRequest, BlockResponse};
 use sc_consensus::{import_queue::RuntimeOrigin, IncomingBlock};
 use sp_consensus::BlockOrigin;
@@ -30,8 +34,9 @@ use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
 	Justifications,
 };
-use std::{any::Any, fmt, fmt::Formatter, task::Poll};
 use warp::WarpSyncProgress;
+
+use std::{any::Any, fmt, fmt::Formatter, pin::Pin, sync::Arc, task::Poll};
 
 /// The sync status of a peer we are trying to sync with
 #[derive(Debug)]
@@ -40,6 +45,17 @@ pub struct PeerInfo<Block: BlockT> {
 	pub best_hash: Block::Hash,
 	/// Their best block number.
 	pub best_number: NumberFor<Block>,
+}
+
+/// Info about a peer's known state (both full and light).
+#[derive(Clone, Debug)]
+pub struct ExtendedPeerInfo<B: BlockT> {
+	/// Roles
+	pub roles: Roles,
+	/// Peer best block hash
+	pub best_hash: B::Hash,
+	/// Peer best block number
+	pub best_number: NumberFor<B>,
 }
 
 /// Reported sync state.
@@ -248,6 +264,49 @@ pub struct OpaqueBlockResponse(pub Box<dyn Any + Send>);
 impl fmt::Debug for OpaqueBlockResponse {
 	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
 		f.debug_struct("OpaqueBlockResponse").finish()
+	}
+}
+
+/// Provides high-level status of syncing.
+#[async_trait::async_trait]
+pub trait SyncStatusProvider<Block: BlockT>: Send + Sync {
+	/// Get high-level view of the syncing status.
+	async fn status(&self) -> Result<SyncStatus<Block>, ()>;
+}
+
+#[async_trait::async_trait]
+impl<T, Block> SyncStatusProvider<Block> for Arc<T>
+where
+	T: ?Sized,
+	T: SyncStatusProvider<Block>,
+	Block: BlockT,
+{
+	async fn status(&self) -> Result<SyncStatus<Block>, ()> {
+		T::status(self).await
+	}
+}
+
+/// Syncing-related events that other protocols can subscribe to.
+pub enum SyncEvent {
+	/// Peer that the syncing implementation is tracking connected.
+	PeerConnected(PeerId),
+
+	/// Peer that the syncing implementation was tracking disconnected.
+	PeerDisconnected(PeerId),
+}
+
+pub trait SyncEventStream: Send + Sync {
+	/// Subscribe to syncing-related events.
+	fn event_stream(&self, name: &'static str) -> Pin<Box<dyn Stream<Item = SyncEvent> + Send>>;
+}
+
+impl<T> SyncEventStream for Arc<T>
+where
+	T: ?Sized,
+	T: SyncEventStream,
+{
+	fn event_stream(&self, name: &'static str) -> Pin<Box<dyn Stream<Item = SyncEvent> + Send>> {
+		T::event_stream(self, name)
 	}
 }
 

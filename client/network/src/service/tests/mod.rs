@@ -16,44 +16,36 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{config, ChainSyncInterface, NetworkService, NetworkWorker};
+use crate::{config, NetworkService, NetworkWorker};
 
 use futures::prelude::*;
 use libp2p::Multiaddr;
-use sc_client_api::{BlockBackend, HeaderBackend};
 use sc_consensus::{ImportQueue, Link};
 use sc_network_common::{
-	config::{
-		NonDefaultSetConfig, NonReservedPeerMode, NotificationHandshake, ProtocolId, SetConfig,
-		TransportConfig,
-	},
+	config::{NonDefaultSetConfig, ProtocolId, SetConfig, TransportConfig},
 	protocol::{event::Event, role::Roles},
 	service::NetworkEventStream,
-	sync::{message::BlockAnnouncesHandshake, ChainSync as ChainSyncT},
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
 	block_request_handler::BlockRequestHandler,
+	engine::SyncingEngine,
 	service::network::{NetworkServiceHandle, NetworkServiceProvider},
 	state_request_handler::StateRequestHandler,
-	ChainSync,
 };
-use sp_runtime::traits::{Block as BlockT, Header as _, Zero};
+use sp_runtime::traits::{Block as BlockT, Header as _};
 use std::sync::Arc;
 use substrate_test_runtime_client::{
 	runtime::{Block as TestBlock, Hash as TestHash},
-	TestClient, TestClientBuilder, TestClientBuilderExt as _,
+	TestClientBuilder, TestClientBuilderExt as _,
 };
 
 #[cfg(test)]
-mod chain_sync;
-#[cfg(test)]
 mod service;
 
-type TestNetworkWorker = NetworkWorker<TestBlock, TestHash, TestClient>;
+type TestNetworkWorker = NetworkWorker<TestBlock, TestHash>;
 type TestNetworkService = NetworkService<TestBlock, TestHash>;
 
-const BLOCK_ANNOUNCE_PROTO_NAME: &str = "/block-announces";
 const PROTOCOL_NAME: &str = "/foo";
 
 struct TestNetwork {
@@ -63,14 +55,6 @@ struct TestNetwork {
 impl TestNetwork {
 	pub fn new(network: TestNetworkWorker) -> Self {
 		Self { network }
-	}
-
-	pub fn service(&self) -> &Arc<TestNetworkService> {
-		&self.network.service()
-	}
-
-	pub fn network(&mut self) -> &mut TestNetworkWorker {
-		&mut self.network
 	}
 
 	pub fn start_network(
@@ -92,7 +76,6 @@ struct TestNetworkBuilder {
 	client: Option<Arc<substrate_test_runtime_client::TestClient>>,
 	listen_addresses: Vec<Multiaddr>,
 	set_config: Option<SetConfig>,
-	chain_sync: Option<(Box<dyn ChainSyncT<TestBlock>>, Box<dyn ChainSyncInterface<TestBlock>>)>,
 	chain_sync_network: Option<(NetworkServiceProvider, NetworkServiceHandle)>,
 	config: Option<config::NetworkConfiguration>,
 }
@@ -105,15 +88,9 @@ impl TestNetworkBuilder {
 			client: None,
 			listen_addresses: Vec::new(),
 			set_config: None,
-			chain_sync: None,
 			chain_sync_network: None,
 			config: None,
 		}
-	}
-
-	pub fn with_client(mut self, client: Arc<substrate_test_runtime_client::TestClient>) -> Self {
-		self.client = Some(client);
-		self
 	}
 
 	pub fn with_config(mut self, config: config::NetworkConfiguration) -> Self {
@@ -128,27 +105,6 @@ impl TestNetworkBuilder {
 
 	pub fn with_set_config(mut self, set_config: SetConfig) -> Self {
 		self.set_config = Some(set_config);
-		self
-	}
-
-	pub fn with_chain_sync(
-		mut self,
-		chain_sync: (Box<dyn ChainSyncT<TestBlock>>, Box<dyn ChainSyncInterface<TestBlock>>),
-	) -> Self {
-		self.chain_sync = Some(chain_sync);
-		self
-	}
-
-	pub fn with_chain_sync_network(
-		mut self,
-		chain_sync_network: (NetworkServiceProvider, NetworkServiceHandle),
-	) -> Self {
-		self.chain_sync_network = Some(chain_sync_network);
-		self
-	}
-
-	pub fn with_import_queue(mut self, import_queue: Box<dyn ImportQueue<TestBlock>>) -> Self {
-		self.import_queue = Some(import_queue);
 		self
 	}
 
@@ -240,73 +196,29 @@ impl TestNetworkBuilder {
 			protocol_config
 		};
 
-		let block_announce_config = NonDefaultSetConfig {
-			notifications_protocol: BLOCK_ANNOUNCE_PROTO_NAME.into(),
-			fallback_names: vec![],
-			max_notification_size: 1024 * 1024,
-			handshake: Some(NotificationHandshake::new(BlockAnnouncesHandshake::<
-				substrate_test_runtime_client::runtime::Block,
-			>::build(
-				Roles::from(&config::Role::Full),
-				client.info().best_number,
-				client.info().best_hash,
-				client
-					.block_hash(Zero::zero())
-					.ok()
-					.flatten()
-					.expect("Genesis block exists; qed"),
-			))),
-			set_config: SetConfig {
-				in_peers: 0,
-				out_peers: 0,
-				reserved_nodes: Vec::new(),
-				non_reserved_mode: NonReservedPeerMode::Deny,
-			},
-		};
-
 		let (chain_sync_network_provider, chain_sync_network_handle) =
 			self.chain_sync_network.unwrap_or(NetworkServiceProvider::new());
 
-		let (chain_sync, chain_sync_service) = self.chain_sync.unwrap_or({
-			let (chain_sync, chain_sync_service, _) = ChainSync::new(
-				match network_config.sync_mode {
-					config::SyncMode::Full => sc_network_common::sync::SyncMode::Full,
-					config::SyncMode::Fast { skip_proofs, storage_chain_mode } =>
-						sc_network_common::sync::SyncMode::LightState {
-							skip_proofs,
-							storage_chain_mode,
-						},
-					config::SyncMode::Warp => sc_network_common::sync::SyncMode::Warp,
-				},
-				client.clone(),
-				protocol_id.clone(),
-				&fork_id,
-				Roles::from(&config::Role::Full),
-				Box::new(sp_consensus::block_validation::DefaultBlockAnnounceValidator),
-				network_config.max_parallel_downloads,
-				None,
-				None,
-				chain_sync_network_handle,
-				import_queue.service(),
-				block_request_protocol_config.name.clone(),
-				state_request_protocol_config.name.clone(),
-				None,
-			)
-			.unwrap();
-
-			if let None = self.link {
-				self.link = Some(Box::new(chain_sync_service.clone()));
-			}
-			(Box::new(chain_sync), Box::new(chain_sync_service))
-		});
-		let mut link = self
-			.link
-			.unwrap_or(Box::new(sc_network_sync::service::mock::MockChainSyncInterface::new()));
-
+		let (engine, chain_sync_service, block_announce_config) = SyncingEngine::new(
+			Roles::from(&config::Role::Full),
+			client.clone(),
+			None,
+			&network_config,
+			protocol_id.clone(),
+			&None,
+			Box::new(sp_consensus::block_validation::DefaultBlockAnnounceValidator),
+			None,
+			chain_sync_network_handle,
+			import_queue.service(),
+			block_request_protocol_config.name.clone(),
+			state_request_protocol_config.name.clone(),
+			None,
+		)
+		.unwrap();
+		let mut link = self.link.unwrap_or(Box::new(chain_sync_service.clone()));
 		let worker = NetworkWorker::<
 			substrate_test_runtime_client::runtime::Block,
 			substrate_test_runtime_client::runtime::Hash,
-			substrate_test_runtime_client::TestClient,
 		>::new(config::Params {
 			block_announce_config,
 			role: config::Role::Full,
@@ -317,8 +229,6 @@ impl TestNetworkBuilder {
 			chain: client.clone(),
 			protocol_id,
 			fork_id,
-			chain_sync,
-			chain_sync_service,
 			metrics_registry: None,
 			request_response_protocol_configs: [
 				block_request_protocol_config,
@@ -343,6 +253,8 @@ impl TestNetworkBuilder {
 				tokio::time::sleep(std::time::Duration::from_millis(250)).await;
 			}
 		});
+		let stream = worker.service().event_stream("syncing");
+		tokio::spawn(engine.run(stream));
 
 		TestNetwork::new(worker)
 	}
