@@ -753,7 +753,7 @@ fn pallet_macro_stub() -> TokenStream {
 /// coupling](https://docs.substrate.io/reference/how-to-guides/pallet-design/use-tight-coupling/))
 ///
 /// The associated type `RuntimeEvent` is reserved. If defined, it must have the bounds
-/// `From<Event>` and `IsType<<Self as frame_system::Config>::RuntimeEvent>`.
+/// `From<Event>` and `IsType<<Self as frame_system::Config>::SystemEvent>`.
 ///
 /// [`pallet::event`](`macro@event`) must be present if `RuntimeEvent` exists as a config item
 /// in your `#[pallet::config]`.

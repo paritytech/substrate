@@ -88,8 +88,8 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		/// The event type of this module.
 		type RuntimeEvent: From<Event>
-			+ Into<<Self as frame_system::Config>::RuntimeEvent>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+			+ Into<<Self as frame_system::Config>::SystemEvent>
+			+ IsType<<Self as frame_system::Config>::SystemEvent>;
 
 		/// The proof of key ownership, used for validating equivocation reports
 		/// The proof must include the session index and validator count of the

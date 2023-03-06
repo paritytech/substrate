@@ -331,7 +331,7 @@ pub mod pallet {
 
 		/// The runtime event type.
 		type RuntimeEvent: From<Event<Self, I>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+			+ IsType<<Self as frame_system::Config>::SystemEvent>;
 
 		/// The origin required to add or promote a mmember. The success value indicates the
 		/// maximum rank *to which* the promotion may be.

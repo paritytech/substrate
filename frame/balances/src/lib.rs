@@ -223,7 +223,7 @@ pub mod pallet {
 
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self, I>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+			+ IsType<<Self as frame_system::Config>::SystemEvent>;
 
 		/// The minimum amount required to keep an account open.
 		#[pallet::constant]

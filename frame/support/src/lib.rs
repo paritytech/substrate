@@ -1659,7 +1659,7 @@ pub mod pallet_prelude {
 /// coupling](https://docs.substrate.io/reference/how-to-guides/pallet-design/use-tight-coupling/))
 ///
 /// The associated type `RuntimeEvent` is reserved. If defined, it must have the bounds
-/// `From<Event>` and `IsType<<Self as frame_system::Config>::RuntimeEvent>`.
+/// `From<Event>` and `IsType<<Self as frame_system::Config>::SystemEvent>`.
 ///
 /// [`pallet::event`](`frame_support::pallet_macros::event`) must be present if `RuntimeEvent`
 /// exists as a config item in your `#[pallet::config]`.
@@ -2306,7 +2306,7 @@ pub mod pallet_prelude {
 /// 		#[pallet::constant] // put the constant in metadata
 /// 		type MyGetParam: Get<u32>;
 /// 		type Balance: Parameter + MaxEncodedLen + From<u8>;
-/// 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+/// 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::SystemEvent>;
 /// 	}
 ///
 /// 	// Define some additional constant to put into the constant metadata.
@@ -2495,7 +2495,7 @@ pub mod pallet_prelude {
 /// 		#[pallet::constant]
 /// 		type MyGetParam: Get<u32>;
 /// 		type Balance: Parameter + MaxEncodedLen + From<u8>;
-/// 		type RuntimeEvent: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+/// 		type RuntimeEvent: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::SystemEvent>;
 /// 	}
 ///
 /// 	#[pallet::extra_constants]
@@ -2651,7 +2651,7 @@ pub mod pallet_prelude {
 /// 	```
 /// 5. **migrate Config**: move trait into the module with
 ///     * all const in `decl_module` to [`#[pallet::constant]`](#palletconstant)
-///     * add the bound `IsType<<Self as frame_system::Config>::RuntimeEvent>` to `type
+///     * add the bound `IsType<<Self as frame_system::Config>::SystemEvent>` to `type
 ///       RuntimeEvent`
 /// 7. **migrate decl_module**: write:
 /// 	```ignore

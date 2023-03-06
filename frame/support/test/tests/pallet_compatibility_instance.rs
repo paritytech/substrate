@@ -30,7 +30,7 @@ mod pallet_old {
 	pub trait Config<I: Instance = DefaultInstance>: frame_system::Config {
 		type SomeConst: Get<Self::Balance>;
 		type Balance: Parameter + codec::HasCompact + From<u32> + Into<u64> + Default;
-		type RuntimeEvent: From<Event<Self, I>> + Into<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event<Self, I>> + Into<<Self as frame_system::Config>::SystemEvent>;
 	}
 
 	decl_storage! {
@@ -106,7 +106,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type SomeConst: Get<Self::Balance>;
 		type RuntimeEvent: From<Event<Self, I>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+			+ IsType<<Self as frame_system::Config>::SystemEvent>;
 	}
 
 	#[pallet::pallet]

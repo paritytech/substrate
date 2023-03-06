@@ -99,7 +99,7 @@ pub mod pallet {
 	pub trait Config<I: 'static = ()>: frame_system::Config + Sized {
 		// System level stuff.
 		type RuntimeEvent: From<Event<Self, I>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+			+ IsType<<Self as frame_system::Config>::SystemEvent>;
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 		/// Currency type with which voting happens.

@@ -190,7 +190,7 @@ pub mod pallet {
 			+ Inspect<Self::AccountId, Balance = BalanceOf<Self>>;
 
 		/// The overarching event type.
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::SystemEvent>;
 
 		/// The overarching call type.
 		type RuntimeCall: Dispatchable<RuntimeOrigin = Self::RuntimeOrigin, PostInfo = PostDispatchInfo>

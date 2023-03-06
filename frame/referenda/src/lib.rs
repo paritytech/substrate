@@ -158,7 +158,7 @@ pub mod pallet {
 			+ IsType<<Self as frame_system::Config>::RuntimeCall>
 			+ From<frame_system::Call<Self>>;
 		type RuntimeEvent: From<Event<Self, I>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+			+ IsType<<Self as frame_system::Config>::SystemEvent>;
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 		/// The Scheduler.

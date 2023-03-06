@@ -295,11 +295,10 @@ pub mod pallet {
 		type Header: Parameter + traits::Header<Number = Self::BlockNumber, Hash = Self::Hash>;
 
 		/// The aggregated event type of the runtime.
-		type RuntimeEvent: Parameter
+		type SystemEvent: Parameter
 			+ Member
 			+ From<Event<Self>>
-			+ Debug
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+			+ Debug;
 
 		/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 		#[pallet::constant]
@@ -593,7 +592,7 @@ pub mod pallet {
 	#[pallet::whitelist_storage]
 	#[pallet::unbounded]
 	pub(super) type Events<T: Config> =
-		StorageValue<_, Vec<Box<EventRecord<T::RuntimeEvent, T::Hash>>>, ValueQuery>;
+		StorageValue<_, Vec<Box<EventRecord<T::SystemEvent, T::Hash>>>, ValueQuery>;
 
 	/// The number of events in the `Events<T>` list.
 	#[pallet::storage]
@@ -1235,7 +1234,7 @@ impl<T: Config> Pallet<T> {
 	/// Deposits an event into this block's event record.
 	///
 	/// NOTE: Events not registered at the genesis block and quietly omitted.
-	pub fn deposit_event(event: impl Into<T::RuntimeEvent>) {
+	pub fn deposit_event(event: impl Into<T::SystemEvent>) {
 		Self::deposit_event_indexed(&[], event.into());
 	}
 
@@ -1246,7 +1245,7 @@ impl<T: Config> Pallet<T> {
 	/// It is expected that light-clients could subscribe to this topics.
 	///
 	/// NOTE: Events not registered at the genesis block and quietly omitted.
-	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::RuntimeEvent) {
+	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::SystemEvent) {
 		let block_number = Self::block_number();
 		// Don't populate events on genesis.
 		if block_number.is_zero() {
@@ -1436,7 +1435,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// NOTE: Events not registered at the genesis block and quietly omitted.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
-	pub fn events() -> Vec<EventRecord<T::RuntimeEvent, T::Hash>> {
+	pub fn events() -> Vec<EventRecord<T::SystemEvent, T::Hash>> {
 		debug_assert!(
 			!Self::block_number().is_zero(),
 			"events not registered at the genesis block"
@@ -1451,7 +1450,7 @@ impl<T: Config> Pallet<T> {
 	/// Should only be called if you know what you are doing and outside of the runtime block
 	/// execution else it can have a large impact on the PoV size of a block.
 	pub fn read_events_no_consensus(
-	) -> impl sp_std::iter::Iterator<Item = Box<EventRecord<T::RuntimeEvent, T::Hash>>> {
+	) -> impl sp_std::iter::Iterator<Item = Box<EventRecord<T::SystemEvent, T::Hash>>> {
 		Events::<T>::stream_iter()
 	}
 
@@ -1498,7 +1497,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// NOTE: Events not registered at the genesis block and quietly omitted.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
-	pub fn assert_has_event(event: T::RuntimeEvent) {
+	pub fn assert_has_event(event: T::SystemEvent) {
 		let events = Self::events();
 		assert!(
 			events.iter().any(|record| record.event == event),
@@ -1510,7 +1509,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// NOTE: Events not registered at the genesis block and quietly omitted.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
-	pub fn assert_last_event(event: T::RuntimeEvent) {
+	pub fn assert_last_event(event: T::SystemEvent) {
 		let last_event = Self::events().last().expect("events expected").event.clone();
 		assert_eq!(
 			last_event, event,

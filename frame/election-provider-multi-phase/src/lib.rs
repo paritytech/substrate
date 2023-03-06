@@ -570,7 +570,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 		type RuntimeEvent: From<Event<Self>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>
+			+ IsType<<Self as frame_system::Config>::SystemEvent>
 			+ TryInto<Event<Self>>;
 
 		/// Currency type.

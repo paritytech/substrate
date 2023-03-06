@@ -42,7 +42,7 @@ pub mod pallet {
 		type MyGetParam: Get<u32>;
 		type Balance: Parameter + Default + scale_info::StaticTypeInfo;
 		type RuntimeEvent: From<Event<Self, I>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+			+ IsType<<Self as frame_system::Config>::SystemEvent>;
 	}
 
 	#[pallet::pallet]
@@ -256,7 +256,7 @@ pub mod pallet2 {
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		type RuntimeEvent: From<Event<Self, I>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+			+ IsType<<Self as frame_system::Config>::SystemEvent>;
 	}
 
 	#[pallet::pallet]

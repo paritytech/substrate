@@ -1,4 +1,4 @@
-error: Invalid `type RuntimeEvent`, associated type `RuntimeEvent` is reserved and must bound: `IsType<<Self as frame_system::Config>::RuntimeEvent>`
+error: Invalid `type RuntimeEvent`, associated type `RuntimeEvent` is reserved and must bound: `IsType<<Self as frame_system::Config>::SystemEvent>`
  --> $DIR/event_type_invalid_bound.rs:9:3
   |
 9 |         type RuntimeEvent;

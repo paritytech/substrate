@@ -143,7 +143,7 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 
 					let event = <
 						<T as Config #trait_use_gen>::RuntimeEvent as
-						Into<<T as #frame_system::Config>::RuntimeEvent>
+						Into<<T as #frame_system::Config>::SystemEvent>
 					>::into(event);
 
 					<#frame_system::Pallet<T>>::deposit_event(event)

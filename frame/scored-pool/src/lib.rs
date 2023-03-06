@@ -160,7 +160,7 @@ pub mod pallet {
 
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self, I>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+			+ IsType<<Self as frame_system::Config>::SystemEvent>;
 
 		// The deposit which is reserved from candidates if they want to
 		// start a candidacy. The deposit gets returned when the candidacy is

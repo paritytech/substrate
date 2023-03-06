@@ -43,7 +43,7 @@ mod pallet_old {
 			+ Into<u64>
 			+ Default
 			+ SomeAssociation;
-		type RuntimeEvent: From<Event<Self>> + Into<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event<Self>> + Into<<Self as frame_system::Config>::SystemEvent>;
 	}
 
 	decl_storage! {
@@ -120,7 +120,7 @@ pub mod pallet {
 			+ scale_info::StaticTypeInfo;
 		#[pallet::constant]
 		type SomeConst: Get<Self::Balance>;
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::SystemEvent>;
 	}
 
 	#[pallet::pallet]

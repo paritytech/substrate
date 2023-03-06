@@ -102,7 +102,7 @@ mod mock_democracy {
 		#[pallet::config]
 		pub trait Config: frame_system::Config + Sized {
 			type RuntimeEvent: From<Event<Self>>
-				+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+				+ IsType<<Self as frame_system::Config>::SystemEvent>;
 			type ExternalMajorityOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 		}
 

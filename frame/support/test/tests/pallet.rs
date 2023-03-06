@@ -131,7 +131,7 @@ pub mod pallet {
 
 		type Balance: Parameter + Default + TypeInfo;
 
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::SystemEvent>;
 	}
 
 	#[pallet::extra_constants]
@@ -492,7 +492,7 @@ pub mod pallet2 {
 	where
 		<Self as frame_system::Config>::AccountId: From<SomeType1> + SomeAssociation1,
 	{
-		type RuntimeEvent: From<Event> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event> + IsType<<Self as frame_system::Config>::SystemEvent>;
 	}
 
 	#[pallet::pallet]

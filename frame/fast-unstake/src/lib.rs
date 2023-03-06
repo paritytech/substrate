@@ -111,7 +111,7 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>
+			+ IsType<<Self as frame_system::Config>::SystemEvent>
 			+ TryInto<Event<Self>>;
 
 		/// The currency used for deposits.

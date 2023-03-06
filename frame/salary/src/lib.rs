@@ -165,7 +165,7 @@ pub mod pallet {
 
 		/// The runtime event type.
 		type RuntimeEvent: From<Event<Self, I>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+			+ IsType<<Self as frame_system::Config>::SystemEvent>;
 
 		/// Means by which we can make payments to accounts. This also defines the currency and the
 		/// balance which we use to denote that currency.
