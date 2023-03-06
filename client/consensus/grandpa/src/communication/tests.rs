@@ -33,6 +33,7 @@ use sc_network_common::{
 		NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
 		NetworkSyncForkRequest, NotificationSender, NotificationSenderError,
 	},
+	sync::{SyncEvent as SyncStreamEvent, SyncEventStream},
 };
 use sc_network_gossip::Validator;
 use sc_network_test::{Block, Hash};
@@ -153,6 +154,10 @@ impl NetworkNotification for TestNetwork {
 	) -> Result<Box<dyn NotificationSender>, NotificationSenderError> {
 		unimplemented!();
 	}
+
+	fn set_notification_handshake(&self, _protocol: ProtocolName, _handshake: Vec<u8>) {
+		unimplemented!();
+	}
 }
 
 impl NetworkBlock<Hash, NumberFor<Block>> for TestNetwork {
@@ -186,8 +191,34 @@ impl sc_network_gossip::ValidatorContext<Block> for TestNetwork {
 	fn send_topic(&mut self, _: &PeerId, _: Hash, _: bool) {}
 }
 
+#[derive(Clone)]
+pub(crate) struct TestSync;
+
+impl SyncEventStream for TestSync {
+	fn event_stream(
+		&self,
+		_name: &'static str,
+	) -> Pin<Box<dyn Stream<Item = SyncStreamEvent> + Send>> {
+		Box::pin(futures::stream::pending())
+	}
+}
+
+impl NetworkBlock<Hash, NumberFor<Block>> for TestSync {
+	fn announce_block(&self, _hash: Hash, _data: Option<Vec<u8>>) {
+		unimplemented!();
+	}
+
+	fn new_best_block_imported(&self, _hash: Hash, _number: NumberFor<Block>) {
+		unimplemented!();
+	}
+}
+
+impl NetworkSyncForkRequest<Hash, NumberFor<Block>> for TestSync {
+	fn set_sync_fork_request(&self, _peers: Vec<PeerId>, _hash: Hash, _number: NumberFor<Block>) {}
+}
+
 pub(crate) struct Tester {
-	pub(crate) net_handle: super::NetworkBridge<Block, TestNetwork>,
+	pub(crate) net_handle: super::NetworkBridge<Block, TestNetwork, TestSync>,
 	gossip_validator: Arc<GossipValidator<Block>>,
 	pub(crate) events: TracingUnboundedReceiver<Event>,
 }
@@ -255,6 +286,7 @@ fn voter_set_state() -> SharedVoterSetState<Block> {
 pub(crate) fn make_test_network() -> (impl Future<Output = Tester>, TestNetwork) {
 	let (tx, rx) = tracing_unbounded("test", 100_000);
 	let net = TestNetwork { sender: tx };
+	let sync = TestSync {};
 
 	#[derive(Clone)]
 	struct Exit;
@@ -267,7 +299,8 @@ pub(crate) fn make_test_network() -> (impl Future<Output = Tester>, TestNetwork)
 		}
 	}
 
-	let bridge = super::NetworkBridge::new(net.clone(), config(), voter_set_state(), None, None);
+	let bridge =
+		super::NetworkBridge::new(net.clone(), sync, config(), voter_set_state(), None, None);
 
 	(
 		futures::future::ready(Tester {
@@ -370,6 +403,7 @@ fn good_commit_leads_to_relay() {
 						protocol: grandpa_protocol_name::NAME.into(),
 						negotiated_fallback: None,
 						role: ObservedRole::Full,
+						received_handshake: vec![],
 					});
 
 					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
@@ -387,6 +421,7 @@ fn good_commit_leads_to_relay() {
 						protocol: grandpa_protocol_name::NAME.into(),
 						negotiated_fallback: None,
 						role: ObservedRole::Full,
+						received_handshake: vec![],
 					});
 
 					// Announce its local set has being on the current set id through a neighbor
@@ -519,6 +554,7 @@ fn bad_commit_leads_to_report() {
 						protocol: grandpa_protocol_name::NAME.into(),
 						negotiated_fallback: None,
 						role: ObservedRole::Full,
+						received_handshake: vec![],
 					});
 					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
 						remote: sender_id,

@@ -56,7 +56,7 @@
 //! **Pagination**
 //!
 //! Queues are stored in a *paged* manner by splitting their messages into [`Page`]s. This results
-//! in a lot of complexity when implementing the pallet but is completely necessary to archive the
+//! in a lot of complexity when implementing the pallet but is completely necessary to achieve the
 //! second #[Design Goal](design-goals). The problem comes from the fact a message can *possibly* be
 //! quite large, lets say 64KiB. This then results in a *MEL* of at least 64KiB which results in a
 //! PoV of at least 64KiB. Now we have the assumption that most messages are much shorter than their

@@ -46,7 +46,7 @@ use sc_network_common::{
 	config::MultiaddrWithPeerId,
 	service::{NetworkBlock, NetworkPeers},
 };
-use sc_network_sync::service::chain_sync::ChainSyncInterfaceHandle;
+use sc_network_sync::SyncingService;
 use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_blockchain::HeaderMetadata;
 use sp_consensus::SyncOracle;
@@ -158,17 +158,15 @@ async fn build_network_future<
 		+ 'static,
 	H: sc_network_common::ExHashT,
 >(
-	network: sc_network::NetworkWorker<B, H, C>,
+	network: sc_network::NetworkWorker<B, H>,
 	client: Arc<C>,
-	chain_sync_service: ChainSyncInterfaceHandle<B>,
+	sync_service: Arc<SyncingService<B>>,
 	announce_imported_blocks: bool,
 ) {
 	let mut imported_blocks_stream = client.import_notification_stream().fuse();
 
 	// Stream of finalized blocks reported by the client.
 	let mut finality_notification_stream = client.finality_notification_stream().fuse();
-
-	let network_service = network.service().clone();
 
 	let network_run = network.run().fuse();
 	pin_mut!(network_run);
@@ -188,11 +186,11 @@ async fn build_network_future<
 				};
 
 				if announce_imported_blocks {
-					network_service.announce_block(notification.hash, None);
+					sync_service.announce_block(notification.hash, None);
 				}
 
 				if notification.is_new_best {
-					network_service.new_best_block_imported(
+					sync_service.new_best_block_imported(
 						notification.hash,
 						*notification.header.number(),
 					);
@@ -201,7 +199,7 @@ async fn build_network_future<
 
 			// List of blocks that the client has finalized.
 			notification = finality_notification_stream.select_next_some() => {
-				chain_sync_service.on_block_finalized(notification.hash, *notification.header.number());
+				sync_service.on_block_finalized(notification.hash, notification.header);
 			}
 
 			// Drive the network. Shut down the network future if `NetworkWorker` has terminated.
@@ -228,7 +226,7 @@ async fn build_system_rpc_future<
 >(
 	role: Role,
 	network_service: Arc<sc_network::NetworkService<B, H>>,
-	chain_sync_service: ChainSyncInterfaceHandle<B>,
+	sync_service: Arc<SyncingService<B>>,
 	client: Arc<C>,
 	mut rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
@@ -244,23 +242,21 @@ async fn build_system_rpc_future<
 		};
 
 		match req {
-			sc_rpc::system::Request::Health(sender) => {
-				let peers = network_service.peers_debug_info().await;
-				if let Ok(peers) = peers {
+			sc_rpc::system::Request::Health(sender) => match sync_service.peers_info().await {
+				Ok(info) => {
 					let _ = sender.send(sc_rpc::system::Health {
-						peers: peers.len(),
-						is_syncing: network_service.is_major_syncing(),
+						peers: info.len(),
+						is_syncing: sync_service.is_major_syncing(),
 						should_have_peers,
 					});
-				} else {
-					break
-				}
+				},
+				Err(_) => log::error!("`SyncingEngine` shut down"),
 			},
 			sc_rpc::system::Request::LocalPeerId(sender) => {
 				let _ = sender.send(network_service.local_peer_id().to_base58());
 			},
 			sc_rpc::system::Request::LocalListenAddresses(sender) => {
-				let peer_id = network_service.local_peer_id().into();
+				let peer_id = (network_service.local_peer_id()).into();
 				let p2p_proto_suffix = sc_network::multiaddr::Protocol::P2p(peer_id);
 				let addresses = network_service
 					.listen_addresses()
@@ -269,12 +265,10 @@ async fn build_system_rpc_future<
 					.collect();
 				let _ = sender.send(addresses);
 			},
-			sc_rpc::system::Request::Peers(sender) => {
-				let peers = network_service.peers_debug_info().await;
-				if let Ok(peers) = peers {
+			sc_rpc::system::Request::Peers(sender) => match sync_service.peers_info().await {
+				Ok(info) => {
 					let _ = sender.send(
-						peers
-							.into_iter()
+						info.into_iter()
 							.map(|(peer_id, p)| sc_rpc::system::PeerInfo {
 								peer_id: peer_id.to_base58(),
 								roles: format!("{:?}", p.roles),
@@ -283,9 +277,8 @@ async fn build_system_rpc_future<
 							})
 							.collect(),
 					);
-				} else {
-					break
-				}
+				},
+				Err(_) => log::error!("`SyncingEngine` shut down"),
 			},
 			sc_rpc::system::Request::NetworkState(sender) => {
 				let network_state = network_service.network_state().await;
@@ -339,21 +332,21 @@ async fn build_system_rpc_future<
 			sc_rpc::system::Request::SyncState(sender) => {
 				use sc_rpc::system::SyncState;
 
-				let best_number = client.info().best_number;
-
-				let Ok(status) = chain_sync_service.status().await else {
-					debug!("`ChainSync` has terminated, shutting down the system RPC future.");
-					return
-				};
-
-				let _ = sender.send(SyncState {
-					starting_block,
-					current_block: best_number,
-					highest_block: status.best_seen_block.unwrap_or(best_number),
-				});
+				match sync_service.best_seen_block().await {
+					Ok(best_seen_block) => {
+						let best_number = client.info().best_number;
+						let _ = sender.send(SyncState {
+							starting_block,
+							current_block: best_number,
+							highest_block: best_seen_block.unwrap_or(best_number),
+						});
+					},
+					Err(_) => log::error!("`SyncingEngine` shut down"),
+				}
 			},
 		}
 	}
+
 	debug!("`NetworkWorker` has terminated, shutting down the system RPC future.");
 }
 
