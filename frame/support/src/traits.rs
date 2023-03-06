@@ -36,7 +36,7 @@ pub use members::{AllowAll, DenyAll, Filter};
 pub use members::{
 	AsContains, ChangeMembers, Contains, ContainsLengthBound, ContainsPair, Everything,
 	EverythingBut, FromContainsPair, InitializeMembers, InsideBoth, IsInVec, Nothing,
-	SortedMembers, TheseExcept,
+	RankedMembers, SortedMembers, TheseExcept,
 };
 
 mod validation;
@@ -114,8 +114,8 @@ pub use preimages::{Bounded, BoundedInline, FetchResult, Hash, QueryPreimage, St
 
 mod messages;
 pub use messages::{
-	EnqueueMessage, ExecuteOverweightError, Footprint, ProcessMessage, ProcessMessageError,
-	ServiceQueues,
+	EnqueueMessage, ExecuteOverweightError, Footprint, NoopServiceQueues, ProcessMessage,
+	ProcessMessageError, ServiceQueues, TransformOrigin,
 };
 
 #[cfg(feature = "try-runtime")]

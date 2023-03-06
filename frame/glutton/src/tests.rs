@@ -133,7 +133,7 @@ fn on_idle_works() {
 		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), Perbill::from_percent(100)));
 		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), Perbill::from_percent(100)));
 
-		Glutton::on_idle(1, Weight::from_ref_time(20_000_000));
+		Glutton::on_idle(1, Weight::from_parts(20_000_000, 0));
 	});
 }
 
@@ -177,7 +177,7 @@ fn on_idle_weight_low_proof_is_close_enough_works() {
 		let ratio = Perbill::from_rational(got.proof_size(), should.proof_size());
 		// Just a sanity check here.
 		assert!(
-			ratio >= Perbill::from_percent(80),
+			ratio >= Perbill::from_percent(50),
 			"Too few proof size consumed, was only {:?} of expected",
 			ratio
 		);

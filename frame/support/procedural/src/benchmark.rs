@@ -567,7 +567,12 @@ pub fn benchmarks(
 						#support::storage::transactional::TRANSACTION_LEVEL_KEY.into(),
 					);
 					whitelist.push(transactional_layer_key);
-					#krate::benchmarking::set_whitelist(whitelist);
+					// Whitelist the `:extrinsic_index`.
+					let extrinsic_index = #krate::TrackedStorageKey::new(
+						#krate::well_known_keys::EXTRINSIC_INDEX.into()
+					);
+					whitelist.push(extrinsic_index);
+					#krate::benchmarking::set_whitelist(whitelist.clone());
 					let mut results: #krate::Vec<#krate::BenchmarkResult> = #krate::Vec::new();
 
 					// Always do at least one internal repeat...
@@ -589,6 +594,12 @@ pub fn benchmarks(
 						// Commit the externalities to the database, flushing the DB cache.
 						// This will enable worst case scenario for reading from the database.
 						#krate::benchmarking::commit_db();
+
+						// Access all whitelisted keys to get them into the proof recorder since the
+						// recorder does now have a whitelist.
+						for key in &whitelist {
+							#krate::frame_support::storage::unhashed::get_raw(&key.key);
+						}
 
 						// Reset the read/write counter so we don't count operations in the setup process.
 						#krate::benchmarking::reset_read_write_count();

@@ -111,7 +111,7 @@ parameter_types! {
 	pub static Target: Perquintill = Perquintill::zero();
 	pub const MinReceipt: Perquintill = Perquintill::from_percent(1);
 	pub const ThawThrottle: (Perquintill, u64) = (Perquintill::from_percent(25), 5);
-	pub static MaxIntakeWeight: Weight = Weight::from_ref_time(2_000_000_000_000);
+	pub static MaxIntakeWeight: Weight = Weight::from_parts(2_000_000_000_000, 0);
 	pub const ReserveId: [u8; 8] = *b"py/nis  ";
 }
 
