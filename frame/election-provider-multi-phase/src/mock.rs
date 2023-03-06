@@ -281,7 +281,7 @@ parameter_types! {
 	pub static DesiredTargets: u32 = 2;
 	pub static SignedPhase: BlockNumber = 10;
 	pub static UnsignedPhase: BlockNumber = 5;
-	// We expect a successful election to take at least 25% of the signed hase blocks.
+	// We expect a successful election to take at least 25% of the signed and unsigned blocks.
 	pub static MinBlocksBeforeEmergency: Perbill = Perbill::from_percent(25);
 	pub static SignedMaxSubmissions: u32 = 5;
 	pub static SignedMaxRefunds: u32 = 1;

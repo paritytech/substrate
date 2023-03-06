@@ -1593,7 +1593,7 @@ impl<T: Config> Pallet<T> {
 		Self::kill_snapshot();
 	}
 
-	// Returns `true` the minimum number of blocks have passed since last successful election.
+	// Returns `true` if the minimum number of blocks have passed since last successful election.
 	fn minimum_blocks_signed_phase() -> bool {
 		(frame_system::Pallet::<T>::block_number() - <LastElection<T>>::get()) >=
 			T::MinBlocksBeforeEmergency::get() *
@@ -2183,6 +2183,27 @@ mod tests {
 				roll_to_signed();
 				roll_to(System::block_number() + min_blocks);
 
+				assert!(MultiPhase::minimum_blocks_signed_phase());
+				assert_err!(MultiPhase::elect(), ElectionError::Fallback("NoFallback."));
+				assert!(MultiPhase::current_phase().is_emergency());
+			})
+	}
+
+	#[test]
+	fn emergency_throttling_disabled_works() {
+		ExtBuilder::default()
+			.onchain_fallback(false)
+			.phases(10, 10)
+			.build_and_execute(|| {
+				// election successful at block 10.
+				roll_to_signed();
+				<LastElection<Runtime>>::set(10);
+
+				MultiPhase::rotate_round();
+				assert!(MultiPhase::current_phase().is_off());
+
+				// if `T::MinBlocksBeforeEmergency` is 0, the emergency throttling is disabled.
+				<MinBlocksBeforeEmergency>::set(Perbill::zero());
 				assert!(MultiPhase::minimum_blocks_signed_phase());
 				assert_err!(MultiPhase::elect(), ElectionError::Fallback("NoFallback."));
 				assert!(MultiPhase::current_phase().is_emergency());
