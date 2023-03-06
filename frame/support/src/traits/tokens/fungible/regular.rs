@@ -99,7 +99,7 @@ pub trait Inspect<AccountId>: Sized {
 		provenance: Provenance,
 	) -> DepositConsequence;
 
-	/// Returns `Failed` if the balance of `who` may not be decreased by `amount`, otherwise
+	/// Returns `Success` if the balance of `who` may be decreased by `amount`, otherwise
 	/// the consequence.
 	fn can_withdraw(who: &AccountId, amount: Self::Balance) -> WithdrawConsequence<Self::Balance>;
 }
