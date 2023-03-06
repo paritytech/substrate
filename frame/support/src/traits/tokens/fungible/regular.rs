@@ -92,14 +92,14 @@ pub trait Inspect<AccountId>: Sized {
 	///
 	/// - `who`: The account of which the balance should be increased by `amount`.
 	/// - `amount`: How much should the balance be increased?
-	/// - `mint`: Will `amount` be minted to deposit it into `account`?
+	/// - `provenance`: Will `amount` be minted to deposit it into `account` or is it already in the system?
 	fn can_deposit(
 		who: &AccountId,
 		amount: Self::Balance,
 		provenance: Provenance,
 	) -> DepositConsequence;
 
-	/// Returns `Failed` if the balance of `who` may not be decreased by `amount`, otherwise
+	/// Returns `Success` if the balance of `who` may be decreased by `amount`, otherwise
 	/// the consequence.
 	fn can_withdraw(who: &AccountId, amount: Self::Balance) -> WithdrawConsequence<Self::Balance>;
 }

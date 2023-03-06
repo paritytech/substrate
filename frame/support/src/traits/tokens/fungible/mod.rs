@@ -34,7 +34,7 @@
 //! - `InspectFreeze`: Inspector functions for frozen balance.
 //! - `MutateFreeze`: Mutator functions for frozen balance.
 //! - `Balanced`: One-sided mutator functions for regular balances, which return imbalance objects
-//!   which guaranete eventual book-keeping. May be useful for some sophisticated operations where
+//!   which guarantee eventual book-keeping. May be useful for some sophisticated operations where
 //!   funds must be removed from an account before it is known precisely what should be done with
 //!   them.
 

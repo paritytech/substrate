@@ -21,7 +21,7 @@ use scale_info::TypeInfo;
 use sp_runtime::DispatchResult;
 
 /// Trait for inspecting a fungible asset which can be frozen. Freezing is essentially setting a
-/// minimum balance bellow which the total balance (inclusive of any funds placed on hold) may not
+/// minimum balance below which the total balance (inclusive of any funds placed on hold) may not
 /// be normally allowed to drop. Generally, freezers will provide an "update" function such that
 /// if the total balance does drop below the limit, then the freezer can update their housekeeping
 /// accordingly.

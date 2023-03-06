@@ -78,13 +78,13 @@ pub trait Inspect<AccountId>: super::Inspect<AccountId> {
 	/// Check to see if some `amount` of funds of `who` may be placed on hold with the given
 	/// `reason`. Reasons why this may not be true:
 	///
-	/// - The implementor supports only a limited number of concurrernt holds on an account which is
+	/// - The implementor supports only a limited number of concurrent holds on an account which is
 	///   the possible values of `reason`;
 	/// - The total balance of the account is less than `amount`;
 	/// - Removing `amount` from the total balance would kill the account and remove the only
 	///   provider reference.
 	///
-	/// Note: we pass `true` as the third argument to `reducible_balance` since we assume that if
+	/// Note: we pass `Fortitude::Force` as the last argument to `reducible_balance` since we assume that if
 	/// needed the balance can slashed. If we are using a simple non-forcing reserve-transfer, then
 	/// we really ought to check that we are not reducing the funds below the freeze-limit (if any).
 	///
@@ -108,7 +108,7 @@ pub trait Inspect<AccountId>: super::Inspect<AccountId> {
 	/// Check to see if some `amount` of funds of `who` may be placed on hold for the given
 	/// `reason`. Reasons why this may not be true:
 	///
-	/// - The implementor supports only a limited number of concurrernt holds on an account which is
+	/// - The implementor supports only a limited number of concurrent holds on an account which is
 	///   the possible values of `reason`;
 	/// - The main balance of the account is less than `amount`;
 	/// - Removing `amount` from the main balance would kill the account and remove the only
@@ -159,8 +159,8 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 
 	/// Reduce the balance on hold of `who` by `amount`.
 	///
-	/// If `precision` is `false` and it cannot be reduced by that amount for
-	/// some reason, return `Err` and don't reduce it at all. If `precision` is `BestEffort`, then
+	/// If `precision` is `Precision::Exact` and it cannot be reduced by that amount for
+	/// some reason, return `Err` and don't reduce it at all. If `precision` is `Precision::BestEffort`, then
 	/// reduce the balance of `who` by the most that is possible, up to `amount`.
 	///
 	/// In either case, if `Ok` is returned then the inner is the amount by which is was reduced.
