@@ -100,13 +100,14 @@ pub mod weights;
 mod tests;
 
 use crate::{
-	exec::{AccountIdOf, ExecError, Executable, Stack as ExecStack},
+	exec::{AccountIdOf, ErrorOrigin, ExecError, Executable, Stack as ExecStack},
 	gas::GasMeter,
 	storage::{meter::Meter as StorageMeter, ContractInfo, DeletedContract},
 	wasm::{OwnerInfo, PrefabWasmModule, TryInstantiate},
 	weights::WeightInfo,
 };
 use codec::{Codec, Encode, HasCompact};
+use environmental::*;
 use frame_support::{
 	dispatch::{Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo},
 	ensure,
@@ -616,16 +617,16 @@ pub mod pallet {
 			let gas_limit: Weight = gas_limit.into();
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
-			let mut output = Self::internal_call(
+			let common = CommonInput {
 				origin,
-				dest,
 				value,
-				gas_limit,
-				storage_deposit_limit.map(Into::into),
 				data,
-				None,
-				Determinism::Deterministic,
-			);
+				gas_limit,
+				storage_deposit_limit: storage_deposit_limit.map(Into::into),
+				debug_message: None,
+			};
+			let mut output = CallInput::<T> { dest, determinism: Determinism::Deterministic }
+				.run_guarded(common);
 			if let Ok(retval) = &output.result {
 				if retval.did_revert() {
 					output.result = Err(<Error<T>>::ContractReverted.into());
@@ -678,16 +679,16 @@ pub mod pallet {
 			let code_len = code.len() as u32;
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
-			let mut output = Self::internal_instantiate(
+			let common = CommonInput {
 				origin,
 				value,
-				gas_limit,
-				storage_deposit_limit.map(Into::into),
-				Code::Upload(code),
 				data,
-				salt,
-				None,
-			);
+				gas_limit,
+				storage_deposit_limit: storage_deposit_limit.map(Into::into),
+				debug_message: None,
+			};
+			let mut output =
+				InstantiateInput::<T> { code: Code::Upload(code), salt }.run_guarded(common);
 			if let Ok(retval) = &output.result {
 				if retval.1.did_revert() {
 					output.result = Err(<Error<T>>::ContractReverted.into());
@@ -720,16 +721,16 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
-			let mut output = Self::internal_instantiate(
+			let common = CommonInput {
 				origin,
 				value,
-				gas_limit,
-				storage_deposit_limit.map(Into::into),
-				Code::Existing(code_hash),
 				data,
-				salt,
-				None,
-			);
+				gas_limit,
+				storage_deposit_limit: storage_deposit_limit.map(Into::into),
+				debug_message: None,
+			};
+			let mut output =
+				InstantiateInput::<T> { code: Code::Existing(code_hash), salt }.run_guarded(common);
 			if let Ok(retval) = &output.result {
 				if retval.1.did_revert() {
 					output.result = Err(<Error<T>>::ContractReverted.into());
@@ -872,6 +873,9 @@ pub mod pallet {
 		/// This can be triggered by a call to `seal_terminate`.
 		TerminatedInConstructor,
 		/// A call tried to invoke a contract that is flagged as non-reentrant.
+		/// The only other cause is that a call from a contract into the runtime tried to call back
+		/// into `pallet-contracts`. This would make the whole pallet reentrant with regard to
+		/// contract code execution which is not supported.
 		ReentranceDenied,
 		/// Origin doesn't have enough balance to pay the required storage deposits.
 		StorageDepositNotEnoughFunds,
@@ -951,11 +955,27 @@ pub mod pallet {
 		StorageValue<_, BoundedVec<DeletedContract, T::DeletionQueueDepth>, ValueQuery>;
 }
 
-/// Return type of the private [`Pallet::internal_call`] function.
-type InternalCallOutput<T> = InternalOutput<T, ExecReturnValue>;
+/// Context of a contract invocation.
+struct CommonInput<'a, T: Config> {
+	origin: T::AccountId,
+	value: BalanceOf<T>,
+	data: Vec<u8>,
+	gas_limit: Weight,
+	storage_deposit_limit: Option<BalanceOf<T>>,
+	debug_message: Option<&'a mut DebugBufferVec<T>>,
+}
 
-/// Return type of the private [`Pallet::internal_instantiate`] function.
-type InternalInstantiateOutput<T> = InternalOutput<T, (AccountIdOf<T>, ExecReturnValue)>;
+/// Input specific to a call into contract.
+struct CallInput<T: Config> {
+	dest: T::AccountId,
+	determinism: Determinism,
+}
+
+/// Input specific to a contract instantiation invocation.
+struct InstantiateInput<T: Config> {
+	code: Code<CodeHash<T>>,
+	salt: Vec<u8>,
+}
 
 /// Return type of private helper functions.
 struct InternalOutput<T: Config, O> {
@@ -965,6 +985,164 @@ struct InternalOutput<T: Config, O> {
 	storage_deposit: StorageDeposit<BalanceOf<T>>,
 	/// The result of the call.
 	result: Result<O, ExecError>,
+}
+
+/// Helper trait to wrap contract execution entry points into a signle function
+/// [`Invokable::run_guarded`].
+trait Invokable<T: Config> {
+	/// What is returned as a result of a successful invocation.
+	type Output;
+
+	/// Single entry point to contract execution.
+	/// Downstream execution flow is branched by implementations of [`Invokable`] trait:
+	///
+	/// - [`InstantiateInput::run`] runs contract instantiation,
+	/// - [`CallInput::run`] runs contract call.
+	///
+	/// We enforce a re-entrancy guard here by initializing and checking a boolean flag through a
+	/// global reference.
+	fn run_guarded(&self, common: CommonInput<T>) -> InternalOutput<T, Self::Output> {
+		// Set up a global reference to the boolean flag used for the re-entrancy guard.
+		environmental!(executing_contract: bool);
+
+		let gas_limit = common.gas_limit;
+		executing_contract::using_once(&mut false, || {
+			executing_contract::with(|f| {
+				// Fail if already entered contract execution
+				if *f {
+					return Err(())
+				}
+				// We are entering contract execution
+				*f = true;
+				Ok(())
+			})
+			.expect("Returns `Ok` if called within `using_once`. It is syntactically obvious that this is the case; qed")
+			.map_or_else(
+				|_| InternalOutput {
+					gas_meter: GasMeter::new(gas_limit),
+					storage_deposit: Default::default(),
+					result: Err(ExecError {
+						error: <Error<T>>::ReentranceDenied.into(),
+						origin: ErrorOrigin::Caller,
+					}),
+				},
+				// Enter contract call.
+				|_| self.run(common, GasMeter::new(gas_limit)),
+			)
+		})
+	}
+
+	/// Method that does the actual call to a contract. It can be either a call to a deployed
+	/// contract or a instantiation of a new one.
+	///
+	/// Called by dispatchables and public functions through the [`Invokable::run_guarded`].
+	fn run(
+		&self,
+		common: CommonInput<T>,
+		gas_meter: GasMeter<T>,
+	) -> InternalOutput<T, Self::Output>;
+}
+
+impl<T: Config> Invokable<T> for CallInput<T> {
+	type Output = ExecReturnValue;
+
+	fn run(
+		&self,
+		common: CommonInput<T>,
+		mut gas_meter: GasMeter<T>,
+	) -> InternalOutput<T, Self::Output> {
+		let mut storage_meter =
+			match StorageMeter::new(&common.origin, common.storage_deposit_limit, common.value) {
+				Ok(meter) => meter,
+				Err(err) =>
+					return InternalOutput {
+						result: Err(err.into()),
+						gas_meter,
+						storage_deposit: Default::default(),
+					},
+			};
+		let schedule = T::Schedule::get();
+		let CallInput { dest, determinism } = self;
+		let CommonInput { origin, value, data, debug_message, .. } = common;
+		let result = ExecStack::<T, PrefabWasmModule<T>>::run_call(
+			origin.clone(),
+			dest.clone(),
+			&mut gas_meter,
+			&mut storage_meter,
+			&schedule,
+			value,
+			data.clone(),
+			debug_message,
+			*determinism,
+		);
+		InternalOutput { gas_meter, storage_deposit: storage_meter.into_deposit(&origin), result }
+	}
+}
+
+impl<T: Config> Invokable<T> for InstantiateInput<T> {
+	type Output = (AccountIdOf<T>, ExecReturnValue);
+
+	fn run(
+		&self,
+		mut common: CommonInput<T>,
+		mut gas_meter: GasMeter<T>,
+	) -> InternalOutput<T, Self::Output> {
+		let mut storage_deposit = Default::default();
+		let try_exec = || {
+			let schedule = T::Schedule::get();
+			let (extra_deposit, executable) = match &self.code {
+				Code::Upload(binary) => {
+					let executable = PrefabWasmModule::from_code(
+						binary.clone(),
+						&schedule,
+						common.origin.clone(),
+						Determinism::Deterministic,
+						TryInstantiate::Skip,
+					)
+					.map_err(|(err, msg)| {
+						common
+							.debug_message
+							.as_mut()
+							.map(|buffer| buffer.try_extend(&mut msg.bytes()));
+						err
+					})?;
+					// The open deposit will be charged during execution when the
+					// uploaded module does not already exist. This deposit is not part of the
+					// storage meter because it is not transferred to the contract but
+					// reserved on the uploading account.
+					(executable.open_deposit(), executable)
+				},
+				Code::Existing(hash) => (
+					Default::default(),
+					PrefabWasmModule::from_storage(*hash, &schedule, &mut gas_meter)?,
+				),
+			};
+			let mut storage_meter = StorageMeter::new(
+				&common.origin,
+				common.storage_deposit_limit,
+				common.value.saturating_add(extra_deposit),
+			)?;
+
+			let InstantiateInput { salt, .. } = self;
+			let CommonInput { origin, value, data, debug_message, .. } = common;
+			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
+				origin.clone(),
+				executable,
+				&mut gas_meter,
+				&mut storage_meter,
+				&schedule,
+				value,
+				data.clone(),
+				&salt,
+				debug_message,
+			);
+			storage_deposit = storage_meter
+				.into_deposit(&origin)
+				.saturating_add(&StorageDeposit::Charge(extra_deposit));
+			result
+		};
+		InternalOutput { result: try_exec(), gas_meter, storage_deposit }
+	}
 }
 
 impl<T: Config> Pallet<T> {
@@ -991,16 +1169,15 @@ impl<T: Config> Pallet<T> {
 		determinism: Determinism,
 	) -> ContractExecResult<BalanceOf<T>> {
 		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
-		let output = Self::internal_call(
+		let common = CommonInput {
 			origin,
-			dest,
 			value,
+			data,
 			gas_limit,
 			storage_deposit_limit,
-			data,
-			debug_message.as_mut(),
-			determinism,
-		);
+			debug_message: debug_message.as_mut(),
+		};
+		let output = CallInput::<T> { dest, determinism }.run_guarded(common);
 		ContractExecResult {
 			result: output.result.map_err(|r| r.error),
 			gas_consumed: output.gas_meter.gas_consumed(),
@@ -1033,16 +1210,15 @@ impl<T: Config> Pallet<T> {
 		debug: bool,
 	) -> ContractInstantiateResult<T::AccountId, BalanceOf<T>> {
 		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
-		let output = Self::internal_instantiate(
+		let common = CommonInput {
 			origin,
 			value,
+			data,
 			gas_limit,
 			storage_deposit_limit,
-			code,
-			data,
-			salt,
-			debug_message.as_mut(),
-		);
+			debug_message: debug_message.as_mut(),
+		};
+		let output = InstantiateInput::<T> { code, salt }.run_guarded(common);
 		ContractInstantiateResult {
 			result: output
 				.result
@@ -1130,113 +1306,6 @@ impl<T: Config> Pallet<T> {
 		schedule: &Schedule<T>,
 	) -> frame_support::dispatch::DispatchResult {
 		self::wasm::reinstrument(module, schedule).map(|_| ())
-	}
-
-	/// Internal function that does the actual call.
-	///
-	/// Called by dispatchables and public functions.
-	fn internal_call(
-		origin: T::AccountId,
-		dest: T::AccountId,
-		value: BalanceOf<T>,
-		gas_limit: Weight,
-		storage_deposit_limit: Option<BalanceOf<T>>,
-		data: Vec<u8>,
-		debug_message: Option<&mut DebugBufferVec<T>>,
-		determinism: Determinism,
-	) -> InternalCallOutput<T> {
-		let mut gas_meter = GasMeter::new(gas_limit);
-		let mut storage_meter = match StorageMeter::new(&origin, storage_deposit_limit, value) {
-			Ok(meter) => meter,
-			Err(err) =>
-				return InternalCallOutput {
-					result: Err(err.into()),
-					gas_meter,
-					storage_deposit: Default::default(),
-				},
-		};
-		let schedule = T::Schedule::get();
-		let result = ExecStack::<T, PrefabWasmModule<T>>::run_call(
-			origin.clone(),
-			dest,
-			&mut gas_meter,
-			&mut storage_meter,
-			&schedule,
-			value,
-			data,
-			debug_message,
-			determinism,
-		);
-		InternalCallOutput {
-			result,
-			gas_meter,
-			storage_deposit: storage_meter.into_deposit(&origin),
-		}
-	}
-
-	/// Internal function that does the actual instantiation.
-	///
-	/// Called by dispatchables and public functions.
-	fn internal_instantiate(
-		origin: T::AccountId,
-		value: BalanceOf<T>,
-		gas_limit: Weight,
-		storage_deposit_limit: Option<BalanceOf<T>>,
-		code: Code<CodeHash<T>>,
-		data: Vec<u8>,
-		salt: Vec<u8>,
-		mut debug_message: Option<&mut DebugBufferVec<T>>,
-	) -> InternalInstantiateOutput<T> {
-		let mut storage_deposit = Default::default();
-		let mut gas_meter = GasMeter::new(gas_limit);
-		let try_exec = || {
-			let schedule = T::Schedule::get();
-			let (extra_deposit, executable) = match code {
-				Code::Upload(binary) => {
-					let executable = PrefabWasmModule::from_code(
-						binary,
-						&schedule,
-						origin.clone(),
-						Determinism::Deterministic,
-						TryInstantiate::Skip,
-					)
-					.map_err(|(err, msg)| {
-						debug_message.as_mut().map(|buffer| buffer.try_extend(&mut msg.bytes()));
-						err
-					})?;
-					// The open deposit will be charged during execution when the
-					// uploaded module does not already exist. This deposit is not part of the
-					// storage meter because it is not transferred to the contract but
-					// reserved on the uploading account.
-					(executable.open_deposit(), executable)
-				},
-				Code::Existing(hash) => (
-					Default::default(),
-					PrefabWasmModule::from_storage(hash, &schedule, &mut gas_meter)?,
-				),
-			};
-			let mut storage_meter = StorageMeter::new(
-				&origin,
-				storage_deposit_limit,
-				value.saturating_add(extra_deposit),
-			)?;
-			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
-				origin.clone(),
-				executable,
-				&mut gas_meter,
-				&mut storage_meter,
-				&schedule,
-				value,
-				data,
-				&salt,
-				debug_message,
-			);
-			storage_deposit = storage_meter
-				.into_deposit(&origin)
-				.saturating_add(&StorageDeposit::Charge(extra_deposit));
-			result
-		};
-		InternalInstantiateOutput { result: try_exec(), gas_meter, storage_deposit }
 	}
 
 	/// Deposit a pallet contracts event. Handles the conversion to the overarching event type.
