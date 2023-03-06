@@ -167,8 +167,8 @@ pub mod pallet {
 		/// rank to which it can promote.
 		type PromoteOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = RankOf<Self, I>>;
 
-		#[pallet::constant]
 		/// The maximum size in bytes submitted evidence is allowed to be.
+		#[pallet::constant]
 		type EvidenceSize: Get<u32>;
 	}
 
