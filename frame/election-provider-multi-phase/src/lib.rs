@@ -505,6 +505,7 @@ where
 			(&Miner(ref x), &Miner(ref y)) if x == y => true,
 			(&DataProvider(ref x), &DataProvider(ref y)) if x == y => true,
 			(&Fallback(ref x), &Fallback(ref y)) if x == y => true,
+			(NothingQueued, NothingQueued) => true,
 			_ => false,
 		}
 	}
@@ -2166,7 +2167,7 @@ mod tests {
 				// call elect while snapshot does not exist during off phase but emergency phase is
 				// throttled because not enough blocks since last election passed (phase off).
 				assert!(!MultiPhase::minimum_blocks_signed_phase());
-				assert_noop!(MultiPhase::elect(), ElectionError::NothingQueued);
+				assert_err!(MultiPhase::elect(), ElectionError::NothingQueued);
 				assert!(MultiPhase::current_phase().is_off());
 
 				// same as above.
@@ -2183,7 +2184,7 @@ mod tests {
 				roll_to(System::block_number() + min_blocks);
 
 				assert!(MultiPhase::minimum_blocks_signed_phase());
-				assert_err!(MultiPhase::elect(), ElectionError::NothingQueued);
+				assert_err!(MultiPhase::elect(), ElectionError::Fallback("NoFallback."));
 				assert!(MultiPhase::current_phase().is_emergency());
 			})
 	}
