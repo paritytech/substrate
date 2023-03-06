@@ -92,7 +92,8 @@ pub trait Inspect<AccountId>: Sized {
 	///
 	/// - `who`: The account of which the balance should be increased by `amount`.
 	/// - `amount`: How much should the balance be increased?
-	/// - `provenance`: Will `amount` be minted to deposit it into `account` or is it already in the system?
+	/// - `provenance`: Will `amount` be minted to deposit it into `account` or is it already in the
+	///   system?
 	fn can_deposit(
 		who: &AccountId,
 		amount: Self::Balance,

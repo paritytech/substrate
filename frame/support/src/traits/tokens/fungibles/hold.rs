@@ -84,9 +84,10 @@ pub trait Inspect<AccountId>: super::Inspect<AccountId> {
 	/// - Removing `amount` from the total balance would kill the account and remove the only
 	///   provider reference.
 	///
-	/// Note: we pass `Fortitude::Force` as the last argument to `reducible_balance` since we assume that if
-	/// needed the balance can slashed. If we are using a simple non-forcing reserve-transfer, then
-	/// we really ought to check that we are not reducing the funds below the freeze-limit (if any).
+	/// Note: we pass `Fortitude::Force` as the last argument to `reducible_balance` since we assume
+	/// that if needed the balance can slashed. If we are using a simple non-forcing
+	/// reserve-transfer, then we really ought to check that we are not reducing the funds below the
+	/// freeze-limit (if any).
 	///
 	/// NOTE: This does not take into account changes which could be made to the account of `who`
 	/// (such as removing a provider reference) after this call is made. Any usage of this should
@@ -160,8 +161,9 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 	/// Reduce the balance on hold of `who` by `amount`.
 	///
 	/// If `precision` is `Precision::Exact` and it cannot be reduced by that amount for
-	/// some reason, return `Err` and don't reduce it at all. If `precision` is `Precision::BestEffort`, then
-	/// reduce the balance of `who` by the most that is possible, up to `amount`.
+	/// some reason, return `Err` and don't reduce it at all. If `precision` is
+	/// `Precision::BestEffort`, then reduce the balance of `who` by the most that is possible, up
+	/// to `amount`.
 	///
 	/// In either case, if `Ok` is returned then the inner is the amount by which is was reduced.
 	fn decrease_balance_on_hold(
