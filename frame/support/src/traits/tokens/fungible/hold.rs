@@ -291,7 +291,7 @@ pub trait Mutate<AccountId>:
 		mode: Restriction,
 		force: Fortitude,
 	) -> Result<Self::Balance, DispatchError> {
-		// We must check total-balance requirements if `!force`.
+		// We must check total-balance requirements if `force` is `Fortitude::Polite`.
 		let have = Self::balance_on_hold(reason, source);
 		let liquid = Self::reducible_total_balance_on_hold(source, force);
 		if let BestEffort = precision {
