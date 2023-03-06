@@ -52,12 +52,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `{{benchmark.base_recorded_proof_size}}{{#each benchmark.component_recorded_proof_size as |cp|}} + {{cp.name}} * ({{cp.slope}} ±{{underscore cp.error}}){{/each}}`
 		//  Estimated: `{{benchmark.base_calculated_proof_size}}{{#each benchmark.component_calculated_proof_size as |cp|}} + {{cp.name}} * ({{cp.slope}} ±{{underscore cp.error}}){{/each}}`
-		// Minimum execution time: {{underscore benchmark.min_execution_time}} nanoseconds.
-		Weight::from_ref_time({{underscore benchmark.base_weight}})
-			.saturating_add(Weight::from_proof_size({{benchmark.base_calculated_proof_size}}))
+		// Minimum execution time: {{underscore benchmark.min_execution_time}}_000 picoseconds.
+		Weight::from_parts({{underscore benchmark.base_weight}}, {{benchmark.base_calculated_proof_size}})
 			{{#each benchmark.component_weight as |cw|}}
 			// Standard Error: {{underscore cw.error}}
-			.saturating_add(Weight::from_ref_time({{underscore cw.slope}}).saturating_mul({{cw.name}}.into()))
+			.saturating_add(Weight::from_parts({{underscore cw.slope}}, 0).saturating_mul({{cw.name}}.into()))
 			{{/each}}
 			{{#if (ne benchmark.base_reads "0")}}
 			.saturating_add(T::DbWeight::get().reads({{benchmark.base_reads}}_u64))
@@ -72,7 +71,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(({{cw.slope}}_u64).saturating_mul({{cw.name}}.into())))
 			{{/each}}
 			{{#each benchmark.component_calculated_proof_size as |cp|}}
-			.saturating_add(Weight::from_proof_size({{cp.slope}}).saturating_mul({{cp.name}}.into()))
+			.saturating_add(Weight::from_parts(0, {{cp.slope}}).saturating_mul({{cp.name}}.into()))
 			{{/each}}
 	}
 	{{/each}}
@@ -95,12 +94,11 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `{{benchmark.base_recorded_proof_size}}{{#each benchmark.component_recorded_proof_size as |cp|}} + {{cp.name}} * ({{cp.slope}} ±{{underscore cp.error}}){{/each}}`
 		//  Estimated: `{{benchmark.base_calculated_proof_size}}{{#each benchmark.component_calculated_proof_size as |cp|}} + {{cp.name}} * ({{cp.slope}} ±{{underscore cp.error}}){{/each}}`
-		// Minimum execution time: {{underscore benchmark.min_execution_time}} nanoseconds.
-		Weight::from_ref_time({{underscore benchmark.base_weight}})
-			.saturating_add(Weight::from_proof_size({{benchmark.base_calculated_proof_size}}))
+		// Minimum execution time: {{underscore benchmark.min_execution_time}}_000 picoseconds.
+		Weight::from_parts({{underscore benchmark.base_weight}}, {{benchmark.base_calculated_proof_size}})
 			{{#each benchmark.component_weight as |cw|}}
 			// Standard Error: {{underscore cw.error}}
-			.saturating_add(Weight::from_ref_time({{underscore cw.slope}}).saturating_mul({{cw.name}}.into()))
+			.saturating_add(Weight::from_parts({{underscore cw.slope}}, 0).saturating_mul({{cw.name}}.into()))
 			{{/each}}
 			{{#if (ne benchmark.base_reads "0")}}
 			.saturating_add(RocksDbWeight::get().reads({{benchmark.base_reads}}_u64))
@@ -115,7 +113,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(({{cw.slope}}_u64).saturating_mul({{cw.name}}.into())))
 			{{/each}}
 			{{#each benchmark.component_calculated_proof_size as |cp|}}
-			.saturating_add(Weight::from_proof_size({{cp.slope}}).saturating_mul({{cp.name}}.into()))
+			.saturating_add(Weight::from_parts(0, {{cp.slope}}).saturating_mul({{cp.name}}.into()))
 			{{/each}}
 	}
 	{{/each}}

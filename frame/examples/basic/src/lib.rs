@@ -329,7 +329,7 @@ impl<T: pallet_balances::Config> WeighData<(&BalanceOf<T>,)> for WeightForSetDum
 		let multiplier = self.0;
 		// *target.0 is the amount passed into the extrinsic
 		let cents = *target.0 / <BalanceOf<T>>::from(MILLICENTS);
-		Weight::from_ref_time((cents * multiplier).saturated_into::<u64>())
+		Weight::from_parts((cents * multiplier).saturated_into::<u64>(), 0)
 	}
 }
 
