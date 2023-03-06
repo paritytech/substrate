@@ -623,7 +623,7 @@ pub enum TokenError {
 	/// Account cannot be created for a held balance.
 	CannotCreateHold,
 	/// Withdrawal would cause unwanted loss of account.
-	UnwantedRemoval,
+	UnwantedAccountRemoval,
 }
 
 impl From<TokenError> for &'static str {
@@ -638,7 +638,7 @@ impl From<TokenError> for &'static str {
 			TokenError::Unsupported => "Operation is not supported by the asset",
 			TokenError::CannotCreateHold =>
 				"Account cannot be created for recording amount on hold",
-			TokenError::UnwantedRemoval => "Account that is desired to remain would die",
+			TokenError::UnwantedAccountRemoval => "Account that is desired to remain would die",
 		}
 	}
 }

@@ -392,7 +392,7 @@ fn do_buy_ticket_keep_alive() {
 		assert_ok!(Lottery::start_lottery(RuntimeOrigin::root(), 100, 10, 10, false));
 
 		// Buying fails with Expendability.
-		assert_noop!(Lottery::do_buy_ticket(&1, &calls[0]), TokenError::UnwantedRemoval);
+		assert_noop!(Lottery::do_buy_ticket(&1, &calls[0]), TokenError::UnwantedAccountRemoval);
 		assert!(TicketsCount::<Test>::get().is_zero());
 	});
 }

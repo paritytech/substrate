@@ -688,9 +688,7 @@ mod tests {
 
 	use frame_support::{
 		assert_err, parameter_types,
-		traits::{
-			fungible, ConstU32, ConstU64, ConstU8, Currency,
-		},
+		traits::{fungible, ConstU32, ConstU64, ConstU8, Currency},
 		weights::{ConstantMultiplier, IdentityFee, RuntimeDbWeight, Weight, WeightToFee},
 	};
 	use frame_system::{ChainContext, LastRuntimeUpgradeInfo};

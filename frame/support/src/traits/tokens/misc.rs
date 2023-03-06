@@ -121,7 +121,7 @@ impl<Balance: Zero> WithdrawConsequence<Balance> {
 			Underflow => Err(ArithmeticError::Underflow.into()),
 			Overflow => Err(ArithmeticError::Overflow.into()),
 			Frozen => Err(TokenError::Frozen.into()),
-			ReducedToZero(_) if keep_nonzero => Err(TokenError::UnwantedRemoval.into()),
+			ReducedToZero(_) if keep_nonzero => Err(TokenError::UnwantedAccountRemoval.into()),
 			ReducedToZero(result) => Ok(result),
 			Success => Ok(Zero::zero()),
 		}
