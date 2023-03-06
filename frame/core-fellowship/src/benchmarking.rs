@@ -27,9 +27,6 @@ use frame_system::RawOrigin;
 use sp_arithmetic::traits::Bounded;
 
 const SEED: u32 = 0;
-// todo deposit evidence for prove/promote/bump.
-// todo rename request to submit_evidence
-// todo bench submit_evidence
 #[instance_benchmarks]
 mod benchmarks {
 	use super::*;
