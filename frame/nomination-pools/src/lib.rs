@@ -2376,11 +2376,11 @@ pub mod pallet {
 
 		/// Update the roles of the pool.
 		///
-		/// The root is the only entity that can change any of the roles, including itself,
-		/// excluding the depositor, who can never change.
+		/// The root is the only entity that can change any of the roles, including itself, excluding
+		/// the depositor, who can never change.
 		///
-		/// It emits an event, notifying UIs of the role change. This event is quite relevant to
-		/// most pool members and they should be informed of changes to pool roles.
+		/// It emits an event, notifying UIs of the role change. This event is quite relevant to most
+		/// pool members and they should be informed of changes to pool roles.
 		#[pallet::call_index(12)]
 		#[pallet::weight(T::WeightInfo::update_roles())]
 		pub fn update_roles(
