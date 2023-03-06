@@ -77,6 +77,14 @@ impl frame_system::Config for Test {
 	type OnSetCode = ();
 	type MaxConsumers = ConstU32<16>;
 }
+
+#[derive(
+	Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, Debug, TypeInfo,
+)]
+pub enum HoldIdentifier {
+	Treasury,
+}
+
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ();
@@ -89,13 +97,15 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 	type FreezeIdentifier = ();
 	type MaxFreezes = ();
-	type HoldIdentifier = ();
-	type MaxHolds = ();
+	type HoldIdentifier = HoldIdentifier;
+	type MaxHolds = ConstU32<10>;
 }
+
 parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);
 	pub const Burn: Permill = Permill::from_percent(50);
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
+	pub const HoldReason: HoldIdentifier = HoldIdentifier::Treasury;
 }
 pub struct TestSpendOrigin;
 impl frame_support::traits::EnsureOrigin<RuntimeOrigin> for TestSpendOrigin {
@@ -133,6 +143,7 @@ impl Config for Test {
 	type SpendFunds = ();
 	type MaxApprovals = ConstU32<100>;
 	type SpendOrigin = TestSpendOrigin;
+	type HoldReason = HoldReason;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -152,6 +163,10 @@ fn genesis_config_works() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(Treasury::pot(), 0);
 		assert_eq!(Treasury::proposal_count(), 0);
+
+		assert_eq!(Balances::free_balance(0), 100);
+		assert_eq!(Balances::free_balance(1), 98);
+		assert_eq!(Balances::free_balance(2), 1);
 	});
 }
 
@@ -182,7 +197,8 @@ fn spend_origin_permissioning_works() {
 fn spend_origin_works() {
 	new_test_ext().execute_with(|| {
 		// Check that accumulate works when we have Some value in Dummy already.
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
+		assert_eq!(Treasury::pot(), 100); // The missing 1 unit is the ExistentialDeposit
 		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 5, 6));
 		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 5, 6));
 		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 5, 6));
@@ -190,6 +206,9 @@ fn spend_origin_works() {
 		assert_ok!(Treasury::spend(RuntimeOrigin::signed(11), 10, 6));
 		assert_ok!(Treasury::spend(RuntimeOrigin::signed(12), 20, 6));
 		assert_ok!(Treasury::spend(RuntimeOrigin::signed(13), 50, 6));
+		// Pot should be unchanged until `on_initialize` and hence `spend_funds` runs.
+		assert_eq!(Treasury::pot(), 100);
+		assert_eq!(Balances::free_balance(6), 0);
 
 		<Treasury as OnInitialize<u64>>::on_initialize(1);
 		assert_eq!(Balances::free_balance(6), 0);
@@ -204,7 +223,7 @@ fn spend_origin_works() {
 fn minting_works() {
 	new_test_ext().execute_with(|| {
 		// Check that accumulate works when we have Some value in Dummy already.
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 		assert_eq!(Treasury::pot(), 100);
 	});
 }
@@ -240,7 +259,7 @@ fn spend_proposal_fails_when_proposer_poor() {
 #[test]
 fn accepted_spend_proposal_ignored_outside_spend_period() {
 	new_test_ext().execute_with(|| {
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 
 		assert_ok!(Treasury::propose_spend(RuntimeOrigin::signed(0), 100, 3));
 		assert_ok!(Treasury::approve_proposal(RuntimeOrigin::root(), 0));
@@ -255,7 +274,7 @@ fn accepted_spend_proposal_ignored_outside_spend_period() {
 fn unused_pot_should_diminish() {
 	new_test_ext().execute_with(|| {
 		let init_total_issuance = Balances::total_issuance();
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 		assert_eq!(Balances::total_issuance(), init_total_issuance + 100);
 
 		<Treasury as OnInitialize<u64>>::on_initialize(2);
@@ -267,7 +286,7 @@ fn unused_pot_should_diminish() {
 #[test]
 fn rejected_spend_proposal_ignored_on_spend_period() {
 	new_test_ext().execute_with(|| {
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 
 		assert_ok!(Treasury::propose_spend(RuntimeOrigin::signed(0), 100, 3));
 		assert_ok!(Treasury::reject_proposal(RuntimeOrigin::root(), 0));
@@ -281,7 +300,7 @@ fn rejected_spend_proposal_ignored_on_spend_period() {
 #[test]
 fn reject_already_rejected_spend_proposal_fails() {
 	new_test_ext().execute_with(|| {
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 
 		assert_ok!(Treasury::propose_spend(RuntimeOrigin::signed(0), 100, 3));
 		assert_ok!(Treasury::reject_proposal(RuntimeOrigin::root(), 0));
@@ -315,7 +334,7 @@ fn accept_non_existent_spend_proposal_fails() {
 #[test]
 fn accept_already_rejected_spend_proposal_fails() {
 	new_test_ext().execute_with(|| {
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 
 		assert_ok!(Treasury::propose_spend(RuntimeOrigin::signed(0), 100, 3));
 		assert_ok!(Treasury::reject_proposal(RuntimeOrigin::root(), 0));
@@ -329,7 +348,7 @@ fn accept_already_rejected_spend_proposal_fails() {
 #[test]
 fn accepted_spend_proposal_enacted_on_spend_period() {
 	new_test_ext().execute_with(|| {
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 		assert_eq!(Treasury::pot(), 100);
 
 		assert_ok!(Treasury::propose_spend(RuntimeOrigin::signed(0), 100, 3));
@@ -344,7 +363,7 @@ fn accepted_spend_proposal_enacted_on_spend_period() {
 #[test]
 fn pot_underflow_should_not_diminish() {
 	new_test_ext().execute_with(|| {
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 		assert_eq!(Treasury::pot(), 100);
 
 		assert_ok!(Treasury::propose_spend(RuntimeOrigin::signed(0), 150, 3));
@@ -353,7 +372,7 @@ fn pot_underflow_should_not_diminish() {
 		<Treasury as OnInitialize<u64>>::on_initialize(2);
 		assert_eq!(Treasury::pot(), 100); // Pot hasn't changed
 
-		let _ = Balances::deposit_into_existing(&Treasury::account_id(), 100).unwrap();
+		let _ = Balances::mint_into(&Treasury::account_id(), 100).unwrap();
 		<Treasury as OnInitialize<u64>>::on_initialize(4);
 		assert_eq!(Balances::free_balance(3), 150); // Fund has been spent
 		assert_eq!(Treasury::pot(), 25); // Pot has finally changed
@@ -365,7 +384,7 @@ fn pot_underflow_should_not_diminish() {
 #[test]
 fn treasury_account_doesnt_get_deleted() {
 	new_test_ext().execute_with(|| {
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 		assert_eq!(Treasury::pot(), 100);
 		let treasury_balance = Balances::free_balance(&Treasury::account_id());
 
@@ -407,7 +426,7 @@ fn inexistent_account_works() {
 		assert_eq!(Treasury::pot(), 0); // Pot hasn't changed
 		assert_eq!(Balances::free_balance(3), 0); // Balance of `3` hasn't changed
 
-		Balances::make_free_balance_be(&Treasury::account_id(), 100);
+		Balances::set_balance(&Treasury::account_id(), 100);
 		assert_eq!(Treasury::pot(), 99); // Pot now contains funds
 		assert_eq!(Balances::free_balance(Treasury::account_id()), 100); // Account does exist
 
@@ -433,15 +452,15 @@ fn genesis_funding_works() {
 
 	t.execute_with(|| {
 		assert_eq!(Balances::free_balance(Treasury::account_id()), initial_funding);
-		assert_eq!(Treasury::pot(), initial_funding - Balances::minimum_balance());
+		assert_eq!(Treasury::pot(), initial_funding - <Balances as fungible::Inspect<<Test as frame_system::Config>::AccountId>>::minimum_balance());
 	});
 }
 
 #[test]
 fn max_approvals_limited() {
 	new_test_ext().execute_with(|| {
-		Balances::make_free_balance_be(&Treasury::account_id(), u64::MAX);
-		Balances::make_free_balance_be(&0, u64::MAX);
+		Balances::set_balance(&Treasury::account_id(), u32::MAX.into());
+		Balances::set_balance(&0, u32::MAX.into());
 
 		for _ in 0..<Test as Config>::MaxApprovals::get() {
 			assert_ok!(Treasury::propose_spend(RuntimeOrigin::signed(0), 100, 3));
@@ -460,7 +479,7 @@ fn max_approvals_limited() {
 #[test]
 fn remove_already_removed_approval_fails() {
 	new_test_ext().execute_with(|| {
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 
 		assert_ok!(Treasury::propose_spend(RuntimeOrigin::signed(0), 100, 3));
 		assert_ok!(Treasury::approve_proposal(RuntimeOrigin::root(), 0));

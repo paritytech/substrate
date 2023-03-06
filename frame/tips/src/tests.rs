@@ -29,7 +29,7 @@ use sp_storage::Storage;
 
 use frame_support::{
 	assert_noop, assert_ok,
-	pallet_prelude::GenesisBuild,
+	pallet_prelude::{GenesisBuild, MaxEncodedLen, TypeInfo},
 	parameter_types,
 	storage::StoragePrefixedMap,
 	traits::{ConstU32, ConstU64, SortedMembers, StorageVersion},
@@ -87,6 +87,13 @@ impl frame_system::Config for Test {
 	type MaxConsumers = ConstU32<16>;
 }
 
+#[derive(
+	Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, Debug, TypeInfo,
+)]
+pub enum HoldIdentifier {
+	Tips,
+}
+
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ();
@@ -99,8 +106,8 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 	type FreezeIdentifier = ();
 	type MaxFreezes = ();
-	type HoldIdentifier = ();
-	type MaxHolds = ();
+	type HoldIdentifier = HoldIdentifier;
+	type MaxHolds = ConstU32<10>;
 }
 parameter_types! {
 	static TenToFourteenTestValue: Vec<u128> = vec![10,11,12,13,14];
@@ -126,12 +133,15 @@ impl ContainsLengthBound for TenToFourteen {
 		0
 	}
 }
+
 parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);
 	pub const Burn: Permill = Permill::from_percent(50);
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 	pub const TreasuryPalletId2: PalletId = PalletId(*b"py/trsr2");
+	pub const HoldReason: HoldIdentifier = HoldIdentifier::Tips;
 }
+
 impl pallet_treasury::Config for Test {
 	type PalletId = TreasuryPalletId;
 	type Currency = pallet_balances::Pallet<Test>;
@@ -149,6 +159,7 @@ impl pallet_treasury::Config for Test {
 	type SpendFunds = ();
 	type MaxApprovals = ConstU32<100>;
 	type SpendOrigin = frame_support::traits::NeverEnsureOrigin<u64>;
+	type HoldReason = HoldReason;
 }
 
 impl pallet_treasury::Config<Instance1> for Test {
@@ -168,6 +179,7 @@ impl pallet_treasury::Config<Instance1> for Test {
 	type SpendFunds = ();
 	type MaxApprovals = ConstU32<100>;
 	type SpendOrigin = frame_support::traits::NeverEnsureOrigin<u64>;
+	type HoldReason = HoldReason;
 }
 
 parameter_types! {
@@ -233,7 +245,7 @@ fn tip_hash() -> H256 {
 #[test]
 fn tip_new_cannot_be_used_twice() {
 	new_test_ext().execute_with(|| {
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 		assert_ok!(Tips::tip_new(RuntimeOrigin::signed(10), b"awesome.dot".to_vec(), 3, 10));
 		assert_noop!(
 			Tips::tip_new(RuntimeOrigin::signed(11), b"awesome.dot".to_vec(), 3, 10),
@@ -245,7 +257,7 @@ fn tip_new_cannot_be_used_twice() {
 #[test]
 fn report_awesome_and_tip_works() {
 	new_test_ext().execute_with(|| {
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 		assert_ok!(Tips::report_awesome(RuntimeOrigin::signed(0), b"awesome.dot".to_vec(), 3));
 		assert_eq!(Balances::reserved_balance(0), 12);
 		assert_eq!(Balances::free_balance(0), 88);
@@ -272,7 +284,7 @@ fn report_awesome_and_tip_works() {
 #[test]
 fn report_awesome_from_beneficiary_and_tip_works() {
 	new_test_ext().execute_with(|| {
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 		assert_ok!(Tips::report_awesome(RuntimeOrigin::signed(0), b"awesome.dot".to_vec(), 0));
 		assert_eq!(Balances::reserved_balance(0), 12);
 		assert_eq!(Balances::free_balance(0), 88);
@@ -292,7 +304,7 @@ fn close_tip_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 		assert_eq!(Treasury::pot(), 100);
 
 		assert_ok!(Tips::tip_new(RuntimeOrigin::signed(10), b"awesome.dot".to_vec(), 3, 10));
@@ -329,7 +341,7 @@ fn close_tip_works() {
 fn slash_tip_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 		assert_eq!(Treasury::pot(), 100);
 
 		assert_eq!(Balances::reserved_balance(0), 0);
@@ -360,7 +372,7 @@ fn slash_tip_works() {
 fn retract_tip_works() {
 	new_test_ext().execute_with(|| {
 		// with report awesome
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 		assert_ok!(Tips::report_awesome(RuntimeOrigin::signed(0), b"awesome.dot".to_vec(), 3));
 		let h = tip_hash();
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(10), h, 10));
@@ -375,7 +387,7 @@ fn retract_tip_works() {
 		);
 
 		// with tip new
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 		assert_ok!(Tips::tip_new(RuntimeOrigin::signed(10), b"awesome.dot".to_vec(), 3, 10));
 		let h = tip_hash();
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(11), h, 10));
@@ -393,7 +405,7 @@ fn retract_tip_works() {
 #[test]
 fn tip_median_calculation_works() {
 	new_test_ext().execute_with(|| {
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 		assert_ok!(Tips::tip_new(RuntimeOrigin::signed(10), b"awesome.dot".to_vec(), 3, 0));
 		let h = tip_hash();
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(11), h, 10));
@@ -407,7 +419,7 @@ fn tip_median_calculation_works() {
 #[test]
 fn tip_changing_works() {
 	new_test_ext().execute_with(|| {
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 		assert_ok!(Tips::tip_new(RuntimeOrigin::signed(10), b"awesome.dot".to_vec(), 3, 10000));
 		let h = tip_hash();
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(11), h, 10000));
@@ -590,8 +602,8 @@ fn genesis_funding_works() {
 #[test]
 fn report_awesome_and_tip_works_second_instance() {
 	new_test_ext().execute_with(|| {
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
-		Balances::make_free_balance_be(&Treasury1::account_id(), 201);
+		Balances::set_balance(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury1::account_id(), 201);
 		assert_eq!(Balances::free_balance(&Treasury::account_id()), 101);
 		assert_eq!(Balances::free_balance(&Treasury1::account_id()), 201);
 

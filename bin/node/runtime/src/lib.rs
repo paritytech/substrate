@@ -445,6 +445,8 @@ parameter_types! {
 pub enum HoldReason {
 	/// The NIS Pallet has reserved it for a non-fungible receipt.
 	Nis,
+	// The Treasury Pallet has reserved it for a treasury spend proposal.
+	Treasury,
 }
 
 impl pallet_balances::Config for Runtime {
@@ -1105,6 +1107,7 @@ parameter_types! {
 	pub const MaximumReasonLength: u32 = 300;
 	pub const MaxApprovals: u32 = 100;
 	pub const MaxBalance: Balance = Balance::max_value();
+	pub const TreasuryHoldReason: HoldReason = HoldReason::Treasury;
 }
 
 impl pallet_treasury::Config for Runtime {
@@ -1118,6 +1121,7 @@ impl pallet_treasury::Config for Runtime {
 		EnsureRoot<AccountId>,
 		pallet_collective::EnsureProportionMoreThan<AccountId, CouncilCollective, 1, 2>,
 	>;
+	type HoldReason = TreasuryHoldReason;
 	type RuntimeEvent = RuntimeEvent;
 	type OnSlash = ();
 	type ProposalBond = ProposalBond;

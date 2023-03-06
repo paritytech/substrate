@@ -69,8 +69,9 @@ use sp_std::prelude::*;
 use codec::{Decode, Encode};
 use frame_support::{
 	traits::{
-		ContainsLengthBound, Currency, EnsureOrigin, ExistenceRequirement::KeepAlive, Get,
-		OnUnbalanced, ReservableCurrency, SortedMembers,
+		fungible::*,
+		tokens::{Precision, Preservation},
+		ContainsLengthBound, EnsureOrigin, Get, SortedMembers,
 	},
 	Parameter,
 };
@@ -81,7 +82,7 @@ pub use weights::WeightInfo;
 const LOG_TARGET: &str = "runtime::tips";
 
 pub type BalanceOf<T, I = ()> = pallet_treasury::BalanceOf<T, I>;
-pub type NegativeImbalanceOf<T, I = ()> = pallet_treasury::NegativeImbalanceOf<T, I>;
+pub type CreditOf<T, I = ()> = pallet_treasury::CreditOf<T, I>;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 /// An open tipping "motion". Retains all details of a tip including information on the finder
@@ -256,7 +257,7 @@ pub mod pallet {
 
 			let deposit = T::TipReportDepositBase::get() +
 				T::DataDepositPerByte::get() * (reason.len() as u32).into();
-			T::Currency::reserve(&finder, deposit)?;
+			T::Currency::hold(&T::HoldReason::get(), &finder, deposit)?;
 
 			Reasons::<T, I>::insert(&reason_hash, &reason);
 			let tip = OpenTip {
@@ -299,8 +300,13 @@ pub mod pallet {
 			Reasons::<T, I>::remove(&tip.reason);
 			Tips::<T, I>::remove(&hash);
 			if !tip.deposit.is_zero() {
-				let err_amount = T::Currency::unreserve(&who, tip.deposit);
-				debug_assert!(err_amount.is_zero());
+				let err_amount = T::Currency::release(
+					&T::HoldReason::get(),
+					&who,
+					tip.deposit,
+					Precision::Exact,
+				);
+				debug_assert!(err_amount.is_ok());
 			}
 			Self::deposit_event(Event::TipRetracted { tip_hash: hash });
 			Ok(())
@@ -441,8 +447,9 @@ pub mod pallet {
 			let tip = Tips::<T, I>::take(hash).ok_or(Error::<T, I>::UnknownTip)?;
 
 			if !tip.deposit.is_zero() {
-				let imbalance = T::Currency::slash_reserved(&tip.finder, tip.deposit).0;
-				T::OnSlash::on_unbalanced(imbalance);
+				let imbalance =
+					T::Currency::slash(&T::HoldReason::get(), &tip.finder, tip.deposit).0;
+				T::OnSlash::handle(imbalance);
 			}
 			Reasons::<T, I>::remove(&tip.reason);
 			Self::deposit_event(Event::TipSlashed {
@@ -527,8 +534,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let mut payout = tips[tips.len() / 2].1.min(max_payout);
 		if !tip.deposit.is_zero() {
-			let err_amount = T::Currency::unreserve(&tip.finder, tip.deposit);
-			debug_assert!(err_amount.is_zero());
+			let err_amount = T::Currency::release(
+				&T::HoldReason::get(),
+				&tip.finder,
+				tip.deposit,
+				Precision::Exact,
+			);
+			debug_assert!(err_amount.is_ok());
 		}
 
 		if tip.finders_fee && tip.finder != tip.who {
@@ -537,12 +549,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			payout -= finders_fee;
 			// this should go through given we checked it's at most the free balance, but still
 			// we only make a best-effort.
-			let res = T::Currency::transfer(&treasury, &tip.finder, finders_fee, KeepAlive);
+			let res =
+				T::Currency::transfer(&treasury, &tip.finder, finders_fee, Preservation::Protect);
 			debug_assert!(res.is_ok());
 		}
 
 		// same as above: best-effort only.
-		let res = T::Currency::transfer(&treasury, &tip.who, payout, KeepAlive);
+		let res = T::Currency::transfer(&treasury, &tip.who, payout, Preservation::Protect);
 		debug_assert!(res.is_ok());
 		Self::deposit_event(Event::TipClosed { tip_hash: hash, who: tip.who, payout });
 	}

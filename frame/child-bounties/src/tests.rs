@@ -93,6 +93,13 @@ impl frame_system::Config for Test {
 	type MaxConsumers = ConstU32<16>;
 }
 
+#[derive(
+	Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, Debug, TypeInfo,
+)]
+pub enum HoldIdentifier {
+	ChildBounties,
+}
+
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ();
@@ -105,7 +112,7 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 	type FreezeIdentifier = ();
 	type MaxFreezes = ();
-	type HoldIdentifier = ();
+	type HoldIdentifier = HoldIdentifier;
 	type MaxHolds = ();
 }
 parameter_types! {
@@ -113,6 +120,7 @@ parameter_types! {
 	pub const Burn: Permill = Permill::from_percent(50);
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 	pub const SpendLimit: Balance = u64::MAX;
+	pub const HoldReason: HoldIdentifier = HoldIdentifier::ChildBounties;
 }
 
 impl pallet_treasury::Config for Test {
@@ -132,6 +140,7 @@ impl pallet_treasury::Config for Test {
 	type SpendFunds = Bounties;
 	type MaxApprovals = ConstU32<100>;
 	type SpendOrigin = frame_system::EnsureRootWithSuccess<Self::AccountId, SpendLimit>;
+	type HoldReason = HoldReason;
 }
 parameter_types! {
 	// This will be 50% of the bounty fee.
@@ -194,7 +203,7 @@ fn genesis_config_works() {
 fn minting_works() {
 	new_test_ext().execute_with(|| {
 		// Check that accumulate works when we have Some value in Dummy already.
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 		assert_eq!(Treasury::pot(), 100);
 	});
 }
@@ -214,7 +223,7 @@ fn add_child_bounty() {
 
 		// Make the parent bounty.
 		System::set_block_number(1);
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 
 		assert_ok!(Bounties::propose_bounty(RuntimeOrigin::signed(0), 50, b"12345".to_vec()));
 
@@ -226,7 +235,7 @@ fn add_child_bounty() {
 		let fee = 8;
 		assert_ok!(Bounties::propose_curator(RuntimeOrigin::root(), 0, 4, fee));
 
-		Balances::make_free_balance_be(&4, 10);
+		Balances::set_balance(&4, 10);
 
 		assert_ok!(Bounties::accept_curator(RuntimeOrigin::signed(4), 0));
 
@@ -244,7 +253,7 @@ fn add_child_bounty() {
 		);
 
 		// Update the parent curator balance.
-		Balances::make_free_balance_be(&4, 101);
+		Balances::set_balance(&4, 101);
 
 		// parent curator fee is reserved on parent bounty account.
 		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 50);
@@ -305,9 +314,9 @@ fn child_bounty_assign_curator() {
 
 		// Make the parent bounty.
 		System::set_block_number(1);
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
-		Balances::make_free_balance_be(&4, 101);
-		Balances::make_free_balance_be(&8, 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
+		Balances::set_balance(&4, 101);
+		Balances::set_balance(&8, 101);
 
 		assert_ok!(Bounties::propose_bounty(RuntimeOrigin::signed(0), 50, b"12345".to_vec()));
 
@@ -410,13 +419,13 @@ fn award_claim_child_bounty() {
 	new_test_ext().execute_with(|| {
 		// Make the parent bounty.
 		System::set_block_number(1);
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 		assert_eq!(Balances::free_balance(Treasury::account_id()), 101);
 		assert_eq!(Balances::reserved_balance(Treasury::account_id()), 0);
 
 		// Bounty curator initial balance.
-		Balances::make_free_balance_be(&4, 101); // Parent-bounty curator.
-		Balances::make_free_balance_be(&8, 101); // Child-bounty curator.
+		Balances::set_balance(&4, 101); // Parent-bounty curator.
+		Balances::set_balance(&8, 101); // Child-bounty curator.
 
 		assert_ok!(Bounties::propose_bounty(RuntimeOrigin::signed(0), 50, b"12345".to_vec()));
 
@@ -501,13 +510,13 @@ fn close_child_bounty_added() {
 	new_test_ext().execute_with(|| {
 		// Make the parent bounty.
 		System::set_block_number(1);
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 		assert_eq!(Balances::free_balance(Treasury::account_id()), 101);
 		assert_eq!(Balances::reserved_balance(Treasury::account_id()), 0);
 
 		// Bounty curator initial balance.
-		Balances::make_free_balance_be(&4, 101); // Parent-bounty curator.
-		Balances::make_free_balance_be(&8, 101); // Child-bounty curator.
+		Balances::set_balance(&4, 101); // Parent-bounty curator.
+		Balances::set_balance(&8, 101); // Child-bounty curator.
 
 		assert_ok!(Bounties::propose_bounty(RuntimeOrigin::signed(0), 50, b"12345".to_vec()));
 
@@ -558,13 +567,13 @@ fn close_child_bounty_active() {
 	new_test_ext().execute_with(|| {
 		// Make the parent bounty.
 		System::set_block_number(1);
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 		assert_eq!(Balances::free_balance(Treasury::account_id()), 101);
 		assert_eq!(Balances::reserved_balance(Treasury::account_id()), 0);
 
 		// Bounty curator initial balance.
-		Balances::make_free_balance_be(&4, 101); // Parent-bounty curator.
-		Balances::make_free_balance_be(&8, 101); // Child-bounty curator.
+		Balances::set_balance(&4, 101); // Parent-bounty curator.
+		Balances::set_balance(&8, 101); // Child-bounty curator.
 
 		assert_ok!(Bounties::propose_bounty(RuntimeOrigin::signed(0), 50, b"12345".to_vec()));
 
@@ -616,13 +625,13 @@ fn close_child_bounty_pending() {
 	new_test_ext().execute_with(|| {
 		// Make the parent bounty.
 		System::set_block_number(1);
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 		assert_eq!(Balances::free_balance(Treasury::account_id()), 101);
 		assert_eq!(Balances::reserved_balance(Treasury::account_id()), 0);
 
 		// Bounty curator initial balance.
-		Balances::make_free_balance_be(&4, 101); // Parent-bounty curator.
-		Balances::make_free_balance_be(&8, 101); // Child-bounty curator.
+		Balances::set_balance(&4, 101); // Parent-bounty curator.
+		Balances::set_balance(&8, 101); // Child-bounty curator.
 
 		assert_ok!(Bounties::propose_bounty(RuntimeOrigin::signed(0), 50, b"12345".to_vec()));
 
@@ -677,13 +686,13 @@ fn child_bounty_added_unassign_curator() {
 	new_test_ext().execute_with(|| {
 		// Make the parent bounty.
 		System::set_block_number(1);
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 		assert_eq!(Balances::free_balance(Treasury::account_id()), 101);
 		assert_eq!(Balances::reserved_balance(Treasury::account_id()), 0);
 
 		// Bounty curator initial balance.
-		Balances::make_free_balance_be(&4, 101); // Parent-bounty curator.
-		Balances::make_free_balance_be(&8, 101); // Child-bounty curator.
+		Balances::set_balance(&4, 101); // Parent-bounty curator.
+		Balances::set_balance(&8, 101); // Child-bounty curator.
 
 		assert_ok!(Bounties::propose_bounty(RuntimeOrigin::signed(0), 50, b"12345".to_vec()));
 
@@ -719,13 +728,13 @@ fn child_bounty_curator_proposed_unassign_curator() {
 	new_test_ext().execute_with(|| {
 		// Make the parent bounty.
 		System::set_block_number(1);
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 		assert_eq!(Balances::free_balance(Treasury::account_id()), 101);
 		assert_eq!(Balances::reserved_balance(Treasury::account_id()), 0);
 
 		// Bounty curator initial balance.
-		Balances::make_free_balance_be(&4, 101); // Parent-bounty curator.
-		Balances::make_free_balance_be(&8, 101); // Child-bounty curator.
+		Balances::set_balance(&4, 101); // Parent-bounty curator.
+		Balances::set_balance(&8, 101); // Child-bounty curator.
 
 		assert_ok!(Bounties::propose_bounty(RuntimeOrigin::signed(0), 50, b"12345".to_vec()));
 
@@ -794,15 +803,15 @@ fn child_bounty_active_unassign_curator() {
 	new_test_ext().execute_with(|| {
 		// Make the parent bounty.
 		System::set_block_number(1);
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 		assert_eq!(Balances::free_balance(Treasury::account_id()), 101);
 		assert_eq!(Balances::reserved_balance(Treasury::account_id()), 0);
 
 		// Bounty curator initial balance.
-		Balances::make_free_balance_be(&4, 101); // Parent-bounty curator.
-		Balances::make_free_balance_be(&6, 101); // Child-bounty curator 1.
-		Balances::make_free_balance_be(&7, 101); // Child-bounty curator 2.
-		Balances::make_free_balance_be(&8, 101); // Child-bounty curator 3.
+		Balances::set_balance(&4, 101); // Parent-bounty curator.
+		Balances::set_balance(&6, 101); // Child-bounty curator 1.
+		Balances::set_balance(&7, 101); // Child-bounty curator 2.
+		Balances::set_balance(&8, 101); // Child-bounty curator 3.
 
 		assert_ok!(Bounties::propose_bounty(RuntimeOrigin::signed(0), 50, b"12345".to_vec()));
 
@@ -999,16 +1008,16 @@ fn parent_bounty_inactive_unassign_curator_child_bounty() {
 	new_test_ext().execute_with(|| {
 		// Make the parent bounty.
 		System::set_block_number(1);
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 		assert_eq!(Balances::free_balance(Treasury::account_id()), 101);
 		assert_eq!(Balances::reserved_balance(Treasury::account_id()), 0);
 
 		// Bounty curator initial balance.
-		Balances::make_free_balance_be(&4, 101); // Parent-bounty curator 1.
-		Balances::make_free_balance_be(&5, 101); // Parent-bounty curator 2.
-		Balances::make_free_balance_be(&6, 101); // Child-bounty curator 1.
-		Balances::make_free_balance_be(&7, 101); // Child-bounty curator 2.
-		Balances::make_free_balance_be(&8, 101); // Child-bounty curator 3.
+		Balances::set_balance(&4, 101); // Parent-bounty curator 1.
+		Balances::set_balance(&5, 101); // Parent-bounty curator 2.
+		Balances::set_balance(&6, 101); // Child-bounty curator 1.
+		Balances::set_balance(&7, 101); // Child-bounty curator 2.
+		Balances::set_balance(&8, 101); // Child-bounty curator 3.
 
 		assert_ok!(Bounties::propose_bounty(RuntimeOrigin::signed(0), 50, b"12345".to_vec()));
 		assert_ok!(Bounties::approve_bounty(RuntimeOrigin::root(), 0));
@@ -1150,13 +1159,13 @@ fn close_parent_with_child_bounty() {
 	new_test_ext().execute_with(|| {
 		// Make the parent bounty.
 		System::set_block_number(1);
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 		assert_eq!(Balances::free_balance(Treasury::account_id()), 101);
 		assert_eq!(Balances::reserved_balance(Treasury::account_id()), 0);
 
 		// Bounty curator initial balance.
-		Balances::make_free_balance_be(&4, 101); // Parent-bounty curator.
-		Balances::make_free_balance_be(&8, 101); // Child-bounty curator.
+		Balances::set_balance(&4, 101); // Parent-bounty curator.
+		Balances::set_balance(&8, 101); // Child-bounty curator.
 
 		assert_ok!(Bounties::propose_bounty(RuntimeOrigin::signed(0), 50, b"12345".to_vec()));
 		assert_ok!(Bounties::approve_bounty(RuntimeOrigin::root(), 0));
@@ -1214,13 +1223,13 @@ fn children_curator_fee_calculation_test() {
 	new_test_ext().execute_with(|| {
 		// Make the parent bounty.
 		System::set_block_number(1);
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::set_balance(&Treasury::account_id(), 101);
 		assert_eq!(Balances::free_balance(Treasury::account_id()), 101);
 		assert_eq!(Balances::reserved_balance(Treasury::account_id()), 0);
 
 		// Bounty curator initial balance.
-		Balances::make_free_balance_be(&4, 101); // Parent-bounty curator.
-		Balances::make_free_balance_be(&8, 101); // Child-bounty curator.
+		Balances::set_balance(&4, 101); // Parent-bounty curator.
+		Balances::set_balance(&8, 101); // Child-bounty curator.
 
 		assert_ok!(Bounties::propose_bounty(RuntimeOrigin::signed(0), 50, b"12345".to_vec()));
 		assert_ok!(Bounties::approve_bounty(RuntimeOrigin::root(), 0));
@@ -1309,8 +1318,8 @@ fn accept_curator_handles_different_deposit_calculations() {
 		let parent_fee = 10_000;
 
 		System::set_block_number(1);
-		Balances::make_free_balance_be(&Treasury::account_id(), parent_value * 3);
-		Balances::make_free_balance_be(&parent_curator, parent_fee * 100);
+		Balances::set_balance(&Treasury::account_id(), parent_value * 3);
+		Balances::set_balance(&parent_curator, parent_fee * 100);
 		assert_ok!(Bounties::propose_bounty(
 			RuntimeOrigin::signed(parent_curator),
 			parent_value,
@@ -1338,7 +1347,7 @@ fn accept_curator_handles_different_deposit_calculations() {
 		let child_fee = 100;
 		let starting_balance = 100 * child_fee + child_value;
 
-		Balances::make_free_balance_be(&child_curator, starting_balance);
+		Balances::set_balance(&child_curator, starting_balance);
 		assert_ok!(ChildBounties::add_child_bounty(
 			RuntimeOrigin::signed(parent_curator),
 			parent_index,
@@ -1406,7 +1415,7 @@ fn accept_curator_handles_different_deposit_calculations() {
 		let child_value = 10_000;
 		let child_fee = 5_000;
 
-		Balances::make_free_balance_be(&child_curator, starting_balance);
+		Balances::set_balance(&child_curator, starting_balance);
 		assert_ok!(ChildBounties::add_child_bounty(
 			RuntimeOrigin::signed(parent_curator),
 			parent_index,
@@ -1442,7 +1451,7 @@ fn accept_curator_handles_different_deposit_calculations() {
 		let child_value = 10_000;
 		let child_fee = 0;
 
-		Balances::make_free_balance_be(&child_curator, starting_balance);
+		Balances::set_balance(&child_curator, starting_balance);
 		assert_ok!(ChildBounties::add_child_bounty(
 			RuntimeOrigin::signed(parent_curator),
 			parent_index,
