@@ -787,18 +787,9 @@ impl<T: Config> Pallet<T> {
 				// if this voter is a nominator:
 				let voter_weight = weight_of(&voter);
 				if !targets.is_empty() {
-					// select only targets allowed by voter's nomination quota.
-					let nominations_quota = T::NominationsQuota::get_quota(voter_weight.into());
-
-					// if the current number of targets exceeds the nomination quota, emit an event
-					// but proceed without truncating or failing. The nomination quota checks are
-					// lazy and only fail when setting/updating the nominations.
-					if targets.len() > nominations_quota as usize {
-						Self::deposit_event(Event::<T>::NominationsQuotaExceeded {
-							staker: voter.clone(),
-							exceeded_by: (targets.len() as u32 - nominations_quota).into(),
-						});
-					}
+					// Note on lazy nomination quota: we do not check the nomination quota of the
+					// voter at this point and accept all the current nominations. The nomination
+					// quota is only enforced at `nominate` time.
 
 					if voters_size_tracker.try_register_voter(targets.len(), voter_bounds).is_err()
 					{

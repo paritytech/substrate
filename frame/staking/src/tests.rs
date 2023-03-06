@@ -4646,7 +4646,7 @@ mod election_data_provider {
 				assert_ok!(Staking::unbond(RuntimeOrigin::signed(60), 78));
 
 				// even through 61 has nomination quota of 2 at the time of the election, all the
-				// nominations (5) will be used and an `Event::NominationsQuotaExceeded` emitted.
+				// nominations (5) will be used.
 				assert_eq!(
 					Staking::electing_voters(DataProviderBounds::new_unbounded())
 						.unwrap()
@@ -4654,11 +4654,6 @@ mod election_data_provider {
 						.map(|(stash, _, targets)| (*stash, targets.len()))
 						.collect::<Vec<_>>(),
 					vec![(11, 1), (21, 1), (31, 1), (61, 5)],
-				);
-
-				assert_eq!(
-					*staking_events().last().unwrap(),
-					Event::NominationsQuotaExceeded { staker: 61, exceeded_by: 3 }
 				);
 			});
 	}
