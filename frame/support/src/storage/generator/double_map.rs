@@ -511,6 +511,7 @@ where
 
 /// Test iterators for StorageDoubleMap
 #[cfg(test)]
+#[allow(deprecated)]
 mod test_iterators {
 	use crate::{
 		hash::StorageHasher,

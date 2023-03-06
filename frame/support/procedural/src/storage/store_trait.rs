@@ -45,6 +45,8 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 	let where_clause = &def.where_clause;
 
 	quote!(
+		#[deprecated(note = r"The `Store` trait will be removed soon. Check
+			https://github.com/paritytech/substrate/pull/13535 for more details.")]
 		#visibility trait #store_trait {
 			#decl_store_items
 		}

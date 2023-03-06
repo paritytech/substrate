@@ -825,6 +825,7 @@ macro_rules! assert_error_encoded_size {
 pub use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
+#[allow(deprecated)]
 pub mod tests {
 	use super::*;
 	use crate::metadata::{
