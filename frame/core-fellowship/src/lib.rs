@@ -228,7 +228,7 @@ pub mod pallet {
 			new_rank: Option<u16>,
 		},
 		/// Pre-ranked account has been inducted at their current rank.
-		Synced { who: T::AccountId, rank: RankOf<T, I> },
+		Imported { who: T::AccountId, rank: RankOf<T, I> },
 	}
 
 	#[pallet::error]
@@ -501,7 +501,7 @@ pub mod pallet {
 				&who,
 				MemberStatus { is_active: true, last_promotion: 0u32.into(), last_proof: now },
 			);
-			Self::deposit_event(Event::<T, I>::Synced { who, rank });
+			Self::deposit_event(Event::<T, I>::Imported { who, rank });
 
 			Ok(Pays::No.into())
 		}
