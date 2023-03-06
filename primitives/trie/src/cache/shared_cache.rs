@@ -83,7 +83,7 @@ where
 		let new_item_heap_size = node.size_in_bytes() - std::mem::size_of::<NodeOwned<H>>();
 		if new_item_heap_size > self.max_heap_size {
 			// Item's too big to add even if the cache's empty; bail.
-			return None
+			return None;
 		}
 
 		self.heap_size += new_item_heap_size;
@@ -104,7 +104,7 @@ where
 		let new_item_heap_size = new_node.size_in_bytes() - std::mem::size_of::<NodeOwned<H>>();
 		if new_item_heap_size > self.max_heap_size {
 			// Item's too big to add even if the cache's empty; bail.
-			return false
+			return false;
 		}
 
 		let old_item_heap_size = old_node.size_in_bytes() - std::mem::size_of::<NodeOwned<H>>();
@@ -181,7 +181,7 @@ where
 				let new_item_heap_size = key.storage_key.len();
 				if new_item_heap_size > self.max_heap_size {
 					// Item's too big to add even if the cache's empty; bail.
-					return None
+					return None;
 				}
 
 				self.heap_size += new_item_heap_size;
@@ -279,10 +279,10 @@ impl<H: AsRef<[u8]> + Eq + std::hash::Hash> SharedNodeCache<H> {
 
 					if access_count >= super::SHARED_NODE_CACHE_MAX_PROMOTED_KEYS {
 						// Stop when we've promoted a large enough number of items.
-						break
+						break;
 					}
 
-					continue
+					continue;
 				}
 			}
 
@@ -291,7 +291,7 @@ impl<H: AsRef<[u8]> + Eq + std::hash::Hash> SharedNodeCache<H> {
 
 			if self.lru.limiter().items_evicted > self.lru.limiter().max_items_evicted {
 				// Stop when we've evicted a big enough chunk of the shared cache.
-				break
+				break;
 			}
 		}
 
@@ -392,8 +392,8 @@ where
 	H: AsRef<[u8]>,
 {
 	fn eq(&self, rhs: &ValueCacheKey<H>) -> bool {
-		self.storage_root.as_ref() == rhs.storage_root.as_ref() &&
-			self.storage_key == &*rhs.storage_key
+		self.storage_root.as_ref() == rhs.storage_root.as_ref()
+			&& self.storage_key == &*rhs.storage_key
 	}
 }
 
@@ -537,7 +537,7 @@ impl<H: Eq + std::hash::Hash + Clone + Copy + AsRef<[u8]>> SharedValueCache<H> {
 
 			if self.lru.limiter().items_evicted > self.lru.limiter().max_items_evicted {
 				// Stop when we've evicted a big enough chunk of the shared cache.
-				break
+				break;
 			}
 		}
 

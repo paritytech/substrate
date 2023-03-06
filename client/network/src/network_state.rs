@@ -106,10 +106,12 @@ pub enum Endpoint {
 impl From<ConnectedPoint> for PeerEndpoint {
 	fn from(endpoint: ConnectedPoint) -> Self {
 		match endpoint {
-			ConnectedPoint::Dialer { address, role_override } =>
-				Self::Dialing(address, role_override.into()),
-			ConnectedPoint::Listener { local_addr, send_back_addr } =>
-				Self::Listening { local_addr, send_back_addr },
+			ConnectedPoint::Dialer { address, role_override } => {
+				Self::Dialing(address, role_override.into())
+			},
+			ConnectedPoint::Listener { local_addr, send_back_addr } => {
+				Self::Listening { local_addr, send_back_addr }
+			},
 		}
 	}
 }

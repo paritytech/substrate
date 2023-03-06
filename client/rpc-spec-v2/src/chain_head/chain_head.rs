@@ -186,7 +186,7 @@ fn parse_hex_param(
 ) -> Result<Vec<u8>, SubscriptionEmptyError> {
 	// Methods can accept empty parameters.
 	if param.is_empty() {
-		return Ok(Default::default())
+		return Ok(Default::default());
 	}
 
 	match array_bytes::hex2bytes(&param) {
@@ -211,7 +211,7 @@ where
 {
 	// No runtime versions should be reported.
 	if !runtime_updates {
-		return None
+		return None;
 	}
 
 	let block_rt = match client.runtime_version_at(block) {
@@ -292,7 +292,7 @@ async fn submit_events<EventStream, T>(
 			Ok(false) => return,
 			Err(_) => {
 				// Failed to submit event.
-				break
+				break;
 			},
 		}
 	}
@@ -330,7 +330,7 @@ where
 	});
 
 	if !notification.is_new_best {
-		return Ok((new_block, None))
+		return Ok((new_block, None));
 	}
 
 	// If this is the new best block, then we need to generate two events.
@@ -390,7 +390,7 @@ where
 			// Check if the current best block is also reported as pruned.
 			let reported_pruned = pruned_block_hashes.iter().find(|&&hash| hash == block_cache);
 			if reported_pruned.is_none() {
-				return Ok((finalized_event, None))
+				return Ok((finalized_event, None));
 			}
 
 			// The best block is reported as pruned. Therefore, we need to signal a new
@@ -420,7 +420,7 @@ where
 				if ancestor.hash != last_finalized {
 					return Err(SubscriptionManagementError::Custom(
 						"The finalized block is not an ancestor of the best block".into(),
-					))
+					));
 				}
 
 				// The RPC needs to also submit a new best block changed before the
@@ -459,7 +459,7 @@ where
 			Ok(sub_id) => sub_id,
 			Err(err) => {
 				sink.close(ChainHeadRpcError::InvalidSubscriptionID);
-				return Err(err)
+				return Err(err);
 			},
 		};
 
@@ -558,7 +558,7 @@ where
 			// Block is not part of the subscription.
 			if !handle.contains_block(&hash) {
 				let _ = sink.reject(ChainHeadRpcError::InvalidBlock);
-				return
+				return;
 			}
 
 			let event = match client.block(hash) {
@@ -594,7 +594,7 @@ where
 
 		// Block is not part of the subscription.
 		if !handle.contains_block(&hash) {
-			return Err(ChainHeadRpcError::InvalidBlock.into())
+			return Err(ChainHeadRpcError::InvalidBlock.into());
 		}
 
 		self.client
@@ -637,19 +637,19 @@ where
 			// Block is not part of the subscription.
 			if !handle.contains_block(&hash) {
 				let _ = sink.reject(ChainHeadRpcError::InvalidBlock);
-				return
+				return;
 			}
 
 			// The child key is provided, use the key to query the child trie.
 			if let Some(child_key) = child_key {
 				// The child key must not be prefixed with ":child_storage:" nor
 				// ":child_storage:default:".
-				if well_known_keys::is_default_child_storage_key(child_key.storage_key()) ||
-					well_known_keys::is_child_storage_key(child_key.storage_key())
+				if well_known_keys::is_default_child_storage_key(child_key.storage_key())
+					|| well_known_keys::is_child_storage_key(child_key.storage_key())
 				{
 					let _ = sink
 						.send(&ChainHeadEvent::Done(ChainHeadResult { result: None::<String> }));
-					return
+					return;
 				}
 
 				let res = client
@@ -663,17 +663,17 @@ where
 						ChainHeadEvent::Error(ErrorEvent { error: error.to_string() })
 					});
 				let _ = sink.send(&res);
-				return
+				return;
 			}
 
 			// The main key must not be prefixed with b":child_storage:" nor
 			// b":child_storage:default:".
-			if well_known_keys::is_default_child_storage_key(&key.0) ||
-				well_known_keys::is_child_storage_key(&key.0)
+			if well_known_keys::is_default_child_storage_key(&key.0)
+				|| well_known_keys::is_child_storage_key(&key.0)
 			{
 				let _ =
 					sink.send(&ChainHeadEvent::Done(ChainHeadResult { result: None::<String> }));
-				return
+				return;
 			}
 
 			// Main root trie storage query.
@@ -718,7 +718,7 @@ where
 			// Block is not part of the subscription.
 			if !handle.contains_block(&hash) {
 				let _ = sink.reject(ChainHeadRpcError::InvalidBlock);
-				return
+				return;
 			}
 
 			// Reject subscription if runtime_updates is false.
@@ -726,7 +726,7 @@ where
 				let _ = sink.reject(ChainHeadRpcError::InvalidParam(
 					"The runtime updates flag must be set".into(),
 				));
-				return
+				return;
 			}
 
 			let res = client
@@ -764,7 +764,7 @@ where
 		};
 
 		if !handle.unpin_block(&hash) {
-			return Err(ChainHeadRpcError::InvalidBlock.into())
+			return Err(ChainHeadRpcError::InvalidBlock.into());
 		}
 
 		Ok(())

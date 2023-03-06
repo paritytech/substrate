@@ -44,7 +44,7 @@ pub fn expand_outer_event(
 					 be constructed: pallet `{}` must have generic `Event`",
 					pallet_name,
 				);
-				return Err(syn::Error::new(pallet_name.span(), msg))
+				return Err(syn::Error::new(pallet_name.span(), msg));
 			}
 
 			let part_is_generic = !generics.params.is_empty();

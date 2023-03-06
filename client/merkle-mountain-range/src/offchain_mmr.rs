@@ -149,7 +149,7 @@ where
 			None => {
 				// If we can't convert the block number to a leaf index, the chain state is probably
 				// corrupted. We only log the error, hoping that the chain state will be fixed.
-				return
+				return;
 			},
 		};
 
@@ -170,7 +170,7 @@ where
 		// Don't canonicalize branches corresponding to blocks for which the MMR pallet
 		// wasn't yet initialized.
 		if header.number < self.first_mmr_block {
-			return
+			return;
 		}
 
 		// We "canonicalize" the leaf associated with the provided block
@@ -181,7 +181,7 @@ where
 				// If we can't convert the block number to a leaf index, the chain state is probably
 				// corrupted. We only log the error, hoping that the chain state will be fixed.
 				self.best_canonicalized = header.number;
-				return
+				return;
 			},
 		};
 
@@ -231,7 +231,7 @@ where
 					_ => break,
 				};
 				if header.number <= self.best_canonicalized {
-					break
+					break;
 				}
 				to_canon.push_front(header.hash);
 			}

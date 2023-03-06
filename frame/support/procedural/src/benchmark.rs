@@ -83,12 +83,12 @@ impl syn::parse::Parse for BenchmarkAttrKeyword {
 		let lookahead = input.lookahead1();
 		if lookahead.peek(keywords::extra) {
 			let _extra: keywords::extra = input.parse()?;
-			return Ok(BenchmarkAttrKeyword::Extra)
+			return Ok(BenchmarkAttrKeyword::Extra);
 		} else if lookahead.peek(keywords::skip_meta) {
 			let _skip_meta: keywords::skip_meta = input.parse()?;
-			return Ok(BenchmarkAttrKeyword::SkipMeta)
+			return Ok(BenchmarkAttrKeyword::SkipMeta);
 		} else {
-			return Err(lookahead.error())
+			return Err(lookahead.error());
 		}
 	}
 }
@@ -98,7 +98,7 @@ impl syn::parse::Parse for BenchmarkAttrs {
 		let lookahead = input.lookahead1();
 		if !lookahead.peek(Paren) {
 			let _nothing: Nothing = input.parse()?;
-			return Ok(BenchmarkAttrs { skip_meta: false, extra: false })
+			return Ok(BenchmarkAttrs { skip_meta: false, extra: false });
 		}
 		let content;
 		let _paren: Paren = parenthesized!(content in input);
@@ -109,13 +109,13 @@ impl syn::parse::Parse for BenchmarkAttrs {
 			match arg {
 				BenchmarkAttrKeyword::Extra => {
 					if extra {
-						return Err(content.error("`extra` can only be specified once"))
+						return Err(content.error("`extra` can only be specified once"));
 					}
 					extra = true;
 				},
 				BenchmarkAttrKeyword::SkipMeta => {
 					if skip_meta {
-						return Err(content.error("`skip_meta` can only be specified once"))
+						return Err(content.error("`skip_meta` can only be specified once"));
 					}
 					skip_meta = true;
 				},
@@ -186,7 +186,7 @@ fn ensure_valid_return_type(item_fn: &ItemFn) -> Result<()> {
 		// ensure T in Result<T, E> is ()
 		let Type::Tuple(tup) = res.unit else { return non_unit(res.unit.span()) };
 		if !tup.elems.is_empty() {
-			return non_unit(tup.span())
+			return non_unit(tup.span());
 		}
 		let TypePath { path, qself: _ } = res.e_type;
 		let seg = path
@@ -206,7 +206,7 @@ fn parse_params(item_fn: &ItemFn) -> Result<Vec<ParamDef>> {
 			return Err(Error::new(
 				span,
 				"Invalid benchmark function param. A valid example would be `x: Linear<5, 10>`.",
-			))
+			));
 		};
 
 		let FnArg::Typed(arg) = arg else { return invalid_param(arg.span()) };
@@ -218,15 +218,15 @@ fn parse_params(item_fn: &ItemFn) -> Result<Vec<ParamDef>> {
 			return Err(Error::new(
 					var_span,
 					"Benchmark parameter names must consist of a single lowercase letter (a-z) and no other characters.",
-				))
+				));
 		};
 		let name = ident.ident.to_token_stream().to_string();
 		if name.len() > 1 {
-			return invalid_param_name()
+			return invalid_param_name();
 		};
 		let Some(name_char) = name.chars().next() else { return invalid_param_name() };
 		if !name_char.is_alphabetic() || !name_char.is_lowercase() {
-			return invalid_param_name()
+			return invalid_param_name();
 		}
 
 		// parse type
@@ -242,7 +242,7 @@ fn parse_params(item_fn: &ItemFn) -> Result<Vec<ParamDef>> {
 			return Err(Error::new(
 				args.start.span(),
 				"The start of a `ParamRange` must be less than or equal to the end",
-			))
+			));
 		}
 
 		params.push(ParamDef { name, typ: typ.clone(), start, end });
@@ -255,7 +255,7 @@ fn missing_call<T>(item_fn: &ItemFn) -> Result<T> {
 	return Err(Error::new(
 		item_fn.block.brace_token.span,
 		"No valid #[extrinsic_call] or #[block] annotation could be found in benchmark function body."
-	))
+	));
 }
 
 /// Finds the `BenchmarkCallDef` and its index (within the list of stmts for the fn) and
@@ -300,11 +300,12 @@ fn parse_call_def(item_fn: &ItemFn) -> Result<(usize, BenchmarkCallDef)> {
 	Ok(match &call_defs[..] {
 		[(i, call_def)] => (*i, call_def.clone()), // = 1
 		[] => return missing_call(item_fn),
-		_ =>
+		_ => {
 			return Err(Error::new(
 				call_defs[1].1.attr_span(),
 				"Only one #[extrinsic_call] or #[block] attribute is allowed per benchmark.",
-			)),
+			))
+		},
 	})
 }
 
@@ -318,7 +319,9 @@ impl BenchmarkDef {
 		let (verify_stmts, last_stmt) = match item_fn.sig.output {
 			ReturnType::Default =>
 			// no return type, last_stmt should be None
-				(Vec::from(&item_fn.block.stmts[(i + 1)..item_fn.block.stmts.len()]), None),
+			{
+				(Vec::from(&item_fn.block.stmts[(i + 1)..item_fn.block.stmts.len()]), None)
+			},
 			ReturnType::Type(_, _) => {
 				// defined return type, last_stmt should be Result<(), BenchmarkError>
 				// compatible and should not be included in verify_stmts
@@ -330,7 +333,7 @@ impl BenchmarkDef {
 						defined a return type. You should return something compatible \
 						with Result<(), BenchmarkError> (i.e. `Ok(())`) as the last statement \
 						or change your signature to a blank return type.",
-					))
+					));
 				}
 				let Some(stmt) = item_fn.block.stmts.last() else { return missing_call(item_fn) };
 				(
@@ -840,8 +843,9 @@ fn expand_benchmark(
 				},
 			)
 		},
-		BenchmarkCallDef::Block { block, attr_span: _ } =>
-			(quote!(), quote!(#block), quote!(#block)),
+		BenchmarkCallDef::Block { block, attr_span: _ } => {
+			(quote!(), quote!(#block), quote!(#block))
+		},
 	};
 
 	let vis = benchmark_def.fn_vis;

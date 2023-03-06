@@ -99,7 +99,7 @@ where
 			.map_err(|e| ImportError(e.to_string()))?
 			.ok_or_else(|| ImportError("Unknown BEEFY genesis".to_string()))?;
 		if number < beefy_genesis {
-			return Err(ImportError("BEEFY genesis is set for future block".to_string()))
+			return Err(ImportError("BEEFY genesis is set for future block".to_string()));
 		}
 		let validator_set = self
 			.runtime

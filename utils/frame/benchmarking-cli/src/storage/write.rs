@@ -97,7 +97,7 @@ impl StorageCmd {
 							state_col,
 							None,
 						) {
-							break
+							break;
 						}
 					}
 
@@ -137,7 +137,7 @@ impl StorageCmd {
 							state_col,
 							Some(&info),
 						) {
-							break
+							break;
 						}
 					}
 
@@ -237,7 +237,7 @@ fn check_new_value<Block: BlockT>(
 			db.sanitize_key(&mut k);
 			if db.get(col, &k).is_some() {
 				trace!("Benchmark-store key creation: Key collision detected, retry");
-				return false
+				return false;
 			}
 		}
 	}

@@ -570,7 +570,7 @@ pub mod pallet {
 				let contract = if let Some(contract) = contract {
 					contract
 				} else {
-					return Err(<Error<T>>::ContractNotFound.into())
+					return Err(<Error<T>>::ContractNotFound.into());
 				};
 				<PrefabWasmModule<T>>::add_user(code_hash)?;
 				<PrefabWasmModule<T>>::remove_user(contract.code_hash);
@@ -1148,12 +1148,13 @@ impl<T: Config> Pallet<T> {
 		let mut gas_meter = GasMeter::new(gas_limit);
 		let mut storage_meter = match StorageMeter::new(&origin, storage_deposit_limit, value) {
 			Ok(meter) => meter,
-			Err(err) =>
+			Err(err) => {
 				return InternalCallOutput {
 					result: Err(err.into()),
 					gas_meter,
 					storage_deposit: Default::default(),
-				},
+				}
+			},
 		};
 		let schedule = T::Schedule::get();
 		let result = ExecStack::<T, PrefabWasmModule<T>>::run_call(

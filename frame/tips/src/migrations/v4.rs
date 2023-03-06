@@ -50,7 +50,7 @@ pub fn migrate<T: pallet_tips::Config, P: GetStorageVersion + PalletInfoAccess, 
 			target: LOG_TARGET,
 			"New pallet name is equal to the old prefix. No migration needs to be done.",
 		);
-		return Weight::zero()
+		return Weight::zero();
 	}
 
 	let on_chain_storage_version = <P as GetStorageVersion>::on_chain_storage_version();
@@ -110,7 +110,7 @@ pub fn pre_migrate<
 	log_migration("pre-migration", storage_prefix_reasons, old_pallet_name, new_pallet_name);
 
 	if new_pallet_name == old_pallet_name {
-		return
+		return;
 	}
 
 	let new_pallet_prefix = twox_128(new_pallet_name.as_bytes());
@@ -149,7 +149,7 @@ pub fn post_migrate<
 	log_migration("post-migration", storage_prefix_reasons, old_pallet_name, new_pallet_name);
 
 	if new_pallet_name == old_pallet_name {
-		return
+		return;
 	}
 
 	// Assert that no `Tips` and `Reasons` storages remains at the old prefix.

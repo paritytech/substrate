@@ -119,19 +119,23 @@ pub mod v1 {
 			);
 			if onchain_version != 0 {
 				log::warn!(target: TARGET, "skipping migration from v0 to v1.");
-				return weight
+				return weight;
 			}
 			v0::ReferendumInfoFor::<T, I>::iter().for_each(|(key, value)| {
 				let maybe_new_value = match value {
 					v0::ReferendumInfo::Ongoing(_) | v0::ReferendumInfo::Killed(_) => None,
-					v0::ReferendumInfo::Approved(e, s, d) =>
-						Some(ReferendumInfo::Approved(e, Some(s), d)),
-					v0::ReferendumInfo::Rejected(e, s, d) =>
-						Some(ReferendumInfo::Rejected(e, Some(s), d)),
-					v0::ReferendumInfo::Cancelled(e, s, d) =>
-						Some(ReferendumInfo::Cancelled(e, Some(s), d)),
-					v0::ReferendumInfo::TimedOut(e, s, d) =>
-						Some(ReferendumInfo::TimedOut(e, Some(s), d)),
+					v0::ReferendumInfo::Approved(e, s, d) => {
+						Some(ReferendumInfo::Approved(e, Some(s), d))
+					},
+					v0::ReferendumInfo::Rejected(e, s, d) => {
+						Some(ReferendumInfo::Rejected(e, Some(s), d))
+					},
+					v0::ReferendumInfo::Cancelled(e, s, d) => {
+						Some(ReferendumInfo::Cancelled(e, Some(s), d))
+					},
+					v0::ReferendumInfo::TimedOut(e, s, d) => {
+						Some(ReferendumInfo::TimedOut(e, Some(s), d))
+					},
 				};
 				if let Some(new_value) = maybe_new_value {
 					weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));

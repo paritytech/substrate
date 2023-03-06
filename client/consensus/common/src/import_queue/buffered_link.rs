@@ -127,12 +127,15 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 	/// Send action for the synchronization to perform.
 	pub fn send_actions(&mut self, msg: BlockImportWorkerMsg<B>, link: &mut dyn Link<B>) {
 		match msg {
-			BlockImportWorkerMsg::BlocksProcessed(imported, count, results) =>
-				link.blocks_processed(imported, count, results),
-			BlockImportWorkerMsg::JustificationImported(who, hash, number, success) =>
-				link.justification_imported(who, &hash, number, success),
-			BlockImportWorkerMsg::RequestJustification(hash, number) =>
-				link.request_justification(&hash, number),
+			BlockImportWorkerMsg::BlocksProcessed(imported, count, results) => {
+				link.blocks_processed(imported, count, results)
+			},
+			BlockImportWorkerMsg::JustificationImported(who, hash, number, success) => {
+				link.justification_imported(who, &hash, number, success)
+			},
+			BlockImportWorkerMsg::RequestJustification(hash, number) => {
+				link.request_justification(&hash, number)
+			},
 		}
 	}
 
@@ -160,7 +163,7 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 	pub async fn next_action(&mut self, link: &mut dyn Link<B>) -> Result<(), ()> {
 		if let Some(msg) = self.rx.next().await {
 			self.send_actions(msg, link);
-			return Ok(())
+			return Ok(());
 		}
 		Err(())
 	}

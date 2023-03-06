@@ -243,7 +243,7 @@ where
 			return Err(JsonRpseeError::from(Error::InvalidCount {
 				value: count,
 				max: STORAGE_KEYS_PAGED_MAX_COUNT,
-			}))
+			}));
 		}
 		self.backend
 			.storage_keys_paged(block, prefix, count, start_key)
@@ -342,7 +342,7 @@ where
 		if keys.is_none() {
 			if let Err(err) = self.deny_unsafe.check_if_safe() {
 				let _ = sink.reject(JsonRpseeError::from(err));
-				return Ok(())
+				return Ok(());
 			}
 		}
 

@@ -57,14 +57,18 @@ fn fuse_nibbles_node(nibbles: &[u8], kind: NodeKind) -> impl Iterator<Item = u8>
 	let size = nibbles.len();
 	let iter_start = match kind {
 		NodeKind::Leaf => size_and_prefix_iterator(size, trie_constants::LEAF_PREFIX_MASK, 2),
-		NodeKind::BranchNoValue =>
-			size_and_prefix_iterator(size, trie_constants::BRANCH_WITHOUT_MASK, 2),
-		NodeKind::BranchWithValue =>
-			size_and_prefix_iterator(size, trie_constants::BRANCH_WITH_MASK, 2),
-		NodeKind::HashedValueLeaf =>
-			size_and_prefix_iterator(size, trie_constants::ALT_HASHING_LEAF_PREFIX_MASK, 3),
-		NodeKind::HashedValueBranch =>
-			size_and_prefix_iterator(size, trie_constants::ALT_HASHING_BRANCH_WITH_MASK, 4),
+		NodeKind::BranchNoValue => {
+			size_and_prefix_iterator(size, trie_constants::BRANCH_WITHOUT_MASK, 2)
+		},
+		NodeKind::BranchWithValue => {
+			size_and_prefix_iterator(size, trie_constants::BRANCH_WITH_MASK, 2)
+		},
+		NodeKind::HashedValueLeaf => {
+			size_and_prefix_iterator(size, trie_constants::ALT_HASHING_LEAF_PREFIX_MASK, 3)
+		},
+		NodeKind::HashedValueBranch => {
+			size_and_prefix_iterator(size, trie_constants::ALT_HASHING_BRANCH_WITH_MASK, 4)
+		},
 	};
 	iter_start
 		.chain(if nibbles.len() % 2 == 1 { Some(nibbles[0]) } else { None })

@@ -98,23 +98,23 @@ impl<B: Block> VoterOracle<B> {
 		// verifies the
 		let mut validate = || -> bool {
 			if sessions.is_empty() {
-				return false
+				return false;
 			}
 			for (idx, session) in sessions.iter().enumerate() {
 				if session.validators().is_empty() {
-					return false
+					return false;
 				}
 				if session.session_start() <= prev_start {
-					return false
+					return false;
 				}
 				#[cfg(not(test))]
 				if let Some(prev_id) = prev_validator_id {
 					if session.validator_set_id() <= prev_id {
-						return false
+						return false;
 					}
 				}
 				if idx != 0 && session.mandatory_done() {
-					return false
+					return false;
 				}
 				prev_start = session.session_start();
 				prev_validator_id = Some(session.validator_set_id());
@@ -227,7 +227,7 @@ impl<B: Block> VoterOracle<B> {
 			r
 		} else {
 			debug!(target: LOG_TARGET, "🥩 No voting round started");
-			return None
+			return None;
 		};
 
 		// `target` is guaranteed > `best_beefy` since `min_block_delta` is at least `1`.
@@ -769,7 +769,7 @@ where
 			hash
 		} else {
 			warn!(target: LOG_TARGET, "🥩 No MMR root digest found for: {:?}", target_hash);
-			return Ok(())
+			return Ok(());
 		};
 
 		let rounds = self
@@ -787,7 +787,7 @@ where
 				target: LOG_TARGET,
 				"🥩 Missing validator id - can't vote for: {:?}", target_hash
 			);
-			return Ok(())
+			return Ok(());
 		};
 
 		let commitment = Commitment { payload, block_number: target_number, validator_set_id };
@@ -797,7 +797,7 @@ where
 			Ok(sig) => sig,
 			Err(err) => {
 				warn!(target: LOG_TARGET, "🥩 Error signing commitment: {:?}", err);
-				return Ok(())
+				return Ok(());
 			},
 		};
 
@@ -954,11 +954,11 @@ where
 
 		if !check_equivocation_proof::<_, _, BeefySignatureHasher>(&proof) {
 			debug!(target: LOG_TARGET, "🥩 Skip report for bad equivocation {:?}", proof);
-			return Ok(())
+			return Ok(());
 		} else if let Some(local_id) = self.key_store.authority_id(validators) {
 			if offender_id == local_id {
 				debug!(target: LOG_TARGET, "🥩 Skip equivocation report for own equivocation");
-				return Ok(())
+				return Ok(());
 			}
 		}
 
@@ -986,7 +986,7 @@ where
 					target: LOG_TARGET,
 					"🥩 Equivocation offender not part of the authority set."
 				);
-				return Ok(())
+				return Ok(());
 			},
 		};
 

@@ -253,7 +253,7 @@ async fn build_system_rpc_future<
 						should_have_peers,
 					});
 				} else {
-					break
+					break;
 				}
 			},
 			sc_rpc::system::Request::LocalPeerId(sender) => {
@@ -284,7 +284,7 @@ async fn build_system_rpc_future<
 							.collect(),
 					);
 				} else {
-					break
+					break;
 				}
 			},
 			sc_rpc::system::Request::NetworkState(sender) => {
@@ -294,7 +294,7 @@ async fn build_system_rpc_future<
 						let _ = sender.send(network_state);
 					}
 				} else {
-					break
+					break;
 				}
 			},
 			sc_rpc::system::Request::NetworkAddReservedPeer(peer_addr, sender) => {
@@ -323,7 +323,7 @@ async fn build_system_rpc_future<
 						reserved_peers.iter().map(|peer_id| peer_id.to_base58()).collect();
 					let _ = sender.send(reserved_peers);
 				} else {
-					break
+					break;
 				}
 			},
 			sc_rpc::system::Request::NodeRoles(sender) => {
@@ -498,7 +498,7 @@ where
 			Ok(uxt) => uxt,
 			Err(e) => {
 				debug!("Transaction invalid: {:?}", e);
-				return Box::pin(futures::future::ready(TransactionImport::Bad))
+				return Box::pin(futures::future::ready(TransactionImport::Bad));
 			},
 		};
 
@@ -513,8 +513,9 @@ where
 			match import_future.await {
 				Ok(_) => TransactionImport::NewGood,
 				Err(e) => match e.into_pool_error() {
-					Ok(sc_transaction_pool_api::error::Error::AlreadyImported(_)) =>
-						TransactionImport::KnownGood,
+					Ok(sc_transaction_pool_api::error::Error::AlreadyImported(_)) => {
+						TransactionImport::KnownGood
+					},
 					Ok(e) => {
 						debug!("Error adding transaction to the pool: {:?}", e);
 						TransactionImport::Bad

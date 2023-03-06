@@ -125,7 +125,7 @@ pub mod v3 {
 						agenda.len(),
 						max_scheduled_per_block,
 					);
-					return Err("Agenda would overflow `MaxScheduledPerBlock`.")
+					return Err("Agenda would overflow `MaxScheduledPerBlock`.");
 				}
 			}
 			// Check that bounding the calls will not overflow `MAX_LENGTH`.
@@ -142,7 +142,7 @@ pub mod v3 {
 									block_number,
 									l,
 								);
-								return Err("Call is too large.")
+								return Err("Call is too large.");
 							}
 						},
 						_ => (),
@@ -162,7 +162,7 @@ pub mod v3 {
 				Expected version 3, found {:?}",
 					version,
 				);
-				return T::DbWeight::get().reads(1)
+				return T::DbWeight::get().reads(1);
 			}
 
 			crate::Pallet::<T>::migrate_v3_to_v4()
@@ -234,7 +234,7 @@ pub mod v4 {
 			let version = StorageVersion::get::<Pallet<T>>();
 			if version != 4 {
 				log::warn!(target: TARGET, "Skipping CleanupAgendas migration since it was run on the wrong version: {:?} != 4", version);
-				return T::DbWeight::get().reads(1)
+				return T::DbWeight::get().reads(1);
 			}
 
 			let keys = Agenda::<T>::iter_keys().collect::<Vec<_>>();
@@ -297,8 +297,9 @@ pub mod v4 {
 					target: TARGET,
 					"Did not clean up any agendas. v4::CleanupAgendas can be removed."
 				),
-				Some(n) =>
-					log::info!(target: TARGET, "Cleaned up {} agendas, now {}", n, new_agendas),
+				Some(n) => {
+					log::info!(target: TARGET, "Cleaned up {} agendas, now {}", n, new_agendas)
+				},
 				None => unreachable!(
 					"Number of agendas cannot increase, old {} new {}",
 					old_agendas, new_agendas
@@ -560,8 +561,9 @@ mod test {
 						"Agenda {} should be removed",
 						i
 					),
-					Some(new) =>
-						assert_eq!(Agenda::<Test>::get(i as u64), new, "Agenda wrong {}", i),
+					Some(new) => {
+						assert_eq!(Agenda::<Test>::get(i as u64), new, "Agenda wrong {}", i)
+					},
 				}
 			}
 		});

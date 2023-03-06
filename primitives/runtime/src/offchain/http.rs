@@ -404,7 +404,7 @@ impl Iterator for ResponseBody {
 
 	fn next(&mut self) -> Option<Self::Item> {
 		if self.error.is_some() {
-			return None
+			return None;
 		}
 
 		if self.filled_up_to.is_none() {
@@ -413,7 +413,7 @@ impl Iterator for ResponseBody {
 			match result {
 				Err(e) => {
 					self.error = Some(e);
-					return None
+					return None;
 				},
 				Ok(0) => return None,
 				Ok(size) => {
@@ -425,7 +425,7 @@ impl Iterator for ResponseBody {
 
 		if Some(self.position) == self.filled_up_to {
 			self.filled_up_to = None;
-			return self.next()
+			return self.next();
 		}
 
 		let result = self.buffer[self.position];
@@ -452,7 +452,7 @@ impl Headers {
 		let raw = name.as_bytes();
 		for &(ref key, ref val) in &self.raw {
 			if &**key == raw {
-				return str::from_utf8(val).ok()
+				return str::from_utf8(val).ok();
 			}
 		}
 		None

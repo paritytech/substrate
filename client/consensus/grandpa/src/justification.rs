@@ -98,7 +98,7 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 			let mut current_hash = signed.precommit.target_hash;
 			loop {
 				if current_hash == base_hash {
-					break
+					break;
 				}
 
 				match client.header(current_hash)? {
@@ -107,7 +107,7 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 						// as base and only traverse backwards from the other blocks
 						// in the commit. but better be safe to avoid an unbound loop.
 						if *current_header.number() <= base_number {
-							return error()
+							return error();
 						}
 
 						let parent_hash = *current_header.parent_hash();
@@ -180,7 +180,7 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 			Ok(ref result) if result.is_valid() => {},
 			_ => {
 				let msg = "invalid commit in grandpa justification".to_string();
-				return Err(ClientError::BadJustification(msg))
+				return Err(ClientError::BadJustification(msg));
 			},
 		}
 
@@ -215,11 +215,11 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 			) {
 				return Err(ClientError::BadJustification(
 					"invalid signature for precommit in grandpa justification".to_string(),
-				))
+				));
 			}
 
 			if base_hash == signed.precommit.target_hash {
-				continue
+				continue;
 			}
 
 			match ancestry_chain.ancestry(base_hash, signed.precommit.target_hash) {
@@ -231,10 +231,11 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 						visited_hashes.insert(hash);
 					}
 				},
-				_ =>
+				_ => {
 					return Err(ClientError::BadJustification(
 						"invalid precommit ancestry proof in grandpa justification".to_string(),
-					)),
+					))
+				},
 			}
 		}
 
@@ -249,7 +250,7 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 			return Err(ClientError::BadJustification(
 				"invalid precommit ancestries in grandpa justification with unused headers"
 					.to_string(),
-			))
+			));
 		}
 
 		Ok(())
@@ -290,7 +291,7 @@ where
 		let mut current_hash = block;
 		loop {
 			if current_hash == base {
-				break
+				break;
 			}
 			match self.ancestry.get(&current_hash) {
 				Some(current_header) => {

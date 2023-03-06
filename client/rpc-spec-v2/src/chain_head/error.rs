@@ -58,8 +58,9 @@ impl From<Error> for ErrorObject<'static> {
 
 		match e {
 			Error::InvalidBlock => ErrorObject::owned(INVALID_BLOCK_ERROR, msg, None::<()>),
-			Error::FetchBlockHeader(_) =>
-				ErrorObject::owned(FETCH_BLOCK_HEADER_ERROR, msg, None::<()>),
+			Error::FetchBlockHeader(_) => {
+				ErrorObject::owned(FETCH_BLOCK_HEADER_ERROR, msg, None::<()>)
+			},
 			Error::InvalidParam(_) => ErrorObject::owned(INVALID_PARAM_ERROR, msg, None::<()>),
 			Error::InvalidSubscriptionID => ErrorObject::owned(INVALID_SUB_ID, msg, None::<()>),
 		}

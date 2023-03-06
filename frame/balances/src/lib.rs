@@ -1061,11 +1061,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 		Ok(actual)
 	}
+
+	/// Check invariants are consistent within the pallet.
+	/// - `total_issuance` should be less than `Config::Balance::max_value()`.
 	#[cfg(any(test, feature = "try-runtime", feature = "fuzz"))]
 	pub fn do_try_state() -> Result<(), &'static str> {
-		let total_issuance: Balance = Self::total_issuance();
-		let max_balance_value: Balance = Self::Balance::max_value();
-		// Total issuance should be less than max balance value.
+		let total_issuance: T::Balance = TotalIssuance::<T, I>::get();
+		let max_balance_value: T::Balance = T::Balance::max_value();
+
 		assert!(total_issuance < max_balance_value, "Total issuance exceeds max balance value.");
 
 		Ok(())

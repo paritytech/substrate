@@ -50,8 +50,9 @@ where
 	) -> Result<(), TransactionValidityError> {
 		let max = T::BlockWeights::get().get(info.class).max_extrinsic;
 		match max {
-			Some(max) if info.weight.any_gt(max) =>
-				Err(InvalidTransaction::ExhaustsResources.into()),
+			Some(max) if info.weight.any_gt(max) => {
+				Err(InvalidTransaction::ExhaustsResources.into())
+			},
 			_ => Ok(()),
 		}
 	}
@@ -146,8 +147,9 @@ where
 
 	// Check if we don't exceed per-class allowance
 	match limit_per_class.max_total {
-		Some(max) if per_class.any_gt(max) =>
-			return Err(InvalidTransaction::ExhaustsResources.into()),
+		Some(max) if per_class.any_gt(max) => {
+			return Err(InvalidTransaction::ExhaustsResources.into())
+		},
 		// There is no `max_total` limit (`None`),
 		// or we are below the limit.
 		_ => {},
@@ -158,8 +160,9 @@ where
 	if all_weight.total().any_gt(maximum_weight.max_block) {
 		match limit_per_class.reserved {
 			// We are over the limit in reserved pool.
-			Some(reserved) if per_class.any_gt(reserved) =>
-				return Err(InvalidTransaction::ExhaustsResources.into()),
+			Some(reserved) if per_class.any_gt(reserved) => {
+				return Err(InvalidTransaction::ExhaustsResources.into())
+			},
 			// There is either no limit in reserved pool (`None`),
 			// or we are below the limit.
 			_ => {},
@@ -307,8 +310,8 @@ mod tests {
 	fn normal_extrinsic_limited_by_maximum_extrinsic_weight() {
 		new_test_ext().execute_with(|| {
 			let max = DispatchInfo {
-				weight: block_weights().get(DispatchClass::Normal).max_extrinsic.unwrap() +
-					Weight::from_parts(1, 0),
+				weight: block_weights().get(DispatchClass::Normal).max_extrinsic.unwrap()
+					+ Weight::from_parts(1, 0),
 				class: DispatchClass::Normal,
 				..Default::default()
 			};
@@ -598,9 +601,9 @@ mod tests {
 			let pre = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &info, len).unwrap();
 			assert_eq!(
 				BlockWeight::<Test>::get().total(),
-				info.weight +
-					Weight::from_parts(128, 0) +
-					block_weights().get(DispatchClass::Normal).base_extrinsic,
+				info.weight
+					+ Weight::from_parts(128, 0)
+					+ block_weights().get(DispatchClass::Normal).base_extrinsic,
 			);
 
 			assert_ok!(CheckWeight::<Test>::post_dispatch(
@@ -612,9 +615,9 @@ mod tests {
 			));
 			assert_eq!(
 				BlockWeight::<Test>::get().total(),
-				info.weight +
-					Weight::from_parts(128, 0) +
-					block_weights().get(DispatchClass::Normal).base_extrinsic,
+				info.weight
+					+ Weight::from_parts(128, 0)
+					+ block_weights().get(DispatchClass::Normal).base_extrinsic,
 			);
 		})
 	}

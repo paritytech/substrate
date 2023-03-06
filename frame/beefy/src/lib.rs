@@ -332,11 +332,11 @@ impl<T: Config> Pallet<T> {
 
 	fn initialize(authorities: &Vec<T::BeefyId>) -> Result<(), ()> {
 		if authorities.is_empty() {
-			return Ok(())
+			return Ok(());
 		}
 
 		if !<Authorities<T>>::get().is_empty() {
-			return Err(())
+			return Err(());
 		}
 
 		let bounded_authorities =
@@ -397,7 +397,7 @@ impl<T: Config> Pallet<T> {
 
 		// validate equivocation proof (check votes are different and signatures are valid).
 		if !sp_consensus_beefy::check_equivocation_proof(&equivocation_proof) {
-			return Err(Error::<T>::InvalidEquivocationProof.into())
+			return Err(Error::<T>::InvalidEquivocationProof.into());
 		}
 
 		// check that the session id for the membership proof is within the
@@ -405,7 +405,7 @@ impl<T: Config> Pallet<T> {
 		let set_id_session_index =
 			Self::session_for_set(set_id).ok_or(Error::<T>::InvalidEquivocationProof)?;
 		if session_index != set_id_session_index {
-			return Err(Error::<T>::InvalidEquivocationProof.into())
+			return Err(Error::<T>::InvalidEquivocationProof.into());
 		}
 
 		// report to the offences module rewarding the sender.

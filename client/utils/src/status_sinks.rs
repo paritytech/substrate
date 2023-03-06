@@ -151,7 +151,7 @@ impl<'a, T> Drop for ReadySinkEvent<'a, T> {
 	fn drop(&mut self) {
 		if let Some(sender) = self.sender.take() {
 			if sender.is_closed() {
-				return
+				return;
 			}
 
 			let _ = self.sinks.entries_tx.unbounded_send(YieldAfter {

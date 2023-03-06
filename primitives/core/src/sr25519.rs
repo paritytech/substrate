@@ -145,7 +145,7 @@ impl TryFrom<&[u8]> for Public {
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
 		if data.len() != Self::LEN {
-			return Err(())
+			return Err(());
 		}
 		let mut r = [0u8; 32];
 		r.copy_from_slice(data);
@@ -341,7 +341,7 @@ impl Signature {
 	/// you are certain that the array actually is a signature. GIGO!
 	pub fn from_slice(data: &[u8]) -> Option<Self> {
 		if data.len() != 64 {
-			return None
+			return None;
 		}
 		let mut r = [0u8; 64];
 		r.copy_from_slice(data);

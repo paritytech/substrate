@@ -97,7 +97,7 @@ pub fn group_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
 					Error::new(Span::call_site(), &format!("Could not find `serde` crate: {}", e))
 						.to_compile_error();
 
-				return quote!( #err )
+				return quote!( #err );
 			},
 		};
 
@@ -176,7 +176,7 @@ pub fn derive(
 		Ok(FoundCrate::Name(chain_spec_name)) => chain_spec_name,
 		Err(e) => {
 			let err = Error::new(Span::call_site(), &e).to_compile_error();
-			return quote!( #err ).into()
+			return quote!( #err ).into();
 		},
 	};
 	let crate_name = Ident::new(&crate_name, Span::call_site());

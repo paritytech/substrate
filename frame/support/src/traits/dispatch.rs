@@ -128,7 +128,7 @@ where
 
 		// If this is the expected origin, it has the same privilege.
 		if o == expected_origin {
-			return Ok(())
+			return Ok(());
 		}
 
 		let cmp = PrivilegeCmp::cmp_privilege(&o, &expected_origin);

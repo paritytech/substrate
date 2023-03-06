@@ -525,13 +525,13 @@ impl ConnectionHandler for NotifsHandler {
 						// in mind that it is invalid for the remote to open multiple such
 						// substreams, and therefore sending a "RST" is the most correct thing
 						// to do.
-						return
+						return;
 					},
-					State::Opening { ref mut in_substream, .. } |
-					State::Open { ref mut in_substream, .. } => {
+					State::Opening { ref mut in_substream, .. }
+					| State::Open { ref mut in_substream, .. } => {
 						if in_substream.is_some() {
 							// Same remark as above.
-							return
+							return;
 						}
 
 						// Create `handshake_message` on a separate line to be sure that the
@@ -546,8 +546,8 @@ impl ConnectionHandler for NotifsHandler {
 				let (new_open, protocol_index) = (outbound.protocol, outbound.info);
 
 				match self.protocols[protocol_index].state {
-					State::Closed { ref mut pending_opening } |
-					State::OpenDesiredByRemote { ref mut pending_opening, .. } => {
+					State::Closed { ref mut pending_opening }
+					| State::OpenDesiredByRemote { ref mut pending_opening, .. } => {
 						debug_assert!(*pending_opening);
 						*pending_opening = false;
 					},
@@ -590,8 +590,8 @@ impl ConnectionHandler for NotifsHandler {
 				[dial_upgrade_error.info]
 				.state
 			{
-				State::Closed { ref mut pending_opening } |
-				State::OpenDesiredByRemote { ref mut pending_opening, .. } => {
+				State::Closed { ref mut pending_opening }
+				| State::OpenDesiredByRemote { ref mut pending_opening, .. } => {
 					debug_assert!(*pending_opening);
 					*pending_opening = false;
 				},
@@ -706,7 +706,7 @@ impl ConnectionHandler for NotifsHandler {
 	fn connection_keep_alive(&self) -> KeepAlive {
 		// `Yes` if any protocol has some activity.
 		if self.protocols.iter().any(|p| !matches!(p.state, State::Closed { .. })) {
-			return KeepAlive::Yes
+			return KeepAlive::Yes;
 		}
 
 		// A grace period of `INITIAL_KEEPALIVE_TIME` must be given to leave time for the remote
@@ -726,7 +726,7 @@ impl ConnectionHandler for NotifsHandler {
 		>,
 	> {
 		if let Some(ev) = self.events_queue.pop_front() {
-			return Poll::Ready(ev)
+			return Poll::Ready(ev);
 		}
 
 		// For each open substream, try send messages from `notifications_sink_rx` to the
@@ -741,10 +741,11 @@ impl ConnectionHandler for NotifsHandler {
 					// available in `notifications_sink_rx`. This avoids waking up the task when
 					// a substream is ready to send if there isn't actually something to send.
 					match Pin::new(&mut *notifications_sink_rx).as_mut().poll_peek(cx) {
-						Poll::Ready(Some(&NotificationsSinkMessage::ForceClose)) =>
+						Poll::Ready(Some(&NotificationsSinkMessage::ForceClose)) => {
 							return Poll::Ready(ConnectionHandlerEvent::Close(
 								NotifsHandlerError::SyncNotificationsClogged,
-							)),
+							))
+						},
 						Poll::Ready(Some(&NotificationsSinkMessage::Notification { .. })) => {},
 						Poll::Ready(None) | Poll::Pending => break,
 					}
@@ -758,14 +759,15 @@ impl ConnectionHandler for NotifsHandler {
 
 					// Now that the substream is ready for a message, grab what to send.
 					let message = match notifications_sink_rx.poll_next_unpin(cx) {
-						Poll::Ready(Some(NotificationsSinkMessage::Notification { message })) =>
-							message,
-						Poll::Ready(Some(NotificationsSinkMessage::ForceClose)) |
-						Poll::Ready(None) |
-						Poll::Pending => {
+						Poll::Ready(Some(NotificationsSinkMessage::Notification { message })) => {
+							message
+						},
+						Poll::Ready(Some(NotificationsSinkMessage::ForceClose))
+						| Poll::Ready(None)
+						| Poll::Pending => {
 							// Should never be reached, as per `poll_peek` above.
 							debug_assert!(false);
-							break
+							break;
 						},
 					};
 
@@ -790,15 +792,15 @@ impl ConnectionHandler for NotifsHandler {
 						Poll::Ready(Err(_)) => {
 							*out_substream = None;
 							let event = NotifsHandlerOut::CloseDesired { protocol_index };
-							return Poll::Ready(ConnectionHandlerEvent::Custom(event))
+							return Poll::Ready(ConnectionHandlerEvent::Custom(event));
 						},
 					};
 				},
 
-				State::Closed { .. } |
-				State::Opening { .. } |
-				State::Open { out_substream: None, .. } |
-				State::OpenDesiredByRemote { .. } => {},
+				State::Closed { .. }
+				| State::Opening { .. }
+				| State::Open { out_substream: None, .. }
+				| State::OpenDesiredByRemote { .. } => {},
 			}
 		}
 
@@ -807,21 +809,22 @@ impl ConnectionHandler for NotifsHandler {
 			// Inbound substreams being closed is always tolerated, except for the
 			// `OpenDesiredByRemote` state which might need to be switched back to `Closed`.
 			match &mut self.protocols[protocol_index].state {
-				State::Closed { .. } |
-				State::Open { in_substream: None, .. } |
-				State::Opening { in_substream: None } => {},
+				State::Closed { .. }
+				| State::Open { in_substream: None, .. }
+				| State::Opening { in_substream: None } => {},
 
-				State::Open { in_substream: in_substream @ Some(_), .. } =>
+				State::Open { in_substream: in_substream @ Some(_), .. } => {
 					match Stream::poll_next(Pin::new(in_substream.as_mut().unwrap()), cx) {
 						Poll::Pending => {},
 						Poll::Ready(Some(Ok(message))) => {
 							let event = NotifsHandlerOut::Notification { protocol_index, message };
-							return Poll::Ready(ConnectionHandlerEvent::Custom(event))
+							return Poll::Ready(ConnectionHandlerEvent::Custom(event));
 						},
 						Poll::Ready(None) | Poll::Ready(Some(Err(_))) => *in_substream = None,
-					},
+					}
+				},
 
-				State::OpenDesiredByRemote { in_substream, pending_opening } =>
+				State::OpenDesiredByRemote { in_substream, pending_opening } => {
 					match NotificationsInSubstream::poll_process(Pin::new(in_substream), cx) {
 						Poll::Pending => {},
 						Poll::Ready(Ok(void)) => match void {},
@@ -830,11 +833,12 @@ impl ConnectionHandler for NotifsHandler {
 								State::Closed { pending_opening: *pending_opening };
 							return Poll::Ready(ConnectionHandlerEvent::Custom(
 								NotifsHandlerOut::CloseDesired { protocol_index },
-							))
+							));
 						},
-					},
+					}
+				},
 
-				State::Opening { in_substream: in_substream @ Some(_), .. } =>
+				State::Opening { in_substream: in_substream @ Some(_), .. } => {
 					match NotificationsInSubstream::poll_process(
 						Pin::new(in_substream.as_mut().unwrap()),
 						cx,
@@ -842,7 +846,8 @@ impl ConnectionHandler for NotifsHandler {
 						Poll::Pending => {},
 						Poll::Ready(Ok(void)) => match void {},
 						Poll::Ready(Err(_)) => *in_substream = None,
-					},
+					}
+				},
 			}
 		}
 
@@ -938,15 +943,17 @@ pub mod tests {
 			let substream = if let Some(info) = self.connections.get_mut(&(peer, set)) {
 				info
 			} else {
-				return None
+				return None;
 			};
 
 			futures::future::poll_fn(|cx| match substream.notifications.poll_next_unpin(cx) {
-				Poll::Ready(Some(NotificationsSinkMessage::Notification { message })) =>
-					Poll::Ready(Some(message)),
+				Poll::Ready(Some(NotificationsSinkMessage::Notification { message })) => {
+					Poll::Ready(Some(message))
+				},
 				Poll::Pending => Poll::Ready(None),
-				Poll::Ready(Some(NotificationsSinkMessage::ForceClose)) | Poll::Ready(None) =>
-					panic!("sink closed"),
+				Poll::Ready(Some(NotificationsSinkMessage::ForceClose)) | Poll::Ready(None) => {
+					panic!("sink closed")
+				},
 			})
 			.await
 		}
@@ -1023,8 +1030,9 @@ pub mod tests {
 		) -> Poll<Result<usize, Error>> {
 			match self.rx.poll_recv(cx) {
 				Poll::Ready(Some(data)) => self.rx_buffer.extend_from_slice(&data),
-				Poll::Ready(None) =>
-					return Poll::Ready(Err(std::io::ErrorKind::UnexpectedEof.into())),
+				Poll::Ready(None) => {
+					return Poll::Ready(Err(std::io::ErrorKind::UnexpectedEof.into()))
+				},
 				_ => {},
 			}
 
@@ -1033,7 +1041,7 @@ pub mod tests {
 			buf[..nsize].copy_from_slice(&data[..]);
 
 			if nsize > 0 {
-				return Poll::Ready(Ok(nsize))
+				return Poll::Ready(Ok(nsize));
 			}
 
 			Poll::Pending

@@ -56,8 +56,8 @@ fn count_migrate<'a, H: Hasher>(
 			NodePlan::Leaf { value, .. } | NodePlan::NibbledBranch { value: Some(value), .. } => {
 				total_nb += 1;
 				if let ValuePlan::Inline(range) = value {
-					if (range.end - range.start) as u32 >=
-						sp_core::storage::TRIE_VALUE_NODE_THRESHOLD
+					if (range.end - range.start) as u32
+						>= sp_core::storage::TRIE_VALUE_NODE_THRESHOLD
 					{
 						nb += 1;
 					}

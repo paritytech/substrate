@@ -81,7 +81,7 @@ pub fn derive_impl(input: DeriveInput) -> Result<TokenStream> {
 /// enum or a variant is not an unit.
 fn get_enum_field_idents(data: &Data) -> Result<impl Iterator<Item = Result<&Ident>>> {
 	match data {
-		Data::Enum(d) =>
+		Data::Enum(d) => {
 			if d.variants.len() <= 256 {
 				Ok(d.variants.iter().map(|v| {
 					if let Fields::Unit = v.fields {
@@ -95,7 +95,8 @@ fn get_enum_field_idents(data: &Data) -> Result<impl Iterator<Item = Result<&Ide
 				}))
 			} else {
 				Err(Error::new(Span::call_site(), "`PassByEnum` only supports `256` variants."))
-			},
+			}
+		},
 		_ => Err(Error::new(Span::call_site(), "`PassByEnum` only supports enums as input type.")),
 	}
 }

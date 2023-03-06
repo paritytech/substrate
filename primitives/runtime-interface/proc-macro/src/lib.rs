@@ -66,7 +66,7 @@ impl Parse for Options {
 			} else if lookahead.peek(Token![,]) {
 				let _ = input.parse::<Token![,]>();
 			} else {
-				return Err(lookahead.error())
+				return Err(lookahead.error());
 			}
 		}
 		Ok(res)

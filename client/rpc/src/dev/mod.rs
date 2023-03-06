@@ -77,7 +77,7 @@ where
 				header.digest_mut().logs.retain(|item| !matches!(item, DigestItem::Seal(_, _)));
 				Block::new(header, body)
 			} else {
-				return Ok(None)
+				return Ok(None);
 			}
 		};
 		let parent_header = {
@@ -89,7 +89,7 @@ where
 			if let Some(header) = parent_header {
 				header
 			} else {
-				return Ok(None)
+				return Ok(None);
 			}
 		};
 		let block_len = block.encoded_size() as u64;

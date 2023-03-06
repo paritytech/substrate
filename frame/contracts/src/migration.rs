@@ -420,7 +420,7 @@ mod post_checks {
 
 	pub fn post_upgrade<T: Config>(old_version: StorageVersion) -> Result<(), &'static str> {
 		if old_version < 7 {
-			return Ok(())
+			return Ok(());
 		}
 
 		if old_version < 8 {

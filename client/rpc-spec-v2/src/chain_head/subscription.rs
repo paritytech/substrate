@@ -95,9 +95,9 @@ impl<Block: BlockT> SubscriptionHandle<Block> {
 		if inner.blocks.len() == inner.max_pinned_blocks {
 			// We have reached the limit. However, the block can be already inserted.
 			if inner.blocks.contains(&hash) {
-				return Ok(false)
+				return Ok(false);
 			} else {
-				return Err(SubscriptionManagementError::ExceededLimits)
+				return Err(SubscriptionManagementError::ExceededLimits);
 			}
 		}
 

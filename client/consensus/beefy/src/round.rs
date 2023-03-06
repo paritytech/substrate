@@ -39,7 +39,7 @@ pub(crate) struct RoundTracker {
 impl RoundTracker {
 	fn add_vote(&mut self, vote: (Public, Signature)) -> bool {
 		if self.votes.contains_key(&vote.0) {
-			return false
+			return false;
 		}
 
 		self.votes.insert(vote.0, vote.1);
@@ -124,7 +124,7 @@ where
 
 		if num < self.session_start || Some(num) <= self.best_done {
 			debug!(target: LOG_TARGET, "🥩 received vote for old stale round {:?}, ignoring", num);
-			return VoteImportResult::Stale
+			return VoteImportResult::Stale;
 		} else if vote.commitment.validator_set_id != self.validator_set_id() {
 			debug!(
 				target: LOG_TARGET,
@@ -132,14 +132,14 @@ where
 				self.validator_set_id(),
 				vote,
 			);
-			return VoteImportResult::Invalid
+			return VoteImportResult::Invalid;
 		} else if !self.validators().iter().any(|id| &vote.id == id) {
 			debug!(
 				target: LOG_TARGET,
 				"🥩 received vote {:?} from validator that is not in the validator set, ignoring",
 				vote
 			);
-			return VoteImportResult::Invalid
+			return VoteImportResult::Invalid;
 		}
 
 		if let Some(previous_vote) = self.previous_votes.get(&vote_key) {
@@ -152,7 +152,7 @@ where
 				return VoteImportResult::Equivocation(EquivocationProof {
 					first: previous_vote.clone(),
 					second: vote,
-				})
+				});
 			}
 		} else {
 			// this is the first vote sent by `id` for `num`, all good
@@ -161,11 +161,11 @@ where
 
 		// add valid vote
 		let round = self.rounds.entry(vote.commitment.clone()).or_default();
-		if round.add_vote((vote.id, vote.signature)) &&
-			round.is_done(threshold(self.validator_set.len()))
+		if round.add_vote((vote.id, vote.signature))
+			&& round.is_done(threshold(self.validator_set.len()))
 		{
 			if let Some(round) = self.rounds.remove_entry(&vote.commitment) {
-				return VoteImportResult::RoundConcluded(self.signed_commitment(round))
+				return VoteImportResult::RoundConcluded(self.signed_commitment(round));
 			}
 		}
 		VoteImportResult::Ok

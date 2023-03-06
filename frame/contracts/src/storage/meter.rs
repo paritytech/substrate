@@ -155,7 +155,7 @@ impl Diff {
 		} else {
 			debug_assert_eq!(self.bytes_removed, 0);
 			debug_assert_eq!(self.items_removed, 0);
-			return bytes_deposit.saturating_add(&items_deposit)
+			return bytes_deposit.saturating_add(&items_deposit);
 		};
 
 		// Refunds are calculated pro rata based on the accumulated storage within the contract
@@ -178,16 +178,20 @@ impl Diff {
 		info.storage_items =
 			info.storage_items.saturating_add(items_added).saturating_sub(items_removed);
 		match &bytes_deposit {
-			Deposit::Charge(amount) =>
-				info.storage_byte_deposit = info.storage_byte_deposit.saturating_add(*amount),
-			Deposit::Refund(amount) =>
-				info.storage_byte_deposit = info.storage_byte_deposit.saturating_sub(*amount),
+			Deposit::Charge(amount) => {
+				info.storage_byte_deposit = info.storage_byte_deposit.saturating_add(*amount)
+			},
+			Deposit::Refund(amount) => {
+				info.storage_byte_deposit = info.storage_byte_deposit.saturating_sub(*amount)
+			},
 		}
 		match &items_deposit {
-			Deposit::Charge(amount) =>
-				info.storage_item_deposit = info.storage_item_deposit.saturating_add(*amount),
-			Deposit::Refund(amount) =>
-				info.storage_item_deposit = info.storage_item_deposit.saturating_sub(*amount),
+			Deposit::Charge(amount) => {
+				info.storage_item_deposit = info.storage_item_deposit.saturating_add(*amount)
+			},
+			Deposit::Refund(amount) => {
+				info.storage_item_deposit = info.storage_item_deposit.saturating_sub(*amount)
+			},
 		}
 
 		bytes_deposit.saturating_add(&items_deposit)
@@ -386,7 +390,7 @@ where
 		// We also add another `ed` here which goes to the contract's own account into existence.
 		deposit = deposit.max(Deposit::Charge(ed)).saturating_add(&Deposit::Charge(ed));
 		if deposit.charge_or_zero() > self.limit {
-			return Err(<Error<T>>::StorageDepositLimitExhausted.into())
+			return Err(<Error<T>>::StorageDepositLimitExhausted.into());
 		}
 
 		// We do not increase `own_contribution` because this will be charged later when the
@@ -440,7 +444,7 @@ where
 		}
 		if let Deposit::Charge(amount) = total_deposit {
 			if amount > self.limit {
-				return Err(<Error<T>>::StorageDepositLimitExhausted.into())
+				return Err(<Error<T>>::StorageDepositLimitExhausted.into());
 			}
 		}
 		Ok(())
@@ -461,8 +465,8 @@ impl<T: Config> Ext<T> for ReservingExt {
 			.saturating_sub(Pallet::<T>::min_balance());
 		let limit = limit.unwrap_or(max);
 		ensure!(
-			limit <= max &&
-				matches!(T::Currency::can_withdraw(origin, limit), WithdrawConsequence::Success),
+			limit <= max
+				&& matches!(T::Currency::can_withdraw(origin, limit), WithdrawConsequence::Success),
 			<Error<T>>::StorageDepositNotEnoughFunds,
 		);
 		Ok(limit)

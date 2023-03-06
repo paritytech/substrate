@@ -148,8 +148,9 @@ mod inner {
 				UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[self.name, "send"]).inc();
 
 				let queue_size = self.queue_size.fetch_add(1, Ordering::Relaxed);
-				if queue_size == self.queue_size_warning &&
-					self.warning_fired
+				if queue_size == self.queue_size_warning
+					&& self
+						.warning_fired
 						.compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
 						.is_ok()
 				{
@@ -181,7 +182,7 @@ mod inner {
 			let mut count = 0;
 			loop {
 				if self.inner.is_terminated() {
-					break
+					break;
 				}
 
 				match self.try_next() {

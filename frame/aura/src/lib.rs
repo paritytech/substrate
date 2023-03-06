@@ -159,7 +159,7 @@ impl<T: Config> Pallet<T> {
 		if new.is_empty() {
 			log::warn!(target: LOG_TARGET, "Ignoring empty authority change.");
 
-			return
+			return;
 		}
 
 		<Authorities<T>>::put(&new);
@@ -191,7 +191,7 @@ impl<T: Config> Pallet<T> {
 		let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
 		for (id, mut data) in pre_runtime_digests {
 			if id == AURA_ENGINE_ID {
-				return Slot::decode(&mut data).ok()
+				return Slot::decode(&mut data).ok();
 			}
 		}
 
@@ -262,7 +262,7 @@ impl<T: Config> FindAuthor<u32> for Pallet<T> {
 			if id == AURA_ENGINE_ID {
 				let slot = Slot::decode(&mut data).ok()?;
 				let author_index = *slot % Self::authorities().len() as u64;
-				return Some(author_index as u32)
+				return Some(author_index as u32);
 			}
 		}
 

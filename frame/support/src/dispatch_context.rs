@@ -123,7 +123,7 @@ impl<T> Value<'_, T> {
 		T: Default,
 	{
 		if let Some(v) = &mut self.value {
-			return v
+			return v;
 		}
 
 		self.new_value.get_or_insert_with(|| Default::default())

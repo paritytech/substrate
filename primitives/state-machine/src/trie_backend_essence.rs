@@ -112,7 +112,7 @@ where
 		) -> Option<core::result::Result<R, Box<TrieError<<H as Hasher>::Out>>>>,
 	) -> Option<Result<R>> {
 		if !matches!(self.state, IterState::Pending) {
-			return None
+			return None;
 		}
 
 		let result = backend.with_trie_db(self.root, self.child_info.as_ref(), |db| {
@@ -126,8 +126,8 @@ where
 			},
 			Some(Err(error)) => {
 				self.state = IterState::FinishedIncomplete;
-				if matches!(*error, TrieError::IncompleteDatabase(_)) &&
-					self.stop_on_incomplete_database
+				if matches!(*error, TrieError::IncompleteDatabase(_))
+					&& self.stop_on_incomplete_database
 				{
 					None
 				} else {
@@ -431,7 +431,7 @@ where
 		#[cfg(feature = "std")]
 		{
 			if let Some(result) = self.cache.read().child_root.get(child_info.storage_key()) {
-				return Ok(*result)
+				return Ok(*result);
 			}
 		}
 
@@ -587,7 +587,7 @@ where
 
 		if self.root == Default::default() {
 			// A special-case for an empty storage root.
-			return Ok(Default::default())
+			return Ok(Default::default());
 		}
 
 		let trie_iter = self
@@ -672,7 +672,7 @@ where
 			self.with_recorder_and_cache_for_storage_root(Some(child_root), |recorder, cache| {
 				let mut eph = Ephemeral::new(self.backend_storage(), &mut write_overlay);
 				match match state_version {
-					StateVersion::V0 =>
+					StateVersion::V0 => {
 						child_delta_trie_root::<sp_trie::LayoutV0<H>, _, _, _, _, _, _>(
 							child_info.keyspace(),
 							&mut eph,
@@ -680,8 +680,9 @@ where
 							delta,
 							recorder,
 							cache,
-						),
-					StateVersion::V1 =>
+						)
+					},
+					StateVersion::V1 => {
 						child_delta_trie_root::<sp_trie::LayoutV1<H>, _, _, _, _, _, _>(
 							child_info.keyspace(),
 							&mut eph,
@@ -689,7 +690,8 @@ where
 							delta,
 							recorder,
 							cache,
-						),
+						)
+					},
 				} {
 					Ok(ret) => (Some(ret), ret),
 					Err(e) => {
@@ -821,7 +823,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H> + Send + Sync> 
 {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
 		if *key == self.empty {
-			return Some([0u8].to_vec())
+			return Some([0u8].to_vec());
 		}
 		match self.storage.get(key, prefix) {
 			Ok(x) => x,

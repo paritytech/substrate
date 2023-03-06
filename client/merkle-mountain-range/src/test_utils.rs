@@ -89,8 +89,9 @@ impl MmrBlock {
 				node,
 				self.parent_hash(),
 			),
-			OffchainKeyType::Canon =>
-				NodesUtils::node_canon_offchain_key(MockRuntimeApi::INDEXING_PREFIX, node),
+			OffchainKeyType::Canon => {
+				NodesUtils::node_canon_offchain_key(MockRuntimeApi::INDEXING_PREFIX, node)
+			},
 		}
 	}
 }

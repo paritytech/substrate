@@ -187,12 +187,14 @@ impl fmt::Debug for StateDbError {
 				"Incompatible pruning modes [stored: {:?}; requested: {:?}]",
 				stored, requested
 			),
-			Self::TooManySiblingBlocks { number } =>
-				write!(f, "Too many sibling blocks at #{number} inserted"),
+			Self::TooManySiblingBlocks { number } => {
+				write!(f, "Too many sibling blocks at #{number} inserted")
+			},
 			Self::BlockAlreadyExists => write!(f, "Block already exists"),
 			Self::Metadata(message) => write!(f, "Invalid metadata: {}", message),
-			Self::BlockUnavailable =>
-				write!(f, "Trying to get a block record from db while it is not commit to db yet"),
+			Self::BlockUnavailable => {
+				write!(f, "Trying to get a block record from db while it is not commit to db yet")
+			},
 			Self::BlockMissing => write!(f, "Block record is missing from the pruning window"),
 		}
 	}
@@ -315,8 +317,9 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDbSync<BlockHash, Key, D> {
 
 		let non_canonical: NonCanonicalOverlay<BlockHash, Key> = NonCanonicalOverlay::new(&db)?;
 		let pruning: Option<RefWindow<BlockHash, Key, D>> = match mode {
-			PruningMode::Constrained(Constraints { max_blocks }) =>
-				Some(RefWindow::new(db, max_blocks.unwrap_or(0), ref_counting)?),
+			PruningMode::Constrained(Constraints { max_blocks }) => {
+				Some(RefWindow::new(db, max_blocks.unwrap_or(0), ref_counting)?)
+			},
 			PruningMode::ArchiveAll | PruningMode::ArchiveCanonical => None,
 		};
 
@@ -350,7 +353,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDbSync<BlockHash, Key, D> {
 		// the database atomically to keep their consistency when restarting the node
 		let mut commit = CommitSet::default();
 		if self.mode == PruningMode::ArchiveAll {
-			return Ok(commit)
+			return Ok(commit);
 		}
 		let number = self.non_canonical.canonicalize(hash, &mut commit)?;
 		if self.mode == PruningMode::ArchiveCanonical {
@@ -411,17 +414,18 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDbSync<BlockHash, Key, D> {
 		{
 			loop {
 				if pruning.window_size() <= constraints.max_blocks.unwrap_or(0) as u64 {
-					break
+					break;
 				}
 
 				let pinned = &self.pinned;
 				match pruning.next_hash() {
 					// the block record is temporary unavailable, break and try next time
 					Err(Error::StateDb(StateDbError::BlockUnavailable)) => break,
-					res =>
+					res => {
 						if res?.map_or(false, |h| pinned.contains_key(&h)) {
-							break
-						},
+							break;
+						}
+					},
 				}
 				match pruning.prune_one(commit) {
 					// this branch should not reach as previous `next_hash` don't return error
@@ -440,16 +444,18 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDbSync<BlockHash, Key, D> {
 	fn revert_one(&mut self) -> Option<CommitSet<Key>> {
 		match self.mode {
 			PruningMode::ArchiveAll => Some(CommitSet::default()),
-			PruningMode::ArchiveCanonical | PruningMode::Constrained(_) =>
-				self.non_canonical.revert_one(),
+			PruningMode::ArchiveCanonical | PruningMode::Constrained(_) => {
+				self.non_canonical.revert_one()
+			},
 		}
 	}
 
 	fn remove(&mut self, hash: &BlockHash) -> Option<CommitSet<Key>> {
 		match self.mode {
 			PruningMode::ArchiveAll => Some(CommitSet::default()),
-			PruningMode::ArchiveCanonical | PruningMode::Constrained(_) =>
-				self.non_canonical.remove(hash),
+			PruningMode::ArchiveCanonical | PruningMode::Constrained(_) => {
+				self.non_canonical.remove(hash)
+			},
 		}
 	}
 
@@ -460,8 +466,8 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDbSync<BlockHash, Key, D> {
 		match self.mode {
 			PruningMode::ArchiveAll => Ok(()),
 			PruningMode::ArchiveCanonical | PruningMode::Constrained(_) => {
-				let have_block = self.non_canonical.have_block(hash) ||
-					self.pruning.as_ref().map_or_else(
+				let have_block = self.non_canonical.have_block(hash)
+					|| self.pruning.as_ref().map_or_else(
 						|| hint(),
 						|pruning| match pruning.have_block(hash, number) {
 							HaveBlock::No => false,
@@ -515,7 +521,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDbSync<BlockHash, Key, D> {
 		Q: std::hash::Hash + Eq,
 	{
 		if let Some(value) = self.non_canonical.get(key) {
-			return Ok(Some(value))
+			return Ok(Some(value));
 		}
 		db.get(key.as_ref()).map_err(Error::Db)
 	}
@@ -543,11 +549,12 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDb<BlockHash, Key, D> {
 				requested_mode.unwrap_or_default()
 			},
 
-			(false, None, _) =>
+			(false, None, _) => {
 				return Err(StateDbError::Metadata(
 					"An existing StateDb does not have PRUNING_MODE stored in its meta-data".into(),
 				)
-				.into()),
+				.into())
+			},
 
 			(false, Some(stored), None) => stored,
 
@@ -692,10 +699,12 @@ fn choose_pruning_mode(
 ) -> Result<PruningMode, StateDbError> {
 	match (stored, requested) {
 		(PruningMode::ArchiveAll, PruningMode::ArchiveAll) => Ok(PruningMode::ArchiveAll),
-		(PruningMode::ArchiveCanonical, PruningMode::ArchiveCanonical) =>
-			Ok(PruningMode::ArchiveCanonical),
-		(PruningMode::Constrained(_), PruningMode::Constrained(requested)) =>
-			Ok(PruningMode::Constrained(requested)),
+		(PruningMode::ArchiveCanonical, PruningMode::ArchiveCanonical) => {
+			Ok(PruningMode::ArchiveCanonical)
+		},
+		(PruningMode::Constrained(_), PruningMode::Constrained(requested)) => {
+			Ok(PruningMode::Constrained(requested))
+		},
 		(stored, requested) => Err(StateDbError::IncompatiblePruningModes { requested, stored }),
 	}
 }

@@ -102,7 +102,7 @@ pub fn full_page<T: Config>() -> (PageOf<T>, usize) {
 	for i in 0..u32::MAX {
 		let r = i.using_encoded(|d| page.try_append_message::<T>(d.try_into().unwrap()));
 		if r.is_err() {
-			break
+			break;
 		} else {
 			msgs += 1;
 		}

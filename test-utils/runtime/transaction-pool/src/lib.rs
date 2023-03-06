@@ -266,13 +266,14 @@ impl sc_transaction_pool::ChainApi for TestApi {
 				if !found_best {
 					return ready(Ok(Err(TransactionValidityError::Invalid(
 						InvalidTransaction::Custom(1),
-					))))
+					))));
 				}
 			},
-			Ok(None) =>
+			Ok(None) => {
 				return ready(Ok(Err(TransactionValidityError::Invalid(
 					InvalidTransaction::Custom(2),
-				)))),
+				))))
+			},
 			Err(e) => return ready(Err(e)),
 		}
 
@@ -288,7 +289,9 @@ impl sc_transaction_pool::ChainApi for TestApi {
 		};
 
 		if self.chain.read().invalid_hashes.contains(&self.hash_and_length(&uxt).0) {
-			return ready(Ok(Err(TransactionValidityError::Invalid(InvalidTransaction::Custom(0)))))
+			return ready(Ok(Err(TransactionValidityError::Invalid(InvalidTransaction::Custom(
+				0,
+			)))));
 		}
 
 		let mut validity =
@@ -304,8 +307,9 @@ impl sc_transaction_pool::ChainApi for TestApi {
 		at: &BlockId<Self::Block>,
 	) -> Result<Option<NumberFor<Self::Block>>, Error> {
 		Ok(match at {
-			generic::BlockId::Hash(x) =>
-				self.chain.read().block_by_hash.get(x).map(|b| *b.header.number()),
+			generic::BlockId::Hash(x) => {
+				self.chain.read().block_by_hash.get(x).map(|b| *b.header.number())
+			},
 			generic::BlockId::Number(num) => Some(*num),
 		})
 	}
@@ -316,10 +320,11 @@ impl sc_transaction_pool::ChainApi for TestApi {
 	) -> Result<Option<<Self::Block as BlockT>::Hash>, Error> {
 		Ok(match at {
 			generic::BlockId::Hash(x) => Some(*x),
-			generic::BlockId::Number(num) =>
+			generic::BlockId::Number(num) => {
 				self.chain.read().block_by_number.get(num).and_then(|blocks| {
 					blocks.iter().find(|b| b.1.is_best()).map(|b| b.0.header().hash())
-				}),
+				})
+			},
 		})
 	}
 

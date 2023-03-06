@@ -163,14 +163,14 @@ impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 		for (function_index, function) in self.host_functions.iter().enumerate() {
 			if name == function.name() {
 				if signature == function.signature() {
-					return Ok(wasmi::FuncInstance::alloc_host(signature.into(), function_index))
+					return Ok(wasmi::FuncInstance::alloc_host(signature.into(), function_index));
 				} else {
 					return Err(wasmi::Error::Instantiation(format!(
 						"Invalid signature for function `{}` expected `{:?}`, got `{:?}`",
 						function.name(),
 						signature,
 						function.signature(),
-					)))
+					)));
 				}
 			}
 		}
@@ -215,9 +215,9 @@ impl wasmi::Externals for FunctionExecutor {
 				.map_err(|msg| Error::FunctionExecution(function.name().to_string(), msg))
 				.map_err(wasmi::Trap::from)
 				.map(|v| v.map(Into::into))
-		} else if self.allow_missing_func_imports &&
-			index >= self.host_functions.len() &&
-			index < self.host_functions.len() + self.missing_functions.len()
+		} else if self.allow_missing_func_imports
+			&& index >= self.host_functions.len()
+			&& index < self.host_functions.len() + self.missing_functions.len()
 		{
 			Err(Error::from(format!(
 				"Function `{}` is only a stub. Calling a stub is not allowed.",

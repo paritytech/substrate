@@ -90,11 +90,11 @@ where
 	pub fn import(&mut self, response: StateResponse) -> ImportResult<B> {
 		if response.entries.is_empty() && response.proof.is_empty() {
 			debug!(target: "sync", "Bad state response");
-			return ImportResult::BadResponse
+			return ImportResult::BadResponse;
 		}
 		if !self.skip_proof && response.proof.is_empty() {
 			debug!(target: "sync", "Missing proof");
-			return ImportResult::BadResponse
+			return ImportResult::BadResponse;
 		}
 		let complete = if !self.skip_proof {
 			debug!(target: "sync", "Importing state from {} trie nodes", response.proof.len());
@@ -103,7 +103,7 @@ where
 				Ok(proof) => proof,
 				Err(e) => {
 					debug!(target: "sync", "Error decoding proof: {:?}", e);
-					return ImportResult::BadResponse
+					return ImportResult::BadResponse;
 				},
 			};
 			let (values, completed) = match self.client.verify_range_proof(
@@ -117,7 +117,7 @@ where
 						"StateResponse failed proof verification: {}",
 						e,
 					);
-					return ImportResult::BadResponse
+					return ImportResult::BadResponse;
 				},
 				Ok(values) => values,
 			};

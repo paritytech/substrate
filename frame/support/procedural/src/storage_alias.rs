@@ -254,8 +254,8 @@ impl StorageType {
 			},
 			Self::CountedMap {
 				value_ty, query_type, hasher_ty, key_ty, prefix_generics, ..
-			} |
-			Self::Map { value_ty, query_type, hasher_ty, key_ty, prefix_generics, .. } => {
+			}
+			| Self::Map { value_ty, query_type, hasher_ty, key_ty, prefix_generics, .. } => {
 				let query_type = query_type.as_ref().map(|(c, t)| quote!(#c #t));
 				let map_type = Ident::new(
 					match self {
@@ -321,22 +321,22 @@ impl StorageType {
 	/// The prefix for this storage type.
 	fn prefix(&self) -> &SimplePath {
 		match self {
-			Self::Value { prefix, .. } |
-			Self::Map { prefix, .. } |
-			Self::CountedMap { prefix, .. } |
-			Self::NMap { prefix, .. } |
-			Self::DoubleMap { prefix, .. } => prefix,
+			Self::Value { prefix, .. }
+			| Self::Map { prefix, .. }
+			| Self::CountedMap { prefix, .. }
+			| Self::NMap { prefix, .. }
+			| Self::DoubleMap { prefix, .. } => prefix,
 		}
 	}
 
 	/// The prefix generics for this storage type.
 	fn prefix_generics(&self) -> Option<&TypeGenerics> {
 		match self {
-			Self::Value { prefix_generics, .. } |
-			Self::Map { prefix_generics, .. } |
-			Self::CountedMap { prefix_generics, .. } |
-			Self::NMap { prefix_generics, .. } |
-			Self::DoubleMap { prefix_generics, .. } => prefix_generics.as_ref(),
+			Self::Value { prefix_generics, .. }
+			| Self::Map { prefix_generics, .. }
+			| Self::CountedMap { prefix_generics, .. }
+			| Self::NMap { prefix_generics, .. }
+			| Self::DoubleMap { prefix_generics, .. } => prefix_generics.as_ref(),
 		}
 	}
 }
@@ -476,7 +476,7 @@ impl Parse for Input {
 		} else if lookahead.peek(Token![=]) {
 			None
 		} else {
-			return Err(lookahead.error())
+			return Err(lookahead.error());
 		};
 
 		let lookahead = input.lookahead1();
@@ -485,7 +485,7 @@ impl Parse for Input {
 		} else if lookahead.peek(Token![=]) {
 			None
 		} else {
-			return Err(lookahead.error())
+			return Err(lookahead.error());
 		};
 
 		let _equal = input.parse()?;
@@ -560,7 +560,7 @@ fn generate_storage_instance(
 	is_counted_map: bool,
 ) -> Result<StorageInstance> {
 	if let Some(ident) = prefix.get_ident().filter(|i| *i == "_") {
-		return Err(Error::new(ident.span(), "`_` is not allowed as prefix by `storage_alias`."))
+		return Err(Error::new(ident.span(), "`_` is not allowed as prefix by `storage_alias`."));
 	}
 
 	let (pallet_prefix, impl_generics, type_generics) =
@@ -588,7 +588,7 @@ fn generate_storage_instance(
 			return Err(Error::new_spanned(
 				prefix,
 				"If there are no generics, the prefix is only allowed to be an identifier.",
-			))
+			));
 		};
 
 	let where_clause = storage_where_clause.map(|w| quote!(#w)).unwrap_or_default();

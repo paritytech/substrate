@@ -293,8 +293,9 @@ impl ChildInfo {
 	/// this trie.
 	pub fn prefixed_storage_key(&self) -> PrefixedStorageKey {
 		match self {
-			ChildInfo::ParentKeyId(ChildTrieParentKeyId { data }) =>
-				ChildType::ParentKeyId.new_prefixed_key(data.as_slice()),
+			ChildInfo::ParentKeyId(ChildTrieParentKeyId { data }) => {
+				ChildType::ParentKeyId.new_prefixed_key(data.as_slice())
+			},
 		}
 	}
 

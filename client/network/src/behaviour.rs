@@ -316,14 +316,17 @@ impl<B: BlockT> From<CustomMessageOutcome<B>> for BehaviourOut {
 				protocol,
 				notifications_sink,
 			} => BehaviourOut::NotificationStreamReplaced { remote, protocol, notifications_sink },
-			CustomMessageOutcome::NotificationStreamClosed { remote, protocol } =>
-				BehaviourOut::NotificationStreamClosed { remote, protocol },
-			CustomMessageOutcome::NotificationsReceived { remote, messages } =>
-				BehaviourOut::NotificationsReceived { remote, messages },
+			CustomMessageOutcome::NotificationStreamClosed { remote, protocol } => {
+				BehaviourOut::NotificationStreamClosed { remote, protocol }
+			},
+			CustomMessageOutcome::NotificationsReceived { remote, messages } => {
+				BehaviourOut::NotificationsReceived { remote, messages }
+			},
 			CustomMessageOutcome::PeerNewBest(_peer_id, _number) => BehaviourOut::None,
 			CustomMessageOutcome::SyncConnected(peer_id) => BehaviourOut::SyncConnected(peer_id),
-			CustomMessageOutcome::SyncDisconnected(peer_id) =>
-				BehaviourOut::SyncDisconnected(peer_id),
+			CustomMessageOutcome::SyncDisconnected(peer_id) => {
+				BehaviourOut::SyncDisconnected(peer_id)
+			},
 			CustomMessageOutcome::None => BehaviourOut::None,
 		}
 	}
@@ -332,12 +335,15 @@ impl<B: BlockT> From<CustomMessageOutcome<B>> for BehaviourOut {
 impl From<request_responses::Event> for BehaviourOut {
 	fn from(event: request_responses::Event) -> Self {
 		match event {
-			request_responses::Event::InboundRequest { peer, protocol, result } =>
-				BehaviourOut::InboundRequest { peer, protocol, result },
-			request_responses::Event::RequestFinished { peer, protocol, duration, result } =>
-				BehaviourOut::RequestFinished { peer, protocol, duration, result },
-			request_responses::Event::ReputationChanges { peer, changes } =>
-				BehaviourOut::ReputationChanges { peer, changes },
+			request_responses::Event::InboundRequest { peer, protocol, result } => {
+				BehaviourOut::InboundRequest { peer, protocol, result }
+			},
+			request_responses::Event::RequestFinished { peer, protocol, duration, result } => {
+				BehaviourOut::RequestFinished { peer, protocol, duration, result }
+			},
+			request_responses::Event::ReputationChanges { peer, changes } => {
+				BehaviourOut::ReputationChanges { peer, changes }
+			},
 		}
 	}
 }
@@ -360,14 +366,18 @@ impl From<DiscoveryOut> for BehaviourOut {
 				BehaviourOut::None
 			},
 			DiscoveryOut::Discovered(peer_id) => BehaviourOut::Discovered(peer_id),
-			DiscoveryOut::ValueFound(results, duration) =>
-				BehaviourOut::Dht(DhtEvent::ValueFound(results), duration),
-			DiscoveryOut::ValueNotFound(key, duration) =>
-				BehaviourOut::Dht(DhtEvent::ValueNotFound(key), duration),
-			DiscoveryOut::ValuePut(key, duration) =>
-				BehaviourOut::Dht(DhtEvent::ValuePut(key), duration),
-			DiscoveryOut::ValuePutFailed(key, duration) =>
-				BehaviourOut::Dht(DhtEvent::ValuePutFailed(key), duration),
+			DiscoveryOut::ValueFound(results, duration) => {
+				BehaviourOut::Dht(DhtEvent::ValueFound(results), duration)
+			},
+			DiscoveryOut::ValueNotFound(key, duration) => {
+				BehaviourOut::Dht(DhtEvent::ValueNotFound(key), duration)
+			},
+			DiscoveryOut::ValuePut(key, duration) => {
+				BehaviourOut::Dht(DhtEvent::ValuePut(key), duration)
+			},
+			DiscoveryOut::ValuePutFailed(key, duration) => {
+				BehaviourOut::Dht(DhtEvent::ValuePutFailed(key), duration)
+			},
 			DiscoveryOut::RandomKademliaStarted => BehaviourOut::RandomKademliaStarted,
 		}
 	}

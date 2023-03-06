@@ -162,8 +162,9 @@ where
 
 		match SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
 			Ok(()) => log::info!(target: LOG_TARGET, "Submitted BABE equivocation report.",),
-			Err(e) =>
-				log::error!(target: LOG_TARGET, "Error submitting equivocation report: {:?}", e,),
+			Err(e) => {
+				log::error!(target: LOG_TARGET, "Error submitting equivocation report: {:?}", e,)
+			},
 		}
 
 		Ok(())
@@ -190,7 +191,7 @@ impl<T: Config> Pallet<T> {
 						"rejecting unsigned report equivocation transaction because it is not local/in-block.",
 					);
 
-					return InvalidTransaction::Call.into()
+					return InvalidTransaction::Call.into();
 				},
 			}
 

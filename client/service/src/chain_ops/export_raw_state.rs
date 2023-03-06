@@ -53,7 +53,7 @@ where
 			}
 
 			children_default.insert(child_root_key.0, StorageChild { child_info, data: pairs });
-			continue
+			continue;
 		}
 
 		top.insert(key.0, value.0);

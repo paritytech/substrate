@@ -480,7 +480,7 @@ where
 				Some(value) => value,
 				None => {
 					log::error!("Invalid translate: fail to decode old value");
-					continue
+					continue;
 				},
 			};
 			let mut key_material = G::Hasher1::reverse(&previous_key[prefix.len()..]);
@@ -488,7 +488,7 @@ where
 				Ok(key1) => key1,
 				Err(_) => {
 					log::error!("Invalid translate: fail to decode key1");
-					continue
+					continue;
 				},
 			};
 
@@ -497,7 +497,7 @@ where
 				Ok(key2) => key2,
 				Err(_) => {
 					log::error!("Invalid translate: fail to decode key2");
-					continue
+					continue;
 				},
 			};
 

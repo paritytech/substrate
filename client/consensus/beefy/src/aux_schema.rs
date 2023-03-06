@@ -65,8 +65,9 @@ where
 		None => (),
 		Some(1) => (), // version 1 is totally obsolete and should be simply ignored
 		Some(2) => return load_decode::<_, PersistedState<B>>(backend, WORKER_STATE_KEY),
-		other =>
-			return Err(ClientError::Backend(format!("Unsupported BEEFY DB version: {:?}", other))),
+		other => {
+			return Err(ClientError::Backend(format!("Unsupported BEEFY DB version: {:?}", other)))
+		},
 	}
 
 	// No persistent state found in DB.

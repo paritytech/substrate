@@ -194,7 +194,7 @@ where
 			// When we are importing only the state of a block, it will be the best block.
 			block.fork_choice = Some(ForkChoiceStrategy::Custom(block.with_state()));
 
-			return Ok((block, Default::default()))
+			return Ok((block, Default::default()));
 		}
 
 		let hash = block.header.hash();

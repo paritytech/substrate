@@ -63,8 +63,9 @@ impl From<Error> for TraitError {
 	fn from(error: Error) -> Self {
 		match error {
 			Error::KeyNotSupported(id) => TraitError::KeyNotSupported(id),
-			Error::InvalidSeed | Error::InvalidPhrase | Error::PublicKeyMismatch =>
-				TraitError::ValidationError(error.to_string()),
+			Error::InvalidSeed | Error::InvalidPhrase | Error::PublicKeyMismatch => {
+				TraitError::ValidationError(error.to_string())
+			},
 			Error::Unavailable => TraitError::Unavailable,
 			Error::Io(e) => TraitError::Other(e.to_string()),
 			Error::Json(e) => TraitError::Other(e.to_string()),

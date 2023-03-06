@@ -272,7 +272,7 @@ where
 			Ok(state) => state,
 			Err(e) => {
 				error!(target: LOG_TARGET, "Error: {:?}. Terminating.", e);
-				return
+				return;
 			},
 		};
 
@@ -375,7 +375,7 @@ where
 			let state =
 				PersistedState::checked_new(best_grandpa, best_beefy, sessions, min_block_delta)
 					.ok_or_else(|| ClientError::Backend("Invalid BEEFY chain".into()))?;
-			break state
+			break state;
 		}
 
 		if *header.number() == beefy_genesis {
@@ -391,8 +391,13 @@ where
 			);
 
 			sessions.push_front(Rounds::new(beefy_genesis, genesis_set));
-			break PersistedState::checked_new(best_grandpa, Zero::zero(), sessions, min_block_delta)
-				.ok_or_else(|| ClientError::Backend("Invalid BEEFY chain".into()))?
+			break PersistedState::checked_new(
+				best_grandpa,
+				Zero::zero(),
+				sessions,
+				min_block_delta,
+			)
+			.ok_or_else(|| ClientError::Backend("Invalid BEEFY chain".into()))?;
 		}
 
 		if let Some(active) = worker::find_authorities_change::<B>(&header) {

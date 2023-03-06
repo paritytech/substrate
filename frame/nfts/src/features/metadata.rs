@@ -131,8 +131,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> DispatchResult {
 		let collection_config = Self::get_collection_config(&collection)?;
 		ensure!(
-			maybe_check_owner.is_none() ||
-				collection_config.is_setting_enabled(CollectionSetting::UnlockedMetadata),
+			maybe_check_owner.is_none()
+				|| collection_config.is_setting_enabled(CollectionSetting::UnlockedMetadata),
 			Error::<T, I>::LockedCollectionMetadata
 		);
 
@@ -146,8 +146,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
 			details.owner_deposit.saturating_reduce(old_deposit);
 			let mut deposit = Zero::zero();
-			if maybe_check_owner.is_some() &&
-				collection_config.is_setting_enabled(CollectionSetting::DepositRequired)
+			if maybe_check_owner.is_some()
+				&& collection_config.is_setting_enabled(CollectionSetting::DepositRequired)
 			{
 				deposit = T::DepositPerByte::get()
 					.saturating_mul(((data.len()) as u32).into())
@@ -181,8 +181,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let collection_config = Self::get_collection_config(&collection)?;
 		ensure!(
-			maybe_check_owner.is_none() ||
-				collection_config.is_setting_enabled(CollectionSetting::UnlockedMetadata),
+			maybe_check_owner.is_none()
+				|| collection_config.is_setting_enabled(CollectionSetting::UnlockedMetadata),
 			Error::<T, I>::LockedCollectionMetadata
 		);
 

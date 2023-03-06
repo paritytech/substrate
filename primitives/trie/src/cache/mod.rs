@@ -132,7 +132,7 @@ where
 		// Only enforce the limit if there's more than one element to make sure
 		// we can always add a new element to the cache.
 		if length <= 1 {
-			return false
+			return false;
 		}
 
 		self.current_heap_size > LOCAL_NODE_CACHE_MAX_HEAP_SIZE
@@ -201,7 +201,7 @@ where
 		// Only enforce the limit if there's more than one element to make sure
 		// we can always add a new element to the cache.
 		if length <= 1 {
-			return false
+			return false;
 		}
 
 		self.current_heap_size > LOCAL_VALUE_CACHE_MAX_HEAP_SIZE
@@ -406,7 +406,7 @@ impl<H: Hasher> Drop for LocalTrieCache<H> {
 					target: LOG_TARGET,
 					"Timeout while trying to acquire a write lock for the shared trie cache"
 				);
-				return
+				return;
 			},
 		};
 
@@ -447,13 +447,14 @@ impl<H: Hasher> ValueCache<'_, H> {
 		stats.local_fetch_attempts.fetch_add(1, Ordering::Relaxed);
 
 		match self {
-			Self::Fresh(map) =>
+			Self::Fresh(map) => {
 				if let Some(value) = map.get(key) {
 					stats.local_hits.fetch_add(1, Ordering::Relaxed);
 					Some(value)
 				} else {
 					None
-				},
+				}
+			},
 			Self::ForStorageRoot {
 				local_value_cache,
 				shared_value_cache_access,
@@ -476,7 +477,7 @@ impl<H: Hasher> ValueCache<'_, H> {
 					}) {
 					stats.local_hits.fetch_add(1, Ordering::Relaxed);
 
-					return Some(value)
+					return Some(value);
 				}
 
 				stats.shared_fetch_attempts.fetch_add(1, Ordering::Relaxed);
@@ -484,7 +485,7 @@ impl<H: Hasher> ValueCache<'_, H> {
 					stats.shared_hits.fetch_add(1, Ordering::Relaxed);
 					shared_value_cache_access.insert(hash, ());
 					*buffered_value = Some(value.clone());
-					return buffered_value.as_ref()
+					return buffered_value.as_ref();
 				}
 
 				None
@@ -559,7 +560,7 @@ impl<'a, H: Hasher> trie_db::TrieCache<NodeCodec<H>> for TrieCache<'a, H> {
 				self.stats.node_cache.shared_hits.fetch_add(1, Ordering::Relaxed);
 				tracing::trace!(target: LOG_TARGET, ?hash, "Serving node from shared cache");
 
-				return Ok(NodeCached::<H::Out> { node: node.clone(), is_from_shared_cache: true })
+				return Ok(NodeCached::<H::Out> { node: node.clone(), is_from_shared_cache: true });
 			}
 
 			// It was not in the shared cache; try fetching it from the database.

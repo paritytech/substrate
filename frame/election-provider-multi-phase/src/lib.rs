@@ -1414,7 +1414,7 @@ impl<T: Config> Pallet<T> {
 			.map_err(ElectionError::DataProvider)?;
 
 		if targets.len() > target_limit || voters.len() > voter_limit {
-			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
+			return Err(ElectionError::DataProvider("Snapshot too big for submission."));
 		}
 
 		let mut desired_targets = <Pallet<T> as ElectionProviderBase>::desired_targets_checked()
@@ -1540,7 +1540,7 @@ impl<T: Config> Pallet<T> {
 
 			// Check that all of the targets are valid based on the snapshot.
 			if assignment.distribution.iter().any(|(d, _)| !targets.contains(d)) {
-				return Err(FeasibilityError::InvalidVote)
+				return Err(FeasibilityError::InvalidVote);
 			}
 			Ok(())
 		})?;
@@ -2610,8 +2610,8 @@ mod tests {
 
 		let mut active = 1;
 		while weight_with(active)
-			.all_lte(<Runtime as frame_system::Config>::BlockWeights::get().max_block) ||
-			active == all_voters
+			.all_lte(<Runtime as frame_system::Config>::BlockWeights::get().max_block)
+			|| active == all_voters
 		{
 			active += 1;
 		}

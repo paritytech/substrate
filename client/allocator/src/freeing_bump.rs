@@ -142,7 +142,7 @@ impl Order {
 	fn from_size(size: u32) -> Result<Self, Error> {
 		let clamped_size = if size > MAX_POSSIBLE_ALLOCATION {
 			log::warn!(target: LOG_TARGET, "going to fail due to allocating {:?}", size);
-			return Err(Error::RequestedAllocationTooLarge)
+			return Err(Error::RequestedAllocationTooLarge);
 		} else if size < MIN_POSSIBLE_ALLOCATION {
 			MIN_POSSIBLE_ALLOCATION
 		} else {
@@ -411,7 +411,7 @@ impl FreeingBumpHeapAllocator {
 		size: WordSize,
 	) -> Result<Pointer<u8>, Error> {
 		if self.poisoned {
-			return Err(error("the allocator has been poisoned"))
+			return Err(error("the allocator has been poisoned"));
 		}
 
 		let bomb = PoisonBomb { poisoned: &mut self.poisoned };
@@ -469,7 +469,7 @@ impl FreeingBumpHeapAllocator {
 	/// - `ptr` - pointer to the allocated chunk
 	pub fn deallocate(&mut self, mem: &mut impl Memory, ptr: Pointer<u8>) -> Result<(), Error> {
 		if self.poisoned {
-			return Err(error("the allocator has been poisoned"))
+			return Err(error("the allocator has been poisoned"));
 		}
 
 		let bomb = PoisonBomb { poisoned: &mut self.poisoned };
@@ -529,14 +529,14 @@ impl FreeingBumpHeapAllocator {
 					"Wasm pages ({current_pages}) are already at the maximum.",
 				);
 
-				return Err(Error::AllocatorOutOfSpace)
+				return Err(Error::AllocatorOutOfSpace);
 			} else if required_pages > max_pages {
 				log::debug!(
 					target: LOG_TARGET,
 					"Failed to grow memory from {current_pages} pages to at least {required_pages}\
 						 pages due to the maximum limit of {max_pages} pages",
 				);
-				return Err(Error::AllocatorOutOfSpace)
+				return Err(Error::AllocatorOutOfSpace);
 			}
 
 			// Ideally we want to double our current number of pages,
@@ -551,7 +551,7 @@ impl FreeingBumpHeapAllocator {
 					"Failed to grow memory from {current_pages} pages to {next_pages} pages",
 				);
 
-				return Err(Error::AllocatorOutOfSpace)
+				return Err(Error::AllocatorOutOfSpace);
 			}
 
 			debug_assert_eq!(memory.pages(), next_pages, "Number of pages should have increased!");
@@ -567,7 +567,7 @@ impl FreeingBumpHeapAllocator {
 		mem: &mut impl Memory,
 	) -> Result<(), Error> {
 		if mem.size() < *last_observed_memory_size {
-			return Err(Error::MemoryShrinked)
+			return Err(Error::MemoryShrinked);
 		}
 		*last_observed_memory_size = mem.size();
 		Ok(())

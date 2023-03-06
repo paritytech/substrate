@@ -37,7 +37,7 @@ fn ensure_member_with_salary<T: Config<I>, I: 'static>(who: &T::AccountId) {
 	for _ in 0..255 {
 		let r = T::Members::rank_of(who).expect("prior guard ensures `who` is a member; qed");
 		if !T::Salary::get_salary(r, &who).is_zero() {
-			break
+			break;
 		}
 		T::Members::promote(who).unwrap();
 	}

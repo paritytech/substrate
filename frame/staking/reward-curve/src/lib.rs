@@ -135,10 +135,10 @@ struct Bounds {
 
 impl Bounds {
 	fn check(&self, value: u32) -> bool {
-		let wrong = (self.min_strict && value <= self.min) ||
-			(!self.min_strict && value < self.min) ||
-			(self.max_strict && value >= self.max) ||
-			(!self.max_strict && value > self.max);
+		let wrong = (self.min_strict && value <= self.min)
+			|| (!self.min_strict && value < self.min)
+			|| (self.max_strict && value >= self.max)
+			|| (!self.max_strict && value > self.max);
 
 		!wrong
 	}
@@ -174,7 +174,7 @@ fn parse_field<Token: Parse + Default + ToTokens>(
 				value,
 				bounds,
 			),
-		))
+		));
 	}
 
 	Ok(value)
@@ -195,7 +195,7 @@ impl Parse for INposInput {
 		<syn::Token![;]>::parse(input)?;
 
 		if !input.is_empty() {
-			return Err(input.error("expected end of input stream, no token expected"))
+			return Err(input.error("expected end of input stream, no token expected"));
 		}
 
 		let min_inflation = parse_field::<keyword::min_inflation>(
@@ -230,7 +230,7 @@ impl Parse for INposInput {
 		<Option<syn::Token![,]>>::parse(&args_input)?;
 
 		if !args_input.is_empty() {
-			return Err(args_input.error("expected end of input stream, no token expected"))
+			return Err(args_input.error("expected end of input stream, no token expected"));
 		}
 
 		Ok(Self {
@@ -272,7 +272,7 @@ impl INPoS {
 	// See web3 docs for the details
 	fn compute_opposite_after_x_ideal(&self, y: u32) -> u32 {
 		if y == self.i_0 {
-			return u32::MAX
+			return u32::MAX;
 		}
 		// Note: the log term calculated here represents a per_million value
 		let log = log2(self.i_ideal_times_x_ideal - self.i_0, y - self.i_0);
@@ -290,8 +290,8 @@ fn compute_points(input: &INposInput) -> Vec<(u32, u32)> {
 
 	// For each point p: (next_p.0 - p.0) < segment_length && (next_p.1 - p.1) < segment_length.
 	// This ensures that the total number of segment doesn't overflow max_piece_count.
-	let max_length = (input.max_inflation - input.min_inflation + 1_000_000 - inpos.x_ideal) /
-		(input.max_piece_count - 1);
+	let max_length = (input.max_inflation - input.min_inflation + 1_000_000 - inpos.x_ideal)
+		/ (input.max_piece_count - 1);
 
 	let mut delta_y = max_length;
 	let mut y = input.max_inflation;
@@ -303,29 +303,29 @@ fn compute_points(input: &INposInput) -> Vec<(u32, u32)> {
 
 		if next_y <= input.min_inflation {
 			delta_y = delta_y.saturating_sub(1);
-			continue
+			continue;
 		}
 
 		let next_x = inpos.compute_opposite_after_x_ideal(next_y);
 
 		if (next_x - points.last().unwrap().0) > max_length {
 			delta_y = delta_y.saturating_sub(1);
-			continue
+			continue;
 		}
 
 		if next_x >= 1_000_000 {
 			let prev = points.last().unwrap();
 			// Compute the y corresponding to x=1_000_000 using the this point and the previous one.
 
-			let delta_y: u32 = ((next_x - 1_000_000) as u64 * (prev.1 - next_y) as u64 /
-				(next_x - prev.0) as u64)
+			let delta_y: u32 = ((next_x - 1_000_000) as u64 * (prev.1 - next_y) as u64
+				/ (next_x - prev.0) as u64)
 				.try_into()
 				.unwrap();
 
 			let y = next_y + delta_y;
 
 			points.push((1_000_000, y));
-			return points
+			return points;
 		}
 		points.push((next_x, next_y));
 		y = next_y;

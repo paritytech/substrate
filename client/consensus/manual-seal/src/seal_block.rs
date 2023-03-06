@@ -92,15 +92,16 @@ pub async fn seal_block<B, BI, SC, C, E, TP, CIDP, P>(
 {
 	let future = async {
 		if pool.status().ready == 0 && !create_empty {
-			return Err(Error::EmptyTransactionPool)
+			return Err(Error::EmptyTransactionPool);
 		}
 
 		// get the header to build this new block on.
 		// use the parent_hash supplied via `EngineCommand`
 		// or fetch the best_block.
 		let parent = match parent_hash {
-			Some(hash) =>
-				client.header(hash)?.ok_or_else(|| Error::BlockNotFound(format!("{}", hash)))?,
+			Some(hash) => {
+				client.header(hash)?.ok_or_else(|| Error::BlockNotFound(format!("{}", hash)))?
+			},
 			None => select_chain.best_chain().await?,
 		};
 
@@ -131,7 +132,7 @@ pub async fn seal_block<B, BI, SC, C, E, TP, CIDP, P>(
 			.await?;
 
 		if proposal.block.extrinsics().len() == inherents_len && !create_empty {
-			return Err(Error::EmptyTransactionPool)
+			return Err(Error::EmptyTransactionPool);
 		}
 
 		let (header, body) = proposal.block.deconstruct();
@@ -154,8 +155,9 @@ pub async fn seal_block<B, BI, SC, C, E, TP, CIDP, P>(
 		post_header.digest_mut().logs.extend(params.post_digests.iter().cloned());
 
 		match block_import.import_block(params, HashMap::new()).await? {
-			ImportResult::Imported(aux) =>
-				Ok(CreatedBlock { hash: <B as BlockT>::Header::hash(&post_header), aux }),
+			ImportResult::Imported(aux) => {
+				Ok(CreatedBlock { hash: <B as BlockT>::Header::hash(&post_header), aux })
+			},
 			other => Err(other.into()),
 		}
 	};

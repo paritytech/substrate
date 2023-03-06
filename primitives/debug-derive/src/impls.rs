@@ -179,8 +179,9 @@ mod implementation {
 				name_str,
 				Fields::new(f.named.iter(), Some(syn::Token!(self)(Span::call_site()))),
 			),
-			syn::Fields::Unnamed(ref f) =>
-				derive_fields(name_str, Fields::new(f.unnamed.iter(), None)),
+			syn::Fields::Unnamed(ref f) => {
+				derive_fields(name_str, Fields::new(f.unnamed.iter(), None))
+			},
 			syn::Fields::Unit => derive_fields(name_str, Fields::Indexed { indices: vec![] }),
 		}
 	}

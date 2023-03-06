@@ -143,7 +143,7 @@ fn map_results(
 ) -> Result<HashMap<(String, String), Vec<BenchmarkData>>, std::io::Error> {
 	// Skip if batches is empty.
 	if batches.is_empty() {
-		return Err(io_error("empty batches"))
+		return Err(io_error("empty batches"));
 	}
 
 	let mut all_benchmarks = HashMap::<_, Vec<BenchmarkData>>::new();
@@ -151,7 +151,7 @@ fn map_results(
 	for batch in batches {
 		// Skip if there are no results
 		if batch.time_results.is_empty() {
-			continue
+			continue;
 		}
 
 		let pallet_string = String::from_utf8(batch.pallet.clone()).unwrap();
@@ -322,7 +322,7 @@ fn get_benchmark_data(
 				if used_component.name == component.name {
 					used_component.slope += component.slope;
 					found = true;
-					break
+					break;
 				}
 			}
 			if !found && !component.slope.is_zero() {
@@ -550,7 +550,7 @@ pub(crate) fn process_storage_results(
 		for (key, reads, writes, whitelisted) in &result.keys {
 			// skip keys which are whitelisted
 			if *whitelisted {
-				continue
+				continue;
 			}
 
 			let prefix_length = key.len().min(32);
@@ -580,8 +580,8 @@ pub(crate) fn process_storage_results(
 				},
 				None => None,
 			};
-			let is_all_ignored = pov_modes.get(&("ALL".to_string(), "ALL".to_string())) ==
-				Some(&PovEstimationMode::Ignored);
+			let is_all_ignored = pov_modes.get(&("ALL".to_string(), "ALL".to_string()))
+				== Some(&PovEstimationMode::Ignored);
 			if is_all_ignored && override_pov_mode != Some(&PovEstimationMode::Ignored) {
 				panic!("The syntax currently does not allow to exclude single keys from a top-level `Ignored` pov-mode.");
 			}
@@ -854,7 +854,7 @@ mod test {
 			benchmark: [benchmark.to_vec(), b"_benchmark".to_vec()].concat(),
 			time_results: results.clone(),
 			db_results: results,
-		}
+		};
 	}
 
 	fn test_storage_info() -> Vec<StorageInfo> {

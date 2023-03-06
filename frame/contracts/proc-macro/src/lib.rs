@@ -65,7 +65,7 @@ fn derive_debug(input: TokenStream, fmt: impl Fn(&Ident) -> TokenStream2) -> Tok
 			name.span() =>
 			compile_error!("WeightDebug is only supported for structs.");
 		}
-		.into()
+		.into();
 	};
 
 	#[cfg(feature = "full")]
@@ -102,7 +102,7 @@ fn iterate_fields(data: &syn::DataStruct, fmt: impl Fn(&Ident) -> TokenStream2) 
 			let recurse = fields.named.iter().filter_map(|f| {
 				let name = f.ident.as_ref()?;
 				if name.to_string().starts_with('_') {
-					return None
+					return None;
 				}
 				let value = fmt(name);
 				let ret = quote_spanned! { f.span() =>
@@ -219,14 +219,14 @@ impl HostFn {
 			match ident.as_str() {
 				"version" => {
 					if maybe_version.is_some() {
-						return Err(err(span, "#[version] can only be specified once"))
+						return Err(err(span, "#[version] can only be specified once"));
 					}
 					maybe_version =
 						Some(attr.parse_args::<syn::LitInt>().and_then(|lit| lit.base10_parse())?);
 				},
 				"unstable" => {
 					if !is_stable {
-						return Err(err(span, "#[unstable] can only be specified once"))
+						return Err(err(span, "#[unstable] can only be specified once"));
 					}
 					is_stable = false;
 				},
@@ -239,7 +239,7 @@ impl HostFn {
 				},
 				"deprecated" => {
 					if !not_deprecated {
-						return Err(err(span, "#[deprecated] can only be specified once"))
+						return Err(err(span, "#[deprecated] can only be specified once"));
 					}
 					not_deprecated = false;
 				},
@@ -249,7 +249,7 @@ impl HostFn {
 		let name = item.sig.ident.to_string();
 
 		if !(is_stable || not_deprecated) {
-			return Err(err(span, "#[deprecated] is mutually exclusive with #[unstable]"))
+			return Err(err(span, "#[deprecated] is mutually exclusive with #[unstable]"));
 		}
 
 		// process arguments: The first and second args are treated differently (ctx, memory)
@@ -265,7 +265,7 @@ impl HostFn {
 			.fold(0u32, |acc, valid| if valid { acc + 1 } else { acc });
 
 		if special_args != 2 {
-			return Err(err(span, msg))
+			return Err(err(span, msg));
 		}
 
 		// process return type
@@ -287,7 +287,7 @@ impl HostFn {
 				match &result.arguments {
 					syn::PathArguments::AngleBracketed(group) => {
 						if group.args.len() != 2 {
-							return Err(err(span, &msg))
+							return Err(err(span, &msg));
 						};
 
 						let arg2 = group.args.last().ok_or(err(span, &msg))?;
@@ -326,7 +326,7 @@ impl HostFn {
 								.to_string()),
 							syn::Type::Tuple(tt) => {
 								if !tt.elems.is_empty() {
-									return Err(err(arg1.span(), &msg))
+									return Err(err(arg1.span(), &msg));
 								};
 								Ok("()".to_string())
 							},
@@ -402,14 +402,15 @@ impl EnvDef {
 
 fn is_valid_special_arg(idx: usize, arg: &FnArg) -> bool {
 	let pat = if let FnArg::Typed(pat) = arg { pat } else { return false };
-	let ident = if let syn::Pat::Ident(ref ident) = *pat.pat { &ident.ident } else { return false };
+	let ident =
+		if let syn::Pat::Ident(ref ident) = *pat.pat { &ident.ident } else { return false };
 	let name_ok = match idx {
 		0 => ident == "ctx" || ident == "_ctx",
 		1 => ident == "memory" || ident == "_memory",
 		_ => false,
 	};
 	if !name_ok {
-		return false
+		return false;
 	}
 	matches!(*pat.ty, syn::Type::Infer(_))
 }
@@ -485,7 +486,7 @@ fn expand_docs(def: &EnvDef) -> TokenStream2 {
 	funcs.sort_unstable_by_key(|func| Reverse(func.version));
 	for func in funcs {
 		if current_docs.contains_key(&func.name) {
-			continue
+			continue;
 		}
 		current_docs.insert(func.name.clone(), expand_func_doc(&func));
 	}
@@ -782,7 +783,7 @@ pub fn define_env(attr: TokenStream, item: TokenStream) -> TokenStream {
 					 - `#[define_env]`
 					 - `#[define_env(doc)]`"#;
 		let span = TokenStream2::from(attr).span();
-		return syn::Error::new(span, msg).to_compile_error().into()
+		return syn::Error::new(span, msg).to_compile_error().into();
 	}
 
 	let item = syn::parse_macro_input!(item as syn::ItemMod);

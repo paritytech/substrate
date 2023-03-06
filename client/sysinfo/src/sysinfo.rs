@@ -169,7 +169,7 @@ where
 	S: Serializer,
 {
 	if let Some(throughput) = maybe_throughput {
-		return serializer.serialize_some(&(throughput.as_mibs() as u64))
+		return serializer.serialize_some(&(throughput.as_mibs() as u64));
 	}
 	serializer.serialize_none()
 }
@@ -244,7 +244,7 @@ pub(crate) fn benchmark<E>(
 		elapsed = timestamp.elapsed();
 
 		if elapsed >= max_duration {
-			break
+			break;
 		}
 	}
 
@@ -629,26 +629,30 @@ impl Requirements {
 	pub fn check_hardware(&self, hwbench: &HwBench) -> bool {
 		for requirement in self.0.iter() {
 			match requirement.metric {
-				Metric::Blake2256 =>
+				Metric::Blake2256 => {
 					if requirement.minimum > hwbench.cpu_hashrate_score {
-						return false
-					},
-				Metric::MemCopy =>
+						return false;
+					}
+				},
+				Metric::MemCopy => {
 					if requirement.minimum > hwbench.memory_memcpy_score {
-						return false
-					},
-				Metric::DiskSeqWrite =>
+						return false;
+					}
+				},
+				Metric::DiskSeqWrite => {
 					if let Some(score) = hwbench.disk_sequential_write_score {
 						if requirement.minimum > score {
-							return false
+							return false;
 						}
-					},
-				Metric::DiskRndWrite =>
+					}
+				},
+				Metric::DiskRndWrite => {
 					if let Some(score) = hwbench.disk_random_write_score {
 						if requirement.minimum > score {
-							return false
+							return false;
 						}
-					},
+					}
+				},
 				Metric::Sr25519Verify => {},
 			}
 		}
@@ -686,16 +690,16 @@ mod tests {
 	#[test]
 	fn test_benchmark_disk_sequential_writes() {
 		assert!(
-			benchmark_disk_sequential_writes(DEFAULT_DISK_EXECUTION_LIMIT, "./".as_ref()).unwrap() >
-				Throughput::from_mibs(0.0)
+			benchmark_disk_sequential_writes(DEFAULT_DISK_EXECUTION_LIMIT, "./".as_ref()).unwrap()
+				> Throughput::from_mibs(0.0)
 		);
 	}
 
 	#[test]
 	fn test_benchmark_disk_random_writes() {
 		assert!(
-			benchmark_disk_random_writes(DEFAULT_DISK_EXECUTION_LIMIT, "./".as_ref()).unwrap() >
-				Throughput::from_mibs(0.0)
+			benchmark_disk_random_writes(DEFAULT_DISK_EXECUTION_LIMIT, "./".as_ref()).unwrap()
+				> Throughput::from_mibs(0.0)
 		);
 	}
 

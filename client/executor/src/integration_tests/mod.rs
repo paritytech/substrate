@@ -790,8 +790,9 @@ fn unreachable_intrinsic(wasm_method: WasmExecutionMethod) {
 		Error::AbortedDueToTrap(error) => {
 			let expected = match wasm_method {
 				WasmExecutionMethod::Interpreted => "unreachable",
-				WasmExecutionMethod::Compiled { .. } =>
-					"wasm trap: wasm `unreachable` instruction executed",
+				WasmExecutionMethod::Compiled { .. } => {
+					"wasm trap: wasm `unreachable` instruction executed"
+				},
 			};
 			assert_eq!(error.message, expected);
 		},

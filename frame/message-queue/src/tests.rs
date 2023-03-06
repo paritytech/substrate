@@ -288,7 +288,7 @@ fn reap_page_permanent_overweight_works() {
 			let watermark = b.begin.saturating_sub(backlog);
 
 			if i >= watermark {
-				break
+				break;
 			}
 			assert_ok!(MessageQueue::do_reap_page(&Here, i));
 			assert_eq!(QueueChanges::take(), vec![(Here, b.message_count - 1, b.size - 8)]);
@@ -838,13 +838,13 @@ fn page_try_append_message_basic_works() {
 	for i in 0..u32::MAX {
 		let r = i.using_encoded(|i| page.try_append_message::<Test>(i.try_into().unwrap()));
 		if r.is_err() {
-			break
+			break;
 		} else {
 			msgs += 1;
 		}
 	}
-	let expected_msgs = (<Test as Config>::HeapSize::get()) /
-		(ItemHeader::<<Test as Config>::Size>::max_encoded_len() as u32 + 4);
+	let expected_msgs = (<Test as Config>::HeapSize::get())
+		/ (ItemHeader::<<Test as Config>::Size>::max_encoded_len() as u32 + 4);
 	assert_eq!(expected_msgs, msgs, "Wrong number of messages");
 	assert_eq!(page.remaining, msgs);
 	assert_eq!(page.remaining_size, msgs * 4);
@@ -1141,8 +1141,8 @@ fn ready_ring_knit_and_unknit_works() {
 #[test]
 fn enqueue_message_works() {
 	use MessageOrigin::*;
-	let max_msg_per_page = <Test as Config>::HeapSize::get() as u64 /
-		(ItemHeader::<<Test as Config>::Size>::max_encoded_len() as u64 + 1);
+	let max_msg_per_page = <Test as Config>::HeapSize::get() as u64
+		/ (ItemHeader::<<Test as Config>::Size>::max_encoded_len() as u64 + 1);
 
 	new_test_ext::<Test>().execute_with(|| {
 		// Enqueue messages which should fill three pages.
@@ -1171,8 +1171,8 @@ fn enqueue_message_works() {
 #[test]
 fn enqueue_messages_works() {
 	use MessageOrigin::*;
-	let max_msg_per_page = <Test as Config>::HeapSize::get() as u64 /
-		(ItemHeader::<<Test as Config>::Size>::max_encoded_len() as u64 + 1);
+	let max_msg_per_page = <Test as Config>::HeapSize::get() as u64
+		/ (ItemHeader::<<Test as Config>::Size>::max_encoded_len() as u64 + 1);
 
 	new_test_ext::<Test>().execute_with(|| {
 		// Enqueue messages which should fill three pages.

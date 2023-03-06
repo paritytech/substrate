@@ -253,8 +253,8 @@ impl<Block: BlockT> ExecutionExtensions<Block> {
 			}
 		}
 
-		if capabilities.contains(offchain::Capabilities::OFFCHAIN_DB_READ) ||
-			capabilities.contains(offchain::Capabilities::OFFCHAIN_DB_WRITE)
+		if capabilities.contains(offchain::Capabilities::OFFCHAIN_DB_READ)
+			|| capabilities.contains(offchain::Capabilities::OFFCHAIN_DB_WRITE)
 		{
 			if let Some(offchain_db) = self.offchain_db.as_ref() {
 				extensions.register(OffchainDbExt::new(offchain::LimitedExternalities::new(
@@ -288,8 +288,9 @@ impl<Block: BlockT> ExecutionExtensions<Block> {
 			ExecutionContext::BlockConstruction => self.strategies.block_construction.get_manager(),
 			ExecutionContext::Syncing => self.strategies.syncing.get_manager(),
 			ExecutionContext::Importing => self.strategies.importing.get_manager(),
-			ExecutionContext::OffchainCall(Some((_, capabilities))) if capabilities.is_all() =>
-				self.strategies.offchain_worker.get_manager(),
+			ExecutionContext::OffchainCall(Some((_, capabilities))) if capabilities.is_all() => {
+				self.strategies.offchain_worker.get_manager()
+			},
 			ExecutionContext::OffchainCall(_) => self.strategies.other.get_manager(),
 		};
 
@@ -309,7 +310,7 @@ impl<Block: BlockT> offchain::TransactionPool for TransactionPoolAdapter<Block> 
 			Ok(xt) => xt,
 			Err(e) => {
 				log::warn!("Unable to decode extrinsic: {:?}: {}", data, e);
-				return Err(())
+				return Err(());
 			},
 		};
 

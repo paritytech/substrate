@@ -90,7 +90,7 @@ where
 	if Pair::verify(&signature, &message, &pubkey) {
 		println!("Signature verifies correctly.");
 	} else {
-		return Err(error::Error::SignatureInvalid)
+		return Err(error::Error::SignatureInvalid);
 	}
 
 	Ok(())

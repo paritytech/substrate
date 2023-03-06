@@ -188,17 +188,17 @@ impl frame_support::traits::ExecuteBlock<Block> for BlockExecutor {
 /// This doesn't attempt to validate anything regarding the block.
 pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 	if check_signature(&utx).is_err() {
-		return InvalidTransaction::BadProof.into()
+		return InvalidTransaction::BadProof.into();
 	}
 
 	let tx = utx.transfer();
 	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
 	let expected_nonce: u64 = storage::hashed::get_or(&blake2_256, &nonce_key, 0);
 	if tx.nonce < expected_nonce {
-		return InvalidTransaction::Stale.into()
+		return InvalidTransaction::Stale.into();
 	}
 	if tx.nonce > expected_nonce + 64 {
-		return InvalidTransaction::Future.into()
+		return InvalidTransaction::Future.into();
 	}
 
 	let encode = |from: &AccountId, nonce: u64| (from, nonce).encode();
@@ -261,12 +261,15 @@ fn execute_transaction_backend(utx: &Extrinsic, extrinsic_index: u32) -> ApplyEx
 	match utx {
 		Extrinsic::Transfer { exhaust_resources_when_not_first: true, .. }
 			if extrinsic_index != 0 =>
-			Err(InvalidTransaction::ExhaustsResources.into()),
+		{
+			Err(InvalidTransaction::ExhaustsResources.into())
+		},
 		Extrinsic::Transfer { ref transfer, .. } => execute_transfer_backend(transfer),
 		Extrinsic::AuthoritiesChange(ref new_auth) => execute_new_authorities_backend(new_auth),
 		Extrinsic::IncludeData(_) => Ok(Ok(())),
-		Extrinsic::StorageChange(key, value) =>
-			execute_storage_change(key, value.as_ref().map(|v| &**v)),
+		Extrinsic::StorageChange(key, value) => {
+			execute_storage_change(key, value.as_ref().map(|v| &**v))
+		},
 		Extrinsic::OffchainIndexSet(key, value) => {
 			sp_io::offchain_index::set(key, value);
 			Ok(Ok(()))
@@ -284,7 +287,7 @@ fn execute_transfer_backend(tx: &Transfer) -> ApplyExtrinsicResult {
 	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
 	let expected_nonce: u64 = storage::hashed::get_or(&blake2_256, &nonce_key, 0);
 	if tx.nonce != expected_nonce {
-		return Err(InvalidTransaction::Stale.into())
+		return Err(InvalidTransaction::Stale.into());
 	}
 
 	// increment nonce in storage
@@ -296,7 +299,7 @@ fn execute_transfer_backend(tx: &Transfer) -> ApplyExtrinsicResult {
 
 	// enact transfer
 	if tx.amount > from_balance {
-		return Err(InvalidTransaction::Payment.into())
+		return Err(InvalidTransaction::Payment.into());
 	}
 	let to_balance_key = tx.to.to_keyed_vec(BALANCE_OF);
 	let to_balance: u64 = storage::hashed::get_or(&blake2_256, &to_balance_key, 0);

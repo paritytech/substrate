@@ -95,7 +95,7 @@ where
 				let exts = span.extensions();
 				if let Some(prefix) = exts.get::<super::layers::Prefix>() {
 					write!(writer, "{}", prefix.as_str())?;
-					break
+					break;
 				}
 			}
 		}
@@ -130,10 +130,10 @@ where
 		writer: &mut dyn fmt::Write,
 		event: &Event,
 	) -> fmt::Result {
-		if self.dup_to_stdout &&
-			(event.metadata().level() == &Level::INFO ||
-				event.metadata().level() == &Level::WARN ||
-				event.metadata().level() == &Level::ERROR)
+		if self.dup_to_stdout
+			&& (event.metadata().level() == &Level::INFO
+				|| event.metadata().level() == &Level::WARN
+				|| event.metadata().level() == &Level::ERROR)
 		{
 			let mut out = String::new();
 			self.format_event_custom(CustomFmtContext::FmtContext(ctx), &mut out, event)?;
@@ -276,8 +276,9 @@ where
 	) -> fmt::Result {
 		match self {
 			CustomFmtContext::FmtContext(fmt_ctx) => fmt_ctx.format_fields(writer, fields),
-			CustomFmtContext::ContextWithFormatFields(_ctx, fmt_fields) =>
-				fmt_fields.format_fields(writer, fields),
+			CustomFmtContext::ContextWithFormatFields(_ctx, fmt_fields) => {
+				fmt_fields.format_fields(writer, fields)
+			},
 		}
 	}
 }

@@ -208,7 +208,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
 		fn on_idle(_: T::BlockNumber, remaining_weight: Weight) -> Weight {
 			if remaining_weight.any_lt(T::DbWeight::get().reads(2)) {
-				return Weight::from_parts(0, 0)
+				return Weight::from_parts(0, 0);
 			}
 
 			Self::do_on_idle(remaining_weight)
@@ -360,7 +360,7 @@ pub mod pallet {
 
 			let eras_to_check_per_block = ErasToCheckPerBlock::<T>::get();
 			if eras_to_check_per_block.is_zero() {
-				return T::DbWeight::get().reads(1).saturating_add(unaccounted_weight)
+				return T::DbWeight::get().reads(1).saturating_add(unaccounted_weight);
 			}
 
 			// NOTE: here we're assuming that the number of validators has only ever increased,
@@ -386,7 +386,7 @@ pub mod pallet {
 
 			if max_weight(validator_count, next_batch_size).any_gt(remaining_weight) {
 				log!(debug, "early exit because eras_to_check_per_block is zero");
-				return T::DbWeight::get().reads(3).saturating_add(unaccounted_weight)
+				return T::DbWeight::get().reads(3).saturating_add(unaccounted_weight);
 			}
 
 			if T::Staking::election_ongoing() {
@@ -394,7 +394,7 @@ pub mod pallet {
 				// there is an ongoing election -- we better not do anything. Imagine someone is not
 				// exposed anywhere in the last era, and the snapshot for the election is already
 				// taken. In this time period, we don't want to accidentally unstake them.
-				return T::DbWeight::get().reads(4).saturating_add(unaccounted_weight)
+				return T::DbWeight::get().reads(4).saturating_add(unaccounted_weight);
 			}
 
 			let UnstakeRequest { stashes, mut checked } = match Head::<T>::take().or_else(|| {
@@ -415,7 +415,7 @@ pub mod pallet {
 			}) {
 				None => {
 					// There's no `Head` and nothing in the `Queue`, nothing to do here.
-					return T::DbWeight::get().reads(4)
+					return T::DbWeight::get().reads(4);
 				},
 				Some(head) => head,
 			};
@@ -440,8 +440,8 @@ pub mod pallet {
 			let unchecked_eras_to_check = {
 				// get the last available `bonding_duration` eras up to current era in reverse
 				// order.
-				let total_check_range = (current_era.saturating_sub(bonding_duration)..=
-					current_era)
+				let total_check_range = (current_era.saturating_sub(bonding_duration)
+					..=current_era)
 					.rev()
 					.collect::<Vec<_>>();
 				debug_assert!(
@@ -517,7 +517,7 @@ pub mod pallet {
 				);
 
 				match checked.try_extend(unchecked_eras_to_check.clone().into_iter()) {
-					Ok(_) =>
+					Ok(_) => {
 						if stashes.is_empty() {
 							Self::deposit_event(Event::<T>::BatchFinished { size: 0 });
 						} else {
@@ -525,7 +525,8 @@ pub mod pallet {
 							Self::deposit_event(Event::<T>::BatchChecked {
 								eras: unchecked_eras_to_check,
 							});
-						},
+						}
+					},
 					Err(_) => {
 						// don't put the head back in -- there is an internal error in the pallet.
 						Self::halt("checked is pruned via retain above")

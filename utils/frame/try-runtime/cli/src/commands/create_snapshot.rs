@@ -50,7 +50,7 @@ where
 {
 	let snapshot_path = command.snapshot_path;
 	if !matches!(shared.runtime, crate::Runtime::Existing) {
-		return Err("creating a snapshot is only possible with --runtime existing.".into())
+		return Err("creating a snapshot is only possible with --runtime existing.".into());
 	}
 
 	let path = match snapshot_path {

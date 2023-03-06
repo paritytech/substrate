@@ -133,7 +133,7 @@
 //! given the right flag:
 //!
 //! ```ignore
-//! 
+//!
 //! #[cfg(feature = try-runtime)]
 //! fn pre_upgrade() -> Result<Vec<u8>, &'static str> {}
 //!
@@ -630,10 +630,11 @@ impl State {
 		<Block::Hash as FromStr>::Err: Debug,
 	{
 		let builder = match self {
-			State::Snap { snapshot_path } =>
+			State::Snap { snapshot_path } => {
 				Builder::<Block>::new().mode(Mode::Offline(OfflineConfig {
 					state_snapshot: SnapshotConfig::new(snapshot_path),
-				})),
+				}))
+			},
 			State::Live(LiveState { pallet, uri, at, child_tree }) => {
 				let at = match at {
 					Some(at_str) => Some(hash_of::<Block>(at_str)?),
@@ -715,14 +716,14 @@ impl State {
 			);
 
 			if new_version.spec_name != old_version.spec_name {
-				return Err("Spec names must match.".into())
+				return Err("Spec names must match.".into());
 			}
 		}
 
 		// whatever runtime we have in store now must have been compiled with try-runtime feature.
 		if try_runtime_check {
 			if !ensure_try_runtime::<Block, HostFns>(&executor, &mut ext) {
-				return Err("given runtime is NOT compiled with try-runtime feature!".into())
+				return Err("given runtime is NOT compiled with try-runtime feature!".into());
 			}
 		}
 
@@ -747,43 +748,49 @@ impl TryRuntimeCmd {
 		BBIP: BlockBuildingInfoProvider<Block, Option<(InherentData, Digest)>>,
 	{
 		match &self.command {
-			Command::OnRuntimeUpgrade(ref cmd) =>
+			Command::OnRuntimeUpgrade(ref cmd) => {
 				commands::on_runtime_upgrade::on_runtime_upgrade::<Block, HostFns>(
 					self.shared.clone(),
 					cmd.clone(),
 				)
-				.await,
-			Command::OffchainWorker(cmd) =>
+				.await
+			},
+			Command::OffchainWorker(cmd) => {
 				commands::offchain_worker::offchain_worker::<Block, HostFns>(
 					self.shared.clone(),
 					cmd.clone(),
 				)
-				.await,
-			Command::ExecuteBlock(cmd) =>
+				.await
+			},
+			Command::ExecuteBlock(cmd) => {
 				commands::execute_block::execute_block::<Block, HostFns>(
 					self.shared.clone(),
 					cmd.clone(),
 				)
-				.await,
-			Command::FollowChain(cmd) =>
+				.await
+			},
+			Command::FollowChain(cmd) => {
 				commands::follow_chain::follow_chain::<Block, HostFns>(
 					self.shared.clone(),
 					cmd.clone(),
 				)
-				.await,
-			Command::FastForward(cmd) =>
+				.await
+			},
+			Command::FastForward(cmd) => {
 				commands::fast_forward::fast_forward::<Block, HostFns, BBIP>(
 					self.shared.clone(),
 					cmd.clone(),
 					block_building_info_provider,
 				)
-				.await,
-			Command::CreateSnapshot(cmd) =>
+				.await
+			},
+			Command::CreateSnapshot(cmd) => {
 				commands::create_snapshot::create_snapshot::<Block, HostFns>(
 					self.shared.clone(),
 					cmd.clone(),
 				)
-				.await,
+				.await
+			},
 		}
 	}
 }

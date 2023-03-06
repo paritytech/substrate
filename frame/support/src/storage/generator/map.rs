@@ -115,7 +115,7 @@ impl<K: Decode + Sized, V: Decode + Sized, Hasher: ReversibleStorageHasher> Iter
 					}
 				},
 				None => None,
-			}
+			};
 		}
 	}
 }
@@ -188,7 +188,7 @@ where
 				Some(value) => value,
 				None => {
 					log::error!("Invalid translate: fail to decode old value");
-					continue
+					continue;
 				},
 			};
 
@@ -197,7 +197,7 @@ where
 				Ok(key) => key,
 				Err(_) => {
 					log::error!("Invalid translate: fail to decode key");
-					continue
+					continue;
 				},
 			};
 

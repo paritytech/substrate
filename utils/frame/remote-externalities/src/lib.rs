@@ -367,7 +367,7 @@ where
 
 			if page_len < DEFAULT_KEY_DOWNLOAD_PAGE as usize {
 				log::debug!(target: LOG_TARGET, "last page received: {}", page_len);
-				break all_keys
+				break all_keys;
 			} else {
 				let new_last_key =
 					all_keys.last().expect("all_keys is populated; has .last(); qed");
@@ -396,7 +396,7 @@ where
 	) -> Result<Vec<KeyValue>, &'static str> {
 		let keys = self.rpc_get_keys_paged(prefix.clone(), at).await?;
 		if keys.is_empty() {
-			return Ok(Default::default())
+			return Ok(Default::default());
 		}
 
 		let client = self.as_online().rpc_client_cloned();
@@ -483,7 +483,7 @@ where
 								// Signal failures to the main thread, stop aggregating (key, value)
 								// pairs and return immediately an error.
 								thread_sender.unbounded_send(Message::BatchFailed(reason)).unwrap();
-								return Default::default()
+								return Default::default();
 							},
 						};
 
@@ -522,7 +522,7 @@ where
 					for (k, v) in kv {
 						// skip writing the child root data.
 						if is_default_child_storage_key(k.as_ref()) {
-							continue
+							continue;
 						}
 						pending_ext.insert(k, v);
 					}
@@ -530,12 +530,12 @@ where
 				Message::BatchFailed(error) => {
 					log::error!(target: LOG_TARGET, "Batch processing failed: {:?}", error);
 					batch_failed = true;
-					break
+					break;
 				},
 				Message::Terminated => {
 					terminated += 1;
 					if terminated == handles.len() {
-						break
+						break;
 					}
 				},
 			}
@@ -546,7 +546,7 @@ where
 			handles.into_iter().flat_map(|h| h.join().unwrap()).collect::<Vec<_>>();
 
 		if batch_failed {
-			return Err("Batch failed.")
+			return Err("Batch failed.");
 		}
 
 		Ok(keys_and_values)
@@ -675,7 +675,7 @@ where
 			.collect::<Vec<_>>();
 
 		if child_roots.is_empty() {
-			return Ok(Default::default())
+			return Ok(Default::default());
 		}
 
 		// div-ceil simulation.
@@ -733,7 +733,7 @@ where
 						Some((ChildType::ParentKeyId, storage_key)) => storage_key,
 						None => {
 							log::error!(target: LOG_TARGET, "invalid key: {:?}", prefixed_top_key);
-							return Err("Invalid child key")
+							return Err("Invalid child key");
 						},
 					};
 
@@ -761,14 +761,15 @@ where
 		let mut terminated = 0usize;
 		loop {
 			match rx.next().await.unwrap() {
-				Message::Batch((info, kvs)) =>
+				Message::Batch((info, kvs)) => {
 					for (k, v) in kvs {
 						pending_ext.insert_child(info.clone(), k, v);
-					},
+					}
+				},
 				Message::Terminated => {
 					terminated += 1;
 					if terminated == handles.len() {
-						break
+						break;
 					}
 				},
 			}
@@ -958,7 +959,7 @@ where
 		for (k, v) in top {
 			// skip writing the child root data.
 			if is_default_child_storage_key(k.as_ref()) {
-				continue
+				continue;
 			}
 			inner_ext.insert(k.0, v.0);
 		}
@@ -1351,7 +1352,7 @@ mod remote_tests {
 	#[tokio::test(flavor = "multi_thread")]
 	async fn can_build_big_pallet() {
 		if std::option_env!("TEST_WS").is_none() {
-			return
+			return;
 		}
 		init_logger();
 		Builder::<Block>::new()
@@ -1370,7 +1371,7 @@ mod remote_tests {
 	#[tokio::test(flavor = "multi_thread")]
 	async fn can_fetch_all() {
 		if std::option_env!("TEST_WS").is_none() {
-			return
+			return;
 		}
 		init_logger();
 		Builder::<Block>::new()

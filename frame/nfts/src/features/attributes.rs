@@ -77,8 +77,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let mut deposit = Zero::zero();
 		// disabled DepositRequired setting only affects the CollectionOwner namespace
-		if collection_config.is_setting_enabled(CollectionSetting::DepositRequired) ||
-			namespace != AttributeNamespace::CollectionOwner
+		if collection_config.is_setting_enabled(CollectionSetting::DepositRequired)
+			|| namespace != AttributeNamespace::CollectionOwner
 		{
 			deposit = T::DepositPerByte::get()
 				.saturating_mul(((key.len() + value.len()) as u32).into())
@@ -378,17 +378,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let mut result = false;
 		match namespace {
 			AttributeNamespace::CollectionOwner => result = origin == collection_owner,
-			AttributeNamespace::ItemOwner =>
+			AttributeNamespace::ItemOwner => {
 				if let Some(item) = maybe_item {
 					let item_details =
 						Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
 					result = origin == &item_details.owner
-				},
-			AttributeNamespace::Account(account_id) =>
+				}
+			},
+			AttributeNamespace::Account(account_id) => {
 				if let Some(item) = maybe_item {
 					let approvals = ItemAttributesApprovalsOf::<T, I>::get(&collection, &item);
 					result = account_id == origin && approvals.contains(&origin)
-				},
+				}
+			},
 			_ => (),
 		};
 		Ok(result)

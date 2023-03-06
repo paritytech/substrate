@@ -69,7 +69,7 @@ impl RuntimeInterfaceFunction {
 			return Err(Error::new(
 				item.sig.ident.span(),
 				"Methods marked as #[trap_on_return] cannot return anything",
-			))
+			));
 		}
 
 		Ok(Self { item, should_trap_on_return })
@@ -127,13 +127,13 @@ impl RuntimeInterfaceFunctionSet {
 				"Previous version with the same number defined here",
 			));
 
-			return Err(err)
+			return Err(err);
 		}
 
 		self.versions
 			.insert(version.version, RuntimeInterfaceFunction::new(trait_item)?);
-		if self.latest_version_to_call.map_or(true, |v| v < version.version) &&
-			version.is_callable()
+		if self.latest_version_to_call.map_or(true, |v| v < version.version)
+			&& version.is_callable()
 		{
 			self.latest_version_to_call = Some(version.version);
 		}
@@ -315,7 +315,7 @@ impl Parse for VersionAttribute {
 			Some(input.parse()?)
 		} else {
 			if !input.is_empty() {
-				return Err(Error::new(input.span(), "Unexpected token, expected `,`."))
+				return Err(Error::new(input.span(), "Unexpected token, expected `,`."));
 			}
 
 			None
@@ -343,7 +343,7 @@ pub fn get_runtime_interface(trait_def: &ItemTrait) -> Result<RuntimeInterface> 
 		let version = get_item_version(item)?.unwrap_or_default();
 
 		if version.version < 1 {
-			return Err(Error::new(item.span(), "Version needs to be at least `1`."))
+			return Err(Error::new(item.span(), "Version needs to be at least `1`."));
 		}
 
 		match functions.entry(name.clone()) {
@@ -366,7 +366,7 @@ pub fn get_runtime_interface(trait_def: &ItemTrait) -> Result<RuntimeInterface> 
 						"Unexpected version attribute: missing version '{}' for this function",
 						next_expected
 					),
-				))
+				));
 			}
 			next_expected += 1;
 		}

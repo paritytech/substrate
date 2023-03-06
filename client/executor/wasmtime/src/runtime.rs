@@ -226,10 +226,12 @@ impl WasmInstance for WasmtimeInstance {
 
 	fn get_global_const(&mut self, name: &str) -> Result<Option<Value>> {
 		match &mut self.strategy {
-			Strategy::LegacyInstanceReuse { instance_wrapper, .. } =>
-				instance_wrapper.get_global_val(name),
-			Strategy::RecreateInstance(ref mut instance_creator) =>
-				instance_creator.instantiate()?.get_global_val(name),
+			Strategy::LegacyInstanceReuse { instance_wrapper, .. } => {
+				instance_wrapper.get_global_val(name)
+			},
+			Strategy::RecreateInstance(ref mut instance_creator) => {
+				instance_creator.instantiate()?.get_global_val(name)
+			},
 		}
 	}
 
@@ -240,8 +242,9 @@ impl WasmInstance for WasmtimeInstance {
 				// associated with it.
 				None
 			},
-			Strategy::LegacyInstanceReuse { instance_wrapper, .. } =>
-				Some(instance_wrapper.base_ptr()),
+			Strategy::LegacyInstanceReuse { instance_wrapper, .. } => {
+				Some(instance_wrapper.base_ptr())
+			},
 		}
 	}
 }
@@ -345,8 +348,9 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 
 	config.memory_init_cow(use_cow);
 	config.memory_guaranteed_dense_image_size(match semantics.heap_alloc_strategy {
-		HeapAllocStrategy::Dynamic { maximum_pages } =>
-			maximum_pages.map(|p| p as u64 * WASM_PAGE_SIZE).unwrap_or(u64::MAX),
+		HeapAllocStrategy::Dynamic { maximum_pages } => {
+			maximum_pages.map(|p| p as u64 * WASM_PAGE_SIZE).unwrap_or(u64::MAX)
+		},
 		HeapAllocStrategy::Static { .. } => u64::MAX,
 	});
 
@@ -354,8 +358,9 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 		const MAX_WASM_PAGES: u64 = 0x10000;
 
 		let memory_pages = match semantics.heap_alloc_strategy {
-			HeapAllocStrategy::Dynamic { maximum_pages } =>
-				maximum_pages.map(|p| p as u64).unwrap_or(MAX_WASM_PAGES),
+			HeapAllocStrategy::Dynamic { maximum_pages } => {
+				maximum_pages.map(|p| p as u64).unwrap_or(MAX_WASM_PAGES)
+			},
 			HeapAllocStrategy::Static { .. } => MAX_WASM_PAGES,
 		};
 
@@ -628,11 +633,12 @@ where
 						}),
 					)
 				},
-				InstantiationStrategy::Pooling |
-				InstantiationStrategy::PoolingCopyOnWrite |
-				InstantiationStrategy::RecreateInstance |
-				InstantiationStrategy::RecreateInstanceCopyOnWrite =>
-					(module, InternalInstantiationStrategy::Builtin),
+				InstantiationStrategy::Pooling
+				| InstantiationStrategy::PoolingCopyOnWrite
+				| InstantiationStrategy::RecreateInstance
+				| InstantiationStrategy::RecreateInstanceCopyOnWrite => {
+					(module, InternalInstantiationStrategy::Builtin)
+				},
 			}
 		},
 		CodeSupplyMode::Precompiled(compiled_artifact_path) => {

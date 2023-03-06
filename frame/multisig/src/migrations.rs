@@ -59,7 +59,7 @@ pub mod v1 {
 
 			if onchain > 0 {
 				log!(info, "MigrateToV1 should be removed");
-				return T::DbWeight::get().reads(1)
+				return T::DbWeight::get().reads(1);
 			}
 
 			Calls::<T>::drain().for_each(|(_call_hash, (_data, caller, deposit))| {

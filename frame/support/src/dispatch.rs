@@ -464,7 +464,7 @@ pub trait WeighData<T> {
 
 impl<T> WeighData<T> for Weight {
 	fn weigh_data(&self, _: T) -> Weight {
-		return *self
+		return *self;
 	}
 }
 
@@ -476,13 +476,13 @@ impl<T> PaysFee<T> for (Weight, DispatchClass, Pays) {
 
 impl<T> WeighData<T> for (Weight, DispatchClass) {
 	fn weigh_data(&self, args: T) -> Weight {
-		return self.0.weigh_data(args)
+		return self.0.weigh_data(args);
 	}
 }
 
 impl<T> WeighData<T> for (Weight, DispatchClass, Pays) {
 	fn weigh_data(&self, args: T) -> Weight {
-		return self.0.weigh_data(args)
+		return self.0.weigh_data(args);
 	}
 }
 
@@ -500,7 +500,7 @@ impl<T> PaysFee<T> for (Weight, DispatchClass) {
 
 impl<T> WeighData<T> for (Weight, Pays) {
 	fn weigh_data(&self, args: T) -> Weight {
-		return self.0.weigh_data(args)
+		return self.0.weigh_data(args);
 	}
 }
 
@@ -584,13 +584,13 @@ impl<T> PaysFee<T> for u64 {
 
 impl<T> WeighData<T> for u64 {
 	fn weigh_data(&self, _: T) -> Weight {
-		return Weight::from_parts(*self, 0)
+		return Weight::from_parts(*self, 0);
 	}
 }
 
 impl<T> WeighData<T> for (u64, DispatchClass, Pays) {
 	fn weigh_data(&self, args: T) -> Weight {
-		return self.0.weigh_data(args)
+		return self.0.weigh_data(args);
 	}
 }
 
@@ -608,7 +608,7 @@ impl<T> PaysFee<T> for (u64, DispatchClass, Pays) {
 
 impl<T> WeighData<T> for (u64, DispatchClass) {
 	fn weigh_data(&self, args: T) -> Weight {
-		return self.0.weigh_data(args)
+		return self.0.weigh_data(args);
 	}
 }
 
@@ -626,7 +626,7 @@ impl<T> PaysFee<T> for (u64, DispatchClass) {
 
 impl<T> WeighData<T> for (u64, Pays) {
 	fn weigh_data(&self, args: T) -> Weight {
-		return self.0.weigh_data(args)
+		return self.0.weigh_data(args);
 	}
 }
 
@@ -3262,7 +3262,7 @@ mod tests {
 		fn index<P: 'static>() -> Option<usize> {
 			let type_id = sp_std::any::TypeId::of::<P>();
 			if type_id == sp_std::any::TypeId::of::<Test>() {
-				return Some(0)
+				return Some(0);
 			}
 
 			None
@@ -3270,7 +3270,7 @@ mod tests {
 		fn name<P: 'static>() -> Option<&'static str> {
 			let type_id = sp_std::any::TypeId::of::<P>();
 			if type_id == sp_std::any::TypeId::of::<Test>() {
-				return Some("Test")
+				return Some("Test");
 			}
 
 			None
@@ -3278,7 +3278,7 @@ mod tests {
 		fn module_name<P: 'static>() -> Option<&'static str> {
 			let type_id = sp_std::any::TypeId::of::<P>();
 			if type_id == sp_std::any::TypeId::of::<Test>() {
-				return Some("tests")
+				return Some("tests");
 			}
 
 			None
@@ -3286,7 +3286,7 @@ mod tests {
 		fn crate_version<P: 'static>() -> Option<CrateVersion> {
 			let type_id = sp_std::any::TypeId::of::<P>();
 			if type_id == sp_std::any::TypeId::of::<Test>() {
-				return Some(frame_support::crate_to_crate_version!())
+				return Some(frame_support::crate_to_crate_version!());
 			}
 
 			None

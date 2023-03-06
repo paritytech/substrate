@@ -99,7 +99,7 @@ where
 					"Requested a finality target using max number {} below the base number {}",
 					max_number, base_number
 				);
-				return Err(Application(msg.into()))
+				return Err(Application(msg.into()));
 			}
 
 			while current_head.number() > &max_number {
@@ -116,7 +116,7 @@ where
 					"Requested a finality target using a base {:?} not in the best chain {:?}",
 					base_hash, best_hash,
 				);
-				return Err(Application(msg.into()))
+				return Err(Application(msg.into()));
 			}
 			let current_hash = *current_head.parent_hash();
 			current_head = blockchain

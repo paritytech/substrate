@@ -288,7 +288,7 @@ impl<
 		let heap_size: u32 = HeapSize::get().into();
 		if (heap_size as usize).saturating_sub(self.heap.len()) < data_len {
 			// Can't fit.
-			return Err(())
+			return Err(());
 		}
 
 		let mut heap = sp_std::mem::take(&mut self.heap).into_inner();
@@ -306,7 +306,7 @@ impl<
 	/// SAFETY: Does not panic even on corrupted storage.
 	fn peek_first(&self) -> Option<BoundedSlice<u8, IntoU32<HeapSize, Size>>> {
 		if self.first > self.last {
-			return None
+			return None;
 		}
 		let f = (self.first.into() as usize).min(self.heap.len());
 		let mut item_slice = &self.heap[f..];
@@ -315,7 +315,7 @@ impl<
 			if payload_len <= item_slice.len() {
 				// impossible to truncate since is sliced up from `self.heap: BoundedVec<u8,
 				// HeapSize>`
-				return Some(BoundedSlice::defensive_truncate_from(&item_slice[..payload_len]))
+				return Some(BoundedSlice::defensive_truncate_from(&item_slice[..payload_len]));
 			}
 		}
 		defensive!("message-queue: heap corruption");
@@ -348,14 +348,14 @@ impl<
 			let h = ItemHeader::<Size>::decode(&mut item_slice).ok()?;
 			let item_len = h.payload_len.into() as usize;
 			if item_slice.len() < item_len {
-				return None
+				return None;
 			}
 			item_slice = &item_slice[item_len..];
 			pos.saturating_accrue(header_len.saturating_add(item_len));
 		}
 		let h = ItemHeader::<Size>::decode(&mut item_slice).ok()?;
 		if item_slice.len() < h.payload_len.into() as usize {
-			return None
+			return None;
 		}
 		item_slice = &item_slice[..h.payload_len.into() as usize];
 		Some((pos, h.is_processed, item_slice))
@@ -731,7 +731,7 @@ impl<T: Config> Pallet<T> {
 	/// Returns the current head if it got be bumped and `None` otherwise.
 	fn bump_service_head(weight: &mut WeightMeter) -> Option<MessageOriginOf<T>> {
 		if !weight.check_accrue(T::WeightInfo::bump_service_head()) {
-			return None
+			return None;
 		}
 
 		if let Some(head) = ServiceHead::<T>::get() {
@@ -766,13 +766,13 @@ impl<T: Config> Pallet<T> {
 				Some(p) => p,
 				None => {
 					defensive!("Corruption: referenced page doesn't exist.");
-					return
+					return;
 				},
 			};
 			if page.try_append_message::<T>(message).is_ok() {
 				Pages::<T>::insert(origin, last, &page);
 				BookStateFor::<T>::insert(origin, book_state);
-				return
+				return;
 			}
 		} else {
 			debug_assert!(
@@ -812,8 +812,8 @@ impl<T: Config> Pallet<T> {
 			page.peek_index(index.into() as usize).ok_or(Error::<T>::NoMessage)?;
 		let payload_len = payload.len() as u64;
 		ensure!(
-			page_index < book_state.begin ||
-				(page_index == book_state.begin && pos < page.first.into() as usize),
+			page_index < book_state.begin
+				|| (page_index == book_state.begin && pos < page.first.into() as usize),
 			Error::<T>::Queued
 		);
 		ensure!(!is_processed, Error::<T>::AlreadyProcessed);
@@ -942,7 +942,7 @@ impl<T: Config> Pallet<T> {
 		if !weight.check_accrue(
 			T::WeightInfo::service_queue_base().saturating_add(T::WeightInfo::ready_ring_unknit()),
 		) {
-			return (false, None)
+			return (false, None);
 		}
 
 		let mut book_state = BookStateFor::<T>::get(&origin);
@@ -994,7 +994,7 @@ impl<T: Config> Pallet<T> {
 			T::WeightInfo::service_page_base_completion()
 				.max(T::WeightInfo::service_page_base_no_completion()),
 		) {
-			return (0, Bailed)
+			return (0, Bailed);
 		}
 
 		let page_index = book_state.begin;
@@ -1002,7 +1002,7 @@ impl<T: Config> Pallet<T> {
 			Some(p) => p,
 			None => {
 				defensive!("message-queue: referenced page not found");
-				return (0, NoMore)
+				return (0, NoMore);
 			},
 		};
 
@@ -1051,10 +1051,10 @@ impl<T: Config> Pallet<T> {
 		// This ugly pre-checking is needed for the invariant
 		// "we never bail if a page became complete".
 		if page.is_complete() {
-			return ItemExecutionStatus::NoItem
+			return ItemExecutionStatus::NoItem;
 		}
 		if !weight.check_accrue(T::WeightInfo::service_page_item()) {
-			return ItemExecutionStatus::Bailed
+			return ItemExecutionStatus::Bailed;
 		}
 
 		let payload = &match page.peek_first() {
@@ -1124,7 +1124,7 @@ impl<T: Config> Pallet<T> {
 						page_info.push_str(&format!("{:?}, ", msg));
 						page.skip_first(true);
 					} else {
-						break
+						break;
 					}
 				}
 				page_info.push_str("]\n");
@@ -1250,10 +1250,10 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 		loop {
 			let (progressed, n) = Self::service_queue(next.clone(), &mut weight, overweight_limit);
 			next = match n {
-				Some(n) =>
+				Some(n) => {
 					if !progressed {
 						if last_no_progress == Some(n.clone()) {
-							break
+							break;
 						}
 						if last_no_progress.is_none() {
 							last_no_progress = Some(next.clone())
@@ -1262,7 +1262,8 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 					} else {
 						last_no_progress = None;
 						n
-					},
+					}
+				},
 				None => break,
 			}
 		}
@@ -1281,7 +1282,7 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 			T::WeightInfo::execute_overweight_page_removed()
 				.max(T::WeightInfo::execute_overweight_page_updated()),
 		) {
-			return Err(ExecuteOverweightError::InsufficientWeight)
+			return Err(ExecuteOverweightError::InsufficientWeight);
 		}
 
 		Pallet::<T>::do_execute_overweight(message_origin, page, index, weight.remaining()).map_err(
@@ -1319,7 +1320,7 @@ impl<T: Config> EnqueueMessage<MessageOriginOf<T>> for Pallet<T> {
 
 	fn sweep_queue(origin: MessageOriginOf<T>) {
 		if !BookStateFor::<T>::contains_key(&origin) {
-			return
+			return;
 		}
 		let mut book_state = BookStateFor::<T>::get(&origin);
 		book_state.begin = book_state.end;

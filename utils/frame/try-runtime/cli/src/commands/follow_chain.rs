@@ -163,7 +163,7 @@ where
 				number,
 				why
 			);
-			continue
+			continue;
 		}
 
 		let (mut changes, encoded_result) = result.expect("checked to be Ok; qed");

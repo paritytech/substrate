@@ -127,8 +127,9 @@ impl<B: BlockT> BitswapRequestHandler<B> {
 					};
 
 					match pending_response.send(response) {
-						Ok(()) =>
-							trace!(target: LOG_TARGET, "Handled bitswap request from {peer}.",),
+						Ok(()) => {
+							trace!(target: LOG_TARGET, "Handled bitswap request from {peer}.",)
+						},
 						Err(_) => debug!(
 							target: LOG_TARGET,
 							"Failed to handle light client request from {peer}: {}",
@@ -175,13 +176,13 @@ impl<B: BlockT> BitswapRequestHandler<B> {
 			Some(wantlist) => wantlist,
 			None => {
 				debug!(target: LOG_TARGET, "Unexpected bitswap message from {}", peer);
-				return Err(BitswapError::InvalidWantList)
+				return Err(BitswapError::InvalidWantList);
 			},
 		};
 
 		if wantlist.entries.len() > MAX_WANTED_BLOCKS {
 			trace!(target: LOG_TARGET, "Ignored request: too many entries");
-			return Err(BitswapError::TooManyEntries)
+			return Err(BitswapError::TooManyEntries);
 		}
 
 		for entry in wantlist.entries {
@@ -189,16 +190,16 @@ impl<B: BlockT> BitswapRequestHandler<B> {
 				Ok(cid) => cid,
 				Err(e) => {
 					trace!(target: LOG_TARGET, "Bad CID {:?}: {:?}", entry.block, e);
-					continue
+					continue;
 				},
 			};
 
-			if cid.version() != cid::Version::V1 ||
-				cid.hash().code() != u64::from(cid::multihash::Code::Blake2b256) ||
-				cid.hash().size() != 32
+			if cid.version() != cid::Version::V1
+				|| cid.hash().code() != u64::from(cid::multihash::Code::Blake2b256)
+				|| cid.hash().size() != 32
 			{
 				debug!(target: LOG_TARGET, "Ignoring unsupported CID {}: {}", peer, cid);
-				continue
+				continue;
 			}
 
 			let mut hash = B::Hash::default();

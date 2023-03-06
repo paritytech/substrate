@@ -149,7 +149,7 @@ where
 				// We have to canonicalize and prune the blocks in the finality
 				// notification that lead to building the offchain-mmr as well.
 				offchain_mmr.canonicalize_and_prune(notification);
-				return Some(offchain_mmr)
+				return Some(offchain_mmr);
 			}
 		}
 
@@ -197,7 +197,7 @@ where
 					target: LOG_TARGET,
 					"Can't spawn a MmrGadget for a node without offchain storage."
 				);
-				return
+				return;
 			},
 		};
 

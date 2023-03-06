@@ -60,7 +60,7 @@ fn main() {
 
 				if score.minimal_stake == 0 {
 					// such cases cannot be improved by balancing.
-					return
+					return;
 				}
 				score
 			};
@@ -85,9 +85,9 @@ fn main() {
 			// The only guarantee of balancing is such that the first and third element of the score
 			// cannot decrease.
 			assert!(
-				balanced_score.minimal_stake >= unbalanced_score.minimal_stake &&
-					balanced_score.sum_stake == unbalanced_score.sum_stake &&
-					balanced_score.sum_stake_squared <= unbalanced_score.sum_stake_squared
+				balanced_score.minimal_stake >= unbalanced_score.minimal_stake
+					&& balanced_score.sum_stake == unbalanced_score.sum_stake
+					&& balanced_score.sum_stake_squared <= unbalanced_score.sum_stake_squared
 			);
 		});
 	}
