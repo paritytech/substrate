@@ -37,11 +37,14 @@ fn asset_ids() -> Vec<u32> {
 fn basic_minting_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 1, 1, true, 1));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
 		assert_eq!(Assets::balance(0, 1), 100);
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 2, 100));
 		assert_eq!(Assets::balance(0, 2), 100);
-		assert_eq!(asset_ids(), vec![0, 999]);
+		assert_eq!(asset_ids(), vec![0, 1, 999]);
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 1, 1, 100));
+		assert_eq!(Assets::account_balances(1), vec![(0, 100), (999, 100), (1, 100)]);
 	});
 }
 
@@ -1094,6 +1097,35 @@ fn force_asset_status_should_work() {
 		assert_eq!(Assets::balance(0, 1), 200);
 		assert_eq!(Assets::balance(0, 2), 0);
 		assert_eq!(Assets::total_supply(0), 200);
+	});
+}
+
+#[test]
+fn set_min_balance_should_work() {
+	new_test_ext().execute_with(|| {
+		let id = 42;
+		Balances::make_free_balance_be(&1, 10);
+		assert_ok!(Assets::create(RuntimeOrigin::signed(1), id, 1, 30));
+
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), id, 1, 50));
+		// won't execute because there is an asset holder.
+		assert_noop!(
+			Assets::set_min_balance(RuntimeOrigin::signed(1), id, 50),
+			Error::<Test>::NoPermission
+		);
+
+		// will execute because the new value of min_balance is less than the
+		// old value. 10 < 30
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), id, 1, 10));
+
+		assert_ok!(Assets::burn(RuntimeOrigin::signed(1), id, 1, 50));
+		assert_noop!(
+			Assets::set_min_balance(RuntimeOrigin::signed(2), id, 50),
+			Error::<Test>::NoPermission
+		);
+
+		assert_ok!(Assets::set_min_balance(RuntimeOrigin::signed(1), id, 50));
+		assert_eq!(Asset::<Test>::get(id).unwrap().min_balance, 50);
 	});
 }
 

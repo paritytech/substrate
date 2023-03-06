@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use super::benchmarking::{inherent_benchmark_data, RemarkBuilder, TransferExpendabilityBuilder};
+use super::benchmarking::{inherent_benchmark_data, RemarkBuilder, TransferKeepAliveBuilder};
 use crate::{
 	chain_spec, service,
 	service::{new_partial, FullClient},
@@ -157,7 +157,7 @@ pub fn run() -> Result<()> {
 						// Register the *Remark* and *TKA* builders.
 						let ext_factory = ExtrinsicFactory(vec![
 							Box::new(RemarkBuilder::new(partial.client.clone())),
-							Box::new(TransferExpendabilityBuilder::new(
+							Box::new(TransferKeepAliveBuilder::new(
 								partial.client.clone(),
 								Sr25519Keyring::Alice.to_account_id(),
 								ExistentialDeposit::get(),

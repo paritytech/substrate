@@ -72,7 +72,7 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 		}
 
 		match self.block_type {
-			BlockType::RandomTransfersExpendability => path.push("transfer_keep_alive"),
+			BlockType::RandomTransfersKeepAlive => path.push("transfer_keep_alive"),
 			BlockType::RandomTransfersReaping => path.push("transfer_reaping"),
 			BlockType::Noop => path.push("noop"),
 		}
@@ -133,7 +133,7 @@ impl core::Benchmark for ImportBenchmark {
 			.expect("state_at failed for block#1")
 			.inspect_state(|| {
 				match self.block_type {
-					BlockType::RandomTransfersExpendability => {
+					BlockType::RandomTransfersKeepAlive => {
 						// should be 8 per signed extrinsic + 1 per unsigned
 						// we have 1 unsigned and the rest are signed in the block
 						// those 8 events per signed are:
