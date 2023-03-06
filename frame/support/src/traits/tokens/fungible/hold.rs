@@ -325,7 +325,7 @@ pub trait Mutate<AccountId>:
 	/// `source` must obey the requirements of `keep_alive`.
 	///
 	/// If `force` is `Force`, then other fund-locking mechanisms may be disregarded. It should be
-	/// left as `Regular` in most circumstances, but when you want the same power as a `slash`, it
+	/// left as `Polite` in most circumstances, but when you want the same power as a `slash`, it
 	/// may be `Force`.
 	///
 	/// The amount placed on hold is returned or `Err` in the case of error and nothing is changed.
