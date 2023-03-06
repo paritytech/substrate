@@ -169,7 +169,6 @@ fn next_block() {
 	System::set_block_number(System::block_number() + 1);
 }
 
-#[allow(dead_code)]
 fn run_to(n: u64) {
 	while System::block_number() < n {
 		next_block();
