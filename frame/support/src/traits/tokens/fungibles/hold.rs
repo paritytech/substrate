@@ -84,7 +84,7 @@ pub trait Inspect<AccountId>: super::Inspect<AccountId> {
 	/// - Removing `amount` from the total balance would kill the account and remove the only
 	///   provider reference.
 	///
-	/// Note: we pass `true` as the third argument to `reducible_balance` since we assume that if
+	/// Note: we pass `Fortitude::Force` as the last argument to `reducible_balance` since we assume that if
 	/// needed the balance can slashed. If we are using a simple non-forcing reserve-transfer, then
 	/// we really ought to check that we are not reducing the funds below the freeze-limit (if any).
 	///
