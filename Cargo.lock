@@ -573,13 +573,13 @@ dependencies = [
 
 [[package]]
 name = "blake2b_simd"
-version = "1.0.0"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72936ee4afc7f8f736d1c38383b56480b5497b4617b4a77bdbf1d2ababc76127"
+checksum = "3c2f0dc9a68c6317d884f97cc36cf5a3d20ba14ce404227df55e1af708ab04bc"
 dependencies = [
  "arrayref",
  "arrayvec 0.7.2",
- "constant_time_eq 0.1.5",
+ "constant_time_eq 0.2.4",
 ]
 
 [[package]]
@@ -10073,7 +10073,7 @@ dependencies = [
 name = "sp-core-hashing"
 version = "5.0.0"
 dependencies = [
- "blake2",
+ "blake2b_simd",
  "byteorder",
  "digest 0.10.6",
  "sha2 0.10.6",
@@ -11655,7 +11655,7 @@ checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
  "digest 0.10.6",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 

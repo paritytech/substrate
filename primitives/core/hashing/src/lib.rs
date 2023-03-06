@@ -23,34 +23,41 @@
 use core::hash::Hasher;
 
 use byteorder::{ByteOrder, LittleEndian};
-use digest::{
-	consts::{U16, U32, U8},
-	Digest,
-};
+use digest::Digest;
+
+#[inline(always)]
+fn blake2<const N: usize>(data: &[u8]) -> [u8; N] {
+	blake2b_simd::Params::new()
+		.hash_length(N)
+		.hash(data)
+		.as_bytes()
+		.try_into()
+		.expect("slice is always the necessary length")
+}
 
 /// Do a Blake2 512-bit hash and place result in `dest`.
 pub fn blake2_512_into(data: &[u8], dest: &mut [u8; 64]) {
-	dest.copy_from_slice(blake2::Blake2b512::digest(data).as_slice());
+	*dest = blake2(data);
 }
 
 /// Do a Blake2 512-bit hash and return result.
 pub fn blake2_512(data: &[u8]) -> [u8; 64] {
-	blake2::Blake2b512::digest(data).into()
+	blake2(data)
 }
 
 /// Do a Blake2 256-bit hash and return result.
 pub fn blake2_256(data: &[u8]) -> [u8; 32] {
-	blake2::Blake2b::<U32>::digest(data).into()
+	blake2(data)
 }
 
 /// Do a Blake2 128-bit hash and return result.
 pub fn blake2_128(data: &[u8]) -> [u8; 16] {
-	blake2::Blake2b::<U16>::digest(data).into()
+	blake2(data)
 }
 
 /// Do a Blake2 64-bit hash and return result.
 pub fn blake2_64(data: &[u8]) -> [u8; 8] {
-	blake2::Blake2b::<U8>::digest(data).into()
+	blake2(data)
 }
 
 /// Do a XX 64-bit hash and place result in `dest`.
