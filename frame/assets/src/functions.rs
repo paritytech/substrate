@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -923,5 +923,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			});
 			Ok(())
 		})
+	}
+
+	/// Returns all the non-zero balances for all assets of the given `account`.
+	pub fn account_balances(account: T::AccountId) -> Vec<(T::AssetId, T::Balance)> {
+		Asset::<T, I>::iter_keys()
+			.filter_map(|id| Self::maybe_balance(id, account.clone()).map(|balance| (id, balance)))
+			.collect::<Vec<_>>()
 	}
 }

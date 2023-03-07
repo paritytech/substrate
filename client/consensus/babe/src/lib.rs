@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -123,7 +123,7 @@ use sp_core::{crypto::ByteArray, ExecutionContext};
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
-	generic::{BlockId, OpaqueDigestItemId},
+	generic::OpaqueDigestItemId,
 	traits::{Block as BlockT, Header, NumberFor, SaturatedConversion, Zero},
 	DigestItem,
 };
@@ -152,7 +152,7 @@ mod tests;
 const LOG_TARGET: &str = "babe";
 
 /// BABE epoch information
-#[derive(Decode, Encode, PartialEq, Eq, Clone, Debug)]
+#[derive(Decode, Encode, PartialEq, Eq, Clone, Debug, scale_info::TypeInfo)]
 pub struct Epoch {
 	/// The epoch index.
 	pub epoch_index: u64,
@@ -377,24 +377,24 @@ where
 	C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
 	C::Api: BabeApi<B>,
 {
-	let block_id = if client.usage_info().chain.finalized_state.is_some() {
-		BlockId::Hash(client.usage_info().chain.best_hash)
+	let at_hash = if client.usage_info().chain.finalized_state.is_some() {
+		client.usage_info().chain.best_hash
 	} else {
 		debug!(target: LOG_TARGET, "No finalized state is available. Reading config from genesis");
-		BlockId::Hash(client.usage_info().chain.genesis_hash)
+		client.usage_info().chain.genesis_hash
 	};
 
 	let runtime_api = client.runtime_api();
-	let version = runtime_api.api_version::<dyn BabeApi<B>>(&block_id)?;
+	let version = runtime_api.api_version::<dyn BabeApi<B>>(at_hash)?;
 
 	let config = match version {
 		Some(1) => {
 			#[allow(deprecated)]
 			{
-				runtime_api.configuration_before_version_2(&block_id)?.into()
+				runtime_api.configuration_before_version_2(at_hash)?.into()
 			}
 		},
-		Some(2) => runtime_api.configuration(&block_id)?,
+		Some(2) => runtime_api.configuration(at_hash)?,
 		_ =>
 			return Err(sp_blockchain::Error::VersionInvalid(
 				"Unsupported or invalid BabeApi version".to_string(),
@@ -1023,7 +1023,7 @@ where
 	async fn check_inherents(
 		&self,
 		block: Block,
-		block_id: BlockId<Block>,
+		at_hash: Block::Hash,
 		inherent_data: InherentData,
 		create_inherent_data_providers: CIDP::InherentDataProviders,
 		execution_context: ExecutionContext,
@@ -1031,7 +1031,7 @@ where
 		let inherent_res = self
 			.client
 			.runtime_api()
-			.check_inherents_with_context(&block_id, execution_context, block, inherent_data)
+			.check_inherents_with_context(at_hash, execution_context, block, inherent_data)
 			.map_err(Error::RuntimeApi)?;
 
 		if !inherent_res.ok() {
@@ -1078,32 +1078,32 @@ where
 		);
 
 		// get the best block on which we will build and send the equivocation report.
-		let best_id = self
+		let best_hash = self
 			.select_chain
 			.best_chain()
 			.await
-			.map(|h| BlockId::Hash(h.hash()))
+			.map(|h| h.hash())
 			.map_err(|e| Error::Client(e.into()))?;
 
 		// generate a key ownership proof. we start by trying to generate the
-		// key owernship proof at the parent of the equivocating header, this
+		// key ownership proof at the parent of the equivocating header, this
 		// will make sure that proof generation is successful since it happens
 		// during the on-going session (i.e. session keys are available in the
 		// state to be able to generate the proof). this might fail if the
 		// equivocation happens on the first block of the session, in which case
 		// its parent would be on the previous session. if generation on the
 		// parent header fails we try with best block as well.
-		let generate_key_owner_proof = |block_id: &BlockId<Block>| {
+		let generate_key_owner_proof = |at_hash: Block::Hash| {
 			self.client
 				.runtime_api()
-				.generate_key_ownership_proof(block_id, slot, equivocation_proof.offender.clone())
+				.generate_key_ownership_proof(at_hash, slot, equivocation_proof.offender.clone())
 				.map_err(Error::RuntimeApi)
 		};
 
-		let parent_id = BlockId::Hash(*header.parent_hash());
-		let key_owner_proof = match generate_key_owner_proof(&parent_id)? {
+		let parent_hash = *header.parent_hash();
+		let key_owner_proof = match generate_key_owner_proof(parent_hash)? {
 			Some(proof) => proof,
-			None => match generate_key_owner_proof(&best_id)? {
+			None => match generate_key_owner_proof(best_hash)? {
 				Some(proof) => proof,
 				None => {
 					debug!(
@@ -1119,7 +1119,7 @@ where
 		self.client
 			.runtime_api()
 			.submit_report_equivocation_unsigned_extrinsic(
-				&best_id,
+				best_hash,
 				equivocation_proof,
 				key_owner_proof,
 			)
@@ -1268,7 +1268,7 @@ where
 
 						self.check_inherents(
 							new_block.clone(),
-							BlockId::Hash(parent_hash),
+							parent_hash,
 							inherent_data,
 							create_inherent_data_providers,
 							block.origin.into(),
@@ -1395,11 +1395,10 @@ where
 		};
 
 		// Read epoch info from the imported state.
-		let block_id = BlockId::hash(hash);
-		let current_epoch = self.client.runtime_api().current_epoch(&block_id).map_err(|e| {
+		let current_epoch = self.client.runtime_api().current_epoch(hash).map_err(|e| {
 			ConsensusError::ClientImport(babe_err::<Block>(Error::RuntimeApi(e)).into())
 		})?;
-		let next_epoch = self.client.runtime_api().next_epoch(&block_id).map_err(|e| {
+		let next_epoch = self.client.runtime_api().next_epoch(hash).map_err(|e| {
 			ConsensusError::ClientImport(babe_err::<Block>(Error::RuntimeApi(e)).into())
 		})?;
 

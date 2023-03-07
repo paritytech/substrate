@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -972,6 +972,20 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
+impl<T: Config> Pallet<T> {
+	/// Returns the current nominations quota for nominators.
+	///
+	/// Used by the runtime API.
+	/// Note: for now, this api runtime will always return value of `T::MaxNominations` and thus it
+	/// is redundant. However, with the upcoming changes in
+	/// <https://github.com/paritytech/substrate/pull/12970>, the nominations quota will change
+	/// depending on the nominators balance. We're introducing this runtime API now to prepare the
+	/// community to use it before rolling out PR#12970.
+	pub fn api_nominations_quota(_balance: BalanceOf<T>) -> u32 {
+		T::MaxNominations::get()
+	}
+}
+
 impl<T: Config> ElectionDataProvider for Pallet<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = BlockNumberFor<T>;
@@ -1217,22 +1231,12 @@ impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, 
 
 /// Add reward points to block authors:
 /// * 20 points to the block producer for producing a (non-uncle) block in the relay chain,
-/// * 2 points to the block producer for each reference to a previously unreferenced uncle, and
-/// * 1 point to the producer of each referenced uncle block.
 impl<T> pallet_authorship::EventHandler<T::AccountId, T::BlockNumber> for Pallet<T>
 where
 	T: Config + pallet_authorship::Config + pallet_session::Config,
 {
 	fn note_author(author: T::AccountId) {
 		Self::reward_by_ids(vec![(author, 20)])
-	}
-	fn note_uncle(uncle_author: T::AccountId, _age: T::BlockNumber) {
-		// defensive-only: block author must exist.
-		if let Some(block_author) = <pallet_authorship::Pallet<T>>::author() {
-			Self::reward_by_ids(vec![(block_author, 2), (uncle_author, 1)])
-		} else {
-			crate::log!(warn, "block author not set, this should never happen");
-		}
 	}
 }
 
@@ -1263,7 +1267,7 @@ where
 		disable_strategy: DisableStrategy,
 	) -> Weight {
 		let reward_proportion = SlashRewardFraction::<T>::get();
-		let mut consumed_weight = Weight::from_ref_time(0);
+		let mut consumed_weight = Weight::from_parts(0, 0);
 		let mut add_db_reads_writes = |reads, writes| {
 			consumed_weight += T::DbWeight::get().reads_writes(reads, writes);
 		};
@@ -1461,9 +1465,11 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 		// nothing to do upon regenerate.
 		0
 	}
+	#[cfg(feature = "try-runtime")]
 	fn try_state() -> Result<(), &'static str> {
 		Ok(())
 	}
+
 	fn unsafe_clear() {
 		#[allow(deprecated)]
 		Validators::<T>::remove_all();
@@ -1535,6 +1541,8 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 		// nothing to do upon regenerate.
 		0
 	}
+
+	#[cfg(feature = "try-runtime")]
 	fn try_state() -> Result<(), &'static str> {
 		Ok(())
 	}

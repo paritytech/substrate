@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -354,7 +354,15 @@ impl<B: BlockT> ConsensusGossip<B> {
 					protocol = %self.protocol,
 					"Ignored already known message",
 				);
-				network.report_peer(who, rep::DUPLICATE_GOSSIP);
+
+				// If the peer already send us the message once, let's report them.
+				if self
+					.peers
+					.get_mut(&who)
+					.map_or(false, |p| !p.known_messages.insert(message_hash))
+				{
+					network.report_peer(who, rep::DUPLICATE_GOSSIP);
+				}
 				continue
 			}
 
@@ -675,6 +683,10 @@ mod tests {
 		) -> Result<Box<dyn NotificationSender>, NotificationSenderError> {
 			unimplemented!();
 		}
+
+		fn set_notification_handshake(&self, _protocol: ProtocolName, _handshake: Vec<u8>) {
+			unimplemented!();
+		}
 	}
 
 	impl NetworkBlock<<Block as BlockT>::Hash, NumberFor<Block>> for NoOpNetwork {
@@ -812,6 +824,32 @@ mod tests {
 			to_forward.is_empty(),
 			"Expected `on_incoming` to ignore message from unregistered peer but got {:?}",
 			to_forward,
+		);
+	}
+
+	// Two peers can send us the same gossip message. We should not report the second peer
+	// sending the gossip message as long as its the first time the peer send us this message.
+	#[test]
+	fn do_not_report_peer_for_first_time_duplicate_gossip_message() {
+		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), "/foo".into(), None);
+
+		let mut network = NoOpNetwork::default();
+
+		let peer_id = PeerId::random();
+		consensus.new_peer(&mut network, peer_id, ObservedRole::Full);
+		assert!(consensus.peers.contains_key(&peer_id));
+
+		let peer_id2 = PeerId::random();
+		consensus.new_peer(&mut network, peer_id2, ObservedRole::Full);
+		assert!(consensus.peers.contains_key(&peer_id2));
+
+		let message = vec![vec![1, 2, 3]];
+		consensus.on_incoming(&mut network, peer_id, message.clone());
+		consensus.on_incoming(&mut network, peer_id2, message.clone());
+
+		assert_eq!(
+			vec![(peer_id, rep::GOSSIP_SUCCESS)],
+			network.inner.lock().unwrap().peer_reports
 		);
 	}
 }

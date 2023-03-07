@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -148,7 +148,7 @@ impl ExtBuilder {
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		self.build().execute_with(|| {
 			test();
-			List::<Runtime>::try_state().expect("Try-state post condition failed")
+			List::<Runtime>::do_try_state().expect("do_try_state post condition failed")
 		})
 	}
 

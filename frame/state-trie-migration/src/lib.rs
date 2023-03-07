@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -1136,25 +1136,25 @@ mod mock {
 
 	impl WeightInfo for StateMigrationTestWeight {
 		fn process_top_key(_: u32) -> Weight {
-			Weight::from_ref_time(1000000)
+			Weight::from_parts(1000000, 0)
 		}
 		fn continue_migrate() -> Weight {
-			Weight::from_ref_time(1000000)
+			Weight::from_parts(1000000, 0)
 		}
 		fn continue_migrate_wrong_witness() -> Weight {
-			Weight::from_ref_time(1000000)
+			Weight::from_parts(1000000, 0)
 		}
 		fn migrate_custom_top_fail() -> Weight {
-			Weight::from_ref_time(1000000)
+			Weight::from_parts(1000000, 0)
 		}
 		fn migrate_custom_top_success() -> Weight {
-			Weight::from_ref_time(1000000)
+			Weight::from_parts(1000000, 0)
 		}
 		fn migrate_custom_child_fail() -> Weight {
-			Weight::from_ref_time(1000000)
+			Weight::from_parts(1000000, 0)
 		}
 		fn migrate_custom_child_success() -> Weight {
-			Weight::from_ref_time(1000000)
+			Weight::from_parts(1000000, 0)
 		}
 	}
 

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -21,8 +21,11 @@ use sc_client_api::{
 	backend, call_executor::CallExecutor, execution_extensions::ExecutionExtensions, HeaderBackend,
 };
 use sc_executor::{RuntimeVersion, RuntimeVersionOf};
-use sp_api::{ExecutionContext, ProofRecorder, StorageTransactionCache};
-use sp_core::traits::{CodeExecutor, RuntimeCode, SpawnNamed};
+use sp_api::{ProofRecorder, StorageTransactionCache};
+use sp_core::{
+	traits::{CallContext, CodeExecutor, RuntimeCode, SpawnNamed},
+	ExecutionContext,
+};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_state_machine::{
 	backend::AsTrieBackend, ExecutionStrategy, Ext, OverlayedChanges, StateMachine, StorageProof,
@@ -166,6 +169,7 @@ where
 		method: &str,
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
+		context: CallContext,
 	) -> sp_blockchain::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
 		let at_number =
@@ -193,6 +197,7 @@ where
 			extensions,
 			&runtime_code,
 			self.spawn_handle.clone(),
+			context,
 		)
 		.set_parent_hash(at_hash);
 
@@ -215,6 +220,11 @@ where
 		let at_number =
 			self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(at_hash))?;
 		let state = self.backend.state_at(at_hash)?;
+
+		let call_context = match context {
+			ExecutionContext::OffchainCall(_) => CallContext::Offchain,
+			_ => CallContext::Onchain,
+		};
 
 		let (execution_manager, extensions) =
 			self.execution_extensions.manager_and_extensions(at_hash, at_number, context);
@@ -247,6 +257,7 @@ where
 					extensions,
 					&runtime_code,
 					self.spawn_handle.clone(),
+					call_context,
 				)
 				.with_storage_transaction_cache(storage_transaction_cache.as_deref_mut())
 				.set_parent_hash(at_hash);
@@ -262,6 +273,7 @@ where
 					extensions,
 					&runtime_code,
 					self.spawn_handle.clone(),
+					call_context,
 				)
 				.with_storage_transaction_cache(storage_transaction_cache.as_deref_mut())
 				.set_parent_hash(at_hash);
@@ -485,7 +497,7 @@ mod tests {
 			)
 			.expect("Creates a client");
 
-		let version = client.runtime_version_at(&BlockId::Number(0)).unwrap();
+		let version = client.runtime_version_at(client.chain_info().genesis_hash).unwrap();
 
 		assert_eq!(SUBSTITUTE_SPEC_NAME, &*version.spec_name);
 	}

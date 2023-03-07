@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +20,7 @@
 use super::*;
 
 use assert_matches::assert_matches;
-use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist_account};
+use frame_benchmarking::v1::{account, benchmarks_instance_pallet, whitelist_account};
 use frame_support::{
 	dispatch::RawOrigin,
 	traits::{fungible, Currency, Get},

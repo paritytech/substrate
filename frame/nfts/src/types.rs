@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -60,6 +60,18 @@ pub(super) type CollectionConfigFor<T, I = ()> = CollectionConfig<
 	BalanceOf<T, I>,
 	<T as SystemConfig>::BlockNumber,
 	<T as Config<I>>::CollectionId,
+>;
+pub(super) type PreSignedMintOf<T, I = ()> = PreSignedMint<
+	<T as Config<I>>::CollectionId,
+	<T as Config<I>>::ItemId,
+	<T as SystemConfig>::AccountId,
+	<T as SystemConfig>::BlockNumber,
+>;
+pub(super) type PreSignedAttributesOf<T, I = ()> = PreSignedAttributes<
+	<T as Config<I>>::CollectionId,
+	<T as Config<I>>::ItemId,
+	<T as SystemConfig>::AccountId,
+	<T as SystemConfig>::BlockNumber,
 >;
 
 pub trait Incrementable {
@@ -187,7 +199,7 @@ pub struct PendingSwap<CollectionId, ItemId, ItemPriceWithDirection, Deadline> {
 	pub(super) desired_item: Option<ItemId>,
 	/// A price for the desired `item` with the direction.
 	pub(super) price: Option<ItemPriceWithDirection>,
-	/// An optional deadline for the swap.
+	/// A deadline for the swap.
 	pub(super) deadline: Deadline,
 }
 
@@ -473,3 +485,33 @@ impl CollectionRoles {
 	}
 }
 impl_codec_bitflags!(CollectionRoles, u8, CollectionRole);
+
+#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
+pub struct PreSignedMint<CollectionId, ItemId, AccountId, Deadline> {
+	/// A collection of the item to be minted.
+	pub(super) collection: CollectionId,
+	/// Item's ID.
+	pub(super) item: ItemId,
+	/// Additional item's key-value attributes.
+	pub(super) attributes: Vec<(Vec<u8>, Vec<u8>)>,
+	/// Additional item's metadata.
+	pub(super) metadata: Vec<u8>,
+	/// Restrict the claim to a particular account.
+	pub(super) only_account: Option<AccountId>,
+	/// A deadline for the signature.
+	pub(super) deadline: Deadline,
+}
+
+#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
+pub struct PreSignedAttributes<CollectionId, ItemId, AccountId, Deadline> {
+	/// Collection's ID.
+	pub(super) collection: CollectionId,
+	/// Item's ID.
+	pub(super) item: ItemId,
+	/// Key-value attributes.
+	pub(super) attributes: Vec<(Vec<u8>, Vec<u8>)>,
+	/// Attributes' namespace.
+	pub(super) namespace: AttributeNamespace<AccountId>,
+	/// A deadline for the signature.
+	pub(super) deadline: Deadline,
+}

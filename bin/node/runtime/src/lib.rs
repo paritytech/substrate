@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -32,10 +32,11 @@ use frame_support::{
 	pallet_prelude::Get,
 	parameter_types,
 	traits::{
-		fungible::ItemOf, AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32,
-		Currency, EitherOfDiverse, EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter,
-		KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote,
-		WithdrawReasons,
+		fungible::ItemOf,
+		tokens::{nonfungibles_v2::Inspect, GetSalary},
+		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, Currency, EitherOfDiverse,
+		EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter, KeyOwnerProofSystem,
+		LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote, WithdrawReasons,
 	},
 	weights::{
 		constants::{
@@ -52,9 +53,6 @@ use frame_system::{
 pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
 use pallet_election_provider_multi_phase::SolutionAccuracyOf;
-use pallet_grandpa::{
-	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
-};
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use pallet_nfts::PalletFeatures;
 use pallet_nis::WithMaximumOf;
@@ -63,6 +61,7 @@ pub use pallet_transaction_payment::{CurrencyAdapter, Multiplier, TargetedFeeAdj
 use pallet_transaction_payment::{FeeDetails, RuntimeDispatchInfo};
 use sp_api::impl_runtime_apis;
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
+use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_inherents::{CheckInherentsResult, InherentData};
 use sp_runtime::{
@@ -106,6 +105,9 @@ use sp_runtime::generic::Era;
 
 /// Generated voter bag information.
 mod voter_bags;
+
+/// Runtime API definition for assets.
+pub mod assets_api;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -233,7 +235,7 @@ impl frame_system::Config for Runtime {
 	type MaxConsumers = ConstU32<16>;
 }
 
-impl pallet_randomness_collective_flip::Config for Runtime {}
+impl pallet_insecure_randomness_collective_flip::Config for Runtime {}
 
 impl pallet_utility::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
@@ -362,6 +364,11 @@ impl pallet_scheduler::Config for Runtime {
 	type Preimages = Preimage;
 }
 
+impl pallet_glutton::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = pallet_glutton::weights::SubstrateWeight<Runtime>;
+}
+
 parameter_types! {
 	pub const PreimageMaxSize: u32 = 4096 * 1024;
 	pub const PreimageBaseDeposit: Balance = 1 * DOLLARS;
@@ -488,14 +495,8 @@ impl pallet_timestamp::Config for Runtime {
 	type WeightInfo = pallet_timestamp::weights::SubstrateWeight<Runtime>;
 }
 
-parameter_types! {
-	pub const UncleGenerations: BlockNumber = 5;
-}
-
 impl pallet_authorship::Config for Runtime {
 	type FindAuthor = pallet_session::FindAccountFromAuthorIndex<Self, Babe>;
-	type UncleGenerations = UncleGenerations;
-	type FilterUncle = ();
 	type EventHandler = (Staking, ImOnline);
 }
 
@@ -949,6 +950,7 @@ impl pallet_democracy::Config for Runtime {
 	/// (NTB) vote.
 	type ExternalDefaultOrigin =
 		pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 1, 1>;
+	type SubmitOrigin = EnsureSigned<AccountId>;
 	/// Two thirds of the technical committee can have an ExternalMajority/ExternalDefault vote
 	/// be tabled immediately and with a shorter voting/enactment period.
 	type FastTrackOrigin =
@@ -998,6 +1000,7 @@ impl pallet_collective::Config<CouncilCollective> for Runtime {
 	type MaxMembers = CouncilMaxMembers;
 	type DefaultVote = pallet_collective::PrimeDefaultVote;
 	type WeightInfo = pallet_collective::weights::SubstrateWeight<Runtime>;
+	type SetMembersOrigin = EnsureRoot<Self::AccountId>;
 }
 
 parameter_types! {
@@ -1009,8 +1012,9 @@ parameter_types! {
 	pub const TermDuration: BlockNumber = 7 * DAYS;
 	pub const DesiredMembers: u32 = 13;
 	pub const DesiredRunnersUp: u32 = 7;
-	pub const MaxVoters: u32 = 10 * 1000;
-	pub const MaxCandidates: u32 = 1000;
+	pub const MaxVotesPerVoter: u32 = 16;
+	pub const MaxVoters: u32 = 512;
+	pub const MaxCandidates: u32 = 64;
 	pub const ElectionsPhragmenPalletId: LockIdentifier = *b"phrelect";
 }
 
@@ -1035,6 +1039,7 @@ impl pallet_elections_phragmen::Config for Runtime {
 	type DesiredRunnersUp = DesiredRunnersUp;
 	type TermDuration = TermDuration;
 	type MaxVoters = MaxVoters;
+	type MaxVotesPerVoter = MaxVotesPerVoter;
 	type MaxCandidates = MaxCandidates;
 	type WeightInfo = pallet_elections_phragmen::weights::SubstrateWeight<Runtime>;
 }
@@ -1055,6 +1060,7 @@ impl pallet_collective::Config<TechnicalCollective> for Runtime {
 	type MaxMembers = TechnicalMaxMembers;
 	type DefaultVote = pallet_collective::PrimeDefaultVote;
 	type WeightInfo = pallet_collective::weights::SubstrateWeight<Runtime>;
+	type SetMembersOrigin = EnsureRoot<Self::AccountId>;
 }
 
 type EnsureRootOrHalfCouncil = EitherOfDiverse<
@@ -1151,7 +1157,7 @@ impl pallet_message_queue::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
 	/// NOTE: Always set this to `NoopMessageProcessor` for benchmarking.
-	type MessageProcessor = pallet_message_queue::mock_helpers::NoopMessageProcessor;
+	type MessageProcessor = pallet_message_queue::mock_helpers::NoopMessageProcessor<u32>;
 	type Size = u32;
 	type QueueChangeHandler = ();
 	type HeapSize = ConstU32<{ 64 * 1024 }>;
@@ -1316,6 +1322,10 @@ impl pallet_authority_discovery::Config for Runtime {
 	type MaxAuthorities = MaxAuthorities;
 }
 
+parameter_types! {
+	pub const MaxSetIdSessionEntries: u32 = BondingDuration::get() * SessionsPerEra::get();
+}
+
 impl pallet_grandpa::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 
@@ -1337,6 +1347,7 @@ impl pallet_grandpa::Config for Runtime {
 
 	type WeightInfo = ();
 	type MaxAuthorities = MaxAuthorities;
+	type MaxSetIdSessionEntries = MaxSetIdSessionEntries;
 }
 
 parameter_types! {
@@ -1562,7 +1573,31 @@ impl pallet_uniques::Config for Runtime {
 }
 
 parameter_types! {
+	pub const Budget: Balance = 10_000 * DOLLARS;
+	pub TreasuryAccount: AccountId = Treasury::account_id();
+}
+
+pub struct SalaryForRank;
+impl GetSalary<u16, AccountId, Balance> for SalaryForRank {
+	fn get_salary(a: u16, _: &AccountId) -> Balance {
+		Balance::from(a) * 1000 * DOLLARS
+	}
+}
+
+impl pallet_salary::Config for Runtime {
+	type WeightInfo = ();
+	type RuntimeEvent = RuntimeEvent;
+	type Paymaster = pallet_salary::PayFromAccount<Balances, TreasuryAccount>;
+	type Members = RankedCollective;
+	type Salary = SalaryForRank;
+	type RegistrationPeriod = ConstU32<200>;
+	type PayoutPeriod = ConstU32<200>;
+	type Budget = Budget;
+}
+
+parameter_types! {
 	pub Features: PalletFeatures = PalletFeatures::all_enabled();
+	pub const MaxAttributesPerCall: u32 = 10;
 }
 
 impl pallet_nfts::Config for Runtime {
@@ -1583,7 +1618,10 @@ impl pallet_nfts::Config for Runtime {
 	type ItemAttributesApprovalsLimit = ItemAttributesApprovalsLimit;
 	type MaxTips = MaxTips;
 	type MaxDeadlineDuration = MaxDeadlineDuration;
+	type MaxAttributesPerCall = MaxAttributesPerCall;
 	type Features = Features;
+	type OffchainSignature = Signature;
+	type OffchainPublic = <Signature as traits::Verify>::Signer;
 	type WeightInfo = pallet_nfts::weights::SubstrateWeight<Runtime>;
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = ();
@@ -1651,6 +1689,7 @@ impl pallet_collective::Config<AllianceCollective> for Runtime {
 	type MaxMembers = AllianceMaxMembers;
 	type DefaultVote = pallet_collective::PrimeDefaultVote;
 	type WeightInfo = pallet_collective::weights::SubstrateWeight<Runtime>;
+	type SetMembersOrigin = EnsureRoot<Self::AccountId>;
 }
 
 parameter_types! {
@@ -1733,12 +1772,13 @@ construct_runtime!(
 		AuthorityDiscovery: pallet_authority_discovery,
 		Offences: pallet_offences,
 		Historical: pallet_session_historical::{Pallet},
-		RandomnessCollectiveFlip: pallet_randomness_collective_flip,
+		RandomnessCollectiveFlip: pallet_insecure_randomness_collective_flip,
 		Identity: pallet_identity,
 		Society: pallet_society,
 		Recovery: pallet_recovery,
 		Vesting: pallet_vesting,
 		Scheduler: pallet_scheduler,
+		Glutton: pallet_glutton,
 		Preimage: pallet_preimage,
 		Proxy: pallet_proxy,
 		Multisig: pallet_multisig,
@@ -1750,6 +1790,7 @@ construct_runtime!(
 		Nis: pallet_nis,
 		Uniques: pallet_uniques,
 		Nfts: pallet_nfts,
+		Salary: pallet_salary,
 		TransactionStorage: pallet_transaction_storage,
 		VoterList: pallet_bags_list::<Instance1>,
 		StateTrieMigration: pallet_state_trie_migration,
@@ -1869,7 +1910,9 @@ mod benches {
 		[pallet_referenda, Referenda]
 		[pallet_recovery, Recovery]
 		[pallet_remark, Remark]
+		[pallet_salary, Salary]
 		[pallet_scheduler, Scheduler]
+		[pallet_glutton, Glutton]
 		[pallet_session, SessionBench::<Runtime>]
 		[pallet_staking, Staking]
 		[pallet_state_trie_migration, StateTrieMigration]
@@ -1941,21 +1984,21 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl fg_primitives::GrandpaApi<Block> for Runtime {
-		fn grandpa_authorities() -> GrandpaAuthorityList {
+	impl sp_consensus_grandpa::GrandpaApi<Block> for Runtime {
+		fn grandpa_authorities() -> sp_consensus_grandpa::AuthorityList {
 			Grandpa::grandpa_authorities()
 		}
 
-		fn current_set_id() -> fg_primitives::SetId {
+		fn current_set_id() -> sp_consensus_grandpa::SetId {
 			Grandpa::current_set_id()
 		}
 
 		fn submit_report_equivocation_unsigned_extrinsic(
-			equivocation_proof: fg_primitives::EquivocationProof<
+			equivocation_proof: sp_consensus_grandpa::EquivocationProof<
 				<Block as BlockT>::Hash,
 				NumberFor<Block>,
 			>,
-			key_owner_proof: fg_primitives::OpaqueKeyOwnershipProof,
+			key_owner_proof: sp_consensus_grandpa::OpaqueKeyOwnershipProof,
 		) -> Option<()> {
 			let key_owner_proof = key_owner_proof.decode()?;
 
@@ -1966,20 +2009,34 @@ impl_runtime_apis! {
 		}
 
 		fn generate_key_ownership_proof(
-			_set_id: fg_primitives::SetId,
+			_set_id: sp_consensus_grandpa::SetId,
 			authority_id: GrandpaId,
-		) -> Option<fg_primitives::OpaqueKeyOwnershipProof> {
+		) -> Option<sp_consensus_grandpa::OpaqueKeyOwnershipProof> {
 			use codec::Encode;
 
-			Historical::prove((fg_primitives::KEY_TYPE, authority_id))
+			Historical::prove((sp_consensus_grandpa::KEY_TYPE, authority_id))
 				.map(|p| p.encode())
-				.map(fg_primitives::OpaqueKeyOwnershipProof::new)
+				.map(sp_consensus_grandpa::OpaqueKeyOwnershipProof::new)
 		}
 	}
 
 	impl pallet_nomination_pools_runtime_api::NominationPoolsApi<Block, AccountId, Balance> for Runtime {
-		fn pending_rewards(member_account: AccountId) -> Balance {
-			NominationPools::pending_rewards(member_account).unwrap_or_default()
+		fn pending_rewards(who: AccountId) -> Balance {
+			NominationPools::api_pending_rewards(who).unwrap_or_default()
+		}
+
+		fn points_to_balance(pool_id: pallet_nomination_pools::PoolId, points: Balance) -> Balance {
+			NominationPools::api_points_to_balance(pool_id, points)
+		}
+
+		fn balance_to_points(pool_id: pallet_nomination_pools::PoolId, new_funds: Balance) -> Balance {
+			NominationPools::api_balance_to_points(pool_id, new_funds)
+		}
+	}
+
+	impl pallet_staking_runtime_api::StakingApi<Block, Balance> for Runtime {
+		fn nominations_quota(balance: Balance) -> u32 {
+			Staking::api_nominations_quota(balance)
 		}
 	}
 
@@ -2041,6 +2098,18 @@ impl_runtime_apis! {
 	impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
 		fn account_nonce(account: AccountId) -> Index {
 			System::account_nonce(account)
+		}
+	}
+
+	impl assets_api::AssetsApi<
+		Block,
+		AccountId,
+		Balance,
+		u32,
+	> for Runtime
+	{
+		fn account_balances(account: AccountId) -> Vec<(u32, Balance)> {
+			Assets::account_balances(account)
 		}
 	}
 
@@ -2148,6 +2217,50 @@ impl_runtime_apis! {
 		}
 		fn query_length_to_fee(length: u32) -> Balance {
 			TransactionPayment::length_to_fee(length)
+		}
+	}
+
+	impl pallet_nfts_runtime_api::NftsApi<Block, AccountId, u32, u32> for Runtime {
+		fn owner(collection: u32, item: u32) -> Option<AccountId> {
+			<Nfts as Inspect<AccountId>>::owner(&collection, &item)
+		}
+
+		fn collection_owner(collection: u32) -> Option<AccountId> {
+			<Nfts as Inspect<AccountId>>::collection_owner(&collection)
+		}
+
+		fn attribute(
+			collection: u32,
+			item: u32,
+			key: Vec<u8>,
+		) -> Option<Vec<u8>> {
+			<Nfts as Inspect<AccountId>>::attribute(&collection, &item, &key)
+		}
+
+		fn custom_attribute(
+			account: AccountId,
+			collection: u32,
+			item: u32,
+			key: Vec<u8>,
+		) -> Option<Vec<u8>> {
+			<Nfts as Inspect<AccountId>>::custom_attribute(
+				&account,
+				&collection,
+				&item,
+				&key,
+			)
+		}
+
+		fn system_attribute(
+			collection: u32,
+			item: u32,
+			key: Vec<u8>,
+		) -> Option<Vec<u8>> {
+			<Nfts as Inspect<AccountId>>::system_attribute(&collection, &item, &key)
+		}
+
+		fn collection_attribute(collection: u32, key: Vec<u8>) -> Option<Vec<u8>> {
+			<Nfts as Inspect<AccountId>>::collection_attribute(&collection, &key)
 		}
 	}
 
