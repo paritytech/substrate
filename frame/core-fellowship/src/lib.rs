@@ -89,6 +89,10 @@ pub enum Wish {
 	Promotion,
 }
 
+/// A piece of evidence to underpin a [Wish].
+///
+/// From the pallet's perspective, this is just a blob of data without meaning. The fellows can
+/// decide how to concretely utilise it. This could be an IPFS hash, a URL or structured data.
 pub type Evidence<T, I> = BoundedVec<u8, <T as Config<I>>::EvidenceSize>;
 
 /// The status of the pallet instance.
