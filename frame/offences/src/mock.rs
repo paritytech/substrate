@@ -134,17 +134,17 @@ pub fn offence_reports(kind: Kind, time_slot: u128) -> Vec<OffenceDetails<u64, u
 }
 
 #[derive(Clone)]
-pub struct Offence<T> {
+pub struct Offence {
 	pub validator_set_count: u32,
-	pub offenders: Vec<T>,
+	pub offenders: Vec<u64>,
 	pub time_slot: u128,
 }
 
-impl<T: Clone> offence::Offence<T> for Offence<T> {
+impl offence::Offence<u64> for Offence {
 	const ID: offence::Kind = KIND;
 	type TimeSlot = u128;
 
-	fn offenders(&self) -> Vec<T> {
+	fn offenders(&self) -> Vec<u64> {
 		self.offenders.clone()
 	}
 
@@ -167,5 +167,5 @@ impl<T: Clone> offence::Offence<T> for Offence<T> {
 
 /// Create the report id for the given `offender` and `time_slot` combination.
 pub fn report_id(time_slot: u128, offender: u64) -> H256 {
-	Offences::report_id::<Offence<u64>>(&time_slot, &offender)
+	Offences::report_id::<Offence>(&time_slot, &offender)
 }

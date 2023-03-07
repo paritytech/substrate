@@ -28,7 +28,7 @@ use scale_info::TypeInfo;
 use sp_std::{marker::PhantomData, prelude::*};
 
 use sp_application_crypto::{ecdsa, ed25519, sr25519, RuntimeAppPublic};
-use sp_core::{offchain::KeyTypeId, OpaqueMetadata, RuntimeDebug};
+use sp_core::{OpaqueMetadata, RuntimeDebug};
 use sp_trie::{
 	trie_types::{TrieDBBuilder, TrieDBMutBuilderV1},
 	PrefixedMemoryDB, StorageProof,
@@ -39,7 +39,7 @@ use cfg_if::cfg_if;
 use frame_support::{
 	dispatch::RawOrigin,
 	parameter_types,
-	traits::{CallerTrait, ConstU32, ConstU64, CrateVersion, KeyOwnerProofSystem},
+	traits::{CallerTrait, ConstU32, ConstU64, CrateVersion},
 	weights::{RuntimeDbWeight, Weight},
 };
 use frame_system::limits::{BlockLength, BlockWeights};
@@ -659,21 +659,10 @@ impl pallet_babe::Config for Runtime {
 	// pallet_babe::SameAuthoritiesForever.
 	type EpochChangeTrigger = pallet_babe::ExternalTrigger;
 	type DisabledValidators = ();
-
-	type KeyOwnerProofSystem = ();
-
-	type KeyOwnerProof =
-		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, AuthorityId)>>::Proof;
-
-	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
-		KeyTypeId,
-		AuthorityId,
-	)>>::IdentificationTuple;
-
-	type HandleEquivocation = ();
 	type WeightInfo = ();
-
 	type MaxAuthorities = ConstU32<10>;
+	type KeyOwnerProof = sp_core::Void;
+	type EquivocationReportSystem = ();
 }
 
 /// Adds one to the given input and returns the final result.
