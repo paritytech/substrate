@@ -20,7 +20,7 @@
 
 use assert_cmd::cargo::cargo_bin;
 use nix::{
-	sys::signal::{kill, Signal::SIGINT},
+	sys::signal::{kill, Signal, Signal::SIGINT},
 	unistd::Pid,
 };
 use node_primitives::{Hash, Header};
@@ -28,46 +28,17 @@ use std::{
 	io::{BufRead, BufReader, Read},
 	ops::{Deref, DerefMut},
 	path::Path,
-	process::{self, Child, Command, ExitStatus},
+	process::{self, Child, Command},
 	time::Duration,
 };
-use tokio::time::timeout;
 
-/// Wait for the given `child` the given number of `secs`.
-///
-/// Returns the `Some(exit status)` or `None` if the process did not finish in the given time.
-pub fn wait_for(child: &mut Child, secs: u64) -> Result<ExitStatus, ()> {
-	let result = wait_timeout::ChildExt::wait_timeout(child, Duration::from_secs(5.min(secs)))
-		.map_err(|_| ())?;
-	if let Some(exit_status) = result {
-		Ok(exit_status)
-	} else {
-		if secs > 5 {
-			eprintln!("Child process taking over 5 seconds to exit gracefully");
-			let result = wait_timeout::ChildExt::wait_timeout(child, Duration::from_secs(secs - 5))
-				.map_err(|_| ())?;
-			if let Some(exit_status) = result {
-				return Ok(exit_status)
-			}
-		}
-		eprintln!("Took too long to exit (> {} seconds). Killing...", secs);
-		let _ = child.kill();
-		child.wait().unwrap();
-		Err(())
-	}
-}
-
-/// Wait for at least n blocks to be finalized within a specified time.
-pub async fn wait_n_finalized_blocks(
-	n: usize,
-	timeout_secs: u64,
-	url: &str,
-) -> Result<(), tokio::time::error::Elapsed> {
-	timeout(Duration::from_secs(timeout_secs), wait_n_finalized_blocks_from(n, url)).await
+/// Run the given `future` and panic if the `timeout` is hit.
+pub async fn run_with_timeout(timeout: Duration, future: impl futures::Future<Output = ()>) {
+	tokio::time::timeout(timeout, future).await.expect("Hit timeout");
 }
 
 /// Wait for at least n blocks to be finalized from a specified node
-pub async fn wait_n_finalized_blocks_from(n: usize, url: &str) {
+pub async fn wait_n_finalized_blocks(n: usize, url: &str) {
 	use substrate_rpc_client::{ws_client, ChainApi};
 
 	let mut built_blocks = std::collections::HashSet::new();
@@ -87,46 +58,54 @@ pub async fn wait_n_finalized_blocks_from(n: usize, url: &str) {
 
 /// Run the node for a while (3 blocks)
 pub async fn run_node_for_a_while(base_path: &Path, args: &[&str]) {
-	let mut cmd = Command::new(cargo_bin("substrate"))
-		.stdout(process::Stdio::piped())
-		.stderr(process::Stdio::piped())
-		.args(args)
-		.arg("-d")
-		.arg(base_path)
-		.spawn()
-		.unwrap();
+	run_with_timeout(Duration::from_secs(60 * 10), async move {
+		let mut cmd = Command::new(cargo_bin("substrate"))
+			.stdout(process::Stdio::piped())
+			.stderr(process::Stdio::piped())
+			.args(args)
+			.arg("-d")
+			.arg(base_path)
+			.spawn()
+			.unwrap();
 
-	let stderr = cmd.stderr.take().unwrap();
+		let stderr = cmd.stderr.take().unwrap();
 
-	let mut child = KillChildOnDrop(cmd);
+		let mut child = KillChildOnDrop(cmd);
 
-	let (ws_url, _) = find_ws_url_from_output(stderr);
+		let (ws_url, _) = find_ws_url_from_output(stderr);
 
-	// Let it produce some blocks.
-	let _ = wait_n_finalized_blocks(3, 30, &ws_url).await;
+		// Let it produce some blocks.
+		wait_n_finalized_blocks(3, &ws_url).await;
 
-	assert!(child.try_wait().unwrap().is_none(), "the process should still be running");
+		child.assert_still_running();
 
-	// Stop the process
-	kill(Pid::from_raw(child.id().try_into().unwrap()), SIGINT).unwrap();
-	assert!(wait_for(&mut child, 40).map(|x| x.success()).unwrap());
-}
-
-/// Run the node asserting that it fails with an error
-pub fn run_node_assert_fail(base_path: &Path, args: &[&str]) {
-	let mut cmd = Command::new(cargo_bin("substrate"));
-
-	let mut child = KillChildOnDrop(cmd.args(args).arg("-d").arg(base_path).spawn().unwrap());
-
-	// Let it produce some blocks, but it should die within 10 seconds.
-	assert_ne!(
-		wait_timeout::ChildExt::wait_timeout(&mut *child, Duration::from_secs(10)).unwrap(),
-		None,
-		"the process should not be running anymore"
-	);
+		// Stop the process
+		child.stop();
+	})
+	.await
 }
 
 pub struct KillChildOnDrop(pub Child);
+
+impl KillChildOnDrop {
+	/// Stop the child and wait until it is finished.
+	///
+	/// Asserts if the exit status isn't success.
+	pub fn stop(&mut self) {
+		self.stop_with_signal(SIGINT);
+	}
+
+	/// Same as [`Self::stop`] but takes the `signal` that is send to stop the child.
+	pub fn stop_with_signal(&mut self, signal: Signal) {
+		kill(Pid::from_raw(self.id().try_into().unwrap()), signal).unwrap();
+		assert!(self.wait().unwrap().success());
+	}
+
+	/// Asserts that the child is still running.
+	pub fn assert_still_running(&mut self) {
+		assert!(self.try_wait().unwrap().is_none(), "the process should still be running");
+	}
+}
 
 impl Drop for KillChildOnDrop {
 	fn drop(&mut self) {
