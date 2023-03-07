@@ -2696,7 +2696,6 @@ fn gas_estimation_nested_call_fixed_limit() {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
 		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
-		let _ = Balances::deposit_creating(&CHARLIE, 1000 * min_balance);
 
 		let addr_caller = Contracts::bare_instantiate(
 			ALICE,
@@ -2730,6 +2729,7 @@ fn gas_estimation_nested_call_fixed_limit() {
 			.iter()
 			.cloned()
 			.chain((GAS_LIMIT / 5).ref_time().to_le_bytes())
+			.chain((GAS_LIMIT / 5).proof_size().to_le_bytes())
 			.collect();
 
 		// Call in order to determine the gas that is required for this call
@@ -2746,22 +2746,36 @@ fn gas_estimation_nested_call_fixed_limit() {
 		assert_ok!(&result.result);
 
 		// We have a subcall with a fixed gas limit. This constitutes precharging.
-		assert!(result.gas_required.ref_time() > result.gas_consumed.ref_time());
+		assert!(result.gas_required.all_gt(result.gas_consumed));
 
 		// Make the same call using the estimated gas. Should succeed.
 		assert_ok!(
 			Contracts::bare_call(
 				ALICE,
-				addr_caller,
+				addr_caller.clone(),
 				0,
 				result.gas_required,
 				Some(result.storage_deposit.charge_or_zero()),
-				input,
+				input.clone(),
 				false,
 				Determinism::Deterministic,
 			)
 			.result
 		);
+
+		// Make the same call using proof_size a but less than estimated. Should fail with OutOfGas.
+		let result = Contracts::bare_call(
+			ALICE,
+			addr_caller,
+			0,
+			result.gas_required.sub_proof_size(1),
+			Some(result.storage_deposit.charge_or_zero()),
+			input,
+			false,
+			Determinism::Deterministic,
+		)
+		.result;
+		assert_err!(result, <Error<Test>>::OutOfGas);
 	});
 }
 
