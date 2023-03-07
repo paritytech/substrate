@@ -61,7 +61,7 @@ benchmarks! {
 		// number of targets in snapshot.
 		let t in (TARGETS[0]) .. TARGETS[1];
 		// number of votes per voter (ie the degree).
-		let d in (VOTERS[1]) .. VOTERS[1] * MAX_VOTES_PER_VOTER;
+		let d in (VOTERS[0]) .. VOTERS[1] * MAX_VOTES_PER_VOTER;
 
 		let votes_per_voter = (d / v).min(MAX_VOTES_PER_VOTER);
 
@@ -94,7 +94,7 @@ benchmarks! {
 	approval_voting {
 		let v in (VOTERS[0]) .. VOTERS[1];
 		let t in (TARGETS[0]) .. TARGETS[1];
-		let d in (VOTERS[1]) .. VOTERS[1] * MAX_VOTES_PER_VOTER;
+		let d in (VOTERS[0]) .. VOTERS[1] * MAX_VOTES_PER_VOTER;
 
 		let votes_per_voter = (d / v).min(MAX_VOTES_PER_VOTER);
 
