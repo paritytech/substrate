@@ -1013,7 +1013,7 @@ pub mod env {
 	///
 	/// NOTE: This is a implementation defined call and is NOT a part of the public API.
 	/// This call is supposed to be called only by instrumentation injected code.
-	/// TODO: It deals only with the ref_time part of the weight.
+	/// It deals only with the *ref_time* Weight.
 	///
 	/// - `amount`: How much gas is used.
 	fn gas(ctx: _, _memory: _, amount: u64) -> Result<(), TrapReason> {
@@ -1023,8 +1023,9 @@ pub mod env {
 
 	/// Set the value at the given key in the contract storage.
 	///
-	/// Equivalent to the newer version [`super::seal1::Api::set_storage`] with the exception of the
-	/// return type. Still a valid thing to call when not interested in the return value.
+	/// Equivalent to the newer [`seal1`][`super::api_doc::Version1::set_storage`] version with the
+	/// exception of the return type. Still a valid thing to call when not interested in the return
+	/// value.
 	#[prefixed_alias]
 	fn set_storage(
 		ctx: _,
@@ -1097,8 +1098,9 @@ pub mod env {
 
 	/// Clear the value at the given key in the contract storage.
 	///
-	/// Equivalent to the newer version [`super::seal1::Api::clear_storage`] with the exception of
-	/// the return type. Still a valid thing to call when not interested in the return value.
+	/// Equivalent to the newer [`seal1`][`super::api_doc::Version1::clear_storage`] version with
+	/// the exception of the return type. Still a valid thing to call when not interested in the
+	/// return value.
 	#[prefixed_alias]
 	fn clear_storage(ctx: _, memory: _, key_ptr: u32) -> Result<(), TrapReason> {
 		ctx.clear_storage(memory, KeyType::Fix, key_ptr).map(|_| ())
@@ -1330,33 +1332,9 @@ pub mod env {
 
 	/// Make a call to another contract.
 	///
-	/// The callees output buffer is copied to `output_ptr` and its length to `output_len_ptr`.
-	/// The copy of the output buffer can be skipped by supplying the sentinel value
-	/// of `SENTINEL` to `output_ptr`.
-	///
-	/// # Parameters
-	///
-	/// - `flags`: See `crate::wasm::runtime::CallFlags` for a documenation of the supported flags.
-	/// - `callee_ptr`: a pointer to the address of the callee contract. Should be decodable as an
-	///   `T::AccountId`. Traps otherwise.
-	/// - `gas`: how much gas to devote to the execution.
-	/// - `value_ptr`: a pointer to the buffer with value, how much value to send. Should be
-	///   decodable as a `T::Balance`. Traps otherwise.
-	/// - `input_data_ptr`: a pointer to a buffer to be used as input data to the callee.
-	/// - `input_data_len`: length of the input data buffer.
-	/// - `output_ptr`: a pointer where the output buffer is copied to.
-	/// - `output_len_ptr`: in-out pointer to where the length of the buffer is read from and the
-	///   actual length is written to.
-	///
-	/// # Errors
-	///
-	/// An error means that the call wasn't successful output buffer is returned unless
-	/// stated otherwise.
-	///
-	/// - `ReturnCode::CalleeReverted`: Output buffer is returned.
-	/// - `ReturnCode::CalleeTrapped`
-	/// - `ReturnCode::TransferFailed`
-	/// - `ReturnCode::NotCallable`
+	/// Equivalent to the newer [`seal2`][`super::api_doc::Version2::call`] version but works with
+	/// *ref_time* Weight only. It is recommended to switch to the latest version, once it's
+	/// stabilized.
 	#[version(1)]
 	#[prefixed_alias]
 	fn call(
@@ -1382,7 +1360,36 @@ pub mod env {
 		)
 	}
 
-	/// TODO
+	/// Make a call to another contract.
+	///
+	/// The callees output buffer is copied to `output_ptr` and its length to `output_len_ptr`.
+	/// The copy of the output buffer can be skipped by supplying the sentinel value
+	/// of `SENTINEL` to `output_ptr`.
+	///
+	/// # Parameters
+	///
+	/// - `flags`: See `crate::wasm::runtime::CallFlags` for a documenation of the supported flags.
+	/// - `callee_ptr`: a pointer to the address of the callee contract. Should be decodable as an
+	///   `T::AccountId`. Traps otherwise.
+	/// - `ref_time`: how much *ref_time* Weight to devote to the execution.
+	/// - `proof_limit`: how much *proof_limit* Weight to devote to the execution.
+	/// - `value_ptr`: a pointer to the buffer with value, how much value to send. Should be
+	///   decodable as a `T::Balance`. Traps otherwise.
+	/// - `input_data_ptr`: a pointer to a buffer to be used as input data to the callee.
+	/// - `input_data_len`: length of the input data buffer.
+	/// - `output_ptr`: a pointer where the output buffer is copied to.
+	/// - `output_len_ptr`: in-out pointer to where the length of the buffer is read from and the
+	///   actual length is written to.
+	///
+	/// # Errors
+	///
+	/// An error means that the call wasn't successful output buffer is returned unless
+	/// stated otherwise.
+	///
+	/// - `ReturnCode::CalleeReverted`: Output buffer is returned.
+	/// - `ReturnCode::CalleeTrapped`
+	/// - `ReturnCode::TransferFailed`
+	/// - `ReturnCode::NotCallable`
 	#[version(2)]
 	#[unstable]
 	fn call(
