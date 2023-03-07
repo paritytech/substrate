@@ -22,14 +22,12 @@ use crate::{
 	config::MultiaddrWithPeerId,
 	protocol::{event::Event, ProtocolName},
 	request_responses::{IfDisconnected, RequestFailure},
-	sync::{warp::WarpSyncProgress, StateDownloadProgress, SyncState},
 };
 use futures::{channel::oneshot, Stream};
 pub use libp2p::{identity::error::SigningError, kad::record::Key as KademliaKey};
 use libp2p::{Multiaddr, PeerId};
 use sc_peerset::ReputationChange;
 pub use signature::Signature;
-use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{collections::HashSet, future::Future, pin::Pin, sync::Arc};
 
 mod signature;
@@ -96,45 +94,33 @@ where
 
 /// Overview status of the network.
 #[derive(Clone)]
-pub struct NetworkStatus<B: BlockT> {
-	/// Current global sync state.
-	pub sync_state: SyncState<NumberFor<B>>,
-	/// Target sync block number.
-	pub best_seen_block: Option<NumberFor<B>>,
-	/// Number of peers participating in syncing.
-	pub num_sync_peers: u32,
-	/// Total number of connected peers
+pub struct NetworkStatus {
+	/// Total number of connected peers.
 	pub num_connected_peers: usize,
-	/// Total number of active peers.
-	pub num_active_peers: usize,
 	/// The total number of bytes received.
 	pub total_bytes_inbound: u64,
 	/// The total number of bytes sent.
 	pub total_bytes_outbound: u64,
-	/// State sync in progress.
-	pub state_sync: Option<StateDownloadProgress>,
-	/// Warp sync in progress.
-	pub warp_sync: Option<WarpSyncProgress<B>>,
 }
 
 /// Provides high-level status information about network.
 #[async_trait::async_trait]
-pub trait NetworkStatusProvider<Block: BlockT> {
+pub trait NetworkStatusProvider {
 	/// High-level network status information.
 	///
 	/// Returns an error if the `NetworkWorker` is no longer running.
-	async fn status(&self) -> Result<NetworkStatus<Block>, ()>;
+	async fn status(&self) -> Result<NetworkStatus, ()>;
 }
 
 // Manual implementation to avoid extra boxing here
-impl<T, Block: BlockT> NetworkStatusProvider<Block> for Arc<T>
+impl<T> NetworkStatusProvider for Arc<T>
 where
 	T: ?Sized,
-	T: NetworkStatusProvider<Block>,
+	T: NetworkStatusProvider,
 {
 	fn status<'life0, 'async_trait>(
 		&'life0 self,
-	) -> Pin<Box<dyn Future<Output = Result<NetworkStatus<Block>, ()>> + Send + 'async_trait>>
+	) -> Pin<Box<dyn Future<Output = Result<NetworkStatus, ()>> + Send + 'async_trait>>
 	where
 		'life0: 'async_trait,
 		Self: 'async_trait,
@@ -511,6 +497,9 @@ pub trait NetworkNotification {
 		target: PeerId,
 		protocol: ProtocolName,
 	) -> Result<Box<dyn NotificationSender>, NotificationSenderError>;
+
+	/// Set handshake for the notification protocol.
+	fn set_notification_handshake(&self, protocol: ProtocolName, handshake: Vec<u8>);
 }
 
 impl<T> NetworkNotification for Arc<T>
@@ -528,6 +517,10 @@ where
 		protocol: ProtocolName,
 	) -> Result<Box<dyn NotificationSender>, NotificationSenderError> {
 		T::notification_sender(self, target, protocol)
+	}
+
+	fn set_notification_handshake(&self, protocol: ProtocolName, handshake: Vec<u8>) {
+		T::set_notification_handshake(self, protocol, handshake)
 	}
 }
 

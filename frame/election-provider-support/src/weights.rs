@@ -57,37 +57,26 @@ pub trait WeightInfo {
 /// Weights for frame_election_provider_support using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
-	/// The range of component `v` is `[1000, 2000]`.
-	/// The range of component `t` is `[500, 1000]`.
-	/// The range of component `d` is `[2000, 32000]`.
-	fn phragmen(v: u32, _t: u32, d: u32, ) -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `0`
-		//  Estimated: `0`
-		// Minimum execution time: 1_884_683 nanoseconds.
-		Weight::from_ref_time(1_890_956_000)
-			.saturating_add(Weight::from_proof_size(0))
-			// Standard Error: 121_724
-			.saturating_add(Weight::from_ref_time(6_312_901).saturating_mul(v.into()))
-			// Standard Error: 5_277
-			.saturating_add(Weight::from_ref_time(810_273).saturating_mul(d.into()))
+	fn phragmen(v: u32, t: u32, d: u32, ) -> Weight {
+		Weight::from_parts(0 as u64, 0)
+			// Standard Error: 667_000
+			.saturating_add(Weight::from_parts(32_973_000 as u64, 0).saturating_mul(v as u64))
+			// Standard Error: 1_334_000
+			.saturating_add(Weight::from_parts(1_334_000 as u64, 0).saturating_mul(t as u64))
+			// Standard Error: 60_644_000
+			.saturating_add(Weight::from_parts(2_636_364_000 as u64, 0).saturating_mul(d as u64))
 	}
 	/// The range of component `v` is `[1000, 2000]`.
 	/// The range of component `t` is `[500, 1000]`.
 	/// The range of component `d` is `[1, 16]`.
 	fn phragmms(v: u32, t: u32, d: u32, ) -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `0`
-		//  Estimated: `0`
-		// Minimum execution time: 5_309 nanoseconds.
-		Weight::from_ref_time(531_645)
-			.saturating_add(Weight::from_proof_size(0))
-			// Standard Error: 6
-			.saturating_add(Weight::from_ref_time(4_864).saturating_mul(v.into()))
-			// Standard Error: 12
-			.saturating_add(Weight::from_ref_time(6).saturating_mul(t.into()))
-			// Standard Error: 409
-			.saturating_add(Weight::from_ref_time(21).saturating_mul(d.into()))
+		Weight::from_parts(0 as u64, 0)
+			// Standard Error: 73_000
+			.saturating_add(Weight::from_parts(21_073_000 as u64, 0).saturating_mul(v as u64))
+			// Standard Error: 146_000
+			.saturating_add(Weight::from_parts(65_000 as u64, 0).saturating_mul(t as u64))
+			// Standard Error: 6_649_000
+			.saturating_add(Weight::from_parts(1_711_424_000 as u64, 0).saturating_mul(d as u64))
 	}
 	/// The range of component `v` is `[1000, 2000]`.
 	/// The range of component `t` is `[500, 1000]`.
@@ -108,37 +97,26 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	/// The range of component `v` is `[1000, 2000]`.
-	/// The range of component `t` is `[500, 1000]`.
-	/// The range of component `d` is `[2000, 32000]`.
-	fn phragmen(v: u32, _t: u32, d: u32, ) -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `0`
-		//  Estimated: `0`
-		// Minimum execution time: 1_884_683 nanoseconds.
-		Weight::from_ref_time(1_890_956_000)
-			.saturating_add(Weight::from_proof_size(0))
-			// Standard Error: 121_724
-			.saturating_add(Weight::from_ref_time(6_312_901).saturating_mul(v.into()))
-			// Standard Error: 5_277
-			.saturating_add(Weight::from_ref_time(810_273).saturating_mul(d.into()))
+	fn phragmen(v: u32, t: u32, d: u32, ) -> Weight {
+		Weight::from_parts(0 as u64, 0)
+			// Standard Error: 667_000
+			.saturating_add(Weight::from_parts(32_973_000 as u64, 0).saturating_mul(v as u64))
+			// Standard Error: 1_334_000
+			.saturating_add(Weight::from_parts(1_334_000 as u64, 0).saturating_mul(t as u64))
+			// Standard Error: 60_644_000
+			.saturating_add(Weight::from_parts(2_636_364_000 as u64, 0).saturating_mul(d as u64))
 	}
 	/// The range of component `v` is `[1000, 2000]`.
 	/// The range of component `t` is `[500, 1000]`.
 	/// The range of component `d` is `[1, 16]`.
 	fn phragmms(v: u32, t: u32, d: u32, ) -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `0`
-		//  Estimated: `0`
-		// Minimum execution time: 5_309 nanoseconds.
-		Weight::from_ref_time(531_645)
-			.saturating_add(Weight::from_proof_size(0))
-			// Standard Error: 6
-			.saturating_add(Weight::from_ref_time(4_864).saturating_mul(v.into()))
-			// Standard Error: 12
-			.saturating_add(Weight::from_ref_time(6).saturating_mul(t.into()))
-			// Standard Error: 409
-			.saturating_add(Weight::from_ref_time(21).saturating_mul(d.into()))
+	    Weight::from_parts(0 as u64, 0)
+			// Standard Error: 73_000
+			.saturating_add(Weight::from_parts(21_073_000 as u64, 0).saturating_mul(v as u64))
+			// Standard Error: 146_000
+			.saturating_add(Weight::from_parts(65_000 as u64, 0).saturating_mul(t as u64))
+			// Standard Error: 6_649_000
+			.saturating_add(Weight::from_parts(1_711_424_000 as u64, 0).saturating_mul(d as u64))
 	}
 	/// The range of component `v` is `[1000, 2000]`.
 	/// The range of component `t` is `[500, 1000]`.

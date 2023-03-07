@@ -32,7 +32,6 @@ type TestNetworkService = NetworkService<
 	substrate_test_runtime_client::runtime::Hash,
 >;
 
-const BLOCK_ANNOUNCE_PROTO_NAME: &str = "/block-announces";
 const PROTOCOL_NAME: &str = "/foo";
 
 /// Builds two nodes and their associated events stream.
@@ -196,10 +195,6 @@ async fn notifications_state_consistent() {
 			},
 
 			// Add new events here.
-			future::Either::Left(Event::SyncConnected { .. }) => {},
-			future::Either::Right(Event::SyncConnected { .. }) => {},
-			future::Either::Left(Event::SyncDisconnected { .. }) => {},
-			future::Either::Right(Event::SyncDisconnected { .. }) => {},
 			future::Either::Left(Event::Dht(_)) => {},
 			future::Either::Right(Event::Dht(_)) => {},
 		};
@@ -208,6 +203,7 @@ async fn notifications_state_consistent() {
 
 #[tokio::test]
 async fn lots_of_incoming_peers_works() {
+	sp_tracing::try_init_simple();
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
 	let (main_node, _) = TestNetworkBuilder::new()
@@ -241,6 +237,7 @@ async fn lots_of_incoming_peers_works() {
 			let mut timer = futures_timer::Delay::new(Duration::from_secs(3600 * 24 * 7)).fuse();
 
 			let mut event_stream = event_stream.fuse();
+			let mut sync_protocol_name = None;
 			loop {
 				futures::select! {
 					_ = timer => {
@@ -249,15 +246,21 @@ async fn lots_of_incoming_peers_works() {
 					}
 					ev = event_stream.next() => {
 						match ev.unwrap() {
-							Event::NotificationStreamOpened { remote, .. } => {
+							Event::NotificationStreamOpened { protocol, remote, .. } => {
+								if let None = sync_protocol_name {
+									sync_protocol_name = Some(protocol.clone());
+								}
+
 								assert_eq!(remote, main_node_peer_id);
 								// Test succeeds after 5 seconds. This timer is here in order to
 								// detect a potential problem after opening.
 								timer = futures_timer::Delay::new(Duration::from_secs(5)).fuse();
 							}
-							Event::NotificationStreamClosed { .. } => {
-								// Test failed.
-								panic!();
+							Event::NotificationStreamClosed { protocol, .. } => {
+								if Some(protocol) != sync_protocol_name {
+									// Test failed.
+									panic!();
+								}
 							}
 							_ => {}
 						}
@@ -282,10 +285,19 @@ async fn notifications_back_pressure() {
 
 	let receiver = tokio::spawn(async move {
 		let mut received_notifications = 0;
+		let mut sync_protocol_name = None;
 
 		while received_notifications < TOTAL_NOTIFS {
 			match events_stream2.next().await.unwrap() {
-				Event::NotificationStreamClosed { .. } => panic!(),
+				Event::NotificationStreamOpened { protocol, .. } =>
+					if let None = sync_protocol_name {
+						sync_protocol_name = Some(protocol);
+					},
+				Event::NotificationStreamClosed { protocol, .. } => {
+					if Some(&protocol) != sync_protocol_name.as_ref() {
+						panic!()
+					}
+				},
 				Event::NotificationsReceived { messages, .. } =>
 					for message in messages {
 						assert_eq!(message.0, PROTOCOL_NAME.into());
@@ -385,42 +397,6 @@ async fn fallback_name_working() {
 	}
 
 	receiver.await.unwrap();
-}
-
-// Disconnect peer by calling `Protocol::disconnect_peer()` with the supplied block announcement
-// protocol name and verify that `SyncDisconnected` event is emitted
-#[tokio::test]
-async fn disconnect_sync_peer_using_block_announcement_protocol_name() {
-	let (node1, mut events_stream1, node2, mut events_stream2) = build_nodes_one_proto();
-
-	async fn wait_for_events(stream: &mut (impl Stream<Item = Event> + std::marker::Unpin)) {
-		let mut notif_received = false;
-		let mut sync_received = false;
-
-		while !notif_received || !sync_received {
-			match stream.next().await.unwrap() {
-				Event::NotificationStreamOpened { .. } => notif_received = true,
-				Event::SyncConnected { .. } => sync_received = true,
-				_ => {},
-			};
-		}
-	}
-
-	wait_for_events(&mut events_stream1).await;
-	wait_for_events(&mut events_stream2).await;
-
-	// disconnect peer using `PROTOCOL_NAME`, verify `NotificationStreamClosed` event is emitted
-	node2.disconnect_peer(node1.local_peer_id(), PROTOCOL_NAME.into());
-	assert!(std::matches!(
-		events_stream2.next().await,
-		Some(Event::NotificationStreamClosed { .. })
-	));
-	let _ = events_stream2.next().await; // ignore the reopen event
-
-	// now disconnect using `BLOCK_ANNOUNCE_PROTO_NAME`, verify that `SyncDisconnected` is
-	// emitted
-	node2.disconnect_peer(node1.local_peer_id(), BLOCK_ANNOUNCE_PROTO_NAME.into());
-	assert!(std::matches!(events_stream2.next().await, Some(Event::SyncDisconnected { .. })));
 }
 
 #[tokio::test]

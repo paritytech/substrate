@@ -424,7 +424,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		);
 
 		let header = block_import_params.post_header();
-		match self.block_import().import_block(block_import_params, Default::default()).await {
+		match self.block_import().import_block(block_import_params).await {
 			Ok(res) => {
 				res.handle_justification(
 					&header.hash(),

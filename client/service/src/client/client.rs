@@ -18,16 +18,14 @@
 
 //! Substrate Client
 
-use super::{
-	block_rules::{BlockRules, LookupResult as BlockLookupResult},
-	genesis::BuildGenesisBlock,
-};
+use super::block_rules::{BlockRules, LookupResult as BlockLookupResult};
 use futures::{FutureExt, StreamExt};
 use log::{error, info, trace, warn};
 use parking_lot::{Mutex, RwLock};
 use prometheus_endpoint::Registry;
 use rand::Rng;
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider, RecordProof};
+use sc_chain_spec::{resolve_state_version_from_wasm, BuildGenesisBlock};
 use sc_client_api::{
 	backend::{
 		self, apply_aux, BlockImportOperation, ClientImportOperation, FinalizeSummary, Finalizer,
@@ -46,23 +44,23 @@ use sc_client_api::{
 use sc_consensus::{
 	BlockCheckParams, BlockImportParams, ForkChoiceStrategy, ImportResult, StateAction,
 };
-use sc_executor::{RuntimeVersion, RuntimeVersionOf};
+use sc_executor::RuntimeVersion;
 use sc_telemetry::{telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sp_api::{
 	ApiExt, ApiRef, CallApiAt, CallApiAtParams, ConstructRuntimeApi, Core as CoreApi,
 	ProvideRuntimeApi,
 };
 use sp_blockchain::{
-	self as blockchain, well_known_cache_keys::Id as CacheKeyId, Backend as ChainBackend,
-	CachedHeaderMetadata, Error, HeaderBackend as ChainHeaderBackend, HeaderMetadata,
+	self as blockchain, Backend as ChainBackend, CachedHeaderMetadata, Error,
+	HeaderBackend as ChainHeaderBackend, HeaderMetadata,
 };
 use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError};
 
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_core::{
 	storage::{
-		well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, Storage, StorageChild,
-		StorageData, StorageKey,
+		well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, StorageChild, StorageData,
+		StorageKey,
 	},
 	traits::SpawnNamed,
 };
@@ -84,7 +82,7 @@ use sp_state_machine::{
 };
 use sp_trie::{CompactProof, StorageProof};
 use std::{
-	collections::{hash_map::DefaultHasher, HashMap, HashSet},
+	collections::{HashMap, HashSet},
 	marker::PhantomData,
 	path::PathBuf,
 	sync::Arc,
@@ -172,7 +170,7 @@ pub fn new_in_mem<E, Block, G, RA>(
 	Client<in_mem::Backend<Block>, LocalCallExecutor<Block, in_mem::Backend<Block>, E>, Block, RA>,
 >
 where
-	E: CodeExecutor + RuntimeVersionOf,
+	E: CodeExecutor + sc_executor::RuntimeVersionOf,
 	Block: BlockT,
 	G: BuildGenesisBlock<
 			Block,
@@ -233,7 +231,7 @@ pub fn new_with_backend<B, E, Block, G, RA>(
 	config: ClientConfig<Block>,
 ) -> sp_blockchain::Result<Client<B, LocalCallExecutor<Block, B, E>, Block, RA>>
 where
-	E: CodeExecutor + RuntimeVersionOf,
+	E: CodeExecutor + sc_executor::RuntimeVersionOf,
 	G: BuildGenesisBlock<
 		Block,
 		BlockImportOperation = <B as backend::Backend<Block>>::BlockImportOperation,
@@ -506,7 +504,6 @@ where
 		&self,
 		operation: &mut ClientImportOperation<Block, B>,
 		import_block: BlockImportParams<Block, backend::TransactionFor<B, Block>>,
-		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 		storage_changes: Option<
 			sc_consensus::StorageChanges<Block, backend::TransactionFor<B, Block>>,
 		>,
@@ -561,7 +558,6 @@ where
 			body,
 			indexed_body,
 			storage_changes,
-			new_cache,
 			finalized,
 			auxiliary,
 			fork_choice,
@@ -601,7 +597,6 @@ where
 		storage_changes: Option<
 			sc_consensus::StorageChanges<Block, backend::TransactionFor<B, Block>>,
 		>,
-		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 		finalized: bool,
 		aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 		fork_choice: ForkChoiceStrategy,
@@ -714,7 +709,6 @@ where
 					},
 				};
 
-				operation.op.update_cache(new_cache);
 				storage_changes
 			},
 			None => None,
@@ -1219,38 +1213,6 @@ where
 		}
 		trace!("Collected {} uncles", uncles.len());
 		Ok(uncles)
-	}
-}
-
-/// Return the genesis state version given the genesis storage and executor.
-pub fn resolve_state_version_from_wasm<E>(
-	storage: &Storage,
-	executor: &E,
-) -> sp_blockchain::Result<StateVersion>
-where
-	E: RuntimeVersionOf,
-{
-	if let Some(wasm) = storage.top.get(well_known_keys::CODE) {
-		let mut ext = sp_state_machine::BasicExternalities::new_empty(); // just to read runtime version.
-
-		let code_fetcher = sp_core::traits::WrappedRuntimeCode(wasm.as_slice().into());
-		let runtime_code = sp_core::traits::RuntimeCode {
-			code_fetcher: &code_fetcher,
-			heap_pages: None,
-			hash: {
-				use std::hash::{Hash, Hasher};
-				let mut state = DefaultHasher::new();
-				wasm.hash(&mut state);
-				state.finish().to_le_bytes().to_vec()
-			},
-		};
-		let runtime_version = RuntimeVersionOf::runtime_version(executor, &mut ext, &runtime_code)
-			.map_err(|e| sp_blockchain::Error::VersionInvalid(e.to_string()))?;
-		Ok(runtime_version.state_version())
-	} else {
-		Err(sp_blockchain::Error::VersionInvalid(
-			"Runtime missing from initial storage, could not read state version.".to_string(),
-		))
 	}
 }
 
@@ -1804,7 +1766,6 @@ where
 	async fn import_block(
 		&mut self,
 		mut import_block: BlockImportParams<Block, backend::TransactionFor<B, Block>>,
-		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		let span = tracing::span!(tracing::Level::DEBUG, "import_block");
 		let _enter = span.enter();
@@ -1819,7 +1780,7 @@ where
 			};
 
 		self.lock_import_and_run(|operation| {
-			self.apply_block(operation, import_block, new_cache, storage_changes)
+			self.apply_block(operation, import_block, storage_changes)
 		})
 		.map_err(|e| {
 			warn!("Block import error: {}", e);
@@ -1909,9 +1870,8 @@ where
 	async fn import_block(
 		&mut self,
 		import_block: BlockImportParams<Block, Self::Transaction>,
-		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		(&*self).import_block(import_block, new_cache).await
+		(&*self).import_block(import_block).await
 	}
 
 	async fn check_block(

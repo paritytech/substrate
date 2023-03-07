@@ -16,7 +16,7 @@
 // limitations under the License.
 
 //! General tests for construct_runtime macro, test for:
-//! * error declareed with decl_error works
+//! * error declared with decl_error works
 //! * integrity test is generated
 
 #![recursion_limit = "128"]
@@ -254,7 +254,7 @@ impl system::Config for Runtime {
 }
 
 frame_support::construct_runtime!(
-	pub enum Runtime where
+	pub struct Runtime where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
@@ -508,7 +508,7 @@ fn call_weight_should_attach_to_call_enum() {
 	assert_eq!(
 		module3::Call::<Runtime>::operational {}.get_dispatch_info(),
 		DispatchInfo {
-			weight: Weight::from_ref_time(5),
+			weight: Weight::from_parts(5, 0),
 			class: DispatchClass::Operational,
 			pays_fee: Pays::Yes
 		},
@@ -517,7 +517,7 @@ fn call_weight_should_attach_to_call_enum() {
 	assert_eq!(
 		module3::Call::<Runtime>::aux_4 {}.get_dispatch_info(),
 		DispatchInfo {
-			weight: Weight::from_ref_time(3),
+			weight: Weight::from_parts(3, 0),
 			class: DispatchClass::Normal,
 			pays_fee: Pays::Yes
 		},
