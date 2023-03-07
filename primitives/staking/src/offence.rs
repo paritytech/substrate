@@ -234,7 +234,7 @@ pub trait OffenceReportSystem<Reporter, Evidence> {
 	/// Longevity, in blocks, for the evidence report validity.
 	///
 	/// For example, when using the staking pallet this should be set equal
-	/// to the bonding durationin blocks, not eras).
+	/// to the bonding duration in blocks, not eras.
 	type Longevity: Get<u64>;
 
 	/// Publish an offence evidence.

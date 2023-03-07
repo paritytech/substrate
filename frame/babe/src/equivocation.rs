@@ -87,18 +87,17 @@ impl<Offender: Clone> Offence<Offender> for EquivocationOffence<Offender> {
 		self.slot
 	}
 
+	// The formula is min((3k / n)^2, 1)
+	// with: k = offenders_number, n = validators_number
 	fn slash_fraction(&self, offenders_count: u32) -> Perbill {
-		// the formula is min((3k / n)^2, 1)
-		let x = Perbill::from_rational(3 * offenders_count, self.validator_set_count);
-		// _ ^ 2
-		x.square()
+		// Perbill type domain is [0, 1] by definition
+		Perbill::from_rational(3 * offenders_count, self.validator_set_count).square()
 	}
 }
 
-/// Generic equivocation handler. This type implements `HandleEquivocation`
-/// using existing subsystems that are part of frame (type bounds described
-/// below) and will dispatch to them directly, it's only purpose is to wire all
-/// subsystems together.
+/// Babe equivocation offence system.
+///
+/// This type implements `OffenceReportSystem`
 pub struct EquivocationReportSystem<T, R, P, L>(sp_std::marker::PhantomData<(T, R, P, L)>);
 
 // We use the authorship pallet to fetch the current block author and use
