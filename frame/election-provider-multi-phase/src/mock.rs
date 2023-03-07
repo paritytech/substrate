@@ -359,6 +359,7 @@ impl MinerConfig for Runtime {
 	type MaxLength = MinerMaxLength;
 	type MaxWeight = MinerMaxWeight;
 	type MaxVotesPerVoter = <StakingMock as ElectionDataProvider>::MaxVotesPerVoter;
+	type MaxWinners = MaxWinners;
 	type Solution = TestNposSolution;
 
 	fn solution_weight(v: u32, t: u32, a: u32, d: u32) -> Weight {
