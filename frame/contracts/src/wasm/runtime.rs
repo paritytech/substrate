@@ -1515,8 +1515,8 @@ pub mod env {
 
 	/// Instantiate a contract with the specified code hash.
 	///
-	/// Equivalent to the newer [`seal2`][`super::api_doc::Version2::instantiate`] version but works with
-	/// *ref_time* Weight only. It is recommended to switch to the latest version, once it's
+	/// Equivalent to the newer [`seal2`][`super::api_doc::Version2::instantiate`] version but works
+	/// with *ref_time* Weight only. It is recommended to switch to the latest version, once it's
 	/// stabilized.
 	#[version(1)]
 	#[prefixed_alias]
@@ -1861,17 +1861,9 @@ pub mod env {
 
 	/// Stores the price for the specified amount of gas into the supplied buffer.
 	///
-	/// The value is stored to linear memory at the address pointed to by `out_ptr`.
-	/// `out_len_ptr` must point to a u32 value that describes the available space at
-	/// `out_ptr`. This call overwrites it with the size of the value. If the available
-	/// space at `out_ptr` is less than the size of the value a trap is triggered.
-	///
-	/// The data is encoded as `T::Balance`.
-	///
-	/// # Note
-	///
-	/// It is recommended to avoid specifying very small values for `gas` as the prices for a single
-	/// gas can be smaller than one.
+	/// Equivalent to the newer [`seal1`][`super::api_doc::Version2::weight_to_fee`] version but
+	/// works with *ref_time* Weight only. It is recommended to switch to the latest version, once
+	/// it's stabilized.
 	#[prefixed_alias]
 	fn weight_to_fee(
 		ctx: _,
@@ -1881,6 +1873,43 @@ pub mod env {
 		out_len_ptr: u32,
 	) -> Result<(), TrapReason> {
 		let gas = Weight::from_parts(gas, 0);
+		ctx.charge_gas(RuntimeCosts::WeightToFee)?;
+		Ok(ctx.write_sandbox_output(
+			memory,
+			out_ptr,
+			out_len_ptr,
+			&ctx.ext.get_weight_price(gas).encode(),
+			false,
+			already_charged,
+		)?)
+	}
+
+	/// Stores the price for the specified amount of weight into the supplied buffer.
+	///
+	/// # Parameters
+	///
+	/// - `out_ptr`: pointer to the linear memory where the returning value is written to. If the
+	///   available space at `out_ptr` is less than the size of the value a trap is triggered.
+	/// - `out_len_ptr`: in-out pointer into linear memory where the buffer length is read from and
+	///   the value length is written to.
+	///
+	/// The data is encoded as `T::Balance`.
+	///
+	/// # Note
+	///
+	/// It is recommended to avoid specifying very small values for `ref_time` and `proof_limit` as
+	/// the prices for a single gas can be smaller than the basic balance unit.
+	#[version(1)]
+	#[unstable]
+	fn weight_to_fee(
+		ctx: _,
+		memory: _,
+		ref_time: u64,
+		proof_limit: u64,
+		out_ptr: u32,
+		out_len_ptr: u32,
+	) -> Result<(), TrapReason> {
+		let gas = Weight::from_parts(ref_time, proof_limit);
 		ctx.charge_gas(RuntimeCosts::WeightToFee)?;
 		Ok(ctx.write_sandbox_output(
 			memory,

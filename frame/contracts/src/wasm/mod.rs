@@ -615,7 +615,8 @@ mod tests {
 			16_384
 		}
 		fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T> {
-			BalanceOf::<Self::T>::from(1312_u32).saturating_mul(weight.ref_time().into())
+			BalanceOf::<Self::T>::from(1312_u32).saturating_mul(weight.ref_time().into()).saturating_add(
+				BalanceOf::<Self::T>::from(103_u32).saturating_mul(weight.proof_size()))
 		}
 		fn schedule(&self) -> &Schedule<Self::T> {
 			&self.schedule
@@ -1570,7 +1571,7 @@ mod tests {
 
 	const CODE_GAS_PRICE: &str = r#"
 (module
-	(import "seal0" "seal_weight_to_fee" (func $seal_weight_to_fee (param i64 i32 i32)))
+	(import "seal1" "weight_to_fee" (func $seal_weight_to_fee (param i64 i64 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -1587,7 +1588,7 @@ mod tests {
 
 	(func (export "call")
 		;; This stores the gas price in the buffer
-		(call $seal_weight_to_fee (i64.const 2) (i32.const 0) (i32.const 32))
+		(call $seal_weight_to_fee (i64.const 2) (i64.const 1) (i32.const 0) (i32.const 32))
 
 		;; assert len == 8
 		(call $assert
@@ -1597,11 +1598,11 @@ mod tests {
 			)
 		)
 
-		;; assert that contents of the buffer is equal to the i64 value of 2 * 1312.
+		;; assert that contents of the buffer is equal to the i64 value of 2 * 1312 + 103 = 2727.
 		(call $assert
 			(i64.eq
 				(i64.load (i32.const 0))
-				(i64.const 2624)
+				(i64.const 2727)
 			)
 		)
 	)
