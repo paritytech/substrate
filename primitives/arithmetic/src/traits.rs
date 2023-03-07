@@ -243,7 +243,7 @@ pub trait Saturating {
 		self
 	}
 
-	/// Decrement self by one, saturating at zero.
+	/// Increment self by one, saturating at the numeric bounds instead of overflowing.
 	fn saturating_plus_one(mut self) -> Self
 	where
 		Self: One,
