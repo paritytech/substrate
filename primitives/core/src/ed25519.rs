@@ -332,16 +332,6 @@ impl Signature {
 	}
 }
 
-/// A localized signature also contains sender information.
-#[cfg(feature = "std")]
-#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode)]
-pub struct LocalizedSignature {
-	/// The signer of the signature.
-	pub signer: Public,
-	/// The signature itself.
-	pub signature: Signature,
-}
-
 impl Public {
 	/// A new instance from the given 32-byte `data`.
 	///

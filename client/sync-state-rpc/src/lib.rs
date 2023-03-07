@@ -52,7 +52,7 @@ use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::sync::Arc;
 
 type SharedAuthoritySet<TBl> =
-	sc_finality_grandpa::SharedAuthoritySet<<TBl as BlockT>::Hash, NumberFor<TBl>>;
+	sc_consensus_grandpa::SharedAuthoritySet<<TBl as BlockT>::Hash, NumberFor<TBl>>;
 type SharedEpochChanges<TBl> =
 	sc_consensus_epochs::SharedEpochChanges<TBl, sc_consensus_babe::Epoch>;
 
@@ -117,7 +117,7 @@ pub struct LightSyncState<Block: BlockT> {
 	/// The authority set for grandpa.
 	#[serde(serialize_with = "serialize_encoded")]
 	pub grandpa_authority_set:
-		sc_finality_grandpa::AuthoritySet<<Block as BlockT>::Hash, NumberFor<Block>>,
+		sc_consensus_grandpa::AuthoritySet<<Block as BlockT>::Hash, NumberFor<Block>>,
 }
 
 /// An api for sync state RPC calls.

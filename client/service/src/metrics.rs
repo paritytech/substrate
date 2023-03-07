@@ -23,7 +23,10 @@ use futures_timer::Delay;
 use prometheus_endpoint::{register, Gauge, GaugeVec, Opts, PrometheusError, Registry, U64};
 use sc_client_api::{ClientInfo, UsageProvider};
 use sc_network::config::Role;
-use sc_network_common::service::{NetworkStatus, NetworkStatusProvider};
+use sc_network_common::{
+	service::{NetworkStatus, NetworkStatusProvider},
+	sync::{SyncStatus, SyncStatusProvider},
+};
 use sc_telemetry::{telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sc_transaction_pool_api::{MaintainedTransactionPool, PoolStatus};
 use sc_utils::metrics::register_globals;
@@ -175,16 +178,18 @@ impl MetricsService {
 	/// Returns a never-ending `Future` that performs the
 	/// metric and telemetry updates with information from
 	/// the given sources.
-	pub async fn run<TBl, TExPool, TCl, TNet>(
+	pub async fn run<TBl, TExPool, TCl, TNet, TSync>(
 		mut self,
 		client: Arc<TCl>,
 		transactions: Arc<TExPool>,
 		network: TNet,
+		syncing: TSync,
 	) where
 		TBl: Block,
 		TCl: ProvideRuntimeApi<TBl> + UsageProvider<TBl>,
 		TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as Block>::Hash>,
-		TNet: NetworkStatusProvider<TBl>,
+		TNet: NetworkStatusProvider,
+		TSync: SyncStatusProvider<TBl>,
 	{
 		let mut timer = Delay::new(Duration::from_secs(0));
 		let timer_interval = Duration::from_secs(5);
@@ -196,8 +201,11 @@ impl MetricsService {
 			// Try to get the latest network information.
 			let net_status = network.status().await.ok();
 
+			// Try to get the latest syncing information.
+			let sync_status = syncing.status().await.ok();
+
 			// Update / Send the metrics.
-			self.update(&client.usage_info(), &transactions.status(), net_status);
+			self.update(&client.usage_info(), &transactions.status(), net_status, sync_status);
 
 			// Schedule next tick.
 			timer.reset(timer_interval);
@@ -208,7 +216,8 @@ impl MetricsService {
 		&mut self,
 		info: &ClientInfo<T>,
 		txpool_status: &PoolStatus,
-		net_status: Option<NetworkStatus<T>>,
+		net_status: Option<NetworkStatus>,
+		sync_status: Option<SyncStatus<T>>,
 	) {
 		let now = Instant::now();
 		let elapsed = (now - self.last_update).as_secs();
@@ -273,10 +282,12 @@ impl MetricsService {
 				"bandwidth_download" => avg_bytes_per_sec_inbound,
 				"bandwidth_upload" => avg_bytes_per_sec_outbound,
 			);
+		}
 
+		if let Some(sync_status) = sync_status {
 			if let Some(metrics) = self.metrics.as_ref() {
 				let best_seen_block: Option<u64> =
-					net_status.best_seen_block.map(|num: NumberFor<T>| {
+					sync_status.best_seen_block.map(|num: NumberFor<T>| {
 						UniqueSaturatedInto::<u64>::unique_saturated_into(num)
 					});
 

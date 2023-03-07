@@ -38,8 +38,7 @@
 use codec::{self as codec, Decode, Encode};
 use frame_support::traits::{Get, KeyOwnerProofSystem};
 use log::{error, info};
-
-use sp_finality_grandpa::{AuthorityId, EquivocationProof, RoundNumber, SetId, KEY_TYPE};
+use sp_consensus_grandpa::{AuthorityId, EquivocationProof, RoundNumber, SetId, KEY_TYPE};
 use sp_runtime::{
 	transaction_validity::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,

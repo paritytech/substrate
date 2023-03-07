@@ -19,7 +19,8 @@
 //! Subscription management for tracking subscription IDs to pinned blocks.
 
 use futures::channel::oneshot;
-use parking_lot::{RwLock, RwLockWriteGuard};
+use parking_lot::RwLock;
+use sp_blockchain::Error;
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	collections::{hash_map::Entry, HashMap, HashSet},
@@ -33,8 +34,20 @@ pub enum SubscriptionManagementError {
 	/// the subscription has exceeded the maximum number
 	/// of blocks pinned.
 	ExceededLimits,
+	/// Error originated from the blockchain (client or backend).
+	Blockchain(Error),
+	/// The database does not contain a block number.
+	BlockNumberAbsent,
+	/// The database does not contain a block hash.
+	BlockHashAbsent,
 	/// Custom error.
 	Custom(String),
+}
+
+impl From<Error> for SubscriptionManagementError {
+	fn from(err: Error) -> Self {
+		SubscriptionManagementError::Blockchain(err)
+	}
 }
 
 /// Inner subscription data structure.
@@ -53,10 +66,6 @@ struct SubscriptionInner<Block: BlockT> {
 #[derive(Clone)]
 pub struct SubscriptionHandle<Block: BlockT> {
 	inner: Arc<RwLock<SubscriptionInner<Block>>>,
-	/// The best reported block by this subscription.
-	/// Have this as a separate variable to easily share
-	/// the write guard with the RPC layer.
-	best_block: Arc<RwLock<Option<Block::Hash>>>,
 }
 
 impl<Block: BlockT> SubscriptionHandle<Block> {
@@ -69,7 +78,6 @@ impl<Block: BlockT> SubscriptionHandle<Block> {
 				blocks: HashSet::new(),
 				max_pinned_blocks,
 			})),
-			best_block: Arc::new(RwLock::new(None)),
 		}
 	}
 
@@ -124,11 +132,6 @@ impl<Block: BlockT> SubscriptionHandle<Block> {
 	pub fn has_runtime_updates(&self) -> bool {
 		let inner = self.inner.read();
 		inner.runtime_updates
-	}
-
-	/// Get the write guard of the best reported block.
-	pub fn best_block_write(&self) -> RwLockWriteGuard<'_, Option<Block::Hash>> {
-		self.best_block.write()
 	}
 }
 

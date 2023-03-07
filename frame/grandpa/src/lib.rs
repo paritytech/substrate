@@ -28,17 +28,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-// re-export since this is necessary for `impl_apis` in runtime.
-pub use sp_finality_grandpa as fg_primitives;
-
-use sp_std::prelude::*;
+// Re-export since this is necessary for `impl_apis` in runtime.
+pub use sp_consensus_grandpa::{
+	self as fg_primitives, AuthorityId, AuthorityList, AuthorityWeight, VersionedAuthorityList,
+};
 
 use codec::{self as codec, Decode, Encode, MaxEncodedLen};
-pub use fg_primitives::{AuthorityId, AuthorityList, AuthorityWeight, VersionedAuthorityList};
-use fg_primitives::{
-	ConsensusLog, EquivocationProof, ScheduledChange, SetId, GRANDPA_AUTHORITIES_KEY,
-	GRANDPA_ENGINE_ID, RUNTIME_LOG_TARGET as LOG_TARGET,
-};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, Pays},
 	pallet_prelude::Get,
@@ -48,9 +43,14 @@ use frame_support::{
 	WeakBoundedVec,
 };
 use scale_info::TypeInfo;
+use sp_consensus_grandpa::{
+	ConsensusLog, EquivocationProof, ScheduledChange, SetId, GRANDPA_AUTHORITIES_KEY,
+	GRANDPA_ENGINE_ID, RUNTIME_LOG_TARGET as LOG_TARGET,
+};
 use sp_runtime::{generic::DigestItem, traits::Zero, DispatchResult};
 use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_staking::{offence::OffenceReportSystem, SessionIndex};
+use sp_std::prelude::*;
 
 mod default_weights;
 mod equivocation;
@@ -343,7 +343,7 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			CurrentSetId::<T>::put(fg_primitives::SetId::default());
+			CurrentSetId::<T>::put(SetId::default());
 			Pallet::<T>::initialize(&self.authorities)
 		}
 	}

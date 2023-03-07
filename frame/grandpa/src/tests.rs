@@ -354,7 +354,7 @@ fn report_equivocation_current_set_works() {
 
 		// create the key ownership proof
 		let key_owner_proof =
-			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
+			Historical::prove((sp_consensus_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
 
 		// report the equivocation and the tx should be dispatched successfully
 		assert_ok!(Grandpa::report_equivocation_unsigned(
@@ -407,7 +407,7 @@ fn report_equivocation_old_set_works() {
 
 		// create the key ownership proof in the "old" set
 		let key_owner_proof =
-			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
+			Historical::prove((sp_consensus_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
 
 		start_era(2);
 
@@ -485,7 +485,7 @@ fn report_equivocation_invalid_set_id() {
 		let equivocation_keyring = extract_keyring(equivocation_key);
 
 		let key_owner_proof =
-			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
+			Historical::prove((sp_consensus_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
 
 		let set_id = Grandpa::current_set_id();
 
@@ -523,7 +523,7 @@ fn report_equivocation_invalid_session() {
 
 		// generate a key ownership proof at set id = 1
 		let key_owner_proof =
-			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
+			Historical::prove((sp_consensus_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
 
 		start_era(2);
 
@@ -562,7 +562,7 @@ fn report_equivocation_invalid_key_owner_proof() {
 
 		// generate a key ownership proof for the authority at index 1
 		let invalid_key_owner_proof =
-			Historical::prove((sp_finality_grandpa::KEY_TYPE, &invalid_owner_key)).unwrap();
+			Historical::prove((sp_consensus_grandpa::KEY_TYPE, &invalid_owner_key)).unwrap();
 
 		let equivocation_authority_index = 0;
 		let equivocation_key = &authorities[equivocation_authority_index].0;
@@ -609,7 +609,7 @@ fn report_equivocation_invalid_equivocation_proof() {
 
 		// generate a key ownership proof at set id = 1
 		let key_owner_proof =
-			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
+			Historical::prove((sp_consensus_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
 
 		let set_id = Grandpa::current_set_id();
 
@@ -684,7 +684,7 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		);
 
 		let key_owner_proof =
-			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
+			Historical::prove((sp_consensus_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
 
 		let call = Call::report_equivocation_unsigned {
 			equivocation_proof: Box::new(equivocation_proof.clone()),
@@ -872,7 +872,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 
 		// create the key ownership proof.
 		let key_owner_proof =
-			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
+			Historical::prove((sp_consensus_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
 
 		// check the dispatch info for the call.
 		let info = Call::<Test>::report_equivocation_unsigned {

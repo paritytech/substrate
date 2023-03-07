@@ -84,10 +84,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Minimum execution time: 27_362 nanoseconds.
 		Weight::from_parts(28_497_963, 9726)
 			// Standard Error: 3_968
-			.saturating_add(Weight::from_ref_time(176_840).saturating_mul(v.into()))
+			.saturating_add(Weight::from_parts(176_840, 0).saturating_mul(v.into()))
 			.saturating_add(T::DbWeight::get().reads(5_u64))
 			.saturating_add(T::DbWeight::get().writes(2_u64))
-			.saturating_add(Weight::from_proof_size(320).saturating_mul(v.into()))
+			.saturating_add(Weight::from_parts(0, 320).saturating_mul(v.into()))
 	}
 	/// Storage: Elections Candidates (r:1 w:0)
 	/// Proof Skipped: Elections Candidates (max_values: Some(1), max_size: None, mode: Measured)
@@ -107,10 +107,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Minimum execution time: 37_120 nanoseconds.
 		Weight::from_parts(38_455_302, 9598)
 			// Standard Error: 5_478
-			.saturating_add(Weight::from_ref_time(219_678).saturating_mul(v.into()))
+			.saturating_add(Weight::from_parts(219_678, 0).saturating_mul(v.into()))
 			.saturating_add(T::DbWeight::get().reads(5_u64))
 			.saturating_add(T::DbWeight::get().writes(2_u64))
-			.saturating_add(Weight::from_proof_size(320).saturating_mul(v.into()))
+			.saturating_add(Weight::from_parts(0, 320).saturating_mul(v.into()))
 	}
 	/// Storage: Elections Candidates (r:1 w:0)
 	/// Proof Skipped: Elections Candidates (max_values: Some(1), max_size: None, mode: Measured)
@@ -130,10 +130,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Minimum execution time: 36_928 nanoseconds.
 		Weight::from_parts(38_334_669, 9726)
 			// Standard Error: 5_271
-			.saturating_add(Weight::from_ref_time(232_355).saturating_mul(v.into()))
+			.saturating_add(Weight::from_parts(232_355, 0).saturating_mul(v.into()))
 			.saturating_add(T::DbWeight::get().reads(5_u64))
 			.saturating_add(T::DbWeight::get().writes(2_u64))
-			.saturating_add(Weight::from_proof_size(320).saturating_mul(v.into()))
+			.saturating_add(Weight::from_parts(0, 320).saturating_mul(v.into()))
 	}
 	/// Storage: Elections Voting (r:1 w:1)
 	/// Proof Skipped: Elections Voting (max_values: None, max_size: None, mode: Measured)
@@ -162,10 +162,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Minimum execution time: 31_864 nanoseconds.
 		Weight::from_parts(33_490_161, 6576)
 			// Standard Error: 2_643
-			.saturating_add(Weight::from_ref_time(158_386).saturating_mul(c.into()))
+			.saturating_add(Weight::from_parts(158_386, 0).saturating_mul(c.into()))
 			.saturating_add(T::DbWeight::get().reads(3_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
-			.saturating_add(Weight::from_proof_size(144).saturating_mul(c.into()))
+			.saturating_add(Weight::from_parts(0, 144).saturating_mul(c.into()))
 	}
 	/// Storage: Elections Candidates (r:1 w:1)
 	/// Proof Skipped: Elections Candidates (max_values: Some(1), max_size: None, mode: Measured)
@@ -177,10 +177,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Minimum execution time: 27_292 nanoseconds.
 		Weight::from_parts(28_364_955, 844)
 			// Standard Error: 1_335
-			.saturating_add(Weight::from_ref_time(78_086).saturating_mul(c.into()))
+			.saturating_add(Weight::from_parts(78_086, 0).saturating_mul(c.into()))
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
-			.saturating_add(Weight::from_proof_size(48).saturating_mul(c.into()))
+			.saturating_add(Weight::from_parts(0, 48).saturating_mul(c.into()))
 	}
 	/// Storage: Elections Members (r:1 w:1)
 	/// Proof Skipped: Elections Members (max_values: Some(1), max_size: None, mode: Measured)
@@ -219,7 +219,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 2_000_000_000 nanoseconds.
-		Weight::from_ref_time(2_000_000_000_000)
+		Weight::from_parts(2_000_000_000_000, 0)
 	}
 	/// Storage: Elections Members (r:1 w:1)
 	/// Proof Skipped: Elections Members (max_values: Some(1), max_size: None, mode: Measured)
@@ -263,11 +263,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Minimum execution time: 14_934_185 nanoseconds.
 		Weight::from_parts(15_014_057_000, 8448)
 			// Standard Error: 245_588
-			.saturating_add(Weight::from_ref_time(35_586_946).saturating_mul(v.into()))
+			.saturating_add(Weight::from_parts(35_586_946, 0).saturating_mul(v.into()))
 			.saturating_add(T::DbWeight::get().reads(4_u64))
 			.saturating_add(T::DbWeight::get().reads((3_u64).saturating_mul(v.into())))
 			.saturating_add(T::DbWeight::get().writes((3_u64).saturating_mul(v.into())))
-			.saturating_add(Weight::from_proof_size(12352).saturating_mul(v.into()))
+			.saturating_add(Weight::from_parts(0, 12352).saturating_mul(v.into()))
 	}
 	/// Storage: Elections Candidates (r:1 w:1)
 	/// Proof Skipped: Elections Candidates (max_values: Some(1), max_size: None, mode: Measured)
@@ -297,17 +297,17 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Minimum execution time: 1_273_671 nanoseconds.
 		Weight::from_parts(1_279_716_000, 330033)
 			// Standard Error: 543_277
-			.saturating_add(Weight::from_ref_time(20_613_753).saturating_mul(v.into()))
+			.saturating_add(Weight::from_parts(20_613_753, 0).saturating_mul(v.into()))
 			// Standard Error: 34_857
-			.saturating_add(Weight::from_ref_time(688_354).saturating_mul(e.into()))
+			.saturating_add(Weight::from_parts(688_354, 0).saturating_mul(e.into()))
 			.saturating_add(T::DbWeight::get().reads(21_u64))
 			.saturating_add(T::DbWeight::get().reads((1_u64).saturating_mul(c.into())))
 			.saturating_add(T::DbWeight::get().reads((1_u64).saturating_mul(v.into())))
 			.saturating_add(T::DbWeight::get().writes(6_u64))
 			.saturating_add(T::DbWeight::get().writes((1_u64).saturating_mul(c.into())))
-			.saturating_add(Weight::from_proof_size(5229).saturating_mul(v.into()))
-			.saturating_add(Weight::from_proof_size(89).saturating_mul(e.into()))
-			.saturating_add(Weight::from_proof_size(2135).saturating_mul(c.into()))
+			.saturating_add(Weight::from_parts(0, 5229).saturating_mul(v.into()))
+			.saturating_add(Weight::from_parts(0, 89).saturating_mul(e.into()))
+			.saturating_add(Weight::from_parts(0, 2135).saturating_mul(c.into()))
 	}
 }
 
@@ -331,10 +331,10 @@ impl WeightInfo for () {
 		// Minimum execution time: 27_362 nanoseconds.
 		Weight::from_parts(28_497_963, 9726)
 			// Standard Error: 3_968
-			.saturating_add(Weight::from_ref_time(176_840).saturating_mul(v.into()))
+			.saturating_add(Weight::from_parts(176_840, 0).saturating_mul(v.into()))
 			.saturating_add(RocksDbWeight::get().reads(5_u64))
 			.saturating_add(RocksDbWeight::get().writes(2_u64))
-			.saturating_add(Weight::from_proof_size(320).saturating_mul(v.into()))
+			.saturating_add(Weight::from_parts(0, 320).saturating_mul(v.into()))
 	}
 	/// Storage: Elections Candidates (r:1 w:0)
 	/// Proof Skipped: Elections Candidates (max_values: Some(1), max_size: None, mode: Measured)
@@ -354,10 +354,10 @@ impl WeightInfo for () {
 		// Minimum execution time: 37_120 nanoseconds.
 		Weight::from_parts(38_455_302, 9598)
 			// Standard Error: 5_478
-			.saturating_add(Weight::from_ref_time(219_678).saturating_mul(v.into()))
+			.saturating_add(Weight::from_parts(219_678, 0).saturating_mul(v.into()))
 			.saturating_add(RocksDbWeight::get().reads(5_u64))
 			.saturating_add(RocksDbWeight::get().writes(2_u64))
-			.saturating_add(Weight::from_proof_size(320).saturating_mul(v.into()))
+			.saturating_add(Weight::from_parts(0, 320).saturating_mul(v.into()))
 	}
 	/// Storage: Elections Candidates (r:1 w:0)
 	/// Proof Skipped: Elections Candidates (max_values: Some(1), max_size: None, mode: Measured)
@@ -377,10 +377,10 @@ impl WeightInfo for () {
 		// Minimum execution time: 36_928 nanoseconds.
 		Weight::from_parts(38_334_669, 9726)
 			// Standard Error: 5_271
-			.saturating_add(Weight::from_ref_time(232_355).saturating_mul(v.into()))
+			.saturating_add(Weight::from_parts(232_355, 0).saturating_mul(v.into()))
 			.saturating_add(RocksDbWeight::get().reads(5_u64))
 			.saturating_add(RocksDbWeight::get().writes(2_u64))
-			.saturating_add(Weight::from_proof_size(320).saturating_mul(v.into()))
+			.saturating_add(Weight::from_parts(0, 320).saturating_mul(v.into()))
 	}
 	/// Storage: Elections Voting (r:1 w:1)
 	/// Proof Skipped: Elections Voting (max_values: None, max_size: None, mode: Measured)
@@ -409,10 +409,10 @@ impl WeightInfo for () {
 		// Minimum execution time: 31_864 nanoseconds.
 		Weight::from_parts(33_490_161, 6576)
 			// Standard Error: 2_643
-			.saturating_add(Weight::from_ref_time(158_386).saturating_mul(c.into()))
+			.saturating_add(Weight::from_parts(158_386, 0).saturating_mul(c.into()))
 			.saturating_add(RocksDbWeight::get().reads(3_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
-			.saturating_add(Weight::from_proof_size(144).saturating_mul(c.into()))
+			.saturating_add(Weight::from_parts(0, 144).saturating_mul(c.into()))
 	}
 	/// Storage: Elections Candidates (r:1 w:1)
 	/// Proof Skipped: Elections Candidates (max_values: Some(1), max_size: None, mode: Measured)
@@ -424,10 +424,10 @@ impl WeightInfo for () {
 		// Minimum execution time: 27_292 nanoseconds.
 		Weight::from_parts(28_364_955, 844)
 			// Standard Error: 1_335
-			.saturating_add(Weight::from_ref_time(78_086).saturating_mul(c.into()))
+			.saturating_add(Weight::from_parts(78_086, 0).saturating_mul(c.into()))
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
-			.saturating_add(Weight::from_proof_size(48).saturating_mul(c.into()))
+			.saturating_add(Weight::from_parts(0, 48).saturating_mul(c.into()))
 	}
 	/// Storage: Elections Members (r:1 w:1)
 	/// Proof Skipped: Elections Members (max_values: Some(1), max_size: None, mode: Measured)
@@ -466,7 +466,7 @@ impl WeightInfo for () {
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 2_000_000_000 nanoseconds.
-		Weight::from_ref_time(2_000_000_000_000)
+		Weight::from_parts(2_000_000_000_000, 0)
 	}
 	/// Storage: Elections Members (r:1 w:1)
 	/// Proof Skipped: Elections Members (max_values: Some(1), max_size: None, mode: Measured)
@@ -510,11 +510,11 @@ impl WeightInfo for () {
 		// Minimum execution time: 14_934_185 nanoseconds.
 		Weight::from_parts(15_014_057_000, 8448)
 			// Standard Error: 245_588
-			.saturating_add(Weight::from_ref_time(35_586_946).saturating_mul(v.into()))
+			.saturating_add(Weight::from_parts(35_586_946, 0).saturating_mul(v.into()))
 			.saturating_add(RocksDbWeight::get().reads(4_u64))
 			.saturating_add(RocksDbWeight::get().reads((3_u64).saturating_mul(v.into())))
 			.saturating_add(RocksDbWeight::get().writes((3_u64).saturating_mul(v.into())))
-			.saturating_add(Weight::from_proof_size(12352).saturating_mul(v.into()))
+			.saturating_add(Weight::from_parts(0, 12352).saturating_mul(v.into()))
 	}
 	/// Storage: Elections Candidates (r:1 w:1)
 	/// Proof Skipped: Elections Candidates (max_values: Some(1), max_size: None, mode: Measured)
@@ -544,16 +544,16 @@ impl WeightInfo for () {
 		// Minimum execution time: 1_273_671 nanoseconds.
 		Weight::from_parts(1_279_716_000, 330033)
 			// Standard Error: 543_277
-			.saturating_add(Weight::from_ref_time(20_613_753).saturating_mul(v.into()))
+			.saturating_add(Weight::from_parts(20_613_753, 0).saturating_mul(v.into()))
 			// Standard Error: 34_857
-			.saturating_add(Weight::from_ref_time(688_354).saturating_mul(e.into()))
+			.saturating_add(Weight::from_parts(688_354, 0).saturating_mul(e.into()))
 			.saturating_add(RocksDbWeight::get().reads(21_u64))
 			.saturating_add(RocksDbWeight::get().reads((1_u64).saturating_mul(c.into())))
 			.saturating_add(RocksDbWeight::get().reads((1_u64).saturating_mul(v.into())))
 			.saturating_add(RocksDbWeight::get().writes(6_u64))
 			.saturating_add(RocksDbWeight::get().writes((1_u64).saturating_mul(c.into())))
-			.saturating_add(Weight::from_proof_size(5229).saturating_mul(v.into()))
-			.saturating_add(Weight::from_proof_size(89).saturating_mul(e.into()))
-			.saturating_add(Weight::from_proof_size(2135).saturating_mul(c.into()))
+			.saturating_add(Weight::from_parts(0, 5229).saturating_mul(v.into()))
+			.saturating_add(Weight::from_parts(0, 89).saturating_mul(e.into()))
+			.saturating_add(Weight::from_parts(0, 2135).saturating_mul(c.into()))
 	}
 }
