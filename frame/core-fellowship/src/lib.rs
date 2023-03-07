@@ -228,8 +228,7 @@ pub mod pallet {
 		Promoted { who: T::AccountId, to_rank: RankOf<T, I> },
 		/// Member has been demoted to the given (non-zero) rank.
 		Demoted { who: T::AccountId, to_rank: RankOf<T, I> },
-		/// Member has been proven at their current rank, postponing auto-demotion. `new` is `true`
-		/// if this pallet did not previously track the member.
+		/// Member has been proven at their current rank, postponing auto-demotion.
 		Proven { who: T::AccountId, at_rank: RankOf<T, I> },
 		/// Member has stated evidence of their efforts their request for rank.
 		Requested { who: T::AccountId, wish: Wish },
