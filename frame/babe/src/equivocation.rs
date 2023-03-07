@@ -88,7 +88,7 @@ impl<Offender: Clone> Offence<Offender> for EquivocationOffence<Offender> {
 	}
 
 	// The formula is min((3k / n)^2, 1)
-	// with: k = offenders_number, n = validators_number
+	// where k = offenders_number and n = validators_number
 	fn slash_fraction(&self, offenders_count: u32) -> Perbill {
 		// Perbill type domain is [0, 1] by definition
 		Perbill::from_rational(3 * offenders_count, self.validator_set_count).square()
