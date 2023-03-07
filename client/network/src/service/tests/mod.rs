@@ -33,7 +33,7 @@ use sc_network_sync::{
 	service::network::{NetworkServiceHandle, NetworkServiceProvider},
 	state_request_handler::StateRequestHandler,
 };
-use sp_runtime::traits::{Block as BlockT, Header as _};
+use sp_runtime::traits::Block as BlockT;
 use std::sync::Arc;
 use substrate_test_runtime_client::{
 	runtime::{Block as TestBlock, Hash as TestHash},
@@ -135,31 +135,10 @@ impl TestNetworkBuilder {
 			async fn verify(
 				&mut self,
 				mut block: sc_consensus::BlockImportParams<B, ()>,
-			) -> Result<
-				(
-					sc_consensus::BlockImportParams<B, ()>,
-					Option<Vec<(sp_blockchain::well_known_cache_keys::Id, Vec<u8>)>>,
-				),
-				String,
-			> {
-				let maybe_keys = block
-					.header
-					.digest()
-					.log(|l| {
-						l.try_as_raw(sp_runtime::generic::OpaqueDigestItemId::Consensus(b"aura"))
-							.or_else(|| {
-								l.try_as_raw(sp_runtime::generic::OpaqueDigestItemId::Consensus(
-									b"babe",
-								))
-							})
-					})
-					.map(|blob| {
-						vec![(sp_blockchain::well_known_cache_keys::AUTHORITIES, blob.to_vec())]
-					});
-
+			) -> Result<sc_consensus::BlockImportParams<B, ()>, String> {
 				block.finalized = self.0;
 				block.fork_choice = Some(sc_consensus::ForkChoiceStrategy::LongestChain);
-				Ok((block, maybe_keys))
+				Ok(block)
 			}
 		}
 

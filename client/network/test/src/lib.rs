@@ -67,7 +67,6 @@ use sc_network_sync::{
 };
 use sc_service::client::Client;
 use sp_blockchain::{
-	well_known_cache_keys::{self, Id as CacheKeyId},
 	Backend as BlockchainBackend, HeaderBackend, Info as BlockchainInfo, Result as ClientResult,
 };
 use sp_consensus::{
@@ -77,7 +76,7 @@ use sp_consensus::{
 use sp_core::H256;
 use sp_runtime::{
 	codec::{Decode, Encode},
-	generic::{BlockId, OpaqueDigestItemId},
+	generic::BlockId,
 	traits::{Block as BlockT, Header as HeaderT, NumberFor},
 	Justification, Justifications,
 };
@@ -112,20 +111,12 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 	async fn verify(
 		&mut self,
 		mut block: BlockImportParams<B, ()>,
-	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-		let maybe_keys = block
-			.header
-			.digest()
-			.log(|l| {
-				l.try_as_raw(OpaqueDigestItemId::Consensus(b"aura"))
-					.or_else(|| l.try_as_raw(OpaqueDigestItemId::Consensus(b"babe")))
-			})
-			.map(|blob| vec![(well_known_cache_keys::AUTHORITIES, blob.to_vec())]);
+	) -> Result<BlockImportParams<B, ()>, String> {
 		if block.fork_choice.is_none() {
 			block.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 		};
 		block.finalized = self.finalized;
-		Ok((block, maybe_keys))
+		Ok(block)
 	}
 }
 
@@ -224,9 +215,8 @@ impl BlockImport<Block> for PeersClient {
 	async fn import_block(
 		&mut self,
 		block: BlockImportParams<Block, ()>,
-		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		self.client.import_block(block.clear_storage_changes_and_mutate(), cache).await
+		self.client.import_block(block.clear_storage_changes_and_mutate()).await
 	}
 }
 
@@ -392,15 +382,10 @@ where
 			let mut import_block = BlockImportParams::new(origin, header.clone());
 			import_block.body = if headers_only { None } else { Some(block.extrinsics) };
 			import_block.fork_choice = Some(fork_choice);
-			let (import_block, cache) =
+			let import_block =
 				futures::executor::block_on(self.verifier.verify(import_block)).unwrap();
-			let cache = if let Some(cache) = cache {
-				cache.into_iter().collect()
-			} else {
-				Default::default()
-			};
 
-			futures::executor::block_on(self.block_import.import_block(import_block, cache))
+			futures::executor::block_on(self.block_import.import_block(import_block))
 				.expect("block_import failed");
 			if announce_block {
 				self.sync_service.announce_block(hash, None);
@@ -633,9 +618,8 @@ where
 	async fn import_block(
 		&mut self,
 		block: BlockImportParams<Block, Self::Transaction>,
-		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		self.inner.import_block(block.clear_storage_changes_and_mutate(), cache).await
+		self.inner.import_block(block.clear_storage_changes_and_mutate()).await
 	}
 }
 
@@ -650,7 +634,7 @@ impl<B: BlockT> Verifier<B> for VerifierAdapter<B> {
 	async fn verify(
 		&mut self,
 		block: BlockImportParams<B, ()>,
-	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> Result<BlockImportParams<B, ()>, String> {
 		let hash = block.header.hash();
 		self.verifier.lock().await.verify(block).await.map_err(|e| {
 			self.failed_verifications.lock().insert(hash, e.clone());

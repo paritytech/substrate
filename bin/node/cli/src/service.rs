@@ -760,7 +760,7 @@ mod tests {
 				);
 				params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
-				futures::executor::block_on(block_import.import_block(params, Default::default()))
+				futures::executor::block_on(block_import.import_block(params))
 					.expect("error importing test block");
 			},
 			|service, _| {
