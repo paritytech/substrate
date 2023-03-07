@@ -883,17 +883,17 @@ where
 	}
 
 	// create transactions protocol and add it to the list of supported protocols of
-	// `network_params`
-	let transactions_handler_proto = sc_network_transactions::TransactionsHandlerPrototype::new(
-		protocol_id.clone(),
-		client
-			.block_hash(0u32.into())
-			.ok()
-			.flatten()
-			.expect("Genesis block exists; qed"),
-		config.chain_spec.fork_id(),
-	);
-	net_config.add_notification_protocol(transactions_handler_proto.set_config());
+	let (transactions_handler_proto, transactions_config) =
+		sc_network_transactions::TransactionsHandlerPrototype::new(
+			protocol_id.clone(),
+			client
+				.block_hash(0u32.into())
+				.ok()
+				.flatten()
+				.expect("Genesis block exists; qed"),
+			config.chain_spec.fork_id(),
+		);
+	net_config.add_notification_protocol(transactions_config);
 
 	let (tx, rx) = sc_utils::mpsc::tracing_unbounded("mpsc_syncing_engine_protocol", 100_000);
 	let (chain_sync_network_provider, chain_sync_network_handle) = NetworkServiceProvider::new();

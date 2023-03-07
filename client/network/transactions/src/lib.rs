@@ -121,7 +121,6 @@ impl<H: ExHashT> Future for PendingTransaction<H> {
 /// Prototype for a [`TransactionsHandler`].
 pub struct TransactionsHandlerPrototype {
 	protocol_name: ProtocolName,
-	fallback_protocol_names: Vec<ProtocolName>,
 }
 
 impl TransactionsHandlerPrototype {
@@ -130,26 +129,17 @@ impl TransactionsHandlerPrototype {
 		protocol_id: ProtocolId,
 		genesis_hash: Hash,
 		fork_id: Option<&str>,
-	) -> Self {
+	) -> (Self, NonDefaultSetConfig) {
 		let genesis_hash = genesis_hash.as_ref();
-		let protocol_name = if let Some(fork_id) = fork_id {
+		let protocol_name: ProtocolName = if let Some(fork_id) = fork_id {
 			format!("/{}/{}/transactions/1", array_bytes::bytes2hex("", genesis_hash), fork_id)
 		} else {
 			format!("/{}/transactions/1", array_bytes::bytes2hex("", genesis_hash))
-		};
-		let legacy_protocol_name = format!("/{}/transactions/1", protocol_id.as_ref());
-
-		Self {
-			protocol_name: protocol_name.into(),
-			fallback_protocol_names: iter::once(legacy_protocol_name.into()).collect(),
 		}
-	}
-
-	/// Returns the configuration of the set to put in the network configuration.
-	pub fn set_config(&self) -> NonDefaultSetConfig {
-		NonDefaultSetConfig {
-			notifications_protocol: self.protocol_name.clone(),
-			fallback_names: self.fallback_protocol_names.clone(),
+		.into();
+		let config = NonDefaultSetConfig {
+			notifications_protocol: protocol_name.clone(),
+			fallback_names: vec![format!("/{}/transactions/1", protocol_id.as_ref()).into()],
 			max_notification_size: MAX_TRANSACTIONS_SIZE,
 			handshake: None,
 			set_config: SetConfig {
@@ -158,7 +148,9 @@ impl TransactionsHandlerPrototype {
 				reserved_nodes: Vec::new(),
 				non_reserved_mode: NonReservedPeerMode::Deny,
 			},
-		}
+		};
+
+		(Self { protocol_name }, config)
 	}
 
 	/// Turns the prototype into the actual handler. Returns a controller that allows controlling
