@@ -92,18 +92,32 @@ pub enum Wish {
 pub type Evidence<T, I> = BoundedVec<u8, <T as Config<I>>::EvidenceSize>;
 
 /// The status of the pallet instance.
-#[derive(Encode, Decode, Eq, PartialEq, Clone, TypeInfo, MaxEncodedLen, RuntimeDebug, Default)]
-pub struct ParamsType<Balance, BlockNumber> {
+#[derive(Encode, Decode, Eq, PartialEq, Clone, TypeInfo, MaxEncodedLen, RuntimeDebug)]
+pub struct ParamsType<Balance, BlockNumber, const RANKS: usize> {
 	/// The amounts to be paid when a given grade is active.
-	active_salary: [Balance; 9],
+	active_salary: [Balance; RANKS],
 	/// The minimum percent discount when passive.
-	passive_salary: [Balance; 9],
+	passive_salary: [Balance; RANKS],
 	/// The period between which unproven members become demoted.
-	demotion_period: [BlockNumber; 9],
+	demotion_period: [BlockNumber; RANKS],
 	/// The period between which members must wait before they may proceed to this rank.
-	min_promotion_period: [BlockNumber; 9],
+	min_promotion_period: [BlockNumber; RANKS],
 	/// Amount by which an account can remain at rank 0 (candidate before being offboard entirely).
 	offboard_timeout: BlockNumber,
+}
+
+impl<Balance: Default + Copy, BlockNumber: Default + Copy, const RANKS: usize> Default
+	for ParamsType<Balance, BlockNumber, RANKS>
+{
+	fn default() -> Self {
+		Self {
+			active_salary: [Balance::default(); RANKS],
+			passive_salary: [Balance::default(); RANKS],
+			demotion_period: [BlockNumber::default(); RANKS],
+			min_promotion_period: [BlockNumber::default(); RANKS],
+			offboard_timeout: BlockNumber::default(),
+		}
+	}
 }
 
 /// The status of a single member.
@@ -126,6 +140,8 @@ pub mod pallet {
 		traits::{tokens::GetSalary, EnsureOrigin},
 	};
 	use frame_system::{ensure_root, pallet_prelude::*};
+
+	const RANK_COUNT: usize = 9;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -173,7 +189,7 @@ pub mod pallet {
 	}
 
 	pub type ParamsOf<T, I> =
-		ParamsType<<T as Config<I>>::Balance, <T as frame_system::Config>::BlockNumber>;
+		ParamsType<<T as Config<I>>::Balance, <T as frame_system::Config>::BlockNumber, RANK_COUNT>;
 	pub type MemberStatusOf<T> = MemberStatus<<T as frame_system::Config>::BlockNumber>;
 	pub type RankOf<T, I> = <<T as Config<I>>::Members as RankedMembers>::Rank;
 
@@ -240,7 +256,7 @@ pub mod pallet {
 		/// Member's rank is not as expected - generally means that the rank provided to the call
 		/// does not agree with the state of the system.
 		UnexpectedRank,
-		/// The given rank is invalid - this generally means it's not between 1 and 9.
+		/// The given rank is invalid - this generally means it's not between 1 and `RANK_COUNT`.
 		InvalidRank,
 		/// The origin does not have enough permission to do this operation.
 		NoPermission,
@@ -508,13 +524,13 @@ pub mod pallet {
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		/// Convert a rank into a 0..9 index suitable for the arrays in Params.
+		/// Convert a rank into a `0..RANK_COUNT` index suitable for the arrays in Params.
 		///
-		/// Rank 1 becomes index 0, rank 9 becomes index 8. Any rank not in the range 1..=9 is
-		/// `None`.
+		/// Rank 1 becomes index 0, rank `RANK_COUNT` becomes index `RANK_COUNT - 1`. Any rank not
+		/// in the range `1..=RANK_COUNT` is `None`.
 		pub(crate) fn rank_to_index(rank: RankOf<T, I>) -> Option<usize> {
 			match TryInto::<usize>::try_into(rank) {
-				Ok(r) if r <= 9 && r > 0 => Some(r - 1),
+				Ok(r) if r <= RANK_COUNT && r > 0 => Some(r - 1),
 				_ => return None,
 			}
 		}
