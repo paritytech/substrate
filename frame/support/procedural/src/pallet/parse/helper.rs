@@ -47,7 +47,9 @@ pub trait MutItemAttrs {
 }
 
 /// Take the first pallet attribute (e.g. attribute like `#[pallet..]`) and decode it to `Attr`
-pub(crate) fn take_first_item_pallet_attr<Attr>(item: &mut impl MutItemAttrs) -> syn::Result<Option<Attr>>
+pub(crate) fn take_first_item_pallet_attr<Attr>(
+	item: &mut impl MutItemAttrs,
+) -> syn::Result<Option<Attr>>
 where
 	Attr: syn::parse::Parse,
 {

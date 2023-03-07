@@ -216,7 +216,6 @@ pub use frame_support_procedural::derive_impl;
 #[doc(hidden)]
 pub use frame_support_procedural::derive_impl_inner;
 
-
 /// Create new implementations of the [`Get`](crate::traits::Get) trait.
 ///
 /// The so-called parameter type can be created in four different ways:

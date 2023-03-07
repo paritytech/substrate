@@ -205,8 +205,8 @@ pub mod pallet {
 		use super::*;
 		pub mod testing {
 			type AccountId = u64;
-			use sp_runtime::traits::IdentityLookup;
 			use super::*;
+			use sp_runtime::traits::IdentityLookup;
 
 			pub struct Impl {}
 			impl DefaultConfig for Impl {
