@@ -437,7 +437,7 @@ bitflags! {
 /// The kind of call that should be performed.
 enum CallType {
 	/// Execute another instantiated contract
-	Call { callee_ptr: u32, value_ptr: u32, gas: u64 },
+	Call { callee_ptr: u32, value_ptr: u32, weight: Weight },
 	/// Execute deployed code in the context (storage, account ID, value) of the caller contract
 	DelegateCall { code_hash_ptr: u32 },
 }
@@ -894,7 +894,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 		};
 
 		let call_outcome = match call_type {
-			CallType::Call { callee_ptr, value_ptr, gas } => {
+			CallType::Call { callee_ptr, value_ptr, weight } => {
 				let callee: <<E as Ext>::T as frame_system::Config>::AccountId =
 					self.read_sandbox_memory_as(memory, callee_ptr)?;
 				let value: BalanceOf<<E as Ext>::T> =
@@ -903,7 +903,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 					self.charge_gas(RuntimeCosts::CallSurchargeTransfer)?;
 				}
 				self.ext.call(
-					Weight::from_parts(gas, 0),
+					weight,
 					callee,
 					value,
 					input_data,
@@ -947,7 +947,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 		&mut self,
 		memory: &mut [u8],
 		code_hash_ptr: u32,
-		gas: u64,
+		weight: Weight,
 		value_ptr: u32,
 		input_data_ptr: u32,
 		input_data_len: u32,
@@ -958,7 +958,6 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 		salt_ptr: u32,
 		salt_len: u32,
 	) -> Result<ReturnCode, TrapReason> {
-		let gas = Weight::from_parts(gas, 0);
 		self.charge_gas(RuntimeCosts::InstantiateBase { input_data_len, salt_len })?;
 		let value: BalanceOf<<E as Ext>::T> = self.read_sandbox_memory_as(memory, value_ptr)?;
 		if value > 0u32.into() {
@@ -968,7 +967,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 			self.read_sandbox_memory_as(memory, code_hash_ptr)?;
 		let input_data = self.read_sandbox_memory(memory, input_data_ptr, input_data_len)?;
 		let salt = self.read_sandbox_memory(memory, salt_ptr, salt_len)?;
-		let instantiate_outcome = self.ext.instantiate(gas, code_hash, value, input_data, &salt);
+		let instantiate_outcome = self.ext.instantiate(weight, code_hash, value, input_data, &salt);
 		if let Ok((address, output)) = &instantiate_outcome {
 			if !output.flags.contains(ReturnFlags::REVERT) {
 				self.write_sandbox_output(
@@ -1014,6 +1013,7 @@ pub mod env {
 	///
 	/// NOTE: This is a implementation defined call and is NOT a part of the public API.
 	/// This call is supposed to be called only by instrumentation injected code.
+	/// TODO: It deals only with the ref_time part of the weight.
 	///
 	/// - `amount`: How much gas is used.
 	fn gas(ctx: _, _memory: _, amount: u64) -> Result<(), TrapReason> {
@@ -1320,7 +1320,7 @@ pub mod env {
 		ctx.call(
 			memory,
 			CallFlags::ALLOW_REENTRY,
-			CallType::Call { callee_ptr, value_ptr, gas },
+			CallType::Call { callee_ptr, value_ptr, weight: Weight::from_parts(gas, 0) },
 			input_data_ptr,
 			input_data_len,
 			output_ptr,
@@ -1374,7 +1374,38 @@ pub mod env {
 		ctx.call(
 			memory,
 			CallFlags::from_bits(flags).ok_or(Error::<E::T>::InvalidCallFlags)?,
-			CallType::Call { callee_ptr, value_ptr, gas },
+			CallType::Call { callee_ptr, value_ptr, weight: Weight::from_parts(gas, 0) },
+			input_data_ptr,
+			input_data_len,
+			output_ptr,
+			output_len_ptr,
+		)
+	}
+
+	/// TODO
+	#[version(2)]
+	#[unstable]
+	fn call(
+		ctx: _,
+		memory: _,
+		flags: u32,
+		callee_ptr: u32,
+		ref_time: u64,
+		proof_limit: u64,
+		value_ptr: u32,
+		input_data_ptr: u32,
+		input_data_len: u32,
+		output_ptr: u32,
+		output_len_ptr: u32,
+	) -> Result<ReturnCode, TrapReason> {
+		ctx.call(
+			memory,
+			CallFlags::from_bits(flags).ok_or(Error::<E::T>::InvalidCallFlags)?,
+			CallType::Call {
+				callee_ptr,
+				value_ptr,
+				weight: Weight::from_parts(ref_time, proof_limit),
+			},
 			input_data_ptr,
 			input_data_len,
 			output_ptr,
@@ -1462,7 +1493,7 @@ pub mod env {
 		ctx.instantiate(
 			memory,
 			code_hash_ptr,
-			gas,
+			Weight::from_parts(gas, 0),
 			value_ptr,
 			input_data_ptr,
 			input_data_len,
@@ -1535,7 +1566,7 @@ pub mod env {
 		ctx.instantiate(
 			memory,
 			code_hash_ptr,
-			gas,
+			Weight::from_parts(gas, 0),
 			value_ptr,
 			input_data_ptr,
 			input_data_len,
