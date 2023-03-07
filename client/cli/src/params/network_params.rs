@@ -18,11 +18,8 @@
 
 use crate::{arg_enums::SyncMode, params::node_key_params::NodeKeyParams};
 use clap::Args;
-use sc_network::{
-	config::{NetworkConfiguration, NodeKeyConfig},
-	multiaddr::Protocol,
-};
-use sc_network_common::config::{NonReservedPeerMode, SetConfig, TransportConfig};
+use sc_network::{config::NetworkConfiguration, multiaddr::Protocol};
+use sc_network_common::config::{NodeKeyConfig, NonReservedPeerMode, SetConfig, TransportConfig};
 use sc_service::{
 	config::{Multiaddr, MultiaddrWithPeerId},
 	ChainSpec, ChainType,
