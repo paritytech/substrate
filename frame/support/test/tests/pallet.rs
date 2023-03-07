@@ -25,7 +25,7 @@ use frame_support::{
 	pallet_prelude::{StorageInfoTrait, ValueQuery},
 	storage::unhashed,
 	traits::{
-		ConstU32, GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize,
+		ConstU32, GetCallName, GetCallIndex, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize,
 		OnRuntimeUpgrade, PalletError, PalletInfoAccess, StorageVersion,
 	},
 	weights::{RuntimeDbWeight, Weight},

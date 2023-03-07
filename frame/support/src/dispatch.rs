@@ -29,7 +29,7 @@ pub use crate::{
 		result,
 	},
 	traits::{
-		CallMetadata, GetCallMetadata, GetCallName, GetStorageVersion, UnfilteredDispatchable,
+		CallMetadata, GetCallMetadata, GetCallName, GetCallIndex, GetStorageVersion, UnfilteredDispatchable,
 	},
 };
 #[cfg(feature = "std")]
@@ -2830,6 +2830,22 @@ macro_rules! decl_module {
 					$(
 						stringify!($fn_name),
 					)*
+				]
+			}
+		}
+
+		// Implement GetCallIndex for the Call.
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::GetCallIndex
+			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
+		{
+			//fake impl
+			fn get_call_index(&self) -> u8 {
+				*self as u8
+			}
+
+			fn get_call_indices() -> &'static [u8] {
+				&[
+					0
 				]
 			}
 		}

@@ -31,6 +31,7 @@ pub fn expand_outer_dispatch(
 	let mut variant_patterns = Vec::new();
 	let mut query_call_part_macros = Vec::new();
 	let mut pallet_names = Vec::new();
+	let mut pallet_indices = Vec::new();
 	let mut pallet_attrs = Vec::new();
 	let system_path = &system_pallet.path;
 
@@ -57,6 +58,7 @@ pub fn expand_outer_dispatch(
 		});
 		variant_patterns.push(quote!(RuntimeCall::#name(call)));
 		pallet_names.push(name);
+		pallet_indices.push(index);
 		pallet_attrs.push(attr);
 		query_call_part_macros.push(quote! {
 			#path::__substrate_call_check::is_call_part_defined!(#name);
@@ -129,6 +131,7 @@ pub fn expand_outer_dispatch(
 		impl #scrate::dispatch::GetCallMetadata for RuntimeCall {
 			fn get_call_metadata(&self) -> #scrate::dispatch::CallMetadata {
 				use #scrate::dispatch::GetCallName;
+				use #scrate::dispatch::GetCallIndex;
 				match self {
 					#(
 						#pallet_attrs
@@ -160,6 +163,27 @@ pub fn expand_outer_dispatch(
 					_ => unreachable!(),
 				}
 			}
+
+			fn get_module_indices() -> &'static [u8] {
+				&[#(
+					#pallet_attrs
+					#pallet_indices,
+				)*]
+			}
+
+			fn get_call_indices(module: &str) -> &'static [u8] {
+				use #scrate::dispatch::{Callable, GetCallIndex};
+				match module {
+					#(
+						#pallet_attrs
+						stringify!(#pallet_names) =>
+							<<#pallet_names as Callable<#runtime>>::RuntimeCall
+								as GetCallIndex>::get_call_indices(),
+					)*
+					_ => unreachable!(),
+				}
+			}
+
 		}
 		impl #scrate::dispatch::Dispatchable for RuntimeCall {
 			type RuntimeOrigin = RuntimeOrigin;

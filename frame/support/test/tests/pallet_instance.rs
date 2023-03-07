@@ -19,7 +19,7 @@ use frame_support::{
 	dispatch::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays, UnfilteredDispatchable},
 	pallet_prelude::ValueQuery,
 	storage::unhashed,
-	traits::{ConstU32, GetCallName, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade},
+	traits::{ConstU32, GetCallName, GetCallMetadata, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade},
 };
 use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
