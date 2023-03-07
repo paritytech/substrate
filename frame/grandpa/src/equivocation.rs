@@ -156,7 +156,7 @@ where
 		let (equivocation_proof, key_owner_proof) = evidence;
 
 		// Check the membership proof to extract the offender's id
-		let key = (sp_finality_grandpa::KEY_TYPE, equivocation_proof.offender().clone());
+		let key = (KEY_TYPE, equivocation_proof.offender().clone());
 		let offender = P::check_proof(key, key_owner_proof).ok_or(InvalidTransaction::BadProof)?;
 
 		// Check if the offence has already been reported, and if so then we can discard the report.
@@ -189,7 +189,7 @@ where
 		let validator_set_count = key_owner_proof.validator_count();
 
 		// Validate equivocation proof (check votes are different and signatures are valid).
-		if !sp_finality_grandpa::check_equivocation_proof(equivocation_proof) {
+		if !sp_consensus_grandpa::check_equivocation_proof(equivocation_proof) {
 			return Err(Error::<T>::InvalidEquivocationProof.into())
 		}
 
