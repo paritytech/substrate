@@ -98,9 +98,9 @@ pub type Evidence<T, I> = BoundedVec<u8, <T as Config<I>>::EvidenceSize>;
 /// The status of the pallet instance.
 #[derive(Encode, Decode, Eq, PartialEq, Clone, TypeInfo, MaxEncodedLen, RuntimeDebug)]
 pub struct ParamsType<Balance, BlockNumber, const RANKS: usize> {
-	/// The amounts to be paid when a given grade is active.
+	/// The amounts to be paid when a member of a given rank (-1) is active.
 	active_salary: [Balance; RANKS],
-	/// The minimum percent discount when passive.
+	/// The amounts to be paid when a member of a given rank (-1) is passive.
 	passive_salary: [Balance; RANKS],
 	/// The period between which unproven members become demoted.
 	demotion_period: [BlockNumber; RANKS],
@@ -473,6 +473,7 @@ pub mod pallet {
 			ensure!(T::Members::rank_of(&who).is_none(), Error::<T, I>::Ranked);
 			ensure!(Member::<T, I>::contains_key(&who), Error::<T, I>::NotTracked);
 			Member::<T, I>::remove(&who);
+			MemberEvidence::<T, I>::remove(&who);
 			Self::deposit_event(Event::<T, I>::Offboarded { who });
 			Ok(Pays::No.into())
 		}
