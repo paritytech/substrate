@@ -21,7 +21,7 @@
 		(i32.store
 			(i32.const 0)
 			(call $seal_call
-				(i32.const 8) ;; set ALLOW_REENTRY
+				(i32.const 0) ;; Set no flag.
 				(i32.const 4) ;; Pointer to "callee" address.
 				(i64.load (i32.const 36)) ;; How much ref_time to devote for the execution.
 				(i64.load (i32.const 44)) ;; How much proof_size to devote for the execution.

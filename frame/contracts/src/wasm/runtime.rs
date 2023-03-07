@@ -1515,6 +1515,44 @@ pub mod env {
 
 	/// Instantiate a contract with the specified code hash.
 	///
+	/// Equivalent to the newer [`seal2`][`super::api_doc::Version2::instantiate`] version but works with
+	/// *ref_time* Weight only. It is recommended to switch to the latest version, once it's
+	/// stabilized.
+	#[version(1)]
+	#[prefixed_alias]
+	fn instantiate(
+		ctx: _,
+		memory: _,
+		code_hash_ptr: u32,
+		gas: u64,
+		value_ptr: u32,
+		input_data_ptr: u32,
+		input_data_len: u32,
+		address_ptr: u32,
+		address_len_ptr: u32,
+		output_ptr: u32,
+		output_len_ptr: u32,
+		salt_ptr: u32,
+		salt_len: u32,
+	) -> Result<ReturnCode, TrapReason> {
+		ctx.instantiate(
+			memory,
+			code_hash_ptr,
+			Weight::from_parts(gas, 0),
+			value_ptr,
+			input_data_ptr,
+			input_data_len,
+			address_ptr,
+			address_len_ptr,
+			output_ptr,
+			output_len_ptr,
+			salt_ptr,
+			salt_len,
+		)
+	}
+
+	/// Instantiate a contract with the specified code hash.
+	///
 	/// This function creates an account and executes the constructor defined in the code specified
 	/// by the code hash. The address of this new account is copied to `address_ptr` and its length
 	/// to `address_len_ptr`. The constructors output buffer is copied to `output_ptr` and its
@@ -1527,7 +1565,8 @@ pub mod env {
 	/// # Parameters
 	///
 	/// - `code_hash_ptr`: a pointer to the buffer that contains the initializer code.
-	/// - `gas`: how much gas to devote to the execution of the initializer code.
+	/// - `ref_time`: how much *ref_time* Weight to devote to the execution.
+	/// - `proof_limit`: how much *proof_limit* Weight to devote to the execution.
 	/// - `value_ptr`: a pointer to the buffer with value, how much value to send. Should be
 	///   decodable as a `T::Balance`. Traps otherwise.
 	/// - `input_data_ptr`: a pointer to a buffer to be used as input data to the initializer code.
@@ -1553,13 +1592,14 @@ pub mod env {
 	/// - `ReturnCode::CalleeTrapped`
 	/// - `ReturnCode::TransferFailed`
 	/// - `ReturnCode::CodeNotFound`
-	#[version(1)]
-	#[prefixed_alias]
+	#[version(2)]
+	#[unstable]
 	fn instantiate(
 		ctx: _,
 		memory: _,
 		code_hash_ptr: u32,
-		gas: u64,
+		ref_time: u64,
+		proof_limit: u64,
 		value_ptr: u32,
 		input_data_ptr: u32,
 		input_data_len: u32,
@@ -1573,7 +1613,7 @@ pub mod env {
 		ctx.instantiate(
 			memory,
 			code_hash_ptr,
-			Weight::from_parts(gas, 0),
+			Weight::from_parts(ref_time, proof_limit),
 			value_ptr,
 			input_data_ptr,
 			input_data_len,
