@@ -50,7 +50,8 @@ pub fn expand_config(def: &mut Def) -> proc_macro2::TokenStream {
 			)
 			.collect::<Vec<_>>();
 
-		// we rarely use const and fns in config traits anyways... maybe not supporting them is good enough.
+		// we rarely use const and fns in config traits anyways... maybe not supporting them is good
+		// enough.
 		let const_names = Vec::<syn::Ident>::default();
 		let fn_names = Vec::<syn::Ident>::default();
 

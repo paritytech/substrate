@@ -25,6 +25,7 @@ mod construct_runtime;
 mod crate_version;
 mod debug_no_bound;
 mod default_no_bound;
+mod derive_impl;
 mod dummy_part_checker;
 mod key_prefix;
 mod match_and_insert;
@@ -35,7 +36,6 @@ mod storage;
 mod storage_alias;
 mod transactional;
 mod tt_macro;
-mod derive_impl;
 
 use proc_macro::TokenStream;
 use quote::quote;
