@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Implementation of the `storage_alias` attribute macro.
+//! Implementation of the `derive_impl` attribute macro.
 
 use frame_support_procedural_tools::generate_crate_access_2018;
 use proc_macro2::TokenStream;
