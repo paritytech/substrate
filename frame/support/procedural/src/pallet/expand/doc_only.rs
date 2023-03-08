@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use proc_macro2::Span;
+
 use crate::pallet::Def;
 
 pub fn expand_doc_only(def: &mut Def) -> proc_macro2::TokenStream {
@@ -45,6 +47,8 @@ pub fn expand_doc_only(def: &mut Def) -> proc_macro2::TokenStream {
 		}
 	};
 
+	let type_impl_generics = def.type_impl_generics(Span::call_site());
+
 	quote::quote!(
 		#[cfg(doc)]
 		pub mod storage_types {
@@ -56,7 +60,10 @@ pub fn expand_doc_only(def: &mut Def) -> proc_macro2::TokenStream {
 		#[cfg(doc)]
 		pub mod dispatchables {
 			use super::*;
-			#dispatchables
+			pub struct Dispatchables;
+			impl<#type_impl_generics> Dispatchables {
+				#dispatchables
+			}
 		}
 	)
 }
