@@ -55,6 +55,8 @@ mod tests;
 pub use crate::equivocation::{EquivocationOffence, EquivocationReportSystem, TimeSlot};
 pub use pallet::*;
 
+use crate::equivocation::EquivocationEvidenceFor;
+
 const LOG_TARGET: &str = "runtime::beefy";
 
 #[frame_support::pallet]
@@ -105,14 +107,7 @@ pub mod pallet {
 		/// Defines methods to publish, check and process an equivocation offence.
 		type EquivocationReportSystem: OffenceReportSystem<
 			Option<Self::AccountId>,
-			(
-				EquivocationProof<
-					Self::BlockNumber,
-					Self::BeefyId,
-					<Self::BeefyId as RuntimeAppPublic>::Signature,
-				>,
-				Self::KeyOwnerProof,
-			),
+			EquivocationEvidenceFor<Self>,
 		>;
 	}
 

@@ -123,8 +123,8 @@ where
 /// - Offence reporter for unsigned transactions is fetched via the the authorship pallet.
 pub struct EquivocationReportSystem<T, R, P, L>(sp_std::marker::PhantomData<(T, R, P, L)>);
 
-// Convenience alias.
-type EvidenceFor<T> = (
+/// Equivocation evidence convenience alias.
+pub type EquivocationEvidenceFor<T> = (
 	EquivocationProof<
 		<T as frame_system::Config>::BlockNumber,
 		<T as Config>::BeefyId,
@@ -133,7 +133,7 @@ type EvidenceFor<T> = (
 	<T as Config>::KeyOwnerProof,
 );
 
-impl<T, R, P, L> OffenceReportSystem<Option<T::AccountId>, EvidenceFor<T>>
+impl<T, R, P, L> OffenceReportSystem<Option<T::AccountId>, EquivocationEvidenceFor<T>>
 	for EquivocationReportSystem<T, R, P, L>
 where
 	T: Config + pallet_authorship::Config + frame_system::offchain::SendTransactionTypes<Call<T>>,
@@ -148,7 +148,7 @@ where
 {
 	type Longevity = L;
 
-	fn publish_evidence(evidence: EvidenceFor<T>) -> Result<(), ()> {
+	fn publish_evidence(evidence: EquivocationEvidenceFor<T>) -> Result<(), ()> {
 		use frame_system::offchain::SubmitTransaction;
 		let (equivocation_proof, key_owner_proof) = evidence;
 
@@ -165,7 +165,9 @@ where
 		res
 	}
 
-	fn check_evidence(evidence: EvidenceFor<T>) -> Result<(), TransactionValidityError> {
+	fn check_evidence(
+		evidence: EquivocationEvidenceFor<T>,
+	) -> Result<(), TransactionValidityError> {
 		let (equivocation_proof, key_owner_proof) = evidence;
 
 		// Check the membership proof to extract the offender's id
@@ -187,7 +189,7 @@ where
 
 	fn process_evidence(
 		reporter: Option<T::AccountId>,
-		evidence: EvidenceFor<T>,
+		evidence: EquivocationEvidenceFor<T>,
 	) -> Result<(), DispatchError> {
 		let (equivocation_proof, key_owner_proof) = evidence;
 		let reporter = reporter.or_else(|| <pallet_authorship::Pallet<T>>::author());
