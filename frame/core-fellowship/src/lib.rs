@@ -393,7 +393,7 @@ pub mod pallet {
 		/// - `who`: The account ID of the candidate to be inducted and become a member.
 		#[pallet::weight(T::WeightInfo::induct())]
 		#[pallet::call_index(4)]
-		pub fn induct(origin: OriginFor<T>, who: T::AccountId) -> DispatchResultWithPostInfo {
+		pub fn induct(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
 			match T::InductOrigin::try_origin(origin) {
 				Ok(_) => {},
 				Err(origin) => ensure_root(origin)?,
@@ -408,7 +408,7 @@ pub mod pallet {
 				MemberStatus { is_active: true, last_promotion: now, last_proof: now },
 			);
 			Self::deposit_event(Event::<T, I>::Inducted { who });
-			Ok(Pays::No.into())
+			Ok(())
 		}
 
 		/// Increment the rank of a ranked and tracked account.
