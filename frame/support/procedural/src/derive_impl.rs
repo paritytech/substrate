@@ -18,7 +18,9 @@
 //! Implementation of the `derive_impl` attribute macro.
 
 use frame_support_procedural_tools::generate_crate_access_2018;
+use macro_magic::import_tokens_indirect;
 use proc_macro2::TokenStream;
+use quote::ToTokens;
 use syn::{
 	braced, bracketed,
 	parse::{Parse, ParseStream},
@@ -147,6 +149,8 @@ pub fn derive_impl(attrs: TokenStream, input: TokenStream) -> Result<TokenStream
 	let frame_support = generate_crate_access_2018("frame-support")?;
 	// TODO: may not be accurate.
 	let source_crate_path = implementing_type.path.segments.first().unwrap().ident.clone();
+
+	//let tokens = import_tokens_indirect!(::pallet_example_basic::pallet::Config);
 
 	Ok(quote::quote!(
 		#frame_support::tt_call! {

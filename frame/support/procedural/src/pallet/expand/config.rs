@@ -17,14 +17,18 @@
 
 use crate::pallet::Def;
 use frame_support_procedural_tools::get_doc_literals;
+use macro_magic::core::export_tokens_internal;
+use proc_macro2::TokenStream;
+use quote::quote;
+use syn::{parse_quote, Item};
 
 ///
 /// * Generate default rust doc
-pub fn expand_config(def: &mut Def) -> proc_macro2::TokenStream {
+pub fn expand_config(def: &mut Def) -> TokenStream {
 	let config = &def.config;
 	let config_item = {
 		let item = &mut def.item.content.as_mut().expect("Checked by def parser").1[config.index];
-		if let syn::Item::Trait(item) = item {
+		if let Item::Trait(item) = item {
 			item
 		} else {
 			unreachable!("Checked by config parser")
@@ -32,7 +36,7 @@ pub fn expand_config(def: &mut Def) -> proc_macro2::TokenStream {
 	};
 
 	if get_doc_literals(&config_item.attrs).is_empty() {
-		config_item.attrs.push(syn::parse_quote!(
+		config_item.attrs.push(parse_quote!(
 			#[doc = r"
 			Configuration trait of this pallet.
 
@@ -52,13 +56,28 @@ pub fn expand_config(def: &mut Def) -> proc_macro2::TokenStream {
 
 		// we rarely use const and fns in config traits anyways... maybe not supporting them is good
 		// enough.
-		let const_names = Vec::<syn::Ident>::default();
-		let fn_names = Vec::<syn::Ident>::default();
+		let _const_names = Vec::<syn::Ident>::default();
+		let _fn_names = Vec::<syn::Ident>::default();
 
-		quote::quote!(
+		// tokens we want to pass to derive_impl, exclude docs
+		let stripped_config_tokens = quote! {
+			pub trait Config {
+				#(#trait_items)*
+			}
+		};
+
+		let Ok((_item, tokens_const_decl)) = export_tokens_internal(stripped_config_tokens, quote!(), "#[pallet::config]") else {
+			unreachable!("stripped_config_tokens is quoted and thus will parse correctly, QED");
+		};
+
+		quote!(
 			pub trait DefaultConfig {
 				#(#trait_items)*
 			}
+
+			#[allow(unused)]
+			#[doc(hidden)]
+			#tokens_const_decl
 
 			#[macro_export]
 			#[doc(hidden)]
