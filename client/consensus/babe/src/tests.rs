@@ -209,9 +209,8 @@ where
 	async fn import_block(
 		&mut self,
 		block: BlockImportParams<TestBlock, Self::Transaction>,
-		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		Ok(self.0.import_block(block, new_cache).await.expect("importing block failed"))
+		Ok(self.0.import_block(block).await.expect("importing block failed"))
 	}
 
 	async fn check_block(
@@ -258,7 +257,7 @@ impl Verifier<TestBlock> for TestVerifier {
 	async fn verify(
 		&mut self,
 		mut block: BlockImportParams<TestBlock, ()>,
-	) -> Result<(BlockImportParams<TestBlock, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> Result<BlockImportParams<TestBlock, ()>, String> {
 		// apply post-sealing mutations (i.e. stripping seal, if desired).
 		(self.mutator)(&mut block.header, Stage::PostSeal);
 		self.inner.verify(block).await
@@ -347,6 +346,11 @@ impl TestNetFactory for BabeTestNet {
 	fn peers(&self) -> &Vec<BabePeer> {
 		trace!(target: LOG_TARGET, "Retrieving peers");
 		&self.peers
+	}
+
+	fn peers_mut(&mut self) -> &mut Vec<BabePeer> {
+		trace!(target: "babe", "Retrieving peers, mutable");
+		&mut self.peers
 	}
 
 	fn mut_peers<F: FnOnce(&mut Vec<BabePeer>)>(&mut self, closure: F) {
@@ -738,7 +742,7 @@ async fn propose_and_import_block<Transaction: Send + 'static>(
 	import
 		.insert_intermediate(INTERMEDIATE_KEY, BabeIntermediate::<TestBlock> { epoch_descriptor });
 	import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
-	let import_result = block_import.import_block(import, Default::default()).await.unwrap();
+	let import_result = block_import.import_block(import).await.unwrap();
 
 	match import_result {
 		ImportResult::Imported(_) => {},
