@@ -112,10 +112,10 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config, O: Offence<T::IdentificationTuple>>
-	ReportOffence<T::AccountId, T::IdentificationTuple, O> for Pallet<T>
+impl<T, O> ReportOffence<T::AccountId, T::IdentificationTuple, O> for Pallet<T>
 where
-	T::IdentificationTuple: Clone,
+	T: Config,
+	O: Offence<T::IdentificationTuple>,
 {
 	fn report_offence(reporters: Vec<T::AccountId>, offence: O) -> Result<(), OffenceError> {
 		let offenders = offence.offenders();

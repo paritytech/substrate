@@ -16,7 +16,7 @@
 // limitations under the License.
 
 //! General tests for construct_runtime macro, test for:
-//! * error declareed with decl_error works
+//! * error declared with decl_error works
 //! * integrity test is generated
 
 #![recursion_limit = "128"]
@@ -254,7 +254,7 @@ impl system::Config for Runtime {
 }
 
 frame_support::construct_runtime!(
-	pub enum Runtime where
+	pub struct Runtime where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic

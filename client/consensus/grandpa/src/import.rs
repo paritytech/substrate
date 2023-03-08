@@ -29,7 +29,7 @@ use sc_consensus::{
 use sc_telemetry::TelemetryHandle;
 use sc_utils::mpsc::TracingUnboundedSender;
 use sp_api::{Core, RuntimeApiInfo, TransactionFor};
-use sp_blockchain::{well_known_cache_keys, BlockStatus};
+use sp_blockchain::BlockStatus;
 use sp_consensus::{BlockOrigin, Error as ConsensusError, SelectChain};
 use sp_consensus_grandpa::{ConsensusLog, GrandpaApi, ScheduledChange, SetId, GRANDPA_ENGINE_ID};
 use sp_core::hashing::twox_128;
@@ -460,13 +460,12 @@ where
 	async fn import_state(
 		&mut self,
 		mut block: BlockImportParams<Block, TransactionFor<Client, Block>>,
-		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, ConsensusError> {
 		let hash = block.post_hash();
 		let number = *block.header.number();
 		// Force imported state finality.
 		block.finalized = true;
-		let import_result = (&*self.inner).import_block(block, new_cache).await;
+		let import_result = (&*self.inner).import_block(block).await;
 		match import_result {
 			Ok(ImportResult::Imported(aux)) => {
 				// We've just imported a new state. We trust the sync module has verified
@@ -526,7 +525,6 @@ where
 	async fn import_block(
 		&mut self,
 		mut block: BlockImportParams<Block, Self::Transaction>,
-		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_hash();
 		let number = *block.header.number();
@@ -537,14 +535,14 @@ where
 			Ok(BlockStatus::InChain) => {
 				// Strip justifications when re-importing an existing block.
 				let _justifications = block.justifications.take();
-				return (&*self.inner).import_block(block, new_cache).await
+				return (&*self.inner).import_block(block).await
 			},
 			Ok(BlockStatus::Unknown) => {},
 			Err(e) => return Err(ConsensusError::ClientImport(e.to_string())),
 		}
 
 		if block.with_state() {
-			return self.import_state(block, new_cache).await
+			return self.import_state(block).await
 		}
 
 		if number <= self.inner.info().finalized_number {
@@ -570,7 +568,7 @@ where
 					},
 				);
 			}
-			return (&*self.inner).import_block(block, new_cache).await
+			return (&*self.inner).import_block(block).await
 		}
 
 		// on initial sync we will restrict logging under info to avoid spam.
@@ -580,7 +578,7 @@ where
 
 		// we don't want to finalize on `inner.import_block`
 		let mut justifications = block.justifications.take();
-		let import_result = (&*self.inner).import_block(block, new_cache).await;
+		let import_result = (&*self.inner).import_block(block).await;
 
 		let mut imported_aux = {
 			match import_result {

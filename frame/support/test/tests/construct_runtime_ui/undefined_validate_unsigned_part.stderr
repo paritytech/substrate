@@ -5,7 +5,7 @@ error: `Pallet` does not have #[pallet::validate_unsigned] defined, perhaps you 
    |   ^^^^^^^^^^^^^^^^^^^^^^^^
 ...
 49 | / construct_runtime! {
-50 | |     pub enum Runtime where
+50 | |     pub struct Runtime where
 51 | |         Block = Block,
 52 | |         NodeBlock = Block,
 ...  |
@@ -19,7 +19,7 @@ error[E0599]: no variant or associated item named `Pallet` found for enum `Runti
   --> tests/construct_runtime_ui/undefined_validate_unsigned_part.rs:56:3
    |
 49 | / construct_runtime! {
-50 | |     pub enum Runtime where
+50 | |     pub struct Runtime where
 51 | |         Block = Block,
 52 | |         NodeBlock = Block,
 ...  |
@@ -36,7 +36,7 @@ error[E0599]: no function or associated item named `pre_dispatch` found for stru
    |       -------------------- function or associated item `pre_dispatch` not found for this struct
 ...
 49 | / construct_runtime! {
-50 | |     pub enum Runtime where
+50 | |     pub struct Runtime where
 51 | |         Block = Block,
 52 | |         NodeBlock = Block,
 ...  |
@@ -57,7 +57,7 @@ error[E0599]: no function or associated item named `validate_unsigned` found for
    |       -------------------- function or associated item `validate_unsigned` not found for this struct
 ...
 49 | / construct_runtime! {
-50 | |     pub enum Runtime where
+50 | |     pub struct Runtime where
 51 | |         Block = Block,
 52 | |         NodeBlock = Block,
 ...  |
