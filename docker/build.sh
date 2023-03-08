@@ -3,11 +3,8 @@ set -e
 
 pushd .
 
-# The following lines ensure we run from the project root
-DOCKER_DIR=$(realpath "$(dirname "${BASH_SOURCE[0]}")")
-PROJECT_ROOT=$(dirname "$DOCKER_DIR")
-
-cd $PROJECT_ROOT
+# Change to the project root and supports calls from symlinks
+cd $(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")
 
 # Find the current version from Cargo.toml
 VERSION=`grep "^version" ./bin/node/cli/Cargo.toml | egrep -o "([0-9\.]+)"`
