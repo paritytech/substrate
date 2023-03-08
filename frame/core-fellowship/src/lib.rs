@@ -326,14 +326,11 @@ pub mod pallet {
 		/// - `params`: The new parameters for the pallet.
 		#[pallet::weight(T::WeightInfo::set_params())]
 		#[pallet::call_index(1)]
-		pub fn set_params(
-			origin: OriginFor<T>,
-			params: Box<ParamsOf<T, I>>,
-		) -> DispatchResultWithPostInfo {
+		pub fn set_params(origin: OriginFor<T>, params: Box<ParamsOf<T, I>>) -> DispatchResult {
 			T::ParamsOrigin::try_origin(origin).map(|_| ()).or_else(|o| ensure_root(o))?;
 			Params::<T, I>::put(params.as_ref());
 			Self::deposit_event(Event::<T, I>::ParamsChanged { params: *params });
-			Ok(Pays::No.into())
+			Ok(())
 		}
 
 		/// Set whether a member is active or not.
