@@ -368,7 +368,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			who: T::AccountId,
 			at_rank: RankOf<T, I>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			match T::PromoteOrigin::try_origin(origin) {
 				Ok(allow_rank) => ensure!(allow_rank >= at_rank, Error::<T, I>::NoPermission),
 				Err(origin) => ensure_root(origin)?,
@@ -384,7 +384,7 @@ pub mod pallet {
 			Self::dispose_evidence(who.clone(), at_rank, Some(at_rank));
 			Self::deposit_event(Event::<T, I>::Proven { who, at_rank });
 
-			Ok(Pays::No.into())
+			Ok(())
 		}
 
 		/// Introduce a new and unranked candidate (rank zero).
@@ -423,7 +423,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			who: T::AccountId,
 			to_rank: RankOf<T, I>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			match T::PromoteOrigin::try_origin(origin) {
 				Ok(allow_rank) => ensure!(allow_rank >= to_rank, Error::<T, I>::NoPermission),
 				Err(origin) => ensure_root(origin)?,
@@ -454,7 +454,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T, I>::Promoted { who, to_rank });
 
-			Ok(Pays::No.into())
+			Ok(())
 		}
 
 		/// Stop tracking a prior member who is now not a ranked member of the collective.
