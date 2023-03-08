@@ -717,7 +717,7 @@ impl<T: MinerConfig> Miner<T> {
 
 		ensure!(winners.len() as u32 == desired_targets, FeasibilityError::WrongWinnerCount);
 		// Fail early if targets requested by data provider exceed maximum winners supported.
-		ensure!(desired_targets <= 16, FeasibilityError::TooManyDesiredTargets);
+		ensure!(desired_targets <= T::MaxWinners::get(), FeasibilityError::TooManyDesiredTargets);
 
 		// Ensure that the solution's score can pass absolute min-score.
 		let submitted_score = raw_solution.score;
