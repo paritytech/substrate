@@ -553,7 +553,7 @@ benchmarks! {
 	seal_gas_left {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
-			"seal0", "seal_gas_left", r * API_BENCHMARK_BATCH_SIZE
+			"seal1", "gas_left", r * API_BENCHMARK_BATCH_SIZE
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
@@ -610,9 +610,9 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "seal0",
-				name: "seal_weight_to_fee",
-				params: vec![ValueType::I64, ValueType::I32, ValueType::I32],
+				module: "seal1",
+				name: "weight_to_fee",
+				params: vec![ValueType::I64,ValueType::I64,  ValueType::I32, ValueType::I32],
 				return_type: None,
 			}],
 			data_segments: vec![DataSegment {
@@ -621,6 +621,7 @@ benchmarks! {
 			}],
 			call_body: Some(body::repeated(r * API_BENCHMARK_BATCH_SIZE, &[
 				Instruction::I64Const(500_000),
+				Instruction::I64Const(300_000),
 				Instruction::I32Const(4),
 				Instruction::I32Const(0),
 				Instruction::Call(0),
@@ -1617,17 +1618,17 @@ benchmarks! {
 		let callee_bytes = callees.iter().flat_map(|x| x.account_id.encode()).collect();
 		let value: BalanceOf<T> = 0u32.into();
 		let value_bytes = value.encode();
-		let value_len = value_bytes.len();
+		let value_len = BalanceOf::<T>::max_encoded_len() as u32;
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "seal0",
-				name: "seal_call",
+				module: "seal2",
+				name: "call",
 				params: vec![
 					ValueType::I32,
 					ValueType::I32,
 					ValueType::I64,
-					ValueType::I32,
+					ValueType::I64,
 					ValueType::I32,
 					ValueType::I32,
 					ValueType::I32,
@@ -1642,16 +1643,16 @@ benchmarks! {
 					value: value_bytes,
 				},
 				DataSegment {
-					offset: value_len as u32,
+					offset: value_len,
 					value: callee_bytes,
 				},
 			],
 			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
-				Counter(value_len as u32, callee_len as u32), // callee_ptr
-				Regular(Instruction::I32Const(callee_len as i32)), // callee_len
-				Regular(Instruction::I64Const(0)), // gas
+				Regular(Instruction::I32Const(0)), // flags
+				Counter(4, callee_len as u32), // callee_ptr
+				Regular(Instruction::I64Const(0)), // ref_time weight
+				Regular(Instruction::I64Const(0)), // proof_size weight
 				Regular(Instruction::I32Const(0)), // value_ptr
-				Regular(Instruction::I32Const(value_len as i32)), // value_len
 				Regular(Instruction::I32Const(0)), // input_data_ptr
 				Regular(Instruction::I32Const(0)), // input_data_len
 				Regular(Instruction::I32Const(SENTINEL as i32)), // output_ptr
@@ -1803,7 +1804,7 @@ benchmarks! {
 		let value = Pallet::<T>::min_balance();
 		assert!(value > 0u32.into());
 		let value_bytes = value.encode();
-		let value_len = value_bytes.len();
+		let value_len = BalanceOf::<T>::max_encoded_len();
 		let addr_len = T::AccountId::max_encoded_len();
 
 		// offsets where to place static data in contract memory
@@ -1815,13 +1816,12 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "seal0",
-				name: "seal_instantiate",
+				module: "seal2",
+				name: "instantiate",
 				params: vec![
 					ValueType::I32,
-					ValueType::I32,
 					ValueType::I64,
-					ValueType::I32,
+					ValueType::I64,
 					ValueType::I32,
 					ValueType::I32,
 					ValueType::I32,
@@ -1850,10 +1850,9 @@ benchmarks! {
 			],
 			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
 				Counter(hashes_offset as u32, hash_len as u32), // code_hash_ptr
-				Regular(Instruction::I32Const(hash_len as i32)), // code_hash_len
-				Regular(Instruction::I64Const(0)), // gas
+				Regular(Instruction::I64Const(0)), // ref_time weight
+				Regular(Instruction::I64Const(0)), // proof_size weight
 				Regular(Instruction::I32Const(value_offset as i32)), // value_ptr
-				Regular(Instruction::I32Const(value_len as i32)), // value_len
 				Regular(Instruction::I32Const(0)), // input_data_ptr
 				Regular(Instruction::I32Const(0)), // input_data_len
 				Regular(Instruction::I32Const(addr_offset as i32)), // address_ptr
@@ -1861,7 +1860,7 @@ benchmarks! {
 				Regular(Instruction::I32Const(SENTINEL as i32)), // output_ptr
 				Regular(Instruction::I32Const(0)), // output_len_ptr
 				Regular(Instruction::I32Const(0)), // salt_ptr
-				Regular(Instruction::I32Const(0)), // salt_ptr_len
+				Regular(Instruction::I32Const(0)), // salt_len_ptr
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
 			])),

@@ -1476,8 +1476,7 @@ pub mod env {
 	/// # Note
 	///
 	/// The values `_code_hash_len` and `_value_len` are ignored because the encoded sizes
-	/// of those types are fixed through
-	/// [`codec::MaxEncodedLen`]. The fields exist
+	/// of those types are fixed through [`codec::MaxEncodedLen`]. The fields exist
 	/// for backwards compatibility. Consider switching to the newest version of this function.
 	#[prefixed_alias]
 	fn instantiate(
