@@ -441,6 +441,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "debc29dde2e69f9e47506b525f639ed42300fc014a3e007832592448fa8e4599"
 
 [[package]]
+name = "atomicwrites"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09a580bfc0fc2370333eddb71de8c8614d5972e3a327438eb3acc22824a638bf"
+dependencies = [
+ "rustix",
+ "tempfile",
+ "windows-sys 0.45.0",
+]
+
+[[package]]
 name = "atty"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2474,6 +2485,7 @@ dependencies = [
  "derive-syn-parse",
  "frame-support-procedural-tools",
  "itertools",
+ "macro_magic",
  "proc-macro2",
  "quote",
  "syn",
@@ -4462,6 +4474,39 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b823e83b2affd8f40a9ee8c29dbc56404c1e34cd2710921f2801e2cf29527afa"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "macro_magic"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cbbc8ab45e29a7233d828c8cc54947fa19deb63d5bfd47a57f601531dd81a030"
+dependencies = [
+ "macro_magic_core",
+ "macro_magic_macros",
+ "syn",
+]
+
+[[package]]
+name = "macro_magic_core"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69b2d6342c7e29d670e90de87b60b4b0d11e42d06fcaa43f136019f3d3fea06a"
+dependencies = [
+ "atomicwrites",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "macro_magic_macros"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93f1660de2dfcce670cea4d5e2a79f3a93d6db3a823107fbce10b5e6f0fbf4af"
+dependencies = [
+ "macro_magic_core",
+ "quote",
+ "syn",
 ]
 
 [[package]]
