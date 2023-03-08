@@ -377,9 +377,7 @@ mod tests {
 	};
 	use assert_matches::assert_matches;
 	use frame_support::{
-		assert_err, assert_ok,
-		dispatch::DispatchResultWithPostInfo,
-		weights::{OldWeight, Weight},
+		assert_err, assert_ok, dispatch::DispatchResultWithPostInfo, weights::Weight,
 	};
 	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 	use pretty_assertions::assert_eq;
@@ -615,8 +613,11 @@ mod tests {
 			16_384
 		}
 		fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T> {
-			BalanceOf::<Self::T>::from(1312_u32).saturating_mul(weight.ref_time().into()).saturating_add(
-				BalanceOf::<Self::T>::from(103_u32).saturating_mul(weight.proof_size()))
+			BalanceOf::<Self::T>::from(1312_u32)
+				.saturating_mul(weight.ref_time().into())
+				.saturating_add(
+					BalanceOf::<Self::T>::from(103_u32).saturating_mul(weight.proof_size()),
+				)
 		}
 		fn schedule(&self) -> &Schedule<Self::T> {
 			&self.schedule
@@ -1617,12 +1618,12 @@ mod tests {
 
 	const CODE_GAS_LEFT: &str = r#"
 (module
-	(import "seal0" "seal_gas_left" (func $seal_gas_left (param i32 i32)))
+	(import "seal1" "gas_left" (func $seal_gas_left (param i32 i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
-	;; size of our buffer is 32 bytes
-	(data (i32.const 32) "\20")
+	;; Make output buffer size 20 bytes
+	(data (i32.const 20) "\14")
 
 	(func $assert (param i32)
 		(block $ok
@@ -1634,19 +1635,19 @@ mod tests {
 	)
 
 	(func (export "call")
-		;; This stores the gas left in the buffer
-		(call $seal_gas_left (i32.const 0) (i32.const 32))
+		;; This stores the weight left to the buffer
+		(call $seal_gas_left (i32.const 0) (i32.const 20))
 
-		;; assert len == 8
+		;; Assert len <= 16 (max encoded Weight len)
 		(call $assert
-			(i32.eq
-				(i32.load (i32.const 32))
-				(i32.const 8)
+			(i32.le_u
+				(i32.load (i32.const 20))
+				(i32.const 16)
 			)
 		)
 
-		;; return gas left
-		(call $seal_return (i32.const 0) (i32.const 0) (i32.const 8))
+		;; Return weight left and its encoded value len
+		(call $seal_return (i32.const 0) (i32.const 0) (i32.load (i32.const 20)))
 
 		(unreachable)
 	)
@@ -1661,11 +1662,11 @@ mod tests {
 
 		let output = execute(CODE_GAS_LEFT, vec![], &mut ext).unwrap();
 
-		let OldWeight(gas_left) = OldWeight::decode(&mut &*output.data).unwrap();
+		let weight_left = Weight::decode(&mut &*output.data).unwrap();
 		let actual_left = ext.gas_meter.gas_left();
-		// TODO: account for proof size weight
-		assert!(gas_left < gas_limit.ref_time(), "gas_left must be less than initial");
-		assert!(gas_left > actual_left.ref_time(), "gas_left must be greater than final");
+
+		assert!(weight_left.all_lt(gas_limit), "gas_left must be less than initial");
+		assert!(weight_left.all_gt(actual_left), "gas_left must be greater than final");
 	}
 
 	const CODE_VALUE_TRANSFERRED: &str = r#"

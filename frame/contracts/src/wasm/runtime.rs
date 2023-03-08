@@ -1909,30 +1909,50 @@ pub mod env {
 		out_ptr: u32,
 		out_len_ptr: u32,
 	) -> Result<(), TrapReason> {
-		let gas = Weight::from_parts(ref_time, proof_limit);
+		let weight = Weight::from_parts(ref_time, proof_limit);
 		ctx.charge_gas(RuntimeCosts::WeightToFee)?;
 		Ok(ctx.write_sandbox_output(
 			memory,
 			out_ptr,
 			out_len_ptr,
-			&ctx.ext.get_weight_price(gas).encode(),
+			&ctx.ext.get_weight_price(weight).encode(),
 			false,
 			already_charged,
 		)?)
 	}
 
-	/// Stores the amount of gas left into the supplied buffer.
+	/// Stores the weight left into the supplied buffer.
+	///
+	/// Equivalent to the newer [`seal1`][`super::api_doc::Version2::gas_left`] version but
+	/// works with *ref_time* Weight only. It is recommended to switch to the latest version, once
+	/// it's stabilized.
+	#[prefixed_alias]
+	fn gas_left(ctx: _, memory: _, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
+		ctx.charge_gas(RuntimeCosts::GasLeft)?;
+		let gas_left = &ctx.ext.gas_meter().gas_left().ref_time().encode();
+		Ok(ctx.write_sandbox_output(
+			memory,
+			out_ptr,
+			out_len_ptr,
+			gas_left,
+			false,
+			already_charged,
+		)?)
+	}
+
+	/// Stores the amount of weight left into the supplied buffer.
 	///
 	/// The value is stored to linear memory at the address pointed to by `out_ptr`.
 	/// `out_len_ptr` must point to a u32 value that describes the available space at
 	/// `out_ptr`. This call overwrites it with the size of the value. If the available
 	/// space at `out_ptr` is less than the size of the value a trap is triggered.
 	///
-	/// The data is encoded as Gas.
-	#[prefixed_alias]
+	/// The data is encoded as Weight.
+	#[version(1)]
+	#[unstable]
 	fn gas_left(ctx: _, memory: _, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::GasLeft)?;
-		let gas_left = &ctx.ext.gas_meter().gas_left().ref_time().encode();
+		let gas_left = &ctx.ext.gas_meter().gas_left().encode();
 		Ok(ctx.write_sandbox_output(
 			memory,
 			out_ptr,
