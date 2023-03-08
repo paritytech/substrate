@@ -280,6 +280,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type DepositPerByte: Get<BalanceOf<Self>>;
 
+		/// Fallback value to limit the storage deposit if it's not being set by the caller.
+		#[pallet::constant]
+		type DefaultDepositLimit: Get<BalanceOf<Self>>;
+
 		/// The amount of balance a caller has to pay for each storage item.
 		///
 		/// # Note

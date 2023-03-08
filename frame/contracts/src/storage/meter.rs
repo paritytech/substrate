@@ -459,7 +459,8 @@ impl<T: Config> Ext<T> for ReservingExt {
 		let max = T::Currency::reducible_balance(origin, true)
 			.saturating_sub(min_leftover)
 			.saturating_sub(Pallet::<T>::min_balance());
-		let limit = limit.unwrap_or(max);
+		let default = max.min(T::DefaultDepositLimit::get());
+		let limit = limit.unwrap_or(default);
 		ensure!(
 			limit <= max &&
 				matches!(T::Currency::can_withdraw(origin, limit), WithdrawConsequence::Success),

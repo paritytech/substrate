@@ -340,6 +340,8 @@ parameter_types! {
 	};
 	pub static DepositPerByte: BalanceOf<Test> = 1;
 	pub const DepositPerItem: BalanceOf<Test> = 2;
+	// We need this one set high enough for running benchmarks.
+	pub const DefaultDepositLimit: BalanceOf<Test> = 10_000_000;
 }
 
 impl Convert<Weight, BalanceOf<Self>> for Test {
@@ -400,6 +402,7 @@ impl Config for Test {
 	type Schedule = MySchedule;
 	type DepositPerByte = DepositPerByte;
 	type DepositPerItem = DepositPerItem;
+	type DefaultDepositLimit = DefaultDepositLimit;
 	type AddressGenerator = DefaultAddressGenerator;
 	type MaxCodeLen = ConstU32<{ 123 * 1024 }>;
 	type MaxStorageKeyLen = ConstU32<128>;
