@@ -297,6 +297,8 @@ parameter_types! {
 	pub static MockWeightInfo: MockedWeightInfo = MockedWeightInfo::Real;
 	pub static MaxElectingVoters: VoterIndex = u32::max_value();
 	pub static MaxElectableTargets: TargetIndex = TargetIndex::max_value();
+
+	#[derive(Debug)]
 	pub static MaxWinners: u32 = 200;
 
 	pub static EpochLength: u64 = 30;

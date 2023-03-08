@@ -735,6 +735,11 @@ pub mod pallet {
 		fn max_votes_per_voter() -> u32 {
 			<T::MinerConfig as MinerConfig>::MaxVotesPerVoter::get()
 		}
+
+		#[pallet::constant_name(MinerMaxWinners)]
+		fn max_winners() -> u32 {
+			<T::MinerConfig as MinerConfig>::MaxWinners::get()
+		}
 	}
 
 	#[pallet::hooks]

@@ -392,7 +392,7 @@ pub trait MinerConfig {
 	///
 	/// The weight is computed using `solution_weight`.
 	type MaxWeight: Get<Weight>;
-	/// TODO(niklasad1): ... leaky move to another trait?!.
+	/// The maximum number of winners that can be elected.
 	type MaxWinners: Get<u32>;
 	/// Something that can compute the weight of a solution.
 	///
