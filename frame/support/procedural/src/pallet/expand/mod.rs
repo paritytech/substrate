@@ -18,6 +18,7 @@
 mod call;
 mod config;
 mod constants;
+mod doc_only;
 mod documentation;
 mod error;
 mod event;
@@ -33,7 +34,6 @@ mod store_trait;
 mod tt_default_parts;
 mod type_value;
 mod validate_unsigned;
-mod doc_only;
 
 use crate::pallet::Def;
 use frame_support_procedural_tools::get_doc_literals;

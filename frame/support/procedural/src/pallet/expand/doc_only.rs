@@ -22,18 +22,24 @@ pub fn expand_doc_only(def: &mut Def) -> proc_macro2::TokenStream {
 	let storage_viss = &def.storages.iter().map(|storage| &storage.vis).collect::<Vec<_>>();
 	let dispatchables = {
 		if let Some(call_def) = &def.call {
-			call_def.methods.iter().map(|method| {
-				let name = &method.name;
-				let args = &method.args.iter().map(|(_, arg_name, arg_type)| {
-					quote::quote!( #arg_name: #arg_type, )
-				}).collect::<proc_macro2::TokenStream>();
-				let docs = &method.docs;
+			call_def
+				.methods
+				.iter()
+				.map(|method| {
+					let name = &method.name;
+					let args = &method
+						.args
+						.iter()
+						.map(|(_, arg_name, arg_type)| quote::quote!( #arg_name: #arg_type, ))
+						.collect::<proc_macro2::TokenStream>();
+					let docs = &method.docs;
 
-				quote::quote!(
-					#( #[doc = #docs] )*
-					pub fn #name(#args) { unreachable!(); }
-				)
-			}).collect::<proc_macro2::TokenStream>()
+					quote::quote!(
+						#( #[doc = #docs] )*
+						pub fn #name(#args) { unreachable!(); }
+					)
+				})
+				.collect::<proc_macro2::TokenStream>()
 		} else {
 			quote::quote!()
 		}
