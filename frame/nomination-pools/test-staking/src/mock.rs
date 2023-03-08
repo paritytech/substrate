@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -186,7 +186,7 @@ type Block = frame_system::mocking::MockBlock<Runtime>;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
 
 frame_support::construct_runtime!(
-	pub enum Runtime where
+	pub struct Runtime where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic

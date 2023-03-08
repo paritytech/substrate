@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -1039,7 +1039,7 @@ mod tests {
 
 		let mut nodes: Vec<_> = epoch_changes.tree().iter().map(|(h, _, _)| h).collect();
 		nodes.sort();
-		assert_eq!(nodes, vec![b"A", b"B", b"C", b"E", b"F", b"G"]);
+		assert_eq!(nodes, vec![b"A", b"B", b"C", b"F", b"G"]);
 
 		// Finalize block y @ number 35, slot 330
 		// This should prune all nodes imported by blocks with a number < 35 that are not
@@ -1050,7 +1050,7 @@ mod tests {
 
 		let mut nodes: Vec<_> = epoch_changes.tree().iter().map(|(h, _, _)| h).collect();
 		nodes.sort();
-		assert_eq!(nodes, vec![b"B", b"C", b"F", b"G"]);
+		assert_eq!(nodes, vec![b"B", b"C", b"G"]);
 	}
 
 	#[test]

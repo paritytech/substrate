@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -972,6 +972,20 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
+impl<T: Config> Pallet<T> {
+	/// Returns the current nominations quota for nominators.
+	///
+	/// Used by the runtime API.
+	/// Note: for now, this api runtime will always return value of `T::MaxNominations` and thus it
+	/// is redundant. However, with the upcoming changes in
+	/// <https://github.com/paritytech/substrate/pull/12970>, the nominations quota will change
+	/// depending on the nominators balance. We're introducing this runtime API now to prepare the
+	/// community to use it before rolling out PR#12970.
+	pub fn api_nominations_quota(_balance: BalanceOf<T>) -> u32 {
+		T::MaxNominations::get()
+	}
+}
+
 impl<T: Config> ElectionDataProvider for Pallet<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = BlockNumberFor<T>;
@@ -1253,7 +1267,7 @@ where
 		disable_strategy: DisableStrategy,
 	) -> Weight {
 		let reward_proportion = SlashRewardFraction::<T>::get();
-		let mut consumed_weight = Weight::from_ref_time(0);
+		let mut consumed_weight = Weight::from_parts(0, 0);
 		let mut add_db_reads_writes = |reads, writes| {
 			consumed_weight += T::DbWeight::get().reads_writes(reads, writes);
 		};

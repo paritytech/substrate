@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2023 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -54,7 +54,7 @@ parameter_types! {
 	///   95th: 384_876
 	///   75th: 380_642
 	pub const BlockExecutionWeight: Weight =
-		Weight::from_ref_time(WEIGHT_REF_TIME_PER_NANOS.saturating_mul(381_015));
+		Weight::from_parts(WEIGHT_REF_TIME_PER_NANOS.saturating_mul(381_015), 0);
 }
 
 #[cfg(test)]

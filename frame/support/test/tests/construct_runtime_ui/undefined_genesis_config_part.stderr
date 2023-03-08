@@ -5,7 +5,7 @@ error: `Pallet` does not have #[pallet::genesis_config] defined, perhaps you sho
    |   ^^^^^^^^^^^^^^^^^^^^^^^^
 ...
 49 | / construct_runtime! {
-50 | |     pub enum Runtime where
+50 | |     pub struct Runtime where
 51 | |         Block = Block,
 52 | |         NodeBlock = Block,
 ...  |
@@ -19,7 +19,7 @@ error[E0412]: cannot find type `GenesisConfig` in module `pallet`
   --> tests/construct_runtime_ui/undefined_genesis_config_part.rs:49:1
    |
 49 | / construct_runtime! {
-50 | |     pub enum Runtime where
+50 | |     pub struct Runtime where
 51 | |         Block = Block,
 52 | |         NodeBlock = Block,
 ...  |
@@ -37,7 +37,7 @@ error[E0283]: type annotations needed
   --> tests/construct_runtime_ui/undefined_genesis_config_part.rs:49:1
    |
 49 | / construct_runtime! {
-50 | |     pub enum Runtime where
+50 | |     pub struct Runtime where
 51 | |         Block = Block,
 52 | |         NodeBlock = Block,
 ...  |

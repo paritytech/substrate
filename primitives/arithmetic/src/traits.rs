@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -147,6 +147,20 @@ impl<
 	> BaseArithmetic for T
 {
 }
+
+/// A meta trait for arithmetic.
+///
+/// Arithmetic types do all the usual stuff you'd expect numbers to do. They are guaranteed to
+/// be able to represent at least `u16` values without loss, hence the trait implies `From<u16>`
+/// and smaller integers. All other conversions are fallible.
+pub trait AtLeast16Bit: BaseArithmetic + From<u16> {}
+
+impl<T: BaseArithmetic + From<u16>> AtLeast16Bit for T {}
+
+/// A meta trait for arithmetic.  Same as [`AtLeast16Bit `], but also bounded to be unsigned.
+pub trait AtLeast16BitUnsigned: AtLeast16Bit + Unsigned {}
+
+impl<T: AtLeast16Bit + Unsigned> AtLeast16BitUnsigned for T {}
 
 /// A meta trait for arithmetic.
 ///

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -112,10 +112,10 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config, O: Offence<T::IdentificationTuple>>
-	ReportOffence<T::AccountId, T::IdentificationTuple, O> for Pallet<T>
+impl<T, O> ReportOffence<T::AccountId, T::IdentificationTuple, O> for Pallet<T>
 where
-	T::IdentificationTuple: Clone,
+	T: Config,
+	O: Offence<T::IdentificationTuple>,
 {
 	fn report_offence(reporters: Vec<T::AccountId>, offence: O) -> Result<(), OffenceError> {
 		let offenders = offence.offenders();

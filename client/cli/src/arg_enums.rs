@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -251,15 +251,19 @@ pub enum SyncMode {
 	Warp,
 }
 
-impl Into<sc_network::config::SyncMode> for SyncMode {
-	fn into(self) -> sc_network::config::SyncMode {
+impl Into<sc_network_common::config::SyncMode> for SyncMode {
+	fn into(self) -> sc_network_common::config::SyncMode {
 		match self {
-			SyncMode::Full => sc_network::config::SyncMode::Full,
-			SyncMode::Fast =>
-				sc_network::config::SyncMode::Fast { skip_proofs: false, storage_chain_mode: false },
-			SyncMode::FastUnsafe =>
-				sc_network::config::SyncMode::Fast { skip_proofs: true, storage_chain_mode: false },
-			SyncMode::Warp => sc_network::config::SyncMode::Warp,
+			SyncMode::Full => sc_network_common::config::SyncMode::Full,
+			SyncMode::Fast => sc_network_common::config::SyncMode::Fast {
+				skip_proofs: false,
+				storage_chain_mode: false,
+			},
+			SyncMode::FastUnsafe => sc_network_common::config::SyncMode::Fast {
+				skip_proofs: true,
+				storage_chain_mode: false,
+			},
+			SyncMode::Warp => sc_network_common::config::SyncMode::Warp,
 		}
 	}
 }
