@@ -766,6 +766,11 @@ mod tests {
 		fn peers(&self) -> &Vec<AuraPeer> {
 			&self.peers
 		}
+
+		fn peers_mut(&mut self) -> &mut Vec<AuraPeer> {
+			&mut self.peers
+		}
+
 		fn mut_peers<F: FnOnce(&mut Vec<AuraPeer>)>(&mut self, closure: F) {
 			closure(&mut self.peers);
 		}

@@ -40,7 +40,7 @@ use sc_client_api::{Backend, BlockBackend, BlockchainEvents, FinalityNotificatio
 use sc_consensus::BlockImport;
 use sc_network::ProtocolName;
 use sc_network_common::service::NetworkRequest;
-use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
+use sc_network_gossip::{GossipEngine, Network as GossipNetwork, Syncing as GossipSyncing};
 use sp_api::{HeaderT, NumberFor, ProvideRuntimeApi};
 use sp_blockchain::{
 	Backend as BlockchainBackend, Error as ClientError, HeaderBackend, Result as ClientResult,
@@ -172,9 +172,11 @@ where
 }
 
 /// BEEFY gadget network parameters.
-pub struct BeefyNetworkParams<B: Block, N> {
+pub struct BeefyNetworkParams<B: Block, N, S> {
 	/// Network implementing gossip, requests and sync-oracle.
 	pub network: Arc<N>,
+	/// Syncing service implementing a sync oracle and an event stream for peers.
+	pub sync: Arc<S>,
 	/// Chain specific BEEFY gossip protocol name. See
 	/// [`communication::beefy_protocol_name::gossip_protocol_name`].
 	pub gossip_protocol_name: ProtocolName,
@@ -186,7 +188,7 @@ pub struct BeefyNetworkParams<B: Block, N> {
 }
 
 /// BEEFY gadget initialization parameters.
-pub struct BeefyParams<B: Block, BE, C, N, P, R> {
+pub struct BeefyParams<B: Block, BE, C, N, P, R, S> {
 	/// BEEFY client
 	pub client: Arc<C>,
 	/// Client Backend
@@ -198,7 +200,7 @@ pub struct BeefyParams<B: Block, BE, C, N, P, R> {
 	/// Local key store
 	pub key_store: Option<SyncCryptoStorePtr>,
 	/// BEEFY voter network params
-	pub network_params: BeefyNetworkParams<B, N>,
+	pub network_params: BeefyNetworkParams<B, N, S>,
 	/// Minimal delta between blocks, BEEFY should vote for
 	pub min_block_delta: u32,
 	/// Prometheus metric registry
@@ -212,15 +214,17 @@ pub struct BeefyParams<B: Block, BE, C, N, P, R> {
 /// Start the BEEFY gadget.
 ///
 /// This is a thin shim around running and awaiting a BEEFY worker.
-pub async fn start_beefy_gadget<B, BE, C, N, P, R>(beefy_params: BeefyParams<B, BE, C, N, P, R>)
-where
+pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
+	beefy_params: BeefyParams<B, BE, C, N, P, R, S>,
+) where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE> + BlockBackend<B>,
 	P: PayloadProvider<B>,
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash, NumberFor<B>>,
-	N: GossipNetwork<B> + NetworkRequest + SyncOracle + Send + Sync + 'static,
+	N: GossipNetwork<B> + NetworkRequest + Send + Sync + 'static,
+	S: GossipSyncing<B> + SyncOracle + 'static,
 {
 	let BeefyParams {
 		client,
@@ -235,14 +239,20 @@ where
 		on_demand_justifications_handler,
 	} = beefy_params;
 
-	let BeefyNetworkParams { network, gossip_protocol_name, justifications_protocol_name, .. } =
-		network_params;
+	let BeefyNetworkParams {
+		network,
+		sync,
+		gossip_protocol_name,
+		justifications_protocol_name,
+		..
+	} = network_params;
 
 	let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
 	let gossip_validator =
 		Arc::new(communication::gossip::GossipValidator::new(known_peers.clone()));
 	let mut gossip_engine = sc_network_gossip::GossipEngine::new(
 		network.clone(),
+		sync.clone(),
 		gossip_protocol_name,
 		gossip_validator.clone(),
 		None,
@@ -280,7 +290,7 @@ where
 		backend,
 		payload_provider,
 		runtime,
-		network,
+		sync,
 		key_store: key_store.into(),
 		gossip_engine,
 		gossip_validator,

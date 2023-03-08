@@ -307,17 +307,6 @@ impl sp_std::fmt::Debug for Signature {
 	}
 }
 
-/// A localized signature also contains sender information.
-/// NOTE: Encode and Decode traits are supported in ed25519 but not possible for now here.
-#[cfg(feature = "std")]
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub struct LocalizedSignature {
-	/// The signer of the signature.
-	pub signer: Public,
-	/// The signature itself.
-	pub signature: Signature,
-}
-
 impl UncheckedFrom<[u8; 64]> for Signature {
 	fn unchecked_from(data: [u8; 64]) -> Signature {
 		Signature(data)

@@ -37,6 +37,7 @@ use sc_network_common::{
 	error,
 	protocol::{event::Event, role::ObservedRole, ProtocolName},
 	service::{NetworkEventStream, NetworkNotification, NetworkPeers},
+	sync::{SyncEvent, SyncEventStream},
 	utils::{interval, LruHashSet},
 	ExHashT,
 };
@@ -161,14 +162,17 @@ impl TransactionsHandlerPrototype {
 	pub fn build<
 		B: BlockT + 'static,
 		H: ExHashT,
-		S: NetworkPeers + NetworkEventStream + NetworkNotification + sp_consensus::SyncOracle,
+		N: NetworkPeers + NetworkEventStream + NetworkNotification,
+		S: SyncEventStream + sp_consensus::SyncOracle,
 	>(
 		self,
-		service: S,
+		network: N,
+		sync: S,
 		transaction_pool: Arc<dyn TransactionPool<H, B>>,
 		metrics_registry: Option<&Registry>,
-	) -> error::Result<(TransactionsHandler<B, H, S>, TransactionsHandlerController<H>)> {
-		let event_stream = service.event_stream("transactions-handler");
+	) -> error::Result<(TransactionsHandler<B, H, N, S>, TransactionsHandlerController<H>)> {
+		let net_event_stream = network.event_stream("transactions-handler-net");
+		let sync_event_stream = sync.event_stream("transactions-handler-sync");
 		let (to_handler, from_controller) = tracing_unbounded("mpsc_transactions_handler", 100_000);
 
 		let handler = TransactionsHandler {
@@ -178,8 +182,10 @@ impl TransactionsHandlerPrototype {
 				.fuse(),
 			pending_transactions: FuturesUnordered::new(),
 			pending_transactions_peers: HashMap::new(),
-			service,
-			event_stream: event_stream.fuse(),
+			network,
+			sync,
+			net_event_stream: net_event_stream.fuse(),
+			sync_event_stream: sync_event_stream.fuse(),
 			peers: HashMap::new(),
 			transaction_pool,
 			from_controller,
@@ -228,7 +234,8 @@ enum ToHandler<H: ExHashT> {
 pub struct TransactionsHandler<
 	B: BlockT + 'static,
 	H: ExHashT,
-	S: NetworkPeers + NetworkEventStream + NetworkNotification + sp_consensus::SyncOracle,
+	N: NetworkPeers + NetworkEventStream + NetworkNotification,
+	S: SyncEventStream + sp_consensus::SyncOracle,
 > {
 	protocol_name: ProtocolName,
 	/// Interval at which we call `propagate_transactions`.
@@ -241,9 +248,13 @@ pub struct TransactionsHandler<
 	/// multiple times concurrently.
 	pending_transactions_peers: HashMap<H, Vec<PeerId>>,
 	/// Network service to use to send messages and manage peers.
-	service: S,
+	network: N,
+	/// Syncing service.
+	sync: S,
 	/// Stream of networking events.
-	event_stream: stream::Fuse<Pin<Box<dyn Stream<Item = Event> + Send>>>,
+	net_event_stream: stream::Fuse<Pin<Box<dyn Stream<Item = Event> + Send>>>,
+	/// Receiver for syncing-related events.
+	sync_event_stream: stream::Fuse<Pin<Box<dyn Stream<Item = SyncEvent> + Send>>>,
 	// All connected peers
 	peers: HashMap<PeerId, Peer<H>>,
 	transaction_pool: Arc<dyn TransactionPool<H, B>>,
@@ -260,11 +271,12 @@ struct Peer<H: ExHashT> {
 	role: ObservedRole,
 }
 
-impl<B, H, S> TransactionsHandler<B, H, S>
+impl<B, H, N, S> TransactionsHandler<B, H, N, S>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	S: NetworkPeers + NetworkEventStream + NetworkNotification + sp_consensus::SyncOracle,
+	N: NetworkPeers + NetworkEventStream + NetworkNotification,
+	S: SyncEventStream + sp_consensus::SyncOracle,
 {
 	/// Turns the [`TransactionsHandler`] into a future that should run forever and not be
 	/// interrupted.
@@ -281,7 +293,7 @@ where
 						warn!(target: "sub-libp2p", "Inconsistent state, no peers for pending transaction!");
 					}
 				},
-				network_event = self.event_stream.next() => {
+				network_event = self.net_event_stream.next() => {
 					if let Some(network_event) = network_event {
 						self.handle_network_event(network_event).await;
 					} else {
@@ -289,6 +301,14 @@ where
 						return;
 					}
 				},
+				sync_event = self.sync_event_stream.next() => {
+					if let Some(sync_event) = sync_event {
+						self.handle_sync_event(sync_event);
+					} else {
+						// Syncing has seemingly closed. Closing as well.
+						return;
+					}
+				}
 				message = self.from_controller.select_next_some() => {
 					match message {
 						ToHandler::PropagateTransaction(hash) => self.propagate_transaction(&hash),
@@ -299,13 +319,12 @@ where
 		}
 	}
 
-	async fn handle_network_event(&mut self, event: Event) {
+	fn handle_sync_event(&mut self, event: SyncEvent) {
 		match event {
-			Event::Dht(_) => {},
-			Event::SyncConnected { remote } => {
+			SyncEvent::PeerConnected(remote) => {
 				let addr = iter::once(multiaddr::Protocol::P2p(remote.into()))
 					.collect::<multiaddr::Multiaddr>();
-				let result = self.service.add_peers_to_reserved_set(
+				let result = self.network.add_peers_to_reserved_set(
 					self.protocol_name.clone(),
 					iter::once(addr).collect(),
 				);
@@ -313,13 +332,18 @@ where
 					log::error!(target: "sync", "Add reserved peer failed: {}", err);
 				}
 			},
-			Event::SyncDisconnected { remote } => {
-				self.service.remove_peers_from_reserved_set(
+			SyncEvent::PeerDisconnected(remote) => {
+				self.network.remove_peers_from_reserved_set(
 					self.protocol_name.clone(),
 					iter::once(remote).collect(),
 				);
 			},
+		}
+	}
 
+	async fn handle_network_event(&mut self, event: Event) {
+		match event {
+			Event::Dht(_) => {},
 			Event::NotificationStreamOpened { remote, protocol, role, .. }
 				if protocol == self.protocol_name =>
 			{
@@ -365,7 +389,7 @@ where
 	/// Called when peer sends us new transactions
 	fn on_transactions(&mut self, who: PeerId, transactions: Transactions<B::Extrinsic>) {
 		// Accept transactions only when node is not major syncing
-		if self.service.is_major_syncing() {
+		if self.sync.is_major_syncing() {
 			trace!(target: "sync", "{} Ignoring transactions while major syncing", who);
 			return
 		}
@@ -385,7 +409,7 @@ where
 				let hash = self.transaction_pool.hash_of(&t);
 				peer.known_transactions.insert(hash.clone());
 
-				self.service.report_peer(who, rep::ANY_TRANSACTION);
+				self.network.report_peer(who, rep::ANY_TRANSACTION);
 
 				match self.pending_transactions_peers.entry(hash.clone()) {
 					Entry::Vacant(entry) => {
@@ -406,9 +430,9 @@ where
 	fn on_handle_transaction_import(&mut self, who: PeerId, import: TransactionImport) {
 		match import {
 			TransactionImport::KnownGood =>
-				self.service.report_peer(who, rep::ANY_TRANSACTION_REFUND),
-			TransactionImport::NewGood => self.service.report_peer(who, rep::GOOD_TRANSACTION),
-			TransactionImport::Bad => self.service.report_peer(who, rep::BAD_TRANSACTION),
+				self.network.report_peer(who, rep::ANY_TRANSACTION_REFUND),
+			TransactionImport::NewGood => self.network.report_peer(who, rep::GOOD_TRANSACTION),
+			TransactionImport::Bad => self.network.report_peer(who, rep::BAD_TRANSACTION),
 			TransactionImport::None => {},
 		}
 	}
@@ -416,7 +440,7 @@ where
 	/// Propagate one transaction.
 	pub fn propagate_transaction(&mut self, hash: &H) {
 		// Accept transactions only when node is not major syncing
-		if self.service.is_major_syncing() {
+		if self.sync.is_major_syncing() {
 			return
 		}
 
@@ -453,7 +477,7 @@ where
 					propagated_to.entry(hash).or_default().push(who.to_base58());
 				}
 				trace!(target: "sync", "Sending {} transactions to {}", to_send.len(), who);
-				self.service
+				self.network
 					.write_notification(*who, self.protocol_name.clone(), to_send.encode());
 			}
 		}
@@ -468,7 +492,7 @@ where
 	/// Call when we must propagate ready transactions to peers.
 	fn propagate_transactions(&mut self) {
 		// Accept transactions only when node is not major syncing
-		if self.service.is_major_syncing() {
+		if self.sync.is_major_syncing() {
 			return
 		}
 
