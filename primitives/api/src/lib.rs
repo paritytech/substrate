@@ -774,17 +774,55 @@ impl<C, B: BlockT> RuntimeInstanceBuilderStage2<C, B> {
 		self
 	}
 
-	pub fn build(self) -> RuntimeInstance<C, B> {
+	pub fn build(self) -> RuntimeInstance<C, B>
+	where
+		C: CallApiAt<B>,
+	{
 		RuntimeInstance {
 			call_api_at: self.call_api_at,
 			block: self.block,
 			call_context: self.call_context,
+			overlayed_changes: Default::default(),
+			storage_transaction_cache: Default::default(),
 		}
 	}
 }
 
-pub struct RuntimeInstance<C, B: BlockT> {
+pub struct RuntimeInstance<C: CallApiAt<Block>, Block: BlockT> {
 	call_api_at: C,
-	block: B::Hash,
+	block: Block::Hash,
 	call_context: CallContext,
+	overlayed_changes: RefCell<OverlayedChanges>,
+	storage_transaction_cache: RefCell<StorageTransactionCache<Block, C::StateBackend>>,
+	recorder: Option<ProofRecorder<Block>>,
+}
+
+impl<C: CallApiAt<B>, B: BlockT> RuntimeInstance<C, B> {
+	fn call(
+		&self,
+		fn_name: &dyn Fn(RuntimeVersion) -> &'static str,
+		params: Vec<u8>,
+	) -> Result<Vec<u8>, ApiError> {
+		// TODO: Enable storage transaction if required.
+
+		let res = (|| {
+			let version = self.call_api_at.runtime_version_at(self.block)?;
+
+			let params = CallApiAtParams {
+				at: self.block,
+				function: (*fn_name)(version),
+				arguments: params,
+				overlayed_changes: &self.changes,
+				storage_transaction_cache: &self.storage_transaction_cache,
+				context: self.call_context,
+				recorder: &self.recorder,
+			};
+
+			self.call_api_at.call_api_at(params)
+		})();
+
+		// self.commit_or_rollback(std::result::Result::is_ok(&res));
+
+		res
+	}
 }
