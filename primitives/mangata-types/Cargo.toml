@@ -10,6 +10,7 @@ scale-info = { version = "2.1.1", default-features = false, features = ["derive"
 
 sp-core = { version = "7.0.0", default-features = false, path = "../core" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../runtime" }
+sp-std = {default-features = false, path = "../std" }
 
 [features]
 default = ["std"]

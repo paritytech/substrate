@@ -5,7 +5,7 @@ pub use sp_runtime::{
 	MultiAddress, MultiSignature, OpaqueExtrinsic,
 };
 pub mod assets;
-pub mod traits;
+pub mod multipurpose_liquidity;
 
 pub type TokenId = u32;
 pub type Balance = u128;
