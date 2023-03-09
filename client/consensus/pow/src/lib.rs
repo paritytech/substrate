@@ -55,7 +55,7 @@ use sc_consensus::{
 };
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
-use sp_blockchain::{well_known_cache_keys::Id as CacheKeyId, HeaderBackend};
+use sp_blockchain::HeaderBackend;
 use sp_consensus::{Environment, Error as ConsensusError, Proposer, SelectChain, SyncOracle};
 use sp_consensus_pow::{Seal, TotalDifficulty, POW_ENGINE_ID};
 use sp_core::ExecutionContext;
@@ -65,7 +65,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT},
 	RuntimeString,
 };
-use std::{cmp::Ordering, collections::HashMap, marker::PhantomData, sync::Arc, time::Duration};
+use std::{cmp::Ordering, marker::PhantomData, sync::Arc, time::Duration};
 
 const LOG_TARGET: &str = "pow";
 
@@ -325,7 +325,6 @@ where
 	async fn import_block(
 		&mut self,
 		mut block: BlockImportParams<B, Self::Transaction>,
-		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		let best_header = self
 			.select_chain
@@ -399,7 +398,7 @@ where
 			));
 		}
 
-		self.inner.import_block(block, new_cache).await.map_err(Into::into)
+		self.inner.import_block(block).await.map_err(Into::into)
 	}
 }
 
@@ -449,7 +448,7 @@ where
 	async fn verify(
 		&mut self,
 		mut block: BlockImportParams<B, ()>,
-	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> Result<BlockImportParams<B, ()>, String> {
 		let hash = block.header.hash();
 		let (checked_header, seal) = self.check_header(block.header)?;
 
@@ -459,7 +458,7 @@ where
 		block.insert_intermediate(INTERMEDIATE_KEY, intermediate);
 		block.post_hash = Some(hash);
 
-		Ok((block, None))
+		Ok(block)
 	}
 }
 

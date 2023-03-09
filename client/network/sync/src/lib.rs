@@ -30,20 +30,18 @@
 
 pub mod block_request_handler;
 pub mod blocks;
+pub mod engine;
 pub mod mock;
 mod schema;
 pub mod service;
 pub mod state;
 pub mod state_request_handler;
-#[cfg(test)]
-mod tests;
 pub mod warp;
 pub mod warp_request_handler;
 
 use crate::{
 	blocks::BlockCollection,
 	schema::v1::{StateRequest, StateResponse},
-	service::chain_sync::{ChainSyncInterfaceHandle, ToServiceCommand},
 	state::StateSync,
 	warp::{WarpProofImportResult, WarpSync},
 };
@@ -78,7 +76,7 @@ use sc_network_common::{
 		SyncState, SyncStatus,
 	},
 };
-use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
+pub use service::chain_sync::SyncingService;
 use sp_arithmetic::traits::Saturating;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata};
 use sp_consensus::{
@@ -327,8 +325,6 @@ pub struct ChainSync<B: BlockT, Client> {
 	import_existing: bool,
 	/// Gap download process.
 	gap_sync: Option<GapSync<B>>,
-	/// Channel for receiving service commands
-	service_rx: TracingUnboundedReceiver<ToServiceCommand<B>>,
 	/// Handle for communicating with `NetworkService`
 	network_service: service::network::NetworkServiceHandle,
 	/// Protocol name used for block announcements
@@ -1326,47 +1322,6 @@ where
 		&mut self,
 		cx: &mut std::task::Context,
 	) -> Poll<PollBlockAnnounceValidation<B::Header>> {
-		while let Poll::Ready(Some(event)) = self.service_rx.poll_next_unpin(cx) {
-			match event {
-				ToServiceCommand::SetSyncForkRequest(peers, hash, number) => {
-					self.set_sync_fork_request(peers, &hash, number);
-				},
-				ToServiceCommand::RequestJustification(hash, number) =>
-					self.request_justification(&hash, number),
-				ToServiceCommand::ClearJustificationRequests => self.clear_justification_requests(),
-				ToServiceCommand::BlocksProcessed(imported, count, results) => {
-					for result in self.on_blocks_processed(imported, count, results) {
-						match result {
-							Ok((id, req)) => self.send_block_request(id, req),
-							Err(BadPeer(id, repu)) => {
-								self.network_service
-									.disconnect_peer(id, self.block_announce_protocol_name.clone());
-								self.network_service.report_peer(id, repu)
-							},
-						}
-					}
-				},
-				ToServiceCommand::JustificationImported(peer, hash, number, success) => {
-					self.on_justification_import(hash, number, success);
-					if !success {
-						info!(target: "sync", "💔 Invalid justification provided by {} for #{}", peer, hash);
-						self.network_service
-							.disconnect_peer(peer, self.block_announce_protocol_name.clone());
-						self.network_service.report_peer(
-							peer,
-							sc_peerset::ReputationChange::new_fatal("Invalid justification"),
-						);
-					}
-				},
-				ToServiceCommand::BlockFinalized(hash, number) => {
-					self.on_block_finalized(&hash, number);
-				},
-				ToServiceCommand::Status { pending_response } => {
-					let _ = pending_response.send(self.status());
-				},
-			}
-		}
-
 		// Should be called before `process_outbound_requests` to ensure
 		// that a potential target block is directly leading to requests.
 		if let Some(warp_sync) = &mut self.warp_sync {
@@ -1448,8 +1403,7 @@ where
 		block_request_protocol_name: ProtocolName,
 		state_request_protocol_name: ProtocolName,
 		warp_sync_protocol_name: Option<ProtocolName>,
-	) -> Result<(Self, ChainSyncInterfaceHandle<B>, NonDefaultSetConfig), ClientError> {
-		let (tx, service_rx) = tracing_unbounded("mpsc_chain_sync", 100_000);
+	) -> Result<(Self, NonDefaultSetConfig), ClientError> {
 		let block_announce_config = Self::get_block_announce_proto_config(
 			protocol_id,
 			fork_id,
@@ -1483,7 +1437,6 @@ where
 			warp_sync: None,
 			import_existing: false,
 			gap_sync: None,
-			service_rx,
 			network_service,
 			block_request_protocol_name,
 			state_request_protocol_name,
@@ -1509,7 +1462,7 @@ where
 		};
 
 		sync.reset_sync_start_point()?;
-		Ok((sync, ChainSyncInterfaceHandle::new(tx), block_announce_config))
+		Ok((sync, block_announce_config))
 	}
 
 	/// Returns the median seen block number.
@@ -3231,7 +3184,7 @@ mod test {
 		let import_queue = Box::new(sc_consensus::import_queue::mock::MockImportQueueHandle::new());
 		let (_chain_sync_network_provider, chain_sync_network_handle) =
 			NetworkServiceProvider::new();
-		let (mut sync, _, _) = ChainSync::new(
+		let (mut sync, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -3297,7 +3250,7 @@ mod test {
 		let (_chain_sync_network_provider, chain_sync_network_handle) =
 			NetworkServiceProvider::new();
 
-		let (mut sync, _, _) = ChainSync::new(
+		let (mut sync, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -3478,7 +3431,7 @@ mod test {
 		let (_chain_sync_network_provider, chain_sync_network_handle) =
 			NetworkServiceProvider::new();
 
-		let (mut sync, _, _) = ChainSync::new(
+		let (mut sync, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -3604,7 +3557,7 @@ mod test {
 			NetworkServiceProvider::new();
 		let info = client.info();
 
-		let (mut sync, _, _) = ChainSync::new(
+		let (mut sync, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -3760,7 +3713,7 @@ mod test {
 
 		let info = client.info();
 
-		let (mut sync, _, _) = ChainSync::new(
+		let (mut sync, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -3901,7 +3854,7 @@ mod test {
 
 		let info = client.info();
 
-		let (mut sync, _, _) = ChainSync::new(
+		let (mut sync, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -4042,7 +3995,7 @@ mod test {
 		let mut client = Arc::new(TestClientBuilder::new().build());
 		let blocks = (0..3).map(|_| build_block(&mut client, None, false)).collect::<Vec<_>>();
 
-		let (mut sync, _, _) = ChainSync::new(
+		let (mut sync, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -4087,7 +4040,7 @@ mod test {
 
 		let empty_client = Arc::new(TestClientBuilder::new().build());
 
-		let (mut sync, _, _) = ChainSync::new(
+		let (mut sync, _) = ChainSync::new(
 			SyncMode::Full,
 			empty_client.clone(),
 			ProtocolId::from("test-protocol-name"),
