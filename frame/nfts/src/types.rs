@@ -124,7 +124,7 @@ impl<AccountId, DepositBalance> CollectionDetails<AccountId, DepositBalance> {
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct MintWitness<ItemId> {
 	/// Provide the id of the item in a required collection.
-	pub owner_of_item: ItemId,
+	pub owned_item: ItemId,
 }
 
 /// Information concerning the ownership of a single unique item.
