@@ -72,15 +72,16 @@ extern crate self as sp_api;
 
 #[doc(hidden)]
 pub use codec::{self, Decode, DecodeLimit, Encode};
+use core::marker::PhantomData;
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use hash_db::Hasher;
 #[doc(hidden)]
 #[cfg(not(feature = "std"))]
 pub use sp_core::to_substrate_wasm_fn_return_value;
-use sp_core::OpaqueMetadata;
 #[doc(hidden)]
 pub use sp_core::{offchain, ExecutionContext};
+use sp_core::{traits::CallContext, OpaqueMetadata};
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use sp_runtime::StateVersion;
@@ -733,4 +734,57 @@ decl_runtime_apis! {
 		/// Returns the metadata of a runtime.
 		fn metadata() -> OpaqueMetadata;
 	}
+}
+
+pub struct RuntimeInstanceBuilder<C, B: BlockT> {
+	call_api_at: C,
+	block: B::Hash,
+}
+
+impl<C, B: BlockT> RuntimeInstanceBuilder<C, B> {
+	pub fn create(call_api_at: C, block: B::Hash) -> Self {
+		Self { call_api_at, block }
+	}
+
+	pub fn on_chain_context(self) -> RuntimeInstanceBuilderStage2<C, B> {
+		RuntimeInstanceBuilderStage2 {
+			call_api_at: self.call_api_at,
+			block: self.block,
+			call_context: CallContext::Onchain,
+		}
+	}
+
+	pub fn off_chain_context(self) -> RuntimeInstanceBuilderStage2<C, B> {
+		RuntimeInstanceBuilderStage2 {
+			call_api_at: self.call_api_at,
+			block: self.block,
+			call_context: CallContext::Offchain,
+		}
+	}
+}
+
+pub struct RuntimeInstanceBuilderStage2<C, B: BlockT> {
+	call_api_at: C,
+	block: B::Hash,
+	call_context: CallContext,
+}
+
+impl<C, B: BlockT> RuntimeInstanceBuilderStage2<C, B> {
+	pub fn with_recorder(mut self) -> Self {
+		self
+	}
+
+	pub fn build(self) -> RuntimeInstance<C, B> {
+		RuntimeInstance {
+			call_api_at: self.call_api_at,
+			block: self.block,
+			call_context: self.call_context,
+		}
+	}
+}
+
+pub struct RuntimeInstance<C, B: BlockT> {
+	call_api_at: C,
+	block: B::Hash,
+	call_context: CallContext,
 }
