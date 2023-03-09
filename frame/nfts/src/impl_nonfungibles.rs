@@ -19,7 +19,6 @@
 
 use super::*;
 use frame_support::{
-	ensure,
 	storage::KeyPrefixIterator,
 	traits::{tokens::nonfungibles_v2::*, Get},
 	BoundedSlice,
@@ -130,21 +129,12 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 	}
 }
 
-impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, CollectionConfigFor<T, I>>
-	for Pallet<T, I>
-{
+impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId> for Pallet<T, I> {
 	/// Create a `collection` of nonfungible items to be owned by `who` and managed by `admin`.
 	fn create_collection(
 		who: &T::AccountId,
 		admin: &T::AccountId,
-		config: &CollectionConfigFor<T, I>,
 	) -> Result<T::CollectionId, DispatchError> {
-		// DepositRequired can be disabled by calling the force_create() only
-		ensure!(
-			!config.has_disabled_setting(CollectionSetting::DepositRequired),
-			Error::<T, I>::WrongSetting
-		);
-
 		let collection =
 			NextCollectionId::<T, I>::get().unwrap_or(T::CollectionId::initial_value());
 
@@ -152,7 +142,7 @@ impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, Collection
 			collection,
 			who.clone(),
 			admin.clone(),
-			*config,
+			CollectionConfigFor::<T, I>::default(),
 			T::CollectionDeposit::get(),
 			Event::Created { collection, creator: who.clone(), owner: admin.clone() },
 		)?;
@@ -311,6 +301,35 @@ impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId, ItemConfig
 		key.using_encoded(|k| {
 			<Self as Mutate<T::AccountId, ItemConfig>>::clear_collection_attribute(collection, k)
 		})
+	}
+}
+
+impl<T: Config<I>, I: 'static>
+	MutateCollectionSettings<
+		<T as SystemConfig>::AccountId,
+		MintSettingsFor<T, I>,
+		CollectionSettings,
+	> for Pallet<T, I>
+{
+	/// Set the maximum number of items a `collection` could have.
+	fn set_max_supply(collection: &Self::CollectionId, max_supply: u32) -> DispatchResult {
+		Self::do_set_collection_max_supply(None, *collection, max_supply)
+	}
+
+	/// Update mint settings for the `collection`.
+	fn update_mint_settings(
+		collection: &Self::CollectionId,
+		mint_settings: MintSettingsFor<T, I>,
+	) -> DispatchResult {
+		Self::do_update_mint_settings(None, *collection, mint_settings)
+	}
+
+	/// Disable `collection` settings.
+	fn disable_collection_settings(
+		collection: &Self::CollectionId,
+		disable_settings: CollectionSettings,
+	) -> DispatchResult {
+		Self::do_lock_collection(None, *collection, disable_settings)
 	}
 }
 

@@ -61,6 +61,8 @@ pub(super) type CollectionConfigFor<T, I = ()> = CollectionConfig<
 	<T as SystemConfig>::BlockNumber,
 	<T as Config<I>>::CollectionId,
 >;
+pub(super) type MintSettingsFor<T, I = ()> =
+	MintSettings<BalanceOf<T, I>, <T as SystemConfig>::BlockNumber, <T as Config<I>>::CollectionId>;
 pub(super) type PreSignedMintOf<T, I = ()> = PreSignedMint<
 	<T as Config<I>>::CollectionId,
 	<T as Config<I>>::ItemId,
@@ -347,9 +349,7 @@ pub enum PalletAttributes<CollectionId> {
 }
 
 /// Collection's configuration.
-#[derive(
-	Clone, Copy, Decode, Default, Encode, MaxEncodedLen, PartialEq, RuntimeDebug, TypeInfo,
-)]
+#[derive(Clone, Copy, Decode, Encode, MaxEncodedLen, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct CollectionConfig<Price, BlockNumber, CollectionId> {
 	/// Collection's settings.
 	pub settings: CollectionSettings,
@@ -357,6 +357,18 @@ pub struct CollectionConfig<Price, BlockNumber, CollectionId> {
 	pub max_supply: Option<u32>,
 	/// Default settings each item will get during the mint.
 	pub mint_settings: MintSettings<Price, BlockNumber, CollectionId>,
+}
+
+impl<Price, BlockNumber, CollectionId> Default
+	for CollectionConfig<Price, BlockNumber, CollectionId>
+{
+	fn default() -> Self {
+		Self {
+			settings: CollectionSettings::default(),
+			max_supply: None,
+			mint_settings: MintSettings::default(),
+		}
+	}
 }
 
 impl<Price, BlockNumber, CollectionId> CollectionConfig<Price, BlockNumber, CollectionId> {
@@ -409,12 +421,16 @@ impl ItemSettings {
 impl_codec_bitflags!(ItemSettings, u64, ItemSetting);
 
 /// Item's configuration.
-#[derive(
-	Encode, Decode, Default, PartialEq, RuntimeDebug, Clone, Copy, MaxEncodedLen, TypeInfo,
-)]
+#[derive(Encode, Decode, PartialEq, RuntimeDebug, Clone, Copy, MaxEncodedLen, TypeInfo)]
 pub struct ItemConfig {
 	/// Item's settings.
-	pub(super) settings: ItemSettings,
+	pub settings: ItemSettings,
+}
+
+impl Default for ItemConfig {
+	fn default() -> Self {
+		Self { settings: ItemSettings::default() }
+	}
 }
 
 impl ItemConfig {
