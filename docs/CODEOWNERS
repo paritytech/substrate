@@ -59,10 +59,11 @@
 /frame/contracts/ @athei
 
 # NPoS and election
-/frame/staking/ @kianenigma
-/frame/elections/ @kianenigma
-/frame/elections-phragmen/ @kianenigma
-/primitives/npos-elections/ @kianenigma
+/frame/election-provider-support/ @paritytech/staking-core
+/frame/staking/ @paritytech/staking-core
+/frame/nomination-pools/ @paritytech/staking-core
+/frame/elections-phragmen/ @paritytech/staking-core
+/primitives/npos-elections/ @paritytech/staking-core
 
 # Fixed point arithmetic
 /primitives/sp-arithmetic/ @kianenigma

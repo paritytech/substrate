@@ -1083,6 +1083,121 @@ fn execute_overweight_works() {
 		assert_eq!(consumed, Err(ExecuteOverweightError::NotFound));
 		assert!(QueueChanges::take().is_empty());
 		assert!(!Pages::<Test>::contains_key(origin, 0), "Page is gone");
+		// The book should have been unknit from the ready ring.
+		assert!(!ServiceHead::<Test>::exists(), "No ready book");
+	});
+}
+
+#[test]
+fn permanently_overweight_book_unknits() {
+	use MessageOrigin::*;
+
+	new_test_ext::<Test>().execute_with(|| {
+		set_weight("bump_service_head", 1.into_weight());
+		set_weight("service_queue_base", 1.into_weight());
+		set_weight("service_page_base_completion", 1.into_weight());
+
+		MessageQueue::enqueue_messages([msg("weight=9")].into_iter(), Here);
+
+		// It is the only ready book.
+		assert_ring(&[Here]);
+		// Mark the message as overweight.
+		assert_eq!(MessageQueue::service_queues(8.into_weight()), 4.into_weight());
+		assert_last_event::<Test>(
+			Event::OverweightEnqueued {
+				hash: <Test as frame_system::Config>::Hashing::hash(b"weight=9"),
+				origin: Here,
+				message_index: 0,
+				page_index: 0,
+			}
+			.into(),
+		);
+		// The book is not ready anymore.
+		assert_ring(&[]);
+		assert_eq!(MessagesProcessed::take().len(), 0);
+		assert_eq!(BookStateFor::<Test>::get(Here).message_count, 1);
+		// Now if we enqueue another message, it will become ready again.
+		MessageQueue::enqueue_messages([msg("weight=1")].into_iter(), Here);
+		assert_ring(&[Here]);
+		assert_eq!(MessageQueue::service_queues(8.into_weight()), 5.into_weight());
+		assert_eq!(MessagesProcessed::take().len(), 1);
+		assert_ring(&[]);
+	});
+}
+
+#[test]
+fn permanently_overweight_book_unknits_multiple() {
+	use MessageOrigin::*;
+
+	new_test_ext::<Test>().execute_with(|| {
+		set_weight("bump_service_head", 1.into_weight());
+		set_weight("service_queue_base", 1.into_weight());
+		set_weight("service_page_base_completion", 1.into_weight());
+
+		MessageQueue::enqueue_messages(
+			[msg("weight=1"), msg("weight=9"), msg("weight=9")].into_iter(),
+			Here,
+		);
+
+		assert_ring(&[Here]);
+		// Process the first message.
+		assert_eq!(MessageQueue::service_queues(4.into_weight()), 4.into_weight());
+		assert_eq!(num_overweight_enqueued_events(), 0);
+		assert_eq!(MessagesProcessed::take().len(), 1);
+
+		// Book is still ready since it was not marked as overweight yet.
+		assert_ring(&[Here]);
+		assert_eq!(MessageQueue::service_queues(8.into_weight()), 5.into_weight());
+		assert_eq!(num_overweight_enqueued_events(), 2);
+		assert_eq!(MessagesProcessed::take().len(), 0);
+		// Now it is overweight.
+		assert_ring(&[]);
+		// Enqueue another message.
+		MessageQueue::enqueue_messages([msg("weight=1")].into_iter(), Here);
+		assert_ring(&[Here]);
+		assert_eq!(MessageQueue::service_queues(4.into_weight()), 4.into_weight());
+		assert_eq!(MessagesProcessed::take().len(), 1);
+		assert_ring(&[]);
+	});
+}
+
+/// We don't want empty books in the ready ring, but if they somehow make their way in there, it
+/// should not panic.
+#[test]
+#[cfg(not(debug_assertions))] // Would trigger a defensive failure otherwise.
+fn ready_but_empty_does_not_panic() {
+	use MessageOrigin::*;
+
+	new_test_ext::<Test>().execute_with(|| {
+		BookStateFor::<Test>::insert(Here, empty_book::<Test>());
+		BookStateFor::<Test>::insert(There, empty_book::<Test>());
+
+		knit(&Here);
+		knit(&There);
+		assert_ring(&[Here, There]);
+
+		assert_eq!(MessageQueue::service_queues(Weight::MAX), 0.into_weight());
+		assert_ring(&[]);
+	});
+}
+
+/// We don't want permanently books in the ready ring, but if they somehow make their way in there,
+/// it should not panic.
+#[test]
+#[cfg(not(debug_assertions))] // Would trigger a defensive failure otherwise.
+fn ready_but_perm_overweight_does_not_panic() {
+	use MessageOrigin::*;
+
+	new_test_ext::<Test>().execute_with(|| {
+		MessageQueue::enqueue_message(msg("weight=9"), Here);
+		assert_eq!(MessageQueue::service_queues(8.into_weight()), 0.into_weight());
+		assert_ring(&[]);
+		// Force it back into the ready ring.
+		knit(&Here);
+		assert_ring(&[Here]);
+		assert_eq!(MessageQueue::service_queues(Weight::MAX), 0.into_weight());
+		// Unready again.
+		assert_ring(&[]);
 	});
 }
 

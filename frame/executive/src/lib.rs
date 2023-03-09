@@ -837,7 +837,7 @@ mod tests {
 	}
 
 	frame_support::construct_runtime!(
-		pub enum Runtime where
+		pub struct Runtime where
 			Block = TestBlock,
 			NodeBlock = TestBlock,
 			UncheckedExtrinsic = TestUncheckedExtrinsic
