@@ -8,6 +8,7 @@ mod pallet {
 	pub trait Config: frame_system::Config {}
 
 	#[pallet::pallet]
+	#[pallet::generate_store(trait Store)]
 	pub struct Pallet<T>(core::marker::PhantomData<T>);
 
 	#[pallet::hooks]
@@ -18,10 +19,6 @@ mod pallet {
 
 	#[pallet::storage]
 	type Foo<T> = StorageValue<_, u8>;
-
-	#[pallet::call]
-	impl<T: Config> Pallet<T> {}
 }
 
-fn main() {
-}
+fn main() {}

@@ -38,6 +38,8 @@ pub fn expand_store_trait(def: &mut Def) -> proc_macro2::TokenStream {
 		&def.storages.iter().map(|storage| &storage.cfg_attrs).collect::<Vec<_>>();
 
 	quote::quote_spanned!(trait_store.span() =>
+		#[deprecated(note = r"Use of #[pallet::generate_store(pub(super) trait Store)] will be removed soon.
+		Check https://github.com/paritytech/substrate/pull/13535 for more details.")]
 		#trait_vis trait #trait_store {
 			#(
 				#(#storage_cfg_attrs)*

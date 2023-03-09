@@ -1,0 +1,8 @@
+error: use of deprecated trait `pallet::Store`: Use of #[pallet::generate_store(pub(super) trait Store)] will be removed soon.
+               Check https://github.com/paritytech/substrate/pull/13535 for more details.
+  --> $DIR/deprecated_store_attr.rs:11:33
+   |
+11 |     #[pallet::generate_store(trait Store)]
+   |                                    ^^^^^
+   |
+   = note: `-D deprecated` implied by `-D warnings`

@@ -158,7 +158,6 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(crate) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
@@ -496,7 +495,6 @@ pub mod pallet2 {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(crate) trait Store)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
@@ -944,15 +942,6 @@ fn validate_unsigned_expand() {
 
 	let validity = pallet::Pallet::validate_unsigned(TransactionSource::External, &call).unwrap();
 	assert_eq!(validity, ValidTransaction::default());
-}
-
-#[test]
-fn trait_store_expand() {
-	TestExternalities::default().execute_with(|| {
-		<pallet::Pallet<Runtime> as pallet::Store>::Value::get();
-		<pallet::Pallet<Runtime> as pallet::Store>::Map::get(1);
-		<pallet::Pallet<Runtime> as pallet::Store>::DoubleMap::get(1, 2);
-	})
 }
 
 #[test]
