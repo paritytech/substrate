@@ -16,18 +16,21 @@
 // limitations under the License.
 
 use crate::pallet::Def;
-use proc_macro2::{Ident, TokenStream};
+use derive_syn_parse::Parse;
+use proc_macro2::TokenStream;
 use quote::ToTokens;
 use syn::{
-	parenthesized,
 	parse::{self, Parse, ParseStream},
 	spanned::Spanned,
-	Attribute, Lit, Token,
+	Attribute, Lit,
 };
 
 const DOC: &'static str = "doc";
-const INCLUDE_STR: &'static str = "include_str";
 const PALLET_DOC: &'static str = "pallet_doc";
+
+mod keywords {
+	syn::custom_keyword!(include_str);
+}
 
 /// Get the documentation file path from the `pallet_doc` attribute.
 ///
@@ -38,23 +41,22 @@ fn parse_pallet_doc_value(attr: &Attribute) -> syn::Result<DocMetaValue> {
 
 	let meta = attr.parse_meta()?;
 	let syn::Meta::List(metalist) = meta else {
-                let msg =
-                        "The `pallet_doc` attribute must receive arguments as a list. Supported format: `pallet_doc(PATH)`";
-                return Err(syn::Error::new(span, msg))
-        };
+		let msg = "The `pallet_doc` attribute must receive arguments as a list. Supported format: `pallet_doc(PATH)`";
+		return Err(syn::Error::new(span, msg))
+	};
 
 	let paths: Vec<_> = metalist
-                .nested
-                .into_iter()
-                .map(|nested| {
-                        let syn::NestedMeta::Lit(lit) = nested else {
-                                let msg = "The `pallet_doc` received an unsupported argument. Supported format: `pallet_doc(PATH)`";
-                        return Err(syn::Error::new(span, msg))
-                };
+		.nested
+		.into_iter()
+		.map(|nested| {
+			let syn::NestedMeta::Lit(lit) = nested else {
+				let msg = "The `pallet_doc` received an unsupported argument. Supported format: `pallet_doc(PATH)`";
+				return Err(syn::Error::new(span, msg))
+			};
 
-                        Ok(lit)
-                })
-                .collect::<syn::Result<_>>()?;
+			Ok(lit)
+		})
+		.collect::<syn::Result<_>>()?;
 
 	if paths.len() != 1 {
 		let msg = "The `pallet_doc` attribute must receive only one argument. Supported format: `pallet_doc(PATH)`";
@@ -71,14 +73,43 @@ fn parse_pallet_doc_value(attr: &Attribute) -> syn::Result<DocMetaValue> {
 /// - `#[doc = include_str!(PATH)]`: Documentation obtained from a path
 fn parse_doc_value(attr: &Attribute) -> Option<DocMetaValue> {
 	let Some(ident) = attr.path.get_ident() else {
-                return None
-        };
+		return None
+	};
 	if ident != DOC {
 		return None
 	}
 
-	let parser = |input: ParseStream| DocMetaValue::parse(input);
-	parse::Parser::parse2(parser, attr.tokens.clone()).ok()
+	let parser = |input: ParseStream| DocParser::parse(input);
+	let result = parse::Parser::parse2(parser, attr.tokens.clone()).ok()?;
+
+	if let Some(lit) = result.lit {
+		Some(DocMetaValue::Lit(lit))
+	} else if let Some(include_doc) = result.include_doc {
+		Some(DocMetaValue::Path(include_doc.lit))
+	} else {
+		None
+	}
+}
+
+/// Parse the include_str attribute.
+#[derive(Debug, Parse)]
+struct IncludeDocParser {
+	_include_str: keywords::include_str,
+	_eq_token: syn::token::Bang,
+	#[paren]
+	_paren: syn::token::Paren,
+	#[inside(_paren)]
+	lit: Lit,
+}
+
+/// Parse the doc literal.
+#[derive(Debug, Parse)]
+struct DocParser {
+	_eq_token: syn::token::Eq,
+	#[peek(Lit)]
+	lit: Option<Lit>,
+	#[parse_if(lit.is_none())]
+	include_doc: Option<IncludeDocParser>,
 }
 
 /// Supported documentation tokens.
@@ -94,27 +125,6 @@ enum DocMetaValue {
 	///
 	/// `#[doc = include_str!(PATH)]`
 	Path(Lit),
-}
-
-impl Parse for DocMetaValue {
-	fn parse(input: ParseStream) -> syn::Result<Self> {
-		let _token: Token![=] = input.parse()?;
-
-		if input.peek(Lit) {
-			return input.parse().map(DocMetaValue::Lit)
-		}
-
-		let ident: Ident = input.parse()?;
-		if ident != INCLUDE_STR {
-			return Err(input.error("expected include_str ident"))
-		}
-		let _token: Token![!] = input.parse()?;
-
-		// We must have a path literal inside `(...)`
-		let content;
-		parenthesized!(content in input);
-		content.parse().map(DocMetaValue::Path)
-	}
 }
 
 impl ToTokens for DocMetaValue {
