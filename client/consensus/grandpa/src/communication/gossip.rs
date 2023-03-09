@@ -791,68 +791,67 @@ impl<Block: BlockT> Inner<Block> {
 	/// Note a round in the current set has started. Does nothing if the last
 	/// call to the function was with the same `round`.
 	fn note_round(&mut self, round: Round) -> MaybeMessage<Block> {
-		{
-			let local_view = match self.local_view {
-				None => return None,
-				Some(ref mut v) =>
-					if v.round == round {
-						// Do not send neighbor packets out if `round` has not changed ---
-						// such behavior is punishable.
-						return None
-					} else {
-						v
-					},
-			};
-
-			let set_id = local_view.set_id;
-
-			debug!(
-				target: LOG_TARGET,
-				"Voter {} noting beginning of round {:?} to network.",
-				self.config.name(),
-				(round, set_id)
-			);
-
-			local_view.update_round(round);
-
-			self.live_topics.push(round, set_id);
-			self.peers.reshuffle();
+		let local_view = self.local_view.as_mut()?;
+		if local_view.round == round {
+			// Do not send neighbor packets out if `round` has not changed ---
+			// such behavior is punishable.
+			return None
 		}
-		self.multicast_neighbor_packet()
+
+		let set_id = local_view.set_id;
+
+		debug!(
+			target: LOG_TARGET,
+			"Voter {} noting beginning of round {:?} to network.",
+			self.config.name(),
+			(round, set_id)
+		);
+
+		local_view.update_round(round);
+
+		self.live_topics.push(round, set_id);
+		self.peers.reshuffle();
+
+		self.multicast_neighbor_packet(false)
 	}
 
 	/// Note that a voter set with given ID has started. Does nothing if the last
 	/// call to the function was with the same `set_id`.
 	fn note_set(&mut self, set_id: SetId, authorities: Vec<AuthorityId>) -> MaybeMessage<Block> {
-		{
-			let local_view = match self.local_view {
-				ref mut x @ None => x.get_or_insert(LocalView::new(set_id, Round(1))),
-				Some(ref mut v) =>
-					if v.set_id == set_id {
-						let diff_authorities = self.authorities.iter().collect::<HashSet<_>>() !=
-							authorities.iter().collect::<HashSet<_>>();
+		let local_view = match self.local_view {
+			ref mut x @ None => x.get_or_insert(LocalView::new(set_id, Round(1))),
+			Some(ref mut v) =>
+				if v.set_id == set_id {
+					let diff_authorities = self.authorities.iter().collect::<HashSet<_>>() !=
+						authorities.iter().collect::<HashSet<_>>();
 
-						if diff_authorities {
-							debug!(target: LOG_TARGET,
-								"Gossip validator noted set {:?} twice with different authorities. \
-								Was the authority set hard forked?",
-								set_id,
-							);
-							self.authorities = authorities;
-						}
-						// Do not send neighbor packets out if the `set_id` has not changed ---
-						// such behavior is punishable.
-						return None
-					} else {
-						v
-					},
-			};
+					if diff_authorities {
+						debug!(
+							target: LOG_TARGET,
+							"Gossip validator noted set {:?} twice with different authorities. \
+							Was the authority set hard forked?",
+							set_id,
+						);
 
-			local_view.update_set(set_id);
-			self.live_topics.push(Round(1), set_id);
-			self.authorities = authorities;
-		}
-		self.multicast_neighbor_packet()
+						self.authorities = authorities;
+					}
+
+					// Do not send neighbor packets out if the `set_id` has not changed ---
+					// such behavior is punishable.
+					return None
+				} else {
+					v
+				},
+		};
+
+		local_view.update_set(set_id);
+		self.live_topics.push(Round(1), set_id);
+		self.authorities = authorities;
+
+		// when transitioning to a new set we also want to send neighbor packets to light clients,
+		// this is so that they know who to ask justifications from in order to finalize the last
+		// block in the previous set.
+		self.multicast_neighbor_packet(true)
 	}
 
 	/// Note that we've imported a commit finalizing a given block. Does nothing if the last
@@ -864,19 +863,14 @@ impl<Block: BlockT> Inner<Block> {
 		set_id: SetId,
 		finalized: NumberFor<Block>,
 	) -> MaybeMessage<Block> {
-		{
-			match self.local_view {
-				None => return None,
-				Some(ref mut v) =>
-					if v.last_commit_height() < Some(&finalized) {
-						v.last_commit = Some((finalized, round, set_id));
-					} else {
-						return None
-					},
-			};
+		let local_view = self.local_view.as_mut()?;
+		if local_view.last_commit_height() < Some(&finalized) {
+			local_view.last_commit = Some((finalized, round, set_id));
+		} else {
+			return None
 		}
 
-		self.multicast_neighbor_packet()
+		self.multicast_neighbor_packet(false)
 	}
 
 	fn consider_vote(&self, round: Round, set_id: SetId) -> Consider {
@@ -1193,7 +1187,7 @@ impl<Block: BlockT> Inner<Block> {
 		(neighbor_topics, action, catch_up, report)
 	}
 
-	fn multicast_neighbor_packet(&self) -> MaybeMessage<Block> {
+	fn multicast_neighbor_packet(&self, force_light: bool) -> MaybeMessage<Block> {
 		self.local_view.as_ref().map(|local_view| {
 			let packet = NeighborPacket {
 				round: local_view.round,
@@ -1207,8 +1201,9 @@ impl<Block: BlockT> Inner<Block> {
 				.iter()
 				.filter_map(|(id, info)| {
 					// light clients don't participate in the full GRANDPA voter protocol
-					// and therefore don't need to be informed about view updates
-					if info.roles.is_light() {
+					// and therefore don't need to be informed about all view updates unless
+					// we explicitly require it (e.g. when transitioning to a new set)
+					if info.roles.is_light() && !force_light {
 						None
 					} else {
 						Some(id)
@@ -2611,5 +2606,53 @@ mod tests {
 		val.note_set(SetId(1), a2.clone(), |_, _| {});
 
 		assert_eq!(val.inner().read().authorities, a2);
+	}
+
+	#[test]
+	fn sends_neighbor_packets_to_non_light_peers_when_starting_a_new_round() {
+		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state(), None, None);
+
+		// initialize the validator to a stable set id
+		val.note_set(SetId(1), Vec::new(), |_, _| {});
+
+		let authority_peer = PeerId::random();
+		let full_peer = PeerId::random();
+		let light_peer = PeerId::random();
+
+		val.inner.write().peers.new_peer(authority_peer, ObservedRole::Authority);
+		val.inner.write().peers.new_peer(full_peer, ObservedRole::Full);
+		val.inner.write().peers.new_peer(light_peer, ObservedRole::Light);
+
+		val.note_round(Round(2), |peers, message| {
+			assert_eq!(peers.len(), 2);
+			assert!(peers.contains(&authority_peer));
+			assert!(peers.contains(&full_peer));
+			assert!(!peers.contains(&light_peer));
+			assert!(matches!(message, NeighborPacket { set_id: SetId(1), round: Round(2), .. }));
+		});
+	}
+
+	#[test]
+	fn sends_neighbor_packets_to_all_peers_when_starting_a_new_set() {
+		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state(), None, None);
+
+		// initialize the validator to a stable set id
+		val.note_set(SetId(1), Vec::new(), |_, _| {});
+
+		let authority_peer = PeerId::random();
+		let full_peer = PeerId::random();
+		let light_peer = PeerId::random();
+
+		val.inner.write().peers.new_peer(authority_peer, ObservedRole::Authority);
+		val.inner.write().peers.new_peer(full_peer, ObservedRole::Full);
+		val.inner.write().peers.new_peer(light_peer, ObservedRole::Light);
+
+		val.note_set(SetId(2), Vec::new(), |peers, message| {
+			assert_eq!(peers.len(), 3);
+			assert!(peers.contains(&authority_peer));
+			assert!(peers.contains(&full_peer));
+			assert!(peers.contains(&light_peer));
+			assert!(matches!(message, NeighborPacket { set_id: SetId(2), round: Round(1), .. }));
+		});
 	}
 }
