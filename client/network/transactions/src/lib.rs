@@ -26,15 +26,20 @@
 //! - Use [`TransactionsHandlerPrototype::build`] then [`TransactionsHandler::run`] to obtain a
 //! `Future` that processes transactions.
 
+// Local dependencies
 use crate::config::*;
+
+// External dependencies
 use codec::{Decode, Encode};
 use futures::{prelude::*, stream::FuturesUnordered};
 use libp2p::{multiaddr, PeerId};
 use log::{debug, trace, warn};
+
+// Substrate dependencies
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
+use sc_network::{config::NonDefaultSetConfig, error};
 use sc_network_common::{
-	config::{NonDefaultSetConfig, NonReservedPeerMode, ProtocolId, SetConfig},
-	error,
+	config::{NonReservedPeerMode, ProtocolId, SetConfig},
 	protocol::{event::Event, role::ObservedRole, ProtocolName},
 	service::{NetworkEventStream, NetworkNotification, NetworkPeers},
 	sync::{SyncEvent, SyncEventStream},
@@ -43,6 +48,8 @@ use sc_network_common::{
 };
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_runtime::traits::Block as BlockT;
+
+// `std` dependencies
 use std::{
 	collections::{hash_map::Entry, HashMap},
 	iter,

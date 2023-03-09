@@ -27,10 +27,12 @@
 //! The methods of the [`NetworkService`] are implemented by sending a message over a channel,
 //! which is then processed by [`NetworkWorker::next_action`].
 
+// Local dependencies
 use crate::{
 	behaviour::{self, Behaviour, BehaviourOut},
 	config::Params,
 	discovery::DiscoveryConfig,
+	error::Error,
 	network_state::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
@@ -38,6 +40,7 @@ use crate::{
 	transport, ReputationChange,
 };
 
+// External dependencies
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
 	core::{either::EitherError, upgrade, ConnectedPoint},
@@ -55,17 +58,18 @@ use libp2p::{
 use log::{debug, error, info, trace, warn};
 use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
+
+// Substrate dependencies
 use sc_network_common::{
 	config::{MultiaddrWithPeerId, TransportConfig},
-	error::Error,
 	protocol::{
 		event::{DhtEvent, Event},
 		ProtocolName,
 	},
 	request_responses::{IfDisconnected, RequestFailure},
 	service::{
-		NetworkDHTProvider, NetworkEventStream, NetworkNotification, NetworkPeers, NetworkSigner,
-		NetworkStateInfo, NetworkStatus, NetworkStatusProvider,
+		NetworkDHTProvider, NetworkEventStream, NetworkNotification, NetworkPeers, NetworkRequest,
+		NetworkSigner, NetworkStateInfo, NetworkStatus, NetworkStatusProvider,
 		NotificationSender as NotificationSenderT, NotificationSenderError,
 		NotificationSenderReady as NotificationSenderReadyT, Signature, SigningError,
 	},
@@ -75,6 +79,8 @@ use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain::HeaderBackend;
 use sp_runtime::traits::{Block as BlockT, Zero};
+
+// `std` dependencies
 use std::{
 	cmp,
 	collections::{HashMap, HashSet},
@@ -90,12 +96,10 @@ use std::{
 };
 
 pub use behaviour::{InboundFailure, OutboundFailure, ResponseFailure};
+pub use libp2p::identity::{error::DecodingError, Keypair, PublicKey};
 
 mod metrics;
 mod out_events;
-
-pub use libp2p::identity::{error::DecodingError, Keypair, PublicKey};
-use sc_network_common::service::NetworkRequest;
 
 /// Custom error that can be produced by the [`ConnectionHandler`] of the [`NetworkBehaviour`].
 /// Used as a template parameter of [`SwarmEvent`] below.

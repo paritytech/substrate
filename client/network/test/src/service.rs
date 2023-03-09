@@ -22,7 +22,7 @@ use libp2p::{Multiaddr, PeerId};
 use sc_consensus::{ImportQueue, Link};
 use sc_network::{config, NetworkService, NetworkWorker};
 use sc_network_common::{
-	config::{MultiaddrWithPeerId, NonDefaultSetConfig, ProtocolId, SetConfig, TransportConfig},
+	config::{MultiaddrWithPeerId, ProtocolId, SetConfig, TransportConfig},
 	protocol::{event::Event, role::Roles},
 	service::{NetworkEventStream, NetworkNotification, NetworkPeers, NetworkStateInfo},
 };
@@ -113,7 +113,7 @@ impl TestNetworkBuilder {
 		);
 
 		let network_config = self.config.unwrap_or(config::NetworkConfiguration {
-			extra_sets: vec![NonDefaultSetConfig {
+			extra_sets: vec![config::NonDefaultSetConfig {
 				notifications_protocol: PROTOCOL_NAME.into(),
 				fallback_names: Vec::new(),
 				max_notification_size: 1024 * 1024,
@@ -548,7 +548,7 @@ async fn fallback_name_working() {
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 	let (node1, mut events_stream1) = TestNetworkBuilder::new()
 		.with_config(config::NetworkConfiguration {
-			extra_sets: vec![NonDefaultSetConfig {
+			extra_sets: vec![config::NonDefaultSetConfig {
 				notifications_protocol: NEW_PROTOCOL_NAME.into(),
 				fallback_names: vec![PROTOCOL_NAME.into()],
 				max_notification_size: 1024 * 1024,

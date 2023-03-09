@@ -253,6 +253,7 @@ mod service;
 mod transport;
 
 pub mod config;
+pub mod error;
 pub mod network_state;
 
 #[doc(inline)]

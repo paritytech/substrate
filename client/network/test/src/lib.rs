@@ -48,11 +48,14 @@ use sc_consensus::{
 	ForkChoiceStrategy, ImportQueue, ImportResult, JustificationImport, JustificationSyncLink,
 	LongestChain, Verifier,
 };
-use sc_network::{Multiaddr, NetworkService, NetworkWorker};
+use sc_network::{
+	config::{NetworkConfiguration, NonDefaultSetConfig},
+	Multiaddr, NetworkService, NetworkWorker,
+};
 use sc_network_common::{
 	config::{
-		MultiaddrWithPeerId, NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode,
-		ProtocolId, RequestResponseConfig, Role, SyncMode, TransportConfig,
+		MultiaddrWithPeerId, NonReservedPeerMode, ProtocolId, RequestResponseConfig, Role,
+		SyncMode, TransportConfig,
 	},
 	protocol::{role::Roles, ProtocolName},
 	service::{NetworkBlock, NetworkEventStream, NetworkStateInfo, NetworkSyncForkRequest},

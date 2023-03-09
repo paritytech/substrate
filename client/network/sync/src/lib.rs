@@ -28,23 +28,15 @@
 //! the network, or whenever a block has been successfully verified, call the appropriate method in
 //! order to update it.
 
-pub mod block_request_handler;
-pub mod blocks;
-pub mod engine;
-pub mod mock;
-mod schema;
-pub mod service;
-pub mod state;
-pub mod state_request_handler;
-pub mod warp;
-pub mod warp_request_handler;
-
+// Local dependencies
 use crate::{
 	blocks::BlockCollection,
 	schema::v1::{StateRequest, StateResponse},
 	state::StateSync,
 	warp::{WarpProofImportResult, WarpSync},
 };
+
+// External dependencies
 use codec::{Decode, DecodeAll, Encode};
 use extra_requests::ExtraRequests;
 use futures::{
@@ -52,16 +44,17 @@ use futures::{
 };
 use libp2p::{request_response::OutboundFailure, PeerId};
 use log::{debug, error, info, trace, warn};
-use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use prost::Message;
+
+// Substrate dependencies
+use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{
 	import_queue::ImportQueueService, BlockImportError, BlockImportStatus, IncomingBlock,
 };
+use sc_network::config::NonDefaultSetConfig;
 use sc_network_common::{
-	config::{
-		NonDefaultSetConfig, NonReservedPeerMode, NotificationHandshake, ProtocolId, SetConfig,
-	},
+	config::{NonReservedPeerMode, NotificationHandshake, ProtocolId, SetConfig},
 	protocol::{role::Roles, ProtocolName},
 	request_responses::{IfDisconnected, RequestFailure},
 	sync::{
@@ -76,7 +69,6 @@ use sc_network_common::{
 		SyncState, SyncStatus,
 	},
 };
-pub use service::chain_sync::SyncingService;
 use sp_arithmetic::traits::Saturating;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata};
 use sp_consensus::{
@@ -90,6 +82,8 @@ use sp_runtime::{
 	},
 	EncodedJustification, Justifications,
 };
+
+// `std` dependencies
 use std::{
 	collections::{hash_map::Entry, HashMap, HashSet},
 	iter,
@@ -97,9 +91,21 @@ use std::{
 	pin::Pin,
 	sync::Arc,
 };
-use warp::TargetBlockImportResult;
+
+pub use service::chain_sync::SyncingService;
 
 mod extra_requests;
+mod schema;
+
+pub mod block_request_handler;
+pub mod blocks;
+pub mod engine;
+pub mod mock;
+pub mod service;
+pub mod state;
+pub mod state_request_handler;
+pub mod warp;
+pub mod warp_request_handler;
 
 /// Maximum blocks to request in a single packet.
 const MAX_BLOCKS_TO_REQUEST: usize = 64;
@@ -927,9 +933,9 @@ where
 								match warp_sync.import_target_block(
 									blocks.pop().expect("`blocks` len checked above."),
 								) {
-									TargetBlockImportResult::Success =>
+									warp::TargetBlockImportResult::Success =>
 										return Ok(OnBlockData::Continue),
-									TargetBlockImportResult::BadResponse =>
+									warp::TargetBlockImportResult::BadResponse =>
 										return Err(BadPeer(*who, rep::VERIFICATION_FAIL)),
 								}
 							} else if blocks.is_empty() {

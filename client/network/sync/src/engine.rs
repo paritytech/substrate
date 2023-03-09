@@ -19,26 +19,28 @@
 //! `SyncingEngine` is the actor responsible for syncing Substrate chain
 //! to tip and keep the blockchain up to date with network updates.
 
+// Local dependencies
 use crate::{
 	service::{self, chain_sync::ToServiceCommand},
 	ChainSync, ClientError, SyncingService,
 };
 
+// External dependencies
+use codec::{Decode, DecodeAll, Encode};
 use futures::{FutureExt, Stream, StreamExt};
+use futures_timer::Delay;
 use libp2p::PeerId;
 use lru::LruCache;
 use prometheus_endpoint::{
 	register, Gauge, GaugeVec, MetricSource, Opts, PrometheusError, Registry, SourcedGauge, U64,
 };
 
-use codec::{Decode, DecodeAll, Encode};
-use futures_timer::Delay;
+// Substrate dependencies
 use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_consensus::import_queue::ImportQueueService;
+use sc_network::config::{NetworkConfiguration, NonDefaultSetConfig};
 use sc_network_common::{
-	config::{
-		NetworkConfiguration, NonDefaultSetConfig, ProtocolId, SyncMode as SyncOperationMode,
-	},
+	config::{ProtocolId, SyncMode as SyncOperationMode},
 	protocol::{event::Event, role::Roles, ProtocolName},
 	sync::{
 		message::{
@@ -59,6 +61,7 @@ use sp_runtime::{
 	SaturatedConversion,
 };
 
+// `std` dependencies
 use std::{
 	collections::{HashMap, HashSet},
 	num::NonZeroUsize,

@@ -695,9 +695,9 @@ pub struct GrandpaParams<Block: BlockT, C, N, S, SC, VR> {
 /// For standard protocol name see [`crate::protocol_standard_name`].
 pub fn grandpa_peers_set_config(
 	protocol_name: ProtocolName,
-) -> sc_network_common::config::NonDefaultSetConfig {
+) -> sc_network::config::NonDefaultSetConfig {
 	use communication::grandpa_protocol_name;
-	sc_network_common::config::NonDefaultSetConfig {
+	sc_network::config::NonDefaultSetConfig {
 		notifications_protocol: protocol_name,
 		fallback_names: grandpa_protocol_name::LEGACY_NAMES.iter().map(|&n| n.into()).collect(),
 		// Notifications reach ~256kiB in size at the time of writing on Kusama and Polkadot.
