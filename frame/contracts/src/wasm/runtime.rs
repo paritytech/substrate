@@ -437,7 +437,7 @@ bitflags! {
 /// The kind of call that should be performed.
 enum CallType {
 	/// Execute another instantiated contract
-	Call { callee_ptr: u32, value_ptr: u32, weight: Weight },
+	Call { callee_ptr: u32, value_ptr: u32, deposit_ptr: u32, weight: Weight },
 	/// Execute deployed code in the context (storage, account ID, value) of the caller contract
 	DelegateCall { code_hash_ptr: u32 },
 }
@@ -894,9 +894,14 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 		};
 
 		let call_outcome = match call_type {
-			CallType::Call { callee_ptr, value_ptr, weight } => {
+			CallType::Call { callee_ptr, value_ptr, deposit_ptr, weight } => {
 				let callee: <<E as Ext>::T as frame_system::Config>::AccountId =
 					self.read_sandbox_memory_as(memory, callee_ptr)?;
+				let deposit_limit: BalanceOf<<E as Ext>::T> = if deposit_ptr == SENTINEL {
+					BalanceOf::<<E as Ext>::T>::zero()
+				} else {
+					self.read_sandbox_memory_as(memory, deposit_ptr)?
+				};
 				let value: BalanceOf<<E as Ext>::T> =
 					self.read_sandbox_memory_as(memory, value_ptr)?;
 				if value > 0u32.into() {
@@ -904,6 +909,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 				}
 				self.ext.call(
 					weight,
+					deposit_limit,
 					callee,
 					value,
 					input_data,
@@ -1322,7 +1328,12 @@ pub mod env {
 		ctx.call(
 			memory,
 			CallFlags::ALLOW_REENTRY,
-			CallType::Call { callee_ptr, value_ptr, weight: Weight::from_parts(gas, 0) },
+			CallType::Call {
+				callee_ptr,
+				value_ptr,
+				deposit_ptr: SENTINEL,
+				weight: Weight::from_parts(gas, 0),
+			},
 			input_data_ptr,
 			input_data_len,
 			output_ptr,
@@ -1352,7 +1363,12 @@ pub mod env {
 		ctx.call(
 			memory,
 			CallFlags::from_bits(flags).ok_or(Error::<E::T>::InvalidCallFlags)?,
-			CallType::Call { callee_ptr, value_ptr, weight: Weight::from_parts(gas, 0) },
+			CallType::Call {
+				callee_ptr,
+				value_ptr,
+				deposit_ptr: SENTINEL,
+				weight: Weight::from_parts(gas, 0),
+			},
 			input_data_ptr,
 			input_data_len,
 			output_ptr,
@@ -1373,6 +1389,10 @@ pub mod env {
 	///   `T::AccountId`. Traps otherwise.
 	/// - `ref_time`: how much *ref_time* Weight to devote to the execution.
 	/// - `proof_limit`: how much *proof_limit* Weight to devote to the execution.
+	/// - `deposit_ptr`: a pointer to the buffer with value of the storage deposit limit for the
+	///   call. Should be decodable as a `T::Balance`. Traps otherwise. Passing `SENTINEL` means
+	///   setting no specific limit for the call, which implies storage usage up to the limit of the
+	///   parent call.
 	/// - `value_ptr`: a pointer to the buffer with value, how much value to send. Should be
 	///   decodable as a `T::Balance`. Traps otherwise.
 	/// - `input_data_ptr`: a pointer to a buffer to be used as input data to the callee.
@@ -1399,6 +1419,7 @@ pub mod env {
 		callee_ptr: u32,
 		ref_time: u64,
 		proof_limit: u64,
+		deposit_ptr: u32,
 		value_ptr: u32,
 		input_data_ptr: u32,
 		input_data_len: u32,
@@ -1411,6 +1432,7 @@ pub mod env {
 			CallType::Call {
 				callee_ptr,
 				value_ptr,
+				deposit_ptr,
 				weight: Weight::from_parts(ref_time, proof_limit),
 			},
 			input_data_ptr,

@@ -2,7 +2,7 @@
 ;; It returns the result of the call as output data.
 (module
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
-	(import "seal2" "call" (func $seal_call (param i32 i32 i64 i64 i32 i32 i32 i32 i32) (result i32)))
+	(import "seal2" "call" (func $seal_call (param i32 i32 i64 i64 i32 i32 i32 i32 i32 i32) (result i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
@@ -25,6 +25,7 @@
 				(i32.const 4) ;; Pointer to "callee" address.
 				(i64.load (i32.const 36)) ;; How much ref_time to devote for the execution.
 				(i64.load (i32.const 44)) ;; How much proof_size to devote for the execution.
+				(i32.const 0xffffffff)	;; u32 max sentinel value: pass no deposit limit.
 				(i32.const 0) ;; Pointer to the buffer with value to transfer
 				(i32.const 0) ;; Pointer to input data buffer address
 				(i32.const 0)  ;; Length of input data buffer

@@ -471,6 +471,7 @@ mod tests {
 		fn call(
 			&mut self,
 			_gas_limit: Weight,
+			_deposit_limit: BalanceOf<Self::T>,
 			to: AccountIdOf<Self::T>,
 			value: u64,
 			data: Vec<u8>,

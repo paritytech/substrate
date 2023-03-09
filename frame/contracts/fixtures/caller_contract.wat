@@ -1,7 +1,7 @@
 (module
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal0" "seal_balance" (func $seal_balance (param i32 i32)))
-	(import "seal2" "call" (func $seal_call (param i32 i32 i64 i64 i32 i32 i32 i32 i32) (result i32)))
+	(import "seal2" "call" (func $seal_call (param i32 i32 i64 i64 i32 i32 i32 i32 i32 i32) (result i32)))
 	(import "seal2" "instantiate" (func $seal_instantiate
 		(param i32 i64 i64 i32 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)
 	))
@@ -164,6 +164,7 @@
 				(i32.const 16)	;; Pointer to "callee" address.
 				(i64.const 0)	;; How much ref_time weight to devote for the execution. 0 = all.
 				(i64.const 0)	;; How much proof_size weight to devote for the execution. 0 = all.
+				(i32.const 0xffffffff)	;; u32 max sentinel value: pass no deposit limit.
 				(i32.const 0)	;; Pointer to the buffer with value to transfer
 				(i32.const 9)	;; Pointer to input data buffer address
 				(i32.const 7)	;; Length of input data buffer
@@ -195,6 +196,7 @@
 				(i32.const 16)	;; Pointer to "callee" address.
 				(i64.const 1)	;; Supply too little ref_time weight
 				(i64.const 0)	;; How much proof_size weight to devote for the execution. 0 = all.
+				(i32.const 0xffffffff)	;; u32 max sentinel value: pass no deposit limit.
 				(i32.const 0)	;; Pointer to the buffer with value to transfer
 				(i32.const 8)	;; Pointer to input data buffer address
 				(i32.const 8)	;; Length of input data buffer
@@ -215,6 +217,7 @@
 				(i32.const 16)	;; Pointer to "callee" address.
 				(i64.const 0)	;; How much ref_time weight to devote for the execution. 0 = all.
 				(i64.const 1)	;; Supply too little proof_size weight
+				(i32.const 0xffffffff)	;; u32 max sentinel value: pass no deposit limit.
 				(i32.const 0)	;; Pointer to the buffer with value to transfer
 				(i32.const 8)	;; Pointer to input data buffer address
 				(i32.const 8)	;; Length of input data buffer
@@ -247,6 +250,7 @@
 				(i32.const 16)	;; Pointer to "callee" address.
 				(i64.const 0)	;; How much ref_time weight to devote for the execution. 0 = all.
 				(i64.const 0)	;; How much proof_size weight to devote for the execution. 0 = all.
+				(i32.const 0xffffffff)	;; u32 max sentinel value: pass no deposit limit.
 				(i32.const 0)	;; Pointer to the buffer with value to transfer
 				(i32.const 8)	;; Pointer to input data buffer address
 				(i32.const 8)	;; Length of input data buffer
