@@ -863,15 +863,12 @@ impl<Block: BlockT> Inner<Block> {
 		set_id: SetId,
 		finalized: NumberFor<Block>,
 	) -> MaybeMessage<Block> {
-		match self.local_view {
-			None => return None,
-			Some(ref mut v) =>
-				if v.last_commit_height() < Some(&finalized) {
-					v.last_commit = Some((finalized, round, set_id));
-				} else {
-					return None
-				},
-		};
+		let local_view = self.local_view.as_mut()?;
+		if local_view.last_commit_height() < Some(&finalized) {
+			local_view.last_commit = Some((finalized, round, set_id));
+		} else {
+			return None
+		}
 
 		self.multicast_neighbor_packet(false)
 	}
