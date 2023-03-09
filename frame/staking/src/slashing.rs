@@ -50,8 +50,9 @@
 //! Based on research at <https://research.web3.foundation/en/latest/polkadot/slashing/npos.html>
 
 use crate::{
-	BalanceOf, Config, Error, Exposure, NegativeImbalanceOf, Pallet, Perbill, SessionInterface,
-	SpanSlash, OffendingValidators, NominatorSlashInEra, UnappliedSlash, ValidatorSlashInEra,
+	BalanceOf, Config, Error, Exposure, NegativeImbalanceOf, NominatorSlashInEra,
+	OffendingValidators, Pallet, Perbill, SessionInterface, SpanSlash, UnappliedSlash,
+	ValidatorSlashInEra,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -239,9 +240,8 @@ pub(crate) fn compute_slash<T: Config>(
 		return None
 	}
 
-	let prior_slash_p =
-		ValidatorSlashInEra::<T>::get(&params.slash_era, params.stash)
-			.map_or(Zero::zero(), |(prior_slash_proportion, _)| prior_slash_proportion);
+	let prior_slash_p = ValidatorSlashInEra::<T>::get(&params.slash_era, params.stash)
+		.map_or(Zero::zero(), |(prior_slash_proportion, _)| prior_slash_proportion);
 
 	// compare slash proportions rather than slash values to avoid issues due to rounding
 	// error.
@@ -388,8 +388,7 @@ fn slash_nominators<T: Config>(
 			let own_slash_difference = own_slash_by_validator.saturating_sub(own_slash_prior);
 
 			let mut era_slash =
-				NominatorSlashInEra::<T>::get(&params.slash_era, stash)
-					.unwrap_or_else(Zero::zero);
+				NominatorSlashInEra::<T>::get(&params.slash_era, stash).unwrap_or_else(Zero::zero);
 			era_slash += own_slash_difference;
 			NominatorSlashInEra::<T>::insert(&params.slash_era, stash, &era_slash);
 
