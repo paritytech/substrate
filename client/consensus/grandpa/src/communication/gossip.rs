@@ -791,17 +791,12 @@ impl<Block: BlockT> Inner<Block> {
 	/// Note a round in the current set has started. Does nothing if the last
 	/// call to the function was with the same `round`.
 	fn note_round(&mut self, round: Round) -> MaybeMessage<Block> {
-		let local_view = match self.local_view {
-			None => return None,
-			Some(ref mut v) =>
-				if v.round == round {
-					// Do not send neighbor packets out if `round` has not changed ---
-					// such behavior is punishable.
-					return None
-				} else {
-					v
-				},
-		};
+		let local_view = self.local_view.as_mut()?;
+		if local_view.round == round {
+			// Do not send neighbor packets out if `round` has not changed ---
+			// such behavior is punishable.
+			return None
+		}
 
 		let set_id = local_view.set_id;
 
@@ -1195,7 +1190,7 @@ impl<Block: BlockT> Inner<Block> {
 		(neighbor_topics, action, catch_up, report)
 	}
 
-	fn multicast_neighbor_packet(&self, include_light: bool) -> MaybeMessage<Block> {
+	fn multicast_neighbor_packet(&self, force_light: bool) -> MaybeMessage<Block> {
 		self.local_view.as_ref().map(|local_view| {
 			let packet = NeighborPacket {
 				round: local_view.round,
@@ -1211,7 +1206,7 @@ impl<Block: BlockT> Inner<Block> {
 					// light clients don't participate in the full GRANDPA voter protocol
 					// and therefore don't need to be informed about all view updates unless
 					// we explicitly require it (e.g. when transitioning to a new set)
-					if info.roles.is_light() && !include_light {
+					if info.roles.is_light() && !force_light {
 						None
 					} else {
 						Some(id)
