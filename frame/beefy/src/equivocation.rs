@@ -159,8 +159,8 @@ where
 
 		let res = SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into());
 		match res {
-			Ok(_) => info!(target: LOG_TARGET, "Submitted equivocation report.",),
-			Err(e) => error!(target: LOG_TARGET, "Error submitting equivocation report: {:?}", e,),
+			Ok(_) => info!(target: LOG_TARGET, "Submitted equivocation report."),
+			Err(e) => error!(target: LOG_TARGET, "Error submitting equivocation report: {:?}", e),
 		}
 		res
 	}
