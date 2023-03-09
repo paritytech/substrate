@@ -24,6 +24,7 @@ pub fn expand_doc_only(def: &mut Def) -> proc_macro2::TokenStream {
 	let storage_viss = &def.storages.iter().map(|storage| &storage.vis).collect::<Vec<_>>();
 	let dispatchables = {
 		if let Some(call_def) = &def.call {
+			let type_impl_generics = def.type_impl_generics(Span::call_site());
 			call_def
 				.methods
 				.iter()
@@ -38,7 +39,7 @@ pub fn expand_doc_only(def: &mut Def) -> proc_macro2::TokenStream {
 
 					quote::quote!(
 						#( #[doc = #docs] )*
-						pub fn #name(#args) { unreachable!(); }
+						pub fn #name<#type_impl_generics>(#args) { unreachable!(); }
 					)
 				})
 				.collect::<proc_macro2::TokenStream>()
@@ -47,9 +48,8 @@ pub fn expand_doc_only(def: &mut Def) -> proc_macro2::TokenStream {
 		}
 	};
 
-	let type_impl_generics = def.type_impl_generics(Span::call_site());
-
 	quote::quote!(
+		/// Auto-generated docs-only module listing all defined storage types for this pallet
 		#[cfg(doc)]
 		pub mod storage_types {
 			use super::*;
@@ -57,13 +57,12 @@ pub fn expand_doc_only(def: &mut Def) -> proc_macro2::TokenStream {
 				#storage_viss use super::#storage_names;
 			)*
 		}
+
+		/// Auto-generated docs-only module listing all defined dispatchables for this pallet
 		#[cfg(doc)]
 		pub mod dispatchables {
 			use super::*;
-			pub struct Dispatchables;
-			impl<#type_impl_generics> Dispatchables {
-				#dispatchables
-			}
+			#dispatchables
 		}
 	)
 }

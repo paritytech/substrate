@@ -23,6 +23,7 @@
 pub use pallet::*;
 
 #[frame_support::pallet]
+#[allow(missing_docs)]
 pub mod pallet {
 	#[allow(unused_imports)]
 	use frame_support::pallet_prelude::*;
