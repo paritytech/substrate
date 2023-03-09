@@ -27,9 +27,7 @@
 //! Implementations of these traits may be converted to implementations of corresponding
 //! `nonfungible` traits by using the `nonfungible::ItemOf` type adapter.
 
-use crate::{
-	dispatch::{DispatchError, DispatchResult, Parameter},
-};
+use crate::dispatch::{DispatchError, DispatchResult, Parameter};
 use codec::{Decode, Encode};
 use sp_runtime::TokenError;
 use sp_std::prelude::*;
