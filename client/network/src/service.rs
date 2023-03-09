@@ -93,8 +93,6 @@ pub use behaviour::{InboundFailure, OutboundFailure, ResponseFailure};
 
 mod metrics;
 mod out_events;
-#[cfg(test)]
-mod tests;
 
 pub use libp2p::identity::{error::DecodingError, Keypair, PublicKey};
 use sc_network_common::service::NetworkRequest;
@@ -1432,10 +1430,11 @@ where
 						},
 					}
 				},
-			SwarmEvent::Behaviour(BehaviourOut::ReputationChanges { peer, changes }) =>
+			SwarmEvent::Behaviour(BehaviourOut::ReputationChanges { peer, changes }) => {
 				for change in changes {
 					self.network_service.behaviour().user_protocol().report_peer(peer, change);
-				},
+				}
+			},
 			SwarmEvent::Behaviour(BehaviourOut::PeerIdentify {
 				peer_id,
 				info:
@@ -1467,10 +1466,11 @@ where
 					.user_protocol_mut()
 					.add_default_set_discovered_nodes(iter::once(peer_id));
 			},
-			SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted) =>
+			SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted) => {
 				if let Some(metrics) = self.metrics.as_ref() {
 					metrics.kademlia_random_queries_total.inc();
-				},
+				}
+			},
 			SwarmEvent::Behaviour(BehaviourOut::NotificationStreamOpened {
 				remote,
 				protocol,

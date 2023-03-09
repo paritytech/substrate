@@ -20,6 +20,8 @@
 #[cfg(test)]
 mod block_import;
 #[cfg(test)]
+mod service;
+#[cfg(test)]
 mod sync;
 
 use std::{
