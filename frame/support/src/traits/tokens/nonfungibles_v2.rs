@@ -27,7 +27,10 @@
 //! Implementations of these traits may be converted to implementations of corresponding
 //! `nonfungible` traits by using the `nonfungible::ItemOf` type adapter.
 
-use crate::dispatch::{DispatchError, DispatchResult};
+use crate::{
+	dispatch::{DispatchError, DispatchResult},
+	traits::tokens::{CollectionId, DestroyWitness, ItemId},
+};
 use codec::{Decode, Encode};
 use sp_runtime::TokenError;
 use sp_std::prelude::*;
@@ -35,11 +38,11 @@ use sp_std::prelude::*;
 /// Trait for providing an interface to many read-only NFT-like sets of items.
 pub trait Inspect<AccountId> {
 	/// Type for identifying an item.
-	type ItemId;
+	type ItemId: ItemId;
 
 	/// Type for identifying a collection (an identifier for an independent collection of
 	/// items).
-	type CollectionId;
+	type CollectionId: CollectionId;
 
 	/// Returns the owner of `item` of `collection`, or `None` if the item doesn't exist
 	/// (or somehow has no owner).
@@ -193,7 +196,7 @@ pub trait Create<AccountId, CollectionConfig>: Inspect<AccountId> {
 /// Trait for providing the ability to destroy collections of nonfungible items.
 pub trait Destroy<AccountId>: Inspect<AccountId> {
 	/// The witness data needed to destroy an item.
-	type DestroyWitness;
+	type DestroyWitness: DestroyWitness;
 
 	/// Provide the appropriate witness data needed to destroy an item.
 	fn get_destroy_witness(collection: &Self::CollectionId) -> Option<Self::DestroyWitness>;

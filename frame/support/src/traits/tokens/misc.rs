@@ -210,6 +210,36 @@ pub trait BalanceConversion<InBalance, AssetId, OutBalance> {
 	fn to_asset_balance(balance: InBalance, asset_id: AssetId) -> Result<OutBalance, Self::Error>;
 }
 
+/// Simple amalgamation trait to collect together properties for a CollectionId under one roof.
+pub trait CollectionId:
+	FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen
+{
+}
+impl<T: FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen>
+	CollectionId for T
+{
+}
+
+/// Simple amalgamation trait to collect together properties for an ItemId under one roof.
+pub trait ItemId:
+	FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen
+{
+}
+impl<T: FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen> ItemId
+	for T
+{
+}
+
+/// Simple amalgamation trait to collect together properties for a DestroyWitness under one roof.
+pub trait DestroyWitness:
+	FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen
+{
+}
+impl<T: FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen>
+	DestroyWitness for T
+{
+}
+
 /// Trait to handle asset locking mechanism to ensure interactions with the asset can be implemented
 /// downstream to extend logic of Uniques current functionality.
 pub trait Locker<CollectionId, ItemId> {
