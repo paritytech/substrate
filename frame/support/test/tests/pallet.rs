@@ -37,6 +37,9 @@ use sp_io::{
 };
 use sp_runtime::{DispatchError, ModuleError};
 
+/// Latest stable metadata version used for testing.
+const LATEST_METADATA_VERSION: u32 = 14;
+
 pub struct SomeType1;
 impl From<SomeType1> for u64 {
 	fn from(_t: SomeType1) -> Self {
@@ -1605,8 +1608,8 @@ fn metadata_at_version() {
 	use frame_support::metadata::*;
 	use sp_core::Decode;
 
-	let metadata_v14 = Runtime::metadata();
-	let at_metadata = match Runtime::metadata_at_version(14) {
+	let metadata = Runtime::metadata();
+	let at_metadata = match Runtime::metadata_at_version(LATEST_METADATA_VERSION) {
 		Some(opaque) => {
 			let bytes = &*opaque;
 			let metadata: RuntimeMetadataPrefixed = Decode::decode(&mut &bytes[..]).unwrap();
@@ -1615,12 +1618,12 @@ fn metadata_at_version() {
 		_ => panic!("metadata has been bumped, test needs to be updated"),
 	};
 
-	assert_eq!(metadata_v14, at_metadata);
+	assert_eq!(metadata, at_metadata);
 }
 
 #[test]
 fn metadata_versions() {
-	assert_eq!(vec![14], Runtime::metadata_versions());
+	assert_eq!(vec![LATEST_METADATA_VERSION], Runtime::metadata_versions());
 }
 
 #[test]
