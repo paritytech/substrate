@@ -23,7 +23,7 @@ use frame_support::{
 	assert_noop, assert_ok,
 	dispatch::Dispatchable,
 	traits::{
-		tokens::nonfungibles_v2::{Create, Destroy, Mutate, MutateCollectionSettings},
+		tokens::nonfungibles_v2::{Destroy, Mutate},
 		Currency, Get,
 	},
 };
@@ -242,57 +242,6 @@ fn lifecycle_should_work() {
 		assert!(!ItemMetadataOf::<Test>::contains_key(0, 69));
 		assert_eq!(collections(), vec![]);
 		assert_eq!(items(), vec![]);
-	});
-}
-
-#[test]
-fn change_config_via_traits_should_work() {
-	new_test_ext().execute_with(|| {
-		Balances::make_free_balance_be(&account(1), 100);
-		Balances::make_free_balance_be(&account(2), 100);
-
-		assert_ok!(<Nfts as Create<<Test as SystemConfig>::AccountId>>::create_collection(
-			&account(1),
-			&account(1),
-		));
-		assert_eq!(collections(), vec![(account(1), 0)]);
-
-		assert_ok!(<Nfts as MutateCollectionSettings<
-			<Test as SystemConfig>::AccountId,
-			MintSettingsFor<Test>,
-			CollectionSettings,
-		>>::set_max_supply(&0, 1));
-
-		assert_noop!(
-			Nfts::mint(RuntimeOrigin::signed(account(2)), 0, 0, account(2), None),
-			Error::<Test>::NoPermission
-		);
-
-		assert_ok!(<Nfts as MutateCollectionSettings<
-			<Test as SystemConfig>::AccountId,
-			MintSettingsFor<Test>,
-			CollectionSettings,
-		>>::update_mint_settings(
-			&0, MintSettings { mint_type: MintType::Public, ..Default::default() }
-		));
-		assert_ok!(<Nfts as MutateCollectionSettings<
-			<Test as SystemConfig>::AccountId,
-			MintSettingsFor<Test>,
-			CollectionSettings,
-		>>::disable_collection_settings(
-			&0,
-			CollectionSettings::from_disabled(CollectionSetting::TransferableItems.into())
-		));
-
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(account(2)), 0, 0, account(2), None));
-		assert_noop!(
-			Nfts::transfer(RuntimeOrigin::signed(account(2)), 0, 0, account(1)),
-			Error::<Test>::ItemsNonTransferable
-		);
-		assert_noop!(
-			Nfts::mint(RuntimeOrigin::signed(account(2)), 0, 1, account(2), None),
-			Error::<Test>::MaxSupplyReached
-		);
 	});
 }
 

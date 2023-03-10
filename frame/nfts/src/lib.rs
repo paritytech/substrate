@@ -1086,8 +1086,7 @@ pub mod pallet {
 
 		/// Disallows specified settings for the whole collection.
 		///
-		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Freezer of
-		/// the `collection`.
+		/// Origin must be Signed and the sender should be the Freezer of the `collection`.
 		///
 		/// - `collection`: The collection to be locked.
 		/// - `lock_settings`: The settings to be locked.
@@ -1103,10 +1102,8 @@ pub mod pallet {
 			collection: T::CollectionId,
 			lock_settings: CollectionSettings,
 		) -> DispatchResult {
-			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
-				.map(|_| None)
-				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
-			Self::do_lock_collection(maybe_check_origin, collection, lock_settings)
+			let origin = ensure_signed(origin)?;
+			Self::do_lock_collection(origin, collection, lock_settings)
 		}
 
 		/// Change the Owner of a collection.
@@ -1655,7 +1652,11 @@ pub mod pallet {
 		pub fn update_mint_settings(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			mint_settings: MintSettingsFor<T, I>,
+			mint_settings: MintSettings<
+				BalanceOf<T, I>,
+				<T as SystemConfig>::BlockNumber,
+				T::CollectionId,
+			>,
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)

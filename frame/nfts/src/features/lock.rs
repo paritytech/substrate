@@ -20,16 +20,14 @@ use frame_support::pallet_prelude::*;
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub(crate) fn do_lock_collection(
-		maybe_check_origin: Option<T::AccountId>,
+		origin: T::AccountId,
 		collection: T::CollectionId,
 		lock_settings: CollectionSettings,
 	) -> DispatchResult {
-		if let Some(check_origin) = &maybe_check_origin {
-			ensure!(
-				Self::has_role(&collection, &check_origin, CollectionRole::Freezer),
-				Error::<T, I>::NoPermission
-			);
-		}
+		ensure!(
+			Self::has_role(&collection, &origin, CollectionRole::Freezer),
+			Error::<T, I>::NoPermission
+		);
 		ensure!(
 			!lock_settings.is_disabled(CollectionSetting::DepositRequired),
 			Error::<T, I>::WrongSetting

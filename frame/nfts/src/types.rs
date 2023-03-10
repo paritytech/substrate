@@ -61,8 +61,6 @@ pub(super) type CollectionConfigFor<T, I = ()> = CollectionConfig<
 	<T as SystemConfig>::BlockNumber,
 	<T as Config<I>>::CollectionId,
 >;
-pub(super) type MintSettingsFor<T, I = ()> =
-	MintSettings<BalanceOf<T, I>, <T as SystemConfig>::BlockNumber, <T as Config<I>>::CollectionId>;
 pub(super) type PreSignedMintOf<T, I = ()> = PreSignedMint<
 	<T as Config<I>>::CollectionId,
 	<T as Config<I>>::ItemId,

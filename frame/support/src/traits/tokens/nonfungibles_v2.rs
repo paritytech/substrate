@@ -181,8 +181,20 @@ pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
 }
 
 /// Trait for providing the ability to create collections of nonfungible items.
-pub trait Create<AccountId>: Inspect<AccountId> {
-	/// Create a `collection` of nonfungible items to be owned by `who` and managed by `admin`.
+pub trait Create<AccountId, CollectionConfig>: Inspect<AccountId> {
+	/// Create a `collection` of nonfungible items to be owned by `who` and managed by `admin` with
+	/// collection settings provided in `config`.
+	fn create_collection(
+		who: &AccountId,
+		admin: &AccountId,
+		config: &CollectionConfig,
+	) -> Result<Self::CollectionId, DispatchError>;
+}
+
+/// A simplified trait for providing the ability to create collections of nonfungible items.
+pub trait CreateSimplified<AccountId>: Inspect<AccountId> {
+	/// Create a `collection` of nonfungible items to be owned by `who` and managed by `admin` with
+	/// default collection settings.
 	fn create_collection(
 		who: &AccountId,
 		admin: &AccountId,
@@ -326,38 +338,6 @@ pub trait Mutate<AccountId, ItemConfig>: Inspect<AccountId> {
 		key: &K,
 	) -> DispatchResult {
 		key.using_encoded(|k| Self::clear_collection_attribute(collection, k))
-	}
-}
-
-/// Trait for providing the ability to change the settings of the collections of nonfungible items.
-pub trait MutateCollectionSettings<AccountId, MintSettings, CollectionSettings>:
-	Inspect<AccountId>
-{
-	/// Set the maximum number of items a `collection` could have.
-	///
-	/// By default, this is not a supported operation.
-	fn set_max_supply(_collection: &Self::CollectionId, _max_supply: u32) -> DispatchResult {
-		Err(TokenError::Unsupported.into())
-	}
-
-	/// Update mint settings for the `collection`.
-	///
-	/// By default, this is not a supported operation.
-	fn update_mint_settings(
-		_collection: &Self::CollectionId,
-		_mint_settings: MintSettings,
-	) -> DispatchResult {
-		Err(TokenError::Unsupported.into())
-	}
-
-	/// Disable `collection` settings.
-	///
-	/// By default, this is not a supported operation.
-	fn disable_collection_settings(
-		_collection: &Self::CollectionId,
-		_disable_settings: CollectionSettings,
-	) -> DispatchResult {
-		Err(TokenError::Unsupported.into())
 	}
 }
 
