@@ -25,8 +25,6 @@ use ark_ec::{
 	models::CurveConfig,
 	pairing::{MillerLoopOutput, Pairing},
 };
-use ark_serialize::{CanonicalDeserialize, Compress, Validate};
-use ark_std::io::Cursor;
 use sp_std::vec::Vec;
 
 /// Compute multi miller loop through arkworks
@@ -75,27 +73,11 @@ pub fn msm_g1(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 pub fn msm_g2(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 	let bases: Vec<_> = bases
 		.iter()
-		.map(|a| {
-			let cursor = Cursor::new(a);
-			<Bls12_377 as Pairing>::G2Affine::deserialize_with_mode(
-				cursor,
-				Compress::No,
-				Validate::No,
-			)
-			.unwrap()
-		})
+		.map(|a| deserialize_argument::<<Bls12_377 as Pairing>::G2Affine>(a))
 		.collect();
 	let scalars: Vec<_> = scalars
 		.iter()
-		.map(|a| {
-			let cursor = Cursor::new(a);
-			<g2::Config as CurveConfig>::ScalarField::deserialize_with_mode(
-				cursor,
-				Compress::No,
-				Validate::No,
-			)
-			.unwrap()
-		})
+		.map(|a| deserialize_argument::<<g2::Config as CurveConfig>::ScalarField>(a))
 		.collect();
 
 	let result =

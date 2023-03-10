@@ -21,10 +21,8 @@
 
 use crate::utils::{deserialize_argument, serialize_result};
 use ark_ec::{
-	models::CurveConfig,
-	short_weierstrass::{Affine as SWAffine},
-	twisted_edwards::{Affine as TEAffine},
-	VariableBaseMSM,
+	models::CurveConfig, short_weierstrass::Affine as SWAffine,
+	twisted_edwards::Affine as TEAffine, VariableBaseMSM,
 };
 use ark_ed_on_bls12_381::{EdwardsProjective, JubjubConfig, SWProjective};
 use sp_std::vec::Vec;

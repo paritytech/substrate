@@ -20,9 +20,7 @@
 #![warn(missing_docs)]
 
 use crate::utils::{deserialize_argument, serialize_result};
-use ark_ec::{
-	models::CurveConfig, twisted_edwards, VariableBaseMSM,
-};
+use ark_ec::{models::CurveConfig, twisted_edwards, VariableBaseMSM};
 use ark_ed_on_bls12_377::{EdwardsConfig, EdwardsProjective};
 use sp_std::vec::Vec;
 
