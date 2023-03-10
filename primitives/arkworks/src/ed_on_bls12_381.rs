@@ -19,7 +19,7 @@
 
 #![warn(missing_docs)]
 
-use crate::utils::serialize_result;
+use crate::utils::{deserialize_argument, serialize_result};
 use ark_ec::{
 	models::CurveConfig,
 	short_weierstrass::{Affine as SWAffine, SWCurveConfig},
@@ -28,21 +28,12 @@ use ark_ec::{
 	VariableBaseMSM,
 };
 use ark_ed_on_bls12_381::{EdwardsProjective, JubjubConfig, SWProjective};
-use ark_serialize::{CanonicalDeserialize, Compress, Validate};
-use ark_std::io::Cursor;
 use sp_std::vec::Vec;
 
 /// Compute a scalar multiplication on G2 through arkworks
 pub fn sw_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-	let cursor = Cursor::new(base);
-	let base = ark_ec::short_weierstrass::Projective::<JubjubConfig>::deserialize_with_mode(
-		cursor,
-		Compress::No,
-		Validate::No,
-	)
-	.unwrap();
-	let cursor = Cursor::new(scalar);
-	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::No, Validate::No).unwrap();
+	let base = deserialize_argument::<ark_ec::short_weierstrass::Projective<JubjubConfig>>(&base);
+	let scalar = deserialize_argument::<Vec<u64>>(&scalar);
 
 	let result = <JubjubConfig as SWCurveConfig>::mul_projective(&base, &scalar);
 
@@ -51,11 +42,8 @@ pub fn sw_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 
 /// Compute a scalar multiplication through arkworks
 pub fn sw_mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-	let cursor = Cursor::new(base);
-	let base = SWAffine::<JubjubConfig>::deserialize_with_mode(cursor, Compress::No, Validate::No)
-		.unwrap();
-	let cursor = Cursor::new(scalar);
-	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::No, Validate::No).unwrap();
+	let base = deserialize_argument::<SWAffine<JubjubConfig>>(&base);
+	let scalar = deserialize_argument::<Vec<u64>>(&scalar);
 
 	let result = <JubjubConfig as SWCurveConfig>::mul_affine(&base, &scalar);
 
@@ -64,15 +52,8 @@ pub fn sw_mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 
 /// Compute a scalar multiplication on G2 through arkworks
 pub fn te_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-	let cursor = Cursor::new(base);
-	let base = twisted_edwards::Projective::<JubjubConfig>::deserialize_with_mode(
-		cursor,
-		Compress::No,
-		Validate::No,
-	)
-	.unwrap();
-	let cursor = Cursor::new(scalar);
-	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::No, Validate::No).unwrap();
+	let base = deserialize_argument::<twisted_edwards::Projective<JubjubConfig>>(&base);
+	let scalar = deserialize_argument::<Vec<u64>>(&scalar);
 
 	let result = <JubjubConfig as TECurveConfig>::mul_projective(&base, &scalar);
 
@@ -81,11 +62,8 @@ pub fn te_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 
 /// Compute a scalar multiplication through arkworks
 pub fn te_mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-	let cursor = Cursor::new(base);
-	let base = TEAffine::<JubjubConfig>::deserialize_with_mode(cursor, Compress::No, Validate::No)
-		.unwrap();
-	let cursor = Cursor::new(scalar);
-	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::No, Validate::No).unwrap();
+	let base = deserialize_argument::<TEAffine<JubjubConfig>>(&base);
+	let scalar = deserialize_argument::<Vec<u64>>(&scalar);
 
 	let result = <JubjubConfig as TECurveConfig>::mul_affine(&base, &scalar);
 
@@ -96,23 +74,11 @@ pub fn te_mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 pub fn te_msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 	let bases: Vec<_> = bases
 		.iter()
-		.map(|a| {
-			let cursor = Cursor::new(a);
-			TEAffine::<JubjubConfig>::deserialize_with_mode(cursor, Compress::No, Validate::No)
-				.unwrap()
-		})
+		.map(|a| deserialize_argument::<TEAffine<JubjubConfig>>(a))
 		.collect();
 	let scalars: Vec<_> = scalars
 		.iter()
-		.map(|a| {
-			let cursor = Cursor::new(a);
-			<JubjubConfig as CurveConfig>::ScalarField::deserialize_with_mode(
-				cursor,
-				Compress::No,
-				Validate::No,
-			)
-			.unwrap()
-		})
+		.map(|a| deserialize_argument::<<JubjubConfig as CurveConfig>::ScalarField>(a))
 		.collect();
 
 	let result = <EdwardsProjective as VariableBaseMSM>::msm(&bases, &scalars).unwrap();
@@ -124,23 +90,11 @@ pub fn te_msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 pub fn sw_msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 	let bases: Vec<_> = bases
 		.iter()
-		.map(|a| {
-			let cursor = Cursor::new(a);
-			SWAffine::<JubjubConfig>::deserialize_with_mode(cursor, Compress::No, Validate::No)
-				.unwrap()
-		})
+		.map(|a| deserialize_argument::<SWAffine<JubjubConfig>>(a))
 		.collect();
 	let scalars: Vec<_> = scalars
 		.iter()
-		.map(|a| {
-			let cursor = Cursor::new(a);
-			<JubjubConfig as CurveConfig>::ScalarField::deserialize_with_mode(
-				cursor,
-				Compress::No,
-				Validate::No,
-			)
-			.unwrap()
-		})
+		.map(|a| deserialize_argument::<<JubjubConfig as CurveConfig>::ScalarField>(a))
 		.collect();
 
 	let result = <SWProjective as VariableBaseMSM>::msm(&bases, &scalars).unwrap();
