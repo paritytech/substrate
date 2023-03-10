@@ -87,17 +87,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// - `collection_id`: A collection to check the role in.
 	/// - `role`: A role to find the account for.
 	///
-	/// Returns `T::AccountId`.
+	/// Returns `Some(T::AccountId)` if the record was found, `None` otherwise.
 	pub(crate) fn find_account_by_role(
 		collection_id: &T::CollectionId,
 		role: CollectionRole,
 	) -> Option<T::AccountId> {
-		CollectionRoleOf::<T, I>::iter_prefix(&collection_id)
-			.into_iter()
-			.filter_map(
-				|(account, roles)| if roles.has_role(role) { Some(account.clone()) } else { None },
-			)
-			.next()
+		CollectionRoleOf::<T, I>::iter_prefix(&collection_id).into_iter().find_map(
+			|(account, roles)| if roles.has_role(role) { Some(account.clone()) } else { None },
+		)
 	}
 
 	/// Groups provided roles by account, given one account could have multiple roles.
