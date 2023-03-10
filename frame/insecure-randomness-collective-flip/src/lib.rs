@@ -172,7 +172,7 @@ mod tests {
 
 	use frame_support::{
 		parameter_types,
-		traits::{ConstU32, ConstU64, OnInitialize, Randomness},
+		traits::{ConstU32, ConstU64, Hooks, Randomness},
 	};
 	use frame_system::limits;
 
