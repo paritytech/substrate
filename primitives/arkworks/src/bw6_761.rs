@@ -20,11 +20,10 @@
 #![warn(missing_docs)]
 
 use crate::utils::{deserialize_argument, serialize_result};
-use ark_bw6_761::{G1Affine, G1Projective, G2Affine, G2Projective, BW6_761};
+use ark_bw6_761::BW6_761;
 use ark_ec::{
 	models::CurveConfig,
 	pairing::{MillerLoopOutput, Pairing},
-	short_weierstrass::SWCurveConfig,
 };
 use sp_std::vec::Vec;
 
@@ -49,46 +48,6 @@ pub fn final_exponentiation(target: Vec<u8>) -> Vec<u8> {
 	let target = deserialize_argument::<<BW6_761 as Pairing>::TargetField>(&target);
 
 	let result = BW6_761::final_exponentiation(MillerLoopOutput(target)).unwrap().0;
-
-	serialize_result(result)
-}
-
-/// Compute a scalar multiplication on G2 through arkworks
-pub fn mul_projective_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-	let base = deserialize_argument::<G2Projective>(&base);
-	let scalar = deserialize_argument::<Vec<u64>>(&scalar);
-
-	let result = <ark_bw6_761::g2::Config as SWCurveConfig>::mul_projective(&base, &scalar);
-
-	serialize_result(result)
-}
-
-/// Compute a scalar multiplication on G2 through arkworks
-pub fn mul_projective_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-	let base = deserialize_argument::<G1Projective>(&base);
-	let scalar = deserialize_argument::<Vec<u64>>(&scalar);
-
-	let result = <ark_bw6_761::g1::Config as SWCurveConfig>::mul_projective(&base, &scalar);
-
-	serialize_result(result)
-}
-
-/// Compute a scalar multiplication on G2 through arkworks
-pub fn mul_affine_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-	let base = deserialize_argument::<G1Affine>(&base);
-	let scalar = deserialize_argument::<Vec<u64>>(&scalar);
-
-	let result = <ark_bw6_761::g1::Config as SWCurveConfig>::mul_affine(&base, &scalar);
-
-	serialize_result(result)
-}
-
-/// Compute a scalar multiplication on G2 through arkworks
-pub fn mul_affine_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-	let base = deserialize_argument::<G2Affine>(&base);
-	let scalar = deserialize_argument::<Vec<u64>>(&scalar);
-
-	let result = <ark_bw6_761::g2::Config as SWCurveConfig>::mul_affine(&base, &scalar);
 
 	serialize_result(result)
 }

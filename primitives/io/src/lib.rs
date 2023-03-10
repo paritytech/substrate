@@ -1135,26 +1135,6 @@ pub trait EllipticCurves {
 		sp_arkworks::bls12_381::final_exponentiation(f12)
 	}
 
-	/// Compute a projective multiplication on G1 for bls12_381
-	fn bls12_381_mul_projective_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-		sp_arkworks::bls12_381::mul_projective_g1(base, scalar)
-	}
-
-	/// Compute a projective multiplication on G1 for bls12_381
-	fn bls12_381_mul_affine_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-		sp_arkworks::bls12_381::mul_affine_g1(base, scalar)
-	}
-
-	/// Compute a projective multiplication on G2 for bls12_381
-	fn bls12_381_mul_projective_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-		sp_arkworks::bls12_381::mul_projective_g2(base, scalar)
-	}
-
-	/// Compute a affine multiplication on G2 for bls12_381
-	fn bls12_381_mul_affine_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-		sp_arkworks::bls12_381::mul_affine_g2(base, scalar)
-	}
-
 	/// Compute a msm on G1 for bls12_381
 	fn bls12_381_msm_g1(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 		sp_arkworks::bls12_381::msm_g1(bases, scalars)
@@ -1173,26 +1153,6 @@ pub trait EllipticCurves {
 	/// Compute a final exponentiation for bls12_377
 	fn bls12_377_final_exponentiation(f12: Vec<u8>) -> Vec<u8> {
 		sp_arkworks::bls12_377::final_exponentiation(f12)
-	}
-
-	/// Compute a projective multiplication on G1 for bls12_377
-	fn bls12_377_mul_projective_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-		sp_arkworks::bls12_377::mul_projective_g1(base, scalar)
-	}
-
-	/// Compute a affine multiplication on G1 for bls12_377
-	fn bls12_377_mul_affine_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-		sp_arkworks::bls12_377::mul_affine_g1(base, scalar)
-	}
-
-	/// Compute a projective multiplication on G2 for bls12_377
-	fn bls12_377_mul_projective_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-		sp_arkworks::bls12_377::mul_projective_g2(base, scalar)
-	}
-
-	/// Compute a affine multiplication on G2 for bls12_377
-	fn bls12_377_mul_affine_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-		sp_arkworks::bls12_377::mul_affine_g2(base, scalar)
 	}
 
 	/// Compute a msm on G1 for bls12_377
@@ -1215,26 +1175,6 @@ pub trait EllipticCurves {
 		sp_arkworks::bw6_761::final_exponentiation(f12)
 	}
 
-	/// Compute a projective multiplication on G1 for bw6_761
-	fn bw6_761_mul_projective_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-		sp_arkworks::bw6_761::mul_projective_g1(base, scalar)
-	}
-
-	/// Compute a affine multiplication on G1 for bw6_761
-	fn bw6_761_mul_affine_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-		sp_arkworks::bw6_761::mul_affine_g1(base, scalar)
-	}
-
-	/// Compute a projective multiplication on G2 for bw6_761
-	fn bw6_761_mul_projective_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-		sp_arkworks::bw6_761::mul_projective_g2(base, scalar)
-	}
-
-	/// Compute a affine multiplication on G2 for bw6_761
-	fn bw6_761_mul_affine_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-		sp_arkworks::bw6_761::mul_affine_g2(base, scalar)
-	}
-
 	/// Compute a msm on G1 for bw6_761
 	fn bw6_761_msm_g1(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
 		sp_arkworks::bw6_761::msm_g1(bases, bigints)
@@ -1245,26 +1185,6 @@ pub trait EllipticCurves {
 		sp_arkworks::bw6_761::msm_g2(bases, bigints)
 	}
 
-	/// Compute a short weierstrass affine multiplication on ed_on_bls12_381
-	fn ed_on_bls12_381_sw_mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-		sp_arkworks::ed_on_bls12_381::sw_mul_affine(base, scalar)
-	}
-
-	/// Compute twisted edwards projective multiplication on ed_on_bls12_381
-	fn ed_on_bls12_381_te_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-		sp_arkworks::ed_on_bls12_381::te_mul_projective(base, scalar)
-	}
-
-	/// Compute twisted edwards affine multiplication on ed_on_bls12_381
-	fn ed_on_bls12_381_te_mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-		sp_arkworks::ed_on_bls12_381::te_mul_affine(base, scalar)
-	}
-
-	/// Compute short weierstrass projective multiplication on ed_on_bls12_381
-	fn ed_on_bls12_381_sw_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-		sp_arkworks::ed_on_bls12_381::sw_mul_projective(base, scalar)
-	}
-
 	/// Compute twisted edwards msm on ed_on_bls12_381
 	fn ed_on_bls12_381_te_msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 		sp_arkworks::ed_on_bls12_381::te_msm(bases, scalars)
@@ -1273,16 +1193,6 @@ pub trait EllipticCurves {
 	/// Compute short weierstrass msm on ed_on_bls12_381
 	fn ed_on_bls12_381_sw_msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 		sp_arkworks::ed_on_bls12_381::sw_msm(bases, scalars)
-	}
-
-	/// Compute affine multiplication on ed_on_bls12_377
-	fn ed_on_bls12_377_mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-		sp_arkworks::ed_on_bls12_377::mul_affine(base, scalar)
-	}
-
-	/// Compute projective multiplication on ed_on_bls12_377
-	fn ed_on_bls12_377_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-		sp_arkworks::ed_on_bls12_377::mul_projective(base, scalar)
 	}
 
 	/// Compute msm on ed_on_bls12_377

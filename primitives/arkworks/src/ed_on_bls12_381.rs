@@ -22,53 +22,12 @@
 use crate::utils::{deserialize_argument, serialize_result};
 use ark_ec::{
 	models::CurveConfig,
-	short_weierstrass::{Affine as SWAffine, SWCurveConfig},
-	twisted_edwards,
-	twisted_edwards::{Affine as TEAffine, TECurveConfig},
+	short_weierstrass::{Affine as SWAffine},
+	twisted_edwards::{Affine as TEAffine},
 	VariableBaseMSM,
 };
 use ark_ed_on_bls12_381::{EdwardsProjective, JubjubConfig, SWProjective};
 use sp_std::vec::Vec;
-
-/// Compute a scalar multiplication on G2 through arkworks
-pub fn sw_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-	let base = deserialize_argument::<ark_ec::short_weierstrass::Projective<JubjubConfig>>(&base);
-	let scalar = deserialize_argument::<Vec<u64>>(&scalar);
-
-	let result = <JubjubConfig as SWCurveConfig>::mul_projective(&base, &scalar);
-
-	serialize_result(result)
-}
-
-/// Compute a scalar multiplication through arkworks
-pub fn sw_mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-	let base = deserialize_argument::<SWAffine<JubjubConfig>>(&base);
-	let scalar = deserialize_argument::<Vec<u64>>(&scalar);
-
-	let result = <JubjubConfig as SWCurveConfig>::mul_affine(&base, &scalar);
-
-	serialize_result(result)
-}
-
-/// Compute a scalar multiplication on G2 through arkworks
-pub fn te_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-	let base = deserialize_argument::<twisted_edwards::Projective<JubjubConfig>>(&base);
-	let scalar = deserialize_argument::<Vec<u64>>(&scalar);
-
-	let result = <JubjubConfig as TECurveConfig>::mul_projective(&base, &scalar);
-
-	serialize_result(result)
-}
-
-/// Compute a scalar multiplication through arkworks
-pub fn te_mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-	let base = deserialize_argument::<TEAffine<JubjubConfig>>(&base);
-	let scalar = deserialize_argument::<Vec<u64>>(&scalar);
-
-	let result = <JubjubConfig as TECurveConfig>::mul_affine(&base, &scalar);
-
-	serialize_result(result)
-}
 
 /// Compute a multi scalar multiplication on G! through arkworks
 pub fn te_msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {

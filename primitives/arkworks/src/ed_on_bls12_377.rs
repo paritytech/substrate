@@ -21,30 +21,10 @@
 
 use crate::utils::{deserialize_argument, serialize_result};
 use ark_ec::{
-	models::CurveConfig, twisted_edwards, twisted_edwards::TECurveConfig, VariableBaseMSM,
+	models::CurveConfig, twisted_edwards, VariableBaseMSM,
 };
 use ark_ed_on_bls12_377::{EdwardsConfig, EdwardsProjective};
 use sp_std::vec::Vec;
-
-/// Compute a scalar multiplication on G2 through arkworks
-pub fn mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-	let base = deserialize_argument::<twisted_edwards::Projective<EdwardsConfig>>(&base);
-	let scalar = deserialize_argument::<Vec<u64>>(&scalar);
-
-	let result = <EdwardsConfig as TECurveConfig>::mul_projective(&base, &scalar);
-
-	serialize_result(result)
-}
-
-/// Compute a scalar multiplication through arkworks
-pub fn mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-	let base = deserialize_argument::<twisted_edwards::Affine<EdwardsConfig>>(&base);
-	let scalar = deserialize_argument::<Vec<u64>>(&scalar);
-
-	let result = <EdwardsConfig as TECurveConfig>::mul_affine(&base, &scalar);
-
-	serialize_result(result)
-}
 
 /// Compute a multi scalar multiplication on G! through arkworks
 pub fn msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
