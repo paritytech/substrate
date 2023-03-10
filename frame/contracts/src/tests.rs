@@ -37,7 +37,7 @@ use frame_support::{
 	storage::child,
 	traits::{
 		ConstU32, ConstU64, Contains, Currency, ExistenceRequirement, Get, LockableCurrency,
-		OnIdle, OnInitialize, ReservableCurrency, WithdrawReasons,
+		Hooks, ReservableCurrency, WithdrawReasons,
 	},
 	weights::{constants::WEIGHT_REF_TIME_PER_SECOND, Weight},
 };

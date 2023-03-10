@@ -22,15 +22,16 @@ use frame_support::{
 	pallet_prelude::*,
 	storage::migration,
 	storage_alias,
-	traits::{Get, OnRuntimeUpgrade},
+	traits::{Get, Hooks},
 	Identity, Twox64Concat,
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_runtime::traits::Saturating;
 use sp_std::{marker::PhantomData, prelude::*};
 
 /// Performs all necessary migrations based on `StorageVersion`.
 pub struct Migration<T: Config>(PhantomData<T>);
-impl<T: Config> OnRuntimeUpgrade for Migration<T> {
+impl<T: Config> Hooks<BlockNumberFor<T>> for Migration<T> {
 	fn on_runtime_upgrade() -> Weight {
 		let version = <Pallet<T>>::on_chain_storage_version();
 		let mut weight = Weight::zero();
