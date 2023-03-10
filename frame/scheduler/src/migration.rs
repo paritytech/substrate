@@ -18,7 +18,8 @@
 //! Migrations for the scheduler pallet.
 
 use super::*;
-use frame_support::traits::OnRuntimeUpgrade;
+use frame_support::traits::Hooks;
+use frame_system::pallet_prelude::BlockNumberFor;
 
 /// The log target.
 const TARGET: &'static str = "runtime::scheduler::migration";
@@ -95,7 +96,7 @@ pub mod v3 {
 	/// Migrate the scheduler pallet from V3 to V4.
 	pub struct MigrateToV4<T>(sp_std::marker::PhantomData<T>);
 
-	impl<T: Config<Hash = PreimageHash>> OnRuntimeUpgrade for MigrateToV4<T> {
+	impl<T: Config<Hash = PreimageHash>> Hooks<BlockNumberFor<T>> for MigrateToV4<T> {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 			assert_eq!(StorageVersion::get::<Pallet<T>>(), 3, "Can only upgrade from version 3");
@@ -208,7 +209,7 @@ pub mod v4 {
 	/// <https://github.com/paritytech/substrate/pull/12989> since it piles up `None`-only agendas. This does not modify the pallet version.
 	pub struct CleanupAgendas<T>(sp_std::marker::PhantomData<T>);
 
-	impl<T: Config> OnRuntimeUpgrade for CleanupAgendas<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>> for CleanupAgendas<T> {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 			assert_eq!(

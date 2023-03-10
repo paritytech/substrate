@@ -23,7 +23,7 @@ use crate as scheduler;
 use frame_support::{
 	ord_parameter_types, parameter_types,
 	traits::{
-		ConstU32, ConstU64, Contains, EitherOfDiverse, EqualPrivilegeOnly, OnFinalize, OnInitialize,
+		ConstU32, ConstU64, Contains, EitherOfDiverse, EqualPrivilegeOnly, Hooks,
 	},
 	weights::constants::RocksDbWeight,
 };

@@ -23,7 +23,7 @@ use crate::mock::{
 };
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
-	traits::{Contains, GetStorageVersion, OnInitialize, QueryPreimage, StorePreimage},
+	traits::{Contains, GetStorageVersion, Hooks, QueryPreimage, StorePreimage},
 	Hashable,
 };
 use sp_runtime::traits::Hash;
