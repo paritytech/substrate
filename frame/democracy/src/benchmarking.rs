@@ -22,7 +22,7 @@ use super::*;
 use frame_benchmarking::v1::{account, benchmarks, whitelist_account, BenchmarkError};
 use frame_support::{
 	assert_noop, assert_ok,
-	traits::{Currency, EnsureOrigin, Get, OnInitialize, UnfilteredDispatchable},
+	traits::{Currency, EnsureOrigin, Get, Hooks, UnfilteredDispatchable},
 };
 use frame_system::RawOrigin;
 use sp_core::H256;

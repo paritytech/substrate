@@ -18,7 +18,8 @@
 //! Storage migrations for the preimage pallet.
 
 use super::*;
-use frame_support::{pallet_prelude::*, storage_alias, traits::OnRuntimeUpgrade, BoundedVec};
+use frame_support::{pallet_prelude::*, storage_alias, traits::Hooks, BoundedVec};
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::H256;
 
 /// The log target.
@@ -59,7 +60,7 @@ pub mod v1 {
 	/// Migration for translating bare `Hash`es into `Bounded<Call>`s.
 	pub struct Migration<T>(sp_std::marker::PhantomData<T>);
 
-	impl<T: Config + frame_system::Config<Hash = H256>> OnRuntimeUpgrade for Migration<T> {
+	impl<T: Config + frame_system::Config<Hash = H256>> Hooks<BlockNumberFor<T>> for Migration<T> {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 			assert_eq!(StorageVersion::get::<Pallet<T>>(), 0, "can only upgrade from version 0");
