@@ -22,7 +22,7 @@ use frame_support::{
 	construct_runtime, parameter_types,
 	sp_io::TestExternalities,
 	traits::{
-		ConstU16, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, OnFinalize, OnInitialize,
+		ConstU16, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, Hooks,
 	},
 	BasicExternalities,
 };

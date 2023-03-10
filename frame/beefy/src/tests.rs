@@ -28,7 +28,7 @@ use sp_runtime::DigestItem;
 use frame_support::{
 	assert_err, assert_ok,
 	dispatch::{GetDispatchInfo, Pays},
-	traits::{Currency, KeyOwnerProofSystem, OnInitialize},
+	traits::{Currency, KeyOwnerProofSystem, Hooks},
 };
 
 use crate::{mock::*, Call, Config, Error, Weight, WeightInfo};
