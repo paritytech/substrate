@@ -29,7 +29,7 @@ use sp_std::{prelude::*, vec};
 use frame_benchmarking::v1::benchmarks;
 use frame_support::{
 	codec::Decode,
-	traits::{Get, KeyOwnerProofSystem, OnInitialize},
+	traits::{Get, KeyOwnerProofSystem, Hooks},
 };
 use frame_system::RawOrigin;
 use pallet_session::{historical::Pallet as Historical, Pallet as Session, *};
@@ -46,7 +46,7 @@ pub trait Config:
 {
 }
 
-impl<T: Config> OnInitialize<T::BlockNumber> for Pallet<T> {
+impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
 	fn on_initialize(n: T::BlockNumber) -> frame_support::weights::Weight {
 		pallet_session::Pallet::<T>::on_initialize(n)
 	}

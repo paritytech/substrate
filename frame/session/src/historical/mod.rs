@@ -381,7 +381,7 @@ pub(crate) mod tests {
 	use sp_runtime::{key_types::DUMMY, testing::UintAuthorityId};
 
 	use frame_support::{
-		traits::{GenesisBuild, KeyOwnerProofSystem, OnInitialize},
+		traits::{GenesisBuild, KeyOwnerProofSystem, Hooks},
 		BasicExternalities,
 	};
 

@@ -31,7 +31,7 @@ use sp_runtime::testing::UintAuthorityId;
 
 use frame_support::{
 	assert_noop, assert_ok,
-	traits::{ConstU64, OnInitialize},
+	traits::{ConstU64, Hooks},
 };
 
 fn initialize_block(block: u64) {
