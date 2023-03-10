@@ -26,6 +26,7 @@ mod crate_version;
 mod debug_no_bound;
 mod default_no_bound;
 mod dummy_part_checker;
+mod interface;
 mod key_prefix;
 mod match_and_insert;
 mod pallet;
@@ -1358,4 +1359,10 @@ pub fn validate_unsigned(_: TokenStream, _: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn origin(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
+}
+
+/// TODO: Docs
+#[proc_macro_attribute]
+pub fn interface(attr: TokenStream, input: TokenStream) -> TokenStream {
+	interface::interface(attr, input)
 }
