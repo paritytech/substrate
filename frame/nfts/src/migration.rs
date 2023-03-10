@@ -91,10 +91,9 @@ pub mod v1 {
 
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-			ensure!(
-				Pallet::<T>::current_storage_version() > Pallet::<T>::on_chain_storage_version(),
-				"the on_chain version is equal or more than the current one"
-			);
+			let current_version = Pallet::<T>::current_storage_version();
+			let onchain_version = Pallet::<T>::on_chain_storage_version();
+			ensure!(onchain_version == 0 && current_version == 1, "migration from version 0 to 1.");
 			let prev_count = Collection::<T>::iter().count();
 			Ok((prev_count as u32).encode())
 		}
