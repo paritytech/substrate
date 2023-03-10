@@ -1988,7 +1988,7 @@ benchmarks! {
 	// Only the overhead of calling the function itself with minimal arguments.
 	#[pov_mode = Measured]
 	seal_hash_sha2_256 {
-		let r in 0 .. 1;
+		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::hasher(
 			"seal_hash_sha2_256", r * API_BENCHMARK_BATCH_SIZE, 0,
 		), vec![])?;
@@ -2008,7 +2008,7 @@ benchmarks! {
 	// Only the overhead of calling the function itself with minimal arguments.
 	#[pov_mode = Measured]
 	seal_hash_keccak_256 {
-		let r in 0 .. 1;
+		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::hasher(
 			"seal_hash_keccak_256", r * API_BENCHMARK_BATCH_SIZE, 0,
 		), vec![])?;
@@ -2028,7 +2028,7 @@ benchmarks! {
 	// Only the overhead of calling the function itself with minimal arguments.
 	#[pov_mode = Measured]
 	seal_hash_blake2_256 {
-		let r in 0 .. 1;
+		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::hasher(
 			"seal_hash_blake2_256", r * API_BENCHMARK_BATCH_SIZE, 0,
 		), vec![])?;
@@ -2048,7 +2048,7 @@ benchmarks! {
 	// Only the overhead of calling the function itself with minimal arguments.
 	#[pov_mode = Measured]
 	seal_hash_blake2_128 {
-		let r in 0 .. 1;
+		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::hasher(
 			"seal_hash_blake2_128", r * API_BENCHMARK_BATCH_SIZE, 0,
 		), vec![])?;
@@ -2069,7 +2069,7 @@ benchmarks! {
 	// It generates different private keys and signatures for the message "Hello world".
 	#[pov_mode = Measured]
 	seal_ecdsa_recover {
-		let r in 0 .. 1;
+		let r in 0 .. API_BENCHMARK_BATCHES;
 
 		let message_hash = sp_io::hashing::blake2_256("Hello world".as_bytes());
 		let key_type = sp_core::crypto::KeyTypeId(*b"code");
@@ -2118,7 +2118,7 @@ benchmarks! {
 	// generated different ECDSA keys.
 	#[pov_mode = Measured]
 	seal_ecdsa_to_eth_address {
-		let r in 0 .. 1;
+		let r in 0 .. API_BENCHMARK_BATCHES;
 		let key_type = sp_core::crypto::KeyTypeId(*b"code");
 		let pub_keys_bytes = (0..r * API_BENCHMARK_BATCH_SIZE)
 			.flat_map(|_| {
