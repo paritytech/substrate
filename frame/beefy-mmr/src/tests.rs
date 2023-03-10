@@ -27,7 +27,7 @@ use sp_core::H256;
 use sp_io::TestExternalities;
 use sp_runtime::{traits::Keccak256, DigestItem};
 
-use frame_support::traits::OnInitialize;
+use frame_support::traits::Hooks;
 
 use crate::mock::*;
 
