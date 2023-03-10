@@ -1643,7 +1643,7 @@ pub fn panic(info: &core::panic::PanicInfo) -> ! {
 }
 
 /// A default OOM handler for WASM environment.
-#[cfg(all(not(feature = "disable_oom"), feature = "enable_alloc_error_handler"))]
+#[cfg(all(not(feature = "disable_oom"), enable_alloc_error_handler))]
 #[alloc_error_handler]
 pub fn oom(_: core::alloc::Layout) -> ! {
 	#[cfg(feature = "improved_panic_error_reporting")]
