@@ -15,10 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::{fmt::Display, marker::PhantomData};
-use sp_std::fmt::Formatter;
-
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
+use core::{fmt::Display, marker::PhantomData};
 use frame_support::{traits::tokens::Balance, RuntimeDebug};
 use scale_info::TypeInfo;
 
@@ -26,8 +24,8 @@ use scale_info::TypeInfo;
 // is expected to be loweset.
 pub trait MultiAssetBalanceConverter {
 	type AssetId;
-	type NativeBalance;
-	type AssetBalance;
+	type NativeBalance: Balance;
+	type AssetBalance: Balance;
 	type NativeOrAssetBalance;
 
 	fn get_native(balance: Self::NativeBalance) -> Self::NativeOrAssetBalance;

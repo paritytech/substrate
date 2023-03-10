@@ -296,7 +296,6 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		ProposalIndex,
-		// Proposal<T::AccountId, BalanceOf<T, I>, T::MultiAssetId>,
 		Proposal<T::AccountId, T::MultiAssetBalance>,
 		OptionQuery,
 	>;
@@ -526,21 +525,18 @@ pub mod pallet {
 			beneficiary: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			// let max_amount = T::SpendOrigin::ensure_origin(origin)?;
-			// let beneficiary = T::Lookup::lookup(beneficiary)?;
+			let beneficiary = T::Lookup::lookup(beneficiary)?;
 
 			// ensure!(amount <= max_amount, Error::<T, I>::InsufficientPermission);
 			let proposal_index = Self::proposal_count();
 			// Approvals::<T, I>::try_append(proposal_index)
 			// 	.map_err(|_| Error::<T, I>::TooManyApprovals)?;
 
-			// let am1 = T::
 			let proposal = Proposal {
 				proposer: beneficiary.clone(),
 				value: amount,
 				beneficiary: beneficiary.clone(),
 				bond: amount,
-				// bond: Default::default(),
-				// asset,
 			};
 			Proposals::<T, I>::insert(proposal_index, proposal);
 			// ProposalCount::<T, I>::put(proposal_index + 1);
@@ -604,123 +600,214 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	// 	r
 	// }
 
-	// /// Spend some money! returns number of approvals before spend.
-	// pub fn spend_funds() -> Weight {
+	pub fn spend_funds() -> Weight {
+		let mut total_weight = Weight::zero();
+		let mut pot = Self::pot();
 
-	// let mut total_weight = Weight::zero();
+		let proposals_len = Approvals::<T, I>::mutate(|v| {
+			v.retain(|&index| {
+				if let Some(p) = Self::proposals(index) {
+					if let Ok(_) = Self::process_proposal(p, &mut pot) {
+						false
+					}
+				}
+				true
+			})
+		});
+		total_weight
+	}
 
-	// let mut budget_remaining = Self::pot();
-	// Self::deposit_event(Event::Spending { budget_remaining });
-	// let account_id = Self::account_id();
-	// let mut missed_any = false;
-	// let mut imbalance = <DebtOf<T, I>>::zero();
-	// let proposals_len = Approvals::<T, I>::mutate(|v| {
-	// 	let proposals_approvals_len = v.len() as u32;
-	// 	v.retain(|&index| {
-	// 		// Should always be true, but shouldn't panic if false or we're screwed.
-	// 		if let Some(p) = Self::proposals(index) {
-	// 			if p.value <= budget_remaining {
-	// 				budget_remaining -= p.value;
-	// 				<Proposals<T, I>>::remove(index);
-	// 				if T::MultiAssetBalanceConverter::get_native() == p.asset {
-	// 					// return their deposit.
-	// 					let released_amount = T::Currency::release(
-	// 						&T::HoldReason::get(),
-	// 						&p.proposer,
-	// 						p.bond,
-	// 						Precision::Exact,
-	// 					);
-	// 					debug_assert!(released_amount.is_ok());
+	fn process_proposal(
+		p: Proposal<T::AccountId, T::MultiAssetBalance>,
+		balances: &mut Vec<T::MultiAssetBalance>,
+	) -> Result<(), DispatchError> {
+		if let Ok(value) = T::MultiAssetBalanceConverter::try_convert_native(p.value) {
+			balances.iter().filter(|b| {
+				T::MultiAssetBalanceConverter::try_convert_native(b).and_then(|bal| {
+					if bal <= value {
+						return Err(())
+					}
+					let bond = T::MultiAssetBalanceConverter::try_convert_native(p.bond)?;
+					// return their deposit.
+					let released_amount = T::Currency::release(
+						&T::HoldReason::get(),
+						&p.proposer,
+						bond,
+						Precision::Exact,
+					);
+					debug_assert!(released_amount.is_ok());
 
-	// 					// provide the allocation.
-	// 					let _ = T::Currency::deposit(&p.beneficiary, p.value, Precision::Exact)
-	// 						.and_then(|debt| {
-	// 							imbalance.subsume(debt);
-	// 							Ok(())
-	// 						});
-	// 				} else {
-	// 					let asset_id =
-	// 						T::MultiAssetBalanceConverter::try_convert(p.asset).unwrap(); // FIXME: temporary.
-	// 													  // println!("asset_id {}", asset_id);
+					// provide the allocation.
+					let _ = T::Currency::deposit(&p.beneficiary, value, Precision::Exact).and_then(
+						|debt| {
+							// imbalance.subsume(debt);
+							Ok(())
+						},
+					);
+					Ok(bal)
+				})
+			})
+		} else if let Ok((asset_id, value)) =
+			T::MultiAssetBalanceConverter::try_convert_asset(p.value)
+		{
+			let (asset_id_b, val_b) = balances
+				.iter()
+				.find(|b| {
+					T::MultiAssetBalanceConverter::try_convert_asset(b)
+						.and_then(|(asset_id_b, val_b)| {
+							(asset_id_b == asset_id).then_some(()).ok_or(())
+						})
+						.is_ok()
+				})
+				.ok_or(Err(()))?;
+			if val_b <= value {
+				return Err(())
+			}
 
-	// 					// return their deposit.
-	// 					let released_amount = T::Assets::release(
-	// 						asset_id,
-	// 						&T::HoldAssetReason::get(),
-	// 						&p.proposer,
-	// 						p.bond,
-	// 						Precision::Exact,
-	// 					);
-	// 					debug_assert!(released_amount.is_ok());
+			let (bond_asset_id, bond) = T::MultiAssetBalanceConverter::try_convert_asset(p.bond)?;
+			debug_assert_eq!(bond_asset_id, asset_id);
 
-	// 					// provide the allocation.
-	// 					let _ = T::Assets::deposit(
-	// 						asset_id,
-	// 						&p.beneficiary,
-	// 						p.value,
-	// 						Precision::Exact,
-	// 					)
-	// 					.and_then(|debt| {
-	// 						imbalance.subsume(debt);
-	// 						Ok(())
-	// 					});
-	// 				}
+			// return their deposit.
+			let released_amount = T::Assets::release(
+				asset_id,
+				&T::HoldAssetReason::get(),
+				&p.proposer,
+				bond,
+				Precision::Exact,
+			);
+			debug_assert!(released_amount.is_ok());
 
-	// 				Self::deposit_event(Event::Awarded {
-	// 					proposal_index: index,
-	// 					award: p.value,
-	// 					account: p.beneficiary,
-	// 				});
-	// 				false
-	// 			} else {
-	// 				missed_any = true;
-	// 				true
-	// 			}
-	// 		} else {
-	// 			false
-	// 		}
-	// 	});
-	// 	proposals_approvals_len
-	// });
+			// provide the allocation.
+			let _ = T::Assets::deposit(asset_id, &p.beneficiary, value, Precision::Exact).and_then(
+				|debt| {
+					// imbalance.subsume(debt);
+					Ok(())
+				},
+			);
+		}
+		// INVALID case
+		Err(())
+	}
 
-	// total_weight += T::WeightInfo::on_initialize_proposals(proposals_len);
+	/*
+	/// Spend some money! returns number of approvals before spend.
+	pub fn spend_funds1() -> Weight {
+		let mut total_weight = Weight::zero();
 
-	// // Call Runtime hooks to external pallet using treasury to compute spend funds.
-	// T::SpendFunds::spend_funds(
-	// 	&mut budget_remaining,
-	// 	&mut imbalance,
-	// 	&mut total_weight,
-	// 	&mut missed_any,
-	// );
+		let mut budget_remaining = Self::pot();
+		Self::deposit_event(Event::Spending { budget_remaining });
+		let account_id = Self::account_id();
+		let mut missed_any = false;
+		let mut imbalance = <DebtOf<T, I>>::zero();
+		let proposals_len = Approvals::<T, I>::mutate(|v| {
+			let proposals_approvals_len = v.len() as u32;
+			v.retain(|&index| {
+				// Should always be true, but shouldn't panic if false or we're screwed.
+				if let Some(p) = Self::proposals(index) {
+					if p.value <= budget_remaining {
+						budget_remaining -= p.value;
+						<Proposals<T, I>>::remove(index);
+						if T::MultiAssetBalanceConverter::get_native() == p.asset {
+							// return their deposit.
+							let released_amount = T::Currency::release(
+								&T::HoldReason::get(),
+								&p.proposer,
+								p.bond,
+								Precision::Exact,
+							);
+							debug_assert!(released_amount.is_ok());
 
-	// if !missed_any {
-	// 	// burn some proportion of the remaining budget if we run a surplus.
-	// 	let burn = (T::Burn::get() * budget_remaining).min(budget_remaining);
-	// 	budget_remaining -= burn;
+							// provide the allocation.
+							let _ = T::Currency::deposit(&p.beneficiary, p.value, Precision::Exact)
+								.and_then(|debt| {
+									imbalance.subsume(debt);
+									Ok(())
+								});
+						} else {
+							let asset_id =
+								T::MultiAssetBalanceConverter::try_convert(p.asset).unwrap(); // FIXME: temporary.
+															  // println!("asset_id {}", asset_id);
 
-	// 	let (debit, credit) = <T::Currency as fungible::Balanced<T::AccountId>>::pair(burn);
-	// 	imbalance.subsume(debit);
-	// 	T::BurnDestination::handle(credit);
-	// 	Self::deposit_event(Event::Burnt { burnt_funds: burn })
-	// }
+							// return their deposit.
+							let released_amount = T::Assets::release(
+								asset_id,
+								&T::HoldAssetReason::get(),
+								&p.proposer,
+								p.bond,
+								Precision::Exact,
+							);
+							debug_assert!(released_amount.is_ok());
 
-	// // Must never be an error, but better to be safe.
-	// // proof: budget_remaining is account free balance minus ED;
-	// // Thus we can't spend more than account free balance minus ED;
-	// // Thus account is kept alive; qed;
-	// if let Err(problem) = <T::Currency as fungible::Balanced<T::AccountId>>::settle(
-	// 	&account_id,
-	// 	imbalance,
-	// 	Preservation::Preserve,
-	// ) {
-	// 	print("Inconsistent state - couldn't settle imbalance for funds spent by treasury");
-	// 	// Nothing else to do here.
-	// 	drop(problem);
-	// }
-	// Self::deposit_event(Event::Rollover { rollover_balance: budget_remaining });
+							// provide the allocation.
+							let _ = T::Assets::deposit(
+								asset_id,
+								&p.beneficiary,
+								p.value,
+								Precision::Exact,
+							)
+							.and_then(|debt| {
+								imbalance.subsume(debt);
+								Ok(())
+							});
+						}
 
-	// total_weight
-	// }
+						// Self::deposit_event(Event::Awarded {
+						// 	proposal_index: index,
+						// 	award: p.value,
+						// 	account: p.beneficiary,
+						// });
+						false
+					} else {
+						missed_any = true;
+						true
+					}
+				} else {
+					false
+				}
+			});
+			proposals_approvals_len
+		});
+
+		total_weight += T::WeightInfo::on_initialize_proposals(proposals_len);
+
+		// Call Runtime hooks to external pallet using treasury to compute spend funds.
+		T::SpendFunds::spend_funds(
+			&mut budget_remaining,
+			&mut imbalance,
+			&mut total_weight,
+			&mut missed_any,
+		);
+
+		if !missed_any {
+			// burn some proportion of the remaining budget if we run a surplus.
+			let burn = (T::Burn::get() * budget_remaining).min(budget_remaining);
+			budget_remaining -= burn;
+
+			let (debit, credit) = <T::Currency as fungible::Balanced<T::AccountId>>::pair(burn);
+			imbalance.subsume(debit);
+			T::BurnDestination::handle(credit);
+			Self::deposit_event(Event::Burnt { burnt_funds: burn })
+		}
+
+		// Must never be an error, but better to be safe.
+		// proof: budget_remaining is account free balance minus ED;
+		// Thus we can't spend more than account free balance minus ED;
+		// Thus account is kept alive; qed;
+		if let Err(problem) = <T::Currency as fungible::Balanced<T::AccountId>>::settle(
+			&account_id,
+			imbalance,
+			Preservation::Preserve,
+		) {
+			print("Inconsistent state - couldn't settle imbalance for funds spent by treasury");
+			// Nothing else to do here.
+			drop(problem);
+		}
+		// Self::deposit_event(Event::Rollover { rollover_balance: budget_remaining });
+
+		total_weight
+	}
+
+	*/
 
 	// /// Return the amount of money in the pot.
 	// // The existential deposit is not part of the pot so treasury account never gets deleted.
@@ -731,6 +818,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	// 		Fortitude::Polite,
 	// 	)
 	// }
+	pub fn pot() -> Vec<T::MultiAssetBalance> {
+		vec![]
+	}
 }
 
 // impl<T: Config<I>, I: 'static> HandleImbalanceDrop<CreditOf<T, I>> for Pallet<T, I> {
