@@ -34,143 +34,163 @@
 //! definition.
 
 use frame_support::traits::{Get, KeyOwnerProofSystem};
-use sp_consensus_babe::{EquivocationProof, Slot};
+use log::{error, info};
+
+use sp_consensus_babe::{AuthorityId, EquivocationProof, Slot, KEY_TYPE};
 use sp_runtime::{
 	transaction_validity::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		TransactionValidityError, ValidTransaction,
 	},
-	DispatchResult, Perbill,
+	DispatchError, KeyTypeId, Perbill,
 };
+use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_staking::{
-	offence::{Kind, Offence, OffenceError, ReportOffence},
+	offence::{Kind, Offence, OffenceReportSystem, ReportOffence},
 	SessionIndex,
 };
 use sp_std::prelude::*;
 
-use crate::{Call, Config, Pallet, LOG_TARGET};
+use crate::{Call, Config, Error, Pallet, LOG_TARGET};
 
-/// A trait with utility methods for handling equivocation reports in BABE.
-/// The trait provides methods for reporting an offence triggered by a valid
-/// equivocation report, checking the current block author (to declare as the
-/// reporter), and also for creating and submitting equivocation report
-/// extrinsics (useful only in offchain context).
-pub trait HandleEquivocation<T: Config> {
-	/// The longevity, in blocks, that the equivocation report is valid for. When using the staking
-	/// pallet this should be equal to the bonding duration (in blocks, not eras).
-	type ReportLongevity: Get<u64>;
-
-	/// Report an offence proved by the given reporters.
-	fn report_offence(
-		reporters: Vec<T::AccountId>,
-		offence: BabeEquivocationOffence<T::KeyOwnerIdentification>,
-	) -> Result<(), OffenceError>;
-
-	/// Returns true if all of the offenders at the given time slot have already been reported.
-	fn is_known_offence(offenders: &[T::KeyOwnerIdentification], time_slot: &Slot) -> bool;
-
-	/// Create and dispatch an equivocation report extrinsic.
-	fn submit_unsigned_equivocation_report(
-		equivocation_proof: EquivocationProof<T::Header>,
-		key_owner_proof: T::KeyOwnerProof,
-	) -> DispatchResult;
-
-	/// Fetch the current block author id, if defined.
-	fn block_author() -> Option<T::AccountId>;
+/// BABE equivocation offence report.
+///
+/// When a validator released two or more blocks at the same slot.
+pub struct EquivocationOffence<Offender> {
+	/// A babe slot in which this incident happened.
+	pub slot: Slot,
+	/// The session index in which the incident happened.
+	pub session_index: SessionIndex,
+	/// The size of the validator set at the time of the offence.
+	pub validator_set_count: u32,
+	/// The authority that produced the equivocation.
+	pub offender: Offender,
 }
 
-impl<T: Config> HandleEquivocation<T> for () {
-	type ReportLongevity = ();
+impl<Offender: Clone> Offence<Offender> for EquivocationOffence<Offender> {
+	const ID: Kind = *b"babe:equivocatio";
+	type TimeSlot = Slot;
 
-	fn report_offence(
-		_reporters: Vec<T::AccountId>,
-		_offence: BabeEquivocationOffence<T::KeyOwnerIdentification>,
-	) -> Result<(), OffenceError> {
-		Ok(())
+	fn offenders(&self) -> Vec<Offender> {
+		vec![self.offender.clone()]
 	}
 
-	fn is_known_offence(_offenders: &[T::KeyOwnerIdentification], _time_slot: &Slot) -> bool {
-		true
+	fn session_index(&self) -> SessionIndex {
+		self.session_index
 	}
 
-	fn submit_unsigned_equivocation_report(
-		_equivocation_proof: EquivocationProof<T::Header>,
-		_key_owner_proof: T::KeyOwnerProof,
-	) -> DispatchResult {
-		Ok(())
+	fn validator_set_count(&self) -> u32 {
+		self.validator_set_count
 	}
 
-	fn block_author() -> Option<T::AccountId> {
-		None
+	fn time_slot(&self) -> Self::TimeSlot {
+		self.slot
+	}
+
+	// The formula is min((3k / n)^2, 1)
+	// where k = offenders_number and n = validators_number
+	fn slash_fraction(&self, offenders_count: u32) -> Perbill {
+		// Perbill type domain is [0, 1] by definition
+		Perbill::from_rational(3 * offenders_count, self.validator_set_count).square()
 	}
 }
 
-/// Generic equivocation handler. This type implements `HandleEquivocation`
-/// using existing subsystems that are part of frame (type bounds described
-/// below) and will dispatch to them directly, it's only purpose is to wire all
-/// subsystems together.
-pub struct EquivocationHandler<I, R, L> {
-	_phantom: sp_std::marker::PhantomData<(I, R, L)>,
-}
+/// Babe equivocation offence system.
+///
+/// This type implements `OffenceReportSystem`
+pub struct EquivocationReportSystem<T, R, P, L>(sp_std::marker::PhantomData<(T, R, P, L)>);
 
-impl<I, R, L> Default for EquivocationHandler<I, R, L> {
-	fn default() -> Self {
-		Self { _phantom: Default::default() }
-	}
-}
-
-impl<T, R, L> HandleEquivocation<T> for EquivocationHandler<T::KeyOwnerIdentification, R, L>
+// We use the authorship pallet to fetch the current block author and use
+// `offchain::SendTransactionTypes` for unsigned extrinsic creation and
+// submission.
+impl<T, R, P, L>
+	OffenceReportSystem<Option<T::AccountId>, (EquivocationProof<T::Header>, T::KeyOwnerProof)>
+	for EquivocationReportSystem<T, R, P, L>
 where
-	// We use the authorship pallet to fetch the current block author and use
-	// `offchain::SendTransactionTypes` for unsigned extrinsic creation and
-	// submission.
 	T: Config + pallet_authorship::Config + frame_system::offchain::SendTransactionTypes<Call<T>>,
-	// A system for reporting offences after valid equivocation reports are
-	// processed.
 	R: ReportOffence<
 		T::AccountId,
-		T::KeyOwnerIdentification,
-		BabeEquivocationOffence<T::KeyOwnerIdentification>,
+		P::IdentificationTuple,
+		EquivocationOffence<P::IdentificationTuple>,
 	>,
-	// The longevity (in blocks) that the equivocation report is valid for. When using the staking
-	// pallet this should be the bonding duration.
+	P: KeyOwnerProofSystem<(KeyTypeId, AuthorityId), Proof = T::KeyOwnerProof>,
+	P::IdentificationTuple: Clone,
 	L: Get<u64>,
 {
-	type ReportLongevity = L;
+	type Longevity = L;
 
-	fn report_offence(
-		reporters: Vec<T::AccountId>,
-		offence: BabeEquivocationOffence<T::KeyOwnerIdentification>,
-	) -> Result<(), OffenceError> {
-		R::report_offence(reporters, offence)
-	}
-
-	fn is_known_offence(offenders: &[T::KeyOwnerIdentification], time_slot: &Slot) -> bool {
-		R::is_known_offence(offenders, time_slot)
-	}
-
-	fn submit_unsigned_equivocation_report(
-		equivocation_proof: EquivocationProof<T::Header>,
-		key_owner_proof: T::KeyOwnerProof,
-	) -> DispatchResult {
+	fn publish_evidence(
+		evidence: (EquivocationProof<T::Header>, T::KeyOwnerProof),
+	) -> Result<(), ()> {
 		use frame_system::offchain::SubmitTransaction;
+		let (equivocation_proof, key_owner_proof) = evidence;
 
 		let call = Call::report_equivocation_unsigned {
 			equivocation_proof: Box::new(equivocation_proof),
 			key_owner_proof,
 		};
-
-		match SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
-			Ok(()) => log::info!(target: LOG_TARGET, "Submitted BABE equivocation report.",),
-			Err(e) =>
-				log::error!(target: LOG_TARGET, "Error submitting equivocation report: {:?}", e,),
+		let res = SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into());
+		match res {
+			Ok(()) => info!(target: LOG_TARGET, "Submitted equivocation report."),
+			Err(e) => error!(target: LOG_TARGET, "Error submitting equivocation report: {:?}", e),
 		}
-
-		Ok(())
+		res
 	}
 
-	fn block_author() -> Option<T::AccountId> {
-		<pallet_authorship::Pallet<T>>::author()
+	fn check_evidence(
+		evidence: (EquivocationProof<T::Header>, T::KeyOwnerProof),
+	) -> Result<(), TransactionValidityError> {
+		let (equivocation_proof, key_owner_proof) = evidence;
+
+		// Check the membership proof to extract the offender's id
+		let key = (sp_consensus_babe::KEY_TYPE, equivocation_proof.offender.clone());
+		let offender =
+			P::check_proof(key, key_owner_proof.clone()).ok_or(InvalidTransaction::BadProof)?;
+
+		// Check if the offence has already been reported, and if so then we can discard the report.
+		if R::is_known_offence(&[offender], &equivocation_proof.slot) {
+			Err(InvalidTransaction::Stale.into())
+		} else {
+			Ok(())
+		}
+	}
+
+	fn process_evidence(
+		reporter: Option<T::AccountId>,
+		evidence: (EquivocationProof<T::Header>, T::KeyOwnerProof),
+	) -> Result<(), DispatchError> {
+		let (equivocation_proof, key_owner_proof) = evidence;
+		let reporter = reporter.or_else(|| <pallet_authorship::Pallet<T>>::author());
+		let offender = equivocation_proof.offender.clone();
+		let slot = equivocation_proof.slot;
+
+		// Validate the equivocation proof (check votes are different and signatures are valid)
+		if !sp_consensus_babe::check_equivocation_proof(equivocation_proof) {
+			return Err(Error::<T>::InvalidEquivocationProof.into())
+		}
+
+		let validator_set_count = key_owner_proof.validator_count();
+		let session_index = key_owner_proof.session();
+
+		let epoch_index =
+			*slot.saturating_sub(crate::GenesisSlot::<T>::get()) / T::EpochDuration::get();
+
+		// Check that the slot number is consistent with the session index
+		// in the key ownership proof (i.e. slot is for that epoch)
+		if Pallet::<T>::session_index_for_epoch(epoch_index) != session_index {
+			return Err(Error::<T>::InvalidKeyOwnershipProof.into())
+		}
+
+		// Check the membership proof and extract the offender's id
+		let offender = P::check_proof((KEY_TYPE, offender), key_owner_proof)
+			.ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
+
+		let offence = EquivocationOffence { slot, validator_set_count, offender, session_index };
+
+		R::report_offence(reporter.into_iter().collect(), offence)
+			.map_err(|_| Error::<T>::DuplicateOffenceReport)?;
+
+		Ok(())
 	}
 }
 
@@ -194,11 +214,12 @@ impl<T: Config> Pallet<T> {
 				},
 			}
 
-			// check report staleness
-			is_known_offence::<T>(equivocation_proof, key_owner_proof)?;
+			// Check report validity
+			let evidence = (*equivocation_proof.clone(), key_owner_proof.clone());
+			T::EquivocationReportSystem::check_evidence(evidence)?;
 
 			let longevity =
-				<T::HandleEquivocation as HandleEquivocation<T>>::ReportLongevity::get();
+				<T::EquivocationReportSystem as OffenceReportSystem<_, _>>::Longevity::get();
 
 			ValidTransaction::with_tag_prefix("BabeEquivocation")
 				// We assign the maximum priority for any equivocation report.
@@ -216,72 +237,10 @@ impl<T: Config> Pallet<T> {
 
 	pub fn pre_dispatch(call: &Call<T>) -> Result<(), TransactionValidityError> {
 		if let Call::report_equivocation_unsigned { equivocation_proof, key_owner_proof } = call {
-			is_known_offence::<T>(equivocation_proof, key_owner_proof)
+			let evidence = (*equivocation_proof.clone(), key_owner_proof.clone());
+			T::EquivocationReportSystem::check_evidence(evidence)
 		} else {
 			Err(InvalidTransaction::Call.into())
 		}
-	}
-}
-
-fn is_known_offence<T: Config>(
-	equivocation_proof: &EquivocationProof<T::Header>,
-	key_owner_proof: &T::KeyOwnerProof,
-) -> Result<(), TransactionValidityError> {
-	// check the membership proof to extract the offender's id
-	let key = (sp_consensus_babe::KEY_TYPE, equivocation_proof.offender.clone());
-
-	let offender = T::KeyOwnerProofSystem::check_proof(key, key_owner_proof.clone())
-		.ok_or(InvalidTransaction::BadProof)?;
-
-	// check if the offence has already been reported,
-	// and if so then we can discard the report.
-	if T::HandleEquivocation::is_known_offence(&[offender], &equivocation_proof.slot) {
-		Err(InvalidTransaction::Stale.into())
-	} else {
-		Ok(())
-	}
-}
-
-/// A BABE equivocation offence report.
-///
-/// When a validator released two or more blocks at the same slot.
-pub struct BabeEquivocationOffence<FullIdentification> {
-	/// A babe slot in which this incident happened.
-	pub slot: Slot,
-	/// The session index in which the incident happened.
-	pub session_index: SessionIndex,
-	/// The size of the validator set at the time of the offence.
-	pub validator_set_count: u32,
-	/// The authority that produced the equivocation.
-	pub offender: FullIdentification,
-}
-
-impl<FullIdentification: Clone> Offence<FullIdentification>
-	for BabeEquivocationOffence<FullIdentification>
-{
-	const ID: Kind = *b"babe:equivocatio";
-	type TimeSlot = Slot;
-
-	fn offenders(&self) -> Vec<FullIdentification> {
-		vec![self.offender.clone()]
-	}
-
-	fn session_index(&self) -> SessionIndex {
-		self.session_index
-	}
-
-	fn validator_set_count(&self) -> u32 {
-		self.validator_set_count
-	}
-
-	fn time_slot(&self) -> Self::TimeSlot {
-		self.slot
-	}
-
-	fn slash_fraction(&self, offenders_count: u32) -> Perbill {
-		// the formula is min((3k / n)^2, 1)
-		let x = Perbill::from_rational(3 * offenders_count, self.validator_set_count);
-		// _ ^ 2
-		x.square()
 	}
 }

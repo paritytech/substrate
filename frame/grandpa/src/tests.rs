@@ -21,12 +21,11 @@
 
 use super::{Call, Event, *};
 use crate::mock::*;
-use codec::Encode;
 use fg_primitives::ScheduledChange;
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
 	dispatch::{GetDispatchInfo, Pays},
-	traits::{Currency, OnFinalize, OneSessionHandler},
+	traits::{Currency, KeyOwnerProofSystem, OnFinalize, OneSessionHandler},
 };
 use frame_system::{EventRecord, Phase};
 use sp_core::H256;

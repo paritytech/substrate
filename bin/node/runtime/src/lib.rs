@@ -32,10 +32,11 @@ use frame_support::{
 	pallet_prelude::Get,
 	parameter_types,
 	traits::{
-		fungible::ItemOf, tokens::nonfungibles_v2::Inspect, AsEnsureOriginWithArg, ConstBool,
-		ConstU128, ConstU16, ConstU32, Currency, EitherOfDiverse, EqualPrivilegeOnly, Everything,
-		Imbalance, InstanceFilter, KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced,
-		U128CurrencyToVote, WithdrawReasons,
+		fungible::ItemOf,
+		tokens::{nonfungibles_v2::Inspect, GetSalary},
+		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, Currency, EitherOfDiverse,
+		EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter, KeyOwnerProofSystem,
+		LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote, WithdrawReasons,
 	},
 	weights::{
 		constants::{
@@ -111,6 +112,11 @@ pub mod assets_api;
 // Make the WASM binary available.
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
+
+/// Max size for serialized extrinsic params for this testing runtime.
+/// This is a quite arbitrary but empirically battle tested value.
+#[cfg(test)]
+pub const CALL_PARAMS_MAX_SIZE: usize = 208;
 
 /// Wasm binary unwrapped. If built with `SKIP_WASM_BUILD`, the function panics.
 #[cfg(feature = "std")]
@@ -398,24 +404,12 @@ impl pallet_babe::Config for Runtime {
 	type ExpectedBlockTime = ExpectedBlockTime;
 	type EpochChangeTrigger = pallet_babe::ExternalTrigger;
 	type DisabledValidators = Session;
-
-	type KeyOwnerProofSystem = Historical;
-
-	type KeyOwnerProof = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
-		KeyTypeId,
-		pallet_babe::AuthorityId,
-	)>>::Proof;
-
-	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
-		KeyTypeId,
-		pallet_babe::AuthorityId,
-	)>>::IdentificationTuple;
-
-	type HandleEquivocation =
-		pallet_babe::EquivocationHandler<Self::KeyOwnerIdentification, Offences, ReportLongevity>;
-
 	type WeightInfo = ();
 	type MaxAuthorities = MaxAuthorities;
+	type KeyOwnerProof =
+		<Historical as KeyOwnerProofSystem<(KeyTypeId, pallet_babe::AuthorityId)>>::Proof;
+	type EquivocationReportSystem =
+		pallet_babe::EquivocationReportSystem<Self, Offences, Historical, ReportLongevity>;
 }
 
 parameter_types! {
@@ -1327,26 +1321,12 @@ parameter_types! {
 
 impl pallet_grandpa::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-
-	type KeyOwnerProofSystem = Historical;
-
-	type KeyOwnerProof =
-		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
-
-	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
-		KeyTypeId,
-		GrandpaId,
-	)>>::IdentificationTuple;
-
-	type HandleEquivocation = pallet_grandpa::EquivocationHandler<
-		Self::KeyOwnerIdentification,
-		Offences,
-		ReportLongevity,
-	>;
-
 	type WeightInfo = ();
 	type MaxAuthorities = MaxAuthorities;
 	type MaxSetIdSessionEntries = MaxSetIdSessionEntries;
+	type KeyOwnerProof = <Historical as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
+	type EquivocationReportSystem =
+		pallet_grandpa::EquivocationReportSystem<Self, Offences, Historical, ReportLongevity>;
 }
 
 parameter_types! {
@@ -1572,6 +1552,29 @@ impl pallet_uniques::Config for Runtime {
 }
 
 parameter_types! {
+	pub const Budget: Balance = 10_000 * DOLLARS;
+	pub TreasuryAccount: AccountId = Treasury::account_id();
+}
+
+pub struct SalaryForRank;
+impl GetSalary<u16, AccountId, Balance> for SalaryForRank {
+	fn get_salary(a: u16, _: &AccountId) -> Balance {
+		Balance::from(a) * 1000 * DOLLARS
+	}
+}
+
+impl pallet_salary::Config for Runtime {
+	type WeightInfo = ();
+	type RuntimeEvent = RuntimeEvent;
+	type Paymaster = pallet_salary::PayFromAccount<Balances, TreasuryAccount>;
+	type Members = RankedCollective;
+	type Salary = SalaryForRank;
+	type RegistrationPeriod = ConstU32<200>;
+	type PayoutPeriod = ConstU32<200>;
+	type Budget = Budget;
+}
+
+parameter_types! {
 	pub Features: PalletFeatures = PalletFeatures::all_enabled();
 	pub const MaxAttributesPerCall: u32 = 10;
 }
@@ -1716,7 +1719,7 @@ impl frame_benchmarking_pallet_pov::Config for Runtime {
 }
 
 construct_runtime!(
-	pub enum Runtime where
+	pub struct Runtime where
 		Block = Block,
 		NodeBlock = node_primitives::Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
@@ -1766,6 +1769,7 @@ construct_runtime!(
 		Nis: pallet_nis,
 		Uniques: pallet_uniques,
 		Nfts: pallet_nfts,
+		Salary: pallet_salary,
 		TransactionStorage: pallet_transaction_storage,
 		VoterList: pallet_bags_list::<Instance1>,
 		StateTrieMigration: pallet_state_trie_migration,
@@ -1885,6 +1889,7 @@ mod benches {
 		[pallet_referenda, Referenda]
 		[pallet_recovery, Recovery]
 		[pallet_remark, Remark]
+		[pallet_salary, Salary]
 		[pallet_scheduler, Scheduler]
 		[pallet_glutton, Glutton]
 		[pallet_session, SessionBench::<Runtime>]
@@ -2457,10 +2462,10 @@ mod tests {
 	fn call_size() {
 		let size = core::mem::size_of::<RuntimeCall>();
 		assert!(
-			size <= 208,
-			"size of RuntimeCall {} is more than 208 bytes: some calls have too big arguments, use Box to reduce the
-			size of RuntimeCall.
-			If the limit is too strong, maybe consider increase the limit to 300.",
+			size <= CALL_PARAMS_MAX_SIZE,
+			"size of RuntimeCall {} is more than {CALL_PARAMS_MAX_SIZE} bytes.
+			 Some calls have too big arguments, use Box to reduce the size of RuntimeCall.
+			 If the limit is too strong, maybe consider increase the limit.",
 			size,
 		);
 	}

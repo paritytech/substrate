@@ -27,9 +27,9 @@
 //! instantiated. The `BasicQueue` and `BasicVerifier` traits allow serial
 //! queues to be instantiated simply.
 
-use std::{collections::HashMap, iter::FromIterator};
-
 use log::{debug, trace};
+
+use sp_consensus::{error::Error as ConsensusError, BlockOrigin};
 use sp_runtime::{
 	traits::{Block as BlockT, Header as _, NumberFor},
 	Justifications,
@@ -42,8 +42,8 @@ use crate::{
 	},
 	metrics::Metrics,
 };
+
 pub use basic_queue::BasicQueue;
-use sp_consensus::{error::Error as ConsensusError, BlockOrigin, CacheKeyId};
 
 const LOG_TARGET: &str = "sync::import-queue";
 
@@ -96,13 +96,12 @@ pub struct IncomingBlock<B: BlockT> {
 /// Verify a justification of a block
 #[async_trait::async_trait]
 pub trait Verifier<B: BlockT>: Send + Sync {
-	/// Verify the given data and return the BlockImportParams and an optional
-	/// new set of validators to import. If not, err with an Error-Message
-	/// presented to the User in the logs.
+	/// Verify the given block data and return the `BlockImportParams` to
+	/// continue the block import process.
 	async fn verify(
 		&mut self,
 		block: BlockImportParams<B, ()>,
-	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String>;
+	) -> Result<BlockImportParams<B, ()>, String>;
 }
 
 /// Blocks import queue API.
@@ -328,7 +327,7 @@ pub(crate) async fn import_single_block_metered<
 		import_block.state_action = StateAction::ExecuteIfPossible;
 	}
 
-	let (import_block, maybe_keys) = verifier.verify(import_block).await.map_err(|msg| {
+	let import_block = verifier.verify(import_block).await.map_err(|msg| {
 		if let Some(ref peer) = peer {
 			trace!(
 				target: LOG_TARGET,
@@ -351,9 +350,8 @@ pub(crate) async fn import_single_block_metered<
 		metrics.report_verification(true, started.elapsed());
 	}
 
-	let cache = HashMap::from_iter(maybe_keys.unwrap_or_default());
 	let import_block = import_block.clear_storage_changes_and_mutate();
-	let imported = import_handle.import_block(import_block, cache).await;
+	let imported = import_handle.import_block(import_block).await;
 	if let Some(metrics) = metrics.as_ref() {
 		metrics.report_verification_and_import(started.elapsed());
 	}
