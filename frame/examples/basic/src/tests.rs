@@ -21,7 +21,7 @@ use crate::*;
 use frame_support::{
 	assert_ok,
 	dispatch::{DispatchInfo, GetDispatchInfo},
-	traits::{ConstU64, OnInitialize},
+	traits::{ConstU64, Hooks},
 };
 use sp_core::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
@@ -127,7 +127,7 @@ fn it_works_for_optional_value() {
 		assert_eq!(Example::dummy(), Some(val1 + val2));
 
 		// Check that accumulate works when we Dummy has None in it.
-		<Example as OnInitialize<u64>>::on_initialize(2);
+		<Example as Hooks<u64>>::on_initialize(2);
 		assert_ok!(Example::accumulate_dummy(RuntimeOrigin::signed(1), val1));
 		assert_eq!(Example::dummy(), Some(val1 + val2 + val1));
 	});
