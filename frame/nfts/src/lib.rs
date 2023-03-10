@@ -45,9 +45,7 @@ pub mod weights;
 
 use codec::{Decode, Encode};
 use frame_support::traits::{
-	tokens::{AttributeNamespace, Locker},
-	BalanceStatus::Reserved,
-	Currency, EnsureOriginWithArg, ReservableCurrency,
+	tokens::Locker, BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
 };
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
@@ -809,13 +807,13 @@ pub mod pallet {
 					match mint_settings.mint_type {
 						MintType::Issuer => return Err(Error::<T, I>::NoPermission.into()),
 						MintType::HolderOf(collection_id) => {
-							let MintWitness { owner_of_item } =
+							let MintWitness { owned_item } =
 								witness_data.ok_or(Error::<T, I>::BadWitness)?;
 
 							let owns_item = Account::<T, I>::contains_key((
 								&caller,
 								&collection_id,
-								&owner_of_item,
+								&owned_item,
 							));
 							ensure!(owns_item, Error::<T, I>::BadWitness);
 
@@ -824,7 +822,7 @@ pub mod pallet {
 
 							let key = (
 								&collection_id,
-								Some(owner_of_item),
+								Some(owned_item),
 								AttributeNamespace::Pallet,
 								&Self::construct_attribute_key(pallet_attribute.encode())?,
 							);
