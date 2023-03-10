@@ -16,9 +16,10 @@
 // limitations under the License.
 
 use frame_support::{
-	traits::{Get, OnRuntimeUpgrade},
+	traits::{Get, Hooks},
 	weights::Weight,
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 
 use crate::{Config, CurrentSetId, SetIdSession, LOG_TARGET};
 
@@ -33,7 +34,7 @@ pub mod v4;
 /// `MaxSetIdSessionEntries` constant to the pallet (although it could also be
 /// done later on).
 pub struct CleanupSetIdSessionMap<T>(sp_std::marker::PhantomData<T>);
-impl<T: Config> OnRuntimeUpgrade for CleanupSetIdSessionMap<T> {
+impl<T: Config> Hooks<BlockNumberFor<T>> for CleanupSetIdSessionMap<T> {
 	fn on_runtime_upgrade() -> Weight {
 		// NOTE: since this migration will loop over all stale entries in the
 		// map we need to set some cutoff value, otherwise the migration might
