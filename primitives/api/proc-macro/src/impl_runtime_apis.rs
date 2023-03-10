@@ -505,9 +505,10 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 			__SrApiBlock__: #crate_::BlockT + std::panic::UnwindSafe +
 				std::panic::RefUnwindSafe
 		));
-		input.generics.params.push(
-			parse_quote!( RuntimeApiImplCall: #crate_::CallApiAt<__SrApiBlock__> + 'static ),
-		);
+		input
+			.generics
+			.params
+			.push(parse_quote!( RuntimeApiImplCall: #crate_::CallApiAt<__SrApiBlock__> + 'static ));
 
 		let where_clause = input.generics.make_where_clause();
 

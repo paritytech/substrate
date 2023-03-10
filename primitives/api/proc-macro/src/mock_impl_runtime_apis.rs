@@ -17,8 +17,8 @@
 
 use crate::utils::{
 	extract_block_type_from_trait_path, extract_impl_trait,
-	extract_parameter_names_types_and_borrows, generate_crate_access,
-	return_type_extract_type, AllowSelfRefInParameters, RequireQualifiedTraitPath,
+	extract_parameter_names_types_and_borrows, generate_crate_access, return_type_extract_type,
+	AllowSelfRefInParameters, RequireQualifiedTraitPath,
 };
 
 use proc_macro2::{Span, TokenStream};
