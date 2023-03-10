@@ -21,7 +21,7 @@ use crate::{self as pallet_nis, Perquintill, WithMaximumOf};
 
 use frame_support::{
 	ord_parameter_types, parameter_types,
-	traits::{ConstU16, ConstU32, ConstU64, Currency, OnFinalize, OnInitialize, StorageMapShim},
+	traits::{ConstU16, ConstU32, ConstU64, Currency, Hooks, StorageMapShim},
 	weights::Weight,
 	PalletId,
 };
