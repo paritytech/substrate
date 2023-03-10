@@ -15,12 +15,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::interface::parse::Def;
-use frame_support_procedural_tools::generate_crate_access_2018;
+struct SelectorDef {
+	default: SingleSelectorDef,
+	others: Option<Vec<SingleSelectorDef>>,
+}
 
-pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
-	let frame_system = generate_crate_access_2018("frame-system")?;
-	let frame_support = generate_crate_access_2018("frame-support")?;
+impl SelectorDef {
+	pub fn try_from(
+		attr_span: proc_macro2::Span,
+		index: usize,
+		item: &mut syn::Item,
+	) -> syn::Result<Self> {
+		todo!()
+	}
+}
 
-	todo!()
+struct SingleSelectorDef {
+	item: syn::TraitItemMethod,
+	name: syn::Ident,
+}
+
+impl SingleSelectorDef {
+	pub fn try_from(
+		attr_span: proc_macro2::Span,
+		index: usize,
+		item: &mut syn::Item,
+	) -> syn::Result<Self> {
+		todo!()
+	}
 }

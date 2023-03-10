@@ -33,8 +33,8 @@ pub fn interface(
 	}
 
 	let item = syn::parse_macro_input!(item as syn::ItemTrait);
-	match parse::Def::try_from(item) {
-		Ok(def) => expand::expand(def).into(),
+	match r#mod::Def::try_from(item) {
+		Ok(def) => r#mod::expand(def).into(),
 		Err(e) => e.to_compile_error().into(),
 	}
 }

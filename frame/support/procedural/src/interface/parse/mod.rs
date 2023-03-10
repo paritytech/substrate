@@ -15,105 +15,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use syn::{spanned::Spanned, Generics, Item};
+mod error;
+mod interface;
+mod event;
+mod selector;
 
-pub struct InterfaceDef {
-	item: syn::ItemTrait,
-	selectors: Option<SelectorDef>,
-	views: Option<Vec<ViewDef>>,
-	calls: Option<Vec<CallDef>>,
-}
-
-impl InterfaceDef {
-	fn try_from(
-		attr_span: proc_macro2::Span,
-		index: usize,
-		item: &mut syn::Item,
-	) -> syn::Result<Self> {
-		// Ensure NO generics or where clauses on interface trait
-		let item_span = item.span();
-		if !item.generics == Generics::default() {
-			// TODO: Where clauses should be allowed. We can carry them to all impl blocks.
-			//       But "extending" an interface gets harder, as carrying them over from
-			//       extended traits is harder.
-			let msg = "Invalid Interface definition. Traits that define an interface \
-                currently can not have generics or where clauses.";
-			return Err(syn::Error::new(item_span, msg))
-		}
-
-		// Filter selector methods
-		let with_selector = false;
-
-		// Filter view methods
-
-		// Filter call methods
-		todo!()
-	}
-}
-
-struct SelectorDef {
-	default: SingleSelectorDef,
-	others: Option<Vec<SingleSelectorDef>>,
-}
-
-impl SelectorDef {
-	pub fn try_from(
-		attr_span: proc_macro2::Span,
-		index: usize,
-		item: &mut syn::Item,
-	) -> syn::Result<Self> {
-		todo!()
-	}
-}
-
-struct SingleSelectorDef {
-	item: syn::TraitItemMethod,
-	name: syn::Ident,
-}
-
-impl SingleSelectorDef {
-	pub fn try_from(
-		attr_span: proc_macro2::Span,
-		index: usize,
-		item: &mut syn::Item,
-	) -> syn::Result<Self> {
-		todo!()
-	}
-}
-
-struct ViewDef {
-	views: Vec<syn::TraitItemMethod>,
-}
-
-impl ViewDef {
-	pub fn try_from(
-		attr_span: proc_macro2::Span,
-		index: usize,
-		item: &mut syn::Item,
-	) -> syn::Result<Self> {
-		todo!()
-	}
-}
-
-struct CallDef {
-	calls: Vec<syn::TraitItemMethod>,
-}
-
-impl CallDef {
-	pub fn try_from(
-		attr_span: proc_macro2::Span,
-		index: usize,
-		item: &mut syn::Item,
-	) -> syn::Result<Self> {
-		todo!()
-	}
-}
+use quote::ToTokens;
+use syn::{spanned::Spanned, Generics, Item, Attribute};
+pub use error::ErrorDef;
+pub use event::EventDef;
+pub use interface::InterfaceDef;
 
 pub struct Def {
 	item: syn::ItemMod,
 	interface: InterfaceDef,
 	error: Option<ErrorDef>,
 	event: Option<EventDef>,
+	unrelated: Option<Vec<(usize, Item)>>
 }
 
 impl Def {
@@ -143,7 +61,7 @@ impl Def {
 					event = Some(EventDef::try_from(span, index, item)?);
 				},
 				Some(InterfaceAttr::Error(span)) if error.is_none() => {
-					event = Some(ErrorDef::try_from(span, index, item)?);
+					error = Some(ErrorDef::try_from(span, index, item)?);
 				},
 				Some(attr) => {
 					let msg = "Invalid duplicated attribute";
@@ -152,7 +70,7 @@ impl Def {
 				None => unrelated.map_or_else(
 					|| Vec::new(),
 					|mut v| {
-						v.push((index, item));
+						v.push((index, item.clone()));
 						v
 					},
 				),
@@ -165,19 +83,27 @@ impl Def {
 			syn::Error::new(item_span, msg)
 		})?;
 
-		todo!()
+
+		Ok(Def {
+			item,
+			interface,
+			error,
+			event,
+			unrelated
+		})
+
 	}
 }
 
 /// Take the first interface attribute (e.g. attribute like `#[interface..]`) and decode it to
 /// `Attr`
-pub fn take_first_item_interface_attr<Attr>(
-	item: &mut impl MutItemAttrs,
+fn take_first_item_interface_attr<Attr>(
+	item: &mut Item,
 ) -> syn::Result<Option<Attr>>
 where
 	Attr: syn::parse::Parse,
 {
-	let attrs = if let Some(attrs) = item.mut_item_attrs() { attrs } else { return Ok(None) };
+	let attrs = if let Some(attrs) = mut_item_attrs(item) { attrs } else { return Ok(None) };
 
 	if let Some(index) = attrs.iter().position(|attr| {
 		attr.path.segments.first().map_or(false, |segment| segment.ident == "interface")
@@ -187,6 +113,30 @@ where
 	} else {
 		Ok(None)
 	}
+}
+
+fn mut_item_attrs(item: &mut syn::Item) -> Option<&mut Vec<syn::Attribute>> {
+		match item {
+			Item::Const(item) => Some(item.attrs.as_mut()),
+			Item::Enum(item) => Some(item.attrs.as_mut()),
+			Item::ExternCrate(item) => Some(item.attrs.as_mut()),
+			Item::Fn(item) => Some(item.attrs.as_mut()),
+			Item::ForeignMod(item) => Some(item.attrs.as_mut()),
+			Item::Impl(item) => Some(item.attrs.as_mut()),
+			Item::Macro(item) => Some(item.attrs.as_mut()),
+			Item::Macro2(item) => Some(item.attrs.as_mut()),
+			Item::Mod(item) => Some(item.attrs.as_mut()),
+			Item::Static(item) => Some(item.attrs.as_mut()),
+			Item::Struct(item) => Some(item.attrs.as_mut()),
+			Item::Trait(item) => Some(item.attrs.as_mut()),
+			Item::TraitAlias(item) => Some(item.attrs.as_mut()),
+			Item::Type(item) => Some(item.attrs.as_mut()),
+			Item::Union(item) => Some(item.attrs.as_mut()),
+			Item::Use(item) => Some(item.attrs.as_mut()),
+			_ => None,
+		}
+	}
+}
 }
 
 /// List of additional token to be used for parsing.
