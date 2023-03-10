@@ -232,6 +232,10 @@ fn lifecycle_should_work() {
 		let w = Nfts::get_destroy_witness(&0).unwrap();
 		assert_eq!(w.item_metadatas, 2);
 		assert_eq!(w.item_configs, 3);
+		assert_noop!(
+			Nfts::destroy(RuntimeOrigin::signed(account(1)), 0, w),
+			Error::<Test>::CollectionNotEmpty
+		);
 
 		assert_ok!(Nfts::set_attribute(
 			RuntimeOrigin::signed(account(1)),
@@ -611,6 +615,7 @@ fn transfer_owner_should_work() {
 		assert_eq!(Balances::reserved_balance(&account(3)), 44);
 
 		assert_ok!(Nfts::transfer(RuntimeOrigin::signed(account(1)), 0, 42, account(2)));
+		// reserved_balance of accounts 1 & 2 should be unchanged:
 		assert_eq!(Balances::reserved_balance(&account(1)), 1);
 		assert_eq!(Balances::reserved_balance(&account(2)), 0);
 
@@ -642,6 +647,14 @@ fn set_team_should_work() {
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(account(2)), 0, 42, account(2), None));
 		assert_ok!(Nfts::lock_item_transfer(RuntimeOrigin::signed(account(4)), 0, 42));
 		assert_ok!(Nfts::unlock_item_transfer(RuntimeOrigin::signed(account(4)), 0, 42));
+		assert_noop!(
+			Nfts::transfer(RuntimeOrigin::signed(account(3)), 0, 42, account(3)),
+			Error::<Test>::NoPermission
+		);
+		assert_noop!(
+			Nfts::burn(RuntimeOrigin::signed(account(3)), 0, 42),
+			Error::<Test>::NoPermission
+		);
 	});
 }
 
