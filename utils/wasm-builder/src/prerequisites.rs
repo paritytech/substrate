@@ -39,8 +39,8 @@ pub(crate) fn check() -> Result<CargoCommandVersioned, String> {
 
 	if !cargo_command.supports_substrate_wasm_env() {
 		return Err(print_error_message(
-			"No rustc version found that supports our Substrate wasm environment! \
-				Rustc version needs to be at least 1.68.0 or rustc nightly needs to be installed.",
+			"Cannot compile the WASM runtime: no compatible Rust compiler found!\n\
+			 Install at least Rust 1.68.0 or a recent nightly version.",
 		))
 	}
 
