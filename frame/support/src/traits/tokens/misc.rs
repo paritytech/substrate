@@ -126,21 +126,6 @@ pub enum BalanceStatus {
 	Reserved,
 }
 
-/// Attribute namespaces for non-fungible tokens.
-#[derive(
-	Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, scale_info::TypeInfo, MaxEncodedLen,
-)]
-pub enum AttributeNamespace<AccountId> {
-	/// An attribute was set by the pallet.
-	Pallet,
-	/// An attribute was set by collection's owner.
-	CollectionOwner,
-	/// An attribute was set by item's owner.
-	ItemOwner,
-	/// An attribute was set by pre-approved account.
-	Account(AccountId),
-}
-
 bitflags::bitflags! {
 	/// Reasons for moving funds out of an account.
 	#[derive(Encode, Decode, MaxEncodedLen)]
