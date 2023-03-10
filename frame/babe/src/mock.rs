@@ -22,7 +22,7 @@ use codec::Encode;
 use frame_election_provider_support::{onchain, SequentialPhragmen};
 use frame_support::{
 	parameter_types,
-	traits::{ConstU128, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, OnInitialize},
+	traits::{ConstU128, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, Hooks},
 };
 use pallet_session::historical as pallet_session_historical;
 use sp_consensus_babe::{AuthorityId, AuthorityPair, Slot};
@@ -231,8 +231,6 @@ impl Config for Test {
 }
 
 pub fn go_to_block(n: u64, s: u64) {
-	use frame_support::traits::OnFinalize;
-
 	Babe::on_finalize(System::block_number());
 	Session::on_finalize(System::block_number());
 	Staking::on_finalize(System::block_number());
