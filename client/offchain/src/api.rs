@@ -326,11 +326,8 @@ mod tests {
 	use super::*;
 	use libp2p::PeerId;
 	use sc_client_db::offchain::LocalStorage;
-	use sc_network_common::{
-		config::MultiaddrWithPeerId,
-		protocol::ProtocolName,
-		service::{NetworkPeers, NetworkStateInfo},
-	};
+	use sc_network::{NetworkPeers, NetworkStateInfo};
+	use sc_network_common::{config::MultiaddrWithPeerId, protocol::ProtocolName};
 	use sc_peerset::ReputationChange;
 	use sp_core::offchain::{DbExternalities, Externalities};
 	use std::time::SystemTime;

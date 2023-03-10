@@ -50,7 +50,8 @@ use sc_consensus::{
 };
 use sc_network::{
 	config::{NetworkConfiguration, NonDefaultSetConfig},
-	Multiaddr, NetworkService, NetworkWorker,
+	Multiaddr, NetworkBlock, NetworkEventStream, NetworkService, NetworkStateInfo,
+	NetworkSyncForkRequest, NetworkWorker,
 };
 use sc_network_common::{
 	config::{
@@ -58,7 +59,6 @@ use sc_network_common::{
 		SyncMode, TransportConfig,
 	},
 	protocol::{role::Roles, ProtocolName},
-	service::{NetworkBlock, NetworkEventStream, NetworkStateInfo, NetworkSyncForkRequest},
 	sync::warp::{
 		AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncParams, WarpSyncProvider,
 	},

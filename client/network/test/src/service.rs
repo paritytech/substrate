@@ -20,11 +20,13 @@ use futures::prelude::*;
 use libp2p::{Multiaddr, PeerId};
 
 use sc_consensus::{ImportQueue, Link};
-use sc_network::{config, NetworkService, NetworkWorker};
+use sc_network::{
+	config, NetworkEventStream, NetworkNotification, NetworkPeers, NetworkService,
+	NetworkStateInfo, NetworkWorker,
+};
 use sc_network_common::{
-	config::{MultiaddrWithPeerId, ProtocolId, SetConfig, TransportConfig},
+	config::{MultiaddrWithPeerId, ProtocolId, TransportConfig},
 	protocol::{event::Event, role::Roles},
-	service::{NetworkEventStream, NetworkNotification, NetworkPeers, NetworkStateInfo},
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
@@ -73,7 +75,7 @@ struct TestNetworkBuilder {
 	link: Option<Box<dyn Link<TestBlock>>>,
 	client: Option<Arc<substrate_test_runtime_client::TestClient>>,
 	listen_addresses: Vec<Multiaddr>,
-	set_config: Option<SetConfig>,
+	set_config: Option<config::SetConfig>,
 	chain_sync_network: Option<(NetworkServiceProvider, NetworkServiceHandle)>,
 	config: Option<config::NetworkConfiguration>,
 }
@@ -101,7 +103,7 @@ impl TestNetworkBuilder {
 		self
 	}
 
-	pub fn with_set_config(mut self, set_config: SetConfig) -> Self {
+	pub fn with_set_config(mut self, set_config: config::SetConfig) -> Self {
 		self.set_config = Some(set_config);
 		self
 	}
@@ -253,7 +255,7 @@ fn build_nodes_one_proto() -> (
 		.start_network();
 
 	let (node2, events_stream2) = TestNetworkBuilder::new()
-		.with_set_config(SetConfig {
+		.with_set_config(config::SetConfig {
 			reserved_nodes: vec![MultiaddrWithPeerId {
 				multiaddr: listen_addr,
 				peer_id: node1.local_peer_id(),
@@ -411,7 +413,7 @@ async fn lots_of_incoming_peers_works() {
 
 	let (main_node, _) = TestNetworkBuilder::new()
 		.with_listen_addresses(vec![listen_addr.clone()])
-		.with_set_config(SetConfig { in_peers: u32::MAX, ..Default::default() })
+		.with_set_config(config::SetConfig { in_peers: u32::MAX, ..Default::default() })
 		.build()
 		.start_network();
 
@@ -423,7 +425,7 @@ async fn lots_of_incoming_peers_works() {
 
 	for _ in 0..32 {
 		let (_dialing_node, event_stream) = TestNetworkBuilder::new()
-			.with_set_config(SetConfig {
+			.with_set_config(config::SetConfig {
 				reserved_nodes: vec![MultiaddrWithPeerId {
 					multiaddr: listen_addr.clone(),
 					peer_id: main_node_peer_id,
@@ -563,7 +565,7 @@ async fn fallback_name_working() {
 		.start_network();
 
 	let (_, mut events_stream2) = TestNetworkBuilder::new()
-		.with_set_config(SetConfig {
+		.with_set_config(config::SetConfig {
 			reserved_nodes: vec![MultiaddrWithPeerId {
 				multiaddr: listen_addr,
 				peer_id: node1.local_peer_id(),
@@ -704,7 +706,7 @@ async fn ensure_reserved_node_addresses_consistent_with_transport_memory() {
 		.with_config(config::NetworkConfiguration {
 			listen_addresses: vec![listen_addr.clone()],
 			transport: TransportConfig::MemoryOnly,
-			default_peers_set: SetConfig {
+			default_peers_set: config::SetConfig {
 				reserved_nodes: vec![reserved_node],
 				..Default::default()
 			},
@@ -731,7 +733,7 @@ async fn ensure_reserved_node_addresses_consistent_with_transport_not_memory() {
 	let _ = TestNetworkBuilder::new()
 		.with_config(config::NetworkConfiguration {
 			listen_addresses: vec![listen_addr.clone()],
-			default_peers_set: SetConfig {
+			default_peers_set: config::SetConfig {
 				reserved_nodes: vec![reserved_node],
 				..Default::default()
 			},

@@ -46,7 +46,7 @@ use finality_grandpa::{
 	Message::{Precommit, Prevote, PrimaryPropose},
 };
 use parity_scale_codec::{Decode, Encode};
-use sc_network::ReputationChange;
+use sc_network::{NetworkBlock, NetworkSyncForkRequest, ReputationChange};
 use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use sp_keystore::SyncCryptoStorePtr;
@@ -59,10 +59,7 @@ use crate::{
 use gossip::{
 	FullCatchUpMessage, FullCommitMessage, GossipMessage, GossipValidator, PeerReport, VoteMessage,
 };
-use sc_network_common::{
-	service::{NetworkBlock, NetworkSyncForkRequest},
-	sync::SyncEventStream,
-};
+use sc_network_common::sync::SyncEventStream;
 use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_consensus_grandpa::{AuthorityId, AuthoritySignature, RoundNumber, SetId as SetIdNumber};
 

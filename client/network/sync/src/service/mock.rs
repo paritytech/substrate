@@ -19,14 +19,14 @@
 use futures::channel::oneshot;
 use libp2p::{Multiaddr, PeerId};
 use sc_consensus::{BlockImportError, BlockImportStatus};
+use sc_network::{
+	NetworkNotification, NetworkPeers, NetworkRequest, NetworkSyncForkRequest,
+	NotificationSenderError, NotificationSenderT,
+};
 use sc_network_common::{
 	config::MultiaddrWithPeerId,
 	protocol::ProtocolName,
 	request_responses::{IfDisconnected, RequestFailure},
-	service::{
-		NetworkNotification, NetworkPeers, NetworkRequest, NetworkSyncForkRequest,
-		NotificationSender, NotificationSenderError,
-	},
 };
 use sc_peerset::ReputationChange;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
@@ -135,7 +135,7 @@ mockall::mock! {
 			&self,
 			target: PeerId,
 			protocol: ProtocolName,
-		) -> Result<Box<dyn NotificationSender>, NotificationSenderError>;
+		) -> Result<Box<dyn NotificationSenderT>, NotificationSenderError>;
 		fn set_notification_handshake(&self, protocol: ProtocolName, handshake: Vec<u8>);
 	}
 }

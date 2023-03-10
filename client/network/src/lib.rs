@@ -265,17 +265,18 @@ pub use sc_network_common::{
 		ProtocolName,
 	},
 	request_responses::{IfDisconnected, RequestFailure},
-	service::{
-		KademliaKey, NetworkBlock, NetworkDHTProvider, NetworkRequest, NetworkSigner,
-		NetworkStateInfo, NetworkStatus, NetworkStatusProvider, NetworkSyncForkRequest, Signature,
-		SigningError,
-	},
 	sync::{
 		warp::{WarpSyncPhase, WarpSyncProgress},
 		ExtendedPeerInfo, StateDownloadProgress, SyncEventStream, SyncState, SyncStatusProvider,
 	},
 };
 pub use service::{
+	traits::{
+		KademliaKey, NetworkBlock, NetworkDHTProvider, NetworkEventStream, NetworkNotification,
+		NetworkPeers, NetworkRequest, NetworkSigner, NetworkStateInfo, NetworkStatus,
+		NetworkStatusProvider, NetworkSyncForkRequest, NotificationSender as NotificationSenderT,
+		NotificationSenderError,
+	},
 	DecodingError, Keypair, NetworkService, NetworkWorker, NotificationSender,
 	NotificationSenderReady, OutboundFailure, PublicKey,
 };

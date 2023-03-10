@@ -37,6 +37,12 @@ use crate::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
 	protocol::{self, NotificationsSink, NotifsHandlerError, Protocol, Ready},
+	service::traits::{
+		NetworkDHTProvider, NetworkEventStream, NetworkNotification, NetworkPeers, NetworkRequest,
+		NetworkSigner, NetworkStateInfo, NetworkStatus, NetworkStatusProvider,
+		NotificationSender as NotificationSenderT, NotificationSenderError,
+		NotificationSenderReady as NotificationSenderReadyT,
+	},
 	transport, ReputationChange,
 };
 
@@ -67,12 +73,7 @@ use sc_network_common::{
 		ProtocolName,
 	},
 	request_responses::{IfDisconnected, RequestFailure},
-	service::{
-		NetworkDHTProvider, NetworkEventStream, NetworkNotification, NetworkPeers, NetworkRequest,
-		NetworkSigner, NetworkStateInfo, NetworkStatus, NetworkStatusProvider,
-		NotificationSender as NotificationSenderT, NotificationSenderError,
-		NotificationSenderReady as NotificationSenderReadyT, Signature, SigningError,
-	},
+	service::signature::{Signature, SigningError},
 	ExHashT,
 };
 use sc_peerset::PeersetHandle;
@@ -100,6 +101,8 @@ pub use libp2p::identity::{error::DecodingError, Keypair, PublicKey};
 
 mod metrics;
 mod out_events;
+
+pub mod traits;
 
 /// Custom error that can be produced by the [`ConnectionHandler`] of the [`NetworkBehaviour`].
 /// Used as a template parameter of [`SwarmEvent`] below.

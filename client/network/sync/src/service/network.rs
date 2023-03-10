@@ -18,10 +18,10 @@
 
 use futures::{channel::oneshot, StreamExt};
 use libp2p::PeerId;
+use sc_network::{NetworkNotification, NetworkPeers, NetworkRequest};
 use sc_network_common::{
 	protocol::ProtocolName,
 	request_responses::{IfDisconnected, RequestFailure},
-	service::{NetworkNotification, NetworkPeers, NetworkRequest},
 };
 use sc_peerset::ReputationChange;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};

@@ -42,7 +42,7 @@ use futures::{
 	prelude::*,
 };
 use parking_lot::Mutex;
-use sc_network_common::service::{NetworkPeers, NetworkStateInfo};
+use sc_network::{NetworkPeers, NetworkStateInfo};
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_core::{offchain, traits::SpawnNamed, ExecutionContext};
 use sp_runtime::traits::{self, Header};

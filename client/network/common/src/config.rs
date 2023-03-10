@@ -195,31 +195,6 @@ impl From<multiaddr::Error> for ParseErr {
 	}
 }
 
-/// Configuration for a set of nodes.
-#[derive(Clone, Debug)]
-pub struct SetConfig {
-	/// Maximum allowed number of incoming substreams related to this set.
-	pub in_peers: u32,
-	/// Number of outgoing substreams related to this set that we're trying to maintain.
-	pub out_peers: u32,
-	/// List of reserved node addresses.
-	pub reserved_nodes: Vec<MultiaddrWithPeerId>,
-	/// Whether nodes that aren't in [`SetConfig::reserved_nodes`] are accepted or automatically
-	/// refused.
-	pub non_reserved_mode: NonReservedPeerMode,
-}
-
-impl Default for SetConfig {
-	fn default() -> Self {
-		Self {
-			in_peers: 25,
-			out_peers: 75,
-			reserved_nodes: Vec::new(),
-			non_reserved_mode: NonReservedPeerMode::Accept,
-		}
-	}
-}
-
 /// Custom handshake for the notification protocol
 #[derive(Debug, Clone)]
 pub struct NotificationHandshake(Vec<u8>);

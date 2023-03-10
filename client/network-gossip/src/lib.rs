@@ -68,11 +68,8 @@ pub use self::{
 };
 
 use libp2p::{multiaddr, PeerId};
-use sc_network_common::{
-	protocol::ProtocolName,
-	service::{NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers},
-	sync::SyncEventStream,
-};
+use sc_network::{NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers};
+use sc_network_common::{protocol::ProtocolName, sync::SyncEventStream};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::iter;
 

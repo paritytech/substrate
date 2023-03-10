@@ -52,9 +52,9 @@ use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{
 	import_queue::ImportQueueService, BlockImportError, BlockImportStatus, IncomingBlock,
 };
-use sc_network::config::NonDefaultSetConfig;
+use sc_network::config::{NonDefaultSetConfig, SetConfig};
 use sc_network_common::{
-	config::{NonReservedPeerMode, NotificationHandshake, ProtocolId, SetConfig},
+	config::{NonReservedPeerMode, NotificationHandshake, ProtocolId},
 	protocol::{role::Roles, ProtocolName},
 	request_responses::{IfDisconnected, RequestFailure},
 	sync::{

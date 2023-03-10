@@ -37,11 +37,13 @@ use log::{debug, trace, warn};
 
 // Substrate dependencies
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
-use sc_network::{config::NonDefaultSetConfig, error};
+use sc_network::{
+	config::{NonDefaultSetConfig, SetConfig},
+	error, NetworkEventStream, NetworkNotification, NetworkPeers,
+};
 use sc_network_common::{
-	config::{NonReservedPeerMode, ProtocolId, SetConfig},
+	config::{NonReservedPeerMode, ProtocolId},
 	protocol::{event::Event, role::ObservedRole, ProtocolName},
-	service::{NetworkEventStream, NetworkNotification, NetworkPeers},
 	sync::{SyncEvent, SyncEventStream},
 	utils::{interval, LruHashSet},
 	ExHashT,
