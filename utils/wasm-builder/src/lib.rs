@@ -294,8 +294,8 @@ impl CargoCommand {
 				return false
 			}
 
-			// Check if major and minor are greater or equal than 1.68
-			parts[0] >= 1 && parts[1] >= 68
+			// Check if major and minor are greater or equal than 1.68 or this is a nightly.
+			parts[0] >= 1 && parts[1] >= 68 || is_nightly
 		} else {
 			false
 		}
