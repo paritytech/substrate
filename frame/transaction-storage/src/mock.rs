@@ -21,7 +21,7 @@ use crate::{
 	self as pallet_transaction_storage, TransactionStorageProof, DEFAULT_MAX_BLOCK_TRANSACTIONS,
 	DEFAULT_MAX_TRANSACTION_SIZE,
 };
-use frame_support::traits::{ConstU16, ConstU32, ConstU64, OnFinalize, OnInitialize};
+use frame_support::traits::{ConstU16, ConstU32, ConstU64, Hooks};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
