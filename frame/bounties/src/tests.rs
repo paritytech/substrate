@@ -26,7 +26,7 @@ use frame_support::{
 	assert_noop, assert_ok,
 	pallet_prelude::GenesisBuild,
 	parameter_types,
-	traits::{ConstU32, ConstU64, OnInitialize},
+	traits::{ConstU32, ConstU64, Hooks},
 	PalletId,
 };
 
@@ -265,7 +265,7 @@ fn accepted_spend_proposal_ignored_outside_spend_period() {
 		assert_ok!(Treasury::propose_spend(RuntimeOrigin::signed(0), 100, 3));
 		assert_ok!(Treasury::approve_proposal(RuntimeOrigin::root(), 0));
 
-		<Treasury as OnInitialize<u64>>::on_initialize(1);
+		<Treasury as Hooks<u64>>::on_initialize(1);
 		assert_eq!(Balances::free_balance(3), 0);
 		assert_eq!(Treasury::pot(), 100);
 	});
@@ -278,7 +278,7 @@ fn unused_pot_should_diminish() {
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
 		assert_eq!(Balances::total_issuance(), init_total_issuance + 100);
 
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Treasury as Hooks<u64>>::on_initialize(2);
 		assert_eq!(Treasury::pot(), 50);
 		assert_eq!(Balances::total_issuance(), init_total_issuance + 50);
 	});
@@ -292,7 +292,7 @@ fn rejected_spend_proposal_ignored_on_spend_period() {
 		assert_ok!(Treasury::propose_spend(RuntimeOrigin::signed(0), 100, 3));
 		assert_ok!(Treasury::reject_proposal(RuntimeOrigin::root(), 0));
 
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Treasury as Hooks<u64>>::on_initialize(2);
 		assert_eq!(Balances::free_balance(3), 0);
 		assert_eq!(Treasury::pot(), 50);
 	});
@@ -355,7 +355,7 @@ fn accepted_spend_proposal_enacted_on_spend_period() {
 		assert_ok!(Treasury::propose_spend(RuntimeOrigin::signed(0), 100, 3));
 		assert_ok!(Treasury::approve_proposal(RuntimeOrigin::root(), 0));
 
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Treasury as Hooks<u64>>::on_initialize(2);
 		assert_eq!(Balances::free_balance(3), 100);
 		assert_eq!(Treasury::pot(), 0);
 	});
@@ -370,11 +370,11 @@ fn pot_underflow_should_not_diminish() {
 		assert_ok!(Treasury::propose_spend(RuntimeOrigin::signed(0), 150, 3));
 		assert_ok!(Treasury::approve_proposal(RuntimeOrigin::root(), 0));
 
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Treasury as Hooks<u64>>::on_initialize(2);
 		assert_eq!(Treasury::pot(), 100); // Pot hasn't changed
 
 		assert_ok!(Balances::deposit_into_existing(&Treasury::account_id(), 100));
-		<Treasury as OnInitialize<u64>>::on_initialize(4);
+		<Treasury as Hooks<u64>>::on_initialize(4);
 		assert_eq!(Balances::free_balance(3), 150); // Fund has been spent
 		assert_eq!(Treasury::pot(), 25); // Pot has finally changed
 	});
@@ -392,13 +392,13 @@ fn treasury_account_doesnt_get_deleted() {
 		assert_ok!(Treasury::propose_spend(RuntimeOrigin::signed(0), treasury_balance, 3));
 		assert_ok!(Treasury::approve_proposal(RuntimeOrigin::root(), 0));
 
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Treasury as Hooks<u64>>::on_initialize(2);
 		assert_eq!(Treasury::pot(), 100); // Pot hasn't changed
 
 		assert_ok!(Treasury::propose_spend(RuntimeOrigin::signed(0), Treasury::pot(), 3));
 		assert_ok!(Treasury::approve_proposal(RuntimeOrigin::root(), 1));
 
-		<Treasury as OnInitialize<u64>>::on_initialize(4);
+		<Treasury as Hooks<u64>>::on_initialize(4);
 		assert_eq!(Treasury::pot(), 0); // Pot is emptied
 		assert_eq!(Balances::free_balance(Treasury::account_id()), 1); // but the account is still there
 	});
@@ -423,7 +423,7 @@ fn inexistent_account_works() {
 		assert_ok!(Treasury::approve_proposal(RuntimeOrigin::root(), 0));
 		assert_ok!(Treasury::propose_spend(RuntimeOrigin::signed(0), 1, 3));
 		assert_ok!(Treasury::approve_proposal(RuntimeOrigin::root(), 1));
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Treasury as Hooks<u64>>::on_initialize(2);
 		assert_eq!(Treasury::pot(), 0); // Pot hasn't changed
 		assert_eq!(Balances::free_balance(3), 0); // Balance of `3` hasn't changed
 
@@ -431,7 +431,7 @@ fn inexistent_account_works() {
 		assert_eq!(Treasury::pot(), 99); // Pot now contains funds
 		assert_eq!(Balances::free_balance(Treasury::account_id()), 100); // Account does exist
 
-		<Treasury as OnInitialize<u64>>::on_initialize(4);
+		<Treasury as Hooks<u64>>::on_initialize(4);
 
 		assert_eq!(Treasury::pot(), 0); // Pot has changed
 		assert_eq!(Balances::free_balance(3), 99); // Balance of `3` has changed
@@ -564,7 +564,7 @@ fn approve_bounty_works() {
 		assert_eq!(Balances::reserved_balance(0), deposit);
 		assert_eq!(Balances::free_balance(0), 100 - deposit);
 
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Treasury as Hooks<u64>>::on_initialize(2);
 
 		// return deposit
 		assert_eq!(Balances::reserved_balance(0), 0);
@@ -603,7 +603,7 @@ fn assign_curator_works() {
 		assert_ok!(Bounties::approve_bounty(RuntimeOrigin::root(), 0));
 
 		System::set_block_number(2);
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Treasury as Hooks<u64>>::on_initialize(2);
 
 		assert_noop!(
 			Bounties::propose_curator(RuntimeOrigin::root(), 0, 4, 50),
@@ -667,7 +667,7 @@ fn unassign_curator_works() {
 		assert_ok!(Bounties::approve_bounty(RuntimeOrigin::root(), 0));
 
 		System::set_block_number(2);
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Treasury as Hooks<u64>>::on_initialize(2);
 
 		let fee = 4;
 
@@ -721,7 +721,7 @@ fn award_and_claim_bounty_works() {
 		assert_ok!(Bounties::approve_bounty(RuntimeOrigin::root(), 0));
 
 		System::set_block_number(2);
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Treasury as Hooks<u64>>::on_initialize(2);
 
 		let fee = 4;
 		assert_ok!(Bounties::propose_curator(RuntimeOrigin::root(), 0, 4, fee));
@@ -752,7 +752,7 @@ fn award_and_claim_bounty_works() {
 		assert_noop!(Bounties::claim_bounty(RuntimeOrigin::signed(1), 0), Error::<Test>::Premature);
 
 		System::set_block_number(5);
-		<Treasury as OnInitialize<u64>>::on_initialize(5);
+		<Treasury as Hooks<u64>>::on_initialize(5);
 
 		assert_ok!(Balances::transfer(
 			RuntimeOrigin::signed(0),
@@ -788,7 +788,7 @@ fn claim_handles_high_fee() {
 		assert_ok!(Bounties::approve_bounty(RuntimeOrigin::root(), 0));
 
 		System::set_block_number(2);
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Treasury as Hooks<u64>>::on_initialize(2);
 
 		assert_ok!(Bounties::propose_curator(RuntimeOrigin::root(), 0, 4, 49));
 		assert_ok!(Bounties::accept_curator(RuntimeOrigin::signed(4), 0));
@@ -796,7 +796,7 @@ fn claim_handles_high_fee() {
 		assert_ok!(Bounties::award_bounty(RuntimeOrigin::signed(4), 0, 3));
 
 		System::set_block_number(5);
-		<Treasury as OnInitialize<u64>>::on_initialize(5);
+		<Treasury as Hooks<u64>>::on_initialize(5);
 
 		// make fee > balance
 		let res = Balances::slash(&Bounties::bounty_account_id(0), 10);
@@ -830,7 +830,7 @@ fn cancel_and_refund() {
 		assert_ok!(Bounties::approve_bounty(RuntimeOrigin::root(), 0));
 
 		System::set_block_number(2);
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Treasury as Hooks<u64>>::on_initialize(2);
 
 		assert_ok!(Balances::transfer(
 			RuntimeOrigin::signed(0),
@@ -871,7 +871,7 @@ fn award_and_cancel() {
 		assert_ok!(Bounties::approve_bounty(RuntimeOrigin::root(), 0));
 
 		System::set_block_number(2);
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Treasury as Hooks<u64>>::on_initialize(2);
 
 		assert_ok!(Bounties::propose_curator(RuntimeOrigin::root(), 0, 0, 10));
 		assert_ok!(Bounties::accept_curator(RuntimeOrigin::signed(0), 0));
@@ -914,7 +914,7 @@ fn expire_and_unassign() {
 		assert_ok!(Bounties::approve_bounty(RuntimeOrigin::root(), 0));
 
 		System::set_block_number(2);
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Treasury as Hooks<u64>>::on_initialize(2);
 
 		assert_ok!(Bounties::propose_curator(RuntimeOrigin::root(), 0, 1, 10));
 		assert_ok!(Bounties::accept_curator(RuntimeOrigin::signed(1), 0));
@@ -923,7 +923,7 @@ fn expire_and_unassign() {
 		assert_eq!(Balances::reserved_balance(1), 5);
 
 		System::set_block_number(22);
-		<Treasury as OnInitialize<u64>>::on_initialize(22);
+		<Treasury as Hooks<u64>>::on_initialize(22);
 
 		assert_noop!(
 			Bounties::unassign_curator(RuntimeOrigin::signed(0), 0),
@@ -931,7 +931,7 @@ fn expire_and_unassign() {
 		);
 
 		System::set_block_number(23);
-		<Treasury as OnInitialize<u64>>::on_initialize(23);
+		<Treasury as Hooks<u64>>::on_initialize(23);
 
 		assert_ok!(Bounties::unassign_curator(RuntimeOrigin::signed(0), 0));
 
@@ -968,7 +968,7 @@ fn extend_expiry() {
 		);
 
 		System::set_block_number(2);
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Treasury as Hooks<u64>>::on_initialize(2);
 
 		assert_ok!(Bounties::propose_curator(RuntimeOrigin::root(), 0, 4, 10));
 		assert_ok!(Bounties::accept_curator(RuntimeOrigin::signed(4), 0));
@@ -977,7 +977,7 @@ fn extend_expiry() {
 		assert_eq!(Balances::reserved_balance(4), 5);
 
 		System::set_block_number(10);
-		<Treasury as OnInitialize<u64>>::on_initialize(10);
+		<Treasury as Hooks<u64>>::on_initialize(10);
 
 		assert_noop!(
 			Bounties::extend_bounty_expiry(RuntimeOrigin::signed(0), 0, Vec::new()),
@@ -1012,7 +1012,7 @@ fn extend_expiry() {
 		);
 
 		System::set_block_number(25);
-		<Treasury as OnInitialize<u64>>::on_initialize(25);
+		<Treasury as Hooks<u64>>::on_initialize(25);
 
 		assert_noop!(
 			Bounties::unassign_curator(RuntimeOrigin::signed(0), 0),
@@ -1095,7 +1095,7 @@ fn unassign_curator_self() {
 		assert_ok!(Bounties::approve_bounty(RuntimeOrigin::root(), 0));
 
 		System::set_block_number(2);
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Treasury as Hooks<u64>>::on_initialize(2);
 
 		assert_ok!(Bounties::propose_curator(RuntimeOrigin::root(), 0, 1, 10));
 		assert_ok!(Bounties::accept_curator(RuntimeOrigin::signed(1), 0));
@@ -1104,7 +1104,7 @@ fn unassign_curator_self() {
 		assert_eq!(Balances::reserved_balance(1), 5);
 
 		System::set_block_number(8);
-		<Treasury as OnInitialize<u64>>::on_initialize(8);
+		<Treasury as Hooks<u64>>::on_initialize(8);
 
 		assert_ok!(Bounties::unassign_curator(RuntimeOrigin::signed(1), 0));
 
@@ -1145,7 +1145,7 @@ fn accept_curator_handles_different_deposit_calculations() {
 		assert_ok!(Bounties::approve_bounty(RuntimeOrigin::root(), bounty_index));
 
 		System::set_block_number(2);
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Treasury as Hooks<u64>>::on_initialize(2);
 
 		assert_ok!(Bounties::propose_curator(RuntimeOrigin::root(), bounty_index, user, fee));
 		assert_ok!(Bounties::accept_curator(RuntimeOrigin::signed(user), bounty_index));
@@ -1167,7 +1167,7 @@ fn accept_curator_handles_different_deposit_calculations() {
 		assert_ok!(Bounties::approve_bounty(RuntimeOrigin::root(), bounty_index));
 
 		System::set_block_number(4);
-		<Treasury as OnInitialize<u64>>::on_initialize(4);
+		<Treasury as Hooks<u64>>::on_initialize(4);
 
 		assert_ok!(Bounties::propose_curator(RuntimeOrigin::root(), bounty_index, user, fee));
 		assert_ok!(Bounties::accept_curator(RuntimeOrigin::signed(user), bounty_index));
@@ -1193,7 +1193,7 @@ fn accept_curator_handles_different_deposit_calculations() {
 		assert_ok!(Bounties::approve_bounty(RuntimeOrigin::root(), bounty_index));
 
 		System::set_block_number(6);
-		<Treasury as OnInitialize<u64>>::on_initialize(6);
+		<Treasury as Hooks<u64>>::on_initialize(6);
 
 		assert_ok!(Bounties::propose_curator(RuntimeOrigin::root(), bounty_index, user, fee));
 		assert_ok!(Bounties::accept_curator(RuntimeOrigin::signed(user), bounty_index));
@@ -1218,8 +1218,8 @@ fn approve_bounty_works_second_instance() {
 
 		assert_ok!(Bounties1::propose_bounty(RuntimeOrigin::signed(0), 10, b"12345".to_vec()));
 		assert_ok!(Bounties1::approve_bounty(RuntimeOrigin::root(), 0));
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
-		<Treasury1 as OnInitialize<u64>>::on_initialize(2);
+		<Treasury as Hooks<u64>>::on_initialize(2);
+		<Treasury1 as Hooks<u64>>::on_initialize(2);
 
 		// Bounties 1 is funded... but from where?
 		assert_eq!(Balances::free_balance(Bounties1::bounty_account_id(0)), 10);
@@ -1278,7 +1278,7 @@ fn propose_curator_insufficient_spend_limit_errors() {
 		assert_ok!(Bounties::approve_bounty(RuntimeOrigin::root(), 0));
 
 		System::set_block_number(2);
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Treasury as Hooks<u64>>::on_initialize(2);
 
 		SpendLimit::set(50);
 		// 51 will not work since the limit is 50.
@@ -1301,7 +1301,7 @@ fn propose_curator_instance1_insufficient_spend_limit_errors() {
 		assert_ok!(Bounties1::approve_bounty(RuntimeOrigin::root(), 0));
 
 		System::set_block_number(2);
-		<Treasury1 as OnInitialize<u64>>::on_initialize(2);
+		<Treasury1 as Hooks<u64>>::on_initialize(2);
 
 		SpendLimit1::set(10);
 		// 11 will not work since the limit is 10.
