@@ -196,7 +196,7 @@ pub mod pallet {
 
 	/// Details of a collection.
 	#[pallet::storage]
-	pub(super) type Collection<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub type Collection<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Blake2_128Concat,
 		T::CollectionId,
@@ -205,13 +205,13 @@ pub mod pallet {
 
 	/// The collection, if any, of which an account is willing to take ownership.
 	#[pallet::storage]
-	pub(super) type OwnershipAcceptance<T: Config<I>, I: 'static = ()> =
+	pub type OwnershipAcceptance<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, T::CollectionId>;
 
 	/// The items held by any given account; set out this way so that items owned by a single
 	/// account can be enumerated.
 	#[pallet::storage]
-	pub(super) type Account<T: Config<I>, I: 'static = ()> = StorageNMap<
+	pub type Account<T: Config<I>, I: 'static = ()> = StorageNMap<
 		_,
 		(
 			NMapKey<Blake2_128Concat, T::AccountId>, // owner
@@ -225,7 +225,7 @@ pub mod pallet {
 	/// The collections owned by any given account; set out this way so that collections owned by
 	/// a single account can be enumerated.
 	#[pallet::storage]
-	pub(super) type CollectionAccount<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub type CollectionAccount<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
 		T::AccountId,
@@ -238,7 +238,7 @@ pub mod pallet {
 	/// The items in existence and their ownership details.
 	#[pallet::storage]
 	/// Stores collection roles as per account.
-	pub(super) type CollectionRoleOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub type CollectionRoleOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
 		T::CollectionId,
@@ -250,7 +250,7 @@ pub mod pallet {
 
 	/// The items in existence and their ownership details.
 	#[pallet::storage]
-	pub(super) type Item<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub type Item<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
 		T::CollectionId,
@@ -262,7 +262,7 @@ pub mod pallet {
 
 	/// Metadata of a collection.
 	#[pallet::storage]
-	pub(super) type CollectionMetadataOf<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub type CollectionMetadataOf<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Blake2_128Concat,
 		T::CollectionId,
@@ -272,7 +272,7 @@ pub mod pallet {
 
 	/// Metadata of an item.
 	#[pallet::storage]
-	pub(super) type ItemMetadataOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub type ItemMetadataOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
 		T::CollectionId,
@@ -284,7 +284,7 @@ pub mod pallet {
 
 	/// Attributes of a collection.
 	#[pallet::storage]
-	pub(super) type Attribute<T: Config<I>, I: 'static = ()> = StorageNMap<
+	pub type Attribute<T: Config<I>, I: 'static = ()> = StorageNMap<
 		_,
 		(
 			NMapKey<Blake2_128Concat, T::CollectionId>,
@@ -298,7 +298,7 @@ pub mod pallet {
 
 	/// A price of an item.
 	#[pallet::storage]
-	pub(super) type ItemPriceOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub type ItemPriceOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
 		T::CollectionId,
@@ -310,7 +310,7 @@ pub mod pallet {
 
 	/// Item attribute approvals.
 	#[pallet::storage]
-	pub(super) type ItemAttributesApprovalsOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub type ItemAttributesApprovalsOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
 		T::CollectionId,
@@ -323,12 +323,12 @@ pub mod pallet {
 	/// Stores the `CollectionId` that is going to be used for the next collection.
 	/// This gets incremented whenever a new collection is created.
 	#[pallet::storage]
-	pub(super) type NextCollectionId<T: Config<I>, I: 'static = ()> =
+	pub type NextCollectionId<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, T::CollectionId, OptionQuery>;
 
 	/// Handles all the pending swaps.
 	#[pallet::storage]
-	pub(super) type PendingSwapOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub type PendingSwapOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
 		T::CollectionId,
@@ -345,12 +345,12 @@ pub mod pallet {
 
 	/// Config of a collection.
 	#[pallet::storage]
-	pub(super) type CollectionConfigOf<T: Config<I>, I: 'static = ()> =
+	pub type CollectionConfigOf<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, T::CollectionId, CollectionConfigFor<T, I>, OptionQuery>;
 
 	/// Config of an item.
 	#[pallet::storage]
-	pub(super) type ItemConfigOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub type ItemConfigOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
 		T::CollectionId,
