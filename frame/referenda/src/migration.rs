@@ -19,7 +19,8 @@
 
 use super::*;
 use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
-use frame_support::{pallet_prelude::*, storage_alias, traits::OnRuntimeUpgrade};
+use frame_support::{pallet_prelude::*, storage_alias, traits::Hooks};
+use frame_system::pallet_prelude::BlockNumberFor;
 use log;
 
 /// Initial version of storage types.
@@ -93,7 +94,7 @@ pub mod v1 {
 	/// Transforms a submission deposit of ReferendumInfo(Approved|Rejected|Cancelled|TimedOut) to
 	/// optional value, making it refundable.
 	pub struct MigrateV0ToV1<T, I = ()>(PhantomData<(T, I)>);
-	impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for MigrateV0ToV1<T, I> {
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for MigrateV0ToV1<T, I> {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 			let onchain_version = Pallet::<T, I>::on_chain_storage_version();
