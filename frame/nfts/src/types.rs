@@ -124,7 +124,7 @@ impl<AccountId, DepositBalance> CollectionDetails<AccountId, DepositBalance> {
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct MintWitness<ItemId> {
 	/// Provide the id of the item in a required collection.
-	pub owner_of_item: ItemId,
+	pub owned_item: ItemId,
 }
 
 /// Information concerning the ownership of a single unique item.
@@ -317,6 +317,21 @@ impl<Price, BlockNumber, CollectionId> Default for MintSettings<Price, BlockNumb
 	}
 }
 
+/// Attribute namespaces for non-fungible tokens.
+#[derive(
+	Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, scale_info::TypeInfo, MaxEncodedLen,
+)]
+pub enum AttributeNamespace<AccountId> {
+	/// An attribute was set by the pallet.
+	Pallet,
+	/// An attribute was set by collection's owner.
+	CollectionOwner,
+	/// An attribute was set by item's owner.
+	ItemOwner,
+	/// An attribute was set by pre-approved account.
+	Account(AccountId),
+}
+
 /// A witness data to cancel attributes approval operation.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct CancelAttributesApprovalWitness {
@@ -399,7 +414,7 @@ impl_codec_bitflags!(ItemSettings, u64, ItemSetting);
 )]
 pub struct ItemConfig {
 	/// Item's settings.
-	pub(super) settings: ItemSettings,
+	pub settings: ItemSettings,
 }
 
 impl ItemConfig {
