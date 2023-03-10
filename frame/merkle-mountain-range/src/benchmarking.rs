@@ -21,7 +21,7 @@
 
 use crate::*;
 use frame_benchmarking::v1::benchmarks_instance_pallet;
-use frame_support::traits::OnInitialize;
+use frame_support::traits::Hooks;
 
 benchmarks_instance_pallet! {
 	on_initialize {

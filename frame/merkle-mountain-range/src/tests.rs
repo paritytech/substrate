@@ -17,7 +17,7 @@
 
 use crate::{mock::*, *};
 
-use frame_support::traits::{Get, OnInitialize};
+use frame_support::traits::{Get, Hooks};
 use sp_core::{
 	offchain::{testing::TestOffchainExt, OffchainDbExt, OffchainWorkerExt},
 	H256,
