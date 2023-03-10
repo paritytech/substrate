@@ -1201,7 +1201,7 @@ mod tests {
 		assert_noop, assert_ok,
 		dispatch::DispatchResultWithPostInfo,
 		parameter_types,
-		traits::{ConstU32, ConstU64, OnInitialize},
+		traits::{ConstU32, ConstU64, Hooks},
 	};
 	use frame_system::ensure_signed;
 	use sp_core::H256;
