@@ -20,7 +20,7 @@
 use super::*;
 use mock::*;
 
-use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
+use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_runtime::traits::BadOrigin;
 
 type ScoredPool = Pallet<Test>;
