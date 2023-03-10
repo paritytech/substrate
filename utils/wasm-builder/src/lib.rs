@@ -184,7 +184,9 @@ fn get_cargo_command() -> CargoCommand {
 	let wasm_toolchain = env::var(WASM_BUILD_TOOLCHAIN).ok();
 
 	// First check if the user requested a specific toolchain
-	if let Some(cmd) = wasm_toolchain.and_then(|t| get_rustup_command(Some(t))) {
+	if let Some(cmd) =
+		wasm_toolchain.map(|t| CargoCommand::new_with_args("rustup", &["run", &t, "cargo"]))
+	{
 		cmd
 	} else if env_cargo.supports_substrate_wasm_env() {
 		env_cargo
@@ -194,38 +196,74 @@ fn get_cargo_command() -> CargoCommand {
 		// If no command before provided us with a cargo that supports our Substrate wasm env, we
 		// try to search one with rustup. If that fails as well, we return the default cargo and let
 		// the prequisities check fail.
-		get_rustup_command(None).unwrap_or(default_cargo)
+		get_rustup_command().unwrap_or(default_cargo)
 	}
 }
 
-/// Get the first rustup command that supports our Substrate wasm env. If `selected` is `Some(_)`, a
-/// `CargoCommand` using the given nightly is returned.
-fn get_rustup_command(selected: Option<String>) -> Option<CargoCommand> {
+/// Get the newest rustup command that supports our Substrate wasm env.
+///
+/// Stable versions are always favored over nightly versions even if the nightly versions are
+/// newer.
+fn get_rustup_command() -> Option<CargoCommand> {
 	let host = format!("-{}", env::var("HOST").expect("`HOST` is always set by cargo"));
 
-	let version = match selected {
-		Some(selected) => selected,
-		None => {
-			let output = Command::new("rustup").args(&["toolchain", "list"]).output().ok()?.stdout;
-			let lines = output.as_slice().lines();
+	let output = Command::new("rustup").args(&["toolchain", "list"]).output().ok()?.stdout;
+	let lines = output.as_slice().lines();
 
-			let mut found_version = None;
-			for line in lines.filter_map(|l| l.ok()) {
-				let version = line.trim_end_matches(&host);
+	let mut found_version: Option<(String, Version)> = None;
+	for line in lines.filter_map(|l| l.ok()) {
+		let rustup_version = line.trim_end_matches(&host);
 
-				if CargoCommand::new_with_args("rustup", &["run", &version, "cargo"])
-					.supports_substrate_wasm_env()
-				{
-					found_version = Some(version.into());
-					break
-				}
+		let cmd = CargoCommand::new_with_args("rustup", &["run", &rustup_version, "cargo"]);
+
+		if !cmd.supports_substrate_wasm_env() {
+			continue
+		}
+
+		let Some(cargo_version) = cmd.version() else { continue; };
+
+		if let Some((rustup_version_other, cargo_version_other)) = &mut found_version {
+			let is_older = cargo_version_other.is_older(&cargo_version);
+
+			// Nightly should not overwrite a stable version.
+			if cargo_version_other.is_stable() && cargo_version.is_nightly {
+				continue
 			}
 
-			found_version?
-		},
-	};
+			// Stable versions overwrite nightly versions or otherwise just check which one is
+			// older.
+			if cargo_version_other.is_nightly && cargo_version.is_stable() || is_older {
+				*rustup_version_other = rustup_version.into();
+				*cargo_version_other = cargo_version;
+			}
+		} else {
+			found_version = Some((rustup_version.into(), cargo_version));
+		}
+	}
 
+	let version = found_version?.0;
 	Some(CargoCommand::new_with_args("rustup", &["run", &version, "cargo"]))
+}
+
+/// The version of rustc/cargo.
+#[derive(Clone, Copy, Debug)]
+struct Version {
+	pub major: u32,
+	pub minor: u32,
+	pub patch: u32,
+	pub is_nightly: bool,
+}
+
+impl Version {
+	/// Returns if `self` is older than `other`.
+	fn is_older(&self, other: &Self) -> bool {
+		self.major < other.major || self.minor < other.minor || self.patch < other.patch
+	}
+
+	/// Returns if `self` is a stable version.
+	fn is_stable(&self) -> bool {
+		!self.is_nightly
+	}
 }
 
 /// Wraps a specific command which represents a cargo invocation.
@@ -233,17 +271,23 @@ fn get_rustup_command(selected: Option<String>) -> Option<CargoCommand> {
 struct CargoCommand {
 	program: String,
 	args: Vec<String>,
+	version: Option<Version>,
 }
 
 impl CargoCommand {
 	fn new(program: &str) -> Self {
-		CargoCommand { program: program.into(), args: Vec::new() }
+		let version = Self::extract_version(program, &[]);
+
+		CargoCommand { program: program.into(), args: Vec::new(), version }
 	}
 
 	fn new_with_args(program: &str, args: &[&str]) -> Self {
+		let version = Self::extract_version(program, args);
+
 		CargoCommand {
 			program: program.into(),
 			args: args.iter().map(ToString::to_string).collect(),
+			version,
 		}
 	}
 
@@ -251,6 +295,43 @@ impl CargoCommand {
 		let mut cmd = Command::new(&self.program);
 		cmd.args(&self.args);
 		cmd
+	}
+
+	fn extract_version(program: &str, args: &[&str]) -> Option<Version> {
+		let version = Command::new(program)
+			.args(args)
+			.arg("--version")
+			.output()
+			.ok()
+			.and_then(|o| String::from_utf8(o.stdout).ok())?;
+
+		if let Some(version) = version.split(" ").nth(1) {
+			let mut is_nightly = false;
+			let parts = version
+				.split(".")
+				.filter_map(|v| {
+					if let Some(rest) = v.strip_suffix("-nightly") {
+						is_nightly = true;
+						rest.parse().ok()
+					} else {
+						v.parse().ok()
+					}
+				})
+				.collect::<Vec<u32>>();
+
+			if parts.len() != 3 {
+				return None
+			}
+
+			Some(Version { major: parts[0], minor: parts[1], patch: parts[2], is_nightly })
+		} else {
+			None
+		}
+	}
+
+	/// Returns the version of this cargo command or `None` if it failed to extract the version.
+	fn version(&self) -> Option<Version> {
+		self.version
 	}
 
 	/// Check if the supplied cargo command supports our Substrate wasm environment.
@@ -267,38 +348,10 @@ impl CargoCommand {
 			return true
 		}
 
-		let version = self
-			.command()
-			.arg("--version")
-			.output()
-			.map_err(|_| ())
-			.and_then(|o| String::from_utf8(o.stdout).map_err(|_| ()))
-			.unwrap_or_default();
+		let Some(version) = self.version() else { return false };
 
-		// Cargo version should always be in format `cargo 1.68.0(-nightly)? (hash date)`
-		if let Some(version) = version.split(" ").nth(1) {
-			let mut is_nightly = false;
-			let parts = version
-				.split(".")
-				.filter_map(|v| {
-					if let Some(rest) = v.strip_suffix("-nightly") {
-						is_nightly = true;
-						rest.parse().ok()
-					} else {
-						v.parse().ok()
-					}
-				})
-				.collect::<Vec<u32>>();
-
-			if parts.len() != 3 {
-				return false
-			}
-
-			// Check if major and minor are greater or equal than 1.68 or this is a nightly.
-			parts[0] >= 1 && parts[1] >= 68 || is_nightly
-		} else {
-			false
-		}
+		// Check if major and minor are greater or equal than 1.68 or this is a nightly.
+		version.major >= 1 && version.minor >= 68 || version.is_nightly
 	}
 }
 
