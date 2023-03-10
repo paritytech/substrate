@@ -203,9 +203,13 @@ impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId, ItemConfig
 		collection: &Self::CollectionId,
 		item: &Self::ItemId,
 		who: &T::AccountId,
-		item_config: &ItemConfig,
+		item_config: Option<&ItemConfig>,
 		deposit_collection_owner: bool,
 	) -> DispatchResult {
+		let item_config = match item_config {
+			Some(item_config) => *item_config,
+			None => ItemConfig { settings: Self::get_default_item_settings(&collection)? },
+		};
 		Self::do_mint(
 			*collection,
 			*item,
@@ -214,7 +218,7 @@ impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId, ItemConfig
 				false => Some(who.clone()),
 			},
 			who.clone(),
-			*item_config,
+			item_config,
 			|_, _| Ok(()),
 		)
 	}

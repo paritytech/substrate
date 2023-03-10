@@ -122,12 +122,13 @@ pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
 /// attributes set on them.
 pub trait Mutate<AccountId, ItemConfig>: Inspect<AccountId> {
 	/// Mint some `item` to be owned by `who`.
+	/// When `config` set to `None` it will use the collection's default_item_settings.
 	///
 	/// By default, this is not a supported operation.
 	fn mint_into(
 		_item: &Self::ItemId,
 		_who: &AccountId,
-		_config: &ItemConfig,
+		_config: Option<&ItemConfig>,
 		_deposit_collection_owner: bool,
 	) -> DispatchResult {
 		Err(TokenError::Unsupported.into())
@@ -257,7 +258,7 @@ impl<
 	fn mint_into(
 		item: &Self::ItemId,
 		who: &AccountId,
-		config: &ItemConfig,
+		config: Option<&ItemConfig>,
 		deposit_collection_owner: bool,
 	) -> DispatchResult {
 		<F as nonfungibles::Mutate<AccountId, ItemConfig>>::mint_into(
