@@ -25,7 +25,7 @@ use frame_benchmarking::v1::{account, benchmarks_instance_pallet, BenchmarkError
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	ensure,
-	traits::{EnsureOrigin, OnInitialize},
+	traits::{EnsureOrigin, Hooks},
 };
 use frame_system::RawOrigin;
 
