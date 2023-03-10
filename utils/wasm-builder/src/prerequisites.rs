@@ -35,10 +35,13 @@ fn print_error_message(message: &str) -> String {
 ///
 /// Returns the versioned cargo command on success.
 pub(crate) fn check() -> Result<CargoCommandVersioned, String> {
-	let cargo_command = crate::get_nightly_cargo();
+	let cargo_command = crate::get_cargo_command();
 
-	if !cargo_command.is_nightly() {
-		return Err(print_error_message("Rust nightly not installed, please install it!"))
+	if !cargo_command.supports_substrate_wasm_env() {
+		return Err(print_error_message(
+			"No rustc version found that supports our Substrate wasm environment! \
+				Rustc version needs to be at least 1.68.0 or rustc nightly needs to be installed.",
+		))
 	}
 
 	check_wasm_toolchain_installed(cargo_command)
