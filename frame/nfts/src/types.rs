@@ -399,7 +399,7 @@ impl_codec_bitflags!(ItemSettings, u64, ItemSetting);
 )]
 pub struct ItemConfig {
 	/// Item's settings.
-	pub(super) settings: ItemSettings,
+	pub settings: ItemSettings,
 }
 
 impl ItemConfig {
