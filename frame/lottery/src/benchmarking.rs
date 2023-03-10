@@ -24,7 +24,7 @@ use super::*;
 use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller, BenchmarkError};
 use frame_support::{
 	storage::bounded_vec::BoundedVec,
-	traits::{EnsureOrigin, OnInitialize},
+	traits::{EnsureOrigin, Hooks},
 };
 use frame_system::RawOrigin;
 use sp_runtime::traits::{Bounded, Zero};
