@@ -362,7 +362,7 @@ impl<Price, BlockNumber, CollectionId> Default
 {
 	fn default() -> Self {
 		Self {
-			settings: CollectionSettings::default(),
+			settings: CollectionSettings::all_enabled(),
 			max_supply: None,
 			mint_settings: MintSettings::default(),
 		}
@@ -427,7 +427,7 @@ pub struct ItemConfig {
 
 impl Default for ItemConfig {
 	fn default() -> Self {
-		Self { settings: ItemSettings::default() }
+		Self { settings: ItemSettings::all_enabled() }
 	}
 }
 
