@@ -716,7 +716,7 @@ benchmarks! {
 	// contract it cannot be used as an attack vector.
 	#[pov_mode = Measured]
 	seal_return {
-		let r in 0 .. 1;
+		let r in 0 .. API_BENCHMARK_BATCHES;
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
@@ -2700,7 +2700,7 @@ benchmarks! {
 	// depends on how much memory is already allocated.
 	#[pov_mode = Ignored]
 	instr_memory_grow {
-		let r in 0 .. 1;
+		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let max_pages = ImportedMemory::max::<T>().max_pages;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory {
