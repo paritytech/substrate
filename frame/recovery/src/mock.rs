@@ -22,7 +22,7 @@ use super::*;
 use crate as recovery;
 use frame_support::{
 	parameter_types,
-	traits::{ConstU32, ConstU64, OnFinalize, OnInitialize},
+	traits::{ConstU32, ConstU64, Hooks},
 };
 use sp_core::H256;
 use sp_runtime::{
