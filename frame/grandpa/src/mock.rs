@@ -224,13 +224,10 @@ parameter_types! {
 
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-
 	type WeightInfo = ();
 	type MaxAuthorities = ConstU32<100>;
 	type MaxSetIdSessionEntries = MaxSetIdSessionEntries;
-
 	type KeyOwnerProof = <Historical as KeyOwnerProofSystem<(KeyTypeId, AuthorityId)>>::Proof;
-
 	type EquivocationReportSystem =
 		super::EquivocationReportSystem<Self, Offences, Historical, ReportLongevity>;
 }

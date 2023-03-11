@@ -63,7 +63,7 @@ mod mock;
 #[cfg(all(feature = "std", test))]
 mod tests;
 
-pub use equivocation::{EquivocationOffence, EquivocationReportSystem, GrandpaTimeSlot};
+pub use equivocation::{EquivocationOffence, EquivocationReportSystem, TimeSlot};
 
 pub use pallet::*;
 
@@ -351,6 +351,7 @@ pub mod pallet {
 	#[pallet::validate_unsigned]
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
+
 		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			Self::validate_unsigned(source, call)
 		}
