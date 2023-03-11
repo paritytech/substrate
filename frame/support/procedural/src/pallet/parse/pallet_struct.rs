@@ -84,7 +84,10 @@ impl syn::parse::Parse for PalletStructAttr {
 			syn::parenthesized!(generate_content in content);
 			let vis = generate_content.parse::<syn::Visibility>()?;
 			generate_content.parse::<syn::Token![trait]>()?;
-			let keyword = generate_content.parse::<keyword::Store>()?;
+			let mut keyword = generate_content.parse::<keyword::Store>()?;
+			// set span of Store keyword same to attirbute macro `generate_store`
+			// so that deprecated warning highlights use of macro.
+			keyword.span = content.span();
 			Ok(Self::GenerateStore { vis, keyword, span })
 		} else if lookahead.peek(keyword::without_storage_info) {
 			let span = content.parse::<keyword::without_storage_info>()?.span();
