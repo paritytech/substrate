@@ -235,6 +235,7 @@ fn tip_new_cannot_be_used_twice() {
 			Tips::tip_new(RuntimeOrigin::signed(11), b"awesome.dot".to_vec(), 3, 10),
 			Error::<Test>::AlreadyKnown
 		);
+		Tips::do_try_state().unwrap();
 	});
 }
 
@@ -262,6 +263,7 @@ fn report_awesome_and_tip_works() {
 		assert_eq!(Balances::reserved_balance(0), 0);
 		assert_eq!(Balances::free_balance(0), 102);
 		assert_eq!(Balances::free_balance(3), 8);
+		Tips::do_try_state().unwrap();
 	});
 }
 
@@ -280,6 +282,7 @@ fn report_awesome_from_beneficiary_and_tip_works() {
 		assert_ok!(Tips::close_tip(RuntimeOrigin::signed(100), h.into()));
 		assert_eq!(Balances::reserved_balance(0), 0);
 		assert_eq!(Balances::free_balance(0), 110);
+		Tips::do_try_state().unwrap();
 	});
 }
 
@@ -318,6 +321,8 @@ fn close_tip_works() {
 			Tips::close_tip(RuntimeOrigin::signed(100), h.into()),
 			Error::<Test>::UnknownTip
 		);
+		
+		Tips::do_try_state().unwrap();
 	});
 }
 
@@ -349,6 +354,8 @@ fn slash_tip_works() {
 		// tipper slashed
 		assert_eq!(Balances::reserved_balance(0), 0);
 		assert_eq!(Balances::free_balance(0), 88);
+		
+		Tips::do_try_state().unwrap();
 	});
 }
 
@@ -383,6 +390,8 @@ fn retract_tip_works() {
 			Tips::close_tip(RuntimeOrigin::signed(10), h.into()),
 			Error::<Test>::UnknownTip
 		);
+		
+		Tips::do_try_state().unwrap();
 	});
 }
 
@@ -397,6 +406,7 @@ fn tip_median_calculation_works() {
 		System::set_block_number(2);
 		assert_ok!(Tips::close_tip(RuntimeOrigin::signed(0), h.into()));
 		assert_eq!(Balances::free_balance(3), 10);
+		Tips::do_try_state().unwrap();
 	});
 }
 
@@ -416,6 +426,7 @@ fn tip_changing_works() {
 		System::set_block_number(2);
 		assert_ok!(Tips::close_tip(RuntimeOrigin::signed(0), h.into()));
 		assert_eq!(Balances::free_balance(3), 10);
+		Tips::do_try_state().unwrap();
 	});
 }
 
@@ -613,5 +624,7 @@ fn report_awesome_and_tip_works_second_instance() {
 		assert_eq!(Balances::free_balance(&Treasury::account_id()), 101);
 		// Treasury 2 gave the funds
 		assert_eq!(Balances::free_balance(&Treasury1::account_id()), 191);
+		
+		Tips::do_try_state().unwrap();
 	});
 }

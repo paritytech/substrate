@@ -453,6 +453,14 @@ pub mod pallet {
 			Ok(())
 		}
 	}
+
+	#[pallet::hooks]
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), &'static str> {
+			Self::do_try_state()
+		}
+	}
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -598,5 +606,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			};
 			Tips::<T, I>::insert(hash, new_tip)
 		}
+	}
+
+	#[cfg(any(feature = "try-runtime", feature = "fuzzing", test, debug_assertions))]
+	pub fn do_try_state() -> Result<(), &'static str> {
+		let reasons = Reasons::<T, I>::iter_keys().collect::<Vec<_>>();
+		let tips = Tips::<T, I>::iter_keys().collect::<Vec<_>>();
+		assert_eq!(reasons.len(), tips.len());
+		Ok(())
 	}
 }
