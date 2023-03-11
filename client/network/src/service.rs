@@ -620,7 +620,7 @@ where
 	}
 
 	/// Returns the list of reserved peers.
-	pub fn reserved_peers(&self) -> impl Iterator<Item = &PeerId> {
+	fn reserved_peers(&self) -> impl Iterator<Item = &PeerId> {
 		self.network_service.behaviour().user_protocol().reserved_peers()
 	}
 }

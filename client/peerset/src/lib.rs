@@ -33,6 +33,7 @@
 //! will at all time try to maintain a connection with.
 
 mod peersstate;
+mod protocol_controller;
 
 use futures::{channel::oneshot, prelude::*};
 use log::{debug, error, trace};
