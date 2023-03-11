@@ -36,8 +36,18 @@ pub fn expand_doc_only(def: &mut Def) -> proc_macro2::TokenStream {
 						.map(|(_, arg_name, arg_type)| quote::quote!( #arg_name: #arg_type, ))
 						.collect::<proc_macro2::TokenStream>();
 					let docs = &method.docs;
-
+					let line_2 = format!(
+						" designed to document the [`{}`][`crate::Call::{}`] variant of",
+						name, name
+					);
 					quote::quote!(
+						/// NOTE: This function is an automatically generated, uncallable stub
+						#[ doc = #line_2 ]
+						/// the pallet [`Call`](`crate::Call`) enum. You should not attempt to
+						/// call this function directly.
+						///
+						/// ---
+						///
 						#( #[doc = #docs] )*
 						pub fn #name<#type_impl_generics>(#args) { unreachable!(); }
 					)
