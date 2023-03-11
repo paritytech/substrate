@@ -257,8 +257,6 @@ pub mod network_state;
 
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
-pub use protocol::PeerInfo;
-use sc_consensus::{JustificationSyncLink, Link};
 pub use sc_network_common::{
 	protocol::{
 		event::{DhtEvent, Event},
@@ -273,14 +271,13 @@ pub use sc_network_common::{
 	},
 	sync::{
 		warp::{WarpSyncPhase, WarpSyncProgress},
-		StateDownloadProgress, SyncState,
+		ExtendedPeerInfo, StateDownloadProgress, SyncEventStream, SyncState, SyncStatusProvider,
 	},
 };
 pub use service::{
 	DecodingError, Keypair, NetworkService, NetworkWorker, NotificationSender,
 	NotificationSenderReady, OutboundFailure, PublicKey,
 };
-use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 pub use sc_peerset::ReputationChange;
 
@@ -295,18 +292,3 @@ const MAX_CONNECTIONS_PER_PEER: usize = 2;
 
 /// The maximum number of concurrent established connections that were incoming.
 const MAX_CONNECTIONS_ESTABLISHED_INCOMING: u32 = 10_000;
-
-/// Abstraction over syncing-related services
-pub trait ChainSyncInterface<B: BlockT>:
-	NetworkSyncForkRequest<B::Hash, NumberFor<B>> + JustificationSyncLink<B> + Link<B> + Send + Sync
-{
-}
-
-impl<T, B: BlockT> ChainSyncInterface<B> for T where
-	T: NetworkSyncForkRequest<B::Hash, NumberFor<B>>
-		+ JustificationSyncLink<B>
-		+ Link<B>
-		+ Send
-		+ Sync
-{
-}

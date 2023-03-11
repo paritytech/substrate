@@ -652,12 +652,12 @@ async fn imports_stale_once() {
 	// check that NEW block is imported from announce message
 	let new_hash = net.peer(0).push_blocks(1, false).pop().unwrap();
 	import_with_announce(&mut net, new_hash).await;
-	assert_eq!(net.peer(1).num_downloaded_blocks(), 1);
+	assert_eq!(net.peer(1).num_downloaded_blocks().await, 1);
 
 	// check that KNOWN STALE block is imported from announce message
 	let known_stale_hash = net.peer(0).push_blocks_at(BlockId::Number(0), 1, true).pop().unwrap();
 	import_with_announce(&mut net, known_stale_hash).await;
-	assert_eq!(net.peer(1).num_downloaded_blocks(), 2);
+	assert_eq!(net.peer(1).num_downloaded_blocks().await, 2);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -820,7 +820,7 @@ async fn sync_to_tip_requires_that_sync_protocol_is_informed_about_best_block() 
 	assert!(!net.peer(1).has_block(block_hash));
 
 	// Make sync protocol aware of the best block
-	net.peer(0).network_service().new_best_block_imported(block_hash, 3);
+	net.peer(0).sync_service().new_best_block_imported(block_hash, 3);
 	net.run_until_idle().await;
 
 	// Connect another node that should now sync to the tip
@@ -865,8 +865,8 @@ async fn sync_to_tip_when_we_sync_together_with_multiple_peers() {
 
 	assert!(!net.peer(2).has_block(block_hash));
 
-	net.peer(0).network_service().new_best_block_imported(block_hash, 10_000);
-	net.peer(0).network_service().announce_block(block_hash, None);
+	net.peer(0).sync_service().new_best_block_imported(block_hash, 10_000);
+	net.peer(0).sync_service().announce_block(block_hash, None);
 
 	while !net.peer(2).has_block(block_hash) && !net.peer(1).has_block(block_hash) {
 		net.run_until_idle().await;
@@ -1045,14 +1045,17 @@ async fn syncs_all_forks_from_single_peer() {
 	let branch1 = net.peer(0).push_blocks_at(BlockId::Number(10), 2, true).pop().unwrap();
 
 	// Wait till peer 1 starts downloading
-	futures::future::poll_fn::<(), _>(|cx| {
-		net.poll(cx);
-		if net.peer(1).network().best_seen_block() != Some(12) {
-			return Poll::Pending
+	loop {
+		futures::future::poll_fn::<(), _>(|cx| {
+			net.poll(cx);
+			Poll::Ready(())
+		})
+		.await;
+
+		if net.peer(1).sync_service().best_seen_block().await.unwrap() == Some(12) {
+			break
 		}
-		Poll::Ready(())
-	})
-	.await;
+	}
 
 	// Peer 0 produces and announces another fork
 	let branch2 = net.peer(0).push_blocks_at(BlockId::Number(10), 2, false).pop().unwrap();
