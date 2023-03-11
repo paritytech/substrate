@@ -24,6 +24,8 @@ sp-std = { version = "5.0.0", default-features = false, path = "../../../primiti
 
 [dev-dependencies]
 sp-io = { version = "7.0.0", path = "../../../primitives/io" }
+sp-externalities = { version = "0.13.0", path = "../../../primitives/externalities" }
+sp-version = { version = "5.0.0", path = "../../../primitives/version" }
 
 [features]
 default = ["std"]
