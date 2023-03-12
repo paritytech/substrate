@@ -19,7 +19,10 @@
 
 #![warn(missing_docs)]
 
-use crate::utils::{deserialize_argument, serialize_result};
+use crate::utils::{
+	deserialize_argument, final_exponentiation_generic, msm_g1_generic, msm_g2_generic,
+	multi_miller_loop_generic, serialize_result,
+};
 use ark_bls12_377::{g1, g2, Bls12_377};
 use ark_ec::{
 	models::CurveConfig,
@@ -28,60 +31,22 @@ use ark_ec::{
 use sp_std::vec::Vec;
 
 /// Compute multi miller loop through arkworks
-pub fn multi_miller_loop(a_vec: Vec<Vec<u8>>, b_vec: Vec<Vec<u8>>) -> Vec<u8> {
-	let g1: Vec<_> = a_vec
-		.iter()
-		.map(|elem| deserialize_argument::<<Bls12_377 as Pairing>::G1Affine>(elem))
-		.collect();
-	let g2: Vec<_> = b_vec
-		.iter()
-		.map(|elem| deserialize_argument::<<Bls12_377 as Pairing>::G2Prepared>(elem))
-		.collect();
 
-	let result = Bls12_377::multi_miller_loop(g1, g2).0;
-
-	serialize_result(result)
+pub fn multi_miller_loop(a: Vec<Vec<u8>>, b: Vec<Vec<u8>>) -> Vec<u8> {
+	multi_miller_loop_generic::<Bls12_377>(a, b)
 }
 
 /// Compute final exponentiation through arkworks
 pub fn final_exponentiation(target: Vec<u8>) -> Vec<u8> {
-	let target = deserialize_argument::<<Bls12_377 as Pairing>::TargetField>(&target);
-
-	let result = Bls12_377::final_exponentiation(MillerLoopOutput(target)).unwrap().0;
-
-	serialize_result(result)
+	final_exponentiation_generic::<Bls12_377>(target)
 }
 
 /// Compute a multi scalar multiplication on G! through arkworks
 pub fn msm_g1(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
-	let bases: Vec<_> = bases
-		.iter()
-		.map(|a| deserialize_argument::<<Bls12_377 as Pairing>::G1Affine>(a))
-		.collect();
-	let scalars: Vec<_> = scalars
-		.iter()
-		.map(|a| deserialize_argument::<<g1::Config as CurveConfig>::ScalarField>(a))
-		.collect();
-
-	let result =
-		<<Bls12_377 as Pairing>::G1 as ark_ec::VariableBaseMSM>::msm(&bases, &scalars).unwrap();
-
-	serialize_result(result)
+	msm_g1_generic::<Bls12_377>(bases, scalars)
 }
 
 /// Compute a multi scalar multiplication on G! through arkworks
 pub fn msm_g2(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
-	let bases: Vec<_> = bases
-		.iter()
-		.map(|a| deserialize_argument::<<Bls12_377 as Pairing>::G2Affine>(a))
-		.collect();
-	let scalars: Vec<_> = scalars
-		.iter()
-		.map(|a| deserialize_argument::<<g2::Config as CurveConfig>::ScalarField>(a))
-		.collect();
-
-	let result =
-		<<Bls12_377 as Pairing>::G2 as ark_ec::VariableBaseMSM>::msm(&bases, &scalars).unwrap();
-
-	serialize_result(result)
+	msm_g2_generic::<Bls12_377>(bases, scalars)
 }
