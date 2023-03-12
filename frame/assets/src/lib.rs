@@ -229,6 +229,8 @@ pub mod pallet {
 			+ MaxEncodedLen
 			+ TypeInfo;
 
+		type HoldIdentifier: Parameter + Member + MaxEncodedLen + Ord + Copy;
+
 		/// Max number of items to destroy per `destroy_accounts` and `destroy_approvals` call.
 		///
 		/// Must be configured to result in a weight that makes each call fit in a block.

@@ -6020,6 +6020,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-multi-asset-treasury"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "impl-trait-for-tuples",
+ "pallet-assets",
+ "pallet-balances",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-multisig"
 version = "4.0.0-dev"
 dependencies = [
@@ -6696,24 +6715,6 @@ dependencies = [
 
 [[package]]
 name = "pallet-treasury"
-version = "4.0.0-dev"
-dependencies = [
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "impl-trait-for-tuples",
- "pallet-balances",
- "parity-scale-codec",
- "scale-info",
- "serde",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
-name = "pallet-treasury2"
 version = "4.0.0-dev"
 dependencies = [
  "frame-benchmarking",

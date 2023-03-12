@@ -17,11 +17,14 @@
 
 //! Implementations for fungibles trait.
 
-use frame_support::traits::tokens::{
-	Fortitude,
-	Precision::{self, BestEffort},
-	Preservation::{self, Expendable},
-	Provenance::{self, Minted},
+use frame_support::traits::{
+	fungibles::Credit,
+	tokens::{
+		Fortitude,
+		Precision::{self, BestEffort},
+		Preservation::{self, Expendable},
+		Provenance::{self, Minted},
+	},
 };
 
 use super::*;
@@ -256,5 +259,71 @@ impl<T: Config<I>, I: 'static> fungibles::InspectEnumerable<T::AccountId> for Pa
 	/// NOTE: iterating this list invokes a storage read per item.
 	fn asset_ids() -> Self::AssetsIterator {
 		Asset::<T, I>::iter_keys()
+	}
+}
+
+impl<T: Config<I>, I: 'static> fungibles::MutateHold<<T as SystemConfig>::AccountId>
+	for Pallet<T, I>
+{
+}
+
+impl<T: Config<I>, I: 'static> fungibles::InspectHold<<T as SystemConfig>::AccountId>
+	for Pallet<T, I>
+{
+	type Reason = T::HoldIdentifier;
+
+	fn total_balance_on_hold(asset: T::AssetId, who: &T::AccountId) -> T::Balance {
+		Zero::zero()
+	}
+	fn reducible_total_balance_on_hold(
+		asset: T::AssetId,
+		who: &T::AccountId,
+		force: Fortitude,
+	) -> T::Balance {
+		// // The total balance must never drop below the freeze requirements if we're not forcing:
+		// let a = Self::account(who);
+		// let unavailable = if force == Force {
+		// 	Self::Balance::zero()
+		// } else {
+		// 	// The freeze lock applies to the total balance, so we can discount the free balance
+		// 	// from the amount which the total reserved balance must provide to satisfy it.
+		// 	a.frozen.saturating_sub(a.free)
+		// };
+		// a.reserved.saturating_sub(unavailable)
+		Zero::zero()
+	}
+	fn balance_on_hold(asset: T::AssetId, reason: &Self::Reason, who: &T::AccountId) -> T::Balance {
+		// Holds::<T, I>::get(who)
+		// 	.iter()
+		// 	.find(|x| &x.id == reason)
+		// 	.map_or_else(Zero::zero, |x| x.amount)
+		Zero::zero()
+	}
+	fn hold_available(asset: T::AssetId, reason: &Self::Reason, who: &T::AccountId) -> bool {
+		false
+	}
+}
+
+impl<T: Config<I>, I: 'static> fungibles::UnbalancedHold<<T as SystemConfig>::AccountId>
+	for Pallet<T, I>
+{
+	fn set_balance_on_hold(
+		asset: T::AssetId,
+		reason: &T::HoldIdentifier,
+		who: &T::AccountId,
+		amount: T::Balance,
+	) -> DispatchResult {
+		Ok(())
+	}
+}
+
+impl<T: Config<I>, I: 'static> fungibles::BalancedHold<T::AccountId> for Pallet<T, I> {
+	fn slash(
+		asset: T::AssetId,
+		reason: &T::HoldIdentifier,
+		who: &T::AccountId,
+		amount: T::Balance,
+	) -> (Credit<T::AccountId, Self>, T::Balance) {
+		(<Credit<T::AccountId, Self>>::zero(asset), Zero::zero())
 	}
 }
