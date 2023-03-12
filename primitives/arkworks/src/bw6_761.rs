@@ -20,8 +20,7 @@
 #![warn(missing_docs)]
 
 use crate::utils::{
-	deserialize_argument, final_exponentiation_generic, msm_g1_generic, msm_g2_generic,
-	multi_miller_loop_generic, serialize_result,
+	final_exponentiation_generic, msm_g1_generic, msm_g2_generic, multi_miller_loop_generic,
 };
 use ark_bw6_761::BW6_761;
 use ark_ec::{

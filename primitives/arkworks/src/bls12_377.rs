@@ -20,8 +20,7 @@
 #![warn(missing_docs)]
 
 use crate::utils::{
-	deserialize_argument, final_exponentiation_generic, msm_g1_generic, msm_g2_generic,
-	multi_miller_loop_generic, serialize_result,
+	final_exponentiation_generic, msm_g1_generic, msm_g2_generic, multi_miller_loop_generic,
 };
 use ark_bls12_377::{g1, g2, Bls12_377};
 use ark_ec::{
