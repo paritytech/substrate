@@ -22,11 +22,7 @@
 use crate::utils::{
 	final_exponentiation_generic, msm_g1_generic, msm_g2_generic, multi_miller_loop_generic,
 };
-use ark_bls12_377::{g1, g2, Bls12_377};
-use ark_ec::{
-	models::CurveConfig,
-	pairing::{MillerLoopOutput, Pairing},
-};
+use ark_bls12_377::Bls12_377;
 use sp_std::vec::Vec;
 
 /// Compute multi miller loop through arkworks

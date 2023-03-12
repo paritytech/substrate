@@ -23,10 +23,6 @@ use crate::utils::{
 	final_exponentiation_generic, msm_g1_generic, msm_g2_generic, multi_miller_loop_generic,
 };
 use ark_bw6_761::BW6_761;
-use ark_ec::{
-	models::CurveConfig,
-	pairing::{MillerLoopOutput, Pairing},
-};
 use sp_std::vec::Vec;
 
 /// Compute multi miller loop through arkworks

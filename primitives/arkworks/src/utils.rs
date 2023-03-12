@@ -1,7 +1,4 @@
-use ark_ec::{
-	pairing::{MillerLoopOutput, Pairing},
-	CurveConfig,
-};
+use ark_ec::pairing::{MillerLoopOutput, Pairing};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use ark_std::{io::Cursor, vec, vec::Vec};
 
