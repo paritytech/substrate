@@ -15,23 +15,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod definition;
 mod error;
-mod interface;
 mod event;
-mod selector;
+mod helper;
 
-use quote::ToTokens;
-use syn::{spanned::Spanned, Generics, Item, Attribute};
+pub use definition::InterfaceDef;
 pub use error::ErrorDef;
 pub use event::EventDef;
-pub use interface::InterfaceDef;
+use syn::{spanned::Spanned, Item};
 
 pub struct Def {
 	item: syn::ItemMod,
 	interface: InterfaceDef,
 	error: Option<ErrorDef>,
 	event: Option<EventDef>,
-	unrelated: Option<Vec<(usize, Item)>>
+	unrelated: Option<Vec<(usize, Item)>>,
 }
 
 impl Def {
@@ -52,7 +51,8 @@ impl Def {
 		let mut unrelated: Option<Vec<(usize, Item)>> = None;
 
 		for (index, item) in items.iter_mut().enumerate() {
-			let interface_attr: Option<InterfaceAttr> = take_first_item_interface_attr(item)?;
+			let interface_attr: Option<InterfaceAttr> =
+				helper::take_first_item_interface_attr(item)?;
 
 			match interface_attr {
 				Some(InterfaceAttr::Definition(span)) if interface.is_none() =>
@@ -67,13 +67,15 @@ impl Def {
 					let msg = "Invalid duplicated attribute";
 					return Err(syn::Error::new(attr.span(), msg))
 				},
-				None => unrelated.map_or_else(
-					|| Vec::new(),
-					|mut v| {
-						v.push((index, item.clone()));
-						v
-					},
-				),
+				None => {
+					unrelated = Some(unrelated.map_or_else(
+						|| Vec::new(),
+						|mut v| {
+							v.push((index, item.clone()));
+							v
+						},
+					));
+				},
 			}
 		}
 
@@ -83,60 +85,8 @@ impl Def {
 			syn::Error::new(item_span, msg)
 		})?;
 
-
-		Ok(Def {
-			item,
-			interface,
-			error,
-			event,
-			unrelated
-		})
-
+		Ok(Def { item, interface, error, event, unrelated })
 	}
-}
-
-/// Take the first interface attribute (e.g. attribute like `#[interface..]`) and decode it to
-/// `Attr`
-fn take_first_item_interface_attr<Attr>(
-	item: &mut Item,
-) -> syn::Result<Option<Attr>>
-where
-	Attr: syn::parse::Parse,
-{
-	let attrs = if let Some(attrs) = mut_item_attrs(item) { attrs } else { return Ok(None) };
-
-	if let Some(index) = attrs.iter().position(|attr| {
-		attr.path.segments.first().map_or(false, |segment| segment.ident == "interface")
-	}) {
-		let interface_attr = attrs.remove(index);
-		Ok(Some(syn::parse2(interface_attr.into_token_stream())?))
-	} else {
-		Ok(None)
-	}
-}
-
-fn mut_item_attrs(item: &mut syn::Item) -> Option<&mut Vec<syn::Attribute>> {
-		match item {
-			Item::Const(item) => Some(item.attrs.as_mut()),
-			Item::Enum(item) => Some(item.attrs.as_mut()),
-			Item::ExternCrate(item) => Some(item.attrs.as_mut()),
-			Item::Fn(item) => Some(item.attrs.as_mut()),
-			Item::ForeignMod(item) => Some(item.attrs.as_mut()),
-			Item::Impl(item) => Some(item.attrs.as_mut()),
-			Item::Macro(item) => Some(item.attrs.as_mut()),
-			Item::Macro2(item) => Some(item.attrs.as_mut()),
-			Item::Mod(item) => Some(item.attrs.as_mut()),
-			Item::Static(item) => Some(item.attrs.as_mut()),
-			Item::Struct(item) => Some(item.attrs.as_mut()),
-			Item::Trait(item) => Some(item.attrs.as_mut()),
-			Item::TraitAlias(item) => Some(item.attrs.as_mut()),
-			Item::Type(item) => Some(item.attrs.as_mut()),
-			Item::Union(item) => Some(item.attrs.as_mut()),
-			Item::Use(item) => Some(item.attrs.as_mut()),
-			_ => None,
-		}
-	}
-}
 }
 
 /// List of additional token to be used for parsing.
@@ -146,7 +96,6 @@ mod keyword {
 	syn::custom_keyword!(error);
 	syn::custom_keyword!(event);
 }
-
 /// Parse attributes for item in pallet module
 /// syntax must be `interface::` (e.g. `#[interface::definition]`)
 enum InterfaceAttr {
@@ -174,12 +123,12 @@ impl syn::parse::Parse for InterfaceAttr {
 		content.parse::<syn::Token![::]>()?;
 
 		let lookahead = content.lookahead1();
-		if lookahead.peek(keyword::config) {
-			Ok(PalletAttr::Error(content.parse::<keyword::event>()?.span()))
-		} else if lookahead.peek(keyword::pallet) {
-			Ok(PalletAttr::Event(content.parse::<keyword::error>()?.span()))
-		} else if lookahead.peek(keyword::hooks) {
-			Ok(PalletAttr::Definition(content.parse::<keyword::definition>()?.span()))
+		if lookahead.peek(keyword::error) {
+			Ok(InterfaceAttr::Error(content.parse::<keyword::error>()?.span()))
+		} else if lookahead.peek(keyword::event) {
+			Ok(InterfaceAttr::Event(content.parse::<keyword::event>()?.span()))
+		} else if lookahead.peek(keyword::definition) {
+			Ok(InterfaceAttr::Definition(content.parse::<keyword::definition>()?.span()))
 		} else {
 			Err(lookahead.error())
 		}

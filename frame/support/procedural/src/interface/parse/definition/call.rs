@@ -15,25 +15,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use syn::spanned::Spanned;
+pub struct CallDef {
+	calls: Vec<syn::TraitItemMethod>,
+}
 
-mod expand;
-mod parse;
-
-pub fn interface(
-	attr: proc_macro::TokenStream,
-	item: proc_macro::TokenStream,
-) -> proc_macro::TokenStream {
-	if !attr.is_empty() {
-		let msg = "Invalid interface macro call: unexpected attribute. Macro call must be \
-				bare, such as `#[frame_support::interface]` or `#[interface]`.";
-		let span = proc_macro2::TokenStream::from(attr).span();
-		return syn::Error::new(span, msg).to_compile_error().into()
-	}
-
-	let item = syn::parse_macro_input!(item as syn::ItemMod);
-	match parse::Def::try_from(item) {
-		Ok(def) => expand::expand(def).into(),
-		Err(e) => e.to_compile_error().into(),
+impl CallDef {
+	pub fn try_from(
+		views: Option<CallDef>,
+		with_selector: bool,
+		attr_span: proc_macro2::Span,
+		index: usize,
+		item: &mut syn::TraitItem,
+	) -> syn::Result<Self> {
+		todo!()
 	}
 }

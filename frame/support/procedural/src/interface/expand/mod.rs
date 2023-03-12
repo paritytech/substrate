@@ -15,12 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::interface::r#mod::Def;
-use frame_support_procedural_tools::generate_crate_access_2018;
+use crate::interface::parse::Def;
 
 pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
-	let frame_system = generate_crate_access_2018("frame-system")?;
-	let frame_support = generate_crate_access_2018("frame-support")?;
-
 	todo!()
 }

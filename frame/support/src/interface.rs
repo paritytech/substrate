@@ -167,7 +167,8 @@ pub mod __expandend_view {
 
 pub mod pip721 {
 	#[frame_support::interface]
-	pub trait Pip721 {
+	#[interface::extend(Pip20(Call, View, Error, Event))]
+	pub trait Pip721: frame_support::interface::Core {
 		type AccountId;
 		type Collection;
 		type Item;
@@ -225,7 +226,7 @@ pub mod pip721 {
 			} = 0,
 		}
 
-		impl<Runtime: Pip20 + Core> super::Call for Call<Runtime> {
+		impl<Runtime: Pip721 + Core> super::Call for Call<Runtime> {
 			type RuntimeOrigin = <Runtime as Core>::RuntimeOrigin;
 			type Selectable = <Runtime as Core>::Runtime::Selectable;
 
@@ -374,7 +375,7 @@ pub mod pip20 {
 		impl<Runtime: Pip20 + Core> View for View<Runtime> {
 			type Selectable = <Runtime as Core>::Selectable;
 
-			fn view(&self) -> Result<Vec<u8>, InterfaceError> {
+			fn view(&self, selectable: Self::Selectable) -> Result<Vec<u8>, InterfaceError> {
 				match self {
 					View::FreeBalance { who } => {
 						let select = Select::new(selector, Box::new(SelectCurrency::<Runtime> {}));
@@ -418,4 +419,17 @@ pub mod pip20 {
 			}
 		}
 	}
+}
+
+#[frame_support::interface]
+#[interface::extends(Pip1(Call, View)), Pip2(Call)]
+mod interface {
+	#[interface::definition]
+	pub trait Pip20: frame_support::interface::Core {}
+
+	#[interface::error]
+	pub enum Error {}
+
+	#[interface::error]
+	pub enum Event {}
 }

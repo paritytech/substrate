@@ -15,31 +15,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-struct SelectorDef {
-	default: SingleSelectorDef,
-	others: Option<Vec<SingleSelectorDef>>,
+pub struct ViewDef {
+	views: Vec<syn::TraitItemMethod>,
 }
 
-impl SelectorDef {
+impl ViewDef {
 	pub fn try_from(
+		views: Option<ViewDef>,
+		with_selector: bool,
 		attr_span: proc_macro2::Span,
 		index: usize,
-		item: &mut syn::Item,
-	) -> syn::Result<Self> {
-		todo!()
-	}
-}
-
-struct SingleSelectorDef {
-	item: syn::TraitItemMethod,
-	name: syn::Ident,
-}
-
-impl SingleSelectorDef {
-	pub fn try_from(
-		attr_span: proc_macro2::Span,
-		index: usize,
-		item: &mut syn::Item,
+		item: &mut syn::TraitItem,
 	) -> syn::Result<Self> {
 		todo!()
 	}
