@@ -878,12 +878,9 @@ impl<
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<O, ()> {
-		let zero_account_id =
-			AccountId::decode(&mut TrailingZeroInput::zeroes()).map_err(|_| ())?;
-		let members = Who::sorted_members();
-		let first_member = match members.get(0) {
+		let first_member = match Who::sorted_members().first() {
 			Some(account) => account.clone(),
-			None => zero_account_id,
+			None => AccountId::decode(&mut TrailingZeroInput::zeroes()).map_err(|_| ())?,
 		};
 		Ok(O::from(RawOrigin::Signed(first_member)))
 	}
