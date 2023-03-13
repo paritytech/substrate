@@ -51,9 +51,9 @@ use futures::prelude::*;
 use futures_timer::Delay;
 use ip_network::IpNetwork;
 use libp2p::{
-	core::{Multiaddr, PeerId, PublicKey},
+	core::{Endpoint, Multiaddr, PeerId, PublicKey},
 	kad::{
-		handler::KademliaHandlerIn,
+		handler::KademliaHandler,
 		record::{
 			self,
 			store::{MemoryStore, RecordStore},
@@ -68,8 +68,8 @@ use libp2p::{
 			toggle::{Toggle, ToggleConnectionHandler},
 			DialFailure, FromSwarm, NewExternalAddr,
 		},
-		ConnectionHandler, ConnectionId, DialError, NetworkBehaviour, NetworkBehaviourAction,
-		PollParameters, THandler, THandlerOutEvent,
+		ConnectionDenied, ConnectionId, DialError, NetworkBehaviour, NetworkBehaviourAction,
+		PollParameters, THandler, THandlerInEvent, THandlerOutEvent,
 	},
 };
 use log::{debug, info, trace, warn};
@@ -234,7 +234,7 @@ impl DiscoveryConfig {
 			allow_private_ip,
 			discovery_only_if_under_num,
 			mdns: if enable_mdns {
-				match TokioMdns::new(mdns::Config::default()) {
+				match TokioMdns::new(mdns::Config::default(), local_peer_id) {
 					Ok(mdns) => Some(mdns),
 					Err(err) => {
 						warn!(target: "sub-libp2p", "Failed to initialize mDNS: {:?}", err);
@@ -483,7 +483,7 @@ pub enum DiscoveryOut {
 }
 
 impl NetworkBehaviour for DiscoveryBehaviour {
-	type ConnectionHandler = ToggleConnectionHandler<KademliaHandlerIn<QueryId>>;
+	type ConnectionHandler = ToggleConnectionHandler<KademliaHandler<QueryId>>;
 	type OutEvent = DiscoveryOut;
 
 	fn handle_established_inbound_connection(
@@ -493,7 +493,12 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		local_addr: &Multiaddr,
 		remote_addr: &Multiaddr,
 	) -> Result<THandler<Self>, ConnectionDenied> {
-		unimplemented!("");
+		self.kademlia.handle_established_inbound_connection(
+			connection_id,
+			peer,
+			local_addr,
+			remote_addr,
+		)
 	}
 
 	fn handle_established_outbound_connection(
@@ -503,31 +508,61 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		addr: &Multiaddr,
 		role_override: Endpoint,
 	) -> Result<THandler<Self>, ConnectionDenied> {
-		unimplemented!("");
+		self.kademlia.handle_established_outbound_connection(
+			connection_id,
+			peer,
+			addr,
+			role_override,
+		)
+	}
+
+	fn handle_pending_inbound_connection(
+		&mut self,
+		connection_id: ConnectionId,
+		local_addr: &Multiaddr,
+		remote_addr: &Multiaddr,
+	) -> Result<(), ConnectionDenied> {
+		self.kademlia
+			.handle_pending_inbound_connection(connection_id, local_addr, remote_addr)
 	}
 
 	fn handle_pending_outbound_connection(
 		&mut self,
-		_connection_id: ConnectionId,
-		_maybe_peer: Option<PeerId>,
-		_addresses: &[Multiaddr],
-		_effective_role: Endpoint,
+		connection_id: ConnectionId,
+		maybe_peer: Option<PeerId>,
+		addresses: &[Multiaddr],
+		effective_role: Endpoint,
 	) -> Result<Vec<Multiaddr>, ConnectionDenied> {
-		let mut list = self
-			.permanent_addresses
-			.iter()
-			.filter_map(|(p, a)| if p == peer_id { Some(a.clone()) } else { None })
-			.collect::<Vec<_>>();
+		let mut list = Vec::new();
 
-		if let Some(ephemeral_addresses) = self.ephemeral_addresses.get(peer_id) {
-			list.extend(ephemeral_addresses.clone());
+		if let Some(peer_id) = maybe_peer {
+			list.extend(
+				self.permanent_addresses
+					.iter()
+					.filter_map(|(p, a)| if *p == peer_id { Some(a.clone()) } else { None })
+					.collect::<Vec<_>>(),
+			);
+
+			if let Some(ephemeral_addresses) = self.ephemeral_addresses.get(&peer_id) {
+				list.extend(ephemeral_addresses.clone());
+			}
 		}
 
 		{
-			let mut list_to_filter = self.kademlia.addresses_of_peer(peer_id);
+			let mut list_to_filter = self.kademlia.handle_pending_outbound_connection(
+				connection_id,
+				maybe_peer,
+				addresses,
+				effective_role,
+			)?;
 
 			if let Some(ref mut mdns) = self.mdns {
-				list_to_filter.extend(mdns.addresses_of_peer(peer_id));
+				list_to_filter.extend(mdns.handle_pending_outbound_connection(
+					connection_id,
+					maybe_peer,
+					addresses,
+					effective_role,
+				)?);
 			}
 
 			if !self.allow_private_ip {
@@ -541,7 +576,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			list.extend(list_to_filter);
 		}
 
-		trace!(target: "sub-libp2p", "Addresses of {:?}: {:?}", peer_id, list);
+		trace!(target: "sub-libp2p", "Addresses of {:?}: {:?}", maybe_peer, list);
 
 		Ok(list)
 	}
