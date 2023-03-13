@@ -217,6 +217,7 @@ parameter_types! {
 	pub static MaxMetadataLen: u32 = 2;
 	pub static CheckLevel: u8 = 255;
 	pub const PoolsPalletId: PalletId = PalletId(*b"py/nopls");
+	pub const InitialGlobalMaxCommission: Perbill = Perbill::zero();
 }
 impl pools::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
@@ -231,6 +232,7 @@ impl pools::Config for Runtime {
 	type MaxMetadataLen = MaxMetadataLen;
 	type MaxUnbonding = MaxUnbonding;
 	type MaxPointsToBalance = frame_support::traits::ConstU8<10>;
+	type InitialGlobalMaxCommission = InitialGlobalMaxCommission;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;

@@ -494,7 +494,7 @@ pub mod v4 {
 			);
 
 			if current == 4 && onchain == 3 {
-				GlobalMaxCommission::<T>::set(Some(Zero::zero()));
+				GlobalMaxCommission::<T>::set(Some(T::InitialGlobalMaxCommission::get()));
 				log!(info, "Set initial global max commission to 0%");
 
 				let mut translated = 0u64;
@@ -534,6 +534,7 @@ pub mod v4 {
 					inner.commission.throttle_from.is_none()),
 				"a commission value has been incorrectly set"
 			);
+			ensure!(GlobalMaxCommission::<T>::get(), InitialGlobalMaxCommission::<T>::get());
 			ensure!(Pallet::<T>::on_chain_storage_version() == 4, "wrong storage version");
 			Ok(())
 		}

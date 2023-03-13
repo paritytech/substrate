@@ -1545,6 +1545,9 @@ pub mod pallet {
 
 		/// The maximum number of simultaneous unbonding chunks that can exist per member.
 		type MaxUnbonding: Get<u32>;
+
+		/// The initial value for global maximum commission. Used in pool migration to v4.
+		type InitialGlobalMaxCommission: Get<Perbill>;
 	}
 
 	/// Minimum amount to bond to join a pool.
@@ -2803,16 +2806,14 @@ impl<T: Config> Pallet<T> {
 		//
 		// In scenarios where commission is 100%, `pending_rewards` will be zero. We therefore check
 		// if there is a non-zero payout to be transferred.
-		if pending_rewards > Zero::zero() {
-			T::Currency::transfer(
-				&bonded_pool.reward_account(),
-				member_account,
-				pending_rewards,
-				// defensive: the depositor has put existential deposit into the pool and it stays
-				// untouched, reward account shall not die.
-				ExistenceRequirement::KeepAlive,
-			)?;
-		}
+		T::Currency::transfer(
+			&bonded_pool.reward_account(),
+			member_account,
+			pending_rewards,
+			// defensive: the depositor has put existential deposit into the pool and it stays
+			// untouched, reward account shall not die.
+			ExistenceRequirement::KeepAlive,
+		)?;
 
 		Self::deposit_event(Event::<T>::PaidOut {
 			member: member_account.clone(),
@@ -3138,7 +3139,12 @@ impl<T: Config> Pallet<T> {
 
 			assert!(
 				total_balance >= bonded_balance + sum_unbonding_balance,
-				"faulty pool: {pool_id:?} / {_pool:?}, total_balance {total_balance:?} >= bonded_balance {bonded_balance:?} + sum_unbonding_balance {sum_unbonding_balance:?}"
+				"faulty pool: {:?} / {:?}, total_balance {:?} >= bonded_balance {:?} + sum_unbonding_balance {:?}",
+				pool_id,
+				_pool,
+				total_balance,
+				bonded_balance,
+				sum_unbonding_balance
 			);
 		}
 
