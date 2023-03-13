@@ -22,6 +22,7 @@ pub struct SelectorDef {
 
 impl SelectorDef {
 	pub fn try_from(
+		selectors: Option<SelectorDef>,
 		attr_span: proc_macro2::Span,
 		index: usize,
 		item: &mut syn::TraitItem,
@@ -30,9 +31,9 @@ impl SelectorDef {
 	}
 }
 
-struct SingleSelectorDef {
-	item: syn::TraitItemMethod,
+pub struct SingleSelectorDef {
 	name: syn::Ident,
+	output: Box<syn::Type>,
 }
 
 impl SingleSelectorDef {

@@ -17,6 +17,6 @@
 
 use crate::interface::parse::Def;
 
-pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
+pub fn expand(_def: Def) -> proc_macro2::TokenStream {
 	todo!()
 }

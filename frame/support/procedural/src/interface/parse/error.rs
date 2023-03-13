@@ -15,7 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub struct ErrorDef {}
+pub struct ErrorDef {
+	index: usize,
+	name: syn::Ident,
+}
 
 impl ErrorDef {
 	pub fn try_from(
@@ -23,6 +26,9 @@ impl ErrorDef {
 		index: usize,
 		item: &mut syn::Item,
 	) -> syn::Result<Self> {
-		todo!()
+		Err(syn::Error::new(
+			attr_span,
+			"Invalid #[interface::event]. Interface events not yet supported.",
+		))
 	}
 }

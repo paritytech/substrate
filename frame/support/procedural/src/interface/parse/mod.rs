@@ -23,14 +23,15 @@ mod helper;
 pub use definition::InterfaceDef;
 pub use error::ErrorDef;
 pub use event::EventDef;
-use syn::{spanned::Spanned, Item};
+use frame_support_procedural_tools::generate_crate_access_2018;
+use syn::spanned::Spanned;
 
 pub struct Def {
 	item: syn::ItemMod,
 	interface: InterfaceDef,
 	error: Option<ErrorDef>,
 	event: Option<EventDef>,
-	unrelated: Option<Vec<(usize, Item)>>,
+	frame_support: syn::Ident,
 }
 
 impl Def {
@@ -45,10 +46,10 @@ impl Def {
 			})?
 			.1;
 
+		let frame_support = generate_crate_access_2018("frame-support")?;
 		let mut interface = None;
 		let mut error = None;
 		let mut event = None;
-		let mut unrelated: Option<Vec<(usize, Item)>> = None;
 
 		for (index, item) in items.iter_mut().enumerate() {
 			let interface_attr: Option<InterfaceAttr> =
@@ -56,7 +57,8 @@ impl Def {
 
 			match interface_attr {
 				Some(InterfaceAttr::Definition(span)) if interface.is_none() =>
-					interface = Some(InterfaceDef::try_from(span, index, item)?),
+					interface =
+						Some(InterfaceDef::try_from(span, index, item, frame_support.clone())?),
 				Some(InterfaceAttr::Event(span)) if event.is_none() => {
 					event = Some(EventDef::try_from(span, index, item)?);
 				},
@@ -67,15 +69,7 @@ impl Def {
 					let msg = "Invalid duplicated attribute";
 					return Err(syn::Error::new(attr.span(), msg))
 				},
-				None => {
-					unrelated = Some(unrelated.map_or_else(
-						|| Vec::new(),
-						|mut v| {
-							v.push((index, item.clone()));
-							v
-						},
-					));
-				},
+				None => (),
 			}
 		}
 
@@ -85,7 +79,7 @@ impl Def {
 			syn::Error::new(item_span, msg)
 		})?;
 
-		Ok(Def { item, interface, error, event, unrelated })
+		Ok(Def { item, interface, error, event, frame_support })
 	}
 }
 

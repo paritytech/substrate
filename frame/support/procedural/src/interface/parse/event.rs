@@ -15,14 +15,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub struct EventDef {}
+pub struct EventDef {
+	index: usize,
+	name: syn::Ident,
+}
 
 impl EventDef {
 	pub fn try_from(
 		attr_span: proc_macro2::Span,
-		index: usize,
-		item: &mut syn::Item,
+		_index: usize,
+		_item: &mut syn::Item,
 	) -> syn::Result<Self> {
-		todo!()
+		Err(syn::Error::new(
+			attr_span,
+			"Invalid #[interface::error]. Interface errors not yet supported.",
+		))
 	}
 }

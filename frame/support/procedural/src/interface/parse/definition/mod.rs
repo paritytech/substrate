@@ -19,17 +19,15 @@ mod call;
 mod selector;
 mod view;
 
-use frame_support_procedural_tools::generate_crate_access_2018;
 use quote::ToTokens;
 use syn::spanned::Spanned;
 
 pub struct InterfaceDef {
 	index: usize,
-	item: syn::ItemTrait,
 	selectors: Option<selector::SelectorDef>,
 	views: Option<view::ViewDef>,
 	calls: Option<call::CallDef>,
-	unrelated: Option<Vec<(usize, syn::TraitItem)>>,
+	where_clause: Option<syn::WhereClause>,
 }
 
 impl InterfaceDef {
@@ -37,6 +35,7 @@ impl InterfaceDef {
 		attr_span: proc_macro2::Span,
 		index: usize,
 		item: &mut syn::Item,
+		frame_support: syn::Ident,
 	) -> syn::Result<Self> {
 		let item = if let syn::Item::Trait(item) = item {
 			item
@@ -47,7 +46,6 @@ impl InterfaceDef {
 			))
 		};
 
-		let frame_support = generate_crate_access_2018("frame-support")?;
 		let has_frame_suppert_core_supertrait = item.supertraits.iter().any(|s| {
 			syn::parse2::<CoreBoundParse>(s.to_token_stream())
 				.map_or(false, |b| b.0 == frame_support)
@@ -84,11 +82,12 @@ impl InterfaceDef {
                 currently can not have generics.";
 			return Err(syn::Error::new(item_span, msg))
 		}
+		let where_clause = item.generics.where_clause.clone();
 
 		let mut with_selector = false;
 		super::helper::take_first_item_interface_attr::<InterfaceTraitAttr>(item)?.map(|attr| {
 			match attr {
-				InterfaceTraitAttr::WithSelector(span) => {
+				InterfaceTraitAttr::WithSelector(_) => {
 					with_selector = true;
 				},
 				_ => (),
@@ -98,7 +97,6 @@ impl InterfaceDef {
 		let mut selectors = None;
 		let mut views = None;
 		let mut calls = None;
-		let mut unrelated: Option<Vec<(usize, syn::TraitItem)>> = None;
 
 		for (index, item) in item.items.iter_mut().enumerate() {
 			let interface_attr: Option<InterfaceTraitAttr> =
@@ -110,31 +108,23 @@ impl InterfaceDef {
 				Some(InterfaceTraitAttr::View(span)) =>
 					views = Some(view::ViewDef::try_from(views, with_selector, span, index, item)?),
 				Some(InterfaceTraitAttr::Selector(span)) =>
-					selectors = Some(selector::SelectorDef::try_from(span, index, item)?),
+					selectors = Some(selector::SelectorDef::try_from(selectors, span, index, item)?),
 				Some(InterfaceTraitAttr::WithSelector(_)) => {
 					let msg = "Invalid interface definition. #[interface::with_selector] is \
 						only allowed as an annotation at the trait of the interface.";
 					return Err(syn::Error::new(attr_span, msg))
 				},
-				None => {
-					unrelated = Some(unrelated.map_or_else(
-						|| Vec::new(),
-						|mut v| {
-							v.push((index, item.clone()));
-							v
-						},
-					));
-				},
+				None => (),
 			}
 		}
 
 		if with_selector && selectors.is_none() {
-			let msg = "Invalid interface definition. Expected one trait annotated \
+			let msg = "Invalid interface definition. Expected one trait method annotated \
 				with #[interface::selector] or #[selector].";
 			return Err(syn::Error::new(item_span, msg))
 		}
 
-		Ok(InterfaceDef { index, item: item.clone(), calls, views, selectors, unrelated })
+		Ok(InterfaceDef { index, calls, views, selectors, where_clause })
 	}
 }
 
@@ -174,17 +164,6 @@ enum InterfaceTraitAttr {
 	View(proc_macro2::Span),
 	Selector(proc_macro2::Span),
 	WithSelector(proc_macro2::Span),
-}
-
-impl InterfaceTraitAttr {
-	fn span(&self) -> proc_macro2::Span {
-		match self {
-			Self::Call(span) => *span,
-			Self::View(span) => *span,
-			Self::Selector(span) => *span,
-			Self::WithSelector(span) => *span,
-		}
-	}
 }
 
 impl syn::parse::Parse for InterfaceTraitAttr {
