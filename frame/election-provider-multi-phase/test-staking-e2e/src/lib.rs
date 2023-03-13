@@ -139,7 +139,7 @@ fn enters_emergency_phase_after_forcing_before_elect() {
 ///
 /// Since the `OffendingValidatorsThreshold` is only checked per era staking does not force a new
 /// era even as the number of active validators is decreasing across eras. When processing a new
-/// slash, staking calculates the offending threshold based on the lenght of the current list of
+/// slash, staking calculates the offending threshold based on the length of the current list of
 /// active validators. Thus, slashing a percentage of the current validators that is lower than
 /// `OffendingValidatorsThreshold` will never force a new era. However, as the slashes progress, if
 /// the subsequent elections do not meet the minimum election untrusted score, the election will
