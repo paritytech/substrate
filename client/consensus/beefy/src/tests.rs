@@ -61,7 +61,7 @@ use sp_runtime::{
 	traits::{Header as HeaderT, NumberFor},
 	BuildStorage, DigestItem, EncodedJustification, Justifications, Storage,
 };
-use std::{collections::HashMap, marker::PhantomData, sync::Arc, task::Poll};
+use std::{marker::PhantomData, sync::Arc, task::Poll};
 use substrate_test_runtime_client::{runtime::Header, ClientExt};
 use tokio::time::Duration;
 
@@ -223,6 +223,10 @@ impl TestNetFactory for BeefyTestNet {
 		&self.peers
 	}
 
+	fn peers_mut(&mut self) -> &mut Vec<BeefyPeer> {
+		&mut self.peers
+	}
+
 	fn mut_peers<F: FnOnce(&mut Vec<BeefyPeer>)>(&mut self, closure: F) {
 		closure(&mut self.peers);
 	}
@@ -353,6 +357,7 @@ async fn voter_init_setup(
 		Arc::new(crate::communication::gossip::GossipValidator::new(known_peers));
 	let mut gossip_engine = sc_network_gossip::GossipEngine::new(
 		net.peer(0).network_service().clone(),
+		net.peer(0).sync_service().clone(),
 		"/beefy/whatever",
 		gossip_validator,
 		None,
@@ -389,6 +394,7 @@ where
 
 		let network_params = crate::BeefyNetworkParams {
 			network: peer.network_service().clone(),
+			sync: peer.sync_service().clone(),
 			gossip_protocol_name: beefy_gossip_proto_name(),
 			justifications_protocol_name: on_demand_justif_handler.protocol_name(),
 			_phantom: PhantomData,
@@ -407,7 +413,7 @@ where
 			prometheus_registry: None,
 			on_demand_justifications_handler: on_demand_justif_handler,
 		};
-		let task = crate::start_beefy_gadget::<_, _, _, _, _, _>(beefy_params);
+		let task = crate::start_beefy_gadget::<_, _, _, _, _, _, _>(beefy_params);
 
 		fn assert_send<T: Send>(_: &T) {}
 		assert_send(&task);
@@ -760,14 +766,11 @@ async fn beefy_importing_justifications() {
 
 	// Import block 1 without justifications.
 	assert_eq!(
-		block_import
-			.import_block(params(block.clone(), None), HashMap::new())
-			.await
-			.unwrap(),
+		block_import.import_block(params(block.clone(), None)).await.unwrap(),
 		ImportResult::Imported(ImportedAux { is_new_best: true, ..Default::default() }),
 	);
 	assert_eq!(
-		block_import.import_block(params(block, None), HashMap::new()).await.unwrap(),
+		block_import.import_block(params(block, None)).await.unwrap(),
 		ImportResult::AlreadyInChain,
 	);
 
@@ -782,7 +785,7 @@ async fn beefy_importing_justifications() {
 	let encoded = versioned_proof.encode();
 	let justif = Some(Justifications::from((BEEFY_ENGINE_ID, encoded)));
 	assert_eq!(
-		block_import.import_block(params(block, justif), HashMap::new()).await.unwrap(),
+		block_import.import_block(params(block, justif)).await.unwrap(),
 		ImportResult::Imported(ImportedAux {
 			bad_justification: false,
 			is_new_best: true,
@@ -814,7 +817,7 @@ async fn beefy_importing_justifications() {
 	let justif = Some(Justifications::from((BEEFY_ENGINE_ID, encoded)));
 	let mut justif_recv = justif_stream.subscribe(100_000);
 	assert_eq!(
-		block_import.import_block(params(block, justif), HashMap::new()).await.unwrap(),
+		block_import.import_block(params(block, justif)).await.unwrap(),
 		ImportResult::Imported(ImportedAux {
 			bad_justification: false,
 			is_new_best: true,
@@ -850,7 +853,7 @@ async fn beefy_importing_justifications() {
 	let justif = Some(Justifications::from((BEEFY_ENGINE_ID, encoded)));
 	let mut justif_recv = justif_stream.subscribe(100_000);
 	assert_eq!(
-		block_import.import_block(params(block, justif), HashMap::new()).await.unwrap(),
+		block_import.import_block(params(block, justif)).await.unwrap(),
 		ImportResult::Imported(ImportedAux {
 			// Still `false` because we don't want to fail import on bad BEEFY justifications.
 			bad_justification: false,

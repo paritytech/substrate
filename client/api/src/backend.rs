@@ -18,12 +18,10 @@
 
 //! Substrate Client data backend
 
-use crate::{
-	blockchain::{well_known_cache_keys, Backend as BlockchainBackend},
-	UsageInfo,
-};
+use std::collections::HashSet;
+
 use parking_lot::RwLock;
-use sp_blockchain;
+
 use sp_consensus::BlockOrigin;
 use sp_core::offchain::OffchainStorage;
 use sp_runtime::{
@@ -35,7 +33,8 @@ use sp_state_machine::{
 	OffchainChangesCollection, StorageCollection, StorageIterator,
 };
 use sp_storage::{ChildInfo, StorageData, StorageKey};
-use std::collections::{HashMap, HashSet};
+
+use crate::{blockchain::Backend as BlockchainBackend, UsageInfo};
 
 pub use sp_state_machine::{Backend as StateBackend, KeyValueStates};
 
@@ -178,9 +177,6 @@ pub trait BlockImportOperation<Block: BlockT> {
 		justifications: Option<Justifications>,
 		state: NewBlockState,
 	) -> sp_blockchain::Result<()>;
-
-	/// Update cached data.
-	fn update_cache(&mut self, cache: HashMap<well_known_cache_keys::Id, Vec<u8>>);
 
 	/// Inject storage data into the database.
 	fn update_db_storage(

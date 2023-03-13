@@ -38,7 +38,7 @@ tempfile = "3.1.0"
 fs_extra = "1"
 rand = { version = "0.8.5", features = ["small_rng"] }
 lazy_static = "1.4.0"
-parity-db = "0.4.3"
+parity-db = "0.4.4"
 sc-transaction-pool = { version = "4.0.0-dev", path = "../../../client/transaction-pool" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
 futures = { version = "0.3.21", features = ["thread-pool"] }

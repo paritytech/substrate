@@ -302,6 +302,7 @@ impl OpaqueKeyOwnershipProof {
 
 sp_api::decl_runtime_apis! {
 	/// API necessary for BEEFY voters.
+	#[api_version(2)]
 	pub trait BeefyApi
 	{
 		/// Return the block number where BEEFY consensus is enabled/started

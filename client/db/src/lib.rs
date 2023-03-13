@@ -68,8 +68,8 @@ use sc_client_api::{
 use sc_state_db::{IsPruned, LastCanonicalized, StateDb};
 use sp_arithmetic::traits::Saturating;
 use sp_blockchain::{
-	well_known_cache_keys, Backend as _, CachedHeaderMetadata, Error as ClientError, HeaderBackend,
-	HeaderMetadata, HeaderMetadataCache, Result as ClientResult,
+	Backend as _, CachedHeaderMetadata, Error as ClientError, HeaderBackend, HeaderMetadata,
+	HeaderMetadataCache, Result as ClientResult,
 };
 use sp_core::{
 	offchain::OffchainOverlayedChange,
@@ -911,10 +911,6 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block>
 		self.pending_block =
 			Some(PendingBlock { header, body, indexed_body, justifications, leaf_state });
 		Ok(())
-	}
-
-	fn update_cache(&mut self, _cache: HashMap<well_known_cache_keys::Id, Vec<u8>>) {
-		// Currently cache isn't implemented on full nodes.
 	}
 
 	fn update_db_storage(&mut self, update: PrefixedMemoryDB<HashFor<Block>>) -> ClientResult<()> {

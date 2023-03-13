@@ -240,6 +240,9 @@ pub struct EquivocationProof<H, N> {
 	equivocation: Equivocation<H, N>,
 }
 
+// Don't bother the grandpa crate...
+impl<H: PartialEq, N: PartialEq> Eq for EquivocationProof<H, N> {}
+
 impl<H, N> EquivocationProof<H, N> {
 	/// Create a new `EquivocationProof` for the given set id and using the
 	/// given equivocation as proof.
