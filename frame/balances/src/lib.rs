@@ -692,7 +692,7 @@ pub mod pallet {
 					upgrade_count.saturating_inc();
 				}
 			}
-			if upgrade_count >= (who.len() + 1) * 95 / 100 - 1 {
+			if if Perbill::from_rational(upgrade_count, who.len()) >= Perbill::from_percent(90) { {
 				Ok(Pays::No.into())
 			} else {
 				Ok(Pays::Yes.into())
