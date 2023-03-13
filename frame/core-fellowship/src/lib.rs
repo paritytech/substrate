@@ -148,7 +148,6 @@ pub mod pallet {
 	const RANK_COUNT: usize = 9;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
