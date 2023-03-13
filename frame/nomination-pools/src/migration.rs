@@ -480,8 +480,8 @@ pub mod v4 {
 
 	/// This migration adds a `commission` field to every `BondedPoolInner`, if
 	/// any.
-	pub struct MigrateToV4<T>(sp_std::marker::PhantomData<T>);
-	impl<T: Config> OnRuntimeUpgrade for MigrateToV4<T> {
+	pub struct MigrateToV4<T, U>(sp_std::marker::PhantomData<(T, U)>);
+	impl<T: Config, U: Get<Perbill>> OnRuntimeUpgrade for MigrateToV4<T, U> {
 		fn on_runtime_upgrade() -> Weight {
 			let current = Pallet::<T>::current_storage_version();
 			let onchain = Pallet::<T>::on_chain_storage_version();
@@ -494,8 +494,13 @@ pub mod v4 {
 			);
 
 			if current == 4 && onchain == 3 {
-				GlobalMaxCommission::<T>::set(Some(Perbill::zero()));
-				log!(info, "Set initial global max commission to 0%");
+				let initial_global_max_commission = U::get();
+				GlobalMaxCommission::<T>::set(Some(initial_global_max_commission));
+				log!(
+					info,
+					"Set initial global max commission to {:?}.",
+					initial_global_max_commission
+				);
 
 				let mut translated = 0u64;
 				BondedPools::<T>::translate::<OldBondedPoolInner<T>, _>(|_key, old_value| {
@@ -533,6 +538,10 @@ pub mod v4 {
 					inner.commission.change_rate.is_none() &&
 					inner.commission.throttle_from.is_none()),
 				"a commission value has been incorrectly set"
+			);
+			ensure!(
+				GlobalMaxCommission::<T>::get() == Some(U::get()),
+				"global maximum commission error"
 			);
 			ensure!(Pallet::<T>::on_chain_storage_version() == 4, "wrong storage version");
 			Ok(())
