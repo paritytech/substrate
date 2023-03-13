@@ -1023,7 +1023,10 @@ impl<T: Config> Pallet<T> {
 		T::MaxNominations::get()
 	}
 
-	pub fn api_eras_stakers(era: EraIndex, account: T::AccountId) -> Exposure<T::AccountId, BalanceOf<T>>{
+	pub fn api_eras_stakers(
+		era: EraIndex,
+		account: T::AccountId,
+	) -> Exposure<T::AccountId, BalanceOf<T>> {
 		Self::eras_stakers(era, &account)
 	}
 

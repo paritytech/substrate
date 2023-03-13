@@ -19,7 +19,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Codec, Decode, HasCompact, Encode};
+use codec::{Codec, Decode, Encode, HasCompact};
 
 sp_api::decl_runtime_apis! {
 	pub trait StakingApi<Balance, AccountId>
