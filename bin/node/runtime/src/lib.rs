@@ -606,6 +606,8 @@ parameter_types! {
 	// phase durations. 1/4 of the last session for each.
 	pub const SignedPhase: u32 = EPOCH_DURATION_IN_BLOCKS / 4;
 	pub const UnsignedPhase: u32 = EPOCH_DURATION_IN_BLOCKS / 4;
+	// minimum blocks before emergency is half of the signed and unsigned phases.
+	pub MinBlocksBeforeEmergency: BlockNumber = EPOCH_DURATION_IN_BLOCKS / 8;
 
 	// signed config
 	pub const SignedRewardBase: Balance = 1 * DOLLARS;
@@ -647,7 +649,6 @@ parameter_types! {
 	// The maximum winners that can be elected by the Election pallet which is equivalent to the
 	// maximum active validators the staking pallet can have.
 	pub MaxActiveValidators: u32 = 1000;
-	pub MinBlocksBeforeEmergency: Perbill = Perbill::from_percent(25);
 }
 
 /// The numbers configured here could always be more than the the maximum limits of staking pallet
