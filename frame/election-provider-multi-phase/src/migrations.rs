@@ -15,6 +15,44 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod v2 {
+	use frame_support::traits::{GetStorageVersion, OnRuntimeUpgrade};
+
+	use crate::*;
+	pub struct MigrateToV2<T>(sp_std::marker::PhantomData<T>);
+	impl<T: Config> OnRuntimeUpgrade for MigrateToV2<T> {
+		fn on_runtime_upgrade() -> Weight {
+			let current = Pallet::<T>::current_storage_version();
+			let onchain = Pallet::<T>::on_chain_storage_version();
+
+			log!(
+				info,
+				"Running migration with current storage version {:?} / onchain {:?}",
+				current,
+				onchain
+			);
+
+			if current == 2 && onchain == 1 {
+				let now = frame_system::Pallet::<T>::block_number();
+				// This migration will set the starting block number of the signed phase as the
+				// current block number, i.e. when the migration runs. If the election fails in the
+				// next signed phase blocks, the emergency phase may be throttled even though it
+				// should not. This behavior is not critical, however, we recommend to run the
+				// migrations with the emergency throttling disabled (i.e.
+				// `T::MinBlocksBeforeEmergency` set to 0).
+				if Pallet::<T>::current_phase().is_signed() {
+					<CurrentPhase<T>>::put(Phase::Signed(now));
+				}
+
+				T::DbWeight::get().reads_writes(4, 1)
+			} else {
+				log!(info, "Migration did not execute. This probably should be removed");
+				T::DbWeight::get().reads(2)
+			}
+		}
+	}
+}
+
 pub mod v1 {
 	use frame_support::{
 		storage::unhashed,

@@ -1335,7 +1335,8 @@ pub mod pallet {
 	/// The current storage version.
 	///
 	/// v1: https://github.com/paritytech/substrate/pull/12237/
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+	/// v2: https://github.com/paritytech/substrate/pull/13040/
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
 
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
