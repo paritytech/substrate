@@ -206,9 +206,12 @@ pub mod pallet {
 		pub mod testing {
 			type AccountId = u64;
 			use super::*;
+			use macro_magic::export_tokens;
 			use sp_runtime::traits::IdentityLookup;
 
 			pub struct Impl {}
+
+			#[export_tokens(frame_system::testing::DefaultConfig)]
 			impl DefaultConfig for Impl {
 				type Version = ();
 				type BlockWeights = ();

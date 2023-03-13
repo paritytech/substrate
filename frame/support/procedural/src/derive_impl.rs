@@ -144,7 +144,8 @@ pub fn derive_impl(attrs: TokenStream, input: TokenStream) -> Result<TokenStream
 	let implementing_type: TypePath = parse2(attrs.clone())?;
 	// ideas for sam:
 	// let other_path_tokens = magic_macro!(path_to_other_path_token);
-	// let foreign_trait_def_token: Syn::TraitItem = magic_macro!(frame_system::Config);
+	let foreign_trait_tokens = import_tokens_indirect!(frame_system::testing::DefaultConfig);
+	println!("{}", foreign_trait_tokens.to_string());
 
 	let frame_support = generate_crate_access_2018("frame-support")?;
 	// TODO: may not be accurate.
