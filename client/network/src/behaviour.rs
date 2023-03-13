@@ -18,9 +18,11 @@
 
 use crate::{
 	discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
+	event::DhtEvent,
 	peer_info,
 	protocol::{CustomMessageOutcome, NotificationsSink, Protocol},
 	request_responses::{self, IfDisconnected, ProtocolConfig, RequestFailure},
+	types::ProtocolName,
 };
 
 use bytes::Bytes;
@@ -32,11 +34,7 @@ use libp2p::{
 	swarm::NetworkBehaviour,
 };
 
-use sc_network_common::protocol::{
-	event::DhtEvent,
-	role::{ObservedRole, Roles},
-	ProtocolName,
-};
+use sc_network_common::role::{ObservedRole, Roles};
 use sc_peerset::{PeersetHandle, ReputationChange};
 use sp_runtime::traits::Block as BlockT;
 use std::{collections::HashSet, time::Duration};

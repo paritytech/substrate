@@ -42,7 +42,7 @@ use sc_network::{
 	config::SyncMode, NetworkEventStream, NetworkService, NetworkStateInfo, NetworkStatusProvider,
 };
 use sc_network_bitswap::BitswapRequestHandler;
-use sc_network_common::{protocol::role::Roles, sync::warp::WarpSyncParams};
+use sc_network_common::{role::Roles, sync::warp::WarpSyncParams};
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
 	block_request_handler::BlockRequestHandler, engine::SyncingEngine,

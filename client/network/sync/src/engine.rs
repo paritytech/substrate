@@ -39,10 +39,12 @@ use sc_network::{
 	config::{
 		NetworkConfiguration, NonDefaultSetConfig, ProtocolId, SyncMode as SyncOperationMode,
 	},
+	event::Event,
 	utils::LruHashSet,
+	ProtocolName,
 };
 use sc_network_common::{
-	protocol::{event::Event, role::Roles, ProtocolName},
+	role::Roles,
 	sync::{
 		message::{
 			generic::{BlockData, BlockResponse},

@@ -54,11 +54,12 @@ use sc_network::{
 		ProtocolId, Role, SyncMode, TransportConfig,
 	},
 	request_responses::ProtocolConfig as RequestResponseConfig,
+	types::ProtocolName,
 	Multiaddr, NetworkBlock, NetworkEventStream, NetworkService, NetworkStateInfo,
 	NetworkSyncForkRequest, NetworkWorker,
 };
 use sc_network_common::{
-	protocol::{role::Roles, ProtocolName},
+	role::Roles,
 	sync::warp::{
 		AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncParams, WarpSyncProvider,
 	},

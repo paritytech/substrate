@@ -19,6 +19,7 @@
 use crate::{
 	config::{self, NonReservedPeerMode},
 	error,
+	types::ProtocolName,
 };
 
 use bytes::Bytes;
@@ -33,10 +34,7 @@ use libp2p::{
 };
 use log::{debug, error, warn};
 
-use sc_network_common::{
-	protocol::{role::Roles, ProtocolName},
-	sync::message::BlockAnnouncesHandshake,
-};
+use sc_network_common::{role::Roles, sync::message::BlockAnnouncesHandshake};
 use sp_runtime::traits::Block as BlockT;
 
 use std::{

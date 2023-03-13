@@ -27,12 +27,14 @@ use futures::prelude::*;
 use parity_scale_codec::Encode;
 use sc_network::{
 	config::{MultiaddrWithPeerId, Role},
+	event::Event as NetworkEvent,
+	types::ProtocolName,
 	Multiaddr, NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
 	NetworkSyncForkRequest, NotificationSenderError, NotificationSenderT as NotificationSender,
 	PeerId, ReputationChange,
 };
 use sc_network_common::{
-	protocol::{event::Event as NetworkEvent, role::ObservedRole, ProtocolName},
+	role::ObservedRole,
 	sync::{SyncEvent as SyncStreamEvent, SyncEventStream},
 };
 use sc_network_gossip::Validator;

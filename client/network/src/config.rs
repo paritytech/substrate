@@ -21,18 +21,17 @@
 //! The [`Params`] struct is the struct that must be passed in order to initialize the networking.
 //! See the documentation of [`Params`].
 
-pub use crate::request_responses::{
-	IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
+pub use crate::{
+	request_responses::{
+		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
+	},
+	types::ProtocolName,
 };
 
 use codec::Encode;
 use libp2p::{core::PublicKey, identity::Keypair, multiaddr, Multiaddr, PeerId};
 use prometheus_endpoint::Registry;
-pub use sc_network_common::{
-	protocol::{role::Role, ProtocolName},
-	sync::warp::WarpSyncProvider,
-	ExHashT,
-};
+pub use sc_network_common::{role::Role, sync::warp::WarpSyncProvider, ExHashT};
 use zeroize::Zeroize;
 
 use std::{

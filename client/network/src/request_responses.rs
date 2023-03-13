@@ -34,7 +34,7 @@
 //! - If provided, a ["requests processing"](ProtocolConfig::inbound_queue) channel
 //! is used to handle incoming requests.
 
-use crate::ReputationChange;
+use crate::{types::ProtocolName, ReputationChange};
 
 use futures::{
 	channel::{mpsc, oneshot},
@@ -54,7 +54,6 @@ use libp2p::{
 	},
 };
 
-use sc_network_common::protocol::ProtocolName;
 use sc_peerset::{PeersetHandle, BANNED_THRESHOLD};
 
 use std::{

@@ -54,9 +54,10 @@ use sc_network::{
 		NonDefaultSetConfig, NonReservedPeerMode, NotificationHandshake, ProtocolId, SetConfig,
 	},
 	request_responses::{IfDisconnected, RequestFailure},
+	types::ProtocolName,
 };
 use sc_network_common::{
-	protocol::{role::Roles, ProtocolName},
+	role::Roles,
 	sync::{
 		message::{
 			BlockAnnounce, BlockAnnouncesHandshake, BlockAttributes, BlockData, BlockRequest,
@@ -3165,7 +3166,7 @@ mod test {
 	use futures::{executor::block_on, future::poll_fn};
 	use sc_block_builder::BlockBuilderProvider;
 	use sc_network_common::{
-		protocol::role::Role,
+		role::Role,
 		sync::message::{BlockData, BlockState, FromBlock},
 	};
 	use sp_blockchain::HeaderBackend;

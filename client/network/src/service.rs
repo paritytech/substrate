@@ -32,6 +32,7 @@ use crate::{
 	config::{MultiaddrWithPeerId, Params, TransportConfig},
 	discovery::DiscoveryConfig,
 	error::Error,
+	event::{DhtEvent, Event},
 	network_state::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
@@ -46,7 +47,9 @@ use crate::{
 			NotificationSenderReady as NotificationSenderReadyT,
 		},
 	},
-	transport, ReputationChange,
+	transport,
+	types::ProtocolName,
+	ReputationChange,
 };
 
 use futures::{channel::oneshot, prelude::*};
@@ -67,13 +70,7 @@ use log::{debug, error, info, trace, warn};
 use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
 
-use sc_network_common::{
-	protocol::{
-		event::{DhtEvent, Event},
-		ProtocolName,
-	},
-	ExHashT,
-};
+use sc_network_common::ExHashT;
 use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain::HeaderBackend;

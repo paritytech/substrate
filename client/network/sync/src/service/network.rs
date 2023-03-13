@@ -21,9 +21,9 @@ use libp2p::PeerId;
 
 use sc_network::{
 	request_responses::{IfDisconnected, RequestFailure},
+	types::ProtocolName,
 	NetworkNotification, NetworkPeers, NetworkRequest,
 };
-use sc_network_common::protocol::ProtocolName;
 use sc_peerset::ReputationChange;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 

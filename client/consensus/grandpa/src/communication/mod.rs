@@ -74,7 +74,7 @@ pub(crate) const NEIGHBOR_REBROADCAST_PERIOD: Duration = Duration::from_secs(2 *
 
 pub mod grandpa_protocol_name {
 	use sc_chain_spec::ChainSpec;
-	use sc_network_common::protocol::ProtocolName;
+	use sc_network::types::ProtocolName;
 
 	pub(crate) const NAME: &str = "/grandpa/1";
 	/// Old names for the notifications protocol, used for backward compatibility.

@@ -19,7 +19,7 @@
 //! Common data structures of the networking layer.
 
 pub mod message;
-pub mod protocol;
+pub mod role;
 pub mod sync;
 
 /// Minimum Requirements for a Hash within Networking

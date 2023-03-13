@@ -26,8 +26,10 @@ use libp2p::core::PeerId;
 use log::{debug, error, trace};
 use prost::Message;
 use sc_client_api::BlockBackend;
-use sc_network::request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig};
-use sc_network_common::protocol::ProtocolName;
+use sc_network::{
+	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
+	types::ProtocolName,
+};
 use schema::bitswap::{
 	message::{wantlist::WantType, Block as MessageBlock, BlockPresence, BlockPresenceType},
 	Message as BitswapMessage,

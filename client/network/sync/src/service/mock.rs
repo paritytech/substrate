@@ -23,10 +23,10 @@ use sc_consensus::{BlockImportError, BlockImportStatus};
 use sc_network::{
 	config::MultiaddrWithPeerId,
 	request_responses::{IfDisconnected, RequestFailure},
+	types::ProtocolName,
 	NetworkNotification, NetworkPeers, NetworkRequest, NetworkSyncForkRequest,
 	NotificationSenderError, NotificationSenderT,
 };
-use sc_network_common::protocol::ProtocolName;
 use sc_peerset::ReputationChange;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
