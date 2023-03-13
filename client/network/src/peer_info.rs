@@ -213,18 +213,19 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 		local_addr: &Multiaddr,
 		remote_addr: &Multiaddr,
 	) -> Result<THandler<Self>, ConnectionDenied> {
-		self.ping.handle_established_inbound_connection(
+		let ping_handler = self.ping.handle_established_inbound_connection(
 			connection_id,
 			peer,
 			local_addr,
 			remote_addr,
 		)?;
-		self.identify.handle_established_inbound_connection(
+		let identity_handler = self.identify.handle_established_inbound_connection(
 			connection_id,
 			peer,
 			local_addr,
 			remote_addr,
-		)
+		)?;
+		Ok(ping_handler.select(identity_handler))
 	}
 
 	fn handle_established_outbound_connection(
@@ -234,18 +235,19 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 		addr: &Multiaddr,
 		role_override: Endpoint,
 	) -> Result<THandler<Self>, ConnectionDenied> {
-		self.ping.handle_established_outbound_connection(
+		let ping_handler = self.ping.handle_established_outbound_connection(
 			connection_id,
 			peer,
 			addr,
 			role_override,
 		)?;
-		self.identify.handle_established_outbound_connection(
+		let identity_handler = self.identify.handle_established_outbound_connection(
 			connection_id,
 			peer,
 			addr,
 			role_override,
-		)
+		)?;
+		Ok(ping_handler.select(identity_handler))
 	}
 
 	fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {

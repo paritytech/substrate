@@ -576,7 +576,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			list.extend(list_to_filter);
 		}
 
-		trace!(target: "sub-libp2p", "Addresses of {:?}: {:?}", maybe_peer, list);
+		trace!(target: "sub-libp2p","Addresses of {:?} (connection ID: {:?}): {:?}", maybe_peer, connection_id, list);
 
 		Ok(list)
 	}
