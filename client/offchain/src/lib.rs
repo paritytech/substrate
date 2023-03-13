@@ -43,9 +43,14 @@ use futures::{
 };
 use parking_lot::Mutex;
 use sc_network_common::service::{NetworkPeers, NetworkStateInfo};
+use sc_transaction_pool_api::OffchainSubmitTransaction;
 use sp_api::{ApiExt, ProvideRuntimeApi};
-use sp_core::{offchain, traits::SpawnNamed, ExecutionContext};
-use sp_runtime::traits::{self, Header};
+use sp_core::{offchain, traits::SpawnNamed};
+use sp_keystore::{KeystoreExt, SyncCryptoStorePtr};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{self, Block, Header},
+};
 use threadpool::ThreadPool;
 
 mod api;
@@ -76,16 +81,36 @@ pub struct OffchainWorkers<Client, Block: traits::Block> {
 	thread_pool: Mutex<ThreadPool>,
 	shared_http_client: api::SharedClient,
 	enable_http: bool,
+	keystore: Option<SyncCryptoStorePtr>,
+	offchain_db: Option<Arc<dyn DbExternalitiesFactory>>,
+	transaction_pool: Option<Arc<dyn OffchainSubmitTransaction<Block>>>,
 }
 
 impl<Client, Block: traits::Block> OffchainWorkers<Client, Block> {
 	/// Creates new [`OffchainWorkers`].
-	pub fn new(client: Arc<Client>) -> Self {
-		Self::new_with_options(client, OffchainWorkerOptions { enable_http_requests: true })
+	pub fn new(
+		client: Arc<Client>,
+		keystore: Option<SyncCryptoStorePtr>,
+		offchain_db: Option<Box<dyn DbExternalitiesFactory>>,
+		transaction_pool: Option<Box<dyn OffchainSubmitTransaction<Block>>>,
+	) -> Self {
+		Self::new_with_options(
+			client,
+			keystore,
+			offchain_db,
+			transaction_pool,
+			OffchainWorkerOptions { enable_http_requests: true },
+		)
 	}
 
 	/// Creates new [`OffchainWorkers`] using the given `options`.
-	pub fn new_with_options(client: Arc<Client>, options: OffchainWorkerOptions) -> Self {
+	pub fn new_with_options(
+		client: Arc<Client>,
+		keystore: Option<SyncCryptoStorePtr>,
+		offchain_db: Option<Box<dyn DbExternalitiesFactory>>,
+		transaction_pool: Option<Box<dyn OffchainSubmitTransaction<Block>>>,
+		options: OffchainWorkerOptions,
+	) -> Self {
 		Self {
 			client,
 			_block: PhantomData,
@@ -95,6 +120,9 @@ impl<Client, Block: traits::Block> OffchainWorkers<Client, Block> {
 			)),
 			shared_http_client: api::SharedClient::new(),
 			enable_http: options.enable_http_requests,
+			keystore,
+			offchain_db,
+			transaction_pool,
 		}
 	}
 }
@@ -152,25 +180,40 @@ where
 			let client = self.client.clone();
 
 			let mut capabilities = offchain::Capabilities::all();
-
 			capabilities.set(offchain::Capabilities::HTTP, self.enable_http);
+
 			self.spawn_worker(move || {
 				let mut runtime = client.runtime_api();
 				let api = Box::new(api);
 				tracing::debug!(target: LOG_TARGET, "Running offchain workers at {:?}", hash);
 
-				// runtime.register_extension():
+				if let Some(keystore) = self.keystore.as_ref() {
+					runtime.register_extension(KeystoreExt(keystore.clone()));
+				}
 
-				let context = ExecutionContext::OffchainCall(Some((api, capabilities)));
+				if let Some(pool) = self.transaction_pool.as_ref() {
+					runtime.register_extension(offchain::TransactionPoolExt(Box::new(
+						TransactionPoolAdapter { hash, pool },
+					) as _));
+				}
+
+				if let Some(offchain_db) = self.offchain_db.as_ref() {
+					runtime.register_extension(offchain::OffchainDbExt::new(
+						offchain::LimitedExternalities::new(capabilities, offchain_db.create()),
+					));
+				}
+
+				runtime.register_extension(offchain::OffchainWorkerExt::new(
+					offchain::LimitedExternalities::new(capabilities, api),
+				));
+
 				let run = if version == 2 {
 					runtime.offchain_worker(hash, &header)
 				} else {
 					#[allow(deprecated)]
-					runtime.offchain_worker_before_version_2(
-						hash,
-						*header.number(),
-					)
+					runtime.offchain_worker_before_version_2(hash, *header.number())
 				};
+
 				if let Err(e) = run {
 					tracing::error!(
 						target: LOG_TARGET,
@@ -238,6 +281,26 @@ pub async fn notification_future<Client, Block, Spawner>(
 			ready(())
 		})
 		.await;
+}
+
+/// A wrapper type to pass `BlockId` to the actual transaction pool.
+struct TransactionPoolAdapter<Block: traits::Block> {
+	hash: Block::Hash,
+	pool: Arc<dyn OffchainSubmitTransaction<Block>>,
+}
+
+impl<Block: traits::Block> offchain::TransactionPool for TransactionPoolAdapter<Block> {
+	fn submit_transaction(&mut self, data: Vec<u8>) -> Result<(), ()> {
+		let xt = match Block::Extrinsic::decode(&mut &*data) {
+			Ok(xt) => xt,
+			Err(e) => {
+				log::warn!("Unable to decode extrinsic: {:?}: {}", data, e);
+				return Err(())
+			},
+		};
+
+		self.pool.submit_at(&BlockId::Hash(self.hash), xt)
+	}
 }
 
 #[cfg(test)]
