@@ -155,18 +155,19 @@ where
 
 			capabilities.set(offchain::Capabilities::HTTP, self.enable_http);
 			self.spawn_worker(move || {
-				let runtime = client.runtime_api();
+				let mut runtime = client.runtime_api();
 				let api = Box::new(api);
 				tracing::debug!(target: LOG_TARGET, "Running offchain workers at {:?}", hash);
 
+				// runtime.register_extension():
+
 				let context = ExecutionContext::OffchainCall(Some((api, capabilities)));
 				let run = if version == 2 {
-					runtime.offchain_worker_with_context(hash, context, &header)
+					runtime.offchain_worker(hash, &header)
 				} else {
 					#[allow(deprecated)]
-					runtime.offchain_worker_before_version_2_with_context(
+					runtime.offchain_worker_before_version_2(
 						hash,
-						context,
 						*header.number(),
 					)
 				};

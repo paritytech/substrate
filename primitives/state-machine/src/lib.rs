@@ -166,14 +166,7 @@ mod execution {
 		traits::{CallContext, CodeExecutor, ReadRuntimeVersionExt, RuntimeCode, SpawnNamed},
 	};
 	use sp_externalities::Extensions;
-	use std::{
-		collections::{HashMap, HashSet},
-		fmt,
-	};
-
-	const PROOF_CLOSE_TRANSACTION: &str = "\
-		Closing a transaction that was started in this function. Client initiated transactions
-		are protected from being closed by the runtime. qed";
+	use std::collections::{HashMap, HashSet};
 
 	pub(crate) type CallResult<E> = Result<Vec<u8>, E>;
 
@@ -182,21 +175,6 @@ mod execution {
 
 	/// Trie backend with in-memory storage.
 	pub type InMemoryBackend<H> = TrieBackend<MemoryDB<H>, H>;
-
-	/// Strategy for executing a call into the runtime.
-	#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-	pub enum ExecutionStrategy {
-		/// Execute with the native equivalent if it is compatible with the given wasm module;
-		/// otherwise fall back to the wasm.
-		NativeWhenPossible,
-		/// Use the given wasm module.
-		AlwaysWasm,
-		/// Run with both the wasm and the native variant (if compatible). Report any discrepancy
-		/// as an error.
-		Both,
-		/// First native, then if that fails or is not possible, wasm.
-		NativeElseWasm,
-	}
 
 	/// Storage backend trust level.
 	#[derive(Debug, Clone)]
@@ -207,73 +185,6 @@ mod execution {
 		/// Untrusted backend may be missing some parts of the trie, so panics are not considered
 		/// fatal.
 		Untrusted,
-	}
-
-	/// Like `ExecutionStrategy` only it also stores a handler in case of consensus failure.
-	#[derive(Clone)]
-	pub enum ExecutionManager<F> {
-		/// Execute with the native equivalent if it is compatible with the given wasm module;
-		/// otherwise fall back to the wasm.
-		NativeWhenPossible,
-		/// Use the given wasm module. The backend on which code is executed code could be
-		/// trusted to provide all storage or not (i.e. the light client cannot be trusted to
-		/// provide for all storage queries since the storage entries it has come from an external
-		/// node).
-		AlwaysWasm(BackendTrustLevel),
-		/// Run with both the wasm and the native variant (if compatible). Call `F` in the case of
-		/// any discrepancy.
-		Both(F),
-		/// First native, then if that fails or is not possible, wasm.
-		NativeElseWasm,
-	}
-
-	impl<'a, F> From<&'a ExecutionManager<F>> for ExecutionStrategy {
-		fn from(s: &'a ExecutionManager<F>) -> Self {
-			match *s {
-				ExecutionManager::NativeWhenPossible => ExecutionStrategy::NativeWhenPossible,
-				ExecutionManager::AlwaysWasm(_) => ExecutionStrategy::AlwaysWasm,
-				ExecutionManager::NativeElseWasm => ExecutionStrategy::NativeElseWasm,
-				ExecutionManager::Both(_) => ExecutionStrategy::Both,
-			}
-		}
-	}
-
-	impl ExecutionStrategy {
-		/// Gets the corresponding manager for the execution strategy.
-		pub fn get_manager<E: fmt::Debug>(self) -> ExecutionManager<DefaultHandler<E>> {
-			match self {
-				ExecutionStrategy::AlwaysWasm =>
-					ExecutionManager::AlwaysWasm(BackendTrustLevel::Trusted),
-				ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
-				ExecutionStrategy::NativeElseWasm => ExecutionManager::NativeElseWasm,
-				ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
-					warn!(
-						"Consensus error between wasm {:?} and native {:?}. Using wasm.",
-						wasm_result, native_result,
-					);
-					warn!("   Native result {:?}", native_result);
-					warn!("   Wasm result {:?}", wasm_result);
-					wasm_result
-				}),
-			}
-		}
-	}
-
-	/// Evaluate to ExecutionManager::NativeElseWasm, without having to figure out the type.
-	pub fn native_else_wasm<E>() -> ExecutionManager<DefaultHandler<E>> {
-		ExecutionManager::NativeElseWasm
-	}
-
-	/// Evaluate to ExecutionManager::AlwaysWasm with trusted backend, without having to figure out
-	/// the type.
-	fn always_wasm<E>() -> ExecutionManager<DefaultHandler<E>> {
-		ExecutionManager::AlwaysWasm(BackendTrustLevel::Trusted)
-	}
-
-	/// Evaluate ExecutionManager::AlwaysWasm with untrusted backend, without having to figure out
-	/// the type.
-	fn always_untrusted_wasm<E>() -> ExecutionManager<DefaultHandler<E>> {
-		ExecutionManager::AlwaysWasm(BackendTrustLevel::Untrusted)
 	}
 
 	/// The substrate state machine.
@@ -374,13 +285,7 @@ mod execution {
 		/// blocks (e.g. a transaction at a time), ensure a different method is used.
 		///
 		/// Returns the SCALE encoded result of the executed function.
-		pub fn execute(&mut self, strategy: ExecutionStrategy) -> Result<Vec<u8>, Box<dyn Error>> {
-			// We are not giving a native call and thus we are sure that the result can never be a
-			// native value.
-			self.execute_using_consensus_failure_handler(strategy.get_manager())
-		}
-
-		fn execute_aux(&mut self, use_native: bool) -> (CallResult<Exec::Error>, bool) {
+		pub fn execute(&mut self) -> Result<Vec<u8>, Box<dyn Error>> {
 			let mut cache = StorageTransactionCache::default();
 
 			let cache = match self.storage_transaction_cache.as_mut() {
@@ -405,14 +310,10 @@ mod execution {
 				"Call",
 			);
 
-			let (result, was_native) = self.exec.call(
-				&mut ext,
-				self.runtime_code,
-				self.method,
-				self.call_data,
-				use_native,
-				self.context,
-			);
+			let result = self
+				.exec
+				.call(&mut ext, self.runtime_code, self.method, self.call_data, false, self.context)
+				.0;
 
 			self.overlay
 				.exit_runtime()
@@ -421,92 +322,11 @@ mod execution {
 			trace!(
 				target: "state",
 				ext_id = %HexDisplay::from(&ext_id.to_le_bytes()),
-				?was_native,
 				?result,
 				"Return",
 			);
 
-			(result, was_native)
-		}
-
-		fn execute_call_with_both_strategy<Handler>(
-			&mut self,
-			on_consensus_failure: Handler,
-		) -> CallResult<Exec::Error>
-		where
-			Handler:
-				FnOnce(CallResult<Exec::Error>, CallResult<Exec::Error>) -> CallResult<Exec::Error>,
-		{
-			self.overlay.start_transaction();
-			let (result, was_native) = self.execute_aux(true);
-
-			if was_native {
-				self.overlay.rollback_transaction().expect(PROOF_CLOSE_TRANSACTION);
-				let (wasm_result, _) = self.execute_aux(false);
-
-				if (result.is_ok() &&
-					wasm_result.is_ok() && result.as_ref().ok() == wasm_result.as_ref().ok()) ||
-					result.is_err() && wasm_result.is_err()
-				{
-					result
-				} else {
-					on_consensus_failure(wasm_result, result)
-				}
-			} else {
-				self.overlay.commit_transaction().expect(PROOF_CLOSE_TRANSACTION);
-				result
-			}
-		}
-
-		fn execute_call_with_native_else_wasm_strategy(&mut self) -> CallResult<Exec::Error> {
-			self.overlay.start_transaction();
-			let (result, was_native) = self.execute_aux(true);
-
-			if !was_native || result.is_ok() {
-				self.overlay.commit_transaction().expect(PROOF_CLOSE_TRANSACTION);
-				result
-			} else {
-				self.overlay.rollback_transaction().expect(PROOF_CLOSE_TRANSACTION);
-				self.execute_aux(false).0
-			}
-		}
-
-		/// Execute a call using the given state backend, overlayed changes, and call executor.
-		///
-		/// On an error, no prospective changes are written to the overlay.
-		///
-		/// Note: changes to code will be in place if this call is made again. For running partial
-		/// blocks (e.g. a transaction at a time), ensure a different method is used.
-		///
-		/// Returns the result of the executed function either in native representation `R` or
-		/// in SCALE encoded representation.
-		pub fn execute_using_consensus_failure_handler<Handler>(
-			&mut self,
-			manager: ExecutionManager<Handler>,
-		) -> Result<Vec<u8>, Box<dyn Error>>
-		where
-			Handler:
-				FnOnce(CallResult<Exec::Error>, CallResult<Exec::Error>) -> CallResult<Exec::Error>,
-		{
-			let result = {
-				match manager {
-					ExecutionManager::Both(on_consensus_failure) =>
-						self.execute_call_with_both_strategy(on_consensus_failure),
-					ExecutionManager::NativeElseWasm =>
-						self.execute_call_with_native_else_wasm_strategy(),
-					ExecutionManager::AlwaysWasm(trust_level) => {
-						let _abort_guard = match trust_level {
-							BackendTrustLevel::Trusted => None,
-							BackendTrustLevel::Untrusted =>
-								Some(sp_panic_handler::AbortGuard::never_abort()),
-						};
-						self.execute_aux(false).0
-					},
-					ExecutionManager::NativeWhenPossible => self.execute_aux(true).0,
-				}
-			};
-
-			result.map_err(|e| Box::new(e) as _)
+			result.map_err(|e| Box::new(e) as Box<_>)
 		}
 	}
 
@@ -580,7 +400,7 @@ mod execution {
 			spawn_handle,
 			CallContext::Offchain,
 		)
-		.execute_using_consensus_failure_handler::<_>(always_wasm())?;
+		.execute()?;
 
 		let proof = proving_backend
 			.extract_proof()
@@ -645,7 +465,7 @@ mod execution {
 			spawn_handle,
 			CallContext::Offchain,
 		)
-		.execute_using_consensus_failure_handler(always_untrusted_wasm())
+		.execute()
 	}
 
 	/// Generate storage read proof.

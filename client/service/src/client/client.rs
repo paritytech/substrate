@@ -62,7 +62,7 @@ use sp_core::{
 		well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, StorageChild, StorageData,
 		StorageKey,
 	},
-	traits::SpawnNamed,
+	traits::{CallContext, SpawnNamed},
 };
 #[cfg(feature = "test-helpers")]
 use sp_keystore::SyncCryptoStorePtr;
@@ -879,12 +879,12 @@ where
 			// We should enact state, but don't have any storage changes, so we need to execute the
 			// block.
 			(true, None, Some(ref body)) => {
-				let runtime_api = self.runtime_api();
-				let execution_context = import_block.origin.into();
+				let mut runtime_api = self.runtime_api();
 
-				runtime_api.execute_block_with_context(
+				runtime_api.set_call_context(CallContext::Onchain);
+
+				runtime_api.execute_block(
 					*parent_hash,
-					execution_context,
 					Block::new(import_block.header.clone(), body.clone()),
 				)?;
 
@@ -1722,7 +1722,7 @@ where
 				params.overlayed_changes,
 				Some(params.storage_transaction_cache),
 				params.recorder,
-				params.context,
+				params.call_context,
 			)
 			.map_err(Into::into)
 	}

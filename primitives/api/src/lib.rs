@@ -76,11 +76,17 @@ pub use codec::{self, Decode, DecodeLimit, Encode};
 #[cfg(feature = "std")]
 pub use hash_db::Hasher;
 #[doc(hidden)]
+pub use sp_core::offchain;
+#[doc(hidden)]
 #[cfg(not(feature = "std"))]
 pub use sp_core::to_substrate_wasm_fn_return_value;
+#[doc(hidden)]
+#[cfg(feature = "std")]
+pub use sp_core::traits::CallContext;
 use sp_core::OpaqueMetadata;
 #[doc(hidden)]
-pub use sp_core::{offchain, ExecutionContext};
+#[cfg(feature = "std")]
+pub use sp_externalities::{Extension, Extensions};
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use sp_runtime::StateVersion;
@@ -582,6 +588,12 @@ pub trait ApiExt<Block: BlockT> {
 	) -> Result<StorageChanges<Self::StateBackend, Block>, String>
 	where
 		Self: Sized;
+
+	/// Set the [`CallContext`] to be used by the runtime api calls done by this instance.
+	fn set_call_context(&mut self, call_context: CallContext);
+
+	/// Register an [`Extension`] that will be accessible while executing a runtime api call.
+	fn register_extension<E: Extension>(&mut self, extension: E);
 }
 
 /// Parameters for [`CallApiAt::call_api_at`].
@@ -597,8 +609,8 @@ pub struct CallApiAtParams<'a, Block: BlockT, Backend: StateBackend<HashFor<Bloc
 	pub overlayed_changes: &'a RefCell<OverlayedChanges>,
 	/// The cache for storage transactions.
 	pub storage_transaction_cache: &'a RefCell<StorageTransactionCache<Block, Backend>>,
-	/// The context this function is executed in.
-	pub context: ExecutionContext,
+	/// The call context of this call.
+	pub call_context: CallContext,
 	/// The optional proof recorder for recording storage accesses.
 	pub recorder: &'a Option<ProofRecorder<Block>>,
 }

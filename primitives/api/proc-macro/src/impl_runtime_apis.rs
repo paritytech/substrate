@@ -209,6 +209,8 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				#crate_::StorageTransactionCache<Block, C::StateBackend>
 			>,
 			recorder: std::option::Option<#crate_::ProofRecorder<Block>>,
+			call_context: #crate_::CallContext,
+			extensions: std::cell::RefCell<#crate_::Extensions>,
 		}
 
 		#[cfg(any(feature = "std", test))]
@@ -292,6 +294,14 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					state_version,
 				)
 			}
+
+			fn set_call_context(&mut self, call_context: #crate_::CallContext) {
+				self.call_context = call_context;
+			}
+
+			fn register_extension<E: #crate_::Extension>(&mut self, extension: E) {
+				std::cell::RefCell::borrow_mut(&self.extensions).register(extension);
+			}
 		}
 
 		#[cfg(any(feature = "std", test))]
@@ -311,6 +321,8 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					changes: std::default::Default::default(),
 					recorder: std::default::Default::default(),
 					storage_transaction_cache: std::default::Default::default(),
+					call_context: #crate_::CallContext::Offchain,
+					extensions: std::default::Default::default(),
 				}.into()
 			}
 		}
@@ -424,7 +436,6 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 			fn __runtime_api_internal_call_api_at(
 				&self,
 				at: <__SR_API_BLOCK__ as #crate_::BlockT>::Hash,
-				context: #crate_::ExecutionContext,
 				params: std::vec::Vec<u8>,
 				fn_name: &dyn Fn(#crate_::RuntimeVersion) -> &'static str,
 			) -> std::result::Result<std::vec::Vec<u8>, #crate_::ApiError> {
@@ -446,7 +457,7 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 						arguments: params,
 						overlayed_changes: &self.changes,
 						storage_transaction_cache: &self.storage_transaction_cache,
-						context,
+						call_context: self.call_context,
 						recorder: &self.recorder,
 					};
 

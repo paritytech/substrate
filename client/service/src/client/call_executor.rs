@@ -28,7 +28,7 @@ use sp_core::{
 };
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_state_machine::{
-	backend::AsTrieBackend, ExecutionStrategy, Ext, OverlayedChanges, StateMachine, StorageProof,
+	backend::AsTrieBackend, Ext, OverlayedChanges, StateMachine, StorageProof,
 };
 use std::{cell::RefCell, sync::Arc};
 
@@ -182,11 +182,7 @@ where
 
 		let runtime_code = self.check_override(runtime_code, at_hash)?.0;
 
-		let extensions = self.execution_extensions.extensions(
-			at_hash,
-			at_number,
-			ExecutionContext::OffchainCall(None),
-		);
+		let extensions = self.execution_extensions.extensions(at_hash, at_number);
 
 		let mut sm = StateMachine::new(
 			&state,
@@ -201,8 +197,7 @@ where
 		)
 		.set_parent_hash(at_hash);
 
-		sm.execute_using_consensus_failure_handler(strategy.get_manager())
-			.map_err(Into::into)
+		sm.execute().map_err(Into::into)
 	}
 
 	fn contextual_call(
@@ -213,7 +208,7 @@ where
 		changes: &RefCell<OverlayedChanges>,
 		storage_transaction_cache: Option<&RefCell<StorageTransactionCache<Block, B::State>>>,
 		recorder: &Option<ProofRecorder<Block>>,
-		context: ExecutionContext,
+		call_context: CallContext,
 	) -> Result<Vec<u8>, sp_blockchain::Error> {
 		let mut storage_transaction_cache = storage_transaction_cache.map(|c| c.borrow_mut());
 
@@ -221,13 +216,7 @@ where
 			self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(at_hash))?;
 		let state = self.backend.state_at(at_hash)?;
 
-		let call_context = match context {
-			ExecutionContext::OffchainCall(_) => CallContext::Offchain,
-			_ => CallContext::Onchain,
-		};
-
-		let (execution_manager, extensions) =
-			self.execution_extensions.manager_and_extensions(at_hash, at_number, context);
+		let extensions = self.execution_extensions.extensions(at_hash, at_number);
 
 		let changes = &mut *changes.borrow_mut();
 
@@ -261,7 +250,7 @@ where
 				)
 				.with_storage_transaction_cache(storage_transaction_cache.as_deref_mut())
 				.set_parent_hash(at_hash);
-				state_machine.execute_using_consensus_failure_handler(execution_manager)
+				state_machine.execute()
 			},
 			None => {
 				let mut state_machine = StateMachine::new(
@@ -277,7 +266,7 @@ where
 				)
 				.with_storage_transaction_cache(storage_transaction_cache.as_deref_mut())
 				.set_parent_hash(at_hash);
-				state_machine.execute_using_consensus_failure_handler(execution_manager)
+				state_machine.execute()
 			},
 		}
 		.map_err(Into::into)
@@ -317,11 +306,7 @@ where
 			method,
 			call_data,
 			&runtime_code,
-			self.execution_extensions.extensions(
-				at_hash,
-				at_number,
-				ExecutionContext::OffchainCall(None),
-			),
+			self.execution_extensions.extensions(at_hash, at_number),
 		)
 		.map_err(Into::into)
 	}

@@ -394,7 +394,6 @@ where
 					hash,
 					&function,
 					&call_parameters,
-					client.execution_extensions().strategies().other,
 					CallContext::Offchain,
 				)
 				.map(|result| {
