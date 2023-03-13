@@ -17,11 +17,14 @@
 
 //! Implementations for fungibles trait.
 
-use frame_support::traits::tokens::{
-	Fortitude,
-	Precision::{self, BestEffort},
-	Preservation::{self, Expendable},
-	Provenance::{self, Minted},
+use frame_support::{
+	defensive,
+	traits::tokens::{
+		Fortitude,
+		Precision::{self, BestEffort},
+		Preservation::{self, Expendable},
+		Provenance::{self, Minted},
+	},
 };
 
 use super::*;
@@ -86,6 +89,7 @@ impl<T: Config<I>, I: 'static> fungibles::Balanced<<T as SystemConfig>::AccountI
 }
 
 impl<T: Config<I>, I: 'static> fungibles::Unbalanced<T::AccountId> for Pallet<T, I> {
+	fn handle_raw_dust(_: Self::AssetId, _: Self::Balance) {}
 	fn handle_dust(_: fungibles::Dust<T::AccountId, Self>) {
 		unreachable!("`decrease_balance` and `increase_balance` have non-default impls; nothing else calls this; qed");
 	}
