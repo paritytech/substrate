@@ -1619,6 +1619,7 @@ fn metadata_versions() {
 	assert_eq!(vec![LATEST_METADATA_VERSION], Runtime::metadata_versions());
 }
 
+#[test]
 fn test_pallet_runtime_docs() {
 	let docs = crate::pallet::Pallet::<Runtime>::pallet_documentation_metadata();
 	let readme = "Support code for the runtime.\n\nLicense: Apache-2.0";
