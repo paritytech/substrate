@@ -40,11 +40,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				(freezer.clone(), CollectionRole::Freezer),
 			];
 
-			// validate roles
+			// only root can change the role from `None` to `Some(account)`
 			if !is_root {
 				for (account, role) in roles_map.iter() {
 					if account.is_some() {
-						// only root can change the role from `None` to `Some(account)`
 						ensure!(
 							Self::find_account_by_role(&collection, *role).is_some(),
 							Error::<T, I>::NoPermission
@@ -53,14 +52,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				}
 			}
 
-			let valid_roles = roles_map
+			let roles = roles_map
 				.into_iter()
 				.filter_map(|(account, role)| account.map(|account| (account, role)))
 				.collect();
 
-			let account_to_role = Self::group_roles_by_account(valid_roles);
+			let account_to_role = Self::group_roles_by_account(roles);
 
-			// delete previous records
+			// delete the previous records
 			Self::clear_roles(&collection)?;
 
 			// insert new records

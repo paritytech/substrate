@@ -3278,7 +3278,7 @@ fn pre_signed_mints_should_work() {
 				signature,
 				user_1.clone(),
 			),
-			Error::<Test>::UnknownCollection
+			Error::<Test>::NoPermission
 		);
 
 		// validate max attributes limit
