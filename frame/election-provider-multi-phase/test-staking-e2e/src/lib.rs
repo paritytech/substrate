@@ -135,7 +135,7 @@ fn enters_emergency_phase_after_forcing_before_elect() {
 }
 
 #[test]
-/// Continously slash 10% of the active validators per era.
+/// Continuously slash 10% of the active validators per era.
 ///
 /// Since the `OffendingValidatorsThreshold` is only checked per era staking does not force a new
 /// era even as the number of active validators is decreasing across eras. When processing a new
