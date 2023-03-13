@@ -142,16 +142,16 @@ fn main() {
 			key_types: KeyTypes::Sr25519,
 			block_type: BlockType::RandomTransfersKeepAlive,
 			size: SizeType::Medium,
-			database_type: BenchDataBaseType::RocksDb,
+			database_type: BenchDataBaseType::ParityDb,
 		},
 		ConstructionBenchmarkDescription {
 			profile: Profile::Wasm,
 			key_types: KeyTypes::Sr25519,
 			block_type: BlockType::RandomTransfersKeepAlive,
 			size: SizeType::Large,
-			database_type: BenchDataBaseType::RocksDb,
+			database_type: BenchDataBaseType::ParityDb,
 		},
-		PoolBenchmarkDescription { database_type: BenchDataBaseType::RocksDb },
+		PoolBenchmarkDescription { database_type: BenchDataBaseType::ParityDb },
 	);
 
 	if opt.list {
