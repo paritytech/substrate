@@ -526,10 +526,10 @@ mod tests {
 	use crate::multiaddr::Multiaddr;
 	use futures::prelude::*;
 	use sc_network::{
-		NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
-		NotificationSenderError, NotificationSenderT as NotificationSender,
+		config::MultiaddrWithPeerId, NetworkBlock, NetworkEventStream, NetworkNotification,
+		NetworkPeers, NotificationSenderError, NotificationSenderT as NotificationSender,
 	};
-	use sc_network_common::{config::MultiaddrWithPeerId, protocol::event::Event};
+	use sc_network_common::protocol::event::Event;
 	use sc_peerset::ReputationChange;
 	use sp_runtime::{
 		testing::{Block as RawBlock, ExtrinsicWrapper, H256},

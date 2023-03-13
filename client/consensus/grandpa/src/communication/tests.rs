@@ -26,12 +26,12 @@ use crate::{communication::grandpa_protocol_name, environment::SharedVoterSetSta
 use futures::prelude::*;
 use parity_scale_codec::Encode;
 use sc_network::{
-	config::Role, Multiaddr, NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
+	config::{MultiaddrWithPeerId, Role},
+	Multiaddr, NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
 	NetworkSyncForkRequest, NotificationSenderError, NotificationSenderT as NotificationSender,
 	PeerId, ReputationChange,
 };
 use sc_network_common::{
-	config::MultiaddrWithPeerId,
 	protocol::{event::Event as NetworkEvent, role::ObservedRole, ProtocolName},
 	sync::{SyncEvent as SyncStreamEvent, SyncEventStream},
 };

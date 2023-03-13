@@ -16,7 +16,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{config, error};
+use crate::{
+	config::{self, NonReservedPeerMode},
+	error,
+};
 
 use bytes::Bytes;
 use codec::{DecodeAll, Encode};
@@ -31,7 +34,6 @@ use libp2p::{
 use log::{debug, error, warn};
 
 use sc_network_common::{
-	config::NonReservedPeerMode,
 	protocol::{role::Roles, ProtocolName},
 	sync::message::BlockAnnouncesHandshake,
 };

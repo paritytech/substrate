@@ -18,8 +18,7 @@
 
 //! Helpers for outgoing and incoming light client requests.
 
-use sc_network::request_responses::ProtocolConfig;
-use sc_network_common::config::ProtocolId;
+use sc_network::{config::ProtocolId, request_responses::ProtocolConfig};
 
 use std::time::Duration;
 

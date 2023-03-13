@@ -707,7 +707,7 @@ pub fn grandpa_peers_set_config(
 			in_peers: 0,
 			out_peers: 0,
 			reserved_nodes: Vec::new(),
-			non_reserved_mode: sc_network_common::config::NonReservedPeerMode::Deny,
+			non_reserved_mode: sc_network::config::NonReservedPeerMode::Deny,
 		},
 	}
 }

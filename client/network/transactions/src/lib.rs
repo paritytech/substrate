@@ -35,13 +35,12 @@ use log::{debug, trace, warn};
 
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sc_network::{
-	config::{NonDefaultSetConfig, SetConfig},
+	config::{NonDefaultSetConfig, NonReservedPeerMode, ProtocolId, SetConfig},
 	error,
 	utils::{interval, LruHashSet},
 	NetworkEventStream, NetworkNotification, NetworkPeers,
 };
 use sc_network_common::{
-	config::{NonReservedPeerMode, ProtocolId},
 	protocol::{event::Event, role::ObservedRole, ProtocolName},
 	sync::{SyncEvent, SyncEventStream},
 	ExHashT,

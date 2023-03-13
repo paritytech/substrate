@@ -341,12 +341,10 @@ mod tests {
 	};
 	use quickcheck::{Arbitrary, Gen, QuickCheck};
 	use sc_network::{
-		NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
-		NotificationSenderError, NotificationSenderT as NotificationSender,
+		config::MultiaddrWithPeerId, NetworkBlock, NetworkEventStream, NetworkNotification,
+		NetworkPeers, NotificationSenderError, NotificationSenderT as NotificationSender,
 	};
-	use sc_network_common::{
-		config::MultiaddrWithPeerId, protocol::role::ObservedRole, sync::SyncEventStream,
-	};
+	use sc_network_common::{protocol::role::ObservedRole, sync::SyncEventStream};
 	use sp_runtime::{
 		testing::H256,
 		traits::{Block as BlockT, NumberFor},

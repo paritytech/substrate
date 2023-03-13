@@ -23,13 +23,13 @@ use futures::{
 };
 use log::debug;
 
-use sc_network::request_responses::{
-	IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
-};
-use sc_network_common::{
+use sc_network::{
 	config::ProtocolId,
-	sync::warp::{EncodedProof, WarpProofRequest, WarpSyncProvider},
+	request_responses::{
+		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
+	},
 };
+use sc_network_common::sync::warp::{EncodedProof, WarpProofRequest, WarpSyncProvider};
 use sp_runtime::traits::Block as BlockT;
 
 use std::{sync::Arc, time::Duration};

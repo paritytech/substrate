@@ -246,7 +246,8 @@ mod tests {
 	use libp2p::{Multiaddr, PeerId};
 	use sc_block_builder::BlockBuilderProvider as _;
 	use sc_client_api::Backend as _;
-	use sc_network_common::{config::MultiaddrWithPeerId, protocol::ProtocolName};
+	use sc_network::config::MultiaddrWithPeerId;
+	use sc_network_common::protocol::ProtocolName;
 	use sc_peerset::ReputationChange;
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};

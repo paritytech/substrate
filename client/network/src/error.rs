@@ -18,10 +18,12 @@
 
 //! Substrate network possible errors.
 
+use crate::config::TransportConfig;
+
 use libp2p::{Multiaddr, PeerId};
 
 // TODO: remove
-use sc_network_common::{config::TransportConfig, protocol::ProtocolName};
+use sc_network_common::protocol::ProtocolName;
 
 use std::fmt;
 

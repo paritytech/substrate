@@ -29,7 +29,7 @@
 
 use crate::{
 	behaviour::{self, Behaviour, BehaviourOut},
-	config::Params,
+	config::{MultiaddrWithPeerId, Params, TransportConfig},
 	discovery::DiscoveryConfig,
 	error::Error,
 	network_state::{
@@ -68,7 +68,6 @@ use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
 
 use sc_network_common::{
-	config::{MultiaddrWithPeerId, TransportConfig},
 	protocol::{
 		event::{DhtEvent, Event},
 		ProtocolName,

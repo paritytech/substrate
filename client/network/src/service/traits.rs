@@ -19,6 +19,7 @@
 // If you read this, you are very thorough, congratulations.
 
 use crate::{
+	config::MultiaddrWithPeerId,
 	request_responses::{IfDisconnected, RequestFailure},
 	service::signature::Signature,
 };
@@ -26,10 +27,7 @@ use crate::{
 use futures::{channel::oneshot, Stream};
 use libp2p::{Multiaddr, PeerId};
 
-use sc_network_common::{
-	config::MultiaddrWithPeerId,
-	protocol::{event::Event, ProtocolName},
-};
+use sc_network_common::protocol::{event::Event, ProtocolName};
 use sc_peerset::ReputationChange;
 
 use std::{collections::HashSet, future::Future, pin::Pin, sync::Arc};

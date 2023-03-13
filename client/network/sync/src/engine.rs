@@ -36,11 +36,12 @@ use prometheus_endpoint::{
 use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_consensus::import_queue::ImportQueueService;
 use sc_network::{
-	config::{NetworkConfiguration, NonDefaultSetConfig},
+	config::{
+		NetworkConfiguration, NonDefaultSetConfig, ProtocolId, SyncMode as SyncOperationMode,
+	},
 	utils::LruHashSet,
 };
 use sc_network_common::{
-	config::{ProtocolId, SyncMode as SyncOperationMode},
 	protocol::{event::Event, role::Roles, ProtocolName},
 	sync::{
 		message::{

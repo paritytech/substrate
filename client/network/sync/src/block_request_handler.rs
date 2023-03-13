@@ -30,8 +30,11 @@ use lru::LruCache;
 use prost::Message;
 
 use sc_client_api::BlockBackend;
-use sc_network::request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig};
-use sc_network_common::{config::ProtocolId, sync::message::BlockAttributes};
+use sc_network::{
+	config::ProtocolId,
+	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
+};
+use sc_network_common::sync::message::BlockAttributes;
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
 	generic::BlockId,

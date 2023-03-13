@@ -50,11 +50,12 @@ use sc_consensus::{
 	import_queue::ImportQueueService, BlockImportError, BlockImportStatus, IncomingBlock,
 };
 use sc_network::{
-	config::{NonDefaultSetConfig, SetConfig},
+	config::{
+		NonDefaultSetConfig, NonReservedPeerMode, NotificationHandshake, ProtocolId, SetConfig,
+	},
 	request_responses::{IfDisconnected, RequestFailure},
 };
 use sc_network_common::{
-	config::{NonReservedPeerMode, NotificationHandshake, ProtocolId},
 	protocol::{role::Roles, ProtocolName},
 	sync::{
 		message::{

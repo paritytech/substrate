@@ -23,9 +23,9 @@ use log::{debug, info};
 use parking_lot::Mutex;
 use sc_client_api::{Backend, CallExecutor};
 use sc_network::{
-	config::NetworkConfiguration, multiaddr, NetworkBlock, NetworkPeers, NetworkStateInfo,
+	config::{MultiaddrWithPeerId, NetworkConfiguration, TransportConfig},
+	multiaddr, NetworkBlock, NetworkPeers, NetworkStateInfo,
 };
-use sc_network_common::config::{MultiaddrWithPeerId, TransportConfig};
 use sc_network_sync::SyncingService;
 use sc_service::{
 	client::Client,

@@ -49,15 +49,15 @@ use sc_consensus::{
 	LongestChain, Verifier,
 };
 use sc_network::{
-	config::{NetworkConfiguration, NonDefaultSetConfig},
+	config::{
+		MultiaddrWithPeerId, NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode,
+		ProtocolId, Role, SyncMode, TransportConfig,
+	},
 	request_responses::ProtocolConfig as RequestResponseConfig,
 	Multiaddr, NetworkBlock, NetworkEventStream, NetworkService, NetworkStateInfo,
 	NetworkSyncForkRequest, NetworkWorker,
 };
 use sc_network_common::{
-	config::{
-		MultiaddrWithPeerId, NonReservedPeerMode, ProtocolId, Role, SyncMode, TransportConfig,
-	},
 	protocol::{role::Roles, ProtocolName},
 	sync::warp::{
 		AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncParams, WarpSyncProvider,

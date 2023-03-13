@@ -21,13 +21,11 @@ use libp2p::{Multiaddr, PeerId};
 
 use sc_consensus::{ImportQueue, Link};
 use sc_network::{
-	config, NetworkEventStream, NetworkNotification, NetworkPeers, NetworkService,
-	NetworkStateInfo, NetworkWorker,
+	config::{self, MultiaddrWithPeerId, ProtocolId, TransportConfig},
+	NetworkEventStream, NetworkNotification, NetworkPeers, NetworkService, NetworkStateInfo,
+	NetworkWorker,
 };
-use sc_network_common::{
-	config::{MultiaddrWithPeerId, ProtocolId, TransportConfig},
-	protocol::{event::Event, role::Roles},
-};
+use sc_network_common::protocol::{event::Event, role::Roles};
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
 	block_request_handler::BlockRequestHandler,

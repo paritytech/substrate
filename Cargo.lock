@@ -8164,7 +8164,7 @@ dependencies = [
  "sc-chain-spec-derive",
  "sc-client-api",
  "sc-executor",
- "sc-network-common",
+ "sc-network",
  "sc-telemetry",
  "serde",
  "serde_json",
