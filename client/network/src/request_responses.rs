@@ -232,7 +232,12 @@ pub enum Event {
 	},
 
 	/// A request protocol handler issued reputation changes for the given peer.
-	ReputationChanges { peer: PeerId, changes: Vec<ReputationChange> },
+	ReputationChanges {
+		/// Peer whose reputation needs to be adjust.
+		peer: PeerId,
+		/// Reputation changes.
+		changes: Vec<ReputationChange>,
+	},
 }
 
 /// Combination of a protocol name and a request id.

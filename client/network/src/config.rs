@@ -29,7 +29,7 @@ pub use crate::{
 };
 
 use codec::Encode;
-use libp2p::{core::PublicKey, identity::Keypair, multiaddr, Multiaddr, PeerId};
+use libp2p::{identity::Keypair, multiaddr, Multiaddr, PeerId};
 use prometheus_endpoint::Registry;
 pub use sc_network_common::{role::Role, sync::warp::WarpSyncProvider, ExHashT};
 use zeroize::Zeroize;

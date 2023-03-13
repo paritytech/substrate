@@ -16,6 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+//! `sc-network` type definitions
+
 use libp2p::core::upgrade;
 
 use std::{
