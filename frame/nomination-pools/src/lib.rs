@@ -261,7 +261,7 @@
 //!
 //! When a pool is first bonded it sets up a deterministic, inaccessible account as its reward
 //! destination. This reward account combined with `RewardPool` compose a reward pool.
-//! 
+//!
 //! Reward pools are completely separate entities to bonded pools. Along with its account, a reward
 //! pool also tracks its outstanding and claimed rewards as counters, in addition to pending and
 //! claimed commission. These counters are updated with `RewardPool::update_records`. The current
@@ -1263,11 +1263,11 @@ impl<T: Config> RewardPool<T> {
 	}
 
 	/// Update the recorded values of the reward pool.
-	/// 
+	///
 	/// This function MUST be called whenever the points in the bonded pool change, AND whenever the
 	/// the pools commission is updated. The reason for the former is that a change in pool points
 	/// will alter the share of the reward balance among pool members, and the reason for the latter
-	/// is that a change in commission will alter the share of the reward balance among the pool. 
+	/// is that a change in commission will alter the share of the reward balance among the pool.
 	fn update_records(
 		&mut self,
 		id: PoolId,
@@ -1278,9 +1278,10 @@ impl<T: Config> RewardPool<T> {
 
 		let (current_reward_counter, new_pending_commission) =
 			self.current_reward_counter(id, bonded_points, commission)?;
-		
+
 		// Store the reward counter at the time of this update. This is used in subsequent calls to
-		// `current_reward_counter`, whereby newly pending rewards (in points) are added to this value.
+		// `current_reward_counter`, whereby newly pending rewards (in points) are added to this
+		// value.
 		self.last_recorded_reward_counter = current_reward_counter;
 
 		// Add any new pending commission that has been calculated from `current_reward_counter` to
@@ -1288,9 +1289,9 @@ impl<T: Config> RewardPool<T> {
 		self.total_commission_pending =
 			self.total_commission_pending.saturating_add(new_pending_commission);
 
-		// Store the total payouts at the time of this update. Total payouts are essentially the entire
-		// historical balance of the reward pool, equating to the current balance + the total rewards
-		// that have left the pool + the total commission that has left the pool.
+		// Store the total payouts at the time of this update. Total payouts are essentially the
+		// entire historical balance of the reward pool, equating to the current balance + the total
+		// rewards that have left the pool + the total commission that has left the pool.
 		self.last_recorded_total_payouts = balance
 			.checked_add(&self.total_rewards_claimed.saturating_add(self.total_commission_claimed))
 			.ok_or(Error::<T>::OverflowRisk)?;
@@ -1308,8 +1309,8 @@ impl<T: Config> RewardPool<T> {
 	) -> Result<(T::RewardCounter, BalanceOf<T>), Error<T>> {
 		let balance = Self::current_balance(id);
 
-		// Calculate the current payout balance. The first 3 values of this calculation added together
-		// represent what the balance would be if no payouts were made. The
+		// Calculate the current payout balance. The first 3 values of this calculation added
+		// together represent what the balance would be if no payouts were made. The
 		// `last_recorded_total_payouts` is then subtracted from this value to cancel out previously
 		// recorded payouts, leaving only the remaining payouts that have not been claimed.
 		let current_payout_balance = balance
@@ -1317,8 +1318,8 @@ impl<T: Config> RewardPool<T> {
 			.saturating_add(self.total_commission_claimed)
 			.saturating_sub(self.last_recorded_total_payouts);
 
-		// Split the `current_payout_balance` into claimable rewards and claimable commission according
-		// to the current commission rate.
+		// Split the `current_payout_balance` into claimable rewards and claimable commission
+		// according to the current commission rate.
 		let new_pending_commission = commission * current_payout_balance;
 		let new_pending_rewards = current_payout_balance.saturating_sub(new_pending_commission);
 
