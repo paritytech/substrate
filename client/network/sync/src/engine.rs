@@ -35,7 +35,10 @@ use prometheus_endpoint::{
 
 use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_consensus::import_queue::ImportQueueService;
-use sc_network::config::{NetworkConfiguration, NonDefaultSetConfig};
+use sc_network::{
+	config::{NetworkConfiguration, NonDefaultSetConfig},
+	utils::LruHashSet,
+};
 use sc_network_common::{
 	config::{ProtocolId, SyncMode as SyncOperationMode},
 	protocol::{event::Event, role::Roles, ProtocolName},
@@ -48,7 +51,6 @@ use sc_network_common::{
 		BadPeer, ChainSync as ChainSyncT, ExtendedPeerInfo, PollBlockAnnounceValidation, SyncEvent,
 		SyncMode,
 	},
-	utils::LruHashSet,
 };
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain::HeaderMetadata;

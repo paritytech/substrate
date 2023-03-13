@@ -46,6 +46,8 @@
 //! active mechanism that asks nodes for the addresses they are listening on. Whenever we learn
 //! of a node's address, you must call `add_self_reported_address`.
 
+use crate::utils::LruHashSet;
+
 use array_bytes::bytes2hex;
 use futures::prelude::*;
 use futures_timer::Delay;
@@ -73,7 +75,7 @@ use libp2p::{
 	},
 };
 use log::{debug, info, trace, warn};
-use sc_network_common::{config::ProtocolId, utils::LruHashSet};
+use sc_network_common::config::ProtocolId;
 use sp_core::hexdisplay::HexDisplay;
 use std::{
 	cmp,

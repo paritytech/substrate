@@ -37,11 +37,14 @@ use crate::{
 	},
 	protocol::{self, NotificationsSink, NotifsHandlerError, Protocol, Ready},
 	request_responses::{IfDisconnected, RequestFailure},
-	service::traits::{
-		NetworkDHTProvider, NetworkEventStream, NetworkNotification, NetworkPeers, NetworkRequest,
-		NetworkSigner, NetworkStateInfo, NetworkStatus, NetworkStatusProvider,
-		NotificationSender as NotificationSenderT, NotificationSenderError,
-		NotificationSenderReady as NotificationSenderReadyT,
+	service::{
+		signature::{Signature, SigningError},
+		traits::{
+			NetworkDHTProvider, NetworkEventStream, NetworkNotification, NetworkPeers,
+			NetworkRequest, NetworkSigner, NetworkStateInfo, NetworkStatus, NetworkStatusProvider,
+			NotificationSender as NotificationSenderT, NotificationSenderError,
+			NotificationSenderReady as NotificationSenderReadyT,
+		},
 	},
 	transport, ReputationChange,
 };
@@ -70,7 +73,6 @@ use sc_network_common::{
 		event::{DhtEvent, Event},
 		ProtocolName,
 	},
-	service::signature::{Signature, SigningError},
 	ExHashT,
 };
 use sc_peerset::PeersetHandle;
@@ -98,6 +100,7 @@ pub use libp2p::identity::{error::DecodingError, Keypair, PublicKey};
 mod metrics;
 mod out_events;
 
+pub mod signature;
 pub mod traits;
 
 /// Custom error that can be produced by the [`ConnectionHandler`] of the [`NetworkBehaviour`].

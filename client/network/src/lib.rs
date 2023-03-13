@@ -255,6 +255,7 @@ pub mod config;
 pub mod error;
 pub mod network_state;
 pub mod request_responses;
+pub mod utils;
 
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
@@ -271,6 +272,7 @@ pub use sc_network_common::{
 	},
 };
 pub use service::{
+	signature::Signature,
 	traits::{
 		KademliaKey, NetworkBlock, NetworkDHTProvider, NetworkEventStream, NetworkNotification,
 		NetworkPeers, NetworkRequest, NetworkSigner, NetworkStateInfo, NetworkStatus,

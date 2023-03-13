@@ -20,7 +20,6 @@
 
 pub use crate::{
 	protocol::{self, role::Role},
-	sync::warp::WarpSyncProvider,
 	ExHashT,
 };
 pub use libp2p::{build_multiaddr, core::PublicKey, identity};
