@@ -534,7 +534,10 @@ pub mod v4 {
 					inner.commission.throttle_from.is_none()),
 				"a commission value has been incorrectly set"
 			);
-			ensure!(GlobalMaxCommission::<T>::get(), InitialGlobalMaxCommission::<T>::get());
+			ensure!(
+				GlobalMaxCommission::<T>::get() == Some(T::InitialGlobalMaxCommission::get()),
+				"global maximum commission error"
+			);
 			ensure!(Pallet::<T>::on_chain_storage_version() == 4, "wrong storage version");
 			Ok(())
 		}
