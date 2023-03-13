@@ -1259,10 +1259,6 @@ pub mod pallet {
 	#[pallet::getter(fn current_phase)]
 	pub type CurrentPhase<T: Config> = StorageValue<_, Phase<T::BlockNumber>, ValueQuery>;
 
-	/// Block number of last successful election.
-	#[pallet::storage]
-	pub type LastElection<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
-
 	/// Current best solution, signed or unsigned, queued to be returned upon `elect`.
 	#[pallet::storage]
 	#[pallet::getter(fn queued_solution)]
@@ -1703,7 +1699,6 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 				// block of the last successful election, etc.
 				Self::weigh_supports(&supports);
 				Self::rotate_round();
-				<LastElection<T>>::put(<frame_system::Pallet<T>>::block_number());
 
 				Ok(supports)
 			},
@@ -2183,10 +2178,6 @@ mod tests {
 			.onchain_fallback(false)
 			.phases(10, 10)
 			.build_and_execute(|| {
-				// election successful at block 10.
-				roll_to_signed();
-				<LastElection<Runtime>>::set(10);
-
 				MultiPhase::rotate_round();
 				assert!(MultiPhase::current_phase().is_off());
 
@@ -2230,10 +2221,6 @@ mod tests {
 			.onchain_fallback(false)
 			.phases(10, 10)
 			.build_and_execute(|| {
-				// election successful at block 10.
-				roll_to_signed();
-				<LastElection<Runtime>>::set(10);
-
 				MultiPhase::rotate_round();
 				assert!(MultiPhase::current_phase().is_off());
 
