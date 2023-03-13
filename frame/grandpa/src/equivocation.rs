@@ -57,7 +57,7 @@ use super::{Call, Config, Error, Pallet, LOG_TARGET};
 
 /// A round number and set id which point on the time of an offence.
 #[derive(Copy, Clone, PartialOrd, Ord, Eq, PartialEq, Encode, Decode)]
-pub struct GrandpaTimeSlot {
+pub struct TimeSlot {
 	// The order of these matters for `derive(Ord)`.
 	/// Grandpa Set ID.
 	pub set_id: SetId,
@@ -65,10 +65,10 @@ pub struct GrandpaTimeSlot {
 	pub round: RoundNumber,
 }
 
-/// A GRANDPA equivocation offence report.
+/// GRANDPA equivocation offence report.
 pub struct EquivocationOffence<Offender> {
 	/// Time slot at which this incident happened.
-	pub time_slot: GrandpaTimeSlot,
+	pub time_slot: TimeSlot,
 	/// The session index in which the incident happened.
 	pub session_index: SessionIndex,
 	/// The size of the validator set at the time of the offence.
@@ -79,7 +79,7 @@ pub struct EquivocationOffence<Offender> {
 
 impl<Offender: Clone> Offence<Offender> for EquivocationOffence<Offender> {
 	const ID: Kind = *b"grandpa:equivoca";
-	type TimeSlot = GrandpaTimeSlot;
+	type TimeSlot = TimeSlot;
 
 	fn offenders(&self) -> Vec<Offender> {
 		vec![self.offender.clone()]
@@ -105,15 +105,16 @@ impl<Offender: Clone> Offence<Offender> for EquivocationOffence<Offender> {
 	}
 }
 
-/// Generic equivocation handler. This type implements `HandleEquivocation`
-/// using existing subsystems that are part of frame (type bounds described
-/// below) and will dispatch to them directly, it's only purpose is to wire all
-/// subsystems together.
+/// GRANDPA equivocation offence report system.
+///
+/// This type implements `OffenceReportSystem` such that:
+/// - Equivocation reports are published on-chain as unsigned extrinsic via
+///   `offchain::SendTransactioinsTypes`.
+/// - On-chain validity checks and processing are mostly delegated to the user provided generic
+///   types implementing `KeyOwnerProofSystem` and `ReportOffence` traits.
+/// - Offence reporter for unsigned transactions is fetched via the the authorship pallet.
 pub struct EquivocationReportSystem<T, R, P, L>(sp_std::marker::PhantomData<(T, R, P, L)>);
 
-// We use the authorship pallet to fetch the current block author and use
-// `offchain::SendTransactionTypes` for unsigned extrinsic creation and
-// submission.
 impl<T, R, P, L>
 	OffenceReportSystem<
 		Option<T::AccountId>,
@@ -144,7 +145,7 @@ where
 		};
 		let res = SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into());
 		match res {
-			Ok(()) => info!(target: LOG_TARGET, "Submitted equivocation report."),
+			Ok(_) => info!(target: LOG_TARGET, "Submitted equivocation report"),
 			Err(e) => error!(target: LOG_TARGET, "Error submitting equivocation report: {:?}", e),
 		}
 		res
@@ -160,10 +161,8 @@ where
 		let offender = P::check_proof(key, key_owner_proof).ok_or(InvalidTransaction::BadProof)?;
 
 		// Check if the offence has already been reported, and if so then we can discard the report.
-		let time_slot = GrandpaTimeSlot {
-			set_id: equivocation_proof.set_id(),
-			round: equivocation_proof.round(),
-		};
+		let time_slot =
+			TimeSlot { set_id: equivocation_proof.set_id(), round: equivocation_proof.round() };
 		if R::is_known_offence(&[offender], &time_slot) {
 			Err(InvalidTransaction::Stale.into())
 		} else {
@@ -221,7 +220,7 @@ where
 		}
 
 		let offence = EquivocationOffence {
-			time_slot: GrandpaTimeSlot { set_id, round },
+			time_slot: TimeSlot { set_id, round },
 			session_index,
 			offender,
 			validator_set_count,
