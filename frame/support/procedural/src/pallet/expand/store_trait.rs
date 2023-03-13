@@ -45,7 +45,7 @@ pub fn expand_store_trait(def: &mut Def) -> proc_macro2::TokenStream {
 	);
 
 	quote::quote_spanned!(trait_store.span() =>
-		mod warnig {
+		mod warning {
 			#warning
 			const _: Option<#warnig_struct_name> = None;
 		}
