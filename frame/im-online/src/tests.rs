@@ -56,6 +56,9 @@ fn test_unresponsiveness_slash_fraction() {
 		dummy_offence.slash_fraction(17),
 		Perbill::from_parts(46200000), // 4.62%
 	);
+
+	// Offline offences should never lead to being disabled.
+	assert_eq!(dummy_offence.disable_strategy(), DisableStrategy::Never);
 }
 
 #[test]

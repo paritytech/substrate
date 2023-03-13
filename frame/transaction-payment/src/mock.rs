@@ -37,7 +37,7 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>
 type Block = frame_system::mocking::MockBlock<Runtime>;
 
 frame_support::construct_runtime!(
-	pub enum Runtime where
+	pub struct Runtime where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
@@ -64,7 +64,7 @@ impl Get<frame_system::limits::BlockWeights> for BlockWeights {
 				weights.base_extrinsic = ExtrinsicBaseWeight::get().into();
 			})
 			.for_class(DispatchClass::non_mandatory(), |weights| {
-				weights.max_total = Weight::from_ref_time(1024).set_proof_size(u64::MAX).into();
+				weights.max_total = Weight::from_parts(1024, u64::MAX).into();
 			})
 			.build_or_panic()
 	}

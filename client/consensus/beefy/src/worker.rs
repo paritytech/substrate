@@ -33,7 +33,6 @@ use codec::{Codec, Decode, Encode};
 use futures::{stream::Fuse, FutureExt, StreamExt};
 use log::{debug, error, info, log_enabled, trace, warn};
 use sc_client_api::{Backend, FinalityNotification, FinalityNotifications, HeaderBackend};
-use sc_network_common::service::{NetworkEventStream, NetworkRequest};
 use sc_network_gossip::GossipEngine;
 use sc_utils::notification::NotificationReceiver;
 use sp_api::{BlockId, ProvideRuntimeApi};
@@ -244,11 +243,11 @@ impl<B: Block> VoterOracle<B> {
 	}
 }
 
-pub(crate) struct WorkerParams<B: Block, BE, P, R, N> {
+pub(crate) struct WorkerParams<B: Block, BE, P, R, S> {
 	pub backend: Arc<BE>,
 	pub payload_provider: P,
 	pub runtime: Arc<R>,
-	pub network: N,
+	pub sync: Arc<S>,
 	pub key_store: BeefyKeystore,
 	pub gossip_engine: GossipEngine<B>,
 	pub gossip_validator: Arc<GossipValidator<B>>,
@@ -296,12 +295,12 @@ impl<B: Block> PersistedState<B> {
 }
 
 /// A BEEFY worker plays the BEEFY protocol
-pub(crate) struct BeefyWorker<B: Block, BE, P, RuntimeApi, N> {
+pub(crate) struct BeefyWorker<B: Block, BE, P, RuntimeApi, S> {
 	// utilities
 	backend: Arc<BE>,
 	payload_provider: P,
 	runtime: Arc<RuntimeApi>,
-	network: N,
+	sync: Arc<S>,
 	key_store: BeefyKeystore,
 
 	// communication
@@ -330,14 +329,14 @@ pub(crate) struct BeefyWorker<B: Block, BE, P, RuntimeApi, N> {
 	persisted_state: PersistedState<B>,
 }
 
-impl<B, BE, P, R, N> BeefyWorker<B, BE, P, R, N>
+impl<B, BE, P, R, S> BeefyWorker<B, BE, P, R, S>
 where
 	B: Block + Codec,
 	BE: Backend<B>,
 	P: PayloadProvider<B>,
+	S: SyncOracle,
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B>,
-	N: NetworkEventStream + NetworkRequest + SyncOracle + Send + Sync + Clone + 'static,
 {
 	/// Return a new BEEFY worker instance.
 	///
@@ -345,13 +344,13 @@ where
 	/// BEEFY pallet has been deployed on-chain.
 	///
 	/// The BEEFY pallet is needed in order to keep track of the BEEFY authority set.
-	pub(crate) fn new(worker_params: WorkerParams<B, BE, P, R, N>) -> Self {
+	pub(crate) fn new(worker_params: WorkerParams<B, BE, P, R, S>) -> Self {
 		let WorkerParams {
 			backend,
 			payload_provider,
 			runtime,
 			key_store,
-			network,
+			sync,
 			gossip_engine,
 			gossip_validator,
 			on_demand_justifications,
@@ -364,7 +363,7 @@ where
 			backend,
 			payload_provider,
 			runtime,
-			network,
+			sync,
 			key_store,
 			gossip_engine,
 			gossip_validator,
@@ -836,7 +835,7 @@ where
 		}
 
 		// Don't bother voting or requesting justifications during major sync.
-		if !self.network.is_major_syncing() {
+		if !self.sync.is_major_syncing() {
 			// There were external events, 'state' is changed, author a vote if needed/possible.
 			if let Err(err) = self.try_to_vote() {
 				debug!(target: LOG_TARGET, "🥩 {}", err);
@@ -1065,7 +1064,7 @@ pub(crate) mod tests {
 	use futures::{future::poll_fn, task::Poll};
 	use parking_lot::Mutex;
 	use sc_client_api::{Backend as BackendT, HeaderBackend};
-	use sc_network::NetworkService;
+	use sc_network_sync::SyncingService;
 	use sc_network_test::TestNetFactory;
 	use sp_api::HeaderT;
 	use sp_blockchain::Backend as BlockchainBackendT;
@@ -1075,7 +1074,7 @@ pub(crate) mod tests {
 	};
 	use sp_runtime::traits::One;
 	use substrate_test_runtime_client::{
-		runtime::{Block, Digest, DigestItem, Header, H256},
+		runtime::{Block, Digest, DigestItem, Header},
 		Backend,
 	};
 
@@ -1113,7 +1112,7 @@ pub(crate) mod tests {
 		Backend,
 		MmrRootProvider<Block, TestApi>,
 		TestApi,
-		Arc<NetworkService<Block, H256>>,
+		Arc<SyncingService<Block>>,
 	> {
 		let keystore = create_beefy_keystore(*key);
 
@@ -1137,10 +1136,16 @@ pub(crate) mod tests {
 		let backend = peer.client().as_backend();
 		let api = Arc::new(TestApi::with_validator_set(&genesis_validator_set));
 		let network = peer.network_service().clone();
+		let sync = peer.sync_service().clone();
 		let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
 		let gossip_validator = Arc::new(GossipValidator::new(known_peers.clone()));
-		let gossip_engine =
-			GossipEngine::new(network.clone(), "/beefy/1", gossip_validator.clone(), None);
+		let gossip_engine = GossipEngine::new(
+			network.clone(),
+			sync.clone(),
+			"/beefy/1",
+			gossip_validator.clone(),
+			None,
+		);
 		let metrics = None;
 		let on_demand_justifications = OnDemandJustificationsEngine::new(
 			network.clone(),
@@ -1169,7 +1174,7 @@ pub(crate) mod tests {
 			gossip_engine,
 			gossip_validator,
 			metrics,
-			network,
+			sync: Arc::new(sync),
 			on_demand_justifications,
 			persisted_state,
 		};

@@ -133,7 +133,7 @@ fn on_idle_works() {
 		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), Perbill::from_percent(100)));
 		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), Perbill::from_percent(100)));
 
-		Glutton::on_idle(1, Weight::from_ref_time(20_000_000));
+		Glutton::on_idle(1, Weight::from_parts(20_000_000, 0));
 	});
 }
 

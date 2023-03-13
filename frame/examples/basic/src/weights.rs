@@ -56,20 +56,20 @@ pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: BasicExample Dummy (r:0 w:1)
 	fn set_dummy_benchmark() -> Weight {
-		Weight::from_ref_time(19_000_000 as u64)
+		Weight::from_parts(19_000_000 as u64, 0)
 			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: BasicExample Dummy (r:1 w:1)
 	fn accumulate_dummy() -> Weight {
-		Weight::from_ref_time(18_000_000 as u64)
+		Weight::from_parts(18_000_000 as u64, 0)
 			.saturating_add(T::DbWeight::get().reads(1 as u64))
 			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	/// The range of component `x` is `[0, 10000]`.
 	fn sort_vector(x: u32, ) -> Weight {
-		Weight::from_ref_time(0 as u64)
+		Weight::from_parts(0 as u64, 0)
 			// Standard Error: 2
-			.saturating_add(Weight::from_ref_time(520 as u64).saturating_mul(x as u64))
+			.saturating_add(Weight::from_parts(520 as u64, 0).saturating_mul(x as u64))
 	}
 }
 
@@ -77,19 +77,19 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 impl WeightInfo for () {
 	// Storage: BasicExample Dummy (r:0 w:1)
 	fn set_dummy_benchmark() -> Weight {
-		Weight::from_ref_time(19_000_000 as u64)
+		Weight::from_parts(19_000_000 as u64, 0)
 			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: BasicExample Dummy (r:1 w:1)
 	fn accumulate_dummy() -> Weight {
-		Weight::from_ref_time(18_000_000 as u64)
+		Weight::from_parts(18_000_000 as u64, 0)
 			.saturating_add(RocksDbWeight::get().reads(1 as u64))
 			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	/// The range of component `x` is `[0, 10000]`.
 	fn sort_vector(x: u32, ) -> Weight {
-		Weight::from_ref_time(0 as u64)
+		Weight::from_parts(0 as u64, 0)
 			// Standard Error: 2
-			.saturating_add(Weight::from_ref_time(520 as u64).saturating_mul(x as u64))
+			.saturating_add(Weight::from_parts(520 as u64, 0).saturating_mul(x as u64))
 	}
 }

@@ -314,7 +314,7 @@ pub trait WithPostDispatchInfo {
 	/// # Example
 	///
 	/// ```ignore
-	/// let who = ensure_signed(origin).map_err(|e| e.with_weight(Weight::from_ref_time(100)))?;
+	/// let who = ensure_signed(origin).map_err(|e| e.with_weight(Weight::from_parts(100, 0)))?;
 	/// ensure!(who == me, Error::<T>::NotMe.with_weight(200_000));
 	/// ```
 	fn with_weight(self, actual_weight: Weight) -> DispatchErrorWithPostInfo;
@@ -365,7 +365,7 @@ impl<Call: Encode + GetDispatchInfo, Extra: Encode> GetDispatchInfo
 	fn get_dispatch_info(&self) -> DispatchInfo {
 		// for testing: weight == size.
 		DispatchInfo {
-			weight: Weight::from_ref_time(self.encode().len() as _),
+			weight: Weight::from_parts(self.encode().len() as _, 0),
 			pays_fee: Pays::Yes,
 			class: self.call.get_dispatch_info().class,
 		}
@@ -552,7 +552,7 @@ impl<T> ClassifyDispatch<T> for (Weight, DispatchClass, Pays) {
 impl From<Option<u64>> for PostDispatchInfo {
 	fn from(maybe_actual_computation: Option<u64>) -> Self {
 		let actual_weight = match maybe_actual_computation {
-			Some(actual_computation) => Some(Weight::zero().set_ref_time(actual_computation)),
+			Some(actual_computation) => Some(Weight::from_parts(actual_computation, 0)),
 			None => None,
 		};
 		Self { actual_weight, pays_fee: Default::default() }
@@ -563,7 +563,7 @@ impl From<(Option<u64>, Pays)> for PostDispatchInfo {
 	fn from(post_weight_info: (Option<u64>, Pays)) -> Self {
 		let (maybe_actual_time, pays_fee) = post_weight_info;
 		let actual_weight = match maybe_actual_time {
-			Some(actual_time) => Some(Weight::zero().set_ref_time(actual_time)),
+			Some(actual_time) => Some(Weight::from_parts(actual_time, 0)),
 			None => None,
 		};
 		Self { actual_weight, pays_fee }
@@ -584,7 +584,7 @@ impl<T> PaysFee<T> for u64 {
 
 impl<T> WeighData<T> for u64 {
 	fn weigh_data(&self, _: T) -> Weight {
-		return Weight::zero().set_ref_time(*self)
+		return Weight::from_parts(*self, 0)
 	}
 }
 
@@ -735,7 +735,7 @@ impl<T> PaysFee<T> for (u64, Pays) {
 /// 	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
 /// 		#[weight = 1_000_000]
 /// 		fn my_long_function(origin, do_expensive_calc: bool) -> DispatchResultWithPostInfo {
-/// 			ensure_signed(origin).map_err(|e| e.with_weight(Weight::from_ref_time(100_000)))?;
+/// 			ensure_signed(origin).map_err(|e| e.with_weight(Weight::from_parts(100_000, 0)))?;
 /// 			if do_expensive_calc {
 /// 				// do the expensive calculation
 /// 				// ...
@@ -3239,13 +3239,13 @@ mod tests {
 			#[weight = (5, DispatchClass::Operational)]
 			fn operational(_origin) { unreachable!() }
 
-			fn on_initialize(n: T::BlockNumber,) -> Weight { if n.into() == 42 { panic!("on_initialize") } Weight::from_ref_time(7) }
+			fn on_initialize(n: T::BlockNumber,) -> Weight { if n.into() == 42 { panic!("on_initialize") } Weight::from_parts(7, 0) }
 			fn on_idle(n: T::BlockNumber, remaining_weight: Weight,) -> Weight {
-				if n.into() == 42 || remaining_weight == Weight::from_ref_time(42)  { panic!("on_idle") }
-				Weight::from_ref_time(7)
+				if n.into() == 42 || remaining_weight == Weight::from_parts(42, 0)  { panic!("on_idle") }
+				Weight::from_parts(7, 0)
 			}
 			fn on_finalize(n: T::BlockNumber,) { if n.into() == 42 { panic!("on_finalize") } }
-			fn on_runtime_upgrade() -> Weight { Weight::from_ref_time(10) }
+			fn on_runtime_upgrade() -> Weight { Weight::from_parts(10, 0) }
 			fn offchain_worker() {}
 			/// Some doc
 			fn integrity_test() { panic!("integrity_test") }
@@ -3423,27 +3423,27 @@ mod tests {
 	fn on_initialize_should_work_2() {
 		assert_eq!(
 			<Module<TraitImpl> as OnInitialize<u32>>::on_initialize(10),
-			Weight::from_ref_time(7)
+			Weight::from_parts(7, 0)
 		);
 	}
 
 	#[test]
 	#[should_panic(expected = "on_idle")]
 	fn on_idle_should_work_1() {
-		<Module<TraitImpl> as OnIdle<u32>>::on_idle(42, Weight::from_ref_time(9));
+		<Module<TraitImpl> as OnIdle<u32>>::on_idle(42, Weight::from_parts(9, 0));
 	}
 
 	#[test]
 	#[should_panic(expected = "on_idle")]
 	fn on_idle_should_work_2() {
-		<Module<TraitImpl> as OnIdle<u32>>::on_idle(9, Weight::from_ref_time(42));
+		<Module<TraitImpl> as OnIdle<u32>>::on_idle(9, Weight::from_parts(42, 0));
 	}
 
 	#[test]
 	fn on_idle_should_work_3() {
 		assert_eq!(
-			<Module<TraitImpl> as OnIdle<u32>>::on_idle(10, Weight::from_ref_time(11)),
-			Weight::from_ref_time(7)
+			<Module<TraitImpl> as OnIdle<u32>>::on_idle(10, Weight::from_parts(11, 0)),
+			Weight::from_parts(7, 0)
 		);
 	}
 
@@ -3458,7 +3458,7 @@ mod tests {
 		sp_io::TestExternalities::default().execute_with(|| {
 			assert_eq!(
 				<Module<TraitImpl> as OnRuntimeUpgrade>::on_runtime_upgrade(),
-				Weight::from_ref_time(10)
+				Weight::from_parts(10, 0)
 			)
 		});
 	}
@@ -3469,7 +3469,7 @@ mod tests {
 		assert_eq!(
 			Call::<TraitImpl>::operational {}.get_dispatch_info(),
 			DispatchInfo {
-				weight: Weight::from_ref_time(5),
+				weight: Weight::from_parts(5, 0),
 				class: DispatchClass::Operational,
 				pays_fee: Pays::Yes
 			},
@@ -3478,7 +3478,7 @@ mod tests {
 		assert_eq!(
 			Call::<TraitImpl>::aux_3 {}.get_dispatch_info(),
 			DispatchInfo {
-				weight: Weight::from_ref_time(3),
+				weight: Weight::from_parts(3, 0),
 				class: DispatchClass::Normal,
 				pays_fee: Pays::Yes
 			},
@@ -3567,10 +3567,10 @@ mod weight_tests {
 			#[weight = (0, DispatchClass::Operational, Pays::Yes)]
 			fn f12(_origin, _a: u32, _eb: u32) { unimplemented!(); }
 
-			#[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + Weight::from_ref_time(10_000)]
+			#[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + Weight::from_parts(10_000, 0)]
 			fn f20(_origin) { unimplemented!(); }
 
-			#[weight = T::DbWeight::get().reads_writes(6, 5) + Weight::from_ref_time(40_000)]
+			#[weight = T::DbWeight::get().reads_writes(6, 5) + Weight::from_parts(40_000, 0)]
 			fn f21(_origin) { unimplemented!(); }
 
 		}
@@ -3580,96 +3580,96 @@ mod weight_tests {
 	fn weights_are_correct() {
 		// #[weight = 1000]
 		let info = Call::<TraitImpl>::f00 {}.get_dispatch_info();
-		assert_eq!(info.weight, Weight::from_ref_time(1000));
+		assert_eq!(info.weight, Weight::from_parts(1000, 0));
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = (1000, DispatchClass::Mandatory)]
 		let info = Call::<TraitImpl>::f01 {}.get_dispatch_info();
-		assert_eq!(info.weight, Weight::from_ref_time(1000));
+		assert_eq!(info.weight, Weight::from_parts(1000, 0));
 		assert_eq!(info.class, DispatchClass::Mandatory);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = (1000, Pays::No)]
 		let info = Call::<TraitImpl>::f02 {}.get_dispatch_info();
-		assert_eq!(info.weight, Weight::from_ref_time(1000));
+		assert_eq!(info.weight, Weight::from_parts(1000, 0));
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::No);
 
 		// #[weight = (1000, DispatchClass::Operational, Pays::No)]
 		let info = Call::<TraitImpl>::f03 {}.get_dispatch_info();
-		assert_eq!(info.weight, Weight::from_ref_time(1000));
+		assert_eq!(info.weight, Weight::from_parts(1000, 0));
 		assert_eq!(info.class, DispatchClass::Operational);
 		assert_eq!(info.pays_fee, Pays::No);
 
 		// #[weight = ((_a * 10 + _eb * 1) as Weight, DispatchClass::Normal, Pays::Yes)]
 		let info = Call::<TraitImpl>::f11 { _a: 13, _eb: 20 }.get_dispatch_info();
-		assert_eq!(info.weight, Weight::from_ref_time(150)); // 13*10 + 20
+		assert_eq!(info.weight, Weight::from_parts(150, 0)); // 13*10 + 20
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = (0, DispatchClass::Operational, Pays::Yes)]
 		let info = Call::<TraitImpl>::f12 { _a: 10, _eb: 20 }.get_dispatch_info();
-		assert_eq!(info.weight, Weight::from_ref_time(0));
+		assert_eq!(info.weight, Weight::from_parts(0, 0));
 		assert_eq!(info.class, DispatchClass::Operational);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + 10_000]
 		let info = Call::<TraitImpl>::f20 {}.get_dispatch_info();
-		assert_eq!(info.weight, Weight::from_ref_time(12300)); // 100*3 + 1000*2 + 10_1000
+		assert_eq!(info.weight, Weight::from_parts(12300, 0)); // 100*3 + 1000*2 + 10_1000
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = T::DbWeight::get().reads_writes(6, 5) + 40_000]
 		let info = Call::<TraitImpl>::f21 {}.get_dispatch_info();
-		assert_eq!(info.weight, Weight::from_ref_time(45600)); // 100*6 + 1000*5 + 40_1000
+		assert_eq!(info.weight, Weight::from_parts(45600, 0)); // 100*6 + 1000*5 + 40_1000
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 	}
 
 	#[test]
 	fn extract_actual_weight_works() {
-		let pre = DispatchInfo { weight: Weight::from_ref_time(1000), ..Default::default() };
-		assert_eq!(extract_actual_weight(&Ok(Some(7).into()), &pre), Weight::from_ref_time(7));
+		let pre = DispatchInfo { weight: Weight::from_parts(1000, 0), ..Default::default() };
+		assert_eq!(extract_actual_weight(&Ok(Some(7).into()), &pre), Weight::from_parts(7, 0));
 		assert_eq!(
 			extract_actual_weight(&Ok(Some(1000).into()), &pre),
-			Weight::from_ref_time(1000)
+			Weight::from_parts(1000, 0)
 		);
 		assert_eq!(
 			extract_actual_weight(
-				&Err(DispatchError::BadOrigin.with_weight(Weight::from_ref_time(9))),
+				&Err(DispatchError::BadOrigin.with_weight(Weight::from_parts(9, 0))),
 				&pre
 			),
-			Weight::from_ref_time(9)
+			Weight::from_parts(9, 0)
 		);
 	}
 
 	#[test]
 	fn extract_actual_weight_caps_at_pre_weight() {
-		let pre = DispatchInfo { weight: Weight::from_ref_time(1000), ..Default::default() };
+		let pre = DispatchInfo { weight: Weight::from_parts(1000, 0), ..Default::default() };
 		assert_eq!(
 			extract_actual_weight(&Ok(Some(1250).into()), &pre),
-			Weight::from_ref_time(1000)
+			Weight::from_parts(1000, 0)
 		);
 		assert_eq!(
 			extract_actual_weight(
-				&Err(DispatchError::BadOrigin.with_weight(Weight::from_ref_time(1300))),
+				&Err(DispatchError::BadOrigin.with_weight(Weight::from_parts(1300, 0))),
 				&pre
 			),
-			Weight::from_ref_time(1000),
+			Weight::from_parts(1000, 0),
 		);
 	}
 
 	#[test]
 	fn extract_actual_pays_fee_works() {
-		let pre = DispatchInfo { weight: Weight::from_ref_time(1000), ..Default::default() };
+		let pre = DispatchInfo { weight: Weight::from_parts(1000, 0), ..Default::default() };
 		assert_eq!(extract_actual_pays_fee(&Ok(Some(7).into()), &pre), Pays::Yes);
 		assert_eq!(extract_actual_pays_fee(&Ok(Some(1000).into()), &pre), Pays::Yes);
 		assert_eq!(extract_actual_pays_fee(&Ok((Some(1000), Pays::Yes).into()), &pre), Pays::Yes);
 		assert_eq!(extract_actual_pays_fee(&Ok((Some(1000), Pays::No).into()), &pre), Pays::No);
 		assert_eq!(
 			extract_actual_pays_fee(
-				&Err(DispatchError::BadOrigin.with_weight(Weight::from_ref_time(9))),
+				&Err(DispatchError::BadOrigin.with_weight(Weight::from_parts(9, 0))),
 				&pre
 			),
 			Pays::Yes
@@ -3686,7 +3686,7 @@ mod weight_tests {
 		);
 
 		let pre = DispatchInfo {
-			weight: Weight::from_ref_time(1000),
+			weight: Weight::from_parts(1000, 0),
 			pays_fee: Pays::No,
 			..Default::default()
 		};

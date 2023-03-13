@@ -82,17 +82,17 @@ pub struct RuntimeDbWeight {
 
 impl RuntimeDbWeight {
 	pub fn reads(self, r: u64) -> Weight {
-		Weight::from_ref_time(self.read.saturating_mul(r))
+		Weight::from_parts(self.read.saturating_mul(r), 0)
 	}
 
 	pub fn writes(self, w: u64) -> Weight {
-		Weight::from_ref_time(self.write.saturating_mul(w))
+		Weight::from_parts(self.write.saturating_mul(w), 0)
 	}
 
 	pub fn reads_writes(self, r: u64, w: u64) -> Weight {
 		let read_weight = self.read.saturating_mul(r);
 		let write_weight = self.write.saturating_mul(w);
-		Weight::from_ref_time(read_weight.saturating_add(write_weight))
+		Weight::from_parts(read_weight.saturating_add(write_weight), 0)
 	}
 }
 
@@ -264,15 +264,15 @@ mod tests {
 	#[test]
 	fn polynomial_works() {
 		// 100^3/2=500000 100^2*(2+1/3)=23333 700 -10000
-		assert_eq!(Poly::weight_to_fee(&Weight::from_ref_time(100)), 514033);
+		assert_eq!(Poly::weight_to_fee(&Weight::from_parts(100, 0)), 514033);
 		// 10123^3/2=518677865433 10123^2*(2+1/3)=239108634 70861 -10000
-		assert_eq!(Poly::weight_to_fee(&Weight::from_ref_time(10_123)), 518917034928);
+		assert_eq!(Poly::weight_to_fee(&Weight::from_parts(10_123, 0)), 518917034928);
 	}
 
 	#[test]
 	fn polynomial_does_not_underflow() {
 		assert_eq!(Poly::weight_to_fee(&Weight::zero()), 0);
-		assert_eq!(Poly::weight_to_fee(&Weight::from_ref_time(10)), 0);
+		assert_eq!(Poly::weight_to_fee(&Weight::from_parts(10, 0)), 0);
 	}
 
 	#[test]
@@ -283,7 +283,7 @@ mod tests {
 	#[test]
 	fn identity_fee_works() {
 		assert_eq!(IdentityFee::<Balance>::weight_to_fee(&Weight::zero()), 0);
-		assert_eq!(IdentityFee::<Balance>::weight_to_fee(&Weight::from_ref_time(50)), 50);
+		assert_eq!(IdentityFee::<Balance>::weight_to_fee(&Weight::from_parts(50, 0)), 50);
 		assert_eq!(IdentityFee::<Balance>::weight_to_fee(&Weight::MAX), Balance::max_value());
 	}
 
@@ -295,20 +295,20 @@ mod tests {
 			0
 		);
 		assert_eq!(
-			ConstantMultiplier::<u128, ConstU128<10u128>>::weight_to_fee(&Weight::from_ref_time(
-				50
+			ConstantMultiplier::<u128, ConstU128<10u128>>::weight_to_fee(&Weight::from_parts(
+				50, 0
 			)),
 			500
 		);
 		assert_eq!(
-			ConstantMultiplier::<u128, ConstU128<1024u128>>::weight_to_fee(&Weight::from_ref_time(
-				16
+			ConstantMultiplier::<u128, ConstU128<1024u128>>::weight_to_fee(&Weight::from_parts(
+				16, 0
 			)),
 			16384
 		);
 		assert_eq!(
 			ConstantMultiplier::<u128, ConstU128<{ u128::MAX }>>::weight_to_fee(
-				&Weight::from_ref_time(2)
+				&Weight::from_parts(2, 0)
 			),
 			u128::MAX
 		);

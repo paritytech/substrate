@@ -16,15 +16,26 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use futures::channel::oneshot;
+use futures::{channel::oneshot, Stream};
 use libp2p::PeerId;
+
 use sc_consensus::{BlockImportError, BlockImportStatus, JustificationSyncLink, Link};
-use sc_network_common::{service::NetworkSyncForkRequest, sync::SyncStatus};
-use sc_utils::mpsc::TracingUnboundedSender;
+use sc_network_common::{
+	service::{NetworkBlock, NetworkSyncForkRequest},
+	sync::{ExtendedPeerInfo, SyncEvent, SyncEventStream, SyncStatus, SyncStatusProvider},
+};
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
+use std::{
+	pin::Pin,
+	sync::{
+		atomic::{AtomicBool, AtomicUsize, Ordering},
+		Arc,
+	},
+};
+
 /// Commands send to `ChainSync`
-#[derive(Debug)]
 pub enum ToServiceCommand<B: BlockT> {
 	SetSyncForkRequest(Vec<PeerId>, B::Hash, NumberFor<B>),
 	RequestJustification(B::Hash, NumberFor<B>),
@@ -35,27 +46,105 @@ pub enum ToServiceCommand<B: BlockT> {
 		Vec<(Result<BlockImportStatus<NumberFor<B>>, BlockImportError>, B::Hash)>,
 	),
 	JustificationImported(PeerId, B::Hash, NumberFor<B>, bool),
-	BlockFinalized(B::Hash, NumberFor<B>),
-	Status {
-		pending_response: oneshot::Sender<SyncStatus<B>>,
-	},
+	AnnounceBlock(B::Hash, Option<Vec<u8>>),
+	NewBestBlockImported(B::Hash, NumberFor<B>),
+	EventStream(TracingUnboundedSender<SyncEvent>),
+	Status(oneshot::Sender<SyncStatus<B>>),
+	NumActivePeers(oneshot::Sender<usize>),
+	SyncState(oneshot::Sender<SyncStatus<B>>),
+	BestSeenBlock(oneshot::Sender<Option<NumberFor<B>>>),
+	NumSyncPeers(oneshot::Sender<u32>),
+	NumQueuedBlocks(oneshot::Sender<u32>),
+	NumDownloadedBlocks(oneshot::Sender<usize>),
+	NumSyncRequests(oneshot::Sender<usize>),
+	PeersInfo(oneshot::Sender<Vec<(PeerId, ExtendedPeerInfo<B>)>>),
+	OnBlockFinalized(B::Hash, B::Header),
+	// Status {
+	// 	pending_response: oneshot::Sender<SyncStatus<B>>,
+	// },
 }
 
 /// Handle for communicating with `ChainSync` asynchronously
 #[derive(Clone)]
-pub struct ChainSyncInterfaceHandle<B: BlockT> {
+pub struct SyncingService<B: BlockT> {
 	tx: TracingUnboundedSender<ToServiceCommand<B>>,
+	/// Number of peers we're connected to.
+	num_connected: Arc<AtomicUsize>,
+	/// Are we actively catching up with the chain?
+	is_major_syncing: Arc<AtomicBool>,
 }
 
-impl<B: BlockT> ChainSyncInterfaceHandle<B> {
+impl<B: BlockT> SyncingService<B> {
 	/// Create new handle
-	pub fn new(tx: TracingUnboundedSender<ToServiceCommand<B>>) -> Self {
-		Self { tx }
+	pub fn new(
+		tx: TracingUnboundedSender<ToServiceCommand<B>>,
+		num_connected: Arc<AtomicUsize>,
+		is_major_syncing: Arc<AtomicBool>,
+	) -> Self {
+		Self { tx, num_connected, is_major_syncing }
 	}
 
-	/// Notify ChainSync about finalized block
-	pub fn on_block_finalized(&self, hash: B::Hash, number: NumberFor<B>) {
-		let _ = self.tx.unbounded_send(ToServiceCommand::BlockFinalized(hash, number));
+	/// Get the number of active peers.
+	pub async fn num_active_peers(&self) -> Result<usize, oneshot::Canceled> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.tx.unbounded_send(ToServiceCommand::NumActivePeers(tx));
+
+		rx.await
+	}
+
+	/// Get best seen block.
+	pub async fn best_seen_block(&self) -> Result<Option<NumberFor<B>>, oneshot::Canceled> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.tx.unbounded_send(ToServiceCommand::BestSeenBlock(tx));
+
+		rx.await
+	}
+
+	/// Get the number of sync peers.
+	pub async fn num_sync_peers(&self) -> Result<u32, oneshot::Canceled> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.tx.unbounded_send(ToServiceCommand::NumSyncPeers(tx));
+
+		rx.await
+	}
+
+	/// Get the number of queued blocks.
+	pub async fn num_queued_blocks(&self) -> Result<u32, oneshot::Canceled> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.tx.unbounded_send(ToServiceCommand::NumQueuedBlocks(tx));
+
+		rx.await
+	}
+
+	/// Get the number of downloaded blocks.
+	pub async fn num_downloaded_blocks(&self) -> Result<usize, oneshot::Canceled> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.tx.unbounded_send(ToServiceCommand::NumDownloadedBlocks(tx));
+
+		rx.await
+	}
+
+	/// Get the number of sync requests.
+	pub async fn num_sync_requests(&self) -> Result<usize, oneshot::Canceled> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.tx.unbounded_send(ToServiceCommand::NumSyncRequests(tx));
+
+		rx.await
+	}
+
+	/// Get peer information.
+	pub async fn peers_info(
+		&self,
+	) -> Result<Vec<(PeerId, ExtendedPeerInfo<B>)>, oneshot::Canceled> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.tx.unbounded_send(ToServiceCommand::PeersInfo(tx));
+
+		rx.await
+	}
+
+	/// Notify the `SyncingEngine` that a block has been finalized.
+	pub fn on_block_finalized(&self, hash: B::Hash, header: B::Header) {
+		let _ = self.tx.unbounded_send(ToServiceCommand::OnBlockFinalized(hash, header));
 	}
 
 	/// Get sync status
@@ -63,15 +152,13 @@ impl<B: BlockT> ChainSyncInterfaceHandle<B> {
 	/// Returns an error if `ChainSync` has terminated.
 	pub async fn status(&self) -> Result<SyncStatus<B>, ()> {
 		let (tx, rx) = oneshot::channel();
-		let _ = self.tx.unbounded_send(ToServiceCommand::Status { pending_response: tx });
+		let _ = self.tx.unbounded_send(ToServiceCommand::Status(tx));
 
 		rx.await.map_err(|_| ())
 	}
 }
 
-impl<B: BlockT + 'static> NetworkSyncForkRequest<B::Hash, NumberFor<B>>
-	for ChainSyncInterfaceHandle<B>
-{
+impl<B: BlockT + 'static> NetworkSyncForkRequest<B::Hash, NumberFor<B>> for SyncingService<B> {
 	/// Configure an explicit fork sync request.
 	///
 	/// Note that this function should not be used for recent blocks.
@@ -87,7 +174,7 @@ impl<B: BlockT + 'static> NetworkSyncForkRequest<B::Hash, NumberFor<B>>
 	}
 }
 
-impl<B: BlockT> JustificationSyncLink<B> for ChainSyncInterfaceHandle<B> {
+impl<B: BlockT> JustificationSyncLink<B> for SyncingService<B> {
 	/// Request a justification for the given block from the network.
 	///
 	/// On success, the justification will be passed to the import queue that was part at
@@ -101,7 +188,18 @@ impl<B: BlockT> JustificationSyncLink<B> for ChainSyncInterfaceHandle<B> {
 	}
 }
 
-impl<B: BlockT> Link<B> for ChainSyncInterfaceHandle<B> {
+#[async_trait::async_trait]
+impl<B: BlockT> SyncStatusProvider<B> for SyncingService<B> {
+	/// Get high-level view of the syncing status.
+	async fn status(&self) -> Result<SyncStatus<B>, ()> {
+		let (rtx, rrx) = oneshot::channel();
+
+		let _ = self.tx.unbounded_send(ToServiceCommand::Status(rtx));
+		rrx.await.map_err(|_| ())
+	}
+}
+
+impl<B: BlockT> Link<B> for SyncingService<B> {
 	fn blocks_processed(
 		&mut self,
 		imported: usize,
@@ -127,5 +225,34 @@ impl<B: BlockT> Link<B> for ChainSyncInterfaceHandle<B> {
 
 	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self.tx.unbounded_send(ToServiceCommand::RequestJustification(*hash, number));
+	}
+}
+
+impl<B: BlockT> SyncEventStream for SyncingService<B> {
+	/// Get syncing event stream.
+	fn event_stream(&self, name: &'static str) -> Pin<Box<dyn Stream<Item = SyncEvent> + Send>> {
+		let (tx, rx) = tracing_unbounded(name, 100_000);
+		let _ = self.tx.unbounded_send(ToServiceCommand::EventStream(tx));
+		Box::pin(rx)
+	}
+}
+
+impl<B: BlockT> NetworkBlock<B::Hash, NumberFor<B>> for SyncingService<B> {
+	fn announce_block(&self, hash: B::Hash, data: Option<Vec<u8>>) {
+		let _ = self.tx.unbounded_send(ToServiceCommand::AnnounceBlock(hash, data));
+	}
+
+	fn new_best_block_imported(&self, hash: B::Hash, number: NumberFor<B>) {
+		let _ = self.tx.unbounded_send(ToServiceCommand::NewBestBlockImported(hash, number));
+	}
+}
+
+impl<B: BlockT> sp_consensus::SyncOracle for SyncingService<B> {
+	fn is_major_syncing(&self) -> bool {
+		self.is_major_syncing.load(Ordering::Relaxed)
+	}
+
+	fn is_offline(&self) -> bool {
+		self.num_connected.load(Ordering::Relaxed) == 0
 	}
 }

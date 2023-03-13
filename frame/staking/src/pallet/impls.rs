@@ -682,7 +682,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Apply previously-unapplied slashes on the beginning of a new era, after a delay.
 	fn apply_unapplied_slashes(active_era: EraIndex) {
-		let era_slashes = <Self as Store>::UnappliedSlashes::take(&active_era);
+		let era_slashes = UnappliedSlashes::<T>::take(&active_era);
 		log!(
 			debug,
 			"found {} slashes scheduled to be executed in era {:?}",
@@ -1267,7 +1267,7 @@ where
 		disable_strategy: DisableStrategy,
 	) -> Weight {
 		let reward_proportion = SlashRewardFraction::<T>::get();
-		let mut consumed_weight = Weight::from_ref_time(0);
+		let mut consumed_weight = Weight::from_parts(0, 0);
 		let mut add_db_reads_writes = |reads, writes| {
 			consumed_weight += T::DbWeight::get().reads_writes(reads, writes);
 		};
@@ -1369,7 +1369,7 @@ where
 						active_era,
 						slash_era + slash_defer_duration + 1,
 					);
-					<Self as Store>::UnappliedSlashes::mutate(
+					UnappliedSlashes::<T>::mutate(
 						slash_era.saturating_add(slash_defer_duration).saturating_add(One::one()),
 						move |for_later| for_later.push(unapplied),
 					);
