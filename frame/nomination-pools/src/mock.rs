@@ -141,7 +141,7 @@ impl sp_staking::StakingInterface for StakingMock {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn max_exposure_page_size() -> PageIndex {
+	fn max_exposure_page_size() -> sp_staking::PageIndex {
 		unimplemented!("method currently not used in testing")
 	}
 
