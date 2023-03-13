@@ -28,7 +28,6 @@
 //! the network, or whenever a block has been successfully verified, call the appropriate method in
 //! order to update it.
 
-// Local dependencies
 use crate::{
 	blocks::BlockCollection,
 	schema::v1::{StateRequest, StateResponse},
@@ -36,7 +35,6 @@ use crate::{
 	warp::{WarpProofImportResult, WarpSync},
 };
 
-// External dependencies
 use codec::{Decode, DecodeAll, Encode};
 use extra_requests::ExtraRequests;
 use futures::{
@@ -46,17 +44,18 @@ use libp2p::{request_response::OutboundFailure, PeerId};
 use log::{debug, error, info, trace, warn};
 use prost::Message;
 
-// Substrate dependencies
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{
 	import_queue::ImportQueueService, BlockImportError, BlockImportStatus, IncomingBlock,
 };
-use sc_network::config::{NonDefaultSetConfig, SetConfig};
+use sc_network::{
+	config::{NonDefaultSetConfig, SetConfig},
+	request_responses::{IfDisconnected, RequestFailure},
+};
 use sc_network_common::{
 	config::{NonReservedPeerMode, NotificationHandshake, ProtocolId},
 	protocol::{role::Roles, ProtocolName},
-	request_responses::{IfDisconnected, RequestFailure},
 	sync::{
 		message::{
 			BlockAnnounce, BlockAnnouncesHandshake, BlockAttributes, BlockData, BlockRequest,
@@ -83,7 +82,6 @@ use sp_runtime::{
 	EncodedJustification, Justifications,
 };
 
-// `std` dependencies
 use std::{
 	collections::{hash_map::Entry, HashMap, HashSet},
 	iter,

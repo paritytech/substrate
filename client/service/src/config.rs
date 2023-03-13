@@ -23,13 +23,13 @@ pub use sc_client_db::{BlocksPruning, Database, DatabaseSource, PruningMode};
 pub use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 pub use sc_network::{
 	config::{NetworkConfiguration, NonDefaultSetConfig, Role, SetConfig},
-	Multiaddr,
-};
-pub use sc_network_common::{
-	config::{MultiaddrWithPeerId, NodeKeyConfig, ProtocolId, TransportConfig},
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
+	Multiaddr,
+};
+pub use sc_network_common::config::{
+	MultiaddrWithPeerId, NodeKeyConfig, ProtocolId, TransportConfig,
 };
 
 use prometheus_endpoint::Registry;

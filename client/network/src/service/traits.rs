@@ -18,20 +18,18 @@
 //
 // If you read this, you are very thorough, congratulations.
 
-// External dependencies
+use crate::request_responses::{IfDisconnected, RequestFailure};
+
 use futures::{channel::oneshot, Stream};
 use libp2p::{Multiaddr, PeerId};
 
-// Substrate dependencies
 use sc_network_common::{
 	config::MultiaddrWithPeerId,
 	protocol::{event::Event, ProtocolName},
-	request_responses::{IfDisconnected, RequestFailure},
 	service::signature::Signature,
 };
 use sc_peerset::ReputationChange;
 
-// `std` dependencies
 use std::{collections::HashSet, future::Future, pin::Pin, sync::Arc};
 
 pub use libp2p::{identity::error::SigningError, kad::record::Key as KademliaKey};

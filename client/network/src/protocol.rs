@@ -16,10 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-// Local dependencies
 use crate::{config, error};
 
-// External dependencies
 use bytes::Bytes;
 use codec::{DecodeAll, Encode};
 use libp2p::{
@@ -32,7 +30,6 @@ use libp2p::{
 };
 use log::{debug, error, warn};
 
-// Substrate dependencies
 use sc_network_common::{
 	config::NonReservedPeerMode,
 	protocol::{role::Roles, ProtocolName},
@@ -40,7 +37,6 @@ use sc_network_common::{
 };
 use sp_runtime::traits::Block as BlockT;
 
-// `std` dependencies
 use std::{
 	collections::{HashMap, HashSet, VecDeque},
 	iter,

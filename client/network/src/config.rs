@@ -21,10 +21,12 @@
 //! The [`Params`] struct is the struct that must be passed in order to initialize the networking.
 //! See the documentation of [`Params`].
 
-// External dependencies
+pub use crate::request_responses::{
+	IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
+};
+
 pub use libp2p::{build_multiaddr, core::PublicKey, identity, multiaddr, Multiaddr};
 
-// Substrate dependencies
 use prometheus_endpoint::Registry;
 pub use sc_network_common::{
 	config::{
@@ -32,14 +34,10 @@ pub use sc_network_common::{
 		SyncMode, TransportConfig,
 	},
 	protocol::{role::Role, ProtocolName},
-	request_responses::{
-		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
-	},
 	sync::warp::WarpSyncProvider,
 	ExHashT,
 };
 
-// `std` dependencies
 use std::{future::Future, iter, net::Ipv4Addr, path::PathBuf, pin::Pin, sync::Arc};
 
 /// Configuration for a set of nodes.

@@ -50,13 +50,13 @@ use sc_consensus::{
 };
 use sc_network::{
 	config::{NetworkConfiguration, NonDefaultSetConfig},
+	request_responses::ProtocolConfig as RequestResponseConfig,
 	Multiaddr, NetworkBlock, NetworkEventStream, NetworkService, NetworkStateInfo,
 	NetworkSyncForkRequest, NetworkWorker,
 };
 use sc_network_common::{
 	config::{
-		MultiaddrWithPeerId, NonReservedPeerMode, ProtocolId, RequestResponseConfig, Role,
-		SyncMode, TransportConfig,
+		MultiaddrWithPeerId, NonReservedPeerMode, ProtocolId, Role, SyncMode, TransportConfig,
 	},
 	protocol::{role::Roles, ProtocolName},
 	sync::warp::{

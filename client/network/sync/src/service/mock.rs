@@ -18,18 +18,17 @@
 
 use futures::channel::oneshot;
 use libp2p::{Multiaddr, PeerId};
+
 use sc_consensus::{BlockImportError, BlockImportStatus};
 use sc_network::{
+	request_responses::{IfDisconnected, RequestFailure},
 	NetworkNotification, NetworkPeers, NetworkRequest, NetworkSyncForkRequest,
 	NotificationSenderError, NotificationSenderT,
 };
-use sc_network_common::{
-	config::MultiaddrWithPeerId,
-	protocol::ProtocolName,
-	request_responses::{IfDisconnected, RequestFailure},
-};
+use sc_network_common::{config::MultiaddrWithPeerId, protocol::ProtocolName};
 use sc_peerset::ReputationChange;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
+
 use std::collections::HashSet;
 
 mockall::mock! {

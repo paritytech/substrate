@@ -22,8 +22,10 @@ use codec::Encode;
 use futures::channel::{oneshot, oneshot::Canceled};
 use log::{debug, warn};
 use parking_lot::Mutex;
-use sc_network::{NetworkRequest, PeerId, ProtocolName};
-use sc_network_common::request_responses::{IfDisconnected, RequestFailure};
+use sc_network::{
+	request_responses::{IfDisconnected, RequestFailure},
+	NetworkRequest, PeerId, ProtocolName,
+};
 use sp_consensus_beefy::{crypto::AuthorityId, ValidatorSet};
 use sp_runtime::traits::{Block, NumberFor};
 use std::{collections::VecDeque, result::Result, sync::Arc};

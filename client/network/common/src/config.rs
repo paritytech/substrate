@@ -20,9 +20,6 @@
 
 pub use crate::{
 	protocol::{self, role::Role},
-	request_responses::{
-		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
-	},
 	sync::warp::WarpSyncProvider,
 	ExHashT,
 };

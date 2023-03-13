@@ -29,10 +29,8 @@ use libp2p::PeerId;
 use log::{debug, trace};
 use prost::Message;
 use sc_client_api::{BlockBackend, ProofProvider};
-use sc_network_common::{
-	config::ProtocolId,
-	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
-};
+use sc_network::request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig};
+use sc_network_common::config::ProtocolId;
 use sc_peerset::ReputationChange;
 use sp_core::{
 	hexdisplay::HexDisplay,

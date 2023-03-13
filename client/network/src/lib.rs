@@ -248,23 +248,23 @@ mod behaviour;
 mod discovery;
 mod peer_info;
 mod protocol;
-mod request_responses;
 mod service;
 mod transport;
 
 pub mod config;
 pub mod error;
 pub mod network_state;
+pub mod request_responses;
 
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
+pub use request_responses::{IfDisconnected, RequestFailure, RequestResponseConfig};
 pub use sc_network_common::{
 	protocol::{
 		event::{DhtEvent, Event},
 		role::ObservedRole,
 		ProtocolName,
 	},
-	request_responses::{IfDisconnected, RequestFailure},
 	sync::{
 		warp::{WarpSyncPhase, WarpSyncProgress},
 		ExtendedPeerInfo, StateDownloadProgress, SyncEventStream, SyncState, SyncStatusProvider,

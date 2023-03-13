@@ -20,7 +20,7 @@ use crate::{
 	discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
 	peer_info,
 	protocol::{CustomMessageOutcome, NotificationsSink, Protocol},
-	request_responses,
+	request_responses::{self, IfDisconnected, ProtocolConfig, RequestFailure},
 };
 
 use bytes::Bytes;
@@ -32,13 +32,10 @@ use libp2p::{
 	swarm::NetworkBehaviour,
 };
 
-use sc_network_common::{
-	protocol::{
-		event::DhtEvent,
-		role::{ObservedRole, Roles},
-		ProtocolName,
-	},
-	request_responses::{IfDisconnected, ProtocolConfig, RequestFailure},
+use sc_network_common::protocol::{
+	event::DhtEvent,
+	role::{ObservedRole, Roles},
+	ProtocolName,
 };
 use sc_peerset::{PeersetHandle, ReputationChange};
 use sp_runtime::traits::Block as BlockT;

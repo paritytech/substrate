@@ -27,7 +27,6 @@
 //! The methods of the [`NetworkService`] are implemented by sending a message over a channel,
 //! which is then processed by [`NetworkWorker::next_action`].
 
-// Local dependencies
 use crate::{
 	behaviour::{self, Behaviour, BehaviourOut},
 	config::Params,
@@ -37,6 +36,7 @@ use crate::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
 	protocol::{self, NotificationsSink, NotifsHandlerError, Protocol, Ready},
+	request_responses::{IfDisconnected, RequestFailure},
 	service::traits::{
 		NetworkDHTProvider, NetworkEventStream, NetworkNotification, NetworkPeers, NetworkRequest,
 		NetworkSigner, NetworkStateInfo, NetworkStatus, NetworkStatusProvider,
@@ -46,7 +46,6 @@ use crate::{
 	transport, ReputationChange,
 };
 
-// External dependencies
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
 	core::{either::EitherError, upgrade, ConnectedPoint},
@@ -65,14 +64,12 @@ use log::{debug, error, info, trace, warn};
 use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
 
-// Substrate dependencies
 use sc_network_common::{
 	config::{MultiaddrWithPeerId, TransportConfig},
 	protocol::{
 		event::{DhtEvent, Event},
 		ProtocolName,
 	},
-	request_responses::{IfDisconnected, RequestFailure},
 	service::signature::{Signature, SigningError},
 	ExHashT,
 };
@@ -81,7 +78,6 @@ use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnbound
 use sp_blockchain::HeaderBackend;
 use sp_runtime::traits::{Block as BlockT, Zero};
 
-// `std` dependencies
 use std::{
 	cmp,
 	collections::{HashMap, HashSet},

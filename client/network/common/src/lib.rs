@@ -21,7 +21,6 @@
 pub mod config;
 pub mod message;
 pub mod protocol;
-pub mod request_responses;
 pub mod service;
 pub mod sync;
 pub mod utils;
