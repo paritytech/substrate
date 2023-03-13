@@ -152,7 +152,7 @@
 //!
 //! Implementation note: Commission is analogous to a separate member account of the pool, with its
 //! own reward counter in the form of `current_pending_commission`.
-//! 
+//!
 //! Crucially, commission is applied to rewards based on the current commission in effect at the
 //! time rewards are transferred into the reward pool. This is to prevent the malicious behaviour of
 //! changing the commission rate to a very high value after rewards are accumulated, and thus claim
