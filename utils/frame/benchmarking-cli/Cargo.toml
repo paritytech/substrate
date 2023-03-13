@@ -55,6 +55,6 @@ sp-trie = { version = "7.0.0", path = "../../../primitives/trie" }
 gethostname = "0.2.3"
 
 [features]
-default = ["rocksdb"]
+default = ["paritydb"]
 runtime-benchmarks = ["sc-client-db/runtime-benchmarks"]
-rocksdb = ["sc-cli/rocksdb", "sc-client-db/rocksdb"]
+paritydb = ["sc-cli/paritydb", "sc-client-db/paritydb"]

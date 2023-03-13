@@ -13,10 +13,10 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [features]
-default = ["rocksdb"]
-# The RocksDB feature activates the RocksDB database backend. If it is not activated, and you pass
+default = ["paritydb"]
+# The ParityDB feature activates the ParityDB database backend. If it is not activated, and you pass
 # a path to a database, an error will be produced at runtime.
-rocksdb = ["sc-client-db/rocksdb"]
+paritydb = ["sc-client-db/paritydb"]
 # exposes the client type
 test-helpers = []
 runtime-benchmarks = ["sc-client-db/runtime-benchmarks"]

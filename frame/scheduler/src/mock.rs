@@ -25,7 +25,7 @@ use frame_support::{
 	traits::{
 		ConstU32, ConstU64, Contains, EitherOfDiverse, EqualPrivilegeOnly, OnFinalize, OnInitialize,
 	},
-	weights::constants::RocksDbWeight,
+	weights::constants::ParityDbWeight,
 };
 use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
@@ -128,7 +128,7 @@ impl system::Config for Test {
 	type BaseCallFilter = BaseFilter;
 	type BlockWeights = BlockWeights;
 	type BlockLength = ();
-	type DbWeight = RocksDbWeight;
+	type DbWeight = ParityDbWeight;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type Index = u64;

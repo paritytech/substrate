@@ -29,9 +29,9 @@ fn benchmark_storage_works() {
 	let tmp_dir = tempdir().expect("could not create a temp dir");
 	let base_path = tmp_dir.path();
 
-	// Benchmarking the storage works and creates the correct weight file.
-	assert!(benchmark_storage("rocksdb", base_path).success());
-	assert!(base_path.join("rocksdb_weights.rs").exists());
+	// // Benchmarking the storage works and creates the correct weight file.
+	// assert!(benchmark_storage("rocksdb", base_path).success());
+	// assert!(base_path.join("rocksdb_weights.rs").exists());
 
 	assert!(benchmark_storage("paritydb", base_path).success());
 	assert!(base_path.join("paritydb_weights.rs").exists());

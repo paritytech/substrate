@@ -1329,7 +1329,8 @@ fn doesnt_import_blocks_that_revert_finality() {
 				trie_cache_maximum_size: Some(1 << 20),
 				state_pruning: Some(PruningMode::ArchiveAll),
 				blocks_pruning: BlocksPruning::KeepAll,
-				source: DatabaseSource::RocksDb { path: tmp.path().into(), cache_size: 1024 },
+				// TODO - this should be a choice of DB? ParityDb has not cache_size 
+				source: DatabaseSource::ParityDb { path: tmp.path().into() },
 			},
 			u64::MAX,
 		)

@@ -25,7 +25,7 @@ use codec::Encode;
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64},
-	weights::{constants::RocksDbWeight, Weight},
+	weights::{constants::ParityDbWeight, Weight},
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -84,7 +84,7 @@ impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
-	type DbWeight = RocksDbWeight;
+	type DbWeight = ParityDbWeight;
 	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u64;

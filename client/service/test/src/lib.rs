@@ -245,7 +245,8 @@ fn node_config<
 		network: network_config,
 		keystore_remote: Default::default(),
 		keystore: KeystoreConfig::Path { path: root.join("key"), password: None },
-		database: DatabaseSource::RocksDb { path: root.join("db"), cache_size: 128 },
+		// TODO - this should be a choice of DB? ParityDb has not cache_size
+		database: DatabaseSource::ParityDb { path: root.join("db") },
 		trie_cache_maximum_size: Some(16 * 1024 * 1024),
 		state_pruning: Default::default(),
 		blocks_pruning: BlocksPruning::KeepFinalized,

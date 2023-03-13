@@ -23,7 +23,7 @@ use crate as pallet_preimage;
 use frame_support::{
 	ord_parameter_types,
 	traits::{ConstU32, ConstU64, Everything},
-	weights::constants::RocksDbWeight,
+	weights::constants::ParityDbWeight,
 };
 use frame_system::EnsureSignedBy;
 use sp_core::H256;
@@ -51,7 +51,7 @@ impl frame_system::Config for Test {
 	type BaseCallFilter = Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
-	type DbWeight = RocksDbWeight;
+	type DbWeight = ParityDbWeight;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type Index = u64;

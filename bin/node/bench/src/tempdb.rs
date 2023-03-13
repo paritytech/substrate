@@ -17,12 +17,12 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use kvdb::{DBKeyValue, DBTransaction, KeyValueDB};
-use kvdb_rocksdb::{Database, DatabaseConfig};
+// use kvdb_rocksdb::{Database, DatabaseConfig};
 use std::{io, path::PathBuf, sync::Arc};
 
 #[derive(Clone, Copy, Debug)]
 pub enum DatabaseType {
-	RocksDb,
+	// RocksDb,
 	ParityDb,
 }
 
@@ -83,11 +83,11 @@ impl TempDatabase {
 
 	pub fn open(&mut self, db_type: DatabaseType) -> Arc<dyn KeyValueDB> {
 		match db_type {
-			DatabaseType::RocksDb => {
-				let db_cfg = DatabaseConfig::with_columns(1);
-				let db = Database::open(&db_cfg, &self.0.path()).expect("Database backend error");
-				Arc::new(db)
-			},
+			// DatabaseType::RocksDb => {
+			// 	let db_cfg = DatabaseConfig::with_columns(1);
+			// 	let db = Database::open(&db_cfg, &self.0.path()).expect("Database backend error");
+			// 	Arc::new(db)
+			// },
 			DatabaseType::ParityDb => Arc::new(ParityDbWrapper({
 				let mut options = parity_db::Options::with_columns(self.0.path(), 1);
 				let mut column_options = &mut options.columns[0];

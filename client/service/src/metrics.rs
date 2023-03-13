@@ -111,6 +111,7 @@ impl PrometheusMetrics {
 			)?,
 
 			// I/ O
+			// Note: Don't need this if using ParityDB
 			database_cache: register(
 				Gauge::new("substrate_database_cache_bytes", "RocksDB cache size in bytes")?,
 				registry,

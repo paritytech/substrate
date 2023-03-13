@@ -25,7 +25,7 @@ use frame_support::{
 		ConstU32, ConstU64, Currency, EitherOfDiverse, FindAuthor, GenesisBuild, Get, Hooks,
 		Imbalance, OnUnbalanced, OneSessionHandler,
 	},
-	weights::constants::RocksDbWeight,
+	weights::constants::ParityDbWeight,
 };
 use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
@@ -125,7 +125,7 @@ impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
-	type DbWeight = RocksDbWeight;
+	type DbWeight = ParityDbWeight;
 	type RuntimeOrigin = RuntimeOrigin;
 	type Index = AccountIndex;
 	type BlockNumber = BlockNumber;
