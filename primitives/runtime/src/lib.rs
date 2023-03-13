@@ -623,7 +623,7 @@ pub enum TokenError {
 	/// Account cannot be created for a held balance.
 	CannotCreateHold,
 	/// Withdrawal would cause unwanted loss of account.
-	UnwantedAccountRemoval,
+	UnwantedRemovalOfAccount,
 }
 
 impl From<TokenError> for &'static str {
