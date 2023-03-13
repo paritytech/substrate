@@ -27,7 +27,7 @@ use crate::{
 	wasm::{Determinism, PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
 	BalanceOf, Code, CodeStorage, Config, ContractInfo, ContractInfoOf, DefaultAddressGenerator,
-	DeletionQueue, Error, Pallet, Schedule, SENTINEL,
+	DeletionQueue, Error, Pallet, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -44,6 +44,7 @@ use frame_support::{
 };
 use frame_system::{self as system, EventRecord, Phase};
 use pretty_assertions::{assert_eq, assert_ne};
+use sp_core::ByteArray;
 use sp_io::hashing::blake2_256;
 use sp_keystore::{testing::KeyStore, KeystoreExt};
 use sp_runtime::{
@@ -1108,7 +1109,7 @@ fn cannot_self_destruct_through_draning() {
 
 #[test]
 fn cannot_self_destruct_through_storage_refund_after_price_change() {
-	let (wasm, _code_hash) = compile_module::<Test>("store").unwrap();
+	let (wasm, _code_hash) = compile_module::<Test>("store_call").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 		let min_balance = <Test as Config>::Currency::minimum_balance();
@@ -1686,7 +1687,7 @@ fn instantiate_return_code() {
 		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
 
 		// Contract has enough total balance in order to not go below the min_balance
-		// threshold when transfering the balance but this balance is reserved so
+		// threshold when transferring the balance but this balance is reserved so
 		// the transfer still fails.
 		Balances::make_free_balance_be(&addr, min_balance + 10_000);
 		Balances::reserve(&addr, min_balance + 10_000).unwrap();
@@ -3986,7 +3987,7 @@ fn set_code_hash() {
 
 #[test]
 fn storage_deposit_limit_is_enforced() {
-	let (wasm, _code_hash) = compile_module::<Test>("store").unwrap();
+	let (wasm, _code_hash) = compile_module::<Test>("store_call").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 		let min_balance = <Test as Config>::Currency::minimum_balance();
@@ -4026,10 +4027,10 @@ fn storage_deposit_limit_is_enforced() {
 }
 
 #[test]
-fn storage_deposit_limit_in_nested_calls() {
+fn deposit_limit_in_nested_calls() {
 	let (wasm_caller, _code_hash_caller) =
 		compile_module::<Test>("create_storage_and_call").unwrap();
-	let (wasm_callee, _code_hash_callee) = compile_module::<Test>("store").unwrap();
+	let (wasm_callee, _code_hash_callee) = compile_module::<Test>("store_call").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 
@@ -4074,8 +4075,8 @@ fn storage_deposit_limit_in_nested_calls() {
 
 		// We do not remove any storage but add a storage item of 12 bytes in the caller
 		// contract. This would cost 12 + 2 = 14 Balance.
-		// The nested call doesn't get a special limit, which is set by passing SENTINEL as its
-		// reference. This should fail as the specified parent's limit is less than the cost: 13 <
+		// The nested call doesn't get a special limit, which is set by passing 0 to it.
+		// This should fail as the specified parent's limit is less than the cost: 13 <
 		// 14.
 		assert_err_ignore_postinfo!(
 			Contracts::call(
@@ -4089,7 +4090,7 @@ fn storage_deposit_limit_in_nested_calls() {
 					.as_ref()
 					.iter()
 					.chain(<_ as AsRef<[u8]>>::as_ref(&addr_callee))
-					.chain(SENTINEL.to_le_bytes().as_ref())
+					.chain(0u64.to_le_bytes().as_ref())
 					.cloned()
 					.collect(),
 			),
@@ -4098,8 +4099,9 @@ fn storage_deposit_limit_in_nested_calls() {
 
 		// Now we specify the parent's limit high enough to cover the caller's storage additions.
 		// However, we use a single byte more in the callee, hence the storage deposit should be 15
-		// Balance. The nested call doesn't get a special limit, which is set by passing SENTINEL as
-		// its reference. This should fail as the specified parent's limit is less than the cost: 14
+		// Balance.
+		// The nested call doesn't get a special limit, which is set by passing 0 to it.
+		// This should fail as the specified parent's limit is less than the cost: 14
 		// < 15.
 		assert_err_ignore_postinfo!(
 			Contracts::call(
@@ -4113,7 +4115,7 @@ fn storage_deposit_limit_in_nested_calls() {
 					.as_ref()
 					.iter()
 					.chain(<_ as AsRef<[u8]>>::as_ref(&addr_callee))
-					.chain(SENTINEL.to_le_bytes().as_ref())
+					.chain(0u64.to_le_bytes().as_ref())
 					.cloned()
 					.collect(),
 			),
@@ -4146,7 +4148,7 @@ fn storage_deposit_limit_in_nested_calls() {
 
 		// Refund in the callee contract but not enough to cover the 14 Balance required by the
 		// caller. Note that if previous sub-call wouldn't roll back, this call would pass making
-		// the test case fail. We don't specify special limit for the nested call here.
+		// the test case fail. We don't set a special limit for the nested call here.
 		assert_err_ignore_postinfo!(
 			Contracts::call(
 				RuntimeOrigin::signed(ALICE),
@@ -4159,7 +4161,7 @@ fn storage_deposit_limit_in_nested_calls() {
 					.as_ref()
 					.iter()
 					.chain(<_ as AsRef<[u8]>>::as_ref(&addr_callee))
-					.chain(SENTINEL.to_le_bytes().as_ref())
+					.chain(0u64.to_le_bytes().as_ref())
 					.cloned()
 					.collect(),
 			),
@@ -4169,7 +4171,7 @@ fn storage_deposit_limit_in_nested_calls() {
 		let _ = Balances::make_free_balance_be(&ALICE, 1_000);
 
 		// Require more than the sender's balance.
-		// We don't specify special limit for the nested call.
+		// We don't set a special limit for the nested call.
 		assert_err_ignore_postinfo!(
 			Contracts::call(
 				RuntimeOrigin::signed(ALICE),
@@ -4182,7 +4184,7 @@ fn storage_deposit_limit_in_nested_calls() {
 					.as_ref()
 					.iter()
 					.chain(<_ as AsRef<[u8]>>::as_ref(&addr_callee))
-					.chain(SENTINEL.to_le_bytes().as_ref())
+					.chain(0u64.to_le_bytes().as_ref())
 					.cloned()
 					.collect(),
 			),
@@ -4211,8 +4213,192 @@ fn storage_deposit_limit_in_nested_calls() {
 }
 
 #[test]
+fn deposit_limit_in_nested_instantiate() {
+	let (wasm_caller, _code_hash_caller) =
+		compile_module::<Test>("create_storage_and_instantiate").unwrap();
+	let (wasm_callee, code_hash_callee) = compile_module::<Test>("store_deploy").unwrap();
+	const ED: u64 = 5;
+	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = Balances::deposit_creating(&BOB, 1_000_000);
+		// Create caller contract
+		let addr_caller = Contracts::bare_instantiate(
+			ALICE,
+			10_000u64, // this balance is later passed to the deployed contract
+			GAS_LIMIT,
+			None,
+			Code::Upload(wasm_caller),
+			vec![],
+			vec![],
+			false,
+		)
+		.result
+		.unwrap()
+		.account_id;
+		// Deploy a contract to get its occupied storage size
+		let addr = Contracts::bare_instantiate(
+			ALICE,
+			0,
+			GAS_LIMIT,
+			None,
+			Code::Upload(wasm_callee),
+			vec![0, 0, 0, 0],
+			vec![],
+			false,
+		)
+		.result
+		.unwrap()
+		.account_id;
+
+		let callee_info_len = ContractInfoOf::<Test>::get(&addr).unwrap().encoded_size() as u64;
+
+		// We don't set a special deposit limit for the netsted instantiation.
+		//
+		// The deposit limit set for the parent is insufficient for the instantiation, which
+		// requires:
+		// - callee_info_len + 2 for storing the new contract info,
+		// - ED for deployed contract account,
+		// - 2 for the storage item of 0 bytes being created in the callee constructor
+		// or (callee_info_len + 2 + ED + 2) Balance in total.
+		//
+		// Provided the limit is set to be 1 Balance less,
+		// this call should fail on the return from the caller contract.
+		assert_err_ignore_postinfo!(
+			Contracts::call(
+				RuntimeOrigin::signed(BOB),
+				addr_caller.clone(),
+				0,
+				GAS_LIMIT,
+				Some(codec::Compact(callee_info_len + 2 + ED + 1)),
+				0u32.to_le_bytes()
+					.as_ref()
+					.iter()
+					.chain(code_hash_callee.as_ref())
+					.chain(0u64.to_le_bytes().as_ref())
+					.cloned()
+					.collect(),
+			),
+			<Error<Test>>::StorageDepositLimitExhausted,
+		);
+		// The charges made on instantiation should be rolled back.
+		assert_eq!(<Test as Config>::Currency::free_balance(&BOB), 1_000_000);
+
+		// Now we give enough limit for the instantiation itself, but require for 1 more storage
+		// byte in the constructor. Hence +1 Balance to the limit is needed. This should fail on the
+		// return from constructor.
+		assert_err_ignore_postinfo!(
+			Contracts::call(
+				RuntimeOrigin::signed(BOB),
+				addr_caller.clone(),
+				0,
+				GAS_LIMIT,
+				Some(codec::Compact(callee_info_len + 2 + ED + 2)),
+				1u32.to_le_bytes()
+					.as_ref()
+					.iter()
+					.chain(code_hash_callee.as_ref())
+					.chain(0u64.to_le_bytes().as_ref())
+					.cloned()
+					.collect(),
+			),
+			<Error<Test>>::StorageDepositLimitExhausted,
+		);
+		// The charges made on the instantiation should be rolled back.
+		assert_eq!(<Test as Config>::Currency::free_balance(&BOB), 1_000_000);
+
+		// Now we set enough limit in parent call, but an insufficient limit for child instantiate.
+		// This should fail during the charging for the instantiation in
+		// `RawMeter::charge_instantiate()`
+		assert_err_ignore_postinfo!(
+			Contracts::call(
+				RuntimeOrigin::signed(BOB),
+				addr_caller.clone(),
+				0,
+				GAS_LIMIT,
+				Some(codec::Compact(callee_info_len + 2 + ED + 2)),
+				0u32.to_le_bytes()
+					.as_ref()
+					.iter()
+					.chain(code_hash_callee.as_ref())
+					.chain((callee_info_len + 2 + ED + 1).to_le_bytes().as_ref())
+					.cloned()
+					.collect(),
+			),
+			<Error<Test>>::StorageDepositLimitExhausted,
+		);
+		// The charges made on the instantiation should be rolled back.
+		assert_eq!(<Test as Config>::Currency::free_balance(&BOB), 1_000_000);
+
+		// Same as above but requires for single added storage
+		// item of 1 byte to be covered by the limit, which implies 3 more Balance.
+		// Now we set enough limit for the parent call, but insufficient limit for child
+		// instantiate. This should fail right after the constructor execution.
+		assert_err_ignore_postinfo!(
+			Contracts::call(
+				RuntimeOrigin::signed(BOB),
+				addr_caller.clone(),
+				0,
+				GAS_LIMIT,
+				Some(codec::Compact(callee_info_len + 2 + ED + 3)), // enough parent limit
+				1u32.to_le_bytes()
+					.as_ref()
+					.iter()
+					.chain(code_hash_callee.as_ref())
+					.chain((callee_info_len + 2 + ED + 2).to_le_bytes().as_ref()) // not enough child limit
+					.cloned()
+					.collect(),
+			),
+			<Error<Test>>::StorageDepositLimitExhausted,
+		);
+		// The charges made on the instantiation should be rolled back.
+		assert_eq!(<Test as Config>::Currency::free_balance(&BOB), 1_000_000);
+
+		// Set enough deposit limit for the child instantiate. This should succeed.
+		let result = Contracts::bare_call(
+			BOB,
+			addr_caller.clone(),
+			0,
+			GAS_LIMIT,
+			Some(codec::Compact(callee_info_len + 2 + ED + 4).into()),
+			1u32.to_le_bytes()
+				.as_ref()
+				.iter()
+				.chain(code_hash_callee.as_ref())
+				.chain((callee_info_len + 2 + ED + 3).to_le_bytes().as_ref()) // child limit is tougher but is still enough
+				.cloned()
+				.collect(),
+			false,
+			Determinism::Deterministic,
+		);
+
+		let returned = result.result.unwrap();
+		// All balance of the caller except ED has been transferred to the callee.
+		// No deposit has been taken from it.
+		assert_eq!(<Test as Config>::Currency::free_balance(&addr_caller), ED);
+		// Get address of the deployed contract.
+		let addr_callee = AccountId32::from_slice(&returned.data[0..32]).unwrap();
+		// 10_000 should be sent to callee from the caller contract, plus ED to be sent from the
+		// origin.
+		assert_eq!(<Test as Config>::Currency::free_balance(&addr_callee), 10_000 + ED);
+		// The origin should be charged with:
+		//  - callee instantiation deposit = (callee_info_len + 2)
+		//  - callee account ED
+		//  - for writing an item of 1 byte to storage = 3 Balance
+		//
+		//  Still, the latter is to be charged at the end of the call stack, hence
+		//  only (callee_info_len + 2 + ED) is charged so far
+		assert_eq!(
+			<Test as Config>::Currency::free_balance(&BOB),
+			1_000_000 - (callee_info_len + 2 + ED)
+		);
+		// Check that deposit due to be charged still includes these 3 Balance
+		assert_eq!(result.storage_deposit.charge_or_zero(), (callee_info_len + 2 + ED + 3),)
+	});
+}
+
+#[test]
 fn deposit_limit_honors_liquidity_restrictions() {
-	let (wasm, _code_hash) = compile_module::<Test>("store").unwrap();
+	let (wasm, _code_hash) = compile_module::<Test>("store_call").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 		let _ = Balances::deposit_creating(&BOB, 1_000);
@@ -4256,7 +4442,7 @@ fn deposit_limit_honors_liquidity_restrictions() {
 
 #[test]
 fn deposit_limit_honors_existential_deposit() {
-	let (wasm, _code_hash) = compile_module::<Test>("store").unwrap();
+	let (wasm, _code_hash) = compile_module::<Test>("store_call").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 		let _ = Balances::deposit_creating(&BOB, 1_000);
@@ -4299,7 +4485,7 @@ fn deposit_limit_honors_existential_deposit() {
 
 #[test]
 fn deposit_limit_honors_min_leftover() {
-	let (wasm, _code_hash) = compile_module::<Test>("store").unwrap();
+	let (wasm, _code_hash) = compile_module::<Test>("store_call").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 		let _ = Balances::deposit_creating(&BOB, 1_000);

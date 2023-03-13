@@ -954,6 +954,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 		memory: &mut [u8],
 		code_hash_ptr: u32,
 		weight: Weight,
+		deposit_ptr: u32,
 		value_ptr: u32,
 		input_data_ptr: u32,
 		input_data_len: u32,
@@ -965,6 +966,11 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 		salt_len: u32,
 	) -> Result<ReturnCode, TrapReason> {
 		self.charge_gas(RuntimeCosts::InstantiateBase { input_data_len, salt_len })?;
+		let deposit_limit: BalanceOf<<E as Ext>::T> = if deposit_ptr == SENTINEL {
+			BalanceOf::<<E as Ext>::T>::zero()
+		} else {
+			self.read_sandbox_memory_as(memory, deposit_ptr)?
+		};
 		let value: BalanceOf<<E as Ext>::T> = self.read_sandbox_memory_as(memory, value_ptr)?;
 		if value > 0u32.into() {
 			self.charge_gas(RuntimeCosts::InstantiateSurchargeTransfer)?;
@@ -973,7 +979,8 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 			self.read_sandbox_memory_as(memory, code_hash_ptr)?;
 		let input_data = self.read_sandbox_memory(memory, input_data_ptr, input_data_len)?;
 		let salt = self.read_sandbox_memory(memory, salt_ptr, salt_len)?;
-		let instantiate_outcome = self.ext.instantiate(weight, code_hash, value, input_data, &salt);
+		let instantiate_outcome =
+			self.ext.instantiate(weight, deposit_limit, code_hash, value, input_data, &salt);
 		if let Ok((address, output)) = &instantiate_outcome {
 			if !output.flags.contains(ReturnFlags::REVERT) {
 				self.write_sandbox_output(
@@ -1522,6 +1529,7 @@ pub mod env {
 			memory,
 			code_hash_ptr,
 			Weight::from_parts(gas, 0),
+			SENTINEL,
 			value_ptr,
 			input_data_ptr,
 			input_data_len,
@@ -1560,6 +1568,7 @@ pub mod env {
 			memory,
 			code_hash_ptr,
 			Weight::from_parts(gas, 0),
+			SENTINEL,
 			value_ptr,
 			input_data_ptr,
 			input_data_len,
@@ -1588,14 +1597,20 @@ pub mod env {
 	/// - `code_hash_ptr`: a pointer to the buffer that contains the initializer code.
 	/// - `ref_time`: how much *ref_time* Weight to devote to the execution.
 	/// - `proof_limit`: how much *proof_limit* Weight to devote to the execution.
+	/// - `deposit_ptr`: a pointer to the buffer with value of the storage deposit limit for
+	///   instantiation. Should be decodable as a `T::Balance`. Traps otherwise. Passing `SENTINEL`
+	///   means setting no specific limit for the call, which implies storage usage up to the limit
+	///   of the parent call.
 	/// - `value_ptr`: a pointer to the buffer with value, how much value to send. Should be
 	///   decodable as a `T::Balance`. Traps otherwise.
 	/// - `input_data_ptr`: a pointer to a buffer to be used as input data to the initializer code.
 	/// - `input_data_len`: length of the input data buffer.
-	/// - `address_ptr`: a pointer where the new account's address is copied to.
+	/// - `address_ptr`: a pointer where the new account's address is copied to. `SENTINEL` means
+	///   not to copy.
 	/// - `address_len_ptr`: in-out pointer to where the length of the buffer is read from and the
 	///   actual length is written to.
-	/// - `output_ptr`: a pointer where the output buffer is copied to.
+	/// - `output_ptr`: a pointer where the output buffer is copied to.  `SENTINEL` means not to
+	///   copy.
 	/// - `output_len_ptr`: in-out pointer to where the length of the buffer is read from and the
 	///   actual length is written to.
 	/// - `salt_ptr`: Pointer to raw bytes used for address derivation. See `fn contract_address`.
@@ -1621,6 +1636,7 @@ pub mod env {
 		code_hash_ptr: u32,
 		ref_time: u64,
 		proof_limit: u64,
+		deposit_ptr: u32,
 		value_ptr: u32,
 		input_data_ptr: u32,
 		input_data_len: u32,
@@ -1635,6 +1651,7 @@ pub mod env {
 			memory,
 			code_hash_ptr,
 			Weight::from_parts(ref_time, proof_limit),
+			deposit_ptr,
 			value_ptr,
 			input_data_ptr,
 			input_data_len,

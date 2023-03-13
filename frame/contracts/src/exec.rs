@@ -150,6 +150,7 @@ pub trait Ext: sealing::Sealed {
 	fn instantiate(
 		&mut self,
 		gas_limit: Weight,
+		deposit_limit: BalanceOf<Self::T>,
 		code: CodeHash<Self::T>,
 		value: BalanceOf<Self::T>,
 		input_data: Vec<u8>,
@@ -895,6 +896,13 @@ where
 						return Err(Error::<T>::TerminatedInConstructor.into())
 					}
 
+					// If a special limit was set for the sub-call, we enforce it here.
+					// This is needed because contract constructor might write to storage.
+					// The sub-call will be rolled back in case the limit is exhausted.
+					let frame = self.top_frame_mut();
+					let contract = frame.contract_info.as_contract();
+					frame.nested_storage.enforce_subcall_limit(contract)?;
+
 					// Deposit an instantiation event.
 					Contracts::<T>::deposit_event(
 						vec![T::Hashing::hash_of(self.caller()), T::Hashing::hash_of(account_id)],
@@ -1200,6 +1208,7 @@ where
 	fn instantiate(
 		&mut self,
 		gas_limit: Weight,
+		deposit_limit: BalanceOf<Self::T>,
 		code_hash: CodeHash<T>,
 		value: BalanceOf<T>,
 		input_data: Vec<u8>,
@@ -1217,7 +1226,7 @@ where
 			},
 			value,
 			gas_limit,
-			BalanceOf::<T>::zero(),
+			deposit_limit,
 		)?;
 		let account_id = self.top_frame().account_id.clone();
 		self.run(executable, input_data).map(|ret| (account_id, ret))
@@ -2339,6 +2348,7 @@ mod tests {
 					.ext
 					.instantiate(
 						Weight::zero(),
+						BalanceOf::<Test>::zero(),
 						dummy_ch,
 						<Test as Config>::Currency::minimum_balance(),
 						vec![],
@@ -2403,6 +2413,7 @@ mod tests {
 				assert_matches!(
 					ctx.ext.instantiate(
 						Weight::zero(),
+						BalanceOf::<Test>::zero(),
 						dummy_ch,
 						<Test as Config>::Currency::minimum_balance(),
 						vec![],
@@ -2927,6 +2938,7 @@ mod tests {
 			ctx.ext
 				.instantiate(
 					Weight::zero(),
+					BalanceOf::<Test>::zero(),
 					fail_code,
 					ctx.ext.minimum_balance() * 100,
 					vec![],
@@ -2940,6 +2952,7 @@ mod tests {
 				.ext
 				.instantiate(
 					Weight::zero(),
+					BalanceOf::<Test>::zero(),
 					success_code,
 					ctx.ext.minimum_balance() * 100,
 					vec![],
@@ -3454,7 +3467,14 @@ mod tests {
 			assert_eq!(ctx.ext.nonce(), 1);
 			// Should not change with a failed instantiation
 			assert_err!(
-				ctx.ext.instantiate(Weight::zero(), fail_code, 0, vec![], &[],),
+				ctx.ext.instantiate(
+					Weight::zero(),
+					BalanceOf::<Test>::zero(),
+					fail_code,
+					0,
+					vec![],
+					&[],
+				),
 				ExecError {
 					error: <Error<Test>>::ContractTrapped.into(),
 					origin: ErrorOrigin::Callee
@@ -3462,7 +3482,16 @@ mod tests {
 			);
 			assert_eq!(ctx.ext.nonce(), 1);
 			// Successful instantation increments
-			ctx.ext.instantiate(Weight::zero(), success_code, 0, vec![], &[]).unwrap();
+			ctx.ext
+				.instantiate(
+					Weight::zero(),
+					BalanceOf::<Test>::zero(),
+					success_code,
+					0,
+					vec![],
+					&[],
+				)
+				.unwrap();
 			assert_eq!(ctx.ext.nonce(), 2);
 			exec_success()
 		});

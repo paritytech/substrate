@@ -420,7 +420,7 @@ where
 		self.total_deposit = deposit.clone();
 		info.storage_base_deposit = deposit.charge_or_zero();
 
-		// Usually, deposit charges are deferred to be able to coalesce them with refunds.
+		// Normally, deposit charges are deferred to be able to coalesce them with refunds.
 		// However, we need to charge immediately so that the account is created before
 		// charges possibly below the ed are collected and fail.
 		E::charge(

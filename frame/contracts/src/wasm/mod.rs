@@ -491,6 +491,7 @@ mod tests {
 		fn instantiate(
 			&mut self,
 			gas_limit: Weight,
+			_deposit_limit: BalanceOf<Self::T>,
 			code_hash: CodeHash<Test>,
 			value: u64,
 			data: Vec<u8>,
