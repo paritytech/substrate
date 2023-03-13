@@ -82,7 +82,7 @@ use frame_support::{
 pub use pallet::*;
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{AccountIdConversion, StaticLookup},
+	traits::{AccountIdConversion, StaticLookup, Zero},
 	DispatchError, Permill, RuntimeDebug,
 };
 use sp_std::prelude::*;
@@ -117,6 +117,17 @@ pub trait SpendFunds<T: Config<I>, I: 'static = ()> {
 		missed_any: &mut bool,
 	) {
 	}
+}
+
+/// A trait that allows us get all the balances which a given account has.
+pub trait AccountBalances<AccountId, AssetBalance, AssetId>
+where
+	AccountId: codec::Codec,
+	AssetBalance: codec::Codec,
+	AssetId: codec::Codec,
+{
+	/// Returns the list of `AssetId`s and corresponding balance that an `AccountId` has.
+	fn account_balances(account: AccountId) -> Vec<(AssetId, AssetBalance)>;
 }
 
 /// An index of a proposal. Just a `u32`.
@@ -158,6 +169,8 @@ pub mod pallet {
 			+ FunsBalanced<Self::AccountId>
 			+ FunsMutateHold<Self::AccountId>
 			+ FunsBalancedHold<Self::AccountId>;
+
+		type AccountBalances: AccountBalances<Self::AccountId, BalanceOf<Self, I>, Self::AssetId>;
 
 		/// The name for the reserve ID.
 		#[pallet::constant]
@@ -335,8 +348,8 @@ pub mod pallet {
 		/// ## Complexity
 		/// - `O(A)` where `A` is the number of approvals
 		fn on_initialize(n: T::BlockNumber) -> Weight {
-			// let pot = Self::pot();
-			// let deactivated = Deactivated::<T, I>::get();
+			let pot = Self::pot();
+			let deactivated = Deactivated::<T, I>::get();
 			// if pot != deactivated {
 			// 	<T::Currency as fungible::Unbalanced<T::AccountId>>::reactivate(deactivated);
 			// 	<T::Currency as fungible::Unbalanced<T::AccountId>>::deactivate(pot);
@@ -347,13 +360,12 @@ pub mod pallet {
 			// 	});
 			// }
 
-			// // Check to see if we should spend some funds!
-			// if (n % T::SpendPeriod::get()).is_zero() {
-			// 	Self::spend_funds()
-			// } else {
-			// 	Weight::zero()
-			// }
-			Weight::zero()
+			// Check to see if we should spend some funds!
+			if (n % T::SpendPeriod::get()).is_zero() {
+				Self::spend_funds()
+			} else {
+				Weight::zero()
+			}
 		}
 	}
 
@@ -503,6 +515,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			p.bond,
 			Precision::Exact,
 		);
+		println!("released_amount {:?}", released_amount);
 		debug_assert!(released_amount.is_ok());
 
 		// provide the allocation. Rely on the T::Assets::OnDropDebt to handle the resulting Debt.
@@ -520,7 +533,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	// 	)
 	// }
 	pub fn pot() -> Vec<(T::AssetId, BalanceOf<T, I>)> {
-		vec![]
+		<T::AccountBalances as AccountBalances<T::AccountId, BalanceOf<T, I>, T::AssetId>>::account_balances(Self::account_id())
 	}
 }
 

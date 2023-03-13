@@ -37,7 +37,7 @@ use super::*;
 use crate as treasury;
 use frame_support::traits::AsEnsureOriginWithArg;
 use frame_system::EnsureRoot;
-use pallet_assets;
+use pallet_assets::{self};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -160,10 +160,18 @@ impl frame_support::traits::EnsureOrigin<RuntimeOrigin> for TestSpendOrigin {
 	}
 }
 
+pub struct AssetBalances;
+impl crate::AccountBalances<AccountId, u64, AssetId> for AssetBalances {
+	fn account_balances(account: AccountId) -> Vec<(u32, u64)> {
+		Assets::account_balances(account)
+	}
+}
+
 impl Config for Test {
 	type PalletId = TreasuryPalletId;
 	// type Currency = pallet_balances::Pallet<Test>;
 	type Assets = pallet_assets::Pallet<Test>;
+	type AccountBalances = AssetBalances;
 	type AssetId = AssetId;
 	type HoldAssetReason = HoldReason;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
@@ -237,31 +245,42 @@ fn spend_origin_works() {
 	new_test_ext().execute_with(|| {
 		// Check that accumulate works when we have Some value in Dummy already.
 		// Balances::set_balance(&Treasury::account_id(), 101);
-		assert_ok!(Assets::force_create(
-			RuntimeOrigin::root(),
+		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, Treasury::account_id(), true, 1));
+		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 1, Treasury::account_id(), true, 1));
+		assert_ok!(Assets::mint(
+			RuntimeOrigin::signed(Treasury::account_id()),
 			0,
 			Treasury::account_id(),
-			false,
-			1
+			100
 		));
+		assert_ok!(Assets::mint(
+			RuntimeOrigin::signed(Treasury::account_id()),
+			1,
+			Treasury::account_id(),
+			100
+		));
+		assert_eq!(Treasury::pot(), vec![(0, 100), (1, 100)]); // The missing 1 unit is the ExistentialDeposit
 
-		assert_eq!(Treasury::pot(), vec![(0, 100)]); // The missing 1 unit is the ExistentialDeposit
-
-		// assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 5, 6));
-		// assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 5, 6));
-		// assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 5, 6));
-		// assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 5, 6));
-		// assert_ok!(Treasury::spend(RuntimeOrigin::signed(11), 10, 6));
-		// assert_ok!(Treasury::spend(RuntimeOrigin::signed(12), 20, 6));
-		// assert_ok!(Treasury::spend(RuntimeOrigin::signed(13), 50, 6));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 0, 5, 6));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 0, 5, 6));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 0, 5, 6));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 0, 5, 6));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(11), 0, 10, 6));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(12), 0, 20, 6));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(13), 0, 50, 6));
 		// // Pot should be unchanged until `on_initialize` and hence `spend_funds` runs.
-		// assert_eq!(Treasury::pot(), 100);
+		assert_eq!(Treasury::pot(), [(0, 100), (1, 100)]);
+		assert_eq!(Assets::balance(0, Treasury::account_id()), 100);
 		// assert_eq!(Balances::free_balance(6), 0);
 
-		// <Treasury as OnInitialize<u64>>::on_initialize(1);
+		<Treasury as OnInitialize<u64>>::on_initialize(1);
+		assert_eq!(Treasury::pot(), [(0, 100), (1, 100)]);
+		assert_eq!(Assets::balance(0, Treasury::account_id()), 100);
 		// assert_eq!(Balances::free_balance(6), 0);
 
-		// <Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		assert_eq!(Treasury::pot(), [(0, 100), (1, 100)]);
+		assert_eq!(Assets::balance(0, Treasury::account_id()), 100);
 		// assert_eq!(Balances::free_balance(6), 100);
 		// assert_eq!(Treasury::pot(), 0);
 	});
