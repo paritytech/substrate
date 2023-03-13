@@ -212,8 +212,8 @@ pub struct BlockContent {
 /// Type of backend database.
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum DatabaseType {
-	/// RocksDb backend.
-	RocksDb,
+	// /// RocksDb backend.
+	// RocksDb,
 	/// Parity DB backend.
 	ParityDb,
 }
@@ -221,7 +221,7 @@ pub enum DatabaseType {
 impl DatabaseType {
 	fn into_settings(self, path: PathBuf) -> sc_client_db::DatabaseSource {
 		match self {
-			Self::RocksDb => sc_client_db::DatabaseSource::RocksDb { path, cache_size: 512 },
+			// Self::RocksDb => sc_client_db::DatabaseSource::RocksDb { path, cache_size: 512 },
 			Self::ParityDb => sc_client_db::DatabaseSource::ParityDb { path },
 		}
 	}
