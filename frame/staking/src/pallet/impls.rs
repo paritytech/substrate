@@ -885,9 +885,13 @@ impl<T: Config> Pallet<T> {
 	/// to `Nominators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
 	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T>) {
-		let prev_nominations = Self::nominations(who);
+		if Nominators::<T>::contains_key(who) {
+			let prev_nominations = Self::nominations(who);
+			T::EventListeners::on_nominator_update(who, prev_nominations.unwrap_or_default());
+		} else {
+			T::EventListeners::on_nominator_add(who);
+		}
 		Nominators::<T>::insert(who, nominations);
-		T::EventListeners::on_nominator_update(who, prev_nominations.unwrap_or_default());
 	}
 
 	/// This function will remove a nominator from the `Nominators` storage map,
@@ -914,7 +918,11 @@ impl<T: Config> Pallet<T> {
 	/// `Validators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
 	pub fn do_add_validator(who: &T::AccountId, prefs: ValidatorPrefs) {
-		T::EventListeners::on_validator_update(who);
+		if Validators::<T>::contains_key(who) {
+			T::EventListeners::on_validator_update(who);
+		} else {
+			T::EventListeners::on_validator_add(who);
+		}
 
 		Validators::<T>::insert(who, prefs);
 	}

@@ -63,7 +63,7 @@ impl<AccountId, Balance> OnStakerSlash<AccountId, Balance> for () {
 /// A struct that reflects stake that an account has in the staking system. Provides a set of
 /// methods to operate on it's properties. Aimed at making `StakingInterface` more concise.
 #[derive(Default, Clone, Debug, Eq, PartialEq)]
-pub struct Stake<AccountId: Clone, Balance: Clone> {
+pub struct Stake<AccountId, Balance> {
 	/// The stash account whose balance is actually locked and at stake.
 	pub stash: AccountId,
 	/// The total stake that `stash` has in the staking system. This includes the
@@ -85,15 +85,20 @@ pub struct Stake<AccountId: Clone, Balance: Clone> {
 /// Note that the interface is designed in a way that the events are fired post-action, so any
 /// pre-action data that is needed needs to be passed to interface methods.
 /// The rest of the data can be retrieved by using `StakingInterface`.
+#[impl_trait_for_tuples::impl_for_tuples(10)]
 pub trait OnStakingUpdate<AccountId: Clone, Balance: Copy> {
 	/// Fired when the stake amount of someone updates.
 	///
 	/// This is effectively any changes to the bond amount, such as bonding more funds, and
 	/// unbonding.
 	fn on_stake_update(who: &AccountId, prev_stake: Option<Stake<AccountId, Balance>>);
-	/// Fired when someone sets their intention to nominate, either new, or existing one.
+	/// Fired when someone sets their intention to nominate.
+	fn on_nominator_add(who: &AccountId);
+	/// Fired when an existing nominator updates their nominations.
 	fn on_nominator_update(who: &AccountId, prev_nominations: Vec<AccountId>);
-	/// Fired when someone sets their intention to validate, either new, or existing one.
+	/// Fired when someone sets their intention to validate.
+	fn on_validator_add(who: &AccountId);
+	/// Fired when an existing validator updates their preferences.
 	fn on_validator_update(who: &AccountId);
 	/// Fired when someone removes their intention to validate, either due to chill or nominating.
 	fn on_validator_remove(who: &AccountId); // only fire this event when this is an actual Validator
@@ -101,37 +106,6 @@ pub trait OnStakingUpdate<AccountId: Clone, Balance: Copy> {
 	fn on_nominator_remove(who: &AccountId, nominations: Vec<AccountId>); // only fire this if this is an actual Nominator
 	/// fired when someone is fully unstaked.
 	fn on_unstake(who: &AccountId); // -> basically `kill_stash`
-}
-
-#[impl_trait_for_tuples::impl_for_tuples(10)]
-impl<AccountId, Balance> OnStakingUpdate<AccountId, Balance> for Tuple
-where
-	AccountId: Clone,
-	Balance: Copy,
-{
-	fn on_stake_update(who: &AccountId, prev_stake: Option<Stake<AccountId, Balance>>) {
-		for_tuples!( #( Tuple::on_stake_update(who, prev_stake.clone()); )* );
-	}
-
-	fn on_nominator_update(who: &AccountId, prev_nominations: Vec<AccountId>) {
-		for_tuples!( #( Tuple::on_nominator_update(who, prev_nominations.clone()); )* );
-	}
-
-	fn on_validator_update(who: &AccountId) {
-		for_tuples!( #( Tuple::on_validator_update(who); )* );
-	}
-
-	fn on_validator_remove(who: &AccountId) {
-		for_tuples!( #( Tuple::on_validator_remove(who); )* );
-	}
-
-	fn on_nominator_remove(who: &AccountId, nominations: Vec<AccountId>) {
-		for_tuples!( #( Tuple::on_nominator_remove(who, nominations.clone()); )* );
-	}
-
-	fn on_unstake(who: &AccountId) {
-		for_tuples!( #( Tuple::on_unstake(who); )* );
-	}
 }
 
 /// A generic representation of a staking implementation.

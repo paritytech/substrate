@@ -42,13 +42,9 @@ mod tests;
 use frame_election_provider_support::{SortedListProvider, VoteWeight};
 use frame_support::{
 	defensive,
-	traits::{Currency, CurrencyToVote},
+	traits::{Currency, CurrencyToVote, Defensive},
 };
 pub use pallet::*;
-use sp_runtime::{
-	traits::{Bounded, Zero},
-	Saturating,
-};
 use sp_staking::{OnStakingUpdate, Stake, StakingInterface};
 
 use sp_std::{boxed::Box, vec::Vec};
@@ -103,34 +99,49 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 			// if this is a nominator
 			if let Some(_) = T::Staking::nominations(&current_stake.stash) {
 				let _ =
-					T::VoterList::on_update(&current_stake.stash, Self::to_vote(current_active));
+					T::VoterList::on_update(&current_stake.stash, Self::to_vote(current_active))
+						.defensive_proof(
+							"Unable to update a nominator, perhaps it does not exist?",
+						);
 			}
 
+			// if this is a validator
 			if T::Staking::is_validator(&current_stake.stash) {
 				let _ =
-					T::VoterList::on_update(&current_stake.stash, Self::to_vote(current_active));
+					T::VoterList::on_update(&current_stake.stash, Self::to_vote(current_active))
+						.defensive_proof(
+							"Unable to update a validator, perhaps it does not exist?",
+						);
 			}
 		}
 	}
-
-	fn on_nominator_update(who: &T::AccountId, _prev_nominations: Vec<T::AccountId>) {
-		// NOTE: We ignore the result here, because this method can be called when the nominator
-		// is already in the list, just changing their nominations.
-		let _ = T::VoterList::on_insert(who.clone(), Self::to_vote(Self::active_stake_of(who)));
+	fn on_nominator_add(who: &T::AccountId) {
+		let _ = T::VoterList::on_insert(who.clone(), Self::to_vote(Self::active_stake_of(who)))
+			.defensive_proof("Unable to insert a nominator, perhaps it already exists?");
 	}
 
-	fn on_validator_update(who: &T::AccountId) {
+	fn on_nominator_update(_who: &T::AccountId, _prev_nominations: Vec<T::AccountId>) {
+		// Nothing to be done yet.
+	}
+
+	fn on_validator_add(who: &T::AccountId) {
 		let self_stake = Self::active_stake_of(who);
-		// maybe update sorted list.
-		let _ = T::VoterList::on_insert(who.clone(), Self::to_vote(self_stake));
+		let _ = T::VoterList::on_insert(who.clone(), Self::to_vote(self_stake))
+			.defensive_proof("Unable to insert a validator, perhaps it already exists?");
+	}
+
+	fn on_validator_update(_who: &T::AccountId) {
+		// Nothing to be done.
 	}
 
 	fn on_validator_remove(who: &T::AccountId) {
-		let _ = T::VoterList::on_remove(who);
+		let _ = T::VoterList::on_remove(who)
+			.defensive_proof("Unable to remove a validator, perhaps it does not exist?");
 	}
 
 	fn on_nominator_remove(who: &T::AccountId, _nominations: Vec<T::AccountId>) {
-		let _ = T::VoterList::on_remove(who);
+		let _ = T::VoterList::on_remove(who)
+			.defensive_proof("Unable to remove a nominator, perhaps it does not exist?");
 	}
 
 	fn on_unstake(_who: &T::AccountId) {}
@@ -138,79 +149,77 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 
 /// A wrapper for a given `SortedListProvider` that introduces defensive checks  for insert, update
 /// and remove operations, suggesting that it's read-only, except for unsafe operations.
-pub struct TrackedList<T, S, P>(sp_std::marker::PhantomData<(T, S, P)>);
+pub struct TrackedList<AccountId, Inner>(sp_std::marker::PhantomData<(AccountId, Inner)>);
 
-impl<T: Config, S: Bounded + Saturating + Zero, P: SortedListProvider<T::AccountId, Score = S>>
-	SortedListProvider<T::AccountId> for TrackedList<T, S, P>
+impl<AccountId, Inner: SortedListProvider<AccountId>> SortedListProvider<AccountId>
+	for TrackedList<AccountId, Inner>
 {
-	type Error = P::Error;
-	type Score = P::Score;
-	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
-		P::iter()
+	type Error = Inner::Error;
+	type Score = Inner::Score;
+	fn iter() -> Box<dyn Iterator<Item = AccountId>> {
+		Inner::iter()
 	}
 
-	fn iter_from(
-		start: &T::AccountId,
-	) -> Result<Box<dyn Iterator<Item = T::AccountId>>, Self::Error> {
-		P::iter_from(start)
+	fn iter_from(start: &AccountId) -> Result<Box<dyn Iterator<Item = AccountId>>, Self::Error> {
+		Inner::iter_from(start)
 	}
 
 	fn count() -> u32 {
-		P::count()
+		Inner::count()
 	}
 
-	fn contains(id: &T::AccountId) -> bool {
-		P::contains(id)
+	fn contains(id: &AccountId) -> bool {
+		Inner::contains(id)
 	}
 
-	fn get_score(id: &T::AccountId) -> Result<Self::Score, Self::Error> {
-		P::get_score(id)
+	fn get_score(id: &AccountId) -> Result<Self::Score, Self::Error> {
+		Inner::get_score(id)
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn try_state() -> Result<(), &'static str> {
-		P::try_state()
+		Inner::try_state()
 	}
 
-	fn on_insert(id: T::AccountId, score: Self::Score) -> Result<(), Self::Error> {
+	fn on_insert(id: AccountId, score: Self::Score) -> Result<(), Self::Error> {
 		defensive!("TrackedList on_insert should never be called");
-		P::on_insert(id, score)
+		Inner::on_insert(id, score)
 	}
 
-	fn on_update(id: &T::AccountId, score: Self::Score) -> Result<(), Self::Error> {
+	fn on_update(id: &AccountId, score: Self::Score) -> Result<(), Self::Error> {
 		defensive!("TrackedList on_update should never be called");
-		P::on_update(id, score)
+		Inner::on_update(id, score)
 	}
 
-	fn on_increase(id: &T::AccountId, additional: Self::Score) -> Result<(), Self::Error> {
+	fn on_increase(id: &AccountId, additional: Self::Score) -> Result<(), Self::Error> {
 		defensive!("TrackedList on_increase should never be called");
-		P::on_increase(id, additional)
+		Inner::on_increase(id, additional)
 	}
 
-	fn on_decrease(id: &T::AccountId, decreased: Self::Score) -> Result<(), Self::Error> {
+	fn on_decrease(id: &AccountId, decreased: Self::Score) -> Result<(), Self::Error> {
 		defensive!("TrackedList on_decrease should never be called");
-		P::on_decrease(id, decreased)
+		Inner::on_decrease(id, decreased)
 	}
 
-	fn on_remove(id: &T::AccountId) -> Result<(), Self::Error> {
+	fn on_remove(id: &AccountId) -> Result<(), Self::Error> {
 		defensive!("TrackedList on_remove should never be called");
-		P::on_remove(id)
+		Inner::on_remove(id)
 	}
 
 	fn unsafe_regenerate(
-		all: impl IntoIterator<Item = T::AccountId>,
-		score_of: Box<dyn Fn(&T::AccountId) -> Self::Score>,
+		all: impl IntoIterator<Item = AccountId>,
+		score_of: Box<dyn Fn(&AccountId) -> Self::Score>,
 	) -> u32 {
-		P::unsafe_regenerate(all, score_of)
+		Inner::unsafe_regenerate(all, score_of)
 	}
 
 	frame_election_provider_support::runtime_benchmarks_or_test_enabled! {
 		fn unsafe_clear() {
-			P::unsafe_clear()
+			Inner::unsafe_clear()
 		}
 
-		fn score_update_worst_case(who: &T::AccountId, is_increase: bool) -> Self::Score {
-			P::score_update_worst_case(who, is_increase)
+		fn score_update_worst_case(who: &AccountId, is_increase: bool) -> Self::Score {
+			Inner::score_update_worst_case(who, is_increase)
 		}
 	}
 }

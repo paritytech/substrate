@@ -293,11 +293,15 @@ impl OnStakingUpdate<AccountId, Balance> for EventListenerMock {
 		OnStakeUpdate::set(vec);
 	}
 
+	fn on_nominator_add(who: &AccountId) {}
+
 	fn on_nominator_update(who: &AccountId, prev_nominations: Vec<AccountId>) {
 		let mut vec = OnNominatorUpdate::get();
 		vec.push((*who, prev_nominations));
 		OnNominatorUpdate::set(vec);
 	}
+
+	fn on_validator_add(who: &AccountId) {}
 
 	fn on_validator_update(who: &AccountId) {
 		let mut vec = OnValidatorUpdate::get();
@@ -345,8 +349,7 @@ impl crate::pallet::pallet::Config for Test {
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type ElectionProvider = onchain::OnChainExecution<OnChainSeqPhragmen>;
 	type GenesisElectionProvider = Self::ElectionProvider;
-	// NOTE: consider a macro and use `UseNominatorsAndValidatorsMap<Self>` as well.
-	type VoterList = VoterBagsList;
+	type VoterList = pallet_stake_tracker::TrackedList<AccountId, VoterBagsList>;
 	type TargetList = UseValidatorsMap<Self>;
 	type MaxUnlockingChunks = MaxUnlockingChunks;
 	type HistoryDepth = HistoryDepth;
