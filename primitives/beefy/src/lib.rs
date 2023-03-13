@@ -248,12 +248,12 @@ mod tests {
 	#[test]
 	fn beefy_verify_works() {
 		let msg = &b"test-message"[..];
-		let (pair, _) = crypto::Pair::generate();
+		let (pair, _) = ecdsa_crypto::Pair::generate();
 
-		let keccak_256_signature: crypto::Signature =
+		let keccak_256_signature: ecdsa_crypto::Signature =
 			pair.as_inner_ref().sign_prehashed(&keccak_256(msg)).into();
 
-		let blake2_256_signature: crypto::Signature =
+		let blake2_256_signature: ecdsa_crypto::Signature =
 			pair.as_inner_ref().sign_prehashed(&blake2_256(msg)).into();
 
 		// Verification works if same hashing function is used when signing and verifying.
@@ -272,7 +272,7 @@ mod tests {
 		));
 
 		// Other public key doesn't work
-		let (other_pair, _) = crypto::Pair::generate();
+		let (other_pair, _) = ecdsa_crypto::Pair::generate();
 		assert!(!BeefyAuthorityId::<Keccak256>::verify(
 			&other_pair.public(),
 			&keccak_256_signature,

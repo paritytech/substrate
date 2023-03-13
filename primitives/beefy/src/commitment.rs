@@ -379,18 +379,6 @@ mod tests {
 		//including bls signature
 		let bls_signed_msgs = mock_bls_signatures();
 
-		//we are going to aggregate the signatures here, in real life, this happens when
-		//validators receives other validators signatures before they are going to gossip
-		//it.
-		//let mut aggregatedsigs =  SignatureAggregatorAssumingPoP::new();
-
-		//aggregatedsigs.aggregate(&bls_signed_msgs.0);
-		//aggregatedsigs.aggregate(&bls_signed_msgs.1);
-
-		//let aggregated_signature = (&aggregatedsigs).signature();
-		// //<SignatureAggregatorAssumingPoP<BLS377>) as
-		// Signed>::signature(&aggregatedsigs.signature());
-
 		let ecdsa_and_bls_signed = SignedCommitment {
 			commitment,
 			signatures: vec![
@@ -412,7 +400,7 @@ mod tests {
 		assert_eq!(
 			encoded,
 			hex_literal::hex!(
-				"046d68343048656c6c6f20576f726c642105000000000000000000000000000000000000000000000004300400000008558455ad81279df0795cc985580e4fb75d72d948d1107b2ac80a09abed4da8480c746cc321f2319a5e99a830e314d10dd3cd68ce3dc0c33c86e99bcb7816f9ba0134835b340f62cb1bcb58f2cbdb4435a0e1780c5ec56c88ec198f9300581712a1d4876ce82befeeaf97d72351b25b9c002c729c651768c11f692807fb5ee5e8c50c1f07576fe705b406bc677e706304e92438b80e1bc87e0591ed99273a5a46012d6e1f8105c337a86cdd9aaacdc496577f3db8c55ef9e6fd48f2c5c05a2274707491635d8ba3df64f324575b7b2a34487bca2324b6a0046395a71681be3d0c2a0084c79ad33c5c69de77c1242167b1b11469df914306073696dbedd1d03805c917a9fb0074d2003dad4bb476f1f560650085fb69b3c2cedfbbd8d3aa8b80ac9525fe5cafbd585d84c0e49052df577e85602bb892a3bfd8525d15478e05a0f47b80"
+				"046d68343048656c6c6f20576f726c642105000000000000000000000000000000000000000000000004300400000008558455ad81279df0795cc985580e4fb75d72d948d1107b2ac80a09abed4da8480c746cc321f2319a5e99a830e314d10dd3cd68ce3dc0c33c86e99bcb7816f9ba01c7dc77fb482be09d1abf060059bfb33452184946af97417d5acab792b03d92f4d6ef8a053667a1463cf638526f163c01cd47c820a5fba1fc31a412369ea6de7c354374fb39fc0acc6490fcb27b8bf452d0d0e9328b4f7fe778473868148c86802d6e1f8105c337a86cdd9aaacdc496577f3db8c55ef9e6fd48f2c5c05a2274707491635d8ba3df64f324575b7b2a34487bca2324b6a0046395a71681be3d0c2a000d0d8346712c6f2441d8cf824e0540daef1ec40b5462cbab5c41ca430cde51a074ddc82e02f47abfa5f6c66d29b1b400937d98744780735c75fce188e1183e7d936f101af6d4a96a94098935921a366b0e381ee3e6bc846ddb36256491483a81"
 			)
 		);
 	}

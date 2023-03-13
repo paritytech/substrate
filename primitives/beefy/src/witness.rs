@@ -37,20 +37,20 @@ use crate::commitment::{Commitment, SignedCommitment};
 /// Ethereum Mainnet), in a commit-reveal like scheme, where first we submit only the signed
 /// commitment witness and later on, the client picks only some signatures to verify at random.
 #[derive(Debug, PartialEq, Eq, codec::Encode, codec::Decode)]
-pub struct SignedCommitmentWitness<TBlockNumber, TAggregatedSignature> {
+pub struct SignedCommitmentWitness<TBlockNumber, TSignatureAccumulator> {
 	/// The full content of the commitment.
 	pub commitment: Commitment<TBlockNumber>,
 
 	/// The bit vector of validators who signed the commitment.
 	pub signed_by: Vec<bool>, // TODO [ToDr] Consider replacing with bitvec crate
 
-	/// Either a merkle root of signatures in the original signed commitment or just an aggregated
-	/// BLS signature
-	pub aggregated_signature: TAggregatedSignature,
+	/// Either a merkle root of signatures in the original signed commitment or a single aggregated
+	/// BLS signature aggregating all original signatures.
+	pub signature_accumulator: TSignatureAccumulator,
 }
 
-impl<TBlockNumber, TAggregatedSignature>
-	SignedCommitmentWitness<TBlockNumber, TAggregatedSignature>
+impl<TBlockNumber, TSignatureAccumulator>
+	SignedCommitmentWitness<TBlockNumber, TSignatureAccumulator>
 {
 	/// Convert [SignedCommitment] into [SignedCommitmentWitness].
 	///
@@ -60,18 +60,18 @@ impl<TBlockNumber, TAggregatedSignature>
 	/// and a merkle root of all signatures.
 	///
 	/// Returns the full list of signatures along with the witness.
-	pub fn from_signed<TSignatureAggregator, TSignature, TAggregatableSignature>(
+	pub fn from_signed<TSignatureAggregator, TSignature>(
 		signed: SignedCommitment<TBlockNumber, TSignature>,
 		aggregator: TSignatureAggregator,
 	) -> (Self, Vec<Option<TSignature>>)
 	where
-		TSignatureAggregator: FnOnce(&[Option<TSignature>]) -> TAggregatedSignature,
+		TSignatureAggregator: FnOnce(&[Option<TSignature>]) -> TSignatureAccumulator,
 	{
 		let SignedCommitment { commitment, signatures } = signed;
 		let signed_by = signatures.iter().map(|s| s.is_some()).collect();
-		let aggregated_signature = aggregator(&signatures);
+		let signature_accumulator = aggregator(&signatures);
 
-		(Self { commitment, signed_by, aggregated_signature }, signatures)
+		(Self { commitment, signed_by, signature_accumulator }, signatures)
 	}
 }
 
@@ -161,8 +161,7 @@ mod tests {
 	}
 
 	fn ecdsa_and_bls_signed_commitment() -> TestBLSSignedCommitment {
-		let payload =
-			Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".as_bytes().to_vec());
+		let payload = Payload::from_single_entry(known_payloads::MMR_ROOT_ID, "Hello World!".as_bytes().to_vec());
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
@@ -189,11 +188,10 @@ mod tests {
 		let (witness, signatures) = TestSignedCommitmentWitness::from_signed::<
 			_,
 			_,
-			Vec<Option<ecdsa_crypto::Signature>>,
 		>(signed, |sigs| sigs.to_vec());
 
 		// then
-		assert_eq!(witness.aggregated_signature, signatures);
+		assert_eq!(witness.signature_accumulator, signatures);
 	}
 
 	#[test]
@@ -205,7 +203,6 @@ mod tests {
 		let (witness, signatures) = TestBLSSignedCommitmentWitness::from_signed::<
 			_,
 			_,
-			[u8; BLS377::SIGNATURE_SERIALIZED_SIZE],
 		>(signed, |sigs| {
 			//we are going to aggregate the signatures here
 			let mut aggregatedsigs: SignatureAggregatorAssumingPoP<BLS377> =
@@ -224,12 +221,8 @@ mod tests {
 			});
 			(&aggregatedsigs).signature().to_bytes()
 		});
-		// then
-		BLSSignature::try_from(witness.aggregated_signature.as_slice()).unwrap();
-		//, signatures.iter().filter_map(|sig| sig.map(|sig|
-		//, (bls_like::Signature::<BLS377>::from_bytes(<BLSSignature as
-		//, AsRef<[u8]>>::as_ref(&sig.1).try_into().unwrap())).unwrap())).
-		//, collect::<Vec<bls_like::Signature::<BLS377>>>().iter().sum());
+	        
+	        BLSSignature::try_from(witness.signature_accumulator.as_slice()).unwrap();
 	}
 
 	#[test]
@@ -237,7 +230,7 @@ mod tests {
 		// given
 		let signed = ecdsa_signed_commitment();
 		let (witness, _) =
-			TestSignedCommitmentWitness::from_signed::<_, _, Vec<Option<ecdsa_crypto::Signature>>>(
+			TestSignedCommitmentWitness::from_signed::<_, _, >(
 				signed,
 				|sigs: &[std::option::Option<ecdsa_crypto::Signature>]| sigs.to_vec(),
 			);
