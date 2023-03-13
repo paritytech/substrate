@@ -34,7 +34,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				ensure!(check_origin == details.owner, Error::<T, I>::NoPermission);
 			}
 
-			let roles_map = vec![
+			let roles_map = [
 				(issuer.clone(), CollectionRole::Issuer),
 				(admin.clone(), CollectionRole::Admin),
 				(freezer.clone(), CollectionRole::Freezer),
