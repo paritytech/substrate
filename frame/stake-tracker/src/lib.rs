@@ -42,7 +42,7 @@ mod tests;
 use frame_election_provider_support::{SortedListProvider, VoteWeight};
 use frame_support::{
 	defensive,
-	traits::{Currency, CurrencyToVote, Defensive, DefensiveResult},
+	traits::{Currency, CurrencyToVote, Defensive},
 };
 pub use pallet::*;
 use sp_staking::{OnStakingUpdate, Stake, StakingInterface};
@@ -144,9 +144,9 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 			.defensive_proof("Unable to remove a nominator, perhaps it does not exist?");
 	}
 
-	fn on_unstake(_who: &T::AccountId) {
+	fn on_unstake(who: &T::AccountId) {
 		if T::VoterList::contains(who) {
-			defensive!("The staker should have already been removed!")
+			defensive!("The staker should have already been removed!");
 		}
 	}
 }

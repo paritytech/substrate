@@ -17,7 +17,14 @@
 
 //! Test utilities
 
-use crate::{self as pallet_staking, *};
+use crate::{
+	self as pallet_staking,
+	mock::StakingEvent::{
+		NominatorAdd, NominatorRemove, NominatorUpdate, StakeUpdate, Unstake, ValidatorAdd,
+		ValidatorRemove, ValidatorUpdate,
+	},
+	*,
+};
 use frame_election_provider_support::{onchain, SequentialPhragmen, VoteWeight};
 use frame_support::{
 	assert_ok, ord_parameter_types, parameter_types,
@@ -237,12 +244,6 @@ parameter_types! {
 	pub static MaxUnlockingChunks: u32 = 32;
 	pub static RewardOnUnbalanceWasCalled: bool = false;
 	pub static LedgerSlashPerEra: (BalanceOf<Test>, BTreeMap<EraIndex, BalanceOf<Test>>) = (Zero::zero(), BTreeMap::new());
-	pub static OnStakeUpdate: Vec<(AccountId, Option<Stake<AccountId, Balance>>)> = Vec::new();
-	pub static OnNominatorUpdate: Vec<(AccountId, Vec<AccountId>)> = Vec::new();
-	pub static OnValidatorUpdate: Vec<AccountId> = Vec::new();
-	pub static OnValidatorRemove: Vec<AccountId> = Vec::new();
-	pub static OnNominatorRemove: Vec<(AccountId, Vec<AccountId>)> = Vec::new();
-	pub static OnUnstake: Vec<AccountId> = Vec::new();
 	pub static MaxWinners: u32 = 100;
 }
 
@@ -285,46 +286,70 @@ impl<T: Config> sp_staking::OnStakerSlash<AccountId, Balance> for OnStakerSlashM
 	}
 }
 
+#[derive(Clone)]
+pub enum StakingEvent {
+	StakeUpdate(AccountId, Option<Stake<AccountId, Balance>>),
+	NominatorAdd(AccountId),
+	NominatorUpdate(AccountId, Vec<AccountId>),
+	ValidatorAdd(AccountId),
+	ValidatorUpdate(AccountId),
+	ValidatorRemove(AccountId),
+	NominatorRemove(AccountId, Vec<AccountId>),
+	Unstake(AccountId),
+}
+
+parameter_types! {
+	pub static EmittedEvents: Vec<StakingEvent> = Vec::new();
+}
+
 pub struct EventListenerMock;
 impl OnStakingUpdate<AccountId, Balance> for EventListenerMock {
 	fn on_stake_update(who: &AccountId, prev_stake: Option<Stake<AccountId, Balance>>) {
-		let mut vec = OnStakeUpdate::get();
-		vec.push((*who, prev_stake));
-		OnStakeUpdate::set(vec);
+		let mut vec = EmittedEvents::get();
+		vec.push(StakeUpdate(*who, prev_stake));
+		EmittedEvents::set(vec);
 	}
 
-	fn on_nominator_add(who: &AccountId) {}
+	fn on_nominator_add(who: &AccountId) {
+		let mut vec = EmittedEvents::get();
+		vec.push(NominatorAdd(*who));
+		EmittedEvents::set(vec);
+	}
 
 	fn on_nominator_update(who: &AccountId, prev_nominations: Vec<AccountId>) {
-		let mut vec = OnNominatorUpdate::get();
-		vec.push((*who, prev_nominations));
-		OnNominatorUpdate::set(vec);
+		let mut vec = EmittedEvents::get();
+		vec.push(NominatorUpdate(*who, prev_nominations));
+		EmittedEvents::set(vec);
 	}
 
-	fn on_validator_add(who: &AccountId) {}
+	fn on_validator_add(who: &AccountId) {
+		let mut vec = EmittedEvents::get();
+		vec.push(ValidatorAdd(*who));
+		EmittedEvents::set(vec);
+	}
 
 	fn on_validator_update(who: &AccountId) {
-		let mut vec = OnValidatorUpdate::get();
-		vec.push(*who);
-		OnValidatorUpdate::set(vec);
+		let mut vec = EmittedEvents::get();
+		vec.push(ValidatorUpdate(*who));
+		EmittedEvents::set(vec);
 	}
 
 	fn on_validator_remove(who: &AccountId) {
-		let mut vec = OnValidatorRemove::get();
-		vec.push(*who);
-		OnValidatorRemove::set(vec);
+		let mut vec = EmittedEvents::get();
+		vec.push(ValidatorRemove(*who));
+		EmittedEvents::set(vec);
 	}
 
 	fn on_nominator_remove(who: &AccountId, nominations: Vec<AccountId>) {
-		let mut vec = OnNominatorRemove::get();
-		vec.push((*who, nominations));
-		OnNominatorRemove::set(vec);
+		let mut vec = EmittedEvents::get();
+		vec.push(NominatorRemove(*who, nominations));
+		EmittedEvents::set(vec);
 	}
 
 	fn on_unstake(who: &AccountId) {
-		let mut vec = OnUnstake::get();
-		vec.push(*who);
-		OnUnstake::set(vec);
+		let mut vec = EmittedEvents::get();
+		vec.push(Unstake(*who));
+		EmittedEvents::set(vec);
 	}
 }
 
@@ -612,23 +637,13 @@ impl ExtBuilder {
 		let mut ext = self.build();
 		ext.execute_with(|| {
 			// Clean up all the events produced on init.
-			OnStakeUpdate::take();
-			OnNominatorUpdate::take();
-			OnValidatorUpdate::take();
-			OnValidatorRemove::take();
-			OnNominatorRemove::take();
-			OnUnstake::take();
+			EmittedEvents::take();
 		});
 		ext.execute_with(test);
 		if check_events {
 			ext.execute_with(|| {
 				// Make sure we have checked all the events produced by the test.
-				assert!(OnStakeUpdate::get().is_empty(), "Unexpected OnStakeUpdate events");
-				assert!(OnNominatorUpdate::get().is_empty(), "Unexpected OnNominatorUpdate events");
-				assert!(OnValidatorUpdate::get().is_empty(), "Unexpected OnValidatorUpdate events");
-				assert!(OnValidatorRemove::get().is_empty(), "Unexpected OnValidatorRemove events");
-				assert!(OnNominatorRemove::get().is_empty(), "Unexpected OnNominatorRemove events");
-				assert!(OnUnstake::get().is_empty(), "Unexpected OnUnstake events");
+				assert!(EmittedEvents::get().is_empty(), "Encountered unchecked Staking events");
 			});
 		}
 		ext.execute_with(|| {

@@ -112,7 +112,7 @@ impl pallet_staking::Config for Runtime {
 	type ElectionProvider =
 		frame_election_provider_support::NoElection<(AccountId, BlockNumber, Staking, ())>;
 	type GenesisElectionProvider = Self::ElectionProvider;
-	type VoterList = <Runtime as pallet_stake_tracker::Config>::VoterList;
+	type VoterList = VoterList;
 	type TargetList = pallet_staking::UseValidatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type HistoryDepth = ConstU32<84>;
