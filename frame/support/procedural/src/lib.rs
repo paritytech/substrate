@@ -503,7 +503,7 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 ///  - "Documentation for pallet 2"  (captured from `#[doc]`)
 ///  - content of ../README.md       (captured from `#[doc]` with `include_str!`)
 ///  - content of "../doc1.md"       (captured from `pallet_doc`)
-///  - content of "../doc1.md"       (captured from `pallet_doc`)
+///  - content of "../doc2.md"       (captured from `pallet_doc`)
 ///
 /// ### `doc` attribute
 ///
