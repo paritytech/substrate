@@ -105,7 +105,7 @@ pub fn roll_to_unsigned() {
 	}
 }
 pub fn roll_to_signed() {
-	while !matches!(MultiPhase::current_phase(), Phase::Signed) {
+	while !matches!(MultiPhase::current_phase(), Phase::Signed(_)) {
 		roll_to(System::block_number() + 1);
 	}
 }
@@ -281,8 +281,9 @@ parameter_types! {
 	pub static DesiredTargets: u32 = 2;
 	pub static SignedPhase: BlockNumber = 10;
 	pub static UnsignedPhase: BlockNumber = 5;
-	// We expect a successful election to take at least 25% of the signed and unsigned blocks.
-	pub static MinBlocksBeforeEmergency: Perbill = Perbill::from_percent(25);
+	// We expect a successful election to take at least 4 blocks have passed in both signed and
+	// unsigned phases.
+	pub static MinBlocksBeforeEmergency: BlockNumber = 4;
 	pub static SignedMaxSubmissions: u32 = 5;
 	pub static SignedMaxRefunds: u32 = 1;
 	pub static SignedDepositBase: Balance = 5;
@@ -526,6 +527,10 @@ impl ExtBuilder {
 	pub fn phases(self, signed: BlockNumber, unsigned: BlockNumber) -> Self {
 		<SignedPhase>::set(signed);
 		<UnsignedPhase>::set(unsigned);
+		self
+	}
+	pub fn throttling_blocks(self, bn: BlockNumber) -> Self {
+		<MinBlocksBeforeEmergency>::set(bn);
 		self
 	}
 	pub fn onchain_fallback(self, onchain: bool) -> Self {

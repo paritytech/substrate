@@ -1153,9 +1153,9 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed(15), round: 1 },
 					Event::PhaseTransitioned {
-						from: Phase::Signed,
+						from: Phase::Signed(15),
 						to: Phase::Unsigned((true, 25)),
 						round: 1
 					},
@@ -1452,7 +1452,7 @@ mod tests {
 
 	#[test]
 	fn ocw_clears_cache_on_unsigned_phase_open() {
-		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
+		let (mut ext, pool) = ExtBuilder::default().throttling_blocks(0).build_offchainify(0);
 		ext.execute_with(|| {
 			const BLOCK: u64 = 25;
 			let block_plus = |delta: u64| BLOCK + delta;
@@ -1510,9 +1510,9 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed(15), round: 1 },
 					Event::PhaseTransitioned {
-						from: Phase::Signed,
+						from: Phase::Signed(15),
 						to: Phase::Unsigned((true, 25)),
 						round: 1
 					},

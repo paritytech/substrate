@@ -318,8 +318,8 @@ pub trait BenchmarkingConfig {
 pub enum Phase<Bn> {
 	/// Nothing, the election is not happening.
 	Off,
-	/// Signed phase is open.
-	Signed,
+	/// Signed phase is open. The associated data represents the starting block number.
+	Signed(Bn),
 	/// Unsigned phase. First element is whether it is active or not, second the starting block
 	/// number.
 	///
@@ -351,7 +351,12 @@ impl<Bn: PartialEq + Eq> Phase<Bn> {
 
 	/// Whether the phase is signed or not.
 	pub fn is_signed(&self) -> bool {
-		matches!(self, Phase::Signed)
+		matches!(self, Phase::Signed(_))
+	}
+
+	/// Whether the phase is signed and open or not, with specific start.
+	pub fn is_signed_open_at(&self, at: Bn) -> bool {
+		matches!(self, Phase::Signed(real) if *real == at)
 	}
 
 	/// Whether the phase is unsigned or not.
@@ -583,13 +588,15 @@ pub mod pallet {
 		/// Duration of the unsigned phase.
 		#[pallet::constant]
 		type UnsignedPhase: Get<Self::BlockNumber>;
+
 		/// Duration of the signed phase.
 		#[pallet::constant]
 		type SignedPhase: Get<Self::BlockNumber>;
-		/// Minimum duration of the signed phase before trying `T::Fallback` election and
-		/// potentially entering in `Phase::Emergency` in case of election error.
+
+		/// Minimum duration of the signed and unsigned phase before trying `T::Fallback` election
+		/// and potentially entering in `Phase::Emergency` in case of election error.
 		#[pallet::constant]
-		type MinBlocksBeforeEmergency: Get<Perbill>;
+		type MinBlocksBeforeEmergency: Get<Self::BlockNumber>;
 
 		/// The minimum amount of improvement to the solution score that defines a solution as
 		/// "better" in the Signed phase.
@@ -763,7 +770,7 @@ pub mod pallet {
 					// NOTE: if signed-phase length is zero, second part of the if-condition fails.
 					match Self::create_snapshot() {
 						Ok(_) => {
-							Self::phase_transition(Phase::Signed);
+							Self::phase_transition(Phase::Signed(now));
 							T::WeightInfo::on_initialize_open_signed()
 						},
 						Err(why) => {
@@ -773,7 +780,7 @@ pub mod pallet {
 						},
 					}
 				},
-				Phase::Signed | Phase::Off
+				Phase::Signed(_) | Phase::Off
 					if remaining <= unsigned_deadline && remaining > Zero::zero() =>
 				{
 					// our needs vary according to whether or not the unsigned phase follows a
@@ -1593,11 +1600,23 @@ impl<T: Config> Pallet<T> {
 		Self::kill_snapshot();
 	}
 
-	// Returns `true` if the minimum number of blocks have passed since last successful election.
-	fn minimum_blocks_since_last_election() -> bool {
-		(frame_system::Pallet::<T>::block_number() - <LastElection<T>>::get()) >=
-			T::MinBlocksBeforeEmergency::get() *
-				(T::SignedPhase::get() + T::UnsignedPhase::get())
+	// Returns `true` if the emergency phase should be throttled.
+	//
+	// The emergency phase should be throttled when an election fails with the following
+	// conditions:
+	//
+	// - phase is off and emergency throttling is enabled (i.e. `T::MinBlocksBeforeEmergency` > 0)
+	// - signed phase was open, but the election failed before `T::MinBlocksBeforeEmergency` blocks
+	//   have passed since the phase started
+	// - unsigned phase was open, but the election failed before `T::MinBlocksBeforeEmergency`
+	//   blocks have passed since the phase started.
+	fn emergency_phase_throttling(now: T::BlockNumber) -> bool {
+		match Self::current_phase() {
+			Phase::Off => T::MinBlocksBeforeEmergency::get() > T::BlockNumber::zero(),
+			Phase::Signed(started_at) | Phase::Unsigned((_, started_at)) =>
+				T::MinBlocksBeforeEmergency::get() > now - started_at,
+			_ => false,
+		}
 	}
 
 	fn do_elect() -> Result<BoundedSupportsOf<Self>, ElectionError<T>> {
@@ -1615,11 +1634,12 @@ impl<T: Config> Pallet<T> {
 		// - EPM is in `Phase::Off` or not enough blocks have passed since the transition to the
 		//   signed phase, return an election error without trying the fallback election.
 		//
+		let now = <frame_system::Pallet<T>>::block_number();
 		let _ = Self::finalize_signed_phase();
 		<QueuedSolution<T>>::take()
 			.ok_or(ElectionError::<T>::NothingQueued)
 			.or_else(|err| {
-				if Self::minimum_blocks_since_last_election() {
+				if !Self::emergency_phase_throttling(now) {
 					T::Fallback::instant_elect(None, None)
 						.map_err(|fe| ElectionError::Fallback(fe))
 						.and_then(|supports| {
@@ -1688,9 +1708,10 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 				Ok(supports)
 			},
 			Err(why) => {
+				let now = <frame_system::Pallet<T>>::block_number();
 				// Enters in emergency phase only if election failed and the signed phase has been
 				// active for at least `T::MinBlocksBeforeEmergency`.
-				if Self::minimum_blocks_since_last_election() {
+				if !Self::emergency_phase_throttling(now) {
 					log!(error, "Entering emergency mode: {:?}", why);
 					Self::phase_transition(Phase::Emergency);
 				};
@@ -1914,8 +1935,7 @@ mod tests {
 		mock::{
 			multi_phase_events, raw_solution, roll_to, roll_to_signed, roll_to_unsigned, AccountId,
 			ExtBuilder, MinBlocksBeforeEmergency, MockWeightInfo, MockedWeightInfo, MultiPhase,
-			Runtime, RuntimeOrigin, SignedMaxSubmissions, SignedPhase, System, TargetIndex,
-			Targets, UnsignedPhase,
+			Runtime, RuntimeOrigin, SignedMaxSubmissions, System, TargetIndex, Targets,
 		},
 		Phase,
 	};
@@ -1940,15 +1960,20 @@ mod tests {
 
 			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
+			assert!(MultiPhase::current_phase().is_signed_open_at(15));
 			assert_eq!(
 				multi_phase_events(),
-				vec![Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 }]
+				vec![Event::PhaseTransitioned {
+					from: Phase::Off,
+					to: Phase::Signed(15),
+					round: 1
+				}]
 			);
 			assert!(MultiPhase::snapshot().is_some());
 			assert_eq!(MultiPhase::round(), 1);
 
 			roll_to(24);
-			assert!(MultiPhase::current_phase().is_signed());
+			assert!(MultiPhase::current_phase().is_signed_open_at(15));
 			assert!(MultiPhase::snapshot().is_some());
 			assert_eq!(MultiPhase::round(), 1);
 
@@ -1957,9 +1982,9 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed(15), round: 1 },
 					Event::PhaseTransitioned {
-						from: Phase::Signed,
+						from: Phase::Signed(15),
 						to: Phase::Unsigned((true, 25)),
 						round: 1
 					},
@@ -1991,6 +2016,7 @@ mod tests {
 
 			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
+			assert!(MultiPhase::current_phase().is_signed_open_at(45));
 
 			roll_to(55);
 			assert!(MultiPhase::current_phase().is_unsigned_open_at(55));
@@ -1998,9 +2024,9 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed(15), round: 1 },
 					Event::PhaseTransitioned {
-						from: Phase::Signed,
+						from: Phase::Signed(15),
 						to: Phase::Unsigned((true, 25)),
 						round: 1
 					},
@@ -2017,9 +2043,9 @@ mod tests {
 						to: Phase::Off,
 						round: 2
 					},
-					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 2 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed(45), round: 2 },
 					Event::PhaseTransitioned {
-						from: Phase::Signed,
+						from: Phase::Signed(45),
 						to: Phase::Unsigned((true, 55)),
 						round: 2
 					},
@@ -2099,7 +2125,7 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed(20), round: 1 },
 					Event::ElectionFinalized {
 						compute: ElectionCompute::Fallback,
 						score: ElectionScore {
@@ -2108,7 +2134,7 @@ mod tests {
 							sum_stake_squared: 0
 						}
 					},
-					Event::PhaseTransitioned { from: Phase::Signed, to: Phase::Off, round: 2 },
+					Event::PhaseTransitioned { from: Phase::Signed(20), to: Phase::Off, round: 2 },
 				]
 			)
 		});
@@ -2116,7 +2142,7 @@ mod tests {
 
 	#[test]
 	fn both_phases_void() {
-		ExtBuilder::default().phases(0, 0).build_and_execute(|| {
+		ExtBuilder::default().phases(0, 0).throttling_blocks(0).build_and_execute(|| {
 			roll_to(15);
 			assert!(MultiPhase::current_phase().is_off());
 
@@ -2166,24 +2192,33 @@ mod tests {
 
 				// call elect while snapshot does not exist during off phase but emergency phase is
 				// throttled because not enough blocks since last election passed (phase off).
-				assert!(!MultiPhase::minimum_blocks_since_last_election());
+				assert!(MultiPhase::emergency_phase_throttling(System::block_number()));
 				assert_err!(MultiPhase::elect(), ElectionError::NothingQueued);
 				assert!(MultiPhase::current_phase().is_off());
 
 				// same as above.
 				roll_to_signed();
-				assert!(!MultiPhase::minimum_blocks_since_last_election());
+				assert!(MultiPhase::emergency_phase_throttling(System::block_number()));
 				assert_err!(MultiPhase::elect(), ElectionError::NothingQueued);
 				assert!(MultiPhase::current_phase().is_signed());
 
-				// however, if `MinBlocksBeforeEmergency` have passed and the election fails, EPM
-				// transitions to emergency phase (provided that the election is not in phase off).
-				let min_blocks =
-					MinBlocksBeforeEmergency::get() * (SignedPhase::get() + UnsignedPhase::get());
+				// however, if `MinBlocksBeforeEmergency` have passed and the election fails during
+				// the signed phase, EPM transitions to emergency phase.
+				let min_blocks = MinBlocksBeforeEmergency::get();
 				roll_to_signed();
 				roll_to(System::block_number() + min_blocks);
 
-				assert!(MultiPhase::minimum_blocks_since_last_election());
+				assert!(!MultiPhase::emergency_phase_throttling(System::block_number()));
+				assert_err!(MultiPhase::elect(), ElectionError::Fallback("NoFallback."));
+				assert!(MultiPhase::current_phase().is_emergency());
+
+				// reset current phase.
+				MultiPhase::phase_transition(Phase::Off);
+
+				// same behaviour as above happens in the unsigned phase.
+				roll_to_unsigned();
+				roll_to(System::block_number() + min_blocks);
+				assert!(!MultiPhase::emergency_phase_throttling(System::block_number()));
 				assert_err!(MultiPhase::elect(), ElectionError::Fallback("NoFallback."));
 				assert!(MultiPhase::current_phase().is_emergency());
 			})
@@ -2203,8 +2238,19 @@ mod tests {
 				assert!(MultiPhase::current_phase().is_off());
 
 				// if `T::MinBlocksBeforeEmergency` is 0, the emergency throttling is disabled.
-				<MinBlocksBeforeEmergency>::set(Perbill::zero());
-				assert!(MultiPhase::minimum_blocks_since_last_election());
+				<MinBlocksBeforeEmergency>::set(0);
+				assert!(!MultiPhase::emergency_phase_throttling(System::block_number()));
+				assert_err!(MultiPhase::elect(), ElectionError::Fallback("NoFallback."));
+				assert!(MultiPhase::current_phase().is_emergency());
+
+				// reset current phase.
+				MultiPhase::phase_transition(Phase::Off);
+				MultiPhase::rotate_round();
+				roll_to_signed();
+				assert!(MultiPhase::current_phase().is_signed());
+
+				// tries fallback election and enters in emergency phase since emergency throttling
+				// is disabled.
 				assert_err!(MultiPhase::elect(), ElectionError::Fallback("NoFallback."));
 				assert!(MultiPhase::current_phase().is_emergency());
 			})
@@ -2219,24 +2265,43 @@ mod tests {
 			roll_to_signed();
 			assert_eq!(
 				multi_phase_events(),
-				vec![Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 }]
+				vec![Event::PhaseTransitioned {
+					from: Phase::Off,
+					to: Phase::Signed(15),
+					round: 1
+				}]
 			);
 			assert!(MultiPhase::current_phase().is_signed());
 			assert_eq!(MultiPhase::round(), 1);
 
-			// An unexpected call to elect.
+			// An unexpected call to elect before `T::MinBlocksBeforeEmergency` should fail and not
+			// run the fallback election.
+			assert_err!(MultiPhase::elect(), ElectionError::NothingQueued);
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed(15), round: 1 },
+					Event::ElectionFailed,
+				],
+			);
+
+			// An unexpected call to elect after `T::MinBlocksBeforeEmergency` will try the
+			// fallback election.
+			roll_to(System::block_number() + MinBlocksBeforeEmergency::get());
 			assert_ok!(MultiPhase::elect());
 
 			// We surely can't have any feasible solutions. This will cause an on-chain election.
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed(15), round: 1 },
+					Event::ElectionFailed,
 					Event::ElectionFinalized {
 						compute: ElectionCompute::Fallback,
 						score: Default::default()
 					},
-					Event::PhaseTransitioned { from: Phase::Signed, to: Phase::Off, round: 2 },
+					Event::PhaseTransitioned { from: Phase::Signed(15), to: Phase::Off, round: 2 },
 				],
 			);
 			// All storage items must be cleared.
@@ -2258,7 +2323,11 @@ mod tests {
 			roll_to_signed();
 			assert_eq!(
 				multi_phase_events(),
-				vec![Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 }]
+				vec![Event::PhaseTransitioned {
+					from: Phase::Off,
+					to: Phase::Signed(15),
+					round: 1
+				}]
 			);
 			assert!(MultiPhase::current_phase().is_signed());
 			assert_eq!(MultiPhase::round(), 1);
@@ -2275,7 +2344,13 @@ mod tests {
 				));
 			}
 
-			// an unexpected call to elect.
+			// an unexpected call to elect before `T::MinBlocksBeforeEmergency` should fail.
+			assert_err!(MultiPhase::elect(), ElectionError::NothingQueued);
+			assert!(MultiPhase::current_phase().is_signed());
+
+			// an unexpected call to elect after `T::MinBlocksBeforeEmergency`.
+			roll_to(System::block_number() + MinBlocksBeforeEmergency::get());
+			assert!(MultiPhase::current_phase().is_signed());
 			assert_ok!(MultiPhase::elect());
 
 			// all storage items must be cleared.
@@ -2289,7 +2364,7 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed(15), round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
 						origin: Some(99),
@@ -2320,6 +2395,7 @@ mod tests {
 					Event::Slashed { account: 99, value: 5 },
 					Event::Slashed { account: 99, value: 5 },
 					Event::Slashed { account: 99, value: 5 },
+					Event::ElectionFailed,
 					Event::ElectionFinalized {
 						compute: ElectionCompute::Fallback,
 						score: ElectionScore {
@@ -2328,7 +2404,7 @@ mod tests {
 							sum_stake_squared: 0
 						}
 					},
-					Event::PhaseTransitioned { from: Phase::Signed, to: Phase::Off, round: 2 },
+					Event::PhaseTransitioned { from: Phase::Signed(15), to: Phase::Off, round: 2 },
 				]
 			);
 		})
@@ -2352,7 +2428,7 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed(15), round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
 						origin: Some(99),
@@ -2360,7 +2436,7 @@ mod tests {
 					},
 					Event::Rewarded { account: 99, value: 7 },
 					Event::PhaseTransitioned {
-						from: Phase::Signed,
+						from: Phase::Signed(15),
 						to: Phase::Unsigned((true, 25)),
 						round: 1
 					},
@@ -2409,9 +2485,9 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed(15), round: 1 },
 					Event::PhaseTransitioned {
-						from: Phase::Signed,
+						from: Phase::Signed(15),
 						to: Phase::Unsigned((true, 25)),
 						round: 1
 					},
@@ -2444,6 +2520,13 @@ mod tests {
 			roll_to_unsigned();
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 
+			// `T::MinBlocksBeforeEmergency` blocks hasn't passed since starting of unsigned phase.
+			assert_err!(MultiPhase::elect(), ElectionError::NothingQueued);
+
+			// progress until end of emergency throttling and bypassing the fallback election.
+			roll_to(System::block_number() + MinBlocksBeforeEmergency::get());
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
+
 			// Zilch solutions thus far, but we get a result.
 			assert!(MultiPhase::queued_solution().is_none());
 			let supports = MultiPhase::elect().unwrap();
@@ -2459,12 +2542,13 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed(15), round: 1 },
 					Event::PhaseTransitioned {
-						from: Phase::Signed,
+						from: Phase::Signed(15),
 						to: Phase::Unsigned((true, 25)),
 						round: 1
 					},
+					Event::ElectionFailed,
 					Event::ElectionFinalized {
 						compute: ElectionCompute::Fallback,
 						score: ElectionScore {
@@ -2486,6 +2570,13 @@ mod tests {
 			roll_to_unsigned();
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 
+			// `T::MinBlocksBeforeEmergency` blocks hasn't passed since starting of unsigned phase.
+			assert_err!(MultiPhase::elect(), ElectionError::NothingQueued);
+
+			// progress until end of emergency throttling and bypassing the fallback election.
+			roll_to(System::block_number() + MinBlocksBeforeEmergency::get());
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
+
 			// Zilch solutions thus far.
 			assert!(MultiPhase::queued_solution().is_none());
 			assert_eq!(MultiPhase::elect().unwrap_err(), ElectionError::Fallback("NoFallback."));
@@ -2497,12 +2588,13 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed(15), round: 1 },
 					Event::PhaseTransitioned {
-						from: Phase::Signed,
+						from: Phase::Signed(15),
 						to: Phase::Unsigned((true, 25)),
 						round: 1
 					},
+					Event::ElectionFailed,
 					Event::ElectionFailed,
 					Event::PhaseTransitioned {
 						from: Phase::Unsigned((true, 25)),
@@ -2516,67 +2608,81 @@ mod tests {
 
 	#[test]
 	fn governance_fallback_works() {
-		ExtBuilder::default().onchain_fallback(false).build_and_execute(|| {
-			roll_to_unsigned();
-			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
+		ExtBuilder::default()
+			.onchain_fallback(false)
+			.throttling_blocks(0)
+			.build_and_execute(|| {
+				roll_to_unsigned();
+				assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 
-			// Zilch solutions thus far.
-			assert!(MultiPhase::queued_solution().is_none());
-			assert_eq!(MultiPhase::elect().unwrap_err(), ElectionError::Fallback("NoFallback."));
+				// Zilch solutions thus far.
+				assert!(MultiPhase::queued_solution().is_none());
+				assert_eq!(
+					MultiPhase::elect().unwrap_err(),
+					ElectionError::Fallback("NoFallback.")
+				);
 
-			// phase is now emergency.
-			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
-			assert!(MultiPhase::queued_solution().is_none());
-			assert!(MultiPhase::snapshot().is_some());
+				// phase is now emergency.
+				assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
+				assert!(MultiPhase::queued_solution().is_none());
+				assert!(MultiPhase::snapshot().is_some());
 
-			// no single account can trigger this
-			assert_noop!(
-				MultiPhase::governance_fallback(RuntimeOrigin::signed(99), None, None),
-				DispatchError::BadOrigin
-			);
+				// no single account can trigger this
+				assert_noop!(
+					MultiPhase::governance_fallback(RuntimeOrigin::signed(99), None, None),
+					DispatchError::BadOrigin
+				);
 
-			// only root can
-			assert_ok!(MultiPhase::governance_fallback(RuntimeOrigin::root(), None, None));
-			// something is queued now
-			assert!(MultiPhase::queued_solution().is_some());
-			// next election call with fix everything.;
-			assert!(MultiPhase::elect().is_ok());
-			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+				// only root can
+				assert_ok!(MultiPhase::governance_fallback(RuntimeOrigin::root(), None, None));
+				// something is queued now
+				assert!(MultiPhase::queued_solution().is_some());
+				// next election call with fix everything.;
+				assert!(MultiPhase::elect().is_ok());
+				assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
-			assert_eq!(
-				multi_phase_events(),
-				vec![
-					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
-					Event::PhaseTransitioned {
-						from: Phase::Signed,
-						to: Phase::Unsigned((true, 25)),
-						round: 1
-					},
-					Event::ElectionFailed,
-					Event::PhaseTransitioned {
-						from: Phase::Unsigned((true, 25)),
-						to: Phase::Emergency,
-						round: 1
-					},
-					Event::SolutionStored {
-						compute: ElectionCompute::Fallback,
-						origin: None,
-						prev_ejected: false
-					},
-					Event::ElectionFinalized {
-						compute: ElectionCompute::Fallback,
-						score: Default::default()
-					},
-					Event::PhaseTransitioned { from: Phase::Emergency, to: Phase::Off, round: 2 },
-				]
-			);
-		})
+				assert_eq!(
+					multi_phase_events(),
+					vec![
+						Event::PhaseTransitioned {
+							from: Phase::Off,
+							to: Phase::Signed(15),
+							round: 1
+						},
+						Event::PhaseTransitioned {
+							from: Phase::Signed(15),
+							to: Phase::Unsigned((true, 25)),
+							round: 1
+						},
+						Event::ElectionFailed,
+						Event::PhaseTransitioned {
+							from: Phase::Unsigned((true, 25)),
+							to: Phase::Emergency,
+							round: 1
+						},
+						Event::SolutionStored {
+							compute: ElectionCompute::Fallback,
+							origin: None,
+							prev_ejected: false
+						},
+						Event::ElectionFinalized {
+							compute: ElectionCompute::Fallback,
+							score: Default::default()
+						},
+						Event::PhaseTransitioned {
+							from: Phase::Emergency,
+							to: Phase::Off,
+							round: 2
+						},
+					]
+				);
+			})
 	}
 
 	#[test]
 	fn snapshot_too_big_failure_onchain_fallback() {
 		// the `MockStaking` is designed such that if it has too many targets, it simply fails.
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().throttling_blocks(0).build_and_execute(|| {
 			Targets::set((0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>());
 
 			// Signed phase failed to open.
@@ -2611,32 +2717,39 @@ mod tests {
 	#[test]
 	fn snapshot_too_big_failure_no_fallback() {
 		// and if the backup mode is nothing, we go into the emergency mode..
-		ExtBuilder::default().onchain_fallback(false).build_and_execute(|| {
-			crate::mock::Targets::set(
-				(0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>(),
-			);
+		ExtBuilder::default()
+			.onchain_fallback(false)
+			.throttling_blocks(0)
+			.build_and_execute(|| {
+				crate::mock::Targets::set(
+					(0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>(),
+				);
 
-			// Signed phase failed to open.
-			roll_to(15);
-			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+				// Signed phase failed to open.
+				roll_to(15);
+				assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
-			// Unsigned phase failed to open.
-			roll_to(25);
-			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+				// Unsigned phase failed to open.
+				roll_to(25);
+				assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
-			roll_to(29);
-			let err = MultiPhase::elect().unwrap_err();
-			assert_eq!(err, ElectionError::Fallback("NoFallback."));
-			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
+				roll_to(29);
+				let err = MultiPhase::elect().unwrap_err();
+				assert_eq!(err, ElectionError::Fallback("NoFallback."));
+				assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
 
-			assert_eq!(
-				multi_phase_events(),
-				vec![
-					Event::ElectionFailed,
-					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Emergency, round: 1 }
-				]
-			);
-		});
+				assert_eq!(
+					multi_phase_events(),
+					vec![
+						Event::ElectionFailed,
+						Event::PhaseTransitioned {
+							from: Phase::Off,
+							to: Phase::Emergency,
+							round: 1
+						}
+					]
+				);
+			});
 	}
 
 	#[test]
