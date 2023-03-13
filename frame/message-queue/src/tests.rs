@@ -215,7 +215,7 @@ fn service_queues_failing_messages_works() {
 #[test]
 fn service_queues_suspension_works() {
 	use MessageOrigin::*;
-	new_test_ext::<Test>().execute_with(|| {
+	build_and_execute::<Test>(|| {
 		MessageQueue::enqueue_messages(vec![msg("a"), msg("b"), msg("c")].into_iter(), Here);
 		MessageQueue::enqueue_messages(vec![msg("x"), msg("y"), msg("z")].into_iter(), There);
 		MessageQueue::enqueue_messages(
@@ -512,7 +512,7 @@ fn service_page_suspension_works() {
 	use MessageOrigin::*;
 	use PageExecutionStatus::*;
 
-	new_test_ext::<Test>().execute_with(|| {
+	build_and_execute::<Test>(|| {
 		let (page, mut msgs) = full_page::<Test>();
 		assert!(msgs >= 10, "pre-condition: need at least 10 msgs per page");
 		let mut book = book_for::<Test>(&page);
@@ -1095,7 +1095,7 @@ fn execute_overweight_works() {
 fn permanently_overweight_book_unknits() {
 	use MessageOrigin::*;
 
-	new_test_ext::<Test>().execute_with(|| {
+	build_and_execute::<Test>(|| {
 		set_weight("bump_service_head", 1.into_weight());
 		set_weight("service_queue_base", 1.into_weight());
 		set_weight("service_page_base_completion", 1.into_weight());
@@ -1132,7 +1132,7 @@ fn permanently_overweight_book_unknits() {
 fn permanently_overweight_book_unknits_multiple() {
 	use MessageOrigin::*;
 
-	new_test_ext::<Test>().execute_with(|| {
+	build_and_execute::<Test>(|| {
 		set_weight("bump_service_head", 1.into_weight());
 		set_weight("service_queue_base", 1.into_weight());
 		set_weight("service_page_base_completion", 1.into_weight());
@@ -1171,7 +1171,7 @@ fn permanently_overweight_book_unknits_multiple() {
 fn ready_but_empty_does_not_panic() {
 	use MessageOrigin::*;
 
-	new_test_ext::<Test>().execute_with(|| {
+	build_and_execute::<Test>(|| {
 		BookStateFor::<Test>::insert(Here, empty_book::<Test>());
 		BookStateFor::<Test>::insert(There, empty_book::<Test>());
 
@@ -1191,7 +1191,7 @@ fn ready_but_empty_does_not_panic() {
 fn ready_but_perm_overweight_does_not_panic() {
 	use MessageOrigin::*;
 
-	new_test_ext::<Test>().execute_with(|| {
+	build_and_execute::<Test>(|| {
 		MessageQueue::enqueue_message(msg("weight=9"), Here);
 		assert_eq!(MessageQueue::service_queues(8.into_weight()), 0.into_weight());
 		assert_ring(&[]);
