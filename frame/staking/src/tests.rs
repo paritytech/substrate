@@ -512,10 +512,10 @@ fn no_candidate_emergency_condition() {
 			// initial validators
 			assert_eq_uvec!(validator_controllers(), vec![10, 20, 30, 40]);
 			let prefs = ValidatorPrefs { commission: Perbill::one(), ..Default::default() };
-			<Staking as crate::Store>::Validators::insert(11, prefs.clone());
+			Validators::<Test>::insert(11, prefs.clone());
 
 			// set the minimum validator count.
-			<Staking as crate::Store>::MinimumValidatorCount::put(10);
+			MinimumValidatorCount::<Test>::put(10);
 
 			// try to chill
 			let res = Staking::chill(RuntimeOrigin::signed(10));
@@ -536,7 +536,7 @@ fn no_candidate_emergency_condition() {
 			// changed)
 			assert_eq_uvec!(validator_controllers(), vec![10, 20, 30, 40]);
 			// The chill is still pending.
-			assert!(!<Staking as crate::Store>::Validators::contains_key(11));
+			assert!(!Validators::<Test>::contains_key(11));
 			// No new era is created.
 			assert_eq!(current_era, CurrentEra::<Test>::get());
 		});
@@ -2432,7 +2432,7 @@ fn slash_in_old_span_does_not_deselect() {
 		);
 
 		// the validator doesn't get chilled again
-		assert!(<Staking as Store>::Validators::iter().any(|(stash, _)| stash == 11));
+		assert!(Validators::<Test>::iter().any(|(stash, _)| stash == 11));
 
 		// but we are still forcing a new era
 		assert_eq!(Staking::force_era(), Forcing::ForceNew);
@@ -2449,7 +2449,7 @@ fn slash_in_old_span_does_not_deselect() {
 		);
 
 		// the validator doesn't get chilled again
-		assert!(<Staking as Store>::Validators::iter().any(|(stash, _)| stash == 11));
+		assert!(Validators::<Test>::iter().any(|(stash, _)| stash == 11));
 
 		// but it's disabled
 		assert!(is_disabled(10));
@@ -2648,8 +2648,8 @@ fn garbage_collection_after_slashing() {
 			);
 
 			assert_eq!(Balances::free_balance(11), 2000 - 200);
-			assert!(<Staking as crate::Store>::SlashingSpans::get(&11).is_some());
-			assert_eq!(<Staking as crate::Store>::SpanSlash::get(&(11, 0)).amount(), &200);
+			assert!(SlashingSpans::<Test>::get(&11).is_some());
+			assert_eq!(SpanSlash::<Test>::get(&(11, 0)).amount(), &200);
 
 			on_offence_now(
 				&[OffenceDetails {
@@ -2665,7 +2665,7 @@ fn garbage_collection_after_slashing() {
 			assert_eq!(Balances::free_balance(11), 2);
 			assert_eq!(Balances::total_balance(&11), 2);
 
-			let slashing_spans = <Staking as crate::Store>::SlashingSpans::get(&11).unwrap();
+			let slashing_spans = SlashingSpans::<Test>::get(&11).unwrap();
 			assert_eq!(slashing_spans.iter().count(), 2);
 
 			// reap_stash respects num_slashing_spans so that weight is accurate
@@ -2675,8 +2675,8 @@ fn garbage_collection_after_slashing() {
 			);
 			assert_ok!(Staking::reap_stash(RuntimeOrigin::signed(20), 11, 2));
 
-			assert!(<Staking as crate::Store>::SlashingSpans::get(&11).is_none());
-			assert_eq!(<Staking as crate::Store>::SpanSlash::get(&(11, 0)).amount(), &0);
+			assert!(SlashingSpans::<Test>::get(&11).is_none());
+			assert_eq!(SpanSlash::<Test>::get(&(11, 0)).amount(), &0);
 		})
 }
 
@@ -2702,19 +2702,19 @@ fn garbage_collection_on_window_pruning() {
 		assert_eq!(Balances::free_balance(11), 900);
 		assert_eq!(Balances::free_balance(101), 2000 - (nominated_value / 10));
 
-		assert!(<Staking as crate::Store>::ValidatorSlashInEra::get(&now, &11).is_some());
-		assert!(<Staking as crate::Store>::NominatorSlashInEra::get(&now, &101).is_some());
+		assert!(ValidatorSlashInEra::<Test>::get(&now, &11).is_some());
+		assert!(NominatorSlashInEra::<Test>::get(&now, &101).is_some());
 
 		// + 1 because we have to exit the bonding window.
 		for era in (0..(BondingDuration::get() + 1)).map(|offset| offset + now + 1) {
-			assert!(<Staking as crate::Store>::ValidatorSlashInEra::get(&now, &11).is_some());
-			assert!(<Staking as crate::Store>::NominatorSlashInEra::get(&now, &101).is_some());
+			assert!(ValidatorSlashInEra::<Test>::get(&now, &11).is_some());
+			assert!(NominatorSlashInEra::<Test>::get(&now, &101).is_some());
 
 			mock::start_active_era(era);
 		}
 
-		assert!(<Staking as crate::Store>::ValidatorSlashInEra::get(&now, &11).is_none());
-		assert!(<Staking as crate::Store>::NominatorSlashInEra::get(&now, &101).is_none());
+		assert!(ValidatorSlashInEra::<Test>::get(&now, &11).is_none());
+		assert!(NominatorSlashInEra::<Test>::get(&now, &101).is_none());
 	})
 }
 
@@ -2755,7 +2755,7 @@ fn slashing_nominators_by_span_max() {
 			slashing::SlashingSpan { index: 0, start: 0, length: Some(4) },
 		];
 
-		let get_span = |account| <Staking as crate::Store>::SlashingSpans::get(&account).unwrap();
+		let get_span = |account| SlashingSpans::<Test>::get(&account).unwrap();
 
 		assert_eq!(get_span(11).iter().collect::<Vec<_>>(), expected_spans);
 
@@ -2817,7 +2817,7 @@ fn slashes_are_summed_across_spans() {
 		assert_eq!(Balances::free_balance(21), 2000);
 		assert_eq!(Staking::slashable_balance_of(&21), 1000);
 
-		let get_span = |account| <Staking as crate::Store>::SlashingSpans::get(&account).unwrap();
+		let get_span = |account| SlashingSpans::<Test>::get(&account).unwrap();
 
 		on_offence_now(
 			&[OffenceDetails {
@@ -3192,7 +3192,7 @@ fn remove_multi_deferred() {
 			&[Perbill::from_percent(25)],
 		);
 
-		assert_eq!(<Staking as Store>::UnappliedSlashes::get(&4).len(), 5);
+		assert_eq!(UnappliedSlashes::<Test>::get(&4).len(), 5);
 
 		// fails if list is not sorted
 		assert_noop!(
@@ -3212,7 +3212,7 @@ fn remove_multi_deferred() {
 
 		assert_ok!(Staking::cancel_deferred_slash(RuntimeOrigin::root(), 4, vec![0, 2, 4]));
 
-		let slashes = <Staking as Store>::UnappliedSlashes::get(&4);
+		let slashes = UnappliedSlashes::<Test>::get(&4);
 		assert_eq!(slashes.len(), 2);
 		assert_eq!(slashes[0].validator, 21);
 		assert_eq!(slashes[1].validator, 42);
@@ -3267,7 +3267,7 @@ fn slash_kicks_validators_not_nominators_and_disables_nominator_for_kicked_valid
 		assert_eq!(Balances::free_balance(101), 2000 - nominator_slash_amount_11);
 
 		// check that validator was chilled.
-		assert!(<Staking as Store>::Validators::iter().all(|(stash, _)| stash != 11));
+		assert!(Validators::<Test>::iter().all(|(stash, _)| stash != 11));
 
 		// actually re-bond the slashed validator
 		assert_ok!(Staking::validate(RuntimeOrigin::signed(10), Default::default()));
@@ -3612,7 +3612,7 @@ fn zero_slash_keeps_nominators() {
 		assert_eq!(Balances::free_balance(101), 2000);
 
 		// 11 is still removed..
-		assert!(<Staking as Store>::Validators::iter().all(|(stash, _)| stash != 11));
+		assert!(Validators::<Test>::iter().all(|(stash, _)| stash != 11));
 		// but their nominations are kept.
 		assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
 	});

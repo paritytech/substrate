@@ -94,6 +94,7 @@ members = [
 	"frame/contracts/proc-macro",
 	"frame/contracts/primitives",
 	"frame/conviction-voting",
+	"frame/core-fellowship",
 	"frame/democracy",
 	"frame/fast-unstake",
 	"frame/try-runtime",
