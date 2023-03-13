@@ -197,20 +197,29 @@ impl Into<sc_service::config::RpcMethods> for RpcMethods {
 #[derive(Debug, Clone, PartialEq, Copy, clap::ValueEnum)]
 #[value(rename_all = "lower")]
 pub enum Database {
+	// /// Facebooks RocksDB
+	// #[cfg(feature = "rocksdb")]
+	// RocksDb,
 	/// ParityDb. <https://github.com/paritytech/parity-db/>
 	#[cfg(feature = "paritydb")]
 	ParityDb,
 	/// Detect whether there is an existing database. Use it, if there is, if not, create new
 	/// instance of ParityDb
 	Auto,
+	// /// ParityDb. <https://github.com/paritytech/parity-db/>
+	// #[value(name = "paritydb-experimental")]
+	// ParityDbDeprecated,
 }
 
 impl Database {
 	/// Returns all the variants of this enum to be shown in the cli.
 	pub const fn variants() -> &'static [&'static str] {
 		&[
+			// #[cfg(feature = "rocksdb")]
+			// "rocksdb",
 			#[cfg(feature = "paritydb")]
 			"paritydb",
+			// "paritydb-experimental",
 			"auto",
 		]
 	}

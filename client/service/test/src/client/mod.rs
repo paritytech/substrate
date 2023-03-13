@@ -1580,7 +1580,7 @@ fn returns_status_for_pruned_blocks() {
 				trie_cache_maximum_size: Some(1 << 20),
 				state_pruning: Some(PruningMode::blocks_pruning(1)),
 				blocks_pruning: BlocksPruning::KeepFinalized,
-				source: DatabaseSource::RocksDb { path: tmp.path().into(), cache_size: 1024 },
+				source: DatabaseSource::ParityDb { path: tmp.path().into() },
 			},
 			u64::MAX,
 		)
