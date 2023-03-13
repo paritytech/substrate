@@ -178,10 +178,14 @@ const LOG_TARGET: &str = "runtime::assets";
 /// Trait with callbacks that are executed after successfull asset creation or destruction.
 pub trait AssetsCallback<AssetId, AccountId> {
 	/// Indicates that asset with `id` was successfully created by the `owner`
-	fn created(_id: &AssetId, _owner: &AccountId) {}
+	fn created(_id: &AssetId, _owner: &AccountId) -> Result<(), ()> {
+		Ok(())
+	}
 
 	/// Indicates that asset with `id` has just been destroyed
-	fn destroyed(_id: &AssetId) {}
+	fn destroyed(_id: &AssetId) -> Result<(), ()> {
+		Ok(())
+	}
 }
 
 /// Empty implementation in case no callbacks are required.
@@ -560,6 +564,8 @@ pub mod pallet {
 		IncorrectStatus,
 		/// The asset should be frozen before the given operation.
 		NotFrozen,
+		/// Callback action resulted in error
+		CallbackFailed,
 	}
 
 	#[pallet::call]
@@ -618,13 +624,12 @@ pub mod pallet {
 					status: AssetStatus::Live,
 				},
 			);
-
+			ensure!(T::CallbackHandle::created(&id, &owner).is_ok(), Error::<T, I>::CallbackFailed);
 			Self::deposit_event(Event::Created {
 				asset_id: id,
 				creator: owner.clone(),
 				owner: admin,
 			});
-			T::CallbackHandle::created(&id, &owner);
 
 			Ok(())
 		}
