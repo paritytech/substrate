@@ -446,7 +446,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09a580bfc0fc2370333eddb71de8c8614d5972e3a327438eb3acc22824a638bf"
 dependencies = [
- "rustix",
+ "rustix 0.36.8",
  "tempfile",
  "windows-sys 0.45.0",
 ]
@@ -2564,6 +2564,7 @@ dependencies = [
  "criterion",
  "frame-support",
  "log",
+ "macro_magic",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -4478,9 +4479,9 @@ dependencies = [
 
 [[package]]
 name = "macro_magic"
-version = "0.1.5"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbbc8ab45e29a7233d828c8cc54947fa19deb63d5bfd47a57f601531dd81a030"
+checksum = "996890480944ead79dde4510dd81c9f90ee0cc3a545bcf925f516c3777dbb9e7"
 dependencies = [
  "macro_magic_core",
  "macro_magic_macros",
@@ -4489,9 +4490,9 @@ dependencies = [
 
 [[package]]
 name = "macro_magic_core"
-version = "0.1.5"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69b2d6342c7e29d670e90de87b60b4b0d11e42d06fcaa43f136019f3d3fea06a"
+checksum = "2474c33425d968d25291a28e90cc237297a3930cad3daaaedf9a5a00b5bc0dfb"
 dependencies = [
  "atomicwrites",
  "quote",
@@ -4500,9 +4501,9 @@ dependencies = [
 
 [[package]]
 name = "macro_magic_macros"
-version = "0.1.5"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93f1660de2dfcce670cea4d5e2a79f3a93d6db3a823107fbce10b5e6f0fbf4af"
+checksum = "f26342b33e4843158619f8926f0214c000f8c03b3b65557ccc826e82d1c51664"
 dependencies = [
  "macro_magic_core",
  "quote",
