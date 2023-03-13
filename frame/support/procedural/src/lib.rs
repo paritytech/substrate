@@ -517,13 +517,21 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 /// pub struct Pallet<T>(_);
 /// ```
 ///
+/// If you want to specify the file from which the documentation is loaded, you can use the
+/// `include_str` macro. However, if you only want the documentation to be included in the
+/// runtime metadata, use the `pallet_doc` attribute.
+///
 /// ### `pallet_doc` attribute
+///
+/// Unlike the `doc` attribute, the documentation provided to the `pallet_doc` attribute is
+/// not inserted on the module.
 ///
 /// The `pallet_doc` attribute can only be provided with one argument,
 /// which is the file path that holds the documentation to be added to the metadata.
 ///
-/// Unlike the `doc` attribute, the documentation provided to the `proc_macro` attribute is
-/// not inserted at the beginning of the module.
+/// This approach is beneficial when you use the `include_str` macro at the beginning of the file
+/// and want that documentation to extend to the runtime metadata, without reiterating the
+/// documentation on the module itself.
 #[proc_macro_attribute]
 pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
 	pallet::pallet(attr, item)
