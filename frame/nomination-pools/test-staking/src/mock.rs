@@ -165,7 +165,6 @@ impl Convert<sp_core::U256, Balance> for U256ToBalance {
 parameter_types! {
 	pub const PostUnbondingPoolsWindow: u32 = 10;
 	pub const PoolsPalletId: PalletId = PalletId(*b"py/nopls");
-	pub const InitialGlobalMaxCommission: Perbill = Perbill::zero();
 }
 
 impl pallet_nomination_pools::Config for Runtime {
@@ -181,7 +180,6 @@ impl pallet_nomination_pools::Config for Runtime {
 	type MaxUnbonding = ConstU32<8>;
 	type MaxPointsToBalance = ConstU8<10>;
 	type PalletId = PoolsPalletId;
-	type InitialGlobalMaxCommission = InitialGlobalMaxCommission;
 }
 
 type Block = frame_system::mocking::MockBlock<Runtime>;

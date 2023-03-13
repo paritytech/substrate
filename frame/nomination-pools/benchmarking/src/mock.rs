@@ -151,7 +151,6 @@ parameter_types! {
 	pub static PostUnbondingPoolsWindow: u32 = 10;
 	pub const PoolsPalletId: PalletId = PalletId(*b"py/nopls");
 	pub const MaxPointsToBalance: u8 = 10;
-	pub const InitialGlobalMaxCommission: Perbill = Perbill::zero();
 }
 
 impl pallet_nomination_pools::Config for Runtime {
@@ -167,7 +166,6 @@ impl pallet_nomination_pools::Config for Runtime {
 	type MaxUnbonding = ConstU32<8>;
 	type PalletId = PoolsPalletId;
 	type MaxPointsToBalance = MaxPointsToBalance;
-	type InitialGlobalMaxCommission = InitialGlobalMaxCommission;
 }
 
 impl crate::Config for Runtime {}

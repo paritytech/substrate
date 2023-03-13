@@ -1568,9 +1568,6 @@ pub mod pallet {
 
 		/// The maximum number of simultaneous unbonding chunks that can exist per member.
 		type MaxUnbonding: Get<u32>;
-
-		/// The initial value for global maximum commission. Used in pool migration to v4.
-		type InitialGlobalMaxCommission: Get<Perbill>;
 	}
 
 	/// Minimum amount to bond to join a pool.
