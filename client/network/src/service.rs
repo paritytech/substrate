@@ -48,7 +48,7 @@ use libp2p::{
 	ping::Failure as PingFailure,
 	swarm::{
 		AddressScore, ConnectionError, ConnectionHandler, ConnectionLimits, DialError, Executor,
-		ListenError, NetworkBehaviour, Swarm, SwarmBuilder, SwarmEvent,
+		ListenError, NetworkBehaviour, Swarm, SwarmBuilder, SwarmEvent, THandlerErr,
 	},
 	Multiaddr, PeerId,
 };
@@ -98,12 +98,6 @@ mod tests;
 
 pub use libp2p::identity::{error::DecodingError, Keypair, PublicKey};
 use sc_network_common::service::NetworkRequest;
-
-/// Custom error that can be produced by the [`ConnectionHandler`] of the [`NetworkBehaviour`].
-/// Used as a template parameter of [`SwarmEvent`] below.
-type ConnectionHandlerErr<TBehaviour> =
-	<<<TBehaviour as NetworkBehaviour>::ConnectionHandler as IntoConnectionHandler>
-		::Handler as ConnectionHandler>::Error;
 
 /// Substrate network service. Handles network IO and manages connectivity.
 pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
@@ -400,7 +394,7 @@ where
 				)
 				.substream_upgrade_protocol_override(upgrade::Version::V1Lazy)
 				.notify_handler_buffer_size(NonZeroUsize::new(32).expect("32 != 0; qed"))
-				.connection_event_buffer_size(1024)
+				.per_connection_event_buffer_size(24)
 				.max_negotiating_inbound_streams(2048);
 
 			(builder.build(), bandwidth)
@@ -1356,10 +1350,7 @@ where
 	}
 
 	/// Process the next event coming from `Swarm`.
-	fn handle_swarm_event(
-		&mut self,
-		event: SwarmEvent<BehaviourOut, ConnectionHandlerErr<Behaviour<B>>>,
-	) {
+	fn handle_swarm_event(&mut self, event: SwarmEvent<BehaviourOut, THandlerErr<Behaviour<B>>>) {
 		match event {
 			SwarmEvent::Behaviour(BehaviourOut::InboundRequest { protocol, result, .. }) => {
 				if let Some(metrics) = self.metrics.as_ref() {
@@ -1670,15 +1661,15 @@ where
 				if let Some(metrics) = self.metrics.as_ref() {
 					let reason = match error {
 						DialError::ConnectionLimit(_) => Some("limit-reached"),
-						DialError::InvalidPeerId(_) => Some("invalid-peer-id"),
-						DialError::Transport(_) | DialError::ConnectionIo(_) =>
-							Some("transport-error"),
+						DialError::InvalidPeerId(_) |
+						DialError::WrongPeerId { .. } |
+						DialError::LocalPeerId { .. } => Some("invalid-peer-id"),
+						DialError::Transport(_) => Some("transport-error"),
 						DialError::Banned |
-						DialError::LocalPeerId |
 						DialError::NoAddresses |
 						DialError::DialPeerConditionFalse(_) |
-						DialError::WrongPeerId { .. } |
-						DialError::Aborted => None, // ignore them
+						DialError::Aborted |
+						DialError::Denied { .. } => None, // ignore them
 					};
 					if let Some(reason) = reason {
 						metrics.pending_connections_errors_total.with_label_values(&[reason]).inc();
@@ -1704,9 +1695,10 @@ where
 				if let Some(metrics) = self.metrics.as_ref() {
 					let reason = match error {
 						ListenError::ConnectionLimit(_) => Some("limit-reached"),
-						ListenError::WrongPeerId { .. } => Some("invalid-peer-id"),
-						ListenError::Transport(_) | ListenError::IO(_) => Some("transport-error"),
-						ListenError::Aborted => None, // ignore it
+						ListenError::WrongPeerId { .. } | ListenError::LocalPeerId { .. } =>
+							Some("invalid-peer-id"),
+						ListenError::Transport(_) => Some("transport-error"),
+						ListenError::Aborted | ListenError::Denied { .. } => None, // ignore it
 					};
 
 					if let Some(reason) = reason {
