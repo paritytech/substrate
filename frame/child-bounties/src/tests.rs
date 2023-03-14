@@ -252,7 +252,7 @@ fn add_child_bounty() {
 
 		assert_noop!(
 			ChildBounties::add_child_bounty(RuntimeOrigin::signed(4), 0, 50, b"12345-p1".to_vec()),
-			TokenError::UnwantedRemovalOfAccount,
+			TokenError::NotExpendable,
 		);
 
 		assert_noop!(

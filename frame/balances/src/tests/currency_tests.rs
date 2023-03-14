@@ -173,7 +173,7 @@ fn lock_should_work_reserve() {
 				ChargeTransactionPayment::from(1),
 				&1,
 				CALL,
-				&info_from_weight(Weight::from_ref_time(1)),
+				&info_from_weight(Weight::from_parts(1, 0)),
 				1,
 			)
 			.is_err());
@@ -181,7 +181,7 @@ fn lock_should_work_reserve() {
 				ChargeTransactionPayment::from(0),
 				&1,
 				CALL,
-				&info_from_weight(Weight::from_ref_time(1)),
+				&info_from_weight(Weight::from_parts(1, 0)),
 				1,
 			)
 			.is_err());
@@ -201,7 +201,7 @@ fn lock_should_work_tx_fee() {
 				ChargeTransactionPayment::from(1),
 				&1,
 				CALL,
-				&info_from_weight(Weight::from_ref_time(1)),
+				&info_from_weight(Weight::from_parts(1, 0)),
 				1,
 			)
 			.is_err());
@@ -209,7 +209,7 @@ fn lock_should_work_tx_fee() {
 				ChargeTransactionPayment::from(0),
 				&1,
 				CALL,
-				&info_from_weight(Weight::from_ref_time(1)),
+				&info_from_weight(Weight::from_parts(1, 0)),
 				1,
 			)
 			.is_err());

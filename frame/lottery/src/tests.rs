@@ -391,7 +391,7 @@ fn do_buy_ticket_keep_alive() {
 		// Price set to 100.
 		assert_ok!(Lottery::start_lottery(RuntimeOrigin::root(), 100, 10, 10, false));
 
-		assert_noop!(Lottery::do_buy_ticket(&1, &calls[0]), TokenError::UnwantedRemovalOfAccount);
+		assert_noop!(Lottery::do_buy_ticket(&1, &calls[0]), TokenError::NotExpendable);
 		assert!(TicketsCount::<Test>::get().is_zero());
 	});
 }
