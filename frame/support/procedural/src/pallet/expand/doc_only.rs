@@ -41,14 +41,14 @@ pub fn expand_doc_only(def: &mut Def) -> proc_macro2::TokenStream {
 						name, name
 					);
 					quote::quote!(
+						#( #[doc = #docs] )*
+						///
+						/// ---
+						///
 						/// NOTE: This function is an automatically generated, uncallable stub
 						#[ doc = #line_2 ]
 						/// the pallet [`Call`](`crate::Call`) enum. You should not attempt to
 						/// call this function directly.
-						///
-						/// ---
-						///
-						#( #[doc = #docs] )*
 						pub fn #name<#type_impl_generics>(#args) { unreachable!(); }
 					)
 				})
@@ -60,6 +60,8 @@ pub fn expand_doc_only(def: &mut Def) -> proc_macro2::TokenStream {
 
 	quote::quote!(
 		/// Auto-generated docs-only module listing all defined storage types for this pallet
+		/// Note that members of this module cannot be used directly and are only provided for
+		/// documentation purposes.
 		#[cfg(doc)]
 		pub mod storage_types {
 			use super::*;
@@ -68,7 +70,9 @@ pub fn expand_doc_only(def: &mut Def) -> proc_macro2::TokenStream {
 			)*
 		}
 
-		/// Auto-generated docs-only module listing all defined dispatchables for this pallet
+		/// Auto-generated docs-only module listing all defined dispatchables for this pallet.
+		/// Note that members of this module cannot be used directly and are only provided for
+		/// documentation purposes.
 		#[cfg(doc)]
 		pub mod dispatchables {
 			use super::*;
