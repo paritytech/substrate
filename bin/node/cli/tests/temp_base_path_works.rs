@@ -32,9 +32,9 @@ use std::{
 
 pub mod common;
 
-/*
-#[ignore]
-#[tokio::test]
+#[allow(dead_code)]
+// Apparently `#[ignore]` doesn't actually work to disable this one.
+//#[tokio::test]
 async fn temp_base_path_works() {
 	let mut cmd = Command::new(cargo_bin("substrate"));
 	let mut child = common::KillChildOnDrop(
@@ -63,4 +63,3 @@ async fn temp_base_path_works() {
 
 	assert!(!db_path.exists());
 }
-*/
