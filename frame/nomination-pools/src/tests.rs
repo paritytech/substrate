@@ -6442,6 +6442,64 @@ mod commission {
 	}
 
 	#[test]
+	fn commission_accumulates_on_multiple_rewards() {
+		ExtBuilder::default().build_and_execute(|| {
+			let pool_id = 1;
+
+			// Given:
+
+			// Set initial commission of pool 1 to 10%.
+			assert_ok!(Pools::set_commission(
+				RuntimeOrigin::signed(900),
+				pool_id,
+				Some((Perbill::from_percent(10), 2)),
+			));
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::PoolCommissionUpdated {
+						pool_id: 1,
+						current: Some((Perbill::from_percent(10), 2))
+					},
+				]
+			);
+
+			// When:
+
+			// The pool earns 100 points
+			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 100));
+
+			// Change commission to 20%
+			assert_ok!(Pools::set_commission(
+				RuntimeOrigin::signed(900),
+				pool_id,
+				Some((Perbill::from_percent(20), 2)),
+			));
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![Event::PoolCommissionUpdated {
+					pool_id: 1,
+					current: Some((Perbill::from_percent(20), 2))
+				},]
+			);
+
+			// The pool earns 100 points
+			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 100));
+
+			// Claim payout:
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+
+			// Then:
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 90 + 80 }]
+			);
+		})
+	}
+
+	#[test]
 	fn do_reward_payout_with_100_percent_commission() {
 		ExtBuilder::default().build_and_execute(|| {
 			// turn off GlobalMaxCommission for this test.
