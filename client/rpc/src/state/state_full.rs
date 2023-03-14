@@ -207,7 +207,6 @@ where
 						block,
 						&method,
 						&call_data,
-						self.client.execution_extensions().strategies().other,
 						CallContext::Offchain,
 					)
 					.map(Into::into)

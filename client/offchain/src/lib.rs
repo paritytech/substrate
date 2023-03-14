@@ -37,6 +37,7 @@
 
 use std::{fmt, marker::PhantomData, sync::Arc};
 
+use codec::Decode;
 use futures::{
 	future::{ready, Future},
 	prelude::*,
@@ -75,24 +76,24 @@ pub struct OffchainWorkerOptions {
 }
 
 /// An offchain workers manager.
-pub struct OffchainWorkers<Client, Block: traits::Block> {
+pub struct OffchainWorkers<Client, Block: traits::Block, Storage> {
 	client: Arc<Client>,
 	_block: PhantomData<Block>,
 	thread_pool: Mutex<ThreadPool>,
 	shared_http_client: api::SharedClient,
 	enable_http: bool,
 	keystore: Option<SyncCryptoStorePtr>,
-	offchain_db: Option<Arc<dyn DbExternalitiesFactory>>,
+	offchain_db: Option<api::Db<Storage>>,
 	transaction_pool: Option<Arc<dyn OffchainSubmitTransaction<Block>>>,
 }
 
-impl<Client, Block: traits::Block> OffchainWorkers<Client, Block> {
+impl<Client, Block: traits::Block, Storage> OffchainWorkers<Client, Block, Storage> {
 	/// Creates new [`OffchainWorkers`].
 	pub fn new(
 		client: Arc<Client>,
 		keystore: Option<SyncCryptoStorePtr>,
-		offchain_db: Option<Box<dyn DbExternalitiesFactory>>,
-		transaction_pool: Option<Box<dyn OffchainSubmitTransaction<Block>>>,
+		offchain_db: Option<Storage>,
+		transaction_pool: Option<Arc<dyn OffchainSubmitTransaction<Block>>>,
 	) -> Self {
 		Self::new_with_options(
 			client,
@@ -107,8 +108,8 @@ impl<Client, Block: traits::Block> OffchainWorkers<Client, Block> {
 	pub fn new_with_options(
 		client: Arc<Client>,
 		keystore: Option<SyncCryptoStorePtr>,
-		offchain_db: Option<Box<dyn DbExternalitiesFactory>>,
-		transaction_pool: Option<Box<dyn OffchainSubmitTransaction<Block>>>,
+		offchain_db: Option<Storage>,
+		transaction_pool: Option<Arc<dyn OffchainSubmitTransaction<Block>>>,
 		options: OffchainWorkerOptions,
 	) -> Self {
 		Self {
@@ -121,23 +122,26 @@ impl<Client, Block: traits::Block> OffchainWorkers<Client, Block> {
 			shared_http_client: api::SharedClient::new(),
 			enable_http: options.enable_http_requests,
 			keystore,
-			offchain_db,
+			offchain_db: offchain_db.map(|d| api::Db::new(d)),
 			transaction_pool,
 		}
 	}
 }
 
-impl<Client, Block: traits::Block> fmt::Debug for OffchainWorkers<Client, Block> {
+impl<Client, Block: traits::Block, Storage: offchain::OffchainStorage> fmt::Debug
+	for OffchainWorkers<Client, Block, Storage>
+{
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		f.debug_tuple("OffchainWorkers").finish()
 	}
 }
 
-impl<Client, Block> OffchainWorkers<Client, Block>
+impl<Client, Block, Storage> OffchainWorkers<Client, Block, Storage>
 where
 	Block: traits::Block,
 	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static,
 	Client::Api: OffchainWorkerApi<Block>,
+	Storage: offchain::OffchainStorage + 'static,
 {
 	/// Start the offchain workers after given block.
 	#[must_use]
@@ -182,24 +186,28 @@ where
 			let mut capabilities = offchain::Capabilities::all();
 			capabilities.set(offchain::Capabilities::HTTP, self.enable_http);
 
+			let keystore = self.keystore.clone();
+			let db = self.offchain_db.clone();
+			let tx_pool = self.transaction_pool.clone();
+
 			self.spawn_worker(move || {
 				let mut runtime = client.runtime_api();
 				let api = Box::new(api);
 				tracing::debug!(target: LOG_TARGET, "Running offchain workers at {:?}", hash);
 
-				if let Some(keystore) = self.keystore.as_ref() {
+				if let Some(keystore) = keystore {
 					runtime.register_extension(KeystoreExt(keystore.clone()));
 				}
 
-				if let Some(pool) = self.transaction_pool.as_ref() {
+				if let Some(pool) = tx_pool {
 					runtime.register_extension(offchain::TransactionPoolExt(Box::new(
-						TransactionPoolAdapter { hash, pool },
+						TransactionPoolAdapter { hash, pool: pool.clone() },
 					) as _));
 				}
 
-				if let Some(offchain_db) = self.offchain_db.as_ref() {
+				if let Some(offchain_db) = db {
 					runtime.register_extension(offchain::OffchainDbExt::new(
-						offchain::LimitedExternalities::new(capabilities, offchain_db.create()),
+						offchain::LimitedExternalities::new(capabilities, offchain_db.clone()),
 					));
 				}
 
@@ -246,10 +254,10 @@ where
 }
 
 /// Inform the offchain worker about new imported blocks
-pub async fn notification_future<Client, Block, Spawner>(
+pub async fn notification_future<Client, Block, Spawner, Storage>(
 	is_validator: bool,
 	client: Arc<Client>,
-	offchain: Arc<OffchainWorkers<Client, Block>>,
+	offchain: Arc<OffchainWorkers<Client, Block, Storage>>,
 	spawner: Spawner,
 	network_provider: Arc<dyn NetworkProvider + Send + Sync>,
 ) where
@@ -258,6 +266,7 @@ pub async fn notification_future<Client, Block, Spawner>(
 		ProvideRuntimeApi<Block> + sc_client_api::BlockchainEvents<Block> + Send + Sync + 'static,
 	Client::Api: OffchainWorkerApi<Block>,
 	Spawner: SpawnNamed,
+	Storage: offchain::OffchainStorage + 'static,
 {
 	client
 		.import_notification_stream()

@@ -115,8 +115,8 @@ impl<Block: BlockT> Default for ExecutionExtensions<Block> {
 
 impl<Block: BlockT> ExecutionExtensions<Block> {
 	/// Create new `ExecutionExtensions` given a `keystore` and `ExecutionStrategies`.
-	pub fn new() -> Self {
-		Self::default()
+	pub fn new(extensions_factory: impl ExtensionsFactory<Block> + 'static) -> Self {
+		Self { extensions_factory: RwLock::new(Box::new(extensions_factory)) }
 	}
 
 	/// Based on the execution context and capabilities it produces

@@ -396,9 +396,6 @@ where
 			client.usage_info().chain.finalized_hash,
 		));
 
-		// make transaction pool available for off-chain runtime calls.
-		client.execution_extensions().register_transaction_pool(&pool);
-
 		pool
 	}
 }

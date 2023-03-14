@@ -22,14 +22,9 @@ use sc_client_api::{
 };
 use sc_executor::{RuntimeVersion, RuntimeVersionOf};
 use sp_api::{ProofRecorder, StorageTransactionCache};
-use sp_core::{
-	traits::{CallContext, CodeExecutor, RuntimeCode, SpawnNamed},
-	ExecutionContext,
-};
+use sp_core::traits::{CallContext, CodeExecutor, RuntimeCode, SpawnNamed};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
-use sp_state_machine::{
-	backend::AsTrieBackend, Ext, OverlayedChanges, StateMachine, StorageProof,
-};
+use sp_state_machine::{backend::AsTrieBackend, Ext, OverlayedChanges, StateMachine, StorageProof};
 use std::{cell::RefCell, sync::Arc};
 
 /// Call executor that executes methods locally, querying all required
@@ -168,7 +163,6 @@ where
 		at_hash: Block::Hash,
 		method: &str,
 		call_data: &[u8],
-		strategy: ExecutionStrategy,
 		context: CallContext,
 	) -> sp_blockchain::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
