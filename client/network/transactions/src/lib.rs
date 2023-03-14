@@ -137,18 +137,18 @@ impl TransactionsHandlerPrototype {
 			format!("/{}/transactions/1", array_bytes::bytes2hex("", genesis_hash))
 		}
 		.into();
-		let config = NonDefaultSetConfig {
-			notifications_protocol: protocol_name.clone(),
-			fallback_names: vec![format!("/{}/transactions/1", protocol_id.as_ref()).into()],
-			max_notification_size: MAX_TRANSACTIONS_SIZE,
-			handshake: None,
-			set_config: SetConfig {
+		let config = NonDefaultSetConfig::new(
+			protocol_name.clone(),
+			vec![format!("/{}/transactions/1", protocol_id.as_ref()).into()],
+			MAX_TRANSACTIONS_SIZE,
+			None,
+			SetConfig {
 				in_peers: 0,
 				out_peers: 0,
 				reserved_nodes: Vec::new(),
 				non_reserved_mode: NonReservedPeerMode::Deny,
 			},
-		};
+		);
 
 		(Self { protocol_name }, config)
 	}

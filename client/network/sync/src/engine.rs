@@ -300,7 +300,7 @@ where
 			}
 			for config in net_config.notification_protocols() {
 				let peer_ids = config
-					.set_config
+					.set_config()
 					.reserved_nodes
 					.iter()
 					.map(|info| info.peer_id)
@@ -356,7 +356,7 @@ where
 			warp_sync_protocol_name,
 		)?;
 
-		let block_announce_protocol_name = block_announce_config.notifications_protocol.clone();
+		let block_announce_protocol_name = block_announce_config.protocol_name().clone();
 		let (tx, service_rx) = tracing_unbounded("mpsc_chain_sync", 100_000);
 		let num_connected = Arc::new(AtomicUsize::new(0));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));

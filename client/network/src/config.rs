@@ -487,7 +487,7 @@ pub struct NonDefaultSetConfig {
 	///
 	/// > **Note**: This field isn't present for the default set, as this is handled internally
 	/// > by the networking code.
-	pub notifications_protocol: ProtocolName,
+	protocol_name: ProtocolName,
 
 	/// If the remote reports that it doesn't support the protocol indicated in the
 	/// `notifications_protocol` field, then each of these fallback names will be tried one by
@@ -495,37 +495,57 @@ pub struct NonDefaultSetConfig {
 	///
 	/// If a fallback is used, it will be reported in
 	/// `sc_network::protocol::event::Event::NotificationStreamOpened::negotiated_fallback`
-	pub fallback_names: Vec<ProtocolName>,
+	fallback_names: Vec<ProtocolName>,
 
 	/// Handshake of the protocol
 	///
 	/// NOTE: Currently custom handshakes are not fully supported. See issue #5685 for more
 	/// details. This field is temporarily used to allow moving the hardcoded block announcement
 	/// protocol out of `protocol.rs`.
-	pub handshake: Option<NotificationHandshake>,
+	handshake: Option<NotificationHandshake>,
 
 	/// Maximum allowed size of single notifications.
-	pub max_notification_size: u64,
+	max_notification_size: u64,
 
 	/// Base configuration.
-	pub set_config: SetConfig,
+	set_config: SetConfig,
 }
 
 impl NonDefaultSetConfig {
 	/// Creates a new [`NonDefaultSetConfig`]. Zero slots and accepts only reserved nodes.
-	pub fn new(notifications_protocol: ProtocolName, max_notification_size: u64) -> Self {
-		Self {
-			notifications_protocol,
-			max_notification_size,
-			fallback_names: Vec::new(),
-			handshake: None,
-			set_config: SetConfig {
-				in_peers: 0,
-				out_peers: 0,
-				reserved_nodes: Vec::new(),
-				non_reserved_mode: NonReservedPeerMode::Deny,
-			},
-		}
+	pub fn new(
+		protocol_name: ProtocolName,
+		fallback_names: Vec<ProtocolName>,
+		max_notification_size: u64,
+		handshake: Option<NotificationHandshake>,
+		set_config: SetConfig,
+	) -> Self {
+		Self { protocol_name, max_notification_size, fallback_names, handshake, set_config }
+	}
+
+	/// Get reference to protocol name.
+	pub fn protocol_name(&self) -> &ProtocolName {
+		&self.protocol_name
+	}
+
+	/// Get refer
+	pub fn fallback_names(&self) -> impl Iterator<Item = &ProtocolName> {
+		self.fallback_names.iter()
+	}
+
+	/// Get reference to handshake.
+	pub fn handshake(&self) -> &Option<NotificationHandshake> {
+		&self.handshake
+	}
+
+	/// Get maximum notification size.
+	pub fn max_notification_size(&self) -> u64 {
+		self.max_notification_size
+	}
+
+	/// Get reference to `SetConfig`.
+	pub fn set_config(&self) -> &SetConfig {
+		&self.set_config
 	}
 
 	/// Modifies the configuration to allow non-reserved nodes.

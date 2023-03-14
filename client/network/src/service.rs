@@ -193,7 +193,7 @@ where
 		)?;
 		for notification_protocol in &notification_protocols {
 			ensure_addresses_consistent_with_transport(
-				notification_protocol.set_config.reserved_nodes.iter().map(|x| &x.multiaddr),
+				notification_protocol.set_config().reserved_nodes.iter().map(|x| &x.multiaddr),
 				&network_config.transport,
 			)?;
 		}
@@ -235,7 +235,7 @@ where
 					.map(|cfg| usize::try_from(cfg.max_response_size).unwrap_or(usize::MAX));
 				let notifs_max = notification_protocols
 					.iter()
-					.map(|cfg| usize::try_from(cfg.max_notification_size).unwrap_or(usize::MAX));
+					.map(|cfg| usize::try_from(cfg.max_notification_size()).unwrap_or(usize::MAX));
 
 				// A "default" max is added to cover all the other protocols: ping, identify,
 				// kademlia, block announces, and transactions.

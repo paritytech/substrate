@@ -120,18 +120,18 @@ impl StatementHandlerPrototype {
 
 	/// Returns the configuration of the set to put in the network configuration.
 	pub fn set_config(&self) -> NonDefaultSetConfig {
-		NonDefaultSetConfig {
-			notifications_protocol: self.protocol_name.clone(),
-			fallback_names: Vec::new(),
-			max_notification_size: MAX_STATEMENT_SIZE,
-			handshake: None,
-			set_config: SetConfig {
+		NonDefaultSetConfig::new(
+			self.protocol_name.clone(),
+			Vec::new(),
+			MAX_STATEMENT_SIZE,
+			None,
+			SetConfig {
 				in_peers: 0,
 				out_peers: 0,
 				reserved_nodes: Vec::new(),
 				non_reserved_mode: NonReservedPeerMode::Deny,
 			},
-		}
+		)
 	}
 
 	/// Turns the prototype into the actual handler.

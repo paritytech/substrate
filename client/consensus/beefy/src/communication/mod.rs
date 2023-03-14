@@ -68,7 +68,13 @@ pub(crate) mod beefy_protocol_name {
 pub fn beefy_peers_set_config(
 	gossip_protocol_name: sc_network::ProtocolName,
 ) -> sc_network::config::NonDefaultSetConfig {
-	let mut cfg = sc_network::config::NonDefaultSetConfig::new(gossip_protocol_name, 1024 * 1024);
+	let mut cfg = sc_network::config::NonDefaultSetConfig::new(
+		gossip_protocol_name,
+		Vec::new(),
+		1024 * 1024,
+		None,
+		Default::default(),
+	);
 	cfg.allow_non_reserved(25, 25);
 	cfg
 }

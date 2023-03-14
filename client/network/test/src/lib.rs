@@ -800,6 +800,32 @@ where
 		network_config.transport = TransportConfig::MemoryOnly;
 		network_config.listen_addresses = vec![listen_addr.clone()];
 		network_config.allow_non_globals_in_dht = true;
+		// <<<<<<< HEAD
+		// ||||||| parent of 7a8fd6570a (Make fields of `NonDefaultSetConfig` private)
+		// 		network_config
+		// 			.request_response_protocols
+		// 			.extend(config.request_response_protocols);
+		// 		network_config.extra_sets = config
+		// 			.notifications_protocols
+		// 			.into_iter()
+		// 			.map(|p| NonDefaultSetConfig {
+		// 				notifications_protocol: p,
+		// 				fallback_names: Vec::new(),
+		// 				max_notification_size: 1024 * 1024,
+		// 				handshake: None,
+		// 				set_config: Default::default(),
+		// 			})
+		// 			.collect();
+		// =======
+		// 		network_config
+		// 			.request_response_protocols
+		// 			.extend(config.request_response_protocols);
+		// 		network_config.extra_sets = config
+		// 			.notifications_protocols
+		// 			.into_iter()
+		// 			.map(|p| NonDefaultSetConfig::new(p, Vec::new(), 1024 * 1024, None, Default::default()))
+		// 			.collect();
+		// >>>>>>> 7a8fd6570a (Make fields of `NonDefaultSetConfig` private)
 		if let Some(connect_to) = config.connect_to_peers {
 			let addrs = connect_to
 				.iter()
@@ -906,13 +932,13 @@ where
 		}
 
 		for protocol in config.notifications_protocols {
-			full_net_config.add_notification_protocol(NonDefaultSetConfig {
-				notifications_protocol: protocol,
-				fallback_names: Vec::new(),
-				max_notification_size: 1024 * 1024,
-				handshake: None,
-				set_config: Default::default(),
-			});
+			full_net_config.add_notification_protocol(NonDefaultSetConfig::new(
+				protocol,
+				Vec::new(),
+				1024 * 1024,
+				None,
+				Default::default(),
+			));
 		}
 
 		let genesis_hash =

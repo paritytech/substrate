@@ -697,19 +697,19 @@ pub fn grandpa_peers_set_config(
 	protocol_name: ProtocolName,
 ) -> sc_network::config::NonDefaultSetConfig {
 	use communication::grandpa_protocol_name;
-	sc_network::config::NonDefaultSetConfig {
-		notifications_protocol: protocol_name,
-		fallback_names: grandpa_protocol_name::LEGACY_NAMES.iter().map(|&n| n.into()).collect(),
+	sc_network::config::NonDefaultSetConfig::new(
+		protocol_name,
+		grandpa_protocol_name::LEGACY_NAMES.iter().map(|&n| n.into()).collect(),
 		// Notifications reach ~256kiB in size at the time of writing on Kusama and Polkadot.
-		max_notification_size: 1024 * 1024,
-		handshake: None,
-		set_config: sc_network::config::SetConfig {
+		1024 * 1024,
+		None,
+		sc_network::config::SetConfig {
 			in_peers: 0,
 			out_peers: 0,
 			reserved_nodes: Vec::new(),
 			non_reserved_mode: sc_network::config::NonReservedPeerMode::Deny,
 		},
-	}
+	)
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
