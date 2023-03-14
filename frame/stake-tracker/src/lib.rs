@@ -70,9 +70,10 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		/// This has to come from Staking::Currency
+		/// The same currency type that's used by Staking.
 		type Currency: Currency<Self::AccountId, Balance = BalanceOf<Self>>;
 
+		/// An interface to Staking.
 		type Staking: StakingInterface<AccountId = Self::AccountId>;
 
 		/// A sorted list of nominators and validators, by their stake and self-stake respectively.

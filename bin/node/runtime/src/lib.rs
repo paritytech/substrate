@@ -572,11 +572,7 @@ impl pallet_staking::Config for Runtime {
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type ElectionProvider = ElectionProviderMultiPhase;
 	type GenesisElectionProvider = onchain::OnChainExecution<OnChainSeqPhragmen>;
-	type VoterList = pallet_stake_tracker::TrackedList<
-		Self,
-		VoteWeight,
-		<Runtime as pallet_stake_tracker::Config>::VoterList,
-	>;
+	type VoterList = pallet_stake_tracker::TrackedList<AccountId, VoterList>;
 	// This a placeholder, to be introduced in the next PR as an instance of bags-list
 	type TargetList = pallet_staking::UseValidatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;
