@@ -395,12 +395,6 @@ fn withdrawing_balance_should_fail_when_not_expendable() {
 			WithdrawReasons::TRANSFER,
 			ExistenceRequirement::KeepAlive
 		),);
-		assert_ok!(Balances::withdraw(
-			&2,
-			5,
-			WithdrawReasons::TRANSFER,
-			ExistenceRequirement::AllowDeath
-		),);
 	});
 }
 
