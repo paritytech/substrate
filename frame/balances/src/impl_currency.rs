@@ -275,11 +275,6 @@ where
 	// Ensure that an account can withdraw from their free balance given any existing withdrawal
 	// restrictions like locks and vesting balance.
 	// Is a no-op if amount to be withdrawn is zero.
-	//
-	// # <weight>
-	// Despite iterating over a list of locks, they are limited by the number of
-	// lock IDs, which means the number of runtime pallets that intend to use and create locks.
-	// # </weight>
 	fn ensure_can_withdraw(
 		who: &T::AccountId,
 		amount: T::Balance,
