@@ -57,13 +57,13 @@ fn inspect_trait_reducible_balance_other_provide_works() {
 fn inspect_trait_reducible_balance_frozen_works() {
 	ExtBuilder::default().existential_deposit(10).build_and_execute_with(|| {
 		Balances::set_balance(&1, 100);
-		Balances::set_freeze(TestId::Foo, &1, 50);
-		assert_eq!(Balances::reducible_balance(&1, Expendable, Polite), 100);
-		assert_eq!(Balances::reducible_balance(&1, Protect, Polite), 90);
-		assert_eq!(Balances::reducible_balance(&1, Preserve, Polite), 90);
-		assert_eq!(Balances::reducible_balance(&1, Expendable, Force), 50);
-		assert_eq!(Balances::reducible_balance(&1, Protect, Force), 40);
-		assert_eq!(Balances::reducible_balance(&1, Preserve, Force), 40);
+		assert_ok!(Balances::set_freeze(&TestId::Foo, &1, 50));
+		assert_eq!(Balances::reducible_balance(&1, Expendable, Polite), 50);
+		assert_eq!(Balances::reducible_balance(&1, Protect, Polite), 50);
+		assert_eq!(Balances::reducible_balance(&1, Preserve, Polite), 50);
+		assert_eq!(Balances::reducible_balance(&1, Expendable, Force), 90);
+		assert_eq!(Balances::reducible_balance(&1, Protect, Force), 90);
+		assert_eq!(Balances::reducible_balance(&1, Preserve, Force), 90);
 	});
 }
 
