@@ -632,3 +632,122 @@ where
 		T::new_best_block_imported(self, hash, number)
 	}
 }
+
+/// Substream acceptance result.
+pub enum ValidationResult {
+	/// Accept inbound substream.
+	Accept,
+
+	/// Reject inbound substream.
+	Reject,
+}
+
+/// Events received by the protocol from `Notifications`.
+pub enum NotificationEvent {
+	/// Validate inbound substream.
+	ValidateInboundSubstream {
+		/// Peer ID.
+		peer: PeerId,
+
+		/// Received handshake.
+		handshake: Vec<u8>,
+
+		/// `oneshot::Sender` for sending validation result back to `Notifications`
+		result_tx: oneshot::Sender<ValidationResult>,
+	},
+
+	/// Remote identified by `PeerId` opened a substream and sent `Handshake`.
+	/// Validate `Handshake` and report status (accept/reject) to `Notifications`.
+	NotificationStreamOpened {
+		/// Peer ID.
+		peer: PeerId,
+
+		/// Role of the peer.
+		role: ObservedRole,
+
+		/// Negotiated fallback.
+		negotiated_fallback: Option<ProtocolName>,
+	},
+
+	/// Substream was closed.
+	NotificationStreamClosed {
+		/// Peer Id.
+		peer: PeerId,
+	},
+
+	/// Notification was received from the substream.
+	NotificationReceived {
+		/// Peer IDJ.
+		peer: PeerId,
+
+		/// Received notification.
+		notification: Vec<u8>,
+	},
+}
+
+/// Notification service
+///
+/// Defines traits that specify the behavior both protocol implementations and `Notifications` can
+/// expect from each other.
+///
+/// `Notifications` can send two different kinds of information to protocol:
+///  * substream-related information
+///  * notification-related information
+///
+/// When an unvalidated, inbound substream is received by `Notifications`, it sends the inbound
+/// stream information (peer ID, handshake) to protocol for validation. Protocol must then verify
+/// that the handshake is valid (and in the future that it has a slot it can allocate for the peer)
+/// and then report back `ValidationResult` which is either `Accept` or `Reject`.
+///
+/// After the validation result has been received by `Notifications`, it prepares the
+/// substream for communication by initializing the necessary sinks and emits
+/// `NotificationStreamOpened` which informs the protocol that the remote peer is ready to receive
+/// notifications.
+///
+/// Two different flavors of sending options are provided:
+///  * synchronous sending ([`ProtocolNotificationService::send_sync_notification()`])
+///  * asynchronous sending ([`ProtocolNotificationService::send_async_notification()`])
+///
+/// The former is used by protocols that don't have the implementation ready for exercising
+/// backpressure and the latter for the protocols that can do it.
+///
+/// Both local and remote peer can close the substream at any time. Local peer can do so by calling
+/// [`ProtocolNotificationService::close_substream()`] which instrucs `Notifications` to close the
+/// substream. Remote closing the substream is indicated to the local peer by receiving
+/// `NotificationEvent::SubstreamClosed` event
+///
+/// In case the protocol must update its handshake while it's operating (such as updating the best
+/// block information), it can do so by calling [`ProtocolNotificationService::set_handshake()`]
+/// which instructs `Notifications` to update the handshake it stored during protocol
+/// initialization.
+///
+/// All peer events are multiplexed on the same incoming event stream from `Notifications` and thus
+/// each event carries a `PeerId` so the protocol knows whose information to update when receiving
+/// an event.
+#[async_trait::async_trait]
+pub trait NotificationService: Debug + Send {
+	/// Instruct `Notifications` to open a new substream for `peer`.
+	///
+	/// `dial_if_disconnected` informs `Notifications` whether to dial
+	// the peer if there is currently no active connection to it.
+	async fn open_substream(&mut self, peer: PeerId) -> Result<(), ()>;
+
+	/// Instruct `Notifications` to close substream for `peer`.
+	async fn close_substream(&mut self, peer: PeerId) -> Result<(), ()>;
+
+	/// Send synchronous `notification` to `peer`.
+	fn send_sync_notification(&mut self, peer: PeerId, notification: Vec<u8>) -> Result<(), ()>;
+
+	/// Send asynchronous `notification` to `peer`, allowing sender to exercise backpressure.
+	async fn send_async_notification(
+		&mut self,
+		peer: PeerId,
+		notification: Vec<u8>,
+	) -> Result<(), ()>;
+
+	/// Set handshake for the notification protocol replacing the old handshake.
+	async fn set_hanshake(&mut self, handshake: Vec<u8>) -> Result<(), ()>;
+
+	/// Get next event from the `Notifications` event stream.
+	async fn next_event(&mut self) -> Option<NotificationEvent>;
+}

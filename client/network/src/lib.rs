@@ -274,7 +274,7 @@ pub use service::{
 		KademliaKey, NetworkBlock, NetworkDHTProvider, NetworkEventStream, NetworkNotification,
 		NetworkPeers, NetworkRequest, NetworkSigner, NetworkStateInfo, NetworkStatus,
 		NetworkStatusProvider, NetworkSyncForkRequest, NotificationSender as NotificationSenderT,
-		NotificationSenderError, NotificationSenderReady,
+		NotificationSenderError, NotificationSenderReady, NotificationService,
 	},
 	DecodingError, Keypair, NetworkService, NetworkWorker, NotificationSender, NotificationsSink,
 	OutboundFailure, PublicKey,
