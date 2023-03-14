@@ -21,10 +21,8 @@ use crate::{
 	Network, Syncing, Validator,
 };
 
-use sc_network_common::{
-	protocol::{event::Event, ProtocolName},
-	sync::SyncEvent,
-};
+use sc_network::{event::Event, types::ProtocolName};
+use sc_network_common::sync::SyncEvent;
 use sc_peerset::ReputationChange;
 
 use futures::{
@@ -340,15 +338,11 @@ mod tests {
 		future::poll_fn,
 	};
 	use quickcheck::{Arbitrary, Gen, QuickCheck};
-	use sc_network_common::{
-		config::MultiaddrWithPeerId,
-		protocol::role::ObservedRole,
-		service::{
-			NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
-			NotificationSender, NotificationSenderError,
-		},
-		sync::SyncEventStream,
+	use sc_network::{
+		config::MultiaddrWithPeerId, NetworkBlock, NetworkEventStream, NetworkNotification,
+		NetworkPeers, NotificationSenderError, NotificationSenderT as NotificationSender,
 	};
+	use sc_network_common::{role::ObservedRole, sync::SyncEventStream};
 	use sp_runtime::{
 		testing::H256,
 		traits::{Block as BlockT, NumberFor},
