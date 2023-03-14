@@ -40,16 +40,15 @@ use futures::{
 	prelude::*,
 };
 use libp2p::{
-	core::{Multiaddr, PeerId},
+	core::{Endpoint, Multiaddr, PeerId},
 	request_response::{
-		handler::RequestResponseHandler, ProtocolSupport, RequestResponse, RequestResponseCodec,
-		RequestResponseConfig, RequestResponseEvent, RequestResponseMessage, ResponseChannel,
+		self, handler::Handler, Behaviour, Codec, Config, Message, ProtocolSupport, ResponseChannel,
 	},
 	swarm::{
 		behaviour::{ConnectionClosed, DialFailure, FromSwarm, ListenFailure},
 		handler::multi::MultiHandler,
-		ConnectionId, NetworkBehaviour, NetworkBehaviourAction, PollParameters, THandlerInEvent,
-		THandlerOutEvent,
+		ConnectionDenied, ConnectionId, NetworkBehaviour, NetworkBehaviourAction, PollParameters,
+		THandler, THandlerInEvent, THandlerOutEvent,
 	},
 };
 use sc_network_common::{
@@ -127,14 +126,13 @@ impl From<(ProtocolName, RequestId)> for ProtocolRequestId {
 /// Implementation of `NetworkBehaviour` that provides support for request-response protocols.
 pub struct RequestResponsesBehaviour {
 	/// The multiple sub-protocols, by name.
-	/// Contains the underlying libp2p `RequestResponse` behaviour, plus an optional
+	///
+	/// Contains the underlying libp2p [`Behaviour`] behaviour, plus an optional
 	/// "response builder" used to build responses for incoming requests.
-	protocols: HashMap<
-		ProtocolName,
-		(RequestResponse<GenericCodec>, Option<mpsc::Sender<IncomingRequest>>),
-	>,
+	protocols:
+		HashMap<ProtocolName, (Behaviour<GenericCodec>, Option<mpsc::Sender<IncomingRequest>>)>,
 
-	/// Pending requests, passed down to a [`RequestResponse`] behaviour, awaiting a reply.
+	/// Pending requests, passed down to a [`Behaviour`] behaviour, awaiting a reply.
 	pending_requests:
 		HashMap<ProtocolRequestId, (Instant, oneshot::Sender<Result<Vec<u8>, RequestFailure>>)>,
 
@@ -191,7 +189,7 @@ impl RequestResponsesBehaviour {
 	) -> Result<Self, RegisterError> {
 		let mut protocols = HashMap::new();
 		for protocol in list {
-			let mut cfg = RequestResponseConfig::default();
+			let mut cfg = Config::default();
 			cfg.set_connection_keep_alive(Duration::from_secs(10));
 			cfg.set_request_timeout(protocol.request_timeout);
 
@@ -201,7 +199,7 @@ impl RequestResponsesBehaviour {
 				ProtocolSupport::Outbound
 			};
 
-			let rq_rp = RequestResponse::new(
+			let rq_rp = Behaviour::new(
 				GenericCodec {
 					max_request_size: protocol.max_request_size,
 					max_response_size: protocol.max_response_size,
@@ -268,34 +266,11 @@ impl RequestResponsesBehaviour {
 			);
 		}
 	}
-
-	// fn new_handler_with_replacement(
-	// 	&mut self,
-	// 	protocol: String,
-	// 	handler: RequestResponseHandler<GenericCodec>,
-	// ) -> <RequestResponsesBehaviour as NetworkBehaviour>::ConnectionHandler {
-	// 	let mut handlers: HashMap<_, _> = self
-	// 		.protocols
-	// 		.iter_mut()
-	// 		.map(|(p, (r, _))| (p.to_string(), NetworkBehaviour::new_handler(r)))
-	// 		.collect();
-
-	// 	if let Some(h) = handlers.get_mut(&protocol) {
-	// 		*h = handler
-	// 	}
-
-	// 	MultiHandler::try_from_iter(handlers).expect(
-	// 		"Protocols are in a HashMap and there can be at most one handler per protocol name, \
-	// 		 which is the only possible error; qed",
-	// 	)
-	// }
 }
 
 impl NetworkBehaviour for RequestResponsesBehaviour {
-	type ConnectionHandler = MultiHandler<
-		String,
-		<RequestResponse<GenericCodec> as NetworkBehaviour>::ConnectionHandler,
-	>;
+	type ConnectionHandler =
+		MultiHandler<String, <Behaviour<GenericCodec> as NetworkBehaviour>::ConnectionHandler>;
 	type OutEvent = Event;
 
 	fn handle_pending_inbound_connection(
@@ -324,10 +299,18 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 		local_addr: &Multiaddr,
 		remote_addr: &Multiaddr,
 	) -> Result<THandler<Self>, ConnectionDenied> {
-		let iter = self
-			.protocols
-			.iter_mut()
-			.map(|(p, (r, _))| (p.to_string(), NetworkBehaviour::new_handler(r)));
+		let iter = self.protocols.iter_mut().filter_map(|(p, (r, _))| {
+			if let Ok(handler) = r.handle_established_inbound_connection(
+				connection_id,
+				peer,
+				local_addr,
+				remote_addr,
+			) {
+				Some((p.to_string(), handler))
+			} else {
+				None
+			}
+		});
 
 		Ok(MultiHandler::try_from_iter(iter).expect(
 			"Protocols are in a HashMap and there can be at most one handler per protocol name, \
@@ -342,6 +325,20 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 		addr: &Multiaddr,
 		role_override: Endpoint,
 	) -> Result<THandler<Self>, ConnectionDenied> {
+		let iter = self.protocols.iter_mut().filter_map(|(p, (r, _))| {
+			if let Ok(handler) =
+				r.handle_established_outbound_connection(connection_id, peer, addr, role_override)
+			{
+				Some((p.to_string(), handler))
+			} else {
+				None
+			}
+		});
+
+		Ok(MultiHandler::try_from_iter(iter).expect(
+			"Protocols are in a HashMap and there can be at most one handler per protocol name, \
+			 which is the only possible error; qed",
+		))
 	}
 
 	fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
@@ -522,7 +519,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 						// initialization.
 						if let Some(mut resp_builder) = resp_builder {
 							// If the response builder is too busy, silently drop `tx`. This
-							// will be reported by the corresponding `RequestResponse` through
+							// will be reported by the corresponding [`Behaviour`] through
 							// an `InboundFailure::Omission` event.
 							let _ = resp_builder.try_send(IncomingRequest {
 								peer,
@@ -575,7 +572,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 					if let Some((protocol, _)) = self.protocols.get_mut(&*protocol_name) {
 						if protocol.send_response(inner_channel, Ok(payload)).is_err() {
 							// Note: Failure is handled further below when receiving
-							// `InboundFailure` event from `RequestResponse` behaviour.
+							// `InboundFailure` event from [`Behaviour`] behaviour.
 							log::debug!(
 								target: "sub-libp2p",
 								"Failed to send response for {:?} on protocol {:?} due to a \
@@ -635,10 +632,9 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 
 					match ev {
 						// Received a request from a remote.
-						RequestResponseEvent::Message {
+						request_response::Event::Message {
 							peer,
-							message:
-								RequestResponseMessage::Request { request_id, request, channel, .. },
+							message: Message::Request { request_id, request, channel, .. },
 						} => {
 							self.pending_responses_arrival_time
 								.insert((protocol.clone(), request_id).into(), Instant::now());
@@ -665,9 +661,9 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 						},
 
 						// Received a response from a remote to one of our requests.
-						RequestResponseEvent::Message {
+						request_response::Event::Message {
 							peer,
-							message: RequestResponseMessage::Response { request_id, response },
+							message: Message::Response { request_id, response },
 							..
 						} => {
 							let (started, delivered) = match self
@@ -702,8 +698,11 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 						},
 
 						// One of our requests has failed.
-						RequestResponseEvent::OutboundFailure {
-							peer, request_id, error, ..
+						request_response::Event::OutboundFailure {
+							peer,
+							request_id,
+							error,
+							..
 						} => {
 							let started = match self
 								.pending_requests
@@ -746,7 +745,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 
 						// An inbound request failed, either while reading the request or due to
 						// failing to send a response.
-						RequestResponseEvent::InboundFailure {
+						request_response::Event::InboundFailure {
 							request_id, peer, error, ..
 						} => {
 							self.pending_responses_arrival_time
@@ -761,7 +760,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 						},
 
 						// A response to an inbound request has been sent.
-						RequestResponseEvent::ResponseSent { request_id, peer } => {
+						request_response::Event::ResponseSent { request_id, peer } => {
 							let arrival_time = self
 								.pending_responses_arrival_time
 								.remove(&(protocol.clone(), request_id).into())
@@ -813,7 +812,7 @@ pub enum ResponseFailure {
 	Network(InboundFailure),
 }
 
-/// Implements the libp2p [`RequestResponseCodec`] trait. Defines how streams of bytes are turned
+/// Implements the libp2p [`Codec`] trait. Defines how streams of bytes are turned
 /// into requests and responses and vice-versa.
 #[derive(Debug, Clone)]
 #[doc(hidden)] // Needs to be public in order to satisfy the Rust compiler.
@@ -823,7 +822,7 @@ pub struct GenericCodec {
 }
 
 #[async_trait::async_trait]
-impl RequestResponseCodec for GenericCodec {
+impl Codec for GenericCodec {
 	type Protocol = Vec<u8>;
 	type Request = Vec<u8>;
 	type Response = Result<Vec<u8>, ()>;
@@ -1017,7 +1016,7 @@ mod tests {
 		let protocol_name = "/test/req-resp/1";
 		let mut pool = LocalPool::new();
 
-		// Build swarms whose behaviour is `RequestResponsesBehaviour`.
+		// Build swarms whose behaviour is [`RequestResponsesBehaviour`].
 		let mut swarms = (0..2)
 			.map(|_| {
 				let (tx, mut rx) = mpsc::channel::<IncomingRequest>(64);
@@ -1120,7 +1119,7 @@ mod tests {
 		let protocol_name = "/test/req-resp/1";
 		let mut pool = LocalPool::new();
 
-		// Build swarms whose behaviour is `RequestResponsesBehaviour`.
+		// Build swarms whose behaviour is [`RequestResponsesBehaviour`].
 		let mut swarms = (0..2)
 			.map(|_| {
 				let (tx, mut rx) = mpsc::channel::<IncomingRequest>(64);
