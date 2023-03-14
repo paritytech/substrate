@@ -207,7 +207,7 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 	pub async fn next(&mut self) -> Option<BeefyVersionedFinalityProof<B>> {
 		let (peer, req_info, resp) = match &mut self.state {
 			State::Idle => {
-				futures::pending!();
+				futures::future::pending::<()>().await;
 				return None
 			},
 			State::AwaitingResponse(peer, req_info, receiver) => {
