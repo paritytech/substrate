@@ -93,7 +93,7 @@ fn transfer_keep_alive_works() {
 		let _ = Balances::mint_into(&1, 100);
 		assert_noop!(
 			Balances::transfer_keep_alive(Some(1).into(), 2, 100),
-			TokenError::UnwantedAccountRemoval
+			TokenError::UnwantedRemovalOfAccount
 		);
 		assert_eq!(Balances::total_balance(&1), 100);
 		assert_eq!(Balances::total_balance(&2), 0);

@@ -638,7 +638,7 @@ impl From<TokenError> for &'static str {
 			TokenError::Unsupported => "Operation is not supported by the asset",
 			TokenError::CannotCreateHold =>
 				"Account cannot be created for recording amount on hold",
-			TokenError::UnwantedAccountRemoval => "Account that is desired to remain would die",
+			TokenError::UnwantedRemovalOfAccount => "Account that is desired to remain would die",
 		}
 	}
 }
