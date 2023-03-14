@@ -2856,9 +2856,9 @@ dependencies = [
 
 [[package]]
 name = "hash-db"
-version = "0.15.2"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d23bd4e7b5eda0d0f3a307e8b381fdc8ba9000f26fbe912250c0a4cc3956364a"
+checksum = "8e7d7786361d7425ae2fe4f9e407eb0efaa0840f5212d109cc018c40c35c6ab4"
 
 [[package]]
 name = "hash256-std-hasher"
@@ -3484,9 +3484,9 @@ dependencies = [
 
 [[package]]
 name = "keccak-hasher"
-version = "0.15.3"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "711adba9940a039f4374fc5724c0a5eaca84a2d558cce62256bfe26f0dbef05e"
+checksum = "19ea4653859ca2266a86419d3f592d3f22e7a854b482f99180d2498507902048"
 dependencies = [
  "hash-db",
  "hash256-std-hasher",
@@ -4454,12 +4454,11 @@ dependencies = [
 
 [[package]]
 name = "memory-db"
-version = "0.31.0"
+version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e0c7cba9ce19ac7ffd2053ac9f49843bbd3f4318feedfd74e85c19d5fb0ba66"
+checksum = "808b50db46293432a45e63bc15ea51e0ab4c0a1647b8eb114e31a3e698dd6fbe"
 dependencies = [
  "hash-db",
- "hashbrown 0.12.3",
 ]
 
 [[package]]
@@ -11618,9 +11617,9 @@ dependencies = [
 
 [[package]]
 name = "trie-bench"
-version = "0.36.0"
+version = "0.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac2b7695feb8041efc0adaa09ed3a692ca7b7c997395954fdc838b5b078346f6"
+checksum = "4f54b4f9d51d368e62cf7e0730c7c1e18fc658cc84333656bab5b328f44aa964"
 dependencies = [
  "criterion",
  "hash-db",
@@ -11634,9 +11633,9 @@ dependencies = [
 
 [[package]]
 name = "trie-db"
-version = "0.26.0"
+version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "879380c0061b165ba1f036325b7f3478bc1a947814d9fc36d22c5d8e960b11bd"
+checksum = "634d75c77ea43f2ad8ea9d9c58de49dfc9c3995bdef32b503df7883ff054e7f1"
 dependencies = [
  "hash-db",
  "hashbrown 0.13.2",
@@ -11647,18 +11646,18 @@ dependencies = [
 
 [[package]]
 name = "trie-root"
-version = "0.17.0"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a36c5ca3911ed3c9a5416ee6c679042064b93fc637ded67e25f92e68d783891"
+checksum = "d4ed310ef5ab98f5fa467900ed906cb9232dd5376597e00fd4cba2a449d06c0b"
 dependencies = [
  "hash-db",
 ]
 
 [[package]]
 name = "trie-standardmap"
-version = "0.15.2"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3161ba520ab28cd8e6b68e1126f1009f6e335339d1a73b978139011703264c8"
+checksum = "684aafb332fae6f83d7fe10b3fbfdbe39a1b3234c4e2a618f030815838519516"
 dependencies = [
  "hash-db",
  "keccak-hasher",
