@@ -80,7 +80,6 @@ pub enum RequestFailure {
 	Refused,
 	#[error("The remote replied, but the local node is no longer interested in the response.")]
 	Obsolete,
-	/// Problem on the network.
 	#[error("Problem on the network: {0}")]
 	Network(OutboundFailure),
 }
