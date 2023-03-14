@@ -1,8 +1,8 @@
 error[E0433]: failed to resolve: could not find `tt_default_parts` in `pallet_old`
-  --> $DIR/old_unsupported_pallet_decl.rs:15:1
+  --> tests/construct_runtime_ui/old_unsupported_pallet_decl.rs:15:1
    |
 15 | / construct_runtime! {
-16 | |     pub enum Runtime where
+16 | |     pub struct Runtime where
 17 | |         UncheckedExtrinsic = UncheckedExtrinsic,
 18 | |         Block = Block,
 ...  |
@@ -13,7 +13,7 @@ error[E0433]: failed to resolve: could not find `tt_default_parts` in `pallet_ol
    = note: this error originates in the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error: cannot find macro `decl_storage` in this scope
- --> $DIR/old_unsupported_pallet_decl.rs:6:2
+ --> tests/construct_runtime_ui/old_unsupported_pallet_decl.rs:6:2
   |
 6 |     decl_storage! {
   |     ^^^^^^^^^^^^
@@ -22,7 +22,7 @@ error: cannot find macro `decl_storage` in this scope
           frame_support::decl_storage
 
 error: cannot find macro `decl_module` in this scope
-  --> $DIR/old_unsupported_pallet_decl.rs:10:2
+  --> tests/construct_runtime_ui/old_unsupported_pallet_decl.rs:10:2
    |
 10 |     decl_module! {
    |     ^^^^^^^^^^^

@@ -137,7 +137,7 @@ fn import_block(
 	params.state_action =
 		StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(built.storage_changes));
 	params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
-	futures::executor::block_on(client.import_block(params, Default::default()))
+	futures::executor::block_on(client.import_block(params))
 		.expect("importing a block doesn't fail");
 }
 

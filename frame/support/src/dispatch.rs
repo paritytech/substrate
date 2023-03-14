@@ -2948,6 +2948,10 @@ macro_rules! decl_module {
 			{ $( $other_where_bounds )* }
 			$( $error_type )*
 		}
+		$crate::__impl_docs_metadata! {
+			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>
+			{ $( $other_where_bounds )* }
+		}
 		$crate::__impl_module_constants_metadata ! {
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>
 			{ $( $other_where_bounds )* }
@@ -3013,6 +3017,26 @@ macro_rules! __impl_error_metadata {
 				Some($crate::metadata::PalletErrorMetadata {
 					ty: $crate::scale_info::meta_type::<$( $error_type )*>()
 				})
+			}
+		}
+	};
+}
+
+/// Implement metadata for pallet documentation.
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __impl_docs_metadata {
+	(
+		$mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>
+		{ $( $other_where_bounds:tt )* }
+	) => {
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $mod_type<$trait_instance $(, $instance)?>
+			where $( $other_where_bounds )*
+		{
+			#[doc(hidden)]
+			#[allow(dead_code)]
+			pub fn pallet_documentation_metadata() -> $crate::sp_std::vec::Vec<&'static str> {
+				$crate::sp_std::vec![]
 			}
 		}
 	};

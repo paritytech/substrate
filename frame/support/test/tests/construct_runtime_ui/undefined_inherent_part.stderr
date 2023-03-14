@@ -5,7 +5,7 @@ error: `Pallet` does not have #[pallet::inherent] defined, perhaps you should re
    |   ^^^^^^^^^^^^^^^^^^^^^^^^
 ...
 49 | / construct_runtime! {
-50 | |     pub enum Runtime where
+50 | |     pub struct Runtime where
 51 | |         Block = Block,
 52 | |         NodeBlock = Block,
 ...  |
@@ -22,7 +22,7 @@ error[E0599]: no function or associated item named `create_inherent` found for s
    |       -------------------- function or associated item `create_inherent` not found for this struct
 ...
 49 | / construct_runtime! {
-50 | |     pub enum Runtime where
+50 | |     pub struct Runtime where
 51 | |         Block = Block,
 52 | |         NodeBlock = Block,
 ...  |
@@ -42,7 +42,7 @@ error[E0599]: no function or associated item named `is_inherent` found for struc
    |       -------------------- function or associated item `is_inherent` not found for this struct
 ...
 49 | / construct_runtime! {
-50 | |     pub enum Runtime where
+50 | |     pub struct Runtime where
 51 | |         Block = Block,
 52 | |         NodeBlock = Block,
 ...  |
@@ -62,7 +62,7 @@ error[E0599]: no function or associated item named `check_inherent` found for st
    |       -------------------- function or associated item `check_inherent` not found for this struct
 ...
 49 | / construct_runtime! {
-50 | |     pub enum Runtime where
+50 | |     pub struct Runtime where
 51 | |         Block = Block,
 52 | |         NodeBlock = Block,
 ...  |
@@ -82,7 +82,7 @@ error[E0599]: no associated item named `INHERENT_IDENTIFIER` found for struct `p
    |       -------------------- associated item `INHERENT_IDENTIFIER` not found for this struct
 ...
 49 | / construct_runtime! {
-50 | |     pub enum Runtime where
+50 | |     pub struct Runtime where
 51 | |         Block = Block,
 52 | |         NodeBlock = Block,
 ...  |
@@ -102,7 +102,7 @@ error[E0599]: no function or associated item named `is_inherent_required` found 
    |       -------------------- function or associated item `is_inherent_required` not found for this struct
 ...
 49 | / construct_runtime! {
-50 | |     pub enum Runtime where
+50 | |     pub struct Runtime where
 51 | |         Block = Block,
 52 | |         NodeBlock = Block,
 ...  |

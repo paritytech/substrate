@@ -668,8 +668,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				status: AssetStatus::Live,
 			},
 		);
+		ensure!(T::CallbackHandle::created(&id, &owner).is_ok(), Error::<T, I>::CallbackFailed);
 		Self::deposit_event(Event::ForceCreated { asset_id: id, owner: owner.clone() });
-		T::CallbackHandle::created(&id, &owner);
 		Ok(())
 	}
 
@@ -759,7 +759,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					approvals_destroyed: removed_approvals as u32,
 					approvals_remaining: details.approvals as u32,
 				});
-				T::CallbackHandle::destroyed(&id);
 				Ok(())
 			})?;
 		Ok(removed_approvals)
@@ -774,6 +773,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::IncorrectStatus);
 			ensure!(details.accounts == 0, Error::<T, I>::InUse);
 			ensure!(details.approvals == 0, Error::<T, I>::InUse);
+			ensure!(T::CallbackHandle::destroyed(&id).is_ok(), Error::<T, I>::CallbackFailed);
 
 			let metadata = Metadata::<T, I>::take(&id);
 			T::Currency::unreserve(

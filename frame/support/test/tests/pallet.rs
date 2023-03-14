@@ -101,6 +101,10 @@ impl SomeAssociation2 for u64 {
 }
 
 #[frame_support::pallet]
+/// Pallet documentation
+// Comments should not be included in the pallet documentation
+#[pallet_doc("../../README.md")]
+#[doc = include_str!("../../README.md")]
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
@@ -158,7 +162,6 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(crate) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
@@ -496,7 +499,6 @@ pub mod pallet2 {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(crate) trait Store)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
@@ -660,7 +662,7 @@ pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
 
 frame_support::construct_runtime!(
-	pub enum Runtime where
+	pub struct Runtime where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
@@ -944,15 +946,6 @@ fn validate_unsigned_expand() {
 
 	let validity = pallet::Pallet::validate_unsigned(TransactionSource::External, &call).unwrap();
 	assert_eq!(validity, ValidTransaction::default());
-}
-
-#[test]
-fn trait_store_expand() {
-	TestExternalities::default().execute_with(|| {
-		<pallet::Pallet<Runtime> as pallet::Store>::Value::get();
-		<pallet::Pallet<Runtime> as pallet::Store>::Map::get(1);
-		<pallet::Pallet<Runtime> as pallet::Store>::DoubleMap::get(1, 2);
-	})
 }
 
 #[test]
@@ -1598,6 +1591,14 @@ fn metadata() {
 	};
 
 	pretty_assertions::assert_eq!(actual_metadata.pallets, expected_metadata.pallets);
+}
+
+#[test]
+fn test_pallet_runtime_docs() {
+	let docs = crate::pallet::Pallet::<Runtime>::pallet_documentation_metadata();
+	let readme = "Support code for the runtime.\n\nLicense: Apache-2.0";
+	let expected = vec![" Pallet documentation", readme, readme];
+	assert_eq!(docs, expected);
 }
 
 #[test]
