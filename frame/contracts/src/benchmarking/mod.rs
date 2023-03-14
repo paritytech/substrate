@@ -243,7 +243,7 @@ benchmarks! {
 	// the sandbox. This does **not** include the actual execution for which the gas meter
 	// is responsible. This is achieved by generating all code to the `deploy` function
 	// which is in the wasm module but not executed on `call`.
-	// The results are supposed to be used as `call_with_code_kb(c) - call_with_code_kb(0)`.
+	// The results are supposed to be used as `call_with_code_per_byte(c) - call_with_code_per_byte(0)`.
 	#[pov_mode = Measured]
 	call_with_code_per_byte {
 		let c in 0 .. T::MaxCodeLen::get();
@@ -262,9 +262,9 @@ benchmarks! {
 	// we don't benchmark the actual execution of this code but merely what it takes to load
 	// a code of that size into the sandbox.
 	//
-	// `c`: Size of the code in kilobytes.
-	// `i`: Size of the input in kilobytes.
-	// `s`: Size of the salt in kilobytes.
+	// `c`: Size of the code in bytes.
+	// `i`: Size of the input in bytes.
+	// `s`: Size of the salt in bytes.
 	//
 	// # Note
 	//
@@ -298,8 +298,8 @@ benchmarks! {
 	}
 
 	// Instantiate uses a dummy contract constructor to measure the overhead of the instantiate.
-	// `i`: Size of the input in kilobytes.
-	// `s`: Size of the salt in kilobytes.
+	// `i`: Size of the input in bytes.
+	// `s`: Size of the salt in bytes.
 	#[pov_mode = Measured]
 	instantiate {
 		let i in 0 .. code::max_pages::<T>() * 64 * 1024;
@@ -332,7 +332,7 @@ benchmarks! {
 	// The dummy contract used here does not do this. The costs for the data copy is billed as
 	// part of `seal_input`. The costs for invoking a contract of a specific size are not part
 	// of this benchmark because we cannot know the size of the contract when issuing a call
-	// transaction. See `invoke_per_code_kb` for this.
+	// transaction. See `call_with_code_per_byte` for this.
 	#[pov_mode = Measured]
 	call {
 		let data = vec![42u8; 1024];
@@ -361,7 +361,7 @@ benchmarks! {
 
 	// This constructs a contract that is maximal expensive to instrument.
 	// It creates a maximum number of metering blocks per byte.
-	// `c`: Size of the code in kilobytes.
+	// `c`: Size of the code in bytes.
 	//
 	// # Note
 	//
@@ -680,10 +680,9 @@ benchmarks! {
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	#[pov_mode = Measured]
-	seal_input_per_kb {
-		let n in 0 .. code::max_pages::<T>() * 64;
-		let pages = code::max_pages::<T>();
-		let buffer_size = pages * 64 * 1024 - 4;
+	seal_input_per_byte {
+		let n in 0 .. code::max_pages::<T>() * 64 * 1024;
+		let buffer_size = code::max_pages::<T>() * 64 * 1024 - 4;
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
@@ -707,7 +706,7 @@ benchmarks! {
 			.. Default::default()
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
-		let data = vec![42u8; (n * 1024).min(buffer_size) as usize];
+		let data = vec![42u8; n.min(buffer_size) as usize];
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, data)
 
@@ -738,8 +737,8 @@ benchmarks! {
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	#[pov_mode = Measured]
-	seal_return_per_kb {
-		let n in 0 .. code::max_pages::<T>() * 64;
+	seal_return_per_byte {
+		let n in 0 .. code::max_pages::<T>() * 64 * 1024;
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
@@ -751,7 +750,7 @@ benchmarks! {
 			call_body: Some(body::plain(vec![
 				Instruction::I32Const(0), // flags
 				Instruction::I32Const(0), // data_ptr
-				Instruction::I32Const((n * 1024) as i32), // data_len
+				Instruction::I32Const(n as i32), // data_len
 				Instruction::Call(0),
 				Instruction::End,
 			])),
@@ -868,11 +867,11 @@ benchmarks! {
 
 	// Benchmark the overhead that topics generate.
 	// `t`: Number of topics
-	// `n`: Size of event payload in kb
+	// `n`: Size of event payload in bytes
 	#[pov_mode = Measured]
-	seal_deposit_event_per_topic_and_kb {
+	seal_deposit_event_per_topic_and_byte {
 		let t in 0 .. T::Schedule::get().limits.event_topics;
-		let n in 0 .. T::Schedule::get().limits.payload_len / 1024;
+		let n in 0 .. T::Schedule::get().limits.payload_len;
 		let topics = (0..t).map(|i| T::Hashing::hash_of(&i)).collect::<Vec<_>>().encode();
 		let topics_len = topics.len();
 		let code = WasmModule::<T>::from(ModuleDefinition {
@@ -893,7 +892,7 @@ benchmarks! {
 				Instruction::I32Const(0), // topics_ptr
 				Instruction::I32Const(topics_len as i32), // topics_len
 				Instruction::I32Const(0), // data_ptr
-				Instruction::I32Const((n * 1024) as i32), // data_len
+				Instruction::I32Const(n as i32), // data_len
 				Instruction::Call(0),
 				Instruction::End,
 			])),
@@ -940,10 +939,10 @@ benchmarks! {
 		.result?;
 	}
 
-	seal_debug_message_per_kb {
-		// Vary size of input in kilobytes up to maximum allowed contract memory
+	seal_debug_message_per_byte {
+		// Vary size of input in bytes up to maximum allowed contract memory
 		// or maximum allowed debug buffer size, whichever is less.
-		let i in 0 .. (T::Schedule::get().limits.memory_pages * 64).min(T::MaxDebugBufferLen::get() / 1024);
+		let i in 0 .. (T::Schedule::get().limits.memory_pages * 64 * 1024).min(T::MaxDebugBufferLen::get());
 		// We benchmark versus messages containing printable ASCII codes.
 		// About 1Kb goes to the instrumented contract code instructions,
 		// whereas all the space left we use for the initialization of the debug messages data.
@@ -967,7 +966,7 @@ benchmarks! {
 			],
 			call_body: Some(body::plain(vec![
 				Instruction::I32Const(0), // value_ptr
-				Instruction::I32Const((i * 1024) as i32), // value_len increments by i Kb
+				Instruction::I32Const(i as i32), // value_len
 				Instruction::Call(0),
 				Instruction::Drop,
 				Instruction::End,
@@ -1050,8 +1049,8 @@ benchmarks! {
 
 	#[skip_meta]
 	#[pov_mode = Measured]
-	seal_set_storage_per_new_kb {
-		let n in 0 .. T::Schedule::get().limits.payload_len / 1024;
+	seal_set_storage_per_new_byte {
+		let n in 0 .. T::Schedule::get().limits.payload_len;
 		let max_key_len = T::MaxStorageKeyLen::get();
 		let key = vec![0u8; max_key_len as usize];
 		let code = WasmModule::<T>::from(ModuleDefinition {
@@ -1072,7 +1071,7 @@ benchmarks! {
 				Instruction::I32Const(0), // key_ptr
 				Instruction::I32Const(max_key_len as i32), // key_len
 				Instruction::I32Const(0), // value_ptr
-				Instruction::I32Const((n * 1024) as i32),
+				Instruction::I32Const(n as i32), // value_len
 				Instruction::Call(0),
 				Instruction::Drop,
 				Instruction::End,
@@ -1093,8 +1092,8 @@ benchmarks! {
 
 	#[skip_meta]
 	#[pov_mode = Measured]
-	seal_set_storage_per_old_kb {
-		let n in 0 .. T::Schedule::get().limits.payload_len / 1024;
+	seal_set_storage_per_old_byte {
+		let n in 0 .. T::Schedule::get().limits.payload_len;
 		let max_key_len = T::MaxStorageKeyLen::get();
 		let key = vec![0u8; max_key_len as usize];
 		let code = WasmModule::<T>::from(ModuleDefinition {
@@ -1126,7 +1125,7 @@ benchmarks! {
 		let info = instance.info()?;
 		info.write(
 			&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
-			Some(vec![42u8; (n * 1024) as usize]),
+			Some(vec![42u8; n as usize]),
 			None,
 			false,
 		)
@@ -1187,8 +1186,8 @@ benchmarks! {
 
 	#[skip_meta]
 	#[pov_mode = Measured]
-	seal_clear_storage_per_kb {
-		let n in 0 .. T::Schedule::get().limits.payload_len / 1024;
+	seal_clear_storage_per_byte {
+		let n in 0 .. T::Schedule::get().limits.payload_len;
 		let max_key_len = T::MaxStorageKeyLen::get();
 		let key = vec![0u8; max_key_len as usize];
 		let code = WasmModule::<T>::from(ModuleDefinition {
@@ -1218,7 +1217,7 @@ benchmarks! {
 		let info = instance.info()?;
 		info.write(
 			&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
-			Some(vec![42u8; (n * 1024) as usize]),
+			Some(vec![42u8; n as usize]),
 			None,
 			false,
 		)
@@ -1283,8 +1282,8 @@ benchmarks! {
 
 	#[skip_meta]
 	#[pov_mode = Measured]
-	seal_get_storage_per_kb {
-		let n in 0 .. T::Schedule::get().limits.payload_len / 1024;
+	seal_get_storage_per_byte {
+		let n in 0 .. T::Schedule::get().limits.payload_len;
 		let max_key_len = T::MaxStorageKeyLen::get();
 		let key = vec![0u8; max_key_len as usize];
 		let code = WasmModule::<T>::from(ModuleDefinition {
@@ -1320,7 +1319,7 @@ benchmarks! {
 		let info = instance.info()?;
 		info.write(
 			&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
-			Some(vec![42u8; (n * 1024) as usize]),
+			Some(vec![42u8; n as usize]),
 			None,
 			false,
 		)
@@ -1380,8 +1379,8 @@ benchmarks! {
 
 	#[skip_meta]
 	#[pov_mode = Measured]
-	seal_contains_storage_per_kb {
-		let n in 0 .. T::Schedule::get().limits.payload_len / 1024;
+	seal_contains_storage_per_byte {
+		let n in 0 .. T::Schedule::get().limits.payload_len;
 		let max_key_len = T::MaxStorageKeyLen::get();
 		let key = vec![0u8; max_key_len as usize];
 		let code = WasmModule::<T>::from(ModuleDefinition {
@@ -1411,7 +1410,7 @@ benchmarks! {
 		let info = instance.info()?;
 		info.write(
 			&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
-			Some(vec![42u8; (n * 1024) as usize]),
+			Some(vec![42u8; n as usize]),
 			None,
 			false,
 		)
@@ -1476,8 +1475,8 @@ benchmarks! {
 
 	#[skip_meta]
 	#[pov_mode = Measured]
-	seal_take_storage_per_kb {
-		let n in 0 .. T::Schedule::get().limits.payload_len / 1024;
+	seal_take_storage_per_byte {
+		let n in 0 .. T::Schedule::get().limits.payload_len;
 		let max_key_len = T::MaxStorageKeyLen::get();
 		let key = vec![0u8; max_key_len as usize];
 		let code = WasmModule::<T>::from(ModuleDefinition {
@@ -1513,7 +1512,7 @@ benchmarks! {
 		let info = instance.info()?;
 		info.write(
 			&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
-			Some(vec![42u8; (n * 1024) as usize]),
+			Some(vec![42u8; n as usize]),
 			None,
 			false,
 		)
@@ -1690,9 +1689,9 @@ benchmarks! {
 	}: call(origin, callee, 0u32.into(), Weight::MAX, None, vec![])
 
 	#[pov_mode = Measured]
-	seal_call_per_transfer_clone_kb {
+	seal_call_per_transfer_clone_byte {
 		let t in 0 .. 1;
-		let c in 0 .. code::max_pages::<T>() * 64;
+		let c in 0 .. code::max_pages::<T>() * 64 * 1024;
 		let callee = Contract::with_index(5, <WasmModule<T>>::dummy(), vec![])?;
 		let value: BalanceOf<T> = t.into();
 		let value_bytes = value.encode();
@@ -1741,7 +1740,7 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-		let bytes = vec![42; (c * 1024) as usize];
+		let bytes = vec![42; c as usize];
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, bytes)
 
 	// We assume that every instantiate sends at least the minimum balance.
@@ -1860,10 +1859,10 @@ benchmarks! {
 	}
 
 	#[pov_mode = Measured]
-	seal_instantiate_per_transfer_input_salt_kb {
+	seal_instantiate_per_transfer_input_salt_byte {
 		let t in 0 .. 1;
-		let i in 0 .. (code::max_pages::<T>() - 1) * 64;
-		let s in 0 .. (code::max_pages::<T>() - 1) * 64;
+		let i in 0 .. (code::max_pages::<T>() - 1) * 64 * 1024;
+		let s in 0 .. (code::max_pages::<T>() - 1) * 64 * 1024;
 		let callee_code = WasmModule::<T>::dummy();
 		let hash = callee_code.hash;
 		let hash_bytes = callee_code.hash.encode();
@@ -1907,13 +1906,13 @@ benchmarks! {
 				Instruction::I64Const(0), // gas
 				Instruction::I32Const(hash_len as i32), // value_ptr
 				Instruction::I32Const(0 as i32), // input_data_ptr
-				Instruction::I32Const((i * 1024) as i32), // input_data_len
+				Instruction::I32Const(i as i32), // input_data_len
 				Instruction::I32Const(SENTINEL as i32), // address_ptr
 				Instruction::I32Const(0), // address_len_ptr
 				Instruction::I32Const(SENTINEL as i32), // output_ptr
 				Instruction::I32Const(0), // output_len_ptr
 				Instruction::I32Const(0 as i32), // salt_ptr
-				Instruction::I32Const((s * 1024) as i32), // salt_len
+				Instruction::I32Const(s as i32), // salt_len
 				Instruction::Call(0),
 				Instruction::I32Eqz,
 				Instruction::If(BlockType::NoResult),
@@ -1940,12 +1939,12 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
-	// `n`: Input to hash in kilobytes
+	// `n`: Input to hash in bytes
 	#[pov_mode = Measured]
-	seal_hash_sha2_256_per_kb {
-		let n in 0 .. code::max_pages::<T>() * 64;
+	seal_hash_sha2_256_per_byte {
+		let n in 0 .. code::max_pages::<T>() * 64 * 1024;
 		let instance = Contract::<T>::new(WasmModule::hasher(
-			"seal_hash_sha2_256", 1, n * 1024,
+			"seal_hash_sha2_256", 1, n,
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
@@ -1960,12 +1959,12 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
-	// `n`: Input to hash in kilobytes
+	// `n`: Input to hash in bytes
 	#[pov_mode = Measured]
-	seal_hash_keccak_256_per_kb {
-		let n in 0 .. code::max_pages::<T>() * 64;
+	seal_hash_keccak_256_per_byte {
+		let n in 0 .. code::max_pages::<T>() * 64 * 1024;
 		let instance = Contract::<T>::new(WasmModule::hasher(
-			"seal_hash_keccak_256", 1, n * 1024,
+			"seal_hash_keccak_256", 1, n,
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
@@ -1980,12 +1979,12 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
-	// `n`: Input to hash in kilobytes
+	// `n`: Input to hash in bytes
 	#[pov_mode = Measured]
-	seal_hash_blake2_256_per_kb {
-		let n in 0 .. code::max_pages::<T>() * 64;
+	seal_hash_blake2_256_per_byte {
+		let n in 0 .. code::max_pages::<T>() * 64 * 1024;
 		let instance = Contract::<T>::new(WasmModule::hasher(
-			"seal_hash_blake2_256", 1, n * 1024,
+			"seal_hash_blake2_256", 1, n,
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
@@ -2000,12 +1999,12 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
-	// `n`: Input to hash in kilobytes
+	// `n`: Input to hash in bytes
 	#[pov_mode = Measured]
-	seal_hash_blake2_128_per_kb {
-		let n in 0 .. code::max_pages::<T>() * 64;
+	seal_hash_blake2_128_per_byte {
+		let n in 0 .. code::max_pages::<T>() * 64 * 1024;
 		let instance = Contract::<T>::new(WasmModule::hasher(
-			"seal_hash_blake2_128", 1, n * 1024,
+			"seal_hash_blake2_128", 1, n,
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])

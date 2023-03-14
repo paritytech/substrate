@@ -447,21 +447,9 @@ macro_rules! cost_instr_no_params {
 	};
 }
 
-macro_rules! cost_byte_args {
-	($name:ident, $( $arg: expr ),+) => {
-		cost_args!($name, $( $arg ),+) / 1024
-	}
-}
-
 macro_rules! cost {
 	($name:ident) => {
 		cost_args!($name, 1)
-	};
-}
-
-macro_rules! cost_byte {
-	($name:ident) => {
-		cost_byte_args!($name, 1)
 	};
 }
 
@@ -573,60 +561,60 @@ impl<T: Config> Default for HostFnWeights<T> {
 			// a frequent operation that this would be a vast overestimation.
 			gas: cost!(seal_gas).set_proof_size(0),
 			input: cost!(seal_input),
-			input_per_byte: cost_byte!(seal_input_per_kb),
+			input_per_byte: cost!(seal_input_per_byte),
 			r#return: cost!(seal_return),
-			return_per_byte: cost_byte!(seal_return_per_kb),
+			return_per_byte: cost!(seal_return_per_byte),
 			terminate: cost!(seal_terminate),
 			random: cost!(seal_random),
 			deposit_event: cost!(seal_deposit_event),
-			deposit_event_per_topic: cost_args!(seal_deposit_event_per_topic_and_kb, 1, 0),
-			deposit_event_per_byte: cost_byte_args!(seal_deposit_event_per_topic_and_kb, 0, 1),
+			deposit_event_per_topic: cost_args!(seal_deposit_event_per_topic_and_byte, 1, 0),
+			deposit_event_per_byte: cost_args!(seal_deposit_event_per_topic_and_byte, 0, 1),
 			debug_message: cost!(seal_debug_message),
-			debug_message_per_byte: cost_byte!(seal_debug_message_per_kb),
+			debug_message_per_byte: cost!(seal_debug_message_per_byte),
 			set_storage: cost!(seal_set_storage),
 			set_code_hash: cost!(seal_set_code_hash),
-			set_storage_per_new_byte: cost_byte!(seal_set_storage_per_new_kb),
-			set_storage_per_old_byte: cost_byte!(seal_set_storage_per_old_kb),
+			set_storage_per_new_byte: cost!(seal_set_storage_per_new_byte),
+			set_storage_per_old_byte: cost!(seal_set_storage_per_old_byte),
 			clear_storage: cost!(seal_clear_storage),
-			clear_storage_per_byte: cost_byte!(seal_clear_storage_per_kb),
+			clear_storage_per_byte: cost!(seal_clear_storage_per_byte),
 			contains_storage: cost!(seal_contains_storage),
-			contains_storage_per_byte: cost_byte!(seal_contains_storage_per_kb),
+			contains_storage_per_byte: cost!(seal_contains_storage_per_byte),
 			get_storage: cost!(seal_get_storage),
-			get_storage_per_byte: cost_byte!(seal_get_storage_per_kb),
+			get_storage_per_byte: cost!(seal_get_storage_per_byte),
 			take_storage: cost!(seal_take_storage),
-			take_storage_per_byte: cost_byte!(seal_take_storage_per_kb),
+			take_storage_per_byte: cost!(seal_take_storage_per_byte),
 			transfer: cost!(seal_transfer),
 			call: cost!(seal_call),
 			delegate_call: cost!(seal_delegate_call),
-			call_transfer_surcharge: cost_args!(seal_call_per_transfer_clone_kb, 1, 0),
-			call_per_cloned_byte: cost_byte_args!(seal_call_per_transfer_clone_kb, 0, 1),
+			call_transfer_surcharge: cost_args!(seal_call_per_transfer_clone_byte, 1, 0),
+			call_per_cloned_byte: cost_args!(seal_call_per_transfer_clone_byte, 0, 1),
 			instantiate: cost!(seal_instantiate),
 			instantiate_transfer_surcharge: cost_args!(
-				seal_instantiate_per_transfer_input_salt_kb,
+				seal_instantiate_per_transfer_input_salt_byte,
 				1,
 				0,
 				0
 			),
-			instantiate_per_input_byte: cost_byte_args!(
-				seal_instantiate_per_transfer_input_salt_kb,
+			instantiate_per_input_byte: cost_args!(
+				seal_instantiate_per_transfer_input_salt_byte,
 				0,
 				1,
 				0
 			),
-			instantiate_per_salt_byte: cost_byte_args!(
-				seal_instantiate_per_transfer_input_salt_kb,
+			instantiate_per_salt_byte: cost_args!(
+				seal_instantiate_per_transfer_input_salt_byte,
 				0,
 				0,
 				1
 			),
 			hash_sha2_256: cost!(seal_hash_sha2_256),
-			hash_sha2_256_per_byte: cost_byte!(seal_hash_sha2_256_per_kb),
+			hash_sha2_256_per_byte: cost!(seal_hash_sha2_256_per_byte),
 			hash_keccak_256: cost!(seal_hash_keccak_256),
-			hash_keccak_256_per_byte: cost_byte!(seal_hash_keccak_256_per_kb),
+			hash_keccak_256_per_byte: cost!(seal_hash_keccak_256_per_byte),
 			hash_blake2_256: cost!(seal_hash_blake2_256),
-			hash_blake2_256_per_byte: cost_byte!(seal_hash_blake2_256_per_kb),
+			hash_blake2_256_per_byte: cost!(seal_hash_blake2_256_per_byte),
 			hash_blake2_128: cost!(seal_hash_blake2_128),
-			hash_blake2_128_per_byte: cost_byte!(seal_hash_blake2_128_per_kb),
+			hash_blake2_128_per_byte: cost!(seal_hash_blake2_128_per_byte),
 			ecdsa_recover: cost!(seal_ecdsa_recover),
 			ecdsa_to_eth_address: cost!(seal_ecdsa_to_eth_address),
 			reentrance_count: cost!(seal_reentrance_count),
