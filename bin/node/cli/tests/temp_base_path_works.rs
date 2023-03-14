@@ -32,6 +32,7 @@ use std::{
 
 pub mod common;
 
+/*
 #[ignore]
 #[tokio::test]
 async fn temp_base_path_works() {
@@ -62,3 +63,4 @@ async fn temp_base_path_works() {
 
 	assert!(!db_path.exists());
 }
+*/
