@@ -106,9 +106,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let now = frame_system::Pallet::<T>::block_number();
 		ensure!(deadline >= now, Error::<T, I>::DeadlineExpired);
 
-		let collection_details =
-			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-
 		ensure!(
 			Self::has_role(&collection, &signer, CollectionRole::Issuer),
 			Error::<T, I>::NoPermission
@@ -123,27 +120,28 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			item_config,
 			|_, _| Ok(()),
 		)?;
-		let origin = Self::find_account_by_role(&collection, CollectionRole::Admin)
-			.unwrap_or(collection_details.owner.clone());
-		for (key, value) in attributes {
-			Self::do_set_attribute(
-				origin.clone(),
-				collection,
-				Some(item),
-				AttributeNamespace::CollectionOwner,
-				Self::construct_attribute_key(key)?,
-				Self::construct_attribute_value(value)?,
-				mint_to.clone(),
-			)?;
-		}
-		if !metadata.len().is_zero() {
-			Self::do_set_item_metadata(
-				Some(origin.clone()),
-				collection,
-				item,
-				metadata,
-				Some(mint_to.clone()),
-			)?;
+		let admin_account = Self::find_account_by_role(&collection, CollectionRole::Admin);
+		if let Some(admin_account) = admin_account {
+			for (key, value) in attributes {
+				Self::do_set_attribute(
+					admin_account.clone(),
+					collection,
+					Some(item),
+					AttributeNamespace::CollectionOwner,
+					Self::construct_attribute_key(key)?,
+					Self::construct_attribute_value(value)?,
+					mint_to.clone(),
+				)?;
+			}
+			if !metadata.len().is_zero() {
+				Self::do_set_item_metadata(
+					Some(admin_account.clone()),
+					collection,
+					item,
+					metadata,
+					Some(mint_to.clone()),
+				)?;
+			}
 		}
 		Ok(())
 	}

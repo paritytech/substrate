@@ -1,0 +1,5 @@
+error: The `pallet_doc` received an unsupported argument. Supported format: `pallet_doc(PATH)`
+ --> tests/pallet_ui/pallet_doc_arg_non_path.rs:3:1
+  |
+3 | #[pallet_doc(X)]
+  | ^

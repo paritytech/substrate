@@ -383,16 +383,16 @@ benchmarks_instance_pallet! {
 
 	set_team {
 		let (collection, caller, _) = create_collection::<T, I>();
-		let target0 = T::Lookup::unlookup(account("target", 0, SEED));
-		let target1 = T::Lookup::unlookup(account("target", 1, SEED));
-		let target2 = T::Lookup::unlookup(account("target", 2, SEED));
+		let target0 = Some(T::Lookup::unlookup(account("target", 0, SEED)));
+		let target1 = Some(T::Lookup::unlookup(account("target", 1, SEED)));
+		let target2 = Some(T::Lookup::unlookup(account("target", 2, SEED)));
 	}: _(SystemOrigin::Signed(caller), collection, target0, target1, target2)
 	verify {
 		assert_last_event::<T, I>(Event::TeamChanged{
 			collection,
-			issuer: account("target", 0, SEED),
-			admin: account("target", 1, SEED),
-			freezer: account("target", 2, SEED),
+			issuer: Some(account("target", 0, SEED)),
+			admin: Some(account("target", 1, SEED)),
+			freezer: Some(account("target", 2, SEED)),
 		}.into());
 	}
 

@@ -68,7 +68,6 @@ pub mod pallet {
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(13);
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(crate) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
@@ -1452,7 +1451,7 @@ pub mod pallet {
 			ensure!(!slash_indices.is_empty(), Error::<T>::EmptyTargets);
 			ensure!(is_sorted_and_unique(&slash_indices), Error::<T>::NotSortedAndUnique);
 
-			let mut unapplied = <Self as Store>::UnappliedSlashes::get(&era);
+			let mut unapplied = UnappliedSlashes::<T>::get(&era);
 			let last_item = slash_indices[slash_indices.len() - 1];
 			ensure!((last_item as usize) < unapplied.len(), Error::<T>::InvalidSlashIndex);
 
@@ -1461,7 +1460,7 @@ pub mod pallet {
 				unapplied.remove(index);
 			}
 
-			<Self as Store>::UnappliedSlashes::insert(&era, &unapplied);
+			UnappliedSlashes::<T>::insert(&era, &unapplied);
 			Ok(())
 		}
 
