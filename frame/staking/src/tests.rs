@@ -5823,3 +5823,100 @@ mod staking_interface {
 		});
 	}
 }
+
+mod on_staking_update {
+	use super::*;
+	use crate::mock::StakingEvent::*;
+
+	#[test]
+	fn on_validator_add() {
+		ExtBuilder::default().check_events(true).build_and_execute(|| {
+			assert_ok!(Staking::bond(
+				RuntimeOrigin::signed(3),
+				4,
+				1500,
+				RewardDestination::Controller
+			));
+			assert_ok!(Staking::validate(RuntimeOrigin::signed(4), ValidatorPrefs::default()));
+			assert_eq!(EmittedEvents::take(), vec![StakeUpdate(3, None), ValidatorAdd(3)]);
+		});
+	}
+
+	#[test]
+	fn on_validator_update() {
+		ExtBuilder::default().check_events(true).build_and_execute(|| {
+			assert_ok!(Staking::validate(RuntimeOrigin::signed(10), ValidatorPrefs::default()));
+			assert_eq!(EmittedEvents::take(), vec![ValidatorUpdate(11)]);
+		});
+	}
+
+	#[test]
+	fn on_stake_update() {
+		ExtBuilder::default().check_events(true).build_and_execute(|| {
+			assert_ok!(Staking::bond(
+				RuntimeOrigin::signed(3),
+				4,
+				100,
+				RewardDestination::Controller
+			));
+
+			assert_ok!(Staking::bond_extra(RuntimeOrigin::signed(3), 500));
+			assert_eq!(
+				EmittedEvents::take(),
+				vec![
+					StakeUpdate(3, None),
+					StakeUpdate(3, Some(Stake { stash: 3, total: 100, active: 100 }))
+				]
+			);
+		});
+	}
+
+	#[test]
+	fn on_nominator_update() {
+		ExtBuilder::default().check_events(true).nominate(true).build_and_execute(|| {
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(100), vec![11]));
+			assert_eq!(EmittedEvents::take(), vec![NominatorUpdate(101, vec![11, 21])]);
+		});
+	}
+
+	#[test]
+	fn on_nominator_add() {
+		ExtBuilder::default().check_events(true).build_and_execute(|| {
+			assert_ok!(Staking::bond(
+				RuntimeOrigin::signed(1),
+				2,
+				1000,
+				RewardDestination::Controller
+			));
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(2), vec![11, 21, 31]));
+			assert_eq!(EmittedEvents::take(), vec![StakeUpdate(1, None), NominatorAdd(1)]);
+		});
+	}
+
+	#[test]
+	fn on_nominator_remove() {
+		ExtBuilder::default().check_events(true).nominate(true).build_and_execute(|| {
+			assert_ok!(Staking::force_unstake(RuntimeOrigin::root(), 101, 0));
+			assert_eq!(
+				EmittedEvents::take(),
+				vec![NominatorRemove(101, vec![11, 21]), Unstake(101)]
+			);
+		});
+	}
+
+	#[test]
+	fn on_validator_remove() {
+		ExtBuilder::default().check_events(true).nominate(true).build_and_execute(|| {
+			assert_ok!(Staking::force_unstake(RuntimeOrigin::root(), 11, 0));
+			assert_eq!(EmittedEvents::take(), vec![ValidatorRemove(11), Unstake(11)]);
+		});
+	}
+
+	#[test]
+	fn on_unstake() {
+		ExtBuilder::default().check_events(true).nominate(true).build_and_execute(|| {
+			assert_ok!(Staking::force_unstake(RuntimeOrigin::root(), 11, 0));
+			assert_eq!(EmittedEvents::take(), vec![ValidatorRemove(11), Unstake(11)]);
+		});
+	}
+}

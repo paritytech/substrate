@@ -286,7 +286,7 @@ impl<T: Config> sp_staking::OnStakerSlash<AccountId, Balance> for OnStakerSlashM
 	}
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum StakingEvent {
 	StakeUpdate(AccountId, Option<Stake<AccountId, Balance>>),
 	NominatorAdd(AccountId),
