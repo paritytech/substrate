@@ -57,6 +57,28 @@ mod on_stake_update {
 			}
 		});
 	}
+
+	#[test]
+	#[should_panic(expected = "Unable to update a nominator, perhaps it does not exist?")]
+	fn defensive_when_not_in_list_nominator() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+			for id in Nominators::get() {
+				let _ = StakeTracker::on_stake_update(&id, None);
+			}
+		});
+	}
+
+	#[test]
+	#[should_panic(expected = "Unable to update a validator, perhaps it does not exist?")]
+	fn defensive_when_not_in_list_validator() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+			for id in Validators::get() {
+				let _ = StakeTracker::on_stake_update(&id, None);
+			}
+		});
+	}
 }
 
 mod on_nominator_add {
