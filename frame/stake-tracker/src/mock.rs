@@ -129,6 +129,17 @@ impl ScoreProvider<AccountId> for StakingMock {
 	}
 }
 
+parameter_types! {
+	pub static Nominators: Vec<AccountId> = vec![20, 21, 22, 23, 24];
+	pub static Validators: Vec<AccountId> = vec![10, 11, 12, 13, 14];
+}
+
+pub(crate) fn stakers() -> Vec<AccountId> {
+	let mut stakers = Nominators::get();
+	stakers.append(&mut Validators::get());
+	stakers
+}
+
 impl StakingInterface for StakingMock {
 	type Balance = Balance;
 	type AccountId = AccountId;
@@ -157,7 +168,7 @@ impl StakingInterface for StakingMock {
 	fn stake(
 		who: &Self::AccountId,
 	) -> Result<Stake<Self::AccountId, Self::Balance>, DispatchError> {
-		if *who >= 30 {
+		if !Nominators::get().contains(who) && !Validators::get().contains(who) {
 			return Err(DispatchError::Other("not bonded"))
 		}
 		let stake = Balances::total_balance(who);
@@ -213,7 +224,7 @@ impl StakingInterface for StakingMock {
 	}
 
 	fn nominations(who: &Self::AccountId) -> Option<Vec<Self::AccountId>> {
-		if *who >= 20 && *who <= 24 {
+		if Nominators::get().contains(who) {
 			Some(Vec::new())
 		} else {
 			None
@@ -247,11 +258,6 @@ impl ExtBuilder {
 
 		let _ = pallet_balances::GenesisConfig::<Runtime> {
 			balances: vec![
-				// Random users, used to test some edge-cases, where we don't want the user to be
-				// neither a nominator nor validator.
-				(1, 10),
-				(2, 20),
-				(3, 30),
 				// Validator stashes, for simplicity we assume stash == controller as StakeTracker
 				// really does not care.
 				(10, 10),

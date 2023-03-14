@@ -125,8 +125,7 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 	}
 
 	fn on_validator_add(who: &T::AccountId) {
-		let self_stake = Self::active_stake_of(who);
-		let _ = T::VoterList::on_insert(who.clone(), Self::to_vote(self_stake))
+		let _ = T::VoterList::on_insert(who.clone(), Self::to_vote(Self::active_stake_of(who)))
 			.defensive_proof("Unable to insert a validator, perhaps it already exists?");
 	}
 
