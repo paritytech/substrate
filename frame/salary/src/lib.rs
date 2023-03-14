@@ -31,7 +31,7 @@ use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
 	traits::{
-		tokens::{fungible, Balance, GetSalary},
+		tokens::{fungible, Balance, GetSalary, Preservation::Expendable},
 		RankedMembers,
 	},
 	RuntimeDebug,
@@ -90,14 +90,14 @@ pub trait Pay {
 
 /// Simple implementation of `Pay` which makes a payment from a "pot" - i.e. a single account.
 pub struct PayFromAccount<F, A>(sp_std::marker::PhantomData<(F, A)>);
-impl<A: TypedGet, F: fungible::Transfer<A::Type> + fungible::Mutate<A::Type>> Pay
+impl<A: TypedGet, F: fungible::Mutate<A::Type> + fungible::Mutate<A::Type>> Pay
 	for PayFromAccount<F, A>
 {
 	type Balance = F::Balance;
 	type AccountId = A::Type;
 	type Id = ();
 	fn pay(who: &Self::AccountId, amount: Self::Balance) -> Result<Self::Id, ()> {
-		<F as fungible::Transfer<_>>::transfer(&A::get(), who, amount, false).map_err(|_| ())?;
+		<F as fungible::Mutate<_>>::transfer(&A::get(), who, amount, Expendable).map_err(|_| ())?;
 		Ok(())
 	}
 	fn check_payment(_: ()) -> PaymentStatus {

@@ -52,10 +52,10 @@ impl<T: Config<I>, I: 'static> fungibles::Inspect<<T as SystemConfig>::AccountId
 	fn reducible_balance(
 		asset: Self::AssetId,
 		who: &<T as SystemConfig>::AccountId,
-		keep_alive: Preservation,
-		_force: Fortitude,
+		preservation: Preservation,
+		_: Fortitude,
 	) -> Self::Balance {
-		Pallet::<T, I>::reducible_balance(asset, who, keep_alive.into()).unwrap_or(Zero::zero())
+		Pallet::<T, I>::reducible_balance(asset, who, preservation.into()).unwrap_or(Zero::zero())
 	}
 
 	fn can_deposit(
@@ -113,11 +113,11 @@ impl<T: Config<I>, I: 'static> fungibles::Unbalanced<T::AccountId> for Pallet<T,
 		who: &T::AccountId,
 		amount: Self::Balance,
 		precision: Precision,
-		keep_alive: Preservation,
-		_force: Fortitude,
+		preservation: Preservation,
+		_: Fortitude,
 	) -> Result<Self::Balance, DispatchError> {
 		let f = DebitFlags {
-			keep_alive: keep_alive != Expendable,
+			keep_alive: preservation != Expendable,
 			best_effort: precision == BestEffort,
 		};
 		Self::decrease_balance(asset, who, amount, f, |_, _| Ok(()))
@@ -126,7 +126,7 @@ impl<T: Config<I>, I: 'static> fungibles::Unbalanced<T::AccountId> for Pallet<T,
 		asset: T::AssetId,
 		who: &T::AccountId,
 		amount: Self::Balance,
-		_best_effort: Precision,
+		_: Precision,
 	) -> Result<Self::Balance, DispatchError> {
 		Self::increase_balance(asset, who, amount, |_| Ok(()))?;
 		Ok(amount)

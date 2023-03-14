@@ -58,10 +58,10 @@ impl<
 	}
 	fn reducible_balance(
 		who: &AccountId,
-		keep_alive: Preservation,
+		preservation: Preservation,
 		force: Fortitude,
 	) -> Self::Balance {
-		<F as fungibles::Inspect<AccountId>>::reducible_balance(A::get(), who, keep_alive, force)
+		<F as fungibles::Inspect<AccountId>>::reducible_balance(A::get(), who, preservation, force)
 	}
 	fn can_deposit(
 		who: &AccountId,
@@ -147,7 +147,7 @@ impl<
 		who: &AccountId,
 		amount: Self::Balance,
 		precision: Precision,
-		keep_alive: Preservation,
+		preservation: Preservation,
 		force: Fortitude,
 	) -> Result<Self::Balance, DispatchError> {
 		<F as fungibles::Unbalanced<AccountId>>::decrease_balance(
@@ -155,7 +155,7 @@ impl<
 			who,
 			amount,
 			precision,
-			keep_alive,
+			preservation,
 			force,
 		)
 	}
@@ -243,9 +243,9 @@ impl<
 		source: &AccountId,
 		dest: &AccountId,
 		amount: Self::Balance,
-		keep_alive: Preservation,
+		preservation: Preservation,
 	) -> Result<Self::Balance, DispatchError> {
-		<F as fungibles::Mutate<AccountId>>::transfer(A::get(), source, dest, amount, keep_alive)
+		<F as fungibles::Mutate<AccountId>>::transfer(A::get(), source, dest, amount, preservation)
 	}
 
 	fn set_balance(who: &AccountId, amount: Self::Balance) -> Self::Balance {
@@ -312,7 +312,7 @@ impl<
 		dest: &AccountId,
 		amount: Self::Balance,
 		precision: Precision,
-		keep_alive: Preservation,
+		preservation: Preservation,
 		force: Fortitude,
 	) -> Result<Self::Balance, DispatchError> {
 		<F as fungibles::MutateHold<AccountId>>::transfer_and_hold(
@@ -322,7 +322,7 @@ impl<
 			dest,
 			amount,
 			precision,
-			keep_alive,
+			preservation,
 			force,
 		)
 	}
@@ -404,10 +404,10 @@ impl<
 	fn settle(
 		who: &AccountId,
 		debt: Debt<AccountId, Self>,
-		keep_alive: Preservation,
+		preservation: Preservation,
 	) -> Result<Credit<AccountId, Self>, Debt<AccountId, Self>> {
 		let debt = fungibles::Imbalance::new(A::get(), debt.peek());
-		<F as fungibles::Balanced<AccountId>>::settle(who, debt, keep_alive)
+		<F as fungibles::Balanced<AccountId>>::settle(who, debt, preservation)
 			.map(|credit| Imbalance::new(credit.peek()))
 			.map_err(|debt| Imbalance::new(debt.peek()))
 	}
@@ -415,7 +415,7 @@ impl<
 		who: &AccountId,
 		value: Self::Balance,
 		precision: Precision,
-		keep_alive: Preservation,
+		preservation: Preservation,
 		force: Fortitude,
 	) -> Result<Credit<AccountId, Self>, DispatchError> {
 		<F as fungibles::Balanced<AccountId>>::withdraw(
@@ -423,7 +423,7 @@ impl<
 			who,
 			value,
 			precision,
-			keep_alive,
+			preservation,
 			force,
 		)
 		.map(|credit| Imbalance::new(credit.peek()))

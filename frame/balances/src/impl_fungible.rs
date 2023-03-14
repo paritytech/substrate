@@ -43,7 +43,7 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 	}
 	fn reducible_balance(
 		who: &T::AccountId,
-		keep_alive: Preservation,
+		preservation: Preservation,
 		force: Fortitude,
 	) -> Self::Balance {
 		let a = Self::account(who);
@@ -54,12 +54,12 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 			untouchable = a.frozen.saturating_sub(a.reserved);
 		}
 		// If we want to keep our provider ref..
-		if keep_alive == Preserve
+		if preservation == Preserve
 			// ..or we don't want the account to die and our provider ref is needed for it to live..
-			|| keep_alive == Protect && !a.free.is_zero() &&
+			|| preservation == Protect && !a.free.is_zero() &&
 				frame_system::Pallet::<T>::providers(who) == 1
 			// ..or we don't care about the account dying but our provider ref is required..
-			|| keep_alive == Expendable && !a.free.is_zero() &&
+			|| preservation == Expendable && !a.free.is_zero() &&
 				!frame_system::Pallet::<T>::can_dec_provider(who)
 		{
 			// ..then the ED needed..
