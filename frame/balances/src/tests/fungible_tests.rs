@@ -21,10 +21,51 @@ use super::*;
 use frame_support::traits::tokens::{
 	Fortitude::{Force, Polite},
 	Precision::{BestEffort, Exact},
-	Preservation::Expendable,
+	Preservation::{Expendable, Preserve, Protect},
 	Restriction::Free,
 };
-use fungible::{Inspect, InspectFreeze, InspectHold, MutateFreeze, MutateHold, Unbalanced};
+use fungible::{Inspect, InspectFreeze, InspectHold, Mutate, MutateFreeze, MutateHold, Unbalanced};
+
+#[test]
+fn inspect_trait_reducible_balance_basic_works() {
+	ExtBuilder::default().existential_deposit(10).build_and_execute_with(|| {
+		Balances::set_balance(&1, 100);
+		assert_eq!(Balances::reducible_balance(&1, Expendable, Polite), 100);
+		assert_eq!(Balances::reducible_balance(&1, Protect, Polite), 90);
+		assert_eq!(Balances::reducible_balance(&1, Preserve, Polite), 90);
+		assert_eq!(Balances::reducible_balance(&1, Expendable, Force), 100);
+		assert_eq!(Balances::reducible_balance(&1, Protect, Force), 90);
+		assert_eq!(Balances::reducible_balance(&1, Preserve, Force), 90);
+	});
+}
+
+#[test]
+fn inspect_trait_reducible_balance_other_provide_works() {
+	ExtBuilder::default().existential_deposit(10).build_and_execute_with(|| {
+		Balances::set_balance(&1, 100);
+		System::inc_providers(&1);
+		assert_eq!(Balances::reducible_balance(&1, Expendable, Polite), 100);
+		assert_eq!(Balances::reducible_balance(&1, Protect, Polite), 100);
+		assert_eq!(Balances::reducible_balance(&1, Preserve, Polite), 90);
+		assert_eq!(Balances::reducible_balance(&1, Expendable, Force), 100);
+		assert_eq!(Balances::reducible_balance(&1, Protect, Force), 100);
+		assert_eq!(Balances::reducible_balance(&1, Preserve, Force), 90);
+	});
+}
+
+#[test]
+fn inspect_trait_reducible_balance_frozen_works() {
+	ExtBuilder::default().existential_deposit(10).build_and_execute_with(|| {
+		Balances::set_balance(&1, 100);
+		Balances::set_freeze(TestId::Foo, &1, 50);
+		assert_eq!(Balances::reducible_balance(&1, Expendable, Polite), 100);
+		assert_eq!(Balances::reducible_balance(&1, Protect, Polite), 90);
+		assert_eq!(Balances::reducible_balance(&1, Preserve, Polite), 90);
+		assert_eq!(Balances::reducible_balance(&1, Expendable, Force), 50);
+		assert_eq!(Balances::reducible_balance(&1, Protect, Force), 40);
+		assert_eq!(Balances::reducible_balance(&1, Preserve, Force), 40);
+	});
+}
 
 #[test]
 fn unbalanced_trait_set_balance_works() {

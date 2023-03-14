@@ -28,7 +28,7 @@ pub mod nonfungibles;
 pub mod nonfungibles_v2;
 pub use imbalance::Imbalance;
 pub use misc::{
-	AssetId, Balance, BalanceConversion, BalanceStatus, ConvertRank,
-	DepositConsequence, ExistenceRequirement, Fortitude, GetSalary, Locker, Precision,
-	Preservation, Provenance, Restriction, WithdrawConsequence, WithdrawReasons,
+	AssetId, Balance, BalanceConversion, BalanceStatus, ConvertRank, DepositConsequence,
+	ExistenceRequirement, Fortitude, GetSalary, Locker, Precision, Preservation, Provenance,
+	Restriction, WithdrawConsequence, WithdrawReasons,
 };
