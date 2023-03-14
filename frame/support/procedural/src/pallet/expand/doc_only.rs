@@ -59,7 +59,7 @@ pub fn expand_doc_only(def: &mut Def) -> proc_macro2::TokenStream {
 	};
 
 	quote::quote!(
-		/// Auto-generated docs-only module listing all defined storage types for this pallet
+		/// Auto-generated docs-only module listing all defined storage types for this pallet.
 		/// Note that members of this module cannot be used directly and are only provided for
 		/// documentation purposes.
 		#[cfg(doc)]
