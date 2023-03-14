@@ -49,7 +49,7 @@ mod on_stake_update {
 				let _ = VoterList::on_insert(*id, score).unwrap();
 				assert_eq!(VoterList::count() as usize, idx + 1);
 				assert_eq!(VoterList::get_score(id).unwrap(), score);
-				let _ = StakeTracker::on_stake_update(id, None);
+				StakeTracker::on_stake_update(id, None);
 				assert_eq!(
 					VoterList::get_score(id).unwrap(),
 					Pallet::<Runtime>::to_vote(Staking::stake(id).map(|s| s.active).unwrap())
@@ -64,7 +64,7 @@ mod on_stake_update {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(VoterList::count(), 0);
 			for id in Nominators::get() {
-				let _ = StakeTracker::on_stake_update(&id, None);
+				StakeTracker::on_stake_update(&id, None);
 			}
 		});
 	}
@@ -75,7 +75,7 @@ mod on_stake_update {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(VoterList::count(), 0);
 			for id in Validators::get() {
-				let _ = StakeTracker::on_stake_update(&id, None);
+				StakeTracker::on_stake_update(&id, None);
 			}
 		});
 	}
@@ -99,6 +99,18 @@ mod on_nominator_add {
 			}
 
 			assert_eq!(VoterList::count(), stakers().len() as u32);
+		});
+	}
+
+	#[test]
+	#[should_panic(expected = "Unable to insert a nominator, perhaps it already exists?")]
+	fn defensive_when_in_list() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+			for id in Nominators::get() {
+				let _ = VoterList::on_insert(id, 100);
+				StakeTracker::on_nominator_add(&id);
+			}
 		});
 	}
 }
@@ -145,6 +157,18 @@ mod on_validator_add {
 			}
 
 			assert_eq!(VoterList::count(), stakers().len() as u32);
+		});
+	}
+
+	#[test]
+	#[should_panic(expected = "Unable to insert a validator, perhaps it already exists?")]
+	fn defensive_when_in_list() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+			for id in Validators::get() {
+				let _ = VoterList::on_insert(id, 100);
+				StakeTracker::on_validator_add(&id);
+			}
 		});
 	}
 }
@@ -195,6 +219,17 @@ mod on_validator_remove {
 			}
 		});
 	}
+
+	#[test]
+	#[should_panic(expected = "Unable to remove a validator, perhaps it does not exist?")]
+	fn defensive_when_not_in_list() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+			for id in Validators::get() {
+				StakeTracker::on_validator_remove(&id);
+			}
+		});
+	}
 }
 
 mod on_nominator_remove {
@@ -215,6 +250,17 @@ mod on_nominator_remove {
 			}
 		});
 	}
+
+	#[test]
+	#[should_panic(expected = "Unable to remove a nominator, perhaps it does not exist?")]
+	fn defensive_when_not_in_list() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+			for id in Nominators::get() {
+				StakeTracker::on_nominator_remove(&id, vec![]);
+			}
+		});
+	}
 }
 
 mod on_unstake {
@@ -230,6 +276,18 @@ mod on_unstake {
 			// any staker
 			for id in stakers() {
 				assert_storage_noop!(StakeTracker::on_unstake(&id));
+			}
+		});
+	}
+
+	#[test]
+	#[should_panic(expected = "The staker should have already been removed!")]
+	fn defensive_when_in_list() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+			for id in stakers() {
+				let _ = VoterList::on_insert(id, 100);
+				StakeTracker::on_unstake(&id);
 			}
 		});
 	}
