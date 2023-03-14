@@ -17,14 +17,14 @@
 
 use crate::utils::{
 	extract_parameter_names_types_and_borrows, fold_fn_decl_for_client_side, generate_crate_access,
-	generate_hidden_includes, generate_runtime_mod_name_for_trait, parse_runtime_api_version,
-	prefix_function_with_trait, replace_wild_card_parameter_names, return_type_extract_type,
-	versioned_trait_name, AllowSelfRefInParameters,
+	generate_runtime_mod_name_for_trait, parse_runtime_api_version, prefix_function_with_trait,
+	replace_wild_card_parameter_names, return_type_extract_type, versioned_trait_name,
+	AllowSelfRefInParameters,
 };
 
 use crate::common::{
 	API_VERSION_ATTRIBUTE, BLOCK_GENERIC_IDENT, CHANGED_IN_ATTRIBUTE, CORE_TRAIT_ATTRIBUTE,
-	HIDDEN_INCLUDES_ID, RENAMED_ATTRIBUTE, SUPPORTED_ATTRIBUTE_NAMES,
+	RENAMED_ATTRIBUTE, SUPPORTED_ATTRIBUTE_NAMES,
 };
 
 use proc_macro2::{Span, TokenStream};
@@ -62,7 +62,7 @@ impl Parse for RuntimeApiDecls {
 
 /// Extend the given generics with `Block: BlockT` as first generic parameter.
 fn extend_generics_with_block(generics: &mut Generics) {
-	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
+	let c = generate_crate_access();
 
 	generics.lt_token = Some(Default::default());
 	generics.params.insert(0, parse_quote!( Block: #c::BlockT ));
@@ -298,7 +298,7 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 			#[allow(dead_code)]
 			#[allow(deprecated)]
 			pub mod #mod_name {
-				use super::*;
+				pub use super::*;
 
 				#( #versioned_api_traits )*
 
@@ -495,10 +495,10 @@ impl<'a> ToClientSideDecl<'a> {
 					__runtime_api_at_param__,
 					#context,
 					__runtime_api_impl_params_encoded__,
-					&|version| {
+					&|_version| {
 						#(
 							// Check if we need to call the function by an old name.
-							if version.apis.iter().any(|(s, v)| {
+							if _version.apis.iter().any(|(s, v)| {
 								s == &#runtime_mod::ID && *v < #versions
 							}) {
 								return #old_names
@@ -569,7 +569,7 @@ fn generate_runtime_api_version(version: u32) -> TokenStream {
 /// Generates the implementation of `RuntimeApiInfo` for the given trait.
 fn generate_runtime_info_impl(trait_: &ItemTrait, version: u64) -> TokenStream {
 	let trait_name = &trait_.ident;
-	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
+	let crate_ = generate_crate_access();
 	let id = generate_runtime_api_id(&trait_name.to_string());
 	let version = generate_runtime_api_version(version as u32);
 
@@ -620,7 +620,7 @@ fn generate_client_side_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 	for decl in decls {
 		let decl = decl.clone();
 
-		let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
+		let crate_ = generate_crate_access();
 		let block_hash = quote!( <Block as #crate_::BlockT>::Hash );
 		let mut found_attributes = HashMap::new();
 		let mut errors = Vec::new();
@@ -777,15 +777,20 @@ pub fn decl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::Tok
 fn decl_runtime_apis_impl_inner(api_decls: &[ItemTrait]) -> Result<TokenStream> {
 	check_trait_decls(api_decls)?;
 
-	let hidden_includes = generate_hidden_includes(HIDDEN_INCLUDES_ID);
 	let runtime_decls = generate_runtime_decls(api_decls)?;
 	let client_side_decls = generate_client_side_decls(api_decls)?;
 
-	Ok(quote!(
-		#hidden_includes
-
+	let decl = quote! {
 		#runtime_decls
 
 		#client_side_decls
-	))
+	};
+
+	let decl = expander::Expander::new("decl_runtime_apis")
+		.dry(std::env::var("SP_API_EXPAND").is_err())
+		.verbose(true)
+		.write_to_out_dir(decl)
+		.expect("Does not fail because of IO in OUT_DIR; qed");
+
+	Ok(decl)
 }
