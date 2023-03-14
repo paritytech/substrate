@@ -276,10 +276,10 @@ pub use service::{
 		KademliaKey, NetworkBlock, NetworkDHTProvider, NetworkEventStream, NetworkNotification,
 		NetworkPeers, NetworkRequest, NetworkSigner, NetworkStateInfo, NetworkStatus,
 		NetworkStatusProvider, NetworkSyncForkRequest, NotificationSender as NotificationSenderT,
-		NotificationSenderError,
+		NotificationSenderError, NotificationSenderReady,
 	},
-	DecodingError, Keypair, NetworkService, NetworkWorker, NotificationSender,
-	NotificationSenderReady, OutboundFailure, PublicKey,
+	DecodingError, Keypair, NetworkService, NetworkWorker, NotificationSender, OutboundFailure,
+	PublicKey,
 };
 pub use types::ProtocolName;
 
