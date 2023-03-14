@@ -81,12 +81,11 @@ pub struct Stake<AccountId, Balance> {
 	pub active: Balance,
 }
 
-/// A generic staking event listener.
-/// Note that the interface is designed in a way that the events are fired post-action, so any
-/// pre-action data that is needed needs to be passed to interface methods.
-/// The rest of the data can be retrieved by using `StakingInterface`.
+/// A generic staking event listener. Note that the interface is designed in a way that the events
+/// are fired post-action, so any pre-action data that is needed needs to be passed to interface
+/// methods. The rest of the data can be retrieved by using `StakingInterface`.
 #[impl_trait_for_tuples::impl_for_tuples(10)]
-pub trait OnStakingUpdate<AccountId: Clone, Balance: Copy> {
+pub trait OnStakingUpdate<AccountId, Balance> {
 	/// Fired when the stake amount of someone updates.
 	///
 	/// This is effectively any changes to the bond amount, such as bonding more funds, and
