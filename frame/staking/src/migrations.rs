@@ -266,7 +266,7 @@ pub mod v10 {
 	pub struct MigrateToV10<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV10<T> {
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
-			if StorageVersion::<T>::get() == ObsoleteReleases::V9_0_0 {
+			if obsolete::StorageVersion::<T>::get() == obsolete::Releases::V9_0_0 {
 				let pending_slashes = UnappliedSlashes::<T>::iter().take(512);
 				for (era, slashes) in pending_slashes {
 					for slash in slashes {
