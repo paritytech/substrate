@@ -1619,6 +1619,17 @@ benchmarks! {
 		let value: BalanceOf<T> = 0u32.into();
 		let value_bytes = value.encode();
 		let value_len = BalanceOf::<T>::max_encoded_len() as u32;
+		// Set an own limit every 2nd call
+		let deposits = (0..r * API_BENCHMARK_BATCH_SIZE)
+			.enumerate()
+			.map(|(i,x)| if i % 2 == 0 { 0u32.into() } else { x.into() } )
+			.collect::<Vec<BalanceOf<T>>>();
+		let deposits_bytes: Vec<u8> = deposits.iter().flat_map(|i| i.encode()).collect();
+		let deposits_len = deposits_bytes.len() as u32;
+		let deposit_len = value_len.clone() as u32;
+
+		let callee_offset = value_len + deposits_len;
+
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
@@ -1634,6 +1645,7 @@ benchmarks! {
 					ValueType::I32,
 					ValueType::I32,
 					ValueType::I32,
+					ValueType::I32,
 				],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1644,14 +1656,19 @@ benchmarks! {
 				},
 				DataSegment {
 					offset: value_len,
+					value: deposits_bytes,
+				},
+				DataSegment {
+					offset: callee_offset,
 					value: callee_bytes,
 				},
 			],
 			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
 				Regular(Instruction::I32Const(0)), // flags
-				Counter(4, callee_len as u32), // callee_ptr
+				Counter(callee_offset, callee_len as u32), // callee_ptr
 				Regular(Instruction::I64Const(0)), // ref_time weight
 				Regular(Instruction::I64Const(0)), // proof_size weight
+				Counter(value_len, deposit_len as u32), // deposit_limit_ptr
 				Regular(Instruction::I32Const(0)), // value_ptr
 				Regular(Instruction::I32Const(0)), // input_data_ptr
 				Regular(Instruction::I32Const(0)), // input_data_len
@@ -1805,13 +1822,22 @@ benchmarks! {
 		assert!(value > 0u32.into());
 		let value_bytes = value.encode();
 		let value_len = BalanceOf::<T>::max_encoded_len();
+		// Set an own deposit limit every 2nd call
+		let deposits = (0..r * API_BENCHMARK_BATCH_SIZE)
+			.enumerate()
+			.map(|(i,x)| if i % 2 == 0 { 0u32.into() } else { x.into() } )
+			.collect::<Vec<BalanceOf<T>>>();
+		let deposits_bytes: Vec<u8> = deposits.iter().flat_map(|i| i.encode()).collect();
+		let deposits_len = deposits_bytes.len();
+		let deposit_len = value_len.clone();
 		let addr_len = T::AccountId::max_encoded_len();
 
 		// offsets where to place static data in contract memory
 		let value_offset = 0;
 		let hashes_offset = value_offset + value_len;
 		let addr_len_offset = hashes_offset + hashes_len;
-		let addr_offset = addr_len_offset + addr_len;
+		let deposits_offset = addr_len_offset + addr_len;
+		let addr_offset = deposits_offset + deposits_len;
 
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
@@ -1822,6 +1848,7 @@ benchmarks! {
 					ValueType::I32,
 					ValueType::I64,
 					ValueType::I64,
+					ValueType::I32,
 					ValueType::I32,
 					ValueType::I32,
 					ValueType::I32,
@@ -1847,11 +1874,16 @@ benchmarks! {
 					offset: addr_len_offset as u32,
 					value: addr_len.to_le_bytes().into(),
 				},
+				DataSegment {
+					offset: addr_offset as u32,
+					value: deposits_bytes,
+				},
 			],
 			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
 				Counter(hashes_offset as u32, hash_len as u32), // code_hash_ptr
 				Regular(Instruction::I64Const(0)), // ref_time weight
 				Regular(Instruction::I64Const(0)), // proof_size weight
+				Counter(deposits_offset as u32, deposit_len as u32), // deposit limit ptr
 				Regular(Instruction::I32Const(value_offset as i32)), // value_ptr
 				Regular(Instruction::I32Const(0)), // input_data_ptr
 				Regular(Instruction::I32Const(0)), // input_data_len
