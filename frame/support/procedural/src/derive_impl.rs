@@ -141,22 +141,37 @@ pub(crate) fn derive_impl_inner(input: TokenStream) -> Result<TokenStream> {
 }
 
 pub fn derive_impl(attrs: TokenStream, input: TokenStream) -> Result<TokenStream> {
+	// attr: frame_system::preludes::testing::Impl
+	// tokens:
+	// impl frame_system::Config for Test {
+	//	// These are all defined by system as mandatory.
+	// 	type BaseCallFilter = frame_support::traits::Everything;
+	// 	type RuntimeEvent = RuntimeEvent;
+	// 	type RuntimeCall = RuntimeCall;
+	// 	type RuntimeOrigin = RuntimeOrigin;
+	// 	type OnSetCode = frame_system::DefaultSetCode<Self>;
+	// 	type PalletInfo = PalletInfo;
+	// 	type Header = Header;
+	// 	// We decide to override this one.
+	// 	type AccountData = pallet_balances::AccountData<u64>;
+	// }
 	let implementing_type: TypePath = parse2(attrs.clone())?;
 	// ideas for sam:
 	// let other_path_tokens = magic_macro!(path_to_other_path_token);
-	let foreign_trait_tokens = import_tokens_indirect!(frame_system::testing::DefaultConfig);
-	println!("{}", foreign_trait_tokens.to_string());
+	// let foreign_trait_tokens = import_tokens_indirect!(frame_system::testing::DefaultConfig);
+	// println!("{}", foreign_trait_tokens.to_string());
 
 	let frame_support = generate_crate_access_2018("frame-support")?;
 	// TODO: may not be accurate.
 	let source_crate_path = implementing_type.path.segments.first().unwrap().ident.clone();
+	// source_crate_path = frame_system
 
 	//let tokens = import_tokens_indirect!(::pallet_example_basic::pallet::Config);
 
 	Ok(quote::quote!(
 		#frame_support::tt_call! {
-			macro = [{ #source_crate_path::tt_config_items }]
-			frame_support = [{ #frame_support }]
+			macro = [{ #source_crate_path::tt_config_items }] // frame_system::tt_config_items
+			frame_support = [{ #frame_support }] // ::frame_support
 			~~> #frame_support::derive_impl_inner! {
 				partial_impl_block = [{ #input }]
 				implementing_type = [{ #attrs }]
