@@ -2748,7 +2748,7 @@ fn gas_estimation_call_runtime() {
 
 		// Call something trivial with a huge gas limit so that we can observe the effects
 		// of pre-charging. This should create a difference between consumed and required.
-		let call = RuntimeCall::Balances(pallet_balances::Call::transfer {
+		let call = RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death {
 			dest: addr_callee,
 			value: min_balance * 10,
 		});
