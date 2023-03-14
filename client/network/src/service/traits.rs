@@ -20,17 +20,20 @@
 
 use crate::{
 	config::MultiaddrWithPeerId,
-	protocol::{event::Event, ProtocolName},
+	event::Event,
 	request_responses::{IfDisconnected, RequestFailure},
+	service::signature::Signature,
+	types::ProtocolName,
 };
+
 use futures::{channel::oneshot, Stream};
-pub use libp2p::{identity::error::SigningError, kad::record::Key as KademliaKey};
 use libp2p::{Multiaddr, PeerId};
+
 use sc_peerset::ReputationChange;
-pub use signature::Signature;
+
 use std::{collections::HashSet, future::Future, pin::Pin, sync::Arc};
 
-mod signature;
+pub use libp2p::{identity::error::SigningError, kad::record::Key as KademliaKey};
 
 /// Signer with network identity
 pub trait NetworkSigner {

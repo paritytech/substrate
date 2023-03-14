@@ -82,8 +82,8 @@ pub trait Pay {
 	/// after this call. Used in benchmarking code.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn ensure_successful(who: &Self::AccountId, amount: Self::Balance);
-	/// Ensure that a call to check_payment with the given parameters will return either Success
-	/// or Failure.
+	/// Ensure that a call to `check_payment` with the given parameters will return either `Success`
+	/// or `Failure`.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn ensure_concluded(id: Self::Id);
 }
@@ -155,7 +155,6 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]

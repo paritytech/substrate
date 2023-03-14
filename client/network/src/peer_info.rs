@@ -16,6 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use crate::utils::interval;
+
 use fnv::FnvHashMap;
 use futures::prelude::*;
 use libp2p::{
@@ -36,8 +38,8 @@ use libp2p::{
 	Multiaddr,
 };
 use log::{debug, error, trace};
-use sc_network_common::utils::interval;
 use smallvec::SmallVec;
+
 use std::{
 	collections::hash_map::Entry,
 	pin::Pin,
