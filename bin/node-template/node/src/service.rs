@@ -135,6 +135,8 @@ pub fn new_partial(
 			compatibility_mode: Default::default(),
 		})?;
 
+	let statement_store = sc_statement_store::Store::new(config.database.path().unwrap())?;
+
 	Ok(sc_service::PartialComponents {
 		client,
 		backend,
@@ -143,6 +145,7 @@ pub fn new_partial(
 		keystore_container,
 		select_chain,
 		transaction_pool,
+		statement_store,
 		other: (grandpa_block_import, grandpa_link, telemetry),
 	})
 }
@@ -164,6 +167,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		mut keystore_container,
 		select_chain,
 		transaction_pool,
+		statement_store,
 		other: (block_import, grandpa_link, mut telemetry),
 	} = new_partial(&config)?;
 
@@ -192,11 +196,12 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		Vec::default(),
 	));
 
-	let (network, system_rpc_tx, tx_handler_controller, network_starter, sync_service) =
+	let (network, system_rpc_tx, tx_handler_controller, _statement_handler_controller, network_starter, sync_service) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
 			config: &config,
 			client: client.clone(),
 			transaction_pool: transaction_pool.clone(),
+			statement_store: statement_store.clone(),
 			spawn_handle: task_manager.spawn_handle(),
 			import_queue,
 			block_announce_validator_builder: None,
@@ -236,6 +241,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		keystore: keystore_container.sync_keystore(),
 		task_manager: &mut task_manager,
 		transaction_pool: transaction_pool.clone(),
+		statement_store: statement_store.clone(),
 		rpc_builder: rpc_extensions_builder,
 		backend,
 		system_rpc_tx,

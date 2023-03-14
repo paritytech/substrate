@@ -16,31 +16,4 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Substrate RPC implementation.
-//!
-//! A core implementation of Substrate RPC interfaces.
 
-#![warn(missing_docs)]
-
-pub use jsonrpsee::core::{
-	id_providers::{
-		RandomIntegerIdProvider as RandomIntegerSubscriptionId,
-		RandomStringIdProvider as RandomStringSubscriptionId,
-	},
-	traits::IdProvider as RpcSubscriptionIdProvider,
-};
-pub use sc_rpc_api::DenyUnsafe;
-
-pub mod author;
-pub mod chain;
-pub mod dev;
-pub mod offchain;
-pub mod state;
-pub mod statement;
-pub mod system;
-
-#[cfg(any(test, feature = "test-helpers"))]
-pub mod testing;
-
-/// Task executor that is being used by RPC subscriptions.
-pub type SubscriptionTaskExecutor = std::sync::Arc<dyn sp_core::traits::SpawnNamed>;

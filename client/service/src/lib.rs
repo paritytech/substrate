@@ -90,6 +90,7 @@ pub use sc_rpc::{
 pub use sc_tracing::TracingReceiver;
 pub use sc_transaction_pool::Options as TransactionPoolOptions;
 pub use sc_transaction_pool_api::{error::IntoPoolError, InPoolTransaction, TransactionPool};
+pub use sc_statement_store::Store as StatementStore;
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 pub use task_manager::{SpawnTaskHandle, Task, TaskManager, TaskRegistry, DEFAULT_GROUP_NAME};
@@ -142,6 +143,8 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 	pub import_queue: ImportQueue,
 	/// A shared transaction pool.
 	pub transaction_pool: Arc<TransactionPool>,
+	/// A shared statement store.
+	pub statement_store: Arc<StatementStore>,
 	/// Everything else that needs to be passed into the main build function.
 	pub other: Other,
 }

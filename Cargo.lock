@@ -4899,6 +4899,7 @@ dependencies = [
  "sc-rpc",
  "sc-service",
  "sc-service-test",
+ "sc-statement-store",
  "sc-storage-monitor",
  "sc-sync-state-rpc",
  "sc-sysinfo",
@@ -5063,6 +5064,7 @@ dependencies = [
  "sc-rpc",
  "sc-rpc-api",
  "sc-service",
+ "sc-statement-store",
  "sc-telemetry",
  "sc-transaction-pool",
  "sc-transaction-pool-api",
@@ -8280,6 +8282,7 @@ dependencies = [
  "sp-database",
  "sp-runtime",
  "sp-state-machine",
+ "sp-statement-store",
  "sp-tracing",
  "sp-trie",
  "substrate-test-runtime-client",
@@ -8920,6 +8923,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "sc-network-statement"
+version = "0.10.0-dev"
+dependencies = [
+ "array-bytes",
+ "futures",
+ "libp2p",
+ "log",
+ "parity-scale-codec",
+ "pin-project",
+ "sc-network-common",
+ "sc-peerset",
+ "sc-utils",
+ "sp-consensus",
+ "sp-runtime",
+ "sp-statement-store",
+ "substrate-prometheus-endpoint",
+]
+
+[[package]]
 name = "sc-network-sync"
 version = "0.10.0-dev"
 dependencies = [
@@ -9096,6 +9118,7 @@ dependencies = [
  "sp-rpc",
  "sp-runtime",
  "sp-session",
+ "sp-statement-store",
  "sp-version",
  "substrate-test-runtime-client",
  "tokio",
@@ -9205,12 +9228,14 @@ dependencies = [
  "sc-network-bitswap",
  "sc-network-common",
  "sc-network-light",
+ "sc-network-statement",
  "sc-network-sync",
  "sc-network-transactions",
  "sc-offchain",
  "sc-rpc",
  "sc-rpc-server",
  "sc-rpc-spec-v2",
+ "sc-statement-store",
  "sc-storage-monitor",
  "sc-sysinfo",
  "sc-telemetry",
@@ -9290,6 +9315,24 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "sp-core",
+]
+
+[[package]]
+name = "sc-statement-store"
+version = "4.0.0-dev"
+dependencies = [
+ "async-trait",
+ "futures",
+ "futures-timer",
+ "log",
+ "parity-db",
+ "parity-scale-codec",
+ "parking_lot 0.12.1",
+ "sp-core",
+ "sp-statement-store",
+ "sp-tracing",
+ "substrate-prometheus-endpoint",
+ "substrate-test-runtime",
 ]
 
 [[package]]
@@ -10561,6 +10604,18 @@ dependencies = [
  "thiserror",
  "tracing",
  "trie-db",
+]
+
+[[package]]
+name = "sp-statement-store"
+version = "4.0.0-dev"
+dependencies = [
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-runtime",
+ "sp-std",
+ "thiserror",
 ]
 
 [[package]]

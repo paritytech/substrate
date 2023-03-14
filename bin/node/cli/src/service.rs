@@ -284,6 +284,8 @@ pub fn new_partial(
 		(rpc_extensions_builder, shared_voter_state2)
 	};
 
+	let statement_store = sc_statement_store::Store::new(config.database.path().unwrap())?;
+
 	Ok(sc_service::PartialComponents {
 		client,
 		backend,
@@ -292,6 +294,7 @@ pub fn new_partial(
 		select_chain,
 		import_queue,
 		transaction_pool,
+		statement_store,
 		other: (rpc_extensions_builder, import_setup, rpc_setup, telemetry),
 	})
 }
@@ -336,6 +339,7 @@ pub fn new_full_base(
 		keystore_container,
 		select_chain,
 		transaction_pool,
+		statement_store,
 		other: (rpc_builder, import_setup, rpc_setup, mut telemetry),
 	} = new_partial(&config)?;
 
@@ -356,11 +360,12 @@ pub fn new_full_base(
 		Vec::default(),
 	));
 
-	let (network, system_rpc_tx, tx_handler_controller, network_starter, sync_service) =
+	let (network, system_rpc_tx, tx_handler_controller, _statement_handler_controller, network_starter, sync_service) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
 			config: &config,
 			client: client.clone(),
 			transaction_pool: transaction_pool.clone(),
+			statement_store: statement_store.clone(),
 			spawn_handle: task_manager.spawn_handle(),
 			import_queue,
 			block_announce_validator_builder: None,
@@ -396,6 +401,7 @@ pub fn new_full_base(
 		system_rpc_tx,
 		tx_handler_controller,
 		sync_service: sync_service.clone(),
+		statement_store,
 		telemetry: telemetry.as_mut(),
 	})?;
 
