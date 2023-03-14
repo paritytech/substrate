@@ -2975,7 +2975,8 @@ impl<T: Config> Pallet<T> {
 			bonded_pool.commission.current(),
 		)?;
 
-		ensure!(!reward_pool.total_commission_pending.is_zero(), Error::<T>::NoPendingCommission);
+		let commission = reward_pool.total_commission_pending;
+		ensure!(!commission.is_zero(), Error::<T>::NoPendingCommission);
 
 		let payee = bonded_pool
 			.commission
@@ -2988,21 +2989,19 @@ impl<T: Config> Pallet<T> {
 		T::Currency::transfer(
 			&bonded_pool.reward_account(),
 			&payee,
-			reward_pool.total_commission_pending,
+			commission,
 			ExistenceRequirement::KeepAlive,
 		)?;
 
-		reward_pool.total_commission_claimed = reward_pool
-			.total_commission_claimed
-			.saturating_add(reward_pool.total_commission_pending);
+		// Add pending commission to total claimed counter.
+		reward_pool.total_commission_claimed =
+			reward_pool.total_commission_claimed.saturating_add(commission);
+		// Reset total pending commission counter to zero.
 		reward_pool.total_commission_pending = Zero::zero();
-
+		// Commit reward pool updates
 		RewardPools::<T>::insert(pool_id, reward_pool);
 
-		Self::deposit_event(Event::<T>::PoolCommissionClaimed {
-			pool_id,
-			commission: Zero::zero(),
-		});
+		Self::deposit_event(Event::<T>::PoolCommissionClaimed { pool_id, commission });
 		Ok(())
 	}
 

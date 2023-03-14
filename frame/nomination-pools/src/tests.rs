@@ -5467,7 +5467,7 @@ mod commission {
 			assert_eq!(RewardPool::<Runtime>::current_balance(pool_id), 0);
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::PoolCommissionClaimed { pool_id: 1, commission: 0 }]
+				vec![Event::PoolCommissionClaimed { pool_id: 1, commission: 20 }]
 			);
 
 			// Commission can be removed from the pool completely.
@@ -6488,13 +6488,21 @@ mod commission {
 			// The pool earns 100 points
 			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 100));
 
+			// Then:
+
 			// Claim payout:
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+
+			// Claim commission:
+			assert_ok!(Pools::claim_commission(RuntimeOrigin::signed(900), pool_id));
 
 			// Then:
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 90 + 80 }]
+				vec![
+					Event::PaidOut { member: 10, pool_id: 1, payout: 90 + 80 },
+					Event::PoolCommissionClaimed { pool_id: 1, commission: 30 }
+				]
 			);
 		})
 	}
@@ -6546,7 +6554,7 @@ mod commission {
 				pool_events_since_last_call(),
 				vec![
 					Event::PaidOut { member: 10, pool_id: 1, payout: 90 },
-					Event::PoolCommissionClaimed { pool_id: 1, commission: 0 }
+					Event::PoolCommissionClaimed { pool_id: 1, commission: 10 }
 				]
 			);
 		})
