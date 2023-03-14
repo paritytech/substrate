@@ -158,33 +158,38 @@ impl<B: BlockT> Protocol<B> {
 			sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig { sets })
 		};
 
-		let behaviour = {
-			Notifications::new(
-				peerset,
-				// NOTE: Block announcement protocol is still very much hardcoded into `Protocol`.
-				// 	This protocol must be the first notification protocol given to
-				// `Notifications`
-				iter::once(notifications::ProtocolConfig {
-					name: block_announces_protocol.notifications_protocol.clone(),
-					fallback_names: block_announces_protocol.fallback_names.clone(),
-					handshake: block_announces_protocol.handshake.as_ref().unwrap().to_vec(),
-					max_notification_size: block_announces_protocol.max_notification_size,
-				})
-				.chain(notification_protocols.iter().map(|s| notifications::ProtocolConfig {
-					name: s.notifications_protocol.clone(),
-					fallback_names: s.fallback_names.clone(),
-					handshake: s.handshake.as_ref().map_or(roles.encode(), |h| (*h).to_vec()),
-					max_notification_size: s.max_notification_size,
-				})),
+		let (behaviour, notification_protocols) = {
+			let installed_protocols =
+				iter::once(block_announces_protocol.notifications_protocol.clone())
+					.chain(notification_protocols.iter().map(|p| p.notifications_protocol.clone()))
+					.collect::<Vec<_>>();
+			(
+				Notifications::new(
+					peerset,
+					// NOTE: Block announcement protocol is still very much hardcoded into
+					// `Protocol`. 	This protocol must be the first notification protocol given to
+					// `Notifications`
+					iter::once(notifications::ProtocolConfig {
+						name: block_announces_protocol.notifications_protocol.clone(),
+						fallback_names: block_announces_protocol.fallback_names.clone(),
+						handshake: block_announces_protocol.handshake.as_ref().unwrap().to_vec(),
+						max_notification_size: block_announces_protocol.max_notification_size,
+					})
+					.chain(notification_protocols.iter().map(|s| notifications::ProtocolConfig {
+						name: s.notifications_protocol.clone(),
+						fallback_names: s.fallback_names.clone(),
+						handshake: s.handshake.as_ref().map_or(roles.encode(), |h| (*h).to_vec()),
+						max_notification_size: s.max_notification_size,
+					})),
+				),
+				installed_protocols,
 			)
 		};
 
 		let protocol = Self {
 			peerset_handle: peerset_handle.clone(),
 			behaviour,
-			notification_protocols: iter::once(block_announces_protocol.notifications_protocol)
-				.chain(notification_protocols.iter().map(|s| s.notifications_protocol.clone()))
-				.collect(),
+			notification_protocols,
 			bad_handshake_substreams: Default::default(),
 			peers: HashMap::new(),
 			sync_substream_validations: FuturesUnordered::new(),
