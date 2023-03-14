@@ -380,6 +380,31 @@ fn withdrawing_balance_should_work() {
 }
 
 #[test]
+fn withdrawing_balance_should_fail_when_not_expendable() {
+	ExtBuilder::default().build_and_execute_with(|| {
+		ExistentialDeposit::set(10);
+		let _ = Balances::deposit_creating(&2, 20);
+		assert_ok!(Balances::reserve(&2, 5));
+		assert_noop!(
+			Balances::withdraw(&2, 6, WithdrawReasons::TRANSFER, ExistenceRequirement::KeepAlive),
+			Error::<Test>::Expendability,
+		);
+		assert_ok!(Balances::withdraw(
+			&2,
+			5,
+			WithdrawReasons::TRANSFER,
+			ExistenceRequirement::KeepAlive
+		),);
+		assert_ok!(Balances::withdraw(
+			&2,
+			5,
+			WithdrawReasons::TRANSFER,
+			ExistenceRequirement::AllowDeath
+		),);
+	});
+}
+
+#[test]
 fn slashing_incomplete_balance_should_work() {
 	ExtBuilder::default().build_and_execute_with(|| {
 		let _ = Balances::deposit_creating(&1, 42);
