@@ -997,7 +997,7 @@ impl NetworkBehaviour for Notifications {
 		local_addr: &Multiaddr,
 		remote_addr: &Multiaddr,
 	) -> Result<THandler<Self>, ConnectionDenied> {
-		unimplemented!("todo");
+		Ok(NotifsHandlerProto::new(self.notif_protocols.clone()))
 	}
 
 	fn handle_established_outbound_connection(
@@ -1007,7 +1007,16 @@ impl NetworkBehaviour for Notifications {
 		addr: &Multiaddr,
 		role_override: Endpoint,
 	) -> Result<THandler<Self>, ConnectionDenied> {
-		unimplemented!("todo");
+		Ok(NotifsHandlerProto::new(self.notif_protocols.clone()))
+	}
+
+	fn handle_pending_inbound_connection(
+		&mut self,
+		_connection_id: ConnectionId,
+		_local_addr: &Multiaddr,
+		_remote_addr: &Multiaddr,
+	) -> Result<(), ConnectionDenied> {
+		Ok(())
 	}
 
 	fn handle_pending_outbound_connection(
