@@ -2812,6 +2812,8 @@ impl<T: Config> Pallet<T> {
 			bonded_pool.commission.current(),
 		)?;
 
+		// Determine the pending rewards. In scenarios where commission is 100%, `pending_rewards`
+		// will be zero.
 		let pending_rewards = member.pending_rewards(current_reward_counter)?;
 		if pending_rewards.is_zero() {
 			return Ok(pending_rewards)
@@ -2821,10 +2823,6 @@ impl<T: Config> Pallet<T> {
 		member.last_recorded_reward_counter = current_reward_counter;
 		reward_pool.register_claimed_reward(pending_rewards);
 
-		// Transfer remaining payout to the member.
-		//
-		// In scenarios where commission is 100%, `pending_rewards` will be zero. We therefore check
-		// if there is a non-zero payout to be transferred.
 		T::Currency::transfer(
 			&bonded_pool.reward_account(),
 			member_account,
