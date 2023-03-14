@@ -27,6 +27,7 @@
 //! `Future` that processes statements.
 
 use crate::config::*;
+
 use codec::{Decode, Encode};
 use futures::{channel::oneshot, prelude::*, stream::FuturesUnordered, FutureExt};
 use libp2p::{multiaddr, PeerId};
@@ -37,7 +38,7 @@ use sc_network::{
 	event::Event,
 	types::ProtocolName,
 	utils::{interval, LruHashSet},
-	NetworkEventStream, NetworkNotification, NetworkPeers,
+	NetworkEventStream, NetworkNotification, NetworkPeers, NotificationService,
 };
 use sc_network_common::{
 	role::ObservedRole,
@@ -103,25 +104,23 @@ impl Metrics {
 /// Prototype for a [`StatementHandler`].
 pub struct StatementHandlerPrototype {
 	protocol_name: ProtocolName,
+	notification_service: Box<dyn NotificationService>,
 }
 
 impl StatementHandlerPrototype {
 	/// Create a new instance.
-	pub fn new<Hash: AsRef<[u8]>>(genesis_hash: Hash, fork_id: Option<&str>) -> Self {
+	pub fn new<Hash: AsRef<[u8]>>(
+		genesis_hash: Hash,
+		fork_id: Option<&str>,
+	) -> (Self, NonDefaultSetConfig) {
 		let genesis_hash = genesis_hash.as_ref();
 		let protocol_name = if let Some(fork_id) = fork_id {
 			format!("/{}/{}/statement/1", array_bytes::bytes2hex("", genesis_hash), fork_id)
 		} else {
 			format!("/{}/statement/1", array_bytes::bytes2hex("", genesis_hash))
 		};
-
-		Self { protocol_name: protocol_name.into() }
-	}
-
-	/// Returns the configuration of the set to put in the network configuration.
-	pub fn set_config(&self) -> NonDefaultSetConfig {
-		NonDefaultSetConfig::new(
-			self.protocol_name.clone(),
+		let (config, notification_service) = NonDefaultSetConfig::new(
+			protocol_name.clone().into(),
 			Vec::new(),
 			MAX_STATEMENT_SIZE,
 			None,
@@ -131,7 +130,9 @@ impl StatementHandlerPrototype {
 				reserved_nodes: Vec::new(),
 				non_reserved_mode: NonReservedPeerMode::Deny,
 			},
-		)
+		);
+
+		(Self { protocol_name: protocol_name.into(), notification_service }, config)
 	}
 
 	/// Turns the prototype into the actual handler.
@@ -178,6 +179,7 @@ impl StatementHandlerPrototype {
 
 		let handler = StatementHandler {
 			protocol_name: self.protocol_name,
+			notification_service: self.notification_service,
 			propagate_timeout: (Box::pin(interval(PROPAGATE_TIMEOUT))
 				as Pin<Box<dyn Stream<Item = ()> + Send>>)
 				.fuse(),
@@ -225,6 +227,8 @@ pub struct StatementHandler<
 	net_event_stream: stream::Fuse<Pin<Box<dyn Stream<Item = Event> + Send>>>,
 	/// Receiver for syncing-related events.
 	sync_event_stream: stream::Fuse<Pin<Box<dyn Stream<Item = SyncEvent> + Send>>>,
+	/// Notification service.
+	notification_service: Box<dyn NotificationService>,
 	// All connected peers
 	peers: HashMap<PeerId, Peer>,
 	statement_store: Arc<dyn StatementStore>,

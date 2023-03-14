@@ -50,7 +50,9 @@ use std::{
 use message::{generic::Message as GenericMessage, Message};
 use notifications::{Notifications, NotificationsOut};
 
-pub use notifications::{NotificationsSink, NotifsHandlerError, Ready};
+pub use notifications::{
+	notification_service, NotificationsSink, NotifsHandlerError, ProtocolHandlePair, Ready,
+};
 
 mod notifications;
 

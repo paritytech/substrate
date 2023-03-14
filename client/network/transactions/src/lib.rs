@@ -40,7 +40,7 @@ use sc_network::{
 	event::Event,
 	types::ProtocolName,
 	utils::{interval, LruHashSet},
-	NetworkEventStream, NetworkNotification, NetworkPeers,
+	NetworkEventStream, NetworkNotification, NetworkPeers, NotificationService,
 };
 use sc_network_common::{
 	role::ObservedRole,
@@ -120,7 +120,11 @@ impl<H: ExHashT> Future for PendingTransaction<H> {
 
 /// Prototype for a [`TransactionsHandler`].
 pub struct TransactionsHandlerPrototype {
+	/// Name of the transaction protocol.
 	protocol_name: ProtocolName,
+
+	/// Handle that is used to communicate with `sc_network::Notifications`.
+	notification_handle: Box<dyn NotificationService>,
 }
 
 impl TransactionsHandlerPrototype {
@@ -137,7 +141,7 @@ impl TransactionsHandlerPrototype {
 			format!("/{}/transactions/1", array_bytes::bytes2hex("", genesis_hash))
 		}
 		.into();
-		let config = NonDefaultSetConfig::new(
+		let (config, notification_handle) = NonDefaultSetConfig::new(
 			protocol_name.clone(),
 			vec![format!("/{}/transactions/1", protocol_id.as_ref()).into()],
 			MAX_TRANSACTIONS_SIZE,
@@ -150,7 +154,7 @@ impl TransactionsHandlerPrototype {
 			},
 		);
 
-		(Self { protocol_name }, config)
+		(Self { protocol_name, notification_handle }, config)
 	}
 
 	/// Turns the prototype into the actual handler. Returns a controller that allows controlling
@@ -176,6 +180,7 @@ impl TransactionsHandlerPrototype {
 
 		let handler = TransactionsHandler {
 			protocol_name: self.protocol_name,
+			_notification_handle: self.notification_handle,
 			propagate_timeout: (Box::pin(interval(PROPAGATE_TIMEOUT))
 				as Pin<Box<dyn Stream<Item = ()> + Send>>)
 				.fuse(),
@@ -260,6 +265,8 @@ pub struct TransactionsHandler<
 	from_controller: TracingUnboundedReceiver<ToHandler<H>>,
 	/// Prometheus metrics.
 	metrics: Option<Metrics>,
+	/// Handle that is used to communicate with `sc_network::Notifications`.
+	_notification_handle: Box<dyn NotificationService>,
 }
 
 /// Peer information

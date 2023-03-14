@@ -68,7 +68,7 @@ use sc_client_api::{
 	StorageProvider, TransactionFor,
 };
 use sc_consensus::BlockImport;
-use sc_network::types::ProtocolName;
+use sc_network::{types::ProtocolName, NotificationService};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sp_api::ProvideRuntimeApi;
@@ -695,7 +695,7 @@ pub struct GrandpaParams<Block: BlockT, C, N, S, SC, VR> {
 /// For standard protocol name see [`crate::protocol_standard_name`].
 pub fn grandpa_peers_set_config(
 	protocol_name: ProtocolName,
-) -> sc_network::config::NonDefaultSetConfig {
+) -> (sc_network::config::NonDefaultSetConfig, Box<dyn NotificationService>) {
 	use communication::grandpa_protocol_name;
 	sc_network::config::NonDefaultSetConfig::new(
 		protocol_name,

@@ -39,8 +39,10 @@ use sc_network::{
 	config::{
 		FullNetworkConfiguration, NonDefaultSetConfig, ProtocolId, SyncMode as SyncOperationMode,
 	},
+	event::Event,
+	types::ProtocolName,
 	utils::LruHashSet,
-	NotificationsSink, ProtocolName,
+	NotificationService, NotificationsSink,
 };
 use sc_network_common::{
 	role::Roles,
@@ -243,6 +245,9 @@ pub struct SyncingEngine<B: BlockT, Client> {
 
 	/// Prometheus metrics.
 	metrics: Option<Metrics>,
+
+	/// Handle that is used to communicate with `sc_network::Notifications`.
+	_notification_handle: Box<dyn NotificationService>,
 }
 
 impl<B: BlockT, Client> SyncingEngine<B, Client>
@@ -338,7 +343,7 @@ where
 			total.saturating_sub(net_config.network_config.default_peers_set_num_full) as usize
 		};
 
-		let (chain_sync, block_announce_config) = ChainSync::new(
+		let (chain_sync, block_announce_config, _notification_handle) = ChainSync::new(
 			mode,
 			client.clone(),
 			protocol_id,
@@ -388,6 +393,7 @@ where
 				default_peers_set_num_full,
 				default_peers_set_num_light,
 				event_streams: Vec::new(),
+				_notification_handle,
 				tick_timeout: Delay::new(TICK_TIMEOUT),
 				metrics: if let Some(r) = metrics_registry {
 					match Metrics::register(r, is_major_syncing.clone()) {

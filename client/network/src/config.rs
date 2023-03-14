@@ -22,10 +22,11 @@
 //! See the documentation of [`Params`].
 
 pub use crate::{
-	protocol::NotificationsSink,
+	protocol::{notification_service, NotificationsSink, ProtocolHandlePair},
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
+	service::traits::NotificationService,
 	types::ProtocolName,
 };
 
@@ -480,7 +481,7 @@ impl Default for SetConfig {
 ///
 /// > **Note**: As new fields might be added in the future, please consider using the `new` method
 /// >			and modifiers instead of creating this struct manually.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct NonDefaultSetConfig {
 	/// Name of the notifications protocols of this set. A substream on this set will be
 	/// considered established once this protocol is open.
@@ -509,18 +510,39 @@ pub struct NonDefaultSetConfig {
 
 	/// Base configuration.
 	set_config: SetConfig,
+
+	/// Notification handle.
+	///
+	/// Notification handle is created during `NonDefaultSetConfig` creation and its other half,
+	/// Box<dyn NotificationService>` is given to the protocol created the config and
+	/// `ProtocolHandle` is given to `Notifications` when it initializes itself. This handle allows
+	/// `Notifications ` to communicate with the protocol directly without relaying events through
+	/// `sc-network.`
+	protocol_handle_pair: ProtocolHandlePair,
 }
 
 impl NonDefaultSetConfig {
 	/// Creates a new [`NonDefaultSetConfig`]. Zero slots and accepts only reserved nodes.
+	/// Also returns an object which allows the protocol to communicate with `Notifications`.
 	pub fn new(
 		protocol_name: ProtocolName,
 		fallback_names: Vec<ProtocolName>,
 		max_notification_size: u64,
 		handshake: Option<NotificationHandshake>,
 		set_config: SetConfig,
-	) -> Self {
-		Self { protocol_name, max_notification_size, fallback_names, handshake, set_config }
+	) -> (Self, Box<dyn NotificationService>) {
+		let (protocol_handle_pair, notification_handle) = notification_service();
+		(
+			Self {
+				protocol_name,
+				max_notification_size,
+				fallback_names,
+				handshake,
+				set_config,
+				protocol_handle_pair,
+			},
+			notification_handle,
+		)
 	}
 
 	/// Get reference to protocol name.

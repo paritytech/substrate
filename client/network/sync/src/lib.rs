@@ -55,6 +55,7 @@ use sc_network::{
 	},
 	request_responses::{IfDisconnected, RequestFailure},
 	types::ProtocolName,
+	NotificationService,
 };
 use sc_network_common::{
 	role::Roles,
@@ -1418,8 +1419,8 @@ where
 		block_request_protocol_name: ProtocolName,
 		state_request_protocol_name: ProtocolName,
 		warp_sync_protocol_name: Option<ProtocolName>,
-	) -> Result<(Self, NonDefaultSetConfig), ClientError> {
-		let block_announce_config = Self::get_block_announce_proto_config(
+	) -> Result<(Self, NonDefaultSetConfig, Box<dyn NotificationService>), ClientError> {
+		let (block_announce_config, notification_handle) = Self::get_block_announce_proto_config(
 			protocol_id,
 			fork_id,
 			roles,
@@ -1475,7 +1476,7 @@ where
 		};
 
 		sync.reset_sync_start_point()?;
-		Ok((sync, block_announce_config))
+		Ok((sync, block_announce_config, notification_handle))
 	}
 
 	/// Returns the median seen block number.
@@ -1957,7 +1958,7 @@ where
 		best_number: NumberFor<B>,
 		best_hash: B::Hash,
 		genesis_hash: B::Hash,
-	) -> NonDefaultSetConfig {
+	) -> (NonDefaultSetConfig, Box<dyn NotificationService>) {
 		let block_announces_protocol = {
 			let genesis_hash = genesis_hash.as_ref();
 			if let Some(ref fork_id) = fork_id {
@@ -3210,7 +3211,7 @@ mod test {
 		let import_queue = Box::new(sc_consensus::import_queue::mock::MockImportQueueHandle::new());
 		let (_chain_sync_network_provider, chain_sync_network_handle) =
 			NetworkServiceProvider::new();
-		let (mut sync, _) = ChainSync::new(
+		let (mut sync, _, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -3277,7 +3278,7 @@ mod test {
 		let (_chain_sync_network_provider, chain_sync_network_handle) =
 			NetworkServiceProvider::new();
 
-		let (mut sync, _) = ChainSync::new(
+		let (mut sync, _, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -3459,7 +3460,7 @@ mod test {
 		let (_chain_sync_network_provider, chain_sync_network_handle) =
 			NetworkServiceProvider::new();
 
-		let (mut sync, _) = ChainSync::new(
+		let (mut sync, _, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -3586,7 +3587,7 @@ mod test {
 			NetworkServiceProvider::new();
 		let info = client.info();
 
-		let (mut sync, _) = ChainSync::new(
+		let (mut sync, _, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -3744,7 +3745,7 @@ mod test {
 
 		let info = client.info();
 
-		let (mut sync, _) = ChainSync::new(
+		let (mut sync, _, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -3887,7 +3888,7 @@ mod test {
 
 		let info = client.info();
 
-		let (mut sync, _) = ChainSync::new(
+		let (mut sync, _, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -4032,7 +4033,7 @@ mod test {
 		let mut client = Arc::new(TestClientBuilder::new().build());
 		let blocks = (0..3).map(|_| build_block(&mut client, None, false)).collect::<Vec<_>>();
 
-		let (mut sync, _) = ChainSync::new(
+		let (mut sync, _, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -4078,7 +4079,7 @@ mod test {
 
 		let empty_client = Arc::new(TestClientBuilder::new().build());
 
-		let (mut sync, _) = ChainSync::new(
+		let (mut sync, _, _) = ChainSync::new(
 			SyncMode::Full,
 			empty_client.clone(),
 			ProtocolId::from("test-protocol-name"),

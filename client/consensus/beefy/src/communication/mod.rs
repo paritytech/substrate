@@ -67,8 +67,8 @@ pub(crate) mod beefy_protocol_name {
 /// For standard protocol name see [`beefy_protocol_name::gossip_protocol_name`].
 pub fn beefy_peers_set_config(
 	gossip_protocol_name: sc_network::ProtocolName,
-) -> sc_network::config::NonDefaultSetConfig {
-	let mut cfg = sc_network::config::NonDefaultSetConfig::new(
+) -> (sc_network::config::NonDefaultSetConfig, Box<dyn sc_network::NotificationService>) {
+	let (mut cfg, notification_handle) = sc_network::config::NonDefaultSetConfig::new(
 		gossip_protocol_name,
 		Vec::new(),
 		1024 * 1024,
@@ -76,7 +76,7 @@ pub fn beefy_peers_set_config(
 		Default::default(),
 	);
 	cfg.allow_non_reserved(25, 25);
-	cfg
+	(cfg, notification_handle)
 }
 
 // cost scalars for reporting peers.
