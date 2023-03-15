@@ -23,24 +23,46 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub(crate) fn do_set_team(
 		maybe_check_owner: Option<T::AccountId>,
 		collection: T::CollectionId,
-		issuer: T::AccountId,
-		admin: T::AccountId,
-		freezer: T::AccountId,
+		issuer: Option<T::AccountId>,
+		admin: Option<T::AccountId>,
+		freezer: Option<T::AccountId>,
 	) -> DispatchResult {
 		Collection::<T, I>::try_mutate(collection, |maybe_details| {
 			let details = maybe_details.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
+			let is_root = maybe_check_owner.is_none();
 			if let Some(check_origin) = maybe_check_owner {
 				ensure!(check_origin == details.owner, Error::<T, I>::NoPermission);
 			}
 
-			// delete previous values
-			Self::clear_roles(&collection)?;
-
-			let account_to_role = Self::group_roles_by_account(vec![
+			let roles_map = [
 				(issuer.clone(), CollectionRole::Issuer),
 				(admin.clone(), CollectionRole::Admin),
 				(freezer.clone(), CollectionRole::Freezer),
-			]);
+			];
+
+			// only root can change the role from `None` to `Some(account)`
+			if !is_root {
+				for (account, role) in roles_map.iter() {
+					if account.is_some() {
+						ensure!(
+							Self::find_account_by_role(&collection, *role).is_some(),
+							Error::<T, I>::NoPermission
+						);
+					}
+				}
+			}
+
+			let roles = roles_map
+				.into_iter()
+				.filter_map(|(account, role)| account.map(|account| (account, role)))
+				.collect();
+
+			let account_to_role = Self::group_roles_by_account(roles);
+
+			// delete the previous records
+			Self::clear_roles(&collection)?;
+
+			// insert new records
 			for (account, roles) in account_to_role {
 				CollectionRoleOf::<T, I>::insert(&collection, &account, roles);
 			}

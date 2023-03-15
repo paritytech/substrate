@@ -68,7 +68,7 @@ use sc_client_api::{
 	StorageProvider, TransactionFor,
 };
 use sc_consensus::BlockImport;
-use sc_network_common::protocol::ProtocolName;
+use sc_network::types::ProtocolName;
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sp_api::ProvideRuntimeApi;
@@ -695,19 +695,19 @@ pub struct GrandpaParams<Block: BlockT, C, N, S, SC, VR> {
 /// For standard protocol name see [`crate::protocol_standard_name`].
 pub fn grandpa_peers_set_config(
 	protocol_name: ProtocolName,
-) -> sc_network_common::config::NonDefaultSetConfig {
+) -> sc_network::config::NonDefaultSetConfig {
 	use communication::grandpa_protocol_name;
-	sc_network_common::config::NonDefaultSetConfig {
+	sc_network::config::NonDefaultSetConfig {
 		notifications_protocol: protocol_name,
 		fallback_names: grandpa_protocol_name::LEGACY_NAMES.iter().map(|&n| n.into()).collect(),
 		// Notifications reach ~256kiB in size at the time of writing on Kusama and Polkadot.
 		max_notification_size: 1024 * 1024,
 		handshake: None,
-		set_config: sc_network_common::config::SetConfig {
+		set_config: sc_network::config::SetConfig {
 			in_peers: 0,
 			out_peers: 0,
 			reserved_nodes: Vec::new(),
-			non_reserved_mode: sc_network_common::config::NonReservedPeerMode::Deny,
+			non_reserved_mode: sc_network::config::NonReservedPeerMode::Deny,
 		},
 	}
 }

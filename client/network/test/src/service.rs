@@ -16,23 +16,227 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{config, service::tests::TestNetworkBuilder, NetworkService};
-
 use futures::prelude::*;
-use libp2p::PeerId;
-use sc_network_common::{
-	config::{MultiaddrWithPeerId, NonDefaultSetConfig, SetConfig, TransportConfig},
-	protocol::event::Event,
-	service::{NetworkNotification, NetworkPeers, NetworkStateInfo},
+use libp2p::{Multiaddr, PeerId};
+
+use sc_consensus::{ImportQueue, Link};
+use sc_network::{
+	config::{self, MultiaddrWithPeerId, ProtocolId, TransportConfig},
+	event::Event,
+	NetworkEventStream, NetworkNotification, NetworkPeers, NetworkService, NetworkStateInfo,
+	NetworkWorker,
 };
+use sc_network_common::role::Roles;
+use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
+use sc_network_sync::{
+	block_request_handler::BlockRequestHandler,
+	engine::SyncingEngine,
+	service::network::{NetworkServiceHandle, NetworkServiceProvider},
+	state_request_handler::StateRequestHandler,
+};
+use sp_runtime::traits::Block as BlockT;
+use substrate_test_runtime_client::{
+	runtime::{Block as TestBlock, Hash as TestHash},
+	TestClientBuilder, TestClientBuilderExt as _,
+};
+
 use std::{sync::Arc, time::Duration};
 
-type TestNetworkService = NetworkService<
-	substrate_test_runtime_client::runtime::Block,
-	substrate_test_runtime_client::runtime::Hash,
->;
+type TestNetworkWorker = NetworkWorker<TestBlock, TestHash>;
+type TestNetworkService = NetworkService<TestBlock, TestHash>;
 
 const PROTOCOL_NAME: &str = "/foo";
+
+struct TestNetwork {
+	network: TestNetworkWorker,
+}
+
+impl TestNetwork {
+	pub fn new(network: TestNetworkWorker) -> Self {
+		Self { network }
+	}
+
+	pub fn start_network(
+		self,
+	) -> (Arc<TestNetworkService>, (impl Stream<Item = Event> + std::marker::Unpin)) {
+		let worker = self.network;
+		let service = worker.service().clone();
+		let event_stream = service.event_stream("test");
+
+		tokio::spawn(worker.run());
+
+		(service, event_stream)
+	}
+}
+
+struct TestNetworkBuilder {
+	import_queue: Option<Box<dyn ImportQueue<TestBlock>>>,
+	link: Option<Box<dyn Link<TestBlock>>>,
+	client: Option<Arc<substrate_test_runtime_client::TestClient>>,
+	listen_addresses: Vec<Multiaddr>,
+	set_config: Option<config::SetConfig>,
+	chain_sync_network: Option<(NetworkServiceProvider, NetworkServiceHandle)>,
+	config: Option<config::NetworkConfiguration>,
+}
+
+impl TestNetworkBuilder {
+	pub fn new() -> Self {
+		Self {
+			import_queue: None,
+			link: None,
+			client: None,
+			listen_addresses: Vec::new(),
+			set_config: None,
+			chain_sync_network: None,
+			config: None,
+		}
+	}
+
+	pub fn with_config(mut self, config: config::NetworkConfiguration) -> Self {
+		self.config = Some(config);
+		self
+	}
+
+	pub fn with_listen_addresses(mut self, addresses: Vec<Multiaddr>) -> Self {
+		self.listen_addresses = addresses;
+		self
+	}
+
+	pub fn with_set_config(mut self, set_config: config::SetConfig) -> Self {
+		self.set_config = Some(set_config);
+		self
+	}
+
+	pub fn build(mut self) -> TestNetwork {
+		let client = self.client.as_mut().map_or(
+			Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0),
+			|v| v.clone(),
+		);
+
+		let network_config = self.config.unwrap_or(config::NetworkConfiguration {
+			extra_sets: vec![config::NonDefaultSetConfig {
+				notifications_protocol: PROTOCOL_NAME.into(),
+				fallback_names: Vec::new(),
+				max_notification_size: 1024 * 1024,
+				handshake: None,
+				set_config: self.set_config.unwrap_or_default(),
+			}],
+			listen_addresses: self.listen_addresses,
+			transport: TransportConfig::MemoryOnly,
+			..config::NetworkConfiguration::new_local()
+		});
+
+		#[derive(Clone)]
+		struct PassThroughVerifier(bool);
+
+		#[async_trait::async_trait]
+		impl<B: BlockT> sc_consensus::Verifier<B> for PassThroughVerifier {
+			async fn verify(
+				&mut self,
+				mut block: sc_consensus::BlockImportParams<B, ()>,
+			) -> Result<sc_consensus::BlockImportParams<B, ()>, String> {
+				block.finalized = self.0;
+				block.fork_choice = Some(sc_consensus::ForkChoiceStrategy::LongestChain);
+				Ok(block)
+			}
+		}
+
+		let mut import_queue =
+			self.import_queue.unwrap_or(Box::new(sc_consensus::BasicQueue::new(
+				PassThroughVerifier(false),
+				Box::new(client.clone()),
+				None,
+				&sp_core::testing::TaskExecutor::new(),
+				None,
+			)));
+
+		let protocol_id = ProtocolId::from("test-protocol-name");
+		let fork_id = Some(String::from("test-fork-id"));
+
+		let block_request_protocol_config = {
+			let (handler, protocol_config) =
+				BlockRequestHandler::new(&protocol_id, None, client.clone(), 50);
+			tokio::spawn(handler.run().boxed());
+			protocol_config
+		};
+
+		let state_request_protocol_config = {
+			let (handler, protocol_config) =
+				StateRequestHandler::new(&protocol_id, None, client.clone(), 50);
+			tokio::spawn(handler.run().boxed());
+			protocol_config
+		};
+
+		let light_client_request_protocol_config = {
+			let (handler, protocol_config) =
+				LightClientRequestHandler::new(&protocol_id, None, client.clone());
+			tokio::spawn(handler.run().boxed());
+			protocol_config
+		};
+
+		let (chain_sync_network_provider, chain_sync_network_handle) =
+			self.chain_sync_network.unwrap_or(NetworkServiceProvider::new());
+
+		let (engine, chain_sync_service, block_announce_config) = SyncingEngine::new(
+			Roles::from(&config::Role::Full),
+			client.clone(),
+			None,
+			&network_config,
+			protocol_id.clone(),
+			&None,
+			Box::new(sp_consensus::block_validation::DefaultBlockAnnounceValidator),
+			None,
+			chain_sync_network_handle,
+			import_queue.service(),
+			block_request_protocol_config.name.clone(),
+			state_request_protocol_config.name.clone(),
+			None,
+		)
+		.unwrap();
+		let mut link = self.link.unwrap_or(Box::new(chain_sync_service.clone()));
+		let worker = NetworkWorker::<
+			substrate_test_runtime_client::runtime::Block,
+			substrate_test_runtime_client::runtime::Hash,
+		>::new(config::Params {
+			block_announce_config,
+			role: config::Role::Full,
+			executor: Box::new(|f| {
+				tokio::spawn(f);
+			}),
+			network_config,
+			chain: client.clone(),
+			protocol_id,
+			fork_id,
+			metrics_registry: None,
+			request_response_protocol_configs: [
+				block_request_protocol_config,
+				state_request_protocol_config,
+				light_client_request_protocol_config,
+			]
+			.to_vec(),
+		})
+		.unwrap();
+
+		let service = worker.service().clone();
+		tokio::spawn(async move {
+			let _ = chain_sync_network_provider.run(service).await;
+		});
+		tokio::spawn(async move {
+			loop {
+				futures::future::poll_fn(|cx| {
+					import_queue.poll_actions(cx, &mut *link);
+					std::task::Poll::Ready(())
+				})
+				.await;
+				tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+			}
+		});
+		let stream = worker.service().event_stream("syncing");
+		tokio::spawn(engine.run(stream));
+
+		TestNetwork::new(worker)
+	}
+}
 
 /// Builds two nodes and their associated events stream.
 /// The nodes are connected together and have the `PROTOCOL_NAME` protocol registered.
@@ -50,7 +254,7 @@ fn build_nodes_one_proto() -> (
 		.start_network();
 
 	let (node2, events_stream2) = TestNetworkBuilder::new()
-		.with_set_config(SetConfig {
+		.with_set_config(config::SetConfig {
 			reserved_nodes: vec![MultiaddrWithPeerId {
 				multiaddr: listen_addr,
 				peer_id: node1.local_peer_id(),
@@ -208,7 +412,7 @@ async fn lots_of_incoming_peers_works() {
 
 	let (main_node, _) = TestNetworkBuilder::new()
 		.with_listen_addresses(vec![listen_addr.clone()])
-		.with_set_config(SetConfig { in_peers: u32::MAX, ..Default::default() })
+		.with_set_config(config::SetConfig { in_peers: u32::MAX, ..Default::default() })
 		.build()
 		.start_network();
 
@@ -220,7 +424,7 @@ async fn lots_of_incoming_peers_works() {
 
 	for _ in 0..32 {
 		let (_dialing_node, event_stream) = TestNetworkBuilder::new()
-			.with_set_config(SetConfig {
+			.with_set_config(config::SetConfig {
 				reserved_nodes: vec![MultiaddrWithPeerId {
 					multiaddr: listen_addr.clone(),
 					peer_id: main_node_peer_id,
@@ -289,10 +493,11 @@ async fn notifications_back_pressure() {
 
 		while received_notifications < TOTAL_NOTIFS {
 			match events_stream2.next().await.unwrap() {
-				Event::NotificationStreamOpened { protocol, .. } =>
+				Event::NotificationStreamOpened { protocol, .. } => {
 					if let None = sync_protocol_name {
 						sync_protocol_name = Some(protocol);
-					},
+					}
+				},
 				Event::NotificationStreamClosed { protocol, .. } => {
 					if Some(&protocol) != sync_protocol_name.as_ref() {
 						panic!()
@@ -344,7 +549,7 @@ async fn fallback_name_working() {
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 	let (node1, mut events_stream1) = TestNetworkBuilder::new()
 		.with_config(config::NetworkConfiguration {
-			extra_sets: vec![NonDefaultSetConfig {
+			extra_sets: vec![config::NonDefaultSetConfig {
 				notifications_protocol: NEW_PROTOCOL_NAME.into(),
 				fallback_names: vec![PROTOCOL_NAME.into()],
 				max_notification_size: 1024 * 1024,
@@ -359,7 +564,7 @@ async fn fallback_name_working() {
 		.start_network();
 
 	let (_, mut events_stream2) = TestNetworkBuilder::new()
-		.with_set_config(SetConfig {
+		.with_set_config(config::SetConfig {
 			reserved_nodes: vec![MultiaddrWithPeerId {
 				multiaddr: listen_addr,
 				peer_id: node1.local_peer_id(),
@@ -500,7 +705,7 @@ async fn ensure_reserved_node_addresses_consistent_with_transport_memory() {
 		.with_config(config::NetworkConfiguration {
 			listen_addresses: vec![listen_addr.clone()],
 			transport: TransportConfig::MemoryOnly,
-			default_peers_set: SetConfig {
+			default_peers_set: config::SetConfig {
 				reserved_nodes: vec![reserved_node],
 				..Default::default()
 			},
@@ -527,7 +732,7 @@ async fn ensure_reserved_node_addresses_consistent_with_transport_not_memory() {
 	let _ = TestNetworkBuilder::new()
 		.with_config(config::NetworkConfiguration {
 			listen_addresses: vec![listen_addr.clone()],
-			default_peers_set: SetConfig {
+			default_peers_set: config::SetConfig {
 				reserved_nodes: vec![reserved_node],
 				..Default::default()
 			},
