@@ -118,7 +118,31 @@ pub struct WeightToFeeCoefficient<Balance> {
 	pub degree: u8,
 }
 
-/// A list of coefficients that represent one polynomial.
+impl<Balance> WeightToFeeCoefficient<Balance>
+where
+	Balance: BaseArithmetic + From<u32> + Copy + Unsigned,
+{
+	/// Evaluate the term at `x` and saturatingly amalgamate into `result`.
+	pub fn saturating_eval(&self, mut result: Balance, x: Balance) -> Balance {
+		let power = x.saturating_pow(self.degree.into());
+
+		let frac = self.coeff_frac * power; // Overflow safe.
+		let integer = self.coeff_integer.saturating_mul(power);
+		// Do not add them together here to avoid an underflow.
+
+		if self.negative {
+			result = result.saturating_sub(frac);
+			result = result.saturating_sub(integer);
+		} else {
+			result = result.saturating_add(frac);
+			result = result.saturating_add(integer);
+		}
+
+		result
+	}
+}
+
+/// A list of coefficients that represent a polynomial.
 pub type WeightToFeeCoefficients<T> = SmallVec<[WeightToFeeCoefficient<T>; 4]>;
 
 /// A list of coefficients that represent a polynomial.
@@ -140,23 +164,8 @@ where
 {
 	/// Evaluate the polynomial at a specific `x`.
 	pub fn eval(&self, x: u64) -> Balance {
-		self.coefficients.iter().fold(Balance::saturated_from(0u32), |mut acc, args| {
-			let w = Balance::saturated_from(x).saturating_pow(args.degree.into());
-
-			// The sum could get negative. Therefore we only sum with the accumulator.
-			// The Perbill Mul implementation is non overflowing.
-			let frac = args.coeff_frac * w;
-			let integer = args.coeff_integer.saturating_mul(w);
-
-			if args.negative {
-				acc = acc.saturating_sub(frac);
-				acc = acc.saturating_sub(integer);
-			} else {
-				acc = acc.saturating_add(frac);
-				acc = acc.saturating_add(integer);
-			}
-
-			acc
+		self.coefficients.iter().fold(Balance::zero(), |acc, term| {
+			term.saturating_eval(acc, Balance::saturated_from(x))
 		})
 	}
 }
