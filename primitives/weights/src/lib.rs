@@ -30,7 +30,7 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 use sp_arithmetic::{
-	traits::{BaseArithmetic, SaturatedConversion, Saturating, Unsigned},
+	traits::{BaseArithmetic, SaturatedConversion, Unsigned},
 	Perbill,
 };
 use sp_core::Get;
@@ -121,6 +121,45 @@ pub struct WeightToFeeCoefficient<Balance> {
 /// A list of coefficients that represent one polynomial.
 pub type WeightToFeeCoefficients<T> = SmallVec<[WeightToFeeCoefficient<T>; 4]>;
 
+/// A list of coefficients that represent a polynomial to convert a `u64` to a fee.
+///
+/// Can be [eval](Self::eval)uated at a specific `u64` to get the fee.
+pub struct FeePolynomial<Balance> {
+	coefficients: SmallVec<[WeightToFeeCoefficient<Balance>; 4]>,
+}
+
+impl<Balance> From<WeightToFeeCoefficients<Balance>> for FeePolynomial<Balance> {
+	fn from(coefficients: WeightToFeeCoefficients<Balance>) -> Self {
+		Self { coefficients }
+	}
+}
+
+impl<Balance> FeePolynomial<Balance>
+where
+	Balance: BaseArithmetic + From<u32> + Copy + Unsigned,
+{
+	pub fn eval(&self, x: u64) -> Balance {
+		self.coefficients.iter().fold(Balance::saturated_from(0u32), |mut acc, args| {
+			let w = Balance::saturated_from(x).saturating_pow(args.degree.into());
+
+			// The sum could get negative. Therefore we only sum with the accumulator.
+			// The Perbill Mul implementation is non overflowing.
+			let frac = args.coeff_frac * w;
+			let integer = args.coeff_integer.saturating_mul(w);
+
+			if args.negative {
+				acc = acc.saturating_sub(frac);
+				acc = acc.saturating_sub(integer);
+			} else {
+				acc = acc.saturating_add(frac);
+				acc = acc.saturating_add(integer);
+			}
+
+			acc
+		})
+	}
+}
+
 /// A trait that describes the weight to fee calculation.
 pub trait WeightToFee {
 	/// The type that is returned as result from calculation.
@@ -157,27 +196,8 @@ where
 	/// This should not be overridden in most circumstances. Calculation is done in the
 	/// `Balance` type and never overflows. All evaluation is saturating.
 	fn weight_to_fee(weight: &Weight) -> Self::Balance {
-		Self::polynomial()
-			.iter()
-			.fold(Self::Balance::saturated_from(0u32), |mut acc, args| {
-				let w = Self::Balance::saturated_from(weight.ref_time())
-					.saturating_pow(args.degree.into());
-
-				// The sum could get negative. Therefore we only sum with the accumulator.
-				// The Perbill Mul implementation is non overflowing.
-				let frac = args.coeff_frac * w;
-				let integer = args.coeff_integer.saturating_mul(w);
-
-				if args.negative {
-					acc = acc.saturating_sub(frac);
-					acc = acc.saturating_sub(integer);
-				} else {
-					acc = acc.saturating_add(frac);
-					acc = acc.saturating_add(integer);
-				}
-
-				acc
-			})
+		let poly: FeePolynomial<Self::Balance> = Self::polynomial().into();
+		poly.eval(weight.ref_time())
 	}
 }
 
