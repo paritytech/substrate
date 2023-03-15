@@ -29,22 +29,26 @@ use super::{fungible, Balance};
 pub trait Pay {
 	/// The type by which we measure units of the currency in which we make payments.
 	type Balance: Balance;
-	/// The type by which we identify the individuals to whom a payment may be made.
-	type AccountId;
-	/// The type of the asset that is going to be paid, `()` for native asset
-	type AssetId;
+	/// The type by which we identify the beneficiaries to whom a payment may be made.
+	type Beneficiary;
+	/// The kind of asset that is going to be paid, `()` for native asset
+	type AssetKind;
 	/// An identifier given to an individual payment.
 	type Id: FullCodec + MaxEncodedLen + TypeInfo + Clone + Eq + PartialEq + Debug + Copy;
 	/// Make a payment and return an identifier for later evaluation of success in some off-chain
 	/// mechanism (likely an event, but possibly not on this chain).
-	fn pay(who: &Self::AccountId, amount: Self::Balance) -> Result<Self::Id, ()>;
-	/// Check how a payment has proceeded. `id` must have been a previously returned by `pay` for
+	fn pay(
+		who: &Self::Beneficiary,
+		asset_kind: Self::AssetKind,
+		amount: Self::Balance,
+	) -> Result<Self::Id, ()>;
+	/// Check how a payment has proceeded. `id` must have been previously returned by `pay` for
 	/// the result of this call to be meaningful.
 	fn check_payment(id: Self::Id) -> PaymentStatus;
 	/// Ensure that a call to pay with the given parameters will be successful if done immediately
 	/// after this call. Used in benchmarking code.
 	#[cfg(feature = "runtime-benchmarks")]
-	fn ensure_successful(who: &Self::AccountId, amount: Self::Balance);
+	fn ensure_successful(who: &Self::Beneficiary, amount: Self::Balance);
 	/// Ensure that a call to `check_payment` with the given parameters will return either `Success`
 	/// or `Failure`.
 	#[cfg(feature = "runtime-benchmarks")]
@@ -70,10 +74,14 @@ impl<A: TypedGet, F: fungible::Transfer<A::Type> + fungible::Mutate<A::Type>> Pa
 	for PayFromAccount<F, A>
 {
 	type Balance = F::Balance;
-	type AccountId = A::Type;
-	type AssetId = ();
+	type Beneficiary = A::Type;
+	type AssetKind = ();
 	type Id = ();
-	fn pay(who: &Self::AccountId, amount: Self::Balance) -> Result<Self::Id, ()> {
+	fn pay(
+		who: &Self::Beneficiary,
+		_: Self::AssetKind,
+		amount: Self::Balance,
+	) -> Result<Self::Id, ()> {
 		<F as fungible::Transfer<_>>::transfer(&A::get(), who, amount, false).map_err(|_| ())?;
 		Ok(())
 	}
@@ -81,7 +89,7 @@ impl<A: TypedGet, F: fungible::Transfer<A::Type> + fungible::Mutate<A::Type>> Pa
 		PaymentStatus::Success
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	fn ensure_successful(_: &Self::AccountId, amount: Self::Balance) {
+	fn ensure_successful(_: &Self::Beneficiary, amount: Self::Balance) {
 		<F as fungible::Mutate<_>>::mint_into(&A::get(), amount).unwrap();
 	}
 	#[cfg(feature = "runtime-benchmarks")]

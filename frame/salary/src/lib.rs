@@ -106,7 +106,7 @@ pub mod pallet {
 
 		/// Means by which we can make payments to accounts. This also defines the currency and the
 		/// balance which we use to denote that currency.
-		type Paymaster: Pay<AccountId = <Self as frame_system::Config>::AccountId>;
+		type Paymaster: Pay<Beneficiary = <Self as frame_system::Config>::AccountId, AssetKind = ()>;
 
 		/// The current membership of payees.
 		type Members: RankedMembers<AccountId = <Self as frame_system::Config>::AccountId>;
@@ -436,8 +436,8 @@ pub mod pallet {
 
 			claimant.last_active = status.cycle_index;
 
-			let id =
-				T::Paymaster::pay(&beneficiary, payout).map_err(|()| Error::<T, I>::PayError)?;
+			let id = T::Paymaster::pay(&beneficiary, (), payout)
+				.map_err(|()| Error::<T, I>::PayError)?;
 
 			claimant.status = Attempted { registered, id, amount: payout };
 
