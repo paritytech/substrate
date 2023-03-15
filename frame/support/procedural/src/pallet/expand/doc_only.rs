@@ -47,7 +47,7 @@ pub fn expand_doc_only(def: &mut Def) -> proc_macro2::TokenStream {
 						///
 						/// NOTE: This function is an automatically generated, doc only, uncallable stub.
 						#[ doc = #line_2 ]
-						/// the pallet [`Call`](`crate::Call`) enum. You should not attempt to
+						/// the pallet [`Call`](`Call`) enum. You should not attempt to
 						/// call this function directly.
 						pub fn #name<#type_impl_generics>(#args) { unreachable!(); }
 					)
