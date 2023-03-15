@@ -43,7 +43,7 @@ use libp2p::{
 	core::{Endpoint, Multiaddr, PeerId},
 	request_response::{self, Behaviour, Codec, Config, Message, ProtocolSupport, ResponseChannel},
 	swarm::{
-		behaviour::{ConnectionClosed, DialFailure, FromSwarm, ListenFailure},
+		behaviour::{ConnectionClosed, FromSwarm},
 		handler::multi::MultiHandler,
 		ConnectionDenied, ConnectionId, NetworkBehaviour, NetworkBehaviourAction, PollParameters,
 		THandler, THandlerInEvent, THandlerOutEvent,
@@ -578,7 +578,6 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 									"The request-response isn't supposed to start dialing addresses"
 								);
 							}
-							let protocol = protocol.to_string();
 							return Poll::Ready(NetworkBehaviourAction::Dial { opts })
 						},
 						NetworkBehaviourAction::NotifyHandler { peer_id, handler, event } =>

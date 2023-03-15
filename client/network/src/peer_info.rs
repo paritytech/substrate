@@ -196,10 +196,10 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 
 	fn handle_pending_outbound_connection(
 		&mut self,
-		connection_id: ConnectionId,
-		maybe_peer: Option<PeerId>,
-		addresses: &[Multiaddr],
-		effective_role: Endpoint,
+		_connection_id: ConnectionId,
+		_maybe_peer: Option<PeerId>,
+		_addresses: &[Multiaddr],
+		_effective_role: Endpoint,
 	) -> Result<Vec<Multiaddr>, ConnectionDenied> {
 		// Only `Discovery::handle_pending_outbound_connection` must be returning addresses to
 		// ensure that we don't return unwanted addresses.
