@@ -48,6 +48,7 @@ pub fn expand_runtime_metadata(
 			let event = expand_pallet_metadata_events(&filtered_names, runtime, scrate, decl);
 			let constants = expand_pallet_metadata_constants(runtime, decl);
 			let errors = expand_pallet_metadata_errors(runtime, decl);
+			let docs = expand_pallet_metadata_docs(runtime, decl);
 			let attr = decl.cfg_pattern.iter().fold(TokenStream::new(), |acc, pattern| {
 				let attr = TokenStream::from_str(&format!("#[cfg({})]", pattern.original()))
 					.expect("was successfully parsed before; qed");
@@ -67,8 +68,7 @@ pub fn expand_runtime_metadata(
 					event: #event,
 					constants: #constants,
 					error: #errors,
-					// No docs collected for now.
-					docs: Default::default(),
+					docs: #docs,
 				}
 			}
 		})
@@ -198,5 +198,14 @@ fn expand_pallet_metadata_errors(runtime: &Ident, decl: &Pallet) -> TokenStream 
 
 	quote! {
 		#path::Pallet::<#runtime #(, #path::#instance)*>::error_metadata()
+	}
+}
+
+fn expand_pallet_metadata_docs(runtime: &Ident, decl: &Pallet) -> TokenStream {
+	let path = &decl.path;
+	let instance = decl.instance.as_ref().into_iter();
+
+	quote! {
+		#path::Pallet::<#runtime #(, #path::#instance)*>::pallet_documentation_metadata()
 	}
 }
