@@ -1017,13 +1017,8 @@ async fn should_initialize_voter_at_genesis() {
 
 	// verify next vote target is mandatory block 1
 	assert_eq!(persisted_state.best_beefy_block(), 0);
-	assert_eq!(persisted_state.best_grandpa_block(), 13);
-	assert_eq!(
-		persisted_state
-			.voting_oracle()
-			.voting_target(persisted_state.best_beefy_block(), 13),
-		Some(1)
-	);
+	assert_eq!(persisted_state.best_grandpa_number(), 13);
+	assert_eq!(persisted_state.voting_oracle().voting_target(), Some(1));
 
 	// verify state also saved to db
 	assert!(verify_persisted_version(&*backend));
@@ -1065,13 +1060,8 @@ async fn should_initialize_voter_at_custom_genesis() {
 
 	// verify next vote target is mandatory block 7
 	assert_eq!(persisted_state.best_beefy_block(), 0);
-	assert_eq!(persisted_state.best_grandpa_block(), 8);
-	assert_eq!(
-		persisted_state
-			.voting_oracle()
-			.voting_target(persisted_state.best_beefy_block(), 13),
-		Some(custom_pallet_genesis)
-	);
+	assert_eq!(persisted_state.best_grandpa_number(), 8);
+	assert_eq!(persisted_state.voting_oracle().voting_target(), Some(custom_pallet_genesis));
 
 	// verify state also saved to db
 	assert!(verify_persisted_version(&*backend));
@@ -1123,14 +1113,9 @@ async fn should_initialize_voter_when_last_final_is_session_boundary() {
 
 	// verify block 10 is correctly marked as finalized
 	assert_eq!(persisted_state.best_beefy_block(), 10);
-	assert_eq!(persisted_state.best_grandpa_block(), 13);
+	assert_eq!(persisted_state.best_grandpa_number(), 13);
 	// verify next vote target is diff-power-of-two block 12
-	assert_eq!(
-		persisted_state
-			.voting_oracle()
-			.voting_target(persisted_state.best_beefy_block(), 13),
-		Some(12)
-	);
+	assert_eq!(persisted_state.voting_oracle().voting_target(), Some(12));
 
 	// verify state also saved to db
 	assert!(verify_persisted_version(&*backend));
@@ -1181,13 +1166,8 @@ async fn should_initialize_voter_at_latest_finalized() {
 
 	// verify next vote target is 13
 	assert_eq!(persisted_state.best_beefy_block(), 12);
-	assert_eq!(persisted_state.best_grandpa_block(), 13);
-	assert_eq!(
-		persisted_state
-			.voting_oracle()
-			.voting_target(persisted_state.best_beefy_block(), 13),
-		Some(13)
-	);
+	assert_eq!(persisted_state.best_grandpa_number(), 13);
+	assert_eq!(persisted_state.voting_oracle().voting_target(), Some(13));
 
 	// verify state also saved to db
 	assert!(verify_persisted_version(&*backend));

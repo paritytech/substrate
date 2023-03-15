@@ -82,23 +82,34 @@ pub(crate) struct VoterOracle<B: Block> {
 	sessions: VecDeque<Rounds<B>>,
 	/// Min delta in block numbers between two blocks, BEEFY should vote on.
 	min_block_delta: u32,
+	/// Best block we received a GRANDPA finality for.
+	best_grandpa_block_header: <B as Block>::Header,
+	/// Best block a BEEFY voting round has been concluded for.
+	best_beefy_block: NumberFor<B>,
 }
 
 impl<B: Block> VoterOracle<B> {
 	/// Verify provided `sessions` satisfies requirements, then build `VoterOracle`.
-	pub fn checked_new(sessions: VecDeque<Rounds<B>>, min_block_delta: u32) -> Option<Self> {
+	pub fn checked_new(
+		sessions: VecDeque<Rounds<B>>,
+		min_block_delta: u32,
+		grandpa_header: <B as Block>::Header,
+		best_beefy: NumberFor<B>,
+	) -> Option<Self> {
 		let mut prev_start = Zero::zero();
 		let mut prev_validator_id = None;
 		// verifies the
 		let mut validate = || -> bool {
-			if sessions.is_empty() {
+			let best_grandpa = *grandpa_header.number();
+			if sessions.is_empty() || best_beefy > best_grandpa {
 				return false
 			}
 			for (idx, session) in sessions.iter().enumerate() {
+				let start = session.session_start();
 				if session.validators().is_empty() {
 					return false
 				}
-				if session.session_start() <= prev_start {
+				if start > best_grandpa || start <= prev_start {
 					return false
 				}
 				#[cfg(not(test))]
@@ -120,9 +131,17 @@ impl<B: Block> VoterOracle<B> {
 				sessions,
 				// Always target at least one block better than current best beefy.
 				min_block_delta: min_block_delta.max(1),
+				best_grandpa_block_header: grandpa_header,
+				best_beefy_block: best_beefy,
 			})
 		} else {
-			error!(target: LOG_TARGET, "🥩 Invalid sessions queue: {:?}.", sessions);
+			error!(
+				target: LOG_TARGET,
+				"🥩 Invalid sessions queue: {:?}; best-beefy {:?} best-grandpa-header {:?}.",
+				sessions,
+				best_beefy,
+				grandpa_header
+			);
 			None
 		}
 	}
@@ -181,16 +200,13 @@ impl<B: Block> VoterOracle<B> {
 	}
 
 	/// Return `(A, B)` tuple representing inclusive [A, B] interval of votes to accept.
-	pub fn accepted_interval(
-		&self,
-		best_grandpa: NumberFor<B>,
-	) -> Result<(NumberFor<B>, NumberFor<B>), Error> {
+	pub fn accepted_interval(&self) -> Result<(NumberFor<B>, NumberFor<B>), Error> {
 		let rounds = self.sessions.front().ok_or(Error::UninitSession)?;
 
 		if rounds.mandatory_done() {
 			// There's only one session active and its mandatory is done.
 			// Accept any GRANDPA finalized vote.
-			Ok((rounds.session_start(), best_grandpa.into()))
+			Ok((rounds.session_start(), (*self.best_grandpa_block_header.number()).into()))
 		} else {
 			// There's at least one session with mandatory not done.
 			// Only accept votes for the mandatory block in the front of queue.
@@ -199,12 +215,8 @@ impl<B: Block> VoterOracle<B> {
 	}
 
 	/// Utility function to quickly decide what to do for each round.
-	pub fn triage_round(
-		&self,
-		round: NumberFor<B>,
-		best_grandpa: NumberFor<B>,
-	) -> Result<RoundAction, Error> {
-		let (start, end) = self.accepted_interval(best_grandpa)?;
+	pub fn triage_round(&self, round: NumberFor<B>) -> Result<RoundAction, Error> {
+		let (start, end) = self.accepted_interval()?;
 		if start <= round && round <= end {
 			Ok(RoundAction::Process)
 		} else if round > end {
@@ -216,17 +228,15 @@ impl<B: Block> VoterOracle<B> {
 
 	/// Return `Some(number)` if we should be voting on block `number`,
 	/// return `None` if there is no block we should vote on.
-	pub fn voting_target(
-		&self,
-		best_beefy: NumberFor<B>,
-		best_grandpa: NumberFor<B>,
-	) -> Option<NumberFor<B>> {
+	pub fn voting_target(&self) -> Option<NumberFor<B>> {
 		let rounds = if let Some(r) = self.sessions.front() {
 			r
 		} else {
 			debug!(target: LOG_TARGET, "🥩 No voting round started");
 			return None
 		};
+		let best_grandpa = *self.best_grandpa_block_header.number();
+		let best_beefy = self.best_beefy_block;
 
 		// `target` is guaranteed > `best_beefy` since `min_block_delta` is at least `1`.
 		let target =
@@ -258,10 +268,6 @@ pub(crate) struct WorkerParams<B: Block, BE, P, R, S> {
 
 #[derive(Debug, Decode, Encode, PartialEq)]
 pub(crate) struct PersistedState<B: Block> {
-	/// Best block we received a GRANDPA finality for.
-	best_grandpa_block_header: <B as Block>::Header,
-	/// Best block a BEEFY voting round has been concluded for.
-	best_beefy_block: NumberFor<B>,
 	/// Best block we voted on.
 	best_voted: NumberFor<B>,
 	/// Chooses which incoming votes to accept and which votes to generate.
@@ -276,25 +282,24 @@ impl<B: Block> PersistedState<B> {
 		sessions: VecDeque<Rounds<B>>,
 		min_block_delta: u32,
 	) -> Option<Self> {
-		VoterOracle::checked_new(sessions, min_block_delta).map(|voting_oracle| PersistedState {
-			best_grandpa_block_header: grandpa_header,
-			best_beefy_block: best_beefy,
-			best_voted: Zero::zero(),
-			voting_oracle,
-		})
+		VoterOracle::checked_new(sessions, min_block_delta, grandpa_header, best_beefy)
+			.map(|voting_oracle| PersistedState { best_voted: Zero::zero(), voting_oracle })
 	}
 
 	pub(crate) fn set_min_block_delta(&mut self, min_block_delta: u32) {
 		self.voting_oracle.min_block_delta = min_block_delta.max(1);
 	}
 
+	pub(crate) fn set_best_beefy(&mut self, best_beefy: NumberFor<B>) {
+		self.voting_oracle.best_beefy_block = best_beefy;
+	}
+
 	pub(crate) fn set_best_grandpa(&mut self, best_grandpa: <B as Block>::Header) {
-		self.best_grandpa_block_header = best_grandpa;
+		self.voting_oracle.best_grandpa_block_header = best_grandpa;
 	}
 
 	pub(crate) fn current_gossip_filter(&self) -> Result<GossipVoteFilter<B>, Error> {
-		let (start, end) =
-			self.voting_oracle.accepted_interval(*self.best_grandpa_block_header.number())?;
+		let (start, end) = self.voting_oracle.accepted_interval()?;
 		let validator_set_id = self.voting_oracle.current_validator_set_id()?;
 		Ok(GossipVoteFilter { start, end, validator_set_id })
 	}
@@ -374,11 +379,11 @@ where
 	}
 
 	fn best_grandpa_block(&self) -> NumberFor<B> {
-		*self.persisted_state.best_grandpa_block_header.number()
+		*self.persisted_state.voting_oracle.best_grandpa_block_header.number()
 	}
 
 	fn best_beefy_block(&self) -> NumberFor<B> {
-		self.persisted_state.best_beefy_block
+		self.persisted_state.voting_oracle.best_beefy_block
 	}
 
 	fn voting_oracle(&self) -> &VoterOracle<B> {
@@ -467,7 +472,7 @@ where
 
 		if *header.number() > self.best_grandpa_block() {
 			// update best GRANDPA finalized block we have seen
-			self.persisted_state.best_grandpa_block_header = header.clone();
+			self.persisted_state.set_best_grandpa(header.clone());
 
 			// Check all (newly) finalized blocks for new session(s).
 			let backend = self.backend.clone();
@@ -504,8 +509,7 @@ where
 		vote: VoteMessage<NumberFor<B>, AuthorityId, Signature>,
 	) -> Result<(), Error> {
 		let block_num = vote.commitment.block_number;
-		let best_grandpa = self.best_grandpa_block();
-		match self.voting_oracle().triage_round(block_num, best_grandpa)? {
+		match self.voting_oracle().triage_round(block_num)? {
 			RoundAction::Process => self.handle_vote(vote)?,
 			RoundAction::Drop => metric_inc!(self, beefy_stale_votes),
 			RoundAction::Enqueue => error!(target: LOG_TARGET, "🥩 unexpected vote: {:?}.", vote),
@@ -524,8 +528,7 @@ where
 			VersionedFinalityProof::V1(ref sc) => sc,
 		};
 		let block_num = signed_commitment.commitment.block_number;
-		let best_grandpa = self.best_grandpa_block();
-		match self.voting_oracle().triage_round(block_num, best_grandpa)? {
+		match self.voting_oracle().triage_round(block_num)? {
 			RoundAction::Process => {
 				debug!(target: LOG_TARGET, "🥩 Process justification for round: {:?}.", block_num);
 				metric_inc!(self, beefy_imported_justifications);
@@ -608,7 +611,7 @@ where
 
 		if block_num > self.best_beefy_block() {
 			// Set new best BEEFY block number.
-			self.persisted_state.best_beefy_block = block_num;
+			self.persisted_state.set_best_beefy(block_num);
 			crate::aux_schema::write_voter_state(&*self.backend, &self.persisted_state)
 				.map_err(|e| Error::Backend(e.to_string()))?;
 
@@ -652,9 +655,8 @@ where
 
 	/// Handle previously buffered justifications, that now land in the voting interval.
 	fn try_pending_justififactions(&mut self) -> Result<(), Error> {
-		let best_grandpa = self.best_grandpa_block();
 		// Interval of blocks for which we can process justifications and votes right now.
-		let (start, end) = self.voting_oracle().accepted_interval(best_grandpa)?;
+		let (start, end) = self.voting_oracle().accepted_interval()?;
 		// Process pending justifications.
 		if !self.pending_justifications.is_empty() {
 			// These are still pending.
@@ -680,10 +682,7 @@ where
 	/// Decide if should vote, then vote.. or don't..
 	fn try_to_vote(&mut self) -> Result<(), Error> {
 		// Vote if there's now a new vote target.
-		if let Some(target) = self
-			.voting_oracle()
-			.voting_target(self.best_beefy_block(), self.best_grandpa_block())
-		{
+		if let Some(target) = self.voting_oracle().voting_target() {
 			metric_set!(self, beefy_should_vote_on, target);
 			if target > self.persisted_state.best_voted {
 				self.do_vote(target)?;
@@ -701,7 +700,7 @@ where
 		// Most of the time we get here, `target` is actually `best_grandpa`,
 		// avoid getting header from backend in that case.
 		let target_header = if target_number == self.best_grandpa_block() {
-			self.persisted_state.best_grandpa_block_header.clone()
+			self.persisted_state.voting_oracle.best_grandpa_block_header.clone()
 		} else {
 			let hash = self
 				.backend
@@ -1044,11 +1043,11 @@ pub(crate) mod tests {
 		}
 
 		pub fn best_beefy_block(&self) -> NumberFor<B> {
-			self.best_beefy_block
+			self.voting_oracle.best_beefy_block
 		}
 
-		pub fn best_grandpa_block(&self) -> NumberFor<B> {
-			*self.best_grandpa_block_header.number()
+		pub fn best_grandpa_number(&self) -> NumberFor<B> {
+			*self.voting_oracle.best_grandpa_block_header.number()
 		}
 	}
 
@@ -1059,7 +1058,7 @@ pub(crate) mod tests {
 	}
 
 	fn create_beefy_worker(
-		peer: &BeefyPeer,
+		peer: &mut BeefyPeer,
 		key: &Keyring,
 		min_block_delta: u32,
 		genesis_validator_set: ValidatorSet<AuthorityId>,
@@ -1109,12 +1108,15 @@ pub(crate) mod tests {
 			known_peers,
 			None,
 		);
-		let genesis_header = backend
+		// Push 1 block - will start first session.
+		let hashes = peer.push_blocks(1, false);
+		backend.finalize_block(hashes[0], None).unwrap();
+		let first_header = backend
 			.blockchain()
-			.expect_header(backend.blockchain().info().genesis_hash)
+			.expect_header(backend.blockchain().info().best_hash)
 			.unwrap();
 		let persisted_state = PersistedState::checked_new(
-			genesis_header,
+			first_header,
 			Zero::zero(),
 			vec![Rounds::new(One::one(), genesis_validator_set)].into(),
 			min_block_delta,
@@ -1231,10 +1233,30 @@ pub(crate) mod tests {
 
 	#[test]
 	fn should_vote_target() {
-		let mut oracle = VoterOracle::<Block> { min_block_delta: 1, sessions: VecDeque::new() };
+		let header = Header::new(
+			1u32.into(),
+			Default::default(),
+			Default::default(),
+			Default::default(),
+			Digest::default(),
+		);
+		let mut oracle = VoterOracle::<Block> {
+			best_beefy_block: 0,
+			best_grandpa_block_header: header,
+			min_block_delta: 1,
+			sessions: VecDeque::new(),
+		};
+		let voting_target_with = |oracle: &mut VoterOracle<Block>,
+		                          best_beefy: NumberFor<Block>,
+		                          best_grandpa: NumberFor<Block>|
+		 -> Option<NumberFor<Block>> {
+			oracle.best_beefy_block = best_beefy;
+			oracle.best_grandpa_block_header.number = best_grandpa;
+			oracle.voting_target()
+		};
 
 		// rounds not initialized -> should vote: `None`
-		assert_eq!(oracle.voting_target(0, 1), None);
+		assert_eq!(voting_target_with(&mut oracle, 0, 1), None);
 
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
@@ -1243,29 +1265,29 @@ pub(crate) mod tests {
 
 		// under min delta
 		oracle.min_block_delta = 4;
-		assert_eq!(oracle.voting_target(1, 1), None);
-		assert_eq!(oracle.voting_target(2, 5), None);
+		assert_eq!(voting_target_with(&mut oracle, 1, 1), None);
+		assert_eq!(voting_target_with(&mut oracle, 2, 5), None);
 
 		// vote on min delta
-		assert_eq!(oracle.voting_target(4, 9), Some(8));
+		assert_eq!(voting_target_with(&mut oracle, 4, 9), Some(8));
 		oracle.min_block_delta = 8;
-		assert_eq!(oracle.voting_target(10, 18), Some(18));
+		assert_eq!(voting_target_with(&mut oracle, 10, 18), Some(18));
 
 		// vote on power of two
 		oracle.min_block_delta = 1;
-		assert_eq!(oracle.voting_target(1000, 1008), Some(1004));
-		assert_eq!(oracle.voting_target(1000, 1016), Some(1008));
+		assert_eq!(voting_target_with(&mut oracle, 1000, 1008), Some(1004));
+		assert_eq!(voting_target_with(&mut oracle, 1000, 1016), Some(1008));
 
 		// nothing new to vote on
-		assert_eq!(oracle.voting_target(1000, 1000), None);
+		assert_eq!(voting_target_with(&mut oracle, 1000, 1000), None);
 
 		// vote on mandatory
 		oracle.sessions.clear();
 		oracle.add_session(Rounds::new(1000, validator_set.clone()));
-		assert_eq!(oracle.voting_target(0, 1008), Some(1000));
+		assert_eq!(voting_target_with(&mut oracle, 0, 1008), Some(1000));
 		oracle.sessions.clear();
 		oracle.add_session(Rounds::new(1001, validator_set.clone()));
-		assert_eq!(oracle.voting_target(1000, 1008), Some(1001));
+		assert_eq!(voting_target_with(&mut oracle, 1000, 1008), Some(1001));
 	}
 
 	#[test]
@@ -1273,16 +1295,34 @@ pub(crate) mod tests {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 
-		let mut oracle = VoterOracle::<Block> { min_block_delta: 1, sessions: VecDeque::new() };
+		let header = Header::new(
+			1u32.into(),
+			Default::default(),
+			Default::default(),
+			Default::default(),
+			Digest::default(),
+		);
+		let mut oracle = VoterOracle::<Block> {
+			best_beefy_block: 0,
+			best_grandpa_block_header: header,
+			min_block_delta: 1,
+			sessions: VecDeque::new(),
+		};
+		let accepted_interval_with = |oracle: &mut VoterOracle<Block>,
+		                              best_grandpa: NumberFor<Block>|
+		 -> Result<(NumberFor<Block>, NumberFor<Block>), Error> {
+			oracle.best_grandpa_block_header.number = best_grandpa;
+			oracle.accepted_interval()
+		};
 
 		// rounds not initialized -> should accept votes: `None`
-		assert!(oracle.accepted_interval(1).is_err());
+		assert!(accepted_interval_with(&mut oracle, 1).is_err());
 
 		let session_one = 1;
 		oracle.add_session(Rounds::new(session_one, validator_set.clone()));
 		// mandatory not done, only accept mandatory
 		for i in 0..15 {
-			assert_eq!(oracle.accepted_interval(i), Ok((session_one, session_one)));
+			assert_eq!(accepted_interval_with(&mut oracle, i), Ok((session_one, session_one)));
 		}
 
 		// add more sessions, nothing changes
@@ -1292,7 +1332,7 @@ pub(crate) mod tests {
 		oracle.add_session(Rounds::new(session_three, validator_set.clone()));
 		// mandatory not done, should accept mandatory for session_one
 		for i in session_three..session_three + 15 {
-			assert_eq!(oracle.accepted_interval(i), Ok((session_one, session_one)));
+			assert_eq!(accepted_interval_with(&mut oracle, i), Ok((session_one, session_one)));
 		}
 
 		// simulate finish mandatory for session one, prune oracle
@@ -1300,7 +1340,7 @@ pub(crate) mod tests {
 		oracle.try_prune();
 		// session_one pruned, should accept mandatory for session_two
 		for i in session_three..session_three + 15 {
-			assert_eq!(oracle.accepted_interval(i), Ok((session_two, session_two)));
+			assert_eq!(accepted_interval_with(&mut oracle, i), Ok((session_two, session_two)));
 		}
 
 		// simulate finish mandatory for session two, prune oracle
@@ -1308,26 +1348,29 @@ pub(crate) mod tests {
 		oracle.try_prune();
 		// session_two pruned, should accept mandatory for session_three
 		for i in session_three..session_three + 15 {
-			assert_eq!(oracle.accepted_interval(i), Ok((session_three, session_three)));
+			assert_eq!(accepted_interval_with(&mut oracle, i), Ok((session_three, session_three)));
 		}
 
 		// simulate finish mandatory for session three
 		oracle.sessions.front_mut().unwrap().test_set_mandatory_done(true);
 		// verify all other blocks in this session are now open to voting
 		for i in session_three..session_three + 15 {
-			assert_eq!(oracle.accepted_interval(i), Ok((session_three, i)));
+			assert_eq!(accepted_interval_with(&mut oracle, i), Ok((session_three, i)));
 		}
 		// pruning does nothing in this case
 		oracle.try_prune();
 		for i in session_three..session_three + 15 {
-			assert_eq!(oracle.accepted_interval(i), Ok((session_three, i)));
+			assert_eq!(accepted_interval_with(&mut oracle, i), Ok((session_three, i)));
 		}
 
 		// adding new session automatically prunes "finalized" previous session
 		let session_four = 31;
 		oracle.add_session(Rounds::new(session_four, validator_set.clone()));
 		assert_eq!(oracle.sessions.front().unwrap().session_start(), session_four);
-		assert_eq!(oracle.accepted_interval(session_four + 10), Ok((session_four, session_four)));
+		assert_eq!(
+			accepted_interval_with(&mut oracle, session_four + 10),
+			Ok((session_four, session_four))
+		);
 	}
 
 	#[test]
@@ -1361,7 +1404,7 @@ pub(crate) mod tests {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1);
-		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
+		let mut worker = create_beefy_worker(net.peer(0), &keys[0], 1, validator_set.clone());
 
 		// keystore doesn't contain other keys than validators'
 		assert_eq!(worker.verify_validator_set(&1, &validator_set), Ok(()));
@@ -1385,7 +1428,7 @@ pub(crate) mod tests {
 		let validator_set = ValidatorSet::new(make_beefy_ids(&keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1);
 		let backend = net.peer(0).client().as_backend();
-		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
+		let mut worker = create_beefy_worker(net.peer(0), &keys[0], 1, validator_set.clone());
 		// remove default session, will manually add custom one.
 		worker.persisted_state.voting_oracle.sessions.clear();
 
@@ -1413,6 +1456,7 @@ pub(crate) mod tests {
 		})
 		.await;
 
+		let client = net.peer(0).client().as_client();
 		// unknown hash for block #1
 		let (mut best_block_streams, mut finality_proofs) =
 			get_beefy_streams(&mut net, keys.clone());
@@ -1429,8 +1473,14 @@ pub(crate) mod tests {
 		// verify block finalized
 		assert_eq!(worker.best_beefy_block(), 1);
 		poll_fn(move |cx| {
-			// unknown hash -> nothing streamed
-			assert_eq!(best_block_stream.poll_next_unpin(cx), Poll::Pending);
+			// expect Some(hash-of-block-1)
+			match best_block_stream.poll_next_unpin(cx) {
+				Poll::Ready(Some(hash)) => {
+					let block_num = client.number(hash).unwrap();
+					assert_eq!(block_num, Some(1));
+				},
+				v => panic!("unexpected value: {:?}", v),
+			}
 			// commitment streamed
 			match finality_proof.poll_next_unpin(cx) {
 				// expect justification
@@ -1444,11 +1494,9 @@ pub(crate) mod tests {
 		// generate 2 blocks, try again expect success
 		let (mut best_block_streams, _) = get_beefy_streams(&mut net, keys);
 		let mut best_block_stream = best_block_streams.drain(..).next().unwrap();
-		let hashes = net.peer(0).push_blocks(2, false);
+		let hashes = net.peer(0).push_blocks(1, false);
 		// finalize 1 and 2 without justifications (hashes does not contain genesis)
-		let hashof1 = hashes[0];
-		let hashof2 = hashes[1];
-		backend.finalize_block(hashof1, None).unwrap();
+		let hashof2 = hashes[0];
 		backend.finalize_block(hashof2, None).unwrap();
 
 		let justif = create_finality_proof(2);
@@ -1484,7 +1532,7 @@ pub(crate) mod tests {
 		let keys = &[Keyring::Alice, Keyring::Bob];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1);
-		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
+		let mut worker = create_beefy_worker(net.peer(0), &keys[0], 1, validator_set.clone());
 
 		let worker_rounds = worker.active_rounds().unwrap();
 		assert_eq!(worker_rounds.session_start(), 1);
@@ -1522,7 +1570,7 @@ pub(crate) mod tests {
 		let api_alice = Arc::new(api_alice);
 
 		let mut net = BeefyTestNet::new(1);
-		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
+		let mut worker = create_beefy_worker(net.peer(0), &keys[0], 1, validator_set.clone());
 		worker.runtime = api_alice.clone();
 
 		// let there be a block with num = 1:
