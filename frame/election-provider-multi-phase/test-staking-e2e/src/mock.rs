@@ -413,7 +413,7 @@ impl EpmExtBuilder {
 	}
 }
 
-struct BalancesExtBuilder {
+pub struct BalancesExtBuilder {
 	balances: Vec<(AccountId, Balance)>,
 }
 
@@ -539,6 +539,11 @@ impl ExtBuilder {
 
 	pub fn epm(mut self, builder: EpmExtBuilder) -> Self {
 		self.epm_builder = builder;
+		self
+	}
+
+	pub fn balances(mut self, builder: BalancesExtBuilder) -> Self {
+		self.balances_builder = builder;
 		self
 	}
 
