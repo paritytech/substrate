@@ -95,7 +95,7 @@ impl KillChildOnDrop {
 		self.stop_with_signal(SIGINT);
 	}
 
-	/// Same as [`Self::stop`] but takes the `signal` that is send to stop the child.
+	/// Same as [`Self::stop`] but takes the `signal` that is sent to stop the child.
 	pub fn stop_with_signal(&mut self, signal: Signal) {
 		kill(Pid::from_raw(self.id().try_into().unwrap()), signal).unwrap();
 		assert!(self.wait().unwrap().success());
