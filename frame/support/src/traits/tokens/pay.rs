@@ -62,7 +62,8 @@ pub trait Pay {
 pub enum PaymentStatus {
 	/// Payment is in progress. Nothing to report yet.
 	InProgress,
-	/// Payment status is unknowable. It will never be reported successful or failed.
+	/// Payment status is unknowable. It may already have reported the result, or if not then
+	/// it will never be reported successful or failed.
 	Unknown,
 	/// Payment happened successfully.
 	Success,
