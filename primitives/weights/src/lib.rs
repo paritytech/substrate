@@ -128,7 +128,7 @@ where
 	/// ```ignore
 	/// (frac * x^(degree) + integer * x^(degree))
 	/// ```
-	/// Depending on the value of `negative`, it is added or subtracted from `result`.
+	/// Depending on the value of `negative`, it is added or subtracted from the `result`.
 	pub fn saturating_eval(&self, mut result: Balance, x: Balance) -> Balance {
 		let power = x.saturating_pow(self.degree.into());
 
@@ -161,11 +161,12 @@ pub type WeightToFeeCoefficients<T> = SmallVec<[WeightToFeeCoefficient<T>; 4]>;
 /// For visualization purposes, the formulas of the unsigned terms look like:
 ///
 /// ```ignore
-/// c[0].frac * x^(c[0].degree) + c[0].integer * x^(c[0].degree)
-/// c[1].frac * x^(c[1].degree) + c[1].integer * x^(c[1].degree)
+/// (c[0].frac * x^(c[0].degree) + c[0].integer * x^(c[0].degree))
+/// (c[1].frac * x^(c[1].degree) + c[1].integer * x^(c[1].degree))
 /// ...
 /// ```
-/// Depending on the value of `c[i].negative`, the term is added or subtracted from the result.
+/// Depending on the value of `c[i].negative`, each term is added or subtracted from the result.
+/// The result is initialized as zero.
 pub struct FeePolynomial<Balance> {
 	coefficients: SmallVec<[WeightToFeeCoefficient<Balance>; 4]>,
 }
