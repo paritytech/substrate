@@ -22,7 +22,7 @@ use crate::pallet::Def;
 pub fn expand_doc_only(def: &mut Def) -> proc_macro2::TokenStream {
 	let storage_names = &def.storages.iter().map(|storage| &storage.ident).collect::<Vec<_>>();
 	let storage_docs = &def.storages.iter().map(|storage| &storage.docs).collect::<Vec<_>>();
-	let dispatchables = {
+	let dispatchables =
 		if let Some(call_def) = &def.call {
 			let type_impl_generics = def.type_impl_generics(Span::call_site());
 			call_def
