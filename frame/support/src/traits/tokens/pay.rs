@@ -31,7 +31,10 @@ pub trait Pay {
 	type Balance: Balance;
 	/// The type by which we identify the beneficiaries to whom a payment may be made.
 	type Beneficiary;
-	/// The kind of asset that is going to be paid, `()` for native asset
+	/// The type for the kinds of asset that are going to be paid.
+	///
+	/// The unit type can be used here to indicate there's only one kind of asset to do payments
+	/// with. When implementing, it should be clear from the context what that asset is.
 	type AssetKind;
 	/// An identifier given to an individual payment.
 	type Id: FullCodec + MaxEncodedLen + TypeInfo + Clone + Eq + PartialEq + Debug + Copy;
