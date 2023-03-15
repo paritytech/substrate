@@ -365,7 +365,7 @@ pub struct ExtBuilder {
 	invulnerables: Vec<AccountId>,
 	has_stakers: bool,
 	initialize_first_session: bool,
-	pub min_nominator_bond: Balance,
+	min_nominator_bond: Balance,
 	min_validator_bond: Balance,
 	balance_factor: Balance,
 	status: BTreeMap<AccountId, StakerStatus<AccountId>>,
