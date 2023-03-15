@@ -24,9 +24,8 @@ use sp_core::{
 
 use crate::{
 	vrf::{make_transcript, VRFSignature, VRFTranscriptData},
-	CryptoStore, Error, SyncCryptoStore, SyncCryptoStorePtr,
+	Error, SyncCryptoStore, SyncCryptoStorePtr,
 };
-use async_trait::async_trait;
 use parking_lot::RwLock;
 use std::{collections::HashMap, sync::Arc};
 
@@ -65,84 +64,6 @@ impl KeyStore {
 				.get(pub_key.as_slice())
 				.map(|s| ecdsa::Pair::from_string(s, None).expect("`ecdsa` seed slice is valid"))
 		})
-	}
-}
-
-#[async_trait]
-impl CryptoStore for KeyStore {
-	async fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error> {
-		SyncCryptoStore::keys(self, id)
-	}
-
-	async fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
-		SyncCryptoStore::sr25519_public_keys(self, id)
-	}
-
-	async fn sr25519_generate_new(
-		&self,
-		id: KeyTypeId,
-		seed: Option<&str>,
-	) -> Result<sr25519::Public, Error> {
-		SyncCryptoStore::sr25519_generate_new(self, id, seed)
-	}
-
-	async fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public> {
-		SyncCryptoStore::ed25519_public_keys(self, id)
-	}
-
-	async fn ed25519_generate_new(
-		&self,
-		id: KeyTypeId,
-		seed: Option<&str>,
-	) -> Result<ed25519::Public, Error> {
-		SyncCryptoStore::ed25519_generate_new(self, id, seed)
-	}
-
-	async fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public> {
-		SyncCryptoStore::ecdsa_public_keys(self, id)
-	}
-
-	async fn ecdsa_generate_new(
-		&self,
-		id: KeyTypeId,
-		seed: Option<&str>,
-	) -> Result<ecdsa::Public, Error> {
-		SyncCryptoStore::ecdsa_generate_new(self, id, seed)
-	}
-
-	async fn insert_unknown(&self, id: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
-		SyncCryptoStore::insert_unknown(self, id, suri, public)
-	}
-
-	async fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
-		SyncCryptoStore::has_keys(self, public_keys)
-	}
-
-	async fn sign_with(
-		&self,
-		id: KeyTypeId,
-		key: &CryptoTypePublicPair,
-		msg: &[u8],
-	) -> Result<Option<Vec<u8>>, Error> {
-		SyncCryptoStore::sign_with(self, id, key, msg)
-	}
-
-	async fn sr25519_vrf_sign(
-		&self,
-		key_type: KeyTypeId,
-		public: &sr25519::Public,
-		transcript_data: VRFTranscriptData,
-	) -> Result<Option<VRFSignature>, Error> {
-		SyncCryptoStore::sr25519_vrf_sign(self, key_type, public, transcript_data)
-	}
-
-	async fn ecdsa_sign_prehashed(
-		&self,
-		id: KeyTypeId,
-		public: &ecdsa::Public,
-		msg: &[u8; 32],
-	) -> Result<Option<ecdsa::Signature>, Error> {
-		SyncCryptoStore::ecdsa_sign_prehashed(self, id, public, msg)
 	}
 }
 
@@ -366,12 +287,6 @@ impl SyncCryptoStore for KeyStore {
 
 impl Into<SyncCryptoStorePtr> for KeyStore {
 	fn into(self) -> SyncCryptoStorePtr {
-		Arc::new(self)
-	}
-}
-
-impl Into<Arc<dyn CryptoStore>> for KeyStore {
-	fn into(self) -> Arc<dyn CryptoStore> {
 		Arc::new(self)
 	}
 }

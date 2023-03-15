@@ -17,7 +17,6 @@
 //
 //! Local keystore implementation
 
-use async_trait::async_trait;
 use parking_lot::RwLock;
 use sp_application_crypto::{ecdsa, ed25519, sr25519, AppKey, AppPair, IsWrappedBy};
 use sp_core::{
@@ -29,7 +28,7 @@ use sp_core::{
 };
 use sp_keystore::{
 	vrf::{make_transcript, VRFSignature, VRFTranscriptData},
-	CryptoStore, Error as TraitError, SyncCryptoStore, SyncCryptoStorePtr,
+	Error as TraitError, SyncCryptoStore, SyncCryptoStorePtr,
 };
 use std::{
 	collections::HashMap,
@@ -66,92 +65,6 @@ impl LocalKeystore {
 		public: &<Pair as AppKey>::Public,
 	) -> Result<Option<Pair>> {
 		self.0.read().key_pair::<Pair>(public)
-	}
-}
-
-#[async_trait]
-impl CryptoStore for LocalKeystore {
-	async fn keys(
-		&self,
-		id: KeyTypeId,
-	) -> std::result::Result<Vec<CryptoTypePublicPair>, TraitError> {
-		SyncCryptoStore::keys(self, id)
-	}
-
-	async fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
-		SyncCryptoStore::sr25519_public_keys(self, id)
-	}
-
-	async fn sr25519_generate_new(
-		&self,
-		id: KeyTypeId,
-		seed: Option<&str>,
-	) -> std::result::Result<sr25519::Public, TraitError> {
-		SyncCryptoStore::sr25519_generate_new(self, id, seed)
-	}
-
-	async fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public> {
-		SyncCryptoStore::ed25519_public_keys(self, id)
-	}
-
-	async fn ed25519_generate_new(
-		&self,
-		id: KeyTypeId,
-		seed: Option<&str>,
-	) -> std::result::Result<ed25519::Public, TraitError> {
-		SyncCryptoStore::ed25519_generate_new(self, id, seed)
-	}
-
-	async fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public> {
-		SyncCryptoStore::ecdsa_public_keys(self, id)
-	}
-
-	async fn ecdsa_generate_new(
-		&self,
-		id: KeyTypeId,
-		seed: Option<&str>,
-	) -> std::result::Result<ecdsa::Public, TraitError> {
-		SyncCryptoStore::ecdsa_generate_new(self, id, seed)
-	}
-
-	async fn insert_unknown(
-		&self,
-		id: KeyTypeId,
-		suri: &str,
-		public: &[u8],
-	) -> std::result::Result<(), ()> {
-		SyncCryptoStore::insert_unknown(self, id, suri, public)
-	}
-
-	async fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
-		SyncCryptoStore::has_keys(self, public_keys)
-	}
-
-	async fn sign_with(
-		&self,
-		id: KeyTypeId,
-		key: &CryptoTypePublicPair,
-		msg: &[u8],
-	) -> std::result::Result<Option<Vec<u8>>, TraitError> {
-		SyncCryptoStore::sign_with(self, id, key, msg)
-	}
-
-	async fn sr25519_vrf_sign(
-		&self,
-		key_type: KeyTypeId,
-		public: &sr25519::Public,
-		transcript_data: VRFTranscriptData,
-	) -> std::result::Result<Option<VRFSignature>, TraitError> {
-		SyncCryptoStore::sr25519_vrf_sign(self, key_type, public, transcript_data)
-	}
-
-	async fn ecdsa_sign_prehashed(
-		&self,
-		id: KeyTypeId,
-		public: &ecdsa::Public,
-		msg: &[u8; 32],
-	) -> std::result::Result<Option<ecdsa::Signature>, TraitError> {
-		SyncCryptoStore::ecdsa_sign_prehashed(self, id, public, msg)
 	}
 }
 
@@ -337,12 +250,6 @@ impl SyncCryptoStore for LocalKeystore {
 
 impl Into<SyncCryptoStorePtr> for LocalKeystore {
 	fn into(self) -> SyncCryptoStorePtr {
-		Arc::new(self)
-	}
-}
-
-impl Into<Arc<dyn CryptoStore>> for LocalKeystore {
-	fn into(self) -> Arc<dyn CryptoStore> {
 		Arc::new(self)
 	}
 }

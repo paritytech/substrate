@@ -53,7 +53,7 @@ use sp_authority_discovery::{
 use sp_blockchain::HeaderBackend;
 
 use sp_core::crypto::{key_types, CryptoTypePublicPair, Pair};
-use sp_keystore::CryptoStore;
+use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::traits::Block as BlockT;
 
 mod addr_cache;
@@ -78,7 +78,7 @@ const MAX_IN_FLIGHT_LOOKUPS: usize = 8;
 /// Role an authority discovery [`Worker`] can run as.
 pub enum Role {
 	/// Publish own addresses and discover addresses of others.
-	PublishAndDiscover(Arc<dyn CryptoStore>),
+	PublishAndDiscover(SyncCryptoStorePtr),
 	/// Discover addresses of others.
 	Discover,
 }
@@ -382,7 +382,6 @@ where
 		let local_keys = match &self.role {
 			Role::PublishAndDiscover(key_store) => key_store
 				.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
-				.await
 				.into_iter()
 				.collect::<HashSet<_>>(),
 			Role::Discover => HashSet::new(),
@@ -588,12 +587,11 @@ where
 	// next authority set with two keys. The function does not return all of the local authority
 	// discovery public keys, but only the ones intersecting with the current or next authority set.
 	async fn get_own_public_keys_within_authority_set(
-		key_store: Arc<dyn CryptoStore>,
+		key_store: SyncCryptoStorePtr,
 		client: &Client,
 	) -> Result<HashSet<AuthorityId>> {
 		let local_pub_keys = key_store
 			.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
-			.await
 			.into_iter()
 			.collect::<HashSet<_>>();
 
@@ -666,7 +664,7 @@ fn sign_record_with_peer_id(
 async fn sign_record_with_authority_ids(
 	serialized_record: Vec<u8>,
 	peer_signature: Option<schema::PeerSignature>,
-	key_store: &dyn CryptoStore,
+	key_store: &dyn SyncCryptoStore,
 	keys: Vec<CryptoTypePublicPair>,
 ) -> Result<Vec<(KademliaKey, Vec<u8>)>> {
 	let mut result = Vec::with_capacity(keys.len());
@@ -674,7 +672,6 @@ async fn sign_record_with_authority_ids(
 	for key in keys.iter() {
 		let auth_signature = key_store
 			.sign_with(key_types::AUTHORITY_DISCOVERY, key, &serialized_record)
-			.await
 			.map_err(|_| Error::Signing)?
 			.ok_or_else(|| Error::MissingSignature(key.clone()))?;
 

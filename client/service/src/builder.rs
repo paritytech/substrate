@@ -67,7 +67,7 @@ use sp_consensus::block_validation::{
 	BlockAnnounceValidator, Chain, DefaultBlockAnnounceValidator,
 };
 use sp_core::traits::{CodeExecutor, SpawnNamed};
-use sp_keystore::{CryptoStore, SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::traits::{Block as BlockT, BlockIdTo, NumberFor, Zero};
 use std::{str::FromStr, sync::Arc, time::SystemTime};
 
@@ -86,15 +86,16 @@ type TFullParts<TBl, TRtApi, TExec> =
 	(TFullClient<TBl, TRtApi, TExec>, Arc<TFullBackend<TBl>>, KeystoreContainer, TaskManager);
 
 trait AsCryptoStoreRef {
-	fn keystore_ref(&self) -> Arc<dyn CryptoStore>;
+	// TODO-DAVXY: this can be removed
+	fn keystore_ref(&self) -> Arc<dyn SyncCryptoStore>;
 	fn sync_keystore_ref(&self) -> Arc<dyn SyncCryptoStore>;
 }
 
 impl<T> AsCryptoStoreRef for Arc<T>
 where
-	T: CryptoStore + SyncCryptoStore + 'static,
+	T: SyncCryptoStore + 'static,
 {
-	fn keystore_ref(&self) -> Arc<dyn CryptoStore> {
+	fn keystore_ref(&self) -> Arc<dyn SyncCryptoStore> {
 		self.clone()
 	}
 	fn sync_keystore_ref(&self) -> Arc<dyn SyncCryptoStore> {
@@ -127,13 +128,13 @@ impl KeystoreContainer {
 	/// stick around.
 	pub fn set_remote_keystore<T>(&mut self, remote: Arc<T>)
 	where
-		T: CryptoStore + SyncCryptoStore + 'static,
+		T: SyncCryptoStore + 'static,
 	{
 		self.remote = Some(Box::new(remote))
 	}
 
 	/// Returns an adapter to the asynchronous keystore that implements `CryptoStore`
-	pub fn keystore(&self) -> Arc<dyn CryptoStore> {
+	pub fn keystore(&self) -> Arc<dyn SyncCryptoStore> {
 		if let Some(c) = self.remote.as_ref() {
 			c.keystore_ref()
 		} else {
