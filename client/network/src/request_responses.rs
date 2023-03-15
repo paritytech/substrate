@@ -41,9 +41,7 @@ use futures::{
 };
 use libp2p::{
 	core::{Endpoint, Multiaddr, PeerId},
-	request_response::{
-		self, handler::Handler, Behaviour, Codec, Config, Message, ProtocolSupport, ResponseChannel,
-	},
+	request_response::{self, Behaviour, Codec, Config, Message, ProtocolSupport, ResponseChannel},
 	swarm::{
 		behaviour::{ConnectionClosed, DialFailure, FromSwarm, ListenFailure},
 		handler::multi::MultiHandler,
@@ -131,6 +129,9 @@ pub struct RequestResponsesBehaviour {
 	/// "response builder" used to build responses for incoming requests.
 	protocols:
 		HashMap<ProtocolName, (Behaviour<GenericCodec>, Option<mpsc::Sender<IncomingRequest>>)>,
+
+	// A map from [`ConnectionId`] to the sub-protocols.
+	connection_to_protocols_map: HashMap<ConnectionId, Vec<String>>,
 
 	/// Pending requests, passed down to a [`Behaviour`] behaviour, awaiting a reply.
 	pending_requests:
@@ -224,6 +225,7 @@ impl RequestResponsesBehaviour {
 			send_feedback: Default::default(),
 			peerset,
 			message_request: None,
+			connection_to_protocols_map: HashMap::new(),
 		})
 	}
 
@@ -312,6 +314,9 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 			}
 		});
 
+		self.connection_to_protocols_map
+			.insert(connection_id, iter.map(|(k, _)| k).collect());
+
 		Ok(MultiHandler::try_from_iter(iter).expect(
 			"Protocols are in a HashMap and there can be at most one handler per protocol name, \
 			 which is the only possible error; qed",
@@ -334,6 +339,9 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 				None
 			}
 		});
+
+		self.connection_to_protocols_map
+			.insert(connection_id, iter.map(|(k, _)| k).collect());
 
 		Ok(MultiHandler::try_from_iter(iter).expect(
 			"Protocols are in a HashMap and there can be at most one handler per protocol name, \
@@ -372,19 +380,21 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 					}
 				},
 			FromSwarm::DialFailure(DialFailure { peer_id, error, connection_id }) =>
-				for (p_name, p_handler) in handler.into_iter() {
-					if let Some((proto, _)) = self.protocols.get_mut(p_name.as_str()) {
-						proto.on_swarm_event(FromSwarm::DialFailure(DialFailure {
-							peer_id,
-							error,
-							connection_id,
-						}));
-					} else {
-						log::error!(
-						  target: "sub-libp2p",
-						  "on_swarm_event/dial_failure: no request-response instance registered for protocol {:?}",
-						  p_name,
-						)
+				if let Some(p_names) = self.connection_to_protocols_map.get(&connection_id) {
+					for p_name in p_names {
+						if let Some((proto, _)) = self.protocols.get_mut(p_name.as_str()) {
+							proto.on_swarm_event(FromSwarm::DialFailure(DialFailure {
+								peer_id,
+								error,
+								connection_id,
+							}));
+						} else {
+							log::error!(
+								target: "sub-libp2p",
+								"on_swarm_event/dial_failure: no request-response instance registered for protocol {:?}",
+								p_name,
+							)
+						}
 					}
 				},
 			FromSwarm::ListenerClosed(e) =>
@@ -397,20 +407,22 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 				error,
 				connection_id,
 			}) =>
-				for (p_name, p_handler) in handler.into_iter() {
-					if let Some((proto, _)) = self.protocols.get_mut(p_name.as_str()) {
-						proto.on_swarm_event(FromSwarm::ListenFailure(ListenFailure {
-							local_addr,
-							send_back_addr,
-							error,
-							connection_id,
-						}));
-					} else {
-						log::error!(
-						  target: "sub-libp2p",
-						  "on_swarm_event/listen_failure: no request-response instance registered for protocol {:?}",
-						  p_name,
-						)
+				if let Some(p_names) = self.connection_to_protocols_map.get(&connection_id) {
+					for p_name in p_names {
+						if let Some((proto, _)) = self.protocols.get_mut(p_name.as_str()) {
+							proto.on_swarm_event(FromSwarm::ListenFailure(ListenFailure {
+								local_addr,
+								send_back_addr,
+								error,
+								connection_id,
+							}));
+						} else {
+							log::error!(
+								target: "sub-libp2p",
+								"on_swarm_event/listen_failure: no request-response instance registered for protocol {:?}",
+								p_name,
+							)
+						}
 					}
 				},
 			FromSwarm::ListenerError(e) =>
@@ -450,15 +462,19 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 		connection_id: ConnectionId,
 		event: THandlerOutEvent<Self>,
 	) {
-		if let Some((proto, _)) = self.protocols.get_mut(&*p_name) {
-			return proto.on_connection_handler_event(peer_id, connection_id, event)
+		if let Some(p_names) = self.connection_to_protocols_map.get(&connection_id) {
+			for p_name in p_names {
+				if let Some((proto, _)) = self.protocols.get_mut(p_name.as_str()) {
+					return proto.on_connection_handler_event(peer_id, connection_id, event.1)
+				} else {
+					log::warn!(
+						target: "sub-libp2p",
+						"on_connection_handler_event: no request-response instance registered for protocol {:?}",
+						p_name
+					);
+				}
+			}
 		}
-
-		log::warn!(
-			target: "sub-libp2p",
-			"on_connection_handler_event: no request-response instance registered for protocol {:?}",
-			p_name
-		);
 	}
 
 	fn poll(
