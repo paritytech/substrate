@@ -710,7 +710,7 @@ async fn correct_beefy_payload() {
 	net.lock().peer(3).client().as_client().finalize_block(hashof11, None).unwrap();
 
 	// verify consensus is _not_ reached
-	let timeout = Some(Duration::from_millis(250));
+	let timeout = Some(Duration::from_millis(100));
 	streams_empty_after_timeout(best_blocks, &net, timeout).await;
 	streams_empty_after_timeout(versioned_finality_proof, &net, None).await;
 
@@ -945,7 +945,7 @@ async fn on_demand_beefy_justification_sync() {
 	finalize_block_and_wait_for_beefy(
 		&net,
 		fast_peers.clone(),
-		&[hashes[1], hashes[6], hashes[10], hashes[17], hashes[23]],
+		&[hashes[1], hashes[6], hashes[10], hashes[17], hashes[24]],
 		&[1, 5, 10, 15, 20],
 	)
 	.await;

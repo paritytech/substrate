@@ -24,7 +24,7 @@ use crate::{
 	error::Error,
 	justification::BeefyVersionedFinalityProof,
 	keystore::{BeefyKeystore, BeefySignatureHasher},
-	metric_get, metric_inc, metric_set,
+	metric_inc, metric_set,
 	metrics::VoterMetrics,
 	round::{Rounds, VoteImportResult},
 	BeefyVoterLinks, LOG_TARGET,
@@ -46,20 +46,15 @@ use sp_consensus_beefy::{
 };
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
-	traits::{Block, ConstU32, Header, NumberFor, Zero},
-	BoundedVec, SaturatedConversion,
+	traits::{Block, Header, NumberFor, Zero},
+	SaturatedConversion,
 };
 use std::{
 	collections::{BTreeMap, BTreeSet, VecDeque},
 	fmt::Debug,
-	marker::PhantomData,
 	sync::Arc,
 };
 
-/// Bound for the number of buffered future voting rounds.
-const MAX_BUFFERED_VOTE_ROUNDS: usize = 600;
-/// Bound for the number of buffered votes per round number.
-const MAX_BUFFERED_VOTES_PER_ROUND: u32 = 1000;
 /// Bound for the number of pending justifications - use 2400 - the max number
 /// of justifications possible in a single session.
 const MAX_BUFFERED_JUSTIFICATIONS: usize = 2400;
@@ -326,14 +321,6 @@ pub(crate) struct BeefyWorker<B: Block, BE, P, RuntimeApi, S> {
 	// voter state
 	/// BEEFY client metrics.
 	metrics: Option<VoterMetrics>,
-	/// Buffer holding votes for future processing.
-	pending_votes: BTreeMap<
-		NumberFor<B>,
-		BoundedVec<
-			VoteMessage<NumberFor<B>, AuthorityId, Signature>,
-			ConstU32<MAX_BUFFERED_VOTES_PER_ROUND>,
-		>,
-	>,
 	/// Buffer holding justifications for future processing.
 	pending_justifications: BTreeMap<NumberFor<B>, BeefyVersionedFinalityProof<B>>,
 	/// Persisted voter state.
@@ -381,7 +368,6 @@ where
 			on_demand_justifications,
 			links,
 			metrics,
-			pending_votes: BTreeMap::new(),
 			pending_justifications: BTreeMap::new(),
 			persisted_state,
 		}
@@ -512,7 +498,7 @@ where
 		}
 	}
 
-	/// Based on [VoterOracle] this vote is either processed here or enqueued for later.
+	/// Based on [VoterOracle] this vote is either processed here or discarded.
 	fn triage_incoming_vote(
 		&mut self,
 		vote: VoteMessage<NumberFor<B>, AuthorityId, Signature>,
@@ -521,25 +507,8 @@ where
 		let best_grandpa = self.best_grandpa_block();
 		match self.voting_oracle().triage_round(block_num, best_grandpa)? {
 			RoundAction::Process => self.handle_vote(vote)?,
-			RoundAction::Enqueue => {
-				debug!(target: LOG_TARGET, "🥩 Buffer vote for round: {:?}.", block_num);
-				if self.pending_votes.len() < MAX_BUFFERED_VOTE_ROUNDS {
-					let votes_vec = self.pending_votes.entry(block_num).or_default();
-					if votes_vec.try_push(vote).is_ok() {
-						metric_inc!(self, beefy_buffered_votes);
-					} else {
-						warn!(
-							target: LOG_TARGET,
-							"🥩 Buffer vote dropped for round: {:?}", block_num
-						);
-						metric_inc!(self, beefy_buffered_votes_dropped);
-					}
-				} else {
-					warn!(target: LOG_TARGET, "🥩 Buffer vote dropped for round: {:?}.", block_num);
-					metric_inc!(self, beefy_buffered_votes_dropped);
-				}
-			},
 			RoundAction::Drop => metric_inc!(self, beefy_stale_votes),
+			RoundAction::Enqueue => error!(target: LOG_TARGET, "🥩 unexpected vote: {:?}.", vote),
 		};
 		Ok(())
 	}
@@ -681,32 +650,22 @@ where
 		Ok(())
 	}
 
-	/// Handle previously buffered justifications and votes that now land in the voting interval.
-	fn try_pending_justif_and_votes(&mut self) -> Result<(), Error> {
+	/// Handle previously buffered justifications, that now land in the voting interval.
+	fn try_pending_justififactions(&mut self) -> Result<(), Error> {
 		let best_grandpa = self.best_grandpa_block();
-		let _ph = PhantomData::<B>::default();
-
-		fn to_process_for<B: Block, T>(
-			pending: &mut BTreeMap<NumberFor<B>, T>,
-			(start, end): (NumberFor<B>, NumberFor<B>),
-			_: PhantomData<B>,
-		) -> BTreeMap<NumberFor<B>, T> {
-			// These are still pending.
-			let still_pending = pending.split_off(&end.saturating_add(1u32.into()));
-			// These can be processed.
-			let to_handle = pending.split_off(&start);
-			// The rest can be dropped.
-			*pending = still_pending;
-			// Return ones to process.
-			to_handle
-		}
 		// Interval of blocks for which we can process justifications and votes right now.
-		let mut interval = self.voting_oracle().accepted_interval(best_grandpa)?;
-
+		let (start, end) = self.voting_oracle().accepted_interval(best_grandpa)?;
 		// Process pending justifications.
 		if !self.pending_justifications.is_empty() {
-			let justifs_to_handle = to_process_for(&mut self.pending_justifications, interval, _ph);
-			for (num, justification) in justifs_to_handle.into_iter() {
+			// These are still pending.
+			let still_pending =
+				self.pending_justifications.split_off(&end.saturating_add(1u32.into()));
+			// These can be processed.
+			let justifs_to_process = self.pending_justifications.split_off(&start);
+			// The rest can be dropped.
+			self.pending_justifications = still_pending;
+
+			for (num, justification) in justifs_to_process.into_iter() {
 				debug!(target: LOG_TARGET, "🥩 Handle buffered justification for: {:?}.", num);
 				metric_inc!(self, beefy_imported_justifications);
 				if let Err(err) = self.finalize(justification) {
@@ -714,27 +673,6 @@ where
 				}
 			}
 			metric_set!(self, beefy_buffered_justifications, self.pending_justifications.len());
-			// Possibly new interval after processing justifications.
-			interval = self.voting_oracle().accepted_interval(best_grandpa)?;
-		}
-
-		// Process pending votes.
-		if !self.pending_votes.is_empty() {
-			let mut processed = 0u64;
-			let votes_to_handle = to_process_for(&mut self.pending_votes, interval, _ph);
-			for (num, votes) in votes_to_handle.into_iter() {
-				debug!(target: LOG_TARGET, "🥩 Handle buffered votes for: {:?}.", num);
-				processed += votes.len() as u64;
-				for v in votes.into_iter() {
-					if let Err(err) = self.handle_vote(v) {
-						error!(target: LOG_TARGET, "🥩 Error handling buffered vote: {}", err);
-					};
-				}
-			}
-			if let Some(previous) = metric_get!(self, beefy_buffered_votes) {
-				previous.sub(processed);
-				metric_set!(self, beefy_buffered_votes, previous.get());
-			}
 		}
 		Ok(())
 	}
@@ -849,7 +787,7 @@ where
 
 	fn process_new_state(&mut self) {
 		// Handle pending justifications and/or votes for now GRANDPA finalized blocks.
-		if let Err(err) = self.try_pending_justif_and_votes() {
+		if let Err(err) = self.try_pending_justififactions() {
 			debug!(target: LOG_TARGET, "🥩 {}", err);
 		}
 
@@ -1570,77 +1508,6 @@ pub(crate) mod tests {
 		assert_eq!(rounds.session_start(), 11);
 		assert_eq!(rounds.validators(), new_validator_set.validators());
 		assert_eq!(rounds.validator_set_id(), new_validator_set.id());
-	}
-
-	#[tokio::test]
-	async fn should_triage_votes_and_process_later() {
-		let keys = &[Keyring::Alice, Keyring::Bob];
-		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-		let mut net = BeefyTestNet::new(1);
-		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
-		// remove default session, will manually add custom one.
-		worker.persisted_state.voting_oracle.sessions.clear();
-
-		fn new_vote(
-			block_number: NumberFor<Block>,
-		) -> VoteMessage<NumberFor<Block>, AuthorityId, Signature> {
-			let commitment = Commitment {
-				payload: Payload::from_single_entry(*b"BF", vec![]),
-				block_number,
-				validator_set_id: 0,
-			};
-			VoteMessage {
-				commitment,
-				id: Keyring::Alice.public(),
-				signature: Keyring::Alice.sign(b"I am committed"),
-			}
-		}
-
-		// best grandpa is 20
-		let best_grandpa_header = Header::new(
-			20u32.into(),
-			Default::default(),
-			Default::default(),
-			Default::default(),
-			Digest::default(),
-		);
-
-		worker
-			.persisted_state
-			.voting_oracle
-			.add_session(Rounds::new(10, validator_set.clone()));
-		worker.persisted_state.best_grandpa_block_header = best_grandpa_header;
-
-		// triage votes for blocks 10..13
-		worker.triage_incoming_vote(new_vote(10)).unwrap();
-		worker.triage_incoming_vote(new_vote(11)).unwrap();
-		worker.triage_incoming_vote(new_vote(12)).unwrap();
-		// triage votes for blocks 20..23
-		worker.triage_incoming_vote(new_vote(20)).unwrap();
-		worker.triage_incoming_vote(new_vote(21)).unwrap();
-		worker.triage_incoming_vote(new_vote(22)).unwrap();
-
-		// vote for 10 should have been handled, while the rest buffered for later processing
-		let mut votes = worker.pending_votes.values();
-		assert_eq!(votes.next().unwrap().first().unwrap().commitment.block_number, 11);
-		assert_eq!(votes.next().unwrap().first().unwrap().commitment.block_number, 12);
-		assert_eq!(votes.next().unwrap().first().unwrap().commitment.block_number, 20);
-		assert_eq!(votes.next().unwrap().first().unwrap().commitment.block_number, 21);
-		assert_eq!(votes.next().unwrap().first().unwrap().commitment.block_number, 22);
-		assert!(votes.next().is_none());
-
-		// simulate mandatory done, and retry buffered votes
-		worker
-			.persisted_state
-			.voting_oracle
-			.active_rounds_mut()
-			.unwrap()
-			.test_set_mandatory_done(true);
-		worker.try_pending_justif_and_votes().unwrap();
-		// all blocks <= grandpa finalized should have been handled, rest still buffered
-		let mut votes = worker.pending_votes.values();
-		assert_eq!(votes.next().unwrap().first().unwrap().commitment.block_number, 21);
-		assert_eq!(votes.next().unwrap().first().unwrap().commitment.block_number, 22);
 	}
 
 	#[tokio::test]

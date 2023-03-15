@@ -45,10 +45,6 @@ pub struct VoterMetrics {
 	pub beefy_lagging_sessions: Counter<U64>,
 	/// Number of times no Authority public key found in store
 	pub beefy_no_authority_found_in_store: Counter<U64>,
-	/// Number of currently buffered votes
-	pub beefy_buffered_votes: Gauge<U64>,
-	/// Number of votes dropped due to full buffers
-	pub beefy_buffered_votes_dropped: Counter<U64>,
 	/// Number of good votes successfully handled
 	pub beefy_good_votes_processed: Counter<U64>,
 	/// Number of equivocation votes received
@@ -107,17 +103,6 @@ impl PrometheusRegister for VoterMetrics {
 				Counter::new(
 					"substrate_beefy_no_authority_found_in_store",
 					"Number of times no Authority public key found in store",
-				)?,
-				registry,
-			)?,
-			beefy_buffered_votes: register(
-				Gauge::new("substrate_beefy_buffered_votes", "Number of currently buffered votes")?,
-				registry,
-			)?,
-			beefy_buffered_votes_dropped: register(
-				Counter::new(
-					"substrate_beefy_buffered_votes_dropped",
-					"Number of votes dropped due to full buffers",
 				)?,
 				registry,
 			)?,
