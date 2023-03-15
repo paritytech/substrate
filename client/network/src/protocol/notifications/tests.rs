@@ -22,11 +22,12 @@ use crate::protocol::notifications::{Notifications, NotificationsOut, ProtocolCo
 
 use futures::prelude::*;
 use libp2p::{
-	core::{connection::ConnectionId, transport::MemoryTransport, upgrade, Endpoint},
+	core::{transport::MemoryTransport, upgrade, Endpoint},
 	identity, noise,
 	swarm::{
-		behaviour::FromSwarm, ConnectionDenied, ConnectionHandler, Executor, IntoConnectionHandler,
-		NetworkBehaviour, NetworkBehaviourAction, PollParameters, Swarm, SwarmEvent, THandler,
+		behaviour::FromSwarm, ConnectionDenied, ConnectionId, Executor, NetworkBehaviour,
+		NetworkBehaviourAction, PollParameters, Swarm, SwarmEvent, THandler, THandlerInEvent,
+		THandlerOutEvent,
 	},
 	yamux, Multiaddr, PeerId, Transport,
 };
@@ -146,6 +147,39 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 	type ConnectionHandler = <Notifications as NetworkBehaviour>::ConnectionHandler;
 	type OutEvent = <Notifications as NetworkBehaviour>::OutEvent;
 
+	fn handle_pending_inbound_connection(
+		&mut self,
+		connection_id: ConnectionId,
+		local_addr: &Multiaddr,
+		remote_addr: &Multiaddr,
+	) -> Result<(), ConnectionDenied> {
+		self.inner
+			.handle_pending_inbound_connection(connection_id, local_addr, remote_addr)
+	}
+
+	fn handle_pending_outbound_connection(
+		&mut self,
+		connection_id: ConnectionId,
+		maybe_peer: Option<PeerId>,
+		addresses: &[Multiaddr],
+		effective_role: Endpoint,
+	) -> Result<Vec<Multiaddr>, ConnectionDenied> {
+		let mut list = self.inner.handle_pending_outbound_connection(
+			connection_id,
+			maybe_peer,
+			addresses,
+			effective_role,
+		)?;
+		if let Some(peer_id) = maybe_peer {
+			for (p, a) in self.addrs.iter() {
+				if *p == peer_id {
+					list.push(a.clone());
+				}
+			}
+		}
+		Ok(list)
+	}
+
 	fn handle_established_inbound_connection(
 		&mut self,
 		connection_id: ConnectionId,
@@ -172,37 +206,6 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 			.handle_established_outbound_connection(connection_id, peer, addr, role_override)
 	}
 
-	fn handle_pending_inbound_connection(
-		&mut self,
-		connection_id: ConnectionId,
-		local_addr: &Multiaddr,
-		remote_addr: &Multiaddr,
-	) -> Result<(), ConnectionDenied> {
-		self.inner
-			.handle_pending_inbound_connection(connection_id, local_addr, remote_addr)
-	}
-
-	fn handle_pending_outbound_connection(
-		&mut self,
-		connection_id: ConnectionId,
-		maybe_peer: Option<PeerId>,
-		addresses: &[Multiaddr],
-		effective_role: Endpoint,
-	) -> Result<Vec<Multiaddr>, ConnectionDenied> {
-		let mut list = self.inner.handle_pending_outbound_connection(
-			connection_id,
-			maybe_peer,
-			addresses,
-			effective_role,
-		);
-		for (p, a) in self.addrs.iter() {
-			if p == peer_id {
-				list.push(a.clone());
-			}
-		}
-		Ok(list)
-	}
-
 	fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
 		self.inner.on_swarm_event(event);
 	}
@@ -211,8 +214,7 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 		&mut self,
 		peer_id: PeerId,
 		connection_id: ConnectionId,
-		event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as
-		ConnectionHandler>::OutEvent,
+		event: THandlerOutEvent<Self>,
 	) {
 		self.inner.on_connection_handler_event(peer_id, connection_id, event);
 	}

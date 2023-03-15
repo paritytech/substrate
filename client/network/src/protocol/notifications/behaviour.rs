@@ -2253,7 +2253,7 @@ mod tests {
 	fn remote_opens_connection_and_substream() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
 			send_back_addr: Multiaddr::empty(),
@@ -2303,7 +2303,7 @@ mod tests {
 	async fn disconnect_remote_substream_before_handled_by_peerset() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
 			send_back_addr: Multiaddr::empty(),
@@ -2340,7 +2340,7 @@ mod tests {
 		let (mut notif, _peerset) = development_notifs();
 		let set_id = sc_peerset::SetId::from(0);
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
 			send_back_addr: Multiaddr::empty(),
@@ -2375,7 +2375,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn,
 				endpoint: &connected,
-				handler: NotifsHandlerProto::new(vec![]).into_handler(&peer, &connected),
+				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
 		));
@@ -2404,7 +2404,7 @@ mod tests {
 	fn peerset_connect_incoming() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let set_id = sc_peerset::SetId::from(0);
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
@@ -2439,7 +2439,7 @@ mod tests {
 		let (mut notif, _peerset) = development_notifs();
 		let set_id = sc_peerset::SetId::from(0);
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
 			send_back_addr: Multiaddr::empty(),
@@ -2485,7 +2485,7 @@ mod tests {
 	fn peerset_disconnect_enabled() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let set_id = sc_peerset::SetId::from(0);
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
@@ -2535,7 +2535,7 @@ mod tests {
 		let (mut notif, _peerset) = development_notifs();
 		let set_id = sc_peerset::SetId::from(0);
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
 			send_back_addr: Multiaddr::empty(),
@@ -2565,7 +2565,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn,
 				endpoint: &connected,
-				handler: NotifsHandlerProto::new(vec![]).into_handler(&peer, &connected),
+				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
 		));
@@ -2587,7 +2587,7 @@ mod tests {
 	fn peerset_accept_peer_not_alive() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let set_id = sc_peerset::SetId::from(0);
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
@@ -2634,7 +2634,7 @@ mod tests {
 	fn secondary_connection_peer_state_incoming() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let conn2 = ConnectionId::new(1usize);
 		let set_id = sc_peerset::SetId::from(0);
 		let connected = ConnectedPoint::Listener {
@@ -2691,7 +2691,7 @@ mod tests {
 	fn close_connection_for_disabled_peer() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let set_id = sc_peerset::SetId::from(0);
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
@@ -2714,7 +2714,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn,
 				endpoint: &connected,
-				handler: NotifsHandlerProto::new(vec![]).into_handler(&peer, &connected),
+				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
 		));
@@ -2725,7 +2725,7 @@ mod tests {
 	fn close_connection_for_incoming_peer_one_connection() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let set_id = sc_peerset::SetId::from(0);
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
@@ -2755,7 +2755,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn,
 				endpoint: &connected,
-				handler: NotifsHandlerProto::new(vec![]).into_handler(&peer, &connected),
+				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
 		));
@@ -2770,7 +2770,7 @@ mod tests {
 	fn close_connection_for_incoming_peer_two_connections() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let conn1 = ConnectionId::new(1usize);
 		let set_id = sc_peerset::SetId::from(0);
 		let connected = ConnectedPoint::Listener {
@@ -2822,7 +2822,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn,
 				endpoint: &connected,
-				handler: NotifsHandlerProto::new(vec![]).into_handler(&peer, &connected),
+				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
 		));
@@ -2840,7 +2840,7 @@ mod tests {
 	fn connection_and_substream_open() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let set_id = sc_peerset::SetId::from(0);
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
@@ -2892,7 +2892,7 @@ mod tests {
 	fn connection_closed_sink_replaced() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
-		let conn1 = ConnectionId::new(0usize);
+		let conn1 = ConnectionId::DUMMY;
 		let conn2 = ConnectionId::new(1usize);
 		let set_id = sc_peerset::SetId::from(0);
 		let connected = ConnectedPoint::Listener {
@@ -2967,7 +2967,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn1,
 				endpoint: &connected,
-				handler: NotifsHandlerProto::new(vec![]).into_handler(&peer, &connected),
+				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
 		));
@@ -2998,8 +2998,8 @@ mod tests {
 
 		notif.on_swarm_event(FromSwarm::DialFailure(libp2p::swarm::behaviour::DialFailure {
 			peer_id: Some(peer),
-			handler: NotifsHandlerProto::new(vec![]),
 			error: &libp2p::swarm::DialError::Banned,
+			connection_id: ConnectionId::DUMMY,
 		}));
 
 		if let Some(PeerState::Backoff { timer_deadline, .. }) = notif.peers.get(&(peer, set_id)) {
@@ -3013,7 +3013,7 @@ mod tests {
 	async fn write_notification() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let set_id = sc_peerset::SetId::from(0);
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
@@ -3063,7 +3063,7 @@ mod tests {
 		let (mut notif, _peerset) = development_notifs();
 		let set_id = sc_peerset::SetId::from(0);
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
 			send_back_addr: Multiaddr::empty(),
@@ -3093,7 +3093,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn,
 				endpoint: &connected,
-				handler: NotifsHandlerProto::new(vec![]).into_handler(&peer, &connected),
+				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
 		));
@@ -3111,7 +3111,7 @@ mod tests {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
 		let set_id = sc_peerset::SetId::from(0);
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
 			send_back_addr: Multiaddr::empty(),
@@ -3137,7 +3137,7 @@ mod tests {
 		let (mut notif, _peerset) = development_notifs();
 		let set_id = sc_peerset::SetId::from(0);
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
 			send_back_addr: Multiaddr::empty(),
@@ -3167,7 +3167,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn,
 				endpoint: &connected,
-				handler: NotifsHandlerProto::new(vec![]).into_handler(&peer, &connected),
+				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
 		));
@@ -3183,8 +3183,8 @@ mod tests {
 		let (mut notif, _peerset) = development_notifs();
 		let set_id = sc_peerset::SetId::from(0);
 		let peer = PeerId::random();
-		let conn1 = ConnectionId::new(0usize);
-		let conn2 = ConnectionId::new(0usize);
+		let conn1 = ConnectionId::DUMMY;
+		let conn2 = ConnectionId::DUMMY;
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
 			send_back_addr: Multiaddr::empty(),
@@ -3230,7 +3230,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn1,
 				endpoint: &connected,
-				handler: NotifsHandlerProto::new(vec![]).into_handler(&peer, &connected),
+				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
 		));
@@ -3244,7 +3244,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn2,
 				endpoint: &connected,
-				handler: NotifsHandlerProto::new(vec![]).into_handler(&peer, &connected),
+				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
 		));
@@ -3256,7 +3256,7 @@ mod tests {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
 		let set_id = sc_peerset::SetId::from(0);
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
 			send_back_addr: Multiaddr::empty(),
@@ -3295,7 +3295,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn,
 				endpoint: &connected,
-				handler: NotifsHandlerProto::new(vec![]).into_handler(&peer, &connected),
+				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
 		));
@@ -3306,7 +3306,7 @@ mod tests {
 	fn two_connections_inactive_connection_gets_closed_peer_state_is_still_incoming() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
-		let conn1 = ConnectionId::new(0usize);
+		let conn1 = ConnectionId::DUMMY;
 		let conn2 = ConnectionId::new(1usize);
 		let set_id = sc_peerset::SetId::from(0);
 		let connected = ConnectedPoint::Listener {
@@ -3351,7 +3351,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn2,
 				endpoint: &connected,
-				handler: NotifsHandlerProto::new(vec![]).into_handler(&peer, &connected),
+				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
 		));
@@ -3362,7 +3362,7 @@ mod tests {
 	fn two_connections_active_connection_gets_closed_peer_state_is_disabled() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
-		let conn1 = ConnectionId::new(0usize);
+		let conn1 = ConnectionId::DUMMY;
 		let conn2 = ConnectionId::new(1usize);
 		let set_id = sc_peerset::SetId::from(0);
 		let connected = ConnectedPoint::Listener {
@@ -3410,7 +3410,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn1,
 				endpoint: &connected,
-				handler: NotifsHandlerProto::new(vec![]).into_handler(&peer, &connected),
+				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
 		));
@@ -3421,7 +3421,7 @@ mod tests {
 	fn inject_connection_closed_for_active_connection() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
-		let conn1 = ConnectionId::new(0usize);
+		let conn1 = ConnectionId::DUMMY;
 		let conn2 = ConnectionId::new(1usize);
 		let set_id = sc_peerset::SetId::from(0);
 		let connected = ConnectedPoint::Listener {
@@ -3481,7 +3481,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn1,
 				endpoint: &connected,
-				handler: NotifsHandlerProto::new(vec![]).into_handler(&peer, &connected),
+				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
 		));
@@ -3492,7 +3492,7 @@ mod tests {
 		let (mut notif, _peerset) = development_notifs();
 		let set_id = sc_peerset::SetId::from(0);
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
 			send_back_addr: Multiaddr::empty(),
@@ -3522,7 +3522,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn,
 				endpoint: &connected,
-				handler: NotifsHandlerProto::new(vec![]).into_handler(&peer, &connected),
+				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
 		));
@@ -3539,8 +3539,8 @@ mod tests {
 		let now = Instant::now();
 		notif.on_swarm_event(FromSwarm::DialFailure(libp2p::swarm::behaviour::DialFailure {
 			peer_id: Some(peer),
-			handler: NotifsHandlerProto::new(vec![]),
 			error: &libp2p::swarm::DialError::Banned,
+			connection_id: ConnectionId::DUMMY,
 		}));
 
 		if let Some(PeerState::PendingRequest { ref timer_deadline, .. }) =
@@ -3555,7 +3555,7 @@ mod tests {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
 		let set_id = sc_peerset::SetId::from(0);
-		let conn1 = ConnectionId::new(0usize);
+		let conn1 = ConnectionId::DUMMY;
 		let conn2 = ConnectionId::new(1usize);
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
@@ -3609,7 +3609,7 @@ mod tests {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
 		let set_id = sc_peerset::SetId::from(0);
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
 			send_back_addr: Multiaddr::empty(),
@@ -3639,7 +3639,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn,
 				endpoint: &connected,
-				handler: NotifsHandlerProto::new(vec![]).into_handler(&peer, &connected),
+				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
 		));
@@ -3686,7 +3686,7 @@ mod tests {
 	async fn reschedule_disabled_pending_enable_when_connection_not_closed() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let set_id = sc_peerset::SetId::from(0);
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
@@ -3802,7 +3802,7 @@ mod tests {
 	fn peerset_report_connect_with_enabled_peer() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let set_id = sc_peerset::SetId::from(0);
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
@@ -3854,7 +3854,7 @@ mod tests {
 		let (mut notif, _peerset) = development_notifs();
 		let set_id = sc_peerset::SetId::from(0);
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
 			send_back_addr: Multiaddr::empty(),
@@ -3911,7 +3911,7 @@ mod tests {
 		let (mut notif, _peerset) = development_notifs();
 		let set_id = sc_peerset::SetId::from(0);
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
 			send_back_addr: Multiaddr::empty(),
@@ -3941,7 +3941,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn,
 				endpoint: &connected,
-				handler: NotifsHandlerProto::new(vec![]).into_handler(&peer, &connected),
+				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
 		));
@@ -3964,7 +3964,7 @@ mod tests {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
 		let set_id = sc_peerset::SetId::from(0);
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
 			send_back_addr: Multiaddr::empty(),
@@ -3999,7 +3999,7 @@ mod tests {
 	fn peerset_report_accept_incoming_peer() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let set_id = sc_peerset::SetId::from(0);
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
@@ -4040,7 +4040,7 @@ mod tests {
 	fn peerset_report_accept_not_incoming_peer() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let set_id = sc_peerset::SetId::from(0);
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
@@ -4097,9 +4097,9 @@ mod tests {
 		notif.on_swarm_event(FromSwarm::ConnectionClosed(
 			libp2p::swarm::behaviour::ConnectionClosed {
 				peer_id: peer,
-				connection_id: ConnectionId::new(0usize),
+				connection_id: ConnectionId::DUMMY,
 				endpoint: &endpoint,
-				handler: NotifsHandlerProto::new(vec![]).into_handler(&peer, &endpoint),
+				handler: NotifsHandler::new(peer, endpoint, vec![]),
 				remaining_established: 0usize,
 			},
 		));
@@ -4141,7 +4141,7 @@ mod tests {
 	fn reject_non_active_connection() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let set_id = sc_peerset::SetId::from(0);
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
@@ -4179,7 +4179,7 @@ mod tests {
 	fn reject_non_existent_peer_but_alive_connection() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let set_id = sc_peerset::SetId::from(0);
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
@@ -4219,7 +4219,7 @@ mod tests {
 	fn inject_non_existent_connection_closed_for_incoming_peer() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let set_id = sc_peerset::SetId::from(0);
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
@@ -4250,7 +4250,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: ConnectionId::new(1337usize),
 				endpoint: &connected,
-				handler: NotifsHandlerProto::new(vec![]).into_handler(&peer, &connected),
+				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
 		));
@@ -4263,7 +4263,7 @@ mod tests {
 		let (mut notif, _peerset) = development_notifs();
 		let set_id = sc_peerset::SetId::from(0);
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
 			send_back_addr: Multiaddr::empty(),
@@ -4285,7 +4285,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: ConnectionId::new(1337usize),
 				endpoint: &connected,
-				handler: NotifsHandlerProto::new(vec![]).into_handler(&peer, &connected),
+				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
 		));
@@ -4298,7 +4298,7 @@ mod tests {
 		let (mut notif, _peerset) = development_notifs();
 		let set_id = sc_peerset::SetId::from(0);
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
 			send_back_addr: Multiaddr::empty(),
@@ -4336,7 +4336,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: ConnectionId::new(1337usize),
 				endpoint: &connected,
-				handler: NotifsHandlerProto::new(vec![]).into_handler(&peer, &connected),
+				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
 		));
@@ -4348,7 +4348,7 @@ mod tests {
 	fn inject_connection_closed_for_incoming_peer_state_mismatch() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let set_id = sc_peerset::SetId::from(0);
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
@@ -4380,7 +4380,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn,
 				endpoint: &connected,
-				handler: NotifsHandlerProto::new(vec![]).into_handler(&peer, &connected),
+				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
 		));
@@ -4392,7 +4392,7 @@ mod tests {
 	fn inject_connection_closed_for_enabled_state_mismatch() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let set_id = sc_peerset::SetId::from(0);
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
@@ -4427,7 +4427,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: ConnectionId::new(1337usize),
 				endpoint: &connected,
-				handler: NotifsHandlerProto::new(vec![]).into_handler(&peer, &connected),
+				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
 		));
@@ -4440,7 +4440,7 @@ mod tests {
 		let (mut notif, _peerset) = development_notifs();
 		let set_id = sc_peerset::SetId::from(0);
 		let peer = PeerId::random();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
 			send_back_addr: Multiaddr::empty(),
@@ -4470,7 +4470,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn,
 				endpoint: &connected,
-				handler: NotifsHandlerProto::new(vec![]).into_handler(&peer, &connected),
+				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
 		));
@@ -4481,7 +4481,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn,
 				endpoint: &connected,
-				handler: NotifsHandlerProto::new(vec![]).into_handler(&peer, &connected),
+				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
 		));
@@ -4492,7 +4492,7 @@ mod tests {
 	#[cfg(debug_assertions)]
 	fn open_result_ok_non_existent_peer() {
 		let (mut notif, _peerset) = development_notifs();
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::DUMMY;
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
 			send_back_addr: Multiaddr::empty(),
