@@ -24,10 +24,11 @@ use nix::{
 	unistd::Pid,
 };
 use node_primitives::{Hash, Header};
+use regex::Regex;
 use std::{
 	io::{BufRead, BufReader, Read},
 	ops::{Deref, DerefMut},
-	path::Path,
+	path::{Path, PathBuf},
 	process::{self, Child, Command},
 	time::Duration,
 };
@@ -72,7 +73,7 @@ pub async fn run_node_for_a_while(base_path: &Path, args: &[&str]) {
 
 		let mut child = KillChildOnDrop(cmd);
 
-		let (ws_url, _) = find_ws_url_from_output(stderr);
+		let ws_url = extract_info_from_output(stderr).0.ws_url;
 
 		// Let it produce some blocks.
 		wait_n_finalized_blocks(3, &ws_url).await;
@@ -127,18 +128,22 @@ impl DerefMut for KillChildOnDrop {
 	}
 }
 
-/// Read the WS address from the output.
+/// Information about extracted from a running node.
+pub struct NodeInfo {
+	pub ws_url: String,
+	pub db_path: PathBuf,
+}
+
+/// Extract [`NodeInfo`] from a running node by parsing its output.
 ///
-/// This is hack to get the actual binded sockaddr because
-/// substrate assigns a random port if the specified port was already binded.
-pub fn find_ws_url_from_output(read: impl Read + Send) -> (String, String) {
+/// Returns the [`NodeInfo`] and all the read data.
+pub fn extract_info_from_output(read: impl Read + Send) -> (NodeInfo, String) {
 	let mut data = String::new();
 
 	let ws_url = BufReader::new(read)
 		.lines()
 		.find_map(|line| {
-			let line =
-				line.expect("failed to obtain next line from stdout for WS address discovery");
+			let line = line.expect("failed to obtain next line while extracting node info");
 			data.push_str(&line);
 			data.push_str("\n");
 
@@ -155,5 +160,9 @@ pub fn find_ws_url_from_output(read: impl Read + Send) -> (String, String) {
 			panic!("We should get a WebSocket address")
 		});
 
-	(ws_url, data)
+	// Database path is printed before the ws url!
+	let re = Regex::new(r"Database: .+ at (\S+)").unwrap();
+	let db_path = PathBuf::from(re.captures(data.as_str()).unwrap().get(1).unwrap().as_str());
+
+	(NodeInfo { ws_url, db_path }, data)
 }

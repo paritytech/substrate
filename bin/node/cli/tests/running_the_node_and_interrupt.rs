@@ -46,7 +46,7 @@ async fn running_the_node_works_and_can_be_interrupted() {
 
 			let stderr = cmd.stderr.take().unwrap();
 
-			let (ws_url, _) = common::find_ws_url_from_output(stderr);
+			let ws_url = common::extract_info_from_output(stderr).0.ws_url;
 
 			common::wait_n_finalized_blocks(3, &ws_url).await;
 
@@ -84,7 +84,7 @@ async fn running_two_nodes_with_the_same_ws_port_should_work() {
 		let mut second_node = common::KillChildOnDrop(start_node());
 
 		let stderr = first_node.stderr.take().unwrap();
-		let (ws_url, _) = common::find_ws_url_from_output(stderr);
+		let ws_url = common::extract_info_from_output(stderr).0.ws_url;
 
 		common::wait_n_finalized_blocks(3, &ws_url).await;
 

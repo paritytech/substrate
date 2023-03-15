@@ -19,10 +19,7 @@
 #![cfg(unix)]
 
 use assert_cmd::cargo::cargo_bin;
-use regex::Regex;
 use std::{
-	io::Read,
-	path::PathBuf,
 	process::{Command, Stdio},
 	time::Duration,
 };
@@ -42,23 +39,21 @@ async fn temp_base_path_works() {
 		);
 
 		let mut stderr = child.stderr.take().unwrap();
-		let (ws_url, mut data) = common::find_ws_url_from_output(&mut stderr);
+		let node_info = common::extract_info_from_output(&mut stderr).0;
 
 		// Let it produce some blocks.
-		common::wait_n_finalized_blocks(3, &ws_url).await;
+		common::wait_n_finalized_blocks(3, &node_info.ws_url).await;
+
+		// Ensure the db path exists while the node is running
+		assert!(node_info.db_path.exists());
 
 		child.assert_still_running();
 
 		// Stop the process
 		child.stop();
 
-		// Ensure the database has been deleted
-		stderr.read_to_string(&mut data).unwrap();
-		let re = Regex::new(r"Database: .+ at (\S+)").unwrap();
-		let db_path = PathBuf::from(re.captures(data.as_str()).unwrap().get(1).unwrap().as_str());
-
-		if db_path.exists() {
-			panic!("Database path `{}` wasn't deleted!", db_path.display());
+		if node_info.db_path.exists() {
+			panic!("Database path `{}` wasn't deleted!", node_info.db_path.display());
 		}
 	})
 	.await;
