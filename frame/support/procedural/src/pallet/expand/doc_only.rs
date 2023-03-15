@@ -37,7 +37,7 @@ pub fn expand_doc_only(def: &mut Def) -> proc_macro2::TokenStream {
 						.collect::<proc_macro2::TokenStream>();
 					let docs = &method.docs;
 					let line_2 = format!(
-						" designed to document the [`{}`][`crate::Call::{}`] variant of",
+						" designed to document the [`{}`][`Call::{}`] variant of",
 						name, name
 					);
 					quote::quote!(
