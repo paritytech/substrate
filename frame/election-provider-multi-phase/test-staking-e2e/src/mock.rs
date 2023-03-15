@@ -25,7 +25,7 @@ use frame_support::{
 };
 use frame_system::EnsureRoot;
 use sp_core::{ConstU32, Get, H256};
-use sp_npos_elections::{BalancingConfig, ElectionScore, VoteWeight};
+use sp_npos_elections::{ElectionScore, VoteWeight};
 use sp_runtime::{
 	testing,
 	traits::{IdentityLookup, Zero},
@@ -127,10 +127,6 @@ impl pallet_balances::Config for Runtime {
 	type WeightInfo = ();
 }
 
-parameter_types! {
-	pub static CapturedMoment: Option<Moment> = None;
-}
-
 impl pallet_timestamp::Config for Runtime {
 	type Moment = Moment;
 	type OnTimestampSet = ();
@@ -181,9 +177,6 @@ parameter_types! {
 	pub static MaxElectingVoters: VoterIndex = 1000;
 	pub static MaxElectableTargets: TargetIndex = 1000;
 	pub static MaxActiveValidators: u32 = 1000;
-	pub static Balancing: Option<BalancingConfig> = Some( BalancingConfig { iterations: 0, tolerance: 0 } );
-	pub static BetterSignedThreshold: Perbill = Perbill::zero();
-	pub static BetterUnsignedThreshold: Perbill = Perbill::zero();
 	pub static OffchainRepeat: u32 = 5;
 	pub static MinerMaxLength: u32 = 256;
 	pub static MinerMaxWeight: Weight = BlockWeights::get().max_block;
@@ -199,8 +192,8 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type EstimateCallFee = frame_support::traits::ConstU32<8>;
 	type SignedPhase = SignedPhase;
 	type UnsignedPhase = UnsignedPhase;
-	type BetterSignedThreshold = BetterSignedThreshold;
-	type BetterUnsignedThreshold = BetterUnsignedThreshold;
+	type BetterSignedThreshold = ();
+	type BetterUnsignedThreshold = ();
 	type OffchainRepeat = OffchainRepeat;
 	type MinerTxPriority = TransactionPriority;
 	type MinerConfig = Self;
@@ -217,7 +210,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type Fallback =
 		frame_election_provider_support::NoElection<(AccountId, BlockNumber, Staking, MaxWinners)>;
 	type GovernanceFallback = onchain::OnChainExecution<OnChainSeqPhragmen>;
-	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
+	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, ()>;
 	type ForceOrigin = EnsureRoot<AccountId>;
 	type MaxElectableTargets = MaxElectableTargets;
 	type MaxElectingVoters = MaxElectingVoters;
