@@ -138,56 +138,6 @@ benchmarks! {
 		assert_eq!(Nis::<T>::owner(&0), None);
 	}
 
-	process_queues {
-		fill_queues::<T>()?;
-	}: {
-		Nis::<T>::process_queues(
-			Perquintill::one(),
-			Zero::zero(),
-			u32::max_value(),
-			&mut WeightCounter::unlimited(),
-		)
-	}
-
-	process_queue {
-		let our_account = Nis::<T>::account_id();
-		let issuance = Nis::<T>::issuance();
-		let mut summary = Summary::<T>::get();
-	}: {
-		Nis::<T>::process_queue(
-			1u32,
-			1u32.into(),
-			&our_account,
-			&issuance,
-			0,
-			&mut Bounded::max_value(),
-			&mut (T::MaxQueueLen::get(), Bounded::max_value()),
-			&mut summary,
-			&mut WeightCounter::unlimited(),
-		)
-	}
-
-	process_bid {
-		let who = account::<T::AccountId>("bidder", 0, SEED);
-		let bid = Bid {
-			amount: T::MinBid::get(),
-			who,
-		};
-		let our_account = Nis::<T>::account_id();
-		let issuance = Nis::<T>::issuance();
-		let mut summary = Summary::<T>::get();
-	}: {
-		Nis::<T>::process_bid(
-			bid,
-			2u32.into(),
-			&our_account,
-			&issuance,
-			&mut Bounded::max_value(),
-			&mut Bounded::max_value(),
-			&mut summary,
-		)
-	}
-
 	privatize {
 		let caller: T::AccountId = whitelisted_caller();
 		let bid = T::MinBid::get().max(One::one());
@@ -235,6 +185,59 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller.clone()), 0)
 	verify {
 		assert!(Receipts::<T>::get(0).is_none());
+	}
+
+	process_queues {
+		fill_queues::<T>()?;
+	}: {
+		Nis::<T>::process_queues(
+			Perquintill::one(),
+			Zero::zero(),
+			u32::max_value(),
+			&mut WeightCounter::unlimited(),
+		)
+	}
+
+	process_queue {
+		let our_account = Nis::<T>::account_id();
+		let issuance = Nis::<T>::issuance();
+		let mut summary = Summary::<T>::get();
+	}: {
+		Nis::<T>::process_queue(
+			1u32,
+			1u32.into(),
+			&our_account,
+			&issuance,
+			0,
+			&mut Bounded::max_value(),
+			&mut (T::MaxQueueLen::get(), Bounded::max_value()),
+			&mut summary,
+			&mut WeightCounter::unlimited(),
+		)
+	}
+
+	process_bid {
+		let who = account::<T::AccountId>("bidder", 0, SEED);
+		let min_bid = T::MinBid::get().max(One::one());
+		let ed = T::Currency::minimum_balance();
+		T::Currency::set_balance(&who, ed + min_bid);
+		let bid = Bid {
+			amount: T::MinBid::get(),
+			who,
+		};
+		let our_account = Nis::<T>::account_id();
+		let issuance = Nis::<T>::issuance();
+		let mut summary = Summary::<T>::get();
+	}: {
+		Nis::<T>::process_bid(
+			bid,
+			2u32.into(),
+			&our_account,
+			&issuance,
+			&mut Bounded::max_value(),
+			&mut Bounded::max_value(),
+			&mut summary,
+		)
 	}
 
 	impl_benchmark_test_suite!(Nis, crate::mock::new_test_ext_empty(), crate::mock::Test);
