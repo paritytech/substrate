@@ -118,7 +118,7 @@ where
 		// less than one (e.g. 0.5) but gets rounded down by integer division we introduce a minimum
 		// fee.
 		let min_converted_fee = if fee.is_zero() { Zero::zero() } else { One::one() };
-		let converted_fee = CON::to_asset_balance(fee, asset_id)
+		let converted_fee = CON::convert(fee, asset_id)
 			.map_err(|_| TransactionValidityError::from(InvalidTransaction::Payment))?
 			.max(min_converted_fee);
 		let can_withdraw =
@@ -146,10 +146,10 @@ where
 	) -> Result<(AssetBalanceOf<T>, AssetBalanceOf<T>), TransactionValidityError> {
 		let min_converted_fee = if corrected_fee.is_zero() { Zero::zero() } else { One::one() };
 		// Convert the corrected fee and tip into the asset used for payment.
-		let converted_fee = CON::to_asset_balance(corrected_fee, paid.asset())
+		let converted_fee = CON::convert(corrected_fee, paid.asset())
 			.map_err(|_| -> TransactionValidityError { InvalidTransaction::Payment.into() })?
 			.max(min_converted_fee);
-		let converted_tip = CON::to_asset_balance(tip, paid.asset())
+		let converted_tip = CON::convert(tip, paid.asset())
 			.map_err(|_| -> TransactionValidityError { InvalidTransaction::Payment.into() })?;
 
 		// Calculate how much refund we should return.

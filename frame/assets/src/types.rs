@@ -245,7 +245,7 @@ where
 	///
 	/// Will return `Err` if the asset is not found, not sufficient or the fungible's minimum
 	/// balance is zero.
-	fn to_asset_balance(
+	fn convert(
 		balance: BalanceOf<F, T>,
 		asset_id: AssetIdOf<T, I>,
 	) -> Result<AssetBalanceOf<T, I>, ConversionError> {
