@@ -205,10 +205,13 @@ impl<B: Block> VoterOracle<B> {
 
 		if rounds.mandatory_done() {
 			// There's only one session active and its mandatory is done.
-			// Accept any GRANDPA finalized vote.
-			Ok((rounds.session_start(), (*self.best_grandpa_block_header.number()).into()))
+			// Accept any vote for a GRANDPA finalized block in a better round.
+			Ok((
+				rounds.session_start().max(self.best_beefy_block),
+				(*self.best_grandpa_block_header.number()).into(),
+			))
 		} else {
-			// There's at least one session with mandatory not done.
+			// Current session has mandatory not done.
 			// Only accept votes for the mandatory block in the front of queue.
 			Ok((rounds.session_start(), rounds.session_start()))
 		}
@@ -380,10 +383,6 @@ where
 
 	fn best_grandpa_block(&self) -> NumberFor<B> {
 		*self.persisted_state.voting_oracle.best_grandpa_block_header.number()
-	}
-
-	fn best_beefy_block(&self) -> NumberFor<B> {
-		self.persisted_state.voting_oracle.best_beefy_block
 	}
 
 	fn voting_oracle(&self) -> &VoterOracle<B> {
@@ -600,7 +599,7 @@ where
 	/// 3. Persist voter state,
 	/// 4. Send best block hash and `finality_proof` to RPC worker.
 	///
-	/// Expects `finality proof` to be valid.
+	/// Expects `finality proof` to be valid and for a block > current-best-beefy.
 	fn finalize(&mut self, finality_proof: BeefyVersionedFinalityProof<B>) -> Result<(), Error> {
 		let block_num = match finality_proof {
 			VersionedFinalityProof::V1(ref sc) => sc.commitment.block_number,
@@ -609,43 +608,39 @@ where
 		// Finalize inner round and update voting_oracle state.
 		self.persisted_state.voting_oracle.finalize(block_num)?;
 
-		if block_num > self.best_beefy_block() {
-			// Set new best BEEFY block number.
-			self.persisted_state.set_best_beefy(block_num);
-			crate::aux_schema::write_voter_state(&*self.backend, &self.persisted_state)
-				.map_err(|e| Error::Backend(e.to_string()))?;
+		// Set new best BEEFY block number.
+		self.persisted_state.set_best_beefy(block_num);
+		crate::aux_schema::write_voter_state(&*self.backend, &self.persisted_state)
+			.map_err(|e| Error::Backend(e.to_string()))?;
 
-			metric_set!(self, beefy_best_block, block_num);
+		metric_set!(self, beefy_best_block, block_num);
 
-			self.on_demand_justifications.cancel_requests_older_than(block_num);
+		self.on_demand_justifications.cancel_requests_older_than(block_num);
 
-			if let Err(e) = self
-				.backend
-				.blockchain()
-				.expect_block_hash_from_id(&BlockId::Number(block_num))
-				.and_then(|hash| {
-					self.links
-						.to_rpc_best_block_sender
-						.notify(|| Ok::<_, ()>(hash))
-						.expect("forwards closure result; the closure always returns Ok; qed.");
+		if let Err(e) = self
+			.backend
+			.blockchain()
+			.expect_block_hash_from_id(&BlockId::Number(block_num))
+			.and_then(|hash| {
+				self.links
+					.to_rpc_best_block_sender
+					.notify(|| Ok::<_, ()>(hash))
+					.expect("forwards closure result; the closure always returns Ok; qed.");
 
-					self.backend
-						.append_justification(hash, (BEEFY_ENGINE_ID, finality_proof.encode()))
-				}) {
-				error!(
-					target: LOG_TARGET,
-					"🥩 Error {:?} on appending justification: {:?}", e, finality_proof
-				);
-			}
-
-			self.links
-				.to_rpc_justif_sender
-				.notify(|| Ok::<_, ()>(finality_proof))
-				.expect("forwards closure result; the closure always returns Ok; qed.");
-		} else {
-			debug!(target: LOG_TARGET, "🥩 Can't set best beefy to old: {}", block_num);
-			metric_set!(self, beefy_best_block_set_last_failure, block_num);
+				self.backend
+					.append_justification(hash, (BEEFY_ENGINE_ID, finality_proof.encode()))
+			}) {
+			error!(
+				target: LOG_TARGET,
+				"🥩 Error {:?} on appending justification: {:?}", e, finality_proof
+			);
 		}
+
+		self.links
+			.to_rpc_justif_sender
+			.notify(|| Ok::<_, ()>(finality_proof))
+			.expect("forwards closure result; the closure always returns Ok; qed.");
+
 		// Update gossip validator votes filter.
 		self.persisted_state
 			.current_gossip_filter()
@@ -1448,7 +1443,7 @@ pub(crate) mod tests {
 		};
 
 		// no 'best beefy block' or finality proofs
-		assert_eq!(worker.best_beefy_block(), 0);
+		assert_eq!(worker.persisted_state.best_beefy_block(), 0);
 		poll_fn(move |cx| {
 			assert_eq!(best_block_stream.poll_next_unpin(cx), Poll::Pending);
 			assert_eq!(finality_proof.poll_next_unpin(cx), Poll::Pending);
@@ -1471,7 +1466,7 @@ pub(crate) mod tests {
 		// try to finalize block #1
 		worker.finalize(justif.clone()).unwrap();
 		// verify block finalized
-		assert_eq!(worker.best_beefy_block(), 1);
+		assert_eq!(worker.persisted_state.best_beefy_block(), 1);
 		poll_fn(move |cx| {
 			// expect Some(hash-of-block-1)
 			match best_block_stream.poll_next_unpin(cx) {
@@ -1508,7 +1503,7 @@ pub(crate) mod tests {
 		// new session starting at #2 is in front
 		assert_eq!(worker.active_rounds().unwrap().session_start(), 2);
 		// verify block finalized
-		assert_eq!(worker.best_beefy_block(), 2);
+		assert_eq!(worker.persisted_state.best_beefy_block(), 2);
 		poll_fn(move |cx| {
 			match best_block_stream.poll_next_unpin(cx) {
 				// expect Some(hash-of-block-2)

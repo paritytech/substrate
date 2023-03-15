@@ -35,7 +35,10 @@ use sp_consensus_beefy::{
 };
 
 // Timeout for rebroadcasting messages.
-const REBROADCAST_AFTER: Duration = Duration::from_secs(60 * 5);
+#[cfg(not(test))]
+const REBROADCAST_AFTER: Duration = Duration::from_secs(60);
+#[cfg(test)]
+const REBROADCAST_AFTER: Duration = Duration::from_secs(5);
 
 /// Gossip engine messages topic
 pub(crate) fn topic<B: Block>() -> B::Hash
@@ -208,6 +211,7 @@ where
 			let now = Instant::now();
 			let mut next_rebroadcast = self.next_rebroadcast.lock();
 			if now >= *next_rebroadcast {
+				trace!(target: LOG_TARGET, "🥩 Gossip rebroadcast");
 				*next_rebroadcast = now + REBROADCAST_AFTER;
 				true
 			} else {
