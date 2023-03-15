@@ -129,7 +129,7 @@ where
 
 	/// Update gossip validator filter.
 	///
-	/// Only votes for `set_id` and rounds >= `start` will be accepted.
+	/// Only votes for `set_id` and rounds `start <= round <= end` will be accepted.
 	pub(crate) fn update_filter(&self, filter: GossipVoteFilter<B>) {
 		debug!(target: LOG_TARGET, "🥩 New gossip filter {:?}", filter);
 		self.votes_filter.write().update(filter);

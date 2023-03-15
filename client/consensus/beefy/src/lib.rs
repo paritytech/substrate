@@ -247,6 +247,8 @@ pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
 	} = network_params;
 
 	let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
+	// Default votes filter is to discard everything.
+	// Validator is updated later with correct starting round and set id.
 	let gossip_validator =
 		Arc::new(communication::gossip::GossipValidator::new(known_peers.clone()));
 	let mut gossip_engine = sc_network_gossip::GossipEngine::new(
