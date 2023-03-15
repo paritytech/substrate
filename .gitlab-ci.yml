@@ -313,6 +313,7 @@ include:
     rules:
       - if: $PIPELINE != "automatic-crate-publishing"
   - project: parity/infrastructure/ci_cd/shared
+    ref: v0.1
     file: /common/timestamp.yml
 
 #### stage:                        notify
