@@ -818,12 +818,12 @@ where
 			self.gossip_engine
 				.messages_for(topic::<B>())
 				.filter_map(|notification| async move {
-					trace!(target: LOG_TARGET, "🥩 Got vote message: {:?}", notification);
-
-					VoteMessage::<NumberFor<B>, AuthorityId, Signature>::decode(
+					let vote = VoteMessage::<NumberFor<B>, AuthorityId, Signature>::decode(
 						&mut &notification.message[..],
 					)
-					.ok()
+					.ok();
+					trace!(target: LOG_TARGET, "🥩 Got vote message: {:?}", vote);
+					vote
 				})
 				.fuse(),
 		);
