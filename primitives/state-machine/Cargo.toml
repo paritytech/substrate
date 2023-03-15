@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false }
-hash-db = { version = "0.15.2", default-features = false }
+hash-db = { version = "0.16.0", default-features = false }
 log = { version = "0.4.17", default-features = false }
 parking_lot = { version = "0.12.1", optional = true }
 rand = { version = "0.8.5", optional = true }
@@ -33,7 +33,7 @@ array-bytes = "4.1"
 pretty_assertions = "1.2.1"
 rand = "0.8.5"
 sp-runtime = { version = "7.0.0", path = "../runtime" }
-trie-db = "0.26.0"
+trie-db = "0.27.0"
 assert_matches = "1.5"
 
 [features]
