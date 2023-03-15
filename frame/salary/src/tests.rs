@@ -102,6 +102,7 @@ impl Pay for TestPay {
 	type AccountId = u64;
 	type Balance = u64;
 	type Id = u64;
+	type AssetId = ();
 
 	fn pay(who: &Self::AccountId, amount: Self::Balance) -> Result<Self::Id, ()> {
 		PAID.with(|paid| *paid.borrow_mut().entry(*who).or_default() += amount);
