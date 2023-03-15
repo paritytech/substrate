@@ -80,19 +80,6 @@ pub mod pallet {
 
 		/// The identifier for the class of asset.
 		type AssetId: Member + Parameter + Copy + MaybeSerializeDeserialize + MaxEncodedLen;
-
-		/// Wrapper around `Self::AssetId` to use in dispatchable call signatures. Allows the use
-		/// of compact encoding in instances of the pallet, which will prevent breaking changes
-		/// resulting from the removal of `HasCompact` from `Self::AssetId`.
-		///
-		/// This type includes the `From<Self::AssetId>` bound, since tightly coupled pallets may
-		/// want to convert an `AssetId` into a parameter for calling dispatchable functions
-		/// directly.
-		type AssetIdParameter: Parameter
-			+ Copy
-			+ From<Self::AssetId>
-			+ Into<Self::AssetId>
-			+ MaxEncodedLen;
 	}
 
 	#[pallet::storage]
@@ -116,7 +103,6 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// The given asset ID is unknown.
 		Unknown,
-		Conversion,
 	}
 
 	#[pallet::call]
@@ -124,12 +110,11 @@ pub mod pallet {
 		#[pallet::call_index(0)]
 		pub fn create(
 			origin: OriginFor<T>,
-			id: T::AssetIdParameter,
+			asset_id: T::AssetId,
 			rate: FixedU128,
 		) -> DispatchResult {
 			T::CreateOrigin::ensure_origin(origin)?;
 
-			let asset_id: T::AssetId = id.into();
 			ConversionRateToNative::<T>::set(asset_id, Some(rate));
 
 			Self::deposit_event(Event::Created { asset_id, rate });
@@ -139,12 +124,11 @@ pub mod pallet {
 		#[pallet::call_index(1)]
 		pub fn update(
 			origin: OriginFor<T>,
-			id: T::AssetIdParameter,
+			asset_id: T::AssetId,
 			rate: FixedU128,
 		) -> DispatchResult {
 			T::UpdateOrigin::ensure_origin(origin)?;
 
-			let asset_id: T::AssetId = id.into();
 			let mut old = FixedU128::zero();
 			ConversionRateToNative::<T>::mutate(asset_id, |maybe_rate| {
 				if let Some(r) = maybe_rate {
@@ -164,14 +148,12 @@ pub mod pallet {
 		#[pallet::call_index(2)]
 		pub fn remove(
 			origin: OriginFor<T>,
-			id: T::AssetIdParameter,
+			asset_id: T::AssetId,
 			rate: FixedU128,
 		) -> DispatchResult {
 			T::RemoveOrigin::ensure_origin(origin)?;
 
-			let asset_id: T::AssetId = id.into();
 			ensure!(ConversionRateToNative::<T>::contains_key(asset_id), Error::<T>::Unknown);
-
 			ConversionRateToNative::<T>::remove(asset_id);
 
 			Self::deposit_event(Event::Removed { asset_id, rate });
