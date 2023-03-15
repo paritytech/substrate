@@ -160,13 +160,13 @@ where
 			// We are going to discard old votes right away (without verification)
 			// Also we keep track of already received votes to avoid verifying duplicates.
 			{
-				let known_votes = self.votes_filter.read();
+				let filter = self.votes_filter.read();
 
-				if !known_votes.is_live(round, set_id) {
+				if !filter.is_live(round, set_id) {
 					return ValidationResult::Discard
 				}
 
-				if known_votes.is_known(round, &msg_hash) {
+				if filter.is_known(round, &msg_hash) {
 					return ValidationResult::ProcessAndKeep(self.topic)
 				}
 			}
@@ -187,7 +187,7 @@ where
 	}
 
 	fn message_expired<'a>(&'a self) -> Box<dyn FnMut(B::Hash, &[u8]) -> bool + 'a> {
-		let known_votes = self.votes_filter.read();
+		let filter = self.votes_filter.read();
 		Box::new(move |_topic, mut data| {
 			let msg = match VoteMessage::<NumberFor<B>, Public, Signature>::decode(&mut data) {
 				Ok(vote) => vote,
@@ -196,7 +196,7 @@ where
 
 			let round = msg.commitment.block_number;
 			let set_id = msg.commitment.validator_set_id;
-			let expired = !known_votes.is_live(round, set_id);
+			let expired = !filter.is_live(round, set_id);
 
 			trace!(target: LOG_TARGET, "🥩 Message for round #{} expired: {}", round, expired);
 
@@ -219,7 +219,7 @@ where
 			}
 		};
 
-		let known_votes = self.votes_filter.read();
+		let filter = self.votes_filter.read();
 		Box::new(move |_who, intent, _topic, mut data| {
 			if let MessageIntent::PeriodicRebroadcast = intent {
 				return do_rebroadcast
@@ -232,7 +232,7 @@ where
 
 			let round = msg.commitment.block_number;
 			let set_id = msg.commitment.validator_set_id;
-			let allowed = known_votes.is_live(round, set_id);
+			let allowed = filter.is_live(round, set_id);
 
 			trace!(target: LOG_TARGET, "🥩 Message for round #{} allowed: {}", round, allowed);
 
