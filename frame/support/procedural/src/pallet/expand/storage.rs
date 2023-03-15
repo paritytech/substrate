@@ -639,8 +639,8 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 			#completed_where_clause
 		{
 			#[doc(hidden)]
-			pub fn storage_metadata() -> #frame_support::metadata::PalletStorageMetadata {
-				#frame_support::metadata::PalletStorageMetadata {
+			pub fn storage_metadata() -> #frame_support::metadata_ir::PalletStorageMetadataIR {
+				#frame_support::metadata_ir::PalletStorageMetadataIR {
 					prefix: <
 						<T as #frame_system::Config>::PalletInfo as
 						#frame_support::traits::PalletInfo
