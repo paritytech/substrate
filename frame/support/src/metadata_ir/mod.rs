@@ -40,7 +40,7 @@ pub fn into_version(metadata: MetadataIR, version: u32) -> Option<RuntimeMetadat
 	}
 }
 
-/// Returns the supported versions of metadata.
+/// Returns the supported metadata versions.
 pub fn supported_versions() -> sp_std::vec::Vec<u32> {
 	sp_std::vec![V14,]
 }
