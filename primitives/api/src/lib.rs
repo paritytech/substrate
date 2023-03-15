@@ -740,7 +740,7 @@ decl_runtime_apis! {
 		/// Use [`Self::metadata_versions`] to find out about supported metadata version of the runtime.
 		fn metadata_at_version(version: u32) -> Option<OpaqueMetadata>;
 
-		/// Returns the supported versions of metadata.
+		/// Returns the supported metadata versions.
 		///
 		/// This can be used to call `metadata_at_version`.
 		fn metadata_versions() -> sp_std::vec::Vec<u32>;
