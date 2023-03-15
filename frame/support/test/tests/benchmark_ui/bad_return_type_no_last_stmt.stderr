@@ -1,0 +1,9 @@
+error: Benchmark `#[block]` or `#[extrinsic_call]` item cannot be the last statement of your benchmark function definition if you have defined a return type. You should return something compatible with Result<(), BenchmarkError> (i.e. `Ok(())`) as the last statement or change your signature to a blank return type.
+  --> tests/benchmark_ui/bad_return_type_no_last_stmt.rs:10:43
+   |
+10 |       fn bench() -> Result<(), BenchmarkError> {
+   |  ______________________________________________^
+11 | |         #[block]
+12 | |         {}
+13 | |     }
+   | |_____^

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -49,7 +49,7 @@ macro_rules! defensive {
 		);
 		debug_assert!(false, "{}", $crate::traits::DEFENSIVE_OP_INTERNAL_ERROR);
 	};
-	($error:tt) => {
+	($error:expr $(,)?) => {
 		frame_support::log::error!(
 			target: "runtime",
 			"{}: {:?}",
@@ -58,7 +58,7 @@ macro_rules! defensive {
 		);
 		debug_assert!(false, "{}: {:?}", $crate::traits::DEFENSIVE_OP_INTERNAL_ERROR, $error);
 	};
-	($error:tt, $proof:tt) => {
+	($error:expr, $proof:expr $(,)?) => {
 		frame_support::log::error!(
 			target: "runtime",
 			"{}: {:?}: {:?}",
@@ -68,6 +68,25 @@ macro_rules! defensive {
 		);
 		debug_assert!(false, "{}: {:?}: {:?}", $crate::traits::DEFENSIVE_OP_INTERNAL_ERROR, $error, $proof);
 	}
+}
+
+/// Trigger a defensive failure if a condition is not met.
+///
+/// Similar to [`assert!`] but will print an error without `debug_assertions` instead of silently
+/// ignoring it. Only accepts one instead of variable formatting arguments.
+///
+/// # Example
+///
+/// ```should_panic
+/// frame_support::defensive_assert!(1 == 0, "Must fail")
+/// ```
+#[macro_export]
+macro_rules! defensive_assert {
+	($cond:expr $(, $proof:expr )? $(,)?) => {
+		if !($cond) {
+			$crate::defensive!(::core::stringify!($cond) $(, $proof )?);
+		}
+	};
 }
 
 /// Prelude module for all defensive traits to be imported at once.
@@ -445,7 +464,7 @@ pub trait DefensiveMin<T> {
 	/// assert_eq!(4, 4_u32.defensive_min(4_u32));
 	/// ```
 	///
-	/// ```should_panic
+	/// ```#[cfg_attr(debug_assertions, should_panic)]
 	/// use frame_support::traits::DefensiveMin;
 	/// // min(4, 3) panics.
 	/// 4_u32.defensive_min(3_u32);
@@ -462,7 +481,7 @@ pub trait DefensiveMin<T> {
 	/// assert_eq!(3, 3_u32.defensive_strict_min(4_u32));
 	/// ```
 	///
-	/// ```should_panic
+	/// ```#[cfg_attr(debug_assertions, should_panic)]
 	/// use frame_support::traits::DefensiveMin;
 	/// // min(4, 4) panics.
 	/// 4_u32.defensive_strict_min(4_u32);
@@ -509,7 +528,7 @@ pub trait DefensiveMax<T> {
 	/// assert_eq!(4, 4_u32.defensive_max(4_u32));
 	/// ```
 	///
-	/// ```should_panic
+	/// ```#[cfg_attr(debug_assertions, should_panic)]
 	/// use frame_support::traits::DefensiveMax;
 	/// // max(4, 5) panics.
 	/// 4_u32.defensive_max(5_u32);
@@ -526,7 +545,7 @@ pub trait DefensiveMax<T> {
 	/// assert_eq!(4, 4_u32.defensive_strict_max(3_u32));
 	/// ```
 	///
-	/// ```should_panic
+	/// ```#[cfg_attr(debug_assertions, should_panic)]
 	/// use frame_support::traits::DefensiveMax;
 	/// // max(4, 4) panics.
 	/// 4_u32.defensive_strict_max(4_u32);
@@ -1142,6 +1161,27 @@ mod test {
 	use sp_std::marker::PhantomData;
 
 	#[test]
+	fn defensive_assert_works() {
+		defensive_assert!(true);
+		defensive_assert!(true,);
+		defensive_assert!(true, "must work");
+		defensive_assert!(true, "must work",);
+	}
+
+	#[test]
+	#[cfg(debug_assertions)]
+	#[should_panic(expected = "Defensive failure has been triggered!: \"1 == 0\": \"Must fail\"")]
+	fn defensive_assert_panics() {
+		defensive_assert!(1 == 0, "Must fail");
+	}
+
+	#[test]
+	#[cfg(not(debug_assertions))]
+	fn defensive_assert_does_not_panic() {
+		defensive_assert!(1 == 0, "Must fail");
+	}
+
+	#[test]
 	#[cfg(not(debug_assertions))]
 	fn defensive_saturating_accrue_works() {
 		let mut v = 1_u32;
@@ -1353,6 +1393,7 @@ mod test {
 	}
 
 	#[test]
+	#[cfg(debug_assertions)]
 	#[should_panic(expected = "Defensive failure has been triggered!: \"DefensiveMin\"")]
 	fn defensive_min_panics() {
 		10_u32.defensive_min(9_u32);
@@ -1365,6 +1406,7 @@ mod test {
 	}
 
 	#[test]
+	#[cfg(debug_assertions)]
 	#[should_panic(expected = "Defensive failure has been triggered!: \"DefensiveMin strict\"")]
 	fn defensive_strict_min_panics() {
 		9_u32.defensive_strict_min(9_u32);
@@ -1377,6 +1419,7 @@ mod test {
 	}
 
 	#[test]
+	#[cfg(debug_assertions)]
 	#[should_panic(expected = "Defensive failure has been triggered!: \"DefensiveMax\"")]
 	fn defensive_max_panics() {
 		9_u32.defensive_max(10_u32);
@@ -1389,6 +1432,7 @@ mod test {
 	}
 
 	#[test]
+	#[cfg(debug_assertions)]
 	#[should_panic(expected = "Defensive failure has been triggered!: \"DefensiveMax strict\"")]
 	fn defensive_strict_max_panics() {
 		9_u32.defensive_strict_max(9_u32);

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,7 +24,7 @@ use codec::{Decode, Encode};
 #[cfg(feature = "std")]
 use sp_api::ProvideRuntimeApi;
 #[cfg(feature = "std")]
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use sp_runtime::traits::Block as BlockT;
 
 use sp_core::{crypto::KeyTypeId, RuntimeDebug};
 use sp_staking::SessionIndex;
@@ -110,7 +110,7 @@ impl GetValidatorCount for MembershipProof {
 #[cfg(feature = "std")]
 pub fn generate_initial_session_keys<Block, T>(
 	client: std::sync::Arc<T>,
-	at: &BlockId<Block>,
+	at: Block::Hash,
 	seeds: Vec<String>,
 ) -> Result<(), sp_api::ApiError>
 where

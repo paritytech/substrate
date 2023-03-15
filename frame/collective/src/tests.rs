@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,7 +24,7 @@ use frame_support::{
 	traits::{ConstU32, ConstU64, GenesisBuild, StorageVersion},
 	Hashable,
 };
-use frame_system::{EventRecord, Phase};
+use frame_system::{EnsureRoot, EventRecord, Phase};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -57,7 +57,6 @@ mod mock_democracy {
 		use frame_system::pallet_prelude::*;
 
 		#[pallet::pallet]
-		#[pallet::generate_store(pub(super) trait Store)]
 		pub struct Pallet<T>(_);
 
 		#[pallet::config]
@@ -91,8 +90,6 @@ pub type MaxMembers = ConstU32<100>;
 parameter_types! {
 	pub const MotionDuration: u64 = 3;
 	pub const MaxProposals: u32 = 257;
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
@@ -129,6 +126,7 @@ impl Config<Instance1> for Test {
 	type MaxMembers = MaxMembers;
 	type DefaultVote = PrimeDefaultVote;
 	type WeightInfo = ();
+	type SetMembersOrigin = EnsureRoot<Self::AccountId>;
 }
 impl Config<Instance2> for Test {
 	type RuntimeOrigin = RuntimeOrigin;
@@ -139,6 +137,7 @@ impl Config<Instance2> for Test {
 	type MaxMembers = MaxMembers;
 	type DefaultVote = MoreThanMajorityThenPrimeDefaultVote;
 	type WeightInfo = ();
+	type SetMembersOrigin = EnsureRoot<Self::AccountId>;
 }
 impl mock_democracy::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
@@ -153,6 +152,7 @@ impl Config for Test {
 	type MaxMembers = MaxMembers;
 	type DefaultVote = PrimeDefaultVote;
 	type WeightInfo = ();
+	type SetMembersOrigin = EnsureRoot<Self::AccountId>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -287,7 +287,7 @@ fn proposal_weight_limit_works_on_approve() {
 				RuntimeOrigin::signed(4),
 				hash,
 				0,
-				proposal_weight - Weight::from_ref_time(100),
+				proposal_weight - Weight::from_parts(100, 0),
 				proposal_len
 			),
 			Error::<Test, Instance1>::WrongProposalWeight
@@ -326,7 +326,7 @@ fn proposal_weight_limit_ignored_on_disapprove() {
 			RuntimeOrigin::signed(4),
 			hash,
 			0,
-			proposal_weight - Weight::from_ref_time(100),
+			proposal_weight - Weight::from_parts(100, 0),
 			proposal_len
 		));
 	})
@@ -749,7 +749,7 @@ fn correct_validate_and_get_proposal() {
 			Collective::validate_and_get_proposal(
 				&hash,
 				length,
-				weight - Weight::from_ref_time(10)
+				weight - Weight::from_parts(10, 0)
 			),
 			Error::<Test, Instance1>::WrongProposalWeight
 		);

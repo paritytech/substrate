@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,6 +26,9 @@ fn pallet_ui() {
 
 	// As trybuild is using `cargo check`, we don't need the real WASM binaries.
 	std::env::set_var("SKIP_WASM_BUILD", "1");
+
+	// Deny all warnings since we emit warnings as part of a Pallet's UI.
+	std::env::set_var("RUSTFLAGS", "--deny warnings");
 
 	let t = trybuild::TestCases::new();
 	t.compile_fail("tests/pallet_ui/*.rs");

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -27,7 +27,7 @@ fn positive_rx_receives_relevant_messages_and_terminates_upon_hub_drop() {
 		// No subscribers yet. That message is not supposed to get to anyone.
 		hub.send(0);
 
-		let mut rx_01 = hub.subscribe(SubsKey::new());
+		let mut rx_01 = hub.subscribe(SubsKey::new(), 100_000);
 		assert_eq!(hub.subs_count(), 1);
 
 		// That message is sent after subscription. Should be delivered into rx_01.
@@ -37,9 +37,8 @@ fn positive_rx_receives_relevant_messages_and_terminates_upon_hub_drop() {
 		// Hub is disposed. The rx_01 should be over after that.
 		std::mem::drop(hub);
 
-		assert!(!rx_01.is_terminated());
-		assert_eq!(None, rx_01.next().await);
 		assert!(rx_01.is_terminated());
+		assert_eq!(None, rx_01.next().await);
 	});
 }
 
@@ -49,9 +48,9 @@ fn positive_subs_count_is_correct_upon_drop_of_rxs() {
 		let hub = TestHub::new(TK);
 		assert_eq!(hub.subs_count(), 0);
 
-		let rx_01 = hub.subscribe(SubsKey::new());
+		let rx_01 = hub.subscribe(SubsKey::new(), 100_000);
 		assert_eq!(hub.subs_count(), 1);
-		let rx_02 = hub.subscribe(SubsKey::new());
+		let rx_02 = hub.subscribe(SubsKey::new(), 100_000);
 		assert_eq!(hub.subs_count(), 2);
 
 		std::mem::drop(rx_01);
@@ -69,11 +68,11 @@ fn positive_subs_count_is_correct_upon_drop_of_rxs_on_cloned_hubs() {
 		assert_eq!(hub_01.subs_count(), 0);
 		assert_eq!(hub_02.subs_count(), 0);
 
-		let rx_01 = hub_02.subscribe(SubsKey::new());
+		let rx_01 = hub_02.subscribe(SubsKey::new(), 100_000);
 		assert_eq!(hub_01.subs_count(), 1);
 		assert_eq!(hub_02.subs_count(), 1);
 
-		let rx_02 = hub_02.subscribe(SubsKey::new());
+		let rx_02 = hub_02.subscribe(SubsKey::new(), 100_000);
 		assert_eq!(hub_01.subs_count(), 2);
 		assert_eq!(hub_02.subs_count(), 2);
 

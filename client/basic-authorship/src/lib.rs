@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -50,7 +50,7 @@
 //!
 //! // From this factory, we create a `Proposer`.
 //! let proposer = proposer_factory.init(
-//! 	&client.header(&BlockId::number(0)).unwrap().unwrap(),
+//! 	&client.header(client.chain_info().genesis_hash).unwrap().unwrap(),
 //! );
 //!
 //! // The proposer is created asynchronously.

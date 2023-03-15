@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -43,9 +43,8 @@ use log::{debug, error, log_enabled};
 use prometheus_endpoint::{register, Counter, CounterVec, Gauge, Opts, U64};
 use prost::Message;
 use rand::{seq::SliceRandom, thread_rng};
-use sc_network_common::{
-	protocol::event::DhtEvent,
-	service::{KademliaKey, NetworkDHTProvider, NetworkSigner, NetworkStateInfo, Signature},
+use sc_network::{
+	event::DhtEvent, KademliaKey, NetworkDHTProvider, NetworkSigner, NetworkStateInfo, Signature,
 };
 use sp_api::{ApiError, ProvideRuntimeApi};
 use sp_authority_discovery::{
@@ -55,7 +54,7 @@ use sp_blockchain::HeaderBackend;
 
 use sp_core::crypto::{key_types, CryptoTypePublicPair, Pair};
 use sp_keystore::CryptoStore;
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use sp_runtime::traits::Block as BlockT;
 
 mod addr_cache;
 /// Dht payload schemas generated from Protobuf definitions via Prost crate in build.rs.
@@ -171,7 +170,7 @@ where
 		&self,
 		at: Block::Hash,
 	) -> std::result::Result<Vec<AuthorityId>, ApiError> {
-		self.runtime_api().authorities(&BlockId::Hash(at))
+		self.runtime_api().authorities(at)
 	}
 }
 

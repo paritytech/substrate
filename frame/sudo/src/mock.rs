@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,12 +19,7 @@
 
 use super::*;
 use crate as sudo;
-use frame_support::{
-	parameter_types,
-	traits::{ConstU32, ConstU64, Contains, GenesisBuild},
-	weights::Weight,
-};
-use frame_system::limits;
+use frame_support::traits::{ConstU32, ConstU64, Contains, GenesisBuild};
 use sp_core::H256;
 use sp_io;
 use sp_runtime::{
@@ -44,7 +39,6 @@ pub mod logger {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::call]
@@ -110,10 +104,6 @@ frame_support::construct_runtime!(
 		Logger: logger::{Pallet, Call, Storage, Event<T>},
 	}
 );
-
-parameter_types! {
-	pub BlockWeights: limits::BlockWeights = limits::BlockWeights::simple_max(Weight::from_ref_time(1024));
-}
 
 pub struct BlockEverything;
 impl Contains<RuntimeCall> for BlockEverything {

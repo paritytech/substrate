@@ -1,4 +1,4 @@
-// Copyright 2021 Parity Technologies (UK) Ltd.
+// Copyright Parity Technologies (UK) Ltd.
 // This file is part of Polkadot.
 
 // Polkadot is free software: you can redistribute it and/or modify
@@ -30,7 +30,7 @@ pub async fn execute<Runtime, Block>(
 	ws_url: String,
 ) where
 	Runtime: RuntimeT<pallet_bags_list::Instance1>,
-	Block: BlockT,
+	Block: BlockT + DeserializeOwned,
 	Block::Header: DeserializeOwned,
 {
 	let mut ext = Builder::<Block>::new()

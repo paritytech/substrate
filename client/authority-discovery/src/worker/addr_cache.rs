@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -68,6 +68,11 @@ impl AddrCache {
 				peer_ids
 			);
 		}
+
+		log::debug!(
+			target: super::LOG_TARGET,
+			"Found addresses for authority {authority_id:?}: {addresses:?}",
+		);
 
 		let old_addresses = self.authority_id_to_addresses.insert(authority_id.clone(), addresses);
 		let old_peer_ids = addresses_to_peer_ids(&old_addresses.unwrap_or_default());

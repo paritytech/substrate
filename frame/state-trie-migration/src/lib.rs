@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -439,7 +439,6 @@ pub mod pallet {
 
 	/// The outer Pallet struct.
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(crate) trait Store)]
 	pub struct Pallet<T>(_);
 
 	/// Configurations of this pallet.
@@ -1136,25 +1135,25 @@ mod mock {
 
 	impl WeightInfo for StateMigrationTestWeight {
 		fn process_top_key(_: u32) -> Weight {
-			Weight::from_ref_time(1000000)
+			Weight::from_parts(1000000, 0)
 		}
 		fn continue_migrate() -> Weight {
-			Weight::from_ref_time(1000000)
+			Weight::from_parts(1000000, 0)
 		}
 		fn continue_migrate_wrong_witness() -> Weight {
-			Weight::from_ref_time(1000000)
+			Weight::from_parts(1000000, 0)
 		}
 		fn migrate_custom_top_fail() -> Weight {
-			Weight::from_ref_time(1000000)
+			Weight::from_parts(1000000, 0)
 		}
 		fn migrate_custom_top_success() -> Weight {
-			Weight::from_ref_time(1000000)
+			Weight::from_parts(1000000, 0)
 		}
 		fn migrate_custom_child_fail() -> Weight {
-			Weight::from_ref_time(1000000)
+			Weight::from_parts(1000000, 0)
 		}
 		fn migrate_custom_child_success() -> Weight {
-			Weight::from_ref_time(1000000)
+			Weight::from_parts(1000000, 0)
 		}
 	}
 
@@ -1619,7 +1618,10 @@ pub(crate) mod remote_tests {
 	use frame_system::Pallet as System;
 	use remote_externalities::Mode;
 	use sp_core::H256;
-	use sp_runtime::traits::{Block as BlockT, HashFor, Header as _, One, Zero};
+	use sp_runtime::{
+		traits::{Block as BlockT, HashFor, Header as _, One, Zero},
+		DeserializeOwned,
+	};
 	use thousands::Separable;
 
 	#[allow(dead_code)]
@@ -1648,12 +1650,12 @@ pub(crate) mod remote_tests {
 	pub(crate) async fn run_with_limits<Runtime, Block>(limits: MigrationLimits, mode: Mode<Block>)
 	where
 		Runtime: crate::Config<Hash = H256>,
-		Block: BlockT<Hash = H256>,
+		Block: BlockT<Hash = H256> + DeserializeOwned,
 		Block::Header: serde::de::DeserializeOwned,
 	{
 		let mut ext = remote_externalities::Builder::<Block>::new()
 			.mode(mode)
-			.state_version(sp_core::storage::StateVersion::V0)
+			.overwrite_state_version(sp_core::storage::StateVersion::V0)
 			.build()
 			.await
 			.unwrap();

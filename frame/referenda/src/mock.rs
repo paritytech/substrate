@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -32,7 +32,7 @@ use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, Hash, IdentityLookup},
 	DispatchResult, Perbill,
 };
 
@@ -62,9 +62,7 @@ impl Contains<RuntimeCall> for BaseFilter {
 }
 
 parameter_types! {
-	pub MaxWeight: Weight = Weight::from_ref_time(2_000_000_000_000);
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(MaxWeight::get());
+	pub MaxWeight: Weight = Weight::from_parts(2_000_000_000_000, u64::MAX);
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = BaseFilter;
@@ -471,4 +469,16 @@ impl RefState {
 		}
 		index
 	}
+}
+
+/// note a new preimage without registering.
+pub fn note_preimage(who: u64) -> PreimageHash {
+	use std::sync::atomic::{AtomicU8, Ordering};
+	// note a new preimage on every function invoke.
+	static COUNTER: AtomicU8 = AtomicU8::new(0);
+	let data = vec![COUNTER.fetch_add(1, Ordering::Relaxed)];
+	assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(who), data.clone()));
+	let hash = BlakeTwo256::hash(&data);
+	assert!(!Preimage::is_requested(&hash));
+	hash
 }

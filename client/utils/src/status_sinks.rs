@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -58,7 +58,7 @@ impl<T> Default for StatusSinks<T> {
 impl<T> StatusSinks<T> {
 	/// Builds a new empty collection.
 	pub fn new() -> StatusSinks<T> {
-		let (entries_tx, entries_rx) = tracing_unbounded("status-sinks-entries");
+		let (entries_tx, entries_rx) = tracing_unbounded("status-sinks-entries", 100_000);
 
 		StatusSinks {
 			inner: Mutex::new(Inner { entries: stream::FuturesUnordered::new(), entries_rx }),
@@ -196,7 +196,7 @@ mod tests {
 
 		let status_sinks = StatusSinks::new();
 
-		let (tx, rx) = tracing_unbounded("test");
+		let (tx, rx) = tracing_unbounded("test", 100_000);
 		status_sinks.push(Duration::from_millis(100), tx);
 
 		let mut val_order = 5;
