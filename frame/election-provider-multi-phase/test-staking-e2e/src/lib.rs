@@ -18,7 +18,7 @@
 #![cfg(test)]
 mod mock;
 
-pub(crate) const LOG_TARGET: &str = "tests::epm";
+pub(crate) const LOG_TARGET: &str = "tests::e2e-epm";
 
 use mock::*;
 use sp_npos_elections::{to_supports, StakedAssignment};
@@ -70,7 +70,7 @@ fn setup_works() {
 /// Replicates the Kusama incident of 8th Dec 2022 and its resolution through the governance
 /// fallback.
 ///
-/// After enough slashes to exceed the `Staking::OffendingValidatorsThreshold`, the staking pallet
+/// After enough slashes exceeded the `Staking::OffendingValidatorsThreshold`, the staking pallet
 /// set `Forcing::ForceNew`. When a new session starts, staking will start to force a new era and
 /// calls <EPM as election_provider>::elect(). If at this point EPM and the staking miners did not
 /// have enough time to queue a new solution (snapshot + solution submission), the election request
@@ -103,9 +103,12 @@ fn enters_emergency_phase_after_forcing_before_elect() {
 		assert!(ElectionProviderMultiPhase::current_phase().is_emergency());
 		log_current_time();
 
+		let era_before_delayed_next = Staking::current_era();
 		// try to advance 2 eras with a delayed solution.
 		assert!(start_next_active_era_delayed_solution().is_ok());
+		assert_eq!(Staking::current_era(), era_before_delayed_next);
 		assert!(start_next_active_era_delayed_solution().is_ok());
+		assert_eq!(Staking::current_era(), era_before_delayed_next);
 
 		// EPM is still in emergency phase.
 		assert!(ElectionProviderMultiPhase::current_phase().is_emergency());
@@ -131,6 +134,7 @@ fn enters_emergency_phase_after_forcing_before_elect() {
 		log_current_time();
 		assert!(ElectionProviderMultiPhase::current_phase().is_signed());
 		assert_eq!(Session::validators(), vec![21, 31, 41]);
+		assert_eq!(Staking::current_era(), era_before_delayed_next.map(|e| e + 1));
 	});
 }
 

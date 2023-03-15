@@ -215,7 +215,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type MaxElectableTargets = MaxElectableTargets;
 	type MaxElectingVoters = MaxElectingVoters;
 	type MaxWinners = MaxWinners;
-	type BenchmarkingConfig = ElectionProviderBenchmarkConfig;
+	type BenchmarkingConfig = NoopElectionProviderBenchmarkConfig;
 	type WeightInfo = ();
 }
 
@@ -278,7 +278,7 @@ impl pallet_staking::Config for Runtime {
 	type HistoryDepth = HistoryDepth;
 	type OnStakerSlash = ();
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
-	type BenchmarkingConfig = StakingBenchmarkingConfig;
+	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime
@@ -309,22 +309,18 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type TargetsBound = TargetsBound;
 }
 
-pub struct StakingBenchmarkingConfig;
-impl pallet_staking::BenchmarkingConfig for StakingBenchmarkingConfig {
-	type MaxNominators = traits::ConstU32<1000>;
-	type MaxValidators = traits::ConstU32<1000>;
-}
+pub struct NoopElectionProviderBenchmarkConfig;
 
-pub struct ElectionProviderBenchmarkConfig;
-
-impl pallet_election_provider_multi_phase::BenchmarkingConfig for ElectionProviderBenchmarkConfig {
-	const VOTERS: [u32; 2] = [1000, 2000];
-	const TARGETS: [u32; 2] = [500, 1000];
-	const ACTIVE_VOTERS: [u32; 2] = [500, 800];
-	const DESIRED_TARGETS: [u32; 2] = [200, 400];
-	const SNAPSHOT_MAXIMUM_VOTERS: u32 = 1000;
-	const MINER_MAXIMUM_VOTERS: u32 = 1000;
-	const MAXIMUM_TARGETS: u32 = 300;
+impl pallet_election_provider_multi_phase::BenchmarkingConfig
+	for NoopElectionProviderBenchmarkConfig
+{
+	const VOTERS: [u32; 2] = [0, 0];
+	const TARGETS: [u32; 2] = [0, 0];
+	const ACTIVE_VOTERS: [u32; 2] = [0, 0];
+	const DESIRED_TARGETS: [u32; 2] = [0, 0];
+	const SNAPSHOT_MAXIMUM_VOTERS: u32 = 0;
+	const MINER_MAXIMUM_VOTERS: u32 = 0;
+	const MAXIMUM_TARGETS: u32 = 0;
 }
 
 pub struct OtherSessionHandler;
@@ -383,7 +379,6 @@ impl Default for ExtBuilder {
 		}
 	}
 }
-
 
 impl ExtBuilder {
 	pub fn build(self) -> sp_io::TestExternalities {
