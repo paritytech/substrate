@@ -18,7 +18,7 @@
 
 use crate::{
 	communication::{
-		gossip::{topic, GossipValidator},
+		gossip::{topic, GossipValidator, GossipVoteFilter},
 		request_response::outgoing_requests_engine::OnDemandJustificationsEngine,
 	},
 	error::Error,
@@ -42,7 +42,7 @@ use sp_consensus_beefy::{
 	check_equivocation_proof,
 	crypto::{AuthorityId, Signature},
 	BeefyApi, Commitment, ConsensusLog, EquivocationProof, PayloadProvider, ValidatorSet,
-	VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
+	ValidatorSetId, VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
 };
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
@@ -134,14 +134,18 @@ impl<B: Block> VoterOracle<B> {
 
 	// Return reference to rounds pertaining to first session in the queue.
 	// Voting will always happen at the head of the queue.
-	fn active_rounds(&self) -> Option<&Rounds<B>> {
-		self.sessions.front()
+	fn active_rounds(&self) -> Result<&Rounds<B>, Error> {
+		self.sessions.front().ok_or(Error::UninitSession)
 	}
 
 	// Return mutable reference to rounds pertaining to first session in the queue.
 	// Voting will always happen at the head of the queue.
-	fn active_rounds_mut(&mut self) -> Option<&mut Rounds<B>> {
-		self.sessions.front_mut()
+	fn active_rounds_mut(&mut self) -> Result<&mut Rounds<B>, Error> {
+		self.sessions.front_mut().ok_or(Error::UninitSession)
+	}
+
+	fn current_validator_set_id(&self) -> Result<ValidatorSetId, Error> {
+		self.active_rounds().map(|r| r.validator_set_id())
 	}
 
 	// Prune the sessions queue to keep the Oracle in one of the expected three states.
@@ -164,7 +168,7 @@ impl<B: Block> VoterOracle<B> {
 	/// Finalize a particular block.
 	pub fn finalize(&mut self, block: NumberFor<B>) -> Result<(), Error> {
 		// Conclude voting round for this block.
-		self.active_rounds_mut().ok_or(Error::UninitSession)?.conclude(block);
+		self.active_rounds_mut()?.conclude(block);
 		// Prune any now "finalized" sessions from queue.
 		self.try_prune();
 		Ok(())
@@ -292,6 +296,13 @@ impl<B: Block> PersistedState<B> {
 	pub(crate) fn set_best_grandpa(&mut self, best_grandpa: <B as Block>::Header) {
 		self.best_grandpa_block_header = best_grandpa;
 	}
+
+	pub(crate) fn current_gossip_filter(&self) -> Result<GossipVoteFilter<B>, Error> {
+		let (start, end) =
+			self.voting_oracle.accepted_interval(*self.best_grandpa_block_header.number())?;
+		let validator_set_id = self.voting_oracle.current_validator_set_id()?;
+		Ok(GossipVoteFilter { start, end, validator_set_id })
+	}
 }
 
 /// A BEEFY worker plays the BEEFY protocol
@@ -388,7 +399,7 @@ where
 		&self.persisted_state.voting_oracle
 	}
 
-	fn active_rounds(&mut self) -> Option<&Rounds<B>> {
+	fn active_rounds(&mut self) -> Result<&Rounds<B>, Error> {
 		self.persisted_state.voting_oracle.active_rounds()
 	}
 
@@ -429,7 +440,7 @@ where
 		debug!(target: LOG_TARGET, "🥩 New active validator set: {:?}", validator_set);
 
 		// BEEFY should finalize a mandatory block during each session.
-		if let Some(active_session) = self.active_rounds() {
+		if let Ok(active_session) = self.active_rounds() {
 			if !active_session.mandatory_done() {
 				debug!(
 					target: LOG_TARGET,
@@ -460,7 +471,12 @@ where
 	}
 
 	fn handle_finality_notification(&mut self, notification: &FinalityNotification<B>) {
-		debug!(target: LOG_TARGET, "🥩 Finality notification: {:?}", notification);
+		debug!(
+			target: LOG_TARGET,
+			"🥩 Finality notification: header {:?} tree_route {:?}",
+			notification.header,
+			notification.tree_route,
+		);
 		let header = &notification.header;
 
 		if *header.number() > self.best_grandpa_block() {
@@ -484,6 +500,15 @@ where
 					self.init_session_at(new_validator_set, *header.number());
 				}
 			}
+
+			// Update gossip validator votes filter.
+			if let Err(e) = self
+				.persisted_state
+				.current_gossip_filter()
+				.map(|filter| self.gossip_validator.update_filter(filter))
+			{
+				error!(target: LOG_TARGET, "🥩 Voter error: {:?}", e);
+			}
 		}
 	}
 
@@ -494,7 +519,6 @@ where
 	) -> Result<(), Error> {
 		let block_num = vote.commitment.block_number;
 		let best_grandpa = self.best_grandpa_block();
-		self.gossip_validator.note_round(block_num);
 		match self.voting_oracle().triage_round(block_num, best_grandpa)? {
 			RoundAction::Process => self.handle_vote(vote)?,
 			RoundAction::Enqueue => {
@@ -560,11 +584,7 @@ where
 		&mut self,
 		vote: VoteMessage<NumberFor<B>, AuthorityId, Signature>,
 	) -> Result<(), Error> {
-		let rounds = self
-			.persisted_state
-			.voting_oracle
-			.active_rounds_mut()
-			.ok_or(Error::UninitSession)?;
+		let rounds = self.persisted_state.voting_oracle.active_rounds_mut()?;
 
 		let block_number = vote.commitment.block_number;
 		match rounds.add_vote(vote) {
@@ -616,7 +636,6 @@ where
 
 		// Finalize inner round and update voting_oracle state.
 		self.persisted_state.voting_oracle.finalize(block_num)?;
-		self.gossip_validator.conclude_round(block_num);
 
 		if block_num > self.best_beefy_block() {
 			// Set new best BEEFY block number.
@@ -655,6 +674,10 @@ where
 			debug!(target: LOG_TARGET, "🥩 Can't set best beefy to old: {}", block_num);
 			metric_set!(self, beefy_best_block_set_last_failure, block_num);
 		}
+		// Update gossip validator votes filter.
+		self.persisted_state
+			.current_gossip_filter()
+			.map(|filter| self.gossip_validator.update_filter(filter))?;
 		Ok(())
 	}
 
@@ -771,11 +794,7 @@ where
 			return Ok(())
 		};
 
-		let rounds = self
-			.persisted_state
-			.voting_oracle
-			.active_rounds_mut()
-			.ok_or(Error::UninitSession)?;
+		let rounds = self.persisted_state.voting_oracle.active_rounds_mut()?;
 		let (validators, validator_set_id) = (rounds.validators(), rounds.validator_set_id());
 
 		let authority_id = if let Some(id) = self.key_store.authority_id(validators) {
@@ -946,8 +965,7 @@ where
 		&self,
 		proof: EquivocationProof<NumberFor<B>, AuthorityId, Signature>,
 	) -> Result<(), Error> {
-		let rounds =
-			self.persisted_state.voting_oracle.active_rounds().ok_or(Error::UninitSession)?;
+		let rounds = self.persisted_state.voting_oracle.active_rounds()?;
 		let (validators, validator_set_id) = (rounds.validators(), rounds.validator_set_id());
 		let offender_id = proof.offender_id().clone();
 
@@ -1083,7 +1101,7 @@ pub(crate) mod tests {
 			&self.voting_oracle
 		}
 
-		pub fn active_round(&self) -> Option<&Rounds<B>> {
+		pub fn active_round(&self) -> Result<&Rounds<B>, Error> {
 			self.voting_oracle.active_rounds()
 		}
 

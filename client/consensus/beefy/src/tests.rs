@@ -593,12 +593,12 @@ async fn beefy_finalizing_blocks() {
 async fn lagging_validators() {
 	sp_tracing::try_init_simple();
 
-	let peers = [BeefyKeyring::Alice, BeefyKeyring::Bob];
+	let peers = [BeefyKeyring::Alice, BeefyKeyring::Bob, BeefyKeyring::Charlie];
 	let validator_set = ValidatorSet::new(make_beefy_ids(&peers), 0).unwrap();
 	let session_len = 30;
 	let min_block_delta = 1;
 
-	let mut net = BeefyTestNet::new(2);
+	let mut net = BeefyTestNet::new(3);
 	let api = Arc::new(TestApi::with_validator_set(&validator_set));
 	let beefy_peers = peers.iter().enumerate().map(|(id, key)| (id, key, api.clone())).collect();
 	tokio::spawn(initialize_beefy(&mut net, beefy_peers, min_block_delta));
@@ -619,19 +619,20 @@ async fn lagging_validators() {
 	)
 	.await;
 
-	// Alice finalizes #25, Bob lags behind
+	// Alice and Bob finalize #25, Charlie lags behind
 	let finalize = hashes[25];
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
 	net.lock().peer(0).client().as_client().finalize_block(finalize, None).unwrap();
+	net.lock().peer(1).client().as_client().finalize_block(finalize, None).unwrap();
 	// verify nothing gets finalized by BEEFY
-	let timeout = Some(Duration::from_millis(250));
+	let timeout = Some(Duration::from_millis(100));
 	streams_empty_after_timeout(best_blocks, &net, timeout).await;
 	streams_empty_after_timeout(versioned_finality_proof, &net, None).await;
 
-	// Bob catches up and also finalizes #25
+	// Charlie catches up and also finalizes #25
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
-	net.lock().peer(1).client().as_client().finalize_block(finalize, None).unwrap();
-	// expected beefy finalizes block #17 from diff-power-of-two
+	net.lock().peer(2).client().as_client().finalize_block(finalize, None).unwrap();
+	// expected beefy finalizes blocks 23, 24, 25 from diff-power-of-two
 	wait_for_best_beefy_blocks(best_blocks, &net, &[23, 24, 25]).await;
 	wait_for_beefy_signed_commitments(versioned_finality_proof, &net, &[23, 24, 25]).await;
 
@@ -648,18 +649,19 @@ async fn lagging_validators() {
 	// session-boundary block is GRANDPA-finalized (this guarantees authenticity for the new session
 	// validator set).
 
-	// Alice finalizes session-boundary mandatory block #60, Bob lags behind
+	// Alice and Bob finalize session-boundary mandatory block #60, Charlie lags behind
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
 	let finalize = hashes[60];
 	net.lock().peer(0).client().as_client().finalize_block(finalize, None).unwrap();
+	net.lock().peer(1).client().as_client().finalize_block(finalize, None).unwrap();
 	// verify nothing gets finalized by BEEFY
-	let timeout = Some(Duration::from_millis(250));
+	let timeout = Some(Duration::from_millis(100));
 	streams_empty_after_timeout(best_blocks, &net, timeout).await;
 	streams_empty_after_timeout(versioned_finality_proof, &net, None).await;
 
-	// Bob catches up and also finalizes #60 (and should have buffered Alice's vote on #60)
+	// Charlie catches up and also finalizes #60 (and should have buffered Alice's vote on #60)
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers);
-	net.lock().peer(1).client().as_client().finalize_block(finalize, None).unwrap();
+	net.lock().peer(2).client().as_client().finalize_block(finalize, None).unwrap();
 	// verify beefy skips intermediary votes, and successfully finalizes mandatory block #60
 	wait_for_best_beefy_blocks(best_blocks, &net, &[60]).await;
 	wait_for_beefy_signed_commitments(versioned_finality_proof, &net, &[60]).await;
