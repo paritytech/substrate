@@ -55,8 +55,7 @@ pub fn expand_doc_only(def: &mut Def) -> proc_macro2::TokenStream {
 				.collect::<proc_macro2::TokenStream>()
 		} else {
 			quote::quote!()
-		}
-	};
+		};
 
 	quote::quote!(
 		/// Auto-generated docs-only module listing all defined storage types for this pallet.
