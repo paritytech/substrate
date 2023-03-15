@@ -20,6 +20,8 @@
 #[cfg(test)]
 mod block_import;
 #[cfg(test)]
+mod service;
+#[cfg(test)]
 mod sync;
 
 use std::{
@@ -46,14 +48,18 @@ use sc_consensus::{
 	ForkChoiceStrategy, ImportQueue, ImportResult, JustificationImport, JustificationSyncLink,
 	LongestChain, Verifier,
 };
-use sc_network::{Multiaddr, NetworkService, NetworkWorker};
-use sc_network_common::{
+use sc_network::{
 	config::{
 		MultiaddrWithPeerId, NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode,
-		ProtocolId, RequestResponseConfig, Role, SyncMode, TransportConfig,
+		ProtocolId, Role, SyncMode, TransportConfig,
 	},
-	protocol::{role::Roles, ProtocolName},
-	service::{NetworkBlock, NetworkEventStream, NetworkStateInfo, NetworkSyncForkRequest},
+	request_responses::ProtocolConfig as RequestResponseConfig,
+	types::ProtocolName,
+	Multiaddr, NetworkBlock, NetworkEventStream, NetworkService, NetworkStateInfo,
+	NetworkSyncForkRequest, NetworkWorker,
+};
+use sc_network_common::{
+	role::Roles,
 	sync::warp::{
 		AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncParams, WarpSyncProvider,
 	},

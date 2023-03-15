@@ -934,7 +934,7 @@ async fn on_demand_beefy_justification_sync() {
 	let dave_index = 3;
 
 	// push 30 blocks
-	let hashes = net.generate_blocks_and_sync(35, session_len, &validator_set, false).await;
+	let mut hashes = net.generate_blocks_and_sync(30, session_len, &validator_set, false).await;
 
 	let fast_peers = fast_peers.into_iter().enumerate();
 	let net = Arc::new(Mutex::new(net));
@@ -951,8 +951,16 @@ async fn on_demand_beefy_justification_sync() {
 	// Spawn Dave, they are now way behind voting and can only catch up through on-demand justif
 	// sync.
 	tokio::spawn(dave_task);
-	// give Dave a chance to spawn and init.
-	run_for(Duration::from_millis(400), &net).await;
+	// Dave pushes and syncs 4 more blocks just to make sure he gets included in gossip.
+	{
+		let mut net_guard = net.lock();
+		let built_hashes =
+			net_guard
+				.peer(dave_index)
+				.generate_blocks(4, BlockOrigin::File, |builder| builder.build().unwrap().block);
+		hashes.extend(built_hashes);
+		net_guard.run_until_sync().await;
+	}
 
 	let (dave_best_blocks, _) =
 		get_beefy_streams(&mut net.lock(), [(dave_index, BeefyKeyring::Dave)].into_iter());
@@ -965,7 +973,10 @@ async fn on_demand_beefy_justification_sync() {
 	// Have the other peers do some gossip so Dave finds out about their progress.
 	finalize_block_and_wait_for_beefy(&net, fast_peers, &[hashes[25], hashes[29]], &[25, 29]).await;
 
-	// Now verify Dave successfully finalized #1 (through on-demand justification request).
+	// Kick Dave's async loop by finalizing another block.
+	client.finalize_block(hashes[2], None).unwrap();
+
+	// And verify Dave successfully finalized #1 (through on-demand justification request).
 	wait_for_best_beefy_blocks(dave_best_blocks, &net, &[1]).await;
 
 	// Give all tasks some cpu cycles to burn through their events queues,
@@ -978,10 +989,6 @@ async fn on_demand_beefy_justification_sync() {
 		&[5, 10, 15, 20, 25],
 	)
 	.await;
-
-	let all_peers = all_peers.into_iter().enumerate();
-	// Now that Dave has caught up, sanity check voting works for all of them.
-	finalize_block_and_wait_for_beefy(&net, all_peers, &[hashes[30], hashes[34]], &[30]).await;
 }
 
 #[tokio::test]
