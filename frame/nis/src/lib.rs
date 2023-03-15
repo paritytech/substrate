@@ -182,7 +182,7 @@ pub mod pallet {
 	use sp_arithmetic::{PerThing, Perquintill};
 	use sp_runtime::{
 		traits::{AccountIdConversion, Bounded, Convert, ConvertBack, Saturating, Zero},
-		TokenError,
+		Rounding, TokenError,
 	};
 	use sp_std::prelude::*;
 
@@ -479,6 +479,9 @@ pub mod pallet {
 		AlreadyCommunal,
 		/// The receipt is already private.
 		AlreadyPrivate,
+		Release1,
+		Release2,
+		Tah,
 	}
 
 	pub(crate) struct WeightCounter {
@@ -711,6 +714,7 @@ pub mod pallet {
 			// Multiply the proportion it is by the total issued.
 			let our_account = Self::account_id();
 			let effective_issuance = Self::issuance_with(&our_account, &summary).effective;
+			//			let amount = proportion.mul_ceil(effective_issuance);
 			let amount = proportion * effective_issuance;
 
 			receipt.proportion.saturating_reduce(proportion);
@@ -719,7 +723,8 @@ pub mod pallet {
 			let dropped = receipt.proportion.is_zero();
 
 			if amount > on_hold {
-				T::Currency::release(&T::HoldReason::get(), &who, on_hold, Exact)?;
+				T::Currency::release(&T::HoldReason::get(), &who, on_hold, Exact)
+					.map_err(|_| Error::<T>::Release1)?;
 				let deficit = amount - on_hold;
 				// Try to transfer deficit from pot to receipt owner.
 				summary.receipts_on_hold.saturating_reduce(on_hold);
@@ -741,10 +746,17 @@ pub mod pallet {
 						Exact,
 						Free,
 						Polite,
+					)
+					.map(|_| ())
+					// We ignore this error as it just means the amount we're trying to deposit is
+					// dust and the beneficiary account doesn't exist.
+					.or_else(
+						|e| if e == TokenError::CannotCreate.into() { Ok(()) } else { Err(e) },
 					)?;
 					summary.receipts_on_hold.saturating_reduce(on_hold);
 				}
-				T::Currency::release(&T::HoldReason::get(), &who, amount, Exact)?;
+				T::Currency::release(&T::HoldReason::get(), &who, amount, Exact)
+					.map_err(|_| Error::<T>::Release2)?;
 			}
 
 			if dropped {
@@ -1123,7 +1135,9 @@ pub mod pallet {
 			// Now to activate the bid...
 			let n = amount;
 			let d = issuance.effective;
-			let proportion = Perquintill::from_rational(n, d);
+			let proportion =
+				Perquintill::from_rational_with_rounding(n, d, Rounding::NearestPrefDown)
+					.defensive_unwrap_or_default();
 			let who = bid.who;
 			let index = summary.index;
 			summary.proportion_owed.defensive_saturating_accrue(proportion);

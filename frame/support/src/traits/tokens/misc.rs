@@ -54,12 +54,6 @@ pub enum Preservation {
 	Preserve,
 }
 
-impl From<Preservation> for bool {
-	fn from(k: Preservation) -> bool {
-		matches!(k, Preservation::Expendable)
-	}
-}
-
 /// The privilege with which a withdraw operation is conducted.
 #[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
 pub enum Fortitude {

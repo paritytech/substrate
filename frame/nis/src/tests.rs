@@ -33,11 +33,11 @@ use sp_runtime::{
 	TokenError::{self, FundsUnavailable},
 };
 
-fn pot() -> u64 {
+fn pot() -> Balance {
 	Balances::free_balance(&Nis::account_id())
 }
 
-fn holdings() -> u64 {
+fn holdings() -> Balance {
 	Nis::issuance().holdings
 }
 
@@ -45,8 +45,8 @@ fn signed(who: u64) -> RuntimeOrigin {
 	RuntimeOrigin::signed(who)
 }
 
-fn enlarge(amount: u64, max_bids: u32) {
-	let summary: SummaryRecord<u64, u64> = Summary::<Test>::get();
+fn enlarge(amount: Balance, max_bids: u32) {
+	let summary: SummaryRecord<u64, Balance> = Summary::<Test>::get();
 	let increase_in_proportion_owed = Perquintill::from_rational(amount, Nis::issuance().effective);
 	let target = summary.proportion_owed.saturating_add(increase_in_proportion_owed);
 	Nis::process_queues(target, u32::max_value(), max_bids, &mut WeightCounter::unlimited());

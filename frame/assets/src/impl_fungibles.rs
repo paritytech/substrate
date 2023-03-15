@@ -55,7 +55,8 @@ impl<T: Config<I>, I: 'static> fungibles::Inspect<<T as SystemConfig>::AccountId
 		preservation: Preservation,
 		_: Fortitude,
 	) -> Self::Balance {
-		Pallet::<T, I>::reducible_balance(asset, who, preservation.into()).unwrap_or(Zero::zero())
+		Pallet::<T, I>::reducible_balance(asset, who, !matches!(preservation, Expendable))
+			.unwrap_or(Zero::zero())
 	}
 
 	fn can_deposit(
