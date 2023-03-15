@@ -22,10 +22,9 @@ use codec::Encode;
 use futures::channel::{oneshot, oneshot::Canceled};
 use log::{debug, warn};
 use parking_lot::Mutex;
-use sc_network::{PeerId, ProtocolName};
-use sc_network_common::{
+use sc_network::{
 	request_responses::{IfDisconnected, RequestFailure},
-	service::NetworkRequest,
+	NetworkRequest, PeerId, ProtocolName,
 };
 use sp_consensus_beefy::{crypto::AuthorityId, ValidatorSet};
 use sp_runtime::traits::{Block, NumberFor};
@@ -208,7 +207,7 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 	pub async fn next(&mut self) -> Option<BeefyVersionedFinalityProof<B>> {
 		let (peer, req_info, resp) = match &mut self.state {
 			State::Idle => {
-				futures::pending!();
+				futures::future::pending::<()>().await;
 				return None
 			},
 			State::AwaitingResponse(peer, req_info, receiver) => {
