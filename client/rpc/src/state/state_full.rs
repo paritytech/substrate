@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -46,9 +46,10 @@ use sp_core::{
 	storage::{
 		ChildInfo, ChildType, PrefixedStorageKey, StorageChangeSet, StorageData, StorageKey,
 	},
+	traits::CallContext,
 	Bytes,
 };
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use sp_runtime::traits::Block as BlockT;
 use sp_version::RuntimeVersion;
 
 /// The maximum time allowed for an RPC call when running without unsafe RPC enabled.
@@ -207,29 +208,36 @@ where
 						&method,
 						&call_data,
 						self.client.execution_extensions().strategies().other,
+						CallContext::Offchain,
 					)
 					.map(Into::into)
 			})
 			.map_err(client_err)
 	}
 
+	// TODO: This is horribly broken; either remove it, or make it streaming.
 	fn storage_keys(
 		&self,
 		block: Option<Block::Hash>,
 		prefix: StorageKey,
 	) -> std::result::Result<Vec<StorageKey>, Error> {
+		// TODO: Remove the `.collect`.
 		self.block_or_best(block)
-			.and_then(|block| self.client.storage_keys(block, &prefix))
+			.and_then(|block| self.client.storage_keys(block, Some(&prefix), None))
+			.map(|iter| iter.collect())
 			.map_err(client_err)
 	}
 
+	// TODO: This is horribly broken; either remove it, or make it streaming.
 	fn storage_pairs(
 		&self,
 		block: Option<Block::Hash>,
 		prefix: StorageKey,
 	) -> std::result::Result<Vec<(StorageKey, StorageData)>, Error> {
+		// TODO: Remove the `.collect`.
 		self.block_or_best(block)
-			.and_then(|block| self.client.storage_pairs(block, &prefix))
+			.and_then(|block| self.client.storage_pairs(block, Some(&prefix), None))
+			.map(|iter| iter.collect())
 			.map_err(client_err)
 	}
 
@@ -241,9 +249,7 @@ where
 		start_key: Option<StorageKey>,
 	) -> std::result::Result<Vec<StorageKey>, Error> {
 		self.block_or_best(block)
-			.and_then(|block| {
-				self.client.storage_keys_iter(block, prefix.as_ref(), start_key.as_ref())
-			})
+			.and_then(|block| self.client.storage_keys(block, prefix.as_ref(), start_key.as_ref()))
 			.map(|iter| iter.take(count as usize).collect())
 			.map_err(client_err)
 	}
@@ -284,7 +290,7 @@ where
 			}
 
 			// The key doesn't point to anything, so it's probably a prefix.
-			let iter = match client.storage_keys_iter(block, Some(&key), None).map_err(client_err) {
+			let iter = match client.storage_keys(block, Some(&key), None).map_err(client_err) {
 				Ok(iter) => iter,
 				Err(e) => return Ok(Err(e)),
 			};
@@ -321,7 +327,7 @@ where
 		self.block_or_best(block).map_err(client_err).and_then(|block| {
 			self.client
 				.runtime_api()
-				.metadata(&BlockId::Hash(block))
+				.metadata(block)
 				.map(Into::into)
 				.map_err(|e| Error::Client(Box::new(e)))
 		})
@@ -332,9 +338,7 @@ where
 		block: Option<Block::Hash>,
 	) -> std::result::Result<RuntimeVersion, Error> {
 		self.block_or_best(block).map_err(client_err).and_then(|block| {
-			self.client
-				.runtime_version_at(&BlockId::Hash(block))
-				.map_err(|e| Error::Client(Box::new(e)))
+			self.client.runtime_version_at(block).map_err(|e| Error::Client(Box::new(e)))
 		})
 	}
 
@@ -383,9 +387,7 @@ where
 
 		let initial = match self
 			.block_or_best(None)
-			.and_then(|block| {
-				self.client.runtime_version_at(&BlockId::Hash(block)).map_err(Into::into)
-			})
+			.and_then(|block| self.client.runtime_version_at(block).map_err(Into::into))
 			.map_err(|e| Error::Client(Box::new(e)))
 		{
 			Ok(initial) => initial,
@@ -402,9 +404,8 @@ where
 			.import_notification_stream()
 			.filter(|n| future::ready(n.is_new_best))
 			.filter_map(move |n| {
-				let version = client
-					.runtime_version_at(&BlockId::hash(n.hash))
-					.map_err(|e| Error::Client(Box::new(e)));
+				let version =
+					client.runtime_version_at(n.hash).map_err(|e| Error::Client(Box::new(e)));
 
 				match version {
 					Ok(version) if version != previous_version => {
@@ -536,6 +537,7 @@ where
 		storage_key: PrefixedStorageKey,
 		prefix: StorageKey,
 	) -> std::result::Result<Vec<StorageKey>, Error> {
+		// TODO: Remove the `.collect`.
 		self.block_or_best(block)
 			.and_then(|block| {
 				let child_info = match ChildType::from_prefixed_key(&storage_key) {
@@ -543,8 +545,9 @@ where
 						ChildInfo::new_default(storage_key),
 					None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
 				};
-				self.client.child_storage_keys(block, &child_info, &prefix)
+				self.client.child_storage_keys(block, child_info, Some(&prefix), None)
 			})
+			.map(|iter| iter.collect())
 			.map_err(client_err)
 	}
 
@@ -563,7 +566,7 @@ where
 						ChildInfo::new_default(storage_key),
 					None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
 				};
-				self.client.child_storage_keys_iter(
+				self.client.child_storage_keys(
 					block,
 					child_info,
 					prefix.as_ref(),

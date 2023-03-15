@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -31,8 +31,9 @@ use node_primitives::Block;
 use sc_client_api::BlockBackend;
 use sc_consensus_babe::{self, SlotProportion};
 use sc_executor::NativeElseWasmExecutor;
-use sc_network::NetworkService;
-use sc_network_common::{protocol::event::Event, service::NetworkEventStream};
+use sc_network::{event::Event, NetworkEventStream, NetworkService};
+use sc_network_common::sync::warp::WarpSyncParams;
+use sc_network_sync::SyncingService;
 use sc_service::{config::Configuration, error::Error as ServiceError, RpcHandlers, TaskManager};
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sp_api::ProvideRuntimeApi;
@@ -58,7 +59,7 @@ pub fn fetch_nonce(client: &FullClient, account: sp_core::sr25519::Pair) -> u32 
 	let best_hash = client.chain_info().best_hash;
 	client
 		.runtime_api()
-		.account_nonce(&generic::BlockId::Hash(best_hash), account.public().into())
+		.account_nonce(best_hash, account.public().into())
 		.expect("Fetching account nonce works; qed")
 }
 
@@ -301,6 +302,8 @@ pub struct NewFullBase {
 	pub client: Arc<FullClient>,
 	/// The networking service of the node.
 	pub network: Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
+	/// The syncing service of the node.
+	pub sync: Arc<SyncingService<Block>>,
 	/// The transaction pool of the node.
 	pub transaction_pool: Arc<TransactionPool>,
 	/// The rpc handlers of the node.
@@ -351,7 +354,7 @@ pub fn new_full_base(
 		Vec::default(),
 	));
 
-	let (network, system_rpc_tx, tx_handler_controller, network_starter) =
+	let (network, system_rpc_tx, tx_handler_controller, network_starter, sync_service) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
 			config: &config,
 			client: client.clone(),
@@ -359,7 +362,7 @@ pub fn new_full_base(
 			spawn_handle: task_manager.spawn_handle(),
 			import_queue,
 			block_announce_validator_builder: None,
-			warp_sync: Some(warp_sync),
+			warp_sync_params: Some(WarpSyncParams::WithProvider(warp_sync)),
 		})?;
 
 	if config.offchain_worker.enabled {
@@ -390,6 +393,7 @@ pub fn new_full_base(
 		task_manager: &mut task_manager,
 		system_rpc_tx,
 		tx_handler_controller,
+		sync_service: sync_service.clone(),
 		telemetry: telemetry.as_mut(),
 	})?;
 
@@ -432,8 +436,8 @@ pub fn new_full_base(
 			select_chain,
 			env: proposer,
 			block_import,
-			sync_oracle: network.clone(),
-			justification_sync_link: network.clone(),
+			sync_oracle: sync_service.clone(),
+			justification_sync_link: sync_service.clone(),
 			create_inherent_data_providers: move |parent, ()| {
 				let client_clone = client_clone.clone();
 				async move {
@@ -529,6 +533,7 @@ pub fn new_full_base(
 			config,
 			link: grandpa_link,
 			network: network.clone(),
+			sync: Arc::new(sync_service.clone()),
 			telemetry: telemetry.as_ref().map(|x| x.handle()),
 			voting_rule: grandpa::VotingRulesBuilder::default().build(),
 			prometheus_registry,
@@ -545,7 +550,14 @@ pub fn new_full_base(
 	}
 
 	network_starter.start_network();
-	Ok(NewFullBase { task_manager, client, network, transaction_pool, rpc_handlers })
+	Ok(NewFullBase {
+		task_manager,
+		client,
+		network,
+		sync: sync_service,
+		transaction_pool,
+		rpc_handlers,
+	})
 }
 
 /// Builds a new service for a full client.
@@ -558,7 +570,8 @@ pub fn new_full(config: Configuration, cli: Cli) -> Result<TaskManager, ServiceE
 		cli.storage_monitor,
 		database_source,
 		&task_manager.spawn_essential_handle(),
-	)?;
+	)
+	.map_err(|e| ServiceError::Application(e.into()))?;
 
 	Ok(task_manager)
 }
@@ -585,7 +598,7 @@ mod tests {
 	use sp_keyring::AccountKeyring;
 	use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 	use sp_runtime::{
-		generic::{BlockId, Digest, Era, SignedPayload},
+		generic::{Digest, Era, SignedPayload},
 		key_types::BABE,
 		traits::{Block as BlockT, Header as HeaderT, IdentifyAccount, Verify},
 		RuntimeAppPublic,
@@ -624,7 +637,7 @@ mod tests {
 			chain_spec,
 			|config| {
 				let mut setup_handles = None;
-				let NewFullBase { task_manager, client, network, transaction_pool, .. } =
+				let NewFullBase { task_manager, client, network, sync, transaction_pool, .. } =
 					new_full_base(
 						config,
 						false,
@@ -638,6 +651,7 @@ mod tests {
 					task_manager,
 					client,
 					network,
+					sync,
 					transaction_pool,
 				);
 				Ok((node, setup_handles.unwrap()))
@@ -744,7 +758,7 @@ mod tests {
 				);
 				params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
-				futures::executor::block_on(block_import.import_block(params, Default::default()))
+				futures::executor::block_on(block_import.import_block(params))
 					.expect("error importing test block");
 			},
 			|service, _| {
@@ -752,9 +766,9 @@ mod tests {
 				let to: Address = AccountPublic::from(bob.public()).into_account().into();
 				let from: Address = AccountPublic::from(charlie.public()).into_account().into();
 				let genesis_hash = service.client().block_hash(0).unwrap().unwrap();
-				let best_block_id = BlockId::number(service.client().chain_info().best_number);
+				let best_hash = service.client().chain_info().best_hash;
 				let (spec_version, transaction_version) = {
-					let version = service.client().runtime_version_at(&best_block_id).unwrap();
+					let version = service.client().runtime_version_at(best_hash).unwrap();
 					(version.spec_version, version.transaction_version)
 				};
 				let signer = charlie.clone();
@@ -804,12 +818,13 @@ mod tests {
 		sc_service_test::consensus(
 			crate::chain_spec::tests::integration_test_config_with_two_authorities(),
 			|config| {
-				let NewFullBase { task_manager, client, network, transaction_pool, .. } =
+				let NewFullBase { task_manager, client, network, sync, transaction_pool, .. } =
 					new_full_base(config, false, |_, _| ())?;
 				Ok(sc_service_test::TestNetComponents::new(
 					task_manager,
 					client,
 					network,
+					sync,
 					transaction_pool,
 				))
 			},

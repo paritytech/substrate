@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -30,6 +30,7 @@ pub mod chain_head;
 pub mod error;
 pub mod event;
 
+mod chain_head_follow;
 mod subscription;
 
 pub use api::ChainHeadApiServer;

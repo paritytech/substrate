@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -587,6 +587,7 @@ fn decl_integrity_test(scrate: &TokenStream2) -> TokenStream2 {
 
 			#[test]
 			pub fn runtime_integrity_tests() {
+				#scrate::sp_tracing::try_init_simple();
 				<AllPalletsWithSystem as #scrate::traits::IntegrityTest>::integrity_test();
 			}
 		}

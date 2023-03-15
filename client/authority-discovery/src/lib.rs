@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -40,7 +40,7 @@ use futures::{
 };
 
 use libp2p::{Multiaddr, PeerId};
-use sc_network_common::protocol::event::DhtEvent;
+use sc_network::event::DhtEvent;
 use sp_authority_discovery::AuthorityId;
 use sp_blockchain::HeaderBackend;
 use sp_runtime::traits::Block as BlockT;

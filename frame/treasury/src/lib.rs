@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -67,10 +67,10 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
 use sp_runtime::{
-	traits::{AccountIdConversion, Saturating, StaticLookup, Zero},
+	traits::{AccountIdConversion, CheckedAdd, Saturating, StaticLookup, Zero},
 	Permill, RuntimeDebug,
 };
-use sp_std::prelude::*;
+use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use frame_support::{
 	print,
@@ -136,11 +136,10 @@ pub struct Proposal<AccountId, Balance> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{dispatch_context::with_context, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -315,13 +314,8 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
-		/// # <weight>
-		/// - Complexity: `O(A)` where `A` is the number of approvals
-		/// - Db reads and writes: `Approvals`, `pot account data`
-		/// - Db reads and writes per approval: `Proposals`, `proposer account data`, `beneficiary
-		///   account data`
-		/// - The weight is overestimated if some approvals got missed.
-		/// # </weight>
+		/// ## Complexity
+		/// - `O(A)` where `A` is the number of approvals
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			let pot = Self::pot();
 			let deactivated = Deactivated::<T, I>::get();
@@ -344,17 +338,19 @@ pub mod pallet {
 		}
 	}
 
+	#[derive(Default)]
+	struct SpendContext<Balance> {
+		spend_in_context: BTreeMap<Balance, Balance>,
+	}
+
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Put forward a suggestion for spending. A deposit proportional to the value
 		/// is reserved and slashed if the proposal is rejected. It is returned once the
 		/// proposal is awarded.
 		///
-		/// # <weight>
-		/// - Complexity: O(1)
-		/// - DbReads: `ProposalCount`, `origin account`
-		/// - DbWrites: `ProposalCount`, `Proposals`, `origin account`
-		/// # </weight>
+		/// ## Complexity
+		/// - O(1)
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::propose_spend())]
 		pub fn propose_spend(
@@ -381,11 +377,8 @@ pub mod pallet {
 		///
 		/// May only be called from `T::RejectOrigin`.
 		///
-		/// # <weight>
-		/// - Complexity: O(1)
-		/// - DbReads: `Proposals`, `rejected proposer account`
-		/// - DbWrites: `Proposals`, `rejected proposer account`
-		/// # </weight>
+		/// ## Complexity
+		/// - O(1)
 		#[pallet::call_index(1)]
 		#[pallet::weight((T::WeightInfo::reject_proposal(), DispatchClass::Operational))]
 		pub fn reject_proposal(
@@ -412,11 +405,8 @@ pub mod pallet {
 		///
 		/// May only be called from `T::ApproveOrigin`.
 		///
-		/// # <weight>
-		/// - Complexity: O(1).
-		/// - DbReads: `Proposals`, `Approvals`
-		/// - DbWrite: `Approvals`
-		/// # </weight>
+		/// ## Complexity
+		///  - O(1).
 		#[pallet::call_index(2)]
 		#[pallet::weight((T::WeightInfo::approve_proposal(T::MaxApprovals::get()), DispatchClass::Operational))]
 		pub fn approve_proposal(
@@ -447,9 +437,29 @@ pub mod pallet {
 			beneficiary: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let max_amount = T::SpendOrigin::ensure_origin(origin)?;
-			let beneficiary = T::Lookup::lookup(beneficiary)?;
-
 			ensure!(amount <= max_amount, Error::<T, I>::InsufficientPermission);
+
+			with_context::<SpendContext<BalanceOf<T, I>>, _>(|v| {
+				let context = v.or_default();
+
+				// We group based on `max_amount`, to dinstinguish between different kind of
+				// origins. (assumes that all origins have different `max_amount`)
+				//
+				// Worst case is that we reject some "valid" request.
+				let spend = context.spend_in_context.entry(max_amount).or_default();
+
+				// Ensure that we don't overflow nor use more than `max_amount`
+				if spend.checked_add(&amount).map(|s| s > max_amount).unwrap_or(true) {
+					Err(Error::<T, I>::InsufficientPermission)
+				} else {
+					*spend = spend.saturating_add(amount);
+
+					Ok(())
+				}
+			})
+			.unwrap_or(Ok(()))?;
+
+			let beneficiary = T::Lookup::lookup(beneficiary)?;
 			let proposal_index = Self::proposal_count();
 			Approvals::<T, I>::try_append(proposal_index)
 				.map_err(|_| Error::<T, I>::TooManyApprovals)?;
@@ -472,10 +482,8 @@ pub mod pallet {
 		/// May only be called from `T::RejectOrigin`.
 		/// - `proposal_id`: The index of a proposal
 		///
-		/// # <weight>
-		/// - Complexity: O(A) where `A` is the number of approvals
-		/// - Db reads and writes: `Approvals`
-		/// # </weight>
+		/// ## Complexity
+		/// - O(A) where `A` is the number of approvals
 		///
 		/// Errors:
 		/// - `ProposalNotApproved`: The `proposal_id` supplied was not found in the approval queue,

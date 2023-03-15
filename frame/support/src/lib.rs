@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -78,11 +78,12 @@ pub mod inherent;
 #[macro_use]
 pub mod error;
 pub mod crypto;
+pub mod dispatch_context;
 pub mod instances;
+pub mod metadata_ir;
 pub mod migrations;
 pub mod traits;
 pub mod weights;
-
 #[doc(hidden)]
 pub mod unsigned {
 	#[doc(hidden)]
@@ -826,9 +827,9 @@ pub use serde::{Deserialize, Serialize};
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::metadata::{
-		PalletStorageMetadata, StorageEntryMetadata, StorageEntryModifier, StorageEntryType,
-		StorageHasher,
+	use crate::metadata_ir::{
+		PalletStorageMetadataIR, StorageEntryMetadataIR, StorageEntryModifierIR,
+		StorageEntryTypeIR, StorageHasherIR,
 	};
 	use codec::{Codec, EncodeLike};
 	use frame_support::traits::CrateVersion;
@@ -1309,101 +1310,107 @@ pub mod tests {
 		});
 	}
 
-	fn expected_metadata() -> PalletStorageMetadata {
-		PalletStorageMetadata {
+	fn expected_metadata() -> PalletStorageMetadataIR {
+		PalletStorageMetadataIR {
 			prefix: "Test",
 			entries: vec![
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "Value",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<u64>()),
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u64>()),
 					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "Data",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Twox64Concat],
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Twox64Concat],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<u64>(),
 					},
 					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "OptionLinkedMap",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Blake2_128Concat],
+					modifier: StorageEntryModifierIR::Optional,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Blake2_128Concat],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: vec![0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GenericData",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Identity],
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Identity],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: vec![0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GenericData2",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Blake2_128Concat],
+					modifier: StorageEntryModifierIR::Optional,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Blake2_128Concat],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: vec![0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "DataDM",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Twox64Concat, StorageHasher::Blake2_128Concat],
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![
+							StorageHasherIR::Twox64Concat,
+							StorageHasherIR::Blake2_128Concat,
+						],
 						key: scale_info::meta_type::<(u32, u32)>(),
 						value: scale_info::meta_type::<u64>(),
 					},
 					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GenericDataDM",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Blake2_128Concat, StorageHasher::Identity],
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Blake2_128Concat, StorageHasherIR::Identity],
 						key: scale_info::meta_type::<(u32, u32)>(),
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: vec![0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GenericData2DM",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Blake2_128Concat, StorageHasher::Twox64Concat],
+					modifier: StorageEntryModifierIR::Optional,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![
+							StorageHasherIR::Blake2_128Concat,
+							StorageHasherIR::Twox64Concat,
+						],
 						key: scale_info::meta_type::<(u32, u32)>(),
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: vec![0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "AppendableDM",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
 						hashers: vec![
-							StorageHasher::Blake2_128Concat,
-							StorageHasher::Blake2_128Concat,
+							StorageHasherIR::Blake2_128Concat,
+							StorageHasherIR::Blake2_128Concat,
 						],
 						key: scale_info::meta_type::<(u32, u32)>(),
 						value: scale_info::meta_type::<Vec<u32>>(),
