@@ -17,18 +17,18 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::protocol::notifications::handler::{
-	self, NotificationsSink, NotifsHandlerIn, NotifsHandlerOut, NotifsHandlerProto,
+	self, NotificationsSink, NotifsHandler, NotifsHandlerIn, NotifsHandlerOut,
 };
 
 use bytes::BytesMut;
 use fnv::FnvHashMap;
 use futures::prelude::*;
 use libp2p::{
-	core::{Endpoint, Multiaddr, PeerId},
+	core::{ConnectedPoint, Endpoint, Multiaddr, PeerId},
 	swarm::{
 		behaviour::{ConnectionClosed, ConnectionEstablished, DialFailure, FromSwarm},
 		ConnectionDenied, ConnectionId, DialError, NetworkBehaviour, NetworkBehaviourAction,
-		NotifyHandler, PollParameters, THandler, THandlerOutEvent,
+		NotifyHandler, PollParameters, THandler, THandlerInEvent, THandlerOutEvent,
 	},
 };
 use log::{error, trace, warn};
@@ -133,7 +133,7 @@ pub struct Notifications {
 	next_incoming_index: sc_peerset::IncomingIndex,
 
 	/// Events to produce from `poll()`.
-	events: VecDeque<NetworkBehaviourAction<NotificationsOut, NotifsHandlerProto>>,
+	events: VecDeque<NetworkBehaviourAction<NotificationsOut, NotifsHandlerIn>>,
 }
 
 /// Configuration for a notifications protocol.
@@ -589,10 +589,8 @@ impl Notifications {
 					set_id,
 				);
 				trace!(target: "sub-libp2p", "Libp2p <= Dial {:?}", occ_entry.key());
-				self.events.push_back(NetworkBehaviourAction::Dial {
-					opts: occ_entry.key().0.into(),
-					handler,
-				});
+				self.events
+					.push_back(NetworkBehaviourAction::Dial { opts: occ_entry.key().0.into() });
 				*occ_entry.into_mut() = PeerState::Requested;
 			},
 
@@ -987,28 +985,8 @@ impl Notifications {
 }
 
 impl NetworkBehaviour for Notifications {
-	type ConnectionHandler = NotifsHandlerProto;
+	type ConnectionHandler = NotifsHandler;
 	type OutEvent = NotificationsOut;
-
-	fn handle_established_inbound_connection(
-		&mut self,
-		connection_id: ConnectionId,
-		peer: PeerId,
-		local_addr: &Multiaddr,
-		remote_addr: &Multiaddr,
-	) -> Result<THandler<Self>, ConnectionDenied> {
-		Ok(NotifsHandlerProto::new(self.notif_protocols.clone()))
-	}
-
-	fn handle_established_outbound_connection(
-		&mut self,
-		connection_id: ConnectionId,
-		peer: PeerId,
-		addr: &Multiaddr,
-		role_override: Endpoint,
-	) -> Result<THandler<Self>, ConnectionDenied> {
-		Ok(NotifsHandlerProto::new(self.notif_protocols.clone()))
-	}
 
 	fn handle_pending_inbound_connection(
 		&mut self,
@@ -1027,6 +1005,37 @@ impl NetworkBehaviour for Notifications {
 		_effective_role: Endpoint,
 	) -> Result<Vec<Multiaddr>, ConnectionDenied> {
 		Ok(Vec::new())
+	}
+
+	fn handle_established_inbound_connection(
+		&mut self,
+		_connection_id: ConnectionId,
+		peer: PeerId,
+		local_addr: &Multiaddr,
+		remote_addr: &Multiaddr,
+	) -> Result<THandler<Self>, ConnectionDenied> {
+		Ok(NotifsHandler::new(
+			peer,
+			ConnectedPoint::Listener {
+				local_addr: local_addr.clone(),
+				send_back_addr: remote_addr.clone(),
+			},
+			self.notif_protocols.clone(),
+		))
+	}
+
+	fn handle_established_outbound_connection(
+		&mut self,
+		_connection_id: ConnectionId,
+		peer: PeerId,
+		addr: &Multiaddr,
+		role_override: Endpoint,
+	) -> Result<THandler<Self>, ConnectionDenied> {
+		Ok(NotifsHandler::new(
+			peer,
+			ConnectedPoint::Dialer { address: addr.clone(), role_override },
+			self.notif_protocols.clone(),
+		))
 	}
 
 	fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
