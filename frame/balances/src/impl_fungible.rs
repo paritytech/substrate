@@ -261,7 +261,7 @@ impl<T: Config<I>, I: 'static> fungible::UnbalancedHold<T::AccountId> for Pallet
 		} else {
 			if !amount.is_zero() {
 				holds
-					.try_push(IdAmount { id: reason.clone(), amount })
+					.try_push(IdAmount { id: *reason, amount })
 					.map_err(|_| Error::<T, I>::TooManyHolds)?;
 			}
 		}
@@ -309,7 +309,7 @@ impl<T: Config<I>, I: 'static> fungible::MutateFreeze<T::AccountId> for Pallet<T
 			i.amount = amount;
 		} else {
 			locks
-				.try_push(IdAmount { id: id.clone(), amount })
+				.try_push(IdAmount { id: *id, amount })
 				.map_err(|_| Error::<T, I>::TooManyFreezes)?;
 		}
 		Self::update_freezes(who, locks.as_bounded_slice())
@@ -324,7 +324,7 @@ impl<T: Config<I>, I: 'static> fungible::MutateFreeze<T::AccountId> for Pallet<T
 			i.amount = i.amount.max(amount);
 		} else {
 			locks
-				.try_push(IdAmount { id: id.clone(), amount })
+				.try_push(IdAmount { id: *id, amount })
 				.map_err(|_| Error::<T, I>::TooManyFreezes)?;
 		}
 		Self::update_freezes(who, locks.as_bounded_slice())
@@ -348,10 +348,10 @@ impl<T: Config<I>, I: 'static> fungible::Balanced<T::AccountId> for Pallet<T, I>
 		Self::deposit_event(Event::<T, I>::Withdraw { who: who.clone(), amount });
 	}
 	fn done_issue(amount: Self::Balance) {
-		Self::deposit_event(Event::<T, I>::Issue { amount });
+		Self::deposit_event(Event::<T, I>::Issued { amount });
 	}
 	fn done_rescind(amount: Self::Balance) {
-		Self::deposit_event(Event::<T, I>::Rescind { amount });
+		Self::deposit_event(Event::<T, I>::Rescinded { amount });
 	}
 }
 

@@ -314,9 +314,9 @@ pub mod pallet {
 		/// An account was upgraded.
 		Upgraded { who: T::AccountId },
 		/// Total issuance was increased by `amount`, creating a credit to be balanced.
-		Issue { amount: T::Balance },
+		Issued { amount: T::Balance },
 		/// Total issuance was decreased by `amount`, creating a debt to be balanced.
-		Rescind { amount: T::Balance },
+		Rescinded { amount: T::Balance },
 	}
 
 	#[pallet::error]
