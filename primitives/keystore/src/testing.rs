@@ -22,6 +22,8 @@ use sp_core::{
 	ecdsa, ed25519, sr25519,
 };
 
+use sp_core::bls;
+
 use crate::{
 	vrf::{make_transcript, VRFSignature, VRFTranscriptData},
 	CryptoStore, Error, SyncCryptoStore, SyncCryptoStorePtr,
@@ -69,6 +71,14 @@ impl KeyStore {
 				.map(|s| ecdsa::Pair::from_string(s, None).expect("`ecdsa` seed slice is valid"))
 		})
 	}
+
+	fn bls_key_pair(&self, id: KeyTypeId, pub_key: &bls::Public) -> Option<bls::Pair> {
+		self.keys.read().get(&id).and_then(|inner| {
+			inner
+				.get(pub_key.as_slice())
+				.map(|s| bls::Pair::from_string(s, None).expect("`bls` seed slice is valid"))
+		})
+	}
 }
 
 #[async_trait]
@@ -103,6 +113,18 @@ impl CryptoStore for KeyStore {
 
 	async fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public> {
 		SyncCryptoStore::ecdsa_public_keys(self, id)
+	}
+
+	async fn bls_public_keys(&self, id: KeyTypeId) -> Vec<bls::Public> {
+		SyncCryptoStore::bls_public_keys(self, id)
+	}
+
+	async fn bls_generate_new(
+		&self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<bls::Public, Error> {
+		SyncCryptoStore::bls_generate_new(self, id, seed)
 	}
 
 	async fn ecdsa_generate_new(
@@ -304,6 +326,43 @@ impl SyncCryptoStore for KeyStore {
 		}
 	}
 
+	fn bls_public_keys(&self, id: KeyTypeId) -> Vec<bls::Public> {
+		self.keys
+			.read()
+			.get(&id)
+			.map(|keys| {
+				keys.values()
+					.map(|s| bls::Pair::from_string(s, None).expect("`bls` seed slice is valid"))
+					.map(|p| p.public())
+					.collect()
+			})
+			.unwrap_or_default()
+	}
+
+	fn bls_generate_new(&self, id: KeyTypeId, seed: Option<&str>) -> Result<bls::Public, Error> {
+		match seed {
+			Some(seed) => {
+				let pair = bls::Pair::from_string(seed, None)
+					.map_err(|_| Error::ValidationError("Generates an `bls` pair.".to_owned()))?;
+				self.keys
+					.write()
+					.entry(id)
+					.or_default()
+					.insert(pair.public().to_raw_vec(), seed.into());
+				Ok(pair.public())
+			},
+			None => {
+				let (pair, phrase, _) = bls::Pair::generate_with_phrase(None);
+				self.keys
+					.write()
+					.entry(id)
+					.or_default()
+					.insert(pair.public().to_raw_vec(), phrase);
+				Ok(pair.public())
+			},
+		}
+	}
+
 	fn insert_unknown(&self, id: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
 		self.keys
 			.write()
@@ -383,6 +442,16 @@ impl SyncCryptoStore for KeyStore {
 	) -> Result<Option<ecdsa::Signature>, Error> {
 		let pair = self.ecdsa_key_pair(id, public);
 		pair.map(|k| k.sign_prehashed(msg)).map(Ok).transpose()
+	}
+
+	fn bls_sign(
+		&self,
+		id: KeyTypeId,
+		public: &bls::Public,
+		msg: &[u8],
+	) -> Result<Option<bls::Signature>, Error> {
+		let pair = self.bls_key_pair(id, public);
+		pair.map(|k| k.sign(msg)).map(Ok).transpose()
 	}
 }
 

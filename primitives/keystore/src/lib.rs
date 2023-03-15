@@ -26,6 +26,8 @@ use sp_core::{
 	crypto::{CryptoTypePublicPair, KeyTypeId},
 	ecdsa, ed25519, sr25519,
 };
+use sp_core::bls;
+
 use std::sync::Arc;
 
 /// CryptoStore error
@@ -84,6 +86,22 @@ pub trait CryptoStore: Send + Sync {
 		id: KeyTypeId,
 		seed: Option<&str>,
 	) -> Result<ecdsa::Public, Error>;
+
+        /// Returns all bls public keys for the given key type.
+	async fn bls_public_keys(&self, id: KeyTypeId) -> Vec<bls::Public>;
+
+	/// Generate a new bls key pair for the given key type and an optional seed.
+	///
+	/// If the given seed is `Some(_)`, the key pair will only be stored in memory.
+	///
+	/// Returns the public key of the generated key pair.
+	async fn bls_generate_new(
+		&self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<bls::Public, Error>;
+
+	/// Returns all ed25519 public keys for the given key type.
 
 	/// Insert a new key. This doesn't require any known of the crypto; but a public key must be
 	/// manually provided.
@@ -257,7 +275,17 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 	fn ecdsa_generate_new(&self, id: KeyTypeId, seed: Option<&str>)
 		-> Result<ecdsa::Public, Error>;
 
-	/// Insert a new key. This doesn't require any known of the crypto; but a public key must be
+	/// Returns all bls public keys for the given key type.
+	fn bls_public_keys(&self, id: KeyTypeId) -> Vec<bls::Public>;
+
+	/// Generate a new bls key pair for the given key type and an optional seed.
+	///
+	/// If the given seed is `Some(_)`, the key pair will only be stored in memory.
+	///
+	/// Returns the public key of the generated key pair.
+	fn bls_generate_new(&self, id: KeyTypeId, seed: Option<&str>) -> Result<bls::Public, Error>;
+
+        /// Insert a new key. This doesn't require any known of the crypto; but a public key must be
 	/// manually provided.
 	///
 	/// Places it into the file system store.
@@ -382,6 +410,25 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 		public: &ecdsa::Public,
 		msg: &[u8; 32],
 	) -> Result<Option<ecdsa::Signature>, Error>;
+
+	/// Generate an BLS signature for a given message.
+	///
+	/// Receives [`KeyTypeId`] and an [`bls::Public`] key to be able to map
+	/// them to a private key that exists in the keystore. This private key is,
+	/// in turn, used for signing the provided message.
+	///
+	/// The `msg` argument provided should be a message for which an
+	/// BLS12-377 signature should be generated.
+	///
+	/// Returns an [`bls::Signature`] or `None` in case the given `id` and
+	/// `public` combination doesn't exist in the keystore. An `Err` will be
+	/// returned if generating the signature itself failed.
+	fn bls_sign(
+		&self,
+		id: KeyTypeId,
+		public: &bls::Public,
+		msg: &[u8],
+	) -> Result<Option<bls::Signature>, Error>;
 }
 
 /// A pointer to a keystore.

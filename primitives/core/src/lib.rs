@@ -54,6 +54,7 @@ pub use hashing::{blake2_128, blake2_256, keccak_256, twox_128, twox_256, twox_6
 pub mod crypto;
 pub mod hexdisplay;
 
+pub mod bls;
 pub mod defer;
 pub mod ecdsa;
 pub mod ed25519;
