@@ -70,7 +70,6 @@ std = [
 	"log/std",
 	"environmental/std",
 ]
-# The runtime supports the metadata V14.
 runtime-benchmarks = []
 try-runtime = []
 # By default some types have documentation, `no-metadata-docs` allows to reduce the documentation
