@@ -44,7 +44,7 @@ pub enum Error {
 }
 
 /// Something that generates, stores and provides access to secret keys.
-pub trait SyncCryptoStore: Send + Sync {
+pub trait Keystore: Send + Sync {
 	/// Returns all sr25519 public keys for the given key type.
 	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public>;
 
@@ -157,9 +157,9 @@ pub trait SyncCryptoStore: Send + Sync {
 }
 
 /// A pointer to a keystore.
-pub type SyncCryptoStorePtr = Arc<dyn SyncCryptoStore>;
+pub type KeystorePtr = Arc<dyn Keystore>;
 
 sp_externalities::decl_extension! {
 	/// The keystore extension to register/retrieve from the externalities.
-	pub struct KeystoreExt(SyncCryptoStorePtr);
+	pub struct KeystoreExt(KeystorePtr);
 }

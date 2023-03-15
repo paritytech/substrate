@@ -40,7 +40,7 @@ use prometheus_endpoint::prometheus::default_registry;
 use sc_client_api::HeaderBackend;
 use sc_network::Signature;
 use sp_api::{ApiRef, ProvideRuntimeApi};
-use sp_keystore::{testing::KeyStore, CryptoStore};
+use sp_keystore::{testing::MemoryKeystore, Keystore};
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
 use substrate_test_runtime_client::runtime::Block;
 
@@ -234,7 +234,7 @@ async fn build_dht_event<Signer: NetworkSigner>(
 fn new_registers_metrics() {
 	let (_dht_event_tx, dht_event_rx) = mpsc::channel(1000);
 	let network: Arc<TestNetwork> = Arc::new(Default::default());
-	let key_store = KeyStore::new();
+	let key_store = MemoryKeystore::new();
 	let test_api = Arc::new(TestApi { authorities: vec![] });
 
 	let registry = prometheus_endpoint::Registry::new();
@@ -266,7 +266,7 @@ fn triggers_dht_get_query() {
 	let test_api = Arc::new(TestApi { authorities: authorities.clone() });
 
 	let network = Arc::new(TestNetwork::default());
-	let key_store = KeyStore::new();
+	let key_store = MemoryKeystore::new();
 
 	let (_to_worker, from_service) = mpsc::channel(0);
 	let mut worker = Worker::new(
@@ -298,7 +298,7 @@ fn publish_discover_cycle() {
 
 	let network: Arc<TestNetwork> = Arc::new(Default::default());
 
-	let key_store = KeyStore::new();
+	let key_store = MemoryKeystore::new();
 
 	let _ = pool.spawner().spawn_local_obj(
 		async move {
@@ -337,7 +337,7 @@ fn publish_discover_cycle() {
 				authorities: vec![node_a_public.into()],
 			});
 			let network: Arc<TestNetwork> = Arc::new(Default::default());
-			let key_store = KeyStore::new();
+			let key_store = MemoryKeystore::new();
 
 			let (_to_worker, from_service) = mpsc::channel(0);
 			let mut worker = Worker::new(
@@ -371,7 +371,7 @@ fn publish_discover_cycle() {
 fn terminate_when_event_stream_terminates() {
 	let (dht_event_tx, dht_event_rx) = channel(1000);
 	let network: Arc<TestNetwork> = Arc::new(Default::default());
-	let key_store = KeyStore::new();
+	let key_store = MemoryKeystore::new();
 	let test_api = Arc::new(TestApi { authorities: vec![] });
 
 	let (to_worker, from_service) = mpsc::channel(0);
@@ -420,7 +420,7 @@ fn dont_stop_polling_dht_event_stream_after_bogus_event() {
 
 		address.with(multiaddr::Protocol::P2p(peer_id.into()))
 	};
-	let remote_key_store = KeyStore::new();
+	let remote_key_store = MemoryKeystore::new();
 	let remote_public_key: AuthorityId =
 		block_on(remote_key_store.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None))
 			.unwrap()
@@ -433,7 +433,7 @@ fn dont_stop_polling_dht_event_stream_after_bogus_event() {
 		(Arc::new(n), r)
 	};
 
-	let key_store = KeyStore::new();
+	let key_store = MemoryKeystore::new();
 	let test_api = Arc::new(TestApi { authorities: vec![remote_public_key.clone()] });
 	let mut pool = LocalPool::new();
 
@@ -498,7 +498,7 @@ fn dont_stop_polling_dht_event_stream_after_bogus_event() {
 }
 
 struct DhtValueFoundTester {
-	pub remote_key_store: KeyStore,
+	pub remote_key_store: MemoryKeystore,
 	pub remote_authority_public: sp_core::sr25519::Public,
 	pub remote_node_key: Keypair,
 	pub local_worker: Option<
@@ -516,7 +516,7 @@ struct DhtValueFoundTester {
 
 impl DhtValueFoundTester {
 	fn new() -> Self {
-		let remote_key_store = KeyStore::new();
+		let remote_key_store = MemoryKeystore::new();
 		let remote_authority_public =
 			block_on(remote_key_store.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None))
 				.unwrap();
@@ -542,7 +542,7 @@ impl DhtValueFoundTester {
 		let local_test_api =
 			Arc::new(TestApi { authorities: vec![self.remote_authority_public.into()] });
 		let local_network: Arc<TestNetwork> = Arc::new(Default::default());
-		let local_key_store = KeyStore::new();
+		let local_key_store = MemoryKeystore::new();
 
 		let (_to_worker, from_service) = mpsc::channel(0);
 		let mut local_worker = Worker::new(
@@ -701,7 +701,7 @@ fn addresses_to_publish_adds_p2p() {
 		Arc::new(TestApi { authorities: vec![] }),
 		network.clone(),
 		Box::pin(dht_event_rx),
-		Role::PublishAndDiscover(Arc::new(KeyStore::new())),
+		Role::PublishAndDiscover(Arc::new(MemoryKeystore::new())),
 		Some(prometheus_endpoint::Registry::new()),
 		Default::default(),
 	);
@@ -735,7 +735,7 @@ fn addresses_to_publish_respects_existing_p2p_protocol() {
 		Arc::new(TestApi { authorities: vec![] }),
 		network.clone(),
 		Box::pin(dht_event_rx),
-		Role::PublishAndDiscover(Arc::new(KeyStore::new())),
+		Role::PublishAndDiscover(Arc::new(MemoryKeystore::new())),
 		Some(prometheus_endpoint::Registry::new()),
 		Default::default(),
 	);
@@ -755,7 +755,7 @@ fn lookup_throttling() {
 
 		address.with(multiaddr::Protocol::P2p(peer_id.into()))
 	};
-	let remote_key_store = KeyStore::new();
+	let remote_key_store = MemoryKeystore::new();
 	let remote_public_keys: Vec<AuthorityId> = (0..20)
 		.map(|_| {
 			block_on(remote_key_store.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None))

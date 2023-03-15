@@ -24,19 +24,19 @@ use sp_core::{
 
 use crate::{
 	vrf::{make_transcript, VRFSignature, VRFTranscriptData},
-	Error, SyncCryptoStore, SyncCryptoStorePtr,
+	Error, Keystore, KeystorePtr,
 };
 use parking_lot::RwLock;
 use std::{collections::HashMap, sync::Arc};
 
 /// A keystore implementation usable in tests.
 #[derive(Default)]
-pub struct KeyStore {
+pub struct MemoryKeystore {
 	/// `KeyTypeId` maps to public keys and public keys map to private keys.
 	keys: Arc<RwLock<HashMap<KeyTypeId, HashMap<Vec<u8>, String>>>>,
 }
 
-impl KeyStore {
+impl MemoryKeystore {
 	/// Creates a new instance of `Self`.
 	pub fn new() -> Self {
 		Self::default()
@@ -67,7 +67,7 @@ impl KeyStore {
 	}
 }
 
-impl SyncCryptoStore for KeyStore {
+impl Keystore for MemoryKeystore {
 	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error> {
 		self.keys
 			.read()
@@ -285,8 +285,8 @@ impl SyncCryptoStore for KeyStore {
 	}
 }
 
-impl Into<SyncCryptoStorePtr> for KeyStore {
-	fn into(self) -> SyncCryptoStorePtr {
+impl Into<KeystorePtr> for MemoryKeystore {
+	fn into(self) -> KeystorePtr {
 		Arc::new(self)
 	}
 }
@@ -294,7 +294,7 @@ impl Into<SyncCryptoStorePtr> for KeyStore {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{vrf::VRFTranscriptValue, SyncCryptoStore};
+	use crate::vrf::VRFTranscriptValue;
 	use sp_core::{
 		sr25519,
 		testing::{ECDSA, ED25519, SR25519},
@@ -302,34 +302,33 @@ mod tests {
 
 	#[test]
 	fn store_key_and_extract() {
-		let store = KeyStore::new();
+		let store = MemoryKeystore::new();
 
-		let public =
-			SyncCryptoStore::ed25519_generate_new(&store, ED25519, None).expect("Generates key");
+		let public = Keystore::ed25519_generate_new(&store, ED25519, None).expect("Generates key");
 
-		let public_keys = SyncCryptoStore::keys(&store, ED25519).unwrap();
+		let public_keys = Keystore::keys(&store, ED25519).unwrap();
 
 		assert!(public_keys.contains(&public.into()));
 	}
 
 	#[test]
 	fn store_unknown_and_extract_it() {
-		let store = KeyStore::new();
+		let store = MemoryKeystore::new();
 
 		let secret_uri = "//Alice";
 		let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
 
-		SyncCryptoStore::insert_unknown(&store, SR25519, secret_uri, key_pair.public().as_ref())
+		Keystore::insert_unknown(&store, SR25519, secret_uri, key_pair.public().as_ref())
 			.expect("Inserts unknown key");
 
-		let public_keys = SyncCryptoStore::keys(&store, SR25519).unwrap();
+		let public_keys = Keystore::keys(&store, SR25519).unwrap();
 
 		assert!(public_keys.contains(&key_pair.public().into()));
 	}
 
 	#[test]
 	fn vrf_sign() {
-		let store = KeyStore::new();
+		let store = MemoryKeystore::new();
 
 		let secret_uri = "//Alice";
 		let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
@@ -343,7 +342,7 @@ mod tests {
 			],
 		};
 
-		let result = SyncCryptoStore::sr25519_vrf_sign(
+		let result = Keystore::sr25519_vrf_sign(
 			&store,
 			SR25519,
 			&key_pair.public(),
@@ -351,18 +350,18 @@ mod tests {
 		);
 		assert!(result.unwrap().is_none());
 
-		SyncCryptoStore::insert_unknown(&store, SR25519, secret_uri, key_pair.public().as_ref())
+		Keystore::insert_unknown(&store, SR25519, secret_uri, key_pair.public().as_ref())
 			.expect("Inserts unknown key");
 
 		let result =
-			SyncCryptoStore::sr25519_vrf_sign(&store, SR25519, &key_pair.public(), transcript_data);
+			Keystore::sr25519_vrf_sign(&store, SR25519, &key_pair.public(), transcript_data);
 
 		assert!(result.unwrap().is_some());
 	}
 
 	#[test]
 	fn ecdsa_sign_prehashed_works() {
-		let store = KeyStore::new();
+		let store = MemoryKeystore::new();
 
 		let suri = "//Alice";
 		let pair = ecdsa::Pair::from_string(suri, None).unwrap();
@@ -370,15 +369,13 @@ mod tests {
 		let msg = sp_core::keccak_256(b"this should be a hashed message");
 
 		// no key in key store
-		let res =
-			SyncCryptoStore::ecdsa_sign_prehashed(&store, ECDSA, &pair.public(), &msg).unwrap();
+		let res = Keystore::ecdsa_sign_prehashed(&store, ECDSA, &pair.public(), &msg).unwrap();
 		assert!(res.is_none());
 
 		// insert key, sign again
-		SyncCryptoStore::insert_unknown(&store, ECDSA, suri, pair.public().as_ref()).unwrap();
+		Keystore::insert_unknown(&store, ECDSA, suri, pair.public().as_ref()).unwrap();
 
-		let res =
-			SyncCryptoStore::ecdsa_sign_prehashed(&store, ECDSA, &pair.public(), &msg).unwrap();
+		let res = Keystore::ecdsa_sign_prehashed(&store, ECDSA, &pair.public(), &msg).unwrap();
 		assert!(res.is_some());
 	}
 }

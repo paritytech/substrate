@@ -49,7 +49,7 @@ use sp_consensus_beefy::{
 	crypto::AuthorityId, BeefyApi, MmrRootHash, PayloadProvider, ValidatorSet, BEEFY_ENGINE_ID,
 	GENESIS_AUTHORITY_SET_ID,
 };
-use sp_keystore::SyncCryptoStorePtr;
+use sp_keystore::KeystorePtr;
 use sp_mmr_primitives::MmrApi;
 use sp_runtime::traits::{Block, Zero};
 use std::{collections::VecDeque, marker::PhantomData, sync::Arc};
@@ -197,7 +197,7 @@ pub struct BeefyParams<B: Block, BE, C, N, P, R, S> {
 	/// Runtime Api Provider
 	pub runtime: Arc<R>,
 	/// Local key store
-	pub key_store: Option<SyncCryptoStorePtr>,
+	pub key_store: Option<KeystorePtr>,
 	/// BEEFY voter network params
 	pub network_params: BeefyNetworkParams<B, N, S>,
 	/// Minimal delta between blocks, BEEFY should vote for

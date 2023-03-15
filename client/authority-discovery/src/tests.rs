@@ -33,7 +33,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use sp_authority_discovery::AuthorityId;
 use sp_core::crypto::key_types;
-use sp_keystore::{testing::KeyStore, CryptoStore};
+use sp_keystore::{testing::MemoryKeystore, Keystore};
 
 #[test]
 fn get_addresses_and_authority_id() {
@@ -42,7 +42,7 @@ fn get_addresses_and_authority_id() {
 
 	let mut pool = LocalPool::new();
 
-	let key_store = KeyStore::new();
+	let key_store = MemoryKeystore::new();
 
 	let remote_authority_id: AuthorityId = pool.run_until(async {
 		key_store

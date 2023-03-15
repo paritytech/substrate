@@ -67,7 +67,7 @@ use sp_consensus::block_validation::{
 	BlockAnnounceValidator, Chain, DefaultBlockAnnounceValidator,
 };
 use sp_core::traits::{CodeExecutor, SpawnNamed};
-use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::{Keystore, KeystorePtr};
 use sp_runtime::traits::{Block as BlockT, BlockIdTo, NumberFor, Zero};
 use std::{str::FromStr, sync::Arc, time::SystemTime};
 
@@ -87,18 +87,18 @@ type TFullParts<TBl, TRtApi, TExec> =
 
 trait AsCryptoStoreRef {
 	// TODO-DAVXY: this can be removed
-	fn keystore_ref(&self) -> Arc<dyn SyncCryptoStore>;
-	fn sync_keystore_ref(&self) -> Arc<dyn SyncCryptoStore>;
+	fn keystore_ref(&self) -> Arc<dyn Keystore>;
+	fn sync_keystore_ref(&self) -> Arc<dyn Keystore>;
 }
 
 impl<T> AsCryptoStoreRef for Arc<T>
 where
-	T: SyncCryptoStore + 'static,
+	T: Keystore + 'static,
 {
-	fn keystore_ref(&self) -> Arc<dyn SyncCryptoStore> {
+	fn keystore_ref(&self) -> Arc<dyn Keystore> {
 		self.clone()
 	}
-	fn sync_keystore_ref(&self) -> Arc<dyn SyncCryptoStore> {
+	fn sync_keystore_ref(&self) -> Arc<dyn Keystore> {
 		self.clone()
 	}
 }
@@ -128,13 +128,13 @@ impl KeystoreContainer {
 	/// stick around.
 	pub fn set_remote_keystore<T>(&mut self, remote: Arc<T>)
 	where
-		T: SyncCryptoStore + 'static,
+		T: Keystore + 'static,
 	{
 		self.remote = Some(Box::new(remote))
 	}
 
 	/// Returns an adapter to the asynchronous keystore that implements `CryptoStore`
-	pub fn keystore(&self) -> Arc<dyn SyncCryptoStore> {
+	pub fn keystore(&self) -> Arc<dyn Keystore> {
 		if let Some(c) = self.remote.as_ref() {
 			c.keystore_ref()
 		} else {
@@ -143,11 +143,11 @@ impl KeystoreContainer {
 	}
 
 	/// Returns the synchronous keystore wrapper
-	pub fn sync_keystore(&self) -> SyncCryptoStorePtr {
+	pub fn sync_keystore(&self) -> KeystorePtr {
 		if let Some(c) = self.remote.as_ref() {
 			c.sync_keystore_ref()
 		} else {
-			self.local.clone() as SyncCryptoStorePtr
+			self.local.clone() as KeystorePtr
 		}
 	}
 
@@ -375,7 +375,7 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	/// A task manager returned by `new_full_parts`.
 	pub task_manager: &'a mut TaskManager,
 	/// A shared keystore returned by `new_full_parts`.
-	pub keystore: SyncCryptoStorePtr,
+	pub keystore: KeystorePtr,
 	/// A shared transaction pool.
 	pub transaction_pool: Arc<TExPool>,
 	/// Builds additional [`RpcModule`]s that should be added to the server
@@ -646,7 +646,7 @@ fn gen_rpc_module<TBl, TBackend, TCl, TRpc, TExPool>(
 	spawn_handle: SpawnTaskHandle,
 	client: Arc<TCl>,
 	transaction_pool: Arc<TExPool>,
-	keystore: SyncCryptoStorePtr,
+	keystore: KeystorePtr,
 	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 	config: &Configuration,
 	backend: Arc<TBackend>,

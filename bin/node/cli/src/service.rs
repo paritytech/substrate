@@ -596,7 +596,7 @@ mod tests {
 	use sp_core::{crypto::Pair as CryptoPair, Public};
 	use sp_inherents::InherentDataProvider;
 	use sp_keyring::AccountKeyring;
-	use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+	use sp_keystore::{Keystore, KeystorePtr};
 	use sp_runtime::{
 		generic::{Digest, Era, SignedPayload},
 		key_types::BABE,
@@ -616,10 +616,10 @@ mod tests {
 		sp_tracing::try_init_simple();
 
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-		let keystore: SyncCryptoStorePtr =
+		let keystore: KeystorePtr =
 			Arc::new(LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore"));
 		let alice: sp_consensus_babe::AuthorityId =
-			SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some("//Alice"))
+			Keystore::sr25519_generate_new(&*keystore, BABE, Some("//Alice"))
 				.expect("Creates authority pair")
 				.into();
 
@@ -736,7 +736,7 @@ mod tests {
 				// sign the pre-sealed hash of the block and then
 				// add it to a digest item.
 				let to_sign = pre_hash.encode();
-				let signature = SyncCryptoStore::sign_with(
+				let signature = Keystore::sign_with(
 					&*keystore,
 					sp_consensus_babe::AuthorityId::ID,
 					&alice.to_public_crypto_pair(),

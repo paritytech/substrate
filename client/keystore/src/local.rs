@@ -28,7 +28,7 @@ use sp_core::{
 };
 use sp_keystore::{
 	vrf::{make_transcript, VRFSignature, VRFTranscriptData},
-	Error as TraitError, SyncCryptoStore, SyncCryptoStorePtr,
+	Error as TraitError, Keystore, KeystorePtr,
 };
 use std::{
 	collections::HashMap,
@@ -68,7 +68,7 @@ impl LocalKeystore {
 	}
 }
 
-impl SyncCryptoStore for LocalKeystore {
+impl Keystore for LocalKeystore {
 	fn keys(&self, id: KeyTypeId) -> std::result::Result<Vec<CryptoTypePublicPair>, TraitError> {
 		let raw_keys = self.0.read().raw_public_keys(id)?;
 		Ok(raw_keys.into_iter().fold(Vec::new(), |mut v, k| {
@@ -248,8 +248,8 @@ impl SyncCryptoStore for LocalKeystore {
 	}
 }
 
-impl Into<SyncCryptoStorePtr> for LocalKeystore {
-	fn into(self) -> SyncCryptoStorePtr {
+impl Into<KeystorePtr> for LocalKeystore {
+	fn into(self) -> KeystorePtr {
 		Arc::new(self)
 	}
 }
@@ -504,12 +504,9 @@ mod tests {
 		let key: ed25519::AppPair = store.0.write().generate().unwrap();
 		let key2 = ed25519::Pair::generate().0;
 
-		assert!(!SyncCryptoStore::has_keys(
-			&store,
-			&[(key2.public().to_vec(), ed25519::AppPublic::ID)]
-		));
+		assert!(!Keystore::has_keys(&store, &[(key2.public().to_vec(), ed25519::AppPublic::ID)]));
 
-		assert!(!SyncCryptoStore::has_keys(
+		assert!(!Keystore::has_keys(
 			&store,
 			&[
 				(key2.public().to_vec(), ed25519::AppPublic::ID),
@@ -517,10 +514,7 @@ mod tests {
 			],
 		));
 
-		assert!(SyncCryptoStore::has_keys(
-			&store,
-			&[(key.public().to_raw_vec(), ed25519::AppPublic::ID)]
-		));
+		assert!(Keystore::has_keys(&store, &[(key.public().to_raw_vec(), ed25519::AppPublic::ID)]));
 	}
 
 	#[test]
@@ -632,7 +626,7 @@ mod tests {
 		let file_name = temp_dir.path().join(array_bytes::bytes2hex("", &SR25519.0[..2]));
 		fs::write(file_name, "test").expect("Invalid file is written");
 
-		assert!(SyncCryptoStore::sr25519_public_keys(&store, SR25519).is_empty());
+		assert!(Keystore::sr25519_public_keys(&store, SR25519).is_empty());
 	}
 
 	#[test]
@@ -640,23 +634,23 @@ mod tests {
 		let temp_dir = TempDir::new().unwrap();
 		let store = LocalKeystore::open(temp_dir.path(), None).unwrap();
 		let _alice_tmp_key =
-			SyncCryptoStore::sr25519_generate_new(&store, TEST_KEY_TYPE, Some("//Alice")).unwrap();
+			Keystore::sr25519_generate_new(&store, TEST_KEY_TYPE, Some("//Alice")).unwrap();
 
-		assert_eq!(SyncCryptoStore::sr25519_public_keys(&store, TEST_KEY_TYPE).len(), 1);
+		assert_eq!(Keystore::sr25519_public_keys(&store, TEST_KEY_TYPE).len(), 1);
 
 		drop(store);
 		let store = LocalKeystore::open(temp_dir.path(), None).unwrap();
-		assert_eq!(SyncCryptoStore::sr25519_public_keys(&store, TEST_KEY_TYPE).len(), 0);
+		assert_eq!(Keystore::sr25519_public_keys(&store, TEST_KEY_TYPE).len(), 0);
 	}
 
 	#[test]
 	fn generate_can_be_fetched_in_memory() {
 		let store = LocalKeystore::in_memory();
-		SyncCryptoStore::sr25519_generate_new(&store, TEST_KEY_TYPE, Some("//Alice")).unwrap();
+		Keystore::sr25519_generate_new(&store, TEST_KEY_TYPE, Some("//Alice")).unwrap();
 
-		assert_eq!(SyncCryptoStore::sr25519_public_keys(&store, TEST_KEY_TYPE).len(), 1);
-		SyncCryptoStore::sr25519_generate_new(&store, TEST_KEY_TYPE, None).unwrap();
-		assert_eq!(SyncCryptoStore::sr25519_public_keys(&store, TEST_KEY_TYPE).len(), 2);
+		assert_eq!(Keystore::sr25519_public_keys(&store, TEST_KEY_TYPE).len(), 1);
+		Keystore::sr25519_generate_new(&store, TEST_KEY_TYPE, None).unwrap();
+		assert_eq!(Keystore::sr25519_public_keys(&store, TEST_KEY_TYPE).len(), 2);
 	}
 
 	#[test]
@@ -667,7 +661,7 @@ mod tests {
 		let temp_dir = TempDir::new().unwrap();
 		let store = LocalKeystore::open(temp_dir.path(), None).unwrap();
 
-		let public = SyncCryptoStore::sr25519_generate_new(&store, TEST_KEY_TYPE, None).unwrap();
+		let public = Keystore::sr25519_generate_new(&store, TEST_KEY_TYPE, None).unwrap();
 
 		let path = store.0.read().key_file_path(public.as_ref(), TEST_KEY_TYPE).unwrap();
 		let permissions = File::open(path).unwrap().metadata().unwrap().permissions();

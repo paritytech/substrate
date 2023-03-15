@@ -53,7 +53,7 @@ use sp_authority_discovery::{
 use sp_blockchain::HeaderBackend;
 
 use sp_core::crypto::{key_types, CryptoTypePublicPair, Pair};
-use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::{Keystore, KeystorePtr};
 use sp_runtime::traits::Block as BlockT;
 
 mod addr_cache;
@@ -78,7 +78,7 @@ const MAX_IN_FLIGHT_LOOKUPS: usize = 8;
 /// Role an authority discovery [`Worker`] can run as.
 pub enum Role {
 	/// Publish own addresses and discover addresses of others.
-	PublishAndDiscover(SyncCryptoStorePtr),
+	PublishAndDiscover(KeystorePtr),
 	/// Discover addresses of others.
 	Discover,
 }
@@ -587,7 +587,7 @@ where
 	// next authority set with two keys. The function does not return all of the local authority
 	// discovery public keys, but only the ones intersecting with the current or next authority set.
 	async fn get_own_public_keys_within_authority_set(
-		key_store: SyncCryptoStorePtr,
+		key_store: KeystorePtr,
 		client: &Client,
 	) -> Result<HashSet<AuthorityId>> {
 		let local_pub_keys = key_store
@@ -664,7 +664,7 @@ fn sign_record_with_peer_id(
 async fn sign_record_with_authority_ids(
 	serialized_record: Vec<u8>,
 	peer_signature: Option<schema::PeerSignature>,
-	key_store: &dyn SyncCryptoStore,
+	key_store: &dyn Keystore,
 	keys: Vec<CryptoTypePublicPair>,
 ) -> Result<Vec<(KademliaKey, Vec<u8>)>> {
 	let mut result = Vec::with_capacity(keys.len());
