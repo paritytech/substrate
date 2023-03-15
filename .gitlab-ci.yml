@@ -110,10 +110,6 @@ variables:
   before_script:
     - if echo "$CI_DISABLED_JOBS" | grep -xF "$CI_JOB_NAME"; then echo "The job has been cancelled in CI settings"; exit 0; fi
 
-.timestamp:
-  before_script:
-    - source scripts/ci/gitlab/timestamp.sh
-
 .kubernetes-env:
   image: "${CI_IMAGE}"
   before_script:
@@ -316,6 +312,7 @@ include:
   - local: scripts/ci/gitlab/default-pipeline.yml
     rules:
       - if: $PIPELINE != "automatic-crate-publishing"
+  - scripts/ci/gitlab/timestamp.yml
 
 #### stage:                        notify
 
