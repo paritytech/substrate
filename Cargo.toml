@@ -151,6 +151,7 @@ members = [
 	"frame/sudo",
 	"frame/root-offences",
 	"frame/root-testing",
+	"frame/statement",
 	"frame/support",
 	"frame/support/procedural",
 	"frame/support/procedural/tools",

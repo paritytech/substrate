@@ -25,6 +25,7 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../../
 frame-try-runtime = { version = "0.10.0-dev", default-features = false, path = "../../../frame/try-runtime", optional = true }
 pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../../frame/timestamp" }
 pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-payment" }
+pallet-statement = { version = "4.0.0-dev", default-features = false, path = "../../../frame/statement" }
 frame-executive = { version = "4.0.0-dev", default-features = false, path = "../../../frame/executive" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/api" }
 sp-block-builder = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/block-builder"}
@@ -37,6 +38,7 @@ sp-runtime = { version = "7.0.0", default-features = false, path = "../../../pri
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/session" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../../primitives/std" }
 sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/transaction-pool" }
+sp-statement-store = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/statement-store" }
 sp-version = { version = "5.0.0", default-features = false, path = "../../../primitives/version" }
 
 # Used for the node template's RPCs
@@ -70,6 +72,7 @@ std = [
 	"pallet-balances/std",
 	"pallet-grandpa/std",
 	"pallet-sudo/std",
+	"pallet-statement/std",
 	"pallet-template/std",
 	"pallet-timestamp/std",
 	"pallet-transaction-payment-rpc-runtime-api/std",
@@ -85,6 +88,7 @@ std = [
 	"sp-session/std",
 	"sp-std/std",
 	"sp-transaction-pool/std",
+	"sp-statement-store/std",
 	"sp-version/std",
 	"substrate-wasm-builder",
 ]
@@ -107,6 +111,7 @@ try-runtime = [
 	"pallet-aura/try-runtime",
 	"pallet-balances/try-runtime",
 	"pallet-grandpa/try-runtime",
+	"pallet-statement/try-runtime",
 	"pallet-sudo/try-runtime",
 	"pallet-template/try-runtime",
 	"pallet-timestamp/try-runtime",

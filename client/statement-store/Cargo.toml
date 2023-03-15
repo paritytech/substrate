@@ -22,11 +22,12 @@ parking_lot = "0.12.1"
 parity-db = "0.4.3"
 sp-statement-store = { version = "4.0.0-dev", path = "../../primitives/statement-store" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../utils/prometheus" }
+#sc-client-api = { version = "4.0.0-dev", path = "../api" }
 #sc-utils = { version = "4.0.0-dev", path = "../utils" }
-#sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
+sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 #sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-core = { version = "7.0.0", path = "../../primitives/core" }
-#sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
+sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
 sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
 #sp-transaction-pool = { version = "4.0.0-dev", path = "../../primitives/transaction-pool" }
 

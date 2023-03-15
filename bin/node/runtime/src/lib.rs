@@ -1731,6 +1731,8 @@ impl frame_benchmarking_pallet_pov::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 }
 
+impl pallet_statement::Config for Runtime {}
+
 construct_runtime!(
 	pub struct Runtime where
 		Block = Block,
@@ -1801,6 +1803,7 @@ construct_runtime!(
 		FastUnstake: pallet_fast_unstake,
 		MessageQueue: pallet_message_queue,
 		Pov: frame_benchmarking_pallet_pov,
+		Statement: pallet_statement,
 	}
 );
 
@@ -1969,6 +1972,15 @@ impl_runtime_apis! {
 			block_hash: <Block as BlockT>::Hash,
 		) -> TransactionValidity {
 			Executive::validate_transaction(source, tx, block_hash)
+		}
+	}
+
+	impl sp_statement_store::runtime_api::ValidateStatement<Block> for Runtime {
+		fn validate_statement(
+			source: sp_statement_store::runtime_api::StatementSource,
+			statement: sp_statement_store::Statement,
+		) -> Result<sp_statement_store::runtime_api::ValidStatement, sp_statement_store::runtime_api::InvalidStatement> {
+			Statement::validate_statement(source, statement)
 		}
 	}
 

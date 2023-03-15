@@ -23,7 +23,7 @@
 #![warn(unused_extern_crates)]
 
 mod store;
-mod metrics;
+//mod metrics;
 
 pub use store::Store;
 pub use sp_statement_store::{StatementStore, Error};

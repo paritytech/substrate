@@ -263,6 +263,8 @@ impl pallet_sudo::Config for Runtime {
 	type RuntimeCall = RuntimeCall;
 }
 
+impl pallet_statement::Config for Runtime {}
+
 /// Configure the pallet-template in pallets/template.
 impl pallet_template::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
@@ -283,6 +285,7 @@ construct_runtime!(
 		Balances: pallet_balances,
 		TransactionPayment: pallet_transaction_payment,
 		Sudo: pallet_sudo,
+		Statement: pallet_statement,
 		// Include the custom logic from the pallet-template in the runtime.
 		TemplateModule: pallet_template,
 	}
@@ -386,6 +389,16 @@ impl_runtime_apis! {
 			Executive::validate_transaction(source, tx, block_hash)
 		}
 	}
+
+	impl sp_statement_store::runtime_api::ValidateStatement<Block> for Runtime {
+		fn validate_statement(
+			source: sp_statement_store::runtime_api::StatementSource,
+			statement: sp_statement_store::Statement,
+		) -> Result<sp_statement_store::runtime_api::ValidStatement, sp_statement_store::runtime_api::InvalidStatement> {
+			Statement::validate_statement(source, statement)
+		}
+	}
+
 
 	impl sp_offchain::OffchainWorkerApi<Block> for Runtime {
 		fn offchain_worker(header: &<Block as BlockT>::Header) {

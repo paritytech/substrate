@@ -3582,6 +3582,7 @@ dependencies = [
  "pallet-staking-reward-curve",
  "pallet-staking-runtime-api",
  "pallet-state-trie-migration",
+ "pallet-statement",
  "pallet-sudo",
  "pallet-timestamp",
  "pallet-tips",
@@ -3607,6 +3608,7 @@ dependencies = [
  "sp-runtime",
  "sp-session",
  "sp-staking",
+ "sp-statement-store",
  "sp-std",
  "sp-transaction-pool",
  "sp-version",
@@ -5117,6 +5119,7 @@ dependencies = [
  "pallet-aura",
  "pallet-balances",
  "pallet-grandpa",
+ "pallet-statement",
  "pallet-sudo",
  "pallet-template",
  "pallet-timestamp",
@@ -5133,6 +5136,7 @@ dependencies = [
  "sp-offchain",
  "sp-runtime",
  "sp-session",
+ "sp-statement-store",
  "sp-std",
  "sp-transaction-pool",
  "sp-version",
@@ -6703,6 +6707,21 @@ dependencies = [
  "thousands",
  "tokio",
  "zstd",
+]
+
+[[package]]
+name = "pallet-statement"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-api",
+ "sp-io",
+ "sp-runtime",
+ "sp-statement-store",
+ "sp-std",
 ]
 
 [[package]]
@@ -9355,7 +9374,9 @@ dependencies = [
  "parity-db",
  "parity-scale-codec",
  "parking_lot 0.12.1",
+ "sp-api",
  "sp-core",
+ "sp-runtime",
  "sp-statement-store",
  "sp-tracing",
  "substrate-prometheus-endpoint",
@@ -10639,8 +10660,10 @@ dependencies = [
 name = "sp-statement-store"
 version = "4.0.0-dev"
 dependencies = [
+ "log",
  "parity-scale-codec",
  "scale-info",
+ "sp-api",
  "sp-core",
  "sp-runtime",
  "sp-std",

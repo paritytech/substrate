@@ -21,8 +21,11 @@
 use std::{collections::{HashSet, HashMap}, sync::Arc, future::Future};
 
 use parking_lot::RwLock;
-use sp_statement_store::{Statement, Topic, DecryptionKey, Result, Error, Hash, SubmitResult};
+use sp_statement_store::{Statement, Topic, DecryptionKey, Result, Error, Hash, BlockHash, SubmitResult};
+use sp_statement_store::runtime_api::{ValidateStatement, ValidStatement, InvalidStatement, StatementSource};
 use sp_core::{Encode, Decode};
+use sp_api::ProvideRuntimeApi;
+use sp_runtime::traits::Block as BlockT;
 
 const KEY_VERSION: &[u8] = b"version".as_slice();
 const CURRENT_VERSION: u32 = 1;
@@ -42,10 +45,43 @@ struct Index {
 	extended_topics: HashMap<Hash, [Topic; 3]>,
 }
 
+struct ClientWrapper<Block, Client>  {
+	client: Arc<Client>,
+	_block: std::marker::PhantomData<Block>,
+}
+
+impl<Block, Client> ClientWrapper<Block, Client>
+	where
+		Block: BlockT,
+		Block::Hash: From<BlockHash>,
+		Client: ProvideRuntimeApi<Block>
+		+ Send
+		+ Sync
+		+ 'static,
+		Client::Api: ValidateStatement<Block>,
+{
+	fn validate_statement(
+		&self,
+		block: BlockHash,
+		source: StatementSource,
+		statement: Statement,
+	) -> std::result::Result<ValidStatement, InvalidStatement> {
+		let api = self.client.runtime_api();
+		let block = block.into();
+		match api.validate_statement(block, source, statement) {
+			Ok(r) => r,
+			Err(_) => {
+				Err(InvalidStatement::InternalError)
+			}
+		}
+	}
+}
+
 /// Statement store.
 pub struct Store {
 	db: parity_db::Db,
 	index: RwLock<Index>,
+	validate_fn: Box<dyn Fn(BlockHash, StatementSource, Statement) -> std::result::Result<ValidStatement, InvalidStatement> + Send + Sync>,
 }
 
 impl Index {
@@ -100,7 +136,16 @@ impl Index {
 
 impl Store {
 	/// Create a new shared store instance. There should only be one per process.
-	pub fn new(path: &std::path::Path) -> Result<Arc<Store>> {
+	pub fn new<Block, Client>(path: &std::path::Path, client: Arc<Client>) -> Result<Arc<Store>>
+	where
+		Block: BlockT,
+		Block::Hash: From<BlockHash>,
+		Client: ProvideRuntimeApi<Block>
+		+ Send
+		+ Sync
+		+ 'static,
+		Client::Api: ValidateStatement<Block>,
+	{
 		let mut path: std::path::PathBuf = path.into();
 		path.pop();
 		path.push("statement");
@@ -137,7 +182,14 @@ impl Store {
 			true
 		}).map_err(|e| Error::Db(e.to_string()))?;
 
-		Ok(Arc::new(Store { db, index: RwLock::new(index) }))
+		let validator = ClientWrapper { client, _block: Default::default() };
+		let validate_fn = Box::new(move |block, source, statement| validator.validate_statement(block, source, statement));
+
+		Ok(Arc::new(Store {
+			db,
+			index: RwLock::new(index),
+			validate_fn,
+		}))
 	}
 
 	fn collect_statements<R>(&self, key: Option<DecryptionKey>, match_all_topics: &[Topic], mut f: impl FnMut(Statement) -> Option<R> ) -> Result<Vec<R>> {
@@ -222,6 +274,7 @@ impl sp_statement_store::StatementStore for Store {
 	fn submit(&self, statement: Statement) -> SubmitResult {
 		let encoded = statement.encode();
 		let hash = sp_statement_store::hash_encoded(&encoded);
+		let _ = (self.validate_fn)(Default::default(), StatementSource::Local, statement.clone());
 		//commit to the db with locked index
 		let mut index = self.index.write();
 		if let Err(e) = self.db.commit([(col::STATEMENTS, &hash, Some(encoded))]) {

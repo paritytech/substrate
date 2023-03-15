@@ -135,7 +135,7 @@ pub fn new_partial(
 			compatibility_mode: Default::default(),
 		})?;
 
-	let statement_store = sc_statement_store::Store::new(config.database.path().unwrap())?;
+	let statement_store = sc_statement_store::Store::new(config.database.path().unwrap(), client.clone())?;
 
 	Ok(sc_service::PartialComponents {
 		client,

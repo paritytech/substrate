@@ -26,11 +26,13 @@ use codec::{Decode, Encode};
 pub type Topic = [u8; 32];
 pub type DecryptionKey = [u8; 32];
 pub type Hash = [u8; 32];
+pub type BlockHash = [u8; 32];
 
 #[cfg(feature = "std")]
 pub use api::{StatementStore, SubmitResult, Error, Result};
 
 /// Returns blake2-256 hash for the encoded statement.
+#[cfg(feature = "std")]
 pub fn hash_encoded(data: &[u8]) -> [u8; 32] {
 	sp_core::hashing::blake2_256(data)
 }
@@ -40,7 +42,7 @@ pub enum Proof {
 	Sr25519 { signature: [u8; 64], signer: [u8; 32] },
 	Ed25519 { signature: [u8; 64], signer: [u8; 32] },
 	Secp256k1Ecdsa { signature: [u8; 65], signer: [u8; 33] },
-	OnChain { who: [u8; 32], block_hash: [u8; 32], event_index: u64 },
+	OnChain { who: [u8; 32], block_hash: BlockHash, event_index: u64 },
 }
 
 #[derive(Encode, Decode, sp_runtime::RuntimeDebug, Clone)]
@@ -63,10 +65,11 @@ pub struct Statement {
 impl Statement {
 	pub fn new(proof: Proof) -> Statement {
 		Statement {
-			fields: vec![Field::AuthenticityProof(proof)],
+			fields: sp_std::vec![Field::AuthenticityProof(proof)],
 		}
 	}
 
+	#[cfg(feature = "std")]
 	pub fn hash(&self) -> [u8; 32] {
 		hash_encoded(&self.encode())
 	}
@@ -152,5 +155,50 @@ mod api {
 		fn submit_encoded(&self, statement: &[u8]) -> SubmitResult;
 
 		fn submit_async(&self, statement: Statement) -> std::pin::Pin<Box<dyn Future<Output = SubmitResult> + Send>>;
+	}
+}
+
+pub mod runtime_api {
+	use codec::{Decode, Encode};
+	use scale_info::TypeInfo;
+	use sp_runtime::{RuntimeDebug};
+	use crate::Statement;
+
+	/// Information concerning a valid statement.
+	#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
+	pub struct ValidStatement {
+		pub priority: u64,
+		pub propagate: bool,
+	}
+
+	/// An invalid statement.
+	#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug, TypeInfo)]
+	pub enum InvalidStatement {
+		Payment,
+		BadProof,
+		Stale,
+		InternalError,
+	}
+
+	/// The source of the statement.
+	///
+	/// Depending on the source we might apply different validation schemes.
+	#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
+	pub enum StatementSource {
+		/// Statement is coming from a local source, such as the OCW.
+		Local,
+		/// Statement has been received externally (network or RPC).
+		External,
+	}
+
+	sp_api::decl_runtime_apis! {
+		/// Runtime API trait for statement validation.
+		pub trait ValidateStatement {
+			/// Validate the statement.
+			fn validate_statement(
+				source: StatementSource,
+				statement: Statement,
+			) -> Result<ValidStatement, InvalidStatement>;
+		}
 	}
 }
