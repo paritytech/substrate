@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -43,9 +43,11 @@ pub fn clear_validators_and_nominators<T: Config>() {
 	Nominators::<T>::remove_all();
 
 	frame_election_provider_support::runtime_benchmarks_or_test_enabled! {
-		use frame_election_provider_support::ReadOnlySortedListProvider;
+		use frame_election_provider_support::SortedListProvider;
 		// NOTE: safe to call outside block production
 		T::VoterList::unsafe_clear();
+		// NOTE: This is currently a noop due to the fact that we're using UseValidatorsMap.
+		T::TargetList::unsafe_clear();
 	}
 }
 

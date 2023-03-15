@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,6 +18,7 @@
 mod call;
 mod config;
 mod constants;
+mod documentation;
 mod error;
 mod event;
 mod genesis_build;
@@ -52,6 +53,8 @@ pub fn merge_where_clauses(clauses: &[&Option<syn::WhereClause>]) -> Option<syn:
 /// * create some new types,
 /// * impl stuff on them.
 pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
+	// Remove the `pallet_doc` attribute first.
+	let metadata_docs = documentation::expand_documentation(&mut def);
 	let constants = constants::expand_constants(&mut def);
 	let pallet_struct = pallet_struct::expand_pallet_struct(&mut def);
 	let config = config::expand_config(&mut def);
@@ -82,6 +85,7 @@ pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
 	}
 
 	let new_items = quote::quote!(
+		#metadata_docs
 		#constants
 		#pallet_struct
 		#config

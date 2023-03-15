@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -62,7 +62,7 @@ impl<AccountId, Balance> OnStakerSlash<AccountId, Balance> for () {
 
 /// A struct that reflects stake that an account has in the staking system. Provides a set of
 /// methods to operate on it's properties. Aimed at making `StakingInterface` more concise.
-#[derive(Default)]
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
 pub struct Stake<AccountId, Balance> {
 	/// The stash account whose balance is actually locked and at stake.
 	pub stash: AccountId,
@@ -81,60 +81,30 @@ pub struct Stake<AccountId, Balance> {
 	pub active: Balance,
 }
 
-/// A generic staking event listener.
-///
-/// Note that the interface is designed in a way that the events are fired post-action, so any
-/// pre-action data that is needed needs to be passed to interface methods.
-/// The rest of the data can be retrieved by using `StakingInterface`.
-///
-/// Implementors of this interface assume that Staking knows what it's doing when calling any of the
-/// methods.
+/// A generic staking event listener. Note that the interface is designed in a way that the events
+/// are fired post-action, so any pre-action data that is needed needs to be passed to interface
+/// methods. The rest of the data can be retrieved by using `StakingInterface`.
+#[impl_trait_for_tuples::impl_for_tuples(10)]
 pub trait OnStakingUpdate<AccountId, Balance> {
 	/// Fired when the stake amount of someone updates.
-	///
-	/// Also called when someone stakes for the first time. (TODO: is it? this is why we need unit
-	/// tests for this pallet alone).
 	///
 	/// This is effectively any changes to the bond amount, such as bonding more funds, and
 	/// unbonding.
 	fn on_stake_update(who: &AccountId, prev_stake: Option<Stake<AccountId, Balance>>);
-	/// Fired when someone sets their intention to nominate, either new, or existing one.
+	/// Fired when someone sets their intention to nominate.
+	fn on_nominator_add(who: &AccountId);
+	/// Fired when an existing nominator updates their nominations.
 	fn on_nominator_update(who: &AccountId, prev_nominations: Vec<AccountId>);
-	/// Fired when someone sets their intention to validate, either new, or existing one.
+	/// Fired when someone sets their intention to validate.
 	fn on_validator_add(who: &AccountId);
+	/// Fired when an existing validator updates their preferences.
+	fn on_validator_update(who: &AccountId);
 	/// Fired when someone removes their intention to validate, either due to chill or nominating.
 	fn on_validator_remove(who: &AccountId); // only fire this event when this is an actual Validator
 	/// Fired when someone removes their intention to nominate, either due to chill or validating.
 	fn on_nominator_remove(who: &AccountId, nominations: Vec<AccountId>); // only fire this if this is an actual Nominator
 	/// fired when someone is fully unstaked.
 	fn on_unstake(who: &AccountId); // -> basically `kill_stash`
-}
-
-#[cfg(feature = "std")]
-impl<AccountId, Balance> OnStakingUpdate<AccountId, Balance> for () {
-	fn on_stake_update(_: &AccountId, _: Option<Stake<AccountId, Balance>>) {
-		// stub
-	}
-
-	fn on_nominator_update(_: &AccountId, _: Vec<AccountId>) {
-		// stub
-	}
-
-	fn on_validator_add(_: &AccountId) {
-		// stub
-	}
-
-	fn on_validator_remove(_: &AccountId) {
-		// stub
-	}
-
-	fn on_nominator_remove(_: &AccountId, _: Vec<AccountId>) {
-		// stub
-	}
-
-	fn on_unstake(_: &AccountId) {
-		// stub
-	}
 }
 
 /// A generic representation of a staking implementation.
@@ -154,7 +124,7 @@ pub trait StakingInterface {
 		+ Saturating;
 
 	/// AccountId type used by the staking system
-	type AccountId;
+	type AccountId: Clone;
 
 	/// whatever
 	type CurrencyToVote: CurrencyToVote<Self::Balance>;

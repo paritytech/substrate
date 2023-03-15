@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) 2023 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,6 +15,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! # Stake Tracker Pallet
+//!
+//! The Stake Tracker pallet is used to maintain sorted lists of [`frame_system::Config::AccountId`]
+//! by listening to the events that Staking emits.
+//!
+//! - [`Config`]
+//! - [`Pallet`]
+//!
+//! ## Overview
+//!
+//! The goal of Stake Tracker is to maintain [`SortedListProvider`] sorted list implementations
+//! based on [`SortedListProvider::Score`]. This pallet implements [`OnStakingUpdate`] interface in
+//! order to be able to listen to the events that Staking emits and propagate the changes to said
+//! lists accordingly. It also exposes [`TrackedList`] that adds defensive checks to a subset of
+//! [`SortedListProvider`] methods in order to spot unexpected list updates on the consumer side.
+//! This wrapper should be used to pass the tracked entity to the consumer.
+//!
+//! ## Terminology
+//!
+//! - Approval Stake: a sum total of self-stake and all of the backing nominator stakes.
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(test)]
@@ -22,18 +43,16 @@ pub(crate) mod mock;
 #[cfg(test)]
 mod tests;
 
-use frame_election_provider_support::{
-	ReadOnlySortedListProvider, ScoreProvider, SortedListProvider, VoteWeight,
-};
+use frame_election_provider_support::{ScoreProvider, SortedListProvider, VoteWeight};
 use frame_support::{
-	sp_runtime::Saturating,
-	traits::{Currency, CurrencyToVote},
+	defensive,
+	traits::{Currency, CurrencyToVote, Defensive},
 };
 pub use pallet::*;
-
+use sp_runtime::Saturating;
 use sp_staking::{OnStakingUpdate, Stake, StakingInterface};
 
-use sp_std::vec::Vec;
+use sp_std::{boxed::Box, vec::Vec};
 
 /// The balance type of this pallet.
 pub type BalanceOf<T> = <<T as Config>::Staking as StakingInterface>::Balance;
@@ -51,24 +70,26 @@ pub mod pallet {
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		/// This has to come from Staking::Currency
+		/// The same currency type that's used by Staking.
 		type Currency: Currency<Self::AccountId, Balance = BalanceOf<Self>>;
 
+		/// An interface to Staking.
 		type Staking: StakingInterface<AccountId = Self::AccountId>;
 
+		/// A sorted list of nominators and validators, by their stake and self-stake respectively.
 		type VoterList: SortedListProvider<Self::AccountId, Score = VoteWeight>;
 
+		/// A sorted list of validators, by their approval stake.
 		type TargetList: SortedListProvider<Self::AccountId, Score = BalanceOf<Self>>;
 	}
 
-	/// The map from validator stash key to their total approval stake. Not that this map is kept up
-	/// to date even if a validator chilled or turned into nominator. Entries from this map are only
+	/// The map from validator stash key to their approval stake. Note that this map is kept up to
+	/// date even if a validator chilled or turned into nominator. Entries from this map are only
 	/// ever removed if the stash is reaped.
 	///
 	/// NOTE: This is currently a [`CountedStorageMap`] for debugging purposes. We might actually
@@ -94,10 +115,8 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	/// The total balance that can be slashed from a stash account as of right now.
-	pub fn slashable_balance_of(who: &T::AccountId) -> BalanceOf<T> {
-		// Weight note: consider making the stake accessible through stash.
-		T::Staking::stake(&who).map(|l| l.active).unwrap_or_default()
+	pub fn active_stake_of(who: &T::AccountId) -> BalanceOf<T> {
+		T::Staking::stake(&who).map(|s| s.active).unwrap_or_default()
 	}
 
 	pub(crate) fn to_vote(balance: BalanceOf<T>) -> VoteWeight {
@@ -108,41 +127,81 @@ impl<T: Config> Pallet<T> {
 
 impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 	fn on_stake_update(who: &T::AccountId, prev_stake: Option<Stake<T::AccountId, BalanceOf<T>>>) {
-		// This should never fail.
-		let current_stake = T::Staking::stake(who).unwrap();
-		let prev_active = prev_stake.map(|s| s.active).unwrap_or_default();
-		let current_active = current_stake.active;
+		if let Ok(current_stake) = T::Staking::stake(who) {
+			let current_active = current_stake.active;
+			let prev_active = prev_stake.map(|s| s.active).unwrap_or_default();
 
-		let update_approval_stake = |who: &T::AccountId| {
-			let mut approval_stake = Self::approval_stake(who).unwrap_or_default();
+			let update_approval_stake = |who: &T::AccountId| {
+				let mut approval_stake = Self::approval_stake(who).unwrap_or_default();
 
-			use sp_std::cmp::Ordering;
-			match current_active.cmp(&prev_active) {
-				Ordering::Greater => {
-					approval_stake = approval_stake.saturating_add(current_active - prev_active);
-				},
-				Ordering::Less => {
-					approval_stake = approval_stake.saturating_sub(prev_active - current_active);
-				},
-				Ordering::Equal => return,
+				use sp_std::cmp::Ordering;
+				match current_active.cmp(&prev_active) {
+					Ordering::Greater => {
+						approval_stake =
+							approval_stake.saturating_add(current_active - prev_active);
+					},
+					Ordering::Less => {
+						approval_stake =
+							approval_stake.saturating_sub(prev_active - current_active);
+					},
+					Ordering::Equal => return,
+				};
+
+				if T::TargetList::contains(who) {
+					let _ = T::TargetList::on_update(who, approval_stake)
+						.defensive_proof("Unable to update a TargetList entry.");
+				}
+
+				ApprovalStake::<T>::set(who, Some(approval_stake));
 			};
-			let _ = T::TargetList::on_update(who, approval_stake);
-			ApprovalStake::<T>::set(who, Some(approval_stake));
-		};
 
-		// if this is a nominator
-		if let Some(targets) = T::Staking::nominations(&current_stake.stash) {
-			// update the target list.
-			for target in targets {
-				update_approval_stake(&target);
+			// if this is a nominator
+			if let Some(targets) = T::Staking::nominations(&current_stake.stash) {
+				// update the target list.
+				for target in targets {
+					update_approval_stake(&target);
+				}
+				let _ =
+					T::VoterList::on_update(&current_stake.stash, Self::to_vote(current_active))
+						.defensive_proof(
+							"Unable to update a nominator, perhaps it does not exist?",
+						);
 			}
 
-			let _ = T::VoterList::on_update(&current_stake.stash, Self::to_vote(current_active));
-		}
+			// if this is a validator
+			if T::Staking::is_validator(&current_stake.stash) {
+				if !T::TargetList::contains(&current_stake.stash) {
+					defensive!("Each validator must exist in the TargetList.");
+				}
 
-		if T::Staking::is_validator(&current_stake.stash) {
-			update_approval_stake(&current_stake.stash);
-			let _ = T::VoterList::on_update(&current_stake.stash, Self::to_vote(current_active));
+				update_approval_stake(&current_stake.stash);
+				let _ =
+					T::VoterList::on_update(&current_stake.stash, Self::to_vote(current_active))
+						.defensive_proof(
+							"Unable to update a validator, perhaps it does not exist?",
+						);
+			}
+		} else {
+			defensive!("on_stake_update should always be called on a bonded account!");
+		}
+	}
+	fn on_nominator_add(who: &T::AccountId) {
+		let score = Self::active_stake_of(who);
+		if let Some(nominations) = T::Staking::nominations(who) {
+			for nomination in nominations {
+				// Create a new entry if it does not exist
+				let new_stake =
+					Self::approval_stake(&nomination).unwrap_or_default().saturating_add(score);
+
+				ApprovalStake::<T>::set(&nomination, Some(new_stake));
+
+				if T::TargetList::contains(&nomination) {
+					let _ = T::TargetList::on_update(&nomination, new_stake)
+						.defensive_proof("Unable to update a TargetList entry.");
+				}
+			}
+			let _ = T::VoterList::on_insert(who.clone(), Self::to_vote(score))
+				.defensive_proof("Unable to insert a nominator, perhaps it already exists?");
 		}
 	}
 
@@ -163,55 +222,53 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 				// Create a new entry if it does not exist
 				let new_stake = Self::approval_stake(&nomination)
 					.unwrap_or_default()
-					.saturating_add(Self::slashable_balance_of(who));
+					.saturating_add(Self::active_stake_of(who));
 
 				update_approval_stake(&nomination, new_stake);
 			}
 
 			for nomination in obsolete {
 				if let Some(new_stake) = Self::approval_stake(&nomination) {
-					let new_stake = new_stake.saturating_sub(Self::slashable_balance_of(who));
+					let new_stake = new_stake.saturating_sub(Self::active_stake_of(who));
 					update_approval_stake(&nomination, new_stake);
 				}
 			}
-
-			// NOTE: We ignore the result here, because this method can be called when the nominator
-			// is already in the list, just changing their nominations.
-			let _ = T::VoterList::on_insert(
-				who.clone(),
-				Self::to_vote(Self::slashable_balance_of(who)),
-			);
 		}
 	}
 
-	// NOTE: This should only be called if that stash isn't already a validator. Because we don't
-	// remove ApprovalStake when a validator chills and we need to make sure their self-stake is
-	// up-to-date and not applied twice.
 	fn on_validator_add(who: &T::AccountId) {
-		let self_stake = Self::slashable_balance_of(who);
+		let self_stake = Self::active_stake_of(who);
 		let new_stake = Self::approval_stake(who).unwrap_or_default().saturating_add(self_stake);
 
-		// maybe update sorted list.
-		let _ = T::VoterList::on_insert(who.clone(), Self::to_vote(self_stake));
-
-		// TODO: Make sure this always works. Among other things we need to make sure that when the
-		// migration is run we only have active validators in TargetList and not the chilled ones.
-		let _ = T::TargetList::on_insert(who.clone(), new_stake);
+		let _ = T::TargetList::on_insert(who.clone(), new_stake).defensive_proof(
+			"Unable to insert a validator into TargetList, perhaps it already exists?",
+		);
 		ApprovalStake::<T>::set(who, Some(new_stake));
+		let _ = T::VoterList::on_insert(who.clone(), Self::to_vote(self_stake)).defensive_proof(
+			"Unable to insert a validator into VoterList, perhaps it already exists?",
+		);
+	}
+
+	fn on_validator_update(_who: &T::AccountId) {
+		// Nothing to be done.
 	}
 
 	fn on_validator_remove(who: &T::AccountId) {
-		let _ = T::TargetList::on_remove(who);
-		let _ = T::VoterList::on_remove(who);
+		let self_stake = Self::active_stake_of(who);
+		let new_stake = Self::approval_stake(who).unwrap_or_default().saturating_sub(self_stake);
+		ApprovalStake::<T>::set(who, Some(new_stake));
 
-		let _ = ApprovalStake::<T>::mutate(who, |x: &mut Option<BalanceOf<T>>| {
-			*x = x.map(|b| b.saturating_sub(Self::slashable_balance_of(who)))
-		});
+		let _ = T::TargetList::on_remove(who).defensive_proof(
+			"Unable to remove an entry from TargetList, perhaps it does not exist?",
+		);
+		let _ = T::VoterList::on_remove(who).defensive_proof(
+			"Unable to remove a validator from VoterList, perhaps it does not exist?",
+		);
 	}
 
 	fn on_nominator_remove(who: &T::AccountId, nominations: Vec<T::AccountId>) {
-		let score = Self::slashable_balance_of(who);
-		let _ = T::VoterList::on_remove(who);
+		let score = Self::active_stake_of(who);
+
 		for validator in nominations {
 			let _ = ApprovalStake::<T>::mutate(&validator, |x: &mut Option<BalanceOf<T>>| {
 				*x = x.map(|b| b.saturating_sub(score))
@@ -221,10 +278,19 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 				Self::approval_stake(&validator).unwrap_or_default(),
 			);
 		}
+
+		let _ = T::VoterList::on_remove(who)
+			.defensive_proof("Unable to remove a nominator, perhaps it does not exist?");
 	}
 
 	fn on_unstake(who: &T::AccountId) {
 		ApprovalStake::<T>::remove(who);
+		if T::VoterList::contains(who) {
+			defensive!("The staker should have already been removed!");
+		}
+		if T::TargetList::contains(who) {
+			defensive!("The validator should have already been removed!");
+		}
 	}
 }
 
@@ -238,5 +304,82 @@ impl<T: Config> ScoreProvider<T::AccountId> for Pallet<T> {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_score_of(who: &T::AccountId, score: Self::Score) {
 		ApprovalStake::<T>::set(who, Some(score));
+	}
+}
+
+/// A wrapper for a given `SortedListProvider` that introduces defensive checks  for insert, update
+/// and remove operations, suggesting that it's read-only, except for unsafe operations.
+pub struct TrackedList<AccountId, Inner>(sp_std::marker::PhantomData<(AccountId, Inner)>);
+
+impl<AccountId, Inner: SortedListProvider<AccountId>> SortedListProvider<AccountId>
+	for TrackedList<AccountId, Inner>
+{
+	type Error = Inner::Error;
+	type Score = Inner::Score;
+	fn iter() -> Box<dyn Iterator<Item = AccountId>> {
+		Inner::iter()
+	}
+
+	fn iter_from(start: &AccountId) -> Result<Box<dyn Iterator<Item = AccountId>>, Self::Error> {
+		Inner::iter_from(start)
+	}
+
+	fn count() -> u32 {
+		Inner::count()
+	}
+
+	fn contains(id: &AccountId) -> bool {
+		Inner::contains(id)
+	}
+
+	fn get_score(id: &AccountId) -> Result<Self::Score, Self::Error> {
+		Inner::get_score(id)
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn try_state() -> Result<(), &'static str> {
+		Inner::try_state()
+	}
+
+	fn on_insert(id: AccountId, score: Self::Score) -> Result<(), Self::Error> {
+		defensive!("TrackedList on_insert should never be called");
+		Inner::on_insert(id, score)
+	}
+
+	fn on_update(id: &AccountId, score: Self::Score) -> Result<(), Self::Error> {
+		defensive!("TrackedList on_update should never be called");
+		Inner::on_update(id, score)
+	}
+
+	fn on_increase(id: &AccountId, additional: Self::Score) -> Result<(), Self::Error> {
+		defensive!("TrackedList on_increase should never be called");
+		Inner::on_increase(id, additional)
+	}
+
+	fn on_decrease(id: &AccountId, decreased: Self::Score) -> Result<(), Self::Error> {
+		defensive!("TrackedList on_decrease should never be called");
+		Inner::on_decrease(id, decreased)
+	}
+
+	fn on_remove(id: &AccountId) -> Result<(), Self::Error> {
+		defensive!("TrackedList on_remove should never be called");
+		Inner::on_remove(id)
+	}
+
+	fn unsafe_regenerate(
+		all: impl IntoIterator<Item = AccountId>,
+		score_of: Box<dyn Fn(&AccountId) -> Self::Score>,
+	) -> u32 {
+		Inner::unsafe_regenerate(all, score_of)
+	}
+
+	frame_election_provider_support::runtime_benchmarks_or_test_enabled! {
+		fn unsafe_clear() {
+			Inner::unsafe_clear()
+		}
+
+		fn score_update_worst_case(who: &AccountId, is_increase: bool) -> Self::Score {
+			Inner::score_update_worst_case(who, is_increase)
+		}
 	}
 }

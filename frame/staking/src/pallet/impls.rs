@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,8 +18,8 @@
 //! Implementations for the Staking FRAME Pallet.
 
 use frame_election_provider_support::{
-	data_provider, BoundedSupportsOf, ElectionDataProvider, ElectionProvider,
-	ReadOnlySortedListProvider, ScoreProvider, SortedListProvider, VoteWeight, VoterOf,
+	data_provider, BoundedSupportsOf, ElectionDataProvider, ElectionProvider, ScoreProvider,
+	SortedListProvider, VoteWeight, VoterOf,
 };
 use frame_support::{
 	dispatch::WithPostDispatchInfo,
@@ -276,7 +276,7 @@ impl<T: Config> Pallet<T> {
 		});
 		T::Currency::set_lock(STAKING_ID, &ledger.stash, ledger.total, WithdrawReasons::all());
 		<Ledger<T>>::insert(controller, ledger);
-		T::EventListener::on_stake_update(&ledger.stash, prev_ledger);
+		T::EventListeners::on_stake_update(&ledger.stash, prev_ledger);
 	}
 
 	/// Chill a stash account.
@@ -668,7 +668,7 @@ impl<T: Config> Pallet<T> {
 		Self::do_remove_nominator(stash);
 
 		frame_system::Pallet::<T>::dec_consumers(stash);
-		T::EventListener::on_unstake(stash);
+		T::EventListeners::on_unstake(stash);
 
 		Ok(())
 	}
@@ -689,7 +689,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Apply previously-unapplied slashes on the beginning of a new era, after a delay.
 	fn apply_unapplied_slashes(active_era: EraIndex) {
-		let era_slashes = <Self as Store>::UnappliedSlashes::take(&active_era);
+		let era_slashes = UnappliedSlashes::<T>::take(&active_era);
 		log!(
 			debug,
 			"found {} slashes scheduled to be executed in era {:?}",
@@ -885,9 +885,13 @@ impl<T: Config> Pallet<T> {
 	/// to `Nominators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
 	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T>) {
-		let prev_nominations = Self::nominations(who);
+		if Nominators::<T>::contains_key(who) {
+			let prev_nominations = Self::nominations(who);
+			T::EventListeners::on_nominator_update(who, prev_nominations.unwrap_or_default());
+		} else {
+			T::EventListeners::on_nominator_add(who);
+		}
 		Nominators::<T>::insert(who, nominations);
-		T::EventListener::on_nominator_update(who, prev_nominations.unwrap_or_default());
 	}
 
 	/// This function will remove a nominator from the `Nominators` storage map,
@@ -900,7 +904,7 @@ impl<T: Config> Pallet<T> {
 	pub fn do_remove_nominator(who: &T::AccountId) -> bool {
 		if let Some(nominations) = Self::nominations(who) {
 			Nominators::<T>::remove(who);
-			T::EventListener::on_nominator_remove(who, nominations);
+			T::EventListeners::on_nominator_remove(who, nominations);
 			return true
 		}
 		false
@@ -914,9 +918,12 @@ impl<T: Config> Pallet<T> {
 	/// `Validators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
 	pub fn do_add_validator(who: &T::AccountId, prefs: ValidatorPrefs) {
-		if !Validators::<T>::contains_key(who) {
-			T::EventListener::on_validator_add(who);
+		if Validators::<T>::contains_key(who) {
+			T::EventListeners::on_validator_update(who);
+		} else {
+			T::EventListeners::on_validator_add(who);
 		}
+
 		Validators::<T>::insert(who, prefs);
 	}
 
@@ -929,7 +936,7 @@ impl<T: Config> Pallet<T> {
 	pub fn do_remove_validator(who: &T::AccountId) -> bool {
 		if Validators::<T>::contains_key(who) {
 			Validators::<T>::remove(who);
-			T::EventListener::on_validator_remove(who);
+			T::EventListeners::on_validator_remove(who);
 			return true
 		}
 		false
@@ -943,6 +950,20 @@ impl<T: Config> Pallet<T> {
 			weight,
 			DispatchClass::Mandatory,
 		);
+	}
+}
+
+impl<T: Config> Pallet<T> {
+	/// Returns the current nominations quota for nominators.
+	///
+	/// Used by the runtime API.
+	/// Note: for now, this api runtime will always return value of `T::MaxNominations` and thus it
+	/// is redundant. However, with the upcoming changes in
+	/// <https://github.com/paritytech/substrate/pull/12970>, the nominations quota will change
+	/// depending on the nominators balance. We're introducing this runtime API now to prepare the
+	/// community to use it before rolling out PR#12970.
+	pub fn api_nominations_quota(_balance: BalanceOf<T>) -> u32 {
+		T::MaxNominations::get()
 	}
 }
 
@@ -1062,8 +1083,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		<Validators<T>>::remove_all();
 		#[allow(deprecated)]
 		<Nominators<T>>::remove_all();
-		// TODO: sort it out some other way
-		// T::VoterList::unsafe_clear();
+		T::VoterList::unsafe_clear();
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -1227,7 +1247,7 @@ where
 		disable_strategy: DisableStrategy,
 	) -> Weight {
 		let reward_proportion = SlashRewardFraction::<T>::get();
-		let mut consumed_weight = Weight::from_ref_time(0);
+		let mut consumed_weight = Weight::from_parts(0, 0);
 		let mut add_db_reads_writes = |reads, writes| {
 			consumed_weight += T::DbWeight::get().reads_writes(reads, writes);
 		};
@@ -1329,7 +1349,7 @@ where
 						active_era,
 						slash_era + slash_defer_duration + 1,
 					);
-					<Self as Store>::UnappliedSlashes::mutate(
+					UnappliedSlashes::<T>::mutate(
 						slash_era.saturating_add(slash_defer_duration).saturating_add(One::one()),
 						move |for_later| for_later.push(unapplied),
 					);
@@ -1379,14 +1399,16 @@ impl<T: Config> ScoreProvider<T::AccountId> for Pallet<T> {
 /// does not provide validators in sorted order. If you desire nominators in a sorted order take
 /// a look at [`pallet-bags-list`].
 pub struct UseValidatorsMap<T>(sp_std::marker::PhantomData<T>);
-impl<T: Config> ReadOnlySortedListProvider<T::AccountId> for UseValidatorsMap<T> {
-	type Error = ();
+
+impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 	type Score = BalanceOf<T>;
+	type Error = ();
 
 	/// Returns iterator over voter list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
 		Box::new(Validators::<T>::iter().map(|(v, _)| v))
 	}
+
 	fn iter_from(
 		start: &T::AccountId,
 	) -> Result<Box<dyn Iterator<Item = T::AccountId>>, Self::Error> {
@@ -1397,15 +1419,43 @@ impl<T: Config> ReadOnlySortedListProvider<T::AccountId> for UseValidatorsMap<T>
 			Err(())
 		}
 	}
+
 	fn count() -> u32 {
 		Validators::<T>::count()
 	}
+
 	fn contains(id: &T::AccountId) -> bool {
 		Validators::<T>::contains_key(id)
 	}
+
+	fn on_insert(_: T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
+		// nothing to do on insert.
+		Ok(())
+	}
+
 	fn get_score(id: &T::AccountId) -> Result<Self::Score, Self::Error> {
 		Ok(Pallet::<T>::weight_of(id).into())
 	}
+
+	fn on_update(_: &T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
+		// nothing to do on update.
+		Ok(())
+	}
+
+	fn on_remove(_: &T::AccountId) -> Result<(), Self::Error> {
+		// nothing to do on remove.
+		Ok(())
+	}
+
+	fn unsafe_regenerate(
+		_: impl IntoIterator<Item = T::AccountId>,
+		_: Box<dyn Fn(&T::AccountId) -> Self::Score>,
+	) -> u32 {
+		// nothing to do upon regenerate.
+		0
+	}
+
+	#[cfg(feature = "try-runtime")]
 	fn try_state() -> Result<(), &'static str> {
 		Ok(())
 	}
@@ -1422,35 +1472,12 @@ impl<T: Config> ReadOnlySortedListProvider<T::AccountId> for UseValidatorsMap<T>
 	}
 }
 
-impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
-	fn on_insert(_: T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
-		// nothing to do on insert.
-		Ok(())
-	}
-
-	fn on_update(_: &T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
-		// nothing to do on update.
-		Ok(())
-	}
-	fn on_remove(_: &T::AccountId) -> Result<(), Self::Error> {
-		// nothing to do on remove.
-		Ok(())
-	}
-	fn unsafe_regenerate(
-		_: impl IntoIterator<Item = T::AccountId>,
-		_: Box<dyn Fn(&T::AccountId) -> Self::Score>,
-	) -> u32 {
-		// nothing to do upon regenerate.
-		0
-	}
-}
-
 /// A simple voter list implementation that does not require any additional pallets. Note, this
 /// does not provided nominators in sorted ordered. If you desire nominators in a sorted order take
 /// a look at [`pallet-bags-list].
 pub struct UseNominatorsAndValidatorsMap<T>(sp_std::marker::PhantomData<T>);
 
-impl<T: Config> ReadOnlySortedListProvider<T::AccountId> for UseNominatorsAndValidatorsMap<T> {
+impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsMap<T> {
 	type Error = ();
 	type Score = VoteWeight;
 
@@ -1461,6 +1488,7 @@ impl<T: Config> ReadOnlySortedListProvider<T::AccountId> for UseNominatorsAndVal
 				.chain(Nominators::<T>::iter().map(|(n, _)| n)),
 		)
 	}
+
 	fn iter_from(
 		start: &T::AccountId,
 	) -> Result<Box<dyn Iterator<Item = T::AccountId>>, Self::Error> {
@@ -1478,15 +1506,43 @@ impl<T: Config> ReadOnlySortedListProvider<T::AccountId> for UseNominatorsAndVal
 			Err(())
 		}
 	}
+
 	fn count() -> u32 {
 		Nominators::<T>::count().saturating_add(Validators::<T>::count())
 	}
+
 	fn contains(id: &T::AccountId) -> bool {
 		Nominators::<T>::contains_key(id) || Validators::<T>::contains_key(id)
 	}
+
+	fn on_insert(_: T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
+		// nothing to do on insert.
+		Ok(())
+	}
+
 	fn get_score(id: &T::AccountId) -> Result<Self::Score, Self::Error> {
 		Ok(Pallet::<T>::weight_of(id))
 	}
+
+	fn on_update(_: &T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
+		// nothing to do on update.
+		Ok(())
+	}
+
+	fn on_remove(_: &T::AccountId) -> Result<(), Self::Error> {
+		// nothing to do on remove.
+		Ok(())
+	}
+
+	fn unsafe_regenerate(
+		_: impl IntoIterator<Item = T::AccountId>,
+		_: Box<dyn Fn(&T::AccountId) -> Self::Score>,
+	) -> u32 {
+		// nothing to do upon regenerate.
+		0
+	}
+
+	#[cfg(feature = "try-runtime")]
 	fn try_state() -> Result<(), &'static str> {
 		Ok(())
 	}
@@ -1507,40 +1563,14 @@ impl<T: Config> ReadOnlySortedListProvider<T::AccountId> for UseNominatorsAndVal
 	}
 }
 
-impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsMap<T> {
-	fn on_insert(_: T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
-		// nothing to do on insert.
-		Ok(())
-	}
-
-	fn on_update(_: &T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
-		// nothing to do on update.
-		Ok(())
-	}
-	fn on_remove(_: &T::AccountId) -> Result<(), Self::Error> {
-		// nothing to do on remove.
-		Ok(())
-	}
-	fn unsafe_regenerate(
-		_: impl IntoIterator<Item = T::AccountId>,
-		_: Box<dyn Fn(&T::AccountId) -> Self::Score>,
-	) -> u32 {
-		// nothing to do upon regenerate.
-		0
-	}
-}
-
 // NOTE: in this entire impl block, the assumption is that `who` is a stash account.
 impl<T: Config> StakingInterface for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Balance = BalanceOf<T>;
+	type CurrencyToVote = T::CurrencyToVote;
 
 	fn minimum_nominator_bond() -> Self::Balance {
 		MinNominatorBond::<T>::get()
-	}
-
-	fn minimum_validator_bond() -> Self::Balance {
-		MinValidatorBond::<T>::get()
 	}
 
 	fn desired_validator_count() -> u32 {
@@ -1554,6 +1584,10 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	fn force_unstake(who: Self::AccountId) -> sp_runtime::DispatchResult {
 		let num_slashing_spans = Self::slashing_spans(&who).map_or(0, |s| s.iter().count() as u32);
 		Self::force_unstake(RawOrigin::Root.into(), who.clone(), num_slashing_spans)
+	}
+
+	fn minimum_validator_bond() -> Self::Balance {
+		MinValidatorBond::<T>::get()
 	}
 
 	fn stash_by_ctrl(controller: &Self::AccountId) -> Result<Self::AccountId, DispatchError> {
@@ -1632,6 +1666,10 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::nominate(RawOrigin::Signed(ctrl).into(), targets)
 	}
 
+	fn is_validator(who: &Self::AccountId) -> bool {
+		Validators::<T>::contains_key(who)
+	}
+
 	fn nominations(who: &Self::AccountId) -> Option<Vec<T::AccountId>> {
 		Nominators::<T>::get(who).map(|n| n.targets.into_inner())
 	}
@@ -1653,12 +1691,6 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		fn set_current_era(era: EraIndex) {
 			CurrentEra::<T>::put(era);
 		}
-	}
-
-	type CurrencyToVote = T::CurrencyToVote;
-
-	fn is_validator(who: &Self::AccountId) -> bool {
-		Validators::<T>::contains_key(who)
 	}
 }
 

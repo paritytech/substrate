@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +22,7 @@ use crate::{ConfigOp, Pallet as Staking};
 use testing_utils::*;
 
 use codec::Decode;
-use frame_election_provider_support::ReadOnlySortedListProvider;
+use frame_election_provider_support::SortedListProvider;
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	pallet_prelude::*,
@@ -189,7 +189,6 @@ impl<T: Config> ListScenario<T> {
 		)?;
 
 		// find a destination weight that will trigger the worst case scenario
-		// TODO: This is a hack, might be great to implement this differently.
 		let dest_weight_as_vote =
 			T::VoterList::score_update_worst_case(&origin_stash1, is_increase);
 

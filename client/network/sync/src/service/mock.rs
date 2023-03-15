@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -23,7 +23,10 @@ use sc_network_common::{
 	config::MultiaddrWithPeerId,
 	protocol::ProtocolName,
 	request_responses::{IfDisconnected, RequestFailure},
-	service::{NetworkPeers, NetworkRequest, NetworkSyncForkRequest},
+	service::{
+		NetworkNotification, NetworkPeers, NetworkRequest, NetworkSyncForkRequest,
+		NotificationSender, NotificationSenderError,
+	},
 };
 use sc_peerset::ReputationChange;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
@@ -124,5 +127,15 @@ mockall::mock! {
 			tx: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 			connect: IfDisconnected,
 		);
+	}
+
+	impl NetworkNotification for Network {
+		fn write_notification(&self, target: PeerId, protocol: ProtocolName, message: Vec<u8>);
+		fn notification_sender(
+			&self,
+			target: PeerId,
+			protocol: ProtocolName,
+		) -> Result<Box<dyn NotificationSender>, NotificationSenderError>;
+		fn set_notification_handshake(&self, protocol: ProtocolName, handshake: Vec<u8>);
 	}
 }

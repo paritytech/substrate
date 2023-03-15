@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -661,8 +661,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				status: AssetStatus::Live,
 			},
 		);
+		ensure!(T::CallbackHandle::created(&id, &owner).is_ok(), Error::<T, I>::CallbackFailed);
 		Self::deposit_event(Event::ForceCreated { asset_id: id, owner: owner.clone() });
-		T::CallbackHandle::created(&id, &owner);
 		Ok(())
 	}
 
@@ -752,7 +752,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					approvals_destroyed: removed_approvals as u32,
 					approvals_remaining: details.approvals as u32,
 				});
-				T::CallbackHandle::destroyed(&id);
 				Ok(())
 			})?;
 		Ok(removed_approvals)
@@ -767,6 +766,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::IncorrectStatus);
 			ensure!(details.accounts == 0, Error::<T, I>::InUse);
 			ensure!(details.approvals == 0, Error::<T, I>::InUse);
+			ensure!(T::CallbackHandle::destroyed(&id).is_ok(), Error::<T, I>::CallbackFailed);
 
 			let metadata = Metadata::<T, I>::take(&id);
 			T::Currency::unreserve(
@@ -923,5 +923,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			});
 			Ok(())
 		})
+	}
+
+	/// Returns all the non-zero balances for all assets of the given `account`.
+	pub fn account_balances(account: T::AccountId) -> Vec<(T::AssetId, T::Balance)> {
+		Asset::<T, I>::iter_keys()
+			.filter_map(|id| Self::maybe_balance(id, account.clone()).map(|balance| (id, balance)))
+			.collect::<Vec<_>>()
 	}
 }

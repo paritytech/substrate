@@ -1,4 +1,4 @@
-// Copyright 2021 Parity Technologies (UK) Ltd.
+// Copyright Parity Technologies (UK) Ltd.
 // This file is part of Polkadot.
 
 // Polkadot is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 //! Test to check the migration of the voter bag.
 
 use crate::{RuntimeT, LOG_TARGET};
-use frame_election_provider_support::ReadOnlySortedListProvider;
+use frame_election_provider_support::SortedListProvider;
 use frame_support::traits::PalletInfoAccess;
 use pallet_staking::Nominators;
 use remote_externalities::{Builder, Mode, OnlineConfig};
@@ -49,9 +49,8 @@ pub async fn execute<Runtime, Block>(
 		let pre_migrate_nominator_count = <Nominators<Runtime>>::iter().count() as u32;
 		log::info!(target: LOG_TARGET, "Nominator count: {}", pre_migrate_nominator_count);
 
-		use frame_election_provider_support::SortedListProvider;
 		// run the actual migration
-		let moved = <Runtime as pallet_stake_tracker::Config>::VoterList::unsafe_regenerate(
+		let moved = <Runtime as pallet_staking::Config>::VoterList::unsafe_regenerate(
 			pallet_staking::Nominators::<Runtime>::iter().map(|(n, _)| n),
 			pallet_staking::Pallet::<Runtime>::weight_of_fn(),
 		);

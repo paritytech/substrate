@@ -39,10 +39,6 @@ sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elect
 pallet-bags-list = { version = "4.0.0-dev", path = "../bags-list" }
 frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
 
-
-
-
-
 [features]
 default = ["std"]
 std = [
@@ -70,6 +66,5 @@ runtime-benchmarks = [
 	"sp-staking/runtime-benchmarks",
 	"pallet-staking/runtime-benchmarks"
 ]
-
 
 try-runtime = ["frame-support/try-runtime"]

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,7 @@
 
 //! Utilities for remote-testing pallet-bags-list.
 
-use frame_election_provider_support::{ReadOnlySortedListProvider, ScoreProvider};
+use frame_election_provider_support::{ScoreProvider, SortedListProvider};
 use pallet_bags_list::Instance1;
 use sp_std::prelude::*;
 
@@ -32,18 +32,12 @@ pub mod try_state;
 ///
 /// For example, this can be the `Runtime` type of the Polkadot runtime.
 pub trait RuntimeT<I: 'static>:
-	pallet_staking::Config
-	+ pallet_stake_tracker::Config
-	+ pallet_bags_list::Config<I>
-	+ frame_system::Config
+	pallet_staking::Config + pallet_bags_list::Config<I> + frame_system::Config
 {
 }
 impl<
 		I: 'static,
-		T: pallet_staking::Config
-			+ pallet_stake_tracker::Config
-			+ pallet_bags_list::Config<I>
-			+ frame_system::Config,
+		T: pallet_staking::Config + pallet_bags_list::Config<I> + frame_system::Config,
 	> RuntimeT<I> for T
 {
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -80,6 +80,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> bool {
 		CollectionRoleOf::<T, I>::get(&collection_id, &account_id)
 			.map_or(false, |roles| roles.has_role(role))
+	}
+
+	/// Finds the account by a provided role within a collection.
+	///
+	/// - `collection_id`: A collection to check the role in.
+	/// - `role`: A role to find the account for.
+	///
+	/// Returns `Some(T::AccountId)` if the record was found, `None` otherwise.
+	pub(crate) fn find_account_by_role(
+		collection_id: &T::CollectionId,
+		role: CollectionRole,
+	) -> Option<T::AccountId> {
+		CollectionRoleOf::<T, I>::iter_prefix(&collection_id).into_iter().find_map(
+			|(account, roles)| if roles.has_role(role) { Some(account.clone()) } else { None },
+		)
 	}
 
 	/// Groups provided roles by account, given one account could have multiple roles.

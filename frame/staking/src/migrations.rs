@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -267,7 +267,7 @@ pub mod v10 {
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV10<T> {
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
 			if obsolete::StorageVersion::<T>::get() == obsolete::Releases::V9_0_0 {
-				let pending_slashes = <Pallet<T> as Store>::UnappliedSlashes::iter().take(512);
+				let pending_slashes = UnappliedSlashes::<T>::iter().take(512);
 				for (era, slashes) in pending_slashes {
 					for slash in slashes {
 						// in the old slashing scheme, the slash era was the key at which we read
@@ -292,7 +292,7 @@ pub mod v10 {
 
 pub mod v9 {
 	use super::*;
-	use frame_election_provider_support::{ReadOnlySortedListProvider, SortedListProvider};
+	use frame_election_provider_support::SortedListProvider;
 	#[cfg(feature = "try-runtime")]
 	use frame_support::codec::{Decode, Encode};
 	#[cfg(feature = "try-runtime")]
@@ -376,7 +376,7 @@ pub mod v9 {
 pub mod v8 {
 	use super::*;
 	use crate::{Config, Nominators, Pallet, Weight};
-	use frame_election_provider_support::{ReadOnlySortedListProvider, SortedListProvider};
+	use frame_election_provider_support::SortedListProvider;
 	use frame_support::traits::Get;
 
 	pub trait MigrationConfig {
@@ -407,7 +407,6 @@ pub mod v8 {
 				Nominators::<T::Config>::iter().map(|(id, _)| id),
 				Pallet::<T::Config>::weight_of_fn(),
 			);
-			debug_assert_eq!(T::VoterList::try_state(), Ok(()));
 
 			obsolete::StorageVersion::<T::Config>::put(obsolete::Releases::V8_0_0);
 			frame_support::log::info!(

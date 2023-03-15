@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,9 +17,16 @@
 
 //! Test utilities
 
-use crate::{self as pallet_staking, *};
+use crate::{
+	self as pallet_staking,
+	mock::StakingEvent::{
+		NominatorAdd, NominatorRemove, NominatorUpdate, StakeUpdate, Unstake, ValidatorAdd,
+		ValidatorRemove, ValidatorUpdate,
+	},
+	*,
+};
 use frame_election_provider_support::{
-	onchain, ReadOnlySortedListProvider, SequentialPhragmen, VoteWeight,
+	onchain, SequentialPhragmen, SortedListProvider, VoteWeight,
 };
 use frame_support::{
 	assert_ok, ord_parameter_types, parameter_types,
@@ -37,7 +44,10 @@ use sp_runtime::{
 	testing::{Header, UintAuthorityId},
 	traits::{IdentityLookup, Zero},
 };
-use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
+use sp_staking::{
+	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
+	OnStakingUpdate, Stake,
+};
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
 pub const BLOCK_TIME: u64 = 1000;
@@ -101,8 +111,8 @@ frame_support::construct_runtime!(
 		Session: pallet_session,
 		Historical: pallet_session::historical,
 		VoterBagsList: pallet_bags_list::<Instance1>,
-    TargetBagsList: pallet_bags_list::<Instance2>,
-    StakeTracker: pallet_stake_tracker,
+		TargetBagsList: pallet_bags_list::<Instance2>,
+		StakeTracker: pallet_stake_tracker,
 	}
 );
 
@@ -290,6 +300,73 @@ impl<T: Config> sp_staking::OnStakerSlash<AccountId, Balance> for OnStakerSlashM
 	}
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum StakingEvent {
+	StakeUpdate(AccountId, Option<Stake<AccountId, Balance>>),
+	NominatorAdd(AccountId),
+	NominatorUpdate(AccountId, Vec<AccountId>),
+	ValidatorAdd(AccountId),
+	ValidatorUpdate(AccountId),
+	ValidatorRemove(AccountId),
+	NominatorRemove(AccountId, Vec<AccountId>),
+	Unstake(AccountId),
+}
+
+parameter_types! {
+	pub static EmittedEvents: Vec<StakingEvent> = Vec::new();
+}
+
+pub struct EventListenerMock;
+impl OnStakingUpdate<AccountId, Balance> for EventListenerMock {
+	fn on_stake_update(who: &AccountId, prev_stake: Option<Stake<AccountId, Balance>>) {
+		let mut vec = EmittedEvents::get();
+		vec.push(StakeUpdate(*who, prev_stake));
+		EmittedEvents::set(vec);
+	}
+
+	fn on_nominator_add(who: &AccountId) {
+		let mut vec = EmittedEvents::get();
+		vec.push(NominatorAdd(*who));
+		EmittedEvents::set(vec);
+	}
+
+	fn on_nominator_update(who: &AccountId, prev_nominations: Vec<AccountId>) {
+		let mut vec = EmittedEvents::get();
+		vec.push(NominatorUpdate(*who, prev_nominations));
+		EmittedEvents::set(vec);
+	}
+
+	fn on_validator_add(who: &AccountId) {
+		let mut vec = EmittedEvents::get();
+		vec.push(ValidatorAdd(*who));
+		EmittedEvents::set(vec);
+	}
+
+	fn on_validator_update(who: &AccountId) {
+		let mut vec = EmittedEvents::get();
+		vec.push(ValidatorUpdate(*who));
+		EmittedEvents::set(vec);
+	}
+
+	fn on_validator_remove(who: &AccountId) {
+		let mut vec = EmittedEvents::get();
+		vec.push(ValidatorRemove(*who));
+		EmittedEvents::set(vec);
+	}
+
+	fn on_nominator_remove(who: &AccountId, nominations: Vec<AccountId>) {
+		let mut vec = EmittedEvents::get();
+		vec.push(NominatorRemove(*who, nominations));
+		EmittedEvents::set(vec);
+	}
+
+	fn on_unstake(who: &AccountId) {
+		let mut vec = EmittedEvents::get();
+		vec.push(Unstake(*who));
+		EmittedEvents::set(vec);
+	}
+}
+
 impl crate::pallet::pallet::Config for Test {
 	type MaxNominations = MaxNominations;
 	type Currency = Balances;
@@ -311,15 +388,14 @@ impl crate::pallet::pallet::Config for Test {
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type ElectionProvider = onchain::OnChainExecution<OnChainSeqPhragmen>;
 	type GenesisElectionProvider = Self::ElectionProvider;
-	// NOTE: consider a macro and use `UseNominatorsAndValidatorsMap<Self>` as well.
-	type VoterList = VoterBagsList;
+	type VoterList = pallet_stake_tracker::TrackedList<AccountId, VoterBagsList>;
 	type TargetList = UseValidatorsMap<Self>;
 	type MaxUnlockingChunks = MaxUnlockingChunks;
 	type HistoryDepth = HistoryDepth;
 	type OnStakerSlash = OnStakerSlashMock<Test>;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type WeightInfo = ();
-	type EventListener = StakeTracker;
+	type EventListeners = (StakeTracker, EventListenerMock);
 }
 
 impl pallet_stake_tracker::Config for Test {
@@ -345,6 +421,7 @@ pub struct ExtBuilder {
 	status: BTreeMap<AccountId, StakerStatus<AccountId>>,
 	stakes: BTreeMap<AccountId, Balance>,
 	stakers: Vec<(AccountId, AccountId, Balance, StakerStatus<AccountId>)>,
+	check_events: bool,
 	tracker_target_list_cleanup: bool,
 }
 
@@ -363,6 +440,7 @@ impl Default for ExtBuilder {
 			status: Default::default(),
 			stakes: Default::default(),
 			stakers: Default::default(),
+			check_events: false,
 			tracker_target_list_cleanup: false,
 		}
 	}
@@ -443,10 +521,16 @@ impl ExtBuilder {
 		self.balance_factor = factor;
 		self
 	}
-	#[allow(unused)]
-	pub fn clear_tracker_target_list(mut self) -> Self {
-		self.tracker_target_list_cleanup = true;
+	pub fn check_events(mut self, check: bool) -> Self {
+		self.check_events = check;
 		self
+	}
+	// NOTE: can be removed when pallet_staking is allowed to use BagsList as TargetList.
+	frame_election_provider_support::runtime_benchmarks_or_test_enabled! {
+		pub fn clear_tracker_target_list(mut self) -> Self {
+			self.tracker_target_list_cleanup = true;
+			self
+		}
 	}
 	fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
@@ -572,7 +656,7 @@ impl ExtBuilder {
 	}
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		sp_tracing::try_init_simple();
-
+		let check_events = self.check_events;
 		#[allow(unused)]
 		let tracker_cleanup = self.tracker_target_list_cleanup;
 		let mut ext = self.build();
@@ -583,7 +667,17 @@ impl ExtBuilder {
 				}
 			});
 		}
+		ext.execute_with(|| {
+			// Clean up all the events produced on init.
+			EmittedEvents::take();
+		});
 		ext.execute_with(test);
+		if check_events {
+			ext.execute_with(|| {
+				// Make sure we have checked all the events produced by the test.
+				assert!(EmittedEvents::get().is_empty(), "Encountered unchecked Staking events");
+			});
+		}
 		ext.execute_with(|| {
 			assert_eq!(
 				Validators::<Test>::count(),

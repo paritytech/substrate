@@ -1,64 +1,42 @@
+// This file is part of Substrate.
+
+// Copyright (C) 2023 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use super::{mock::*, pallet::*};
 use crate as pallet_stake_tracker;
-use frame_election_provider_support::{ReadOnlySortedListProvider, SortedListProvider};
-use frame_support::{assert_ok, assert_storage_noop};
+use frame_election_provider_support::SortedListProvider;
+use frame_support::{assert_err, assert_ok, assert_storage_noop};
 use sp_staking::{OnStakingUpdate, Stake, StakingInterface};
 
-type VoterList = <Runtime as pallet_stake_tracker::Config>::VoterList;
-type TargetList = <Runtime as pallet_stake_tracker::Config>::TargetList;
-type Staking = <Runtime as pallet_stake_tracker::Config>::Staking;
+pub(crate) type VoterList = <Runtime as pallet_stake_tracker::Config>::VoterList;
+pub(crate) type TargetList = <Runtime as pallet_stake_tracker::Config>::TargetList;
+
+// It is the caller's problem to make sure each of events is emitted in the right context, therefore
+// we test each event for all the stakers (validators + nominators).
 
 mod on_stake_update {
 	use super::*;
-	#[test]
-	fn empty_lists() {
-		ExtBuilder::default().build_and_execute(|| {
-			assert_eq!(VoterList::count(), 0);
-			assert_eq!(TargetList::count(), 0);
-			let validator_id = &10;
-			// usual user
-			assert_storage_noop!(StakeTracker::on_stake_update(&1, None));
-			// validator
-			StakeTracker::on_stake_update(validator_id, None);
-			assert_eq!(
-				ApprovalStake::<Runtime>::get(validator_id).unwrap(),
-				StakeTracker::slashable_balance_of(validator_id)
-			);
-			assert_eq!(ApprovalStake::<Runtime>::count(), 1);
-
-			// nominator
-			StakeTracker::on_stake_update(&20, None);
-			assert_eq!(
-				ApprovalStake::<Runtime>::get(validator_id).unwrap(),
-				StakeTracker::slashable_balance_of(validator_id) +
-					StakeTracker::slashable_balance_of(&20)
-			);
-			assert_eq!(
-				StakeTracker::approval_stake(&11).unwrap(),
-				StakeTracker::slashable_balance_of(&20)
-			);
-			assert_eq!(ApprovalStake::<Runtime>::count(), 2);
-			assert_eq!(VoterList::count(), 0);
-			assert_eq!(TargetList::count(), 0);
-		});
-	}
 
 	#[test]
-	#[should_panic]
-	fn panics_when_not_bonded() {
+	#[should_panic(expected = "on_stake_update should always be called on a bonded account!")]
+	fn defensive_when_not_bonded() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(VoterList::count(), 0);
 			// user without stake
 			assert_storage_noop!(StakeTracker::on_stake_update(&30, None));
-		});
-	}
-
-	#[test]
-	fn noop_when_not_validator_or_nominator() {
-		ExtBuilder::default().build_and_execute(|| {
-			VoterList::on_insert(1, 10000).unwrap();
-			// usual user
-			assert_storage_noop!(StakeTracker::on_stake_update(&1, None));
 		});
 	}
 
@@ -86,11 +64,11 @@ mod on_stake_update {
 			// VoterList logic does not care about previous stake so we test it only once.
 			assert_eq!(
 				VoterList::get_score(&validator_id).unwrap(),
-				StakeTracker::to_vote(StakeTracker::slashable_balance_of(&validator_id))
+				StakeTracker::to_vote(StakeTracker::active_stake_of(&validator_id))
 			);
 			assert_eq!(
 				TargetList::get_score(&validator_id).unwrap(),
-				StakeTracker::slashable_balance_of(&validator_id)
+				StakeTracker::active_stake_of(&validator_id)
 			);
 
 			// Previous stake is more than current 10 vs 9, ApprovalStake decrements by 1.
@@ -101,7 +79,7 @@ mod on_stake_update {
 
 			assert_eq!(
 				TargetList::get_score(&validator_id).unwrap(),
-				StakeTracker::slashable_balance_of(&validator_id) - 1
+				StakeTracker::active_stake_of(&validator_id) - 1
 			);
 
 			// Previous stake is less than current 8 vs 9, ApprovalStake increments	 by 1.
@@ -112,7 +90,7 @@ mod on_stake_update {
 
 			assert_eq!(
 				TargetList::get_score(&validator_id).unwrap(),
-				StakeTracker::slashable_balance_of(&validator_id)
+				StakeTracker::active_stake_of(&validator_id)
 			);
 
 			assert_eq!(VoterList::count(), 1);
@@ -126,12 +104,12 @@ mod on_stake_update {
 			let _ = StakeTracker::on_stake_update(&nominator_id, None);
 			assert_eq!(
 				VoterList::get_score(&nominator_id).unwrap(),
-				StakeTracker::to_vote(StakeTracker::slashable_balance_of(&nominator_id))
+				StakeTracker::to_vote(StakeTracker::active_stake_of(&nominator_id))
 			);
 			assert_eq!(
 				TargetList::get_score(&validator_id).unwrap(),
-				StakeTracker::slashable_balance_of(&nominator_id) +
-					StakeTracker::slashable_balance_of(&validator_id)
+				StakeTracker::active_stake_of(&nominator_id) +
+					StakeTracker::active_stake_of(&validator_id)
 			);
 			assert_eq!(
 				ApprovalStake::<Runtime>::get(validator_id).unwrap(),
@@ -139,7 +117,7 @@ mod on_stake_update {
 			);
 			assert_eq!(
 				TargetList::get_score(&validator2_id).unwrap(),
-				StakeTracker::slashable_balance_of(&nominator_id)
+				StakeTracker::active_stake_of(&nominator_id)
 			);
 			assert_eq!(
 				ApprovalStake::<Runtime>::get(validator2_id).unwrap(),
@@ -149,34 +127,141 @@ mod on_stake_update {
 			assert_eq!(TargetList::count(), 2);
 		});
 	}
-}
 
-mod on_nominator_update {
-	use super::*;
-	use frame_support::assert_err;
 	#[test]
-	fn noop_for_non_nominator() {
+	#[should_panic(expected = "Unable to update a nominator, perhaps it does not exist?")]
+	fn defensive_when_not_in_list_nominator() {
 		ExtBuilder::default().build_and_execute(|| {
-			// usual user, validator, not bonded user
-			for id in [1, 10, 30] {
-				assert_storage_noop!(StakeTracker::on_nominator_update(&id, Vec::new()));
+			assert_eq!(VoterList::count(), 0);
+			for id in Nominators::get() {
+				StakeTracker::on_stake_update(&id, None);
 			}
 		});
 	}
 
 	#[test]
-	fn nominator_in_the_list_empty_nominations() {
+	#[should_panic(expected = "Each validator must exist in the TargetList.")]
+	fn defensive_when_not_in_target_list_validator() {
 		ExtBuilder::default().build_and_execute(|| {
-			let _ = VoterList::on_insert(22, 1);
-			assert_storage_noop!(StakeTracker::on_nominator_update(&22, Vec::new()));
-			StakeTracker::on_nominator_update(&23, Vec::new());
-			assert_eq!(
-				VoterList::get_score(&23).unwrap(),
-				StakeTracker::to_vote(Staking::stake(&23).map(|s| s.active).unwrap())
-			)
+			assert_eq!(VoterList::count(), 0);
+			for id in Validators::get() {
+				StakeTracker::on_stake_update(&id, None);
+			}
 		});
 	}
 
+	#[test]
+	#[should_panic(expected = "Unable to update a validator, perhaps it does not exist?")]
+	fn defensive_when_not_in_voter_list_validator() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+			for id in Validators::get() {
+				assert_ok!(TargetList::on_insert(id, 100));
+				StakeTracker::on_stake_update(&id, None);
+			}
+		});
+	}
+}
+
+mod on_nominator_add {
+	use super::*;
+
+	#[test]
+	fn works_with_empty_lists() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+			assert_eq!(TargetList::count(), 0);
+
+			let mut nominations = nominations();
+
+			for id in Nominators::get() {
+				StakeTracker::on_nominator_add(&id);
+				assert_eq!(
+					VoterList::get_score(&id).unwrap(),
+					StakeTracker::to_vote(StakeTracker::active_stake_of(&id))
+				);
+			}
+
+			for (nomination, score) in nominations.clone() {
+				assert_eq!(ApprovalStake::<Runtime>::get(nomination).unwrap_or_default(), score);
+			}
+
+			assert_eq!(VoterList::count(), Nominators::get().len() as u32);
+			// does not update the TargetList as the validators were not added to it
+			assert_eq!(TargetList::count(), 0);
+		});
+	}
+
+	#[test]
+	fn works_with_prepopulated_target_list() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+			assert_eq!(TargetList::count(), 0);
+
+			let nominations = nominations();
+
+			// prepopulate the TargetList with nominated validators
+			for (nomination, _) in &nominations {
+				StakeTracker::on_validator_add(&nomination);
+			}
+
+			// nominators
+			for id in Nominators::get() {
+				StakeTracker::on_nominator_add(&id);
+				assert_eq!(
+					VoterList::get_score(&id).unwrap(),
+					StakeTracker::to_vote(StakeTracker::active_stake_of(&id))
+				);
+			}
+
+			for (nomination, score) in &nominations {
+				let approval_stake = *score + StakeTracker::active_stake_of(nomination);
+				assert_eq!(
+					ApprovalStake::<Runtime>::get(nomination).unwrap_or_default(),
+					approval_stake
+				);
+				assert_eq!(
+					ApprovalStake::<Runtime>::get(nomination).unwrap_or_default(),
+					TargetList::get_score(nomination).unwrap()
+				);
+			}
+
+			assert_eq!(VoterList::count(), (Nominators::get().len() + nominations.len()) as u32);
+			assert_eq!(TargetList::count(), nominations.len() as u32);
+		});
+	}
+
+	#[test]
+	#[should_panic(expected = "Unable to insert a nominator, perhaps it already exists?")]
+	fn defensive_when_in_list() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+			for id in Nominators::get() {
+				let _ = VoterList::on_insert(id, 100);
+				StakeTracker::on_nominator_add(&id);
+			}
+		});
+	}
+}
+
+mod on_nominator_update {
+	use super::*;
+	use frame_support::traits::Len;
+
+	#[test]
+	fn noop_for_non_nominator_and_empty_nominations() {
+		ExtBuilder::default().build_and_execute(|| {
+			// validators
+			for id in Validators::get() {
+				assert_storage_noop!(StakeTracker::on_nominator_update(&id, Vec::new()));
+			}
+
+			// nominators with no nominations
+			for id in Nominators::get().iter().filter(|id| Staking::nominations(&id).len() == 0) {
+				assert_storage_noop!(StakeTracker::on_nominator_update(&id, Vec::new()));
+			}
+		});
+	}
 	#[test]
 	// It is the caller's problem to make sure `on_nominator_update` is called in the right context.
 	fn nomination_scenarios() {
@@ -185,10 +270,6 @@ mod on_nominator_update {
 
 			// no prev nominations and nominations are not in TargetList
 			StakeTracker::on_nominator_update(&20, Vec::new());
-			assert_eq!(
-				VoterList::get_score(&20).unwrap(),
-				StakeTracker::to_vote(StakeTracker::slashable_balance_of(&20))
-			);
 
 			for nomination in Staking::nominations(&20).unwrap() {
 				assert_err!(
@@ -197,7 +278,7 @@ mod on_nominator_update {
 				);
 				assert_eq!(
 					StakeTracker::approval_stake(&nomination).unwrap(),
-					StakeTracker::slashable_balance_of(&20)
+					StakeTracker::active_stake_of(&20)
 				);
 			}
 
@@ -210,21 +291,17 @@ mod on_nominator_update {
 			}
 
 			StakeTracker::on_nominator_update(&20, Vec::new());
-			assert_eq!(
-				VoterList::get_score(&20).unwrap(),
-				StakeTracker::to_vote(StakeTracker::slashable_balance_of(&20))
-			);
 
 			for nomination in Staking::nominations(&20).unwrap() {
 				assert_eq!(
 					TargetList::get_score(&nomination).unwrap(),
-					StakeTracker::slashable_balance_of(&20)
-						.saturating_add(StakeTracker::slashable_balance_of(&nomination))
+					StakeTracker::active_stake_of(&20)
+						.saturating_add(StakeTracker::active_stake_of(&nomination))
 				);
 				assert_eq!(
 					ApprovalStake::<Runtime>::get(&nomination).unwrap(),
-					StakeTracker::slashable_balance_of(&20)
-						.saturating_add(StakeTracker::slashable_balance_of(&nomination))
+					StakeTracker::active_stake_of(&20)
+						.saturating_add(StakeTracker::active_stake_of(&nomination))
 				);
 			}
 
@@ -233,8 +310,8 @@ mod on_nominator_update {
 			// reset two validators to have something new to nominate and something that won't
 			// be touched
 			for nomination in vec![10, 11] {
+				StakeTracker::on_validator_remove(&nomination);
 				StakeTracker::on_unstake(&nomination);
-				let _ = TargetList::on_remove(&nomination);
 				StakeTracker::on_validator_add(&nomination);
 			}
 
@@ -244,34 +321,31 @@ mod on_nominator_update {
 
 			assert_eq!(
 				TargetList::get_score(&12).unwrap(),
-				StakeTracker::slashable_balance_of(&12)
-					.saturating_sub(StakeTracker::slashable_balance_of(&20))
+				StakeTracker::active_stake_of(&12)
+					.saturating_sub(StakeTracker::active_stake_of(&20))
 			);
 			assert_eq!(
 				StakeTracker::approval_stake(&12).unwrap(),
-				StakeTracker::slashable_balance_of(&12)
-					.saturating_sub(StakeTracker::slashable_balance_of(&20))
+				StakeTracker::active_stake_of(&12)
+					.saturating_sub(StakeTracker::active_stake_of(&20))
 			);
 
 			assert_eq!(
 				TargetList::get_score(&10).unwrap(),
-				StakeTracker::slashable_balance_of(&20)
-					.saturating_add(StakeTracker::slashable_balance_of(&10))
+				StakeTracker::active_stake_of(&20)
+					.saturating_add(StakeTracker::active_stake_of(&10))
 			);
 			assert_eq!(
 				StakeTracker::approval_stake(&10).unwrap(),
-				StakeTracker::slashable_balance_of(&20)
-					.saturating_add(StakeTracker::slashable_balance_of(&10))
+				StakeTracker::active_stake_of(&20)
+					.saturating_add(StakeTracker::active_stake_of(&10))
 			);
 
 			// this is untouched as it was present in both current and prev nominations
-			assert_eq!(
-				TargetList::get_score(&11).unwrap(),
-				StakeTracker::slashable_balance_of(&11)
-			);
+			assert_eq!(TargetList::get_score(&11).unwrap(), StakeTracker::active_stake_of(&11));
 			assert_eq!(
 				StakeTracker::approval_stake(&11).unwrap(),
-				StakeTracker::slashable_balance_of(&11)
+				StakeTracker::active_stake_of(&11)
 			);
 		});
 	}
@@ -279,59 +353,114 @@ mod on_nominator_update {
 
 mod on_validator_add {
 	use super::*;
-	#[test]
-	fn not_updating_when_in_the_list() {
-		ExtBuilder::default().build_and_execute(|| {
-			// usual user, validator, nominator
-			for id in [1, 10, 20] {
-				let _ = VoterList::on_insert(id, 1000);
-				let _ = TargetList::on_insert(id, 1000);
-				ApprovalStake::<Runtime>::set(&id, Some(1000));
 
+	#[test]
+	fn works() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+			assert_eq!(TargetList::count(), 0);
+
+			// nominators + validators
+			for id in stakers() {
 				StakeTracker::on_validator_add(&id);
-				assert_eq!(VoterList::get_score(&id).unwrap(), 1000);
-				assert_eq!(TargetList::get_score(&id).unwrap(), 1000);
-				// only updates ApprovalStake as it allows for `upsert` due to the fact that it's
-				// never removed, unless unstaked
 				assert_eq!(
-					StakeTracker::approval_stake(&id).unwrap(),
-					1000 + StakeTracker::slashable_balance_of(&id)
-				)
+					VoterList::get_score(&id).unwrap(),
+					StakeTracker::to_vote(StakeTracker::active_stake_of(&id))
+				);
+				assert_eq!(
+					TargetList::get_score(&id).unwrap(),
+					ApprovalStake::<Runtime>::get(&id).unwrap()
+				);
+			}
+
+			assert_eq!(VoterList::count(), stakers().len() as u32);
+			assert_eq!(TargetList::count(), stakers().len() as u32);
+		});
+	}
+
+	#[test]
+	fn works_with_existing_approval_stake() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+			assert_eq!(TargetList::count(), 0);
+
+			let initial_approval_stake = 100;
+
+			// nominators + validators
+			for id in stakers() {
+				ApprovalStake::<Runtime>::set(&id, Some(initial_approval_stake));
+				StakeTracker::on_validator_add(&id);
+				assert_eq!(
+					VoterList::get_score(&id).unwrap(),
+					StakeTracker::to_vote(StakeTracker::active_stake_of(&id))
+				);
+				assert_eq!(
+					TargetList::get_score(&id).unwrap(),
+					ApprovalStake::<Runtime>::get(&id).unwrap()
+				);
+				assert_eq!(
+					ApprovalStake::<Runtime>::get(&id).unwrap(),
+					StakeTracker::active_stake_of(&id) + initial_approval_stake,
+				);
+			}
+
+			assert_eq!(VoterList::count(), stakers().len() as u32);
+			assert_eq!(TargetList::count(), stakers().len() as u32);
+		});
+	}
+
+	#[test]
+	#[should_panic(
+		expected = "Unable to insert a validator into VoterList, perhaps it already exists?"
+	)]
+	fn defensive_when_in_list() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+			for id in Validators::get() {
+				let _ = VoterList::on_insert(id, 100);
+				StakeTracker::on_validator_add(&id);
 			}
 		});
 	}
 
 	#[test]
-	#[should_panic]
-	fn panics_when_not_bonded() {
+	#[should_panic(
+		expected = "Unable to insert a validator into TargetList, perhaps it already exists?"
+	)]
+	fn defensive_when_in_target_list() {
 		ExtBuilder::default().build_and_execute(|| {
-			assert_eq!(VoterList::count(), 0);
-			// user without stake
-			assert_storage_noop!(StakeTracker::on_validator_add(&30));
+			assert_eq!(TargetList::count(), 0);
+			for id in Validators::get() {
+				let _ = TargetList::on_insert(id, 100);
+				StakeTracker::on_validator_add(&id);
+			}
 		});
 	}
+}
 
+mod on_validator_update {
+	use super::*;
 	#[test]
-	// It is the caller's problem to make sure `on_validator_add` is called in the right context.
-	fn works_for_everyone() {
+	fn noop_when_in_the_list() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(VoterList::count(), 0);
 
 			// usual user, validator, nominator
-			for id in [1, 10, 20] {
-				StakeTracker::on_validator_add(&id);
-				assert_eq!(
-					VoterList::get_score(&id).unwrap(),
-					StakeTracker::to_vote(StakeTracker::slashable_balance_of(&id))
-				);
-				assert_eq!(
-					TargetList::get_score(&id).unwrap(),
-					StakeTracker::slashable_balance_of(&id)
-				);
-				assert_eq!(
-					StakeTracker::approval_stake(&id).unwrap(),
-					StakeTracker::slashable_balance_of(&id)
-				);
+			for id in stakers() {
+				let _ = VoterList::on_insert(id, 1000);
+				assert_storage_noop!(StakeTracker::on_validator_update(&id));
+			}
+		});
+	}
+
+	#[test]
+	fn noop() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+
+			// validators + nominators
+			for id in stakers() {
+				assert_storage_noop!(StakeTracker::on_validator_update(&id));
 			}
 		});
 	}
@@ -339,74 +468,71 @@ mod on_validator_add {
 
 mod on_validator_remove {
 	use super::*;
+
 	#[test]
-	fn noop_if_not_in_list() {
+	fn works_for_everyone() {
 		ExtBuilder::default().build_and_execute(|| {
-			// usual user, validator, nominator, not bonded
-			for id in [1, 10, 20, 30] {
-				assert_storage_noop!(StakeTracker::on_validator_remove(&id));
+			assert_eq!(VoterList::count(), 0);
+			assert_eq!(TargetList::count(), 0);
+
+			// nominators + validators
+			for id in stakers() {
+				StakeTracker::on_validator_add(&id);
+				assert_eq!(VoterList::count(), 1);
+				assert_eq!(TargetList::count(), 1);
+				assert_eq!(
+					ApprovalStake::<Runtime>::get(&id).unwrap(),
+					TargetList::get_score(&id).unwrap()
+				);
+				assert_eq!(
+					ApprovalStake::<Runtime>::get(&id).unwrap(),
+					StakeTracker::active_stake_of(&id)
+				);
+				StakeTracker::on_validator_remove(&id);
+				assert_eq!(ApprovalStake::<Runtime>::get(&id).unwrap(), 0);
+				assert_eq!(VoterList::count(), 0);
+				assert_eq!(TargetList::count(), 0);
 			}
 		});
 	}
 
 	#[test]
-	// It is a caller's problem to make sure `on_validator_remove` is called in the right context.
-	fn works_for_everyone() {
+	#[should_panic(
+		expected = "Unable to remove a validator from VoterList, perhaps it does not exist?"
+	)]
+	fn defensive_when_not_in_list() {
 		ExtBuilder::default().build_and_execute(|| {
-			// usual user, validator, nominator, unbonded
-			for id in [1, 10, 20, 30] {
-				assert_ok!(VoterList::on_insert(id, 100));
+			assert_eq!(VoterList::count(), 0);
+
+			for id in Validators::get() {
 				assert_ok!(TargetList::on_insert(id, 100));
-				ApprovalStake::<Runtime>::set(&id, Some(100));
 				StakeTracker::on_validator_remove(&id);
-				assert_eq!(VoterList::count(), 0);
-				assert_eq!(TargetList::count(), 0);
-				assert_eq!(
-					StakeTracker::approval_stake(&id).unwrap(),
-					100 - StakeTracker::slashable_balance_of(&id)
-				);
+			}
+		});
+	}
+
+	#[test]
+	#[should_panic(
+		expected = "Unable to remove an entry from TargetList, perhaps it does not exist?"
+	)]
+	fn defensive_when_not_in_target_list() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(TargetList::count(), 0);
+			for id in Validators::get() {
+				StakeTracker::on_validator_remove(&id);
 			}
 		});
 	}
 }
 
-// It is the caller's problem to make sure `on_nominator_remove` is called in the right context. So
-// we are also including not bonded users with 0 balance.
 mod on_nominator_remove {
 	use super::*;
-	#[test]
-	fn noop_when_not_in_the_list_and_no_nominations() {
-		ExtBuilder::default().build_and_execute(|| {
-			assert_eq!(VoterList::count(), 0);
 
-			// usual user, validator, nominator, not bonded
-			for id in [1, 10, 20, 30] {
-				assert_storage_noop!(StakeTracker::on_nominator_remove(&id, Vec::new()));
-			}
-		});
-	}
-
-	#[test]
-	fn no_nominations() {
-		ExtBuilder::default().build_and_execute(|| {
-			assert_eq!(VoterList::count(), 0);
-
-			// usual user, validator, nominator, not bonded
-			for id in [1, 10, 20, 30] {
-				let _ = VoterList::on_insert(id, 100);
-				assert_eq!(VoterList::count(), 1);
-				StakeTracker::on_nominator_remove(&id, Vec::new());
-				assert_eq!(VoterList::count(), 0);
-			}
-		});
-	}
-
-	#[test]
 	fn with_nominations() {
 		ExtBuilder::default().build_and_execute(|| {
 			// no entries in TargetList or ApprovalStake
-			// usual user, validator, nominator, not bonded
-			for id in [1, 10, 20, 30] {
+			// validators, nominators
+			for id in stakers() {
 				assert_storage_noop!(StakeTracker::on_nominator_remove(&id, vec![10, 11]));
 			}
 
@@ -421,14 +547,25 @@ mod on_nominator_remove {
 			for id in nominations {
 				assert_eq!(
 					TargetList::get_score(&id).unwrap(),
-					StakeTracker::slashable_balance_of(&id)
-						.saturating_sub(StakeTracker::slashable_balance_of(&20))
+					StakeTracker::active_stake_of(&id)
+						.saturating_sub(StakeTracker::active_stake_of(&20))
 				);
 				assert_eq!(
 					StakeTracker::approval_stake(&id).unwrap(),
-					StakeTracker::slashable_balance_of(&id)
-						.saturating_sub(StakeTracker::slashable_balance_of(&20))
+					StakeTracker::active_stake_of(&id)
+						.saturating_sub(StakeTracker::active_stake_of(&20))
 				);
+			}
+		});
+	}
+
+	#[test]
+	#[should_panic(expected = "Unable to remove a nominator, perhaps it does not exist?")]
+	fn defensive_when_not_in_list() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+			for id in Nominators::get() {
+				StakeTracker::on_nominator_remove(&id, vec![]);
 			}
 		});
 	}
@@ -438,23 +575,52 @@ mod on_unstake {
 	use super::*;
 
 	#[test]
-	fn noop_if_no_approval_stake() {
+	fn noop_when_no_approval_stake() {
 		ExtBuilder::default().build_and_execute(|| {
-			// usual user, validator, nominator, not bonded
-			for id in [1, 10, 20, 30] {
+			assert_eq!(VoterList::count(), 0);
+
+			// any staker
+			for id in stakers() {
 				assert_storage_noop!(StakeTracker::on_unstake(&id));
 			}
 		});
 	}
+
 	#[test]
 	fn removes_approval_stake() {
 		ExtBuilder::default().build_and_execute(|| {
-			// anybody
-			for id in [1, 10, 20, 30] {
-				ApprovalStake::<Runtime>::insert(id, 10);
+			assert_eq!(VoterList::count(), 0);
+
+			// any staker
+			for id in stakers() {
+				ApprovalStake::<Runtime>::set(&id, Some(1));
+				StakeTracker::on_unstake(&id);
+				assert_eq!(ApprovalStake::<Runtime>::get(&id), None);
+			}
+		});
+	}
+
+	#[test]
+	#[should_panic(expected = "The staker should have already been removed!")]
+	fn defensive_when_in_voter_list() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+			for id in stakers() {
+				let _ = VoterList::on_insert(id, 100);
 				StakeTracker::on_unstake(&id);
 			}
-			assert_eq!(ApprovalStake::<Runtime>::count(), 0);
+		});
+	}
+
+	#[test]
+	#[should_panic(expected = "The validator should have already been removed!")]
+	fn defensive_when_in_target_list() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(TargetList::count(), 0);
+			for id in stakers() {
+				let _ = TargetList::on_insert(id, 100);
+				StakeTracker::on_unstake(&id);
+			}
 		});
 	}
 }

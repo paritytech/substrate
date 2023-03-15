@@ -1,3 +1,20 @@
+// This file is part of Substrate.
+
+// Copyright (C) 2023 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use crate::{self as pallet_stake_tracker, *};
 use frame_election_provider_support::{ScoreProvider, VoteWeight};
 use frame_support::{parameter_types, weights::constants::RocksDbWeight};
@@ -7,6 +24,7 @@ use sp_runtime::{
 	DispatchError, DispatchResult,
 };
 use sp_staking::{EraIndex, Stake, StakingInterface};
+use std::collections::HashMap;
 use Currency;
 
 pub(crate) type AccountId = u64;
@@ -14,6 +32,7 @@ pub(crate) type AccountIndex = u64;
 pub(crate) type BlockNumber = u64;
 pub(crate) type Balance = u128;
 
+pub(crate) type Staking = <Runtime as pallet_stake_tracker::Config>::Staking;
 type Block = frame_system::mocking::MockBlock<Runtime>;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
 
@@ -131,38 +150,61 @@ impl ScoreProvider<AccountId> for StakingMock {
 	}
 }
 
+parameter_types! {
+	pub static Nominators: Vec<AccountId> = vec![20, 21, 22, 23, 24];
+	pub static Validators: Vec<AccountId> = vec![10, 11, 12, 13, 14];
+}
+
+pub(crate) fn stakers() -> Vec<AccountId> {
+	let mut stakers = Nominators::get();
+	stakers.append(&mut Validators::get());
+	stakers
+}
+
+pub(crate) fn nominations() -> HashMap<AccountId, BalanceOf<Runtime>> {
+	let mut nominations = HashMap::new();
+	for id in Nominators::get() {
+		for nomination in Staking::nominations(&id).unwrap_or_default() {
+			let total_stake: BalanceOf<Runtime> =
+				nominations.get(&nomination).unwrap_or(&0) + StakeTracker::active_stake_of(&id);
+			nominations.insert(nomination, total_stake);
+		}
+	}
+	nominations
+}
+
 impl StakingInterface for StakingMock {
 	type Balance = Balance;
 	type AccountId = AccountId;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 
 	fn minimum_nominator_bond() -> Self::Balance {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn minimum_validator_bond() -> Self::Balance {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn stash_by_ctrl(_: &Self::AccountId) -> Result<Self::AccountId, DispatchError> {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn bonding_duration() -> EraIndex {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn current_era() -> EraIndex {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn stake(
 		who: &Self::AccountId,
 	) -> Result<Stake<Self::AccountId, Self::Balance>, DispatchError> {
-		if *who >= 30 {
+		if !Nominators::get().contains(who) && !Validators::get().contains(who) {
 			return Err(DispatchError::Other("not bonded"))
 		}
-		let stake = <Runtime as pallet_stake_tracker::Config>::Currency::total_balance(who);
+		let stake = Balances::total_balance(who);
 		Ok(Stake {
 			stash: *who,
 			active: stake.saturating_sub(ExistentialDeposit::get()),
@@ -171,59 +213,60 @@ impl StakingInterface for StakingMock {
 	}
 
 	fn bond(_: &Self::AccountId, _: Self::Balance, _: &Self::AccountId) -> DispatchResult {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn nominate(_: &Self::AccountId, _: Vec<Self::AccountId>) -> DispatchResult {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn chill(_: &Self::AccountId) -> DispatchResult {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn bond_extra(_: &Self::AccountId, _: Self::Balance) -> DispatchResult {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn unbond(_: &Self::AccountId, _: Self::Balance) -> DispatchResult {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn withdraw_unbonded(_: Self::AccountId, _: u32) -> Result<bool, DispatchError> {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn desired_validator_count() -> u32 {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn election_ongoing() -> bool {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn force_unstake(_: Self::AccountId) -> DispatchResult {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn is_exposed_in_era(_: &Self::AccountId, _: &EraIndex) -> bool {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	fn is_validator(who: &Self::AccountId) -> bool {
-		*who >= 10 && *who <= 14
+		Validators::get().contains(who)
 	}
 
 	fn nominations(who: &Self::AccountId) -> Option<Vec<Self::AccountId>> {
-		if *who == 20 {
-			Some(vec![10, 11])
-		} else if *who == 21 {
-			Some(vec![12, 13])
-		} else if *who >= 22 && *who <= 24 {
-			Some(Vec::new())
-		} else {
-			None
+		// set up two nominators with different nominations.
+		if Nominators::get().contains(who) {
+			if *who == 20 {
+				return Some(vec![10, 11])
+			} else if *who == 21 {
+				return Some(vec![12, 13])
+			}
+			return Some(Vec::new())
 		}
+		None
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -232,12 +275,12 @@ impl StakingInterface for StakingMock {
 		_: &Self::AccountId,
 		_: Vec<(Self::AccountId, Self::Balance)>,
 	) {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_current_era(_: EraIndex) {
-		unimplemented!("Currently not used.")
+		unreachable!();
 	}
 }
 
@@ -253,11 +296,6 @@ impl ExtBuilder {
 
 		let _ = pallet_balances::GenesisConfig::<Runtime> {
 			balances: vec![
-				// Random users, used to test some edge-cases, where we don't want the user to be
-				// neither a nominator nor validator.
-				(1, 10),
-				(2, 20),
-				(3, 30),
 				// Validator stashes, for simplicity we assume stash == controller as StakeTracker
 				// really does not care.
 				(10, 10),

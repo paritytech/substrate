@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -56,6 +56,9 @@ fn test_unresponsiveness_slash_fraction() {
 		dummy_offence.slash_fraction(17),
 		Perbill::from_parts(46200000), // 4.62%
 	);
+
+	// Offline offences should never lead to being disabled.
+	assert_eq!(dummy_offence.disable_strategy(), DisableStrategy::Never);
 }
 
 #[test]

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,8 +24,13 @@ mod runtime;
 
 #[cfg(feature = "runtime-benchmarks")]
 pub use crate::wasm::code_cache::reinstrument;
+
 #[cfg(doc)]
 pub use crate::wasm::runtime::api_doc;
+
+#[cfg(test)]
+pub use tests::MockExt;
+
 pub use crate::wasm::{
 	prepare::TryInstantiate,
 	runtime::{
@@ -37,7 +42,7 @@ pub use crate::wasm::{
 use crate::{
 	exec::{ExecResult, Executable, ExportedFunction, Ext},
 	gas::GasMeter,
-	AccountIdOf, BalanceOf, CodeHash, CodeStorage, CodeVec, Config, Error, RelaxedCodeVec,
+	AccountIdOf, BalanceOf, CodeHash, CodeVec, Config, Error, OwnerInfoOf, RelaxedCodeVec,
 	Schedule,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -45,8 +50,6 @@ use frame_support::dispatch::{DispatchError, DispatchResult};
 use sp_core::Get;
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
-#[cfg(test)]
-pub use tests::MockExt;
 use wasmi::{
 	Config as WasmiConfig, Engine, Instance, Linker, Memory, MemoryType, Module, StackLimits, Store,
 };
@@ -188,7 +191,7 @@ impl<T: Config> PrefabWasmModule<T> {
 	/// Returns `0` if the module is already in storage and hence no deposit will
 	/// be charged when storing it.
 	pub fn open_deposit(&self) -> BalanceOf<T> {
-		if <CodeStorage<T>>::contains_key(&self.code_hash) {
+		if <OwnerInfoOf<T>>::contains_key(&self.code_hash) {
 			0u32.into()
 		} else {
 			// Only already in-storage contracts have their `owner_info` set to `None`.
@@ -2360,13 +2363,8 @@ mod tests {
 "#;
 		let mut ext = MockExt::default();
 		let result = execute(CODE_DEBUG_MESSAGE_FAIL, vec![], &mut ext);
-		assert_eq!(
-			result,
-			Err(ExecError {
-				error: Error::<Test>::DebugMessageInvalidUTF8.into(),
-				origin: ErrorOrigin::Caller,
-			})
-		);
+		assert_ok!(result);
+		assert!(ext.debug_buffer.is_empty());
 	}
 
 	const CODE_CALL_RUNTIME: &str = r#"
