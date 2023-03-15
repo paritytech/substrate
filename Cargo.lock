@@ -10293,6 +10293,7 @@ dependencies = [
  "ark-ff",
  "ark-serialize",
  "ark-std",
+ "parity-scale-codec",
  "sp-std",
 ]
 
