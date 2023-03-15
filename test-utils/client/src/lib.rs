@@ -22,10 +22,7 @@
 pub mod client_ext;
 
 pub use self::client_ext::{ClientBlockImportExt, ClientExt};
-pub use sc_client_api::{
-	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
-	BadBlocks, ForkBlocks,
-};
+pub use sc_client_api::{execution_extensions::ExecutionExtensions, BadBlocks, ForkBlocks};
 pub use sc_client_db::{self, Backend, BlocksPruning};
 pub use sc_executor::{self, NativeElseWasmExecutor, WasmExecutionMethod};
 pub use sc_service::{client, RpcHandlers};
@@ -35,7 +32,6 @@ pub use sp_keyring::{
 };
 pub use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 pub use sp_runtime::{Storage, StorageChild};
-pub use sp_state_machine::ExecutionStrategy;
 
 use futures::{future::Future, stream::StreamExt};
 use sc_client_api::BlockchainEvents;
@@ -63,7 +59,6 @@ impl GenesisInit for () {
 
 /// A builder for creating a test client instance.
 pub struct TestClientBuilder<Block: BlockT, ExecutorDispatch, Backend: 'static, G: GenesisInit> {
-	execution_strategies: ExecutionStrategies,
 	genesis_init: G,
 	/// The key is an unprefixed storage key, this only contains
 	/// default child trie content.
@@ -115,7 +110,6 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 	pub fn with_backend(backend: Arc<Backend>) -> Self {
 		TestClientBuilder {
 			backend,
-			execution_strategies: ExecutionStrategies::default(),
 			child_storage_extension: Default::default(),
 			genesis_init: Default::default(),
 			_executor: Default::default(),
@@ -155,18 +149,6 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 			StorageChild { data: Default::default(), child_info: child_info.clone() }
 		});
 		entry.data.insert(key.as_ref().to_vec(), value.as_ref().to_vec());
-		self
-	}
-
-	/// Set the execution strategy that should be used by all contexts.
-	pub fn set_execution_strategy(mut self, execution_strategy: ExecutionStrategy) -> Self {
-		self.execution_strategies = ExecutionStrategies {
-			syncing: execution_strategy,
-			importing: execution_strategy,
-			block_construction: execution_strategy,
-			offchain_worker: execution_strategy,
-			other: execution_strategy,
-		};
 		self
 	}
 
@@ -293,11 +275,7 @@ impl<Block: BlockT, D, Backend, G: GenesisInit>
 			executor,
 			Box::new(sp_core::testing::TaskExecutor::new()),
 			Default::default(),
-			ExecutionExtensions::new(
-				self.execution_strategies.clone(),
-				self.keystore.clone(),
-				sc_offchain::OffchainDb::factory_from_backend(&*self.backend),
-			),
+			ExecutionExtensions::default(),
 		)
 		.expect("Creates LocalCallExecutor");
 

@@ -235,11 +235,7 @@ where
 		.unwrap_or_default();
 
 	let client = {
-		let extensions = sc_client_api::execution_extensions::ExecutionExtensions::new(
-			config.execution_strategies.clone(),
-			Some(keystore_container.sync_keystore()),
-			sc_offchain::OffchainDb::factory_from_backend(&*backend),
-		);
+		let extensions = sc_client_api::execution_extensions::ExecutionExtensions::default();
 
 		let wasm_runtime_substitutes = config
 			.chain_spec
@@ -394,38 +390,6 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	pub sync_service: Arc<SyncingService<TBl>>,
 	/// Telemetry instance for this node.
 	pub telemetry: Option<&'a mut Telemetry>,
-}
-
-/// Build a shared offchain workers instance.
-pub fn build_offchain_workers<TBl, TCl>(
-	config: &Configuration,
-	spawn_handle: SpawnTaskHandle,
-	client: Arc<TCl>,
-	network: Arc<dyn sc_offchain::NetworkProvider + Send + Sync>,
-) -> Option<Arc<sc_offchain::OffchainWorkers<TCl, TBl>>>
-where
-	TBl: BlockT,
-	TCl: Send + Sync + ProvideRuntimeApi<TBl> + BlockchainEvents<TBl> + 'static,
-	<TCl as ProvideRuntimeApi<TBl>>::Api: sc_offchain::OffchainWorkerApi<TBl>,
-{
-	let offchain_workers = Some(Arc::new(sc_offchain::OffchainWorkers::new(client.clone())));
-
-	// Inform the offchain worker about new imported blocks
-	if let Some(offchain) = offchain_workers.clone() {
-		spawn_handle.spawn(
-			"offchain-notifications",
-			Some("offchain-worker"),
-			sc_offchain::notification_future(
-				config.role.is_authority(),
-				client,
-				offchain,
-				Clone::clone(&spawn_handle),
-				network,
-			),
-		);
-	}
-
-	offchain_workers
 }
 
 /// Spawn the tasks that are required to run a node.

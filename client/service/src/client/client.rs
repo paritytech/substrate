@@ -161,7 +161,6 @@ pub fn new_in_mem<E, Block, G, RA>(
 	backend: Arc<in_mem::Backend<Block>>,
 	executor: E,
 	genesis_block_builder: G,
-	keystore: Option<SyncCryptoStorePtr>,
 	prometheus_registry: Option<Registry>,
 	telemetry: Option<TelemetryHandle>,
 	spawn_handle: Box<dyn SpawnNamed>,
@@ -181,7 +180,6 @@ where
 		backend,
 		executor,
 		genesis_block_builder,
-		keystore,
 		spawn_handle,
 		prometheus_registry,
 		telemetry,
@@ -224,7 +222,6 @@ pub fn new_with_backend<B, E, Block, G, RA>(
 	backend: Arc<B>,
 	executor: E,
 	genesis_block_builder: G,
-	keystore: Option<SyncCryptoStorePtr>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
 	telemetry: Option<TelemetryHandle>,
@@ -239,11 +236,7 @@ where
 	Block: BlockT,
 	B: backend::LocalBackend<Block> + 'static,
 {
-	let extensions = ExecutionExtensions::new(
-		Default::default(),
-		keystore,
-		sc_offchain::OffchainDb::factory_from_backend(&*backend),
-	);
+	let extensions = ExecutionExtensions::default();
 
 	let call_executor = LocalCallExecutor::new(
 		backend.clone(),

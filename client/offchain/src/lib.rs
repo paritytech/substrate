@@ -43,6 +43,7 @@ use futures::{
 	prelude::*,
 };
 use parking_lot::Mutex;
+use sc_client_api::BlockchainEvents;
 use sc_network_common::service::{NetworkPeers, NetworkStateInfo};
 use sc_transaction_pool_api::OffchainSubmitTransaction;
 use sp_api::{ApiExt, ProvideRuntimeApi};
@@ -68,7 +69,19 @@ pub trait NetworkProvider: NetworkStateInfo + NetworkPeers {}
 impl<T> NetworkProvider for T where T: NetworkStateInfo + NetworkPeers {}
 
 /// Options for [`OffchainWorkers`]
-pub struct OffchainWorkerOptions {
+pub struct OffchainWorkerOptions<RA, Block: traits::Block, Storage> {
+	/// Provides access to the runtime api.
+	pub runtime_api_provider: Arc<RA>,
+	/// Provides access to the keystore.
+	pub keystore: Option<SyncCryptoStorePtr>,
+	/// Provides access to the offchain database.
+	pub offchain_db: Option<Storage>,
+	/// Provides access to the transaction pool.
+	pub transaction_pool: Option<Arc<dyn OffchainSubmitTransaction<Block>>>,
+	/// Provides access to network information.
+	pub network_provider: Arc<dyn NetworkProvider + Send + Sync>,
+	/// Is the node running as validator?
+	pub is_validator: bool,
 	/// Enable http requests from offchain workers?
 	///
 	/// If not enabled, any http request will panic.
@@ -76,82 +89,95 @@ pub struct OffchainWorkerOptions {
 }
 
 /// An offchain workers manager.
-pub struct OffchainWorkers<Client, Block: traits::Block, Storage> {
-	client: Arc<Client>,
-	_block: PhantomData<Block>,
+pub struct OffchainWorkers<RA, Block: traits::Block, Storage> {
+	runtime_api_provider: Arc<RA>,
 	thread_pool: Mutex<ThreadPool>,
 	shared_http_client: api::SharedClient,
-	enable_http: bool,
+	enable_http_requests: bool,
 	keystore: Option<SyncCryptoStorePtr>,
 	offchain_db: Option<api::Db<Storage>>,
 	transaction_pool: Option<Arc<dyn OffchainSubmitTransaction<Block>>>,
+	network_provider: Arc<dyn NetworkProvider + Send + Sync>,
+	is_validator: bool,
 }
 
-impl<Client, Block: traits::Block, Storage> OffchainWorkers<Client, Block, Storage> {
+impl<RA, Block: traits::Block, Storage> OffchainWorkers<RA, Block, Storage> {
 	/// Creates new [`OffchainWorkers`].
 	pub fn new(
-		client: Arc<Client>,
-		keystore: Option<SyncCryptoStorePtr>,
-		offchain_db: Option<Storage>,
-		transaction_pool: Option<Arc<dyn OffchainSubmitTransaction<Block>>>,
-	) -> Self {
-		Self::new_with_options(
-			client,
+		OffchainWorkerOptions {
+			runtime_api_provider,
 			keystore,
 			offchain_db,
 			transaction_pool,
-			OffchainWorkerOptions { enable_http_requests: true },
-		)
-	}
-
-	/// Creates new [`OffchainWorkers`] using the given `options`.
-	pub fn new_with_options(
-		client: Arc<Client>,
-		keystore: Option<SyncCryptoStorePtr>,
-		offchain_db: Option<Storage>,
-		transaction_pool: Option<Arc<dyn OffchainSubmitTransaction<Block>>>,
-		options: OffchainWorkerOptions,
+			network_provider,
+			is_validator,
+			enable_http_requests,
+		}: OffchainWorkerOptions<RA, Block, Storage>,
 	) -> Self {
 		Self {
-			client,
-			_block: PhantomData,
+			runtime_api_provider,
 			thread_pool: Mutex::new(ThreadPool::with_name(
 				"offchain-worker".into(),
 				num_cpus::get(),
 			)),
 			shared_http_client: api::SharedClient::new(),
-			enable_http: options.enable_http_requests,
+			enable_http_requests,
 			keystore,
 			offchain_db: offchain_db.map(|d| api::Db::new(d)),
 			transaction_pool,
+			is_validator,
+			network_provider,
 		}
 	}
 }
 
-impl<Client, Block: traits::Block, Storage: offchain::OffchainStorage> fmt::Debug
-	for OffchainWorkers<Client, Block, Storage>
+impl<RA, Block: traits::Block, Storage: offchain::OffchainStorage> fmt::Debug
+	for OffchainWorkers<RA, Block, Storage>
 {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		f.debug_tuple("OffchainWorkers").finish()
 	}
 }
 
-impl<Client, Block, Storage> OffchainWorkers<Client, Block, Storage>
+impl<RA, Block, Storage> OffchainWorkers<RA, Block, Storage>
 where
 	Block: traits::Block,
-	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static,
-	Client::Api: OffchainWorkerApi<Block>,
+	RA: ProvideRuntimeApi<Block> + Send + Sync + 'static,
+	RA::Api: OffchainWorkerApi<Block>,
 	Storage: offchain::OffchainStorage + 'static,
 {
+	/// Run the offchain workers on every block import.
+	pub async fn run<BE: BlockchainEvents<Block>>(
+		self,
+		import_events: Arc<BE>,
+		spawner: impl SpawnNamed,
+	) {
+		import_events
+			.import_notification_stream()
+			.for_each(move |n| {
+				if n.is_new_best {
+					spawner.spawn(
+						"offchain-on-block",
+						Some("offchain-worker"),
+						self.on_block_imported(&n.header).boxed(),
+					);
+				} else {
+					tracing::debug!(
+						target: LOG_TARGET,
+						"Skipping offchain workers for non-canon block: {:?}",
+						n.header,
+					)
+				}
+
+				ready(())
+			})
+			.await;
+	}
+
 	/// Start the offchain workers after given block.
 	#[must_use]
-	pub fn on_block_imported(
-		&self,
-		header: &Block::Header,
-		network_provider: Arc<dyn NetworkProvider + Send + Sync>,
-		is_validator: bool,
-	) -> impl Future<Output = ()> {
-		let runtime = self.client.runtime_api();
+	fn on_block_imported(&self, header: &Block::Header) -> impl Future<Output = ()> {
+		let runtime = self.runtime_api_provider.runtime_api();
 		let hash = header.hash();
 		let has_api_v1 = runtime.has_api_with::<dyn OffchainWorkerApi<Block>, _>(hash, |v| v == 1);
 		let has_api_v2 = runtime.has_api_with::<dyn OffchainWorkerApi<Block>, _>(hash, |v| v == 2);
@@ -172,19 +198,21 @@ where
 		};
 		tracing::debug!(
 			target: LOG_TARGET,
-			"Checking offchain workers at {:?}: version:{}",
-			hash,
-			version
+			"Checking offchain workers at {hash:?}: version: {version}",
 		);
+
 		let process = (version > 0).then(|| {
-			let (api, runner) =
-				api::AsyncApi::new(network_provider, is_validator, self.shared_http_client.clone());
-			tracing::debug!(target: LOG_TARGET, "Spawning offchain workers at {:?}", hash);
+			let (api, runner) = api::AsyncApi::new(
+				self.network_provider.clone(),
+				self.is_validator,
+				self.shared_http_client.clone(),
+			);
+			tracing::debug!(target: LOG_TARGET, "Spawning offchain workers at {hash:?}");
 			let header = header.clone();
-			let client = self.client.clone();
+			let client = self.runtime_api_provider.clone();
 
 			let mut capabilities = offchain::Capabilities::all();
-			capabilities.set(offchain::Capabilities::HTTP, self.enable_http);
+			capabilities.set(offchain::Capabilities::HTTP, self.enable_http_requests);
 
 			let keystore = self.keystore.clone();
 			let db = self.offchain_db.clone();
@@ -193,7 +221,7 @@ where
 			self.spawn_worker(move || {
 				let mut runtime = client.runtime_api();
 				let api = Box::new(api);
-				tracing::debug!(target: LOG_TARGET, "Running offchain workers at {:?}", hash);
+				tracing::debug!(target: LOG_TARGET, "Running offchain workers at {hash:?}");
 
 				if let Some(keystore) = keystore {
 					runtime.register_extension(KeystoreExt(keystore.clone()));
@@ -251,45 +279,6 @@ where
 	fn spawn_worker(&self, f: impl FnOnce() -> () + Send + 'static) {
 		self.thread_pool.lock().execute(f);
 	}
-}
-
-/// Inform the offchain worker about new imported blocks
-pub async fn notification_future<Client, Block, Spawner, Storage>(
-	is_validator: bool,
-	client: Arc<Client>,
-	offchain: Arc<OffchainWorkers<Client, Block, Storage>>,
-	spawner: Spawner,
-	network_provider: Arc<dyn NetworkProvider + Send + Sync>,
-) where
-	Block: traits::Block,
-	Client:
-		ProvideRuntimeApi<Block> + sc_client_api::BlockchainEvents<Block> + Send + Sync + 'static,
-	Client::Api: OffchainWorkerApi<Block>,
-	Spawner: SpawnNamed,
-	Storage: offchain::OffchainStorage + 'static,
-{
-	client
-		.import_notification_stream()
-		.for_each(move |n| {
-			if n.is_new_best {
-				spawner.spawn(
-					"offchain-on-block",
-					Some("offchain-worker"),
-					offchain
-						.on_block_imported(&n.header, network_provider.clone(), is_validator)
-						.boxed(),
-				);
-			} else {
-				tracing::debug!(
-					target: LOG_TARGET,
-					"Skipping offchain workers for non-canon block: {:?}",
-					n.header,
-				)
-			}
-
-			ready(())
-		})
-		.await;
 }
 
 /// A wrapper type to pass `BlockId` to the actual transaction pool.

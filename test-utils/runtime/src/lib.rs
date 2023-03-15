@@ -344,8 +344,6 @@ cfg_if! {
 				fn function_signature_changed() -> Vec<u64>;
 				/// The new signature.
 				fn function_signature_changed() -> u64;
-				fn fail_on_native() -> u64;
-				fn fail_on_wasm() -> u64;
 				/// trie no_std testing
 				fn use_trie() -> u64;
 				fn benchmark_indirect_call() -> u64;
@@ -396,8 +394,6 @@ cfg_if! {
 				fn fail_convert_return_value() -> DecodeFails<Block>;
 				/// In wasm we just emulate the old behavior.
 				fn function_signature_changed() -> Vec<u64>;
-				fn fail_on_native() -> u64;
-				fn fail_on_wasm() -> u64;
 				/// trie no_std testing
 				fn use_trie() -> u64;
 				fn benchmark_indirect_call() -> u64;
@@ -794,13 +790,6 @@ cfg_if! {
 					1
 				}
 
-				fn fail_on_native() -> u64 {
-					panic!("Failing because we are on native")
-				}
-				fn fail_on_wasm() -> u64 {
-					1
-				}
-
 				fn use_trie() -> u64 {
 					code_using_trie()
 				}
@@ -1087,14 +1076,6 @@ cfg_if! {
 					vec.push(1);
 					vec.push(2);
 					vec
-				}
-
-				fn fail_on_native() -> u64 {
-					1
-				}
-
-				fn fail_on_wasm() -> u64 {
-					panic!("Failing because we are on wasm")
 				}
 
 				fn use_trie() -> u64 {

@@ -18,7 +18,7 @@
 use sp_api::{Core, ProvideRuntimeApi};
 use sp_runtime::traits::{HashFor, Header as HeaderT};
 use sp_state_machine::{
-	create_proof_check_backend, execution_proof_check_on_trie_backend, ExecutionStrategy,
+	create_proof_check_backend, execution_proof_check_on_trie_backend,
 };
 use substrate_test_runtime_client::{
 	prelude::*,
@@ -30,8 +30,9 @@ use codec::Encode;
 use sc_block_builder::BlockBuilderProvider;
 use sp_consensus::SelectChain;
 
-fn calling_function_with_strat(strat: ExecutionStrategy) {
-	let client = TestClientBuilder::new().set_execution_strategy(strat).build();
+#[test]
+fn calling_runtime_function() {
+	let client = TestClientBuilder::new().build();
 	let runtime_api = client.runtime_api();
 	let best_hash = client.chain_info().best_hash;
 
@@ -39,31 +40,8 @@ fn calling_function_with_strat(strat: ExecutionStrategy) {
 }
 
 #[test]
-fn calling_native_runtime_function() {
-	calling_function_with_strat(ExecutionStrategy::NativeWhenPossible);
-}
-
-#[test]
-fn calling_wasm_runtime_function() {
-	calling_function_with_strat(ExecutionStrategy::AlwaysWasm);
-}
-
-#[test]
-fn calling_native_runtime_signature_changed_function() {
-	let client = TestClientBuilder::new()
-		.set_execution_strategy(ExecutionStrategy::NativeWhenPossible)
-		.build();
-	let runtime_api = client.runtime_api();
-	let best_hash = client.chain_info().best_hash;
-
-	assert_eq!(runtime_api.function_signature_changed(best_hash).unwrap(), 1);
-}
-
-#[test]
-fn calling_wasm_runtime_signature_changed_old_function() {
-	let client = TestClientBuilder::new()
-		.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
-		.build();
+fn calling_runtime_signature_changed_old_function() {
+	let client = TestClientBuilder::new().build();
 	let runtime_api = client.runtime_api();
 	let best_hash = client.chain_info().best_hash;
 
@@ -73,45 +51,8 @@ fn calling_wasm_runtime_signature_changed_old_function() {
 }
 
 #[test]
-fn calling_with_both_strategy_and_fail_on_wasm_should_return_error() {
-	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
-	let runtime_api = client.runtime_api();
-	let best_hash = client.chain_info().best_hash;
-	assert!(runtime_api.fail_on_wasm(best_hash).is_err());
-}
-
-#[test]
-fn calling_with_both_strategy_and_fail_on_native_should_work() {
-	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
-	let runtime_api = client.runtime_api();
-	let best_hash = client.chain_info().best_hash;
-	assert_eq!(runtime_api.fail_on_native(best_hash).unwrap(), 1);
-}
-
-#[test]
-fn calling_with_native_else_wasm_and_fail_on_wasm_should_work() {
-	let client = TestClientBuilder::new()
-		.set_execution_strategy(ExecutionStrategy::NativeElseWasm)
-		.build();
-	let runtime_api = client.runtime_api();
-	let best_hash = client.chain_info().best_hash;
-	assert_eq!(runtime_api.fail_on_wasm(best_hash).unwrap(), 1);
-}
-
-#[test]
-fn calling_with_native_else_wasm_and_fail_on_native_should_work() {
-	let client = TestClientBuilder::new()
-		.set_execution_strategy(ExecutionStrategy::NativeElseWasm)
-		.build();
-	let runtime_api = client.runtime_api();
-	let best_hash = client.chain_info().best_hash;
-	assert_eq!(runtime_api.fail_on_native(best_hash).unwrap(), 1);
-}
-
-#[test]
 fn use_trie_function() {
 	let client = TestClientBuilder::new()
-		.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
 		.build();
 	let runtime_api = client.runtime_api();
 	let best_hash = client.chain_info().best_hash;
@@ -120,7 +61,7 @@ fn use_trie_function() {
 
 #[test]
 fn initialize_block_works() {
-	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
+	let client = TestClientBuilder::new().build();
 	let runtime_api = client.runtime_api();
 	let best_hash = client.chain_info().best_hash;
 	runtime_api
@@ -141,7 +82,6 @@ fn initialize_block_works() {
 #[test]
 fn record_proof_works() {
 	let (client, longest_chain) = TestClientBuilder::new()
-		.set_execution_strategy(ExecutionStrategy::Both)
 		.build_with_longest_chain();
 
 	let storage_root =
@@ -198,7 +138,7 @@ fn record_proof_works() {
 
 #[test]
 fn call_runtime_api_with_multiple_arguments() {
-	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
+	let client = TestClientBuilder::new().build();
 
 	let data = vec![1, 2, 4, 5, 6, 7, 8, 8, 10, 12];
 	let best_hash = client.chain_info().best_hash;
@@ -213,8 +153,7 @@ fn disable_logging_works() {
 	if std::env::var("RUN_TEST").is_ok() {
 		sp_tracing::try_init_simple();
 
-		let mut builder =
-			TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm);
+		let mut builder = TestClientBuilder::new();
 		builder.genesis_init_mut().set_wasm_code(
 			substrate_test_runtime_client::runtime::wasm_binary_logging_disabled_unwrap().to_vec(),
 		);
