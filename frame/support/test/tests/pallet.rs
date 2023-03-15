@@ -1620,6 +1620,20 @@ fn metadata_versions() {
 }
 
 #[test]
+fn metadata_ir_pallet_runtime_docs() {
+	let ir = Runtime::metadata_ir();
+	let pallet = ir
+		.pallets
+		.iter()
+		.find(|pallet| pallet.name == "Example")
+		.expect("Pallet should be present");
+
+	let readme = "Support code for the runtime.\n\nLicense: Apache-2.0";
+	let expected = vec![" Pallet documentation", readme, readme];
+	assert_eq!(pallet.docs, expected);
+}
+
+#[test]
 fn test_pallet_runtime_docs() {
 	let docs = crate::pallet::Pallet::<Runtime>::pallet_documentation_metadata();
 	let readme = "Support code for the runtime.\n\nLicense: Apache-2.0";
