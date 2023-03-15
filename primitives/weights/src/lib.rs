@@ -147,7 +147,18 @@ pub type WeightToFeeCoefficients<T> = SmallVec<[WeightToFeeCoefficient<T>; 4]>;
 
 /// A list of coefficients that represent a polynomial.
 ///
-/// Can be [eval](Self::eval)uated at a specific `u64` to get the fee.
+/// Can be [eval](Self::eval)uated at a specific `u64` to get the fee. The evaluations happens by
+/// summing up all term [results](`WeightToFeeCoefficient::saturating_eval`). The order of the
+/// coefficients matters since it uses saturating arithmetic. This struct does therefore not model a
+/// polynomial in the mathematical sense (polynomial ring).
+///
+/// For visualization purposes, the formula looks like this:
+///
+/// ```ignore
+///   (c[0].frac * x^(c[0].degree) + c[0].integer * x^(c[0].degree)) * (-1 * c[0].negative)
+/// + (c[1].frac * x^(c[1].degree) + c[1].integer * x^(c[1].degree)) * (-1 * c[1].negative)
+/// + ...
+/// ```
 pub struct FeePolynomial<Balance> {
 	coefficients: SmallVec<[WeightToFeeCoefficient<Balance>; 4]>,
 }
