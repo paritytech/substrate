@@ -25,7 +25,7 @@ use frame_support::{
 };
 use sp_runtime::{
 	traits::{Convert, IdentityLookup},
-	FixedU128,
+	FixedU128, Perbill,
 };
 
 type AccountId = u128;
@@ -186,7 +186,7 @@ type Block = frame_system::mocking::MockBlock<Runtime>;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
 
 frame_support::construct_runtime!(
-	pub enum Runtime where
+	pub struct Runtime where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
@@ -209,6 +209,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		max_pools: Some(3),
 		max_members_per_pool: Some(5),
 		max_members: Some(3 * 5),
+		global_max_commission: Some(Perbill::from_percent(90)),
 	}
 	.assimilate_storage(&mut storage)
 	.unwrap();

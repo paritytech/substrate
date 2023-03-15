@@ -39,9 +39,6 @@ pub use select_chain::SelectChain;
 pub use sp_inherents::InherentData;
 pub use sp_state_machine::Backend as StateBackend;
 
-/// Type of keys in the blockchain cache that consensus module could use for its needs.
-pub type CacheKeyId = [u8; 4];
-
 /// Block status.
 #[derive(Debug, PartialEq, Eq)]
 pub enum BlockStatus {

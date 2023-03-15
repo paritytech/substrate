@@ -16,13 +16,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use std::sync::Arc;
+
 use log::debug;
-use sp_consensus_beefy::{BeefyApi, BEEFY_ENGINE_ID};
-use std::{collections::HashMap, sync::Arc};
 
 use sp_api::{ProvideRuntimeApi, TransactionFor};
-use sp_blockchain::well_known_cache_keys;
 use sp_consensus::Error as ConsensusError;
+use sp_consensus_beefy::{BeefyApi, BEEFY_ENGINE_ID};
 use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT, NumberFor},
 	EncodedJustification,
@@ -132,7 +132,6 @@ where
 	async fn import_block(
 		&mut self,
 		mut block: BlockImportParams<Block, Self::Transaction>,
-		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_hash();
 		let number = *block.header.number();
@@ -146,7 +145,7 @@ where
 		});
 
 		// Run inner block import.
-		let inner_import_result = self.inner.import_block(block, new_cache).await?;
+		let inner_import_result = self.inner.import_block(block).await?;
 
 		match (beefy_encoded, &inner_import_result) {
 			(Some(encoded), ImportResult::Imported(_)) => {
