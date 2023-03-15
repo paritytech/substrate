@@ -32,13 +32,17 @@ use futures::{prelude::*, stream::FuturesUnordered};
 use libp2p::{multiaddr, PeerId};
 use log::{debug, trace, warn};
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
-use sc_network_common::{
+use sc_network::{
 	config::{NonDefaultSetConfig, NonReservedPeerMode, ProtocolId, SetConfig},
 	error,
-	protocol::{event::Event, role::ObservedRole, ProtocolName},
-	service::{NetworkEventStream, NetworkNotification, NetworkPeers},
-	sync::{SyncEvent, SyncEventStream},
+	event::Event,
+	types::ProtocolName,
 	utils::{interval, LruHashSet},
+	NetworkEventStream, NetworkNotification, NetworkPeers,
+};
+use sc_network_common::{
+	role::ObservedRole,
+	sync::{SyncEvent, SyncEventStream},
 };
 use sp_statement_store::{Hash, Statement, StatementStore, SubmitResult};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
