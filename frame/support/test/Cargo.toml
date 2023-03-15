@@ -48,7 +48,6 @@ std = [
 	"sp-arithmetic/std",
 	"sp-version/std",
 ]
-# The runtime supports the metadata V14.
 try-runtime = ["frame-support/try-runtime"]
 # WARNING:
 # Only CI runs with this feature enabled. This feature is for testing stuff related to the FRAME macros
