@@ -19,19 +19,22 @@
 
 #![warn(missing_docs)]
 
-use crate::utils::{
-	final_exponentiation_generic, msm_g1_generic, msm_g2_generic, multi_miller_loop_generic,
+use crate::{
+	utils::{
+		final_exponentiation_generic, msm_g1_generic, msm_g2_generic, multi_miller_loop_generic,
+	},
+	PairingError,
 };
 use ark_bw6_761::BW6_761;
 use sp_std::vec::Vec;
 
 /// Compute multi miller loop through arkworks
-pub fn multi_miller_loop(a: Vec<Vec<u8>>, b: Vec<Vec<u8>>) -> Vec<u8> {
+pub fn multi_miller_loop(a: Vec<Vec<u8>>, b: Vec<Vec<u8>>) -> Result<Vec<u8>, PairingError> {
 	multi_miller_loop_generic::<BW6_761>(a, b)
 }
 
 /// Compute final exponentiation through arkworks
-pub fn final_exponentiation(target: Vec<u8>) -> Vec<u8> {
+pub fn final_exponentiation(target: Vec<u8>) -> Result<Vec<u8>, PairingError> {
 	final_exponentiation_generic::<BW6_761>(target)
 }
 
