@@ -26,11 +26,11 @@ use sp_runtime::{traits::Zero, FixedPointNumber, FixedPointOperand, FixedU128};
 
 pub use pallet::*;
 
-// #[cfg(test)]
-// mod mock;
+#[cfg(test)]
+mod mock;
 
-// #[cfg(test)]
-// mod tests;
+#[cfg(test)]
+mod tests;
 
 // #[cfg(feature = "runtime-benchmarks")]
 // mod benchmarking;
@@ -94,7 +94,7 @@ pub mod pallet {
 		// Some `asset_id` conversion rate was created.
 		Created { asset_id: T::AssetId, rate: FixedU128 },
 		// Some `asset_id` conversion rate was removed.
-		Removed { asset_id: T::AssetId, rate: FixedU128 },
+		Removed { asset_id: T::AssetId },
 		// Some existing `asset_id` conversion rate was updated from `old` to `new`.
 		Updated { asset_id: T::AssetId, old: FixedU128, new: FixedU128 },
 	}
@@ -146,17 +146,13 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(2)]
-		pub fn remove(
-			origin: OriginFor<T>,
-			asset_id: T::AssetId,
-			rate: FixedU128,
-		) -> DispatchResult {
+		pub fn remove(origin: OriginFor<T>, asset_id: T::AssetId) -> DispatchResult {
 			T::RemoveOrigin::ensure_origin(origin)?;
 
 			ensure!(ConversionRateToNative::<T>::contains_key(asset_id), Error::<T>::Unknown);
 			ConversionRateToNative::<T>::remove(asset_id);
 
-			Self::deposit_event(Event::Removed { asset_id, rate });
+			Self::deposit_event(Event::Removed { asset_id });
 			Ok(())
 		}
 	}
