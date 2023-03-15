@@ -364,8 +364,7 @@ where
 			Some(peer_signature),
 			key_store.as_ref(),
 			keys_vec,
-		)
-		.await?;
+		)?;
 
 		for (key, value) in kv_pairs.into_iter() {
 			self.network.put_value(key, value);
@@ -661,7 +660,7 @@ fn sign_record_with_peer_id(
 	Ok(schema::PeerSignature { signature, public_key })
 }
 
-async fn sign_record_with_authority_ids(
+fn sign_record_with_authority_ids(
 	serialized_record: Vec<u8>,
 	peer_signature: Option<schema::PeerSignature>,
 	key_store: &dyn Keystore,

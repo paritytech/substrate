@@ -47,7 +47,6 @@ fn get_addresses_and_authority_id() {
 	let remote_authority_id: AuthorityId = pool.run_until(async {
 		key_store
 			.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
-			.await
 			.unwrap()
 			.into()
 	});
