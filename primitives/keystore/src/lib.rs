@@ -21,7 +21,7 @@ pub mod vrf;
 
 use crate::vrf::{VRFSignature, VRFTranscriptData};
 use async_trait::async_trait;
-use futures::{executor::block_on, future::join_all};
+use futures::executor::block_on;
 use sp_core::{
 	crypto::{CryptoTypePublicPair, KeyTypeId},
 	ecdsa, ed25519, sr25519,
@@ -93,15 +93,6 @@ pub trait CryptoStore: Send + Sync {
 	/// `Err` if there's some sort of weird filesystem error, but should generally be `Ok`.
 	async fn insert_unknown(&self, id: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()>;
 
-	/// Find intersection between provided keys and supported keys
-	///
-	/// Provided a list of (CryptoTypeId,[u8]) pairs, this would return
-	/// a filtered set of public keys which are supported by the keystore.
-	async fn supported_keys(
-		&self,
-		id: KeyTypeId,
-		keys: Vec<CryptoTypePublicPair>,
-	) -> Result<Vec<CryptoTypePublicPair>, Error>;
 	/// List all supported keys
 	///
 	/// Returns a set of public keys the signer supports.
@@ -125,50 +116,6 @@ pub trait CryptoStore: Send + Sync {
 		key: &CryptoTypePublicPair,
 		msg: &[u8],
 	) -> Result<Option<Vec<u8>>, Error>;
-
-	/// Sign with any key
-	///
-	/// Given a list of public keys, find the first supported key and
-	/// sign the provided message with that key.
-	///
-	/// Returns a tuple of the used key and the SCALE encoded signature or `None` if no key could
-	/// be found to sign.
-	async fn sign_with_any(
-		&self,
-		id: KeyTypeId,
-		keys: Vec<CryptoTypePublicPair>,
-		msg: &[u8],
-	) -> Result<Option<(CryptoTypePublicPair, Vec<u8>)>, Error> {
-		if keys.len() == 1 {
-			return Ok(self.sign_with(id, &keys[0], msg).await?.map(|s| (keys[0].clone(), s)))
-		} else {
-			for k in self.supported_keys(id, keys).await? {
-				if let Ok(Some(sign)) = self.sign_with(id, &k, msg).await {
-					return Ok(Some((k, sign)))
-				}
-			}
-		}
-
-		Ok(None)
-	}
-
-	/// Sign with all keys
-	///
-	/// Provided a list of public keys, sign a message with
-	/// each key given that the key is supported.
-	///
-	/// Returns a list of `Result`s each representing the SCALE encoded
-	/// signature of each key, `None` if the key doesn't exist or a error when something failed.
-	async fn sign_with_all(
-		&self,
-		id: KeyTypeId,
-		keys: Vec<CryptoTypePublicPair>,
-		msg: &[u8],
-	) -> Result<Vec<Result<Option<Vec<u8>>, Error>>, ()> {
-		let futs = keys.iter().map(|k| self.sign_with(id, k, msg));
-
-		Ok(join_all(futs).await)
-	}
 
 	/// Generate VRF signature for given transcript data.
 	///
@@ -257,6 +204,7 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 	fn ecdsa_generate_new(&self, id: KeyTypeId, seed: Option<&str>)
 		-> Result<ecdsa::Public, Error>;
 
+	/// TODO-DAVXY: THIS should be renamed as "insert"... a key crypto type is never known
 	/// Insert a new key. This doesn't require any known of the crypto; but a public key must be
 	/// manually provided.
 	///
@@ -264,16 +212,6 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 	///
 	/// `Err` if there's some sort of weird filesystem error, but should generally be `Ok`.
 	fn insert_unknown(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()>;
-
-	/// Find intersection between provided keys and supported keys
-	///
-	/// Provided a list of (CryptoTypeId,[u8]) pairs, this would return
-	/// a filtered set of public keys which are supported by the keystore.
-	fn supported_keys(
-		&self,
-		id: KeyTypeId,
-		keys: Vec<CryptoTypePublicPair>,
-	) -> Result<Vec<CryptoTypePublicPair>, Error>;
 
 	/// List all supported keys
 	///
@@ -300,50 +238,6 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 		key: &CryptoTypePublicPair,
 		msg: &[u8],
 	) -> Result<Option<Vec<u8>>, Error>;
-
-	/// Sign with any key
-	///
-	/// Given a list of public keys, find the first supported key and
-	/// sign the provided message with that key.
-	///
-	/// Returns a tuple of the used key and the SCALE encoded signature or `None` if no key could
-	/// be found to sign.
-	fn sign_with_any(
-		&self,
-		id: KeyTypeId,
-		keys: Vec<CryptoTypePublicPair>,
-		msg: &[u8],
-	) -> Result<Option<(CryptoTypePublicPair, Vec<u8>)>, Error> {
-		if keys.len() == 1 {
-			return Ok(
-				SyncCryptoStore::sign_with(self, id, &keys[0], msg)?.map(|s| (keys[0].clone(), s))
-			)
-		} else {
-			for k in SyncCryptoStore::supported_keys(self, id, keys)? {
-				if let Ok(Some(sign)) = SyncCryptoStore::sign_with(self, id, &k, msg) {
-					return Ok(Some((k, sign)))
-				}
-			}
-		}
-
-		Ok(None)
-	}
-
-	/// Sign with all keys
-	///
-	/// Provided a list of public keys, sign a message with
-	/// each key given that the key is supported.
-	///
-	/// Returns a list of `Result`s each representing the SCALE encoded
-	/// signature of each key, `None` if the key doesn't exist or an error when something failed.
-	fn sign_with_all(
-		&self,
-		id: KeyTypeId,
-		keys: Vec<CryptoTypePublicPair>,
-		msg: &[u8],
-	) -> Result<Vec<Result<Option<Vec<u8>>, Error>>, ()> {
-		Ok(keys.iter().map(|k| SyncCryptoStore::sign_with(self, id, k, msg)).collect())
-	}
 
 	/// Generate VRF signature for given transcript data.
 	///

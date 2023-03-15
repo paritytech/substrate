@@ -28,10 +28,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use parking_lot::RwLock;
-use std::{
-	collections::{HashMap, HashSet},
-	sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 /// A keystore implementation usable in tests.
 #[derive(Default)]
@@ -119,14 +116,6 @@ impl CryptoStore for KeyStore {
 
 	async fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
 		SyncCryptoStore::has_keys(self, public_keys)
-	}
-
-	async fn supported_keys(
-		&self,
-		id: KeyTypeId,
-		keys: Vec<CryptoTypePublicPair>,
-	) -> std::result::Result<Vec<CryptoTypePublicPair>, Error> {
-		SyncCryptoStore::supported_keys(self, id, keys)
 	}
 
 	async fn sign_with(
@@ -317,17 +306,6 @@ impl SyncCryptoStore for KeyStore {
 		public_keys
 			.iter()
 			.all(|(k, t)| self.keys.read().get(t).and_then(|s| s.get(k)).is_some())
-	}
-
-	fn supported_keys(
-		&self,
-		id: KeyTypeId,
-		keys: Vec<CryptoTypePublicPair>,
-	) -> std::result::Result<Vec<CryptoTypePublicPair>, Error> {
-		let provided_keys = keys.into_iter().collect::<HashSet<_>>();
-		let all_keys = SyncCryptoStore::keys(self, id)?.into_iter().collect::<HashSet<_>>();
-
-		Ok(provided_keys.intersection(&all_keys).cloned().collect())
 	}
 
 	fn sign_with(

@@ -32,7 +32,7 @@ use sp_keystore::{
 	CryptoStore, Error as TraitError, SyncCryptoStore, SyncCryptoStorePtr,
 };
 use std::{
-	collections::{HashMap, HashSet},
+	collections::HashMap,
 	fs::{self, File},
 	io::Write,
 	path::PathBuf,
@@ -127,14 +127,6 @@ impl CryptoStore for LocalKeystore {
 		SyncCryptoStore::has_keys(self, public_keys)
 	}
 
-	async fn supported_keys(
-		&self,
-		id: KeyTypeId,
-		keys: Vec<CryptoTypePublicPair>,
-	) -> std::result::Result<Vec<CryptoTypePublicPair>, TraitError> {
-		SyncCryptoStore::supported_keys(self, id, keys)
-	}
-
 	async fn sign_with(
 		&self,
 		id: KeyTypeId,
@@ -172,15 +164,6 @@ impl SyncCryptoStore for LocalKeystore {
 			v.push(CryptoTypePublicPair(ecdsa::CRYPTO_ID, k));
 			v
 		}))
-	}
-
-	fn supported_keys(
-		&self,
-		id: KeyTypeId,
-		keys: Vec<CryptoTypePublicPair>,
-	) -> std::result::Result<Vec<CryptoTypePublicPair>, TraitError> {
-		let all_keys = SyncCryptoStore::keys(self, id)?.into_iter().collect::<HashSet<_>>();
-		Ok(keys.into_iter().filter(|key| all_keys.contains(key)).collect::<Vec<_>>())
 	}
 
 	fn sign_with(
