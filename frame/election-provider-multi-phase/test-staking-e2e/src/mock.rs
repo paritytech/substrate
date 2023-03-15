@@ -391,7 +391,6 @@ impl Default for ExtBuilder {
 	}
 }
 
-parameter_types! {}
 
 impl ExtBuilder {
 	pub fn build(self) -> sp_io::TestExternalities {
