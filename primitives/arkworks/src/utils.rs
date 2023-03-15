@@ -30,7 +30,7 @@ pub fn multi_miller_loop_generic<Curve: Pairing>(
 
 	let result = Curve::multi_miller_loop(g1, g2);
 
-	Ok(serialize_result(result))
+	Ok(serialize_result(result.0))
 }
 
 pub fn final_exponentiation_generic<Curve: Pairing>(
