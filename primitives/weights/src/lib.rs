@@ -121,7 +121,7 @@ pub struct WeightToFeeCoefficient<Balance> {
 /// A list of coefficients that represent one polynomial.
 pub type WeightToFeeCoefficients<T> = SmallVec<[WeightToFeeCoefficient<T>; 4]>;
 
-/// A list of coefficients that represent a polynomial to convert a `u64` to a fee.
+/// A list of coefficients that represent a polynomial.
 ///
 /// Can be [eval](Self::eval)uated at a specific `u64` to get the fee.
 pub struct FeePolynomial<Balance> {
@@ -138,6 +138,7 @@ impl<Balance> FeePolynomial<Balance>
 where
 	Balance: BaseArithmetic + From<u32> + Copy + Unsigned,
 {
+	/// Evaluate the polynomial at a specific `x`.
 	pub fn eval(&self, x: u64) -> Balance {
 		self.coefficients.iter().fold(Balance::saturated_from(0u32), |mut acc, args| {
 			let w = Balance::saturated_from(x).saturating_pow(args.degree.into());
