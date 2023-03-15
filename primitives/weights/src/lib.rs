@@ -123,6 +123,12 @@ where
 	Balance: BaseArithmetic + From<u32> + Copy + Unsigned,
 {
 	/// Evaluate the term at `x` and saturatingly amalgamate into `result`.
+	///
+	/// The term is calculated as:
+	///
+	/// ```ignore
+	/// (frac * x^(degree) + integer * x^(degree)) * (-1 * c[0].negative)
+	/// ```
 	pub fn saturating_eval(&self, mut result: Balance, x: Balance) -> Balance {
 		let power = x.saturating_pow(self.degree.into());
 
