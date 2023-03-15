@@ -6853,6 +6853,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-treasury-oracle"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+]
+
+[[package]]
 name = "pallet-uniques"
 version = "4.0.0-dev"
 dependencies = [

@@ -1,0 +1,40 @@
+[package]
+name = "pallet-treasury-oracle"
+version = "4.0.0-dev"
+description = "Convert whitelisted assets to native balance"
+authors = ["Centrifuge <admin@centrifuge.io>"]
+homepage = "https://substrate.io"
+edition = "2021"
+license = "Unlicense"
+publish = false
+repository = "https://github.com/paritytech/substrate/"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = [
+	"derive",
+] }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
+
+[dev-dependencies]
+sp-core = { version = "7.0.0", path = "../../primitives/core" }
+sp-io = { version = "7.0.0", path = "../../primitives/io" }
+
+[features]
+default = ["std"]
+std = [
+	"codec/std",
+	"frame-benchmarking?/std",
+	"frame-support/std",
+	"frame-system/std",
+	"scale-info/std",
+	"sp-runtime/std",
+]
+runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
+try-runtime = ["frame-support/try-runtime"]
