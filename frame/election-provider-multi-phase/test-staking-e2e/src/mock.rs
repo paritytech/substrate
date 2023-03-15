@@ -38,7 +38,7 @@ use sp_staking::{
 use sp_std::prelude::*;
 use std::collections::BTreeMap;
 
-use frame_election_provider_support::{onchain, SequentialPhragmen, Weight};
+use frame_election_provider_support::{onchain, ElectionDataProvider, SequentialPhragmen, Weight};
 use pallet_election_provider_multi_phase::{
 	unsigned::MinerConfig, ElectionCompute, QueuedSolution, SolutionAccuracyOf,
 };
@@ -222,9 +222,11 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 impl MinerConfig for Runtime {
 	type AccountId = AccountId;
 	type Solution = MockNposSolution;
-	type MaxVotesPerVoter = MaxNominations;
+	type MaxVotesPerVoter =
+	<<Self as pallet_election_provider_multi_phase::Config>::DataProvider as ElectionDataProvider>::MaxVotesPerVoter;
 	type MaxLength = MinerMaxLength;
 	type MaxWeight = MinerMaxWeight;
+	type MaxWinners = MaxWinners;
 
 	fn solution_weight(_v: u32, _t: u32, _a: u32, _d: u32) -> Weight {
 		Weight::zero()
@@ -264,7 +266,7 @@ impl pallet_staking::Config for Runtime {
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
 	type SlashDeferDuration = SlashDeferDuration;
-	type SlashCancelOrigin = EnsureRoot<AccountId>; // root can cancel slashes
+	type AdminOrigin = EnsureRoot<AccountId>; // root can cancel slashes
 	type SessionInterface = Self;
 	type EraPayout = ();
 	type NextNewSession = Session;
