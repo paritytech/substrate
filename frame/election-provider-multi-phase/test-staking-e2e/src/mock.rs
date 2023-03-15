@@ -299,8 +299,8 @@ where
 pub struct OnChainSeqPhragmen;
 
 parameter_types! {
-	pub VotersBound: u32 = 600;
-	pub TargetsBound: u32 = 400;
+	pub static VotersBound: u32 = 600;
+	pub static TargetsBound: u32 = 400;
 }
 
 impl onchain::Config for OnChainSeqPhragmen {
