@@ -127,7 +127,8 @@ benchmarks! {
 
 	thaw_private {
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller, T::MinBid::get() * BalanceOf::<T>::from(3u32));
+		let ed = T::Currency::minimum_balance();
+		T::Currency::set_balance(&caller, ed + T::MinBid::get() * BalanceOf::<T>::from(2u32));
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
 		Nis::<T>::process_queues(Perquintill::one(), 1, 2, &mut WeightCounter::unlimited());
@@ -139,7 +140,8 @@ benchmarks! {
 
 	thaw_communal {
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller, T::MinBid::get() * BalanceOf::<T>::from(3u32));
+		let ed = T::Currency::minimum_balance();
+		T::Currency::set_balance(&caller, ed + T::MinBid::get() * BalanceOf::<T>::from(2u32));
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
 		Nis::<T>::process_queues(Perquintill::one(), 1, 2, &mut WeightCounter::unlimited());
@@ -152,7 +154,8 @@ benchmarks! {
 
 	privatize {
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller, T::MinBid::get() * BalanceOf::<T>::from(3u32));
+		let ed = T::Currency::minimum_balance();
+		T::Currency::set_balance(&caller, ed + T::MinBid::get() * BalanceOf::<T>::from(2u32));
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
 		Nis::<T>::process_queues(Perquintill::one(), 1, 2, &mut WeightCounter::unlimited());
@@ -164,7 +167,8 @@ benchmarks! {
 
 	communify {
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller, T::MinBid::get() * BalanceOf::<T>::from(3u32));
+		let ed = T::Currency::minimum_balance();
+		T::Currency::set_balance(&caller, ed + T::MinBid::get() * BalanceOf::<T>::from(2u32));
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
 		Nis::<T>::process_queues(Perquintill::one(), 1, 2, &mut WeightCounter::unlimited());
