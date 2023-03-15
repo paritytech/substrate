@@ -124,11 +124,11 @@ where
 {
 	/// Evaluate the term at `x` and saturatingly amalgamate into `result`.
 	///
-	/// The term is calculated as:
-	///
+	/// The unsigned value for the term is calculated as:
 	/// ```ignore
-	/// (frac * x^(degree) + integer * x^(degree)) * (-1 * c[0].negative)
+	/// (frac * x^(degree) + integer * x^(degree))
 	/// ```
+	/// Depending on the value of `negative`, it is added or subtracted from `result`.
 	pub fn saturating_eval(&self, mut result: Balance, x: Balance) -> Balance {
 		let power = x.saturating_pow(self.degree.into());
 
@@ -158,13 +158,14 @@ pub type WeightToFeeCoefficients<T> = SmallVec<[WeightToFeeCoefficient<T>; 4]>;
 /// coefficients matters since it uses saturating arithmetic. This struct does therefore not model a
 /// polynomial in the mathematical sense (polynomial ring).
 ///
-/// For visualization purposes, the formula looks like this:
+/// For visualization purposes, the formulas of the unsigned terms look like:
 ///
 /// ```ignore
-///   (c[0].frac * x^(c[0].degree) + c[0].integer * x^(c[0].degree)) * (-1 * c[0].negative)
-/// + (c[1].frac * x^(c[1].degree) + c[1].integer * x^(c[1].degree)) * (-1 * c[1].negative)
-/// + ...
+/// c[0].frac * x^(c[0].degree) + c[0].integer * x^(c[0].degree)
+/// c[1].frac * x^(c[1].degree) + c[1].integer * x^(c[1].degree)
+/// ...
 /// ```
+/// Depending on the value of `c[i].negative`, the term is added or subtracted from the result.
 pub struct FeePolynomial<Balance> {
 	coefficients: SmallVec<[WeightToFeeCoefficient<Balance>; 4]>,
 }
