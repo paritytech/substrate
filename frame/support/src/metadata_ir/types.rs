@@ -31,7 +31,7 @@ use scale_info::{
 /// When the IR does not contain enough information to generate a specific version
 /// of the runtime metadata an appropriate default value is used (ie, empty vector).
 pub struct MetadataIR<T: Form = MetaForm> {
-	/// Palet metadata.
+	/// Pallet metadata.
 	pub pallets: Vec<PalletMetadataIR<T>>,
 	/// Metadata of the extrinsic.
 	pub extrinsic: ExtrinsicMetadataIR<T>,
