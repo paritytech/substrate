@@ -44,7 +44,7 @@ pub trait Pay {
 	) -> Result<Self::Id, ()>;
 	/// Check how a payment has proceeded. `id` must have been previously returned by `pay` for
 	/// the result of this call to be meaningful. Once this returns anything other than
-	/// `InProgress` for some `id` it may validly return `Unknown` rather than the actual result
+	/// `InProgress` for some `id` it must return `Unknown` rather than the actual result
 	/// value.
 	fn check_payment(id: Self::Id) -> PaymentStatus;
 	/// Ensure that a call to pay with the given parameters will be successful if done immediately
