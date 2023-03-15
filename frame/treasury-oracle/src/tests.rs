@@ -43,6 +43,23 @@ fn create_works() {
 }
 
 #[test]
+fn create_existing_throws() {
+	new_test_ext().execute_with(|| {
+		assert!(TreasuryOracle::conversion_rate_to_native(ASSET_ID).is_none());
+		assert_ok!(TreasuryOracle::create(
+			RuntimeOrigin::root(),
+			ASSET_ID,
+			FixedU128::from_float(0.1)
+		));
+
+		assert_noop!(
+			TreasuryOracle::create(RuntimeOrigin::root(), ASSET_ID, FixedU128::from_float(0.1)),
+			Error::<Test>::AlreadyExists
+		);
+	});
+}
+
+#[test]
 fn remove_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(TreasuryOracle::create(
@@ -116,7 +133,7 @@ fn convert_works() {
 }
 
 #[test]
-fn convert_unknown_works() {
+fn convert_unknown_throws() {
 	new_test_ext().execute_with(|| {
 		let conversion = <TreasuryOracle as BalanceConversion<
 			BalanceOf<Test>,

@@ -15,6 +15,52 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! A simple oracle pallet for the treasury.
+//!
+//! ## Overview
+//!
+//! The TreasuryOracle pallet provides means of setting conversion rates
+//! for some asset to native balance.
+//!
+//! The supported dispatchable functions are documented in the [`Call`] enum.
+//!
+//! ### Terminology
+//!
+//! * **Asset balance**: The balance type of an arbitrary asset. The network might only know about
+//!   identifier of the asset and nothing more.
+//! * **Native balance**: The balance type of the network's native currency.
+//! * **Treasury spend**: A payment from the treasury after the corresponding proposal has been
+//!   approved.
+//!
+//! ### Goals
+//!
+//! The treasury-oracle system in Substrate is designed to make the following possible:
+//!
+//! * Whitelisting assets other than the native currency which can be accepted for Treasury spends.
+//! * Providing a soft conversion for the balance of whitelisted assets to native.
+//! * Updating existing conversion rates.
+//!
+//! ## Interface
+//!
+//! ### Permissioned Functions
+//!
+//! * `create`: Creates a new asset conversion rate.
+//! * `remove`: Removes an existing asset conversion rate.
+//! * `update`: Overwrites an existing assert conversion rate.
+//!
+//! Please refer to the [`Call`] enum and its associated variants for documentation on each
+//! function.
+//!
+//! ### Assumptions
+//!
+//! * Conversion rates will not be used to determine the payment amount in another asset.
+//! * Conversion rates will be used to determine the tier of the spender status, e.g.
+//!   `SmallSpender`, `MediumSpender` or `BigSpender`.
+//! * Conversion rates are only required from some asset to native.
+//!
+//! ## Related Modules
+//! * [`Treasury`](../treasury/index.html)
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::traits::{
@@ -41,8 +87,6 @@ type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 type AssetIdOf<T> = <T as Config>::AssetId;
 // Generic fungible balance type.
 type BalanceOf<T> = <<T as Config>::Currency as Inspect<AccountIdOf<T>>>::Balance;
-
-// TODO: Pallet description
 
 // #[frame_support::pallet]
 // TODO: Remove
@@ -103,6 +147,8 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// The given asset ID is unknown.
 		Unknown,
+		/// The given asset ID already has an assigned conversion rate and cannot be re-created.
+		AlreadyExists,
 	}
 
 	#[pallet::call]
@@ -115,6 +161,10 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::CreateOrigin::ensure_origin(origin)?;
 
+			ensure!(
+				!ConversionRateToNative::<T>::contains_key(asset_id),
+				Error::<T>::AlreadyExists
+			);
 			ConversionRateToNative::<T>::set(asset_id, Some(rate));
 
 			Self::deposit_event(Event::Created { asset_id, rate });
