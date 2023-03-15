@@ -51,7 +51,7 @@ fn log_current_time() {
 
 #[test]
 fn setup_works() {
-	ExtBuilder::default().initialize_first_session(true).build_and_execute(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		assert_eq!(active_era(), 0);
 
 		assert!(start_next_active_era().is_ok());
@@ -81,7 +81,7 @@ fn setup_works() {
 /// solution is added to the queue, EPM phase transitions to `Phase::Off` and the election flow
 /// restarts.
 fn enters_emergency_phase_after_forcing_before_elect() {
-	ExtBuilder::default().initialize_first_session(true).build_and_execute(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		log!(
 			trace,
 			"current validators (staking): {:?}",
@@ -149,37 +149,36 @@ fn enters_emergency_phase_after_forcing_before_elect() {
 /// the subsequent elections do not meet the minimum election untrusted score, the election will
 /// fail and enter in emenergency mode.
 fn continous_slashes_below_offending_threshold() {
-	ExtBuilder::default()
-		.initialize_first_session(true)
-		.validator_count(10)
-		.build_and_execute(|| {
-			assert_eq!(Session::validators().len(), 10);
-			let mut active_validator_set = Session::validators();
+	let staking_builder = StakingExtBuilder::default().validator_count(10);
 
-			// set a minimum election score.
-			assert!(set_minimum_election_score(500, 1000, 500).is_ok());
+	ExtBuilder::default().staking(staking_builder).build_and_execute(|| {
+		assert_eq!(Session::validators().len(), 10);
+		let mut active_validator_set = Session::validators();
 
-			// slash 10% of the active validators and progress era until the minimum trusted score
-			// is reached.
-			while active_validator_set.len() > 0 {
-				let slashed = slash_percentage(Perbill::from_percent(10));
-				assert_eq!(slashed.len(), 1);
+		// set a minimum election score.
+		assert!(set_minimum_election_score(500, 1000, 500).is_ok());
 
-				// break loop when era does not progress; EPM is in emergency phase as election
-				// failed due to election minimum score.
-				if start_next_active_era().is_err() {
-					assert!(ElectionProviderMultiPhase::current_phase().is_emergency());
-					break
-				}
+		// slash 10% of the active validators and progress era until the minimum trusted score
+		// is reached.
+		while active_validator_set.len() > 0 {
+			let slashed = slash_percentage(Perbill::from_percent(10));
+			assert_eq!(slashed.len(), 1);
 
-				active_validator_set = Session::validators();
-
-				log!(
-					trace,
-					"slashed 10% of active validators ({:?}). After slash: {:?}",
-					slashed,
-					active_validator_set
-				);
+			// break loop when era does not progress; EPM is in emergency phase as election
+			// failed due to election minimum score.
+			if start_next_active_era().is_err() {
+				assert!(ElectionProviderMultiPhase::current_phase().is_emergency());
+				break
 			}
-		});
+
+			active_validator_set = Session::validators();
+
+			log!(
+				trace,
+				"slashed 10% of active validators ({:?}). After slash: {:?}",
+				slashed,
+				active_validator_set
+			);
+		}
+	});
 }

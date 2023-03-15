@@ -149,11 +149,11 @@ impl pallet_session::Config for Runtime {
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Runtime, Staking>;
 	type Keys = SessionKeys;
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
+	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type SessionHandler = (OtherSessionHandler,);
 	type RuntimeEvent = RuntimeEvent;
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Runtime>;
-	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type WeightInfo = ();
 }
 impl pallet_session::historical::Config for Runtime {
@@ -348,34 +348,126 @@ impl sp_runtime::BoundToRuntimeAppPublic for OtherSessionHandler {
 	type Public = testing::UintAuthorityId;
 }
 
-pub struct ExtBuilder {
+pub struct StakingExtBuilder {
 	validator_count: u32,
 	minimum_validator_count: u32,
-	invulnerables: Vec<AccountId>,
-	has_stakers: bool,
-	initialize_first_session: bool,
 	min_nominator_bond: Balance,
 	min_validator_bond: Balance,
-	balance_factor: Balance,
 	status: BTreeMap<AccountId, StakerStatus<AccountId>>,
 	stakes: BTreeMap<AccountId, Balance>,
 	stakers: Vec<(AccountId, AccountId, Balance, StakerStatus<AccountId>)>,
 }
 
-impl Default for ExtBuilder {
+impl Default for StakingExtBuilder {
 	fn default() -> Self {
+		let stakers = vec![
+			// (stash, ctrl, stake, status)
+			// these two will be elected in the default test where we elect 2.
+			(11, 10, 1000, StakerStatus::<AccountId>::Validator),
+			(21, 20, 1000, StakerStatus::<AccountId>::Validator),
+			// loser validatos if validator_count() is default.
+			(31, 30, 500, StakerStatus::<AccountId>::Validator),
+			(41, 40, 500, StakerStatus::<AccountId>::Validator),
+			(51, 50, 500, StakerStatus::<AccountId>::Validator),
+			(61, 60, 500, StakerStatus::<AccountId>::Validator),
+			(71, 70, 500, StakerStatus::<AccountId>::Validator),
+			(81, 80, 500, StakerStatus::<AccountId>::Validator),
+			(91, 90, 500, StakerStatus::<AccountId>::Validator),
+			(101, 100, 500, StakerStatus::<AccountId>::Validator),
+			// an idle validator
+			(201, 200, 1000, StakerStatus::<AccountId>::Idle),
+		];
+
 		Self {
 			validator_count: 2,
 			minimum_validator_count: 0,
-			balance_factor: 1,
-			invulnerables: vec![],
-			has_stakers: true,
-			initialize_first_session: true,
 			min_nominator_bond: ExistentialDeposit::get(),
 			min_validator_bond: ExistentialDeposit::get(),
 			status: Default::default(),
 			stakes: Default::default(),
-			stakers: Default::default(),
+			stakers,
+		}
+	}
+}
+
+impl StakingExtBuilder {
+	pub fn validator_count(mut self, n: u32) -> Self {
+		self.validator_count = n;
+		self
+	}
+}
+
+pub struct EpmExtBuilder {}
+
+impl Default for EpmExtBuilder {
+	fn default() -> Self {
+		EpmExtBuilder {}
+	}
+}
+
+impl EpmExtBuilder {
+	pub fn phases(self, signed: BlockNumber, unsigned: BlockNumber) -> Self {
+		<SignedPhase>::set(signed);
+		<UnsignedPhase>::set(unsigned);
+		self
+	}
+}
+
+struct BalancesExtBuilder {
+	balances: Vec<(AccountId, Balance)>,
+}
+
+impl Default for BalancesExtBuilder {
+	fn default() -> Self {
+		let balances = vec![
+			// (account_id, balance)
+			(1, 10),
+			(2, 20),
+			(3, 300),
+			(4, 400),
+			// controllers
+			(10, 100),
+			(20, 100),
+			(30, 100),
+			(40, 100),
+			(50, 100),
+			(60, 100),
+			(70, 100),
+			(80, 100),
+			(90, 100),
+			(100, 100),
+			(200, 100),
+			// stashes
+			(11, 1000),
+			(21, 2000),
+			(31, 3000),
+			(41, 4000),
+			(51, 5000),
+			(61, 6000),
+			(71, 7000),
+			(81, 8000),
+			(91, 9000),
+			(101, 10000),
+			(201, 20000),
+			// This allows us to have a total_payout different from 0.
+			(999, 1_000_000_000_000),
+		];
+		Self { balances }
+	}
+}
+
+pub struct ExtBuilder {
+	staking_builder: StakingExtBuilder,
+	epm_builder: EpmExtBuilder,
+	balances_builder: BalancesExtBuilder,
+}
+
+impl Default for ExtBuilder {
+	fn default() -> Self {
+		Self {
+			staking_builder: StakingExtBuilder::default(),
+			epm_builder: EpmExtBuilder::default(),
+			balances_builder: BalancesExtBuilder::default(),
 		}
 	}
 }
@@ -386,142 +478,70 @@ impl ExtBuilder {
 		let mut storage =
 			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 
-		let _ = pallet_balances::GenesisConfig::<Runtime> {
-			balances: vec![
-				(1, 10 * self.balance_factor),
-				(2, 20 * self.balance_factor),
-				(3, 300 * self.balance_factor),
-				(4, 400 * self.balance_factor),
-				// controllers
-				(10, self.balance_factor),
-				(20, self.balance_factor),
-				(30, self.balance_factor),
-				(40, self.balance_factor),
-				(50, self.balance_factor),
-				(60, self.balance_factor),
-				(70, self.balance_factor),
-				(80, self.balance_factor),
-				(90, self.balance_factor),
-				(100, self.balance_factor),
-				(200, self.balance_factor),
-				// stashes
-				(11, self.balance_factor * 1000),
-				(21, self.balance_factor * 2000),
-				(31, self.balance_factor * 3000),
-				(41, self.balance_factor * 4000),
-				(51, self.balance_factor * 5000),
-				(61, self.balance_factor * 6000),
-				(71, self.balance_factor * 7000),
-				(81, self.balance_factor * 8000),
-				(91, self.balance_factor * 9000),
-				(101, self.balance_factor * 10000),
-				(201, self.balance_factor * 20000),
-				// This allows us to have a total_payout different from 0.
-				(999, 1_000_000_000_000),
-			],
-		}
-		.assimilate_storage(&mut storage);
+		let _ =
+			pallet_balances::GenesisConfig::<Runtime> { balances: self.balances_builder.balances }
+				.assimilate_storage(&mut storage);
 
-		let mut stakers = vec![];
-		if self.has_stakers {
-			stakers = vec![
-				// (stash, ctrl, stake, status)
-				// these two will be elected in the default test where we elect 2.
-				(11, 10, self.balance_factor * 1000, StakerStatus::<AccountId>::Validator),
-				(21, 20, self.balance_factor * 1000, StakerStatus::<AccountId>::Validator),
-				// loser validatos if validator_count() is default.
-				(31, 30, self.balance_factor * 500, StakerStatus::<AccountId>::Validator),
-				(41, 40, self.balance_factor * 500, StakerStatus::<AccountId>::Validator),
-				(51, 50, self.balance_factor * 500, StakerStatus::<AccountId>::Validator),
-				(61, 60, self.balance_factor * 500, StakerStatus::<AccountId>::Validator),
-				(71, 70, self.balance_factor * 500, StakerStatus::<AccountId>::Validator),
-				(81, 80, self.balance_factor * 500, StakerStatus::<AccountId>::Validator),
-				(91, 90, self.balance_factor * 500, StakerStatus::<AccountId>::Validator),
-				(101, 100, self.balance_factor * 500, StakerStatus::<AccountId>::Validator),
-				// an idle validator
-				(201, 200, self.balance_factor * 1000, StakerStatus::<AccountId>::Idle),
-			];
-			// replace any of the status if needed.
-			self.status.into_iter().for_each(|(stash, status)| {
-				let (_, _, _, ref mut prev_status) = stakers
-					.iter_mut()
-					.find(|s| s.0 == stash)
-					.expect("set_status staker should exist; qed");
-				*prev_status = status;
-			});
-			// replaced any of the stakes if needed.
-			self.stakes.into_iter().for_each(|(stash, stake)| {
-				let (_, _, ref mut prev_stake, _) = stakers
-					.iter_mut()
-					.find(|s| s.0 == stash)
-					.expect("set_stake staker should exits; qed.");
-				*prev_stake = stake;
-			});
-			// extend stakers if needed.
-			stakers.extend(self.stakers)
-		}
+		let mut stakers = self.staking_builder.stakers.clone();
+		self.staking_builder.status.into_iter().for_each(|(stash, status)| {
+			let (_, _, _, ref mut prev_status) = stakers
+				.iter_mut()
+				.find(|s| s.0 == stash)
+				.expect("set_status staker should exist; qed");
+			*prev_status = status;
+		});
+		// replaced any of the stakes if needed.
+		self.staking_builder.stakes.into_iter().for_each(|(stash, stake)| {
+			let (_, _, ref mut prev_stake, _) = stakers
+				.iter_mut()
+				.find(|s| s.0 == stash)
+				.expect("set_stake staker should exits; qed.");
+			*prev_stake = stake;
+		});
 
 		let _ = pallet_staking::GenesisConfig::<Runtime> {
 			stakers: stakers.clone(),
-			validator_count: self.validator_count,
-			minimum_validator_count: self.minimum_validator_count,
-			invulnerables: self.invulnerables,
+			validator_count: self.staking_builder.validator_count,
+			minimum_validator_count: self.staking_builder.minimum_validator_count,
 			slash_reward_fraction: Perbill::from_percent(10),
-			min_nominator_bond: self.min_nominator_bond,
-			min_validator_bond: self.min_validator_bond,
+			min_nominator_bond: self.staking_builder.min_nominator_bond,
+			min_validator_bond: self.staking_builder.min_validator_bond,
 			..Default::default()
 		}
 		.assimilate_storage(&mut storage);
 
 		let _ = pallet_session::GenesisConfig::<Runtime> {
-			keys: if self.has_stakers {
-				// set the keys for the first session.
-				stakers
-					.into_iter()
-					.map(|(id, ..)| (id, id, SessionKeys { other: (id as u64).into() }))
-					.collect()
-			} else {
-				// set some dummy validators in genesis.
-				(0..self.validator_count as u128)
-					.map(|id| (id, id, SessionKeys { other: (id as u64).into() }))
-					.collect()
-			},
+			// set the keys for the first session.
+			keys: stakers
+				.into_iter()
+				.map(|(id, ..)| (id, id, SessionKeys { other: (id as u64).into() }))
+				.collect(),
 		}
 		.assimilate_storage(&mut storage);
 
 		let mut ext = sp_io::TestExternalities::from(storage);
 
-		if self.initialize_first_session {
-			// We consider all test to start after timestamp is initialized This must be ensured by
-			// having `timestamp::on_initialize` called before `staking::on_initialize`. Also, if
-			// session length is 1, then it is already triggered.
-			ext.execute_with(|| {
-				System::set_block_number(1);
-				Session::on_initialize(1);
-				<Staking as Hooks<u64>>::on_initialize(1);
-				Timestamp::set_timestamp(INIT_TIMESTAMP);
-			});
-		}
+		// We consider all test to start after timestamp is initialized This must be ensured by
+		// having `timestamp::on_initialize` called before `staking::on_initialize`.
+		ext.execute_with(|| {
+			System::set_block_number(1);
+			Session::on_initialize(1);
+			<Staking as Hooks<u64>>::on_initialize(1);
+			Timestamp::set_timestamp(INIT_TIMESTAMP);
+		});
 
 		ext
 	}
-	pub fn balance_factor(mut self, factor: Balance) -> Self {
-		self.balance_factor = factor;
+	pub fn staking(mut self, builder: StakingExtBuilder) -> Self {
+		self.staking_builder = builder;
 		self
 	}
-	pub fn initialize_first_session(mut self, init: bool) -> Self {
-		self.initialize_first_session = init;
+
+	pub fn epm(mut self, builder: EpmExtBuilder) -> Self {
+		self.epm_builder = builder;
 		self
 	}
-	pub fn phases(self, signed: BlockNumber, unsigned: BlockNumber) -> Self {
-		<SignedPhase>::set(signed);
-		<UnsignedPhase>::set(unsigned);
-		self
-	}
-	pub fn validator_count(mut self, n: u32) -> Self {
-		self.validator_count = n;
-		self
-	}
+
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		self.build().execute_with(test)
 	}
