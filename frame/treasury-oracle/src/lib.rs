@@ -72,18 +72,18 @@ use frame_support::traits::{
 	fungible::Inspect,
 	tokens::{Balance, BalanceConversion},
 };
-use frame_system::WeightInfo;
 use sp_runtime::{traits::Zero, FixedPointNumber, FixedPointOperand, FixedU128};
 
 pub use pallet::*;
+pub use weights::WeightInfo;
 
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 #[cfg(test)]
 mod mock;
-
 #[cfg(test)]
 mod tests;
+pub mod weights;
 
 // Type alias for `frame_system`'s account id.
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
@@ -162,7 +162,7 @@ pub mod pallet {
 		/// ## Complexity
 		/// - O(1)
 		#[pallet::call_index(0)]
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(1).ref_time())]
+		#[pallet::weight(T::WeightInfo::create())]
 		pub fn create(
 			origin: OriginFor<T>,
 			asset_id: T::AssetId,
@@ -185,7 +185,7 @@ pub mod pallet {
 		/// ## Complexity
 		/// - O(1)
 		#[pallet::call_index(1)]
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(1).ref_time())]
+		#[pallet::weight(T::WeightInfo::update())]
 		pub fn update(
 			origin: OriginFor<T>,
 			asset_id: T::AssetId,
@@ -214,7 +214,7 @@ pub mod pallet {
 		/// ## Complexity
 		/// - O(1)
 		#[pallet::call_index(2)]
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(1).ref_time())]
+		#[pallet::weight(T::WeightInfo::remove())]
 		pub fn remove(origin: OriginFor<T>, asset_id: T::AssetId) -> DispatchResult {
 			T::RemoveOrigin::ensure_origin(origin)?;
 

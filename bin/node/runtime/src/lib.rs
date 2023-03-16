@@ -1122,7 +1122,7 @@ impl pallet_treasury_oracle::Config for Runtime {
 	type Currency = Balances;
 	type AssetId = u32;
 	type RuntimeEvent = RuntimeEvent;
-	type WeightInfo = ();
+	type WeightInfo = pallet_treasury_oracle::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
