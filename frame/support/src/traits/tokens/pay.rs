@@ -76,9 +76,7 @@ pub enum PaymentStatus {
 
 /// Simple implementation of `Pay` which makes a payment from a "pot" - i.e. a single account.
 pub struct PayFromAccount<F, A>(sp_std::marker::PhantomData<(F, A)>);
-impl<A: TypedGet, F: fungible::Mutate<A::Type>> Pay
-	for PayFromAccount<F, A>
-{
+impl<A: TypedGet, F: fungible::Mutate<A::Type>> Pay for PayFromAccount<F, A> {
 	type Balance = F::Balance;
 	type Beneficiary = A::Type;
 	type AssetKind = ();

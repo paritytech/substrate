@@ -986,7 +986,7 @@ mod claim_payout {
 			);
 
 			// The pool earns 10 points
-			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 10));
+			deposit_rewards(10);
 
 			assert_ok!(Pools::do_reward_payout(
 				&10,
@@ -5431,7 +5431,7 @@ mod commission {
 			// Pool earns 80 points and a payout is triggered.
 
 			// Given:
-			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 80));
+			deposit_rewards(80);
 			assert_eq!(
 				PoolMembers::<Runtime>::get(10).unwrap(),
 				PoolMember::<Runtime> { pool_id, points: 10, ..Default::default() }
@@ -5478,7 +5478,7 @@ mod commission {
 			// is next called, which is not done in this test segment..
 
 			// Given:
-			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 100));
+			deposit_rewards(100);
 
 			// When:
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
@@ -5614,7 +5614,7 @@ mod commission {
 				1,
 				Some((Perbill::from_percent(10), root)),
 			));
-			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 40));
+			deposit_rewards(40);
 
 			// When:
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
@@ -6366,7 +6366,7 @@ mod commission {
 			);
 
 			// The pool earns 10 points
-			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 10));
+			deposit_rewards(10);
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 
 			// Then:
@@ -6376,7 +6376,7 @@ mod commission {
 			);
 
 			// The pool earns 17 points
-			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 17));
+			deposit_rewards(17);
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 
 			// Then:
@@ -6386,7 +6386,7 @@ mod commission {
 			);
 
 			// The pool earns 50 points
-			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 50));
+			deposit_rewards(50);
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 
 			// Then:
@@ -6396,7 +6396,7 @@ mod commission {
 			);
 
 			// The pool earns 10439 points
-			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 10439));
+			deposit_rewards(10439);
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 
 			// Then:
@@ -6416,7 +6416,7 @@ mod commission {
 			));
 
 			// Given:
-			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 200));
+			deposit_rewards(200);
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 
 			// Then:
@@ -6458,7 +6458,7 @@ mod commission {
 			// When:
 
 			// The pool earns 100 points
-			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 100));
+			deposit_rewards(100);
 
 			// Change commission to 20%
 			assert_ok!(Pools::set_commission(
@@ -6475,7 +6475,7 @@ mod commission {
 			);
 
 			// The pool earns 100 points
-			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 100));
+			deposit_rewards(100);
 
 			// Then:
 
@@ -6524,7 +6524,7 @@ mod commission {
 			// When:
 
 			// The pool earns 100 points
-			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 100));
+			deposit_rewards(100);
 
 			// Claim payout:
 			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
@@ -6581,7 +6581,7 @@ mod commission {
 			);
 
 			// The pool earns 10 points
-			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 10));
+			deposit_rewards(10);
 
 			// execute the payout
 			assert_ok!(Pools::do_reward_payout(
@@ -6623,7 +6623,7 @@ mod commission {
 			);
 
 			// The pool earns 10 points
-			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 10));
+			deposit_rewards(10);
 
 			// execute the payout
 			assert_ok!(Pools::do_reward_payout(
@@ -6666,7 +6666,7 @@ mod commission {
 			);
 
 			// Pool earns 80 points, payout is triggered.
-			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 80));
+			deposit_rewards(80);
 			assert_eq!(
 				PoolMembers::<Runtime>::get(10).unwrap(),
 				PoolMember::<Runtime> { pool_id, points: 10, ..Default::default() }
