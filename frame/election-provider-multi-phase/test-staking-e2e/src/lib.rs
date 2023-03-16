@@ -26,6 +26,7 @@ use sp_npos_elections::{to_supports, StakedAssignment};
 use sp_runtime::Perbill;
 
 use crate::mock::RuntimeOrigin;
+use pallet_election_provider_multi_phase::Phase;
 
 // syntactic sugar for logging.
 #[macro_export]
@@ -152,6 +153,53 @@ fn enters_emergency_phase_after_forcing_before_elect() {
 		assert_eq!(Session::validators(), vec![21, 31, 41]);
 		assert_eq!(Staking::current_era(), era_before_delayed_next.map(|e| e + 1));
 	});
+}
+
+#[test]
+fn forcing_before_elect_with_emergency_throttling() {
+	ExtBuilder::default().build_and_execute(|| {
+		let session_validators_before = Session::validators();
+		let era_before = Session::current_index();
+
+		roll_to_epm_off();
+		assert!(ElectionProviderMultiPhase::current_phase().is_off());
+
+		assert_eq!(<MinBlocksBeforeEmergency>::get(), 3);
+
+		assert_eq!(pallet_staking::ForceEra::<Runtime>::get(), pallet_staking::Forcing::NotForcing);
+		// slashes so that staking goes into `Forcing::ForceNew`.
+		slash_through_offending_threshold();
+		assert_eq!(pallet_staking::ForceEra::<Runtime>::get(), pallet_staking::Forcing::ForceNew);
+
+		assert_eq!(ElectionProviderMultiPhase::current_phase(), Phase::Off);
+		advance_session_delayed_solution();
+
+		// since `EPM::MinBlocksBeforeEmergency` blocks haven't passed in the signed phase, the
+		// emergency phase is throttled..
+		assert_eq!(ElectionProviderMultiPhase::current_phase(), Phase::Off);
+		// .. session validator set remains the same..
+		assert_eq!(Session::validators(), session_validators_before);
+		// .. and the era progressed.
+		assert_eq!(Session::current_index(), era_before + 1);
+
+		// progress to block in signed phase when emergency phase is not throttled anymore.
+		roll_to(System::block_number() + MinBlocksBeforeEmergency::get(), true);
+
+		// slashes so that staking goes into `Forcing::ForceNew` again.
+		advance_session_delayed_solution();
+		// now the emergency phase is not throttled anymore..
+		assert!(ElectionProviderMultiPhase::current_phase().is_emergency());
+		// .. and the era progressed as expected.
+		assert_eq!(Session::current_index(), era_before + 2);
+	});
+
+	// TODO(gpestana) comment. test emergency throttling after not enough blocks have passed
+	// signed phase.
+	ExtBuilder::default().build_and_execute(|| {});
+
+	// TODO(gpestana) comment. test emergency throttling after not enough blocks have passed
+	// unsigned phase.
+	ExtBuilder::default().build_and_execute(|| {});
 }
 
 #[test]
