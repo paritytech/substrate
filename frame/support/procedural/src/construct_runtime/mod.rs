@@ -291,7 +291,7 @@ fn construct_runtime_final_expansion(
 
 		trait InternalConstructRuntime {
 			#[inline(always)]
-			fn runtime_metadata(&self) -> #scrate::sp_std::vec::Vec<#scrate::metadata::v15::TraitMetadata> {
+			fn runtime_metadata(&self) -> #scrate::sp_std::vec::Vec<#scrate::metadata::v15::RuntimeApiMetadata> {
 				Default::default()
 			}
 		}

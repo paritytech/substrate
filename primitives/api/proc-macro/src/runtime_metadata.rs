@@ -110,7 +110,7 @@ pub fn generate_decl_runtime_metadata(decl: &ItemTrait, crate_: &TokenStream) ->
 			collect_where_bounds(ty).map(|ty_elem| where_clause.push(ty_elem));
 
 			inputs.push(quote!(
-				#crate_::metadata::v15::ParamMetadata {
+				#crate_::metadata::v15::RuntimeApiMethodParamMetadata {
 					name: #name,
 					ty: #crate_::scale_info::meta_type::<#ty>(),
 				}
@@ -125,7 +125,7 @@ pub fn generate_decl_runtime_metadata(decl: &ItemTrait, crate_: &TokenStream) ->
 			},
 		};
 
-		// String method name including quotes for constructing `v15::MethodMetadata`.
+		// String method name including quotes for constructing `v15::RuntimeApiMethodMetadata`.
 		let method_name = format!("{}", signature.ident);
 		let docs = collect_docs(&method.attrs, &crate_);
 
@@ -133,7 +133,7 @@ pub fn generate_decl_runtime_metadata(decl: &ItemTrait, crate_: &TokenStream) ->
 		let attrs = filter_cfg_attributes(&method.attrs);
 		methods.push(quote!(
 			#( #attrs )*
-			#crate_::metadata::v15::MethodMetadata {
+			#crate_::metadata::v15::RuntimeApiMethodMetadata {
 				name: #method_name,
 				inputs: #crate_::vec![ #( #inputs, )* ],
 				output: #output,
@@ -166,10 +166,10 @@ pub fn generate_decl_runtime_metadata(decl: &ItemTrait, crate_: &TokenStream) ->
 	quote!(
 		#( #attrs )*
 		#[inline(always)]
-		pub fn runtime_metadata #generics () -> #crate_::metadata::v15::TraitMetadata
+		pub fn runtime_metadata #generics () -> #crate_::metadata::v15::RuntimeApiMetadata
 		where #( #where_clause, )*
 		{
-			#crate_::metadata::v15::TraitMetadata {
+			#crate_::metadata::v15::RuntimeApiMetadata {
 				name: #trait_name,
 				methods: #crate_::vec![ #( #methods, )* ],
 				docs: #docs,
@@ -241,7 +241,7 @@ pub fn generate_impl_runtime_metadata(
 	Ok(quote!(
 		trait InternalImplRuntimeApis {
 			#[inline(always)]
-			fn runtime_metadata(&self) -> #crate_::vec::Vec<#crate_::metadata::v15::TraitMetadata> {
+			fn runtime_metadata(&self) -> #crate_::vec::Vec<#crate_::metadata::v15::RuntimeApiMetadata> {
 				#crate_::vec![ #( #metadata, )* ]
 			}
 		}
