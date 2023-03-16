@@ -19,7 +19,7 @@
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
 mod tests {
-	use frame_support::metadata::*;
+	use frame_support::metadata_ir::*;
 	use sp_io::TestExternalities;
 
 	frame_support::decl_module! {
@@ -104,195 +104,195 @@ mod tests {
 		type Origin2 = u32;
 	}
 
-	fn expected_metadata() -> PalletStorageMetadata {
-		PalletStorageMetadata {
+	fn expected_metadata() -> PalletStorageMetadataIR {
+		PalletStorageMetadataIR {
 			prefix: "TestStorage",
 			entries: vec![
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "U32",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					modifier: StorageEntryModifierIR::Optional,
+					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 					default: vec![0],
 					docs: vec![" Hello, this is doc!"],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "PUBU32",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					modifier: StorageEntryModifierIR::Optional,
+					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 					default: vec![0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "U32MYDEF",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					modifier: StorageEntryModifierIR::Optional,
+					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 					default: vec![0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "PUBU32MYDEF",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					modifier: StorageEntryModifierIR::Optional,
+					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 					default: vec![0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GETU32",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 					default: vec![0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "PUBGETU32",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 					default: vec![0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GETU32WITHCONFIG",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 					default: vec![0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "PUBGETU32WITHCONFIG",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 					default: vec![0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GETU32MYDEF",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					modifier: StorageEntryModifierIR::Optional,
+					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 					default: vec![0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "PUBGETU32MYDEF",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 					default: vec![3, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GETU32WITHCONFIGMYDEF",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 					default: vec![2, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "PUBGETU32WITHCONFIGMYDEF",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 					default: vec![1, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "PUBGETU32WITHCONFIGMYDEFOPT",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					modifier: StorageEntryModifierIR::Optional,
+					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 					default: vec![0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GetU32WithBuilder",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 					default: vec![0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GetOptU32WithBuilderSome",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					modifier: StorageEntryModifierIR::Optional,
+					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 					default: vec![0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GetOptU32WithBuilderNone",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					modifier: StorageEntryModifierIR::Optional,
+					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 					default: vec![0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "MAPU32",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Blake2_128Concat],
+					modifier: StorageEntryModifierIR::Optional,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Blake2_128Concat],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<[u8; 4]>(),
 					},
 					default: vec![0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "PUBMAPU32",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Blake2_128Concat],
+					modifier: StorageEntryModifierIR::Optional,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Blake2_128Concat],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<[u8; 4]>(),
 					},
 					default: vec![0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GETMAPU32",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Blake2_128Concat],
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Blake2_128Concat],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<[u8; 4]>(),
 					},
 					default: vec![0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "PUBGETMAPU32",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Blake2_128Concat],
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Blake2_128Concat],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<[u8; 4]>(),
 					},
 					default: vec![0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GETMAPU32MYDEF",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Blake2_128Concat],
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Blake2_128Concat],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<[u8; 4]>(),
 					},
 					default: vec![109, 97, 112, 100], // "map"
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "PUBGETMAPU32MYDEF",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Blake2_128Concat],
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Blake2_128Concat],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<[u8; 4]>(),
 					},
 					default: vec![112, 117, 98, 109], // "pubmap"
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "DOUBLEMAP",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
+					modifier: StorageEntryModifierIR::Optional,
+					ty: StorageEntryTypeIR::Map {
 						hashers: vec![
-							StorageHasher::Blake2_128Concat,
-							StorageHasher::Blake2_128Concat,
+							StorageHasherIR::Blake2_128Concat,
+							StorageHasherIR::Blake2_128Concat,
 						],
 						key: scale_info::meta_type::<(u32, u32)>(),
 						value: scale_info::meta_type::<[u8; 4]>(),
@@ -300,13 +300,13 @@ mod tests {
 					default: vec![0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "DOUBLEMAP2",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
+					modifier: StorageEntryModifierIR::Optional,
+					ty: StorageEntryTypeIR::Map {
 						hashers: vec![
-							StorageHasher::Blake2_128Concat,
-							StorageHasher::Blake2_128Concat,
+							StorageHasherIR::Blake2_128Concat,
+							StorageHasherIR::Blake2_128Concat,
 						],
 						key: scale_info::meta_type::<(u32, u32)>(),
 						value: scale_info::meta_type::<[u8; 4]>(),
@@ -314,47 +314,50 @@ mod tests {
 					default: vec![0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "COMPLEXTYPE1",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<(Option<u32>,)>()),
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<(Option<u32>,)>()),
 					default: vec![0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "COMPLEXTYPE2",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<(
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<(
 						[[(u16, Option<()>); 32]; 12],
 						u32,
 					)>()),
 					default: [0u8; 1156].to_vec(),
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "COMPLEXTYPE3",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<[u32; 25]>()),
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<[u32; 25]>()),
 					default: [0u8; 100].to_vec(),
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "NMAP",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
 						key: scale_info::meta_type::<(u32, u16)>(),
-						hashers: vec![StorageHasher::Blake2_128Concat, StorageHasher::Twox64Concat],
+						hashers: vec![
+							StorageHasherIR::Blake2_128Concat,
+							StorageHasherIR::Twox64Concat,
+						],
 						value: scale_info::meta_type::<u8>(),
 					},
 					default: vec![0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "NMAP2",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
 						key: scale_info::meta_type::<u32>(),
-						hashers: vec![StorageHasher::Blake2_128Concat],
+						hashers: vec![StorageHasherIR::Blake2_128Concat],
 						value: scale_info::meta_type::<u8>(),
 					},
 					default: vec![0],
