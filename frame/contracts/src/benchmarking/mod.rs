@@ -1795,22 +1795,16 @@ benchmarks! {
 		assert!(value > 0u32.into());
 		let value_bytes = value.encode();
 		let value_len = BalanceOf::<T>::max_encoded_len();
-		// Set an own deposit limit every 2nd call
-		let own_limit = (u32::MAX - 100).into();
-		let deposits = (0..r)
-			.enumerate()
-			.map(|(i,x)| if i % 2 == 0 { 0u32.into() } else { own_limit } )
-			.collect::<Vec<BalanceOf<T>>>();
-		let deposits_bytes: Vec<u8> = deposits.iter().flat_map(|i| i.encode()).collect();
-		let deposits_len = deposits_bytes.len();
-		let deposit_len = value_len.clone();
+		// Set an own deposit limit for every call
+		let deposit_limit: u32 = (u32::MAX - 100).into();
+		let deposit_bytes = deposit_limit.to_le_bytes().to_vec();
 		let addr_len = T::AccountId::max_encoded_len();
 		// offsets where to place static data in contract memory
 		let value_offset = 0;
 		let hashes_offset = value_offset + value_len;
 		let addr_len_offset = hashes_offset + hashes_len;
-		let deposits_offset = addr_len_offset + addr_len;
-		let addr_offset = deposits_offset + deposits_len;
+		let deposit_offset = addr_len_offset + addr_len;
+		let addr_offset = deposit_offset + 4;
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
@@ -1848,14 +1842,14 @@ benchmarks! {
 				},
 				DataSegment {
 					offset: addr_offset as u32,
-					value: deposits_bytes,
+					value: deposit_bytes,
 				},
 			],
 			call_body: Some(body::repeated_dyn(r, vec![
 				Counter(hashes_offset as u32, hash_len as u32), // code_hash_ptr
 				Regular(Instruction::I64Const(0)), // ref_time weight
 				Regular(Instruction::I64Const(0)), // proof_size weight
-				Counter(deposits_offset as u32, deposit_len as u32), // deposit limit ptr
+				Regular(Instruction::I32Const(deposit_offset as i32)),  // deposit limit ptr
 				Regular(Instruction::I32Const(value_offset as i32)), // value_ptr
 				Regular(Instruction::I32Const(0)), // input_data_ptr
 				Regular(Instruction::I32Const(0)), // input_data_len
