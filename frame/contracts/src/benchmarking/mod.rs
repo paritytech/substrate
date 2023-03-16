@@ -1140,7 +1140,7 @@ benchmarks! {
 			.map_err(|_| "Failed to write to storage during setup.")?;
 		}
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, Some(BalanceOf::<T>::from(1_000_000u32).into()), vec![])
 
 	// Similar to seal_set_storage. We store all the keys that we are about to
 	// delete beforehand in order to prevent any optimizations that could occur when
