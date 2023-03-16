@@ -234,6 +234,7 @@ impl ProtocolController {
 		if !self.reserved_nodes.insert(peer_id) {
 			return
 		}
+
 		// Discount occupied slots or connect to the node.
 		match self.nodes.entry(peer_id).or_insert(PeerState::NotConnected) {
 			PeerState::Connected(Direction::Inbound) => self.num_in -= 1,
