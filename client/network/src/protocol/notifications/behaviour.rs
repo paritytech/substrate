@@ -116,7 +116,7 @@ pub struct Notifications {
 	protocol_handles: Vec<ProtocolHandle>,
 
 	// Command streams.
-	command_streams: StreamMap<usize, Box<dyn Stream<Item = NotificationCommand> + Send>>,
+	command_streams: StreamMap<usize, Box<dyn Stream<Item = NotificationCommand> + Send + Unpin>>,
 
 	/// Receiver for instructions about who to connect to or disconnect from.
 	peerset: sc_peerset::Peerset,
@@ -2036,6 +2036,26 @@ impl NetworkBehaviour for Notifications {
 				},
 				Poll::Ready(None) => {
 					error!(target: "sub-libp2p", "Peerset receiver stream has returned None");
+					break
+				},
+				Poll::Pending => break,
+			}
+		}
+
+		// poll commands from protocols
+		loop {
+			match futures::Stream::poll_next(Pin::new(&mut self.command_streams), cx) {
+				Poll::Ready(Some((set_id, command))) => match command {
+					NotificationCommand::SetHandshake(handshake) => {
+						self.set_notif_protocol_handshake(set_id.into(), handshake);
+					},
+					NotificationCommand::OpenSubstream(_peer) |
+					NotificationCommand::CloseSubstream(_peer) => {
+						todo!("substream control not implemented");
+					},
+				},
+				Poll::Ready(None) => {
+					error!(target: "sub-libp2p", "Protocol command streams have been shut down");
 					break
 				},
 				Poll::Pending => break,

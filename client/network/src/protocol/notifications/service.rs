@@ -86,17 +86,13 @@ enum InnerNotificationEvent {
 
 /// Notification commands.
 ///
-/// Commands sent by the notifications protocol to `Notifications`
-/// in order to modify connectivity state and communicate with the remote peer.
+/// Sent by the installed protocols to `Notifications` to open/close/modify substreams.
 pub enum NotificationCommand {
 	/// Instruct `Notifications` to open a substream to peer.
 	OpenSubstream(PeerId),
 
 	/// Instruct `Notifications` to close the substream to peer.
 	CloseSubstream(PeerId),
-
-	/// Send notification to peer.
-	SendNotification(PeerId, Vec<u8>),
 
 	/// Set handshake for the notifications protocol.
 	SetHandshake(Vec<u8>),
@@ -158,6 +154,7 @@ impl NotificationService for NotificationHandle {
 	) -> Result<(), error::Error> {
 		self.peers
 			.get(&peer)
+			// TODO: check what the current implementation does in case the peer doesn't exist
 			.ok_or_else(|| error::Error::PeerDoesntExist(*peer))?
 			.reserve_notification()
 			.await
@@ -215,9 +212,11 @@ impl ProtocolHandlePair {
 		Self(tx, rx)
 	}
 
-	/// Split [`ProtocolHandlePair`] into a handle which allows it to send events to the protocol
-	/// into a stream of commands received from the protocol.
-	pub fn split(self) -> (ProtocolHandle, Box<dyn Stream<Item = NotificationCommand> + Send>) {
+	/// Consume `self` and split [`ProtocolHandlePair`] into a handle which allows it to send events
+	/// to the protocol into a stream of commands received from the protocol.
+	pub fn split(
+		self,
+	) -> (ProtocolHandle, Box<dyn Stream<Item = NotificationCommand> + Send + Unpin>) {
 		(ProtocolHandle::new(self.0), Box::new(tokio_stream::wrappers::ReceiverStream::new(self.1)))
 	}
 }
