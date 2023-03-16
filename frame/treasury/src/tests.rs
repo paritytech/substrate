@@ -19,18 +19,22 @@
 
 #![cfg(test)]
 
-use sp_core::H256;
+use frame_support::{
+	assert_err_ignore_postinfo, assert_noop, assert_ok,
+	pallet_prelude::{GenesisBuild, PhantomData},
+	parameter_types,
+	traits::{
+		fungibles::{self, *},
+		AsEnsureOriginWithArg, ConstU32, ConstU64, OnInitialize,
+	},
+	PalletId,
+};
+use frame_system::EnsureRoot;
+use pallet_assets;
+use sp_core::{TypedGet, H256};
 use sp_runtime::{
 	testing::Header,
 	traits::{BadOrigin, BlakeTwo256, Dispatchable, IdentityLookup},
-};
-
-use frame_support::{
-	assert_err_ignore_postinfo, assert_noop, assert_ok,
-	pallet_prelude::GenesisBuild,
-	parameter_types,
-	traits::{ConstU32, ConstU64, OnInitialize},
-	PalletId,
 };
 
 use super::*;
@@ -51,6 +55,7 @@ frame_support::construct_runtime!(
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Treasury: treasury::{Pallet, Call, Storage, Config, Event<T>},
 		Utility: pallet_utility,
+		Assets: pallet_assets::{Pallet, Call, Config<T>, Storage, Event<T>},
 	}
 );
 
@@ -80,6 +85,7 @@ impl frame_system::Config for Test {
 	type OnSetCode = ();
 	type MaxConsumers = ConstU32<16>;
 }
+
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ();
@@ -99,10 +105,38 @@ impl pallet_utility::Config for Test {
 	type WeightInfo = ();
 }
 
+type AssetId = u32;
+type BalanceU64 = u64;
+
+impl pallet_assets::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type Balance = BalanceU64;
+	type RemoveItemsLimit = ConstU32<1000>;
+	type AssetId = AssetId;
+	type AssetIdParameter = AssetId;
+	type Currency = Balances;
+	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<Self::AccountId>>;
+	type ForceOrigin = EnsureRoot<Self::AccountId>;
+	type AssetDeposit = ConstU64<2>;
+	type AssetAccountDeposit = ConstU64<2>;
+	type MetadataDepositBase = ConstU64<0>;
+	type MetadataDepositPerByte = ConstU64<0>;
+	type ApprovalDeposit = ConstU64<0>;
+	type StringLimit = ConstU32<20>;
+	type Freezer = ();
+	type Extra = ();
+	type CallbackHandle = ();
+	type WeightInfo = ();
+	pallet_assets::runtime_benchmarks_enabled! {
+		type BenchmarkHelper = ();
+	}
+}
+
 parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);
 	pub const Burn: Permill = Permill::from_percent(50);
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
+	pub TreasuryAccount: u128 = Treasury::account_id();
 }
 pub struct TestSpendOrigin;
 impl frame_support::traits::EnsureOrigin<RuntimeOrigin> for TestSpendOrigin {
@@ -125,6 +159,10 @@ impl frame_support::traits::EnsureOrigin<RuntimeOrigin> for TestSpendOrigin {
 
 impl Config for Test {
 	type PalletId = TreasuryPalletId;
+	type Balance = BalanceU64;
+	type AssetKind = AssetId;
+	type Paymaster = AssetsPaymaster<Assets, TreasuryAccount>;
+	type BalanceConverter = DummyBalanceConverter<Self>;
 	type Currency = pallet_balances::Pallet<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
 	type RejectOrigin = frame_system::EnsureRoot<u128>;
@@ -138,8 +176,47 @@ impl Config for Test {
 	type BurnDestination = (); // Just gets burned.
 	type WeightInfo = ();
 	type SpendFunds = ();
+	type SpendFundsLocal = ();
 	type MaxApprovals = ConstU32<100>;
 	type SpendOrigin = TestSpendOrigin;
+	type SpendOriginLocal = TestSpendOrigin;
+}
+
+pub struct AssetsPaymaster<F, A>(sp_std::marker::PhantomData<(F, A)>);
+impl<A: TypedGet, F: fungibles::Transfer<A::Type> + fungibles::Mutate<A::Type>> Pay
+	for AssetsPaymaster<F, A>
+{
+	type Balance = F::Balance;
+	type Beneficiary = A::Type;
+	type AssetKind = F::AssetId;
+	type Id = ();
+	fn pay(
+		who: &Self::Beneficiary,
+		asset_id: Self::AssetKind,
+		amount: Self::Balance,
+	) -> Result<Self::Id, ()> {
+		<F as fungibles::Transfer<_>>::transfer(asset_id, &A::get(), who, amount, false)
+			.map_err(|_| ())?;
+		Ok(())
+	}
+	fn check_payment(_: ()) -> PaymentStatus {
+		PaymentStatus::Success
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn ensure_successful(_: &Self::Beneficiary, amount: Self::Balance) {}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn ensure_concluded(_: Self::Id) {}
+}
+
+pub struct DummyBalanceConverter<T>(PhantomData<T>);
+impl<T> BalanceConversion<BalanceU64, AssetId, BalanceU64> for DummyBalanceConverter<T> {
+	type Error = Error<T>;
+	fn to_asset_balance(
+		_balance: BalanceU64,
+		_asset_id: AssetId,
+	) -> Result<BalanceU64, Self::Error> {
+		Ok(0)
+	}
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -163,40 +240,63 @@ fn genesis_config_works() {
 }
 
 #[test]
-fn spend_origin_permissioning_works() {
+fn spend_local_origin_permissioning_works() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(Treasury::spend(RuntimeOrigin::signed(1), 1, 1), BadOrigin);
+		assert_noop!(Treasury::spend_local(RuntimeOrigin::signed(1), 1, 1), BadOrigin);
 		assert_noop!(
-			Treasury::spend(RuntimeOrigin::signed(10), 6, 1),
+			Treasury::spend_local(RuntimeOrigin::signed(10), 6, 1),
 			Error::<Test>::InsufficientPermission
 		);
 		assert_noop!(
-			Treasury::spend(RuntimeOrigin::signed(11), 11, 1),
+			Treasury::spend_local(RuntimeOrigin::signed(11), 11, 1),
 			Error::<Test>::InsufficientPermission
 		);
 		assert_noop!(
-			Treasury::spend(RuntimeOrigin::signed(12), 21, 1),
+			Treasury::spend_local(RuntimeOrigin::signed(12), 21, 1),
 			Error::<Test>::InsufficientPermission
 		);
 		assert_noop!(
-			Treasury::spend(RuntimeOrigin::signed(13), 51, 1),
+			Treasury::spend_local(RuntimeOrigin::signed(13), 51, 1),
 			Error::<Test>::InsufficientPermission
 		);
 	});
 }
 
 #[test]
-fn spend_origin_works() {
+fn spend_origin_permissioning_works() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(Treasury::spend(RuntimeOrigin::signed(1), 0, 1, 1), BadOrigin);
+		assert_noop!(
+			Treasury::spend(RuntimeOrigin::signed(10), 0, 6, 1),
+			Error::<Test>::InsufficientPermission
+		);
+		assert_noop!(
+			Treasury::spend(RuntimeOrigin::signed(11), 0, 11, 1),
+			Error::<Test>::InsufficientPermission
+		);
+		assert_noop!(
+			Treasury::spend(RuntimeOrigin::signed(12), 0, 21, 1),
+			Error::<Test>::InsufficientPermission
+		);
+		assert_noop!(
+			Treasury::spend(RuntimeOrigin::signed(13), 0, 51, 1),
+			Error::<Test>::InsufficientPermission
+		);
+	});
+}
+
+#[test]
+fn spend_local_origin_works() {
 	new_test_ext().execute_with(|| {
 		// Check that accumulate works when we have Some value in Dummy already.
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
-		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 5, 6));
-		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 5, 6));
-		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 5, 6));
-		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 5, 6));
-		assert_ok!(Treasury::spend(RuntimeOrigin::signed(11), 10, 6));
-		assert_ok!(Treasury::spend(RuntimeOrigin::signed(12), 20, 6));
-		assert_ok!(Treasury::spend(RuntimeOrigin::signed(13), 50, 6));
+		assert_ok!(Treasury::spend_local(RuntimeOrigin::signed(10), 5, 6));
+		assert_ok!(Treasury::spend_local(RuntimeOrigin::signed(10), 5, 6));
+		assert_ok!(Treasury::spend_local(RuntimeOrigin::signed(10), 5, 6));
+		assert_ok!(Treasury::spend_local(RuntimeOrigin::signed(10), 5, 6));
+		assert_ok!(Treasury::spend_local(RuntimeOrigin::signed(11), 10, 6));
+		assert_ok!(Treasury::spend_local(RuntimeOrigin::signed(12), 20, 6));
+		assert_ok!(Treasury::spend_local(RuntimeOrigin::signed(13), 50, 6));
 
 		<Treasury as OnInitialize<u64>>::on_initialize(1);
 		assert_eq!(Balances::free_balance(6), 0);
@@ -204,6 +304,32 @@ fn spend_origin_works() {
 		<Treasury as OnInitialize<u64>>::on_initialize(2);
 		assert_eq!(Balances::free_balance(6), 100);
 		assert_eq!(Treasury::pot(), 0);
+	});
+}
+
+#[test]
+fn spend_origin_works() {
+	new_test_ext().execute_with(|| {
+		// Check that accumulate works when we have Some value in Dummy already.
+		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, Treasury::account_id(), true, 1));
+		assert_ok!(Assets::mint_into(0, &Treasury::account_id(), 100));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 0, 5, 6));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 0, 5, 6));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 0, 5, 6));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 0, 5, 6));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(11), 0, 10, 6));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(12), 0, 20, 6));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(13), 0, 50, 6));
+
+		// Treasury account should still have funds until next T::SpendPeriod
+		assert_eq!(Assets::reducible_balance(0, &Treasury::account_id(), false), 100);
+		assert_eq!(Assets::reducible_balance(0, &6, false), 0);
+		<Treasury as OnInitialize<u64>>::on_initialize(1);
+		assert_eq!(Assets::reducible_balance(0, &Treasury::account_id(), false), 100);
+
+		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		assert_eq!(Assets::reducible_balance(0, &Treasury::account_id(), false), 0);
+		assert_eq!(Assets::reducible_balance(0, &6, false), 100);
 	});
 }
 
@@ -450,7 +576,7 @@ fn max_approvals_limited() {
 		Balances::make_free_balance_be(&Treasury::account_id(), u64::MAX);
 		Balances::make_free_balance_be(&0, u64::MAX);
 
-		for _ in 0..<Test as Config>::MaxApprovals::get() {
+		for _ in 0..<<Test as Config>::MaxApprovals as sp_core::TypedGet>::get() {
 			assert_ok!(Treasury::propose_spend(RuntimeOrigin::signed(0), 100, 3));
 			assert_ok!(Treasury::approve_proposal(RuntimeOrigin::root(), 0));
 		}
@@ -488,8 +614,8 @@ fn spending_in_batch_respects_max_total() {
 		// Respect the `max_total` for the given origin.
 		assert_ok!(RuntimeCall::from(UtilityCall::batch_all {
 			calls: vec![
-				RuntimeCall::from(TreasuryCall::spend { amount: 2, beneficiary: 100 }),
-				RuntimeCall::from(TreasuryCall::spend { amount: 2, beneficiary: 101 })
+				RuntimeCall::from(TreasuryCall::spend_local { amount: 2, beneficiary: 100 }),
+				RuntimeCall::from(TreasuryCall::spend_local { amount: 2, beneficiary: 101 })
 			]
 		})
 		.dispatch(RuntimeOrigin::signed(10)));
@@ -497,8 +623,8 @@ fn spending_in_batch_respects_max_total() {
 		assert_err_ignore_postinfo!(
 			RuntimeCall::from(UtilityCall::batch_all {
 				calls: vec![
-					RuntimeCall::from(TreasuryCall::spend { amount: 2, beneficiary: 100 }),
-					RuntimeCall::from(TreasuryCall::spend { amount: 4, beneficiary: 101 })
+					RuntimeCall::from(TreasuryCall::spend_local { amount: 2, beneficiary: 100 }),
+					RuntimeCall::from(TreasuryCall::spend_local { amount: 4, beneficiary: 101 })
 				]
 			})
 			.dispatch(RuntimeOrigin::signed(10)),

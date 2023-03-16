@@ -182,13 +182,14 @@ pub mod pallet {
 		/// The identifier for what asset should be spent.
 		type AssetKind: AssetId;
 
-		/// Means by which we can make payments to accounts. This also defines the currency and the
-		/// balance which we use to denote that currency.
+		/// The means by which we can make payments to beneficiaries.
+		/// This can be implmented over fungibles or some other means.
 		type Paymaster: Pay<
 			Beneficiary = <Self as frame_system::Config>::AccountId,
 			AssetKind = Self::AssetKind,
 		>;
 
+		// THe means of knowing what is the equivalent native Balance of a given asset id Balance.
 		type BalanceConverter: BalanceConversion<
 			PayBalanceOf<Self, I>,
 			Self::AssetKind,
@@ -378,7 +379,7 @@ pub mod pallet {
 			asset_id: T::AssetKind,
 			amount: PayBalanceOf<T, I>,
 		},
-		// The proposal payment failed. Payment will be retried in next spend period.
+		/// The proposal payment failed. Payment will be retried in next spend period.
 		ProposalPaymentFailure {
 			proposal_index: ProposalIndex,
 			asset_id: T::AssetKind,
