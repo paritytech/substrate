@@ -86,6 +86,17 @@ impl KeyType {
 			},
 		}
 	}
+
+	fn decode<T: Config>(self, key: Vec<u8>) -> Result<crate::exec::Key<T>, Error<T>> {
+		let result = match self {
+			KeyType::Fix =>
+				FixSizedKey::try_from(key).map_err(|_| Error::<T>::DecodingFailed)?.into(),
+			KeyType::Variable(_) =>
+				VarSizedKey::<T>::try_from(key).map_err(|_| Error::<T>::DecodingFailed)?.into(),
+		};
+
+		Ok(result)
+	}
 }
 
 /// Every error that can be returned to a contract when it calls any of the host functions.
@@ -769,18 +780,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 		}
 		let key = self.read_sandbox_memory(memory, key_ptr, key_type.len::<E::T>()?)?;
 		let value = Some(self.read_sandbox_memory(memory, value_ptr, value_len)?);
-		let write_outcome = match key_type {
-			KeyType::Fix => self.ext.set_storage(
-				&FixSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
-				value,
-				false,
-			)?,
-			KeyType::Variable(_) => self.ext.set_storage_transparent(
-				&VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
-				value,
-				false,
-			)?,
-		};
+		let write_outcome = self.ext.set_storage(&key_type.decode(key)?, value, false)?;
 
 		self.adjust_gas(
 			charged,
@@ -797,18 +797,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 	) -> Result<u32, TrapReason> {
 		let charged = self.charge_gas(RuntimeCosts::ClearStorage(self.ext.max_value_size()))?;
 		let key = self.read_sandbox_memory(memory, key_ptr, key_type.len::<E::T>()?)?;
-		let outcome = match key_type {
-			KeyType::Fix => self.ext.set_storage(
-				&FixSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
-				None,
-				false,
-			)?,
-			KeyType::Variable(_) => self.ext.set_storage_transparent(
-				&VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
-				None,
-				false,
-			)?,
-		};
+		let outcome = self.ext.set_storage(&key_type.decode(key)?, None, false)?;
 
 		self.adjust_gas(charged, RuntimeCosts::ClearStorage(outcome.old_len()));
 		Ok(outcome.old_len_with_sentinel())
@@ -824,14 +813,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 	) -> Result<ReturnCode, TrapReason> {
 		let charged = self.charge_gas(RuntimeCosts::GetStorage(self.ext.max_value_size()))?;
 		let key = self.read_sandbox_memory(memory, key_ptr, key_type.len::<E::T>()?)?;
-		let outcome = match key_type {
-			KeyType::Fix => self.ext.get_storage(
-				&FixSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
-			),
-			KeyType::Variable(_) => self.ext.get_storage_transparent(
-				&VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
-			),
-		};
+		let outcome = self.ext.get_storage(&key_type.decode(key)?);
 
 		if let Some(value) = outcome {
 			self.adjust_gas(charged, RuntimeCosts::GetStorage(value.len() as u32));
@@ -858,14 +840,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 	) -> Result<u32, TrapReason> {
 		let charged = self.charge_gas(RuntimeCosts::ContainsStorage(self.ext.max_value_size()))?;
 		let key = self.read_sandbox_memory(memory, key_ptr, key_type.len::<E::T>()?)?;
-		let outcome = match key_type {
-			KeyType::Fix => self.ext.get_storage_size(
-				&FixSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
-			),
-			KeyType::Variable(_) => self.ext.get_storage_size_transparent(
-				&VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
-			),
-		};
+		let outcome = self.ext.get_storage_size(&key_type.decode(key)?);
 
 		self.adjust_gas(charged, RuntimeCosts::ClearStorage(outcome.unwrap_or(0)));
 		Ok(outcome.unwrap_or(SENTINEL))
@@ -1239,8 +1214,10 @@ pub mod env {
 	) -> Result<ReturnCode, TrapReason> {
 		let charged = ctx.charge_gas(RuntimeCosts::TakeStorage(ctx.ext.max_value_size()))?;
 		let key = ctx.read_sandbox_memory(memory, key_ptr, key_len)?;
-		if let crate::storage::WriteOutcome::Taken(value) = ctx.ext.set_storage_transparent(
-			&VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
+		if let crate::storage::WriteOutcome::Taken(value) = ctx.ext.set_storage(
+			&VarSizedKey::<E::T>::try_from(key)
+				.map_err(|_| Error::<E::T>::DecodingFailed)?
+				.into(),
 			None,
 			true,
 		)? {
