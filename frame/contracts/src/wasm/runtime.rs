@@ -18,7 +18,7 @@
 //! Environment definition of the wasm smart-contract runtime.
 
 use crate::{
-	exec::{ExecError, ExecResult, Ext, FixSizedKey, TopicOf, VarSizedKey},
+	exec::{ExecError, ExecResult, Ext, Key, TopicOf},
 	gas::{ChargedAmount, Token},
 	schedule::HostFnWeights,
 	BalanceOf, CodeHash, Config, DebugBufferVec, Error, SENTINEL,
@@ -88,14 +88,11 @@ impl KeyType {
 	}
 
 	fn decode<T: Config>(self, key: Vec<u8>) -> Result<crate::exec::Key<T>, Error<T>> {
-		let result = match self {
-			KeyType::Fix =>
-				FixSizedKey::try_from(key).map_err(|_| Error::<T>::DecodingFailed)?.into(),
+		match self {
+			KeyType::Fix => Key::<T>::try_from_fix(key).map_err(|_| Error::<T>::DecodingFailed),
 			KeyType::Variable(_) =>
-				VarSizedKey::<T>::try_from(key).map_err(|_| Error::<T>::DecodingFailed)?.into(),
-		};
-
-		Ok(result)
+				Key::<T>::try_from_var(key).map_err(|_| Error::<T>::DecodingFailed),
+		}
 	}
 }
 
@@ -1215,7 +1212,7 @@ pub mod env {
 		let charged = ctx.charge_gas(RuntimeCosts::TakeStorage(ctx.ext.max_value_size()))?;
 		let key = ctx.read_sandbox_memory(memory, key_ptr, key_len)?;
 		if let crate::storage::WriteOutcome::Taken(value) = ctx.ext.set_storage(
-			&VarSizedKey::<E::T>::try_from(key)
+			&Key::<E::T>::try_from_var(key)
 				.map_err(|_| Error::<E::T>::DecodingFailed)?
 				.into(),
 			None,

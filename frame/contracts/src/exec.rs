@@ -35,7 +35,7 @@ use smallvec::{Array, SmallVec};
 use sp_core::ecdsa::Public as ECDSAPublic;
 use sp_io::{crypto::secp256k1_ecdsa_recover_compressed, hashing::blake2_256};
 use sp_runtime::traits::{Convert, Hash};
-use sp_std::{marker::PhantomData, mem, prelude::*};
+use sp_std::{marker::PhantomData, mem, prelude::*, vec::Vec};
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type MomentOf<T> = <<T as Config>::Time as Time>::Moment;
@@ -46,16 +46,13 @@ pub type ExecResult = Result<ExecReturnValue, ExecError>;
 /// A type that represents a topic of an event. At the moment a hash is used.
 pub type TopicOf<T> = <T as frame_system::Config>::Hash;
 
-/// Type for fix sized storage key.
-pub type FixSizedKey = [u8; 32];
-
 /// Type for variable sized storage key. Used for transparent hashing.
-pub type VarSizedKey<T> = BoundedVec<u8, <T as Config>::MaxStorageKeyLen>;
+type VarSizedKey<T> = BoundedVec<u8, <T as Config>::MaxStorageKeyLen>;
 
 /// Combined key type for both fixed and variable storage keys.
 pub enum Key<T: Config> {
 	/// Variant for fixed sized keys.
-	Fix(FixSizedKey),
+	Fix([u8; 32]),
 	/// Variant for variable sized keys.
 	Var(VarSizedKey<T>),
 }
@@ -75,10 +72,18 @@ impl<T: Config> Key<T> {
 			Key::Var(v) => Blake2_128Concat::hash(v.as_slice()),
 		}
 	}
+
+	pub fn try_from_fix(v: Vec<u8>) -> Result<Self, Vec<u8>> {
+		<[u8; 32]>::try_from(v).map(Self::Fix)
+	}
+
+	pub fn try_from_var(v: Vec<u8>) -> Result<Self, Vec<u8>> {
+		VarSizedKey::<T>::try_from(v).map(Self::Var)
+	}
 }
 
-impl<T: Config> From<FixSizedKey> for Key<T> {
-	fn from(v: FixSizedKey) -> Self {
+impl<T: Config> From<[u8; 32]> for Key<T> {
+	fn from(v: [u8; 32]) -> Self {
 		Key::Fix(v)
 	}
 }
@@ -3020,7 +3025,7 @@ mod tests {
 			// Write
 			assert_eq!(
 				ctx.ext.set_storage(
-					&VarSizedKey::<Test>::try_from([1; 64].to_vec()).unwrap().into(),
+					&Key::<Test>::try_from_var([1; 64].to_vec()).unwrap(),
 					Some(vec![1, 2, 3]),
 					false
 				),
@@ -3028,7 +3033,7 @@ mod tests {
 			);
 			assert_eq!(
 				ctx.ext.set_storage(
-					&VarSizedKey::<Test>::try_from([2; 19].to_vec()).unwrap().into(),
+					&Key::<Test>::try_from_var([2; 19].to_vec()).unwrap(),
 					Some(vec![4, 5, 6]),
 					true
 				),
@@ -3036,7 +3041,7 @@ mod tests {
 			);
 			assert_eq!(
 				ctx.ext.set_storage(
-					&VarSizedKey::<Test>::try_from([3; 19].to_vec()).unwrap().into(),
+					&Key::<Test>::try_from_var([3; 19].to_vec()).unwrap(),
 					None,
 					false
 				),
@@ -3044,7 +3049,7 @@ mod tests {
 			);
 			assert_eq!(
 				ctx.ext.set_storage(
-					&VarSizedKey::<Test>::try_from([4; 64].to_vec()).unwrap().into(),
+					&Key::<Test>::try_from_var([4; 64].to_vec()).unwrap(),
 					None,
 					true
 				),
@@ -3052,7 +3057,7 @@ mod tests {
 			);
 			assert_eq!(
 				ctx.ext.set_storage(
-					&VarSizedKey::<Test>::try_from([5; 30].to_vec()).unwrap().into(),
+					&Key::<Test>::try_from_var([5; 30].to_vec()).unwrap(),
 					Some(vec![]),
 					false
 				),
@@ -3060,7 +3065,7 @@ mod tests {
 			);
 			assert_eq!(
 				ctx.ext.set_storage(
-					&VarSizedKey::<Test>::try_from([6; 128].to_vec()).unwrap().into(),
+					&Key::<Test>::try_from_var([6; 128].to_vec()).unwrap(),
 					Some(vec![]),
 					true
 				),
@@ -3070,7 +3075,7 @@ mod tests {
 			// Overwrite
 			assert_eq!(
 				ctx.ext.set_storage(
-					&VarSizedKey::<Test>::try_from([1; 64].to_vec()).unwrap().into(),
+					&Key::<Test>::try_from_var([1; 64].to_vec()).unwrap(),
 					Some(vec![42, 43, 44]),
 					false
 				),
@@ -3078,7 +3083,7 @@ mod tests {
 			);
 			assert_eq!(
 				ctx.ext.set_storage(
-					&VarSizedKey::<Test>::try_from([2; 19].to_vec()).unwrap().into(),
+					&Key::<Test>::try_from_var([2; 19].to_vec()).unwrap(),
 					Some(vec![48]),
 					true
 				),
@@ -3086,7 +3091,7 @@ mod tests {
 			);
 			assert_eq!(
 				ctx.ext.set_storage(
-					&VarSizedKey::<Test>::try_from([3; 19].to_vec()).unwrap().into(),
+					&Key::<Test>::try_from_var([3; 19].to_vec()).unwrap(),
 					None,
 					false
 				),
@@ -3094,7 +3099,7 @@ mod tests {
 			);
 			assert_eq!(
 				ctx.ext.set_storage(
-					&VarSizedKey::<Test>::try_from([4; 64].to_vec()).unwrap().into(),
+					&Key::<Test>::try_from_var([4; 64].to_vec()).unwrap(),
 					None,
 					true
 				),
@@ -3102,7 +3107,7 @@ mod tests {
 			);
 			assert_eq!(
 				ctx.ext.set_storage(
-					&VarSizedKey::<Test>::try_from([5; 30].to_vec()).unwrap().into(),
+					&Key::<Test>::try_from_var([5; 30].to_vec()).unwrap(),
 					Some(vec![]),
 					false
 				),
@@ -3110,7 +3115,7 @@ mod tests {
 			);
 			assert_eq!(
 				ctx.ext.set_storage(
-					&VarSizedKey::<Test>::try_from([6; 128].to_vec()).unwrap().into(),
+					&Key::<Test>::try_from_var([6; 128].to_vec()).unwrap(),
 					Some(vec![]),
 					true
 				),
@@ -3224,7 +3229,7 @@ mod tests {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
 			assert_eq!(
 				ctx.ext.set_storage(
-					&VarSizedKey::<Test>::try_from([1; 19].to_vec()).unwrap().into(),
+					&Key::<Test>::try_from_var([1; 19].to_vec()).unwrap(),
 					Some(vec![1, 2, 3]),
 					false
 				),
@@ -3232,25 +3237,22 @@ mod tests {
 			);
 			assert_eq!(
 				ctx.ext.set_storage(
-					&VarSizedKey::<Test>::try_from([2; 16].to_vec()).unwrap().into(),
+					&Key::<Test>::try_from_var([2; 16].to_vec()).unwrap(),
 					Some(vec![]),
 					false
 				),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext
-					.get_storage(&VarSizedKey::<Test>::try_from([1; 19].to_vec()).unwrap().into()),
+				ctx.ext.get_storage(&Key::<Test>::try_from_var([1; 19].to_vec()).unwrap()),
 				Some(vec![1, 2, 3])
 			);
 			assert_eq!(
-				ctx.ext
-					.get_storage(&VarSizedKey::<Test>::try_from([2; 16].to_vec()).unwrap().into()),
+				ctx.ext.get_storage(&Key::<Test>::try_from_var([2; 16].to_vec()).unwrap()),
 				Some(vec![])
 			);
 			assert_eq!(
-				ctx.ext
-					.get_storage(&VarSizedKey::<Test>::try_from([3; 8].to_vec()).unwrap().into()),
+				ctx.ext.get_storage(&Key::<Test>::try_from_var([3; 8].to_vec()).unwrap()),
 				None
 			);
 
@@ -3283,7 +3285,7 @@ mod tests {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
 			assert_eq!(
 				ctx.ext.set_storage(
-					&VarSizedKey::<Test>::try_from([1; 19].to_vec()).unwrap().into(),
+					&Key::<Test>::try_from_var([1; 19].to_vec()).unwrap(),
 					Some(vec![1, 2, 3]),
 					false
 				),
@@ -3291,28 +3293,22 @@ mod tests {
 			);
 			assert_eq!(
 				ctx.ext.set_storage(
-					&VarSizedKey::<Test>::try_from([2; 16].to_vec()).unwrap().into(),
+					&Key::<Test>::try_from_var([2; 16].to_vec()).unwrap(),
 					Some(vec![]),
 					false
 				),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.get_storage_size(
-					&VarSizedKey::<Test>::try_from([1; 19].to_vec()).unwrap().into()
-				),
+				ctx.ext.get_storage_size(&Key::<Test>::try_from_var([1; 19].to_vec()).unwrap()),
 				Some(3)
 			);
 			assert_eq!(
-				ctx.ext.get_storage_size(
-					&VarSizedKey::<Test>::try_from([2; 16].to_vec()).unwrap().into()
-				),
+				ctx.ext.get_storage_size(&Key::<Test>::try_from_var([2; 16].to_vec()).unwrap()),
 				Some(0)
 			);
 			assert_eq!(
-				ctx.ext.get_storage_size(
-					&VarSizedKey::<Test>::try_from([3; 8].to_vec()).unwrap().into()
-				),
+				ctx.ext.get_storage_size(&Key::<Test>::try_from_var([3; 8].to_vec()).unwrap()),
 				None
 			);
 

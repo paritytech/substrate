@@ -710,11 +710,7 @@ fn deploying_wasm_contract_should_work() {
 	t.execute_with(|| {
 		// Verify that the contract does exist by querying some of its storage items
 		// It does not matter that the storage item itself does not exist.
-		assert!(&pallet_contracts::Pallet::<Runtime>::get_storage(
-			addr,
-			pallet_contracts::StorageKey::<Runtime>::default().to_vec()
-		)
-		.is_ok());
+		assert!(&pallet_contracts::Pallet::<Runtime>::get_storage(addr, vec![]).is_ok());
 	});
 }
 

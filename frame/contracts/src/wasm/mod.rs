@@ -366,10 +366,7 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 mod tests {
 	use super::*;
 	use crate::{
-		exec::{
-			AccountIdOf, BlockNumberOf, ErrorOrigin, ExecError, Executable, Ext, Key, SeedOf,
-			VarSizedKey,
-		},
+		exec::{AccountIdOf, BlockNumberOf, ErrorOrigin, ExecError, Executable, Ext, Key, SeedOf},
 		gas::GasMeter,
 		storage::WriteOutcome,
 		tests::{RuntimeCall, Test, ALICE, BOB},
@@ -1047,13 +1044,13 @@ mod tests {
 
 		let mut ext = MockExt::default();
 		ext.set_storage(
-			&VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap().into(),
+			&Key::<Test>::try_from_var([1u8; 64].to_vec()).unwrap(),
 			Some(vec![42u8]),
 			false,
 		)
 		.unwrap();
 		ext.set_storage(
-			&VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap().into(),
+			&Key::<Test>::try_from_var([2u8; 19].to_vec()).unwrap(),
 			Some(vec![]),
 			false,
 		)
@@ -2523,14 +2520,14 @@ mod tests {
 		let mut ext = MockExt::default();
 
 		ext.set_storage(
-			&VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap().into(),
+			&Key::<Test>::try_from_var([1u8; 64].to_vec()).unwrap(),
 			Some(vec![42u8]),
 			false,
 		)
 		.unwrap();
 
 		ext.set_storage(
-			&VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap().into(),
+			&Key::<Test>::try_from_var([2u8; 19].to_vec()).unwrap(),
 			Some(vec![]),
 			false,
 		)
@@ -2607,13 +2604,13 @@ mod tests {
 		let mut ext = MockExt::default();
 
 		ext.set_storage(
-			&VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap().into(),
+			&Key::<Test>::try_from_var([1u8; 64].to_vec()).unwrap(),
 			Some(vec![42u8]),
 			false,
 		)
 		.unwrap();
 		ext.set_storage(
-			&VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap().into(),
+			&Key::<Test>::try_from_var([2u8; 19].to_vec()).unwrap(),
 			Some(vec![]),
 			false,
 		)
@@ -2704,14 +2701,14 @@ mod tests {
 		let mut ext = MockExt::default();
 
 		ext.set_storage(
-			&VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap().into(),
+			&Key::<Test>::try_from_var([1u8; 64].to_vec()).unwrap(),
 			Some(vec![42u8]),
 			false,
 		)
 		.unwrap();
 
 		ext.set_storage(
-			&VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap().into(),
+			&Key::<Test>::try_from_var([2u8; 19].to_vec()).unwrap(),
 			Some(vec![]),
 			false,
 		)
