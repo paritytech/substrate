@@ -35,13 +35,14 @@ use frame_support::sp_runtime::SaturatedConversion;
 use frame_support::traits::Currency;
 use frame_support::pallet_prelude::*;
 
-//mod mock;
-//mod tests;
+#[cfg(test)]
+mod mock;
+#[cfg(test)]
+mod tests;
 
 pub use pallet::*;
 
 const LOG_TARGET: &str = "runtime::statement";
-
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -72,7 +73,7 @@ pub mod pallet {
 		<T as frame_system::Config>::AccountId: From<[u8; 32]>,
 	{
 		/// A new statement is submitted
-		NewStatement { statement: Statement },
+		NewStatement { account: T::AccountId, statement: Statement },
 	}
 	pub type BalanceOf<T> =
 		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -81,6 +82,7 @@ pub mod pallet {
 impl<T: Config> Pallet<T>
 	where
 		<T as frame_system::Config>::AccountId: From<[u8; 32]>,
+		[u8; 32]: From<<T as frame_system::Config>::AccountId>,
 		<T as frame_system::Config>::RuntimeEvent: From<pallet::Event<T>>,
 {
 
@@ -95,7 +97,9 @@ impl<T: Config> Pallet<T>
 		enter_span! { Level::TRACE, "validate_statement" };
 		log::debug!(target: LOG_TARGET, "Validating statement {:?}", statement);
 		let account: Option<T::AccountId> = match statement.proof() {
-			None => None,
+			None => {
+				return Err(InvalidStatement::NoProof)
+			},
 			Some(Proof::Sr25519 { signature, signer }) => {
 				let to_sign = statement.signature_material();
 				let signature =  sp_core::sr25519::Signature(*signature);
@@ -132,10 +136,10 @@ impl<T: Config> Pallet<T>
 					log::debug!(target: LOG_TARGET, "Bad block hash.");
 					return Err(InvalidStatement::BadProof);
 				}
-				let account_id = Some(who.clone().into());
+				let account: T::AccountId = who.clone().into();
 				match frame_system::Pallet::<T>::event_no_consensus(*event_index as usize) {
 					Some(e) => {
-						if e != (Event::NewStatement { statement: statement.strip_proof() }).into() {
+						if e != (Event::NewStatement { account: account.clone(), statement: statement.strip_proof() }).into() {
 							log::debug!(target: LOG_TARGET, "Event mismatch");
 							return Err(InvalidStatement::BadProof);
 						}
@@ -145,7 +149,7 @@ impl<T: Config> Pallet<T>
 						return Err(InvalidStatement::BadProof);
 					}
 				}
-				account_id
+				Some(account)
 			}
 		};
 		let priority: u64 = if let Some(account) = account {
@@ -165,13 +169,10 @@ impl<T: Config> Pallet<T>
 
 		Ok(ValidStatement {
 			priority,
-			propagate: true,
 		})
 	}
 
-	pub fn submit_statement(statement: Statement) {
-		Self::deposit_event(Event::NewStatement { statement });
+	pub fn submit_statement(account: T::AccountId, statement: Statement) {
+		Self::deposit_event(Event::NewStatement { account, statement });
 	}
-
 }
-

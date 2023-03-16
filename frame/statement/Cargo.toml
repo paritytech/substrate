@@ -24,6 +24,9 @@ sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/
 sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
 log = { version = "0.4.17", default-features = false }
 
+[dev-dependencies]
+pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+
 [features]
 default = [ "std" ]
 std = [
@@ -36,6 +39,7 @@ std = [
 	"sp-std/std",
 	"sp-io/std",
 	"sp-core/std",
+	"sp-statement-store/std",
 ]
 try-runtime = [
 	"frame-support/try-runtime",

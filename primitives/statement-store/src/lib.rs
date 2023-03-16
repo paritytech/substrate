@@ -22,6 +22,9 @@
 use sp_std::vec::Vec;
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
+use sp_application_crypto::RuntimeAppPublic;
+#[cfg(feature = "std")]
+use sp_core::Pair;
 
 pub type Topic = [u8; 32];
 pub type DecryptionKey = [u8; 32];
@@ -30,6 +33,48 @@ pub type BlockHash = [u8; 32];
 
 #[cfg(feature = "std")]
 pub use api::{StatementStore, SubmitResult, Error, Result};
+
+pub mod sr25519 {
+	mod app_sr25519 {
+		use sp_application_crypto::{app_crypto, key_types::STATEMENT, sr25519};
+		app_crypto!(sr25519, STATEMENT);
+	}
+
+	sp_application_crypto::with_pair! {
+		pub type Pair = app_sr25519::Pair;
+	}
+
+	pub type Signature = app_sr25519::Signature;
+	pub type Public = app_sr25519::Public;
+}
+
+pub mod ed25519 {
+	mod app_ed25519 {
+		use sp_application_crypto::{app_crypto, ed25519, key_types::STATEMENT};
+		app_crypto!(ed25519, STATEMENT);
+	}
+
+	sp_application_crypto::with_pair! {
+		pub type Pair = app_ed25519::Pair;
+	}
+
+	pub type Signature = app_ed25519::Signature;
+	pub type Public = app_ed25519::Public;
+}
+
+pub mod ecdsa {
+	mod app_ecdsa {
+		use sp_application_crypto::{app_crypto, ecdsa, key_types::STATEMENT};
+		app_crypto!(ecdsa, STATEMENT);
+	}
+
+	sp_application_crypto::with_pair! {
+		pub type Pair = app_ecdsa::Pair;
+	}
+
+	pub type Signature = app_ecdsa::Signature;
+	pub type Public = app_ecdsa::Public;
+}
 
 /// Returns blake2-256 hash for the encoded statement.
 #[cfg(feature = "std")]
@@ -62,11 +107,100 @@ pub struct Statement {
 	fields: Vec<Field>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum SignatureVerificationResult {
+	Valid,
+	Invalid,
+	NoSignature,
+}
+
 impl Statement {
-	pub fn new(proof: Proof) -> Statement {
+	pub fn new() -> Statement {
 		Statement {
-			fields: sp_std::vec![Field::AuthenticityProof(proof)],
+			fields: Vec::new(),
 		}
+	}
+
+	pub fn new_with_proof(proof: Proof) -> Statement {
+		Statement {
+			fields: vec![Field::AuthenticityProof(proof)],
+		}
+	}
+
+	pub fn sign_sr25519_public(&mut self, key: &sr25519::Public) -> bool {
+		let to_sign = self.signature_material();
+		if let Some(signature) = key.sign(&to_sign) {
+			let proof = Proof::Sr25519 {
+				signature: signature.into_generic().into(),
+				signer: key.clone().into_generic().into(),
+			};
+			self.set_proof(proof);
+			true
+		} else {
+			false
+		}
+	}
+
+	#[cfg(feature = "std")]
+	pub fn sign_sr25519_private(&mut self, key: &sp_core::sr25519::Pair) {
+		let to_sign = self.signature_material();
+		let proof = Proof::Sr25519 {
+			signature: key.sign(&to_sign).into(),
+			signer: key.public().into(),
+		};
+		self.set_proof(proof);
+	}
+
+	pub fn sign_ed25519_public(&mut self, key: &ed25519::Public) -> bool {
+		let to_sign = self.signature_material();
+		if let Some(signature) = key.sign(&to_sign) {
+			let proof = Proof::Ed25519 {
+				signature: signature.into_generic().into(),
+				signer: key.clone().into_generic().into(),
+			};
+			self.set_proof(proof);
+			true
+		} else {
+			false
+		}
+	}
+
+	#[cfg(feature = "std")]
+	pub fn sign_ed25519_private(&mut self, key: &sp_core::ed25519::Pair) {
+		let to_sign = self.signature_material();
+		let proof = Proof::Ed25519 {
+			signature: key.sign(&to_sign).into(),
+			signer: key.public().into(),
+		};
+		self.set_proof(proof);
+	}
+
+	pub fn sign_ecdsa_public(&mut self, key: &ecdsa::Public) -> bool {
+		let to_sign = self.signature_material();
+		if let Some(signature) = key.sign(&to_sign) {
+			let proof = Proof::Secp256k1Ecdsa {
+				signature: signature.into_generic().into(),
+				signer: key.clone().into_generic().0,
+			};
+			self.set_proof(proof);
+			true
+		} else {
+			false
+		}
+	}
+
+	#[cfg(feature = "std")]
+	pub fn sign_ecdsa_private(&mut self, key: &sp_core::ecdsa::Pair) {
+		let to_sign = self.signature_material();
+		let proof = Proof::Secp256k1Ecdsa {
+			signature: key.sign(&to_sign).into(),
+			signer: key.public().0,
+		};
+		self.set_proof(proof);
+	}
+
+	pub fn verify_signature(&self) -> SignatureVerificationResult {
+		SignatureVerificationResult::Valid
 	}
 
 	#[cfg(feature = "std")]
@@ -130,6 +264,15 @@ impl Statement {
 		}
 		self.clone()
 	}
+
+	pub fn set_proof(&mut self, proof: Proof) {
+		if let Some(Field::AuthenticityProof(_)) = self.fields.get(0) {
+			self.fields[0] = Field::AuthenticityProof(proof);
+		} else {
+			self.fields.insert(0, Field::AuthenticityProof(proof));
+		}
+	}
+
 }
 
 #[cfg(feature = "std")]
@@ -195,14 +338,13 @@ pub mod runtime_api {
 	#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
 	pub struct ValidStatement {
 		pub priority: u64,
-		pub propagate: bool,
 	}
 
 	/// An invalid statement.
 	#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug, TypeInfo)]
 	pub enum InvalidStatement {
-		Payment,
 		BadProof,
+		NoProof,
 		Stale,
 		InternalError,
 	}
