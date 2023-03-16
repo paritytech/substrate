@@ -9,7 +9,7 @@ pub mod ed_on_bls12_381;
 mod utils;
 
 /// Error computing an elliptic curve pairing
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, Debug)]
 pub enum PairingError {
 	InternalPanic,
 	FinalExpInverse,
