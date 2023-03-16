@@ -110,6 +110,7 @@ pub use sp_std::{mem, slice, vec};
 pub use sp_version::{create_apis_vec, ApiId, ApisVec, RuntimeVersion};
 #[cfg(feature = "std")]
 use std::cell::RefCell;
+pub mod metadata_ir;
 
 /// Maximum nesting level for extrinsics.
 pub const MAX_EXTRINSIC_DEPTH: u32 = 256;
