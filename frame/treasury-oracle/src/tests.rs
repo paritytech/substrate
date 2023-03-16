@@ -68,7 +68,7 @@ fn remove_works() {
 			FixedU128::from_float(0.1)
 		));
 
-		assert_ok!(TreasuryOracle::remove(RuntimeOrigin::signed(1), ASSET_ID,));
+		assert_ok!(TreasuryOracle::remove(RuntimeOrigin::root(), ASSET_ID,));
 		assert!(TreasuryOracle::conversion_rate_to_native(ASSET_ID).is_none());
 	});
 }
@@ -77,7 +77,7 @@ fn remove_works() {
 fn remove_unknown_throws() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			TreasuryOracle::remove(RuntimeOrigin::signed(1), ASSET_ID,),
+			TreasuryOracle::remove(RuntimeOrigin::root(), ASSET_ID,),
 			Error::<Test>::UnknownAssetId
 		);
 	});
@@ -92,7 +92,7 @@ fn update_works() {
 			FixedU128::from_float(0.1)
 		));
 		assert_ok!(TreasuryOracle::update(
-			RuntimeOrigin::signed(1),
+			RuntimeOrigin::root(),
 			ASSET_ID,
 			FixedU128::from_float(0.5)
 		));
@@ -108,7 +108,7 @@ fn update_works() {
 fn update_unknown_throws() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			TreasuryOracle::update(RuntimeOrigin::signed(1), ASSET_ID, FixedU128::from_float(0.5)),
+			TreasuryOracle::update(RuntimeOrigin::root(), ASSET_ID, FixedU128::from_float(0.5)),
 			Error::<Test>::UnknownAssetId
 		);
 	});

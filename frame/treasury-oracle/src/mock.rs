@@ -83,8 +83,8 @@ impl pallet_treasury_oracle::Config for Test {
 	type WeightInfo = ();
 	type RuntimeEvent = RuntimeEvent;
 	type CreateOrigin = frame_system::EnsureRoot<u64>;
-	type RemoveOrigin = frame_system::EnsureSigned<u64>;
-	type UpdateOrigin = frame_system::EnsureSigned<u64>;
+	type RemoveOrigin = frame_system::EnsureRoot<u64>;
+	type UpdateOrigin = frame_system::EnsureRoot<u64>;
 	type Balance = u64;
 	type Currency = Balances;
 	type AssetId = u32;

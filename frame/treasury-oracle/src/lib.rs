@@ -152,9 +152,9 @@ pub mod pallet {
 	}
 
 	#[pallet::call]
-	#[pallet::weight(10_000 + T::DbWeight::get().writes(1).ref_time())]
 	impl<T: Config> Pallet<T> {
 		#[pallet::call_index(0)]
+		#[pallet::weight(10_000 + T::DbWeight::get().writes(1).ref_time())]
 		pub fn create(
 			origin: OriginFor<T>,
 			asset_id: T::AssetId,
