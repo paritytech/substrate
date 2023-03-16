@@ -126,6 +126,7 @@ pub struct NotifsHandler {
 }
 
 impl NotifsHandler {
+	/// Creates new [`NotifsHandler`].
 	pub fn new(peer_id: PeerId, endpoint: ConnectedPoint, protocols: Vec<ProtocolConfig>) -> Self {
 		Self {
 			protocols: protocols
@@ -230,19 +231,6 @@ enum State {
 		in_substream: Option<NotificationsInSubstream<NegotiatedSubstream>>,
 	},
 }
-
-// fn inbound_protocol(&self) -> UpgradeCollec<NotificationsIn> {
-// 	self.protocols
-// 		.iter()
-// 		.map(|cfg| {
-// 			NotificationsIn::new(
-// 				cfg.name.clone(),
-// 				cfg.fallback_names.clone(),
-// 				cfg.max_notification_size,
-// 			)
-// 		})
-// 		.collect::<UpgradeCollec<_>>()
-// }
 
 /// Event that can be received by a `NotifsHandler`.
 #[derive(Debug, Clone)]
