@@ -94,27 +94,32 @@ impl ProtocolHandle {
 	}
 }
 
+/// Direction of a connection
+#[derive(Debug)]
+enum Direction {
+	Inbound,
+	Outbound,
+}
+
 /// Status of a connection with a peer.
 #[derive(Debug)]
-enum ConnectionState {
-	/// We are connected through an incoming connection.
-	In,
-	/// We are connected through an outgoing connection.
-	Out,
+enum PeerState {
+	/// We are connected to the peer.
+	Connected(Direction),
 	/// We are not connected.
 	NotConnected,
 }
 
-impl ConnectionState {
+impl PeerState {
 	/// Returns true if we are connected with the node.
 	fn is_connected(&self) -> bool {
-		matches!(self, ConnectionState::In | ConnectionState::Out)
+		matches!(self, PeerState::Connected(_))
 	}
 }
 
-impl Default for ConnectionState {
-	fn default() -> ConnectionState {
-		ConnectionState::NotConnected
+impl Default for PeerState {
+	fn default() -> PeerState {
+		PeerState::NotConnected
 	}
 }
 
@@ -140,7 +145,7 @@ pub struct ProtocolController {
 	/// Connect only to reserved nodes.
 	reserved_only: bool,
 	/// Peers and their connection states (including reserved nodes).
-	nodes: HashMap<PeerId, ConnectionState>,
+	nodes: HashMap<PeerId, PeerState>,
 	/// Next time to allocate slots. This is done once per second.
 	next_periodic_alloc_slots: Instant,
 	/// Outgoing channel for messages to `Notifications`.
@@ -159,8 +164,8 @@ impl ProtocolController {
 		let nodes = config
 			.reserved_nodes
 			.union(&config.bootnodes.into_iter().collect())
-			.map(|p| (*p, ConnectionState::NotConnected))
-			.collect::<HashMap<PeerId, ConnectionState>>();
+			.map(|p| (*p, PeerState::NotConnected))
+			.collect::<HashMap<PeerId, PeerState>>();
 		let controller = ProtocolController {
 			set_id,
 			from_handle,
@@ -220,9 +225,9 @@ impl ProtocolController {
 		}
 		// Discount occupied slots or connect to the node.
 		match self.nodes.entry(peer_id).or_default() {
-			ConnectionState::In => self.num_in -= 1,
-			ConnectionState::Out => self.num_out -= 1,
-			ConnectionState::NotConnected => self.alloc_slots(),
+			PeerState::Connected(Direction::Inbound) => self.num_in -= 1,
+			PeerState::Connected(Direction::Outbound) => self.num_out -= 1,
+			PeerState::NotConnected => self.alloc_slots(),
 		}
 	}
 
@@ -237,7 +242,7 @@ impl ProtocolController {
 				// should be disconnected.
 				// Note that we don't need to update slots, so we drop the node manually here
 				// and not via [`Peer`] interface
-				*node.get_mut() = ConnectionState::NotConnected;
+				*node.get_mut() = PeerState::NotConnected;
 				let _ = self
 					.to_notifications
 					.unbounded_send(Message::Drop { set_id: self.set_id, peer_id: *node.key() });
@@ -249,9 +254,9 @@ impl ProtocolController {
 			} else {
 				// Otherwise, just count occupied slots for the node.
 				match node.get() {
-					ConnectionState::In => self.num_in += 1,
-					ConnectionState::Out => self.num_out += 1,
-					ConnectionState::NotConnected => {},
+					PeerState::Connected(Direction::Inbound) => self.num_in += 1,
+					PeerState::Connected(Direction::Outbound) => self.num_out += 1,
+					PeerState::NotConnected => {},
 				}
 			}
 		} else {
@@ -297,7 +302,7 @@ impl ProtocolController {
 	}
 
 	fn on_add_peer(&mut self, peer_id: PeerId) {
-		if self.nodes.insert(peer_id, ConnectionState::NotConnected).is_none() {
+		if self.nodes.insert(peer_id, PeerState::NotConnected).is_none() {
 			self.alloc_slots();
 		}
 	}
@@ -341,11 +346,11 @@ impl ProtocolController {
 		match self.nodes.get(peer_id) {
 			None =>
 				Peer::Unknown(UnknownPeer { controller: self, peer_id: Cow::Borrowed(peer_id) }),
-			Some(ConnectionState::NotConnected) => Peer::NotConnected(NotConnectedPeer {
+			Some(PeerState::NotConnected) => Peer::NotConnected(NotConnectedPeer {
 				controller: self,
 				peer_id: Cow::Borrowed(peer_id),
 			}),
-			Some(ConnectionState::In) | Some(ConnectionState::Out) =>
+			Some(PeerState::Connected(_)) =>
 				Peer::Connected(ConnectedPeer { controller: self, peer_id: Cow::Borrowed(peer_id) }),
 		}
 	}
@@ -428,9 +433,9 @@ impl<'a> ConnectedPeer<'a> {
 		if let Some(state) = self.controller.nodes.get_mut(&*self.peer_id) {
 			if !is_no_slot_occupy {
 				match state {
-					ConnectionState::In => self.controller.num_in -= 1,
-					ConnectionState::Out => self.controller.num_out -= 1,
-					ConnectionState::NotConnected => {
+					PeerState::Connected(Direction::Inbound) => self.controller.num_in -= 1,
+					PeerState::Connected(Direction::Outbound) => self.controller.num_out -= 1,
+					PeerState::NotConnected => {
 						debug_assert!(
 							false,
 							"State inconsistency: disconnecting a disconnected node"
@@ -438,7 +443,7 @@ impl<'a> ConnectedPeer<'a> {
 					},
 				}
 			}
-			*state = ConnectionState::NotConnected;
+			*state = PeerState::NotConnected;
 			let _ = self.controller.to_notifications.unbounded_send(Message::Drop {
 				set_id: self.controller.set_id,
 				peer_id: *self.peer_id,
@@ -480,13 +485,13 @@ impl<'a> NotConnectedPeer<'a> {
 
 		if let Some(state) = self.controller.nodes.get_mut(&*self.peer_id) {
 			debug_assert!(
-				matches!(state, ConnectionState::NotConnected),
+				matches!(state, PeerState::NotConnected),
 				"State inconsistency: try_outgoing on a connected node"
 			);
 			if !is_no_slot_occupy {
 				self.controller.num_out += 1;
 			}
-			*state = ConnectionState::Out;
+			*state = PeerState::Connected(Direction::Outbound);
 			let _ = self.controller.to_notifications.unbounded_send(Message::Connect {
 				set_id: self.controller.set_id,
 				peer_id: *self.peer_id,
@@ -515,13 +520,13 @@ impl<'a> NotConnectedPeer<'a> {
 
 		if let Some(state) = self.controller.nodes.get_mut(&*self.peer_id) {
 			debug_assert!(
-				matches!(state, ConnectionState::NotConnected),
+				matches!(state, PeerState::NotConnected),
 				"State inconsistency: try_accept_incoming on a connected node"
 			);
 			if !is_no_slot_occupy {
 				self.controller.num_in += 1;
 			}
-			*state = ConnectionState::In;
+			*state = PeerState::Connected(Direction::Inbound);
 			let _ =
 				self.controller.to_notifications.unbounded_send(Message::Accept(incoming_index));
 		} else {
@@ -562,12 +567,7 @@ impl<'a> UnknownPeer<'a> {
 	/// The node starts with a reputation of 0. You can adjust these default
 	/// values using the `NotConnectedPeer` that this method returns.
 	fn discover(self) -> NotConnectedPeer<'a> {
-		if self
-			.controller
-			.nodes
-			.insert(*self.peer_id, ConnectionState::NotConnected)
-			.is_some()
-		{
+		if self.controller.nodes.insert(*self.peer_id, PeerState::NotConnected).is_some() {
 			debug_assert!(false, "State inconsistency: discovered already known peer");
 		}
 		NotConnectedPeer { controller: self.controller, peer_id: self.peer_id }
