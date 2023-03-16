@@ -128,7 +128,7 @@ impl DerefMut for KillChildOnDrop {
 	}
 }
 
-/// Information about extracted from a running node.
+/// Information extracted from a running node.
 pub struct NodeInfo {
 	pub ws_url: String,
 	pub db_path: PathBuf,
