@@ -95,7 +95,8 @@ pub fn expand_runtime_metadata(
 								})
 								.collect(),
 					},
-					ty: #scrate::scale_info::meta_type::<#runtime>()
+					ty: #scrate::scale_info::meta_type::<#runtime>(),
+					runtime: #scrate::sp_std::vec![],
 				}
 			}
 
