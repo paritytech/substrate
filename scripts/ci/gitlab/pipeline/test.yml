@@ -90,15 +90,13 @@ cargo-check-benches:
     - !reference [.rusty-cachier, before_script]
     - !reference [.pipeline-stopper-vars, script]
     # merges in the master branch on PRs
-    - |
-      export BASE=$(curl -s -H "Authorization: Bearer ${GITHUB_PR_TOKEN}" https://api.github.com/repos/paritytech/substrate/pulls/${CI_COMMIT_REF_NAME} | jq .base.ref)
-    - if [ $CI_COMMIT_REF_NAME != "master" ]; then
-      git fetch origin +${BASE}:${BASE};
-      git fetch origin +$CI_COMMIT_REF_NAME:$CI_COMMIT_REF_NAME;
-      git checkout ${BASE};
+    - 'if [ $CI_COMMIT_REF_NAME != "master" ]; then
+      BASE=$(curl -s -H "Authorization: Bearer ${GITHUB_PR_TOKEN}" https://api.github.com/repos/paritytech/substrate/pulls/${CI_COMMIT_REF_NAME} | jq -r .base.ref);
+      printf "Merging base branch %s\n" "${BASE:=master}";
       git config user.email "ci@gitlab.parity.io";
-      git merge $CI_COMMIT_REF_NAME --verbose --no-edit;
-      fi
+      git fetch origin "refs/heads/${BASE}";
+      git merge --verbose --no-edit FETCH_HEAD;
+      fi'
   parallel: 2
   script:
     - rusty-cachier snapshot create
