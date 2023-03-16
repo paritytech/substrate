@@ -1,8 +1,8 @@
 [package]
 name = "pallet-treasury-oracle"
 version = "4.0.0-dev"
-description = "Convert whitelisted assets to native balance"
-authors = ["Centrifuge <admin@centrifuge.io>"]
+description = "Whitelist non-native assets for treasury spending and provide conversion to native balance"
+authors = ["William Freudenberger <w.freude@icloud.com>"]
 homepage = "https://substrate.io"
 edition = "2021"
 license = "Unlicense"
@@ -38,5 +38,14 @@ std = [
 	"scale-info/std",
 	"sp-runtime/std",
 ]
-runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
-try-runtime = ["frame-support/try-runtime"]
+runtime-benchmarks = [
+	"frame-benchmarking/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
+]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
+	"sp-runtime/try-runtime",
+]

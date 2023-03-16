@@ -1114,6 +1114,17 @@ impl pallet_treasury::Config for Runtime {
 	type SpendOrigin = EnsureWithSuccess<EnsureRoot<AccountId>, AccountId, MaxBalance>;
 }
 
+impl pallet_treasury_oracle::Config for Runtime {
+	type CreateOrigin = EnsureRoot<AccountId>;
+	type RemoveOrigin = EnsureRoot<AccountId>;
+	type UpdateOrigin = EnsureRoot<AccountId>;
+	type Balance = Balance;
+	type Currency = Balances;
+	type AssetId = u32;
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = ();
+}
+
 parameter_types! {
 	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
 	pub const BountyValueMinimum: Balance = 5 * DOLLARS;
@@ -1758,6 +1769,7 @@ construct_runtime!(
 		TechnicalMembership: pallet_membership::<Instance1>,
 		Grandpa: pallet_grandpa,
 		Treasury: pallet_treasury,
+		TreasuryOracle: pallet_treasury_oracle,
 		Contracts: pallet_contracts,
 		Sudo: pallet_sudo,
 		ImOnline: pallet_im_online,
@@ -1915,6 +1927,7 @@ mod benches {
 		[pallet_tips, Tips]
 		[pallet_transaction_storage, TransactionStorage]
 		[pallet_treasury, Treasury]
+		[pallet_treasury_oracle, TreasuryOracle]
 		[pallet_uniques, Uniques]
 		[pallet_nfts, Nfts]
 		[pallet_utility, Utility]

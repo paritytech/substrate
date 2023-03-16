@@ -27,7 +27,7 @@
 //! ### Terminology
 //!
 //! * **Asset balance**: The balance type of an arbitrary asset. The network might only know about
-//!   identifier of the asset and nothing more.
+//!   the identifier of the asset and nothing more.
 //! * **Native balance**: The balance type of the network's native currency.
 //! * **Treasury spend**: A payment from the treasury after the corresponding proposal has been
 //!   approved.
@@ -55,8 +55,8 @@
 //!
 //! * Conversion rates will not be used to determine the payment amount in another asset.
 //! * Conversion rates will be used to determine the tier of the spender status, e.g.
-//!   `SmallSpender`, `MediumSpender` or `BigSpender`.
-//! * Conversion rates are only required from some asset to native.
+//!   `SmallSpender`, `MediumSpender`, `BigSpender` or `Treasurer`.
+//! * All conversion rates reflect the ration of some asset to native, e.g. native = asset * rate.
 //!
 //! ## Related Modules
 //! * [`Treasury`](../treasury/index.html)
@@ -78,8 +78,8 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-// #[cfg(feature = "runtime-benchmarks")]
-// mod benchmarking;
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 
 // Type alias for `frame_system`'s account id.
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
@@ -129,6 +129,8 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn conversion_rate_to_native)]
 	/// Maps an asset to its fixed point representation in the native balance.
+	///
+	/// E.g. `native_amount = asset_amount * ConversionRateToNative::<T>::get(asset_id)`
 	pub(super) type ConversionRateToNative<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::AssetId, FixedU128, OptionQuery>;
 
