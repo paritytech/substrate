@@ -317,7 +317,6 @@ use sp_staking::{
 	EraIndex, SessionIndex,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
-
 pub use weights::WeightInfo;
 
 pub use pallet::{pallet::*, *};
