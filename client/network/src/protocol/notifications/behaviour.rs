@@ -2085,6 +2085,7 @@ impl NetworkBehaviour for Notifications {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
 	use super::*;
 	use crate::protocol::notifications::handler::tests::*;
@@ -2374,7 +2375,7 @@ mod tests {
 			libp2p::swarm::behaviour::ConnectionClosed {
 				peer_id: peer,
 				connection_id: conn,
-				endpoint: &connected,
+				endpoint: &connected.clone(),
 				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
@@ -2564,7 +2565,7 @@ mod tests {
 			libp2p::swarm::behaviour::ConnectionClosed {
 				peer_id: peer,
 				connection_id: conn,
-				endpoint: &connected,
+				endpoint: &connected.clone(),
 				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
@@ -2635,7 +2636,7 @@ mod tests {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
 		let conn = ConnectionId::DUMMY;
-		let conn2 = ConnectionId::new(1usize);
+		let conn2 = ConnectionId::DUMMY; // 1
 		let set_id = sc_peerset::SetId::from(0);
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
@@ -2713,7 +2714,7 @@ mod tests {
 			libp2p::swarm::behaviour::ConnectionClosed {
 				peer_id: peer,
 				connection_id: conn,
-				endpoint: &connected,
+				endpoint: &connected.clone(),
 				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
@@ -2754,7 +2755,7 @@ mod tests {
 			libp2p::swarm::behaviour::ConnectionClosed {
 				peer_id: peer,
 				connection_id: conn,
-				endpoint: &connected,
+				endpoint: &connected.clone(),
 				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
@@ -2771,7 +2772,7 @@ mod tests {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
 		let conn = ConnectionId::DUMMY;
-		let conn1 = ConnectionId::new(1usize);
+		let conn1 = ConnectionId::DUMMY; // 1
 		let set_id = sc_peerset::SetId::from(0);
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
@@ -2821,7 +2822,7 @@ mod tests {
 			libp2p::swarm::behaviour::ConnectionClosed {
 				peer_id: peer,
 				connection_id: conn,
-				endpoint: &connected,
+				endpoint: &connected.clone(),
 				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
@@ -2893,7 +2894,7 @@ mod tests {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
 		let conn1 = ConnectionId::DUMMY;
-		let conn2 = ConnectionId::new(1usize);
+		let conn2 = ConnectionId::DUMMY; // 1
 		let set_id = sc_peerset::SetId::from(0);
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
@@ -2966,7 +2967,7 @@ mod tests {
 			libp2p::swarm::behaviour::ConnectionClosed {
 				peer_id: peer,
 				connection_id: conn1,
-				endpoint: &connected,
+				endpoint: &connected.clone(),
 				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
@@ -3092,7 +3093,7 @@ mod tests {
 			libp2p::swarm::behaviour::ConnectionClosed {
 				peer_id: peer,
 				connection_id: conn,
-				endpoint: &connected,
+				endpoint: &connected.clone(),
 				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
@@ -3166,7 +3167,7 @@ mod tests {
 			libp2p::swarm::behaviour::ConnectionClosed {
 				peer_id: peer,
 				connection_id: conn,
-				endpoint: &connected,
+				endpoint: &connected.clone(),
 				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
@@ -3229,8 +3230,8 @@ mod tests {
 			libp2p::swarm::behaviour::ConnectionClosed {
 				peer_id: peer,
 				connection_id: conn1,
-				endpoint: &connected,
-				handler: NotifsHandler::new(peer, connected, vec![]),
+				endpoint: &connected.clone(),
+				handler: NotifsHandler::new(peer, connected.clone(), vec![]),
 				remaining_established: 0usize,
 			},
 		));
@@ -3243,7 +3244,7 @@ mod tests {
 			libp2p::swarm::behaviour::ConnectionClosed {
 				peer_id: peer,
 				connection_id: conn2,
-				endpoint: &connected,
+				endpoint: &connected.clone(),
 				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
@@ -3294,7 +3295,7 @@ mod tests {
 			libp2p::swarm::behaviour::ConnectionClosed {
 				peer_id: peer,
 				connection_id: conn,
-				endpoint: &connected,
+				endpoint: &connected.clone(),
 				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
@@ -3307,7 +3308,7 @@ mod tests {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
 		let conn1 = ConnectionId::DUMMY;
-		let conn2 = ConnectionId::new(1usize);
+		let conn2 = ConnectionId::DUMMY; // 1
 		let set_id = sc_peerset::SetId::from(0);
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
@@ -3350,7 +3351,7 @@ mod tests {
 			libp2p::swarm::behaviour::ConnectionClosed {
 				peer_id: peer,
 				connection_id: conn2,
-				endpoint: &connected,
+				endpoint: &connected.clone(),
 				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
@@ -3363,7 +3364,7 @@ mod tests {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
 		let conn1 = ConnectionId::DUMMY;
-		let conn2 = ConnectionId::new(1usize);
+		let conn2 = ConnectionId::DUMMY; // 1
 		let set_id = sc_peerset::SetId::from(0);
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
@@ -3409,7 +3410,7 @@ mod tests {
 			libp2p::swarm::behaviour::ConnectionClosed {
 				peer_id: peer,
 				connection_id: conn1,
-				endpoint: &connected,
+				endpoint: &connected.clone(),
 				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
@@ -3422,7 +3423,7 @@ mod tests {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
 		let conn1 = ConnectionId::DUMMY;
-		let conn2 = ConnectionId::new(1usize);
+		let conn2 = ConnectionId::DUMMY; // 1
 		let set_id = sc_peerset::SetId::from(0);
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
@@ -3480,7 +3481,7 @@ mod tests {
 			libp2p::swarm::behaviour::ConnectionClosed {
 				peer_id: peer,
 				connection_id: conn1,
-				endpoint: &connected,
+				endpoint: &connected.clone(),
 				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
@@ -3521,7 +3522,7 @@ mod tests {
 			libp2p::swarm::behaviour::ConnectionClosed {
 				peer_id: peer,
 				connection_id: conn,
-				endpoint: &connected,
+				endpoint: &connected.clone(),
 				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
@@ -3556,7 +3557,7 @@ mod tests {
 		let peer = PeerId::random();
 		let set_id = sc_peerset::SetId::from(0);
 		let conn1 = ConnectionId::DUMMY;
-		let conn2 = ConnectionId::new(1usize);
+		let conn2 = ConnectionId::DUMMY; // 1
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
 			send_back_addr: Multiaddr::empty(),
@@ -3638,7 +3639,7 @@ mod tests {
 			libp2p::swarm::behaviour::ConnectionClosed {
 				peer_id: peer,
 				connection_id: conn,
-				endpoint: &connected,
+				endpoint: &connected.clone(),
 				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
@@ -3940,7 +3941,7 @@ mod tests {
 			libp2p::swarm::behaviour::ConnectionClosed {
 				peer_id: peer,
 				connection_id: conn,
-				endpoint: &connected,
+				endpoint: &connected.clone(),
 				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
@@ -4098,7 +4099,7 @@ mod tests {
 			libp2p::swarm::behaviour::ConnectionClosed {
 				peer_id: peer,
 				connection_id: ConnectionId::DUMMY,
-				endpoint: &endpoint,
+				endpoint: &endpoint.clone(),
 				handler: NotifsHandler::new(peer, endpoint, vec![]),
 				remaining_established: 0usize,
 			},
@@ -4248,8 +4249,8 @@ mod tests {
 		notif.on_swarm_event(FromSwarm::ConnectionClosed(
 			libp2p::swarm::behaviour::ConnectionClosed {
 				peer_id: peer,
-				connection_id: ConnectionId::new(1337usize),
-				endpoint: &connected,
+				connection_id: ConnectionId::DUMMY, // 1337
+				endpoint: &connected.clone(),
 				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
@@ -4283,8 +4284,8 @@ mod tests {
 		notif.on_swarm_event(FromSwarm::ConnectionClosed(
 			libp2p::swarm::behaviour::ConnectionClosed {
 				peer_id: peer,
-				connection_id: ConnectionId::new(1337usize),
-				endpoint: &connected,
+				connection_id: ConnectionId::DUMMY, // 1337
+				endpoint: &connected.clone(),
 				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
@@ -4334,8 +4335,8 @@ mod tests {
 		notif.on_swarm_event(FromSwarm::ConnectionClosed(
 			libp2p::swarm::behaviour::ConnectionClosed {
 				peer_id: peer,
-				connection_id: ConnectionId::new(1337usize),
-				endpoint: &connected,
+				connection_id: ConnectionId::DUMMY, // 1337
+				endpoint: &connected.clone(),
 				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
@@ -4379,7 +4380,7 @@ mod tests {
 			libp2p::swarm::behaviour::ConnectionClosed {
 				peer_id: peer,
 				connection_id: conn,
-				endpoint: &connected,
+				endpoint: &connected.clone(),
 				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
@@ -4425,8 +4426,8 @@ mod tests {
 		notif.on_swarm_event(FromSwarm::ConnectionClosed(
 			libp2p::swarm::behaviour::ConnectionClosed {
 				peer_id: peer,
-				connection_id: ConnectionId::new(1337usize),
-				endpoint: &connected,
+				connection_id: ConnectionId::DUMMY, // 1337
+				endpoint: &connected.clone(),
 				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},
@@ -4469,8 +4470,8 @@ mod tests {
 			libp2p::swarm::behaviour::ConnectionClosed {
 				peer_id: peer,
 				connection_id: conn,
-				endpoint: &connected,
-				handler: NotifsHandler::new(peer, connected, vec![]),
+				endpoint: &connected.clone(),
+				handler: NotifsHandler::new(peer, connected.clone(), vec![]),
 				remaining_established: 0usize,
 			},
 		));
@@ -4480,7 +4481,7 @@ mod tests {
 			libp2p::swarm::behaviour::ConnectionClosed {
 				peer_id: peer,
 				connection_id: conn,
-				endpoint: &connected,
+				endpoint: &connected.clone(),
 				handler: NotifsHandler::new(peer, connected, vec![]),
 				remaining_established: 0usize,
 			},

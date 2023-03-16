@@ -524,10 +524,12 @@ where
 			let swarm = &mut *swarm;
 			open.iter()
 				.filter_map(move |peer_id| {
-					let known_addresses =
-						NetworkBehaviour::addresses_of_peer(swarm.behaviour_mut(), peer_id)
-							.into_iter()
-							.collect();
+					// TODO: either use `NetworkBehaviour::handle_pending_outbound_connection`,
+					// which requires `ConnectionId` OR store this info somewhere.
+					#[allow(deprecated)]
+					let known_addresses = NetworkBehaviour::addresses_of_peer(swarm.behaviour_mut(), peer_id)
+						.into_iter()
+						.collect();
 
 					let endpoint = if let Some(e) =
 						swarm.behaviour_mut().node(peer_id).and_then(|i| i.endpoint())
@@ -560,6 +562,7 @@ where
 
 		let not_connected_peers = {
 			let swarm = &mut *swarm;
+			#[allow(deprecated)]
 			swarm
 				.behaviour_mut()
 				.known_peers()
@@ -577,6 +580,9 @@ where
 								.behaviour_mut()
 								.node(&peer_id)
 								.and_then(|i| i.latest_ping()),
+							// TODO: either use
+							// `NetworkBehaviour::handle_pending_outbound_connection`, which
+							// requires `ConnectionId` OR store this info somewhere.
 							known_addresses: NetworkBehaviour::addresses_of_peer(
 								swarm.behaviour_mut(),
 								&peer_id,
