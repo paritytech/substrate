@@ -86,8 +86,8 @@ pub fn generate_decl_runtime_metadata(decl: &ItemTrait, crate_: &TokenStream) ->
 	for item in &decl.items {
 		// Collect metadata for methods only.
 		let syn::TraitItem::Method(method) = item else {
-	                   continue
-	    };
+			continue
+		};
 
 		// Collect metadata only for the latest methods.
 		let is_changed_in =
@@ -101,7 +101,7 @@ pub fn generate_decl_runtime_metadata(decl: &ItemTrait, crate_: &TokenStream) ->
 		for input in &signature.inputs {
 			// Exclude `self` from metadata collection.
 			let syn::FnArg::Typed(typed) = input else {
-					continue
+				continue
 			};
 
 			let pat = &typed.pat;
@@ -110,7 +110,7 @@ pub fn generate_decl_runtime_metadata(decl: &ItemTrait, crate_: &TokenStream) ->
 			collect_where_bounds(ty).map(|ty_elem| where_clause.push(ty_elem));
 
 			inputs.push(quote!(
-				#crate_::metadata::v15::RuntimeApiMethodParamMetadata {
+				#crate_::metadata_ir::RuntimeApiMethodParamMetadataIR {
 					name: #name,
 					ty: #crate_::scale_info::meta_type::<#ty>(),
 				}
@@ -133,7 +133,7 @@ pub fn generate_decl_runtime_metadata(decl: &ItemTrait, crate_: &TokenStream) ->
 		let attrs = filter_cfg_attributes(&method.attrs);
 		methods.push(quote!(
 			#( #attrs )*
-			#crate_::metadata::v15::RuntimeApiMethodMetadata {
+			#crate_::metadata_ir::RuntimeApiMethodMetadataIR {
 				name: #method_name,
 				inputs: #crate_::vec![ #( #inputs, )* ],
 				output: #output,
@@ -166,10 +166,10 @@ pub fn generate_decl_runtime_metadata(decl: &ItemTrait, crate_: &TokenStream) ->
 	quote!(
 		#( #attrs )*
 		#[inline(always)]
-		pub fn runtime_metadata #generics () -> #crate_::metadata::v15::RuntimeApiMetadata
+		pub fn runtime_metadata #generics () -> #crate_::metadata_ir::RuntimeApiMetadataIR
 		where #( #where_clause, )*
 		{
-			#crate_::metadata::v15::RuntimeApiMetadata {
+			#crate_::metadata_ir::RuntimeApiMetadataIR {
 				name: #trait_name,
 				methods: #crate_::vec![ #( #methods, )* ],
 				docs: #docs,
@@ -241,7 +241,7 @@ pub fn generate_impl_runtime_metadata(
 	Ok(quote!(
 		trait InternalImplRuntimeApis {
 			#[inline(always)]
-			fn runtime_metadata(&self) -> #crate_::vec::Vec<#crate_::metadata::v15::RuntimeApiMetadata> {
+			fn runtime_metadata(&self) -> #crate_::vec::Vec<#crate_::metadata_ir::RuntimeApiMetadataIR> {
 				#crate_::vec![ #( #metadata, )* ]
 			}
 		}

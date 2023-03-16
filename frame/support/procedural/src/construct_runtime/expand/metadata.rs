@@ -77,6 +77,8 @@ pub fn expand_runtime_metadata(
 	quote! {
 		impl #runtime {
 			fn metadata_ir() -> #scrate::metadata_ir::MetadataIR {
+				let rt = #runtime;
+
 				#scrate::metadata_ir::MetadataIR {
 					pallets: #scrate::sp_std::vec![ #(#pallets),* ],
 					extrinsic: #scrate::metadata_ir::ExtrinsicMetadataIR {
@@ -96,7 +98,7 @@ pub fn expand_runtime_metadata(
 								.collect(),
 					},
 					ty: #scrate::scale_info::meta_type::<#runtime>(),
-					runtime: #scrate::sp_std::vec![],
+					runtime: (&rt).runtime_metadata(),
 				}
 			}
 
