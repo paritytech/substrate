@@ -217,7 +217,7 @@ impl ProtocolHandlePair {
 
 	/// Split [`ProtocolHandlePair`] into a handle which allows it to send events to the protocol
 	/// into a stream of commands received from the protocol.
-	pub fn split(self) -> (ProtocolHandle, Box<dyn Stream<Item = NotificationCommand>>) {
+	pub fn split(self) -> (ProtocolHandle, Box<dyn Stream<Item = NotificationCommand> + Send>) {
 		(ProtocolHandle::new(self.0), Box::new(tokio_stream::wrappers::ReceiverStream::new(self.1)))
 	}
 }

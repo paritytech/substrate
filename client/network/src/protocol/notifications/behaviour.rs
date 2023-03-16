@@ -17,8 +17,10 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	protocol::notifications::handler::{
-		self, NotificationsSink, NotifsHandler, NotifsHandlerIn, NotifsHandlerOut,
+	config::ProtocolHandlePair,
+	protocol::notifications::{
+		handler::{self, NotificationsSink, NotifsHandlerIn, NotifsHandlerOut, NotifsHandlerProto},
+		service::{NotificationCommand, ProtocolHandle},
 	},
 	types::ProtocolName,
 };
@@ -38,8 +40,11 @@ use libp2p::{
 use log::{error, trace, warn};
 use parking_lot::RwLock;
 use rand::distributions::{Distribution as _, Uniform};
-use sc_peerset::DropReason;
 use smallvec::SmallVec;
+use tokio_stream::StreamMap;
+
+use sc_peerset::DropReason;
+
 use std::{
 	cmp,
 	collections::{hash_map::Entry, VecDeque},
@@ -106,6 +111,12 @@ use std::{
 pub struct Notifications {
 	/// Notification protocols. Entries never change after initialization.
 	notif_protocols: Vec<handler::ProtocolConfig>,
+
+	/// Protocol handles.
+	protocol_handles: Vec<ProtocolHandle>,
+
+	// Command streams.
+	command_streams: StreamMap<usize, Box<dyn Stream<Item = NotificationCommand> + Send>>,
 
 	/// Receiver for instructions about who to connect to or disconnect from.
 	peerset: sc_peerset::Peerset,
@@ -360,21 +371,37 @@ impl Notifications {
 	/// Creates a `CustomProtos`.
 	pub fn new(
 		peerset: sc_peerset::Peerset,
-		notif_protocols: impl Iterator<Item = ProtocolConfig>,
+		notif_protocols: impl Iterator<Item = (ProtocolConfig, ProtocolHandlePair)>,
 	) -> Self {
-		let notif_protocols = notif_protocols
-			.map(|cfg| handler::ProtocolConfig {
-				name: cfg.name,
-				fallback_names: cfg.fallback_names,
-				handshake: Arc::new(RwLock::new(cfg.handshake)),
-				max_notification_size: cfg.max_notification_size,
+		let (notif_protocols, protocol_handle_pairs): (Vec<_>, Vec<_>) = notif_protocols
+			.map(|(cfg, protocol_handle_pair)| {
+				(
+					handler::ProtocolConfig {
+						name: cfg.name,
+						fallback_names: cfg.fallback_names,
+						handshake: Arc::new(RwLock::new(cfg.handshake)),
+						max_notification_size: cfg.max_notification_size,
+					},
+					protocol_handle_pair,
+				)
 			})
-			.collect::<Vec<_>>();
-
+			.unzip();
 		assert!(!notif_protocols.is_empty());
+
+		let (protocol_handles, command_streams): (Vec<_>, Vec<_>) = protocol_handle_pairs
+			.into_iter()
+			.enumerate()
+			.map(|(set_id, protocol_handle_pair)| {
+				let (protocol_handle, command_stream) = protocol_handle_pair.split();
+
+				(protocol_handle, (set_id, command_stream))
+			})
+			.unzip();
 
 		Self {
 			notif_protocols,
+			protocol_handles,
+			command_streams: StreamMap::from_iter(command_streams.into_iter()),
 			peerset,
 			peers: FnvHashMap::default(),
 			delays: Default::default(),

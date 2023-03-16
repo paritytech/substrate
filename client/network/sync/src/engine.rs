@@ -39,7 +39,6 @@ use sc_network::{
 	config::{
 		FullNetworkConfiguration, NonDefaultSetConfig, ProtocolId, SyncMode as SyncOperationMode,
 	},
-	event::Event,
 	types::ProtocolName,
 	utils::LruHashSet,
 	NotificationService, NotificationsSink,
