@@ -617,7 +617,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "seal1",
-				name: "seal_weight_to_fee",
+				name: "weight_to_fee",
 				params: vec![ValueType::I64, ValueType::I64, ValueType::I32, ValueType::I32],
 				return_type: None,
 			}],
