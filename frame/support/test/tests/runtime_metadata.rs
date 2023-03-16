@@ -15,7 +15,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_support::{metadata::*, traits::ConstU32};
+use frame_support::{
+	metadata_ir::{
+		RuntimeApiMetadataIR, RuntimeApiMethodMetadataIR, RuntimeApiMethodParamMetadataIR,
+	},
+	traits::ConstU32,
+};
 use scale_info::{form::MetaForm, meta_type};
 use sp_runtime::traits::Block as BlockT;
 
@@ -119,45 +124,51 @@ fn runtime_metadata() {
 	}
 
 	let expected_runtime_metadata = vec![
-		v15::TraitMetadata {
+		RuntimeApiMetadataIR {
 			name: "Api",
 			methods: vec![
-				v15::MethodMetadata {
+				RuntimeApiMethodMetadataIR {
 					name: "test",
-					inputs: vec![v15::ParamMetadata::<MetaForm> {
+					inputs: vec![RuntimeApiMethodParamMetadataIR::<MetaForm> {
 						name: "data",
 						ty: meta_type::<u64>(),
 					}],
 					output: meta_type::<()>(),
 					docs: vec![],
 				},
-				v15::MethodMetadata {
+				RuntimeApiMethodMetadataIR {
 					name: "something_with_block",
-					inputs: vec![v15::ParamMetadata::<MetaForm> {
+					inputs: vec![RuntimeApiMethodParamMetadataIR::<MetaForm> {
 						name: "block",
 						ty: meta_type::<Block>(),
 					}],
 					output: meta_type::<Block>(),
 					docs: maybe_docs(vec![" something_with_block."]),
 				},
-				v15::MethodMetadata {
+				RuntimeApiMethodMetadataIR {
 					name: "function_with_two_args",
 					inputs: vec![
-						v15::ParamMetadata::<MetaForm> { name: "data", ty: meta_type::<u64>() },
-						v15::ParamMetadata::<MetaForm> { name: "block", ty: meta_type::<Block>() },
+						RuntimeApiMethodParamMetadataIR::<MetaForm> {
+							name: "data",
+							ty: meta_type::<u64>(),
+						},
+						RuntimeApiMethodParamMetadataIR::<MetaForm> {
+							name: "block",
+							ty: meta_type::<Block>(),
+						},
 					],
 					output: meta_type::<()>(),
 					docs: vec![],
 				},
-				v15::MethodMetadata {
+				RuntimeApiMethodMetadataIR {
 					name: "same_name",
 					inputs: vec![],
 					output: meta_type::<()>(),
 					docs: vec![],
 				},
-				v15::MethodMetadata {
+				RuntimeApiMethodMetadataIR {
 					name: "wild_card",
-					inputs: vec![v15::ParamMetadata::<MetaForm> {
+					inputs: vec![RuntimeApiMethodParamMetadataIR::<MetaForm> {
 						name: "_",
 						ty: meta_type::<u32>(),
 					}],
@@ -171,27 +182,27 @@ fn runtime_metadata() {
 				" Documentation on multiline.",
 			]),
 		},
-		v15::TraitMetadata {
+		RuntimeApiMetadataIR {
 			name: "Core",
 			methods: vec![
-				v15::MethodMetadata {
+				RuntimeApiMethodMetadataIR {
 					name: "version",
 					inputs: vec![],
 					output: meta_type::<sp_version::RuntimeVersion>(),
 					docs: maybe_docs(vec![" Returns the version of the runtime."]),
 				},
-				v15::MethodMetadata {
+				RuntimeApiMethodMetadataIR {
 					name: "execute_block",
-					inputs: vec![v15::ParamMetadata::<MetaForm> {
+					inputs: vec![RuntimeApiMethodParamMetadataIR::<MetaForm> {
 						name: "block",
 						ty: meta_type::<Block>(),
 					}],
 					output: meta_type::<()>(),
 					docs: maybe_docs(vec![" Execute the given block."]),
 				},
-				v15::MethodMetadata {
+				RuntimeApiMethodMetadataIR {
 					name: "initialize_block",
-					inputs: vec![v15::ParamMetadata::<MetaForm> {
+					inputs: vec![RuntimeApiMethodParamMetadataIR::<MetaForm> {
 						name: "header",
 						ty: meta_type::<&<Block as BlockT>::Header>(),
 					}],
