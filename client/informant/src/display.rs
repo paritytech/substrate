@@ -20,12 +20,10 @@ use crate::OutputFormat;
 use ansi_term::Colour;
 use log::info;
 use sc_client_api::ClientInfo;
-use sc_network_common::{
-	service::NetworkStatus,
-	sync::{
-		warp::{WarpSyncPhase, WarpSyncProgress},
-		SyncState,
-	},
+use sc_network::NetworkStatus;
+use sc_network_common::sync::{
+	warp::{WarpSyncPhase, WarpSyncProgress},
+	SyncState, SyncStatus,
 };
 use sp_runtime::traits::{Block as BlockT, CheckedDiv, NumberFor, Saturating, Zero};
 use std::{fmt, time::Instant};
@@ -69,7 +67,12 @@ impl<B: BlockT> InformantDisplay<B> {
 	}
 
 	/// Displays the informant by calling `info!`.
-	pub fn display(&mut self, info: &ClientInfo<B>, net_status: NetworkStatus<B>) {
+	pub fn display(
+		&mut self,
+		info: &ClientInfo<B>,
+		net_status: NetworkStatus,
+		sync_status: SyncStatus<B>,
+	) {
 		let best_number = info.chain.best_number;
 		let best_hash = info.chain.best_hash;
 		let finalized_number = info.chain.finalized_number;
@@ -94,7 +97,7 @@ impl<B: BlockT> InformantDisplay<B> {
 		};
 
 		let (level, status, target) =
-			match (net_status.sync_state, net_status.state_sync, net_status.warp_sync) {
+			match (sync_status.state, sync_status.state_sync, sync_status.warp_sync) {
 				(
 					_,
 					_,
