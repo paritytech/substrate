@@ -452,7 +452,6 @@ where
 			 is_new|
 			 -> Result<SignedImbalance<Self::Balance, Self::PositiveImbalance>, DispatchError> {
 				let ed = T::ExistentialDeposit::get();
-				let total = value.saturating_add(account.reserved);
 				// If we're attempting to set an existing account to less than ED, then
 				// bypass the entire operation. It's a no-op if you follow it through, but
 				// since this is an instance where we might account for a negative imbalance
@@ -460,7 +459,7 @@ where
 				// equal and opposite cause (returned as an Imbalance), then in the
 				// instance that there's no other accounts on the system at all, we might
 				// underflow the issuance and our arithmetic will be off.
-				ensure!(total >= ed || !is_new, Error::<T, I>::ExistentialDeposit);
+				ensure!(value >= ed || !is_new, Error::<T, I>::ExistentialDeposit);
 
 				let imbalance = if account.free <= value {
 					SignedImbalance::Positive(PositiveImbalance::new(value - account.free))
