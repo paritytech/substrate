@@ -121,7 +121,7 @@ pub trait SpendFundsLocal<T: Config<I>, I: 'static = ()> {
 
 #[impl_trait_for_tuples::impl_for_tuples(30)]
 pub trait SpendFunds<T: Config<I>, I: 'static = ()> {
-	fn spend_funds(total_weight: &mut Weight, total_spent: T::Balance, total_missed: u32);
+	fn spend_funds(total_weight: &mut Weight, total_spent: BalanceOf<T, I>, total_missed: u32);
 }
 
 /// An index of a proposal. Just a `u32`.
@@ -193,8 +193,7 @@ pub mod pallet {
 		type BalanceConverter: BalanceConversion<
 			PayBalanceOf<Self, I>,
 			Self::AssetKind,
-			Self::Balance,
-			Error = Error<Self, I>,
+			BalanceOf<Self, I>,
 		>;
 
 		/// The overarching event type.
@@ -250,12 +249,7 @@ pub mod pallet {
 		/// The origin required for approving spends from the treasury outside of the proposal
 		/// process. The `Success` value is the maximum amount that this origin is allowed to
 		/// spend at a time.
-		type SpendOriginLocal: EnsureOrigin<Self::RuntimeOrigin, Success = BalanceOf<Self, I>>;
-
-		/// The origin required for approving spends from the treasury outside of the proposal
-		/// process. The `Success` value is the maximum amount that this origin is allowed to
-		/// spend at a time.
-		type SpendOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = PayBalanceOf<Self, I>>;
+		type SpendOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = BalanceOf<Self, I>>;
 	}
 
 	/// Number of proposals that have been made.
@@ -283,7 +277,7 @@ pub mod pallet {
 		ProposalIndex,
 		PendingPayment<
 			T::AccountId,
-			T::Balance,
+			BalanceOf<T, I>,
 			T::AssetKind,
 			PayBalanceOf<T, I>,
 			<T::Paymaster as Pay>::Id,
@@ -528,7 +522,7 @@ pub mod pallet {
 			#[pallet::compact] amount: BalanceOf<T, I>,
 			beneficiary: AccountIdLookupOf<T>,
 		) -> DispatchResult {
-			let max_amount = T::SpendOriginLocal::ensure_origin(origin)?;
+			let max_amount = T::SpendOrigin::ensure_origin(origin)?;
 			ensure!(amount <= max_amount, Error::<T, I>::InsufficientPermission);
 			with_context::<SpendContext<BalanceOf<T, I>>, _>(|v| {
 				let context = v.or_default();
@@ -581,9 +575,11 @@ pub mod pallet {
 			beneficiary: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let max_amount = T::SpendOrigin::ensure_origin(origin)?;
-			ensure!(amount <= max_amount, Error::<T, I>::InsufficientPermission);
+			let normalized_amount = T::BalanceConverter::to_asset_balance(amount, asset_id)
+				.map_err(|_| Error::<T, I>::BalanceConversionFailed)?;
+			ensure!(normalized_amount <= max_amount, Error::<T, I>::InsufficientPermission);
 
-			with_context::<SpendContext<PayBalanceOf<T, I>>, _>(|v| {
+			with_context::<SpendContext<BalanceOf<T, I>>, _>(|v| {
 				let context = v.or_default();
 
 				// We group based on `max_amount`, to dinstinguish between different kind of
@@ -593,10 +589,10 @@ pub mod pallet {
 				let spend = context.spend_in_context.entry(max_amount).or_default();
 
 				// Ensure that we don't overflow nor use more than `max_amount`
-				if spend.checked_add(&amount).map(|s| s > max_amount).unwrap_or(true) {
+				if spend.checked_add(&normalized_amount).map(|s| s > max_amount).unwrap_or(true) {
 					Err(Error::<T, I>::InsufficientPermission)
 				} else {
-					*spend = spend.saturating_add(amount);
+					*spend = spend.saturating_add(normalized_amount);
 
 					Ok(())
 				}
@@ -609,7 +605,7 @@ pub mod pallet {
 				asset_id,
 				value: amount,
 				beneficiary: beneficiary.clone(),
-				normalized_value: T::BalanceConverter::to_asset_balance(amount, asset_id)?,
+				normalized_value: normalized_amount,
 				payment_id: None,
 			};
 
@@ -678,7 +674,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Spend some money! returns number of approvals before spend.
 	pub fn spend_funds() -> Weight {
 		let mut total_weight = Weight::zero();
-		let mut total_spent = T::Balance::zero();
+		let mut total_spent = BalanceOf::<T, I>::zero();
 		let mut missed_proposals: u32 = 0;
 		let proposals_len = PendingPayments::<T, I>::count();
 

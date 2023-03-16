@@ -179,7 +179,6 @@ impl Config for Test {
 	type SpendFundsLocal = ();
 	type MaxApprovals = ConstU32<100>;
 	type SpendOrigin = TestSpendOrigin;
-	type SpendOriginLocal = TestSpendOrigin;
 }
 
 pub struct AssetsPaymaster<F, A>(sp_std::marker::PhantomData<(F, A)>);
@@ -212,10 +211,10 @@ pub struct DummyBalanceConverter<T>(PhantomData<T>);
 impl<T> BalanceConversion<BalanceU64, AssetId, BalanceU64> for DummyBalanceConverter<T> {
 	type Error = Error<T>;
 	fn to_asset_balance(
-		_balance: BalanceU64,
+		balance: BalanceU64,
 		_asset_id: AssetId,
 	) -> Result<BalanceU64, Self::Error> {
-		Ok(0)
+		Ok(balance)
 	}
 }
 
