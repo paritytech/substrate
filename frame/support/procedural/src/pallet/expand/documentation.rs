@@ -145,7 +145,7 @@ impl ToTokens for DocMetaValue {
 /// Implement a `pallet_documentation_metadata` function to fetch the
 /// documentation that is included in the metadata.
 ///
-/// The documentation is placed at the top of the module similar to:
+/// The documentation is placed on the pallet similar to:
 ///
 /// ```ignore
 /// #[pallet]
@@ -163,7 +163,7 @@ impl ToTokens for DocMetaValue {
 /// which is the file path that holds the documentation to be added to the metadata.
 ///
 /// Unlike the `doc` attribute, the documentation provided to the `proc_macro` attribute is
-/// not inserted at the beginning of the module.
+/// not added to the pallet.
 pub fn expand_documentation(def: &mut Def) -> proc_macro2::TokenStream {
 	let frame_support = &def.frame_support;
 	let type_impl_gen = &def.type_impl_generics(proc_macro2::Span::call_site());
