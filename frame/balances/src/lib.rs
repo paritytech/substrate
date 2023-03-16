@@ -186,7 +186,7 @@ use sp_runtime::{
 		AtLeast32BitUnsigned, Bounded, CheckedAdd, CheckedSub, MaybeSerializeDeserialize,
 		Saturating, StaticLookup, Zero,
 	},
-	ArithmeticError, DispatchError, FixedPointOperand, Perbill, RuntimeDebug,
+	ArithmeticError, DispatchError, FixedPointOperand, Perbill, RuntimeDebug, TokenError,
 };
 use sp_std::{cmp, fmt::Debug, mem, prelude::*, result};
 pub use types::{AccountData, BalanceLock, DustCleaner, IdAmount, Reasons, ReserveData};
@@ -530,18 +530,22 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Set the regular balance of a given account.
+		/// Set the regular balance of a given account; it also takes a reserved balance but this
+		/// must be the same as the account's current reserved balance.
 		///
 		/// The dispatch origin for this call is `root`.
+		///
+		/// WARNING: This call is DEPRECATED! Use `force_set_balance` instead.
 		#[pallet::call_index(1)]
 		#[pallet::weight(
 			T::WeightInfo::force_set_balance_creating() // Creates a new account.
 				.max(T::WeightInfo::force_set_balance_killing()) // Kills an existing account.
 		)]
-		pub fn force_set_balance(
+		pub fn set_balance_deprecated(
 			origin: OriginFor<T>,
 			who: AccountIdLookupOf<T>,
 			#[pallet::compact] new_free: T::Balance,
+			#[pallet::compact] old_reserved: T::Balance,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
@@ -551,11 +555,15 @@ pub mod pallet {
 			let new_free = if wipeout { Zero::zero() } else { new_free };
 
 			// First we try to modify the account's balance to the forced balance.
-			let old_free = Self::mutate_account_handling_dust(&who, |account| {
-				let old_free = account.free;
-				account.free = new_free;
-				old_free
-			})?;
+			let old_free = Self::try_mutate_account_handling_dust(
+				&who,
+				|account, _is_new| -> Result<T::Balance, DispatchError> {
+					let old_free = account.free;
+					ensure!(account.reserved == old_reserved, TokenError::Unsupported);
+					account.free = new_free;
+					Ok(old_free)
+				},
+			)?;
 
 			// This will adjust the total issuance, which was not done by the `mutate_account`
 			// above.
@@ -712,6 +720,45 @@ pub mod pallet {
 			let source = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 			<Self as fungible::Mutate<_>>::transfer(&source, &dest, value, Expendable)?;
+			Ok(().into())
+		}
+
+		/// Set the regular balance of a given account.
+		///
+		/// The dispatch origin for this call is `root`.
+		#[pallet::call_index(8)]
+		#[pallet::weight(
+			T::WeightInfo::force_set_balance_creating() // Creates a new account.
+				.max(T::WeightInfo::force_set_balance_killing()) // Kills an existing account.
+		)]
+		pub fn force_set_balance(
+			origin: OriginFor<T>,
+			who: AccountIdLookupOf<T>,
+			#[pallet::compact] new_free: T::Balance,
+		) -> DispatchResultWithPostInfo {
+			ensure_root(origin)?;
+			let who = T::Lookup::lookup(who)?;
+			let existential_deposit = T::ExistentialDeposit::get();
+
+			let wipeout = new_free < existential_deposit;
+			let new_free = if wipeout { Zero::zero() } else { new_free };
+
+			// First we try to modify the account's balance to the forced balance.
+			let old_free = Self::mutate_account_handling_dust(&who, |account| {
+				let old_free = account.free;
+				account.free = new_free;
+				old_free
+			})?;
+
+			// This will adjust the total issuance, which was not done by the `mutate_account`
+			// above.
+			if new_free > old_free {
+				mem::drop(PositiveImbalance::<T, I>::new(new_free - old_free));
+			} else if new_free < old_free {
+				mem::drop(NegativeImbalance::<T, I>::new(old_free - new_free));
+			}
+
+			Self::deposit_event(Event::BalanceSet { who, free: new_free });
 			Ok(().into())
 		}
 	}
