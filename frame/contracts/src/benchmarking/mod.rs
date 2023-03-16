@@ -1620,9 +1620,10 @@ benchmarks! {
 		let value_bytes = value.encode();
 		let value_len = BalanceOf::<T>::max_encoded_len() as u32;
 		// Set an own limit every 2nd call
+		let own_limit = T::DefaultDepositLimit::get() - 100u32.into();
 		let deposits = (0..r * API_BENCHMARK_BATCH_SIZE)
 			.enumerate()
-			.map(|(i,x)| if i % 2 == 0 { 0u32.into() } else { x.into() } )
+			.map(|(i,x)| if i % 2 == 0 { 0u32.into() } else { own_limit } )
 			.collect::<Vec<BalanceOf<T>>>();
 		let deposits_bytes: Vec<u8> = deposits.iter().flat_map(|i| i.encode()).collect();
 		let deposits_len = deposits_bytes.len() as u32;
@@ -1823,9 +1824,10 @@ benchmarks! {
 		let value_bytes = value.encode();
 		let value_len = BalanceOf::<T>::max_encoded_len();
 		// Set an own deposit limit every 2nd call
+		let own_limit = T::DefaultDepositLimit::get() - 100u32.into();
 		let deposits = (0..r * API_BENCHMARK_BATCH_SIZE)
 			.enumerate()
-			.map(|(i,x)| if i % 2 == 0 { 0u32.into() } else { x.into() } )
+			.map(|(i,x)| if i % 2 == 0 { 0u32.into() } else { own_limit } )
 			.collect::<Vec<BalanceOf<T>>>();
 		let deposits_bytes: Vec<u8> = deposits.iter().flat_map(|i| i.encode()).collect();
 		let deposits_len = deposits_bytes.len();
