@@ -44,7 +44,7 @@ use pallet_election_provider_multi_phase::{
 };
 use pallet_staking::StakerStatus;
 
-use crate::log_current_time;
+use crate::{log, log_current_time};
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
 pub const BLOCK_TIME: u64 = 1000;
@@ -135,7 +135,7 @@ impl pallet_timestamp::Config for Runtime {
 }
 
 parameter_types! {
-	pub static Period: BlockNumber = 15;
+	pub static Period: BlockNumber = 30;
 	pub static Offset: BlockNumber = 0;
 }
 
@@ -173,7 +173,10 @@ frame_election_provider_support::generate_solution_type!(
 
 parameter_types! {
 	pub static SignedPhase: BlockNumber = 10;
-	pub static UnsignedPhase: BlockNumber = 5;
+	pub static UnsignedPhase: BlockNumber = 10;
+	// we expect a minimum of 3 blocks in signed phase and unsigned phases before trying
+	// enetering in emergency phase after the election failed.
+	pub static MinBlocksBeforeEmergency: BlockNumber = 3;
 	pub static MaxElectingVoters: VoterIndex = 1000;
 	pub static MaxElectableTargets: TargetIndex = 1000;
 	pub static MaxActiveValidators: u32 = 1000;
@@ -408,6 +411,11 @@ impl Default for EpmExtBuilder {
 }
 
 impl EpmExtBuilder {
+	pub fn disable_emergency_throttling(self) -> Self {
+		<MinBlocksBeforeEmergency>::set(0);
+		self
+	}
+
 	pub fn phases(self, signed: BlockNumber, unsigned: BlockNumber) -> Self {
 		<SignedPhase>::set(signed);
 		<UnsignedPhase>::set(unsigned);
@@ -562,37 +570,36 @@ pub fn roll_to(n: BlockNumber, delay_solution: bool) {
 		Session::on_initialize(b);
 		Timestamp::set_timestamp(System::block_number() * BLOCK_TIME + INIT_TIMESTAMP);
 
-		// if EPM is in off phase, there's no solution and the solution should not be delayed, try
-		// "minining" and queue a solution.
-		if ElectionProviderMultiPhase::snapshot().is_none() &&
-			ElectionProviderMultiPhase::current_phase().is_off() &&
-			!delay_solution
-		{
-			ElectionProviderMultiPhase::on_initialize(n);
-			let _ = try_queue_solution(ElectionCompute::Signed);
-		} else {
-			ElectionProviderMultiPhase::on_initialize(n);
-		};
+		// TODO(gpestana): implement a realistic OCW worker insted of simulating it
+		// https://github.com/paritytech/substrate/issues/13589
+		// if there's no solution queued and the solution should not be delayed, try mining and
+		// queue a solution.
+		if ElectionProviderMultiPhase::current_phase().is_signed() && !delay_solution {
+			let _ = try_queue_solution(ElectionCompute::Signed).map_err(|e| {
+				log!(info, "failed to mine/queue solution: {:?}", e);
+			});
+		}
+		ElectionProviderMultiPhase::on_initialize(b);
+
 		Staking::on_initialize(b);
 		if b != n {
 			Staking::on_finalize(System::block_number());
 		}
+
+		log_current_time();
 	}
-	log_current_time();
 }
 
-// Progress one block.
-pub fn roll_one(delay_solution: bool) {
-	roll_to(System::block_number() + 1, delay_solution);
-}
-
-/// Progresses from the current block number (whatever that may be) to the `P * session_index + 1`.
+/// Progresses from the current block number (whatever that may be) to the block where the session
+/// `session_index` starts.
 pub(crate) fn start_session(session_index: SessionIndex, delay_solution: bool) {
 	let end: u64 = if Offset::get().is_zero() {
-		(session_index as u64) * Period::get()
+		Period::get() * (session_index as u64)
 	} else {
-		Offset::get() + (session_index.saturating_sub(1) as u64) * Period::get()
+		Offset::get() * (session_index as u64) + Period::get() * (session_index as u64)
 	};
+
+	assert!(end >= System::block_number());
 
 	roll_to(end, delay_solution);
 
@@ -617,9 +624,28 @@ pub(crate) fn advance_session_delayed_solution() {
 	start_session(current_index + 1, true);
 }
 
+pub(crate) fn start_next_active_era() -> Result<(), ()> {
+	start_active_era(active_era() + 1, false)
+}
+
+pub(crate) fn start_next_active_era_delayed_solution() -> Result<(), ()> {
+	start_active_era(active_era() + 1, true)
+}
+
 /// Progress until the given era.
 pub(crate) fn start_active_era(era_index: EraIndex, delay_solution: bool) -> Result<(), ()> {
+	let era_before = current_era();
+
 	start_session((era_index * <SessionsPerEra as Get<u32>>::get()).into(), delay_solution);
+
+	log!(
+		info,
+		"start_active_era - era_before: {}, current era: {} -> progress to: {} -> after era: {}",
+		era_before,
+		active_era(),
+		era_index,
+		current_era(),
+	);
 
 	// if the solution was not delayed, era should have progressed.
 	if !delay_solution && (active_era() != era_index || current_era() != active_era()) {
@@ -627,14 +653,6 @@ pub(crate) fn start_active_era(era_index: EraIndex, delay_solution: bool) -> Res
 	} else {
 		Ok(())
 	}
-}
-
-pub(crate) fn start_next_active_era() -> Result<(), ()> {
-	start_active_era(active_era() + 1, false)
-}
-
-pub(crate) fn start_next_active_era_delayed_solution() -> Result<(), ()> {
-	start_active_era(active_era() + 1, true)
 }
 
 pub(crate) fn active_era() -> EraIndex {
@@ -676,13 +694,15 @@ pub fn roll_to_epm_off() {
 }
 
 // Queue a solution based on the current snapshot.
-pub(crate) fn try_queue_solution(when: ElectionCompute) -> Result<(), ()> {
-	let raw_solution = ElectionProviderMultiPhase::mine_solution().map_err(|_| ())?;
+pub(crate) fn try_queue_solution(when: ElectionCompute) -> Result<(), String> {
+	let raw_solution = ElectionProviderMultiPhase::mine_solution()
+		.map_err(|e| format!("error mining solution: {:?}", e))?;
+
 	ElectionProviderMultiPhase::feasibility_check(raw_solution.0, when)
 		.map(|ready| {
 			QueuedSolution::<Runtime>::put(ready);
 		})
-		.map_err(|_| ())
+		.map_err(|e| format!("error in solution feasibility: {:?}", e))
 }
 
 pub(crate) fn on_offence_now(

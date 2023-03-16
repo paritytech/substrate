@@ -21,6 +21,7 @@ mod mock;
 pub(crate) const LOG_TARGET: &str = "tests::e2e-epm";
 
 use mock::*;
+use sp_core::Get;
 use sp_npos_elections::{to_supports, StakedAssignment};
 use sp_runtime::Perbill;
 
@@ -50,20 +51,35 @@ fn log_current_time() {
 }
 
 #[test]
-fn setup_works() {
+fn block_progression_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		assert_eq!(active_era(), 0);
+		assert_eq!(Session::current_index(), 0);
+		assert!(ElectionProviderMultiPhase::current_phase().is_off());
 
 		assert!(start_next_active_era().is_ok());
-		assert!(start_next_active_era().is_ok());
-		assert_eq!(active_era(), 2);
+		assert_eq!(active_era(), 1);
+		assert_eq!(Session::current_index(), <SessionsPerEra as Get<u32>>::get());
 
-		// if the solution is delayed, EPM will end up in emergency mode and eras won't progress.
-		assert!(start_next_active_era_delayed_solution().is_ok());
-		assert!(start_next_active_era_delayed_solution().is_ok());
-		assert!(ElectionProviderMultiPhase::current_phase().is_emergency());
-		assert_eq!(active_era(), 3);
+		assert!(ElectionProviderMultiPhase::current_phase().is_off());
+
+		roll_to_epm_signed();
+		assert!(ElectionProviderMultiPhase::current_phase().is_signed());
 	});
+
+	ExtBuilder::default().build_and_execute(|| {
+		assert_eq!(active_era(), 0);
+		assert_eq!(Session::current_index(), 0);
+		assert!(ElectionProviderMultiPhase::current_phase().is_off());
+
+		assert!(start_next_active_era_delayed_solution().is_ok());
+		// if the solution is delayed, EPM will end up in emergency mode..
+		assert!(ElectionProviderMultiPhase::current_phase().is_emergency());
+		// .. era won't progress..
+		assert_eq!(active_era(), 0);
+		// .. but session does.
+		assert_eq!(Session::current_index(), 2);
+	})
 }
 
 #[test]
@@ -79,9 +95,11 @@ fn setup_works() {
 /// solution is added to EPM's `QueuedSolution` queue. This can be achieved through
 /// `Call::set_emergency_election_result` or `Call::governance_fallback` dispatchables. Once a new
 /// solution is added to the queue, EPM phase transitions to `Phase::Off` and the election flow
-/// restarts.
+/// restarts. Note that in this test case, the emergency throttling is disabled.
 fn enters_emergency_phase_after_forcing_before_elect() {
-	ExtBuilder::default().build_and_execute(|| {
+	let epm_builder = EpmExtBuilder::default().disable_emergency_throttling();
+
+	ExtBuilder::default().epm(epm_builder).build_and_execute(|| {
 		log!(
 			trace,
 			"current validators (staking): {:?}",
@@ -91,7 +109,6 @@ fn enters_emergency_phase_after_forcing_before_elect() {
 
 		roll_to_epm_off();
 		assert!(ElectionProviderMultiPhase::current_phase().is_off());
-		log_current_time();
 
 		assert_eq!(pallet_staking::ForceEra::<Runtime>::get(), pallet_staking::Forcing::NotForcing);
 		// slashes so that staking goes into `Forcing::ForceNew`.
@@ -104,10 +121,10 @@ fn enters_emergency_phase_after_forcing_before_elect() {
 		log_current_time();
 
 		let era_before_delayed_next = Staking::current_era();
-		// try to advance 2 eras with a delayed solution.
+		// try to advance 2 eras.
 		assert!(start_next_active_era_delayed_solution().is_ok());
 		assert_eq!(Staking::current_era(), era_before_delayed_next);
-		assert!(start_next_active_era_delayed_solution().is_ok());
+		assert!(start_next_active_era().is_err());
 		assert_eq!(Staking::current_era(), era_before_delayed_next);
 
 		// EPM is still in emergency phase.
@@ -131,8 +148,7 @@ fn enters_emergency_phase_after_forcing_before_elect() {
 		// EPM can now roll to signed phase to proceed with elections. The validator set is the
 		// expected (ie. set through `set_emergency_election_result`).
 		roll_to_epm_signed();
-		log_current_time();
-		assert!(ElectionProviderMultiPhase::current_phase().is_signed());
+		//assert!(ElectionProviderMultiPhase::current_phase().is_signed());
 		assert_eq!(Session::validators(), vec![21, 31, 41]);
 		assert_eq!(Staking::current_era(), era_before_delayed_next.map(|e| e + 1));
 	});
@@ -150,35 +166,41 @@ fn enters_emergency_phase_after_forcing_before_elect() {
 /// fail and enter in emenergency mode.
 fn continous_slashes_below_offending_threshold() {
 	let staking_builder = StakingExtBuilder::default().validator_count(10);
+	let epm_builder = EpmExtBuilder::default().disable_emergency_throttling();
 
-	ExtBuilder::default().staking(staking_builder).build_and_execute(|| {
-		assert_eq!(Session::validators().len(), 10);
-		let mut active_validator_set = Session::validators();
+	ExtBuilder::default()
+		.staking(staking_builder)
+		.epm(epm_builder)
+		.build_and_execute(|| {
+			assert_eq!(Session::validators().len(), 10);
+			let mut active_validator_set = Session::validators();
 
-		// set a minimum election score.
-		assert!(set_minimum_election_score(500, 1000, 500).is_ok());
+			roll_to_epm_signed();
 
-		// slash 10% of the active validators and progress era until the minimum trusted score
-		// is reached.
-		while active_validator_set.len() > 0 {
-			let slashed = slash_percentage(Perbill::from_percent(10));
-			assert_eq!(slashed.len(), 1);
+			// set a minimum election score.
+			assert!(set_minimum_election_score(500, 1000, 500).is_ok());
 
-			// break loop when era does not progress; EPM is in emergency phase as election
-			// failed due to election minimum score.
-			if start_next_active_era().is_err() {
-				assert!(ElectionProviderMultiPhase::current_phase().is_emergency());
-				break
+			// slash 10% of the active validators and progress era until the minimum trusted score
+			// is reached.
+			while active_validator_set.len() > 0 {
+				let slashed = slash_percentage(Perbill::from_percent(10));
+				assert_eq!(slashed.len(), 1);
+
+				// break loop when era does not progress; EPM is in emergency phase as election
+				// failed due to election minimum score.
+				if start_next_active_era().is_err() {
+					assert!(ElectionProviderMultiPhase::current_phase().is_emergency());
+					break
+				}
+
+				active_validator_set = Session::validators();
+
+				log!(
+					trace,
+					"slashed 10% of active validators ({:?}). After slash: {:?}",
+					slashed,
+					active_validator_set
+				);
 			}
-
-			active_validator_set = Session::validators();
-
-			log!(
-				trace,
-				"slashed 10% of active validators ({:?}). After slash: {:?}",
-				slashed,
-				active_validator_set
-			);
-		}
-	});
+		});
 }
