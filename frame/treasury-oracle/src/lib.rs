@@ -88,9 +88,7 @@ type AssetIdOf<T> = <T as Config>::AssetId;
 // Generic fungible balance type.
 type BalanceOf<T> = <<T as Config>::Currency as Inspect<AccountIdOf<T>>>::Balance;
 
-// #[frame_support::pallet]
-// TODO: Remove
-#[frame_support::pallet(dev_mode)]
+#[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
@@ -148,12 +146,13 @@ pub mod pallet {
 	#[pallet::error]
 	pub enum Error<T> {
 		/// The given asset ID is unknown.
-		Unknown,
+		UnknownAssetId,
 		/// The given asset ID already has an assigned conversion rate and cannot be re-created.
 		AlreadyExists,
 	}
 
 	#[pallet::call]
+	#[pallet::weight(10_000 + T::DbWeight::get().writes(1).ref_time())]
 	impl<T: Config> Pallet<T> {
 		#[pallet::call_index(0)]
 		pub fn create(
@@ -174,6 +173,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(1)]
+		#[pallet::weight(10_000 + T::DbWeight::get().writes(1).ref_time())]
 		pub fn update(
 			origin: OriginFor<T>,
 			asset_id: T::AssetId,
@@ -189,7 +189,7 @@ pub mod pallet {
 
 					Ok(())
 				} else {
-					Err(Error::<T>::Unknown)
+					Err(Error::<T>::UnknownAssetId)
 				}
 			})?;
 
@@ -198,10 +198,14 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(2)]
+		#[pallet::weight(10_000 + T::DbWeight::get().writes(1).ref_time())]
 		pub fn remove(origin: OriginFor<T>, asset_id: T::AssetId) -> DispatchResult {
 			T::RemoveOrigin::ensure_origin(origin)?;
 
-			ensure!(ConversionRateToNative::<T>::contains_key(asset_id), Error::<T>::Unknown);
+			ensure!(
+				ConversionRateToNative::<T>::contains_key(asset_id),
+				Error::<T>::UnknownAssetId
+			);
 			ConversionRateToNative::<T>::remove(asset_id);
 
 			Self::deposit_event(Event::Removed { asset_id });
@@ -222,7 +226,7 @@ where
 		asset_id: AssetIdOf<T>,
 	) -> Result<BalanceOf<T>, pallet::Error<T>> {
 		let rate = Pallet::<T>::conversion_rate_to_native(asset_id)
-			.ok_or(pallet::Error::<T>::Unknown.into())?;
+			.ok_or(pallet::Error::<T>::UnknownAssetId.into())?;
 		Ok(rate.saturating_mul_int(balance))
 	}
 }

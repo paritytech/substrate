@@ -78,7 +78,7 @@ fn remove_unknown_throws() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			TreasuryOracle::remove(RuntimeOrigin::signed(1), ASSET_ID,),
-			Error::<Test>::Unknown
+			Error::<Test>::UnknownAssetId
 		);
 	});
 }
@@ -109,7 +109,7 @@ fn update_unknown_throws() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			TreasuryOracle::update(RuntimeOrigin::signed(1), ASSET_ID, FixedU128::from_float(0.5)),
-			Error::<Test>::Unknown
+			Error::<Test>::UnknownAssetId
 		);
 	});
 }
