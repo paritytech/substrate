@@ -50,6 +50,11 @@
 //!   not nominating proper validators.
 //! * reward account: A similar key-less account, that is set as the `Payee` account for the bonded
 //!   account for all staking rewards.
+//! * change rate: The rate at which pool commission can be changed. A change rate consists of a
+//!   `max_increase` and `min_delay`, dictating the maximum percentage increase that can be applied
+//!   to the commission per number of blocks.
+//! * throttle: An attempted commission increase is throttled if the attempted change falls outside
+//!   the change rate bounds.
 //!
 //! ## Usage
 //!
@@ -125,8 +130,33 @@
 //!   other members have left. Once they fully withdraw their funds, the pool is destroyed.
 //! * Nominator: can select which validators the pool nominates.
 //! * Bouncer: can change the pools state and kick members if the pool is blocked.
-//! * Root: can change the nominator, bouncer, or itself and can perform any of the actions the
-//!   nominator or bouncer can.
+//! * Root: can change the nominator, bouncer, or itself, manage and claim commission, and can
+//!   perform any of the actions the nominator or bouncer can.
+//!
+//! ## Commission
+//!
+//! A pool can optionally have a commission configuration, via the `root` role, set with
+//! [`Call::set_commission`] and claimed with [`Call::claim_commission`]. A payee account must be
+//! supplied with the desired commission percentage. Beyond the commission itself, a pool can have a
+//! maximum commission and a change rate.
+//!
+//! Importantly, both max commission  [`Call::set_commission_max`] and change rate
+//! [`Call::set_commission_change_rate`] can not be removed once set, and can only be set to more
+//! restrictive values (i.e. a lower max commission or a slower change rate) in subsequent updates.
+//!
+//! If set, a pool's commission is bound to [`GlobalMaxCommission`] at the time it is applied to
+//! pending rewards. [`GlobalMaxCommission`] is intended to be updated only via governance.
+//!
+//! When a pool is dissolved, any outstanding pending commission that has not been claimed will be
+//! transferred to the depositor.
+//!
+//! Implementation note: Commission is analogous to a separate member account of the pool, with its
+//! own reward counter in the form of `current_pending_commission`.
+//!
+//! Crucially, commission is applied to rewards based on the current commission in effect at the
+//! time rewards are transferred into the reward pool. This is to prevent the malicious behaviour of
+//! changing the commission rate to a very high value after rewards are accumulated, and thus claim
+//! an unexpectedly high chunk of the reward.
 //!
 //! ### Dismantling
 //!
@@ -232,11 +262,14 @@
 //!
 //! ### Reward pool
 //!
-//! When a pool is first bonded it sets up an deterministic, inaccessible account as its reward
-//! destination.
+//! When a pool is first bonded it sets up a deterministic, inaccessible account as its reward
+//! destination. This reward account combined with `RewardPool` compose a reward pool.
 //!
-//! The reward pool is not really a pool anymore, as it does not track points anymore. Instead, it
-//! tracks, a virtual value called `reward_counter`, among a few other values.
+//! Reward pools are completely separate entities to bonded pools. Along with its account, a reward
+//! pool also tracks its outstanding and claimed rewards as counters, in addition to pending and
+//! claimed commission. These counters are updated with `RewardPool::update_records`. The current
+//! reward counter of the pool (the total outstanding rewards, in points) is also callable with the
+//! `RewardPool::current_reward_counter` method.
 //!
 //! See [this link](https://hackmd.io/PFGn6wI5TbCmBYoEA_f2Uw) for an in-depth explanation of the
 //! reward pool mechanism.
@@ -247,13 +280,12 @@
 //!
 //! ### Unbonding sub pools
 //!
-//! When a member unbonds, it's balance is unbonded in the bonded pool's account and tracked in
-//! an unbonding pool associated with the active era. If no such pool exists, one is created. To
-//! track which unbonding sub pool a member belongs too, a member tracks it's
-//! `unbonding_era`.
+//! When a member unbonds, it's balance is unbonded in the bonded pool's account and tracked in an
+//! unbonding pool associated with the active era. If no such pool exists, one is created. To track
+//! which unbonding sub pool a member belongs too, a member tracks it's `unbonding_era`.
 //!
-//! When a member initiates unbonding it's claim on the bonded pool
-//! (`balance_to_unbond`) is computed as:
+//! When a member initiates unbonding it's claim on the bonded pool (`balance_to_unbond`) is
+//! computed as:
 //!
 //! ```text
 //! balance_to_unbond = (bonded_pool.balance / bonded_pool.points) * member.points;
@@ -262,8 +294,8 @@
 //! If this is the first transfer into an unbonding pool arbitrary amount of points can be issued
 //! per balance. In this implementation unbonding pools are initialized with a 1 point to 1 balance
 //! ratio (see [`POINTS_TO_BALANCE_INIT_RATIO`]). Otherwise, the unbonding pools hold the same
-//! points to balance ratio properties as the bonded pool, so member points in the
-//! unbonding pool are issued based on
+//! points to balance ratio properties as the bonded pool, so member points in the unbonding pool
+//! are issued based on
 //!
 //! ```text
 //! new_points_issued = (points_before_transfer / balance_before_transfer) * balance_to_unbond;
@@ -296,14 +328,14 @@
 //! `pallet_staking::StakingLedger::slash`, which passes the information to this pallet via
 //! [`sp_staking::OnStakerSlash::on_slash`].
 //!
-//! Unbonding pools need to be slashed to ensure all nominators whom where in the bonded pool
-//! while it was backing a validator that equivocated are punished. Without these measures a
-//! member could unbond right after a validator equivocated with no consequences.
+//! Unbonding pools need to be slashed to ensure all nominators whom where in the bonded pool while
+//! it was backing a validator that equivocated are punished. Without these measures a member could
+//! unbond right after a validator equivocated with no consequences.
 //!
-//! This strategy is unfair to members who joined after the slash, because they get slashed as
-//! well, but spares members who unbond. The latter is much more important for security: if a
-//! pool's validators are attacking the network, their members need to unbond fast! Avoiding
-//! slashes gives them an incentive to do that if validators get repeatedly slashed.
+//! This strategy is unfair to members who joined after the slash, because they get slashed as well,
+//! but spares members who unbond. The latter is much more important for security: if a pool's
+//! validators are attacking the network, their members need to unbond fast! Avoiding slashes gives
+//! them an incentive to do that if validators get repeatedly slashed.
 //!
 //! To be fair to joiners, this implementation also need joining pools, which are actively staking,
 //! in addition to the unbonding pools. For maintenance simplicity these are not implemented.
@@ -332,21 +364,22 @@ use frame_support::{
 		Currency, Defensive, DefensiveOption, DefensiveResult, DefensiveSaturating,
 		ExistenceRequirement, Get,
 	},
-	DefaultNoBound,
+	DefaultNoBound, PalletError,
 };
 use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_runtime::{
 	traits::{
-		AccountIdConversion, CheckedAdd, CheckedSub, Convert, Saturating, StaticLookup, Zero,
+		AccountIdConversion, Bounded, CheckedAdd, CheckedSub, Convert, Saturating, StaticLookup,
+		Zero,
 	},
-	FixedPointNumber,
+	FixedPointNumber, Perbill,
 };
 use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, ops::Div, vec::Vec};
 
 /// The log target of this pallet.
-pub const LOG_TARGET: &'static str = "runtime::nomination-pools";
+pub const LOG_TARGET: &str = "runtime::nomination-pools";
 
 // syntactic sugar for logging.
 #[macro_export]
@@ -430,19 +463,11 @@ pub enum ClaimPermission {
 
 impl ClaimPermission {
 	fn can_bond_extra(&self) -> bool {
-		match self {
-			ClaimPermission::PermissionlessAll => true,
-			ClaimPermission::PermissionlessCompound => true,
-			_ => false,
-		}
+		matches!(self, ClaimPermission::PermissionlessAll | ClaimPermission::PermissionlessCompound)
 	}
 
 	fn can_claim_payout(&self) -> bool {
-		match self {
-			ClaimPermission::PermissionlessAll => true,
-			ClaimPermission::PermissionlessWithdraw => true,
-			_ => false,
-		}
+		matches!(self, ClaimPermission::PermissionlessAll | ClaimPermission::PermissionlessWithdraw)
 	}
 }
 
@@ -623,25 +648,232 @@ pub struct PoolRoles<AccountId> {
 	pub bouncer: Option<AccountId>,
 }
 
+/// Pool commission.
+///
+/// The pool `root` can set commission configuration after pool creation. By default, all commission
+/// values are `None`. Pool `root` can also set `max` and `change_rate` configurations before
+/// setting an initial `current` commission.
+///
+/// `current` is a tuple of the commission percentage and payee of commission. `throttle_from`
+/// keeps track of which block `current` was last updated. A `max` commission value can only be
+/// decreased after the initial value is set, to prevent commission from repeatedly increasing.
+///
+/// An optional commission `change_rate` allows the pool to set strict limits to how much commission
+/// can change in each update, and how often updates can take place.
+#[derive(
+	Encode, Decode, DefaultNoBound, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Copy, Clone,
+)]
+#[codec(mel_bound(T: Config))]
+#[scale_info(skip_type_params(T))]
+pub struct Commission<T: Config> {
+	/// Optional commission rate of the pool along with the account commission is paid to.
+	pub current: Option<(Perbill, T::AccountId)>,
+	/// Optional maximum commission that can be set by the pool `root`. Once set, this value can
+	/// only be updated to a decreased value.
+	pub max: Option<Perbill>,
+	/// Optional configuration around how often commission can be updated, and when the last
+	/// commission update took place.
+	pub change_rate: Option<CommissionChangeRate<T::BlockNumber>>,
+	/// The block from where throttling should be checked from. This value will be updated on all
+	/// commission updates and when setting an initial `change_rate`.
+	pub throttle_from: Option<T::BlockNumber>,
+}
+
+impl<T: Config> Commission<T> {
+	/// Returns true if the current commission updating to `to` would exhaust the change rate
+	/// limits.
+	///
+	/// A commission update will be throttled (disallowed) if:
+	/// 1. not enough blocks have passed since the `throttle_from` block, if exists, or
+	/// 2. the new commission is greater than the maximum allowed increase.
+	fn throttling(&self, to: &Perbill) -> bool {
+		if let Some(t) = self.change_rate.as_ref() {
+			let commission_as_percent =
+				self.current.as_ref().map(|(x, _)| *x).unwrap_or(Perbill::zero());
+
+			// do not throttle if `to` is the same or a decrease in commission.
+			if *to <= commission_as_percent {
+				return false
+			}
+			// Test for `max_increase` throttling.
+			//
+			// Throttled if the attempted increase in commission is greater than `max_increase`.
+			if (*to).saturating_sub(commission_as_percent) > t.max_increase {
+				return true
+			}
+
+			// Test for `min_delay` throttling.
+			//
+			// Note: matching `None` is defensive only. `throttle_from` should always exist where
+			// `change_rate` has already been set, so this scenario should never happen.
+			return self.throttle_from.map_or_else(
+				|| {
+					defensive!("throttle_from should exist if change_rate is set");
+					true
+				},
+				|f| {
+					// if `min_delay` is zero (no delay), not throttling.
+					if t.min_delay == Zero::zero() {
+						false
+					} else {
+						// throttling if blocks passed is less than `min_delay`.
+						let blocks_surpassed =
+							<frame_system::Pallet<T>>::block_number().saturating_sub(f);
+						blocks_surpassed < t.min_delay
+					}
+				},
+			)
+		}
+		false
+	}
+
+	/// Gets the pool's current commission, or returns Perbill::zero if none is set.
+	/// Bounded to global max if current is greater than `GlobalMaxCommission`.
+	fn current(&self) -> Perbill {
+		self.current
+			.as_ref()
+			.map_or(Perbill::zero(), |(c, _)| *c)
+			.min(GlobalMaxCommission::<T>::get().unwrap_or(Bounded::max_value()))
+	}
+
+	/// Set the pool's commission.
+	///
+	/// Update commission based on `current`. If a `None` is supplied, allow the commission to be
+	/// removed without any change rate restrictions. Updates `throttle_from` to the current block.
+	/// If the supplied commission is zero, `None` will be inserted and `payee` will be ignored.
+	fn try_update_current(&mut self, current: &Option<(Perbill, T::AccountId)>) -> DispatchResult {
+		self.current = match current {
+			None => None,
+			Some((commission, payee)) => {
+				ensure!(!self.throttling(commission), Error::<T>::CommissionChangeThrottled);
+				ensure!(
+					self.max.map_or(true, |m| commission <= &m),
+					Error::<T>::CommissionExceedsMaximum
+				);
+				if commission.is_zero() {
+					None
+				} else {
+					Some((*commission, payee.clone()))
+				}
+			},
+		};
+		self.register_update();
+		Ok(())
+	}
+
+	/// Set the pool's maximum commission.
+	///
+	/// The pool's maximum commission can initially be set to any value, and only smaller values
+	/// thereafter. If larger values are attempted, this function will return a dispatch error.
+	///
+	/// If `current.0` is larger than the updated max commission value, `current.0` will also be
+	/// updated to the new maximum. This will also register a `throttle_from` update.
+	/// A `PoolCommissionUpdated` event is triggered if `current.0` is updated.
+	fn try_update_max(&mut self, pool_id: PoolId, new_max: Perbill) -> DispatchResult {
+		if let Some(old) = self.max.as_mut() {
+			if new_max > *old {
+				return Err(Error::<T>::MaxCommissionRestricted.into())
+			}
+			*old = new_max;
+		} else {
+			self.max = Some(new_max)
+		};
+		let updated_current = self
+			.current
+			.as_mut()
+			.map(|(c, _)| {
+				let u = *c > new_max;
+				*c = (*c).min(new_max);
+				u
+			})
+			.unwrap_or(false);
+
+		if updated_current {
+			if let Some((_, payee)) = self.current.as_ref() {
+				Pallet::<T>::deposit_event(Event::<T>::PoolCommissionUpdated {
+					pool_id,
+					current: Some((new_max, payee.clone())),
+				});
+			}
+			self.register_update();
+		}
+		Ok(())
+	}
+
+	/// Set the pool's commission `change_rate`.
+	///
+	/// Once a change rate configuration has been set, only more restrictive values can be set
+	/// thereafter. These restrictions translate to increased `min_delay` values and decreased
+	/// `max_increase` values.
+	///
+	/// Update `throttle_from` to the current block upon setting change rate for the first time, so
+	/// throttling can be checked from this block.
+	fn try_update_change_rate(
+		&mut self,
+		change_rate: CommissionChangeRate<T::BlockNumber>,
+	) -> DispatchResult {
+		ensure!(!&self.less_restrictive(&change_rate), Error::<T>::CommissionChangeRateNotAllowed);
+
+		if self.change_rate.is_none() {
+			self.register_update();
+		}
+		self.change_rate = Some(change_rate);
+		Ok(())
+	}
+
+	/// Updates a commission's `throttle_from` field to the current block.
+	fn register_update(&mut self) {
+		self.throttle_from = Some(<frame_system::Pallet<T>>::block_number());
+	}
+
+	/// Checks whether a change rate is less restrictive than the current change rate, if any.
+	///
+	/// No change rate will always be less restrictive than some change rate, so where no
+	/// `change_rate` is currently set, `false` is returned.
+	fn less_restrictive(&self, new: &CommissionChangeRate<T::BlockNumber>) -> bool {
+		self.change_rate
+			.as_ref()
+			.map(|c| new.max_increase > c.max_increase || new.min_delay < c.min_delay)
+			.unwrap_or(false)
+	}
+}
+
+/// Pool commission change rate preferences.
+///
+/// The pool root is able to set a commission change rate for their pool. A commission change rate
+/// consists of 2 values; (1) the maximum allowed commission change, and (2) the minimum amount of
+/// blocks that must elapse before commission updates are allowed again.
+///
+/// Commission change rates are not applied to decreases in commission.
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Copy, Clone)]
+pub struct CommissionChangeRate<BlockNumber> {
+	/// The maximum amount the commission can be updated by per `min_delay` period.
+	pub max_increase: Perbill,
+	/// How often an update can take place.
+	pub min_delay: BlockNumber,
+}
+
 /// Pool permissions and state
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Clone)]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct BondedPoolInner<T: Config> {
-	/// Total points of all the members in the pool who are actively bonded.
-	pub points: BalanceOf<T>,
-	/// The current state of the pool.
-	pub state: PoolState,
+	/// The commission rate of the pool.
+	pub commission: Commission<T>,
 	/// Count of members that belong to the pool.
 	pub member_counter: u32,
+	/// Total points of all the members in the pool who are actively bonded.
+	pub points: BalanceOf<T>,
 	/// See [`PoolRoles`].
 	pub roles: PoolRoles<T::AccountId>,
+	/// The current state of the pool.
+	pub state: PoolState,
 }
 
 /// A wrapper for bonded pools, with utility functions.
 ///
-/// The main purpose of this is to wrap a [`BondedPoolInner`], with the account + id of the pool,
-/// for easier access.
+/// The main purpose of this is to wrap a [`BondedPoolInner`], with the account
+/// + id of the pool, for easier access.
 #[derive(RuntimeDebugNoBound)]
 #[cfg_attr(feature = "std", derive(Clone, PartialEq))]
 pub struct BondedPool<T: Config> {
@@ -670,10 +902,11 @@ impl<T: Config> BondedPool<T> {
 		Self {
 			id,
 			inner: BondedPoolInner {
+				commission: Commission::default(),
+				member_counter: Zero::zero(),
+				points: Zero::zero(),
 				roles,
 				state: PoolState::Open,
-				points: Zero::zero(),
-				member_counter: Zero::zero(),
 			},
 		}
 	}
@@ -695,7 +928,7 @@ impl<T: Config> BondedPool<T> {
 
 	/// Consume self and put into storage.
 	fn put(self) {
-		BondedPools::<T>::insert(self.id, BondedPoolInner { ..self.inner });
+		BondedPools::<T>::insert(self.id, self.inner);
 	}
 
 	/// Consume self and remove from storage.
@@ -798,6 +1031,10 @@ impl<T: Config> BondedPool<T> {
 
 	fn can_set_metadata(&self, who: &T::AccountId) -> bool {
 		self.is_root(who) || self.is_bouncer(who)
+	}
+
+	fn can_manage_commission(&self, who: &T::AccountId) -> bool {
+		self.is_root(who)
 	}
 
 	fn is_destroying(&self) -> bool {
@@ -952,7 +1189,7 @@ impl<T: Config> BondedPool<T> {
 		// Cache the value
 		let bonded_account = self.bonded_account();
 		T::Currency::transfer(
-			&who,
+			who,
 			&bonded_account,
 			amount,
 			match ty {
@@ -1011,6 +1248,10 @@ pub struct RewardPool<T: Config> {
 	last_recorded_total_payouts: BalanceOf<T>,
 	/// Total amount that this pool has paid out so far to the members.
 	total_rewards_claimed: BalanceOf<T>,
+	/// The amount of commission pending to be claimed.
+	total_commission_pending: BalanceOf<T>,
+	/// The amount of commission that has been claimed.
+	total_commission_claimed: BalanceOf<T>,
 }
 
 impl<T: Config> RewardPool<T> {
@@ -1024,13 +1265,40 @@ impl<T: Config> RewardPool<T> {
 		self.total_rewards_claimed = self.total_rewards_claimed.saturating_add(reward);
 	}
 
-	/// Update the recorded values of the pool.
-	fn update_records(&mut self, id: PoolId, bonded_points: BalanceOf<T>) -> Result<(), Error<T>> {
+	/// Update the recorded values of the reward pool.
+	///
+	/// This function MUST be called whenever the points in the bonded pool change, AND whenever the
+	/// the pools commission is updated. The reason for the former is that a change in pool points
+	/// will alter the share of the reward balance among pool members, and the reason for the latter
+	/// is that a change in commission will alter the share of the reward balance among the pool.
+	fn update_records(
+		&mut self,
+		id: PoolId,
+		bonded_points: BalanceOf<T>,
+		commission: Perbill,
+	) -> Result<(), Error<T>> {
 		let balance = Self::current_balance(id);
-		self.last_recorded_reward_counter = self.current_reward_counter(id, bonded_points)?;
+
+		let (current_reward_counter, new_pending_commission) =
+			self.current_reward_counter(id, bonded_points, commission)?;
+
+		// Store the reward counter at the time of this update. This is used in subsequent calls to
+		// `current_reward_counter`, whereby newly pending rewards (in points) are added to this
+		// value.
+		self.last_recorded_reward_counter = current_reward_counter;
+
+		// Add any new pending commission that has been calculated from `current_reward_counter` to
+		// determine the total pending commission at the time of this update.
+		self.total_commission_pending =
+			self.total_commission_pending.saturating_add(new_pending_commission);
+
+		// Store the total payouts at the time of this update. Total payouts are essentially the
+		// entire historical balance of the reward pool, equating to the current balance + the total
+		// rewards that have left the pool + the total commission that has left the pool.
 		self.last_recorded_total_payouts = balance
-			.checked_add(&self.total_rewards_claimed)
+			.checked_add(&self.total_rewards_claimed.saturating_add(self.total_commission_claimed))
 			.ok_or(Error::<T>::OverflowRisk)?;
+
 		Ok(())
 	}
 
@@ -1040,15 +1308,27 @@ impl<T: Config> RewardPool<T> {
 		&self,
 		id: PoolId,
 		bonded_points: BalanceOf<T>,
-	) -> Result<T::RewardCounter, Error<T>> {
+		commission: Perbill,
+	) -> Result<(T::RewardCounter, BalanceOf<T>), Error<T>> {
 		let balance = Self::current_balance(id);
-		let payouts_since_last_record = balance
+
+		// Calculate the current payout balance. The first 3 values of this calculation added
+		// together represent what the balance would be if no payouts were made. The
+		// `last_recorded_total_payouts` is then subtracted from this value to cancel out previously
+		// recorded payouts, leaving only the remaining payouts that have not been claimed.
+		let current_payout_balance = balance
 			.saturating_add(self.total_rewards_claimed)
+			.saturating_add(self.total_commission_claimed)
 			.saturating_sub(self.last_recorded_total_payouts);
 
+		// Split the `current_payout_balance` into claimable rewards and claimable commission
+		// according to the current commission rate.
+		let new_pending_commission = commission * current_payout_balance;
+		let new_pending_rewards = current_payout_balance.saturating_sub(new_pending_commission);
+
 		// * accuracy notes regarding the multiplication in `checked_from_rational`:
-		// `payouts_since_last_record` is a subset of the total_issuance at the very
-		// worse. `bonded_points` are similarly, in a non-slashed pool, have the same granularity as
+		// `current_payout_balance` is a subset of the total_issuance at the very worse.
+		// `bonded_points` are similarly, in a non-slashed pool, have the same granularity as
 		// balance, and are thus below within the range of total_issuance. In the worse case
 		// scenario, for `saturating_from_rational`, we have:
 		//
@@ -1066,22 +1346,26 @@ impl<T: Config> RewardPool<T> {
 		// represented as `FixedU128`, which means it is less than `total_issuance * 10^18`.
 		//
 		// * accuracy notes regarding `checked_from_rational` collapsing to zero, meaning that no
-		// reward can be claimed:
+		//   reward can be claimed:
 		//
-		// largest `bonded_points`, such that the reward counter is non-zero, with `FixedU128`
-		// will be when the payout is being computed. This essentially means `payout/bonded_points`
-		// needs to be more than 1/1^18. Thus, assuming that `bonded_points` will always be less
-		// than `10 * dot_total_issuance`, if the reward_counter is the smallest possible value,
-		// the value of the reward being calculated is:
+		// largest `bonded_points`, such that the reward counter is non-zero, with `FixedU128` will
+		// be when the payout is being computed. This essentially means `payout/bonded_points` needs
+		// to be more than 1/1^18. Thus, assuming that `bonded_points` will always be less than `10
+		// * dot_total_issuance`, if the reward_counter is the smallest possible value, the value of
+		//   the
+		// reward being calculated is:
 		//
 		// x / 10^20 = 1/ 10^18
 		//
 		// x = 100
 		//
 		// which is basically 10^-8 DOTs. See `smallest_claimable_reward` for an example of this.
-		T::RewardCounter::checked_from_rational(payouts_since_last_record, bonded_points)
-			.and_then(|ref r| self.last_recorded_reward_counter.checked_add(r))
-			.ok_or(Error::<T>::OverflowRisk)
+		let current_reward_counter =
+			T::RewardCounter::checked_from_rational(new_pending_rewards, bonded_points)
+				.and_then(|ref r| self.last_recorded_reward_counter.checked_add(r))
+				.ok_or(Error::<T>::OverflowRisk)?;
+
+		Ok((current_reward_counter, new_pending_commission))
 	}
 
 	/// Current free balance of the reward pool.
@@ -1209,9 +1493,10 @@ pub mod pallet {
 	use super::*;
 	use frame_support::traits::StorageVersion;
 	use frame_system::{ensure_signed, pallet_prelude::*};
+	use sp_runtime::Perbill;
 
 	/// The current storage version.
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(3);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
@@ -1313,6 +1598,12 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type MaxPoolMembersPerPool<T: Config> = StorageValue<_, u32, OptionQuery>;
 
+	/// The maximum commission that can be charged by a pool. Used on commission payouts to bound
+	/// pool commissions that are > `GlobalMaxCommission`, necessary if a future
+	/// `GlobalMaxCommission` is lower than some current pool commissions.
+	#[pallet::storage]
+	pub type GlobalMaxCommission<T: Config> = StorageValue<_, Perbill, OptionQuery>;
+
 	/// Active members.
 	///
 	/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
@@ -1326,13 +1617,13 @@ pub mod pallet {
 	pub type BondedPools<T: Config> =
 		CountedStorageMap<_, Twox64Concat, PoolId, BondedPoolInner<T>>;
 
-	/// Reward pools. This is where there rewards for each pool accumulate. When a members payout
-	/// is claimed, the balance comes out fo the reward pool. Keyed by the bonded pools account.
+	/// Reward pools. This is where there rewards for each pool accumulate. When a members payout is
+	/// claimed, the balance comes out fo the reward pool. Keyed by the bonded pools account.
 	#[pallet::storage]
 	pub type RewardPools<T: Config> = CountedStorageMap<_, Twox64Concat, PoolId, RewardPool<T>>;
 
-	/// Groups of unbonding pools. Each group of unbonding pools belongs to a bonded pool,
-	/// hence the name sub-pools. Keyed by the bonded pools account.
+	/// Groups of unbonding pools. Each group of unbonding pools belongs to a
+	/// bonded pool, hence the name sub-pools. Keyed by the bonded pools account.
 	#[pallet::storage]
 	pub type SubPoolsStorage<T: Config> = CountedStorageMap<_, Twox64Concat, PoolId, SubPools<T>>;
 
@@ -1365,6 +1656,7 @@ pub mod pallet {
 		pub max_pools: Option<u32>,
 		pub max_members_per_pool: Option<u32>,
 		pub max_members: Option<u32>,
+		pub global_max_commission: Option<Perbill>,
 	}
 
 	#[cfg(feature = "std")]
@@ -1376,6 +1668,7 @@ pub mod pallet {
 				max_pools: Some(16),
 				max_members_per_pool: Some(32),
 				max_members: Some(16 * 32),
+				global_max_commission: None,
 			}
 		}
 	}
@@ -1393,6 +1686,9 @@ pub mod pallet {
 			}
 			if let Some(max_members) = self.max_members {
 				MaxPoolMembers::<T>::put(max_members);
+			}
+			if let Some(global_max_commission) = self.global_max_commission {
+				GlobalMaxCommission::<T>::put(global_max_commission);
 			}
 		}
 	}
@@ -1456,6 +1752,17 @@ pub mod pallet {
 		PoolSlashed { pool_id: PoolId, balance: BalanceOf<T> },
 		/// The unbond pool at `era` of pool `pool_id` has been slashed to `balance`.
 		UnbondingPoolSlashed { pool_id: PoolId, era: EraIndex, balance: BalanceOf<T> },
+		/// A pool's commission setting has been changed.
+		PoolCommissionUpdated { pool_id: PoolId, current: Option<(Perbill, T::AccountId)> },
+		/// A pool's maximum commission setting has been changed.
+		PoolMaxCommissionUpdated { pool_id: PoolId, max_commission: Perbill },
+		/// A pool's commission `change_rate` has been changed.
+		PoolCommissionChangeRateUpdated {
+			pool_id: PoolId,
+			change_rate: CommissionChangeRate<T::BlockNumber>,
+		},
+		/// Pool commission has been claimed.
+		PoolCommissionClaimed { pool_id: PoolId, commission: BalanceOf<T> },
 	}
 
 	#[pallet::error]
@@ -1511,6 +1818,18 @@ pub mod pallet {
 		Defensive(DefensiveError),
 		/// Partial unbonding now allowed permissionlessly.
 		PartialUnbondNotAllowedPermissionlessly,
+		/// The pool's max commission cannot be set higher than the existing value.
+		MaxCommissionRestricted,
+		/// The supplied commission exceeds the max allowed commission.
+		CommissionExceedsMaximum,
+		/// Not enough blocks have surpassed since the last commission update.
+		CommissionChangeThrottled,
+		/// The submitted changes to commission change rate are not allowed.
+		CommissionChangeRateNotAllowed,
+		/// There is no pending commission to claim.
+		NoPendingCommission,
+		/// No commission current has been set.
+		NoCommissionCurrentSet,
 		/// Pool id currently in use.
 		PoolIdInUse,
 		/// Pool id provided is not correct/usable.
@@ -1519,7 +1838,7 @@ pub mod pallet {
 		BondExtraRestricted,
 	}
 
-	#[derive(Encode, Decode, PartialEq, TypeInfo, frame_support::PalletError, RuntimeDebug)]
+	#[derive(Encode, Decode, PartialEq, TypeInfo, PalletError, RuntimeDebug)]
 	pub enum DefensiveError {
 		/// There isn't enough space in the unbond pool.
 		NotEnoughSpaceInUnbondPool,
@@ -1571,7 +1890,11 @@ pub mod pallet {
 			let mut reward_pool = RewardPools::<T>::get(pool_id)
 				.defensive_ok_or::<Error<T>>(DefensiveError::RewardPoolNotFound.into())?;
 			// IMPORTANT: reward pool records must be updated with the old points.
-			reward_pool.update_records(pool_id, bonded_pool.points)?;
+			reward_pool.update_records(
+				pool_id,
+				bonded_pool.points,
+				bonded_pool.commission.current(),
+			)?;
 
 			bonded_pool.try_inc_members()?;
 			let points_issued = bonded_pool.try_bond_funds(&who, amount, BondType::Later)?;
@@ -1622,7 +1945,7 @@ pub mod pallet {
 		}
 
 		/// A bonded member can use this to claim their payout based on the rewards that the pool
-		/// has accumulated since their last claimed payout (OR since joining if this is there first
+		/// has accumulated since their last claimed payout (OR since joining if this is their first
 		/// time claiming rewards). The payout will be transferred to the member's account.
 		///
 		/// The member will earn rewards pro rata based on the members stake vs the sum of the
@@ -1684,7 +2007,11 @@ pub mod pallet {
 			// Claim the the payout prior to unbonding. Once the user is unbonding their points no
 			// longer exist in the bonded pool and thus they can no longer claim their payouts. It
 			// is not strictly necessary to claim the rewards, but we do it here for UX.
-			let _ = reward_pool.update_records(bonded_pool.id, bonded_pool.points)?;
+			reward_pool.update_records(
+				bonded_pool.id,
+				bonded_pool.points,
+				bonded_pool.commission.current(),
+			)?;
 			let _ = Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
 
 			let current_era = T::Staking::current_era();
@@ -1731,7 +2058,7 @@ pub mod pallet {
 			});
 
 			// Now that we know everything has worked write the items to storage.
-			SubPoolsStorage::insert(&member.pool_id, sub_pools);
+			SubPoolsStorage::insert(member.pool_id, sub_pools);
 			Self::put_member_with_pools(&member_account, member, bonded_pool, reward_pool);
 			Ok(())
 		}
@@ -1820,10 +2147,10 @@ pub mod pallet {
 				.iter()
 				.fold(BalanceOf::<T>::zero(), |accumulator, (era, unlocked_points)| {
 					sum_unlocked_points = sum_unlocked_points.saturating_add(*unlocked_points);
-					if let Some(era_pool) = sub_pools.with_era.get_mut(&era) {
+					if let Some(era_pool) = sub_pools.with_era.get_mut(era) {
 						let balance_to_unbond = era_pool.dissolve(*unlocked_points);
 						if era_pool.points.is_zero() {
-							sub_pools.with_era.remove(&era);
+							sub_pools.with_era.remove(era);
 						}
 						accumulator.saturating_add(balance_to_unbond)
 					} else {
@@ -1872,12 +2199,12 @@ pub mod pallet {
 					None
 				} else {
 					bonded_pool.dec_members().put();
-					SubPoolsStorage::<T>::insert(&member.pool_id, sub_pools);
+					SubPoolsStorage::<T>::insert(member.pool_id, sub_pools);
 					Some(T::WeightInfo::withdraw_unbonded_update(num_slashing_spans))
 				}
 			} else {
 				// we certainly don't need to delete any pools, because no one is being removed.
-				SubPoolsStorage::<T>::insert(&member.pool_id, sub_pools);
+				SubPoolsStorage::<T>::insert(member.pool_id, sub_pools);
 				PoolMembers::<T>::insert(&member_account, member);
 				Some(T::WeightInfo::withdraw_unbonded_update(num_slashing_spans))
 			};
@@ -2002,8 +2329,8 @@ pub mod pallet {
 
 		/// Set a new metadata for the pool.
 		///
-		/// The dispatch origin of this call must be signed by the bouncer, or the root role
-		/// of the pool.
+		/// The dispatch origin of this call must be signed by the bouncer, or the root role of the
+		/// pool.
 		#[pallet::call_index(10)]
 		#[pallet::weight(T::WeightInfo::set_metadata(metadata.len() as u32))]
 		pub fn set_metadata(
@@ -2036,6 +2363,7 @@ pub mod pallet {
 		/// * `max_pools` - Set [`MaxPools`].
 		/// * `max_members` - Set [`MaxPoolMembers`].
 		/// * `max_members_per_pool` - Set [`MaxPoolMembersPerPool`].
+		/// * `global_max_commission` - Set [`GlobalMaxCommission`].
 		#[pallet::call_index(11)]
 		#[pallet::weight(T::WeightInfo::set_configs())]
 		pub fn set_configs(
@@ -2045,6 +2373,7 @@ pub mod pallet {
 			max_pools: ConfigOp<u32>,
 			max_members: ConfigOp<u32>,
 			max_members_per_pool: ConfigOp<u32>,
+			global_max_commission: ConfigOp<Perbill>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
@@ -2063,6 +2392,7 @@ pub mod pallet {
 			config_op_exp!(MaxPools::<T>, max_pools);
 			config_op_exp!(MaxPoolMembers::<T>, max_members);
 			config_op_exp!(MaxPoolMembersPerPool::<T>, max_members_per_pool);
+			config_op_exp!(GlobalMaxCommission::<T>, global_max_commission);
 			Ok(())
 		}
 
@@ -2195,6 +2525,103 @@ pub mod pallet {
 			let signer = ensure_signed(origin)?;
 			Self::do_claim_payout(signer, other)
 		}
+
+		/// Set the commission of a pool.
+		//
+		/// Both a commission percentage and a commission payee must be provided in the `current`
+		/// tuple. Where a `current` of `None` is provided, any current commission will be removed.
+		///
+		/// - If a `None` is supplied to `new_commission`, existing commission will be removed.
+		#[pallet::call_index(17)]
+		#[pallet::weight(T::WeightInfo::set_commission())]
+		pub fn set_commission(
+			origin: OriginFor<T>,
+			pool_id: PoolId,
+			new_commission: Option<(Perbill, T::AccountId)>,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+			ensure!(bonded_pool.can_manage_commission(&who), Error::<T>::DoesNotHavePermission);
+
+			let mut reward_pool = RewardPools::<T>::get(pool_id)
+				.defensive_ok_or::<Error<T>>(DefensiveError::RewardPoolNotFound.into())?;
+			// IMPORTANT: make sure that everything up to this point is using the current commission
+			// before it updates. Note that `try_update_current` could still fail at this point.
+			reward_pool.update_records(
+				pool_id,
+				bonded_pool.points,
+				bonded_pool.commission.current(),
+			)?;
+			RewardPools::insert(pool_id, reward_pool);
+
+			bonded_pool.commission.try_update_current(&new_commission)?;
+			bonded_pool.put();
+			Self::deposit_event(Event::<T>::PoolCommissionUpdated {
+				pool_id,
+				current: new_commission,
+			});
+			Ok(())
+		}
+
+		/// Set the maximum commission of a pool.
+		///
+		/// - Initial max can be set to any `Perbill`, and only smaller values thereafter.
+		/// - Current commission will be lowered in the event it is higher than a new max
+		///   commission.
+		#[pallet::call_index(18)]
+		#[pallet::weight(T::WeightInfo::set_commission_max())]
+		pub fn set_commission_max(
+			origin: OriginFor<T>,
+			pool_id: PoolId,
+			max_commission: Perbill,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+			ensure!(bonded_pool.can_manage_commission(&who), Error::<T>::DoesNotHavePermission);
+
+			bonded_pool.commission.try_update_max(pool_id, max_commission)?;
+			bonded_pool.put();
+
+			Self::deposit_event(Event::<T>::PoolMaxCommissionUpdated { pool_id, max_commission });
+			Ok(())
+		}
+
+		/// Set the commission change rate for a pool.
+		///
+		/// Initial change rate is not bounded, whereas subsequent updates can only be more
+		/// restrictive than the current.
+		#[pallet::call_index(19)]
+		#[pallet::weight(T::WeightInfo::set_commission_change_rate())]
+		pub fn set_commission_change_rate(
+			origin: OriginFor<T>,
+			pool_id: PoolId,
+			change_rate: CommissionChangeRate<T::BlockNumber>,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+			ensure!(bonded_pool.can_manage_commission(&who), Error::<T>::DoesNotHavePermission);
+
+			bonded_pool.commission.try_update_change_rate(change_rate)?;
+			bonded_pool.put();
+
+			Self::deposit_event(Event::<T>::PoolCommissionChangeRateUpdated {
+				pool_id,
+				change_rate,
+			});
+			Ok(())
+		}
+
+		/// Claim pending commission.
+		///
+		/// The dispatch origin of this call must be signed by the `root` role of the pool. Pending
+		/// commission is paid out and added to total claimed commission`. Total pending commission
+		/// is reset to zero. the current.
+		#[pallet::call_index(20)]
+		#[pallet::weight(0)]
+		pub fn claim_commission(origin: OriginFor<T>, pool_id: PoolId) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			Self::do_claim_commission(who, pool_id)
+		}
 	}
 
 	#[pallet::hooks]
@@ -2259,7 +2686,8 @@ impl<T: Config> Pallet<T> {
 			Zero::zero()
 		);
 
-		// This shouldn't fail, but if it does we don't really care
+		// This shouldn't fail, but if it does we don't really care. Remaining balance can consist
+		// of unclaimed pending commission, errorneous transfers to the reward account, etc.
 		let reward_pool_remaining = T::Currency::free_balance(&reward_account);
 		let _ = T::Currency::transfer(
 			&reward_account,
@@ -2295,7 +2723,7 @@ impl<T: Config> Pallet<T> {
 	fn get_member_with_pools(
 		who: &T::AccountId,
 	) -> Result<(PoolMember<T>, BondedPool<T>, RewardPool<T>), Error<T>> {
-		let member = PoolMembers::<T>::get(&who).ok_or(Error::<T>::PoolMemberNotFound)?;
+		let member = PoolMembers::<T>::get(who).ok_or(Error::<T>::PoolMemberNotFound)?;
 		let bonded_pool =
 			BondedPool::<T>::get(member.pool_id).defensive_ok_or(DefensiveError::PoolNotFound)?;
 		let reward_pool =
@@ -2323,8 +2751,8 @@ impl<T: Config> Pallet<T> {
 		current_points: BalanceOf<T>,
 		new_funds: BalanceOf<T>,
 	) -> BalanceOf<T> {
-		let u256 = |x| T::BalanceToU256::convert(x);
-		let balance = |x| T::U256ToBalance::convert(x);
+		let u256 = T::BalanceToU256::convert;
+		let balance = T::U256ToBalance::convert;
 		match (current_balance.is_zero(), current_points.is_zero()) {
 			(_, true) => new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into()),
 			(true, false) => {
@@ -2351,8 +2779,8 @@ impl<T: Config> Pallet<T> {
 		current_points: BalanceOf<T>,
 		points: BalanceOf<T>,
 	) -> BalanceOf<T> {
-		let u256 = |x| T::BalanceToU256::convert(x);
-		let balance = |x| T::U256ToBalance::convert(x);
+		let u256 = T::BalanceToU256::convert;
+		let balance = T::U256ToBalance::convert;
 		if current_balance.is_zero() || current_points.is_zero() || points.is_zero() {
 			// There is nothing to unbond
 			return Zero::zero()
@@ -2378,10 +2806,15 @@ impl<T: Config> Pallet<T> {
 		// a member who has no skin in the game anymore cannot claim any rewards.
 		ensure!(!member.active_points().is_zero(), Error::<T>::FullyUnbonding);
 
-		let current_reward_counter =
-			reward_pool.current_reward_counter(bonded_pool.id, bonded_pool.points)?;
-		let pending_rewards = member.pending_rewards(current_reward_counter)?;
+		let (current_reward_counter, _) = reward_pool.current_reward_counter(
+			bonded_pool.id,
+			bonded_pool.points,
+			bonded_pool.commission.current(),
+		)?;
 
+		// Determine the pending rewards. In scenarios where commission is 100%, `pending_rewards`
+		// will be zero.
+		let pending_rewards = member.pending_rewards(current_reward_counter)?;
 		if pending_rewards.is_zero() {
 			return Ok(pending_rewards)
 		}
@@ -2390,14 +2823,13 @@ impl<T: Config> Pallet<T> {
 		member.last_recorded_reward_counter = current_reward_counter;
 		reward_pool.register_claimed_reward(pending_rewards);
 
-		// Transfer payout to the member.
 		T::Currency::transfer(
 			&bonded_pool.reward_account(),
-			&member_account,
+			member_account,
 			pending_rewards,
 			// defensive: the depositor has put existential deposit into the pool and it stays
 			// untouched, reward account shall not die.
-			ExistenceRequirement::AllowDeath,
+			ExistenceRequirement::KeepAlive,
 		)?;
 
 		Self::deposit_event(Event::<T>::PaidOut {
@@ -2462,6 +2894,8 @@ impl<T: Config> Pallet<T> {
 				last_recorded_reward_counter: Zero::zero(),
 				last_recorded_total_payouts: Zero::zero(),
 				total_rewards_claimed: Zero::zero(),
+				total_commission_pending: Zero::zero(),
+				total_commission_claimed: Zero::zero(),
 			},
 		);
 		ReversePoolIdLookup::<T>::insert(bonded_pool.bonded_account(), pool_id);
@@ -2496,7 +2930,11 @@ impl<T: Config> Pallet<T> {
 
 		// payout related stuff: we must claim the payouts, and updated recorded payout data
 		// before updating the bonded pool points, similar to that of `join` transaction.
-		reward_pool.update_records(bonded_pool.id, bonded_pool.points)?;
+		reward_pool.update_records(
+			bonded_pool.id,
+			bonded_pool.points,
+			bonded_pool.commission.current(),
+		)?;
 		let claimed =
 			Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
 
@@ -2519,6 +2957,51 @@ impl<T: Config> Pallet<T> {
 		});
 		Self::put_member_with_pools(&who, member, bonded_pool, reward_pool);
 
+		Ok(())
+	}
+
+	fn do_claim_commission(who: T::AccountId, pool_id: PoolId) -> DispatchResult {
+		let bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+		ensure!(bonded_pool.can_manage_commission(&who), Error::<T>::DoesNotHavePermission);
+
+		let mut reward_pool = RewardPools::<T>::get(pool_id)
+			.defensive_ok_or::<Error<T>>(DefensiveError::RewardPoolNotFound.into())?;
+
+		// IMPORTANT: make sure that any newly pending commission not yet processed is added to
+		// `total_commission_pending`.
+		reward_pool.update_records(
+			pool_id,
+			bonded_pool.points,
+			bonded_pool.commission.current(),
+		)?;
+
+		let commission = reward_pool.total_commission_pending;
+		ensure!(!commission.is_zero(), Error::<T>::NoPendingCommission);
+
+		let payee = bonded_pool
+			.commission
+			.current
+			.as_ref()
+			.map(|(_, p)| p.clone())
+			.ok_or(Error::<T>::NoCommissionCurrentSet)?;
+
+		// Payout claimed commission.
+		T::Currency::transfer(
+			&bonded_pool.reward_account(),
+			&payee,
+			commission,
+			ExistenceRequirement::KeepAlive,
+		)?;
+
+		// Add pending commission to total claimed counter.
+		reward_pool.total_commission_claimed =
+			reward_pool.total_commission_claimed.saturating_add(commission);
+		// Reset total pending commission counter to zero.
+		reward_pool.total_commission_pending = Zero::zero();
+		// Commit reward pool updates
+		RewardPools::<T>::insert(pool_id, reward_pool);
+
+		Self::deposit_event(Event::<T>::PoolCommissionClaimed { pool_id, commission });
 		Ok(())
 	}
 
@@ -2608,16 +3091,18 @@ impl<T: Config> Pallet<T> {
 		let mut all_members = 0u32;
 		PoolMembers::<T>::iter().for_each(|(_, d)| {
 			let bonded_pool = BondedPools::<T>::get(d.pool_id).unwrap();
-			assert!(!d.total_points().is_zero(), "no member should have zero points: {:?}", d);
+			assert!(!d.total_points().is_zero(), "no member should have zero points: {d:?}");
 			*pools_members.entry(d.pool_id).or_default() += 1;
 			all_members += 1;
 
 			let reward_pool = RewardPools::<T>::get(d.pool_id).unwrap();
 			if !bonded_pool.points.is_zero() {
-				let current_rc =
-					reward_pool.current_reward_counter(d.pool_id, bonded_pool.points).unwrap();
-				*pools_members_pending_rewards.entry(d.pool_id).or_default() +=
-					d.pending_rewards(current_rc).unwrap();
+				let commission = bonded_pool.commission.current();
+				let (current_rc, _) = reward_pool
+					.current_reward_counter(d.pool_id, bonded_pool.points, commission)
+					.unwrap();
+				let pending_rewards = d.pending_rewards(current_rc).unwrap();
+				*pools_members_pending_rewards.entry(d.pool_id).or_default() += pending_rewards;
 			} // else this pool has been heavily slashed and cannot have any rewards anymore.
 		});
 
@@ -2633,14 +3118,14 @@ impl<T: Config> Pallet<T> {
 			);
 			assert!(
 				RewardPool::<T>::current_balance(id) >=
-					pools_members_pending_rewards.get(&id).map(|x| *x).unwrap_or_default()
+					pools_members_pending_rewards.get(&id).copied().unwrap_or_default()
 			)
 		});
 
 		BondedPools::<T>::iter().for_each(|(id, inner)| {
 			let bonded_pool = BondedPool { id, inner };
 			assert_eq!(
-				pools_members.get(&id).map(|x| *x).unwrap_or_default(),
+				pools_members.get(&id).copied().unwrap_or_default(),
 				bonded_pool.member_counter
 			);
 			assert!(MaxPoolMembersPerPool::<T>::get()
@@ -2706,8 +3191,9 @@ impl<T: Config> Pallet<T> {
 			if let Some((reward_pool, bonded_pool)) = RewardPools::<T>::get(pool_member.pool_id)
 				.zip(BondedPools::<T>::get(pool_member.pool_id))
 			{
-				let current_reward_counter = reward_pool
-					.current_reward_counter(pool_member.pool_id, bonded_pool.points)
+				let commission = bonded_pool.commission.current();
+				let (current_reward_counter, _) = reward_pool
+					.current_reward_counter(pool_member.pool_id, bonded_pool.points, commission)
 					.ok()?;
 				return pool_member.pending_rewards(current_reward_counter).ok()
 			}

@@ -559,7 +559,11 @@ benchmarks! {
 	seal_gas_left {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
+<<<<<<< HEAD
 			"seal1", "seal_gas_left", r
+=======
+			"seal0", "seal_gas_left", r
+>>>>>>> master
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
