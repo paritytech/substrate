@@ -177,6 +177,16 @@ impl PeersetHandle {
 		// The channel can only be closed if the peerset no longer exists.
 		rx.await.map_err(|_| ())
 	}
+
+	/// Checks whether the peer has a reputation value below [`BANNED_THRESHOLD`].
+	pub fn is_banned(&self, peer_id: PeerId) -> bool {
+		todo!("will be implemented after `Peerset` is converted into shared struct");
+	}
+
+	/// Report disconnect to adjust peers reputation value.
+	pub fn report_disconnect(&self, peer_id: PeerId) {
+		todo!("will be implemented after `Peerset` is converted into shared struct");
+	}
 }
 
 /// Message that can be sent by the peer set manager (PSM).
@@ -765,6 +775,7 @@ impl Stream for Peerset {
 }
 
 /// Reason for calling [`Peerset::dropped`].
+#[derive(Debug)]
 pub enum DropReason {
 	/// Substream or connection has been closed for an unknown reason.
 	Unknown,
