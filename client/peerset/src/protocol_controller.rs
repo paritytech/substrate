@@ -18,14 +18,11 @@
 
 use futures::{FutureExt, StreamExt};
 use libp2p::PeerId;
-use log::{error, trace};
+use log::{error, info, trace};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::{
 	borrow::Cow,
-	collections::{
-		hash_map::Entry,
-		HashMap, HashSet,
-	},
+	collections::{hash_map::Entry, HashMap, HashSet},
 	time::{Duration, Instant},
 };
 use wasm_timer::Delay;
@@ -43,7 +40,8 @@ enum Action {
 	IncomingConnection(PeerId, IncomingIndex),
 }
 
-/// Shared handle to [`ProtocolController`]. Distributed around the code.
+/// Shared handle to [`ProtocolController`]. Distributed around the code outside of the
+/// protocol implementation.
 pub struct ProtocolHandle {
 	to_controller: TracingUnboundedSender<Action>,
 }
@@ -241,7 +239,7 @@ impl ProtocolController {
 				let _ = self
 					.to_notifications
 					.unbounded_send(Message::Drop { set_id: self.set_id, peer_id: *node.key() });
-				trace!(
+				info!(
 					target: "peerset",
 					"Disconnecting previously reserved node {} on {:?}.",
 					node.key(), self.set_id
@@ -308,7 +306,9 @@ impl ProtocolController {
 			return
 		}
 
-		self.peer(&peer_id).into_connected().map(|connected_peer| connected_peer.disconnect());
+		self.peer(&peer_id)
+			.into_connected()
+			.map(|connected_peer| connected_peer.disconnect());
 		self.nodes.remove(&peer_id);
 	}
 
@@ -329,7 +329,7 @@ impl ProtocolController {
 
 		if not_connected.is_banned() {
 			let _ = self.to_notifications.unbounded_send(Message::Reject(incoming_index));
-			return;
+			return
 		}
 
 		let _ = not_connected.try_accept_incoming(incoming_index);
@@ -502,10 +502,7 @@ impl<'a> NotConnectedPeer<'a> {
 	/// the slots are full, the node stays "not connected" and we return `Err`.
 	///
 	/// Non-slot-occupying nodes don't count towards the number of slots.
-	fn try_accept_incoming(
-		self,
-		incoming_index: IncomingIndex,
-	) -> Result<ConnectedPeer<'a>, Self> {
+	fn try_accept_incoming(self, incoming_index: IncomingIndex) -> Result<ConnectedPeer<'a>, Self> {
 		let is_no_slot_occupy = self.controller.reserved_nodes.contains(&*self.peer_id);
 
 		// Note that it is possible for num_in to be strictly superior to the max, in case we were
