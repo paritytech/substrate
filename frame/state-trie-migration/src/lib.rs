@@ -439,7 +439,6 @@ pub mod pallet {
 
 	/// The outer Pallet struct.
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(crate) trait Store)]
 	pub struct Pallet<T>(_);
 
 	/// Configurations of this pallet.
