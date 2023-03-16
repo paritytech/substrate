@@ -698,6 +698,22 @@ pub mod pallet {
 				Ok(Pays::Yes.into())
 			}
 		}
+
+		/// Alias for `transfer_allow_death`, provided only for name-wise compatibility.
+		///
+		/// WARNING: DEPRECATED! Will be released in approximately 3 months.
+		#[pallet::call_index(7)]
+		#[pallet::weight(T::WeightInfo::transfer_allow_death())]
+		pub fn transfer(
+			origin: OriginFor<T>,
+			dest: AccountIdLookupOf<T>,
+			#[pallet::compact] value: T::Balance,
+		) -> DispatchResultWithPostInfo {
+			let source = ensure_signed(origin)?;
+			let dest = T::Lookup::lookup(dest)?;
+			<Self as fungible::Mutate<_>>::transfer(&source, &dest, value, Expendable)?;
+			Ok(().into())
+		}
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {

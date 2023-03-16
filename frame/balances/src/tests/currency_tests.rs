@@ -40,7 +40,10 @@ fn basic_locking_should_work() {
 		.build_and_execute_with(|| {
 			assert_eq!(Balances::free_balance(1), 10);
 			Balances::set_lock(ID_1, &1, 9, WithdrawReasons::all());
-			assert_noop!(Balances::transfer(&1, &2, 5, AllowDeath), TokenError::Frozen);
+			assert_noop!(
+				<Balances as Currency<_>>::transfer(&1, &2, 5, AllowDeath),
+				TokenError::Frozen
+			);
 		});
 }
 
@@ -51,7 +54,7 @@ fn account_should_be_reaped() {
 		.monied(true)
 		.build_and_execute_with(|| {
 			assert_eq!(Balances::free_balance(1), 10);
-			assert_ok!(Balances::transfer(&1, &2, 10, AllowDeath));
+			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 10, AllowDeath));
 			assert_eq!(System::providers(&1), 0);
 			assert_eq!(System::consumers(&1), 0);
 			// Check that the account is dead.
@@ -68,7 +71,10 @@ fn reap_failed_due_to_provider_and_consumer() {
 			// SCENARIO: only one provider and there are remaining consumers.
 			assert_ok!(System::inc_consumers(&1));
 			assert!(!System::can_dec_provider(&1));
-			assert_noop!(Balances::transfer(&1, &2, 10, AllowDeath), TokenError::Frozen);
+			assert_noop!(
+				<Balances as Currency<_>>::transfer(&1, &2, 10, AllowDeath),
+				TokenError::Frozen
+			);
 			assert!(System::account_exists(&1));
 			assert_eq!(Balances::free_balance(1), 10);
 
@@ -76,7 +82,7 @@ fn reap_failed_due_to_provider_and_consumer() {
 			assert_eq!(System::inc_providers(&1), frame_system::IncRefStatus::Existed);
 			assert_eq!(System::providers(&1), 2);
 			assert!(System::can_dec_provider(&1));
-			assert_ok!(Balances::transfer(&1, &2, 10, AllowDeath));
+			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 10, AllowDeath));
 			assert_eq!(System::providers(&1), 1);
 			assert!(System::account_exists(&1));
 			assert_eq!(Balances::free_balance(1), 0);
@@ -90,7 +96,7 @@ fn partial_locking_should_work() {
 		.monied(true)
 		.build_and_execute_with(|| {
 			Balances::set_lock(ID_1, &1, 5, WithdrawReasons::all());
-			assert_ok!(Balances::transfer(&1, &2, 1, AllowDeath));
+			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 		});
 }
 
@@ -102,7 +108,7 @@ fn lock_removal_should_work() {
 		.build_and_execute_with(|| {
 			Balances::set_lock(ID_1, &1, u64::MAX, WithdrawReasons::all());
 			Balances::remove_lock(ID_1, &1);
-			assert_ok!(Balances::transfer(&1, &2, 1, AllowDeath));
+			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 		});
 }
 
@@ -114,7 +120,7 @@ fn lock_replacement_should_work() {
 		.build_and_execute_with(|| {
 			Balances::set_lock(ID_1, &1, u64::MAX, WithdrawReasons::all());
 			Balances::set_lock(ID_1, &1, 5, WithdrawReasons::all());
-			assert_ok!(Balances::transfer(&1, &2, 1, AllowDeath));
+			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 		});
 }
 
@@ -126,7 +132,7 @@ fn double_locking_should_work() {
 		.build_and_execute_with(|| {
 			Balances::set_lock(ID_1, &1, 5, WithdrawReasons::all());
 			Balances::set_lock(ID_2, &1, 5, WithdrawReasons::all());
-			assert_ok!(Balances::transfer(&1, &2, 1, AllowDeath));
+			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 		});
 }
 
@@ -138,7 +144,7 @@ fn combination_locking_should_work() {
 		.build_and_execute_with(|| {
 			Balances::set_lock(ID_1, &1, u64::MAX, WithdrawReasons::empty());
 			Balances::set_lock(ID_2, &1, 0, WithdrawReasons::all());
-			assert_ok!(Balances::transfer(&1, &2, 1, AllowDeath));
+			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 		});
 }
 
@@ -149,11 +155,20 @@ fn lock_value_extension_should_work() {
 		.monied(true)
 		.build_and_execute_with(|| {
 			Balances::set_lock(ID_1, &1, 5, WithdrawReasons::all());
-			assert_noop!(Balances::transfer(&1, &2, 6, AllowDeath), TokenError::Frozen);
+			assert_noop!(
+				<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
+				TokenError::Frozen
+			);
 			Balances::extend_lock(ID_1, &1, 2, WithdrawReasons::all());
-			assert_noop!(Balances::transfer(&1, &2, 6, AllowDeath), TokenError::Frozen);
+			assert_noop!(
+				<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
+				TokenError::Frozen
+			);
 			Balances::extend_lock(ID_1, &1, 8, WithdrawReasons::all());
-			assert_noop!(Balances::transfer(&1, &2, 3, AllowDeath), TokenError::Frozen);
+			assert_noop!(
+				<Balances as Currency<_>>::transfer(&1, &2, 3, AllowDeath),
+				TokenError::Frozen
+			);
 		});
 }
 
@@ -167,7 +182,10 @@ fn lock_should_work_reserve() {
 				Multiplier::saturating_from_integer(1),
 			);
 			Balances::set_lock(ID_1, &1, 10, WithdrawReasons::RESERVE);
-			assert_noop!(Balances::transfer(&1, &2, 1, AllowDeath), TokenError::Frozen);
+			assert_noop!(
+				<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath),
+				TokenError::Frozen
+			);
 			assert_noop!(Balances::reserve(&1, 1), Error::<Test>::LiquidityRestrictions,);
 			assert!(<ChargeTransactionPayment<Test> as SignedExtension>::pre_dispatch(
 				ChargeTransactionPayment::from(1),
@@ -195,7 +213,10 @@ fn lock_should_work_tx_fee() {
 		.monied(true)
 		.build_and_execute_with(|| {
 			Balances::set_lock(ID_1, &1, 10, WithdrawReasons::TRANSACTION_PAYMENT);
-			assert_noop!(Balances::transfer(&1, &2, 1, AllowDeath), TokenError::Frozen);
+			assert_noop!(
+				<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath),
+				TokenError::Frozen
+			);
 			assert_noop!(Balances::reserve(&1, 1), Error::<Test>::LiquidityRestrictions,);
 			assert!(<ChargeTransactionPayment<Test> as SignedExtension>::pre_dispatch(
 				ChargeTransactionPayment::from(1),
@@ -223,12 +244,21 @@ fn lock_block_number_extension_should_work() {
 		.monied(true)
 		.build_and_execute_with(|| {
 			Balances::set_lock(ID_1, &1, 10, WithdrawReasons::all());
-			assert_noop!(Balances::transfer(&1, &2, 6, AllowDeath), TokenError::Frozen);
+			assert_noop!(
+				<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
+				TokenError::Frozen
+			);
 			Balances::extend_lock(ID_1, &1, 10, WithdrawReasons::all());
-			assert_noop!(Balances::transfer(&1, &2, 6, AllowDeath), TokenError::Frozen);
+			assert_noop!(
+				<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
+				TokenError::Frozen
+			);
 			System::set_block_number(2);
 			Balances::extend_lock(ID_1, &1, 10, WithdrawReasons::all());
-			assert_noop!(Balances::transfer(&1, &2, 3, AllowDeath), TokenError::Frozen);
+			assert_noop!(
+				<Balances as Currency<_>>::transfer(&1, &2, 3, AllowDeath),
+				TokenError::Frozen
+			);
 		});
 }
 
@@ -239,11 +269,20 @@ fn lock_reasons_extension_should_work() {
 		.monied(true)
 		.build_and_execute_with(|| {
 			Balances::set_lock(ID_1, &1, 10, WithdrawReasons::TRANSFER);
-			assert_noop!(Balances::transfer(&1, &2, 6, AllowDeath), TokenError::Frozen);
+			assert_noop!(
+				<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
+				TokenError::Frozen
+			);
 			Balances::extend_lock(ID_1, &1, 10, WithdrawReasons::empty());
-			assert_noop!(Balances::transfer(&1, &2, 6, AllowDeath), TokenError::Frozen);
+			assert_noop!(
+				<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
+				TokenError::Frozen
+			);
 			Balances::extend_lock(ID_1, &1, 10, WithdrawReasons::RESERVE);
-			assert_noop!(Balances::transfer(&1, &2, 6, AllowDeath), TokenError::Frozen);
+			assert_noop!(
+				<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
+				TokenError::Frozen
+			);
 		});
 }
 
@@ -527,7 +566,10 @@ fn transferring_too_high_value_should_not_panic() {
 		Balances::make_free_balance_be(&1, u64::MAX);
 		Balances::make_free_balance_be(&2, 1);
 
-		assert_err!(Balances::transfer(&1, &2, u64::MAX, AllowDeath), ArithmeticError::Overflow,);
+		assert_err!(
+			<Balances as Currency<_>>::transfer(&1, &2, u64::MAX, AllowDeath),
+			ArithmeticError::Overflow,
+		);
 
 		assert_eq!(Balances::free_balance(1), u64::MAX);
 		assert_eq!(Balances::free_balance(2), 1);
