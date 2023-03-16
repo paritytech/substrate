@@ -219,7 +219,8 @@ pub mod pallet {
 			+ FunHoldInspect<Self::AccountId>
 			+ FunHoldMutate<Self::AccountId>;
 
-		/// The name for the reserve ID.
+		/// The identifier of the hold reason.
+
 		#[pallet::constant]
 		type HoldReason: Get<<Self::Currency as FunHoldInspect<Self::AccountId>>::Reason>;
 
