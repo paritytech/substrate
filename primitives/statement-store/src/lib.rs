@@ -19,9 +19,9 @@
 
 //! A crate which contains statement-store primitives.
 
-//use sp_runtime::{DispatchError, DispatchResult};
 use sp_std::vec::Vec;
 use codec::{Decode, Encode};
+use scale_info::TypeInfo;
 
 pub type Topic = [u8; 32];
 pub type DecryptionKey = [u8; 32];
@@ -37,7 +37,7 @@ pub fn hash_encoded(data: &[u8]) -> [u8; 32] {
 	sp_core::hashing::blake2_256(data)
 }
 
-#[derive(Encode, Decode, sp_runtime::RuntimeDebug, Clone)]
+#[derive(Encode, Decode, TypeInfo, sp_runtime::RuntimeDebug, Clone, PartialEq, Eq)]
 pub enum Proof {
 	Sr25519 { signature: [u8; 64], signer: [u8; 32] },
 	Ed25519 { signature: [u8; 64], signer: [u8; 32] },
@@ -45,7 +45,7 @@ pub enum Proof {
 	OnChain { who: [u8; 32], block_hash: BlockHash, event_index: u64 },
 }
 
-#[derive(Encode, Decode, sp_runtime::RuntimeDebug, Clone)]
+#[derive(Encode, Decode, TypeInfo, sp_runtime::RuntimeDebug, Clone, PartialEq, Eq)]
 pub enum Field {
 	AuthenticityProof(Proof),
 	DecryptionKey(DecryptionKey),
@@ -57,7 +57,7 @@ pub enum Field {
 	Data(Vec<u8>),
 }
 
-#[derive(Encode, Decode, sp_runtime::RuntimeDebug, Clone)]
+#[derive(Encode, Decode, TypeInfo, sp_runtime::RuntimeDebug, Clone, PartialEq, Eq)]
 pub struct Statement {
 	fields: Vec<Field>,
 }
@@ -75,7 +75,7 @@ impl Statement {
 	}
 
 	pub fn topic(&self, index: usize) -> Option<Topic> {
-		for field in &self.fields[1..] {
+		for field in &self.fields {
 			match (field, index) {
 				(Field::Topic0(t), 0) => return Some(*t),
 				(Field::Topic1(t), 1) => return Some(*t),
@@ -88,11 +88,12 @@ impl Statement {
 	}
 
 	pub fn decryption_key(&self) -> Option<DecryptionKey> {
-		if let Some(Field::DecryptionKey(key)) = self.fields.get(1) {
-			Some(*key)
-		} else {
-			None
+		for field in &self.fields {
+			if let Field::DecryptionKey(key) = field {
+				return Some(*key);
+			}
 		}
+		None
 	}
 
 	pub fn into_data(self) -> Option<Vec<u8>> {
@@ -102,6 +103,32 @@ impl Statement {
 			}
 		}
 		None
+	}
+
+	pub fn proof(&self) -> Option<&Proof> {
+		if let Some(Field::AuthenticityProof(p)) = self.fields.get(0) {
+			Some(p)
+		} else {
+			None
+		}
+	}
+
+	/// Return encoded fields that can be signed to construct or verify a proof
+	pub fn signature_material(&self) -> Vec<u8> {
+		let mut out = Vec::new();
+		let skip_fields = if let Some(Field::AuthenticityProof(_)) = self.fields.get(0) { 1 } else { 0 };
+		for field in &self.fields[skip_fields..] {
+			field.encode_to(&mut out)
+		}
+		out
+	}
+
+	/// Return a copy of this statement with proof removed
+	pub fn strip_proof(&self) -> Statement {
+		if let Some(Field::AuthenticityProof(_)) = self.fields.get(0) {
+			return Statement { fields: self.fields[1..].iter().cloned().collect() }
+		}
+		self.clone()
 	}
 }
 

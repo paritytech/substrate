@@ -1731,7 +1731,16 @@ impl frame_benchmarking_pallet_pov::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 }
 
-impl pallet_statement::Config for Runtime {}
+
+parameter_types! {
+	pub StatementPriorityBalance: Balance = 10 * CENTS;
+}
+
+impl pallet_statement::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Currency = Balances;
+	type PriorityBalance = StatementPriorityBalance;
+}
 
 construct_runtime!(
 	pub struct Runtime where

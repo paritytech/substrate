@@ -263,7 +263,15 @@ impl pallet_sudo::Config for Runtime {
 	type RuntimeCall = RuntimeCall;
 }
 
-impl pallet_statement::Config for Runtime {}
+parameter_types! {
+	pub StatementPriorityBalance: Balance = 1000;
+}
+
+impl pallet_statement::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Currency = Balances;
+	type PriorityBalance = StatementPriorityBalance;
+}
 
 /// Configure the pallet-template in pallets/template.
 impl pallet_template::Config for Runtime {
@@ -398,7 +406,6 @@ impl_runtime_apis! {
 			Statement::validate_statement(source, statement)
 		}
 	}
-
 
 	impl sp_offchain::OffchainWorkerApi<Block> for Runtime {
 		fn offchain_worker(header: &<Block as BlockT>::Header) {

@@ -21,6 +21,8 @@ sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primit
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
+sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
+log = { version = "0.4.17", default-features = false }
 
 [features]
 default = [ "std" ]
@@ -33,6 +35,7 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 	"sp-io/std",
+	"sp-core/std",
 ]
 try-runtime = [
 	"frame-support/try-runtime",
