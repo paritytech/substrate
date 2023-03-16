@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -46,7 +46,7 @@ pub enum InspectSubCmd {
 		/// Can be either a block hash (no 0x prefix) or a number to retrieve existing block,
 		/// or a 0x-prefixed bytes hex string, representing SCALE encoding of
 		/// a block.
-		#[clap(value_name = "HASH or NUMBER or BYTES")]
+		#[arg(value_name = "HASH or NUMBER or BYTES")]
 		input: String,
 	},
 	/// Decode extrinsic with native version of runtime and print out the details.
@@ -56,7 +56,7 @@ pub enum InspectSubCmd {
 		/// Can be either a block hash (no 0x prefix) or number and the index, in the form
 		/// of `{block}:{index}` or a 0x-prefixed bytes hex string,
 		/// representing SCALE encoding of an extrinsic.
-		#[clap(value_name = "BLOCK:INDEX or BYTES")]
+		#[arg(value_name = "BLOCK:INDEX or BYTES")]
 		input: String,
 	},
 }

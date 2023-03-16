@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@
 //! Substrate state API.
 
 mod state_full;
+mod utils;
 
 #[cfg(test)]
 mod tests;
@@ -28,8 +29,8 @@ use std::sync::Arc;
 use crate::SubscriptionTaskExecutor;
 
 use jsonrpsee::{
-	core::{Error as JsonRpseeError, RpcResult},
-	ws_server::PendingSubscription,
+	core::{async_trait, server::rpc_module::SubscriptionSink, Error as JsonRpseeError, RpcResult},
+	types::SubscriptionResult,
 };
 
 use sc_rpc_api::{state::ReadProof, DenyUnsafe};
@@ -53,6 +54,7 @@ use sp_blockchain::{HeaderBackend, HeaderMetadata};
 const STORAGE_KEYS_PAGED_MAX_COUNT: u32 = 1000;
 
 /// State backend API.
+#[async_trait]
 pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 where
 	Block: BlockT + 'static,
@@ -107,10 +109,11 @@ where
 	///
 	/// If data is available at `key`, it is returned. Else, the sum of values who's key has `key`
 	/// prefix is returned, i.e. all the storage (double) maps that have this prefix.
-	fn storage_size(
+	async fn storage_size(
 		&self,
 		block: Option<Block::Hash>,
 		key: StorageKey,
+		deny_unsafe: DenyUnsafe,
 	) -> Result<Option<u64>, Error>;
 
 	/// Returns the runtime metadata as an opaque blob.
@@ -155,10 +158,10 @@ where
 	) -> Result<sp_rpc::tracing::TraceBlockResponse, Error>;
 
 	/// New runtime version subscription
-	fn subscribe_runtime_version(&self, sink: PendingSubscription);
+	fn subscribe_runtime_version(&self, sink: SubscriptionSink);
 
 	/// New storage subscription
-	fn subscribe_storage(&self, sink: PendingSubscription, keys: Option<Vec<StorageKey>>);
+	fn subscribe_storage(&self, sink: SubscriptionSink, keys: Option<Vec<StorageKey>>);
 }
 
 /// Create new state API that works on full node.
@@ -202,6 +205,7 @@ pub struct State<Block, Client> {
 	deny_unsafe: DenyUnsafe,
 }
 
+#[async_trait]
 impl<Block, Client> StateApiServer<Block::Hash> for State<Block, Client>
 where
 	Block: BlockT + 'static,
@@ -262,8 +266,15 @@ where
 		self.backend.storage_hash(block, key).map_err(Into::into)
 	}
 
-	fn storage_size(&self, key: StorageKey, block: Option<Block::Hash>) -> RpcResult<Option<u64>> {
-		self.backend.storage_size(block, key).map_err(Into::into)
+	async fn storage_size(
+		&self,
+		key: StorageKey,
+		block: Option<Block::Hash>,
+	) -> RpcResult<Option<u64>> {
+		self.backend
+			.storage_size(block, key, self.deny_unsafe)
+			.await
+			.map_err(Into::into)
 	}
 
 	fn metadata(&self, block: Option<Block::Hash>) -> RpcResult<Bytes> {
@@ -318,19 +329,25 @@ where
 			.map_err(Into::into)
 	}
 
-	fn subscribe_runtime_version(&self, sink: PendingSubscription) {
-		self.backend.subscribe_runtime_version(sink)
+	fn subscribe_runtime_version(&self, sink: SubscriptionSink) -> SubscriptionResult {
+		self.backend.subscribe_runtime_version(sink);
+		Ok(())
 	}
 
-	fn subscribe_storage(&self, sink: PendingSubscription, keys: Option<Vec<StorageKey>>) {
+	fn subscribe_storage(
+		&self,
+		mut sink: SubscriptionSink,
+		keys: Option<Vec<StorageKey>>,
+	) -> SubscriptionResult {
 		if keys.is_none() {
 			if let Err(err) = self.deny_unsafe.check_if_safe() {
 				let _ = sink.reject(JsonRpseeError::from(err));
-				return
+				return Ok(())
 			}
 		}
 
-		self.backend.subscribe_storage(sink, keys)
+		self.backend.subscribe_storage(sink, keys);
+		Ok(())
 	}
 }
 

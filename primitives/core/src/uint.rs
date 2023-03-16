@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -35,7 +35,6 @@ mod tests {
 					($name::from(2), "0x2"),
 					($name::from(10), "0xa"),
 					($name::from(15), "0xf"),
-					($name::from(15), "0xf"),
 					($name::from(16), "0x10"),
 					($name::from(1_000), "0x3e8"),
 					($name::from(100_000), "0x186a0"),
@@ -52,8 +51,6 @@ mod tests {
 				assert!(ser::from_str::<$name>("\"0x\"").unwrap_err().is_data());
 				assert!(ser::from_str::<$name>("\"0xg\"").unwrap_err().is_data());
 				assert!(ser::from_str::<$name>("\"\"").unwrap_err().is_data());
-				assert!(ser::from_str::<$name>("\"10\"").unwrap_err().is_data());
-				assert!(ser::from_str::<$name>("\"0\"").unwrap_err().is_data());
 			}
 		};
 	}

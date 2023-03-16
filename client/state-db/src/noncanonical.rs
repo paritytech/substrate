@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -19,8 +19,8 @@
 //! Canonicalization window.
 //! Maintains trees of block overlays and allows discarding trees/roots
 //! The overlays are added in `insert` and removed in `canonicalize`.
-//! All pending changes are kept in memory until next call to `apply_pending` or
-//! `revert_pending`
+
+use crate::{LOG_TARGET, LOG_TARGET_PIN};
 
 use super::{to_meta_key, ChangeSet, CommitSet, DBValue, Error, Hash, MetaDb, StateDbError};
 use codec::{Decode, Encode};
@@ -28,24 +28,21 @@ use log::trace;
 use std::collections::{hash_map::Entry, HashMap, VecDeque};
 
 const NON_CANONICAL_JOURNAL: &[u8] = b"noncanonical_journal";
-const LAST_CANONICAL: &[u8] = b"last_canonical";
+pub(crate) const LAST_CANONICAL: &[u8] = b"last_canonical";
 const MAX_BLOCKS_PER_LEVEL: u64 = 32;
 
 /// See module documentation.
-#[derive(parity_util_mem_derive::MallocSizeOf)]
 pub struct NonCanonicalOverlay<BlockHash: Hash, Key: Hash> {
 	last_canonicalized: Option<(BlockHash, u64)>,
 	levels: VecDeque<OverlayLevel<BlockHash, Key>>,
 	parents: HashMap<BlockHash, BlockHash>,
-	pending_canonicalizations: Vec<BlockHash>,
-	pending_insertions: Vec<BlockHash>,
 	values: HashMap<Key, (u32, DBValue)>, // ref counted
 	// would be deleted but kept around because block is pinned, ref counted.
 	pinned: HashMap<BlockHash, u32>,
 	pinned_insertions: HashMap<BlockHash, (Vec<Key>, u32)>,
+	pinned_canonincalized: Vec<BlockHash>,
 }
 
-#[derive(parity_util_mem_derive::MallocSizeOf)]
 #[cfg_attr(test, derive(PartialEq, Debug))]
 struct OverlayLevel<BlockHash: Hash, Key: Hash> {
 	blocks: Vec<BlockOverlay<BlockHash, Key>>,
@@ -85,7 +82,6 @@ fn to_journal_key(block: u64, index: u64) -> Vec<u8> {
 }
 
 #[cfg_attr(test, derive(PartialEq, Debug))]
-#[derive(parity_util_mem_derive::MallocSizeOf)]
 struct BlockOverlay<BlockHash: Hash, Key: Hash> {
 	hash: BlockHash,
 	journal_index: u64,
@@ -184,7 +180,12 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		let mut values = HashMap::new();
 		if let Some((ref hash, mut block)) = last_canonicalized {
 			// read the journal
-			trace!(target: "state-db", "Reading uncanonicalized journal. Last canonicalized #{} ({:?})", block, hash);
+			trace!(
+				target: LOG_TARGET,
+				"Reading uncanonicalized journal. Last canonicalized #{} ({:?})",
+				block,
+				hash
+			);
 			let mut total: u64 = 0;
 			block += 1;
 			loop {
@@ -204,7 +205,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 						};
 						insert_values(&mut values, record.inserted);
 						trace!(
-							target: "state-db",
+							target: LOG_TARGET,
 							"Uncanonicalized journal entry {}.{} ({:?}) ({} inserted, {} deleted)",
 							block,
 							index,
@@ -223,17 +224,20 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 				levels.push_back(level);
 				block += 1;
 			}
-			trace!(target: "state-db", "Finished reading uncanonicalized journal, {} entries", total);
+			trace!(
+				target: LOG_TARGET,
+				"Finished reading uncanonicalized journal, {} entries",
+				total
+			);
 		}
 		Ok(NonCanonicalOverlay {
 			last_canonicalized,
 			levels,
 			parents,
-			pending_canonicalizations: Default::default(),
-			pending_insertions: Default::default(),
 			pinned: Default::default(),
 			pinned_insertions: Default::default(),
 			values,
+			pinned_canonincalized: Default::default(),
 		})
 	}
 
@@ -259,7 +263,9 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		} else if self.last_canonicalized.is_some() {
 			if number < front_block_number || number > front_block_number + self.levels.len() as u64
 			{
-				trace!(target: "state-db", "Failed to insert block {}, current is {} .. {})",
+				trace!(
+					target: LOG_TARGET,
+					"Failed to insert block {}, current is {} .. {})",
 					number,
 					front_block_number,
 					front_block_number + self.levels.len() as u64,
@@ -290,7 +296,12 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		};
 
 		if level.blocks.len() >= MAX_BLOCKS_PER_LEVEL as usize {
-			return Err(StateDbError::TooManySiblingBlocks)
+			trace!(
+				target: LOG_TARGET,
+				"Too many sibling blocks at #{number}: {:?}",
+				level.blocks.iter().map(|b| &b.hash).collect::<Vec<_>>()
+			);
+			return Err(StateDbError::TooManySiblingBlocks { number })
 		}
 		if level.blocks.iter().any(|b| b.hash == *hash) {
 			return Err(StateDbError::BlockAlreadyExists)
@@ -316,9 +327,16 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			deleted: changeset.deleted,
 		};
 		commit.meta.inserted.push((journal_key, journal_record.encode()));
-		trace!(target: "state-db", "Inserted uncanonicalized changeset {}.{} ({} inserted, {} deleted)", number, index, journal_record.inserted.len(), journal_record.deleted.len());
+		trace!(
+			target: LOG_TARGET,
+			"Inserted uncanonicalized changeset {}.{} {:?} ({} inserted, {} deleted)",
+			number,
+			index,
+			hash,
+			journal_record.inserted.len(),
+			journal_record.deleted.len()
+		);
 		insert_values(&mut self.values, journal_record.inserted);
-		self.pending_insertions.push(hash.clone());
 		Ok(commit)
 	}
 
@@ -326,7 +344,6 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		&self,
 		level_index: usize,
 		discarded_journals: &mut Vec<Vec<u8>>,
-		discarded_blocks: &mut Vec<BlockHash>,
 		hash: &BlockHash,
 	) {
 		if let Some(level) = self.levels.get(level_index) {
@@ -338,13 +355,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 					.clone();
 				if parent == *hash {
 					discarded_journals.push(overlay.journal_key.clone());
-					discarded_blocks.push(overlay.hash.clone());
-					self.discard_journals(
-						level_index + 1,
-						discarded_journals,
-						discarded_blocks,
-						&overlay.hash,
-					);
+					self.discard_journals(level_index + 1, discarded_journals, &overlay.hash);
 				}
 			});
 		}
@@ -355,131 +366,98 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	}
 
 	pub fn last_canonicalized_block_number(&self) -> Option<u64> {
-		match self.last_canonicalized.as_ref().map(|&(_, n)| n) {
-			Some(n) => Some(n + self.pending_canonicalizations.len() as u64),
-			None if !self.pending_canonicalizations.is_empty() =>
-				Some(self.pending_canonicalizations.len() as u64),
-			_ => None,
+		self.last_canonicalized.as_ref().map(|&(_, n)| n)
+	}
+
+	/// Confirm that all changes made to commit sets are on disk. Allows for temporarily pinned
+	/// blocks to be released.
+	pub fn sync(&mut self) {
+		let mut pinned = std::mem::take(&mut self.pinned_canonincalized);
+		for hash in pinned.iter() {
+			self.unpin(hash)
 		}
-	}
-
-	pub fn last_canonicalized_hash(&self) -> Option<BlockHash> {
-		self.last_canonicalized.as_ref().map(|&(ref h, _)| h.clone())
-	}
-
-	pub fn top_level(&self) -> Vec<(BlockHash, u64)> {
-		let start = self.last_canonicalized_block_number().unwrap_or(0);
-		self.levels
-			.get(self.pending_canonicalizations.len())
-			.map(|level| level.blocks.iter().map(|r| (r.hash.clone(), start)).collect())
-			.unwrap_or_default()
+		pinned.clear();
+		// Reuse the same memory buffer
+		self.pinned_canonincalized = pinned;
 	}
 
 	/// Select a top-level root and canonicalized it. Discards all sibling subtrees and the root.
-	/// Returns a set of changes that need to be added to the DB.
+	/// Add a set of changes of the canonicalized block to `CommitSet`
+	/// Return the block number of the canonicalized block
 	pub fn canonicalize(
 		&mut self,
 		hash: &BlockHash,
 		commit: &mut CommitSet<Key>,
-	) -> Result<(), StateDbError> {
-		trace!(target: "state-db", "Canonicalizing {:?}", hash);
-		let level = self
-			.levels
-			.get(self.pending_canonicalizations.len())
-			.ok_or(StateDbError::InvalidBlock)?;
+	) -> Result<u64, StateDbError> {
+		trace!(target: LOG_TARGET, "Canonicalizing {:?}", hash);
+		let level = match self.levels.pop_front() {
+			Some(level) => level,
+			None => return Err(StateDbError::InvalidBlock),
+		};
 		let index = level
 			.blocks
 			.iter()
 			.position(|overlay| overlay.hash == *hash)
 			.ok_or(StateDbError::InvalidBlock)?;
 
+		// No failures are possible beyond this point.
+
+		// Force pin canonicalized block so that it is no discarded immediately
+		self.pin(hash);
+		self.pinned_canonincalized.push(hash.clone());
+
 		let mut discarded_journals = Vec::new();
-		let mut discarded_blocks = Vec::new();
-		for (i, overlay) in level.blocks.iter().enumerate() {
-			if i != index {
-				self.discard_journals(
-					self.pending_canonicalizations.len() + 1,
-					&mut discarded_journals,
-					&mut discarded_blocks,
+		for (i, overlay) in level.blocks.into_iter().enumerate() {
+			let mut pinned_children = 0;
+			// That's the one we need to canonicalize
+			if i == index {
+				commit.data.inserted.extend(overlay.inserted.iter().map(|k| {
+					(
+						k.clone(),
+						self.values
+							.get(k)
+							.expect("For each key in overlays there's a value in values")
+							.1
+							.clone(),
+					)
+				}));
+				commit.data.deleted.extend(overlay.deleted.clone());
+			} else {
+				// Discard this overlay
+				self.discard_journals(0, &mut discarded_journals, &overlay.hash);
+				pinned_children = discard_descendants(
+					&mut self.levels.as_mut_slices(),
+					&mut self.values,
+					&mut self.parents,
+					&self.pinned,
+					&mut self.pinned_insertions,
 					&overlay.hash,
 				);
 			}
+			if self.pinned.contains_key(&overlay.hash) {
+				pinned_children += 1;
+			}
+			if pinned_children != 0 {
+				self.pinned_insertions
+					.insert(overlay.hash.clone(), (overlay.inserted, pinned_children));
+			} else {
+				self.parents.remove(&overlay.hash);
+				discard_values(&mut self.values, overlay.inserted);
+			}
 			discarded_journals.push(overlay.journal_key.clone());
-			discarded_blocks.push(overlay.hash.clone());
 		}
-
-		// get the one we need to canonicalize
-		let overlay = &level.blocks[index];
-		commit.data.inserted.extend(overlay.inserted.iter().map(|k| {
-			(
-				k.clone(),
-				self.values
-					.get(k)
-					.expect("For each key in overlays there's a value in values")
-					.1
-					.clone(),
-			)
-		}));
-		commit.data.deleted.extend(overlay.deleted.clone());
-
 		commit.meta.deleted.append(&mut discarded_journals);
-		let canonicalized =
-			(hash.clone(), self.front_block_number() + self.pending_canonicalizations.len() as u64);
+
+		let canonicalized = (hash.clone(), self.front_block_number());
 		commit
 			.meta
 			.inserted
 			.push((to_meta_key(LAST_CANONICAL, &()), canonicalized.encode()));
-		trace!(target: "state-db", "Discarding {} records", commit.meta.deleted.len());
-		self.pending_canonicalizations.push(hash.clone());
-		Ok(())
-	}
+		trace!(target: LOG_TARGET, "Discarding {} records", commit.meta.deleted.len());
 
-	fn apply_canonicalizations(&mut self) {
-		let last = self.pending_canonicalizations.last().cloned();
-		let count = self.pending_canonicalizations.len() as u64;
-		for hash in self.pending_canonicalizations.drain(..) {
-			trace!(target: "state-db", "Post canonicalizing {:?}", hash);
-			let level =
-				self.levels.pop_front().expect("Hash validity is checked in `canonicalize`");
-			let index = level
-				.blocks
-				.iter()
-				.position(|overlay| overlay.hash == hash)
-				.expect("Hash validity is checked in `canonicalize`");
-
-			// discard unfinalized overlays and values
-			for (i, overlay) in level.blocks.into_iter().enumerate() {
-				let mut pinned_children = if i != index {
-					discard_descendants(
-						&mut self.levels.as_mut_slices(),
-						&mut self.values,
-						&mut self.parents,
-						&self.pinned,
-						&mut self.pinned_insertions,
-						&overlay.hash,
-					)
-				} else {
-					0
-				};
-				if self.pinned.contains_key(&overlay.hash) {
-					pinned_children += 1;
-				}
-				if pinned_children != 0 {
-					self.pinned_insertions
-						.insert(overlay.hash.clone(), (overlay.inserted, pinned_children));
-				} else {
-					self.parents.remove(&overlay.hash);
-					discard_values(&mut self.values, overlay.inserted);
-				}
-			}
-		}
-		if let Some(hash) = last {
-			let last_canonicalized = (
-				hash,
-				self.last_canonicalized.as_ref().map(|(_, n)| n + count).unwrap_or(count - 1),
-			);
-			self.last_canonicalized = Some(last_canonicalized);
-		}
+		let num = canonicalized.1;
+		self.last_canonicalized = Some(canonicalized);
+		Ok(num)
 	}
 
 	/// Get a value from the node overlay. This searches in every existing changeset.
@@ -493,8 +471,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 
 	/// Check if the block is in the canonicalization queue.
 	pub fn have_block(&self, hash: &BlockHash) -> bool {
-		(self.parents.contains_key(hash) || self.pending_insertions.contains(hash)) &&
-			!self.pending_canonicalizations.contains(hash)
+		self.parents.contains_key(hash)
 	}
 
 	/// Revert a single level. Returns commit set that deletes the journal or `None` if not
@@ -523,7 +500,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			};
 			// Check that it does not have any children
 			if (level_index != level_count - 1) && self.parents.values().any(|h| h == hash) {
-				log::debug!(target: "state-db", "Trying to remove block {:?} with children", hash);
+				log::debug!(target: LOG_TARGET, "Trying to remove block {:?} with children", hash);
 				return None
 			}
 			let overlay = level.remove(index);
@@ -542,53 +519,11 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		}
 	}
 
-	fn revert_insertions(&mut self) {
-		self.pending_insertions.reverse();
-		for hash in self.pending_insertions.drain(..) {
-			self.parents.remove(&hash);
-			// find a level. When iterating insertions backwards the hash is always last in the
-			// level.
-			let level_index = self
-				.levels
-				.iter()
-				.position(|level| {
-					level.blocks.last().expect("Hash is added in `insert` in reverse order").hash ==
-						hash
-				})
-				.expect("Hash is added in insert");
-
-			let overlay_index = self.levels[level_index].blocks.len() - 1;
-			let overlay = self.levels[level_index].remove(overlay_index);
-			discard_values(&mut self.values, overlay.inserted);
-			if self.levels[level_index].blocks.is_empty() {
-				debug_assert_eq!(level_index, self.levels.len() - 1);
-				self.levels.pop_back();
-			}
-		}
-	}
-
-	/// Apply all pending changes
-	pub fn apply_pending(&mut self) {
-		self.apply_canonicalizations();
-		self.pending_insertions.clear();
-	}
-
-	/// Revert all pending changes
-	pub fn revert_pending(&mut self) {
-		self.pending_canonicalizations.clear();
-		self.revert_insertions();
-	}
-
 	/// Pin state values in memory
 	pub fn pin(&mut self, hash: &BlockHash) {
-		if self.pending_insertions.contains(hash) {
-			// Pinning pending state is not implemented. Pending states
-			// won't be pruned for quite some time anyway, so it's not a big deal.
-			return
-		}
 		let refs = self.pinned.entry(hash.clone()).or_default();
 		if *refs == 0 {
-			trace!(target: "state-db-pin", "Pinned non-canon block: {:?}", hash);
+			trace!(target: LOG_TARGET_PIN, "Pinned non-canon block: {:?}", hash);
 		}
 		*refs += 1;
 	}
@@ -617,12 +552,13 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 						entry.get_mut().1 -= 1;
 						if entry.get().1 == 0 {
 							let (inserted, _) = entry.remove();
-							trace!(target: "state-db-pin", "Discarding unpinned non-canon block: {:?}", hash);
+							trace!(
+								target: LOG_TARGET_PIN,
+								"Discarding unpinned non-canon block: {:?}",
+								hash
+							);
 							discard_values(&mut self.values, inserted);
 							self.parents.remove(&hash);
-							true
-						} else {
-							false
 						}
 					},
 					Entry::Vacant(_) => break,
@@ -755,7 +691,7 @@ mod tests {
 				.unwrap(),
 		);
 		db.commit(&overlay.insert(&h2, 11, &h1, make_changeset(&[5], &[3])).unwrap());
-		assert_eq!(db.meta.len(), 3);
+		assert_eq!(db.meta_len(), 3);
 
 		let overlay2 = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		assert_eq!(overlay.levels, overlay2.levels);
@@ -777,8 +713,8 @@ mod tests {
 		db.commit(&overlay.insert(&h2, 11, &h1, make_changeset(&[5], &[3])).unwrap());
 		let mut commit = CommitSet::default();
 		overlay.canonicalize(&h1, &mut commit).unwrap();
+		overlay.unpin(&h1);
 		db.commit(&commit);
-		overlay.apply_pending();
 		assert_eq!(overlay.levels.len(), 1);
 
 		let overlay2 = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
@@ -805,18 +741,15 @@ mod tests {
 		let mut commit = CommitSet::default();
 		overlay.canonicalize(&h1, &mut commit).unwrap();
 		db.commit(&commit);
-		assert!(contains(&overlay, 5));
-		assert_eq!(overlay.levels.len(), 2);
-		assert_eq!(overlay.parents.len(), 2);
-		overlay.apply_pending();
-		assert_eq!(overlay.levels.len(), 1);
-		assert_eq!(overlay.parents.len(), 1);
+		overlay.sync();
 		assert!(!contains(&overlay, 5));
 		assert!(contains(&overlay, 7));
+		assert_eq!(overlay.levels.len(), 1);
+		assert_eq!(overlay.parents.len(), 1);
 		let mut commit = CommitSet::default();
 		overlay.canonicalize(&h2, &mut commit).unwrap();
 		db.commit(&commit);
-		overlay.apply_pending();
+		overlay.sync();
 		assert_eq!(overlay.levels.len(), 0);
 		assert_eq!(overlay.parents.len(), 0);
 		assert!(db.data_eq(&make_db(&[1, 4, 6, 7, 8])));
@@ -835,13 +768,12 @@ mod tests {
 		let mut commit = CommitSet::default();
 		overlay.canonicalize(&h_1, &mut commit).unwrap();
 		db.commit(&commit);
-		assert!(contains(&overlay, 1));
-		overlay.apply_pending();
+		overlay.sync();
 		assert!(!contains(&overlay, 1));
 	}
 
 	#[test]
-	fn insert_with_pending_canonicalization() {
+	fn insert_and_canonicalize() {
 		let h1 = H256::random();
 		let h2 = H256::random();
 		let h3 = H256::random();
@@ -850,13 +782,11 @@ mod tests {
 		let changeset = make_changeset(&[], &[]);
 		db.commit(&overlay.insert(&h1, 1, &H256::default(), changeset.clone()).unwrap());
 		db.commit(&overlay.insert(&h2, 2, &h1, changeset.clone()).unwrap());
-		overlay.apply_pending();
 		let mut commit = CommitSet::default();
 		overlay.canonicalize(&h1, &mut commit).unwrap();
 		overlay.canonicalize(&h2, &mut commit).unwrap();
 		db.commit(&commit);
 		db.commit(&overlay.insert(&h3, 3, &h2, changeset.clone()).unwrap());
-		overlay.apply_pending();
 		assert_eq!(overlay.levels.len(), 1);
 	}
 
@@ -926,7 +856,7 @@ mod tests {
 		let mut commit = CommitSet::default();
 		overlay.canonicalize(&h_1, &mut commit).unwrap();
 		db.commit(&commit);
-		overlay.apply_pending();
+		overlay.sync();
 		assert_eq!(overlay.levels.len(), 2);
 		assert_eq!(overlay.parents.len(), 6);
 		assert!(!contains(&overlay, 1));
@@ -947,7 +877,7 @@ mod tests {
 		let mut commit = CommitSet::default();
 		overlay.canonicalize(&h_1_2, &mut commit).unwrap();
 		db.commit(&commit);
-		overlay.apply_pending();
+		overlay.sync();
 		assert_eq!(overlay.levels.len(), 1);
 		assert_eq!(overlay.parents.len(), 3);
 		assert!(!contains(&overlay, 11));
@@ -964,7 +894,7 @@ mod tests {
 		let mut commit = CommitSet::default();
 		overlay.canonicalize(&h_1_2_2, &mut commit).unwrap();
 		db.commit(&commit);
-		overlay.apply_pending();
+		overlay.sync();
 		assert_eq!(overlay.levels.len(), 0);
 		assert_eq!(overlay.parents.len(), 0);
 		assert!(db.data_eq(&make_db(&[1, 12, 122])));
@@ -994,31 +924,6 @@ mod tests {
 	}
 
 	#[test]
-	fn revert_pending_insertion() {
-		let h1 = H256::random();
-		let h2_1 = H256::random();
-		let h2_2 = H256::random();
-		let db = make_db(&[]);
-		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		let changeset1 = make_changeset(&[5, 6], &[2]);
-		let changeset2 = make_changeset(&[7, 8], &[5, 3]);
-		let changeset3 = make_changeset(&[9], &[]);
-		overlay.insert(&h1, 1, &H256::default(), changeset1).unwrap();
-		assert!(contains(&overlay, 5));
-		overlay.insert(&h2_1, 2, &h1, changeset2).unwrap();
-		overlay.insert(&h2_2, 2, &h1, changeset3).unwrap();
-		assert!(contains(&overlay, 7));
-		assert!(contains(&overlay, 5));
-		assert!(contains(&overlay, 9));
-		assert_eq!(overlay.levels.len(), 2);
-		assert_eq!(overlay.parents.len(), 3);
-		overlay.revert_pending();
-		assert!(!contains(&overlay, 5));
-		assert_eq!(overlay.levels.len(), 0);
-		assert_eq!(overlay.parents.len(), 0);
-	}
-
-	#[test]
 	fn keeps_pinned() {
 		let mut db = make_db(&[]);
 
@@ -1032,14 +937,12 @@ mod tests {
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		db.commit(&overlay.insert(&h_1, 1, &H256::default(), c_1).unwrap());
 		db.commit(&overlay.insert(&h_2, 1, &H256::default(), c_2).unwrap());
-		overlay.apply_pending();
 
 		overlay.pin(&h_1);
 
 		let mut commit = CommitSet::default();
 		overlay.canonicalize(&h_2, &mut commit).unwrap();
 		db.commit(&commit);
-		overlay.apply_pending();
 		assert!(contains(&overlay, 1));
 		overlay.unpin(&h_1);
 		assert!(!contains(&overlay, 1));
@@ -1063,18 +966,38 @@ mod tests {
 		db.commit(&overlay.insert(&h_1, 1, &H256::default(), c_1).unwrap());
 		db.commit(&overlay.insert(&h_2, 1, &H256::default(), c_2).unwrap());
 		db.commit(&overlay.insert(&h_3, 1, &H256::default(), c_3).unwrap());
-		overlay.apply_pending();
 
 		overlay.pin(&h_1);
 
 		let mut commit = CommitSet::default();
 		overlay.canonicalize(&h_3, &mut commit).unwrap();
 		db.commit(&commit);
-		overlay.apply_pending(); // 1_2 should be discarded, 1_1 is pinned
 
 		assert!(contains(&overlay, 1));
 		overlay.unpin(&h_1);
 		assert!(!contains(&overlay, 1));
+	}
+
+	#[test]
+	fn pins_canonicalized() {
+		let mut db = make_db(&[]);
+
+		let (h_1, c_1) = (H256::random(), make_changeset(&[1], &[]));
+		let (h_2, c_2) = (H256::random(), make_changeset(&[2], &[]));
+
+		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
+		db.commit(&overlay.insert(&h_1, 1, &H256::default(), c_1).unwrap());
+		db.commit(&overlay.insert(&h_2, 2, &h_1, c_2).unwrap());
+
+		let mut commit = CommitSet::default();
+		overlay.canonicalize(&h_1, &mut commit).unwrap();
+		overlay.canonicalize(&h_2, &mut commit).unwrap();
+		assert!(contains(&overlay, 1));
+		assert!(contains(&overlay, 2));
+		db.commit(&commit);
+		overlay.sync();
+		assert!(!contains(&overlay, 1));
+		assert!(!contains(&overlay, 2));
 	}
 
 	#[test]
@@ -1093,18 +1016,17 @@ mod tests {
 		db.commit(&overlay.insert(&h_11, 1, &H256::default(), c_11).unwrap());
 		db.commit(&overlay.insert(&h_12, 1, &H256::default(), c_12).unwrap());
 		db.commit(&overlay.insert(&h_21, 2, &h_11, c_21).unwrap());
-		overlay.apply_pending();
 
 		overlay.pin(&h_21);
 
 		let mut commit = CommitSet::default();
 		overlay.canonicalize(&h_12, &mut commit).unwrap();
 		db.commit(&commit);
-		overlay.apply_pending(); // 1_1 and 2_1 should be both pinned
 
 		assert!(contains(&overlay, 1));
 		overlay.unpin(&h_21);
 		assert!(!contains(&overlay, 1));
+		overlay.unpin(&h_12);
 		assert!(overlay.pinned.is_empty());
 	}
 
@@ -1128,12 +1050,10 @@ mod tests {
 		overlay.canonicalize(&root, &mut commit).unwrap();
 		overlay.canonicalize(&h2, &mut commit).unwrap(); // h11 should stay in the DB
 		db.commit(&commit);
-		overlay.apply_pending();
 		assert_eq!(overlay.levels.len(), 1);
 		assert!(contains(&overlay, 21));
 		assert!(!contains(&overlay, 11));
 		assert!(db.get_meta(&to_journal_key(12, 1)).unwrap().is_some());
-		assert!(db.get_meta(&to_journal_key(12, 0)).unwrap().is_none());
 
 		// Restore into a new overlay and check that journaled value exists.
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
@@ -1142,7 +1062,7 @@ mod tests {
 		let mut commit = CommitSet::default();
 		overlay.canonicalize(&h21, &mut commit).unwrap(); // h11 should stay in the DB
 		db.commit(&commit);
-		overlay.apply_pending();
+		overlay.sync();
 		assert!(!contains(&overlay, 21));
 	}
 
@@ -1166,7 +1086,6 @@ mod tests {
 		overlay.canonicalize(&root, &mut commit).unwrap();
 		overlay.canonicalize(&h2, &mut commit).unwrap(); // h11 should stay in the DB
 		db.commit(&commit);
-		overlay.apply_pending();
 
 		// add another block at top level. It should reuse journal index 0 of previously discarded
 		// block

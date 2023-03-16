@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,13 +16,29 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! RPC middlware to collect prometheus metrics on RPC calls.
+//! RPC middleware to collect prometheus metrics on RPC calls.
 
-use jsonrpsee::core::middleware::Middleware;
+use jsonrpsee::server::logger::{HttpRequest, Logger, MethodKind, Params, TransportProtocol};
 use prometheus_endpoint::{
 	register, Counter, CounterVec, HistogramOpts, HistogramVec, Opts, PrometheusError, Registry,
 	U64,
 };
+use std::net::SocketAddr;
+
+/// Histogram time buckets in microseconds.
+const HISTOGRAM_BUCKETS: [f64; 11] = [
+	5.0,
+	25.0,
+	100.0,
+	500.0,
+	1_000.0,
+	2_500.0,
+	10_000.0,
+	25_000.0,
+	100_000.0,
+	1_000_000.0,
+	10_000_000.0,
+];
 
 /// Metrics for RPC middleware storing information about the number of requests started/completed,
 /// calls started/completed and their timings.
@@ -38,9 +54,9 @@ pub struct RpcMetrics {
 	calls_started: CounterVec<U64>,
 	/// Number of calls completed.
 	calls_finished: CounterVec<U64>,
-	/// Number of Websocket sessions opened (Websocket only).
+	/// Number of Websocket sessions opened.
 	ws_sessions_opened: Option<Counter<U64>>,
-	/// Number of Websocket sessions closed (Websocket only).
+	/// Number of Websocket sessions closed.
 	ws_sessions_closed: Option<Counter<U64>>,
 }
 
@@ -74,7 +90,8 @@ impl RpcMetrics {
 						HistogramOpts::new(
 							"substrate_rpc_calls_time",
 							"Total time [μs] of processed RPC calls",
-						),
+						)
+						.buckets(HISTOGRAM_BUCKETS.to_vec()),
 						&["protocol", "method"],
 					)?,
 					metrics_registry,
@@ -122,71 +139,86 @@ impl RpcMetrics {
 	}
 }
 
-#[derive(Clone)]
-/// Middleware for RPC calls
-pub struct RpcMiddleware {
-	metrics: RpcMetrics,
-	transport_label: &'static str,
-}
-
-impl RpcMiddleware {
-	/// Create a new [`RpcMiddleware`] with the provided [`RpcMetrics`].
-	pub fn new(metrics: RpcMetrics, transport_label: &'static str) -> Self {
-		Self { metrics, transport_label }
-	}
-}
-
-impl Middleware for RpcMiddleware {
+impl Logger for RpcMetrics {
 	type Instant = std::time::Instant;
 
-	fn on_connect(&self) {
-		self.metrics.ws_sessions_opened.as_ref().map(|counter| counter.inc());
+	fn on_connect(
+		&self,
+		_remote_addr: SocketAddr,
+		_request: &HttpRequest,
+		transport: TransportProtocol,
+	) {
+		if let TransportProtocol::WebSocket = transport {
+			self.ws_sessions_opened.as_ref().map(|counter| counter.inc());
+		}
 	}
 
-	fn on_request(&self) -> Self::Instant {
+	fn on_request(&self, transport: TransportProtocol) -> Self::Instant {
+		let transport_label = transport_label_str(transport);
 		let now = std::time::Instant::now();
-		self.metrics.requests_started.with_label_values(&[self.transport_label]).inc();
+		self.requests_started.with_label_values(&[transport_label]).inc();
 		now
 	}
 
-	fn on_call(&self, name: &str) {
-		log::trace!(target: "rpc_metrics", "[{}] on_call name={}", self.transport_label, name);
-		self.metrics
-			.calls_started
-			.with_label_values(&[self.transport_label, name])
-			.inc();
+	fn on_call(&self, name: &str, params: Params, kind: MethodKind, transport: TransportProtocol) {
+		let transport_label = transport_label_str(transport);
+		log::trace!(
+			target: "rpc_metrics",
+			"[{}] on_call name={} params={:?} kind={}",
+			transport_label,
+			name,
+			params,
+			kind,
+		);
+		self.calls_started.with_label_values(&[transport_label, name]).inc();
 	}
 
-	fn on_result(&self, name: &str, success: bool, started_at: Self::Instant) {
+	fn on_result(
+		&self,
+		name: &str,
+		success: bool,
+		started_at: Self::Instant,
+		transport: TransportProtocol,
+	) {
+		let transport_label = transport_label_str(transport);
 		let micros = started_at.elapsed().as_micros();
 		log::debug!(
 			target: "rpc_metrics",
 			"[{}] {} call took {} μs",
-			self.transport_label,
+			transport_label,
 			name,
 			micros,
 		);
-		self.metrics
-			.calls_time
-			.with_label_values(&[self.transport_label, name])
-			.observe(micros as _);
+		self.calls_time.with_label_values(&[transport_label, name]).observe(micros as _);
 
-		self.metrics
-			.calls_finished
+		self.calls_finished
 			.with_label_values(&[
-				self.transport_label,
+				transport_label,
 				name,
-				if success { "true" } else { "false" },
+				// the label "is_error", so `success` should be regarded as false
+				// and vice-versa to be registrered correctly.
+				if success { "false" } else { "true" },
 			])
 			.inc();
 	}
 
-	fn on_response(&self, started_at: Self::Instant) {
-		log::trace!(target: "rpc_metrics", "[{}] on_response started_at={:?}", self.transport_label, started_at);
-		self.metrics.requests_finished.with_label_values(&[self.transport_label]).inc();
+	fn on_response(&self, result: &str, started_at: Self::Instant, transport: TransportProtocol) {
+		let transport_label = transport_label_str(transport);
+		log::trace!(target: "rpc_metrics", "[{}] on_response started_at={:?}", transport_label, started_at);
+		log::trace!(target: "rpc_metrics::extra", "[{}] result={:?}", transport_label, result);
+		self.requests_finished.with_label_values(&[transport_label]).inc();
 	}
 
-	fn on_disconnect(&self) {
-		self.metrics.ws_sessions_closed.as_ref().map(|counter| counter.inc());
+	fn on_disconnect(&self, _remote_addr: SocketAddr, transport: TransportProtocol) {
+		if let TransportProtocol::WebSocket = transport {
+			self.ws_sessions_closed.as_ref().map(|counter| counter.inc());
+		}
+	}
+}
+
+fn transport_label_str(t: TransportProtocol) -> &'static str {
+	match t {
+		TransportProtocol::Http => "http",
+		TransportProtocol::WebSocket => "ws",
 	}
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 //
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 //
 // This program is free software: you can redistribute it and/or modify
@@ -18,7 +18,12 @@
 //
 // If you read this, you are very thorough, congratulations.
 
-use super::*;
+use libp2p::{
+	identity::{Keypair, PublicKey},
+	PeerId,
+};
+
+pub use libp2p::identity::error::SigningError;
 
 /// A result of signing a message with a network identity. Since `PeerId` is potentially a hash of a
 /// `PublicKey`, you need to reveal the `PublicKey` next to the signature, so the verifier can check

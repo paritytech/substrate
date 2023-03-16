@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,12 +21,11 @@
 
 use super::{Call, Event, *};
 use crate::mock::*;
-use codec::Encode;
 use fg_primitives::ScheduledChange;
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
-	traits::{Currency, OnFinalize, OneSessionHandler},
-	weights::{GetDispatchInfo, Pays},
+	dispatch::{GetDispatchInfo, Pays},
+	traits::{Currency, KeyOwnerProofSystem, OnFinalize, OneSessionHandler},
 };
 use frame_system::{EventRecord, Phase};
 use sp_core::H256;
@@ -297,12 +296,12 @@ fn schedule_resume_only_when_paused() {
 #[test]
 fn time_slot_have_sane_ord() {
 	// Ensure that `Ord` implementation is sane.
-	const FIXTURE: &[GrandpaTimeSlot] = &[
-		GrandpaTimeSlot { set_id: 0, round: 0 },
-		GrandpaTimeSlot { set_id: 0, round: 1 },
-		GrandpaTimeSlot { set_id: 1, round: 0 },
-		GrandpaTimeSlot { set_id: 1, round: 1 },
-		GrandpaTimeSlot { set_id: 1, round: 2 },
+	const FIXTURE: &[TimeSlot] = &[
+		TimeSlot { set_id: 0, round: 0 },
+		TimeSlot { set_id: 0, round: 1 },
+		TimeSlot { set_id: 1, round: 0 },
+		TimeSlot { set_id: 1, round: 1 },
+		TimeSlot { set_id: 1, round: 2 },
 	];
 	assert!(FIXTURE.windows(2).all(|f| f[0] < f[1]));
 }
@@ -355,11 +354,11 @@ fn report_equivocation_current_set_works() {
 
 		// create the key ownership proof
 		let key_owner_proof =
-			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
+			Historical::prove((sp_consensus_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
 
 		// report the equivocation and the tx should be dispatched successfully
 		assert_ok!(Grandpa::report_equivocation_unsigned(
-			Origin::none(),
+			RuntimeOrigin::none(),
 			Box::new(equivocation_proof),
 			key_owner_proof,
 		),);
@@ -408,7 +407,7 @@ fn report_equivocation_old_set_works() {
 
 		// create the key ownership proof in the "old" set
 		let key_owner_proof =
-			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
+			Historical::prove((sp_consensus_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
 
 		start_era(2);
 
@@ -437,7 +436,7 @@ fn report_equivocation_old_set_works() {
 		// report the equivocation using the key ownership proof generated on
 		// the old set, the tx should be dispatched successfully
 		assert_ok!(Grandpa::report_equivocation_unsigned(
-			Origin::none(),
+			RuntimeOrigin::none(),
 			Box::new(equivocation_proof),
 			key_owner_proof,
 		),);
@@ -486,7 +485,7 @@ fn report_equivocation_invalid_set_id() {
 		let equivocation_keyring = extract_keyring(equivocation_key);
 
 		let key_owner_proof =
-			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
+			Historical::prove((sp_consensus_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
 
 		let set_id = Grandpa::current_set_id();
 
@@ -500,7 +499,7 @@ fn report_equivocation_invalid_set_id() {
 		// the call for reporting the equivocation should error
 		assert_err!(
 			Grandpa::report_equivocation_unsigned(
-				Origin::none(),
+				RuntimeOrigin::none(),
 				Box::new(equivocation_proof),
 				key_owner_proof,
 			),
@@ -524,7 +523,7 @@ fn report_equivocation_invalid_session() {
 
 		// generate a key ownership proof at set id = 1
 		let key_owner_proof =
-			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
+			Historical::prove((sp_consensus_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
 
 		start_era(2);
 
@@ -541,7 +540,7 @@ fn report_equivocation_invalid_session() {
 		// proof from the previous set, the session should be invalid.
 		assert_err!(
 			Grandpa::report_equivocation_unsigned(
-				Origin::none(),
+				RuntimeOrigin::none(),
 				Box::new(equivocation_proof),
 				key_owner_proof,
 			),
@@ -563,7 +562,7 @@ fn report_equivocation_invalid_key_owner_proof() {
 
 		// generate a key ownership proof for the authority at index 1
 		let invalid_key_owner_proof =
-			Historical::prove((sp_finality_grandpa::KEY_TYPE, &invalid_owner_key)).unwrap();
+			Historical::prove((sp_consensus_grandpa::KEY_TYPE, &invalid_owner_key)).unwrap();
 
 		let equivocation_authority_index = 0;
 		let equivocation_key = &authorities[equivocation_authority_index].0;
@@ -586,7 +585,7 @@ fn report_equivocation_invalid_key_owner_proof() {
 		// proof for a different key than the one in the equivocation proof.
 		assert_err!(
 			Grandpa::report_equivocation_unsigned(
-				Origin::none(),
+				RuntimeOrigin::none(),
 				Box::new(equivocation_proof),
 				invalid_key_owner_proof,
 			),
@@ -610,14 +609,14 @@ fn report_equivocation_invalid_equivocation_proof() {
 
 		// generate a key ownership proof at set id = 1
 		let key_owner_proof =
-			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
+			Historical::prove((sp_consensus_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
 
 		let set_id = Grandpa::current_set_id();
 
 		let assert_invalid_equivocation_proof = |equivocation_proof| {
 			assert_err!(
 				Grandpa::report_equivocation_unsigned(
-					Origin::none(),
+					RuntimeOrigin::none(),
 					Box::new(equivocation_proof),
 					key_owner_proof.clone(),
 				),
@@ -685,7 +684,7 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		);
 
 		let key_owner_proof =
-			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
+			Historical::prove((sp_consensus_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
 
 		let call = Call::report_equivocation_unsigned {
 			equivocation_proof: Box::new(equivocation_proof.clone()),
@@ -723,7 +722,7 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 
 		// we submit the report
 		Grandpa::report_equivocation_unsigned(
-			Origin::none(),
+			RuntimeOrigin::none(),
 			Box::new(equivocation_proof),
 			key_owner_proof,
 		)
@@ -782,6 +781,33 @@ fn on_new_session_doesnt_start_new_set_if_schedule_change_failed() {
 }
 
 #[test]
+fn cleans_up_old_set_id_session_mappings() {
+	new_test_ext(vec![(1, 1), (2, 1), (3, 1)]).execute_with(|| {
+		let max_set_id_session_entries = MaxSetIdSessionEntries::get();
+
+		start_era(max_set_id_session_entries);
+
+		// we should have a session id mapping for all the set ids from
+		// `max_set_id_session_entries` eras we have observed
+		for i in 1..=max_set_id_session_entries {
+			assert!(Grandpa::session_for_set(i as u64).is_some());
+		}
+
+		start_era(max_set_id_session_entries * 2);
+
+		// we should keep tracking the new mappings for new eras
+		for i in max_set_id_session_entries + 1..=max_set_id_session_entries * 2 {
+			assert!(Grandpa::session_for_set(i as u64).is_some());
+		}
+
+		// but the old ones should have been pruned by now
+		for i in 1..=max_set_id_session_entries {
+			assert!(Grandpa::session_for_set(i as u64).is_none());
+		}
+	});
+}
+
+#[test]
 fn always_schedules_a_change_on_new_session_when_stalled() {
 	new_test_ext(vec![(1, 1), (2, 1), (3, 1)]).execute_with(|| {
 		start_era(1);
@@ -823,7 +849,7 @@ fn report_equivocation_has_valid_weight() {
 		.map(<Test as Config>::WeightInfo::report_equivocation)
 		.collect::<Vec<_>>()
 		.windows(2)
-		.all(|w| w[0] < w[1]));
+		.all(|w| w[0].ref_time() < w[1].ref_time()));
 }
 
 #[test]
@@ -846,7 +872,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 
 		// create the key ownership proof.
 		let key_owner_proof =
-			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
+			Historical::prove((sp_consensus_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
 
 		// check the dispatch info for the call.
 		let info = Call::<Test>::report_equivocation_unsigned {
@@ -856,12 +882,12 @@ fn valid_equivocation_reports_dont_pay_fees() {
 		.get_dispatch_info();
 
 		// it should have non-zero weight and the fee has to be paid.
-		assert!(info.weight > 0);
+		assert!(info.weight.any_gt(Weight::zero()));
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// report the equivocation.
 		let post_info = Grandpa::report_equivocation_unsigned(
-			Origin::none(),
+			RuntimeOrigin::none(),
 			Box::new(equivocation_proof.clone()),
 			key_owner_proof.clone(),
 		)
@@ -875,7 +901,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 		// report the equivocation again which is invalid now since it is
 		// duplicate.
 		let post_info = Grandpa::report_equivocation_unsigned(
-			Origin::none(),
+			RuntimeOrigin::none(),
 			Box::new(equivocation_proof),
 			key_owner_proof,
 		)

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -32,6 +32,7 @@ pub(crate) use instance_trait::INHERENT_INSTANCE_NAME;
 use frame_support_procedural_tools::{
 	generate_crate_access, generate_hidden_includes, syn_ext as ext,
 };
+
 use quote::quote;
 
 /// All information contained in input of decl_storage
@@ -453,13 +454,13 @@ impl HasherKind {
 
 	fn into_metadata(&self) -> proc_macro2::TokenStream {
 		match self {
-			HasherKind::Blake2_256 => quote!(StorageHasher::Blake2_256),
-			HasherKind::Blake2_128 => quote!(StorageHasher::Blake2_128),
-			HasherKind::Blake2_128Concat => quote!(StorageHasher::Blake2_128Concat),
-			HasherKind::Twox256 => quote!(StorageHasher::Twox256),
-			HasherKind::Twox128 => quote!(StorageHasher::Twox128),
-			HasherKind::Twox64Concat => quote!(StorageHasher::Twox64Concat),
-			HasherKind::Identity => quote!(StorageHasher::Identity),
+			HasherKind::Blake2_256 => quote!(StorageHasherIR::Blake2_256),
+			HasherKind::Blake2_128 => quote!(StorageHasherIR::Blake2_128),
+			HasherKind::Blake2_128Concat => quote!(StorageHasherIR::Blake2_128Concat),
+			HasherKind::Twox256 => quote!(StorageHasherIR::Twox256),
+			HasherKind::Twox128 => quote!(StorageHasherIR::Twox128),
+			HasherKind::Twox64Concat => quote!(StorageHasherIR::Twox64Concat),
+			HasherKind::Identity => quote!(StorageHasherIR::Identity),
 		}
 	}
 }

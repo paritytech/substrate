@@ -1,0 +1,6 @@
+error: feature(test)
+              ^ expected one of `=`, `,`, `)` here
+  --> tests/construct_runtime_ui/unsupported_meta_structure.rs:10:3
+   |
+10 |         #[cfg(feature(test))]
+   |         ^

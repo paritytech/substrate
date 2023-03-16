@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,9 +16,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+//! `sc-network` utilities
+
 use futures::{stream::unfold, FutureExt, Stream, StreamExt};
 use futures_timer::Delay;
 use linked_hash_set::LinkedHashSet;
+
 use std::{hash::Hash, num::NonZeroUsize, time::Duration};
 
 /// Creates a stream that returns a new value every `duration`.

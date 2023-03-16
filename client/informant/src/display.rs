@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -20,7 +20,11 @@ use crate::OutputFormat;
 use ansi_term::Colour;
 use log::info;
 use sc_client_api::ClientInfo;
-use sc_network::{NetworkStatus, SyncState, WarpSyncPhase, WarpSyncProgress};
+use sc_network::NetworkStatus;
+use sc_network_common::sync::{
+	warp::{WarpSyncPhase, WarpSyncProgress},
+	SyncState, SyncStatus,
+};
 use sp_runtime::traits::{Block as BlockT, CheckedDiv, NumberFor, Saturating, Zero};
 use std::{fmt, time::Instant};
 
@@ -63,7 +67,12 @@ impl<B: BlockT> InformantDisplay<B> {
 	}
 
 	/// Displays the informant by calling `info!`.
-	pub fn display(&mut self, info: &ClientInfo<B>, net_status: NetworkStatus<B>) {
+	pub fn display(
+		&mut self,
+		info: &ClientInfo<B>,
+		net_status: NetworkStatus,
+		sync_status: SyncStatus<B>,
+	) {
 		let best_number = info.chain.best_number;
 		let best_hash = info.chain.best_hash;
 		let finalized_number = info.chain.finalized_number;
@@ -87,42 +96,42 @@ impl<B: BlockT> InformantDisplay<B> {
 			(diff_bytes_inbound, diff_bytes_outbound)
 		};
 
-		let (level, status, target) = match (
-			net_status.sync_state,
-			net_status.best_seen_block,
-			net_status.state_sync,
-			net_status.warp_sync,
-		) {
-			(
-				_,
-				_,
-				_,
-				Some(WarpSyncProgress { phase: WarpSyncPhase::DownloadingBlocks(n), .. }),
-			) => ("⏩", "Block history".into(), format!(", #{}", n)),
-			(_, _, _, Some(warp)) => (
-				"⏩",
-				"Warping".into(),
-				format!(
-					", {}, {:.2} Mib",
-					warp.phase,
-					(warp.total_bytes as f32) / (1024f32 * 1024f32)
+		let (level, status, target) =
+			match (sync_status.state, sync_status.state_sync, sync_status.warp_sync) {
+				(
+					_,
+					_,
+					Some(WarpSyncProgress { phase: WarpSyncPhase::DownloadingBlocks(n), .. }),
+				) => ("⏩", "Block history".into(), format!(", #{}", n)),
+				(
+					_,
+					_,
+					Some(WarpSyncProgress { phase: WarpSyncPhase::AwaitingTargetBlock, .. }),
+				) => ("⏩", "Waiting for pending target block".into(), "".into()),
+				(_, _, Some(warp)) => (
+					"⏩",
+					"Warping".into(),
+					format!(
+						", {}, {:.2} Mib",
+						warp.phase,
+						(warp.total_bytes as f32) / (1024f32 * 1024f32)
+					),
 				),
-			),
-			(_, _, Some(state), _) => (
-				"⚙️ ",
-				"Downloading state".into(),
-				format!(
-					", {}%, {:.2} Mib",
-					state.percentage,
-					(state.size as f32) / (1024f32 * 1024f32)
+				(_, Some(state), _) => (
+					"⚙️ ",
+					"Downloading state".into(),
+					format!(
+						", {}%, {:.2} Mib",
+						state.percentage,
+						(state.size as f32) / (1024f32 * 1024f32)
+					),
 				),
-			),
-			(SyncState::Idle, _, _, _) => ("💤", "Idle".into(), "".into()),
-			(SyncState::Downloading, None, _, _) =>
-				("⚙️ ", format!("Preparing{}", speed), "".into()),
-			(SyncState::Downloading, Some(n), None, _) =>
-				("⚙️ ", format!("Syncing{}", speed), format!(", target=#{}", n)),
-		};
+				(SyncState::Idle, _, _) => ("💤", "Idle".into(), "".into()),
+				(SyncState::Downloading { target }, _, _) =>
+					("⚙️ ", format!("Syncing{}", speed), format!(", target=#{target}")),
+				(SyncState::Importing { target }, _, _) =>
+					("⚙️ ", format!("Preparing{}", speed), format!(", target=#{target}")),
+			};
 
 		if self.format.enable_color {
 			info!(

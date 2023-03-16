@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,9 +27,10 @@ use crate::{
 use codec::{Decode, Encode, EncodeLike, FullCodec, FullEncode};
 use sp_core::storage::ChildInfo;
 use sp_runtime::generic::{Digest, DigestItem};
-use sp_std::{marker::PhantomData, prelude::*};
+use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData, prelude::*};
 
 pub use self::{
+	stream_iter::StorageStreamIter,
 	transactional::{
 		in_storage_layer, with_storage_layer, with_transaction, with_transaction_unchecked,
 	},
@@ -46,6 +47,8 @@ pub mod child;
 pub mod generator;
 pub mod hashed;
 pub mod migration;
+pub mod storage_noop_guard;
+mod stream_iter;
 pub mod transactional;
 pub mod types;
 pub mod unhashed;
@@ -110,6 +113,12 @@ pub trait StorageValue<T: FullCodec> {
 
 	/// Mutate the value if closure returns `Ok`
 	fn try_mutate<R, E, F: FnOnce(&mut Self::Query) -> Result<R, E>>(f: F) -> Result<R, E>;
+
+	/// Mutate the value. Deletes the item if mutated to a `None`.
+	fn mutate_exists<R, F: FnOnce(&mut Option<T>) -> R>(f: F) -> R;
+
+	/// Mutate the value if closure returns `Ok`. Deletes the item if mutated to a `None`.
+	fn try_mutate_exists<R, E, F: FnOnce(&mut Option<T>) -> Result<R, E>>(f: F) -> Result<R, E>;
 
 	/// Clear the storage value.
 	fn kill();
@@ -554,6 +563,12 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	where
 		KArg1: ?Sized + EncodeLike<K1>;
 
+	/// Does any value under the first key `k1` (explicitly) exist in storage?
+	/// Might have unexpected behaviour with empty keys, e.g. `[]`.
+	fn contains_prefix<KArg1>(k1: KArg1) -> bool
+	where
+		KArg1: EncodeLike<K1>;
+
 	/// Iterate over values that share the first key.
 	fn iter_prefix_values<KArg1>(k1: KArg1) -> PrefixIterator<V>
 	where
@@ -727,6 +742,12 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 		limit: u32,
 		maybe_cursor: Option<&[u8]>,
 	) -> sp_io::MultiRemovalResults
+	where
+		K: HasKeyPrefix<KP>;
+
+	/// Does any value under a `partial_key` prefix (explicitly) exist in storage?
+	/// Might have unexpected behaviour with empty keys, e.g. `[]`.
+	fn contains_prefix<KP>(partial_key: KP) -> bool
 	where
 		K: HasKeyPrefix<KP>;
 
@@ -1302,6 +1323,7 @@ mod private {
 	impl<T, S> Sealed for WeakBoundedVec<T, S> {}
 	impl<K, V, S> Sealed for bounded_btree_map::BoundedBTreeMap<K, V, S> {}
 	impl<T, S> Sealed for bounded_btree_set::BoundedBTreeSet<T, S> {}
+	impl<T: Encode> Sealed for BTreeSet<T> {}
 
 	macro_rules! impl_sealed_for_tuple {
 		($($elem:ident),+) => {
@@ -1333,6 +1355,9 @@ mod private {
 
 impl<T: Encode> StorageAppend<T> for Vec<T> {}
 impl<T: Encode> StorageDecodeLength for Vec<T> {}
+
+impl<T: Encode> StorageAppend<T> for BTreeSet<T> {}
+impl<T: Encode> StorageDecodeLength for BTreeSet<T> {}
 
 /// We abuse the fact that SCALE does not put any marker into the encoding, i.e. we only encode the
 /// internal vec and we can append to this vec. We have a test that ensures that if the `Digest`
@@ -1472,7 +1497,7 @@ pub fn storage_prefix(pallet_name: &[u8], storage_name: &[u8]) -> [u8; 32] {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::{assert_ok, hash::Identity, Twox128};
+	use crate::{assert_ok, hash::Identity, pallet_prelude::NMapKey, Twox128};
 	use bounded_vec::BoundedVec;
 	use frame_support::traits::ConstU32;
 	use generator::StorageValue as _;
@@ -1767,6 +1792,39 @@ mod test {
 	#[crate::storage_alias]
 	type FooDoubleMap =
 		StorageDoubleMap<Prefix, Twox128, u32, Twox128, u32, BoundedVec<u32, ConstU32<7>>>;
+	#[crate::storage_alias]
+	type FooTripleMap = StorageNMap<
+		Prefix,
+		(NMapKey<Twox128, u32>, NMapKey<Twox128, u32>, NMapKey<Twox128, u32>),
+		u64,
+	>;
+
+	#[test]
+	fn contains_prefix_works() {
+		TestExternalities::default().execute_with(|| {
+			// Test double maps
+			assert!(FooDoubleMap::iter_prefix_values(1).next().is_none());
+			assert_eq!(FooDoubleMap::contains_prefix(1), false);
+
+			assert_ok!(FooDoubleMap::try_append(1, 1, 4));
+			assert_ok!(FooDoubleMap::try_append(2, 1, 4));
+			assert!(FooDoubleMap::iter_prefix_values(1).next().is_some());
+			assert!(FooDoubleMap::contains_prefix(1));
+			FooDoubleMap::remove(1, 1);
+			assert_eq!(FooDoubleMap::contains_prefix(1), false);
+
+			// Test N Maps
+			assert!(FooTripleMap::iter_prefix_values((1,)).next().is_none());
+			assert_eq!(FooTripleMap::contains_prefix((1,)), false);
+
+			FooTripleMap::insert((1, 1, 1), 4);
+			FooTripleMap::insert((2, 1, 1), 4);
+			assert!(FooTripleMap::iter_prefix_values((1,)).next().is_some());
+			assert!(FooTripleMap::contains_prefix((1,)));
+			FooTripleMap::remove((1, 1, 1));
+			assert_eq!(FooTripleMap::contains_prefix((1,)), false);
+		});
+	}
 
 	#[test]
 	fn try_append_works() {
@@ -1829,6 +1887,24 @@ mod test {
 				FooDoubleMap::get(2, 1).unwrap(),
 				BoundedVec::<u32, ConstU32<7>>::try_from(vec![4, 5]).unwrap(),
 			);
+		});
+	}
+
+	#[crate::storage_alias]
+	type FooSet = StorageValue<Prefix, BTreeSet<u32>>;
+
+	#[test]
+	fn btree_set_append_and_decode_len_works() {
+		TestExternalities::default().execute_with(|| {
+			let btree = BTreeSet::from([1, 2, 3]);
+			FooSet::put(btree);
+
+			FooSet::append(4);
+			FooSet::append(5);
+			FooSet::append(6);
+			FooSet::append(7);
+
+			assert_eq!(FooSet::decode_len().unwrap(), 7);
 		});
 	}
 }

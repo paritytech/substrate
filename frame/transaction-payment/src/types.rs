@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,13 +21,15 @@ use codec::{Decode, Encode};
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 
+use scale_info::TypeInfo;
+
 use sp_runtime::traits::{AtLeast32BitUnsigned, Zero};
 use sp_std::prelude::*;
 
-use frame_support::weights::{DispatchClass, Weight};
+use frame_support::dispatch::DispatchClass;
 
 /// The base fee and adjusted weight and length fees constitute the _inclusion fee_.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+#[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 pub struct InclusionFee<Balance> {
@@ -63,7 +65,7 @@ impl<Balance: AtLeast32BitUnsigned + Copy> InclusionFee<Balance> {
 ///   - (Optional) `inclusion_fee`: Only the `Pays::Yes` transaction can have the inclusion fee.
 ///   - `tip`: If included in the transaction, the tip will be added on top. Only signed
 ///     transactions can have a tip.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+#[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 pub struct FeeDetails<Balance> {
@@ -91,12 +93,18 @@ impl<Balance: AtLeast32BitUnsigned + Copy> FeeDetails<Balance> {
 
 /// Information related to a dispatchable's class, weight, and fee that can be queried from the
 /// runtime.
-#[derive(Eq, PartialEq, Encode, Decode, Default)]
+#[derive(Eq, PartialEq, Encode, Decode, Default, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-#[cfg_attr(feature = "std", serde(bound(serialize = "Balance: std::fmt::Display")))]
-#[cfg_attr(feature = "std", serde(bound(deserialize = "Balance: std::str::FromStr")))]
-pub struct RuntimeDispatchInfo<Balance> {
+#[cfg_attr(
+	feature = "std",
+	serde(bound(serialize = "Balance: std::fmt::Display, Weight: Serialize"))
+)]
+#[cfg_attr(
+	feature = "std",
+	serde(bound(deserialize = "Balance: std::str::FromStr, Weight: Deserialize<'de>"))
+)]
+pub struct RuntimeDispatchInfo<Balance, Weight = frame_support::weights::Weight> {
 	/// Weight of this dispatch.
 	pub weight: Weight,
 	/// Class of this dispatch.
@@ -131,16 +139,18 @@ mod serde_balance {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use frame_support::weights::Weight;
 
 	#[test]
 	fn should_serialize_and_deserialize_properly_with_string() {
 		let info = RuntimeDispatchInfo {
-			weight: 5,
+			weight: Weight::from_parts(5, 0),
 			class: DispatchClass::Normal,
 			partial_fee: 1_000_000_u64,
 		};
 
-		let json_str = r#"{"weight":5,"class":"normal","partialFee":"1000000"}"#;
+		let json_str =
+			r#"{"weight":{"ref_time":5,"proof_size":0},"class":"normal","partialFee":"1000000"}"#;
 
 		assert_eq!(serde_json::to_string(&info).unwrap(), json_str);
 		assert_eq!(serde_json::from_str::<RuntimeDispatchInfo<u64>>(json_str).unwrap(), info);
@@ -152,12 +162,12 @@ mod tests {
 	#[test]
 	fn should_serialize_and_deserialize_properly_large_value() {
 		let info = RuntimeDispatchInfo {
-			weight: 5,
+			weight: Weight::from_parts(5, 0),
 			class: DispatchClass::Normal,
 			partial_fee: u128::max_value(),
 		};
 
-		let json_str = r#"{"weight":5,"class":"normal","partialFee":"340282366920938463463374607431768211455"}"#;
+		let json_str = r#"{"weight":{"ref_time":5,"proof_size":0},"class":"normal","partialFee":"340282366920938463463374607431768211455"}"#;
 
 		assert_eq!(serde_json::to_string(&info).unwrap(), json_str);
 		assert_eq!(serde_json::from_str::<RuntimeDispatchInfo<u128>>(json_str).unwrap(), info);

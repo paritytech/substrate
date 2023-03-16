@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,30 +20,40 @@
 use std::{
 	borrow::Cow,
 	fmt::{Debug, Display},
-	panic::UnwindSafe,
 };
 
 pub use sp_externalities::{Externalities, ExternalitiesExt};
+
+/// The context in which a call is done.
+///
+/// Depending on the context the executor may chooses different kind of heap sizes for the runtime
+/// instance.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Ord, PartialOrd)]
+pub enum CallContext {
+	/// The call is happening in some offchain context.
+	Offchain,
+	/// The call is happening in some on-chain context like building or importing a block.
+	Onchain,
+}
 
 /// Code execution engine.
 pub trait CodeExecutor: Sized + Send + Sync + ReadRuntimeVersion + Clone + 'static {
 	/// Externalities error type.
 	type Error: Display + Debug + Send + Sync + 'static;
 
-	/// Call a given method in the runtime. Returns a tuple of the result (either the output data
-	/// or an execution error) together with a `bool`, which is true if native execution was used.
-	fn call<
-		R: codec::Codec + PartialEq,
-		NC: FnOnce() -> Result<R, Box<dyn std::error::Error + Send + Sync>> + UnwindSafe,
-	>(
+	/// Call a given method in the runtime.
+	///
+	/// Returns a tuple of the result (either the output data or an execution error) together with a
+	/// `bool`, which is true if native execution was used.
+	fn call(
 		&self,
 		ext: &mut dyn Externalities,
 		runtime_code: &RuntimeCode,
 		method: &str,
 		data: &[u8],
 		use_native: bool,
-		native_call: Option<NC>,
-	) -> (Result<crate::NativeOrEncoded<R>, Self::Error>, bool);
+		context: CallContext,
+	) -> (Result<Vec<u8>, Self::Error>, bool);
 }
 
 /// Something that can fetch the runtime `:code`.
@@ -182,12 +192,6 @@ pub trait RuntimeSpawn: Send {
 
 	/// Join the result of previously created runtime instance invocation.
 	fn join(&self, handle: u64) -> Vec<u8>;
-}
-
-#[cfg(feature = "std")]
-sp_externalities::decl_extension! {
-	/// Extension that supports spawning extra runtime instances in externalities.
-	pub struct RuntimeSpawnExt(Box<dyn RuntimeSpawn>);
 }
 
 /// Something that can spawn tasks (blocking and non-blocking) with an assigned name

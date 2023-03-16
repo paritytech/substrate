@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,8 +17,10 @@
 
 //! Benchmarks for the MMR pallet.
 
+#![cfg(feature = "runtime-benchmarks")]
+
 use crate::*;
-use frame_benchmarking::benchmarks_instance_pallet;
+use frame_benchmarking::v1::benchmarks_instance_pallet;
 use frame_support::traits::OnInitialize;
 
 benchmarks_instance_pallet! {

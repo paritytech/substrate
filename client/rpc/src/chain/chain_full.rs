@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -26,13 +26,10 @@ use futures::{
 	future::{self, FutureExt},
 	stream::{self, Stream, StreamExt},
 };
-use jsonrpsee::PendingSubscription;
+use jsonrpsee::SubscriptionSink;
 use sc_client_api::{BlockBackend, BlockchainEvents};
 use sp_blockchain::HeaderBackend;
-use sp_runtime::{
-	generic::{BlockId, SignedBlock},
-	traits::Block as BlockT,
-};
+use sp_runtime::{generic::SignedBlock, traits::Block as BlockT};
 
 /// Blockchain API backend for full nodes. Reads all the data from local database.
 pub struct FullChain<Block: BlockT, Client> {
@@ -62,14 +59,14 @@ where
 	}
 
 	fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, Error> {
-		self.client.header(BlockId::Hash(self.unwrap_or_best(hash))).map_err(client_err)
+		self.client.header(self.unwrap_or_best(hash)).map_err(client_err)
 	}
 
 	fn block(&self, hash: Option<Block::Hash>) -> Result<Option<SignedBlock<Block>>, Error> {
-		self.client.block(&BlockId::Hash(self.unwrap_or_best(hash))).map_err(client_err)
+		self.client.block(self.unwrap_or_best(hash)).map_err(client_err)
 	}
 
-	fn subscribe_all_heads(&self, sink: PendingSubscription) {
+	fn subscribe_all_heads(&self, sink: SubscriptionSink) {
 		subscribe_headers(
 			&self.client,
 			&self.executor,
@@ -83,7 +80,7 @@ where
 		)
 	}
 
-	fn subscribe_new_heads(&self, sink: PendingSubscription) {
+	fn subscribe_new_heads(&self, sink: SubscriptionSink) {
 		subscribe_headers(
 			&self.client,
 			&self.executor,
@@ -98,7 +95,7 @@ where
 		)
 	}
 
-	fn subscribe_finalized_heads(&self, sink: PendingSubscription) {
+	fn subscribe_finalized_heads(&self, sink: SubscriptionSink) {
 		subscribe_headers(
 			&self.client,
 			&self.executor,
@@ -117,7 +114,7 @@ where
 fn subscribe_headers<Block, Client, F, G, S>(
 	client: &Arc<Client>,
 	executor: &SubscriptionTaskExecutor,
-	pending: PendingSubscription,
+	mut sink: SubscriptionSink,
 	best_block_hash: G,
 	stream: F,
 ) where
@@ -130,7 +127,7 @@ fn subscribe_headers<Block, Client, F, G, S>(
 {
 	// send current head right at the start.
 	let maybe_header = client
-		.header(BlockId::Hash(best_block_hash()))
+		.header(best_block_hash())
 		.map_err(client_err)
 		.and_then(|header| header.ok_or_else(|| Error::Other("Best header missing.".into())))
 		.map_err(|e| log::warn!("Best header error {:?}", e))
@@ -143,9 +140,7 @@ fn subscribe_headers<Block, Client, F, G, S>(
 	let stream = stream::iter(maybe_header).chain(stream());
 
 	let fut = async move {
-		if let Some(mut sink) = pending.accept() {
-			sink.pipe_from_stream(stream).await;
-		}
+		sink.pipe_from_stream(stream).await;
 	};
 
 	executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());

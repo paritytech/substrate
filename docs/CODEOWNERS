@@ -24,32 +24,46 @@
 /.gitlab-ci.yml @paritytech/ci
 
 # Sandboxing capability of Substrate Runtime
-/primitives/sr-sandbox/ @pepyakin
-/primitives/core/src/sandbox.rs @pepyakin
+/primitives/sandbox/ @pepyakin @koute
+
+# WASM executor, low-level client <-> WASM interface and other WASM-related code
+/client/executor/ @koute
+/client/allocator/ @koute
+/primitives/wasm-interface/ @koute
+/primitives/runtime-interface/ @koute
+/primitives/panic-handler/ @koute
+/utils/wasm-builder/ @koute
+
+# Systems-related bits and bobs on the client side
+/client/sysinfo/ @koute
+/client/tracing/ @koute
 
 # GRANDPA, BABE, consensus stuff
 /frame/babe/ @andresilva
 /frame/grandpa/ @andresilva
-/client/finality-grandpa/ @andresilva
+/client/consensus/grandpa/ @andresilva
 /client/consensus/babe/ @andresilva
 /client/consensus/slots/ @andresilva
 /client/consensus/pow/ @sorpaas
 /primitives/consensus/pow/ @sorpaas
 
-# BEEFY
+# BEEFY, MMR
 /client/beefy/ @acatangiu
 /frame/beefy/ @acatangiu
 /frame/beefy-mmr/ @acatangiu
+/frame/merkle-mountain-range/ @acatangiu
 /primitives/beefy/ @acatangiu
+/primitives/merkle-mountain-range/ @acatangiu
 
 # Contracts
 /frame/contracts/ @athei
 
 # NPoS and election
-/frame/staking/ @kianenigma
-/frame/elections/ @kianenigma
-/frame/elections-phragmen/ @kianenigma
-/primitives/npos-elections/ @kianenigma
+/frame/election-provider-support/ @paritytech/staking-core
+/frame/staking/ @paritytech/staking-core
+/frame/nomination-pools/ @paritytech/staking-core
+/frame/elections-phragmen/ @paritytech/staking-core
+/primitives/npos-elections/ @paritytech/staking-core
 
 # Fixed point arithmetic
 /primitives/sp-arithmetic/ @kianenigma

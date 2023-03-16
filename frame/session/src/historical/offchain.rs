@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -141,7 +141,7 @@ mod tests {
 	use super::*;
 	use crate::{
 		historical::{onchain, Pallet},
-		mock::{force_new_session, set_next_validators, Session, System, Test, NEXT_VALIDATORS},
+		mock::{force_new_session, set_next_validators, NextValidators, Session, System, Test},
 	};
 
 	use codec::Encode;
@@ -163,9 +163,12 @@ mod tests {
 			.build_storage::<Test>()
 			.expect("Failed to create test externalities.");
 
-		let keys: Vec<_> = NEXT_VALIDATORS.with(|l| {
-			l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect()
-		});
+		let keys: Vec<_> = NextValidators::get()
+			.iter()
+			.cloned()
+			.map(|i| (i, i, UintAuthorityId(i).into()))
+			.collect();
+
 		BasicExternalities::execute_with_storage(&mut t, || {
 			for (ref k, ..) in &keys {
 				frame_system::Pallet::<Test>::inc_providers(k);

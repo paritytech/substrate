@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -115,7 +115,7 @@ pub fn upgrade_db<Block: BlockT>(db_path: &Path, db_type: DatabaseType) -> Upgra
 /// 2) transactions column is added;
 fn migrate_1_to_2<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> UpgradeResult<()> {
 	let db_cfg = DatabaseConfig::with_columns(V1_NUM_COLUMNS);
-	let db = Database::open(&db_cfg, db_path)?;
+	let mut db = Database::open(&db_cfg, db_path)?;
 	db.add_column().map_err(Into::into)
 }
 
@@ -126,7 +126,10 @@ fn migrate_2_to_3<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> Upgr
 	let db = Database::open(&db_cfg, db_path)?;
 
 	// Get all the keys we need to update
-	let keys: Vec<_> = db.iter(columns::JUSTIFICATIONS).map(|entry| entry.0).collect();
+	let keys: Vec<_> = db
+		.iter(columns::JUSTIFICATIONS)
+		.map(|r| r.map(|e| e.0))
+		.collect::<Result<_, _>>()?;
 
 	// Read and update each entry
 	let mut transaction = db.transaction();
@@ -152,7 +155,7 @@ fn migrate_2_to_3<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> Upgr
 /// 2) BODY_INDEX column is added;
 fn migrate_3_to_4<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> UpgradeResult<()> {
 	let db_cfg = DatabaseConfig::with_columns(V3_NUM_COLUMNS);
-	let db = Database::open(&db_cfg, db_path)?;
+	let mut db = Database::open(&db_cfg, db_path)?;
 	db.add_column().map_err(Into::into)
 }
 
@@ -187,7 +190,7 @@ fn version_file_path(path: &Path) -> PathBuf {
 	file_path
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "rocksdb"))]
 mod tests {
 	use super::*;
 	use crate::{tests::Block, DatabaseSource};

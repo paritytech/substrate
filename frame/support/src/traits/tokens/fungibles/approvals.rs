@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,7 +24,7 @@ pub trait Inspect<AccountId>: super::Inspect<AccountId> {
 }
 
 pub trait Mutate<AccountId>: Inspect<AccountId> {
-	// Aprove a delegate account to spend an amount of tokens owned by an owner
+	// Approve a delegate account to spend an amount of tokens owned by an owner
 	fn approve(
 		asset: Self::AssetId,
 		owner: &AccountId,

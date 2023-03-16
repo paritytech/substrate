@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,15 +18,21 @@
 //! Miscellaneous additional datatypes.
 
 use crate::{AccountVote, Conviction, Vote, VoteThreshold};
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, Saturating, Zero},
 	RuntimeDebug,
 };
 
+/// A proposal index.
+pub type PropIndex = u32;
+
+/// A referendum index.
+pub type ReferendumIndex = u32;
+
 /// Info regarding an ongoing referendum.
-#[derive(Encode, Decode, Default, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, MaxEncodedLen, Decode, Default, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct Tally<Balance> {
 	/// The number of aye votes, expressed in terms of post-conviction lock-vote.
 	pub ayes: Balance,
@@ -37,7 +43,9 @@ pub struct Tally<Balance> {
 }
 
 /// Amount of votes and capital placed in delegation for an account.
-#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(
+	Encode, MaxEncodedLen, Decode, Default, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo,
+)]
 pub struct Delegations<Balance> {
 	/// The number of votes (this is post-conviction).
 	pub votes: Balance,
@@ -160,12 +168,12 @@ impl<
 }
 
 /// Info regarding an ongoing referendum.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub struct ReferendumStatus<BlockNumber, Hash, Balance> {
+#[derive(Encode, MaxEncodedLen, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+pub struct ReferendumStatus<BlockNumber, Proposal, Balance> {
 	/// When voting on this referendum will end.
 	pub end: BlockNumber,
-	/// The hash of the proposal being voted on.
-	pub proposal_hash: Hash,
+	/// The proposal being voted on.
+	pub proposal: Proposal,
 	/// The thresholding mechanism to determine whether it passed.
 	pub threshold: VoteThreshold,
 	/// The delay (in blocks) to wait after a successful referendum before deploying.
@@ -175,23 +183,23 @@ pub struct ReferendumStatus<BlockNumber, Hash, Balance> {
 }
 
 /// Info regarding a referendum, present or past.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub enum ReferendumInfo<BlockNumber, Hash, Balance> {
+#[derive(Encode, MaxEncodedLen, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+pub enum ReferendumInfo<BlockNumber, Proposal, Balance> {
 	/// Referendum is happening, the arg is the block number at which it will end.
-	Ongoing(ReferendumStatus<BlockNumber, Hash, Balance>),
+	Ongoing(ReferendumStatus<BlockNumber, Proposal, Balance>),
 	/// Referendum finished at `end`, and has been `approved` or rejected.
 	Finished { approved: bool, end: BlockNumber },
 }
 
-impl<BlockNumber, Hash, Balance: Default> ReferendumInfo<BlockNumber, Hash, Balance> {
+impl<BlockNumber, Proposal, Balance: Default> ReferendumInfo<BlockNumber, Proposal, Balance> {
 	/// Create a new instance.
 	pub fn new(
 		end: BlockNumber,
-		proposal_hash: Hash,
+		proposal: Proposal,
 		threshold: VoteThreshold,
 		delay: BlockNumber,
 	) -> Self {
-		let s = ReferendumStatus { end, proposal_hash, threshold, delay, tally: Tally::default() };
+		let s = ReferendumStatus { end, proposal, threshold, delay, tally: Tally::default() };
 		ReferendumInfo::Ongoing(s)
 	}
 }
@@ -203,4 +211,15 @@ pub enum UnvoteScope {
 	Any,
 	/// Permitted to do only the changes that do not need the owner's permission.
 	OnlyExpired,
+}
+
+/// Identifies an owner of a metadata.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub enum MetadataOwner {
+	/// External proposal.
+	External,
+	/// Public proposal of the index.
+	Proposal(PropIndex),
+	/// Referendum of the index.
+	Referendum(ReferendumIndex),
 }

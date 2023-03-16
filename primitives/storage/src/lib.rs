@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,6 +18,8 @@
 //! Primitive types for storage related stuff.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+
+use core::fmt::Display;
 
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
@@ -47,8 +49,9 @@ impl AsRef<[u8]> for StorageKey {
 }
 
 /// Storage key with read/write tracking information.
-#[derive(PartialEq, Eq, RuntimeDebug, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Hash, PartialOrd, Ord))]
+#[derive(
+	PartialEq, Eq, Ord, PartialOrd, sp_std::hash::Hash, RuntimeDebug, Clone, Encode, Decode,
+)]
 pub struct TrackedStorageKey {
 	pub key: Vec<u8>,
 	pub reads: u32,
@@ -197,6 +200,8 @@ pub mod well_known_keys {
 	pub const HEAP_PAGES: &[u8] = b":heappages";
 
 	/// Current extrinsic index (u32) is stored under this key.
+	///
+	/// Encodes to `0x3a65787472696e7369635f696e646578`.
 	pub const EXTRINSIC_INDEX: &[u8] = b":extrinsic_index";
 
 	/// Prefix of child storage keys.
@@ -268,6 +273,7 @@ impl ChildInfo {
 	/// Returns byte sequence (keyspace) that can be use by underlying db to isolate keys.
 	/// This is a unique id of the child trie. The collision resistance of this value
 	/// depends on the type of child info use. For `ChildInfo::Default` it is and need to be.
+	#[inline]
 	pub fn keyspace(&self) -> &[u8] {
 		match self {
 			ChildInfo::ParentKeyId(..) => self.storage_key(),
@@ -404,11 +410,21 @@ impl ChildTrieParentKeyId {
 /// V0 and V1 uses a same trie implementation, but V1 will write external value node in the trie for
 /// value with size at least `TRIE_VALUE_NODE_THRESHOLD`.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[cfg_attr(feature = "std", derive(Encode, Decode))]
 pub enum StateVersion {
 	/// Old state version, no value nodes.
 	V0 = 0,
 	/// New state version can use value nodes.
 	V1 = 1,
+}
+
+impl Display for StateVersion {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		match self {
+			StateVersion::V0 => f.write_str("0"),
+			StateVersion::V1 => f.write_str("1"),
+		}
+	}
 }
 
 impl Default for StateVersion {

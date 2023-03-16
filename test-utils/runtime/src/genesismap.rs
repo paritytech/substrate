@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,12 +17,13 @@
 
 //! Tool for creating the genesis block.
 
-use super::{system, wasm_binary_unwrap, AccountId, AuthorityId};
+use super::{system, wasm_binary_unwrap, AccountId, AuthorityId, Runtime};
 use codec::{Encode, Joiner, KeyedVec};
-use sc_service::client::genesis;
+use frame_support::traits::GenesisBuild;
+use sc_service::construct_genesis_block;
 use sp_core::{
 	map,
-	storage::{well_known_keys, Storage},
+	storage::{well_known_keys, StateVersion, Storage},
 };
 use sp_io::hashing::{blake2_256, twox_128};
 use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
@@ -80,10 +81,11 @@ impl GenesisConfig {
 		// Assimilate the system genesis config.
 		let mut storage =
 			Storage { top: map, children_default: self.extra_storage.children_default.clone() };
-		let config = system::GenesisConfig { authorities: self.authorities.clone() };
-		config
-			.assimilate_storage(&mut storage)
-			.expect("Adding `system::GensisConfig` to the genesis");
+		<system::GenesisConfig as GenesisBuild<Runtime>>::assimilate_storage(
+			&system::GenesisConfig { authorities: self.authorities.clone() },
+			&mut storage,
+		)
+		.expect("Adding `system::GensisConfig` to the genesis");
 
 		storage
 	}
@@ -104,7 +106,7 @@ pub fn insert_genesis_block(storage: &mut Storage) -> sp_core::hash::H256 {
 		storage.top.clone().into_iter().collect(),
 		sp_runtime::StateVersion::V1,
 	);
-	let block: crate::Block = genesis::construct_genesis_block(state_root);
+	let block: crate::Block = construct_genesis_block(state_root, StateVersion::V1);
 	let genesis_hash = block.header.hash();
 	storage.top.extend(additional_storage_with_genesis(&block));
 	genesis_hash

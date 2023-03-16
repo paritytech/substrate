@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -129,9 +129,9 @@ pub trait SubstrateCli: Sized {
 		let about = Self::description();
 		let app = app
 			.name(name)
-			.author(author.as_str())
-			.about(about.as_str())
-			.version(full_version.as_str())
+			.author(author)
+			.about(about)
+			.version(full_version)
 			.propagate_version(true)
 			.args_conflicts_with_subcommands(true)
 			.subcommand_negates_reqs(true);
@@ -153,9 +153,9 @@ pub trait SubstrateCli: Sized {
 	///
 	/// **NOTE:** This method WILL NOT exit when `--help` or `--version` (or short versions) are
 	/// used. It will return a [`clap::Error`], where the [`clap::Error::kind`] is a
-	/// [`clap::ErrorKind::DisplayHelp`] or [`clap::ErrorKind::DisplayVersion`] respectively.
-	/// You must call [`clap::Error::exit`] or perform a [`std::process::exit`].
-	fn try_from_iter<I>(iter: I) -> clap::Result<Self>
+	/// [`clap::error::ErrorKind::DisplayHelp`] or [`clap::error::ErrorKind::DisplayVersion`]
+	/// respectively. You must call [`clap::Error::exit`] or perform a [`std::process::exit`].
+	fn try_from_iter<I>(iter: I) -> clap::error::Result<Self>
 	where
 		Self: Parser + Sized,
 		I: IntoIterator,
@@ -169,11 +169,7 @@ pub trait SubstrateCli: Sized {
 		let name = Self::executable_name();
 		let author = Self::author();
 		let about = Self::description();
-		let app = app
-			.name(name)
-			.author(author.as_str())
-			.about(about.as_str())
-			.version(full_version.as_str());
+		let app = app.name(name).author(author).about(about).version(full_version);
 
 		let matches = app.try_get_matches_from(iter)?;
 
@@ -201,10 +197,15 @@ pub trait SubstrateCli: Sized {
 		command: &T,
 	) -> error::Result<Runner<Self>> {
 		let tokio_runtime = build_runtime()?;
+
+		// `capture` needs to be called in a tokio context.
+		// Also capture them as early as possible.
+		let signals = tokio_runtime.block_on(async { Signals::capture() })?;
+
 		let config = command.create_configuration(self, tokio_runtime.handle().clone())?;
 
 		command.init(&Self::support_url(), &Self::impl_version(), |_, _| {}, &config)?;
-		Runner::new(config, tokio_runtime)
+		Runner::new(config, tokio_runtime, signals)
 	}
 
 	/// Create a runner for the command provided in argument. The `logger_hook` can be used to setup
@@ -235,10 +236,15 @@ pub trait SubstrateCli: Sized {
 		F: FnOnce(&mut LoggerBuilder, &Configuration),
 	{
 		let tokio_runtime = build_runtime()?;
+
+		// `capture` needs to be called in a tokio context.
+		// Also capture them as early as possible.
+		let signals = tokio_runtime.block_on(async { Signals::capture() })?;
+
 		let config = command.create_configuration(self, tokio_runtime.handle().clone())?;
 
 		command.init(&Self::support_url(), &Self::impl_version(), logger_hook, &config)?;
-		Runner::new(config, tokio_runtime)
+		Runner::new(config, tokio_runtime, signals)
 	}
 	/// Native runtime version.
 	fn native_runtime_version(chain_spec: &Box<dyn ChainSpec>) -> &'static RuntimeVersion;

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -40,8 +40,6 @@ pub use serde;
 use serde::{Deserialize, Serialize};
 use sp_runtime_interface::pass_by::{PassByEnum, PassByInner};
 use sp_std::{ops::Deref, prelude::*};
-#[cfg(feature = "std")]
-use std::borrow::Cow;
 
 pub use sp_debug_derive::RuntimeDebug;
 
@@ -56,6 +54,7 @@ pub use hashing::{blake2_128, blake2_256, keccak_256, twox_128, twox_256, twox_6
 pub mod crypto;
 pub mod hexdisplay;
 
+pub mod defer;
 pub mod ecdsa;
 pub mod ed25519;
 pub mod hash;
@@ -81,6 +80,13 @@ pub use self::hasher::blake2::Blake2Hasher;
 pub use self::hasher::keccak::KeccakHasher;
 pub use hash_db::Hasher;
 
+pub use bounded_collections as bounded;
+#[cfg(feature = "std")]
+pub use bounded_collections::{bounded_btree_map, bounded_vec};
+pub use bounded_collections::{
+	parameter_types, ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128,
+	ConstU16, ConstU32, ConstU64, ConstU8, Get, GetDefault, TryCollect, TypedGet,
+};
 pub use sp_storage as storage;
 
 #[doc(hidden)]
@@ -165,7 +171,7 @@ impl sp_std::str::FromStr for Bytes {
 }
 
 /// Stores the encoded `RuntimeMetadata` for the native side as opaque type.
-#[derive(Encode, Decode, PartialEq)]
+#[derive(Encode, Decode, PartialEq, TypeInfo)]
 pub struct OpaqueMetadata(Vec<u8>);
 
 impl OpaqueMetadata {
@@ -204,85 +210,6 @@ impl OpaquePeerId {
 	/// Create new `OpaquePeerId`
 	pub fn new(vec: Vec<u8>) -> Self {
 		OpaquePeerId(vec)
-	}
-}
-
-/// Something that is either a native or an encoded value.
-#[cfg(feature = "std")]
-pub enum NativeOrEncoded<R> {
-	/// The native representation.
-	Native(R),
-	/// The encoded representation.
-	Encoded(Vec<u8>),
-}
-
-#[cfg(feature = "std")]
-impl<R> From<R> for NativeOrEncoded<R> {
-	fn from(val: R) -> Self {
-		Self::Native(val)
-	}
-}
-
-#[cfg(feature = "std")]
-impl<R: codec::Encode> sp_std::fmt::Debug for NativeOrEncoded<R> {
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		hexdisplay::HexDisplay::from(&self.as_encoded().as_ref()).fmt(f)
-	}
-}
-
-#[cfg(feature = "std")]
-impl<R: codec::Encode> NativeOrEncoded<R> {
-	/// Return the value as the encoded format.
-	pub fn as_encoded(&self) -> Cow<'_, [u8]> {
-		match self {
-			NativeOrEncoded::Encoded(e) => Cow::Borrowed(e.as_slice()),
-			NativeOrEncoded::Native(n) => Cow::Owned(n.encode()),
-		}
-	}
-
-	/// Return the value as the encoded format.
-	pub fn into_encoded(self) -> Vec<u8> {
-		match self {
-			NativeOrEncoded::Encoded(e) => e,
-			NativeOrEncoded::Native(n) => n.encode(),
-		}
-	}
-}
-
-#[cfg(feature = "std")]
-impl<R: PartialEq + codec::Decode> PartialEq for NativeOrEncoded<R> {
-	fn eq(&self, other: &Self) -> bool {
-		match (self, other) {
-			(NativeOrEncoded::Native(l), NativeOrEncoded::Native(r)) => l == r,
-			(NativeOrEncoded::Native(n), NativeOrEncoded::Encoded(e)) |
-			(NativeOrEncoded::Encoded(e), NativeOrEncoded::Native(n)) =>
-				Some(n) == codec::Decode::decode(&mut &e[..]).ok().as_ref(),
-			(NativeOrEncoded::Encoded(l), NativeOrEncoded::Encoded(r)) => l == r,
-		}
-	}
-}
-
-/// A value that is never in a native representation.
-/// This is type is useful in conjunction with `NativeOrEncoded`.
-#[cfg(feature = "std")]
-#[derive(PartialEq)]
-pub enum NeverNativeValue {}
-
-#[cfg(feature = "std")]
-impl codec::Encode for NeverNativeValue {
-	fn encode(&self) -> Vec<u8> {
-		// The enum is not constructable, so this function should never be callable!
-		unreachable!()
-	}
-}
-
-#[cfg(feature = "std")]
-impl codec::EncodeLike for NeverNativeValue {}
-
-#[cfg(feature = "std")]
-impl codec::Decode for NeverNativeValue {
-	fn decode<I: codec::Input>(_: &mut I) -> Result<Self, codec::Error> {
-		Err("`NeverNativeValue` should never be decoded".into())
 	}
 }
 
@@ -465,3 +392,49 @@ macro_rules! impl_maybe_marker {
 // The maximum possible allocation size was chosen rather arbitrary, 32 MiB should be enough for
 // everybody.
 pub const MAX_POSSIBLE_ALLOCATION: u32 = 33554432; // 2^25 bytes, 32 MiB
+
+/// Generates a macro for checking if a certain feature is enabled.
+///
+/// These feature checking macros can be used to conditionally enable/disable code in a dependent
+/// crate based on a feature in the crate where the macro is called.
+#[macro_export]
+// We need to skip formatting this macro because of this bug:
+// https://github.com/rust-lang/rustfmt/issues/5283
+#[rustfmt::skip]
+macro_rules! generate_feature_enabled_macro {
+	( $macro_name:ident, $feature_name:meta, $d:tt ) => {
+		/// Enable/disable the given code depending on
+		#[doc = concat!("`", stringify!($feature_name), "`")]
+		/// being enabled for the crate or not.
+		///
+		/// # Example
+		///
+		/// ```nocompile
+		/// // Will add the code depending on the feature being enabled or not.
+		#[doc = concat!(stringify!($macro_name), "!( println!(\"Hello\") )")]
+		/// ```
+		#[cfg($feature_name)]
+		#[macro_export]
+		macro_rules! $macro_name {
+			( $d ( $d input:tt )* ) => {
+				$d ( $d input )*
+			}
+		}
+
+		/// Enable/disable the given code depending on
+		#[doc = concat!("`", stringify!($feature_name), "`")]
+		/// being enabled for the crate or not.
+		///
+		/// # Example
+		///
+		/// ```nocompile
+		/// // Will add the code depending on the feature being enabled or not.
+		#[doc = concat!(stringify!($macro_name), "!( println!(\"Hello\") )")]
+		/// ```
+		#[cfg(not($feature_name))]
+		#[macro_export]
+		macro_rules! $macro_name {
+			( $d ( $d input:tt )* ) => {};
+		}
+	};
+}

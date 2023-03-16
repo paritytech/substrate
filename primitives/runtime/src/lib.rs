@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,10 +19,6 @@
 
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
-// to allow benchmarking
-#![cfg_attr(feature = "bench", feature(test))]
-#[cfg(feature = "bench")]
-extern crate test;
 
 #[doc(hidden)]
 pub use codec;
@@ -36,6 +32,8 @@ pub use sp_std;
 
 #[doc(hidden)]
 pub use paste;
+#[doc(hidden)]
+pub use sp_arithmetic::traits::Saturating;
 
 #[doc(hidden)]
 pub use sp_application_crypto as app_crypto;
@@ -55,7 +53,6 @@ use sp_std::prelude::*;
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
-pub mod bounded;
 pub mod curve;
 pub mod generic;
 pub mod legacy;
@@ -70,9 +67,6 @@ pub mod transaction_validity;
 
 pub use crate::runtime_string::*;
 
-// Re-export bounded types
-pub use bounded::{BoundedBTreeMap, BoundedBTreeSet, BoundedSlice, BoundedVec, WeakBoundedVec};
-
 // Re-export Multiaddress
 pub use multiaddress::MultiAddress;
 
@@ -82,9 +76,13 @@ pub use generic::{Digest, DigestItem};
 pub use sp_application_crypto::{BoundToRuntimeAppPublic, RuntimeAppPublic};
 /// Re-export this since it's part of the API of this crate.
 pub use sp_core::{
+	bounded::{BoundedBTreeMap, BoundedBTreeSet, BoundedSlice, BoundedVec, WeakBoundedVec},
 	crypto::{key_types, AccountId32, CryptoType, CryptoTypeId, KeyTypeId},
 	TypeId,
 };
+/// Re-export bounded_vec and bounded_btree_map macros only when std is enabled.
+#[cfg(feature = "std")]
+pub use sp_core::{bounded_btree_map, bounded_vec};
 
 /// Re-export `RuntimeDebug`, to avoid dependency clutter.
 pub use sp_core::RuntimeDebug;
@@ -95,9 +93,9 @@ pub use sp_arithmetic::biguint;
 pub use sp_arithmetic::helpers_128bit;
 /// Re-export top-level arithmetic stuff.
 pub use sp_arithmetic::{
-	traits::SaturatedConversion, FixedI128, FixedI64, FixedPointNumber, FixedPointOperand,
-	FixedU128, InnerOf, PerThing, PerU16, Perbill, Percent, Permill, Perquintill, Rational128,
-	UpperOf,
+	traits::SaturatedConversion, ArithmeticError, FixedI128, FixedI64, FixedPointNumber,
+	FixedPointOperand, FixedU128, InnerOf, PerThing, PerU16, Perbill, Percent, Permill,
+	Perquintill, Rational128, Rounding, UpperOf,
 };
 
 pub use either::Either;
@@ -149,6 +147,11 @@ impl Justifications {
 	/// exists.
 	pub fn get(&self, engine_id: ConsensusEngineId) -> Option<&EncodedJustification> {
 		self.iter().find(|j| j.0 == engine_id).map(|j| &j.1)
+	}
+
+	/// Remove the encoded justification for the given consensus engine, if it exists.
+	pub fn remove(&mut self, engine_id: ConsensusEngineId) {
+		self.0.retain(|j| j.0 != engine_id)
 	}
 
 	/// Return a copy of the encoded justification for the given consensus
@@ -231,7 +234,7 @@ impl BuildStorage for () {
 /// Consensus engine unique ID.
 pub type ConsensusEngineId = [u8; 4];
 
-/// Signature verify that can work with any known signature types..
+/// Signature verify that can work with any known signature types.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Eq, PartialEq, Clone, Encode, Decode, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub enum MultiSignature {
@@ -471,7 +474,7 @@ pub type DispatchResult = sp_std::result::Result<(), DispatchError>;
 pub type DispatchResultWithInfo<T> = sp_std::result::Result<T, DispatchErrorWithPostInfo<T>>;
 
 /// Reason why a pallet call failed.
-#[derive(Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
+#[derive(Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct ModuleError {
 	/// Module index, matching the metadata module index.
@@ -491,7 +494,7 @@ impl PartialEq for ModuleError {
 }
 
 /// Errors related to transactional storage layers.
-#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum TransactionalError {
 	/// Too many transactional layers have been spawned.
@@ -516,7 +519,7 @@ impl From<TransactionalError> for DispatchError {
 }
 
 /// Reason why a dispatch call failed.
-#[derive(Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo, PartialEq)]
+#[derive(Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo, PartialEq, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum DispatchError {
 	/// Some error occurred.
@@ -544,6 +547,12 @@ pub enum DispatchError {
 	/// The number of transactional layers has been reached, or we are not in a transactional
 	/// layer.
 	Transactional(TransactionalError),
+	/// Resources exhausted, e.g. attempt to read/write data which is too large to manipulate.
+	Exhausted,
+	/// The state is corrupt; this is generally not going to fix itself.
+	Corruption,
+	/// Some resource (e.g. a preimage) is unavailable right now. This might fix itself later.
+	Unavailable,
 }
 
 /// Result of a `Dispatchable` which contains the `DispatchResult` and additional information about
@@ -593,7 +602,7 @@ impl From<crate::traits::BadOrigin> for DispatchError {
 }
 
 /// Description of what went wrong when trying to complete an operation on a token.
-#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum TokenError {
 	/// Funds are unavailable.
@@ -632,28 +641,6 @@ impl From<TokenError> for DispatchError {
 	}
 }
 
-/// Arithmetic errors.
-#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub enum ArithmeticError {
-	/// Underflow.
-	Underflow,
-	/// Overflow.
-	Overflow,
-	/// Division by zero.
-	DivisionByZero,
-}
-
-impl From<ArithmeticError> for &'static str {
-	fn from(e: ArithmeticError) -> &'static str {
-		match e {
-			ArithmeticError::Underflow => "An underflow would occur",
-			ArithmeticError::Overflow => "An overflow would occur",
-			ArithmeticError::DivisionByZero => "Division by zero",
-		}
-	}
-}
-
 impl From<ArithmeticError> for DispatchError {
 	fn from(e: ArithmeticError) -> DispatchError {
 		Self::Arithmetic(e)
@@ -668,18 +655,21 @@ impl From<&'static str> for DispatchError {
 
 impl From<DispatchError> for &'static str {
 	fn from(err: DispatchError) -> &'static str {
+		use DispatchError::*;
 		match err {
-			DispatchError::Other(msg) => msg,
-			DispatchError::CannotLookup => "Cannot lookup",
-			DispatchError::BadOrigin => "Bad origin",
-			DispatchError::Module(ModuleError { message, .. }) =>
-				message.unwrap_or("Unknown module error"),
-			DispatchError::ConsumerRemaining => "Consumer remaining",
-			DispatchError::NoProviders => "No providers",
-			DispatchError::TooManyConsumers => "Too many consumers",
-			DispatchError::Token(e) => e.into(),
-			DispatchError::Arithmetic(e) => e.into(),
-			DispatchError::Transactional(e) => e.into(),
+			Other(msg) => msg,
+			CannotLookup => "Cannot lookup",
+			BadOrigin => "Bad origin",
+			Module(ModuleError { message, .. }) => message.unwrap_or("Unknown module error"),
+			ConsumerRemaining => "Consumer remaining",
+			NoProviders => "No providers",
+			TooManyConsumers => "Too many consumers",
+			Token(e) => e.into(),
+			Arithmetic(e) => e.into(),
+			Transactional(e) => e.into(),
+			Exhausted => "Resources exhausted",
+			Corruption => "State corrupt",
+			Unavailable => "Resource unavailable",
 		}
 	}
 }
@@ -695,33 +685,37 @@ where
 
 impl traits::Printable for DispatchError {
 	fn print(&self) {
+		use DispatchError::*;
 		"DispatchError".print();
 		match self {
-			Self::Other(err) => err.print(),
-			Self::CannotLookup => "Cannot lookup".print(),
-			Self::BadOrigin => "Bad origin".print(),
-			Self::Module(ModuleError { index, error, message }) => {
+			Other(err) => err.print(),
+			CannotLookup => "Cannot lookup".print(),
+			BadOrigin => "Bad origin".print(),
+			Module(ModuleError { index, error, message }) => {
 				index.print();
 				error.print();
 				if let Some(msg) = message {
 					msg.print();
 				}
 			},
-			Self::ConsumerRemaining => "Consumer remaining".print(),
-			Self::NoProviders => "No providers".print(),
-			Self::TooManyConsumers => "Too many consumers".print(),
-			Self::Token(e) => {
+			ConsumerRemaining => "Consumer remaining".print(),
+			NoProviders => "No providers".print(),
+			TooManyConsumers => "Too many consumers".print(),
+			Token(e) => {
 				"Token error: ".print();
 				<&'static str>::from(*e).print();
 			},
-			Self::Arithmetic(e) => {
+			Arithmetic(e) => {
 				"Arithmetic error: ".print();
 				<&'static str>::from(*e).print();
 			},
-			Self::Transactional(e) => {
+			Transactional(e) => {
 				"Transactional error: ".print();
 				<&'static str>::from(*e).print();
 			},
+			Exhausted => "Resources exhausted".print(),
+			Corruption => "State corrupt".print(),
+			Unavailable => "Resource unavailable".print(),
 		}
 	}
 }
@@ -820,7 +814,8 @@ pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(
 macro_rules! assert_eq_error_rate {
 	($x:expr, $y:expr, $error:expr $(,)?) => {
 		assert!(
-			($x) >= (($y) - ($error)) && ($x) <= (($y) + ($error)),
+			($x >= $crate::Saturating::saturating_sub($y, $error)) &&
+				($x <= $crate::Saturating::saturating_add($y, $error)),
 			"{:?} != {:?} (with error rate {:?})",
 			$x,
 			$y,
@@ -829,42 +824,19 @@ macro_rules! assert_eq_error_rate {
 	};
 }
 
-/// Build a bounded vec from the given literals.
-///
-/// The type of the outcome must be known.
-///
-/// Will not handle any errors and just panic if the given literals cannot fit in the corresponding
-/// bounded vec type. Thus, this is only suitable for testing and non-consensus code.
+/// Same as [`assert_eq_error_rate`], but intended to be used with floating point number, or
+/// generally those who do not have over/underflow potentials.
 #[macro_export]
 #[cfg(feature = "std")]
-macro_rules! bounded_vec {
-	($ ($values:expr),* $(,)?) => {
-		{
-			$crate::sp_std::vec![$($values),*].try_into().unwrap()
-		}
-	};
-	( $value:expr ; $repetition:expr ) => {
-		{
-			$crate::sp_std::vec![$value ; $repetition].try_into().unwrap()
-		}
-	}
-}
-
-/// Build a bounded btree-map from the given literals.
-///
-/// The type of the outcome must be known.
-///
-/// Will not handle any errors and just panic if the given literals cannot fit in the corresponding
-/// bounded vec type. Thus, this is only suitable for testing and non-consensus code.
-#[macro_export]
-#[cfg(feature = "std")]
-macro_rules! bounded_btree_map {
-	($ ( $key:expr => $value:expr ),* $(,)?) => {
-		{
-			$crate::traits::TryCollect::<$crate::BoundedBTreeMap<_, _, _>>::try_collect(
-				$crate::sp_std::vec![$(($key, $value)),*].into_iter()
-			).unwrap()
-		}
+macro_rules! assert_eq_error_rate_float {
+	($x:expr, $y:expr, $error:expr $(,)?) => {
+		assert!(
+			($x >= $y - $error) && ($x <= $y + $error),
+			"{:?} != {:?} (with error rate {:?})",
+			$x,
+			$y,
+			$error,
+		);
 	};
 }
 
@@ -877,13 +849,6 @@ impl OpaqueExtrinsic {
 	/// Convert an encoded extrinsic to an `OpaqueExtrinsic`.
 	pub fn from_bytes(mut bytes: &[u8]) -> Result<Self, codec::Error> {
 		Self::decode(&mut bytes)
-	}
-}
-
-#[cfg(feature = "std")]
-impl parity_util_mem::MallocSizeOf for OpaqueExtrinsic {
-	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
-		self.0.size_of(ops)
 	}
 }
 
@@ -1113,7 +1078,7 @@ mod tests {
 		ext.insert(b"c".to_vec(), vec![3u8; 33]);
 		ext.insert(b"d".to_vec(), vec![4u8; 33]);
 
-		let pre_root = ext.backend.root().clone();
+		let pre_root = *ext.backend.root();
 		let (_, proof) = ext.execute_and_prove(|| {
 			sp_io::storage::get(b"a");
 			sp_io::storage::get(b"b");

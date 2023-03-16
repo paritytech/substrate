@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +22,7 @@ use sp_runtime::generic;
 /// An unchecked extrinsic type to be used in tests.
 pub type MockUncheckedExtrinsic<T, Signature = (), Extra = ()> = generic::UncheckedExtrinsic<
 	<T as crate::Config>::AccountId,
-	<T as crate::Config>::Call,
+	<T as crate::Config>::RuntimeCall,
 	Signature,
 	Extra,
 >;

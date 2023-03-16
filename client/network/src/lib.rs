@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -212,7 +212,7 @@
 //! `sc-network` automatically tries to open a substream towards each node for which the legacy
 //! Substream substream is open. The handshake is then performed automatically.
 //!
-//! For example, the `sc-finality-grandpa` crate registers the `/paritytech/grandpa/1`
+//! For example, the `sc-consensus-grandpa` crate registers the `/paritytech/grandpa/1`
 //! notifications protocol.
 //!
 //! At the moment, for backwards-compatibility, notification protocols are tied to the legacy
@@ -248,40 +248,42 @@ mod behaviour;
 mod discovery;
 mod peer_info;
 mod protocol;
-mod request_responses;
-mod schema;
 mod service;
 mod transport;
-mod utils;
 
-pub mod bitswap;
 pub mod config;
 pub mod error;
+pub mod event;
 pub mod network_state;
-pub mod transactions;
+pub mod request_responses;
+pub mod types;
+pub mod utils;
 
+pub use event::{DhtEvent, Event};
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
-pub use protocol::{
-	event::{DhtEvent, Event, ObservedRole},
-	PeerInfo,
-};
-pub use sc_network_light::light_client_requests;
-pub use sc_network_sync::{
-	block_request_handler,
-	state::StateDownloadProgress,
-	state_request_handler,
-	warp::{WarpSyncPhase, WarpSyncProgress},
-	warp_request_handler, SyncState,
+pub use request_responses::{IfDisconnected, RequestFailure, RequestResponseConfig};
+pub use sc_network_common::{
+	role::ObservedRole,
+	sync::{
+		warp::{WarpSyncPhase, WarpSyncProgress},
+		ExtendedPeerInfo, StateDownloadProgress, SyncEventStream, SyncState, SyncStatusProvider,
+	},
 };
 pub use service::{
-	DecodingError, IfDisconnected, KademliaKey, Keypair, NetworkService, NetworkWorker,
-	NotificationSender, NotificationSenderReady, OutboundFailure, PublicKey, RequestFailure,
-	Signature, SigningError,
+	signature::Signature,
+	traits::{
+		KademliaKey, NetworkBlock, NetworkDHTProvider, NetworkEventStream, NetworkNotification,
+		NetworkPeers, NetworkRequest, NetworkSigner, NetworkStateInfo, NetworkStatus,
+		NetworkStatusProvider, NetworkSyncForkRequest, NotificationSender as NotificationSenderT,
+		NotificationSenderError, NotificationSenderReady,
+	},
+	DecodingError, Keypair, NetworkService, NetworkWorker, NotificationSender, OutboundFailure,
+	PublicKey,
 };
+pub use types::ProtocolName;
 
 pub use sc_peerset::ReputationChange;
-use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 /// The maximum allowed number of established connections per peer.
 ///
@@ -294,41 +296,3 @@ const MAX_CONNECTIONS_PER_PEER: usize = 2;
 
 /// The maximum number of concurrent established connections that were incoming.
 const MAX_CONNECTIONS_ESTABLISHED_INCOMING: u32 = 10_000;
-
-/// Minimum Requirements for a Hash within Networking
-pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static {}
-
-impl<T> ExHashT for T where T: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static
-{}
-
-/// Trait for providing information about the local network state
-pub trait NetworkStateInfo {
-	/// Returns the local external addresses.
-	fn external_addresses(&self) -> Vec<Multiaddr>;
-
-	/// Returns the local Peer ID.
-	fn local_peer_id(&self) -> PeerId;
-}
-
-/// Overview status of the network.
-#[derive(Clone)]
-pub struct NetworkStatus<B: BlockT> {
-	/// Current global sync state.
-	pub sync_state: SyncState,
-	/// Target sync block number.
-	pub best_seen_block: Option<NumberFor<B>>,
-	/// Number of peers participating in syncing.
-	pub num_sync_peers: u32,
-	/// Total number of connected peers
-	pub num_connected_peers: usize,
-	/// Total number of active peers.
-	pub num_active_peers: usize,
-	/// The total number of bytes received.
-	pub total_bytes_inbound: u64,
-	/// The total number of bytes sent.
-	pub total_bytes_outbound: u64,
-	/// State sync in progress.
-	pub state_sync: Option<StateDownloadProgress>,
-	/// Warp sync in progress.
-	pub warp_sync: Option<WarpSyncProgress<B>>,
-}

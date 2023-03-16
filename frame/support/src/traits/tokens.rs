@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,9 +23,13 @@ pub mod fungibles;
 pub mod imbalance;
 mod misc;
 pub mod nonfungible;
+pub mod nonfungible_v2;
 pub mod nonfungibles;
+pub mod nonfungibles_v2;
 pub use imbalance::Imbalance;
+pub mod pay;
 pub use misc::{
-	AssetId, Balance, BalanceConversion, BalanceStatus, DepositConsequence, ExistenceRequirement,
-	Locker, WithdrawConsequence, WithdrawReasons,
+	AssetId, Balance, BalanceConversion, BalanceStatus, ConvertRank, DepositConsequence,
+	ExistenceRequirement, GetSalary, Locker, WithdrawConsequence, WithdrawReasons,
 };
+pub use pay::{Pay, PayFromAccount, PaymentStatus};

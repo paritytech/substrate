@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -71,8 +71,8 @@ pub trait StateApi<Hash> {
 	fn storage_hash(&self, key: StorageKey, hash: Option<Hash>) -> RpcResult<Option<Hash>>;
 
 	/// Returns the size of a storage entry at a block's state.
-	#[method(name = "state_getStorageSize", aliases = ["state_getStorageSizeAt"], blocking)]
-	fn storage_size(&self, key: StorageKey, hash: Option<Hash>) -> RpcResult<Option<u64>>;
+	#[method(name = "state_getStorageSize", aliases = ["state_getStorageSizeAt"])]
+	async fn storage_size(&self, key: StorageKey, hash: Option<Hash>) -> RpcResult<Option<u64>>;
 
 	/// Returns the runtime metadata as an opaque blob.
 	#[method(name = "state_getMetadata", blocking)]
@@ -265,7 +265,7 @@ pub trait StateApi<Hash> {
 	/// [substrate storage][1], [transparent keys in substrate][2],
 	/// [querying substrate storage via rpc][3].
 	///
-	/// [1]: https://docs.substrate.io/v3/advanced/storage#storage-map-keys
+	/// [1]: https://docs.substrate.io/main-docs/fundamentals/state-transitions-and-storage/
 	/// [2]: https://www.shawntabrizi.com/substrate/transparent-keys-in-substrate/
 	/// [3]: https://www.shawntabrizi.com/substrate/querying-substrate-storage-via-rpc/
 	///

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -69,8 +69,8 @@ pub enum Error {
 	#[error("Key storage issue encountered")]
 	KeyStorage(#[from] sc_keystore::Error),
 
-	#[error("Invalid hexadecimal string data")]
-	HexDataConversion(#[from] hex::FromHexError),
+	#[error("Invalid hexadecimal string data, {0:?}")]
+	HexDataConversion(array_bytes::Error),
 
 	/// Application specific error chain sequence forwarder.
 	#[error(transparent)]
@@ -95,5 +95,11 @@ impl From<String> for Error {
 impl From<crypto::PublicError> for Error {
 	fn from(e: crypto::PublicError) -> Error {
 		Error::InvalidUri(e)
+	}
+}
+
+impl From<array_bytes::Error> for Error {
+	fn from(e: array_bytes::Error) -> Error {
+		Error::HexDataConversion(e)
 	}
 }

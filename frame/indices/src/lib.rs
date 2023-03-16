@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -36,6 +36,7 @@ pub use weights::WeightInfo;
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 pub use pallet::*;
 
@@ -67,14 +68,13 @@ pub mod pallet {
 		type Deposit: Get<BalanceOf<Self>>;
 
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::call]
@@ -89,14 +89,9 @@ pub mod pallet {
 		///
 		/// Emits `IndexAssigned` if successful.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`.
-		/// - One storage mutation (codec `O(1)`).
-		/// - One reserve operation.
-		/// - One event.
-		/// -------------------
-		/// - DB Weight: 1 Read/Write (Accounts)
-		/// # </weight>
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::claim())]
 		pub fn claim(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -120,23 +115,17 @@ pub mod pallet {
 		///
 		/// Emits `IndexAssigned` if successful.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`.
-		/// - One storage mutation (codec `O(1)`).
-		/// - One transfer operation.
-		/// - One event.
-		/// -------------------
-		/// - DB Weight:
-		///    - Reads: Indices Accounts, System Account (recipient)
-		///    - Writes: Indices Accounts, System Account (recipient)
-		/// # </weight>
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::transfer())]
 		pub fn transfer(
 			origin: OriginFor<T>,
-			new: T::AccountId,
+			new: AccountIdLookupOf<T>,
 			index: T::AccountIndex,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let new = T::Lookup::lookup(new)?;
 			ensure!(who != new, Error::<T>::NotTransfer);
 
 			Accounts::<T>::try_mutate(index, |maybe_value| -> DispatchResult {
@@ -161,14 +150,9 @@ pub mod pallet {
 		///
 		/// Emits `IndexFreed` if successful.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`.
-		/// - One storage mutation (codec `O(1)`).
-		/// - One reserve operation.
-		/// - One event.
-		/// -------------------
-		/// - DB Weight: 1 Read/Write (Accounts)
-		/// # </weight>
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::free())]
 		pub fn free(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -195,24 +179,18 @@ pub mod pallet {
 		///
 		/// Emits `IndexAssigned` if successful.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`.
-		/// - One storage mutation (codec `O(1)`).
-		/// - Up to one reserve operation.
-		/// - One event.
-		/// -------------------
-		/// - DB Weight:
-		///    - Reads: Indices Accounts, System Account (original owner)
-		///    - Writes: Indices Accounts, System Account (original owner)
-		/// # </weight>
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::force_transfer())]
 		pub fn force_transfer(
 			origin: OriginFor<T>,
-			new: T::AccountId,
+			new: AccountIdLookupOf<T>,
 			index: T::AccountIndex,
 			freeze: bool,
 		) -> DispatchResult {
 			ensure_root(origin)?;
+			let new = T::Lookup::lookup(new)?;
 
 			Accounts::<T>::mutate(index, |maybe_value| {
 				if let Some((account, amount, _)) = maybe_value.take() {
@@ -234,14 +212,9 @@ pub mod pallet {
 		///
 		/// Emits `IndexFrozen` if successful.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`.
-		/// - One storage mutation (codec `O(1)`).
-		/// - Up to one slash operation.
-		/// - One event.
-		/// -------------------
-		/// - DB Weight: 1 Read/Write (Accounts)
-		/// # </weight>
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::freeze())]
 		pub fn freeze(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;

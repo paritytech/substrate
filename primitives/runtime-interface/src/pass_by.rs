@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -248,12 +248,12 @@ impl<T: codec::Codec> PassByImpl<T> for Codec<T> {
 		let len = len as usize;
 
 		let encoded = if len == 0 {
-			Vec::new()
+			bytes::Bytes::new()
 		} else {
-			unsafe { Vec::from_raw_parts(ptr as *mut u8, len, len) }
+			bytes::Bytes::from(unsafe { Vec::from_raw_parts(ptr as *mut u8, len, len) })
 		};
 
-		T::decode(&mut &encoded[..]).expect("Host to wasm values are encoded correctly; qed")
+		codec::decode_from_bytes(encoded).expect("Host to wasm values are encoded correctly; qed")
 	}
 }
 

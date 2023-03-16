@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,6 +17,7 @@
 
 //! Migrate the reference counting state.
 
+use super::LOG_TARGET;
 use crate::{Config, Pallet};
 use codec::{Decode, Encode, FullCodec};
 use frame_support::{
@@ -75,13 +76,13 @@ pub fn migrate_from_single_u8_to_triple_ref_count<V: V2ToV3, T: Config>() -> Wei
 		Some(AccountInfo { nonce, consumers: rc as RefCount, providers: 1, sufficients: 0, data })
 	});
 	log::info!(
-		target: "runtime::system",
+		target: LOG_TARGET,
 		"Applied migration from single u8 to triple reference counting to {:?} elements.",
 		translated
 	);
 	<UpgradedToU32RefCount<T>>::put(true);
 	<UpgradedToTripleRefCount<T>>::put(true);
-	Weight::max_value()
+	Weight::MAX
 }
 
 /// Migrate from unique `u32` reference counting to triple `u32` reference counting.
@@ -94,12 +95,12 @@ pub fn migrate_from_single_to_triple_ref_count<V: V2ToV3, T: Config>() -> Weight
 		},
 	);
 	log::info!(
-		target: "runtime::system",
+		target: LOG_TARGET,
 		"Applied migration from single to triple reference counting to {:?} elements.",
 		translated
 	);
 	<UpgradedToTripleRefCount<T>>::put(true);
-	Weight::max_value()
+	Weight::MAX
 }
 
 /// Migrate from dual `u32` reference counting to triple `u32` reference counting.
@@ -112,10 +113,10 @@ pub fn migrate_from_dual_to_triple_ref_count<V: V2ToV3, T: Config>() -> Weight {
 		},
 	);
 	log::info!(
-		target: "runtime::system",
+		target: LOG_TARGET,
 		"Applied migration from dual to triple reference counting to {:?} elements.",
 		translated
 	);
 	<UpgradedToTripleRefCount<T>>::put(true);
-	Weight::max_value()
+	Weight::MAX
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@ use sp_runtime::{
 };
 use std::{any::Any, borrow::Cow, collections::HashMap, sync::Arc};
 
-use sp_consensus::{BlockOrigin, CacheKeyId, Error};
+use sp_consensus::{BlockOrigin, Error};
 
 /// Block import result.
 #[derive(Debug, PartialEq, Eq)]
@@ -151,6 +151,18 @@ pub enum StateAction<Block: BlockT, Transaction> {
 	ExecuteIfPossible,
 	/// Don't execute or import state.
 	Skip,
+}
+
+impl<Block: BlockT, Transaction> StateAction<Block, Transaction> {
+	/// Check if execution checks that require runtime calls should be skipped.
+	pub fn skip_execution_checks(&self) -> bool {
+		match self {
+			StateAction::ApplyChanges(_) |
+			StateAction::Execute |
+			StateAction::ExecuteIfPossible => false,
+			StateAction::Skip => true,
+		}
+	}
 }
 
 /// Data required to import a Block.
@@ -282,18 +294,23 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 		}
 	}
 
-	/// Take intermediate by given key, and remove it from the processing list.
-	pub fn take_intermediate<T: 'static>(&mut self, key: &[u8]) -> Result<Box<T>, Error> {
+	/// Insert intermediate by given key.
+	pub fn insert_intermediate<T: 'static + Send>(&mut self, key: &'static [u8], value: T) {
+		self.intermediates.insert(Cow::from(key), Box::new(value));
+	}
+
+	/// Remove and return intermediate by given key.
+	pub fn remove_intermediate<T: 'static>(&mut self, key: &[u8]) -> Result<T, Error> {
 		let (k, v) = self.intermediates.remove_entry(key).ok_or(Error::NoIntermediate)?;
 
-		v.downcast::<T>().map_err(|v| {
+		v.downcast::<T>().map(|v| *v).map_err(|v| {
 			self.intermediates.insert(k, v);
 			Error::InvalidIntermediate
 		})
 	}
 
 	/// Get a reference to a given intermediate.
-	pub fn intermediate<T: 'static>(&self, key: &[u8]) -> Result<&T, Error> {
+	pub fn get_intermediate<T: 'static>(&self, key: &[u8]) -> Result<&T, Error> {
 		self.intermediates
 			.get(key)
 			.ok_or(Error::NoIntermediate)?
@@ -302,7 +319,7 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 	}
 
 	/// Get a mutable reference to a given intermediate.
-	pub fn intermediate_mut<T: 'static>(&mut self, key: &[u8]) -> Result<&mut T, Error> {
+	pub fn get_intermediate_mut<T: 'static>(&mut self, key: &[u8]) -> Result<&mut T, Error> {
 		self.intermediates
 			.get_mut(key)
 			.ok_or(Error::NoIntermediate)?
@@ -331,12 +348,9 @@ pub trait BlockImport<B: BlockT> {
 	) -> Result<ImportResult, Self::Error>;
 
 	/// Import a block.
-	///
-	/// Cached data can be accessed through the blockchain cache.
 	async fn import_block(
 		&mut self,
 		block: BlockImportParams<B, Self::Transaction>,
-		cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error>;
 }
 
@@ -357,14 +371,11 @@ where
 	}
 
 	/// Import a block.
-	///
-	/// Cached data can be accessed through the blockchain cache.
 	async fn import_block(
 		&mut self,
 		block: BlockImportParams<B, Transaction>,
-		cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		(**self).import_block(block, cache).await
+		(**self).import_block(block).await
 	}
 }
 
@@ -388,9 +399,8 @@ where
 	async fn import_block(
 		&mut self,
 		block: BlockImportParams<B, Transaction>,
-		cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		(&**self).import_block(block, cache).await
+		(&**self).import_block(block).await
 	}
 }
 
@@ -433,10 +443,10 @@ impl<B: BlockT> JustificationSyncLink<B> for () {
 
 impl<B: BlockT, L: JustificationSyncLink<B>> JustificationSyncLink<B> for Arc<L> {
 	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
-		L::request_justification(&*self, hash, number);
+		L::request_justification(self, hash, number);
 	}
 
 	fn clear_justification_requests(&self) {
-		L::clear_justification_requests(&*self);
+		L::clear_justification_requests(self);
 	}
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,15 +28,19 @@ use scale_info::TypeInfo;
 use sp_std::{marker::PhantomData, prelude::*};
 
 use sp_application_crypto::{ecdsa, ed25519, sr25519, RuntimeAppPublic};
-use sp_core::{offchain::KeyTypeId, OpaqueMetadata, RuntimeDebug};
-use sp_trie::{trie_types::TrieDB, PrefixedMemoryDB, StorageProof};
+use sp_core::{OpaqueMetadata, RuntimeDebug};
+use sp_trie::{
+	trie_types::{TrieDBBuilder, TrieDBMutBuilderV1},
+	PrefixedMemoryDB, StorageProof,
+};
 use trie_db::{Trie, TrieMut};
 
 use cfg_if::cfg_if;
 use frame_support::{
+	dispatch::RawOrigin,
 	parameter_types,
-	traits::{ConstU32, ConstU64, CrateVersion, KeyOwnerProofSystem},
-	weights::RuntimeDbWeight,
+	traits::{CallerTrait, ConstU32, ConstU64, CrateVersion},
+	weights::{RuntimeDbWeight, Weight},
 };
 use frame_system::limits::{BlockLength, BlockWeights};
 use sp_api::{decl_runtime_apis, impl_runtime_apis};
@@ -59,8 +63,6 @@ use sp_runtime::{
 #[cfg(any(feature = "std", test))]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
-// bench on latest state.
-use sp_trie::trie_types::TrieDBMutV1 as TrieDBMut;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub use sp_consensus_babe::{AllowedSlots, AuthorityId, Slot};
@@ -118,7 +120,7 @@ pub fn native_version() -> NativeVersion {
 }
 
 /// Calls in transactions.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct Transfer {
 	pub from: AccountId,
 	pub to: AccountId,
@@ -149,7 +151,7 @@ impl Transfer {
 }
 
 /// Extrinsic for test-runtime.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub enum Extrinsic {
 	AuthoritiesChange(Vec<AuthorityId>),
 	Transfer {
@@ -163,8 +165,6 @@ pub enum Extrinsic {
 	OffchainIndexClear(Vec<u8>),
 	Store(Vec<u8>),
 }
-
-parity_util_mem::malloc_size_of_is_0!(Extrinsic); // non-opaque extrinsic does not need this
 
 #[cfg(feature = "std")]
 impl serde::Serialize for Extrinsic {
@@ -232,12 +232,15 @@ impl ExtrinsicT for Extrinsic {
 }
 
 impl sp_runtime::traits::Dispatchable for Extrinsic {
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Config = ();
 	type Info = ();
 	type PostInfo = ();
-	fn dispatch(self, _origin: Self::Origin) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
-		panic!("This implemention should not be used for actual dispatch.");
+	fn dispatch(
+		self,
+		_origin: Self::RuntimeOrigin,
+	) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
+		panic!("This implementation should not be used for actual dispatch.");
 	}
 }
 
@@ -294,7 +297,7 @@ pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
 }
 
 /// A type that can not be decoded.
-#[derive(PartialEq)]
+#[derive(PartialEq, TypeInfo)]
 pub struct DecodeFails<B: BlockT> {
 	_phantom: PhantomData<B>,
 }
@@ -373,6 +376,8 @@ cfg_if! {
 				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32);
 				/// Traces log "Hey I'm runtime."
 				fn do_trace_log();
+				/// Verify the given signature, public & message bundle.
+				fn verify_ed25519(sig: ed25519::Signature, public: ed25519::Public, message: Vec<u8>) -> bool;
 			}
 		}
 	} else {
@@ -423,6 +428,8 @@ cfg_if! {
 				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32);
 				/// Traces log "Hey I'm runtime."
 				fn do_trace_log();
+				/// Verify the given signature, public & message bundle.
+				fn verify_ed25519(sig: ed25519::Signature, public: ed25519::Public, message: Vec<u8>) -> bool;
 			}
 		}
 	}
@@ -430,7 +437,6 @@ cfg_if! {
 
 #[derive(Clone, Eq, PartialEq, TypeInfo)]
 pub struct Runtime;
-
 impl GetNodeBlockType for Runtime {
 	type NodeBlock = Block;
 }
@@ -440,22 +446,33 @@ impl GetRuntimeBlockType for Runtime {
 }
 
 #[derive(Clone, RuntimeDebug, Encode, Decode, PartialEq, Eq, TypeInfo, MaxEncodedLen)]
-pub struct Origin;
+pub struct RuntimeOrigin;
 
-impl From<frame_system::Origin<Runtime>> for Origin {
-	fn from(_o: frame_system::Origin<Runtime>) -> Self {
-		unimplemented!("Not required in tests!")
-	}
-}
-impl From<Origin> for Result<frame_system::Origin<Runtime>, Origin> {
-	fn from(_origin: Origin) -> Result<frame_system::Origin<Runtime>, Origin> {
+impl From<RawOrigin<<Runtime as frame_system::Config>::AccountId>> for RuntimeOrigin {
+	fn from(_: RawOrigin<<Runtime as frame_system::Config>::AccountId>) -> Self {
 		unimplemented!("Not required in tests!")
 	}
 }
 
-impl frame_support::traits::OriginTrait for Origin {
-	type Call = <Runtime as frame_system::Config>::Call;
-	type PalletsOrigin = Origin;
+impl CallerTrait<<Runtime as frame_system::Config>::AccountId> for RuntimeOrigin {
+	fn into_system(self) -> Option<RawOrigin<<Runtime as frame_system::Config>::AccountId>> {
+		unimplemented!("Not required in tests!")
+	}
+
+	fn as_system_ref(&self) -> Option<&RawOrigin<<Runtime as frame_system::Config>::AccountId>> {
+		unimplemented!("Not required in tests!")
+	}
+}
+
+impl From<RuntimeOrigin> for Result<frame_system::Origin<Runtime>, RuntimeOrigin> {
+	fn from(_origin: RuntimeOrigin) -> Result<frame_system::Origin<Runtime>, RuntimeOrigin> {
+		unimplemented!("Not required in tests!")
+	}
+}
+
+impl frame_support::traits::OriginTrait for RuntimeOrigin {
+	type Call = <Runtime as frame_system::Config>::RuntimeCall;
+	type PalletsOrigin = RuntimeOrigin;
 	type AccountId = <Runtime as frame_system::Config>::AccountId;
 
 	fn add_filter(&mut self, _filter: impl Fn(&Self::Call) -> bool + 'static) {
@@ -478,6 +495,10 @@ impl frame_support::traits::OriginTrait for Origin {
 		unimplemented!("Not required in tests!")
 	}
 
+	fn into_caller(self) -> Self::PalletsOrigin {
+		unimplemented!("Not required in tests!")
+	}
+
 	fn try_with_caller<R>(
 		self,
 		_f: impl FnOnce(Self::PalletsOrigin) -> Result<R, Self::PalletsOrigin>,
@@ -497,12 +518,15 @@ impl frame_support::traits::OriginTrait for Origin {
 	fn as_signed(self) -> Option<Self::AccountId> {
 		unimplemented!("Not required in tests!")
 	}
+	fn as_system_ref(&self) -> Option<&RawOrigin<Self::AccountId>> {
+		unimplemented!("Not required in tests!")
+	}
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
-pub struct Event;
+pub struct RuntimeEvent;
 
-impl From<frame_system::Event<Runtime>> for Event {
+impl From<frame_system::Event<Runtime>> for RuntimeEvent {
 	fn from(_evt: frame_system::Event<Runtime>) -> Self {
 		unimplemented!("Not required in tests!")
 	}
@@ -576,15 +600,21 @@ parameter_types! {
 	pub RuntimeBlockLength: BlockLength =
 		BlockLength::max(4 * 1024 * 1024);
 	pub RuntimeBlockWeights: BlockWeights =
-		BlockWeights::with_sensible_defaults(4 * 1024 * 1024, Perbill::from_percent(75));
+		BlockWeights::with_sensible_defaults(Weight::from_parts(4 * 1024 * 1024, 0), Perbill::from_percent(75));
 }
 
-impl frame_system::Config for Runtime {
+impl From<frame_system::Call<Runtime>> for Extrinsic {
+	fn from(_: frame_system::Call<Runtime>) -> Self {
+		unimplemented!("Not required in tests!")
+	}
+}
+
+impl frame_system::pallet::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
-	type Origin = Origin;
-	type Call = Extrinsic;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = Extrinsic;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -592,7 +622,7 @@ impl frame_system::Config for Runtime {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<2400>;
 	type DbWeight = ();
 	type Version = ();
@@ -605,6 +635,8 @@ impl frame_system::Config for Runtime {
 	type OnSetCode = ();
 	type MaxConsumers = ConstU32<16>;
 }
+
+impl system::Config for Runtime {}
 
 impl pallet_timestamp::Config for Runtime {
 	/// A timestamp: milliseconds since the unix epoch.
@@ -626,21 +658,10 @@ impl pallet_babe::Config for Runtime {
 	// pallet_babe::SameAuthoritiesForever.
 	type EpochChangeTrigger = pallet_babe::ExternalTrigger;
 	type DisabledValidators = ();
-
-	type KeyOwnerProofSystem = ();
-
-	type KeyOwnerProof =
-		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, AuthorityId)>>::Proof;
-
-	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
-		KeyTypeId,
-		AuthorityId,
-	)>>::IdentificationTuple;
-
-	type HandleEquivocation = ();
 	type WeightInfo = ();
-
 	type MaxAuthorities = ConstU32<10>;
+	type KeyOwnerProof = sp_core::Void;
+	type EquivocationReportSystem = ();
 }
 
 /// Adds one to the given input and returns the final result.
@@ -663,25 +684,19 @@ fn code_using_trie() -> u64 {
 
 	let mut mdb = PrefixedMemoryDB::default();
 	let mut root = sp_std::default::Default::default();
-	let _ = {
-		let mut t = TrieDBMut::<Hashing>::new(&mut mdb, &mut root);
+	{
+		let mut t = TrieDBMutBuilderV1::<Hashing>::new(&mut mdb, &mut root).build();
 		for (key, value) in &pairs {
 			if t.insert(key, value).is_err() {
 				return 101
 			}
 		}
-		t
-	};
-
-	if let Ok(trie) = TrieDB::<Hashing>::new(&mdb, &root) {
-		if let Ok(iter) = trie.iter() {
-			iter.flatten().count() as u64
-		} else {
-			102
-		}
-	} else {
-		103
 	}
+
+	let trie = TrieDBBuilder::<Hashing>::new(&mdb, &root).build();
+	let res = if let Ok(iter) = trie.iter() { iter.flatten().count() as u64 } else { 102 };
+
+	res
 }
 
 impl_opaque_keys! {
@@ -712,6 +727,14 @@ cfg_if! {
 			impl sp_api::Metadata<Block> for Runtime {
 				fn metadata() -> OpaqueMetadata {
 					unimplemented!()
+				}
+
+				fn metadata_at_version(_version: u32) -> Option<OpaqueMetadata> {
+						unimplemented!()
+				}
+
+				fn metadata_versions() -> sp_std::vec::Vec<u32> {
+						unimplemented!()
 				}
 			}
 
@@ -838,6 +861,10 @@ cfg_if! {
 				fn do_trace_log() {
 					log::trace!("Hey I'm runtime");
 				}
+
+				fn verify_ed25519(sig: ed25519::Signature, public: ed25519::Public, message: Vec<u8>) -> bool {
+					sp_io::crypto::ed25519_verify(&sig, &message, &public)
+				}
 			}
 
 			impl sp_consensus_aura::AuraApi<Block, AuraId> for Runtime {
@@ -854,12 +881,12 @@ cfg_if! {
 			}
 
 			impl sp_consensus_babe::BabeApi<Block> for Runtime {
-				fn configuration() -> sp_consensus_babe::BabeGenesisConfiguration {
-					sp_consensus_babe::BabeGenesisConfiguration {
+				fn configuration() -> sp_consensus_babe::BabeConfiguration {
+					sp_consensus_babe::BabeConfiguration {
 						slot_duration: 1000,
 						epoch_length: EpochDuration::get(),
 						c: (3, 10),
-						genesis_authorities: system::authorities()
+						authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
 						randomness: <pallet_babe::Pallet<Runtime>>::randomness(),
 						allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
@@ -914,36 +941,64 @@ cfg_if! {
 				}
 			}
 
-			impl sp_finality_grandpa::GrandpaApi<Block> for Runtime {
-				fn grandpa_authorities() -> sp_finality_grandpa::AuthorityList {
+			impl sp_consensus_grandpa::GrandpaApi<Block> for Runtime {
+				fn grandpa_authorities() -> sp_consensus_grandpa::AuthorityList {
 					Vec::new()
 				}
 
-				fn current_set_id() -> sp_finality_grandpa::SetId {
+				fn current_set_id() -> sp_consensus_grandpa::SetId {
 					0
 				}
 
 				fn submit_report_equivocation_unsigned_extrinsic(
-					_equivocation_proof: sp_finality_grandpa::EquivocationProof<
+					_equivocation_proof: sp_consensus_grandpa::EquivocationProof<
 						<Block as BlockT>::Hash,
 						NumberFor<Block>,
 					>,
-					_key_owner_proof: sp_finality_grandpa::OpaqueKeyOwnershipProof,
+					_key_owner_proof: sp_consensus_grandpa::OpaqueKeyOwnershipProof,
 				) -> Option<()> {
 					None
 				}
 
 				fn generate_key_ownership_proof(
-					_set_id: sp_finality_grandpa::SetId,
-					_authority_id: sp_finality_grandpa::AuthorityId,
-				) -> Option<sp_finality_grandpa::OpaqueKeyOwnershipProof> {
+					_set_id: sp_consensus_grandpa::SetId,
+					_authority_id: sp_consensus_grandpa::AuthorityId,
+				) -> Option<sp_consensus_grandpa::OpaqueKeyOwnershipProof> {
 					None
 				}
 			}
 
-			impl beefy_primitives::BeefyApi<Block> for RuntimeApi {
-				fn validator_set() -> Option<beefy_primitives::ValidatorSet<beefy_primitives::crypto::AuthorityId>> {
+			impl sp_consensus_beefy::BeefyApi<Block> for Runtime {
+				fn beefy_genesis() -> Option<BlockNumber> {
 					None
+				}
+
+				fn validator_set() -> Option<sp_consensus_beefy::ValidatorSet<sp_consensus_beefy::crypto::AuthorityId>> {
+					None
+				}
+
+				fn submit_report_equivocation_unsigned_extrinsic(
+					_equivocation_proof: sp_consensus_beefy::EquivocationProof<
+						NumberFor<Block>,
+						sp_consensus_beefy::crypto::AuthorityId,
+						sp_consensus_beefy::crypto::Signature
+					>,
+					_key_owner_proof: sp_consensus_beefy::OpaqueKeyOwnershipProof,
+				) -> Option<()> { None }
+
+				fn generate_key_ownership_proof(
+					_set_id: sp_consensus_beefy::ValidatorSetId,
+					_authority_id: sp_consensus_beefy::crypto::AuthorityId,
+				) -> Option<sp_consensus_beefy::OpaqueKeyOwnershipProof> { None }
+			}
+
+			impl pallet_beefy_mmr::BeefyMmrApi<Block, sp_consensus_beefy::MmrRootHash> for Runtime {
+				fn authority_set_proof() -> sp_consensus_beefy::mmr::BeefyAuthoritySet<sp_consensus_beefy::MmrRootHash> {
+					Default::default()
+				}
+
+				fn next_authority_set_proof() -> sp_consensus_beefy::mmr::BeefyNextAuthoritySet<sp_consensus_beefy::MmrRootHash> {
+					Default::default()
 				}
 			}
 
@@ -972,6 +1027,14 @@ cfg_if! {
 			impl sp_api::Metadata<Block> for Runtime {
 				fn metadata() -> OpaqueMetadata {
 					unimplemented!()
+				}
+
+				fn metadata_at_version(_version: u32) -> Option<OpaqueMetadata> {
+						unimplemented!()
+				}
+
+				fn metadata_versions() -> sp_std::vec::Vec<u32> {
+						unimplemented!()
 				}
 			}
 
@@ -1102,6 +1165,10 @@ cfg_if! {
 				fn do_trace_log() {
 					log::trace!("Hey I'm runtime: {}", log::STATIC_MAX_LEVEL);
 				}
+
+				fn verify_ed25519(sig: ed25519::Signature, public: ed25519::Public, message: Vec<u8>) -> bool {
+					sp_io::crypto::ed25519_verify(&sig, &message, &public)
+				}
 			}
 
 			impl sp_consensus_aura::AuraApi<Block, AuraId> for Runtime {
@@ -1118,12 +1185,12 @@ cfg_if! {
 			}
 
 			impl sp_consensus_babe::BabeApi<Block> for Runtime {
-				fn configuration() -> sp_consensus_babe::BabeGenesisConfiguration {
-					sp_consensus_babe::BabeGenesisConfiguration {
+				fn configuration() -> sp_consensus_babe::BabeConfiguration {
+					sp_consensus_babe::BabeConfiguration {
 						slot_duration: 1000,
 						epoch_length: EpochDuration::get(),
 						c: (3, 10),
-						genesis_authorities: system::authorities()
+						authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
 						randomness: <pallet_babe::Pallet<Runtime>>::randomness(),
 						allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
@@ -1267,7 +1334,7 @@ fn test_read_child_storage() {
 fn test_witness(proof: StorageProof, root: crate::Hash) {
 	use sp_externalities::Externalities;
 	let db: sp_trie::MemoryDB<crate::Hashing> = proof.into_memory_db();
-	let backend = sp_state_machine::TrieBackend::<_, crate::Hashing>::new(db, root);
+	let backend = sp_state_machine::TrieBackendBuilder::<_, crate::Hashing>::new(db, root).build();
 	let mut overlay = sp_state_machine::OverlayedChanges::default();
 	let mut cache = sp_state_machine::StorageTransactionCache::<_, _>::default();
 	let mut ext = sp_state_machine::Ext::new(
@@ -1289,8 +1356,7 @@ mod tests {
 	use sc_block_builder::BlockBuilderProvider;
 	use sp_api::ProvideRuntimeApi;
 	use sp_consensus::BlockOrigin;
-	use sp_core::storage::well_known_keys::HEAP_PAGES;
-	use sp_runtime::generic::BlockId;
+	use sp_core::{storage::well_known_keys::HEAP_PAGES, ExecutionContext};
 	use sp_state_machine::ExecutionStrategy;
 	use substrate_test_runtime_client::{
 		prelude::*, runtime::TestAPI, DefaultTestClientBuilderExt, TestClientBuilder,
@@ -1305,27 +1371,32 @@ mod tests {
 			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
 			.set_heap_pages(8)
 			.build();
-		let block_id = BlockId::Number(client.chain_info().best_number);
+		let best_hash = client.chain_info().best_hash;
 
 		// Try to allocate 1024k of memory on heap. This is going to fail since it is twice larger
 		// than the heap.
-		let ret = client.runtime_api().vec_with_capacity(&block_id, 1048576);
+		let ret = client.runtime_api().vec_with_capacity_with_context(
+			best_hash,
+			// Use `BlockImport` to ensure we use the on chain heap pages as configured above.
+			ExecutionContext::Importing,
+			1048576,
+		);
 		assert!(ret.is_err());
 
 		// Create a block that sets the `:heap_pages` to 32 pages of memory which corresponds to
 		// ~2048k of heap memory.
-		let (new_block_id, block) = {
+		let (new_at_hash, block) = {
 			let mut builder = client.new_block(Default::default()).unwrap();
 			builder.push_storage_change(HEAP_PAGES.to_vec(), Some(32u64.encode())).unwrap();
 			let block = builder.build().unwrap().block;
 			let hash = block.header.hash();
-			(BlockId::Hash(hash), block)
+			(hash, block)
 		};
 
 		futures::executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
 		// Allocation of 1024k while having ~2048k should succeed.
-		let ret = client.runtime_api().vec_with_capacity(&new_block_id, 1048576);
+		let ret = client.runtime_api().vec_with_capacity(new_at_hash, 1048576);
 		assert!(ret.is_ok());
 	}
 
@@ -1334,9 +1405,9 @@ mod tests {
 		let client =
 			TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
 		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Number(client.chain_info().best_number);
+		let best_hash = client.chain_info().best_hash;
 
-		runtime_api.test_storage(&block_id).unwrap();
+		runtime_api.test_storage(best_hash).unwrap();
 	}
 
 	fn witness_backend() -> (sp_trie::MemoryDB<crate::Hashing>, crate::Hash) {
@@ -1344,7 +1415,8 @@ mod tests {
 		let mut root = crate::Hash::default();
 		let mut mdb = sp_trie::MemoryDB::<crate::Hashing>::default();
 		{
-			let mut trie = sp_trie::trie_types::TrieDBMutV1::new(&mut mdb, &mut root);
+			let mut trie =
+				sp_trie::trie_types::TrieDBMutBuilderV1::new(&mut mdb, &mut root).build();
 			trie.insert(b"value3", &[142]).expect("insert failed");
 			trie.insert(b"value4", &[124]).expect("insert failed");
 		};
@@ -1354,13 +1426,14 @@ mod tests {
 	#[test]
 	fn witness_backend_works() {
 		let (db, root) = witness_backend();
-		let backend = sp_state_machine::TrieBackend::<_, crate::Hashing>::new(db, root);
+		let backend =
+			sp_state_machine::TrieBackendBuilder::<_, crate::Hashing>::new(db, root).build();
 		let proof = sp_state_machine::prove_read(backend, vec![b"value3"]).unwrap();
 		let client =
 			TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
 		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Number(client.chain_info().best_number);
+		let best_hash = client.chain_info().best_hash;
 
-		runtime_api.test_witness(&block_id, proof, root).unwrap();
+		runtime_api.test_witness(best_hash, proof, root).unwrap();
 	}
 }

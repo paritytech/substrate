@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,10 +18,11 @@
 
 //! Substrate network possible errors.
 
-use crate::config::TransportConfig;
+use crate::{config::TransportConfig, types::ProtocolName};
+
 use libp2p::{Multiaddr, PeerId};
 
-use std::{borrow::Cow, fmt};
+use std::fmt;
 
 /// Result type alias for the network.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -65,7 +66,7 @@ pub enum Error {
 	#[error("Request-response protocol registered multiple times: {protocol}")]
 	DuplicateRequestResponseProtocol {
 		/// Name of the protocol registered multiple times.
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 	},
 }
 

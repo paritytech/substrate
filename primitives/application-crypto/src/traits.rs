@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -157,8 +157,8 @@ pub trait RuntimeAppPublic: Sized {
 	fn to_raw_vec(&self) -> Vec<u8>;
 }
 
-/// Something that bound to a fixed `RuntimeAppPublic`.
+/// Something that bound to a fixed [`RuntimeAppPublic`].
 pub trait BoundToRuntimeAppPublic {
-	/// The `RuntimeAppPublic` this type is bound to.
+	/// The [`RuntimeAppPublic`] this type is bound to.
 	type Public: RuntimeAppPublic;
 }

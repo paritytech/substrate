@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # This file is part of Substrate.
-# Copyright (C) 2022 Parity Technologies (UK) Ltd.
+# Copyright (C) Parity Technologies (UK) Ltd.
 # SPDX-License-Identifier: Apache-2.0
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -74,6 +74,8 @@ EXCLUDED_PALLETS=(
   "pallet_grandpa"
   "pallet_mmr"
   "pallet_offences"
+  # Only used for testing, does not need real weights.
+  "frame_benchmarking_pallet_pov"
 )
 
 # Load all pallet names in an array.
@@ -121,6 +123,7 @@ for PALLET in "${PALLETS[@]}"; do
     --wasm-execution=compiled \
     --heap-pages=4096 \
     --output="$WEIGHT_FILE" \
+    --header="./HEADER-APACHE2" \
     --template=./.maintain/frame-weight-template.hbs 2>&1
   )
   if [ $? -ne 0 ]; then
@@ -137,6 +140,7 @@ OUTPUT=$(
   --execution=wasm \
   --wasm-execution=compiled \
   --weight-path="./frame/support/src/weights/" \
+  --header="./HEADER-APACHE2" \
   --warmup=10 \
   --repeat=100 2>&1
 )

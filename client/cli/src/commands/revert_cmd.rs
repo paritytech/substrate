@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -31,7 +31,7 @@ use std::{fmt::Debug, str::FromStr, sync::Arc};
 #[derive(Debug, Parser)]
 pub struct RevertCmd {
 	/// Number of blocks to revert.
-	#[clap(default_value = "256")]
+	#[arg(default_value = "256")]
 	pub num: GenericNumber,
 
 	#[allow(missing_docs)]

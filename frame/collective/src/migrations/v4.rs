@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,6 +17,7 @@
 
 use sp_io::hashing::twox_128;
 
+use super::super::LOG_TARGET;
 use frame_support::{
 	traits::{
 		Get, GetStorageVersion, PalletInfoAccess, StorageVersion,
@@ -42,15 +43,15 @@ pub fn migrate<T: frame_system::Config, P: GetStorageVersion + PalletInfoAccess,
 
 	if new_pallet_name == old_pallet_name {
 		log::info!(
-			target: "runtime::collective",
+			target: LOG_TARGET,
 			"New pallet name is equal to the old pallet name. No migration needs to be done.",
 		);
-		return 0
+		return Weight::zero()
 	}
 
 	let on_chain_storage_version = <P as GetStorageVersion>::on_chain_storage_version();
 	log::info!(
-		target: "runtime::collective",
+		target: LOG_TARGET,
 		"Running migration to v4 for collective with storage version {:?}",
 		on_chain_storage_version,
 	);
@@ -66,11 +67,11 @@ pub fn migrate<T: frame_system::Config, P: GetStorageVersion + PalletInfoAccess,
 		<T as frame_system::Config>::BlockWeights::get().max_block
 	} else {
 		log::warn!(
-			target: "runtime::collective",
+			target: LOG_TARGET,
 			"Attempted to apply migration to v4 but failed because storage version is {:?}",
 			on_chain_storage_version,
 		);
-		0
+		Weight::zero()
 	}
 }
 
@@ -138,7 +139,7 @@ pub fn post_migrate<P: GetStorageVersion + PalletInfoAccess, N: AsRef<str>>(old_
 
 fn log_migration(stage: &str, old_pallet_name: &str, new_pallet_name: &str) {
 	log::info!(
-		target: "runtime::collective",
+		target: LOG_TARGET,
 		"{}, prefix: '{}' ==> '{}'",
 		stage,
 		old_pallet_name,

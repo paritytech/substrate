@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,17 +18,20 @@
 
 //! State API backend for full nodes.
 
-use std::{collections::HashMap, marker::PhantomData, sync::Arc};
+use std::{collections::HashMap, marker::PhantomData, sync::Arc, time::Duration};
 
 use super::{
 	client_err,
 	error::{Error, Result},
 	ChildStateBackend, StateBackend,
 };
-use crate::SubscriptionTaskExecutor;
+use crate::{DenyUnsafe, SubscriptionTaskExecutor};
 
 use futures::{future, stream, FutureExt, StreamExt};
-use jsonrpsee::{core::Error as JsonRpseeError, PendingSubscription};
+use jsonrpsee::{
+	core::{async_trait, Error as JsonRpseeError},
+	SubscriptionSink,
+};
 use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
 	StorageProvider,
@@ -43,10 +46,14 @@ use sp_core::{
 	storage::{
 		ChildInfo, ChildType, PrefixedStorageKey, StorageChangeSet, StorageData, StorageKey,
 	},
+	traits::CallContext,
 	Bytes,
 };
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use sp_runtime::traits::Block as BlockT;
 use sp_version::RuntimeVersion;
+
+/// The maximum time allowed for an RPC call when running without unsafe RPC enabled.
+const MAXIMUM_SAFE_RPC_CALL_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Ranges to query in state_queryStorage.
 struct QueryStorageRange<Block: BlockT> {
@@ -145,10 +152,9 @@ where
 	) -> Result<()> {
 		for block_hash in &range.hashes {
 			let mut block_changes = StorageChangeSet { block: *block_hash, changes: Vec::new() };
-			let id = BlockId::hash(*block_hash);
 			for key in keys {
 				let (has_changed, data) = {
-					let curr_data = self.client.storage(&id, key).map_err(client_err)?;
+					let curr_data = self.client.storage(*block_hash, key).map_err(client_err)?;
 					match last_values.get(key) {
 						Some(prev_data) => (curr_data != *prev_data, curr_data),
 						None => (true, curr_data),
@@ -167,6 +173,7 @@ where
 	}
 }
 
+#[async_trait]
 impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Client>
 where
 	Block: BlockT + 'static,
@@ -197,34 +204,40 @@ where
 				self.client
 					.executor()
 					.call(
-						&BlockId::Hash(block),
+						block,
 						&method,
-						&*call_data,
+						&call_data,
 						self.client.execution_extensions().strategies().other,
-						None,
+						CallContext::Offchain,
 					)
 					.map(Into::into)
 			})
 			.map_err(client_err)
 	}
 
+	// TODO: This is horribly broken; either remove it, or make it streaming.
 	fn storage_keys(
 		&self,
 		block: Option<Block::Hash>,
 		prefix: StorageKey,
 	) -> std::result::Result<Vec<StorageKey>, Error> {
+		// TODO: Remove the `.collect`.
 		self.block_or_best(block)
-			.and_then(|block| self.client.storage_keys(&BlockId::Hash(block), &prefix))
+			.and_then(|block| self.client.storage_keys(block, Some(&prefix), None))
+			.map(|iter| iter.collect())
 			.map_err(client_err)
 	}
 
+	// TODO: This is horribly broken; either remove it, or make it streaming.
 	fn storage_pairs(
 		&self,
 		block: Option<Block::Hash>,
 		prefix: StorageKey,
 	) -> std::result::Result<Vec<(StorageKey, StorageData)>, Error> {
+		// TODO: Remove the `.collect`.
 		self.block_or_best(block)
-			.and_then(|block| self.client.storage_pairs(&BlockId::Hash(block), &prefix))
+			.and_then(|block| self.client.storage_pairs(block, Some(&prefix), None))
+			.map(|iter| iter.collect())
 			.map_err(client_err)
 	}
 
@@ -236,13 +249,7 @@ where
 		start_key: Option<StorageKey>,
 	) -> std::result::Result<Vec<StorageKey>, Error> {
 		self.block_or_best(block)
-			.and_then(|block| {
-				self.client.storage_keys_iter(
-					&BlockId::Hash(block),
-					prefix.as_ref(),
-					start_key.as_ref(),
-				)
-			})
+			.and_then(|block| self.client.storage_keys(block, prefix.as_ref(), start_key.as_ref()))
 			.map(|iter| iter.take(count as usize).collect())
 			.map_err(client_err)
 	}
@@ -253,37 +260,57 @@ where
 		key: StorageKey,
 	) -> std::result::Result<Option<StorageData>, Error> {
 		self.block_or_best(block)
-			.and_then(|block| self.client.storage(&BlockId::Hash(block), &key))
+			.and_then(|block| self.client.storage(block, &key))
 			.map_err(client_err)
 	}
 
-	fn storage_size(
+	async fn storage_size(
 		&self,
 		block: Option<Block::Hash>,
 		key: StorageKey,
+		deny_unsafe: DenyUnsafe,
 	) -> std::result::Result<Option<u64>, Error> {
 		let block = match self.block_or_best(block) {
 			Ok(b) => b,
 			Err(e) => return Err(client_err(e)),
 		};
 
-		match self.client.storage(&BlockId::Hash(block), &key) {
-			Ok(Some(d)) => return Ok(Some(d.0.len() as u64)),
-			Err(e) => return Err(client_err(e)),
-			Ok(None) => {},
-		}
+		let client = self.client.clone();
+		let timeout = match deny_unsafe {
+			DenyUnsafe::Yes => Some(MAXIMUM_SAFE_RPC_CALL_TIMEOUT),
+			DenyUnsafe::No => None,
+		};
 
-		self.client
-			.storage_pairs(&BlockId::Hash(block), &key)
-			.map(|kv| {
-				let item_sum = kv.iter().map(|(_, v)| v.0.len() as u64).sum::<u64>();
-				if item_sum > 0 {
-					Some(item_sum)
-				} else {
-					None
-				}
-			})
-			.map_err(client_err)
+		super::utils::spawn_blocking_with_timeout(timeout, move |is_timed_out| {
+			// Does the key point to a concrete entry in the database?
+			match client.storage(block, &key) {
+				Ok(Some(d)) => return Ok(Ok(Some(d.0.len() as u64))),
+				Err(e) => return Ok(Err(client_err(e))),
+				Ok(None) => {},
+			}
+
+			// The key doesn't point to anything, so it's probably a prefix.
+			let iter = match client.storage_keys(block, Some(&key), None).map_err(client_err) {
+				Ok(iter) => iter,
+				Err(e) => return Ok(Err(e)),
+			};
+
+			let mut sum = 0;
+			for storage_key in iter {
+				let value = client.storage(block, &storage_key).ok().flatten().unwrap_or_default();
+				sum += value.0.len() as u64;
+
+				is_timed_out.check_if_timed_out()?;
+			}
+
+			if sum > 0 {
+				Ok(Ok(Some(sum)))
+			} else {
+				Ok(Ok(None))
+			}
+		})
+		.await
+		.map_err(|error| Error::Client(Box::new(error)))?
 	}
 
 	fn storage_hash(
@@ -292,7 +319,7 @@ where
 		key: StorageKey,
 	) -> std::result::Result<Option<Block::Hash>, Error> {
 		self.block_or_best(block)
-			.and_then(|block| self.client.storage_hash(&BlockId::Hash(block), &key))
+			.and_then(|block| self.client.storage_hash(block, &key))
 			.map_err(client_err)
 	}
 
@@ -300,7 +327,7 @@ where
 		self.block_or_best(block).map_err(client_err).and_then(|block| {
 			self.client
 				.runtime_api()
-				.metadata(&BlockId::Hash(block))
+				.metadata(block)
 				.map(Into::into)
 				.map_err(|e| Error::Client(Box::new(e)))
 		})
@@ -311,9 +338,7 @@ where
 		block: Option<Block::Hash>,
 	) -> std::result::Result<RuntimeVersion, Error> {
 		self.block_or_best(block).map_err(client_err).and_then(|block| {
-			self.client
-				.runtime_version_at(&BlockId::Hash(block))
-				.map_err(|e| Error::Client(Box::new(e)))
+			self.client.runtime_version_at(block).map_err(|e| Error::Client(Box::new(e)))
 		})
 	}
 
@@ -350,26 +375,24 @@ where
 		self.block_or_best(block)
 			.and_then(|block| {
 				self.client
-					.read_proof(&BlockId::Hash(block), &mut keys.iter().map(|key| key.0.as_ref()))
-					.map(|proof| proof.iter_nodes().map(|node| node.into()).collect())
+					.read_proof(block, &mut keys.iter().map(|key| key.0.as_ref()))
+					.map(|proof| proof.into_iter_nodes().map(|node| node.into()).collect())
 					.map(|proof| ReadProof { at: block, proof })
 			})
 			.map_err(client_err)
 	}
 
-	fn subscribe_runtime_version(&self, pending: PendingSubscription) {
+	fn subscribe_runtime_version(&self, mut sink: SubscriptionSink) {
 		let client = self.client.clone();
 
 		let initial = match self
 			.block_or_best(None)
-			.and_then(|block| {
-				self.client.runtime_version_at(&BlockId::Hash(block)).map_err(Into::into)
-			})
+			.and_then(|block| self.client.runtime_version_at(block).map_err(Into::into))
 			.map_err(|e| Error::Client(Box::new(e)))
 		{
 			Ok(initial) => initial,
 			Err(e) => {
-				pending.reject(JsonRpseeError::from(e));
+				let _ = sink.reject(JsonRpseeError::from(e));
 				return
 			},
 		};
@@ -381,9 +404,8 @@ where
 			.import_notification_stream()
 			.filter(|n| future::ready(n.is_new_best))
 			.filter_map(move |n| {
-				let version = client
-					.runtime_version_at(&BlockId::hash(n.hash))
-					.map_err(|e| Error::Client(Box::new(e)));
+				let version =
+					client.runtime_version_at(n.hash).map_err(|e| Error::Client(Box::new(e)));
 
 				match version {
 					Ok(version) if version != previous_version => {
@@ -397,19 +419,17 @@ where
 		let stream = futures::stream::once(future::ready(initial)).chain(version_stream);
 
 		let fut = async move {
-			if let Some(mut sink) = pending.accept() {
-				sink.pipe_from_stream(stream).await;
-			}
+			sink.pipe_from_stream(stream).await;
 		};
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 	}
 
-	fn subscribe_storage(&self, pending: PendingSubscription, keys: Option<Vec<StorageKey>>) {
+	fn subscribe_storage(&self, mut sink: SubscriptionSink, keys: Option<Vec<StorageKey>>) {
 		let stream = match self.client.storage_changes_notification_stream(keys.as_deref(), None) {
 			Ok(stream) => stream,
 			Err(blockchain_err) => {
-				pending.reject(JsonRpseeError::from(Error::Client(Box::new(blockchain_err))));
+				let _ = sink.reject(JsonRpseeError::from(Error::Client(Box::new(blockchain_err))));
 				return
 			},
 		};
@@ -420,7 +440,7 @@ where
 			let changes = keys
 				.into_iter()
 				.map(|key| {
-					let v = self.client.storage(&BlockId::Hash(block), &key).ok().flatten();
+					let v = self.client.storage(block, &key).ok().flatten();
 					(key, v)
 				})
 				.collect();
@@ -442,9 +462,7 @@ where
 			.filter(|storage| future::ready(!storage.changes.is_empty()));
 
 		let fut = async move {
-			if let Some(mut sink) = pending.accept() {
-				sink.pipe_from_stream(stream).await;
-			}
+			sink.pipe_from_stream(stream).await;
 		};
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
@@ -503,11 +521,11 @@ where
 				};
 				self.client
 					.read_child_proof(
-						&BlockId::Hash(block),
+						block,
 						&child_info,
 						&mut keys.iter().map(|key| key.0.as_ref()),
 					)
-					.map(|proof| proof.iter_nodes().map(|node| node.into()).collect())
+					.map(|proof| proof.into_iter_nodes().map(|node| node.into()).collect())
 					.map(|proof| ReadProof { at: block, proof })
 			})
 			.map_err(client_err)
@@ -519,6 +537,7 @@ where
 		storage_key: PrefixedStorageKey,
 		prefix: StorageKey,
 	) -> std::result::Result<Vec<StorageKey>, Error> {
+		// TODO: Remove the `.collect`.
 		self.block_or_best(block)
 			.and_then(|block| {
 				let child_info = match ChildType::from_prefixed_key(&storage_key) {
@@ -526,8 +545,9 @@ where
 						ChildInfo::new_default(storage_key),
 					None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
 				};
-				self.client.child_storage_keys(&BlockId::Hash(block), &child_info, &prefix)
+				self.client.child_storage_keys(block, child_info, Some(&prefix), None)
 			})
+			.map(|iter| iter.collect())
 			.map_err(client_err)
 	}
 
@@ -546,8 +566,8 @@ where
 						ChildInfo::new_default(storage_key),
 					None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
 				};
-				self.client.child_storage_keys_iter(
-					&BlockId::Hash(block),
+				self.client.child_storage_keys(
+					block,
 					child_info,
 					prefix.as_ref(),
 					start_key.as_ref(),
@@ -570,7 +590,7 @@ where
 						ChildInfo::new_default(storage_key),
 					None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
 				};
-				self.client.child_storage(&BlockId::Hash(block), &child_info, &key)
+				self.client.child_storage(block, &child_info, &key)
 			})
 			.map_err(client_err)
 	}
@@ -593,10 +613,7 @@ where
 
 		keys.into_iter()
 			.map(move |key| {
-				client
-					.clone()
-					.child_storage(&BlockId::Hash(block), &child_info, &key)
-					.map_err(client_err)
+				client.clone().child_storage(block, &child_info, &key).map_err(client_err)
 			})
 			.collect()
 	}
@@ -614,7 +631,7 @@ where
 						ChildInfo::new_default(storage_key),
 					None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
 				};
-				self.client.child_storage_hash(&BlockId::Hash(block), &child_info, &key)
+				self.client.child_storage_hash(block, &child_info, &key)
 			})
 			.map_err(client_err)
 	}

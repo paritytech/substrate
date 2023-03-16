@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -46,6 +46,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		#[pallet::call_index(0)]
 		#[pallet::weight(1)]
 		pub fn set_value(_origin: OriginFor<T>, value: u32) -> DispatchResult {
 			Value::<T>::put(value);
@@ -59,7 +60,7 @@ pub mod decl_pallet {
 	pub trait Config: frame_system::Config {}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::Origin {
+		pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
 			#[weight = 0]
 			pub fn set_value(_origin, value: u32) {
 				DeclValue::put(value);
@@ -79,23 +80,23 @@ pub type BlockNumber = u64;
 pub type Index = u64;
 pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, Call, (), ()>;
+pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
 
 impl frame_system::Config for Runtime {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
 	type BaseCallFilter = frame_support::traits::Everything;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u32;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hash = sp_runtime::testing::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU32<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -113,7 +114,7 @@ impl pallet::Config for Runtime {}
 impl decl_pallet::Config for Runtime {}
 
 frame_support::construct_runtime!(
-	pub enum Runtime where
+	pub struct Runtime where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
@@ -255,12 +256,12 @@ fn storage_layer_commit_then_rollback() {
 fn storage_layer_in_pallet_call() {
 	TestExternalities::default().execute_with(|| {
 		use sp_runtime::traits::Dispatchable;
-		let call1 = Call::MyPallet(pallet::Call::set_value { value: 2 });
-		assert_ok!(call1.dispatch(Origin::signed(0)));
+		let call1 = RuntimeCall::MyPallet(pallet::Call::set_value { value: 2 });
+		assert_ok!(call1.dispatch(RuntimeOrigin::signed(0)));
 		assert_eq!(Value::<Runtime>::get(), 2);
 
-		let call2 = Call::MyPallet(pallet::Call::set_value { value: 1 });
-		assert_noop!(call2.dispatch(Origin::signed(0)), Error::<Runtime>::Revert);
+		let call2 = RuntimeCall::MyPallet(pallet::Call::set_value { value: 1 });
+		assert_noop!(call2.dispatch(RuntimeOrigin::signed(0)), Error::<Runtime>::Revert);
 	});
 }
 
@@ -270,11 +271,16 @@ fn storage_layer_in_decl_pallet_call() {
 		use frame_support::StorageValue;
 		use sp_runtime::traits::Dispatchable;
 
-		let call1 = Call::DeclPallet(decl_pallet::Call::set_value { value: 2 });
-		assert_ok!(call1.dispatch(Origin::signed(0)));
+		let call1 = RuntimeCall::DeclPallet(decl_pallet::Call::set_value { value: 2 });
+		assert_ok!(call1.dispatch(RuntimeOrigin::signed(0)));
 		assert_eq!(decl_pallet::DeclValue::get(), 2);
 
-		let call2 = Call::DeclPallet(decl_pallet::Call::set_value { value: 1 });
-		assert_noop!(call2.dispatch(Origin::signed(0)), "Revert!");
+		let call2 = RuntimeCall::DeclPallet(decl_pallet::Call::set_value { value: 1 });
+		assert_noop!(call2.dispatch(RuntimeOrigin::signed(0)), "Revert!");
+		// Calling the function directly also works with storage layers.
+		assert_noop!(
+			decl_pallet::Module::<Runtime>::set_value(RuntimeOrigin::signed(1), 1),
+			"Revert!"
+		);
 	});
 }

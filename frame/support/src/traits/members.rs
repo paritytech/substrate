@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,6 +17,9 @@
 
 //! Traits for dealing with the idea of membership.
 
+use impl_trait_for_tuples::impl_for_tuples;
+use sp_arithmetic::traits::AtLeast16BitUnsigned;
+use sp_runtime::DispatchResult;
 use sp_std::{marker::PhantomData, prelude::*};
 
 /// A trait for querying whether a type can be said to "contain" a value.
@@ -25,7 +28,9 @@ pub trait Contains<T> {
 	fn contains(t: &T) -> bool;
 }
 
-#[impl_trait_for_tuples::impl_for_tuples(1, 30)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl<T> Contains<T> for Tuple {
 	fn contains(t: &T) -> bool {
 		for_tuples!( #(
@@ -41,7 +46,9 @@ pub trait ContainsPair<A, B> {
 	fn contains(a: &A, b: &B) -> bool;
 }
 
-#[impl_trait_for_tuples::impl_for_tuples(0, 30)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl<A, B> ContainsPair<A, B> for Tuple {
 	fn contains(a: &A, b: &B) -> bool {
 		for_tuples!( #(
@@ -258,6 +265,28 @@ pub trait ContainsLengthBound {
 	fn min_len() -> usize;
 	/// Maximum number of elements contained
 	fn max_len() -> usize;
+}
+
+/// Ranked membership data structure.
+pub trait RankedMembers {
+	type AccountId;
+	type Rank: AtLeast16BitUnsigned;
+
+	/// The lowest rank possible in this membership organisation.
+	fn min_rank() -> Self::Rank;
+
+	/// Return the rank of the given ID, or `None` if they are not a member.
+	fn rank_of(who: &Self::AccountId) -> Option<Self::Rank>;
+
+	/// Add a member to the group at the `min_rank()`.
+	fn induct(who: &Self::AccountId) -> DispatchResult;
+
+	/// Promote a member to the next higher rank.
+	fn promote(who: &Self::AccountId) -> DispatchResult;
+
+	/// Demote a member to the next lower rank; demoting beyond the `min_rank` removes the
+	/// member entirely.
+	fn demote(who: &Self::AccountId) -> DispatchResult;
 }
 
 /// Trait for type that can handle the initialization of account IDs at genesis.

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -20,17 +20,18 @@
 
 use crate::{
 	host::HostState,
-	instance_wrapper::{EntryPoint, InstanceWrapper},
-	util,
+	instance_wrapper::{EntryPoint, InstanceWrapper, MemoryWrapper},
+	util::{self, replace_strategy_if_broken},
 };
 
-use sc_allocator::FreeingBumpHeapAllocator;
+use sc_allocator::{AllocationStats, FreeingBumpHeapAllocator};
 use sc_executor_common::{
 	error::{Result, WasmError},
 	runtime_blob::{
 		self, DataSegmentsSnapshot, ExposedMutableGlobalsSet, GlobalsSnapshot, RuntimeBlob,
 	},
-	wasm_runtime::{InvokeMethod, WasmInstance, WasmModule},
+	util::checked_range,
+	wasm_runtime::{HeapAllocStrategy, InvokeMethod, WasmInstance, WasmModule},
 };
 use sp_runtime_interface::unpack_ptr_and_len;
 use sp_wasm_interface::{HostFunctions, Pointer, Value, WordSize};
@@ -41,12 +42,10 @@ use std::{
 		Arc,
 	},
 };
-use wasmtime::{Engine, Memory, StoreLimits, Table};
+use wasmtime::{AsContext, Engine, Memory, Table};
 
+#[derive(Default)]
 pub(crate) struct StoreData {
-	/// The limits we apply to the store. We need to store it here to return a reference to this
-	/// object when we have the limits enabled.
-	pub(crate) limits: StoreLimits,
 	/// This will only be set when we call into the runtime.
 	pub(crate) host_state: Option<HostState>,
 	/// This will be always set once the store is initialized.
@@ -56,11 +55,6 @@ pub(crate) struct StoreData {
 }
 
 impl StoreData {
-	/// Returns a reference to the host state.
-	pub fn host_state(&self) -> Option<&HostState> {
-		self.host_state.as_ref()
-	}
-
 	/// Returns a mutable reference to the host state.
 	pub fn host_state_mut(&mut self) -> Option<&mut HostState> {
 		self.host_state.as_mut()
@@ -69,11 +63,6 @@ impl StoreData {
 	/// Returns the host memory.
 	pub fn memory(&self) -> Memory {
 		self.memory.expect("memory is always set; qed")
-	}
-
-	/// Returns the host table.
-	pub fn table(&self) -> Option<Table> {
-		self.table
 	}
 }
 
@@ -92,12 +81,11 @@ enum Strategy {
 struct InstanceCreator {
 	engine: wasmtime::Engine,
 	instance_pre: Arc<wasmtime::InstancePre<StoreData>>,
-	max_memory_size: Option<usize>,
 }
 
 impl InstanceCreator {
 	fn instantiate(&mut self) -> Result<InstanceWrapper> {
-		InstanceWrapper::new(&self.engine, &self.instance_pre, self.max_memory_size)
+		InstanceWrapper::new(&self.engine, &self.instance_pre)
 	}
 }
 
@@ -137,18 +125,13 @@ pub struct WasmtimeRuntime {
 	engine: wasmtime::Engine,
 	instance_pre: Arc<wasmtime::InstancePre<StoreData>>,
 	instantiation_strategy: InternalInstantiationStrategy,
-	config: Config,
 }
 
 impl WasmModule for WasmtimeRuntime {
 	fn new_instance(&self) -> Result<Box<dyn WasmInstance>> {
 		let strategy = match self.instantiation_strategy {
 			InternalInstantiationStrategy::LegacyInstanceReuse(ref snapshot_data) => {
-				let mut instance_wrapper = InstanceWrapper::new(
-					&self.engine,
-					&self.instance_pre,
-					self.config.semantics.max_memory_size,
-				)?;
+				let mut instance_wrapper = InstanceWrapper::new(&self.engine, &self.instance_pre)?;
 				let heap_base = instance_wrapper.extract_heap_base()?;
 
 				// This function panics if the instance was created from a runtime blob different
@@ -170,7 +153,6 @@ impl WasmModule for WasmtimeRuntime {
 			InternalInstantiationStrategy::Builtin => Strategy::RecreateInstance(InstanceCreator {
 				engine: self.engine.clone(),
 				instance_pre: self.instance_pre.clone(),
-				max_memory_size: self.config.semantics.max_memory_size,
 			}),
 		};
 
@@ -184,8 +166,13 @@ pub struct WasmtimeInstance {
 	strategy: Strategy,
 }
 
-impl WasmInstance for WasmtimeInstance {
-	fn call(&mut self, method: InvokeMethod, data: &[u8]) -> Result<Vec<u8>> {
+impl WasmtimeInstance {
+	fn call_impl(
+		&mut self,
+		method: InvokeMethod,
+		data: &[u8],
+		allocation_stats: &mut Option<AllocationStats>,
+	) -> Result<Vec<u8>> {
 		match &mut self.strategy {
 			Strategy::LegacyInstanceReuse {
 				ref mut instance_wrapper,
@@ -205,7 +192,8 @@ impl WasmInstance for WasmtimeInstance {
 				globals_snapshot.apply(&mut InstanceGlobals { instance: instance_wrapper });
 				let allocator = FreeingBumpHeapAllocator::new(*heap_base);
 
-				let result = perform_call(data, instance_wrapper, entrypoint, allocator);
+				let result =
+					perform_call(data, instance_wrapper, entrypoint, allocator, allocation_stats);
 
 				// Signal to the OS that we are done with the linear memory and that it can be
 				// reclaimed.
@@ -219,9 +207,21 @@ impl WasmInstance for WasmtimeInstance {
 				let entrypoint = instance_wrapper.resolve_entrypoint(method)?;
 
 				let allocator = FreeingBumpHeapAllocator::new(heap_base);
-				perform_call(data, &mut instance_wrapper, entrypoint, allocator)
+				perform_call(data, &mut instance_wrapper, entrypoint, allocator, allocation_stats)
 			},
 		}
+	}
+}
+
+impl WasmInstance for WasmtimeInstance {
+	fn call_with_allocation_stats(
+		&mut self,
+		method: InvokeMethod,
+		data: &[u8],
+	) -> (Result<Vec<u8>>, Option<AllocationStats>) {
+		let mut allocation_stats = None;
+		let result = self.call_impl(method, data, &mut allocation_stats);
+		(result, allocation_stats)
 	}
 
 	fn get_global_const(&mut self, name: &str) -> Result<Option<Value>> {
@@ -257,12 +257,12 @@ fn setup_wasmtime_caching(
 
 	let wasmtime_cache_root = cache_path.join("wasmtime");
 	fs::create_dir_all(&wasmtime_cache_root)
-		.map_err(|err| format!("cannot create the dirs to cache: {:?}", err))?;
+		.map_err(|err| format!("cannot create the dirs to cache: {}", err))?;
 
 	// Canonicalize the path after creating the directories.
 	let wasmtime_cache_root = wasmtime_cache_root
 		.canonicalize()
-		.map_err(|err| format!("failed to canonicalize the path: {:?}", err))?;
+		.map_err(|err| format!("failed to canonicalize the path: {}", err))?;
 
 	// Write the cache config file
 	let cache_config_path = wasmtime_cache_root.join("cache-config.toml");
@@ -275,11 +275,11 @@ directory = \"{cache_dir}\"
 		cache_dir = wasmtime_cache_root.display()
 	);
 	fs::write(&cache_config_path, config_content)
-		.map_err(|err| format!("cannot write the cache config: {:?}", err))?;
+		.map_err(|err| format!("cannot write the cache config: {}", err))?;
 
 	config
 		.cache_config_load(cache_config_path)
-		.map_err(|err| format!("failed to parse the config: {:?}", err))?;
+		.map_err(|err| format!("failed to parse the config: {:#}", err))?;
 
 	Ok(())
 }
@@ -288,6 +288,11 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 	let mut config = wasmtime::Config::new();
 	config.cranelift_opt_level(wasmtime::OptLevel::SpeedAndSize);
 	config.cranelift_nan_canonicalization(semantics.canonicalize_nans);
+
+	// Since wasmtime 6.0.0 the default for this is `true`, but that heavily regresses
+	// the contracts pallet's performance, so disable it for now.
+	#[allow(deprecated)]
+	config.cranelift_use_egraphs(false);
 
 	let profiler = match std::env::var_os("WASMTIME_PROFILING_STRATEGY") {
 		Some(os_string) if os_string == "jitdump" => wasmtime::ProfilingStrategy::JitDump,
@@ -302,17 +307,19 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 			wasmtime::ProfilingStrategy::None
 		},
 	};
-	config
-		.profiler(profiler)
-		.map_err(|e| WasmError::Instantiation(format!("fail to set profiler: {}", e)))?;
+	config.profiler(profiler);
 
-	if let Some(DeterministicStackLimit { native_stack_max, .. }) =
-		semantics.deterministic_stack_limit
-	{
-		config
-			.max_wasm_stack(native_stack_max as usize)
-			.map_err(|e| WasmError::Other(format!("cannot set max wasm stack: {}", e)))?;
-	}
+	let native_stack_max = match semantics.deterministic_stack_limit {
+		Some(DeterministicStackLimit { native_stack_max, .. }) => native_stack_max,
+
+		// In `wasmtime` 0.35 the default stack size limit was changed from 1MB to 512KB.
+		//
+		// This broke at least one parachain which depended on the original 1MB limit,
+		// so here we restore it to what it was originally.
+		None => 1024 * 1024,
+	};
+
+	config.max_wasm_stack(native_stack_max as usize);
 
 	config.parallel_compilation(semantics.parallel_compilation);
 
@@ -323,7 +330,6 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 	config.wasm_bulk_memory(false);
 	config.wasm_multi_value(false);
 	config.wasm_multi_memory(false);
-	config.wasm_module_linking(false);
 	config.wasm_threads(false);
 	config.wasm_memory64(false);
 
@@ -335,53 +341,45 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 		InstantiationStrategy::LegacyInstanceReuse => (false, false),
 	};
 
+	const WASM_PAGE_SIZE: u64 = 65536;
+
 	config.memory_init_cow(use_cow);
-	config.memory_guaranteed_dense_image_size(
-		semantics.max_memory_size.map(|max| max as u64).unwrap_or(u64::MAX),
-	);
+	config.memory_guaranteed_dense_image_size(match semantics.heap_alloc_strategy {
+		HeapAllocStrategy::Dynamic { maximum_pages } =>
+			maximum_pages.map(|p| p as u64 * WASM_PAGE_SIZE).unwrap_or(u64::MAX),
+		HeapAllocStrategy::Static { .. } => u64::MAX,
+	});
 
 	if use_pooling {
-		const WASM_PAGE_SIZE: u64 = 65536;
 		const MAX_WASM_PAGES: u64 = 0x10000;
 
-		let memory_pages = if let Some(max_memory_size) = semantics.max_memory_size {
-			let max_memory_size = max_memory_size as u64;
-			let mut pages = max_memory_size / WASM_PAGE_SIZE;
-			if max_memory_size % WASM_PAGE_SIZE != 0 {
-				pages += 1;
-			}
-
-			std::cmp::min(MAX_WASM_PAGES, pages)
-		} else {
-			MAX_WASM_PAGES
+		let memory_pages = match semantics.heap_alloc_strategy {
+			HeapAllocStrategy::Dynamic { maximum_pages } =>
+				maximum_pages.map(|p| p as u64).unwrap_or(MAX_WASM_PAGES),
+			HeapAllocStrategy::Static { .. } => MAX_WASM_PAGES,
 		};
 
-		config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling {
-			strategy: wasmtime::PoolingAllocationStrategy::ReuseAffinity,
-
+		let mut pooling_config = wasmtime::PoolingAllocationConfig::default();
+		pooling_config
+			.max_unused_warm_slots(4)
 			// Pooling needs a bunch of hard limits to be set; if we go over
 			// any of these then the instantiation will fail.
-			instance_limits: wasmtime::InstanceLimits {
-				// Current minimum values for kusama (as of 2022-04-14):
-				//   size: 32384
-				//   table_elements: 1249
-				//   memory_pages: 2070
-				size: 64 * 1024,
-				table_elements: 2048,
-				memory_pages,
+			//
+			// Current minimum values for kusama (as of 2022-04-14):
+			//   size: 32384
+			//   table_elements: 1249
+			//   memory_pages: 2070
+			.instance_size(128 * 1024)
+			.instance_table_elements(8192)
+			.instance_memory_pages(memory_pages)
+			// We can only have a single of those.
+			.instance_tables(1)
+			.instance_memories(1)
+			// This determines how many instances of the module can be
+			// instantiated in parallel from the same `Module`.
+			.instance_count(32);
 
-				// We can only have a single of those.
-				tables: 1,
-				memories: 1,
-
-				// This determines how many instances of the module can be
-				// instantiated in parallel from the same `Module`.
-				//
-				// This includes nested instances spawned with `sp_tasks::spawn`
-				// from *within* the runtime.
-				count: 32,
-			},
-		});
+		config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling(pooling_config));
 	}
 
 	Ok(config)
@@ -412,6 +410,7 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 /// See [here][stack_height] for more details of the instrumentation
 ///
 /// [stack_height]: https://github.com/paritytech/wasm-utils/blob/d9432baf/src/stack_height/mod.rs#L1-L50
+#[derive(Clone)]
 pub struct DeterministicStackLimit {
 	/// A number of logical "values" that can be pushed on the wasm stack. A trap will be triggered
 	/// if exceeded.
@@ -469,6 +468,7 @@ enum InternalInstantiationStrategy {
 	Builtin,
 }
 
+#[derive(Clone)]
 pub struct Semantics {
 	/// The instantiation strategy to use.
 	pub instantiation_strategy: InstantiationStrategy,
@@ -502,27 +502,11 @@ pub struct Semantics {
 	/// Configures wasmtime to use multiple threads for compiling.
 	pub parallel_compilation: bool,
 
-	/// The number of extra WASM pages which will be allocated
-	/// on top of what is requested by the WASM blob itself.
-	pub extra_heap_pages: u64,
-
-	/// The total amount of memory in bytes an instance can request.
-	///
-	/// If specified, the runtime will be able to allocate only that much of wasm memory.
-	/// This is the total number and therefore the [`Semantics::extra_heap_pages`] is accounted
-	/// for.
-	///
-	/// That means that the initial number of pages of a linear memory plus the
-	/// [`Semantics::extra_heap_pages`] multiplied by the wasm page size (64KiB) should be less
-	/// than or equal to `max_memory_size`, otherwise the instance won't be created.
-	///
-	/// Moreover, `memory.grow` will fail (return -1) if the sum of sizes of currently mounted
-	/// and additional pages exceeds `max_memory_size`.
-	///
-	/// The default is `None`.
-	pub max_memory_size: Option<usize>,
+	/// The heap allocation strategy to use.
+	pub heap_alloc_strategy: HeapAllocStrategy,
 }
 
+#[derive(Clone)]
 pub struct Config {
 	/// The WebAssembly standard requires all imports of an instantiated module to be resolved,
 	/// otherwise, the instantiation fails. If this option is set to `true`, then this behavior is
@@ -599,11 +583,13 @@ where
 /// [`create_runtime_from_artifact`] to get more details.
 unsafe fn do_create_runtime<H>(
 	code_supply_mode: CodeSupplyMode<'_>,
-	config: Config,
+	mut config: Config,
 ) -> std::result::Result<WasmtimeRuntime, WasmError>
 where
 	H: HostFunctions,
 {
+	replace_strategy_if_broken(&mut config.semantics.instantiation_strategy);
+
 	let mut wasmtime_config = common_config(&config.semantics)?;
 	if let Some(ref cache_path) = config.cache_path {
 		if let Err(reason) = setup_wasmtime_caching(cache_path, &mut wasmtime_config) {
@@ -615,7 +601,7 @@ where
 	}
 
 	let engine = Engine::new(&wasmtime_config)
-		.map_err(|e| WasmError::Other(format!("cannot create the wasmtime engine: {}", e)))?;
+		.map_err(|e| WasmError::Other(format!("cannot create the wasmtime engine: {:#}", e)))?;
 
 	let (module, instantiation_strategy) = match code_supply_mode {
 		CodeSupplyMode::Fresh(blob) => {
@@ -623,7 +609,7 @@ where
 			let serialized_blob = blob.clone().serialize();
 
 			let module = wasmtime::Module::new(&engine, &serialized_blob)
-				.map_err(|e| WasmError::Other(format!("cannot create module: {}", e)))?;
+				.map_err(|e| WasmError::Other(format!("cannot create module: {:#}", e)))?;
 
 			match config.semantics.instantiation_strategy {
 				InstantiationStrategy::LegacyInstanceReuse => {
@@ -661,7 +647,7 @@ where
 			//
 			//         See [`create_runtime_from_artifact`] for more details.
 			let module = wasmtime::Module::deserialize_file(&engine, compiled_artifact_path)
-				.map_err(|e| WasmError::Other(format!("cannot deserialize module: {}", e)))?;
+				.map_err(|e| WasmError::Other(format!("cannot deserialize module: {:#}", e)))?;
 
 			(module, InternalInstantiationStrategy::Builtin)
 		},
@@ -670,18 +656,11 @@ where
 	let mut linker = wasmtime::Linker::new(&engine);
 	crate::imports::prepare_imports::<H>(&mut linker, &module, config.allow_missing_func_imports)?;
 
-	let mut store =
-		crate::instance_wrapper::create_store(module.engine(), config.semantics.max_memory_size);
 	let instance_pre = linker
-		.instantiate_pre(&mut store, &module)
-		.map_err(|e| WasmError::Other(format!("cannot preinstantiate module: {}", e)))?;
+		.instantiate_pre(&module)
+		.map_err(|e| WasmError::Other(format!("cannot preinstantiate module: {:#}", e)))?;
 
-	Ok(WasmtimeRuntime {
-		engine,
-		instance_pre: Arc::new(instance_pre),
-		instantiation_strategy,
-		config,
-	})
+	Ok(WasmtimeRuntime { engine, instance_pre: Arc::new(instance_pre), instantiation_strategy })
 }
 
 fn prepare_blob_for_compilation(
@@ -704,12 +683,7 @@ fn prepare_blob_for_compilation(
 	// now automatically take care of creating the memory for us, and it is also necessary
 	// to enable `wasmtime`'s instance pooling. (Imported memories are ineligible for pooling.)
 	blob.convert_memory_import_into_export()?;
-	blob.add_extra_heap_pages_to_memory_section(
-		semantics
-			.extra_heap_pages
-			.try_into()
-			.map_err(|e| WasmError::Other(format!("invalid `extra_heap_pages`: {}", e)))?,
-	)?;
+	blob.setup_memory_according_to_heap_alloc_strategy(semantics.heap_alloc_strategy)?;
 
 	Ok(blob)
 }
@@ -720,14 +694,17 @@ pub fn prepare_runtime_artifact(
 	blob: RuntimeBlob,
 	semantics: &Semantics,
 ) -> std::result::Result<Vec<u8>, WasmError> {
-	let blob = prepare_blob_for_compilation(blob, semantics)?;
+	let mut semantics = semantics.clone();
+	replace_strategy_if_broken(&mut semantics.instantiation_strategy);
 
-	let engine = Engine::new(&common_config(semantics)?)
-		.map_err(|e| WasmError::Other(format!("cannot create the engine: {}", e)))?;
+	let blob = prepare_blob_for_compilation(blob, &semantics)?;
+
+	let engine = Engine::new(&common_config(&semantics)?)
+		.map_err(|e| WasmError::Other(format!("cannot create the engine: {:#}", e)))?;
 
 	engine
 		.precompile_module(&blob.serialize())
-		.map_err(|e| WasmError::Other(format!("cannot precompile module: {}", e)))
+		.map_err(|e| WasmError::Other(format!("cannot precompile module: {:#}", e)))
 }
 
 fn perform_call(
@@ -735,6 +712,7 @@ fn perform_call(
 	instance_wrapper: &mut InstanceWrapper,
 	entrypoint: EntryPoint,
 	mut allocator: FreeingBumpHeapAllocator,
+	allocation_stats: &mut Option<AllocationStats>,
 ) -> Result<Vec<u8>> {
 	let (data_ptr, data_len) = inject_input_data(instance_wrapper, &mut allocator, data)?;
 
@@ -748,7 +726,10 @@ fn perform_call(
 		.map(unpack_ptr_and_len);
 
 	// Reset the host state
-	instance_wrapper.store_mut().data_mut().host_state = None;
+	let host_state = instance_wrapper.store_mut().data_mut().host_state.take().expect(
+		"the host state is always set before calling into WASM so it can't be None here; qed",
+	);
+	*allocation_stats = Some(host_state.allocation_stats());
 
 	let (output_ptr, output_len) = ret?;
 	let output = extract_output_data(instance_wrapper, output_ptr, output_len)?;
@@ -763,9 +744,8 @@ fn inject_input_data(
 ) -> Result<(Pointer<u8>, WordSize)> {
 	let mut ctx = instance.store_mut();
 	let memory = ctx.data().memory();
-	let memory = memory.data_mut(&mut ctx);
 	let data_len = data.len() as WordSize;
-	let data_ptr = allocator.allocate(memory, data_len)?;
+	let data_ptr = allocator.allocate(&mut MemoryWrapper(&memory, &mut ctx), data_len)?;
 	util::write_memory_from(instance.store_mut(), data_ptr, data)?;
 	Ok((data_ptr, data_len))
 }
@@ -775,7 +755,19 @@ fn extract_output_data(
 	output_ptr: u32,
 	output_len: u32,
 ) -> Result<Vec<u8>> {
+	let ctx = instance.store();
+
+	// Do a length check before allocating. The returned output should not be bigger than the
+	// available WASM memory. Otherwise, a malicious parachain can trigger a large allocation,
+	// potentially causing memory exhaustion.
+	//
+	// Get the size of the WASM memory in bytes.
+	let memory_size = ctx.as_context().data().memory().data_size(ctx);
+	if checked_range(output_ptr as usize, output_len as usize, memory_size).is_none() {
+		Err(WasmError::Other("output exceeds bounds of wasm memory".into()))?
+	}
 	let mut output = vec![0; output_len as usize];
-	util::read_memory_into(instance.store(), Pointer::new(output_ptr), &mut output)?;
+
+	util::read_memory_into(ctx, Pointer::new(output_ptr), &mut output)?;
 	Ok(output)
 }

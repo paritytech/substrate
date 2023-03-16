@@ -1,0 +1,5 @@
+error: `_` is not allowed as prefix by `storage_alias`.
+ --> tests/storage_alias_ui/prefix_must_be_an_ident.rs:2:34
+  |
+2 | type NoUnderscore = StorageValue<_, u32>;
+  |                                  ^

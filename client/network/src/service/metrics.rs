@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -24,7 +24,7 @@ use prometheus_endpoint::{
 use std::{
 	str,
 	sync::{
-		atomic::{AtomicBool, AtomicUsize, Ordering},
+		atomic::{AtomicUsize, Ordering},
 		Arc,
 	},
 };
@@ -34,7 +34,6 @@ pub use prometheus_endpoint::{Histogram, HistogramVec};
 /// Registers all networking metrics with the given registry.
 pub fn register(registry: &Registry, sources: MetricSources) -> Result<Metrics, PrometheusError> {
 	BandwidthCounters::register(registry, sources.bandwidth)?;
-	MajorSyncingGauge::register(registry, sources.major_syncing)?;
 	NumConnectedGauge::register(registry, sources.connected_peers)?;
 	Metrics::register(registry)
 }
@@ -42,7 +41,6 @@ pub fn register(registry: &Registry, sources: MetricSources) -> Result<Metrics, 
 /// Predefined metric sources that are fed directly into prometheus.
 pub struct MetricSources {
 	pub bandwidth: Arc<BandwidthSinks>,
-	pub major_syncing: Arc<AtomicBool>,
 	pub connected_peers: Arc<AtomicUsize>,
 }
 
@@ -53,15 +51,13 @@ pub struct Metrics {
 	pub connections_opened_total: CounterVec<U64>,
 	pub distinct_peers_connections_closed_total: Counter<U64>,
 	pub distinct_peers_connections_opened_total: Counter<U64>,
-	pub import_queue_blocks_submitted: Counter<U64>,
-	pub import_queue_justifications_submitted: Counter<U64>,
 	pub incoming_connections_errors_total: CounterVec<U64>,
 	pub incoming_connections_total: Counter<U64>,
 	pub issued_light_requests: Counter<U64>,
 	pub kademlia_query_duration: HistogramVec,
-	pub kademlia_random_queries_total: CounterVec<U64>,
-	pub kademlia_records_count: GaugeVec<U64>,
-	pub kademlia_records_sizes_total: GaugeVec<U64>,
+	pub kademlia_random_queries_total: Counter<U64>,
+	pub kademlia_records_count: Gauge<U64>,
+	pub kademlia_records_sizes_total: Gauge<U64>,
 	pub kbuckets_num_nodes: GaugeVec<U64>,
 	pub listeners_local_addresses: Gauge<U64>,
 	pub listeners_errors_total: Counter<U64>,
@@ -103,14 +99,6 @@ impl Metrics {
 					"substrate_sub_libp2p_distinct_peers_connections_opened_total",
 					"Total number of connections opened with distinct peers"
 			)?, registry)?,
-			import_queue_blocks_submitted: prometheus::register(Counter::new(
-				"substrate_import_queue_blocks_submitted",
-				"Number of blocks submitted to the import queue.",
-			)?, registry)?,
-			import_queue_justifications_submitted: prometheus::register(Counter::new(
-				"substrate_import_queue_justifications_submitted",
-				"Number of justifications submitted to the import queue.",
-			)?, registry)?,
 			incoming_connections_errors_total: prometheus::register(CounterVec::new(
 				Opts::new(
 					"substrate_sub_libp2p_incoming_connections_handshake_errors_total",
@@ -138,33 +126,24 @@ impl Metrics {
 				},
 				&["type"]
 			)?, registry)?,
-			kademlia_random_queries_total: prometheus::register(CounterVec::new(
-				Opts::new(
-					"substrate_sub_libp2p_kademlia_random_queries_total",
-					"Number of random Kademlia queries started"
-				),
-				&["protocol"]
+			kademlia_random_queries_total: prometheus::register(Counter::new(
+				"substrate_sub_libp2p_kademlia_random_queries_total",
+				"Number of random Kademlia queries started",
 			)?, registry)?,
-			kademlia_records_count: prometheus::register(GaugeVec::new(
-				Opts::new(
-					"substrate_sub_libp2p_kademlia_records_count",
-					"Number of records in the Kademlia records store"
-				),
-				&["protocol"]
+			kademlia_records_count: prometheus::register(Gauge::new(
+				"substrate_sub_libp2p_kademlia_records_count",
+				"Number of records in the Kademlia records store",
 			)?, registry)?,
-			kademlia_records_sizes_total: prometheus::register(GaugeVec::new(
-				Opts::new(
-					"substrate_sub_libp2p_kademlia_records_sizes_total",
-					"Total size of all the records in the Kademlia records store"
-				),
-				&["protocol"]
+			kademlia_records_sizes_total: prometheus::register(Gauge::new(
+				"substrate_sub_libp2p_kademlia_records_sizes_total",
+				"Total size of all the records in the Kademlia records store",
 			)?, registry)?,
 			kbuckets_num_nodes: prometheus::register(GaugeVec::new(
 				Opts::new(
 					"substrate_sub_libp2p_kbuckets_num_nodes",
 					"Number of nodes per kbucket per Kademlia instance"
 				),
-				&["protocol", "lower_ilog2_bucket_bound"]
+				&["lower_ilog2_bucket_bound"]
 			)?, registry)?,
 			listeners_local_addresses: prometheus::register(Gauge::new(
 				"substrate_sub_libp2p_listeners_local_addresses",
@@ -282,37 +261,6 @@ impl MetricSource for BandwidthCounters {
 	fn collect(&self, mut set: impl FnMut(&[&str], Self::N)) {
 		set(&["in"], self.0.total_inbound());
 		set(&["out"], self.0.total_outbound());
-	}
-}
-
-/// The "major syncing" metric.
-#[derive(Clone)]
-pub struct MajorSyncingGauge(Arc<AtomicBool>);
-
-impl MajorSyncingGauge {
-	/// Registers the `MajorSyncGauge` metric whose value is
-	/// obtained from the given `AtomicBool`.
-	fn register(registry: &Registry, value: Arc<AtomicBool>) -> Result<(), PrometheusError> {
-		prometheus::register(
-			SourcedGauge::new(
-				&Opts::new(
-					"substrate_sub_libp2p_is_major_syncing",
-					"Whether the node is performing a major sync or not.",
-				),
-				MajorSyncingGauge(value),
-			)?,
-			registry,
-		)?;
-
-		Ok(())
-	}
-}
-
-impl MetricSource for MajorSyncingGauge {
-	type N = u64;
-
-	fn collect(&self, mut set: impl FnMut(&[&str], Self::N)) {
-		set(&[], self.0.load(Ordering::Relaxed) as u64);
 	}
 }
 

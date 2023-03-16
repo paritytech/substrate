@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +19,6 @@
 
 use super::*;
 use crate as pallet_timestamp;
-use sp_std::cell::RefCell;
 
 use frame_support::{
 	parameter_types,
@@ -47,25 +46,21 @@ frame_support::construct_runtime!(
 	}
 );
 
-parameter_types! {
-	pub BlockWeights: frame_system::limits::BlockWeights =
-	frame_system::limits::BlockWeights::simple_max(1024);
-}
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -78,14 +73,14 @@ impl frame_system::Config for Test {
 	type MaxConsumers = ConstU32<16>;
 }
 
-thread_local! {
-	pub static CAPTURED_MOMENT: RefCell<Option<Moment>> = RefCell::new(None);
+parameter_types! {
+	pub static CapturedMoment: Option<Moment> = None;
 }
 
 pub struct MockOnTimestampSet;
 impl OnTimestampSet<Moment> for MockOnTimestampSet {
 	fn on_timestamp_set(moment: Moment) {
-		CAPTURED_MOMENT.with(|x| *x.borrow_mut() = Some(moment));
+		CapturedMoment::mutate(|x| *x = Some(moment));
 	}
 }
 
@@ -97,11 +92,11 @@ impl Config for Test {
 }
 
 pub(crate) fn clear_captured_moment() {
-	CAPTURED_MOMENT.with(|x| *x.borrow_mut() = None);
+	CapturedMoment::mutate(|x| *x = None);
 }
 
 pub(crate) fn get_captured_moment() -> Option<Moment> {
-	CAPTURED_MOMENT.with(|x| x.borrow().clone())
+	CapturedMoment::get()
 }
 
 pub(crate) fn new_test_ext() -> TestExternalities {

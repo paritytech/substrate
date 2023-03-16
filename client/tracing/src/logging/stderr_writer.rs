@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -89,7 +89,7 @@ fn flush_logs(mut buffer: parking_lot::lock_api::MutexGuard<parking_lot::RawMute
 
 	let stderr = std::io::stderr();
 	let mut stderr_lock = stderr.lock();
-	let _ = stderr_lock.write_all(&*spare_buffer);
+	let _ = stderr_lock.write_all(&spare_buffer);
 	std::mem::drop(stderr_lock);
 
 	spare_buffer.clear();

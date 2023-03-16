@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,7 @@
 //! Storage counted map type.
 
 use crate::{
-	metadata::StorageEntryMetadata,
+	metadata_ir::StorageEntryMetadataIR,
 	storage::{
 		generator::StorageMap as _,
 		types::{
@@ -134,7 +134,10 @@ where
 
 	/// Store or remove the value to be associated with `key` so that `get` returns the `query`.
 	pub fn set<KeyArg: EncodeLike<Key>>(key: KeyArg, q: QueryKind::Query) {
-		<Self as MapWrapper>::Map::set(key, q)
+		match QueryKind::from_query_to_optional_value(q) {
+			Some(v) => Self::insert(key, v),
+			None => Self::remove(key),
+		}
 	}
 
 	/// Swap the values of two keys.
@@ -143,10 +146,7 @@ where
 	}
 
 	/// Store a value to be associated with the given key from the map.
-	pub fn insert<KeyArg: EncodeLike<Key> + Clone, ValArg: EncodeLike<Value>>(
-		key: KeyArg,
-		val: ValArg,
-	) {
+	pub fn insert<KeyArg: EncodeLike<Key>, ValArg: EncodeLike<Value>>(key: KeyArg, val: ValArg) {
 		if !<Self as MapWrapper>::Map::contains_key(Ref::from(&key)) {
 			CounterFor::<Prefix>::mutate(|value| value.saturating_inc());
 		}
@@ -154,7 +154,7 @@ where
 	}
 
 	/// Remove the value under a key.
-	pub fn remove<KeyArg: EncodeLike<Key> + Clone>(key: KeyArg) {
+	pub fn remove<KeyArg: EncodeLike<Key>>(key: KeyArg) {
 		if <Self as MapWrapper>::Map::contains_key(Ref::from(&key)) {
 			CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
 		}
@@ -162,7 +162,7 @@ where
 	}
 
 	/// Mutate the value under a key.
-	pub fn mutate<KeyArg: EncodeLike<Key> + Clone, R, F: FnOnce(&mut QueryKind::Query) -> R>(
+	pub fn mutate<KeyArg: EncodeLike<Key>, R, F: FnOnce(&mut QueryKind::Query) -> R>(
 		key: KeyArg,
 		f: F,
 	) -> R {
@@ -173,7 +173,7 @@ where
 	/// Mutate the item, only if an `Ok` value is returned.
 	pub fn try_mutate<KeyArg, R, E, F>(key: KeyArg, f: F) -> Result<R, E>
 	where
-		KeyArg: EncodeLike<Key> + Clone,
+		KeyArg: EncodeLike<Key>,
 		F: FnOnce(&mut QueryKind::Query) -> Result<R, E>,
 	{
 		Self::try_mutate_exists(key, |option_value_ref| {
@@ -187,7 +187,7 @@ where
 	}
 
 	/// Mutate the value under a key. Deletes the item if mutated to a `None`.
-	pub fn mutate_exists<KeyArg: EncodeLike<Key> + Clone, R, F: FnOnce(&mut Option<Value>) -> R>(
+	pub fn mutate_exists<KeyArg: EncodeLike<Key>, R, F: FnOnce(&mut Option<Value>) -> R>(
 		key: KeyArg,
 		f: F,
 	) -> R {
@@ -200,7 +200,7 @@ where
 	/// or if the storage item does not exist (`None`), independent of the `QueryType`.
 	pub fn try_mutate_exists<KeyArg, R, E, F>(key: KeyArg, f: F) -> Result<R, E>
 	where
-		KeyArg: EncodeLike<Key> + Clone,
+		KeyArg: EncodeLike<Key>,
 		F: FnOnce(&mut Option<Value>) -> Result<R, E>,
 	{
 		<Self as MapWrapper>::Map::try_mutate_exists(key, |option_value| {
@@ -222,7 +222,7 @@ where
 	}
 
 	/// Take the value under a key.
-	pub fn take<KeyArg: EncodeLike<Key> + Clone>(key: KeyArg) -> QueryKind::Query {
+	pub fn take<KeyArg: EncodeLike<Key>>(key: KeyArg) -> QueryKind::Query {
 		let removed_value = <Self as MapWrapper>::Map::mutate_exists(key, |value| value.take());
 		if removed_value.is_some() {
 			CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
@@ -240,7 +240,7 @@ where
 	/// `[item]`. Any default value set for the storage item will be ignored on overwrite.
 	pub fn append<Item, EncodeLikeItem, EncodeLikeKey>(key: EncodeLikeKey, item: EncodeLikeItem)
 	where
-		EncodeLikeKey: EncodeLike<Key> + Clone,
+		EncodeLikeKey: EncodeLike<Key>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
 		Value: StorageAppend<Item>,
@@ -355,7 +355,7 @@ where
 	/// Is only available if `Value` of the storage implements [`StorageTryAppend`].
 	pub fn try_append<KArg, Item, EncodeLikeItem>(key: KArg, item: EncodeLikeItem) -> Result<(), ()>
 	where
-		KArg: EncodeLike<Key> + Clone,
+		KArg: EncodeLike<Key>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
 		Value: StorageTryAppend<Item>,
@@ -459,7 +459,7 @@ where
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
 {
-	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>) {
+	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadataIR>) {
 		<Self as MapWrapper>::Map::build_metadata(docs, entries);
 		CounterFor::<Prefix>::build_metadata(
 			if cfg!(feature = "no-metadata-docs") {
@@ -512,7 +512,7 @@ mod test {
 	use super::*;
 	use crate::{
 		hash::*,
-		metadata::{StorageEntryModifier, StorageEntryType, StorageHasher},
+		metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR},
 		storage::{bounded_vec::BoundedVec, types::ValueQuery},
 		traits::ConstU32,
 	};
@@ -542,6 +542,16 @@ mod test {
 		fn get() -> u32 {
 			97
 		}
+	}
+	#[crate::storage_alias]
+	type ExampleCountedMap = CountedStorageMap<Prefix, Twox64Concat, u16, u32>;
+
+	#[test]
+	fn storage_alias_works() {
+		TestExternalities::default().execute_with(|| {
+			assert_eq!(ExampleCountedMap::count(), 0);
+			ExampleCountedMap::insert(3, 10);
+		})
 	}
 
 	#[test]
@@ -748,6 +758,22 @@ mod test {
 
 			// Test initialize_counter.
 			assert_eq!(A::initialize_counter(), 2);
+
+			// Set non-existing.
+			A::set(30, 100);
+
+			assert_eq!(A::contains_key(30), true);
+			assert_eq!(A::get(30), 100);
+			assert_eq!(A::try_get(30), Ok(100));
+			assert_eq!(A::count(), 3);
+
+			// Set existing.
+			A::set(30, 101);
+
+			assert_eq!(A::contains_key(30), true);
+			assert_eq!(A::get(30), 101);
+			assert_eq!(A::try_get(30), Ok(101));
+			assert_eq!(A::count(), 3);
 		})
 	}
 
@@ -979,6 +1005,40 @@ mod test {
 
 			// Test initialize_counter.
 			assert_eq!(B::initialize_counter(), 2);
+
+			// Set non-existing.
+			B::set(30, Some(100));
+
+			assert_eq!(B::contains_key(30), true);
+			assert_eq!(B::get(30), Some(100));
+			assert_eq!(B::try_get(30), Ok(100));
+			assert_eq!(B::count(), 3);
+
+			// Set existing.
+			B::set(30, Some(101));
+
+			assert_eq!(B::contains_key(30), true);
+			assert_eq!(B::get(30), Some(101));
+			assert_eq!(B::try_get(30), Ok(101));
+			assert_eq!(B::count(), 3);
+
+			// Unset existing.
+			B::set(30, None);
+
+			assert_eq!(B::contains_key(30), false);
+			assert_eq!(B::get(30), None);
+			assert_eq!(B::try_get(30), Err(()));
+
+			assert_eq!(B::count(), 2);
+
+			// Unset non-existing.
+			B::set(31, None);
+
+			assert_eq!(B::contains_key(31), false);
+			assert_eq!(B::get(31), None);
+			assert_eq!(B::try_get(31), Err(()));
+
+			assert_eq!(B::count(), 2);
 		})
 	}
 
@@ -1087,21 +1147,21 @@ mod test {
 		assert_eq!(
 			entries,
 			vec![
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "foo",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Twox64Concat],
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Twox64Concat],
 						key: scale_info::meta_type::<u16>(),
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: 97u32.encode(),
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "counter_for_foo",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 					default: vec![0, 0, 0, 0],
 					docs: if cfg!(feature = "no-metadata-docs") {
 						vec![]

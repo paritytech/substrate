@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,12 +19,13 @@
 //! StoragePrefixedDoubleMap traits and their methods directly.
 
 use crate::{
-	metadata::{StorageEntryMetadata, StorageEntryType},
+	metadata_ir::{StorageEntryMetadataIR, StorageEntryTypeIR},
 	storage::{
 		types::{OptionQuery, QueryKindTrait, StorageEntryMetadataBuilder},
 		KeyLenOf, StorageAppend, StorageDecodeLength, StoragePrefixedMap, StorageTryAppend,
 	},
 	traits::{Get, GetDefault, StorageInfo, StorageInstance},
+	StorageHasher, Twox128,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use sp_arithmetic::traits::SaturatedConversion;
@@ -91,10 +92,10 @@ impl<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty, MaxValues>
 	Key2: MaxEncodedLen,
 {
 	fn get() -> u32 {
-		let z = Hasher1::max_len::<Key1>() +
-			Hasher2::max_len::<Key2>() +
-			Prefix::pallet_prefix().len() +
-			Prefix::STORAGE_PREFIX.len();
+		// The `max_len` of both key hashes plus the pallet prefix and storage prefix (which both
+		// are hashed with `Twox128`).
+		let z =
+			Hasher1::max_len::<Key1>() + Hasher2::max_len::<Key2>() + Twox128::max_len::<()>() * 2;
 		z as u32
 	}
 }
@@ -655,13 +656,13 @@ where
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
 {
-	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>) {
+	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadataIR>) {
 		let docs = if cfg!(feature = "no-metadata-docs") { vec![] } else { docs };
 
-		let entry = StorageEntryMetadata {
+		let entry = StorageEntryMetadataIR {
 			name: Prefix::STORAGE_PREFIX,
 			modifier: QueryKind::METADATA,
-			ty: StorageEntryType::Map {
+			ty: StorageEntryTypeIR::Map {
 				hashers: vec![Hasher1::METADATA, Hasher2::METADATA],
 				key: scale_info::meta_type::<(Key1, Key2)>(),
 				value: scale_info::meta_type::<Value>(),
@@ -735,7 +736,7 @@ mod test {
 	use super::*;
 	use crate::{
 		hash::*,
-		metadata::{StorageEntryModifier, StorageEntryType, StorageHasher},
+		metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR},
 		storage::types::ValueQuery,
 	};
 	use sp_io::{hashing::twox_128, TestExternalities};
@@ -753,6 +754,16 @@ mod test {
 		fn get() -> u32 {
 			97
 		}
+	}
+
+	#[test]
+	fn keylenof_works() {
+		// Works with Blake2_128Concat and Twox64Concat.
+		type A = StorageDoubleMap<Prefix, Blake2_128Concat, u64, Twox64Concat, u32, u32>;
+		let size = 16 * 2 // Two Twox128
+			+ 16 + 8 // Blake2_128Concat = hash + key
+			+ 8 + 4; // Twox64Concat = hash + key
+		assert_eq!(KeyLenOf::<A>::get(), size);
 	}
 
 	#[test]
@@ -905,13 +916,13 @@ mod test {
 			assert_eq!(
 				entries,
 				vec![
-					StorageEntryMetadata {
+					StorageEntryMetadataIR {
 						name: "foo",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Map {
+						modifier: StorageEntryModifierIR::Optional,
+						ty: StorageEntryTypeIR::Map {
 							hashers: vec![
-								StorageHasher::Blake2_128Concat,
-								StorageHasher::Twox64Concat
+								StorageHasherIR::Blake2_128Concat,
+								StorageHasherIR::Twox64Concat
 							],
 							key: scale_info::meta_type::<(u16, u8)>(),
 							value: scale_info::meta_type::<u32>(),
@@ -919,13 +930,13 @@ mod test {
 						default: Option::<u32>::None.encode(),
 						docs: vec![],
 					},
-					StorageEntryMetadata {
+					StorageEntryMetadataIR {
 						name: "foo",
-						modifier: StorageEntryModifier::Default,
-						ty: StorageEntryType::Map {
+						modifier: StorageEntryModifierIR::Default,
+						ty: StorageEntryTypeIR::Map {
 							hashers: vec![
-								StorageHasher::Blake2_128Concat,
-								StorageHasher::Twox64Concat
+								StorageHasherIR::Blake2_128Concat,
+								StorageHasherIR::Twox64Concat
 							],
 							key: scale_info::meta_type::<(u16, u8)>(),
 							value: scale_info::meta_type::<u32>(),

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -89,7 +89,7 @@ sp_api::decl_runtime_apis! {
 		/// Currently, only the value provided by this type at genesis will be used.
 		fn slot_duration() -> SlotDuration;
 
-		// Return the current set of authorities.
+		/// Return the current set of authorities.
 		fn authorities() -> Vec<AuthorityId>;
 	}
 }

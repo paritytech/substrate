@@ -8,12 +8,12 @@ mod pallet_old {
 	}
 
 	decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::Origin {}
+		pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {}
 	}
 
 }
 construct_runtime! {
-	pub enum Runtime where
+	pub struct Runtime where
 		UncheckedExtrinsic = UncheckedExtrinsic,
 		Block = Block,
 		NodeBlock = Block,

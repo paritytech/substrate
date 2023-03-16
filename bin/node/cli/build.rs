@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@ fn main() {
 mod cli {
 	include!("src/cli.rs");
 
-	use clap::{ArgEnum, CommandFactory};
+	use clap::{CommandFactory, ValueEnum};
 	use clap_complete::{generate_to, Shell};
 	use std::{env, fs, path::Path};
 	use substrate_build_script_utils::{generate_cargo_keys, rerun_if_git_head_changed};

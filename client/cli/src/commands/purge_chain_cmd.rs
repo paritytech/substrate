@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -33,7 +33,7 @@ use std::{
 #[derive(Debug, Clone, Parser)]
 pub struct PurgeChainCmd {
 	/// Skip interactive prompt by answering yes automatically.
-	#[clap(short = 'y')]
+	#[arg(short = 'y')]
 	pub yes: bool,
 
 	#[allow(missing_docs)]

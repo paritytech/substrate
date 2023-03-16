@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -17,7 +17,11 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use codec::{Decode as _, Encode as _};
-use sc_executor_common::{error::Error, runtime_blob::RuntimeBlob, wasm_runtime::WasmModule};
+use sc_executor_common::{
+	error::Error,
+	runtime_blob::RuntimeBlob,
+	wasm_runtime::{HeapAllocStrategy, WasmModule},
+};
 use sc_runtime_test::wasm_binary_unwrap;
 
 use crate::InstantiationStrategy;
@@ -77,8 +81,7 @@ struct RuntimeBuilder {
 	instantiation_strategy: InstantiationStrategy,
 	canonicalize_nans: bool,
 	deterministic_stack: bool,
-	extra_heap_pages: u64,
-	max_memory_size: Option<usize>,
+	heap_pages: HeapAllocStrategy,
 	precompile_runtime: bool,
 	tmpdir: Option<tempfile::TempDir>,
 }
@@ -90,8 +93,7 @@ impl RuntimeBuilder {
 			instantiation_strategy,
 			canonicalize_nans: false,
 			deterministic_stack: false,
-			extra_heap_pages: 1024,
-			max_memory_size: None,
+			heap_pages: HeapAllocStrategy::Static { extra_pages: 1024 },
 			precompile_runtime: false,
 			tmpdir: None,
 		}
@@ -117,12 +119,12 @@ impl RuntimeBuilder {
 		self
 	}
 
-	fn max_memory_size(mut self, max_memory_size: Option<usize>) -> Self {
-		self.max_memory_size = max_memory_size;
+	fn heap_alloc_strategy(mut self, heap_pages: HeapAllocStrategy) -> Self {
+		self.heap_pages = heap_pages;
 		self
 	}
 
-	fn build<'a>(&'a mut self) -> impl WasmModule + 'a {
+	fn build(&mut self) -> impl WasmModule + '_ {
 		let blob = {
 			let wasm: Vec<u8>;
 
@@ -152,8 +154,7 @@ impl RuntimeBuilder {
 				},
 				canonicalize_nans: self.canonicalize_nans,
 				parallel_compilation: true,
-				extra_heap_pages: self.extra_heap_pages,
-				max_memory_size: self.max_memory_size,
+				heap_alloc_strategy: self.heap_pages,
 			},
 		};
 
@@ -171,6 +172,85 @@ impl RuntimeBuilder {
 			crate::create_runtime::<HostFunctions>(blob, config)
 		}
 		.expect("cannot create runtime")
+	}
+}
+
+fn deep_call_stack_wat(depth: usize) -> String {
+	format!(
+		r#"
+			(module
+			  (memory $0 32)
+			  (export "memory" (memory $0))
+			  (global (export "__heap_base") i32 (i32.const 0))
+			  (func (export "overflow") call 0)
+
+			  (func $overflow (param $0 i32)
+			    (block $label$1
+			      (br_if $label$1
+			        (i32.ge_u
+			          (local.get $0)
+			          (i32.const {depth})
+			        )
+			      )
+			      (call $overflow
+			        (i32.add
+			          (local.get $0)
+			          (i32.const 1)
+			        )
+			      )
+			    )
+			  )
+
+			  (func (export "main")
+			    (param i32 i32) (result i64)
+			    (call $overflow (i32.const 0))
+			    (i64.const 0)
+			  )
+			)
+		"#
+	)
+}
+
+// These two tests ensure that the `wasmtime`'s stack size limit and the amount of
+// stack space used by a single stack frame doesn't suddenly change without us noticing.
+//
+// If they do (e.g. because we've pulled in a new version of `wasmtime`) we want to know
+// that it did, regardless of how small the change was.
+//
+// If these tests starting failing it doesn't necessarily mean that something is broken;
+// what it means is that one (or multiple) of the following has to be done:
+//   a) the tests may need to be updated for the new call depth,
+//   b) the stack limit may need to be changed to maintain backwards compatibility,
+//   c) the root cause of the new call depth limit determined, and potentially fixed,
+//   d) the new call depth limit may need to be validated to ensure it doesn't prevent any
+//      existing chain from syncing (if it was effectively decreased)
+
+// We need two limits here since depending on whether the code is compiled in debug
+// or in release mode the maximum call depth is slightly different.
+const CALL_DEPTH_LOWER_LIMIT: usize = 65455;
+const CALL_DEPTH_UPPER_LIMIT: usize = 65509;
+
+test_wasm_execution!(test_consume_under_1mb_of_stack_does_not_trap);
+fn test_consume_under_1mb_of_stack_does_not_trap(instantiation_strategy: InstantiationStrategy) {
+	let wat = deep_call_stack_wat(CALL_DEPTH_LOWER_LIMIT);
+	let mut builder = RuntimeBuilder::new(instantiation_strategy).use_wat(wat);
+	let runtime = builder.build();
+	let mut instance = runtime.new_instance().expect("failed to instantiate a runtime");
+	instance.call_export("main", &[]).unwrap();
+}
+
+test_wasm_execution!(test_consume_over_1mb_of_stack_does_trap);
+fn test_consume_over_1mb_of_stack_does_trap(instantiation_strategy: InstantiationStrategy) {
+	let wat = deep_call_stack_wat(CALL_DEPTH_UPPER_LIMIT + 1);
+	let mut builder = RuntimeBuilder::new(instantiation_strategy).use_wat(wat);
+	let runtime = builder.build();
+	let mut instance = runtime.new_instance().expect("failed to instantiate a runtime");
+	match instance.call_export("main", &[]).unwrap_err() {
+		Error::AbortedDueToTrap(error) => {
+			let expected = "wasm trap: call stack exhausted";
+			assert_eq!(error.message, expected);
+		},
+		error => panic!("unexpected error: {:?}", error),
 	}
 }
 
@@ -265,29 +345,25 @@ fn test_max_memory_pages(
 	import_memory: bool,
 	precompile_runtime: bool,
 ) {
-	fn try_instantiate(
-		max_memory_size: Option<usize>,
+	fn call(
+		heap_alloc_strategy: HeapAllocStrategy,
 		wat: String,
 		instantiation_strategy: InstantiationStrategy,
 		precompile_runtime: bool,
 	) -> Result<(), Box<dyn std::error::Error>> {
 		let mut builder = RuntimeBuilder::new(instantiation_strategy)
 			.use_wat(wat)
-			.max_memory_size(max_memory_size)
+			.heap_alloc_strategy(heap_alloc_strategy)
 			.precompile_runtime(precompile_runtime);
 
 		let runtime = builder.build();
-		let mut instance = runtime.new_instance()?;
+		let mut instance = runtime.new_instance().unwrap();
 		let _ = instance.call_export("main", &[])?;
 		Ok(())
 	}
 
-	fn memory(initial: u32, maximum: Option<u32>, import: bool) -> String {
-		let memory = if let Some(maximum) = maximum {
-			format!("(memory $0 {} {})", initial, maximum)
-		} else {
-			format!("(memory $0 {})", initial)
-		};
+	fn memory(initial: u32, maximum: u32, import: bool) -> String {
+		let memory = format!("(memory $0 {} {})", initial, maximum);
 
 		if import {
 			format!("(import \"env\" \"memory\" {})", memory)
@@ -296,152 +372,90 @@ fn test_max_memory_pages(
 		}
 	}
 
-	const WASM_PAGE_SIZE: usize = 65536;
+	let assert_grow_ok = |alloc_strategy: HeapAllocStrategy, initial_pages: u32, max_pages: u32| {
+		eprintln!("assert_grow_ok({alloc_strategy:?}, {initial_pages}, {max_pages})");
 
-	// check the old behavior if preserved. That is, if no limit is set we allow 4 GiB of memory.
-	try_instantiate(
-		None,
-		format!(
-			r#"
-			(module
-				{}
-				(global (export "__heap_base") i32 (i32.const 0))
-				(func (export "main")
-					(param i32 i32) (result i64)
-					(i64.const 0)
-				)
-			)
-			"#,
-			/*
-				We want to allocate the maximum number of pages supported in wasm for this test.
-				However, due to a bug in wasmtime (I think wasmi is also affected) it is only possible
-				to allocate 65536 - 1 pages.
+		call(
+			alloc_strategy,
+			format!(
+				r#"
+					(module
+						{}
+						(global (export "__heap_base") i32 (i32.const 0))
+						(func (export "main")
+							(param i32 i32) (result i64)
 
-				Then, during creation of the Substrate Runtime instance, 1024 (heap_pages) pages are
-				mounted.
-
-				Thus 65535 = 64511 + 1024
-			*/
-			memory(64511, None, import_memory)
-		),
-		instantiation_strategy,
-		precompile_runtime,
-	)
-	.unwrap();
-
-	// max is not specified, therefore it's implied to be 65536 pages (4 GiB).
-	//
-	// max_memory_size = (1 (initial) + 1024 (heap_pages)) * WASM_PAGE_SIZE
-	try_instantiate(
-		Some((1 + 1024) * WASM_PAGE_SIZE),
-		format!(
-			r#"
-			(module
-				{}
-				(global (export "__heap_base") i32 (i32.const 0))
-				(func (export "main")
-					(param i32 i32) (result i64)
-					(i64.const 0)
-				)
-			)
-			"#,
-			// 1 initial, max is not specified.
-			memory(1, None, import_memory)
-		),
-		instantiation_strategy,
-		precompile_runtime,
-	)
-	.unwrap();
-
-	// max is specified explicitly to 2048 pages.
-	try_instantiate(
-		Some((1 + 1024) * WASM_PAGE_SIZE),
-		format!(
-			r#"
-			(module
-				{}
-				(global (export "__heap_base") i32 (i32.const 0))
-				(func (export "main")
-					(param i32 i32) (result i64)
-					(i64.const 0)
-				)
-			)
-			"#,
-			// Max is 2048.
-			memory(1, Some(2048), import_memory)
-		),
-		instantiation_strategy,
-		precompile_runtime,
-	)
-	.unwrap();
-
-	// memory grow should work as long as it doesn't exceed 1025 pages in total.
-	try_instantiate(
-		Some((0 + 1024 + 25) * WASM_PAGE_SIZE),
-		format!(
-			r#"
-			(module
-				{}
-				(global (export "__heap_base") i32 (i32.const 0))
-				(func (export "main")
-					(param i32 i32) (result i64)
-
-					;; assert(memory.grow returns != -1)
-					(if
-						(i32.eq
-							(memory.grow
-								(i32.const 25)
+							;; assert(memory.grow returns != -1)
+							(if
+								(i32.eq
+									(memory.grow
+										(i32.const 1)
+									)
+									(i32.const -1)
+								)
+								(unreachable)
 							)
-							(i32.const -1)
+
+							(i64.const 0)
 						)
-						(unreachable)
 					)
-
-					(i64.const 0)
-				)
-			)
 			"#,
-			// Zero starting pages.
-			memory(0, None, import_memory)
-		),
-		instantiation_strategy,
-		precompile_runtime,
-	)
-	.unwrap();
+				memory(initial_pages, max_pages, import_memory)
+			),
+			instantiation_strategy,
+			precompile_runtime,
+		)
+		.unwrap()
+	};
 
-	// We start with 1025 pages and try to grow at least one.
-	try_instantiate(
-		Some((1 + 1024) * WASM_PAGE_SIZE),
-		format!(
-			r#"
-			(module
-				{}
-				(global (export "__heap_base") i32 (i32.const 0))
-				(func (export "main")
-					(param i32 i32) (result i64)
+	let assert_grow_fail =
+		|alloc_strategy: HeapAllocStrategy, initial_pages: u32, max_pages: u32| {
+			eprintln!("assert_grow_fail({alloc_strategy:?}, {initial_pages}, {max_pages})");
 
-					;; assert(memory.grow returns == -1)
-					(if
-						(i32.ne
-							(memory.grow
-								(i32.const 1)
+			call(
+				alloc_strategy,
+				format!(
+					r#"
+						(module
+							{}
+							(global (export "__heap_base") i32 (i32.const 0))
+							(func (export "main")
+								(param i32 i32) (result i64)
+
+								;; assert(memory.grow returns == -1)
+								(if
+									(i32.ne
+										(memory.grow
+											(i32.const 1)
+										)
+										(i32.const -1)
+									)
+									(unreachable)
+								)
+
+								(i64.const 0)
 							)
-							(i32.const -1)
 						)
-						(unreachable)
-					)
-
-					(i64.const 0)
-				)
+					"#,
+					memory(initial_pages, max_pages, import_memory)
+				),
+				instantiation_strategy,
+				precompile_runtime,
 			)
-			"#,
-			// Initial=1, meaning after heap pages mount the total will be already 1025.
-			memory(1, None, import_memory)
-		),
-		instantiation_strategy,
-		precompile_runtime,
-	)
-	.unwrap();
+			.unwrap()
+		};
+
+	assert_grow_ok(HeapAllocStrategy::Dynamic { maximum_pages: Some(10) }, 1, 10);
+	assert_grow_ok(HeapAllocStrategy::Dynamic { maximum_pages: Some(10) }, 9, 10);
+	assert_grow_fail(HeapAllocStrategy::Dynamic { maximum_pages: Some(10) }, 10, 10);
+
+	assert_grow_ok(HeapAllocStrategy::Dynamic { maximum_pages: None }, 1, 10);
+	assert_grow_ok(HeapAllocStrategy::Dynamic { maximum_pages: None }, 9, 10);
+	assert_grow_ok(HeapAllocStrategy::Dynamic { maximum_pages: None }, 10, 10);
+
+	assert_grow_fail(HeapAllocStrategy::Static { extra_pages: 10 }, 1, 10);
+	assert_grow_fail(HeapAllocStrategy::Static { extra_pages: 10 }, 9, 10);
+	assert_grow_fail(HeapAllocStrategy::Static { extra_pages: 10 }, 10, 10);
 }
 
 // This test takes quite a while to execute in a debug build (over 6 minutes on a TR 3970x)
@@ -459,8 +473,7 @@ fn test_instances_without_reuse_are_not_leaked() {
 				deterministic_stack_limit: None,
 				canonicalize_nans: false,
 				parallel_compilation: true,
-				extra_heap_pages: 2048,
-				max_memory_size: None,
+				heap_alloc_strategy: HeapAllocStrategy::Static { extra_pages: 2048 },
 			},
 		},
 	)
@@ -474,5 +487,40 @@ fn test_instances_without_reuse_are_not_leaked() {
 	let mut instance = runtime.new_instance().unwrap();
 	for _ in 0..10001 {
 		instance.call_export("test_empty_return", &[0]).unwrap();
+	}
+}
+
+#[test]
+fn test_rustix_version_matches_with_wasmtime() {
+	let metadata = cargo_metadata::MetadataCommand::new()
+		.manifest_path("../../../Cargo.toml")
+		.exec()
+		.unwrap();
+
+	let wasmtime_rustix = metadata
+		.packages
+		.iter()
+		.find(|pkg| pkg.name == "wasmtime-runtime")
+		.unwrap()
+		.dependencies
+		.iter()
+		.find(|dep| dep.name == "rustix")
+		.unwrap();
+	let our_rustix = metadata
+		.packages
+		.iter()
+		.find(|pkg| pkg.name == "sc-executor-wasmtime")
+		.unwrap()
+		.dependencies
+		.iter()
+		.find(|dep| dep.name == "rustix")
+		.unwrap();
+
+	if wasmtime_rustix.req != our_rustix.req {
+		panic!(
+			"our version of rustix ({0}) doesn't match wasmtime's ({1}); \
+				bump the version in `sc-executor-wasmtime`'s `Cargo.toml' to '{1}' and try again",
+			our_rustix.req, wasmtime_rustix.req,
+		);
 	}
 }

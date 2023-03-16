@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,10 +17,10 @@
 
 //! Miscellaneous types.
 
-use codec::{Decode, Encode, FullCodec};
+use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use sp_arithmetic::traits::{AtLeast32BitUnsigned, Zero};
 use sp_core::RuntimeDebug;
-use sp_runtime::{ArithmeticError, DispatchError, TokenError};
+use sp_runtime::{traits::Convert, ArithmeticError, DispatchError, TokenError};
 use sp_std::fmt::Debug;
 
 /// One of a number of consequences of withdrawing a fungible from an account.
@@ -116,7 +116,9 @@ pub enum ExistenceRequirement {
 }
 
 /// Status of funds.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, scale_info::TypeInfo)]
+#[derive(
+	PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, scale_info::TypeInfo, MaxEncodedLen,
+)]
 pub enum BalanceStatus {
 	/// Funds are free, as corresponding to `free` item in Balances.
 	Free,
@@ -126,7 +128,7 @@ pub enum BalanceStatus {
 
 bitflags::bitflags! {
 	/// Reasons for moving funds out of an account.
-	#[derive(Encode, Decode)]
+	#[derive(Encode, Decode, MaxEncodedLen)]
 	pub struct WithdrawReasons: u8 {
 		/// In order to pay for (system) transaction costs.
 		const TRANSACTION_PAYMENT = 0b00000001;
@@ -161,16 +163,29 @@ impl WithdrawReasons {
 }
 
 /// Simple amalgamation trait to collect together properties for an AssetId under one roof.
-pub trait AssetId: FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo {}
-impl<T: FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo> AssetId for T {}
+pub trait AssetId:
+	FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen
+{
+}
+impl<T: FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen> AssetId
+	for T
+{
+}
 
 /// Simple amalgamation trait to collect together properties for a Balance under one roof.
 pub trait Balance:
-	AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug + scale_info::TypeInfo
+	AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug + scale_info::TypeInfo + MaxEncodedLen
 {
 }
-impl<T: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug + scale_info::TypeInfo> Balance
-	for T
+impl<
+		T: AtLeast32BitUnsigned
+			+ FullCodec
+			+ Copy
+			+ Default
+			+ Debug
+			+ scale_info::TypeInfo
+			+ MaxEncodedLen,
+	> Balance for T
 {
 }
 
@@ -193,5 +208,20 @@ impl<CollectionId, ItemId> Locker<CollectionId, ItemId> for () {
 	// to work.
 	fn is_locked(_collection: CollectionId, _item: ItemId) -> bool {
 		false
+	}
+}
+
+/// Retrieve the salary for a member of a particular rank.
+pub trait GetSalary<Rank, AccountId, Balance> {
+	/// Retrieve the salary for a given rank. The account ID is also supplied in case this changes
+	/// things.
+	fn get_salary(rank: Rank, who: &AccountId) -> Balance;
+}
+
+/// Adapter for a rank-to-salary `Convert` implementation into a `GetSalary` implementation.
+pub struct ConvertRank<C>(sp_std::marker::PhantomData<C>);
+impl<A, R, B, C: Convert<R, B>> GetSalary<R, A, B> for ConvertRank<C> {
+	fn get_salary(rank: R, _: &A) -> B {
+		C::convert(rank)
 	}
 }

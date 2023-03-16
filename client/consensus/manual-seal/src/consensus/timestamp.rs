@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -30,10 +30,7 @@ use sp_consensus_aura::{
 use sp_consensus_babe::BabeApi;
 use sp_consensus_slots::{Slot, SlotDuration};
 use sp_inherents::{InherentData, InherentDataProvider, InherentIdentifier};
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, Zero},
-};
+use sp_runtime::traits::{Block as BlockT, Zero};
 use sp_timestamp::{InherentType, INHERENT_IDENTIFIER};
 use std::{
 	sync::{atomic, Arc},
@@ -46,10 +43,10 @@ use std::{
 /// This works by either fetching the `slot_number` from the most recent header and dividing
 /// that value by `slot_duration` in order to fork chains that expect this inherent.
 ///
-/// It produces timestamp inherents that are increaed by `slot_duraation` whenever
+/// It produces timestamp inherents that are increased by `slot_duration` whenever
 /// `provide_inherent_data` is called.
 pub struct SlotTimestampProvider {
-	// holds the unix millisecnd timestamp for the most recent block
+	// holds the unix millisecond timestamp for the most recent block
 	unix_millis: atomic::AtomicU64,
 	// configured slot_duration in the runtime
 	slot_duration: SlotDuration,
@@ -63,7 +60,7 @@ impl SlotTimestampProvider {
 		C: AuxStore + HeaderBackend<B> + ProvideRuntimeApi<B> + UsageProvider<B>,
 		C::Api: BabeApi<B>,
 	{
-		let slot_duration = sc_consensus_babe::Config::get(&*client)?.slot_duration();
+		let slot_duration = sc_consensus_babe::configuration(&*client)?.slot_duration();
 
 		let time = Self::with_header(&client, slot_duration, |header| {
 			let slot_number = *sc_consensus_babe::find_pre_digest::<B>(&header)
@@ -109,7 +106,7 @@ impl SlotTimestampProvider {
 		// otherwise we'd be producing blocks for older slots.
 		let time = if info.best_number != Zero::zero() {
 			let header = client
-				.header(BlockId::Hash(info.best_hash))?
+				.header(info.best_hash)?
 				.ok_or_else(|| "best header not found in the db!".to_string())?;
 			let slot = func(header)?;
 			// add the slot duration so there's no collision of slots
@@ -141,7 +138,7 @@ impl SlotTimestampProvider {
 
 #[async_trait::async_trait]
 impl InherentDataProvider for SlotTimestampProvider {
-	fn provide_inherent_data(
+	async fn provide_inherent_data(
 		&self,
 		inherent_data: &mut InherentData,
 	) -> Result<(), sp_inherents::Error> {

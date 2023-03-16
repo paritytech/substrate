@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@
 
 // FIXME #1021 move this into sp-consensus
 
-use codec::{Decode, Encode};
+use codec::Encode;
 use futures::{
 	channel::oneshot,
 	future,
@@ -34,13 +34,10 @@ use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_INFO};
 use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_blockchain::{ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed, HeaderBackend};
-use sp_consensus::{
-	evaluation, DisableProofRecording, EnableProofRecording, ProofRecording, Proposal,
-};
+use sp_consensus::{DisableProofRecording, EnableProofRecording, ProofRecording, Proposal};
 use sp_core::traits::SpawnNamed;
 use sp_inherents::InherentData;
 use sp_runtime::{
-	generic::BlockId,
 	traits::{BlakeTwo256, Block as BlockT, Hash as HashT, Header as HeaderT},
 	Digest, Percent, SaturatedConversion,
 };
@@ -198,15 +195,12 @@ where
 	) -> Proposer<B, Block, C, A, PR> {
 		let parent_hash = parent_header.hash();
 
-		let id = BlockId::hash(parent_hash);
-
 		info!("🙌 Starting consensus session on top of parent {:?}", parent_hash);
 
 		let proposer = Proposer::<_, _, _, _, PR> {
 			spawn_handle: self.spawn_handle.clone(),
 			client: self.client.clone(),
 			parent_hash,
-			parent_id: id,
 			parent_number: *parent_header.number(),
 			transaction_pool: self.transaction_pool.clone(),
 			now,
@@ -250,8 +244,7 @@ where
 pub struct Proposer<B, Block: BlockT, C, A: TransactionPool, PR> {
 	spawn_handle: Box<dyn SpawnNamed>,
 	client: Arc<C>,
-	parent_hash: <Block as BlockT>::Hash,
-	parent_id: BlockId<Block>,
+	parent_hash: Block::Hash,
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	transaction_pool: Arc<A>,
 	now: Box<dyn Fn() -> time::Instant + Send + Sync>,
@@ -348,7 +341,7 @@ where
 	{
 		let propose_with_start = time::Instant::now();
 		let mut block_builder =
-			self.client.new_block_at(&self.parent_id, inherent_digests, PR::ENABLED)?;
+			self.client.new_block_at(self.parent_hash, inherent_digests, PR::ENABLED)?;
 
 		let create_inherents_start = time::Instant::now();
 		let inherents = block_builder.create_inherents(inherent_data)?;
@@ -536,16 +529,6 @@ where
 			"hash" => ?<Block as BlockT>::Hash::from(block.header().hash()),
 		);
 
-		if Decode::decode(&mut block.encode().as_slice()).as_ref() != Ok(&block) {
-			error!("Failed to verify block encoding/decoding");
-		}
-
-		if let Err(err) =
-			evaluation::evaluate_initial(&block, &self.parent_hash, self.parent_number)
-		{
-			error!("Failed to evaluate authored block: {:?}", err);
-		}
-
 		let proof =
 			PR::into_proof(proof).map_err(|e| sp_blockchain::Error::Application(Box::new(e)))?;
 
@@ -573,7 +556,7 @@ mod tests {
 	use sp_blockchain::HeaderBackend;
 	use sp_consensus::{BlockOrigin, Environment, Proposer};
 	use sp_core::Pair;
-	use sp_runtime::traits::NumberFor;
+	use sp_runtime::{generic::BlockId, traits::NumberFor};
 	use substrate_test_runtime_client::{
 		prelude::*,
 		runtime::{Extrinsic, Transfer},
@@ -631,8 +614,7 @@ mod tests {
 		block_on(
 			txpool.maintain(chain_event(
 				client
-					.header(&BlockId::Number(0u64))
-					.expect("header get error")
+					.expect_header(client.info().genesis_hash)
 					.expect("there should be header"),
 			)),
 		);
@@ -642,7 +624,7 @@ mod tests {
 
 		let cell = Mutex::new((false, time::Instant::now()));
 		let proposer = proposer_factory.init_with_now(
-			&client.header(&BlockId::number(0)).unwrap().unwrap(),
+			&client.expect_header(client.info().genesis_hash).unwrap(),
 			Box::new(move || {
 				let mut value = cell.lock();
 				if !value.0 {
@@ -686,7 +668,7 @@ mod tests {
 
 		let cell = Mutex::new((false, time::Instant::now()));
 		let proposer = proposer_factory.init_with_now(
-			&client.header(&BlockId::number(0)).unwrap().unwrap(),
+			&client.expect_header(client.info().genesis_hash).unwrap(),
 			Box::new(move || {
 				let mut value = cell.lock();
 				if !value.0 {
@@ -719,15 +701,13 @@ mod tests {
 		);
 
 		let genesis_hash = client.info().best_hash;
-		let block_id = BlockId::Hash(genesis_hash);
 
 		block_on(txpool.submit_at(&BlockId::number(0), SOURCE, vec![extrinsic(0)])).unwrap();
 
 		block_on(
 			txpool.maintain(chain_event(
 				client
-					.header(&BlockId::Number(0u64))
-					.expect("header get error")
+					.expect_header(client.info().genesis_hash)
 					.expect("there should be header"),
 			)),
 		);
@@ -736,7 +716,7 @@ mod tests {
 			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
 
 		let proposer = proposer_factory.init_with_now(
-			&client.header(&block_id).unwrap().unwrap(),
+			&client.header(genesis_hash).unwrap().unwrap(),
 			Box::new(move || time::Instant::now()),
 		);
 
@@ -748,9 +728,9 @@ mod tests {
 		assert_eq!(proposal.block.extrinsics().len(), 1);
 
 		let api = client.runtime_api();
-		api.execute_block(&block_id, proposal.block).unwrap();
+		api.execute_block(genesis_hash, proposal.block).unwrap();
 
-		let state = backend.state_at(block_id).unwrap();
+		let state = backend.state_at(genesis_hash).unwrap();
 
 		let storage_changes = api.into_storage_changes(&state, genesis_hash).unwrap();
 
@@ -804,8 +784,9 @@ mod tests {
 		                         number,
 		                         expected_block_extrinsics,
 		                         expected_pool_transactions| {
+			let hash = client.expect_block_hash_from_id(&BlockId::Number(number)).unwrap();
 			let proposer = proposer_factory.init_with_now(
-				&client.header(&BlockId::number(number)).unwrap().unwrap(),
+				&client.expect_header(hash).unwrap(),
 				Box::new(move || time::Instant::now()),
 			);
 
@@ -827,8 +808,7 @@ mod tests {
 		block_on(
 			txpool.maintain(chain_event(
 				client
-					.header(&BlockId::Number(0u64))
-					.expect("header get error")
+					.expect_header(client.info().genesis_hash)
 					.expect("there should be header"),
 			)),
 		);
@@ -836,14 +816,12 @@ mod tests {
 
 		// let's create one block and import it
 		let block = propose_block(&client, 0, 2, 7);
+		let hashof1 = block.hash();
 		block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
 		block_on(
 			txpool.maintain(chain_event(
-				client
-					.header(&BlockId::Number(1))
-					.expect("header get error")
-					.expect("there should be header"),
+				client.expect_header(hashof1).expect("there should be header"),
 			)),
 		);
 		assert_eq!(txpool.ready().count(), 5);
@@ -865,14 +843,21 @@ mod tests {
 			client.clone(),
 		);
 		let genesis_header = client
-			.header(&BlockId::Number(0u64))
-			.expect("header get error")
+			.expect_header(client.info().genesis_hash)
 			.expect("there should be header");
 
-		let extrinsics_num = 4;
-		let extrinsics = (0..extrinsics_num)
-			.map(|v| Extrinsic::IncludeData(vec![v as u8; 10]))
-			.collect::<Vec<_>>();
+		let extrinsics_num = 5;
+		let extrinsics = std::iter::once(
+			Transfer {
+				from: AccountKeyring::Alice.into(),
+				to: AccountKeyring::Bob.into(),
+				amount: 100,
+				nonce: 0,
+			}
+			.into_signed_tx(),
+		)
+		.chain((0..extrinsics_num - 1).map(|v| Extrinsic::IncludeData(vec![v as u8; 10])))
+		.collect::<Vec<_>>();
 
 		let block_limit = genesis_header.encoded_size() +
 			extrinsics
@@ -936,8 +921,9 @@ mod tests {
 		.unwrap();
 
 		// The block limit didn't changed, but we now include the proof in the estimation of the
-		// block size and thus, one less transaction should fit into the limit.
-		assert_eq!(block.extrinsics().len(), extrinsics_num - 2);
+		// block size and thus, only the `Transfer` will fit into the block. It reads more data
+		// than we have reserved in the block limit.
+		assert_eq!(block.extrinsics().len(), 1);
 	}
 
 	#[test]
@@ -971,8 +957,7 @@ mod tests {
 		block_on(
 			txpool.maintain(chain_event(
 				client
-					.header(&BlockId::Number(0u64))
-					.expect("header get error")
+					.expect_header(client.info().genesis_hash)
 					.expect("there should be header"),
 			)),
 		);
@@ -983,7 +968,7 @@ mod tests {
 
 		let cell = Mutex::new(time::Instant::now());
 		let proposer = proposer_factory.init_with_now(
-			&client.header(&BlockId::number(0)).unwrap().unwrap(),
+			&client.expect_header(client.info().genesis_hash).unwrap(),
 			Box::new(move || {
 				let mut value = cell.lock();
 				let old = *value;
@@ -1034,8 +1019,7 @@ mod tests {
 		block_on(
 			txpool.maintain(chain_event(
 				client
-					.header(&BlockId::Number(0u64))
-					.expect("header get error")
+					.expect_header(client.info().genesis_hash)
 					.expect("there should be header"),
 			)),
 		);
@@ -1048,7 +1032,7 @@ mod tests {
 		let cell = Arc::new(Mutex::new((0, time::Instant::now())));
 		let cell2 = cell.clone();
 		let proposer = proposer_factory.init_with_now(
-			&client.header(&BlockId::number(0)).unwrap().unwrap(),
+			&client.expect_header(client.info().genesis_hash).unwrap(),
 			Box::new(move || {
 				let mut value = cell.lock();
 				let (called, old) = *value;

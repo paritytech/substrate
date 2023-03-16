@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -37,7 +37,7 @@ pub fn decl_runtime_version_impl(input: proc_macro::TokenStream) -> proc_macro::
 }
 
 fn decl_runtime_version_impl_inner(item: ItemConst) -> Result<TokenStream> {
-	let runtime_version = ParseRuntimeVersion::parse_expr(&*item.expr)?.build(item.expr.span())?;
+	let runtime_version = ParseRuntimeVersion::parse_expr(&item.expr)?.build(item.expr.span())?;
 	let link_section =
 		generate_emit_link_section_decl(&runtime_version.encode(), "runtime_version");
 

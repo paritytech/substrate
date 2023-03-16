@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -87,14 +87,11 @@ fn get_addresses_and_authority_id() {
 fn cryptos_are_compatible() {
 	use sp_core::crypto::Pair;
 
-	let libp2p_secret = sc_network::Keypair::generate_ed25519();
+	let libp2p_secret = libp2p::identity::Keypair::generate_ed25519();
 	let libp2p_public = libp2p_secret.public();
 
 	let sp_core_secret = {
-		let libp2p_ed_secret = match libp2p_secret.clone() {
-			sc_network::Keypair::Ed25519(x) => x,
-			_ => panic!("generate_ed25519 should have generated an Ed25519 key ¯\\_(ツ)_/¯"),
-		};
+		let libp2p::identity::Keypair::Ed25519(libp2p_ed_secret) = libp2p_secret.clone();
 		sp_core::ed25519::Pair::from_seed_slice(&libp2p_ed_secret.secret().as_ref()).unwrap()
 	};
 	let sp_core_public = sp_core_secret.public();

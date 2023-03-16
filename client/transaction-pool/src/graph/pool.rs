@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,10 +16,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
+use crate::LOG_TARGET;
 use futures::{channel::mpsc::Receiver, Future};
 use sc_transaction_pool_api::error;
+use sp_blockchain::TreeRoute;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{self, Block as BlockT, SaturatedConversion},
@@ -89,14 +91,21 @@ pub trait ChainApi: Send + Sync {
 	/// Returns hash and encoding length of the extrinsic.
 	fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (ExtrinsicHash<Self>, usize);
 
-	/// Returns a block body given the block id.
-	fn block_body(&self, at: &BlockId<Self::Block>) -> Self::BodyFuture;
+	/// Returns a block body given the block.
+	fn block_body(&self, at: <Self::Block as BlockT>::Hash) -> Self::BodyFuture;
 
 	/// Returns a block header given the block id.
 	fn block_header(
 		&self,
-		at: &BlockId<Self::Block>,
+		at: <Self::Block as BlockT>::Hash,
 	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error>;
+
+	/// Compute a tree-route between two blocks. See [`TreeRoute`] for more details.
+	fn tree_route(
+		&self,
+		from: <Self::Block as BlockT>::Hash,
+		to: <Self::Block as BlockT>::Hash,
+	) -> Result<TreeRoute<Self::Block>, Self::Error>;
 }
 
 /// Pool configuration options.
@@ -108,6 +117,8 @@ pub struct Options {
 	pub future: base::Limit,
 	/// Reject future transactions.
 	pub reject_future_transactions: bool,
+	/// How long the extrinsic is banned for.
+	pub ban_time: Duration,
 }
 
 impl Default for Options {
@@ -116,6 +127,7 @@ impl Default for Options {
 			ready: base::Limit { count: 8192, total_bytes: 20 * 1024 * 1024 },
 			future: base::Limit { count: 512, total_bytes: 1 * 1024 * 1024 },
 			reject_future_transactions: false,
+			ban_time: Duration::from_secs(60 * 30),
 		}
 	}
 }
@@ -133,15 +145,6 @@ pub struct Pool<B: ChainApi> {
 	validated_pool: Arc<ValidatedPool<B>>,
 }
 
-impl<B: ChainApi> parity_util_mem::MallocSizeOf for Pool<B>
-where
-	ExtrinsicFor<B>: parity_util_mem::MallocSizeOf,
-{
-	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
-		self.validated_pool.size_of(ops)
-	}
-}
-
 impl<B: ChainApi> Pool<B> {
 	/// Create a new transaction pool.
 	pub fn new(options: Options, is_validator: IsValidator, api: Arc<B>) -> Self {
@@ -157,7 +160,7 @@ impl<B: ChainApi> Pool<B> {
 	) -> Result<Vec<Result<ExtrinsicHash<B>, B::Error>>, B::Error> {
 		let xts = xts.into_iter().map(|xt| (source, xt));
 		let validated_transactions = self.verify(at, xts, CheckBannedBeforeVerify::Yes).await?;
-		Ok(self.validated_pool.submit(validated_transactions.into_iter().map(|(_, tx)| tx)))
+		Ok(self.validated_pool.submit(validated_transactions.into_values()))
 	}
 
 	/// Resubmit the given extrinsics to the pool.
@@ -171,7 +174,7 @@ impl<B: ChainApi> Pool<B> {
 	) -> Result<Vec<Result<ExtrinsicHash<B>, B::Error>>, B::Error> {
 		let xts = xts.into_iter().map(|xt| (source, xt));
 		let validated_transactions = self.verify(at, xts, CheckBannedBeforeVerify::No).await?;
-		Ok(self.validated_pool.submit(validated_transactions.into_iter().map(|(_, tx)| tx)))
+		Ok(self.validated_pool.submit(validated_transactions.into_values()))
 	}
 
 	/// Imports one unverified extrinsic to the pool
@@ -206,7 +209,8 @@ impl<B: ChainApi> Pool<B> {
 	) {
 		let now = Instant::now();
 		self.validated_pool.resubmit(revalidated_transactions);
-		log::debug!(target: "txpool",
+		log::debug!(
+			target: LOG_TARGET,
 			"Resubmitted. Took {} ms. Status: {:?}",
 			now.elapsed().as_millis(),
 			self.validated_pool.status()
@@ -247,7 +251,7 @@ impl<B: ChainApi> Pool<B> {
 		extrinsics: &[ExtrinsicFor<B>],
 	) -> Result<(), B::Error> {
 		log::debug!(
-			target: "txpool",
+			target: LOG_TARGET,
 			"Starting pruning of block {:?} (extrinsics: {})",
 			at,
 			extrinsics.len()
@@ -269,14 +273,26 @@ impl<B: ChainApi> Pool<B> {
 				// if it's not found in the pool query the runtime at parent block
 				// to get validity info and tags that the extrinsic provides.
 				None => {
-					let validity = self
-						.validated_pool
-						.api()
-						.validate_transaction(parent, TransactionSource::InBlock, extrinsic.clone())
-						.await;
+					// Avoid validating block txs if the pool is empty
+					if !self.validated_pool.status().is_empty() {
+						let validity = self
+							.validated_pool
+							.api()
+							.validate_transaction(
+								parent,
+								TransactionSource::InBlock,
+								extrinsic.clone(),
+							)
+							.await;
 
-					if let Ok(Ok(validity)) = validity {
-						future_tags.extend(validity.provides);
+						if let Ok(Ok(validity)) = validity {
+							future_tags.extend(validity.provides);
+						}
+					} else {
+						log::trace!(
+							target: LOG_TARGET,
+							"txpool is empty, skipping validation for block {at:?}",
+						);
 					}
 				},
 			}
@@ -312,7 +328,7 @@ impl<B: ChainApi> Pool<B> {
 		tags: impl IntoIterator<Item = Tag>,
 		known_imported_hashes: impl IntoIterator<Item = ExtrinsicHash<B>> + Clone,
 	) -> Result<(), B::Error> {
-		log::debug!(target: "txpool", "Pruning at {:?}", at);
+		log::debug!(target: LOG_TARGET, "Pruning at {:?}", at);
 		// Prune all transactions that provide given tags
 		let prune_status = self.validated_pool.prune_tags(tags)?;
 
@@ -331,14 +347,14 @@ impl<B: ChainApi> Pool<B> {
 		let reverified_transactions =
 			self.verify(at, pruned_transactions, CheckBannedBeforeVerify::Yes).await?;
 
-		log::trace!(target: "txpool", "Pruning at {:?}. Resubmitting transactions.", at);
+		log::trace!(target: LOG_TARGET, "Pruning at {:?}. Resubmitting transactions.", at);
 		// And finally - submit reverified transactions back to the pool
 
 		self.validated_pool.resubmit_pruned(
 			at,
 			known_imported_hashes,
 			pruned_hashes,
-			reverified_transactions.into_iter().map(|(_, xt)| xt).collect(),
+			reverified_transactions.into_values().collect(),
 		)
 	}
 
@@ -638,7 +654,7 @@ mod tests {
 		.unwrap();
 
 		// when
-		block_on(pool.prune_tags(&BlockId::Number(1), vec![vec![0]], vec![hash1.clone()])).unwrap();
+		block_on(pool.prune_tags(&BlockId::Number(1), vec![vec![0]], vec![hash1])).unwrap();
 
 		// then
 		assert!(pool.validated_pool.is_banned(&hash1));
@@ -767,7 +783,7 @@ mod tests {
 			assert_eq!(stream.next(), Some(TransactionStatus::Ready));
 			assert_eq!(
 				stream.next(),
-				Some(TransactionStatus::InBlock(H256::from_low_u64_be(2).into())),
+				Some(TransactionStatus::InBlock((H256::from_low_u64_be(2).into(), 0))),
 			);
 		}
 
@@ -790,12 +806,8 @@ mod tests {
 			assert_eq!(pool.validated_pool().status().future, 0);
 
 			// when
-			block_on(pool.prune_tags(
-				&BlockId::Number(2),
-				vec![vec![0u8]],
-				vec![watcher.hash().clone()],
-			))
-			.unwrap();
+			block_on(pool.prune_tags(&BlockId::Number(2), vec![vec![0u8]], vec![*watcher.hash()]))
+				.unwrap();
 			assert_eq!(pool.validated_pool().status().ready, 0);
 			assert_eq!(pool.validated_pool().status().future, 0);
 
@@ -804,7 +816,7 @@ mod tests {
 			assert_eq!(stream.next(), Some(TransactionStatus::Ready));
 			assert_eq!(
 				stream.next(),
-				Some(TransactionStatus::InBlock(H256::from_low_u64_be(2).into())),
+				Some(TransactionStatus::InBlock((H256::from_low_u64_be(2).into(), 0))),
 			);
 		}
 

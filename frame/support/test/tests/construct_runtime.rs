@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,13 +16,13 @@
 // limitations under the License.
 
 //! General tests for construct_runtime macro, test for:
-//! * error declareed with decl_error works
+//! * error declared with decl_error works
 //! * integrity test is generated
 
 #![recursion_limit = "128"]
 
 use codec::MaxEncodedLen;
-use frame_support::traits::{CrateVersion, PalletInfo as _};
+use frame_support::{parameter_types, traits::PalletInfo as _};
 use scale_info::TypeInfo;
 use sp_core::{sr25519, H256};
 use sp_runtime::{
@@ -30,14 +30,13 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Verify},
 	DispatchError, ModuleError,
 };
-use sp_std::cell::RefCell;
 
 mod system;
 
 pub trait Currency {}
 
-thread_local! {
-	pub static INTEGRITY_TEST_EXEC: RefCell<u32> = RefCell::new(0);
+parameter_types! {
+	pub static IntegrityTestExec: u32 = 0;
 }
 
 mod module1 {
@@ -47,7 +46,7 @@ mod module1 {
 
 	frame_support::decl_module! {
 		pub struct Module<T: Config<I>, I: Instance = DefaultInstance> for enum Call
-			where origin: <T as system::Config>::Origin, system=system
+			where origin: <T as system::Config>::RuntimeOrigin, system=system
 		{
 			#[weight = 0]
 			pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
@@ -87,7 +86,7 @@ mod module2 {
 
 	frame_support::decl_module! {
 		pub struct Module<T: Config> for enum Call
-			where origin: <T as system::Config>::Origin, system=system
+			where origin: <T as system::Config>::RuntimeOrigin, system=system
 		{
 			#[weight = 0]
 			pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
@@ -95,7 +94,7 @@ mod module2 {
 			}
 
 			fn integrity_test() {
-				INTEGRITY_TEST_EXEC.with(|i| *i.borrow_mut() += 1);
+				IntegrityTestExec::mutate(|i| *i += 1);
 			}
 		}
 	}
@@ -132,7 +131,7 @@ mod nested {
 
 		frame_support::decl_module! {
 			pub struct Module<T: Config> for enum Call
-				where origin: <T as system::Config>::Origin, system=system
+				where origin: <T as system::Config>::RuntimeOrigin, system=system
 			{
 				#[weight = 0]
 				pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
@@ -140,7 +139,7 @@ mod nested {
 				}
 
 				fn integrity_test() {
-					INTEGRITY_TEST_EXEC.with(|i| *i.borrow_mut() += 1);
+					IntegrityTestExec::mutate(|i| *i += 1);
 				}
 			}
 		}
@@ -178,7 +177,7 @@ pub mod module3 {
 
 	frame_support::decl_module! {
 		pub struct Module<T: Config> for enum Call
-			where origin: <T as system::Config>::Origin, system=system
+			where origin: <T as system::Config>::RuntimeOrigin, system=system
 		{
 			#[weight = 0]
 			pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
@@ -198,7 +197,7 @@ pub mod module3 {
 			}
 			#[weight = 3]
 			fn aux_4(_origin) -> frame_support::dispatch::DispatchResult { unreachable!() }
-			#[weight = (5, frame_support::weights::DispatchClass::Operational)]
+			#[weight = (5, frame_support::dispatch::DispatchClass::Operational)]
 			fn operational(_origin) { unreachable!() }
 		}
 	}
@@ -245,17 +244,17 @@ fn test_pub() -> AccountId {
 impl system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type Hash = H256;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type PalletInfo = PalletInfo;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type DbWeight = ();
 }
 
 frame_support::construct_runtime!(
-	pub enum Runtime where
+	pub struct Runtime where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
@@ -278,104 +277,106 @@ frame_support::construct_runtime!(
 
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
 
 #[test]
 fn check_modules_error_type() {
-	assert_eq!(
-		Module1_1::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module(ModuleError {
-			index: 31,
-			error: [0; 4],
-			message: Some("Something")
-		})),
-	);
-	assert_eq!(
-		Module2::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module(ModuleError {
-			index: 32,
-			error: [0; 4],
-			message: Some("Something")
-		})),
-	);
-	assert_eq!(
-		Module1_2::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module(ModuleError {
-			index: 33,
-			error: [0; 4],
-			message: Some("Something")
-		})),
-	);
-	assert_eq!(
-		NestedModule3::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module(ModuleError {
-			index: 34,
-			error: [0; 4],
-			message: Some("Something")
-		})),
-	);
-	assert_eq!(
-		Module1_3::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module(ModuleError {
-			index: 6,
-			error: [0; 4],
-			message: Some("Something")
-		})),
-	);
-	assert_eq!(
-		Module1_4::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module(ModuleError {
-			index: 3,
-			error: [0; 4],
-			message: Some("Something")
-		})),
-	);
-	assert_eq!(
-		Module1_5::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module(ModuleError {
-			index: 4,
-			error: [0; 4],
-			message: Some("Something")
-		})),
-	);
-	assert_eq!(
-		Module1_6::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module(ModuleError {
-			index: 1,
-			error: [0; 4],
-			message: Some("Something")
-		})),
-	);
-	assert_eq!(
-		Module1_7::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module(ModuleError {
-			index: 2,
-			error: [0; 4],
-			message: Some("Something")
-		})),
-	);
-	assert_eq!(
-		Module1_8::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module(ModuleError {
-			index: 12,
-			error: [0; 4],
-			message: Some("Something")
-		})),
-	);
-	assert_eq!(
-		Module1_9::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module(ModuleError {
-			index: 13,
-			error: [0; 4],
-			message: Some("Something")
-		})),
-	);
+	sp_io::TestExternalities::default().execute_with(|| {
+		assert_eq!(
+			Module1_1::fail(system::Origin::<Runtime>::Root.into()),
+			Err(DispatchError::Module(ModuleError {
+				index: 31,
+				error: [0; 4],
+				message: Some("Something")
+			})),
+		);
+		assert_eq!(
+			Module2::fail(system::Origin::<Runtime>::Root.into()),
+			Err(DispatchError::Module(ModuleError {
+				index: 32,
+				error: [0; 4],
+				message: Some("Something")
+			})),
+		);
+		assert_eq!(
+			Module1_2::fail(system::Origin::<Runtime>::Root.into()),
+			Err(DispatchError::Module(ModuleError {
+				index: 33,
+				error: [0; 4],
+				message: Some("Something")
+			})),
+		);
+		assert_eq!(
+			NestedModule3::fail(system::Origin::<Runtime>::Root.into()),
+			Err(DispatchError::Module(ModuleError {
+				index: 34,
+				error: [0; 4],
+				message: Some("Something")
+			})),
+		);
+		assert_eq!(
+			Module1_3::fail(system::Origin::<Runtime>::Root.into()),
+			Err(DispatchError::Module(ModuleError {
+				index: 6,
+				error: [0; 4],
+				message: Some("Something")
+			})),
+		);
+		assert_eq!(
+			Module1_4::fail(system::Origin::<Runtime>::Root.into()),
+			Err(DispatchError::Module(ModuleError {
+				index: 3,
+				error: [0; 4],
+				message: Some("Something")
+			})),
+		);
+		assert_eq!(
+			Module1_5::fail(system::Origin::<Runtime>::Root.into()),
+			Err(DispatchError::Module(ModuleError {
+				index: 4,
+				error: [0; 4],
+				message: Some("Something")
+			})),
+		);
+		assert_eq!(
+			Module1_6::fail(system::Origin::<Runtime>::Root.into()),
+			Err(DispatchError::Module(ModuleError {
+				index: 1,
+				error: [0; 4],
+				message: Some("Something")
+			})),
+		);
+		assert_eq!(
+			Module1_7::fail(system::Origin::<Runtime>::Root.into()),
+			Err(DispatchError::Module(ModuleError {
+				index: 2,
+				error: [0; 4],
+				message: Some("Something")
+			})),
+		);
+		assert_eq!(
+			Module1_8::fail(system::Origin::<Runtime>::Root.into()),
+			Err(DispatchError::Module(ModuleError {
+				index: 12,
+				error: [0; 4],
+				message: Some("Something")
+			})),
+		);
+		assert_eq!(
+			Module1_9::fail(system::Origin::<Runtime>::Root.into()),
+			Err(DispatchError::Module(ModuleError {
+				index: 13,
+				error: [0; 4],
+				message: Some("Something")
+			})),
+		);
+	})
 }
 
 #[test]
 fn integrity_test_works() {
 	__construct_runtime_integrity_test::runtime_integrity_tests();
-	assert_eq!(INTEGRITY_TEST_EXEC.with(|i| *i.borrow()), 2);
+	assert_eq!(IntegrityTestExec::get(), 2);
 }
 
 #[test]
@@ -418,53 +419,53 @@ fn event_codec() {
 	use codec::Encode;
 
 	let event = system::Event::<Runtime>::ExtrinsicSuccess;
-	assert_eq!(Event::from(event).encode()[0], 30);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 30);
 
 	let event = module1::Event::<Runtime, module1::Instance1>::A(test_pub());
-	assert_eq!(Event::from(event).encode()[0], 31);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 31);
 
 	let event = module2::Event::A;
-	assert_eq!(Event::from(event).encode()[0], 32);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 32);
 
 	let event = module1::Event::<Runtime, module1::Instance2>::A(test_pub());
-	assert_eq!(Event::from(event).encode()[0], 33);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 33);
 
 	let event = nested::module3::Event::A;
-	assert_eq!(Event::from(event).encode()[0], 34);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 34);
 
 	let event = module3::Event::A;
-	assert_eq!(Event::from(event).encode()[0], 35);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 35);
 
 	let event = module1::Event::<Runtime, module1::Instance5>::A(test_pub());
-	assert_eq!(Event::from(event).encode()[0], 4);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 4);
 
 	let event = module1::Event::<Runtime, module1::Instance6>::A(test_pub());
-	assert_eq!(Event::from(event).encode()[0], 1);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 1);
 
 	let event = module1::Event::<Runtime, module1::Instance7>::A(test_pub());
-	assert_eq!(Event::from(event).encode()[0], 2);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 2);
 
 	let event = module1::Event::<Runtime, module1::Instance8>::A(test_pub());
-	assert_eq!(Event::from(event).encode()[0], 12);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 12);
 
 	let event = module1::Event::<Runtime, module1::Instance9>::A(test_pub());
-	assert_eq!(Event::from(event).encode()[0], 13);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 13);
 }
 
 #[test]
 fn call_codec() {
 	use codec::Encode;
-	assert_eq!(Call::System(system::Call::noop {}).encode()[0], 30);
-	assert_eq!(Call::Module1_1(module1::Call::fail {}).encode()[0], 31);
-	assert_eq!(Call::Module2(module2::Call::fail {}).encode()[0], 32);
-	assert_eq!(Call::Module1_2(module1::Call::fail {}).encode()[0], 33);
-	assert_eq!(Call::NestedModule3(nested::module3::Call::fail {}).encode()[0], 34);
-	assert_eq!(Call::Module3(module3::Call::fail {}).encode()[0], 35);
-	assert_eq!(Call::Module1_4(module1::Call::fail {}).encode()[0], 3);
-	assert_eq!(Call::Module1_6(module1::Call::fail {}).encode()[0], 1);
-	assert_eq!(Call::Module1_7(module1::Call::fail {}).encode()[0], 2);
-	assert_eq!(Call::Module1_8(module1::Call::fail {}).encode()[0], 12);
-	assert_eq!(Call::Module1_9(module1::Call::fail {}).encode()[0], 13);
+	assert_eq!(RuntimeCall::System(system::Call::noop {}).encode()[0], 30);
+	assert_eq!(RuntimeCall::Module1_1(module1::Call::fail {}).encode()[0], 31);
+	assert_eq!(RuntimeCall::Module2(module2::Call::fail {}).encode()[0], 32);
+	assert_eq!(RuntimeCall::Module1_2(module1::Call::fail {}).encode()[0], 33);
+	assert_eq!(RuntimeCall::NestedModule3(nested::module3::Call::fail {}).encode()[0], 34);
+	assert_eq!(RuntimeCall::Module3(module3::Call::fail {}).encode()[0], 35);
+	assert_eq!(RuntimeCall::Module1_4(module1::Call::fail {}).encode()[0], 3);
+	assert_eq!(RuntimeCall::Module1_6(module1::Call::fail {}).encode()[0], 1);
+	assert_eq!(RuntimeCall::Module1_7(module1::Call::fail {}).encode()[0], 2);
+	assert_eq!(RuntimeCall::Module1_8(module1::Call::fail {}).encode()[0], 12);
+	assert_eq!(RuntimeCall::Module1_9(module1::Call::fail {}).encode()[0], 13);
 }
 
 #[test]
@@ -500,18 +501,26 @@ fn call_encode_is_correct_and_decode_works() {
 #[test]
 fn call_weight_should_attach_to_call_enum() {
 	use frame_support::{
-		dispatch::{DispatchInfo, GetDispatchInfo},
-		weights::{DispatchClass, Pays},
+		dispatch::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays},
+		weights::Weight,
 	};
 	// operational.
 	assert_eq!(
 		module3::Call::<Runtime>::operational {}.get_dispatch_info(),
-		DispatchInfo { weight: 5, class: DispatchClass::Operational, pays_fee: Pays::Yes },
+		DispatchInfo {
+			weight: Weight::from_parts(5, 0),
+			class: DispatchClass::Operational,
+			pays_fee: Pays::Yes
+		},
 	);
 	// custom basic
 	assert_eq!(
 		module3::Call::<Runtime>::aux_4 {}.get_dispatch_info(),
-		DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes },
+		DispatchInfo {
+			weight: Weight::from_parts(3, 0),
+			class: DispatchClass::Normal,
+			pays_fee: Pays::Yes
+		},
 	);
 }
 
@@ -525,7 +534,7 @@ fn call_name() {
 #[test]
 fn call_metadata() {
 	use frame_support::dispatch::{CallMetadata, GetCallMetadata};
-	let call = Call::Module3(module3::Call::<Runtime>::aux_4 {});
+	let call = RuntimeCall::Module3(module3::Call::<Runtime>::aux_4 {});
 	let metadata = call.get_call_metadata();
 	let expected = CallMetadata { function_name: "aux_4".into(), pallet_name: "Module3".into() };
 	assert_eq!(metadata, expected);
@@ -541,7 +550,7 @@ fn get_call_names() {
 #[test]
 fn get_module_names() {
 	use frame_support::dispatch::GetCallMetadata;
-	let module_names = Call::get_module_names();
+	let module_names = RuntimeCall::get_module_names();
 	assert_eq!(
 		[
 			"System",
@@ -563,13 +572,13 @@ fn get_module_names() {
 #[test]
 fn call_subtype_conversion() {
 	use frame_support::{dispatch::CallableCallFor, traits::IsSubType};
-	let call = Call::Module3(module3::Call::<Runtime>::fail {});
+	let call = RuntimeCall::Module3(module3::Call::<Runtime>::fail {});
 	let subcall: Option<&CallableCallFor<Module3, Runtime>> = call.is_sub_type();
 	let subcall_none: Option<&CallableCallFor<Module2, Runtime>> = call.is_sub_type();
 	assert_eq!(Some(&module3::Call::<Runtime>::fail {}), subcall);
 	assert_eq!(None, subcall_none);
 
-	let from = Call::from(subcall.unwrap().clone());
+	let from = RuntimeCall::from(subcall.unwrap().clone());
 	assert_eq!(from, call);
 }
 
@@ -721,65 +730,65 @@ fn pallet_in_runtime_is_correct() {
 	assert_eq!(PalletInfo::index::<System>().unwrap(), 30);
 	assert_eq!(PalletInfo::name::<System>().unwrap(), "System");
 	assert_eq!(PalletInfo::module_name::<System>().unwrap(), "system");
-	assert_eq!(PalletInfo::crate_version::<System>().unwrap(), CrateVersion::new(3, 0, 0));
+	assert!(PalletInfo::crate_version::<System>().is_some());
 
 	assert_eq!(PalletInfo::index::<Module1_1>().unwrap(), 31);
 	assert_eq!(PalletInfo::name::<Module1_1>().unwrap(), "Module1_1");
 	assert_eq!(PalletInfo::module_name::<Module1_1>().unwrap(), "module1");
-	assert_eq!(PalletInfo::crate_version::<Module1_1>().unwrap(), CrateVersion::new(3, 0, 0));
+	assert!(PalletInfo::crate_version::<Module1_1>().is_some());
 
 	assert_eq!(PalletInfo::index::<Module2>().unwrap(), 32);
 	assert_eq!(PalletInfo::name::<Module2>().unwrap(), "Module2");
 	assert_eq!(PalletInfo::module_name::<Module2>().unwrap(), "module2");
-	assert_eq!(PalletInfo::crate_version::<Module2>().unwrap(), CrateVersion::new(3, 0, 0));
+	assert!(PalletInfo::crate_version::<Module2>().is_some());
 
 	assert_eq!(PalletInfo::index::<Module1_2>().unwrap(), 33);
 	assert_eq!(PalletInfo::name::<Module1_2>().unwrap(), "Module1_2");
 	assert_eq!(PalletInfo::module_name::<Module1_2>().unwrap(), "module1");
-	assert_eq!(PalletInfo::crate_version::<Module1_2>().unwrap(), CrateVersion::new(3, 0, 0));
+	assert!(PalletInfo::crate_version::<Module1_2>().is_some());
 
 	assert_eq!(PalletInfo::index::<NestedModule3>().unwrap(), 34);
 	assert_eq!(PalletInfo::name::<NestedModule3>().unwrap(), "NestedModule3");
 	assert_eq!(PalletInfo::module_name::<NestedModule3>().unwrap(), "nested::module3");
-	assert_eq!(PalletInfo::crate_version::<NestedModule3>().unwrap(), CrateVersion::new(3, 0, 0));
+	assert!(PalletInfo::crate_version::<NestedModule3>().is_some());
 
 	assert_eq!(PalletInfo::index::<Module3>().unwrap(), 35);
 	assert_eq!(PalletInfo::name::<Module3>().unwrap(), "Module3");
 	assert_eq!(PalletInfo::module_name::<Module3>().unwrap(), "self::module3");
-	assert_eq!(PalletInfo::crate_version::<Module3>().unwrap(), CrateVersion::new(3, 0, 0));
+	assert!(PalletInfo::crate_version::<Module3>().is_some());
 
 	assert_eq!(PalletInfo::index::<Module1_3>().unwrap(), 6);
 	assert_eq!(PalletInfo::name::<Module1_3>().unwrap(), "Module1_3");
 	assert_eq!(PalletInfo::module_name::<Module1_3>().unwrap(), "module1");
-	assert_eq!(PalletInfo::crate_version::<Module1_3>().unwrap(), CrateVersion::new(3, 0, 0));
+	assert!(PalletInfo::crate_version::<Module1_3>().is_some());
 
 	assert_eq!(PalletInfo::index::<Module1_4>().unwrap(), 3);
 	assert_eq!(PalletInfo::name::<Module1_4>().unwrap(), "Module1_4");
 	assert_eq!(PalletInfo::module_name::<Module1_4>().unwrap(), "module1");
-	assert_eq!(PalletInfo::crate_version::<Module1_4>().unwrap(), CrateVersion::new(3, 0, 0));
+	assert!(PalletInfo::crate_version::<Module1_4>().is_some());
 
 	assert_eq!(PalletInfo::index::<Module1_5>().unwrap(), 4);
 	assert_eq!(PalletInfo::name::<Module1_5>().unwrap(), "Module1_5");
 	assert_eq!(PalletInfo::module_name::<Module1_5>().unwrap(), "module1");
-	assert_eq!(PalletInfo::crate_version::<Module1_5>().unwrap(), CrateVersion::new(3, 0, 0));
+	assert!(PalletInfo::crate_version::<Module1_5>().is_some());
 
 	assert_eq!(PalletInfo::index::<Module1_6>().unwrap(), 1);
 	assert_eq!(PalletInfo::name::<Module1_6>().unwrap(), "Module1_6");
 	assert_eq!(PalletInfo::module_name::<Module1_6>().unwrap(), "module1");
-	assert_eq!(PalletInfo::crate_version::<Module1_6>().unwrap(), CrateVersion::new(3, 0, 0));
+	assert!(PalletInfo::crate_version::<Module1_6>().is_some());
 
 	assert_eq!(PalletInfo::index::<Module1_7>().unwrap(), 2);
 	assert_eq!(PalletInfo::name::<Module1_7>().unwrap(), "Module1_7");
 	assert_eq!(PalletInfo::module_name::<Module1_7>().unwrap(), "module1");
-	assert_eq!(PalletInfo::crate_version::<Module1_7>().unwrap(), CrateVersion::new(3, 0, 0));
+	assert!(PalletInfo::crate_version::<Module1_7>().is_some());
 
 	assert_eq!(PalletInfo::index::<Module1_8>().unwrap(), 12);
 	assert_eq!(PalletInfo::name::<Module1_8>().unwrap(), "Module1_8");
 	assert_eq!(PalletInfo::module_name::<Module1_8>().unwrap(), "module1");
-	assert_eq!(PalletInfo::crate_version::<Module1_8>().unwrap(), CrateVersion::new(3, 0, 0));
+	assert!(PalletInfo::crate_version::<Module1_8>().is_some());
 
 	assert_eq!(PalletInfo::index::<Module1_9>().unwrap(), 13);
 	assert_eq!(PalletInfo::name::<Module1_9>().unwrap(), "Module1_9");
 	assert_eq!(PalletInfo::module_name::<Module1_9>().unwrap(), "module1");
-	assert_eq!(PalletInfo::crate_version::<Module1_9>().unwrap(), CrateVersion::new(3, 0, 0));
+	assert!(PalletInfo::crate_version::<Module1_9>().is_some());
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -67,10 +67,10 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
 use sp_runtime::{
-	traits::{AccountIdConversion, Saturating, StaticLookup, Zero},
+	traits::{AccountIdConversion, CheckedAdd, Saturating, StaticLookup, Zero},
 	Permill, RuntimeDebug,
 };
-use sp_std::prelude::*;
+use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use frame_support::{
 	print,
@@ -93,6 +93,7 @@ pub type PositiveImbalanceOf<T, I = ()> = <<T as Config<I>>::Currency as Currenc
 pub type NegativeImbalanceOf<T, I = ()> = <<T as Config<I>>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 /// A trait to allow the Treasury Pallet to spend it's funds for other purposes.
 /// There is an expectation that the implementer of this trait will correctly manage
@@ -135,11 +136,10 @@ pub struct Proposal<AccountId, Balance> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{dispatch_context::with_context, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -148,13 +148,14 @@ pub mod pallet {
 		type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
 
 		/// Origin from which approvals must come.
-		type ApproveOrigin: EnsureOrigin<Self::Origin>;
+		type ApproveOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin from which rejections must come.
-		type RejectOrigin: EnsureOrigin<Self::Origin>;
+		type RejectOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The overarching event type.
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Handler for the unbalanced decrease when slashing for a rejected proposal or bounty.
 		type OnSlash: OnUnbalanced<NegativeImbalanceOf<Self, I>>;
@@ -202,7 +203,7 @@ pub mod pallet {
 		/// The origin required for approving spends from the treasury outside of the proposal
 		/// process. The `Success` value is the maximum amount that this origin is allowed to
 		/// spend at a time.
-		type SpendOrigin: EnsureOrigin<Self::Origin, Success = BalanceOf<Self, I>>;
+		type SpendOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = BalanceOf<Self, I>>;
 	}
 
 	/// Number of proposals that have been made.
@@ -220,6 +221,11 @@ pub mod pallet {
 		Proposal<T::AccountId, BalanceOf<T, I>>,
 		OptionQuery,
 	>;
+
+	/// The amount which has been reported as inactive to Currency.
+	#[pallet::storage]
+	pub type Deactivated<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, BalanceOf<T, I>, ValueQuery>;
 
 	/// Proposal indices that have been approved but not yet awarded.
 	#[pallet::storage]
@@ -286,6 +292,8 @@ pub mod pallet {
 			amount: BalanceOf<T, I>,
 			beneficiary: T::AccountId,
 		},
+		/// The inactive funds of the pallet have been updated.
+		UpdatedInactive { reactivated: BalanceOf<T, I>, deactivated: BalanceOf<T, I> },
 	}
 
 	/// Error for the treasury pallet.
@@ -306,21 +314,33 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
-		/// # <weight>
-		/// - Complexity: `O(A)` where `A` is the number of approvals
-		/// - Db reads and writes: `Approvals`, `pot account data`
-		/// - Db reads and writes per approval: `Proposals`, `proposer account data`, `beneficiary
-		///   account data`
-		/// - The weight is overestimated if some approvals got missed.
-		/// # </weight>
+		/// ## Complexity
+		/// - `O(A)` where `A` is the number of approvals
 		fn on_initialize(n: T::BlockNumber) -> Weight {
+			let pot = Self::pot();
+			let deactivated = Deactivated::<T, I>::get();
+			if pot != deactivated {
+				T::Currency::reactivate(deactivated);
+				T::Currency::deactivate(pot);
+				Deactivated::<T, I>::put(&pot);
+				Self::deposit_event(Event::<T, I>::UpdatedInactive {
+					reactivated: deactivated,
+					deactivated: pot,
+				});
+			}
+
 			// Check to see if we should spend some funds!
 			if (n % T::SpendPeriod::get()).is_zero() {
 				Self::spend_funds()
 			} else {
-				0
+				Weight::zero()
 			}
 		}
+	}
+
+	#[derive(Default)]
+	struct SpendContext<Balance> {
+		spend_in_context: BTreeMap<Balance, Balance>,
 	}
 
 	#[pallet::call]
@@ -329,16 +349,14 @@ pub mod pallet {
 		/// is reserved and slashed if the proposal is rejected. It is returned once the
 		/// proposal is awarded.
 		///
-		/// # <weight>
-		/// - Complexity: O(1)
-		/// - DbReads: `ProposalCount`, `origin account`
-		/// - DbWrites: `ProposalCount`, `Proposals`, `origin account`
-		/// # </weight>
+		/// ## Complexity
+		/// - O(1)
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::propose_spend())]
 		pub fn propose_spend(
 			origin: OriginFor<T>,
 			#[pallet::compact] value: BalanceOf<T, I>,
-			beneficiary: <T::Lookup as StaticLookup>::Source,
+			beneficiary: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let proposer = ensure_signed(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
@@ -359,11 +377,9 @@ pub mod pallet {
 		///
 		/// May only be called from `T::RejectOrigin`.
 		///
-		/// # <weight>
-		/// - Complexity: O(1)
-		/// - DbReads: `Proposals`, `rejected proposer account`
-		/// - DbWrites: `Proposals`, `rejected proposer account`
-		/// # </weight>
+		/// ## Complexity
+		/// - O(1)
+		#[pallet::call_index(1)]
 		#[pallet::weight((T::WeightInfo::reject_proposal(), DispatchClass::Operational))]
 		pub fn reject_proposal(
 			origin: OriginFor<T>,
@@ -389,11 +405,9 @@ pub mod pallet {
 		///
 		/// May only be called from `T::ApproveOrigin`.
 		///
-		/// # <weight>
-		/// - Complexity: O(1).
-		/// - DbReads: `Proposals`, `Approvals`
-		/// - DbWrite: `Approvals`
-		/// # </weight>
+		/// ## Complexity
+		///  - O(1).
+		#[pallet::call_index(2)]
 		#[pallet::weight((T::WeightInfo::approve_proposal(T::MaxApprovals::get()), DispatchClass::Operational))]
 		pub fn approve_proposal(
 			origin: OriginFor<T>,
@@ -415,16 +429,37 @@ pub mod pallet {
 		///
 		/// NOTE: For record-keeping purposes, the proposer is deemed to be equivalent to the
 		/// beneficiary.
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::spend())]
 		pub fn spend(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T, I>,
-			beneficiary: <T::Lookup as StaticLookup>::Source,
+			beneficiary: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let max_amount = T::SpendOrigin::ensure_origin(origin)?;
-			let beneficiary = T::Lookup::lookup(beneficiary)?;
-
 			ensure!(amount <= max_amount, Error::<T, I>::InsufficientPermission);
+
+			with_context::<SpendContext<BalanceOf<T, I>>, _>(|v| {
+				let context = v.or_default();
+
+				// We group based on `max_amount`, to dinstinguish between different kind of
+				// origins. (assumes that all origins have different `max_amount`)
+				//
+				// Worst case is that we reject some "valid" request.
+				let spend = context.spend_in_context.entry(max_amount).or_default();
+
+				// Ensure that we don't overflow nor use more than `max_amount`
+				if spend.checked_add(&amount).map(|s| s > max_amount).unwrap_or(true) {
+					Err(Error::<T, I>::InsufficientPermission)
+				} else {
+					*spend = spend.saturating_add(amount);
+
+					Ok(())
+				}
+			})
+			.unwrap_or(Ok(()))?;
+
+			let beneficiary = T::Lookup::lookup(beneficiary)?;
 			let proposal_index = Self::proposal_count();
 			Approvals::<T, I>::try_append(proposal_index)
 				.map_err(|_| Error::<T, I>::TooManyApprovals)?;
@@ -447,15 +482,14 @@ pub mod pallet {
 		/// May only be called from `T::RejectOrigin`.
 		/// - `proposal_id`: The index of a proposal
 		///
-		/// # <weight>
-		/// - Complexity: O(A) where `A` is the number of approvals
-		/// - Db reads and writes: `Approvals`
-		/// # </weight>
+		/// ## Complexity
+		/// - O(A) where `A` is the number of approvals
 		///
 		/// Errors:
 		/// - `ProposalNotApproved`: The `proposal_id` supplied was not found in the approval queue,
 		/// i.e., the proposal has not been approved. This could also mean the proposal does not
 		/// exist altogether, thus there is no way it would have been approved in the first place.
+		#[pallet::call_index(4)]
 		#[pallet::weight((T::WeightInfo::remove_approval(), DispatchClass::Operational))]
 		pub fn remove_approval(
 			origin: OriginFor<T>,
@@ -499,7 +533,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Spend some money! returns number of approvals before spend.
 	pub fn spend_funds() -> Weight {
-		let mut total_weight: Weight = Zero::zero();
+		let mut total_weight = Weight::zero();
 
 		let mut budget_remaining = Self::pot();
 		Self::deposit_event(Event::Spending { budget_remaining });

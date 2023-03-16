@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,11 +18,13 @@
 //! Contains the core benchmarking logic.
 
 use codec::DecodeAll;
-use frame_support::weights::constants::WEIGHT_PER_NANOS;
+use frame_support::weights::constants::WEIGHT_REF_TIME_PER_NANOS;
 use frame_system::ConsumedWeight;
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sc_cli::{Error, Result};
-use sc_client_api::{Backend as ClientBackend, BlockBackend, StorageProvider, UsageProvider};
+use sc_client_api::{
+	Backend as ClientBackend, BlockBackend, HeaderBackend, StorageProvider, UsageProvider,
+};
 use sp_api::{ApiExt, Core, HeaderT, ProvideRuntimeApi};
 use sp_blockchain::Error::RuntimeApiError;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT, DigestItem, OpaqueExtrinsic};
@@ -43,15 +45,15 @@ const LOG_TARGET: &'static str = "benchmark::block::weight";
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
 pub struct BenchmarkParams {
 	/// Number of the first block to consider.
-	#[clap(long)]
+	#[arg(long)]
 	pub from: u32,
 
 	/// Last block number to consider.
-	#[clap(long)]
+	#[arg(long)]
 	pub to: u32,
 
 	/// Number of times that the benchmark should be repeated for each block.
-	#[clap(long, default_value = "10")]
+	#[arg(long, default_value_t = 10)]
 	pub repeat: u32,
 }
 
@@ -73,7 +75,8 @@ where
 		+ ProvideRuntimeApi<Block>
 		+ StorageProvider<Block, BA>
 		+ UsageProvider<Block>
-		+ BlockBackend<Block>,
+		+ BlockBackend<Block>
+		+ HeaderBackend<Block>,
 	C::Api: ApiExt<Block, StateBackend = BA::State> + BlockBuilderApi<Block>,
 {
 	/// Returns a new [`Self`] from the arguments.
@@ -89,13 +92,12 @@ where
 
 		for i in self.params.from..=self.params.to {
 			let block_num = BlockId::Number(i.into());
-			let parent_num = BlockId::Number(((i - 1) as u32).into());
-			let consumed = self.consumed_weight(&block_num)?;
+			let hash = self.client.expect_block_hash_from_id(&block_num)?;
+			let consumed = self.consumed_weight(hash)?;
 
-			let block =
-				self.client.block(&block_num)?.ok_or(format!("Block {} not found", block_num))?;
+			let block = self.client.block(hash)?.ok_or(format!("Block {} not found", block_num))?;
 			let block = self.unsealed(block.block);
-			let took = self.measure_block(&block, &parent_num)?;
+			let took = self.measure_block(&block, *block.header().parent_hash())?;
 
 			self.log_weight(i, block.extrinsics().len(), consumed, took);
 		}
@@ -104,7 +106,7 @@ where
 	}
 
 	/// Return the average *execution* aka. *import* time of the block.
-	fn measure_block(&self, block: &Block, parent_num: &BlockId<Block>) -> Result<NanoSeconds> {
+	fn measure_block(&self, block: &Block, parent_hash: Block::Hash) -> Result<NanoSeconds> {
 		let mut record = Vec::<NanoSeconds>::default();
 		// Interesting part here:
 		// Execute the block multiple times and collect stats about its execution time.
@@ -114,7 +116,7 @@ where
 			let start = Instant::now();
 
 			runtime_api
-				.execute_block(&parent_num, block)
+				.execute_block(parent_hash, block)
 				.map_err(|e| Error::Client(RuntimeApiError(e)))?;
 
 			record.push(start.elapsed().as_nanos() as NanoSeconds);
@@ -128,21 +130,24 @@ where
 	///
 	/// This is the post-dispatch corrected weight and is only available
 	/// after executing the block.
-	fn consumed_weight(&self, block: &BlockId<Block>) -> Result<NanoSeconds> {
+	fn consumed_weight(&self, block_hash: Block::Hash) -> Result<NanoSeconds> {
 		// Hard-coded key for System::BlockWeight. It could also be passed in as argument
 		// for the benchmark, but I think this should work as well.
-		let hash = hex::decode("26aa394eea5630e07c48ae0c9558cef734abf5cb34d6244378cddbf18e849d96")?;
+		let hash = array_bytes::hex2bytes(
+			"26aa394eea5630e07c48ae0c9558cef734abf5cb34d6244378cddbf18e849d96",
+		)?;
 		let key = StorageKey(hash);
 
 		let mut raw_weight = &self
 			.client
-			.storage(&block, &key)?
-			.ok_or(format!("Could not find System::BlockWeight for block: {}", block))?
+			.storage(block_hash, &key)?
+			.ok_or(format!("Could not find System::BlockWeight for block: {}", block_hash))?
 			.0[..];
 
 		let weight = ConsumedWeight::decode_all(&mut raw_weight)?;
 		// Should be divisible, but still use floats in case we ever change that.
-		Ok((weight.total() as f64 / WEIGHT_PER_NANOS as f64).floor() as NanoSeconds)
+		Ok((weight.total().ref_time() as f64 / WEIGHT_REF_TIME_PER_NANOS as f64).floor()
+			as NanoSeconds)
 	}
 
 	/// Prints the weight info of a block to the console.

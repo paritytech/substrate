@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -89,8 +89,8 @@ where
 		// 1) signed by the same voter,
 		if prev_signer == signer {
 			// 2) with different hash
-			if header.hash() != prev_header.hash() {
-				return Ok(Some(EquivocationProof {
+			return if header.hash() != prev_header.hash() {
+				Ok(Some(EquivocationProof {
 					slot,
 					offender: signer.clone(),
 					first_header: prev_header.clone(),
@@ -100,7 +100,7 @@ where
 				// We don't need to continue in case of duplicated header,
 				// since it's already saved and a possible equivocation
 				// would have been detected before.
-				return Ok(None)
+				Ok(None)
 			}
 		}
 	}

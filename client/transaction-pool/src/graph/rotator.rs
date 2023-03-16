@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -51,6 +51,11 @@ impl<Hash: hash::Hash + Eq> Default for PoolRotator<Hash> {
 }
 
 impl<Hash: hash::Hash + Eq + Clone> PoolRotator<Hash> {
+	/// New rotator instance with specified ban time.
+	pub fn new(ban_time: Duration) -> Self {
+		Self { ban_time, banned_until: Default::default() }
+	}
+
 	/// Returns `true` if extrinsic hash is currently banned.
 	pub fn is_banned(&self, hash: &Hash) -> bool {
 		self.banned_until.read().contains_key(hash)
@@ -115,7 +120,7 @@ mod tests {
 		let tx = Transaction {
 			data: (),
 			bytes: 1,
-			hash: hash.clone(),
+			hash,
 			priority: 5,
 			valid_till: 1,
 			requires: vec![],

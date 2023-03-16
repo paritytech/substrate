@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -95,22 +95,22 @@ pub fn check_build_profile() -> Result<(), String> {
 
 /// Parameters to configure how the host info will be determined.
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
-#[clap(rename_all = "kebab-case")]
+#[command(rename_all = "kebab-case")]
 pub struct HostInfoParams {
 	/// Manually override the hostname to use.
-	#[clap(long)]
+	#[arg(long)]
 	pub hostname_override: Option<String>,
 
 	/// Specify a fallback hostname if no-one could be detected automatically.
 	///
 	/// Note: This only exists to make the `hostname` function infallible.
-	#[clap(long, default_value = "<UNKNOWN>")]
+	#[arg(long, default_value = "<UNKNOWN>")]
 	pub hostname_fallback: String,
 
 	/// Specify a fallback CPU name if no-one could be detected automatically.
 	///
 	/// Note: This only exists to make the `cpuname` function infallible.
-	#[clap(long, default_value = "<UNKNOWN>")]
+	#[arg(long, default_value = "<UNKNOWN>")]
 	pub cpuname_fallback: String,
 }
 

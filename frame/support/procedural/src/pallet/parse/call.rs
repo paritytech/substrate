@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -48,8 +48,8 @@ pub struct CallDef {
 	pub docs: Vec<syn::Lit>,
 }
 
-#[derive(Clone)]
 /// Definition of dispatchable typically: `#[weight...] fn foo(origin .., param1: ...) -> ..`
+#[derive(Clone)]
 pub struct CallVariantDef {
 	/// Function name.
 	pub name: syn::Ident,
@@ -59,8 +59,12 @@ pub struct CallVariantDef {
 	pub weight: syn::Expr,
 	/// Call index of the dispatchable.
 	pub call_index: u8,
+	/// Whether an explicit call index was specified.
+	pub explicit_call_index: bool,
 	/// Docs, used for metadata.
 	pub docs: Vec<syn::Lit>,
+	/// Attributes annotated at the top of the dispatchable function.
+	pub attrs: Vec<syn::Attribute>,
 }
 
 /// Attributes for functions in call impl block.
@@ -89,6 +93,10 @@ impl syn::parse::Parse for FunctionAttr {
 			let call_index_content;
 			syn::parenthesized!(call_index_content in content);
 			let index = call_index_content.parse::<syn::LitInt>()?;
+			if !index.suffix().is_empty() {
+				let msg = "Number literal must not have a suffix";
+				return Err(syn::Error::new(index.span(), msg))
+			}
 			Ok(FunctionAttr::CallIndex(index.base10_parse()?))
 		} else {
 			Err(lookahead.error())
@@ -142,19 +150,20 @@ impl CallDef {
 		attr_span: proc_macro2::Span,
 		index: usize,
 		item: &mut syn::Item,
+		dev_mode: bool,
 	) -> syn::Result<Self> {
-		let item = if let syn::Item::Impl(item) = item {
+		let item_impl = if let syn::Item::Impl(item) = item {
 			item
 		} else {
 			return Err(syn::Error::new(item.span(), "Invalid pallet::call, expected item impl"))
 		};
 
 		let instances = vec![
-			helper::check_impl_gen(&item.generics, item.impl_token.span())?,
-			helper::check_pallet_struct_usage(&item.self_ty)?,
+			helper::check_impl_gen(&item_impl.generics, item_impl.impl_token.span())?,
+			helper::check_pallet_struct_usage(&item_impl.self_ty)?,
 		];
 
-		if let Some((_, _, for_)) = item.trait_ {
+		if let Some((_, _, for_)) = item_impl.trait_ {
 			let msg = "Invalid pallet::call, expected no trait ident as in \
 				`impl<..> Pallet<..> { .. }`";
 			return Err(syn::Error::new(for_.span(), msg))
@@ -163,8 +172,8 @@ impl CallDef {
 		let mut methods = vec![];
 		let mut indices = HashMap::new();
 		let mut last_index: Option<u8> = None;
-		for impl_item in &mut item.items {
-			if let syn::ImplItem::Method(method) = impl_item {
+		for item in &mut item_impl.items {
+			if let syn::ImplItem::Method(method) = item {
 				if !matches!(method.vis, syn::Visibility::Public(_)) {
 					let msg = "Invalid pallet::call, dispatchable function must be public: \
 						`pub fn`";
@@ -188,7 +197,7 @@ impl CallDef {
 						return Err(syn::Error::new(method.sig.span(), msg))
 					},
 					Some(syn::FnArg::Typed(arg)) => {
-						check_dispatchable_first_arg_type(&*arg.ty)?;
+						check_dispatchable_first_arg_type(&arg.ty)?;
 					},
 				}
 
@@ -211,6 +220,14 @@ impl CallDef {
 						},
 					);
 
+				if weight_attrs.is_empty() && dev_mode {
+					// inject a default O(1) weight when dev mode is enabled and no weight has
+					// been specified on the call
+					let empty_weight: syn::Expr = syn::parse(quote::quote!(0).into())
+						.expect("we are parsing a quoted string; qed");
+					weight_attrs.push(FunctionAttr::Weight(empty_weight));
+				}
+
 				if weight_attrs.len() != 1 {
 					let msg = if weight_attrs.is_empty() {
 						"Invalid pallet::call, requires weight attribute i.e. `#[pallet::weight($expr)]`"
@@ -232,6 +249,7 @@ impl CallDef {
 					FunctionAttr::CallIndex(idx) => idx,
 					_ => unreachable!("checked during creation of the let binding"),
 				});
+				let explicit_call_index = call_index.is_some();
 
 				let final_index = match call_index {
 					Some(i) => i,
@@ -285,12 +303,14 @@ impl CallDef {
 					name: method.sig.ident.clone(),
 					weight,
 					call_index: final_index,
+					explicit_call_index,
 					args,
 					docs,
+					attrs: method.attrs.clone(),
 				});
 			} else {
 				let msg = "Invalid pallet::call, only method accepted";
-				return Err(syn::Error::new(impl_item.span(), msg))
+				return Err(syn::Error::new(item.span(), msg))
 			}
 		}
 
@@ -299,8 +319,8 @@ impl CallDef {
 			attr_span,
 			instances,
 			methods,
-			where_clause: item.generics.where_clause.clone(),
-			docs: get_doc_literals(&item.attrs),
+			where_clause: item_impl.generics.where_clause.clone(),
+			docs: get_doc_literals(&item_impl.attrs),
 		})
 	}
 }

@@ -11,5 +11,6 @@ Contains code that is shared among multiple sub-commands.
 - `--db` The database backend to use. This depends on your snapshot.
 - `--pruning` Set the pruning mode of the node. Some benchmarks require you to set this to `archive`.
 - `--base-path` The location on the disk that should be used for the benchmarks. You can try this on different disks or even on a mounted RAM-disk. It is important to use the same location that will later-on be used to store the chain data to get the correct results.
+- `--header` Optional file header which will be prepended to the weight output file. Can be used for adding LICENSE headers.
 
 License: Apache-2.0

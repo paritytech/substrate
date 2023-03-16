@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -57,7 +57,7 @@ pub enum Error {
 	ParsingMultiaddress(#[from] libp2p::core::multiaddr::Error),
 
 	#[error("Failed to parse a libp2p key.")]
-	ParsingLibp2pIdentity(#[from] sc_network::DecodingError),
+	ParsingLibp2pIdentity(#[from] libp2p::identity::error::DecodingError),
 
 	#[error("Failed to sign using a specific public key.")]
 	MissingSignature(CryptoTypePublicPair),

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,78 +16,56 @@
 // limitations under the License.
 
 use crate::{
-	build_executor, ensure_matching_spec, extract_code, full_extensions, hash_of, local_spec,
-	state_machine_call_with_proof, SharedParams, State, LOG_TARGET,
+	build_executor, full_extensions, rpc_err_handler, state_machine_call_with_proof, LiveState,
+	SharedParams, State, LOG_TARGET,
 };
-use remote_externalities::rpc_api;
-use sc_service::{Configuration, NativeExecutionDispatch};
-use sp_core::storage::well_known_keys;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use parity_scale_codec::Encode;
+use sc_executor::sp_wasm_interface::HostFunctions;
+use sp_rpc::{list::ListOrValue, number::NumberOrHex};
+use sp_runtime::{
+	generic::SignedBlock,
+	traits::{Block as BlockT, Header as HeaderT, NumberFor},
+};
 use std::{fmt::Debug, str::FromStr};
+use substrate_rpc_client::{ws_client, ChainApi};
 
-/// Configurations of the [`Command::ExecuteBlock`].
+/// Configurations of the [`crate::Command::ExecuteBlock`].
+///
+/// This will always call into `TryRuntime_execute_block`, which can optionally skip the state-root
+/// check (useful for trying a unreleased runtime), and can execute runtime sanity checks as well.
 #[derive(Debug, Clone, clap::Parser)]
 pub struct ExecuteBlockCmd {
-	/// Overwrite the wasm code in state or not.
-	#[clap(long)]
-	overwrite_wasm_code: bool,
-
-	/// If set, then the state root check is disabled by the virtue of calling into
-	/// `TryRuntime_execute_block_no_check` instead of
-	/// `Core_execute_block`.
-	#[clap(long)]
-	no_check: bool,
-
-	/// The block hash at which to fetch the block.
+	/// Which try-state targets to execute when running this command.
 	///
-	/// If the `live` state type is being used, then this can be omitted, and is equal to whatever
-	/// the `state::at` is. Only use this (with care) when combined with a snapshot.
-	#[clap(
-		long,
-		multiple_values = false,
-		parse(try_from_str = crate::parse::hash)
-	)]
-	block_at: Option<String>,
+	/// Expected values:
+	/// - `all`
+	/// - `none`
+	/// - A comma separated list of pallets, as per pallet names in `construct_runtime!()` (e.g.
+	///   `Staking, System`).
+	/// - `rr-[x]` where `[x]` is a number. Then, the given number of pallets are checked in a
+	///   round-robin fashion.
+	#[arg(long, default_value = "all")]
+	pub try_state: frame_try_runtime::TryStateSelect,
 
 	/// The ws uri from which to fetch the block.
 	///
-	/// If the `live` state type is being used, then this can be omitted, and is equal to whatever
-	/// the `state::uri` is. Only use this (with care) when combined with a snapshot.
-	#[clap(
+	/// This will always fetch the next block of whatever `state` is referring to, because this is
+	/// the only sensible combination. In other words, if you have the state of block `n`, you
+	/// should execute block `n+1` on top of it.
+	///
+	/// If `state` is `Live`, this can be ignored and the same uri is used for both.
+	#[arg(
 		long,
-		multiple_values = false,
-		parse(try_from_str = crate::parse::url)
+		value_parser = crate::parse::url
 	)]
-	block_ws_uri: Option<String>,
+	pub block_ws_uri: Option<String>,
 
 	/// The state type to use.
-	///
-	/// For this command only, if the `live` is used, then state of the parent block is fetched.
-	///
-	/// If `block_at` is provided, then the [`State::Live::at`] is being ignored.
-	#[clap(subcommand)]
-	state: State,
+	#[command(subcommand)]
+	pub state: State,
 }
 
 impl ExecuteBlockCmd {
-	fn block_at<Block: BlockT>(&self) -> sc_cli::Result<Block::Hash>
-	where
-		Block::Hash: FromStr,
-		<Block::Hash as FromStr>::Err: Debug,
-	{
-		match (&self.block_at, &self.state) {
-			(Some(block_at), State::Snap { .. }) => hash_of::<Block>(block_at),
-			(Some(block_at), State::Live { .. }) => {
-				log::warn!(target: LOG_TARGET, "--block-at is provided while state type is live. the `Live::at` will be ignored");
-				hash_of::<Block>(block_at)
-			},
-			(None, State::Live { at: Some(at), .. }) => hash_of::<Block>(at),
-			_ => {
-				panic!("either `--block-at` must be provided, or state must be `live with a proper `--at``");
-			},
-		}
-	}
-
 	fn block_ws_uri<Block: BlockT>(&self) -> String
 	where
 		Block::Hash: FromStr,
@@ -99,7 +77,7 @@ impl ExecuteBlockCmd {
 				log::error!(target: LOG_TARGET, "--block-uri is provided while state type is live, Are you sure you know what you are doing?");
 				block_ws_uri.to_owned()
 			},
-			(None, State::Live { uri, .. }) => uri.clone(),
+			(None, State::Live(LiveState { uri, .. })) => uri.clone(),
 			(None, State::Snap { .. }) => {
 				panic!("either `--block-uri` must be provided, or state must be `live`");
 			},
@@ -107,54 +85,37 @@ impl ExecuteBlockCmd {
 	}
 }
 
-pub(crate) async fn execute_block<Block, ExecDispatch>(
+pub(crate) async fn execute_block<Block, HostFns>(
 	shared: SharedParams,
 	command: ExecuteBlockCmd,
-	config: Configuration,
 ) -> sc_cli::Result<()>
 where
 	Block: BlockT + serde::de::DeserializeOwned,
 	Block::Hash: FromStr,
 	<Block::Hash as FromStr>::Err: Debug,
-	NumberFor<Block>: FromStr,
-	<NumberFor<Block> as FromStr>::Err: Debug,
-	ExecDispatch: NativeExecutionDispatch + 'static,
+	Block::Hash: serde::de::DeserializeOwned,
+	Block::Header: serde::de::DeserializeOwned,
+	<NumberFor<Block> as TryInto<u64>>::Error: Debug,
+	HostFns: HostFunctions,
 {
-	let executor = build_executor::<ExecDispatch>(&shared, &config);
-	let execution = shared.execution;
+	let executor = build_executor::<HostFns>(&shared);
+	let ext = command.state.into_ext::<Block, HostFns>(&shared, &executor, None, true).await?;
 
-	let block_at = command.block_at::<Block>()?;
+	// get the block number associated with this block.
 	let block_ws_uri = command.block_ws_uri::<Block>();
-	let block: Block = rpc_api::get_block::<Block, _>(block_ws_uri.clone(), block_at).await?;
-	let parent_hash = block.header().parent_hash();
-	log::info!(
-		target: LOG_TARGET,
-		"fetched block from {:?}, parent_hash to fetch the state {:?}",
-		block_ws_uri,
-		parent_hash
-	);
+	let rpc = ws_client(&block_ws_uri).await?;
+	let next_hash = next_hash_of::<Block>(&rpc, ext.block_hash).await?;
 
-	let ext = {
-		let builder = command
-			.state
-			.builder::<Block>()?
-			// make sure the state is being build with the parent hash, if it is online.
-			.overwrite_online_at(parent_hash.to_owned());
+	log::info!(target: LOG_TARGET, "fetching next block: {:?} ", next_hash);
 
-		let builder = if command.overwrite_wasm_code {
-			log::info!(
-				target: LOG_TARGET,
-				"replacing the in-storage :code: with the local code from {}'s chain_spec (your local repo)",
-				config.chain_spec.name(),
-			);
-			let (code_key, code) = extract_code(&config.chain_spec)?;
-			builder.inject_hashed_key_value(&[(code_key, code)])
-		} else {
-			builder.inject_hashed_key(well_known_keys::CODE)
-		};
-
-		builder.build().await?
-	};
+	let block = ChainApi::<(), Block::Hash, Block::Header, SignedBlock<Block>>::block(
+		&rpc,
+		Some(next_hash),
+	)
+	.await
+	.map_err(rpc_err_handler)?
+	.expect("header exists, block should also exist; qed")
+	.block;
 
 	// A digest item gets added when the runtime is processing the block, so we need to pop
 	// the last one to be consistent with what a gossiped block would contain.
@@ -162,26 +123,50 @@ where
 	header.digest_mut().pop();
 	let block = Block::new(header, extrinsics);
 
-	let (expected_spec_name, expected_spec_version, _) =
-		local_spec::<Block, ExecDispatch>(&ext, &executor);
-	ensure_matching_spec::<Block>(
-		block_ws_uri.clone(),
-		expected_spec_name,
-		expected_spec_version,
-		shared.no_spec_name_check,
-	)
-	.await;
+	// for now, hardcoded for the sake of simplicity. We might customize them one day.
+	let state_root_check = false;
+	let signature_check = false;
+	let payload = (block.clone(), state_root_check, signature_check, command.try_state).encode();
 
-	let _ = state_machine_call_with_proof::<Block, ExecDispatch>(
+	let _ = state_machine_call_with_proof::<Block, HostFns>(
 		&ext,
 		&executor,
-		execution,
-		if command.no_check { "TryRuntime_execute_block_no_check" } else { "Core_execute_block" },
-		block.encode().as_ref(),
+		"TryRuntime_execute_block",
+		&payload,
 		full_extensions(),
+		shared.export_proof,
 	)?;
 
-	log::info!(target: LOG_TARGET, "Core_execute_block executed without errors.");
-
 	Ok(())
+}
+
+pub(crate) async fn next_hash_of<Block: BlockT>(
+	rpc: &substrate_rpc_client::WsClient,
+	hash: Block::Hash,
+) -> sc_cli::Result<Block::Hash>
+where
+	Block: BlockT + serde::de::DeserializeOwned,
+	Block::Header: serde::de::DeserializeOwned,
+{
+	let number = ChainApi::<(), Block::Hash, Block::Header, ()>::header(rpc, Some(hash))
+		.await
+		.map_err(rpc_err_handler)
+		.and_then(|maybe_header| maybe_header.ok_or("header_not_found").map(|h| *h.number()))?;
+
+	let next = number + sp_runtime::traits::One::one();
+
+	let next_hash = match ChainApi::<(), Block::Hash, Block::Header, ()>::block_hash(
+		rpc,
+		Some(ListOrValue::Value(NumberOrHex::Number(
+			next.try_into().map_err(|_| "failed to convert number to block number")?,
+		))),
+	)
+	.await
+	.map_err(rpc_err_handler)?
+	{
+		ListOrValue::Value(t) => t.expect("value passed in; value comes out; qed"),
+		_ => unreachable!(),
+	};
+
+	Ok(next_hash)
 }

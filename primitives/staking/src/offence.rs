@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,10 +18,10 @@
 //! Common traits and types that are useful for describing offences for usage in environments
 //! that use staking.
 
-use sp_std::vec::Vec;
-
 use codec::{Decode, Encode};
-use sp_runtime::Perbill;
+use sp_core::Get;
+use sp_runtime::{transaction_validity::TransactionValidityError, DispatchError, Perbill};
+use sp_std::vec::Vec;
 
 use crate::SessionIndex;
 
@@ -108,11 +108,10 @@ pub trait Offence<Offender> {
 	}
 
 	/// A slash fraction of the total exposure that should be slashed for this
-	/// particular offence kind for the given parameters that happened at a singular `TimeSlot`.
+	/// particular offence for the `offenders_count` that happened at a singular `TimeSlot`.
 	///
-	/// `offenders_count` - the count of unique offending authorities. It is >0.
-	/// `validator_set_count` - the cardinality of the validator set at the time of offence.
-	fn slash_fraction(offenders_count: u32, validator_set_count: u32) -> Perbill;
+	/// `offenders_count` - the count of unique offending authorities for this `TimeSlot`. It is >0.
+	fn slash_fraction(&self, offenders_count: u32) -> Perbill;
 }
 
 /// Errors that may happen on offence reports.
@@ -209,4 +208,69 @@ pub struct OffenceDetails<Reporter, Offender> {
 	/// A list of reporters of offences of this authority ID. Possibly empty where there are no
 	/// particular reporters.
 	pub reporters: Vec<Reporter>,
+}
+
+/// An abstract system to publish, check and process offence evidences.
+///
+/// Implementation details are left opaque and we don't assume any specific usage
+/// scenario for this trait at this level. The main goal is to group together some
+/// common actions required during a typical offence report flow.
+///
+/// Even though this trait doesn't assume too much, this is a general guideline
+/// for a typical usage scenario:
+///
+/// 1. An offence is detected and an evidence is submitted on-chain via the
+///    [`OffenceReportSystem::publish_evidence`] method. This will construct
+///    and submit an extrinsic transaction containing the offence evidence.
+///
+/// 2. If the extrinsic is unsigned then the transaction receiver may want to
+///    perform some preliminary checks before further processing. This is a good
+///    place to call the [`OffenceReportSystem::check_evidence`] method.
+///
+/// 3. Finally the report extrinsic is executed on-chain. This is where the user
+///    calls the [`OffenceReportSystem::process_evidence`] to consume the offence
+///    report and enact any required action.
+pub trait OffenceReportSystem<Reporter, Evidence> {
+	/// Longevity, in blocks, for the evidence report validity.
+	///
+	/// For example, when using the staking pallet this should be set equal
+	/// to the bonding duration in blocks, not eras.
+	type Longevity: Get<u64>;
+
+	/// Publish an offence evidence.
+	///
+	/// Common usage: submit the evidence on-chain via some kind of extrinsic.
+	fn publish_evidence(evidence: Evidence) -> Result<(), ()>;
+
+	/// Check an offence evidence.
+	///
+	/// Common usage: preliminary validity check before execution
+	/// (e.g. for unsigned extrinsic quick checks).
+	fn check_evidence(evidence: Evidence) -> Result<(), TransactionValidityError>;
+
+	/// Process an offence evidence.
+	///
+	/// Common usage: enact some form of slashing directly or by forwarding
+	/// the evidence to a lower level specialized subsystem (e.g. a handler
+	/// implementing `ReportOffence` trait).
+	fn process_evidence(reporter: Reporter, evidence: Evidence) -> Result<(), DispatchError>;
+}
+
+/// Dummy offence report system.
+///
+/// Doesn't do anything special and returns `Ok(())` for all the actions.
+impl<Reporter, Evidence> OffenceReportSystem<Reporter, Evidence> for () {
+	type Longevity = ();
+
+	fn publish_evidence(_evidence: Evidence) -> Result<(), ()> {
+		Ok(())
+	}
+
+	fn check_evidence(_evidence: Evidence) -> Result<(), TransactionValidityError> {
+		Ok(())
+	}
+
+	fn process_evidence(_reporter: Reporter, _evidence: Evidence) -> Result<(), DispatchError> {
+		Ok(())
+	}
 }

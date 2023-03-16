@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -91,5 +91,32 @@ impl Cid {
 			codec: DAG_PB,
 			hash: Multihash { code: SHA2_256, digest: digest.try_into().expect("msg") },
 		}
+	}
+}
+
+/// Witness data for the `disband` call.
+#[derive(
+	Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo, Default,
+)]
+pub struct DisbandWitness {
+	/// Total number of fellow members in the current Alliance.
+	#[codec(compact)]
+	pub(super) fellow_members: u32,
+	/// Total number of ally members in the current Alliance.
+	#[codec(compact)]
+	pub(super) ally_members: u32,
+}
+
+#[cfg(test)]
+impl DisbandWitness {
+	// Creates new DisbandWitness.
+	pub(super) fn new(fellow_members: u32, ally_members: u32) -> Self {
+		Self { fellow_members, ally_members }
+	}
+}
+
+impl DisbandWitness {
+	pub(super) fn is_zero(self) -> bool {
+		self == Self::default()
 	}
 }

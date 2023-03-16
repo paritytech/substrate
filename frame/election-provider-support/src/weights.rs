@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -53,43 +53,43 @@ pub trait WeightInfo {
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn phragmen(v: u32, t: u32, d: u32, ) -> Weight {
-		(0 as Weight)
+		Weight::from_parts(0 as u64, 0)
 			// Standard Error: 667_000
-			.saturating_add((32_973_000 as Weight).saturating_mul(v as Weight))
+			.saturating_add(Weight::from_parts(32_973_000 as u64, 0).saturating_mul(v as u64))
 			// Standard Error: 1_334_000
-			.saturating_add((1_334_000 as Weight).saturating_mul(t as Weight))
+			.saturating_add(Weight::from_parts(1_334_000 as u64, 0).saturating_mul(t as u64))
 			// Standard Error: 60_644_000
-			.saturating_add((2_636_364_000 as Weight).saturating_mul(d as Weight))
+			.saturating_add(Weight::from_parts(2_636_364_000 as u64, 0).saturating_mul(d as u64))
 	}
 	fn phragmms(v: u32, t: u32, d: u32, ) -> Weight {
-		(0 as Weight)
+		Weight::from_parts(0 as u64, 0)
 			// Standard Error: 73_000
-			.saturating_add((21_073_000 as Weight).saturating_mul(v as Weight))
+			.saturating_add(Weight::from_parts(21_073_000 as u64, 0).saturating_mul(v as u64))
 			// Standard Error: 146_000
-			.saturating_add((65_000 as Weight).saturating_mul(t as Weight))
+			.saturating_add(Weight::from_parts(65_000 as u64, 0).saturating_mul(t as u64))
 			// Standard Error: 6_649_000
-			.saturating_add((1_711_424_000 as Weight).saturating_mul(d as Weight))
+			.saturating_add(Weight::from_parts(1_711_424_000 as u64, 0).saturating_mul(d as u64))
 	}
 }
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
 	fn phragmen(v: u32, t: u32, d: u32, ) -> Weight {
-		(0 as Weight)
+		Weight::from_parts(0 as u64, 0)
 			// Standard Error: 667_000
-			.saturating_add((32_973_000 as Weight).saturating_mul(v as Weight))
+			.saturating_add(Weight::from_parts(32_973_000 as u64, 0).saturating_mul(v as u64))
 			// Standard Error: 1_334_000
-			.saturating_add((1_334_000 as Weight).saturating_mul(t as Weight))
+			.saturating_add(Weight::from_parts(1_334_000 as u64, 0).saturating_mul(t as u64))
 			// Standard Error: 60_644_000
-			.saturating_add((2_636_364_000 as Weight).saturating_mul(d as Weight))
+			.saturating_add(Weight::from_parts(2_636_364_000 as u64, 0).saturating_mul(d as u64))
 	}
 	fn phragmms(v: u32, t: u32, d: u32, ) -> Weight {
-		(0 as Weight)
+		Weight::from_parts(0 as u64, 0)
 			// Standard Error: 73_000
-			.saturating_add((21_073_000 as Weight).saturating_mul(v as Weight))
+			.saturating_add(Weight::from_parts(21_073_000 as u64, 0).saturating_mul(v as u64))
 			// Standard Error: 146_000
-			.saturating_add((65_000 as Weight).saturating_mul(t as Weight))
+			.saturating_add(Weight::from_parts(65_000 as u64, 0).saturating_mul(t as u64))
 			// Standard Error: 6_649_000
-			.saturating_add((1_711_424_000 as Weight).saturating_mul(d as Weight))
+			.saturating_add(Weight::from_parts(1_711_424_000 as u64, 0).saturating_mul(d as u64))
 	}
 }

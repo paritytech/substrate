@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -166,7 +166,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// Swap action.
 		type SwapAction: SwapAction<Self::AccountId, Self> + Parameter + MaxEncodedLen;
 		/// Limit of proof size.
@@ -184,7 +184,6 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::storage]
@@ -243,7 +242,8 @@ pub mod pallet {
 		/// - `duration`: Locked duration of the atomic swap. For safety reasons, it is recommended
 		///   that the revealer uses a shorter duration than the counterparty, to prevent the
 		///   situation where the revealer reveals the proof too late around the end block.
-		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1).saturating_add(40_000_000))]
+		#[pallet::call_index(0)]
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1).ref_time().saturating_add(40_000_000))]
 		pub fn create_swap(
 			origin: OriginFor<T>,
 			target: T::AccountId,
@@ -278,11 +278,13 @@ pub mod pallet {
 		/// - `proof`: Revealed proof of the claim.
 		/// - `action`: Action defined in the swap, it must match the entry in blockchain. Otherwise
 		///   the operation fails. This is used for weight calculation.
+		#[pallet::call_index(1)]
 		#[pallet::weight(
 			T::DbWeight::get().reads_writes(1, 1)
-				.saturating_add(40_000_000)
-				.saturating_add((proof.len() as Weight).saturating_mul(100))
 				.saturating_add(action.weight())
+				.ref_time()
+				.saturating_add(40_000_000)
+				.saturating_add((proof.len() as u64).saturating_mul(100))
 		)]
 		pub fn claim_swap(
 			origin: OriginFor<T>,
@@ -317,7 +319,8 @@ pub mod pallet {
 		///
 		/// - `target`: Target of the original atomic swap.
 		/// - `hashed_proof`: Hashed proof of the original atomic swap.
-		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1).saturating_add(40_000_000))]
+		#[pallet::call_index(2)]
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1).ref_time().saturating_add(40_000_000))]
 		pub fn cancel_swap(
 			origin: OriginFor<T>,
 			target: T::AccountId,
@@ -333,7 +336,7 @@ pub mod pallet {
 			);
 
 			swap.action.cancel(&swap.source);
-			PendingSwaps::<T>::remove(&target, hashed_proof.clone());
+			PendingSwaps::<T>::remove(&target, hashed_proof);
 
 			Self::deposit_event(Event::SwapCancelled { account: target, proof: hashed_proof });
 

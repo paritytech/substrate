@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -57,7 +57,7 @@ impl<T: OffchainStorage + 'static> OffchainApiServer for Offchain<T> {
 			StorageKind::PERSISTENT => sp_offchain::STORAGE_PREFIX,
 			StorageKind::LOCAL => return Err(JsonRpseeError::from(Error::UnavailableStorageKind)),
 		};
-		self.storage.write().set(prefix, &*key, &*value);
+		self.storage.write().set(prefix, &key, &value);
 		Ok(())
 	}
 
@@ -69,6 +69,6 @@ impl<T: OffchainStorage + 'static> OffchainApiServer for Offchain<T> {
 			StorageKind::LOCAL => return Err(JsonRpseeError::from(Error::UnavailableStorageKind)),
 		};
 
-		Ok(self.storage.read().get(prefix, &*key).map(Into::into))
+		Ok(self.storage.read().get(prefix, &key).map(Into::into))
 	}
 }

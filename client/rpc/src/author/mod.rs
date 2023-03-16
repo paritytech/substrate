@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -29,7 +29,8 @@ use codec::{Decode, Encode};
 use futures::{FutureExt, TryFutureExt};
 use jsonrpsee::{
 	core::{async_trait, Error as JsonRpseeError, RpcResult},
-	PendingSubscription,
+	types::SubscriptionResult,
+	SubscriptionSink,
 };
 use sc_rpc_api::DenyUnsafe;
 use sc_transaction_pool_api::{
@@ -122,7 +123,7 @@ where
 		let best_block_hash = self.client.info().best_hash;
 		self.client
 			.runtime_api()
-			.generate_session_keys(&generic::BlockId::Hash(best_block_hash), None)
+			.generate_session_keys(best_block_hash, None)
 			.map(Into::into)
 			.map_err(|api_err| Error::Client(Box::new(api_err)).into())
 	}
@@ -134,7 +135,7 @@ where
 		let keys = self
 			.client
 			.runtime_api()
-			.decode_session_keys(&generic::BlockId::Hash(best_block_hash), session_keys.to_vec())
+			.decode_session_keys(best_block_hash, session_keys.to_vec())
 			.map_err(|e| Error::Client(Box::new(e)))?
 			.ok_or(Error::InvalidSessionKeys)?;
 
@@ -176,13 +177,13 @@ where
 			.collect())
 	}
 
-	fn watch_extrinsic(&self, pending: PendingSubscription, xt: Bytes) {
+	fn watch_extrinsic(&self, mut sink: SubscriptionSink, xt: Bytes) -> SubscriptionResult {
 		let best_block_hash = self.client.info().best_hash;
 		let dxt = match TransactionFor::<P>::decode(&mut &xt[..]).map_err(|e| Error::from(e)) {
 			Ok(dxt) => dxt,
 			Err(e) => {
-				pending.reject(JsonRpseeError::from(e));
-				return
+				let _ = sink.reject(JsonRpseeError::from(e));
+				return Ok(())
 			},
 		};
 
@@ -199,19 +200,15 @@ where
 			let stream = match submit.await {
 				Ok(stream) => stream,
 				Err(err) => {
-					pending.reject(JsonRpseeError::from(err));
+					let _ = sink.reject(JsonRpseeError::from(err));
 					return
 				},
-			};
-
-			let mut sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return,
 			};
 
 			sink.pipe_from_stream(stream).await;
 		};
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
+		Ok(())
 	}
 }

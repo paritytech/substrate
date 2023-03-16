@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,7 +25,7 @@
 /// The configuration trait
 pub trait Config: 'static {
 	/// The runtime origin type.
-	type Origin: codec::Codec + codec::EncodeLike + Default + scale_info::TypeInfo;
+	type RuntimeOrigin: codec::Codec + codec::EncodeLike + Default + scale_info::TypeInfo;
 	/// The block number type.
 	type BlockNumber: codec::Codec + codec::EncodeLike + Default + scale_info::TypeInfo;
 	/// The information about the pallet setup in the runtime.
@@ -36,7 +36,7 @@ pub trait Config: 'static {
 
 frame_support::decl_module! {
 	/// Some test module
-	pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {}
+	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=self {}
 }
 
 /// A PalletInfo implementation which just panics.

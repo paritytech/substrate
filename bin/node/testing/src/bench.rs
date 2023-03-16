@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -34,15 +34,15 @@ use crate::{
 };
 use codec::{Decode, Encode};
 use futures::executor;
-use node_primitives::Block;
-use node_runtime::{
-	constants::currency::DOLLARS, AccountId, BalancesCall, Call, CheckedExtrinsic, MinimumPeriod,
-	Signature, SystemCall, UncheckedExtrinsic,
+use kitchensink_runtime::{
+	constants::currency::DOLLARS, AccountId, BalancesCall, CheckedExtrinsic, MinimumPeriod,
+	RuntimeCall, Signature, SystemCall, UncheckedExtrinsic,
 };
+use node_primitives::Block;
 use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::{
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
-	BlockBackend, ExecutionStrategy,
+	ExecutionStrategy,
 };
 use sc_client_db::PruningMode;
 use sc_consensus::{BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult, ImportedAux};
@@ -53,8 +53,7 @@ use sp_consensus::BlockOrigin;
 use sp_core::{blake2_256, ed25519, sr25519, traits::SpawnNamed, ExecutionContext, Pair, Public};
 use sp_inherents::InherentData;
 use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, IdentifyAccount, Verify, Zero},
+	traits::{Block as BlockT, IdentifyAccount, Verify},
 	OpaqueExtrinsic,
 };
 
@@ -273,14 +272,10 @@ pub struct BlockContentIterator<'a> {
 
 impl<'a> BlockContentIterator<'a> {
 	fn new(content: BlockContent, keyring: &'a BenchKeyring, client: &Client) -> Self {
+		let genesis_hash = client.chain_info().genesis_hash;
 		let runtime_version = client
-			.runtime_version_at(&BlockId::number(0))
+			.runtime_version_at(genesis_hash)
 			.expect("There should be runtime version at 0");
-
-		let genesis_hash = client
-			.block_hash(Zero::zero())
-			.expect("Database error?")
-			.expect("Genesis block always exists; qed");
 
 		BlockContentIterator { iteration: 0, content, keyring, runtime_version, genesis_hash }
 	}
@@ -304,23 +299,25 @@ impl<'a> Iterator for BlockContentIterator<'a> {
 			CheckedExtrinsic {
 				signed: Some((
 					sender,
-					signed_extra(0, node_runtime::ExistentialDeposit::get() + 1),
+					signed_extra(0, kitchensink_runtime::ExistentialDeposit::get() + 1),
 				)),
 				function: match self.content.block_type {
 					BlockType::RandomTransfersKeepAlive =>
-						Call::Balances(BalancesCall::transfer_keep_alive {
+						RuntimeCall::Balances(BalancesCall::transfer_keep_alive {
 							dest: sp_runtime::MultiAddress::Id(receiver),
-							value: node_runtime::ExistentialDeposit::get() + 1,
+							value: kitchensink_runtime::ExistentialDeposit::get() + 1,
 						}),
 					BlockType::RandomTransfersReaping => {
-						Call::Balances(BalancesCall::transfer {
+						RuntimeCall::Balances(BalancesCall::transfer {
 							dest: sp_runtime::MultiAddress::Id(receiver),
 							// Transfer so that ending balance would be 1 less than existential
 							// deposit so that we kill the sender account.
-							value: 100 * DOLLARS - (node_runtime::ExistentialDeposit::get() - 1),
+							value: 100 * DOLLARS -
+								(kitchensink_runtime::ExistentialDeposit::get() - 1),
 						})
 					},
-					BlockType::Noop => Call::System(SystemCall::remark { remark: Vec::new() }),
+					BlockType::Noop =>
+						RuntimeCall::System(SystemCall::remark { remark: Vec::new() }),
 				},
 			},
 			self.runtime_version.spec_version,
@@ -387,33 +384,42 @@ impl BenchDb {
 		keyring: &BenchKeyring,
 	) -> (Client, std::sync::Arc<Backend>, TaskExecutor) {
 		let db_config = sc_client_db::DatabaseSettings {
-			state_cache_size: 16 * 1024 * 1024,
-			state_cache_child_ratio: Some((0, 100)),
+			trie_cache_maximum_size: Some(16 * 1024 * 1024),
 			state_pruning: Some(PruningMode::ArchiveAll),
 			source: database_type.into_settings(dir.into()),
-			keep_blocks: sc_client_db::KeepBlocks::All,
+			blocks_pruning: sc_client_db::BlocksPruning::KeepAll,
 		};
 		let task_executor = TaskExecutor::new();
 
 		let backend = sc_service::new_db_backend(db_config).expect("Should not fail");
+		let executor = NativeElseWasmExecutor::new(
+			WasmExecutionMethod::Compiled {
+				instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
+			},
+			None,
+			8,
+			2,
+		);
+		let client_config = sc_service::ClientConfig::default();
+		let genesis_block_builder = sc_service::GenesisBlockBuilder::new(
+			&keyring.generate_genesis(),
+			!client_config.no_genesis,
+			backend.clone(),
+			executor.clone(),
+		)
+		.expect("Failed to create genesis block builder");
+
 		let client = sc_service::new_client(
 			backend.clone(),
-			NativeElseWasmExecutor::new(
-				WasmExecutionMethod::Compiled {
-					instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
-				},
-				None,
-				8,
-				2,
-			),
-			&keyring.generate_genesis(),
+			executor,
+			genesis_block_builder,
 			None,
 			None,
 			ExecutionExtensions::new(profile.into_execution_strategies(), None, None),
 			Box::new(task_executor.clone()),
 			None,
 			None,
-			Default::default(),
+			client_config,
 		)
 		.expect("Should not fail");
 
@@ -434,7 +440,7 @@ impl BenchDb {
 		client
 			.runtime_api()
 			.inherent_extrinsics_with_context(
-				&BlockId::number(0),
+				client.chain_info().genesis_hash,
 				ExecutionContext::BlockConstruction,
 				inherent_data,
 			)
@@ -592,9 +598,9 @@ impl BenchKeyring {
 	}
 
 	/// Generate genesis with accounts from this keyring endowed with some balance.
-	pub fn generate_genesis(&self) -> node_runtime::GenesisConfig {
+	pub fn generate_genesis(&self) -> kitchensink_runtime::GenesisConfig {
 		crate::genesis::config_endowed(
-			Some(node_runtime::wasm_binary_unwrap()),
+			Some(kitchensink_runtime::wasm_binary_unwrap()),
 			self.collect_account_ids(),
 		)
 	}
@@ -676,10 +682,8 @@ impl BenchContext {
 		assert_eq!(self.client.chain_info().best_number, 0);
 
 		assert_eq!(
-			futures::executor::block_on(
-				self.client.import_block(import_params, Default::default())
-			)
-			.expect("Failed to import block"),
+			futures::executor::block_on(self.client.import_block(import_params))
+				.expect("Failed to import block"),
 			ImportResult::Imported(ImportedAux {
 				header_only: false,
 				clear_justification_requests: false,

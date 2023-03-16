@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,9 +17,8 @@
 
 use crate::utils::{
 	extract_block_type_from_trait_path, extract_impl_trait,
-	extract_parameter_names_types_and_borrows, generate_crate_access, generate_hidden_includes,
-	generate_method_runtime_api_impl_name, return_type_extract_type, AllowSelfRefInParameters,
-	RequireQualifiedTraitPath,
+	extract_parameter_names_types_and_borrows, generate_crate_access, return_type_extract_type,
+	AllowSelfRefInParameters, RequireQualifiedTraitPath,
 };
 
 use proc_macro2::{Span, TokenStream};
@@ -31,16 +30,13 @@ use syn::{
 	parse::{Error, Parse, ParseStream, Result},
 	parse_macro_input, parse_quote,
 	spanned::Spanned,
-	Attribute, Ident, ItemImpl, Pat, Type, TypePath,
+	Attribute, ItemImpl, Pat, Type, TypePath,
 };
-
-/// Unique identifier used to make the hidden includes unique for this macro.
-const HIDDEN_INCLUDES_ID: &str = "MOCK_IMPL_RUNTIME_APIS";
 
 /// The `advanced` attribute.
 ///
-/// If this attribute is given to a function, the function gets access to the `BlockId` as first
-/// parameter and needs to return a `Result` with the appropiate error type.
+/// If this attribute is given to a function, the function gets access to the `Hash` as first
+/// parameter and needs to return a `Result` with the appropriate error type.
 const ADVANCED_ATTRIBUTE: &str = "advanced";
 
 /// The structure used for parsing the runtime api implementations.
@@ -66,7 +62,7 @@ impl Parse for RuntimeApiImpls {
 
 /// Implement the `ApiExt` trait and the `Core` runtime api.
 fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<TokenStream> {
-	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
+	let crate_ = generate_crate_access();
 
 	Ok(quote!(
 		impl #crate_::ApiExt<#block_type> for #self_ty {
@@ -81,14 +77,14 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 
 			fn has_api<A: #crate_::RuntimeApiInfo + ?Sized>(
 				&self,
-				_: &#crate_::BlockId<#block_type>,
+				_: <Block as #crate_::BlockT>::Hash,
 			) -> std::result::Result<bool, #crate_::ApiError> where Self: Sized {
 				Ok(true)
 			}
 
 			fn has_api_with<A: #crate_::RuntimeApiInfo + ?Sized, P: Fn(u32) -> bool>(
 				&self,
-				_: &#crate_::BlockId<#block_type>,
+				_: <Block as #crate_::BlockT>::Hash,
 				pred: P,
 			) -> std::result::Result<bool, #crate_::ApiError> where Self: Sized {
 				Ok(pred(A::VERSION))
@@ -96,7 +92,7 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 
 			fn api_version<A: #crate_::RuntimeApiInfo + ?Sized>(
 				&self,
-				_: &#crate_::BlockId<#block_type>,
+				_: <Block as #crate_::BlockT>::Hash,
 			) -> std::result::Result<Option<u32>, #crate_::ApiError> where Self: Sized {
 				Ok(Some(A::VERSION))
 			}
@@ -105,7 +101,9 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 				unimplemented!("`record_proof` not implemented for runtime api mocks")
 			}
 
-			fn extract_proof(&mut self) -> Option<#crate_::StorageProof> {
+			fn extract_proof(
+				&mut self,
+			) -> Option<#crate_::StorageProof> {
 				unimplemented!("`extract_proof` not implemented for runtime api mocks")
 			}
 
@@ -126,34 +124,63 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 		}
 
 		impl #crate_::Core<#block_type> for #self_ty {
-			fn Core_version_runtime_api_impl(
+			fn __runtime_api_internal_call_api_at(
 				&self,
-				_: &#crate_::BlockId<#block_type>,
+				_: <#block_type as #crate_::BlockT>::Hash,
 				_: #crate_::ExecutionContext,
-				_: Option<()>,
-				_: Vec<u8>,
-			) -> std::result::Result<#crate_::NativeOrEncoded<#crate_::RuntimeVersion>, #crate_::ApiError> {
-				unimplemented!("Not required for testing!")
+				_: std::vec::Vec<u8>,
+				_: &dyn Fn(#crate_::RuntimeVersion) -> &'static str,
+			) -> std::result::Result<std::vec::Vec<u8>, #crate_::ApiError> {
+				unimplemented!("`__runtime_api_internal_call_api_at` not implemented for runtime api mocks")
 			}
 
-			fn Core_execute_block_runtime_api_impl(
+			fn version(
 				&self,
-				_: &#crate_::BlockId<#block_type>,
-				_: #crate_::ExecutionContext,
-				_: Option<#block_type>,
-				_: Vec<u8>,
-			) -> std::result::Result<#crate_::NativeOrEncoded<()>, #crate_::ApiError> {
-				unimplemented!("Not required for testing!")
+				_: <#block_type as #crate_::BlockT>::Hash,
+			) -> std::result::Result<#crate_::RuntimeVersion, #crate_::ApiError> {
+				unimplemented!("`Core::version` not implemented for runtime api mocks")
 			}
 
-			fn Core_initialize_block_runtime_api_impl(
+			fn version_with_context(
 				&self,
-				_: &#crate_::BlockId<#block_type>,
+				_: <#block_type as #crate_::BlockT>::Hash,
 				_: #crate_::ExecutionContext,
-				_: Option<&<#block_type as #crate_::BlockT>::Header>,
-				_: Vec<u8>,
-			) -> std::result::Result<#crate_::NativeOrEncoded<()>, #crate_::ApiError> {
-				unimplemented!("Not required for testing!")
+			) -> std::result::Result<#crate_::RuntimeVersion, #crate_::ApiError> {
+				unimplemented!("`Core::version` not implemented for runtime api mocks")
+			}
+
+			fn execute_block(
+				&self,
+				_: <#block_type as #crate_::BlockT>::Hash,
+				_: #block_type,
+			) -> std::result::Result<(), #crate_::ApiError> {
+				unimplemented!("`Core::execute_block` not implemented for runtime api mocks")
+			}
+
+			fn execute_block_with_context(
+				&self,
+				_: <#block_type as #crate_::BlockT>::Hash,
+				_: #crate_::ExecutionContext,
+				_: #block_type,
+			) -> std::result::Result<(), #crate_::ApiError> {
+				unimplemented!("`Core::execute_block` not implemented for runtime api mocks")
+			}
+
+			fn initialize_block(
+				&self,
+				_: <#block_type as #crate_::BlockT>::Hash,
+				_: &<#block_type as #crate_::BlockT>::Header,
+			) -> std::result::Result<(), #crate_::ApiError> {
+				unimplemented!("`Core::initialize_block` not implemented for runtime api mocks")
+			}
+
+			fn initialize_block_with_context(
+				&self,
+				_: <#block_type as #crate_::BlockT>::Hash,
+				_: #crate_::ExecutionContext,
+				_: &<#block_type as #crate_::BlockT>::Header,
+			) -> std::result::Result<(), #crate_::ApiError> {
+				unimplemented!("`Core::initialize_block` not implemented for runtime api mocks")
 			}
 		}
 	))
@@ -184,7 +211,7 @@ fn get_at_param_name(
 	param_names: &mut Vec<Pat>,
 	param_types_and_borrows: &mut Vec<(TokenStream, bool)>,
 	function_span: Span,
-	default_block_id_type: &TokenStream,
+	default_hash_type: &TokenStream,
 ) -> Result<(TokenStream, TokenStream)> {
 	if is_advanced {
 		if param_names.is_empty() {
@@ -192,7 +219,7 @@ fn get_at_param_name(
 				function_span,
 				format!(
 					"If using the `{}` attribute, it is required that the function \
-					 takes at least one argument, the `BlockId`.",
+					 takes at least one argument, the `Hash`.",
 					ADVANCED_ATTRIBUTE,
 				),
 			))
@@ -202,34 +229,70 @@ fn get_at_param_name(
 		// `param_types` can not be empty as well.
 		let ptype_and_borrows = param_types_and_borrows.remove(0);
 		let span = ptype_and_borrows.1.span();
-		if !ptype_and_borrows.1 {
-			return Err(Error::new(
-				span,
-				"`BlockId` needs to be taken by reference and not by value!",
-			))
+		if ptype_and_borrows.1 {
+			return Err(Error::new(span, "`Hash` needs to be taken by value and not by reference!"))
 		}
 
 		let name = param_names.remove(0);
 		Ok((quote!( #name ), ptype_and_borrows.0))
 	} else {
-		Ok((quote!(_), default_block_id_type.clone()))
+		Ok((quote!(_), default_hash_type.clone()))
 	}
 }
 
-/// Auxialiry structure to fold a runtime api trait implementation into the expected format.
+/// Auxiliary structure to fold a runtime api trait implementation into the expected format.
 ///
 /// This renames the methods, changes the method parameters and extracts the error type.
 struct FoldRuntimeApiImpl<'a> {
 	/// The block type that is being used.
 	block_type: &'a TypePath,
-	/// The identifier of the trait being implemented.
-	impl_trait: &'a Ident,
+}
+
+impl<'a> FoldRuntimeApiImpl<'a> {
+	/// Process the given [`syn::ItemImpl`].
+	fn process(mut self, impl_item: syn::ItemImpl) -> syn::ItemImpl {
+		let mut impl_item = self.fold_item_impl(impl_item);
+
+		let crate_ = generate_crate_access();
+
+		// We also need to overwrite all the `_with_context` methods. To do this,
+		// we clone all methods and add them again with the new name plus one more argument.
+		impl_item.items.extend(impl_item.items.clone().into_iter().filter_map(|i| {
+			if let syn::ImplItem::Method(mut m) = i {
+				m.sig.ident = quote::format_ident!("{}_with_context", m.sig.ident);
+				m.sig.inputs.insert(2, parse_quote!( _: #crate_::ExecutionContext ));
+
+				Some(m.into())
+			} else {
+				None
+			}
+		}));
+
+		let block_type = self.block_type;
+
+		impl_item.items.push(parse_quote! {
+			fn __runtime_api_internal_call_api_at(
+				&self,
+				_: <#block_type as #crate_::BlockT>::Hash,
+				_: #crate_::ExecutionContext,
+				_: std::vec::Vec<u8>,
+				_: &dyn Fn(#crate_::RuntimeVersion) -> &'static str,
+			) -> std::result::Result<std::vec::Vec<u8>, #crate_::ApiError> {
+				unimplemented!(
+					"`__runtime_api_internal_call_api_at` not implemented for runtime api mocks. \
+					 Calling deprecated methods is not supported by mocked runtime api."
+				)
+			}
+		});
+
+		impl_item
+	}
 }
 
 impl<'a> Fold for FoldRuntimeApiImpl<'a> {
 	fn fold_impl_item_method(&mut self, mut input: syn::ImplItemMethod) -> syn::ImplItemMethod {
 		let block = {
-			let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
+			let crate_ = generate_crate_access();
 			let is_advanced = has_advanced_attribute(&mut input.attrs);
 			let mut errors = Vec::new();
 
@@ -256,19 +319,19 @@ impl<'a> Fold for FoldRuntimeApiImpl<'a> {
 				};
 
 			let block_type = &self.block_type;
-			let block_id_type = quote!( &#crate_::BlockId<#block_type> );
+			let hash_type = quote!( <#block_type as #crate_::BlockT>::Hash );
 
-			let (at_param_name, block_id_type) = match get_at_param_name(
+			let (at_param_name, hash_type) = match get_at_param_name(
 				is_advanced,
 				&mut param_names,
 				&mut param_types_and_borrows,
 				input.span(),
-				&block_id_type,
+				&hash_type,
 			) {
 				Ok(res) => res,
 				Err(e) => {
 					errors.push(e.to_compile_error());
-					(quote!(_), block_id_type)
+					(quote!(_), hash_type)
 				},
 			};
 
@@ -276,14 +339,9 @@ impl<'a> Fold for FoldRuntimeApiImpl<'a> {
 			// Rewrite the input parameters.
 			input.sig.inputs = parse_quote! {
 				&self,
-				#at_param_name: #block_id_type,
-				_: #crate_::ExecutionContext,
-				___params___sp___api___: Option<( #( #param_types ),* )>,
-				_: Vec<u8>,
+				#at_param_name: #hash_type,
+				#( #param_names: #param_types ),*
 			};
-
-			input.sig.ident =
-				generate_method_runtime_api_impl_name(self.impl_trait, &input.sig.ident);
 
 			// When using advanced, the user needs to declare the correct return type on its own,
 			// otherwise do it for the user.
@@ -292,7 +350,7 @@ impl<'a> Fold for FoldRuntimeApiImpl<'a> {
 
 				// Generate the correct return type.
 				input.sig.output = parse_quote!(
-					-> std::result::Result<#crate_::NativeOrEncoded<#ret_type>, #crate_::ApiError>
+					-> std::result::Result<#ret_type, #crate_::ApiError>
 				);
 			}
 
@@ -304,7 +362,7 @@ impl<'a> Fold for FoldRuntimeApiImpl<'a> {
 				quote! {
 					let __fn_implementation__ = move || #orig_block;
 
-					Ok(#crate_::NativeOrEncoded::Native(__fn_implementation__()))
+					Ok(__fn_implementation__())
 				}
 			};
 
@@ -313,9 +371,6 @@ impl<'a> Fold for FoldRuntimeApiImpl<'a> {
 				{
 					// Get the error to the user (if we have one).
 					#( #errors )*
-
-					let (#( #param_names ),*) = ___params___sp___api___
-						.expect("Mocked runtime apis don't support calling deprecated api versions");
 
 					#construct_return_value
 				}
@@ -351,11 +406,6 @@ fn generate_runtime_api_impls(impls: &[ItemImpl]) -> Result<GeneratedRuntimeApiI
 
 	for impl_ in impls {
 		let impl_trait_path = extract_impl_trait(impl_, RequireQualifiedTraitPath::No)?;
-		let impl_trait = &impl_trait_path
-			.segments
-			.last()
-			.ok_or_else(|| Error::new(impl_trait_path.span(), "Empty trait path not possible!"))?
-			.clone();
 		let block_type = extract_block_type_from_trait_path(impl_trait_path)?;
 
 		self_ty = match self_ty.take() {
@@ -395,9 +445,7 @@ fn generate_runtime_api_impls(impls: &[ItemImpl]) -> Result<GeneratedRuntimeApiI
 			None => Some(block_type.clone()),
 		};
 
-		let mut visitor = FoldRuntimeApiImpl { block_type, impl_trait: &impl_trait.ident };
-
-		result.push(visitor.fold_item_impl(impl_.clone()));
+		result.push(FoldRuntimeApiImpl { block_type }.process(impl_.clone()));
 	}
 
 	Ok(GeneratedRuntimeApiImpls {
@@ -418,14 +466,11 @@ pub fn mock_impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro
 }
 
 fn mock_impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
-	let hidden_includes = generate_hidden_includes(HIDDEN_INCLUDES_ID);
 	let GeneratedRuntimeApiImpls { impls, block_type, self_ty } =
 		generate_runtime_api_impls(api_impls)?;
 	let api_traits = implement_common_api_traits(block_type, self_ty)?;
 
 	Ok(quote!(
-		#hidden_includes
-
 		#impls
 
 		#api_traits

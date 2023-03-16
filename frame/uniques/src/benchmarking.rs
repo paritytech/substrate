@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,8 +20,8 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_benchmarking::{
-	account, benchmarks_instance_pallet, whitelist_account, whitelisted_caller,
+use frame_benchmarking::v1::{
+	account, benchmarks_instance_pallet, whitelist_account, whitelisted_caller, BenchmarkError,
 };
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
@@ -37,7 +37,7 @@ use crate::Pallet as Uniques;
 const SEED: u32 = 0;
 
 fn create_collection<T: Config<I>, I: 'static>(
-) -> (T::CollectionId, T::AccountId, <T::Lookup as StaticLookup>::Source) {
+) -> (T::CollectionId, T::AccountId, AccountIdLookupOf<T>) {
 	let caller: T::AccountId = whitelisted_caller();
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	let collection = T::Helper::collection(0);
@@ -52,8 +52,7 @@ fn create_collection<T: Config<I>, I: 'static>(
 	(collection, caller, caller_lookup)
 }
 
-fn add_collection_metadata<T: Config<I>, I: 'static>(
-) -> (T::AccountId, <T::Lookup as StaticLookup>::Source) {
+fn add_collection_metadata<T: Config<I>, I: 'static>() -> (T::AccountId, AccountIdLookupOf<T>) {
 	let caller = Collection::<T, I>::get(T::Helper::collection(0)).unwrap().owner;
 	if caller != whitelisted_caller() {
 		whitelist_account!(caller);
@@ -71,7 +70,7 @@ fn add_collection_metadata<T: Config<I>, I: 'static>(
 
 fn mint_item<T: Config<I>, I: 'static>(
 	index: u16,
-) -> (T::ItemId, T::AccountId, <T::Lookup as StaticLookup>::Source) {
+) -> (T::ItemId, T::AccountId, AccountIdLookupOf<T>) {
 	let caller = Collection::<T, I>::get(T::Helper::collection(0)).unwrap().admin;
 	if caller != whitelisted_caller() {
 		whitelist_account!(caller);
@@ -90,7 +89,7 @@ fn mint_item<T: Config<I>, I: 'static>(
 
 fn add_item_metadata<T: Config<I>, I: 'static>(
 	item: T::ItemId,
-) -> (T::AccountId, <T::Lookup as StaticLookup>::Source) {
+) -> (T::AccountId, AccountIdLookupOf<T>) {
 	let caller = Collection::<T, I>::get(T::Helper::collection(0)).unwrap().owner;
 	if caller != whitelisted_caller() {
 		whitelist_account!(caller);
@@ -109,7 +108,7 @@ fn add_item_metadata<T: Config<I>, I: 'static>(
 
 fn add_item_attribute<T: Config<I>, I: 'static>(
 	item: T::ItemId,
-) -> (BoundedVec<u8, T::KeyLimit>, T::AccountId, <T::Lookup as StaticLookup>::Source) {
+) -> (BoundedVec<u8, T::KeyLimit>, T::AccountId, AccountIdLookupOf<T>) {
 	let caller = Collection::<T, I>::get(T::Helper::collection(0)).unwrap().owner;
 	if caller != whitelisted_caller() {
 		whitelist_account!(caller);
@@ -127,9 +126,9 @@ fn add_item_attribute<T: Config<I>, I: 'static>(
 	(key, caller, caller_lookup)
 }
 
-fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Event) {
+fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::RuntimeEvent) {
 	let events = frame_system::Pallet::<T>::events();
-	let system_event: <T as frame_system::Config>::Event = generic_event.into();
+	let system_event: <T as frame_system::Config>::RuntimeEvent = generic_event.into();
 	// compare to the last event record
 	let frame_system::EventRecord { event, .. } = &events[events.len() - 1];
 	assert_eq!(event, &system_event);
@@ -138,7 +137,8 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 benchmarks_instance_pallet! {
 	create {
 		let collection = T::Helper::collection(0);
-		let origin = T::CreateOrigin::successful_origin(&collection);
+		let origin = T::CreateOrigin::try_successful_origin(&collection)
+			.map_err(|_| BenchmarkError::Weightless)?;
 		let caller = T::CreateOrigin::ensure_origin(origin.clone(), &collection).unwrap();
 		whitelist_account!(caller);
 		let admin = T::Lookup::unlookup(caller.clone());
@@ -291,7 +291,8 @@ benchmarks_instance_pallet! {
 
 	force_item_status {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
-		let origin = T::ForceOrigin::successful_origin();
+		let origin =
+			T::ForceOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		let call = Call::<T, I>::force_item_status {
 			collection,
 			owner: caller_lookup.clone(),
@@ -405,6 +406,42 @@ benchmarks_instance_pallet! {
 		assert_last_event::<T, I>(Event::CollectionMaxSupplySet {
 			collection,
 			max_supply: u32::MAX,
+		}.into());
+	}
+
+	set_price {
+		let (collection, caller, _) = create_collection::<T, I>();
+		let (item, ..) = mint_item::<T, I>(0);
+		let delegate: T::AccountId = account("delegate", 0, SEED);
+		let delegate_lookup = T::Lookup::unlookup(delegate.clone());
+		let price = ItemPrice::<T, I>::from(100u32);
+	}: _(SystemOrigin::Signed(caller.clone()), collection, item, Some(price), Some(delegate_lookup))
+	verify {
+		assert_last_event::<T, I>(Event::ItemPriceSet {
+			collection,
+			item,
+			price,
+			whitelisted_buyer: Some(delegate),
+		}.into());
+	}
+
+	buy_item {
+		let (collection, seller, _) = create_collection::<T, I>();
+		let (item, ..) = mint_item::<T, I>(0);
+		let buyer: T::AccountId = account("buyer", 0, SEED);
+		let buyer_lookup = T::Lookup::unlookup(buyer.clone());
+		let price = ItemPrice::<T, I>::from(0u32);
+		let origin = SystemOrigin::Signed(seller.clone()).into();
+		Uniques::<T, I>::set_price(origin, collection, item, Some(price.clone()), Some(buyer_lookup))?;
+		T::Currency::make_free_balance_be(&buyer, DepositBalanceOf::<T, I>::max_value());
+	}: _(SystemOrigin::Signed(buyer.clone()), collection, item, price.clone())
+	verify {
+		assert_last_event::<T, I>(Event::ItemBought {
+			collection,
+			item,
+			price,
+			seller,
+			buyer,
 		}.into());
 	}
 

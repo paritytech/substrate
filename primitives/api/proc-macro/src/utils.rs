@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,33 +18,25 @@
 use proc_macro2::{Span, TokenStream};
 
 use syn::{
-	parse_quote, spanned::Spanned, token::And, Error, FnArg, GenericArgument, Ident, ImplItem,
-	ItemImpl, Pat, Path, PathArguments, Result, ReturnType, Signature, Type, TypePath,
+	parse_quote, spanned::Spanned, token::And, Attribute, Error, FnArg, GenericArgument, Ident,
+	ImplItem, ItemImpl, Pat, Path, PathArguments, Result, ReturnType, Signature, Type, TypePath,
 };
 
-use quote::quote;
-
-use std::env;
+use quote::{format_ident, quote};
 
 use proc_macro_crate::{crate_name, FoundCrate};
 
-fn generate_hidden_includes_mod_name(unique_id: &'static str) -> Ident {
-	Ident::new(&format!("sp_api_hidden_includes_{}", unique_id), Span::call_site())
-}
+use crate::common::API_VERSION_ATTRIBUTE;
 
-/// Generates the hidden includes that are required to make the macro independent from its scope.
-pub fn generate_hidden_includes(unique_id: &'static str) -> TokenStream {
-	let mod_name = generate_hidden_includes_mod_name(unique_id);
+use inflector::Inflector;
+
+/// Generates the access to the `sc_client` crate.
+pub fn generate_crate_access() -> TokenStream {
 	match crate_name("sp-api") {
-		Ok(FoundCrate::Itself) => quote!(),
-		Ok(FoundCrate::Name(client_name)) => {
-			let client_name = Ident::new(&client_name, Span::call_site());
-			quote!(
-				#[doc(hidden)]
-				mod #mod_name {
-					pub extern crate #client_name as sp_api;
-				}
-			)
+		Ok(FoundCrate::Itself) => quote!(sp_api),
+		Ok(FoundCrate::Name(renamed_name)) => {
+			let renamed_name = Ident::new(&renamed_name, Span::call_site());
+			quote!(#renamed_name)
 		},
 		Err(e) => {
 			let err = Error::new(Span::call_site(), e).to_compile_error();
@@ -53,24 +45,12 @@ pub fn generate_hidden_includes(unique_id: &'static str) -> TokenStream {
 	}
 }
 
-/// Generates the access to the `sc_client` crate.
-pub fn generate_crate_access(unique_id: &'static str) -> TokenStream {
-	if env::var("CARGO_PKG_NAME").unwrap() == "sp-api" {
-		quote!(sp_api)
-	} else {
-		let mod_name = generate_hidden_includes_mod_name(unique_id);
-		quote!( self::#mod_name::sp_api )
-	}
-}
-
 /// Generates the name of the module that contains the trait declaration for the runtime.
 pub fn generate_runtime_mod_name_for_trait(trait_: &Ident) -> Ident {
-	Ident::new(&format!("runtime_decl_for_{}", trait_), Span::call_site())
-}
-
-/// Generates a name for a method that needs to be implemented in the runtime for the client side.
-pub fn generate_method_runtime_api_impl_name(trait_: &Ident, method: &Ident) -> Ident {
-	Ident::new(&format!("{}_{}_runtime_api_impl", trait_, method), Span::call_site())
+	Ident::new(
+		&format!("runtime_decl_for_{}", trait_.to_string().to_snake_case()),
+		Span::call_site(),
+	)
 }
 
 /// Get the type of a `syn::ReturnType`.
@@ -97,13 +77,13 @@ pub fn replace_wild_card_parameter_names(input: &mut Signature) {
 /// Fold the given `Signature` to make it usable on the client side.
 pub fn fold_fn_decl_for_client_side(
 	input: &mut Signature,
-	block_id: &TokenStream,
+	block_hash: &TokenStream,
 	crate_: &TokenStream,
 ) {
 	replace_wild_card_parameter_names(input);
 
-	// Add `&self, at:& BlockId` as parameters to each function at the beginning.
-	input.inputs.insert(0, parse_quote!( __runtime_api_at_param__: &#block_id ));
+	// Add `&self, at:& Block::Hash` as parameters to each function at the beginning.
+	input.inputs.insert(0, parse_quote!( __runtime_api_at_param__: #block_hash ));
 	input.inputs.insert(0, parse_quote!(&self));
 
 	// Wrap the output in a `Result`
@@ -164,16 +144,6 @@ pub fn extract_parameter_names_types_and_borrows(
 	}
 
 	Ok(result)
-}
-
-/// Generates the name for the native call generator function.
-pub fn generate_native_call_generator_fn_name(fn_name: &Ident) -> Ident {
-	Ident::new(&format!("{}_native_call_generator", fn_name), Span::call_site())
-}
-
-/// Generates the name for the call api at function.
-pub fn generate_call_api_at_fn_name(fn_name: &Ident) -> Ident {
-	Ident::new(&format!("{}_call_api_at", fn_name), Span::call_site())
 }
 
 /// Prefix the given function with the trait name.
@@ -266,4 +236,24 @@ pub fn extract_impl_trait(impl_: &ItemImpl, require: RequireQualifiedTraitPath) 
 				))
 			}
 		})
+}
+
+/// Parse the given attribute as `API_VERSION_ATTRIBUTE`.
+pub fn parse_runtime_api_version(version: &Attribute) -> Result<u64> {
+	let version = version.parse_args::<syn::LitInt>().map_err(|_| {
+		Error::new(
+			version.span(),
+			&format!(
+				"Unexpected `{api_version}` attribute. The supported format is `{api_version}(1)`",
+				api_version = API_VERSION_ATTRIBUTE
+			),
+		)
+	})?;
+
+	version.base10_parse()
+}
+
+// Each versioned trait is named 'ApiNameVN' where N is the specific version. E.g. ParachainHostV2
+pub fn versioned_trait_name(trait_ident: &Ident, version: u64) -> Ident {
+	format_ident!("{}V{}", trait_ident, version)
 }

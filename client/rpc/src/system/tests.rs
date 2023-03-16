@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -21,7 +21,7 @@ use assert_matches::assert_matches;
 use futures::prelude::*;
 use jsonrpsee::{
 	core::Error as RpcError,
-	types::{error::CallError, EmptyParams},
+	types::{error::CallError, EmptyServerParams as EmptyParams},
 	RpcModule,
 };
 use sc_network::{self, config::Role, PeerId};
@@ -52,7 +52,7 @@ impl Default for Status {
 fn api<T: Into<Option<Status>>>(sync: T) -> RpcModule<System<Block>> {
 	let status = sync.into().unwrap_or_default();
 	let should_have_peers = !status.is_dev;
-	let (tx, rx) = tracing_unbounded("rpc_system_tests");
+	let (tx, rx) = tracing_unbounded("rpc_system_tests", 10_000);
 	thread::spawn(move || {
 		futures::executor::block_on(rx.for_each(move |request| {
 			match request {
@@ -123,7 +123,7 @@ fn api<T: Into<Option<Status>>>(sync: T) -> RpcModule<System<Block>> {
 					let _ = sender.send(SyncState {
 						starting_block: 1,
 						current_block: 2,
-						highest_block: Some(3),
+						highest_block: 3,
 					});
 				},
 			};
@@ -297,10 +297,7 @@ async fn system_node_roles() {
 async fn system_sync_state() {
 	let sync_state: SyncState<i32> =
 		api(None).call("system_syncState", EmptyParams::new()).await.unwrap();
-	assert_eq!(
-		sync_state,
-		SyncState { starting_block: 1, current_block: 2, highest_block: Some(3) }
-	);
+	assert_eq!(sync_state, SyncState { starting_block: 1, current_block: 2, highest_block: 3 });
 }
 
 #[tokio::test]

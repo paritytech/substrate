@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,7 @@
 //! This module contains the cost schedule and supporting code that constructs a
 //! sane default schedule from a `WeightInfo` implementation.
 
-use crate::{weights::WeightInfo, Config};
+use crate::{wasm::Determinism, weights::WeightInfo, Config};
 
 use codec::{Decode, Encode};
 use frame_support::{weights::Weight, DefaultNoBound};
@@ -99,24 +99,16 @@ pub struct Limits {
 	/// The maximum number of topics supported by an event.
 	pub event_topics: u32,
 
-	/// Maximum allowed stack height in number of elements.
-	///
-	/// See <https://wiki.parity.io/WebAssembly-StackHeight> to find out
-	/// how the stack frame cost is calculated. Each element can be of one of the
-	/// wasm value types. This means the maximum size per element is 64bit.
-	///
-	/// # Note
-	///
-	/// It is safe to disable (pass `None`) the `stack_height` when the execution engine
-	/// is part of the runtime and hence there can be no indeterminism between different
-	/// client resident execution engines.
-	pub stack_height: Option<u32>,
-
 	/// Maximum number of globals a module is allowed to declare.
 	///
-	/// Globals are not limited through the `stack_height` as locals are. Neither does
-	/// the linear memory limit `memory_pages` applies to them.
+	/// Globals are not limited through the linear memory limit `memory_pages`.
 	pub globals: u32,
+
+	/// Maximum number of locals a function can have.
+	///
+	/// As wasm engine initializes each of the local, we need to limit their number to confine
+	/// execution costs.
+	pub locals: u32,
 
 	/// Maximum numbers of parameters a function can have.
 	///
@@ -141,9 +133,6 @@ pub struct Limits {
 
 	/// The maximum length of a subject in bytes used for PRNG generation.
 	pub subject_len: u32,
-
-	/// The maximum nesting level of the call stack.
-	pub call_depth: u32,
 
 	/// The maximum size of a storage value and event payload in bytes.
 	pub payload_len: u32,
@@ -177,7 +166,7 @@ impl Limits {
 ///    that use them as supporting instructions. Supporting means mainly pushing arguments
 ///    and dropping return values in order to maintain a valid module.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Clone, Encode, Decode, PartialEq, Eq, WeightDebug, TypeInfo)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, ScheduleDebug, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 pub struct InstructionWeights<T: Config> {
 	/// Version of the instruction weights.
@@ -193,6 +182,13 @@ pub struct InstructionWeights<T: Config> {
 	/// Changes to other parts of the schedule should not increment the version in
 	/// order to avoid unnecessary re-instrumentations.
 	pub version: u32,
+	/// Weight to be used for instructions which don't have benchmarks assigned.
+	///
+	/// This weight is used whenever a code is uploaded with [`Determinism::AllowIndeterminism`]
+	/// and an instruction (usually a float instruction) is encountered. This weight is **not**
+	/// used if a contract is uploaded with [`Determinism::Deterministic`]. If this field is set to
+	/// `0` (the default) only deterministic codes are allowed to be uploaded.
+	pub fallback: u32,
 	pub i64const: u32,
 	pub i64load: u32,
 	pub i64store: u32,
@@ -205,6 +201,7 @@ pub struct InstructionWeights<T: Config> {
 	pub call: u32,
 	pub call_indirect: u32,
 	pub call_indirect_per_param: u32,
+	pub call_per_local: u32,
 	pub local_get: u32,
 	pub local_set: u32,
 	pub local_tee: u32,
@@ -326,6 +323,9 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_debug_message`.
 	pub debug_message: Weight,
 
+	/// Weight of calling `seal_debug_message` per byte of the message.
+	pub debug_message_per_byte: Weight,
+
 	/// Weight of calling `seal_set_storage`.
 	pub set_storage: Weight,
 
@@ -383,6 +383,9 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight surcharge that is claimed if `seal_instantiate` does a balance transfer.
 	pub instantiate_transfer_surcharge: Weight,
 
+	/// Weight per input byte supplied to `seal_instantiate`.
+	pub instantiate_per_input_byte: Weight,
+
 	/// Weight per salt byte supplied to `seal_instantiate`.
 	pub instantiate_per_salt_byte: Weight,
 
@@ -416,6 +419,15 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_ecdsa_to_eth_address`.
 	pub ecdsa_to_eth_address: Weight,
 
+	/// Weight of calling `reentrance_count`.
+	pub reentrance_count: Weight,
+
+	/// Weight of calling `account_reentrance_count`.
+	pub account_reentrance_count: Weight,
+
+	/// Weight of calling `instantiation_nonce`.
+	pub instantiation_nonce: Weight,
+
 	/// The type parameter is used in the default implementation.
 	#[codec(skip)]
 	pub _phantom: PhantomData<T>,
@@ -441,13 +453,13 @@ macro_rules! cost_args {
 
 macro_rules! cost_batched_args {
 	($name:ident, $( $arg: expr ),+) => {
-		cost_args!($name, $( $arg ),+) / Weight::from(API_BENCHMARK_BATCH_SIZE)
+		cost_args!($name, $( $arg ),+) / u64::from(API_BENCHMARK_BATCH_SIZE)
 	}
 }
 
 macro_rules! cost_instr_no_params_with_batch_size {
 	($name:ident, $batch_size:expr) => {
-		(cost_args!($name, 1) / Weight::from($batch_size)) as u32
+		(cost_args!($name, 1).ref_time() / u64::from($batch_size)) as u32
 	};
 }
 
@@ -506,16 +518,14 @@ impl Default for Limits {
 	fn default() -> Self {
 		Self {
 			event_topics: 4,
-			// No stack limit required because we use a runtime resident execution engine.
-			stack_height: None,
 			globals: 256,
+			locals: 1024,
 			parameters: 128,
 			memory_pages: 16,
 			// 4k function pointers (This is in count not bytes).
 			table_size: 4096,
 			br_table_size: 256,
 			subject_len: 32,
-			call_depth: 32,
 			payload_len: 16 * 1024,
 		}
 	}
@@ -525,7 +535,8 @@ impl<T: Config> Default for InstructionWeights<T> {
 	fn default() -> Self {
 		let max_pages = Limits::default().memory_pages;
 		Self {
-			version: 2,
+			version: 4,
+			fallback: 0,
 			i64const: cost_instr!(instr_i64const, 1),
 			i64load: cost_instr!(instr_i64load, 2),
 			i64store: cost_instr!(instr_i64store, 2),
@@ -537,7 +548,8 @@ impl<T: Config> Default for InstructionWeights<T> {
 			br_table_per_entry: cost_instr!(instr_br_table_per_entry, 0),
 			call: cost_instr!(instr_call, 2),
 			call_indirect: cost_instr!(instr_call_indirect, 3),
-			call_indirect_per_param: cost_instr!(instr_call_indirect_per_param, 1),
+			call_indirect_per_param: cost_instr!(instr_call_indirect_per_param, 0),
+			call_per_local: cost_instr!(instr_call_per_local, 0),
 			local_get: cost_instr!(instr_local_get, 1),
 			local_set: cost_instr!(instr_local_set, 1),
 			local_tee: cost_instr!(instr_local_tee, 2),
@@ -598,7 +610,12 @@ impl<T: Config> Default for HostFnWeights<T> {
 			block_number: cost_batched!(seal_block_number),
 			now: cost_batched!(seal_now),
 			weight_to_fee: cost_batched!(seal_weight_to_fee),
-			gas: cost_batched!(seal_gas),
+			// Manually remove proof size from basic block cost.
+			//
+			// Due to imperfect benchmarking some host functions incur a small
+			// amount of proof size. Usually this is ok. However, charging a basic block is such
+			// a frequent operation that this would be a vast overestimation.
+			gas: cost_batched!(seal_gas).set_proof_size(0),
 			input: cost_batched!(seal_input),
 			input_per_byte: cost_byte_batched!(seal_input_per_kb),
 			r#return: cost!(seal_return),
@@ -613,6 +630,7 @@ impl<T: Config> Default for HostFnWeights<T> {
 				1
 			),
 			debug_message: cost_batched!(seal_debug_message),
+			debug_message_per_byte: cost_byte!(seal_debug_message_per_kb),
 			set_storage: cost_batched!(seal_set_storage),
 			set_code_hash: cost_batched!(seal_set_code_hash),
 			set_storage_per_new_byte: cost_byte_batched!(seal_set_storage_per_new_kb),
@@ -629,15 +647,23 @@ impl<T: Config> Default for HostFnWeights<T> {
 			call: cost_batched!(seal_call),
 			delegate_call: cost_batched!(seal_delegate_call),
 			call_transfer_surcharge: cost_batched_args!(seal_call_per_transfer_clone_kb, 1, 0),
-			call_per_cloned_byte: cost_batched_args!(seal_call_per_transfer_clone_kb, 0, 1),
+			call_per_cloned_byte: cost_byte_batched_args!(seal_call_per_transfer_clone_kb, 0, 1),
 			instantiate: cost_batched!(seal_instantiate),
-			instantiate_transfer_surcharge: cost_byte_batched_args!(
-				seal_instantiate_per_transfer_salt_kb,
+			instantiate_transfer_surcharge: cost_batched_args!(
+				seal_instantiate_per_transfer_input_salt_kb,
+				1,
+				0,
+				0
+			),
+			instantiate_per_input_byte: cost_byte_batched_args!(
+				seal_instantiate_per_transfer_input_salt_kb,
+				0,
 				1,
 				0
 			),
 			instantiate_per_salt_byte: cost_byte_batched_args!(
-				seal_instantiate_per_transfer_salt_kb,
+				seal_instantiate_per_transfer_input_salt_kb,
+				0,
 				0,
 				1
 			),
@@ -651,6 +677,9 @@ impl<T: Config> Default for HostFnWeights<T> {
 			hash_blake2_128_per_byte: cost_byte_batched!(seal_hash_blake2_128_per_kb),
 			ecdsa_recover: cost_batched!(seal_ecdsa_recover),
 			ecdsa_to_eth_address: cost_batched!(seal_ecdsa_to_eth_address),
+			reentrance_count: cost_batched!(seal_reentrance_count),
+			account_reentrance_count: cost_batched!(seal_account_reentrance_count),
+			instantiation_nonce: cost_batched!(seal_instantiation_nonce),
 			_phantom: PhantomData,
 		}
 	}
@@ -659,10 +688,15 @@ impl<T: Config> Default for HostFnWeights<T> {
 struct ScheduleRules<'a, T: Config> {
 	schedule: &'a Schedule<T>,
 	params: Vec<u32>,
+	determinism: Determinism,
 }
 
 impl<T: Config> Schedule<T> {
-	pub(crate) fn rules(&self, module: &elements::Module) -> impl gas_metering::Rules + '_ {
+	pub(crate) fn rules(
+		&self,
+		module: &elements::Module,
+		determinism: Determinism,
+	) -> impl gas_metering::Rules + '_ {
 		ScheduleRules {
 			schedule: self,
 			params: module
@@ -674,6 +708,7 @@ impl<T: Config> Schedule<T> {
 					func.params().len() as u32
 				})
 				.collect(),
+			determinism,
 		}
 	}
 }
@@ -756,7 +791,10 @@ impl<'a, T: Config> gas_metering::Rules for ScheduleRules<'a, T> {
 			I32Rotr | I64Rotr => w.i64rotr,
 
 			// Returning None makes the gas instrumentation fail which we intend for
-			// unsupported or unknown instructions.
+			// unsupported or unknown instructions. Offchain we might allow indeterminism and hence
+			// use the fallback weight for those instructions.
+			_ if matches!(self.determinism, Determinism::AllowIndeterminism) && w.fallback > 0 =>
+				w.fallback,
 			_ => return None,
 		};
 		Some(weight)
@@ -766,6 +804,10 @@ impl<'a, T: Config> gas_metering::Rules for ScheduleRules<'a, T> {
 		// We benchmarked the memory.grow instruction with the maximum allowed pages.
 		// The cost for growing is therefore already included in the instruction cost.
 		gas_metering::MemoryGrowCost::Free
+	}
+
+	fn call_per_local_cost(&self) -> u32 {
+		self.schedule.instruction_weights.call_per_local
 	}
 }
 

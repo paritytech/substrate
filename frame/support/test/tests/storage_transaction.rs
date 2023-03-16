@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -31,7 +31,7 @@ use sp_std::result;
 pub trait Config: frame_support_test::Config {}
 
 frame_support::decl_module! {
-	pub struct Module<T: Config> for enum Call where origin: T::Origin, system=frame_support_test {
+	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=frame_support_test {
 		#[weight = 0]
 		#[transactional]
 		fn value_commits(_origin, v: u32) {
@@ -57,7 +57,7 @@ frame_support::decl_storage! {
 struct Runtime;
 
 impl frame_support_test::Config for Runtime {
-	type Origin = u32;
+	type RuntimeOrigin = u32;
 	type BlockNumber = u32;
 	type PalletInfo = frame_support_test::PanicPalletInfo;
 	type DbWeight = ();

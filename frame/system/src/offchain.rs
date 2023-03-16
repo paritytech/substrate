@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -617,7 +617,7 @@ pub trait SignedPayload<T: SigningTypes>: Encode {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::mock::{Call, Test as TestRuntime, CALL};
+	use crate::mock::{RuntimeCall, Test as TestRuntime, CALL};
 	use codec::Decode;
 	use sp_core::offchain::{testing, TransactionPoolExt};
 	use sp_runtime::testing::{TestSignature, TestXt, UintAuthorityId};
@@ -627,11 +627,11 @@ mod tests {
 		type Signature = TestSignature;
 	}
 
-	type Extrinsic = TestXt<Call, ()>;
+	type Extrinsic = TestXt<RuntimeCall, ()>;
 
-	impl SendTransactionTypes<Call> for TestRuntime {
+	impl SendTransactionTypes<RuntimeCall> for TestRuntime {
 		type Extrinsic = Extrinsic;
-		type OverarchingCall = Call;
+		type OverarchingCall = RuntimeCall;
 	}
 
 	#[derive(codec::Encode, codec::Decode)]

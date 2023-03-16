@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -31,12 +31,14 @@
 //! - Send events by calling [`OutChannels::send`]. Events are cloned for each sender in the
 //! collection.
 
-use crate::Event;
+use crate::event::Event;
 
-use futures::{channel::mpsc, prelude::*, ready, stream::FusedStream};
+use futures::{prelude::*, ready, stream::FusedStream};
+use log::error;
 use parking_lot::Mutex;
 use prometheus_endpoint::{register, CounterVec, GaugeVec, Opts, PrometheusError, Registry, U64};
 use std::{
+	backtrace::Backtrace,
 	cell::RefCell,
 	fmt,
 	pin::Pin,
@@ -46,11 +48,19 @@ use std::{
 
 /// Creates a new channel that can be associated to a [`OutChannels`].
 ///
-/// The name is used in Prometheus reports.
-pub fn channel(name: &'static str) -> (Sender, Receiver) {
-	let (tx, rx) = mpsc::unbounded();
+/// The name is used in Prometheus reports, the queue size threshold is used
+/// to warn if there are too many unprocessed events in the channel.
+pub fn channel(name: &'static str, queue_size_warning: usize) -> (Sender, Receiver) {
+	let (tx, rx) = async_channel::unbounded();
 	let metrics = Arc::new(Mutex::new(None));
-	let tx = Sender { inner: tx, name, metrics: metrics.clone() };
+	let tx = Sender {
+		inner: tx,
+		name,
+		queue_size_warning,
+		warning_fired: false,
+		creation_backtrace: Backtrace::force_capture(),
+		metrics: metrics.clone(),
+	};
 	let rx = Receiver { inner: rx, name, metrics };
 	(tx, rx)
 }
@@ -63,9 +73,17 @@ pub fn channel(name: &'static str) -> (Sender, Receiver) {
 /// implement the `Clone` trait e.g. in Order to not complicate the logic keeping the metrics in
 /// sync on drop. If someone adds a `#[derive(Clone)]` below, it is **wrong**.
 pub struct Sender {
-	inner: mpsc::UnboundedSender<Event>,
+	inner: async_channel::Sender<Event>,
+	/// Name to identify the channel (e.g., in Prometheus and logs).
 	name: &'static str,
-	/// Clone of [`Receiver::metrics`].
+	/// Threshold queue size to generate an error message in the logs.
+	queue_size_warning: usize,
+	/// We generate the error message only once to not spam the logs.
+	warning_fired: bool,
+	/// Backtrace of a place where the channel was created.
+	creation_backtrace: Backtrace,
+	/// Clone of [`Receiver::metrics`]. Will be initialized when [`Sender`] is added to
+	/// [`OutChannels`] with `OutChannels::push()`.
 	metrics: Arc<Mutex<Option<Arc<Option<Metrics>>>>>,
 }
 
@@ -86,7 +104,7 @@ impl Drop for Sender {
 
 /// Receiving side of a channel.
 pub struct Receiver {
-	inner: mpsc::UnboundedReceiver<Event>,
+	inner: async_channel::Receiver<Event>,
 	name: &'static str,
 	/// Initially contains `None`, and will be set to a value once the corresponding [`Sender`]
 	/// is assigned to an instance of [`OutChannels`].
@@ -161,12 +179,25 @@ impl OutChannels {
 
 	/// Sends an event.
 	pub fn send(&mut self, event: Event) {
-		self.event_streams
-			.retain(|sender| sender.inner.unbounded_send(event.clone()).is_ok());
+		self.event_streams.retain_mut(|sender| {
+			if sender.inner.len() >= sender.queue_size_warning && !sender.warning_fired {
+				sender.warning_fired = true;
+				error!(
+					"The number of unprocessed events in channel `{}` exceeded {}.\n\
+					 The channel was created at:\n{:}\n
+					 The last event was sent from:\n{:}",
+					sender.name,
+					sender.queue_size_warning,
+					sender.creation_backtrace,
+					Backtrace::force_capture(),
+				);
+			}
+			sender.inner.try_send(event.clone()).is_ok()
+		});
 
 		if let Some(metrics) = &*self.metrics {
 			for ev in &self.event_streams {
-				metrics.event_in(&event, 1, ev.name);
+				metrics.event_in(&event, ev.name);
 			}
 		}
 	}
@@ -233,45 +264,29 @@ impl Metrics {
 		})
 	}
 
-	fn event_in(&self, event: &Event, num: u64, name: &str) {
+	fn event_in(&self, event: &Event, name: &str) {
 		match event {
 			Event::Dht(_) => {
-				self.events_total.with_label_values(&["dht", "sent", name]).inc_by(num);
-			},
-			Event::SyncConnected { .. } => {
-				self.events_total
-					.with_label_values(&["sync-connected", "sent", name])
-					.inc_by(num);
-			},
-			Event::SyncDisconnected { .. } => {
-				self.events_total
-					.with_label_values(&["sync-disconnected", "sent", name])
-					.inc_by(num);
+				self.events_total.with_label_values(&["dht", "sent", name]).inc();
 			},
 			Event::NotificationStreamOpened { protocol, .. } => {
 				format_label("notif-open-", protocol, |protocol_label| {
-					self.events_total
-						.with_label_values(&[protocol_label, "sent", name])
-						.inc_by(num);
+					self.events_total.with_label_values(&[protocol_label, "sent", name]).inc();
 				});
 			},
 			Event::NotificationStreamClosed { protocol, .. } => {
 				format_label("notif-closed-", protocol, |protocol_label| {
-					self.events_total
-						.with_label_values(&[protocol_label, "sent", name])
-						.inc_by(num);
+					self.events_total.with_label_values(&[protocol_label, "sent", name]).inc();
 				});
 			},
 			Event::NotificationsReceived { messages, .. } =>
 				for (protocol, message) in messages {
 					format_label("notif-", protocol, |protocol_label| {
-						self.events_total
-							.with_label_values(&[protocol_label, "sent", name])
-							.inc_by(num);
+						self.events_total.with_label_values(&[protocol_label, "sent", name]).inc();
 					});
-					self.notifications_sizes.with_label_values(&[protocol, "sent", name]).inc_by(
-						num.saturating_mul(u64::try_from(message.len()).unwrap_or(u64::MAX)),
-					);
+					self.notifications_sizes
+						.with_label_values(&[protocol, "sent", name])
+						.inc_by(u64::try_from(message.len()).unwrap_or(u64::MAX));
 				},
 		}
 	}
@@ -280,14 +295,6 @@ impl Metrics {
 		match event {
 			Event::Dht(_) => {
 				self.events_total.with_label_values(&["dht", "received", name]).inc();
-			},
-			Event::SyncConnected { .. } => {
-				self.events_total.with_label_values(&["sync-connected", "received", name]).inc();
-			},
-			Event::SyncDisconnected { .. } => {
-				self.events_total
-					.with_label_values(&["sync-disconnected", "received", name])
-					.inc();
 			},
 			Event::NotificationStreamOpened { protocol, .. } => {
 				format_label("notif-open-", protocol, |protocol_label| {

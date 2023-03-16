@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,6 +16,7 @@
 // limitations under the License.
 
 use crate::{pallet::Def, COUNTER};
+use quote::ToTokens;
 use syn::spanned::Spanned;
 
 ///
@@ -31,7 +32,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 
 			(span, where_clause, methods, docs)
 		},
-		None => (def.item.span(), None, Vec::new(), Vec::new()),
+		None => (def.item.span(), def.config.where_clause.clone(), Vec::new(), Vec::new()),
 	};
 	let frame_support = &def.frame_support;
 	let frame_system = &def.frame_system;
@@ -52,6 +53,29 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		.iter()
 		.map(|fn_name| format!("Create a call with the variant `{}`.", fn_name))
 		.collect::<Vec<_>>();
+
+	let mut warning_structs = Vec::new();
+	let mut warning_names = Vec::new();
+	// Emit a warning for each call that is missing `call_index` when not in dev-mode.
+	for method in &methods {
+		if method.explicit_call_index || def.dev_mode {
+			continue
+		}
+
+		let name = syn::Ident::new(&format!("{}", method.name), method.name.span());
+		let warning: syn::ItemStruct = syn::parse_quote!(
+			#[deprecated(note = r"
+			Implicit call indices are deprecated in favour of explicit ones.
+			Please ensure that all calls have the `pallet::call_index` attribute or that the
+			`dev-mode` of the pallet is enabled. For more info see:
+			<https://github.com/paritytech/substrate/pull/12891> and
+			<https://github.com/paritytech/substrate/pull/11381>.")]
+			#[allow(non_camel_case_types)]
+			struct #name;
+		);
+		warning_names.push(name);
+		warning_structs.push(warning);
+	}
 
 	let fn_weight = methods.iter().map(|method| &method.weight);
 
@@ -140,7 +164,51 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 
 	let capture_docs = if cfg!(feature = "no-metadata-docs") { "never" } else { "always" };
 
+	// Wrap all calls inside of storage layers
+	if let Some(syn::Item::Impl(item_impl)) = def
+		.call
+		.as_ref()
+		.map(|c| &mut def.item.content.as_mut().expect("Checked by def parser").1[c.index])
+	{
+		item_impl.items.iter_mut().for_each(|i| {
+			if let syn::ImplItem::Method(method) = i {
+				let block = &method.block;
+				method.block = syn::parse_quote! {{
+					// We execute all dispatchable in a new storage layer, allowing them
+					// to return an error at any point, and undoing any storage changes.
+					#frame_support::storage::with_storage_layer(|| #block)
+				}};
+			}
+		});
+	}
+
+	// Extracts #[allow] attributes, necessary so that we don't run into compiler warnings
+	let maybe_allow_attrs = methods
+		.iter()
+		.map(|method| {
+			method
+				.attrs
+				.iter()
+				.find(|attr| {
+					if let Ok(syn::Meta::List(syn::MetaList { path, .. })) = attr.parse_meta() {
+						path.segments.last().map(|seg| seg.ident == "allow").unwrap_or(false)
+					} else {
+						false
+					}
+				})
+				.map_or(proc_macro2::TokenStream::new(), |attr| attr.to_token_stream())
+		})
+		.collect::<Vec<_>>();
+
 	quote::quote_spanned!(span =>
+		mod warnings {
+			#(
+				#warning_structs
+				// This triggers each deprecated warning once.
+				const _: Option<#warning_names> = None;
+			)*
+		}
+
 		#[doc(hidden)]
 		pub mod __substrate_call_check {
 			#[macro_export]
@@ -237,6 +305,10 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 		}
 
+		// Deprecated, but will warn when used
+		#[allow(deprecated)]
+		impl<#type_impl_gen> #frame_support::weights::GetDispatchInfo for #call_ident<#type_use_gen> #where_clause {}
+
 		impl<#type_impl_gen> #frame_support::dispatch::GetCallName for #call_ident<#type_use_gen>
 			#where_clause
 		{
@@ -256,42 +328,41 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			for #call_ident<#type_use_gen>
 			#where_clause
 		{
-			type Origin = #frame_system::pallet_prelude::OriginFor<T>;
+			type RuntimeOrigin = #frame_system::pallet_prelude::OriginFor<T>;
 			fn dispatch_bypass_filter(
 				self,
-				origin: Self::Origin
+				origin: Self::RuntimeOrigin
 			) -> #frame_support::dispatch::DispatchResultWithPostInfo {
-				match self {
-					#(
-						Self::#fn_name { #( #args_name_pattern, )* } => {
-							#frame_support::sp_tracing::enter_span!(
-								#frame_support::sp_tracing::trace_span!(stringify!(#fn_name))
-							);
-							// We execute all dispatchable in at least one storage layer, allowing them
-							// to return an error at any point, and undoing any storage changes.
-							#frame_support::storage::in_storage_layer(|| {
+				#frame_support::dispatch_context::run_in_context(|| {
+					match self {
+						#(
+							Self::#fn_name { #( #args_name_pattern, )* } => {
+								#frame_support::sp_tracing::enter_span!(
+									#frame_support::sp_tracing::trace_span!(stringify!(#fn_name))
+								);
+								#maybe_allow_attrs
 								<#pallet_ident<#type_use_gen>>::#fn_name(origin, #( #args_name, )* )
 									.map(Into::into).map_err(Into::into)
-							})
+							},
+						)*
+						Self::__Ignore(_, _) => {
+							let _ = origin; // Use origin for empty Call enum
+							unreachable!("__PhantomItem cannot be used.");
 						},
-					)*
-					Self::__Ignore(_, _) => {
-						let _ = origin; // Use origin for empty Call enum
-						unreachable!("__PhantomItem cannot be used.");
-					},
-				}
+					}
+				})
 			}
 		}
 
 		impl<#type_impl_gen> #frame_support::dispatch::Callable<T> for #pallet_ident<#type_use_gen>
 			#where_clause
 		{
-			type Call = #call_ident<#type_use_gen>;
+			type RuntimeCall = #call_ident<#type_use_gen>;
 		}
 
 		impl<#type_impl_gen> #pallet_ident<#type_use_gen> #where_clause {
 			#[doc(hidden)]
-			pub fn call_functions() -> #frame_support::metadata::PalletCallMetadata {
+			pub fn call_functions() -> #frame_support::metadata_ir::PalletCallMetadataIR {
 				#frame_support::scale_info::meta_type::<#call_ident<#type_use_gen>>().into()
 			}
 		}

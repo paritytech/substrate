@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +19,7 @@
 //! This file was not auto-generated.
 
 use frame_support::weights::{
-	constants::{RocksDbWeight as DbWeight, WEIGHT_PER_MICROS, WEIGHT_PER_NANOS},
+	constants::{RocksDbWeight as DbWeight, WEIGHT_REF_TIME_PER_MICROS, WEIGHT_REF_TIME_PER_NANOS},
 	Weight,
 };
 
@@ -34,14 +34,20 @@ impl crate::WeightInfo for () {
 		const MAX_NOMINATORS: u64 = 200;
 
 		// checking membership proof
-		(35 * WEIGHT_PER_MICROS)
-			.saturating_add((175 * WEIGHT_PER_NANOS).saturating_mul(validator_count))
+		Weight::from_parts(35u64 * WEIGHT_REF_TIME_PER_MICROS, 0)
+			.saturating_add(
+				Weight::from_parts(175u64 * WEIGHT_REF_TIME_PER_NANOS, 0)
+					.saturating_mul(validator_count),
+			)
 			.saturating_add(DbWeight::get().reads(5))
 			// check equivocation proof
-			.saturating_add(95 * WEIGHT_PER_MICROS)
+			.saturating_add(Weight::from_parts(95u64 * WEIGHT_REF_TIME_PER_MICROS, 0))
 			// report offence
-			.saturating_add(110 * WEIGHT_PER_MICROS)
-			.saturating_add(25 * WEIGHT_PER_MICROS * MAX_NOMINATORS)
+			.saturating_add(Weight::from_parts(110u64 * WEIGHT_REF_TIME_PER_MICROS, 0))
+			.saturating_add(Weight::from_parts(
+				25u64 * WEIGHT_REF_TIME_PER_MICROS * MAX_NOMINATORS,
+				0,
+			))
 			.saturating_add(DbWeight::get().reads(14 + 3 * MAX_NOMINATORS))
 			.saturating_add(DbWeight::get().writes(10 + 3 * MAX_NOMINATORS))
 			// fetching set id -> session index mappings
@@ -49,6 +55,7 @@ impl crate::WeightInfo for () {
 	}
 
 	fn note_stalled() -> Weight {
-		(3 * WEIGHT_PER_MICROS).saturating_add(DbWeight::get().writes(1))
+		Weight::from_parts(3u64 * WEIGHT_REF_TIME_PER_MICROS, 0)
+			.saturating_add(DbWeight::get().writes(1))
 	}
 }

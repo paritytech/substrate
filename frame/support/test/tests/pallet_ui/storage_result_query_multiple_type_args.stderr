@@ -1,0 +1,5 @@
+error: Invalid pallet::storage, unexpected number of generic arguments for ResultQuery, expected 1 type argument, found 2
+  --> tests/pallet_ui/storage_result_query_multiple_type_args.rs:19:56
+   |
+19 |     type Foo<T: Config> = StorageValue<_, u8, ResultQuery<Error<T>::NonExistentValue, SomeOtherError>>;
+   |                                                           ^^^^^

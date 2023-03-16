@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -21,14 +21,14 @@
 use codec::{Decode, Encode};
 use log::info;
 
-use crate::{migration::EpochV0, Epoch};
+use crate::{migration::EpochV0, Epoch, LOG_TARGET};
 use sc_client_api::backend::AuxStore;
 use sc_consensus_epochs::{
 	migration::{EpochChangesV0For, EpochChangesV1For},
 	EpochChangesFor, SharedEpochChanges,
 };
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
-use sp_consensus_babe::{BabeBlockWeight, BabeGenesisConfiguration};
+use sp_consensus_babe::{BabeBlockWeight, BabeConfiguration};
 use sp_runtime::traits::Block as BlockT;
 
 const BABE_EPOCH_CHANGES_VERSION: &[u8] = b"babe_epoch_changes_version";
@@ -57,7 +57,7 @@ where
 /// Load or initialize persistent epoch change data from backend.
 pub fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 	backend: &B,
-	config: &BabeGenesisConfiguration,
+	config: &BabeConfiguration,
 ) -> ClientResult<SharedEpochChanges<Block, Epoch>> {
 	let version = load_decode::<_, u32>(backend, BABE_EPOCH_CHANGES_VERSION)?;
 
@@ -82,7 +82,7 @@ pub fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 	let epoch_changes =
 		SharedEpochChanges::<Block, Epoch>::new(maybe_epoch_changes.unwrap_or_else(|| {
 			info!(
-				target: "babe",
+				target: LOG_TARGET,
 				"👶 Creating empty BABE epoch changes on what appears to be first startup.",
 			);
 			EpochChangesFor::<Block, Epoch>::default()
@@ -143,7 +143,7 @@ mod test {
 	use sc_consensus_epochs::{EpochHeader, PersistedEpoch, PersistedEpochHeader};
 	use sc_network_test::Block as TestBlock;
 	use sp_consensus::Error as ConsensusError;
-	use sp_consensus_babe::{AllowedSlots, BabeGenesisConfiguration};
+	use sp_consensus_babe::AllowedSlots;
 	use sp_core::H256;
 	use sp_runtime::traits::NumberFor;
 	use substrate_test_runtime_client;
@@ -182,11 +182,11 @@ mod test {
 
 		let epoch_changes = load_epoch_changes::<TestBlock, _>(
 			&client,
-			&BabeGenesisConfiguration {
+			&BabeConfiguration {
 				slot_duration: 10,
 				epoch_length: 4,
 				c: (3, 10),
-				genesis_authorities: Vec::new(),
+				authorities: Vec::new(),
 				randomness: Default::default(),
 				allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 			},

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -481,7 +481,7 @@ mod tests {
 		assert_eq!(
 			candidates
 				.iter()
-				.map(|c| (c.borrow().who.clone(), c.borrow().elected, c.borrow().backed_stake))
+				.map(|c| (c.borrow().who, c.borrow().elected, c.borrow().backed_stake))
 				.collect::<Vec<_>>(),
 			vec![(10, false, 0), (20, true, 15), (30, false, 0), (40, true, 15)],
 		);

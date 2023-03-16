@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -106,6 +106,19 @@ pub trait VoteTally<Votes, Class> {
 	fn rejection(class: Class) -> Self;
 	#[cfg(feature = "runtime-benchmarks")]
 	fn from_requirements(support: Perbill, approval: Perbill, class: Class) -> Self;
+	#[cfg(feature = "runtime-benchmarks")]
+	/// A function that should be called before any use of the `runtime-benchmarks` gated functions
+	/// of the `VoteTally` trait.
+	///
+	/// Should be used to set up any needed state in a Pallet which implements `VoteTally` so that
+	/// benchmarks that execute will complete successfully. `class` can be used to set up a
+	/// particular class of voters, and `granularity` is used to determine the weight of one vote
+	/// relative to total unanimity.
+	///
+	/// For example, in the case where there are a number of unique voters, and each voter has equal
+	/// voting weight, a granularity of `Perbill::from_rational(1, 1000)` should create `1_000`
+	/// users.
+	fn setup(class: Class, granularity: Perbill);
 }
 pub enum PollStatus<Tally, Moment, Class> {
 	None,

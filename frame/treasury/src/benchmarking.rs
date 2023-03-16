@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +21,7 @@
 
 use super::{Pallet as Treasury, *};
 
-use frame_benchmarking::{account, benchmarks_instance_pallet};
+use frame_benchmarking::v1::{account, benchmarks_instance_pallet, BenchmarkError};
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	ensure,
@@ -34,7 +34,7 @@ const SEED: u32 = 0;
 // Create the pre-requisite information needed to create a treasury `propose_spend`.
 fn setup_proposal<T: Config<I>, I: 'static>(
 	u: u32,
-) -> (T::AccountId, BalanceOf<T, I>, <T::Lookup as StaticLookup>::Source) {
+) -> (T::AccountId, BalanceOf<T, I>, AccountIdLookupOf<T>) {
 	let caller = account("caller", u, SEED);
 	let value: BalanceOf<T, I> = T::ProposalBondMinimum::get().saturating_mul(100u32.into());
 	let _ = T::Currency::make_free_balance_be(&caller, value);
@@ -61,7 +61,7 @@ fn setup_pot_account<T: Config<I>, I: 'static>() {
 	let _ = T::Currency::make_free_balance_be(&pot_account, value);
 }
 
-fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Event) {
+fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::RuntimeEvent) {
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
@@ -99,7 +99,9 @@ benchmarks_instance_pallet! {
 			beneficiary_lookup
 		)?;
 		let proposal_id = Treasury::<T, _>::proposal_count() - 1;
-	}: _(RawOrigin::Root, proposal_id)
+		let reject_origin =
+			T::RejectOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+	}: _<T::RuntimeOrigin>(reject_origin, proposal_id)
 
 	approve_proposal {
 		let p in 0 .. T::MaxApprovals::get() - 1;
@@ -111,7 +113,9 @@ benchmarks_instance_pallet! {
 			beneficiary_lookup
 		)?;
 		let proposal_id = Treasury::<T, _>::proposal_count() - 1;
-	}: _(RawOrigin::Root, proposal_id)
+		let approve_origin =
+			T::ApproveOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+	}: _<T::RuntimeOrigin>(approve_origin, proposal_id)
 
 	remove_approval {
 		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
@@ -122,7 +126,9 @@ benchmarks_instance_pallet! {
 		)?;
 		let proposal_id = Treasury::<T, _>::proposal_count() - 1;
 		Treasury::<T, I>::approve_proposal(RawOrigin::Root.into(), proposal_id)?;
-	}: _(RawOrigin::Root, proposal_id)
+		let reject_origin =
+			T::RejectOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+	}: _<T::RuntimeOrigin>(reject_origin, proposal_id)
 
 	on_initialize_proposals {
 		let p in 0 .. T::MaxApprovals::get();

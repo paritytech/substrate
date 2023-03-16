@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use kvdb::KeyValueDB;
 use node_primitives::Hash;
-use sp_trie::{trie_types::TrieDBMutV1, TrieMut};
+use sp_trie::{trie_types::TrieDBMutBuilderV1, TrieMut};
 
 use crate::simple_trie::SimpleTrie;
 
@@ -37,13 +37,16 @@ pub fn generate_trie(
 	let (db, overlay) = {
 		let mut overlay = HashMap::new();
 		overlay.insert(
-			hex::decode("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314")
-				.expect("null key is valid"),
+			array_bytes::hex2bytes(
+				"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314",
+			)
+			.expect("null key is valid"),
 			Some(vec![0]),
 		);
 		let mut trie = SimpleTrie { db, overlay: &mut overlay };
 		{
-			let mut trie_db = TrieDBMutV1::<crate::simple_trie::Hasher>::new(&mut trie, &mut root);
+			let mut trie_db =
+				TrieDBMutBuilderV1::<crate::simple_trie::Hasher>::new(&mut trie, &mut root).build();
 			for (key, value) in key_values {
 				trie_db.insert(&key, &value).expect("trie insertion failed");
 			}

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,7 +28,7 @@ mod no_instance {
 	pub trait Config: frame_support_test::Config {}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=frame_support_test {}
+		pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=frame_support_test {}
 	}
 
 	frame_support::decl_storage! {
@@ -53,7 +53,7 @@ mod instance {
 
 	frame_support::decl_module! {
 		pub struct Module<T: Config<I>, I: Instance = DefaultInstance>
-			for enum Call where origin: T::Origin, system=frame_support_test {}
+			for enum Call where origin: T::RuntimeOrigin, system=frame_support_test {}
 	}
 
 	frame_support::decl_storage! {

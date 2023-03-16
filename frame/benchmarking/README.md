@@ -125,6 +125,8 @@ cargo test -p pallet-balances --features runtime-benchmarks
 > ```
 > To solve this, navigate to the folder of the node (`cd bin/node/cli`) or pallet (`cd frame/pallet`) and run the command there.
 
+This will instance each linear component with different values. The number of values per component is set to six and can be changed with the `VALUES_PER_COMPONENT` environment variable.
+
 ## Adding Benchmarks
 
 The benchmarks included with each pallet are not automatically added to your node. To actually
@@ -183,7 +185,7 @@ Then you can run a benchmark like so:
 ```
 
 This will output a file `pallet_name.rs` which implements the `WeightInfo` trait you should include
-in your pallet. Each blockchain should generate their own benchmark file with their custom
+in your pallet. Double colons `::` will be replaced with a `_` in the output name if you specify a directory. Each blockchain should generate their own benchmark file with their custom
 implementation of the `WeightInfo` trait. This means that you will be able to use these modular
 Substrate pallets while still keeping your network safe for your specific configuration and
 requirements.

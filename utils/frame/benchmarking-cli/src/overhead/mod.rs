@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,8 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod bench;
 pub mod cmd;
-mod template;
+pub mod template;
 
-pub use cmd::{ExtrinsicBuilder, OverheadCmd};
+pub use cmd::OverheadCmd;
