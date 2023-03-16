@@ -63,7 +63,7 @@ mod benchmarking;
 mod tests;
 pub mod weights;
 
-use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
+use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
 use sp_runtime::{
@@ -73,10 +73,9 @@ use sp_runtime::{
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use frame_support::{
-	dispatch::fmt::Debug,
 	print,
 	traits::{
-		tokens::{AssetId, Balance, BalanceConversion},
+		tokens::{Balance, BalanceConversion, Pay, PaymentStatus},
 		Currency,
 		ExistenceRequirement::KeepAlive,
 		Get, Imbalance, OnUnbalanced, ReservableCurrency, WithdrawReasons,
@@ -188,18 +187,18 @@ pub mod pallet {
 		type Balance: Balance;
 
 		/// The identifier for what asset should be spent.
-		type AssetId: AssetId;
+		type AssetKind: AssetId;
 
 		/// Means by which we can make payments to accounts. This also defines the currency and the
 		/// balance which we use to denote that currency.
 		type Paymaster: Pay<
-			AccountId = <Self as frame_system::Config>::AccountId,
-			AssetId = Self::AssetId,
+			Beneficiary = <Self as frame_system::Config>::AccountId,
+			AssetKind = Self::AssetKind,
 		>;
 
 		type BalanceConverter: BalanceConversion<
 			PayBalanceOf<Self, I>,
-			Self::AssetId,
+			Self::AssetKind,
 			Self::Balance,
 			Error = Error<Self, I>,
 		>;
@@ -291,7 +290,7 @@ pub mod pallet {
 		PendingPayment<
 			T::AccountId,
 			T::Balance,
-			T::AssetId,
+			T::AssetKind,
 			PayBalanceOf<T, I>,
 			<T::Paymaster as Pay>::Id,
 		>,
@@ -376,13 +375,13 @@ pub mod pallet {
 		/// The proposal was paid successfully
 		ProposalPaymentSuccess {
 			proposal_index: ProposalIndex,
-			asset_id: T::AssetId,
+			asset_id: T::AssetKind,
 			amount: PayBalanceOf<T, I>,
 		},
 		// The proposal payment failed. Payment will be retried in next spend period.
 		ProposalPaymentFailure {
 			proposal_index: ProposalIndex,
-			asset_id: T::AssetId,
+			asset_id: T::AssetKind,
 			amount: PayBalanceOf<T, I>,
 		},
 	}
@@ -576,7 +575,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::spend())]
 		pub fn spend(
 			origin: OriginFor<T>,
-			asset_id: T::AssetId,
+			asset_id: T::AssetKind,
 			#[pallet::compact] amount: PayBalanceOf<T, I>,
 			beneficiary: AccountIdLookupOf<T>,
 		) -> DispatchResult {
@@ -841,31 +840,4 @@ impl<T: Config<I>, I: 'static> OnUnbalanced<NegativeImbalanceOf<T, I>> for Palle
 
 		Self::deposit_event(Event::Deposit { value: numeric_amount });
 	}
-}
-
-// TODO: PaymentStatus struct and Pay trait be replaced with version in frame_support
-// These are only left here temporarily until the Pay trait is merged into master.
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Encode, Decode, Eq, PartialEq, Clone, TypeInfo, MaxEncodedLen, RuntimeDebug)]
-pub enum PaymentStatus {
-	InProgress,
-	Unknown,
-	Success,
-	Failure,
-}
-pub trait Pay {
-	type Balance: Balance;
-	type AccountId;
-	type Id: FullCodec + MaxEncodedLen + TypeInfo + Clone + Eq + PartialEq + Debug + Copy;
-	type AssetId: AssetId;
-	fn pay(
-		who: &Self::AccountId,
-		asset_id: Self::AssetId,
-		amount: Self::Balance,
-	) -> Result<Self::Id, ()>;
-	fn check_payment(id: Self::Id) -> PaymentStatus;
-	#[cfg(feature = "runtime-benchmarks")]
-	fn ensure_successful(who: &Self::AccountId, amount: Self::Balance);
-	#[cfg(feature = "runtime-benchmarks")]
-	fn ensure_concluded(id: Self::Id);
 }
