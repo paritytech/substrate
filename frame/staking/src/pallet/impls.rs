@@ -774,7 +774,9 @@ impl<T: Config> Pallet<T> {
 		let mut min_active_stake = u64::MAX;
 
 		let mut sorted_voters = T::VoterList::iter();
-		while all_voters.len() < max_allowed_len as usize {
+		while all_voters.len() < max_allowed_len as usize &&
+			voters_seen < (NPOS_MAX_ITERATIONS_COEFFICIENT * max_allowed_len as u32)
+		{
 			let voter = match sorted_voters.next() {
 				Some(voter) => {
 					voters_seen.saturating_inc();
