@@ -2511,7 +2511,7 @@ mod tests {
 		for info in storage_info {
 			let pallet_name = String::from_utf8(info.pallet_name).unwrap();
 			let storage_name = String::from_utf8(info.storage_name).unwrap();
-                        println!(
+			println!(
 				"| {:<30} | {:<30} | {:<10} | {:<15} |",
 				pallet_name,
 				storage_name,
