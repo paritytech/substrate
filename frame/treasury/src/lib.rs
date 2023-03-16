@@ -75,7 +75,7 @@ use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 use frame_support::{
 	print,
 	traits::{
-		tokens::{Balance, BalanceConversion, Pay, PaymentStatus},
+		tokens::{AssetId, Balance, BalanceConversion, Pay, PaymentStatus},
 		Currency,
 		ExistenceRequirement::KeepAlive,
 		Get, Imbalance, OnUnbalanced, ReservableCurrency, WithdrawReasons,
@@ -96,7 +96,6 @@ pub type PositiveImbalanceOf<T, I = ()> = <<T as Config<I>>::Currency as Currenc
 pub type NegativeImbalanceOf<T, I = ()> = <<T as Config<I>>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
-
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 /// A trait to allow the Treasury Pallet to spend it's funds for other purposes.
@@ -127,8 +126,6 @@ pub trait SpendFunds<T: Config<I>, I: 'static = ()> {
 
 /// An index of a proposal. Just a `u32`.
 pub type ProposalIndex = u32;
-/// A count of proposals. Just a `u32`.
-pub type ProposalsCount = u32;
 
 /// A spending proposal.
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
@@ -144,30 +141,26 @@ pub struct Proposal<AccountId, Balance> {
 	bond: Balance,
 }
 
-/// A spending proposal.
+/// A treasury spend payment which has not yet succeeded.
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub struct PendingPayment<AccountId, Balance, AssetKind, AssetBalance, PaymentId> {
-	/// The account proposing it.
-	proposer: AccountId,
+	/// The account to whom the payment should be made if the proposal is accepted.
+	beneficiary: AccountId,
 	/// The asset_id of the amount to be paid
 	asset_id: AssetKind,
 	/// The (total) amount that should be paid.
 	value: AssetBalance,
-	/// The account to whom the payment should be made if the proposal is accepted.
-	beneficiary: AccountId,
 	/// The amount to be paid, but normalized to the native asset class
 	normalized_value: Balance,
-	// payment_status: PaymentStatus,
+	// the identifier for tracking the status of a payment which is in flight.
 	payment_id: Option<PaymentId>,
 }
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{
-		dispatch_context::with_context, pallet_prelude::*, traits::tokens::AssetId,
-	};
+	use frame_support::{dispatch_context::with_context, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -365,7 +358,7 @@ pub mod pallet {
 		ProcessingProposals { waiting_proposals: ProposalIndex },
 		/// Spending has finished; this is the number of proposals rolled over till next
 		/// T::SpendPeriod.
-		RolloverPayments { rollover_proposals: ProposalsCount, allocated_proposals: ProposalsCount },
+		RolloverPayments { rollover_proposals: ProposalIndex, allocated_proposals: ProposalIndex },
 		/// A new spend proposal has been approved.
 		SpendApproved {
 			proposal_index: ProposalIndex,
@@ -612,7 +605,6 @@ pub mod pallet {
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 
 			let proposal = PendingPayment {
-				proposer: beneficiary.clone(),
 				asset_id,
 				value: amount,
 				beneficiary: beneficiary.clone(),
