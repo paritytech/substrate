@@ -99,13 +99,17 @@ pub fn roll_to(n: BlockNumber) {
 	}
 }
 
+pub fn roll_one() {
+	roll_to(System::block_number() + 1);
+}
+
 pub fn roll_to_unsigned() {
 	while !matches!(MultiPhase::current_phase(), Phase::Unsigned(_)) {
 		roll_to(System::block_number() + 1);
 	}
 }
 pub fn roll_to_signed() {
-	while !matches!(MultiPhase::current_phase(), Phase::Signed(_)) {
+	while !matches!(MultiPhase::current_phase(), Phase::Signed) {
 		roll_to(System::block_number() + 1);
 	}
 }
@@ -281,9 +285,8 @@ parameter_types! {
 	pub static DesiredTargets: u32 = 2;
 	pub static SignedPhase: BlockNumber = 10;
 	pub static UnsignedPhase: BlockNumber = 5;
-	// We expect a successful election to take at least 4 blocks have passed in both signed and
-	// unsigned phases.
-	pub static MinBlocksBeforeEmergency: BlockNumber = 4;
+	// We expect a successful election to take at least 15 blocks (i.e. a round).
+	pub static MinBlocksBeforeEmergency: BlockNumber = 15;
 	pub static SignedMaxSubmissions: u32 = 5;
 	pub static SignedMaxRefunds: u32 = 1;
 	pub static SignedDepositBase: Balance = 5;

@@ -620,7 +620,7 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed(15), round: 1 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
 						origin: Some(99),
@@ -649,7 +649,7 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed(15), round: 1 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
 						origin: Some(99),
@@ -684,7 +684,7 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed(15), round: 1 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
 						origin: Some(99),
@@ -725,7 +725,7 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed(15), round: 1 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
 						origin: Some(99),
@@ -808,7 +808,7 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed(15), round: 1 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
 						origin: Some(99),
@@ -896,11 +896,7 @@ mod tests {
 				assert_eq!(
 					multi_phase_events(),
 					vec![
-						Event::PhaseTransitioned {
-							from: Phase::Off,
-							to: Phase::Signed(15),
-							round: 1
-						},
+						Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
 						Event::SolutionStored {
 							compute: ElectionCompute::Signed,
 							origin: Some(99),
@@ -1158,7 +1154,7 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed(15), round: 1 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
 						origin: Some(100),
@@ -1176,7 +1172,7 @@ mod tests {
 					},
 					Event::Rewarded { account: 100, value: 7 },
 					Event::PhaseTransitioned {
-						from: Phase::Signed(15),
+						from: Phase::Signed,
 						to: Phase::Unsigned((true, 25)),
 						round: 1
 					},
@@ -1232,7 +1228,7 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed(15), round: 1 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
 						origin: Some(99),
@@ -1378,7 +1374,7 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed(15), round: 1 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
 						origin: Some(99),

@@ -201,7 +201,7 @@ frame_benchmarking::benchmarks! {
 		assert!(<MultiPhase<T>>::current_phase().is_off());
 	}: {
 		let now = frame_system::Pallet::<T>::block_number();
-		<MultiPhase<T>>::phase_transition(Phase::Signed(now));
+		<MultiPhase<T>>::phase_transition(Phase::Signed);
 	} verify {
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 		assert!(<MultiPhase<T>>::current_phase().is_signed());
@@ -300,7 +300,7 @@ frame_benchmarking::benchmarks! {
 			<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Signed)
 				.map_err(<&str>::from)?;
 		let now = frame_system::Pallet::<T>::block_number();
-		<CurrentPhase<T>>::put(Phase::Signed(now));
+		<CurrentPhase<T>>::put(Phase::Signed);
 		// assume a queued solution is stored, regardless of where it comes from.
 		<QueuedSolution<T>>::put(ready_solution);
 
@@ -322,7 +322,7 @@ frame_benchmarking::benchmarks! {
 		// the queue is full and the solution is only better than the worse.
 		<MultiPhase<T>>::create_snapshot().map_err(<&str>::from)?;
 		let now = frame_system::Pallet::<T>::block_number();
-		<MultiPhase<T>>::phase_transition(Phase::Signed(now));
+		<MultiPhase<T>>::phase_transition(Phase::Signed);
 		<Round<T>>::put(1);
 
 		let mut signed_submissions = SignedSubmissions::<T>::get();
