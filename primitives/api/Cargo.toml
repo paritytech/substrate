@@ -21,7 +21,7 @@ sp-runtime = { version = "7.0.0", default-features = false, path = "../runtime" 
 sp-version = { version = "5.0.0", default-features = false, path = "../version" }
 sp-state-machine = { version = "0.13.0", default-features = false, optional = true, path = "../state-machine" }
 sp-trie = { version = "7.0.0", default-features = false, optional = true, path = "../trie" }
-hash-db = { version = "0.15.2", optional = true }
+hash-db = { version = "0.16.0", optional = true }
 thiserror = { version = "1.0.30", optional = true }
 
 log = { version = "0.4.17", default-features = false }

@@ -20,18 +20,17 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "128"]
 
-use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
+use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::{Saturating, Zero};
-use sp_core::TypedGet;
 use sp_runtime::Perbill;
-use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
+use sp_std::{marker::PhantomData, prelude::*};
 
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
 	traits::{
-		tokens::{fungible, Balance, GetSalary},
+		tokens::{GetSalary, Pay, PaymentStatus},
 		RankedMembers,
 	},
 	RuntimeDebug,
@@ -49,67 +48,6 @@ pub use weights::WeightInfo;
 
 /// Payroll cycle.
 pub type Cycle = u32;
-
-/// Status for making a payment via the `Pay::pay` trait function.
-#[derive(Encode, Decode, Eq, PartialEq, Clone, TypeInfo, MaxEncodedLen, RuntimeDebug)]
-pub enum PaymentStatus {
-	/// Payment is in progress. Nothing to report yet.
-	InProgress,
-	/// Payment status is unknowable. It will never be reported successful or failed.
-	Unknown,
-	/// Payment happened successfully.
-	Success,
-	/// Payment failed. It may safely be retried.
-	Failure,
-}
-
-/// Can be implemented by `PayFromAccount` using a `fungible` impl, but can also be implemented with
-/// XCM/MultiAsset and made generic over assets.
-pub trait Pay {
-	/// The type by which we measure units of the currency in which we make payments.
-	type Balance: Balance;
-	/// The type by which we identify the individuals to whom a payment may be made.
-	type AccountId;
-	/// An identifier given to an individual payment.
-	type Id: FullCodec + MaxEncodedLen + TypeInfo + Clone + Eq + PartialEq + Debug + Copy;
-	/// Make a payment and return an identifier for later evaluation of success in some off-chain
-	/// mechanism (likely an event, but possibly not on this chain).
-	fn pay(who: &Self::AccountId, amount: Self::Balance) -> Result<Self::Id, ()>;
-	/// Check how a payment has proceeded. `id` must have been a previously returned by `pay` for
-	/// the result of this call to be meaningful.
-	fn check_payment(id: Self::Id) -> PaymentStatus;
-	/// Ensure that a call to pay with the given parameters will be successful if done immediately
-	/// after this call. Used in benchmarking code.
-	#[cfg(feature = "runtime-benchmarks")]
-	fn ensure_successful(who: &Self::AccountId, amount: Self::Balance);
-	/// Ensure that a call to `check_payment` with the given parameters will return either `Success`
-	/// or `Failure`.
-	#[cfg(feature = "runtime-benchmarks")]
-	fn ensure_concluded(id: Self::Id);
-}
-
-/// Simple implementation of `Pay` which makes a payment from a "pot" - i.e. a single account.
-pub struct PayFromAccount<F, A>(sp_std::marker::PhantomData<(F, A)>);
-impl<A: TypedGet, F: fungible::Transfer<A::Type> + fungible::Mutate<A::Type>> Pay
-	for PayFromAccount<F, A>
-{
-	type Balance = F::Balance;
-	type AccountId = A::Type;
-	type Id = ();
-	fn pay(who: &Self::AccountId, amount: Self::Balance) -> Result<Self::Id, ()> {
-		<F as fungible::Transfer<_>>::transfer(&A::get(), who, amount, false).map_err(|_| ())?;
-		Ok(())
-	}
-	fn check_payment(_: ()) -> PaymentStatus {
-		PaymentStatus::Success
-	}
-	#[cfg(feature = "runtime-benchmarks")]
-	fn ensure_successful(_: &Self::AccountId, amount: Self::Balance) {
-		<F as fungible::Mutate<_>>::mint_into(&A::get(), amount).unwrap();
-	}
-	#[cfg(feature = "runtime-benchmarks")]
-	fn ensure_concluded(_: Self::Id) {}
-}
 
 /// The status of the pallet instance.
 #[derive(Encode, Decode, Eq, PartialEq, Clone, TypeInfo, MaxEncodedLen, RuntimeDebug)]
@@ -168,7 +106,7 @@ pub mod pallet {
 
 		/// Means by which we can make payments to accounts. This also defines the currency and the
 		/// balance which we use to denote that currency.
-		type Paymaster: Pay<AccountId = <Self as frame_system::Config>::AccountId>;
+		type Paymaster: Pay<Beneficiary = <Self as frame_system::Config>::AccountId, AssetKind = ()>;
 
 		/// The current membership of payees.
 		type Members: RankedMembers<AccountId = <Self as frame_system::Config>::AccountId>;
@@ -498,8 +436,8 @@ pub mod pallet {
 
 			claimant.last_active = status.cycle_index;
 
-			let id =
-				T::Paymaster::pay(&beneficiary, payout).map_err(|()| Error::<T, I>::PayError)?;
+			let id = T::Paymaster::pay(&beneficiary, (), payout)
+				.map_err(|()| Error::<T, I>::PayError)?;
 
 			claimant.status = Attempted { registered, id, amount: payout };
 
