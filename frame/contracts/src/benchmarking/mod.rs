@@ -46,9 +46,16 @@ use sp_std::prelude::*;
 use wasm_instrument::parity_wasm::elements::{BlockType, BrTableData, Instruction, ValueType};
 
 /// How many batches we do per API benchmark.
+///
+/// This is picked more or less arbitrary. We experimented with different numbers until
+/// the results appeared to be stable. Reducing the number would speed up the benchmarks
+/// but might make the results less precise.
 const API_BENCHMARK_BATCHES: u32 = 1600;
 
-/// How many batches we do per Instruction benchmark.
+/// How many batches we do per instruction benchmark.
+///
+/// Same rationale as for [`API_BENCHMARK_BATCHES`]. The number is bigger because instruction
+/// benchmarks are faster.
 const INSTR_BENCHMARK_BATCHES: u32 = 5000;
 
 /// An instantiated and deployed contract.
