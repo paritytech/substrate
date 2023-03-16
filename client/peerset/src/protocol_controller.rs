@@ -81,7 +81,7 @@ impl ProtocolHandle {
 		let _ = self.to_controller.unbounded_send(Action::AddPeer(peer_id));
 	}
 
-	/// Remove a peer from a set of peers we try to connect to and disconnect a peer.
+	/// Remove a peer from a set of peers we try to connect to and disconnect the peer.
 	pub fn remove_peer(&self, peer_id: PeerId) {
 		let _ = self.to_controller.unbounded_send(Action::RemovePeer(peer_id));
 	}
@@ -97,7 +97,7 @@ impl ProtocolHandle {
 /// Status of a connection with a peer.
 #[derive(Debug)]
 enum ConnectionState {
-	/// We are connected through an ingoing connection.
+	/// We are connected through an incoming connection.
 	In,
 	/// We are connected through an outgoing connection.
 	Out,
@@ -200,6 +200,7 @@ impl ProtocolController {
 				},
 			}
 		};
+
 		match action {
 			Action::AddReservedPeer(peer_id) => self.on_add_reserved_peer(peer_id),
 			Action::RemoveReservedPeer(peer_id) => self.on_remove_reserved_peer(peer_id),
@@ -229,6 +230,7 @@ impl ProtocolController {
 		if !self.reserved_nodes.remove(&peer_id) {
 			return
 		}
+
 		if let Entry::Occupied(mut node) = self.nodes.entry(peer_id) {
 			if self.reserved_only && node.get().is_connected() {
 				// If we are in reserved-only mode, the removed reserved node
