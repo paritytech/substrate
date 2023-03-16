@@ -195,6 +195,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type EstimateCallFee = frame_support::traits::ConstU32<8>;
 	type SignedPhase = SignedPhase;
 	type UnsignedPhase = UnsignedPhase;
+	type MinBlocksBeforeEmergency = MinBlocksBeforeEmergency;
 	type BetterSignedThreshold = ();
 	type BetterUnsignedThreshold = ();
 	type OffchainRepeat = OffchainRepeat;
