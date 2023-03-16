@@ -1793,9 +1793,9 @@ where
 			let res = self.apply_block(operation, import_block, storage_changes);
 
 			error!(
-				"IMPORT_BLOCK {:?}: {}",
+				"IMPORT_BLOCK {:?}: {}ns res: {res:?}",
 				post_hash,
-				std::time::Instant::now().saturating_duration_since(timer).as_millis(),
+				std::time::Instant::now().saturating_duration_since(timer).as_nanos(),
 			);
 
 			res

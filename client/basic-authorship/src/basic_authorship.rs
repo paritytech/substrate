@@ -508,6 +508,11 @@ where
 			metrics.report_end_proposing_reason(end_reason);
 		});
 
+		error!(
+			"TOTAL_BUILD_TIME {:?}: {}",
+			block.header().hash(),
+			propose_with_start.elapsed().as_millis()
+		);
 		info!(
 			"🎁 Prepared block for proposing at {} ({} ms) [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
 			block.header().number(),
