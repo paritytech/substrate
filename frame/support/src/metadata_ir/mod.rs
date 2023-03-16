@@ -22,9 +22,12 @@ use frame_metadata::{RuntimeMetadataPrefixed, RuntimeMetadataV14};
 pub use types::*;
 
 mod v14;
+mod v15;
 
 /// Metadata V14.
 const V14: u32 = 14;
+/// Metadata V15.
+const V15: u32 = u32::MAX;
 
 /// Transform the IR to the specified version.
 ///
@@ -36,13 +39,18 @@ pub fn into_version(metadata: MetadataIR, version: u32) -> Option<RuntimeMetadat
 			let v14: frame_metadata::v14::RuntimeMetadataV14 = metadata.into();
 			Some(v14.into())
 		},
+		// Unstable metadata.
+		V15 => {
+			let v15: frame_metadata::v15::RuntimeMetadataV15 = metadata.into();
+			Some(v15.into())
+		},
 		_ => None,
 	}
 }
 
 /// Returns the supported metadata versions.
 pub fn supported_versions() -> sp_std::vec::Vec<u32> {
-	sp_std::vec![V14,]
+	sp_std::vec![V14, V15]
 }
 
 /// Transform the IR to the latest stable metadata version.
@@ -79,5 +87,15 @@ mod test {
 		assert_eq!(metadata.0, META_RESERVED);
 
 		assert!(matches!(metadata.1, RuntimeMetadata::V14(_)));
+	}
+
+	#[test]
+	fn into_version_15() {
+		let ir = ir_metadata();
+		let metadata = into_version(ir, V15).expect("Should return prefixed metadata");
+
+		assert_eq!(metadata.0, META_RESERVED);
+
+		assert!(matches!(metadata.1, RuntimeMetadata::V15(_)));
 	}
 }
