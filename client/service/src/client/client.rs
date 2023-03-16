@@ -882,11 +882,19 @@ where
 				let runtime_api = self.runtime_api();
 				let execution_context = import_block.origin.into();
 
+				let timer = std::time::Instant::now();
+
 				runtime_api.execute_block_with_context(
 					*parent_hash,
 					execution_context,
 					Block::new(import_block.header.clone(), body.clone()),
 				)?;
+
+				error!(
+					"EXECUTE_BLOCK {:?}: {}",
+					import_block.post_hash(),
+					std::time::Instant::now().saturating_duration_since(timer).as_millis(),
+				);
 
 				let state = self.backend.state_at(*parent_hash)?;
 				let gen_storage_changes = runtime_api
@@ -1780,7 +1788,17 @@ where
 			};
 
 		self.lock_import_and_run(|operation| {
-			self.apply_block(operation, import_block, storage_changes)
+			let post_hash = import_block.post_hash();
+			let timer = std::time::Instant::now();
+			let res = self.apply_block(operation, import_block, storage_changes);
+
+			error!(
+				"IMPORT_BLOCK {:?}: {}",
+				post_hash,
+				std::time::Instant::now().saturating_duration_since(timer).as_millis(),
+			);
+
+			res
 		})
 		.map_err(|e| {
 			warn!("Block import error: {}", e);
