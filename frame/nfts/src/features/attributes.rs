@@ -33,17 +33,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Error::<T, I>::MethodDisabled
 		);
 
-		let mut collection_details =
-			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-
 		ensure!(
-			Self::is_valid_namespace(
-				&origin,
-				&namespace,
-				&collection,
-				&collection_details.owner,
-				&maybe_item,
-			)?,
+			Self::is_valid_namespace(&origin, &namespace, &collection, &maybe_item)?,
 			Error::<T, I>::NoPermission
 		);
 
@@ -65,6 +56,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			},
 			_ => (),
 		}
+
+		let mut collection_details =
+			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 
 		let attribute = Attribute::<T, I>::get((collection, maybe_item, &namespace, &key));
 		let attribute_exists = attribute.is_some();
@@ -219,7 +213,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	pub(crate) fn do_clear_attribute(
-		maybe_check_owner: Option<T::AccountId>,
+		maybe_check_origin: Option<T::AccountId>,
 		collection: T::CollectionId,
 		maybe_item: Option<T::ItemId>,
 		namespace: AttributeNamespace<T::AccountId>,
@@ -227,21 +221,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> DispatchResult {
 		let (_, deposit) = Attribute::<T, I>::take((collection, maybe_item, &namespace, &key))
 			.ok_or(Error::<T, I>::AttributeNotFound)?;
-		let mut collection_details =
-			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 
-		if let Some(check_owner) = &maybe_check_owner {
+		if let Some(check_origin) = &maybe_check_origin {
 			// validate the provided namespace when it's not a root call and the caller is not
 			// the same as the `deposit.account` (e.g. the deposit was paid by different account)
-			if deposit.account != maybe_check_owner {
+			if deposit.account != maybe_check_origin {
 				ensure!(
-					Self::is_valid_namespace(
-						&check_owner,
-						&namespace,
-						&collection,
-						&collection_details.owner,
-						&maybe_item,
-					)?,
+					Self::is_valid_namespace(&check_origin, &namespace, &collection, &maybe_item)?,
 					Error::<T, I>::NoPermission
 				);
 			}
@@ -264,23 +250,24 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							.map_or(None, |c| {
 								Some(c.has_disabled_setting(ItemSetting::UnlockedAttributes))
 							});
-						match maybe_is_locked {
-							Some(is_locked) => {
-								// when item exists, then only the collection's owner can clear that
-								// attribute
-								ensure!(
-									check_owner == &collection_details.owner,
-									Error::<T, I>::NoPermission
-								);
-								ensure!(!is_locked, Error::<T, I>::LockedItemAttributes);
-							},
-							None => (),
+						if let Some(is_locked) = maybe_is_locked {
+							ensure!(!is_locked, Error::<T, I>::LockedItemAttributes);
+							// Only the collection's admin can clear attributes in that namespace.
+							// e.g. in off-chain mints, the attribute's depositor will be the item's
+							// owner, that's why we need to do this extra check.
+							ensure!(
+								Self::has_role(&collection, &check_origin, CollectionRole::Admin),
+								Error::<T, I>::NoPermission
+							);
 						}
 					},
 				},
 				_ => (),
 			};
 		}
+
+		let mut collection_details =
+			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 
 		collection_details.attributes.saturating_dec();
 
@@ -372,12 +359,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		origin: &T::AccountId,
 		namespace: &AttributeNamespace<T::AccountId>,
 		collection: &T::CollectionId,
-		collection_owner: &T::AccountId,
 		maybe_item: &Option<T::ItemId>,
 	) -> Result<bool, DispatchError> {
 		let mut result = false;
 		match namespace {
-			AttributeNamespace::CollectionOwner => result = origin == collection_owner,
+			AttributeNamespace::CollectionOwner =>
+				result = Self::has_role(&collection, &origin, CollectionRole::Admin),
 			AttributeNamespace::ItemOwner =>
 				if let Some(item) = maybe_item {
 					let item_details =

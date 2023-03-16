@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use libp2p::PeerId;
-use sc_network_common::protocol::role::ObservedRole;
+use sc_network_common::role::ObservedRole;
 use sp_runtime::traits::Block as BlockT;
 
 /// Validates consensus messages.
