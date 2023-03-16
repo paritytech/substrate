@@ -559,11 +559,7 @@ benchmarks! {
 	seal_gas_left {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
-<<<<<<< HEAD
-			"seal1", "seal_gas_left", r
-=======
-			"seal0", "seal_gas_left", r
->>>>>>> master
+			"seal1", "gas_left", r
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
@@ -1599,10 +1595,10 @@ benchmarks! {
 		let callee_bytes = callees.iter().flat_map(|x| x.account_id.encode()).collect();
 		let value: BalanceOf<T> = 0u32.into();
 		let value_bytes = value.encode();
-		let value_len = value_bytes.len();
+		let value_len = BalanceOf::<T>::max_encoded_len() as u32;
 		// Set an own limit every 2nd call
 		let own_limit = (u32::MAX - 100).into();
-		let deposits = (0..r * API_BENCHMARK_BATCH_SIZE)
+		let deposits = (0..r)
 			.enumerate()
 			.map(|(i,x)| if i % 2 == 0 { 0u32.into() } else { own_limit } )
 			.collect::<Vec<BalanceOf<T>>>();
@@ -1614,7 +1610,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "seal2",
-				name: "seal_call",
+				name: "call",
 				params: vec![
 					ValueType::I32,
 					ValueType::I32,
@@ -1801,7 +1797,7 @@ benchmarks! {
 		let value_len = BalanceOf::<T>::max_encoded_len();
 		// Set an own deposit limit every 2nd call
 		let own_limit = (u32::MAX - 100).into();
-		let deposits = (0..r * API_BENCHMARK_BATCH_SIZE)
+		let deposits = (0..r)
 			.enumerate()
 			.map(|(i,x)| if i % 2 == 0 { 0u32.into() } else { own_limit } )
 			.collect::<Vec<BalanceOf<T>>>();
@@ -1819,7 +1815,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "seal2",
-				name: "seal_instantiate",
+				name: "instantiate",
 				params: vec![
 					ValueType::I32,
 					ValueType::I64,
