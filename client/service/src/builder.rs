@@ -85,27 +85,22 @@ pub type TFullCallExecutor<TBl, TExec> =
 type TFullParts<TBl, TRtApi, TExec> =
 	(TFullClient<TBl, TRtApi, TExec>, Arc<TFullBackend<TBl>>, KeystoreContainer, TaskManager);
 
-trait AsCryptoStoreRef {
-	// TODO-DAVXY: this can be removed
+trait AsKeystoreRef {
 	fn keystore_ref(&self) -> Arc<dyn Keystore>;
-	fn sync_keystore_ref(&self) -> Arc<dyn Keystore>;
 }
 
-impl<T> AsCryptoStoreRef for Arc<T>
+impl<T> AsKeystoreRef for Arc<T>
 where
 	T: Keystore + 'static,
 {
 	fn keystore_ref(&self) -> Arc<dyn Keystore> {
 		self.clone()
 	}
-	fn sync_keystore_ref(&self) -> Arc<dyn Keystore> {
-		self.clone()
-	}
 }
 
 /// Construct and hold different layers of Keystore wrappers
 pub struct KeystoreContainer {
-	remote: Option<Box<dyn AsCryptoStoreRef>>,
+	remote: Option<Box<dyn AsKeystoreRef>>,
 	local: Arc<LocalKeystore>,
 }
 
@@ -133,21 +128,12 @@ impl KeystoreContainer {
 		self.remote = Some(Box::new(remote))
 	}
 
-	/// Returns an adapter to the asynchronous keystore that implements `CryptoStore`
+	/// Returns an adapter to a `Keystore` implementation.
 	pub fn keystore(&self) -> Arc<dyn Keystore> {
 		if let Some(c) = self.remote.as_ref() {
 			c.keystore_ref()
 		} else {
 			self.local.clone()
-		}
-	}
-
-	/// Returns the synchronous keystore wrapper
-	pub fn sync_keystore(&self) -> KeystorePtr {
-		if let Some(c) = self.remote.as_ref() {
-			c.sync_keystore_ref()
-		} else {
-			self.local.clone() as KeystorePtr
 		}
 	}
 
@@ -235,7 +221,7 @@ where
 	let client = {
 		let extensions = sc_client_api::execution_extensions::ExecutionExtensions::new(
 			config.execution_strategies.clone(),
-			Some(keystore_container.sync_keystore()),
+			Some(keystore_container.keystore()),
 			sc_offchain::OffchainDb::factory_from_backend(&*backend),
 		);
 

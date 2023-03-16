@@ -26,7 +26,7 @@ use sp_core::{
 };
 use std::sync::Arc;
 
-/// CryptoStore error
+/// Keystore error
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// Public key type is not supported
