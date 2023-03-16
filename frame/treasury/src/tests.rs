@@ -159,7 +159,6 @@ impl frame_support::traits::EnsureOrigin<RuntimeOrigin> for TestSpendOrigin {
 
 impl Config for Test {
 	type PalletId = TreasuryPalletId;
-	type Balance = BalanceU64;
 	type AssetKind = AssetId;
 	type Paymaster = AssetsPaymaster<Assets, TreasuryAccount>;
 	type BalanceConverter = DummyBalanceConverter<Self>;
@@ -176,14 +175,15 @@ impl Config for Test {
 	type BurnDestination = (); // Just gets burned.
 	type WeightInfo = ();
 	type SpendFunds = ();
-	type SpendFundsLocal = ();
 	type MaxApprovals = ConstU32<100>;
 	type SpendOrigin = TestSpendOrigin;
 }
 
 pub struct AssetsPaymaster<F, A>(sp_std::marker::PhantomData<(F, A)>);
-impl<A: TypedGet, F: fungibles::Transfer<A::Type> + fungibles::Mutate<A::Type>> Pay
-	for AssetsPaymaster<F, A>
+impl<
+		A: TypedGet,
+		F: fungibles::Transfer<A::Type> + fungibles::Mutate<A::Type> + fungibles::Inspect<A::Type>,
+	> Pay for AssetsPaymaster<F, A>
 {
 	type Balance = F::Balance;
 	type Beneficiary = A::Type;

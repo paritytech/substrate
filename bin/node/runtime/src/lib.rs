@@ -1091,6 +1091,9 @@ parameter_types! {
 
 impl pallet_treasury::Config for Runtime {
 	type PalletId = TreasuryPalletId;
+	type Balance = Balances;
+	type AssetKind = u32;
+	type Paymaster = PayFromAccount<Balances, TreasuryAccount>;
 	type Currency = Balances;
 	type ApproveOrigin = EitherOfDiverse<
 		EnsureRoot<AccountId>,

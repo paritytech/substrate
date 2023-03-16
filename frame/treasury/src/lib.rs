@@ -75,7 +75,7 @@ use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 use frame_support::{
 	print,
 	traits::{
-		tokens::{AssetId, Balance, BalanceConversion, Pay, PaymentStatus},
+		tokens::{AssetId, BalanceConversion, Pay, PaymentStatus},
 		Currency,
 		ExistenceRequirement::KeepAlive,
 		Get, Imbalance, OnUnbalanced, ReservableCurrency, WithdrawReasons,
@@ -110,18 +110,13 @@ type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup
 /// * `missed_any`: If there were items that you want to spend on, but there were not enough funds,
 ///   mark this value as `true`. This will prevent the treasury from burning the excess funds.
 #[impl_trait_for_tuples::impl_for_tuples(30)]
-pub trait SpendFundsLocal<T: Config<I>, I: 'static = ()> {
+pub trait SpendFunds<T: Config<I>, I: 'static = ()> {
 	fn spend_funds(
 		budget_remaining: &mut BalanceOf<T, I>,
 		imbalance: &mut PositiveImbalanceOf<T, I>,
 		total_weight: &mut Weight,
 		missed_any: &mut bool,
 	);
-}
-
-#[impl_trait_for_tuples::impl_for_tuples(30)]
-pub trait SpendFunds<T: Config<I>, I: 'static = ()> {
-	fn spend_funds(total_weight: &mut Weight, total_spent: BalanceOf<T, I>, total_missed: u32);
 }
 
 /// An index of a proposal. Just a `u32`.
@@ -176,8 +171,6 @@ pub mod pallet {
 
 		/// Origin from which rejections must come.
 		type RejectOrigin: EnsureOrigin<Self::RuntimeOrigin>;
-
-		type Balance: Balance;
 
 		/// The identifier for what asset should be spent.
 		type AssetKind: AssetId;
@@ -236,9 +229,6 @@ pub mod pallet {
 
 		/// Runtime hooks to external pallet using treasury to compute spend funds.
 		type SpendFunds: SpendFunds<Self, I>;
-
-		/// Runtime hooks to external pallet using treasury to compute spend funds.
-		type SpendFundsLocal: SpendFundsLocal<Self, I>;
 
 		/// The maximum number of approvals that can wait in the spending queue.
 		///
@@ -725,10 +715,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		total_weight += T::WeightInfo::on_initialize_proposals(proposals_len);
 
-		// Call Runtime hooks to external pallet using treasury to compute spend funds.
-		// We could trigger burning of funds in the spendFunds hook as well.
-		T::SpendFunds::spend_funds(&mut total_weight, total_spent, missed_proposals);
-
 		Self::deposit_event(Event::RolloverPayments {
 			rollover_proposals: missed_proposals,
 			allocated_proposals: proposals_len.saturating_sub(missed_proposals),
@@ -783,7 +769,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		total_weight += T::WeightInfo::on_initialize_proposals(proposals_len);
 
 		// Call Runtime hooks to external pallet using treasury to compute spend funds.
-		T::SpendFundsLocal::spend_funds(
+		T::SpendFunds::spend_funds(
 			&mut budget_remaining,
 			&mut imbalance,
 			&mut total_weight,
