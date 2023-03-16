@@ -28,7 +28,7 @@ impl crate::WeightInfo for () {
 		// Reading the parent hash.
 		let leaf_weight = DbWeight::get().reads(1);
 		// Blake2 hash cost.
-		let hash_weight = Weight::from_ref_time(2u64 * WEIGHT_REF_TIME_PER_NANOS);
+		let hash_weight = Weight::from_parts(2u64 * WEIGHT_REF_TIME_PER_NANOS, 0);
 		// No-op hook.
 		let hook_weight = Weight::zero();
 

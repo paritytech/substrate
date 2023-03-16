@@ -190,7 +190,7 @@ impl ChainExtension<Test> for TestExtension {
 			},
 			2 => {
 				let mut env = env.buf_in_buf_out();
-				let weight = Weight::from_ref_time(env.read(5)?[4].into());
+				let weight = Weight::from_parts(env.read(5)?[4].into(), 0);
 				env.charge_weight(weight)?;
 				Ok(RetVal::Converging(id))
 			},
@@ -705,7 +705,7 @@ fn run_out_of_gas() {
 				RuntimeOrigin::signed(ALICE),
 				addr, // newly created account
 				0,
-				Weight::from_ref_time(1_000_000_000_000).set_proof_size(u64::MAX),
+				Weight::from_parts(1_000_000_000_000, u64::MAX),
 				None,
 				vec![],
 			),
@@ -2115,7 +2115,7 @@ fn lazy_removal_partial_remove_works() {
 
 	// We create a contract with some extra keys above the weight limit
 	let extra_keys = 7u32;
-	let weight_limit = Weight::from_ref_time(5_000_000_000);
+	let weight_limit = Weight::from_parts(5_000_000_000, 0);
 	let (_, max_keys) = ContractInfo::<Test>::deletion_budget(1, weight_limit);
 	let vals: Vec<_> = (0..max_keys + extra_keys)
 		.map(|i| (blake2_256(&i.encode()), (i as u32), (i as u32).encode()))
@@ -2805,12 +2805,9 @@ fn gas_estimation_call_runtime() {
 
 		// Call something trivial with a huge gas limit so that we can observe the effects
 		// of pre-charging. This should create a difference between consumed and required.
-		let call = RuntimeCall::Contracts(crate::Call::call {
+		let call = RuntimeCall::Balances(pallet_balances::Call::transfer {
 			dest: addr_callee,
-			value: 0,
-			gas_limit: GAS_LIMIT / 3,
-			storage_deposit_limit: None,
-			data: vec![],
+			value: min_balance * 10,
 		});
 		let result = Contracts::bare_call(
 			ALICE,
@@ -2841,6 +2838,71 @@ fn gas_estimation_call_runtime() {
 			)
 			.result
 		);
+	});
+}
+
+#[test]
+fn gas_call_runtime_reentrancy_guarded() {
+	let (caller_code, _caller_hash) = compile_module::<Test>("call_runtime").unwrap();
+	let (callee_code, _callee_hash) = compile_module::<Test>("dummy").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		let _ = Balances::deposit_creating(&CHARLIE, 1000 * min_balance);
+
+		let addr_caller = Contracts::bare_instantiate(
+			ALICE,
+			min_balance * 100,
+			GAS_LIMIT,
+			None,
+			Code::Upload(caller_code),
+			vec![],
+			vec![0],
+			false,
+		)
+		.result
+		.unwrap()
+		.account_id;
+
+		let addr_callee = Contracts::bare_instantiate(
+			ALICE,
+			min_balance * 100,
+			GAS_LIMIT,
+			None,
+			Code::Upload(callee_code),
+			vec![],
+			vec![1],
+			false,
+		)
+		.result
+		.unwrap()
+		.account_id;
+
+		// Call pallet_contracts call() dispatchable
+		let call = RuntimeCall::Contracts(crate::Call::call {
+			dest: addr_callee,
+			value: 0,
+			gas_limit: GAS_LIMIT / 3,
+			storage_deposit_limit: None,
+			data: vec![],
+		});
+
+		// Call runtime to re-enter back to contracts engine by
+		// calling dummy contract
+		let result = Contracts::bare_call(
+			ALICE,
+			addr_caller.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			call.encode(),
+			false,
+			Determinism::Deterministic,
+		)
+		.result
+		.unwrap();
+		// Call to runtime should fail because of the re-entrancy guard
+		assert_return_code!(result, RuntimeReturnCode::CallRuntimeFailed);
 	});
 }
 

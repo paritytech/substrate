@@ -48,16 +48,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
 		with_details(&collection_details, &mut details)?;
 
-		if details.deposit.account == details.owner {
-			// Move the deposit to the new owner.
-			T::Currency::repatriate_reserved(
-				&details.owner,
-				&dest,
-				details.deposit.amount,
-				Reserved,
-			)?;
-		}
-
 		Account::<T, I>::remove((&details.owner, &collection, &item));
 		Account::<T, I>::insert((&dest, &collection, &item), ());
 		let origin = details.owner;

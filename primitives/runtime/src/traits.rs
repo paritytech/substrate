@@ -319,6 +319,24 @@ impl<T> TryMorph<T> for Identity {
 	}
 }
 
+/// Implementation of `Morph` which converts between types using `Into`.
+pub struct MorphInto<T>(sp_std::marker::PhantomData<T>);
+impl<T, A: Into<T>> Morph<A> for MorphInto<T> {
+	type Outcome = T;
+	fn morph(a: A) -> T {
+		a.into()
+	}
+}
+
+/// Implementation of `TryMorph` which attmepts to convert between types using `TryInto`.
+pub struct TryMorphInto<T>(sp_std::marker::PhantomData<T>);
+impl<T, A: TryInto<T>> TryMorph<A> for TryMorphInto<T> {
+	type Outcome = T;
+	fn try_morph(a: A) -> Result<T, ()> {
+		a.try_into().map_err(|_| ())
+	}
+}
+
 /// Create a `Morph` and/or `TryMorph` impls with a simple closure-like expression.
 ///
 /// # Examples

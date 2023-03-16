@@ -20,7 +20,7 @@
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use sp_arithmetic::traits::{AtLeast32BitUnsigned, Zero};
 use sp_core::RuntimeDebug;
-use sp_runtime::{ArithmeticError, DispatchError, TokenError};
+use sp_runtime::{traits::Convert, ArithmeticError, DispatchError, TokenError};
 use sp_std::fmt::Debug;
 
 /// One of a number of consequences of withdrawing a fungible from an account.
@@ -126,21 +126,6 @@ pub enum BalanceStatus {
 	Reserved,
 }
 
-/// Attribute namespaces for non-fungible tokens.
-#[derive(
-	Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, scale_info::TypeInfo, MaxEncodedLen,
-)]
-pub enum AttributeNamespace<AccountId> {
-	/// An attribute was set by the pallet.
-	Pallet,
-	/// An attribute was set by collection's owner.
-	CollectionOwner,
-	/// An attribute was set by item's owner.
-	ItemOwner,
-	/// An attribute was set by pre-approved account.
-	Account(AccountId),
-}
-
 bitflags::bitflags! {
 	/// Reasons for moving funds out of an account.
 	#[derive(Encode, Decode, MaxEncodedLen)]
@@ -223,5 +208,20 @@ impl<CollectionId, ItemId> Locker<CollectionId, ItemId> for () {
 	// to work.
 	fn is_locked(_collection: CollectionId, _item: ItemId) -> bool {
 		false
+	}
+}
+
+/// Retrieve the salary for a member of a particular rank.
+pub trait GetSalary<Rank, AccountId, Balance> {
+	/// Retrieve the salary for a given rank. The account ID is also supplied in case this changes
+	/// things.
+	fn get_salary(rank: Rank, who: &AccountId) -> Balance;
+}
+
+/// Adapter for a rank-to-salary `Convert` implementation into a `GetSalary` implementation.
+pub struct ConvertRank<C>(sp_std::marker::PhantomData<C>);
+impl<A, R, B, C: Convert<R, B>> GetSalary<R, A, B> for ConvertRank<C> {
+	fn get_salary(rank: R, _: &A) -> B {
+		C::convert(rank)
 	}
 }

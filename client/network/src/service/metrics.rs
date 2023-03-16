@@ -24,7 +24,7 @@ use prometheus_endpoint::{
 use std::{
 	str,
 	sync::{
-		atomic::{AtomicBool, AtomicUsize, Ordering},
+		atomic::{AtomicUsize, Ordering},
 		Arc,
 	},
 };
@@ -34,7 +34,6 @@ pub use prometheus_endpoint::{Histogram, HistogramVec};
 /// Registers all networking metrics with the given registry.
 pub fn register(registry: &Registry, sources: MetricSources) -> Result<Metrics, PrometheusError> {
 	BandwidthCounters::register(registry, sources.bandwidth)?;
-	MajorSyncingGauge::register(registry, sources.major_syncing)?;
 	NumConnectedGauge::register(registry, sources.connected_peers)?;
 	Metrics::register(registry)
 }
@@ -42,7 +41,6 @@ pub fn register(registry: &Registry, sources: MetricSources) -> Result<Metrics, 
 /// Predefined metric sources that are fed directly into prometheus.
 pub struct MetricSources {
 	pub bandwidth: Arc<BandwidthSinks>,
-	pub major_syncing: Arc<AtomicBool>,
 	pub connected_peers: Arc<AtomicUsize>,
 }
 
@@ -263,37 +261,6 @@ impl MetricSource for BandwidthCounters {
 	fn collect(&self, mut set: impl FnMut(&[&str], Self::N)) {
 		set(&["in"], self.0.total_inbound());
 		set(&["out"], self.0.total_outbound());
-	}
-}
-
-/// The "major syncing" metric.
-#[derive(Clone)]
-pub struct MajorSyncingGauge(Arc<AtomicBool>);
-
-impl MajorSyncingGauge {
-	/// Registers the `MajorSyncGauge` metric whose value is
-	/// obtained from the given `AtomicBool`.
-	fn register(registry: &Registry, value: Arc<AtomicBool>) -> Result<(), PrometheusError> {
-		prometheus::register(
-			SourcedGauge::new(
-				&Opts::new(
-					"substrate_sub_libp2p_is_major_syncing",
-					"Whether the node is performing a major sync or not.",
-				),
-				MajorSyncingGauge(value),
-			)?,
-			registry,
-		)?;
-
-		Ok(())
-	}
-}
-
-impl MetricSource for MajorSyncingGauge {
-	type N = u64;
-
-	fn collect(&self, mut set: impl FnMut(&[&str], Self::N)) {
-		set(&[], self.0.load(Ordering::Relaxed) as u64);
 	}
 }
 

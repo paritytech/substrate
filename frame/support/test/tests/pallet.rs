@@ -37,6 +37,9 @@ use sp_io::{
 };
 use sp_runtime::{DispatchError, ModuleError};
 
+/// Latest stable metadata version used for testing.
+const LATEST_METADATA_VERSION: u32 = 14;
+
 pub struct SomeType1;
 impl From<SomeType1> for u64 {
 	fn from(_t: SomeType1) -> Self {
@@ -101,6 +104,10 @@ impl SomeAssociation2 for u64 {
 }
 
 #[frame_support::pallet]
+/// Pallet documentation
+// Comments should not be included in the pallet documentation
+#[pallet_doc("../../README.md")]
+#[doc = include_str!("../../README.md")]
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
@@ -158,7 +165,6 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(crate) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
@@ -171,7 +177,7 @@ pub mod pallet {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType2); // Test for where clause
 			Self::deposit_event(Event::Something(10));
-			Weight::from_ref_time(10)
+			Weight::from_parts(10, 0)
 		}
 		fn on_finalize(_: BlockNumberFor<T>) {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
@@ -182,7 +188,7 @@ pub mod pallet {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType2); // Test for where clause
 			Self::deposit_event(Event::Something(30));
-			Weight::from_ref_time(30)
+			Weight::from_parts(30, 0)
 		}
 		fn integrity_test() {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
@@ -197,7 +203,7 @@ pub mod pallet {
 	{
 		/// Doc comment put in metadata
 		#[pallet::call_index(0)]
-		#[pallet::weight(Weight::from_ref_time(*_foo as u64))]
+		#[pallet::weight(Weight::from_parts(*_foo as u64, 0))]
 		pub fn foo(
 			origin: OriginFor<T>,
 			#[pallet::compact] _foo: u32,
@@ -496,7 +502,6 @@ pub mod pallet2 {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(crate) trait Store)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
@@ -660,7 +665,7 @@ pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
 
 frame_support::construct_runtime!(
-	pub enum Runtime where
+	pub struct Runtime where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
@@ -715,7 +720,7 @@ fn call_expand() {
 	assert_eq!(
 		call_foo.get_dispatch_info(),
 		DispatchInfo {
-			weight: frame_support::weights::Weight::from_ref_time(3),
+			weight: frame_support::weights::Weight::from_parts(3, 0),
 			class: DispatchClass::Normal,
 			pays_fee: Pays::Yes
 		}
@@ -947,15 +952,6 @@ fn validate_unsigned_expand() {
 }
 
 #[test]
-fn trait_store_expand() {
-	TestExternalities::default().execute_with(|| {
-		<pallet::Pallet<Runtime> as pallet::Store>::Value::get();
-		<pallet::Pallet<Runtime> as pallet::Store>::Map::get(1);
-		<pallet::Pallet<Runtime> as pallet::Store>::DoubleMap::get(1, 2);
-	})
-}
-
-#[test]
 fn pallet_expand_deposit_event() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
@@ -1096,10 +1092,10 @@ fn pallet_hooks_expand() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), Weight::from_ref_time(10));
+		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), Weight::from_parts(10, 0));
 		AllPalletsWithoutSystem::on_finalize(1);
 
-		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), Weight::from_ref_time(30));
+		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), Weight::from_parts(30, 0));
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
@@ -1137,13 +1133,13 @@ fn all_pallets_type_reversed_order_is_correct() {
 		{
 			assert_eq!(
 				AllPalletsWithoutSystemReversed::on_initialize(1),
-				Weight::from_ref_time(10)
+				Weight::from_parts(10, 0)
 			);
 			AllPalletsWithoutSystemReversed::on_finalize(1);
 
 			assert_eq!(
 				AllPalletsWithoutSystemReversed::on_runtime_upgrade(),
-				Weight::from_ref_time(30)
+				Weight::from_parts(30, 0)
 			);
 		}
 
@@ -1219,7 +1215,7 @@ fn migrate_from_pallet_version_to_storage_version() {
 		};
 
 		// `pallet_num` pallets, 2 writes and every write costs 5 weight.
-		assert_eq!(Weight::from_ref_time(pallet_num * 2 * 5), weight);
+		assert_eq!(Weight::from_parts(pallet_num * 2 * 5, 0), weight);
 
 		// All pallet versions should be removed
 		assert!(sp_io::storage::get(&pallet_version_key(Example::name())).is_none());
@@ -1598,6 +1594,51 @@ fn metadata() {
 	};
 
 	pretty_assertions::assert_eq!(actual_metadata.pallets, expected_metadata.pallets);
+}
+
+#[test]
+fn metadata_at_version() {
+	use frame_support::metadata::*;
+	use sp_core::Decode;
+
+	let metadata = Runtime::metadata();
+	let at_metadata = match Runtime::metadata_at_version(LATEST_METADATA_VERSION) {
+		Some(opaque) => {
+			let bytes = &*opaque;
+			let metadata: RuntimeMetadataPrefixed = Decode::decode(&mut &bytes[..]).unwrap();
+			metadata
+		},
+		_ => panic!("metadata has been bumped, test needs to be updated"),
+	};
+
+	assert_eq!(metadata, at_metadata);
+}
+
+#[test]
+fn metadata_versions() {
+	assert_eq!(vec![LATEST_METADATA_VERSION], Runtime::metadata_versions());
+}
+
+#[test]
+fn metadata_ir_pallet_runtime_docs() {
+	let ir = Runtime::metadata_ir();
+	let pallet = ir
+		.pallets
+		.iter()
+		.find(|pallet| pallet.name == "Example")
+		.expect("Pallet should be present");
+
+	let readme = "Support code for the runtime.\n\nLicense: Apache-2.0";
+	let expected = vec![" Pallet documentation", readme, readme];
+	assert_eq!(pallet.docs, expected);
+}
+
+#[test]
+fn test_pallet_runtime_docs() {
+	let docs = crate::pallet::Pallet::<Runtime>::pallet_documentation_metadata();
+	let readme = "Support code for the runtime.\n\nLicense: Apache-2.0";
+	let expected = vec![" Pallet documentation", readme, readme];
+	assert_eq!(docs, expected);
 }
 
 #[test]
