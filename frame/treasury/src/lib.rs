@@ -334,7 +334,14 @@ pub mod pallet {
 
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig {
-		fn build(&self) {}
+		fn build(&self) {
+			// Create Treasury account
+			let account_id = <Pallet<T, I>>::account_id();
+			let min = T::Currency::minimum_balance();
+			if T::Currency::free_balance(&account_id) < min {
+				let _ = T::Currency::make_free_balance_be(&account_id, min);
+			}
+		}
 	}
 
 	#[pallet::event]
