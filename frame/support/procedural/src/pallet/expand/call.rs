@@ -362,7 +362,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 
 		impl<#type_impl_gen> #pallet_ident<#type_use_gen> #where_clause {
 			#[doc(hidden)]
-			pub fn call_functions() -> #frame_support::metadata::PalletCallMetadata {
+			pub fn call_functions() -> #frame_support::metadata_ir::PalletCallMetadataIR {
 				#frame_support::scale_info::meta_type::<#call_ident<#type_use_gen>>().into()
 			}
 		}

@@ -61,7 +61,7 @@ use sp_runtime::{
 	traits::{Header as HeaderT, NumberFor},
 	BuildStorage, DigestItem, EncodedJustification, Justifications, Storage,
 };
-use std::{collections::HashMap, marker::PhantomData, sync::Arc, task::Poll};
+use std::{marker::PhantomData, sync::Arc, task::Poll};
 use substrate_test_runtime_client::{runtime::Header, ClientExt};
 use tokio::time::Duration;
 
@@ -223,6 +223,10 @@ impl TestNetFactory for BeefyTestNet {
 		&self.peers
 	}
 
+	fn peers_mut(&mut self) -> &mut Vec<BeefyPeer> {
+		&mut self.peers
+	}
+
 	fn mut_peers<F: FnOnce(&mut Vec<BeefyPeer>)>(&mut self, closure: F) {
 		closure(&mut self.peers);
 	}
@@ -353,6 +357,7 @@ async fn voter_init_setup(
 		Arc::new(crate::communication::gossip::GossipValidator::new(known_peers));
 	let mut gossip_engine = sc_network_gossip::GossipEngine::new(
 		net.peer(0).network_service().clone(),
+		net.peer(0).sync_service().clone(),
 		"/beefy/whatever",
 		gossip_validator,
 		None,
@@ -389,6 +394,7 @@ where
 
 		let network_params = crate::BeefyNetworkParams {
 			network: peer.network_service().clone(),
+			sync: peer.sync_service().clone(),
 			gossip_protocol_name: beefy_gossip_proto_name(),
 			justifications_protocol_name: on_demand_justif_handler.protocol_name(),
 			_phantom: PhantomData,
@@ -407,7 +413,7 @@ where
 			prometheus_registry: None,
 			on_demand_justifications_handler: on_demand_justif_handler,
 		};
-		let task = crate::start_beefy_gadget::<_, _, _, _, _, _>(beefy_params);
+		let task = crate::start_beefy_gadget::<_, _, _, _, _, _, _>(beefy_params);
 
 		fn assert_send<T: Send>(_: &T) {}
 		assert_send(&task);
@@ -760,14 +766,11 @@ async fn beefy_importing_justifications() {
 
 	// Import block 1 without justifications.
 	assert_eq!(
-		block_import
-			.import_block(params(block.clone(), None), HashMap::new())
-			.await
-			.unwrap(),
+		block_import.import_block(params(block.clone(), None)).await.unwrap(),
 		ImportResult::Imported(ImportedAux { is_new_best: true, ..Default::default() }),
 	);
 	assert_eq!(
-		block_import.import_block(params(block, None), HashMap::new()).await.unwrap(),
+		block_import.import_block(params(block, None)).await.unwrap(),
 		ImportResult::AlreadyInChain,
 	);
 
@@ -782,7 +785,7 @@ async fn beefy_importing_justifications() {
 	let encoded = versioned_proof.encode();
 	let justif = Some(Justifications::from((BEEFY_ENGINE_ID, encoded)));
 	assert_eq!(
-		block_import.import_block(params(block, justif), HashMap::new()).await.unwrap(),
+		block_import.import_block(params(block, justif)).await.unwrap(),
 		ImportResult::Imported(ImportedAux {
 			bad_justification: false,
 			is_new_best: true,
@@ -814,7 +817,7 @@ async fn beefy_importing_justifications() {
 	let justif = Some(Justifications::from((BEEFY_ENGINE_ID, encoded)));
 	let mut justif_recv = justif_stream.subscribe(100_000);
 	assert_eq!(
-		block_import.import_block(params(block, justif), HashMap::new()).await.unwrap(),
+		block_import.import_block(params(block, justif)).await.unwrap(),
 		ImportResult::Imported(ImportedAux {
 			bad_justification: false,
 			is_new_best: true,
@@ -850,7 +853,7 @@ async fn beefy_importing_justifications() {
 	let justif = Some(Justifications::from((BEEFY_ENGINE_ID, encoded)));
 	let mut justif_recv = justif_stream.subscribe(100_000);
 	assert_eq!(
-		block_import.import_block(params(block, justif), HashMap::new()).await.unwrap(),
+		block_import.import_block(params(block, justif)).await.unwrap(),
 		ImportResult::Imported(ImportedAux {
 			// Still `false` because we don't want to fail import on bad BEEFY justifications.
 			bad_justification: false,
@@ -931,7 +934,7 @@ async fn on_demand_beefy_justification_sync() {
 	let dave_index = 3;
 
 	// push 30 blocks
-	let hashes = net.generate_blocks_and_sync(35, session_len, &validator_set, false).await;
+	let mut hashes = net.generate_blocks_and_sync(30, session_len, &validator_set, false).await;
 
 	let fast_peers = fast_peers.into_iter().enumerate();
 	let net = Arc::new(Mutex::new(net));
@@ -948,8 +951,16 @@ async fn on_demand_beefy_justification_sync() {
 	// Spawn Dave, they are now way behind voting and can only catch up through on-demand justif
 	// sync.
 	tokio::spawn(dave_task);
-	// give Dave a chance to spawn and init.
-	run_for(Duration::from_millis(400), &net).await;
+	// Dave pushes and syncs 4 more blocks just to make sure he gets included in gossip.
+	{
+		let mut net_guard = net.lock();
+		let built_hashes =
+			net_guard
+				.peer(dave_index)
+				.generate_blocks(4, BlockOrigin::File, |builder| builder.build().unwrap().block);
+		hashes.extend(built_hashes);
+		net_guard.run_until_sync().await;
+	}
 
 	let (dave_best_blocks, _) =
 		get_beefy_streams(&mut net.lock(), [(dave_index, BeefyKeyring::Dave)].into_iter());
@@ -962,7 +973,10 @@ async fn on_demand_beefy_justification_sync() {
 	// Have the other peers do some gossip so Dave finds out about their progress.
 	finalize_block_and_wait_for_beefy(&net, fast_peers, &[hashes[25], hashes[29]], &[25, 29]).await;
 
-	// Now verify Dave successfully finalized #1 (through on-demand justification request).
+	// Kick Dave's async loop by finalizing another block.
+	client.finalize_block(hashes[2], None).unwrap();
+
+	// And verify Dave successfully finalized #1 (through on-demand justification request).
 	wait_for_best_beefy_blocks(dave_best_blocks, &net, &[1]).await;
 
 	// Give all tasks some cpu cycles to burn through their events queues,
@@ -975,10 +989,6 @@ async fn on_demand_beefy_justification_sync() {
 		&[5, 10, 15, 20, 25],
 	)
 	.await;
-
-	let all_peers = all_peers.into_iter().enumerate();
-	// Now that Dave has caught up, sanity check voting works for all of them.
-	finalize_block_and_wait_for_beefy(&net, all_peers, &[hashes[30], hashes[34]], &[30]).await;
 }
 
 #[tokio::test]

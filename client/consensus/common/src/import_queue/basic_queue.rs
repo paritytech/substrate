@@ -118,8 +118,8 @@ impl<B: BlockT> BasicQueueHandle<B> {
 	}
 
 	pub fn close(&mut self) {
-		self.justification_sender.close_channel();
-		self.block_import_sender.close_channel();
+		self.justification_sender.close();
+		self.block_import_sender.close();
 	}
 }
 
@@ -504,19 +504,18 @@ mod tests {
 		block_import::{
 			BlockCheckParams, BlockImport, BlockImportParams, ImportResult, JustificationImport,
 		},
-		import_queue::{CacheKeyId, Verifier},
+		import_queue::Verifier,
 	};
 	use futures::{executor::block_on, Future};
 	use sp_test_primitives::{Block, BlockNumber, Extrinsic, Hash, Header};
-	use std::collections::HashMap;
 
 	#[async_trait::async_trait]
 	impl Verifier<Block> for () {
 		async fn verify(
 			&mut self,
 			block: BlockImportParams<Block, ()>,
-		) -> Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-			Ok((BlockImportParams::new(block.origin, block.header), None))
+		) -> Result<BlockImportParams<Block, ()>, String> {
+			Ok(BlockImportParams::new(block.origin, block.header))
 		}
 	}
 
@@ -535,7 +534,6 @@ mod tests {
 		async fn import_block(
 			&mut self,
 			_block: BlockImportParams<Block, Self::Transaction>,
-			_cache: HashMap<CacheKeyId, Vec<u8>>,
 		) -> Result<ImportResult, Self::Error> {
 			Ok(ImportResult::imported(true))
 		}
@@ -597,11 +595,11 @@ mod tests {
 	fn prioritizes_finality_work_over_block_import() {
 		let (result_sender, mut result_port) = buffered_link::buffered_link(100_000);
 
-		let (worker, mut finality_sender, mut block_import_sender) =
+		let (worker, finality_sender, block_import_sender) =
 			BlockImportWorker::new(result_sender, (), Box::new(()), Some(Box::new(())), None);
 		futures::pin_mut!(worker);
 
-		let mut import_block = |n| {
+		let import_block = |n| {
 			let header = Header {
 				parent_hash: Hash::random(),
 				number: n,
@@ -612,35 +610,37 @@ mod tests {
 
 			let hash = header.hash();
 
-			block_on(block_import_sender.send(worker_messages::ImportBlocks(
-				BlockOrigin::Own,
-				vec![IncomingBlock {
-					hash,
-					header: Some(header),
-					body: None,
-					indexed_body: None,
-					justifications: None,
-					origin: None,
-					allow_missing_state: false,
-					import_existing: false,
-					state: None,
-					skip_execution: false,
-				}],
-			)))
-			.unwrap();
+			block_import_sender
+				.unbounded_send(worker_messages::ImportBlocks(
+					BlockOrigin::Own,
+					vec![IncomingBlock {
+						hash,
+						header: Some(header),
+						body: None,
+						indexed_body: None,
+						justifications: None,
+						origin: None,
+						allow_missing_state: false,
+						import_existing: false,
+						state: None,
+						skip_execution: false,
+					}],
+				))
+				.unwrap();
 
 			hash
 		};
 
-		let mut import_justification = || {
+		let import_justification = || {
 			let hash = Hash::random();
-			block_on(finality_sender.send(worker_messages::ImportJustification(
-				libp2p::PeerId::random(),
-				hash,
-				1,
-				(*b"TEST", Vec::new()),
-			)))
-			.unwrap();
+			finality_sender
+				.unbounded_send(worker_messages::ImportJustification(
+					libp2p::PeerId::random(),
+					hash,
+					1,
+					(*b"TEST", Vec::new()),
+				))
+				.unwrap();
 
 			hash
 		};
