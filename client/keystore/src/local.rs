@@ -204,13 +204,13 @@ impl Keystore for LocalKeystore {
 		Ok(pair.public())
 	}
 
-	fn insert_unknown(
+	fn insert(
 		&self,
 		key_type: KeyTypeId,
 		suri: &str,
 		public: &[u8],
 	) -> std::result::Result<(), ()> {
-		self.0.write().insert_unknown(key_type, suri, public).map_err(|_| ())
+		self.0.write().insert(key_type, suri, public).map_err(|_| ())
 	}
 
 	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
@@ -304,7 +304,7 @@ impl KeystoreInner {
 	/// Insert a new key with anonymous crypto.
 	///
 	/// Places it into the file system store, if a path is configured.
-	fn insert_unknown(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<()> {
+	fn insert(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<()> {
 		if let Some(path) = self.key_file_path(public, key_type) {
 			Self::write_to_file(path, suri)?;
 		}
@@ -607,7 +607,7 @@ mod tests {
 		let key_pair = sr25519::AppPair::from_string(secret_uri, None).expect("Generates key pair");
 
 		store
-			.insert_unknown(SR25519, secret_uri, key_pair.public().as_ref())
+			.insert(SR25519, secret_uri, key_pair.public().as_ref())
 			.expect("Inserts unknown key");
 
 		let store_key_pair = store

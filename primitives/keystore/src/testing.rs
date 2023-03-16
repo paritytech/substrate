@@ -214,7 +214,7 @@ impl Keystore for MemoryKeystore {
 		}
 	}
 
-	fn insert_unknown(&self, id: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
+	fn insert(&self, id: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
 		self.keys
 			.write()
 			.entry(id)
@@ -318,7 +318,7 @@ mod tests {
 		let secret_uri = "//Alice";
 		let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
 
-		Keystore::insert_unknown(&store, SR25519, secret_uri, key_pair.public().as_ref())
+		Keystore::insert(&store, SR25519, secret_uri, key_pair.public().as_ref())
 			.expect("Inserts unknown key");
 
 		let public_keys = Keystore::keys(&store, SR25519).unwrap();
@@ -350,7 +350,7 @@ mod tests {
 		);
 		assert!(result.unwrap().is_none());
 
-		Keystore::insert_unknown(&store, SR25519, secret_uri, key_pair.public().as_ref())
+		Keystore::insert(&store, SR25519, secret_uri, key_pair.public().as_ref())
 			.expect("Inserts unknown key");
 
 		let result =
@@ -373,7 +373,7 @@ mod tests {
 		assert!(res.is_none());
 
 		// insert key, sign again
-		Keystore::insert_unknown(&store, ECDSA, suri, pair.public().as_ref()).unwrap();
+		Keystore::insert(&store, ECDSA, suri, pair.public().as_ref()).unwrap();
 
 		let res = Keystore::ecdsa_sign_prehashed(&store, ECDSA, &pair.public(), &msg).unwrap();
 		assert!(res.is_some());

@@ -173,7 +173,7 @@ fn generate_authority_keys_and_store(seeds: &[String], keystore_path: &Path) -> 
 			chain_spec::authority_keys_from_seed(seed);
 
 		let insert_key = |key_type, public| {
-			Keystore::insert_unknown(&*keystore, key_type, &format!("//{}", seed), public)
+			Keystore::insert(&*keystore, key_type, &format!("//{}", seed), public)
 				.map_err(|_| format!("Failed to insert key: {}", grandpa))
 		};
 

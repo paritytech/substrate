@@ -78,7 +78,7 @@ impl InsertKeyCmd {
 		let key_type =
 			KeyTypeId::try_from(self.key_type.as_str()).map_err(|_| Error::KeyTypeInvalid)?;
 
-		Keystore::insert_unknown(&*keystore, key_type, &suri, &public[..])
+		Keystore::insert(&*keystore, key_type, &suri, &public[..])
 			.map_err(|_| Error::KeystoreOperation)?;
 
 		Ok(())

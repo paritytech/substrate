@@ -93,8 +93,7 @@ mod tests {
 		let store: KeystorePtr = MemoryKeystore::new().into();
 
 		let alice = sp_core::ecdsa::Pair::from_string("//Alice", None).unwrap();
-		let _ = Keystore::insert_unknown(&*store, KEY_TYPE, "//Alice", alice.public().as_ref())
-			.unwrap();
+		let _ = Keystore::insert(&*store, KEY_TYPE, "//Alice", alice.public().as_ref()).unwrap();
 
 		let msg = keccak_256(b"This is the first message");
 		let sig1 = Keystore::ecdsa_sign_prehashed(&*store, KEY_TYPE, &alice.public(), &msg)

@@ -112,7 +112,7 @@ where
 		self.deny_unsafe.check_if_safe()?;
 
 		let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
-		Keystore::insert_unknown(&*self.keystore, key_type, &suri, &public[..])
+		Keystore::insert(&*self.keystore, key_type, &suri, &public[..])
 			.map_err(|_| Error::KeystoreUnavailable)?;
 		Ok(())
 	}

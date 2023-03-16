@@ -84,14 +84,8 @@ pub trait Keystore: Send + Sync {
 	fn ecdsa_generate_new(&self, id: KeyTypeId, seed: Option<&str>)
 		-> Result<ecdsa::Public, Error>;
 
-	/// TODO-DAVXY: THIS should be renamed as "insert"... a key crypto type is never known
-	/// Insert a new key. This doesn't require any known of the crypto; but a public key must be
-	/// manually provided.
-	///
-	/// Places it into the file system store.
-	///
-	/// `Err` if there's some sort of weird filesystem error, but should generally be `Ok`.
-	fn insert_unknown(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()>;
+	/// Insert a new secret key.
+	fn insert(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()>;
 
 	/// List all supported keys
 	///
