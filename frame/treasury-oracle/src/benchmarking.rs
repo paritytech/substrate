@@ -17,10 +17,9 @@
 
 //! The crate's benchmarks.
 
-#![cfg(feature = "runtime-benchmarks")]
-
 use super::*;
 use crate::Pallet as TreasuryOracle;
+
 use frame_benchmarking::v2::*;
 use frame_support::assert_ok;
 use frame_system::RawOrigin;
@@ -28,7 +27,7 @@ use frame_system::RawOrigin;
 const ASSET_ID: u32 = 1;
 
 fn default_conversion_rate() -> FixedU128 {
-	FixedU128::from_float(0.1)
+	FixedU128::from_u32(1u32)
 }
 
 #[benchmarks(where <T as Config>::AssetId: From<u32>)]
@@ -58,13 +57,13 @@ mod benchmarks {
 		));
 
 		#[extrinsic_call]
-		_(RawOrigin::Root, ASSET_ID.into(), FixedU128::from_float(1.5));
+		_(RawOrigin::Root, ASSET_ID.into(), FixedU128::from_u32(2));
 
 		assert_eq!(
 			TreasuryOracle::<T>::conversion_rate_to_native::<<T as Config>::AssetId>(
 				ASSET_ID.into()
 			),
-			Some(FixedU128::from_float(1.5))
+			Some(FixedU128::from_u32(2))
 		);
 		Ok(())
 	}

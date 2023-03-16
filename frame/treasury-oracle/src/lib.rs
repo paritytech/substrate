@@ -15,7 +15,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! # Treasury Oracle Pallet
+//!
 //! A simple oracle pallet for the treasury.
+//!
+//! - [`Config`]
+//! - [`Call`]
 //!
 //! ## Overview
 //!
@@ -72,14 +77,13 @@ use sp_runtime::{traits::Zero, FixedPointNumber, FixedPointOperand, FixedU128};
 
 pub use pallet::*;
 
+#[cfg(feature = "runtime-benchmarks")]
+pub mod benchmarking;
 #[cfg(test)]
 mod mock;
 
 #[cfg(test)]
 mod tests;
-
-#[cfg(feature = "runtime-benchmarks")]
-mod benchmarking;
 
 // Type alias for `frame_system`'s account id.
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
@@ -124,12 +128,12 @@ pub mod pallet {
 		type AssetId: Member + Parameter + Copy + MaybeSerializeDeserialize + MaxEncodedLen;
 	}
 
-	#[pallet::storage]
-	#[pallet::getter(fn conversion_rate_to_native)]
 	/// Maps an asset to its fixed point representation in the native balance.
 	///
 	/// E.g. `native_amount = asset_amount * ConversionRateToNative::<T>::get(asset_id)`
-	pub(super) type ConversionRateToNative<T: Config> =
+	#[pallet::storage]
+	#[pallet::getter(fn conversion_rate_to_native)]
+	pub type ConversionRateToNative<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::AssetId, FixedU128, OptionQuery>;
 
 	#[pallet::event]
@@ -153,6 +157,10 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// Initialize a conversion rate for the given asset.
+		///
+		/// ## Complexity
+		/// - O(1)
 		#[pallet::call_index(0)]
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1).ref_time())]
 		pub fn create(
@@ -172,6 +180,10 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Remove the conversion rate for the given asset.
+		///
+		/// ## Complexity
+		/// - O(1)
 		#[pallet::call_index(1)]
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1).ref_time())]
 		pub fn update(
@@ -197,6 +209,10 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Update an existing conversion rate for the given asset.
+		///
+		/// ## Complexity
+		/// - O(1)
 		#[pallet::call_index(2)]
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1).ref_time())]
 		pub fn remove(origin: OriginFor<T>, asset_id: T::AssetId) -> DispatchResult {
@@ -214,6 +230,7 @@ pub mod pallet {
 	}
 }
 
+// Exposes conversion of an arbitrary balance of an asset to native balance.
 impl<T> BalanceConversion<BalanceOf<T>, AssetIdOf<T>, BalanceOf<T>> for Pallet<T>
 where
 	T: Config,

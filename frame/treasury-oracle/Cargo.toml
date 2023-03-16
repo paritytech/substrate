@@ -6,7 +6,6 @@ authors = ["William Freudenberger <w.freude@icloud.com>"]
 homepage = "https://substrate.io"
 edition = "2021"
 license = "Unlicense"
-publish = false
 repository = "https://github.com/paritytech/substrate/"
 
 [package.metadata.docs.rs]
@@ -20,7 +19,7 @@ scale-info = { version = "2.1.1", default-features = false, features = ["derive"
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
 
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
