@@ -27,7 +27,6 @@ use crate::{
 	params::{DatabaseParams, PruningParams},
 };
 use clap::Args;
-use sc_client_api::execution_extensions::ExecutionStrategies;
 use std::path::PathBuf;
 
 /// Parameters for block import.
@@ -118,36 +117,6 @@ impl ImportParams {
 	/// by specifying the path where local WASM is stored.
 	pub fn wasm_runtime_overrides(&self) -> Option<PathBuf> {
 		self.wasm_runtime_overrides.clone()
-	}
-
-	/// Get execution strategies for the parameters
-	pub fn execution_strategies(&self, is_dev: bool, is_validator: bool) -> ExecutionStrategies {
-		let exec = &self.execution_strategies;
-		let exec_all_or = |strat: Option<ExecutionStrategy>, default: ExecutionStrategy| {
-			let default = if is_dev { ExecutionStrategy::Native } else { default };
-
-			exec.execution.unwrap_or_else(|| strat.unwrap_or(default)).into()
-		};
-
-		let default_execution_import_block = if is_validator {
-			DEFAULT_EXECUTION_IMPORT_BLOCK_VALIDATOR
-		} else {
-			DEFAULT_EXECUTION_IMPORT_BLOCK
-		};
-
-		ExecutionStrategies {
-			syncing: exec_all_or(exec.execution_syncing, DEFAULT_EXECUTION_SYNCING),
-			importing: exec_all_or(exec.execution_import_block, default_execution_import_block),
-			block_construction: exec_all_or(
-				exec.execution_block_construction,
-				DEFAULT_EXECUTION_BLOCK_CONSTRUCTION,
-			),
-			offchain_worker: exec_all_or(
-				exec.execution_offchain_worker,
-				DEFAULT_EXECUTION_OFFCHAIN_WORKER,
-			),
-			other: exec_all_or(exec.execution_other, DEFAULT_EXECUTION_OTHER),
-		}
 	}
 }
 

@@ -35,7 +35,7 @@
 
 #![warn(missing_docs)]
 
-use std::{fmt, marker::PhantomData, sync::Arc};
+use std::{fmt, sync::Arc};
 
 use codec::Decode;
 use futures::{
@@ -51,7 +51,7 @@ use sp_core::{offchain, traits::SpawnNamed};
 use sp_keystore::{KeystoreExt, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{self, Block, Header},
+	traits::{self, Header},
 };
 use threadpool::ThreadPool;
 

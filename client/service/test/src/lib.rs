@@ -252,7 +252,6 @@ fn node_config<
 		chain_spec: Box::new((*spec).clone()),
 		wasm_method: sc_service::config::WasmExecutionMethod::Interpreted,
 		wasm_runtime_overrides: Default::default(),
-		execution_strategies: Default::default(),
 		rpc_http: None,
 		rpc_ipc: None,
 		rpc_ws: None,

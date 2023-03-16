@@ -64,7 +64,7 @@ use prometheus_endpoint::{PrometheusError, Registry};
 use sc_client_api::{
 	backend::{AuxStore, Backend},
 	utils::is_descendent_of,
-	BlockchainEvents, CallExecutor, ExecutionStrategy, ExecutorProvider, Finalizer, LockImportRun,
+	BlockchainEvents, CallExecutor, ExecutorProvider, Finalizer, LockImportRun,
 	StorageProvider, TransactionFor,
 };
 use sc_consensus::BlockImport;
@@ -479,7 +479,6 @@ where
 				self.expect_block_hash_from_id(&BlockId::Number(Zero::zero()))?,
 				"GrandpaApi_grandpa_authorities",
 				&[],
-				ExecutionStrategy::NativeElseWasm,
 				CallContext::Offchain,
 			)
 			.and_then(|call_result| {

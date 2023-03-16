@@ -24,7 +24,6 @@ use crate::{
 };
 use log::warn;
 use names::{Generator, Name};
-use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{
 	config::{
 		BasePath, Configuration, DatabaseSource, KeystoreConfig, NetworkConfiguration,
@@ -287,21 +286,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		self.import_params().map(|x| x.wasm_runtime_overrides()).unwrap_or_default()
 	}
 
-	/// Get the execution strategies.
-	///
-	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its
-	/// `ExecutionStrategies::default()`.
-	fn execution_strategies(
-		&self,
-		is_dev: bool,
-		is_validator: bool,
-	) -> Result<ExecutionStrategies> {
-		Ok(self
-			.import_params()
-			.map(|x| x.execution_strategies(is_dev, is_validator))
-			.unwrap_or_default())
-	}
-
 	/// Get the RPC HTTP address (`None` if disabled).
 	///
 	/// By default this is `None`.
@@ -532,7 +516,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			blocks_pruning: self.blocks_pruning()?,
 			wasm_method: self.wasm_method()?,
 			wasm_runtime_overrides: self.wasm_runtime_overrides(),
-			execution_strategies: self.execution_strategies(is_dev, is_validator)?,
 			rpc_http: self.rpc_http(DCV::rpc_http_listen_port())?,
 			rpc_ws: self.rpc_ws(DCV::rpc_ws_listen_port())?,
 			rpc_ipc: self.rpc_ipc()?,
