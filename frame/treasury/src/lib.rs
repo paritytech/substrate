@@ -64,6 +64,14 @@ mod tests;
 pub mod weights;
 
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
+use scale_info::TypeInfo;
+
+use sp_runtime::{
+	traits::{AccountIdConversion, CheckedAdd, Saturating, StaticLookup, Zero},
+	Permill, RuntimeDebug,
+};
+use sp_std::{collections::btree_map::BTreeMap, prelude::*};
+
 use frame_support::{
 	dispatch::fmt::Debug,
 	print,
@@ -76,58 +84,9 @@ use frame_support::{
 	weights::Weight,
 	PalletId,
 };
-use scale_info::TypeInfo;
-use sp_runtime::{
-	traits::{AccountIdConversion, CheckedAdd, Saturating, StaticLookup, Zero},
-	Permill, RuntimeDebug,
-};
-use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 pub use pallet::*;
 pub use weights::WeightInfo;
-
-/// Status for making a payment via the `Pay::pay` trait function.
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Encode, Decode, Eq, PartialEq, Clone, TypeInfo, MaxEncodedLen, RuntimeDebug)]
-pub enum PaymentStatus {
-	/// Payment is in progress. Nothing to report yet.
-	InProgress,
-	/// Payment status is unknowable. It will never be reported successful or failed.
-	Unknown,
-	/// Payment happened successfully.
-	Success,
-	/// Payment failed. It may safely be retried.
-	Failure,
-}
-
-// TODO: Should be replaced with a version in frame_support
-pub trait Pay {
-	/// The type by which we measure units of the currency in which we make payments.
-	type Balance: Balance;
-	/// The type by which we identify the individuals to whom a payment may be made.
-	type AccountId;
-	/// An identifier given to an individual payment.
-	type Id: FullCodec + MaxEncodedLen + TypeInfo + Clone + Eq + PartialEq + Debug + Copy;
-	type AssetId: AssetId;
-	/// Make a payment and return an identifier for later evaluation of success in some off-chain
-	/// mechanism (likely an event, but possibly not on this chain).
-	fn pay(
-		who: &Self::AccountId,
-		asset_id: Self::AssetId,
-		amount: Self::Balance,
-	) -> Result<Self::Id, ()>;
-	/// Check how a payment has proceeded. `id` must have been a previously returned by `pay` for
-	/// the result of this call to be meaningful.
-	fn check_payment(id: Self::Id) -> PaymentStatus;
-	/// Ensure that a call to pay with the given parameters will be successful if done immediately
-	/// after this call. Used in benchmarking code.
-	#[cfg(feature = "runtime-benchmarks")]
-	fn ensure_successful(who: &Self::AccountId, amount: Self::Balance);
-	/// Ensure that a call to `check_payment` with the given parameters will return either `Success`
-	/// or `Failure`.
-	#[cfg(feature = "runtime-benchmarks")]
-	fn ensure_concluded(id: Self::Id);
-}
 
 pub type PayBalanceOf<T, I> = <<T as Config<I>>::Paymaster as Pay>::Balance;
 pub type BalanceOf<T, I = ()> =
@@ -882,4 +841,31 @@ impl<T: Config<I>, I: 'static> OnUnbalanced<NegativeImbalanceOf<T, I>> for Palle
 
 		Self::deposit_event(Event::Deposit { value: numeric_amount });
 	}
+}
+
+// TODO: PaymentStatus struct and Pay trait be replaced with version in frame_support
+// These are only left here temporarily until the Pay trait is merged into master.
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Encode, Decode, Eq, PartialEq, Clone, TypeInfo, MaxEncodedLen, RuntimeDebug)]
+pub enum PaymentStatus {
+	InProgress,
+	Unknown,
+	Success,
+	Failure,
+}
+pub trait Pay {
+	type Balance: Balance;
+	type AccountId;
+	type Id: FullCodec + MaxEncodedLen + TypeInfo + Clone + Eq + PartialEq + Debug + Copy;
+	type AssetId: AssetId;
+	fn pay(
+		who: &Self::AccountId,
+		asset_id: Self::AssetId,
+		amount: Self::Balance,
+	) -> Result<Self::Id, ()>;
+	fn check_payment(id: Self::Id) -> PaymentStatus;
+	#[cfg(feature = "runtime-benchmarks")]
+	fn ensure_successful(who: &Self::AccountId, amount: Self::Balance);
+	#[cfg(feature = "runtime-benchmarks")]
+	fn ensure_concluded(id: Self::Id);
 }
