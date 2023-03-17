@@ -18,7 +18,7 @@ chain_spec_path = "zombienet/0004-webrtc/chain-spec.json"
   name = "bob"
   validator = false
   db_snapshot="https://storage.googleapis.com/zombienet-db-snaps/substrate/0001-basic-warp-sync/chains-a233bbacff650aac6bcb56b4e4ef7db7dc143cfb.tgz"
-  args = ["--listen-addr",  "/ip4/0.0.0.0/udp/30333/webrtc"]
+  args = ["--listen-addr",  "/ip4/0.0.0.0/udp/30333/webrtc", "-l sub-libp2p=trace"]
 
   #we need at least 3 nodes for warp sync
   [[relaychain.nodes]]
