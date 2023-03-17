@@ -131,7 +131,7 @@ pub struct InstantiateReturnValue<AccountId> {
 	pub account_id: AccountId,
 }
 
-/// The result of succesfully uploading a contract.
+/// The result of successfully uploading a contract.
 #[derive(PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct CodeUploadReturnValue<CodeHash, Balance> {
 	/// The key under which the new code is stored.
@@ -239,7 +239,7 @@ where
 		}
 	}
 
-	/// If the amount of deposit (this type) is constrained by a `limit` this calcuates how
+	/// If the amount of deposit (this type) is constrained by a `limit` this calculates how
 	/// much balance (if any) is still available from this limit.
 	///
 	/// # Note

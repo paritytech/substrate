@@ -186,7 +186,7 @@ impl<T: Config> PrefabWasmModule<T> {
 		code_cache::try_remove::<T>(origin, code_hash)
 	}
 
-	/// Returns whether there is a deposit to be payed for this module.
+	/// Returns whether there is a deposit to be paid for this module.
 	///
 	/// Returns `0` if the module is already in storage and hence no deposit will
 	/// be charged when storing it.
@@ -689,7 +689,7 @@ mod tests {
 		executable.execute(ext.borrow_mut(), entry_point, input_data)
 	}
 
-	/// Execute the suppplied code.
+	/// Execute the supplied code.
 	fn execute<E: BorrowMut<MockExt>>(wat: &str, input_data: Vec<u8>, ext: E) -> ExecResult {
 		execute_internal(wat, input_data, ext, &ExportedFunction::Call, true, false)
 	}

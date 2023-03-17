@@ -403,7 +403,7 @@ pub mod pallet {
 				T::MaxCodeLen::get(),
 			);
 
-			// Debug buffer should at least be large enough to accomodate a simple error message
+			// Debug buffer should at least be large enough to accommodate a simple error message
 			const MIN_DEBUG_BUF_SIZE: u32 = 256;
 			assert!(
 				T::MaxDebugBufferLen::get() > MIN_DEBUG_BUF_SIZE,
@@ -891,7 +891,7 @@ pub mod pallet {
 		/// The contract's code was found to be invalid during validation or instrumentation.
 		///
 		/// The most likely cause of this is that an API was used which is not supported by the
-		/// node. This hapens if an older node is used with a new version of ink!. Try updating
+		/// node. This happens if an older node is used with a new version of ink!. Try updating
 		/// your node to the newest available version.
 		///
 		/// A more detailed error can be found on the node console if debug messages are enabled
@@ -987,7 +987,7 @@ struct InternalOutput<T: Config, O> {
 	result: Result<O, ExecError>,
 }
 
-/// Helper trait to wrap contract execution entry points into a signle function
+/// Helper trait to wrap contract execution entry points into a single function
 /// [`Invokable::run_guarded`].
 trait Invokable<T: Config> {
 	/// What is returned as a result of a successful invocation.
