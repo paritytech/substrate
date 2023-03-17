@@ -30,12 +30,6 @@ sp_api::decl_runtime_apis! {
 	}
 }
 
-impl_runtime_apis! {
-	impl Interface for Runtime {
-		type View: ViewInterface;
-	}
-}
-
 pub trait Core {
 	type RuntimeOrigin;
 	type Selectable;
@@ -90,6 +84,15 @@ impl<T> Select<T> {
 	}
 }
 
+mod tests {
+	#[frame_support::interface]
+	mod int_123 {
+		#[interface::definition]
+		pub trait Int123 {}
+	}
+}
+
+/*
 #[frame_support::call_interface]
 pub enum CallInterface<Runtime> {
 	#[call_index(20)]
@@ -433,3 +436,4 @@ mod interface {
 	#[interface::error]
 	pub enum Event {}
 }
+ */

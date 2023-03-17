@@ -80,6 +80,7 @@ pub mod error;
 pub mod crypto;
 pub mod dispatch_context;
 pub mod instances;
+pub mod interface;
 pub mod migrations;
 pub mod traits;
 pub mod weights;

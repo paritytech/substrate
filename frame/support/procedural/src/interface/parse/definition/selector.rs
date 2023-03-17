@@ -15,6 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub enum Type {
+	Default { return_ty: Box<syn::Type> },
+	Named { name: syn::Ident, return_ty: Box<syn::Type> },
+}
+
 pub struct SelectorDef {
 	default: SingleSelectorDef,
 	others: Option<Vec<SingleSelectorDef>>,

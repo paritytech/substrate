@@ -44,7 +44,7 @@ where
 	}
 }
 
-/// Take all the pallet attributes (e.g. attribute like `#[pallet..]`) and decode them to `Attr`
+/// Take all the pallet attributes (e.g. attribute like `#[interface..]`) and decode them to `Attr`
 pub fn take_item_interface_attrs<Attr>(item: &mut impl MutItemAttrs) -> syn::Result<Vec<Attr>>
 where
 	Attr: syn::parse::Parse,
