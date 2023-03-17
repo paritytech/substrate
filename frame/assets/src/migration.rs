@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use super::*;
-use frame_support::{log, traits::Hooks};
+use frame_support::log;
 use frame_system::pallet_prelude::BlockNumberFor;
 
 pub mod v1 {
