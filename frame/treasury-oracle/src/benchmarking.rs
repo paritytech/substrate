@@ -18,7 +18,7 @@
 //! The crate's benchmarks.
 
 use super::*;
-use crate::Pallet as TreasuryOracle;
+use crate::{pallet as pallet_treasury_oracle, Pallet as TreasuryOracle};
 
 use frame_benchmarking::v2::*;
 use frame_support::assert_ok;
@@ -36,13 +36,12 @@ mod benchmarks {
 
 	#[benchmark]
 	fn create() -> Result<(), BenchmarkError> {
+		let asset_id: T::AssetId = ASSET_ID.into();
 		#[extrinsic_call]
-		_(RawOrigin::Root, ASSET_ID.into(), default_conversion_rate());
+		_(RawOrigin::Root, asset_id, default_conversion_rate());
 
 		assert_eq!(
-			TreasuryOracle::<T>::conversion_rate_to_native::<<T as Config>::AssetId>(
-				ASSET_ID.into()
-			),
+			pallet_treasury_oracle::ConversionRateToNative::<T>::get(asset_id),
 			Some(default_conversion_rate())
 		);
 		Ok(())
@@ -50,19 +49,18 @@ mod benchmarks {
 
 	#[benchmark]
 	fn update() -> Result<(), BenchmarkError> {
+		let asset_id: T::AssetId = ASSET_ID.into();
 		assert_ok!(TreasuryOracle::<T>::create(
 			RawOrigin::Root.into(),
-			ASSET_ID.into(),
+			asset_id,
 			default_conversion_rate()
 		));
 
 		#[extrinsic_call]
-		_(RawOrigin::Root, ASSET_ID.into(), FixedU128::from_u32(2));
+		_(RawOrigin::Root, asset_id, FixedU128::from_u32(2));
 
 		assert_eq!(
-			TreasuryOracle::<T>::conversion_rate_to_native::<<T as Config>::AssetId>(
-				ASSET_ID.into()
-			),
+			pallet_treasury_oracle::ConversionRateToNative::<T>::get(asset_id),
 			Some(FixedU128::from_u32(2))
 		);
 		Ok(())
@@ -70,6 +68,7 @@ mod benchmarks {
 
 	#[benchmark]
 	fn remove() -> Result<(), BenchmarkError> {
+		let asset_id: T::AssetId = ASSET_ID.into();
 		assert_ok!(TreasuryOracle::<T>::create(
 			RawOrigin::Root.into(),
 			ASSET_ID.into(),
@@ -77,12 +76,9 @@ mod benchmarks {
 		));
 
 		#[extrinsic_call]
-		_(RawOrigin::Root, ASSET_ID.into());
+		_(RawOrigin::Root, asset_id);
 
-		assert!(TreasuryOracle::<T>::conversion_rate_to_native::<<T as Config>::AssetId>(
-			ASSET_ID.into()
-		)
-		.is_none());
+		assert!(pallet_treasury_oracle::ConversionRateToNative::<T>::get(asset_id).is_none());
 		Ok(())
 	}
 

@@ -28,7 +28,7 @@ const ASSET_ID: u32 = 42;
 #[test]
 fn create_works() {
 	new_test_ext().execute_with(|| {
-		assert!(TreasuryOracle::conversion_rate_to_native(ASSET_ID).is_none());
+		assert!(pallet_treasury_oracle::ConversionRateToNative::<Test>::get(ASSET_ID).is_none());
 		assert_ok!(TreasuryOracle::create(
 			RuntimeOrigin::root(),
 			ASSET_ID,
@@ -36,7 +36,7 @@ fn create_works() {
 		));
 
 		assert_eq!(
-			TreasuryOracle::conversion_rate_to_native(ASSET_ID),
+			pallet_treasury_oracle::ConversionRateToNative::<Test>::get(ASSET_ID),
 			Some(FixedU128::from_float(0.1))
 		);
 	});
@@ -45,7 +45,7 @@ fn create_works() {
 #[test]
 fn create_existing_throws() {
 	new_test_ext().execute_with(|| {
-		assert!(TreasuryOracle::conversion_rate_to_native(ASSET_ID).is_none());
+		assert!(pallet_treasury_oracle::ConversionRateToNative::<Test>::get(ASSET_ID).is_none());
 		assert_ok!(TreasuryOracle::create(
 			RuntimeOrigin::root(),
 			ASSET_ID,
@@ -69,7 +69,7 @@ fn remove_works() {
 		));
 
 		assert_ok!(TreasuryOracle::remove(RuntimeOrigin::root(), ASSET_ID,));
-		assert!(TreasuryOracle::conversion_rate_to_native(ASSET_ID).is_none());
+		assert!(pallet_treasury_oracle::ConversionRateToNative::<Test>::get(ASSET_ID).is_none());
 	});
 }
 
@@ -98,7 +98,7 @@ fn update_works() {
 		));
 
 		assert_eq!(
-			TreasuryOracle::conversion_rate_to_native(ASSET_ID),
+			pallet_treasury_oracle::ConversionRateToNative::<Test>::get(ASSET_ID),
 			Some(FixedU128::from_float(0.5))
 		);
 	});

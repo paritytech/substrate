@@ -132,7 +132,6 @@ pub mod pallet {
 	///
 	/// E.g. `native_amount = asset_amount * ConversionRateToNative::<T>::get(asset_id)`
 	#[pallet::storage]
-	#[pallet::getter(fn conversion_rate_to_native)]
 	pub type ConversionRateToNative<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::AssetId, FixedU128, OptionQuery>;
 
@@ -242,7 +241,7 @@ where
 		balance: BalanceOf<T>,
 		asset_id: AssetIdOf<T>,
 	) -> Result<BalanceOf<T>, pallet::Error<T>> {
-		let rate = Pallet::<T>::conversion_rate_to_native(asset_id)
+		let rate = pallet::ConversionRateToNative::<T>::get(asset_id)
 			.ok_or(pallet::Error::<T>::UnknownAssetId.into())?;
 		Ok(rate.saturating_mul_int(balance))
 	}
