@@ -64,7 +64,7 @@ When setting up the `Schedule` for your runtime make sure to set `InstructionWei
 to a non zero value. The default is `0` and prevents the upload of any non deterministic code.
 
 An indeterministic code can be deployed on-chain by passing `Determinism::AllowIndeterministic`
-to `upload_code`. A determinstic contract can then delegate call into it if and only if it
+to `upload_code`. A deterministic contract can then delegate call into it if and only if it
 is ran by using `bare_call` and passing `Determinism::AllowIndeterministic` to it. **Never use
 this argument when the contract is called from an on-chain transaction.**
 
