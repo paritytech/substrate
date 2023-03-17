@@ -83,6 +83,8 @@ use batch_verifier::BatchVerifier;
 
 pub use sp_externalities::MultiRemovalResults;
 
+use sp_arkworks::PairingError;
+
 #[cfg(feature = "std")]
 const LOG_TARGET: &str = "runtime::io";
 
@@ -1129,12 +1131,12 @@ pub trait EllipticCurves {
 	fn bls12_381_multi_miller_loop(
 		a: Vec<Vec<u8>>,
 		b: Vec<Vec<u8>>,
-	) -> Result<Vec<u8>, sp_arkworks::PairingError> {
+	) -> Result<Vec<u8>, PairingError> {
 		sp_arkworks::bls12_381::multi_miller_loop(a, b)
 	}
 
 	/// Compute a final exponentiation on bls12_381
-	fn bls12_381_final_exponentiation(f12: Vec<u8>) -> Result<Vec<u8>, sp_arkworks::PairingError> {
+	fn bls12_381_final_exponentiation(f12: Vec<u8>) -> Result<Vec<u8>, PairingError> {
 		sp_arkworks::bls12_381::final_exponentiation(f12)
 	}
 
@@ -1152,12 +1154,12 @@ pub trait EllipticCurves {
 	fn bls12_377_multi_miller_loop(
 		a: Vec<Vec<u8>>,
 		b: Vec<Vec<u8>>,
-	) -> Result<Vec<u8>, sp_arkworks::PairingError> {
+	) -> Result<Vec<u8>, PairingError> {
 		sp_arkworks::bls12_377::multi_miller_loop(a, b)
 	}
 
 	/// Compute a final exponentiation for bls12_377
-	fn bls12_377_final_exponentiation(f12: Vec<u8>) -> Result<Vec<u8>, sp_arkworks::PairingError> {
+	fn bls12_377_final_exponentiation(f12: Vec<u8>) -> Result<Vec<u8>, PairingError> {
 		sp_arkworks::bls12_377::final_exponentiation(f12)
 	}
 
@@ -1175,12 +1177,12 @@ pub trait EllipticCurves {
 	fn bw6_761_multi_miller_loop(
 		a: Vec<Vec<u8>>,
 		b: Vec<Vec<u8>>,
-	) -> Result<Vec<u8>, sp_arkworks::PairingError> {
+	) -> Result<Vec<u8>, PairingError> {
 		sp_arkworks::bw6_761::multi_miller_loop(a, b)
 	}
 
 	/// Compute a final exponentiation on bw6_761
-	fn bw6_761_final_exponentiation(f12: Vec<u8>) -> Result<Vec<u8>, sp_arkworks::PairingError> {
+	fn bw6_761_final_exponentiation(f12: Vec<u8>) -> Result<Vec<u8>, PairingError> {
 		sp_arkworks::bw6_761::final_exponentiation(f12)
 	}
 
