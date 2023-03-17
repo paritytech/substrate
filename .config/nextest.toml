@@ -117,6 +117,8 @@ test-threads = 1
 [test-groups]
 serial-integration = { max-threads = 1 }
 
+# Running UI tests sequentially
+# More info can be found here: https://github.com/paritytech/ci_cd/issues/754
 [[profile.default.overrides]]
 filter = 'test(/(^ui$|_ui|ui_)/)'
 test-group = 'serial-integration'
