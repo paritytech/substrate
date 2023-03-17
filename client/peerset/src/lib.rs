@@ -192,9 +192,9 @@ impl PeersetHandle {
 	pub fn outgoing_candidates(
 		&self,
 		count: usize,
-		already_connected: HashSet<PeerId>,
+		ignored: HashSet<PeerId>,
 	) -> impl Iterator<Item = &PeerId> {
-		todo!("supply `count` peers with highest reputation, but not `already_connected`");
+		todo!("supply `count` peers with highest reputation, but not from `ignored`");
 		[].into_iter()
 	}
 }
