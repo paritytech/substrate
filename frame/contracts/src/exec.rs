@@ -82,18 +82,6 @@ impl<T: Config> Key<T> {
 	}
 }
 
-impl<T: Config> From<[u8; 32]> for Key<T> {
-	fn from(v: [u8; 32]) -> Self {
-		Key::Fix(v)
-	}
-}
-
-impl<T: Config> From<VarSizedKey<T>> for Key<T> {
-	fn from(v: VarSizedKey<T>) -> Self {
-		Key::Var(v)
-	}
-}
-
 /// Origin of the error.
 ///
 /// Call or instantiate both called into other contracts and pass through errors happening
@@ -2957,41 +2945,41 @@ mod tests {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
 			// Write
 			assert_eq!(
-				ctx.ext.set_storage(&[1; 32].into(), Some(vec![1, 2, 3]), false),
+				ctx.ext.set_storage(&Key::Fix([1; 32]), Some(vec![1, 2, 3]), false),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.set_storage(&[2; 32].into(), Some(vec![4, 5, 6]), true),
+				ctx.ext.set_storage(&Key::Fix([2; 32]), Some(vec![4, 5, 6]), true),
 				Ok(WriteOutcome::New)
 			);
-			assert_eq!(ctx.ext.set_storage(&[3; 32].into(), None, false), Ok(WriteOutcome::New));
-			assert_eq!(ctx.ext.set_storage(&[4; 32].into(), None, true), Ok(WriteOutcome::New));
+			assert_eq!(ctx.ext.set_storage(&Key::Fix([3; 32]), None, false), Ok(WriteOutcome::New));
+			assert_eq!(ctx.ext.set_storage(&Key::Fix([4; 32]), None, true), Ok(WriteOutcome::New));
 			assert_eq!(
-				ctx.ext.set_storage(&[5; 32].into(), Some(vec![]), false),
+				ctx.ext.set_storage(&Key::Fix([5; 32]), Some(vec![]), false),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.set_storage(&[6; 32].into(), Some(vec![]), true),
+				ctx.ext.set_storage(&Key::Fix([6; 32]), Some(vec![]), true),
 				Ok(WriteOutcome::New)
 			);
 
 			// Overwrite
 			assert_eq!(
-				ctx.ext.set_storage(&[1; 32].into(), Some(vec![42]), false),
+				ctx.ext.set_storage(&Key::Fix([1; 32]), Some(vec![42]), false),
 				Ok(WriteOutcome::Overwritten(3))
 			);
 			assert_eq!(
-				ctx.ext.set_storage(&[2; 32].into(), Some(vec![48]), true),
+				ctx.ext.set_storage(&Key::Fix([2; 32]), Some(vec![48]), true),
 				Ok(WriteOutcome::Taken(vec![4, 5, 6]))
 			);
-			assert_eq!(ctx.ext.set_storage(&[3; 32].into(), None, false), Ok(WriteOutcome::New));
-			assert_eq!(ctx.ext.set_storage(&[4; 32].into(), None, true), Ok(WriteOutcome::New));
+			assert_eq!(ctx.ext.set_storage(&Key::Fix([3; 32]), None, false), Ok(WriteOutcome::New));
+			assert_eq!(ctx.ext.set_storage(&Key::Fix([4; 32]), None, true), Ok(WriteOutcome::New));
 			assert_eq!(
-				ctx.ext.set_storage(&[5; 32].into(), Some(vec![]), false),
+				ctx.ext.set_storage(&Key::Fix([5; 32]), Some(vec![]), false),
 				Ok(WriteOutcome::Overwritten(0))
 			);
 			assert_eq!(
-				ctx.ext.set_storage(&[6; 32].into(), Some(vec![]), true),
+				ctx.ext.set_storage(&Key::Fix([6; 32]), Some(vec![]), true),
 				Ok(WriteOutcome::Taken(vec![]))
 			);
 
@@ -3150,16 +3138,16 @@ mod tests {
 	fn get_storage_works() {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
 			assert_eq!(
-				ctx.ext.set_storage(&[1; 32].into(), Some(vec![1, 2, 3]), false),
+				ctx.ext.set_storage(&Key::Fix([1; 32]), Some(vec![1, 2, 3]), false),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.set_storage(&[2; 32].into(), Some(vec![]), false),
+				ctx.ext.set_storage(&Key::Fix([2; 32]), Some(vec![]), false),
 				Ok(WriteOutcome::New)
 			);
-			assert_eq!(ctx.ext.get_storage(&[1; 32].into()), Some(vec![1, 2, 3]));
-			assert_eq!(ctx.ext.get_storage(&[2; 32].into()), Some(vec![]));
-			assert_eq!(ctx.ext.get_storage(&[3; 32].into()), None);
+			assert_eq!(ctx.ext.get_storage(&Key::Fix([1; 32])), Some(vec![1, 2, 3]));
+			assert_eq!(ctx.ext.get_storage(&Key::Fix([2; 32])), Some(vec![]));
+			assert_eq!(ctx.ext.get_storage(&Key::Fix([3; 32])), None);
 
 			exec_success()
 		});
@@ -3189,16 +3177,16 @@ mod tests {
 	fn get_storage_size_works() {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
 			assert_eq!(
-				ctx.ext.set_storage(&[1; 32].into(), Some(vec![1, 2, 3]), false),
+				ctx.ext.set_storage(&Key::Fix([1; 32]), Some(vec![1, 2, 3]), false),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.set_storage(&[2; 32].into(), Some(vec![]), false),
+				ctx.ext.set_storage(&Key::Fix([2; 32]), Some(vec![]), false),
 				Ok(WriteOutcome::New)
 			);
-			assert_eq!(ctx.ext.get_storage_size(&[1; 32].into()), Some(3));
-			assert_eq!(ctx.ext.get_storage_size(&[2; 32].into()), Some(0));
-			assert_eq!(ctx.ext.get_storage_size(&[3; 32].into()), None);
+			assert_eq!(ctx.ext.get_storage_size(&Key::Fix([1; 32])), Some(3));
+			assert_eq!(ctx.ext.get_storage_size(&Key::Fix([2; 32])), Some(0));
+			assert_eq!(ctx.ext.get_storage_size(&Key::Fix([3; 32])), None);
 
 			exec_success()
 		});

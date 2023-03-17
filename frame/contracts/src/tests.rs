@@ -26,7 +26,7 @@ use crate::{
 	wasm::{Determinism, PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
 	BalanceOf, Code, CodeStorage, Config, ContractInfo, ContractInfoOf, DefaultAddressGenerator,
-	DeletionQueue, Error, Pallet, Schedule,
+	DeletionQueue, Error, Key, Pallet, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -2145,7 +2145,7 @@ fn lazy_removal_partial_remove_works() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			info.write(&val.0.into(), Some(val.2.clone()), None, false).unwrap();
+			info.write(&Key::Fix(val.0), Some(val.2.clone()), None, false).unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
@@ -2330,7 +2330,7 @@ fn lazy_removal_does_not_use_all_weight() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			info.write(&val.0.into(), Some(val.2.clone()), None, false).unwrap();
+			info.write(&Key::Fix(val.0), Some(val.2.clone()), None, false).unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
