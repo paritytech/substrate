@@ -64,8 +64,6 @@ use sp_core::{
 	},
 	traits::{CallContext, SpawnNamed},
 };
-#[cfg(feature = "test-helpers")]
-use sp_keystore::SyncCryptoStorePtr;
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::{

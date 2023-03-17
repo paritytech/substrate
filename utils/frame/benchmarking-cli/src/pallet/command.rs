@@ -183,7 +183,6 @@ impl PalletCmd {
 		}
 
 		let spec = config.chain_spec;
-		let strategy = self.execution.unwrap_or(ExecutionStrategy::Native);
 		let pallet = self.pallet.clone().unwrap_or_default();
 		let pallet = pallet.as_bytes();
 		let extrinsic = self.extrinsic.clone().unwrap_or_default();
@@ -240,7 +239,7 @@ impl PalletCmd {
 			sp_core::testing::TaskExecutor::new(),
 			CallContext::Offchain,
 		)
-		.execute(strategy.into())
+		.execute()
 		.map_err(|e| format!("{}: {}", ERROR_METADATA_NOT_FOUND, e))?;
 
 		let (list, storage_info) =
@@ -378,7 +377,7 @@ impl PalletCmd {
 						sp_core::testing::TaskExecutor::new(),
 						CallContext::Offchain,
 					)
-					.execute(strategy.into())
+					.execute()
 					.map_err(|e| {
 						format!("Error executing and verifying runtime benchmark: {}", e)
 					})?;
@@ -419,7 +418,7 @@ impl PalletCmd {
 						sp_core::testing::TaskExecutor::new(),
 						CallContext::Offchain,
 					)
-					.execute(strategy.into())
+					.execute()
 					.map_err(|e| format!("Error executing runtime benchmark: {}", e))?;
 
 					let batch =
@@ -452,7 +451,7 @@ impl PalletCmd {
 						sp_core::testing::TaskExecutor::new(),
 						CallContext::Offchain,
 					)
-					.execute(strategy.into())
+					.execute()
 					.map_err(|e| format!("Error executing runtime benchmark: {}", e))?;
 
 					let batch =

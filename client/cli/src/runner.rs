@@ -340,7 +340,6 @@ mod tests {
 				)),
 				wasm_method: Default::default(),
 				wasm_runtime_overrides: None,
-				execution_strategies: Default::default(),
 				rpc_http: None,
 				rpc_ws: None,
 				rpc_ipc: None,

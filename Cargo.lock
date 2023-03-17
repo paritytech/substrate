@@ -4895,6 +4895,7 @@ dependencies = [
  "sc-network",
  "sc-network-common",
  "sc-network-sync",
+ "sc-offchain",
  "sc-rpc",
  "sc-service",
  "sc-service-test",

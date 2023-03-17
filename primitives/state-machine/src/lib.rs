@@ -1208,7 +1208,7 @@ mod tests {
 			CallContext::Offchain,
 		);
 
-		assert_eq!(state_machine.execute(ExecutionStrategy::NativeWhenPossible).unwrap(), vec![66]);
+		assert_eq!(state_machine.execute().unwrap(), vec![66]);
 	}
 
 	#[test]
@@ -1237,43 +1237,7 @@ mod tests {
 			CallContext::Offchain,
 		);
 
-		assert_eq!(state_machine.execute(ExecutionStrategy::NativeElseWasm).unwrap(), vec![66]);
-	}
-
-	#[test]
-	fn dual_execution_strategy_detects_consensus_failure() {
-		dual_execution_strategy_detects_consensus_failure_inner(StateVersion::V0);
-		dual_execution_strategy_detects_consensus_failure_inner(StateVersion::V1);
-	}
-	fn dual_execution_strategy_detects_consensus_failure_inner(state_version: StateVersion) {
-		let mut consensus_failed = false;
-		let backend = trie_backend::tests::test_trie(state_version, None, None);
-		let mut overlayed_changes = Default::default();
-		let wasm_code = RuntimeCode::empty();
-
-		let mut state_machine = StateMachine::new(
-			&backend,
-			&mut overlayed_changes,
-			&DummyCodeExecutor {
-				native_available: true,
-				native_succeeds: true,
-				fallback_succeeds: false,
-			},
-			"test",
-			&[],
-			Default::default(),
-			&wasm_code,
-			TaskExecutor::new(),
-			CallContext::Offchain,
-		);
-
-		assert!(state_machine
-			.execute_using_consensus_failure_handler(ExecutionManager::Both(|we, _ne| {
-				consensus_failed = true;
-				we
-			}),)
-			.is_err());
-		assert!(consensus_failed);
+		assert_eq!(state_machine.execute().unwrap(), vec![66]);
 	}
 
 	#[test]

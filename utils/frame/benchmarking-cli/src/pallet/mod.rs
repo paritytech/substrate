@@ -129,10 +129,6 @@ pub struct PalletCmd {
 	#[clap(flatten)]
 	pub shared_params: sc_cli::SharedParams,
 
-	/// The execution strategy that should be used for benchmarks.
-	#[arg(long, value_name = "STRATEGY", value_enum, ignore_case = true)]
-	pub execution: Option<ExecutionStrategy>,
-
 	/// Method for executing Wasm runtime code.
 	#[arg(
 		long = "wasm-execution",
