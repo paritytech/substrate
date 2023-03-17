@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_support::{assert_noop, assert_ok, assert_storage_noop, traits::IntegrityTest};
+use frame_support::{assert_noop, assert_ok, assert_storage_noop, traits::Hooks};
 
 use super::*;
 use frame_election_provider_support::{SortedListProvider, VoteWeight};
