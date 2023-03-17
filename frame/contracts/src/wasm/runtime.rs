@@ -1336,7 +1336,7 @@ pub mod env {
 	///
 	/// # Parameters
 	///
-	/// - `flags`: See `crate::wasm::runtime::CallFlags` for a documenation of the supported flags.
+	/// - `flags`: See `crate::wasm::runtime::CallFlags` for a documentation of the supported flags.
 	/// - `callee_ptr`: a pointer to the address of the callee contract. Should be decodable as an
 	///   `T::AccountId`. Traps otherwise.
 	/// - `gas`: how much gas to devote to the execution.
@@ -2038,7 +2038,7 @@ pub mod env {
 	/// # Note
 	///
 	/// The state rent functionality was removed. This is stub only exists for
-	/// backwards compatiblity
+	/// backwards compatibility
 	#[prefixed_alias]
 	#[deprecated]
 	fn restore_to(
@@ -2062,7 +2062,7 @@ pub mod env {
 	/// # Note
 	///
 	/// The state rent functionality was removed. This is stub only exists for
-	/// backwards compatiblity
+	/// backwards compatibility
 	#[version(1)]
 	#[prefixed_alias]
 	#[deprecated]
@@ -2084,7 +2084,7 @@ pub mod env {
 	/// # Note
 	///
 	/// The state rent functionality was removed. This is stub only exists for
-	/// backwards compatiblity.
+	/// backwards compatibility.
 	#[prefixed_alias]
 	#[deprecated]
 	fn set_rent_allowance(
@@ -2102,7 +2102,7 @@ pub mod env {
 	/// # Note
 	///
 	/// The state rent functionality was removed. This is stub only exists for
-	/// backwards compatiblity.
+	/// backwards compatibility.
 	#[version(1)]
 	#[prefixed_alias]
 	#[deprecated]
@@ -2116,7 +2116,7 @@ pub mod env {
 	/// # Note
 	///
 	/// The state rent functionality was removed. This is stub only exists for
-	/// backwards compatiblity.
+	/// backwards compatibility.
 	#[prefixed_alias]
 	#[deprecated]
 	fn rent_allowance(ctx: _, memory: _, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
@@ -2409,7 +2409,7 @@ pub mod env {
 	///
 	/// # Return Value
 	///
-	/// Returns `ReturnCode::Success` when the dispatchable was succesfully executed and
+	/// Returns `ReturnCode::Success` when the dispatchable was successfully executed and
 	/// returned `Ok`. When the dispatchable was exeuted but returned an error
 	/// `ReturnCode::CallRuntimeFailed` is returned. The full error is not
 	/// provided because it is not guaranteed to be stable.
@@ -2603,7 +2603,7 @@ pub mod env {
 
 	/// Returns a nonce that is unique per contract instantiation.
 	///
-	/// The nonce is incremented for each succesful contract instantiation. This is a
+	/// The nonce is incremented for each successful contract instantiation. This is a
 	/// sensible default salt for contract instantiations.
 	#[unstable]
 	fn instantiation_nonce(ctx: _, _memory: _) -> Result<u64, TrapReason> {

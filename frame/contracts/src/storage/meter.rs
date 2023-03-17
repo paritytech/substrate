@@ -513,7 +513,7 @@ impl<T: Config> Ext<T> for ReservingExt {
 			// we make sure to leave at least the ed in the free balance.
 			//
 			// The sender always has enough balance because we track it in the `ContractInfo` and
-			// never send more back than we have. Noone has access to the deposit account. Hence no
+			// never send more back than we have. No one has access to the deposit account. Hence no
 			// other interaction with this account takes place.
 			Deposit::Refund(amount) => {
 				if terminated {

@@ -689,7 +689,7 @@ mod tests {
 		executable.execute(ext.borrow_mut(), entry_point, input_data)
 	}
 
-	/// Execute the suppplied code.
+	/// Execute the supplied code.
 	fn execute<E: BorrowMut<MockExt>>(wat: &str, input_data: Vec<u8>, ext: E) -> ExecResult {
 		execute_internal(wat, input_data, ext, &ExportedFunction::Call, true, false)
 	}
