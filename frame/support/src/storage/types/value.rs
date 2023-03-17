@@ -24,7 +24,7 @@ use crate::{
 		types::{OptionQuery, QueryKindTrait, StorageEntryMetadataBuilder},
 		StorageAppend, StorageDecodeLength, StorageTryAppend,
 	},
-	traits::{GetDefault, StorageInfo, StorageInstance, Get},
+	traits::{Get, GetDefault, StorageInfo, StorageInstance},
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use sp_arithmetic::traits::SaturatedConversion;

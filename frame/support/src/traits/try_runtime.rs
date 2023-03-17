@@ -19,10 +19,8 @@
 
 use super::StorageInstance;
 use crate::{
-	storage::{
-		generator::value::StorageValue,
-		types::{CountedStorageMapInstance, KeyGenerator, QueryKindTrait},
-	},
+	storage::types::{CountedStorageMapInstance, KeyGenerator, QueryKindTrait},
+	traits::{PartialStorageInfoTrait, StorageInfo},
 	StorageHasher,
 };
 use codec::{Decode, FullCodec};
@@ -52,13 +50,15 @@ impl Default for Select {
 	}
 }
 
-use crate::storage::generator::map::StorageMap;
-
-/// Decode the entire values under the given storage type.
+/// Decode the entire data under the given storage type.
 ///
 /// For values, this is trivial. For all kinds of maps, it should decode all the values associated
 /// with all keys existing in the map.
+///
+/// Tuple implementations are provided and simply decode each type in the tuple, summing up the
+/// decoded bytes if `Ok(_)`.
 pub trait TryDecodeEntireStorage {
+	/// Decode the entire data under the given storage, returning `Ok(bytes_decoded)` if success.
 	fn try_decode_entire_state() -> Result<usize, &'static str>;
 }
 
@@ -73,15 +73,43 @@ impl TryDecodeEntireStorage for Tuple {
 	}
 }
 
-fn decode_key<V: Decode>(key: &[u8]) -> Result<usize, &'static str> {
-	match sp_io::storage::get(key) {
-		None => Ok(0),
-		Some(bytes) => {
-			let len = bytes.len();
-			let _ = <V as Decode>::decode(&mut bytes.as_ref()).map_err(|_| "TODO")?;
-			Ok(len)
-		},
+/// Decode all the values based on the prefix of `info` to `V`.
+///
+/// Basically, it decodes and sums up all the values who's key start with `info.prefix`. For values,
+/// this would be the value itself. For all sorts of maps, this should be all map items in the
+/// absence of key collision.
+fn decode_storage_info<V: Decode>(info: StorageInfo) -> Result<usize, &'static str> {
+	let mut next_key = info.prefix.clone();
+	let mut decoded = 0;
+
+	let decode_key = |key: &[u8]| {
+		match sp_io::storage::get(key) {
+			None => {
+				Ok(0)
+			},
+			Some(bytes) => {
+				let len = bytes.len();
+				let _ = <V as Decode>::decode(&mut bytes.as_ref()).map_err(|_| {
+					log::error!(target: crate::LOG_TARGET, "failed to decoded {:?}", info,);
+					"failed to decode value under existing key"
+				})?;
+				Ok::<usize, &'static str>(len)
+			},
+		}
+	};
+
+	decoded += decode_key(&next_key)?;
+	loop {
+		match sp_io::storage::next_key(&next_key) {
+			Some(key) if key.starts_with(&info.prefix) => {
+				decoded += decode_key(&key)?;
+				next_key = key;
+			},
+			_ => break
+		}
 	}
+
+	Ok(decoded)
 }
 
 impl<Prefix, Value, QueryKind, OnEmpty> TryDecodeEntireStorage
@@ -93,17 +121,11 @@ where
 	OnEmpty: Get<QueryKind::Query> + 'static,
 {
 	fn try_decode_entire_state() -> Result<usize, &'static str> {
-		let len = decode_key::<Value>(&Self::hashed_key())?;
-		// TODO: it will be easier to long such things if we implement these one by one in the
-		// macro, which is more or less then same thing as the blanket implementation.
-		log::debug!(
-			target: crate::LOG_TARGET,
-			"decoded {:?}::{:?}, total of {} bytes",
-			Self::module_prefix(),
-			Self::storage_prefix(),
-			len
-		);
-		Ok(len)
+		let info = Self::partial_storage_info()
+			.first()
+			.cloned()
+			.expect("Value has only one storage info; qed");
+		decode_storage_info::<Value>(info)
 	}
 }
 
@@ -118,14 +140,11 @@ where
 	OnEmpty: Get<QueryKind::Query> + 'static,
 {
 	fn try_decode_entire_state() -> Result<usize, &'static str> {
-		let mut next_key = Self::prefix_hash();
-		let mut len = 0usize;
-		while let Some(key) = sp_io::storage::next_key(&next_key) {
-			len += decode_key::<Value>(&key)?;
-			next_key = key;
-		}
-
-		Ok(len)
+		let info = Self::partial_storage_info()
+			.first()
+			.cloned()
+			.expect("Map has only one storage info; qed");
+		decode_storage_info::<Value>(info)
 	}
 }
 
@@ -140,15 +159,13 @@ where
 	OnEmpty: Get<QueryKind::Query> + 'static,
 {
 	fn try_decode_entire_state() -> Result<usize, &'static str> {
-		// TODO: rather not re-hardcode the u32 here.
-		let mut len = decode_key::<u32>(&Self::counter_storage_final_key())?;
-		let mut next_key = Self::map_storage_final_prefix();
-		while let Some(key) = sp_io::storage::next_key(&next_key) {
-			len += decode_key::<Value>(&key)?;
-			next_key = key;
-		}
-
-		Ok(len)
+		let (map_info, counter_info) = match &Self::partial_storage_info()[..] {
+			[a, b] => (a.clone(), b.clone()), // TODO better way?
+			_ => panic!("Counted map has two storage info items; qed"),
+		};
+		let mut decoded = decode_storage_info::<Value>(counter_info)?;
+		decoded += decode_storage_info::<Value>(map_info)?;
+		Ok(decoded)
 	}
 }
 
@@ -173,7 +190,11 @@ impl<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty> TryDecodeE
 	OnEmpty: Get<QueryKind::Query> + 'static,
 {
 	fn try_decode_entire_state() -> Result<usize, &'static str> {
-		todo!();
+		let info = Self::partial_storage_info()
+			.first()
+			.cloned()
+			.expect("Double-map has only one storage info; qed");
+		decode_storage_info::<Value>(info)
 	}
 }
 
@@ -187,7 +208,11 @@ where
 	OnEmpty: Get<QueryKind::Query> + 'static,
 {
 	fn try_decode_entire_state() -> Result<usize, &'static str> {
-		todo!();
+		let info = Self::partial_storage_info()
+			.first()
+			.cloned() // TODO better way?
+			.expect("N-map has only one storage info; qed");
+		decode_storage_info::<Value>(info)
 	}
 }
 
@@ -332,24 +357,46 @@ impl<BlockNumber: Clone + sp_std::fmt::Debug + AtLeast32BitUnsigned> TryState<Bl
 mod tests {
 	use super::*;
 	use crate::Blake2_128Concat;
+	use crate::storage::types;
 
-	struct Prefix;
-	impl StorageInstance for Prefix {
-		fn pallet_prefix() -> &'static str {
-			"test_pallet"
+	// TODO reuse?
+	macro_rules! build_prefix {
+		($name:ident) => {
+			struct $name;
+			impl StorageInstance for $name {
+				fn pallet_prefix() -> &'static str {
+					"test_pallet"
+				}
+				const STORAGE_PREFIX: &'static str = stringify!($name);
+			}
 		}
-		const STORAGE_PREFIX: &'static str = "val_prefix";
 	}
 
-	type Value = crate::storage::types::StorageValue<Prefix, u32>;
-	type Map = crate::storage::types::StorageMap<Prefix, Blake2_128Concat, u32, u32>;
+	build_prefix!(ValuePrefix);
+	type Value = types::StorageValue<ValuePrefix, u32>;
+
+	build_prefix!(MapPrefix);
+	type Map = types::StorageMap<MapPrefix, Blake2_128Concat, u32, u32>;
+
+	build_prefix!(CMapCounterPrefix);
+	build_prefix!(CMapPrefix);
+	impl CountedStorageMapInstance for CMapPrefix {
+		type CounterPrefix = CMapCounterPrefix;
+	}
+	type CMap = types::CountedStorageMap<CMapPrefix, Blake2_128Concat, u32, u32>;
+
+	build_prefix!(DMapPrefix);
+	type DMap =
+		types::StorageDoubleMap<DMapPrefix, Blake2_128Concat, u32, Blake2_128Concat, u32, u32>;
 
 	#[test]
 	fn try_decode_entire_state_value_works() {
 		sp_io::TestExternalities::new_empty().execute_with(|| {
 			assert_eq!(Value::try_decode_entire_state(), Ok(0));
+
 			Value::put(42);
 			assert_eq!(Value::try_decode_entire_state(), Ok(4));
+
 			Value::kill();
 			assert_eq!(Value::try_decode_entire_state(), Ok(0));
 
@@ -361,26 +408,93 @@ mod tests {
 
 	#[test]
 	fn try_decode_entire_state_map_works() {
-		todo!()
-	}
+		sp_io::TestExternalities::new_empty().execute_with(|| {
+			assert_eq!(Map::try_decode_entire_state(), Ok(0));
 
-	#[test]
-	fn try_decode_entire_state_double_works() {
-		todo!()
-	}
+			Map::insert(0, 42);
+			assert_eq!(Map::try_decode_entire_state(), Ok(4));
 
-	#[test]
-	fn try_decode_entire_state_nmap_works() {
-		todo!()
+			Map::insert(0, 42);
+			assert_eq!(Map::try_decode_entire_state(), Ok(4));
+
+			Map::insert(1, 42);
+			assert_eq!(Map::try_decode_entire_state(), Ok(8));
+
+			Map::remove(0);
+			assert_eq!(Map::try_decode_entire_state(), Ok(4));
+
+			// two bytes, cannot be decoded into u32.
+			sp_io::storage::set(&Map::hashed_key_for(2), &[0u8, 1]);
+			assert!(Map::try_decode_entire_state().is_err());
+		})
 	}
 
 	#[test]
 	fn try_decode_entire_state_counted_map_works() {
-		todo!()
+		sp_io::TestExternalities::new_empty().execute_with(|| {
+			// counter is not even initialized;
+			assert_eq!(CMap::try_decode_entire_state(), Ok(0 + 0));
+
+			let counter = 4;
+
+			CMap::insert(0, 42);
+			assert_eq!(CMap::try_decode_entire_state(), Ok(4 + counter));
+
+			CMap::insert(0, 42);
+			assert_eq!(CMap::try_decode_entire_state(), Ok(4 + counter));
+
+			CMap::insert(1, 42);
+			assert_eq!(CMap::try_decode_entire_state(), Ok(8 + counter));
+
+			CMap::remove(0);
+			assert_eq!(CMap::try_decode_entire_state(), Ok(4 + counter));
+
+			// counter is cleared again.
+			CMap::clear(u32::MAX, None).unwrap();
+			assert_eq!(CMap::try_decode_entire_state(), Ok(0 + 0));
+
+			// two bytes, cannot be decoded into u32.
+			sp_io::storage::set(&CMap::hashed_key_for(2), &[0u8, 1]);
+			assert!(CMap::try_decode_entire_state().is_err());
+		})
+	}
+
+	#[test]
+	fn try_decode_entire_state_double_works() {
+		sp_io::TestExternalities::new_empty().execute_with(|| {
+			assert_eq!(DMap::try_decode_entire_state(), Ok(0));
+
+			DMap::insert(0, 0, 42);
+			assert_eq!(DMap::try_decode_entire_state(), Ok(4));
+
+			DMap::insert(0, 0, 42);
+			assert_eq!(DMap::try_decode_entire_state(), Ok(4));
+
+			DMap::insert(0, 1, 42);
+			assert_eq!(DMap::try_decode_entire_state(), Ok(8));
+
+			DMap::insert(1, 0, 42);
+			assert_eq!(DMap::try_decode_entire_state(), Ok(12));
+
+			DMap::remove(0, 0);
+			assert_eq!(DMap::try_decode_entire_state(), Ok(8));
+
+			// two bytes, cannot be decoded into u32.
+			sp_io::storage::set(&DMap::hashed_key_for(1, 1), &[0u8, 1]);
+			assert!(DMap::try_decode_entire_state().is_err());
+		})
 	}
 
 	#[test]
 	fn try_decode_entire_state_tuple_of_storage_works() {
-		assert!(<(Value, Map) as TryDecodeEntireStorage>::try_decode_entire_state().is_ok());
+		sp_io::TestExternalities::new_empty().execute_with(|| {
+			assert_eq!(<(Value, Map) as TryDecodeEntireStorage>::try_decode_entire_state(), Ok(0));
+
+			Value::put(42);
+			assert_eq!(<(Value, Map) as TryDecodeEntireStorage>::try_decode_entire_state(), Ok(4));
+
+			Map::insert(0, 42);
+			assert_eq!(<(Value, Map) as TryDecodeEntireStorage>::try_decode_entire_state(), Ok(8));
+		});
 	}
 }

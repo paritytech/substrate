@@ -29,7 +29,7 @@ mod map;
 mod nmap;
 mod value;
 
-pub use counted_map::{CountedStorageMap, CountedStorageMapInstance};
+pub use counted_map::{CountedStorageMap, CountedStorageMapInstance, Counter};
 pub use double_map::StorageDoubleMap;
 pub use key::{
 	EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, Key, KeyGenerator,
