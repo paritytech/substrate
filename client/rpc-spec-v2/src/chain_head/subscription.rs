@@ -19,7 +19,7 @@
 //! Subscription management for tracking subscription IDs to pinned blocks.
 
 use futures::channel::oneshot;
-use parking_lot::{RwLock, RwLockWriteGuard};
+use parking_lot::RwLock;
 use sc_client_api::Backend;
 use sp_blockchain::Error;
 use sp_runtime::traits::Block as BlockT;
@@ -65,7 +65,7 @@ struct SubscriptionInner<Block: BlockT> {
 
 /// Manage the blocks of a specific subscription ID.
 #[derive(Clone)]
-pub struct SubscriptionHandle<Block: BlockT> {
+pub struct SubscriptionHandle<Block: BlockT, BE: Backend<Block> + 'static> {
 	inner: Arc<RwLock<SubscriptionInner<Block>>>,
 	/// Backend pinning / unpinning blocks.
 	///
@@ -82,12 +82,12 @@ impl<Block: BlockT, BE: Backend<Block> + 'static> SubscriptionHandle<Block, BE> 
 		backend: Arc<BE>,
 	) -> Self {
 		SubscriptionHandle {
-			inner: RwLock::new(SubscriptionInner {
+			inner: Arc::new(RwLock::new(SubscriptionInner {
 				runtime_updates,
 				tx_stop: Some(tx_stop),
 				blocks: HashSet::new(),
 				max_pinned_blocks,
-			}),
+			})),
 			backend,
 		}
 	}

@@ -47,13 +47,13 @@ use sp_runtime::{
 use std::{collections::HashSet, sync::Arc};
 
 /// Generates the events of the `chainHead_follow` method.
-pub struct ChainHeadFollower<BE, Block: BlockT, Client> {
+pub struct ChainHeadFollower<BE: Backend<Block> + 'static, Block: BlockT, Client> {
 	/// Substrate client.
 	client: Arc<Client>,
 	/// Backend of the chain.
 	backend: Arc<BE>,
 	/// Subscription handle.
-	sub_handle: SubscriptionHandle<Block>,
+	sub_handle: Arc<SubscriptionHandle<Block, BE>>,
 	/// Subscription was started with the runtime updates flag.
 	runtime_updates: bool,
 	/// Subscription ID.
@@ -62,12 +62,12 @@ pub struct ChainHeadFollower<BE, Block: BlockT, Client> {
 	best_block_cache: Option<Block::Hash>,
 }
 
-impl<BE, Block: BlockT, Client> ChainHeadFollower<BE, Block, Client> {
+impl<BE: Backend<Block> + 'static, Block: BlockT, Client> ChainHeadFollower<BE, Block, Client> {
 	/// Create a new [`ChainHeadFollower`].
 	pub fn new(
 		client: Arc<Client>,
 		backend: Arc<BE>,
-		sub_handle: SubscriptionHandle<Block>,
+		sub_handle: Arc<SubscriptionHandle<Block, BE>>,
 		runtime_updates: bool,
 		sub_id: String,
 	) -> Self {
