@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -69,7 +69,7 @@ impl<B: BlockT, Transaction: Send + 'static> BasicQueue<B, Transaction> {
 		spawner: &impl sp_core::traits::SpawnEssentialNamed,
 		prometheus_registry: Option<&Registry>,
 	) -> Self {
-		let (result_sender, result_port) = buffered_link::buffered_link();
+		let (result_sender, result_port) = buffered_link::buffered_link(100_000);
 
 		let metrics = prometheus_registry.and_then(|r| {
 			Metrics::register(r)
@@ -276,10 +276,10 @@ impl<B: BlockT> BlockImportWorker<B> {
 		use worker_messages::*;
 
 		let (justification_sender, mut justification_port) =
-			tracing_unbounded("mpsc_import_queue_worker_justification");
+			tracing_unbounded("mpsc_import_queue_worker_justification", 100_000);
 
 		let (block_import_sender, block_import_port) =
-			tracing_unbounded("mpsc_import_queue_worker_blocks");
+			tracing_unbounded("mpsc_import_queue_worker_blocks", 100_000);
 
 		let mut worker = BlockImportWorker { result_sender, justification_import, metrics };
 
@@ -595,7 +595,7 @@ mod tests {
 
 	#[test]
 	fn prioritizes_finality_work_over_block_import() {
-		let (result_sender, mut result_port) = buffered_link::buffered_link();
+		let (result_sender, mut result_port) = buffered_link::buffered_link(100_000);
 
 		let (worker, mut finality_sender, mut block_import_sender) =
 			BlockImportWorker::new(result_sender, (), Box::new(()), Some(Box::new(())), None);

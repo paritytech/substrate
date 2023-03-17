@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -70,7 +70,7 @@ pub struct StateDownloadProgress {
 }
 
 /// Syncing status and statistics.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct SyncStatus<Block: BlockT> {
 	/// Current global sync state.
 	pub state: SyncState<NumberFor<Block>>,

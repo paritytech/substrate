@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -184,7 +184,7 @@ impl From<BabeConfigurationV1> for BabeConfiguration {
 }
 
 /// Configuration data used by the BABE consensus engine.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct BabeConfiguration {
 	/// The slot duration in milliseconds for BABE. Currently, only
 	/// the value provided by this type at genesis will be used.
@@ -327,7 +327,7 @@ where
 /// the runtime API boundary this type is unknown and as such we keep this
 /// opaque representation, implementors of the runtime API will have to make
 /// sure that all usages of `OpaqueKeyOwnershipProof` refer to the same type.
-#[derive(Decode, Encode, PartialEq)]
+#[derive(Decode, Encode, PartialEq, TypeInfo)]
 pub struct OpaqueKeyOwnershipProof(Vec<u8>);
 impl OpaqueKeyOwnershipProof {
 	/// Create a new `OpaqueKeyOwnershipProof` using the given encoded
@@ -344,7 +344,7 @@ impl OpaqueKeyOwnershipProof {
 }
 
 /// BABE epoch information
-#[derive(Decode, Encode, PartialEq, Eq, Clone, Debug)]
+#[derive(Decode, Encode, PartialEq, Eq, Clone, Debug, TypeInfo)]
 pub struct Epoch {
 	/// The epoch index.
 	pub epoch_index: u64,
@@ -358,6 +358,25 @@ pub struct Epoch {
 	pub randomness: [u8; VRF_OUTPUT_LENGTH],
 	/// Configuration of the epoch.
 	pub config: BabeEpochConfiguration,
+}
+
+/// Returns the epoch index the given slot belongs to.
+pub fn epoch_index(slot: Slot, genesis_slot: Slot, epoch_duration: u64) -> u64 {
+	*slot.saturating_sub(genesis_slot) / epoch_duration
+}
+
+/// Returns the first slot at the given epoch index.
+pub fn epoch_start_slot(epoch_index: u64, genesis_slot: Slot, epoch_duration: u64) -> Slot {
+	// (epoch_index * epoch_duration) + genesis_slot
+
+	const PROOF: &str = "slot number is u64; it should relate in some way to wall clock time; \
+						 if u64 is not enough we should crash for safety; qed.";
+
+	epoch_index
+		.checked_mul(epoch_duration)
+		.and_then(|slot| slot.checked_add(*genesis_slot))
+		.expect(PROOF)
+		.into()
 }
 
 sp_api::decl_runtime_apis! {

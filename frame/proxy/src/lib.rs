@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -182,8 +182,6 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Dispatch the given `call` from an account that the sender is authorised for through
 		/// `add_proxy`.
-		///
-		/// Removes any corresponding announcement(s).
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///

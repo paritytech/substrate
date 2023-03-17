@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -99,7 +99,7 @@ impl NetworkServiceHandle {
 impl NetworkServiceProvider {
 	/// Create new `NetworkServiceProvider`
 	pub fn new() -> (Self, NetworkServiceHandle) {
-		let (tx, rx) = tracing_unbounded("mpsc_network_service_provider");
+		let (tx, rx) = tracing_unbounded("mpsc_network_service_provider", 100_000);
 
 		(Self { rx }, NetworkServiceHandle::new(tx))
 	}

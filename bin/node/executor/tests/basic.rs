@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,7 +30,7 @@ use sp_runtime::{
 use kitchensink_runtime::{
 	constants::{currency::*, time::SLOT_DURATION},
 	Balances, CheckedExtrinsic, Header, Runtime, RuntimeCall, RuntimeEvent, System,
-	TransactionPayment, UncheckedExtrinsic,
+	TransactionPayment, Treasury, UncheckedExtrinsic,
 };
 use node_primitives::{Balance, Hash};
 use node_testing::keyring::*;
@@ -398,6 +398,7 @@ fn full_native_block_import_works() {
 	});
 
 	fees = t.execute_with(|| transfer_fee(&xt()));
+	let pot = t.execute_with(|| Treasury::pot());
 
 	executor_call(&mut t, "Core_execute_block", &block2.0, true).0.unwrap();
 
@@ -408,6 +409,14 @@ fn full_native_block_import_works() {
 		);
 		assert_eq!(Balances::total_balance(&bob()), 179 * DOLLARS - fees);
 		let events = vec![
+			EventRecord {
+				phase: Phase::Initialization,
+				event: RuntimeEvent::Treasury(pallet_treasury::Event::UpdatedInactive {
+					reactivated: 0,
+					deactivated: pot,
+				}),
+				topics: vec![],
+			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: RuntimeEvent::System(frame_system::Event::ExtrinsicSuccess {
@@ -673,7 +682,7 @@ fn deploying_wasm_contract_should_work() {
 					Runtime,
 				> {
 					value: 0,
-					gas_limit: Weight::from_ref_time(500_000_000),
+					gas_limit: Weight::from_parts(500_000_000, 0),
 					storage_deposit_limit: None,
 					code: transfer_code,
 					data: Vec::new(),
@@ -685,7 +694,7 @@ fn deploying_wasm_contract_should_work() {
 				function: RuntimeCall::Contracts(pallet_contracts::Call::call::<Runtime> {
 					dest: sp_runtime::MultiAddress::Id(addr.clone()),
 					value: 10,
-					gas_limit: Weight::from_ref_time(500_000_000),
+					gas_limit: Weight::from_parts(500_000_000, 0),
 					storage_deposit_limit: None,
 					data: vec![0x00, 0x01, 0x02, 0x03],
 				}),

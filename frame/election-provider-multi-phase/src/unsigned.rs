@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -701,345 +701,177 @@ mod max_weight {
 		let w = SolutionOrSnapshotSize { voters: 10, targets: 0 };
 		MockWeightInfo::set(crate::mock::MockedWeightInfo::Complex);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::zero().set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(0, u64::MAX)),
 			0
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(1).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(1, u64::MAX)),
 			0
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(999).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(999, u64::MAX)),
 			0
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(1000).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(1000, u64::MAX)),
 			1
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(1001).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(1001, u64::MAX)),
 			1
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(1990).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(1990, u64::MAX)),
 			1
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(1999).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(1999, u64::MAX)),
 			1
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(2000).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(2000, u64::MAX)),
 			2
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(2001).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(2001, u64::MAX)),
 			2
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(2010).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(2010, u64::MAX)),
 			2
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(2990).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(2990, u64::MAX)),
 			2
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(2999).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(2999, u64::MAX)),
 			2
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(3000).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(3000, u64::MAX)),
 			3
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(3333).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(3333, u64::MAX)),
 			3
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(5500).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(5500, u64::MAX)),
 			5
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(7777).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(7777, u64::MAX)),
 			7
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(9999).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(9999, u64::MAX)),
 			9
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(10_000).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(10_000, u64::MAX)),
 			10
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(10_999).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(10_999, u64::MAX)),
 			10
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(11_000).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(11_000, u64::MAX)),
 			10
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(22_000).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(22_000, u64::MAX)),
 			10
 		);
 
 		let w = SolutionOrSnapshotSize { voters: 1, targets: 0 };
 
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(0).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(0, u64::MAX)),
 			0
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(1).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(1, u64::MAX)),
 			0
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(999).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(999, u64::MAX)),
 			0
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(1000).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(1000, u64::MAX)),
 			1
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(1001).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(1001, u64::MAX)),
 			1
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(1990).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(1990, u64::MAX)),
 			1
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(1999).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(1999, u64::MAX)),
 			1
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(2000).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(2000, u64::MAX)),
 			1
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(2001).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(2001, u64::MAX)),
 			1
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(2010).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(2010, u64::MAX)),
 			1
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(3333).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(3333, u64::MAX)),
 			1
 		);
 
 		let w = SolutionOrSnapshotSize { voters: 2, targets: 0 };
 
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(0).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(0, u64::MAX)),
 			0
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(1).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(1, u64::MAX)),
 			0
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(999).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(999, u64::MAX)),
 			0
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(1000).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(1000, u64::MAX)),
 			1
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(1001).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(1001, u64::MAX)),
 			1
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(1999).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(1999, u64::MAX)),
 			1
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(2000).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(2000, u64::MAX)),
 			2
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(2001).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(2001, u64::MAX)),
 			2
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(2010).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(2010, u64::MAX)),
 			2
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(3333).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(3333, u64::MAX)),
 			2
 		);
 	}
@@ -1055,7 +887,7 @@ mod tests {
 			Runtime, RuntimeCall, RuntimeOrigin, System, TestNposSolution, TrimHelpers,
 			UnsignedPhase,
 		},
-		CurrentPhase, Event, InvalidTransaction, Phase, QueuedSolution, TransactionSource,
+		Event, InvalidTransaction, Phase, QueuedSolution, TransactionSource,
 		TransactionValidityError,
 	};
 	use codec::Decode;
@@ -1128,7 +960,7 @@ mod tests {
 			assert!(<MultiPhase as ValidateUnsigned>::pre_dispatch(&call).is_ok());
 
 			// unsigned -- but not enabled.
-			<CurrentPhase<Runtime>>::put(Phase::Unsigned((false, 25)));
+			MultiPhase::phase_transition(Phase::Unsigned((false, 25)));
 			assert!(MultiPhase::current_phase().is_unsigned());
 			assert!(matches!(
 				<MultiPhase as ValidateUnsigned>::validate_unsigned(
@@ -1321,10 +1153,15 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
-					Event::UnsignedPhaseStarted { round: 1 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::PhaseTransitioned {
+						from: Phase::Signed,
+						to: Phase::Unsigned((true, 25)),
+						round: 1
+					},
 					Event::SolutionStored {
 						compute: ElectionCompute::Unsigned,
+						origin: None,
 						prev_ejected: false
 					}
 				]
@@ -1335,7 +1172,7 @@ mod tests {
 	#[test]
 	fn miner_trims_weight() {
 		ExtBuilder::default()
-			.miner_weight(Weight::from_ref_time(100).set_proof_size(u64::MAX))
+			.miner_weight(Weight::from_parts(100, u64::MAX))
 			.mock_weight_info(crate::mock::MockedWeightInfo::Basic)
 			.build_and_execute(|| {
 				roll_to_unsigned();
@@ -1349,11 +1186,11 @@ mod tests {
 					raw.solution.unique_targets().len() as u32,
 				);
 				// default solution will have 5 edges (5 * 5 + 10)
-				assert_eq!(solution_weight, Weight::from_ref_time(35));
+				assert_eq!(solution_weight, Weight::from_parts(35, 0));
 				assert_eq!(raw.solution.voter_count(), 5);
 
 				// now reduce the max weight
-				<MinerMaxWeight>::set(Weight::from_ref_time(25).set_proof_size(u64::MAX));
+				<MinerMaxWeight>::set(Weight::from_parts(25, u64::MAX));
 
 				let (raw, witness) = MultiPhase::mine_solution().unwrap();
 				let solution_weight = <Runtime as MinerConfig>::solution_weight(
@@ -1363,7 +1200,7 @@ mod tests {
 					raw.solution.unique_targets().len() as u32,
 				);
 				// default solution will have 5 edges (5 * 5 + 10)
-				assert_eq!(solution_weight, Weight::from_ref_time(25));
+				assert_eq!(solution_weight, Weight::from_parts(25, 0));
 				assert_eq!(raw.solution.voter_count(), 3);
 			})
 	}
@@ -1661,7 +1498,7 @@ mod tests {
 
 			let current_block = block_plus(offchain_repeat * 2 + 2);
 			// force the unsigned phase to start on the current block.
-			CurrentPhase::<Runtime>::set(Phase::Unsigned((true, current_block)));
+			MultiPhase::phase_transition(Phase::Unsigned((true, current_block)));
 
 			// clear the cache and create a solution since we are on the first block of the unsigned
 			// phase.
@@ -1673,8 +1510,12 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
-					Event::UnsignedPhaseStarted { round: 1 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::PhaseTransitioned {
+						from: Phase::Signed,
+						to: Phase::Unsigned((true, 25)),
+						round: 1
+					},
 					Event::ElectionFinalized {
 						compute: ElectionCompute::Fallback,
 						score: ElectionScore {
@@ -1682,7 +1523,12 @@ mod tests {
 							sum_stake: 0,
 							sum_stake_squared: 0
 						}
-					}
+					},
+					Event::PhaseTransitioned {
+						from: Phase::Unsigned((true, 25)),
+						to: Phase::Unsigned((true, 37)),
+						round: 1
+					},
 				]
 			);
 		})

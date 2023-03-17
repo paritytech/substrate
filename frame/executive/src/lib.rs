@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -333,8 +333,10 @@ where
 	///
 	/// Runs the try-state code both before and after the migration function if `checks` is set to
 	/// `true`. Also, if set to `true`, it runs the `pre_upgrade` and `post_upgrade` hooks.
-	pub fn try_runtime_upgrade(checks: bool) -> Result<Weight, &'static str> {
-		if checks {
+	pub fn try_runtime_upgrade(
+		checks: frame_try_runtime::UpgradeCheckSelect,
+	) -> Result<Weight, &'static str> {
+		if checks.try_state() {
 			let _guard = frame_support::StorageNoopGuard::default();
 			<AllPalletsWithSystem as frame_support::traits::TryState<System::BlockNumber>>::try_state(
 				frame_system::Pallet::<System>::block_number(),
@@ -344,10 +346,10 @@ where
 
 		let weight =
 			<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::try_on_runtime_upgrade(
-				checks,
+				checks.pre_and_post(),
 			)?;
 
-		if checks {
+		if checks.try_state() {
 			let _guard = frame_support::StorageNoopGuard::default();
 			<AllPalletsWithSystem as frame_support::traits::TryState<System::BlockNumber>>::try_state(
 				frame_system::Pallet::<System>::block_number(),
@@ -716,12 +718,12 @@ mod tests {
 			// one with block number arg and one without
 			fn on_initialize(n: T::BlockNumber) -> Weight {
 				println!("on_initialize({})", n);
-				Weight::from_ref_time(175)
+				Weight::from_parts(175, 0)
 			}
 
 			fn on_idle(n: T::BlockNumber, remaining_weight: Weight) -> Weight {
 				println!("on_idle{}, {})", n, remaining_weight);
-				Weight::from_ref_time(175)
+				Weight::from_parts(175, 0)
 			}
 
 			fn on_finalize(n: T::BlockNumber) {
@@ -730,7 +732,7 @@ mod tests {
 
 			fn on_runtime_upgrade() -> Weight {
 				sp_io::storage::set(super::TEST_KEY, "module".as_bytes());
-				Weight::from_ref_time(200)
+				Weight::from_parts(200, 0)
 			}
 
 			fn offchain_worker(n: T::BlockNumber) {
@@ -851,9 +853,9 @@ mod tests {
 	parameter_types! {
 		pub BlockWeights: frame_system::limits::BlockWeights =
 			frame_system::limits::BlockWeights::builder()
-				.base_block(Weight::from_ref_time(10))
-				.for_class(DispatchClass::all(), |weights| weights.base_extrinsic = Weight::from_ref_time(5))
-				.for_class(DispatchClass::non_mandatory(), |weights| weights.max_total = Weight::from_ref_time(1024).set_proof_size(u64::MAX).into())
+				.base_block(Weight::from_parts(10, 0))
+				.for_class(DispatchClass::all(), |weights| weights.base_extrinsic = Weight::from_parts(5, 0))
+				.for_class(DispatchClass::non_mandatory(), |weights| weights.max_total = Weight::from_parts(1024, u64::MAX).into())
 				.build_or_panic();
 		pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
 			read: 10,
@@ -944,7 +946,7 @@ mod tests {
 			sp_io::storage::set(TEST_KEY, "custom_upgrade".as_bytes());
 			sp_io::storage::set(CUSTOM_ON_RUNTIME_KEY, &true.encode());
 			System::deposit_event(frame_system::Event::CodeUpdated);
-			Weight::from_ref_time(100)
+			Weight::from_parts(100, 0)
 		}
 	}
 
@@ -1122,7 +1124,7 @@ mod tests {
 		let encoded_len = encoded.len() as u64;
 		// on_initialize weight + base block execution weight
 		let block_weights = <Runtime as frame_system::Config>::BlockWeights::get();
-		let base_block_weight = Weight::from_ref_time(175) + block_weights.base_block;
+		let base_block_weight = Weight::from_parts(175, 0) + block_weights.base_block;
 		let limit = block_weights.get(DispatchClass::Normal).max_total.unwrap() - base_block_weight;
 		let num_to_exhaust_block = limit.ref_time() / (encoded_len + 5);
 		t.execute_with(|| {
@@ -1147,7 +1149,7 @@ mod tests {
 					assert_eq!(
 						<frame_system::Pallet<Runtime>>::block_weight().total(),
 						//--------------------- on_initialize + block_execution + extrinsic_base weight
-						Weight::from_ref_time((encoded_len + 5) * (nonce + 1)) + base_block_weight,
+						Weight::from_parts((encoded_len + 5) * (nonce + 1), 0) + base_block_weight,
 					);
 					assert_eq!(
 						<frame_system::Pallet<Runtime>>::extrinsic_index(),
@@ -1178,7 +1180,7 @@ mod tests {
 		let mut t = new_test_ext(1);
 		t.execute_with(|| {
 			// Block execution weight + on_initialize weight from custom module
-			let base_block_weight = Weight::from_ref_time(175) +
+			let base_block_weight = Weight::from_parts(175, 0) +
 				<Runtime as frame_system::Config>::BlockWeights::get().base_block;
 
 			Executive::initialize_block(&Header::new(
@@ -1197,7 +1199,7 @@ mod tests {
 			assert!(Executive::apply_extrinsic(x2.clone()).unwrap().is_ok());
 
 			// default weight for `TestXt` == encoded length.
-			let extrinsic_weight = Weight::from_ref_time(len as u64) +
+			let extrinsic_weight = Weight::from_parts(len as u64, 0) +
 				<Runtime as frame_system::Config>::BlockWeights::get()
 					.get(DispatchClass::Normal)
 					.base_extrinsic;
@@ -1313,7 +1315,7 @@ mod tests {
 			// the `on_initialize` weight defined in the custom test module.
 			assert_eq!(
 				<frame_system::Pallet<Runtime>>::block_weight().total(),
-				Weight::from_ref_time(175 + 175 + 10)
+				Weight::from_parts(175 + 175 + 10, 0)
 			);
 		})
 	}

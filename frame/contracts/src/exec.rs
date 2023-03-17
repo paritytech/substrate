@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,9 +17,9 @@
 
 use crate::{
 	gas::GasMeter,
-	storage::{self, Storage, WriteOutcome},
+	storage::{self, DepositAccount, WriteOutcome},
 	BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, DebugBufferVec, Determinism, Error,
-	Event, Nonce, Pallet as Contracts, Schedule,
+	Event, Nonce, Pallet as Contracts, Schedule, System,
 };
 use frame_support::{
 	crypto::ecdsa::ECDSAExt,
@@ -279,7 +279,7 @@ pub trait Ext: sealing::Sealed {
 	/// when the code is executing on-chain.
 	///
 	/// Returns `true` if debug message recording is enabled. Otherwise `false` is returned.
-	fn append_debug_buffer(&mut self, msg: &str) -> Result<bool, DispatchError>;
+	fn append_debug_buffer(&mut self, msg: &str) -> bool;
 
 	/// Call some dispatchable and return the result.
 	fn call_runtime(&self, call: <Self::T as Config>::RuntimeCall) -> DispatchResultWithPostInfo;
@@ -462,7 +462,7 @@ enum FrameArgs<'a, T: Config, E> {
 		/// If `None` the contract info needs to be reloaded from storage.
 		cached_info: Option<ContractInfo<T>>,
 		/// This frame was created by `seal_delegate_call` and hence uses different code than
-		/// what is stored at [`Self::dest`]. Its caller ([`Frame::delegated_caller`]) is the
+		/// what is stored at [`Self::Call::dest`]. Its caller ([`DelegatedCall::caller`]) is the
 		/// account which called the caller contract
 		delegated_call: Option<DelegatedCall<T, E>>,
 	},
@@ -492,7 +492,7 @@ enum CachedContract<T: Config> {
 	///
 	/// In this case a reload is neither allowed nor possible. Please note that recursive
 	/// calls cannot remove a contract as this is checked and denied.
-	Terminated,
+	Terminated(DepositAccount<T>),
 }
 
 impl<T: Config> CachedContract<T> {
@@ -511,6 +511,15 @@ impl<T: Config> CachedContract<T> {
 			Some(contract)
 		} else {
 			None
+		}
+	}
+
+	/// Returns `Some` iff the contract is not `Cached::Invalidated`.
+	fn deposit_account(&self) -> Option<&DepositAccount<T>> {
+		match self {
+			CachedContract::Cached(contract) => Some(contract.deposit_account()),
+			CachedContract::Terminated(deposit_account) => Some(&deposit_account),
+			CachedContract::Invalidated => None,
 		}
 	}
 }
@@ -591,7 +600,9 @@ impl<T: Config> CachedContract<T> {
 	/// Terminate and return the contract info.
 	fn terminate(&mut self, account_id: &T::AccountId) -> ContractInfo<T> {
 		self.load(account_id);
-		get_cached_or_panic_after_load!(mem::replace(self, Self::Terminated))
+		let contract = get_cached_or_panic_after_load!(self);
+		let deposit_account = contract.deposit_account().clone();
+		get_cached_or_panic_after_load!(mem::replace(self, Self::Terminated(deposit_account)))
 	}
 }
 
@@ -751,9 +762,7 @@ where
 						input_data,
 						salt,
 					);
-					let trie_id = Storage::<T>::generate_trie_id(&account_id, nonce);
-					let contract =
-						Storage::<T>::new_contract(&account_id, trie_id, *executable.code_hash())?;
+					let contract = ContractInfo::new(&account_id, nonce, *executable.code_hash())?;
 					(
 						account_id,
 						contract,
@@ -873,7 +882,7 @@ where
 			match (entry_point, delegated_code_hash) {
 				(ExportedFunction::Constructor, _) => {
 					// It is not allowed to terminate a contract inside its constructor.
-					if matches!(frame.contract_info, CachedContract::Terminated) {
+					if matches!(frame.contract_info, CachedContract::Terminated(_)) {
 						return Err(Error::<T>::TerminatedInConstructor.into())
 					}
 
@@ -962,11 +971,21 @@ where
 
 			// Record the storage meter changes of the nested call into the parent meter.
 			// If the dropped frame's contract wasn't terminated we update the deposit counter
-			// in its contract info. The load is necessary to to pull it from storage in case
+			// in its contract info. The load is necessary to pull it from storage in case
 			// it was invalidated.
 			frame.contract_info.load(account_id);
+			let deposit_account = frame
+				.contract_info
+				.deposit_account()
+				.expect(
+					"Is only `None` when the info is invalidated.
+				We just re-loaded from storage which either makes the state `Cached` or `Terminated`.
+				qed",
+				)
+				.clone();
 			let mut contract = frame.contract_info.into_contract();
-			prev.nested_storage.absorb(frame.nested_storage, account_id, contract.as_mut());
+			prev.nested_storage
+				.absorb(frame.nested_storage, deposit_account, contract.as_mut());
 
 			// In case the contract wasn't terminated we need to persist changes made to it.
 			if let Some(contract) = contract {
@@ -1001,10 +1020,14 @@ where
 			if !persist {
 				return
 			}
+			let deposit_account = self.first_frame.contract_info.deposit_account().expect(
+				"Is only `None` when the info is invalidated. The first frame can't be invalidated.
+				qed",
+			).clone();
 			let mut contract = self.first_frame.contract_info.as_contract();
 			self.storage_meter.absorb(
 				mem::take(&mut self.first_frame.nested_storage),
-				&self.first_frame.account_id,
+				deposit_account,
 				contract.as_deref_mut(),
 			);
 			if let Some(contract) = contract {
@@ -1182,19 +1205,21 @@ where
 	}
 
 	fn terminate(&mut self, beneficiary: &AccountIdOf<Self::T>) -> Result<(), DispatchError> {
+		use frame_support::traits::fungible::Inspect;
 		if self.is_recursive() {
 			return Err(Error::<T>::TerminatedWhileReentrant.into())
 		}
 		let frame = self.top_frame_mut();
 		let info = frame.terminate();
 		frame.nested_storage.terminate(&info);
-		Storage::<T>::queue_trie_for_deletion(&info)?;
-		<Stack<'a, T, E>>::transfer(
-			ExistenceRequirement::AllowDeath,
+		System::<T>::dec_consumers(&frame.account_id);
+		T::Currency::transfer(
 			&frame.account_id,
 			beneficiary,
-			T::Currency::free_balance(&frame.account_id),
+			T::Currency::reducible_balance(&frame.account_id, false),
+			ExistenceRequirement::AllowDeath,
 		)?;
+		info.queue_trie_for_deletion()?;
 		ContractInfoOf::<T>::remove(&frame.account_id);
 		E::remove_user(info.code_hash);
 		Contracts::<T>::deposit_event(
@@ -1212,19 +1237,19 @@ where
 	}
 
 	fn get_storage(&mut self, key: &FixSizedKey) -> Option<Vec<u8>> {
-		Storage::<T>::read(&self.top_frame_mut().contract_info().trie_id, key)
+		self.top_frame_mut().contract_info().read(key)
 	}
 
 	fn get_storage_transparent(&mut self, key: &VarSizedKey<T>) -> Option<Vec<u8>> {
-		Storage::<T>::read(&self.top_frame_mut().contract_info().trie_id, key)
+		self.top_frame_mut().contract_info().read(key)
 	}
 
 	fn get_storage_size(&mut self, key: &FixSizedKey) -> Option<u32> {
-		Storage::<T>::size(&self.top_frame_mut().contract_info().trie_id, key)
+		self.top_frame_mut().contract_info().size(key)
 	}
 
 	fn get_storage_size_transparent(&mut self, key: &VarSizedKey<T>) -> Option<u32> {
-		Storage::<T>::size(&self.top_frame_mut().contract_info().trie_id, key)
+		self.top_frame_mut().contract_info().size(key)
 	}
 
 	fn set_storage(
@@ -1234,8 +1259,7 @@ where
 		take_old: bool,
 	) -> Result<WriteOutcome, DispatchError> {
 		let frame = self.top_frame_mut();
-		Storage::<T>::write(
-			&frame.contract_info.get(&frame.account_id).trie_id,
+		frame.contract_info.get(&frame.account_id).write(
 			key,
 			value,
 			Some(&mut frame.nested_storage),
@@ -1250,8 +1274,7 @@ where
 		take_old: bool,
 	) -> Result<WriteOutcome, DispatchError> {
 		let frame = self.top_frame_mut();
-		Storage::<T>::write(
-			&frame.contract_info.get(&frame.account_id).trie_id,
+		frame.contract_info.get(&frame.account_id).write(
 			key,
 			value,
 			Some(&mut frame.nested_storage),
@@ -1334,16 +1357,21 @@ where
 		&mut self.top_frame_mut().nested_gas
 	}
 
-	fn append_debug_buffer(&mut self, msg: &str) -> Result<bool, DispatchError> {
+	fn append_debug_buffer(&mut self, msg: &str) -> bool {
 		if let Some(buffer) = &mut self.debug_message {
-			if !msg.is_empty() {
-				buffer
-					.try_extend(&mut msg.bytes())
-					.map_err(|_| Error::<T>::DebugBufferExhausted)?;
-			}
-			Ok(true)
+			buffer
+				.try_extend(&mut msg.bytes())
+				.map_err(|_| {
+					log::debug!(
+						target: "runtime::contracts",
+						"Debug buffer (of {} bytes) exhausted!",
+						DebugBufferVec::<T>::bound(),
+					)
+				})
+				.ok();
+			true
 		} else {
-			Ok(false)
+			false
 		}
 	}
 
@@ -1433,7 +1461,6 @@ mod tests {
 	use crate::{
 		exec::ExportedFunction::*,
 		gas::GasMeter,
-		storage::Storage,
 		tests::{
 			test_utils::{get_balance, hash, place_contract, set_balance},
 			ExtBuilder, RuntimeCall, RuntimeEvent as MetaEvent, Test, TestFilter, ALICE, BOB,
@@ -1886,9 +1913,8 @@ mod tests {
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			let executable =
 				MockExecutable::from_storage(input_data_ch, &schedule, &mut gas_meter).unwrap();
-			set_balance(&ALICE, min_balance * 1000);
-			let mut storage_meter =
-				storage::meter::Meter::new(&ALICE, Some(min_balance * 100), min_balance).unwrap();
+			set_balance(&ALICE, min_balance * 10_000);
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, None, min_balance).unwrap();
 
 			let result = MockStack::run_instantiate(
 				ALICE,
@@ -2036,9 +2062,9 @@ mod tests {
 	#[test]
 	fn code_hash_returns_proper_values() {
 		let code_bob = MockLoader::insert(Call, |ctx, _| {
-			// ALICE is not a contract and hence she does not have a code_hash
+			// ALICE is not a contract and hence they do not have a code_hash
 			assert!(ctx.ext.code_hash(&ALICE).is_none());
-			// BOB is a contract and hence he has a code_hash
+			// BOB is a contract and hence it has a code_hash
 			assert!(ctx.ext.code_hash(&BOB).is_some());
 			exec_success()
 		});
@@ -2226,7 +2252,7 @@ mod tests {
 			// Check that the newly created account has the expected code hash and
 			// there are instantiation event.
 			assert_eq!(
-				Storage::<Test>::code_hash(&instantiated_contract_address).unwrap(),
+				ContractInfo::<Test>::load_code_hash(&instantiated_contract_address).unwrap(),
 				dummy_ch
 			);
 			assert_eq!(
@@ -2268,7 +2294,7 @@ mod tests {
 			);
 
 			// Check that the account has not been created.
-			assert!(Storage::<Test>::code_hash(&instantiated_contract_address).is_none());
+			assert!(ContractInfo::<Test>::load_code_hash(&instantiated_contract_address).is_none());
 			assert!(events().is_empty());
 		});
 	}
@@ -2327,7 +2353,7 @@ mod tests {
 			// Check that the newly created account has the expected code hash and
 			// there are instantiation event.
 			assert_eq!(
-				Storage::<Test>::code_hash(&instantiated_contract_address).unwrap(),
+				ContractInfo::<Test>::load_code_hash(&instantiated_contract_address).unwrap(),
 				dummy_ch
 			);
 			assert_eq!(
@@ -2369,7 +2395,7 @@ mod tests {
 			set_balance(&ALICE, 1000);
 			set_balance(&BOB, 100);
 			place_contract(&BOB, instantiator_ch);
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(100), 0).unwrap();
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(200), 0).unwrap();
 
 			assert_matches!(
 				MockStack::run_call(
@@ -2404,8 +2430,8 @@ mod tests {
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			let executable =
 				MockExecutable::from_storage(terminate_ch, &schedule, &mut gas_meter).unwrap();
-			set_balance(&ALICE, 1000);
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(100), 100).unwrap();
+			set_balance(&ALICE, 10_000);
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, None, 100).unwrap();
 
 			assert_eq!(
 				MockStack::run_instantiate(
@@ -2489,9 +2515,8 @@ mod tests {
 			let min_balance = <Test as Config>::Currency::minimum_balance();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			let executable = MockExecutable::from_storage(code, &schedule, &mut gas_meter).unwrap();
-			set_balance(&ALICE, min_balance * 1000);
-			let mut storage_meter =
-				storage::meter::Meter::new(&ALICE, Some(min_balance * 100), min_balance).unwrap();
+			set_balance(&ALICE, min_balance * 10_000);
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, None, min_balance).unwrap();
 
 			let result = MockStack::run_instantiate(
 				ALICE,
@@ -2511,12 +2536,8 @@ mod tests {
 	#[test]
 	fn printing_works() {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
-			ctx.ext
-				.append_debug_buffer("This is a test")
-				.expect("Maximum allowed debug buffer size exhausted!");
-			ctx.ext
-				.append_debug_buffer("More text")
-				.expect("Maximum allowed debug buffer size exhausted!");
+			ctx.ext.append_debug_buffer("This is a test");
+			ctx.ext.append_debug_buffer("More text");
 			exec_success()
 		});
 
@@ -2549,12 +2570,8 @@ mod tests {
 	#[test]
 	fn printing_works_on_fail() {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
-			ctx.ext
-				.append_debug_buffer("This is a test")
-				.expect("Maximum allowed debug buffer size exhausted!");
-			ctx.ext
-				.append_debug_buffer("More text")
-				.expect("Maximum allowed debug buffer size exhausted!");
+			ctx.ext.append_debug_buffer("This is a test");
+			ctx.ext.append_debug_buffer("More text");
 			exec_trapped()
 		});
 
@@ -2587,13 +2604,15 @@ mod tests {
 	#[test]
 	fn debug_buffer_is_limited() {
 		let code_hash = MockLoader::insert(Call, move |ctx, _| {
-			ctx.ext.append_debug_buffer("overflowing bytes")?;
+			ctx.ext.append_debug_buffer("overflowing bytes");
 			exec_success()
 		});
 
-		// Pre-fill the buffer up to its limit
-		let mut debug_buffer =
-			DebugBufferVec::<Test>::try_from(vec![0u8; DebugBufferVec::<Test>::bound()]).unwrap();
+		// Pre-fill the buffer almost up to its limit, leaving not enough space to the message
+		let debug_buf_before =
+			DebugBufferVec::<Test>::try_from(vec![0u8; DebugBufferVec::<Test>::bound() - 5])
+				.unwrap();
+		let mut debug_buf_after = debug_buf_before.clone();
 
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule: Schedule<Test> = <Test as Config>::Schedule::get();
@@ -2602,21 +2621,19 @@ mod tests {
 			set_balance(&ALICE, min_balance * 10);
 			place_contract(&BOB, code_hash);
 			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
-			assert_err!(
-				MockStack::run_call(
-					ALICE,
-					BOB,
-					&mut gas_meter,
-					&mut storage_meter,
-					&schedule,
-					0,
-					vec![],
-					Some(&mut debug_buffer),
-					Determinism::Deterministic,
-				)
-				.map_err(|e| e.error),
-				Error::<Test>::DebugBufferExhausted
-			);
+			MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut gas_meter,
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![],
+				Some(&mut debug_buf_after),
+				Determinism::Deterministic,
+			)
+			.unwrap();
+			assert_eq!(debug_buf_before, debug_buf_after);
 		});
 	}
 
@@ -2905,10 +2922,9 @@ mod tests {
 				MockExecutable::from_storage(succ_fail_code, &schedule, &mut gas_meter).unwrap();
 			let succ_succ_executable =
 				MockExecutable::from_storage(succ_succ_code, &schedule, &mut gas_meter).unwrap();
-			set_balance(&ALICE, min_balance * 1000);
+			set_balance(&ALICE, min_balance * 10_000);
 			let mut storage_meter =
-				storage::meter::Meter::new(&ALICE, Some(min_balance * 500), min_balance * 100)
-					.unwrap();
+				storage::meter::Meter::new(&ALICE, None, min_balance * 100).unwrap();
 
 			MockStack::run_instantiate(
 				ALICE,
@@ -3424,6 +3440,37 @@ mod tests {
 				None,
 				Determinism::Deterministic
 			));
+		});
+	}
+
+	/// This works even though random interface is deprecated, as the check to ban deprecated
+	/// functions happens in the wasm stack which is mocked for exec tests.
+	#[test]
+	fn randomness_works() {
+		let subject = b"nice subject".as_ref();
+		let code_hash = MockLoader::insert(Call, move |ctx, _| {
+			let rand = <Test as Config>::Randomness::random(subject);
+			assert_eq!(rand, ctx.ext.random(subject));
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			place_contract(&BOB, code_hash);
+
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			let result = MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![],
+				None,
+				Determinism::Deterministic,
+			);
+			assert_matches!(result, Ok(_));
 		});
 	}
 }

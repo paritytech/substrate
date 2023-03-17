@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -620,8 +620,12 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false }
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						origin: Some(99),
+						prev_ejected: false
+					}
 				]
 			);
 		})
@@ -645,8 +649,12 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						origin: Some(99),
+						prev_ejected: false
+					},
 					Event::Rewarded { account: 99, value: 7 }
 				]
 			);
@@ -676,8 +684,12 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						origin: Some(99),
+						prev_ejected: false
+					},
 					Event::Slashed { account: 99, value: 5 }
 				]
 			);
@@ -713,9 +725,17 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						origin: Some(99),
+						prev_ejected: false
+					},
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						origin: Some(999),
+						prev_ejected: false
+					},
 					Event::Rewarded { account: 99, value: 7 }
 				]
 			);
@@ -788,12 +808,32 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						origin: Some(99),
+						prev_ejected: false
+					},
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						origin: Some(100),
+						prev_ejected: false
+					},
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						origin: Some(101),
+						prev_ejected: false
+					},
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						origin: Some(102),
+						prev_ejected: false
+					},
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						origin: Some(103),
+						prev_ejected: false
+					},
 					Event::Rewarded { account: 99, value: 7 },
 					Event::ElectionFinalized {
 						compute: ElectionCompute::Signed,
@@ -856,13 +896,15 @@ mod tests {
 				assert_eq!(
 					multi_phase_events(),
 					vec![
-						Event::SignedPhaseStarted { round: 1 },
+						Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
 						Event::SolutionStored {
 							compute: ElectionCompute::Signed,
+							origin: Some(99),
 							prev_ejected: false
 						},
 						Event::SolutionStored {
 							compute: ElectionCompute::Signed,
+							origin: Some(99),
 							prev_ejected: true
 						}
 					]
@@ -1112,12 +1154,28 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						origin: Some(100),
+						prev_ejected: false
+					},
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						origin: Some(101),
+						prev_ejected: false
+					},
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						origin: Some(102),
+						prev_ejected: false
+					},
 					Event::Rewarded { account: 100, value: 7 },
-					Event::UnsignedPhaseStarted { round: 1 }
+					Event::PhaseTransitioned {
+						from: Phase::Signed,
+						to: Phase::Unsigned((true, 25)),
+						round: 1
+					},
 				]
 			);
 		})
@@ -1170,10 +1228,22 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						origin: Some(99),
+						prev_ejected: false
+					},
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						origin: Some(999),
+						prev_ejected: false
+					},
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						origin: Some(9999),
+						prev_ejected: false
+					},
 					Event::Slashed { account: 999, value: 5 },
 					Event::Rewarded { account: 99, value: 7 }
 				]
@@ -1184,7 +1254,7 @@ mod tests {
 	#[test]
 	fn cannot_consume_too_much_future_weight() {
 		ExtBuilder::default()
-			.signed_weight(Weight::from_ref_time(40).set_proof_size(u64::MAX))
+			.signed_weight(Weight::from_parts(40, u64::MAX))
 			.mock_weight_info(MockedWeightInfo::Basic)
 			.build_and_execute(|| {
 				roll_to_signed();
@@ -1198,16 +1268,16 @@ mod tests {
 					raw.solution.unique_targets().len() as u32,
 				);
 				// default solution will have 5 edges (5 * 5 + 10)
-				assert_eq!(solution_weight, Weight::from_ref_time(35));
+				assert_eq!(solution_weight, Weight::from_parts(35, 0));
 				assert_eq!(raw.solution.voter_count(), 5);
 				assert_eq!(
 					<Runtime as Config>::SignedMaxWeight::get(),
-					Weight::from_ref_time(40).set_proof_size(u64::MAX)
+					Weight::from_parts(40, u64::MAX)
 				);
 
 				assert_ok!(MultiPhase::submit(RuntimeOrigin::signed(99), Box::new(raw.clone())));
 
-				<SignedMaxWeight>::set(Weight::from_ref_time(30).set_proof_size(u64::MAX));
+				<SignedMaxWeight>::set(Weight::from_parts(30, u64::MAX));
 
 				// note: resubmitting the same solution is technically okay as long as the queue has
 				// space.
@@ -1304,8 +1374,12 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						origin: Some(99),
+						prev_ejected: false
+					},
 					Event::Rewarded { account: 99, value: 7 }
 				]
 			);

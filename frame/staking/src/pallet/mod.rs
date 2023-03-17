@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -46,7 +46,7 @@ pub use impls::*;
 use crate::{
 	slashing, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo, BalanceOf, EraPayout,
 	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations, PositiveImbalanceOf,
-	Releases, RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
+	RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
 	ValidatorPrefs,
 };
 
@@ -64,8 +64,12 @@ pub mod pallet {
 
 	use super::*;
 
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(13);
+
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	/// Possible operations on the configuration values of this pallet.
@@ -183,8 +187,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type SlashDeferDuration: Get<EraIndex>;
 
-		/// The origin which can cancel a deferred slash. Root can always do this.
-		type SlashCancelOrigin: EnsureOrigin<Self::RuntimeOrigin>;
+		/// The origin which can manage less critical staking parameters that does not require root.
+		///
+		/// Supported actions: (1) cancel deferred slash, (2) set minimum commission.
+		type AdminOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Interface for interacting with a session pallet.
 		type SessionInterface: SessionInterface<Self::AccountId>;
@@ -286,6 +292,8 @@ pub mod pallet {
 	pub type Invulnerables<T: Config> = StorageValue<_, Vec<T::AccountId>, ValueQuery>;
 
 	/// Map from all locked "stash" accounts to the controller account.
+	///
+	/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
 	#[pallet::storage]
 	#[pallet::getter(fn bonded)]
 	pub type Bonded<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, T::AccountId>;
@@ -314,12 +322,16 @@ pub mod pallet {
 	pub type Ledger<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, StakingLedger<T>>;
 
 	/// Where the reward payment should be made. Keyed by stash.
+	///
+	/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
 	#[pallet::storage]
 	#[pallet::getter(fn payee)]
 	pub type Payee<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, RewardDestination<T::AccountId>, ValueQuery>;
 
 	/// The map from (wannabe) validator stash key to the preferences of that validator.
+	///
+	/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
 	#[pallet::storage]
 	#[pallet::getter(fn validators)]
 	pub type Validators<T: Config> =
@@ -347,6 +359,8 @@ pub mod pallet {
 	///
 	/// Lastly, if any of the nominators become non-decodable, they can be chilled immediately via
 	/// [`Call::chill_other`] dispatchable by anyone.
+	///
+	/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
 	#[pallet::storage]
 	#[pallet::getter(fn nominators)]
 	pub type Nominators<T: Config> =
@@ -559,13 +573,6 @@ pub mod pallet {
 	#[pallet::getter(fn offending_validators)]
 	pub type OffendingValidators<T: Config> = StorageValue<_, Vec<(u32, bool)>, ValueQuery>;
 
-	/// True if network has been upgraded to this version.
-	/// Storage version of the pallet.
-	///
-	/// This is set to v7.0.0 for new networks.
-	#[pallet::storage]
-	pub(crate) type StorageVersion<T: Config> = StorageValue<_, Releases, ValueQuery>;
-
 	/// The threshold for when users can start calling `chill_other` for other validators /
 	/// nominators. The threshold is compared to the actual number of validators / nominators
 	/// (`CountFor*`) in the system compared to the configured max (`Max*Count`).
@@ -616,7 +623,6 @@ pub mod pallet {
 			ForceEra::<T>::put(self.force_era);
 			CanceledSlashPayout::<T>::put(self.canceled_payout);
 			SlashRewardFraction::<T>::put(self.slash_reward_fraction);
-			StorageVersion::<T>::put(Releases::V7_0_0);
 			MinNominatorBond::<T>::put(self.min_nominator_bond);
 			MinValidatorBond::<T>::put(self.min_validator_bond);
 			if let Some(x) = self.max_validator_count {
@@ -708,6 +714,8 @@ pub mod pallet {
 		PayoutStarted { era_index: EraIndex, validator_stash: T::AccountId },
 		/// A validator has set their preferences.
 		ValidatorPrefsSet { stash: T::AccountId, prefs: ValidatorPrefs },
+		/// A new force era mode was set.
+		ForceEra { mode: Forcing },
 	}
 
 	#[pallet::error]
@@ -832,15 +840,13 @@ pub mod pallet {
 		/// The dispatch origin for this call must be _Signed_ by the stash account.
 		///
 		/// Emits `Bonded`.
-		/// # <weight>
+		/// ## Complexity
 		/// - Independent of the arguments. Moderate complexity.
 		/// - O(1).
 		/// - Three extra DB entries.
 		///
 		/// NOTE: Two of the storage writes (`Self::bonded`, `Self::payee`) are _never_ cleaned
 		/// unless the `origin` falls below _existential deposit_ and gets removed as dust.
-		/// ------------------
-		/// # </weight>
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::bond())]
 		pub fn bond(
@@ -907,10 +913,9 @@ pub mod pallet {
 		///
 		/// Emits `Bonded`.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - Independent of the arguments. Insignificant complexity.
 		/// - O(1).
-		/// # </weight>
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::bond_extra())]
 		pub fn bond_extra(
@@ -1068,10 +1073,9 @@ pub mod pallet {
 		///
 		/// See also [`Call::unbond`].
 		///
-		/// # <weight>
-		/// Complexity O(S) where S is the number of slashing spans to remove
+		/// ## Complexity
+		/// O(S) where S is the number of slashing spans to remove
 		/// NOTE: Weight annotation is the kill scenario, we refund otherwise.
-		/// # </weight>
 		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::withdraw_unbonded_kill(*num_slashing_spans))]
 		pub fn withdraw_unbonded(
@@ -1128,11 +1132,10 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - The transaction's complexity is proportional to the size of `targets` (N)
 		/// which is capped at CompactAssignments::LIMIT (T::MaxNominations).
 		/// - Both the reads and writes follow a similar pattern.
-		/// # </weight>
 		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::nominate(targets.len() as u32))]
 		pub fn nominate(
@@ -1197,11 +1200,10 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - Independent of the arguments. Insignificant complexity.
 		/// - Contains one read.
 		/// - Writes are limited to the `origin` account key.
-		/// # </weight>
 		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::chill())]
 		pub fn chill(origin: OriginFor<T>) -> DispatchResult {
@@ -1217,16 +1219,12 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
 		///
-		/// # <weight>
+		/// ## Complexity
+		/// - O(1)
 		/// - Independent of the arguments. Insignificant complexity.
 		/// - Contains a limited number of reads.
 		/// - Writes are limited to the `origin` account key.
 		/// ---------
-		/// - Weight: O(1)
-		/// - DB Weight:
-		///     - Read: Ledger
-		///     - Write: Payee
-		/// # </weight>
 		#[pallet::call_index(7)]
 		#[pallet::weight(T::WeightInfo::set_payee())]
 		pub fn set_payee(
@@ -1246,16 +1244,11 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be _Signed_ by the stash, not the controller.
 		///
-		/// # <weight>
+		/// ## Complexity
+		/// O(1)
 		/// - Independent of the arguments. Insignificant complexity.
 		/// - Contains a limited number of reads.
 		/// - Writes are limited to the `origin` account key.
-		/// ----------
-		/// Weight: O(1)
-		/// DB Weight:
-		/// - Read: Bonded, Ledger New Controller, Ledger Old Controller
-		/// - Write: Bonded, Ledger New Controller, Ledger Old Controller
-		/// # </weight>
 		#[pallet::call_index(8)]
 		#[pallet::weight(T::WeightInfo::set_controller())]
 		pub fn set_controller(
@@ -1281,10 +1274,8 @@ pub mod pallet {
 		///
 		/// The dispatch origin must be Root.
 		///
-		/// # <weight>
-		/// Weight: O(1)
-		/// Write: Validator Count
-		/// # </weight>
+		/// ## Complexity
+		/// O(1)
 		#[pallet::call_index(9)]
 		#[pallet::weight(T::WeightInfo::set_validator_count())]
 		pub fn set_validator_count(
@@ -1307,9 +1298,8 @@ pub mod pallet {
 		///
 		/// The dispatch origin must be Root.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// Same as [`Self::set_validator_count`].
-		/// # </weight>
 		#[pallet::call_index(10)]
 		#[pallet::weight(T::WeightInfo::set_validator_count())]
 		pub fn increase_validator_count(
@@ -1333,9 +1323,8 @@ pub mod pallet {
 		///
 		/// The dispatch origin must be Root.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// Same as [`Self::set_validator_count`].
-		/// # </weight>
 		#[pallet::call_index(11)]
 		#[pallet::weight(T::WeightInfo::set_validator_count())]
 		pub fn scale_validator_count(origin: OriginFor<T>, factor: Percent) -> DispatchResult {
@@ -1362,16 +1351,14 @@ pub mod pallet {
 		/// Thus the election process may be ongoing when this is called. In this case the
 		/// election will continue until the next era is triggered.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - No arguments.
 		/// - Weight: O(1)
-		/// - Write: ForceEra
-		/// # </weight>
 		#[pallet::call_index(12)]
 		#[pallet::weight(T::WeightInfo::force_no_eras())]
 		pub fn force_no_eras(origin: OriginFor<T>) -> DispatchResult {
 			ensure_root(origin)?;
-			ForceEra::<T>::put(Forcing::ForceNone);
+			Self::set_force_era(Forcing::ForceNone);
 			Ok(())
 		}
 
@@ -1386,16 +1373,14 @@ pub mod pallet {
 		/// If this is called just before a new era is triggered, the election process may not
 		/// have enough blocks to get a result.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - No arguments.
 		/// - Weight: O(1)
-		/// - Write ForceEra
-		/// # </weight>
 		#[pallet::call_index(13)]
 		#[pallet::weight(T::WeightInfo::force_new_era())]
 		pub fn force_new_era(origin: OriginFor<T>) -> DispatchResult {
 			ensure_root(origin)?;
-			ForceEra::<T>::put(Forcing::ForceNew);
+			Self::set_force_era(Forcing::ForceNew);
 			Ok(())
 		}
 
@@ -1446,13 +1431,13 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_new_era_always())]
 		pub fn force_new_era_always(origin: OriginFor<T>) -> DispatchResult {
 			ensure_root(origin)?;
-			ForceEra::<T>::put(Forcing::ForceAlways);
+			Self::set_force_era(Forcing::ForceAlways);
 			Ok(())
 		}
 
 		/// Cancel enactment of a deferred slash.
 		///
-		/// Can be called by the `T::SlashCancelOrigin`.
+		/// Can be called by the `T::AdminOrigin`.
 		///
 		/// Parameters: era and indices of the slashes for that era to kill.
 		#[pallet::call_index(17)]
@@ -1462,7 +1447,7 @@ pub mod pallet {
 			era: EraIndex,
 			slash_indices: Vec<u32>,
 		) -> DispatchResult {
-			T::SlashCancelOrigin::ensure_origin(origin)?;
+			T::AdminOrigin::ensure_origin(origin)?;
 
 			ensure!(!slash_indices.is_empty(), Error::<T>::EmptyTargets);
 			ensure!(is_sorted_and_unique(&slash_indices), Error::<T>::NotSortedAndUnique);
@@ -1489,18 +1474,8 @@ pub mod pallet {
 		/// The origin of this call must be _Signed_. Any account can call this function, even if
 		/// it is not one of the stakers.
 		///
-		/// # <weight>
-		/// - Time complexity: at most O(MaxNominatorRewardedPerValidator).
-		/// - Contains a limited number of reads and writes.
-		/// -----------
-		/// N is the Number of payouts for the validator (including the validator)
-		/// Weight:
-		/// - Reward Destination Staked: O(N)
-		/// - Reward Destination Controller (Creating): O(N)
-		///
-		///   NOTE: weights are assuming that payouts are made to alive stash account (Staked).
-		///   Paying even a dead controller is cheaper weight-wise. We don't do any refunds here.
-		/// # </weight>
+		/// ## Complexity
+		/// - At most O(MaxNominatorRewardedPerValidator).
 		#[pallet::call_index(18)]
 		#[pallet::weight(T::WeightInfo::payout_stakers_alive_staked(
 			T::MaxNominatorRewardedPerValidator::get()
@@ -1518,11 +1493,9 @@ pub mod pallet {
 		///
 		/// The dispatch origin must be signed by the controller.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - Time complexity: O(L), where L is unlocking chunks
 		/// - Bounded by `MaxUnlockingChunks`.
-		/// - Storage changes: Can't increase storage, only decrease it.
-		/// # </weight>
 		#[pallet::call_index(19)]
 		#[pallet::weight(T::WeightInfo::rebond(T::MaxUnlockingChunks::get() as u32))]
 		pub fn rebond(
@@ -1683,7 +1656,6 @@ pub mod pallet {
 			config_op_exp!(MinCommission<T>, min_commission);
 			Ok(())
 		}
-
 		/// Declare a `controller` to stop participating as either a validator or nominator.
 		///
 		/// Effects will be felt at the beginning of the next era.
@@ -1790,6 +1762,18 @@ pub mod pallet {
 					})
 					.ok_or(Error::<T>::NotStash)
 			})?;
+			Ok(())
+		}
+
+		/// Sets the minimum amount of commission that each validators must maintain.
+		///
+		/// This call has lower privilege requirements than `set_staking_config` and can be called
+		/// by the `T::AdminOrigin`. Root can always call this.
+		#[pallet::call_index(25)]
+		#[pallet::weight(T::WeightInfo::set_min_commission())]
+		pub fn set_min_commission(origin: OriginFor<T>, new: Perbill) -> DispatchResult {
+			T::AdminOrigin::ensure_origin(origin)?;
+			MinCommission::<T>::put(new);
 			Ok(())
 		}
 	}

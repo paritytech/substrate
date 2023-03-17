@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -367,18 +367,18 @@ mod tests {
 
 		impl OnInitialize<u8> for Test {
 			fn on_initialize(_n: u8) -> Weight {
-				Weight::from_ref_time(10)
+				Weight::from_parts(10, 0)
 			}
 		}
 		impl OnRuntimeUpgrade for Test {
 			fn on_runtime_upgrade() -> Weight {
-				Weight::from_ref_time(20)
+				Weight::from_parts(20, 0)
 			}
 		}
 
 		TestExternalities::default().execute_with(|| {
-			assert_eq!(<(Test, Test)>::on_initialize(0), Weight::from_ref_time(20));
-			assert_eq!(<(Test, Test)>::on_runtime_upgrade(), Weight::from_ref_time(40));
+			assert_eq!(<(Test, Test)>::on_initialize(0), Weight::from_parts(20, 0));
+			assert_eq!(<(Test, Test)>::on_runtime_upgrade(), Weight::from_parts(40, 0));
 		});
 	}
 

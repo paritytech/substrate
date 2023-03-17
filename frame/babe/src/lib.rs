@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -39,6 +39,7 @@ use sp_runtime::{
 	ConsensusEngineId, KeyTypeId, Permill,
 };
 use sp_session::{GetSessionNumber, GetValidatorCount};
+use sp_staking::SessionIndex;
 use sp_std::prelude::*;
 
 use sp_consensus_babe::{
@@ -102,7 +103,7 @@ impl EpochChangeTrigger for SameAuthoritiesForever {
 			let authorities = <Pallet<T>>::authorities();
 			let next_authorities = authorities.clone();
 
-			<Pallet<T>>::enact_epoch_change(authorities, next_authorities);
+			<Pallet<T>>::enact_epoch_change(authorities, next_authorities, None);
 		}
 	}
 }
@@ -315,6 +316,19 @@ pub mod pallet {
 	/// (you can fallback to `EpochConfig` instead in that case).
 	#[pallet::storage]
 	pub(super) type NextEpochConfig<T> = StorageValue<_, BabeEpochConfiguration>;
+
+	/// A list of the last 100 skipped epochs and the corresponding session index
+	/// when the epoch was skipped.
+	///
+	/// This is only used for validating equivocation proofs. An equivocation proof
+	/// must contains a key-ownership proof for a given session, therefore we need a
+	/// way to tie together sessions and epoch indices, i.e. we need to validate that
+	/// a validator was the owner of a given key on a given session, and what the
+	/// active epoch index was during that session.
+	#[pallet::storage]
+	#[pallet::getter(fn skipped_epochs)]
+	pub(super) type SkippedEpochs<T> =
+		StorageValue<_, BoundedVec<(u64, SessionIndex), ConstU32<100>>, ValueQuery>;
 
 	#[cfg_attr(feature = "std", derive(Default))]
 	#[pallet::genesis_config]
@@ -572,18 +586,65 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Typically, this is not handled directly by the user, but by higher-level validator-set
 	/// manager logic like `pallet-session`.
+	///
+	/// This doesn't do anything if `authorities` is empty.
 	pub fn enact_epoch_change(
 		authorities: WeakBoundedVec<(AuthorityId, BabeAuthorityWeight), T::MaxAuthorities>,
 		next_authorities: WeakBoundedVec<(AuthorityId, BabeAuthorityWeight), T::MaxAuthorities>,
+		session_index: Option<SessionIndex>,
 	) {
 		// PRECONDITION: caller has done initialization and is guaranteed
 		// by the session module to be called before this.
 		debug_assert!(Self::initialized().is_some());
 
-		// Update epoch index
-		let epoch_index = EpochIndex::<T>::get()
-			.checked_add(1)
-			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
+		if authorities.is_empty() {
+			log::warn!(target: LOG_TARGET, "Ignoring empty epoch change.");
+
+			return
+		}
+
+		// Update epoch index.
+		//
+		// NOTE: we figure out the epoch index from the slot, which may not
+		// necessarily be contiguous if the chain was offline for more than
+		// `T::EpochDuration` slots. When skipping from epoch N to e.g. N+4, we
+		// will be using the randomness and authorities for that epoch that had
+		// been previously announced for epoch N+1, and the randomness collected
+		// during the current epoch (N) will be used for epoch N+5.
+		let epoch_index = sp_consensus_babe::epoch_index(
+			CurrentSlot::<T>::get(),
+			GenesisSlot::<T>::get(),
+			T::EpochDuration::get(),
+		);
+
+		let current_epoch_index = EpochIndex::<T>::get();
+		if current_epoch_index.saturating_add(1) != epoch_index {
+			// we are skipping epochs therefore we need to update the mapping
+			// of epochs to session
+			if let Some(session_index) = session_index {
+				SkippedEpochs::<T>::mutate(|skipped_epochs| {
+					if epoch_index < session_index as u64 {
+						log::warn!(
+							target: LOG_TARGET,
+							"Current epoch index {} is lower than session index {}.",
+							epoch_index,
+							session_index,
+						);
+
+						return
+					}
+
+					if skipped_epochs.is_full() {
+						// NOTE: this is O(n) but we currently don't have a bounded `VecDeque`.
+						// this vector is bounded to a small number of elements so performance
+						// shouldn't be an issue.
+						skipped_epochs.remove(0);
+					}
+
+					skipped_epochs.force_push((epoch_index, session_index));
+				})
+			}
+		}
 
 		EpochIndex::<T>::put(epoch_index);
 		Authorities::<T>::put(authorities);
@@ -630,11 +691,16 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Finds the start slot of the current epoch. only guaranteed to
-	/// give correct results after `initialize` of the first block
-	/// in the chain (as its result is based off of `GenesisSlot`).
+	/// Finds the start slot of the current epoch.
+	///
+	/// Only guaranteed to give correct results after `initialize` of the first
+	/// block in the chain (as its result is based off of `GenesisSlot`).
 	pub fn current_epoch_start() -> Slot {
-		Self::epoch_start(EpochIndex::<T>::get())
+		sp_consensus_babe::epoch_start_slot(
+			EpochIndex::<T>::get(),
+			GenesisSlot::<T>::get(),
+			T::EpochDuration::get(),
+		)
 	}
 
 	/// Produces information about the current epoch.
@@ -658,9 +724,15 @@ impl<T: Config> Pallet<T> {
 			 if u64 is not enough we should crash for safety; qed.",
 		);
 
+		let start_slot = sp_consensus_babe::epoch_start_slot(
+			next_epoch_index,
+			GenesisSlot::<T>::get(),
+			T::EpochDuration::get(),
+		);
+
 		Epoch {
 			epoch_index: next_epoch_index,
-			start_slot: Self::epoch_start(next_epoch_index),
+			start_slot,
 			duration: T::EpochDuration::get(),
 			authorities: NextAuthorities::<T>::get().to_vec(),
 			randomness: NextRandomness::<T>::get(),
@@ -670,17 +742,6 @@ impl<T: Config> Pallet<T> {
 				)
 			}),
 		}
-	}
-
-	fn epoch_start(epoch_index: u64) -> Slot {
-		// (epoch_index * epoch_duration) + genesis_slot
-
-		const PROOF: &str = "slot number is u64; it should relate in some way to wall clock time; \
-							 if u64 is not enough we should crash for safety; qed.";
-
-		let epoch_start = epoch_index.checked_mul(T::EpochDuration::get()).expect(PROOF);
-
-		epoch_start.checked_add(*GenesisSlot::<T>::get()).expect(PROOF).into()
 	}
 
 	fn deposit_consensus<U: Encode>(new: U) {
@@ -799,6 +860,36 @@ impl<T: Config> Pallet<T> {
 		this_randomness
 	}
 
+	/// Returns the session index that was live when the given epoch happened,
+	/// taking into account any skipped epochs.
+	///
+	/// This function is only well defined for epochs that actually existed,
+	/// e.g. if we skipped from epoch 10 to 20 then a call for epoch 15 (which
+	/// didn't exist) will return an incorrect session index.
+	fn session_index_for_epoch(epoch_index: u64) -> SessionIndex {
+		let skipped_epochs = SkippedEpochs::<T>::get();
+		match skipped_epochs.binary_search_by_key(&epoch_index, |(epoch_index, _)| *epoch_index) {
+			// we have an exact match so we just return the given session index
+			Ok(index) => skipped_epochs[index].1,
+			// we haven't found any skipped epoch before the given epoch,
+			// so the epoch index and session index should match
+			Err(0) => epoch_index.saturated_into::<u32>(),
+			// we have found a skipped epoch before the given epoch
+			Err(index) => {
+				// the element before the given index should give us the skipped epoch
+				// that's closest to the one we're trying to find the session index for
+				let closest_skipped_epoch = skipped_epochs[index - 1];
+
+				// calculate the number of skipped epochs at this point by checking the difference
+				// between the epoch and session indices. epoch index should always be greater or
+				// equal to session index, this is because epochs can be skipped whereas sessions
+				// can't (this is enforced when pushing into `SkippedEpochs`)
+				let skipped_epochs = closest_skipped_epoch.0 - closest_skipped_epoch.1 as u64;
+				epoch_index.saturating_sub(skipped_epochs).saturated_into::<u32>()
+			},
+		}
+	}
+
 	fn do_report_equivocation(
 		reporter: Option<T::AccountId>,
 		equivocation_proof: EquivocationProof<T::Header>,
@@ -815,12 +906,11 @@ impl<T: Config> Pallet<T> {
 		let validator_set_count = key_owner_proof.validator_count();
 		let session_index = key_owner_proof.session();
 
-		let epoch_index = (*slot.saturating_sub(GenesisSlot::<T>::get()) / T::EpochDuration::get())
-			.saturated_into::<u32>();
+		let epoch_index = *slot.saturating_sub(GenesisSlot::<T>::get()) / T::EpochDuration::get();
 
 		// check that the slot number is consistent with the session index
 		// in the key ownership proof (i.e. slot is for that epoch)
-		if epoch_index != session_index {
+		if Self::session_index_for_epoch(epoch_index) != session_index {
 			return Err(Error::<T>::InvalidKeyOwnershipProof.into())
 		}
 
@@ -909,7 +999,10 @@ impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T> {
 	type Public = AuthorityId;
 }
 
-impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
+impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T>
+where
+	T: pallet_session::Config,
+{
 	type Key = AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
@@ -942,7 +1035,9 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 			),
 		);
 
-		Self::enact_epoch_change(bounded_authorities, next_bounded_authorities)
+		let session_index = <pallet_session::Pallet<T>>::current_index();
+
+		Self::enact_epoch_change(bounded_authorities, next_bounded_authorities, Some(session_index))
 	}
 
 	fn on_disabled(i: u32) {
