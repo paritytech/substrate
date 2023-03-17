@@ -10386,6 +10386,7 @@ dependencies = [
  "sp-ark-ed-on-bls12-377",
  "sp-ark-ed-on-bls12-381",
  "sp-ark-models 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-arkworks",
  "sp-io",
 ]
 

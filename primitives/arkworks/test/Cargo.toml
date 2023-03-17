@@ -18,6 +18,7 @@ sp-ark-models = { version = "0.4.0", default-features = false }
 
 [dev-dependencies]
 sp-io =  { version = "7.0.0", path = "../../io", default-features =  false }
+sp-arkworks = { path = "../" }
 ark-ec = { version = "0.4.0", default-features = false }
 ark-algebra-test-templates = { version = "0.4.0", default-features = false }
 sp-ark-bls12-377 = { version = "0.4.0", git = "https://github.com/paritytech/ark-substrate", features = [ "curve" ], default-features = false }
@@ -41,6 +42,7 @@ std = [
     "sp-ark-bw6-761/std",
     "sp-ark-ed-on-bls12-377/std",
     "sp-ark-ed-on-bls12-381/std",
+    "sp-arkworks/std"
 ]
 curve = [ "scalar_field", "base_field" ]
 scalar_field = []
