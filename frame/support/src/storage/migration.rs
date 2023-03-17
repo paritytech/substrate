@@ -389,7 +389,7 @@ pub fn move_prefix(from_prefix: &[u8], to_prefix: &[u8]) {
 	}
 }
 
-/// A phony migration that does nothing, except executing [`TryDecodeEntireStorage`] on
+/// A phony migration that does nothing, except executing `TryDecodeEntireStorage` on
 /// `post_upgrade`, which implies it is only available if `try-state` feature is used.
 ///
 /// This can be used typically in the top level runtime, where `AllPallets` typically comes from
