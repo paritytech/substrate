@@ -29,7 +29,7 @@ use sp_std::{prelude::*, vec};
 use frame_benchmarking::v1::benchmarks;
 use frame_support::{
 	codec::Decode,
-	traits::{Get, KeyOwnerProofSystem, Hooks},
+	traits::{Get, Hooks, KeyOwnerProofSystem},
 };
 use frame_system::RawOrigin;
 use pallet_session::{historical::Pallet as Historical, Pallet as Session, *};

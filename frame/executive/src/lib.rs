@@ -120,10 +120,7 @@ use codec::{Codec, Encode};
 use frame_support::{
 	dispatch::{DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo},
 	pallet_prelude::InvalidTransaction,
-	traits::{
-		EnsureInherentsAreFirst, ExecuteBlock, OffchainWorker, OnFinalize, OnIdle, OnInitialize,
-		OnRuntimeUpgrade,
-	},
+	traits::{EnsureInherentsAreFirst, ExecuteBlock, Hooks},
 	weights::Weight,
 };
 use sp_runtime::{
@@ -175,12 +172,8 @@ impl<
 		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
 		Context: Default,
 		UnsignedValidator,
-		AllPalletsWithSystem: OnRuntimeUpgrade
-			+ OnInitialize<System::BlockNumber>
-			+ OnIdle<System::BlockNumber>
-			+ OnFinalize<System::BlockNumber>
-			+ OffchainWorker<System::BlockNumber>,
-		COnRuntimeUpgrade: OnRuntimeUpgrade,
+		AllPalletsWithSystem: Hooks<System::BlockNumber>,
+		COnRuntimeUpgrade: Hooks<System::BlockNumber>,
 	> ExecuteBlock<Block>
 	for Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
 where
@@ -209,13 +202,8 @@ impl<
 		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
 		Context: Default,
 		UnsignedValidator,
-		AllPalletsWithSystem: OnRuntimeUpgrade
-			+ OnInitialize<System::BlockNumber>
-			+ OnIdle<System::BlockNumber>
-			+ OnFinalize<System::BlockNumber>
-			+ OffchainWorker<System::BlockNumber>
-			+ frame_support::traits::TryState<System::BlockNumber>,
-		COnRuntimeUpgrade: OnRuntimeUpgrade,
+		AllPalletsWithSystem: Hooks<System::BlockNumber>,
+		COnRuntimeUpgrade: Hooks<System::BlockNumber>,
 	> Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
@@ -291,9 +279,8 @@ where
 
 		// run the try-state checks of all pallets, ensuring they don't alter any state.
 		let _guard = frame_support::StorageNoopGuard::default();
-		<AllPalletsWithSystem as frame_support::traits::TryState<System::BlockNumber>>::try_state(
+		<AllPalletsWithSystem as frame_support::traits::Hooks<System::BlockNumber>>::try_state(
 			*header.number(),
-			select,
 		)
 		.map_err(|e| {
 			frame_support::log::error!(target: "runtime::executive", "failure: {:?}", e);
@@ -338,22 +325,19 @@ where
 	) -> Result<Weight, &'static str> {
 		if checks.try_state() {
 			let _guard = frame_support::StorageNoopGuard::default();
-			<AllPalletsWithSystem as frame_support::traits::TryState<System::BlockNumber>>::try_state(
+			<AllPalletsWithSystem as frame_support::traits::Hooks<System::BlockNumber>>::try_state(
 				frame_system::Pallet::<System>::block_number(),
-				frame_try_runtime::TryStateSelect::All,
 			)?;
 		}
 
-		let weight =
-			<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::try_on_runtime_upgrade(
-				checks.pre_and_post(),
-			)?;
+		let weight = <(COnRuntimeUpgrade, AllPalletsWithSystem) as frame_support::traits::Hooks<
+			System::BlockNumber,
+		>>::try_on_runtime_upgrade(checks.pre_and_post())?;
 
 		if checks.try_state() {
 			let _guard = frame_support::StorageNoopGuard::default();
-			<AllPalletsWithSystem as frame_support::traits::TryState<System::BlockNumber>>::try_state(
+			<AllPalletsWithSystem as frame_support::traits::Hooks<System::BlockNumber>>::try_state(
 				frame_system::Pallet::<System>::block_number(),
-				frame_try_runtime::TryStateSelect::All,
 			)?;
 		}
 
@@ -366,12 +350,8 @@ impl<
 		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
 		Context: Default,
 		UnsignedValidator,
-		AllPalletsWithSystem: OnRuntimeUpgrade
-			+ OnInitialize<System::BlockNumber>
-			+ OnIdle<System::BlockNumber>
-			+ OnFinalize<System::BlockNumber>
-			+ OffchainWorker<System::BlockNumber>,
-		COnRuntimeUpgrade: OnRuntimeUpgrade,
+		AllPalletsWithSystem: Hooks<System::BlockNumber>,
+		COnRuntimeUpgrade: Hooks<System::BlockNumber>,
 	> Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
@@ -383,7 +363,9 @@ where
 {
 	/// Execute all `OnRuntimeUpgrade` of this runtime, and return the aggregate weight.
 	pub fn execute_on_runtime_upgrade() -> Weight {
-		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::on_runtime_upgrade()
+		<(COnRuntimeUpgrade, AllPalletsWithSystem) as frame_support::traits::Hooks<
+			System::BlockNumber,
+		>>::on_runtime_upgrade()
 	}
 
 	/// Start the execution of a particular block.
@@ -419,9 +401,9 @@ where
 			weight = weight.saturating_add(Self::execute_on_runtime_upgrade());
 		}
 		<frame_system::Pallet<System>>::initialize(block_number, parent_hash, digest);
-		weight = weight.saturating_add(<AllPalletsWithSystem as OnInitialize<
-			System::BlockNumber,
-		>>::on_initialize(*block_number));
+		weight = weight.saturating_add(
+			<AllPalletsWithSystem as Hooks<System::BlockNumber>>::on_initialize(*block_number),
+		);
 		weight = weight.saturating_add(
 			<System::BlockWeights as frame_support::traits::Get<_>>::get().base_block,
 		);
@@ -529,7 +511,7 @@ where
 		let remaining_weight = max_weight.saturating_sub(weight.total());
 
 		if remaining_weight.all_gt(Weight::zero()) {
-			let used_weight = <AllPalletsWithSystem as OnIdle<System::BlockNumber>>::on_idle(
+			let used_weight = <AllPalletsWithSystem as Hooks<System::BlockNumber>>::on_idle(
 				block_number,
 				remaining_weight,
 			);
@@ -539,7 +521,7 @@ where
 			);
 		}
 
-		<AllPalletsWithSystem as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
+		<AllPalletsWithSystem as Hooks<System::BlockNumber>>::on_finalize(block_number);
 	}
 
 	/// Apply extrinsic outside of the block execution function.
@@ -665,9 +647,7 @@ where
 		// as well.
 		frame_system::BlockHash::<System>::insert(header.number(), header.hash());
 
-		<AllPalletsWithSystem as OffchainWorker<System::BlockNumber>>::offchain_worker(
-			*header.number(),
-		)
+		<AllPalletsWithSystem as Hooks<System::BlockNumber>>::offchain_worker(*header.number())
 	}
 }
 
@@ -940,7 +920,7 @@ mod tests {
 	const CUSTOM_ON_RUNTIME_KEY: &[u8] = b":custom:on_runtime";
 
 	struct CustomOnRuntimeUpgrade;
-	impl OnRuntimeUpgrade for CustomOnRuntimeUpgrade {
+	impl Hooks<<Runtime as frame_system::Config>::BlockNumber> for CustomOnRuntimeUpgrade {
 		fn on_runtime_upgrade() -> Weight {
 			sp_io::storage::set(TEST_KEY, "custom_upgrade".as_bytes());
 			sp_io::storage::set(CUSTOM_ON_RUNTIME_KEY, &true.encode());
@@ -1506,9 +1486,9 @@ mod tests {
 			// All weights that show up in the `initialize_block_impl`
 			let custom_runtime_upgrade_weight = CustomOnRuntimeUpgrade::on_runtime_upgrade();
 			let runtime_upgrade_weight =
-				<AllPalletsWithSystem as OnRuntimeUpgrade>::on_runtime_upgrade();
+				<AllPalletsWithSystem as frame_support::traits::Hooks<u64>>::on_runtime_upgrade();
 			let on_initialize_weight =
-				<AllPalletsWithSystem as OnInitialize<u64>>::on_initialize(block_number);
+				<AllPalletsWithSystem as Hooks<u64>>::on_initialize(block_number);
 			let base_block_weight =
 				<Runtime as frame_system::Config>::BlockWeights::get().base_block;
 

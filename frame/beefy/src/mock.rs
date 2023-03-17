@@ -21,9 +21,7 @@ use frame_election_provider_support::{onchain, SequentialPhragmen};
 use frame_support::{
 	construct_runtime, parameter_types,
 	sp_io::TestExternalities,
-	traits::{
-		ConstU16, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, Hooks,
-	},
+	traits::{ConstU16, ConstU32, ConstU64, GenesisBuild, Hooks, KeyOwnerProofSystem},
 	BasicExternalities,
 };
 use pallet_session::historical as pallet_session_historical;

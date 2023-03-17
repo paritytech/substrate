@@ -22,7 +22,7 @@ use codec::Encode;
 use frame_election_provider_support::{onchain, SequentialPhragmen};
 use frame_support::{
 	parameter_types,
-	traits::{ConstU128, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, Hooks},
+	traits::{ConstU128, ConstU32, ConstU64, GenesisBuild, Hooks, KeyOwnerProofSystem},
 };
 use pallet_session::historical as pallet_session_historical;
 use sp_consensus_babe::{AuthorityId, AuthorityPair, Slot};

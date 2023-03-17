@@ -265,6 +265,29 @@ pub trait Hooks<BlockNumber> {
 		Weight::zero()
 	}
 
+	/// Same as `on_runtime_upgrade`, but perform the optional `pre_upgrade` and `post_upgrade` as
+	/// well.
+	#[cfg(feature = "try-runtime")]
+	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, &'static str> {
+		let maybe_state = if checks {
+			let _guard = frame_support::StorageNoopGuard::default();
+			let state = Self::pre_upgrade()?;
+			Some(state)
+		} else {
+			None
+		};
+
+		let weight = Self::on_runtime_upgrade();
+
+		if let Some(state) = maybe_state {
+			let _guard = frame_support::StorageNoopGuard::default();
+			// we want to panic if any checks fail right here right now.
+			Self::post_upgrade(state)?
+		}
+
+		Ok(weight)
+	}
+
 	/// Execute the sanity checks of this pallet, per block.
 	///
 	/// It should focus on certain checks to ensure that the state is sensible. This is never
@@ -321,6 +344,53 @@ pub trait Hooks<BlockNumber> {
 	///
 	/// The test is not executed in a externalities provided environment.
 	fn integrity_test() {}
+}
+
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
+impl<BlockNumber: Copy + AtLeast32BitUnsigned> Hooks<BlockNumber> for Tuple {
+	fn on_initialize(n: BlockNumber) -> Weight {
+		let mut weight = Weight::zero();
+		for_tuples!( #( weight = weight.saturating_add(Tuple::on_initialize(n.clone())); )* );
+		weight
+	}
+
+	fn on_finalize(n: BlockNumber) {
+		for_tuples!( #( Tuple::on_finalize(n.clone()); )* );
+	}
+
+	fn on_idle(n: BlockNumber, remaining_weight: Weight) -> Weight {
+		let on_idle_functions: &[fn(BlockNumber, Weight) -> Weight] =
+			&[for_tuples!( #( Tuple::on_idle ),* )];
+		let mut weight = Weight::zero();
+		let len = on_idle_functions.len();
+		let start_index = n % (len as u32).into();
+		let start_index = start_index.try_into().ok().expect(
+			"`start_index % len` always fits into `usize`, because `len` can be in maximum `usize::MAX`; qed"
+		);
+		for on_idle_fn in on_idle_functions.iter().cycle().skip(start_index).take(len) {
+			let adjusted_remaining_weight = remaining_weight.saturating_sub(weight);
+			weight = weight.saturating_add(on_idle_fn(n, adjusted_remaining_weight));
+		}
+		weight
+	}
+
+	fn on_runtime_upgrade() -> Weight {
+		let mut weight = Weight::zero();
+		for_tuples!( #( weight = weight.saturating_add(Tuple::on_runtime_upgrade()); )* );
+		weight
+	}
+
+	#[cfg(feature = "try-runtime")]
+	/// We are executing pre- and post-checks sequentially in order to be able to test several
+	/// consecutive migrations for the same pallet without errors. Therefore pre and post upgrade
+	/// hooks for tuples are a noop.
+	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, &'static str> {
+		let mut weight = Weight::zero();
+		for_tuples!( #( weight = weight.saturating_add(Tuple::try_on_runtime_upgrade(checks)?); )* );
+		Ok(weight)
+	}
 }
 
 /// A trait to define the build function of a genesis config, T and I are placeholder for pallet

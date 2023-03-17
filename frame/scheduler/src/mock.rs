@@ -22,9 +22,7 @@ use super::*;
 use crate as scheduler;
 use frame_support::{
 	ord_parameter_types, parameter_types,
-	traits::{
-		ConstU32, ConstU64, Contains, EitherOfDiverse, EqualPrivilegeOnly, Hooks,
-	},
+	traits::{ConstU32, ConstU64, Contains, EitherOfDiverse, EqualPrivilegeOnly, Hooks},
 	weights::constants::RocksDbWeight,
 };
 use frame_system::{EnsureRoot, EnsureSignedBy};

@@ -21,7 +21,7 @@ use super::{Call, *};
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
 	dispatch::{GetDispatchInfo, Pays},
-	traits::{Currency, EstimateNextSessionRotation, KeyOwnerProofSystem, Hooks},
+	traits::{Currency, EstimateNextSessionRotation, Hooks, KeyOwnerProofSystem},
 };
 use mock::*;
 use pallet_session::ShouldEndSession;

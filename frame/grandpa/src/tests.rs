@@ -25,7 +25,7 @@ use fg_primitives::ScheduledChange;
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
 	dispatch::{GetDispatchInfo, Pays},
-	traits::{Currency, KeyOwnerProofSystem, Hooks, OneSessionHandler},
+	traits::{Currency, Hooks, KeyOwnerProofSystem, OneSessionHandler},
 };
 use frame_system::{EventRecord, Phase};
 use sp_core::H256;
