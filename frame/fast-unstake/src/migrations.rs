@@ -19,14 +19,15 @@ pub mod v1 {
 	use crate::{types::BalanceOf, *};
 	use frame_support::{
 		storage::unhashed,
-		traits::{Defensive, Get, GetStorageVersion, OnRuntimeUpgrade},
+		traits::{Defensive, Get, GetStorageVersion, Hooks},
 		weights::Weight,
 	};
+	use frame_system::pallet_prelude::BlockNumberFor;
 	use sp_staking::EraIndex;
 	use sp_std::prelude::*;
 
 	pub struct MigrateToV1<T>(sp_std::marker::PhantomData<T>);
-	impl<T: Config> OnRuntimeUpgrade for MigrateToV1<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>> for MigrateToV1<T> {
 		fn on_runtime_upgrade() -> Weight {
 			let current = Pallet::<T>::current_storage_version();
 			let onchain = Pallet::<T>::on_chain_storage_version();

@@ -16,7 +16,8 @@
 // limitations under the License.
 
 use super::*;
-use frame_support::{log, traits::OnRuntimeUpgrade};
+use frame_support::{log, traits::Hooks};
+use frame_system::pallet_prelude::BlockNumberFor;
 
 pub mod v1 {
 	use frame_support::{pallet_prelude::*, weights::Weight};
@@ -61,7 +62,7 @@ pub mod v1 {
 	}
 
 	pub struct MigrateToV1<T>(sp_std::marker::PhantomData<T>);
-	impl<T: Config> OnRuntimeUpgrade for MigrateToV1<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>> for MigrateToV1<T> {
 		fn on_runtime_upgrade() -> Weight {
 			let current_version = Pallet::<T>::current_storage_version();
 			let onchain_version = Pallet::<T>::on_chain_storage_version();

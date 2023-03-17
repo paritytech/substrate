@@ -20,9 +20,10 @@
 use super::*;
 use frame_support::{
 	dispatch::GetStorageVersion,
-	traits::{OnRuntimeUpgrade, WrapperKeepOpaque},
+	traits::{Hooks, WrapperKeepOpaque},
 	Identity,
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 
 #[cfg(feature = "try-runtime")]
 use frame_support::ensure;
@@ -41,7 +42,7 @@ pub mod v1 {
 	>;
 
 	pub struct MigrateToV1<T>(sp_std::marker::PhantomData<T>);
-	impl<T: Config> OnRuntimeUpgrade for MigrateToV1<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>> for MigrateToV1<T> {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 			let onchain = Pallet::<T>::on_chain_storage_version();

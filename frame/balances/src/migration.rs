@@ -17,9 +17,10 @@
 use super::*;
 use frame_support::{
 	pallet_prelude::*,
-	traits::{OnRuntimeUpgrade, PalletInfoAccess},
+	traits::{Hooks, PalletInfoAccess},
 	weights::Weight,
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 
 fn migrate_v0_to_v1<T: Config<I>, I: 'static>(accounts: &[T::AccountId]) -> Weight {
 	let onchain_version = Pallet::<T, I>::on_chain_storage_version();
@@ -54,7 +55,7 @@ fn migrate_v0_to_v1<T: Config<I>, I: 'static>(accounts: &[T::AccountId]) -> Weig
 // NOTE: This must be used alongside the account whose balance is expected to be inactive.
 // Generally this will be used for the XCM teleport checking account.
 pub struct MigrateToTrackInactive<T, A, I = ()>(PhantomData<(T, A, I)>);
-impl<T: Config<I>, A: Get<T::AccountId>, I: 'static> OnRuntimeUpgrade
+impl<T: Config<I>, A: Get<T::AccountId>, I: 'static> Hooks<BlockNumberFor<T>>
 	for MigrateToTrackInactive<T, A, I>
 {
 	fn on_runtime_upgrade() -> Weight {
@@ -65,7 +66,7 @@ impl<T: Config<I>, A: Get<T::AccountId>, I: 'static> OnRuntimeUpgrade
 // NOTE: This must be used alongside the accounts whose balance is expected to be inactive.
 // Generally this will be used for the XCM teleport checking accounts.
 pub struct MigrateManyToTrackInactive<T, A, I = ()>(PhantomData<(T, A, I)>);
-impl<T: Config<I>, A: Get<Vec<T::AccountId>>, I: 'static> OnRuntimeUpgrade
+impl<T: Config<I>, A: Get<Vec<T::AccountId>>, I: 'static> Hooks<BlockNumberFor<T>>
 	for MigrateManyToTrackInactive<T, A, I>
 {
 	fn on_runtime_upgrade() -> Weight {
@@ -74,7 +75,7 @@ impl<T: Config<I>, A: Get<Vec<T::AccountId>>, I: 'static> OnRuntimeUpgrade
 }
 
 pub struct ResetInactive<T, I = ()>(PhantomData<(T, I)>);
-impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for ResetInactive<T, I> {
+impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for ResetInactive<T, I> {
 	fn on_runtime_upgrade() -> Weight {
 		let onchain_version = Pallet::<T, I>::on_chain_storage_version();
 

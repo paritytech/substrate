@@ -20,8 +20,9 @@
 use super::*;
 use frame_support::{
 	storage_alias,
-	traits::{ConstU32, OnRuntimeUpgrade},
+	traits::{ConstU32, Hooks},
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_std::collections::btree_map::BTreeMap;
 
 /// The log target.
@@ -76,7 +77,7 @@ pub mod v1 {
 	/// since it is not re-hashing the preimages.
 	pub struct Migration<T>(sp_std::marker::PhantomData<T>);
 
-	impl<T: Config> OnRuntimeUpgrade for Migration<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Migration<T> {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 			assert_eq!(StorageVersion::get::<Pallet<T>>(), 0, "can only upgrade from version 0");

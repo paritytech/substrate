@@ -16,7 +16,8 @@
 // limitations under the License.
 
 use crate::{Config, Pallet, Weight, LOG_TARGET};
-use frame_support::{pallet_prelude::*, storage::migration, traits::OnRuntimeUpgrade};
+use frame_support::{pallet_prelude::*, storage::migration, traits::Hooks};
+use frame_system::pallet_prelude::BlockNumberFor;
 use log;
 
 /// The current storage version.
@@ -41,10 +42,10 @@ pub fn migrate<T: Config<I>, I: 'static>() -> Weight {
 	weight
 }
 
-/// Implements `OnRuntimeUpgrade` trait.
+/// Implements `on_runtime_upgrade()` from Hooks trait.
 pub struct Migration<T, I = ()>(PhantomData<(T, I)>);
 
-impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
+impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Migration<T, I> {
 	fn on_runtime_upgrade() -> Weight {
 		migrate::<T, I>()
 	}

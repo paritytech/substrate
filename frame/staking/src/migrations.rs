@@ -19,9 +19,9 @@
 use super::*;
 use frame_election_provider_support::SortedListProvider;
 use frame_support::{
-	dispatch::GetStorageVersion, pallet_prelude::ValueQuery, storage_alias,
-	traits::OnRuntimeUpgrade,
+	dispatch::GetStorageVersion, pallet_prelude::ValueQuery, storage_alias, traits::Hooks,
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 
 /// Used for release versioning upto v12.
 ///
@@ -56,7 +56,7 @@ pub mod v13 {
 	use super::*;
 
 	pub struct MigrateToV13<T>(sp_std::marker::PhantomData<T>);
-	impl<T: Config> OnRuntimeUpgrade for MigrateToV13<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>> for MigrateToV13<T> {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 			frame_support::ensure!(
@@ -112,7 +112,7 @@ pub mod v12 {
 	/// We will be depending on the configurable value of `HistoryDepth` post
 	/// this release.
 	pub struct MigrateToV12<T>(sp_std::marker::PhantomData<T>);
-	impl<T: Config> OnRuntimeUpgrade for MigrateToV12<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>> for MigrateToV12<T> {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 			frame_support::ensure!(
@@ -166,8 +166,8 @@ pub mod v11 {
 	use sp_io::hashing::twox_128;
 
 	pub struct MigrateToV11<T, P, N>(sp_std::marker::PhantomData<(T, P, N)>);
-	impl<T: Config, P: GetStorageVersion + PalletInfoAccess, N: Get<&'static str>> OnRuntimeUpgrade
-		for MigrateToV11<T, P, N>
+	impl<T: Config, P: GetStorageVersion + PalletInfoAccess, N: Get<&'static str>>
+		Hooks<BlockNumberFor<T>> for MigrateToV11<T, P, N>
 	{
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
@@ -262,7 +262,7 @@ pub mod v10 {
 	/// won't forget to slash them. The cap of 512 is somewhat randomly taken to
 	/// prevent us from iterating over an arbitrary large number of keys `on_runtime_upgrade`.
 	pub struct MigrateToV10<T>(sp_std::marker::PhantomData<T>);
-	impl<T: Config> OnRuntimeUpgrade for MigrateToV10<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>> for MigrateToV10<T> {
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
 			if StorageVersion::<T>::get() == ObsoleteReleases::V9_0_0 {
 				let pending_slashes = UnappliedSlashes::<T>::iter().take(512);
@@ -299,7 +299,7 @@ pub mod v9 {
 	///
 	/// This is only useful for chains that started their `VoterList` just based on nominators.
 	pub struct InjectValidatorsIntoVoterList<T>(sp_std::marker::PhantomData<T>);
-	impl<T: Config> OnRuntimeUpgrade for InjectValidatorsIntoVoterList<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>> for InjectValidatorsIntoVoterList<T> {
 		fn on_runtime_upgrade() -> Weight {
 			if StorageVersion::<T>::get() == ObsoleteReleases::V8_0_0 {
 				let prev_count = T::VoterList::count();

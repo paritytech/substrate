@@ -20,7 +20,8 @@
 use codec::{Decode, Encode};
 use core::marker::PhantomData;
 use frame_election_provider_support::ScoreProvider;
-use frame_support::traits::OnRuntimeUpgrade;
+use frame_support::traits::Hooks;
+use frame_system::pallet_prelude::BlockNumberFor;
 
 #[cfg(feature = "try-runtime")]
 use frame_support::ensure;
@@ -29,7 +30,7 @@ use sp_std::vec::Vec;
 
 /// A struct that does not migration, but only checks that the counter prefix exists and is correct.
 pub struct CheckCounterPrefix<T: crate::Config<I>, I: 'static>(sp_std::marker::PhantomData<(T, I)>);
-impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for CheckCounterPrefix<T, I> {
+impl<T: crate::Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for CheckCounterPrefix<T, I> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		frame_support::weights::Weight::zero()
 	}
@@ -86,7 +87,7 @@ mod old {
 
 /// A struct that migrates all bags lists to contain a score value.
 pub struct AddScore<T: crate::Config<I>, I: 'static = ()>(sp_std::marker::PhantomData<(T, I)>);
-impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for AddScore<T, I> {
+impl<T: crate::Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for AddScore<T, I> {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 		// The list node data should be corrupt at this point, so this is zero.
