@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Procedural macroses used in the contracts module.
+//! Procedural macros used in the contracts module.
 //!
 //! Most likely you should use the [`#[define_env]`][`macro@define_env`] attribute macro which hides
 //! boilerplate of defining external environment for a wasm module.
