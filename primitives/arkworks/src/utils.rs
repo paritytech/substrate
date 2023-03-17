@@ -25,7 +25,7 @@ pub fn multi_miller_loop_generic<Curve: Pairing>(
 		.collect();
 	let g2: Vec<_> = b_vec
 		.iter()
-		.map(|elem| deserialize_argument::<<Curve as Pairing>::G2Prepared>(elem))
+		.map(|elem| deserialize_argument::<<Curve as Pairing>::G2Affine>(elem))
 		.collect();
 
 	let result = Curve::multi_miller_loop(g1, g2);
