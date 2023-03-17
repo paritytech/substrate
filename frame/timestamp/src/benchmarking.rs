@@ -21,7 +21,7 @@
 
 use super::*;
 use frame_benchmarking::v1::{benchmarks, TrackedStorageKey};
-use frame_support::{ensure, traits::OnFinalize};
+use frame_support::{ensure, traits::Hooks};
 use frame_system::RawOrigin;
 
 use crate::Pallet as Timestamp;
