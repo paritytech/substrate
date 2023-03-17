@@ -82,20 +82,16 @@ fn decode_storage_info<V: Decode>(info: StorageInfo) -> Result<usize, &'static s
 	let mut next_key = info.prefix.clone();
 	let mut decoded = 0;
 
-	let decode_key = |key: &[u8]| {
-		match sp_io::storage::get(key) {
-			None => {
-				Ok(0)
-			},
-			Some(bytes) => {
-				let len = bytes.len();
-				let _ = <V as Decode>::decode(&mut bytes.as_ref()).map_err(|_| {
-					log::error!(target: crate::LOG_TARGET, "failed to decoded {:?}", info,);
-					"failed to decode value under existing key"
-				})?;
-				Ok::<usize, &'static str>(len)
-			},
-		}
+	let decode_key = |key: &[u8]| match sp_io::storage::get(key) {
+		None => Ok(0),
+		Some(bytes) => {
+			let len = bytes.len();
+			let _ = <V as Decode>::decode(&mut bytes.as_ref()).map_err(|_| {
+				log::error!(target: crate::LOG_TARGET, "failed to decoded {:?}", info,);
+				"failed to decode value under existing key"
+			})?;
+			Ok::<usize, &'static str>(len)
+		},
 	};
 
 	decoded += decode_key(&next_key)?;
@@ -105,7 +101,7 @@ fn decode_storage_info<V: Decode>(info: StorageInfo) -> Result<usize, &'static s
 				decoded += decode_key(&key)?;
 				next_key = key;
 			},
-			_ => break
+			_ => break,
 		}
 	}
 
@@ -129,8 +125,8 @@ where
 	}
 }
 
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty> TryDecodeEntireStorage
-	for crate::storage::types::StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty>
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> TryDecodeEntireStorage
+	for crate::storage::types::StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: StorageInstance,
 	Hasher: StorageHasher,
@@ -138,6 +134,7 @@ where
 	Value: FullCodec,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
 {
 	fn try_decode_entire_state() -> Result<usize, &'static str> {
 		let info = Self::partial_storage_info()
@@ -148,15 +145,23 @@ where
 	}
 }
 
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty> TryDecodeEntireStorage
-	for crate::storage::types::CountedStorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty>
-where
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> TryDecodeEntireStorage
+	for crate::storage::types::CountedStorageMap<
+		Prefix,
+		Hasher,
+		Key,
+		Value,
+		QueryKind,
+		OnEmpty,
+		MaxValues,
+	> where
 	Prefix: CountedStorageMapInstance,
 	Hasher: StorageHasher,
 	Key: FullCodec,
 	Value: FullCodec,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
 {
 	fn try_decode_entire_state() -> Result<usize, &'static str> {
 		let (map_info, counter_info) = match &Self::partial_storage_info()[..] {
@@ -169,7 +174,8 @@ where
 	}
 }
 
-impl<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty> TryDecodeEntireStorage
+impl<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty, MaxValues>
+	TryDecodeEntireStorage
 	for crate::storage::types::StorageDoubleMap<
 		Prefix,
 		Hasher1,
@@ -179,6 +185,7 @@ impl<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty> TryDecodeE
 		Value,
 		QueryKind,
 		OnEmpty,
+		MaxValues,
 	> where
 	Prefix: StorageInstance,
 	Hasher1: StorageHasher,
@@ -188,6 +195,7 @@ impl<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty> TryDecodeE
 	Value: FullCodec,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
 {
 	fn try_decode_entire_state() -> Result<usize, &'static str> {
 		let info = Self::partial_storage_info()
@@ -198,14 +206,15 @@ impl<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty> TryDecodeE
 	}
 }
 
-impl<Prefix, Key, Value, QueryKind, OnEmpty> TryDecodeEntireStorage
-	for crate::storage::types::StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty>
+impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues> TryDecodeEntireStorage
+	for crate::storage::types::StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: StorageInstance,
 	Key: KeyGenerator,
 	Value: FullCodec,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
 {
 	fn try_decode_entire_state() -> Result<usize, &'static str> {
 		let info = Self::partial_storage_info()
@@ -356,8 +365,7 @@ impl<BlockNumber: Clone + sp_std::fmt::Debug + AtLeast32BitUnsigned> TryState<Bl
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::Blake2_128Concat;
-	use crate::storage::types;
+	use crate::{storage::types, Blake2_128Concat};
 
 	// TODO reuse?
 	macro_rules! build_prefix {
@@ -369,7 +377,7 @@ mod tests {
 				}
 				const STORAGE_PREFIX: &'static str = stringify!($name);
 			}
-		}
+		};
 	}
 
 	build_prefix!(ValuePrefix);
@@ -450,7 +458,7 @@ mod tests {
 			assert_eq!(CMap::try_decode_entire_state(), Ok(4 + counter));
 
 			// counter is cleared again.
-			CMap::clear(u32::MAX, None).unwrap();
+			let _ = CMap::clear(u32::MAX, None);
 			assert_eq!(CMap::try_decode_entire_state(), Ok(0 + 0));
 
 			// two bytes, cannot be decoded into u32.
