@@ -2275,6 +2275,10 @@ impl_runtime_apis! {
 		fn quote_price_tokens_for_exact_tokens(asset1: NativeOrAssetId<u32>, asset2: NativeOrAssetId<u32>, amount: u128, include_fee: bool) -> Option<Balance> {
 			Dex::quote_price_tokens_for_exact_tokens(asset1, asset2, amount, include_fee)
 		}
+
+		fn get_reserves(asset1: NativeOrAssetId<u32>, asset2: NativeOrAssetId<u32>) -> Option<(Balance, Balance)> {
+			Dex::get_reserves(asset1, asset2).ok()
+		}
 	}
 
 	impl pallet_transaction_payment_rpc_runtime_api::TransactionPaymentCallApi<Block, Balance, RuntimeCall>

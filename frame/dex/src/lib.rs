@@ -33,7 +33,7 @@
 //!
 //! ```text
 //! curl -sS -H "Content-Type: application/json" -d \
-//! '{"id":1, "jsonrpc":"2.0", "method": "state_call", "params": ["DexApi_quote_price", "0x0101000000000000000000000011"]}' \
+//! '{"id":1, "jsonrpc":"2.0", "method": "state_call", "params": ["DexApi_quote_price_tokens_for_exact_tokens", "0x0101000000000000000000000011000000000000000000"]}' \
 //! http://localhost:9933/
 //! ```
 
@@ -646,7 +646,7 @@ pub mod pallet {
 			}
 		}
 
-		pub(crate) fn get_reserves(
+		pub fn get_reserves(
 			asset1: T::MultiAssetId,
 			asset2: T::MultiAssetId,
 		) -> Result<(AssetBalanceOf<T>, AssetBalanceOf<T>), Error<T>> {
@@ -932,5 +932,7 @@ sp_api::decl_runtime_apis! {
 		fn quote_price_tokens_for_exact_tokens(asset1: AssetId, asset2: AssetId, amount: AssetBalance, include_fee: bool) -> Option<Balance>;
 
 		fn quote_price_exact_tokens_for_tokens(asset1: AssetId, asset2: AssetId, amount: AssetBalance, include_fee: bool) -> Option<Balance>;
+
+		fn get_reserves(asset1: AssetId, asset2: AssetId) -> Option<(Balance, Balance)>;
 	}
 }
