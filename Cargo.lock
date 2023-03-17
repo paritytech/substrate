@@ -10339,7 +10339,6 @@ dependencies = [
 name = "sp-keystore"
 version = "0.13.0"
 dependencies = [
- "async-trait",
  "futures",
  "merlin",
  "parity-scale-codec",
