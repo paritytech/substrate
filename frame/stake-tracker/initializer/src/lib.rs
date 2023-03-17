@@ -12,6 +12,23 @@ macro_rules! log {
 	};
 }
 
+// This pallet implementation is only needed to execute the rest of the migration on_initialize.
+#[frame_support::pallet]
+pub mod pallet {
+	use crate::*;
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::BlockNumberFor;
+
+	#[pallet::pallet]
+	pub struct Pallet<T>(_);
+
+	#[pallet::config]
+	pub trait Config: frame_system::Config {}
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+}
+
 pub trait Runtime: pallet_stake_tracker::Config + pallet_staking::Config {}
 
 pub mod v1 {
@@ -22,7 +39,7 @@ pub mod v1 {
 		pallet_prelude::*, sp_io, storage_alias, traits::OnRuntimeUpgrade, CloneNoBound, EqNoBound,
 		PartialEqNoBound,
 	};
-	use pallet_stake_tracker::{ApprovalStake, BalanceOf, Pallet};
+	use pallet_stake_tracker::{ApprovalStake, BalanceOf};
 	use pallet_staking::{Nominations, TemporaryMigrationLock, Validators};
 	use sp_runtime::Saturating;
 	use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
@@ -43,11 +60,11 @@ pub mod v1 {
 
 	#[storage_alias]
 	type MigrationV1StateNominators<T: Runtime> =
-		StorageValue<Pallet<T>, MigrationState, OptionQuery>;
+		StorageValue<pallet_stake_tracker::Pallet<T>, MigrationState, OptionQuery>;
 
 	#[storage_alias]
 	type MigrationV1StateValidators<T: Runtime> =
-		StorageValue<Pallet<T>, MigrationState, OptionQuery>;
+		StorageValue<pallet_stake_tracker::Pallet<T>, MigrationState, OptionQuery>;
 
 	impl<T: Runtime> InjectValidatorsApprovalStakeIntoTargetList<T> {
 		fn nominator_state() -> MigrationState {
@@ -101,7 +118,7 @@ pub mod v1 {
 
 					match storage::unhashed::get::<Nominations<T>>(&next_key) {
 						Some(nominations) => {
-							let stake = Pallet::<T>::slashable_balance_of(&who);
+							let stake = pallet_stake_tracker::Pallet::<T>::active_stake_of(&who);
 
 							for target in nominations.targets {
 								let current = approval_stakes.entry(target).or_default();
@@ -152,7 +169,7 @@ pub mod v1 {
 						next_key.strip_prefix(validator_state.prefix.as_slice()).unwrap();
 
 					let who = T::AccountId::decode(&mut account_raw).unwrap();
-					let stake = Pallet::<T>::slashable_balance_of(&who);
+					let stake = pallet_stake_tracker::Pallet::<T>::active_stake_of(&who);
 					let current = approval_stakes.entry(who).or_default();
 					*current = current.saturating_add(stake);
 					validator_state.last_key = next_key;
@@ -183,7 +200,7 @@ pub mod v1 {
 			// We have to set this manually, because we need this migration to happen in order for
 			// the pallet to get all the data from staking-pallet.
 			let current = StorageVersion::new(1);
-			let onchain = Pallet::<T>::on_chain_storage_version();
+			let onchain = pallet_stake_tracker::Pallet::<T>::on_chain_storage_version();
 
 			if current == 1 && onchain == 0 {
 				TemporaryMigrationLock::<T>::put(true);
@@ -217,7 +234,7 @@ pub mod v1 {
 				}
 
 				TemporaryMigrationLock::<T>::kill();
-				current.put::<Pallet<T>>();
+				current.put::<pallet_stake_tracker::Pallet<T>>();
 				max_weight
 			} else {
 				log!(warn, "This migration is being executed on a wrong storage version, probably needs to be removed.");

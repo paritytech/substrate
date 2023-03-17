@@ -6640,6 +6640,7 @@ dependencies = [
  "pallet-stake-tracker",
  "pallet-staking",
  "parity-scale-codec",
+ "scale-info",
  "sp-runtime",
  "sp-std",
 ]
