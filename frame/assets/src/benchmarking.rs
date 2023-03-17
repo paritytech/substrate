@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -469,6 +469,13 @@ benchmarks_instance_pallet! {
 	}: _(SystemOrigin::Signed(caller.clone()), asset_id, caller_lookup, delegate_lookup)
 	verify {
 		assert_last_event::<T, I>(Event::ApprovalCancelled { asset_id: asset_id.into(), owner: caller, delegate }.into());
+	}
+
+	set_min_balance {
+		let (asset_id, caller, caller_lookup) = create_default_asset::<T, I>(false);
+	}: _(SystemOrigin::Signed(caller.clone()), asset_id, 50u32.into())
+	verify {
+		assert_last_event::<T, I>(Event::AssetMinBalanceChanged { asset_id: asset_id.into(), new_min_balance: 50u32.into() }.into());
 	}
 
 	impl_benchmark_test_suite!(Assets, crate::mock::new_test_ext(), crate::mock::Test)
