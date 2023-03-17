@@ -28,9 +28,8 @@
 
 use crate::config::*;
 use codec::{Decode, Encode};
-use futures::{prelude::*, stream::FuturesUnordered};
+use futures::{prelude::*, stream::FuturesUnordered, channel::oneshot};
 use libp2p::{multiaddr, PeerId};
-use log::{debug, trace, warn};
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sc_network::{
 	config::{NonDefaultSetConfig, NonReservedPeerMode, ProtocolId, SetConfig},
@@ -44,7 +43,7 @@ use sc_network_common::{
 	role::ObservedRole,
 	sync::{SyncEvent, SyncEventStream},
 };
-use sp_statement_store::{Hash, Statement, StatementStore, SubmitResult};
+use sp_statement_store::{Hash, Statement, StatementStore, SubmitResult, NetworkPriority};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::{
 	collections::{hash_map::Entry, HashMap},
@@ -60,7 +59,7 @@ pub mod config;
 /// A set of statements.
 pub type Statements = Vec<Statement>;
 /// Future resolving to statement import result.
-pub type StatementImportFuture = Pin<Box<dyn Future<Output = SubmitResult> + Send>>;
+pub type StatementImportFuture = oneshot::Receiver<SubmitResult>;
 
 mod rep {
 	use sc_peerset::ReputationChange as Rep;
@@ -75,7 +74,11 @@ mod rep {
 	pub const GOOD_STATEMENT: Rep = Rep::new(1 << 7, "Good statement");
 	/// Reputation change when a peer sends us a bad statement.
 	pub const BAD_STATEMENT: Rep = Rep::new(-(1 << 12), "Bad statement");
+	/// Reputation change when a peer sends us particularly useful statement
+	pub const EXCELLENT_STATEMENT: Rep = Rep::new(1 << 8, "High priority statement");
 }
+
+const LOG_TARGET: &str = "statement-gossip";
 
 struct Metrics {
 	propagated_statements: Counter<U64>,
@@ -103,13 +106,13 @@ struct PendingStatement {
 }
 
 impl Future for PendingStatement {
-	type Output = (Hash, SubmitResult);
+	type Output = (Hash, Option<SubmitResult>);
 
 	fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
 		let mut this = self.project();
 
 		if let Poll::Ready(import_result) = Pin::new(&mut this.validation).poll_unpin(cx) {
-			return Poll::Ready((this.hash.clone(), import_result))
+			return Poll::Ready((this.hash.clone(), import_result.ok()))
 		}
 
 		Poll::Pending
@@ -173,10 +176,31 @@ impl StatementHandlerPrototype {
 		sync: S,
 		statement_store: Arc<dyn StatementStore>,
 		metrics_registry: Option<&Registry>,
+		executor: Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>,
 	) -> error::Result<(StatementHandler<N, S>, StatementHandlerController)> {
 		let net_event_stream = network.event_stream("statement-handler-net");
 		let sync_event_stream = sync.event_stream("statement-handler-sync");
 		let (to_handler, from_controller) = tracing_unbounded("mpsc_statement_handler", 100_000);
+		let (queue_sender, mut queue_receiver) = tracing_unbounded("mpsc_statement_validator", 100_000);
+
+		let store = statement_store.clone();
+		executor(
+			async move {
+				loop {
+					let task: Option<(Statement, oneshot::Sender<SubmitResult>)> = queue_receiver.next().await;
+					match task {
+						None => return,
+						Some((statement, completion)) => {
+							let result = store.submit(statement);
+							if let Err(_) = completion.send(result) {
+								log::debug!(target: LOG_TARGET, "Error sending validation completion");
+							}
+						}
+					}
+				}
+			}
+			.boxed(),
+		);
 
 		let handler = StatementHandler {
 			protocol_name: self.protocol_name,
@@ -192,6 +216,7 @@ impl StatementHandlerPrototype {
 			peers: HashMap::new(),
 			statement_store,
 			from_controller,
+			queue_sender,
 			metrics: if let Some(r) = metrics_registry {
 				Some(Metrics::register(r)?)
 			} else {
@@ -258,6 +283,7 @@ pub struct StatementHandler<
 	peers: HashMap<PeerId, Peer>,
 	statement_store: Arc<dyn StatementStore>,
 	from_controller: TracingUnboundedReceiver<ToHandler>,
+	queue_sender: TracingUnboundedSender<(Statement, oneshot::Sender<SubmitResult>)>,
 	/// Prometheus metrics.
 	metrics: Option<Metrics>,
 }
@@ -285,9 +311,11 @@ where
 				},
 				(hash, result) = self.pending_statements.select_next_some() => {
 					if let Some(peers) = self.pending_statements_peers.remove(&hash) {
-						peers.into_iter().for_each(|p| self.on_handle_statement_import(p, &result));
+						if let Some(result) = result {
+							peers.into_iter().for_each(|p| self.on_handle_statement_import(p, &result));
+						}
 					} else {
-						warn!(target: "sub-libp2p", "Inconsistent state, no peers for pending statement!");
+						log::warn!(target: LOG_TARGET, "Inconsistent state, no peers for pending statement!");
 					}
 				},
 				network_event = self.net_event_stream.next() => {
@@ -326,7 +354,7 @@ where
 					iter::once(addr).collect(),
 				);
 				if let Err(err) = result {
-					log::error!(target: "sync", "Add reserved peer failed: {}", err);
+					log::error!(target: LOG_TARGET, "Add reserved peer failed: {}", err);
 				}
 			},
 			SyncEvent::PeerDisconnected(remote) => {
@@ -369,7 +397,7 @@ where
 					}
 					// Accept statements only when node is not major syncing
 					if self.sync.is_major_syncing() {
-						trace!(target: "sync", "{remote}: Ignoring statements while major syncing");
+						log::trace!(target: LOG_TARGET, "{remote}: Ignoring statements while major syncing");
 						continue
 					}
 					if let Ok(statements) =
@@ -377,7 +405,7 @@ where
 					{
 						self.on_statements(remote, statements);
 					} else {
-						debug!(target: "sub-libp2p", "Failed to decode statement list from {remote}");
+						log::debug!(target: LOG_TARGET, "Failed to decode statement list from {remote}");
 					}
 				}
 			},
@@ -389,12 +417,12 @@ where
 
 	/// Called when peer sends us new statements
 	fn on_statements(&mut self, who: PeerId, statements: Statements) {
-		trace!(target: "sync", "Received {} statements from {}", statements.len(), who);
+		log::trace!(target: LOG_TARGET, "Received {} statements from {}", statements.len(), who);
 		if let Some(ref mut peer) = self.peers.get_mut(&who) {
 			for s in statements {
 				if self.pending_statements.len() > MAX_PENDING_STATEMENTS {
-					debug!(
-						target: "sync",
+					log::debug!(
+						target: LOG_TARGET,
 						"Ignoring any further statements that exceed `MAX_PENDING_STATEMENTS`({}) limit",
 						MAX_PENDING_STATEMENTS,
 					);
@@ -408,11 +436,14 @@ where
 
 				match self.pending_statements_peers.entry(hash.clone()) {
 					Entry::Vacant(entry) => {
-						self.pending_statements.push(PendingStatement {
-							validation: self.statement_store.submit_async(s),
-							hash,
-						});
-						entry.insert(vec![who]);
+						let (completion_sender, completion_receiver) = oneshot::channel();
+						if let Ok(()) = self.queue_sender.unbounded_send((s, completion_sender)) {
+							self.pending_statements.push(PendingStatement {
+								validation: completion_receiver,
+								hash,
+							});
+							entry.insert(vec![who]);
+						}
 					},
 					Entry::Occupied(mut entry) => {
 						entry.get_mut().push(who);
@@ -424,9 +455,11 @@ where
 
 	fn on_handle_statement_import(&mut self, who: PeerId, import: &SubmitResult) {
 		match import {
-			SubmitResult::OkNew(_) =>
-				self.network.report_peer(who, rep::ANY_STATEMENT_REFUND),
-			SubmitResult::OkKnown(_) => self.network.report_peer(who, rep::GOOD_STATEMENT),
+			SubmitResult::OkNew(NetworkPriority::High) =>
+				self.network.report_peer(who, rep::EXCELLENT_STATEMENT),
+			SubmitResult::OkNew(NetworkPriority::Low) =>
+				self.network.report_peer(who, rep::GOOD_STATEMENT),
+			SubmitResult::OkKnown => self.network.report_peer(who, rep::ANY_STATEMENT_REFUND),
 			SubmitResult::Bad(_) => self.network.report_peer(who, rep::BAD_STATEMENT),
 			SubmitResult::InternalError(_) => {},
 		}
@@ -439,7 +472,7 @@ where
 			return
 		}
 
-		debug!(target: "sync", "Propagating statement [{:?}]", hash);
+		log::debug!(target: LOG_TARGET, "Propagating statement [{:?}]", hash);
 		if let Ok(Some(statement)) = self.statement_store.statement(hash) {
 			self.do_propagate_statements(&[(hash.clone(), statement)]);
 		}
@@ -466,7 +499,7 @@ where
 			propagated_statements += hashes.len();
 
 			if !to_send.is_empty() {
-				trace!(target: "sync", "Sending {} statements to {}", to_send.len(), who);
+				log::trace!(target: LOG_TARGET, "Sending {} statements to {}", to_send.len(), who);
 				self.network
 					.write_notification(*who, self.protocol_name.clone(), to_send.encode());
 			}
@@ -484,7 +517,7 @@ where
 			return
 		}
 
-		debug!(target: "sync", "Propagating statements");
+		log::debug!(target: LOG_TARGET, "Propagating statements");
 		if let Ok(statements) = self.statement_store.dump() {
 			self.do_propagate_statements(&statements);
 		}

@@ -32,7 +32,7 @@ pub type Hash = [u8; 32];
 pub type BlockHash = [u8; 32];
 
 #[cfg(feature = "std")]
-pub use api::{StatementStore, SubmitResult, Error, Result};
+pub use api::{StatementStore, SubmitResult, Error, Result, NetworkPriority};
 
 pub mod sr25519 {
 	mod app_sr25519 {
@@ -123,7 +123,7 @@ impl Statement {
 
 	pub fn new_with_proof(proof: Proof) -> Statement {
 		Statement {
-			fields: vec![Field::AuthenticityProof(proof)],
+			fields: [Field::AuthenticityProof(proof)].to_vec(),
 		}
 	}
 
@@ -278,7 +278,7 @@ impl Statement {
 #[cfg(feature = "std")]
 mod api {
 	use crate::{Statement, Topic, Hash};
-	use std::future::Future;
+	pub use crate::runtime_api::StatementSource;
 
 	#[derive(Debug, thiserror::Error)]
 	pub enum Error {
@@ -288,12 +288,27 @@ mod api {
 		/// Error decoding statement structure.
 		#[error("Error decoding statement: {0:?}")]
 		Decode(String),
+		/// Error making runtime call.
+		#[error("Error calling into the runtime")]
+		Runtime,
 	}
 
+	#[derive(Debug, PartialEq, Eq)]
+	pub enum NetworkPriority {
+		High,
+		Low,
+	}
+
+	/// Statement submission outcome
+	#[derive(Debug)]
 	pub enum SubmitResult {
-		OkNew(Hash),
-		OkKnown(Hash),
-		Bad(String),
+		/// Accepted as new with given score
+		OkNew(NetworkPriority),
+		/// Known statement
+		OkKnown,
+		/// Statement failed validation.
+		Bad(&'static str),
+		/// Internal store error.
 		InternalError(Error),
 	}
 
@@ -323,15 +338,13 @@ mod api {
 
 		/// Submit a SCALE-encoded statement.
 		fn submit_encoded(&self, statement: &[u8]) -> SubmitResult;
-
-		fn submit_async(&self, statement: Statement) -> std::pin::Pin<Box<dyn Future<Output = SubmitResult> + Send>>;
 	}
 }
 
 pub mod runtime_api {
 	use codec::{Decode, Encode};
 	use scale_info::TypeInfo;
-	use sp_runtime::{RuntimeDebug};
+	use sp_runtime::RuntimeDebug;
 	use crate::Statement;
 
 	/// Information concerning a valid statement.
@@ -345,7 +358,6 @@ pub mod runtime_api {
 	pub enum InvalidStatement {
 		BadProof,
 		NoProof,
-		Stale,
 		InternalError,
 	}
 

@@ -1009,12 +1009,19 @@ where
 	)?;
 	spawn_handle.spawn("network-transactions-handler", Some("networking"), tx_handler.run());
 
+	let statement_protocol_executor = {
+		let spawn_handle = Clone::clone(&spawn_handle);
+		Box::new(move |fut| {
+			spawn_handle.spawn("network-statement-validator", Some("networking"), fut);
+		})
+	};
 	// crate statement goissip protocol and add it to the list of supported protocols of `network_params`
 	let (statement_handler, statement_handler_controller) = statement_handler_proto.build(
 		network.clone(),
 		sync_service.clone(),
 		statement_store.clone(),
 		config.prometheus_config.as_ref().map(|config| &config.registry),
+		statement_protocol_executor,
 	)?;
 	spawn_handle.spawn("network-statement-handler", Some("networking"), statement_handler.run());
 

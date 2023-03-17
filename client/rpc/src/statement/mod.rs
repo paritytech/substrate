@@ -83,8 +83,8 @@ impl StatementApiServer for StatementStore {
 
 	fn submit(&self, encoded: Bytes) -> RpcResult<()> {
 		match self.store.submit_encoded(&encoded) {
-			SubmitResult::OkNew(_) | SubmitResult::OkKnown(_) => Ok(()),
-			SubmitResult::Bad(e) => Err(Error::StatementStore(e).into()),
+			SubmitResult::OkNew(_) | SubmitResult::OkKnown => Ok(()),
+			SubmitResult::Bad(e) => Err(Error::StatementStore(e.into()).into()),
 			SubmitResult::InternalError(e) => Err(Error::StatementStore(e.to_string()).into()),
 		}
 	}

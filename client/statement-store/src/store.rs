@@ -18,10 +18,10 @@
 
 //! Disk-backed statement store.
 
-use std::{collections::{HashSet, HashMap}, sync::Arc, future::Future};
+use std::{collections::{HashSet, HashMap}, sync::Arc};
 
 use parking_lot::RwLock;
-use sp_statement_store::{Statement, Topic, DecryptionKey, Result, Error, Hash, BlockHash, SubmitResult};
+use sp_statement_store::{Statement, Topic, DecryptionKey, Result, Error, Hash, BlockHash, SubmitResult, NetworkPriority};
 use sp_statement_store::runtime_api::{ValidateStatement, ValidStatement, InvalidStatement, StatementSource};
 use sp_core::{Encode, Decode};
 use sp_api::ProvideRuntimeApi;
@@ -100,7 +100,6 @@ impl Index {
 		if let Some(key) = statement.decryption_key() {
 			self.by_dec_key.entry(key).or_default().insert(hash);
 		}
-
 	}
 
 	fn iter_topics(&self, key: Option<DecryptionKey>, topics: &[Topic], mut f: impl FnMut(&Hash) -> Result<()>) -> Result<()> {
@@ -274,26 +273,40 @@ impl sp_statement_store::StatementStore for Store {
 	fn submit(&self, statement: Statement) -> SubmitResult {
 		let encoded = statement.encode();
 		let hash = sp_statement_store::hash_encoded(&encoded);
-		let _ = (self.validate_fn)(Default::default(), StatementSource::Local, statement.clone());
-		//commit to the db with locked index
-		let mut index = self.index.write();
-		if let Err(e) = self.db.commit([(col::STATEMENTS, &hash, Some(encoded))]) {
-			return SubmitResult::InternalError(Error::Db(e.to_string()));
+		let validation_result = (self.validate_fn)(Default::default(), StatementSource::Local, statement.clone());
+		match validation_result {
+			Ok(ValidStatement { priority }) => {
+				//commit to the db with locked index
+				let mut index = self.index.write();
+				if let Err(e) = self.db.commit([(col::STATEMENTS, &hash, Some(encoded))]) {
+					log::debug!(target: LOG_TARGET, "Statement validation failed: database error {}, {:?}", e, statement);
+					return SubmitResult::InternalError(Error::Db(e.to_string()));
+				}
+				index.insert(hash, statement);
+				let network_priority = if priority > 0 { NetworkPriority::High } else { NetworkPriority::Low };
+				SubmitResult::OkNew(network_priority)
+			}
+			Err(InvalidStatement::BadProof) => {
+				log::debug!(target: LOG_TARGET, "Statement validation failed: BadProof, {:?}", statement);
+				SubmitResult::Bad("Bad statement proof")
+			},
+			Err(InvalidStatement::NoProof) =>{
+				log::debug!(target: LOG_TARGET, "Statement validation failed: NoProof, {:?}", statement);
+				SubmitResult::Bad("Missing statement proof")
+			},
+			Err(InvalidStatement::InternalError) => SubmitResult::InternalError(Error::Runtime),
 		}
-		index.insert(hash, statement);
-		SubmitResult::OkNew(hash)
 	}
 
 	/// Submit a SCALE-encoded statement.
 	fn submit_encoded(&self, mut statement: &[u8]) -> SubmitResult {
 		match Statement::decode(&mut statement) {
 			Ok(decoded) => self.submit(decoded),
-			Err(e) => SubmitResult::Bad(e.to_string()),
+			Err(e) => {
+				log::debug!(target: LOG_TARGET, "Error decoding submitted statement. Failed with: {}", e);
+				SubmitResult::Bad("Bad SCALE encoding")
+			}
 		}
-	}
-
-	fn submit_async(&self, statement: Statement) -> std::pin::Pin<Box<dyn Future<Output = SubmitResult> + Send>> {
-		Box::pin(std::future::ready(self.submit(statement)))
 	}
 }
 
