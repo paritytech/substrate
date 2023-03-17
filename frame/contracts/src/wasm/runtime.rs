@@ -73,7 +73,7 @@ enum KeyType {
 	Fix,
 	/// Variable sized key used in transparent hashing,
 	/// cannot be larger than MaxStorageKeyLen.
-	Variable(u32),
+	Var(u32),
 }
 
 /// Every error that can be returned to a contract when it calls any of the host functions.
@@ -751,7 +751,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 				let key = self.read_sandbox_memory(memory, key_ptr, 32u32)?;
 				Key::try_from_fix(key)
 			},
-			KeyType::Variable(len) => {
+			KeyType::Var(len) => {
 				ensure!(
 					len <= <<E as Ext>::T as Config>::MaxStorageKeyLen::get(),
 					Error::<E::T>::DecodingFailed
@@ -1067,7 +1067,7 @@ pub mod env {
 		value_ptr: u32,
 		value_len: u32,
 	) -> Result<u32, TrapReason> {
-		ctx.set_storage(memory, KeyType::Variable(key_len), key_ptr, value_ptr, value_len)
+		ctx.set_storage(memory, KeyType::Var(key_len), key_ptr, value_ptr, value_len)
 	}
 
 	/// Clear the value at the given key in the contract storage.
@@ -1093,7 +1093,7 @@ pub mod env {
 	#[version(1)]
 	#[prefixed_alias]
 	fn clear_storage(ctx: _, memory: _, key_ptr: u32, key_len: u32) -> Result<u32, TrapReason> {
-		ctx.clear_storage(memory, KeyType::Variable(key_len), key_ptr)
+		ctx.clear_storage(memory, KeyType::Var(key_len), key_ptr)
 	}
 
 	/// Retrieve the value under the given key from storage.
@@ -1150,7 +1150,7 @@ pub mod env {
 		out_ptr: u32,
 		out_len_ptr: u32,
 	) -> Result<ReturnCode, TrapReason> {
-		ctx.get_storage(memory, KeyType::Variable(key_len), key_ptr, out_ptr, out_len_ptr)
+		ctx.get_storage(memory, KeyType::Var(key_len), key_ptr, out_ptr, out_len_ptr)
 	}
 
 	/// Checks whether there is a value stored under the given key.
@@ -1187,7 +1187,7 @@ pub mod env {
 	#[version(1)]
 	#[prefixed_alias]
 	fn contains_storage(ctx: _, memory: _, key_ptr: u32, key_len: u32) -> Result<u32, TrapReason> {
-		ctx.contains_storage(memory, KeyType::Variable(key_len), key_ptr)
+		ctx.contains_storage(memory, KeyType::Var(key_len), key_ptr)
 	}
 
 	/// Retrieve and remove the value under the given key from storage.
