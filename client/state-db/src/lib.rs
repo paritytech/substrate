@@ -594,7 +594,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDb<BlockHash, Key, D> {
 	}
 
 	/// Prevents pruning of specified block and its descendants.
-	/// `hint` used for futher checking if the given block exists
+	/// `hint` used for further checking if the given block exists
 	pub fn pin<F>(&self, hash: &BlockHash, number: u64, hint: F) -> Result<(), PinError>
 	where
 		F: Fn() -> bool,
@@ -665,7 +665,7 @@ pub enum IsPruned {
 	Pruned,
 	/// Definitely not pruned
 	NotPruned,
-	/// May or may not pruned, need futher checking
+	/// May or may not pruned, need further checking
 	MaybePruned,
 }
 

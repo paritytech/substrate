@@ -32,7 +32,7 @@ use sp_runtime::traits::{Hash, TrailingZeroInput};
 pub trait AddressGenerator<T: Config> {
 	/// The address of a contract based on the given instantiate parameters.
 	///
-	/// Changing the formular for an already deployed chain is fine as long as no collisons
+	/// Changing the formular for an already deployed chain is fine as long as no collisions
 	/// with the old formular. Changes only affect existing contracts.
 	fn contract_address(
 		deploying_address: &T::AccountId,
