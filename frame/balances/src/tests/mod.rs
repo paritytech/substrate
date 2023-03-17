@@ -197,9 +197,9 @@ impl ExtBuilder {
 	}
 	pub fn build_and_execute_with(self, f: impl Fn()) {
 		let other = self.clone();
-		SYSTEM_STORAGE.with(|q| q.replace(false));
+		UseSystem::set(false);
 		other.build().execute_with(|| f());
-		SYSTEM_STORAGE.with(|q| q.replace(true));
+		UseSystem::set(true);
 		self.build().execute_with(|| f());
 	}
 }
@@ -222,11 +222,8 @@ impl OnUnbalanced<CreditOf<Test, ()>> for DustTrap {
 	}
 }
 
-thread_local! {
-	pub static SYSTEM_STORAGE: sp_std::cell::RefCell<bool>  = sp_std::cell::RefCell::new(false);
-}
-pub fn use_system() -> bool {
-	SYSTEM_STORAGE.with(|q| *q.borrow())
+parameter_types! {
+	pub static UseSystem: bool = false;
 }
 
 type BalancesAccountStore = StorageMapShim<super::Account<Test>, u64, super::AccountData<u64>>;
@@ -235,7 +232,7 @@ type SystemAccountStore = frame_system::Pallet<Test>;
 pub struct TestAccountStore;
 impl StoredMap<u64, super::AccountData<u64>> for TestAccountStore {
 	fn get(k: &u64) -> super::AccountData<u64> {
-		if use_system() {
+		if UseSystem::get() {
 			<SystemAccountStore as StoredMap<_, _>>::get(k)
 		} else {
 			<BalancesAccountStore as StoredMap<_, _>>::get(k)
@@ -245,7 +242,7 @@ impl StoredMap<u64, super::AccountData<u64>> for TestAccountStore {
 		k: &u64,
 		f: impl FnOnce(&mut Option<super::AccountData<u64>>) -> Result<R, E>,
 	) -> Result<R, E> {
-		if use_system() {
+		if UseSystem::get() {
 			<SystemAccountStore as StoredMap<_, _>>::try_mutate_exists(k, f)
 		} else {
 			<BalancesAccountStore as StoredMap<_, _>>::try_mutate_exists(k, f)
@@ -255,7 +252,7 @@ impl StoredMap<u64, super::AccountData<u64>> for TestAccountStore {
 		k: &u64,
 		f: impl FnOnce(&mut super::AccountData<u64>) -> R,
 	) -> Result<R, DispatchError> {
-		if use_system() {
+		if UseSystem::get() {
 			<SystemAccountStore as StoredMap<_, _>>::mutate(k, f)
 		} else {
 			<BalancesAccountStore as StoredMap<_, _>>::mutate(k, f)
@@ -265,21 +262,21 @@ impl StoredMap<u64, super::AccountData<u64>> for TestAccountStore {
 		k: &u64,
 		f: impl FnOnce(&mut Option<super::AccountData<u64>>) -> R,
 	) -> Result<R, DispatchError> {
-		if use_system() {
+		if UseSystem::get() {
 			<SystemAccountStore as StoredMap<_, _>>::mutate_exists(k, f)
 		} else {
 			<BalancesAccountStore as StoredMap<_, _>>::mutate_exists(k, f)
 		}
 	}
 	fn insert(k: &u64, t: super::AccountData<u64>) -> Result<(), DispatchError> {
-		if use_system() {
+		if UseSystem::get() {
 			<SystemAccountStore as StoredMap<_, _>>::insert(k, t)
 		} else {
 			<BalancesAccountStore as StoredMap<_, _>>::insert(k, t)
 		}
 	}
 	fn remove(k: &u64) -> Result<(), DispatchError> {
-		if use_system() {
+		if UseSystem::get() {
 			<SystemAccountStore as StoredMap<_, _>>::remove(k)
 		} else {
 			<BalancesAccountStore as StoredMap<_, _>>::remove(k)

@@ -238,8 +238,8 @@ pub mod pallet {
 		/// The means of storing the balances of an account.
 		type AccountStore: StoredMap<Self::AccountId, AccountData<Self::Balance>>;
 
-		/// The ID type for reserves. 
-		/// 
+		/// The ID type for reserves.
+		///
 		/// Use of reserves is deprecated in favour of holds. See `https://github.com/paritytech/substrate/pull/12951/`
 		type ReserveIdentifier: Parameter + Member + MaxEncodedLen + Ord + Copy;
 
