@@ -23,12 +23,8 @@ use log::{debug, info};
 use parking_lot::Mutex;
 use sc_client_api::{Backend, CallExecutor};
 use sc_network::{
-	config::{NetworkConfiguration, WebRTCConfig},
-	multiaddr,
-};
-use sc_network_common::{
-	config::{MultiaddrWithPeerId, TransportConfig},
-	service::{NetworkBlock, NetworkPeers, NetworkStateInfo},
+	config::{MultiaddrWithPeerId, NetworkConfiguration, TransportConfig, WebRTCConfig},
+	multiaddr, NetworkBlock, NetworkPeers, NetworkStateInfo,
 };
 use sc_network_sync::SyncingService;
 use sc_service::{

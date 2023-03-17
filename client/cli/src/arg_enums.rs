@@ -251,19 +251,15 @@ pub enum SyncMode {
 	Warp,
 }
 
-impl Into<sc_network_common::config::SyncMode> for SyncMode {
-	fn into(self) -> sc_network_common::config::SyncMode {
+impl Into<sc_network::config::SyncMode> for SyncMode {
+	fn into(self) -> sc_network::config::SyncMode {
 		match self {
-			SyncMode::Full => sc_network_common::config::SyncMode::Full,
-			SyncMode::Fast => sc_network_common::config::SyncMode::Fast {
-				skip_proofs: false,
-				storage_chain_mode: false,
-			},
-			SyncMode::FastUnsafe => sc_network_common::config::SyncMode::Fast {
-				skip_proofs: true,
-				storage_chain_mode: false,
-			},
-			SyncMode::Warp => sc_network_common::config::SyncMode::Warp,
+			SyncMode::Full => sc_network::config::SyncMode::Full,
+			SyncMode::Fast =>
+				sc_network::config::SyncMode::Fast { skip_proofs: false, storage_chain_mode: false },
+			SyncMode::FastUnsafe =>
+				sc_network::config::SyncMode::Fast { skip_proofs: true, storage_chain_mode: false },
+			SyncMode::Warp => sc_network::config::SyncMode::Warp,
 		}
 	}
 }

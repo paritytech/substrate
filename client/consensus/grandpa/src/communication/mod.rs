@@ -46,7 +46,7 @@ use finality_grandpa::{
 	Message::{Precommit, Prevote, PrimaryPropose},
 };
 use parity_scale_codec::{Decode, Encode};
-use sc_network::ReputationChange;
+use sc_network::{NetworkBlock, NetworkSyncForkRequest, ReputationChange};
 use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use sp_keystore::SyncCryptoStorePtr;
@@ -59,10 +59,7 @@ use crate::{
 use gossip::{
 	FullCatchUpMessage, FullCommitMessage, GossipMessage, GossipValidator, PeerReport, VoteMessage,
 };
-use sc_network_common::{
-	service::{NetworkBlock, NetworkSyncForkRequest},
-	sync::SyncEventStream,
-};
+use sc_network_common::sync::SyncEventStream;
 use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_consensus_grandpa::{AuthorityId, AuthoritySignature, RoundNumber, SetId as SetIdNumber};
 
@@ -77,7 +74,7 @@ pub(crate) const NEIGHBOR_REBROADCAST_PERIOD: Duration = Duration::from_secs(2 *
 
 pub mod grandpa_protocol_name {
 	use sc_chain_spec::ChainSpec;
-	use sc_network_common::protocol::ProtocolName;
+	use sc_network::types::ProtocolName;
 
 	pub(crate) const NAME: &str = "/grandpa/1";
 	/// Old names for the notifications protocol, used for backward compatibility.

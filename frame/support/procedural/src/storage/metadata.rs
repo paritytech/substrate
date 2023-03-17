@@ -27,7 +27,7 @@ fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) ->
 	match &line.storage_type {
 		StorageLineTypeDef::Simple(_) => {
 			quote! {
-				#scrate::metadata::StorageEntryType::Plain(
+				#scrate::metadata_ir::StorageEntryTypeIR::Plain(
 					#scrate::scale_info::meta_type::<#value_type>()
 				)
 			}
@@ -36,8 +36,8 @@ fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) ->
 			let hasher = map.hasher.into_metadata();
 			let key = &map.key;
 			quote! {
-				#scrate::metadata::StorageEntryType::Map {
-					hashers: #scrate::sp_std::vec! [ #scrate::metadata::#hasher ],
+				#scrate::metadata_ir::StorageEntryTypeIR::Map {
+					hashers: #scrate::sp_std::vec! [ #scrate::metadata_ir::#hasher ],
 					key: #scrate::scale_info::meta_type::<#key>(),
 					value: #scrate::scale_info::meta_type::<#value_type>(),
 				}
@@ -49,10 +49,10 @@ fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) ->
 			let key1 = &map.key1;
 			let key2 = &map.key2;
 			quote! {
-				#scrate::metadata::StorageEntryType::Map {
+				#scrate::metadata_ir::StorageEntryTypeIR::Map {
 					hashers: #scrate::sp_std::vec! [
-						#scrate::metadata::#hasher1,
-						#scrate::metadata::#hasher2,
+						#scrate::metadata_ir::#hasher1,
+						#scrate::metadata_ir::#hasher2,
 					],
 					key: #scrate::scale_info::meta_type::<(#key1, #key2)>(),
 					value: #scrate::scale_info::meta_type::<#value_type>(),
@@ -67,9 +67,9 @@ fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) ->
 				.map(|hasher| hasher.to_storage_hasher_struct())
 				.collect::<Vec<_>>();
 			quote! {
-				#scrate::metadata::StorageEntryType::Map {
+				#scrate::metadata_ir::StorageEntryTypeIR::Map {
 					hashers: #scrate::sp_std::vec! [
-						#( #scrate::metadata::StorageHasher::#hashers, )*
+						#( #scrate::metadata_ir::StorageHasherIR::#hashers, )*
 					],
 					key: #scrate::scale_info::meta_type::<#key_tuple>(),
 					value: #scrate::scale_info::meta_type::<#value_type>(),
@@ -159,9 +159,9 @@ pub fn impl_metadata(def: &DeclStorageDefExt) -> TokenStream {
 		let str_name = line.name.to_string();
 
 		let modifier = if line.is_option {
-			quote!(#scrate::metadata::StorageEntryModifier::Optional)
+			quote!(#scrate::metadata_ir::StorageEntryModifierIR::Optional)
 		} else {
-			quote!(#scrate::metadata::StorageEntryModifier::Default)
+			quote!(#scrate::metadata_ir::StorageEntryModifierIR::Default)
 		};
 
 		let ty = storage_line_metadata_type(scrate, line);
@@ -172,7 +172,7 @@ pub fn impl_metadata(def: &DeclStorageDefExt) -> TokenStream {
 		let docs = get_doc_literals(&line.attrs);
 
 		let entry = quote! {
-			#scrate::metadata::StorageEntryMetadata {
+			#scrate::metadata_ir::StorageEntryMetadataIR {
 				name: #str_name,
 				modifier: #modifier,
 				ty: #ty,
@@ -194,7 +194,7 @@ pub fn impl_metadata(def: &DeclStorageDefExt) -> TokenStream {
 	};
 
 	let store_metadata = quote!(
-		#scrate::metadata::PalletStorageMetadata {
+		#scrate::metadata_ir::PalletStorageMetadataIR {
 			prefix: #prefix,
 			entries: #scrate::sp_std::vec![ #entries ],
 		}
@@ -209,7 +209,7 @@ pub fn impl_metadata(def: &DeclStorageDefExt) -> TokenStream {
 
 		impl #module_impl #module_struct #where_clause {
 			#[doc(hidden)]
-			pub fn storage_metadata() -> #scrate::metadata::PalletStorageMetadata {
+			pub fn storage_metadata() -> #scrate::metadata_ir::PalletStorageMetadataIR {
 				#store_metadata
 			}
 		}

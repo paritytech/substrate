@@ -16,6 +16,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+//! `sc-network` type definitions
+
+use libp2p::core::upgrade;
+
 use std::{
 	borrow::Borrow,
 	fmt,
@@ -23,11 +27,6 @@ use std::{
 	ops::Deref,
 	sync::Arc,
 };
-
-use libp2p::core::upgrade;
-
-pub mod event;
-pub mod role;
 
 /// The protocol name transmitted on the wire.
 #[derive(Debug, Clone)]

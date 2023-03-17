@@ -21,9 +21,12 @@ use crate::{
 	params::{node_key_params::NodeKeyParams, webrtc_certificate_params::WebRTCCertificateParams},
 };
 use clap::Args;
-use sc_network::{config::NetworkConfiguration, multiaddr::Protocol};
-use sc_network_common::config::{
-	NodeKeyConfig, NonReservedPeerMode, SetConfig, TransportConfig, WebRTCConfig,
+use sc_network::{
+	config::{
+		NetworkConfiguration, NodeKeyConfig, NonReservedPeerMode, SetConfig, TransportConfig,
+		WebRTCConfig,
+	},
+	multiaddr::Protocol,
 };
 use sc_service::{
 	config::{Multiaddr, MultiaddrWithPeerId},
