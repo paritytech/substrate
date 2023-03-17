@@ -19,45 +19,42 @@
 #![cfg(unix)]
 
 use assert_cmd::cargo::cargo_bin;
-use nix::{
-	sys::signal::{kill, Signal::SIGINT},
-	unistd::Pid,
-};
-use regex::Regex;
 use std::{
-	io::Read,
-	path::PathBuf,
 	process::{Command, Stdio},
+	time::Duration,
 };
 
 pub mod common;
 
 #[tokio::test]
 async fn temp_base_path_works() {
-	let mut cmd = Command::new(cargo_bin("substrate"));
-	let mut child = common::KillChildOnDrop(
-		cmd.args(&["--dev", "--tmp", "--no-hardware-benchmarks"])
-			.stdout(Stdio::piped())
-			.stderr(Stdio::piped())
-			.spawn()
-			.unwrap(),
-	);
+	common::run_with_timeout(Duration::from_secs(60 * 10), async move {
+		let mut cmd = Command::new(cargo_bin("substrate"));
+		let mut child = common::KillChildOnDrop(
+			cmd.args(&["--dev", "--tmp", "--no-hardware-benchmarks"])
+				.stdout(Stdio::piped())
+				.stderr(Stdio::piped())
+				.spawn()
+				.unwrap(),
+		);
 
-	let mut stderr = child.stderr.take().unwrap();
-	let (ws_url, mut data) = common::find_ws_url_from_output(&mut stderr);
+		let mut stderr = child.stderr.take().unwrap();
+		let node_info = common::extract_info_from_output(&mut stderr).0;
 
-	// Let it produce some blocks.
-	common::wait_n_finalized_blocks(3, 30, &ws_url).await.unwrap();
-	assert!(child.try_wait().unwrap().is_none(), "the process should still be running");
+		// Let it produce some blocks.
+		common::wait_n_finalized_blocks(3, &node_info.ws_url).await;
 
-	// Stop the process
-	kill(Pid::from_raw(child.id().try_into().unwrap()), SIGINT).unwrap();
-	assert!(common::wait_for(&mut child, 40).map(|x| x.success()).unwrap_or_default());
+		// Ensure the db path exists while the node is running
+		assert!(node_info.db_path.exists());
 
-	// Ensure the database has been deleted
-	stderr.read_to_string(&mut data).unwrap();
-	let re = Regex::new(r"Database: .+ at (\S+)").unwrap();
-	let db_path = PathBuf::from(re.captures(data.as_str()).unwrap().get(1).unwrap().as_str());
+		child.assert_still_running();
 
-	assert!(!db_path.exists());
+		// Stop the process
+		child.stop();
+
+		if node_info.db_path.exists() {
+			panic!("Database path `{}` wasn't deleted!", node_info.db_path.display());
+		}
+	})
+	.await;
 }

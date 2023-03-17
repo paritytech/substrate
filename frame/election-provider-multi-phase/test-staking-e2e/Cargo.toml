@@ -1,0 +1,40 @@
+[package]
+name = "pallet-election-provider-e2e-test"
+version = "1.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Apache-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "FRAME election provider multi phase pallet tests with staking pallet, bags-list and session pallets"
+publish = false
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[workspace]
+
+[dev-dependencies]
+codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive"] }
+scale-info = { version = "2.0.1", features = ["derive"] }
+log = { version = "0.4.17", default-features = false }
+
+sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
+sp-io = { version = "7.0.0", path = "../../../primitives/io" }
+sp-std = { version = "5.0.0", path = "../../../primitives/std" }
+sp-staking = { version = "4.0.0-dev", path = "../../../primitives/staking" }
+sp-core = { version = "7.0.0", path = "../../../primitives/core" }
+sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/npos-elections" }
+sp-tracing = { version = "6.0.0", path = "../../../primitives/tracing" }
+
+frame-system = { version = "4.0.0-dev", path = "../../system" }
+frame-support = { version = "4.0.0-dev", path = "../../support" }
+frame-election-provider-support = { version = "4.0.0-dev", path = "../../election-provider-support" }
+
+pallet-election-provider-multi-phase = { version = "4.0.0-dev", path = "../../election-provider-multi-phase" }
+pallet-staking = { version = "4.0.0-dev", path = "../../staking" }
+pallet-bags-list = { version = "4.0.0-dev", path = "../../bags-list" }
+pallet-balances = { version = "4.0.0-dev", path = "../../balances" }
+pallet-timestamp = { version = "4.0.0-dev", path = "../../timestamp" }
+pallet-session = { version = "4.0.0-dev", path = "../../session" }
+

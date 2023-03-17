@@ -18,6 +18,7 @@
 //! `crate::request_responses::RequestResponsesBehaviour`.
 
 use crate::schema::v1::{KeyValueStateEntry, StateEntry, StateRequest, StateResponse};
+
 use codec::{Decode, Encode};
 use futures::{
 	channel::{mpsc, oneshot},
@@ -27,12 +28,14 @@ use libp2p::PeerId;
 use log::{debug, trace};
 use lru::LruCache;
 use prost::Message;
+
 use sc_client_api::{BlockBackend, ProofProvider};
-use sc_network_common::{
+use sc_network::{
 	config::ProtocolId,
 	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
 };
 use sp_runtime::traits::Block as BlockT;
+
 use std::{
 	hash::{Hash, Hasher},
 	num::NonZeroUsize,
