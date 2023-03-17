@@ -44,7 +44,7 @@ use frame_support::{
 use frame_system::{self as system, EventRecord, Phase};
 use pretty_assertions::{assert_eq, assert_ne};
 use sp_io::hashing::blake2_256;
-use sp_keystore::{testing::KeyStore, KeystoreExt};
+use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
 use sp_runtime::{
 	testing::{Header, H256},
 	traits::{BlakeTwo256, Convert, Hash, IdentityLookup},
@@ -440,7 +440,7 @@ impl ExtBuilder {
 			.assimilate_storage(&mut t)
 			.unwrap();
 		let mut ext = sp_io::TestExternalities::new(t);
-		ext.register_extension(KeystoreExt(Arc::new(KeyStore::new())));
+		ext.register_extension(KeystoreExt(Arc::new(MemoryKeystore::new())));
 		ext.execute_with(|| System::set_block_number(1));
 		ext
 	}
