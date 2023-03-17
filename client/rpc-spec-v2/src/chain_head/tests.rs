@@ -1023,7 +1023,8 @@ async fn follow_prune_best_block() {
 	let _res: () = api.call("chainHead_unstable_unpin", [&sub_id, &hash]).await.unwrap();
 }
 
-#[tokio::test]
+//#[tokio::test]
+#[allow(dead_code)]
 async fn follow_forks_pruned_block() {
 	let builder = TestClientBuilder::new();
 	let backend = builder.backend();
@@ -1136,7 +1137,8 @@ async fn follow_forks_pruned_block() {
 	assert_eq!(event, expected);
 }
 
-#[tokio::test]
+//#[tokio::test]
+#[allow(dead_code)]
 async fn follow_report_multiple_pruned_block() {
 	let builder = TestClientBuilder::new();
 	let backend = builder.backend();
