@@ -28,9 +28,6 @@ use tempfile::tempdir;
 pub mod common;
 
 #[tokio::test]
-#[cfg(disable_flaky)]
-#[allow(dead_code)]
-// FIXME: https://github.com/paritytech/substrate/issues/11321
 async fn running_the_node_works_and_can_be_interrupted() {
 	common::run_with_timeout(Duration::from_secs(60 * 10), async move {
 		async fn run_command_and_kill(signal: Signal) {
