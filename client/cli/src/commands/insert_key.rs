@@ -24,7 +24,7 @@ use clap::Parser;
 use sc_keystore::LocalKeystore;
 use sc_service::config::{BasePath, KeystoreConfig};
 use sp_core::crypto::{KeyTypeId, SecretString};
-use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::{Keystore, KeystorePtr};
 use std::sync::Arc;
 
 /// The `insert` command
@@ -69,7 +69,7 @@ impl InsertKeyCmd {
 		let (keystore, public) = match self.keystore_params.keystore_config(&config_dir)? {
 			(_, KeystoreConfig::Path { path, password }) => {
 				let public = with_crypto_scheme!(self.scheme, to_vec(&suri, password.clone()))?;
-				let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(path, password)?);
+				let keystore: KeystorePtr = Arc::new(LocalKeystore::open(path, password)?);
 				(keystore, public)
 			},
 			_ => unreachable!("keystore_config always returns path and password; qed"),
@@ -78,8 +78,8 @@ impl InsertKeyCmd {
 		let key_type =
 			KeyTypeId::try_from(self.key_type.as_str()).map_err(|_| Error::KeyTypeInvalid)?;
 
-		SyncCryptoStore::insert_unknown(&*keystore, key_type, &suri, &public[..])
-			.map_err(|_| Error::KeyStoreOperation)?;
+		Keystore::insert(&*keystore, key_type, &suri, &public[..])
+			.map_err(|_| Error::KeystoreOperation)?;
 
 		Ok(())
 	}

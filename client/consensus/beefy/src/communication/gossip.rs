@@ -245,7 +245,7 @@ where
 mod tests {
 	use sc_keystore::LocalKeystore;
 	use sc_network_test::Block;
-	use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+	use sp_keystore::{Keystore, KeystorePtr};
 
 	use crate::keystore::BeefyKeystore;
 	use sp_consensus_beefy::{
@@ -306,8 +306,8 @@ mod tests {
 	}
 
 	fn sign_commitment<BN: Encode>(who: &Keyring, commitment: &Commitment<BN>) -> Signature {
-		let store: SyncCryptoStorePtr = std::sync::Arc::new(LocalKeystore::in_memory());
-		SyncCryptoStore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&who.to_seed())).unwrap();
+		let store: KeystorePtr = std::sync::Arc::new(LocalKeystore::in_memory());
+		Keystore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&who.to_seed())).unwrap();
 		let beefy_keystore: BeefyKeystore = Some(store).into();
 
 		beefy_keystore.sign(&who.public(), &commitment.encode()).unwrap()

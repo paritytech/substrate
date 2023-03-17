@@ -49,7 +49,7 @@ use parity_scale_codec::{Decode, Encode};
 use sc_network::{NetworkBlock, NetworkSyncForkRequest, ReputationChange};
 use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
-use sp_keystore::SyncCryptoStorePtr;
+use sp_keystore::KeystorePtr;
 use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
 
 use crate::{
@@ -136,7 +136,7 @@ mod benefit {
 
 /// A type that ties together our local authority id and a keystore where it is
 /// available for signing.
-pub struct LocalIdKeystore((AuthorityId, SyncCryptoStorePtr));
+pub struct LocalIdKeystore((AuthorityId, KeystorePtr));
 
 impl LocalIdKeystore {
 	/// Returns a reference to our local authority id.
@@ -145,13 +145,13 @@ impl LocalIdKeystore {
 	}
 
 	/// Returns a reference to the keystore.
-	fn keystore(&self) -> SyncCryptoStorePtr {
+	fn keystore(&self) -> KeystorePtr {
 		(self.0).1.clone()
 	}
 }
 
-impl From<(AuthorityId, SyncCryptoStorePtr)> for LocalIdKeystore {
-	fn from(inner: (AuthorityId, SyncCryptoStorePtr)) -> LocalIdKeystore {
+impl From<(AuthorityId, KeystorePtr)> for LocalIdKeystore {
+	fn from(inner: (AuthorityId, KeystorePtr)) -> LocalIdKeystore {
 		LocalIdKeystore(inner)
 	}
 }

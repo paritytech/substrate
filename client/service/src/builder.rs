@@ -67,7 +67,7 @@ use sp_consensus::block_validation::{
 	BlockAnnounceValidator, Chain, DefaultBlockAnnounceValidator,
 };
 use sp_core::traits::{CodeExecutor, SpawnNamed};
-use sp_keystore::{CryptoStore, SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::{Keystore, KeystorePtr};
 use sp_runtime::traits::{Block as BlockT, BlockIdTo, NumberFor, Zero};
 use std::{str::FromStr, sync::Arc, time::SystemTime};
 
@@ -85,26 +85,22 @@ pub type TFullCallExecutor<TBl, TExec> =
 type TFullParts<TBl, TRtApi, TExec> =
 	(TFullClient<TBl, TRtApi, TExec>, Arc<TFullBackend<TBl>>, KeystoreContainer, TaskManager);
 
-trait AsCryptoStoreRef {
-	fn keystore_ref(&self) -> Arc<dyn CryptoStore>;
-	fn sync_keystore_ref(&self) -> Arc<dyn SyncCryptoStore>;
+trait AsKeystoreRef {
+	fn keystore_ref(&self) -> Arc<dyn Keystore>;
 }
 
-impl<T> AsCryptoStoreRef for Arc<T>
+impl<T> AsKeystoreRef for Arc<T>
 where
-	T: CryptoStore + SyncCryptoStore + 'static,
+	T: Keystore + 'static,
 {
-	fn keystore_ref(&self) -> Arc<dyn CryptoStore> {
-		self.clone()
-	}
-	fn sync_keystore_ref(&self) -> Arc<dyn SyncCryptoStore> {
+	fn keystore_ref(&self) -> Arc<dyn Keystore> {
 		self.clone()
 	}
 }
 
 /// Construct and hold different layers of Keystore wrappers
 pub struct KeystoreContainer {
-	remote: Option<Box<dyn AsCryptoStoreRef>>,
+	remote: Option<Box<dyn AsKeystoreRef>>,
 	local: Arc<LocalKeystore>,
 }
 
@@ -127,26 +123,17 @@ impl KeystoreContainer {
 	/// stick around.
 	pub fn set_remote_keystore<T>(&mut self, remote: Arc<T>)
 	where
-		T: CryptoStore + SyncCryptoStore + 'static,
+		T: Keystore + 'static,
 	{
 		self.remote = Some(Box::new(remote))
 	}
 
-	/// Returns an adapter to the asynchronous keystore that implements `CryptoStore`
-	pub fn keystore(&self) -> Arc<dyn CryptoStore> {
+	/// Returns an adapter to a `Keystore` implementation.
+	pub fn keystore(&self) -> Arc<dyn Keystore> {
 		if let Some(c) = self.remote.as_ref() {
 			c.keystore_ref()
 		} else {
 			self.local.clone()
-		}
-	}
-
-	/// Returns the synchronous keystore wrapper
-	pub fn sync_keystore(&self) -> SyncCryptoStorePtr {
-		if let Some(c) = self.remote.as_ref() {
-			c.sync_keystore_ref()
-		} else {
-			self.local.clone() as SyncCryptoStorePtr
 		}
 	}
 
@@ -234,7 +221,7 @@ where
 	let client = {
 		let extensions = sc_client_api::execution_extensions::ExecutionExtensions::new(
 			config.execution_strategies.clone(),
-			Some(keystore_container.sync_keystore()),
+			Some(keystore_container.keystore()),
 			sc_offchain::OffchainDb::factory_from_backend(&*backend),
 		);
 
@@ -374,7 +361,7 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	/// A task manager returned by `new_full_parts`.
 	pub task_manager: &'a mut TaskManager,
 	/// A shared keystore returned by `new_full_parts`.
-	pub keystore: SyncCryptoStorePtr,
+	pub keystore: KeystorePtr,
 	/// A shared transaction pool.
 	pub transaction_pool: Arc<TExPool>,
 	/// Builds additional [`RpcModule`]s that should be added to the server
@@ -645,7 +632,7 @@ fn gen_rpc_module<TBl, TBackend, TCl, TRpc, TExPool>(
 	spawn_handle: SpawnTaskHandle,
 	client: Arc<TCl>,
 	transaction_pool: Arc<TExPool>,
-	keystore: SyncCryptoStorePtr,
+	keystore: KeystorePtr,
 	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 	config: &Configuration,
 	backend: Arc<TBackend>,
