@@ -49,7 +49,7 @@ pub type TopicOf<T> = <T as frame_system::Config>::Hash;
 /// Type for variable sized storage key. Used for transparent hashing.
 type VarSizedKey<T> = BoundedVec<u8, <T as Config>::MaxStorageKeyLen>;
 
-/// Combined key type for both fixed and variable storage keys.
+/// Combined key type for both fixed and variable sized storage keys.
 pub enum Key<T: Config> {
 	/// Variant for fixed sized keys.
 	Fix([u8; 32]),
