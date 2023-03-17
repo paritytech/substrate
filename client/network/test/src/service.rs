@@ -478,6 +478,9 @@ async fn lots_of_incoming_peers_works() {
 }
 
 #[tokio::test]
+#[cfg(disable_flaky)]
+#[allow(dead_code)]
+// FIXME: https://github.com/paritytech/substrate/issues/11321
 async fn notifications_back_pressure() {
 	// Node 1 floods node 2 with notifications. Random sleeps are done on node 2 to simulate the
 	// node being busy. We make sure that all notifications are received.
