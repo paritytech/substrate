@@ -74,8 +74,8 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `109`
 		//  Estimated: `6986`
-		// Minimum execution time: 18_558_000 picoseconds.
-		Weight::from_parts(18_984_000, 6986)
+		// Minimum execution time: 18_442_000 picoseconds.
+		Weight::from_parts(18_996_000, 6986)
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(4_u64))
 	}
@@ -92,10 +92,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `583 + r * (281 ±0)`
 		//  Estimated: `14024 + r * (7547 ±0)`
-		// Minimum execution time: 29_857_000 picoseconds.
-		Weight::from_parts(33_306_771, 14024)
-			// Standard Error: 21_070
-			.saturating_add(Weight::from_parts(12_707_867, 0).saturating_mul(r.into()))
+		// Minimum execution time: 30_172_000 picoseconds.
+		Weight::from_parts(34_038_450, 14024)
+			// Standard Error: 22_658
+			.saturating_add(Weight::from_parts(12_688_929, 0).saturating_mul(r.into()))
 			.saturating_add(T::DbWeight::get().reads(4_u64))
 			.saturating_add(T::DbWeight::get().reads((3_u64).saturating_mul(r.into())))
 			.saturating_add(T::DbWeight::get().writes(4_u64))
@@ -115,10 +115,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `281 + r * (17 ±0)`
 		//  Estimated: `6986`
-		// Minimum execution time: 21_153_000 picoseconds.
-		Weight::from_parts(22_009_723, 6986)
-			// Standard Error: 4_868
-			.saturating_add(Weight::from_parts(275_329, 0).saturating_mul(r.into()))
+		// Minimum execution time: 21_683_000 picoseconds.
+		Weight::from_parts(21_620_905, 6986)
+			// Standard Error: 43_301
+			.saturating_add(Weight::from_parts(506_826, 0).saturating_mul(r.into()))
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(4_u64))
 	}
@@ -135,10 +135,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `599 + r * (72 ±0)`
 		//  Estimated: `14024`
-		// Minimum execution time: 30_073_000 picoseconds.
-		Weight::from_parts(32_315_111, 14024)
-			// Standard Error: 28_753
-			.saturating_add(Weight::from_parts(672_232, 0).saturating_mul(r.into()))
+		// Minimum execution time: 30_254_000 picoseconds.
+		Weight::from_parts(32_678_778, 14024)
+			// Standard Error: 27_822
+			.saturating_add(Weight::from_parts(655_170, 0).saturating_mul(r.into()))
 			.saturating_add(T::DbWeight::get().reads(4_u64))
 			.saturating_add(T::DbWeight::get().writes(4_u64))
 	}
@@ -154,8 +154,8 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `595`
 		//  Estimated: `230816`
-		// Minimum execution time: 46_389_000 picoseconds.
-		Weight::from_parts(46_971_000, 230816)
+		// Minimum execution time: 47_313_000 picoseconds.
+		Weight::from_parts(47_741_000, 230816)
 			.saturating_add(T::DbWeight::get().reads(5_u64))
 			.saturating_add(T::DbWeight::get().writes(4_u64))
 	}
@@ -170,10 +170,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `429 + n * (50 ±0)`
 		//  Estimated: `8364 + n * (2540 ±0)`
-		// Minimum execution time: 15_163_000 picoseconds.
-		Weight::from_parts(19_698_097, 8364)
-			// Standard Error: 3_271
-			.saturating_add(Weight::from_parts(1_002_132, 0).saturating_mul(n.into()))
+		// Minimum execution time: 15_849_000 picoseconds.
+		Weight::from_parts(20_371_988, 8364)
+			// Standard Error: 7_247
+			.saturating_add(Weight::from_parts(1_011_094, 0).saturating_mul(n.into()))
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().reads((1_u64).saturating_mul(n.into())))
 			.saturating_add(T::DbWeight::get().writes((1_u64).saturating_mul(n.into())))
@@ -195,8 +195,8 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `109`
 		//  Estimated: `6986`
-		// Minimum execution time: 18_558_000 picoseconds.
-		Weight::from_parts(18_984_000, 6986)
+		// Minimum execution time: 18_442_000 picoseconds.
+		Weight::from_parts(18_996_000, 6986)
 			.saturating_add(RocksDbWeight::get().reads(2_u64))
 			.saturating_add(RocksDbWeight::get().writes(4_u64))
 	}
@@ -213,10 +213,10 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `583 + r * (281 ±0)`
 		//  Estimated: `14024 + r * (7547 ±0)`
-		// Minimum execution time: 29_857_000 picoseconds.
-		Weight::from_parts(33_306_771, 14024)
-			// Standard Error: 21_070
-			.saturating_add(Weight::from_parts(12_707_867, 0).saturating_mul(r.into()))
+		// Minimum execution time: 30_172_000 picoseconds.
+		Weight::from_parts(34_038_450, 14024)
+			// Standard Error: 22_658
+			.saturating_add(Weight::from_parts(12_688_929, 0).saturating_mul(r.into()))
 			.saturating_add(RocksDbWeight::get().reads(4_u64))
 			.saturating_add(RocksDbWeight::get().reads((3_u64).saturating_mul(r.into())))
 			.saturating_add(RocksDbWeight::get().writes(4_u64))
@@ -236,10 +236,10 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `281 + r * (17 ±0)`
 		//  Estimated: `6986`
-		// Minimum execution time: 21_153_000 picoseconds.
-		Weight::from_parts(22_009_723, 6986)
-			// Standard Error: 4_868
-			.saturating_add(Weight::from_parts(275_329, 0).saturating_mul(r.into()))
+		// Minimum execution time: 21_683_000 picoseconds.
+		Weight::from_parts(21_620_905, 6986)
+			// Standard Error: 43_301
+			.saturating_add(Weight::from_parts(506_826, 0).saturating_mul(r.into()))
 			.saturating_add(RocksDbWeight::get().reads(2_u64))
 			.saturating_add(RocksDbWeight::get().writes(4_u64))
 	}
@@ -256,10 +256,10 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `599 + r * (72 ±0)`
 		//  Estimated: `14024`
-		// Minimum execution time: 30_073_000 picoseconds.
-		Weight::from_parts(32_315_111, 14024)
-			// Standard Error: 28_753
-			.saturating_add(Weight::from_parts(672_232, 0).saturating_mul(r.into()))
+		// Minimum execution time: 30_254_000 picoseconds.
+		Weight::from_parts(32_678_778, 14024)
+			// Standard Error: 27_822
+			.saturating_add(Weight::from_parts(655_170, 0).saturating_mul(r.into()))
 			.saturating_add(RocksDbWeight::get().reads(4_u64))
 			.saturating_add(RocksDbWeight::get().writes(4_u64))
 	}
@@ -275,8 +275,8 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `595`
 		//  Estimated: `230816`
-		// Minimum execution time: 46_389_000 picoseconds.
-		Weight::from_parts(46_971_000, 230816)
+		// Minimum execution time: 47_313_000 picoseconds.
+		Weight::from_parts(47_741_000, 230816)
 			.saturating_add(RocksDbWeight::get().reads(5_u64))
 			.saturating_add(RocksDbWeight::get().writes(4_u64))
 	}
@@ -291,10 +291,10 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `429 + n * (50 ±0)`
 		//  Estimated: `8364 + n * (2540 ±0)`
-		// Minimum execution time: 15_163_000 picoseconds.
-		Weight::from_parts(19_698_097, 8364)
-			// Standard Error: 3_271
-			.saturating_add(Weight::from_parts(1_002_132, 0).saturating_mul(n.into()))
+		// Minimum execution time: 15_849_000 picoseconds.
+		Weight::from_parts(20_371_988, 8364)
+			// Standard Error: 7_247
+			.saturating_add(Weight::from_parts(1_011_094, 0).saturating_mul(n.into()))
 			.saturating_add(RocksDbWeight::get().reads(2_u64))
 			.saturating_add(RocksDbWeight::get().reads((1_u64).saturating_mul(n.into())))
 			.saturating_add(RocksDbWeight::get().writes((1_u64).saturating_mul(n.into())))
