@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -219,7 +219,7 @@ impl<'a, T: Config> ContractModule<'a, T> {
 	}
 
 	fn inject_gas_metering(self, determinism: Determinism) -> Result<Self, &'static str> {
-		let gas_rules = self.schedule.rules(&self.module, determinism);
+		let gas_rules = self.schedule.rules(determinism);
 		let backend = gas_metering::host_function::Injector::new("seal0", "gas");
 		let contract_module = gas_metering::inject(self.module, backend, &gas_rules)
 			.map_err(|_| "gas instrumentation failed")?;

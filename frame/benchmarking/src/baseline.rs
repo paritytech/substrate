@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -160,12 +160,12 @@ pub mod mock {
 	impl super::Config for Test {}
 
 	pub fn new_test_ext() -> sp_io::TestExternalities {
-		use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStorePtr};
+		use sp_keystore::{testing::MemoryKeystore, KeystoreExt, KeystorePtr};
 		use sp_std::sync::Arc;
 
 		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		let mut ext = sp_io::TestExternalities::new(t);
-		ext.register_extension(KeystoreExt(Arc::new(KeyStore::new()) as SyncCryptoStorePtr));
+		ext.register_extension(KeystoreExt(Arc::new(MemoryKeystore::new()) as KeystorePtr));
 
 		ext
 	}

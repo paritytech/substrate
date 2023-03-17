@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -57,7 +57,6 @@ mod mock_democracy {
 		use frame_system::pallet_prelude::*;
 
 		#[pallet::pallet]
-		#[pallet::generate_store(pub(super) trait Store)]
 		pub struct Pallet<T>(_);
 
 		#[pallet::config]
@@ -288,7 +287,7 @@ fn proposal_weight_limit_works_on_approve() {
 				RuntimeOrigin::signed(4),
 				hash,
 				0,
-				proposal_weight - Weight::from_ref_time(100),
+				proposal_weight - Weight::from_parts(100, 0),
 				proposal_len
 			),
 			Error::<Test, Instance1>::WrongProposalWeight
@@ -327,7 +326,7 @@ fn proposal_weight_limit_ignored_on_disapprove() {
 			RuntimeOrigin::signed(4),
 			hash,
 			0,
-			proposal_weight - Weight::from_ref_time(100),
+			proposal_weight - Weight::from_parts(100, 0),
 			proposal_len
 		));
 	})
@@ -750,7 +749,7 @@ fn correct_validate_and_get_proposal() {
 			Collective::validate_and_get_proposal(
 				&hash,
 				length,
-				weight - Weight::from_ref_time(10)
+				weight - Weight::from_parts(10, 0)
 			),
 			Error::<Test, Instance1>::WrongProposalWeight
 		);

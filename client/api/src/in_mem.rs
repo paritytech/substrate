@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -40,7 +40,7 @@ use std::{
 
 use crate::{
 	backend::{self, NewBlockState},
-	blockchain::{self, well_known_cache_keys::Id as CacheKeyId, BlockStatus, HeaderBackend},
+	blockchain::{self, BlockStatus, HeaderBackend},
 	leaves::LeafSet,
 	UsageInfo,
 };
@@ -548,8 +548,6 @@ where
 			Some(PendingBlock { block: StoredBlock::new(header, body, justifications), state });
 		Ok(())
 	}
-
-	fn update_cache(&mut self, _cache: HashMap<CacheKeyId, Vec<u8>>) {}
 
 	fn update_db_storage(
 		&mut self,

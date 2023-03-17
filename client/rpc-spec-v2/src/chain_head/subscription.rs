@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -21,6 +21,7 @@
 use futures::channel::oneshot;
 use parking_lot::{RwLock, RwLockWriteGuard};
 use sc_client_api::Backend;
+use sp_blockchain::Error;
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	collections::{hash_map::Entry, HashMap, HashSet},
@@ -34,8 +35,20 @@ pub enum SubscriptionManagementError {
 	/// the subscription has exceeded the maximum number
 	/// of blocks pinned.
 	ExceededLimits,
+	/// Error originated from the blockchain (client or backend).
+	Blockchain(Error),
+	/// The database does not contain a block number.
+	BlockNumberAbsent,
+	/// The database does not contain a block hash.
+	BlockHashAbsent,
 	/// Custom error.
 	Custom(String),
+}
+
+impl From<Error> for SubscriptionManagementError {
+	fn from(err: Error) -> Self {
+		SubscriptionManagementError::Blockchain(err)
+	}
 }
 
 /// Inner subscription data structure.
@@ -51,12 +64,9 @@ struct SubscriptionInner<Block: BlockT> {
 }
 
 /// Manage the blocks of a specific subscription ID.
-pub struct SubscriptionHandle<Block: BlockT, BE: Backend<Block> + 'static> {
-	inner: RwLock<SubscriptionInner<Block>>,
-	/// The best reported block by this subscription.
-	/// Have this as a separate variable to easily share
-	/// the write guard with the RPC layer.
-	best_block: RwLock<Option<Block::Hash>>,
+#[derive(Clone)]
+pub struct SubscriptionHandle<Block: BlockT> {
+	inner: Arc<RwLock<SubscriptionInner<Block>>>,
 	/// Backend pinning / unpinning blocks.
 	///
 	/// The `Arc` is handled one level-above, but substrate exposes the backend as Arc<T>.
@@ -78,7 +88,6 @@ impl<Block: BlockT, BE: Backend<Block> + 'static> SubscriptionHandle<Block, BE> 
 				blocks: HashSet::new(),
 				max_pinned_blocks,
 			}),
-			best_block: RwLock::new(None),
 			backend,
 		}
 	}
@@ -145,11 +154,6 @@ impl<Block: BlockT, BE: Backend<Block> + 'static> SubscriptionHandle<Block, BE> 
 	pub fn has_runtime_updates(&self) -> bool {
 		let inner = self.inner.read();
 		inner.runtime_updates
-	}
-
-	/// Get the write guard of the best reported block.
-	pub fn best_block_write(&self) -> RwLockWriteGuard<'_, Option<Block::Hash>> {
-		self.best_block.write()
 	}
 }
 

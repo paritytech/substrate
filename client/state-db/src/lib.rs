@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -56,6 +56,8 @@ use std::{
 	fmt,
 };
 
+const LOG_TARGET: &str = "state-db";
+const LOG_TARGET_PIN: &str = "state-db::pin";
 const PRUNING_MODE: &[u8] = b"mode";
 const PRUNING_MODE_ARCHIVE: &[u8] = b"archive";
 const PRUNING_MODE_ARCHIVE_CANON: &[u8] = b"archive_canonical";
@@ -309,7 +311,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDbSync<BlockHash, Key, D> {
 		ref_counting: bool,
 		db: D,
 	) -> Result<StateDbSync<BlockHash, Key, D>, Error<D::Error>> {
-		trace!(target: "state-db", "StateDb settings: {:?}. Ref-counting: {}", mode, ref_counting);
+		trace!(target: LOG_TARGET, "StateDb settings: {:?}. Ref-counting: {}", mode, ref_counting);
 
 		let non_canonical: NonCanonicalOverlay<BlockHash, Key> = NonCanonicalOverlay::new(&db)?;
 		let pruning: Option<RefWindow<BlockHash, Key, D>> = match mode {
