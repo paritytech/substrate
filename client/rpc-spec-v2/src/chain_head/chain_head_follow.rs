@@ -373,31 +373,26 @@ where
 				continue
 			}
 
-			match self.best_block_cache {
-				Some(best_block_hash) => {
-					// If the best reported block is a children of the last finalized,
-					// then we had a gap in notification.
-					let ancestor = sp_blockchain::lowest_common_ancestor(
-						&*self.client,
-						*last_finalized,
-						best_block_hash,
-					)?;
+			// Make sure we have not encountered a gap in notifications.
+			// Note: Let `generate_import_events()` populate the cache.
+			if let Some(best_block_hash) = self.best_block_cache {
+				// If the best reported block is a children of the last finalized,
+				// then we had a gap in notification.
+				let ancestor = sp_blockchain::lowest_common_ancestor(
+					&*self.client,
+					*last_finalized,
+					best_block_hash,
+				)?;
 
-					// A descendent of the finalized block was already reported
-					// before the `NewBlock` event containing the finalized block
-					// is reported.
-					if ancestor.hash == *last_finalized {
-						return Err(SubscriptionManagementError::Custom(
-							"A descendent of the finalized block was already reported".into(),
-						))
-					}
-					self.best_block_cache = Some(*hash);
-				},
-				// This is the first best block event that we generate.
-				None => {
-					self.best_block_cache = Some(*hash);
-				},
-			};
+				// A descendent of the finalized block was already reported
+				// before the `NewBlock` event containing the finalized block
+				// is reported.
+				if ancestor.hash == *last_finalized {
+					return Err(SubscriptionManagementError::Custom(
+						"A descendent of the finalized block was already reported".into(),
+					))
+				}
+			}
 
 			// This is the first time we see this block. Generate the `NewBlock` event; if this is
 			// the last block, also generate the `BestBlock` event.
