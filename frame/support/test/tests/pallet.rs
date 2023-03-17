@@ -725,6 +725,9 @@ fn call_expand() {
 		pallet::Call::<Runtime>::get_call_names(),
 		&["foo", "foo_storage_layer", "foo_no_post_info", "check_for_dispatch_context"],
 	);
+
+	assert_eq!(call_foo.get_call_index(), 0u8);
+	assert_eq!(pallet::Call::<Runtime>::get_call_indices(), &[0u8, 1u8, 2u8, 3u8])
 }
 
 #[test]

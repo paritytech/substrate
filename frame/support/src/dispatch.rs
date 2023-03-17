@@ -2834,22 +2834,6 @@ macro_rules! decl_module {
 			}
 		}
 
-		// Implement GetCallIndex for the Call.
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::GetCallIndex
-			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
-		{
-			//fake impl
-			fn get_call_index(&self) -> u8 {
-				*self as u8
-			}
-
-			fn get_call_indices() -> &'static [u8] {
-				&[
-					0
-				]
-			}
-		}
-
 		// Implement `OnGenesis` for `Module`
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::OnGenesis
 			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*

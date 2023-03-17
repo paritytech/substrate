@@ -117,12 +117,8 @@ pub trait GetCallIndex {
 pub trait GetCallMetadata {
 	/// Return all module names.
 	fn get_module_names() -> &'static [&'static str];
-	/// Return all module idices.
-	fn get_module_indices() -> &'static [u8];
 	/// Return all function names for the given `module`.
 	fn get_call_names(module: &str) -> &'static [&'static str];
-	/// Return all function indices for the given `module`.
-	fn get_call_indices(module: &str) -> &'static [u8];
 	/// Return a [`CallMetadata`], containing function and pallet name of the Call.
 	fn get_call_metadata(&self) -> CallMetadata;
 }
