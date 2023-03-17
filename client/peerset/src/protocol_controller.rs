@@ -16,10 +16,14 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+// TODO: remove this line.
+#![allow(unused)]
+
 use futures::{FutureExt, StreamExt};
 use libp2p::PeerId;
 use log::{error, info, trace};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use sp_arithmetic::traits::SaturatedConversion;
 use std::{
 	collections::{hash_map::Entry, HashMap, HashSet},
 	time::{Duration, Instant},
@@ -58,7 +62,7 @@ impl ProtocolHandle {
 		let _ = self.to_controller.unbounded_send(Action::AddReservedPeer(peer_id));
 	}
 
-	/// Remove a previously-added reserved peer.
+	/// Demotes reserved peer to non-reserved. Does not disconnect the peer.
 	///
 	/// Has no effect if the node was not a reserved peer.
 	pub fn remove_reserved_peer(&self, peer_id: PeerId) {
@@ -100,14 +104,14 @@ impl ProtocolHandle {
 }
 
 /// Direction of a connection
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 enum Direction {
 	Inbound,
 	Outbound,
 }
 
 /// Status of a connection with a peer.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 enum PeerState {
 	/// We are connected to the peer.
 	Connected(Direction),
@@ -145,12 +149,12 @@ pub struct ProtocolController {
 	max_in: u32,
 	/// Maximum number of slots for outgoing connections.
 	max_out: u32,
-	/// Reserved nodes.
-	reserved_nodes: HashSet<PeerId>,
-	/// Connect only to reserved nodes.
-	reserved_only: bool,
 	/// Peers and their connection states (including reserved nodes).
 	nodes: HashMap<PeerId, PeerState>,
+	/// Reserved nodes. Should be always connected and do not occupy peer slots.
+	reserved_nodes: HashMap<PeerId, PeerState>,
+	/// Connect only to reserved nodes.
+	reserved_only: bool,
 	/// Next time to allocate slots. This is done once per second.
 	next_periodic_alloc_slots: Instant,
 	/// Outgoing channel for messages to `Notifications`.
@@ -170,9 +174,17 @@ impl ProtocolController {
 	) -> (ProtocolHandle, ProtocolController) {
 		let (to_controller, from_handle) = tracing_unbounded("mpsc_protocol_controller", 10_000);
 		let handle = ProtocolHandle { to_controller };
-		let nodes = config
+		let reserved_nodes = config
 			.reserved_nodes
-			.union(&config.bootnodes.into_iter().collect())
+			.iter()
+			.map(|p| (*p, PeerState::NotConnected))
+			.collect::<HashMap<PeerId, PeerState>>();
+		// Initialize with bootnodes, but make sure we don't count peers twice.
+		let nodes = config
+			.bootnodes
+			.into_iter()
+			.collect::<HashSet<_>>()
+			.difference(&config.reserved_nodes)
 			.map(|p| (*p, PeerState::NotConnected))
 			.collect::<HashMap<PeerId, PeerState>>();
 		let controller = ProtocolController {
@@ -182,9 +194,9 @@ impl ProtocolController {
 			num_out: 0,
 			max_in: config.in_peers,
 			max_out: config.out_peers,
-			reserved_nodes: config.reserved_nodes,
-			reserved_only: config.reserved_only,
 			nodes,
+			reserved_nodes,
+			reserved_only: config.reserved_only,
 			next_periodic_alloc_slots: Instant::now(),
 			to_notifications,
 			peerset_handle,
@@ -225,18 +237,58 @@ impl ProtocolController {
 			Action::RemovePeer(peer_id) => self.on_remove_peer(peer_id),
 			Action::IncomingConnection(peer_id, index) =>
 				self.on_incoming_connection(peer_id, index),
-			Action::Dropped(peer_id, reason) => self.on_peer_dropped(peer_id, reason),
+			Action::Dropped(peer_id, reason) =>
+				self.on_peer_dropped(peer_id, reason).unwrap_or_else(|peer_id| {
+					debug_assert!(false, "Received Action::Dropped for non-connected peer.");
+					error!(
+						target: "peerset",
+						"Received Action::Dropped for non-connected peer {} on {:?}.",
+						peer_id, self.set_id,
+					)
+				}),
 		}
 		true
 	}
 
+	fn accept_connection(&self, incoming_index: IncomingIndex) {
+		let _ = self.to_notifications.unbounded_send(Message::Accept(incoming_index));
+	}
+
+	fn reject_connection(&self, incoming_index: IncomingIndex) {
+		let _ = self.to_notifications.unbounded_send(Message::Reject(incoming_index));
+	}
+
+	fn start_connection(&self, peer_id: PeerId) {
+		let _ = self
+			.to_notifications
+			.unbounded_send(Message::Connect { set_id: self.set_id, peer_id });
+	}
+
+	fn drop_connection(&self, peer_id: PeerId) {
+		let _ = self
+			.to_notifications
+			.unbounded_send(Message::Drop { set_id: self.set_id, peer_id });
+	}
+
+	fn report_disconnect(&self, peer_id: PeerId) {
+		self.peerset_handle.report_disconnect(peer_id);
+	}
+
+	fn is_banned(&self, peer_id: PeerId) -> bool {
+		self.peerset_handle.is_banned(peer_id)
+	}
+
 	fn on_add_reserved_peer(&mut self, peer_id: PeerId) {
-		if !self.reserved_nodes.insert(peer_id) {
+		if self.reserved_nodes.contains_key(&peer_id) {
 			return
 		}
 
+		// Get the peer out of non-reserved peers if it's there and add to reserved.
+		let state = self.nodes.remove(&peer_id).unwrap_or(PeerState::NotConnected);
+		self.reserved_nodes.insert(peer_id, state.clone());
+
 		// Discount occupied slots or connect to the node.
-		match self.nodes.entry(peer_id).or_insert(PeerState::NotConnected) {
+		match state {
 			PeerState::Connected(Direction::Inbound) => self.num_in -= 1,
 			PeerState::Connected(Direction::Outbound) => self.num_out -= 1,
 			PeerState::NotConnected => self.alloc_slots(),
@@ -244,53 +296,43 @@ impl ProtocolController {
 	}
 
 	fn on_remove_reserved_peer(&mut self, peer_id: PeerId) {
-		if !self.reserved_nodes.remove(&peer_id) {
-			return
-		}
+		let mut state = match self.reserved_nodes.remove(&peer_id) {
+			Some(state) => state,
+			None => return,
+		};
 
-		match self.nodes.entry(peer_id) {
-			Entry::Occupied(mut node) => {
-				if !node.get().is_connected() {
-					return
-				}
-
+		match state {
+			PeerState::Connected(d) => {
 				if self.reserved_only {
-					// If we are in reserved-only mode, the removed reserved node
-					// should be disconnected.
-					*node.get_mut() = PeerState::NotConnected;
-					let _ = self.to_notifications.unbounded_send(Message::Drop {
-						set_id: self.set_id,
-						peer_id: *node.key(),
-					});
+					// Disconnect the node.
 					info!(
 						target: "peerset",
 						"Disconnecting previously reserved node {} on {:?}.",
-						node.key(), self.set_id
+						peer_id, self.set_id
 					);
+					state = PeerState::NotConnected;
+					self.drop_connection(peer_id);
 				} else {
-					// Otherwise, just count occupied slots for the node.
-					match node.get() {
-						PeerState::Connected(Direction::Inbound) => self.num_in += 1,
-						PeerState::Connected(Direction::Outbound) => self.num_out += 1,
-						PeerState::NotConnected => {},
+					// Count connections as of regular node.
+					match d {
+						Direction::Inbound => self.num_in += 1,
+						Direction::Outbound => self.num_out += 1,
 					}
 				}
 			},
-			Entry::Vacant(_) => {
-				debug_assert!(false, "Reserved node not in the list of known nodes.");
-				error!(
-					target: "peerset",
-					"Invalid state: reserved node {} not in the list of known nodes.",
-					peer_id,
-				);
-			},
+			PeerState::NotConnected => {},
 		}
+
+		// Put the node into the list of regular nodes.
+		let prev = self.nodes.insert(peer_id, state);
+		assert!(prev.is_none(), "Corrupted state: reserved node was also non-reserved.");
 	}
 
 	fn on_set_reserved_peers(&mut self, peer_ids: HashSet<PeerId>) {
 		// Determine the difference between the current group and the new list.
-		let to_insert = peer_ids.difference(&self.reserved_nodes).cloned().collect::<Vec<_>>();
-		let to_remove = self.reserved_nodes.difference(&peer_ids).cloned().collect::<Vec<_>>();
+		let current = self.reserved_nodes.keys().cloned().collect();
+		let to_insert = peer_ids.difference(&current).cloned().collect::<Vec<_>>();
+		let to_remove = current.difference(&peer_ids).cloned().collect::<Vec<_>>();
 
 		for node in to_insert {
 			self.on_add_reserved_peer(node);
@@ -304,31 +346,29 @@ impl ProtocolController {
 	fn on_set_reserved_only(&mut self, reserved_only: bool) {
 		self.reserved_only = reserved_only;
 
-		if reserved_only {
-			// Disconnect all non-reserved peers.
-			for (peer_id, state) in self.nodes.iter_mut() {
-				match state {
-					PeerState::Connected(d) => {
-						match d {
-							Direction::Inbound => self.num_in -= 1,
-							Direction::Outbound => self.num_out -= 1,
-						}
-						*state = PeerState::NotConnected;
-						let _ = self.to_notifications.unbounded_send(Message::Drop {
-							set_id: self.set_id,
-							peer_id: *peer_id,
-						});
-					},
-					PeerState::NotConnected => {},
-				}
-			}
-		} else {
-			// Try connecting to non-reserved peers.
-			self.alloc_slots();
+		if !reserved_only {
+			return self.alloc_slots()
 		}
+
+		// Disconnect all non-reserved peers.
+		self.nodes
+			.iter_mut()
+			.filter_map(|(peer_id, state)| {
+				state.is_connected().then_some({
+					*state = PeerState::NotConnected;
+					*peer_id
+				})
+			})
+			.collect::<Vec<_>>()
+			.iter()
+			.for_each(|peer_id| self.drop_connection(*peer_id));
 	}
 
 	fn on_add_peer(&mut self, peer_id: PeerId) {
+		if self.reserved_nodes.contains_key(&peer_id) {
+			return
+		}
+
 		if self.nodes.insert(peer_id, PeerState::NotConnected).is_none() {
 			self.alloc_slots();
 		}
@@ -336,7 +376,7 @@ impl ProtocolController {
 
 	fn on_remove_peer(&mut self, peer_id: PeerId) {
 		// Don't do anything if the node is reserved.
-		if self.reserved_nodes.contains(&peer_id) {
+		if self.reserved_nodes.contains_key(&peer_id) {
 			return
 		}
 
@@ -347,9 +387,7 @@ impl ProtocolController {
 						Direction::Inbound => self.num_in -= 1,
 						Direction::Outbound => self.num_out -= 1,
 					}
-					let _ = self
-						.to_notifications
-						.unbounded_send(Message::Drop { set_id: self.set_id, peer_id });
+					self.drop_connection(peer_id);
 				},
 				PeerState::NotConnected => {},
 			},
@@ -364,8 +402,27 @@ impl ProtocolController {
 	}
 
 	fn on_incoming_connection(&mut self, peer_id: PeerId, incoming_index: IncomingIndex) {
-		if self.reserved_only && !self.reserved_nodes.contains(&peer_id) {
-			let _ = self.to_notifications.unbounded_send(Message::Reject(incoming_index));
+		if self.reserved_only && !self.reserved_nodes.contains_key(&peer_id) {
+			self.reject_connection(incoming_index);
+			return
+		}
+
+		// Check if the node is reserved first.
+		if let Some(state) = self.reserved_nodes.get_mut(&peer_id) {
+			match state {
+				// If we're already connected, don't answer, as the docs mention.
+				PeerState::Connected(_) => {},
+				PeerState::NotConnected => {
+					// It's questionable whether we should check a reputation of reserved node.
+					// FIXME: unable to call `self.is_banned()` because of borrowed `self`.
+					if self.peerset_handle.is_banned(peer_id) {
+						self.reject_connection(incoming_index);
+					} else {
+						*state = PeerState::Connected(Direction::Inbound);
+						self.accept_connection(incoming_index);
+					}
+				},
+			}
 			return
 		}
 
@@ -376,69 +433,127 @@ impl ProtocolController {
 			// If we're already connected, don't answer, as the docs mention.
 			PeerState::Connected(_) => return,
 			PeerState::NotConnected => {
+				// FIXME: unable to call `self.is_banned()` because of borrowed `self`.
 				if self.peerset_handle.is_banned(peer_id) {
-					let _ = self.to_notifications.unbounded_send(Message::Reject(incoming_index));
+					self.reject_connection(incoming_index);
 					return
 				}
 
-				let is_no_slot_occupy = self.reserved_nodes.contains(&peer_id);
-				// Note that it is possible for num_in to be strictly superior to the max, in case
-				// we were connected to a reserved node then marked it as not reserved.
-				if self.num_in >= self.max_in && !is_no_slot_occupy {
-					let _ = self.to_notifications.unbounded_send(Message::Reject(incoming_index));
+				if self.num_in >= self.max_in {
+					self.reject_connection(incoming_index);
 					return
 				}
 
-				if !is_no_slot_occupy {
-					self.num_in += 1;
-				}
+				self.num_in += 1;
 				*state = PeerState::Connected(Direction::Inbound);
-				let _ = self.to_notifications.unbounded_send(Message::Accept(incoming_index));
+				self.accept_connection(incoming_index);
 			},
 		}
 	}
 
-	fn on_peer_dropped(&mut self, peer_id: PeerId, reason: DropReason) {
-		match self.nodes.entry(peer_id) {
-			Entry::Occupied(mut node) => match node.get_mut() {
-				PeerState::Connected(d) => {
-					if !self.reserved_nodes.contains(&peer_id) {
-						match d {
-							Direction::Inbound => self.num_in -= 1,
-							Direction::Outbound => self.num_out -= 1,
-						}
+	/// Returns Err(PeerId) if peer wasn't connected.
+	fn on_peer_dropped(&mut self, peer_id: PeerId, reason: DropReason) -> Result<(), PeerId> {
+		let mut is_reserved = true;
+		let state = self
+			.reserved_nodes
+			.get_mut(&peer_id)
+			.or_else(|| {
+				is_reserved = false;
+				self.nodes.get_mut(&peer_id)
+			})
+			.ok_or(peer_id)?;
+		match state {
+			PeerState::Connected(d) => {
+				if is_reserved {
+					*state = PeerState::NotConnected;
+				} else {
+					match d {
+						Direction::Inbound => self.num_in -= 1,
+						Direction::Outbound => self.num_out -= 1,
 					}
-					self.peerset_handle.report_disconnect(peer_id);
 					if let DropReason::Refused = reason {
-						node.remove();
+						self.nodes.remove(&peer_id);
 					} else {
-						*node.get_mut() = PeerState::NotConnected;
+						*state = PeerState::NotConnected;
 					}
-				},
-				PeerState::NotConnected => {
-					debug_assert!(false, "Received on_peer_dropped() for non-connected peer.");
-					error!(
-						target: "peerset",
-						"Received on_peer_dropped() for non-connected peer {} on {:?}.",
-						peer_id, self.set_id,
-					)
-				},
+				}
+				self.report_disconnect(peer_id);
+				Ok(())
 			},
-			Entry::Vacant(_) => {
-				debug_assert!(false, "Received on_peer_dropped() for unknown peer.");
-				error!(
-					target: "peerset",
-					"Received on_peer_dropped() for unknown peer {} on {:?}.",
-					peer_id, self.set_id,
-				)
-			},
+			PeerState::NotConnected => Err(peer_id),
 		}
 	}
 
 	fn alloc_slots(&mut self) {
-		todo!(
-			"Count the number of slots we need to fill and request that number of peers from `Peerset`,
-		     also passing the list of already connected peers to eliminate them from the list."
-		);
+		if self.num_out >= self.max_out {
+			return
+		}
+
+		// Try connecting to reserved nodes first.
+		self.reserved_nodes
+			.iter_mut()
+			.filter_map(|(peer_id, state)| {
+				(matches!(state, PeerState::NotConnected) &&
+					!self.peerset_handle.is_banned(*peer_id))
+				.then_some({
+					*state = PeerState::Connected(Direction::Outbound);
+					peer_id
+				})
+			})
+			.cloned()
+			.collect::<Vec<_>>()
+			.into_iter()
+			.map(|peer_id| {
+				self.start_connection(peer_id);
+			});
+
+		// Nothing more to do if we're in reserved-only mode.
+		if self.reserved_only {
+			return
+		}
+
+		// Fill available slots with non-reserved nodes
+		let available_slots = (self.max_out - self.num_out).saturated_into();
+		// Ignore reserved nodes (connected above) and already connected nodes.
+		let ignored = self
+			.reserved_nodes
+			.keys()
+			.cloned()
+			.collect::<HashSet<PeerId>>()
+			.union(
+				&self
+					.nodes
+					.iter()
+					.filter_map(|(peer_id, state)| state.is_connected().then_some(*peer_id))
+					.collect::<HashSet<_>>(),
+			)
+			.cloned()
+			.collect::<HashSet<PeerId>>();
+
+		self.peerset_handle
+			.outgoing_candidates(available_slots, ignored)
+			.filter_map(|peer_id| {
+				let state = self.nodes.entry(*peer_id).or_insert(PeerState::NotConnected);
+				match state {
+					PeerState::Connected(_) => {
+						debug_assert!(false, "`Peerset` returned a node we asked to ignore.");
+						error!(
+							target: "peerset",
+							"`Peerset` returned a node we asked to ignore: {}.",
+							peer_id
+						);
+						None
+					},
+					PeerState::NotConnected => {
+						self.num_out += 1;
+						*state = PeerState::Connected(Direction::Outbound);
+						Some(peer_id)
+					},
+				}
+			})
+			.cloned()
+			.collect::<Vec<_>>()
+			.iter()
+			.map(|peer_id| self.start_connection(*peer_id));
 	}
 }

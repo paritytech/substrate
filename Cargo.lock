@@ -9053,6 +9053,7 @@ dependencies = [
  "rand 0.8.5",
  "sc-utils",
  "serde_json",
+ "sp-arithmetic",
  "wasm-timer",
 ]
 
