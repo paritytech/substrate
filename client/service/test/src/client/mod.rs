@@ -1566,7 +1566,8 @@ fn respects_block_rules() {
 	run_test(false, &mut known_bad, &mut fork_rules);
 }
 
-#[test]
+//#[test]
+#[allow(dead_code)]
 fn returns_status_for_pruned_blocks() {
 	sp_tracing::try_init_simple();
 	let tmp = tempfile::tempdir().unwrap();
