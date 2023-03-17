@@ -39,7 +39,7 @@
 //! which queue it will be stored. Messages are stored by being appended to the last [`Page`] of a
 //! book. Each book keeps track of its pages by indexing `Pages`. The `ReadyRing` contains all
 //! queues which hold at least one unprocessed message and are thereby *ready* to be serviced. The
-//! `ServiceHead` indicates which *ready* queue is the next to be serviced.  
+//! `ServiceHead` indicates which *ready* queue is the next to be serviced.
 //! The pallet implements [`frame_support::traits::EnqueueMessage`],
 //! [`frame_support::traits::ServiceQueues`] and has [`frame_support::traits::ProcessMessage`] and
 //! [`OnQueueChanged`] hooks to communicate with the outside world.
@@ -438,7 +438,6 @@ pub mod pallet {
 	use super::*;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	/// The module configuration trait.
@@ -961,11 +960,11 @@ impl<T: Config> Pallet<T> {
 			book_state.begin.saturating_inc();
 		}
 		let next_ready = book_state.ready_neighbours.as_ref().map(|x| x.next.clone());
-		if book_state.begin >= book_state.end && total_processed > 0 {
+		if book_state.begin >= book_state.end {
 			// No longer ready - unknit.
 			if let Some(neighbours) = book_state.ready_neighbours.take() {
 				Self::ready_ring_unknit(&origin, neighbours);
-			} else {
+			} else if total_processed > 0 {
 				defensive!("Freshly processed queue must have been ready");
 			}
 		}

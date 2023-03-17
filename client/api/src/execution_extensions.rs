@@ -30,7 +30,7 @@ use sp_core::{
 	ExecutionContext,
 };
 use sp_externalities::{Extension, Extensions};
-use sp_keystore::{KeystoreExt, SyncCryptoStorePtr};
+use sp_keystore::{KeystoreExt, KeystorePtr};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, NumberFor},
@@ -163,7 +163,7 @@ impl<T: offchain::DbExternalities + Clone + Sync + Send + 'static> DbExternaliti
 /// for each call, based on required `Capabilities`.
 pub struct ExecutionExtensions<Block: BlockT> {
 	strategies: ExecutionStrategies,
-	keystore: Option<SyncCryptoStorePtr>,
+	keystore: Option<KeystorePtr>,
 	offchain_db: Option<Box<dyn DbExternalitiesFactory>>,
 	// FIXME: these two are only RwLock because of https://github.com/paritytech/substrate/issues/4587
 	//        remove when fixed.
@@ -191,7 +191,7 @@ impl<Block: BlockT> ExecutionExtensions<Block> {
 	/// Create new `ExecutionExtensions` given a `keystore` and `ExecutionStrategies`.
 	pub fn new(
 		strategies: ExecutionStrategies,
-		keystore: Option<SyncCryptoStorePtr>,
+		keystore: Option<KeystorePtr>,
 		offchain_db: Option<Box<dyn DbExternalitiesFactory>>,
 	) -> Self {
 		let transaction_pool = RwLock::new(None);

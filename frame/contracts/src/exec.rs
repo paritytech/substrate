@@ -84,14 +84,14 @@ where
 pub enum ErrorOrigin {
 	/// Caller error origin.
 	///
-	/// The error happened in the current exeuction context rather than in the one
+	/// The error happened in the current execution context rather than in the one
 	/// of the contract that is called into.
 	Caller,
 	/// The error happened during execution of the called contract.
 	Callee,
 }
 
-/// Error returned by contract exection.
+/// Error returned by contract execution.
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub struct ExecError {
 	/// The reason why the execution failed.
@@ -2455,7 +2455,7 @@ mod tests {
 	#[test]
 	fn in_memory_changes_not_discarded() {
 		// Call stack: BOB -> CHARLIE (trap) -> BOB' (success)
-		// This tests verfies some edge case of the contract info cache:
+		// This tests verifies some edge case of the contract info cache:
 		// We change some value in our contract info before calling into a contract
 		// that calls into ourself. This triggers a case where BOBs contract info
 		// is written to storage and invalidated by the successful execution of BOB'.
@@ -3405,7 +3405,7 @@ mod tests {
 		let code_hash = MockLoader::insert(Call, move |ctx, _| {
 			// It is set to one when this contract was instantiated by `place_contract`
 			assert_eq!(ctx.ext.nonce(), 1);
-			// Should not change without any instantation in-between
+			// Should not change without any instantiation in-between
 			assert_eq!(ctx.ext.nonce(), 1);
 			// Should not change with a failed instantiation
 			assert_err!(
@@ -3416,7 +3416,7 @@ mod tests {
 				}
 			);
 			assert_eq!(ctx.ext.nonce(), 1);
-			// Successful instantation increments
+			// Successful instantiation increments
 			ctx.ext.instantiate(Weight::zero(), success_code, 0, vec![], &[]).unwrap();
 			assert_eq!(ctx.ext.nonce(), 2);
 			exec_success()

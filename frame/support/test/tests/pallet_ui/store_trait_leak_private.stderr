@@ -1,5 +1,15 @@
+error: use of deprecated struct `pallet::_::Store`:
+               Use of `#[pallet::generate_store(pub(super) trait Store)]` will be removed soon.
+               Check https://github.com/paritytech/substrate/pull/13535 for more details.
+  --> tests/pallet_ui/store_trait_leak_private.rs:11:3
+   |
+11 |     #[pallet::generate_store(pub trait Store)]
+   |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `-D deprecated` implied by `-D warnings`
+
 error[E0446]: private type `_GeneratedPrefixForStorageFoo<T>` in public interface
-  --> $DIR/store_trait_leak_private.rs:11:37
+  --> tests/pallet_ui/store_trait_leak_private.rs:11:37
    |
 11 |     #[pallet::generate_store(pub trait Store)]
    |                                        ^^^^^ can't leak private type

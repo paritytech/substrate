@@ -25,6 +25,7 @@ sc-keystore = { version = "4.0.0-dev", path = "../../keystore" }
 sc-network = { version = "0.10.0-dev", path = "../../network" }
 sc-network-common = { version = "0.10.0-dev", path = "../../network/common" }
 sc-network-gossip = { version = "0.10.0-dev", path = "../../network-gossip" }
+sc-network-sync = { version = "0.10.0-dev", path = "../../network/sync" }
 sc-utils = { version = "4.0.0-dev", path = "../../utils" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-application-crypto = { version = "7.0.0", path = "../../../primitives/application-crypto" }
