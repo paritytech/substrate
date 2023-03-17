@@ -21,7 +21,7 @@ use kitchensink_runtime::{Executive, Indices, Runtime, UncheckedExtrinsic};
 use sp_application_crypto::AppKey;
 use sp_core::offchain::{testing::TestTransactionPoolExt, TransactionPoolExt};
 use sp_keyring::sr25519::Keyring::Alice;
-use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStore};
+use sp_keystore::{testing::MemoryKeystore, Keystore, KeystoreExt};
 use std::sync::Arc;
 
 pub mod common;
@@ -62,20 +62,20 @@ fn should_submit_signed_transaction() {
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
-	let keystore = KeyStore::new();
-	SyncCryptoStore::sr25519_generate_new(
+	let keystore = MemoryKeystore::new();
+	Keystore::sr25519_generate_new(
 		&keystore,
 		sr25519::AuthorityId::ID,
 		Some(&format!("{}/hunter1", PHRASE)),
 	)
 	.unwrap();
-	SyncCryptoStore::sr25519_generate_new(
+	Keystore::sr25519_generate_new(
 		&keystore,
 		sr25519::AuthorityId::ID,
 		Some(&format!("{}/hunter2", PHRASE)),
 	)
 	.unwrap();
-	SyncCryptoStore::sr25519_generate_new(
+	Keystore::sr25519_generate_new(
 		&keystore,
 		sr25519::AuthorityId::ID,
 		Some(&format!("{}/hunter3", PHRASE)),
@@ -105,14 +105,14 @@ fn should_submit_signed_twice_from_the_same_account() {
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
-	let keystore = KeyStore::new();
-	SyncCryptoStore::sr25519_generate_new(
+	let keystore = MemoryKeystore::new();
+	Keystore::sr25519_generate_new(
 		&keystore,
 		sr25519::AuthorityId::ID,
 		Some(&format!("{}/hunter1", PHRASE)),
 	)
 	.unwrap();
-	SyncCryptoStore::sr25519_generate_new(
+	Keystore::sr25519_generate_new(
 		&keystore,
 		sr25519::AuthorityId::ID,
 		Some(&format!("{}/hunter2", PHRASE)),
@@ -162,7 +162,7 @@ fn should_submit_signed_twice_from_all_accounts() {
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
-	let keystore = KeyStore::new();
+	let keystore = MemoryKeystore::new();
 	keystore
 		.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE)))
 		.unwrap();
@@ -226,8 +226,8 @@ fn submitted_transaction_should_be_valid() {
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
-	let keystore = KeyStore::new();
-	SyncCryptoStore::sr25519_generate_new(
+	let keystore = MemoryKeystore::new();
+	Keystore::sr25519_generate_new(
 		&keystore,
 		sr25519::AuthorityId::ID,
 		Some(&format!("{}/hunter1", PHRASE)),

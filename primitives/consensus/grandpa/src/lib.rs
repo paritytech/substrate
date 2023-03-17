@@ -28,7 +28,7 @@ use serde::Serialize;
 use codec::{Codec, Decode, Encode, Input};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
-use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::{Keystore, KeystorePtr};
 use sp_runtime::{
 	traits::{Header as HeaderT, NumberFor},
 	ConsensusEngineId, RuntimeDebug,
@@ -444,7 +444,7 @@ where
 /// Localizes the message to the given set and round and signs the payload.
 #[cfg(feature = "std")]
 pub fn sign_message<H, N>(
-	keystore: SyncCryptoStorePtr,
+	keystore: KeystorePtr,
 	message: grandpa::Message<H, N>,
 	public: AuthorityId,
 	round: RoundNumber,
@@ -458,7 +458,7 @@ where
 	use sp_core::crypto::Public;
 
 	let encoded = localized_payload(round, set_id, &message);
-	let signature = SyncCryptoStore::sign_with(
+	let signature = Keystore::sign_with(
 		&*keystore,
 		AuthorityId::ID,
 		&public.to_public_crypto_pair(),

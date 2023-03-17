@@ -65,7 +65,7 @@ use sp_core::{
 	traits::SpawnNamed,
 };
 #[cfg(feature = "test-helpers")]
-use sp_keystore::SyncCryptoStorePtr;
+use sp_keystore::KeystorePtr;
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::{
@@ -161,7 +161,7 @@ pub fn new_in_mem<E, Block, G, RA>(
 	backend: Arc<in_mem::Backend<Block>>,
 	executor: E,
 	genesis_block_builder: G,
-	keystore: Option<SyncCryptoStorePtr>,
+	keystore: Option<KeystorePtr>,
 	prometheus_registry: Option<Registry>,
 	telemetry: Option<TelemetryHandle>,
 	spawn_handle: Box<dyn SpawnNamed>,
@@ -224,7 +224,7 @@ pub fn new_with_backend<B, E, Block, G, RA>(
 	backend: Arc<B>,
 	executor: E,
 	genesis_block_builder: G,
-	keystore: Option<SyncCryptoStorePtr>,
+	keystore: Option<KeystorePtr>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
 	telemetry: Option<TelemetryHandle>,
