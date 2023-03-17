@@ -59,13 +59,13 @@ pub mod weights;
 use sp_std::prelude::*;
 
 use frame_support::traits::{
-	Currency,
-	ExistenceRequirement::{AllowDeath, KeepAlive},
-	Get, OnUnbalanced, ReservableCurrency, WithdrawReasons,
+	fungible::*,
+	tokens::{Precision, Preservation},
+	Get,
 };
 
 use sp_runtime::{
-	traits::{AccountIdConversion, BadOrigin, CheckedSub, Saturating, StaticLookup, Zero},
+	traits::{AccountIdConversion, BadOrigin, Saturating, StaticLookup, Zero},
 	DispatchResult, RuntimeDebug,
 };
 
@@ -263,24 +263,17 @@ pub mod pallet {
 			let parent_bounty_account =
 				pallet_bounties::Pallet::<T>::bounty_account_id(parent_bounty_id);
 
-			// Ensure parent bounty has enough balance after adding child-bounty.
-			let bounty_balance = T::Currency::free_balance(&parent_bounty_account);
-			let new_bounty_balance = bounty_balance
-				.checked_sub(&value)
-				.ok_or(Error::<T>::InsufficientBountyBalance)?;
-			T::Currency::ensure_can_withdraw(
-				&parent_bounty_account,
-				value,
-				WithdrawReasons::TRANSFER,
-				new_bounty_balance,
-			)?;
-
 			// Get child-bounty ID.
 			let child_bounty_id = Self::child_bounty_count();
 			let child_bounty_account = Self::child_bounty_account_id(child_bounty_id);
 
 			// Transfer funds from parent bounty to child-bounty.
-			T::Currency::transfer(&parent_bounty_account, &child_bounty_account, value, KeepAlive)?;
+			T::Currency::transfer(
+				&parent_bounty_account,
+				&child_bounty_account,
+				value,
+				Preservation::Protect,
+			)?;
 
 			// Increment the active child-bounty count.
 			<ParentChildBounties<T>>::mutate(parent_bounty_id, |count| count.saturating_inc());
@@ -411,7 +404,7 @@ pub mod pallet {
 							&child_bounty.fee,
 						);
 
-						T::Currency::reserve(curator, deposit)?;
+						T::Currency::hold(&T::HoldReason::get(), curator, deposit)?;
 						child_bounty.curator_deposit = deposit;
 
 						child_bounty.status =
@@ -478,8 +471,9 @@ pub mod pallet {
 
 					let slash_curator = |curator: &T::AccountId,
 					                     curator_deposit: &mut BalanceOf<T>| {
-						let imbalance = T::Currency::slash_reserved(curator, *curator_deposit).0;
-						T::OnSlash::on_unbalanced(imbalance);
+						let imbalance =
+							T::Currency::slash(&T::HoldReason::get(), curator, *curator_deposit).0;
+						T::OnSlash::handle(imbalance);
 						*curator_deposit = Zero::zero();
 					};
 
@@ -516,7 +510,12 @@ pub mod pallet {
 								Some(sender) if sender == *curator => {
 									// This is the child-bounty curator, willingly giving up their
 									// role. Give back their deposit.
-									T::Currency::unreserve(curator, child_bounty.curator_deposit);
+									let _ = T::Currency::release(
+										&T::HoldReason::get(),
+										curator,
+										child_bounty.curator_deposit,
+										Precision::Exact,
+									)?;
 									// Reset curator deposit.
 									child_bounty.curator_deposit = Zero::zero();
 									// Continue to change bounty status below.
@@ -672,14 +671,19 @@ pub mod pallet {
 
 						// Make curator fee payment.
 						let child_bounty_account = Self::child_bounty_account_id(child_bounty_id);
-						let balance = T::Currency::free_balance(&child_bounty_account);
+						let balance = T::Currency::balance(&child_bounty_account);
 						let curator_fee = child_bounty.fee.min(balance);
 						let payout = balance.saturating_sub(curator_fee);
 
 						// Unreserve the curator deposit. Should not fail
 						// because the deposit is always reserved when curator is
 						// assigned.
-						let _ = T::Currency::unreserve(curator, child_bounty.curator_deposit);
+						let _ = T::Currency::release(
+							&T::HoldReason::get(),
+							curator,
+							child_bounty.curator_deposit,
+							Precision::Exact,
+						);
 
 						// Make payout to child-bounty curator.
 						// Should not fail because curator fee is always less than bounty value.
@@ -687,7 +691,7 @@ pub mod pallet {
 							&child_bounty_account,
 							curator,
 							curator_fee,
-							AllowDeath,
+							Preservation::Expendable,
 						);
 						debug_assert!(fee_transfer_result.is_ok());
 
@@ -697,7 +701,7 @@ pub mod pallet {
 							&child_bounty_account,
 							beneficiary,
 							payout,
-							AllowDeath,
+							Preservation::Expendable,
 						);
 						debug_assert!(payout_transfer_result.is_ok());
 
@@ -844,7 +848,12 @@ impl<T: Config> Pallet<T> {
 					ChildBountyStatus::Active { curator } => {
 						// Cancelled by parent curator or RejectOrigin,
 						// refund deposit of the working child-bounty curator.
-						let _ = T::Currency::unreserve(curator, child_bounty.curator_deposit);
+						let _ = T::Currency::release(
+							&T::HoldReason::get(),
+							curator,
+							child_bounty.curator_deposit,
+							Precision::Exact,
+						);
 						// Then execute removal of the child-bounty below.
 					},
 					ChildBountyStatus::PendingPayout { .. } => {
@@ -870,12 +879,12 @@ impl<T: Config> Pallet<T> {
 				let parent_bounty_account =
 					pallet_bounties::Pallet::<T>::bounty_account_id(parent_bounty_id);
 				let child_bounty_account = Self::child_bounty_account_id(child_bounty_id);
-				let balance = T::Currency::free_balance(&child_bounty_account);
+				let balance = T::Currency::balance(&child_bounty_account);
 				let transfer_result = T::Currency::transfer(
 					&child_bounty_account,
 					&parent_bounty_account,
 					balance,
-					AllowDeath,
+					Preservation::Expendable,
 				); // Should not fail; child bounty account gets this balance during creation.
 				debug_assert!(transfer_result.is_ok());
 

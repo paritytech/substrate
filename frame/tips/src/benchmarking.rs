@@ -37,7 +37,7 @@ fn setup_awesome<T: Config<I>, I: 'static>(length: u32) -> (T::AccountId, Vec<u8
 	let value = T::TipReportDepositBase::get() +
 		T::DataDepositPerByte::get() * length.into() +
 		T::Currency::minimum_balance();
-	let _ = T::Currency::make_free_balance_be(&caller, value);
+	let _ = T::Currency::set_balance(&caller, value);
 	let reason = vec![0; length as usize];
 	let awesome_person = account("awesome", 0, SEED);
 	(caller, reason, awesome_person)
@@ -87,7 +87,7 @@ fn create_tips<T: Config<I>, I: 'static>(
 fn setup_pot_account<T: Config<I>, I: 'static>() {
 	let pot_account = TipsMod::<T, I>::account_id();
 	let value = T::Currency::minimum_balance().saturating_mul(1_000_000_000u32.into());
-	let _ = T::Currency::make_free_balance_be(&pot_account, value);
+	let _ = T::Currency::set_balance(&pot_account, value);
 }
 
 benchmarks_instance_pallet! {

@@ -90,7 +90,9 @@ pub mod weights;
 use sp_std::prelude::*;
 
 use frame_support::traits::{
-	Currency, ExistenceRequirement::AllowDeath, Get, Imbalance, OnUnbalanced, ReservableCurrency,
+	fungible::*,
+	tokens::{Precision, Preservation},
+	Get, Imbalance,
 };
 
 use sp_runtime::{
@@ -108,8 +110,7 @@ pub use weights::WeightInfo;
 pub use pallet::*;
 
 type BalanceOf<T, I = ()> = pallet_treasury::BalanceOf<T, I>;
-
-type PositiveImbalanceOf<T, I = ()> = pallet_treasury::PositiveImbalanceOf<T, I>;
+type DebtOf<T, I = ()> = pallet_treasury::DebtOf<T, I>;
 
 /// An index of a bounty. Just a `u32`.
 pub type BountyIndex = u32;
@@ -445,8 +446,9 @@ pub mod pallet {
 
 				let slash_curator = |curator: &T::AccountId,
 				                     curator_deposit: &mut BalanceOf<T, I>| {
-					let imbalance = T::Currency::slash_reserved(curator, *curator_deposit).0;
-					T::OnSlash::on_unbalanced(imbalance);
+					let imbalance =
+						T::Currency::slash(&T::HoldReason::get(), curator, *curator_deposit).0;
+					T::OnSlash::handle(imbalance);
 					*curator_deposit = Zero::zero();
 				};
 
@@ -483,9 +485,13 @@ pub mod pallet {
 								} else {
 									// Else this is the curator, willingly giving up their role.
 									// Give back their deposit.
-									let err_amount =
-										T::Currency::unreserve(curator, bounty.curator_deposit);
-									debug_assert!(err_amount.is_zero());
+									let err_amount = T::Currency::release(
+										&T::HoldReason::get(),
+										curator,
+										bounty.curator_deposit,
+										Precision::Exact,
+									);
+									debug_assert!(err_amount.is_ok());
 									bounty.curator_deposit = Zero::zero();
 									// Continue to change bounty status below...
 								}
@@ -531,7 +537,7 @@ pub mod pallet {
 						ensure!(signer == *curator, Error::<T, I>::RequireCurator);
 
 						let deposit = Self::calculate_curator_deposit(&bounty.fee);
-						T::Currency::reserve(curator, deposit)?;
+						T::Currency::hold(&T::HoldReason::get(), curator, deposit)?;
 						bounty.curator_deposit = deposit;
 
 						let update_due = frame_system::Pallet::<T>::block_number() +
@@ -622,11 +628,16 @@ pub mod pallet {
 						Error::<T, I>::Premature
 					);
 					let bounty_account = Self::bounty_account_id(bounty_id);
-					let balance = T::Currency::free_balance(&bounty_account);
+					let balance = T::Currency::balance(&bounty_account);
 					let fee = bounty.fee.min(balance); // just to be safe
 					let payout = balance.saturating_sub(fee);
-					let err_amount = T::Currency::unreserve(&curator, bounty.curator_deposit);
-					debug_assert!(err_amount.is_zero());
+					let err_amount = T::Currency::release(
+						&T::HoldReason::get(),
+						&curator,
+						bounty.curator_deposit,
+						Precision::Exact,
+					);
+					debug_assert!(err_amount.is_ok());
 
 					// Get total child bounties curator fees, and subtract it from the parent
 					// curator fee (the fee in present referenced bounty, `self`).
@@ -634,11 +645,19 @@ pub mod pallet {
 					debug_assert!(children_fee <= fee);
 
 					let final_fee = fee.saturating_sub(children_fee);
-					let res =
-						T::Currency::transfer(&bounty_account, &curator, final_fee, AllowDeath); // should not fail
+					let res = T::Currency::transfer(
+						&bounty_account,
+						&curator,
+						final_fee,
+						Preservation::Expendable,
+					); // should not fail
 					debug_assert!(res.is_ok());
-					let res =
-						T::Currency::transfer(&bounty_account, &beneficiary, payout, AllowDeath); // should not fail
+					let res = T::Currency::transfer(
+						&bounty_account,
+						&beneficiary,
+						payout,
+						Preservation::Expendable,
+					); // should not fail
 					debug_assert!(res.is_ok());
 
 					*maybe_bounty = None;
@@ -692,8 +711,10 @@ pub mod pallet {
 							// The reject origin would like to cancel a proposed bounty.
 							BountyDescriptions::<T, I>::remove(bounty_id);
 							let value = bounty.bond;
-							let imbalance = T::Currency::slash_reserved(&bounty.proposer, value).0;
-							T::OnSlash::on_unbalanced(imbalance);
+							let credit =
+								T::Currency::slash(&T::HoldReason::get(), &bounty.proposer, value)
+									.0;
+							T::OnSlash::handle(credit);
 							*maybe_bounty = None;
 
 							Self::deposit_event(Event::<T, I>::BountyRejected {
@@ -715,9 +736,13 @@ pub mod pallet {
 						},
 						BountyStatus::Active { curator, .. } => {
 							// Cancelled by council, refund deposit of the working curator.
-							let err_amount =
-								T::Currency::unreserve(curator, bounty.curator_deposit);
-							debug_assert!(err_amount.is_zero());
+							let err_amount = T::Currency::release(
+								&T::HoldReason::get(),
+								curator,
+								bounty.curator_deposit,
+								Precision::Exact,
+							);
+							debug_assert!(err_amount.is_ok());
 							// Then execute removal of the bounty below.
 						},
 						BountyStatus::PendingPayout { .. } => {
@@ -733,12 +758,12 @@ pub mod pallet {
 
 					BountyDescriptions::<T, I>::remove(bounty_id);
 
-					let balance = T::Currency::free_balance(&bounty_account);
+					let balance = T::Currency::balance(&bounty_account);
 					let res = T::Currency::transfer(
 						&bounty_account,
 						&Self::account_id(),
 						balance,
-						AllowDeath,
+						Preservation::Expendable,
 					); // should not fail
 					debug_assert!(res.is_ok());
 					*maybe_bounty = None;
@@ -833,7 +858,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// reserve deposit for new bounty
 		let bond = T::BountyDepositBase::get() +
 			T::DataDepositPerByte::get() * (bounded_description.len() as u32).into();
-		T::Currency::reserve(&proposer, bond)
+		T::Currency::hold(&T::HoldReason::get(), &proposer, bond)
 			.map_err(|_| Error::<T, I>::InsufficientProposersBalance)?;
 
 		BountyCount::<T, I>::put(index + 1);
@@ -859,7 +884,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 impl<T: Config<I>, I: 'static> pallet_treasury::SpendFunds<T, I> for Pallet<T, I> {
 	fn spend_funds(
 		budget_remaining: &mut BalanceOf<T, I>,
-		imbalance: &mut PositiveImbalanceOf<T, I>,
+		imbalance: &mut DebtOf<T, I>,
 		total_weight: &mut Weight,
 		missed_any: &mut bool,
 	) {
@@ -875,14 +900,24 @@ impl<T: Config<I>, I: 'static> pallet_treasury::SpendFunds<T, I> for Pallet<T, I
 							bounty.status = BountyStatus::Funded;
 
 							// return their deposit.
-							let err_amount = T::Currency::unreserve(&bounty.proposer, bounty.bond);
-							debug_assert!(err_amount.is_zero());
+							let released_amount = T::Currency::release(
+								&T::HoldReason::get(),
+								&bounty.proposer,
+								bounty.bond,
+								Precision::Exact,
+							);
+							debug_assert!(released_amount.is_ok());
 
 							// fund the bounty account
-							imbalance.subsume(T::Currency::deposit_creating(
+							let _ = T::Currency::deposit(
 								&Self::bounty_account_id(index),
 								bounty.value,
-							));
+								Precision::Exact,
+							)
+							.and_then(|debt| {
+								imbalance.subsume(debt);
+								Ok(())
+							});
 
 							Self::deposit_event(Event::<T, I>::BountyBecameActive { index });
 							false
