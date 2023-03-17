@@ -21,12 +21,12 @@ use crate::{
 		ChainExtension, Environment, Ext, InitState, RegisteredChainExtension,
 		Result as ExtensionResult, RetVal, ReturnFlags, SysConfig,
 	},
-	exec::Frame,
+	exec::{Frame, Key},
 	tests::test_utils::{get_contract, get_contract_checked},
 	wasm::{Determinism, PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
 	BalanceOf, Code, CodeStorage, Config, ContractInfo, ContractInfoOf, DefaultAddressGenerator,
-	DeletionQueue, Error, Key, Pallet, Schedule,
+	DeletionQueue, Error, Pallet, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
