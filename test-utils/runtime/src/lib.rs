@@ -437,7 +437,6 @@ cfg_if! {
 
 #[derive(Clone, Eq, PartialEq, TypeInfo)]
 pub struct Runtime;
-
 impl GetNodeBlockType for Runtime {
 	type NodeBlock = Block;
 }
@@ -728,6 +727,14 @@ cfg_if! {
 			impl sp_api::Metadata<Block> for Runtime {
 				fn metadata() -> OpaqueMetadata {
 					unimplemented!()
+				}
+
+				fn metadata_at_version(_version: u32) -> Option<OpaqueMetadata> {
+						unimplemented!()
+				}
+
+				fn metadata_versions() -> sp_std::vec::Vec<u32> {
+						unimplemented!()
 				}
 			}
 
@@ -1020,6 +1027,14 @@ cfg_if! {
 			impl sp_api::Metadata<Block> for Runtime {
 				fn metadata() -> OpaqueMetadata {
 					unimplemented!()
+				}
+
+				fn metadata_at_version(_version: u32) -> Option<OpaqueMetadata> {
+						unimplemented!()
+				}
+
+				fn metadata_versions() -> sp_std::vec::Vec<u32> {
+						unimplemented!()
 				}
 			}
 

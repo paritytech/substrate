@@ -48,6 +48,7 @@ pub fn expand_runtime_metadata(
 			let event = expand_pallet_metadata_events(&filtered_names, runtime, scrate, decl);
 			let constants = expand_pallet_metadata_constants(runtime, decl);
 			let errors = expand_pallet_metadata_errors(runtime, decl);
+			let docs = expand_pallet_metadata_docs(runtime, decl);
 			let attr = decl.cfg_pattern.iter().fold(TokenStream::new(), |acc, pattern| {
 				let attr = TokenStream::from_str(&format!("#[cfg({})]", pattern.original()))
 					.expect("was successfully parsed before; qed");
@@ -59,7 +60,7 @@ pub fn expand_runtime_metadata(
 
 			quote! {
 				#attr
-				#scrate::metadata::PalletMetadata {
+				#scrate::metadata_ir::PalletMetadataIR {
 					name: stringify!(#name),
 					index: #index,
 					storage: #storage,
@@ -67,6 +68,7 @@ pub fn expand_runtime_metadata(
 					event: #event,
 					constants: #constants,
 					error: #errors,
+					docs: #docs,
 				}
 			}
 		})
@@ -74,10 +76,10 @@ pub fn expand_runtime_metadata(
 
 	quote! {
 		impl #runtime {
-			pub fn metadata() -> #scrate::metadata::RuntimeMetadataPrefixed {
-				#scrate::metadata::RuntimeMetadataLastVersion::new(
-					#scrate::sp_std::vec![ #(#pallets),* ],
-					#scrate::metadata::ExtrinsicMetadata {
+			fn metadata_ir() -> #scrate::metadata_ir::MetadataIR {
+				#scrate::metadata_ir::MetadataIR {
+					pallets: #scrate::sp_std::vec![ #(#pallets),* ],
+					extrinsic: #scrate::metadata_ir::ExtrinsicMetadataIR {
 						ty: #scrate::scale_info::meta_type::<#extrinsic>(),
 						version: <#extrinsic as #scrate::sp_runtime::traits::ExtrinsicMetadata>::VERSION,
 						signed_extensions: <
@@ -86,15 +88,29 @@ pub fn expand_runtime_metadata(
 								>::SignedExtensions as #scrate::sp_runtime::traits::SignedExtension
 							>::metadata()
 								.into_iter()
-								.map(|meta| #scrate::metadata::SignedExtensionMetadata {
+								.map(|meta| #scrate::metadata_ir::SignedExtensionMetadataIR {
 									identifier: meta.identifier,
 									ty: meta.ty,
 									additional_signed: meta.additional_signed,
 								})
 								.collect(),
 					},
-					#scrate::scale_info::meta_type::<#runtime>()
-				).into()
+					ty: #scrate::scale_info::meta_type::<#runtime>()
+				}
+			}
+
+			pub fn metadata() -> #scrate::metadata::RuntimeMetadataPrefixed {
+				#scrate::metadata_ir::into_latest(#runtime::metadata_ir())
+			}
+
+			pub fn metadata_at_version(version: u32) -> Option<#scrate::OpaqueMetadata> {
+				#scrate::metadata_ir::into_version(#runtime::metadata_ir(), version).map(|prefixed| {
+					#scrate::OpaqueMetadata::new(prefixed.into())
+				})
+			}
+
+			pub fn metadata_versions() -> #scrate::sp_std::vec::Vec<u32> {
+				#scrate::metadata_ir::supported_versions()
 			}
 		}
 	}
@@ -157,7 +173,7 @@ fn expand_pallet_metadata_events(
 
 		quote! {
 			Some(
-				#scrate::metadata::PalletEventMetadata {
+				#scrate::metadata_ir::PalletEventMetadataIR {
 					ty: #scrate::scale_info::meta_type::<#pallet_event>()
 				}
 			)
@@ -182,5 +198,14 @@ fn expand_pallet_metadata_errors(runtime: &Ident, decl: &Pallet) -> TokenStream 
 
 	quote! {
 		#path::Pallet::<#runtime #(, #path::#instance)*>::error_metadata()
+	}
+}
+
+fn expand_pallet_metadata_docs(runtime: &Ident, decl: &Pallet) -> TokenStream {
+	let path = &decl.path;
+	let instance = decl.instance.as_ref().into_iter();
+
+	quote! {
+		#path::Pallet::<#runtime #(, #path::#instance)*>::pallet_documentation_metadata()
 	}
 }

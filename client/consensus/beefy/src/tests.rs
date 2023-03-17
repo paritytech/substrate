@@ -526,17 +526,15 @@ async fn finalize_block_and_wait_for_beefy(
 	net: &Arc<Mutex<BeefyTestNet>>,
 	// peer index and key
 	peers: impl Iterator<Item = (usize, BeefyKeyring)> + Clone,
-	finalize_targets: &[H256],
+	finalize_target: &H256,
 	expected_beefy: &[u64],
 ) {
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
 
-	for block in finalize_targets {
-		peers.clone().for_each(|(index, _)| {
-			let client = net.lock().peer(index).client().as_client();
-			client.finalize_block(*block, None).unwrap();
-		})
-	}
+	peers.clone().for_each(|(index, _)| {
+		let client = net.lock().peer(index).client().as_client();
+		client.finalize_block(*finalize_target, None).unwrap();
+	});
 
 	if expected_beefy.is_empty() {
 		// run for quarter second then verify no new best beefy block available
@@ -574,31 +572,32 @@ async fn beefy_finalizing_blocks() {
 
 	let peers = peers.into_iter().enumerate();
 	// finalize block #5 -> BEEFY should finalize #1 (mandatory) and #5 from diff-power-of-two rule.
-	finalize_block_and_wait_for_beefy(&net, peers.clone(), &[hashes[1], hashes[5]], &[1, 5]).await;
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &hashes[1], &[1]).await;
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &hashes[5], &[5]).await;
 
 	// GRANDPA finalize #10 -> BEEFY finalize #10 (mandatory)
-	finalize_block_and_wait_for_beefy(&net, peers.clone(), &[hashes[10]], &[10]).await;
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &hashes[10], &[10]).await;
 
 	// GRANDPA finalize #18 -> BEEFY finalize #14, then #18 (diff-power-of-two rule)
-	finalize_block_and_wait_for_beefy(&net, peers.clone(), &[hashes[18]], &[14, 18]).await;
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &hashes[18], &[14, 18]).await;
 
 	// GRANDPA finalize #20 -> BEEFY finalize #20 (mandatory)
-	finalize_block_and_wait_for_beefy(&net, peers.clone(), &[hashes[20]], &[20]).await;
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &hashes[20], &[20]).await;
 
 	// GRANDPA finalize #21 -> BEEFY finalize nothing (yet) because min delta is 4
-	finalize_block_and_wait_for_beefy(&net, peers, &[hashes[21]], &[]).await;
+	finalize_block_and_wait_for_beefy(&net, peers, &hashes[21], &[]).await;
 }
 
 #[tokio::test]
 async fn lagging_validators() {
 	sp_tracing::try_init_simple();
 
-	let peers = [BeefyKeyring::Alice, BeefyKeyring::Bob];
+	let peers = [BeefyKeyring::Alice, BeefyKeyring::Bob, BeefyKeyring::Charlie];
 	let validator_set = ValidatorSet::new(make_beefy_ids(&peers), 0).unwrap();
 	let session_len = 30;
 	let min_block_delta = 1;
 
-	let mut net = BeefyTestNet::new(2);
+	let mut net = BeefyTestNet::new(3);
 	let api = Arc::new(TestApi::with_validator_set(&validator_set));
 	let beefy_peers = peers.iter().enumerate().map(|(id, key)| (id, key, api.clone())).collect();
 	tokio::spawn(initialize_beefy(&mut net, beefy_peers, min_block_delta));
@@ -611,55 +610,47 @@ async fn lagging_validators() {
 	let peers = peers.into_iter().enumerate();
 	// finalize block #15 -> BEEFY should finalize #1 (mandatory) and #9, #13, #14, #15 from
 	// diff-power-of-two rule.
-	finalize_block_and_wait_for_beefy(
-		&net,
-		peers.clone(),
-		&[hashes[1], hashes[15]],
-		&[1, 9, 13, 14, 15],
-	)
-	.await;
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &hashes[1], &[1]).await;
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &hashes[15], &[9, 13, 14, 15]).await;
 
-	// Alice finalizes #25, Bob lags behind
+	// Alice and Bob finalize #25, Charlie lags behind
 	let finalize = hashes[25];
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
 	net.lock().peer(0).client().as_client().finalize_block(finalize, None).unwrap();
+	net.lock().peer(1).client().as_client().finalize_block(finalize, None).unwrap();
 	// verify nothing gets finalized by BEEFY
-	let timeout = Some(Duration::from_millis(250));
+	let timeout = Some(Duration::from_millis(100));
 	streams_empty_after_timeout(best_blocks, &net, timeout).await;
 	streams_empty_after_timeout(versioned_finality_proof, &net, None).await;
 
-	// Bob catches up and also finalizes #25
+	// Charlie catches up and also finalizes #25
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
-	net.lock().peer(1).client().as_client().finalize_block(finalize, None).unwrap();
-	// expected beefy finalizes block #17 from diff-power-of-two
+	net.lock().peer(2).client().as_client().finalize_block(finalize, None).unwrap();
+	// expected beefy finalizes blocks 23, 24, 25 from diff-power-of-two
 	wait_for_best_beefy_blocks(best_blocks, &net, &[23, 24, 25]).await;
 	wait_for_beefy_signed_commitments(versioned_finality_proof, &net, &[23, 24, 25]).await;
 
 	// Both finalize #30 (mandatory session) and #32 -> BEEFY finalize #30 (mandatory), #31, #32
-	finalize_block_and_wait_for_beefy(
-		&net,
-		peers.clone(),
-		&[hashes[30], hashes[32]],
-		&[30, 31, 32],
-	)
-	.await;
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &hashes[30], &[30]).await;
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &hashes[32], &[31, 32]).await;
 
 	// Verify that session-boundary votes get buffered by client and only processed once
 	// session-boundary block is GRANDPA-finalized (this guarantees authenticity for the new session
 	// validator set).
 
-	// Alice finalizes session-boundary mandatory block #60, Bob lags behind
+	// Alice and Bob finalize session-boundary mandatory block #60, Charlie lags behind
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
 	let finalize = hashes[60];
 	net.lock().peer(0).client().as_client().finalize_block(finalize, None).unwrap();
+	net.lock().peer(1).client().as_client().finalize_block(finalize, None).unwrap();
 	// verify nothing gets finalized by BEEFY
-	let timeout = Some(Duration::from_millis(250));
+	let timeout = Some(Duration::from_millis(100));
 	streams_empty_after_timeout(best_blocks, &net, timeout).await;
 	streams_empty_after_timeout(versioned_finality_proof, &net, None).await;
 
-	// Bob catches up and also finalizes #60 (and should have buffered Alice's vote on #60)
+	// Charlie catches up and also finalizes #60 (and should have buffered Alice's vote on #60)
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers);
-	net.lock().peer(1).client().as_client().finalize_block(finalize, None).unwrap();
+	net.lock().peer(2).client().as_client().finalize_block(finalize, None).unwrap();
 	// verify beefy skips intermediary votes, and successfully finalizes mandatory block #60
 	wait_for_best_beefy_blocks(best_blocks, &net, &[60]).await;
 	wait_for_beefy_signed_commitments(versioned_finality_proof, &net, &[60]).await;
@@ -696,7 +687,8 @@ async fn correct_beefy_payload() {
 	let net = Arc::new(Mutex::new(net));
 	let peers = peers.into_iter().enumerate();
 	// with 3 good voters and 1 bad one, consensus should happen and best blocks produced.
-	finalize_block_and_wait_for_beefy(&net, peers, &[hashes[1], hashes[10]], &[1, 9]).await;
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &hashes[1], &[1]).await;
+	finalize_block_and_wait_for_beefy(&net, peers, &hashes[10], &[9]).await;
 
 	let (best_blocks, versioned_finality_proof) =
 		get_beefy_streams(&mut net.lock(), [(0, BeefyKeyring::Alice)].into_iter());
@@ -708,7 +700,7 @@ async fn correct_beefy_payload() {
 	net.lock().peer(3).client().as_client().finalize_block(hashof11, None).unwrap();
 
 	// verify consensus is _not_ reached
-	let timeout = Some(Duration::from_millis(250));
+	let timeout = Some(Duration::from_millis(100));
 	streams_empty_after_timeout(best_blocks, &net, timeout).await;
 	streams_empty_after_timeout(versioned_finality_proof, &net, None).await;
 
@@ -875,39 +867,6 @@ async fn beefy_importing_justifications() {
 }
 
 #[tokio::test]
-async fn voter_initialization() {
-	sp_tracing::try_init_simple();
-	// Regression test for voter initialization where finality notifications were dropped
-	// after waiting for BEEFY pallet availability.
-
-	let peers = [BeefyKeyring::Alice, BeefyKeyring::Bob];
-	let validator_set = ValidatorSet::new(make_beefy_ids(&peers), 0).unwrap();
-	let session_len = 5;
-	// Should vote on all mandatory blocks no matter the `min_block_delta`.
-	let min_block_delta = 10;
-
-	let mut net = BeefyTestNet::new(2);
-	let api = Arc::new(TestApi::with_validator_set(&validator_set));
-	let beefy_peers = peers.iter().enumerate().map(|(id, key)| (id, key, api.clone())).collect();
-	tokio::spawn(initialize_beefy(&mut net, beefy_peers, min_block_delta));
-
-	// push 26 blocks
-	let hashes = net.generate_blocks_and_sync(26, session_len, &validator_set, false).await;
-	let net = Arc::new(Mutex::new(net));
-
-	// Finalize multiple blocks at once to get a burst of finality notifications right from start.
-	// Need to finalize at least one block in each session, choose randomly.
-	// Expect voters to pick up all of them and BEEFY-finalize the mandatory blocks of each session.
-	finalize_block_and_wait_for_beefy(
-		&net,
-		peers.into_iter().enumerate(),
-		&[hashes[1], hashes[6], hashes[10], hashes[17], hashes[24], hashes[26]],
-		&[1, 5, 10, 15, 20, 25],
-	)
-	.await;
-}
-
-#[tokio::test]
 async fn on_demand_beefy_justification_sync() {
 	sp_tracing::try_init_simple();
 
@@ -940,13 +899,11 @@ async fn on_demand_beefy_justification_sync() {
 	let net = Arc::new(Mutex::new(net));
 	// With 3 active voters and one inactive, consensus should happen and blocks BEEFY-finalized.
 	// Need to finalize at least one block in each session, choose randomly.
-	finalize_block_and_wait_for_beefy(
-		&net,
-		fast_peers.clone(),
-		&[hashes[1], hashes[6], hashes[10], hashes[17], hashes[23]],
-		&[1, 5, 10, 15, 20],
-	)
-	.await;
+	finalize_block_and_wait_for_beefy(&net, fast_peers.clone(), &hashes[1], &[1]).await;
+	finalize_block_and_wait_for_beefy(&net, fast_peers.clone(), &hashes[6], &[5]).await;
+	finalize_block_and_wait_for_beefy(&net, fast_peers.clone(), &hashes[10], &[10]).await;
+	finalize_block_and_wait_for_beefy(&net, fast_peers.clone(), &hashes[17], &[15]).await;
+	finalize_block_and_wait_for_beefy(&net, fast_peers.clone(), &hashes[24], &[20]).await;
 
 	// Spawn Dave, they are now way behind voting and can only catch up through on-demand justif
 	// sync.
@@ -971,7 +928,8 @@ async fn on_demand_beefy_justification_sync() {
 	// freshly spun up Dave now needs to listen for gossip to figure out the state of their peers.
 
 	// Have the other peers do some gossip so Dave finds out about their progress.
-	finalize_block_and_wait_for_beefy(&net, fast_peers, &[hashes[25], hashes[29]], &[25, 29]).await;
+	finalize_block_and_wait_for_beefy(&net, fast_peers.clone(), &hashes[25], &[25]).await;
+	finalize_block_and_wait_for_beefy(&net, fast_peers, &hashes[29], &[29]).await;
 
 	// Kick Dave's async loop by finalizing another block.
 	client.finalize_block(hashes[2], None).unwrap();
@@ -982,13 +940,14 @@ async fn on_demand_beefy_justification_sync() {
 	// Give all tasks some cpu cycles to burn through their events queues,
 	run_for(Duration::from_millis(100), &net).await;
 	// then verify Dave catches up through on-demand justification requests.
-	finalize_block_and_wait_for_beefy(
-		&net,
-		[(dave_index, BeefyKeyring::Dave)].into_iter(),
-		&[hashes[6], hashes[10], hashes[17], hashes[24], hashes[26]],
-		&[5, 10, 15, 20, 25],
-	)
-	.await;
+	let (dave_best_blocks, _) =
+		get_beefy_streams(&mut net.lock(), [(dave_index, BeefyKeyring::Dave)].into_iter());
+	client.finalize_block(hashes[6], None).unwrap();
+	client.finalize_block(hashes[10], None).unwrap();
+	client.finalize_block(hashes[17], None).unwrap();
+	client.finalize_block(hashes[24], None).unwrap();
+	client.finalize_block(hashes[26], None).unwrap();
+	wait_for_best_beefy_blocks(dave_best_blocks, &net, &[5, 10, 15, 20, 25]).await;
 }
 
 #[tokio::test]
@@ -1022,13 +981,8 @@ async fn should_initialize_voter_at_genesis() {
 
 	// verify next vote target is mandatory block 1
 	assert_eq!(persisted_state.best_beefy_block(), 0);
-	assert_eq!(persisted_state.best_grandpa_block(), 13);
-	assert_eq!(
-		persisted_state
-			.voting_oracle()
-			.voting_target(persisted_state.best_beefy_block(), 13),
-		Some(1)
-	);
+	assert_eq!(persisted_state.best_grandpa_number(), 13);
+	assert_eq!(persisted_state.voting_oracle().voting_target(), Some(1));
 
 	// verify state also saved to db
 	assert!(verify_persisted_version(&*backend));
@@ -1070,13 +1024,8 @@ async fn should_initialize_voter_at_custom_genesis() {
 
 	// verify next vote target is mandatory block 7
 	assert_eq!(persisted_state.best_beefy_block(), 0);
-	assert_eq!(persisted_state.best_grandpa_block(), 8);
-	assert_eq!(
-		persisted_state
-			.voting_oracle()
-			.voting_target(persisted_state.best_beefy_block(), 13),
-		Some(custom_pallet_genesis)
-	);
+	assert_eq!(persisted_state.best_grandpa_number(), 8);
+	assert_eq!(persisted_state.voting_oracle().voting_target(), Some(custom_pallet_genesis));
 
 	// verify state also saved to db
 	assert!(verify_persisted_version(&*backend));
@@ -1128,14 +1077,9 @@ async fn should_initialize_voter_when_last_final_is_session_boundary() {
 
 	// verify block 10 is correctly marked as finalized
 	assert_eq!(persisted_state.best_beefy_block(), 10);
-	assert_eq!(persisted_state.best_grandpa_block(), 13);
+	assert_eq!(persisted_state.best_grandpa_number(), 13);
 	// verify next vote target is diff-power-of-two block 12
-	assert_eq!(
-		persisted_state
-			.voting_oracle()
-			.voting_target(persisted_state.best_beefy_block(), 13),
-		Some(12)
-	);
+	assert_eq!(persisted_state.voting_oracle().voting_target(), Some(12));
 
 	// verify state also saved to db
 	assert!(verify_persisted_version(&*backend));
@@ -1186,13 +1130,8 @@ async fn should_initialize_voter_at_latest_finalized() {
 
 	// verify next vote target is 13
 	assert_eq!(persisted_state.best_beefy_block(), 12);
-	assert_eq!(persisted_state.best_grandpa_block(), 13);
-	assert_eq!(
-		persisted_state
-			.voting_oracle()
-			.voting_target(persisted_state.best_beefy_block(), 13),
-		Some(13)
-	);
+	assert_eq!(persisted_state.best_grandpa_number(), 13);
+	assert_eq!(persisted_state.voting_oracle().voting_target(), Some(13));
 
 	// verify state also saved to db
 	assert!(verify_persisted_version(&*backend));
@@ -1225,13 +1164,13 @@ async fn beefy_finalizing_after_pallet_genesis() {
 	// Minimum BEEFY block delta is 1.
 
 	// GRANDPA finalize blocks leading up to BEEFY pallet genesis -> BEEFY should finalize nothing.
-	finalize_block_and_wait_for_beefy(&net, peers.clone(), &hashes[1..14], &[]).await;
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &hashes[14], &[]).await;
 
 	// GRANDPA finalize block #16 -> BEEFY should finalize #15 (genesis mandatory) and #16.
-	finalize_block_and_wait_for_beefy(&net, peers.clone(), &[hashes[16]], &[15, 16]).await;
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &hashes[16], &[15, 16]).await;
 
 	// GRANDPA finalize #21 -> BEEFY finalize #20 (mandatory) and #21
-	finalize_block_and_wait_for_beefy(&net, peers.clone(), &[hashes[21]], &[20, 21]).await;
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &hashes[21], &[20, 21]).await;
 }
 
 #[tokio::test]
@@ -1249,14 +1188,14 @@ async fn beefy_reports_equivocations() {
 	let mut api_alice = TestApi::with_validator_set(&validator_set);
 	api_alice.allow_equivocations();
 	let api_alice = Arc::new(api_alice);
-	let alice = (0, &peers[0], api_alice.clone());
+	let alice = (0, &BeefyKeyring::Alice, api_alice.clone());
 	tokio::spawn(initialize_beefy(&mut net, vec![alice], min_block_delta));
 
 	// Bob votes on bad MMR roots, equivocations are allowed/expected.
 	let mut api_bob = TestApi::new(1, &validator_set, BAD_MMR_ROOT);
 	api_bob.allow_equivocations();
 	let api_bob = Arc::new(api_bob);
-	let bob = (1, &peers[1], api_bob.clone());
+	let bob = (1, &BeefyKeyring::Bob, api_bob.clone());
 	tokio::spawn(initialize_beefy(&mut net, vec![bob], min_block_delta));
 
 	// We spawn another node voting with Bob key, on alternate bad MMR roots (equivocating).
@@ -1276,7 +1215,7 @@ async fn beefy_reports_equivocations() {
 
 	let peers = peers.into_iter().enumerate();
 	// finalize block #1 -> BEEFY should not finalize anything (each node votes on different MMR).
-	finalize_block_and_wait_for_beefy(&net, peers, &[hashes[1]], &[]).await;
+	finalize_block_and_wait_for_beefy(&net, peers, &hashes[1], &[]).await;
 
 	// Verify neither Bob or Bob_Prime report themselves as equivocating.
 	assert!(api_bob.reported_equivocations.as_ref().unwrap().lock().is_empty());
