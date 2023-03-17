@@ -39,7 +39,7 @@ use wasm_instrument::{
 	},
 };
 
-/// The location where to put the genrated code.
+/// The location where to put the generated code.
 pub enum Location {
 	/// Generate all code into the `call` exported function.
 	Call,

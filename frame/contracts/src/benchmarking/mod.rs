@@ -355,7 +355,7 @@ benchmarks! {
 	}: _(origin, callee, value, Weight::MAX, None, data)
 	verify {
 		let deposit = T::Currency::free_balance(&deposit_account);
-		// value and value transfered via call should be removed from the caller
+		// value and value transferred via call should be removed from the caller
 		assert_eq!(
 			T::Currency::free_balance(&instance.caller),
 			caller_funding::<T>() - instance.value - value - deposit - Pallet::<T>::min_balance(),
@@ -2224,7 +2224,7 @@ benchmarks! {
 	// the same amount of time. We follow that `t.load` and `drop` both have the weight
 	// of this benchmark / 2. We need to make this assumption because there is no way
 	// to measure them on their own using a valid wasm module. We need their individual
-	// values to derive the weight of individual instructions (by substraction) from
+	// values to derive the weight of individual instructions (by subtraction) from
 	// benchmarks that include those for parameter pushing and return type dropping.
 	// We call the weight of `t.load` and `drop`: `w_param`.
 	// The weight that would result from the respective benchmark we call: `w_bench`.
@@ -3003,9 +3003,9 @@ benchmarks! {
 		sbox.invoke();
 	}
 
-	// This is no benchmark. It merely exist to have an easy way to pretty print the curently
+	// This is no benchmark. It merely exist to have an easy way to pretty print the currently
 	// configured `Schedule` during benchmark development.
-	// It can be outputed using the following command:
+	// It can be outputted using the following command:
 	// cargo run --manifest-path=bin/node/cli/Cargo.toml \
 	//     --features runtime-benchmarks -- benchmark pallet --extra --dev --execution=native \
 	//     -p pallet_contracts -e print_schedule --no-median-slopes --no-min-squares
