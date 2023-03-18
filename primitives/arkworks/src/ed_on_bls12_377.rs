@@ -30,19 +30,13 @@ use sp_std::vec::Vec;
 pub fn msm(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
 	let bases: Vec<_> = bases
 		.chunks(twisted_edwards::Affine::<EdwardsConfig>::generator().serialized_size(Compress::No))
-		.into_iter()
-		.map(|a| {
-			deserialize_argument::<twisted_edwards::Affine<EdwardsConfig>>(a.collect::<Vec<_>>())
-		})
+		.into()
+		.map(|a| deserialize_argument::<twisted_edwards::Affine<EdwardsConfig>>(a))
 		.collect();
 	let scalars: Vec<_> = scalars
 		.chunks(<EdwardsConfig as CurveConfig>::ScalarField::zero().serialized_size(Compress::No))
-		.into_iter()
-		.map(|a| {
-			deserialize_argument::<<EdwardsConfig as CurveConfig>::ScalarField>(
-				a.collect::<Vec<_>>(),
-			)
-		})
+		.into()
+		.map(|a| deserialize_argument::<<EdwardsConfig as CurveConfig>::ScalarField>(a))
 		.collect();
 
 	let result = <EdwardsProjective as VariableBaseMSM>::msm(&bases, &scalars).unwrap();
