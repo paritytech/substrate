@@ -50,7 +50,7 @@ pub fn te_msm(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
 /// Compute a multi scalar multiplication on G! through arkworks
 pub fn sw_msm(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
 	let bases: Vec<_> = bases
-		.chunks(SWAffine::<JubjubConfig>::genrator().serialized_size(Compress::No))
+		.chunks(SWAffine::<JubjubConfig>::generator().serialized_size(Compress::No))
 		.into_iter()
 		.map(|a| deserialize_argument::<SWAffine<JubjubConfig>>(&a.to_vec()))
 		.collect();
