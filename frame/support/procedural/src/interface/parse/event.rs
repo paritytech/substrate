@@ -15,10 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub struct EventDef {
-	index: usize,
-	name: syn::Ident,
-}
+pub struct EventDef {}
 
 impl EventDef {
 	pub fn try_from(

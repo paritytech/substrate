@@ -19,6 +19,7 @@ use crate::{
 	dispatch::{CallMetadata, DispatchInfo, PostDispatchInfo},
 	traits::{GetCallMetadata, UnfilteredDispatchable},
 };
+use sp_core::H256;
 use sp_runtime::{traits::Dispatchable, DispatchError, DispatchResultWithInfo, ModuleError};
 sp_api::decl_runtime_apis! {
 	pub trait Interface {
@@ -35,12 +36,12 @@ pub type InterfaceViewResult = Result<Vec<u8>, InterfaceError>;
 
 pub trait Core {
 	type RuntimeOrigin;
-	type Selectable;
+	type Selectable: From<H256>;
 }
 
 pub trait Call {
 	type RuntimeOrigin;
-	type Selectable;
+	type Selectable: From<H256>;
 
 	fn call(
 		&self,
@@ -50,7 +51,7 @@ pub trait Call {
 }
 
 pub trait View {
-	type Selectable;
+	type Selectable: From<H256>;
 
 	fn view(&self) -> Result<Vec<u8>, InterfaceError>;
 }
@@ -292,13 +293,13 @@ pub mod pip20 {
 
 		#[interface::selector(SelectCurrency)]
 		#[interface::default_selector]
-		fn select_currency(selectable: H256) -> Result<Self::Currency, super::Error>;
+		fn select_currency(selectable: Self::Selectable) -> Result<Self::Currency, InterfaceError>;
 
 		#[interface::selector(RestrictedCurrency)]
-		fn select_restricted_currency(selectable: H256) -> Result<Self::Currency, super::Error>;
+		fn select_restricted_currency(selectable:  Self::Selectable) -> Result<Self::Currency, InterfaceError>;
 
 		#[interface::selector(SelectAccount)]
-		fn select_account(selectable: H256) -> Result<Self::Account, super::Error>;
+		fn select_account(selectable:  Self::Selectable) -> Result<Self::Account, InterfaceError>;
 
 		#[interface::view]
 		#[interface::view_index(0)]

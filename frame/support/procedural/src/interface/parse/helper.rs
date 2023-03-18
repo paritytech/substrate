@@ -58,20 +58,6 @@ where
 	Ok(pallet_attrs)
 }
 
-/// Get all the cfg attributes (e.g. attribute like `#[cfg..]`) and decode them to `Attr`
-pub fn get_item_cfg_attrs(attrs: &[syn::Attribute]) -> Vec<syn::Attribute> {
-	attrs
-		.iter()
-		.filter_map(|attr| {
-			if attr.path.segments.first().map_or(false, |segment| segment.ident == "cfg") {
-				Some(attr.clone())
-			} else {
-				None
-			}
-		})
-		.collect::<Vec<_>>()
-}
-
 impl MutItemAttrs for syn::Item {
 	fn mut_item_attrs(&mut self) -> Option<&mut Vec<syn::Attribute>> {
 		match self {

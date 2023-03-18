@@ -15,16 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub struct ErrorDef {
-	index: usize,
-	name: syn::Ident,
-}
+pub struct ErrorDef {}
 
 impl ErrorDef {
 	pub fn try_from(
 		attr_span: proc_macro2::Span,
-		index: usize,
-		item: &mut syn::Item,
+		_index: usize,
+		_item: &mut syn::Item,
 	) -> syn::Result<Self> {
 		Err(syn::Error::new(
 			attr_span,

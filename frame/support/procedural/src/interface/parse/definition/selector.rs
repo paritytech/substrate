@@ -37,8 +37,16 @@ impl SelectorDef {
 }
 
 pub struct SingleSelectorDef {
+	/// Function name.
 	name: syn::Ident,
+	/// The return type of the selector.
 	output: Box<syn::Type>,
+	/// Docs, used for metadata.
+	docs: Vec<syn::Lit>,
+	/// Attributes annotated at the top of the selector function.
+	attrs: Vec<syn::Attribute>,
+	/// The span of the selector definition
+	attr_span: proc_macro2::Span,
 }
 
 impl SingleSelectorDef {

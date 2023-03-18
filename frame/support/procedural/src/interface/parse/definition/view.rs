@@ -199,15 +199,15 @@ pub struct SingleViewDef {
 	name: syn::Ident,
 	/// Information on args: `(is_compact, name, type)`
 	args: Vec<(bool, syn::Ident, Box<syn::Type>)>,
-	/// Return type of the view call
+	/// Return type of the view function
 	output: Box<syn::Type>,
 	/// View index of the interface.
 	view_index: u8,
 	/// Docs, used for metadata.
 	docs: Vec<syn::Lit>,
-	/// Attributes annotated at the top of the dispatchable function.
+	/// Attributes annotated at the top of the view function.
 	attrs: Vec<syn::Attribute>,
-	/// The span of the call definition
+	/// The span of the view definition
 	attr_span: proc_macro2::Span,
 }
 
