@@ -20,19 +20,29 @@
 #![warn(missing_docs)]
 
 use crate::utils::{deserialize_argument, serialize_result};
-use ark_ec::{models::CurveConfig, twisted_edwards, VariableBaseMSM};
+use ark_ec::{models::CurveConfig, twisted_edwards, Group, VariableBaseMSM};
 use ark_ed_on_bls12_377::{EdwardsConfig, EdwardsProjective};
+use ark_ff::Zero;
+use ark_serialize::{CanonicalSerialize, Compress};
 use sp_std::vec::Vec;
 
 /// Compute a multi scalar multiplication on G! through arkworks
 pub fn msm(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
 	let bases: Vec<_> = bases
-		.iter()
-		.map(|a| deserialize_argument::<twisted_edwards::Affine<EdwardsConfig>>(a))
+		.chunks(twisted_edwards::Affine::<EdwardsConfig>::generator().serialized_size(Compress::No))
+		.into_iter()
+		.map(|a| {
+			deserialize_argument::<twisted_edwards::Affine<EdwardsConfig>>(a.collect::<Vec<_>>())
+		})
 		.collect();
 	let scalars: Vec<_> = scalars
-		.iter()
-		.map(|a| deserialize_argument::<<EdwardsConfig as CurveConfig>::ScalarField>(a))
+		.chunks(<EdwardsConfig as CurveConfig>::ScalarField::zero().serialized_size(Compress::No))
+		.into_iter()
+		.map(|a| {
+			deserialize_argument::<<EdwardsConfig as CurveConfig>::ScalarField>(
+				a.collect::<Vec<_>>(),
+			)
+		})
 		.collect();
 
 	let result = <EdwardsProjective as VariableBaseMSM>::msm(&bases, &scalars).unwrap();
