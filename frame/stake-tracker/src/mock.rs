@@ -224,7 +224,7 @@ impl StakingInterface for StakingMock {
 	}
 
 	fn is_validator(who: &Self::AccountId) -> bool {
-		*who >= 10 && *who <= 14
+		Validators::get().contains(who)
 	}
 
 	fn nominations(who: &Self::AccountId) -> Option<Vec<Self::AccountId>> {

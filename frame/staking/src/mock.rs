@@ -309,51 +309,35 @@ parameter_types! {
 pub struct EventListenerMock;
 impl OnStakingUpdate<AccountId, Balance> for EventListenerMock {
 	fn on_stake_update(who: &AccountId, prev_stake: Option<Stake<AccountId, Balance>>) {
-		let mut vec = EmittedEvents::get();
-		vec.push(StakeUpdate(*who, prev_stake));
-		EmittedEvents::set(vec);
+		EmittedEvents::mutate(|x| x.push(StakeUpdate(*who, prev_stake)))
 	}
 
 	fn on_nominator_add(who: &AccountId) {
-		let mut vec = EmittedEvents::get();
-		vec.push(NominatorAdd(*who));
-		EmittedEvents::set(vec);
+		EmittedEvents::mutate(|x| x.push(NominatorAdd(*who)))
 	}
 
 	fn on_nominator_update(who: &AccountId, prev_nominations: Vec<AccountId>) {
-		let mut vec = EmittedEvents::get();
-		vec.push(NominatorUpdate(*who, prev_nominations));
-		EmittedEvents::set(vec);
+		EmittedEvents::mutate(|x| x.push(NominatorUpdate(*who, prev_nominations)));
 	}
 
 	fn on_validator_add(who: &AccountId) {
-		let mut vec = EmittedEvents::get();
-		vec.push(ValidatorAdd(*who));
-		EmittedEvents::set(vec);
+		EmittedEvents::mutate(|x| x.push(ValidatorAdd(*who)));
 	}
 
 	fn on_validator_update(who: &AccountId) {
-		let mut vec = EmittedEvents::get();
-		vec.push(ValidatorUpdate(*who));
-		EmittedEvents::set(vec);
+		EmittedEvents::mutate(|x| x.push(ValidatorUpdate(*who)));
 	}
 
 	fn on_validator_remove(who: &AccountId) {
-		let mut vec = EmittedEvents::get();
-		vec.push(ValidatorRemove(*who));
-		EmittedEvents::set(vec);
+		EmittedEvents::mutate(|x| x.push(ValidatorRemove(*who)));
 	}
 
 	fn on_nominator_remove(who: &AccountId, nominations: Vec<AccountId>) {
-		let mut vec = EmittedEvents::get();
-		vec.push(NominatorRemove(*who, nominations));
-		EmittedEvents::set(vec);
+		EmittedEvents::mutate(|x| x.push(NominatorRemove(*who, nominations)));
 	}
 
 	fn on_unstake(who: &AccountId) {
-		let mut vec = EmittedEvents::get();
-		vec.push(Unstake(*who));
-		EmittedEvents::set(vec);
+		EmittedEvents::mutate(|x| x.push(Unstake(*who)));
 	}
 }
 

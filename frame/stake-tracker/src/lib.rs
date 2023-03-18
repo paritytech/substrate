@@ -81,7 +81,7 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	pub fn active_stake_of(who: &T::AccountId) -> BalanceOf<T> {
+	pub(crate) fn active_stake_of(who: &T::AccountId) -> BalanceOf<T> {
 		T::Staking::stake(&who).map(|s| s.active).unwrap_or_default()
 	}
 
@@ -96,56 +96,56 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 		if let Ok(current_stake) = T::Staking::stake(who) {
 			let current_active = current_stake.active;
 
-			// if this is a nominator
+			// If this is a nominator, update their position in the `VoterList`.
 			if let Some(_) = T::Staking::nominations(&current_stake.stash) {
 				let _ =
 					T::VoterList::on_update(&current_stake.stash, Self::to_vote(current_active))
-						.defensive_proof(
-							"Unable to update a nominator, perhaps it does not exist?",
-						);
+						.defensive_proof("Nominator's position in VoterList updated; qed");
 			}
 
-			// if this is a validator
+			// If this is a validator, update their position in the `VoterList`.
 			if T::Staking::is_validator(&current_stake.stash) {
 				let _ =
 					T::VoterList::on_update(&current_stake.stash, Self::to_vote(current_active))
-						.defensive_proof(
-							"Unable to update a validator, perhaps it does not exist?",
-						);
+						.defensive_proof("Validator's position in VoterList updated; qed");
 			}
 		}
 	}
 	fn on_nominator_add(who: &T::AccountId) {
 		let _ = T::VoterList::on_insert(who.clone(), Self::to_vote(Self::active_stake_of(who)))
-			.defensive_proof("Unable to insert a nominator, perhaps it already exists?");
+			.defensive_proof("Nominator inserted into VoterList; qed");
 	}
 
-	fn on_nominator_update(_who: &T::AccountId, _prev_nominations: Vec<T::AccountId>) {
-		// Nothing to be done yet.
+	fn on_nominator_update(who: &T::AccountId, _prev_nominations: Vec<T::AccountId>) {
+		if !T::VoterList::contains(who) {
+			defensive!("Active nominator is in the VoterList; qed");
+		}
 	}
 
 	fn on_validator_add(who: &T::AccountId) {
 		let _ = T::VoterList::on_insert(who.clone(), Self::to_vote(Self::active_stake_of(who)))
-			.defensive_proof("Unable to insert a validator, perhaps it already exists?");
+			.defensive_proof("Validator inserted into VoterList; qed");
 	}
 
-	fn on_validator_update(_who: &T::AccountId) {
-		// Nothing to be done.
+	fn on_validator_update(who: &T::AccountId) {
+		if !T::VoterList::contains(who) {
+			defensive!("Active validator is in the VoterList; qed");
+		}
 	}
 
 	fn on_validator_remove(who: &T::AccountId) {
-		let _ = T::VoterList::on_remove(who)
-			.defensive_proof("Unable to remove a validator, perhaps it does not exist?");
+		let _ =
+			T::VoterList::on_remove(who).defensive_proof("Validator removed from VoterList; qed");
 	}
 
 	fn on_nominator_remove(who: &T::AccountId, _nominations: Vec<T::AccountId>) {
-		let _ = T::VoterList::on_remove(who)
-			.defensive_proof("Unable to remove a nominator, perhaps it does not exist?");
+		let _ =
+			T::VoterList::on_remove(who).defensive_proof("Nominator removed from VoterList; qed");
 	}
 
 	fn on_unstake(who: &T::AccountId) {
 		if T::VoterList::contains(who) {
-			defensive!("The staker should have already been removed!");
+			defensive!("The staker has already been removed; qed");
 		}
 	}
 }

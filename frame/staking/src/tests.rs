@@ -5845,6 +5845,7 @@ mod on_staking_update {
 	#[test]
 	fn on_validator_update() {
 		ExtBuilder::default().check_events(true).build_and_execute(|| {
+			assert!(Validators::<Test>::contains_key(11));
 			assert_ok!(Staking::validate(RuntimeOrigin::signed(10), ValidatorPrefs::default()));
 			assert_eq!(EmittedEvents::take(), vec![ValidatorUpdate(11)]);
 		});
@@ -5874,6 +5875,7 @@ mod on_staking_update {
 	#[test]
 	fn on_nominator_update() {
 		ExtBuilder::default().check_events(true).nominate(true).build_and_execute(|| {
+			assert!(Nominators::<Test>::contains_key(101));
 			assert_ok!(Staking::nominate(RuntimeOrigin::signed(100), vec![11]));
 			assert_eq!(EmittedEvents::take(), vec![NominatorUpdate(101, vec![11, 21])]);
 		});
@@ -5901,6 +5903,25 @@ mod on_staking_update {
 				EmittedEvents::take(),
 				vec![NominatorRemove(101, vec![11, 21]), Unstake(101)]
 			);
+
+			assert_ok!(Staking::bond(
+				RuntimeOrigin::signed(1),
+				2,
+				10,
+				RewardDestination::Controller
+			));
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(2), vec![11]));
+			assert_eq!(EmittedEvents::take(), vec![StakeUpdate(1, None), NominatorAdd(1)]);
+
+			assert_ok!(Staking::chill(RuntimeOrigin::signed(2)));
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(2), 10));
+			assert_eq!(
+				EmittedEvents::take(),
+				[
+					NominatorRemove(1, vec![11]),
+					StakeUpdate(1, Some(Stake { stash: 1, total: 10, active: 10 }))
+				]
+			);
 		});
 	}
 
@@ -5909,6 +5930,59 @@ mod on_staking_update {
 		ExtBuilder::default().check_events(true).nominate(true).build_and_execute(|| {
 			assert_ok!(Staking::force_unstake(RuntimeOrigin::root(), 11, 0));
 			assert_eq!(EmittedEvents::take(), vec![ValidatorRemove(11), Unstake(11)]);
+
+			assert_ok!(Staking::bond(
+				RuntimeOrigin::signed(1),
+				2,
+				10,
+				RewardDestination::Controller
+			));
+			assert_ok!(Staking::validate(RuntimeOrigin::signed(2), ValidatorPrefs::default()));
+			assert_eq!(EmittedEvents::take(), vec![StakeUpdate(1, None), ValidatorAdd(1)]);
+
+			assert_ok!(Staking::chill(RuntimeOrigin::signed(2)));
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(2), 10));
+			assert_eq!(
+				EmittedEvents::take(),
+				[
+					ValidatorRemove(1),
+					StakeUpdate(1, Some(Stake { stash: 1, total: 10, active: 10 }))
+				]
+			);
+		});
+	}
+
+	#[test]
+	fn validator_to_nominator() {
+		ExtBuilder::default().check_events(true).build_and_execute(|| {
+			assert_ok!(Staking::bond(
+				RuntimeOrigin::signed(1),
+				2,
+				10,
+				RewardDestination::Controller
+			));
+			assert_ok!(Staking::validate(RuntimeOrigin::signed(2), ValidatorPrefs::default()));
+			assert_eq!(EmittedEvents::take(), vec![StakeUpdate(1, None), ValidatorAdd(1)]);
+
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(2), vec![11]));
+			assert_eq!(EmittedEvents::take(), vec![ValidatorRemove(1), NominatorAdd(1)]);
+		});
+	}
+
+	#[test]
+	fn nominator_to_validator() {
+		ExtBuilder::default().check_events(true).build_and_execute(|| {
+			assert_ok!(Staking::bond(
+				RuntimeOrigin::signed(1),
+				2,
+				10,
+				RewardDestination::Controller
+			));
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(2), vec![11]));
+			assert_eq!(EmittedEvents::take(), vec![StakeUpdate(1, None), NominatorAdd(1)]);
+
+			assert_ok!(Staking::validate(RuntimeOrigin::signed(2), ValidatorPrefs::default()));
+			assert_eq!(EmittedEvents::take(), vec![NominatorRemove(1, vec![11]), ValidatorAdd(1)]);
 		});
 	}
 
