@@ -161,6 +161,10 @@ impl pallet_balances::Config for Test {
 	type ExistentialDeposit = ConstU128<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
+	type HoldIdentifier = ();
+	type MaxHolds = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
 }
 
 impl pallet_timestamp::Config for Test {

@@ -22,7 +22,7 @@ pub mod message;
 pub mod metrics;
 pub mod warp;
 
-use crate::protocol::role::Roles;
+use crate::role::Roles;
 use futures::Stream;
 
 use libp2p::PeerId;

@@ -535,9 +535,9 @@ fn origin_guards_should_work() {
 			Nfts::set_team(
 				RuntimeOrigin::signed(account(2)),
 				0,
-				account(2),
-				account(2),
-				account(2),
+				Some(account(2)),
+				Some(account(2)),
+				Some(account(2)),
 			),
 			Error::<Test>::NoPermission
 		);
@@ -639,14 +639,14 @@ fn set_team_should_work() {
 		assert_ok!(Nfts::set_team(
 			RuntimeOrigin::signed(account(1)),
 			0,
-			account(2),
-			account(3),
-			account(4),
+			Some(account(2)),
+			Some(account(3)),
+			Some(account(4)),
 		));
 
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(account(2)), 0, 42, account(2), None));
-		assert_ok!(Nfts::lock_item_transfer(RuntimeOrigin::signed(account(4)), 0, 42));
-		assert_ok!(Nfts::unlock_item_transfer(RuntimeOrigin::signed(account(4)), 0, 42));
+
+		// admin can't transfer/burn items he doesn't own
 		assert_noop!(
 			Nfts::transfer(RuntimeOrigin::signed(account(3)), 0, 42, account(3)),
 			Error::<Test>::NoPermission
@@ -655,6 +655,46 @@ fn set_team_should_work() {
 			Nfts::burn(RuntimeOrigin::signed(account(3)), 0, 42),
 			Error::<Test>::NoPermission
 		);
+
+		assert_ok!(Nfts::lock_item_transfer(RuntimeOrigin::signed(account(4)), 0, 42));
+		assert_ok!(Nfts::unlock_item_transfer(RuntimeOrigin::signed(account(4)), 0, 42));
+
+		// validate we can set any role to None
+		assert_ok!(Nfts::set_team(
+			RuntimeOrigin::signed(account(1)),
+			0,
+			Some(account(2)),
+			Some(account(3)),
+			None,
+		));
+		assert_noop!(
+			Nfts::lock_item_transfer(RuntimeOrigin::signed(account(4)), 0, 42),
+			Error::<Test>::NoPermission
+		);
+
+		// set all the roles to None
+		assert_ok!(Nfts::set_team(RuntimeOrigin::signed(account(1)), 0, None, None, None,));
+
+		// validate we can't set the roles back
+		assert_noop!(
+			Nfts::set_team(
+				RuntimeOrigin::signed(account(1)),
+				0,
+				Some(account(2)),
+				Some(account(3)),
+				None,
+			),
+			Error::<Test>::NoPermission
+		);
+
+		// only the root account can change the roles from None to Some()
+		assert_ok!(Nfts::set_team(
+			RuntimeOrigin::root(),
+			0,
+			Some(account(2)),
+			Some(account(3)),
+			None,
+		));
 	});
 }
 
@@ -1476,7 +1516,13 @@ fn force_update_collection_should_work() {
 
 		Balances::make_free_balance_be(&account(5), 100);
 		assert_ok!(Nfts::force_collection_owner(RuntimeOrigin::root(), 0, account(5)));
-		assert_ok!(Nfts::set_team(RuntimeOrigin::root(), 0, account(2), account(5), account(4)));
+		assert_ok!(Nfts::set_team(
+			RuntimeOrigin::root(),
+			0,
+			Some(account(2)),
+			Some(account(5)),
+			Some(account(4)),
+		));
 		assert_eq!(collections(), vec![(account(5), 0)]);
 		assert_eq!(Balances::reserved_balance(account(1)), 2);
 		assert_eq!(Balances::reserved_balance(account(5)), 63);
@@ -1502,7 +1548,13 @@ fn force_update_collection_should_work() {
 		assert_eq!(Balances::reserved_balance(account(5)), 0);
 
 		// validate new roles
-		assert_ok!(Nfts::set_team(RuntimeOrigin::root(), 0, account(2), account(3), account(4)));
+		assert_ok!(Nfts::set_team(
+			RuntimeOrigin::root(),
+			0,
+			Some(account(2)),
+			Some(account(3)),
+			Some(account(4)),
+		));
 		assert_eq!(
 			CollectionRoleOf::<Test>::get(0, account(2)).unwrap(),
 			CollectionRoles(CollectionRole::Issuer.into())
@@ -1516,7 +1568,13 @@ fn force_update_collection_should_work() {
 			CollectionRoles(CollectionRole::Freezer.into())
 		);
 
-		assert_ok!(Nfts::set_team(RuntimeOrigin::root(), 0, account(3), account(2), account(3)));
+		assert_ok!(Nfts::set_team(
+			RuntimeOrigin::root(),
+			0,
+			Some(account(3)),
+			Some(account(2)),
+			Some(account(3)),
+		));
 
 		assert_eq!(
 			CollectionRoleOf::<Test>::get(0, account(2)).unwrap(),
@@ -1541,9 +1599,9 @@ fn burn_works() {
 		assert_ok!(Nfts::set_team(
 			RuntimeOrigin::signed(account(1)),
 			0,
-			account(2),
-			account(3),
-			account(4),
+			Some(account(2)),
+			Some(account(3)),
+			Some(account(4)),
 		));
 
 		assert_noop!(
@@ -3220,7 +3278,7 @@ fn pre_signed_mints_should_work() {
 				signature,
 				user_1.clone(),
 			),
-			Error::<Test>::UnknownCollection
+			Error::<Test>::NoPermission
 		);
 
 		// validate max attributes limit

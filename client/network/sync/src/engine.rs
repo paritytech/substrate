@@ -24,22 +24,27 @@ use crate::{
 	ChainSync, ClientError, SyncingService,
 };
 
+use codec::{Decode, DecodeAll, Encode};
 use futures::{FutureExt, Stream, StreamExt};
+use futures_timer::Delay;
 use libp2p::PeerId;
 use lru::LruCache;
 use prometheus_endpoint::{
 	register, Gauge, GaugeVec, MetricSource, Opts, PrometheusError, Registry, SourcedGauge, U64,
 };
 
-use codec::{Decode, DecodeAll, Encode};
-use futures_timer::Delay;
 use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_consensus::import_queue::ImportQueueService;
-use sc_network_common::{
+use sc_network::{
 	config::{
 		NetworkConfiguration, NonDefaultSetConfig, ProtocolId, SyncMode as SyncOperationMode,
 	},
-	protocol::{event::Event, role::Roles, ProtocolName},
+	event::Event,
+	utils::LruHashSet,
+	ProtocolName,
+};
+use sc_network_common::{
+	role::Roles,
 	sync::{
 		message::{
 			generic::{BlockData, BlockResponse},
@@ -49,7 +54,6 @@ use sc_network_common::{
 		BadPeer, ChainSync as ChainSyncT, ExtendedPeerInfo, PollBlockAnnounceValidation, SyncEvent,
 		SyncMode,
 	},
-	utils::LruHashSet,
 };
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain::HeaderMetadata;

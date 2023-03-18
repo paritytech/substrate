@@ -31,7 +31,7 @@ use pallet_balances::Error as BalancesError;
 use sp_runtime::{
 	assert_eq_error_rate,
 	traits::{BadOrigin, Dispatchable},
-	Perbill, Percent, Rounding,
+	Perbill, Percent, Rounding, TokenError,
 };
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
@@ -99,8 +99,8 @@ fn force_unstake_works() {
 		add_slash(&11);
 		// Cant transfer
 		assert_noop!(
-			Balances::transfer(RuntimeOrigin::signed(11), 1, 10),
-			BalancesError::<Test, _>::LiquidityRestrictions
+			Balances::transfer_allow_death(RuntimeOrigin::signed(11), 1, 10),
+			TokenError::Frozen,
 		);
 		// Force unstake requires root.
 		assert_noop!(Staking::force_unstake(RuntimeOrigin::signed(11), 11, 2), BadOrigin);
@@ -114,7 +114,7 @@ fn force_unstake_works() {
 		// No longer bonded.
 		assert_eq!(Staking::bonded(&11), None);
 		// Transfer works.
-		assert_ok!(Balances::transfer(RuntimeOrigin::signed(11), 1, 10));
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(11), 1, 10));
 	});
 }
 
@@ -513,10 +513,10 @@ fn no_candidate_emergency_condition() {
 			// initial validators
 			assert_eq_uvec!(validator_controllers(), vec![10, 20, 30, 40]);
 			let prefs = ValidatorPrefs { commission: Perbill::one(), ..Default::default() };
-			<Staking as crate::Store>::Validators::insert(11, prefs.clone());
+			Validators::<Test>::insert(11, prefs.clone());
 
 			// set the minimum validator count.
-			<Staking as crate::Store>::MinimumValidatorCount::put(10);
+			MinimumValidatorCount::<Test>::put(10);
 
 			// try to chill
 			let res = Staking::chill(RuntimeOrigin::signed(10));
@@ -537,7 +537,7 @@ fn no_candidate_emergency_condition() {
 			// changed)
 			assert_eq_uvec!(validator_controllers(), vec![10, 20, 30, 40]);
 			// The chill is still pending.
-			assert!(!<Staking as crate::Store>::Validators::contains_key(11));
+			assert!(!Validators::<Test>::contains_key(11));
 			// No new era is created.
 			assert_eq!(current_era, CurrentEra::<Test>::get());
 		});
@@ -961,14 +961,14 @@ fn cannot_transfer_staked_balance() {
 		assert_eq!(Staking::eras_stakers(active_era(), &11).total, 1000);
 		// Confirm account 11 cannot transfer as a result
 		assert_noop!(
-			Balances::transfer(RuntimeOrigin::signed(11), 20, 1),
-			BalancesError::<Test, _>::LiquidityRestrictions
+			Balances::transfer_allow_death(RuntimeOrigin::signed(11), 20, 1),
+			TokenError::Frozen,
 		);
 
 		// Give account 11 extra free balance
 		let _ = Balances::make_free_balance_be(&11, 10000);
 		// Confirm that account 11 can now transfer some balance
-		assert_ok!(Balances::transfer(RuntimeOrigin::signed(11), 20, 1));
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(11), 20, 1));
 	});
 }
 
@@ -986,10 +986,10 @@ fn cannot_transfer_staked_balance_2() {
 		assert_eq!(Staking::eras_stakers(active_era(), &21).total, 1000);
 		// Confirm account 21 can transfer at most 1000
 		assert_noop!(
-			Balances::transfer(RuntimeOrigin::signed(21), 20, 1001),
-			BalancesError::<Test, _>::LiquidityRestrictions
+			Balances::transfer_allow_death(RuntimeOrigin::signed(21), 20, 1001),
+			TokenError::Frozen,
 		);
-		assert_ok!(Balances::transfer(RuntimeOrigin::signed(21), 20, 1000));
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(21), 20, 1000));
 	});
 }
 
@@ -2662,8 +2662,8 @@ fn garbage_collection_after_slashing() {
 			);
 
 			assert_eq!(Balances::free_balance(11), 2000 - 200);
-			assert!(<Staking as crate::Store>::SlashingSpans::get(&11).is_some());
-			assert_eq!(<Staking as crate::Store>::SpanSlash::get(&(11, 0)).amount(), &200);
+			assert!(SlashingSpans::<Test>::get(&11).is_some());
+			assert_eq!(SpanSlash::<Test>::get(&(11, 0)).amount(), &200);
 
 			on_offence_now(
 				&[OffenceDetails {
@@ -2679,7 +2679,7 @@ fn garbage_collection_after_slashing() {
 			assert_eq!(Balances::free_balance(11), 2);
 			assert_eq!(Balances::total_balance(&11), 2);
 
-			let slashing_spans = <Staking as crate::Store>::SlashingSpans::get(&11).unwrap();
+			let slashing_spans = SlashingSpans::<Test>::get(&11).unwrap();
 			assert_eq!(slashing_spans.iter().count(), 2);
 
 			// reap_stash respects num_slashing_spans so that weight is accurate
@@ -2689,8 +2689,8 @@ fn garbage_collection_after_slashing() {
 			);
 			assert_ok!(Staking::reap_stash(RuntimeOrigin::signed(20), 11, 2));
 
-			assert!(<Staking as crate::Store>::SlashingSpans::get(&11).is_none());
-			assert_eq!(<Staking as crate::Store>::SpanSlash::get(&(11, 0)).amount(), &0);
+			assert!(SlashingSpans::<Test>::get(&11).is_none());
+			assert_eq!(SpanSlash::<Test>::get(&(11, 0)).amount(), &0);
 		})
 }
 
@@ -2719,19 +2719,19 @@ fn garbage_collection_on_window_pruning() {
 		assert_eq!(Balances::free_balance(11), 900);
 		assert_eq!(Balances::free_balance(101), 2000 - (nominated_value / 10));
 
-		assert!(<Staking as crate::Store>::ValidatorSlashInEra::get(&now, &11).is_some());
-		assert!(<Staking as crate::Store>::NominatorSlashInEra::get(&now, &101).is_some());
+		assert!(ValidatorSlashInEra::<Test>::get(&now, &11).is_some());
+		assert!(NominatorSlashInEra::<Test>::get(&now, &101).is_some());
 
 		// + 1 because we have to exit the bonding window.
 		for era in (0..(BondingDuration::get() + 1)).map(|offset| offset + now + 1) {
-			assert!(<Staking as crate::Store>::ValidatorSlashInEra::get(&now, &11).is_some());
-			assert!(<Staking as crate::Store>::NominatorSlashInEra::get(&now, &101).is_some());
+			assert!(ValidatorSlashInEra::<Test>::get(&now, &11).is_some());
+			assert!(NominatorSlashInEra::<Test>::get(&now, &101).is_some());
 
 			mock::start_active_era(era);
 		}
 
-		assert!(<Staking as crate::Store>::ValidatorSlashInEra::get(&now, &11).is_none());
-		assert!(<Staking as crate::Store>::NominatorSlashInEra::get(&now, &101).is_none());
+		assert!(ValidatorSlashInEra::<Test>::get(&now, &11).is_none());
+		assert!(NominatorSlashInEra::<Test>::get(&now, &101).is_none());
 	})
 }
 
@@ -2772,7 +2772,7 @@ fn slashing_nominators_by_span_max() {
 			slashing::SlashingSpan { index: 0, start: 0, length: Some(4) },
 		];
 
-		let get_span = |account| <Staking as crate::Store>::SlashingSpans::get(&account).unwrap();
+		let get_span = |account| SlashingSpans::<Test>::get(&account).unwrap();
 
 		assert_eq!(get_span(11).iter().collect::<Vec<_>>(), expected_spans);
 
@@ -2834,7 +2834,7 @@ fn slashes_are_summed_across_spans() {
 		assert_eq!(Balances::free_balance(21), 2000);
 		assert_eq!(Staking::slashable_balance_of(&21), 1000);
 
-		let get_span = |account| <Staking as crate::Store>::SlashingSpans::get(&account).unwrap();
+		let get_span = |account| SlashingSpans::<Test>::get(&account).unwrap();
 
 		on_offence_now(
 			&[OffenceDetails {
@@ -4733,7 +4733,7 @@ fn payout_creates_controller() {
 		bond_nominator(1234, 1337, 100, vec![11]);
 
 		// kill controller
-		assert_ok!(Balances::transfer(RuntimeOrigin::signed(1337), 1234, 100));
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1337), 1234, 100));
 		assert_eq!(Balances::free_balance(1337), 0);
 
 		mock::start_active_era(1);
