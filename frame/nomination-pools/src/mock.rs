@@ -67,18 +67,6 @@ impl sp_staking::StakingInterface for StakingMock {
 		CurrentEra::get()
 	}
 
-	fn stake(who: &Self::AccountId) -> Result<Stake<Self>, DispatchError> {
-		match (
-			UnbondingBalanceMap::get().get(who).map(|v| *v),
-			BondedBalanceMap::get().get(who).map(|v| *v),
-		) {
-			(None, None) => Err(DispatchError::Other("balance not found")),
-			(Some(v), None) => Ok(Stake { total: v, active: 0, stash: *who }),
-			(None, Some(v)) => Ok(Stake { total: v, active: v, stash: *who }),
-			(Some(a), Some(b)) => Ok(Stake { total: a + b, active: b, stash: *who }),
-		}
-	}
-
 	fn bond(stash: &Self::AccountId, value: Self::Balance, _: &Self::AccountId) -> DispatchResult {
 		StakingMock::set_bonded_balance(*stash, value);
 		Ok(())
