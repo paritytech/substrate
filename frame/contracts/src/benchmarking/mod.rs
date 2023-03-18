@@ -30,7 +30,7 @@ use self::{
 	sandbox::Sandbox,
 };
 use crate::{
-	exec::{AccountIdOf, FixSizedKey, VarSizedKey},
+	exec::{AccountIdOf, Key},
 	wasm::CallFlags,
 	Pallet as Contracts, *,
 };
@@ -135,10 +135,10 @@ where
 	}
 
 	/// Store the supplied storage items into this contracts storage.
-	fn store(&self, items: &Vec<(FixSizedKey, Vec<u8>)>) -> Result<(), &'static str> {
+	fn store(&self, items: &Vec<([u8; 32], Vec<u8>)>) -> Result<(), &'static str> {
 		let info = self.info()?;
 		for item in items {
-			info.write(&item.0 as &FixSizedKey, Some(item.1.clone()), None, false)
+			info.write(&Key::Fix(item.0), Some(item.1.clone()), None, false)
 				.map_err(|_| "Failed to write storage to restoration dest")?;
 		}
 		<ContractInfoOf<T>>::insert(&self.account_id, info);
@@ -1044,7 +1044,7 @@ benchmarks! {
 		let info = instance.info()?;
 		for key in keys {
 			info.write(
-				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+				&Key::<T>::try_from_var(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
 				false,
@@ -1088,7 +1088,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		info.write(
-			&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+			&Key::<T>::try_from_var(key).map_err(|e| "Key has wrong length")?,
 			Some(vec![]),
 			None,
 			false,
@@ -1131,7 +1131,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		info.write(
-			&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+			&Key::<T>::try_from_var(key).map_err(|e| "Key has wrong length")?,
 			Some(vec![42u8; n as usize]),
 			None,
 			false,
@@ -1180,7 +1180,7 @@ benchmarks! {
 		let info = instance.info()?;
 		for key in keys {
 			info.write(
-				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+				&Key::<T>::try_from_var(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
 				false,
@@ -1223,7 +1223,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		info.write(
-			&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+			&Key::<T>::try_from_var(key).map_err(|e| "Key has wrong length")?,
 			Some(vec![42u8; n as usize]),
 			None,
 			false,
@@ -1276,7 +1276,7 @@ benchmarks! {
 		let info = instance.info()?;
 		for key in keys {
 			info.write(
-				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+				&Key::<T>::try_from_var(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
 				false,
@@ -1325,7 +1325,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		info.write(
-			&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+			&Key::<T>::try_from_var(key).map_err(|e| "Key has wrong length")?,
 			Some(vec![42u8; n as usize]),
 			None,
 			false,
@@ -1373,7 +1373,7 @@ benchmarks! {
 		let info = instance.info()?;
 		for key in keys {
 			info.write(
-				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+				&Key::<T>::try_from_var(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
 				false,
@@ -1416,7 +1416,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		info.write(
-			&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+			&Key::<T>::try_from_var(key).map_err(|e| "Key has wrong length")?,
 			Some(vec![42u8; n as usize]),
 			None,
 			false,
@@ -1469,7 +1469,7 @@ benchmarks! {
 		let info = instance.info()?;
 		for key in keys {
 			info.write(
-				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+				&Key::<T>::try_from_var(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
 				false,
@@ -1518,7 +1518,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		info.write(
-			&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+			&Key::<T>::try_from_var(key).map_err(|e| "Key has wrong length")?,
 			Some(vec![42u8; n as usize]),
 			None,
 			false,

@@ -18,7 +18,7 @@
 //! Environment definition of the wasm smart-contract runtime.
 
 use crate::{
-	exec::{ExecError, ExecResult, Ext, FixSizedKey, TopicOf, VarSizedKey},
+	exec::{ExecError, ExecResult, Ext, Key, TopicOf},
 	gas::{ChargedAmount, Token},
 	schedule::HostFnWeights,
 	BalanceOf, CodeHash, Config, DebugBufferVec, Error, SENTINEL,
@@ -73,19 +73,7 @@ enum KeyType {
 	Fix,
 	/// Variable sized key used in transparent hashing,
 	/// cannot be larger than MaxStorageKeyLen.
-	Variable(u32),
-}
-
-impl KeyType {
-	fn len<T: Config>(&self) -> Result<u32, TrapReason> {
-		match self {
-			KeyType::Fix => Ok(32u32),
-			KeyType::Variable(len) => {
-				ensure!(len <= &<T>::MaxStorageKeyLen::get(), Error::<T>::DecodingFailed);
-				Ok(*len)
-			},
-		}
-	}
+	Var(u32),
 }
 
 /// Every error that can be returned to a contract when it calls any of the host functions.
@@ -752,6 +740,29 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 			(err, _) => Self::err_into_return_code(err),
 		}
 	}
+	fn decode_key(
+		&self,
+		memory: &[u8],
+		key_type: KeyType,
+		key_ptr: u32,
+	) -> Result<crate::exec::Key<E::T>, TrapReason> {
+		let res = match key_type {
+			KeyType::Fix => {
+				let key = self.read_sandbox_memory(memory, key_ptr, 32u32)?;
+				Key::try_from_fix(key)
+			},
+			KeyType::Var(len) => {
+				ensure!(
+					len <= <<E as Ext>::T as Config>::MaxStorageKeyLen::get(),
+					Error::<E::T>::DecodingFailed
+				);
+				let key = self.read_sandbox_memory(memory, key_ptr, len)?;
+				Key::try_from_var(key)
+			},
+		};
+
+		res.map_err(|_| Error::<E::T>::DecodingFailed.into())
+	}
 
 	fn set_storage(
 		&mut self,
@@ -767,20 +778,9 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 		if value_len > max_size {
 			return Err(Error::<E::T>::ValueTooLarge.into())
 		}
-		let key = self.read_sandbox_memory(memory, key_ptr, key_type.len::<E::T>()?)?;
+		let key = self.decode_key(memory, key_type, key_ptr)?;
 		let value = Some(self.read_sandbox_memory(memory, value_ptr, value_len)?);
-		let write_outcome = match key_type {
-			KeyType::Fix => self.ext.set_storage(
-				&FixSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
-				value,
-				false,
-			)?,
-			KeyType::Variable(_) => self.ext.set_storage_transparent(
-				&VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
-				value,
-				false,
-			)?,
-		};
+		let write_outcome = self.ext.set_storage(&key, value, false)?;
 
 		self.adjust_gas(
 			charged,
@@ -796,19 +796,8 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 		key_ptr: u32,
 	) -> Result<u32, TrapReason> {
 		let charged = self.charge_gas(RuntimeCosts::ClearStorage(self.ext.max_value_size()))?;
-		let key = self.read_sandbox_memory(memory, key_ptr, key_type.len::<E::T>()?)?;
-		let outcome = match key_type {
-			KeyType::Fix => self.ext.set_storage(
-				&FixSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
-				None,
-				false,
-			)?,
-			KeyType::Variable(_) => self.ext.set_storage_transparent(
-				&VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
-				None,
-				false,
-			)?,
-		};
+		let key = self.decode_key(memory, key_type, key_ptr)?;
+		let outcome = self.ext.set_storage(&key, None, false)?;
 
 		self.adjust_gas(charged, RuntimeCosts::ClearStorage(outcome.old_len()));
 		Ok(outcome.old_len_with_sentinel())
@@ -823,15 +812,8 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 		out_len_ptr: u32,
 	) -> Result<ReturnCode, TrapReason> {
 		let charged = self.charge_gas(RuntimeCosts::GetStorage(self.ext.max_value_size()))?;
-		let key = self.read_sandbox_memory(memory, key_ptr, key_type.len::<E::T>()?)?;
-		let outcome = match key_type {
-			KeyType::Fix => self.ext.get_storage(
-				&FixSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
-			),
-			KeyType::Variable(_) => self.ext.get_storage_transparent(
-				&VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
-			),
-		};
+		let key = self.decode_key(memory, key_type, key_ptr)?;
+		let outcome = self.ext.get_storage(&key);
 
 		if let Some(value) = outcome {
 			self.adjust_gas(charged, RuntimeCosts::GetStorage(value.len() as u32));
@@ -857,15 +839,8 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 		key_ptr: u32,
 	) -> Result<u32, TrapReason> {
 		let charged = self.charge_gas(RuntimeCosts::ContainsStorage(self.ext.max_value_size()))?;
-		let key = self.read_sandbox_memory(memory, key_ptr, key_type.len::<E::T>()?)?;
-		let outcome = match key_type {
-			KeyType::Fix => self.ext.get_storage_size(
-				&FixSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
-			),
-			KeyType::Variable(_) => self.ext.get_storage_size_transparent(
-				&VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
-			),
-		};
+		let key = self.decode_key(memory, key_type, key_ptr)?;
+		let outcome = self.ext.get_storage_size(&key);
 
 		self.adjust_gas(charged, RuntimeCosts::ClearStorage(outcome.unwrap_or(0)));
 		Ok(outcome.unwrap_or(SENTINEL))
@@ -1092,7 +1067,7 @@ pub mod env {
 		value_ptr: u32,
 		value_len: u32,
 	) -> Result<u32, TrapReason> {
-		ctx.set_storage(memory, KeyType::Variable(key_len), key_ptr, value_ptr, value_len)
+		ctx.set_storage(memory, KeyType::Var(key_len), key_ptr, value_ptr, value_len)
 	}
 
 	/// Clear the value at the given key in the contract storage.
@@ -1118,7 +1093,7 @@ pub mod env {
 	#[version(1)]
 	#[prefixed_alias]
 	fn clear_storage(ctx: _, memory: _, key_ptr: u32, key_len: u32) -> Result<u32, TrapReason> {
-		ctx.clear_storage(memory, KeyType::Variable(key_len), key_ptr)
+		ctx.clear_storage(memory, KeyType::Var(key_len), key_ptr)
 	}
 
 	/// Retrieve the value under the given key from storage.
@@ -1175,7 +1150,7 @@ pub mod env {
 		out_ptr: u32,
 		out_len_ptr: u32,
 	) -> Result<ReturnCode, TrapReason> {
-		ctx.get_storage(memory, KeyType::Variable(key_len), key_ptr, out_ptr, out_len_ptr)
+		ctx.get_storage(memory, KeyType::Var(key_len), key_ptr, out_ptr, out_len_ptr)
 	}
 
 	/// Checks whether there is a value stored under the given key.
@@ -1212,7 +1187,7 @@ pub mod env {
 	#[version(1)]
 	#[prefixed_alias]
 	fn contains_storage(ctx: _, memory: _, key_ptr: u32, key_len: u32) -> Result<u32, TrapReason> {
-		ctx.contains_storage(memory, KeyType::Variable(key_len), key_ptr)
+		ctx.contains_storage(memory, KeyType::Var(key_len), key_ptr)
 	}
 
 	/// Retrieve and remove the value under the given key from storage.
@@ -1239,8 +1214,8 @@ pub mod env {
 	) -> Result<ReturnCode, TrapReason> {
 		let charged = ctx.charge_gas(RuntimeCosts::TakeStorage(ctx.ext.max_value_size()))?;
 		let key = ctx.read_sandbox_memory(memory, key_ptr, key_len)?;
-		if let crate::storage::WriteOutcome::Taken(value) = ctx.ext.set_storage_transparent(
-			&VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
+		if let crate::storage::WriteOutcome::Taken(value) = ctx.ext.set_storage(
+			&Key::<E::T>::try_from_var(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
 			None,
 			true,
 		)? {
