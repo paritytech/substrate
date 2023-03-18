@@ -120,16 +120,15 @@ impl From<Option<KeystorePtr>> for BeefyKeystore {
 pub mod tests {
 	use std::sync::Arc;
 
-	use sc_keystore::LocalKeystore;
-	use sp_core::{ecdsa, Pair};
-
 	use sp_consensus_beefy::{crypto, Keyring};
+	use sp_core::{ecdsa, Pair};
+	use sp_keystore::testing::MemoryKeystore;
 
 	use super::*;
 	use crate::error::Error;
 
 	fn keystore() -> KeystorePtr {
-		Arc::new(LocalKeystore::in_memory())
+		Arc::new(MemoryKeystore::new())
 	}
 
 	#[test]

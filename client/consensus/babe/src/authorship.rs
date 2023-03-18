@@ -287,14 +287,14 @@ fn claim_primary_slot(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sc_keystore::LocalKeystore;
 	use sp_consensus_babe::{AllowedSlots, AuthorityId, BabeEpochConfiguration};
 	use sp_core::{crypto::Pair as _, sr25519::Pair};
+	use sp_keystore::testing::MemoryKeystore;
 	use std::sync::Arc;
 
 	#[test]
 	fn claim_secondary_plain_slot_works() {
-		let keystore: KeystorePtr = Arc::new(LocalKeystore::in_memory());
+		let keystore: KeystorePtr = Arc::new(MemoryKeystore::new());
 		let valid_public_key = Keystore::sr25519_generate_new(
 			&*keystore,
 			AuthorityId::ID,
