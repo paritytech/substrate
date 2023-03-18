@@ -19,7 +19,7 @@ use crate::{
 	dispatch::{CallMetadata, DispatchInfo, PostDispatchInfo},
 	traits::{GetCallMetadata, UnfilteredDispatchable},
 };
-use sp_runtime::{traits::Dispatchable, DispatchResultWithInfo};
+use sp_runtime::{traits::Dispatchable, DispatchError, DispatchResultWithInfo, ModuleError};
 sp_api::decl_runtime_apis! {
 	pub trait Interface {
 		type View: View;
@@ -30,6 +30,9 @@ sp_api::decl_runtime_apis! {
 	}
 }
 
+pub type InterfaceResult = Result<(), InterfaceError>;
+pub type InterfaceViewResult = Result<Vec<u8>, InterfaceError>;
+
 pub trait Core {
 	type RuntimeOrigin;
 	type Selectable;
@@ -39,24 +42,56 @@ pub trait Call {
 	type RuntimeOrigin;
 	type Selectable;
 
-	fn call(&self, origin: Self::RuntimeOrigin, selectable: Self::Selectable) -> DispatchResult;
+	fn call(
+		&self,
+		origin: Self::RuntimeOrigin,
+		selectable: Self::Selectable,
+	) -> Result<(), InterfaceError>;
 }
 
 pub trait View {
 	type Selectable;
 
-	fn view(&self) -> Vec<u8>;
+	fn view(&self) -> Result<Vec<u8>, InterfaceError>;
 }
 
 pub trait Selector {
 	type Selectable;
 	type Selected;
 
-	fn select(&self, selectable: Self::Selectable) -> Result<Self::Selected, Error>;
+	fn select(&self, selectable: Self::Selectable) -> Result<Self::Selected, InterfaceError>;
 }
 
-pub enum Error {
-	SelectorMismatch { provided: H256 },
+/// The "high-level" error enum of interfaces
+///
+/// Amalgamates all inner interfaces errors
+pub enum InterfaceError {
+	SelectorMismatch {
+		provided: H256,
+	},
+	Interface {
+		index: u8,
+		/// Module specific error value.
+		error: [u8; MAX_MODULE_ERROR_ENCODED_SIZE],
+		/// Optional error message.
+		#[codec(skip)]
+		#[cfg_attr(feature = "std", serde(skip_deserializing))]
+		message: Option<&'static str>,
+	},
+	Module(ModuleError),
+}
+
+impl From<ModuleError> for InterfaceError {
+	fn from(m: ModuleError) -> Self {
+		Self::Module(m)
+	}
+}
+
+// THis is then used in the uper level logic
+impl From<InterfaceError> for DispatchError {
+	fn from(value: InterfaceError) -> Self {
+		todo!()
+	}
 }
 
 pub struct EmptySelector;

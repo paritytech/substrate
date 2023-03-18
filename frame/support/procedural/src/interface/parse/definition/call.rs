@@ -30,7 +30,7 @@ impl CallDef {
 		calls: Option<Self>,
 		global_selector: bool,
 		attr_span: proc_macro2::Span,
-		index: usize,
+		_index: usize,
 		item: &mut syn::TraitItem,
 	) -> syn::Result<Self> {
 		let method = if let syn::TraitItem::Method(method) = item {
@@ -68,27 +68,33 @@ impl CallDef {
 			check_call_return_type(ty)?;
 		} else {
 			let msg = "Invalid Interface::call, require return type \
-						DispatchResult";
+						InterfaceResult";
 			return Err(syn::Error::new(method.sig.span(), msg))
 		}
 
-		let (mut weight_attrs, mut call_idx_attrs, mut selector_attrs): (
+		let (mut weight_attrs, mut call_idx_attrs, selector_attrs): (
 			Vec<CallAttr>,
 			Vec<CallAttr>,
 			Vec<CallAttr>,
-		) = helper::take_item_interface_attrs(&mut method.attrs)?.into_iter().fold(
+		) = helper::take_item_interface_attrs(&mut method.attrs)?.into_iter().try_fold(
 			(Vec::new(), Vec::new(), Vec::new()),
 			|(mut weight_attrs, mut call_idx_attrs, mut selector_attrs), attr| {
 				match attr {
 					CallAttr::Index(_) => call_idx_attrs.push(attr),
 					CallAttr::Weight(_) => weight_attrs.push(attr),
-					CallAttr::NoSelector => selector_attrs.push(attr),
-					CallAttr::UseSelector(_) => selector_attrs.push(attr),
+					CallAttr::NoSelector | CallAttr::UseSelector(_) => {
+						if !global_selector {
+							let msg = "Invalid interface::view, selector attributes given \
+								but top level mod misses `#[interface::with_selector] attribute.`";
+							return Err(syn::Error::new(method.sig.span(), msg))
+						}
+						selector_attrs.push(attr)
+					},
 				}
 
-				(weight_attrs, call_idx_attrs, selector_attrs)
+				Ok((weight_attrs, call_idx_attrs, selector_attrs))
 			},
-		);
+		)?;
 
 		if weight_attrs.len() != 1 {
 			let msg = if weight_attrs.is_empty() {
@@ -136,45 +142,39 @@ impl CallDef {
 				CallAttr::NoSelector => false,
 				_ => unreachable!("checked during creation of the let binding"),
 			},
-			None => true,
+			None => global_selector,
 		};
 
-		let (skip, selector) = if with_selector && !global_selector {
-			let msg = "Invalid interface::call, selector attributes given \
-				but top level mod misses `#[interface::with_selector] attribute.`";
-			return Err(syn::Error::new(method.sig.span(), msg))
-		} else {
-			if with_selector {
-				let return_ty = match method.sig.inputs.iter().nth(1) {
-					None => {
-						let msg = "Invalid interface::call, must have `Select<$ident>` as second argument if \
+		let (skip, selector) = if with_selector {
+			let first_arg_ty = match method.sig.inputs.first() {
+				None => {
+					let msg =
+						"Invalid interface::view, must have `Select<$ty>` as first argument if \
 						used with a selector and not annotated with #[interface::no_selector].";
-						return Err(syn::Error::new(method.sig.span(), msg))
-					},
-					Some(syn::FnArg::Receiver(_)) => {
-						let msg =
-							"Invalid interface::call, second argument must be a typed argument, \
-							e.g. `select: Select<$ident>`";
-						return Err(syn::Error::new(method.sig.span(), msg))
-					},
-					Some(syn::FnArg::Typed(arg)) => check_call_second_arg_type(&arg.ty)?,
-				};
+					return Err(syn::Error::new(method.sig.span(), msg))
+				},
+				Some(syn::FnArg::Receiver(_)) => {
+					let msg = "Invalid interface::view, second argument must be a typed argument, \
+							e.g. `select: Select<$ty>`";
+					return Err(syn::Error::new(method.sig.span(), msg))
+				},
+				Some(syn::FnArg::Typed(arg)) => check_call_second_arg_type(&arg.ty)?,
+			};
 
-				let selector_ty = match selector_attrs.first() {
-					Some(attr) => match attr {
-						CallAttr::UseSelector(name) =>
-							selector::Type::Named { name: name.clone(), return_ty },
-						CallAttr::NoSelector =>
-							unreachable!("checked during creation of the let binding"),
-						_ => unreachable!("checked during creation of the let binding"),
-					},
-					None => selector::Type::Default { return_ty },
-				};
+			let selector_ty = match selector_attrs.first() {
+				Some(attr) => match attr {
+					CallAttr::UseSelector(name) =>
+						selector::Type::Named { name: name.clone(), return_ty: first_arg_ty },
+					CallAttr::NoSelector =>
+						unreachable!("checked during creation of the let binding"),
+					_ => unreachable!("checked during creation of the let binding"),
+				},
+				None => selector::Type::Default { return_ty: first_arg_ty },
+			};
 
-				(2, Some(selector_ty))
-			} else {
-				(1, None)
-			}
+			(2, Some(selector_ty))
+		} else {
+			(1, None)
 		};
 
 		// Skip first
@@ -250,8 +250,7 @@ mod keyword {
 	syn::custom_keyword!(call_index);
 	syn::custom_keyword!(weight);
 	syn::custom_keyword!(RuntimeOrigin);
-	syn::custom_keyword!(DispatchResultWithPostInfo);
-	syn::custom_keyword!(DispatchResult);
+	syn::custom_keyword!(InterfaceResult);
 	syn::custom_keyword!(compact);
 	syn::custom_keyword!(Select);
 }
@@ -349,17 +348,14 @@ pub fn check_call_second_arg_type(ty: &syn::Type) -> syn::Result<Box<syn::Type>>
 	Ok(check.0)
 }
 
-/// Check the keyword `DispatchResultWithPostInfo` or `DispatchResult`.
+/// Check the keyword `InterfaceResult`.
 pub fn check_call_return_type(type_: &syn::Type) -> syn::Result<()> {
 	pub struct Checker;
 	impl syn::parse::Parse for Checker {
 		fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
 			let lookahead = input.lookahead1();
-			if lookahead.peek(keyword::DispatchResultWithPostInfo) {
-				input.parse::<keyword::DispatchResultWithPostInfo>()?;
-				Ok(Self)
-			} else if lookahead.peek(keyword::DispatchResult) {
-				input.parse::<keyword::DispatchResult>()?;
+			if lookahead.peek(keyword::InterfaceResult) {
+				input.parse::<keyword::InterfaceResult>()?;
 				Ok(Self)
 			} else {
 				Err(lookahead.error())
