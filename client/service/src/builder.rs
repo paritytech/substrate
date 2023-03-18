@@ -86,21 +86,20 @@ type TFullParts<TBl, TRtApi, TExec> =
 	(TFullClient<TBl, TRtApi, TExec>, Arc<TFullBackend<TBl>>, KeystoreContainer, TaskManager);
 
 trait AsKeystoreRef {
-	fn keystore_ref(&self) -> Arc<dyn Keystore>;
+	fn keystore_ref(&self) -> KeystorePtr;
 }
 
 impl<T> AsKeystoreRef for Arc<T>
 where
 	T: Keystore + 'static,
 {
-	fn keystore_ref(&self) -> Arc<dyn Keystore> {
+	fn keystore_ref(&self) -> KeystorePtr {
 		self.clone()
 	}
 }
 
 /// Construct and hold different layers of Keystore wrappers
 pub struct KeystoreContainer {
-	remote: Option<Box<dyn AsKeystoreRef>>,
 	local: Arc<LocalKeystore>,
 }
 
@@ -113,28 +112,12 @@ impl KeystoreContainer {
 			KeystoreConfig::InMemory => LocalKeystore::in_memory(),
 		});
 
-		Ok(Self { remote: Default::default(), local: keystore })
-	}
-
-	/// Set the remote keystore.
-	/// Should be called right away at startup and not at runtime:
-	/// even though this overrides any previously set remote store, it
-	/// does not reset any references previously handed out - they will
-	/// stick around.
-	pub fn set_remote_keystore<T>(&mut self, remote: Arc<T>)
-	where
-		T: Keystore + 'static,
-	{
-		self.remote = Some(Box::new(remote))
+		Ok(Self { local: keystore })
 	}
 
 	/// Returns an adapter to a `Keystore` implementation.
-	pub fn keystore(&self) -> Arc<dyn Keystore> {
-		if let Some(c) = self.remote.as_ref() {
-			c.keystore_ref()
-		} else {
-			self.local.clone()
-		}
+	pub fn keystore(&self) -> KeystorePtr {
+		self.local.clone()
 	}
 
 	/// Returns the local keystore if available

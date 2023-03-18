@@ -68,6 +68,9 @@ impl LocalKeystore {
 	}
 }
 
+/// Implementation details:
+/// - Key generation functions (e.g. `ed25519_generate_new`): if the `seed` parameter is `Some(_)`
+///   then the key will be ephemeral and stored in memory.
 impl Keystore for LocalKeystore {
 	fn keys(&self, id: KeyTypeId) -> std::result::Result<Vec<CryptoTypePublicPair>, TraitError> {
 		let raw_keys = self.0.read().raw_public_keys(id)?;

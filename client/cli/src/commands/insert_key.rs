@@ -67,7 +67,7 @@ impl InsertKeyCmd {
 		let config_dir = base_path.config_dir(chain_spec.id());
 
 		let (keystore, public) = match self.keystore_params.keystore_config(&config_dir)? {
-			(_, KeystoreConfig::Path { path, password }) => {
+			KeystoreConfig::Path { path, password } => {
 				let public = with_crypto_scheme!(self.scheme, to_vec(&suri, password.clone()))?;
 				let keystore: KeystorePtr = Arc::new(LocalKeystore::open(path, password)?);
 				(keystore, public)
