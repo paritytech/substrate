@@ -26,12 +26,12 @@ pub fn multi_miller_loop_generic<Curve: Pairing>(
 	let g1: Vec<_> = a_vec
 		.chunks(<Curve as Pairing>::G1Affine::generator().serialized_size(Compress::No))
 		.into_iter()
-		.map(|elem| deserialize_argument::<<Curve as Pairing>::G1Affine>(elem))
+		.map(|elem| deserialize_argument::<<Curve as Pairing>::G1Affine>(elem.into()))
 		.collect();
 	let g2: Vec<_> = b_vec
 		.chunks(<Curve as Pairing>::G2Affine::generator().serialized_size(Compress::No))
 		.into_iter()
-		.map(|elem| deserialize_argument::<<Curve as Pairing>::G2Affine>(elem))
+		.map(|elem| deserialize_argument::<<Curve as Pairing>::G2Affine>(elem.into()))
 		.collect();
 
 	let result = Curve::multi_miller_loop(g1, g2);
@@ -56,12 +56,12 @@ pub fn msm_g1_generic<Curve: Pairing>(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u
 	let bases: Vec<_> = bases
 		.chunks(<Curve as Pairing>::G1Affine::generator().serialized_size(Compress::No))
 		.into_iter()
-		.map(|a| deserialize_argument::<<Curve as Pairing>::G1Affine>(a))
+		.map(|a| deserialize_argument::<<Curve as Pairing>::G1Affine>(a.into()))
 		.collect();
 	let scalars: Vec<_> = scalars
 		.chunks(Curve::ScalarField::zero().serialized_size(Compress::No))
 		.into_iter()
-		.map(|a| deserialize_argument::<Curve::ScalarField>(a))
+		.map(|a| deserialize_argument::<Curve::ScalarField>(a.into()))
 		.collect();
 
 	let result =
@@ -74,12 +74,12 @@ pub fn msm_g2_generic<Curve: Pairing>(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u
 	let bases: Vec<_> = bases
 		.chunks(<Curve as Pairing>::G2Affine::generator().serialized_size(Compress::No))
 		.into_iter()
-		.map(|a| deserialize_argument::<<Curve as Pairing>::G2Affine>(a))
+		.map(|a| deserialize_argument::<<Curve as Pairing>::G2Affine>(a.into()))
 		.collect();
 	let scalars: Vec<_> = scalars
 		.chunks(Curve::ScalarField::zero().serialized_size(Compress::No))
 		.into_iter()
-		.map(|a| deserialize_argument::<Curve::ScalarField>(a))
+		.map(|a| deserialize_argument::<Curve::ScalarField>(a.into()))
 		.collect();
 
 	let result =
