@@ -1,5 +1,9 @@
 use crate::PairingError;
-use ark_ec::pairing::{MillerLoopOutput, Pairing};
+use ark_ec::{
+	pairing::{MillerLoopOutput, Pairing},
+	Group,
+};
+use ark_ff::Zero;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use ark_std::{io::Cursor, vec, vec::Vec};
 
@@ -20,12 +24,12 @@ pub fn multi_miller_loop_generic<Curve: Pairing>(
 	b_vec: Vec<u8>,
 ) -> Result<Vec<u8>, PairingError> {
 	let g1: Vec<_> = a_vec
-		.chunks(<Curve as Pairing>::G1Affine.serialized_size(Compress::No))
+		.chunks(<Curve as Pairing>::G1Affine::generator().serialized_size(Compress::No))
 		.into_iter()
 		.map(|elem| deserialize_argument::<<Curve as Pairing>::G1Affine>(elem))
 		.collect();
 	let g2: Vec<_> = b_vec
-		.chunks(<Curve as Pairing>::G2Affine.serialized_size(Compress::No))
+		.chunks(<Curve as Pairing>::G2Affine::generator().serialized_size(Compress::No))
 		.into_iter()
 		.map(|elem| deserialize_argument::<<Curve as Pairing>::G2Affine>(elem))
 		.collect();
@@ -50,12 +54,12 @@ pub fn final_exponentiation_generic<Curve: Pairing>(
 
 pub fn msm_g1_generic<Curve: Pairing>(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
 	let bases: Vec<_> = bases
-		.chunks(<Curve as Pairing>::G1Affine.serialized_size(Compress::No))
+		.chunks(<Curve as Pairing>::G1Affine::generator().serialized_size(Compress::No))
 		.into_iter()
 		.map(|a| deserialize_argument::<<Curve as Pairing>::G1Affine>(a))
 		.collect();
 	let scalars: Vec<_> = scalars
-		.chunks(Curve::ScalarField.serialized_size(Compress::No))
+		.chunks(Curve::ScalarField::zero().serialized_size(Compress::No))
 		.into_iter()
 		.map(|a| deserialize_argument::<Curve::ScalarField>(a))
 		.collect();
@@ -68,12 +72,12 @@ pub fn msm_g1_generic<Curve: Pairing>(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u
 
 pub fn msm_g2_generic<Curve: Pairing>(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
 	let bases: Vec<_> = bases
-		.chunks(<Curve as Pairing>::G2Affine.serialized_size(Compress::No))
+		.chunks(<Curve as Pairing>::G2Affine::generator().serialized_size(Compress::No))
 		.into_iter()
 		.map(|a| deserialize_argument::<<Curve as Pairing>::G2Affine>(a))
 		.collect();
 	let scalars: Vec<_> = scalars
-		.chunks(Curve::ScalarField.serialized_size(Compress::No))
+		.chunks(Curve::ScalarField::zero().serialized_size(Compress::No))
 		.into_iter()
 		.map(|a| deserialize_argument::<Curve::ScalarField>(a))
 		.collect();
