@@ -17,7 +17,8 @@
 
 use super::*;
 use crate::log;
-use frame_support::traits::OnRuntimeUpgrade;
+use frame_support::traits::Hooks;
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 pub mod v1 {
@@ -68,7 +69,7 @@ pub mod v1 {
 	///
 	/// Note: The depositor is not optional since they can never change.
 	pub struct MigrateToV1<T>(sp_std::marker::PhantomData<T>);
-	impl<T: Config> OnRuntimeUpgrade for MigrateToV1<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>> for MigrateToV1<T> {
 		fn on_runtime_upgrade() -> Weight {
 			let current = Pallet::<T>::current_storage_version();
 			let onchain = Pallet::<T>::on_chain_storage_version();
@@ -331,7 +332,7 @@ pub mod v2 {
 		}
 	}
 
-	impl<T: Config> OnRuntimeUpgrade for MigrateToV2<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>> for MigrateToV2<T> {
 		fn on_runtime_upgrade() -> Weight {
 			let current = Pallet::<T>::current_storage_version();
 			let onchain = Pallet::<T>::on_chain_storage_version();
@@ -396,7 +397,7 @@ pub mod v3 {
 
 	/// This migration removes stale bonded-pool metadata, if any.
 	pub struct MigrateToV3<T>(sp_std::marker::PhantomData<T>);
-	impl<T: Config> OnRuntimeUpgrade for MigrateToV3<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>> for MigrateToV3<T> {
 		fn on_runtime_upgrade() -> Weight {
 			let current = Pallet::<T>::current_storage_version();
 			let onchain = Pallet::<T>::on_chain_storage_version();
@@ -481,7 +482,7 @@ pub mod v4 {
 	/// This migration adds a `commission` field to every `BondedPoolInner`, if
 	/// any.
 	pub struct MigrateToV4<T, U>(sp_std::marker::PhantomData<(T, U)>);
-	impl<T: Config, U: Get<Perbill>> OnRuntimeUpgrade for MigrateToV4<T, U> {
+	impl<T: Config, U: Get<Perbill>> Hooks<BlockNumberFor<T>> for MigrateToV4<T, U> {
 		fn on_runtime_upgrade() -> Weight {
 			let current = Pallet::<T>::current_storage_version();
 			let onchain = Pallet::<T>::on_chain_storage_version();
