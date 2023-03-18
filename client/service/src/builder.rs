@@ -67,7 +67,7 @@ use sp_consensus::block_validation::{
 	BlockAnnounceValidator, Chain, DefaultBlockAnnounceValidator,
 };
 use sp_core::traits::{CodeExecutor, SpawnNamed};
-use sp_keystore::{Keystore, KeystorePtr};
+use sp_keystore::KeystorePtr;
 use sp_runtime::traits::{Block as BlockT, BlockIdTo, NumberFor, Zero};
 use std::{str::FromStr, sync::Arc, time::SystemTime};
 
@@ -85,23 +85,8 @@ pub type TFullCallExecutor<TBl, TExec> =
 type TFullParts<TBl, TRtApi, TExec> =
 	(TFullClient<TBl, TRtApi, TExec>, Arc<TFullBackend<TBl>>, KeystoreContainer, TaskManager);
 
-trait AsKeystoreRef {
-	fn keystore_ref(&self) -> KeystorePtr;
-}
-
-impl<T> AsKeystoreRef for Arc<T>
-where
-	T: Keystore + 'static,
-{
-	fn keystore_ref(&self) -> KeystorePtr {
-		self.clone()
-	}
-}
-
-/// Construct and hold different layers of Keystore wrappers
-pub struct KeystoreContainer {
-	local: Arc<LocalKeystore>,
-}
+/// Construct a local keystore shareable container
+pub struct KeystoreContainer(Arc<LocalKeystore>);
 
 impl KeystoreContainer {
 	/// Construct KeystoreContainer
@@ -112,25 +97,17 @@ impl KeystoreContainer {
 			KeystoreConfig::InMemory => LocalKeystore::in_memory(),
 		});
 
-		Ok(Self { local: keystore })
+		Ok(Self(keystore))
 	}
 
-	/// Returns an adapter to a `Keystore` implementation.
+	/// Returns a shared reference to a dynamic `Keystore` trait implementation.
 	pub fn keystore(&self) -> KeystorePtr {
-		self.local.clone()
+		self.0.clone()
 	}
 
-	/// Returns the local keystore if available
-	///
-	/// The function will return None if the available keystore is not a local keystore.
-	///
-	/// # Note
-	///
-	/// Using the [`LocalKeystore`] will result in loosing the ability to use any other keystore
-	/// implementation, like a remote keystore for example. Only use this if you a certain that you
-	/// require it!
-	pub fn local_keystore(&self) -> Option<Arc<LocalKeystore>> {
-		Some(self.local.clone())
+	/// Returns a shared reference to the local keystore .
+	pub fn local_keystore(&self) -> Arc<LocalKeystore> {
+		self.0.clone()
 	}
 }
 
