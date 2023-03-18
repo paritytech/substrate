@@ -37,7 +37,7 @@ use frame_support::{
 	storage::child,
 	traits::{
 		ConstU32, ConstU64, Contains, Currency, ExistenceRequirement, Get, LockableCurrency,
-		OnIdle, OnInitialize, ReservableCurrency, WithdrawReasons,
+		OnIdle, OnInitialize, WithdrawReasons,
 	},
 	weights::{constants::WEIGHT_REF_TIME_PER_SECOND, Weight},
 };
@@ -48,7 +48,7 @@ use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
 use sp_runtime::{
 	testing::{Header, H256},
 	traits::{BlakeTwo256, Convert, Hash, IdentityLookup},
-	AccountId32,
+	AccountId32, TokenError,
 };
 use std::{ops::Deref, sync::Arc};
 
@@ -318,6 +318,10 @@ impl pallet_balances::Config for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 	type WeightInfo = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type HoldIdentifier = ();
+	type MaxHolds = ();
 }
 
 impl pallet_timestamp::Config for Test {
@@ -1054,7 +1058,7 @@ fn transfer_allow_death_cannot_kill_account() {
 				total_balance,
 				ExistenceRequirement::AllowDeath,
 			),
-			pallet_balances::Error::<Test>::KeepAlive,
+			TokenError::Frozen,
 		);
 
 		assert_eq!(<Test as Config>::Currency::total_balance(&addr), total_balance);
@@ -1474,25 +1478,6 @@ fn transfer_return_code() {
 		.result
 		.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
-
-		// Contract has enough total balance in order to not go below the min balance
-		// threshold when transfering 100 balance but this balance is reserved so
-		// the transfer still fails.
-		Balances::make_free_balance_be(&addr, min_balance + 100);
-		Balances::reserve(&addr, min_balance + 100).unwrap();
-		let result = Contracts::bare_call(
-			ALICE,
-			addr,
-			0,
-			GAS_LIMIT,
-			None,
-			vec![],
-			false,
-			Determinism::Deterministic,
-		)
-		.result
-		.unwrap();
-		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
 	});
 }
 
@@ -1551,29 +1536,6 @@ fn call_return_code() {
 		Balances::make_free_balance_be(&addr_django, min_balance);
 
 		// Contract has only the minimal balance so any transfer will fail.
-		let result = Contracts::bare_call(
-			ALICE,
-			addr_bob.clone(),
-			0,
-			GAS_LIMIT,
-			None,
-			AsRef::<[u8]>::as_ref(&addr_django)
-				.iter()
-				.chain(&0u32.to_le_bytes())
-				.cloned()
-				.collect(),
-			false,
-			Determinism::Deterministic,
-		)
-		.result
-		.unwrap();
-		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
-
-		// Contract has enough total balance in order to not go below the min balance
-		// threshold when transfering 100 balance but this balance is reserved so
-		// the transfer still fails.
-		Balances::make_free_balance_be(&addr_bob, min_balance + 100);
-		Balances::reserve(&addr_bob, min_balance + 100).unwrap();
 		let result = Contracts::bare_call(
 			ALICE,
 			addr_bob.clone(),
@@ -1669,25 +1631,6 @@ fn instantiate_return_code() {
 
 		// Contract has only the minimal balance so any transfer will fail.
 		Balances::make_free_balance_be(&addr, min_balance);
-		let result = Contracts::bare_call(
-			ALICE,
-			addr.clone(),
-			0,
-			GAS_LIMIT,
-			None,
-			callee_hash.clone(),
-			false,
-			Determinism::Deterministic,
-		)
-		.result
-		.unwrap();
-		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
-
-		// Contract has enough total balance in order to not go below the min_balance
-		// threshold when transfering the balance but this balance is reserved so
-		// the transfer still fails.
-		Balances::make_free_balance_be(&addr, min_balance + 10_000);
-		Balances::reserve(&addr, min_balance + 10_000).unwrap();
 		let result = Contracts::bare_call(
 			ALICE,
 			addr.clone(),
@@ -2805,7 +2748,7 @@ fn gas_estimation_call_runtime() {
 
 		// Call something trivial with a huge gas limit so that we can observe the effects
 		// of pre-charging. This should create a difference between consumed and required.
-		let call = RuntimeCall::Balances(pallet_balances::Call::transfer {
+		let call = RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death {
 			dest: addr_callee,
 			value: min_balance * 10,
 		});

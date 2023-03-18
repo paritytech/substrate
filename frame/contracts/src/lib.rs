@@ -187,7 +187,7 @@ pub mod pallet {
 		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
 
 		/// The currency in which fees are paid and contract balances are held.
-		type Currency: ReservableCurrency<Self::AccountId>
+		type Currency: ReservableCurrency<Self::AccountId> // TODO: Move to fungible traits
 			+ Inspect<Self::AccountId, Balance = BalanceOf<Self>>;
 
 		/// The overarching event type.

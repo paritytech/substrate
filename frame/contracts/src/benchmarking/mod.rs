@@ -798,15 +798,15 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 		let deposit_account = instance.info()?.deposit_account().clone();
-		assert_eq!(T::Currency::total_balance(&beneficiary), 0u32.into());
+		assert_eq!(<T::Currency as Currency<_>>::total_balance(&beneficiary), 0u32.into());
 		assert_eq!(T::Currency::free_balance(&instance.account_id), Pallet::<T>::min_balance() * 2u32.into());
 		assert_ne!(T::Currency::free_balance(&deposit_account), 0u32.into());
 	}: call(origin, instance.addr.clone(), 0u32.into(), Weight::MAX, None, vec![])
 	verify {
 		if r > 0 {
-			assert_eq!(T::Currency::total_balance(&instance.account_id), 0u32.into());
-			assert_eq!(T::Currency::total_balance(&deposit_account), 0u32.into());
-			assert_eq!(T::Currency::total_balance(&beneficiary), Pallet::<T>::min_balance() * 2u32.into());
+			assert_eq!(<T::Currency as Currency<_>>::total_balance(&instance.account_id), 0u32.into());
+			assert_eq!(<T::Currency as Currency<_>>::total_balance(&deposit_account), 0u32.into());
+			assert_eq!(<T::Currency as Currency<_>>::total_balance(&beneficiary), Pallet::<T>::min_balance() * 2u32.into());
 		}
 	}
 
@@ -1573,12 +1573,12 @@ benchmarks! {
 		instance.set_balance(value * (r + 1).into());
 		let origin = RawOrigin::Signed(instance.caller.clone());
 		for account in &accounts {
-			assert_eq!(T::Currency::total_balance(account), 0u32.into());
+			assert_eq!(<T::Currency as Currency<_>>::total_balance(account), 0u32.into());
 		}
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 	verify {
 		for account in &accounts {
-			assert_eq!(T::Currency::total_balance(account), value);
+			assert_eq!(<T::Currency as Currency<_>>::total_balance(account), value);
 		}
 	}
 

@@ -37,6 +37,7 @@ fn origin_works() {
 #[test]
 fn stored_map_works() {
 	new_test_ext().execute_with(|| {
+		assert_eq!(System::inc_providers(&0), IncRefStatus::Created);
 		assert_ok!(System::insert(&0, 42));
 		assert!(!System::is_provider_required(&0));
 
@@ -56,6 +57,7 @@ fn stored_map_works() {
 
 		assert!(Killed::get().is_empty());
 		assert_ok!(System::remove(&0));
+		assert_ok!(System::dec_providers(&0));
 		assert_eq!(Killed::get(), vec![0u64]);
 	});
 }

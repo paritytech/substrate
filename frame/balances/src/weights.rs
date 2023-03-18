@@ -49,13 +49,14 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_balances.
 pub trait WeightInfo {
-	fn transfer() -> Weight;
+	fn transfer_allow_death() -> Weight;
 	fn transfer_keep_alive() -> Weight;
-	fn set_balance_creating() -> Weight;
-	fn set_balance_killing() -> Weight;
+	fn force_set_balance_creating() -> Weight;
+	fn force_set_balance_killing() -> Weight;
 	fn force_transfer() -> Weight;
 	fn transfer_all() -> Weight;
 	fn force_unreserve() -> Weight;
+	fn upgrade_accounts(u: u32, ) -> Weight;
 }
 
 /// Weights for pallet_balances using the Substrate node and recommended hardware.
@@ -63,7 +64,7 @@ pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Storage: System Account (r:1 w:1)
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
-	fn transfer() -> Weight {
+	fn transfer_allow_death() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `3593`
@@ -85,7 +86,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	}
 	/// Storage: System Account (r:1 w:1)
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
-	fn set_balance_creating() -> Weight {
+	fn force_set_balance_creating() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `174`
 		//  Estimated: `3593`
@@ -96,7 +97,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	}
 	/// Storage: System Account (r:1 w:1)
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
-	fn set_balance_killing() -> Weight {
+	fn force_set_balance_killing() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `174`
 		//  Estimated: `3593`
@@ -138,13 +139,28 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
+	/// Storage: System Account (r:999 w:999)
+	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
+	/// The range of component `u` is `[1, 1000]`.
+	fn upgrade_accounts(u: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `0 + u * (135 ±0)`
+		//  Estimated: `990 + u * (2603 ±0)`
+		// Minimum execution time: 19_851_000 picoseconds.
+		Weight::from_parts(20_099_000, 990)
+			// Standard Error: 15_586
+			.saturating_add(Weight::from_parts(14_892_860, 0).saturating_mul(u.into()))
+			.saturating_add(T::DbWeight::get().reads((1_u64).saturating_mul(u.into())))
+			.saturating_add(T::DbWeight::get().writes((1_u64).saturating_mul(u.into())))
+			.saturating_add(Weight::from_parts(0, 2603).saturating_mul(u.into()))
+	}
 }
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
 	/// Storage: System Account (r:1 w:1)
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
-	fn transfer() -> Weight {
+	fn transfer_allow_death() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `3593`
@@ -166,7 +182,7 @@ impl WeightInfo for () {
 	}
 	/// Storage: System Account (r:1 w:1)
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
-	fn set_balance_creating() -> Weight {
+	fn force_set_balance_creating() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `174`
 		//  Estimated: `3593`
@@ -177,7 +193,7 @@ impl WeightInfo for () {
 	}
 	/// Storage: System Account (r:1 w:1)
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
-	fn set_balance_killing() -> Weight {
+	fn force_set_balance_killing() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `174`
 		//  Estimated: `3593`
@@ -218,5 +234,20 @@ impl WeightInfo for () {
 		Weight::from_parts(16_859_000, 3593)
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
+	}
+	/// Storage: System Account (r:999 w:999)
+	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
+	/// The range of component `u` is `[1, 1000]`.
+	fn upgrade_accounts(u: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `0 + u * (135 ±0)`
+		//  Estimated: `990 + u * (2603 ±0)`
+		// Minimum execution time: 19_851_000 picoseconds.
+		Weight::from_parts(20_099_000, 990)
+			// Standard Error: 15_586
+			.saturating_add(Weight::from_parts(14_892_860, 0).saturating_mul(u.into()))
+			.saturating_add(RocksDbWeight::get().reads((1_u64).saturating_mul(u.into())))
+			.saturating_add(RocksDbWeight::get().writes((1_u64).saturating_mul(u.into())))
+			.saturating_add(Weight::from_parts(0, 2603).saturating_mul(u.into()))
 	}
 }
