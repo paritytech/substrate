@@ -38,8 +38,7 @@ use parking_lot::Mutex;
 use prometheus::Registry;
 use sc_client_api::{Backend, BlockBackend, BlockchainEvents, FinalityNotifications, Finalizer};
 use sc_consensus::BlockImport;
-use sc_network::ProtocolName;
-use sc_network_common::service::NetworkRequest;
+use sc_network::{NetworkRequest, ProtocolName};
 use sc_network_gossip::{GossipEngine, Network as GossipNetwork, Syncing as GossipSyncing};
 use sp_api::{HeaderT, NumberFor, ProvideRuntimeApi};
 use sp_blockchain::{
@@ -50,7 +49,7 @@ use sp_consensus_beefy::{
 	crypto::AuthorityId, BeefyApi, MmrRootHash, PayloadProvider, ValidatorSet, BEEFY_ENGINE_ID,
 	GENESIS_AUTHORITY_SET_ID,
 };
-use sp_keystore::SyncCryptoStorePtr;
+use sp_keystore::KeystorePtr;
 use sp_mmr_primitives::MmrApi;
 use sp_runtime::traits::{Block, Zero};
 use std::{collections::VecDeque, marker::PhantomData, sync::Arc};
@@ -198,7 +197,7 @@ pub struct BeefyParams<B: Block, BE, C, N, P, R, S> {
 	/// Runtime Api Provider
 	pub runtime: Arc<R>,
 	/// Local key store
-	pub key_store: Option<SyncCryptoStorePtr>,
+	pub key_store: Option<KeystorePtr>,
 	/// BEEFY voter network params
 	pub network_params: BeefyNetworkParams<B, N, S>,
 	/// Minimal delta between blocks, BEEFY should vote for
@@ -248,6 +247,8 @@ pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
 	} = network_params;
 
 	let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
+	// Default votes filter is to discard everything.
+	// Validator is updated later with correct starting round and set id.
 	let gossip_validator =
 		Arc::new(communication::gossip::GossipValidator::new(known_peers.clone()));
 	let mut gossip_engine = sc_network_gossip::GossipEngine::new(
@@ -285,6 +286,14 @@ pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
 				return
 			},
 		};
+	// Update the gossip validator with the right starting round and set id.
+	if let Err(e) = persisted_state
+		.current_gossip_filter()
+		.map(|f| gossip_validator.update_filter(f))
+	{
+		error!(target: LOG_TARGET, "Error: {:?}. Terminating.", e);
+		return
+	}
 
 	let worker_params = worker::WorkerParams {
 		backend,

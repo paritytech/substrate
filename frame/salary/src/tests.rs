@@ -99,11 +99,16 @@ fn set_status(id: u64, s: PaymentStatus) {
 
 pub struct TestPay;
 impl Pay for TestPay {
-	type AccountId = u64;
+	type Beneficiary = u64;
 	type Balance = u64;
 	type Id = u64;
+	type AssetKind = ();
 
-	fn pay(who: &Self::AccountId, amount: Self::Balance) -> Result<Self::Id, ()> {
+	fn pay(
+		who: &Self::Beneficiary,
+		_: Self::AssetKind,
+		amount: Self::Balance,
+	) -> Result<Self::Id, ()> {
 		PAID.with(|paid| *paid.borrow_mut().entry(*who).or_default() += amount);
 		Ok(LAST_ID.with(|lid| {
 			let x = *lid.borrow();
@@ -115,7 +120,7 @@ impl Pay for TestPay {
 		STATUS.with(|s| s.borrow().get(&id).cloned().unwrap_or(PaymentStatus::Unknown))
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	fn ensure_successful(_: &Self::AccountId, _: Self::Balance) {}
+	fn ensure_successful(_: &Self::Beneficiary, _: Self::Balance) {}
 	#[cfg(feature = "runtime-benchmarks")]
 	fn ensure_concluded(id: Self::Id) {
 		set_status(id, PaymentStatus::Failure)

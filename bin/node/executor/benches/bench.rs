@@ -167,7 +167,7 @@ fn test_blocks(
 	}];
 	block1_extrinsics.extend((0..20).map(|i| CheckedExtrinsic {
 		signed: Some((alice(), signed_extra(i, 0))),
-		function: RuntimeCall::Balances(pallet_balances::Call::transfer {
+		function: RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death {
 			dest: bob().into(),
 			value: 1 * DOLLARS,
 		}),

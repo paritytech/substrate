@@ -18,12 +18,12 @@
 
 //! Helpers for outgoing and incoming light client requests.
 
-/// For incoming light client requests.
-pub mod handler;
-
-use sc_network_common::{config::ProtocolId, request_responses::ProtocolConfig};
+use sc_network::{config::ProtocolId, request_responses::ProtocolConfig};
 
 use std::time::Duration;
+
+/// For incoming light client requests.
+pub mod handler;
 
 /// Generate the light client protocol name from the genesis hash and fork id.
 fn generate_protocol_name<Hash: AsRef<[u8]>>(genesis_hash: Hash, fork_id: Option<&str>) -> String {

@@ -495,7 +495,7 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 /// #[doc = include_str!("../README.md")]
 /// #[pallet_doc("../doc1.md")]
 /// #[pallet_doc("../doc2.md")]
-/// pub struct Pallet<T>(_);
+/// pub mod pallet {}
 /// ```
 ///
 /// The runtime metadata for this pallet contains the following
@@ -514,7 +514,7 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 /// /// Documentation for pallet 1
 /// /// Documentation for pallet 2
 /// /// Content of README.md
-/// pub struct Pallet<T>(_);
+/// pub mod pallet {}
 /// ```
 ///
 /// If you want to specify the file from which the documentation is loaded, you can use the
@@ -531,7 +531,7 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 ///
 /// This approach is beneficial when you use the `include_str` macro at the beginning of the file
 /// and want that documentation to extend to the runtime metadata, without reiterating the
-/// documentation on the module itself.
+/// documentation on the pallet module itself.
 #[proc_macro_attribute]
 pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
 	pallet::pallet(attr, item)
