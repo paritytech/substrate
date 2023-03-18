@@ -25,7 +25,7 @@ use ark_ed_on_bls12_377::{EdwardsConfig, EdwardsProjective};
 use sp_std::vec::Vec;
 
 /// Compute a multi scalar multiplication on G! through arkworks
-pub fn msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
+pub fn msm(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
 	let bases: Vec<_> = bases
 		.iter()
 		.map(|a| deserialize_argument::<twisted_edwards::Affine<EdwardsConfig>>(a))

@@ -28,7 +28,7 @@ use ark_ed_on_bls12_381::{EdwardsProjective, JubjubConfig, SWProjective};
 use sp_std::vec::Vec;
 
 /// Compute a multi scalar multiplication on G! through arkworks
-pub fn te_msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
+pub fn te_msm(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
 	let bases: Vec<_> = bases
 		.iter()
 		.map(|a| deserialize_argument::<TEAffine<JubjubConfig>>(a))
@@ -44,7 +44,7 @@ pub fn te_msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 }
 
 /// Compute a multi scalar multiplication on G! through arkworks
-pub fn sw_msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
+pub fn sw_msm(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
 	let bases: Vec<_> = bases
 		.iter()
 		.map(|a| deserialize_argument::<SWAffine<JubjubConfig>>(a))

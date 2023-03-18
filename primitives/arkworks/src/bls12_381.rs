@@ -29,7 +29,7 @@ use ark_bls12_381::Bls12_381;
 use sp_std::vec::Vec;
 
 /// Compute multi miller loop through arkworks
-pub fn multi_miller_loop(a: Vec<Vec<u8>>, b: Vec<Vec<u8>>) -> Result<Vec<u8>, PairingError> {
+pub fn multi_miller_loop(a: Vec<u8>, b: Vec<u8>) -> Result<Vec<u8>, PairingError> {
 	multi_miller_loop_generic::<Bls12_381>(a, b)
 }
 
@@ -39,11 +39,11 @@ pub fn final_exponentiation(target: Vec<u8>) -> Result<Vec<u8>, PairingError> {
 }
 
 /// Compute a multi scalar multiplication on G! through arkworks
-pub fn msm_g1(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
+pub fn msm_g1(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
 	msm_g1_generic::<Bls12_381>(bases, scalars)
 }
 
 /// Compute a multi scalar multiplication on G! through arkworks
-pub fn msm_g2(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
+pub fn msm_g2(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
 	msm_g2_generic::<Bls12_381>(bases, scalars)
 }
