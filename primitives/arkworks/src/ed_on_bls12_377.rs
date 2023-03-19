@@ -30,7 +30,7 @@ use sp_std::vec::Vec;
 pub fn msm(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
 	let bases: Vec<_> = serialize_iter_to_vec::<twisted_edwards::Affine<EdwardsConfig>>(bases);
 	let scalars: Vec<_> =
-		serialize_iter_to_vec::<<EdwardsConfig as CurveConfig>::ScalarField>(scalars);
+		serialize_iter_to_vec::<<EdwardsConfig as CurveConfig>::ScalarField>(scalars).unwrap();
 
 	let result = <EdwardsProjective as VariableBaseMSM>::msm(&bases, &scalars).unwrap();
 

@@ -31,9 +31,9 @@ use sp_std::vec::Vec;
 
 /// Compute a multi scalar multiplication on G! through arkworks
 pub fn te_msm(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
-	let bases: Vec<_> = serialize_iter_to_vec::<TEAffine<JubjubConfig>>(bases);
+	let bases: Vec<_> = serialize_iter_to_vec::<TEAffine<JubjubConfig>>(bases).unwrap();
 	let scalars: Vec<_> =
-		serialize_iter_to_vec::<<JubjubConfig as CurveConfig>::ScalarField>(scalars);
+		serialize_iter_to_vec::<<JubjubConfig as CurveConfig>::ScalarField>(scalars).unwrap();
 
 	let result = <EdwardsProjective as VariableBaseMSM>::msm(&bases, &scalars).unwrap();
 
@@ -44,7 +44,7 @@ pub fn te_msm(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
 pub fn sw_msm(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
 	let bases: Vec<_> = serialize_iter_to_vec::<SWAffine<JubjubConfig>>(bases);
 	let scalars: Vec<_> =
-		serialize_iter_to_vec::<<JubjubConfig as CurveConfig>::ScalarField>(scalars);
+		serialize_iter_to_vec::<<JubjubConfig as CurveConfig>::ScalarField>(scalars).unwrap();
 
 	let result = <SWProjective as VariableBaseMSM>::msm(&bases, &scalars).unwrap();
 
