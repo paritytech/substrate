@@ -26,7 +26,7 @@ where
 	T: CanonicalDeserialize + Sized,
 {
 	let mut cursor = Cursor::new(bytes.to_vec());
-	let length = u32::deserialize_uncompressed_unchecked(cursor.clone())?;
+	let length = bytes.len() / 8;
 	let mut result = Vec::with_capacity(length as usize);
 	for _ in 0..length {
 		result.push(T::deserialize_uncompressed_unchecked(&mut cursor)?);
