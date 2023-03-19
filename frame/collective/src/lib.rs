@@ -988,8 +988,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// * Each hash of a proposal that is stored inside `Proposals` must have a
 	/// call mapped to it inside the `ProposalsOf` storage map.
-	/// * `ProposalCount` must always equal to the number of proposals inside
-	/// the `Proposals` storage value.
+	/// * `ProposalCount` must always be more or equal to the number of
+	/// proposals inside the `Proposals` storage value. The reason why
+	/// `ProposalCount` can be more is because when a proposal is removed the
+	/// count is not deducted.
 	///
 	/// Looking at votes:
 	/// * The threshold of members required for a motion to pass cannot be
@@ -1003,7 +1005,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			assert!(Self::proposal_of(proposal).is_some());
 		});
 
-		assert_eq!(Self::proposals().into_iter().count(), Self::proposal_count() as usize);
+		assert!(Self::proposals().into_iter().count() <= Self::proposal_count() as usize);
 
 		Self::proposals().into_iter().for_each(|proposal| {
 			if let Some(votes) = Self::voting(proposal) {
