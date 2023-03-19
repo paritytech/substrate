@@ -15,7 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::interface::parse::{definition::selector, helper};
+use crate::{
+	interface,
+	interface::parse::{definition::selector, helper},
+};
 use frame_support_procedural_tools::get_doc_literals;
 use quote::ToTokens;
 use std::collections::HashMap;
@@ -125,13 +128,15 @@ impl ViewDef {
 
 			let selector_ty = match selector_attrs.first() {
 				Some(attr) => match attr {
-					ViewAttr::UseSelector(name) =>
-						selector::Type::Named { name: name.clone(), return_ty: first_arg_ty },
+					ViewAttr::UseSelector(name) => interface::SelectorType::Named {
+						name: name.clone(),
+						return_ty: first_arg_ty,
+					},
 					ViewAttr::NoSelector =>
 						unreachable!("checked during creation of the let binding"),
 					_ => unreachable!("checked during creation of the let binding"),
 				},
-				None => selector::Type::Default { return_ty: first_arg_ty },
+				None => interface::SelectorType::Default { return_ty: first_arg_ty },
 			};
 
 			(1, Some(selector_ty))
@@ -194,7 +199,7 @@ impl ViewDef {
 pub struct SingleViewDef {
 	/// Signal whether first argument must
 	/// be a selector
-	selector: Option<selector::Type>,
+	selector: Option<interface::SelectorType>,
 	/// Function name.
 	name: syn::Ident,
 	/// Information on args: `(is_compact, name, type)`

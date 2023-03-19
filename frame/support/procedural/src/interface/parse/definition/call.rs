@@ -15,7 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::interface::parse::{definition::selector, helper};
+use crate::{
+	interface,
+	interface::parse::{definition::selector, helper},
+};
 use frame_support_procedural_tools::get_doc_literals;
 use quote::ToTokens;
 use std::collections::HashMap;
@@ -163,13 +166,15 @@ impl CallDef {
 
 			let selector_ty = match selector_attrs.first() {
 				Some(attr) => match attr {
-					CallAttr::UseSelector(name) =>
-						selector::Type::Named { name: name.clone(), return_ty: first_arg_ty },
+					CallAttr::UseSelector(name) => interface::SelectorType::Named {
+						name: name.clone(),
+						return_ty: first_arg_ty,
+					},
 					CallAttr::NoSelector =>
 						unreachable!("checked during creation of the let binding"),
 					_ => unreachable!("checked during creation of the let binding"),
 				},
-				None => selector::Type::Default { return_ty: first_arg_ty },
+				None => interface::SelectorType::Default { return_ty: first_arg_ty },
 			};
 
 			(2, Some(selector_ty))
@@ -225,7 +230,7 @@ impl CallDef {
 pub struct SingleCallDef {
 	/// Signal whether second argument must
 	/// be a selector
-	selector: Option<selector::Type>,
+	selector: Option<interface::SelectorType>,
 	/// Function name.
 	name: syn::Ident,
 	/// Information on args: `(is_compact, name, type)`

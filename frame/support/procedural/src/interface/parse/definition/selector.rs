@@ -19,11 +19,6 @@ use crate::interface::parse::helper;
 use quote::ToTokens;
 use syn::spanned::Spanned;
 
-pub enum Type {
-	Default { return_ty: Box<syn::Type> },
-	Named { name: syn::Ident, return_ty: Box<syn::Type> },
-}
-
 pub struct SelectorDef {
 	selectors: Vec<SingleSelectorDef>,
 }

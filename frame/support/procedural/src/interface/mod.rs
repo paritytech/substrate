@@ -37,3 +37,8 @@ pub fn interface(
 		Err(e) => e.to_compile_error().into(),
 	}
 }
+
+pub enum SelectorType {
+	Default { return_ty: Box<syn::Type> },
+	Named { name: syn::Ident, return_ty: Box<syn::Type> },
+}
