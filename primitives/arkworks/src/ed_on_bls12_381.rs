@@ -19,7 +19,7 @@
 
 #![warn(missing_docs)]
 
-use crate::utils::{deserialize_iter_to_vec, serialize_result};
+use crate::utils::{deserialize_argument, serialize_iter_to_vec, serialize_result};
 use ark_ec::{
 	models::CurveConfig, short_weierstrass::Affine as SWAffine,
 	twisted_edwards::Affine as TEAffine, AffineRepr, Group, VariableBaseMSM,
@@ -31,9 +31,9 @@ use sp_std::vec::Vec;
 
 /// Compute a multi scalar multiplication on G! through arkworks
 pub fn te_msm(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
-	let bases: Vec<_> = deserialize_iter_to_vec::<TEAffine<JubjubConfig>>(&bases).unwrap();
+	let bases: Vec<_> = serialize_iter_to_vec::<TEAffine<JubjubConfig>>(bases).unwrap();
 	let scalars: Vec<_> =
-		deserialize_iter_to_vec::<<JubjubConfig as CurveConfig>::ScalarField>(&scalars).unwrap();
+		serialize_iter_to_vec::<<JubjubConfig as CurveConfig>::ScalarField>(scalars).unwrap();
 
 	let result = <EdwardsProjective as VariableBaseMSM>::msm(&bases, &scalars).unwrap();
 
@@ -42,11 +42,11 @@ pub fn te_msm(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
 
 /// Compute a multi scalar multiplication on G! through arkworks
 pub fn sw_msm(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
-	let bases: Vec<_> = deserialize_iter_to_vec::<SWAffine<JubjubConfig>>(&bases).unwrap();
+	let bases: Vec<_> = serialize_iter_to_vec::<SWAffine<JubjubConfig>>(bases).unwrap();
 	let scalars: Vec<_> =
-		deserialize_iter_to_vec::<<JubjubConfig as CurveConfig>::ScalarField>(&scalars).unwrap();
+		serialize_iter_to_vec::<<JubjubConfig as CurveConfig>::ScalarField>(scalars).unwrap();
 
-	let result = <SWProjective as VariableBaseMSM>::msm(&bases, &scalars).unwrap();
+	let result = <SWProjective as VariableBaseMSM>::msm(&bases, &scalars[..]).unwrap();
 
 	serialize_result(result)
 }
