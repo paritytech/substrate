@@ -1583,9 +1583,11 @@ benchmarks! {
 	}
 
 	// We call unique accounts.
+	//
+	// This is a slow call: We redeuce the number of runs.
 	#[pov_mode = Measured]
 	seal_call {
-		let r in 0 .. API_BENCHMARK_RUNS;
+		let r in 0 .. API_BENCHMARK_RUNS / 2;
 		let dummy_code = WasmModule::<T>::dummy_with_bytes(0);
 		let callees = (0..r)
 			.map(|i| Contract::with_index(i + 1, dummy_code.clone(), vec![]))
@@ -1642,9 +1644,10 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	// This is a slow call: We redeuce the number of runs.
 	#[pov_mode = Measured]
 	seal_delegate_call {
-		let r in 0 .. API_BENCHMARK_RUNS;
+		let r in 0 .. API_BENCHMARK_RUNS / 2;
 		let hashes = (0..r)
 			.map(|i| {
 				let code = WasmModule::<T>::dummy_with_bytes(i);
@@ -1751,9 +1754,10 @@ benchmarks! {
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, bytes)
 
 	// We assume that every instantiate sends at least the minimum balance.
+	// This is a slow call: We redeuce the number of runs.
 	#[pov_mode = Measured]
 	seal_instantiate {
-		let r in 0 .. API_BENCHMARK_RUNS;
+		let r in 0 .. API_BENCHMARK_RUNS / 2;
 		let hashes = (0..r)
 			.map(|i| {
 				let code = WasmModule::<T>::from(ModuleDefinition {
@@ -2018,9 +2022,10 @@ benchmarks! {
 
 	// Only calling the function itself with valid arguments.
 	// It generates different private keys and signatures for the message "Hello world".
+	// This is a slow call: We redeuce the number of runs.
 	#[pov_mode = Measured]
 	seal_ecdsa_recover {
-		let r in 0 .. API_BENCHMARK_RUNS;
+		let r in 0 .. API_BENCHMARK_RUNS / 10;
 
 		let message_hash = sp_io::hashing::blake2_256("Hello world".as_bytes());
 		let key_type = sp_core::crypto::KeyTypeId(*b"code");
@@ -2067,9 +2072,10 @@ benchmarks! {
 
 	// Only calling the function itself for the list of
 	// generated different ECDSA keys.
+	// This is a slow call: We redeuce the number of runs.
 	#[pov_mode = Measured]
 	seal_ecdsa_to_eth_address {
-		let r in 0 .. API_BENCHMARK_RUNS;
+		let r in 0 .. API_BENCHMARK_RUNS / 10;
 		let key_type = sp_core::crypto::KeyTypeId(*b"code");
 		let pub_keys_bytes = (0..r)
 			.flat_map(|_| {
