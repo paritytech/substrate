@@ -21,12 +21,12 @@ pub fn multi_miller_loop_generic<Curve: Pairing>(
 ) -> Result<Vec<u8>, PairingError> {
 	let g1: Vec<_> = a_vec
 		.chunks(<Curve as Pairing>::G1Affine.serialized_size(Compress::No))
-		.into_iter()
+		.iter()
 		.map(|elem| deserialize_argument::<<Curve as Pairing>::G1Affine>(elem))
 		.collect();
 	let g2: Vec<_> = b_vec
 		.chunks(<Curve as Pairing>::G2Affine.serialized_size(Compress::No))
-		.into_iter()
+		.iter()
 		.map(|elem| deserialize_argument::<<Curve as Pairing>::G2Affine>(elem))
 		.collect();
 
@@ -51,7 +51,7 @@ pub fn final_exponentiation_generic<Curve: Pairing>(
 pub fn msm_g1_generic<Curve: Pairing>(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
 	let bases: Vec<_> = bases
 		.chunks(<Curve as Pairing>::G1Affine.serialized_size(Compress::No))
-		.into_iter()
+		.iter()
 		.map(|a| deserialize_argument::<<Curve as Pairing>::G1Affine>(a))
 		.collect();
 	let scalars: Vec<_> =
@@ -66,7 +66,7 @@ pub fn msm_g1_generic<Curve: Pairing>(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u
 pub fn msm_g2_generic<Curve: Pairing>(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
 	let bases: Vec<_> = bases
 		.chunks(<Curve as Pairing>::G2Affine.serialized_size(Compress::No))
-		.into_iter()
+		.iter()
 		.map(|a| deserialize_argument::<<Curve as Pairing>::G2Affine>(a))
 		.collect();
 	let scalars: Vec<_> =
