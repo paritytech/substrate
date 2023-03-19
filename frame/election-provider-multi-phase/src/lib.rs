@@ -746,28 +746,27 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(now: T::BlockNumber) -> Weight {
 			// First we check whether there is a phase that should be forced.
-			if Self::force_phase().is_some() {
-				match Self::force_phase() {
-					Some(Phase::Signed) => {
-						// If the current phase is not `Phase::Off` proceed to the next round.
-						if !Self::current_phase().is_off() {
-							Self::do_force_rotate_round();
-						}
-						<ForcePhase<T>>::kill();
+			match <ForcePhase<T>>::take() {
+				// Only start a signed phase if the current phase is `Off` or `Emergency` since we
+				// don't want to throw away the current solution.
+				Some(Phase::Signed)
+					if Self::current_phase().is_off() || Self::current_phase().is_emergency() =>
+				{
+					if Self::current_phase().is_emergency() {
+						Self::do_force_rotate_round();
+					}
+					return Self::start_signed_phase()
+						.saturating_add(T::DbWeight::get().reads_writes(1, 1))
+				},
+				Some(Phase::Emergency) => {
+					// We remove the current best solution.
+					<QueuedSolution<T>>::kill();
+					Self::phase_transition(Phase::Emergency);
 
-						return Self::start_signed_phase()
-							.saturating_add(T::DbWeight::get().reads_writes(1, 1))
-					},
-					Some(Phase::Emergency) => {
-						// We remove the current best solution.
-						<QueuedSolution<T>>::kill();
-						<CurrentPhase<T>>::put(Phase::Emergency);
-
-						return T::DbWeight::get().writes(2)
-					},
-					_ => {},
-				};
-			}
+					return T::DbWeight::get().writes(2)
+				},
+				_ => {},
+			};
 
 			let next_election = T::DataProvider::next_election_prediction(now).max(now);
 
@@ -1383,7 +1382,6 @@ pub mod pallet {
 
 	/// Stores the phase we want to force during `on_initialize`.
 	#[pallet::storage]
-	#[pallet::getter(fn force_phase)]
 	pub type ForcePhase<T: Config> = StorageValue<_, Phase<T::BlockNumber>, OptionQuery>;
 
 	/// The current storage version.
@@ -1427,10 +1425,6 @@ impl<T: Config> Pallet<T> {
 
 	/// Remove the current solutions and proceed to the following round.
 	fn do_force_rotate_round() {
-		if Self::current_phase().is_signed() {
-			Self::finalize_signed_phase();
-		}
-
 		<QueuedSolution<T>>::kill();
 		Self::rotate_round();
 	}
@@ -2054,7 +2048,7 @@ mod tests {
 	}
 
 	#[test]
-	fn force_start_signed_phase_works() {
+	fn force_start_signed_phase_from_signed_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(1);
 			assert_eq!(System::block_number(), 1);
@@ -2075,35 +2069,104 @@ mod tests {
 				crate::mock::RuntimeOrigin::root(),
 				Phase::Signed
 			));
-			assert_eq!(MultiPhase::force_phase(), Some(Phase::Signed));
+			assert_eq!(<ForcePhase<Runtime>>::get(), Some(Phase::Signed));
 
 			roll_to(2);
+
 			assert!(MultiPhase::current_phase().is_signed());
 			assert!(MultiPhase::snapshot().is_some());
-			assert!(MultiPhase::force_phase().is_none());
-			// Didn't proceed to following round since the previos phase was `Phase::Off`.
+
+			assert!(<ForcePhase<Runtime>>::get().is_none());
+			assert_eq!(MultiPhase::round(), 1);
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },]
+			);
+		});
+	}
+
+	#[test]
+	fn force_start_signed_phase_from_emergency_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to(1);
+			assert_eq!(System::block_number(), 1);
+
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+			assert_eq!(MultiPhase::round(), 1);
+
+			// We first force the emergency phase.
+			assert_ok!(MultiPhase::force_start_phase(
+				crate::mock::RuntimeOrigin::root(),
+				Phase::Emergency
+			));
+			assert_eq!(<ForcePhase<Runtime>>::get(), Some(Phase::Emergency));
+
+			roll_to(2);
+
+			assert!(MultiPhase::current_phase().is_emergency());
+			assert!(<ForcePhase<Runtime>>::get().is_none());
 			assert_eq!(MultiPhase::round(), 1);
 
 			assert_ok!(MultiPhase::force_start_phase(
 				crate::mock::RuntimeOrigin::root(),
 				Phase::Signed
 			));
-			assert_eq!(MultiPhase::force_phase(), Some(Phase::Signed));
 
 			roll_to(3);
+
 			assert!(MultiPhase::current_phase().is_signed());
 			assert!(MultiPhase::snapshot().is_some());
-			// Proceeded to the following roung because the previous phase was signed.
+
+			assert!(<ForcePhase<Runtime>>::get().is_none());
 			assert_eq!(MultiPhase::round(), 2);
+
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
-					Event::PhaseTransitioned { from: Phase::Signed, to: Phase::Off, round: 2 },
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Emergency, round: 1 },
+					Event::PhaseTransitioned { from: Phase::Emergency, to: Phase::Off, round: 2 },
 					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 2 },
 				]
 			);
-		})
+		});
+	}
+
+	#[test]
+	fn force_start_signed_phase_avoids_transition() {
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to(1);
+			assert_eq!(System::block_number(), 1);
+
+			// First proceed to the signed phase.
+			roll_to_signed();
+			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+
+			assert_ok!(MultiPhase::force_start_phase(
+				crate::mock::RuntimeOrigin::root(),
+				Phase::Signed
+			));
+
+			roll_to(3);
+
+			// Nothing happened since we cannot force signed from signed phase.
+			assert!(MultiPhase::current_phase().is_signed());
+			assert!(MultiPhase::snapshot().is_some());
+			assert_eq!(MultiPhase::round(), 1);
+
+			// We also cannot force signed from unsigned phase.
+			roll_to_unsigned();
+			assert!(MultiPhase::current_phase().is_unsigned());
+
+			assert_ok!(MultiPhase::force_start_phase(
+				crate::mock::RuntimeOrigin::root(),
+				Phase::Signed
+			));
+
+			roll_to(4);
+
+			assert!(MultiPhase::current_phase().is_unsigned());
+		});
 	}
 
 	#[test]
