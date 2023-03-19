@@ -1136,11 +1136,7 @@ pub mod pallet {
 		/// The dispatch origin for this call must be `ForceOrigin`.
 		#[pallet::call_index(5)]
 		#[pallet::weight(({
-			if current_phase.is_signed() {
-				T::WeightInfo::force_rotate_round_from_signed()
-			}else {
-				T::WeightInfo::force_rotate_round()
-			}
+			T::WeightInfo::force_rotate_round()
 		}, DispatchClass::Operational))]
 		pub fn force_rotate_round(
 			origin: OriginFor<T>,

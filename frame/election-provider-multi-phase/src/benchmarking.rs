@@ -389,13 +389,6 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(<MultiPhase<T>>::round(), 2);
 	}
 
-	force_rotate_round_from_signed {
-		<CurrentPhase<T>>::put(Phase::Signed);
-	}: force_rotate_round(RawOrigin::Root, Phase::Signed)
-	verify {
-		assert_eq!(<MultiPhase<T>>::round(), 2);
-	}
-
 	// This is checking a valid solution. The worse case is indeed a valid solution.
 	feasibility_check {
 		// number of votes in snapshot.
