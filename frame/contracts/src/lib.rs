@@ -100,7 +100,7 @@ pub mod weights;
 mod tests;
 
 use crate::{
-	exec::{AccountIdOf, ErrorOrigin, ExecError, Executable, Stack as ExecStack},
+	exec::{AccountIdOf, ErrorOrigin, ExecError, Executable, Key, Stack as ExecStack},
 	gas::GasMeter,
 	storage::{meter::Meter as StorageMeter, ContractInfo, DeletedContract},
 	wasm::{OwnerInfo, PrefabWasmModule, TryInstantiate},
@@ -131,7 +131,7 @@ use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 pub use crate::{
 	address::{AddressGenerator, DefaultAddressGenerator},
-	exec::{Frame, VarSizedKey as StorageKey},
+	exec::Frame,
 	migration::Migration,
 	pallet::*,
 	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
@@ -187,7 +187,7 @@ pub mod pallet {
 		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
 
 		/// The currency in which fees are paid and contract balances are held.
-		type Currency: ReservableCurrency<Self::AccountId>
+		type Currency: ReservableCurrency<Self::AccountId> // TODO: Move to fungible traits
 			+ Inspect<Self::AccountId, Balance = BalanceOf<Self>>;
 
 		/// The overarching event type.
@@ -1265,7 +1265,9 @@ impl<T: Config> Pallet<T> {
 			ContractInfoOf::<T>::get(&address).ok_or(ContractAccessError::DoesntExist)?;
 
 		let maybe_value = contract_info.read(
-			&StorageKey::<T>::try_from(key).map_err(|_| ContractAccessError::KeyDecodingFailed)?,
+			&Key::<T>::try_from_var(key)
+				.map_err(|_| ContractAccessError::KeyDecodingFailed)?
+				.into(),
 		);
 		Ok(maybe_value)
 	}
