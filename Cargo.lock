@@ -238,9 +238,9 @@ checksum = "bddcadddf5e9015d310179a59bb28c4d4b9920ad0f11e8e14dbadf654890c9a6"
 
 [[package]]
 name = "ark-algebra-test-templates"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "deca58b5061716327c0a180066ddae1518093806baddc064ff96b105b08d5fac"
+checksum = "400bd3a79c741b1832f1416d4373ae077ef82ca14a8b4cee1248a2f11c8b9172"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -293,9 +293,9 @@ dependencies = [
 
 [[package]]
 name = "ark-ec"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c60370a92f8e1a5f053cad73a862e1b99bc642333cd676fa11c0c39f80f4ac2"
+checksum = "defd9a439d56ac24968cca0571f598a61bc8c55f71d50a89cda591cb750670ba"
 dependencies = [
  "ark-ff",
  "ark-poly",
@@ -334,9 +334,9 @@ dependencies = [
 
 [[package]]
 name = "ark-ff"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c2d42532524bee1da5a4f6f733eb4907301baa480829557adcff5dfaeee1d9a"
+checksum = "ec847af850f44ad29048935519032c33da8aa03340876d351dfab5660d2966ba"
 dependencies = [
  "ark-ff-asm",
  "ark-ff-macros",
@@ -354,9 +354,9 @@ dependencies = [
 
 [[package]]
 name = "ark-ff-asm"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d6873aaba7959593d89babed381d33e2329453368f1bf3c67e07686a1c1056f"
+checksum = "3ed4aa4fe255d0bc6d79373f7e31d2ea147bcf486cba1be5ba7ea85abdb92348"
 dependencies = [
  "quote",
  "syn 1.0.109",
@@ -364,9 +364,9 @@ dependencies = [
 
 [[package]]
 name = "ark-ff-macros"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3c2e7d0f2d67cc7fc925355c74d36e7eda19073639be4a0a233d4611b8c959d"
+checksum = "7abe79b0e4288889c4574159ab790824d0033b9fdcb2a112a3182fac2e514565"
 dependencies = [
  "num-bigint",
  "num-traits",
@@ -377,9 +377,9 @@ dependencies = [
 
 [[package]]
 name = "ark-poly"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f6ec811462cabe265cfe1b102fcfe3df79d7d2929c2425673648ee9abfd0272"
+checksum = "d320bfc44ee185d899ccbadfa8bc31aab923ce1558716e1997a1e74057fe86bf"
 dependencies = [
  "ark-ff",
  "ark-serialize",
@@ -419,9 +419,9 @@ dependencies = [
 
 [[package]]
 name = "ark-serialize"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7e735959bc173ea4baf13327b19c22d452b8e9e8e8f7b7fc34e6bf0e316c33e"
+checksum = "adb7b85a02b83d2f22f89bd5cac66c9c89474240cb6207cb1efc16d098e822a5"
 dependencies = [
  "ark-serialize-derive",
  "ark-std",
@@ -431,9 +431,9 @@ dependencies = [
 
 [[package]]
 name = "ark-serialize-derive"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd34f0920d995d2c932f38861c416f70de89a6de9875876b012557079603e6cc"
+checksum = "ae3281bc6d0fd7e549af32b52511e1302185bd688fd3359fa36423346ff682ea"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -638,7 +638,7 @@ checksum = "86ea188f25f0255d8f92797797c97ebf5631fa88178beb1a46fdf5622c9a00e4"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.0",
+ "syn 2.0.2",
 ]
 
 [[package]]
@@ -773,7 +773,7 @@ version = "0.64.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4243e6031260db77ede97ad86c27e501d646a27ab57b59a574f725d98ab1fb4"
 dependencies = [
- "bitflags",
+ "bitflags 1.3.2",
  "cexpr",
  "clang-sys",
  "lazy_static",
@@ -792,6 +792,12 @@ name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
+
+[[package]]
+name = "bitflags"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "487f1e0fcbe47deb8b0574e646def1c903389d95241dd1bbcc6ce4a715dfc0c1"
 
 [[package]]
 name = "bitvec"
@@ -1108,7 +1114,7 @@ name = "chain-spec-builder"
 version = "2.0.0"
 dependencies = [
  "ansi_term",
- "clap 4.1.10",
+ "clap 4.1.11",
  "node-cli",
  "rand 0.8.5",
  "sc-chain-spec",
@@ -1226,7 +1232,7 @@ version = "3.2.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71655c45cb9845d3270c9d6df84ebe72b4dad3c2ba3f7023ad47c144e4e473a5"
 dependencies = [
- "bitflags",
+ "bitflags 1.3.2",
  "clap_lex 0.2.4",
  "indexmap",
  "textwrap",
@@ -1234,11 +1240,11 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.1.10"
+version = "4.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce38afc168d8665cfc75c7b1dd9672e50716a137f433f070991619744a67342a"
+checksum = "42dfd32784433290c51d92c438bb72ea5063797fc3cc9a21a8c4346bebbb2098"
 dependencies = [
- "bitflags",
+ "bitflags 2.0.2",
  "clap_derive",
  "clap_lex 0.3.3",
  "is-terminal",
@@ -1253,7 +1259,7 @@ version = "4.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37686beaba5ac9f3ab01ee3172f792fc6ffdd685bfb9e63cfef02c0571a4e8e1"
 dependencies = [
- "clap 4.1.10",
+ "clap 4.1.11",
 ]
 
 [[package]]
@@ -1707,7 +1713,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "scratch",
- "syn 2.0.0",
+ "syn 2.0.2",
 ]
 
 [[package]]
@@ -1724,7 +1730,7 @@ checksum = "631569015d0d8d54e6c241733f944042623ab6df7bc3be7466874b05fcdb1c5f"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.0",
+ "syn 2.0.2",
 ]
 
 [[package]]
@@ -2416,7 +2422,7 @@ dependencies = [
  "Inflector",
  "array-bytes",
  "chrono",
- "clap 4.1.10",
+ "clap 4.1.11",
  "comfy-table",
  "frame-benchmarking",
  "frame-support",
@@ -2507,7 +2513,7 @@ dependencies = [
 name = "frame-election-solution-type-fuzzer"
 version = "2.0.0-alpha.5"
 dependencies = [
- "clap 4.1.10",
+ "clap 4.1.11",
  "frame-election-provider-solution-type",
  "frame-election-provider-support",
  "frame-support",
@@ -2576,7 +2582,7 @@ name = "frame-support"
 version = "4.0.0-dev"
 dependencies = [
  "assert_matches",
- "bitflags",
+ "bitflags 1.3.2",
  "environmental",
  "frame-metadata",
  "frame-support-procedural",
@@ -3020,7 +3026,7 @@ version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccf7f68c2995f392c49fffb4f95ae2c873297830eb25c6bc4c114ce8f4562acc"
 dependencies = [
- "bitflags",
+ "bitflags 1.3.2",
  "libc",
  "libgit2-sys",
  "log",
@@ -3481,9 +3487,9 @@ checksum = "59ce5ef949d49ee85593fc4d3f3f95ad61657076395cbbce23e2121fc5542074"
 
 [[package]]
 name = "io-lifetimes"
-version = "1.0.7"
+version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76e86b86ae312accbf05ade23ce76b625e0e47a255712b7414037385a1c05380"
+checksum = "0dd6da19f25979c7270e70fa95ab371ec3b701cd0eefc47667a09785b3c59155"
 dependencies = [
  "hermit-abi 0.3.1",
  "libc",
@@ -3516,13 +3522,13 @@ checksum = "30e22bd8629359895450b59ea7a776c850561b96a3b1d31321c1949d9e6c9146"
 
 [[package]]
 name = "is-terminal"
-version = "0.4.4"
+version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21b6b32576413a8e69b90e952e4a026476040d81017b80445deda5f2d3921857"
+checksum = "8687c819457e979cc940d09cb16e42a1bf70aa6b60a549de6d3a62a0ee90c69e"
 dependencies = [
  "hermit-abi 0.3.1",
- "io-lifetimes 1.0.7",
- "rustix 0.36.9",
+ "io-lifetimes 1.0.8",
+ "rustix 0.36.10",
  "windows-sys 0.45.0",
 ]
 
@@ -4624,7 +4630,7 @@ version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b20a59d985586e4a5aef64564ac77299f8586d8be6cf9106a5a40207e8908efb"
 dependencies = [
- "rustix 0.36.9",
+ "rustix 0.36.10",
 ]
 
 [[package]]
@@ -4949,7 +4955,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d9ea4302b9759a7a88242299225ea3688e63c85ea136371bb6cf94fd674efaab"
 dependencies = [
  "anyhow",
- "bitflags",
+ "bitflags 1.3.2",
  "byteorder",
  "libc",
  "netlink-packet-core",
@@ -5002,7 +5008,7 @@ version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fa52e972a9a719cecb6864fb88568781eb706bac2cd1d4f04a648542dbf78069"
 dependencies = [
- "bitflags",
+ "bitflags 1.3.2",
  "cfg-if",
  "libc",
  "memoffset 0.6.5",
@@ -5014,7 +5020,7 @@ version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bfdda3d196821d6af13126e40375cdf7da646a96114af134d5f417a9a1dc8e1a"
 dependencies = [
- "bitflags",
+ "bitflags 1.3.2",
  "cfg-if",
  "libc",
  "memoffset 0.7.1",
@@ -5027,7 +5033,7 @@ name = "node-bench"
 version = "0.9.0-dev"
 dependencies = [
  "array-bytes",
- "clap 4.1.10",
+ "clap 4.1.11",
  "derive_more",
  "fs_extra",
  "futures",
@@ -5064,7 +5070,7 @@ version = "3.0.0-dev"
 dependencies = [
  "array-bytes",
  "assert_cmd",
- "clap 4.1.10",
+ "clap 4.1.11",
  "clap_complete",
  "criterion",
  "frame-benchmarking-cli",
@@ -5185,7 +5191,7 @@ dependencies = [
 name = "node-inspect"
 version = "0.9.0-dev"
 dependencies = [
- "clap 4.1.10",
+ "clap 4.1.11",
  "parity-scale-codec",
  "sc-cli",
  "sc-client-api",
@@ -5244,7 +5250,7 @@ dependencies = [
 name = "node-runtime-generate-bags"
 version = "3.0.0"
 dependencies = [
- "clap 4.1.10",
+ "clap 4.1.11",
  "generate-bags",
  "kitchensink-runtime",
 ]
@@ -5253,7 +5259,7 @@ dependencies = [
 name = "node-template"
 version = "4.0.0-dev"
 dependencies = [
- "clap 4.1.10",
+ "clap 4.1.11",
  "frame-benchmarking",
  "frame-benchmarking-cli",
  "frame-system",
@@ -5915,7 +5921,7 @@ version = "4.0.0-dev"
 dependencies = [
  "array-bytes",
  "assert_matches",
- "bitflags",
+ "bitflags 1.3.2",
  "env_logger 0.9.3",
  "environmental",
  "frame-benchmarking",
@@ -5952,7 +5958,7 @@ dependencies = [
 name = "pallet-contracts-primitives"
 version = "7.0.0"
 dependencies = [
- "bitflags",
+ "bitflags 1.3.2",
  "parity-scale-codec",
  "scale-info",
  "sp-runtime",
@@ -7437,7 +7443,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e1f879b2998099c2d69ab9605d145d5b661195627eccc680002c4918a7fb6fa"
 dependencies = [
  "autocfg",
- "bitflags",
+ "bitflags 1.3.2",
  "cfg-if",
  "concurrent-queue",
  "libc",
@@ -7937,7 +7943,7 @@ version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fb5a58c1855b4b6819d59012155603f0b22ad30cad752600aadfcb695265519a"
 dependencies = [
- "bitflags",
+ "bitflags 1.3.2",
 ]
 
 [[package]]
@@ -7968,7 +7974,7 @@ checksum = "8d2275aab483050ab2a7364c1a46604865ee7d6906684e08db0f090acf74f9e7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.0",
+ "syn 2.0.2",
 ]
 
 [[package]]
@@ -8015,7 +8021,7 @@ version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "76e189c2369884dce920945e2ddf79b3dff49e071a167dd1817fa9c4c00d512e"
 dependencies = [
- "bitflags",
+ "bitflags 1.3.2",
  "libc",
  "mach",
  "winapi",
@@ -8179,7 +8185,7 @@ version = "0.35.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "727a1a6d65f786ec22df8a81ca3121107f235970dc1705ed681d3e6e8b9cd5f9"
 dependencies = [
- "bitflags",
+ "bitflags 1.3.2",
  "errno",
  "io-lifetimes 0.7.5",
  "libc",
@@ -8189,13 +8195,13 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.36.9"
+version = "0.36.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd5c6ff11fecd55b40746d1995a02f2eb375bf8c00d192d521ee09f42bef37bc"
+checksum = "2fe885c3a125aa45213b68cc1472a49880cb5923dc23f522ad2791b882228778"
 dependencies = [
- "bitflags",
+ "bitflags 1.3.2",
  "errno",
- "io-lifetimes 1.0.7",
+ "io-lifetimes 1.0.8",
  "libc",
  "linux-raw-sys 0.1.4",
  "windows-sys 0.45.0",
@@ -8423,7 +8429,7 @@ version = "0.10.0-dev"
 dependencies = [
  "array-bytes",
  "chrono",
- "clap 4.1.10",
+ "clap 4.1.11",
  "fdlimit",
  "futures",
  "futures-timer",
@@ -8964,7 +8970,7 @@ dependencies = [
  "once_cell",
  "parity-scale-codec",
  "paste",
- "rustix 0.36.9",
+ "rustix 0.36.10",
  "sc-allocator",
  "sc-executor-common",
  "sc-runtime-test",
@@ -9093,7 +9099,7 @@ version = "0.10.0-dev"
 dependencies = [
  "array-bytes",
  "async-trait",
- "bitflags",
+ "bitflags 1.3.2",
  "bytes",
  "futures",
  "futures-timer",
@@ -9537,7 +9543,7 @@ dependencies = [
 name = "sc-storage-monitor"
 version = "0.1.0"
 dependencies = [
- "clap 4.1.10",
+ "clap 4.1.11",
  "fs4",
  "futures",
  "log",
@@ -9862,7 +9868,7 @@ version = "2.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a332be01508d814fed64bf28f798a146d73792121129962fdf335bb3c49a4254"
 dependencies = [
- "bitflags",
+ "bitflags 1.3.2",
  "core-foundation",
  "core-foundation-sys",
  "libc",
@@ -9929,7 +9935,7 @@ checksum = "78997f4555c22a7971214540c4a661291970619afd56de19f77e0de86296e1e5"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.0",
+ "syn 2.0.2",
 ]
 
 [[package]]
@@ -10243,7 +10249,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bls12-377"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#4bad48b6c8ffedcdf0a249f91e74374b1dd89eba"
+source = "git+https://github.com/paritytech/ark-substrate#fa1d7822905cfd1e0ade39b7dc0e02ccfdcbee5c"
 dependencies = [
  "ark-bls12-377",
  "ark-ff",
@@ -10258,7 +10264,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bls12-381"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#4bad48b6c8ffedcdf0a249f91e74374b1dd89eba"
+source = "git+https://github.com/paritytech/ark-substrate#fa1d7822905cfd1e0ade39b7dc0e02ccfdcbee5c"
 dependencies = [
  "ark-bls12-381",
  "ark-ec",
@@ -10273,7 +10279,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bw6-761"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#4bad48b6c8ffedcdf0a249f91e74374b1dd89eba"
+source = "git+https://github.com/paritytech/ark-substrate#fa1d7822905cfd1e0ade39b7dc0e02ccfdcbee5c"
 dependencies = [
  "ark-bw6-761",
  "ark-ff",
@@ -10287,7 +10293,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-ed-on-bls12-377"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#4bad48b6c8ffedcdf0a249f91e74374b1dd89eba"
+source = "git+https://github.com/paritytech/ark-substrate#fa1d7822905cfd1e0ade39b7dc0e02ccfdcbee5c"
 dependencies = [
  "ark-ed-on-bls12-377",
  "ark-ff",
@@ -10301,7 +10307,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-ed-on-bls12-381"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#4bad48b6c8ffedcdf0a249f91e74374b1dd89eba"
+source = "git+https://github.com/paritytech/ark-substrate#fa1d7822905cfd1e0ade39b7dc0e02ccfdcbee5c"
 dependencies = [
  "ark-ed-on-bls12-381",
  "ark-ff",
@@ -10332,7 +10338,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-models"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#4bad48b6c8ffedcdf0a249f91e74374b1dd89eba"
+source = "git+https://github.com/paritytech/ark-substrate#fa1d7822905cfd1e0ade39b7dc0e02ccfdcbee5c"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -10348,7 +10354,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-utils"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#4bad48b6c8ffedcdf0a249f91e74374b1dd89eba"
+source = "git+https://github.com/paritytech/ark-substrate#fa1d7822905cfd1e0ade39b7dc0e02ccfdcbee5c"
 dependencies = [
  "ark-serialize",
  "ark-std",
@@ -10561,7 +10567,7 @@ version = "7.0.0"
 dependencies = [
  "array-bytes",
  "base58",
- "bitflags",
+ "bitflags 1.3.2",
  "blake2",
  "bounded-collections",
  "criterion",
@@ -10764,7 +10770,7 @@ dependencies = [
 name = "sp-npos-elections-fuzzer"
 version = "2.0.0-alpha.5"
 dependencies = [
- "clap 4.1.10",
+ "clap 4.1.11",
  "honggfuzz",
  "parity-scale-codec",
  "rand 0.8.5",
@@ -11168,7 +11174,7 @@ version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a2a1c578e98c1c16fc3b8ec1328f7659a500737d7a0c6d625e73e830ff9c1f6"
 dependencies = [
- "bitflags",
+ "bitflags 1.3.2",
  "cfg_aliases",
  "libc",
  "parking_lot 0.11.2",
@@ -11241,7 +11247,7 @@ dependencies = [
 name = "subkey"
 version = "3.0.0"
 dependencies = [
- "clap 4.1.10",
+ "clap 4.1.11",
  "sc-cli",
 ]
 
@@ -11269,7 +11275,7 @@ dependencies = [
 name = "substrate-frame-cli"
 version = "4.0.0-dev"
 dependencies = [
- "clap 4.1.10",
+ "clap 4.1.11",
  "frame-support",
  "frame-system",
  "sc-cli",
@@ -11541,9 +11547,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.0"
+version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4cff13bb1732bccfe3b246f3fdb09edfd51c01d6f5299b7ccd9457c2e4e37774"
+checksum = "59d3276aee1fa0c33612917969b5172b5be2db051232a6e4826f1a1a9191b045"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -11568,7 +11574,7 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d75182f12f490e953596550b65ee31bda7c8e043d9386174b353bda50838c3fd"
 dependencies = [
- "bitflags",
+ "bitflags 1.3.2",
  "core-foundation",
  "system-configuration-sys",
 ]
@@ -11604,7 +11610,7 @@ dependencies = [
  "cfg-if",
  "fastrand",
  "redox_syscall",
- "rustix 0.36.9",
+ "rustix 0.36.10",
  "windows-sys 0.42.0",
 ]
 
@@ -11646,7 +11652,7 @@ checksum = "f9456a42c5b0d803c8cd86e73dd7cc9edd429499f37a3550d286d5e86720569f"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.0",
+ "syn 2.0.2",
 ]
 
 [[package]]
@@ -11883,7 +11889,7 @@ version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f873044bf02dd1e8239e9c1293ea39dad76dc594ec16185d0a1bf31d8dc8d858"
 dependencies = [
- "bitflags",
+ "bitflags 1.3.2",
  "bytes",
  "futures-core",
  "futures-util",
@@ -12118,7 +12124,7 @@ name = "try-runtime-cli"
 version = "0.10.0-dev"
 dependencies = [
  "async-trait",
- "clap 4.1.10",
+ "clap 4.1.11",
  "frame-remote-externalities",
  "frame-try-runtime",
  "hex",
@@ -12684,7 +12690,7 @@ dependencies = [
  "directories-next",
  "file-per-thread-logger",
  "log",
- "rustix 0.36.9",
+ "rustix 0.36.10",
  "serde",
  "sha2 0.10.6",
  "toml",
@@ -12764,7 +12770,7 @@ checksum = "d0245e8a9347017c7185a72e215218a802ff561545c242953c11ba00fccc930f"
 dependencies = [
  "object 0.29.0",
  "once_cell",
- "rustix 0.36.9",
+ "rustix 0.36.10",
 ]
 
 [[package]]
@@ -12795,7 +12801,7 @@ dependencies = [
  "memoffset 0.6.5",
  "paste",
  "rand 0.8.5",
- "rustix 0.36.9",
+ "rustix 0.36.10",
  "wasmtime-asm-macros",
  "wasmtime-environ",
  "wasmtime-jit-debug",
@@ -13072,7 +13078,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "93f1db1727772c05cf7a2cfece52c3aca8045ca1e176cd517d323489aa3c6d87"
 dependencies = [
  "async-trait",
- "bitflags",
+ "bitflags 1.3.2",
  "bytes",
  "cc",
  "ipnet",
