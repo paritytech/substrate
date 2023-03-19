@@ -1158,12 +1158,12 @@ pub trait EllipticCurves {
 	}
 
 	/// Compute a msm on G1 for bls12_377
-	fn bls12_377_msm_g1(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
+	fn bls12_377_msm_g1(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 		sp_arkworks::bls12_377::msm_g1(bases, scalars)
 	}
 
 	/// Compute a msm on G2 for bls12_377
-	fn bls12_377_msm_g2(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
+	fn bls12_377_msm_g2(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 		sp_arkworks::bls12_377::msm_g2(bases, scalars)
 	}
 
