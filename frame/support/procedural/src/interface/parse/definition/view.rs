@@ -27,7 +27,7 @@ pub struct ViewDef {
 
 impl ViewDef {
 	pub fn try_from(
-		calls: Option<Self>,
+		views: Option<Self>,
 		global_selector: bool,
 		attr_span: proc_macro2::Span,
 		_index: usize,
@@ -42,7 +42,7 @@ impl ViewDef {
 			))
 		};
 
-		let mut views = calls.unwrap_or(ViewDef { views: vec![] });
+		let mut views = views.unwrap_or(ViewDef { views: vec![] });
 		let mut indices = HashMap::new();
 		views.views.iter().for_each(|view| {
 			// Below logic ensures assert won't fail

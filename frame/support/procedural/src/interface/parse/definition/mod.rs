@@ -84,15 +84,18 @@ impl InterfaceDef {
 		}
 		let where_clause = item.generics.where_clause.clone();
 
-		let mut with_selector = false;
-		super::helper::take_first_item_interface_attr::<InterfaceTraitAttr>(item)?.map(|attr| {
-			match attr {
-				InterfaceTraitAttr::WithSelector(_) => {
-					with_selector = true;
+		let with_selector =
+			match super::helper::take_first_item_interface_attr::<InterfaceTraitAttr>(item)? {
+				Some(attr) => match attr {
+					InterfaceTraitAttr::WithSelector(_) => Ok(true),
+					_ => {
+						let msg = "Invalid Interface definition. Traits that define an interface \
+                			can only have a single additional attribute, `#[interface::with_selector]`.";
+						Err(syn::Error::new(item_span, msg))
+					},
 				},
-				_ => (),
-			}
-		});
+				None => Ok(false),
+			}?;
 
 		let mut selectors = None;
 		let mut views = None;
@@ -107,8 +110,16 @@ impl InterfaceDef {
 					calls = Some(call::CallDef::try_from(calls, with_selector, span, index, item)?),
 				Some(InterfaceTraitAttr::View(span)) =>
 					views = Some(view::ViewDef::try_from(views, with_selector, span, index, item)?),
-				Some(InterfaceTraitAttr::Selector(span)) =>
-					selectors = Some(selector::SelectorDef::try_from(selectors, span, index, item)?),
+				Some(InterfaceTraitAttr::Selector(span, name)) =>
+					if with_selector {
+						selectors = Some(selector::SelectorDef::try_from(
+							selectors, name, span, index, item,
+						)?)
+					} else {
+						let msg = "Invalid interface definition. `#[interface::selector]` can \
+						 only be used as an annotation if the trait of the interface carries `#[interface::with_selector]`.";
+						return Err(syn::Error::new(attr_span, msg))
+					},
 				Some(InterfaceTraitAttr::WithSelector(_)) => {
 					let msg = "Invalid interface definition. #[interface::with_selector] is \
 						only allowed as an annotation at the trait of the interface.";
@@ -123,6 +134,10 @@ impl InterfaceDef {
 				with #[interface::selector] or #[selector].";
 			return Err(syn::Error::new(item_span, msg))
 		}
+
+		// Sanity Checks
+		// * if not all methods named selector -> default selector MUST be present
+		// * check if view/call-method selector can be found in selectors
 
 		Ok(InterfaceDef { index, calls, views, selectors, where_clause })
 	}
@@ -162,7 +177,7 @@ mod keyword {
 enum InterfaceTraitAttr {
 	Call(proc_macro2::Span),
 	View(proc_macro2::Span),
-	Selector(proc_macro2::Span),
+	Selector(proc_macro2::Span, syn::Ident),
 	WithSelector(proc_macro2::Span),
 }
 
@@ -180,7 +195,10 @@ impl syn::parse::Parse for InterfaceTraitAttr {
 		} else if lookahead.peek(keyword::view) {
 			Ok(InterfaceTraitAttr::View(content.parse::<keyword::view>()?.span()))
 		} else if lookahead.peek(keyword::selector) {
-			Ok(InterfaceTraitAttr::Selector(content.parse::<keyword::selector>()?.span()))
+			let span = content.parse::<keyword::selector>()?.span();
+			let selector_content;
+			syn::parenthesized!(selector_content in content);
+			Ok(InterfaceTraitAttr::Selector(span, selector_content.parse::<syn::Ident>()?))
 		} else {
 			Err(lookahead.error())
 		}

@@ -101,10 +101,10 @@ impl Selector for EmptySelector {
 	type Selectable = H256;
 	type Selected = ();
 
-	fn select(&self, from: Self::Selectable) -> Result<Self::Selected, Error> {
+	fn select(&self, from: Self::Selectable) -> Result<Self::Selected, InterfaceError> {
 		match from {
 			H256::zero() => Ok(()),
-			_ => Err(Error::SelectorMismatch { provided: from }),
+			_ => Err(InterfaceError::SelectorMismatch { provided: from }),
 		}
 	}
 }
@@ -114,8 +114,11 @@ pub struct Select<T> {
 	selector: Box<dyn Selector<Selected = T, Selectable = H256>>,
 }
 
-impl<T> Select<T> {
-	fn select(&self) -> Result<T, Error> {
+impl<T> Selector for Select<T> {
+	type Selectable = H256;
+	type Selected = T;
+
+	fn select(&self, selectable: Self::Selectable) -> Result<Self::Selected, InterfaceError> {
 		self.selector.select(self.from)
 	}
 }
@@ -130,7 +133,7 @@ mod tests {
 
 /*
 #[frame_support::call_interface]
-pub enum CallInterface<Runtime> {
+pub enum CallInterface {
 	#[call_index(20)]
 	Pip20(pip20::Call<Runtime>, pip20::Event, pip20::Error),
 }
@@ -152,20 +155,20 @@ pub mod __expanded {
 
 	pub enum Call {
 		System(frame_system::Call) = 0,
-		Interface(Interface<Runtime, H256>) = 255,
+		Interface(Interface<CallInterface, H256>) = 255,
 	}
 
-	pub struct Interface<CallInterface: Call, Selectable> {
+	pub struct Interface<CallInterface: Call<RuntimeOrigin = RuntimeOrigin>, Selectable> {
 		selectable: Selectable,
 		interface: CallInterface,
 	}
 
-	impl<Runtime> UnfilteredDispatchable for Interface<Runtime> {
+	impl<CallInterface, Selectable> UnfilteredDispatchable for Interface<CallInterface, Selectable> {
 		type RuntimeOrigin = RuntimeOrigin;
 
 		fn dispatch_bypass_filter(self, origin: Self::RuntimeOrigin) -> DispatchResultWithPostInfo {
 			match self.interface {
-				CallInterface::Pip20(call) => call.call(origin, self.selectable),
+				CallInterface::Pip20(call) => call.call(origin, self.selectable.into()),
 			}
 		}
 	}
@@ -382,8 +385,9 @@ pub mod pip20 {
 		pub struct SelectCurrency<Runtime>;
 		impl<Runtime: Pip20 + Core> Selector for SelectCurrency<Runtime> {
 			type Selected = <Runtime as Pip20>::Currency;
+			type Selectable = <Runtime as Core>::Selectable;
 
-			fn select(&self, from: H256) -> Result<Self::Selected, Error> {
+			fn select(&self, from: Self::Selectable) -> Result<Self::Selected, Error> {
 				<Runtime as Pip20>::select_currency(from)
 			}
 		}
