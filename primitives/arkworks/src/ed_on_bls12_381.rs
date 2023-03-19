@@ -42,11 +42,11 @@ pub fn te_msm(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
 
 /// Compute a multi scalar multiplication on G! through arkworks
 pub fn sw_msm(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
-	let bases: Vec<_> = serialize_iter_to_vec::<SWAffine<JubjubConfig>>(bases).unwrap();
+	let bases: Vec<_> = serialize_iter_to_vec::<SWAffine<JubjubConfig>>(bases);
 	let scalars: Vec<_> =
 		serialize_iter_to_vec::<<JubjubConfig as CurveConfig>::ScalarField>(scalars).unwrap();
 
-	let result = <SWProjective as VariableBaseMSM>::msm(&bases, &scalars[..]).unwrap();
+	let result = <SWProjective as VariableBaseMSM>::msm(&bases, &scalars).unwrap();
 
 	serialize_result(result)
 }
