@@ -1,7 +1,7 @@
 use crate::PairingError;
 use ark_ec::{
 	pairing::{MillerLoopOutput, Pairing},
-	AffineRepr, Group,
+	Group,
 };
 use ark_ff::Zero;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
