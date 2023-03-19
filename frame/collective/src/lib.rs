@@ -342,6 +342,14 @@ pub mod pallet {
 		WrongProposalLength,
 	}
 
+	#[pallet::hooks]
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
+		#[cfg(feautre = "try-runtime")]
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), &'static str> {
+			Self::do_try_state();
+		}
+	}
+
 	// Note that councillor operations are assigned to the operational class.
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -968,6 +976,44 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			proposals.len() + 1 // calculate weight based on original length
 		});
 		num_proposals as u32
+	}
+
+	/// Ensure the correctness of the state of this pallet.
+	///
+	/// The following expectation must always apply.
+	///
+	/// ## Expectations:
+	///
+	/// Looking at proposals:
+	///
+	/// * Each hash of a proposal that is stored inside `Proposals` must have a
+	/// call mapped to it inside the `ProposalsOf` storage map.
+	/// * `ProposalCount` must always equal to the number of proposals inside
+	/// the `Proposals` storage value.
+	///
+	/// Looking at votes:
+	/// * The threshold of members required for a motion to pass cannot be
+	/// greater than the total number of members.
+	///
+	/// Looking at members:
+	/// * The members count must never exceed `MaxMembers`.
+	#[cfg(any(feature = "try-runtime", feature = "fuzzing", test, debug_assertions))]
+	fn do_try_state() -> Result<(), &'static str> {
+		Self::proposals().into_iter().for_each(|proposal| {
+			assert!(Self::proposal_of(proposal).is_some());
+		});
+
+		assert_eq!(Self::proposals().into_iter().count(), Self::proposal_count() as usize);
+
+		Self::proposals().into_iter().for_each(|proposal| {
+			if let Some(votes) = Self::voting(proposal) {
+				assert!(votes.threshold as usize <= Self::members().into_iter().count());
+			}
+		});
+
+		assert!(Self::members().into_iter().count() <= T::MaxMembers::get() as usize);
+
+		Ok(())
 	}
 }
 
