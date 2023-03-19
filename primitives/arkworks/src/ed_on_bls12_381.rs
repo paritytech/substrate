@@ -19,7 +19,7 @@
 
 #![warn(missing_docs)]
 
-use crate::utils::{deserialize_argument, serialize_iter_to_vec, serialize_result};
+use crate::utils::{deserialize_argument, serialize_result};
 use ark_ec::{
 	models::CurveConfig, short_weierstrass::Affine as SWAffine,
 	twisted_edwards::Affine as TEAffine, AffineRepr, Group, VariableBaseMSM,
@@ -31,9 +31,16 @@ use sp_std::vec::Vec;
 
 /// Compute a multi scalar multiplication on G! through arkworks
 pub fn te_msm(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
-	let bases: Vec<_> = serialize_iter_to_vec::<TEAffine<JubjubConfig>>(bases);
-	let scalars: Vec<_> =
-		serialize_iter_to_vec::<<JubjubConfig as CurveConfig>::ScalarField>(scalars);
+	let bases: Vec<_> = bases
+		.chunks(TEAffine::<JubjubConfig>::generator().serialized_size(Compress::No))
+		.into_iter()
+		.map(|a| deserialize_argument::<TEAffine<JubjubConfig>>(&a.to_vec()))
+		.collect();
+	let scalars: Vec<_> = scalars
+		.chunks(<JubjubConfig as CurveConfig>::ScalarField::zero().serialized_size(Compress::No))
+		.into_iter()
+		.map(|a| deserialize_argument::<<JubjubConfig as CurveConfig>::ScalarField>(&a.to_vec()))
+		.collect();
 
 	let result = <EdwardsProjective as VariableBaseMSM>::msm(&bases, &scalars).unwrap();
 
@@ -42,9 +49,16 @@ pub fn te_msm(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
 
 /// Compute a multi scalar multiplication on G! through arkworks
 pub fn sw_msm(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
-	let bases: Vec<_> = serialize_iter_to_vec::<SWAffine<JubjubConfig>>(bases);
-	let scalars: Vec<_> =
-		serialize_iter_to_vec::<<JubjubConfig as CurveConfig>::ScalarField>(scalars);
+	let bases: Vec<_> = bases
+		.chunks(SWAffine::<JubjubConfig>::generator().serialized_size(Compress::No))
+		.into_iter()
+		.map(|a| deserialize_argument::<SWAffine<JubjubConfig>>(&a.to_vec()))
+		.collect();
+	let scalars: Vec<_> = scalars
+		.chunks(<JubjubConfig as CurveConfig>::ScalarField::zero().serialized_size(Compress::No))
+		.into_iter()
+		.map(|a| deserialize_argument::<<JubjubConfig as CurveConfig>::ScalarField>(&a.to_vec()))
+		.collect();
 
 	let result = <SWProjective as VariableBaseMSM>::msm(&bases, &scalars).unwrap();
 

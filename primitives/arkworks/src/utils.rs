@@ -4,9 +4,7 @@ use ark_ec::{
 	AffineRepr, Group,
 };
 use ark_ff::Zero;
-use ark_serialize::{
-	CanonicalDeserialize, CanonicalSerialize, Compress, SerializationError, Validate,
-};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use ark_std::{io::Cursor, vec, vec::Vec};
 
 pub fn serialize_result(result: impl CanonicalSerialize) -> Vec<u8> {
@@ -21,49 +19,20 @@ pub fn deserialize_argument<Field: CanonicalDeserialize>(argument: &Vec<u8>) -> 
 	Field::deserialize_with_mode(cursor, Compress::No, Validate::No).unwrap()
 }
 
-pub fn serialize_iter_to_vec<T>(
-	iter: impl IntoIterator<Item = T>,
-) -> Result<Vec<u8>, SerializationError>
-where
-	T: CanonicalSerialize + Sized + Zero,
-{
-	let iter = iter.into_iter();
-	let element_size = T::zero().uncompressed_size();
-	let length: usize =
-		iter.size_hint().0.try_into().map_err(|_| SerializationError::InvalidData)?;
-	let mut w = Cursor::new(Vec::with_capacity(8 + element_size * length));
-	length.serialize_uncompressed(&mut w)?;
-	let mut length = 0u32;
-	for elem in iter {
-		elem.serialize_uncompressed(&mut w)?;
-		length += 1;
-	}
-	let result = w.into_inner();
-	// elem.serialize_uncompressed::<&mut &mut T>(&mut result.as_mut())?;
-	Ok(result)
-}
-
-pub fn deserialize_iter_to_vec<T>(mut bytes: &[u8]) -> Result<Vec<T>, SerializationError>
-where
-	T: CanonicalDeserialize + Sized,
-{
-	let cursor = Cursor::new(bytes.to_vec());
-	let length = u32::deserialize_uncompressed_unchecked(cursor.clone())?;
-	let mut result = Vec::with_capacity(length as usize);
-	for _ in 0..length {
-		result.push(T::deserialize_uncompressed_unchecked(cursor.clone())?);
-	}
-	Ok(result)
-}
-
 pub fn multi_miller_loop_generic<Curve: Pairing>(
 	a_vec: Vec<u8>,
 	b_vec: Vec<u8>,
 ) -> Result<Vec<u8>, PairingError> {
-	let g1: Vec<_> = deserialize_iter_to_vec::<<Curve as Pairing>::G1Affine>(&a_vec)
-		.map_err(|_| PairingError::InternalPanic)?;
-	let g2: Vec<_> = deserialize_iter_to_vec::<<Curve as Pairing>::G2Affine>(&b_vec)
-		.map_err(|_| PairingError::InternalPanic)?;
+	let g1: Vec<_> = a_vec
+		.chunks(<Curve as Pairing>::G1Affine::generator().serialized_size(Compress::No))
+		.into_iter()
+		.map(|elem| deserialize_argument::<<Curve as Pairing>::G1Affine>(&elem.to_vec()))
+		.collect();
+	let g2: Vec<_> = b_vec
+		.chunks(<Curve as Pairing>::G2Affine::generator().serialized_size(Compress::No))
+		.into_iter()
+		.map(|elem| deserialize_argument::<<Curve as Pairing>::G2Affine>(&elem.to_vec()))
+		.collect();
 
 	let result = Curve::multi_miller_loop(g1, g2);
 
