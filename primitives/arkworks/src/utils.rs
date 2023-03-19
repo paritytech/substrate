@@ -16,16 +16,14 @@ pub fn deserialize_argument<Field: CanonicalDeserialize>(argument: &Vec<u8>) -> 
 }
 
 pub fn multi_miller_loop_generic<Curve: Pairing>(
-	a_vec: Vec<u8>,
-	b_vec: Vec<u8>,
+	a_vec: Vec<Vec<u8>>,
+	b_vec: Vec<Vec<u8>>,
 ) -> Result<Vec<u8>, PairingError> {
 	let g1: Vec<_> = a_vec
-		.chunks(<Curve as Pairing>::G1Affine.serialized_size(Compress::No))
 		.iter()
 		.map(|elem| deserialize_argument::<<Curve as Pairing>::G1Affine>(elem))
 		.collect();
 	let g2: Vec<_> = b_vec
-		.chunks(<Curve as Pairing>::G2Affine.serialized_size(Compress::No))
 		.iter()
 		.map(|elem| deserialize_argument::<<Curve as Pairing>::G2Affine>(elem))
 		.collect();
@@ -48,9 +46,8 @@ pub fn final_exponentiation_generic<Curve: Pairing>(
 	}
 }
 
-pub fn msm_g1_generic<Curve: Pairing>(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
+pub fn msm_g1_generic<Curve: Pairing>(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 	let bases: Vec<_> = bases
-		.chunks(<Curve as Pairing>::G1Affine.serialized_size(Compress::No))
 		.iter()
 		.map(|a| deserialize_argument::<<Curve as Pairing>::G1Affine>(a))
 		.collect();
@@ -63,9 +60,8 @@ pub fn msm_g1_generic<Curve: Pairing>(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u
 	serialize_result(result)
 }
 
-pub fn msm_g2_generic<Curve: Pairing>(bases: Vec<u8>, scalars: Vec<u8>) -> Vec<u8> {
+pub fn msm_g2_generic<Curve: Pairing>(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 	let bases: Vec<_> = bases
-		.chunks(<Curve as Pairing>::G2Affine.serialized_size(Compress::No))
 		.iter()
 		.map(|a| deserialize_argument::<<Curve as Pairing>::G2Affine>(a))
 		.collect();
