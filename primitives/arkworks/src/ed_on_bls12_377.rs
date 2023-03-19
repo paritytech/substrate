@@ -20,10 +20,8 @@
 #![warn(missing_docs)]
 
 use crate::utils::{deserialize_iter_to_vec, serialize_result};
-use ark_ec::{models::CurveConfig, twisted_edwards, AffineRepr, Group, VariableBaseMSM};
+use ark_ec::{models::CurveConfig, twisted_edwards, VariableBaseMSM};
 use ark_ed_on_bls12_377::{EdwardsConfig, EdwardsProjective};
-use ark_ff::Zero;
-use ark_serialize::{CanonicalSerialize, Compress};
 use sp_std::vec::Vec;
 
 /// Compute a multi scalar multiplication on G! through arkworks

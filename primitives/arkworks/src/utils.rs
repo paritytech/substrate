@@ -1,7 +1,7 @@
 use crate::PairingError;
 use ark_ec::{
 	pairing::{MillerLoopOutput, Pairing},
-	AffineRepr, Group,
+	AffineRepr,
 };
 use ark_ff::Zero;
 use ark_serialize::{
@@ -21,37 +21,15 @@ pub fn deserialize_argument<Field: CanonicalDeserialize>(argument: &Vec<u8>) -> 
 	Field::deserialize_with_mode(cursor, Compress::No, Validate::No).unwrap()
 }
 
-pub fn serialize_iter_to_vec<T>(
-	iter: impl IntoIterator<Item = T>,
-) -> Result<Vec<u8>, SerializationError>
-where
-	T: CanonicalSerialize + Sized + Zero,
-{
-	let iter = iter.into_iter();
-	let element_size = T::zero().uncompressed_size();
-	let length: usize =
-		iter.size_hint().0.try_into().map_err(|_| SerializationError::InvalidData)?;
-	let mut w = Cursor::new(Vec::with_capacity(8 + element_size * length));
-	length.serialize_uncompressed(&mut w)?;
-	let mut length = 0u32;
-	for elem in iter {
-		elem.serialize_uncompressed(&mut w)?;
-		length += 1;
-	}
-	let result = w.into_inner();
-	// elem.serialize_uncompressed::<&mut &mut T>(&mut result.as_mut())?;
-	Ok(result)
-}
-
-pub fn deserialize_iter_to_vec<T>(mut bytes: &[u8]) -> Result<Vec<T>, SerializationError>
+pub fn deserialize_iter_to_vec<T>(bytes: &[u8]) -> Result<Vec<T>, SerializationError>
 where
 	T: CanonicalDeserialize + Sized,
 {
-	let cursor = Cursor::new(bytes.to_vec());
+	let mut cursor = Cursor::new(bytes.to_vec());
 	let length = u32::deserialize_uncompressed_unchecked(cursor.clone())?;
 	let mut result = Vec::with_capacity(length as usize);
 	for _ in 0..length {
-		result.push(T::deserialize_uncompressed_unchecked(cursor.clone())?);
+		result.push(T::deserialize_uncompressed_unchecked(&mut cursor)?);
 	}
 	Ok(result)
 }

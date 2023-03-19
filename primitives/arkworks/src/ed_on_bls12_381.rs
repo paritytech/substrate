@@ -22,11 +22,9 @@
 use crate::utils::{deserialize_iter_to_vec, serialize_result};
 use ark_ec::{
 	models::CurveConfig, short_weierstrass::Affine as SWAffine,
-	twisted_edwards::Affine as TEAffine, AffineRepr, Group, VariableBaseMSM,
+	twisted_edwards::Affine as TEAffine, VariableBaseMSM,
 };
 use ark_ed_on_bls12_381::{EdwardsProjective, JubjubConfig, SWProjective};
-use ark_ff::Zero;
-use ark_serialize::{CanonicalSerialize, Compress};
 use sp_std::vec::Vec;
 
 /// Compute a multi scalar multiplication on G! through arkworks
