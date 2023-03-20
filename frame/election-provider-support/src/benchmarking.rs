@@ -18,6 +18,9 @@
 //! Election provider support pallet benchmarking.
 //! This is separated into its own crate to avoid bloating the size of the runtime.
 
+#![cfg(feature = "runtime-benchmarks")]
+#![cfg_attr(not(feature = "std"), no_std)]
+
 use crate::{ApprovalVoting, NposSolver, PhragMMS, SequentialPhragmen};
 use codec::Decode;
 use frame_benchmarking::v1::{benchmarks, Vec};
