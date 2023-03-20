@@ -444,8 +444,6 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
 		fn build(&self) {
-			assert!(!<T as Config<I>>::ExistentialDeposit::get().is_zero());
-
 			let total = self.balances.iter().fold(Zero::zero(), |acc: T::Balance, &(_, n)| acc + n);
 			<TotalIssuance<T, I>>::put(total);
 
@@ -745,7 +743,7 @@ pub mod pallet {
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		fn ed() -> T::Balance {
-			T::ExistentialDeposit::get().max(1u32.into())
+			T::ExistentialDeposit::get()
 		}
 		/// Ensure the account `who` is using the new logic.
 		///
@@ -890,7 +888,8 @@ pub mod pallet {
 			let result = T::AccountStore::try_mutate_exists(who, |maybe_account| {
 				let is_new = maybe_account.is_none();
 				let mut account = maybe_account.take().unwrap_or_default();
-				let did_provide = account.free >= Self::ed();
+				let did_provide =
+					account.free >= Self::ed() && frame_system::Pallet::<T>::providers(who) > 0;
 				let did_consume =
 					!is_new && (!account.reserved.is_zero() || !account.frozen.is_zero());
 
