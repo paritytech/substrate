@@ -272,7 +272,7 @@ impl ProtocolController {
 		self.peerset_handle.is_banned(peer_id)
 	}
 
-	/// Add a peer to the set of reserved peers. [`ProtocolCOntroller`] will try to always maintain
+	/// Add the peer to the set of reserved peers. [`ProtocolCOntroller`] will try to always maintain
 	/// connections with such peers.
 	fn on_add_reserved_peer(&mut self, peer_id: PeerId) {
 		if self.reserved_nodes.contains_key(&peer_id) {
@@ -295,7 +295,7 @@ impl ProtocolController {
 		}
 	}
 
-	/// Remove a peer from the set of reserved peers. The peer is moved to the set of regular nodes.
+	/// Remove the peer from the set of reserved peers. The peer is moved to the set of regular nodes.
 	fn on_remove_reserved_peer(&mut self, peer_id: PeerId) {
 		let mut state = match self.reserved_nodes.remove(&peer_id) {
 			Some(state) => state,
@@ -445,7 +445,7 @@ impl ProtocolController {
 		}
 	}
 
-	/// Try dropping a peer as a reserved peer. Return `Ok(true)` if the peer was found and
+	/// Try dropping the peer as a reserved peer. Return `Ok(true)` if the peer was found and
 	/// disconnected, `Ok(false)` if it wasn't found, `Err(PeerId)`, if the peer found, but not in
 	/// connected state.
 	fn drop_reserved_peer(&mut self, peer_id: &PeerId) -> Result<bool, PeerId> {
@@ -461,7 +461,7 @@ impl ProtocolController {
 		}
 	}
 
-	/// Try dropping a peer as a regular peer. Return `true` if the peer was found and
+	/// Try dropping the peer as a regular peer. Return `true` if the peer was found and
 	/// disconnected, `false` if it wasn't found.
 	fn drop_regular_peer(&mut self, peer_id: &PeerId) -> bool {
 		let Some(direction) = self.nodes.remove(peer_id) else {
