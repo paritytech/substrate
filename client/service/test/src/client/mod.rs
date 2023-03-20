@@ -37,9 +37,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Block as BlockT, Header as HeaderT},
 	ConsensusEngineId, Justifications, StateVersion,
 };
-use sp_state_machine::{
-	backend::Backend as _, ExecutionStrategy, InMemoryBackend, OverlayedChanges, StateMachine,
-};
+use sp_state_machine::{backend::Backend as _, InMemoryBackend, OverlayedChanges, StateMachine};
 use sp_storage::{ChildInfo, StorageKey};
 use sp_trie::{LayoutV0, TrieConfiguration};
 use std::{collections::HashSet, sync::Arc};
@@ -117,7 +115,7 @@ fn construct_block(
 		task_executor.clone() as Box<_>,
 		CallContext::Onchain,
 	)
-	.execute(ExecutionStrategy::NativeElseWasm)
+	.execute()
 	.unwrap();
 
 	for tx in transactions.iter() {
@@ -132,7 +130,7 @@ fn construct_block(
 			task_executor.clone() as Box<_>,
 			CallContext::Onchain,
 		)
-		.execute(ExecutionStrategy::NativeElseWasm)
+		.execute()
 		.unwrap();
 	}
 
@@ -147,7 +145,7 @@ fn construct_block(
 		task_executor.clone() as Box<_>,
 		CallContext::Onchain,
 	)
-	.execute(ExecutionStrategy::NativeElseWasm)
+	.execute()
 	.unwrap();
 	header = Header::decode(&mut &ret_data[..]).unwrap();
 
@@ -220,7 +218,7 @@ fn construct_genesis_should_work_with_native() {
 		TaskExecutor::new(),
 		CallContext::Onchain,
 	)
-	.execute(ExecutionStrategy::NativeElseWasm)
+	.execute()
 	.unwrap();
 }
 
@@ -254,7 +252,7 @@ fn construct_genesis_should_work_with_wasm() {
 		TaskExecutor::new(),
 		CallContext::Onchain,
 	)
-	.execute(ExecutionStrategy::AlwaysWasm)
+	.execute()
 	.unwrap();
 }
 
@@ -288,7 +286,7 @@ fn construct_genesis_with_bad_transaction_should_panic() {
 		TaskExecutor::new(),
 		CallContext::Onchain,
 	)
-	.execute(ExecutionStrategy::NativeElseWasm);
+	.execute();
 	assert!(r.is_err());
 }
 

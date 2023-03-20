@@ -105,9 +105,8 @@ fn main() {
 	}
 
 	let benchmarks = matrix!(
-		(profile, size, block_type, database_type) in import_benchmarks.into_iter() =>
+		(size, block_type, database_type) in import_benchmarks.into_iter() =>
 			ImportBenchmarkDescription {
-				profile,
 				key_types: KeyTypes::Sr25519,
 				size,
 				block_type,

@@ -312,6 +312,7 @@ mod tests {
 	use sc_peerset::ReputationChange;
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
+	use sp_api::offchain::testing::TestPersistentOffchainDB;
 	use sp_consensus::BlockOrigin;
 	use sp_runtime::generic::BlockId;
 	use std::{collections::HashSet, sync::Arc};
@@ -410,6 +411,7 @@ mod tests {
 		}
 	}
 
+	#[derive(Clone)]
 	struct TestPool(Arc<BasicPool<FullChainApi<TestClient, Block>, Block>>);
 
 	impl sc_transaction_pool_api::OffchainSubmitTransaction<Block> for TestPool {
@@ -442,8 +444,16 @@ mod tests {
 		let header = client.header(client.chain_info().genesis_hash).unwrap().unwrap();
 
 		// when
-		let offchain = OffchainWorkers::new(client);
-		futures::executor::block_on(offchain.on_block_imported(&header, network, false));
+		let offchain = OffchainWorkers::new(OffchainWorkerOptions {
+			runtime_api_provider: client,
+			keystore: None,
+			offchain_db: None::<TestPersistentOffchainDB>,
+			transaction_pool: Some(Arc::new(pool.clone())),
+			network_provider: network,
+			is_validator: false,
+			enable_http_requests: false,
+		});
+		futures::executor::block_on(offchain.on_block_imported(&header));
 
 		// then
 		assert_eq!(pool.0.status().ready, 1);

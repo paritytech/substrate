@@ -28,7 +28,7 @@ use futures::Future;
 use std::{borrow::Cow, collections::HashMap, pin::Pin, sync::Arc};
 
 use node_primitives::Block;
-use node_testing::bench::{BenchDb, BlockType, DatabaseType, KeyTypes, Profile};
+use node_testing::bench::{BenchDb, BlockType, DatabaseType, KeyTypes};
 use sc_transaction_pool_api::{
 	ImportNotificationStream, PoolFuture, PoolStatus, ReadyTransactions, TransactionFor,
 	TransactionSource, TransactionStatusStreamFor, TxHash,
@@ -99,8 +99,10 @@ impl core::BenchmarkDescription for ConstructionBenchmarkDescription {
 
 	fn name(&self) -> Cow<'static, str> {
 		format!(
-			"Block construction ({:?}/{}, {:?}, {:?} backend)",
-			self.block_type, self.size, self.profile, self.database_type,
+			"Block construction ({:?}/{}, {:?} backend)",
+			self.block_type,
+			self.size,
+			self.database_type,
 		)
 		.into()
 	}

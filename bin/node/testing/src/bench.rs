@@ -40,17 +40,13 @@ use kitchensink_runtime::{
 };
 use node_primitives::Block;
 use sc_block_builder::BlockBuilderProvider;
-use sc_client_api::{
-	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
-	ExecutionStrategy,
-};
 use sc_client_db::PruningMode;
 use sc_consensus::{BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult, ImportedAux};
 use sc_executor::{NativeElseWasmExecutor, WasmExecutionMethod, WasmtimeInstantiationStrategy};
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
 use sp_consensus::BlockOrigin;
-use sp_core::{blake2_256, ed25519, sr25519, traits::SpawnNamed, ExecutionContext, Pair, Public};
+use sp_core::{blake2_256, ed25519, sr25519, traits::SpawnNamed, Pair, Public};
 use sp_inherents::InherentData;
 use sp_runtime::{
 	traits::{Block as BlockT, IdentifyAccount, Verify},

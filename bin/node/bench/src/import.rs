@@ -33,7 +33,7 @@
 use std::borrow::Cow;
 
 use node_primitives::Block;
-use node_testing::bench::{BenchDb, BlockType, DatabaseType, KeyTypes, Profile};
+use node_testing::bench::{BenchDb, BlockType, DatabaseType, KeyTypes};
 use sc_client_api::backend::Backend;
 use sp_state_machine::InspectState;
 
@@ -43,7 +43,6 @@ use crate::{
 };
 
 pub struct ImportBenchmarkDescription {
-	pub profile: Profile,
 	pub key_types: KeyTypes,
 	pub block_type: BlockType,
 	pub size: SizeType,
@@ -82,21 +81,19 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 	}
 
 	fn setup(self: Box<Self>) -> Box<dyn core::Benchmark> {
-		let profile = self.profile;
 		let mut bench_db = BenchDb::with_key_types(self.database_type, 50_000, self.key_types);
 		let block = bench_db.generate_block(self.block_type.to_content(self.size.transactions()));
 		Box::new(ImportBenchmark {
 			database: bench_db,
 			block_type: self.block_type,
 			block,
-			profile,
 		})
 	}
 
 	fn name(&self) -> Cow<'static, str> {
 		format!(
-			"Block import ({:?}/{}, {:?}, {:?} backend)",
-			self.block_type, self.size, self.profile, self.database_type,
+			"Block import ({:?}/{}, {:?} backend)",
+			self.block_type, self.size, self.database_type,
 		)
 		.into()
 	}

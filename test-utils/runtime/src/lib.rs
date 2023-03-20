@@ -1320,10 +1320,9 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 mod tests {
 	use codec::Encode;
 	use sc_block_builder::BlockBuilderProvider;
-	use sp_api::ProvideRuntimeApi;
+	use sp_api::{ApiExt, ProvideRuntimeApi};
 	use sp_consensus::BlockOrigin;
-	use sp_core::{storage::well_known_keys::HEAP_PAGES, ExecutionContext};
-	use sp_state_machine::ExecutionStrategy;
+	use sp_core::{storage::well_known_keys::HEAP_PAGES, traits::CallContext};
 	use substrate_test_runtime_client::{
 		prelude::*, runtime::TestAPI, DefaultTestClientBuilderExt, TestClientBuilder,
 	};
@@ -1333,20 +1332,15 @@ mod tests {
 		// This tests that the on-chain HEAP_PAGES parameter is respected.
 
 		// Create a client devoting only 8 pages of wasm memory. This gives us ~512k of heap memory.
-		let mut client = TestClientBuilder::new()
-			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
-			.set_heap_pages(8)
-			.build();
+		let mut client = TestClientBuilder::new().set_heap_pages(8).build();
 		let best_hash = client.chain_info().best_hash;
 
 		// Try to allocate 1024k of memory on heap. This is going to fail since it is twice larger
 		// than the heap.
-		let ret = client.runtime_api().vec_with_capacity_with_context(
-			best_hash,
-			// Use `BlockImport` to ensure we use the on chain heap pages as configured above.
-			ExecutionContext::Importing,
-			1048576,
-		);
+		let mut runtime_api = client.runtime_api();
+		// This is currently required to allocate the 1024k of memory as configured above.
+		runtime_api.set_call_context(CallContext::Onchain);
+		let ret = runtime_api.vec_with_capacity(best_hash, 1048576);
 		assert!(ret.is_err());
 
 		// Create a block that sets the `:heap_pages` to 32 pages of memory which corresponds to
@@ -1368,8 +1362,7 @@ mod tests {
 
 	#[test]
 	fn test_storage() {
-		let client =
-			TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
+		let client = TestClientBuilder::new().build();
 		let runtime_api = client.runtime_api();
 		let best_hash = client.chain_info().best_hash;
 
@@ -1395,8 +1388,7 @@ mod tests {
 		let backend =
 			sp_state_machine::TrieBackendBuilder::<_, crate::Hashing>::new(db, root).build();
 		let proof = sp_state_machine::prove_read(backend, vec![b"value3"]).unwrap();
-		let client =
-			TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
+		let client = TestClientBuilder::new().build();
 		let runtime_api = client.runtime_api();
 		let best_hash = client.chain_info().best_hash;
 
