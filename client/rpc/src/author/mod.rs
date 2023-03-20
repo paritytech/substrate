@@ -181,7 +181,7 @@ where
 		let dxt = match TransactionFor::<P>::decode(&mut &xt[..]).map_err(|e| Error::from(e)) {
 			Ok(dxt) => dxt,
 			Err(e) => {
-				let _ = pending.reject(JsonRpseeError::from(e)).await;
+				pending.reject(JsonRpseeError::from(e)).await;
 				return
 			},
 		};
@@ -203,6 +203,6 @@ where
 			},
 		};
 
-		let _ = accept_and_pipe_from_stream(pending, stream).await;
+		let _ = accept_and_pipe_from_stream::<_, _, ()>(pending, stream).await;
 	}
 }

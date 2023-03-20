@@ -28,7 +28,7 @@ use crate::{
 		},
 		subscription::{SubscriptionHandle, SubscriptionManagement, SubscriptionManagementError},
 	},
-	SubscriptionResponse, SubscriptionTaskExecutor,
+	SubscriptionTaskExecutor,
 };
 use codec::Encode;
 use futures::{
@@ -47,6 +47,7 @@ use sc_client_api::{
 	Backend, BlockBackend, BlockImportNotification, BlockchainEvents, CallExecutor, ChildInfo,
 	ExecutorProvider, FinalityNotification, StorageKey, StorageProvider,
 };
+use sc_rpc::utils::SubscriptionResponse;
 use serde::Serialize;
 use sp_api::CallApiAt;
 use sp_blockchain::{

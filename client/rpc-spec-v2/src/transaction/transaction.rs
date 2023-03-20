@@ -32,8 +32,9 @@ use crate::{
 use jsonrpsee::{
 	core::async_trait,
 	types::error::{CallError, ErrorObject},
-	PendingSubscriptionSink, SubscriptionMessage,
+	PendingSubscriptionSink,
 };
+use sc_rpc::utils::SubscriptionResponse;
 use sc_transaction_pool_api::{
 	error::IntoPoolError, BlockHash, TransactionFor, TransactionPool, TransactionSource,
 	TransactionStatus,
@@ -88,7 +89,11 @@ where
 	<Pool::Block as BlockT>::Hash: Unpin,
 	Client: HeaderBackend<Pool::Block> + ProvideRuntimeApi<Pool::Block> + Send + Sync + 'static,
 {
-	async fn submit_and_watch(&self, pending: PendingSubscriptionSink, xt: Bytes) {
+	async fn submit_and_watch(
+		&self,
+		pending: PendingSubscriptionSink,
+		xt: Bytes,
+	) -> SubscriptionResponse<TransactionEvent<<Pool::Block as BlockT>::Hash>> {
 		// This is the only place where the RPC server can return an error for this
 		// subscription. Other defects must be signaled as events to the sink.
 		let decoded_extrinsic = match TransactionFor::<Pool>::decode(&mut &xt[..]) {
@@ -99,8 +104,8 @@ where
 					format!("Extrinsic has invalid format: {}", e),
 					None::<()>,
 				));
-				let _ = pending.reject(err).await;
-				return
+				pending.reject(err).await;
+				return SubscriptionResponse::Closed
 			},
 		};
 
@@ -124,17 +129,13 @@ where
 				let mut state = TransactionState::new();
 				let stream = stream.filter_map(|event| async move { state.handle_event(event) });
 				futures::pin_mut!(stream);
-				_ = accept_and_pipe_from_stream(pending, stream).await
+				accept_and_pipe_from_stream(pending, stream).await
 			},
 			Err(err) => {
 				// We have not created an `Watcher` for the tx. Make sure the
 				// error is still propagated as an event.
-				let event: TransactionEvent<<Pool::Block as BlockT>::Hash> = err.into();
-				let msg = SubscriptionMessage::from_json(&event).unwrap();
-				let Ok(sink) = pending.accept().await else {
-					return
-				};
-				_ = sink.send(msg).await;
+				let _sink = pending.accept().await;
+				SubscriptionResponse::Event(err.into())
 			},
 		}
 	}

@@ -20,6 +20,7 @@
 
 use crate::transaction::event::TransactionEvent;
 use jsonrpsee::proc_macros::rpc;
+use sc_rpc::utils::SubscriptionResponse;
 use sp_core::Bytes;
 
 #[rpc(client, server)]
@@ -33,5 +34,5 @@ pub trait TransactionApi<Hash: Clone> {
 		unsubscribe = "transaction_unstable_unwatch",
 		item = TransactionEvent<Hash>,
 	)]
-	async fn submit_and_watch(&self, bytes: Bytes);
+	async fn submit_and_watch(&self, bytes: Bytes) -> SubscriptionResponse<TransactionEvent<Hash>>;
 }

@@ -424,7 +424,7 @@ where
 
 		let stream = futures::stream::once(future::ready(initial)).chain(version_stream);
 
-		_ = accept_and_pipe_from_stream(pending, stream).await;
+		_ = accept_and_pipe_from_stream::<_, _, ()>(pending, stream).await;
 	}
 
 	async fn subscribe_storage(
@@ -470,7 +470,7 @@ where
 			.chain(storage_stream)
 			.filter(|storage| future::ready(!storage.changes.is_empty()));
 
-		_ = accept_and_pipe_from_stream(pending, stream).await;
+		_ = accept_and_pipe_from_stream::<_, _, ()>(pending, stream).await;
 		log::info!("Dropping a storage subscription; count={}", Arc::strong_count(&c) - 1);
 	}
 

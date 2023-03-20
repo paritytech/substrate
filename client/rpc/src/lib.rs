@@ -48,59 +48,76 @@ pub type SubscriptionTaskExecutor = std::sync::Arc<dyn sp_core::traits::SpawnNam
 pub mod utils {
 	use futures::{Stream, StreamExt};
 	use jsonrpsee::{
-		core::RpcResult, PendingSubscriptionSink, SendTimeoutError, SubscriptionMessage,
-		SubscriptionSink,
+		IntoSubscriptionCloseResponse, PendingSubscriptionSink, SendTimeoutError,
+		SubscriptionCloseResponse, SubscriptionMessage, SubscriptionSink,
 	};
 	use sp_runtime::Serialize;
 
-	/// todo..
-	pub async fn accept_and_pipe_from_stream<S, T>(
+	/// RE-WRITE / REMOVE
+	pub async fn accept_and_pipe_from_stream<S, T, R>(
 		pending: PendingSubscriptionSink,
 		stream: S,
-	) -> RpcResult<()>
+	) -> SubscriptionResponse<R>
 	where
 		S: Stream<Item = T> + Unpin,
 		T: Serialize,
+		R: Serialize,
 	{
-		let sink = pending.accept().await?;
+		let Ok(sink )= pending.accept().await else {
+			return SubscriptionResponse::Closed
+		};
 		pipe_from_stream(sink, stream).await
 	}
 
-	/// todo..
-	pub async fn pipe_from_stream<S, T>(sink: SubscriptionSink, mut stream: S) -> RpcResult<()>
+	/// RE-WRITE / REMOVE
+	pub async fn pipe_from_stream<S, T, R>(
+		sink: SubscriptionSink,
+		mut stream: S,
+	) -> SubscriptionResponse<R>
 	where
 		S: Stream<Item = T> + Unpin,
 		T: Serialize,
+		R: Serialize,
 	{
-		let close_msg = loop {
+		loop {
 			tokio::select! {
 				biased;
-				_ = sink.closed() => break None,
+				_ = sink.closed() => break SubscriptionResponse::Closed,
 
 				maybe_item = stream.next() => {
 					let item = match maybe_item {
 						Some(item) => item,
-						None => break Some("Subscription completed successfully".to_string()),
+						None => break SubscriptionResponse::Closed,
 					};
-					let msg = match SubscriptionMessage::from_json(&item) {
-						Ok(msg) => msg,
-						Err(e) => break Some(e.to_string()),
-					};
+					let msg = SubscriptionMessage::from_json(&item).expect("Serialize must be infallible; qed");
 
 					match sink.send_timeout(msg, std::time::Duration::from_secs(60)).await {
 						Ok(_) => (),
-						Err(SendTimeoutError::Closed(_)) => break None,
-						Err(SendTimeoutError::Timeout(_)) => break Some("Subscription closed because send timeout elapsed".to_string()),
+						Err(SendTimeoutError::Closed(_)) | Err(SendTimeoutError::Timeout(_)) => break SubscriptionResponse::Closed,
 					}
 				}
 			}
-		};
-
-		if let Some(msg) = close_msg {
-			let msg = SubscriptionMessage::from_json(&msg)?;
-			let _ = sink.send(msg).await;
 		}
+	}
 
-		Ok(())
+	/// ...
+	pub enum SubscriptionResponse<T> {
+		/// The subscription was closed, no further message is sent.
+		Closed,
+		/// Send out a notification.
+		Event(T),
+	}
+
+	impl<T: Serialize> IntoSubscriptionCloseResponse for SubscriptionResponse<T> {
+		fn into_response(self) -> SubscriptionCloseResponse {
+			match self {
+				Self::Closed => SubscriptionCloseResponse::None,
+				Self::Event(ev) => {
+					let msg = SubscriptionMessage::from_json(&ev)
+						.expect("JSON serialization infallible; qed");
+					SubscriptionCloseResponse::Some(msg)
+				},
+			}
+		}
 	}
 }

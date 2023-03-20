@@ -19,11 +19,9 @@
 #![allow(non_snake_case)]
 
 //! API trait of the chain head.
-use crate::{
-	chain_head::event::{ChainHeadEvent, FollowEvent, NetworkConfig},
-	SubscriptionResponse,
-};
+use crate::chain_head::event::{ChainHeadEvent, FollowEvent, NetworkConfig};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
+use sc_rpc::utils::SubscriptionResponse;
 
 #[rpc(client, server)]
 pub trait ChainHeadApi<Hash> {
