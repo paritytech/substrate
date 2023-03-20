@@ -365,8 +365,7 @@ where
 		memory64: false,
 		extended_const: false,
 		component_model: false,
-		// This is not our only defense: We check for float types later in the preparation
-		// process. Additionally, all instructions explicitly  need to have weights assigned
+		// This is not our only defense: All instructions explicitly need to have weights assigned
 		// or the deployment will fail. We have none assigned for float instructions.
 		floats: matches!(determinism, Determinism::AllowIndeterminism),
 		mutable_global: false,
