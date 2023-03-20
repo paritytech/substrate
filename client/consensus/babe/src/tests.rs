@@ -369,10 +369,11 @@ async fn rejects_empty_block() {
 }
 
 fn create_keystore(authority: Sr25519Keyring) -> KeystorePtr {
-	let keystore = Arc::new(MemoryKeystore::new());
-	Keystore::sr25519_generate_new(&*keystore, BABE, Some(&authority.to_seed()))
-		.expect("Generates authority key");
+	let keystore = MemoryKeystore::new();
 	keystore
+		.sr25519_generate_new(BABE, Some(&authority.to_seed()))
+		.expect("Generates authority key");
+	keystore.into()
 }
 
 async fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static) {
@@ -637,7 +638,8 @@ fn claim_vrf_check() {
 		v => panic!("Unexpected pre-digest variant {:?}", v),
 	};
 	let transcript = make_transcript_data(&epoch.randomness.clone(), 0.into(), epoch.epoch_index);
-	let sign = Keystore::sr25519_vrf_sign(&*keystore, AuthorityId::ID, &public, transcript)
+	let sign = keystore
+		.sr25519_vrf_sign(AuthorityId::ID, &public, transcript)
 		.unwrap()
 		.unwrap();
 	assert_eq!(pre_digest.vrf_output, VRFOutput(sign.output));
@@ -648,7 +650,8 @@ fn claim_vrf_check() {
 		v => panic!("Unexpected pre-digest variant {:?}", v),
 	};
 	let transcript = make_transcript_data(&epoch.randomness.clone(), 1.into(), epoch.epoch_index);
-	let sign = Keystore::sr25519_vrf_sign(&*keystore, AuthorityId::ID, &public, transcript)
+	let sign = keystore
+		.sr25519_vrf_sign(AuthorityId::ID, &public, transcript)
 		.unwrap()
 		.unwrap();
 	assert_eq!(pre_digest.vrf_output, VRFOutput(sign.output));
@@ -661,7 +664,8 @@ fn claim_vrf_check() {
 	};
 	let fixed_epoch = epoch.clone_for_slot(slot);
 	let transcript = make_transcript_data(&epoch.randomness.clone(), slot, fixed_epoch.epoch_index);
-	let sign = Keystore::sr25519_vrf_sign(&*keystore, AuthorityId::ID, &public, transcript)
+	let sign = keystore
+		.sr25519_vrf_sign(AuthorityId::ID, &public, transcript)
 		.unwrap()
 		.unwrap();
 	assert_eq!(fixed_epoch.epoch_index, 11);
@@ -675,7 +679,8 @@ fn claim_vrf_check() {
 	};
 	let fixed_epoch = epoch.clone_for_slot(slot);
 	let transcript = make_transcript_data(&epoch.randomness.clone(), slot, fixed_epoch.epoch_index);
-	let sign = Keystore::sr25519_vrf_sign(&*keystore, AuthorityId::ID, &public, transcript)
+	let sign = keystore
+		.sr25519_vrf_sign(AuthorityId::ID, &public, transcript)
 		.unwrap()
 		.unwrap();
 	assert_eq!(fixed_epoch.epoch_index, 11);
