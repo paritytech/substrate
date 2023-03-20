@@ -208,6 +208,7 @@ impl<Block: BlockT> SubscriptionState<Block> {
 		!state.was_unpinned
 	}
 
+	/// Get the timestamp of the oldest inserted block.
 	fn oldest_block_timestamp(&self) -> Instant {
 		let mut timestamp = Instant::now();
 		for (_, state) in self.blocks.iter() {
