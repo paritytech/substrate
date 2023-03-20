@@ -33,7 +33,7 @@ use frame_support::{
 	parameter_types,
 	traits::{
 		fungible::ItemOf,
-		tokens::{nonfungibles_v2::Inspect, GetSalary},
+		tokens::{nonfungibles_v2::Inspect, GetSalary, PayFromAccount},
 		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, Currency, EitherOfDiverse,
 		EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter, KeyOwnerProofSystem,
 		LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote, WithdrawReasons,
@@ -56,9 +56,10 @@ use pallet_election_provider_multi_phase::SolutionAccuracyOf;
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use pallet_nfts::PalletFeatures;
 use pallet_nis::WithMaximumOf;
-use pallet_session::historical::{self as pallet_session_historical};
+use pallet_session::historical as pallet_session_historical;
 pub use pallet_transaction_payment::{CurrencyAdapter, Multiplier, TargetedFeeAdjustment};
 use pallet_transaction_payment::{FeeDetails, RuntimeDispatchInfo};
+use scale_info::TypeInfo;
 use sp_api::impl_runtime_apis;
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
@@ -432,6 +433,15 @@ parameter_types! {
 	pub const MaxReserves: u32 = 50;
 }
 
+/// A reason for placing a hold on funds.
+#[derive(
+	Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, Debug, TypeInfo,
+)]
+pub enum HoldReason {
+	/// The NIS Pallet has reserved it for a non-fungible receipt.
+	Nis,
+}
+
 impl pallet_balances::Config for Runtime {
 	type MaxLocks = MaxLocks;
 	type MaxReserves = MaxReserves;
@@ -442,6 +452,10 @@ impl pallet_balances::Config for Runtime {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = frame_system::Pallet<Runtime>;
 	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type HoldIdentifier = HoldReason;
+	type MaxHolds = ConstU32<1>;
 }
 
 parameter_types! {
@@ -1481,7 +1495,6 @@ impl pallet_assets::Config for Runtime {
 }
 
 parameter_types! {
-	pub IgnoredIssuance: Balance = Treasury::pot();
 	pub const QueueCount: u32 = 300;
 	pub const MaxQueueLen: u32 = 1000;
 	pub const FifoQueueLen: u32 = 500;
@@ -1493,7 +1506,7 @@ parameter_types! {
 	pub const ThawThrottle: (Perquintill, BlockNumber) = (Perquintill::from_percent(25), 5);
 	pub Target: Perquintill = Perquintill::zero();
 	pub const NisPalletId: PalletId = PalletId(*b"py/nis  ");
-	pub const NisReserveId: [u8; 8] = *b"py/nis  ";
+	pub const NisHoldReason: HoldReason = HoldReason::Nis;
 }
 
 impl pallet_nis::Config for Runtime {
@@ -1505,7 +1518,7 @@ impl pallet_nis::Config for Runtime {
 	type Counterpart = ItemOf<Assets, ConstU32<9u32>, AccountId>;
 	type CounterpartAmount = WithMaximumOf<ConstU128<21_000_000_000_000_000_000u128>>;
 	type Deficit = ();
-	type IgnoredIssuance = IgnoredIssuance;
+	type IgnoredIssuance = ();
 	type Target = Target;
 	type PalletId = NisPalletId;
 	type QueueCount = QueueCount;
@@ -1517,7 +1530,7 @@ impl pallet_nis::Config for Runtime {
 	type IntakePeriod = IntakePeriod;
 	type MaxIntakeWeight = MaxIntakeWeight;
 	type ThawThrottle = ThawThrottle;
-	type ReserveId = NisReserveId;
+	type HoldReason = NisHoldReason;
 }
 
 parameter_types! {
@@ -1567,7 +1580,7 @@ impl GetSalary<u16, AccountId, Balance> for SalaryForRank {
 impl pallet_salary::Config for Runtime {
 	type WeightInfo = ();
 	type RuntimeEvent = RuntimeEvent;
-	type Paymaster = pallet_salary::PayFromAccount<Balances, TreasuryAccount>;
+	type Paymaster = PayFromAccount<Balances, TreasuryAccount>;
 	type Members = RankedCollective;
 	type Salary = SalaryForRank;
 	type RegistrationPeriod = ConstU32<200>;
@@ -1941,6 +1954,14 @@ impl_runtime_apis! {
 	impl sp_api::Metadata<Block> for Runtime {
 		fn metadata() -> OpaqueMetadata {
 			OpaqueMetadata::new(Runtime::metadata().into())
+		}
+
+		fn metadata_at_version(version: u32) -> Option<OpaqueMetadata> {
+			Runtime::metadata_at_version(version)
+		}
+
+		fn metadata_versions() -> sp_std::vec::Vec<u32> {
+			Runtime::metadata_versions()
 		}
 	}
 

@@ -36,7 +36,7 @@ use sp_core::{
 	testing::{ED25519, SR25519},
 	H256,
 };
-use sp_keystore::testing::KeyStore;
+use sp_keystore::testing::MemoryKeystore;
 use std::sync::Arc;
 use substrate_test_runtime_client::{
 	self,
@@ -58,13 +58,13 @@ type FullTransactionPool = BasicPool<FullChainApi<Client<Backend>, Block>, Block
 
 struct TestSetup {
 	pub client: Arc<Client<Backend>>,
-	pub keystore: Arc<KeyStore>,
+	pub keystore: Arc<MemoryKeystore>,
 	pub pool: Arc<FullTransactionPool>,
 }
 
 impl Default for TestSetup {
 	fn default() -> Self {
-		let keystore = Arc::new(KeyStore::new());
+		let keystore = Arc::new(MemoryKeystore::new());
 		let client_builder = substrate_test_runtime_client::TestClientBuilder::new();
 		let client = Arc::new(client_builder.set_keystore(keystore.clone()).build());
 
@@ -225,7 +225,7 @@ async fn author_should_insert_key() {
 		keypair.public().0.to_vec().into(),
 	);
 	api.call::<_, ()>("author_insertKey", params).await.unwrap();
-	let pubkeys = SyncCryptoStore::keys(&*setup.keystore, ED25519).unwrap();
+	let pubkeys = Keystore::keys(&*setup.keystore, ED25519).unwrap();
 
 	assert!(
 		pubkeys.contains(&CryptoTypePublicPair(ed25519::CRYPTO_ID, keypair.public().to_raw_vec()))
@@ -240,8 +240,8 @@ async fn author_should_rotate_keys() {
 	let new_pubkeys: Bytes = api.call("author_rotateKeys", EmptyParams::new()).await.unwrap();
 	let session_keys =
 		SessionKeys::decode(&mut &new_pubkeys[..]).expect("SessionKeys decode successfully");
-	let ed25519_pubkeys = SyncCryptoStore::keys(&*setup.keystore, ED25519).unwrap();
-	let sr25519_pubkeys = SyncCryptoStore::keys(&*setup.keystore, SR25519).unwrap();
+	let ed25519_pubkeys = Keystore::keys(&*setup.keystore, ED25519).unwrap();
+	let sr25519_pubkeys = Keystore::keys(&*setup.keystore, SR25519).unwrap();
 	assert!(ed25519_pubkeys
 		.contains(&CryptoTypePublicPair(ed25519::CRYPTO_ID, session_keys.ed25519.to_raw_vec())));
 	assert!(sr25519_pubkeys

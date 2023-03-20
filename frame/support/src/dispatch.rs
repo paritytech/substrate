@@ -2977,7 +2977,7 @@ macro_rules! __dispatch_impl_metadata {
 		{
 			#[doc(hidden)]
 			#[allow(dead_code)]
-			pub fn call_functions() -> $crate::metadata::PalletCallMetadata {
+			pub fn call_functions() -> $crate::metadata_ir::PalletCallMetadataIR {
 				$crate::scale_info::meta_type::<$call_type<$trait_instance $(, $instance)?>>().into()
 			}
 		}
@@ -2998,7 +2998,7 @@ macro_rules! __impl_error_metadata {
 		{
 			#[doc(hidden)]
 			#[allow(dead_code)]
-			pub fn error_metadata() -> Option<$crate::metadata::PalletErrorMetadata> {
+			pub fn error_metadata() -> Option<$crate::metadata_ir::PalletErrorMetadataIR> {
 				None
 			}
 		}
@@ -3013,8 +3013,8 @@ macro_rules! __impl_error_metadata {
 		{
 			#[doc(hidden)]
 			#[allow(dead_code)]
-			pub fn error_metadata() -> Option<$crate::metadata::PalletErrorMetadata> {
-				Some($crate::metadata::PalletErrorMetadata {
+			pub fn error_metadata() -> Option<$crate::metadata_ir::PalletErrorMetadataIR> {
+				Some($crate::metadata_ir::PalletErrorMetadataIR {
 					ty: $crate::scale_info::meta_type::<$( $error_type )*>()
 				})
 			}
@@ -3109,7 +3109,7 @@ macro_rules! __impl_module_constants_metadata {
 		{
 			#[doc(hidden)]
 			#[allow(dead_code)]
-			pub fn pallet_constants_metadata() -> $crate::sp_std::vec::Vec<$crate::metadata::PalletConstantMetadata> {
+			pub fn pallet_constants_metadata() -> $crate::sp_std::vec::Vec<$crate::metadata_ir::PalletConstantMetadataIR> {
 				// Create the `ByteGetter`s
 				$(
 					#[allow(non_upper_case_types)]
@@ -3133,7 +3133,7 @@ macro_rules! __impl_module_constants_metadata {
 				)*
 				$crate::sp_std::vec![
 					$(
-						$crate::metadata::PalletConstantMetadata {
+						$crate::metadata_ir::PalletConstantMetadataIR {
 							name: stringify!($name),
 							ty: $crate::scale_info::meta_type::<$type>(),
 							value: $default_byte_name::<$const_trait_instance $(, $const_instance)?>(
@@ -3207,7 +3207,7 @@ mod tests {
 	use super::*;
 	use crate::{
 		dispatch::{DispatchClass, DispatchInfo, Pays},
-		metadata::*,
+		metadata_ir::*,
 		traits::{
 			CallerTrait, CrateVersion, Get, GetCallName, IntegrityTest, OnFinalize, OnIdle,
 			OnInitialize, OnRuntimeUpgrade, PalletInfo,
@@ -3405,7 +3405,7 @@ mod tests {
 	fn module_json_metadata() {
 		let metadata = Module::<TraitImpl>::call_functions();
 		let expected_metadata =
-			PalletCallMetadata { ty: scale_info::meta_type::<Call<TraitImpl>>() };
+			PalletCallMetadataIR { ty: scale_info::meta_type::<Call<TraitImpl>>() };
 		assert_eq!(expected_metadata, metadata);
 	}
 

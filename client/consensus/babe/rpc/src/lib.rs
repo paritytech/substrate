@@ -37,7 +37,7 @@ use sp_consensus_babe::{
 	digests::PreDigest, AuthorityId, BabeApi as BabeRuntimeApi, BabeConfiguration,
 };
 use sp_core::crypto::ByteArray;
-use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::{Keystore, KeystorePtr};
 use sp_runtime::traits::{Block as BlockT, Header as _};
 use std::{collections::HashMap, sync::Arc};
 
@@ -57,7 +57,7 @@ pub struct Babe<B: BlockT, C, SC> {
 	/// shared reference to EpochChanges
 	shared_epoch_changes: SharedEpochChanges<B, Epoch>,
 	/// shared reference to the Keystore
-	keystore: SyncCryptoStorePtr,
+	keystore: KeystorePtr,
 	/// config (actually holds the slot duration)
 	babe_config: BabeConfiguration,
 	/// The SelectChain strategy
@@ -71,7 +71,7 @@ impl<B: BlockT, C, SC> Babe<B, C, SC> {
 	pub fn new(
 		client: Arc<C>,
 		shared_epoch_changes: SharedEpochChanges<B, Epoch>,
-		keystore: SyncCryptoStorePtr,
+		keystore: KeystorePtr,
 		babe_config: BabeConfiguration,
 		select_chain: SC,
 		deny_unsafe: DenyUnsafe,
@@ -117,10 +117,7 @@ where
 				.iter()
 				.enumerate()
 				.filter_map(|(i, a)| {
-					if SyncCryptoStore::has_keys(
-						&*self.keystore,
-						&[(a.0.to_raw_vec(), AuthorityId::ID)],
-					) {
+					if Keystore::has_keys(&*self.keystore, &[(a.0.to_raw_vec(), AuthorityId::ID)]) {
 						Some((a.0.clone(), i))
 					} else {
 						None
@@ -217,7 +214,7 @@ mod tests {
 	use sp_application_crypto::AppPair;
 	use sp_core::crypto::key_types::BABE;
 	use sp_keyring::Sr25519Keyring;
-	use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+	use sp_keystore::{Keystore, KeystorePtr};
 	use substrate_test_runtime_client::{
 		runtime::Block, Backend, DefaultTestClientBuilderExt, TestClient, TestClientBuilder,
 		TestClientBuilderExt,
@@ -229,11 +226,11 @@ mod tests {
 	/// creates keystore backed by a temp file
 	fn create_temp_keystore<P: AppPair>(
 		authority: Sr25519Keyring,
-	) -> (SyncCryptoStorePtr, tempfile::TempDir) {
+	) -> (KeystorePtr, tempfile::TempDir) {
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 		let keystore =
 			Arc::new(LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore"));
-		SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some(&authority.to_seed()))
+		Keystore::sr25519_generate_new(&*keystore, BABE, Some(&authority.to_seed()))
 			.expect("Creates authority key");
 
 		(keystore, keystore_path)

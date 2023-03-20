@@ -138,7 +138,7 @@ pub trait ChainExtension<C: Config> {
 ///
 /// # Note
 ///
-/// Currently, we support tuples of up to ten registred chain extensions. If more chain extensions
+/// Currently, we support tuples of up to ten registered chain extensions. If more chain extensions
 /// are needed consider opening an issue.
 pub trait RegisteredChainExtension<C: Config>: ChainExtension<C> {
 	/// The extensions globally unique identifier.
