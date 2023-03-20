@@ -3468,9 +3468,9 @@ checksum = "59ce5ef949d49ee85593fc4d3f3f95ad61657076395cbbce23e2121fc5542074"
 
 [[package]]
 name = "io-lifetimes"
-version = "1.0.8"
+version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0dd6da19f25979c7270e70fa95ab371ec3b701cd0eefc47667a09785b3c59155"
+checksum = "09270fd4fa1111bc614ed2246c7ef56239a3063d5be0d1ec3b589c505d400aeb"
 dependencies = [
  "hermit-abi 0.3.1",
  "libc",
@@ -3508,8 +3508,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8687c819457e979cc940d09cb16e42a1bf70aa6b60a549de6d3a62a0ee90c69e"
 dependencies = [
  "hermit-abi 0.3.1",
- "io-lifetimes 1.0.8",
- "rustix 0.36.10",
+ "io-lifetimes 1.0.9",
+ "rustix 0.36.11",
  "windows-sys 0.45.0",
 ]
 
@@ -4027,9 +4027,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-identity"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff6c9cb71e2333d31f18e7556b9a5f1d0a2e013effc9325e36f436be65fe7bd2"
+checksum = "8a8ea433ae0cea7e3315354305237b9897afe45278b2118a7a57ca744e70fd27"
 dependencies = [
  "bs58",
  "ed25519-dalek",
@@ -4037,7 +4037,6 @@ dependencies = [
  "multiaddr 0.17.0",
  "multihash 0.17.0",
  "prost",
- "prost-build",
  "quick-protobuf",
  "rand 0.8.5",
  "thiserror",
@@ -4610,7 +4609,7 @@ version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b20a59d985586e4a5aef64564ac77299f8586d8be6cf9106a5a40207e8908efb"
 dependencies = [
- "rustix 0.36.10",
+ "rustix 0.36.11",
 ]
 
 [[package]]
@@ -8157,13 +8156,13 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.36.10"
+version = "0.36.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fe885c3a125aa45213b68cc1472a49880cb5923dc23f522ad2791b882228778"
+checksum = "db4165c9963ab29e422d6c26fbc1d37f15bace6b2810221f9d925023480fcf0e"
 dependencies = [
  "bitflags 1.3.2",
  "errno",
- "io-lifetimes 1.0.8",
+ "io-lifetimes 1.0.9",
  "libc",
  "linux-raw-sys 0.1.4",
  "windows-sys 0.45.0",
@@ -8931,7 +8930,7 @@ dependencies = [
  "once_cell",
  "parity-scale-codec",
  "paste",
- "rustix 0.36.10",
+ "rustix 0.36.11",
  "sc-allocator",
  "sc-executor-common",
  "sc-runtime-test",
@@ -11558,7 +11557,7 @@ dependencies = [
  "cfg-if",
  "fastrand",
  "redox_syscall",
- "rustix 0.36.10",
+ "rustix 0.36.11",
  "windows-sys 0.42.0",
 ]
 
@@ -12106,9 +12105,9 @@ dependencies = [
 
 [[package]]
 name = "trybuild"
-version = "1.0.79"
+version = "1.0.80"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db3115bddce1b5f52dd4b5e0ec8298a66ce733e4cc6759247dc2d1c11508ec38"
+checksum = "501dbdbb99861e4ab6b60eb6a7493956a9defb644fd034bc4a5ef27c693c8a3a"
 dependencies = [
  "basic-toml",
  "dissimilar",
@@ -12638,7 +12637,7 @@ dependencies = [
  "directories-next",
  "file-per-thread-logger",
  "log",
- "rustix 0.36.10",
+ "rustix 0.36.11",
  "serde",
  "sha2 0.10.6",
  "toml",
@@ -12718,7 +12717,7 @@ checksum = "d0245e8a9347017c7185a72e215218a802ff561545c242953c11ba00fccc930f"
 dependencies = [
  "object 0.29.0",
  "once_cell",
- "rustix 0.36.10",
+ "rustix 0.36.11",
 ]
 
 [[package]]
@@ -12749,7 +12748,7 @@ dependencies = [
  "memoffset 0.6.5",
  "paste",
  "rand 0.8.5",
- "rustix 0.36.10",
+ "rustix 0.36.11",
  "wasmtime-asm-macros",
  "wasmtime-environ",
  "wasmtime-jit-debug",
