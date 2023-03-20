@@ -660,22 +660,23 @@ impl<T: Config> Pallet<T> {
 	/// This should be valid before or after each state transition of this pallet.
 	///
 	/// ## Invariants:
-	/// 
+	///
 	/// * The `per_block` payments left of every account currently vesting
 	/// * is equal to the total balance currently locked.
 	#[cfg(any(feature = "try-runtime", feature = "fuzzing", test, debug_assertions))]
 	pub fn do_try_state() -> Result<(), &'static str> {
-		
 		Vesting::<T>::iter().for_each(|(_, d)| {
 			let vesting = d.to_vec();
 			let mut total_per_block: BalanceOf<T> = Zero::zero();
 			let mut total_locked_now: BalanceOf<T> = Zero::zero();
 			for info in vesting.iter() {
 				// get the number of remaining vesting blocks<>balance
-				let payments_left: BalanceOf<T> = info.ending_block_as_balance::<T::BlockNumberToBalance>();
+				let payments_left: BalanceOf<T> =
+					info.ending_block_as_balance::<T::BlockNumberToBalance>();
 				total_per_block += info.per_block().saturating_mul(payments_left);
-				total_locked_now += info.locked_at::<T::BlockNumberToBalance>(<frame_system::Pallet<T>>::block_number());
-			};
+				total_locked_now += info
+					.locked_at::<T::BlockNumberToBalance>(<frame_system::Pallet<T>>::block_number());
+			}
 			let one_extra = total_per_block.saturating_sub(total_locked_now);
 			assert_eq!(total_per_block, total_locked_now.saturating_add(one_extra));
 		});

@@ -613,7 +613,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// This should be valid before or after each state transition of this pallet.
 	///
 	/// ## Invariants:
-	/// 
+	///
 	/// * `Reasons` and `Tips` must have the same length of keys
 	#[cfg(any(feature = "try-runtime", feature = "fuzzing", test, debug_assertions))]
 	pub fn do_try_state() -> Result<(), &'static str> {

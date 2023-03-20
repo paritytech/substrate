@@ -321,7 +321,7 @@ fn close_tip_works() {
 			Tips::close_tip(RuntimeOrigin::signed(100), h.into()),
 			Error::<Test>::UnknownTip
 		);
-		
+
 		Tips::do_try_state().unwrap();
 	});
 }
@@ -354,7 +354,7 @@ fn slash_tip_works() {
 		// tipper slashed
 		assert_eq!(Balances::reserved_balance(0), 0);
 		assert_eq!(Balances::free_balance(0), 88);
-		
+
 		Tips::do_try_state().unwrap();
 	});
 }
@@ -390,7 +390,7 @@ fn retract_tip_works() {
 			Tips::close_tip(RuntimeOrigin::signed(10), h.into()),
 			Error::<Test>::UnknownTip
 		);
-		
+
 		Tips::do_try_state().unwrap();
 	});
 }
@@ -624,7 +624,7 @@ fn report_awesome_and_tip_works_second_instance() {
 		assert_eq!(Balances::free_balance(&Treasury::account_id()), 101);
 		// Treasury 2 gave the funds
 		assert_eq!(Balances::free_balance(&Treasury1::account_id()), 191);
-		
+
 		Tips::do_try_state().unwrap();
 	});
 }
