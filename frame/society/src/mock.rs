@@ -158,7 +158,6 @@ impl EnvBuilder {
 		let mut ext: sp_io::TestExternalities = t.into();
 		ext.execute_with(f)
 	}
-
 	#[allow(dead_code)]
 	pub fn with_members(mut self, m: Vec<u128>) -> Self {
 		self.members = m;
