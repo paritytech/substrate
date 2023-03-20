@@ -576,124 +576,380 @@ impl<Block: BlockT, BE: Backend<Block> + 'static> SubscriptionManagement<Block, 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use futures::executor::block_on;
 	use sc_block_builder::BlockBuilderProvider;
+	use sc_service::client::new_in_mem;
 	use sp_consensus::BlockOrigin;
-	use sp_core::H256;
+	use sp_core::{testing::TaskExecutor, H256};
 	use substrate_test_runtime_client::{
-		prelude::*, runtime::Block, Backend, ClientBlockImportExt,
+		prelude::*,
+		runtime::{Block, RuntimeApi},
+		Client, ClientBlockImportExt, GenesisInit,
 	};
 
+	fn init_backend() -> (
+		Arc<sc_client_api::in_mem::Backend<Block>>,
+		Arc<Client<sc_client_api::in_mem::Backend<Block>>>,
+	) {
+		let backend = Arc::new(sc_client_api::in_mem::Backend::new());
+		let executor = substrate_test_runtime_client::new_native_executor();
+		let client_config = sc_service::ClientConfig::default();
+		let genesis_block_builder = sc_service::GenesisBlockBuilder::new(
+			&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
+			!client_config.no_genesis,
+			backend.clone(),
+			executor.clone(),
+		)
+		.unwrap();
+		let client = Arc::new(
+			new_in_mem::<_, Block, _, RuntimeApi>(
+				backend.clone(),
+				executor,
+				genesis_block_builder,
+				None,
+				None,
+				None,
+				Box::new(TaskExecutor::new()),
+				client_config,
+			)
+			.unwrap(),
+		);
+		(backend, client)
+	}
+
 	#[test]
-	fn subscription_check_id() {
-		let subs = SubscriptionManagement::<Block, Backend>::new();
+	fn sub_state_register_twice() {
+		let mut sub_state = SubscriptionState::<Block> {
+			runtime_updates: false,
+			tx_stop: None,
+			blocks: Default::default(),
+		};
+
+		let hash = H256::random();
+		assert_eq!(sub_state.register_block(hash), true);
+		let block_state = sub_state.blocks.get(&hash).unwrap();
+		// Did not call `register_block` twice.
+		assert_eq!(block_state.can_unregister, false);
+		assert_eq!(block_state.was_unpinned, false);
+
+		assert_eq!(sub_state.register_block(hash), false);
+		let block_state = sub_state.blocks.get(&hash).unwrap();
+		assert_eq!(block_state.can_unregister, true);
+		assert_eq!(block_state.was_unpinned, false);
+
+		// Block is no longer tracked when: `register_block` is called twice and
+		// `unregister_block` is called once.
+		assert_eq!(sub_state.unregister_block(hash), true);
+		let block_state = sub_state.blocks.get(&hash);
+		assert!(block_state.is_none());
+	}
+
+	#[test]
+	fn sub_state_register_unregister() {
+		let mut sub_state = SubscriptionState::<Block> {
+			runtime_updates: false,
+			tx_stop: None,
+			blocks: Default::default(),
+		};
+
+		let hash = H256::random();
+		// Block was not registered before.
+		assert_eq!(sub_state.unregister_block(hash), false);
+
+		assert_eq!(sub_state.register_block(hash), true);
+		let block_state = sub_state.blocks.get(&hash).unwrap();
+		// Did not call `register_block` twice.
+		assert_eq!(block_state.can_unregister, false);
+		assert_eq!(block_state.was_unpinned, false);
+
+		// Unregister block before the second `register_block`.
+		assert_eq!(sub_state.unregister_block(hash), true);
+		let block_state = sub_state.blocks.get(&hash).unwrap();
+		assert_eq!(block_state.can_unregister, false);
+		assert_eq!(block_state.was_unpinned, true);
+
+		assert_eq!(sub_state.register_block(hash), false);
+		let block_state = sub_state.blocks.get(&hash);
+		assert!(block_state.is_none());
+
+		// Block is no longer tracked when: `register_block` is called twice and
+		// `unregister_block` is called once.
+		assert_eq!(sub_state.unregister_block(hash), false);
+		let block_state = sub_state.blocks.get(&hash);
+		assert!(block_state.is_none());
+	}
+
+	#[test]
+	fn subscription_lock_block() {
 		let builder = TestClientBuilder::new();
 		let backend = builder.backend();
+		let mut subs = SubscriptionsInner::new(10, Duration::from_secs(10), backend);
 
 		let id = "abc".to_string();
 		let hash = H256::random();
 
-		let handle = subs.get_subscription(&id);
-		assert!(handle.is_none());
+		// Subscription not inserted.
+		let err = subs.lock_block(&id, hash).unwrap_err();
+		assert_eq!(err, SubscriptionManagementError::SubscriptionAbsent);
 
-		let (_, handle) = subs.insert_subscription(id.clone(), false, 10, backend).unwrap();
-		assert!(!handle.contains_block(&hash));
+		let _stop = subs.insert_subscription(id.clone(), true).unwrap();
+		// Cannot insert the same subscription ID twice.
+		assert!(subs.insert_subscription(id.clone(), true).is_none());
+
+		// No block hash.
+		let err = subs.lock_block(&id, hash).unwrap_err();
+		assert_eq!(err, SubscriptionManagementError::BlockHashAbsent);
 
 		subs.remove_subscription(&id);
 
-		let handle = subs.get_subscription(&id);
-		assert!(handle.is_none());
+		// No subscription.
+		let err = subs.lock_block(&id, hash).unwrap_err();
+		assert_eq!(err, SubscriptionManagementError::SubscriptionAbsent);
 	}
 
 	#[test]
 	fn subscription_check_block() {
-		let subs = SubscriptionManagement::<Block, Backend>::new();
-		let builder = TestClientBuilder::new();
-		let backend = builder.backend();
-		let mut client = Arc::new(builder.build());
+		let (backend, mut client) = init_backend();
 
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 		let hash = block.header.hash();
-		block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
+		futures::executor::block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
 
+		let mut subs = SubscriptionsInner::new(10, Duration::from_secs(10), backend);
 		let id = "abc".to_string();
 
-		// Check with subscription.
-		let (_, handle) = subs.insert_subscription(id.clone(), false, 10, backend).unwrap();
-		assert!(!handle.contains_block(&hash));
-		assert!(!handle.unpin_block(&hash));
+		let _stop = subs.insert_subscription(id.clone(), true).unwrap();
 
-		handle.pin_block(hash).unwrap();
-		assert!(handle.contains_block(&hash));
-		// Unpin an invalid block.
-		assert!(!handle.unpin_block(&H256::random()));
+		// First time we are pinning the block.
+		assert_eq!(subs.pin_block(&id, hash).unwrap(), true);
 
-		// Unpin the valid block.
-		assert!(handle.unpin_block(&hash));
-		assert!(!handle.contains_block(&hash));
+		let block = subs.lock_block(&id, hash).unwrap();
+		// Subscription started with runtime updates
+		assert_eq!(block.has_runtime_updates(), true);
+
+		let invalid_id = "abc-invalid".to_string();
+		let err = subs.unpin_block(&invalid_id, hash).unwrap_err();
+		assert_eq!(err, SubscriptionManagementError::SubscriptionAbsent);
+
+		// Unpin the block.
+		subs.unpin_block(&id, hash).unwrap();
+		let err = subs.lock_block(&id, hash).unwrap_err();
+		assert_eq!(err, SubscriptionManagementError::BlockHashAbsent);
+	}
+
+	#[test]
+	fn subscription_ref_count() {
+		let (backend, mut client) = init_backend();
+		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+		let hash = block.header.hash();
+		futures::executor::block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
+
+		let mut subs = SubscriptionsInner::new(10, Duration::from_secs(10), backend);
+		let id = "abc".to_string();
+
+		let _stop = subs.insert_subscription(id.clone(), true).unwrap();
+		assert_eq!(subs.pin_block(&id, hash).unwrap(), true);
+		// Check the global ref count.
+		assert_eq!(*subs.global_blocks.get(&hash).unwrap(), 1);
+		// Ensure the block propagated to the subscription.
+		subs.subs.get(&id).unwrap().blocks.get(&hash).unwrap();
+
+		// Insert the block for the same subscription again (simulate NewBlock + Finalized pinning)
+		assert_eq!(subs.pin_block(&id, hash).unwrap(), false);
+		// Check the global ref count should not get incremented.
+		assert_eq!(*subs.global_blocks.get(&hash).unwrap(), 1);
+
+		// Ensure the hash propagates for the second subscription.
+		let id_second = "abcd".to_string();
+		let _stop = subs.insert_subscription(id_second.clone(), true).unwrap();
+		assert_eq!(subs.pin_block(&id_second, hash).unwrap(), true);
+		// Check the global ref count.
+		assert_eq!(*subs.global_blocks.get(&hash).unwrap(), 2);
+		// Ensure the block propagated to the subscription.
+		subs.subs.get(&id_second).unwrap().blocks.get(&hash).unwrap();
+
+		subs.unpin_block(&id, hash).unwrap();
+		assert_eq!(*subs.global_blocks.get(&hash).unwrap(), 1);
+		// Cannot unpin a block twice for the same subscription.
+		let err = subs.unpin_block(&id, hash).unwrap_err();
+		assert_eq!(err, SubscriptionManagementError::BlockHashAbsent);
+
+		subs.unpin_block(&id_second, hash).unwrap();
+		// Block unregistered from the memory.
+		assert!(subs.global_blocks.get(&hash).is_none());
+	}
+
+	#[test]
+	fn subscription_remove_subscription() {
+		let (backend, mut client) = init_backend();
+		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+		let hash_1 = block.header.hash();
+		futures::executor::block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
+		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+		let hash_2 = block.header.hash();
+		futures::executor::block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
+		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+		let hash_3 = block.header.hash();
+		futures::executor::block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
+
+		let mut subs = SubscriptionsInner::new(10, Duration::from_secs(10), backend);
+		let id_1 = "abc".to_string();
+		let id_2 = "abcd".to_string();
+
+		// Pin all blocks for the first subscription.
+		let _stop = subs.insert_subscription(id_1.clone(), true).unwrap();
+		assert_eq!(subs.pin_block(&id_1, hash_1).unwrap(), true);
+		assert_eq!(subs.pin_block(&id_1, hash_2).unwrap(), true);
+		assert_eq!(subs.pin_block(&id_1, hash_3).unwrap(), true);
+
+		// Pin only block 2 for the second subscription.
+		let _stop = subs.insert_subscription(id_2.clone(), true).unwrap();
+		assert_eq!(subs.pin_block(&id_2, hash_2).unwrap(), true);
+
+		// Check reference count.
+		assert_eq!(*subs.global_blocks.get(&hash_1).unwrap(), 1);
+		assert_eq!(*subs.global_blocks.get(&hash_2).unwrap(), 2);
+		assert_eq!(*subs.global_blocks.get(&hash_3).unwrap(), 1);
+
+		subs.remove_subscription(&id_1);
+
+		assert!(subs.global_blocks.get(&hash_1).is_none());
+		assert_eq!(*subs.global_blocks.get(&hash_2).unwrap(), 1);
+		assert!(subs.global_blocks.get(&hash_3).is_none());
+
+		subs.remove_subscription(&id_2);
+
+		assert!(subs.global_blocks.get(&hash_2).is_none());
+		assert_eq!(subs.global_blocks.len(), 0);
+	}
+
+	#[test]
+	fn subscription_check_limits() {
+		let (backend, mut client) = init_backend();
+		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+		let hash_1 = block.header.hash();
+		futures::executor::block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
+		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+		let hash_2 = block.header.hash();
+		futures::executor::block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
+		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+		let hash_3 = block.header.hash();
+		futures::executor::block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
+
+		// Maximum number of pinned blocks is 2.
+		let mut subs = SubscriptionsInner::new(2, Duration::from_secs(10), backend);
+		let id_1 = "abc".to_string();
+		let id_2 = "abcd".to_string();
+
+		// Both subscriptions can pin the maximum limit.
+		let _stop = subs.insert_subscription(id_1.clone(), true).unwrap();
+		assert_eq!(subs.pin_block(&id_1, hash_1).unwrap(), true);
+		assert_eq!(subs.pin_block(&id_1, hash_2).unwrap(), true);
+
+		let _stop = subs.insert_subscription(id_2.clone(), true).unwrap();
+		assert_eq!(subs.pin_block(&id_2, hash_1).unwrap(), true);
+		assert_eq!(subs.pin_block(&id_2, hash_2).unwrap(), true);
+
+		// Check reference count.
+		assert_eq!(*subs.global_blocks.get(&hash_1).unwrap(), 2);
+		assert_eq!(*subs.global_blocks.get(&hash_2).unwrap(), 2);
+
+		// Block 3 pinning will exceed the limit and both subscriptions
+		// are terminated because no subscription with older blocks than 10
+		// seconds are present.
+		let err = subs.pin_block(&id_1, hash_3).unwrap_err();
+		assert_eq!(err, SubscriptionManagementError::ExceededLimits);
+
+		// Ensure both subscriptions are removed.
+		let err = subs.lock_block(&id_1, hash_1).unwrap_err();
+		assert_eq!(err, SubscriptionManagementError::SubscriptionAbsent);
+
+		let err = subs.lock_block(&id_2, hash_1).unwrap_err();
+		assert_eq!(err, SubscriptionManagementError::SubscriptionAbsent);
+
+		assert!(subs.global_blocks.get(&hash_1).is_none());
+		assert!(subs.global_blocks.get(&hash_2).is_none());
+		assert!(subs.global_blocks.get(&hash_3).is_none());
+		assert_eq!(subs.global_blocks.len(), 0);
+	}
+
+	#[test]
+	fn subscription_check_limits_with_duration() {
+		let (backend, mut client) = init_backend();
+		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+		let hash_1 = block.header.hash();
+		futures::executor::block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
+		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+		let hash_2 = block.header.hash();
+		futures::executor::block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
+		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+		let hash_3 = block.header.hash();
+		futures::executor::block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
+
+		// Maximum number of pinned blocks is 2 and maximum pin duration is 5 second.
+		let mut subs = SubscriptionsInner::new(2, Duration::from_secs(5), backend);
+		let id_1 = "abc".to_string();
+		let id_2 = "abcd".to_string();
+
+		let _stop = subs.insert_subscription(id_1.clone(), true).unwrap();
+		assert_eq!(subs.pin_block(&id_1, hash_1).unwrap(), true);
+		assert_eq!(subs.pin_block(&id_1, hash_2).unwrap(), true);
+
+		// Maximum pin duration is 5 second, sleep 5 seconds to ensure we clean up
+		// the first subscription.
+		std::thread::sleep(std::time::Duration::from_secs(5));
+
+		let _stop = subs.insert_subscription(id_2.clone(), true).unwrap();
+		assert_eq!(subs.pin_block(&id_2, hash_1).unwrap(), true);
+
+		// Check reference count.
+		assert_eq!(*subs.global_blocks.get(&hash_1).unwrap(), 2);
+		assert_eq!(*subs.global_blocks.get(&hash_2).unwrap(), 1);
+
+		// Second subscription has only 1 block pinned. Only the first subscription is terminated.
+		let err = subs.pin_block(&id_1, hash_3).unwrap_err();
+		assert_eq!(err, SubscriptionManagementError::ExceededLimits);
+
+		// Ensure both subscriptions are removed.
+		let err = subs.lock_block(&id_1, hash_1).unwrap_err();
+		assert_eq!(err, SubscriptionManagementError::SubscriptionAbsent);
+
+		let _block_guard = subs.lock_block(&id_2, hash_1).unwrap();
+
+		assert_eq!(*subs.global_blocks.get(&hash_1).unwrap(), 1);
+		assert!(subs.global_blocks.get(&hash_2).is_none());
+		assert!(subs.global_blocks.get(&hash_3).is_none());
+		assert_eq!(subs.global_blocks.len(), 1);
+
+		// Force second subscription to get terminated.
+		assert_eq!(subs.pin_block(&id_2, hash_2).unwrap(), true);
+		let err = subs.pin_block(&id_2, hash_3).unwrap_err();
+		assert_eq!(err, SubscriptionManagementError::ExceededLimits);
+
+		assert!(subs.global_blocks.get(&hash_1).is_none());
+		assert!(subs.global_blocks.get(&hash_2).is_none());
+		assert!(subs.global_blocks.get(&hash_3).is_none());
+		assert_eq!(subs.global_blocks.len(), 0);
 	}
 
 	#[test]
 	fn subscription_check_stop_event() {
-		let subs = SubscriptionManagement::<Block, Backend>::new();
 		let builder = TestClientBuilder::new();
 		let backend = builder.backend();
+		let mut subs = SubscriptionsInner::new(10, Duration::from_secs(10), backend);
 
 		let id = "abc".to_string();
 
-		// Check with subscription.
-		let (mut rx_stop, handle) =
-			subs.insert_subscription(id.clone(), false, 10, backend.clone()).unwrap();
+		let mut rx_stop = subs.insert_subscription(id.clone(), true).unwrap();
 
 		// Check the stop signal was not received.
 		let res = rx_stop.try_recv().unwrap();
 		assert!(res.is_none());
 
-		// Inserting a second time returns None.
-		let res = subs.insert_subscription(id.clone(), false, 10, backend);
-		assert!(res.is_none());
-
-		handle.stop();
+		let sub = subs.subs.get_mut(&id).unwrap();
+		sub.stop();
 
 		// Check the signal was received.
 		let res = rx_stop.try_recv().unwrap();
 		assert!(res.is_some());
-	}
-
-	#[test]
-	fn subscription_check_data() {
-		let subs = SubscriptionManagement::<Block, Backend>::new();
-		let builder = TestClientBuilder::new();
-		let backend = builder.backend();
-
-		let id = "abc".to_string();
-		let (_, handle) = subs.insert_subscription(id.clone(), false, 10, backend.clone()).unwrap();
-		assert!(!handle.has_runtime_updates());
-
-		let id2 = "abcd".to_string();
-		let (_, handle) = subs.insert_subscription(id2.clone(), true, 10, backend).unwrap();
-		assert!(handle.has_runtime_updates());
-	}
-
-	#[test]
-	fn subscription_check_max_pinned() {
-		let subs = SubscriptionManagement::<Block, Backend>::new();
-		let builder = TestClientBuilder::new();
-		let backend = builder.backend();
-		let mut client = Arc::new(builder.build());
-
-		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-		let hash = block.header.hash();
-		block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
-
-		let id = "abc".to_string();
-		let hash_2 = H256::random();
-		let (_, handle) = subs.insert_subscription(id.clone(), false, 1, backend).unwrap();
-
-		handle.pin_block(hash).unwrap();
-		// The same block can be pinned multiple times.
-		handle.pin_block(hash).unwrap();
-		// Exceeded number of pinned blocks.
-		handle.pin_block(hash_2).unwrap_err();
 	}
 }
