@@ -608,6 +608,7 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 		let not_deprecated = f.not_deprecated;
 
 		// debug traces, used when RUST_LOG contains `runtime::contracts::strace=trace`" 
+        // e.g ./target/release/substrate-contracts-node -l "fatal,runtime::contracts::strace=trace" --dev
 		let body_strace = {
 			let params_fmt = params.clone().filter_map(|arg| match arg {
 				syn::FnArg::Receiver(_) => None,
@@ -622,8 +623,8 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 			.collect::<Vec<_>>()
 			.join(", ");
 
-			let params_fmt = format!("Invoked {}::{}({})", module, name, params_fmt);
-			let params_fmt_args = params.clone().filter_map(|arg| match arg {
+			let trace_fmt_str = format!("{}::{}({})", module, name, params_fmt);
+			let trace_fmt_args = params.clone().filter_map(|arg| match arg {
 				syn::FnArg::Receiver(_) => None,
 				syn::FnArg::Typed(p) => {
 					match *p.pat.clone() {
@@ -633,11 +634,14 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 				},
 			});
 
+			let debug_buffer_fmt_str = format!("{}\n", trace_fmt_str);
+			let debug_buffer_fmt_args = trace_fmt_args.clone();
+
 			quote! {
 				if ::log::log_enabled!(target: "runtime::contracts::strace", ::log::Level::Trace) {
-					let debug_msg = format!(#params_fmt, #( #params_fmt_args, )*);
-					::log::trace!("{}", debug_msg);
-					ctx.ext.append_debug_buffer(&debug_msg);
+					::log::trace!(target: "runtime::contracts::strace", #trace_fmt_str, #( #trace_fmt_args, )*);
+					#[cfg(feature = "std")]
+					ctx.ext.append_debug_buffer(&format!(#debug_buffer_fmt_str, #( #debug_buffer_fmt_args, )*));
 				}
 			}
 		};
@@ -692,8 +696,6 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 			{
 				#allow_unused
 				linker.define(#module, #name, ::wasmi::Func::wrap(&mut*store, |mut __caller__: ::wasmi::Caller<#host_state>, #( #params, )*| -> #wasm_output {
-
-					// #strace
 					let mut func = #inner;
 					func()
 						.map_err(#map_err)
