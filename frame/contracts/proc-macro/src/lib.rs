@@ -609,9 +609,9 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 
 		// wrapped host function body call with traces when target is`runtime::contracts::strace` and level is `trace`
         // e.g ./target/release/substrate-contracts-node -l "fatal,runtime::contracts::strace=trace" --dev
-		//TODO(pg): replace comment with link to readme doc
+		//WIP(pg): replace comment above with link once the doc has been added to the readme
 		let wrapped_body_with_trace = {
-			let params_fmt = params.clone().filter_map(|arg| match arg {
+			let params_fmt_str = params.clone().filter_map(|arg| match arg {
 				syn::FnArg::Receiver(_) => None,
 				syn::FnArg::Typed(p) => {
 					match *p.pat.clone() {
@@ -624,7 +624,7 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 			.collect::<Vec<_>>()
 			.join(", ");
 
-			let trace_fmt_str = format!("{}::{}({}) = {{:?}}", module, name, params_fmt);
+			let trace_fmt_str = format!("{}::{}({}) = {{:?}}", module, name, params_fmt_str);
 			let trace_fmt_args = params.clone().filter_map(|arg| match arg {
 				syn::FnArg::Receiver(_) => None,
 				syn::FnArg::Typed(p) => {
