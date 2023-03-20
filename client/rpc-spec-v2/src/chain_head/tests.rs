@@ -18,7 +18,7 @@ use sp_core::{
 	testing::TaskExecutor,
 };
 use sp_version::RuntimeVersion;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use substrate_test_runtime::Transfer;
 use substrate_test_runtime_client::{
 	prelude::*, runtime, runtime::RuntimeApi, Backend, BlockBuilderExt, Client,
@@ -28,6 +28,7 @@ use substrate_test_runtime_client::{
 type Header = substrate_test_runtime_client::runtime::Header;
 type Block = substrate_test_runtime_client::runtime::Block;
 const MAX_PINNED_BLOCKS: usize = 32;
+const MAX_PINNED_SECS: u64 = 60;
 const CHAIN_GENESIS: [u8; 32] = [0; 32];
 const INVALID_HASH: [u8; 32] = [1; 32];
 const KEY: &[u8] = b":mock";
@@ -66,6 +67,7 @@ async fn setup_api() -> (
 		Arc::new(TaskExecutor::default()),
 		CHAIN_GENESIS,
 		MAX_PINNED_BLOCKS,
+		Duration::from_secs(MAX_PINNED_SECS),
 	)
 	.into_rpc();
 
@@ -105,6 +107,7 @@ async fn follow_subscription_produces_blocks() {
 		Arc::new(TaskExecutor::default()),
 		CHAIN_GENESIS,
 		MAX_PINNED_BLOCKS,
+		Duration::from_secs(MAX_PINNED_SECS),
 	)
 	.into_rpc();
 
@@ -162,6 +165,7 @@ async fn follow_with_runtime() {
 		Arc::new(TaskExecutor::default()),
 		CHAIN_GENESIS,
 		MAX_PINNED_BLOCKS,
+		Duration::from_secs(MAX_PINNED_SECS),
 	)
 	.into_rpc();
 
@@ -267,6 +271,7 @@ async fn get_genesis() {
 		Arc::new(TaskExecutor::default()),
 		CHAIN_GENESIS,
 		MAX_PINNED_BLOCKS,
+		Duration::from_secs(MAX_PINNED_SECS),
 	)
 	.into_rpc();
 
@@ -451,6 +456,7 @@ async fn call_runtime_without_flag() {
 		Arc::new(TaskExecutor::default()),
 		CHAIN_GENESIS,
 		MAX_PINNED_BLOCKS,
+		Duration::from_secs(MAX_PINNED_SECS),
 	)
 	.into_rpc();
 
@@ -625,6 +631,7 @@ async fn follow_generates_initial_blocks() {
 		Arc::new(TaskExecutor::default()),
 		CHAIN_GENESIS,
 		MAX_PINNED_BLOCKS,
+		Duration::from_secs(MAX_PINNED_SECS),
 	)
 	.into_rpc();
 
@@ -752,6 +759,7 @@ async fn follow_exceeding_pinned_blocks() {
 		Arc::new(TaskExecutor::default()),
 		CHAIN_GENESIS,
 		2,
+		Duration::from_secs(MAX_PINNED_SECS),
 	)
 	.into_rpc();
 
@@ -802,6 +810,7 @@ async fn follow_with_unpin() {
 		Arc::new(TaskExecutor::default()),
 		CHAIN_GENESIS,
 		2,
+		Duration::from_secs(MAX_PINNED_SECS),
 	)
 	.into_rpc();
 
@@ -882,6 +891,7 @@ async fn follow_prune_best_block() {
 		Arc::new(TaskExecutor::default()),
 		CHAIN_GENESIS,
 		MAX_PINNED_BLOCKS,
+		Duration::from_secs(MAX_PINNED_SECS),
 	)
 	.into_rpc();
 
@@ -1038,6 +1048,7 @@ async fn follow_forks_pruned_block() {
 		Arc::new(TaskExecutor::default()),
 		CHAIN_GENESIS,
 		MAX_PINNED_BLOCKS,
+		Duration::from_secs(MAX_PINNED_SECS),
 	)
 	.into_rpc();
 
@@ -1151,6 +1162,7 @@ async fn follow_report_multiple_pruned_block() {
 		Arc::new(TaskExecutor::default()),
 		CHAIN_GENESIS,
 		MAX_PINNED_BLOCKS,
+		Duration::from_secs(MAX_PINNED_SECS),
 	)
 	.into_rpc();
 
@@ -1356,6 +1368,7 @@ async fn pin_block_references() {
 		Arc::new(TaskExecutor::default()),
 		CHAIN_GENESIS,
 		3,
+		Duration::from_secs(MAX_PINNED_SECS),
 	)
 	.into_rpc();
 
