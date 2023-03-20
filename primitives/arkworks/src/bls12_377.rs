@@ -21,8 +21,8 @@
 
 use crate::{
 	utils::{
-		deserialize_argument, final_exponentiation_generic, multi_miller_loop_generic,
-		serialize_result,
+		deserialize_argument, final_exponentiation_generic, msm_g1_generic, msm_g2_generic,
+		multi_miller_loop_generic, serialize_result,
 	},
 	PairingError,
 };
