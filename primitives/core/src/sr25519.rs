@@ -32,8 +32,6 @@ use schnorrkel::{
 };
 #[cfg(feature = "full_crypto")]
 use sp_std::vec::Vec;
-#[cfg(feature = "std")]
-use substrate_bip39::mini_secret_from_entropy;
 
 use crate::{
 	crypto::{
@@ -536,18 +534,6 @@ impl TraitPair for Pair {
 
 #[cfg(feature = "std")]
 impl Pair {
-	/// Make a new key pair from binary data derived from a valid seed phrase.
-	///
-	/// This uses a key derivation function to convert the entropy into a seed, then returns
-	/// the pair generated from it.
-	pub fn from_entropy(entropy: &[u8], password: Option<&str>) -> (Pair, Seed) {
-		let mini_key: MiniSecretKey = mini_secret_from_entropy(entropy, password.unwrap_or(""))
-			.expect("32 bytes can always build a key; qed");
-
-		let kp = mini_key.expand_to_keypair(ExpansionMode::Ed25519);
-		(Pair(kp), mini_key.to_bytes())
-	}
-
 	/// Verify a signature on a message. Returns `true` if the signature is good.
 	/// Supports old 0.1.1 deprecated signatures and should be used only for backward
 	/// compatibility.
@@ -621,9 +607,8 @@ mod compatibility_test {
 	// NOTE: tests to ensure addresses that are created with the `0.1.x` version (pre-audit) are
 	// still functional.
 
+	// TODO DAVXY: REMOVE ME!!!
 	impl Pair {
-		// TODO DAVXY: REMOVE ME!!!
-		#[cfg(feature = "std")]
 		fn my_from_phrase(
 			phrase: &str,
 			password: Option<&str>,
@@ -633,8 +618,18 @@ mod compatibility_test {
 				.map_err(|_| SecretStringError::InvalidPhrase)
 				.map(|m| Self::from_entropy(m.entropy(), password))
 		}
+
+		fn from_entropy(entropy: &[u8], password: Option<&str>) -> (Pair, Seed) {
+			use substrate_bip39::mini_secret_from_entropy;
+			let mini_key: MiniSecretKey = mini_secret_from_entropy(entropy, password.unwrap_or(""))
+				.expect("32 bytes can always build a key; qed");
+
+			let kp = mini_key.expand_to_keypair(ExpansionMode::Ed25519);
+			(Pair(kp), mini_key.to_bytes())
+		}
 	}
 
+	// TODO DAVXY: REMOVE ME!!!
 	#[test]
 	fn temporary_test_for_equivalence() {
 		let password = Some("Password");
