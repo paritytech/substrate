@@ -17,7 +17,7 @@
 
 //! Traits and associated datatypes for managing abstract stored values.
 
-use crate::{storage::StorageMap, traits::misc::HandleLifetime};
+use crate::storage::StorageMap;
 use codec::FullCodec;
 use sp_runtime::DispatchError;
 
@@ -81,48 +81,29 @@ pub trait StoredMap<K, T: Default> {
 /// be the default value), or where the account is being removed or reset back to the default value
 /// where previously it did exist (though may have been in a default state). This works well with
 /// system module's `CallOnCreatedAccount` and `CallKillAccount`.
-pub struct StorageMapShim<S, L, K, T>(sp_std::marker::PhantomData<(S, L, K, T)>);
-impl<
-		S: StorageMap<K, T, Query = T>,
-		L: HandleLifetime<K>,
-		K: FullCodec,
-		T: FullCodec + Default,
-	> StoredMap<K, T> for StorageMapShim<S, L, K, T>
+pub struct StorageMapShim<S, K, T>(sp_std::marker::PhantomData<(S, K, T)>);
+impl<S: StorageMap<K, T, Query = T>, K: FullCodec, T: FullCodec + Default> StoredMap<K, T>
+	for StorageMapShim<S, K, T>
 {
 	fn get(k: &K) -> T {
 		S::get(k)
 	}
 	fn insert(k: &K, t: T) -> Result<(), DispatchError> {
-		if !S::contains_key(&k) {
-			L::created(k)?;
-		}
 		S::insert(k, t);
 		Ok(())
 	}
 	fn remove(k: &K) -> Result<(), DispatchError> {
 		if S::contains_key(&k) {
-			L::killed(k)?;
 			S::remove(k);
 		}
 		Ok(())
 	}
 	fn mutate<R>(k: &K, f: impl FnOnce(&mut T) -> R) -> Result<R, DispatchError> {
-		if !S::contains_key(&k) {
-			L::created(k)?;
-		}
 		Ok(S::mutate(k, f))
 	}
 	fn mutate_exists<R>(k: &K, f: impl FnOnce(&mut Option<T>) -> R) -> Result<R, DispatchError> {
 		S::try_mutate_exists(k, |maybe_value| {
-			let existed = maybe_value.is_some();
 			let r = f(maybe_value);
-			let exists = maybe_value.is_some();
-
-			if !existed && exists {
-				L::created(k)?;
-			} else if existed && !exists {
-				L::killed(k)?;
-			}
 			Ok(r)
 		})
 	}
@@ -131,15 +112,7 @@ impl<
 		f: impl FnOnce(&mut Option<T>) -> Result<R, E>,
 	) -> Result<R, E> {
 		S::try_mutate_exists(k, |maybe_value| {
-			let existed = maybe_value.is_some();
 			let r = f(maybe_value)?;
-			let exists = maybe_value.is_some();
-
-			if !existed && exists {
-				L::created(k).map_err(E::from)?;
-			} else if existed && !exists {
-				L::killed(k).map_err(E::from)?;
-			}
 			Ok(r)
 		})
 	}

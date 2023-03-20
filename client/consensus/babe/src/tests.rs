@@ -41,8 +41,7 @@ use sp_consensus_vrf::schnorrkel::VRFOutput;
 use sp_core::crypto::Pair;
 use sp_keyring::Sr25519Keyring;
 use sp_keystore::{
-	testing::KeyStore as TestKeyStore, vrf::make_transcript as transcript_from_data,
-	SyncCryptoStore,
+	testing::MemoryKeystore, vrf::make_transcript as transcript_from_data, Keystore,
 };
 use sp_runtime::{
 	generic::{Digest, DigestItem},
@@ -369,9 +368,9 @@ async fn rejects_empty_block() {
 	})
 }
 
-fn create_keystore(authority: Sr25519Keyring) -> SyncCryptoStorePtr {
-	let keystore = Arc::new(TestKeyStore::new());
-	SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some(&authority.to_seed()))
+fn create_keystore(authority: Sr25519Keyring) -> KeystorePtr {
+	let keystore = Arc::new(MemoryKeystore::new());
+	Keystore::sr25519_generate_new(&*keystore, BABE, Some(&authority.to_seed()))
 		.expect("Generates authority key");
 	keystore
 }
@@ -638,7 +637,7 @@ fn claim_vrf_check() {
 		v => panic!("Unexpected pre-digest variant {:?}", v),
 	};
 	let transcript = make_transcript_data(&epoch.randomness.clone(), 0.into(), epoch.epoch_index);
-	let sign = SyncCryptoStore::sr25519_vrf_sign(&*keystore, AuthorityId::ID, &public, transcript)
+	let sign = Keystore::sr25519_vrf_sign(&*keystore, AuthorityId::ID, &public, transcript)
 		.unwrap()
 		.unwrap();
 	assert_eq!(pre_digest.vrf_output, VRFOutput(sign.output));
@@ -649,7 +648,7 @@ fn claim_vrf_check() {
 		v => panic!("Unexpected pre-digest variant {:?}", v),
 	};
 	let transcript = make_transcript_data(&epoch.randomness.clone(), 1.into(), epoch.epoch_index);
-	let sign = SyncCryptoStore::sr25519_vrf_sign(&*keystore, AuthorityId::ID, &public, transcript)
+	let sign = Keystore::sr25519_vrf_sign(&*keystore, AuthorityId::ID, &public, transcript)
 		.unwrap()
 		.unwrap();
 	assert_eq!(pre_digest.vrf_output, VRFOutput(sign.output));
@@ -662,7 +661,7 @@ fn claim_vrf_check() {
 	};
 	let fixed_epoch = epoch.clone_for_slot(slot);
 	let transcript = make_transcript_data(&epoch.randomness.clone(), slot, fixed_epoch.epoch_index);
-	let sign = SyncCryptoStore::sr25519_vrf_sign(&*keystore, AuthorityId::ID, &public, transcript)
+	let sign = Keystore::sr25519_vrf_sign(&*keystore, AuthorityId::ID, &public, transcript)
 		.unwrap()
 		.unwrap();
 	assert_eq!(fixed_epoch.epoch_index, 11);
@@ -676,7 +675,7 @@ fn claim_vrf_check() {
 	};
 	let fixed_epoch = epoch.clone_for_slot(slot);
 	let transcript = make_transcript_data(&epoch.randomness.clone(), slot, fixed_epoch.epoch_index);
-	let sign = SyncCryptoStore::sr25519_vrf_sign(&*keystore, AuthorityId::ID, &public, transcript)
+	let sign = Keystore::sr25519_vrf_sign(&*keystore, AuthorityId::ID, &public, transcript)
 		.unwrap()
 		.unwrap();
 	assert_eq!(fixed_epoch.epoch_index, 11);

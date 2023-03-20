@@ -86,12 +86,12 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 733_711 nanoseconds.
-		Weight::from_ref_time(734_894_000)
-			.saturating_add(Weight::from_proof_size(0))
+		Weight::from_parts(734_894_000 as u64, 0)
+			.saturating_add(Weight::from_parts(0 as u64, 0))
 			// Standard Error: 25_227
-			.saturating_add(Weight::from_ref_time(1_460_351).saturating_mul(v.into()))
+			.saturating_add(Weight::from_parts(1_460_351 as u64, 0).saturating_mul(v.into()))
 			// Standard Error: 1_093
-			.saturating_add(Weight::from_ref_time(146_451).saturating_mul(d.into()))
+			.saturating_add(Weight::from_parts(146_451 as u64, 0).saturating_mul(d.into()))
 	}
 }
 
@@ -126,11 +126,11 @@ impl WeightInfo for () {
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 733_711 nanoseconds.
-		Weight::from_ref_time(734_894_000)
-			.saturating_add(Weight::from_proof_size(0))
+		Weight::from_parts(734_894_000 as u64, 0)
+			.saturating_add(Weight::from_parts(0 as u64, 0))
 			// Standard Error: 25_227
-			.saturating_add(Weight::from_ref_time(1_460_351).saturating_mul(v.into()))
+			.saturating_add(Weight::from_parts(1_460_351 as u64, 0).saturating_mul(v.into()))
 			// Standard Error: 1_093
-			.saturating_add(Weight::from_ref_time(146_451).saturating_mul(d.into()))
+			.saturating_add(Weight::from_parts(146_451 as u64, 0).saturating_mul(d.into()))
 	}
 }

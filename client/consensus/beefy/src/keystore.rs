@@ -18,7 +18,7 @@
 
 use sp_application_crypto::RuntimeAppPublic;
 use sp_core::keccak_256;
-use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::{Keystore, KeystorePtr};
 
 use log::warn;
 
@@ -33,9 +33,9 @@ use crate::{error, LOG_TARGET};
 pub(crate) type BeefySignatureHasher = sp_runtime::traits::Keccak256;
 
 /// A BEEFY specific keystore implemented as a `Newtype`. This is basically a
-/// wrapper around [`sp_keystore::SyncCryptoStore`] and allows to customize
+/// wrapper around [`sp_keystore::Keystore`] and allows to customize
 /// common cryptographic functionality.
-pub(crate) struct BeefyKeystore(Option<SyncCryptoStorePtr>);
+pub(crate) struct BeefyKeystore(Option<KeystorePtr>);
 
 impl BeefyKeystore {
 	/// Check if the keystore contains a private key for one of the public keys
@@ -50,7 +50,7 @@ impl BeefyKeystore {
 		// we do check for multiple private keys as a key store sanity check.
 		let public: Vec<Public> = keys
 			.iter()
-			.filter(|k| SyncCryptoStore::has_keys(&*store, &[(k.to_raw_vec(), KEY_TYPE)]))
+			.filter(|k| Keystore::has_keys(&*store, &[(k.to_raw_vec(), KEY_TYPE)]))
 			.cloned()
 			.collect();
 
@@ -77,7 +77,7 @@ impl BeefyKeystore {
 		let msg = keccak_256(message);
 		let public = public.as_ref();
 
-		let sig = SyncCryptoStore::ecdsa_sign_prehashed(&*store, KEY_TYPE, public, &msg)
+		let sig = Keystore::ecdsa_sign_prehashed(&*store, KEY_TYPE, public, &msg)
 			.map_err(|e| error::Error::Keystore(e.to_string()))?
 			.ok_or_else(|| error::Error::Signature("ecdsa_sign_prehashed() failed".to_string()))?;
 
@@ -94,7 +94,7 @@ impl BeefyKeystore {
 	pub fn public_keys(&self) -> Result<Vec<Public>, error::Error> {
 		let store = self.0.clone().ok_or_else(|| error::Error::Keystore("no Keystore".into()))?;
 
-		let pk: Vec<Public> = SyncCryptoStore::ecdsa_public_keys(&*store, KEY_TYPE)
+		let pk: Vec<Public> = Keystore::ecdsa_public_keys(&*store, KEY_TYPE)
 			.drain(..)
 			.map(Public::from)
 			.collect();
@@ -110,8 +110,8 @@ impl BeefyKeystore {
 	}
 }
 
-impl From<Option<SyncCryptoStorePtr>> for BeefyKeystore {
-	fn from(store: Option<SyncCryptoStorePtr>) -> BeefyKeystore {
+impl From<Option<KeystorePtr>> for BeefyKeystore {
+	fn from(store: Option<KeystorePtr>) -> BeefyKeystore {
 		BeefyKeystore(store)
 	}
 }
@@ -128,7 +128,7 @@ pub mod tests {
 	use super::*;
 	use crate::error::Error;
 
-	fn keystore() -> SyncCryptoStorePtr {
+	fn keystore() -> KeystorePtr {
 		Arc::new(LocalKeystore::in_memory())
 	}
 
@@ -198,7 +198,7 @@ pub mod tests {
 		let store = keystore();
 
 		let alice: crypto::Public =
-			SyncCryptoStore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&Keyring::Alice.to_seed()))
+			Keystore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&Keyring::Alice.to_seed()))
 				.ok()
 				.unwrap()
 				.into();
@@ -224,7 +224,7 @@ pub mod tests {
 		let store = keystore();
 
 		let alice: crypto::Public =
-			SyncCryptoStore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&Keyring::Alice.to_seed()))
+			Keystore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&Keyring::Alice.to_seed()))
 				.ok()
 				.unwrap()
 				.into();
@@ -243,10 +243,9 @@ pub mod tests {
 	fn sign_error() {
 		let store = keystore();
 
-		let _ =
-			SyncCryptoStore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&Keyring::Bob.to_seed()))
-				.ok()
-				.unwrap();
+		let _ = Keystore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&Keyring::Bob.to_seed()))
+			.ok()
+			.unwrap();
 
 		let store: BeefyKeystore = Some(store).into();
 
@@ -276,7 +275,7 @@ pub mod tests {
 		let store = keystore();
 
 		let alice: crypto::Public =
-			SyncCryptoStore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&Keyring::Alice.to_seed()))
+			Keystore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&Keyring::Alice.to_seed()))
 				.ok()
 				.unwrap()
 				.into();
@@ -302,7 +301,7 @@ pub mod tests {
 		let store = keystore();
 
 		let add_key = |key_type, seed: Option<&str>| {
-			SyncCryptoStore::ecdsa_generate_new(&*store, key_type, seed).unwrap()
+			Keystore::ecdsa_generate_new(&*store, key_type, seed).unwrap()
 		};
 
 		// test keys

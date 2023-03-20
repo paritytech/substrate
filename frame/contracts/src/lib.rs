@@ -100,7 +100,7 @@ pub mod weights;
 mod tests;
 
 use crate::{
-	exec::{AccountIdOf, ErrorOrigin, ExecError, Executable, Stack as ExecStack},
+	exec::{AccountIdOf, ErrorOrigin, ExecError, Executable, Key, Stack as ExecStack},
 	gas::GasMeter,
 	storage::{meter::Meter as StorageMeter, ContractInfo, DeletedContract},
 	wasm::{OwnerInfo, PrefabWasmModule, TryInstantiate},
@@ -131,7 +131,7 @@ use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 pub use crate::{
 	address::{AddressGenerator, DefaultAddressGenerator},
-	exec::{Frame, VarSizedKey as StorageKey},
+	exec::Frame,
 	migration::Migration,
 	pallet::*,
 	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
@@ -187,7 +187,7 @@ pub mod pallet {
 		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
 
 		/// The currency in which fees are paid and contract balances are held.
-		type Currency: ReservableCurrency<Self::AccountId>
+		type Currency: ReservableCurrency<Self::AccountId> // TODO: Move to fungible traits
 			+ Inspect<Self::AccountId, Balance = BalanceOf<Self>>;
 
 		/// The overarching event type.
@@ -403,7 +403,7 @@ pub mod pallet {
 				T::MaxCodeLen::get(),
 			);
 
-			// Debug buffer should at least be large enough to accomodate a simple error message
+			// Debug buffer should at least be large enough to accommodate a simple error message
 			const MIN_DEBUG_BUF_SIZE: u32 = 256;
 			assert!(
 				T::MaxDebugBufferLen::get() > MIN_DEBUG_BUF_SIZE,
@@ -891,7 +891,7 @@ pub mod pallet {
 		/// The contract's code was found to be invalid during validation or instrumentation.
 		///
 		/// The most likely cause of this is that an API was used which is not supported by the
-		/// node. This hapens if an older node is used with a new version of ink!. Try updating
+		/// node. This happens if an older node is used with a new version of ink!. Try updating
 		/// your node to the newest available version.
 		///
 		/// A more detailed error can be found on the node console if debug messages are enabled
@@ -987,7 +987,7 @@ struct InternalOutput<T: Config, O> {
 	result: Result<O, ExecError>,
 }
 
-/// Helper trait to wrap contract execution entry points into a signle function
+/// Helper trait to wrap contract execution entry points into a single function
 /// [`Invokable::run_guarded`].
 trait Invokable<T: Config> {
 	/// What is returned as a result of a successful invocation.
@@ -1265,7 +1265,9 @@ impl<T: Config> Pallet<T> {
 			ContractInfoOf::<T>::get(&address).ok_or(ContractAccessError::DoesntExist)?;
 
 		let maybe_value = contract_info.read(
-			&StorageKey::<T>::try_from(key).map_err(|_| ContractAccessError::KeyDecodingFailed)?,
+			&Key::<T>::try_from_var(key)
+				.map_err(|_| ContractAccessError::KeyDecodingFailed)?
+				.into(),
 		);
 		Ok(maybe_value)
 	}
