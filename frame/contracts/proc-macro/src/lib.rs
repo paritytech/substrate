@@ -607,9 +607,10 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 		let is_stable = f.is_stable;
 		let not_deprecated = f.not_deprecated;
 
-		// debug traces, used when RUST_LOG contains `runtime::contracts::strace=trace`" 
+		// wrapped host function body call with traces when target is`runtime::contracts::strace` and level is `trace`
         // e.g ./target/release/substrate-contracts-node -l "fatal,runtime::contracts::strace=trace" --dev
-		let body_strace = {
+		//TODO(pg): replace comment with link to readme doc
+		let wrapped_body_with_trace = {
 			let params_fmt = params.clone().filter_map(|arg| match arg {
 				syn::FnArg::Receiver(_) => None,
 				syn::FnArg::Typed(p) => {
@@ -619,11 +620,11 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 					}
 				},
 			})
-			.map(|s| format!("{s}: {{}}"))
+			.map(|s| format!("{s}: {{:?}}"))
 			.collect::<Vec<_>>()
 			.join(", ");
 
-			let trace_fmt_str = format!("{}::{}({})", module, name, params_fmt);
+			let trace_fmt_str = format!("{}::{}({}) = {{:?}}", module, name, params_fmt);
 			let trace_fmt_args = params.clone().filter_map(|arg| match arg {
 				syn::FnArg::Receiver(_) => None,
 				syn::FnArg::Typed(p) => {
@@ -639,10 +640,16 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 
 			quote! {
 				if ::log::log_enabled!(target: "runtime::contracts::strace", ::log::Level::Trace) {
-					::log::trace!(target: "runtime::contracts::strace", #trace_fmt_str, #( #trace_fmt_args, )*);
+					let result = #body;
+					
+					::log::trace!(target: "runtime::contracts::strace", #trace_fmt_str, #( #trace_fmt_args, )* result);
 					#[cfg(feature = "std")]
-					ctx.ext.append_debug_buffer(&format!(#debug_buffer_fmt_str, #( #debug_buffer_fmt_args, )*));
-				}
+					ctx.ext.append_debug_buffer(&format!(#debug_buffer_fmt_str, #( #debug_buffer_fmt_args, )* result));
+					result
+				
+				} else {
+					#body
+				} 
 			}
 		};
 
@@ -658,8 +665,7 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 					.memory()
 					.expect("Memory must be set when setting up host data; qed")
 					.data_and_store_mut(&mut __caller__);
-				#body_strace
-				#body
+				#wrapped_body_with_trace
 			} }
 		} else {
 			quote! { || -> #wasm_output {
