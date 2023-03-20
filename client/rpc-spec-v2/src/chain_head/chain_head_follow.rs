@@ -24,7 +24,7 @@ use crate::chain_head::{
 		BestBlockChanged, Finalized, FollowEvent, Initialized, NewBlock, RuntimeEvent,
 		RuntimeVersionEvent,
 	},
-	subscription::{SubscriptionHandle, SubscriptionManagementError},
+	subscription::{SubscriptionManagement, SubscriptionManagementError},
 };
 use futures::{
 	channel::oneshot,
@@ -52,8 +52,8 @@ pub struct ChainHeadFollower<BE: Backend<Block> + 'static, Block: BlockT, Client
 	client: Arc<Client>,
 	/// Backend of the chain.
 	backend: Arc<BE>,
-	/// Subscription handle.
-	sub_handle: Arc<SubscriptionHandle<Block, BE>>,
+	/// Subscriptions handle.
+	sub_handle: Arc<SubscriptionManagement<Block, BE>>,
 	/// Subscription was started with the runtime updates flag.
 	runtime_updates: bool,
 	/// Subscription ID.
@@ -67,7 +67,7 @@ impl<BE: Backend<Block> + 'static, Block: BlockT, Client> ChainHeadFollower<BE, 
 	pub fn new(
 		client: Arc<Client>,
 		backend: Arc<BE>,
-		sub_handle: Arc<SubscriptionHandle<Block, BE>>,
+		sub_handle: Arc<SubscriptionManagement<Block, BE>>,
 		runtime_updates: bool,
 		sub_id: String,
 	) -> Self {
@@ -224,7 +224,7 @@ where
 
 		// The initialized event is the first one sent.
 		let finalized_block_hash = startup_point.finalized_hash;
-		self.sub_handle.pin_block(finalized_block_hash)?;
+		self.sub_handle.pin_block(&self.sub_id, finalized_block_hash)?;
 
 		let finalized_block_runtime = self.generate_runtime_event(finalized_block_hash, None);
 
@@ -238,7 +238,7 @@ where
 
 		finalized_block_descendants.push(initialized_event);
 		for (child, parent) in initial_blocks.into_iter() {
-			self.sub_handle.pin_block(child)?;
+			self.sub_handle.pin_block(&self.sub_id, child)?;
 
 			let new_runtime = self.generate_runtime_event(child, Some(parent));
 
@@ -313,7 +313,7 @@ where
 		startup_point: &StartupPoint<Block>,
 	) -> Result<Vec<FollowEvent<Block::Hash>>, SubscriptionManagementError> {
 		// The block was already pinned by the initial block events or by the finalized event.
-		if !self.sub_handle.pin_block(notification.hash)? {
+		if !self.sub_handle.pin_block(&self.sub_id, notification.hash)? {
 			return Ok(Default::default())
 		}
 
@@ -363,7 +363,7 @@ where
 		let parents = std::iter::once(&parent).chain(finalized_block_hashes.iter());
 		for (hash, parent) in finalized_block_hashes.iter().zip(parents) {
 			// This block is already reported by the import notification.
-			if !self.sub_handle.pin_block(*hash)? {
+			if !self.sub_handle.pin_block(&self.sub_id, *hash)? {
 				continue
 			}
 
@@ -600,6 +600,10 @@ where
 			stream_item = stream.next();
 			stop_event = next_stop_event;
 		}
+
+		// If we got here either the substrate streams have closed
+		// or the `Stop` receiver was triggered.
+		let _ = sink.send(&FollowEvent::<String>::Stop);
 	}
 
 	/// Generate the block events for the `chainHead_follow` method.
