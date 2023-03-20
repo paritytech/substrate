@@ -277,7 +277,7 @@ struct SubscriptionsInner<Block: BlockT, BE: Backend<Block> + 'static> {
 }
 
 impl<Block: BlockT, BE: Backend<Block> + 'static> SubscriptionsInner<Block, BE> {
-	/// Construct a new [`GlobalSubscriptionInner`] from the specified limits.
+	/// Construct a new [`SubscriptionsInner`] from the specified limits.
 	fn new(
 		global_max_pinned_blocks: usize,
 		local_max_pin_duration: Duration,
