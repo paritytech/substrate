@@ -25,10 +25,10 @@ use frame_benchmarking::v1::{benchmarks, Vec};
 pub struct Pallet<T: Config>(frame_system::Pallet<T>);
 pub trait Config: frame_system::Config {}
 
-const VOTERS: [u32; 2] = [1_000, 2_000];
-const TARGETS: [u32; 2] = [500, 1_000];
-const VOTES_PER_VOTER: [u32; 2] = [1, 16];
+const MAX_CANDIDATES: u32 = 1000;
+const MAX_VOTERS: u32 = 10 * 1000;
 const MAX_VOTES_PER_VOTER: u32 = 16;
+const DESIRED_MEMBERS: u32 = 16;
 
 const SEED: u32 = 999;
 fn set_up_voters_targets<AccountId: Decode + Clone>(
@@ -47,6 +47,7 @@ fn set_up_voters_targets<AccountId: Decode + Clone>(
 	let voters = (0..voters_len)
 		.map(|i| {
 			let voter = frame_benchmarking::account::<AccountId>("Voter", i, SEED);
+			// each voters votes in `degree` candidates.
 			(voter, 1_000, targets.clone())
 		})
 		.collect::<Vec<_>>();
@@ -57,52 +58,59 @@ fn set_up_voters_targets<AccountId: Decode + Clone>(
 benchmarks! {
 	phragmen {
 		// number of votes in snapshot.
-		let v in (VOTERS[0]) .. VOTERS[1];
-		// number of targets in snapshot.
-		let t in (TARGETS[0]) .. TARGETS[1];
+		let v in 1 .. MAX_VOTERS;
+		// number of targets in snapshot. the minimum number of targets must be larger than
+		// `MAX_VOTES_PER_VOTER`.
+		let t in (MAX_VOTES_PER_VOTER + 1) .. MAX_CANDIDATES;
 		// number of votes per voter (ie the degree).
-		let d in (VOTERS[0]) .. VOTERS[1] * MAX_VOTES_PER_VOTER;
+		let d in (MAX_VOTERS) .. MAX_VOTERS * MAX_VOTES_PER_VOTER;
 
-		let votes_per_voter = (d / v).min(MAX_VOTES_PER_VOTER);
+		let votes_per_voter = d.min(MAX_VOTES_PER_VOTER);
 
 		let (voters, targets) = set_up_voters_targets::<T::AccountId>(v, t, votes_per_voter as usize);
 	}: {
 		assert!(
+			// why d as `num_to_elect`?
 			SequentialPhragmen::<T::AccountId, sp_runtime::Perbill>
-				::solve(d as usize, targets, voters).is_ok()
+				::solve(DESIRED_MEMBERS as usize, targets, voters).is_ok()
 		);
 	}
 
 	phragmms {
 		// number of votes in snapshot.
-		let v in (VOTERS[0]) .. VOTERS[1];
-		// number of targets in snapshot.
-		let t in (TARGETS[0]) .. TARGETS[1];
+		let v in 1 .. MAX_VOTERS;
+		// number of targets in snapshot. the minimum number of targets must be larger than
+		// `MAX_VOTES_PER_VOTER`.
+		let t in (MAX_VOTES_PER_VOTER + 1) .. MAX_CANDIDATES;
 		// number of votes per voter (ie the degree).
-		let d in (VOTES_PER_VOTER[0]) .. VOTES_PER_VOTER[1];
+		let d in (MAX_VOTERS) .. MAX_VOTERS * MAX_VOTES_PER_VOTER;
 
-		let votes_per_voter = (d / v).min(MAX_VOTES_PER_VOTER);
+		let votes_per_voter = d.min(MAX_VOTES_PER_VOTER);
 
 		let (voters, targets) = set_up_voters_targets::<T::AccountId>(v, t, votes_per_voter as usize);
 	}: {
 		assert!(
 			PhragMMS::<T::AccountId, sp_runtime::Perbill>
-				::solve(d as usize, targets, voters).is_ok()
+				::solve(DESIRED_MEMBERS as usize, targets, voters).is_ok()
 		);
 	}
 
 	approval_voting {
-		let v in (VOTERS[0]) .. VOTERS[1];
-		let t in (TARGETS[0]) .. TARGETS[1];
-		let d in (VOTERS[0]) .. VOTERS[1] * MAX_VOTES_PER_VOTER;
+		// number of votes in snapshot.
+		let v in 1 .. MAX_VOTERS;
+		// number of targets in snapshot. the minimum number of targets must be larger than
+		// `MAX_VOTES_PER_VOTER`.
+		let t in (MAX_VOTES_PER_VOTER + 1) .. MAX_CANDIDATES;
+		// number of votes per voter (ie the degree).
+		let d in (MAX_VOTERS) .. MAX_VOTERS * MAX_VOTES_PER_VOTER;
 
-		let votes_per_voter = (d / v).min(MAX_VOTES_PER_VOTER);
+		let votes_per_voter = d.min(MAX_VOTES_PER_VOTER);
 
 		let (voters, targets) = set_up_voters_targets::<T::AccountId>(v, t, votes_per_voter as usize);
 	}: {
 		assert!(
 			ApprovalVoting::<T::AccountId, sp_runtime::Perbill>
-				::solve(d as usize, targets, voters).is_ok()
+				::solve(DESIRED_MEMBERS as usize, targets, voters).is_ok()
 		);
 	}
 }
