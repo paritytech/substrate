@@ -301,27 +301,24 @@ impl ProtocolController {
 			None => return,
 		};
 
-		match state {
-			PeerState::Connected(d) => {
-				if self.reserved_only {
-					// Disconnect the node.
-					info!(
-						target: "peerset",
-						"Disconnecting previously reserved node {} on {:?}.",
-						peer_id, self.set_id
-					);
-					state = PeerState::NotConnected;
-					self.drop_connection(peer_id);
-				} else {
-					// Count connections as of regular node.
-					match d {
-						Direction::Inbound => self.num_in += 1,
-						Direction::Outbound => self.num_out += 1,
-					}
-				}
-			},
-			PeerState::NotConnected => {},
-		}
+        if let PeerState::Connected(d) = state {
+            if self.reserved_only {
+                // Disconnect the node.
+                info!(
+                    target: "peerset",
+                    "Disconnecting previously reserved node {} on {:?}.",
+                    peer_id, self.set_id
+                );
+                state = PeerState::NotConnected;
+                self.drop_connection(peer_id);
+            } else {
+                // Count connections as of regular node.
+                match d {
+                    Direction::Inbound => self.num_in += 1,
+                    Direction::Outbound => self.num_out += 1,
+                }
+            }
+        }
 
 		// Put the node into the list of regular nodes.
 		let prev = self.nodes.insert(peer_id, state);
