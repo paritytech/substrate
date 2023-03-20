@@ -1008,13 +1008,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		Self::proposals().into_iter().for_each(|proposal| {
 			if let Some(votes) = Self::voting(proposal) {
-				let ayes = votes.ayes.into_iter().count();
-				let nays = votes.nays.into_iter().count();
+				let ayes = votes.ayes.len();
+				let nays = votes.nays.len();
 				assert!(ayes.saturating_add(nays) <= T::MaxMembers::get() as usize);
 			}
 		});
 
-		assert!(Self::members().into_iter().count() <= T::MaxMembers::get() as usize);
+		assert!(Self::members().len() <= T::MaxMembers::get() as usize);
 
 		Ok(())
 	}
