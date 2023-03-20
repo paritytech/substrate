@@ -314,7 +314,7 @@ macro_rules! impl_rrm {
 				}
 			}
 		}
-	}
+	};
 }
 
 impl_rrm!(u8, u16);
