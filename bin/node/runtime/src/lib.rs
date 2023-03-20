@@ -2153,7 +2153,7 @@ impl_runtime_apis! {
 				storage_deposit_limit,
 				input_data,
 				true,
-				pallet_contracts::Determinism::Deterministic,
+				pallet_contracts::Determinism::Enforced,
 			)
 		}
 
