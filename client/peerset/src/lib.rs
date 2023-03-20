@@ -184,7 +184,7 @@ impl PeersetHandle {
 	}
 
 	/// Report disconnect to adjust peers reputation value.
-	pub fn report_disconnect(&self, peer_id: PeerId) {
+	pub fn report_disconnect(&self, peer_id: PeerId, reason: DropReason) {
 		todo!("will be implemented after `Peerset` is converted into shared struct");
 	}
 
