@@ -994,12 +994,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// count is not deducted.
 	///
 	/// Looking at votes:
-	/// * The threshold of members required for a motion to pass cannot be
-	/// greater than the total number of members.
+	/// * The sum of aye and nay votes for a proposal can never exceed
+	///  `MaxMembers`.
 	///
 	/// Looking at members:
 	/// * The members count must never exceed `MaxMembers`.
-	#[cfg(any(feature = "try-runtime", feature = "fuzzing", test, debug_assertions))]
+	#[cfg(any(feature = "try-runtime", test))]
 	fn do_try_state() -> Result<(), &'static str> {
 		Self::proposals().into_iter().for_each(|proposal| {
 			assert!(Self::proposal_of(proposal).is_some());
@@ -1009,7 +1009,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		Self::proposals().into_iter().for_each(|proposal| {
 			if let Some(votes) = Self::voting(proposal) {
-				assert!(votes.threshold as usize <= Self::members().into_iter().count());
+				let ayes = votes.ayes.into_iter().count();
+				let nays = votes.nays.into_iter().count();
+				assert!(ayes.saturating_add(nays) <= T::MaxMembers::get() as usize);
 			}
 		});
 
