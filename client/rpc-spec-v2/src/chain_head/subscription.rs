@@ -377,7 +377,7 @@ impl<Block: BlockT, BE: Backend<Block> + 'static> SubscriptionsInner<Block, BE> 
 
 		// Sanity check: cannot uphold `chainHead` guarantees anymore. We have not
 		// found any subscriptions that have older pinned blocks to terminate.
-		let to_remove: Vec<_> = self.subs.iter().map(|(sub_id, _)| sub_id.clone()).collect();
+		let to_remove: Vec<_> = self.subs.keys().map(|sub_id| sub_id.clone()).collect();
 		for sub_id in to_remove.into_iter() {
 			if sub_id == request_sub_id {
 				is_terminated = true;
