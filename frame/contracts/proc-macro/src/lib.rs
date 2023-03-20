@@ -596,6 +596,7 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 	let impls = def.host_funcs.iter().map(|f| {
 		// skip the context and memory argument
 		let params = f.item.sig.inputs.iter().skip(2);
+
 		let (module, name, body, wasm_output, output) = (
 			f.module(),
 			&f.name,
@@ -605,6 +606,42 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 		);
 		let is_stable = f.is_stable;
 		let not_deprecated = f.not_deprecated;
+
+		// debug traces, used when RUST_LOG contains `runtime::contracts::strace=trace`" 
+		let body_strace = {
+			let params_fmt = params.clone().filter_map(|arg| match arg {
+				syn::FnArg::Receiver(_) => None,
+				syn::FnArg::Typed(p) => {
+					match *p.pat.clone() {
+						syn::Pat::Ident(ref pat_ident) => Some(pat_ident.ident.to_string()),
+						_ => None,
+					}
+				},
+			})
+			.map(|s| format!("{s}: {{}}"))
+			.collect::<Vec<_>>()
+			.join(", ");
+
+			let params_fmt = format!("Invoked {}::{}({})", module, name, params_fmt);
+			let params_fmt_args = params.clone().filter_map(|arg| match arg {
+				syn::FnArg::Receiver(_) => None,
+				syn::FnArg::Typed(p) => {
+					match *p.pat.clone() {
+						syn::Pat::Ident(ref pat_ident) => Some(pat_ident.ident.clone()),
+						_ => None,
+					}
+				},
+			});
+
+			quote! {
+				if ::log::log_enabled!(target: "runtime::contracts::strace", ::log::Level::Trace) {
+					let debug_msg = format!(#params_fmt, #( #params_fmt_args, )*);
+					::log::trace!("{}", debug_msg);
+					ctx.ext.append_debug_buffer(&debug_msg);
+				}
+			}
+		};
+
 
 		// If we don't expand blocks (implementing for `()`) we change a few things:
 		// - We replace any code by unreachable!
@@ -617,6 +654,7 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 					.memory()
 					.expect("Memory must be set when setting up host data; qed")
 					.data_and_store_mut(&mut __caller__);
+				#body_strace
 				#body
 			} }
 		} else {
@@ -654,6 +692,8 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 			{
 				#allow_unused
 				linker.define(#module, #name, ::wasmi::Func::wrap(&mut*store, |mut __caller__: ::wasmi::Caller<#host_state>, #( #params, )*| -> #wasm_output {
+
+					// #strace
 					let mut func = #inner;
 					func()
 						.map_err(#map_err)
