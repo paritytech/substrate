@@ -30,7 +30,7 @@ use crate::{
 	SubscriptionTaskExecutor,
 };
 use jsonrpsee::{
-	core::{async_trait, SubscriptionResult},
+	core::async_trait,
 	types::error::{CallError, ErrorObject},
 	PendingSubscriptionSink, SubscriptionMessage,
 };
@@ -88,11 +88,7 @@ where
 	<Pool::Block as BlockT>::Hash: Unpin,
 	Client: HeaderBackend<Pool::Block> + ProvideRuntimeApi<Pool::Block> + Send + Sync + 'static,
 {
-	async fn submit_and_watch(
-		&self,
-		pending: PendingSubscriptionSink,
-		xt: Bytes,
-	) -> SubscriptionResult {
+	async fn submit_and_watch(&self, pending: PendingSubscriptionSink, xt: Bytes) {
 		// This is the only place where the RPC server can return an error for this
 		// subscription. Other defects must be signaled as events to the sink.
 		let decoded_extrinsic = match TransactionFor::<Pool>::decode(&mut &xt[..]) {
@@ -104,7 +100,7 @@ where
 					None::<()>,
 				));
 				let _ = pending.reject(err).await;
-				return Ok(())
+				return
 			},
 		};
 
@@ -134,13 +130,13 @@ where
 				// We have not created an `Watcher` for the tx. Make sure the
 				// error is still propagated as an event.
 				let event: TransactionEvent<<Pool::Block as BlockT>::Hash> = err.into();
-				let msg = SubscriptionMessage::from_json(&event)?;
-				let sink = pending.accept().await?;
+				let msg = SubscriptionMessage::from_json(&event).unwrap();
+				let Ok(sink) = pending.accept().await else {
+					return
+				};
 				_ = sink.send(msg).await;
 			},
 		}
-
-		Ok(())
 	}
 }
 

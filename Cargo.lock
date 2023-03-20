@@ -3322,7 +3322,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee"
 version = "0.16.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-subscription-api-option-result#f668bcf3ef5ae640754223dbeb74b683ff309703"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-subscription-api-option-result#363d28128172a1d8797d18c72a51bec6afdc7bb0"
 dependencies = [
  "jsonrpsee-core",
  "jsonrpsee-proc-macros",
@@ -3336,7 +3336,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-client-transport"
 version = "0.16.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-subscription-api-option-result#f668bcf3ef5ae640754223dbeb74b683ff309703"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-subscription-api-option-result#363d28128172a1d8797d18c72a51bec6afdc7bb0"
 dependencies = [
  "futures-util",
  "http",
@@ -3354,7 +3354,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-core"
 version = "0.16.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-subscription-api-option-result#f668bcf3ef5ae640754223dbeb74b683ff309703"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-subscription-api-option-result#363d28128172a1d8797d18c72a51bec6afdc7bb0"
 dependencies = [
  "anyhow",
  "async-lock",
@@ -3380,7 +3380,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-proc-macros"
 version = "0.16.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-subscription-api-option-result#f668bcf3ef5ae640754223dbeb74b683ff309703"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-subscription-api-option-result#363d28128172a1d8797d18c72a51bec6afdc7bb0"
 dependencies = [
  "heck",
  "proc-macro-crate",
@@ -3392,7 +3392,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-server"
 version = "0.16.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-subscription-api-option-result#f668bcf3ef5ae640754223dbeb74b683ff309703"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-subscription-api-option-result#363d28128172a1d8797d18c72a51bec6afdc7bb0"
 dependencies = [
  "futures-util",
  "hyper",
@@ -3411,7 +3411,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-types"
 version = "0.16.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-subscription-api-option-result#f668bcf3ef5ae640754223dbeb74b683ff309703"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-subscription-api-option-result#363d28128172a1d8797d18c72a51bec6afdc7bb0"
 dependencies = [
  "anyhow",
  "beef",
@@ -3424,7 +3424,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-ws-client"
 version = "0.16.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-subscription-api-option-result#f668bcf3ef5ae640754223dbeb74b683ff309703"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-subscription-api-option-result#363d28128172a1d8797d18c72a51bec6afdc7bb0"
 dependencies = [
  "http",
  "jsonrpsee-client-transport",

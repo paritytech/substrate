@@ -19,7 +19,10 @@
 #![allow(non_snake_case)]
 
 //! API trait of the chain head.
-use crate::chain_head::event::{ChainHeadEvent, FollowEvent, NetworkConfig};
+use crate::{
+	chain_head::event::{ChainHeadEvent, FollowEvent, NetworkConfig},
+	SubscriptionResponse,
+};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 
 #[rpc(client, server)]
@@ -34,7 +37,10 @@ pub trait ChainHeadApi<Hash> {
 		unsubscribe = "chainHead_unstable_unfollow",
 		item = FollowEvent<Hash>,
 	)]
-	async fn chain_head_unstable_follow(&self, runtime_updates: bool);
+	async fn chain_head_unstable_follow(
+		&self,
+		runtime_updates: bool,
+	) -> SubscriptionResponse<FollowEvent<String>>;
 
 	/// Retrieves the body (list of transactions) of a pinned block.
 	///
@@ -57,7 +63,7 @@ pub trait ChainHeadApi<Hash> {
 		follow_subscription: String,
 		hash: Hash,
 		network_config: Option<NetworkConfig>,
-	);
+	) -> SubscriptionResponse<ChainHeadEvent<String>>;
 
 	/// Retrieves the header of a pinned block.
 	///
@@ -103,7 +109,7 @@ pub trait ChainHeadApi<Hash> {
 		key: String,
 		child_key: Option<String>,
 		network_config: Option<NetworkConfig>,
-	);
+	) -> SubscriptionResponse<ChainHeadEvent<Option<String>>>;
 
 	/// Call into the Runtime API at a specified block's state.
 	///
@@ -122,7 +128,7 @@ pub trait ChainHeadApi<Hash> {
 		function: String,
 		call_parameters: String,
 		network_config: Option<NetworkConfig>,
-	);
+	) -> SubscriptionResponse<ChainHeadEvent<String>>;
 
 	/// Unpin a block reported by the `follow` method.
 	///

@@ -28,7 +28,7 @@ use crate::{
 		},
 		subscription::{SubscriptionHandle, SubscriptionManagement, SubscriptionManagementError},
 	},
-	SubscriptionTaskExecutor,
+	SubscriptionResponse, SubscriptionTaskExecutor,
 };
 use codec::Encode;
 use futures::{
@@ -58,8 +58,6 @@ use sp_runtime::{
 	traits::{Block as BlockT, Header},
 };
 use std::{marker::PhantomData, sync::Arc};
-
-const SERIALIZE_PROOF: &str = "Serialize infallible; qed";
 
 /// An API for chain head RPC calls.
 pub struct ChainHead<BE, Block: BlockT, Client> {
@@ -304,7 +302,8 @@ async fn submit_events<EventStream, T>(
 	sink: &mut SubscriptionSink,
 	mut stream: EventStream,
 	rx_stop: oneshot::Receiver<()>,
-) where
+) -> SubscriptionResponse<FollowEvent<T>>
+where
 	EventStream: Stream<Item = T> + Unpin,
 	T: Serialize,
 {
@@ -321,13 +320,11 @@ async fn submit_events<EventStream, T>(
 				stop_event = next_stop_event;
 			},
 			// Client disconnected.
-			Err(DisconnectError(_)) => return,
+			Err(DisconnectError(_)) => return SubscriptionResponse::Closed,
 		}
 	}
 
-	let msg = SubscriptionMessage::from_json(&FollowEvent::<String>::Stop)
-		.expect("serialize should work");
-	let _ = sink.send(msg).await;
+	SubscriptionResponse::Event(FollowEvent::Stop)
 }
 
 /// Generate the "NewBlock" event and potentially the "BestBlockChanged" event for
@@ -484,9 +481,9 @@ where
 		&self,
 		pending: PendingSubscriptionSink,
 		runtime_updates: bool,
-	) {
+	) -> SubscriptionResponse<FollowEvent<String>> {
 		let Ok((mut sink, sub_id)) = self.accept_subscription(pending).await else {
-			return;
+			return SubscriptionResponse::Closed;
 		};
 
 		// Keep track of the subscription.
@@ -494,9 +491,7 @@ where
 			// Inserting the subscription can only fail if the JsonRPSee
 			// generated a duplicate subscription ID.
 			debug!(target: "rpc-spec-v2", "[follow][id={:?}] Subscription already accepted", sub_id);
-			let msg = SubscriptionMessage::from_json(&FollowEvent::<Block::Hash>::Stop).expect("serialize infallible; qed");
-			let _ = sink.send(msg).await;
-			return;
+			return SubscriptionResponse::Event(FollowEvent::Stop);
 		};
 		debug!(target: "rpc-spec-v2", "[follow][id={:?}] Subscription accepted", sub_id);
 
@@ -546,9 +541,7 @@ where
 		let Ok(initial_events) = generate_initial_events(&self.client, &self.backend, &sub_handle, runtime_updates) else {
 			// Stop the subscription if we exceeded the maximum number of blocks pinned.
 			debug!(target: "rpc-spec-v2", "[follow][id={:?}] Exceeded max pinned blocks from initial events", sub_id);
-			let msg = SubscriptionMessage::from_json(&FollowEvent::<Block::Hash>::Stop).expect("serialize infallible; qed");
-			let _ = sink.send(msg).await;
-			return;
+			return SubscriptionResponse::Event(FollowEvent::Stop);
 		};
 
 		let stream = stream::iter(initial_events).chain(merged);
@@ -557,6 +550,8 @@ where
 		// The client disconnected or called the unsubscribe method.
 		self.subscriptions.remove_subscription(&sub_id);
 		debug!(target: "rpc-spec-v2", "[follow][id={:?}] Subscription removed", sub_id);
+
+		SubscriptionResponse::Closed
 	}
 
 	async fn chain_head_unstable_body(
@@ -565,27 +560,24 @@ where
 		follow_subscription: String,
 		hash: Block::Hash,
 		_network_config: Option<NetworkConfig>,
-	) {
+	) -> SubscriptionResponse<ChainHeadEvent<String>> {
 		let client = self.client.clone();
 		let subscriptions = self.subscriptions.clone();
 
 		let Some(handle) = subscriptions.get_subscription(&follow_subscription) else {
 			// Invalid invalid subscription ID.
-			let msg = SubscriptionMessage::from_json(&ChainHeadEvent::<String>::Disjoint).expect("serialize infallible; qed");
-			if let Ok(sink) = pending.accept().await {
-				let _ = sink.send(msg);
-			}
-			return;
+			let _sink = pending.accept().await;
+			return SubscriptionResponse::Event(ChainHeadEvent::Disjoint);
 		};
 
 		// Block is not part of the subscription.
 		if !handle.contains_block(&hash) {
 			let _ = pending.reject(ChainHeadRpcError::InvalidBlock).await;
-			return
+			return SubscriptionResponse::Closed
 		}
 
-		let Ok(sink) = pending.accept().await else {
-			return;
+		if pending.accept().await.is_err() {
+			return SubscriptionResponse::Closed
 		};
 
 		let event = match client.block(hash) {
@@ -602,8 +594,7 @@ where
 			},
 			Err(error) => ChainHeadEvent::Error(ErrorEvent { error: error.to_string() }),
 		};
-		let msg = SubscriptionMessage::from_json(&event).expect("serialize infallible; qed");
-		let _ = sink.send(msg).await;
+		SubscriptionResponse::Event(event)
 	}
 
 	fn chain_head_unstable_header(
@@ -640,36 +631,37 @@ where
 		key: String,
 		child_key: Option<String>,
 		_network_config: Option<NetworkConfig>,
-	) {
+	) -> SubscriptionResponse<ChainHeadEvent<Option<String>>> {
 		let mut pending = MaybePendingSubscription::new(pending);
 		let Ok(key) = parse_hex_param(&mut pending, key).await else {
-			return;
+			return SubscriptionResponse::Closed;
 		};
 
 		let key = StorageKey(key);
 
 		let child_key = match child_key {
-			Some(k) =>
-				Some(ChildInfo::new_default_from_vec(parse_hex_param(&mut pending, k).await?)),
+			Some(k) => {
+				let Ok(key) = parse_hex_param(&mut pending, k).await else {
+					return SubscriptionResponse::Closed;
+				};
+				Some(ChildInfo::new_default_from_vec(key))
+			},
 			None => None,
 		};
 
 		let Some(handle) = self.subscriptions.get_subscription(&follow_subscription) else {
-			if let Ok(sink) = pending.accept().await {
-				// Invalid invalid subscription ID.
-				let _ = sink.send(SubscriptionMessage::from_json(&ChainHeadEvent::<String>::Disjoint).expect("serialize infallible; qed")).await;
-			}
-			return;
+			let _sink = pending.accept().await;
+			return SubscriptionResponse::Event(ChainHeadEvent::Disjoint);
 		};
 
 		// Block is not part of the subscription.
 		if !handle.contains_block(&hash) {
 			let _ = pending.reject(ChainHeadRpcError::InvalidBlock);
-			return
+			return SubscriptionResponse::Closed
 		}
 
-		let Ok(sink) = pending.accept().await else {
-			return;
+		if pending.accept().await.is_err() {
+			return SubscriptionResponse::Closed
 		};
 
 		// The child key is provided, use the key to query the child trie.
@@ -679,12 +671,9 @@ where
 			if well_known_keys::is_default_child_storage_key(child_key.storage_key()) ||
 				well_known_keys::is_child_storage_key(child_key.storage_key())
 			{
-				let msg = SubscriptionMessage::from_json(&ChainHeadEvent::Done(ChainHeadResult {
-					result: None::<String>,
+				return SubscriptionResponse::Event(ChainHeadEvent::Done(ChainHeadResult {
+					result: None,
 				}))
-				.expect("serialize infallible; qed");
-				let _ = sink.send(msg).await;
-				return
 			}
 
 			let res = self
@@ -698,8 +687,7 @@ where
 				.unwrap_or_else(|error| {
 					ChainHeadEvent::Error(ErrorEvent { error: error.to_string() })
 				});
-			let _ = sink.send(SubscriptionMessage::from_json(&res)?).await;
-			return
+			return SubscriptionResponse::Event(res)
 		}
 
 		// The main key must not be prefixed with b":child_storage:" nor
@@ -707,12 +695,9 @@ where
 		if well_known_keys::is_default_child_storage_key(&key.0) ||
 			well_known_keys::is_child_storage_key(&key.0)
 		{
-			let msg = SubscriptionMessage::from_json(&ChainHeadEvent::Done(ChainHeadResult {
-				result: None::<String>,
+			return SubscriptionResponse::Event(ChainHeadEvent::Done(ChainHeadResult {
+				result: None,
 			}))
-			.expect("serialize infallible; qed");
-			let _ = sink.send(msg).await;
-			return
 		}
 
 		// Main root trie storage query.
@@ -724,9 +709,7 @@ where
 				ChainHeadEvent::Done(ChainHeadResult { result })
 			})
 			.unwrap_or_else(|error| ChainHeadEvent::Error(ErrorEvent { error: error.to_string() }));
-		let _ = sink
-			.send(SubscriptionMessage::from_json(&res).expect("serialize infallible; qed"))
-			.await;
+		SubscriptionResponse::Event(res)
 	}
 
 	async fn chain_head_unstable_call(
@@ -737,26 +720,24 @@ where
 		function: String,
 		call_parameters: String,
 		_network_config: Option<NetworkConfig>,
-	) {
+	) -> SubscriptionResponse<ChainHeadEvent<String>> {
 		let mut pending = MaybePendingSubscription::new(pending);
 		let Ok(bytes) = parse_hex_param(&mut pending, call_parameters).await else {
-			return;
+			return SubscriptionResponse::Closed;
 		};
 		let call_parameters = Bytes::from(bytes);
 
 		let Some(handle) = self.subscriptions.get_subscription(&follow_subscription) else {
 				// Invalid invalid subscription ID.
-				if let Ok(sink) = pending.accept().await {
-					let _ = sink.send(to_sub_message(&ChainHeadEvent::Disjoint)).await;
-				}
-				
-				return;
+				// Pin the subscription as "accepted" to send the `disjoint event`.
+				let _sink = pending.accept().await;
+				return SubscriptionResponse::Event(ChainHeadEvent::Disjoint);
 			};
 
 		// Block is not part of the subscription.
 		if !handle.contains_block(&hash) {
 			let _ = pending.reject(ChainHeadRpcError::InvalidBlock);
-			return;
+			return SubscriptionResponse::Closed
 		}
 
 		// Reject subscription if runtime_updates is false.
@@ -764,10 +745,12 @@ where
 			let _ = pending.reject(ChainHeadRpcError::InvalidParam(
 				"The runtime updates flag must be set".into(),
 			));
-			return;
+			return SubscriptionResponse::Closed
 		}
 
-		let sink = pending.accept().await?;
+		if pending.accept().await.is_err() {
+			return SubscriptionResponse::Closed
+		};
 
 		let res = self
 			.client
@@ -784,8 +767,7 @@ where
 			})
 			.unwrap_or_else(|error| ChainHeadEvent::Error(ErrorEvent { error: error.to_string() }));
 
-		let _ = sink.send(to_sub_message(&res)).await;
-
+		SubscriptionResponse::Event(res)
 	}
 
 	fn chain_head_unstable_unpin(
@@ -804,9 +786,4 @@ where
 
 		Ok(())
 	}
-}
-
-
-fn to_sub_message(res: &ChainHeadEvent<String>) -> SubscriptionMessage {
-	SubscriptionMessage::from_json(res).expect(SERIALIZE_PROOF)
 }

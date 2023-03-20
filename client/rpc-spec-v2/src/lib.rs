@@ -23,9 +23,34 @@
 #![warn(missing_docs)]
 #![deny(unused_crate_dependencies)]
 
+use jsonrpsee::{
+	core::Serialize, IntoSubscriptionCloseResponse, SubscriptionCloseResponse, SubscriptionMessage,
+};
+
 pub mod chain_head;
 pub mod chain_spec;
 pub mod transaction;
 
 /// Task executor that is being used by RPC subscriptions.
 pub type SubscriptionTaskExecutor = std::sync::Arc<dyn sp_core::traits::SpawnNamed>;
+
+/// ...
+pub enum SubscriptionResponse<T> {
+	/// The subscription was closed, no further message is sent.
+	Closed,
+	/// Send out a notification.
+	Event(T),
+}
+
+impl<T: Serialize> IntoSubscriptionCloseResponse for SubscriptionResponse<T> {
+	fn into_response(self) -> SubscriptionCloseResponse {
+		match self {
+			Self::Closed => SubscriptionCloseResponse::None,
+			Self::Event(ev) => {
+				let msg = SubscriptionMessage::from_json(&ev)
+					.expect("JSON serialization infallible; qed");
+				SubscriptionCloseResponse::Some(msg)
+			},
+		}
+	}
+}
