@@ -79,7 +79,7 @@ use sp_consensus_grandpa::{
 	AuthorityList, AuthoritySignature, SetId, CLIENT_LOG_TARGET as LOG_TARGET,
 };
 use sp_core::{crypto::ByteArray, traits::CallContext};
-use sp_keystore::{Keystore, KeystorePtr};
+use sp_keystore::KeystorePtr;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, NumberFor, Zero},
@@ -1141,7 +1141,7 @@ fn local_authority_id(
 	keystore.and_then(|keystore| {
 		voters
 			.iter()
-			.find(|(p, _)| Keystore::has_keys(&**keystore, &[(p.to_raw_vec(), AuthorityId::ID)]))
+			.find(|(p, _)| keystore.has_keys(&[(p.to_raw_vec(), AuthorityId::ID)]))
 			.map(|(p, _)| p.clone())
 	})
 }

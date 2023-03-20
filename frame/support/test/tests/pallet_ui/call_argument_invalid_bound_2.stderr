@@ -23,17 +23,11 @@ error[E0369]: binary operation `==` cannot be applied to type `&<T as pallet::Co
 error[E0277]: the trait bound `<T as pallet::Config>::Bar: WrapperTypeEncode` is not satisfied
   --> tests/pallet_ui/call_argument_invalid_bound_2.rs:21:36
    |
-1  | / #[frame_support::pallet]
-2  | | mod pallet {
-3  | |     use frame_support::pallet_prelude::{Hooks, DispatchResultWithPostInfo};
-4  | |     use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
-...  |
-16 | |
-17 | |     #[pallet::call]
-   | |__________________- required by a bound introduced by this call
+1  | #[frame_support::pallet]
+   | ------------------------ required by a bound introduced by this call
 ...
-21 |           pub fn foo(origin: OriginFor<T>, _bar: T::Bar) -> DispatchResultWithPostInfo {
-   |                                            ^^^^ the trait `WrapperTypeEncode` is not implemented for `<T as pallet::Config>::Bar`
+21 |         pub fn foo(origin: OriginFor<T>, _bar: T::Bar) -> DispatchResultWithPostInfo {
+   |                                          ^^^^ the trait `WrapperTypeEncode` is not implemented for `<T as pallet::Config>::Bar`
    |
    = note: required for `<T as pallet::Config>::Bar` to implement `Encode`
 
