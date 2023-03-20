@@ -20,14 +20,15 @@ use crate::{
 	traits::{GetCallMetadata, UnfilteredDispatchable},
 };
 use sp_core::H256;
-use sp_runtime::{traits::Dispatchable, DispatchError, DispatchResultWithInfo, ModuleError};
+use sp_runtime::{
+	traits::Dispatchable, DispatchError, DispatchResultWithInfo, ModuleError,
+	MAX_MODULE_ERROR_ENCODED_SIZE,
+};
 sp_api::decl_runtime_apis! {
 	pub trait Interface {
 		type View: View;
 
-		fn view(view: Self::View) -> Result<Vec<u8>, InterfaceError> {
-			view::view()
-		}
+		fn view(view: Self::View) -> Result<Vec<u8>, InterfaceError>;
 	}
 }
 
@@ -75,8 +76,6 @@ pub enum InterfaceError {
 		/// Module specific error value.
 		error: [u8; MAX_MODULE_ERROR_ENCODED_SIZE],
 		/// Optional error message.
-		#[codec(skip)]
-		#[cfg_attr(feature = "std", serde(skip_deserializing))]
 		message: Option<&'static str>,
 	},
 	Module(ModuleError),
@@ -126,8 +125,74 @@ impl<T> Selector for Select<T> {
 mod tests {
 	#[frame_support::interface]
 	mod int_123 {
+		use frame_support::{
+			dispatch::DispatchResult,
+			interface::{InterfaceError, Select},
+		};
+
 		#[interface::definition]
-		pub trait Int123 {}
+		#[interface::with_selector]
+		pub trait Pip20: frame_support::interface::Core {
+			type AccountId;
+			type Currency;
+			type Balance;
+
+			#[interface::selector(SelectCurrency)]
+			#[interface::default_selector]
+			fn select_currency(
+				selectable: Self::Selectable,
+			) -> Result<Self::Currency, InterfaceError>;
+
+			#[interface::selector(RestrictedCurrency)]
+			fn select_restricted_currency(
+				selectable: Self::Selectable,
+			) -> Result<Self::Currency, InterfaceError>;
+
+			#[interface::selector(SelectAccount)]
+			fn select_account(
+				selectable: Self::Selectable,
+			) -> Result<Self::Account, InterfaceError>;
+
+			#[interface::view]
+			#[interface::view_index(0)]
+			fn free_balance(
+				currency: Select<Self::Currency>,
+				who: Self::AccountId,
+			) -> Self::Balance;
+
+			#[interface::view]
+			#[interface::view_index(1)]
+			#[interface::no_selector]
+			fn balances(who: Self::AccountId) -> Vec<(Self::Currency, Self::Balance)>;
+
+			#[interface::call]
+			#[interface::call_index(0)]
+			fn transfer(
+				origin: Self::RuntimeOrigin,
+				currency: Select<Self::Currency>,
+				recv: Self::AccountId,
+				amount: Self::Balance,
+			) -> DispatchResult;
+
+			#[interface::call]
+			#[interface::call_index(1)]
+			#[interface::use_selector(RestrictedCurrency)]
+			fn approve(
+				origin: Self::RuntimeOrigin,
+				currency: Select<Self::Currency>,
+				recv: Self::AccountId,
+				amount: Self::Balance,
+			) -> DispatchResult;
+
+			#[interface::call]
+			#[interface::call_index(3)]
+			#[interface::use_selector(SelectAccount)]
+			fn burn(
+				origin: Self::RuntimeOrigin,
+				from: Select<Self::AccountId>,
+				amount: Self::Balance,
+			) -> DispatchResult;
+		}
 	}
 }
 

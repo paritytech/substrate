@@ -2800,6 +2800,8 @@ pub mod pallet_prelude {
 /// * use the newest nightly possible.
 pub use frame_support_procedural::pallet;
 
+pub use frame_support_procedural::interface;
+
 /// Contains macro stubs for all of the pallet:: macros
 pub mod pallet_macros {
 	pub use frame_support_procedural::{
