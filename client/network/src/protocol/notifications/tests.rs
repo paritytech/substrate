@@ -78,16 +78,21 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 				reserved_only: false,
 			}],
 		});
+		let (protocol_handle_pair, _notif_service) =
+			crate::protocol::notifications::service::notification_service();
 
 		let behaviour = CustomProtoWithAddr {
 			inner: Notifications::new(
 				peerset,
-				iter::once(ProtocolConfig {
-					name: "/foo".into(),
-					fallback_names: Vec::new(),
-					handshake: Vec::new(),
-					max_notification_size: 1024 * 1024,
-				}),
+				iter::once((
+					ProtocolConfig {
+						name: "/foo".into(),
+						fallback_names: Vec::new(),
+						handshake: Vec::new(),
+						max_notification_size: 1024 * 1024,
+					},
+					protocol_handle_pair,
+				)),
 			),
 			addrs: addrs
 				.iter()
@@ -331,6 +336,7 @@ fn reconnect_after_disconnect() {
 				}
 			};
 
+			// TODO: rewrite these using `NotificationService`
 			match event {
 				SwarmEvent::Behaviour(NotificationsOut::CustomProtocolOpen { .. }) |
 				SwarmEvent::Behaviour(NotificationsOut::CustomProtocolClosed { .. }) => panic!(),
