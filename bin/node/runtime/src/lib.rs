@@ -35,7 +35,7 @@ use frame_support::{
 	parameter_types,
 	traits::{
 		fungible::ItemOf,
-		tokens::{nonfungibles_v2::Inspect, GetSalary},
+		tokens::{nonfungibles_v2::Inspect, GetSalary, PayFromAccount},
 		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, Currency, EitherOfDiverse,
 		EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter, KeyOwnerProofSystem,
 		LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote, WithdrawReasons,
@@ -59,7 +59,7 @@ use pallet_election_provider_multi_phase::SolutionAccuracyOf;
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use pallet_nfts::PalletFeatures;
 use pallet_nis::WithMaximumOf;
-use pallet_session::historical::{self as pallet_session_historical};
+use pallet_session::historical as pallet_session_historical;
 pub use pallet_transaction_payment::{CurrencyAdapter, Multiplier, TargetedFeeAdjustment};
 use pallet_transaction_payment::{FeeDetails, RuntimeDispatchInfo};
 use sp_api::impl_runtime_apis;
@@ -705,6 +705,7 @@ impl pallet_election_provider_multi_phase::MinerConfig for Runtime {
 	type Solution = NposSolution16;
 	type MaxVotesPerVoter =
 	<<Self as pallet_election_provider_multi_phase::Config>::DataProvider as ElectionDataProvider>::MaxVotesPerVoter;
+	type MaxWinners = MaxActiveValidators;
 
 	// The unsigned submissions have to respect the weight of the submit_unsigned call, thus their
 	// weight estimate function is wired to this call's weight.
@@ -1620,12 +1621,24 @@ impl GetSalary<u16, AccountId, Balance> for SalaryForRank {
 impl pallet_salary::Config for Runtime {
 	type WeightInfo = ();
 	type RuntimeEvent = RuntimeEvent;
-	type Paymaster = pallet_salary::PayFromAccount<Balances, TreasuryAccount>;
+	type Paymaster = PayFromAccount<Balances, TreasuryAccount>;
 	type Members = RankedCollective;
 	type Salary = SalaryForRank;
 	type RegistrationPeriod = ConstU32<200>;
 	type PayoutPeriod = ConstU32<200>;
 	type Budget = Budget;
+}
+
+impl pallet_core_fellowship::Config for Runtime {
+	type WeightInfo = ();
+	type RuntimeEvent = RuntimeEvent;
+	type Members = RankedCollective;
+	type Balance = Balance;
+	type ParamsOrigin = frame_system::EnsureRoot<AccountId>;
+	type InductOrigin = pallet_core_fellowship::EnsureInducted<Runtime, (), 1>;
+	type ApproveOrigin = frame_system::EnsureRootWithSuccess<AccountId, ConstU16<9>>;
+	type PromoteOrigin = frame_system::EnsureRootWithSuccess<AccountId, ConstU16<9>>;
+	type EvidenceSize = ConstU32<16_384>;
 }
 
 parameter_types! {
@@ -1825,6 +1838,7 @@ construct_runtime!(
 		Uniques: pallet_uniques,
 		Nfts: pallet_nfts,
 		Salary: pallet_salary,
+		CoreFellowship: pallet_core_fellowship,
 		TransactionStorage: pallet_transaction_storage,
 		VoterList: pallet_bags_list::<Instance1>,
 		StateTrieMigration: pallet_state_trie_migration,
@@ -1922,6 +1936,7 @@ mod benches {
 		[pallet_collective, Council]
 		[pallet_conviction_voting, ConvictionVoting]
 		[pallet_contracts, Contracts]
+		[pallet_core_fellowship, CoreFellowship]
 		[pallet_democracy, Democracy]
 		[pallet_dex, Dex]
 		[pallet_election_provider_multi_phase, ElectionProviderMultiPhase]
@@ -1983,6 +1998,14 @@ impl_runtime_apis! {
 	impl sp_api::Metadata<Block> for Runtime {
 		fn metadata() -> OpaqueMetadata {
 			OpaqueMetadata::new(Runtime::metadata().into())
+		}
+
+		fn metadata_at_version(version: u32) -> Option<OpaqueMetadata> {
+			Runtime::metadata_at_version(version)
+		}
+
+		fn metadata_versions() -> sp_std::vec::Vec<u32> {
+			Runtime::metadata_versions()
 		}
 	}
 
@@ -2252,6 +2275,10 @@ impl_runtime_apis! {
 
 		fn quote_price_tokens_for_exact_tokens(asset1: NativeOrAssetId<u32>, asset2: NativeOrAssetId<u32>, amount: u128, include_fee: bool) -> Option<Balance> {
 			Dex::quote_price_tokens_for_exact_tokens(asset1, asset2, amount, include_fee)
+		}
+
+		fn get_reserves(asset1: NativeOrAssetId<u32>, asset2: NativeOrAssetId<u32>) -> Option<(Balance, Balance)> {
+			Dex::get_reserves(asset1, asset2).ok()
 		}
 	}
 

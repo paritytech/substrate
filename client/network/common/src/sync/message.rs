@@ -19,7 +19,7 @@
 //! Network packet message types. These get serialized and put into the lower level protocol
 //! payload.
 
-use crate::protocol::role::Roles;
+use crate::role::Roles;
 
 use bitflags::bitflags;
 use codec::{Decode, Encode, Error, Input, Output};

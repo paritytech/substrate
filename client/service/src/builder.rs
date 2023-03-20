@@ -38,14 +38,11 @@ use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
 use sc_executor::RuntimeVersionOf;
 use sc_keystore::LocalKeystore;
-use sc_network::NetworkService;
-use sc_network_bitswap::BitswapRequestHandler;
-use sc_network_common::{
-	config::SyncMode,
-	protocol::role::Roles,
-	service::{NetworkEventStream, NetworkStateInfo, NetworkStatusProvider},
-	sync::warp::WarpSyncParams,
+use sc_network::{
+	config::SyncMode, NetworkEventStream, NetworkService, NetworkStateInfo, NetworkStatusProvider,
 };
+use sc_network_bitswap::BitswapRequestHandler;
+use sc_network_common::{role::Roles, sync::warp::WarpSyncParams};
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
 	block_request_handler::BlockRequestHandler, engine::SyncingEngine,

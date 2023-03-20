@@ -265,7 +265,7 @@ pub mod v10 {
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV10<T> {
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
 			if StorageVersion::<T>::get() == ObsoleteReleases::V9_0_0 {
-				let pending_slashes = <Pallet<T> as Store>::UnappliedSlashes::iter().take(512);
+				let pending_slashes = UnappliedSlashes::<T>::iter().take(512);
 				for (era, slashes) in pending_slashes {
 					for slash in slashes {
 						// in the old slashing scheme, the slash era was the key at which we read

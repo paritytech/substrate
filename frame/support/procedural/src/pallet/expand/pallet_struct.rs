@@ -82,8 +82,8 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 		quote::quote_spanned!(def.pallet_struct.attr_span =>
 			impl<#type_impl_gen> #pallet_ident<#type_use_gen> #config_where_clause {
 				#[doc(hidden)]
-				pub fn error_metadata() -> Option<#frame_support::metadata::PalletErrorMetadata> {
-					Some(#frame_support::metadata::PalletErrorMetadata {
+				pub fn error_metadata() -> Option<#frame_support::metadata_ir::PalletErrorMetadataIR> {
+					Some(#frame_support::metadata_ir::PalletErrorMetadataIR {
 						ty: #frame_support::scale_info::meta_type::<#error_ident<#type_use_gen>>()
 					})
 				}
@@ -93,7 +93,7 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 		quote::quote_spanned!(def.pallet_struct.attr_span =>
 			impl<#type_impl_gen> #pallet_ident<#type_use_gen> #config_where_clause {
 				#[doc(hidden)]
-				pub fn error_metadata() -> Option<#frame_support::metadata::PalletErrorMetadata> {
+				pub fn error_metadata() -> Option<#frame_support::metadata_ir::PalletErrorMetadataIR> {
 					None
 				}
 			}

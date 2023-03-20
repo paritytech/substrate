@@ -887,11 +887,6 @@ where
 			// based on the new resulting 'state'.
 			futures::select_biased! {
 				// Use `select_biased!` to prioritize order below.
-				// Make sure to pump gossip engine.
-				_ = gossip_engine => {
-					error!(target: LOG_TARGET, "🥩 Gossip engine has terminated, closing worker.");
-					return;
-				},
 				// Process finality notifications first since these drive the voter.
 				notification = finality_notifications.next() => {
 					if let Some(notification) = notification {
@@ -900,6 +895,11 @@ where
 						error!(target: LOG_TARGET, "🥩 Finality stream terminated, closing worker.");
 						return;
 					}
+				},
+				// Make sure to pump gossip engine.
+				_ = gossip_engine => {
+					error!(target: LOG_TARGET, "🥩 Gossip engine has terminated, closing worker.");
+					return;
 				},
 				// Process incoming justifications as these can make some in-flight votes obsolete.
 				justif = self.on_demand_justifications.next().fuse() => {

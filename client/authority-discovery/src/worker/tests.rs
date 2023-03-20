@@ -29,11 +29,16 @@ use futures::{
 	sink::SinkExt,
 	task::LocalSpawn,
 };
-use libp2p::{core::multiaddr, identity::Keypair, PeerId};
+use libp2p::{
+	core::multiaddr,
+	identity::{error::SigningError, Keypair},
+	kad::record::Key as KademliaKey,
+	PeerId,
+};
 use prometheus_endpoint::prometheus::default_registry;
 
 use sc_client_api::HeaderBackend;
-use sc_network_common::service::{KademliaKey, Signature, SigningError};
+use sc_network::Signature;
 use sp_api::{ApiRef, ProvideRuntimeApi};
 use sp_keystore::{testing::KeyStore, CryptoStore};
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
