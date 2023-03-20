@@ -19,7 +19,13 @@
 
 #![warn(missing_docs)]
 
-use crate::{utils::{deserialize_argument, serialize_result}, PairingError};
+use crate::{
+	utils::{
+		deserialize_argument, final_exponentiation_generic, multi_miller_loop_generic,
+		serialize_result,
+	},
+	PairingError,
+};
 use ark_bls12_381::{g1, g2, Bls12_381, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::{
 	models::CurveConfig,

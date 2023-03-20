@@ -1126,13 +1126,15 @@ pub trait Crypto {
 #[runtime_interface]
 pub trait EllipticCurves {
 	/// Compute a multi Miller loop on bls12_381
-	fn bls12_381_multi_miller_loop(a: Vec<Vec<u8>>, b: Vec<Vec<u8>>) -> Result<Vec<u8>, PairingError> {
+	fn bls12_381_multi_miller_loop(
+		a: Vec<Vec<u8>>,
+		b: Vec<Vec<u8>>,
+	) -> Result<Vec<u8>, PairingError> {
 		sp_arkworks::bls12_381::multi_miller_loop(a, b)
 	}
 
 	/// Compute a final exponentiation on bls12_381
-	fn bls12_381_final_exponentiation(f12: Vec<u8>
-	) -> Result<Vec<u8>, PairingError> {
+	fn bls12_381_final_exponentiation(f12: Vec<u8>) -> Result<Vec<u8>, PairingError> {
 		sp_arkworks::bls12_381::final_exponentiation(f12)
 	}
 
@@ -1167,14 +1169,15 @@ pub trait EllipticCurves {
 	}
 
 	/// Compute a multi Miller loop for bls12_377
-	fn bls12_377_multi_miller_loop(a: Vec<Vec<u8>>, b: Vec<Vec<u8>>
+	fn bls12_377_multi_miller_loop(
+		a: Vec<Vec<u8>>,
+		b: Vec<Vec<u8>>,
 	) -> Result<Vec<u8>, PairingError> {
 		sp_arkworks::bls12_377::multi_miller_loop(a, b)
 	}
 
 	/// Compute a final exponentiation for bls12_377
-	fn bls12_377_final_exponentiation(f12: Vec<u8>
-	) -> Result<Vec<u8>, PairingError> {
+	fn bls12_377_final_exponentiation(f12: Vec<u8>) -> Result<Vec<u8>, PairingError> {
 		sp_arkworks::bls12_377::final_exponentiation(f12)
 	}
 
@@ -1209,28 +1212,19 @@ pub trait EllipticCurves {
 	}
 
 	/// Compute a multi Miller loop on bw6_761
-	fn bw6_761_multi_miller_loop(a: Vec<Vec<u8>>, b: Vec<Vec<u8>>
+	fn bw6_761_multi_miller_loop(
+		a: Vec<Vec<u8>>,
+		b: Vec<Vec<u8>>,
 	) -> Result<Vec<u8>, PairingError> {
 		sp_arkworks::bw6_761::multi_miller_loop(a, b)
 	}
 
 	/// Compute a final exponentiation on bw6_761
-	fn bw6_761_final_exponentiation(f12: Vec<u8>
-	) -> Result<Vec<u8>, PairingError> {
+	fn bw6_761_final_exponentiation(f12: Vec<u8>) -> Result<Vec<u8>, PairingError> {
 		sp_arkworks::bw6_761::final_exponentiation(f12)
-	}
-
-	/// Compute a projective multiplication on G1 for bw6_761
 	fn bw6_761_mul_projective_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 		sp_arkworks::bw6_761::mul_projective_g1(base, scalar)
 	}
-
-	/// Compute a affine multiplication on G1 for bw6_761
-	fn bw6_761_mul_affine_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-		sp_arkworks::bw6_761::mul_affine_g1(base, scalar)
-	}
-
-	/// Compute a projective multiplication on G2 for bw6_761
 	fn bw6_761_mul_projective_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 		sp_arkworks::bw6_761::mul_projective_g2(base, scalar)
 	}
