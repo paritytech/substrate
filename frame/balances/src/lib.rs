@@ -444,6 +444,8 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
 		fn build(&self) {
+			assert!(!<T as Config<I>>::ExistentialDeposit::get().is_zero());
+
 			let total = self.balances.iter().fold(Zero::zero(), |acc: T::Balance, &(_, n)| acc + n);
 			<TotalIssuance<T, I>>::put(total);
 
@@ -533,7 +535,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
-			let existential_deposit = T::ExistentialDeposit::get();
+			let existential_deposit = Self::ed();
 
 			let wipeout = new_free < existential_deposit;
 			let new_free = if wipeout { Zero::zero() } else { new_free };
@@ -716,7 +718,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
-			let existential_deposit = T::ExistentialDeposit::get();
+			let existential_deposit = Self::ed();
 
 			let wipeout = new_free < existential_deposit;
 			let new_free = if wipeout { Zero::zero() } else { new_free };
@@ -742,6 +744,9 @@ pub mod pallet {
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
+		fn ed() -> T::Balance {
+			T::ExistentialDeposit::get().max(1u32.into())
+		}
 		/// Ensure the account `who` is using the new logic.
 		///
 		/// Returns `true` if the account did get upgraded, `false` if it didn't need upgrading.
@@ -756,7 +761,7 @@ pub mod pallet {
 					// Gah!! We have a non-zero reserve balance but no provider refs :(
 					// This shouldn't practically happen, but we need a failsafe anyway: let's give
 					// them enough for an ED.
-					a.free = a.free.min(T::ExistentialDeposit::get());
+					a.free = a.free.min(Self::ed());
 					system::Pallet::<T>::inc_providers(who);
 				}
 				let _ = system::Pallet::<T>::inc_consumers(who).defensive();
@@ -885,13 +890,13 @@ pub mod pallet {
 			let result = T::AccountStore::try_mutate_exists(who, |maybe_account| {
 				let is_new = maybe_account.is_none();
 				let mut account = maybe_account.take().unwrap_or_default();
-				let did_provide = account.free >= T::ExistentialDeposit::get();
+				let did_provide = account.free >= Self::ed();
 				let did_consume =
 					!is_new && (!account.reserved.is_zero() || !account.frozen.is_zero());
 
 				let result = f(&mut account, is_new)?;
 
-				let does_provide = account.free >= T::ExistentialDeposit::get();
+				let does_provide = account.free >= Self::ed();
 				let does_consume = !account.reserved.is_zero() || !account.frozen.is_zero();
 
 				if !did_provide && does_provide {
@@ -930,7 +935,7 @@ pub mod pallet {
 				//
 				// We should never be dropping if reserved is non-zero. Reserved being non-zero
 				// should imply that we have a consumer ref, so this is economically safe.
-				let ed = T::ExistentialDeposit::get();
+				let ed = Self::ed();
 				let maybe_dust = if account.free < ed && account.reserved.is_zero() {
 					if account.free.is_zero() {
 						None
