@@ -304,9 +304,9 @@ mod tests {
 	fn store_key_and_extract() {
 		let store = MemoryKeystore::new();
 
-		let public = Keystore::ed25519_generate_new(&store, ED25519, None).expect("Generates key");
+		let public = store.ed25519_generate_new(ED25519, None).expect("Generates key");
 
-		let public_keys = Keystore::keys(&store, ED25519).unwrap();
+		let public_keys = store.keys(ED25519).unwrap();
 
 		assert!(public_keys.contains(&public.into()));
 	}
@@ -318,10 +318,11 @@ mod tests {
 		let secret_uri = "//Alice";
 		let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
 
-		Keystore::insert(&store, SR25519, secret_uri, key_pair.public().as_ref())
+		store
+			.insert(SR25519, secret_uri, key_pair.public().as_ref())
 			.expect("Inserts unknown key");
 
-		let public_keys = Keystore::keys(&store, SR25519).unwrap();
+		let public_keys = store.keys(SR25519).unwrap();
 
 		assert!(public_keys.contains(&key_pair.public().into()));
 	}
@@ -342,19 +343,14 @@ mod tests {
 			],
 		};
 
-		let result = Keystore::sr25519_vrf_sign(
-			&store,
-			SR25519,
-			&key_pair.public(),
-			transcript_data.clone(),
-		);
+		let result = store.sr25519_vrf_sign(SR25519, &key_pair.public(), transcript_data.clone());
 		assert!(result.unwrap().is_none());
 
-		Keystore::insert(&store, SR25519, secret_uri, key_pair.public().as_ref())
+		store
+			.insert(SR25519, secret_uri, key_pair.public().as_ref())
 			.expect("Inserts unknown key");
 
-		let result =
-			Keystore::sr25519_vrf_sign(&store, SR25519, &key_pair.public(), transcript_data);
+		let result = store.sr25519_vrf_sign(SR25519, &key_pair.public(), transcript_data);
 
 		assert!(result.unwrap().is_some());
 	}
@@ -369,13 +365,13 @@ mod tests {
 		let msg = sp_core::keccak_256(b"this should be a hashed message");
 
 		// no key in key store
-		let res = Keystore::ecdsa_sign_prehashed(&store, ECDSA, &pair.public(), &msg).unwrap();
+		let res = store.ecdsa_sign_prehashed(ECDSA, &pair.public(), &msg).unwrap();
 		assert!(res.is_none());
 
 		// insert key, sign again
-		Keystore::insert(&store, ECDSA, suri, pair.public().as_ref()).unwrap();
+		store.insert(ECDSA, suri, pair.public().as_ref()).unwrap();
 
-		let res = Keystore::ecdsa_sign_prehashed(&store, ECDSA, &pair.public(), &msg).unwrap();
+		let res = store.ecdsa_sign_prehashed(ECDSA, &pair.public(), &msg).unwrap();
 		assert!(res.is_some());
 	}
 }

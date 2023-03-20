@@ -40,7 +40,7 @@ use sc_transaction_pool_api::{
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
-use sp_keystore::{Keystore, KeystorePtr};
+use sp_keystore::KeystorePtr;
 use sp_runtime::{generic, traits::Block as BlockT};
 use sp_session::SessionKeys;
 
@@ -112,7 +112,8 @@ where
 		self.deny_unsafe.check_if_safe()?;
 
 		let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
-		Keystore::insert(&*self.keystore, key_type, &suri, &public[..])
+		self.keystore
+			.insert(key_type, &suri, &public[..])
 			.map_err(|_| Error::KeystoreUnavailable)?;
 		Ok(())
 	}
@@ -139,14 +140,14 @@ where
 			.map_err(|e| Error::Client(Box::new(e)))?
 			.ok_or(Error::InvalidSessionKeys)?;
 
-		Ok(Keystore::has_keys(&*self.keystore, &keys))
+		Ok(self.keystore.has_keys(&keys))
 	}
 
 	fn has_key(&self, public_key: Bytes, key_type: String) -> RpcResult<bool> {
 		self.deny_unsafe.check_if_safe()?;
 
 		let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
-		Ok(Keystore::has_keys(&*self.keystore, &[(public_key.to_vec(), key_type)]))
+		Ok(self.keystore.has_keys(&[(public_key.to_vec(), key_type)]))
 	}
 
 	fn pending_extrinsics(&self) -> RpcResult<Vec<Bytes>> {

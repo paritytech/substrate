@@ -250,7 +250,7 @@ mod tests {
 		crypto::Signature, known_payloads, Commitment, Keyring, MmrRootHash, Payload, VoteMessage,
 		KEY_TYPE,
 	};
-	use sp_keystore::{testing::MemoryKeystore, Keystore, KeystorePtr};
+	use sp_keystore::{testing::MemoryKeystore, Keystore};
 
 	#[test]
 	fn known_votes_insert_remove() {
@@ -303,10 +303,9 @@ mod tests {
 	}
 
 	fn sign_commitment<BN: Encode>(who: &Keyring, commitment: &Commitment<BN>) -> Signature {
-		let store: KeystorePtr = std::sync::Arc::new(MemoryKeystore::new());
-		Keystore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&who.to_seed())).unwrap();
-		let beefy_keystore: BeefyKeystore = Some(store).into();
-
+		let store = MemoryKeystore::new();
+		store.ecdsa_generate_new(KEY_TYPE, Some(&who.to_seed())).unwrap();
+		let beefy_keystore: BeefyKeystore = Some(store.into()).into();
 		beefy_keystore.sign(&who.public(), &commitment.encode()).unwrap()
 	}
 

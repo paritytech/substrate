@@ -697,7 +697,7 @@ fn addresses_to_publish_adds_p2p() {
 		Arc::new(TestApi { authorities: vec![] }),
 		network.clone(),
 		Box::pin(dht_event_rx),
-		Role::PublishAndDiscover(Arc::new(MemoryKeystore::new())),
+		Role::PublishAndDiscover(MemoryKeystore::new().into()),
 		Some(prometheus_endpoint::Registry::new()),
 		Default::default(),
 	);
@@ -731,7 +731,7 @@ fn addresses_to_publish_respects_existing_p2p_protocol() {
 		Arc::new(TestApi { authorities: vec![] }),
 		network.clone(),
 		Box::pin(dht_event_rx),
-		Role::PublishAndDiscover(Arc::new(MemoryKeystore::new())),
+		Role::PublishAndDiscover(MemoryKeystore::new().into()),
 		Some(prometheus_endpoint::Registry::new()),
 		Default::default(),
 	);

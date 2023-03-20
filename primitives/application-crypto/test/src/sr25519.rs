@@ -35,7 +35,7 @@ fn sr25519_works_in_runtime() {
 		.test_sr25519_crypto(test_client.chain_info().genesis_hash)
 		.expect("Tests `sr25519` crypto.");
 
-	let supported_keys = Keystore::keys(&*keystore, SR25519).unwrap();
+	let supported_keys = keystore.keys(SR25519).unwrap();
 	assert!(supported_keys.contains(&public.clone().into()));
 	assert!(AppPair::verify(&signature, "sr25519", &AppPublic::from(public)));
 }

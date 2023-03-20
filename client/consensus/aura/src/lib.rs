@@ -51,7 +51,7 @@ use sp_consensus::{BlockOrigin, Environment, Error as ConsensusError, Proposer, 
 use sp_consensus_slots::Slot;
 use sp_core::crypto::{ByteArray, Pair, Public};
 use sp_inherents::CreateInherentDataProviders;
-use sp_keystore::{Keystore, KeystorePtr};
+use sp_keystore::KeystorePtr;
 use sp_runtime::{
 	traits::{Block as BlockT, Header, Member, NumberFor, Zero},
 	DigestItem,
@@ -418,10 +418,10 @@ where
 	) -> Option<Self::Claim> {
 		let expected_author = slot_author::<P>(slot, epoch_data);
 		expected_author.and_then(|p| {
-			if Keystore::has_keys(
-				&*self.keystore,
-				&[(p.to_raw_vec(), sp_application_crypto::key_types::AURA)],
-			) {
+			if self
+				.keystore
+				.has_keys(&[(p.to_raw_vec(), sp_application_crypto::key_types::AURA)])
+			{
 				Some(p.clone())
 			} else {
 				None
@@ -449,19 +449,16 @@ where
 		// add it to a digest item.
 		let public_type_pair = public.to_public_crypto_pair();
 		let public = public.to_raw_vec();
-		let signature = Keystore::sign_with(
-			&*self.keystore,
-			<AuthorityId<P> as AppKey>::ID,
-			&public_type_pair,
-			header_hash.as_ref(),
-		)
-		.map_err(|e| sp_consensus::Error::CannotSign(public.clone(), e.to_string()))?
-		.ok_or_else(|| {
-			sp_consensus::Error::CannotSign(
-				public.clone(),
-				"Could not find key in keystore.".into(),
-			)
-		})?;
+		let signature = self
+			.keystore
+			.sign_with(<AuthorityId<P> as AppKey>::ID, &public_type_pair, header_hash.as_ref())
+			.map_err(|e| sp_consensus::Error::CannotSign(public.clone(), e.to_string()))?
+			.ok_or_else(|| {
+				sp_consensus::Error::CannotSign(
+					public.clone(),
+					"Could not find key in keystore.".into(),
+				)
+			})?;
 		let signature = signature
 			.clone()
 			.try_into()
@@ -648,6 +645,7 @@ mod tests {
 	use sp_consensus_aura::sr25519::AuthorityPair;
 	use sp_inherents::InherentData;
 	use sp_keyring::sr25519::Keyring;
+	use sp_keystore::Keystore;
 	use sp_runtime::{
 		traits::{Block as BlockT, Header as _},
 		Digest,
@@ -798,7 +796,8 @@ mod tests {
 				LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore."),
 			);
 
-			Keystore::sr25519_generate_new(&*keystore, AURA, Some(&key.to_seed()))
+			keystore
+				.sr25519_generate_new(AURA, Some(&key.to_seed()))
 				.expect("Creates authority key");
 			keystore_paths.push(keystore_path);
 
@@ -883,7 +882,8 @@ mod tests {
 
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 		let keystore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore.");
-		let public = Keystore::sr25519_generate_new(&keystore, AuthorityPair::ID, None)
+		let public = keystore
+			.sr25519_generate_new(AuthorityPair::ID, None)
 			.expect("Key should be created");
 		authorities.push(public.into());
 
@@ -933,12 +933,9 @@ mod tests {
 
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 		let keystore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore.");
-		Keystore::sr25519_generate_new(
-			&keystore,
-			AuthorityPair::ID,
-			Some(&Keyring::Alice.to_seed()),
-		)
-		.expect("Key should be created");
+		keystore
+			.sr25519_generate_new(AuthorityPair::ID, Some(&Keyring::Alice.to_seed()))
+			.expect("Key should be created");
 
 		let net = Arc::new(Mutex::new(net));
 
