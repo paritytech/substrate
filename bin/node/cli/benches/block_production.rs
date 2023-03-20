@@ -137,7 +137,7 @@ fn import_block(
 	params.state_action =
 		StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(built.storage_changes));
 	params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
-	futures::executor::block_on(client.import_block(params, Default::default()))
+	futures::executor::block_on(client.import_block(params))
 		.expect("importing a block doesn't fail");
 }
 
@@ -162,7 +162,7 @@ fn prepare_benchmark(client: &FullClient) -> (usize, Vec<OpaqueExtrinsic>) {
 		let extrinsic: OpaqueExtrinsic = create_extrinsic(
 			client,
 			src.clone(),
-			BalancesCall::transfer { dest: dst.clone(), value: 1 * DOLLARS },
+			BalancesCall::transfer_allow_death { dest: dst.clone(), value: 1 * DOLLARS },
 			Some(nonce),
 		)
 		.into();

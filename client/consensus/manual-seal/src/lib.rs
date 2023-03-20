@@ -27,7 +27,7 @@ use sc_consensus::{
 	import_queue::{BasicQueue, BoxBlockImport, Verifier},
 };
 use sp_blockchain::HeaderBackend;
-use sp_consensus::{CacheKeyId, Environment, Proposer, SelectChain};
+use sp_consensus::{Environment, Proposer, SelectChain};
 use sp_inherents::CreateInherentDataProviders;
 use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
 use std::{marker::PhantomData, sync::Arc};
@@ -62,10 +62,10 @@ impl<B: BlockT> Verifier<B> for ManualSealVerifier {
 	async fn verify(
 		&mut self,
 		mut block: BlockImportParams<B, ()>,
-	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> Result<BlockImportParams<B, ()>, String> {
 		block.finalized = false;
 		block.fork_choice = Some(ForkChoiceStrategy::LongestChain);
-		Ok((block, None))
+		Ok(block)
 	}
 }
 

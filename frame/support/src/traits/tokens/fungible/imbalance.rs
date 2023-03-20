@@ -18,8 +18,11 @@
 //! The imbalance type and its associates, which handles keeps everything adding up properly with
 //! unbalanced operations.
 
-use super::{super::Imbalance as ImbalanceT, balanced::Balanced, misc::Balance, *};
-use crate::traits::misc::{SameOrOther, TryDrop};
+use super::{super::Imbalance as ImbalanceT, Balanced, *};
+use crate::traits::{
+	misc::{SameOrOther, TryDrop},
+	tokens::Balance,
+};
 use sp_runtime::{traits::Zero, RuntimeDebug};
 use sp_std::marker::PhantomData;
 
@@ -28,6 +31,10 @@ use sp_std::marker::PhantomData;
 pub trait HandleImbalanceDrop<Balance> {
 	/// Some something with the imbalance's value which is being dropped.
 	fn handle(amount: Balance);
+}
+
+impl<Balance> HandleImbalanceDrop<Balance> for () {
+	fn handle(_: Balance) {}
 }
 
 /// An imbalance in the system, representing a divergence of recorded token supply from the sum of
@@ -135,7 +142,7 @@ impl<B: Balance, OnDrop: HandleImbalanceDrop<B>, OppositeOnDrop: HandleImbalance
 }
 
 /// Imbalance implying that the total_issuance value is less than the sum of all account balances.
-pub type DebtOf<AccountId, B> = Imbalance<
+pub type Debt<AccountId, B> = Imbalance<
 	<B as Inspect<AccountId>>::Balance,
 	// This will generally be implemented by increasing the total_issuance value.
 	<B as Balanced<AccountId>>::OnDropDebt,
@@ -144,7 +151,7 @@ pub type DebtOf<AccountId, B> = Imbalance<
 
 /// Imbalance implying that the total_issuance value is greater than the sum of all account
 /// balances.
-pub type CreditOf<AccountId, B> = Imbalance<
+pub type Credit<AccountId, B> = Imbalance<
 	<B as Inspect<AccountId>>::Balance,
 	// This will generally be implemented by decreasing the total_issuance value.
 	<B as Balanced<AccountId>>::OnDropCredit,

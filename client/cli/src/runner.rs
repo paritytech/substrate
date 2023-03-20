@@ -18,54 +18,72 @@
 
 use crate::{error::Error as CliError, Result, SubstrateCli};
 use chrono::prelude::*;
-use futures::{future, future::FutureExt, pin_mut, select, Future};
+use futures::{
+	future::{self, BoxFuture, FutureExt},
+	pin_mut, select, Future,
+};
 use log::info;
 use sc_service::{Configuration, Error as ServiceError, TaskManager};
 use sc_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use std::{marker::PhantomData, time::Duration};
 
-#[cfg(target_family = "unix")]
-async fn main<F, E>(func: F) -> std::result::Result<(), E>
-where
-	F: Future<Output = std::result::Result<(), E>> + future::FusedFuture,
-	E: std::error::Error + Send + Sync + 'static + From<ServiceError>,
-{
-	use tokio::signal::unix::{signal, SignalKind};
+/// Abstraction over OS signals to handle the shutdown of the node smoothly.
+///
+/// On `unix` this represents `SigInt` and `SigTerm`.
+pub struct Signals(BoxFuture<'static, ()>);
 
-	let mut stream_int = signal(SignalKind::interrupt()).map_err(ServiceError::Io)?;
-	let mut stream_term = signal(SignalKind::terminate()).map_err(ServiceError::Io)?;
+impl Signals {
+	/// Capture the relevant signals to handle shutdown of the node smoothly.
+	///
+	/// Needs to be called in a Tokio context to have access to the tokio reactor.
+	#[cfg(target_family = "unix")]
+	pub fn capture() -> std::result::Result<Self, ServiceError> {
+		use tokio::signal::unix::{signal, SignalKind};
 
-	let t1 = stream_int.recv().fuse();
-	let t2 = stream_term.recv().fuse();
-	let t3 = func;
+		let mut stream_int = signal(SignalKind::interrupt()).map_err(ServiceError::Io)?;
+		let mut stream_term = signal(SignalKind::terminate()).map_err(ServiceError::Io)?;
 
-	pin_mut!(t1, t2, t3);
-
-	select! {
-		_ = t1 => {},
-		_ = t2 => {},
-		res = t3 => res?,
+		Ok(Signals(
+			async move {
+				future::select(stream_int.recv().boxed(), stream_term.recv().boxed()).await;
+			}
+			.boxed(),
+		))
 	}
 
-	Ok(())
+	/// Capture the relevant signals to handle shutdown of the node smoothly.
+	///
+	/// Needs to be called in a Tokio context to have access to the tokio reactor.
+	#[cfg(not(unix))]
+	pub fn capture() -> std::result::Result<Self, ServiceError> {
+		use tokio::signal::ctrl_c;
+
+		Ok(Signals(
+			async move {
+				let _ = ctrl_c().await;
+			}
+			.boxed(),
+		))
+	}
+
+	/// A dummy signal that never returns.
+	pub fn dummy() -> Self {
+		Self(future::pending().boxed())
+	}
 }
 
-#[cfg(not(unix))]
-async fn main<F, E>(func: F) -> std::result::Result<(), E>
+async fn main<F, E>(func: F, signals: impl Future<Output = ()>) -> std::result::Result<(), E>
 where
 	F: Future<Output = std::result::Result<(), E>> + future::FusedFuture,
-	E: std::error::Error + Send + Sync + 'static + From<ServiceError>,
+	E: std::error::Error + Send + Sync + 'static,
 {
-	use tokio::signal::ctrl_c;
+	let signals = signals.fuse();
 
-	let t1 = ctrl_c().fuse();
-	let t2 = func;
-
-	pin_mut!(t1, t2);
+	pin_mut!(func, signals);
 
 	select! {
-		_ = t1 => {},
-		res = t2 => res?,
+		_ = signals => {},
+		res = func => res?,
 	}
 
 	Ok(())
@@ -89,6 +107,7 @@ fn run_until_exit<F, E>(
 	tokio_runtime: tokio::runtime::Runtime,
 	future: F,
 	task_manager: TaskManager,
+	signals: impl Future<Output = ()>,
 ) -> std::result::Result<(), E>
 where
 	F: Future<Output = std::result::Result<(), E>> + future::Future,
@@ -97,7 +116,7 @@ where
 	let f = future.fuse();
 	pin_mut!(f);
 
-	tokio_runtime.block_on(main(f))?;
+	tokio_runtime.block_on(main(f, signals))?;
 	drop(task_manager);
 
 	Ok(())
@@ -107,13 +126,18 @@ where
 pub struct Runner<C: SubstrateCli> {
 	config: Configuration,
 	tokio_runtime: tokio::runtime::Runtime,
+	signals: Signals,
 	phantom: PhantomData<C>,
 }
 
 impl<C: SubstrateCli> Runner<C> {
 	/// Create a new runtime with the command provided in argument
-	pub fn new(config: Configuration, tokio_runtime: tokio::runtime::Runtime) -> Result<Runner<C>> {
-		Ok(Runner { config, tokio_runtime, phantom: PhantomData })
+	pub fn new(
+		config: Configuration,
+		tokio_runtime: tokio::runtime::Runtime,
+		signals: Signals,
+	) -> Result<Runner<C>> {
+		Ok(Runner { config, tokio_runtime, signals, phantom: PhantomData })
 	}
 
 	/// Log information about the node itself.
@@ -147,7 +171,7 @@ impl<C: SubstrateCli> Runner<C> {
 		self.print_node_infos();
 
 		let mut task_manager = self.tokio_runtime.block_on(initialize(self.config))?;
-		let res = self.tokio_runtime.block_on(main(task_manager.future().fuse()));
+		let res = self.tokio_runtime.block_on(main(task_manager.future().fuse(), self.signals.0));
 		// We need to drop the task manager here to inform all tasks that they should shut down.
 		//
 		// This is important to be done before we instruct the tokio runtime to shutdown. Otherwise
@@ -210,7 +234,7 @@ impl<C: SubstrateCli> Runner<C> {
 		E: std::error::Error + Send + Sync + 'static + From<ServiceError> + From<CliError>,
 	{
 		let (future, task_manager) = runner(self.config)?;
-		run_until_exit::<_, E>(self.tokio_runtime, future, task_manager)
+		run_until_exit::<_, E>(self.tokio_runtime, future, task_manager, self.signals.0)
 	}
 
 	/// Get an immutable reference to the node Configuration
@@ -369,6 +393,7 @@ mod tests {
 				runtime_cache_size: 2,
 			},
 			runtime,
+			Signals::dummy(),
 		)
 		.unwrap();
 

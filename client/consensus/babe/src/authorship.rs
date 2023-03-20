@@ -29,7 +29,7 @@ use sp_consensus_babe::{
 };
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_core::{blake2_256, crypto::ByteArray, U256};
-use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::{Keystore, KeystorePtr};
 
 /// Calculates the primary selection threshold for a given authority, taking
 /// into account `c` (`1 - c` represents the probability of a slot being empty).
@@ -133,7 +133,7 @@ fn claim_secondary_slot(
 	slot: Slot,
 	epoch: &Epoch,
 	keys: &[(AuthorityId, usize)],
-	keystore: &SyncCryptoStorePtr,
+	keystore: &KeystorePtr,
 	author_secondary_vrf: bool,
 ) -> Option<(PreDigest, AuthorityId)> {
 	let Epoch { authorities, randomness, mut epoch_index, .. } = epoch;
@@ -153,7 +153,7 @@ fn claim_secondary_slot(
 		if authority_id == expected_author {
 			let pre_digest = if author_secondary_vrf {
 				let transcript_data = make_transcript_data(randomness, slot, epoch_index);
-				let result = SyncCryptoStore::sr25519_vrf_sign(
+				let result = Keystore::sr25519_vrf_sign(
 					&**keystore,
 					AuthorityId::ID,
 					authority_id.as_ref(),
@@ -169,7 +169,7 @@ fn claim_secondary_slot(
 				} else {
 					None
 				}
-			} else if SyncCryptoStore::has_keys(
+			} else if Keystore::has_keys(
 				&**keystore,
 				&[(authority_id.to_raw_vec(), AuthorityId::ID)],
 			) {
@@ -197,7 +197,7 @@ fn claim_secondary_slot(
 pub fn claim_slot(
 	slot: Slot,
 	epoch: &Epoch,
-	keystore: &SyncCryptoStorePtr,
+	keystore: &KeystorePtr,
 ) -> Option<(PreDigest, AuthorityId)> {
 	let authorities = epoch
 		.authorities
@@ -213,7 +213,7 @@ pub fn claim_slot(
 pub fn claim_slot_using_keys(
 	slot: Slot,
 	epoch: &Epoch,
-	keystore: &SyncCryptoStorePtr,
+	keystore: &KeystorePtr,
 	keys: &[(AuthorityId, usize)],
 ) -> Option<(PreDigest, AuthorityId)> {
 	claim_primary_slot(slot, epoch, epoch.config.c, keystore, keys).or_else(|| {
@@ -241,7 +241,7 @@ fn claim_primary_slot(
 	slot: Slot,
 	epoch: &Epoch,
 	c: (u64, u64),
-	keystore: &SyncCryptoStorePtr,
+	keystore: &KeystorePtr,
 	keys: &[(AuthorityId, usize)],
 ) -> Option<(PreDigest, AuthorityId)> {
 	let Epoch { authorities, randomness, mut epoch_index, .. } = epoch;
@@ -254,7 +254,7 @@ fn claim_primary_slot(
 	for (authority_id, authority_index) in keys {
 		let transcript = make_transcript(randomness, slot, epoch_index);
 		let transcript_data = make_transcript_data(randomness, slot, epoch_index);
-		let result = SyncCryptoStore::sr25519_vrf_sign(
+		let result = Keystore::sr25519_vrf_sign(
 			&**keystore,
 			AuthorityId::ID,
 			authority_id.as_ref(),
@@ -294,8 +294,8 @@ mod tests {
 
 	#[test]
 	fn claim_secondary_plain_slot_works() {
-		let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::in_memory());
-		let valid_public_key = SyncCryptoStore::sr25519_generate_new(
+		let keystore: KeystorePtr = Arc::new(LocalKeystore::in_memory());
+		let valid_public_key = Keystore::sr25519_generate_new(
 			&*keystore,
 			AuthorityId::ID,
 			Some(sp_core::crypto::DEV_PHRASE),

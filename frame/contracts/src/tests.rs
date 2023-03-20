@@ -21,7 +21,7 @@ use crate::{
 		ChainExtension, Environment, Ext, InitState, RegisteredChainExtension,
 		Result as ExtensionResult, RetVal, ReturnFlags, SysConfig,
 	},
-	exec::{FixSizedKey, Frame},
+	exec::{Frame, Key},
 	tests::test_utils::{get_contract, get_contract_checked},
 	wasm::{Determinism, PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
@@ -37,18 +37,18 @@ use frame_support::{
 	storage::child,
 	traits::{
 		ConstU32, ConstU64, Contains, Currency, ExistenceRequirement, Get, LockableCurrency,
-		OnIdle, OnInitialize, ReservableCurrency, WithdrawReasons,
+		OnIdle, OnInitialize, WithdrawReasons,
 	},
 	weights::{constants::WEIGHT_REF_TIME_PER_SECOND, Weight},
 };
 use frame_system::{self as system, EventRecord, Phase};
 use pretty_assertions::{assert_eq, assert_ne};
 use sp_io::hashing::blake2_256;
-use sp_keystore::{testing::KeyStore, KeystoreExt};
+use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
 use sp_runtime::{
 	testing::{Header, H256},
 	traits::{BlakeTwo256, Convert, Hash, IdentityLookup},
-	AccountId32,
+	AccountId32, TokenError,
 };
 use std::{ops::Deref, sync::Arc};
 
@@ -318,6 +318,10 @@ impl pallet_balances::Config for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 	type WeightInfo = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type HoldIdentifier = ();
+	type MaxHolds = ();
 }
 
 impl pallet_timestamp::Config for Test {
@@ -440,7 +444,7 @@ impl ExtBuilder {
 			.assimilate_storage(&mut t)
 			.unwrap();
 		let mut ext = sp_io::TestExternalities::new(t);
-		ext.register_extension(KeystoreExt(Arc::new(KeyStore::new())));
+		ext.register_extension(KeystoreExt(Arc::new(MemoryKeystore::new())));
 		ext.execute_with(|| System::set_block_number(1));
 		ext
 	}
@@ -1054,7 +1058,7 @@ fn transfer_allow_death_cannot_kill_account() {
 				total_balance,
 				ExistenceRequirement::AllowDeath,
 			),
-			pallet_balances::Error::<Test>::KeepAlive,
+			TokenError::Frozen,
 		);
 
 		assert_eq!(<Test as Config>::Currency::total_balance(&addr), total_balance);
@@ -1474,25 +1478,6 @@ fn transfer_return_code() {
 		.result
 		.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
-
-		// Contract has enough total balance in order to not go below the min balance
-		// threshold when transfering 100 balance but this balance is reserved so
-		// the transfer still fails.
-		Balances::make_free_balance_be(&addr, min_balance + 100);
-		Balances::reserve(&addr, min_balance + 100).unwrap();
-		let result = Contracts::bare_call(
-			ALICE,
-			addr,
-			0,
-			GAS_LIMIT,
-			None,
-			vec![],
-			false,
-			Determinism::Deterministic,
-		)
-		.result
-		.unwrap();
-		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
 	});
 }
 
@@ -1551,29 +1536,6 @@ fn call_return_code() {
 		Balances::make_free_balance_be(&addr_django, min_balance);
 
 		// Contract has only the minimal balance so any transfer will fail.
-		let result = Contracts::bare_call(
-			ALICE,
-			addr_bob.clone(),
-			0,
-			GAS_LIMIT,
-			None,
-			AsRef::<[u8]>::as_ref(&addr_django)
-				.iter()
-				.chain(&0u32.to_le_bytes())
-				.cloned()
-				.collect(),
-			false,
-			Determinism::Deterministic,
-		)
-		.result
-		.unwrap();
-		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
-
-		// Contract has enough total balance in order to not go below the min balance
-		// threshold when transfering 100 balance but this balance is reserved so
-		// the transfer still fails.
-		Balances::make_free_balance_be(&addr_bob, min_balance + 100);
-		Balances::reserve(&addr_bob, min_balance + 100).unwrap();
 		let result = Contracts::bare_call(
 			ALICE,
 			addr_bob.clone(),
@@ -1669,25 +1631,6 @@ fn instantiate_return_code() {
 
 		// Contract has only the minimal balance so any transfer will fail.
 		Balances::make_free_balance_be(&addr, min_balance);
-		let result = Contracts::bare_call(
-			ALICE,
-			addr.clone(),
-			0,
-			GAS_LIMIT,
-			None,
-			callee_hash.clone(),
-			false,
-			Determinism::Deterministic,
-		)
-		.result
-		.unwrap();
-		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
-
-		// Contract has enough total balance in order to not go below the min_balance
-		// threshold when transfering the balance but this balance is reserved so
-		// the transfer still fails.
-		Balances::make_free_balance_be(&addr, min_balance + 10_000);
-		Balances::reserve(&addr, min_balance + 10_000).unwrap();
 		let result = Contracts::bare_call(
 			ALICE,
 			addr.clone(),
@@ -2145,7 +2088,7 @@ fn lazy_removal_partial_remove_works() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			info.write(&val.0 as &FixSizedKey, Some(val.2.clone()), None, false).unwrap();
+			info.write(&Key::Fix(val.0), Some(val.2.clone()), None, false).unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
@@ -2330,7 +2273,7 @@ fn lazy_removal_does_not_use_all_weight() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			info.write(&val.0 as &FixSizedKey, Some(val.2.clone()), None, false).unwrap();
+			info.write(&Key::Fix(val.0), Some(val.2.clone()), None, false).unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
@@ -2805,12 +2748,9 @@ fn gas_estimation_call_runtime() {
 
 		// Call something trivial with a huge gas limit so that we can observe the effects
 		// of pre-charging. This should create a difference between consumed and required.
-		let call = RuntimeCall::Contracts(crate::Call::call {
+		let call = RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death {
 			dest: addr_callee,
-			value: 0,
-			gas_limit: GAS_LIMIT / 3,
-			storage_deposit_limit: None,
-			data: vec![],
+			value: min_balance * 10,
 		});
 		let result = Contracts::bare_call(
 			ALICE,
@@ -2841,6 +2781,71 @@ fn gas_estimation_call_runtime() {
 			)
 			.result
 		);
+	});
+}
+
+#[test]
+fn gas_call_runtime_reentrancy_guarded() {
+	let (caller_code, _caller_hash) = compile_module::<Test>("call_runtime").unwrap();
+	let (callee_code, _callee_hash) = compile_module::<Test>("dummy").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		let _ = Balances::deposit_creating(&CHARLIE, 1000 * min_balance);
+
+		let addr_caller = Contracts::bare_instantiate(
+			ALICE,
+			min_balance * 100,
+			GAS_LIMIT,
+			None,
+			Code::Upload(caller_code),
+			vec![],
+			vec![0],
+			false,
+		)
+		.result
+		.unwrap()
+		.account_id;
+
+		let addr_callee = Contracts::bare_instantiate(
+			ALICE,
+			min_balance * 100,
+			GAS_LIMIT,
+			None,
+			Code::Upload(callee_code),
+			vec![],
+			vec![1],
+			false,
+		)
+		.result
+		.unwrap()
+		.account_id;
+
+		// Call pallet_contracts call() dispatchable
+		let call = RuntimeCall::Contracts(crate::Call::call {
+			dest: addr_callee,
+			value: 0,
+			gas_limit: GAS_LIMIT / 3,
+			storage_deposit_limit: None,
+			data: vec![],
+		});
+
+		// Call runtime to re-enter back to contracts engine by
+		// calling dummy contract
+		let result = Contracts::bare_call(
+			ALICE,
+			addr_caller.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			call.encode(),
+			false,
+			Determinism::Deterministic,
+		)
+		.result
+		.unwrap();
+		// Call to runtime should fail because of the re-entrancy guard
+		assert_return_code!(result, RuntimeReturnCode::CallRuntimeFailed);
 	});
 }
 

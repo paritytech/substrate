@@ -46,10 +46,10 @@ use finality_grandpa::{
 	Message::{Precommit, Prevote, PrimaryPropose},
 };
 use parity_scale_codec::{Decode, Encode};
-use sc_network::ReputationChange;
+use sc_network::{NetworkBlock, NetworkSyncForkRequest, ReputationChange};
 use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
-use sp_keystore::SyncCryptoStorePtr;
+use sp_keystore::KeystorePtr;
 use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
 
 use crate::{
@@ -59,7 +59,7 @@ use crate::{
 use gossip::{
 	FullCatchUpMessage, FullCommitMessage, GossipMessage, GossipValidator, PeerReport, VoteMessage,
 };
-use sc_network_common::service::{NetworkBlock, NetworkSyncForkRequest};
+use sc_network_common::sync::SyncEventStream;
 use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_consensus_grandpa::{AuthorityId, AuthoritySignature, RoundNumber, SetId as SetIdNumber};
 
@@ -74,7 +74,7 @@ pub(crate) const NEIGHBOR_REBROADCAST_PERIOD: Duration = Duration::from_secs(2 *
 
 pub mod grandpa_protocol_name {
 	use sc_chain_spec::ChainSpec;
-	use sc_network_common::protocol::ProtocolName;
+	use sc_network::types::ProtocolName;
 
 	pub(crate) const NAME: &str = "/grandpa/1";
 	/// Old names for the notifications protocol, used for backward compatibility.
@@ -136,7 +136,7 @@ mod benefit {
 
 /// A type that ties together our local authority id and a keystore where it is
 /// available for signing.
-pub struct LocalIdKeystore((AuthorityId, SyncCryptoStorePtr));
+pub struct LocalIdKeystore((AuthorityId, KeystorePtr));
 
 impl LocalIdKeystore {
 	/// Returns a reference to our local authority id.
@@ -145,13 +145,13 @@ impl LocalIdKeystore {
 	}
 
 	/// Returns a reference to the keystore.
-	fn keystore(&self) -> SyncCryptoStorePtr {
+	fn keystore(&self) -> KeystorePtr {
 		(self.0).1.clone()
 	}
 }
 
-impl From<(AuthorityId, SyncCryptoStorePtr)> for LocalIdKeystore {
-	fn from(inner: (AuthorityId, SyncCryptoStorePtr)) -> LocalIdKeystore {
+impl From<(AuthorityId, KeystorePtr)> for LocalIdKeystore {
+	fn from(inner: (AuthorityId, KeystorePtr)) -> LocalIdKeystore {
 		LocalIdKeystore(inner)
 	}
 }
@@ -163,24 +163,35 @@ const TELEMETRY_VOTERS_LIMIT: usize = 10;
 
 /// A handle to the network.
 ///
-/// Something that provides both the capabilities needed for the `gossip_network::Network` trait as
-/// well as the ability to set a fork sync request for a particular block.
-pub trait Network<Block: BlockT>:
+/// Something that provides the capabilities needed for the `gossip_network::Network` trait.
+pub trait Network<Block: BlockT>: GossipNetwork<Block> + Clone + Send + 'static {}
+
+impl<Block, T> Network<Block> for T
+where
+	Block: BlockT,
+	T: GossipNetwork<Block> + Clone + Send + 'static,
+{
+}
+
+/// A handle to syncing-related services.
+///
+/// Something that provides the ability to set a fork sync request for a particular block.
+pub trait Syncing<Block: BlockT>:
 	NetworkSyncForkRequest<Block::Hash, NumberFor<Block>>
 	+ NetworkBlock<Block::Hash, NumberFor<Block>>
-	+ GossipNetwork<Block>
+	+ SyncEventStream
 	+ Clone
 	+ Send
 	+ 'static
 {
 }
 
-impl<Block, T> Network<Block> for T
+impl<Block, T> Syncing<Block> for T
 where
 	Block: BlockT,
 	T: NetworkSyncForkRequest<Block::Hash, NumberFor<Block>>
 		+ NetworkBlock<Block::Hash, NumberFor<Block>>
-		+ GossipNetwork<Block>
+		+ SyncEventStream
 		+ Clone
 		+ Send
 		+ 'static,
@@ -198,8 +209,9 @@ pub(crate) fn global_topic<B: BlockT>(set_id: SetIdNumber) -> B::Hash {
 }
 
 /// Bridge between the underlying network service, gossiping consensus messages and Grandpa
-pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
+pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>, S: Syncing<B>> {
 	service: N,
+	sync: S,
 	gossip_engine: Arc<Mutex<GossipEngine<B>>>,
 	validator: Arc<GossipValidator<B>>,
 
@@ -225,15 +237,16 @@ pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 	telemetry: Option<TelemetryHandle>,
 }
 
-impl<B: BlockT, N: Network<B>> Unpin for NetworkBridge<B, N> {}
+impl<B: BlockT, N: Network<B>, S: Syncing<B>> Unpin for NetworkBridge<B, N, S> {}
 
-impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
+impl<B: BlockT, N: Network<B>, S: Syncing<B>> NetworkBridge<B, N, S> {
 	/// Create a new NetworkBridge to the given NetworkService. Returns the service
 	/// handle.
 	/// On creation it will register previous rounds' votes with the gossip
 	/// service taken from the VoterSetState.
 	pub(crate) fn new(
 		service: N,
+		sync: S,
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
 		prometheus_registry: Option<&Registry>,
@@ -246,6 +259,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		let validator = Arc::new(validator);
 		let gossip_engine = Arc::new(Mutex::new(GossipEngine::new(
 			service.clone(),
+			sync.clone(),
 			protocol,
 			validator.clone(),
 			prometheus_registry,
@@ -290,6 +304,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 
 		NetworkBridge {
 			service,
+			sync,
 			gossip_engine,
 			validator,
 			neighbor_sender: neighbor_packet_sender,
@@ -475,11 +490,11 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		hash: B::Hash,
 		number: NumberFor<B>,
 	) {
-		self.service.set_sync_fork_request(peers, hash, number)
+		self.sync.set_sync_fork_request(peers, hash, number)
 	}
 }
 
-impl<B: BlockT, N: Network<B>> Future for NetworkBridge<B, N> {
+impl<B: BlockT, N: Network<B>, S: Syncing<B>> Future for NetworkBridge<B, N, S> {
 	type Output = Result<(), Error>;
 
 	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
@@ -661,10 +676,11 @@ fn incoming_global<B: BlockT>(
 		})
 }
 
-impl<B: BlockT, N: Network<B>> Clone for NetworkBridge<B, N> {
+impl<B: BlockT, N: Network<B>, S: Syncing<B>> Clone for NetworkBridge<B, N, S> {
 	fn clone(&self) -> Self {
 		NetworkBridge {
 			service: self.service.clone(),
+			sync: self.sync.clone(),
 			gossip_engine: self.gossip_engine.clone(),
 			validator: Arc::clone(&self.validator),
 			neighbor_sender: self.neighbor_sender.clone(),
