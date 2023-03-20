@@ -608,6 +608,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
+	/// Ensure the correctness of the state of this pallet.
+	///
+	/// This should be valid before or after each state transition of this pallet.
+	///
+	/// ## Invariants:
+	/// 
+	/// * `Reasons` and `Tips` must have the same length of keys
 	#[cfg(any(feature = "try-runtime", feature = "fuzzing", test, debug_assertions))]
 	pub fn do_try_state() -> Result<(), &'static str> {
 		let reasons = Reasons::<T, I>::iter_keys().collect::<Vec<_>>();

@@ -655,6 +655,14 @@ impl<T: Config> Pallet<T> {
 		Ok((schedules, locked_now))
 	}
 
+	/// Ensure the correctness of the state of this pallet.
+	///
+	/// This should be valid before or after each state transition of this pallet.
+	///
+	/// ## Invariants:
+	/// 
+	/// * The `per_block` payments left of every account currently vesting
+	/// * is equal to the total balance currently locked.
 	#[cfg(any(feature = "try-runtime", feature = "fuzzing", test, debug_assertions))]
 	pub fn do_try_state() -> Result<(), &'static str> {
 		
