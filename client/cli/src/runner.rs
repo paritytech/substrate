@@ -345,7 +345,6 @@ mod tests {
 				transaction_pool: Default::default(),
 				network: NetworkConfiguration::new_memory(),
 				keystore: sc_service::config::KeystoreConfig::InMemory,
-				keystore_remote: None,
 				database: sc_client_db::DatabaseSource::ParityDb { path: PathBuf::from("db") },
 				trie_cache_maximum_size: None,
 				state_pruning: None,

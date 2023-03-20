@@ -29,7 +29,7 @@ use sp_consensus_babe::{
 };
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_core::{blake2_256, crypto::ByteArray, U256};
-use sp_keystore::{Keystore, KeystorePtr};
+use sp_keystore::KeystorePtr;
 
 /// Calculates the primary selection threshold for a given authority, taking
 /// into account `c` (`1 - c` represents the probability of a slot being empty).
@@ -153,8 +153,7 @@ fn claim_secondary_slot(
 		if authority_id == expected_author {
 			let pre_digest = if author_secondary_vrf {
 				let transcript_data = make_transcript_data(randomness, slot, epoch_index);
-				let result = Keystore::sr25519_vrf_sign(
-					&**keystore,
+				let result = keystore.sr25519_vrf_sign(
 					AuthorityId::ID,
 					authority_id.as_ref(),
 					transcript_data,
@@ -169,10 +168,7 @@ fn claim_secondary_slot(
 				} else {
 					None
 				}
-			} else if Keystore::has_keys(
-				&**keystore,
-				&[(authority_id.to_raw_vec(), AuthorityId::ID)],
-			) {
+			} else if keystore.has_keys(&[(authority_id.to_raw_vec(), AuthorityId::ID)]) {
 				Some(PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
 					slot,
 					authority_index: *authority_index as u32,
@@ -254,12 +250,8 @@ fn claim_primary_slot(
 	for (authority_id, authority_index) in keys {
 		let transcript = make_transcript(randomness, slot, epoch_index);
 		let transcript_data = make_transcript_data(randomness, slot, epoch_index);
-		let result = Keystore::sr25519_vrf_sign(
-			&**keystore,
-			AuthorityId::ID,
-			authority_id.as_ref(),
-			transcript_data,
-		);
+		let result =
+			keystore.sr25519_vrf_sign(AuthorityId::ID, authority_id.as_ref(), transcript_data);
 		if let Ok(Some(signature)) = result {
 			let public = PublicKey::from_bytes(&authority_id.to_raw_vec()).ok()?;
 			let inout = match signature.output.attach_input_hash(&public, transcript) {
@@ -287,20 +279,16 @@ fn claim_primary_slot(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sc_keystore::LocalKeystore;
 	use sp_consensus_babe::{AllowedSlots, AuthorityId, BabeEpochConfiguration};
 	use sp_core::{crypto::Pair as _, sr25519::Pair};
-	use std::sync::Arc;
+	use sp_keystore::testing::MemoryKeystore;
 
 	#[test]
 	fn claim_secondary_plain_slot_works() {
-		let keystore: KeystorePtr = Arc::new(LocalKeystore::in_memory());
-		let valid_public_key = Keystore::sr25519_generate_new(
-			&*keystore,
-			AuthorityId::ID,
-			Some(sp_core::crypto::DEV_PHRASE),
-		)
-		.unwrap();
+		let keystore: KeystorePtr = MemoryKeystore::new().into();
+		let valid_public_key = keystore
+			.sr25519_generate_new(AuthorityId::ID, Some(sp_core::crypto::DEV_PHRASE))
+			.unwrap();
 
 		let authorities = vec![
 			(AuthorityId::from(Pair::generate().0.public()), 5),

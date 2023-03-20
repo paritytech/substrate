@@ -37,7 +37,7 @@ use sp_consensus_babe::{
 	digests::PreDigest, AuthorityId, BabeApi as BabeRuntimeApi, BabeConfiguration,
 };
 use sp_core::crypto::ByteArray;
-use sp_keystore::{Keystore, KeystorePtr};
+use sp_keystore::KeystorePtr;
 use sp_runtime::traits::{Block as BlockT, Header as _};
 use std::{collections::HashMap, sync::Arc};
 
@@ -117,7 +117,7 @@ where
 				.iter()
 				.enumerate()
 				.filter_map(|(i, a)| {
-					if Keystore::has_keys(&*self.keystore, &[(a.0.to_raw_vec(), AuthorityId::ID)]) {
+					if self.keystore.has_keys(&[(a.0.to_raw_vec(), AuthorityId::ID)]) {
 						Some((a.0.clone(), i))
 					} else {
 						None
@@ -210,30 +210,21 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sc_keystore::LocalKeystore;
-	use sp_application_crypto::AppPair;
+	use sc_consensus_babe::block_import;
 	use sp_core::crypto::key_types::BABE;
 	use sp_keyring::Sr25519Keyring;
-	use sp_keystore::{Keystore, KeystorePtr};
+	use sp_keystore::{testing::MemoryKeystore, Keystore};
 	use substrate_test_runtime_client::{
 		runtime::Block, Backend, DefaultTestClientBuilderExt, TestClient, TestClientBuilder,
 		TestClientBuilderExt,
 	};
 
-	use sc_consensus_babe::{block_import, AuthorityPair};
-	use std::sync::Arc;
-
-	/// creates keystore backed by a temp file
-	fn create_temp_keystore<P: AppPair>(
-		authority: Sr25519Keyring,
-	) -> (KeystorePtr, tempfile::TempDir) {
-		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-		let keystore =
-			Arc::new(LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore"));
-		Keystore::sr25519_generate_new(&*keystore, BABE, Some(&authority.to_seed()))
+	fn create_keystore(authority: Sr25519Keyring) -> KeystorePtr {
+		let keystore = MemoryKeystore::new();
+		keystore
+			.sr25519_generate_new(BABE, Some(&authority.to_seed()))
 			.expect("Creates authority key");
-
-		(keystore, keystore_path)
+		keystore.into()
 	}
 
 	fn test_babe_rpc_module(
@@ -247,7 +238,7 @@ mod tests {
 			.expect("can initialize block-import");
 
 		let epoch_changes = link.epoch_changes().clone();
-		let keystore = create_temp_keystore::<AuthorityPair>(Sr25519Keyring::Alice).0;
+		let keystore = create_keystore(Sr25519Keyring::Alice);
 
 		Babe::new(client.clone(), epoch_changes, keystore, config, longest_chain, deny_unsafe)
 	}
