@@ -43,6 +43,7 @@ use rand::distributions::{Distribution as _, Uniform};
 use smallvec::SmallVec;
 use tokio_stream::StreamMap;
 
+use sc_network_common::role::ObservedRole;
 use sc_peerset::DropReason;
 
 use std::{
@@ -1602,6 +1603,7 @@ impl NetworkBehaviour for Notifications {
 								trace!(target: "sub-libp2p", "PSM <= Incoming({}, {:?}).",
 									peer_id, incoming_id);
 								self.peerset.incoming(set_id, peer_id, incoming_id);
+								// TODO: report opened substream to the protocol.
 								self.incoming.push(IncomingPeer {
 									peer_id,
 									set_id,
@@ -1843,11 +1845,19 @@ impl NetworkBehaviour for Notifications {
 								let event = NotificationsOut::CustomProtocolOpen {
 									peer_id,
 									set_id,
-									negotiated_fallback,
+									negotiated_fallback: negotiated_fallback.clone(),
 									received_handshake,
 									notifications_sink: notifications_sink.clone(),
 								};
 								self.events.push_back(ToSwarm::GenerateEvent(event));
+								let _ = self.protocol_handles[protocol_index]
+									.report_substream_opened(
+										peer_id,
+										ObservedRole::Full, /* TODO: this needs to be queried by
+										                     * the protocol from `Peerset` */
+										negotiated_fallback,
+										notifications_sink.clone(),
+									);
 							}
 							*connec_state = ConnectionState::Open(notifications_sink);
 						} else if let Some((_, connec_state)) =
@@ -1992,9 +2002,15 @@ impl NetworkBehaviour for Notifications {
 						peer_id,
 						set_id,
 					);
-					let event = NotificationsOut::Notification { peer_id, set_id, message };
-
-					self.events.push_back(ToSwarm::GenerateEvent(event));
+					let event = NotificationsOut::Notification {
+						peer_id,
+						set_id,
+						message: message.clone(),
+					};
+					self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
+					// TODO: error handling
+					let _ = self.protocol_handles[protocol_index]
+						.report_notification_received(peer_id, message.to_vec());
 				} else {
 					trace!(
 						target: "sub-libp2p",
