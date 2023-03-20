@@ -599,8 +599,6 @@ pub struct LiveState {
 #[derive(Debug, Clone, clap::Subcommand)]
 pub enum State {
 	/// Use a state snapshot as the source of runtime state.
-	///
-	/// This can be crated by passing a value to [`State::Live::snapshot_path`].
 	Snap {
 		#[arg(short, long)]
 		snapshot_path: PathBuf,

@@ -366,10 +366,7 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 mod tests {
 	use super::*;
 	use crate::{
-		exec::{
-			AccountIdOf, BlockNumberOf, ErrorOrigin, ExecError, Executable, Ext, FixSizedKey,
-			SeedOf, VarSizedKey,
-		},
+		exec::{AccountIdOf, BlockNumberOf, ErrorOrigin, ExecError, Executable, Ext, Key, SeedOf},
 		gas::GasMeter,
 		storage::WriteOutcome,
 		tests::{RuntimeCall, Test, ALICE, BOB},
@@ -521,40 +518,15 @@ mod tests {
 			self.terminations.push(TerminationEntry { beneficiary: beneficiary.clone() });
 			Ok(())
 		}
-		fn get_storage(&mut self, key: &FixSizedKey) -> Option<Vec<u8>> {
+		fn get_storage(&mut self, key: &Key<Self::T>) -> Option<Vec<u8>> {
 			self.storage.get(&key.to_vec()).cloned()
 		}
-		fn get_storage_transparent(&mut self, key: &VarSizedKey<Self::T>) -> Option<Vec<u8>> {
-			self.storage.get(&key.to_vec()).cloned()
-		}
-		fn get_storage_size(&mut self, key: &FixSizedKey) -> Option<u32> {
-			self.storage.get(&key.to_vec()).map(|val| val.len() as u32)
-		}
-		fn get_storage_size_transparent(&mut self, key: &VarSizedKey<Self::T>) -> Option<u32> {
+		fn get_storage_size(&mut self, key: &Key<Self::T>) -> Option<u32> {
 			self.storage.get(&key.to_vec()).map(|val| val.len() as u32)
 		}
 		fn set_storage(
 			&mut self,
-			key: &FixSizedKey,
-			value: Option<Vec<u8>>,
-			take_old: bool,
-		) -> Result<WriteOutcome, DispatchError> {
-			let key = key.to_vec();
-			let entry = self.storage.entry(key.clone());
-			let result = match (entry, take_old) {
-				(Entry::Vacant(_), _) => WriteOutcome::New,
-				(Entry::Occupied(entry), false) =>
-					WriteOutcome::Overwritten(entry.remove().len() as u32),
-				(Entry::Occupied(entry), true) => WriteOutcome::Taken(entry.remove()),
-			};
-			if let Some(value) = value {
-				self.storage.insert(key, value);
-			}
-			Ok(result)
-		}
-		fn set_storage_transparent(
-			&mut self,
-			key: &VarSizedKey<Self::T>,
+			key: &Key<Self::T>,
 			value: Option<Vec<u8>>,
 			take_old: bool,
 		) -> Result<WriteOutcome, DispatchError> {
@@ -1071,14 +1043,14 @@ mod tests {
 "#;
 
 		let mut ext = MockExt::default();
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([1u8; 64].to_vec()).unwrap(),
 			Some(vec![42u8]),
 			false,
 		)
 		.unwrap();
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([2u8; 19].to_vec()).unwrap(),
 			Some(vec![]),
 			false,
 		)
@@ -2547,15 +2519,15 @@ mod tests {
 
 		let mut ext = MockExt::default();
 
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([1u8; 64].to_vec()).unwrap(),
 			Some(vec![42u8]),
 			false,
 		)
 		.unwrap();
 
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([2u8; 19].to_vec()).unwrap(),
 			Some(vec![]),
 			false,
 		)
@@ -2631,14 +2603,14 @@ mod tests {
 
 		let mut ext = MockExt::default();
 
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([1u8; 64].to_vec()).unwrap(),
 			Some(vec![42u8]),
 			false,
 		)
 		.unwrap();
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([2u8; 19].to_vec()).unwrap(),
 			Some(vec![]),
 			false,
 		)
@@ -2728,15 +2700,15 @@ mod tests {
 
 		let mut ext = MockExt::default();
 
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([1u8; 64].to_vec()).unwrap(),
 			Some(vec![42u8]),
 			false,
 		)
 		.unwrap();
 
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([2u8; 19].to_vec()).unwrap(),
 			Some(vec![]),
 			false,
 		)

@@ -295,6 +295,10 @@ mod tests {
 		type ExistentialDeposit = ConstU64<1>;
 		type AccountStore = System;
 		type WeightInfo = ();
+		type FreezeIdentifier = ();
+		type MaxFreezes = ();
+		type HoldIdentifier = ();
+		type MaxHolds = ();
 	}
 
 	ord_parameter_types! {
