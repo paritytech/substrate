@@ -458,7 +458,8 @@ impl ProtocolController {
 	}
 
 	/// Try dropping as a reserved peer. Return `Ok(true)` if the peer was found and disconnected,
-	/// `Ok(false)` if it wasn't found, `Err(())`, if the peer found, but not in connected state.
+	/// `Ok(false)` if it wasn't found, `Err(PeerId)`, if the peer found, but not in connected
+	/// state.
 	fn drop_reserved_peer(&mut self, peer_id: &PeerId) -> Result<bool, PeerId> {
 		let Some(state) = self.reserved_nodes.get_mut(peer_id) else {
 			return Ok(false)
@@ -473,7 +474,8 @@ impl ProtocolController {
 	}
 
 	/// Try dropping as a regular peer. Return `Ok(true)` if the peer was found and disconnected,
-	/// `Ok(false)` if it wasn't found, `Err(())`, if the peer found, but not in connected state.
+	/// `Ok(false)` if it wasn't found, `Err(PeerId)`, if the peer found, but not in connected
+	/// state.
 	fn drop_regular_peer(&mut self, peer_id: &PeerId, reason: DropReason) -> Result<bool, PeerId> {
 		let Some(state) = self.nodes.get_mut(peer_id) else {
 			return Ok(false)
