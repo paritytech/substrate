@@ -64,10 +64,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 36_450_000 picoseconds.
-		Weight::from_parts(36_941_000, 0)
-			// Standard Error: 24_996
-			.saturating_add(Weight::from_parts(17_432_462, 0).saturating_mul(v.into()))
+		// Minimum execution time: 36_411_000 picoseconds.
+		Weight::from_parts(36_597_000, 0)
+			// Standard Error: 25_932
+			.saturating_add(Weight::from_parts(17_467_258, 0).saturating_mul(v.into()))
 	}
 	/// The range of component `v` is `[1, 10000]`.
 	/// The range of component `t` is `[17, 1000]`.
@@ -76,10 +76,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 42_205_000 picoseconds.
-		Weight::from_parts(42_386_000, 0)
-			// Standard Error: 38_152
-			.saturating_add(Weight::from_parts(17_884_112, 0).saturating_mul(v.into()))
+		// Minimum execution time: 39_802_000 picoseconds.
+		Weight::from_parts(40_103_000, 0)
+			// Standard Error: 38_622
+			.saturating_add(Weight::from_parts(17_862_430, 0).saturating_mul(v.into()))
 	}
 	/// The range of component `v` is `[1, 10000]`.
 	/// The range of component `t` is `[17, 1000]`.
@@ -88,10 +88,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 7_137_000 picoseconds.
-		Weight::from_parts(7_321_000, 0)
-			// Standard Error: 5_643
-			.saturating_add(Weight::from_parts(3_377_983, 0).saturating_mul(v.into()))
+		// Minimum execution time: 7_231_000 picoseconds.
+		Weight::from_parts(7_348_000, 0)
+			// Standard Error: 5_510
+			.saturating_add(Weight::from_parts(3_356_592, 0).saturating_mul(v.into()))
 	}
 }
 
@@ -104,10 +104,10 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 36_450_000 picoseconds.
-		Weight::from_parts(36_941_000, 0)
-			// Standard Error: 24_996
-			.saturating_add(Weight::from_parts(17_432_462, 0).saturating_mul(v.into()))
+		// Minimum execution time: 36_411_000 picoseconds.
+		Weight::from_parts(36_597_000, 0)
+			// Standard Error: 25_932
+			.saturating_add(Weight::from_parts(17_467_258, 0).saturating_mul(v.into()))
 	}
 	/// The range of component `v` is `[1, 10000]`.
 	/// The range of component `t` is `[17, 1000]`.
@@ -116,10 +116,10 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 42_205_000 picoseconds.
-		Weight::from_parts(42_386_000, 0)
-			// Standard Error: 38_152
-			.saturating_add(Weight::from_parts(17_884_112, 0).saturating_mul(v.into()))
+		// Minimum execution time: 39_802_000 picoseconds.
+		Weight::from_parts(40_103_000, 0)
+			// Standard Error: 38_622
+			.saturating_add(Weight::from_parts(17_862_430, 0).saturating_mul(v.into()))
 	}
 	/// The range of component `v` is `[1, 10000]`.
 	/// The range of component `t` is `[17, 1000]`.
@@ -128,9 +128,9 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 7_137_000 picoseconds.
-		Weight::from_parts(7_321_000, 0)
-			// Standard Error: 5_643
-			.saturating_add(Weight::from_parts(3_377_983, 0).saturating_mul(v.into()))
+		// Minimum execution time: 7_231_000 picoseconds.
+		Weight::from_parts(7_348_000, 0)
+			// Standard Error: 5_510
+			.saturating_add(Weight::from_parts(3_356_592, 0).saturating_mul(v.into()))
 	}
 }
