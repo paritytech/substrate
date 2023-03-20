@@ -638,7 +638,7 @@ checksum = "86ea188f25f0255d8f92797797c97ebf5631fa88178beb1a46fdf5622c9a00e4"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.2",
+ "syn 2.0.3",
 ]
 
 [[package]]
@@ -1713,7 +1713,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "scratch",
- "syn 2.0.2",
+ "syn 2.0.3",
 ]
 
 [[package]]
@@ -1730,7 +1730,7 @@ checksum = "631569015d0d8d54e6c241733f944042623ab6df7bc3be7466874b05fcdb1c5f"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.2",
+ "syn 2.0.3",
 ]
 
 [[package]]
@@ -7936,7 +7936,7 @@ checksum = "8d2275aab483050ab2a7364c1a46604865ee7d6906684e08db0f090acf74f9e7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.2",
+ "syn 2.0.3",
 ]
 
 [[package]]
@@ -9874,22 +9874,22 @@ checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
 name = "serde"
-version = "1.0.157"
+version = "1.0.158"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "707de5fcf5df2b5788fca98dd7eab490bc2fd9b7ef1404defc462833b83f25ca"
+checksum = "771d4d9c4163ee138805e12c710dd365e4f44be8be0503cb1bb9eb989425d9c9"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.157"
+version = "1.0.158"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78997f4555c22a7971214540c4a661291970619afd56de19f77e0de86296e1e5"
+checksum = "e801c1712f48475582b7696ac71e0ca34ebb30e09338425384269d9717c62cad"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.2",
+ "syn 2.0.3",
 ]
 
 [[package]]
@@ -10208,7 +10208,7 @@ dependencies = [
  "ark-r1cs-std",
  "ark-serialize",
  "ark-std",
- "sp-ark-models",
+ "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate?branch=no-compression)",
  "sp-ark-utils",
 ]
 
@@ -10222,7 +10222,7 @@ dependencies = [
  "ark-ff",
  "ark-serialize",
  "ark-std",
- "sp-ark-models",
+ "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate?branch=no-compression)",
  "sp-ark-utils",
 ]
 
@@ -10235,7 +10235,7 @@ dependencies = [
  "ark-ff",
  "ark-serialize",
  "ark-std",
- "sp-ark-models",
+ "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate?branch=no-compression)",
  "sp-ark-utils",
 ]
 
@@ -10249,7 +10249,7 @@ dependencies = [
  "ark-r1cs-std",
  "ark-serialize",
  "ark-std",
- "sp-ark-models",
+ "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate?branch=no-compression)",
  "sp-ark-utils",
 ]
 
@@ -10263,8 +10263,25 @@ dependencies = [
  "ark-r1cs-std",
  "ark-serialize",
  "ark-std",
- "sp-ark-models",
+ "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate?branch=no-compression)",
  "sp-ark-utils",
+]
+
+[[package]]
+name = "sp-ark-models"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28fa906b809d7a346b2aa32a4bd0c884a75f9f588f9a4a07272f63eaf8a10765"
+dependencies = [
+ "ark-ec",
+ "ark-ff",
+ "ark-serialize",
+ "ark-std",
+ "derivative",
+ "getrandom 0.2.8",
+ "itertools",
+ "num-traits",
+ "zeroize",
 ]
 
 [[package]]
@@ -10323,7 +10340,7 @@ dependencies = [
  "sp-ark-bw6-761",
  "sp-ark-ed-on-bls12-377",
  "sp-ark-ed-on-bls12-381",
- "sp-ark-models",
+ "sp-ark-models 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-io",
 ]
 
@@ -11478,9 +11495,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.2"
+version = "2.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59d3276aee1fa0c33612917969b5172b5be2db051232a6e4826f1a1a9191b045"
+checksum = "e8234ae35e70582bfa0f1fedffa6daa248e41dd045310b19800c4a36382c8f60"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -11583,7 +11600,7 @@ checksum = "f9456a42c5b0d803c8cd86e73dd7cc9edd429499f37a3550d286d5e86720569f"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.2",
+ "syn 2.0.3",
 ]
 
 [[package]]
