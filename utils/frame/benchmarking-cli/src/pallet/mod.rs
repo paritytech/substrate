@@ -20,8 +20,8 @@ mod writer;
 
 use crate::shared::HostInfoParams;
 use sc_cli::{
-	ExecutionStrategy, WasmExecutionMethod, WasmtimeInstantiationStrategy,
-	DEFAULT_WASMTIME_INSTANTIATION_STRATEGY, DEFAULT_WASM_EXECUTION_METHOD,
+	WasmExecutionMethod, WasmtimeInstantiationStrategy, DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
+	DEFAULT_WASM_EXECUTION_METHOD,
 };
 use std::{fmt::Debug, path::PathBuf};
 

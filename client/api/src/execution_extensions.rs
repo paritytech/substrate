@@ -22,21 +22,10 @@
 //! strategy for the runtime calls and provide the right `Externalities`
 //! extensions to support APIs for particular execution context & capabilities.
 
-use codec::Decode;
 use parking_lot::RwLock;
-use sc_transaction_pool_api::OffchainSubmitTransaction;
-use sp_core::offchain::{self, Capabilities, OffchainDbExt, OffchainWorkerExt, TransactionPoolExt};
 use sp_externalities::{Extension, Extensions};
-use sp_keystore::{KeystoreExt, SyncCryptoStorePtr};
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, NumberFor},
-};
-use sp_state_machine::DefaultHandler;
-use std::{
-	marker::PhantomData,
-	sync::{Arc, Weak},
-};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
+use std::marker::PhantomData;
 
 /// Generate the starting set of [`Extensions`].
 ///

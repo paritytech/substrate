@@ -51,7 +51,6 @@ pub struct ImportBenchmarkDescription {
 }
 
 pub struct ImportBenchmark {
-	profile: Profile,
 	database: BenchDb,
 	block: Block,
 	block_type: BlockType,
@@ -60,11 +59,6 @@ pub struct ImportBenchmark {
 impl core::BenchmarkDescription for ImportBenchmarkDescription {
 	fn path(&self) -> Path {
 		let mut path = Path::new(&["node", "import"]);
-
-		match self.profile {
-			Profile::Wasm => path.push("wasm"),
-			Profile::Native => path.push("native"),
-		}
 
 		match self.key_types {
 			KeyTypes::Sr25519 => path.push("sr25519"),
@@ -110,7 +104,7 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 
 impl core::Benchmark for ImportBenchmark {
 	fn run(&mut self, mode: Mode) -> std::time::Duration {
-		let mut context = self.database.create_context(self.profile);
+		let mut context = self.database.create_context();
 
 		let _ = context
 			.client

@@ -58,7 +58,6 @@ use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::HeaderBackend;
 use sp_consensus::{Environment, Error as ConsensusError, Proposer, SelectChain, SyncOracle};
 use sp_consensus_pow::{Seal, TotalDifficulty, POW_ENGINE_ID};
-use sp_core::ExecutionContext;
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
 use sp_runtime::{
 	generic::{BlockId, Digest, DigestItem},

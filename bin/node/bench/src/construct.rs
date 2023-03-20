@@ -43,7 +43,6 @@ use crate::{
 };
 
 pub struct ConstructionBenchmarkDescription {
-	pub profile: Profile,
 	pub key_types: KeyTypes,
 	pub block_type: BlockType,
 	pub size: SizeType,
@@ -51,7 +50,6 @@ pub struct ConstructionBenchmarkDescription {
 }
 
 pub struct ConstructionBenchmark {
-	profile: Profile,
 	database: BenchDb,
 	transactions: Transactions,
 }
@@ -59,11 +57,6 @@ pub struct ConstructionBenchmark {
 impl core::BenchmarkDescription for ConstructionBenchmarkDescription {
 	fn path(&self) -> Path {
 		let mut path = Path::new(&["node", "proposer"]);
-
-		match self.profile {
-			Profile::Wasm => path.push("wasm"),
-			Profile::Native => path.push("native"),
-		}
 
 		match self.key_types {
 			KeyTypes::Sr25519 => path.push("sr25519"),
@@ -99,7 +92,6 @@ impl core::BenchmarkDescription for ConstructionBenchmarkDescription {
 		}
 
 		Box::new(ConstructionBenchmark {
-			profile: self.profile,
 			database: bench_db,
 			transactions: Transactions(extrinsics),
 		})
@@ -116,7 +108,7 @@ impl core::BenchmarkDescription for ConstructionBenchmarkDescription {
 
 impl core::Benchmark for ConstructionBenchmark {
 	fn run(&mut self, mode: Mode) -> std::time::Duration {
-		let context = self.database.create_context(self.profile);
+		let context = self.database.create_context();
 
 		let _ = context
 			.client

@@ -879,7 +879,7 @@ pub(crate) fn state_machine_call<Block: BlockT, HostFns: HostFunctions>(
 		sp_core::testing::TaskExecutor::new(),
 		CallContext::Offchain,
 	)
-	.execute(sp_state_machine::ExecutionStrategy::AlwaysWasm)
+	.execute()
 	.map_err(|e| format!("failed to execute '{}': {}", method, e))
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 
@@ -919,7 +919,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 		sp_core::testing::TaskExecutor::new(),
 		CallContext::Offchain,
 	)
-	.execute(sp_state_machine::ExecutionStrategy::AlwaysWasm)
+	.execute()
 	.map_err(|e| format!("failed to execute {}: {}", method, e))
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 

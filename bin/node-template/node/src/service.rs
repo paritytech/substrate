@@ -204,12 +204,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		})?;
 
 	if config.offchain_worker.enabled {
-		sc_service::build_offchain_workers(
-			&config,
-			task_manager.spawn_handle(),
-			client.clone(),
-			network.clone(),
-		);
+		sc_offchain::OffchainWorkers::new()
 	}
 
 	let role = config.role.clone();

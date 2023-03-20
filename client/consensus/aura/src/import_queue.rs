@@ -38,7 +38,7 @@ use sp_blockchain::HeaderBackend;
 use sp_consensus::Error as ConsensusError;
 use sp_consensus_aura::{digests::CompatibleDigestItem, inherents::AuraInherentData, AuraApi};
 use sp_consensus_slots::Slot;
-use sp_core::{crypto::Pair, ExecutionContext};
+use sp_core::crypto::Pair;
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider as _};
 use sp_runtime::{
 	traits::{Block as BlockT, Header, NumberFor},
