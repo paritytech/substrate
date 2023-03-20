@@ -3,7 +3,7 @@
   "id": "local_testnet",
   "chainType": "Local",
   "bootNodes": [
-    "/ip4/127.0.0.1/udp/30333/webrtc/p2p/12D3KooWFvMbTsNZ8peGS8dbnRvNDBspstupzwYC9NVwbzGCLtDt"
+    "/ip4/127.0.0.1/udp/30333/webrtc/certhash/uEiAvF2IuPZJuKkdb5E-gSM_AmumLi3P5ZR_fvZGPE3vJEA/p2p/12D3KooWFvMbTsNZ8peGS8dbnRvNDBspstupzwYC9NVwbzGCLtDt"
   ],
   "telemetryEndpoints": null,
   "protocolId": null,

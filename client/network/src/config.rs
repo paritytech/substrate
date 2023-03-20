@@ -323,11 +323,15 @@ impl Default for NodeKeyConfig {
 #[derive(Clone, Debug)]
 pub enum WebRTCConfig {
 	/// Certificate stored on disk.
+	///
 	/// A new certificate is randomly generated and written there if the file doesn't exist.
 	File(PathBuf),
 
 	/// A new certifiticate is randomly generated each time you start the node.
 	Ephemeral,
+
+	/// Raw certificate's ASCII PEM string.
+	Raw(String),
 }
 
 impl WebRTCConfig {
@@ -375,6 +379,8 @@ impl WebRTCConfig {
 					.map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
 			},
 			Ephemeral => generate(),
+			Raw(pem) => WebRTCCertificate::from_pem(&pem)
+				.map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string())),
 		}
 	}
 }
@@ -833,5 +839,76 @@ mod tests {
 		let kp1 = NodeKeyConfig::Ed25519(Secret::New).into_keypair().unwrap();
 		let kp2 = NodeKeyConfig::Ed25519(Secret::New).into_keypair().unwrap();
 		assert!(secret_bytes(&kp1) != secret_bytes(&kp2));
+	}
+
+	#[test]
+	fn test_webrtc_certificate() {
+		// FILE
+		let tmp = tempdir_with_prefix("x");
+		std::fs::remove_dir(tmp.path()).unwrap(); // should be recreated
+		let file = tmp.path().join("x").to_path_buf();
+		let kp1 = WebRTCConfig::File(file.clone()).into_certificate().unwrap();
+		let kp2 = WebRTCConfig::File(file.clone()).into_certificate().unwrap();
+		assert!(file.is_file() && kp1 == kp2);
+
+		// RAW
+		let kp3 = WebRTCConfig::Raw(
+			r###"-----BEGIN EXPIRES-----
+APfhng8AAAA=
+-----END EXPIRES-----
+
+-----BEGIN PRIVATE_KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAHN+P9h0e5/x1BCI
+tjdkcOdtE11W75ofH/TPsF2YZFqhRANCAARgOEae+O4ipT4YRRXCHmcPCAIAy1Mb
+bc6Uma8Jh84l8tOpLXjou7yNCWikYJm5ivsp/Xk7QJihHRy7RZ8gRm3w
+-----END PRIVATE_KEY-----
+
+-----BEGIN CERTIFICATE-----
+MIIBWDCB/6ADAgECAggJoEeRUy4SuTAKBggqhkjOPQQDAjAhMR8wHQYDVQQDDBZy
+Y2dlbiBzZWxmIHNpZ25lZCBjZXJ0MCAXDTc1MDEwMTAwMDAwMFoYDzQwOTYwMTAx
+MDAwMDAwWjAhMR8wHQYDVQQDDBZyY2dlbiBzZWxmIHNpZ25lZCBjZXJ0MFkwEwYH
+KoZIzj0CAQYIKoZIzj0DAQcDQgAEYDhGnvjuIqU+GEUVwh5nDwgCAMtTG23OlJmv
+CYfOJfLTqS146Lu8jQlopGCZuYr7Kf15O0CYoR0cu0WfIEZt8KMfMB0wGwYDVR0R
+BBQwEoIQZ253OENrdzNUQldYd0hpeTAKBggqhkjOPQQDAgNIADBFAiEA6V9CVtrY
+wTRg0MLgEsoa1XbaFl19LHF1+ntC6qMMuhQCIHmPielTT43H+0PbhZ45rkp3BwH/
+gLpdut2sEugx/NhJ
+-----END CERTIFICATE-----
+"###
+			.to_string(),
+		)
+		.into_certificate()
+		.unwrap();
+		let kp4 = WebRTCConfig::Raw(
+			r###"-----BEGIN EXPIRES-----
+APfhng8AAAA=
+-----END EXPIRES-----
+
+-----BEGIN PRIVATE_KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAHN+P9h0e5/x1BCI
+tjdkcOdtE11W75ofH/TPsF2YZFqhRANCAARgOEae+O4ipT4YRRXCHmcPCAIAy1Mb
+bc6Uma8Jh84l8tOpLXjou7yNCWikYJm5ivsp/Xk7QJihHRy7RZ8gRm3w
+-----END PRIVATE_KEY-----
+
+-----BEGIN CERTIFICATE-----
+MIIBWDCB/6ADAgECAggJoEeRUy4SuTAKBggqhkjOPQQDAjAhMR8wHQYDVQQDDBZy
+Y2dlbiBzZWxmIHNpZ25lZCBjZXJ0MCAXDTc1MDEwMTAwMDAwMFoYDzQwOTYwMTAx
+MDAwMDAwWjAhMR8wHQYDVQQDDBZyY2dlbiBzZWxmIHNpZ25lZCBjZXJ0MFkwEwYH
+KoZIzj0CAQYIKoZIzj0DAQcDQgAEYDhGnvjuIqU+GEUVwh5nDwgCAMtTG23OlJmv
+CYfOJfLTqS146Lu8jQlopGCZuYr7Kf15O0CYoR0cu0WfIEZt8KMfMB0wGwYDVR0R
+BBQwEoIQZ253OENrdzNUQldYd0hpeTAKBggqhkjOPQQDAgNIADBFAiEA6V9CVtrY
+wTRg0MLgEsoa1XbaFl19LHF1+ntC6qMMuhQCIHmPielTT43H+0PbhZ45rkp3BwH/
+gLpdut2sEugx/NhJ
+-----END CERTIFICATE-----
+"###
+			.to_string(),
+		)
+		.into_certificate()
+		.unwrap();
+		assert!(kp3 == kp4);
+
+		// EPHEMERAL
+		let kp5 = WebRTCConfig::Ephemeral.into_certificate().unwrap();
+		let kp6 = WebRTCConfig::Ephemeral.into_certificate().unwrap();
+		assert!(kp5 != kp6);
 	}
 }
