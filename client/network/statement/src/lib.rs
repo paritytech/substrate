@@ -43,7 +43,7 @@ use sc_network_common::{
 	role::ObservedRole,
 	sync::{SyncEvent, SyncEventStream},
 };
-use sp_statement_store::{Hash, Statement, StatementStore, SubmitResult, NetworkPriority};
+use sp_statement_store::{Hash, Statement, StatementSource, StatementStore, SubmitResult, NetworkPriority};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::{
 	collections::{hash_map::Entry, HashMap},
@@ -191,7 +191,7 @@ impl StatementHandlerPrototype {
 					match task {
 						None => return,
 						Some((statement, completion)) => {
-							let result = store.submit(statement);
+							let result = store.submit(statement, StatementSource::Network);
 							if let Err(_) = completion.send(result) {
 								log::debug!(target: LOG_TARGET, "Error sending validation completion");
 							}
@@ -455,11 +455,12 @@ where
 
 	fn on_handle_statement_import(&mut self, who: PeerId, import: &SubmitResult) {
 		match import {
-			SubmitResult::OkNew(NetworkPriority::High) =>
+			SubmitResult::New(NetworkPriority::High) =>
 				self.network.report_peer(who, rep::EXCELLENT_STATEMENT),
-			SubmitResult::OkNew(NetworkPriority::Low) =>
+			SubmitResult::New(NetworkPriority::Low) =>
 				self.network.report_peer(who, rep::GOOD_STATEMENT),
-			SubmitResult::OkKnown => self.network.report_peer(who, rep::ANY_STATEMENT_REFUND),
+			SubmitResult::Known => self.network.report_peer(who, rep::ANY_STATEMENT_REFUND),
+			SubmitResult::KnownExpired => {},
 			SubmitResult::Bad(_) => self.network.report_peer(who, rep::BAD_STATEMENT),
 			SubmitResult::InternalError(_) => {},
 		}

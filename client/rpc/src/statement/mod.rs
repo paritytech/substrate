@@ -27,8 +27,7 @@ use jsonrpsee::core::{async_trait, RpcResult};
 pub use sc_rpc_api::statement::{error::Error, StatementApiServer};
 use sc_rpc_api::DenyUnsafe;
 use sp_core::Bytes;
-use sp_statement_store::SubmitResult;
-//use sp_statement_store::StatementStore;
+use sp_statement_store::{SubmitResult, StatementSource};
 use std::sync::Arc;
 
 /// Statement store API
@@ -82,8 +81,10 @@ impl StatementApiServer for StatementStore {
 	}
 
 	fn submit(&self, encoded: Bytes) -> RpcResult<()> {
-		match self.store.submit_encoded(&encoded) {
-			SubmitResult::OkNew(_) | SubmitResult::OkKnown => Ok(()),
+		match self.store.submit_encoded(&encoded, StatementSource::Rpc) {
+			SubmitResult::New(_) | SubmitResult::Known => Ok(()),
+			// `KnownExpired` should not happen. Expired statements submitted with `StatementSource::Rpc` should be renewed.
+			SubmitResult::KnownExpired => Err(Error::StatementStore("Submitted an expired statement".into()).into()),
 			SubmitResult::Bad(e) => Err(Error::StatementStore(e.into()).into()),
 			SubmitResult::InternalError(e) => Err(Error::StatementStore(e.to_string()).into()),
 		}

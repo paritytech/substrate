@@ -32,7 +32,7 @@ pub type Hash = [u8; 32];
 pub type BlockHash = [u8; 32];
 
 #[cfg(feature = "std")]
-pub use api::{StatementStore, SubmitResult, Error, Result, NetworkPriority};
+pub use api::{StatementStore, SubmitResult, Error, Result, NetworkPriority, StatementSource};
 
 pub mod sr25519 {
 	mod app_sr25519 {
@@ -205,7 +205,7 @@ impl Statement {
 
 	#[cfg(feature = "std")]
 	pub fn hash(&self) -> [u8; 32] {
-		hash_encoded(&self.encode())
+		self.using_encoded(hash_encoded)
 	}
 
 	pub fn topic(&self, index: usize) -> Option<Topic> {
@@ -303,9 +303,11 @@ mod api {
 	#[derive(Debug)]
 	pub enum SubmitResult {
 		/// Accepted as new with given score
-		OkNew(NetworkPriority),
+		New(NetworkPriority),
 		/// Known statement
-		OkKnown,
+		Known,
+		/// Known statement that's already expired.
+		KnownExpired,
 		/// Statement failed validation.
 		Bad(&'static str),
 		/// Internal store error.
@@ -334,10 +336,10 @@ mod api {
 		fn posted_clear(&self, match_all_topics: &[Topic], dest: [u8; 32]) -> Result<Vec<Vec<u8>>>;
 
 		/// Submit a statement.
-		fn submit(&self, statement: Statement) -> SubmitResult;
+		fn submit(&self, statement: Statement, source: StatementSource) -> SubmitResult;
 
 		/// Submit a SCALE-encoded statement.
-		fn submit_encoded(&self, statement: &[u8]) -> SubmitResult;
+		fn submit_encoded(&self, statement: &[u8], source: StatementSource) -> SubmitResult;
 	}
 }
 
@@ -366,10 +368,21 @@ pub mod runtime_api {
 	/// Depending on the source we might apply different validation schemes.
 	#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
 	pub enum StatementSource {
-		/// Statement is coming from a local source, such as the OCW.
-		Local,
-		/// Statement has been received externally (network or RPC).
-		External,
+		/// Statement is coming from the on-chain worker.
+		Chain,
+		/// Statement has been received from the gossip network.
+		Network,
+		/// Statement has been submitted over the RPC api.
+		Rpc,
+	}
+
+	impl StatementSource {
+		pub fn can_be_resubmitted(&self) -> bool {
+			match self {
+				StatementSource::Chain | StatementSource::Rpc => true,
+				StatementSource::Network => false,
+			}
+		}
 	}
 
 	sp_api::decl_runtime_apis! {

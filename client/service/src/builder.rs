@@ -514,11 +514,18 @@ where
 		),
 	);
 
-	// Inform the statement store about finalized blocks.
+	// Perform periodic statement store maintenance
+	let store = statement_store.clone();
 	spawn_handle.spawn(
 		"statement-store-notifications",
 		Some("statement-store"),
-		statement_store_notifications(client.clone(), statement_store.clone()),
+		async move {
+			let mut interval = tokio::time::interval(std::time::Duration::from_millis(10));
+			loop {
+				interval.tick().await;
+				store.maintain();
+			}
+		}
 	);
 
 	// Prometheus metrics.
@@ -613,17 +620,6 @@ async fn transaction_notifications<Block, ExPool>(
 			ready(())
 		})
 		.await;
-}
-
-async fn statement_store_notifications<Client, Block>(client: Arc<Client>, store: Arc<StatementStore>)
-where
-	Block: BlockT,
-	Client: sc_client_api::BlockchainEvents<Block>,
-{
-	let finality_stream = client.finality_notification_stream().fuse();
-	finality_stream
-		.for_each(|_evt| store.maintain())
-		.await
 }
 
 fn init_telemetry<Block, Client, Network>(
