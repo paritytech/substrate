@@ -500,7 +500,7 @@ impl<PeerStore: PeerStoreT> ProtocolController<PeerStore> {
 				self.start_connection(peer_id);
 			});
 
-		// Nothing more to do if we're in reserved-only mode or don't have slots.
+		// Nothing more to do if we're in reserved-only mode or don't have slots available.
 		if self.reserved_only || self.num_out >= self.max_out {
 			return
 		}
@@ -536,6 +536,7 @@ impl<PeerStore: PeerStoreT> ProtocolController<PeerStore> {
 					Some(peer_id)
 				},
 			})
+			.take(available_slots)
 			.cloned()
 			.collect::<Vec<_>>()
 			.iter()
