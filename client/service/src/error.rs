@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -40,16 +40,13 @@ pub enum Error {
 	Consensus(#[from] sp_consensus::Error),
 
 	#[error(transparent)]
-	Network(#[from] sc_network_common::error::Error),
+	Network(#[from] sc_network::error::Error),
 
 	#[error(transparent)]
 	Keystore(#[from] sc_keystore::Error),
 
 	#[error(transparent)]
 	Telemetry(#[from] sc_telemetry::Error),
-
-	#[error(transparent)]
-	Storage(#[from] sc_storage_monitor::Error),
 
 	#[error("Best chain selection strategy (SelectChain) is not provided.")]
 	SelectChainRequired,

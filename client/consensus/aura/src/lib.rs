@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -51,9 +51,8 @@ use sp_consensus::{BlockOrigin, Environment, Error as ConsensusError, Proposer, 
 use sp_consensus_slots::Slot;
 use sp_core::crypto::{ByteArray, Pair, Public};
 use sp_inherents::CreateInherentDataProviders;
-use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::{Keystore, KeystorePtr};
 use sp_runtime::{
-	generic::BlockId,
 	traits::{Block as BlockT, Header, Member, NumberFor, Zero},
 	DigestItem,
 };
@@ -121,8 +120,10 @@ where
 	C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
 	C::Api: AuraApi<B, A>,
 {
-	let best_block_id = BlockId::Hash(client.usage_info().chain.best_hash);
-	client.runtime_api().slot_duration(&best_block_id).map_err(|err| err.into())
+	client
+		.runtime_api()
+		.slot_duration(client.usage_info().chain.best_hash)
+		.map_err(|err| err.into())
 }
 
 /// Get slot author for given block along with authorities.
@@ -167,7 +168,7 @@ pub struct StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS, N> {
 	/// The backoff strategy when we miss slots.
 	pub backoff_authoring_blocks: Option<BS>,
 	/// The keystore used by the node.
-	pub keystore: SyncCryptoStorePtr,
+	pub keystore: KeystorePtr,
 	/// The proportion of the slot dedicated to proposing.
 	///
 	/// The block proposing will be limited to this proportion of the slot from the starting of the
@@ -264,7 +265,7 @@ pub struct BuildAuraWorkerParams<C, I, PF, SO, L, BS, N> {
 	/// The backoff strategy when we miss slots.
 	pub backoff_authoring_blocks: Option<BS>,
 	/// The keystore used by the node.
-	pub keystore: SyncCryptoStorePtr,
+	pub keystore: KeystorePtr,
 	/// The proportion of the slot dedicated to proposing.
 	///
 	/// The block proposing will be limited to this proportion of the slot from the starting of the
@@ -345,7 +346,7 @@ struct AuraWorker<C, E, I, P, SO, L, BS, N> {
 	client: Arc<C>,
 	block_import: I,
 	env: E,
-	keystore: SyncCryptoStorePtr,
+	keystore: KeystorePtr,
 	sync_oracle: SO,
 	justification_sync_link: L,
 	force_authoring: bool,
@@ -417,7 +418,7 @@ where
 	) -> Option<Self::Claim> {
 		let expected_author = slot_author::<P>(slot, epoch_data);
 		expected_author.and_then(|p| {
-			if SyncCryptoStore::has_keys(
+			if Keystore::has_keys(
 				&*self.keystore,
 				&[(p.to_raw_vec(), sp_application_crypto::key_types::AURA)],
 			) {
@@ -448,7 +449,7 @@ where
 		// add it to a digest item.
 		let public_type_pair = public.to_public_crypto_pair();
 		let public = public.to_raw_vec();
-		let signature = SyncCryptoStore::sign_with(
+		let signature = Keystore::sign_with(
 			&*self.keystore,
 			<AuthorityId<P> as AppKey>::ID,
 			&public_type_pair,
@@ -613,7 +614,7 @@ where
 			if *until > context_block_number {
 				runtime_api
 					.initialize_block(
-						&BlockId::Hash(parent_hash),
+						parent_hash,
 						&B::Header::new(
 							context_block_number,
 							Default::default(),
@@ -627,7 +628,7 @@ where
 	}
 
 	runtime_api
-		.authorities(&BlockId::Hash(parent_hash))
+		.authorities(parent_hash)
 		.ok()
 		.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)
 }
@@ -765,6 +766,11 @@ mod tests {
 		fn peers(&self) -> &Vec<AuraPeer> {
 			&self.peers
 		}
+
+		fn peers_mut(&mut self) -> &mut Vec<AuraPeer> {
+			&mut self.peers
+		}
+
 		fn mut_peers<F: FnOnce(&mut Vec<AuraPeer>)>(&mut self, closure: F) {
 			closure(&mut self.peers);
 		}
@@ -792,7 +798,7 @@ mod tests {
 				LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore."),
 			);
 
-			SyncCryptoStore::sr25519_generate_new(&*keystore, AURA, Some(&key.to_seed()))
+			Keystore::sr25519_generate_new(&*keystore, AURA, Some(&key.to_seed()))
 				.expect("Creates authority key");
 			keystore_paths.push(keystore_path);
 
@@ -877,7 +883,7 @@ mod tests {
 
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 		let keystore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore.");
-		let public = SyncCryptoStore::sr25519_generate_new(&keystore, AuthorityPair::ID, None)
+		let public = Keystore::sr25519_generate_new(&keystore, AuthorityPair::ID, None)
 			.expect("Key should be created");
 		authorities.push(public.into());
 
@@ -927,7 +933,7 @@ mod tests {
 
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 		let keystore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore.");
-		SyncCryptoStore::sr25519_generate_new(
+		Keystore::sr25519_generate_new(
 			&keystore,
 			AuthorityPair::ID,
 			Some(&Keyring::Alice.to_seed()),

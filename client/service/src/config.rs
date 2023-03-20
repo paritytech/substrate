@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -22,19 +22,18 @@ pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionStra
 pub use sc_client_db::{BlocksPruning, Database, DatabaseSource, PruningMode};
 pub use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 pub use sc_network::{
-	config::{NetworkConfiguration, NodeKeyConfig, Role},
-	Multiaddr,
-};
-pub use sc_network_common::{
-	config::{MultiaddrWithPeerId, NonDefaultSetConfig, ProtocolId, SetConfig, TransportConfig},
+	config::{
+		MultiaddrWithPeerId, NetworkConfiguration, NodeKeyConfig, NonDefaultSetConfig, ProtocolId,
+		Role, SetConfig, SyncMode, TransportConfig,
+	},
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
+	Multiaddr,
 };
 
 use prometheus_endpoint::Registry;
 use sc_chain_spec::ChainSpec;
-use sc_network::config::SyncMode;
 pub use sc_telemetry::TelemetryEndpoints;
 pub use sc_transaction_pool::Options as TransactionPoolOptions;
 use sp_core::crypto::SecretString;

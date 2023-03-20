@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -36,9 +36,11 @@ use sp_runtime::{
 };
 use sp_staking::offence::{Offence, ReportOffence};
 
-use pallet_babe::BabeEquivocationOffence;
+use pallet_babe::EquivocationOffence as BabeEquivocationOffence;
 use pallet_balances::Config as BalancesConfig;
-use pallet_grandpa::{GrandpaEquivocationOffence, GrandpaTimeSlot};
+use pallet_grandpa::{
+	EquivocationOffence as GrandpaEquivocationOffence, TimeSlot as GrandpaTimeSlot,
+};
 use pallet_im_online::{Config as ImOnlineConfig, Pallet as ImOnline, UnresponsivenessOffence};
 use pallet_offences::{Config as OffencesConfig, Pallet as Offences};
 use pallet_session::{

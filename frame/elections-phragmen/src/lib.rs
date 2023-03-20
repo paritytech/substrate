@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -187,7 +187,6 @@ pub mod pallet {
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
@@ -435,9 +434,9 @@ pub mod pallet {
 		/// Even if a candidate ends up being a member, they must call [`Call::renounce_candidacy`]
 		/// to get their deposit back. Losing the spot in an election will always lead to a slash.
 		///
-		/// # <weight>
 		/// The number of current candidates must be provided as witness data.
-		/// # </weight>
+		/// ## Complexity
+		/// O(C + log(C)) where C is candidate_count.
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::submit_candidacy(*candidate_count))]
 		pub fn submit_candidacy(
@@ -479,10 +478,12 @@ pub mod pallet {
 		///   next round.
 		///
 		/// The dispatch origin of this call must be signed, and have one of the above roles.
-		///
-		/// # <weight>
 		/// The type of renouncing must be provided as witness data.
-		/// # </weight>
+		///
+		/// ## Complexity
+		///   - Renouncing::Candidate(count): O(count + log(count))
+		///   - Renouncing::Member: O(1)
+		///   - Renouncing::RunnerUp: O(1)
 		#[pallet::call_index(3)]
 		#[pallet::weight(match *renouncing {
 			Renouncing::Candidate(count) => T::WeightInfo::renounce_candidacy_candidate(count),
@@ -542,10 +543,8 @@ pub mod pallet {
 		///
 		/// Note that this does not affect the designated block number of the next election.
 		///
-		/// # <weight>
-		/// If we have a replacement, we use a small weight. Else, since this is a root call and
-		/// will go into phragmen, we assume full block for now.
-		/// # </weight>
+		/// ## Complexity
+		/// - Check details of remove_and_replace_member() and do_phragmen().
 		#[pallet::call_index(4)]
 		#[pallet::weight(if *rerun_election {
 			T::WeightInfo::remove_member_without_replacement()
@@ -579,9 +578,8 @@ pub mod pallet {
 		///
 		/// The dispatch origin of this call must be root.
 		///
-		/// # <weight>
-		/// The total number of voters and those that are defunct must be provided as witness data.
-		/// # </weight>
+		/// ## Complexity
+		/// - Check is_defunct_voter() details.
 		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::clean_defunct_voters(*_num_voters, *_num_defunct))]
 		pub fn clean_defunct_voters(
@@ -1250,6 +1248,10 @@ mod tests {
 		type MaxReserves = ();
 		type ReserveIdentifier = [u8; 8];
 		type WeightInfo = ();
+		type FreezeIdentifier = ();
+		type MaxFreezes = ();
+		type HoldIdentifier = ();
+		type MaxHolds = ();
 	}
 
 	frame_support::parameter_types! {
@@ -2123,7 +2125,8 @@ mod tests {
 			assert_ok!(submit_candidacy(RuntimeOrigin::signed(4)));
 
 			// User has 100 free and 50 reserved.
-			assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 2, 100, 50));
+			assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), 2, 150));
+			assert_ok!(Balances::reserve(&2, 50));
 			// User tries to vote with 150 tokens.
 			assert_ok!(vote(RuntimeOrigin::signed(2), vec![4, 5], 150));
 			// We truncate to only their free balance, after reserving additional for voting.

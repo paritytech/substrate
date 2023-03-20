@@ -1,4 +1,4 @@
-// Copyright 2021 Parity Technologies (UK) Ltd.
+// Copyright Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -207,7 +207,6 @@ where
 			.ok_or_else(|| Error::MissingBlockComponent("Extrinsics not found".to_string()))?;
 		tracing::debug!(target: "state_tracing", "Found {} extrinsics", extrinsics.len());
 		let parent_hash = *header.parent_hash();
-		let parent_id = BlockId::Hash(parent_hash);
 		// Remove all `Seal`s as they are added by the consensus engines after building the block.
 		// On import they are normally removed by the consensus engine.
 		header.digest_mut().logs.retain(|d| d.as_seal().is_none());
@@ -227,7 +226,7 @@ where
 			if let Err(e) = dispatcher::with_default(&dispatch, || {
 				let span = tracing::info_span!(target: TRACE_TARGET, "trace_block");
 				let _enter = span.enter();
-				self.client.runtime_api().execute_block(&parent_id, block)
+				self.client.runtime_api().execute_block(parent_hash, block)
 			}) {
 				return Err(Error::Dispatch(format!(
 					"Failed to collect traces and execute block: {}",

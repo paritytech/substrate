@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -35,6 +35,7 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, Hash, IdentityLookup},
+	TokenError,
 };
 
 type BlockNumber = u64;
@@ -96,7 +97,6 @@ mod mock_democracy {
 		use frame_system::pallet_prelude::*;
 
 		#[pallet::pallet]
-		#[pallet::generate_store(pub(super) trait Store)]
 		pub struct Pallet<T>(_);
 
 		#[pallet::config]
@@ -186,6 +186,10 @@ impl pallet_balances::Config for Test {
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type HoldIdentifier = ();
+	type MaxHolds = ();
 }
 
 impl pallet_root_testing::Config for Test {}
@@ -227,7 +231,7 @@ impl Contains<RuntimeCall> for TestBaseCallFilter {
 	fn contains(c: &RuntimeCall) -> bool {
 		match *c {
 			// Transfer works. Use `transfer_keep_alive` for a call that doesn't pass the filter.
-			RuntimeCall::Balances(pallet_balances::Call::transfer { .. }) => true,
+			RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death { .. }) => true,
 			RuntimeCall::Utility(_) => true,
 			// For benchmarking, this acts as a noop call
 			RuntimeCall::System(frame_system::Call::remark { .. }) => true,
@@ -254,7 +258,7 @@ type ExampleCall = example::Call<Test>;
 type UtilityCall = crate::Call<Test>;
 
 use frame_system::Call as SystemCall;
-use pallet_balances::{Call as BalancesCall, Error as BalancesError};
+use pallet_balances::Call as BalancesCall;
 use pallet_root_testing::Call as RootTestingCall;
 use pallet_timestamp::Call as TimestampCall;
 
@@ -279,7 +283,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 fn call_transfer(dest: u64, value: u64) -> RuntimeCall {
-	RuntimeCall::Balances(BalancesCall::transfer { dest, value })
+	RuntimeCall::Balances(BalancesCall::transfer_allow_death { dest, value })
 }
 
 fn call_foobar(err: bool, start_weight: Weight, end_weight: Option<Weight>) -> RuntimeCall {
@@ -290,10 +294,10 @@ fn call_foobar(err: bool, start_weight: Weight, end_weight: Option<Weight>) -> R
 fn as_derivative_works() {
 	new_test_ext().execute_with(|| {
 		let sub_1_0 = Utility::derivative_account_id(1, 0);
-		assert_ok!(Balances::transfer(RuntimeOrigin::signed(1), sub_1_0, 5));
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), sub_1_0, 5));
 		assert_err_ignore_postinfo!(
 			Utility::as_derivative(RuntimeOrigin::signed(1), 1, Box::new(call_transfer(6, 3)),),
-			BalancesError::<Test, _>::InsufficientBalance
+			TokenError::FundsUnavailable,
 		);
 		assert_ok!(Utility::as_derivative(
 			RuntimeOrigin::signed(1),
@@ -308,8 +312,8 @@ fn as_derivative_works() {
 #[test]
 fn as_derivative_handles_weight_refund() {
 	new_test_ext().execute_with(|| {
-		let start_weight = Weight::from_ref_time(100);
-		let end_weight = Weight::from_ref_time(75);
+		let start_weight = Weight::from_parts(100, 0);
+		let end_weight = Weight::from_parts(75, 0);
 		let diff = start_weight - end_weight;
 
 		// Full weight when ok
@@ -495,8 +499,8 @@ fn batch_weight_calculation_doesnt_overflow() {
 #[test]
 fn batch_handles_weight_refund() {
 	new_test_ext().execute_with(|| {
-		let start_weight = Weight::from_ref_time(100);
-		let end_weight = Weight::from_ref_time(75);
+		let start_weight = Weight::from_parts(100, 0);
+		let end_weight = Weight::from_parts(75, 0);
 		let diff = start_weight - end_weight;
 		let batch_len = 4;
 
@@ -600,7 +604,7 @@ fn batch_all_revert() {
 					),
 					pays_fee: Pays::Yes
 				},
-				error: pallet_balances::Error::<Test, _>::InsufficientBalance.into()
+				error: TokenError::FundsUnavailable.into(),
 			}
 		);
 		assert_eq!(Balances::free_balance(1), 10);
@@ -611,8 +615,8 @@ fn batch_all_revert() {
 #[test]
 fn batch_all_handles_weight_refund() {
 	new_test_ext().execute_with(|| {
-		let start_weight = Weight::from_ref_time(100);
-		let end_weight = Weight::from_ref_time(75);
+		let start_weight = Weight::from_parts(100, 0);
+		let end_weight = Weight::from_parts(75, 0);
 		let diff = start_weight - end_weight;
 		let batch_len = 4;
 
@@ -739,7 +743,7 @@ fn force_batch_works() {
 			RuntimeOrigin::signed(1),
 			vec![
 				call_transfer(2, 5),
-				call_foobar(true, Weight::from_ref_time(75), None),
+				call_foobar(true, Weight::from_parts(75, 0), None),
 				call_transfer(2, 10),
 				call_transfer(2, 5),
 			]

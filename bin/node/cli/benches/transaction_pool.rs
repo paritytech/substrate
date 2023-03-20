@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -136,10 +136,9 @@ fn create_account_extrinsics(
 					Sr25519Keyring::Alice.pair(),
 					SudoCall::sudo {
 						call: Box::new(
-							BalancesCall::set_balance {
+							BalancesCall::force_set_balance {
 								who: AccountId::from(a.public()).into(),
 								new_free: 0,
-								new_reserved: 0,
 							}
 							.into(),
 						),
@@ -152,10 +151,9 @@ fn create_account_extrinsics(
 					Sr25519Keyring::Alice.pair(),
 					SudoCall::sudo {
 						call: Box::new(
-							BalancesCall::set_balance {
+							BalancesCall::force_set_balance {
 								who: AccountId::from(a.public()).into(),
 								new_free: 1_000_000 * DOLLARS,
-								new_reserved: 0,
 							}
 							.into(),
 						),
@@ -180,7 +178,7 @@ fn create_benchmark_extrinsics(
 				create_extrinsic(
 					client,
 					account.clone(),
-					BalancesCall::transfer {
+					BalancesCall::transfer_allow_death {
 						dest: Sr25519Keyring::Bob.to_account_id().into(),
 						value: 1 * DOLLARS,
 					},
