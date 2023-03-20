@@ -367,7 +367,7 @@ where
 		component_model: false,
 		// This is not our only defense: All instructions explicitly need to have weights assigned
 		// or the deployment will fail. We have none assigned for float instructions.
-		floats: matches!(determinism, Determinism::AllowIndeterminism),
+		floats: matches!(determinism, Determinism::Relaxed),
 		mutable_global: false,
 		saturating_float_to_int: false,
 		sign_extension: false,
@@ -558,7 +558,7 @@ pub mod benchmarking {
 				deposit: Default::default(),
 				refcount: 0,
 			}),
-			determinism: Determinism::Deterministic,
+			determinism: Determinism::Enforced,
 		})
 	}
 }
@@ -632,7 +632,7 @@ mod tests {
 					wasm,
 					&schedule,
 					ALICE,
-					Determinism::Deterministic,
+					Determinism::Enforced,
 					TryInstantiate::Instantiate,
 				);
 				assert_matches::assert_matches!(r.map_err(|(_, msg)| msg), $($expected)*);

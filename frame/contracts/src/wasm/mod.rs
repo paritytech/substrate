@@ -127,7 +127,7 @@ pub enum Determinism {
 	/// allowed.
 	///
 	/// Dispatchables always use this mode in order to make on-chain execution deterministic.
-	Deterministic,
+	Enforced,
 	/// Allow calling or uploading an indeterministic code.
 	///
 	/// This is only possible when calling into `pallet-contracts` directly via
@@ -136,7 +136,7 @@ pub enum Determinism {
 	/// # Note
 	///
 	/// **Never** use this mode for on-chain execution.
-	AllowIndeterminism,
+	Relaxed,
 }
 
 impl ExportedFunction {
@@ -358,7 +358,7 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 	}
 
 	fn is_deterministic(&self) -> bool {
-		matches!(self.determinism, Determinism::Deterministic)
+		matches!(self.determinism, Determinism::Enforced)
 	}
 }
 
@@ -653,7 +653,7 @@ mod tests {
 				wasm,
 				&schedule,
 				ALICE,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 				TryInstantiate::Instantiate,
 			)
 			.map_err(|err| err.0)?
@@ -3058,12 +3058,8 @@ mod tests {
 		let schedule = crate::Schedule::<Test>::default();
 		#[cfg(not(feature = "runtime-benchmarks"))]
 		assert_err!(execute(CODE_RANDOM, vec![], MockExt::default()), <Error<Test>>::CodeRejected);
-		self::prepare::reinstrument::<runtime::Env, Test>(
-			&wasm,
-			&schedule,
-			Determinism::Deterministic,
-		)
-		.unwrap();
+		self::prepare::reinstrument::<runtime::Env, Test>(&wasm, &schedule, Determinism::Enforced)
+			.unwrap();
 	}
 
 	/// This test check that an unstable interface cannot be deployed. In case of runtime

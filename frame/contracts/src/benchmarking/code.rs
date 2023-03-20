@@ -512,7 +512,7 @@ pub fn max_pages<T: Config>() -> u32 {
 
 fn inject_gas_metering<T: Config>(module: Module) -> Module {
 	let schedule = T::Schedule::get();
-	let gas_rules = schedule.rules(Determinism::Deterministic);
+	let gas_rules = schedule.rules(Determinism::Enforced);
 	let backend = gas_metering::host_function::Injector::new("seal0", "gas");
 	gas_metering::inject(module, backend, &gas_rules).unwrap()
 }
