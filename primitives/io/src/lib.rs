@@ -1222,6 +1222,7 @@ pub trait EllipticCurves {
 	/// Compute a final exponentiation on bw6_761
 	fn bw6_761_final_exponentiation(f12: Vec<u8>) -> Result<Vec<u8>, PairingError> {
 		sp_arkworks::bw6_761::final_exponentiation(f12)
+	}
 	fn bw6_761_mul_projective_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 		sp_arkworks::bw6_761::mul_projective_g1(base, scalar)
 	}
