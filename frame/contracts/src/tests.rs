@@ -50,7 +50,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Convert, Hash, IdentityLookup},
 	AccountId32, TokenError,
 };
-use std::{ops::Deref, sync::Arc};
+use std::ops::Deref;
 
 use crate as pallet_contracts;
 
@@ -444,7 +444,7 @@ impl ExtBuilder {
 			.assimilate_storage(&mut t)
 			.unwrap();
 		let mut ext = sp_io::TestExternalities::new(t);
-		ext.register_extension(KeystoreExt(Arc::new(MemoryKeystore::new())));
+		ext.register_extension(KeystoreExt::new(MemoryKeystore::new()));
 		ext.execute_with(|| System::set_block_number(1));
 		ext
 	}

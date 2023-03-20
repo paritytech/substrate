@@ -34,7 +34,7 @@ fn ecdsa_works_in_runtime() {
 		.test_ecdsa_crypto(test_client.chain_info().genesis_hash)
 		.expect("Tests `ecdsa` crypto.");
 
-	let supported_keys = Keystore::keys(&*keystore, ECDSA).unwrap();
+	let supported_keys = keystore.keys(ECDSA).unwrap();
 	assert!(supported_keys.contains(&public.clone().into()));
 	assert!(AppPair::verify(&signature, "ecdsa", &AppPublic::from(public)));
 }

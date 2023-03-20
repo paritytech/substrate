@@ -8606,7 +8606,6 @@ dependencies = [
  "sp-keystore",
  "sp-runtime",
  "substrate-test-runtime-client",
- "tempfile",
  "thiserror",
  "tokio",
 ]
