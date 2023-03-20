@@ -445,36 +445,53 @@ impl ProtocolController {
 		}
 	}
 
-	/// Returns Err(PeerId) if peer wasn't connected.
+	/// Returns `Err(PeerId)` if the peer wasn't connected or not found.
 	fn on_peer_dropped(&mut self, peer_id: PeerId, reason: DropReason) -> Result<(), PeerId> {
-		let mut is_reserved = true;
-		let state = self
-			.reserved_nodes
-			.get_mut(&peer_id)
-			.or_else(|| {
-				is_reserved = false;
-				self.nodes.get_mut(&peer_id)
-			})
-			.ok_or(peer_id)?;
-		match state {
-			PeerState::Connected(d) => {
-				if is_reserved {
-					*state = PeerState::NotConnected;
-				} else {
-					match d {
-						Direction::Inbound => self.num_in -= 1,
-						Direction::Outbound => self.num_out -= 1,
-					}
-					if let DropReason::Refused = reason {
-						self.nodes.remove(&peer_id);
-					} else {
-						*state = PeerState::NotConnected;
-					}
-				}
-				self.report_disconnect(peer_id);
-				Ok(())
-			},
-			PeerState::NotConnected => Err(peer_id),
+		if self.drop_reserved_peer(&peer_id)? || self.drop_regular_peer(&peer_id, reason)? {
+			// The peer found and disconnected.
+			self.report_disconnect(peer_id);
+			Ok(())
+		} else {
+			// The peer was not found in neither regular or reserved lists.
+			Err(peer_id)
+		}
+	}
+
+	/// Try dropping as a reserved peer. Return `Ok(true)` if the peer was found and disconnected,
+	/// `Ok(false)` if it wasn't found, `Err(())`, if the peer found, but not in connected state.
+	fn drop_reserved_peer(&mut self, peer_id: &PeerId) -> Result<bool, PeerId> {
+		let Some(state) = self.reserved_nodes.get_mut(peer_id) else {
+			return Ok(false)
+		};
+
+		if let PeerState::Connected(_) = state {
+			*state = PeerState::NotConnected;
+			Ok(true)
+		} else {
+			Err(peer_id.clone())
+		}
+	}
+
+	/// Try dropping as a regular peer. Return `Ok(true)` if the peer was found and disconnected,
+	/// `Ok(false)` if it wasn't found, `Err(())`, if the peer found, but not in connected state.
+	fn drop_regular_peer(&mut self, peer_id: &PeerId, reason: DropReason) -> Result<bool, PeerId> {
+		let Some(state) = self.nodes.get_mut(peer_id) else {
+			return Ok(false)
+		};
+
+		if let PeerState::Connected(d) = state {
+			match d {
+				Direction::Inbound => self.num_in -= 1,
+				Direction::Outbound => self.num_out -= 1,
+			}
+			if let DropReason::Refused = reason {
+				self.nodes.remove(&peer_id);
+			} else {
+				*state = PeerState::NotConnected;
+			}
+			Ok(true)
+		} else {
+			Err(peer_id.clone())
 		}
 	}
 
