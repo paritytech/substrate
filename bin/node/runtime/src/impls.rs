@@ -24,7 +24,7 @@ use crate::{
 use frame_support::{
 	pallet_prelude::*,
 	traits::{
-		fungibles::{Balanced, CreditOf},
+		fungibles::{Balanced, Credit},
 		Currency, OnUnbalanced,
 	},
 };
@@ -45,7 +45,7 @@ impl OnUnbalanced<NegativeImbalance> for Author {
 /// Will drop and burn the assets in case the transfer fails.
 pub struct CreditToBlockAuthor;
 impl HandleCredit<AccountId, Assets> for CreditToBlockAuthor {
-	fn handle_credit(credit: CreditOf<AccountId, Assets>) {
+	fn handle_credit(credit: Credit<AccountId, Assets>) {
 		if let Some(author) = pallet_authorship::Pallet::<Runtime>::author() {
 			// Drop the result which will trigger the `OnDrop` of the imbalance in case of error.
 			let _ = Assets::resolve(&author, credit);
