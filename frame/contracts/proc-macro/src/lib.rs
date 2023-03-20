@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Procedural macroses used in the contracts module.
+//! Procedural macros used in the contracts module.
 //!
 //! Most likely you should use the [`#[define_env]`][`macro@define_env`] attribute macro which hides
 //! boilerplate of defining external environment for a wasm module.
@@ -527,7 +527,7 @@ fn expand_docs(def: &EnvDef) -> TokenStream2 {
 	}
 }
 
-/// Expands environment definiton.
+/// Expands environment definition.
 /// Should generate source code for:
 ///  - implementations of the host functions to be added to the wasm runtime environment (see
 ///    `expand_impls()`).
@@ -778,7 +778,7 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 #[proc_macro_attribute]
 pub fn define_env(attr: TokenStream, item: TokenStream) -> TokenStream {
 	if !attr.is_empty() && !(attr.to_string() == "doc".to_string()) {
-		let msg = r#"Invalid `define_env` attribute macro: expected either no attributes or a single `doc` attibute:
+		let msg = r#"Invalid `define_env` attribute macro: expected either no attributes or a single `doc` attribute:
 					 - `#[define_env]`
 					 - `#[define_env(doc)]`"#;
 		let span = TokenStream2::from(attr).span();

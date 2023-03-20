@@ -18,7 +18,7 @@
 //! Storage value type. Implements StorageValue trait and its method directly.
 
 use crate::{
-	metadata::{StorageEntryMetadata, StorageEntryType},
+	metadata_ir::{StorageEntryMetadataIR, StorageEntryTypeIR},
 	storage::{
 		generator::StorageValue as StorageValueT,
 		types::{OptionQuery, QueryKindTrait, StorageEntryMetadataBuilder},
@@ -221,13 +221,13 @@ where
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
 {
-	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>) {
+	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadataIR>) {
 		let docs = if cfg!(feature = "no-metadata-docs") { vec![] } else { docs };
 
-		let entry = StorageEntryMetadata {
+		let entry = StorageEntryMetadataIR {
 			name: Prefix::STORAGE_PREFIX,
 			modifier: QueryKind::METADATA,
-			ty: StorageEntryType::Plain(scale_info::meta_type::<Value>()),
+			ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<Value>()),
 			default: OnEmpty::get().encode(),
 			docs,
 		};
@@ -278,7 +278,7 @@ where
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::{metadata::StorageEntryModifier, storage::types::ValueQuery};
+	use crate::{metadata_ir::StorageEntryModifierIR, storage::types::ValueQuery};
 	use sp_io::{hashing::twox_128, TestExternalities};
 
 	struct Prefix;
@@ -363,17 +363,17 @@ mod test {
 			assert_eq!(
 				entries,
 				vec![
-					StorageEntryMetadata {
+					StorageEntryMetadataIR {
 						name: "foo",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+						modifier: StorageEntryModifierIR::Optional,
+						ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 						default: Option::<u32>::None.encode(),
 						docs: vec![],
 					},
-					StorageEntryMetadata {
+					StorageEntryMetadataIR {
 						name: "foo",
-						modifier: StorageEntryModifier::Default,
-						ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+						modifier: StorageEntryModifierIR::Default,
+						ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 						default: 97u32.encode(),
 						docs: vec![],
 					}

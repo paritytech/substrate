@@ -119,7 +119,7 @@ use sp_consensus_babe::inherents::BabeInherentData;
 use sp_consensus_slots::Slot;
 use sp_core::{crypto::ByteArray, ExecutionContext};
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
-use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::{Keystore, KeystorePtr};
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
 	traits::{Block as BlockT, Header, NumberFor, SaturatedConversion, Zero},
@@ -404,7 +404,7 @@ where
 /// Parameters for BABE.
 pub struct BabeParams<B: BlockT, C, SC, E, I, SO, L, CIDP, BS> {
 	/// The keystore that manages the keys of the node.
-	pub keystore: SyncCryptoStorePtr,
+	pub keystore: KeystorePtr,
 
 	/// The client to use
 	pub client: Arc<C>,
@@ -711,7 +711,7 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO, L, BS> {
 	justification_sync_link: L,
 	force_authoring: bool,
 	backoff_authoring_blocks: Option<BS>,
-	keystore: SyncCryptoStorePtr,
+	keystore: KeystorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
 	config: BabeConfiguration,
@@ -834,7 +834,7 @@ where
 		// add it to a digest item.
 		let public_type_pair = public.clone().into();
 		let public = public.to_raw_vec();
-		let signature = SyncCryptoStore::sign_with(
+		let signature = Keystore::sign_with(
 			&*self.keystore,
 			<AuthorityId as AppKey>::ID,
 			&public_type_pair,

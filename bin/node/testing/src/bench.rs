@@ -308,7 +308,7 @@ impl<'a> Iterator for BlockContentIterator<'a> {
 							value: kitchensink_runtime::ExistentialDeposit::get() + 1,
 						}),
 					BlockType::RandomTransfersReaping => {
-						RuntimeCall::Balances(BalancesCall::transfer {
+						RuntimeCall::Balances(BalancesCall::transfer_allow_death {
 							dest: sp_runtime::MultiAddress::Id(receiver),
 							// Transfer so that ending balance would be 1 less than existential
 							// deposit so that we kill the sender account.

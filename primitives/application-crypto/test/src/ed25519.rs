@@ -20,7 +20,7 @@
 use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::ed25519::{AppPair, AppPublic};
 use sp_core::{crypto::Pair, testing::ED25519};
-use sp_keystore::{testing::KeyStore, SyncCryptoStore};
+use sp_keystore::{testing::MemoryKeystore, Keystore};
 use std::sync::Arc;
 use substrate_test_runtime_client::{
 	runtime::TestAPI, DefaultTestClientBuilderExt, TestClientBuilder, TestClientBuilderExt,
@@ -28,14 +28,14 @@ use substrate_test_runtime_client::{
 
 #[test]
 fn ed25519_works_in_runtime() {
-	let keystore = Arc::new(KeyStore::new());
+	let keystore = Arc::new(MemoryKeystore::new());
 	let test_client = TestClientBuilder::new().set_keystore(keystore.clone()).build();
 	let (signature, public) = test_client
 		.runtime_api()
 		.test_ed25519_crypto(test_client.chain_info().genesis_hash)
 		.expect("Tests `ed25519` crypto.");
 
-	let supported_keys = SyncCryptoStore::keys(&*keystore, ED25519).unwrap();
+	let supported_keys = Keystore::keys(&*keystore, ED25519).unwrap();
 	assert!(supported_keys.contains(&public.clone().into()));
 	assert!(AppPair::verify(&signature, "ed25519", &AppPublic::from(public)));
 }

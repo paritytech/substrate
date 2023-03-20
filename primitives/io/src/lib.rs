@@ -44,7 +44,7 @@ use sp_core::{
 	traits::TaskExecutorExt,
 };
 #[cfg(feature = "std")]
-use sp_keystore::{KeystoreExt, SyncCryptoStore};
+use sp_keystore::{Keystore, KeystoreExt};
 
 use sp_core::{
 	crypto::KeyTypeId,
@@ -735,7 +735,7 @@ pub trait Crypto {
 		let keystore = &***self
 			.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!");
-		SyncCryptoStore::ed25519_public_keys(keystore, id)
+		Keystore::ed25519_public_keys(keystore, id)
 	}
 
 	/// Generate an `ed22519` key for the given key type using an optional `seed` and
@@ -749,8 +749,7 @@ pub trait Crypto {
 		let keystore = &***self
 			.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!");
-		SyncCryptoStore::ed25519_generate_new(keystore, id, seed)
-			.expect("`ed25519_generate` failed")
+		Keystore::ed25519_generate_new(keystore, id, seed).expect("`ed25519_generate` failed")
 	}
 
 	/// Sign the given `msg` with the `ed25519` key that corresponds to the given public key and
@@ -766,7 +765,7 @@ pub trait Crypto {
 		let keystore = &***self
 			.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!");
-		SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
+		Keystore::sign_with(keystore, id, &pub_key.into(), msg)
 			.ok()
 			.flatten()
 			.and_then(|sig| ed25519::Signature::from_slice(&sig))
@@ -878,7 +877,7 @@ pub trait Crypto {
 		let keystore = &***self
 			.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!");
-		SyncCryptoStore::sr25519_public_keys(keystore, id)
+		Keystore::sr25519_public_keys(keystore, id)
 	}
 
 	/// Generate an `sr22519` key for the given key type using an optional seed and
@@ -892,8 +891,7 @@ pub trait Crypto {
 		let keystore = &***self
 			.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!");
-		SyncCryptoStore::sr25519_generate_new(keystore, id, seed)
-			.expect("`sr25519_generate` failed")
+		Keystore::sr25519_generate_new(keystore, id, seed).expect("`sr25519_generate` failed")
 	}
 
 	/// Sign the given `msg` with the `sr25519` key that corresponds to the given public key and
@@ -909,7 +907,7 @@ pub trait Crypto {
 		let keystore = &***self
 			.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!");
-		SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
+		Keystore::sign_with(keystore, id, &pub_key.into(), msg)
 			.ok()
 			.flatten()
 			.and_then(|sig| sr25519::Signature::from_slice(&sig))
@@ -928,7 +926,7 @@ pub trait Crypto {
 		let keystore = &***self
 			.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!");
-		SyncCryptoStore::ecdsa_public_keys(keystore, id)
+		Keystore::ecdsa_public_keys(keystore, id)
 	}
 
 	/// Generate an `ecdsa` key for the given key type using an optional `seed` and
@@ -942,7 +940,7 @@ pub trait Crypto {
 		let keystore = &***self
 			.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!");
-		SyncCryptoStore::ecdsa_generate_new(keystore, id, seed).expect("`ecdsa_generate` failed")
+		Keystore::ecdsa_generate_new(keystore, id, seed).expect("`ecdsa_generate` failed")
 	}
 
 	/// Sign the given `msg` with the `ecdsa` key that corresponds to the given public key and
@@ -958,7 +956,7 @@ pub trait Crypto {
 		let keystore = &***self
 			.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!");
-		SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
+		Keystore::sign_with(keystore, id, &pub_key.into(), msg)
 			.ok()
 			.flatten()
 			.and_then(|sig| ecdsa::Signature::from_slice(&sig))
@@ -977,7 +975,7 @@ pub trait Crypto {
 		let keystore = &***self
 			.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!");
-		SyncCryptoStore::ecdsa_sign_prehashed(keystore, id, pub_key, msg).ok().flatten()
+		Keystore::ecdsa_sign_prehashed(keystore, id, pub_key, msg).ok().flatten()
 	}
 
 	/// Verify `ecdsa` signature.

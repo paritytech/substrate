@@ -187,7 +187,6 @@ pub mod pallet {
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
@@ -1249,6 +1248,10 @@ mod tests {
 		type MaxReserves = ();
 		type ReserveIdentifier = [u8; 8];
 		type WeightInfo = ();
+		type FreezeIdentifier = ();
+		type MaxFreezes = ();
+		type HoldIdentifier = ();
+		type MaxHolds = ();
 	}
 
 	frame_support::parameter_types! {
@@ -2122,7 +2125,8 @@ mod tests {
 			assert_ok!(submit_candidacy(RuntimeOrigin::signed(4)));
 
 			// User has 100 free and 50 reserved.
-			assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 2, 100, 50));
+			assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), 2, 150));
+			assert_ok!(Balances::reserve(&2, 50));
 			// User tries to vote with 150 tokens.
 			assert_ok!(vote(RuntimeOrigin::signed(2), vec![4, 5], 150));
 			// We truncate to only their free balance, after reserving additional for voting.

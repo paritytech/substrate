@@ -20,9 +20,9 @@
 use codec::{Codec, Decode, Encode, EncodeLike, MaxEncodedLen};
 use frame_support::{
 	inherent::{InherentData, InherentIdentifier, MakeFatalError, ProvideInherent},
-	metadata::{
-		PalletStorageMetadata, StorageEntryMetadata, StorageEntryModifier, StorageEntryType,
-		StorageHasher,
+	metadata_ir::{
+		PalletStorageMetadataIR, StorageEntryMetadataIR, StorageEntryModifierIR,
+		StorageEntryTypeIR, StorageHasherIR,
 	},
 	traits::{ConstU32, Get},
 	Parameter, StorageDoubleMap, StorageMap, StorageValue,
@@ -410,33 +410,33 @@ fn storage_with_instance_basic_operation() {
 	});
 }
 
-fn expected_metadata() -> PalletStorageMetadata {
-	PalletStorageMetadata {
+fn expected_metadata() -> PalletStorageMetadataIR {
+	PalletStorageMetadataIR {
 		prefix: "Instance2Module2",
 		entries: vec![
-			StorageEntryMetadata {
+			StorageEntryMetadataIR {
 				name: "Value",
-				modifier: StorageEntryModifier::Default,
-				ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+				modifier: StorageEntryModifierIR::Default,
+				ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 				default: vec![0, 0, 0, 0],
 				docs: vec![],
 			},
-			StorageEntryMetadata {
+			StorageEntryMetadataIR {
 				name: "Map",
-				modifier: StorageEntryModifier::Default,
-				ty: StorageEntryType::Map {
-					hashers: vec![StorageHasher::Identity],
+				modifier: StorageEntryModifierIR::Default,
+				ty: StorageEntryTypeIR::Map {
+					hashers: vec![StorageHasherIR::Identity],
 					key: scale_info::meta_type::<u64>(),
 					value: scale_info::meta_type::<u64>(),
 				},
 				default: [0u8; 8].to_vec(),
 				docs: vec![],
 			},
-			StorageEntryMetadata {
+			StorageEntryMetadataIR {
 				name: "DoubleMap",
-				modifier: StorageEntryModifier::Default,
-				ty: StorageEntryType::Map {
-					hashers: vec![StorageHasher::Identity, StorageHasher::Identity],
+				modifier: StorageEntryModifierIR::Default,
+				ty: StorageEntryTypeIR::Map {
+					hashers: vec![StorageHasherIR::Identity, StorageHasherIR::Identity],
 					key: scale_info::meta_type::<(u64, u64)>(),
 					value: scale_info::meta_type::<u64>(),
 				},

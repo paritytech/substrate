@@ -23,8 +23,10 @@ use futures::{
 };
 use log::{debug, trace};
 use sc_client_api::BlockBackend;
-use sc_network::{config as netconfig, config::RequestResponseConfig, PeerId, ReputationChange};
-use sc_network_common::protocol::ProtocolName;
+use sc_network::{
+	config as netconfig, config::RequestResponseConfig, types::ProtocolName, PeerId,
+	ReputationChange,
+};
 use sp_consensus_beefy::BEEFY_ENGINE_ID;
 use sp_runtime::traits::Block;
 use std::{marker::PhantomData, sync::Arc};

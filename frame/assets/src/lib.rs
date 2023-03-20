@@ -178,10 +178,14 @@ const LOG_TARGET: &str = "runtime::assets";
 /// Trait with callbacks that are executed after successfull asset creation or destruction.
 pub trait AssetsCallback<AssetId, AccountId> {
 	/// Indicates that asset with `id` was successfully created by the `owner`
-	fn created(_id: &AssetId, _owner: &AccountId) {}
+	fn created(_id: &AssetId, _owner: &AccountId) -> Result<(), ()> {
+		Ok(())
+	}
 
 	/// Indicates that asset with `id` has just been destroyed
-	fn destroyed(_id: &AssetId) {}
+	fn destroyed(_id: &AssetId) -> Result<(), ()> {
+		Ok(())
+	}
 }
 
 /// Empty implementation in case no callbacks are required.
@@ -197,7 +201,6 @@ pub mod pallet {
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T, I = ()>(_);
 
@@ -537,9 +540,9 @@ pub mod pallet {
 		/// Minimum balance should be non-zero.
 		MinBalanceZero,
 		/// Unable to increment the consumer reference counters on the account. Either no provider
-		/// reference exists to allow a non-zero balance of a non-self-sufficient asset, or the
-		/// maximum number of consumers has been reached.
-		NoProvider,
+		/// reference exists to allow a non-zero balance of a non-self-sufficient asset, or one
+		/// fewer then the maximum number of consumers has been reached.
+		UnavailableConsumer,
 		/// Invalid metadata given.
 		BadMetadata,
 		/// No approval exists that would allow the transfer.
@@ -561,6 +564,8 @@ pub mod pallet {
 		IncorrectStatus,
 		/// The asset should be frozen before the given operation.
 		NotFrozen,
+		/// Callback action resulted in error
+		CallbackFailed,
 	}
 
 	#[pallet::call]
@@ -619,13 +624,12 @@ pub mod pallet {
 					status: AssetStatus::Live,
 				},
 			);
-
+			ensure!(T::CallbackHandle::created(&id, &owner).is_ok(), Error::<T, I>::CallbackFailed);
 			Self::deposit_event(Event::Created {
 				asset_id: id,
 				creator: owner.clone(),
 				owner: admin,
 			});
-			T::CallbackHandle::created(&id, &owner);
 
 			Ok(())
 		}
