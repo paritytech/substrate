@@ -151,6 +151,10 @@
 //! ## Assumptions
 //!
 //! * Total issued balanced of all accounts should be less than `Config::Balance::max_value()`.
+//! * Existential Deposit is set to a value greater than zero.
+//!
+//! Note, you may find the Balances pallet still functions with an ED of zero in some circumstances,
+//! however this is not a configuration which is generally supported, nor will it be.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 mod benchmarking;
@@ -231,7 +235,11 @@ pub mod pallet {
 		/// Handler for the unbalanced reduction when removing a dust account.
 		type DustRemoval: OnUnbalanced<CreditOf<Self, I>>;
 
-		/// The minimum amount required to keep an account open.
+		/// The minimum amount required to keep an account open. Should be greater than zero or
+		/// will open up a DoS vector. In case you have multiple sources of provider references,
+		/// you may also get unexpected behaviour if you set this to zero.
+		///
+		/// Do yourself a favour: make it at least one :)
 		#[pallet::constant]
 		type ExistentialDeposit: Get<Self::Balance>;
 
