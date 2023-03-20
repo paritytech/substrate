@@ -16,6 +16,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+//! Protocol Controller. Generic implementation of peer management for protocols.
+//! Responsible for accepting/rejecting incoming connections and initiating outgoing connections,
+//! respecting the inbound and outbound peer slot counts. Communicates with `Peerset` to get and
+//! update peer reputation values and sends commands to `Notifications`.
+
 // TODO: remove this line.
 #![allow(unused)]
 
@@ -247,34 +252,42 @@ impl ProtocolController {
 		true
 	}
 
+	/// Send "accept" message to `Notifications`.
 	fn accept_connection(&self, incoming_index: IncomingIndex) {
 		let _ = self.to_notifications.unbounded_send(Message::Accept(incoming_index));
 	}
 
+	/// Send "reject" message to `Notifications`.
 	fn reject_connection(&self, incoming_index: IncomingIndex) {
 		let _ = self.to_notifications.unbounded_send(Message::Reject(incoming_index));
 	}
 
+	/// Send "connect" message to `Notifications`.
 	fn start_connection(&self, peer_id: PeerId) {
 		let _ = self
 			.to_notifications
 			.unbounded_send(Message::Connect { set_id: self.set_id, peer_id });
 	}
 
+	/// Send "drop" message to `Notifications`.
 	fn drop_connection(&self, peer_id: PeerId) {
 		let _ = self
 			.to_notifications
 			.unbounded_send(Message::Drop { set_id: self.set_id, peer_id });
 	}
 
+	/// Report peer disconnect event to `Peerset` for it to update peer's reputation accordingly.
 	fn report_disconnect(&self, peer_id: PeerId) {
 		self.peerset_handle.report_disconnect(peer_id);
 	}
 
+	/// Ask `Peerset` if the peer has a reputation value not sufficent for connection with it.
 	fn is_banned(&self, peer_id: PeerId) -> bool {
 		self.peerset_handle.is_banned(peer_id)
 	}
 
+	/// Add a peer to the set of reserved peers. [`ProtocolCOntroller`] will try to always maintain
+	/// connections with such peers.
 	fn on_add_reserved_peer(&mut self, peer_id: PeerId) {
 		if self.reserved_nodes.contains_key(&peer_id) {
 			return
@@ -292,6 +305,7 @@ impl ProtocolController {
 		}
 	}
 
+	/// Remove a peer from the set of reserved peers. The peer is moved to the set of regular nodes.
 	fn on_remove_reserved_peer(&mut self, peer_id: PeerId) {
 		let mut state = match self.reserved_nodes.remove(&peer_id) {
 			Some(state) => state,
@@ -322,6 +336,7 @@ impl ProtocolController {
 		assert!(prev.is_none(), "Corrupted state: reserved node was also non-reserved.");
 	}
 
+	/// Replace the set of reserved peers.
 	fn on_set_reserved_peers(&mut self, peer_ids: HashSet<PeerId>) {
 		// Determine the difference between the current group and the new list.
 		let current = self.reserved_nodes.keys().cloned().collect();
@@ -337,6 +352,8 @@ impl ProtocolController {
 		}
 	}
 
+	/// Change "reserved only" flag. In "reserved only" mode we connect and accept connections to
+	/// reserved nodes only.
 	fn on_set_reserved_only(&mut self, reserved_only: bool) {
 		self.reserved_only = reserved_only;
 
@@ -358,6 +375,8 @@ impl ProtocolController {
 			.for_each(|peer_id| self.drop_connection(*peer_id));
 	}
 
+	/// Add a peer to the set of known peers. [`ProtocolController`] will try to connect to the
+	/// peer.
 	fn on_add_peer(&mut self, peer_id: PeerId) {
 		if self.reserved_nodes.contains_key(&peer_id) {
 			return
@@ -368,6 +387,7 @@ impl ProtocolController {
 		}
 	}
 
+	/// Remove a peer from the set of known peers. No-op if the peer is reserved.
 	fn on_remove_peer(&mut self, peer_id: PeerId) {
 		// Don't do anything if the node is reserved.
 		if self.reserved_nodes.contains_key(&peer_id) {
@@ -395,6 +415,15 @@ impl ProtocolController {
 		}
 	}
 
+	/// Indicate that we received an incoming connection. Must be answered either with
+	/// a corresponding `Accept` or `Reject`, except if we were already connected to this peer.
+	///
+	/// Note that this mechanism is orthogonal to `Connect`/`Drop`. Accepting an incoming
+	/// connection implicitly means `Connect`, but incoming connections aren't cancelled by
+	/// `dropped`.
+	// Implementation note: because of concurrency issues, it is possible that we push a `Connect`
+	// message to the output channel with a `PeerId`, and that `incoming` gets called with the same
+	// `PeerId` before that message has been read by the user. In this situation we must not answer.
 	fn on_incoming_connection(&mut self, peer_id: PeerId, incoming_index: IncomingIndex) {
 		if self.reserved_only && !self.reserved_nodes.contains_key(&peer_id) {
 			self.reject_connection(incoming_index);
@@ -445,7 +474,8 @@ impl ProtocolController {
 		}
 	}
 
-	/// Returns `Err(PeerId)` if the peer wasn't connected or not found.
+	/// Indicate that a connection with the peer was dropped.
+	/// Returns `Err(PeerId)` if the peer wasn't connected or is not known to us.
 	fn on_peer_dropped(&mut self, peer_id: PeerId, reason: DropReason) -> Result<(), PeerId> {
 		if self.drop_reserved_peer(&peer_id)? || self.drop_regular_peer(&peer_id, reason)? {
 			// The peer found and disconnected.
@@ -457,9 +487,9 @@ impl ProtocolController {
 		}
 	}
 
-	/// Try dropping as a reserved peer. Return `Ok(true)` if the peer was found and disconnected,
-	/// `Ok(false)` if it wasn't found, `Err(PeerId)`, if the peer found, but not in connected
-	/// state.
+	/// Try dropping a peer as a reserved peer. Return `Ok(true)` if the peer was found and
+	/// disconnected, `Ok(false)` if it wasn't found, `Err(PeerId)`, if the peer found, but not in
+	/// connected state.
 	fn drop_reserved_peer(&mut self, peer_id: &PeerId) -> Result<bool, PeerId> {
 		let Some(state) = self.reserved_nodes.get_mut(peer_id) else {
 			return Ok(false)
@@ -473,9 +503,9 @@ impl ProtocolController {
 		}
 	}
 
-	/// Try dropping as a regular peer. Return `Ok(true)` if the peer was found and disconnected,
-	/// `Ok(false)` if it wasn't found, `Err(PeerId)`, if the peer found, but not in connected
-	/// state.
+	/// Try dropping a peer as a regular peer. Return `Ok(true)` if the peer was found and
+	/// disconnected, `Ok(false)` if it wasn't found, `Err(PeerId)`, if the peer found, but not in
+	/// connected state.
 	fn drop_regular_peer(&mut self, peer_id: &PeerId, reason: DropReason) -> Result<bool, PeerId> {
 		let Some(state) = self.nodes.get_mut(peer_id) else {
 			return Ok(false)
@@ -497,6 +527,8 @@ impl ProtocolController {
 		}
 	}
 
+	/// Initiate outgoing connections trying to connect all reserved nodes and fill in all outgoing
+	/// slots.
 	fn alloc_slots(&mut self) {
 		if self.num_out >= self.max_out {
 			return
