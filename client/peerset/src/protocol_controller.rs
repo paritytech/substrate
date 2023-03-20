@@ -174,11 +174,8 @@ impl ProtocolController {
 	) -> (ProtocolHandle, ProtocolController) {
 		let (to_controller, from_handle) = tracing_unbounded("mpsc_protocol_controller", 10_000);
 		let handle = ProtocolHandle { to_controller };
-		let reserved_nodes = config
-			.reserved_nodes
-			.iter()
-			.map(|p| (*p, PeerState::NotConnected))
-			.collect::<HashMap<PeerId, PeerState>>();
+		let reserved_nodes =
+			config.reserved_nodes.iter().map(|p| (*p, PeerState::NotConnected)).collect();
 		// Initialize with bootnodes, but make sure we don't count peers twice.
 		let nodes = config
 			.bootnodes
@@ -186,7 +183,7 @@ impl ProtocolController {
 			.collect::<HashSet<_>>()
 			.difference(&config.reserved_nodes)
 			.map(|p| (*p, PeerState::NotConnected))
-			.collect::<HashMap<PeerId, PeerState>>();
+			.collect();
 		let controller = ProtocolController {
 			set_id,
 			from_handle,
@@ -301,24 +298,24 @@ impl ProtocolController {
 			None => return,
 		};
 
-        if let PeerState::Connected(d) = state {
-            if self.reserved_only {
-                // Disconnect the node.
-                info!(
-                    target: "peerset",
-                    "Disconnecting previously reserved node {} on {:?}.",
-                    peer_id, self.set_id
-                );
-                state = PeerState::NotConnected;
-                self.drop_connection(peer_id);
-            } else {
-                // Count connections as of regular node.
-                match d {
-                    Direction::Inbound => self.num_in += 1,
-                    Direction::Outbound => self.num_out += 1,
-                }
-            }
-        }
+		if let PeerState::Connected(d) = state {
+			if self.reserved_only {
+				// Disconnect the node.
+				info!(
+					target: "peerset",
+					"Disconnecting previously reserved node {} on {:?}.",
+					peer_id, self.set_id
+				);
+				state = PeerState::NotConnected;
+				self.drop_connection(peer_id);
+			} else {
+				// Count connections as of regular node.
+				match d {
+					Direction::Inbound => self.num_in += 1,
+					Direction::Outbound => self.num_out += 1,
+				}
+			}
+		}
 
 		// Put the node into the list of regular nodes.
 		let prev = self.nodes.insert(peer_id, state);
@@ -500,7 +497,7 @@ impl ProtocolController {
 			.cloned()
 			.collect::<Vec<_>>()
 			.into_iter()
-			.map(|peer_id| {
+			.for_each(|peer_id| {
 				self.start_connection(peer_id);
 			});
 
@@ -551,6 +548,6 @@ impl ProtocolController {
 			.cloned()
 			.collect::<Vec<_>>()
 			.iter()
-			.map(|peer_id| self.start_connection(*peer_id));
+			.for_each(|peer_id| self.start_connection(*peer_id));
 	}
 }
