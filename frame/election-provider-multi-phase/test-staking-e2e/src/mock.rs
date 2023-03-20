@@ -174,9 +174,9 @@ frame_election_provider_support::generate_solution_type!(
 parameter_types! {
 	pub static SignedPhase: BlockNumber = 10;
 	pub static UnsignedPhase: BlockNumber = 10;
-	// we expect a minimum of 3 blocks in signed phase and unsigned phases before trying
-	// enetering in emergency phase after the election failed.
-	pub static MinBlocksBeforeEmergency: BlockNumber = 3;
+	// if the election fails, we expect a minimum of 20 election blocks (signed and unsigned
+	// blocks) before entering in emergency.
+	pub static MinBlocksBeforeEmergency: BlockNumber = 20;
 	pub static MaxElectingVoters: VoterIndex = 1000;
 	pub static MaxElectableTargets: TargetIndex = 1000;
 	pub static MaxActiveValidators: u32 = 1000;

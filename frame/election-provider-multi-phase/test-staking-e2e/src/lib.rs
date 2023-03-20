@@ -164,7 +164,7 @@ fn forcing_before_elect_with_emergency_throttling() {
 		roll_to_epm_off();
 		assert!(ElectionProviderMultiPhase::current_phase().is_off());
 
-		assert_eq!(<MinBlocksBeforeEmergency>::get(), 3);
+		assert_eq!(<MinBlocksBeforeEmergency>::get(), 20);
 
 		assert_eq!(pallet_staking::ForceEra::<Runtime>::get(), pallet_staking::Forcing::NotForcing);
 		// slashes so that staking goes into `Forcing::ForceNew`.
@@ -176,7 +176,7 @@ fn forcing_before_elect_with_emergency_throttling() {
 
 		// since `EPM::MinBlocksBeforeEmergency` blocks haven't passed in the signed phase, the
 		// emergency phase is throttled..
-		assert_eq!(ElectionProviderMultiPhase::current_phase(), Phase::Off);
+		assert_eq!(ElectionProviderMultiPhase::current_phase(), Phase::Unsigned((true, 20)));
 		// .. session validator set remains the same..
 		assert_eq!(Session::validators(), session_validators_before);
 		// .. and the era progressed.
