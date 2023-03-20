@@ -269,7 +269,7 @@ where
 
 		Ok(TraceBlockResponse::BlockTrace(BlockTrace {
 			block_hash: block_id_as_string(BlockId::<Block>::Hash(self.block)),
-			parent_hash: block_id_as_string(parent_id),
+			parent_hash: block_id_as_string(BlockId::<Block>::Hash(parent_hash)),
 			tracing_targets: targets.to_string(),
 			storage_keys: self.storage_keys.clone().unwrap_or_default(),
 			methods: self.methods.clone().unwrap_or_default(),
