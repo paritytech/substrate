@@ -1069,7 +1069,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		assert!(
 			total_issuance < max_balance_value,
-			"Total issuance must be less than max balance value."
+			"Total issuance should be less than max balance value."
 		);
 
 		Ok(())
