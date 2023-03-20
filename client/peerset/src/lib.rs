@@ -32,6 +32,7 @@
 //! In addition, for each, set, the peerset also holds a list of reserved nodes towards which it
 //! will at all time try to maintain a connection with.
 
+mod peer_store;
 mod peersstate;
 mod protocol_controller;
 

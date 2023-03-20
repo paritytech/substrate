@@ -35,7 +35,10 @@ use std::{
 };
 use wasm_timer::Delay;
 
-use crate::{DropReason, IncomingIndex, Message, PeersetHandle, SetConfig, SetId};
+use crate::{
+	peer_store::PeerStore as PeerStoreT, DropReason, IncomingIndex, Message, PeersetHandle,
+	SetConfig, SetId,
+};
 
 #[derive(Debug)]
 enum Action {
@@ -135,7 +138,7 @@ impl Default for PeerState {
 /// Side of [`ProtocolHandle`] responsible for all the logic. Currently all instances are
 /// owned by [`crate::Peerset`], but they should eventually be moved to corresponding protocols.
 #[derive(Debug)]
-pub struct ProtocolController {
+pub struct ProtocolController<PeerStore> {
 	/// Set id to use when sending connect/drop requests to `Notifications`.
 	// Will likely be replaced by `ProtocolName` in the future.
 	set_id: SetId,
@@ -161,17 +164,17 @@ pub struct ProtocolController {
 	to_notifications: TracingUnboundedSender<Message>,
 	/// Peerset handle for checking peer reputation values and getting connection candidates
 	/// with highest reputation.
-	peerset_handle: PeersetHandle,
+	peer_store: PeerStore,
 }
 
-impl ProtocolController {
+impl<PeerStore: PeerStoreT> ProtocolController<PeerStore> {
 	/// Construct new [`ProtocolController`].
 	pub fn new(
 		set_id: SetId,
 		config: SetConfig,
 		to_notifications: TracingUnboundedSender<Message>,
-		peerset_handle: PeersetHandle,
-	) -> (ProtocolHandle, ProtocolController) {
+		peer_store: PeerStore,
+	) -> (ProtocolHandle, ProtocolController<PeerStore>) {
 		let (to_controller, from_handle) = tracing_unbounded("mpsc_protocol_controller", 10_000);
 		let handle = ProtocolHandle { to_controller };
 		let reserved_nodes =
@@ -188,7 +191,7 @@ impl ProtocolController {
 			reserved_only: config.reserved_only,
 			next_periodic_alloc_slots: Instant::now(),
 			to_notifications,
-			peerset_handle,
+			peer_store,
 		};
 		(handle, controller)
 	}
@@ -264,16 +267,16 @@ impl ProtocolController {
 
 	/// Report peer disconnect event to `Peerset` for it to update peer's reputation accordingly.
 	fn report_disconnect(&self, peer_id: PeerId, reason: DropReason) {
-		self.peerset_handle.report_disconnect(peer_id, reason);
+		self.peer_store.report_disconnect(peer_id, reason);
 	}
 
 	/// Ask `Peerset` if the peer has a reputation value not sufficent for connection with it.
 	fn is_banned(&self, peer_id: PeerId) -> bool {
-		self.peerset_handle.is_banned(peer_id)
+		self.peer_store.is_banned(peer_id)
 	}
 
-	/// Add the peer to the set of reserved peers. [`ProtocolCOntroller`] will try to always maintain
-	/// connections with such peers.
+	/// Add the peer to the set of reserved peers. [`ProtocolCOntroller`] will try to always
+	/// maintain connections with such peers.
 	fn on_add_reserved_peer(&mut self, peer_id: PeerId) {
 		if self.reserved_nodes.contains_key(&peer_id) {
 			return
@@ -295,7 +298,8 @@ impl ProtocolController {
 		}
 	}
 
-	/// Remove the peer from the set of reserved peers. The peer is moved to the set of regular nodes.
+	/// Remove the peer from the set of reserved peers. The peer is moved to the set of regular
+	/// nodes.
 	fn on_remove_reserved_peer(&mut self, peer_id: PeerId) {
 		let mut state = match self.reserved_nodes.remove(&peer_id) {
 			Some(state) => state,
@@ -401,7 +405,7 @@ impl ProtocolController {
 				PeerState::NotConnected => {
 					// It's questionable whether we should check a reputation of reserved node.
 					// FIXME: unable to call `self.is_banned()` because of borrowed `self`.
-					if self.peerset_handle.is_banned(peer_id) {
+					if self.peer_store.is_banned(peer_id) {
 						self.reject_connection(incoming_index);
 					} else {
 						*state = PeerState::Connected(Direction::Inbound);
@@ -479,20 +483,15 @@ impl ProtocolController {
 	/// Initiate outgoing connections trying to connect all reserved nodes and fill in all outgoing
 	/// slots.
 	fn alloc_slots(&mut self) {
-		if self.num_out >= self.max_out {
-			return
-		}
-
 		// Try connecting to reserved nodes first.
 		self.reserved_nodes
 			.iter_mut()
 			.filter_map(|(peer_id, state)| {
-				(matches!(state, PeerState::NotConnected) &&
-					!self.peerset_handle.is_banned(*peer_id))
-				.then_some({
-					*state = PeerState::Connected(Direction::Outbound);
-					peer_id
-				})
+				(matches!(state, PeerState::NotConnected) && !self.peer_store.is_banned(*peer_id))
+					.then_some({
+						*state = PeerState::Connected(Direction::Outbound);
+						peer_id
+					})
 			})
 			.cloned()
 			.collect::<Vec<_>>()
@@ -501,8 +500,8 @@ impl ProtocolController {
 				self.start_connection(peer_id);
 			});
 
-		// Nothing more to do if we're in reserved-only mode.
-		if self.reserved_only {
+		// Nothing more to do if we're in reserved-only mode or don't have slots.
+		if self.reserved_only || self.num_out >= self.max_out {
 			return
 		}
 
@@ -518,8 +517,9 @@ impl ProtocolController {
 			.cloned()
 			.collect::<HashSet<PeerId>>();
 
-		self.peerset_handle
+		self.peer_store
 			.outgoing_candidates(available_slots, ignored)
+			.iter()
 			.filter_map(|peer_id| match self.nodes.entry(*peer_id) {
 				Entry::Occupied(_) => {
 					debug_assert!(false, "`Peerset` returned a node we asked to ignore.");
@@ -541,4 +541,62 @@ impl ProtocolController {
 			.iter()
 			.for_each(|peer_id| self.start_connection(*peer_id));
 	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::ProtocolController;
+	use crate::{peer_store::PeerStore, DropReason, Message, SetConfig, SetId};
+	use futures::FutureExt;
+	use libp2p::PeerId;
+	use sc_utils::mpsc::tracing_unbounded;
+	use std::collections::HashSet;
+
+	mockall::mock! {
+		pub PeerStore {}
+
+		impl PeerStore for PeerStore {
+			fn is_banned(&self, peer_id: PeerId) -> bool;
+			fn report_disconnect(&self, peer_id: PeerId, reason: DropReason);
+			fn outgoing_candidates(&self, count: usize, ignored: HashSet<PeerId>) -> Vec<PeerId>;
+		}
+	}
+
+	#[tokio::test]
+	async fn reserved_nodes_are_connected() {
+		let reserved1 = PeerId::random();
+		let reserved2 = PeerId::random();
+
+		// Add first reserved node via config.
+		let config = SetConfig {
+			in_peers: 0,
+			out_peers: 0,
+			bootnodes: Vec::new(),
+			reserved_nodes: std::iter::once(reserved1).collect(),
+			reserved_only: true,
+		};
+		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
+
+		let mut peer_store = MockPeerStore::new();
+		peer_store.expect_is_banned().times(2).return_const(false);
+
+		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
+
+		// Add second reserved node at runtime.
+		controller.on_add_reserved_peer(reserved2);
+
+		// Poll once
+		controller.next_action().now_or_never();
+
+		let mut messages = Vec::new();
+		while let Some(message) = rx.try_recv().ok() {
+			messages.push(message);
+		}
+
+		assert_eq!(messages.len(), 2);
+		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved1 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved2 }));
+	}
+
+	// TODO
 }
