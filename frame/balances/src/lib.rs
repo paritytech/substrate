@@ -1067,7 +1067,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let total_issuance: T::Balance = TotalIssuance::<T, I>::get();
 		let max_balance_value: T::Balance = T::Balance::max_value();
 
-		assert!(total_issuance < max_balance_value, "Total issuance exceeds max balance value.");
+		assert!(
+			total_issuance < max_balance_value,
+			"Total issuance must be less than max balance value."
+		);
 
 		Ok(())
 	}
