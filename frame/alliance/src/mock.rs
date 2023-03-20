@@ -358,6 +358,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		assert_ok!(Alliance::init_members(RuntimeOrigin::root(), vec![1, 2, 3], vec![]));
 
 		System::set_block_number(1);
+		Alliance::do_try_state().unwrap();
 	});
 	ext
 }

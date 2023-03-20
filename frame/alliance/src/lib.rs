@@ -226,6 +226,14 @@ pub mod pallet {
 	#[pallet::storage_version(migration::STORAGE_VERSION)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
+	#[pallet::hooks]
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), &'static str> {
+			Self::do_try_state()
+		}
+	}
+
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The overarching event type.
@@ -1167,5 +1175,26 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			length_bound,
 		)?;
 		Ok(info.into())
+	}
+
+	/// Check invariants are consistent within the pallet.
+	/// - `Members(Fellows)` should keep to `MaxFellows` limit.
+	/// - `Members(Allies)` should keep to `MaxAllies` limit.
+	#[cfg(any(test, feature = "try-runtime", feature = "fuzz"))]
+	pub fn do_try_state() -> Result<(), &'static str> {
+		let fellows = Members::<T, I>::take(MemberRole::Fellow);
+		let allies = Members::<T, I>::take(MemberRole::Ally);
+
+		assert!(
+			fellows.len() as u32 <= T::MaxFellows::get(),
+			"Number of fellows should not exceed maximum fellow limit."
+		);
+
+		assert!(
+			allies.len() as u32 <= T::MaxAllies::get(),
+			"Number of allies should not exceed maximum ally limit."
+		);
+
+		Ok(())
 	}
 }
