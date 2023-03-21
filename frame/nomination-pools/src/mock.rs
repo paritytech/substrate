@@ -196,6 +196,10 @@ impl pallet_balances::Config for Runtime {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 	type WeightInfo = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type HoldIdentifier = ();
+	type MaxHolds = ();
 }
 
 pub struct BalanceToU256;

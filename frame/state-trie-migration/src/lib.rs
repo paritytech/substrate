@@ -1128,6 +1128,10 @@ mod mock {
 		type MaxReserves = ();
 		type ReserveIdentifier = [u8; 8];
 		type WeightInfo = ();
+		type FreezeIdentifier = ();
+		type MaxFreezes = ();
+		type HoldIdentifier = ();
+		type MaxHolds = ();
 	}
 
 	/// Test only Weights for state migration.

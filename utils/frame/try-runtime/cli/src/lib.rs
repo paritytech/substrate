@@ -383,7 +383,7 @@ use sp_core::{
 };
 use sp_externalities::Extensions;
 use sp_inherents::InherentData;
-use sp_keystore::{testing::KeyStore, KeystoreExt};
+use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
 use sp_runtime::{
 	traits::{BlakeTwo256, Block as BlockT, NumberFor},
 	DeserializeOwned, Digest,
@@ -599,8 +599,6 @@ pub struct LiveState {
 #[derive(Debug, Clone, clap::Subcommand)]
 pub enum State {
 	/// Use a state snapshot as the source of runtime state.
-	///
-	/// This can be crated by passing a value to [`State::Live::snapshot_path`].
 	Snap {
 		#[arg(short, long)]
 		snapshot_path: PathBuf,
@@ -818,9 +816,10 @@ pub(crate) fn full_extensions() -> Extensions {
 	extensions.register(TaskExecutorExt::new(TaskExecutor::new()));
 	let (offchain, _offchain_state) = TestOffchainExt::new();
 	let (pool, _pool_state) = TestTransactionPoolExt::new();
+	let keystore = MemoryKeystore::new();
 	extensions.register(OffchainDbExt::new(offchain.clone()));
 	extensions.register(OffchainWorkerExt::new(offchain));
-	extensions.register(KeystoreExt(std::sync::Arc::new(KeyStore::new())));
+	extensions.register(KeystoreExt::new(keystore));
 	extensions.register(TransactionPoolExt::new(pool));
 
 	extensions

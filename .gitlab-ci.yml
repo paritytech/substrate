@@ -48,7 +48,7 @@ variables:
   CARGO_INCREMENTAL: 0
   DOCKER_OS: "debian:stretch"
   ARCH: "x86_64"
-  CI_IMAGE: "paritytech/ci-linux:production"
+  CI_IMAGE: "paritytech/ci-linux@sha256:7c76c3f9639f919447abbf9db535588178fde4df583d6926444d44cc20c094e6" # staging 2023-03-20
   BUILDAH_IMAGE: "quay.io/buildah/stable:v1.27"
   RUSTY_CACHIER_SINGLE_BRANCH: master
   RUSTY_CACHIER_DONT_OPERATE_ON_MAIN_BRANCH: "true"
@@ -113,6 +113,7 @@ variables:
 .kubernetes-env:
   image: "${CI_IMAGE}"
   before_script:
+    - !reference [.timestamp, before_script]
     - !reference [.job-switcher, before_script]
     - !reference [.prepare-env, before_script]
   tags:
@@ -141,6 +142,7 @@ variables:
 .docker-env:
   image: "${CI_IMAGE}"
   before_script:
+    - !reference [.timestamp, before_script]
     - !reference [.job-switcher, before_script]
     - !reference [.prepare-env, before_script]
     - !reference [.rust-info-script, script]
@@ -310,6 +312,9 @@ include:
   - local: scripts/ci/gitlab/default-pipeline.yml
     rules:
       - if: $PIPELINE != "automatic-crate-publishing"
+  - project: parity/infrastructure/ci_cd/shared
+    ref: v0.1
+    file: /common/timestamp.yml
 
 #### stage:                        notify
 

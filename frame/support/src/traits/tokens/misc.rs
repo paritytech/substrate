@@ -23,12 +23,65 @@ use sp_core::RuntimeDebug;
 use sp_runtime::{traits::Convert, ArithmeticError, DispatchError, TokenError};
 use sp_std::fmt::Debug;
 
+/// The origin of funds to be used for a deposit operation.
+#[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
+pub enum Provenance {
+	/// The funds will be minted into the system, increasing total issuance (and potentially
+	/// causing an overflow there).
+	Minted,
+	/// The funds already exist in the system, therefore will not affect total issuance.
+	Extant,
+}
+
+/// The mode under which usage of funds may be restricted.
+#[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
+pub enum Restriction {
+	/// Funds are under the normal conditions.
+	Free,
+	/// Funds are on hold.
+	OnHold,
+}
+
+/// The mode by which we describe whether an operation should keep an account alive.
+#[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
+pub enum Preservation {
+	/// We don't care if the account gets killed by this operation.
+	Expendable,
+	/// The account may not be killed, but we don't care if the balance gets dusted.
+	Protect,
+	/// The account may not be killed and our provider reference must remain (in the context of
+	/// tokens, this means that the account may not be dusted).
+	Preserve,
+}
+
+/// The privilege with which a withdraw operation is conducted.
+#[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
+pub enum Fortitude {
+	/// The operation should execute with regular privilege.
+	Polite,
+	/// The operation should be forced to succeed if possible. This is usually employed for system-
+	/// level security-critical events such as slashing.
+	Force,
+}
+
+/// The precision required of an operation generally involving some aspect of quantitative fund
+/// withdrawal or transfer.
+#[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
+pub enum Precision {
+	/// The operation should must either proceed either exactly according to the amounts involved
+	/// or not at all.
+	Exact,
+	/// The operation may be considered successful even if less than the specified amounts are
+	/// available to be used. In this case a best effort will be made.
+	BestEffort,
+}
+
 /// One of a number of consequences of withdrawing a fungible from an account.
 #[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
 pub enum WithdrawConsequence<Balance> {
 	/// Withdraw could not happen since the amount to be withdrawn is less than the total funds in
 	/// the account.
-	NoFunds,
+	BalanceLow,
 	/// The withdraw would mean the account dying when it needs to exist (usually because it is a
 	/// provider and there are consumer references on it).
 	WouldDie,
@@ -53,15 +106,16 @@ pub enum WithdrawConsequence<Balance> {
 impl<Balance: Zero> WithdrawConsequence<Balance> {
 	/// Convert the type into a `Result` with `DispatchError` as the error or the additional
 	/// `Balance` by which the account will be reduced.
-	pub fn into_result(self) -> Result<Balance, DispatchError> {
+	pub fn into_result(self, keep_nonzero: bool) -> Result<Balance, DispatchError> {
 		use WithdrawConsequence::*;
 		match self {
-			NoFunds => Err(TokenError::NoFunds.into()),
-			WouldDie => Err(TokenError::WouldDie.into()),
+			BalanceLow => Err(TokenError::FundsUnavailable.into()),
+			WouldDie => Err(TokenError::OnlyProvider.into()),
 			UnknownAsset => Err(TokenError::UnknownAsset.into()),
 			Underflow => Err(ArithmeticError::Underflow.into()),
 			Overflow => Err(ArithmeticError::Overflow.into()),
 			Frozen => Err(TokenError::Frozen.into()),
+			ReducedToZero(_) if keep_nonzero => Err(TokenError::NotExpendable.into()),
 			ReducedToZero(result) => Ok(result),
 			Success => Ok(Zero::zero()),
 		}

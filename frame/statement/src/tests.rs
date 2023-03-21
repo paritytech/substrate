@@ -32,19 +32,19 @@ fn sign_and_validate_no_balance() {
 		let pair = sp_core::sr25519::Pair::from_string("//Bob", None).unwrap();
 		let mut statement = Statement::new();
 		statement.sign_sr25519_private(&pair);
-		let result = Pallet::<Test>::validate_statement(StatementSource::Local, statement);
+		let result = Pallet::<Test>::validate_statement(StatementSource::Chain, statement);
 		assert_eq!(Ok(ValidStatement { priority: 0 }), result);
 
 		let pair = sp_core::ed25519::Pair::from_string("//Bob", None).unwrap();
 		let mut statement = Statement::new();
 		statement.sign_ed25519_private(&pair);
-		let result = Pallet::<Test>::validate_statement(StatementSource::Local, statement);
+		let result = Pallet::<Test>::validate_statement(StatementSource::Chain, statement);
 		assert_eq!(Ok(ValidStatement { priority: 0 }), result);
 
 		let pair = sp_core::ecdsa::Pair::from_string("//Bob", None).unwrap();
 		let mut statement = Statement::new();
 		statement.sign_ecdsa_private(&pair);
-		let result = Pallet::<Test>::validate_statement(StatementSource::Local, statement);
+		let result = Pallet::<Test>::validate_statement(StatementSource::Chain, statement);
 		assert_eq!(Ok(ValidStatement { priority: 0 }), result);
 	});
 }
@@ -55,7 +55,7 @@ fn validate_with_balance() {
 		let pair = sp_core::sr25519::Pair::from_string("//Alice", None).unwrap();
 		let mut statement = Statement::new();
 		statement.sign_sr25519_private(&pair);
-		let result = Pallet::<Test>::validate_statement(StatementSource::Local, statement);
+		let result = Pallet::<Test>::validate_statement(StatementSource::Chain, statement);
 		assert_eq!(Ok(ValidStatement { priority: 20 }), result);
 	});
 }
@@ -64,7 +64,7 @@ fn validate_with_balance() {
 fn validate_no_proof_fails() {
 	new_test_ext().execute_with(|| {
 		let statement = Statement::new();
-		let result = Pallet::<Test>::validate_statement(StatementSource::Local, statement);
+		let result = Pallet::<Test>::validate_statement(StatementSource::Chain, statement);
 		assert_eq!(Err(InvalidStatement::NoProof), result);
 	});
 }
@@ -73,7 +73,7 @@ fn validate_no_proof_fails() {
 fn validate_bad_signature_fails() {
 	new_test_ext().execute_with(|| {
 		let statement = Statement::new_with_proof(Proof::Sr25519 { signature: [0u8; 64], signer: Default::default() });
-		let result = Pallet::<Test>::validate_statement(StatementSource::Local, statement);
+		let result = Pallet::<Test>::validate_statement(StatementSource::Chain, statement);
 		assert_eq!(Err(InvalidStatement::BadProof), result);
 	});
 }
@@ -89,17 +89,17 @@ fn validate_event() {
 		let account: AccountId32 = pair.public().into();
 		Pallet::<Test>::submit_statement(account.clone(), statement.clone());
 		statement.set_proof(Proof::OnChain { who: account.clone().into(), event_index: 0, block_hash: parent_hash.into() });
-		let result = Pallet::<Test>::validate_statement(StatementSource::Local, statement.clone());
+		let result = Pallet::<Test>::validate_statement(StatementSource::Chain, statement.clone());
 		assert_eq!(Ok(ValidStatement { priority: 20 }), result);
 
 		// Use wrong event index
 		statement.set_proof(Proof::OnChain { who: account.clone().into(), event_index: 1, block_hash: parent_hash.into() });
-		let result = Pallet::<Test>::validate_statement(StatementSource::Local, statement.clone());
+		let result = Pallet::<Test>::validate_statement(StatementSource::Chain, statement.clone());
 		assert_eq!(Err(InvalidStatement::BadProof), result);
 
 		// Use wrong block hash
 		statement.set_proof(Proof::OnChain { who: account.clone().into(), event_index: 0, block_hash: sp_core::H256::random().into() });
-		let result = Pallet::<Test>::validate_statement(StatementSource::Local, statement.clone());
+		let result = Pallet::<Test>::validate_statement(StatementSource::Chain, statement.clone());
 		assert_eq!(Err(InvalidStatement::BadProof), result);
 	});
 }
@@ -114,7 +114,7 @@ fn validate_no_event_fails() {
 		let pair = sp_core::sr25519::Pair::from_string("//Alice", None).unwrap();
 		let account: AccountId32 = pair.public().into();
 		statement.set_proof(Proof::OnChain { who: account.into(), event_index: 0, block_hash: parent_hash.into() });
-		let result = Pallet::<Test>::validate_statement(StatementSource::Local, statement);
+		let result = Pallet::<Test>::validate_statement(StatementSource::Chain, statement);
 		assert_eq!(Err(InvalidStatement::BadProof), result);
 	});
 }
