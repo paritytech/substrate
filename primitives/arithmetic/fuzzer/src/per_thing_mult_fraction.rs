@@ -54,7 +54,7 @@ where
 	assert!(q * d <= n, "{:?} * {:?} <= {:?}", q, d, n);
 }
 
-/// Checks that `n / (n / d) >= d`. FAIL-CI is this intended?
+/// Checks that `n / (n / d) >= d`.
 fn check_reciprocal_mul<P: PerThing>(n: u128, d: u128)
 where
 	P: PerThing + core::ops::Mul<u128, Output = u128>,
@@ -64,6 +64,6 @@ where
 		return
 	}
 
-	let r = q.saturating_reciprocal_mul(n);
+	let r = q.saturating_reciprocal_mul_floor(n);
 	assert!(r >= d, "{} / ({} / {}) != {} but {}", n, n, d, d, r);
 }

@@ -38,10 +38,10 @@ fn main() {
 	loop {
 		fuzz!(|data: (u128, u128, ArbitraryRounding)| {
 			let (n, d, r) = (data.0.min(data.1), data.0.max(data.1).max(1), data.2);
-			//let r = rounding_mode(data.2);
 
 			check::<PerU16>(n, d, r.0);
 			check::<Percent>(n, d, r.0);
+			check::<Permill>(n, d, r.0);
 			check::<Perbill>(n, d, r.0);
 			check::<Perquintill>(n, d, r.0);
 		})
