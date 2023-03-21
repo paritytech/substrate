@@ -613,6 +613,8 @@ pub struct CallApiAtParams<'a, Block: BlockT, Backend: StateBackend<HashFor<Bloc
 	pub call_context: CallContext,
 	/// The optional proof recorder for recording storage accesses.
 	pub recorder: &'a Option<ProofRecorder<Block>>,
+	/// The extensions that should be used for this call.
+	pub extensions: &'a RefCell<Extensions>,
 }
 
 /// Something that can call into the an api at a given block.

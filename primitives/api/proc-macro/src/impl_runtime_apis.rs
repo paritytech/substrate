@@ -459,6 +459,7 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 						storage_transaction_cache: &self.storage_transaction_cache,
 						call_context: self.call_context,
 						recorder: &self.recorder,
+						extensions: &self.extensions,
 					};
 
 					#crate_::CallApiAt::<__SR_API_BLOCK__>::call_api_at(
