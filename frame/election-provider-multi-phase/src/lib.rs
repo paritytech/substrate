@@ -828,7 +828,7 @@ pub mod pallet {
 
 			// increment the number of election blocks for this round if not in `Phase::Off` block.
 			if current_phase.is_signed() || current_phase.is_unsigned() {
-				ElectionBlocksCount::<T>::mutate(|c| *c = c.saturating_add(1u32.into()));
+				ElectionBlocksCount::<T>::mutate(|c| c.saturating_inc());
 			}
 			weight
 		}
