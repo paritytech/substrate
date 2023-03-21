@@ -29,25 +29,79 @@
 //! More information about `honggfuzz` can be found
 //! [here](https://docs.rs/honggfuzz/).
 
+use fraction::{prelude::BigFraction as Fraction, ToPrimitive};
 use honggfuzz::fuzz;
-use primitive_types::U256;
-use sp_arithmetic::{
-	helpers_128bit::multiply_by_rational_with_rounding, traits::SaturatedConversion, Rounding,
-};
+use sp_arithmetic::{MultiplyRational, Rounding, Rounding::*};
 
 /// Tries to demonstrate that `multiply_by_rational_with_rounding` is incorrect.
 fn main() {
 	loop {
-		fuzz!(|data: (u128, u128, u128)| {
-			let (a, b, c) = (data.0.max(1), data.1, data.2.max(1));
-			let Some(got) = multiply_by_rational_with_rounding(a, b, c, Rounding::Down) else {
-				return;
-			};
+		fuzz!(|data: (u128, u128, u128, ArbitraryRounding)| {
+			let (f, n, d, r) = (data.0, data.1, data.2, data.3 .0);
 
-			let (a, b, c) = (U256::from(a), U256::from(b), U256::from(c));
-			let want = (a * b / c).saturated_into();
-
-			assert_eq!(got, want, "{:?} * {:?} / {:?} = {:?} != {:?}", a, b, c, got, want);
+			check::<u8>(f as u8, n as u8, d as u8, r);
+			check::<u16>(f as u16, n as u16, d as u16, r);
+			check::<u32>(f as u32, n as u32, d as u32, r);
+			check::<u64>(f as u64, n as u64, d as u64, r);
+			check::<u128>(f, n, d, r);
 		})
+	}
+}
+
+fn check<N>(f: N, n: N, d: N, r: Rounding)
+where
+	N: MultiplyRational + Into<u128> + Copy + core::fmt::Debug,
+{
+	let Some(got) = f.multiply_rational(n, d, r) else {
+		return;
+	};
+
+	let (ae, be, ce) =
+		(Fraction::from(f.into()), Fraction::from(n.into()), Fraction::from(d.into()));
+	let want = round(ae * be / ce, r);
+
+	assert_eq!(
+		Fraction::from(got.into()),
+		want,
+		"{:?} * {:?} / {:?} = {:?} != {:?}",
+		f,
+		n,
+		d,
+		got,
+		want
+	);
+}
+
+/// Round a `Fraction` according to the given mode.
+fn round(f: Fraction, r: Rounding) -> Fraction {
+	match r {
+		Up => f.ceil(),
+		NearestPrefUp =>
+			if f.fract() < Fraction::from(0.5) {
+				f.floor()
+			} else {
+				f.ceil()
+			},
+		Down => f.floor(),
+		NearestPrefDown =>
+			if f.fract() > Fraction::from(0.5) {
+				f.ceil()
+			} else {
+				f.floor()
+			},
+	}
+}
+
+/// An [`arbitrary::Arbitrary`] [`Rounding`] mode.
+struct ArbitraryRounding(Rounding);
+impl arbitrary::Arbitrary<'_> for ArbitraryRounding {
+	fn arbitrary(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<Self> {
+		Ok(Self(match u.int_in_range(0..=3).unwrap() {
+			0 => Up,
+			1 => NearestPrefUp,
+			2 => Down,
+			3 => NearestPrefDown,
+			_ => unreachable!(),
+		}))
 	}
 }
