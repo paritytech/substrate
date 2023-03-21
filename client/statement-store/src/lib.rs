@@ -25,7 +25,7 @@
 mod store;
 //mod metrics;
 
-pub use store::Store;
+pub use store::{Store, MAINTENANCE_PERIOD};
 pub use sp_statement_store::{StatementStore, Error};
 
 /*

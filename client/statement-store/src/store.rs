@@ -34,6 +34,7 @@ const LOG_TARGET: &str = "statement";
 const EXPIRE_AFTER: u64 = 24 * 60 * 60; //24h
 const PURGE_AFTER: u64 = 2 * 24 * 60 * 60; //48h
 
+/// Suggested maintenance period. A good value to call `Store::maintain` with.
 #[allow(dead_code)]
 pub const MAINTENANCE_PERIOD: std::time::Duration = std::time::Duration::from_secs(30);
 

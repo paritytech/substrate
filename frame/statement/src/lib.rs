@@ -27,10 +27,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 //use codec::{Decode, Encode, MaxEncodedLen};
-use sp_statement_store::{Proof, Statement};
+use sp_statement_store::{Proof, Statement, SignatureVerificationResult};
 use sp_statement_store::runtime_api::{StatementSource, ValidStatement, InvalidStatement};
 use frame_support::sp_tracing::{enter_span, Level};
-use frame_support::sp_runtime::traits::{Zero, Verify};
+use frame_support::sp_runtime::traits::Zero;
 use frame_support::sp_runtime::SaturatedConversion;
 use frame_support::traits::Currency;
 use frame_support::pallet_prelude::*;
@@ -96,40 +96,7 @@ impl<T: Config> Pallet<T>
 
 		enter_span! { Level::TRACE, "validate_statement" };
 		log::debug!(target: LOG_TARGET, "Validating statement {:?}", statement);
-		let account: Option<T::AccountId> = match statement.proof() {
-			None => {
-				return Err(InvalidStatement::NoProof)
-			},
-			Some(Proof::Sr25519 { signature, signer }) => {
-				let to_sign = statement.signature_material();
-				let signature =  sp_core::sr25519::Signature(*signature);
-				let public = sp_core::sr25519::Public(*signer);
-				if !signature.verify(to_sign.as_slice(), &public) {
-					log::debug!(target: LOG_TARGET, "Bad Sr25519 signature.");
-					return Err(InvalidStatement::BadProof);
-				}
-				Some(signer.clone().into())
-			},
-			Some(Proof::Ed25519 { signature, signer }) => {
-				let to_sign = statement.signature_material();
-				let signature =  sp_core::ed25519::Signature(*signature);
-				let public = sp_core::ed25519::Public(*signer);
-				if !signature.verify(to_sign.as_slice(), &public) {
-					log::debug!(target: LOG_TARGET, "Bad Ed25519 signature.");
-					return Err(InvalidStatement::BadProof);
-				}
-				Some(signer.clone().into())
-			},
-			Some(Proof::Secp256k1Ecdsa { signature, signer }) => {
-				let to_sign = statement.signature_material();
-				let signature =  sp_core::ecdsa::Signature(*signature);
-				let public = sp_core::ecdsa::Public(*signer);
-				if !signature.verify(to_sign.as_slice(), &public) {
-					log::debug!(target: LOG_TARGET, "Bad ECDSA signature.");
-					return Err(InvalidStatement::BadProof);
-				}
-				Some(sp_io::hashing::blake2_256(signer).into())
-			},
+		let account: T::AccountId = match statement.proof() {
 			Some(Proof::OnChain { who, block_hash, event_index }) => {
 				// block_hash and event_index should be checked by the host
 				if frame_system::Pallet::<T>::parent_hash().as_ref() != block_hash.as_slice() {
@@ -149,22 +116,27 @@ impl<T: Config> Pallet<T>
 						return Err(InvalidStatement::BadProof);
 					}
 				}
-				Some(account)
+				account
+			}
+			_ => match statement.verify_signature() {
+				SignatureVerificationResult::Valid(account) => account.into(),
+				SignatureVerificationResult::Invalid => {
+					log::debug!(target: LOG_TARGET, "Bad statement signature.");
+					return Err(InvalidStatement::BadProof);
+				},
+				SignatureVerificationResult::NoSignature => {
+					log::debug!(target: LOG_TARGET, "Missing statement signature.");
+					return Err(InvalidStatement::NoProof);
+				}
 			}
 		};
-		let priority: u64 = if let Some(account) = account {
-			let priority_cost = T::PriorityBalance::get();
-			if priority_cost.is_zero() {
+		let priority_cost = T::PriorityBalance::get();
+		let priority: u64 = if priority_cost.is_zero() {
 				0
-			}
-			else {
-				let balance = T::Currency::free_balance(&account);
-				let priority = balance / priority_cost;
-				priority.saturated_into()
-
-			}
 		} else {
-			0
+			let balance = T::Currency::free_balance(&account);
+			let priority = balance / priority_cost;
+			priority.saturated_into()
 		};
 
 		Ok(ValidStatement {

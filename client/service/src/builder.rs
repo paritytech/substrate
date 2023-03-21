@@ -467,7 +467,7 @@ where
 		"statement-store-notifications",
 		Some("statement-store"),
 		async move {
-			let mut interval = tokio::time::interval(std::time::Duration::from_millis(10));
+			let mut interval = tokio::time::interval(sc_statement_store::MAINTENANCE_PERIOD);
 			loop {
 				interval.tick().await;
 				store.maintain();
