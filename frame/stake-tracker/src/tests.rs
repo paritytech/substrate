@@ -718,10 +718,8 @@ mod on_unstake {
 	fn defensive_when_in_list() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(VoterList::count(), 0);
-			for id in stakers() {
-				let _ = VoterList::on_insert(id, 100);
-				StakeTracker::on_unstake(&id);
-			}
+			let _ = VoterList::on_insert(10, 100);
+			StakeTracker::on_unstake(&10);
 		});
 	}
 
