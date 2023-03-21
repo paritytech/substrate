@@ -18,7 +18,7 @@ error: cannot find macro `decl_storage` in this scope
 6 |     decl_storage! {
   |     ^^^^^^^^^^^^
   |
-  = note: consider importing this macro:
+  = help: consider importing this macro:
           frame_support::decl_storage
 
 error: cannot find macro `decl_module` in this scope
@@ -27,5 +27,5 @@ error: cannot find macro `decl_module` in this scope
 10 |     decl_module! {
    |     ^^^^^^^^^^^
    |
-   = note: consider importing this macro:
+   = help: consider importing this macro:
            frame_support::decl_module

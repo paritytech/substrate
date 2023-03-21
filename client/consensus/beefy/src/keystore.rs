@@ -18,7 +18,7 @@
 
 use sp_application_crypto::RuntimeAppPublic;
 use sp_core::keccak_256;
-use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::KeystorePtr;
 
 use log::warn;
 
@@ -33,9 +33,9 @@ use crate::{error, LOG_TARGET};
 pub(crate) type BeefySignatureHasher = sp_runtime::traits::Keccak256;
 
 /// A BEEFY specific keystore implemented as a `Newtype`. This is basically a
-/// wrapper around [`sp_keystore::SyncCryptoStore`] and allows to customize
+/// wrapper around [`sp_keystore::Keystore`] and allows to customize
 /// common cryptographic functionality.
-pub(crate) struct BeefyKeystore(Option<SyncCryptoStorePtr>);
+pub(crate) struct BeefyKeystore(Option<KeystorePtr>);
 
 impl BeefyKeystore {
 	/// Check if the keystore contains a private key for one of the public keys
@@ -50,7 +50,7 @@ impl BeefyKeystore {
 		// we do check for multiple private keys as a key store sanity check.
 		let public: Vec<Public> = keys
 			.iter()
-			.filter(|k| SyncCryptoStore::has_keys(&*store, &[(k.to_raw_vec(), KEY_TYPE)]))
+			.filter(|k| store.has_keys(&[(k.to_raw_vec(), KEY_TYPE)]))
 			.cloned()
 			.collect();
 
@@ -77,7 +77,8 @@ impl BeefyKeystore {
 		let msg = keccak_256(message);
 		let public = public.as_ref();
 
-		let sig = SyncCryptoStore::ecdsa_sign_prehashed(&*store, KEY_TYPE, public, &msg)
+		let sig = store
+			.ecdsa_sign_prehashed(KEY_TYPE, public, &msg)
 			.map_err(|e| error::Error::Keystore(e.to_string()))?
 			.ok_or_else(|| error::Error::Signature("ecdsa_sign_prehashed() failed".to_string()))?;
 
@@ -94,10 +95,8 @@ impl BeefyKeystore {
 	pub fn public_keys(&self) -> Result<Vec<Public>, error::Error> {
 		let store = self.0.clone().ok_or_else(|| error::Error::Keystore("no Keystore".into()))?;
 
-		let pk: Vec<Public> = SyncCryptoStore::ecdsa_public_keys(&*store, KEY_TYPE)
-			.drain(..)
-			.map(Public::from)
-			.collect();
+		let pk: Vec<Public> =
+			store.ecdsa_public_keys(KEY_TYPE).drain(..).map(Public::from).collect();
 
 		Ok(pk)
 	}
@@ -110,26 +109,23 @@ impl BeefyKeystore {
 	}
 }
 
-impl From<Option<SyncCryptoStorePtr>> for BeefyKeystore {
-	fn from(store: Option<SyncCryptoStorePtr>) -> BeefyKeystore {
+impl From<Option<KeystorePtr>> for BeefyKeystore {
+	fn from(store: Option<KeystorePtr>) -> BeefyKeystore {
 		BeefyKeystore(store)
 	}
 }
 
 #[cfg(test)]
 pub mod tests {
-	use std::sync::Arc;
-
-	use sc_keystore::LocalKeystore;
-	use sp_core::{ecdsa, Pair};
-
 	use sp_consensus_beefy::{crypto, Keyring};
+	use sp_core::{ecdsa, Pair};
+	use sp_keystore::testing::MemoryKeystore;
 
 	use super::*;
 	use crate::error::Error;
 
-	fn keystore() -> SyncCryptoStorePtr {
-		Arc::new(LocalKeystore::in_memory())
+	fn keystore() -> KeystorePtr {
+		MemoryKeystore::new().into()
 	}
 
 	#[test]
@@ -197,11 +193,11 @@ pub mod tests {
 	fn authority_id_works() {
 		let store = keystore();
 
-		let alice: crypto::Public =
-			SyncCryptoStore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&Keyring::Alice.to_seed()))
-				.ok()
-				.unwrap()
-				.into();
+		let alice: crypto::Public = store
+			.ecdsa_generate_new(KEY_TYPE, Some(&Keyring::Alice.to_seed()))
+			.ok()
+			.unwrap()
+			.into();
 
 		let bob = Keyring::Bob.public();
 		let charlie = Keyring::Charlie.public();
@@ -223,11 +219,11 @@ pub mod tests {
 	fn sign_works() {
 		let store = keystore();
 
-		let alice: crypto::Public =
-			SyncCryptoStore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&Keyring::Alice.to_seed()))
-				.ok()
-				.unwrap()
-				.into();
+		let alice: crypto::Public = store
+			.ecdsa_generate_new(KEY_TYPE, Some(&Keyring::Alice.to_seed()))
+			.ok()
+			.unwrap()
+			.into();
 
 		let store: BeefyKeystore = Some(store).into();
 
@@ -243,10 +239,7 @@ pub mod tests {
 	fn sign_error() {
 		let store = keystore();
 
-		let _ =
-			SyncCryptoStore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&Keyring::Bob.to_seed()))
-				.ok()
-				.unwrap();
+		store.ecdsa_generate_new(KEY_TYPE, Some(&Keyring::Bob.to_seed())).ok().unwrap();
 
 		let store: BeefyKeystore = Some(store).into();
 
@@ -275,11 +268,11 @@ pub mod tests {
 	fn verify_works() {
 		let store = keystore();
 
-		let alice: crypto::Public =
-			SyncCryptoStore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&Keyring::Alice.to_seed()))
-				.ok()
-				.unwrap()
-				.into();
+		let alice: crypto::Public = store
+			.ecdsa_generate_new(KEY_TYPE, Some(&Keyring::Alice.to_seed()))
+			.ok()
+			.unwrap()
+			.into();
 
 		let store: BeefyKeystore = Some(store).into();
 
@@ -301,9 +294,8 @@ pub mod tests {
 
 		let store = keystore();
 
-		let add_key = |key_type, seed: Option<&str>| {
-			SyncCryptoStore::ecdsa_generate_new(&*store, key_type, seed).unwrap()
-		};
+		let add_key =
+			|key_type, seed: Option<&str>| store.ecdsa_generate_new(key_type, seed).unwrap();
 
 		// test keys
 		let _ = add_key(TEST_TYPE, Some(Keyring::Alice.to_seed().as_str()));
