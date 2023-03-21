@@ -113,7 +113,7 @@ impl InterfaceDef {
 				Some(InterfaceTraitAttr::Selector(span, name)) =>
 					if with_selector {
 						selectors = Some(selector::SelectorDef::try_from(
-							selectors, name, span, index, item,
+							item_span, selectors, name, span, index, item,
 						)?)
 					} else {
 						let msg = "Invalid interface definition. `#[interface::selector]` can \
@@ -138,6 +138,13 @@ impl InterfaceDef {
 		// Sanity Checks
 		// * if not all methods named selector -> default selector MUST be present
 		// * check if view/call-method selector can be found in selectors
+		if let Some(views) = views.as_ref() {
+			views.check_selectors(&selectors)?;
+		}
+
+		if let Some(calls) = calls.as_ref() {
+			calls.check_selectors(&selectors)?;
+		}
 
 		Ok(InterfaceDef { index, calls, views, selectors, where_clause })
 	}

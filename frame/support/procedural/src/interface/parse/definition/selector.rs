@@ -15,16 +15,86 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::interface::parse::helper;
+use crate::interface::{
+	parse::{definition::keyword::selector, helper},
+	SelectorType,
+};
 use quote::ToTokens;
 use syn::spanned::Spanned;
 
 pub struct SelectorDef {
+	interface_span: proc_macro2::Span,
 	selectors: Vec<SingleSelectorDef>,
 }
 
 impl SelectorDef {
+	pub fn check_selector(&self, selector: &SelectorType) -> syn::Result<()> {
+		match selector {
+			SelectorType::Default { return_ty } => {
+				let default_selector = self.get_default_selector()?;
+
+				if &default_selector.output == return_ty {
+					Ok(())
+				} else {
+					Err(syn::Error::new(
+						self.interface_span,
+						format!(
+							"Default selector has the wrong return type. \
+							Method needs: {:?}, \
+							Selector has: {:?}",
+							default_selector.output, return_ty
+						),
+					))
+				}
+			},
+			SelectorType::Named { name, return_ty } => {
+				let named_selector = self.get_named_selector(name.clone())?;
+
+				if &named_selector.output == return_ty {
+					Ok(())
+				} else {
+					Err(syn::Error::new(
+						named_selector.attr_span,
+						format!(
+							"Selector with name {:?} has the wrong return type. \
+							Method needs: {:?}, \
+							Selector has: {:?}",
+							name, named_selector.output, return_ty
+						),
+					))
+				}
+			},
+		}
+	}
+
+	pub fn get_default_selector(&self) -> syn::Result<&SingleSelectorDef> {
+		self.selectors
+			.iter()
+			.filter(|selector| selector.is_default())
+			.collect::<Vec<_>>()
+			.first()
+			.map(|double_ref| *double_ref)
+			.ok_or(syn::Error::new(
+				self.interface_span,
+				"No default selector found on interface definition.",
+			))
+	}
+
+	pub fn get_named_selector(&self, name: syn::Ident) -> syn::Result<&SingleSelectorDef> {
+		self.selectors
+			.iter()
+			.filter(|selector| selector.is_name(name.clone()))
+			.collect::<Vec<_>>()
+			.first()
+			.map(|double_ref| *double_ref)
+			.ok_or(syn::Error::new(
+				self.interface_span,
+				format!("No selector with name {:?} found on interface definition.", name),
+			))
+	}
+
 	pub fn try_from(
+		interface_span: proc_macro2::Span,
 		selectors: Option<SelectorDef>,
 		name: syn::Ident,
 		attr_span: proc_macro2::Span,
@@ -40,7 +110,8 @@ impl SelectorDef {
 			))
 		};
 
-		let mut selectors = selectors.unwrap_or(SelectorDef { selectors: Vec::new() });
+		let mut selectors =
+			selectors.unwrap_or(SelectorDef { interface_span, selectors: Vec::new() });
 
 		match method.sig.inputs.first() {
 			None => {
@@ -101,7 +172,7 @@ impl SelectorDef {
 		selectors.push_and_check_default(SingleSelectorDef {
 			name,
 			output,
-			attr_span,
+			attr_span: method.span(),
 			default: default_attr.is_some(),
 		})?;
 
@@ -125,11 +196,21 @@ pub struct SingleSelectorDef {
 	/// Function name.
 	name: syn::Ident,
 	/// The return type of the selector.
-	output: Box<syn::Type>,
+	pub output: Box<syn::Type>,
 	/// The span of the selector definition
 	attr_span: proc_macro2::Span,
 	/// Signal if default selector
 	default: bool,
+}
+
+impl SingleSelectorDef {
+	fn is_default(&self) -> bool {
+		self.default
+	}
+
+	fn is_name(&self, name: syn::Ident) -> bool {
+		self.name == name
+	}
 }
 
 /// List of additional token to be used for parsing.

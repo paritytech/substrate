@@ -15,7 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{interface, interface::parse::helper};
+use crate::{
+	interface,
+	interface::parse::{definition::selector::SelectorDef, helper},
+};
 use frame_support_procedural_tools::get_doc_literals;
 use quote::ToTokens;
 use std::collections::HashMap;
@@ -222,6 +225,26 @@ impl ViewDef {
 		});
 
 		Ok(views)
+	}
+
+	pub fn check_selectors(&self, selectors: &Option<SelectorDef>) -> syn::Result<()> {
+		for view in self.views.iter() {
+			if let Some(selector) = &view.selector {
+				if let Some(selectors) = selectors.as_ref() {
+					selectors.check_selector(selector)?;
+				} else {
+					let msg = format!(
+						"Invalid interface::definition, expected a selector of kind `{:?}`, \
+						found none. \
+						(try adding a correctly annotated selector method to the trait).",
+						selector
+					);
+					return Err(syn::Error::new(view.attr_span, msg))
+				}
+			}
+		}
+
+		Ok(())
 	}
 }
 
