@@ -25,7 +25,10 @@ use codec::Encode;
 use frame_support::{
 	dispatch::DispatchError,
 	ensure,
-	traits::{tokens::WithdrawConsequence, Currency, ExistenceRequirement, Get},
+	traits::{
+		tokens::{Fortitude::Polite, Preservation::Protect, WithdrawConsequence},
+		Currency, ExistenceRequirement, Get,
+	},
 	DefaultNoBound, RuntimeDebugNoBound,
 };
 use pallet_contracts_primitives::StorageDeposit as Deposit;
@@ -456,7 +459,7 @@ impl<T: Config> Ext<T> for ReservingExt {
 		// We are sending the `min_leftover` and the `min_balance` from the origin
 		// account as part of a contract call. Hence origin needs to have those left over
 		// as free balance after accounting for all deposits.
-		let max = T::Currency::reducible_balance(origin, true)
+		let max = T::Currency::reducible_balance(origin, Protect, Polite)
 			.saturating_sub(min_leftover)
 			.saturating_sub(Pallet::<T>::min_balance());
 		let limit = limit.unwrap_or(max);

@@ -23,7 +23,11 @@ use assert_matches::assert_matches;
 use frame_benchmarking::v1::{account, benchmarks_instance_pallet, whitelist_account};
 use frame_support::{
 	dispatch::RawOrigin,
-	traits::{fungible, Currency, Get},
+	traits::{
+		fungible,
+		tokens::{Fortitude::Polite, Preservation::Expendable},
+		Currency, Get,
+	},
 };
 use sp_runtime::traits::Bounded;
 use sp_std::collections::btree_map::BTreeMap;
@@ -257,13 +261,13 @@ benchmarks_instance_pallet! {
 			}
 		}
 
-		let orig_usable = <T::Currency as fungible::Inspect<T::AccountId>>::reducible_balance(&caller, false);
+		let orig_usable = <T::Currency as fungible::Inspect<T::AccountId>>::reducible_balance(&caller, Expendable, Polite);
 		let polls = &all_polls[&class];
 
 		// Vote big on the class with the most ongoing votes of them to bump the lock and make it
 		// hard to recompute when removed.
 		ConvictionVoting::<T, I>::vote(RawOrigin::Signed(caller.clone()).into(), polls[0], big_account_vote)?;
-		let now_usable = <T::Currency as fungible::Inspect<T::AccountId>>::reducible_balance(&caller, false);
+		let now_usable = <T::Currency as fungible::Inspect<T::AccountId>>::reducible_balance(&caller, Expendable, Polite);
 		assert_eq!(orig_usable - now_usable, 100u32.into());
 
 		// Remove the vote
@@ -272,7 +276,7 @@ benchmarks_instance_pallet! {
 		// We can now unlock on `class` from 200 to 100...
 	}: _(RawOrigin::Signed(caller.clone()), class, caller_lookup)
 	verify {
-		assert_eq!(orig_usable, <T::Currency as fungible::Inspect<T::AccountId>>::reducible_balance(&caller, false));
+		assert_eq!(orig_usable, <T::Currency as fungible::Inspect<T::AccountId>>::reducible_balance(&caller, Expendable, Polite));
 	}
 
 	impl_benchmark_test_suite!(

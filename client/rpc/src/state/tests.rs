@@ -55,7 +55,7 @@ async fn should_return_storage() {
 		.add_extra_storage(b":map:acc2".to_vec(), vec![1, 2, 3])
 		.build();
 	let genesis_hash = client.genesis_hash();
-	let (client, child) = new_full(Arc::new(client), test_executor(), DenyUnsafe::No, None);
+	let (client, child) = new_full(Arc::new(client), test_executor(), DenyUnsafe::No);
 	let key = StorageKey(KEY.to_vec());
 
 	assert_eq!(
@@ -103,7 +103,7 @@ async fn should_return_storage_entries() {
 		.add_extra_child_storage(&child_info, KEY2.to_vec(), CHILD_VALUE2.to_vec())
 		.build();
 	let genesis_hash = client.genesis_hash();
-	let (_client, child) = new_full(Arc::new(client), test_executor(), DenyUnsafe::No, None);
+	let (_client, child) = new_full(Arc::new(client), test_executor(), DenyUnsafe::No);
 
 	let keys = &[StorageKey(KEY1.to_vec()), StorageKey(KEY2.to_vec())];
 	assert_eq!(
@@ -134,7 +134,7 @@ async fn should_return_child_storage() {
 			.build(),
 	);
 	let genesis_hash = client.genesis_hash();
-	let (_client, child) = new_full(client, test_executor(), DenyUnsafe::No, None);
+	let (_client, child) = new_full(client, test_executor(), DenyUnsafe::No);
 	let child_key = prefixed_storage_key();
 	let key = StorageKey(b"key".to_vec());
 
@@ -165,7 +165,7 @@ async fn should_return_child_storage_entries() {
 			.build(),
 	);
 	let genesis_hash = client.genesis_hash();
-	let (_client, child) = new_full(client, test_executor(), DenyUnsafe::No, None);
+	let (_client, child) = new_full(client, test_executor(), DenyUnsafe::No);
 	let child_key = prefixed_storage_key();
 	let keys = vec![StorageKey(b"key1".to_vec()), StorageKey(b"key2".to_vec())];
 
@@ -196,7 +196,7 @@ async fn should_return_child_storage_entries() {
 async fn should_call_contract() {
 	let client = Arc::new(substrate_test_runtime_client::new());
 	let genesis_hash = client.genesis_hash();
-	let (client, _child) = new_full(client, test_executor(), DenyUnsafe::No, None);
+	let (client, _child) = new_full(client, test_executor(), DenyUnsafe::No);
 
 	use jsonrpsee::{core::Error, types::error::CallError};
 
@@ -210,7 +210,7 @@ async fn should_call_contract() {
 async fn should_notify_about_storage_changes() {
 	let mut sub = {
 		let mut client = Arc::new(substrate_test_runtime_client::new());
-		let (api, _child) = new_full(client.clone(), test_executor(), DenyUnsafe::No, None);
+		let (api, _child) = new_full(client.clone(), test_executor(), DenyUnsafe::No);
 
 		let api_rpc = api.into_rpc();
 		let sub = api_rpc.subscribe("state_subscribeStorage", EmptyParams::new()).await.unwrap();
@@ -242,7 +242,7 @@ async fn should_notify_about_storage_changes() {
 async fn should_send_initial_storage_changes_and_notifications() {
 	let mut sub = {
 		let mut client = Arc::new(substrate_test_runtime_client::new());
-		let (api, _child) = new_full(client.clone(), test_executor(), DenyUnsafe::No, None);
+		let (api, _child) = new_full(client.clone(), test_executor(), DenyUnsafe::No);
 
 		let alice_balance_key =
 			blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into()));
@@ -278,7 +278,7 @@ async fn should_send_initial_storage_changes_and_notifications() {
 #[tokio::test]
 async fn should_query_storage() {
 	async fn run_tests(mut client: Arc<TestClient>) {
-		let (api, _child) = new_full(client.clone(), test_executor(), DenyUnsafe::No, None);
+		let (api, _child) = new_full(client.clone(), test_executor(), DenyUnsafe::No);
 
 		let mut add_block = |nonce| {
 			let mut builder = client.new_block(Default::default()).unwrap();
@@ -480,7 +480,7 @@ async fn should_query_storage() {
 #[tokio::test]
 async fn should_return_runtime_version() {
 	let client = Arc::new(substrate_test_runtime_client::new());
-	let (api, _child) = new_full(client.clone(), test_executor(), DenyUnsafe::No, None);
+	let (api, _child) = new_full(client.clone(), test_executor(), DenyUnsafe::No);
 
 	let result = "{\"specName\":\"test\",\"implName\":\"parity-test\",\"authoringVersion\":1,\
 		\"specVersion\":2,\"implVersion\":2,\"apis\":[[\"0xdf6acb689907609b\",4],\
@@ -501,7 +501,7 @@ async fn should_return_runtime_version() {
 async fn should_notify_on_runtime_version_initially() {
 	let mut sub = {
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let (api, _child) = new_full(client, test_executor(), DenyUnsafe::No, None);
+		let (api, _child) = new_full(client, test_executor(), DenyUnsafe::No);
 
 		let api_rpc = api.into_rpc();
 		let sub = api_rpc
@@ -530,7 +530,7 @@ fn should_deserialize_storage_key() {
 #[tokio::test]
 async fn wildcard_storage_subscriptions_are_rpc_unsafe() {
 	let client = Arc::new(substrate_test_runtime_client::new());
-	let (api, _child) = new_full(client, test_executor(), DenyUnsafe::Yes, None);
+	let (api, _child) = new_full(client, test_executor(), DenyUnsafe::Yes);
 
 	let api_rpc = api.into_rpc();
 	let err = api_rpc.subscribe("state_subscribeStorage", EmptyParams::new()).await;
@@ -540,7 +540,7 @@ async fn wildcard_storage_subscriptions_are_rpc_unsafe() {
 #[tokio::test]
 async fn concrete_storage_subscriptions_are_rpc_safe() {
 	let client = Arc::new(substrate_test_runtime_client::new());
-	let (api, _child) = new_full(client, test_executor(), DenyUnsafe::Yes, None);
+	let (api, _child) = new_full(client, test_executor(), DenyUnsafe::Yes);
 	let api_rpc = api.into_rpc();
 
 	let key = StorageKey(STORAGE_KEY.to_vec());
