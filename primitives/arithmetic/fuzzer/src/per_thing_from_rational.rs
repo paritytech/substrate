@@ -36,14 +36,14 @@ use sp_arithmetic::{
 /// size of the inputs.
 fn main() {
 	loop {
-		fuzz!(|data: (u128, u128, u8)| {
-			let (n, d) = (data.0.min(data.1), data.0.max(data.1).max(1));
-			let r = rounding_mode(data.2);
+		fuzz!(|data: (u128, u128, ArbitraryRounding)| {
+			let (n, d, r) = (data.0.min(data.1), data.0.max(data.1).max(1), data.2);
+			//let r = rounding_mode(data.2);
 
-			check::<PerU16>(n, d, r);
-			check::<Percent>(n, d, r);
-			check::<Perbill>(n, d, r);
-			check::<Perquintill>(n, d, r);
+			check::<PerU16>(n, d, r.0);
+			check::<Percent>(n, d, r.0);
+			check::<Perbill>(n, d, r.0);
+			check::<Perquintill>(n, d, r.0);
 		})
 	}
 }
@@ -90,13 +90,16 @@ fn round(f: Fraction, r: Rounding) -> Fraction {
 	}
 }
 
-/// Create a `Rounding` from an `u8`.
-fn rounding_mode(r: u8) -> Rounding {
-	match r % 4u8 {
-		0 => Up,
-		1 => NearestPrefUp,
-		2 => Down,
-		3 => NearestPrefDown,
-		_ => unreachable!("Cargo does not know that this is unreachable…"),
+/// An [`arbitrary::Arbitrary`] [`Rounding`] mode.
+struct ArbitraryRounding(Rounding);
+impl arbitrary::Arbitrary<'_> for ArbitraryRounding {
+	fn arbitrary(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<Self> {
+		Ok(Self(match u.int_in_range(0..=3).unwrap() {
+			0 => Up,
+			1 => NearestPrefUp,
+			2 => Down,
+			3 => NearestPrefDown,
+			_ => unreachable!(),
+		}))
 	}
 }
