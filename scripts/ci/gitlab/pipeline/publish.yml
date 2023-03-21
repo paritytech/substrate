@@ -52,7 +52,6 @@
   stage: publish
   extends:
     - .kubernetes-env
-    - .publish-refs
   variables:
     CI_IMAGE: paritytech/dockerhub-description
     DOCKERHUB_REPOSITORY: parity/$PRODUCT
@@ -63,6 +62,8 @@
     - if: $CI_COMMIT_REF_NAME == "master"
       changes:
         - scripts/ci/docker/$PRODUCT.Dockerfile.README.md
+  before_script:
+    - echo
   script:
     - cd / && sh entrypoint.sh
 
