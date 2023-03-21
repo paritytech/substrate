@@ -30,51 +30,26 @@
 //! [here](https://docs.rs/honggfuzz/).
 
 use honggfuzz::fuzz;
-use sp_arithmetic::{helpers_128bit::multiply_by_rational_with_rounding, traits::Zero, Rounding};
+use primitive_types::U256;
+use sp_arithmetic::{
+	helpers_128bit::multiply_by_rational_with_rounding,
+	traits::{SaturatedConversion, Zero},
+	Rounding,
+};
 
+/// Tries to demonstrate that `multiply_by_rational_with_rounding` is incorrect.
 fn main() {
 	loop {
-		fuzz!(|data: ([u8; 16], [u8; 16], [u8; 16])| {
-			let (a_bytes, b_bytes, c_bytes) = data;
-			let (a, b, c) = (
-				u128::from_be_bytes(a_bytes),
-				u128::from_be_bytes(b_bytes),
-				u128::from_be_bytes(c_bytes),
-			);
+		fuzz!(|data: (u128, u128, u128)| {
+			let (a, b, c) = (data.0.max(1), data.1, data.2.max(1));
+			let Some(got) = multiply_by_rational_with_rounding(a, b, c, Rounding::Down) else {
+				return;
+			};
 
-			println!("++ Equation: {} * {} / {}", a, b, c);
+			let (a, b, c) = (U256::from(a), U256::from(b), U256::from(c));
+			let want = (a * b / c).saturated_into();
 
-			// The point of this fuzzing is to make sure that `multiply_by_rational_with_rounding`
-			// is 100% accurate as long as the value fits in a u128.
-			if let Some(result) = multiply_by_rational_with_rounding(a, b, c, Rounding::Down) {
-				let truth = mul_div(a, b, c);
-
-				if result != truth && result != truth + 1 {
-					println!("++ Expected {}", truth);
-					println!("+++++++ Got {}", result);
-					panic!();
-				}
-			}
+			assert_eq!(got, want, "{:?} * {:?} / {:?} = {:?} != {:?}", a, b, c, got, want);
 		})
-	}
-}
-
-fn mul_div(a: u128, b: u128, c: u128) -> u128 {
-	use primitive_types::U256;
-	if a.is_zero() {
-		return Zero::zero()
-	}
-	let c = c.max(1);
-
-	// e for extended
-	let ae: U256 = a.into();
-	let be: U256 = b.into();
-	let ce: U256 = c.into();
-
-	let r = ae * be / ce;
-	if r > u128::MAX.into() {
-		a
-	} else {
-		r.as_u128()
 	}
 }
