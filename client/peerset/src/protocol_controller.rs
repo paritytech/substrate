@@ -266,6 +266,7 @@ impl<PeerStore: PeerStoreT> ProtocolController<PeerStore> {
 	}
 
 	/// Report peer disconnect event to `Peerset` for it to update peer's reputation accordingly.
+	/// Should only be called if the remote node disconnected us, not the other way around.
 	fn report_disconnect(&self, peer_id: PeerId, reason: DropReason) {
 		self.peer_store.report_disconnect(peer_id, reason);
 	}
@@ -355,6 +356,9 @@ impl<PeerStore: PeerStoreT> ProtocolController<PeerStore> {
 
 		// Disconnect all non-reserved peers.
 		self.nodes.keys().for_each(|peer_id| self.drop_connection(*peer_id));
+		self.nodes.clear();
+		self.num_in = 0;
+		self.num_out = 0;
 	}
 
 	/// Disconnect the peer.
@@ -421,12 +425,12 @@ impl<PeerStore: PeerStoreT> ProtocolController<PeerStore> {
 			return
 		}
 
-		if self.is_banned(peer_id) {
+		if self.num_in >= self.max_in {
 			self.reject_connection(incoming_index);
 			return
 		}
 
-		if self.num_in >= self.max_in {
+		if self.is_banned(peer_id) {
 			self.reject_connection(incoming_index);
 			return
 		}
@@ -489,7 +493,6 @@ impl<PeerStore: PeerStoreT> ProtocolController<PeerStore> {
 			.filter_map(|(peer_id, state)| {
 				(matches!(state, PeerState::NotConnected) && !self.peer_store.is_banned(*peer_id))
 					.then(|| {
-						println!("Connecting");
 						*state = PeerState::Connected(Direction::Outbound);
 						peer_id
 					})
@@ -547,11 +550,11 @@ impl<PeerStore: PeerStoreT> ProtocolController<PeerStore> {
 
 #[cfg(test)]
 mod tests {
-	use super::ProtocolController;
+	use super::{Direction, PeerState, ProtocolController};
 	use crate::{peer_store::PeerStore, DropReason, IncomingIndex, Message, SetConfig, SetId};
 	use futures::FutureExt;
 	use libp2p::PeerId;
-	use sc_utils::mpsc::tracing_unbounded;
+	use sc_utils::mpsc::{tracing_unbounded, TryRecvError};
 	use std::collections::HashSet;
 
 	mockall::mock! {
@@ -565,7 +568,7 @@ mod tests {
 	}
 
 	#[test]
-	fn reserved_nodes_are_connected_and_accepted() {
+	fn reserved_nodes_are_connected_dropped_and_accepted() {
 		let reserved1 = PeerId::random();
 		let reserved2 = PeerId::random();
 
@@ -595,10 +598,13 @@ mod tests {
 		while let Some(message) = rx.try_recv().ok() {
 			messages.push(message);
 		}
-
 		assert_eq!(messages.len(), 2);
 		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved1 }));
 		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved2 }));
+
+		// Reserved peers do not occupy slots.
+		assert_eq!(controller.num_out, 0);
+		assert_eq!(controller.num_in, 0);
 
 		// Drop connections to be able to accept reserved nodes.
 		controller.on_peer_dropped(reserved1, DropReason::Refused);
@@ -614,8 +620,12 @@ mod tests {
 		controller.on_incoming_connection(reserved2, incoming2);
 		assert_eq!(rx.try_recv().unwrap(), Message::Accept(incoming2));
 
+		// Reserved peers do not occupy slots.
+		assert_eq!(controller.num_out, 0);
+		assert_eq!(controller.num_in, 0);
+
 		// No more commands.
-		assert!(rx.try_recv().is_err());
+		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 	}
 
 	#[test]
@@ -644,8 +654,12 @@ mod tests {
 		// Initiate connections.
 		controller.alloc_slots();
 
+		// No slots occupied.
+		assert_eq!(controller.num_out, 0);
+		assert_eq!(controller.num_in, 0);
+
 		// No commands are generated.
-		assert!(rx.try_recv().is_err());
+		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 
 		// Incoming connection from `reserved1`.
 		let incoming1 = IncomingIndex(1);
@@ -657,9 +671,802 @@ mod tests {
 		controller.on_incoming_connection(reserved2, incoming2);
 		assert_eq!(rx.try_recv().unwrap(), Message::Reject(incoming2));
 
+		// No slots occupied.
+		assert_eq!(controller.num_out, 0);
+		assert_eq!(controller.num_in, 0);
+
 		// No more commands.
-		assert!(rx.try_recv().is_err());
+		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 	}
 
-	// TODO
+	#[test]
+	fn we_try_to_reconnect_to_dropped_reserved_nodes() {
+		let reserved1 = PeerId::random();
+		let reserved2 = PeerId::random();
+
+		// Add first reserved node via config.
+		let config = SetConfig {
+			in_peers: 0,
+			out_peers: 0,
+			bootnodes: Vec::new(),
+			reserved_nodes: std::iter::once(reserved1).collect(),
+			reserved_only: true,
+		};
+		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
+
+		let mut peer_store = MockPeerStore::new();
+		peer_store.expect_is_banned().times(4).return_const(false);
+		peer_store.expect_report_disconnect().times(2).return_const(());
+
+		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
+
+		// Add second reserved node at runtime (this calls `alloc_slots` internally).
+		controller.on_add_reserved_peer(reserved2);
+
+		// Initiate connections (actually redundant, see previous comment).
+		controller.alloc_slots();
+
+		let mut messages = Vec::new();
+		while let Some(message) = rx.try_recv().ok() {
+			messages.push(message);
+		}
+
+		assert_eq!(messages.len(), 2);
+		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved1 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved2 }));
+
+		// Drop both reserved nodes.
+		controller.on_peer_dropped(reserved1, DropReason::Refused);
+		controller.on_peer_dropped(reserved2, DropReason::Unknown);
+
+		// Initiate connections.
+		controller.alloc_slots();
+
+		let mut messages = Vec::new();
+		while let Some(message) = rx.try_recv().ok() {
+			messages.push(message);
+		}
+
+		assert_eq!(messages.len(), 2);
+		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved1 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved2 }));
+
+		// No slots occupied.
+		assert_eq!(controller.num_out, 0);
+		assert_eq!(controller.num_in, 0);
+	}
+
+	#[test]
+	fn nodes_supplied_by_peer_store_are_connected() {
+		let peer1 = PeerId::random();
+		let peer2 = PeerId::random();
+		let peer3 = PeerId::random();
+		let candidates = vec![peer1, peer2, peer3];
+
+		let config = SetConfig {
+			in_peers: 0,
+			// Less slots than candidates.
+			out_peers: 2,
+			bootnodes: Vec::new(),
+			reserved_nodes: HashSet::new(),
+			reserved_only: false,
+		};
+		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
+
+		let mut peer_store = MockPeerStore::new();
+		peer_store.expect_outgoing_candidates().once().return_const(candidates);
+
+		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
+
+		// Initiate connections.
+		controller.alloc_slots();
+
+		let mut messages = Vec::new();
+		while let Some(message) = rx.try_recv().ok() {
+			messages.push(message);
+		}
+
+		// Only first two peers are connected (we only have 2 slots).
+		assert_eq!(messages.len(), 2);
+		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: peer1 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: peer2 }));
+
+		// Outgoing slots occupied.
+		assert_eq!(controller.num_out, 2);
+		assert_eq!(controller.num_in, 0);
+
+		// No more nodes are connected.
+		controller.alloc_slots();
+		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
+
+		// No more slots occupied.
+		assert_eq!(controller.num_out, 2);
+		assert_eq!(controller.num_in, 0);
+	}
+
+	#[test]
+	fn both_reserved_nodes_and_nodes_supplied_by_peer_store_are_connected() {
+		let reserved1 = PeerId::random();
+		let reserved2 = PeerId::random();
+		let regular1 = PeerId::random();
+		let regular2 = PeerId::random();
+		let outgoing_candidates = vec![regular1, regular2];
+		let reserved_nodes = [reserved1, reserved2].iter().cloned().collect();
+
+		let config = SetConfig {
+			in_peers: 10,
+			out_peers: 10,
+			bootnodes: Vec::new(),
+			reserved_nodes,
+			reserved_only: false,
+		};
+		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
+
+		let mut peer_store = MockPeerStore::new();
+		peer_store.expect_is_banned().times(2).return_const(false);
+		peer_store.expect_outgoing_candidates().once().return_const(outgoing_candidates);
+
+		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
+
+		// Initiate connections.
+		controller.alloc_slots();
+
+		let mut messages = Vec::new();
+		while let Some(message) = rx.try_recv().ok() {
+			messages.push(message);
+		}
+		assert_eq!(messages.len(), 4);
+		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved1 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved2 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: regular1 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: regular2 }));
+		assert_eq!(controller.num_out, 2);
+		assert_eq!(controller.num_in, 0);
+	}
+
+	#[test]
+	fn if_slots_are_freed_we_try_to_allocate_them_again() {
+		let peer1 = PeerId::random();
+		let peer2 = PeerId::random();
+		let peer3 = PeerId::random();
+		let candidates1 = vec![peer1.clone(), peer2.clone(), peer3.clone()];
+		let candidates2 = vec![peer3.clone()];
+
+		let config = SetConfig {
+			in_peers: 0,
+			// Less slots than candidates.
+			out_peers: 2,
+			bootnodes: Vec::new(),
+			reserved_nodes: HashSet::new(),
+			reserved_only: false,
+		};
+		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
+
+		let mut peer_store = MockPeerStore::new();
+		peer_store.expect_outgoing_candidates().once().return_const(candidates1);
+		peer_store.expect_outgoing_candidates().once().return_const(candidates2);
+		peer_store.expect_report_disconnect().times(2).return_const(());
+
+		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
+
+		// Initiate connections.
+		controller.alloc_slots();
+
+		let mut messages = Vec::new();
+		while let Some(message) = rx.try_recv().ok() {
+			messages.push(message);
+		}
+
+		// Only first two peers are connected (we only have 2 slots).
+		assert_eq!(messages.len(), 2);
+		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: peer1 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: peer2 }));
+
+		// Outgoing slots occupied.
+		assert_eq!(controller.num_out, 2);
+		assert_eq!(controller.num_in, 0);
+
+		// No more nodes are connected.
+		controller.alloc_slots();
+		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
+
+		// No more slots occupied.
+		assert_eq!(controller.num_out, 2);
+		assert_eq!(controller.num_in, 0);
+
+		// Drop peers.
+		controller.on_peer_dropped(peer1.clone(), DropReason::Unknown);
+		controller.on_peer_dropped(peer2.clone(), DropReason::Refused);
+
+		// Slots are freed.
+		assert_eq!(controller.num_out, 0);
+		assert_eq!(controller.num_in, 0);
+
+		// Initiate connections.
+		controller.alloc_slots();
+
+		let mut messages = Vec::new();
+		while let Some(message) = rx.try_recv().ok() {
+			messages.push(message);
+		}
+
+		// Peers are connected.
+		assert_eq!(messages.len(), 1);
+		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: peer3 }));
+
+		// Outgoing slots occupied.
+		assert_eq!(controller.num_out, 1);
+		assert_eq!(controller.num_in, 0);
+	}
+
+	#[test]
+	fn in_reserved_only_mode_no_peers_are_requested_from_peer_store_and_connected() {
+		let config = SetConfig {
+			in_peers: 0,
+			// Make sure we have slots available.
+			out_peers: 2,
+			bootnodes: Vec::new(),
+			reserved_nodes: HashSet::new(),
+			reserved_only: true,
+		};
+		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
+
+		let mut peer_store = MockPeerStore::new();
+
+		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
+
+		// Initiate connections.
+		controller.alloc_slots();
+
+		// No nodes are connected.
+		assert_eq!(controller.num_out, 0);
+		assert_eq!(controller.num_in, 0);
+		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
+	}
+
+	#[test]
+	fn in_reserved_only_mode_no_regular_peers_are_accepted() {
+		let config = SetConfig {
+			// Make sure we have slots available.
+			in_peers: 2,
+			out_peers: 0,
+			bootnodes: Vec::new(),
+			reserved_nodes: HashSet::new(),
+			reserved_only: true,
+		};
+		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
+
+		let mut peer_store = MockPeerStore::new();
+
+		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
+
+		let peer = PeerId::random();
+		let incoming_index = IncomingIndex(1);
+		controller.on_incoming_connection(peer, incoming_index);
+
+		let mut messages = Vec::new();
+		while let Some(message) = rx.try_recv().ok() {
+			messages.push(message);
+		}
+
+		// Peer is rejected.
+		assert_eq!(messages.len(), 1);
+		assert!(messages.contains(&Message::Reject(incoming_index)));
+		assert_eq!(controller.num_out, 0);
+		assert_eq!(controller.num_in, 0);
+	}
+
+	#[test]
+	fn disabling_reserved_only_mode_allows_to_connect_to_peers() {
+		let peer1 = PeerId::random();
+		let peer2 = PeerId::random();
+		let candidates = vec![peer1.clone(), peer2.clone()];
+
+		let config = SetConfig {
+			in_peers: 0,
+			// Make sure we have slots available.
+			out_peers: 10,
+			bootnodes: Vec::new(),
+			reserved_nodes: HashSet::new(),
+			reserved_only: true,
+		};
+		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
+
+		let mut peer_store = MockPeerStore::new();
+		peer_store.expect_outgoing_candidates().once().return_const(candidates);
+
+		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
+
+		// Initiate connections.
+		controller.alloc_slots();
+
+		// No nodes are connected.
+		assert_eq!(controller.num_out, 0);
+		assert_eq!(controller.num_in, 0);
+		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
+
+		// Disable reserved-only mode (this also connects to peers).
+		controller.on_set_reserved_only(false);
+
+		let mut messages = Vec::new();
+		while let Some(message) = rx.try_recv().ok() {
+			messages.push(message);
+		}
+
+		assert_eq!(messages.len(), 2);
+		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: peer1 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: peer2 }));
+		assert_eq!(controller.num_out, 2);
+		assert_eq!(controller.num_in, 0);
+	}
+
+	#[test]
+	fn enabling_reserved_only_mode_disconnects_regular_peers() {
+		let reserved1 = PeerId::random();
+		let reserved2 = PeerId::random();
+		let regular1 = PeerId::random();
+		let regular2 = PeerId::random();
+		let outgoing_candidates = vec![regular1];
+
+		let config = SetConfig {
+			in_peers: 10,
+			out_peers: 10,
+			bootnodes: Vec::new(),
+			reserved_nodes: [reserved1, reserved2].iter().cloned().collect(),
+			reserved_only: false,
+		};
+		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
+
+		let mut peer_store = MockPeerStore::new();
+		peer_store.expect_is_banned().times(3).return_const(false);
+		peer_store.expect_outgoing_candidates().once().return_const(outgoing_candidates);
+
+		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
+		assert_eq!(controller.num_out, 0);
+		assert_eq!(controller.num_in, 0);
+
+		// Connect `regular1` as outbound.
+		controller.alloc_slots();
+
+		let mut messages = Vec::new();
+		while let Some(message) = rx.try_recv().ok() {
+			messages.push(message);
+		}
+		assert_eq!(messages.len(), 3);
+		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved1 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved2 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: regular1 }));
+		assert_eq!(controller.num_out, 1);
+		assert_eq!(controller.num_in, 0);
+
+		// Connect `regular2` as inbound.
+		let incoming_index = IncomingIndex(1);
+		controller.on_incoming_connection(regular2, incoming_index);
+		assert_eq!(rx.try_recv().unwrap(), Message::Accept(incoming_index));
+		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
+		assert_eq!(controller.num_out, 1);
+		assert_eq!(controller.num_in, 1);
+
+		// Switch to reserved-only mode.
+		controller.on_set_reserved_only(true);
+
+		let mut messages = Vec::new();
+		while let Some(message) = rx.try_recv().ok() {
+			messages.push(message);
+		}
+		assert_eq!(messages.len(), 2);
+		assert!(messages.contains(&Message::Drop { set_id: SetId(0), peer_id: regular1 }));
+		assert!(messages.contains(&Message::Drop { set_id: SetId(0), peer_id: regular2 }));
+		assert_eq!(controller.nodes.len(), 0);
+		assert_eq!(controller.num_out, 0);
+		assert_eq!(controller.num_in, 0);
+	}
+
+	#[test]
+	fn removed_disconnected_reserved_node_is_forgotten() {
+		let reserved1 = PeerId::random();
+		let reserved2 = PeerId::random();
+
+		let config = SetConfig {
+			in_peers: 10,
+			out_peers: 10,
+			bootnodes: Vec::new(),
+			reserved_nodes: [reserved1, reserved2].iter().cloned().collect(),
+			reserved_only: false,
+		};
+		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
+
+		let mut peer_store = MockPeerStore::new();
+
+		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
+		assert_eq!(controller.reserved_nodes.len(), 2);
+		assert_eq!(controller.nodes.len(), 0);
+		assert_eq!(controller.num_out, 0);
+		assert_eq!(controller.num_in, 0);
+
+		controller.on_remove_reserved_peer(reserved1);
+		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
+		assert_eq!(controller.reserved_nodes.len(), 1);
+		assert!(!controller.reserved_nodes.contains_key(&reserved1));
+		assert_eq!(controller.nodes.len(), 0);
+		assert_eq!(controller.num_out, 0);
+		assert_eq!(controller.num_in, 0);
+	}
+
+	#[test]
+	fn removed_connected_reserved_node_is_disconnected_in_reserved_only_mode() {
+		let reserved1 = PeerId::random();
+		let reserved2 = PeerId::random();
+
+		let config = SetConfig {
+			in_peers: 10,
+			out_peers: 10,
+			bootnodes: Vec::new(),
+			reserved_nodes: [reserved1, reserved2].iter().cloned().collect(),
+			reserved_only: true,
+		};
+		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
+
+		let mut peer_store = MockPeerStore::new();
+		peer_store.expect_is_banned().times(2).return_const(false);
+
+		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
+
+		// Initiate connections.
+		controller.alloc_slots();
+		let mut messages = Vec::new();
+		while let Some(message) = rx.try_recv().ok() {
+			messages.push(message);
+		}
+		assert_eq!(messages.len(), 2);
+		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved1 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved2 }));
+
+		// Remove reserved node
+		controller.on_remove_reserved_peer(reserved1);
+		assert_eq!(rx.try_recv().unwrap(), Message::Drop { set_id: SetId(0), peer_id: reserved1 });
+		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
+	}
+
+	#[test]
+	fn removed_connected_reserved_nodes_become_regular_in_non_reserved_mode() {
+		let peer1 = PeerId::random();
+		let peer2 = PeerId::random();
+
+		let config = SetConfig {
+			in_peers: 10,
+			out_peers: 10,
+			bootnodes: Vec::new(),
+			reserved_nodes: [peer1, peer2].iter().cloned().collect(),
+			reserved_only: false,
+		};
+		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
+
+		let mut peer_store = MockPeerStore::new();
+		peer_store.expect_is_banned().times(2).return_const(false);
+		peer_store.expect_outgoing_candidates().once().return_const(Vec::new());
+
+		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
+
+		// Connect `peer1` as inbound, `peer2` as outbound.
+		controller.on_incoming_connection(peer1, IncomingIndex(1));
+		controller.alloc_slots();
+		let mut messages = Vec::new();
+		while let Some(message) = rx.try_recv().ok() {
+			messages.push(message);
+		}
+		assert_eq!(messages.len(), 2);
+		assert!(messages.contains(&Message::Accept(IncomingIndex(1))));
+		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: peer2 }));
+		assert_eq!(controller.num_out, 0);
+		assert_eq!(controller.num_in, 0);
+
+		// Remove reserved nodes (and make them regular)
+		controller.on_remove_reserved_peer(peer1);
+		controller.on_remove_reserved_peer(peer2);
+		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
+		assert_eq!(controller.nodes.len(), 2);
+		assert!(matches!(controller.nodes.get(&peer1), Some(Direction::Inbound)));
+		assert!(matches!(controller.nodes.get(&peer2), Some(Direction::Outbound)));
+		assert_eq!(controller.num_out, 1);
+		assert_eq!(controller.num_in, 1);
+	}
+
+	#[test]
+	fn regular_nodes_stop_occupying_slots_when_become_reserved() {
+		let peer1 = PeerId::random();
+		let peer2 = PeerId::random();
+		let outgoing_candidates = vec![peer1];
+
+		let config = SetConfig {
+			in_peers: 10,
+			out_peers: 10,
+			bootnodes: Vec::new(),
+			reserved_nodes: HashSet::new(),
+			reserved_only: false,
+		};
+		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
+
+		let mut peer_store = MockPeerStore::new();
+		peer_store.expect_is_banned().once().return_const(false);
+		peer_store.expect_outgoing_candidates().once().return_const(outgoing_candidates);
+
+		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
+
+		// Connect `peer1` as outbound & `peer2` as inbound.
+		controller.alloc_slots();
+		controller.on_incoming_connection(peer2, IncomingIndex(1));
+		let mut messages = Vec::new();
+		while let Some(message) = rx.try_recv().ok() {
+			messages.push(message);
+		}
+		assert_eq!(messages.len(), 2);
+		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: peer1 }));
+		assert!(messages.contains(&Message::Accept(IncomingIndex(1))));
+		assert_eq!(controller.num_in, 1);
+		assert_eq!(controller.num_out, 1);
+
+		controller.on_add_reserved_peer(peer1);
+		controller.on_add_reserved_peer(peer2);
+		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
+		assert_eq!(controller.num_in, 0);
+		assert_eq!(controller.num_out, 0);
+	}
+
+	#[test]
+	fn disconnecting_regular_peers_work() {
+		let peer1 = PeerId::random();
+		let peer2 = PeerId::random();
+		let outgoing_candidates = vec![peer1];
+
+		let config = SetConfig {
+			in_peers: 10,
+			out_peers: 10,
+			bootnodes: Vec::new(),
+			reserved_nodes: HashSet::new(),
+			reserved_only: false,
+		};
+		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
+
+		let mut peer_store = MockPeerStore::new();
+		peer_store.expect_is_banned().once().return_const(false);
+		peer_store.expect_outgoing_candidates().once().return_const(outgoing_candidates);
+
+		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
+
+		// Connect `peer1` as outbound & `peer2` as inbound.
+		controller.alloc_slots();
+		controller.on_incoming_connection(peer2, IncomingIndex(1));
+		let mut messages = Vec::new();
+		while let Some(message) = rx.try_recv().ok() {
+			messages.push(message);
+		}
+		assert_eq!(messages.len(), 2);
+		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: peer1 }));
+		assert!(messages.contains(&Message::Accept(IncomingIndex(1))));
+		assert_eq!(controller.nodes.len(), 2);
+		assert!(matches!(controller.nodes.get(&peer1), Some(Direction::Outbound)));
+		assert!(matches!(controller.nodes.get(&peer2), Some(Direction::Inbound)));
+		assert_eq!(controller.num_in, 1);
+		assert_eq!(controller.num_out, 1);
+
+		controller.on_disconnect_peer(peer1);
+		assert_eq!(rx.try_recv().unwrap(), Message::Drop { set_id: SetId(0), peer_id: peer1 });
+		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
+		assert_eq!(controller.nodes.len(), 1);
+		assert!(!controller.nodes.contains_key(&peer1));
+		assert_eq!(controller.num_in, 1);
+		assert_eq!(controller.num_out, 0);
+
+		controller.on_disconnect_peer(peer2);
+		assert_eq!(rx.try_recv().unwrap(), Message::Drop { set_id: SetId(0), peer_id: peer2 });
+		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
+		assert_eq!(controller.nodes.len(), 0);
+		assert_eq!(controller.num_in, 0);
+		assert_eq!(controller.num_out, 0);
+	}
+
+	#[test]
+	fn dropping_regular_peers_work() {
+		let peer1 = PeerId::random();
+		let peer2 = PeerId::random();
+		let outgoing_candidates = vec![peer1];
+
+		let config = SetConfig {
+			in_peers: 10,
+			out_peers: 10,
+			bootnodes: Vec::new(),
+			reserved_nodes: HashSet::new(),
+			reserved_only: false,
+		};
+		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
+
+		let mut peer_store = MockPeerStore::new();
+		peer_store.expect_is_banned().once().return_const(false);
+		peer_store.expect_outgoing_candidates().once().return_const(outgoing_candidates);
+		peer_store.expect_report_disconnect().times(2).return_const(());
+
+		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
+
+		// Connect `peer1` as outbound & `peer2` as inbound.
+		controller.alloc_slots();
+		controller.on_incoming_connection(peer2, IncomingIndex(1));
+		let mut messages = Vec::new();
+		while let Some(message) = rx.try_recv().ok() {
+			messages.push(message);
+		}
+		assert_eq!(messages.len(), 2);
+		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: peer1 }));
+		assert!(messages.contains(&Message::Accept(IncomingIndex(1))));
+		assert_eq!(controller.nodes.len(), 2);
+		assert!(matches!(controller.nodes.get(&peer1), Some(Direction::Outbound)));
+		assert!(matches!(controller.nodes.get(&peer2), Some(Direction::Inbound)));
+		assert_eq!(controller.num_in, 1);
+		assert_eq!(controller.num_out, 1);
+
+		controller.on_peer_dropped(peer1, DropReason::Refused);
+		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
+		assert_eq!(controller.nodes.len(), 1);
+		assert!(!controller.nodes.contains_key(&peer1));
+		assert_eq!(controller.num_in, 1);
+		assert_eq!(controller.num_out, 0);
+
+		controller.on_peer_dropped(peer2, DropReason::Unknown);
+		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
+		assert_eq!(controller.nodes.len(), 0);
+		assert_eq!(controller.num_in, 0);
+		assert_eq!(controller.num_out, 0);
+	}
+
+	#[test]
+	fn we_dont_answer_to_incoming_requests_for_already_connected_peers() {
+		let peer1 = PeerId::random();
+		let peer2 = PeerId::random();
+		let outgoing_candidates = vec![peer1];
+
+		let config = SetConfig {
+			in_peers: 10,
+			out_peers: 10,
+			bootnodes: Vec::new(),
+			reserved_nodes: HashSet::new(),
+			reserved_only: false,
+		};
+		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
+
+		let mut peer_store = MockPeerStore::new();
+		peer_store.expect_is_banned().once().return_const(false);
+		peer_store.expect_outgoing_candidates().once().return_const(outgoing_candidates);
+
+		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
+
+		// Connect `peer1` as outbound & `peer2` as inbound.
+		controller.alloc_slots();
+		controller.on_incoming_connection(peer2, IncomingIndex(1));
+		let mut messages = Vec::new();
+		while let Some(message) = rx.try_recv().ok() {
+			messages.push(message);
+		}
+		assert_eq!(messages.len(), 2);
+		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: peer1 }));
+		assert!(messages.contains(&Message::Accept(IncomingIndex(1))));
+		assert_eq!(controller.nodes.len(), 2);
+		assert!(matches!(controller.nodes.get(&peer1), Some(Direction::Outbound)));
+		assert!(matches!(controller.nodes.get(&peer2), Some(Direction::Inbound)));
+		assert_eq!(controller.num_in, 1);
+		assert_eq!(controller.num_out, 1);
+
+		// Incoming requests for `peer1` & `peer2`.
+		controller.on_incoming_connection(peer1, IncomingIndex(1));
+		controller.on_incoming_connection(peer2, IncomingIndex(2));
+
+		// No answer.
+		assert_eq!(controller.num_in, 1);
+		assert_eq!(controller.num_out, 1);
+		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
+	}
+
+	#[test]
+	fn incoming_peers_that_exceed_slots_are_rejected() {
+		let peer1 = PeerId::random();
+		let peer2 = PeerId::random();
+
+		let config = SetConfig {
+			in_peers: 1,
+			out_peers: 10,
+			bootnodes: Vec::new(),
+			reserved_nodes: HashSet::new(),
+			reserved_only: false,
+		};
+		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
+
+		let mut peer_store = MockPeerStore::new();
+		peer_store.expect_is_banned().once().return_const(false);
+
+		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
+
+		// Connect `peer1` as inbound.
+		controller.on_incoming_connection(peer1, IncomingIndex(1));
+		assert_eq!(rx.try_recv().unwrap(), Message::Accept(IncomingIndex(1)));
+		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
+
+		// Incoming requests for `peer2`.
+		controller.on_incoming_connection(peer2, IncomingIndex(2));
+		assert_eq!(rx.try_recv().unwrap(), Message::Reject(IncomingIndex(2)));
+		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
+	}
+
+	#[test]
+	fn banned_regular_incoming_node_is_rejected() {
+		let peer1 = PeerId::random();
+
+		let config = SetConfig {
+			in_peers: 10,
+			out_peers: 10,
+			bootnodes: Vec::new(),
+			reserved_nodes: HashSet::new(),
+			reserved_only: false,
+		};
+		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
+
+		let mut peer_store = MockPeerStore::new();
+		peer_store.expect_is_banned().once().return_const(true);
+
+		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
+
+		// Incoming request.
+		controller.on_incoming_connection(peer1, IncomingIndex(1));
+		assert_eq!(rx.try_recv().unwrap(), Message::Reject(IncomingIndex(1)));
+		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
+	}
+
+	#[test]
+	fn banned_reserved_incoming_node_is_rejected() {
+		let reserved1 = PeerId::random();
+
+		let config = SetConfig {
+			in_peers: 10,
+			out_peers: 10,
+			bootnodes: Vec::new(),
+			reserved_nodes: std::iter::once(reserved1).collect(),
+			reserved_only: false,
+		};
+		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
+
+		let mut peer_store = MockPeerStore::new();
+		peer_store.expect_is_banned().once().return_const(true);
+
+		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
+		assert!(controller.reserved_nodes.contains_key(&reserved1));
+
+		// Incoming request.
+		controller.on_incoming_connection(reserved1, IncomingIndex(1));
+		assert_eq!(rx.try_recv().unwrap(), Message::Reject(IncomingIndex(1)));
+		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
+	}
+
+	#[test]
+	fn we_dont_connect_to_banned_reserved_node() {
+		let reserved1 = PeerId::random();
+
+		let config = SetConfig {
+			in_peers: 10,
+			out_peers: 10,
+			bootnodes: Vec::new(),
+			reserved_nodes: std::iter::once(reserved1).collect(),
+			reserved_only: false,
+		};
+		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
+
+		let mut peer_store = MockPeerStore::new();
+		peer_store.expect_is_banned().once().return_const(true);
+		peer_store.expect_outgoing_candidates().once().return_const(Vec::new());
+
+		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
+		assert!(matches!(controller.reserved_nodes.get(&reserved1), Some(PeerState::NotConnected)));
+
+		// Initiate connectios
+		controller.alloc_slots();
+		assert!(matches!(controller.reserved_nodes.get(&reserved1), Some(PeerState::NotConnected)));
+		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
+	}
 }
