@@ -81,9 +81,11 @@ pub struct Stake<AccountId, Balance> {
 	pub active: Balance,
 }
 
-/// A generic staking event listener. Note that the interface is designed in a way that the events
-/// are fired post-action, so any pre-action data that is needed needs to be passed to interface
-/// methods. The rest of the data can be retrieved by using `StakingInterface`.
+/// A generic staking event listener.
+///
+/// Note that the interface is designed in a way that the events are fired post-action, so any
+/// pre-action data that is needed needs to be passed to interface methods. The rest of the data can
+/// be retrieved by using `StakingInterface`.
 #[impl_trait_for_tuples::impl_for_tuples(10)]
 pub trait OnStakingUpdate<AccountId, Balance> {
 	/// Fired when the stake amount of someone updates.
@@ -91,18 +93,33 @@ pub trait OnStakingUpdate<AccountId, Balance> {
 	/// This is effectively any changes to the bond amount, such as bonding more funds, and
 	/// unbonding.
 	fn on_stake_update(who: &AccountId, prev_stake: Option<Stake<AccountId, Balance>>);
+
 	/// Fired when someone sets their intention to nominate.
 	fn on_nominator_add(who: &AccountId);
+
 	/// Fired when an existing nominator updates their nominations.
+	///
+	/// Note that this is not fired when a nominator changes their stake. For that,
+	/// `on_stake_update` should be used, followed by querying whether `who` was a validator or a
+	/// nominator.
 	fn on_nominator_update(who: &AccountId, prev_nominations: Vec<AccountId>);
+
 	/// Fired when someone sets their intention to validate.
+	///
+	/// Note validator preference changes are not communicated, but could be added if needed.
 	fn on_validator_add(who: &AccountId);
+
 	/// Fired when an existing validator updates their preferences.
+	///
+	/// Note validator preference changes are not communicated, but could be added if needed.
 	fn on_validator_update(who: &AccountId);
+
 	/// Fired when someone removes their intention to validate, either due to chill or nominating.
 	fn on_validator_remove(who: &AccountId); // only fire this event when this is an actual Validator
+
 	/// Fired when someone removes their intention to nominate, either due to chill or validating.
 	fn on_nominator_remove(who: &AccountId, nominations: Vec<AccountId>); // only fire this if this is an actual Nominator
+
 	/// fired when someone is fully unstaked.
 	fn on_unstake(who: &AccountId); // -> basically `kill_stash`
 }
@@ -123,10 +140,10 @@ pub trait StakingInterface {
 		+ TypeInfo
 		+ Saturating;
 
-	/// AccountId type used by the staking system
+	/// AccountId type used by the staking system.
 	type AccountId: Clone;
 
-	/// whatever
+	/// Means of converting Currency to VoteWeight.
 	type CurrencyToVote: CurrencyToVote<Self::Balance>;
 
 	/// The minimum amount required to bond in order to set nomination intentions. This does not

@@ -52,9 +52,12 @@ pub mod v1 {
 
 	impl<T: Config> OldBondedPoolInner<T> {
 		fn migrate_to_v1(self) -> BondedPoolInner<T> {
+			// Note: `commission` field not introduced to `BondedPoolInner` until
+			// migration 4.
 			BondedPoolInner {
-				member_counter: self.member_counter,
 				points: self.points,
+				commission: Commission::default(),
+				member_counter: self.member_counter,
 				state: self.state,
 				roles: self.roles.migrate_to_v1(),
 			}
@@ -307,6 +310,8 @@ pub mod v2 {
 						last_recorded_reward_counter: Zero::zero(),
 						last_recorded_total_payouts: Zero::zero(),
 						total_rewards_claimed: Zero::zero(),
+						total_commission_claimed: Zero::zero(),
+						total_commission_pending: Zero::zero(),
 					})
 				},
 			);
@@ -445,6 +450,100 @@ pub mod v3 {
 				"not all of the stale metadata has been removed"
 			);
 			ensure!(Pallet::<T>::on_chain_storage_version() == 3, "wrong storage version");
+			Ok(())
+		}
+	}
+}
+
+pub mod v4 {
+	use super::*;
+
+	#[derive(Decode)]
+	pub struct OldBondedPoolInner<T: Config> {
+		pub points: BalanceOf<T>,
+		pub state: PoolState,
+		pub member_counter: u32,
+		pub roles: PoolRoles<T::AccountId>,
+	}
+
+	impl<T: Config> OldBondedPoolInner<T> {
+		fn migrate_to_v4(self) -> BondedPoolInner<T> {
+			BondedPoolInner {
+				commission: Commission::default(),
+				member_counter: self.member_counter,
+				points: self.points,
+				state: self.state,
+				roles: self.roles,
+			}
+		}
+	}
+
+	/// This migration adds a `commission` field to every `BondedPoolInner`, if
+	/// any.
+	pub struct MigrateToV4<T, U>(sp_std::marker::PhantomData<(T, U)>);
+	impl<T: Config, U: Get<Perbill>> OnRuntimeUpgrade for MigrateToV4<T, U> {
+		fn on_runtime_upgrade() -> Weight {
+			let current = Pallet::<T>::current_storage_version();
+			let onchain = Pallet::<T>::on_chain_storage_version();
+
+			log!(
+				info,
+				"Running migration with current storage version {:?} / onchain {:?}",
+				current,
+				onchain
+			);
+
+			if current == 4 && onchain == 3 {
+				let initial_global_max_commission = U::get();
+				GlobalMaxCommission::<T>::set(Some(initial_global_max_commission));
+				log!(
+					info,
+					"Set initial global max commission to {:?}.",
+					initial_global_max_commission
+				);
+
+				let mut translated = 0u64;
+				BondedPools::<T>::translate::<OldBondedPoolInner<T>, _>(|_key, old_value| {
+					translated.saturating_inc();
+					Some(old_value.migrate_to_v4())
+				});
+
+				current.put::<Pallet<T>>();
+				log!(info, "Upgraded {} pools, storage to version {:?}", translated, current);
+
+				// reads: translated + onchain version.
+				// writes: translated + current.put + initial global commission.
+				T::DbWeight::get().reads_writes(translated + 1, translated + 2)
+			} else {
+				log!(info, "Migration did not execute. This probably should be removed");
+				T::DbWeight::get().reads(1)
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+			ensure!(
+				Pallet::<T>::current_storage_version() > Pallet::<T>::on_chain_storage_version(),
+				"the on_chain version is equal or more than the current one"
+			);
+			Ok(Vec::new())
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
+			// ensure all BondedPools items now contain an `inner.commission: Commission` field.
+			ensure!(
+				BondedPools::<T>::iter().all(|(_, inner)| inner.commission.current.is_none() &&
+					inner.commission.max.is_none() &&
+					inner.commission.change_rate.is_none() &&
+					inner.commission.throttle_from.is_none()),
+				"a commission value has been incorrectly set"
+			);
+			ensure!(
+				GlobalMaxCommission::<T>::get() == Some(U::get()),
+				"global maximum commission error"
+			);
+			ensure!(Pallet::<T>::on_chain_storage_version() == 4, "wrong storage version");
 			Ok(())
 		}
 	}

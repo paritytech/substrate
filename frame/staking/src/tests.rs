@@ -30,7 +30,7 @@ use pallet_balances::Error as BalancesError;
 use sp_runtime::{
 	assert_eq_error_rate,
 	traits::{BadOrigin, Dispatchable},
-	Perbill, Percent, Rounding,
+	Perbill, Percent, Rounding, TokenError,
 };
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
@@ -98,8 +98,8 @@ fn force_unstake_works() {
 		add_slash(&11);
 		// Cant transfer
 		assert_noop!(
-			Balances::transfer(RuntimeOrigin::signed(11), 1, 10),
-			BalancesError::<Test, _>::LiquidityRestrictions
+			Balances::transfer_allow_death(RuntimeOrigin::signed(11), 1, 10),
+			TokenError::Frozen,
 		);
 		// Force unstake requires root.
 		assert_noop!(Staking::force_unstake(RuntimeOrigin::signed(11), 11, 2), BadOrigin);
@@ -113,7 +113,7 @@ fn force_unstake_works() {
 		// No longer bonded.
 		assert_eq!(Staking::bonded(&11), None);
 		// Transfer works.
-		assert_ok!(Balances::transfer(RuntimeOrigin::signed(11), 1, 10));
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(11), 1, 10));
 	});
 }
 
@@ -960,14 +960,14 @@ fn cannot_transfer_staked_balance() {
 		assert_eq!(Staking::eras_stakers(active_era(), 11).total, 1000);
 		// Confirm account 11 cannot transfer as a result
 		assert_noop!(
-			Balances::transfer(RuntimeOrigin::signed(11), 20, 1),
-			BalancesError::<Test, _>::LiquidityRestrictions
+			Balances::transfer_allow_death(RuntimeOrigin::signed(11), 20, 1),
+			TokenError::Frozen,
 		);
 
 		// Give account 11 extra free balance
 		let _ = Balances::make_free_balance_be(&11, 10000);
 		// Confirm that account 11 can now transfer some balance
-		assert_ok!(Balances::transfer(RuntimeOrigin::signed(11), 20, 1));
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(11), 20, 1));
 	});
 }
 
@@ -985,10 +985,10 @@ fn cannot_transfer_staked_balance_2() {
 		assert_eq!(Staking::eras_stakers(active_era(), 21).total, 1000);
 		// Confirm account 21 can transfer at most 1000
 		assert_noop!(
-			Balances::transfer(RuntimeOrigin::signed(21), 20, 1001),
-			BalancesError::<Test, _>::LiquidityRestrictions
+			Balances::transfer_allow_death(RuntimeOrigin::signed(21), 20, 1001),
+			TokenError::Frozen,
 		);
-		assert_ok!(Balances::transfer(RuntimeOrigin::signed(21), 20, 1000));
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(21), 20, 1000));
 	});
 }
 
@@ -4187,7 +4187,7 @@ fn payout_creates_controller() {
 		bond_nominator(1234, 1337, 100, vec![11]);
 
 		// kill controller
-		assert_ok!(Balances::transfer(RuntimeOrigin::signed(1337), 1234, 100));
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1337), 1234, 100));
 		assert_eq!(Balances::free_balance(1337), 0);
 
 		mock::start_active_era(1);
@@ -5845,6 +5845,7 @@ mod on_staking_update {
 	#[test]
 	fn on_validator_update() {
 		ExtBuilder::default().check_events(true).build_and_execute(|| {
+			assert!(Validators::<Test>::contains_key(11));
 			assert_ok!(Staking::validate(RuntimeOrigin::signed(10), ValidatorPrefs::default()));
 			assert_eq!(EmittedEvents::take(), vec![ValidatorUpdate(11)]);
 		});
@@ -5874,6 +5875,7 @@ mod on_staking_update {
 	#[test]
 	fn on_nominator_update() {
 		ExtBuilder::default().check_events(true).nominate(true).build_and_execute(|| {
+			assert!(Nominators::<Test>::contains_key(101));
 			assert_ok!(Staking::nominate(RuntimeOrigin::signed(100), vec![11]));
 			assert_eq!(EmittedEvents::take(), vec![NominatorUpdate(101, vec![11, 21])]);
 		});
@@ -5901,6 +5903,25 @@ mod on_staking_update {
 				EmittedEvents::take(),
 				vec![NominatorRemove(101, vec![11, 21]), Unstake(101)]
 			);
+
+			assert_ok!(Staking::bond(
+				RuntimeOrigin::signed(1),
+				2,
+				10,
+				RewardDestination::Controller
+			));
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(2), vec![11]));
+			assert_eq!(EmittedEvents::take(), vec![StakeUpdate(1, None), NominatorAdd(1)]);
+
+			assert_ok!(Staking::chill(RuntimeOrigin::signed(2)));
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(2), 10));
+			assert_eq!(
+				EmittedEvents::take(),
+				[
+					NominatorRemove(1, vec![11]),
+					StakeUpdate(1, Some(Stake { stash: 1, total: 10, active: 10 }))
+				]
+			);
 		});
 	}
 
@@ -5909,6 +5930,59 @@ mod on_staking_update {
 		ExtBuilder::default().check_events(true).nominate(true).build_and_execute(|| {
 			assert_ok!(Staking::force_unstake(RuntimeOrigin::root(), 11, 0));
 			assert_eq!(EmittedEvents::take(), vec![ValidatorRemove(11), Unstake(11)]);
+
+			assert_ok!(Staking::bond(
+				RuntimeOrigin::signed(1),
+				2,
+				10,
+				RewardDestination::Controller
+			));
+			assert_ok!(Staking::validate(RuntimeOrigin::signed(2), ValidatorPrefs::default()));
+			assert_eq!(EmittedEvents::take(), vec![StakeUpdate(1, None), ValidatorAdd(1)]);
+
+			assert_ok!(Staking::chill(RuntimeOrigin::signed(2)));
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(2), 10));
+			assert_eq!(
+				EmittedEvents::take(),
+				[
+					ValidatorRemove(1),
+					StakeUpdate(1, Some(Stake { stash: 1, total: 10, active: 10 }))
+				]
+			);
+		});
+	}
+
+	#[test]
+	fn validator_to_nominator() {
+		ExtBuilder::default().check_events(true).build_and_execute(|| {
+			assert_ok!(Staking::bond(
+				RuntimeOrigin::signed(1),
+				2,
+				10,
+				RewardDestination::Controller
+			));
+			assert_ok!(Staking::validate(RuntimeOrigin::signed(2), ValidatorPrefs::default()));
+			assert_eq!(EmittedEvents::take(), vec![StakeUpdate(1, None), ValidatorAdd(1)]);
+
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(2), vec![11]));
+			assert_eq!(EmittedEvents::take(), vec![ValidatorRemove(1), NominatorAdd(1)]);
+		});
+	}
+
+	#[test]
+	fn nominator_to_validator() {
+		ExtBuilder::default().check_events(true).build_and_execute(|| {
+			assert_ok!(Staking::bond(
+				RuntimeOrigin::signed(1),
+				2,
+				10,
+				RewardDestination::Controller
+			));
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(2), vec![11]));
+			assert_eq!(EmittedEvents::take(), vec![StakeUpdate(1, None), NominatorAdd(1)]);
+
+			assert_ok!(Staking::validate(RuntimeOrigin::signed(2), ValidatorPrefs::default()));
+			assert_eq!(EmittedEvents::take(), vec![NominatorRemove(1, vec![11]), ValidatorAdd(1)]);
 		});
 	}
 

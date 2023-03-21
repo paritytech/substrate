@@ -403,9 +403,9 @@ pub mod pallet {
 		/// The management team changed.
 		TeamChanged {
 			collection: T::CollectionId,
-			issuer: T::AccountId,
-			admin: T::AccountId,
-			freezer: T::AccountId,
+			issuer: Option<T::AccountId>,
+			admin: Option<T::AccountId>,
+			freezer: Option<T::AccountId>,
 		},
 		/// An `item` of a `collection` has been approved by the `owner` for transfer by
 		/// a `delegate`.
@@ -1136,6 +1136,9 @@ pub mod pallet {
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
 		/// `collection`.
 		///
+		/// Note: by setting the role to `None` only the `ForceOrigin` will be able to change it
+		/// after to `Some(account)`.
+		///
 		/// - `collection`: The collection whose team should be changed.
 		/// - `issuer`: The new Issuer of this collection.
 		/// - `admin`: The new Admin of this collection.
@@ -1149,16 +1152,16 @@ pub mod pallet {
 		pub fn set_team(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			issuer: AccountIdLookupOf<T>,
-			admin: AccountIdLookupOf<T>,
-			freezer: AccountIdLookupOf<T>,
+			issuer: Option<AccountIdLookupOf<T>>,
+			admin: Option<AccountIdLookupOf<T>>,
+			freezer: Option<AccountIdLookupOf<T>>,
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
-			let issuer = T::Lookup::lookup(issuer)?;
-			let admin = T::Lookup::lookup(admin)?;
-			let freezer = T::Lookup::lookup(freezer)?;
+			let issuer = issuer.map(T::Lookup::lookup).transpose()?;
+			let admin = admin.map(T::Lookup::lookup).transpose()?;
+			let freezer = freezer.map(T::Lookup::lookup).transpose()?;
 			Self::do_set_team(maybe_check_owner, collection, issuer, admin, freezer)
 		}
 

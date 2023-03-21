@@ -540,9 +540,9 @@ pub mod pallet {
 		/// Minimum balance should be non-zero.
 		MinBalanceZero,
 		/// Unable to increment the consumer reference counters on the account. Either no provider
-		/// reference exists to allow a non-zero balance of a non-self-sufficient asset, or the
-		/// maximum number of consumers has been reached.
-		NoProvider,
+		/// reference exists to allow a non-zero balance of a non-self-sufficient asset, or one
+		/// fewer then the maximum number of consumers has been reached.
+		UnavailableConsumer,
 		/// Invalid metadata given.
 		BadMetadata,
 		/// No approval exists that would allow the transfer.

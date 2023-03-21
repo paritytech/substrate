@@ -20,7 +20,7 @@ use frame_election_provider_support::VoteWeight;
 use frame_support::{pallet_prelude::*, parameter_types, traits::ConstU64, PalletId};
 use sp_runtime::{
 	traits::{Convert, IdentityLookup},
-	FixedU128,
+	FixedU128, Perbill,
 };
 
 type AccountId = u128;
@@ -75,6 +75,10 @@ impl pallet_balances::Config for Runtime {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 	type WeightInfo = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type HoldIdentifier = ();
+	type MaxHolds = ();
 }
 
 pallet_staking_reward_curve::build! {
@@ -204,6 +208,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		max_pools: Some(3),
 		max_members_per_pool: Some(3),
 		max_members: Some(3 * 3),
+		global_max_commission: Some(Perbill::from_percent(50)),
 	}
 	.assimilate_storage(&mut storage);
 	sp_io::TestExternalities::from(storage)

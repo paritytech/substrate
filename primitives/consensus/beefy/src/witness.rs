@@ -76,7 +76,7 @@ impl<TBlockNumber, TMerkleRoot> SignedCommitmentWitness<TBlockNumber, TMerkleRoo
 mod tests {
 
 	use sp_core::{keccak_256, Pair};
-	use sp_keystore::{testing::KeyStore, SyncCryptoStore, SyncCryptoStorePtr};
+	use sp_keystore::{testing::MemoryKeystore, Keystore, KeystorePtr};
 
 	use super::*;
 	use codec::Decode;
@@ -90,20 +90,18 @@ mod tests {
 
 	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
 	fn mock_signatures() -> (crypto::Signature, crypto::Signature) {
-		let store: SyncCryptoStorePtr = KeyStore::new().into();
+		let store: KeystorePtr = MemoryKeystore::new().into();
 
 		let alice = sp_core::ecdsa::Pair::from_string("//Alice", None).unwrap();
-		let _ =
-			SyncCryptoStore::insert_unknown(&*store, KEY_TYPE, "//Alice", alice.public().as_ref())
-				.unwrap();
+		let _ = Keystore::insert(&*store, KEY_TYPE, "//Alice", alice.public().as_ref()).unwrap();
 
 		let msg = keccak_256(b"This is the first message");
-		let sig1 = SyncCryptoStore::ecdsa_sign_prehashed(&*store, KEY_TYPE, &alice.public(), &msg)
+		let sig1 = Keystore::ecdsa_sign_prehashed(&*store, KEY_TYPE, &alice.public(), &msg)
 			.unwrap()
 			.unwrap();
 
 		let msg = keccak_256(b"This is the second message");
-		let sig2 = SyncCryptoStore::ecdsa_sign_prehashed(&*store, KEY_TYPE, &alice.public(), &msg)
+		let sig2 = Keystore::ecdsa_sign_prehashed(&*store, KEY_TYPE, &alice.public(), &msg)
 			.unwrap()
 			.unwrap();
 

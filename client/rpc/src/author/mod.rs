@@ -40,7 +40,7 @@ use sc_transaction_pool_api::{
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
-use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::{Keystore, KeystorePtr};
 use sp_runtime::{generic, traits::Block as BlockT};
 use sp_session::SessionKeys;
 
@@ -55,7 +55,7 @@ pub struct Author<P, Client> {
 	/// Transactions pool
 	pool: Arc<P>,
 	/// The key store.
-	keystore: SyncCryptoStorePtr,
+	keystore: KeystorePtr,
 	/// Whether to deny unsafe calls
 	deny_unsafe: DenyUnsafe,
 	/// Executor to spawn subscriptions.
@@ -67,7 +67,7 @@ impl<P, Client> Author<P, Client> {
 	pub fn new(
 		client: Arc<Client>,
 		pool: Arc<P>,
-		keystore: SyncCryptoStorePtr,
+		keystore: KeystorePtr,
 		deny_unsafe: DenyUnsafe,
 		executor: SubscriptionTaskExecutor,
 	) -> Self {
@@ -112,8 +112,8 @@ where
 		self.deny_unsafe.check_if_safe()?;
 
 		let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
-		SyncCryptoStore::insert_unknown(&*self.keystore, key_type, &suri, &public[..])
-			.map_err(|_| Error::KeyStoreUnavailable)?;
+		Keystore::insert(&*self.keystore, key_type, &suri, &public[..])
+			.map_err(|_| Error::KeystoreUnavailable)?;
 		Ok(())
 	}
 
@@ -139,14 +139,14 @@ where
 			.map_err(|e| Error::Client(Box::new(e)))?
 			.ok_or(Error::InvalidSessionKeys)?;
 
-		Ok(SyncCryptoStore::has_keys(&*self.keystore, &keys))
+		Ok(Keystore::has_keys(&*self.keystore, &keys))
 	}
 
 	fn has_key(&self, public_key: Bytes, key_type: String) -> RpcResult<bool> {
 		self.deny_unsafe.check_if_safe()?;
 
 		let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
-		Ok(SyncCryptoStore::has_keys(&*self.keystore, &[(public_key.to_vec(), key_type)]))
+		Ok(Keystore::has_keys(&*self.keystore, &[(public_key.to_vec(), key_type)]))
 	}
 
 	fn pending_extrinsics(&self) -> RpcResult<Vec<Bytes>> {

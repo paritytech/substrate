@@ -32,7 +32,7 @@ use sp_core::{
 	crypto::{ByteArray, Ss58Codec},
 	sr25519,
 };
-use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::{Keystore, KeystorePtr};
 
 /// A utility to easily create a testnet chain spec definition with a given set
 /// of authorities and endowed accounts and/or generate random accounts.
@@ -164,7 +164,7 @@ fn generate_chain_spec(
 
 fn generate_authority_keys_and_store(seeds: &[String], keystore_path: &Path) -> Result<(), String> {
 	for (n, seed) in seeds.iter().enumerate() {
-		let keystore: SyncCryptoStorePtr = Arc::new(
+		let keystore: KeystorePtr = Arc::new(
 			LocalKeystore::open(keystore_path.join(format!("auth-{}", n)), None)
 				.map_err(|err| err.to_string())?,
 		);
@@ -173,7 +173,7 @@ fn generate_authority_keys_and_store(seeds: &[String], keystore_path: &Path) -> 
 			chain_spec::authority_keys_from_seed(seed);
 
 		let insert_key = |key_type, public| {
-			SyncCryptoStore::insert_unknown(&*keystore, key_type, &format!("//{}", seed), public)
+			Keystore::insert(&*keystore, key_type, &format!("//{}", seed), public)
 				.map_err(|_| format!("Failed to insert key: {}", grandpa))
 		};
 

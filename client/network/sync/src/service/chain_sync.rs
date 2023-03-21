@@ -20,9 +20,9 @@ use futures::{channel::oneshot, Stream};
 use libp2p::PeerId;
 
 use sc_consensus::{BlockImportError, BlockImportStatus, JustificationSyncLink, Link};
-use sc_network_common::{
-	service::{NetworkBlock, NetworkSyncForkRequest},
-	sync::{ExtendedPeerInfo, SyncEvent, SyncEventStream, SyncStatus, SyncStatusProvider},
+use sc_network::{NetworkBlock, NetworkSyncForkRequest};
+use sc_network_common::sync::{
+	ExtendedPeerInfo, SyncEvent, SyncEventStream, SyncStatus, SyncStatusProvider,
 };
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
