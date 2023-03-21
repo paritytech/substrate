@@ -25,32 +25,35 @@
 
 use fraction::prelude::BigFraction as Fraction;
 use honggfuzz::fuzz;
-use sp_arithmetic::{traits::SaturatedConversion, PerThing, Perbill, Percent, Perquintill, *};
+use sp_arithmetic::{
+	traits::SaturatedConversion, PerThing, Perbill, Percent, Perquintill, Rounding::*, *,
+};
 
-/// Tries to demonstrate that `from_rational` is incorrect.
+/// Tries to demonstrate that `from_rational` is incorrect for any rounding modes.
 ///
 /// NOTE: This `Fraction` library is really slow. Using f128/f256 does not work for the large
 /// numbers. But an optimization could be done do use either floats or Fraction depending on the
 /// size of the inputs.
 fn main() {
 	loop {
-		fuzz!(|data: (u128, u128)| {
+		fuzz!(|data: (u128, u128, u8)| {
 			let (n, d) = (data.0.min(data.1), data.0.max(data.1).max(1));
+			let r = rounding_mode(data.2);
 
-			check::<PerU16>(n, d);
-			check::<Percent>(n, d);
-			check::<Perbill>(n, d);
-			check::<Perquintill>(n, d);
+			check::<PerU16>(n, d, r);
+			check::<Percent>(n, d, r);
+			check::<Perbill>(n, d, r);
+			check::<Perquintill>(n, d, r);
 		})
 	}
 }
 
-/// Assert that the parts of `from_rational` are correct.
-fn check<Per: PerThing>(a: u128, b: u128)
+/// Assert that the parts of `from_rational` are correct for the given rounding mode.
+fn check<Per: PerThing>(a: u128, b: u128, r: Rounding)
 where
 	Per::Inner: Into<u128>,
 {
-	let approx_ratio = Per::from_rational(a, b); // This rounds down.
+	let approx_ratio = Per::from_rational_with_rounding(a, b, r).unwrap();
 	let approx_parts = Fraction::from(approx_ratio.deconstruct().saturated_into::<u128>());
 
 	let perfect_ratio = if a == 0 && b == 0 {
@@ -58,11 +61,42 @@ where
 	} else {
 		Fraction::from(a) / Fraction::from(b.max(1))
 	};
-	let perfect_parts = (perfect_ratio * Fraction::from(Per::ACCURACY.into())).floor();
+	let perfect_parts = round(perfect_ratio * Fraction::from(Per::ACCURACY.into()), r);
 
 	assert_eq!(
 		approx_parts, perfect_parts,
 		"approx_parts: {}, perfect_parts: {}, a: {}, b: {}",
 		approx_parts, perfect_parts, a, b
 	);
+}
+
+/// Round a `Fraction` according to the given mode.
+fn round(f: Fraction, r: Rounding) -> Fraction {
+	match r {
+		Up => f.ceil(),
+		NearestPrefUp =>
+			if f.fract() < Fraction::from(0.5) {
+				f.floor()
+			} else {
+				f.ceil()
+			},
+		Down => f.floor(),
+		NearestPrefDown =>
+			if f.fract() > Fraction::from(0.5) {
+				f.ceil()
+			} else {
+				f.floor()
+			},
+	}
+}
+
+/// Create a `Rounding` from an `u8`.
+fn rounding_mode(r: u8) -> Rounding {
+	match r % 4u8 {
+		0 => Up,
+		1 => NearestPrefUp,
+		2 => Down,
+		3 => NearestPrefDown,
+		_ => unreachable!("Cargo does not know that this is unreachable…"),
+	}
 }
