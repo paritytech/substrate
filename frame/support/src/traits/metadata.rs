@@ -109,7 +109,9 @@ pub trait GetCallName {
 
 /// Gets the function index of the Call
 pub trait GetCallIndex {
+	/// Return all call indices.
 	fn get_call_indices() -> &'static [u8];
+	/// Return the index of this call.
 	fn get_call_index(&self) -> u8;
 }
 
