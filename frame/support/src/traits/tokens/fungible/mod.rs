@@ -54,12 +54,15 @@ pub use item_of::ItemOf;
 pub use regular::{
 	Balanced, DecreaseIssuance, Dust, IncreaseIssuance, Inspect, Mutate, Unbalanced,
 };
+use sp_core::Get;
 use sp_runtime::traits::Convert;
 
 use crate::traits::{Consideration, Footprint};
 
 pub struct FreezeConsideration<A, F, R, D>(sp_std::marker::PhantomData<(A, F, R, D)>);
-impl<A, F: MutateFreeze<A>, R: F::Id, D: Convert<Footprint, F::Balance>> Consideration<A> for FreezeConsideration<A, F, R, D> {
+impl<A, F: MutateFreeze<A>, R: Get<F::Id>, D: Convert<Footprint, F::Balance>> Consideration<A>
+	for FreezeConsideration<A, F, R, D>
+{
 	type Ticket = ();
 	fn update(
 		who: &A,
@@ -74,16 +77,18 @@ impl<A, F: MutateFreeze<A>, R: F::Id, D: Convert<Footprint, F::Balance>> Conside
 }
 
 pub struct HoldConsideration<A, F, R, D>(sp_std::marker::PhantomData<(A, F, R, D)>);
-impl<A, F: MutateHold<A>, R: F::Id, D: Convert<Footprint, F::Balance>> Consideration<A> for HoldConsideration<A, F, R, D> {
+impl<A, F: MutateHold<A>, R: Get<F::Reason>, D: Convert<Footprint, F::Balance>> Consideration<A>
+	for HoldConsideration<A, F, R, D>
+{
 	type Ticket = ();
 	fn update(
 		who: &A,
 		_old: Option<Self::Ticket>,
 		new: Option<Footprint>,
 	) -> Result<Self::Ticket, sp_runtime::DispatchError> {
-		match (old, new) {
+		match new {
 			Some(footprint) => F::set_on_hold(&R::get(), who, D::convert(footprint)),
-			None => F::release_all(&R::get(), who, super::Precision::BestEffort),
+			None => F::release_all(&R::get(), who, super::Precision::BestEffort).map(|_| ()),
 		}
 	}
 }

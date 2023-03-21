@@ -17,14 +17,14 @@
 
 //! Traits for encoding data related to pallet's storage items.
 
+use super::Footprint;
 use crate::sp_std::collections::btree_set::BTreeSet;
-use codec::{Encode, FullCodec, MaxEncodedLen};
+use codec::{FullCodec, MaxEncodedLen};
 use impl_trait_for_tuples::impl_for_tuples;
 use scale_info::TypeInfo;
 pub use sp_core::storage::TrackedStorageKey;
 use sp_runtime::{traits::Member, DispatchError};
 use sp_std::prelude::*;
-use super::Footprint;
 
 /// An instance of a pallet in the storage.
 ///
@@ -134,17 +134,11 @@ pub trait Consideration<AccountId> {
 		new: Option<Footprint>,
 	) -> Result<Self::Ticket, DispatchError>;
 
-	fn new(
-		who: &AccountId,
-		new: Option<Footprint>,
-	) -> Result<Self::Ticket, DispatchError> {
+	fn new(who: &AccountId, new: Option<Footprint>) -> Result<Self::Ticket, DispatchError> {
 		Self::update(who, None, new)
 	}
 
-	fn drop(
-		who: &AccountId,
-		old: Option<Self::Ticket>,
-	) -> Result<Self::Ticket, DispatchError> {
+	fn drop(who: &AccountId, old: Option<Self::Ticket>) -> Result<Self::Ticket, DispatchError> {
 		Self::update(who, old, None)
 	}
 }
