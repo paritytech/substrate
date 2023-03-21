@@ -327,24 +327,25 @@ impl Signature {
 		Some(Signature(r))
 	}
 
-	/// A new instance from an H512.
+	/// A new instance from an H768.
 	///
 	/// NOTE: No checking goes on to ensure this is a real signature. Only use it if
 	/// you are certain that the array actually is a signature. GIGO!
-	pub fn from_h512(v: H768) -> Signature {
+	pub fn from_h768(v: H768) -> Signature {
 		Signature(v.into())
 	}
 }
 
-/// A localized signature also contains sender information.
-#[cfg(feature = "std")]
-#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode)]
-pub struct LocalizedSignature {
-	/// The signer of the signature.
-	pub signer: Public,
-	/// The signature itself.
-	pub signature: Signature,
-}
+// TODO: ADD just if and WHEN is required (if ever)
+// /// A localized signature also contains sender information.
+// #[cfg(feature = "std")]
+// #[derive(PartialEq, Eq, Clone, Debug, Encode, Decode)]
+// pub struct LocalizedSignature {
+// 	/// The signer of the signature.
+// 	pub signer: Public,
+// 	/// The signature itself.
+// 	pub signature: Signature,
+// }
 
 impl Public {
 	/// A new instance from the given BLS377::PUBLICKEY_SERIALIZED_SIZE-byte `data`.
@@ -393,17 +394,10 @@ impl From<&Public> for CryptoTypePublicPair {
 	}
 }
 
-///???
-///What is HDKD? What is hard junction? should seed be 48bytes
 /// Derive a single hard junction.
 #[cfg(feature = "full_crypto")]
 fn derive_hard_junction(secret_seed: &Seed, cc: &[u8; 32]) -> Seed {
 	("BLS12377HDKD", secret_seed, cc).using_encoded(sp_core_hashing::blake2_256)
-	// 	using_encoded(|data| {
-	// 	let mut res = [0u8; BLS377::SECRET_KEY_SIZE];
-	// 	res.copy_from_slice(blake2::Blake2b::blake2b(BLS377::SECRET_KEY_SIZE, &[], data).as_bytes());
-	// 	res
-	// })
 }
 
 /// An error when deriving a key.
