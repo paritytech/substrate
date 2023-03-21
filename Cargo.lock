@@ -9055,7 +9055,6 @@ dependencies = [
  "sc-utils",
  "serde_json",
  "sp-arithmetic",
- "tokio",
  "wasm-timer",
 ]
 
