@@ -234,7 +234,7 @@ mod tests {
 	parameter_types! {
 		pub static MaxWinners: u32 = 10;
 		pub static DesiredTargets: u32 = 2;
-		pub static ElectionBounds: crate::ElectionBounds = ElectionBoundsBuilder::new().voters_count(600).targets_count(400).build();
+		pub static ElectionBounds: crate::ElectionBounds = ElectionBoundsBuilder::new().voters_count(600.into()).targets_count(400.into()).build();
 	}
 
 	impl Config for PhragmenParams {

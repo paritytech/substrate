@@ -1086,8 +1086,8 @@ pub mod pallet {
 			T::ForceOrigin::ensure_origin(origin)?;
 			ensure!(Self::current_phase().is_emergency(), <Error<T>>::CallNotAllowed);
 			let election_bounds = ElectionBoundsBuilder::new()
-				.voters_count(maybe_max_voters.unwrap_or(0))
-				.targets_count(maybe_max_targets.unwrap_or(0))
+				.voters_count(maybe_max_voters.unwrap_or(0).into())
+				.targets_count(maybe_max_targets.unwrap_or(0).into())
 				.build();
 			let supports = T::GovernanceFallback::instant_elect(
 				election_bounds.voters,
@@ -1414,10 +1414,18 @@ impl<T: Config> Pallet<T> {
 	fn create_snapshot_external(
 	) -> Result<(Vec<T::AccountId>, Vec<VoterOf<T>>, u32), ElectionError<T>> {
 		let election_bounds = T::ElectionBounds::get();
-		let target_limit =
-			election_bounds.targets.count.unwrap_or(u32::MAX).saturated_into::<usize>();
-		let voter_limit =
-			election_bounds.voters.count.unwrap_or(u32::MAX).saturated_into::<usize>();
+		let target_limit = election_bounds
+			.targets
+			.count
+			.unwrap_or(u32::MAX.into())
+			.0
+			.saturated_into::<usize>();
+		let voter_limit = election_bounds
+			.voters
+			.count
+			.unwrap_or(u32::MAX.into())
+			.0
+			.saturated_into::<usize>();
 
 		let targets = T::DataProvider::electable_targets(election_bounds.targets)
 			.map_err(ElectionError::DataProvider)?;
@@ -2428,7 +2436,7 @@ mod tests {
 		// the `MockStaking` is designed such that if it has too many targets, it simply fails.
 		ExtBuilder::default().build_and_execute(|| {
 			// sets bounds on number of targets.
-			let new_bounds = ElectionBoundsBuilder::new().targets_count(1_000).build();
+			let new_bounds = ElectionBoundsBuilder::new().targets_count(1_000.into()).build();
 			crate::mock::ElectionsBounds::set(new_bounds);
 
 			crate::mock::Targets::set((0..(1_000 as AccountId) + 1).collect::<Vec<_>>());
@@ -2467,7 +2475,7 @@ mod tests {
 		// and if the backup mode is nothing, we go into the emergency mode..
 		ExtBuilder::default().onchain_fallback(false).build_and_execute(|| {
 			// sets bounds on number of targets.
-			let new_bounds = ElectionBoundsBuilder::new().targets_count(1_000).build();
+			let new_bounds = ElectionBoundsBuilder::new().targets_count(1_000.into()).build();
 			crate::mock::ElectionsBounds::set(new_bounds);
 
 			crate::mock::Targets::set((0..(1_000 as AccountId) + 1).collect::<Vec<_>>());
@@ -2502,7 +2510,7 @@ mod tests {
 			// we have 8 voters in total.
 			assert_eq!(crate::mock::Voters::get().len(), 8);
 			// but we want to take 2.
-			let new_bounds = ElectionBoundsBuilder::new().voters_count(2).build();
+			let new_bounds = ElectionBoundsBuilder::new().voters_count(2.into()).build();
 			crate::mock::ElectionsBounds::set(new_bounds);
 
 			// Signed phase opens just fine.

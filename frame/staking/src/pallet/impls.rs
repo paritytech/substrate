@@ -18,8 +18,8 @@
 //! Implementations for the Staking FRAME Pallet.
 
 use frame_election_provider_support::{
-	data_provider, BoundedSupportsOf, DataProviderBounds, ElectionDataProvider, ElectionProvider,
-	ScoreProvider, SortedListProvider, VoteWeight, VoterOf,
+	data_provider, BoundedSupportsOf, CountBound, DataProviderBounds, ElectionDataProvider,
+	ElectionProvider, ScoreProvider, SizeBound, SortedListProvider, VoteWeight, VoterOf,
 };
 use frame_support::{
 	dispatch::WithPostDispatchInfo,
@@ -760,7 +760,11 @@ impl<T: Config> Pallet<T> {
 
 		let max_allowed_len = {
 			let all_voter_count = T::VoterList::count();
-			voter_bounds.count.unwrap_or(all_voter_count).min(all_voter_count)
+			voter_bounds
+				.count
+				.unwrap_or(all_voter_count.into())
+				.min(all_voter_count.into())
+				.0
 		};
 
 		let mut all_voters = Vec::<_>::with_capacity(max_allowed_len as usize);
@@ -868,7 +872,11 @@ impl<T: Config> Pallet<T> {
 	pub fn get_npos_targets(target_bounds: DataProviderBounds) -> Vec<T::AccountId> {
 		let max_allowed_len = {
 			let all_target_count = T::TargetList::count();
-			target_bounds.count.unwrap_or(all_target_count).min(all_target_count)
+			target_bounds
+				.count
+				.unwrap_or(all_target_count.into())
+				.min(all_target_count.into())
+				.0
 		};
 
 		let mut all_targets = Vec::<T::AccountId>::with_capacity(max_allowed_len as usize);
@@ -1024,8 +1032,8 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		let voters = Self::get_npos_voters(bounds);
 
 		debug_assert!(!bounds.exhausted(
-			(voters.encoded_size().saturating_sub(1) as u32).into(),
-			(voters.len() as u32).into()
+			SizeBound(voters.encoded_size().saturating_sub(1) as u32).into(),
+			CountBound(voters.len() as u32).into()
 		));
 
 		Ok(voters)
@@ -1035,7 +1043,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		let target_count = T::TargetList::count();
 
 		// We can't handle this case yet -- return an error.
-		if bounds.exhausted(None, Some(target_count as u32)) {
+		if bounds.exhausted(None, CountBound(target_count as u32).into()) {
 			return Err("Target snapshot too big")
 		}
 

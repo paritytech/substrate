@@ -175,6 +175,8 @@
 
 pub mod onchain;
 pub mod traits;
+use core::ops::Add;
+
 use sp_runtime::traits::{Bounded, Saturating, Zero};
 use sp_std::{fmt::Debug, prelude::*};
 
@@ -664,14 +666,65 @@ pub type BoundedSupportsOf<E> = BoundedSupports<
 	<E as ElectionProviderBase>::AccountId,
 	<E as ElectionProviderBase>::MaxWinners,
 >;
+
 /// Count bound of data provider bounds.
-pub type CountBound = u32;
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct CountBound(pub u32);
+
+impl From<u32> for CountBound {
+	fn from(value: u32) -> Self {
+		CountBound(value)
+	}
+}
+
+impl Add for CountBound {
+	type Output = Self;
+	fn add(self, rhs: Self) -> Self::Output {
+		CountBound(self.0 + rhs.0)
+	}
+}
+
+impl Zero for CountBound {
+	fn is_zero(&self) -> bool {
+		self.0 == 0
+	}
+	fn zero() -> Self {
+		CountBound(0)
+	}
+}
+
 /// Size bound of data provider bounds.
-pub type SizeBound = u32;
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct SizeBound(pub u32);
+
+impl Zero for SizeBound {
+	fn is_zero(&self) -> bool {
+		self.0 == 0
+	}
+	fn zero() -> Self {
+		SizeBound(0)
+	}
+}
+
+impl Add for SizeBound {
+	type Output = Self;
+	fn add(self, rhs: Self) -> Self::Output {
+		SizeBound(self.0 + rhs.0)
+	}
+}
+
+impl From<u32> for SizeBound {
+	fn from(value: u32) -> Self {
+		SizeBound(value)
+	}
+}
 
 sp_core::generate_feature_enabled_macro!(runtime_benchmarks_enabled, feature = "runtime-benchmarks", $);
 sp_core::generate_feature_enabled_macro!(runtime_benchmarks_or_fuzz_enabled, any(feature = "runtime-benchmarks", feature = "fuzzing"), $);
 
+/// Data provider limits that can be bounded based on the count of elements or the scale encoded
+/// size of the final result in MB. It can be used to represent the bounds of election targets
+/// and voters or any other future unit.
 #[derive(Clone, Copy, Default, Debug)]
 pub struct DataProviderBounds {
 	pub count: Option<CountBound>,
@@ -697,16 +750,20 @@ impl DataProviderBounds {
 	/// Returns true if `given_size` or `given_count` exhausts `self.size` or `self_count`,
 	/// respectively.
 	pub fn exhausted(self, given_size: Option<SizeBound>, given_count: Option<CountBound>) -> bool {
-		self.count_exhausted(given_count.unwrap_or(0)) ||
-			self.size_exhausted(given_size.unwrap_or(0))
+		self.count_exhausted(given_count.unwrap_or(CountBound::zero())) ||
+			self.size_exhausted(given_size.unwrap_or(SizeBound::zero()))
 	}
 
 	/// Returns an instance of `Self` that is constructed by capping both the `count` and `size`
 	/// fields.
 	pub fn max(self, bounds: DataProviderBounds) -> Self {
 		DataProviderBounds {
-			count: self.count.map(|c| c.clamp(0, bounds.count.unwrap_or(u32::MAX)).into()),
-			size: self.size.map(|c| c.clamp(0, bounds.size.unwrap_or(u32::MAX)).into()),
+			count: self.count.map(|c| {
+				c.clamp(CountBound::zero(), bounds.count.unwrap_or(CountBound(u32::MAX))).into()
+			}),
+			size: self.size.map(|c| {
+				c.clamp(SizeBound::zero(), bounds.size.unwrap_or(SizeBound(u32::MAX))).into()
+			}),
 		}
 	}
 }

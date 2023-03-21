@@ -169,7 +169,7 @@ parameter_types! {
 	pub const BondingDuration: EraIndex = 3;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
-	pub static ElectionsBoundsOnChain: ElectionBounds = ElectionBoundsBuilder::new().build();
+	pub const ElectionsBoundsOnChain: ElectionBounds = ElectionBoundsBuilder::new().build();
 }
 
 pub struct OnChainSeqPhragmen;

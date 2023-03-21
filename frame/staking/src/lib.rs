@@ -833,7 +833,7 @@ impl<AccountId> ElectionSizeTracker<AccountId> {
 		let voter_size = Self::voter_size(votes);
 		let size_after = self.size.saturating_add(voter_size);
 
-		match bounds.size_exhausted(size_after as SizeBound) {
+		match bounds.size_exhausted(SizeBound(size_after as u32)) {
 			true => Err(()),
 			false => {
 				self.size = size_after;
