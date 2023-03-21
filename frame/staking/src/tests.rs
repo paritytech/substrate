@@ -5461,7 +5461,7 @@ fn proportional_ledger_slash_works() {
 	ledger.active = unit;
 	ledger.total = unit * 4 + value;
 	// When
-	assert_eq!(ledger.slash(slash, 0, 0), slash - 5);
+	assert_eq!(ledger.slash(slash, 0, 0), slash);
 	// Then
 	// The amount slashed out of `unit`
 	let affected_balance = value + unit * 4;
