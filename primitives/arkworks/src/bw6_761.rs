@@ -32,7 +32,6 @@ use ark_ec::{
 	pairing::{MillerLoopOutput, Pairing},
 	short_weierstrass::SWCurveConfig,
 };
-use ark_bw6_761::BW6_761;
 use sp_std::vec::Vec;
 
 /// Compute multi miller loop through arkworks
