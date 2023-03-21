@@ -146,6 +146,10 @@ impl InterfaceDef {
 			calls.check_selectors(&selectors)?;
 		}
 
+		if let Some(selectors) = selectors.as_ref() {
+			selectors.check_duplicate_names()?;
+		}
+
 		Ok(InterfaceDef { index, calls, views, selectors, where_clause })
 	}
 }

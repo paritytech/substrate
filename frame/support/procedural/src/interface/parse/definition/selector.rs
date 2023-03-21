@@ -20,6 +20,7 @@ use crate::interface::{
 	SelectorType,
 };
 use quote::ToTokens;
+use std::collections::HashMap;
 use syn::spanned::Spanned;
 
 pub struct SelectorDef {
@@ -28,6 +29,25 @@ pub struct SelectorDef {
 }
 
 impl SelectorDef {
+	pub fn check_duplicate_names(&self) -> syn::Result<()> {
+		let mut names = HashMap::new();
+		for selector in self.selectors.iter() {
+			match names.insert(selector.name.clone(), selector) {
+				Some(given) =>
+					return Err(syn::Error::new(
+						given
+							.attr_span
+							.join(selector.attr_span)
+							.expect("Same trait, same file. qed."),
+						format!("Selectors have duplicate names of {:?}", given.name.clone()),
+					)),
+				None => (),
+			}
+		}
+
+		Ok(())
+	}
+
 	pub fn check_selector(&self, selector: &SelectorType) -> syn::Result<()> {
 		match selector {
 			SelectorType::Default { return_ty } => {
@@ -194,13 +214,13 @@ impl SelectorDef {
 
 pub struct SingleSelectorDef {
 	/// Function name.
-	name: syn::Ident,
+	pub(self) name: syn::Ident,
 	/// The return type of the selector.
-	pub output: Box<syn::Type>,
+	pub(self) output: Box<syn::Type>,
 	/// The span of the selector definition
-	attr_span: proc_macro2::Span,
+	pub(self) attr_span: proc_macro2::Span,
 	/// Signal if default selector
-	default: bool,
+	pub(self) default: bool,
 }
 
 impl SingleSelectorDef {

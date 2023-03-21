@@ -27,11 +27,11 @@ use frame_support_procedural_tools::generate_crate_access_2018;
 use syn::spanned::Spanned;
 
 pub struct Def {
-	item: syn::ItemMod,
-	interface: InterfaceDef,
-	error: Option<ErrorDef>,
-	event: Option<EventDef>,
-	frame_support: syn::Ident,
+	pub item: syn::ItemMod,
+	pub interface: InterfaceDef,
+	pub error: Option<ErrorDef>,
+	pub event: Option<EventDef>,
+	pub frame_support: syn::Ident,
 }
 
 impl Def {

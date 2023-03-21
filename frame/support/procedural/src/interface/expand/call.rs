@@ -15,34 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod call;
-mod selector;
-mod view;
-
 use crate::interface::parse::Def;
-use quote::ToTokens;
 
-pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
-	let selectors = selector::expand(&def);
-	let calls = call::expand(&def);
-	let views = view::expand(&def);
-
-	// TODO (needs to be parsed first)
-	//  * Expand error
-	//  * Expand event
-
-	let new_items = quote::quote!(
-		#selectors
-		#calls
-		#views
-	);
-
-	def.item
-		.content
-		.as_mut()
-		.expect("This is checked by parsing")
-		.1
-		.push(syn::Item::Verbatim(new_items));
-
-	def.item.into_token_stream()
+pub fn expand(def: &Def) -> proc_macro2::TokenStream {
+	todo!()
 }
