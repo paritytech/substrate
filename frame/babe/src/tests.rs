@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +21,7 @@ use super::{Call, *};
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
 	dispatch::{GetDispatchInfo, Pays},
-	traits::{Currency, EstimateNextSessionRotation, OnFinalize},
+	traits::{Currency, EstimateNextSessionRotation, KeyOwnerProofSystem, OnFinalize},
 };
 use mock::*;
 use pallet_session::ShouldEndSession;

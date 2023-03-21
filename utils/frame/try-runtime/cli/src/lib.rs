@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -378,12 +378,12 @@ use sp_core::{
 	},
 	storage::well_known_keys,
 	testing::TaskExecutor,
-	traits::{ReadRuntimeVersion, TaskExecutorExt},
+	traits::{CallContext, ReadRuntimeVersion, TaskExecutorExt},
 	twox_128, H256,
 };
 use sp_externalities::Extensions;
 use sp_inherents::InherentData;
-use sp_keystore::{testing::KeyStore, KeystoreExt};
+use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
 use sp_runtime::{
 	traits::{BlakeTwo256, Block as BlockT, NumberFor},
 	DeserializeOwned, Digest,
@@ -599,8 +599,6 @@ pub struct LiveState {
 #[derive(Debug, Clone, clap::Subcommand)]
 pub enum State {
 	/// Use a state snapshot as the source of runtime state.
-	///
-	/// This can be crated by passing a value to [`State::Live::snapshot_path`].
 	Snap {
 		#[arg(short, long)]
 		snapshot_path: PathBuf,
@@ -818,9 +816,10 @@ pub(crate) fn full_extensions() -> Extensions {
 	extensions.register(TaskExecutorExt::new(TaskExecutor::new()));
 	let (offchain, _offchain_state) = TestOffchainExt::new();
 	let (pool, _pool_state) = TestTransactionPoolExt::new();
+	let keystore = MemoryKeystore::new();
 	extensions.register(OffchainDbExt::new(offchain.clone()));
 	extensions.register(OffchainWorkerExt::new(offchain));
-	extensions.register(KeystoreExt(std::sync::Arc::new(KeyStore::new())));
+	extensions.register(KeystoreExt::new(keystore));
 	extensions.register(TransactionPoolExt::new(pool));
 
 	extensions
@@ -877,6 +876,7 @@ pub(crate) fn state_machine_call<Block: BlockT, HostFns: HostFunctions>(
 		extensions,
 		&sp_state_machine::backend::BackendRuntimeCode::new(&ext.backend).runtime_code()?,
 		sp_core::testing::TaskExecutor::new(),
+		CallContext::Offchain,
 	)
 	.execute(sp_state_machine::ExecutionStrategy::AlwaysWasm)
 	.map_err(|e| format!("failed to execute '{}': {}", method, e))
@@ -916,6 +916,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 		extensions,
 		&runtime_code,
 		sp_core::testing::TaskExecutor::new(),
+		CallContext::Offchain,
 	)
 	.execute(sp_state_machine::ExecutionStrategy::AlwaysWasm)
 	.map_err(|e| format!("failed to execute {}: {}", method, e))

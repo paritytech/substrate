@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -37,7 +37,7 @@ pub struct Weight {
 
 impl From<OldWeight> for Weight {
 	fn from(old: OldWeight) -> Self {
-		Weight::from_ref_time(old.0)
+		Weight::from_parts(old.0, 0)
 	}
 }
 
@@ -74,6 +74,16 @@ impl Weight {
 		&mut self.proof_size
 	}
 
+	/// Return self but discard any reference time.
+	pub const fn without_ref_time(&self) -> Self {
+		Self { ref_time: 0, proof_size: self.proof_size }
+	}
+
+	/// Return self but discard any proof size.
+	pub const fn without_proof_size(&self) -> Self {
+		Self { ref_time: self.ref_time, proof_size: 0 }
+	}
+
 	pub const MAX: Self = Self { ref_time: u64::MAX, proof_size: u64::MAX };
 
 	/// Get the conservative min of `self` and `other` weight.
@@ -103,11 +113,13 @@ impl Weight {
 	}
 
 	/// Construct [`Weight`] with reference time weight and 0 storage size weight.
+	#[deprecated = "Will be removed soon; use `from_parts` instead."]
 	pub const fn from_ref_time(ref_time: u64) -> Self {
 		Self { ref_time, proof_size: 0 }
 	}
 
 	/// Construct [`Weight`] with storage size weight and 0 reference time weight.
+	#[deprecated = "Will be removed soon; use `from_parts` instead."]
 	pub const fn from_proof_size(proof_size: u64) -> Self {
 		Self { ref_time: 0, proof_size }
 	}
@@ -238,7 +250,7 @@ impl Weight {
 	/// of all those divisions. Returns `None` in case **all** components of `other` are zero.
 	///
 	/// This returns `Some` even if some components of `other` are zero as long as there is at least
-	/// one non-zero component in `other`. The devision for this particular component will then
+	/// one non-zero component in `other`. The division for this particular component will then
 	/// yield the maximum value (e.g u64::MAX). This is because we assume not every operation and
 	/// hence each `Weight` will necessarily use each resource.
 	pub const fn checked_div_per_component(self, other: &Self) -> Option<u64> {

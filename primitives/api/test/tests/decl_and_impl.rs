@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -166,17 +166,17 @@ fn test_client_side_function_signature() {
 
 #[test]
 fn check_runtime_api_info() {
-	assert_eq!(&<dyn Api::<Block>>::ID, &runtime_decl_for_Api::ID);
-	assert_eq!(<dyn Api::<Block>>::VERSION, runtime_decl_for_Api::VERSION);
+	assert_eq!(&<dyn Api::<Block>>::ID, &runtime_decl_for_api::ID);
+	assert_eq!(<dyn Api::<Block>>::VERSION, runtime_decl_for_api::VERSION);
 	assert_eq!(<dyn Api::<Block>>::VERSION, 1);
 
 	assert_eq!(
 		<dyn ApiWithCustomVersion::<Block>>::VERSION,
-		runtime_decl_for_ApiWithCustomVersion::VERSION,
+		runtime_decl_for_api_with_custom_version::VERSION,
 	);
 	assert_eq!(
 		&<dyn ApiWithCustomVersion::<Block>>::ID,
-		&runtime_decl_for_ApiWithCustomVersion::ID,
+		&runtime_decl_for_api_with_custom_version::ID,
 	);
 	assert_eq!(<dyn ApiWithCustomVersion::<Block>>::VERSION, 2);
 

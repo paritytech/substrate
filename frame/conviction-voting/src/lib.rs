@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -92,7 +92,6 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(_);
 
 	#[pallet::config]
@@ -389,7 +388,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		poll_index: PollIndexOf<T, I>,
 		vote: AccountVote<BalanceOf<T, I>>,
 	) -> DispatchResult {
-		ensure!(vote.balance() <= T::Currency::free_balance(who), Error::<T, I>::InsufficientFunds);
+		ensure!(
+			vote.balance() <= T::Currency::total_balance(who),
+			Error::<T, I>::InsufficientFunds
+		);
 		T::Polls::try_access_poll(poll_index, |poll_status| {
 			let (tally, class) = poll_status.ensure_ongoing().ok_or(Error::<T, I>::NotOngoing)?;
 			VotingFor::<T, I>::try_mutate(who, &class, |voting| {
@@ -549,7 +551,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<u32, DispatchError> {
 		ensure!(who != target, Error::<T, I>::Nonsense);
 		T::Polls::classes().binary_search(&class).map_err(|_| Error::<T, I>::BadClass)?;
-		ensure!(balance <= T::Currency::free_balance(&who), Error::<T, I>::InsufficientFunds);
+		ensure!(balance <= T::Currency::total_balance(&who), Error::<T, I>::InsufficientFunds);
 		let votes =
 			VotingFor::<T, I>::try_mutate(&who, &class, |voting| -> Result<u32, DispatchError> {
 				let old = sp_std::mem::replace(

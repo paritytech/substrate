@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -305,17 +305,6 @@ impl sp_std::fmt::Debug for Signature {
 	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		Ok(())
 	}
-}
-
-/// A localized signature also contains sender information.
-/// NOTE: Encode and Decode traits are supported in ed25519 but not possible for now here.
-#[cfg(feature = "std")]
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub struct LocalizedSignature {
-	/// The signer of the signature.
-	pub signer: Public,
-	/// The signature itself.
-	pub signature: Signature,
 }
 
 impl UncheckedFrom<[u8; 64]> for Signature {

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -43,9 +43,8 @@ use log::{debug, error, log_enabled};
 use prometheus_endpoint::{register, Counter, CounterVec, Gauge, Opts, U64};
 use prost::Message;
 use rand::{seq::SliceRandom, thread_rng};
-use sc_network_common::{
-	protocol::event::DhtEvent,
-	service::{KademliaKey, NetworkDHTProvider, NetworkSigner, NetworkStateInfo, Signature},
+use sc_network::{
+	event::DhtEvent, KademliaKey, NetworkDHTProvider, NetworkSigner, NetworkStateInfo, Signature,
 };
 use sp_api::{ApiError, ProvideRuntimeApi};
 use sp_authority_discovery::{
@@ -54,7 +53,7 @@ use sp_authority_discovery::{
 use sp_blockchain::HeaderBackend;
 
 use sp_core::crypto::{key_types, CryptoTypePublicPair, Pair};
-use sp_keystore::CryptoStore;
+use sp_keystore::{Keystore, KeystorePtr};
 use sp_runtime::traits::Block as BlockT;
 
 mod addr_cache;
@@ -79,7 +78,7 @@ const MAX_IN_FLIGHT_LOOKUPS: usize = 8;
 /// Role an authority discovery [`Worker`] can run as.
 pub enum Role {
 	/// Publish own addresses and discover addresses of others.
-	PublishAndDiscover(Arc<dyn CryptoStore>),
+	PublishAndDiscover(KeystorePtr),
 	/// Discover addresses of others.
 	Discover,
 }
@@ -365,8 +364,7 @@ where
 			Some(peer_signature),
 			key_store.as_ref(),
 			keys_vec,
-		)
-		.await?;
+		)?;
 
 		for (key, value) in kv_pairs.into_iter() {
 			self.network.put_value(key, value);
@@ -383,7 +381,6 @@ where
 		let local_keys = match &self.role {
 			Role::PublishAndDiscover(key_store) => key_store
 				.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
-				.await
 				.into_iter()
 				.collect::<HashSet<_>>(),
 			Role::Discover => HashSet::new(),
@@ -589,12 +586,11 @@ where
 	// next authority set with two keys. The function does not return all of the local authority
 	// discovery public keys, but only the ones intersecting with the current or next authority set.
 	async fn get_own_public_keys_within_authority_set(
-		key_store: Arc<dyn CryptoStore>,
+		key_store: KeystorePtr,
 		client: &Client,
 	) -> Result<HashSet<AuthorityId>> {
 		let local_pub_keys = key_store
 			.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
-			.await
 			.into_iter()
 			.collect::<HashSet<_>>();
 
@@ -664,33 +660,28 @@ fn sign_record_with_peer_id(
 	Ok(schema::PeerSignature { signature, public_key })
 }
 
-async fn sign_record_with_authority_ids(
+fn sign_record_with_authority_ids(
 	serialized_record: Vec<u8>,
 	peer_signature: Option<schema::PeerSignature>,
-	key_store: &dyn CryptoStore,
+	key_store: &dyn Keystore,
 	keys: Vec<CryptoTypePublicPair>,
 ) -> Result<Vec<(KademliaKey, Vec<u8>)>> {
-	let signatures = key_store
-		.sign_with_all(key_types::AUTHORITY_DISCOVERY, keys.clone(), &serialized_record)
-		.await
-		.map_err(|_| Error::Signing)?;
+	let mut result = Vec::with_capacity(keys.len());
 
-	let mut result = vec![];
-	for (sign_result, key) in signatures.into_iter().zip(keys.iter()) {
-		let mut signed_record = vec![];
+	for key in keys.iter() {
+		let auth_signature = key_store
+			.sign_with(key_types::AUTHORITY_DISCOVERY, key, &serialized_record)
+			.map_err(|_| Error::Signing)?
+			.ok_or_else(|| Error::MissingSignature(key.clone()))?;
 
-		// Verify that all signatures exist for all provided keys.
-		let auth_signature =
-			sign_result.ok().flatten().ok_or_else(|| Error::MissingSignature(key.clone()))?;
-		schema::SignedAuthorityRecord {
+		let signed_record = schema::SignedAuthorityRecord {
 			record: serialized_record.clone(),
 			auth_signature,
 			peer_signature: peer_signature.clone(),
 		}
-		.encode(&mut signed_record)
-		.map_err(Error::EncodingProto)?;
+		.encode_to_vec();
 
-		result.push((hash_authority_id(key.1.as_ref()), signed_record));
+		result.push((hash_authority_id(&key.1), signed_record));
 	}
 
 	Ok(result)

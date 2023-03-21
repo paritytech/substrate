@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,7 +27,7 @@ use frame_support::{
 	},
 	weights::Weight,
 };
-use frame_system::{EnsureRoot, EnsureSignedBy};
+use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
 use pallet_balances::{BalanceLock, Error as BalancesError};
 use sp_core::H256;
 use sp_runtime::{
@@ -72,7 +72,7 @@ frame_support::construct_runtime!(
 pub struct BaseFilter;
 impl Contains<RuntimeCall> for BaseFilter {
 	fn contains(call: &RuntimeCall) -> bool {
-		!matches!(call, &RuntimeCall::Balances(pallet_balances::Call::set_balance { .. }))
+		!matches!(call, &RuntimeCall::Balances(pallet_balances::Call::force_set_balance { .. }))
 	}
 }
 
@@ -144,6 +144,10 @@ impl pallet_balances::Config for Test {
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type HoldIdentifier = ();
+	type MaxHolds = ();
 }
 parameter_types! {
 	pub static PreimageByteDeposit: u64 = 0;
@@ -177,6 +181,7 @@ impl Config for Test {
 	type MinimumDeposit = ConstU64<1>;
 	type MaxDeposits = ConstU32<1000>;
 	type MaxBlacklisted = ConstU32<5>;
+	type SubmitOrigin = EnsureSigned<Self::AccountId>;
 	type ExternalOrigin = EnsureSignedBy<Two, u64>;
 	type ExternalMajorityOrigin = EnsureSignedBy<Three, u64>;
 	type ExternalDefaultOrigin = EnsureSignedBy<One, u64>;
@@ -222,7 +227,7 @@ fn params_should_work() {
 }
 
 fn set_balance_proposal(value: u64) -> BoundedCallOf<Test> {
-	let inner = pallet_balances::Call::set_balance { who: 42, new_free: value, new_reserved: 0 };
+	let inner = pallet_balances::Call::force_set_balance { who: 42, new_free: value };
 	let outer = RuntimeCall::Balances(inner);
 	Preimage::bound(outer).unwrap()
 }

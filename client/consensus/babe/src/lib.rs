@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -67,7 +67,7 @@
 #![warn(missing_docs)]
 
 use std::{
-	collections::{HashMap, HashSet},
+	collections::HashSet,
 	future::Future,
 	pin::Pin,
 	sync::Arc,
@@ -114,14 +114,12 @@ use sp_blockchain::{
 	Backend as _, BlockStatus, Error as ClientError, ForkBackend, HeaderBackend, HeaderMetadata,
 	Result as ClientResult,
 };
-use sp_consensus::{
-	BlockOrigin, CacheKeyId, Environment, Error as ConsensusError, Proposer, SelectChain,
-};
+use sp_consensus::{BlockOrigin, Environment, Error as ConsensusError, Proposer, SelectChain};
 use sp_consensus_babe::inherents::BabeInherentData;
 use sp_consensus_slots::Slot;
 use sp_core::{crypto::ByteArray, ExecutionContext};
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
-use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::KeystorePtr;
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
 	traits::{Block as BlockT, Header, NumberFor, SaturatedConversion, Zero},
@@ -406,7 +404,7 @@ where
 /// Parameters for BABE.
 pub struct BabeParams<B: BlockT, C, SC, E, I, SO, L, CIDP, BS> {
 	/// The keystore that manages the keys of the node.
-	pub keystore: SyncCryptoStorePtr,
+	pub keystore: KeystorePtr,
 
 	/// The client to use
 	pub client: Arc<C>,
@@ -713,7 +711,7 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO, L, BS> {
 	justification_sync_link: L,
 	force_authoring: bool,
 	backoff_authoring_blocks: Option<BS>,
-	keystore: SyncCryptoStorePtr,
+	keystore: KeystorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
 	config: BabeConfiguration,
@@ -836,19 +834,16 @@ where
 		// add it to a digest item.
 		let public_type_pair = public.clone().into();
 		let public = public.to_raw_vec();
-		let signature = SyncCryptoStore::sign_with(
-			&*self.keystore,
-			<AuthorityId as AppKey>::ID,
-			&public_type_pair,
-			header_hash.as_ref(),
-		)
-		.map_err(|e| sp_consensus::Error::CannotSign(public.clone(), e.to_string()))?
-		.ok_or_else(|| {
-			sp_consensus::Error::CannotSign(
-				public.clone(),
-				"Could not find key in keystore.".into(),
-			)
-		})?;
+		let signature = self
+			.keystore
+			.sign_with(<AuthorityId as AppKey>::ID, &public_type_pair, header_hash.as_ref())
+			.map_err(|e| sp_consensus::Error::CannotSign(public.clone(), e.to_string()))?
+			.ok_or_else(|| {
+				sp_consensus::Error::CannotSign(
+					public.clone(),
+					"Could not find key in keystore.".into(),
+				)
+			})?;
 		let signature: AuthoritySignature = signature
 			.clone()
 			.try_into()
@@ -1131,9 +1126,6 @@ where
 	}
 }
 
-type BlockVerificationResult<Block> =
-	Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String>;
-
 #[async_trait::async_trait]
 impl<Block, Client, SelectChain, CIDP> Verifier<Block>
 	for BabeVerifier<Block, Client, SelectChain, CIDP>
@@ -1153,7 +1145,7 @@ where
 	async fn verify(
 		&mut self,
 		mut block: BlockImportParams<Block, ()>,
-	) -> BlockVerificationResult<Block> {
+	) -> Result<BlockImportParams<Block, ()>, String> {
 		trace!(
 			target: LOG_TARGET,
 			"Verifying origin: {:?} header: {:?} justification(s): {:?} body: {:?}",
@@ -1177,7 +1169,7 @@ where
 			//    read it from the state after import. We also skip all verifications
 			//    because there's no parent state and we trust the sync module to verify
 			//    that the state is correct and finalized.
-			return Ok((block, Default::default()))
+			return Ok(block)
 		}
 
 		debug!(
@@ -1296,7 +1288,7 @@ where
 				);
 				block.post_hash = Some(hash);
 
-				Ok((block, Default::default()))
+				Ok(block)
 			},
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: LOG_TARGET, "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
@@ -1368,7 +1360,6 @@ where
 	async fn import_state(
 		&mut self,
 		mut block: BlockImportParams<Block, sp_api::TransactionFor<Client, Block>>,
-		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, ConsensusError> {
 		let hash = block.post_hash();
 		let parent_hash = *block.header.parent_hash();
@@ -1383,7 +1374,7 @@ where
 		});
 
 		// First make the client import the state.
-		let import_result = self.inner.import_block(block, new_cache).await;
+		let import_result = self.inner.import_block(block).await;
 		let aux = match import_result {
 			Ok(ImportResult::Imported(aux)) => aux,
 			Ok(r) =>
@@ -1433,7 +1424,6 @@ where
 	async fn import_block(
 		&mut self,
 		mut block: BlockImportParams<Block, Self::Transaction>,
-		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_hash();
 		let number = *block.header.number();
@@ -1454,11 +1444,11 @@ where
 			// In case of initial sync intermediates should not be present...
 			let _ = block.remove_intermediate::<BabeIntermediate<Block>>(INTERMEDIATE_KEY);
 			block.fork_choice = Some(ForkChoiceStrategy::Custom(false));
-			return self.inner.import_block(block, new_cache).await.map_err(Into::into)
+			return self.inner.import_block(block).await.map_err(Into::into)
 		}
 
 		if block.with_state() {
-			return self.import_state(block, new_cache).await
+			return self.import_state(block).await
 		}
 
 		let pre_digest = find_pre_digest::<Block>(&block.header).expect(
@@ -1694,7 +1684,7 @@ where
 			epoch_changes.release_mutex()
 		};
 
-		let import_result = self.inner.import_block(block, new_cache).await;
+		let import_result = self.inner.import_block(block).await;
 
 		// revert to the original epoch changes in case there's an error
 		// importing the block
