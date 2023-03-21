@@ -235,11 +235,14 @@ pub mod pallet {
 		/// Handler for the unbalanced reduction when removing a dust account.
 		type DustRemoval: OnUnbalanced<CreditOf<Self, I>>;
 
-		/// The minimum amount required to keep an account open. Should be greater than zero or
-		/// will open up a DoS vector. In case you have multiple sources of provider references,
-		/// you may also get unexpected behaviour if you set this to zero.
+		/// The minimum amount required to keep an account open. MUST BE GREATER THAN ZERO!
 		///
-		/// Do yourself a favour: make it at least one :)
+		/// If you *really* need it to be zero, you can enable the feature `zero_ed` for this
+		/// pallet. However, you do so at your own risk: this will open up a major DoS vector. In
+		/// case you have multiple sources of provider references, you may also get unexpected
+		/// behaviour if you set this to zero.
+		///
+		/// Bottom line: Do yourself a favour and make it at least one!
 		#[pallet::constant]
 		type ExistentialDeposit: Get<Self::Balance>;
 
