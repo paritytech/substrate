@@ -886,10 +886,12 @@ impl<T: Config> Pallet<T> {
 	/// wrong.
 	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T>) {
 		let nominator_exists = Nominators::<T>::contains_key(who);
+		// Get previous nominations before the nominator is updated.
+		let prev_nominations = Self::nominations(who);
+
 		Nominators::<T>::insert(who, nominations);
 
 		if nominator_exists {
-			let prev_nominations = Self::nominations(who);
 			T::EventListeners::on_nominator_update(who, prev_nominations.unwrap_or_default());
 		} else {
 			T::EventListeners::on_nominator_add(who);
