@@ -276,6 +276,15 @@ mod on_nominator_add {
 			StakeTracker::on_nominator_add(&20);
 		});
 	}
+
+	#[test]
+	#[should_panic(expected = "on_nominator_add is called for a nominator; qed")]
+	fn defensive_works_only_for_nominators() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+			StakeTracker::on_nominator_add(&10);
+		});
+	}
 }
 
 mod on_nominator_update {
