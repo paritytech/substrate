@@ -261,19 +261,14 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 	}
 
 	fn on_validator_remove(who: &T::AccountId) {
-		if T::Staking::is_validator(who) {
-			let _ = T::TargetList::on_remove(who)
-				.defensive_proof("Validator removed from TargetList; qed");
-			let _ = T::VoterList::on_remove(who)
-				.defensive_proof("Validator removed from VoterList; qed");
+		let _ =
+			T::TargetList::on_remove(who).defensive_proof("Validator removed from TargetList; qed");
+		let _ =
+			T::VoterList::on_remove(who).defensive_proof("Validator removed from VoterList; qed");
 
-			let self_stake = Self::active_stake_of(who);
-			let new_stake =
-				Self::approval_stake(who).unwrap_or_default().saturating_sub(self_stake);
-			ApprovalStake::<T>::set(who, Some(new_stake));
-		} else {
-			defensive!("on_validator_remove is called for a validator; qed");
-		}
+		let self_stake = Self::active_stake_of(who);
+		let new_stake = Self::approval_stake(who).unwrap_or_default().saturating_sub(self_stake);
+		ApprovalStake::<T>::set(who, Some(new_stake));
 	}
 
 	fn on_nominator_remove(who: &T::AccountId, nominations: Vec<T::AccountId>) {

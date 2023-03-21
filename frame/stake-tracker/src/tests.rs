@@ -598,8 +598,8 @@ mod on_validator_remove {
 	}
 
 	#[test]
-	#[should_panic(expected = "on_validator_remove is called for a validator; qed")]
-	fn defensive_nominator() {
+	#[should_panic(expected = "Validator removed from TargetList; qed")]
+	fn does_not_work_for_a_nominator() {
 		ExtBuilder::default().build_and_execute(|| {
 			let id = 20;
 			assert_eq!(TargetList::count(), 0);
