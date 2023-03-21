@@ -202,6 +202,8 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 			}
 			let _ = T::VoterList::on_insert(who.clone(), Self::to_vote(score))
 				.defensive_proof("Nominator inserted into VoterList; qed");
+		} else {
+			defensive!("on_nominator_add is called for a nominator; qed");
 		}
 	}
 
