@@ -547,7 +547,7 @@ impl<PeerStore: PeerStoreT> ProtocolController<PeerStore> {
 #[cfg(test)]
 mod tests {
 	use super::ProtocolController;
-	use crate::{peer_store::PeerStore, DropReason, Message, SetConfig, SetId};
+	use crate::{peer_store::PeerStore, DropReason, IncomingIndex, Message, SetConfig, SetId};
 	use futures::FutureExt;
 	use libp2p::PeerId;
 	use sc_utils::mpsc::tracing_unbounded;
@@ -563,8 +563,8 @@ mod tests {
 		}
 	}
 
-	#[tokio::test]
-	async fn reserved_nodes_are_connected() {
+	#[test]
+	fn reserved_nodes_are_connected_and_accepted() {
 		let reserved1 = PeerId::random();
 		let reserved2 = PeerId::random();
 
@@ -579,15 +579,16 @@ mod tests {
 		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
 
 		let mut peer_store = MockPeerStore::new();
-		peer_store.expect_is_banned().times(2).return_const(false);
+		peer_store.expect_is_banned().times(4).return_const(false);
+		peer_store.expect_report_disconnect().times(2).return_const(());
 
 		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
 
 		// Add second reserved node at runtime.
 		controller.on_add_reserved_peer(reserved2);
 
-		// Poll once
-		controller.next_action().now_or_never();
+		// Initiate connections.
+		controller.alloc_slots();
 
 		let mut messages = Vec::new();
 		while let Some(message) = rx.try_recv().ok() {
@@ -597,7 +598,22 @@ mod tests {
 		assert_eq!(messages.len(), 2);
 		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved1 }));
 		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved2 }));
-	}
 
-	// TODO
+		// Drop connections to be able to accept reserved nodes.
+		controller.on_peer_dropped(reserved1, DropReason::Refused);
+		controller.on_peer_dropped(reserved2, DropReason::Unknown);
+
+		// Incoming connection from `reserved1`.
+		let incoming1 = IncomingIndex(1);
+		controller.on_incoming_connection(reserved1, incoming1);
+		assert_eq!(rx.try_recv().unwrap(), Message::Accept(incoming1));
+
+		// Incoming connection from `reserved2`.
+		let incoming2 = IncomingIndex(2);
+		controller.on_incoming_connection(reserved2, incoming2);
+		assert_eq!(rx.try_recv().unwrap(), Message::Accept(incoming2));
+
+		// No more commands.
+		assert!(rx.try_recv().is_err());
+	}
 }
