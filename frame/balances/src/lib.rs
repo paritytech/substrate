@@ -890,6 +890,20 @@ pub mod pallet {
 			Self::try_mutate_account(who, |a, _| -> Result<R, DispatchError> { Ok(f(a)) })
 		}
 
+		/// Returns `true` when `who` has some providers or `zero_ed` feature is disnabled. Returns
+		/// `false` otherwise.
+		#[cfg(not(feature = "zero_ed"))]
+		fn have_providers_or_no_zero_ed(_: &T::AccountId) -> bool {
+			true
+		}
+
+		/// Returns `true` when `who` has some providers or `zero_ed` feature is disnabled. Returns
+		/// `false` otherwise.
+		#[cfg(feature = "zero_ed")]
+		fn have_providers_or_no_zero_ed(who: &T::AccountId) -> bool {
+			frame_system::Pallet::<T>::providers(who) > 0
+		}
+
 		/// Mutate an account to some new value, or delete it entirely with `None`. Will enforce
 		/// `ExistentialDeposit` law, annulling the account as needed. This will do nothing if the
 		/// result of `f` is an `Err`.
@@ -912,7 +926,7 @@ pub mod pallet {
 				let is_new = maybe_account.is_none();
 				let mut account = maybe_account.take().unwrap_or_default();
 				let did_provide =
-					account.free >= Self::ed() && frame_system::Pallet::<T>::providers(who) > 0;
+					account.free >= Self::ed() && Self::have_providers_or_no_zero_ed(who);
 				let did_consume =
 					!is_new && (!account.reserved.is_zero() || !account.frozen.is_zero());
 

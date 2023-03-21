@@ -23,7 +23,8 @@ use frame_support::traits::{
 	BalanceStatus::{Free, Reserved},
 	Currency,
 	ExistenceRequirement::{self, AllowDeath},
-	LockIdentifier, LockableCurrency, NamedReservableCurrency, ReservableCurrency, WithdrawReasons,
+	Hooks, LockIdentifier, LockableCurrency, NamedReservableCurrency, ReservableCurrency,
+	WithdrawReasons,
 };
 
 const ID_1: LockIdentifier = *b"1       ";
@@ -998,7 +999,9 @@ fn operations_on_dead_account_should_not_change_state() {
 fn zero_ed_is_prohibited() {
 	// These functions all use `mutate_account` which may introduce a storage change when
 	// the account never existed to begin with, and shouldn't exist in the end.
-	ExtBuilder::default().existential_deposit(0).build_and_execute_with(|| {});
+	ExtBuilder::default().existential_deposit(0).build_and_execute_with(|| {
+		Balances::integrity_test();
+	});
 }
 
 #[test]
