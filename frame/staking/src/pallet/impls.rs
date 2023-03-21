@@ -755,12 +755,12 @@ impl<T: Config> Pallet<T> {
 	/// nominators.
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
-	pub fn get_npos_voters(voter_bounds: DataProviderBounds) -> Vec<VoterOf<Self>> {
+	pub fn get_npos_voters(bounds: DataProviderBounds) -> Vec<VoterOf<Self>> {
 		let mut voters_size_tracker: ElectionSizeTracker<T::AccountId> = ElectionSizeTracker::new();
 
 		let max_allowed_len = {
 			let all_voter_count = T::VoterList::count();
-			voter_bounds
+			bounds
 				.count
 				.unwrap_or(all_voter_count.into())
 				.min(all_voter_count.into())
@@ -797,7 +797,7 @@ impl<T: Config> Pallet<T> {
 					// voter at this point and accept all the current nominations. The nomination
 					// quota is only enforced at `nominate` time.
 
-					if voters_size_tracker.try_register_voter(targets.len(), voter_bounds).is_err()
+					if voters_size_tracker.try_register_voter(targets.len(), bounds).is_err()
 					{
 						// no more space left for the election result, stop iterating.
 						Self::deposit_event(Event::<T>::SnapshotVotersSizeExceeded {
@@ -815,7 +815,7 @@ impl<T: Config> Pallet<T> {
 					if voter_weight < min_active_stake { voter_weight } else { min_active_stake };
 			} else if Validators::<T>::contains_key(&voter) {
 				// if this voter is a validator:
-				if voters_size_tracker.try_register_voter(1, voter_bounds).is_err() {
+				if voters_size_tracker.try_register_voter(1, bounds).is_err() {
 					// no more space left for the election result, stop iterating over.
 					Self::deposit_event(Event::<T>::SnapshotVotersSizeExceeded {
 						size: voters_size_tracker.size as u32,

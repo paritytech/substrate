@@ -256,7 +256,7 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = Staking;
 	type WeightInfo = ();
 	type MaxWinners = MaxWinners;
-	type ElectionBounds = ElectionsBounds;
+	type Bounds = ElectionsBounds;
 }
 
 pub struct MockReward {}

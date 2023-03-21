@@ -314,7 +314,7 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = StakingMock;
 	type WeightInfo = ();
 	type MaxWinners = MaxWinners;
-	type ElectionBounds = ElectionsBoundsOnChain;
+	type Bounds = ElectionsBoundsOnChain;
 }
 
 pub struct MockFallback;

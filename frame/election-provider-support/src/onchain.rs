@@ -88,7 +88,7 @@ pub trait Config {
 
 	/// Elections bounds, to use when calling into
 	/// [`Config::DataProvider`]. It might be overwritten in the `InstantElectionProvider` impl.
-	type ElectionBounds: Get<ElectionBounds>;
+	type Bounds: Get<ElectionBounds>;
 }
 
 /// Same as `BoundedSupportsOf` but for `onchain::Config`.
@@ -155,12 +155,12 @@ impl<T: Config> ElectionProviderBase for OnChainExecution<T> {
 
 impl<T: Config> InstantElectionProvider for OnChainExecution<T> {
 	fn instant_elect(
-		voters_bounds: DataProviderBounds,
-		targets_bounds: DataProviderBounds,
+		forced_input_voters_bounds: DataProviderBounds,
+		forced_input_targets_bounds: DataProviderBounds,
 	) -> Result<BoundedSupportsOf<Self>, Self::Error> {
-		let elections_bounds = ElectionBoundsBuilder::from(T::ElectionBounds::get())
-			.max_voters(voters_bounds)
-			.max_targets(targets_bounds)
+		let elections_bounds = ElectionBoundsBuilder::from(T::Bounds::get())
+			.max_voters(forced_input_voters_bounds)
+			.max_targets(forced_input_targets_bounds)
 			.build();
 		elect_with_input_bounds::<T>(elections_bounds)
 	}
@@ -172,7 +172,7 @@ impl<T: Config> ElectionProvider for OnChainExecution<T> {
 	}
 
 	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
-		let election_bounds = ElectionBoundsBuilder::from(T::ElectionBounds::get()).build();
+		let election_bounds = ElectionBoundsBuilder::from(T::Bounds::get()).build();
 		elect_with_input_bounds::<T>(election_bounds)
 	}
 }
@@ -243,7 +243,7 @@ mod tests {
 		type DataProvider = mock_data_provider::DataProvider;
 		type WeightInfo = ();
 		type MaxWinners = MaxWinners;
-		type ElectionBounds = ElectionBounds;
+		type Bounds = ElectionBounds;
 	}
 
 	impl Config for PhragMMSParams {
@@ -252,7 +252,7 @@ mod tests {
 		type DataProvider = mock_data_provider::DataProvider;
 		type WeightInfo = ();
 		type MaxWinners = MaxWinners;
-		type ElectionBounds = ElectionBounds;
+		type Bounds = ElectionBounds;
 	}
 
 	mod mock_data_provider {

@@ -302,7 +302,7 @@ mod pallet;
 use codec::{Decode, Encode, HasCompact, MaxEncodedLen};
 use frame_election_provider_support::{DataProviderBounds, SizeBound, VoteWeight};
 use frame_support::{
-	traits::{Currency, Defensive, Get},
+	traits::{ConstU32, Currency, Defensive, Get},
 	weights::Weight,
 	BoundedVec, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
@@ -786,15 +786,9 @@ pub trait NominationsQuota<Balance> {
 /// A nomination quota that allows up to MAX nominations for all validators.
 pub struct FixedNominationsQuota<const MAX: u32>;
 impl<Balance, const MAX: u32> NominationsQuota<Balance> for FixedNominationsQuota<MAX> {
-	type MaxNominations = Self;
+	type MaxNominations = ConstU32<MAX>;
 
 	fn curve(_: Balance) -> u32 {
-		MAX
-	}
-}
-
-impl<const MAX: u32> Get<u32> for FixedNominationsQuota<MAX> {
-	fn get() -> u32 {
 		MAX
 	}
 }
