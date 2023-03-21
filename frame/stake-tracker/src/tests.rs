@@ -86,9 +86,7 @@ mod on_stake_update {
 	fn defensive_when_not_in_list_nominator() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(VoterList::count(), 0);
-			for id in Nominators::get() {
-				StakeTracker::on_stake_update(&id, None);
-			}
+			StakeTracker::on_stake_update(&20, None);
 		});
 	}
 
@@ -97,9 +95,8 @@ mod on_stake_update {
 	fn defensive_when_not_in_list_validator() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(VoterList::count(), 0);
-			for id in Validators::get() {
-				StakeTracker::on_stake_update(&id, None);
-			}
+
+			StakeTracker::on_stake_update(&10, None);
 		});
 	}
 }
@@ -130,10 +127,8 @@ mod on_nominator_add {
 	fn defensive_when_in_list() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(VoterList::count(), 0);
-			for id in Nominators::get() {
-				StakeTracker::on_nominator_add(&id);
-				StakeTracker::on_nominator_add(&id);
-			}
+			StakeTracker::on_nominator_add(&20);
+			StakeTracker::on_nominator_add(&20);
 		});
 	}
 }
@@ -283,9 +278,7 @@ mod on_nominator_remove {
 	fn defensive_when_not_in_list() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(VoterList::count(), 0);
-			for id in Nominators::get() {
-				StakeTracker::on_nominator_remove(&id, vec![]);
-			}
+			StakeTracker::on_nominator_remove(&20, vec![]);
 		});
 	}
 }
@@ -312,10 +305,8 @@ mod on_unstake {
 	fn defensive_when_in_list() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(VoterList::count(), 0);
-			for id in stakers() {
-				let _ = VoterList::on_insert(id, 100);
-				StakeTracker::on_unstake(&id);
-			}
+			let _ = VoterList::on_insert(10, 100);
+			StakeTracker::on_unstake(&10);
 		});
 	}
 }
