@@ -59,7 +59,7 @@
     DOCKER_PASSWORD: $Docker_Hub_Pass_Parity
     README_FILEPATH: $CI_PROJECT_DIR/scripts/ci/docker/$PRODUCT.Dockerfile.README.md
   rules:
-    - if: $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
       changes:
         - scripts/ci/docker/$PRODUCT.Dockerfile.README.md
   before_script:
