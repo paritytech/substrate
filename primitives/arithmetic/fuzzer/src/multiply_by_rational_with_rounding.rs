@@ -29,7 +29,7 @@
 //! More information about `honggfuzz` can be found
 //! [here](https://docs.rs/honggfuzz/).
 
-use fraction::{prelude::BigFraction as Fraction};
+use fraction::prelude::BigFraction as Fraction;
 use honggfuzz::fuzz;
 use sp_arithmetic::{MultiplyRational, Rounding, Rounding::*};
 
