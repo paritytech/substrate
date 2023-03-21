@@ -15,10 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::traits::fungibles::Inspect;
-
 /// Interface for enumerating assets in existence or owned by a given account.
-pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
+pub trait Inspect<AccountId>: super::Inspect<AccountId> {
 	type AssetsIterator;
 
 	/// Returns an iterator of the collections in existence.

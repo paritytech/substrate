@@ -38,7 +38,9 @@ use sp_staking::offence::{Offence, ReportOffence};
 
 use pallet_babe::EquivocationOffence as BabeEquivocationOffence;
 use pallet_balances::Config as BalancesConfig;
-use pallet_grandpa::{EquivocationOffence as GrandpaEquivocationOffence, GrandpaTimeSlot};
+use pallet_grandpa::{
+	EquivocationOffence as GrandpaEquivocationOffence, TimeSlot as GrandpaTimeSlot,
+};
 use pallet_im_online::{Config as ImOnlineConfig, Pallet as ImOnline, UnresponsivenessOffence};
 use pallet_offences::{Config as OffencesConfig, Pallet as Offences};
 use pallet_session::{

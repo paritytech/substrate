@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use clap::Args;
-use sc_network_common::config::{identity::ed25519, NodeKeyConfig};
+use sc_network::config::{identity::ed25519, NodeKeyConfig};
 use sp_core::H256;
 use std::{path::PathBuf, str::FromStr};
 
@@ -92,7 +92,7 @@ impl NodeKeyParams {
 				let secret = if let Some(node_key) = self.node_key.as_ref() {
 					parse_ed25519_secret(node_key)?
 				} else {
-					sc_network_common::config::Secret::File(
+					sc_network::config::Secret::File(
 						self.node_key_file
 							.clone()
 							.unwrap_or_else(|| net_config_dir.join(NODE_KEY_ED25519_FILE)),
@@ -111,10 +111,10 @@ fn invalid_node_key(e: impl std::fmt::Display) -> error::Error {
 }
 
 /// Parse a Ed25519 secret key from a hex string into a `sc_network::Secret`.
-fn parse_ed25519_secret(hex: &str) -> error::Result<sc_network_common::config::Ed25519Secret> {
+fn parse_ed25519_secret(hex: &str) -> error::Result<sc_network::config::Ed25519Secret> {
 	H256::from_str(hex).map_err(invalid_node_key).and_then(|bytes| {
 		ed25519::SecretKey::from_bytes(bytes)
-			.map(sc_network_common::config::Secret::Input)
+			.map(sc_network::config::Secret::Input)
 			.map_err(invalid_node_key)
 	})
 }
@@ -123,7 +123,7 @@ fn parse_ed25519_secret(hex: &str) -> error::Result<sc_network_common::config::E
 mod tests {
 	use super::*;
 	use clap::ValueEnum;
-	use sc_network_common::config::identity::{ed25519, Keypair};
+	use sc_network::config::identity::{ed25519, Keypair};
 	use std::fs;
 
 	#[test]
@@ -140,7 +140,7 @@ mod tests {
 					node_key_file: None,
 				};
 				params.node_key(net_config_dir).and_then(|c| match c {
-					NodeKeyConfig::Ed25519(sc_network_common::config::Secret::Input(ref ski))
+					NodeKeyConfig::Ed25519(sc_network::config::Secret::Input(ref ski))
 						if node_key_type == NodeKeyType::Ed25519 && &sk[..] == ski.as_ref() =>
 						Ok(()),
 					_ => Err(error::Error::Input("Unexpected node key config".into())),
@@ -200,7 +200,7 @@ mod tests {
 				let dir = PathBuf::from(net_config_dir.clone());
 				let typ = params.node_key_type;
 				params.node_key(net_config_dir).and_then(move |c| match c {
-					NodeKeyConfig::Ed25519(sc_network_common::config::Secret::File(ref f))
+					NodeKeyConfig::Ed25519(sc_network::config::Secret::File(ref f))
 						if typ == NodeKeyType::Ed25519 && f == &dir.join(NODE_KEY_ED25519_FILE) =>
 						Ok(()),
 					_ => Err(error::Error::Input("Unexpected node key config".into())),

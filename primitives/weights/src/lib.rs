@@ -30,7 +30,7 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 use sp_arithmetic::{
-	traits::{BaseArithmetic, SaturatedConversion, Saturating, Unsigned},
+	traits::{BaseArithmetic, SaturatedConversion, Unsigned},
 	Perbill,
 };
 use sp_core::Get;
@@ -118,8 +118,76 @@ pub struct WeightToFeeCoefficient<Balance> {
 	pub degree: u8,
 }
 
-/// A list of coefficients that represent one polynomial.
+impl<Balance> WeightToFeeCoefficient<Balance>
+where
+	Balance: BaseArithmetic + From<u32> + Copy + Unsigned,
+{
+	/// Evaluate the term at `x` and saturatingly amalgamate into `result`.
+	///
+	/// The unsigned value for the term is calculated as:
+	/// ```ignore
+	/// (frac * x^(degree) + integer * x^(degree))
+	/// ```
+	/// Depending on the value of `negative`, it is added or subtracted from the `result`.
+	pub fn saturating_eval(&self, mut result: Balance, x: Balance) -> Balance {
+		let power = x.saturating_pow(self.degree.into());
+
+		let frac = self.coeff_frac * power; // Overflow safe.
+		let integer = self.coeff_integer.saturating_mul(power);
+		// Do not add them together here to avoid an underflow.
+
+		if self.negative {
+			result = result.saturating_sub(frac);
+			result = result.saturating_sub(integer);
+		} else {
+			result = result.saturating_add(frac);
+			result = result.saturating_add(integer);
+		}
+
+		result
+	}
+}
+
+/// A list of coefficients that represent a polynomial.
 pub type WeightToFeeCoefficients<T> = SmallVec<[WeightToFeeCoefficient<T>; 4]>;
+
+/// A list of coefficients that represent a polynomial.
+///
+/// Can be [eval](Self::eval)uated at a specific `u64` to get the fee. The evaluations happens by
+/// summing up all term [results](`WeightToFeeCoefficient::saturating_eval`). The order of the
+/// coefficients matters since it uses saturating arithmetic. This struct does therefore not model a
+/// polynomial in the mathematical sense (polynomial ring).
+///
+/// For visualization purposes, the formulas of the unsigned terms look like:
+///
+/// ```ignore
+/// (c[0].frac * x^(c[0].degree) + c[0].integer * x^(c[0].degree))
+/// (c[1].frac * x^(c[1].degree) + c[1].integer * x^(c[1].degree))
+/// ...
+/// ```
+/// Depending on the value of `c[i].negative`, each term is added or subtracted from the result.
+/// The result is initialized as zero.
+pub struct FeePolynomial<Balance> {
+	coefficients: SmallVec<[WeightToFeeCoefficient<Balance>; 4]>,
+}
+
+impl<Balance> From<WeightToFeeCoefficients<Balance>> for FeePolynomial<Balance> {
+	fn from(coefficients: WeightToFeeCoefficients<Balance>) -> Self {
+		Self { coefficients }
+	}
+}
+
+impl<Balance> FeePolynomial<Balance>
+where
+	Balance: BaseArithmetic + From<u32> + Copy + Unsigned,
+{
+	/// Evaluate the polynomial at a specific `x`.
+	pub fn eval(&self, x: u64) -> Balance {
+		self.coefficients.iter().fold(Balance::zero(), |acc, term| {
+			term.saturating_eval(acc, Balance::saturated_from(x))
+		})
+	}
+}
 
 /// A trait that describes the weight to fee calculation.
 pub trait WeightToFee {
@@ -157,27 +225,8 @@ where
 	/// This should not be overridden in most circumstances. Calculation is done in the
 	/// `Balance` type and never overflows. All evaluation is saturating.
 	fn weight_to_fee(weight: &Weight) -> Self::Balance {
-		Self::polynomial()
-			.iter()
-			.fold(Self::Balance::saturated_from(0u32), |mut acc, args| {
-				let w = Self::Balance::saturated_from(weight.ref_time())
-					.saturating_pow(args.degree.into());
-
-				// The sum could get negative. Therefore we only sum with the accumulator.
-				// The Perbill Mul implementation is non overflowing.
-				let frac = args.coeff_frac * w;
-				let integer = args.coeff_integer.saturating_mul(w);
-
-				if args.negative {
-					acc = acc.saturating_sub(frac);
-					acc = acc.saturating_sub(integer);
-				} else {
-					acc = acc.saturating_add(frac);
-					acc = acc.saturating_add(integer);
-				}
-
-				acc
-			})
+		let poly: FeePolynomial<Self::Balance> = Self::polynomial().into();
+		poly.eval(weight.ref_time())
 	}
 }
 

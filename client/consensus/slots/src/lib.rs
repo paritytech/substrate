@@ -190,7 +190,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		proposer: Self::Proposer,
 		claim: &Self::Claim,
 		slot_info: SlotInfo<B>,
-		proposing_remaining: Delay,
+		end_proposing_at: Instant,
 	) -> Option<
 		Proposal<
 			B,
@@ -202,9 +202,11 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let telemetry = self.telemetry();
 		let log_target = self.logging_target();
 
-		let inherent_data = Self::create_inherent_data(&slot_info, &log_target).await?;
+		let inherent_data =
+			Self::create_inherent_data(&slot_info, &log_target, end_proposing_at).await?;
 
-		let proposing_remaining_duration = self.proposing_remaining_duration(&slot_info);
+		let proposing_remaining_duration =
+			end_proposing_at.saturating_duration_since(Instant::now());
 		let logs = self.pre_digest_data(slot, claim);
 
 		// deadline our production to 98% of the total time left for proposing. As we deadline
@@ -219,7 +221,12 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			)
 			.map_err(|e| sp_consensus::Error::ClientImport(e.to_string()));
 
-		let proposal = match futures::future::select(proposing, proposing_remaining).await {
+		let proposal = match futures::future::select(
+			proposing,
+			Delay::new(proposing_remaining_duration),
+		)
+		.await
+		{
 			Either::Left((Ok(p), _)) => p,
 			Either::Left((Err(err), _)) => {
 				warn!(target: log_target, "Proposing failed: {}", err);
@@ -255,8 +262,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	async fn create_inherent_data(
 		slot_info: &SlotInfo<B>,
 		logging_target: &str,
+		end_proposing_at: Instant,
 	) -> Option<sp_inherents::InherentData> {
-		let remaining_duration = slot_info.ends_at.saturating_duration_since(Instant::now());
+		let remaining_duration = end_proposing_at.saturating_duration_since(Instant::now());
 		let delay = Delay::new(remaining_duration);
 		let cid = slot_info.create_inherent_data.create_inherent_data();
 		let inherent_data = match futures::future::select(delay, cid).await {
@@ -300,7 +308,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 		let proposing_remaining_duration = self.proposing_remaining_duration(&slot_info);
 
-		let proposing_remaining = if proposing_remaining_duration == Duration::default() {
+		let end_proposing_at = if proposing_remaining_duration == Duration::default() {
 			debug!(
 				target: logging_target,
 				"Skipping proposal slot {} since there's no time left to propose", slot,
@@ -308,7 +316,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 			return None
 		} else {
-			Delay::new(proposing_remaining_duration)
+			Instant::now() + proposing_remaining_duration
 		};
 
 		let aux_data = match self.aux_data(&slot_info.chain_head, slot) {
@@ -379,7 +387,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			},
 		};
 
-		let proposal = self.propose(proposer, &claim, slot_info, proposing_remaining).await?;
+		let proposal = self.propose(proposer, &claim, slot_info, end_proposing_at).await?;
 
 		let (block, storage_proof) = (proposal.block, proposal.proof);
 		let (header, body) = block.deconstruct();
