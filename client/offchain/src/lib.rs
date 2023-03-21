@@ -68,6 +68,34 @@ pub trait NetworkProvider: NetworkStateInfo + NetworkPeers {}
 
 impl<T> NetworkProvider for T where T: NetworkStateInfo + NetworkPeers {}
 
+/// Special type that implements [`OffchainStorage`].
+///
+/// This type can not be constructed and should only be used when passing `None` as `offchain_db` to
+/// [`OffchainWorkerOptions`] to make the compiler happy.
+#[derive(Clone)]
+pub struct NoOffchainStorage {
+	// Ensure no one can construct this type
+	_priv: (),
+}
+
+impl offchain::OffchainStorage for NoOffchainStorage {
+	fn set(&mut self, _: &[u8], _: &[u8], _: &[u8]) {
+		unimplemented!("`NoOffchainStorage` can not be constructed!")
+	}
+
+	fn remove(&mut self, _: &[u8], _: &[u8]) {
+		unimplemented!("`NoOffchainStorage` can not be constructed!")
+	}
+
+	fn get(&self, _: &[u8], _: &[u8]) -> Option<Vec<u8>> {
+		unimplemented!("`NoOffchainStorage` can not be constructed!")
+	}
+
+	fn compare_and_set(&mut self, _: &[u8], _: &[u8], _: Option<&[u8]>, _: &[u8]) -> bool {
+		unimplemented!("`NoOffchainStorage` can not be constructed!")
+	}
+}
+
 /// Options for [`OffchainWorkers`]
 pub struct OffchainWorkerOptions<RA, Block: traits::Block, Storage> {
 	/// Provides access to the runtime api.
@@ -75,6 +103,8 @@ pub struct OffchainWorkerOptions<RA, Block: traits::Block, Storage> {
 	/// Provides access to the keystore.
 	pub keystore: Option<SyncCryptoStorePtr>,
 	/// Provides access to the offchain database.
+	///
+	/// Use [`NoOffchainStorage`] as type when passing `None` to have some type that works.
 	pub offchain_db: Option<Storage>,
 	/// Provides access to the transaction pool.
 	pub transaction_pool: Option<Arc<dyn OffchainSubmitTransaction<Block>>>,
@@ -312,7 +342,6 @@ mod tests {
 	use sc_peerset::ReputationChange;
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
-	use sp_api::offchain::testing::TestPersistentOffchainDB;
 	use sp_consensus::BlockOrigin;
 	use sp_runtime::generic::BlockId;
 	use std::{collections::HashSet, sync::Arc};
@@ -447,7 +476,7 @@ mod tests {
 		let offchain = OffchainWorkers::new(OffchainWorkerOptions {
 			runtime_api_provider: client,
 			keystore: None,
-			offchain_db: None::<TestPersistentOffchainDB>,
+			offchain_db: None::<NoOffchainStorage>,
 			transaction_pool: Some(Arc::new(pool.clone())),
 			network_provider: network,
 			is_validator: false,
