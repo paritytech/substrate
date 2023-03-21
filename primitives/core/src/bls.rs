@@ -38,7 +38,9 @@ use crate::crypto::{
 use crate::crypto::{DeriveJunction, Pair as TraitPair, SecretStringError};
 #[cfg(feature = "std")]
 use bip39::{Language, Mnemonic, MnemonicType};
-use bls_like::{EngineBLS, Keypair, Message, SerializableToBytes, BLS377};
+use bls_like::{EngineBLS, BLS377};
+#[cfg(feature = "full_crypto")]
+use bls_like::{Keypair, Message, SerializableToBytes};
 #[cfg(feature = "full_crypto")]
 use core::convert::TryFrom;
 #[cfg(feature = "std")]
