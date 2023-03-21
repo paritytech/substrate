@@ -119,7 +119,7 @@ use sp_consensus_babe::inherents::BabeInherentData;
 use sp_consensus_slots::Slot;
 use sp_core::{crypto::ByteArray, ExecutionContext};
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
-use sp_keystore::{Keystore, KeystorePtr};
+use sp_keystore::KeystorePtr;
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
 	traits::{Block as BlockT, Header, NumberFor, SaturatedConversion, Zero},
@@ -834,19 +834,16 @@ where
 		// add it to a digest item.
 		let public_type_pair = public.clone().into();
 		let public = public.to_raw_vec();
-		let signature = Keystore::sign_with(
-			&*self.keystore,
-			<AuthorityId as AppKey>::ID,
-			&public_type_pair,
-			header_hash.as_ref(),
-		)
-		.map_err(|e| sp_consensus::Error::CannotSign(public.clone(), e.to_string()))?
-		.ok_or_else(|| {
-			sp_consensus::Error::CannotSign(
-				public.clone(),
-				"Could not find key in keystore.".into(),
-			)
-		})?;
+		let signature = self
+			.keystore
+			.sign_with(<AuthorityId as AppKey>::ID, &public_type_pair, header_hash.as_ref())
+			.map_err(|e| sp_consensus::Error::CannotSign(public.clone(), e.to_string()))?
+			.ok_or_else(|| {
+				sp_consensus::Error::CannotSign(
+					public.clone(),
+					"Could not find key in keystore.".into(),
+				)
+			})?;
 		let signature: AuthoritySignature = signature
 			.clone()
 			.try_into()
