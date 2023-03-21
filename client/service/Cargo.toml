@@ -79,7 +79,7 @@ tracing-futures = { version = "0.2.4" }
 async-trait = "0.1.57"
 tokio = { version = "1.22.0", features = ["time", "rt-multi-thread", "parking_lot"] }
 tempfile = "3.1.0"
-directories = "4.0.1"
+directories = "5.0.0"
 static_init = "1.0.3"
 
 [dev-dependencies]
