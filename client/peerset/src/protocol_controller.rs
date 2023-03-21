@@ -488,7 +488,8 @@ impl<PeerStore: PeerStoreT> ProtocolController<PeerStore> {
 			.iter_mut()
 			.filter_map(|(peer_id, state)| {
 				(matches!(state, PeerState::NotConnected) && !self.peer_store.is_banned(*peer_id))
-					.then_some({
+					.then(|| {
+						println!("Connecting");
 						*state = PeerState::Connected(Direction::Outbound);
 						peer_id
 					})
@@ -584,7 +585,7 @@ mod tests {
 
 		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
 
-		// Add second reserved node at runtime.
+		// Add second reserved node at runtime (this currently calls `alloc_slots` internally).
 		controller.on_add_reserved_peer(reserved2);
 
 		// Initiate connections.
@@ -616,4 +617,49 @@ mod tests {
 		// No more commands.
 		assert!(rx.try_recv().is_err());
 	}
+
+	#[test]
+	fn banned_reserved_nodes_are_not_connected_and_not_accepted() {
+		let reserved1 = PeerId::random();
+		let reserved2 = PeerId::random();
+
+		// Add first reserved node via config.
+		let config = SetConfig {
+			in_peers: 0,
+			out_peers: 0,
+			bootnodes: Vec::new(),
+			reserved_nodes: std::iter::once(reserved1).collect(),
+			reserved_only: true,
+		};
+		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
+
+		let mut peer_store = MockPeerStore::new();
+		peer_store.expect_is_banned().times(6).return_const(true);
+
+		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
+
+		// Add second reserved node at runtime (this currently calls `alloc_slots` internally).
+		controller.on_add_reserved_peer(reserved2);
+
+		// Initiate connections.
+		controller.alloc_slots();
+
+		// No commands are generated.
+		assert!(rx.try_recv().is_err());
+
+		// Incoming connection from `reserved1`.
+		let incoming1 = IncomingIndex(1);
+		controller.on_incoming_connection(reserved1, incoming1);
+		assert_eq!(rx.try_recv().unwrap(), Message::Reject(incoming1));
+
+		// Incoming connection from `reserved2`.
+		let incoming2 = IncomingIndex(2);
+		controller.on_incoming_connection(reserved2, incoming2);
+		assert_eq!(rx.try_recv().unwrap(), Message::Reject(incoming2));
+
+		// No more commands.
+		assert!(rx.try_recv().is_err());
+	}
+
+	// TODO
 }
