@@ -46,8 +46,8 @@ use frame_support::{
 	ensure,
 	pallet_prelude::Get,
 	traits::{
-		Currency, Defensive, FetchResult, Hash as PreimageHash, PreimageProvider,
-		PreimageRecipient, QueryPreimage, ReservableCurrency, StorePreimage,
+		Consideration, Currency, Defensive, FetchResult, Hash as PreimageHash, PreimageProvider,
+		PreimageRecipient, QueryPreimage, ReservableCurrency, StorePreimage, Footprint,
 	},
 	BoundedSlice, BoundedVec,
 };
@@ -61,7 +61,7 @@ pub use pallet::*;
 
 /// A type to note whether a preimage is owned by a user or the system.
 #[derive(Clone, Eq, PartialEq, Encode, Decode, TypeInfo, MaxEncodedLen, RuntimeDebug)]
-pub enum RequestStatus<AccountId, Balance> {
+pub enum OldRequestStatus<AccountId, Balance> {
 	/// The associated preimage has not yet been requested by the system. The given deposit (if
 	/// some) is being held until either it becomes requested or the user retracts the preimage.
 	Unrequested { deposit: (AccountId, Balance), len: u32 },
@@ -71,8 +71,22 @@ pub enum RequestStatus<AccountId, Balance> {
 	Requested { deposit: Option<(AccountId, Balance)>, count: u32, len: Option<u32> },
 }
 
+/// A type to note whether a preimage is owned by a user or the system.
+#[derive(Clone, Eq, PartialEq, Encode, Decode, TypeInfo, MaxEncodedLen, RuntimeDebug)]
+pub enum RequestStatus<AccountId, Ticket> {
+	/// The associated preimage has not yet been requested by the system. The given deposit (if
+	/// some) is being held until either it becomes requested or the user retracts the preimage.
+	Unrequested { ticket: (AccountId, Ticket), len: u32 },
+	/// There are a non-zero number of outstanding requests for this hash by this chain. If there
+	/// is a preimage registered, then `len` is `Some` and it may be removed iff this counter
+	/// becomes zero.
+	Requested { maybe_ticket: Option<(AccountId, Ticket)>, count: u32, len: Option<u32> },
+}
+
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type TicketOf<T> =
+	<<T as Config>::Consideration as Consideration<<T as frame_system::Config>::AccountId>>::Ticket;
 
 /// Maximum size of preimage we can store is 4mb.
 const MAX_SIZE: u32 = 4 * 1024 * 1024;
@@ -104,6 +118,8 @@ pub mod pallet {
 
 		/// The per-byte deposit for placing a preimage on chain.
 		type ByteDeposit: Get<BalanceOf<Self>>;
+
+		type Consideration: Consideration<Self::AccountId>;
 	}
 
 	#[pallet::pallet]
@@ -140,7 +156,12 @@ pub mod pallet {
 	/// The request status of a given hash.
 	#[pallet::storage]
 	pub(super) type StatusFor<T: Config> =
-		StorageMap<_, Identity, T::Hash, RequestStatus<T::AccountId, BalanceOf<T>>>;
+		StorageMap<_, Identity, T::Hash, OldRequestStatus<T::AccountId, BalanceOf<T>>>;
+
+	/// The request status of a given hash.
+	#[pallet::storage]
+	pub(super) type RequestStatusFor<T: Config> =
+		StorageMap<_, Identity, T::Hash, RequestStatus<T::AccountId, TicketOf<T>>>;
 
 	#[pallet::storage]
 	pub(super) type PreimageFor<T: Config> =
@@ -204,6 +225,38 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	fn ensure_updated(h: T::Hash) -> bool {
+		let r = match StatusFor::<T>::take(&h) {
+			Some(r) => r,
+			None => return false,
+		};
+		let n = match r {
+			OldRequestStatus::Unrequested { deposit: (who, amount), len } => {
+				// unreserve deposit
+				T::Currency::unreserve(&who, amount);
+				// take consideration
+				let ticket = T::Consideration::new(&who, Footprint::from_parts(1, len))
+					.unwrap_or_default();
+				RequestStatus::Unrequested { ticket: (who, ticket), len }
+			},
+			OldRequestStatus::Requested { deposit: maybe_deposit, count, len } => {
+				let maybe_ticket = if let Some((who, deposit)) = maybe_deposit {
+					// unreserve deposit
+					T::Currency::unreserve(&who, amount);
+					// take consideration
+					let ticket = T::Consideration::new(&who, Footprint::from_parts(1, len))
+						.unwrap_or_default();
+					Some((who, ticket))
+				} else {
+					None
+				};
+				RequestStatus::Requested { maybe_ticket, count, len }
+			}
+		};
+		RequestStatusFor::<T>::insert(&h, n);
+		true
+	}
+
 	/// Ensure that the origin is either the `ManagerOrigin` or a signed origin.
 	fn ensure_signed_or_manager(
 		origin: T::RuntimeOrigin,
@@ -245,6 +298,7 @@ impl<T: Config> Pallet<T> {
 				let deposit = T::BaseDeposit::get()
 					.saturating_add(T::ByteDeposit::get().saturating_mul(length.into()));
 				T::Currency::reserve(depositor, deposit)?;
+				T::Consideration::new(depositor, )
 				RequestStatus::Unrequested { deposit: (depositor.clone(), deposit), len }
 			},
 		};

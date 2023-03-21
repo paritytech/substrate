@@ -126,7 +126,7 @@ impl WhitelistedStorageKeys for Tuple {
 }
 
 pub trait Consideration<AccountId> {
-	type Ticket: Member + FullCodec + TypeInfo + MaxEncodedLen;
+	type Ticket: Member + FullCodec + TypeInfo + MaxEncodedLen + Default;
 
 	fn update(
 		who: &AccountId,
@@ -134,12 +134,12 @@ pub trait Consideration<AccountId> {
 		new: Option<Footprint>,
 	) -> Result<Self::Ticket, DispatchError>;
 
-	fn new(who: &AccountId, new: Option<Footprint>) -> Result<Self::Ticket, DispatchError> {
-		Self::update(who, None, new)
+	fn new(who: &AccountId, new: Footprint) -> Result<Self::Ticket, DispatchError> {
+		Self::update(who, None, Some(new))
 	}
 
-	fn drop(who: &AccountId, old: Option<Self::Ticket>) -> Result<Self::Ticket, DispatchError> {
-		Self::update(who, old, None)
+	fn drop(who: &AccountId, old: Self::Ticket) -> Result<Self::Ticket, DispatchError> {
+		Self::update(who, Some(old), None)
 	}
 }
 
