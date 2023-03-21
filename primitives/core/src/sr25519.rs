@@ -467,7 +467,8 @@ impl TraitPair for Pair {
 	///
 	/// This is generated using schnorrkel's Mini-Secret-Keys.
 	///
-	/// A `MiniSecretKey` is literally what Ed25519 calls a `SecretKey`, which is just 32 random bytes.
+	/// A `MiniSecretKey` is literally what Ed25519 calls a `SecretKey`, which is just 32 random
+	/// bytes.
 	fn from_seed_slice(seed: &[u8]) -> Result<Pair, SecretStringError> {
 		match seed.len() {
 			MINI_SECRET_KEY_LENGTH => Ok(Pair(
