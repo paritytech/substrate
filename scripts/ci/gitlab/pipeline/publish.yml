@@ -63,6 +63,8 @@
     - if: $CI_COMMIT_REF_NAME == "master"
       changes:
         - scripts/ci/docker/$PRODUCT.Dockerfile.README.md
+  before_script:
+    - echo
   script:
     - cd / && sh entrypoint.sh
 
