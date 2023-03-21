@@ -591,7 +591,6 @@ pub mod pallet {
 
 		/// Minimum number of signed and unsigned blocks before trying `T::Fallback` election
 		/// and potentially entering in `Phase::Emergency` in case of election error.
-		#[pallet::constant]
 		type MinBlocksBeforeEmergency: Get<Self::BlockNumber>;
 
 		/// The minimum amount of improvement to the solution score that defines a solution as
