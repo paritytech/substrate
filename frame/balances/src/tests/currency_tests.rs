@@ -22,7 +22,7 @@ use crate::NegativeImbalance;
 use frame_support::traits::{
 	BalanceStatus::{Free, Reserved},
 	Currency,
-	ExistenceRequirement::{self, AllowDeath},
+	ExistenceRequirement::{self, AllowDeath, KeepAlive},
 	LockIdentifier, LockableCurrency, NamedReservableCurrency, ReservableCurrency, WithdrawReasons,
 };
 
@@ -31,6 +31,17 @@ const ID_2: LockIdentifier = *b"2       ";
 
 pub const CALL: &<Test as frame_system::Config>::RuntimeCall =
 	&RuntimeCall::Balances(crate::Call::transfer_allow_death { dest: 0, value: 0 });
+
+#[test]
+fn ed_should_work() {
+	ExtBuilder::default()
+		.existential_deposit(1)
+		.build_and_execute_with(|| {
+			assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), 1, 1000));
+			assert_noop!(<Balances as Currency<_>>::transfer(&1, &10, 1000, KeepAlive), TokenError::NotExpendable);
+			assert_ok!(<Balances as Currency<_>>::transfer(&1, &10, 1000, AllowDeath));
+		});
+}
 
 #[test]
 fn basic_locking_should_work() {
