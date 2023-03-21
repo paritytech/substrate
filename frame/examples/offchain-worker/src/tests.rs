@@ -27,7 +27,6 @@ use sp_core::{
 	sr25519::Signature,
 	H256,
 };
-use std::sync::Arc;
 
 use sp_keystore::{testing::MemoryKeystore, Keystore, KeystoreExt};
 use sp_runtime::{
@@ -206,17 +205,14 @@ fn should_submit_signed_transaction_on_chain() {
 	let (offchain, offchain_state) = testing::TestOffchainExt::new();
 	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
 	let keystore = MemoryKeystore::new();
-	Keystore::sr25519_generate_new(
-		&keystore,
-		crate::crypto::Public::ID,
-		Some(&format!("{}/hunter1", PHRASE)),
-	)
-	.unwrap();
+	keystore
+		.sr25519_generate_new(crate::crypto::Public::ID, Some(&format!("{}/hunter1", PHRASE)))
+		.unwrap();
 
 	let mut t = sp_io::TestExternalities::default();
 	t.register_extension(OffchainWorkerExt::new(offchain));
 	t.register_extension(TransactionPoolExt::new(pool));
-	t.register_extension(KeystoreExt(Arc::new(keystore)));
+	t.register_extension(KeystoreExt::new(keystore));
 
 	price_oracle_response(&mut offchain_state.write());
 
@@ -241,21 +237,16 @@ fn should_submit_unsigned_transaction_on_chain_for_any_account() {
 
 	let keystore = MemoryKeystore::new();
 
-	Keystore::sr25519_generate_new(
-		&keystore,
-		crate::crypto::Public::ID,
-		Some(&format!("{}/hunter1", PHRASE)),
-	)
-	.unwrap();
-
-	let public_key = *Keystore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
-		.get(0)
+	keystore
+		.sr25519_generate_new(crate::crypto::Public::ID, Some(&format!("{}/hunter1", PHRASE)))
 		.unwrap();
+
+	let public_key = *keystore.sr25519_public_keys(crate::crypto::Public::ID).get(0).unwrap();
 
 	let mut t = sp_io::TestExternalities::default();
 	t.register_extension(OffchainWorkerExt::new(offchain));
 	t.register_extension(TransactionPoolExt::new(pool));
-	t.register_extension(KeystoreExt(Arc::new(keystore)));
+	t.register_extension(KeystoreExt::new(keystore));
 
 	price_oracle_response(&mut offchain_state.write());
 
@@ -300,21 +291,16 @@ fn should_submit_unsigned_transaction_on_chain_for_all_accounts() {
 
 	let keystore = MemoryKeystore::new();
 
-	Keystore::sr25519_generate_new(
-		&keystore,
-		crate::crypto::Public::ID,
-		Some(&format!("{}/hunter1", PHRASE)),
-	)
-	.unwrap();
-
-	let public_key = *Keystore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
-		.get(0)
+	keystore
+		.sr25519_generate_new(crate::crypto::Public::ID, Some(&format!("{}/hunter1", PHRASE)))
 		.unwrap();
+
+	let public_key = *keystore.sr25519_public_keys(crate::crypto::Public::ID).get(0).unwrap();
 
 	let mut t = sp_io::TestExternalities::default();
 	t.register_extension(OffchainWorkerExt::new(offchain));
 	t.register_extension(TransactionPoolExt::new(pool));
-	t.register_extension(KeystoreExt(Arc::new(keystore)));
+	t.register_extension(KeystoreExt::new(keystore));
 
 	price_oracle_response(&mut offchain_state.write());
 
@@ -360,7 +346,7 @@ fn should_submit_raw_unsigned_transaction_on_chain() {
 	let mut t = sp_io::TestExternalities::default();
 	t.register_extension(OffchainWorkerExt::new(offchain));
 	t.register_extension(TransactionPoolExt::new(pool));
-	t.register_extension(KeystoreExt(Arc::new(keystore)));
+	t.register_extension(KeystoreExt::new(keystore));
 
 	price_oracle_response(&mut offchain_state.write());
 

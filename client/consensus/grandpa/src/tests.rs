@@ -281,10 +281,11 @@ fn make_ids(keys: &[Ed25519Keyring]) -> AuthorityList {
 }
 
 fn create_keystore(authority: Ed25519Keyring) -> KeystorePtr {
-	let keystore = Arc::new(MemoryKeystore::new());
-	Keystore::ed25519_generate_new(&*keystore, GRANDPA, Some(&authority.to_seed()))
-		.expect("Creates authority key");
+	let keystore = MemoryKeystore::new();
 	keystore
+		.ed25519_generate_new(GRANDPA, Some(&authority.to_seed()))
+		.expect("Creates authority key");
+	keystore.into()
 }
 
 async fn run_until_complete(future: impl Future + Unpin, net: &Arc<Mutex<GrandpaTestNet>>) {

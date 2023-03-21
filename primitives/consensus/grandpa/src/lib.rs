@@ -28,7 +28,7 @@ use serde::Serialize;
 use codec::{Codec, Decode, Encode, Input};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
-use sp_keystore::{Keystore, KeystorePtr};
+use sp_keystore::KeystorePtr;
 use sp_runtime::{
 	traits::{Header as HeaderT, NumberFor},
 	ConsensusEngineId, RuntimeDebug,
@@ -455,16 +455,12 @@ where
 	use sp_core::crypto::Public;
 
 	let encoded = localized_payload(round, set_id, &message);
-	let signature = Keystore::sign_with(
-		&*keystore,
-		AuthorityId::ID,
-		&public.to_public_crypto_pair(),
-		&encoded[..],
-	)
-	.ok()
-	.flatten()?
-	.try_into()
-	.ok()?;
+	let signature = keystore
+		.sign_with(AuthorityId::ID, &public.to_public_crypto_pair(), &encoded[..])
+		.ok()
+		.flatten()?
+		.try_into()
+		.ok()?;
 
 	Some(grandpa::SignedMessage { message, signature, id: public })
 }
