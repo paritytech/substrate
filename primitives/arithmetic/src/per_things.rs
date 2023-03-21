@@ -1819,6 +1819,14 @@ fn from_rational_with_rounding_breakage() {
 	assert!(q * d <= n);
 }
 
+#[test]
+fn from_rational_with_rounding_breakage_2() {
+	let n = 36893488147419103230u128;
+	let d = 36893488147419103630u128;
+	let q = Perquintill::from_rational_with_rounding(n, d, Rounding::Up).unwrap();
+	assert!(q * d >= n);
+}
+
 implement_per_thing!(Percent, test_per_cent, [u32, u64, u128], 100u8, u8, u16, "_Percent_",);
 implement_per_thing_with_perthousand!(
 	PerU16,

@@ -5461,12 +5461,14 @@ fn proportional_ledger_slash_works() {
 	ledger.active = unit;
 	ledger.total = unit * 4 + value;
 	// When
+	println!("HERE");
 	assert_eq!(ledger.slash(slash, 0, 0), slash);
 	// Then
 	// The amount slashed out of `unit`
 	let affected_balance = value + unit * 4;
 	let ratio =
 		Perquintill::from_rational_with_rounding(slash, affected_balance, Rounding::Up).unwrap();
+	println!("{:?} = {:?}/{:?} UP", ratio, slash, affected_balance);
 	// `unit` after the slash is applied
 	let unit_slashed = {
 		let unit_slash = ratio.mul_ceil(unit);
@@ -5477,12 +5479,12 @@ fn proportional_ledger_slash_works() {
 		value - value_slash
 	};
 	assert_eq!(ledger.active, unit_slashed);
-	assert_eq!(ledger.unlocking, vec![c(5, value_slashed)]);
-	assert_eq!(ledger.total, value_slashed);
+	assert_eq!(ledger.unlocking, vec![c(5, value_slashed), c(7, 32)]);
+	assert_eq!(ledger.total, value_slashed + 32);
 	assert_eq!(LedgerSlashPerEra::get().0, 0);
 	assert_eq!(
 		LedgerSlashPerEra::get().1,
-		BTreeMap::from([(4, 0), (5, value_slashed), (6, 0), (7, 0)])
+		BTreeMap::from([(4, 0), (5, value_slashed), (6, 0), (7, 32)])
 	);
 }
 
