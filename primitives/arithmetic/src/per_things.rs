@@ -479,10 +479,6 @@ where
 	P::Inner: Into<N>,
 {
 	let maximum: N = P::ACCURACY.into();
-	if part.is_zero() {
-		// Division by zero... best effort to prevent a panic.
-		return maximum
-	}
 	let c = rational_mul_correction::<N, P>(x.clone(), P::ACCURACY, part, rounding);
 	(x / part.into()).saturating_mul(maximum).saturating_add(c)
 }
@@ -513,10 +509,6 @@ where
 	let numer_upper = P::Upper::from(numer);
 	let denom_n: N = denom.into();
 	let denom_upper = P::Upper::from(denom);
-	if denom.is_zero() {
-		// Division by zero... best effort to prevent a panic.
-		return N::one()
-	}
 	let rem = x.rem(denom_n);
 	// `rem` is less than `denom`, which fits in `P::Inner`.
 	let rem_inner = rem.saturated_into::<P::Inner>();
