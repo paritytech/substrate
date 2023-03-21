@@ -84,8 +84,6 @@ use batch_verifier::BatchVerifier;
 
 pub use sp_externalities::MultiRemovalResults;
 
-use sp_arkworks::PairingError;
-
 #[cfg(feature = "std")]
 const LOG_TARGET: &str = "runtime::io";
 
