@@ -225,6 +225,12 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		#[pallet::call_index(4)]
+		#[pallet::weight(1)]
+		pub fn foo_index_out_of_order(_origin: OriginFor<T>) -> DispatchResult {
+			Ok(())
+		}
+
 		// Test for DispatchResult return type
 		#[pallet::call_index(2)]
 		#[pallet::weight(1)]
@@ -723,11 +729,25 @@ fn call_expand() {
 	assert_eq!(call_foo.get_call_name(), "foo");
 	assert_eq!(
 		pallet::Call::<Runtime>::get_call_names(),
-		&["foo", "foo_storage_layer", "foo_no_post_info", "check_for_dispatch_context"],
+		&[
+			"foo",
+			"foo_storage_layer",
+			"foo_index_out_of_order",
+			"foo_no_post_info",
+			"check_for_dispatch_context"
+		],
 	);
 
 	assert_eq!(call_foo.get_call_index(), 0u8);
-	assert_eq!(pallet::Call::<Runtime>::get_call_indices(), &[0u8, 1u8, 2u8, 3u8])
+	assert_eq!(pallet::Call::<Runtime>::get_call_indices(), &[0u8, 1u8, 4u8, 2u8, 3u8])
+}
+
+#[test]
+fn call_expand_index() {
+	let call_foo = pallet::Call::<Runtime>::foo_index_out_of_order {};
+
+	assert_eq!(call_foo.get_call_index(), 4u8);
+	assert_eq!(pallet::Call::<Runtime>::get_call_indices(), &[0u8, 1u8, 4u8, 2u8, 3u8])
 }
 
 #[test]

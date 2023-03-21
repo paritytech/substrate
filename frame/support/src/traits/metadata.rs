@@ -101,7 +101,7 @@ pub struct CallMetadata {
 
 /// Gets the function name of the Call.
 pub trait GetCallName {
-	/// Return all function names.
+	/// Return all function names in an undefined order.
 	fn get_call_names() -> &'static [&'static str];
 	/// Return the function name of the Call.
 	fn get_call_name(&self) -> &'static str;
@@ -109,9 +109,9 @@ pub trait GetCallName {
 
 /// Gets the function index of the Call
 pub trait GetCallIndex {
-	/// Return all call indices.
+	/// Return all call indices in an undefined order.
 	fn get_call_indices() -> &'static [u8];
-	/// Return the index of this call.
+	/// Return the index of this Call.
 	fn get_call_index(&self) -> u8;
 }
 
