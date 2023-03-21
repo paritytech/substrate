@@ -164,6 +164,9 @@ benchmarks! {
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), bid, 1)?;
 		Nis::<T>::process_queues(Perquintill::one(), 1, 2, &mut WeightCounter::unlimited());
 		frame_system::Pallet::<T>::set_block_number(Receipts::<T>::get(0).unwrap().expiry);
+		// FIXME: Ensure that the pallet has enough funding. This should already be the case, but
+		// a rounding error can cause it to fail.
+		T::Currency::set_balance(&Nis::<T>::account_id(), BalanceOf::<T>::max_value() / 10u32.into());
 	}: _(RawOrigin::Signed(caller.clone()), 0, None)
 	verify {
 		assert!(Receipts::<T>::get(0).is_none());
@@ -182,6 +185,9 @@ benchmarks! {
 		Nis::<T>::process_queues(Perquintill::one(), 1, 2, &mut WeightCounter::unlimited());
 		frame_system::Pallet::<T>::set_block_number(Receipts::<T>::get(0).unwrap().expiry);
 		Nis::<T>::communify(RawOrigin::Signed(caller.clone()).into(), 0)?;
+		// FIXME: Ensure that the pallet has enough funding. This should already be the case, but
+		// a rounding error can cause it to fail.
+		T::Currency::set_balance(&Nis::<T>::account_id(), BalanceOf::<T>::max_value() / 10u32.into());
 	}: _(RawOrigin::Signed(caller.clone()), 0)
 	verify {
 		assert!(Receipts::<T>::get(0).is_none());
