@@ -535,7 +535,7 @@ impl ExtBuilder {
 		<UnsignedPhase>::set(unsigned);
 		self
 	}
-	pub fn throttling_blocks(self, bn: BlockNumber) -> Self {
+	pub fn min_electing_blocks(self, bn: BlockNumber) -> Self {
 		<MinBlocksBeforeEmergency>::set(bn);
 		self
 	}

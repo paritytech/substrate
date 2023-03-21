@@ -1545,21 +1545,21 @@ impl<T: Config> Pallet<T> {
 		ElectionBlocksCount::<T>::kill();
 	}
 
-	// Returns `true` if the emergency phase should be throttled.
-	//
-	// The emergency phase should be throttled when an election fails with the following
-	// conditions:
-	//
-	// - phase is off and emergency throttling is enabled (i.e. `T::MinBlocksBeforeEmergency` > 0)
-	// - signed or unsigned phases were active but the election failed before
-	//   `T::MinBlocksBeforeEmergency` blocks have passed since the round started, i.e.
-	//   `T::ElectionBlocksCount`.
+	/// Returns `true` if the emergency phase should be throttled.
+	///
+	/// The emergency phase should be throttled when an election fails with the following
+	/// conditions:
+	///
+	/// - phase is off and emergency throttling is enabled (i.e. `T::MinBlocksBeforeEmergency` > 0)
+	/// - signed or unsigned phases were active but the election failed before
+	///   `T::MinBlocksBeforeEmergency` blocks have passed since the round started, i.e.
+	///   `T::ElectionBlocksCount`.
 	fn emergency_phase_throttling() -> bool {
 		match Self::current_phase() {
 			Phase::Off => T::MinBlocksBeforeEmergency::get() > T::BlockNumber::zero(),
 			Phase::Signed | Phase::Unsigned(_) =>
 				ElectionBlocksCount::<T>::get() < T::MinBlocksBeforeEmergency::get(),
-			_ => false,
+			Phase::Emergency => false,
 		}
 	}
 
@@ -2106,7 +2106,7 @@ mod tests {
 
 	#[test]
 	fn both_phases_void() {
-		ExtBuilder::default().phases(0, 0).throttling_blocks(0).build_and_execute(|| {
+		ExtBuilder::default().phases(0, 0).min_electing_blocks(0).build_and_execute(|| {
 			roll_to(15);
 			assert!(MultiPhase::current_phase().is_off());
 
@@ -2147,9 +2147,6 @@ mod tests {
 			.onchain_fallback(false)
 			.phases(10, 10)
 			.build_and_execute(|| {
-				MultiPhase::rotate_round();
-				assert!(MultiPhase::current_phase().is_off());
-
 				// call elect while snapshot does not exist during off phase but emergency phase is
 				// throttled because not enough blocks since last election passed (phase off).
 				assert!(MultiPhase::emergency_phase_throttling());
@@ -2585,7 +2582,7 @@ mod tests {
 	fn governance_fallback_works() {
 		ExtBuilder::default()
 			.onchain_fallback(false)
-			.throttling_blocks(0)
+			.min_electing_blocks(0)
 			.build_and_execute(|| {
 				roll_to_unsigned();
 				assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
@@ -2653,7 +2650,7 @@ mod tests {
 	#[test]
 	fn snapshot_too_big_failure_onchain_fallback() {
 		// the `MockStaking` is designed such that if it has too many targets, it simply fails.
-		ExtBuilder::default().throttling_blocks(0).build_and_execute(|| {
+		ExtBuilder::default().min_electing_blocks(0).build_and_execute(|| {
 			Targets::set((0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>());
 
 			// Signed phase failed to open.
@@ -2690,7 +2687,7 @@ mod tests {
 		// and if the backup mode is nothing, we go into the emergency mode..
 		ExtBuilder::default()
 			.onchain_fallback(false)
-			.throttling_blocks(0)
+			.min_electing_blocks(0)
 			.build_and_execute(|| {
 				crate::mock::Targets::set(
 					(0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>(),
