@@ -68,6 +68,10 @@ benchmarks! {
 		// number of votes per voter (ie the degree).
 		let d in (MAX_VOTERS) .. MAX_VOTERS * MAX_VOTES_PER_VOTER;
 
+		// we want to set the a voting degree per voter between the number of targets and the
+		// maximum votes allowed per voter. with the current benchmarking framework, `t` cannot be
+		// used as a parameter. thus, we try to use `d` as the voting degree, capped by the maximum
+		// number of votes per voter.
 		let votes_per_voter = d.min(MAX_VOTES_PER_VOTER);
 
 		let (voters, targets) = set_up_voters_targets::<T::AccountId>(v, t, votes_per_voter as usize);
@@ -88,6 +92,10 @@ benchmarks! {
 		// number of votes per voter (ie the degree).
 		let d in (MAX_VOTERS) .. MAX_VOTERS * MAX_VOTES_PER_VOTER;
 
+		// we want to set the a voting degree per voter between the number of targets and the
+		// maximum votes allowed per voter. with the current benchmarking framework, `t` cannot be
+		// used as a parameter. thus, we try to use `d` as the voting degree, capped by the maximum
+		// number of votes per voter.
 		let votes_per_voter = d.min(MAX_VOTES_PER_VOTER);
 
 		let (voters, targets) = set_up_voters_targets::<T::AccountId>(v, t, votes_per_voter as usize);
@@ -107,6 +115,10 @@ benchmarks! {
 		// number of votes per voter (ie the degree).
 		let d in (MAX_VOTERS) .. MAX_VOTERS * MAX_VOTES_PER_VOTER;
 
+		// we want to set the a voting degree per voter between the number of targets and the
+		// maximum votes allowed per voter. with the current benchmarking framework, `t` cannot be
+		// used as a parameter. thus, we try to use `d` as the voting degree, capped by the maximum
+		// number of votes per voter.
 		let votes_per_voter = d.min(MAX_VOTES_PER_VOTER);
 
 		let (voters, targets) = set_up_voters_targets::<T::AccountId>(v, t, votes_per_voter as usize);
