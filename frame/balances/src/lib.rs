@@ -202,14 +202,6 @@ const LOG_TARGET: &str = "runtime::balances";
 
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
-#[cfg(feature = "zero_ed")]
-fn assert_valid_ed<Balance: Zero>(_: Balance) {}
-
-#[cfg(not(feature = "zero_ed"))]
-fn assert_valid_ed<Balance: Zero>(existential_deposit: Balance) {
-	assert!(!existential_deposit.is_zero(), "The existential deposit must be greater than zero!");
-}
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -460,14 +452,15 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
 		fn build(&self) {
-			let ed = <T as Config<I>>::ExistentialDeposit::get();
-			assert_valid_ed(ed);
+			Pallet::<T, I>::integrity_test();
+
 			let total = self.balances.iter().fold(Zero::zero(), |acc: T::Balance, &(_, n)| acc + n);
+
 			<TotalIssuance<T, I>>::put(total);
 
 			for (_, balance) in &self.balances {
 				assert!(
-					*balance >= ed,
+					*balance >= <T as Config<I>>::ExistentialDeposit::get(),
 					"the balance of any account should always be at least the existential deposit.",
 				)
 			}
@@ -507,6 +500,17 @@ pub mod pallet {
 		/// Kept in order not to break dependency.
 		pub fn assimilate_storage(&self, storage: &mut sp_runtime::Storage) -> Result<(), String> {
 			<Self as GenesisBuild<T, I>>::assimilate_storage(self, storage)
+		}
+	}
+
+	#[cfg(not(feature = "zero_ed"))]
+	#[pallet::hooks]
+	impl<T: Config<I>, I: 'static> Hooks<T::BlockNumber> for Pallet<T, I> {
+		fn integrity_test() {
+			assert!(
+				!<T as Config<I>>::ExistentialDeposit::get().is_zero(),
+				"The existential deposit must be greater than zero!"
+			);
 		}
 	}
 
