@@ -32,9 +32,7 @@
 use honggfuzz::fuzz;
 use primitive_types::U256;
 use sp_arithmetic::{
-	helpers_128bit::multiply_by_rational_with_rounding,
-	traits::{SaturatedConversion, Zero},
-	Rounding,
+	helpers_128bit::multiply_by_rational_with_rounding, traits::SaturatedConversion, Rounding,
 };
 
 /// Tries to demonstrate that `multiply_by_rational_with_rounding` is incorrect.
