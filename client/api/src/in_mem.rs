@@ -440,7 +440,7 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 	}
 
 	fn children(&self, _parent_hash: Block::Hash) -> sp_blockchain::Result<Vec<Block::Hash>> {
-		Ok(Default::default())
+		unimplemented!()
 	}
 
 	fn indexed_transaction(&self, _hash: Block::Hash) -> sp_blockchain::Result<Option<Vec<u8>>> {
