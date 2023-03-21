@@ -38,7 +38,7 @@ use sp_core::{
 	traits::CallContext,
 };
 use sp_externalities::Extensions;
-use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStorePtr};
+use sp_keystore::{testing::MemoryKeystore, KeystoreExt, KeystorePtr};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_state_machine::StateMachine;
 use std::{collections::HashMap, fmt::Debug, fs, str::FromStr, sync::Arc, time};
@@ -218,7 +218,7 @@ impl PalletCmd {
 
 		let extensions = || -> Extensions {
 			let mut extensions = Extensions::default();
-			extensions.register(KeystoreExt(Arc::new(KeyStore::new()) as SyncCryptoStorePtr));
+			extensions.register(KeystoreExt(Arc::new(MemoryKeystore::new()) as KeystorePtr));
 			let (offchain, _) = TestOffchainExt::new();
 			let (pool, _) = TestTransactionPoolExt::new();
 			extensions.register(OffchainWorkerExt::new(offchain.clone()));

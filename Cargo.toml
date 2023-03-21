@@ -330,6 +330,4 @@ lto = "fat"
 codegen-units = 1
 
 [patch.crates-io]
-sp-arkworks =  { path = "primitives/arkworks" }
-
-
+sp-arkworks =  { path = "./primitives/arkworks" }

@@ -30,7 +30,7 @@ use self::{
 	sandbox::Sandbox,
 };
 use crate::{
-	exec::{AccountIdOf, FixSizedKey, VarSizedKey},
+	exec::{AccountIdOf, Key},
 	wasm::CallFlags,
 	Pallet as Contracts, *,
 };
@@ -135,10 +135,10 @@ where
 	}
 
 	/// Store the supplied storage items into this contracts storage.
-	fn store(&self, items: &Vec<(FixSizedKey, Vec<u8>)>) -> Result<(), &'static str> {
+	fn store(&self, items: &Vec<([u8; 32], Vec<u8>)>) -> Result<(), &'static str> {
 		let info = self.info()?;
 		for item in items {
-			info.write(&item.0 as &FixSizedKey, Some(item.1.clone()), None, false)
+			info.write(&Key::Fix(item.0), Some(item.1.clone()), None, false)
 				.map_err(|_| "Failed to write storage to restoration dest")?;
 		}
 		<ContractInfoOf<T>>::insert(&self.account_id, info);
@@ -355,7 +355,7 @@ benchmarks! {
 	}: _(origin, callee, value, Weight::MAX, None, data)
 	verify {
 		let deposit = T::Currency::free_balance(&deposit_account);
-		// value and value transfered via call should be removed from the caller
+		// value and value transferred via call should be removed from the caller
 		assert_eq!(
 			T::Currency::free_balance(&instance.caller),
 			caller_funding::<T>() - instance.value - value - deposit - Pallet::<T>::min_balance(),
@@ -798,15 +798,15 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 		let deposit_account = instance.info()?.deposit_account().clone();
-		assert_eq!(T::Currency::total_balance(&beneficiary), 0u32.into());
+		assert_eq!(<T::Currency as Currency<_>>::total_balance(&beneficiary), 0u32.into());
 		assert_eq!(T::Currency::free_balance(&instance.account_id), Pallet::<T>::min_balance() * 2u32.into());
 		assert_ne!(T::Currency::free_balance(&deposit_account), 0u32.into());
 	}: call(origin, instance.addr.clone(), 0u32.into(), Weight::MAX, None, vec![])
 	verify {
 		if r > 0 {
-			assert_eq!(T::Currency::total_balance(&instance.account_id), 0u32.into());
-			assert_eq!(T::Currency::total_balance(&deposit_account), 0u32.into());
-			assert_eq!(T::Currency::total_balance(&beneficiary), Pallet::<T>::min_balance() * 2u32.into());
+			assert_eq!(<T::Currency as Currency<_>>::total_balance(&instance.account_id), 0u32.into());
+			assert_eq!(<T::Currency as Currency<_>>::total_balance(&deposit_account), 0u32.into());
+			assert_eq!(<T::Currency as Currency<_>>::total_balance(&beneficiary), Pallet::<T>::min_balance() * 2u32.into());
 		}
 	}
 
@@ -1044,7 +1044,7 @@ benchmarks! {
 		let info = instance.info()?;
 		for key in keys {
 			info.write(
-				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+				&Key::<T>::try_from_var(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
 				false,
@@ -1088,7 +1088,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		info.write(
-			&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+			&Key::<T>::try_from_var(key).map_err(|e| "Key has wrong length")?,
 			Some(vec![]),
 			None,
 			false,
@@ -1131,7 +1131,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		info.write(
-			&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+			&Key::<T>::try_from_var(key).map_err(|e| "Key has wrong length")?,
 			Some(vec![42u8; n as usize]),
 			None,
 			false,
@@ -1180,7 +1180,7 @@ benchmarks! {
 		let info = instance.info()?;
 		for key in keys {
 			info.write(
-				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+				&Key::<T>::try_from_var(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
 				false,
@@ -1223,7 +1223,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		info.write(
-			&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+			&Key::<T>::try_from_var(key).map_err(|e| "Key has wrong length")?,
 			Some(vec![42u8; n as usize]),
 			None,
 			false,
@@ -1276,7 +1276,7 @@ benchmarks! {
 		let info = instance.info()?;
 		for key in keys {
 			info.write(
-				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+				&Key::<T>::try_from_var(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
 				false,
@@ -1325,7 +1325,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		info.write(
-			&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+			&Key::<T>::try_from_var(key).map_err(|e| "Key has wrong length")?,
 			Some(vec![42u8; n as usize]),
 			None,
 			false,
@@ -1373,7 +1373,7 @@ benchmarks! {
 		let info = instance.info()?;
 		for key in keys {
 			info.write(
-				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+				&Key::<T>::try_from_var(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
 				false,
@@ -1416,7 +1416,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		info.write(
-			&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+			&Key::<T>::try_from_var(key).map_err(|e| "Key has wrong length")?,
 			Some(vec![42u8; n as usize]),
 			None,
 			false,
@@ -1469,7 +1469,7 @@ benchmarks! {
 		let info = instance.info()?;
 		for key in keys {
 			info.write(
-				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+				&Key::<T>::try_from_var(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
 				false,
@@ -1518,7 +1518,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		info.write(
-			&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+			&Key::<T>::try_from_var(key).map_err(|e| "Key has wrong length")?,
 			Some(vec![42u8; n as usize]),
 			None,
 			false,
@@ -1573,12 +1573,12 @@ benchmarks! {
 		instance.set_balance(value * (r + 1).into());
 		let origin = RawOrigin::Signed(instance.caller.clone());
 		for account in &accounts {
-			assert_eq!(T::Currency::total_balance(account), 0u32.into());
+			assert_eq!(<T::Currency as Currency<_>>::total_balance(account), 0u32.into());
 		}
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 	verify {
 		for account in &accounts {
-			assert_eq!(T::Currency::total_balance(account), value);
+			assert_eq!(<T::Currency as Currency<_>>::total_balance(account), value);
 		}
 	}
 
@@ -2224,7 +2224,7 @@ benchmarks! {
 	// the same amount of time. We follow that `t.load` and `drop` both have the weight
 	// of this benchmark / 2. We need to make this assumption because there is no way
 	// to measure them on their own using a valid wasm module. We need their individual
-	// values to derive the weight of individual instructions (by substraction) from
+	// values to derive the weight of individual instructions (by subtraction) from
 	// benchmarks that include those for parameter pushing and return type dropping.
 	// We call the weight of `t.load` and `drop`: `w_param`.
 	// The weight that would result from the respective benchmark we call: `w_bench`.
@@ -3003,9 +3003,9 @@ benchmarks! {
 		sbox.invoke();
 	}
 
-	// This is no benchmark. It merely exist to have an easy way to pretty print the curently
+	// This is no benchmark. It merely exist to have an easy way to pretty print the currently
 	// configured `Schedule` during benchmark development.
-	// It can be outputed using the following command:
+	// It can be outputted using the following command:
 	// cargo run --manifest-path=bin/node/cli/Cargo.toml \
 	//     --features runtime-benchmarks -- benchmark pallet --extra --dev --execution=native \
 	//     -p pallet_contracts -e print_schedule --no-median-slopes --no-min-squares

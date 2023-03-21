@@ -50,7 +50,7 @@ pub enum TryInstantiate {
 	Instantiate,
 	/// Skip the instantiation during preparation.
 	///
-	/// This makes sense when the preparation takes place as part of an instantation. Then
+	/// This makes sense when the preparation takes place as part of an instantiation. Then
 	/// this instantiation would fail the whole transaction and an extra check is not
 	/// necessary.
 	Skip,
@@ -376,7 +376,7 @@ fn get_memory_limits<T: Config>(
 			},
 		}
 	} else {
-		// If none memory imported then just crate an empty placeholder.
+		// If none memory imported then just create an empty placeholder.
 		// Any access to it will lead to out of bounds trap.
 		Ok((0, 0))
 	}
@@ -412,7 +412,7 @@ where
 		extended_const: false,
 		component_model: false,
 		// This is not our only defense: We check for float types later in the preparation
-		// process. Additionally, all instructions explictily  need to have weights assigned
+		// process. Additionally, all instructions explicitly  need to have weights assigned
 		// or the deployment will fail. We have none assigned for float instructions.
 		deterministic_only: matches!(determinism, Determinism::Deterministic),
 		mutable_global: false,

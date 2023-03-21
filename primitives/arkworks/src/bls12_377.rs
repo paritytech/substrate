@@ -21,9 +21,16 @@
 
 use crate::{
 	utils::{
-		final_exponentiation_generic, msm_g1_generic, msm_g2_generic, multi_miller_loop_generic,
+		deserialize_argument, final_exponentiation_generic, msm_g1_generic, msm_g2_generic,
+		multi_miller_loop_generic, serialize_result,
 	},
 	PairingError,
+};
+use ark_bls12_377::{g1, g2, Bls12_377, G1Affine, G1Projective, G2Affine, G2Projective};
+use ark_ec::{
+	models::CurveConfig,
+	pairing::{MillerLoopOutput, Pairing},
+	short_weierstrass::SWCurveConfig,
 };
 use ark_bls12_377::Bls12_377;
 use sp_std::vec::Vec;
@@ -47,4 +54,44 @@ pub fn msm_g1(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 /// Compute a multi scalar multiplication on G! through arkworks
 pub fn msm_g2(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 	msm_g2_generic::<Bls12_377>(bases, scalars)
+}
+
+/// Compute a scalar multiplication on G2 through arkworks
+pub fn mul_projective_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+	let base = deserialize_argument::<G2Projective>(&base);
+	let scalar = deserialize_argument::<Vec<u64>>(&scalar);
+
+	let result = <g2::Config as SWCurveConfig>::mul_projective(&base, &scalar);
+
+	serialize_result(result)
+}
+
+/// Compute a scalar multiplication on G2 through arkworks
+pub fn mul_projective_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+	let base = deserialize_argument::<G1Projective>(&base);
+	let scalar = deserialize_argument::<Vec<u64>>(&scalar);
+
+	let result = <g1::Config as SWCurveConfig>::mul_projective(&base, &scalar);
+
+	serialize_result(result)
+}
+
+/// Compute a scalar multiplication on G2 through arkworks
+pub fn mul_affine_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+	let base = deserialize_argument::<G1Affine>(&base);
+	let scalar = deserialize_argument::<Vec<u64>>(&scalar);
+
+	let result = <g1::Config as SWCurveConfig>::mul_affine(&base, &scalar);
+
+	serialize_result(result)
+}
+
+/// Compute a scalar multiplication on G2 through arkworks
+pub fn mul_affine_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+	let base = deserialize_argument::<G2Affine>(&base);
+	let scalar = deserialize_argument::<Vec<u64>>(&scalar);
+
+	let result = <g2::Config as SWCurveConfig>::mul_affine(&base, &scalar);
+
+	serialize_result(result)
 }

@@ -105,14 +105,18 @@ fn add_sufficients<T: Config<I>, I: 'static>(minter: T::AccountId, n: u32) {
 
 fn add_approvals<T: Config<I>, I: 'static>(minter: T::AccountId, n: u32) {
 	let asset_id = default_asset_id::<T, I>();
-	T::Currency::deposit_creating(&minter, T::ApprovalDeposit::get() * n.into());
+	T::Currency::deposit_creating(
+		&minter,
+		T::ApprovalDeposit::get() * n.into() + T::Currency::minimum_balance(),
+	);
 	let minter_lookup = T::Lookup::unlookup(minter.clone());
 	let origin = SystemOrigin::Signed(minter);
 	Assets::<T, I>::mint(origin.clone().into(), asset_id, minter_lookup, (100 * (n + 1)).into())
 		.unwrap();
+	let enough = T::Currency::minimum_balance();
 	for i in 0..n {
 		let target = account("approval", i, SEED);
-		T::Currency::make_free_balance_be(&target, T::Currency::minimum_balance());
+		T::Currency::make_free_balance_be(&target, enough);
 		let target_lookup = T::Lookup::unlookup(target);
 		Assets::<T, I>::approve_transfer(
 			origin.clone().into(),
