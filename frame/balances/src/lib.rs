@@ -510,7 +510,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Hooks<T::BlockNumber> for Pallet<T, I> {
 		#[cfg(not(feature = "zero_ed"))]
 		fn integrity_test() {
-			frame_support::defensive_assert!(
+			assert!(
 				!<T as Config<I>>::ExistentialDeposit::get().is_zero(),
 				"The existential deposit must be greater than zero!"
 			);
