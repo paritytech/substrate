@@ -35,7 +35,7 @@ fn ed25519_works_in_runtime() {
 		.test_ed25519_crypto(test_client.chain_info().genesis_hash)
 		.expect("Tests `ed25519` crypto.");
 
-	let supported_keys = Keystore::keys(&*keystore, ED25519).unwrap();
+	let supported_keys = keystore.keys(ED25519).unwrap();
 	assert!(supported_keys.contains(&public.clone().into()));
 	assert!(AppPair::verify(&signature, "ed25519", &AppPublic::from(public)));
 }

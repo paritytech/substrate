@@ -160,12 +160,11 @@ pub mod mock {
 	impl super::Config for Test {}
 
 	pub fn new_test_ext() -> sp_io::TestExternalities {
-		use sp_keystore::{testing::MemoryKeystore, KeystoreExt, KeystorePtr};
-		use sp_std::sync::Arc;
+		use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
 
 		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		let mut ext = sp_io::TestExternalities::new(t);
-		ext.register_extension(KeystoreExt(Arc::new(MemoryKeystore::new()) as KeystorePtr));
+		ext.register_extension(KeystoreExt::new(MemoryKeystore::new()));
 
 		ext
 	}
