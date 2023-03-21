@@ -292,6 +292,10 @@ macro_rules! impl_rrm {
 	($ulow:ty, $uhi:ty) => {
 		impl MultiplyRational for $ulow {
 			fn multiply_rational(self, n: Self, d: Self, r: Rounding) -> Option<Self> {
+				if d.is_zero() {
+					return None
+				}
+
 				let sn = (self as $uhi) * (n as $uhi);
 				let mut result = sn / (d as $uhi);
 				let remainder = (sn % (d as $uhi)) as $ulow;
