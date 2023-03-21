@@ -75,27 +75,64 @@ impl CallDef {
 			return Err(syn::Error::new(method.sig.span(), msg))
 		}
 
-		let (mut weight_attrs, mut call_idx_attrs, selector_attrs): (
+		let (mut weight_attrs, mut call_idx_attrs, selector_attr): (
 			Vec<CallAttr>,
 			Vec<CallAttr>,
-			Vec<CallAttr>,
+			Option<CallAttr>,
 		) = helper::take_item_interface_attrs(&mut method.attrs)?.into_iter().try_fold(
-			(Vec::new(), Vec::new(), Vec::new()),
-			|(mut weight_attrs, mut call_idx_attrs, mut selector_attrs), attr| {
+			(Vec::new(), Vec::new(), None),
+			|(mut weight_attrs, mut call_idx_attrs, mut selector_attr), attr| {
 				match attr {
 					CallAttr::Index(_) => call_idx_attrs.push(attr),
 					CallAttr::Weight(_) => weight_attrs.push(attr),
-					CallAttr::NoSelector | CallAttr::UseSelector(_) => {
+					CallAttr::NoSelector => {
 						if !global_selector {
 							let msg = "Invalid interface::view, selector attributes given \
 								but top level mod misses `#[interface::with_selector] attribute.`";
 							return Err(syn::Error::new(method.sig.span(), msg))
 						}
-						selector_attrs.push(attr)
+
+						if let Some(CallAttr::UseSelector(_)) = selector_attr {
+							let msg =
+								"Invalid interface::view, both `#[interface::no_selector]` and \
+								`#[interface::use_selector($ident)]` used on the same method. Use either one or the other";
+							return Err(syn::Error::new(method.sig.span(), msg))
+						}
+
+						if selector_attr.is_some() {
+							let msg =
+								"Invalid interface::view, multiple `#[interface::no_selector]` \
+								attributes used on the same method. Only one is allowed.";
+							return Err(syn::Error::new(method.sig.span(), msg))
+						}
+
+						selector_attr = Some(attr);
+					},
+					CallAttr::UseSelector(_) => {
+						if !global_selector {
+							let msg = "Invalid interface::view, selector attributes given \
+								but top level mod misses `#[interface::with_selector] attribute.`";
+							return Err(syn::Error::new(method.sig.span(), msg))
+						}
+
+						if let Some(CallAttr::NoSelector) = selector_attr {
+							let msg =
+								"Invalid interface::view, both `#[interface::no_selector]` and \
+								`#[interface::use_selector($ident)]` used on the same method. Use either one or the other";
+							return Err(syn::Error::new(method.sig.span(), msg))
+						}
+
+						if selector_attr.is_some() {
+							let msg = "Invalid interface::view, multiple `#[interface::use_selector($ident)]` \
+								attributes used on the same method. Only one is allowed.";
+							return Err(syn::Error::new(method.sig.span(), msg))
+						}
+
+						selector_attr = Some(attr);
 					},
 				}
 
-				Ok((weight_attrs, call_idx_attrs, selector_attrs))
+				Ok((weight_attrs, call_idx_attrs, selector_attr))
 			},
 		)?;
 
@@ -134,12 +171,7 @@ impl CallDef {
 			return Err(err)
 		}
 
-		if selector_attrs.len() != 1 {
-			let msg = "Invalid interface::call, too many selector attributes given.\
-				Only use either `#[interface::no_selector]` `#[interface::use_selector($ident)]`";
-			return Err(syn::Error::new(method.sig.span(), msg))
-		};
-		let with_selector = match selector_attrs.first() {
+		let with_selector = match selector_attr.as_ref() {
 			Some(attr) => match attr {
 				CallAttr::UseSelector(_) => true,
 				CallAttr::NoSelector => false,
@@ -147,9 +179,8 @@ impl CallDef {
 			},
 			None => global_selector,
 		};
-
 		let (skip, selector) = if with_selector {
-			let first_arg_ty = match method.sig.inputs.first() {
+			let first_arg_ty = match method.sig.inputs.iter().nth(1) {
 				None => {
 					let msg =
 						"Invalid interface::view, must have `Select<$ty>` as first argument if \
@@ -164,7 +195,7 @@ impl CallDef {
 				Some(syn::FnArg::Typed(arg)) => check_call_second_arg_type(&arg.ty)?,
 			};
 
-			let selector_ty = match selector_attrs.first() {
+			let selector_ty = match selector_attr {
 				Some(attr) => match attr {
 					CallAttr::UseSelector(name) => interface::SelectorType::Named {
 						name: name.clone(),

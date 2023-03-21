@@ -127,7 +127,7 @@ mod tests {
 	mod int_123 {
 		use frame_support::{
 			dispatch::DispatchResult,
-			interface::{InterfaceError, Select},
+			interface::{InterfaceError, InterfaceResult, Select},
 		};
 
 		#[interface::definition]
@@ -158,40 +158,45 @@ mod tests {
 			fn free_balance(
 				currency: Select<Self::Currency>,
 				who: Self::AccountId,
-			) -> Self::Balance;
+			) -> Result<Self::Balance, InterfaceError>;
 
 			#[interface::view]
 			#[interface::view_index(1)]
 			#[interface::no_selector]
-			fn balances(who: Self::AccountId) -> Vec<(Self::Currency, Self::Balance)>;
+			fn balances(
+				who: Self::AccountId,
+			) -> Result<Vec<(Self::Currency, Self::Balance)>, InterfaceError>;
 
 			#[interface::call]
 			#[interface::call_index(0)]
+			#[interface::weight(0)]
 			fn transfer(
 				origin: Self::RuntimeOrigin,
 				currency: Select<Self::Currency>,
 				recv: Self::AccountId,
 				amount: Self::Balance,
-			) -> DispatchResult;
+			) -> InterfaceResult;
 
 			#[interface::call]
 			#[interface::call_index(1)]
 			#[interface::use_selector(RestrictedCurrency)]
+			#[interface::weight(0)]
 			fn approve(
 				origin: Self::RuntimeOrigin,
 				currency: Select<Self::Currency>,
 				recv: Self::AccountId,
 				amount: Self::Balance,
-			) -> DispatchResult;
+			) -> InterfaceResult;
 
 			#[interface::call]
 			#[interface::call_index(3)]
-			#[interface::use_selector(SelectAccount)]
+			#[interface::weight(0)]
+			#[interface::no_selector]
 			fn burn(
 				origin: Self::RuntimeOrigin,
-				from: Select<Self::AccountId>,
+				from: Self::AccountId,
 				amount: Self::Balance,
-			) -> DispatchResult;
+			) -> InterfaceResult;
 		}
 	}
 }

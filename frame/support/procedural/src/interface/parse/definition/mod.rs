@@ -118,7 +118,7 @@ impl InterfaceDef {
 					} else {
 						let msg = "Invalid interface definition. `#[interface::selector]` can \
 						 only be used as an annotation if the trait of the interface carries `#[interface::with_selector]`.";
-						return Err(syn::Error::new(attr_span, msg))
+						return Err(syn::Error::new(span, msg))
 					},
 				Some(InterfaceTraitAttr::WithSelector(_)) => {
 					let msg = "Invalid interface definition. #[interface::with_selector] is \
@@ -194,6 +194,8 @@ impl syn::parse::Parse for InterfaceTraitAttr {
 			Ok(InterfaceTraitAttr::Call(content.parse::<keyword::call>()?.span()))
 		} else if lookahead.peek(keyword::view) {
 			Ok(InterfaceTraitAttr::View(content.parse::<keyword::view>()?.span()))
+		} else if lookahead.peek(keyword::with_selector) {
+			Ok(InterfaceTraitAttr::WithSelector(content.parse::<keyword::with_selector>()?.span()))
 		} else if lookahead.peek(keyword::selector) {
 			let span = content.parse::<keyword::selector>()?.span();
 			let selector_content;

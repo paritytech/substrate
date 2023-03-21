@@ -15,10 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-	interface,
-	interface::parse::{definition::selector, helper},
-};
+use crate::{interface, interface::parse::helper};
 use frame_support_procedural_tools::get_doc_literals;
 use quote::ToTokens;
 use std::collections::HashMap;
@@ -52,23 +49,60 @@ impl ViewDef {
 			assert!(indices.insert(view.view_index, view.name.clone()).is_none());
 		});
 
-		let (mut view_idx_attrs, selector_attrs): (Vec<ViewAttr>, Vec<ViewAttr>) =
+		let (mut view_idx_attrs, selector_attr): (Vec<ViewAttr>, Option<ViewAttr>) =
 			helper::take_item_interface_attrs(&mut method.attrs)?.into_iter().try_fold(
-				(Vec::new(), Vec::new()),
-				|(mut view_idx_attrs, mut selector_attrs), attr| {
+				(Vec::new(), None),
+				|(mut view_idx_attrs, mut selector_attr), attr| {
 					match attr {
 						ViewAttr::Index(_) => view_idx_attrs.push(attr),
-						ViewAttr::NoSelector | ViewAttr::UseSelector(_) => {
+						ViewAttr::NoSelector => {
 							if !global_selector {
 								let msg = "Invalid interface::view, selector attributes given \
 								but top level mod misses `#[interface::with_selector] attribute.`";
 								return Err(syn::Error::new(method.sig.span(), msg))
 							}
-							selector_attrs.push(attr)
+
+							if let Some(ViewAttr::UseSelector(_)) = selector_attr {
+								let msg =
+									"Invalid interface::view, both `#[interface::no_selector]` and \
+								`#[interface::use_selector($ident)]` used on the same method. Use either one or the other";
+								return Err(syn::Error::new(method.sig.span(), msg))
+							}
+
+							if selector_attr.is_some() {
+								let msg =
+									"Invalid interface::view, multiple `#[interface::no_selector]` \
+								attributes used on the same method. Only one is allowed.";
+								return Err(syn::Error::new(method.sig.span(), msg))
+							}
+
+							selector_attr = Some(attr);
+						},
+						ViewAttr::UseSelector(_) => {
+							if !global_selector {
+								let msg = "Invalid interface::view, selector attributes given \
+								but top level mod misses `#[interface::with_selector] attribute.`";
+								return Err(syn::Error::new(method.sig.span(), msg))
+							}
+
+							if let Some(ViewAttr::NoSelector) = selector_attr {
+								let msg =
+									"Invalid interface::view, both `#[interface::no_selector]` and \
+								`#[interface::use_selector($ident)]` used on the same method. Use either one or the other";
+								return Err(syn::Error::new(method.sig.span(), msg))
+							}
+
+							if selector_attr.is_some() {
+								let msg = "Invalid interface::view, multiple `#[interface::use_selector($ident)]` \
+								attributes used on the same method. Only one is allowed.";
+								return Err(syn::Error::new(method.sig.span(), msg))
+							}
+
+							selector_attr = Some(attr);
 						},
 					}
 
-					Ok((view_idx_attrs, selector_attrs))
+					Ok((view_idx_attrs, selector_attr))
 				},
 			)?;
 
@@ -94,12 +128,7 @@ impl ViewDef {
 			return Err(err)
 		}
 
-		if selector_attrs.len() != 1 {
-			let msg = "Invalid interface::view, too many selector attributes given.\
-				Only use either `#[interface::no_selector]` `#[interface::use_selector($ident)]`";
-			return Err(syn::Error::new(method.sig.span(), msg))
-		};
-		let with_selector = match selector_attrs.first() {
+		let with_selector = match selector_attr.as_ref() {
 			Some(attr) => match attr {
 				ViewAttr::UseSelector(_) => true,
 				ViewAttr::NoSelector => false,
@@ -126,7 +155,7 @@ impl ViewDef {
 				Some(syn::FnArg::Typed(arg)) => check_view_first_arg_type(&arg.ty)?,
 			};
 
-			let selector_ty = match selector_attrs.first() {
+			let selector_ty = match selector_attr {
 				Some(attr) => match attr {
 					ViewAttr::UseSelector(name) => interface::SelectorType::Named {
 						name: name.clone(),
