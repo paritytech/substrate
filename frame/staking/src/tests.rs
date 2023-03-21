@@ -5461,14 +5461,12 @@ fn proportional_ledger_slash_works() {
 	ledger.active = unit;
 	ledger.total = unit * 4 + value;
 	// When
-	println!("HERE");
 	assert_eq!(ledger.slash(slash, 0, 0), slash);
 	// Then
 	// The amount slashed out of `unit`
 	let affected_balance = value + unit * 4;
 	let ratio =
 		Perquintill::from_rational_with_rounding(slash, affected_balance, Rounding::Up).unwrap();
-	println!("{:?} = {:?}/{:?} UP", ratio, slash, affected_balance);
 	// `unit` after the slash is applied
 	let unit_slashed = {
 		let unit_slash = ratio.mul_ceil(unit);

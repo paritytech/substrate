@@ -609,7 +609,6 @@ impl<T: Config> StakingLedger<T> {
 					Rounding::Up,
 				)
 				.unwrap_or_else(|_| Perquintill::one());
-				println!("{:?} = {:?}/{:?} UP", ratio, slash_amount, affected_balance);
 				(
 					Some(ratio),
 					affected_indices.chain((0..first_slashable_index).rev()).collect::<Vec<_>>(),
