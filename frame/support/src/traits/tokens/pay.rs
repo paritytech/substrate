@@ -22,7 +22,7 @@ use scale_info::TypeInfo;
 use sp_core::{RuntimeDebug, TypedGet};
 use sp_std::fmt::Debug;
 
-use super::{fungible, Balance, Preservation::Expendable};
+use super::{fungible, fungibles, Balance, Preservation::Expendable};
 
 /// Can be implemented by `PayFromAccount` using a `fungible` impl, but can also be implemented with
 /// XCM/MultiAsset and made generic over assets.
@@ -101,10 +101,8 @@ impl<A: TypedGet, F: fungible::Mutate<A::Type>> Pay for PayFromAccount<F, A> {
 }
 
 pub struct PayFungibles<F, A>(sp_std::marker::PhantomData<(F, A)>);
-impl<
-		A: TypedGet,
-		F: fungibles::Transfer<A::Type> + fungibles::Mutate<A::Type> + fungibles::Inspect<A::Type>,
-	> Pay for PayFungibles<F, A>
+impl<A: TypedGet, F: fungibles::Mutate<A::Type> + fungibles::Inspect<A::Type>> Pay
+	for PayFungibles<F, A>
 {
 	type Balance = F::Balance;
 	type Beneficiary = A::Type;
@@ -115,7 +113,7 @@ impl<
 		asset_id: Self::AssetKind,
 		amount: Self::Balance,
 	) -> Result<Self::Id, ()> {
-		<F as fungibles::Transfer<_>>::transfer(asset_id, &A::get(), who, amount, false)
+		<F as fungibles::Mutate<_>>::transfer(asset_id, &A::get(), who, amount, Expendable)
 			.map_err(|_| ())?;
 		Ok(())
 	}
