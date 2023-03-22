@@ -22,14 +22,14 @@ use super::*;
 use crate as pallet_preimage;
 use frame_support::{
 	ord_parameter_types,
-	traits::{ConstU32, ConstU64, Everything},
+	traits::{fungible::FreezeMultiConsideration, ConstU32, ConstU64, Everything},
 	weights::constants::RocksDbWeight,
 };
 use frame_system::EnsureSignedBy;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, Convert, IdentityLookup},
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -85,13 +85,20 @@ impl pallet_balances::Config for Test {
 	type MaxReserves = ConstU32<50>;
 	type ReserveIdentifier = [u8; 8];
 	type FreezeIdentifier = ();
-	type MaxFreezes = ();
+	type MaxFreezes = ConstU32<1>;
 	type HoldIdentifier = ();
 	type MaxHolds = ();
 }
 
 ord_parameter_types! {
 	pub const One: u64 = 1;
+}
+
+pub struct ConvertDeposit;
+impl Convert<Footprint, u64> for ConvertDeposit {
+	fn convert(a: Footprint) -> u64 {
+		a.count * 2 + a.size
+	}
 }
 
 impl Config for Test {
@@ -101,6 +108,7 @@ impl Config for Test {
 	type ManagerOrigin = EnsureSignedBy<One, u64>;
 	type BaseDeposit = ConstU64<2>;
 	type ByteDeposit = ConstU64<1>;
+	type Consideration = FreezeMultiConsideration<u64, Balances, (), ConvertDeposit>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

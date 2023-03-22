@@ -32,7 +32,7 @@ mod v0 {
 	use super::*;
 
 	#[derive(Clone, Eq, PartialEq, Encode, Decode, TypeInfo, MaxEncodedLen, RuntimeDebug)]
-	pub enum RequestStatus<AccountId, Balance> {
+	pub enum OldRequestStatus<AccountId, Balance> {
 		Unrequested(Option<(AccountId, Balance)>),
 		Requested(u32),
 	}
@@ -50,7 +50,7 @@ mod v0 {
 		Pallet<T>,
 		Identity,
 		<T as frame_system::Config>::Hash,
-		RequestStatus<<T as frame_system::Config>::AccountId, BalanceOf<T>>,
+		OldRequestStatus<<T as frame_system::Config>::AccountId, BalanceOf<T>>,
 	>;
 
 	/// Returns the number of images or `None` if the storage is corrupted.
@@ -122,21 +122,22 @@ pub mod v1 {
 				}
 
 				let status = match status {
-					v0::RequestStatus::Unrequested(deposit) => match deposit {
-						Some(deposit) => RequestStatus::Unrequested { deposit, len },
+					v0::OldRequestStatus::Unrequested(deposit) => match deposit {
+						Some(deposit) => OldRequestStatus::Unrequested { deposit, len },
 						// `None` depositor becomes system-requested.
 						None =>
-							RequestStatus::Requested { deposit: None, count: 1, len: Some(len) },
+							OldRequestStatus::Requested { deposit: None, count: 1, len: Some(len) },
 					},
-					v0::RequestStatus::Requested(count) if count == 0 => {
+					v0::OldRequestStatus::Requested(count) if count == 0 => {
 						log::error!(target: TARGET, "preimage has counter of zero: {:?}", hash);
 						continue
 					},
-					v0::RequestStatus::Requested(count) =>
-						RequestStatus::Requested { deposit: None, count, len: Some(len) },
+					v0::OldRequestStatus::Requested(count) =>
+						OldRequestStatus::Requested { deposit: None, count, len: Some(len) },
 				};
 				log::trace!(target: TARGET, "Moving preimage {:?} with len {}", hash, len);
 
+				#[allow(deprecated)]
 				crate::StatusFor::<T>::insert(hash, status);
 				crate::PreimageFor::<T>::insert(&(hash, len), preimage);
 
@@ -198,19 +199,19 @@ mod test {
 			// Case 1: Unrequested without deposit
 			let (p, h) = preimage::<T>(128);
 			v0::PreimageFor::<T>::insert(h, p);
-			v0::StatusFor::<T>::insert(h, v0::RequestStatus::Unrequested(None));
+			v0::StatusFor::<T>::insert(h, v0::OldRequestStatus::Unrequested(None));
 			// Case 2: Unrequested with deposit
 			let (p, h) = preimage::<T>(1024);
 			v0::PreimageFor::<T>::insert(h, p);
-			v0::StatusFor::<T>::insert(h, v0::RequestStatus::Unrequested(Some((1, 1))));
+			v0::StatusFor::<T>::insert(h, v0::OldRequestStatus::Unrequested(Some((1, 1))));
 			// Case 3: Requested by 0 (invalid)
 			let (p, h) = preimage::<T>(8192);
 			v0::PreimageFor::<T>::insert(h, p);
-			v0::StatusFor::<T>::insert(h, v0::RequestStatus::Requested(0));
+			v0::StatusFor::<T>::insert(h, v0::OldRequestStatus::Requested(0));
 			// Case 4: Requested by 10
 			let (p, h) = preimage::<T>(65536);
 			v0::PreimageFor::<T>::insert(h, p);
-			v0::StatusFor::<T>::insert(h, v0::RequestStatus::Requested(10));
+			v0::StatusFor::<T>::insert(h, v0::OldRequestStatus::Requested(10));
 
 			assert_eq!(v0::image_count::<T>(), Some(4));
 			assert_eq!(v1::image_count::<T>(), None, "V1 storage should be corrupted");
@@ -229,14 +230,14 @@ mod test {
 			assert_eq!(crate::PreimageFor::<T>::get(&(h, 128)), Some(p));
 			assert_eq!(
 				crate::StatusFor::<T>::get(h),
-				Some(RequestStatus::Requested { deposit: None, count: 1, len: Some(128) })
+				Some(OldRequestStatus::Requested { deposit: None, count: 1, len: Some(128) })
 			);
 			// Case 2: Unrequested with deposit becomes unrequested
 			let (p, h) = preimage::<T>(1024);
 			assert_eq!(crate::PreimageFor::<T>::get(&(h, 1024)), Some(p));
 			assert_eq!(
 				crate::StatusFor::<T>::get(h),
-				Some(RequestStatus::Unrequested { deposit: (1, 1), len: 1024 })
+				Some(OldRequestStatus::Unrequested { deposit: (1, 1), len: 1024 })
 			);
 			// Case 3: Requested by 0 should be skipped
 			let (_, h) = preimage::<T>(8192);
@@ -247,7 +248,7 @@ mod test {
 			assert_eq!(crate::PreimageFor::<T>::get(&(h, 65536)), Some(p));
 			assert_eq!(
 				crate::StatusFor::<T>::get(h),
-				Some(RequestStatus::Requested { deposit: None, count: 10, len: Some(65536) })
+				Some(OldRequestStatus::Requested { deposit: None, count: 10, len: Some(65536) })
 			);
 		});
 	}

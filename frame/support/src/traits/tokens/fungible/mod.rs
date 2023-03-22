@@ -76,6 +76,40 @@ impl<A, F: MutateFreeze<A>, R: Get<F::Id>, D: Convert<Footprint, F::Balance>> Co
 	}
 }
 
+pub struct FreezeMultiConsideration<A, F, R, D>(sp_std::marker::PhantomData<(A, F, R, D)>);
+impl<A, F: MutateFreeze<A>, R: Get<F::Id>, D: Convert<Footprint, F::Balance>> Consideration<A>
+	for FreezeMultiConsideration<A, F, R, D>
+{
+	type Ticket = F::Balance;
+	fn update(
+		who: &A,
+		old: Option<Self::Ticket>,
+		new: Option<Footprint>,
+	) -> Result<Self::Ticket, sp_runtime::DispatchError> {
+		match (old, new) {
+			(None, Some(footprint)) => {
+				let new = D::convert(footprint);
+				F::increase_frozen(&R::get(), who, new)?;
+				Ok(new)
+			},
+			(Some(old), Some(footprint)) => {
+				let new = D::convert(footprint);
+				if old > new {
+					F::decrease_frozen(&R::get(), who, old - new)?;
+				} else if new > old {
+					F::extend_freeze(&R::get(), who, new - old)?;
+				}
+				Ok(new)
+			},
+			(Some(old), None) => {
+				F::decrease_frozen(&R::get(), who, old)?;
+				Ok(Default::default())
+			},
+			(None, None) => Ok(Default::default()),
+		}
+	}
+}
+
 pub struct HoldConsideration<A, F, R, D>(sp_std::marker::PhantomData<(A, F, R, D)>);
 impl<A, F: MutateHold<A>, R: Get<F::Reason>, D: Convert<Footprint, F::Balance>> Consideration<A>
 	for HoldConsideration<A, F, R, D>
