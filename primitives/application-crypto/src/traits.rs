@@ -24,23 +24,21 @@ use sp_std::{fmt::Debug, vec::Vec};
 
 /// An application-specific key.
 pub trait AppKey: 'static + Send + Sync + Sized + CryptoType + Clone {
-	/// The corresponding type as a generic crypto type.
-	type UntypedGeneric: IsWrappedBy<Self>;
+	/// Identifier for application-specific key type.
+	const ID: KeyTypeId;
+
+	/// Identifier of the crypto type of this application-specific key type.
+	const CRYPTO_ID: CryptoTypeId;
 
 	/// The corresponding public key type in this application scheme.
 	type Public: AppPublic;
 
-	/// The corresponding key pair type in this application scheme.
-	#[cfg(feature = "full_crypto")]
-	type Pair: AppPair;
-
 	/// The corresponding signature type in this application scheme.
 	type Signature: AppSignature;
 
-	/// An identifier for this application-specific key type.
-	const ID: KeyTypeId;
-	/// The identifier of the crypto type of this application-specific key type.
-	const CRYPTO_ID: CryptoTypeId;
+	/// The corresponding key pair type in this application scheme.
+	#[cfg(feature = "full_crypto")]
+	type Pair: AppPair;
 }
 
 /// Type which implements Hash in std, not when no-std (std variant).
