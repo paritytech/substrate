@@ -29,9 +29,9 @@
 //!
 //! Some resources about the above:
 //!
-//! 1. <https://docs.substrate.io/v3/tools/try-runtime>
+//! 1. <https://docs.substrate.io/reference/command-line-tools/try-runtime/>
 //! 2. <https://www.crowdcast.io/e/substrate-seminar/41>
-//! 3. <https://docs.substrate.io/v3/advanced/executor>
+//! 3. <https://docs.substrate.io/fundamentals/runtime-development/>
 //!
 //! ---
 //!
