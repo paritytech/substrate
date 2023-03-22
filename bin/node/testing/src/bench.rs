@@ -308,7 +308,7 @@ impl<'a> Iterator for BlockContentIterator<'a> {
 							value: kitchensink_runtime::ExistentialDeposit::get() + 1,
 						}),
 					BlockType::RandomTransfersReaping => {
-						RuntimeCall::Balances(BalancesCall::transfer {
+						RuntimeCall::Balances(BalancesCall::transfer_allow_death {
 							dest: sp_runtime::MultiAddress::Id(receiver),
 							// Transfer so that ending balance would be 1 less than existential
 							// deposit so that we kill the sender account.
@@ -682,10 +682,8 @@ impl BenchContext {
 		assert_eq!(self.client.chain_info().best_number, 0);
 
 		assert_eq!(
-			futures::executor::block_on(
-				self.client.import_block(import_params, Default::default())
-			)
-			.expect("Failed to import block"),
+			futures::executor::block_on(self.client.import_block(import_params))
+				.expect("Failed to import block"),
 			ImportResult::Imported(ImportedAux {
 				header_only: false,
 				clear_justification_requests: false,

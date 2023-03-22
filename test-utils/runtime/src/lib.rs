@@ -28,7 +28,7 @@ use scale_info::TypeInfo;
 use sp_std::{marker::PhantomData, prelude::*};
 
 use sp_application_crypto::{ecdsa, ed25519, sr25519, RuntimeAppPublic};
-use sp_core::{offchain::KeyTypeId, OpaqueMetadata, RuntimeDebug};
+use sp_core::{OpaqueMetadata, RuntimeDebug};
 use sp_trie::{
 	trie_types::{TrieDBBuilder, TrieDBMutBuilderV1},
 	PrefixedMemoryDB, StorageProof,
@@ -39,7 +39,7 @@ use cfg_if::cfg_if;
 use frame_support::{
 	dispatch::RawOrigin,
 	parameter_types,
-	traits::{CallerTrait, ConstU32, ConstU64, CrateVersion, KeyOwnerProofSystem},
+	traits::{CallerTrait, ConstU32, ConstU64, CrateVersion},
 	weights::{RuntimeDbWeight, Weight},
 };
 use frame_system::limits::{BlockLength, BlockWeights};
@@ -437,7 +437,6 @@ cfg_if! {
 
 #[derive(Clone, Eq, PartialEq, TypeInfo)]
 pub struct Runtime;
-
 impl GetNodeBlockType for Runtime {
 	type NodeBlock = Block;
 }
@@ -601,7 +600,7 @@ parameter_types! {
 	pub RuntimeBlockLength: BlockLength =
 		BlockLength::max(4 * 1024 * 1024);
 	pub RuntimeBlockWeights: BlockWeights =
-		BlockWeights::with_sensible_defaults(Weight::from_ref_time(4 * 1024 * 1024), Perbill::from_percent(75));
+		BlockWeights::with_sensible_defaults(Weight::from_parts(4 * 1024 * 1024, 0), Perbill::from_percent(75));
 }
 
 impl From<frame_system::Call<Runtime>> for Extrinsic {
@@ -659,21 +658,10 @@ impl pallet_babe::Config for Runtime {
 	// pallet_babe::SameAuthoritiesForever.
 	type EpochChangeTrigger = pallet_babe::ExternalTrigger;
 	type DisabledValidators = ();
-
-	type KeyOwnerProofSystem = ();
-
-	type KeyOwnerProof =
-		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, AuthorityId)>>::Proof;
-
-	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
-		KeyTypeId,
-		AuthorityId,
-	)>>::IdentificationTuple;
-
-	type HandleEquivocation = ();
 	type WeightInfo = ();
-
 	type MaxAuthorities = ConstU32<10>;
+	type KeyOwnerProof = sp_core::Void;
+	type EquivocationReportSystem = ();
 }
 
 /// Adds one to the given input and returns the final result.
@@ -739,6 +727,14 @@ cfg_if! {
 			impl sp_api::Metadata<Block> for Runtime {
 				fn metadata() -> OpaqueMetadata {
 					unimplemented!()
+				}
+
+				fn metadata_at_version(_version: u32) -> Option<OpaqueMetadata> {
+						unimplemented!()
+				}
+
+				fn metadata_versions() -> sp_std::vec::Vec<u32> {
+						unimplemented!()
 				}
 			}
 
@@ -1031,6 +1027,14 @@ cfg_if! {
 			impl sp_api::Metadata<Block> for Runtime {
 				fn metadata() -> OpaqueMetadata {
 					unimplemented!()
+				}
+
+				fn metadata_at_version(_version: u32) -> Option<OpaqueMetadata> {
+						unimplemented!()
+				}
+
+				fn metadata_versions() -> sp_std::vec::Vec<u32> {
+						unimplemented!()
 				}
 			}
 

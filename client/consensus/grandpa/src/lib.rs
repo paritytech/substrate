@@ -68,7 +68,7 @@ use sc_client_api::{
 	StorageProvider, TransactionFor,
 };
 use sc_consensus::BlockImport;
-use sc_network_common::protocol::ProtocolName;
+use sc_network::types::ProtocolName;
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sp_api::ProvideRuntimeApi;
@@ -79,7 +79,7 @@ use sp_consensus_grandpa::{
 	AuthorityList, AuthoritySignature, SetId, CLIENT_LOG_TARGET as LOG_TARGET,
 };
 use sp_core::{crypto::ByteArray, traits::CallContext};
-use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::KeystorePtr;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, NumberFor, Zero},
@@ -141,7 +141,7 @@ pub use voting_rule::{
 };
 
 use aux_schema::PersistentData;
-use communication::{Network as NetworkT, NetworkBridge};
+use communication::{Network as NetworkT, NetworkBridge, Syncing as SyncingT};
 use environment::{Environment, VoterSetState};
 use until_imported::UntilGlobalMessageBlocksImported;
 
@@ -228,7 +228,7 @@ pub struct Config {
 	/// Some local identifier of the voter.
 	pub name: Option<String>,
 	/// The keystore that manages the keys of this node.
-	pub keystore: Option<SyncCryptoStorePtr>,
+	pub keystore: Option<KeystorePtr>,
 	/// TelemetryHandle instance.
 	pub telemetry: Option<TelemetryHandle>,
 	/// Chain specific GRANDPA protocol name. See [`crate::protocol_standard_name`].
@@ -349,10 +349,11 @@ pub(crate) trait BlockSyncRequester<Block: BlockT> {
 	);
 }
 
-impl<Block, Network> BlockSyncRequester<Block> for NetworkBridge<Block, Network>
+impl<Block, Network, Syncing> BlockSyncRequester<Block> for NetworkBridge<Block, Network, Syncing>
 where
 	Block: BlockT,
 	Network: NetworkT<Block>,
+	Syncing: SyncingT<Block>,
 {
 	fn set_sync_fork_request(
 		&self,
@@ -617,12 +618,12 @@ where
 	))
 }
 
-fn global_communication<BE, Block: BlockT, C, N>(
+fn global_communication<BE, Block: BlockT, C, N, S>(
 	set_id: SetId,
 	voters: &Arc<VoterSet<AuthorityId>>,
 	client: Arc<C>,
-	network: &NetworkBridge<Block, N>,
-	keystore: Option<&SyncCryptoStorePtr>,
+	network: &NetworkBridge<Block, N, S>,
+	keystore: Option<&KeystorePtr>,
 	metrics: Option<until_imported::Metrics>,
 ) -> (
 	impl Stream<
@@ -640,6 +641,7 @@ where
 	BE: Backend<Block> + 'static,
 	C: ClientForGrandpa<Block, BE> + 'static,
 	N: NetworkT<Block>,
+	S: SyncingT<Block>,
 	NumberFor<Block>: BlockNumberOps,
 {
 	let is_voter = local_authority_id(voters, keystore).is_some();
@@ -665,7 +667,7 @@ where
 }
 
 /// Parameters used to run Grandpa.
-pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
+pub struct GrandpaParams<Block: BlockT, C, N, S, SC, VR> {
 	/// Configuration for the GRANDPA service.
 	pub config: Config,
 	/// A link to the block import worker.
@@ -676,6 +678,8 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 	/// `sc_network` crate, it is assumed that the Grandpa notifications protocol has been passed
 	/// to the configuration of the networking. See [`grandpa_peers_set_config`].
 	pub network: N,
+	/// Event stream for syncing-related events.
+	pub sync: S,
 	/// A voting rule used to potentially restrict target votes.
 	pub voting_rule: VR,
 	/// The prometheus metrics registry.
@@ -691,32 +695,33 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 /// For standard protocol name see [`crate::protocol_standard_name`].
 pub fn grandpa_peers_set_config(
 	protocol_name: ProtocolName,
-) -> sc_network_common::config::NonDefaultSetConfig {
+) -> sc_network::config::NonDefaultSetConfig {
 	use communication::grandpa_protocol_name;
-	sc_network_common::config::NonDefaultSetConfig {
+	sc_network::config::NonDefaultSetConfig {
 		notifications_protocol: protocol_name,
 		fallback_names: grandpa_protocol_name::LEGACY_NAMES.iter().map(|&n| n.into()).collect(),
 		// Notifications reach ~256kiB in size at the time of writing on Kusama and Polkadot.
 		max_notification_size: 1024 * 1024,
 		handshake: None,
-		set_config: sc_network_common::config::SetConfig {
+		set_config: sc_network::config::SetConfig {
 			in_peers: 0,
 			out_peers: 0,
 			reserved_nodes: Vec::new(),
-			non_reserved_mode: sc_network_common::config::NonReservedPeerMode::Deny,
+			non_reserved_mode: sc_network::config::NonReservedPeerMode::Deny,
 		},
 	}
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
 /// block import worker that has already been instantiated with `block_import`.
-pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
-	grandpa_params: GrandpaParams<Block, C, N, SC, VR>,
+pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, S, SC, VR>(
+	grandpa_params: GrandpaParams<Block, C, N, S, SC, VR>,
 ) -> sp_blockchain::Result<impl Future<Output = ()> + Send>
 where
 	Block::Hash: Ord,
 	BE: Backend<Block> + 'static,
 	N: NetworkT<Block> + Sync + 'static,
+	S: SyncingT<Block> + Sync + 'static,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, C> + Clone + 'static,
 	NumberFor<Block>: BlockNumberOps,
@@ -727,6 +732,7 @@ where
 		mut config,
 		link,
 		network,
+		sync,
 		voting_rule,
 		prometheus_registry,
 		shared_voter_state,
@@ -751,6 +757,7 @@ where
 
 	let network = NetworkBridge::new(
 		network,
+		sync,
 		config.clone(),
 		persistent_data.set_state.clone(),
 		prometheus_registry.as_ref(),
@@ -836,26 +843,27 @@ impl Metrics {
 
 /// Future that powers the voter.
 #[must_use]
-struct VoterWork<B, Block: BlockT, C, N: NetworkT<Block>, SC, VR> {
+struct VoterWork<B, Block: BlockT, C, N: NetworkT<Block>, S: SyncingT<Block>, SC, VR> {
 	voter: Pin<
 		Box<dyn Future<Output = Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>> + Send>,
 	>,
 	shared_voter_state: SharedVoterState,
-	env: Arc<Environment<B, Block, C, N, SC, VR>>,
+	env: Arc<Environment<B, Block, C, N, S, SC, VR>>,
 	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
-	network: NetworkBridge<Block, N>,
+	network: NetworkBridge<Block, N, S>,
 	telemetry: Option<TelemetryHandle>,
 	/// Prometheus metrics.
 	metrics: Option<Metrics>,
 }
 
-impl<B, Block, C, N, SC, VR> VoterWork<B, Block, C, N, SC, VR>
+impl<B, Block, C, N, S, SC, VR> VoterWork<B, Block, C, N, S, SC, VR>
 where
 	Block: BlockT,
 	B: Backend<Block> + 'static,
 	C: ClientForGrandpa<Block, B> + 'static,
 	C::Api: GrandpaApi<Block>,
 	N: NetworkT<Block> + Sync,
+	S: SyncingT<Block> + Sync,
 	NumberFor<Block>: BlockNumberOps,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, C> + Clone + 'static,
@@ -863,7 +871,7 @@ where
 	fn new(
 		client: Arc<C>,
 		config: Config,
-		network: NetworkBridge<Block, N>,
+		network: NetworkBridge<Block, N, S>,
 		select_chain: SC,
 		voting_rule: VR,
 		persistent_data: PersistentData<Block>,
@@ -1072,11 +1080,12 @@ where
 	}
 }
 
-impl<B, Block, C, N, SC, VR> Future for VoterWork<B, Block, C, N, SC, VR>
+impl<B, Block, C, N, S, SC, VR> Future for VoterWork<B, Block, C, N, S, SC, VR>
 where
 	Block: BlockT,
 	B: Backend<Block> + 'static,
 	N: NetworkT<Block> + Sync,
+	S: SyncingT<Block> + Sync,
 	NumberFor<Block>: BlockNumberOps,
 	SC: SelectChain<Block> + 'static,
 	C: ClientForGrandpa<Block, B> + 'static,
@@ -1127,14 +1136,12 @@ where
 /// available.
 fn local_authority_id(
 	voters: &VoterSet<AuthorityId>,
-	keystore: Option<&SyncCryptoStorePtr>,
+	keystore: Option<&KeystorePtr>,
 ) -> Option<AuthorityId> {
 	keystore.and_then(|keystore| {
 		voters
 			.iter()
-			.find(|(p, _)| {
-				SyncCryptoStore::has_keys(&**keystore, &[(p.to_raw_vec(), AuthorityId::ID)])
-			})
+			.find(|(p, _)| keystore.has_keys(&[(p.to_raw_vec(), AuthorityId::ID)]))
 			.map(|(p, _)| p.clone())
 	})
 }

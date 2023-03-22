@@ -55,7 +55,7 @@ variables:
   RUSTY_CACHIER_COMPRESSION_METHOD: zstd
   NEXTEST_FAILURE_OUTPUT: immediate-final
   NEXTEST_SUCCESS_OUTPUT: final
-  ZOMBIENET_IMAGE: "docker.io/paritytech/zombienet:v1.3.34"
+  ZOMBIENET_IMAGE: "docker.io/paritytech/zombienet:v1.3.37"
 
 .shared-default: &shared-default
   retry:
@@ -113,6 +113,7 @@ variables:
 .kubernetes-env:
   image: "${CI_IMAGE}"
   before_script:
+    - !reference [.timestamp, before_script]
     - !reference [.job-switcher, before_script]
     - !reference [.prepare-env, before_script]
   tags:
@@ -141,6 +142,7 @@ variables:
 .docker-env:
   image: "${CI_IMAGE}"
   before_script:
+    - !reference [.timestamp, before_script]
     - !reference [.job-switcher, before_script]
     - !reference [.prepare-env, before_script]
     - !reference [.rust-info-script, script]
@@ -310,6 +312,9 @@ include:
   - local: scripts/ci/gitlab/default-pipeline.yml
     rules:
       - if: $PIPELINE != "automatic-crate-publishing"
+  - project: parity/infrastructure/ci_cd/shared
+    ref: v0.1
+    file: /common/timestamp.yml
 
 #### stage:                        notify
 
