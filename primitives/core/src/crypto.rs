@@ -888,17 +888,16 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 		phrase: &str,
 		password: Option<&str>,
 	) -> Result<(Self, Self::Seed), SecretStringError> {
-		let big_seed = substrate_bip39::seed_from_entropy(
-			Mnemonic::from_phrase(phrase, Language::English)
-				.map_err(|_| SecretStringError::InvalidPhrase)?
-				.entropy(),
-			password.unwrap_or(""),
-		)
-		.map_err(|_| SecretStringError::InvalidSeed)?;
+		let mnemonic = Mnemonic::from_phrase(phrase, Language::English)
+			.map_err(|_| SecretStringError::InvalidPhrase)?;
+		let big_seed =
+			substrate_bip39::seed_from_entropy(mnemonic.entropy(), password.unwrap_or(""))
+				.map_err(|_| SecretStringError::InvalidSeed)?;
 		let mut seed = Self::Seed::default();
 		let seed_slice = seed.as_mut();
-		let minlen = seed_slice.len().min(big_seed.len());
-		seed_slice[0..minlen].copy_from_slice(&big_seed[0..minlen]);
+		let seed_len = seed_slice.len();
+		debug_assert!(seed_len <= big_seed.len());
+		seed_slice[..seed_len].copy_from_slice(&big_seed[..seed_len]);
 		Self::from_seed_slice(seed_slice).map(|x| (x, seed))
 	}
 

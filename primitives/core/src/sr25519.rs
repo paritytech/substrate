@@ -603,52 +603,8 @@ pub fn verify_batch(
 #[cfg(test)]
 mod compatibility_test {
 	use super::*;
-	use crate::crypto::DEV_PHRASE;
-
-	// NOTE: tests to ensure addresses that are created with the `0.1.x` version (pre-audit) are
-	// still functional.
-
-	// TODO DAVXY: REMOVE ME!!!
-	impl Pair {
-		fn my_from_phrase(
-			phrase: &str,
-			password: Option<&str>,
-		) -> Result<(Pair, Seed), SecretStringError> {
-			use bip39::{Language, Mnemonic};
-			Mnemonic::from_phrase(phrase, Language::English)
-				.map_err(|_| SecretStringError::InvalidPhrase)
-				.map(|m| Self::from_entropy(m.entropy(), password))
-		}
-
-		fn from_entropy(entropy: &[u8], password: Option<&str>) -> (Pair, Seed) {
-			use substrate_bip39::mini_secret_from_entropy;
-			let mini_key: MiniSecretKey = mini_secret_from_entropy(entropy, password.unwrap_or(""))
-				.expect("32 bytes can always build a key; qed");
-
-			let kp = mini_key.expand_to_keypair(ExpansionMode::Ed25519);
-			(Pair(kp), mini_key.to_bytes())
-		}
-	}
-
-	// TODO DAVXY: REMOVE ME!!!
-	#[test]
-	fn temporary_test_for_equivalence() {
-		let password = Some("Password");
-
-		// let pair = Pair::from_entropy(m.entropy(), password);
-		let default_pair = Pair::from_phrase(DEV_PHRASE, password).unwrap();
-		println!("public: {:?}", default_pair.0.public());
-		println!("seed: {:?}", crate::hexdisplay::HexDisplay::from(&default_pair.1));
-
-		println!("-----------");
-
-		let special_pair = Pair::my_from_phrase(DEV_PHRASE, password).unwrap();
-		println!("public: {:?}", special_pair.0.public());
-		println!("seed: {:?}", crate::hexdisplay::HexDisplay::from(&special_pair.1));
-
-		assert_eq!(default_pair.0.public(), special_pair.0.public());
-		assert_eq!(default_pair.1, special_pair.1);
-	}
+	use crate::crypto::{Ss58Codec, DEV_ADDRESS, DEV_PHRASE};
+	use serde_json;
 
 	#[test]
 	fn derive_soft_known_pair_should_work() {
@@ -683,13 +639,6 @@ mod compatibility_test {
 		assert!(Pair::verify_deprecated(&signature, &message[..], &public));
 		assert!(!Pair::verify(&signature, &message[..], &public));
 	}
-}
-
-#[cfg(test)]
-mod test {
-	use super::*;
-	use crate::crypto::{Ss58Codec, DEV_ADDRESS, DEV_PHRASE};
-	use serde_json;
 
 	#[test]
 	fn default_phrase_should_be_used() {
