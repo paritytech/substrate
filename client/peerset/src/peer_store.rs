@@ -28,5 +28,5 @@ pub trait PeerStore {
 	fn report_disconnect(&self, peer_id: PeerId, reason: DropReason);
 
 	/// Get the candidates for initiating outgoing connections.
-	fn outgoing_candidates(&self, count: usize, ignored: HashSet<PeerId>) -> Vec<PeerId>;
+	fn outgoing_candidates(&self, count: usize, ignored: HashSet<&PeerId>) -> Vec<PeerId>;
 }

@@ -515,11 +515,10 @@ impl<PeerStore: PeerStoreT> ProtocolController<PeerStore> {
 		let ignored = self
 			.reserved_nodes
 			.keys()
+			.collect::<HashSet<&PeerId>>()
+			.union(&self.nodes.keys().collect::<HashSet<&PeerId>>())
 			.cloned()
-			.collect::<HashSet<PeerId>>()
-			.union(&self.nodes.keys().cloned().collect::<HashSet<_>>())
-			.cloned()
-			.collect::<HashSet<PeerId>>();
+			.collect();
 
 		self.peer_store
 			.outgoing_candidates(available_slots, ignored)
@@ -563,7 +562,7 @@ mod tests {
 		impl PeerStore for PeerStore {
 			fn is_banned(&self, peer_id: PeerId) -> bool;
 			fn report_disconnect(&self, peer_id: PeerId, reason: DropReason);
-			fn outgoing_candidates(&self, count: usize, ignored: HashSet<PeerId>) -> Vec<PeerId>;
+			fn outgoing_candidates<'a>(&self, count: usize, ignored: HashSet<&'a PeerId>) -> Vec<PeerId>;
 		}
 	}
 
