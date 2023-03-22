@@ -984,7 +984,8 @@ pub fn compact(_: TokenStream, _: TokenStream) -> TokenStream {
 ///
 /// The macro creates an enum `Call` with one variant per dispatchable. This enum implements:
 /// [`Clone`], [`Eq`], [`PartialEq`], [`Debug`] (with stripped implementation in `not("std")`),
-/// `Encode`, `Decode`, `GetDispatchInfo`, `GetCallName`, and `UnfilteredDispatchable`.
+/// `Encode`, `Decode`, `GetDispatchInfo`, `GetCallName`, `GetCallIndex` and
+/// `UnfilteredDispatchable`.
 ///
 /// The macro implements the `Callable` trait on `Pallet` and a function `call_functions`
 /// which returns the dispatchable metadata.
