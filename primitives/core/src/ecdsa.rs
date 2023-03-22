@@ -29,7 +29,7 @@ use crate::crypto::{
 };
 #[cfg(feature = "full_crypto")]
 use crate::{
-	crypto::{DeriveJunction, Pair as TraitPair, SecretStringError},
+	crypto::{DeriveError, DeriveJunction, Pair as TraitPair, SecretStringError},
 	hashing::blake2_256,
 };
 #[cfg(all(feature = "full_crypto", not(feature = "std")))]
@@ -365,13 +365,6 @@ fn derive_hard_junction(secret_seed: &Seed, cc: &[u8; 32]) -> Seed {
 	("Secp256k1HDKD", secret_seed, cc).using_encoded(sp_core_hashing::blake2_256)
 }
 
-/// An error when deriving a key.
-#[cfg(feature = "full_crypto")]
-pub enum DeriveError {
-	/// A soft key was found in the path (and is unsupported).
-	SoftKeyInPath,
-}
-
 /// A key pair.
 #[cfg(feature = "full_crypto")]
 #[derive(Clone)]
@@ -385,7 +378,6 @@ impl TraitPair for Pair {
 	type Public = Public;
 	type Seed = Seed;
 	type Signature = Signature;
-	type DeriveError = DeriveError;
 
 	/// Make a new key pair from secret seed material. The slice must be 32 bytes long or it
 	/// will return `None`.

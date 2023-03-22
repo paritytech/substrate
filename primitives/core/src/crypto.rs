@@ -54,10 +54,6 @@ pub const DEV_PHRASE: &str =
 /// The address of the associated root phrase for our publicly known keys.
 pub const DEV_ADDRESS: &str = "5DfhGyQdFobKM8NsWvEeAKk5EQQgYe9AydgJ7rMB6E1EqRzV";
 
-/// The infallible type.
-#[derive(crate::RuntimeDebug)]
-pub enum Infallible {}
-
 /// The length of the junction identifier. Note that this is also referred to as the
 /// `CHAIN_CODE_LENGTH` in the context of Schnorrkel.
 #[cfg(feature = "full_crypto")]
@@ -108,6 +104,13 @@ pub enum SecretStringError {
 	/// The derivation path was invalid (e.g. contains soft junctions when they are not supported).
 	#[cfg_attr(feature = "std", error("Invalid path"))]
 	InvalidPath,
+}
+
+/// An error when deriving a key.
+#[cfg(feature = "full_crypto")]
+pub enum DeriveError {
+	/// A soft key was found in the path (and is unsupported).
+	SoftKeyInPath,
 }
 
 /// A since derivation junction description. It is the single parameter used when creating
@@ -693,7 +696,6 @@ mod dummy {
 		type Public = Dummy;
 		type Seed = Dummy;
 		type Signature = Dummy;
-		type DeriveError = ();
 
 		#[cfg(feature = "std")]
 		fn generate_with_phrase(_: Option<&str>) -> (Self, String, Self::Seed) {
@@ -709,7 +711,7 @@ mod dummy {
 			&self,
 			_: Iter,
 			_: Option<Dummy>,
-		) -> Result<(Self, Option<Dummy>), Self::DeriveError> {
+		) -> Result<(Self, Option<Dummy>), DeriveError> {
 			Ok((Self, None))
 		}
 
@@ -853,9 +855,6 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// and verified with the message and a public key.
 	type Signature: AsRef<[u8]>;
 
-	/// Error returned from the `derive` function.
-	type DeriveError;
-
 	/// Generate new secure (random) key pair.
 	///
 	/// This is only for ephemeral keys really, since you won't have access to the secret key
@@ -906,7 +905,7 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 		&self,
 		path: Iter,
 		seed: Option<Self::Seed>,
-	) -> Result<(Self, Option<Self::Seed>), Self::DeriveError>;
+	) -> Result<(Self, Option<Self::Seed>), DeriveError>;
 
 	/// Generate new key pair from the provided `seed`.
 	///
@@ -1230,7 +1229,6 @@ mod tests {
 		type Public = TestPublic;
 		type Seed = [u8; 8];
 		type Signature = [u8; 0];
-		type DeriveError = ();
 
 		fn generate() -> (Self, <Self as Pair>::Seed) {
 			(TestPair::Generated, [0u8; 8])
@@ -1257,7 +1255,7 @@ mod tests {
 			&self,
 			path_iter: Iter,
 			_: Option<[u8; 8]>,
-		) -> Result<(Self, Option<[u8; 8]>), Self::DeriveError> {
+		) -> Result<(Self, Option<[u8; 8]>), DeriveError> {
 			Ok((
 				match self.clone() {
 					TestPair::Standard { phrase, password, path } => TestPair::Standard {

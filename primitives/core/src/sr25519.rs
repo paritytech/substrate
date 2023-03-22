@@ -24,7 +24,7 @@
 #[cfg(feature = "std")]
 use crate::crypto::Ss58Codec;
 #[cfg(feature = "full_crypto")]
-use crate::crypto::{DeriveJunction, Infallible, Pair as TraitPair, SecretStringError};
+use crate::crypto::{DeriveError, DeriveJunction, Pair as TraitPair, SecretStringError};
 #[cfg(feature = "full_crypto")]
 use schnorrkel::{
 	derive::{ChainCode, Derivation, CHAIN_CODE_LENGTH},
@@ -454,7 +454,6 @@ impl TraitPair for Pair {
 	type Public = Public;
 	type Seed = Seed;
 	type Signature = Signature;
-	type DeriveError = Infallible;
 
 	/// Get the public key.
 	fn public(&self) -> Public {
@@ -489,7 +488,7 @@ impl TraitPair for Pair {
 		&self,
 		path: Iter,
 		seed: Option<Seed>,
-	) -> Result<(Pair, Option<Seed>), Self::DeriveError> {
+	) -> Result<(Pair, Option<Seed>), DeriveError> {
 		let seed = seed
 			.and_then(|s| MiniSecretKey::from_bytes(&s).ok())
 			.filter(|msk| msk.expand(ExpansionMode::Ed25519) == self.0.secret);

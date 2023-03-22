@@ -23,7 +23,7 @@
 pub use sp_core::crypto::{key_types, CryptoTypeId, KeyTypeId};
 #[doc(hidden)]
 #[cfg(feature = "full_crypto")]
-pub use sp_core::crypto::{DeriveJunction, Pair, SecretStringError, Ss58Codec};
+pub use sp_core::crypto::{DeriveError, DeriveJunction, Pair, SecretStringError, Ss58Codec};
 #[doc(hidden)]
 pub use sp_core::{
 	self,
@@ -129,7 +129,6 @@ macro_rules! app_crypto_pair {
 			type Public = Public;
 			type Seed = <$pair as $crate::Pair>::Seed;
 			type Signature = Signature;
-			type DeriveError = <$pair as $crate::Pair>::DeriveError;
 
 			$crate::app_crypto_pair_functions_if_std!($pair);
 
@@ -137,7 +136,7 @@ macro_rules! app_crypto_pair {
 				&self,
 				path: Iter,
 				seed: Option<Self::Seed>,
-			) -> Result<(Self, Option<Self::Seed>), Self::DeriveError> {
+			) -> Result<(Self, Option<Self::Seed>), $crate::DeriveError> {
 				self.0.derive(path, seed).map(|x| (Self(x.0), x.1))
 			}
 			fn from_seed(seed: &Self::Seed) -> Self {
