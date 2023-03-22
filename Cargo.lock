@@ -9472,6 +9472,7 @@ name = "sc-statement-store"
 version = "4.0.0-dev"
 dependencies = [
  "async-trait",
+ "env_logger 0.9.3",
  "futures",
  "futures-timer",
  "log",
@@ -9479,12 +9480,13 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "sp-api",
+ "sp-blockchain",
  "sp-core",
  "sp-runtime",
  "sp-statement-store",
  "sp-tracing",
  "substrate-prometheus-endpoint",
- "substrate-test-runtime",
+ "tempfile",
 ]
 
 [[package]]

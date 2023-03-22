@@ -29,20 +29,22 @@ use std::{collections::{HashSet, HashMap, BinaryHeap}, sync::Arc};
 use parking_lot::RwLock;
 use metrics::MetricsLink as PrometheusMetrics;
 use prometheus_endpoint::Registry as PrometheusRegistry;
-use sp_statement_store::{Statement, Topic, DecryptionKey, Result, Hash, BlockHash, SubmitResult, NetworkPriority};
+use sp_statement_store::{Statement, Topic, DecryptionKey, Result, Hash, BlockHash, SubmitResult, NetworkPriority, Proof};
 use sp_statement_store::runtime_api::{ValidateStatement, ValidStatement, InvalidStatement, StatementSource};
-use sp_core::{Encode, Decode};
+use sp_core::{Encode, Decode, hexdisplay::HexDisplay};
 use sp_api::ProvideRuntimeApi;
 use sp_runtime::traits::Block as BlockT;
+use sp_blockchain::HeaderBackend;
 
 
 const KEY_VERSION: &[u8] = b"version".as_slice();
 const CURRENT_VERSION: u32 = 1;
 
-const LOG_TARGET: &str = "statement";
+const LOG_TARGET: &str = "statement-store";
 
 const EXPIRE_AFTER: u64 = 24 * 60 * 60; //24h
 const PURGE_AFTER: u64 = 2 * 24 * 60 * 60; //48h
+const MAX_LIVE_STATEMENTS: usize = 8192;
 
 /// Suggested maintenance period. A good value to call `Store::maintain` with.
 #[allow(dead_code)]
@@ -94,20 +96,20 @@ impl<Block, Client> ClientWrapper<Block, Client>
 	where
 		Block: BlockT,
 		Block::Hash: From<BlockHash>,
-		Client: ProvideRuntimeApi<Block>
-		+ Send
-		+ Sync
-		+ 'static,
+		Client: ProvideRuntimeApi<Block> + HeaderBackend<Block> + Send + Sync + 'static,
 		Client::Api: ValidateStatement<Block>,
 {
 	fn validate_statement(
 		&self,
-		block: BlockHash,
+		block: Option<BlockHash>,
 		source: StatementSource,
 		statement: Statement,
 	) -> std::result::Result<ValidStatement, InvalidStatement> {
 		let api = self.client.runtime_api();
-		let block = block.into();
+		let block = block.map(Into::into).unwrap_or_else(|| {
+			// Validate against the finalized state.
+			self.client.info().finalized_hash
+		});
 		match api.validate_statement(block, source, statement) {
 			Ok(r) => r,
 			Err(_) => {
@@ -121,8 +123,8 @@ impl<Block, Client> ClientWrapper<Block, Client>
 pub struct Store {
 	db: parity_db::Db,
 	index: RwLock<Index>,
-	validate_fn: Box<dyn Fn(BlockHash, StatementSource, Statement) -> std::result::Result<ValidStatement, InvalidStatement> + Send + Sync>,
-	time_overrite: Option<u64>,
+	validate_fn: Box<dyn Fn(Option<BlockHash>, StatementSource, Statement) -> std::result::Result<ValidStatement, InvalidStatement> + Send + Sync>,
+	time_override: Option<u64>,
 	metrics: PrometheusMetrics,
 }
 
@@ -201,6 +203,7 @@ impl Index {
 		if num_sets == 0 && key.is_none() {
 			// Iterate all entries
 			for h in self.entries.keys() {
+				log::trace!(target: LOG_TARGET, "Iterating: {:?}", HexDisplay::from(h));
 				f(h)?
 			}
 		} else {
@@ -210,12 +213,14 @@ impl Index {
 				let key_set = if let Some(set) = self.by_dec_key.get(&key) { set } else { return Ok(()) };
 				for item in key_set {
 					if sets.iter().all(|set| set.unwrap().contains(item)) {
+						log::trace!(target: LOG_TARGET, "Iterating by key: {:?}", HexDisplay::from(item));
 						f(item)?
 					}
 				}
 			} else {
 				for item in sets[0].unwrap() {
 					if sets[1 .. num_sets].iter().all(|set| set.unwrap().contains(item)) {
+						log::trace!(target: LOG_TARGET, "Iterating by topic: {:?}", HexDisplay::from(item));
 						f(item)?
 					}
 				}
@@ -228,8 +233,9 @@ impl Index {
 		// Purge previously expired messages.
 		let mut purged = Vec::new();
 		self.expired.retain(|hash, meta| {
-			if meta.timestamp + PURGE_AFTER > current_time {
+			if meta.timestamp + PURGE_AFTER < current_time {
 				purged.push((col::STATEMENTS, hash.to_vec(), None));
+				log::trace!(target: LOG_TARGET, "Purged statement {:?}", HexDisplay::from(hash));
 				false
 			} else {
 				true
@@ -239,7 +245,7 @@ impl Index {
 		// Expire messages.
 		let mut num_expired = 0;
 		self.entries.retain(|hash, meta| {
-			if meta.timestamp + EXPIRE_AFTER > current_time {
+			if meta.timestamp + EXPIRE_AFTER < current_time {
 				if let Some((topics, key)) = self.all_topics.remove(hash) {
 					for t in topics {
 						if let Some(t) = t {
@@ -254,6 +260,7 @@ impl Index {
 						}
 					}
 				}
+				log::trace!(target: LOG_TARGET, "Expired statement {:?}", HexDisplay::from(hash));
 				self.expired.insert(hash.clone(), meta.clone());
 				num_expired += 1;
 				false
@@ -310,10 +317,7 @@ impl Store {
 	where
 		Block: BlockT,
 		Block::Hash: From<BlockHash>,
-		Client: ProvideRuntimeApi<Block>
-		+ Send
-		+ Sync
-		+ 'static,
+		Client: ProvideRuntimeApi<Block> + HeaderBackend<Block> + Send + Sync + 'static,
 		Client::Api: ValidateStatement<Block>,
 	{
 		let mut path: std::path::PathBuf = path.into();
@@ -342,7 +346,8 @@ impl Store {
 			}
 		}
 
-		let index = Index::default();
+		let mut index = Index::default();
+		index.max_entries = MAX_LIVE_STATEMENTS;
 		let validator = ClientWrapper { client, _block: Default::default() };
 		let validate_fn = Box::new(move |block, source, statement| validator.validate_statement(block, source, statement));
 
@@ -350,7 +355,7 @@ impl Store {
 			db,
 			index: RwLock::new(index),
 			validate_fn,
-			time_overrite: None,
+			time_override: None,
 			metrics: PrometheusMetrics::new(prometheus),
 		});
 		store.populate()?;
@@ -359,20 +364,25 @@ impl Store {
 
 	fn populate(&self) -> Result<()> {
 		let current_time = self.timestamp();
-		let mut index = self.index.write();
-		self.db.iter_column_while(col::STATEMENTS, |item| {
-			let statement = item.value;
-			if let Ok(statement_with_meta) = StatementWithMeta::decode(&mut statement.as_slice()) {
-				let hash = statement_with_meta.statement.hash();
-				if statement_with_meta.meta.timestamp + EXPIRE_AFTER > current_time {
-					index.insert_expired(hash, statement_with_meta.meta);
-				} else {
-					index.insert_with_meta(hash, statement_with_meta);
+		{
+			let mut index = self.index.write();
+			self.db.iter_column_while(col::STATEMENTS, |item| {
+				let statement = item.value;
+				if let Ok(statement_with_meta) = StatementWithMeta::decode(&mut statement.as_slice()) {
+					let hash = statement_with_meta.statement.hash();
+					if statement_with_meta.meta.timestamp + EXPIRE_AFTER < current_time {
+						log::trace!(target: LOG_TARGET, "Statement loaded (expired): {:?}", HexDisplay::from(&hash));
+						index.insert_expired(hash, statement_with_meta.meta);
+					} else {
+						log::trace!(target: LOG_TARGET, "Statement loaded {:?}", HexDisplay::from(&hash));
+						index.insert_with_meta(hash, statement_with_meta);
+					}
 				}
-			}
-			true
-		}).map_err(|e| Error::Db(e.to_string()))?;
+				true
+			}).map_err(|e| Error::Db(e.to_string()))?;
+		}
 
+		self.maintain();
 		Ok(())
 	}
 
@@ -388,13 +398,13 @@ impl Store {
 						}
 					} else {
 						// DB inconsistency
-						log::warn!(target: LOG_TARGET, "Corrupt statement {:?}", hash);
+						log::warn!(target: LOG_TARGET, "Corrupt statement {:?}", HexDisplay::from(hash));
 					}
 
 				}
 				None => {
 					// DB inconsistency
-					log::warn!(target: LOG_TARGET, "Missing statement {:?}", hash);
+					log::warn!(target: LOG_TARGET, "Missing statement {:?}", HexDisplay::from(hash));
 				}
 			}
 			Ok(())
@@ -414,40 +424,44 @@ impl Store {
 	}
 
 	fn timestamp(&self) -> u64 {
-		self.time_overrite.unwrap_or_else(||
+		self.time_override.unwrap_or_else(||
 			std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs())
 	}
 }
 
 impl StatementStore for Store {
 	fn dump_encoded(&self) -> Result<Vec<(Hash, Vec<u8>)>> {
-		let mut result = Vec::new();
-		self.db.iter_column_while(col::STATEMENTS, |item| {
-			if let Ok(entry) = StatementWithMeta::decode(&mut item.value.as_slice()) {
-				entry.statement.using_encoded(|statement| {
-					let hash = sp_statement_store::hash_encoded(statement);
-					if !self.index.read().is_expired(&hash) {
-						result.push((hash, entry.statement.encode()));
-					}
-				});
+		let index = self.index.read();
+		let mut result = Vec::with_capacity(index.entries.len());
+		for h in self.index.read().entries.keys() {
+			let encoded = self.db.get(col::STATEMENTS, h).map_err(|e| Error::Db(e.to_string()))?;
+			if let Some(encoded) = encoded {
+				if let Ok(entry) = StatementWithMeta::decode(&mut encoded.as_slice()) {
+					entry.statement.using_encoded(|statement| {
+						let hash = sp_statement_store::hash_encoded(statement);
+						if !self.index.read().is_expired(&hash) {
+							result.push((hash, entry.statement.encode()));
+						}
+					});
+				}
 			}
-			true
-		}).map_err(|e| Error::Db(e.to_string()))?;
+		}
 		Ok(result)
 	}
 
 	/// Return all statements.
 	fn dump(&self) -> Result<Vec<(Hash, Statement)>> {
-		let mut result = Vec::new();
-		self.db.iter_column_while(col::STATEMENTS, |item| {
-			if let Ok(entry) = StatementWithMeta::decode(&mut item.value.as_slice()) {
-				let hash = entry.statement.hash();
-				if !self.index.read().is_expired(&hash) {
+		let index = self.index.read();
+		let mut result = Vec::with_capacity(index.entries.len());
+		for h in self.index.read().entries.keys() {
+			let encoded = self.db.get(col::STATEMENTS, h).map_err(|e| Error::Db(e.to_string()))?;
+			if let Some(encoded) = encoded {
+				if let Ok(entry) = StatementWithMeta::decode(&mut encoded.as_slice()) {
+					let hash = entry.statement.hash();
 					result.push((hash, entry.statement));
 				}
 			}
-			true
-		}).map_err(|e| Error::Db(e.to_string()))?;
+		}
 		Ok(result)
 	}
 
@@ -494,7 +508,12 @@ impl StatementStore for Store {
 			}
 			IndexQuery::Unknown => {
 				// Validate.
-				let validation_result = (self.validate_fn)(Default::default(), source, statement.clone());
+				let at_block = if let Some(Proof::OnChain{block_hash, ..}) = statement.proof() {
+					Some(block_hash.clone())
+				} else {
+					None
+				};
+				let validation_result = (self.validate_fn)(at_block, source, statement.clone());
 				match validation_result {
 					Ok(ValidStatement { priority }) => priority,
 					Err(InvalidStatement::BadProof) => {
@@ -533,6 +552,7 @@ impl StatementStore for Store {
 		let mut index = self.index.write();
 		index.insert_with_meta(hash, statement_with_meta);
 		let network_priority = if priority > 0 { NetworkPriority::High } else { NetworkPriority::Low };
+		log::trace!(target: LOG_TARGET, "Statement submitted: {:?}", HexDisplay::from(&hash));
 		SubmitResult::New(network_priority)
 	}
 
@@ -550,7 +570,184 @@ impl StatementStore for Store {
 
 #[cfg(test)]
 mod tests {
+	use sp_statement_store::runtime_api::{ValidateStatement, ValidStatement, InvalidStatement};
+	use sp_statement_store::{Statement, Topic,
+		SignatureVerificationResult, Proof, StatementStore, StatementSource, NetworkPriority, SubmitResult,
+	};
+	use crate::Store;
+	use sp_core::Pair;
+
+	type Extrinsic = sp_runtime::OpaqueExtrinsic;
+	type Hash = sp_core::H256;
+	type Hashing = sp_runtime::traits::BlakeTwo256;
+	type BlockNumber = u64;
+	type Header = sp_runtime::generic::Header<BlockNumber, Hashing>;
+	type Block = sp_runtime::generic::Block<Header, Extrinsic>;
+
+	const CORRECT_BLOCK_HASH: [u8; 32] = [1u8; 32];
+
+	#[derive(Clone)]
+	pub(crate) struct TestClient;
+
+	pub(crate) struct RuntimeApi {
+		_inner: TestClient,
+	}
+
+	impl sp_api::ProvideRuntimeApi<Block> for TestClient {
+		type Api = RuntimeApi;
+		fn runtime_api(&self) -> sp_api::ApiRef<Self::Api> {
+			RuntimeApi { _inner: self.clone() }.into()
+		}
+	}
+	sp_api::mock_impl_runtime_apis! {
+		impl ValidateStatement<Block> for RuntimeApi {
+			fn validate_statement(
+				_source: StatementSource,
+				statement: Statement,
+			) -> std::result::Result<ValidStatement, InvalidStatement> {
+				match statement.verify_signature() {
+					SignatureVerificationResult::Valid(_) => Ok(ValidStatement{priority: 10}),
+					SignatureVerificationResult::Invalid => Err(InvalidStatement::BadProof),
+					SignatureVerificationResult::NoSignature => {
+						if let Some(Proof::OnChain { block_hash, .. }) = statement.proof() {
+							if block_hash == &CORRECT_BLOCK_HASH {
+								Ok(ValidStatement{priority: 1})
+							} else {
+								Err(InvalidStatement::BadProof)
+							}
+						} else {
+							Ok(ValidStatement{priority: 0})
+						}
+					}
+				}
+			}
+		}
+	}
+
+	impl sp_blockchain::HeaderBackend<Block> for TestClient {
+		fn header(&self, _hash: Hash) -> sp_blockchain::Result<Option<Header>> {
+			unimplemented!()
+		}
+		fn info(&self) -> sp_blockchain::Info<Block> {
+			sp_blockchain::Info {
+				best_hash: CORRECT_BLOCK_HASH.into(),
+				best_number: 0,
+				genesis_hash: Default::default(),
+				finalized_hash: CORRECT_BLOCK_HASH.into(),
+				finalized_number: 1,
+				finalized_state: None,
+				number_leaves: 0,
+				block_gap: None,
+			}
+		}
+		fn status(&self, _hash: Hash) -> sp_blockchain::Result<sp_blockchain::BlockStatus> {
+			unimplemented!()
+		}
+		fn number( &self, _hash: Hash) -> sp_blockchain::Result<Option<BlockNumber>> {
+			unimplemented!()
+		}
+		fn hash(&self, _number: BlockNumber) -> sp_blockchain::Result<Option<Hash>> {
+			unimplemented!()
+		}
+	}
+
+	fn test_store() -> (std::sync::Arc<Store>, tempfile::TempDir) {
+		let _ = env_logger::try_init();
+		let temp_dir = tempfile::Builder::new()
+			.tempdir()
+			.expect("Error creating test dir");
+
+		let client = std::sync::Arc::new(TestClient);
+		let mut path: std::path::PathBuf = temp_dir.path().into();
+		path.push("db");
+		let store = Store::new(&path, client, None).unwrap();
+		(store, temp_dir) // return order is important. Store must be dropped before TempDir
+	}
+
+	fn signed_statement(data: u8) -> Statement {
+		signed_statement_with_topics(data, &[])
+	}
+
+	fn signed_statement_with_topics(data: u8, topics: &[Topic]) -> Statement {
+		let mut statement = Statement::new();
+		statement.set_plain_data(vec![data]);
+		for i in 0 .. topics.len() {
+			statement.set_topic(i, topics[i].clone());
+		}
+		let kp = sp_core::sr25519::Pair::from_string("//Alice", None).unwrap();
+		statement.sign_sr25519_private(&kp);
+		statement
+	}
+
+	fn topic(data: u8) -> Topic {
+		[data; 32]
+	}
+
+	#[test]
+	fn submit_one() {
+		let (store, _temp) = test_store();
+		let statement0 = signed_statement(0);
+		assert_eq!(store.submit(statement0, StatementSource::Network), SubmitResult::New(NetworkPriority::High));
+		let unsigned = Statement::new();
+		assert_eq!(store.submit(unsigned, StatementSource::Network), SubmitResult::New(NetworkPriority::Low));
+	}
+
+	#[test]
+	fn save_and_load_statements() {
+		let (store, temp) = test_store();
+		let statement0 = signed_statement(0);
+		let statement1 = signed_statement(1);
+		let statement2 = signed_statement(2);
+		assert_eq!(store.submit(statement0.clone(), StatementSource::Network), SubmitResult::New(NetworkPriority::High));
+		assert_eq!(store.submit(statement1.clone(), StatementSource::Network), SubmitResult::New(NetworkPriority::High));
+		assert_eq!(store.submit(statement2.clone(), StatementSource::Network), SubmitResult::New(NetworkPriority::High));
+		assert_eq!(store.dump().unwrap().len(), 3);
+		assert_eq!(store.broadcasts(&[]).unwrap().len(), 3);
+		assert_eq!(store.statement(&statement1.hash()).unwrap(), Some(statement1.clone()));
+		std::mem::drop(store);
+
+		let client = std::sync::Arc::new(TestClient);
+		let mut path: std::path::PathBuf = temp.path().into();
+		path.push("db");
+		let store = Store::new(&path, client, None).unwrap();
+		assert_eq!(store.dump().unwrap().len(), 3);
+		assert_eq!(store.broadcasts(&[]).unwrap().len(), 3);
+		assert_eq!(store.statement(&statement1.hash()).unwrap(), Some(statement1));
+	}
+
+	#[test]
+	fn search_by_topic() {
+		let (store, _temp) = test_store();
+		let statement0 = signed_statement(0);
+		let statement1 = signed_statement_with_topics(1, &[topic(0)]);
+		let statement2 = signed_statement_with_topics(2, &[topic(0), topic(1)]);
+		let statement3 = signed_statement_with_topics(3, &[topic(0), topic(1), topic(2)]);
+		let statement4 = signed_statement_with_topics(4, &[topic(0), topic(42), topic(2), topic(3)]);
+		let statements = vec![statement0, statement1, statement2, statement3, statement4];
+		for s in &statements {
+			store.submit(s.clone(), StatementSource::Network);
+		}
+
+		let assert_topics = |topics: &[u8], expected: &[u8]| {
+			let topics: Vec<_> = topics.iter().map(|t| topic(*t)).collect();
+			let mut got_vals: Vec<_> = store.broadcasts(&topics).unwrap().into_iter().map(|d| d[0]).collect();
+			got_vals.sort();
+			assert_eq!(expected.to_vec(), got_vals);
+		};
+
+		assert_topics(&[], &[0,1,2,3,4]);
+		assert_topics(&[0], &[1,2,3,4]);
+		assert_topics(&[1], &[2,3]);
+		assert_topics(&[2], &[3,4]);
+		assert_topics(&[3], &[4]);
+		assert_topics(&[42], &[4]);
+
+		assert_topics(&[0,1], &[2, 3]);
+		assert_topics(&[1,2], &[3]);
+	}
+
+	#[test]
+	fn maintenance() {
+	}
 }
-
-
 

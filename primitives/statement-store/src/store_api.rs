@@ -19,7 +19,7 @@ use crate::{Statement, Topic, Hash};
 pub use crate::runtime_api::StatementSource;
 
 /// Statement store error.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum Error {
 	/// Database error.
 	#[error("Database error: {0:?}")]
@@ -42,7 +42,7 @@ pub enum NetworkPriority {
 }
 
 /// Statement submission outcome
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum SubmitResult {
 	/// Accepted as new with given score
 	New(NetworkPriority),
