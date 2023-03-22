@@ -59,33 +59,23 @@ pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn create_pool() -> Weight {
 		// Minimum execution time: 35_358 nanoseconds.
-		Weight::from_ref_time(35_935_000 as u64)
-			.saturating_add(T::DbWeight::get().reads(1 as u64))
-			.saturating_add(T::DbWeight::get().writes(2 as u64))
+		Weight::from_parts(37_508_000, 5038)
 	}
 	fn add_liquidity() -> Weight {
 		// Minimum execution time: 22_767 nanoseconds.
-		Weight::from_ref_time(23_235_000 as u64)
-			.saturating_add(T::DbWeight::get().reads(1 as u64))
-			.saturating_add(T::DbWeight::get().writes(2 as u64))
+		Weight::from_parts(37_508_000, 5038)
 	}
 	fn remove_liquidity() -> Weight {
 		// Minimum execution time: 22_767 nanoseconds.
-		Weight::from_ref_time(23_235_000 as u64)
-			.saturating_add(T::DbWeight::get().reads(1 as u64))
-			.saturating_add(T::DbWeight::get().writes(2 as u64))
+		Weight::from_parts(37_508_000, 5038)
 	}
 	fn swap_exact_tokens_for_tokens() -> Weight {
 		// Minimum execution time: 22_767 nanoseconds.
-		Weight::from_ref_time(23_235_000 as u64)
-			.saturating_add(T::DbWeight::get().reads(1 as u64))
-			.saturating_add(T::DbWeight::get().writes(2 as u64))
+		Weight::from_parts(37_508_000, 5038)
 	}
 	fn swap_tokens_for_exact_tokens() -> Weight {
 		// Minimum execution time: 22_767 nanoseconds.
-		Weight::from_ref_time(23_235_000 as u64)
-			.saturating_add(T::DbWeight::get().reads(1 as u64))
-			.saturating_add(T::DbWeight::get().writes(2 as u64))
+		Weight::from_parts(37_508_000, 5038)
 	}
 }
 
@@ -93,32 +83,22 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 impl WeightInfo for () {
 	fn create_pool() -> Weight {
 		// Minimum execution time: 35_358 nanoseconds.
-		Weight::from_ref_time(35_935_000 as u64)
-			.saturating_add(RocksDbWeight::get().reads(1 as u64))
-			.saturating_add(RocksDbWeight::get().writes(2 as u64))
+		Weight::from_parts(37_508_000, 5038)
 	}
 	fn add_liquidity() -> Weight {
 		// Minimum execution time: 22_767 nanoseconds.
-		Weight::from_ref_time(23_235_000 as u64)
-			.saturating_add(RocksDbWeight::get().reads(1 as u64))
-			.saturating_add(RocksDbWeight::get().writes(2 as u64))
+		Weight::from_parts(37_508_000, 5038)
 	}
 	fn remove_liquidity() -> Weight {
 		// Minimum execution time: 22_767 nanoseconds.
-		Weight::from_ref_time(23_235_000 as u64)
-			.saturating_add(RocksDbWeight::get().reads(1 as u64))
-			.saturating_add(RocksDbWeight::get().writes(2 as u64))
+		Weight::from_parts(37_508_000, 5038)
 	}
 	fn swap_exact_tokens_for_tokens() -> Weight {
 		// Minimum execution time: 22_767 nanoseconds.
-		Weight::from_ref_time(23_235_000 as u64)
-			.saturating_add(RocksDbWeight::get().reads(1 as u64))
-			.saturating_add(RocksDbWeight::get().writes(2 as u64))
+		Weight::from_parts(37_508_000, 5038)
 	}
 	fn swap_tokens_for_exact_tokens() -> Weight {
 		// Minimum execution time: 22_767 nanoseconds.
-		Weight::from_ref_time(23_235_000 as u64)
-			.saturating_add(RocksDbWeight::get().reads(1 as u64))
-			.saturating_add(RocksDbWeight::get().writes(2 as u64))
+		Weight::from_parts(37_508_000, 5038)
 	}
 }
