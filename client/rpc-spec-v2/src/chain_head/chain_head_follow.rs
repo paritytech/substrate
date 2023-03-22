@@ -637,3 +637,35 @@ where
 			.await;
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::chain_head::test_utils::ChainHeadMockClient;
+	use sp_core::H256;
+	use substrate_test_runtime_client::{runtime::Block, TestClientBuilder};
+
+	#[test]
+	fn follower_finalized_before_new_block() {
+		// let builder = TestClientBuilder::new();
+		// let backend = builder.backend();
+		// let mut client = Arc::new(builder.build());
+
+		// let mock_client = ChainHeadMockClient::new(client, backend);
+
+		// let (tx_stop, rx_stop) = oneshot::channel();
+		// let sub_handle = SubscriptionHandle::new(false, tx_stop, 10);
+		// let sub_id = "A".to_string();
+
+		// let follower = ChainHeadFollower::new(client, backend, sub_handle, false, sub_id);
+
+		// let hash = H256::random();
+		// let startup_point = StartupPoint {
+		// 	best_hash: hash.clone(),
+		// 	finalized_hash: hash.clone(),
+		// 	finalized_number: 0.into(),
+		// };
+
+		// follower.submit_events(&startup_point, stream, Default::default(), sink, rx_stop);
+	}
+}

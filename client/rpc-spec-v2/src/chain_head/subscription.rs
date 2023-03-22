@@ -70,7 +70,11 @@ pub struct SubscriptionHandle<Block: BlockT> {
 
 impl<Block: BlockT> SubscriptionHandle<Block> {
 	/// Construct a new [`SubscriptionHandle`].
-	fn new(runtime_updates: bool, tx_stop: oneshot::Sender<()>, max_pinned_blocks: usize) -> Self {
+	pub(crate) fn new(
+		runtime_updates: bool,
+		tx_stop: oneshot::Sender<()>,
+		max_pinned_blocks: usize,
+	) -> Self {
 		SubscriptionHandle {
 			inner: Arc::new(RwLock::new(SubscriptionInner {
 				runtime_updates,

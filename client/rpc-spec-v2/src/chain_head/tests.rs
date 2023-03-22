@@ -1,3 +1,5 @@
+use crate::chain_head::test_utils::ChainHeadMockClient;
+
 use super::*;
 use assert_matches::assert_matches;
 use codec::{Decode, Encode};
@@ -7,7 +9,10 @@ use jsonrpsee::{
 	RpcModule,
 };
 use sc_block_builder::BlockBuilderProvider;
-use sc_client_api::ChildInfo;
+use sc_client_api::{
+	BlockImportNotification, ChildInfo, FinalityNotification, FinalizeSummary, ImportSummary,
+};
+use sc_utils::{mpsc::tracing_unbounded, notification::NotificationStream};
 use sp_blockchain::HeaderBackend;
 use sp_consensus::BlockOrigin;
 use sp_core::{
@@ -33,7 +38,7 @@ const CHILD_STORAGE_KEY: &[u8] = b"child";
 const CHILD_VALUE: &[u8] = b"child value";
 
 async fn get_next_event<T: serde::de::DeserializeOwned>(sub: &mut RpcSubscription) -> T {
-	let (event, _sub_id) = tokio::time::timeout(std::time::Duration::from_secs(1), sub.next())
+	let (event, _sub_id) = tokio::time::timeout(std::time::Duration::from_secs(5), sub.next())
 		.await
 		.unwrap()
 		.unwrap()
@@ -1316,4 +1321,84 @@ async fn follow_report_multiple_pruned_block() {
 		pruned_block_hashes: vec![format!("{:?}", block_4_hash), format!("{:?}", block_5_hash)],
 	});
 	assert_eq!(event, expected);
+}
+
+#[tokio::test]
+async fn follow_fire_finalized_before_new_block() {
+	let builder = TestClientBuilder::new();
+	let backend = builder.backend();
+	let mut client = Arc::new(builder.build());
+
+	let client_mock = Arc::new(ChainHeadMockClient::new(client.clone(), backend.clone()));
+
+	let api = ChainHead::new(
+		client_mock.clone(),
+		backend,
+		Arc::new(TaskExecutor::default()),
+		CHAIN_GENESIS,
+		MAX_PINNED_BLOCKS,
+	)
+	.into_rpc();
+
+	// Make sure the block is imported for it to be pinned.
+	let block_1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	let block_1_hash = block_1.header.hash();
+	client.import(BlockOrigin::Own, block_1.clone()).await.unwrap();
+
+	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
+
+	// Trigger the Finalized notification before the NewBlock one.
+	let (sink, _stream) = tracing_unbounded("mpsc_finality_notification_stream", 100_000);
+	let summary = FinalizeSummary {
+		header: block_1.header,
+		finalized: vec![block_1_hash],
+		stale_heads: vec![],
+	};
+	let notification = FinalityNotification::from_summary(summary, sink);
+	client_mock.fire_finality_stream(notification);
+
+	// Initialized must always be reported first.
+	let finalized_hash = client.info().finalized_hash;
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::Initialized(Initialized {
+		finalized_block_hash: format!("{:?}", finalized_hash),
+		finalized_block_runtime: None,
+		runtime_updates: false,
+	});
+	assert_eq!(event, expected);
+
+	// Block 1 must be reported because we triggered the finalized notification.
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::NewBlock(NewBlock {
+		block_hash: format!("{:?}", block_1_hash),
+		parent_block_hash: format!("{:?}", finalized_hash),
+		new_runtime: None,
+		runtime_updates: false,
+	});
+	assert_eq!(event, expected);
+
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::BestBlockChanged(BestBlockChanged {
+		best_block_hash: format!("{:?}", block_1_hash),
+	});
+	assert_eq!(event, expected);
+
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::Finalized(Finalized {
+		finalized_block_hashes: vec![format!("{:?}", block_1_hash)],
+		pruned_block_hashes: vec![],
+	});
+	assert_eq!(event, expected);
+
+	let summary = ImportSummary {
+	hash: Block::Hash,
+	origin: BlockOrigin,
+	header: Block::Header,
+	is_new_best: bool,
+	storage_changes: Option<(StorageCollection, ChildStorageCollection)>,
+	tree_route: Option<sp_blockchain::TreeRoute<Block>>,
+	import_notification_action: ImportNotificationAction,
+	};
+	let notification = BlockImportNotification::from_summary(summary, sink);
+	client_mock.fire_import_stream(notification.into());
 }
