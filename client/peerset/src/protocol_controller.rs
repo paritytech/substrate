@@ -1267,6 +1267,60 @@ mod tests {
 	}
 
 	#[test]
+	fn disconnecting_reserved_peers_is_a_noop() {
+		let reserved1 = PeerId::random();
+		let reserved2 = PeerId::random();
+
+		let config = SetConfig {
+			in_peers: 10,
+			out_peers: 10,
+			bootnodes: Vec::new(),
+			reserved_nodes: [reserved1, reserved2].iter().cloned().collect(),
+			reserved_only: false,
+		};
+		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
+
+		let mut peer_store = MockPeerStore::new();
+		peer_store.expect_is_banned().times(2).return_const(false);
+		peer_store.expect_outgoing_candidates().once().return_const(Vec::new());
+
+		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
+
+		// Connect `reserved1` as inbound & `reserved2` as outbound.
+		controller.on_incoming_connection(reserved1, IncomingIndex(1));
+		controller.alloc_slots();
+		let mut messages = Vec::new();
+		while let Some(message) = rx.try_recv().ok() {
+			messages.push(message);
+		}
+		assert_eq!(messages.len(), 2);
+		assert!(messages.contains(&Message::Accept(IncomingIndex(1))));
+		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved2 }));
+		assert!(matches!(
+			controller.reserved_nodes.get(&reserved1),
+			Some(PeerState::Connected(Direction::Inbound))
+		));
+		assert!(matches!(
+			controller.reserved_nodes.get(&reserved2),
+			Some(PeerState::Connected(Direction::Outbound))
+		));
+
+		controller.on_disconnect_peer(reserved1);
+		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
+		assert!(matches!(
+			controller.reserved_nodes.get(&reserved1),
+			Some(PeerState::Connected(Direction::Inbound))
+		));
+
+		controller.on_disconnect_peer(reserved2);
+		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
+		assert!(matches!(
+			controller.reserved_nodes.get(&reserved2),
+			Some(PeerState::Connected(Direction::Outbound))
+		));
+	}
+
+	#[test]
 	fn dropping_regular_peers_work() {
 		let peer1 = PeerId::random();
 		let peer2 = PeerId::random();
