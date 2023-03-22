@@ -287,6 +287,14 @@ pub mod pallet {
 
 			ensure!(!Pools::<T>::contains_key(&pool_id), Error::<T>::PoolExists);
 
+			// pay the setup fee
+			T::Currency::transfer(
+				&sender,
+				&T::PoolSetupFeeReceiver::get(),
+				T::PoolSetupFee::get(),
+				Preserve,
+			)?;
+
 			let pool_account = Self::get_pool_account(pool_id);
 			let lp_token = NextPoolAssetId::<T>::get().unwrap_or(T::PoolAssetId::initial_value());
 
@@ -299,14 +307,6 @@ pub mod pallet {
 
 			let pool_info = PoolInfo { lp_token };
 			Pools::<T>::insert(pool_id, pool_info);
-
-			// pay the setup fee
-			T::Currency::transfer(
-				&sender,
-				&T::PoolSetupFeeReceiver::get(),
-				T::PoolSetupFee::get(),
-				Preserve,
-			)?;
 
 			Self::deposit_event(Event::PoolCreated { creator: sender, pool_id, lp_token });
 
