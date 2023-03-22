@@ -105,8 +105,7 @@ impl Keystore for LocalKeystore {
 		let res = self
 			.0
 			.read()
-			.key_pair_by_type::<sr25519::Pair>(public, id)
-			.map_err(TraitError::from)?
+			.key_pair_by_type::<sr25519::Pair>(public, id)?
 			.map(|pair| pair.sign(msg));
 		Ok(res)
 	}
@@ -117,15 +116,12 @@ impl Keystore for LocalKeystore {
 		public: &Sr25519Public,
 		transcript_data: VRFTranscriptData,
 	) -> std::result::Result<Option<VRFSignature>, TraitError> {
-		let transcript = make_transcript(transcript_data);
-		let pair = self.0.read().key_pair_by_type::<Sr25519Pair>(public, key_type)?;
-
-		if let Some(pair) = pair {
+		let res = self.0.read().key_pair_by_type::<Sr25519Pair>(public, key_type)?.map(|pair| {
+			let transcript = make_transcript(transcript_data);
 			let (inout, proof, _) = pair.as_ref().vrf_sign(transcript);
-			Ok(Some(VRFSignature { output: inout.to_output(), proof }))
-		} else {
-			Ok(None)
-		}
+			VRFSignature { output: inout.to_output(), proof }
+		});
+		Ok(res)
 	}
 
 	fn ed25519_public_keys(&self, key_type: KeyTypeId) -> Vec<ed25519::Public> {
@@ -167,8 +163,7 @@ impl Keystore for LocalKeystore {
 		let res = self
 			.0
 			.read()
-			.key_pair_by_type::<ed25519::Pair>(public, id)
-			.map_err(TraitError::from)?
+			.key_pair_by_type::<ed25519::Pair>(public, id)?
 			.map(|pair| pair.sign(msg));
 		Ok(res)
 	}
@@ -212,8 +207,7 @@ impl Keystore for LocalKeystore {
 		let res = self
 			.0
 			.read()
-			.key_pair_by_type::<ecdsa::Pair>(public, id)
-			.map_err(TraitError::from)?
+			.key_pair_by_type::<ecdsa::Pair>(public, id)?
 			.map(|pair| pair.sign(msg));
 		Ok(res)
 	}
@@ -224,9 +218,12 @@ impl Keystore for LocalKeystore {
 		public: &ecdsa::Public,
 		msg: &[u8; 32],
 	) -> std::result::Result<Option<ecdsa::Signature>, TraitError> {
-		let pair = self.0.read().key_pair_by_type::<ecdsa::Pair>(public, id)?;
-
-		pair.map(|k| k.sign_prehashed(msg)).map(Ok).transpose()
+		let res = self
+			.0
+			.read()
+			.key_pair_by_type::<ecdsa::Pair>(public, id)?
+			.map(|pair| pair.sign_prehashed(msg));
+		Ok(res)
 	}
 
 	fn insert(
