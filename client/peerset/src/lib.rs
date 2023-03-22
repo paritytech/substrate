@@ -178,26 +178,6 @@ impl PeersetHandle {
 		// The channel can only be closed if the peerset no longer exists.
 		rx.await.map_err(|_| ())
 	}
-
-	/// Checks whether the peer has a reputation value below [`BANNED_THRESHOLD`].
-	pub fn is_banned(&self, peer_id: PeerId) -> bool {
-		todo!("will be implemented after `Peerset` is converted into shared struct");
-	}
-
-	/// Report disconnect to adjust peers reputation value.
-	pub fn report_disconnect(&self, peer_id: PeerId, reason: DropReason) {
-		todo!("will be implemented after `Peerset` is converted into shared struct");
-	}
-
-	/// Get the candidates for an outgoing connection.
-	pub fn outgoing_candidates(
-		&self,
-		count: usize,
-		ignored: HashSet<PeerId>,
-	) -> impl Iterator<Item = &PeerId> {
-		todo!("supply `count` peers with highest reputation, but not from `ignored`");
-		[].into_iter()
-	}
 }
 
 /// Message that can be sent by the peer set manager (PSM).
