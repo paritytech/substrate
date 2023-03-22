@@ -121,7 +121,7 @@ impl<A: TypedGet, F: fungibles::Mutate<A::Type> + fungibles::Inspect<A::Type>> P
 		PaymentStatus::Success
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	fn ensure_successful(_: &Self::Beneficiary, amount: Self::Balance) {}
+	fn ensure_successful(_: &Self::Beneficiary, _: Self::Balance) {}
 	#[cfg(feature = "runtime-benchmarks")]
 	fn ensure_concluded(_: Self::Id) {}
 }
