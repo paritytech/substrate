@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Runtime support for the statement store.
+
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_runtime::RuntimeDebug;
@@ -23,14 +25,19 @@ use crate::Statement;
 /// Information concerning a valid statement.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct ValidStatement {
+	/// Statement priority as calculated by the runtime. Higher priority statements have lower
+	/// chance of being evicted.
 	pub priority: u64,
 }
 
-/// An invalid statement.
+/// An reason for an invalid statement.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug, TypeInfo)]
 pub enum InvalidStatement {
+	/// Failed proof validation.
 	BadProof,
+	/// Missing proof.
 	NoProof,
+	/// Validity could not be checked because of internal error.
 	InternalError,
 }
 
@@ -48,6 +55,8 @@ pub enum StatementSource {
 }
 
 impl StatementSource {
+	/// Check if the source allows the statement to be resubmitted to the store, extending its
+	/// expiration date.
 	pub fn can_be_resubmitted(&self) -> bool {
 		match self {
 			StatementSource::Chain | StatementSource::Rpc => true,

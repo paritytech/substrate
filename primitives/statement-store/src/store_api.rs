@@ -18,6 +18,7 @@
 use crate::{Statement, Topic, Hash};
 pub use crate::runtime_api::StatementSource;
 
+/// Statement store error.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// Database error.
@@ -32,8 +33,11 @@ pub enum Error {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+/// Network propagation priority.
 pub enum NetworkPriority {
+	/// High priority. Statement should be broadcast to all peers.
 	High,
+	/// Low priority.
 	Low,
 }
 
@@ -52,8 +56,10 @@ pub enum SubmitResult {
 	InternalError(Error),
 }
 
+/// Result type for `Error`
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// Statement store API.
 pub trait StatementStore: Send + Sync {
 	/// Return all statements, SCALE-encoded.
 	fn dump_encoded(&self) -> Result<Vec<(Hash, Vec<u8>)>>;
