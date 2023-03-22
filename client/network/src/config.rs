@@ -531,7 +531,8 @@ impl NonDefaultSetConfig {
 		handshake: Option<NotificationHandshake>,
 		set_config: SetConfig,
 	) -> (Self, Box<dyn NotificationService>) {
-		let (protocol_handle_pair, notification_handle) = notification_service();
+		let (protocol_handle_pair, notification_handle) =
+			notification_service(protocol_name.clone());
 		(
 			Self {
 				protocol_name,

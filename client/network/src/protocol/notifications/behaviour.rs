@@ -2201,7 +2201,7 @@ mod tests {
 		Box<dyn crate::service::traits::NotificationService>,
 	) {
 		let (protocol_handle_pair, notif_service) =
-			crate::protocol::notifications::service::notification_service();
+			crate::protocol::notifications::service::notification_service("/proto/1".into());
 		let (peerset, peerset_handle) = {
 			let mut sets = Vec::with_capacity(1);
 

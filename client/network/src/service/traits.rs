@@ -758,4 +758,8 @@ pub trait NotificationService: Debug + Send {
 
 	/// Get next event from the `Notifications` event stream.
 	async fn next_event(&mut self) -> Option<NotificationEvent>;
+
+	/// Make a copy of the object so it can be shared between protocol components
+	/// who wish to have access to the same underlying notification protocol.
+	fn clone(&mut self) -> Result<Box<dyn NotificationService>, ()>;
 }

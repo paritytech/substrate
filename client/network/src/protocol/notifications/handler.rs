@@ -402,7 +402,6 @@ impl NotificationsSink {
 				tx.try_send(NotificationsSinkMessage::Notification { message: message.into() });
 
 			if result.is_err() {
-				println!("error happened");
 				// Cloning the `mpsc::Sender` guarantees the allocation of an extra spot in the
 				// buffer, and therefore `try_send` will succeed.
 				let _result2 = tx.clone().try_send(NotificationsSinkMessage::ForceClose);
