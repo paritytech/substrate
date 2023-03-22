@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -217,7 +217,6 @@ pub mod pallet {
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
@@ -307,6 +306,11 @@ pub mod pallet {
 		/// Origin from which the next tabled referendum may be forced; this allows for the tabling
 		/// of a negative-turnout-bias (default-carries) referendum.
 		type ExternalDefaultOrigin: EnsureOrigin<Self::RuntimeOrigin>;
+
+		/// Origin from which the new proposal can be made.
+		///
+		/// The success variant is the account id of the depositor.
+		type SubmitOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Self::AccountId>;
 
 		/// Origin from which the next majority-carries (or more permissive) referendum may be
 		/// tabled to vote according to the `FastTrackVotingPeriod` asynchronously in a similar
@@ -590,7 +594,7 @@ pub mod pallet {
 			proposal: BoundedCallOf<T>,
 			#[pallet::compact] value: BalanceOf<T>,
 		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
+			let who = T::SubmitOrigin::ensure_origin(origin)?;
 			ensure!(value >= T::MinimumDeposit::get(), Error::<T>::ValueLow);
 
 			let index = Self::public_prop_count();
@@ -1617,15 +1621,9 @@ impl<T: Config> Pallet<T> {
 	/// Current era is ending; we should finish up any proposals.
 	///
 	///
-	/// # <weight>
+	/// ## Complexity:
 	/// If a referendum is launched or maturing, this will take full block weight if queue is not
-	/// empty. Otherwise:
-	/// - Complexity: `O(R)` where `R` is the number of unbaked referenda.
-	/// - Db reads: `LastTabledWasExternal`, `NextExternal`, `PublicProps`, `account`,
-	///   `ReferendumCount`, `LowestUnbaked`
-	/// - Db writes: `PublicProps`, `account`, `ReferendumCount`, `DepositOf`, `ReferendumInfoOf`
-	/// - Db reads per R: `DepositOf`, `ReferendumInfoOf`
-	/// # </weight>
+	/// empty. Otherwise, `O(R)` where `R` is the number of unbaked referenda.
 	fn begin_block(now: T::BlockNumber) -> Weight {
 		let max_block_weight = T::BlockWeights::get().max_block;
 		let mut weight = Weight::zero();

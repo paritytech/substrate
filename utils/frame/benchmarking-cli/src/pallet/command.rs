@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,15 +30,18 @@ use sc_client_db::BenchmarkingState;
 use sc_executor::NativeElseWasmExecutor;
 use sc_service::{Configuration, NativeExecutionDispatch};
 use serde::Serialize;
-use sp_core::offchain::{
-	testing::{TestOffchainExt, TestTransactionPoolExt},
-	OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
+use sp_core::{
+	offchain::{
+		testing::{TestOffchainExt, TestTransactionPoolExt},
+		OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
+	},
+	traits::CallContext,
 };
 use sp_externalities::Extensions;
-use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStorePtr};
+use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_state_machine::StateMachine;
-use std::{collections::HashMap, fmt::Debug, fs, str::FromStr, sync::Arc, time};
+use std::{collections::HashMap, fmt::Debug, fs, str::FromStr, time};
 
 /// Logging target
 const LOG_TARGET: &'static str = "frame::benchmark::pallet";
@@ -215,9 +218,10 @@ impl PalletCmd {
 
 		let extensions = || -> Extensions {
 			let mut extensions = Extensions::default();
-			extensions.register(KeystoreExt(Arc::new(KeyStore::new()) as SyncCryptoStorePtr));
 			let (offchain, _) = TestOffchainExt::new();
 			let (pool, _) = TestTransactionPoolExt::new();
+			let keystore = MemoryKeystore::new();
+			extensions.register(KeystoreExt::new(keystore));
 			extensions.register(OffchainWorkerExt::new(offchain.clone()));
 			extensions.register(OffchainDbExt::new(offchain));
 			extensions.register(TransactionPoolExt::new(pool));
@@ -235,6 +239,7 @@ impl PalletCmd {
 			extensions(),
 			&sp_state_machine::backend::BackendRuntimeCode::new(state).runtime_code()?,
 			sp_core::testing::TaskExecutor::new(),
+			CallContext::Offchain,
 		)
 		.execute(strategy.into())
 		.map_err(|e| format!("{}: {}", ERROR_METADATA_NOT_FOUND, e))?;
@@ -372,6 +377,7 @@ impl PalletCmd {
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
 						sp_core::testing::TaskExecutor::new(),
+						CallContext::Offchain,
 					)
 					.execute(strategy.into())
 					.map_err(|e| {
@@ -412,6 +418,7 @@ impl PalletCmd {
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
 						sp_core::testing::TaskExecutor::new(),
+						CallContext::Offchain,
 					)
 					.execute(strategy.into())
 					.map_err(|e| format!("Error executing runtime benchmark: {}", e))?;
@@ -444,6 +451,7 @@ impl PalletCmd {
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
 						sp_core::testing::TaskExecutor::new(),
+						CallContext::Offchain,
 					)
 					.execute(strategy.into())
 					.map_err(|e| format!("Error executing runtime benchmark: {}", e))?;
