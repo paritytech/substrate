@@ -24,15 +24,15 @@ use frame_support::{
 	pallet_prelude::{GenesisBuild, PhantomData},
 	parameter_types,
 	traits::{
-		fungibles::{self, *},
-		tokens::pay::PayFungibles,
+		fungibles::*,
+		tokens::{pay::PayFungibles, Fortitude::Polite, Preservation::Expendable},
 		AsEnsureOriginWithArg, ConstU32, ConstU64, OnInitialize,
 	},
 	PalletId,
 };
 use frame_system::EnsureRoot;
 use pallet_assets;
-use sp_core::{TypedGet, H256};
+use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BadOrigin, BlakeTwo256, Dispatchable, IdentityLookup},
@@ -298,14 +298,14 @@ fn spend_origin_works() {
 		assert_ok!(Treasury::spend(RuntimeOrigin::signed(13), 0, 50, 6));
 
 		// Treasury account should still have funds until next T::SpendPeriod
-		assert_eq!(Assets::reducible_balance(0, &Treasury::account_id(), false), 100);
-		assert_eq!(Assets::reducible_balance(0, &6, false), 0);
+		assert_eq!(Assets::reducible_balance(0, &Treasury::account_id(), Expendable, Polite), 100);
+		assert_eq!(Assets::reducible_balance(0, &6, Expendable, Polite), 0);
 		<Treasury as OnInitialize<u64>>::on_initialize(1);
-		assert_eq!(Assets::reducible_balance(0, &Treasury::account_id(), false), 100);
+		assert_eq!(Assets::reducible_balance(0, &Treasury::account_id(), Expendable, Polite), 100);
 
 		<Treasury as OnInitialize<u64>>::on_initialize(2);
-		assert_eq!(Assets::reducible_balance(0, &Treasury::account_id(), false), 0);
-		assert_eq!(Assets::reducible_balance(0, &6, false), 100);
+		assert_eq!(Assets::reducible_balance(0, &Treasury::account_id(), Expendable, Polite), 0);
+		assert_eq!(Assets::reducible_balance(0, &6, Expendable, Polite), 100);
 	});
 }
 
