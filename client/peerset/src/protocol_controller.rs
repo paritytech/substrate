@@ -613,18 +613,17 @@ mod tests {
 		let incoming1 = IncomingIndex(1);
 		controller.on_incoming_connection(reserved1, incoming1);
 		assert_eq!(rx.try_recv().unwrap(), Message::Accept(incoming1));
+		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 
 		// Incoming connection from `reserved2`.
 		let incoming2 = IncomingIndex(2);
 		controller.on_incoming_connection(reserved2, incoming2);
 		assert_eq!(rx.try_recv().unwrap(), Message::Accept(incoming2));
+		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 
 		// Reserved peers do not occupy slots.
 		assert_eq!(controller.num_out, 0);
 		assert_eq!(controller.num_in, 0);
-
-		// No more commands.
-		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 	}
 
 	#[test]
@@ -664,18 +663,17 @@ mod tests {
 		let incoming1 = IncomingIndex(1);
 		controller.on_incoming_connection(reserved1, incoming1);
 		assert_eq!(rx.try_recv().unwrap(), Message::Reject(incoming1));
+		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 
 		// Incoming connection from `reserved2`.
 		let incoming2 = IncomingIndex(2);
 		controller.on_incoming_connection(reserved2, incoming2);
 		assert_eq!(rx.try_recv().unwrap(), Message::Reject(incoming2));
+		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 
 		// No slots occupied.
 		assert_eq!(controller.num_out, 0);
 		assert_eq!(controller.num_in, 0);
-
-		// No more commands.
-		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 	}
 
 	#[test]
