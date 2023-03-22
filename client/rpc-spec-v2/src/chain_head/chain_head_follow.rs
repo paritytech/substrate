@@ -362,8 +362,8 @@ where
 				events.extend(self.generate_import_events(*hash, *parent, false));
 			} else {
 				// If we end up here and the `best_block` is a descendent of the finalized block
-				// (last block in the list), it means that we there were skipped notifications.
-				// Otherwise we `pin_block` would had returned `true`.
+				// (last block in the list), it means that there were skipped notifications.
+				// Otherwise `pin_block` would had returned `true`.
 				//
 				// When the node falls out of sync and then syncs up to the tip of the chain, it can
 				// happen that we skip notifications. Then it is better to terminate the connection
