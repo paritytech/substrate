@@ -36,9 +36,10 @@ use frame_support::{
 	traits::{
 		fungible::ItemOf,
 		tokens::{nonfungibles_v2::Inspect, GetSalary, PayFromAccount},
-		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, Currency, EitherOfDiverse,
-		EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter, KeyOwnerProofSystem,
-		LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote, WithdrawReasons,
+		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, ConstU64, Currency,
+		EitherOfDiverse, EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter,
+		KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote,
+		WithdrawReasons,
 	},
 	weights::{
 		constants::{
@@ -1527,10 +1528,10 @@ impl pallet_assets::Config<Instance2> for Runtime {
 parameter_types! {
 	pub const DexPalletId: PalletId = PalletId(*b"py/dexer");
 	pub AllowMultiAssetPools: bool = true;
+	pub const PoolSetupFee: Balance = 1 * DOLLARS;
 }
 
 impl pallet_dex::Config for Runtime {
-	type Fee = ConstU32<3>;
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
 	type AssetBalance = <Self as pallet_balances::Config>::Balance;
@@ -1542,6 +1543,9 @@ impl pallet_dex::Config for Runtime {
 	type MultiAssetId = NativeOrAssetId<u32>;
 	type PoolAssetId = <Self as pallet_assets::Config<Instance2>>::AssetId;
 	type PalletId = DexPalletId;
+	type LPFee = ConstU32<3>;
+	type PoolSetupFee = PoolSetupFee;
+	type PoolSetupFeeReceiver = DexOrigin;
 	type WeightInfo = pallet_dex::weights::SubstrateWeight<Runtime>;
 	type AllowMultiAssetPools = AllowMultiAssetPools;
 	type MaxSwapPathLength = ConstU32<4>;

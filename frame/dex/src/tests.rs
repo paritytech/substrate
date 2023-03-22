@@ -18,7 +18,7 @@
 use crate::{mock::*, *};
 use frame_support::{
 	assert_noop, assert_ok,
-	traits::{fungibles::InspectEnumerable, Currency},
+	traits::{fungibles::InspectEnumerable, Currency, Get},
 };
 use sp_runtime::{DispatchError, TokenError};
 
@@ -108,7 +108,13 @@ fn can_create_pool() {
 		create_tokens(user, vec![token_2]);
 
 		let lp_token: u32 = Dex::get_next_pool_asset_id();
+		assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), user, 1000));
 		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_2, token_1));
+
+		let setup_fee = <<Test as Config>::PoolSetupFee as Get<<Test as Config>::Balance>>::get();
+		let pool_account = <<Test as Config>::PoolSetupFeeReceiver as Get<u64>>::get();
+		assert_eq!(balance(user, NativeOrAssetId::Native), 1000 - setup_fee);
+		assert_eq!(balance(pool_account, NativeOrAssetId::Native), setup_fee);
 		assert_eq!(lp_token + 1, Dex::get_next_pool_asset_id());
 
 		assert_eq!(events(), [Event::<Test>::PoolCreated { creator: user, pool_id, lp_token }]);

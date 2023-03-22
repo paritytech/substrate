@@ -98,16 +98,17 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
+		/// Overarching event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// Units are 10ths of a percent
-		type Fee: Get<u32>;
-
+		/// Currency type that this works on.
 		type Currency: InspectFungible<Self::AccountId, Balance = Self::Balance>
 			+ MutateFungible<Self::AccountId>;
 
+		/// The `Currency::Balance` type.
 		type Balance: Balance;
 
+		/// The type used to describe the amount of fractions converted into assets.
 		type AssetBalance: Balance;
 
 		type HigherPrecisionBalance: IntegerSquareRoot
@@ -120,23 +121,36 @@ pub mod pallet {
 			+ TryInto<Self::AssetBalance>
 			+ TryInto<Self::Balance>;
 
+		/// Identifier for the class of asset.
 		type AssetId: AssetId + PartialOrd;
 
+		/// Type that holds both Native currency and token from `Assets`.
 		type MultiAssetId: AssetId + PartialOrd;
 
+		/// Type to convert `AssetId` into `MultiAssetId`.
 		type MultiAssetIdConverter: MultiAssetIdConverter<Self::MultiAssetId, Self::AssetId>;
 
-		// Asset id to address the lp tokens by.
+		/// Asset id to address the lp tokens by.
 		type PoolAssetId: AssetId + PartialOrd + Incrementable + From<u32>;
 
+		/// Registry for the assets.
 		type Assets: Inspect<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>
 			+ Mutate<Self::AccountId>;
 
-		// Registry for the lp tokens. Ideally only this pallet should have create permissions on
-		// the assets.
+		/// Registry for the lp tokens. Ideally only this pallet should have create permissions on
+		/// the assets.
 		type PoolAssets: Inspect<Self::AccountId, AssetId = Self::PoolAssetId, Balance = Self::AssetBalance>
 			+ Create<Self::AccountId>
 			+ Mutate<Self::AccountId>;
+
+		/// Units are 10ths of a percent.
+		type LPFee: Get<u32>;
+
+		/// A one-time fee to setup the pool.
+		type PoolSetupFee: Get<Self::Balance>;
+
+		/// An account that receives the pool setup fee.
+		type PoolSetupFeeReceiver: Get<Self::AccountId>;
 
 		/// The max number of hops in a swap.
 		#[pallet::constant]
@@ -285,6 +299,14 @@ pub mod pallet {
 
 			let pool_info = PoolInfo { lp_token };
 			Pools::<T>::insert(pool_id, pool_info);
+
+			// pay the setup fee
+			T::Currency::transfer(
+				&sender,
+				&T::PoolSetupFeeReceiver::get(),
+				T::PoolSetupFee::get(),
+				Preserve,
+			)?;
 
 			Self::deposit_event(Event::PoolCreated { creator: sender, pool_id, lp_token });
 
@@ -824,7 +846,7 @@ pub mod pallet {
 			}
 
 			let amount_in_with_fee = amount_in
-				.checked_mul(&(T::HigherPrecisionBalance::from(1000u32) - (T::Fee::get().into())))
+				.checked_mul(&(T::HigherPrecisionBalance::from(1000u32) - (T::LPFee::get().into())))
 				.ok_or(Error::<T>::Overflow)?;
 
 			let numerator =
@@ -867,7 +889,7 @@ pub mod pallet {
 			let denominator = reserve_out
 				.checked_sub(&amount_out)
 				.ok_or(Error::<T>::Overflow)?
-				.checked_mul(&(T::HigherPrecisionBalance::from(1000u32) - T::Fee::get().into()))
+				.checked_mul(&(T::HigherPrecisionBalance::from(1000u32) - T::LPFee::get().into()))
 				.ok_or(Error::<T>::Overflow)?;
 
 			let result = numerator

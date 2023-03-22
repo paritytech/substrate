@@ -153,7 +153,6 @@ ord_parameter_types! {
 
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Fee = ConstU32<3>;
 	type Currency = Balances;
 	type AssetBalance = <Self as pallet_balances::Config>::Balance;
 	type AssetId = u32;
@@ -162,6 +161,9 @@ impl Config for Test {
 	type PoolAssets = PoolAssets;
 	type PalletId = DexPalletId;
 	type WeightInfo = ();
+	type LPFee = ConstU32<3>;
+	type PoolSetupFee = ConstU64<5>;
+	type PoolSetupFeeReceiver = DexOrigin;
 	type AllowMultiAssetPools = AllowMultiAssetPools;
 	type MaxSwapPathLength = ConstU32<4>;
 
