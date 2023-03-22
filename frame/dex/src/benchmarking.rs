@@ -55,7 +55,7 @@ where
 	let caller: T::AccountId = whitelisted_caller();
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	if let Ok(asset_id) = T::MultiAssetIdConverter::try_convert(asset) {
-		assert_ok!(T::Currency::set_balance(
+		assert_ok!(T::Currency::write_balance(
 			&caller,
 			<T::Currency as Inspect<T::AccountId>>::Balance::max_value()
 		));
@@ -117,7 +117,7 @@ benchmarks! {
 		let asset1 = T::MultiAssetIdConverter::get_native();
 		let asset2 = T::MultiAssetIdConverter::into_multiasset_id(0.into());
 		let (lp_token, caller, _) = create_asset_and_pool::<T>(asset1, asset2);
-	}: _(SystemOrigin::Signed(caller.clone()), asset1, asset2, 100000000000000.into(), 100000000000000.into(), 10.into(), 10.into(), caller.clone(), false)
+	}: _(SystemOrigin::Signed(caller.clone()), asset1, asset2, 10.into(), 10.into(), 10.into(), 10.into(), caller.clone())
 	verify {
 		let pool_id = (asset1, asset2);
 		assert_last_event::<T>(Event::LiquidityAdded {
@@ -131,123 +131,118 @@ benchmarks! {
 		}.into());
 	}
 
-	// remove_liquidity {
-	// 	let asset1 = T::MultiAssetIdConverter::get_native();
-	// 	let asset2 = T::MultiAssetIdConverter::into_multiasset_id(0.into());
-	// 	let (lp_token, caller, _) = create_asset_and_pool::<T>(asset1, asset2);
+	remove_liquidity {
+		let asset1 = T::MultiAssetIdConverter::get_native();
+		let asset2 = T::MultiAssetIdConverter::into_multiasset_id(0.into());
+		let (lp_token, caller, _) = create_asset_and_pool::<T>(asset1, asset2);
 
-	// 	Dex::<T>::add_liquidity(
-	// 		SystemOrigin::Signed(caller.clone()).into(),
-	// 		asset1,
-	// 		asset2,
-	// 		10.into(),
-	// 		10.into(),
-	// 		10.into(),
-	// 		10.into(),
-	// 		caller.clone(),
-	// 		false,
-	// 	)?;
-	// }: _(SystemOrigin::Signed(caller.clone()), asset1, asset2, 8.into(), 1.into(), 1.into(), caller.clone())
-	// verify {
-	// 	let pool_id = (asset1, asset2);
-	// 	assert_last_event::<T>(Event::LiquidityRemoved {
-	// 		who: caller.clone(),
-	// 		withdraw_to: caller.clone(),
-	// 		pool_id,
-	// 		amount1: 8.into(),
-	// 		amount2: 8.into(),
-	// 		lp_token,
-	// 		lp_token_burned: 8.into(),
-	// 	}.into());
-	// }
+		Dex::<T>::add_liquidity(
+			SystemOrigin::Signed(caller.clone()).into(),
+			asset1,
+			asset2,
+			10.into(),
+			10.into(),
+			10.into(),
+			10.into(),
+			caller.clone(),
+		)?;
+	}: _(SystemOrigin::Signed(caller.clone()), asset1, asset2, 8.into(), 1.into(), 1.into(), caller.clone())
+	verify {
+		let pool_id = (asset1, asset2);
+		assert_last_event::<T>(Event::LiquidityRemoved {
+			who: caller.clone(),
+			withdraw_to: caller.clone(),
+			pool_id,
+			amount1: 8.into(),
+			amount2: 8.into(),
+			lp_token,
+			lp_token_burned: 8.into(),
+		}.into());
+	}
 
-	// swap_exact_tokens_for_tokens {
-	// 	let asset1 = T::MultiAssetIdConverter::get_native();
-	// 	let asset2 = T::MultiAssetIdConverter::into_multiasset_id(0.into());
-	// 	let asset3 = T::MultiAssetIdConverter::into_multiasset_id(1.into());
-	// 	let (_, caller, _) = create_asset_and_pool::<T>(asset1, asset2);
-	// 	let (_, _) = create_asset::<T>(asset3);
-	// 	Dex::<T>::create_pool(SystemOrigin::Signed(caller.clone()).into(), asset2, asset3)?;
-	// 	let path: BoundedVec<_, T::MaxSwapPathLength> =
-	// 		BoundedVec::try_from(vec![asset1, asset2, asset3]).unwrap();
+	swap_exact_tokens_for_tokens {
+		let asset1 = T::MultiAssetIdConverter::get_native();
+		let asset2 = T::MultiAssetIdConverter::into_multiasset_id(0.into());
+		let asset3 = T::MultiAssetIdConverter::into_multiasset_id(1.into());
+		let (_, caller, _) = create_asset_and_pool::<T>(asset1, asset2);
+		let (_, _) = create_asset::<T>(asset3);
+		Dex::<T>::create_pool(SystemOrigin::Signed(caller.clone()).into(), asset2, asset3)?;
+		let path: BoundedVec<_, T::MaxSwapPathLength> =
+			BoundedVec::try_from(vec![asset1, asset2, asset3]).unwrap();
 
-	// 	Dex::<T>::add_liquidity(
-	// 		SystemOrigin::Signed(caller.clone()).into(),
-	// 		asset1,
-	// 		asset2,
-	// 		10000.into(),
-	// 		200.into(),
-	// 		10.into(),
-	// 		10.into(),
-	// 		caller.clone(),
-	// 		false,
-	// 	)?;
-	// 	Dex::<T>::add_liquidity(
-	// 		SystemOrigin::Signed(caller.clone()).into(),
-	// 		asset2,
-	// 		asset3,
-	// 		200.into(),
-	// 		2000.into(),
-	// 		10.into(),
-	// 		10.into(),
-	// 		caller.clone(),
-	// 		false,
-	// 	)?;
-	// }: _(SystemOrigin::Signed(caller.clone()), path.clone(), 500.into(), 80.into(), caller.clone(), false)
-	// verify {
-	// 	let pool_id = (asset1, asset2);
-	// 	assert_last_event::<T>(Event::SwapExecuted {
-	// 		who: caller.clone(),
-	// 		send_to: caller.clone(),
-	// 		path,
-	// 		amount_in: 500.into(),
-	// 		amount_out: 85.into(),
-	// 	}.into());
-	// }
+		Dex::<T>::add_liquidity(
+			SystemOrigin::Signed(caller.clone()).into(),
+			asset1,
+			asset2,
+			10000.into(),
+			200.into(),
+			10.into(),
+			10.into(),
+			caller.clone(),
+		)?;
+		Dex::<T>::add_liquidity(
+			SystemOrigin::Signed(caller.clone()).into(),
+			asset2,
+			asset3,
+			200.into(),
+			2000.into(),
+			10.into(),
+			10.into(),
+			caller.clone(),
+		)?;
+	}: _(SystemOrigin::Signed(caller.clone()), path.clone(), 500.into(), 80.into(), caller.clone(), false)
+	verify {
+		let pool_id = (asset1, asset2);
+		assert_last_event::<T>(Event::SwapExecuted {
+			who: caller.clone(),
+			send_to: caller.clone(),
+			path,
+			amount_in: 500.into(),
+			amount_out: 85.into(),
+		}.into());
+	}
 
-	// swap_tokens_for_exact_tokens {
-	// 	let asset1 = T::MultiAssetIdConverter::get_native();
-	// 	let asset2 = T::MultiAssetIdConverter::into_multiasset_id(0.into());
-	// 	let asset3 = T::MultiAssetIdConverter::into_multiasset_id(1.into());
-	// 	let (_, caller, _) = create_asset_and_pool::<T>(asset1, asset2);
-	// 	let (_, _) = create_asset::<T>(asset3);
-	// 	Dex::<T>::create_pool(SystemOrigin::Signed(caller.clone()).into(), asset2, asset3)?;
-	// 	let path: BoundedVec<_, T::MaxSwapPathLength> =
-	// 		BoundedVec::try_from(vec![asset1, asset2, asset3]).unwrap();
+	swap_tokens_for_exact_tokens {
+		let asset1 = T::MultiAssetIdConverter::get_native();
+		let asset2 = T::MultiAssetIdConverter::into_multiasset_id(0.into());
+		let asset3 = T::MultiAssetIdConverter::into_multiasset_id(1.into());
+		let (_, caller, _) = create_asset_and_pool::<T>(asset1, asset2);
+		let (_, _) = create_asset::<T>(asset3);
+		Dex::<T>::create_pool(SystemOrigin::Signed(caller.clone()).into(), asset2, asset3)?;
+		let path: BoundedVec<_, T::MaxSwapPathLength> =
+			BoundedVec::try_from(vec![asset1, asset2, asset3]).unwrap();
 
-	// 	Dex::<T>::add_liquidity(
-	// 		SystemOrigin::Signed(caller.clone()).into(),
-	// 		asset1,
-	// 		asset2,
-	// 		10000.into(),
-	// 		200.into(),
-	// 		10.into(),
-	// 		10.into(),
-	// 		caller.clone(),
-	// 		false,
-	// 	)?;
-	// 	Dex::<T>::add_liquidity(
-	// 		SystemOrigin::Signed(caller.clone()).into(),
-	// 		asset2,
-	// 		asset3,
-	// 		200.into(),
-	// 		2000.into(),
-	// 		10.into(),
-	// 		10.into(),
-	// 		caller.clone(),
-	// 		false,
-	// 	)?;
-	// }: _(SystemOrigin::Signed(caller.clone()), path.clone(), 100.into(), 1000.into(), caller.clone(), false)
-	// verify {
-	// 	let pool_id = (asset1, asset2);
-	// 	assert_last_event::<T>(Event::SwapExecuted {
-	// 		who: caller.clone(),
-	// 		send_to: caller.clone(),
-	// 		path,
-	// 		amount_in: 584.into(),
-	// 		amount_out: 100.into(),
-	// 	}.into());
-	// }
+		Dex::<T>::add_liquidity(
+			SystemOrigin::Signed(caller.clone()).into(),
+			asset1,
+			asset2,
+			10000.into(),
+			200.into(),
+			10.into(),
+			10.into(),
+			caller.clone(),
+		)?;
+		Dex::<T>::add_liquidity(
+			SystemOrigin::Signed(caller.clone()).into(),
+			asset2,
+			asset3,
+			200.into(),
+			2000.into(),
+			10.into(),
+			10.into(),
+			caller.clone(),
+		)?;
+	}: _(SystemOrigin::Signed(caller.clone()), path.clone(), 100.into(), 1000.into(), caller.clone(), false)
+	verify {
+		let pool_id = (asset1, asset2);
+		assert_last_event::<T>(Event::SwapExecuted {
+			who: caller.clone(),
+			send_to: caller.clone(),
+			path,
+			amount_in: 584.into(),
+			amount_out: 100.into(),
+		}.into());
+	}
 
 	impl_benchmark_test_suite!(Dex, crate::mock::new_test_ext(), crate::mock::Test);
 }
