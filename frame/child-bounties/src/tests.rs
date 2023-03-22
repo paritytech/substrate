@@ -26,11 +26,10 @@ use frame_support::{
 	assert_noop, assert_ok,
 	pallet_prelude::GenesisBuild,
 	parameter_types,
-	traits::{ConstU32, ConstU64, OnInitialize},
+	traits::{tokens::PayFromAccount, ConstU32, ConstU64, OnInitialize},
 	weights::Weight,
 	PalletId,
 };
-
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -113,10 +112,14 @@ parameter_types! {
 	pub const Burn: Permill = Permill::from_percent(50);
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 	pub const SpendLimit: Balance = u64::MAX;
+	pub TreasuryAccount: u128 = Treasury::account_id();
 }
 
 impl pallet_treasury::Config for Test {
 	type PalletId = TreasuryPalletId;
+	type AssetKind = ();
+	type Paymaster = PayFromAccount<Balances, TreasuryAccount>;
+	type BalanceConverter = ();
 	type Currency = pallet_balances::Pallet<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
 	type RejectOrigin = frame_system::EnsureRoot<u128>;
