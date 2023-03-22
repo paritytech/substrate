@@ -523,8 +523,8 @@ impl<PeerStore: PeerStoreT> ProtocolController<PeerStore> {
 		self.peer_store
 			.outgoing_candidates(available_slots, ignored)
 			.iter()
-			.filter_map(|peer_id| match self.nodes.entry(*peer_id) {
-				Entry::Occupied(_) => {
+			.filter_map(|peer_id| {
+				if self.reserved_nodes.contains_key(peer_id) || self.nodes.contains_key(peer_id) {
 					debug_assert!(false, "`Peerset` returned a node we asked to ignore.");
 					error!(
 						target: "peerset",
@@ -532,12 +532,11 @@ impl<PeerStore: PeerStoreT> ProtocolController<PeerStore> {
 						peer_id
 					);
 					None
-				},
-				Entry::Vacant(entry) => {
+				} else {
 					self.num_out += 1;
-					entry.insert(Direction::Outbound);
+					self.nodes.insert(*peer_id, Direction::Outbound);
 					Some(peer_id)
-				},
+				}
 			})
 			.take(available_slots)
 			.cloned()
