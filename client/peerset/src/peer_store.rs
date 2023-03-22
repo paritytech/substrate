@@ -20,7 +20,7 @@ use crate::DropReason;
 use libp2p::PeerId;
 use std::collections::HashSet;
 
-pub trait PeerStore {
+pub trait PeerReputationProvider {
 	/// Check whether the peer is banned.
 	fn is_banned(&self, peer_id: PeerId) -> bool;
 
@@ -30,3 +30,5 @@ pub trait PeerStore {
 	/// Get the candidates for initiating outgoing connections.
 	fn outgoing_candidates(&self, count: usize, ignored: HashSet<&PeerId>) -> Vec<PeerId>;
 }
+
+pub struct PeerStoreHandle {}

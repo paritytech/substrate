@@ -36,7 +36,7 @@ use std::{
 use wasm_timer::Delay;
 
 use crate::{
-	peer_store::PeerStore as PeerStoreT, DropReason, IncomingIndex, Message, PeersetHandle,
+	peer_store::PeerReputationProvider, DropReason, IncomingIndex, Message, PeersetHandle,
 	SetConfig, SetId,
 };
 
@@ -138,7 +138,7 @@ impl Default for PeerState {
 /// Side of [`ProtocolHandle`] responsible for all the logic. Currently all instances are
 /// owned by [`crate::Peerset`], but they should eventually be moved to corresponding protocols.
 #[derive(Debug)]
-pub struct ProtocolController<PeerStore> {
+pub struct ProtocolController<PeerStoreHandle> {
 	/// Set id to use when sending connect/drop requests to `Notifications`.
 	// Will likely be replaced by `ProtocolName` in the future.
 	set_id: SetId,
@@ -164,17 +164,17 @@ pub struct ProtocolController<PeerStore> {
 	to_notifications: TracingUnboundedSender<Message>,
 	/// Peerset handle for checking peer reputation values and getting connection candidates
 	/// with highest reputation.
-	peer_store: PeerStore,
+	peer_store: PeerStoreHandle,
 }
 
-impl<PeerStore: PeerStoreT> ProtocolController<PeerStore> {
+impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle> {
 	/// Construct new [`ProtocolController`].
 	pub fn new(
 		set_id: SetId,
 		config: SetConfig,
 		to_notifications: TracingUnboundedSender<Message>,
-		peer_store: PeerStore,
-	) -> (ProtocolHandle, ProtocolController<PeerStore>) {
+		peer_store: PeerStoreHandle,
+	) -> (ProtocolHandle, ProtocolController<PeerStoreHandle>) {
 		let (to_controller, from_handle) = tracing_unbounded("mpsc_protocol_controller", 10_000);
 		let handle = ProtocolHandle { to_controller };
 		let reserved_nodes =
@@ -525,10 +525,10 @@ impl<PeerStore: PeerStoreT> ProtocolController<PeerStore> {
 			.iter()
 			.filter_map(|peer_id| {
 				if self.reserved_nodes.contains_key(peer_id) || self.nodes.contains_key(peer_id) {
-					debug_assert!(false, "`Peerset` returned a node we asked to ignore.");
+					debug_assert!(false, "`PeerStore` returned a node we asked to ignore.");
 					error!(
 						target: "peerset",
-						"`Peerset` returned a node we asked to ignore: {}.",
+						"`PeerStore` returned a node we asked to ignore: {}.",
 						peer_id
 					);
 					None
@@ -549,16 +549,18 @@ impl<PeerStore: PeerStoreT> ProtocolController<PeerStore> {
 #[cfg(test)]
 mod tests {
 	use super::{Direction, PeerState, ProtocolController};
-	use crate::{peer_store::PeerStore, DropReason, IncomingIndex, Message, SetConfig, SetId};
+	use crate::{
+		peer_store::PeerReputationProvider, DropReason, IncomingIndex, Message, SetConfig, SetId,
+	};
 	use futures::FutureExt;
 	use libp2p::PeerId;
 	use sc_utils::mpsc::{tracing_unbounded, TryRecvError};
 	use std::collections::HashSet;
 
 	mockall::mock! {
-		pub PeerStore {}
+		pub PeerStoreHandle {}
 
-		impl PeerStore for PeerStore {
+		impl PeerReputationProvider for PeerStoreHandle {
 			fn is_banned(&self, peer_id: PeerId) -> bool;
 			fn report_disconnect(&self, peer_id: PeerId, reason: DropReason);
 			fn outgoing_candidates<'a>(&self, count: usize, ignored: HashSet<&'a PeerId>) -> Vec<PeerId>;
@@ -580,7 +582,7 @@ mod tests {
 		};
 		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
 
-		let mut peer_store = MockPeerStore::new();
+		let mut peer_store = MockPeerStoreHandle::new();
 		peer_store.expect_is_banned().times(4).return_const(false);
 		peer_store.expect_report_disconnect().times(2).return_const(());
 
@@ -640,7 +642,7 @@ mod tests {
 		};
 		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
 
-		let mut peer_store = MockPeerStore::new();
+		let mut peer_store = MockPeerStoreHandle::new();
 		peer_store.expect_is_banned().times(6).return_const(true);
 
 		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
@@ -690,7 +692,7 @@ mod tests {
 		};
 		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
 
-		let mut peer_store = MockPeerStore::new();
+		let mut peer_store = MockPeerStoreHandle::new();
 		peer_store.expect_is_banned().times(4).return_const(false);
 		peer_store.expect_report_disconnect().times(2).return_const(());
 
@@ -749,7 +751,7 @@ mod tests {
 		};
 		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
 
-		let mut peer_store = MockPeerStore::new();
+		let mut peer_store = MockPeerStoreHandle::new();
 		peer_store.expect_outgoing_candidates().once().return_const(candidates);
 
 		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
@@ -798,7 +800,7 @@ mod tests {
 		};
 		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
 
-		let mut peer_store = MockPeerStore::new();
+		let mut peer_store = MockPeerStoreHandle::new();
 		peer_store.expect_is_banned().times(2).return_const(false);
 		peer_store.expect_outgoing_candidates().once().return_const(outgoing_candidates);
 
@@ -838,7 +840,7 @@ mod tests {
 		};
 		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
 
-		let mut peer_store = MockPeerStore::new();
+		let mut peer_store = MockPeerStoreHandle::new();
 		peer_store.expect_outgoing_candidates().once().return_const(candidates1);
 		peer_store.expect_outgoing_candidates().once().return_const(candidates2);
 		peer_store.expect_report_disconnect().times(2).return_const(());
@@ -907,7 +909,7 @@ mod tests {
 		};
 		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
 
-		let mut peer_store = MockPeerStore::new();
+		let mut peer_store = MockPeerStoreHandle::new();
 
 		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
 
@@ -932,7 +934,7 @@ mod tests {
 		};
 		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
 
-		let mut peer_store = MockPeerStore::new();
+		let mut peer_store = MockPeerStoreHandle::new();
 
 		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
 
@@ -968,7 +970,7 @@ mod tests {
 		};
 		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
 
-		let mut peer_store = MockPeerStore::new();
+		let mut peer_store = MockPeerStoreHandle::new();
 		peer_store.expect_outgoing_candidates().once().return_const(candidates);
 
 		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
@@ -1013,7 +1015,7 @@ mod tests {
 		};
 		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
 
-		let mut peer_store = MockPeerStore::new();
+		let mut peer_store = MockPeerStoreHandle::new();
 		peer_store.expect_is_banned().times(3).return_const(false);
 		peer_store.expect_outgoing_candidates().once().return_const(outgoing_candidates);
 
@@ -1072,7 +1074,7 @@ mod tests {
 		};
 		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
 
-		let mut peer_store = MockPeerStore::new();
+		let mut peer_store = MockPeerStoreHandle::new();
 
 		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
 		assert_eq!(controller.reserved_nodes.len(), 2);
@@ -1103,7 +1105,7 @@ mod tests {
 		};
 		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
 
-		let mut peer_store = MockPeerStore::new();
+		let mut peer_store = MockPeerStoreHandle::new();
 		peer_store.expect_is_banned().times(2).return_const(false);
 
 		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
@@ -1138,7 +1140,7 @@ mod tests {
 		};
 		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
 
-		let mut peer_store = MockPeerStore::new();
+		let mut peer_store = MockPeerStoreHandle::new();
 		peer_store.expect_is_banned().times(2).return_const(false);
 		peer_store.expect_outgoing_candidates().once().return_const(Vec::new());
 
@@ -1183,7 +1185,7 @@ mod tests {
 		};
 		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
 
-		let mut peer_store = MockPeerStore::new();
+		let mut peer_store = MockPeerStoreHandle::new();
 		peer_store.expect_is_banned().once().return_const(false);
 		peer_store.expect_outgoing_candidates().once().return_const(outgoing_candidates);
 
@@ -1224,7 +1226,7 @@ mod tests {
 		};
 		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
 
-		let mut peer_store = MockPeerStore::new();
+		let mut peer_store = MockPeerStoreHandle::new();
 		peer_store.expect_is_banned().once().return_const(false);
 		peer_store.expect_outgoing_candidates().once().return_const(outgoing_candidates);
 
@@ -1276,7 +1278,7 @@ mod tests {
 		};
 		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
 
-		let mut peer_store = MockPeerStore::new();
+		let mut peer_store = MockPeerStoreHandle::new();
 		peer_store.expect_is_banned().times(2).return_const(false);
 		peer_store.expect_outgoing_candidates().once().return_const(Vec::new());
 
@@ -1331,7 +1333,7 @@ mod tests {
 		};
 		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
 
-		let mut peer_store = MockPeerStore::new();
+		let mut peer_store = MockPeerStoreHandle::new();
 		peer_store.expect_is_banned().once().return_const(false);
 		peer_store.expect_outgoing_candidates().once().return_const(outgoing_candidates);
 		peer_store.expect_report_disconnect().times(2).return_const(());
@@ -1383,7 +1385,7 @@ mod tests {
 		};
 		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
 
-		let mut peer_store = MockPeerStore::new();
+		let mut peer_store = MockPeerStoreHandle::new();
 		peer_store.expect_is_banned().once().return_const(false);
 		peer_store.expect_outgoing_candidates().once().return_const(outgoing_candidates);
 
@@ -1429,7 +1431,7 @@ mod tests {
 		};
 		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
 
-		let mut peer_store = MockPeerStore::new();
+		let mut peer_store = MockPeerStoreHandle::new();
 		peer_store.expect_is_banned().once().return_const(false);
 
 		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
@@ -1458,7 +1460,7 @@ mod tests {
 		};
 		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
 
-		let mut peer_store = MockPeerStore::new();
+		let mut peer_store = MockPeerStoreHandle::new();
 		peer_store.expect_is_banned().once().return_const(true);
 
 		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
@@ -1482,7 +1484,7 @@ mod tests {
 		};
 		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
 
-		let mut peer_store = MockPeerStore::new();
+		let mut peer_store = MockPeerStoreHandle::new();
 		peer_store.expect_is_banned().once().return_const(true);
 
 		let (handle, mut controller) = ProtocolController::new(SetId(0), config, tx, peer_store);
@@ -1507,7 +1509,7 @@ mod tests {
 		};
 		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
 
-		let mut peer_store = MockPeerStore::new();
+		let mut peer_store = MockPeerStoreHandle::new();
 		peer_store.expect_is_banned().once().return_const(true);
 		peer_store.expect_outgoing_candidates().once().return_const(Vec::new());
 
