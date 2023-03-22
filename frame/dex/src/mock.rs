@@ -29,12 +29,10 @@ use frame_support::{
 };
 use frame_system::{EnsureSigned, EnsureSignedBy};
 use sp_core::H256;
-use sp_keystore::{testing::KeyStore, KeystoreExt};
 use sp_runtime::{
 	testing::Header,
 	traits::{AccountIdConversion, BlakeTwo256, IdentityLookup},
 };
-use std::sync::Arc;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -90,6 +88,10 @@ impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ConstU32<50>;
 	type ReserveIdentifier = [u8; 8];
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type HoldIdentifier = ();
+	type MaxHolds = ();
 }
 
 impl pallet_assets::Config<Instance1> for Test {
@@ -179,9 +181,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	.assimilate_storage(&mut t)
 	.unwrap();
 
-	let keystore = KeyStore::new();
 	let mut ext = sp_io::TestExternalities::new(t);
-	ext.register_extension(KeystoreExt(Arc::new(keystore)));
 	ext.execute_with(|| System::set_block_number(1));
 	ext
 }

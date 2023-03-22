@@ -77,8 +77,13 @@ pub mod pallet {
 	use frame_support::{
 		pallet_prelude::*,
 		traits::{
-			fungible::{Inspect as InspectFungible, Transfer as TransferFungible},
-			fungibles::{Create, Inspect, Mutate, Transfer},
+			fungible::{Inspect as InspectFungible, Mutate as MutateFungible},
+			fungibles::{Create, Inspect, Mutate},
+			tokens::{
+				Fortitude::Polite,
+				Precision::BestEffort,
+				Preservation::{Expendable, Preserve},
+			},
 		},
 		PalletId,
 	};
@@ -99,7 +104,7 @@ pub mod pallet {
 		type Fee: Get<u32>;
 
 		type Currency: InspectFungible<Self::AccountId, Balance = Self::Balance>
-			+ TransferFungible<Self::AccountId>;
+			+ MutateFungible<Self::AccountId>;
 
 		type Balance: Balance;
 
@@ -125,14 +130,13 @@ pub mod pallet {
 		type PoolAssetId: AssetId + PartialOrd + Incrementable + From<u32>;
 
 		type Assets: Inspect<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>
-			+ Transfer<Self::AccountId>;
+			+ Mutate<Self::AccountId>;
 
 		// Registry for the lp tokens. Ideally only this pallet should have create permissions on
 		// the assets.
 		type PoolAssets: Inspect<Self::AccountId, AssetId = Self::PoolAssetId, Balance = Self::AssetBalance>
 			+ Create<Self::AccountId>
-			+ Mutate<Self::AccountId>
-			+ Transfer<Self::AccountId>;
+			+ Mutate<Self::AccountId>;
 
 		/// The max number of hops in a swap.
 		#[pallet::constant]
@@ -293,8 +297,6 @@ pub mod pallet {
 		/// thus it's needed to provide the min amount you're happy to provide.
 		/// Params `amount1_min`/`amount2_min` represent that.
 		/// `mint_to` will be sent the liquidity tokens that represent this share of the pool.
-		/// `keep_alive` true will fail the transaction if in enacting the transaction
-		/// would take the sender's balance below the existential deposit.
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::add_liquidity())]
 		pub fn add_liquidity(
@@ -306,7 +308,6 @@ pub mod pallet {
 			amount1_min: AssetBalanceOf<T>,
 			amount2_min: AssetBalanceOf<T>,
 			mint_to: T::AccountId,
-			keep_alive: bool,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
@@ -350,8 +351,8 @@ pub mod pallet {
 				}
 			}
 
-			Self::transfer(asset1, &sender, &pool_account, amount1, keep_alive)?;
-			Self::transfer(asset2, &sender, &pool_account, amount2, keep_alive)?;
+			Self::transfer(asset1, &sender, &pool_account, amount1, true)?;
+			Self::transfer(asset2, &sender, &pool_account, amount2, true)?;
 
 			let total_supply = T::PoolAssets::total_issuance(pool.lp_token);
 
@@ -415,7 +416,7 @@ pub mod pallet {
 				&sender,
 				&pool_account,
 				lp_token_burn,
-				false, // LP tokens should not be sufficient assets so can't kill account
+				Expendable, /* LP tokens should not be sufficient assets so can't kill account */
 			)?;
 
 			let reserve1 = Self::get_balance(&pool_account, asset1)?;
@@ -435,7 +436,13 @@ pub mod pallet {
 				Error::<T>::InsufficientAmountParam2
 			);
 
-			T::PoolAssets::burn_from(pool.lp_token, &pool_account, lp_token_burn)?;
+			T::PoolAssets::burn_from(
+				pool.lp_token,
+				&pool_account,
+				lp_token_burn,
+				BestEffort,
+				Polite,
+			)?;
 
 			Self::transfer(asset1, &pool_account, &withdraw_to, amount1, false)?;
 			Self::transfer(asset2, &pool_account, &withdraw_to, amount2, false)?;
@@ -545,8 +552,12 @@ pub mod pallet {
 				amount,
 			});
 			if T::MultiAssetIdConverter::get_native() == asset_id {
+				let preservation = match keep_alive {
+					true => Preserve,
+					false => Expendable,
+				};
 				let amount = Self::asset_to_native(amount)?;
-				Ok(Self::native_to_asset(T::Currency::transfer(from, to, amount, keep_alive)?)?)
+				Ok(Self::native_to_asset(T::Currency::transfer(from, to, amount, preservation)?)?)
 			} else {
 				T::Assets::transfer(
 					T::MultiAssetIdConverter::try_convert(asset_id)
@@ -554,7 +565,7 @@ pub mod pallet {
 					from,
 					to,
 					amount,
-					keep_alive,
+					Expendable,
 				)
 			}
 		}
@@ -602,7 +613,7 @@ pub mod pallet {
 							send_to.clone()
 						};
 
-						Self::transfer(asset2, &pool_account, &to, *amount_out, false)?;
+						Self::transfer(asset2, &pool_account, &to, *amount_out, true)?;
 					}
 					i.saturating_inc();
 				}
@@ -626,12 +637,16 @@ pub mod pallet {
 			token_id: T::MultiAssetId,
 		) -> Result<T::AssetBalance, Error<T>> {
 			if T::MultiAssetIdConverter::get_native() == token_id {
-				Self::native_to_asset(<<T as Config>::Currency>::balance(owner))
+				Self::native_to_asset(<<T as Config>::Currency>::reducible_balance(
+					owner, Expendable, Polite,
+				))
 			} else {
-				Ok(<<T as Config>::Assets>::balance(
+				Ok(<<T as Config>::Assets>::reducible_balance(
 					T::MultiAssetIdConverter::try_convert(token_id)
 						.map_err(|_| Error::<T>::Overflow)?,
 					owner,
+					Expendable,
+					Polite,
 				))
 			}
 		}
