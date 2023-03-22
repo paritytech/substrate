@@ -23,6 +23,7 @@ use sc_client_api::{
 use sc_executor::{RuntimeVersion, RuntimeVersionOf};
 use sp_api::{ProofRecorder, StorageTransactionCache};
 use sp_core::traits::{CallContext, CodeExecutor, RuntimeCode, SpawnNamed};
+use sp_externalities::Extensions;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_state_machine::{backend::AsTrieBackend, Ext, OverlayedChanges, StateMachine, StorageProof};
 use std::{cell::RefCell, sync::Arc};
@@ -176,7 +177,7 @@ where
 
 		let runtime_code = self.check_override(runtime_code, at_hash)?.0;
 
-		let extensions = self.execution_extensions.extensions(at_hash, at_number);
+		let mut extensions = self.execution_extensions.extensions(at_hash, at_number);
 
 		let mut sm = StateMachine::new(
 			&state,
@@ -184,7 +185,7 @@ where
 			&self.executor,
 			method,
 			call_data,
-			extensions,
+			&mut extensions,
 			&runtime_code,
 			self.spawn_handle.clone(),
 			context,
@@ -203,6 +204,7 @@ where
 		storage_transaction_cache: Option<&RefCell<StorageTransactionCache<Block, B::State>>>,
 		recorder: &Option<ProofRecorder<Block>>,
 		call_context: CallContext,
+		extensions: &RefCell<Extensions>,
 	) -> Result<Vec<u8>, sp_blockchain::Error> {
 		let mut storage_transaction_cache = storage_transaction_cache.map(|c| c.borrow_mut());
 
@@ -210,7 +212,7 @@ where
 			self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(at_hash))?;
 		let state = self.backend.state_at(at_hash)?;
 
-		let extensions = self.execution_extensions.extensions(at_hash, at_number);
+		// let extensions = self.execution_extensions.extensions(at_hash, at_number);
 
 		let changes = &mut *changes.borrow_mut();
 
@@ -222,6 +224,7 @@ where
 		let runtime_code =
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
 		let runtime_code = self.check_override(runtime_code, at_hash)?.0;
+		let mut extensions = extensions.borrow_mut();
 
 		match recorder {
 			Some(recorder) => {
@@ -237,7 +240,7 @@ where
 					&self.executor,
 					method,
 					call_data,
-					extensions,
+					&mut *extensions,
 					&runtime_code,
 					self.spawn_handle.clone(),
 					call_context,
@@ -253,7 +256,7 @@ where
 					&self.executor,
 					method,
 					call_data,
-					extensions,
+					&mut *extensions,
 					&runtime_code,
 					self.spawn_handle.clone(),
 					call_context,
@@ -300,7 +303,7 @@ where
 			method,
 			call_data,
 			&runtime_code,
-			self.execution_extensions.extensions(at_hash, at_number),
+			&mut self.execution_extensions.extensions(at_hash, at_number),
 		)
 		.map_err(Into::into)
 	}

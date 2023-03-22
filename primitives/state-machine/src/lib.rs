@@ -198,7 +198,7 @@ mod execution {
 		method: &'a str,
 		call_data: &'a [u8],
 		overlay: &'a mut OverlayedChanges,
-		extensions: Extensions,
+		extensions: &'a mut Extensions,
 		storage_transaction_cache: Option<&'a mut StorageTransactionCache<B::Transaction, H>>,
 		runtime_code: &'a RuntimeCode<'a>,
 		stats: StateMachineStats,
@@ -233,7 +233,7 @@ mod execution {
 			exec: &'a Exec,
 			method: &'a str,
 			call_data: &'a [u8],
-			mut extensions: Extensions,
+			extensions: &'a mut Extensions,
 			runtime_code: &'a RuntimeCode,
 			spawn_handle: impl SpawnNamed + Send + 'static,
 			context: CallContext,
@@ -297,7 +297,7 @@ mod execution {
 				.enter_runtime()
 				.expect("StateMachine is never called from the runtime; qed");
 
-			let mut ext = Ext::new(self.overlay, cache, self.backend, Some(&mut self.extensions));
+			let mut ext = Ext::new(self.overlay, cache, self.backend, Some(self.extensions));
 
 			let ext_id = ext.id;
 
@@ -356,7 +356,7 @@ mod execution {
 			method,
 			call_data,
 			runtime_code,
-			Default::default(),
+			&mut Default::default(),
 		)
 	}
 
@@ -377,7 +377,7 @@ mod execution {
 		method: &str,
 		call_data: &[u8],
 		runtime_code: &RuntimeCode,
-		extensions: Extensions,
+		mut extensions: &mut Extensions,
 	) -> Result<(Vec<u8>, StorageProof), Box<dyn Error>>
 	where
 		S: trie_backend_essence::TrieBackendStorage<H>,
@@ -460,7 +460,7 @@ mod execution {
 			exec,
 			method,
 			call_data,
-			Extensions::default(),
+			&mut Extensions::default(),
 			runtime_code,
 			spawn_handle,
 			CallContext::Offchain,

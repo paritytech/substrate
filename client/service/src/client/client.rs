@@ -1714,6 +1714,7 @@ where
 				Some(params.storage_transaction_cache),
 				params.recorder,
 				params.call_context,
+				params.extensions,
 			)
 			.map_err(Into::into)
 	}

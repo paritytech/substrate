@@ -23,6 +23,7 @@ use sp_core::traits::CallContext;
 use sp_runtime::traits::Block as BlockT;
 use sp_state_machine::{OverlayedChanges, StorageProof};
 use std::cell::RefCell;
+use sp_externalities::Extensions;
 
 use crate::execution_extensions::ExecutionExtensions;
 use sp_api::{ProofRecorder, StorageTransactionCache};
@@ -79,6 +80,7 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 		>,
 		proof_recorder: &Option<ProofRecorder<B>>,
 		call_context: CallContext,
+		extensions: &RefCell<Extensions>,
 	) -> sp_blockchain::Result<Vec<u8>>;
 
 	/// Extract RuntimeVersion of given block
