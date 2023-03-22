@@ -340,10 +340,11 @@ pub(crate) fn make_beefy_ids(keys: &[BeefyKeyring]) -> Vec<AuthorityId> {
 }
 
 pub(crate) fn create_beefy_keystore(authority: BeefyKeyring) -> KeystorePtr {
-	let keystore = Arc::new(MemoryKeystore::new());
-	Keystore::ecdsa_generate_new(&*keystore, BeefyKeyType, Some(&authority.to_seed()))
-		.expect("Creates authority key");
+	let keystore = MemoryKeystore::new();
 	keystore
+		.ecdsa_generate_new(BeefyKeyType, Some(&authority.to_seed()))
+		.expect("Creates authority key");
+	keystore.into()
 }
 
 async fn voter_init_setup(
