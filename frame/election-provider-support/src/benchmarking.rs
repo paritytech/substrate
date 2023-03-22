@@ -28,9 +28,11 @@ use frame_benchmarking::v1::{benchmarks, Vec};
 pub struct Pallet<T: Config>(frame_system::Pallet<T>);
 pub trait Config: frame_system::Config {}
 
-const MAX_CANDIDATES: u32 = 1000;
+const MAX_CANDIDATES: u32 = 2000;
+const MIN_VOTERS: u32 = 1000;
 const MAX_VOTERS: u32 = 10 * 1000;
 const MAX_VOTES_PER_VOTER: u32 = 16;
+const MIN_VOTES_PER_VOTER: u32 = 5;
 const DESIRED_MEMBERS: u32 = 16;
 
 const SEED: u32 = 999;
@@ -40,10 +42,12 @@ fn set_up_voters_targets<AccountId: Decode + Clone>(
 	degree: usize,
 ) -> (Vec<(AccountId, u64, impl IntoIterator<Item = AccountId>)>, Vec<AccountId>) {
 	// fill targets.
-	let mut targets = (0..targets_len)
+	let total_targets = (0..targets_len)
 		.map(|i| frame_benchmarking::account::<AccountId>("Target", i, SEED))
 		.collect::<Vec<_>>();
-	assert!(targets.len() > degree, "we should always have enough voters to fill");
+	assert!(total_targets.len() > degree, "we should always have enough voters to fill");
+
+	let mut targets = total_targets.clone();
 	targets.truncate(degree);
 
 	// fill voters.
@@ -55,13 +59,13 @@ fn set_up_voters_targets<AccountId: Decode + Clone>(
 		})
 		.collect::<Vec<_>>();
 
-	(voters, targets)
+	(voters, total_targets)
 }
 
 benchmarks! {
 	phragmen {
 		// number of votes in snapshot.
-		let v in 1 .. MAX_VOTERS;
+		let v in (MIN_VOTERS) .. MAX_VOTERS;
 		// number of targets in snapshot. the minimum number of targets must be larger than
 		// `MAX_VOTES_PER_VOTER`.
 		let t in (MAX_VOTES_PER_VOTER + 1) .. MAX_CANDIDATES;
@@ -70,22 +74,21 @@ benchmarks! {
 
 		// we want to set the a voting degree per voter between the number of targets and the
 		// maximum votes allowed per voter. with the current benchmarking framework, `t` cannot be
-		// used as a parameter. thus, we try to use `d` as the voting degree, capped by the maximum
-		// number of votes per voter.
-		let votes_per_voter = d.min(MAX_VOTES_PER_VOTER);
+		// used as a parameter. thus, we try to use `d` as the voting degree, clamped between the
+		// minimum and maximum number of votes per voter.
+		let votes_per_voter = d.clamp(MIN_VOTES_PER_VOTER, MAX_VOTES_PER_VOTER);
 
-		let (voters, targets) = set_up_voters_targets::<T::AccountId>(v, t, votes_per_voter as usize);
+		let (voters, total_targets) = set_up_voters_targets::<T::AccountId>(v, t, votes_per_voter as usize);
 	}: {
 		assert!(
-			// why d as `num_to_elect`?
 			SequentialPhragmen::<T::AccountId, sp_runtime::Perbill>
-				::solve(DESIRED_MEMBERS as usize, targets, voters).is_ok()
+				::solve(DESIRED_MEMBERS as usize, total_targets, voters).is_ok()
 		);
 	}
 
 	phragmms {
 		// number of votes in snapshot.
-		let v in 1 .. MAX_VOTERS;
+		let v in (MIN_VOTERS) .. MAX_VOTERS;
 		// number of targets in snapshot. the minimum number of targets must be larger than
 		// `MAX_VOTES_PER_VOTER`.
 		let t in (MAX_VOTES_PER_VOTER + 1) .. MAX_CANDIDATES;
@@ -94,21 +97,21 @@ benchmarks! {
 
 		// we want to set the a voting degree per voter between the number of targets and the
 		// maximum votes allowed per voter. with the current benchmarking framework, `t` cannot be
-		// used as a parameter. thus, we try to use `d` as the voting degree, capped by the maximum
-		// number of votes per voter.
-		let votes_per_voter = d.min(MAX_VOTES_PER_VOTER);
+		// used as a parameter. thus, we try to use `d` as the voting degree, clamped between the
+		// minimum and maximum number of votes per voter.
+		let votes_per_voter = d.clamp(MIN_VOTES_PER_VOTER, MAX_VOTES_PER_VOTER);
 
-		let (voters, targets) = set_up_voters_targets::<T::AccountId>(v, t, votes_per_voter as usize);
+		let (voters, total_targets) = set_up_voters_targets::<T::AccountId>(v, t, votes_per_voter as usize);
 	}: {
 		assert!(
 			PhragMMS::<T::AccountId, sp_runtime::Perbill>
-				::solve(DESIRED_MEMBERS as usize, targets, voters).is_ok()
+				::solve(DESIRED_MEMBERS as usize, total_targets, voters).is_ok()
 		);
 	}
 
 	approval_voting {
 		// number of votes in snapshot.
-		let v in 1 .. MAX_VOTERS;
+		let v in (MIN_VOTERS) .. MAX_VOTERS;
 		// number of targets in snapshot. the minimum number of targets must be larger than
 		// `MAX_VOTES_PER_VOTER`.
 		let t in (MAX_VOTES_PER_VOTER + 1) .. MAX_CANDIDATES;
@@ -117,15 +120,15 @@ benchmarks! {
 
 		// we want to set the a voting degree per voter between the number of targets and the
 		// maximum votes allowed per voter. with the current benchmarking framework, `t` cannot be
-		// used as a parameter. thus, we try to use `d` as the voting degree, capped by the maximum
-		// number of votes per voter.
-		let votes_per_voter = d.min(MAX_VOTES_PER_VOTER);
+		// used as a parameter. thus, we try to use `d` as the voting degree, clamped between the
+		// minimum and maximum number of votes per voter.
+		let votes_per_voter = d.clamp(MIN_VOTES_PER_VOTER, MAX_VOTES_PER_VOTER);
 
-		let (voters, targets) = set_up_voters_targets::<T::AccountId>(v, t, votes_per_voter as usize);
+		let (voters, total_targets) = set_up_voters_targets::<T::AccountId>(v, t, votes_per_voter as usize);
 	}: {
 		assert!(
 			ApprovalVoting::<T::AccountId, sp_runtime::Perbill>
-				::solve(DESIRED_MEMBERS as usize, targets, voters).is_ok()
+				::solve(DESIRED_MEMBERS as usize, total_targets, voters).is_ok()
 		);
 	}
 }
