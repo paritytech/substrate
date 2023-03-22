@@ -15,11 +15,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::*;
 use core::{fmt::Display, marker::PhantomData};
 use sp_std::fmt::Formatter;
 
 use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::traits::fungibles::Inspect;
 use scale_info::TypeInfo;
+
+pub(super) type AssetBalanceOf<T> =
+	<<T as Config>::Assets as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
+pub(super) type PoolIdOf<T> = (<T as Config>::MultiAssetId, <T as Config>::MultiAssetId);
 
 /// Stores what lp_token a particular pool has.
 #[derive(Decode, Encode, Default, PartialEq, Eq, MaxEncodedLen, TypeInfo)]

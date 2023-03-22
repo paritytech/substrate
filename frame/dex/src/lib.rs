@@ -168,11 +168,6 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 	}
 
-	pub type AssetBalanceOf<T> =
-		<<T as Config>::Assets as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
-
-	pub type PoolIdOf<T> = (<T as Config>::MultiAssetId, <T as Config>::MultiAssetId);
-
 	#[pallet::storage]
 	pub type Pools<T: Config> =
 		StorageMap<_, Blake2_128Concat, PoolIdOf<T>, PoolInfo<T::PoolAssetId>, OptionQuery>;
