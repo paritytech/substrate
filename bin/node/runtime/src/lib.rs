@@ -33,7 +33,7 @@ use frame_support::{
 	parameter_types,
 	traits::{
 		fungible::ItemOf,
-		tokens::{nonfungibles_v2::Inspect, GetSalary, PayFromAccount},
+		tokens::{nonfungibles_v2::Inspect, GetSalary, PayFromAccount, PayFungibles},
 		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, Currency, EitherOfDiverse,
 		EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter, KeyOwnerProofSystem,
 		LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote, WithdrawReasons,
@@ -1091,9 +1091,9 @@ parameter_types! {
 
 impl pallet_treasury::Config for Runtime {
 	type PalletId = TreasuryPalletId;
-	type Balance = Balances;
 	type AssetKind = u32;
-	type Paymaster = PayFromAccount<Balances, TreasuryAccount>;
+	type Paymaster = PayFungibles<Assets, TreasuryAccount>;
+	type BalanceConverter = ();
 	type Currency = Balances;
 	type ApproveOrigin = EitherOfDiverse<
 		EnsureRoot<AccountId>,

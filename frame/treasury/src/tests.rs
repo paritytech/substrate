@@ -25,6 +25,7 @@ use frame_support::{
 	parameter_types,
 	traits::{
 		fungibles::{self, *},
+		tokens::pay::PayFungibles,
 		AsEnsureOriginWithArg, ConstU32, ConstU64, OnInitialize,
 	},
 	PalletId,
@@ -160,8 +161,8 @@ impl frame_support::traits::EnsureOrigin<RuntimeOrigin> for TestSpendOrigin {
 impl Config for Test {
 	type PalletId = TreasuryPalletId;
 	type AssetKind = AssetId;
-	type Paymaster = AssetsPaymaster<Assets, TreasuryAccount>;
-	type BalanceConverter = DummyBalanceConverter<Self>;
+	type Paymaster = PayFungibles<Assets, TreasuryAccount>;
+	type BalanceConverter = ();
 	type Currency = pallet_balances::Pallet<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
 	type RejectOrigin = frame_system::EnsureRoot<u128>;
@@ -177,34 +178,6 @@ impl Config for Test {
 	type SpendFunds = ();
 	type MaxApprovals = ConstU32<100>;
 	type SpendOrigin = TestSpendOrigin;
-}
-
-pub struct AssetsPaymaster<F, A>(sp_std::marker::PhantomData<(F, A)>);
-impl<
-		A: TypedGet,
-		F: fungibles::Transfer<A::Type> + fungibles::Mutate<A::Type> + fungibles::Inspect<A::Type>,
-	> Pay for AssetsPaymaster<F, A>
-{
-	type Balance = F::Balance;
-	type Beneficiary = A::Type;
-	type AssetKind = F::AssetId;
-	type Id = ();
-	fn pay(
-		who: &Self::Beneficiary,
-		asset_id: Self::AssetKind,
-		amount: Self::Balance,
-	) -> Result<Self::Id, ()> {
-		<F as fungibles::Transfer<_>>::transfer(asset_id, &A::get(), who, amount, false)
-			.map_err(|_| ())?;
-		Ok(())
-	}
-	fn check_payment(_: ()) -> PaymentStatus {
-		PaymentStatus::Success
-	}
-	#[cfg(feature = "runtime-benchmarks")]
-	fn ensure_successful(_: &Self::Beneficiary, amount: Self::Balance) {}
-	#[cfg(feature = "runtime-benchmarks")]
-	fn ensure_concluded(_: Self::Id) {}
 }
 
 pub struct DummyBalanceConverter<T>(PhantomData<T>);

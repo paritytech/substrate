@@ -32,4 +32,4 @@ pub use misc::{
 	AssetId, Balance, BalanceConversion, BalanceStatus, ConvertRank, DepositConsequence,
 	ExistenceRequirement, GetSalary, Locker, WithdrawConsequence, WithdrawReasons,
 };
-pub use pay::{Pay, PayFromAccount, PaymentStatus};
+pub use pay::{Pay, PayFromAccount, PayFungibles, PaymentStatus};

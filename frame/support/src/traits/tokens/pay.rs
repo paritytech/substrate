@@ -22,7 +22,7 @@ use scale_info::TypeInfo;
 use sp_core::{RuntimeDebug, TypedGet};
 use sp_std::fmt::Debug;
 
-use super::{fungible, Balance};
+use super::{fungible, fungibles, Balance};
 
 /// Can be implemented by `PayFromAccount` using a `fungible` impl, but can also be implemented with
 /// XCM/MultiAsset and made generic over assets.
@@ -98,6 +98,34 @@ impl<A: TypedGet, F: fungible::Transfer<A::Type> + fungible::Mutate<A::Type>> Pa
 	fn ensure_successful(_: &Self::Beneficiary, amount: Self::Balance) {
 		<F as fungible::Mutate<_>>::mint_into(&A::get(), amount).unwrap();
 	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn ensure_concluded(_: Self::Id) {}
+}
+
+pub struct PayFungibles<F, A>(sp_std::marker::PhantomData<(F, A)>);
+impl<
+		A: TypedGet,
+		F: fungibles::Transfer<A::Type> + fungibles::Mutate<A::Type> + fungibles::Inspect<A::Type>,
+	> Pay for PayFungibles<F, A>
+{
+	type Balance = F::Balance;
+	type Beneficiary = A::Type;
+	type AssetKind = F::AssetId;
+	type Id = ();
+	fn pay(
+		who: &Self::Beneficiary,
+		asset_id: Self::AssetKind,
+		amount: Self::Balance,
+	) -> Result<Self::Id, ()> {
+		<F as fungibles::Transfer<_>>::transfer(asset_id, &A::get(), who, amount, false)
+			.map_err(|_| ())?;
+		Ok(())
+	}
+	fn check_payment(_: ()) -> PaymentStatus {
+		PaymentStatus::Success
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn ensure_successful(_: &Self::Beneficiary, amount: Self::Balance) {}
 	#[cfg(feature = "runtime-benchmarks")]
 	fn ensure_concluded(_: Self::Id) {}
 }
