@@ -107,9 +107,12 @@ pub enum SecretStringError {
 }
 
 /// An error when deriving a key.
+#[cfg_attr(feature = "std", derive(thiserror::Error))]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg(feature = "full_crypto")]
 pub enum DeriveError {
 	/// A soft key was found in the path (and is unsupported).
+	#[cfg_attr(feature = "std", error("Soft key in path"))]
 	SoftKeyInPath,
 }
 
@@ -1269,7 +1272,7 @@ mod tests {
 						if path_iter.count() == 0 {
 							x
 						} else {
-							return Err(())
+							return Err(DeriveError::SoftKeyInPath)
 						},
 				},
 				None,
