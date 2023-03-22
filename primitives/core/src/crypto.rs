@@ -19,8 +19,6 @@
 //! Cryptographic utilities.
 // end::description[]
 
-#[cfg(feature = "std")]
-use crate::hexdisplay::HexDisplay;
 use crate::{ed25519, sr25519};
 #[cfg(feature = "std")]
 use base58::{FromBase58, ToBase58};
@@ -488,8 +486,8 @@ pub trait ByteArray: AsRef<[u8]> + AsMut<[u8]> + for<'a> TryFrom<&'a [u8], Error
 
 /// Trait suitable for typical cryptographic PKI key public type.
 pub trait Public: ByteArray + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync {
-	/// Return `CryptoTypePublicPair` from public key.
-	fn to_public_crypto_pair(&self) -> CryptoTypePublicPair;
+	/// Return `CryptoTypeId` from public key.
+	fn crypto_id(&self) -> CryptoTypeId;
 }
 
 /// An opaque 32-byte cryptographic identifier.
@@ -690,8 +688,8 @@ mod dummy {
 		}
 	}
 	impl Public for Dummy {
-		fn to_public_crypto_pair(&self) -> CryptoTypePublicPair {
-			CryptoTypePublicPair(CryptoTypeId(*b"dumm"), <Self as ByteArray>::to_raw_vec(self))
+		fn crypto_id(&self) -> CryptoTypeId {
+			CryptoTypeId(*b"dumm")
 		}
 	}
 
@@ -1118,24 +1116,6 @@ impl<'a> TryFrom<&'a str> for KeyTypeId {
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct CryptoTypeId(pub [u8; 4]);
 
-/// A type alias of CryptoTypeId & a public key
-#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-pub struct CryptoTypePublicPair(pub CryptoTypeId, pub Vec<u8>);
-
-#[cfg(feature = "std")]
-impl sp_std::fmt::Display for CryptoTypePublicPair {
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		let id = match str::from_utf8(&(self.0).0[..]) {
-			Ok(id) => id.to_string(),
-			Err(_) => {
-				format!("{:#?}", self.0)
-			},
-		};
-		write!(f, "{}-{}", id, HexDisplay::from(&self.1))
-	}
-}
-
 /// Known key types; this also functions as a global registry of key types for projects wishing to
 /// avoid collisions with each other.
 ///
@@ -1224,8 +1204,8 @@ mod tests {
 		}
 	}
 	impl Public for TestPublic {
-		fn to_public_crypto_pair(&self) -> CryptoTypePublicPair {
-			CryptoTypePublicPair(CryptoTypeId(*b"dumm"), self.to_raw_vec())
+		fn crypto_id(&self) -> CryptoTypeId {
+			CryptoTypeId(*b"dumm")
 		}
 	}
 	impl Pair for TestPair {

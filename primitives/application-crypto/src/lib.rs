@@ -27,10 +27,7 @@ pub use sp_core::crypto::{DeriveError, DeriveJunction, Pair, SecretStringError, 
 #[doc(hidden)]
 pub use sp_core::{
 	self,
-	crypto::{
-		ByteArray, CryptoType, CryptoTypePublicPair, Derive, IsWrappedBy, Public, UncheckedFrom,
-		Wraps,
-	},
+	crypto::{ByteArray, CryptoType, Derive, IsWrappedBy, Public, UncheckedFrom, Wraps},
 	RuntimeDebug,
 };
 
@@ -303,9 +300,10 @@ macro_rules! app_crypto_public_common {
 		impl $crate::ByteArray for Public {
 			const LEN: usize = <$public>::LEN;
 		}
+
 		impl $crate::Public for Public {
-			fn to_public_crypto_pair(&self) -> $crate::CryptoTypePublicPair {
-				$crate::CryptoTypePublicPair($crypto_type, $crate::ByteArray::to_raw_vec(self))
+			fn crypto_id(&self) -> $crate::CryptoTypeId {
+				$crypto_type
 			}
 		}
 
@@ -344,18 +342,6 @@ macro_rules! app_crypto_public_common {
 
 			fn to_raw_vec(&self) -> $crate::Vec<u8> {
 				<$public as $crate::RuntimePublic>::to_raw_vec(&self.0)
-			}
-		}
-
-		impl From<Public> for $crate::CryptoTypePublicPair {
-			fn from(key: Public) -> Self {
-				(&key).into()
-			}
-		}
-
-		impl From<&Public> for $crate::CryptoTypePublicPair {
-			fn from(key: &Public) -> Self {
-				$crate::CryptoTypePublicPair($crypto_type, $crate::ByteArray::to_raw_vec(key))
 			}
 		}
 

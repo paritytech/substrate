@@ -31,9 +31,7 @@ use scale_info::TypeInfo;
 
 #[cfg(feature = "std")]
 use crate::crypto::Ss58Codec;
-use crate::crypto::{
-	CryptoType, CryptoTypeId, CryptoTypePublicPair, Derive, Public as TraitPublic, UncheckedFrom,
-};
+use crate::crypto::{CryptoType, CryptoTypeId, Derive, Public as TraitPublic, UncheckedFrom};
 #[cfg(feature = "full_crypto")]
 use crate::crypto::{DeriveError, DeriveJunction, Pair as TraitPair, SecretStringError};
 #[cfg(feature = "full_crypto")]
@@ -356,24 +354,12 @@ impl ByteArray for Public {
 }
 
 impl TraitPublic for Public {
-	fn to_public_crypto_pair(&self) -> CryptoTypePublicPair {
-		CryptoTypePublicPair(CRYPTO_ID, self.to_raw_vec())
+	fn crypto_id(&self) -> CryptoTypeId {
+		CRYPTO_ID
 	}
 }
 
 impl Derive for Public {}
-
-impl From<Public> for CryptoTypePublicPair {
-	fn from(key: Public) -> Self {
-		(&key).into()
-	}
-}
-
-impl From<&Public> for CryptoTypePublicPair {
-	fn from(key: &Public) -> Self {
-		CryptoTypePublicPair(CRYPTO_ID, key.to_raw_vec())
-	}
-}
 
 /// Derive a single hard junction.
 #[cfg(feature = "full_crypto")]
