@@ -19,42 +19,69 @@ use crate::{
 	dispatch::{CallMetadata, DispatchInfo, PostDispatchInfo},
 	traits::{GetCallMetadata, UnfilteredDispatchable},
 };
+use codec::{Decode, Encode};
 use sp_core::H256;
 use sp_runtime::{
-	traits::Dispatchable, DispatchError, DispatchResultWithInfo, ModuleError,
+	traits, traits::Dispatchable, DispatchError, DispatchResultWithInfo, ModuleError,
 	MAX_MODULE_ERROR_ENCODED_SIZE,
 };
 sp_api::decl_runtime_apis! {
 	pub trait Interface {
-		type View: View;
 
-		fn view(view: Self::View) -> Result<Vec<u8>, InterfaceError>;
+		// TOOD: Macro does not handle that well
+		//fn view(view: Self::View) -> Result<Vec<u8>, InterfaceError>;
+		fn view(view: u32) -> u32;
 	}
 }
 
 pub type InterfaceResult = Result<(), InterfaceError>;
 pub type InterfaceViewResult = Result<Vec<u8>, InterfaceError>;
+pub type InterfaceResultWithPostInfo = InterfaceErrorWithPostInfo<PostDispatchInfo>;
+
+#[derive(
+	Eq,
+	PartialEq,
+	Clone,
+	Copy,
+	Encode,
+	Decode,
+	frame_support::RuntimeDebug,
+	frame_support::scale_info::TypeInfo,
+)]
+pub struct InterfaceErrorWithPostInfo<Info>
+where
+	Info: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable,
+{
+	pub post_info: Info,
+	pub error: InterfaceError,
+}
+
+impl From<InterfaceError> for InterfaceErrorWithPostInfo<PostDispatchInfo> {
+	fn from(error: InterfaceError) -> Self {
+		InterfaceErrorWithPostInfo { post_info: PostDispatchInfo::default(), error }
+	}
+}
 
 pub trait Core {
 	type RuntimeOrigin;
-	type Selectable: From<H256>;
+	type Selectable: From<H256> + Into<H256>;
 }
 
 pub trait Call {
 	type RuntimeOrigin;
-	type Selectable: From<H256>;
+	type Selectable: From<H256> + Into<H256>;
 
 	fn call(
-		&self,
+		self,
 		origin: Self::RuntimeOrigin,
 		selectable: Self::Selectable,
-	) -> Result<(), InterfaceError>;
+	) -> InterfaceResultWithPostInfo;
 }
 
 pub trait View {
-	type Selectable: From<H256>;
+	type Selectable: From<H256> + Into<H256>;
 
-	fn view(&self) -> Result<Vec<u8>, InterfaceError>;
+	fn view(self) -> Result<Vec<u8>, InterfaceError>;
 }
 
 pub trait Selector {
@@ -67,6 +94,16 @@ pub trait Selector {
 /// The "high-level" error enum of interfaces
 ///
 /// Amalgamates all inner interfaces errors
+#[derive(
+	Eq,
+	PartialEq,
+	Clone,
+	Copy,
+	Encode,
+	Decode,
+	frame_support::RuntimeDebug,
+	frame_support::scale_info::TypeInfo,
+)]
 pub enum InterfaceError {
 	SelectorMismatch {
 		provided: H256,
@@ -75,8 +112,8 @@ pub enum InterfaceError {
 		index: u8,
 		/// Module specific error value.
 		error: [u8; MAX_MODULE_ERROR_ENCODED_SIZE],
-		/// Optional error message.
-		message: Option<&'static str>,
+		// Optional error message.
+		//message: Option<&'static str>,
 	},
 	Module(ModuleError),
 }
@@ -101,8 +138,9 @@ impl Selector for EmptySelector {
 	type Selected = ();
 
 	fn select(&self, from: Self::Selectable) -> Result<Self::Selected, InterfaceError> {
+		let zero = H256::zero();
 		match from {
-			H256::zero() => Ok(()),
+			zero => Ok(()),
 			_ => Err(InterfaceError::SelectorMismatch { provided: from }),
 		}
 	}
@@ -113,12 +151,13 @@ pub struct Select<T> {
 	selector: Box<dyn Selector<Selected = T, Selectable = H256>>,
 }
 
-impl<T> Selector for Select<T> {
-	type Selectable = H256;
-	type Selected = T;
+impl<T> Select<T> {
+	pub fn new(from: H256, selector: Box<dyn Selector<Selected = T, Selectable = H256>>) -> Self {
+		Select { from, selector }
+	}
 
-	fn select(&self, selectable: Self::Selectable) -> Result<Self::Selected, InterfaceError> {
-		self.selector.select(self.from)
+	pub fn select(&self) -> Result<T, InterfaceError> {
+		self.selector.as_ref().select(self.from)
 	}
 }
 
@@ -127,15 +166,16 @@ mod tests {
 	mod int_123 {
 		use frame_support::{
 			dispatch::DispatchResult,
-			interface::{InterfaceError, InterfaceResult, Select},
+			interface::{InterfaceError, InterfaceResult, InterfaceResultWithPostInfo, Select},
+			Parameter,
 		};
 
 		#[interface::definition]
 		#[interface::with_selector]
 		pub trait Pip20: frame_support::interface::Core {
-			type AccountId;
-			type Currency;
-			type Balance;
+			type AccountId: Parameter;
+			type Currency: Parameter;
+			type Balance: Parameter;
 
 			#[interface::selector(SelectCurrency)]
 			#[interface::default_selector]
@@ -151,7 +191,7 @@ mod tests {
 			#[interface::selector(SelectAccount)]
 			fn select_account(
 				selectable: Self::Selectable,
-			) -> Result<Self::Account, InterfaceError>;
+			) -> Result<Self::AccountId, InterfaceError>;
 
 			#[interface::view]
 			#[interface::view_index(0)]
@@ -175,6 +215,16 @@ mod tests {
 				currency: Select<Self::Currency>,
 				recv: Self::AccountId,
 				amount: Self::Balance,
+			) -> InterfaceResultWithPostInfo;
+
+			#[interface::call]
+			#[interface::call_index(3)]
+			#[interface::weight(0)]
+			#[interface::no_selector]
+			fn burn(
+				origin: Self::RuntimeOrigin,
+				from: Self::AccountId,
+				amount: Self::Balance,
 			) -> InterfaceResult;
 
 			#[interface::call]
@@ -185,16 +235,6 @@ mod tests {
 				origin: Self::RuntimeOrigin,
 				currency: Select<Self::Currency>,
 				recv: Self::AccountId,
-				amount: Self::Balance,
-			) -> InterfaceResult;
-
-			#[interface::call]
-			#[interface::call_index(3)]
-			#[interface::weight(0)]
-			#[interface::no_selector]
-			fn burn(
-				origin: Self::RuntimeOrigin,
-				from: Self::AccountId,
 				amount: Self::Balance,
 			) -> InterfaceResult;
 		}

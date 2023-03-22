@@ -38,7 +38,7 @@ pub fn interface(
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum SelectorType {
 	Default { return_ty: Box<syn::Type> },
 	Named { name: syn::Ident, return_ty: Box<syn::Type> },

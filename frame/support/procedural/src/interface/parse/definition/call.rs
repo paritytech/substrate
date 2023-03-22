@@ -28,14 +28,16 @@ use crate::{
 use frame_support_procedural_tools::get_doc_literals;
 use quote::ToTokens;
 use std::collections::HashMap;
-use syn::spanned::Spanned;
+use syn::{spanned::Spanned, Path, Type};
 
 pub struct CallDef {
-	calls: Vec<SingleCallDef>,
+	pub interface_span: proc_macro2::Span,
+	pub calls: Vec<SingleCallDef>,
 }
 
 impl CallDef {
 	pub fn try_from(
+		interface_span: proc_macro2::Span,
 		calls: Option<Self>,
 		global_selector: bool,
 		attr_span: proc_macro2::Span,
@@ -51,7 +53,7 @@ impl CallDef {
 			))
 		};
 
-		let mut calls = calls.unwrap_or(CallDef { calls: vec![] });
+		let mut calls = calls.unwrap_or(CallDef { interface_span, calls: vec![] });
 		let mut indices = HashMap::new();
 		calls.calls.iter().for_each(|call| {
 			// Below logic ensures assert won't fail
@@ -189,12 +191,12 @@ impl CallDef {
 			let first_arg_ty = match method.sig.inputs.iter().nth(1) {
 				None => {
 					let msg =
-						"Invalid interface::view, must have `Select<$ty>` as first argument if \
+						"Invalid interface::call, must have `Select<$ty>` as first argument if \
 						used with a selector and not annotated with #[interface::no_selector].";
 					return Err(syn::Error::new(method.sig.span(), msg))
 				},
 				Some(syn::FnArg::Receiver(_)) => {
-					let msg = "Invalid interface::view, second argument must be a typed argument, \
+					let msg = "Invalid interface::call, second argument must be a typed argument, \
 							e.g. `select: Select<$ty>`";
 					return Err(syn::Error::new(method.sig.span(), msg))
 				},
@@ -244,7 +246,19 @@ impl CallDef {
 				return Err(syn::Error::new(arg.pat.span(), msg))
 			};
 
-			args.push((!arg_attrs.is_empty(), arg_ident, arg.ty.clone()));
+			let arg_ty = if let syn::Type::Path(path) = &*(arg.ty).clone() {
+				if let Some(qself) = &path.qself {
+					let msg = "Invalid interface::call, qualified arguments are not\
+					 	yet supported.";
+					return Err(syn::Error::new(arg.ty.span(), msg))
+				}
+
+				adapt_type_to_generic_if_self(&path.path)
+			} else {
+				arg.ty.clone()
+			};
+
+			args.push((!arg_attrs.is_empty(), arg_ident, arg_ty));
 		}
 
 		let docs = get_doc_literals(&method.attrs);
@@ -284,24 +298,25 @@ impl CallDef {
 	}
 }
 
+#[derive(Clone)]
 pub struct SingleCallDef {
 	/// Signal whether second argument must
 	/// be a selector
-	selector: Option<interface::SelectorType>,
+	pub selector: Option<interface::SelectorType>,
 	/// Function name.
-	name: syn::Ident,
+	pub name: syn::Ident,
 	/// Information on args: `(is_compact, name, type)`
-	args: Vec<(bool, syn::Ident, Box<syn::Type>)>,
+	pub args: Vec<(bool, syn::Ident, Box<syn::Type>)>,
 	/// Weight formula.
-	weight: syn::Expr,
+	pub weight: syn::Expr,
 	/// Call index of the interface.
-	call_index: u8,
+	pub call_index: u8,
 	/// Docs, used for metadata.
-	docs: Vec<syn::Lit>,
+	pub docs: Vec<syn::Lit>,
 	/// Attributes annotated at the top of the dispatchable function.
-	attrs: Vec<syn::Attribute>,
+	pub attrs: Vec<syn::Attribute>,
 	/// The span of the call definition
-	attr_span: proc_macro2::Span,
+	pub attr_span: proc_macro2::Span,
 }
 
 /// List of additional token to be used for parsing.
@@ -313,8 +328,23 @@ mod keyword {
 	syn::custom_keyword!(weight);
 	syn::custom_keyword!(RuntimeOrigin);
 	syn::custom_keyword!(InterfaceResult);
+	syn::custom_keyword!(InterfaceResultWithPostInfo);
 	syn::custom_keyword!(compact);
 	syn::custom_keyword!(Select);
+}
+
+// TODO MAKE AKTUAL TYPE HERE TO LET THE EXPANSION CHOOSE
+fn adapt_type_to_generic_if_self(path: &syn::Path) -> Box<syn::Type> {
+	if let Some(ident) = path.segments.first() {
+		if ident.ident.clone() == syn::Ident::new("Self", ident.span()) {
+			let second = path.segments.iter().nth(1).unwrap().clone().ident;
+			Box::new(syn::Type::Verbatim(quote::quote!(<Runtime as Pip20>::#second)))
+		} else {
+			Box::new(syn::Type::Path(syn::TypePath { qself: None, path: path.clone() }))
+		}
+	} else {
+		Box::new(syn::Type::Path(syn::TypePath { qself: None, path: path.clone() }))
+	}
 }
 
 /// Parse attributes for item in interface trait definition
@@ -418,6 +448,9 @@ pub fn check_call_return_type(type_: &syn::Type) -> syn::Result<()> {
 			let lookahead = input.lookahead1();
 			if lookahead.peek(keyword::InterfaceResult) {
 				input.parse::<keyword::InterfaceResult>()?;
+				Ok(Self)
+			} else if lookahead.peek(keyword::InterfaceResultWithPostInfo) {
+				input.parse::<keyword::InterfaceResultWithPostInfo>()?;
 				Ok(Self)
 			} else {
 				Err(lookahead.error())

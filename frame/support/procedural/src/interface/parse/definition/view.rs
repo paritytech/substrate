@@ -25,11 +25,13 @@ use std::collections::HashMap;
 use syn::spanned::Spanned;
 
 pub struct ViewDef {
+	interface_span: proc_macro2::Span,
 	views: Vec<SingleViewDef>,
 }
 
 impl ViewDef {
 	pub fn try_from(
+		interface_span: proc_macro2::Span,
 		views: Option<Self>,
 		global_selector: bool,
 		attr_span: proc_macro2::Span,
@@ -45,7 +47,7 @@ impl ViewDef {
 			))
 		};
 
-		let mut views = views.unwrap_or(ViewDef { views: vec![] });
+		let mut views = views.unwrap_or(ViewDef { interface_span, views: vec![] });
 		let mut indices = HashMap::new();
 		views.views.iter().for_each(|view| {
 			// Below logic ensures assert won't fail

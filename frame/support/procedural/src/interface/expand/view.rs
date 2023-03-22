@@ -18,5 +18,5 @@
 use crate::interface::parse::Def;
 
 pub fn expand(def: &Def) -> proc_macro2::TokenStream {
-	todo!()
+	quote::quote!()
 }

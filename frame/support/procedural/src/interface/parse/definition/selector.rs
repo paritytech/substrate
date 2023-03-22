@@ -24,8 +24,8 @@ use std::collections::HashMap;
 use syn::spanned::Spanned;
 
 pub struct SelectorDef {
-	interface_span: proc_macro2::Span,
-	selectors: Vec<SingleSelectorDef>,
+	pub interface_span: proc_macro2::Span,
+	pub selectors: Vec<SingleSelectorDef>,
 }
 
 impl SelectorDef {
@@ -214,13 +214,13 @@ impl SelectorDef {
 
 pub struct SingleSelectorDef {
 	/// Function name.
-	pub(self) name: syn::Ident,
+	pub name: syn::Ident,
 	/// The return type of the selector.
-	pub(self) output: Box<syn::Type>,
+	pub output: Box<syn::Type>,
 	/// The span of the selector definition
-	pub(self) attr_span: proc_macro2::Span,
+	pub attr_span: proc_macro2::Span,
 	/// Signal if default selector
-	pub(self) default: bool,
+	pub default: bool,
 }
 
 impl SingleSelectorDef {

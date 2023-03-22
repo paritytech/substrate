@@ -19,18 +19,29 @@ mod call;
 mod selector;
 mod view;
 
+use crate::interface::parse::definition::call::SingleCallDef;
 use quote::ToTokens;
 use syn::spanned::Spanned;
 
 pub struct InterfaceDef {
 	index: usize,
+	pub trait_name: syn::Ident,
 	selectors: Option<selector::SelectorDef>,
 	views: Option<view::ViewDef>,
 	calls: Option<call::CallDef>,
 	where_clause: Option<syn::WhereClause>,
+	span: proc_macro2::Span,
 }
 
 impl InterfaceDef {
+	pub fn calls(&self) -> (proc_macro2::Span, Option<syn::WhereClause>, Vec<SingleCallDef>) {
+		if let Some(calls) = self.calls.as_ref() {
+			(calls.interface_span, self.where_clause.clone(), calls.calls.clone())
+		} else {
+			(self.span.clone(), self.where_clause.clone(), Vec::new())
+		}
+	}
+
 	pub fn try_from(
 		attr_span: proc_macro2::Span,
 		index: usize,
@@ -72,17 +83,31 @@ impl InterfaceDef {
 			return Err(syn::Error::new(attr_span, msg))
 		}
 
+		// NOTE: Where clauses are allowed. We carry them to all impl blocks.
+		//       But "extending" an interface gets harder, as carrying them over from
+		//       extended traits is harder.
+
 		// Ensure no generics on interface trait
 		let item_span = item.span();
 		if !item.generics.params.is_empty() {
-			// TODO: Where clauses should be allowed. We can carry them to all impl blocks.
-			//       But "extending" an interface gets harder, as carrying them over from
-			//       extended traits is harder.
 			let msg = "Invalid Interface definition. Traits that define an interface \
                 currently can not have generics.";
 			return Err(syn::Error::new(item_span, msg))
 		}
 		let where_clause = item.generics.where_clause.clone();
+
+		// Ensure not unsafe
+		if item.unsafety.is_some() {
+			let msg = "Invalid Interface definition. Traits that define an interface \
+                can not be unsafe.";
+			return Err(syn::Error::new(item_span, msg))
+		}
+
+		if !matches!(item.vis, syn::Visibility::Public(_)) {
+			let msg = "Invalid Interface definition. Traits that define an interface \
+                must be public.";
+			return Err(syn::Error::new(item_span, msg))
+		}
 
 		let with_selector =
 			match super::helper::take_first_item_interface_attr::<InterfaceTraitAttr>(item)? {
@@ -107,9 +132,23 @@ impl InterfaceDef {
 
 			match interface_attr {
 				Some(InterfaceTraitAttr::Call(span)) =>
-					calls = Some(call::CallDef::try_from(calls, with_selector, span, index, item)?),
+					calls = Some(call::CallDef::try_from(
+						item_span,
+						calls,
+						with_selector,
+						span,
+						index,
+						item,
+					)?),
 				Some(InterfaceTraitAttr::View(span)) =>
-					views = Some(view::ViewDef::try_from(views, with_selector, span, index, item)?),
+					views = Some(view::ViewDef::try_from(
+						item_span,
+						views,
+						with_selector,
+						span,
+						index,
+						item,
+					)?),
 				Some(InterfaceTraitAttr::Selector(span, name)) =>
 					if with_selector {
 						selectors = Some(selector::SelectorDef::try_from(
@@ -150,7 +189,15 @@ impl InterfaceDef {
 			selectors.check_duplicate_names()?;
 		}
 
-		Ok(InterfaceDef { index, calls, views, selectors, where_clause })
+		Ok(InterfaceDef {
+			index,
+			calls,
+			views,
+			selectors,
+			where_clause,
+			span: item.span(),
+			trait_name: item.ident.clone(),
+		})
 	}
 }
 
