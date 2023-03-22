@@ -406,17 +406,17 @@ where
 		)
 	}
 
-	fn authorities_len(&self, epoch_data: &Self::AuxData) -> Option<usize> {
-		Some(epoch_data.len())
+	fn authorities_len(&self, authorities: &Self::AuxData) -> Option<usize> {
+		Some(authorities.len())
 	}
 
 	async fn claim_slot(
 		&self,
 		_header: &B::Header,
 		slot: Slot,
-		epoch_data: &Self::AuxData,
+		authorities: &Self::AuxData,
 	) -> Option<Self::Claim> {
-		let expected_author = slot_author::<P>(slot, epoch_data);
+		let expected_author = slot_author::<P>(slot, authorities);
 		expected_author.and_then(|p| {
 			if self
 				.keystore
@@ -440,18 +440,20 @@ where
 		body: Vec<B::Extrinsic>,
 		storage_changes: StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
 		public: Self::Claim,
-		_epoch: Self::AuxData,
+		_authorities: Self::AuxData,
 	) -> Result<
 		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
 		sp_consensus::Error,
 	> {
-		// sign the pre-sealed hash of the block and then
-		// add it to a digest item.
-		let public_type_pair = public.to_public_crypto_pair();
 		let public = public.to_raw_vec();
 		let signature = self
 			.keystore
-			.sign_with(<AuthorityId<P> as AppKey>::ID, &public_type_pair, header_hash.as_ref())
+			.sign_with(
+				<AuthorityId<P> as AppKey>::ID,
+				<AuthorityId<P> as AppKey>::CRYPTO_ID,
+				&public,
+				header_hash.as_ref(),
+			)
 			.map_err(|e| sp_consensus::Error::CannotSign(public.clone(), e.to_string()))?
 			.ok_or_else(|| {
 				sp_consensus::Error::CannotSign(

@@ -18,8 +18,6 @@
 
 //! Authority discovery errors.
 
-use sp_core::crypto::CryptoTypePublicPair;
-
 /// AuthorityDiscovery Result.
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -60,7 +58,7 @@ pub enum Error {
 	ParsingLibp2pIdentity(#[from] libp2p::identity::error::DecodingError),
 
 	#[error("Failed to sign using a specific public key.")]
-	MissingSignature(CryptoTypePublicPair),
+	MissingSignature(Vec<u8>),
 
 	#[error("Failed to sign using all public keys.")]
 	Signing,
