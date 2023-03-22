@@ -26,8 +26,8 @@ serde = { version = "1", optional = true, features = ["derive"] }
 smallvec = { version = "1", default-features = false, features = [
 	"const_generics",
 ] }
-wasmi = { version = "0.20", default-features = false }
-wasmparser = { package = "wasmparser-nostd", version = "0.91", default-features = false }
+wasmi = { version = "0.28", default-features = false }
+wasmparser = { package = "wasmparser-nostd", version = "0.100", default-features = false }
 impl-trait-for-tuples = "0.2"
 
 # Only used in benchmarking to generate random contract code

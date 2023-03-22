@@ -665,7 +665,7 @@ where
 			schedule,
 			value,
 			debug_message,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		)?;
 		let account_id = stack.top_frame().account_id.clone();
 		stack.run(executable, input_data).map(|ret| (account_id, ret))
@@ -759,10 +759,10 @@ where
 				},
 			};
 
-		// `AllowIndeterminism` will only be ever set in case of off-chain execution.
+		// `Relaxed` will only be ever set in case of off-chain execution.
 		// Instantiations are never allowed even when executing off-chain.
 		if !(executable.is_deterministic() ||
-			(matches!(determinism, Determinism::AllowIndeterminism) &&
+			(matches!(determinism, Determinism::Relaxed) &&
 				matches!(entry_point, ExportedFunction::Call)))
 		{
 			return Err(Error::<T>::Indeterministic.into())
@@ -1607,7 +1607,7 @@ mod tests {
 					value,
 					vec![],
 					None,
-					Determinism::Deterministic,
+					Determinism::Enforced,
 				),
 				Ok(_)
 			);
@@ -1661,7 +1661,7 @@ mod tests {
 				value,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			)
 			.unwrap();
 
@@ -1703,7 +1703,7 @@ mod tests {
 				value,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			)
 			.unwrap();
 
@@ -1739,7 +1739,7 @@ mod tests {
 				55,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			)
 			.unwrap();
 
@@ -1791,7 +1791,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 
 			let output = result.unwrap();
@@ -1824,7 +1824,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 
 			let output = result.unwrap();
@@ -1855,7 +1855,7 @@ mod tests {
 				0,
 				vec![1, 2, 3, 4],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -1935,7 +1935,7 @@ mod tests {
 				value,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 
 			assert_matches!(result, Ok(_));
@@ -1981,7 +1981,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 
 			assert_matches!(result, Ok(_));
@@ -2015,7 +2015,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -2045,7 +2045,7 @@ mod tests {
 				0,
 				vec![0],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -2073,7 +2073,7 @@ mod tests {
 				0,
 				vec![0],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -2109,7 +2109,7 @@ mod tests {
 				0,
 				vec![0],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -2145,7 +2145,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 
 			assert_matches!(result, Ok(_));
@@ -2304,7 +2304,7 @@ mod tests {
 					min_balance * 10,
 					vec![],
 					None,
-					Determinism::Deterministic,
+					Determinism::Enforced,
 				),
 				Ok(_)
 			);
@@ -2369,7 +2369,7 @@ mod tests {
 					0,
 					vec![],
 					None,
-					Determinism::Deterministic,
+					Determinism::Enforced,
 				),
 				Ok(_)
 			);
@@ -2455,7 +2455,7 @@ mod tests {
 				0,
 				vec![0],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -2521,7 +2521,7 @@ mod tests {
 				0,
 				vec![],
 				Some(&mut debug_buffer),
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			)
 			.unwrap();
 		});
@@ -2555,7 +2555,7 @@ mod tests {
 				0,
 				vec![],
 				Some(&mut debug_buffer),
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 			assert!(result.is_err());
 		});
@@ -2592,7 +2592,7 @@ mod tests {
 				0,
 				vec![],
 				Some(&mut debug_buf_after),
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			)
 			.unwrap();
 			assert_eq!(debug_buf_before, debug_buf_after);
@@ -2625,7 +2625,7 @@ mod tests {
 				0,
 				CHARLIE.encode(),
 				None,
-				Determinism::Deterministic
+				Determinism::Enforced
 			));
 
 			// Calling into oneself fails
@@ -2639,7 +2639,7 @@ mod tests {
 					0,
 					BOB.encode(),
 					None,
-					Determinism::Deterministic
+					Determinism::Enforced
 				)
 				.map_err(|e| e.error),
 				<Error<Test>>::ReentranceDenied,
@@ -2678,7 +2678,7 @@ mod tests {
 					0,
 					vec![0],
 					None,
-					Determinism::Deterministic
+					Determinism::Enforced
 				)
 				.map_err(|e| e.error),
 				<Error<Test>>::ReentranceDenied,
@@ -2713,7 +2713,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			)
 			.unwrap();
 
@@ -2798,7 +2798,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			)
 			.unwrap();
 
@@ -3007,7 +3007,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic
+				Determinism::Enforced
 			));
 		});
 	}
@@ -3134,7 +3134,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic
+				Determinism::Enforced
 			));
 		});
 	}
@@ -3173,7 +3173,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic
+				Determinism::Enforced
 			));
 		});
 	}
@@ -3212,7 +3212,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic
+				Determinism::Enforced
 			));
 		});
 	}
@@ -3268,7 +3268,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic
+				Determinism::Enforced
 			));
 		});
 	}
@@ -3324,7 +3324,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic
+				Determinism::Enforced
 			));
 		});
 	}
@@ -3356,7 +3356,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -3402,7 +3402,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic
+				Determinism::Enforced
 			));
 		});
 	}
@@ -3432,7 +3432,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 			assert_matches!(result, Ok(_));
 		});

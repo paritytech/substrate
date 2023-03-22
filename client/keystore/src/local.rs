@@ -135,6 +135,9 @@ impl Keystore for LocalKeystore {
 			.unwrap_or_default()
 	}
 
+	/// Generate a new pair compatible with the 'ed25519' signature scheme.
+	///
+	/// If the `[seed]` is `Some` then the key will be ephemeral and stored in memory.
 	fn sr25519_generate_new(
 		&self,
 		id: KeyTypeId,
@@ -162,6 +165,9 @@ impl Keystore for LocalKeystore {
 			.unwrap_or_default()
 	}
 
+	/// Generate a new pair compatible with the 'sr25519' signature scheme.
+	///
+	/// If the `[seed]` is `Some` then the key will be ephemeral and stored in memory.
 	fn ed25519_generate_new(
 		&self,
 		id: KeyTypeId,
@@ -189,6 +195,9 @@ impl Keystore for LocalKeystore {
 			.unwrap_or_default()
 	}
 
+	/// Generate a new pair compatible with the 'ecdsa' signature scheme.
+	///
+	/// If the `[seed]` is `Some` then the key will be ephemeral and stored in memory.
 	fn ecdsa_generate_new(
 		&self,
 		id: KeyTypeId,
@@ -504,17 +513,14 @@ mod tests {
 		let key: ed25519::AppPair = store.0.write().generate().unwrap();
 		let key2 = ed25519::Pair::generate().0;
 
-		assert!(!Keystore::has_keys(&store, &[(key2.public().to_vec(), ed25519::AppPublic::ID)]));
+		assert!(!store.has_keys(&[(key2.public().to_vec(), ed25519::AppPublic::ID)]));
 
-		assert!(!Keystore::has_keys(
-			&store,
-			&[
-				(key2.public().to_vec(), ed25519::AppPublic::ID),
-				(key.public().to_raw_vec(), ed25519::AppPublic::ID),
-			],
-		));
+		assert!(!store.has_keys(&[
+			(key2.public().to_vec(), ed25519::AppPublic::ID),
+			(key.public().to_raw_vec(), ed25519::AppPublic::ID),
+		],));
 
-		assert!(Keystore::has_keys(&store, &[(key.public().to_raw_vec(), ed25519::AppPublic::ID)]));
+		assert!(store.has_keys(&[(key.public().to_raw_vec(), ed25519::AppPublic::ID)]));
 	}
 
 	#[test]
@@ -626,31 +632,30 @@ mod tests {
 		let file_name = temp_dir.path().join(array_bytes::bytes2hex("", &SR25519.0[..2]));
 		fs::write(file_name, "test").expect("Invalid file is written");
 
-		assert!(Keystore::sr25519_public_keys(&store, SR25519).is_empty());
+		assert!(store.sr25519_public_keys(SR25519).is_empty());
 	}
 
 	#[test]
 	fn generate_with_seed_is_not_stored() {
 		let temp_dir = TempDir::new().unwrap();
 		let store = LocalKeystore::open(temp_dir.path(), None).unwrap();
-		let _alice_tmp_key =
-			Keystore::sr25519_generate_new(&store, TEST_KEY_TYPE, Some("//Alice")).unwrap();
+		let _alice_tmp_key = store.sr25519_generate_new(TEST_KEY_TYPE, Some("//Alice")).unwrap();
 
-		assert_eq!(Keystore::sr25519_public_keys(&store, TEST_KEY_TYPE).len(), 1);
+		assert_eq!(store.sr25519_public_keys(TEST_KEY_TYPE).len(), 1);
 
 		drop(store);
 		let store = LocalKeystore::open(temp_dir.path(), None).unwrap();
-		assert_eq!(Keystore::sr25519_public_keys(&store, TEST_KEY_TYPE).len(), 0);
+		assert_eq!(store.sr25519_public_keys(TEST_KEY_TYPE).len(), 0);
 	}
 
 	#[test]
 	fn generate_can_be_fetched_in_memory() {
 		let store = LocalKeystore::in_memory();
-		Keystore::sr25519_generate_new(&store, TEST_KEY_TYPE, Some("//Alice")).unwrap();
+		store.sr25519_generate_new(TEST_KEY_TYPE, Some("//Alice")).unwrap();
 
-		assert_eq!(Keystore::sr25519_public_keys(&store, TEST_KEY_TYPE).len(), 1);
-		Keystore::sr25519_generate_new(&store, TEST_KEY_TYPE, None).unwrap();
-		assert_eq!(Keystore::sr25519_public_keys(&store, TEST_KEY_TYPE).len(), 2);
+		assert_eq!(store.sr25519_public_keys(TEST_KEY_TYPE).len(), 1);
+		store.sr25519_generate_new(TEST_KEY_TYPE, None).unwrap();
+		assert_eq!(store.sr25519_public_keys(TEST_KEY_TYPE).len(), 2);
 	}
 
 	#[test]
@@ -661,7 +666,7 @@ mod tests {
 		let temp_dir = TempDir::new().unwrap();
 		let store = LocalKeystore::open(temp_dir.path(), None).unwrap();
 
-		let public = Keystore::sr25519_generate_new(&store, TEST_KEY_TYPE, None).unwrap();
+		let public = store.sr25519_generate_new(TEST_KEY_TYPE, None).unwrap();
 
 		let path = store.0.read().key_file_path(public.as_ref(), TEST_KEY_TYPE).unwrap();
 		let permissions = File::open(path).unwrap().metadata().unwrap().permissions();
