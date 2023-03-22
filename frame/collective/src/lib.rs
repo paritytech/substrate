@@ -343,7 +343,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
-		#[cfg(feautre = "try-runtime")]
+		#[cfg(feature = "try-runtime")]
 		fn try_state(_n: BlockNumberFor<T>) -> Result<(), &'static str> {
 			Self::do_try_state();
 		}
