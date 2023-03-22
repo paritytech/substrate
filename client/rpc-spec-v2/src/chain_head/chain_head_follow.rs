@@ -345,7 +345,7 @@ where
 
 		// Find the parent header.
 		let Some(first_header) = self.client.header(*first_hash)? else {
-			return Err(SubscriptionManagementError::BlockHashAbsent)
+			return Err(SubscriptionManagementError::BlockHeaderAbsent)
 		};
 
 		let parents =
