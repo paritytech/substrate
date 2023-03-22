@@ -150,10 +150,17 @@ pub trait Keystore: Send + Sync {
 	) -> Result<Option<ecdsa::Signature>, Error>;
 }
 
-/// A pointer to a keystore.
+/// A shared pointer to a keystore implementation.
 pub type KeystorePtr = Arc<dyn Keystore>;
 
 sp_externalities::decl_extension! {
 	/// The keystore extension to register/retrieve from the externalities.
 	pub struct KeystoreExt(KeystorePtr);
+}
+
+impl KeystoreExt {
+	/// Create a new instance of `KeystoreExt`
+	pub fn new<T: Keystore + 'static>(keystore: T) -> Self {
+		Self(Arc::new(keystore))
+	}
 }

@@ -1024,9 +1024,6 @@ async fn follow_prune_best_block() {
 }
 
 #[tokio::test]
-#[cfg(disable_flaky)]
-#[allow(dead_code)]
-// FIXME: https://github.com/paritytech/substrate/issues/11321
 async fn follow_forks_pruned_block() {
 	let builder = TestClientBuilder::new();
 	let backend = builder.backend();
@@ -1140,9 +1137,6 @@ async fn follow_forks_pruned_block() {
 }
 
 #[tokio::test]
-#[cfg(disable_flaky)]
-#[allow(dead_code)]
-// FIXME: https://github.com/paritytech/substrate/issues/11321
 async fn follow_report_multiple_pruned_block() {
 	let builder = TestClientBuilder::new();
 	let backend = builder.backend();

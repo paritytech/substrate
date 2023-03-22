@@ -509,9 +509,9 @@ pub mod pallet {
 		/// the in storage version to the current
 		/// [`InstructionWeights::version`](InstructionWeights).
 		///
-		/// - `determinism`: If this is set to any other value but [`Determinism::Deterministic`]
-		///   then the only way to use this code is to delegate call into it from an offchain
-		///   execution. Set to [`Determinism::Deterministic`] if in doubt.
+		/// - `determinism`: If this is set to any other value but [`Determinism::Enforced`] then
+		///   the only way to use this code is to delegate call into it from an offchain execution.
+		///   Set to [`Determinism::Enforced`] if in doubt.
 		///
 		/// # Note
 		///
@@ -625,8 +625,8 @@ pub mod pallet {
 				storage_deposit_limit: storage_deposit_limit.map(Into::into),
 				debug_message: None,
 			};
-			let mut output = CallInput::<T> { dest, determinism: Determinism::Deterministic }
-				.run_guarded(common);
+			let mut output =
+				CallInput::<T> { dest, determinism: Determinism::Enforced }.run_guarded(common);
 			if let Ok(retval) = &output.result {
 				if retval.did_revert() {
 					output.result = Err(<Error<T>>::ContractReverted.into());
@@ -1096,7 +1096,7 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 						binary.clone(),
 						&schedule,
 						common.origin.clone(),
-						Determinism::Deterministic,
+						Determinism::Enforced,
 						TryInstantiate::Skip,
 					)
 					.map_err(|(err, msg)| {
