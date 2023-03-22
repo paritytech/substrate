@@ -32,7 +32,7 @@ use frame_support::{
 	pallet_prelude::GenesisBuild,
 	parameter_types,
 	storage::StoragePrefixedMap,
-	traits::{ConstU32, ConstU64, SortedMembers, StorageVersion},
+	traits::{tokens::PayFromAccount, ConstU32, ConstU64, SortedMembers, StorageVersion},
 	PalletId,
 };
 
@@ -59,6 +59,8 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
+	pub TreasuryAccount: u128 = Treasury::account_id();
+	pub Treasury1Account: u128 = Treasury1::account_id();
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
@@ -134,6 +136,9 @@ parameter_types! {
 }
 impl pallet_treasury::Config for Test {
 	type PalletId = TreasuryPalletId;
+	type AssetKind = ();
+	type Paymaster = PayFromAccount<Balances, TreasuryAccount>;
+	type BalanceConverter = ();
 	type Currency = pallet_balances::Pallet<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
 	type RejectOrigin = frame_system::EnsureRoot<u128>;
@@ -153,6 +158,9 @@ impl pallet_treasury::Config for Test {
 
 impl pallet_treasury::Config<Instance1> for Test {
 	type PalletId = TreasuryPalletId2;
+	type AssetKind = ();
+	type Paymaster = PayFromAccount<Balances, Treasury1Account>;
+	type BalanceConverter = ();
 	type Currency = pallet_balances::Pallet<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
 	type RejectOrigin = frame_system::EnsureRoot<u128>;

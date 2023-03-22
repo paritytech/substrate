@@ -26,7 +26,7 @@ use frame_support::{
 	assert_noop, assert_ok,
 	pallet_prelude::GenesisBuild,
 	parameter_types,
-	traits::{ConstU32, ConstU64, OnInitialize},
+	traits::{tokens::PayFromAccount, ConstU32, ConstU64, OnInitialize},
 	PalletId,
 };
 
@@ -59,6 +59,8 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
+	pub TreasuryAccount: u128 = Treasury::account_id();
+	pub Treasury1Account: u128 = Treasury1::account_id();
 }
 
 type Balance = u64;
@@ -116,6 +118,9 @@ parameter_types! {
 
 impl pallet_treasury::Config for Test {
 	type PalletId = TreasuryPalletId;
+	type AssetKind = ();
+	type Paymaster = PayFromAccount<Balances, TreasuryAccount>;
+	type BalanceConverter = ();
 	type Currency = pallet_balances::Pallet<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
 	type RejectOrigin = frame_system::EnsureRoot<u128>;
@@ -135,6 +140,9 @@ impl pallet_treasury::Config for Test {
 
 impl pallet_treasury::Config<Instance1> for Test {
 	type PalletId = TreasuryPalletId2;
+	type AssetKind = ();
+	type Paymaster = PayFromAccount<Balances, TreasuryAccount>;
+	type BalanceConverter = ();
 	type Currency = pallet_balances::Pallet<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
 	type RejectOrigin = frame_system::EnsureRoot<u128>;
