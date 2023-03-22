@@ -184,17 +184,6 @@ impl Config for Test {
 	type SpendOrigin = TestSpendOrigin;
 }
 
-pub struct DummyBalanceConverter<T>(PhantomData<T>);
-impl<T> BalanceConversion<BalanceU64, AssetId, BalanceU64> for DummyBalanceConverter<T> {
-	type Error = Error<T>;
-	fn to_asset_balance(
-		balance: BalanceU64,
-		_asset_id: AssetId,
-	) -> Result<BalanceU64, Self::Error> {
-		Ok(balance)
-	}
-}
-
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	pallet_balances::GenesisConfig::<Test> {
