@@ -137,6 +137,7 @@ pub struct Proposal<AccountId, Balance> {
 }
 
 /// A treasury spend payment which has not yet succeeded.
+/// When a `PendingPayment` is verified to be successful, it is deleted from storage.
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub struct PendingPayment<AccountId, Balance, AssetKind, AssetBalance, PaymentId> {
