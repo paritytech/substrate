@@ -343,7 +343,7 @@ where
 			return Ok(Default::default())
 		};
 
-		// Find the parent hash.
+		// Find the parent header.
 		let Some(first_header) = self.client.header(*first_hash)? else {
 			return Err(SubscriptionManagementError::BlockHashAbsent)
 		};
