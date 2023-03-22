@@ -18,7 +18,7 @@ ahash = "0.8.2"
 array-bytes = "4.1"
 async-trait = "0.1.57"
 dyn-clone = "1.0"
-finality-grandpa = { version = "0.16.1", features = ["derive-codec"] }
+finality-grandpa = { version = "0.16.2", features = ["derive-codec"] }
 futures = "0.3.21"
 futures-timer = "3.0.1"
 log = "0.4.17"
@@ -50,7 +50,7 @@ sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
 assert_matches = "1.3.0"
-finality-grandpa = { version = "0.16.1", features = ["derive-codec", "test-helpers"] }
+finality-grandpa = { version = "0.16.2", features = ["derive-codec", "test-helpers"] }
 serde = "1.0.136"
 tokio = "1.22.0"
 sc-network = { version = "0.10.0-dev", path = "../../network" }
