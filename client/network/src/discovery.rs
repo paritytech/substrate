@@ -534,19 +534,19 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		addresses: &[Multiaddr],
 		effective_role: Endpoint,
 	) -> Result<Vec<Multiaddr>, ConnectionDenied> {
+		let Some(peer_id) = maybe_peer else { return Ok(Vec::new()); };
+
 		let mut list = Vec::new();
 
-		if let Some(peer_id) = maybe_peer {
-			list.extend(
-				self.permanent_addresses
-					.iter()
-					.filter_map(|(p, a)| if *p == peer_id { Some(a.clone()) } else { None })
-					.collect::<Vec<_>>(),
-			);
+		list.extend(
+			self.permanent_addresses
+				.iter()
+				.filter_map(|(p, a)| if *p == peer_id { Some(a.clone()) } else { None })
+				.collect::<Vec<_>>(),
+		);
 
-			if let Some(ephemeral_addresses) = self.ephemeral_addresses.get(&peer_id) {
-				list.extend(ephemeral_addresses.clone());
-			}
+		if let Some(ephemeral_addresses) = self.ephemeral_addresses.get(&peer_id) {
+			list.extend(ephemeral_addresses.clone());
 		}
 
 		{
@@ -577,7 +577,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			list.extend(list_to_filter);
 		}
 
-		trace!(target: "sub-libp2p","Addresses of {:?} (connection ID: {:?}): {:?}", maybe_peer, connection_id, list);
+		trace!(target: "sub-libp2p","Addresses of {:?}: {:?}", peer_id, list);
 
 		Ok(list)
 	}
