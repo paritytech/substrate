@@ -15,18 +15,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! bls crypto types.
+//! BLS12-377 crypto applications.
 
 use crate::{KeyTypeId, RuntimePublic};
 
 use sp_std::vec::Vec;
 
-pub use sp_core::bls::*;
+pub use sp_core::bls::bls377::*;
 
 mod app {
-	use sp_core::testing::BLS;
+	use sp_core::testing::BLS377;
 
-	crate::app_crypto!(super, BLS);
+	crate::app_crypto!(super, BLS377);
 
 	impl crate::traits::BoundToRuntimeAppPublic for Public {
 		type Public = Self;
@@ -40,20 +40,20 @@ pub use app::{Public as AppPublic, Signature as AppSignature};
 impl RuntimePublic for Public {
 	type Signature = Signature;
 
-	fn all(key_type: KeyTypeId) -> crate::Vec<Self> {
-		sp_io::crypto::bls_public_keys(key_type)
+	fn all(_key_type: KeyTypeId) -> crate::Vec<Self> {
+		unreachable!("no access to the host keystore from runtime")
 	}
 
-	fn generate_pair(key_type: KeyTypeId, seed: Option<Vec<u8>>) -> Self {
-		sp_io::crypto::bls_generate(key_type, seed)
+	fn generate_pair(_key_type: KeyTypeId, _seed: Option<Vec<u8>>) -> Self {
+		unreachable!("no access to the host keystore from runtime")
 	}
 
-	fn sign<M: AsRef<[u8]>>(&self, key_type: KeyTypeId, msg: &M) -> Option<Self::Signature> {
-		sp_io::crypto::bls_sign(key_type, self, msg.as_ref())
+	fn sign<M: AsRef<[u8]>>(&self, _key_type: KeyTypeId, _msg: &M) -> Option<Self::Signature> {
+		unreachable!("no access to the host keystore from runtime")
 	}
 
-	fn verify<M: AsRef<[u8]>>(&self, msg: &M, signature: &Self::Signature) -> bool {
-		sp_io::crypto::bls_verify(&signature, msg.as_ref(), self)
+	fn verify<M: AsRef<[u8]>>(&self, _msg: &M, _signature: &Self::Signature) -> bool {
+		unreachable!("no access to the host keystore from runtime")
 	}
 
 	fn to_raw_vec(&self) -> Vec<u8> {

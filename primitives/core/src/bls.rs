@@ -15,9 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// tag::description[]
 //! Simple BLS (Boneh–Lynn–Shacham) Signature API.
-// end::description[]
 
 #[cfg(feature = "full_crypto")]
 use sp_std::vec::Vec;
@@ -38,7 +36,7 @@ use crate::crypto::{
 use crate::crypto::{DeriveJunction, Pair as TraitPair, SecretStringError};
 #[cfg(feature = "std")]
 use bip39::{Language, Mnemonic, MnemonicType};
-use bls_like::{EngineBLS, BLS377, ZBLS};
+use bls_like::EngineBLS;
 #[cfg(feature = "full_crypto")]
 use bls_like::{Keypair, Message, SerializableToBytes};
 use core::convert::TryFrom;
@@ -52,33 +50,57 @@ use substrate_bip39::seed_from_entropy;
 #[cfg(feature = "std")]
 use hex;
 
-/// An identifier used to match public keys against bls377 keys
-pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"bls7");
+/// BLS-377 specialized types
+pub mod bls377 {
+	use crate::crypto::CryptoTypeId;
+	use bls_like::BLS377;
 
-trait StdMarker: EngineBLS + Send + Sync + 'static {}
+	/// An identifier used to match public keys against BLS12-377 keys
+	pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"bls7");
 
-/// This is valid for both of of supported curves
-const PUBLIC_KEY_SERIALIZED_SIZE: usize = 48;
+	/// BLS12-377 key pair.
+	#[cfg(feature = "full_crypto")]
+	pub type Pair = super::Pair<BLS377>;
+	/// BLS12-377 public key.
+	pub type Public = super::Public<BLS377>;
+	/// BLS12-377 signature.
+	pub type Signature = super::Signature<BLS377>;
+}
 
+/// BLS-381 specialized types
+pub mod bls381 {
+	use crate::crypto::CryptoTypeId;
+	use bls_like::ZBLS;
+
+	/// An identifier used to match public keys against BLS12-381 keys
+	pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"bls8");
+
+	/// BLS12-381 key pair.
+	#[cfg(feature = "full_crypto")]
+	pub type Pair = super::Pair<ZBLS>;
+	/// BLS12-381 public key.
+	pub type Public = super::Public<ZBLS>;
+	/// BLS12-381 signature.
+	pub type Signature = super::Signature<ZBLS>;
+}
+
+trait BlsBound: EngineBLS + Send + Sync + 'static {}
+
+impl<T: EngineBLS + Send + Sync + 'static> BlsBound for T {}
+
+// Secret key serialized side
+#[cfg(feature = "full_crypto")]
 const SECRET_KEY_SERIALIZED_SIZE: usize = 32;
 
+// Public key serialized side
+const PUBLIC_KEY_SERIALIZED_SIZE: usize = 48;
+
+// Signature serialized size
 const SIGNATURE_SERIALIZED_SIZE: usize = 96;
 
-/// TODO BLS12-377
-#[cfg(feature = "full_crypto")]
-pub type Bls377Pair = Pair<BLS377>;
-/// TODO BLS12-377
-pub type Bls377Public = Public<BLS377>;
-/// TODO BLS12-377
-pub type Bls377Signature = Signature<BLS377>;
-
-/// TODO BLS12-381
-#[cfg(feature = "full_crypto")]
-pub type Bls381Pair = Pair<ZBLS>;
-/// TODO BLS12-381
-pub type Bls381Public = Public<ZBLS>;
-/// TODO
-pub type Bls381Signature = Signature<ZBLS>;
+// TODO DAVXY REMOVE-ME (REMOVED FROM UPSTREAM)
+/// Temporary crypto id
+pub const TEMPORARY_CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"TEMP");
 
 /// A secret seed.
 ///
@@ -89,19 +111,11 @@ pub type Bls381Signature = Signature<ZBLS>;
 type Seed = [u8; SECRET_KEY_SERIALIZED_SIZE];
 
 /// A public key.
-// #[cfg_attr(feature = "full_crypto", derive(Hash))]
-#[derive(PartialOrd, Ord, Copy, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[derive(Copy, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[scale_info(skip_type_params(T))]
 pub struct Public<T> {
 	inner: [u8; PUBLIC_KEY_SERIALIZED_SIZE],
-	_phantom: PhantomData<T>,
-}
-
-impl<T> std::hash::Hash for Public<T> {
-	fn hash<H>(&self, state: &mut H)
-	where
-		H: std::hash::Hasher,
-	{
-	}
+	_phantom: PhantomData<fn() -> T>,
 }
 
 impl<T> Clone for Public<T> {
@@ -117,6 +131,25 @@ impl<T> PartialEq for Public<T> {
 }
 
 impl<T> Eq for Public<T> {}
+
+impl<T> PartialOrd for Public<T> {
+	fn partial_cmp(&self, other: &Self) -> Option<sp_std::cmp::Ordering> {
+		self.inner.partial_cmp(&other.inner)
+	}
+}
+
+impl<T> Ord for Public<T> {
+	fn cmp(&self, other: &Self) -> sp_std::cmp::Ordering {
+		self.inner.cmp(&other.inner)
+	}
+}
+
+#[cfg(feature = "full_crypto")]
+impl<T> sp_std::hash::Hash for Public<T> {
+	fn hash<H: sp_std::hash::Hasher>(&self, state: &mut H) {
+		self.inner.hash(state)
+	}
+}
 
 impl<T> Public<T> {
 	/// A new instance from the given PUBLIC_KEY_SERIALIZED_SIZE-byte `data`.
@@ -202,7 +235,7 @@ impl<T> From<Public<T>> for [u8; PUBLIC_KEY_SERIALIZED_SIZE] {
 }
 
 #[cfg(feature = "full_crypto")]
-impl<T: StdMarker> From<Pair<T>> for Public<T> {
+impl<T: BlsBound> From<Pair<T>> for Public<T> {
 	fn from(x: Pair<T>) -> Self {
 		x.public()
 	}
@@ -227,7 +260,7 @@ impl<T> UncheckedFrom<H384> for Public<T> {
 }
 
 #[cfg(feature = "std")]
-impl<T: StdMarker> std::str::FromStr for Public<T> {
+impl<T: BlsBound> std::str::FromStr for Public<T> {
 	type Err = crate::crypto::PublicError;
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -236,14 +269,14 @@ impl<T: StdMarker> std::str::FromStr for Public<T> {
 }
 
 #[cfg(feature = "std")]
-impl<T: StdMarker> std::fmt::Display for Public<T> {
+impl<T: BlsBound> std::fmt::Display for Public<T> {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(f, "{}", self.to_ss58check())
 	}
 }
 
 #[cfg(feature = "std")]
-impl<T: StdMarker> sp_std::fmt::Debug for Public<T> {
+impl<T: BlsBound> sp_std::fmt::Debug for Public<T> {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		let s = self.to_ss58check();
 		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.inner), &s[0..8])
@@ -258,7 +291,7 @@ impl<T> sp_std::fmt::Debug for Public<T> {
 }
 
 #[cfg(feature = "std")]
-impl<T: StdMarker> Serialize for Public<T> {
+impl<T: BlsBound> Serialize for Public<T> {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,
@@ -268,7 +301,7 @@ impl<T: StdMarker> Serialize for Public<T> {
 }
 
 #[cfg(feature = "std")]
-impl<'de, T: StdMarker> Deserialize<'de> for Public<T> {
+impl<'de, T: BlsBound> Deserialize<'de> for Public<T> {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
@@ -278,9 +311,9 @@ impl<'de, T: StdMarker> Deserialize<'de> for Public<T> {
 	}
 }
 
-impl<T: StdMarker> TraitPublic for Public<T> {
+impl<T: BlsBound> TraitPublic for Public<T> {
 	fn to_public_crypto_pair(&self) -> CryptoTypePublicPair {
-		CryptoTypePublicPair(CRYPTO_ID, self.to_raw_vec())
+		CryptoTypePublicPair(TEMPORARY_CRYPTO_ID, self.to_raw_vec())
 	}
 }
 
@@ -294,22 +327,27 @@ impl<T> From<Public<T>> for CryptoTypePublicPair {
 
 impl<T> From<&Public<T>> for CryptoTypePublicPair {
 	fn from(key: &Public<T>) -> Self {
-		CryptoTypePublicPair(CRYPTO_ID, key.to_raw_vec())
+		CryptoTypePublicPair(TEMPORARY_CRYPTO_ID, key.to_raw_vec())
 	}
 }
 
-impl<T: StdMarker> CryptoType for Public<T> {
+impl<T: BlsBound> CryptoType for Public<T> {
 	#[cfg(feature = "full_crypto")]
 	type Pair = Pair<T>;
 }
 
 /// A generic BLS signature.
-/// TODO: PassByInner is required? If yes implement manually
-//#[cfg_attr(feature = "full_crypto", derive(Hash))]
-#[derive(Clone, Encode, Decode, MaxEncodedLen, /* PassByInner, */ TypeInfo)]
+#[derive(Copy, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[scale_info(skip_type_params(T))]
 pub struct Signature<T> {
 	inner: [u8; SIGNATURE_SERIALIZED_SIZE],
-	_phantom: PhantomData<T>,
+	_phantom: PhantomData<fn() -> T>,
+}
+
+impl<T> Clone for Signature<T> {
+	fn clone(&self) -> Self {
+		Self { inner: self.inner.clone(), _phantom: PhantomData }
+	}
 }
 
 impl<T> PartialEq for Signature<T> {
@@ -319,6 +357,13 @@ impl<T> PartialEq for Signature<T> {
 }
 
 impl<T> Eq for Signature<T> {}
+
+#[cfg(feature = "full_crypto")]
+impl<T> sp_std::hash::Hash for Signature<T> {
+	fn hash<H: sp_std::hash::Hasher>(&self, state: &mut H) {
+		self.inner.hash(state)
+	}
+}
 
 impl<T> Signature<T> {
 	/// A new instance from the given SIGNATURE_SERIALIZED_SIZE-byte `data`.
@@ -436,7 +481,7 @@ impl<T> UncheckedFrom<[u8; SIGNATURE_SERIALIZED_SIZE]> for Signature<T> {
 	}
 }
 
-impl<T: StdMarker> CryptoType for Signature<T> {
+impl<T: BlsBound> CryptoType for Signature<T> {
 	#[cfg(feature = "full_crypto")]
 	type Pair = Pair<T>;
 }
@@ -487,7 +532,7 @@ impl<T: EngineBLS> Pair<T> {
 }
 
 #[cfg(feature = "full_crypto")]
-impl<T: StdMarker> TraitPair for Pair<T> {
+impl<T: BlsBound> TraitPair for Pair<T> {
 	type Seed = Seed;
 	type Public = Public<T>;
 	type Signature = Signature<T>;
@@ -589,7 +634,7 @@ impl<T: StdMarker> TraitPair for Pair<T> {
 			Ok(pk) => pk,
 			Err(_) => return false,
 		};
-		let public_key = match bls_like::PublicKey::<BLS377>::from_bytes(&pubkey_array) {
+		let public_key = match bls_like::PublicKey::<T>::from_bytes(&pubkey_array) {
 			Ok(pk) => pk,
 			Err(_) => return false,
 		};
@@ -613,24 +658,23 @@ impl<T: StdMarker> TraitPair for Pair<T> {
 }
 
 #[cfg(feature = "full_crypto")]
-impl<T: StdMarker> CryptoType for Pair<T> {
+impl<T: BlsBound> CryptoType for Pair<T> {
 	type Pair = Pair<T>;
 }
-
-impl StdMarker for BLS377 {}
 
 #[cfg(test)]
 mod test {
 	use super::*;
 	use crate::crypto::DEV_PHRASE;
+	use bls377::{Pair, Public, Signature};
 	use hex_literal::hex;
-	use serde_json;
+	// use serde_json;
 
 	#[test]
 	fn default_phrase_should_be_used() {
 		assert_eq!(
-			Bls377Pair::from_string("//Alice///password", None).unwrap().public(),
-			Bls377Pair::from_string(&format!("{}//Alice", DEV_PHRASE), Some("password"))
+			Pair::from_string("//Alice///password", None).unwrap().public(),
+			Pair::from_string(&format!("{}//Alice", DEV_PHRASE), Some("password"))
 				.unwrap()
 				.public(),
 		);
@@ -640,7 +684,7 @@ mod test {
 	#[test]
 	fn seed_and_derive_should_work() {
 		let seed = hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f00");
-		let pair = Bls377Pair::from_seed(&seed);
+		let pair = Pair::from_seed(&seed);
 		// we are using hash to field so this is not going to work
 		// assert_eq!(pair.seed(), seed);
 		let path = vec![DeriveJunction::Hard([0u8; 32])];
@@ -700,21 +744,21 @@ mod test {
 
 	#[test]
 	fn generated_pair_should_work() {
-		let (pair, _) = Bls377Pair::generate();
+		let (pair, _) = Pair::generate();
 		let public = pair.public();
 		let message = b"Something important";
 		let signature = pair.sign(&message[..]);
-		assert!(Bls377Pair::verify(&signature, &message[..], &public));
-		assert!(!Bls377Pair::verify(&signature, b"Something else", &public));
+		assert!(Pair::verify(&signature, &message[..], &public));
+		assert!(!Pair::verify(&signature, b"Something else", &public));
 	}
 
 	#[test]
 	fn seeded_pair_should_work() {
-		let pair = Bls377Pair::from_seed(b"12345678901234567890123456789012");
+		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
 		assert_eq!(
 			public,
-			Bls377Public::from_raw(
+			Public::from_raw(
 				hex!(
 				"754d2f2bbfa67df54d7e0e951979a18a1e0f45948857752cc2bac6bbb0b1d05e8e48bcc453920bf0c4bbd59932124801")
 			)
@@ -724,8 +768,8 @@ mod test {
 	);
 		let signature = pair.sign(&message[..]);
 		println!("Correct signature: {:?}", signature);
-		assert!(Bls377Pair::verify(&signature, &message[..], &public));
-		assert!(!Bls377Pair::verify(&signature, "Other message", &public));
+		assert!(Pair::verify(&signature, &message[..], &public));
+		assert!(!Pair::verify(&signature, "Other message", &public));
 	}
 
 	// #[test]

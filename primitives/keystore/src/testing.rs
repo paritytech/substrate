@@ -18,7 +18,7 @@
 //! Types that should only be used for testing!
 
 use sp_core::{
-	bls,
+	bls377,
 	crypto::{ByteArray, CryptoTypePublicPair, KeyTypeId, Pair},
 	ecdsa, ed25519, sr25519,
 };
@@ -68,11 +68,11 @@ impl MemoryKeystore {
 		})
 	}
 
-	fn bls_key_pair(&self, id: KeyTypeId, pub_key: &bls::Public) -> Option<bls::Pair> {
+	fn bls377_key_pair(&self, id: KeyTypeId, pub_key: &bls377::Public) -> Option<bls377::Pair> {
 		self.keys.read().get(&id).and_then(|inner| {
 			inner
 				.get(pub_key.as_slice())
-				.map(|s| bls::Pair::from_string(s, None).expect("`bls` seed slice is valid"))
+				.map(|s| bls377::Pair::from_string(s, None).expect("`bls` seed slice is valid"))
 		})
 	}
 }
@@ -294,23 +294,27 @@ impl Keystore for MemoryKeystore {
 		pair.map(|k| k.sign_prehashed(msg)).map(Ok).transpose()
 	}
 
-	fn bls_public_keys(&self, id: KeyTypeId) -> Vec<bls::Public> {
+	fn bls377_public_keys(&self, id: KeyTypeId) -> Vec<bls377::Public> {
 		self.keys
 			.read()
 			.get(&id)
 			.map(|keys| {
 				keys.values()
-					.map(|s| bls::Pair::from_string(s, None).expect("`bls` seed slice is valid"))
+					.map(|s| bls377::Pair::from_string(s, None).expect("`bls` seed slice is valid"))
 					.map(|p| p.public())
 					.collect()
 			})
 			.unwrap_or_default()
 	}
 
-	fn bls_generate_new(&self, id: KeyTypeId, seed: Option<&str>) -> Result<bls::Public, Error> {
+	fn bls377_generate_new(
+		&self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<bls377::Public, Error> {
 		match seed {
 			Some(seed) => {
-				let pair = bls::Pair::from_string(seed, None)
+				let pair = bls377::Pair::from_string(seed, None)
 					.map_err(|_| Error::ValidationError("Generates an `bls` pair.".to_owned()))?;
 				self.keys
 					.write()
@@ -320,7 +324,7 @@ impl Keystore for MemoryKeystore {
 				Ok(pair.public())
 			},
 			None => {
-				let (pair, phrase, _) = bls::Pair::generate_with_phrase(None);
+				let (pair, phrase, _) = bls377::Pair::generate_with_phrase(None);
 				self.keys
 					.write()
 					.entry(id)
@@ -331,13 +335,13 @@ impl Keystore for MemoryKeystore {
 		}
 	}
 
-	fn bls_sign(
+	fn bls377_sign(
 		&self,
 		id: KeyTypeId,
-		public: &bls::Public,
+		public: &bls377::Public,
 		msg: &[u8],
-	) -> Result<Option<bls::Signature>, Error> {
-		let pair = self.bls_key_pair(id, public);
+	) -> Result<Option<bls377::Signature>, Error> {
+		let pair = self.bls377_key_pair(id, public);
 		pair.map(|k| k.sign(msg)).map(Ok).transpose()
 	}
 }

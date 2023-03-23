@@ -68,6 +68,8 @@ pub mod testing;
 pub mod traits;
 pub mod uint;
 
+pub use bls::{bls377, bls381};
+
 pub use self::{
 	hash::{convert_hash, H160, H256, H512},
 	uint::{U256, U512},
