@@ -35,7 +35,6 @@ use sp_runtime::{
 use std::sync::Arc;
 use substrate_test_runtime::{Block, Hash, Header};
 
-
 pub struct ChainHeadMockClient<Client> {
 	client: Arc<Client>,
 	import_sinks: Mutex<Vec<TracingUnboundedSender<BlockImportNotification<Block>>>>,

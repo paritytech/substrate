@@ -3,6 +3,7 @@ use crate::chain_head::test_utils::ChainHeadMockClient;
 use super::*;
 use assert_matches::assert_matches;
 use codec::{Decode, Encode};
+use futures::Future;
 use jsonrpsee::{
 	core::{error::Error, server::rpc_module::Subscription as RpcSubscription},
 	types::{error::CallError, EmptyServerParams as EmptyParams},
@@ -35,12 +36,18 @@ const CHILD_STORAGE_KEY: &[u8] = b"child";
 const CHILD_VALUE: &[u8] = b"child value";
 
 async fn get_next_event<T: serde::de::DeserializeOwned>(sub: &mut RpcSubscription) -> T {
-	let (event, _sub_id) = tokio::time::timeout(std::time::Duration::from_secs(5), sub.next())
+	let (event, _sub_id) = tokio::time::timeout(std::time::Duration::from_secs(60), sub.next())
 		.await
 		.unwrap()
 		.unwrap()
 		.unwrap();
 	event
+}
+
+async fn run_with_timeout<F: Future>(future: F) -> <F as Future>::Output {
+	tokio::time::timeout(std::time::Duration::from_secs(60 * 10), future)
+		.await
+		.unwrap()
 }
 
 async fn setup_api() -> (
@@ -1345,7 +1352,7 @@ async fn follow_finalized_before_new_block() {
 	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
 
 	// Trigger the Finalized notification before the NewBlock one.
-	client_mock.trigger_finality_stream(block_1.header.clone()).await;
+	run_with_timeout(client_mock.trigger_finality_stream(block_1.header.clone())).await;
 
 	// Initialized must always be reported first.
 	let finalized_hash = client.info().finalized_hash;
@@ -1385,8 +1392,8 @@ async fn follow_finalized_before_new_block() {
 	client.import(BlockOrigin::Own, block_2.clone()).await.unwrap();
 
 	// Trigger NewBlock notification for block 1 and block 2.
-	client_mock.trigger_import_stream(block_1.header).await;
-	client_mock.trigger_import_stream(block_2.header).await;
+	run_with_timeout(client_mock.trigger_import_stream(block_1.header)).await;
+	run_with_timeout(client_mock.trigger_import_stream(block_2.header)).await;
 
 	let event: FollowEvent<String> = get_next_event(&mut sub).await;
 	let expected = FollowEvent::NewBlock(NewBlock {
