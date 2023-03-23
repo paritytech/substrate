@@ -995,6 +995,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Looking at votes:
 	/// * The sum of aye and nay votes for a proposal can never exceed
 	///  `MaxMembers`.
+	/// * The proposal index inside the `Voting` storage map must be unique.
 	///
 	/// Looking at members:
 	/// * The members count must never exceed `MaxMembers`.
@@ -1011,6 +1012,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				let ayes = votes.ayes.len();
 				let nays = votes.nays.len();
 				assert!(ayes.saturating_add(nays) <= T::MaxMembers::get() as usize);
+			}
+		});
+
+		Self::proposals().into_iter().for_each(|proposal| {
+			let mut proposal_indices = vec![];
+			if let Some(votes) = Self::voting(proposal) {
+				let proposal_index = votes.index;
+				assert!(!proposal_indices.contains(&proposal_index));
+				proposal_indices.push(proposal_index);
 			}
 		});
 
