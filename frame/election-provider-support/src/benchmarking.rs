@@ -36,16 +36,16 @@ const SEED: u32 = 999;
 fn set_up_voters_targets<AccountId: Decode + Clone>(
 	voters_len: u32,
 	targets_len: u32,
-	degree: usize,
+	votes_per_voter: usize,
 ) -> (Vec<(AccountId, u64, impl IntoIterator<Item = AccountId>)>, Vec<AccountId>) {
 	// fill targets.
 	let total_targets = (0..targets_len)
 		.map(|i| frame_benchmarking::account::<AccountId>("Target", i, SEED))
 		.collect::<Vec<_>>();
-	assert!(total_targets.len() > degree, "we should always have enough voters to fill");
+	assert!(total_targets.len() > votes_per_voter, "we should always have enough voters to fill");
 
 	let mut targets = total_targets.clone();
-	targets.truncate(degree);
+	targets.truncate(votes_per_voter);
 
 	// fill voters.
 	let voters = (0..voters_len)
