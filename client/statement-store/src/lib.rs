@@ -233,7 +233,7 @@ impl Index {
 		// Purge previously expired messages.
 		let mut purged = Vec::new();
 		self.expired.retain(|hash, meta| {
-			if meta.timestamp + PURGE_AFTER < current_time {
+			if meta.timestamp + PURGE_AFTER <= current_time {
 				purged.push((col::STATEMENTS, hash.to_vec(), None));
 				log::trace!(target: LOG_TARGET, "Purged statement {:?}", HexDisplay::from(hash));
 				false
@@ -245,7 +245,7 @@ impl Index {
 		// Expire messages.
 		let mut num_expired = 0;
 		self.entries.retain(|hash, meta| {
-			if meta.timestamp + EXPIRE_AFTER < current_time {
+			if meta.timestamp + EXPIRE_AFTER <= current_time {
 				if let Some((topics, key)) = self.all_topics.remove(hash) {
 					for t in topics {
 						if let Some(t) = t {
@@ -281,8 +281,10 @@ impl Index {
 
 	fn evict(&mut self) -> Vec<(parity_db::ColId, Vec<u8>, Option<Vec<u8>>)> {
 		let mut evicted_set = Vec::new();
-		while self.by_priority.len() > self.max_entries {
+
+		while self.by_priority.len() >= self.max_entries {
 			if let Some(evicted) = self.by_priority.pop() {
+				log::trace!(target: LOG_TARGET, "Evicting statement {:?}", HexDisplay::from(&evicted.hash));
 				self.entries.remove(&evicted.hash);
 				if let Some((topics, key)) = self.all_topics.remove(&evicted.hash) {
 					for t in topics {
@@ -313,7 +315,7 @@ impl Store {
 		path: &std::path::Path,
 		client: Arc<Client>,
 		prometheus: Option<&PrometheusRegistry>,
-	) -> Result<Arc<Store>>
+	) -> Result<Store>
 	where
 		Block: BlockT,
 		Block::Hash: From<BlockHash>,
@@ -351,13 +353,13 @@ impl Store {
 		let validator = ClientWrapper { client, _block: Default::default() };
 		let validate_fn = Box::new(move |block, source, statement| validator.validate_statement(block, source, statement));
 
-		let store = Arc::new(Store {
+		let store = Store {
 			db,
 			index: RwLock::new(index),
 			validate_fn,
 			time_override: None,
 			metrics: PrometheusMetrics::new(prometheus),
-		});
+		};
 		store.populate()?;
 		Ok(store)
 	}
@@ -414,6 +416,7 @@ impl Store {
 
 	/// Perform periodic store maintenance
 	pub fn maintain(&self) {
+		log::trace!(target: LOG_TARGET, "Started store maintenance");
 		let deleted = self.index.write().maintain(self.timestamp());
 		let count = deleted.len() as u64;
 		if let Err(e) = self.db.commit(deleted) {
@@ -421,11 +424,19 @@ impl Store {
 		} else {
 			self.metrics.report(|metrics| metrics.statements_pruned.inc_by(count));
 		}
+		log::trace!(target: LOG_TARGET, "Completed store maintenance. Purged: {}, Active: {}, Expired: {}",
+			count, self.index.read().entries.len(), self.index.read().expired.len()
+		);
 	}
 
 	fn timestamp(&self) -> u64 {
 		self.time_override.unwrap_or_else(||
 			std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs())
+	}
+
+	#[cfg(test)]
+	fn set_time(&mut self, time: u64) {
+		self.time_override = Some(time);
 	}
 }
 
@@ -469,9 +480,13 @@ impl StatementStore for Store {
 	fn statement(&self, hash: &Hash) -> Result<Option<Statement>> {
 		Ok(match self.db.get(col::STATEMENTS, hash.as_slice()).map_err(|e| Error::Db(e.to_string()))? {
 			Some(entry) => {
+				log::trace!(target: LOG_TARGET, "Queried statement {:?}", HexDisplay::from(hash));
 				Some(StatementWithMeta::decode(&mut entry.as_slice()).map_err(|e| Error::Decode(e.to_string()))?.statement)
 			}
-			None => None,
+			None => {
+				log::trace!(target: LOG_TARGET, "Queried missing statement {:?}", HexDisplay::from(hash));
+				None
+			},
 		})
 	}
 
@@ -651,7 +666,7 @@ mod tests {
 		}
 	}
 
-	fn test_store() -> (std::sync::Arc<Store>, tempfile::TempDir) {
+	fn test_store() -> (Store, tempfile::TempDir) {
 		let _ = env_logger::try_init();
 		let temp_dir = tempfile::Builder::new()
 			.tempdir()
@@ -674,13 +689,29 @@ mod tests {
 		for i in 0 .. topics.len() {
 			statement.set_topic(i, topics[i].clone());
 		}
-		let kp = sp_core::sr25519::Pair::from_string("//Alice", None).unwrap();
-		statement.sign_sr25519_private(&kp);
+		let kp = sp_core::ed25519::Pair::from_string("//Alice", None).unwrap();
+		statement.sign_ed25519_private(&kp);
 		statement
 	}
 
-	fn topic(data: u8) -> Topic {
-		[data; 32]
+	fn onchain_statement_with_topics(data: u8, topics: &[Topic]) -> Statement {
+		let mut statement = Statement::new();
+		statement.set_plain_data(vec![data]);
+		for i in 0 .. topics.len() {
+			statement.set_topic(i, topics[i].clone());
+		}
+		statement.set_proof(Proof::OnChain {
+			block_hash: CORRECT_BLOCK_HASH,
+			who: Default::default(),
+			event_index: 0,
+		});
+		statement
+	}
+
+	fn topic(data: u64) -> Topic {
+		let mut topic: Topic = Default::default();
+		topic[0..8].copy_from_slice(&data.to_le_bytes());
+		topic
 	}
 
 	#[test]
@@ -704,7 +735,7 @@ mod tests {
 		assert_eq!(store.dump().unwrap().len(), 3);
 		assert_eq!(store.broadcasts(&[]).unwrap().len(), 3);
 		assert_eq!(store.statement(&statement1.hash()).unwrap(), Some(statement1.clone()));
-		std::mem::drop(store);
+		drop(store);
 
 		let client = std::sync::Arc::new(TestClient);
 		let mut path: std::path::PathBuf = temp.path().into();
@@ -728,7 +759,7 @@ mod tests {
 			store.submit(s.clone(), StatementSource::Network);
 		}
 
-		let assert_topics = |topics: &[u8], expected: &[u8]| {
+		let assert_topics = |topics: &[u64], expected: &[u8]| {
 			let topics: Vec<_> = topics.iter().map(|t| topic(*t)).collect();
 			let mut got_vals: Vec<_> = store.broadcasts(&topics).unwrap().into_iter().map(|d| d[0]).collect();
 			got_vals.sort();
@@ -748,6 +779,49 @@ mod tests {
 
 	#[test]
 	fn maintenance() {
+		use super::{MAX_LIVE_STATEMENTS, EXPIRE_AFTER, PURGE_AFTER};
+		// Check test assumptions
+		assert!((MAX_LIVE_STATEMENTS as u64) < EXPIRE_AFTER);
+
+		// first 10 statements are high priority, the rest is low.
+		let (mut store, _temp) = test_store();
+		for time in 0 .. MAX_LIVE_STATEMENTS as u64 {
+			store.set_time(time);
+			let statement = if time < 10 {
+				signed_statement_with_topics(0, &[topic(time)])
+			} else {
+				onchain_statement_with_topics(0, &[topic(time)])
+			};
+			store.submit(statement, StatementSource::Network);
+		}
+
+		let first = signed_statement_with_topics(0, &[topic(0)]);
+		let second = signed_statement_with_topics(0, &[topic(0)]);
+		assert_eq!(first, second);
+		assert_eq!(store.statement(&first.hash()).unwrap().unwrap(), first);
+		assert_eq!(store.index.read().entries.len(), MAX_LIVE_STATEMENTS);
+
+		let first_to_be_evicted = onchain_statement_with_topics(0, &[topic(10)]);
+		assert_eq!(store.index.read().entries.len(), MAX_LIVE_STATEMENTS);
+		assert_eq!(store.statement(&first_to_be_evicted.hash()).unwrap().unwrap(), first_to_be_evicted);
+
+		// Check that the new statement replaces the old.
+		store.submit(signed_statement_with_topics(0, &[topic(MAX_LIVE_STATEMENTS as u64 + 1)]) , StatementSource::Network);
+		assert_eq!(store.statement(&first_to_be_evicted.hash()).unwrap(), None);
+
+
+		store.set_time(EXPIRE_AFTER + (MAX_LIVE_STATEMENTS as u64)/ 2);
+		store.maintain();
+		// Half statements should be expired.
+		assert_eq!(store.index.read().entries.len(), MAX_LIVE_STATEMENTS / 2);
+		assert_eq!(store.index.read().expired.len(), MAX_LIVE_STATEMENTS / 2);
+
+		// The high-priority statement should survive.
+		assert_eq!(store.statement(&first.hash()).unwrap().unwrap(), first);
+
+		store.set_time(PURGE_AFTER + (MAX_LIVE_STATEMENTS as u64)/ 2);
+		store.maintain();
+		assert_eq!(store.index.read().entries.len(), 0);
+		assert_eq!(store.index.read().expired.len(), MAX_LIVE_STATEMENTS / 2);
 	}
 }
-
