@@ -999,6 +999,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// Looking at members:
 	/// * The members count must never exceed `MaxMembers`.
+	///
+	/// Looking at prime account:
+	/// * The prime account must be a member of the collective.
 	#[cfg(any(feature = "try-runtime", test))]
 	fn do_try_state() -> Result<(), &'static str> {
 		Self::proposals().into_iter().for_each(|proposal| {
@@ -1025,6 +1028,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 
 		assert!(Self::members().len() <= T::MaxMembers::get() as usize);
+
+		if let Some(prime) = Self::prime() {
+			assert!(Self::members().contains(&prime));
+		}
 
 		Ok(())
 	}
