@@ -662,13 +662,13 @@ impl<T: BlsBound> CryptoType for Pair<T> {
 	type Pair = Pair<T>;
 }
 
+// Test set excercising the BLS12-377 implementation
 #[cfg(test)]
 mod test {
 	use super::*;
 	use crate::crypto::DEV_PHRASE;
 	use bls377::{Pair, Public, Signature};
 	use hex_literal::hex;
-	// use serde_json;
 
 	#[test]
 	fn default_phrase_should_be_used() {
@@ -695,52 +695,53 @@ mod test {
 		);
 	}
 
-	// // Is this supposed to be successful?
-	// // Where is the test vector defined?
-	// #[test]
-	// fn test_vector_should_work() {
-	// 	let pair = Bls377Pair::from_seed(&hex!(
-	// 		"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
-	// 	));
-	// 	let public = pair.public();
-	// 	assert_eq!(
-	// 		public,
-	// 		Bls377Public::from_raw(hex!(
-	// 			"7a84ca8ce4c37c93c95ecee6a3c0c9a7b9c225093cf2f12dc4f69cbfb847ef9424a18f5755d5a742247d386ff2aabb80"
-	// 		))
-	// 	);
-	// 	let message = b"";
-	// 	let signature =
-	// hex!("0e5854002b249175764e463165aec0e38a46ddd44c2db29d6fec3022a3993b3390b001b53a04d155a4d216dd361df90087281be27c58ae22c7f1333820259ff5ae1b321126d1a001bf91ee088fb56ca9d4aa484d129ede7e701ced08df631581"
-	// );
-	// 	let signature = Bls377Signature::from_raw(signature);
-	// 	assert!(pair.sign(&message[..]) == signature);
-	// 	assert!(Bls377Pair::verify(&signature, &message[..], &public));
-	// }
+	// TODO FIXME Is this supposed to be successful?
+	// Where is the test vector defined?
+	#[test]
+	fn test_vector_should_work() {
+		let pair = Pair::from_seed(&hex!(
+			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
+		));
+		let public = pair.public();
+		assert_eq!(
+			public,
+			Public::from_raw(hex!(
+				"7a84ca8ce4c37c93c95ecee6a3c0c9a7b9c225093cf2f12dc4f69cbfb847ef9424a18f5755d5a742247d386ff2aabb80"
+			))
+		);
+		let message = b"";
+		let signature =
+	hex!("0e5854002b249175764e463165aec0e38a46ddd44c2db29d6fec3022a3993b3390b001b53a04d155a4d216dd361df90087281be27c58ae22c7f1333820259ff5ae1b321126d1a001bf91ee088fb56ca9d4aa484d129ede7e701ced08df631581"
+	);
+		let signature = Signature::from_raw(signature);
+		assert!(pair.sign(&message[..]) == signature);
+		assert!(Pair::verify(&signature, &message[..], &public));
+	}
 
-	// // Is this expected to be pass?
-	// // Where is the test vector defined?
-	// #[test]
-	// fn test_vector_by_string_should_work() {
-	// 	let pair = Pair::from_string(
-	// 		"0x9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
-	// 		None,
-	// 	)
-	// 	.unwrap();
-	// 	let public = pair.public();
-	// 	assert_eq!(
-	// 		public,
-	// 		Public::from_raw(hex!(
-	// 			"6dc6be608fab3c6bd894a606be86db346cc170db85c733853a371f3db54ae1b12052c0888d472760c81b537572a26f00"
-	// 		))
-	// 	);
-	// 	let message = b"";
-	// 	let signature =
-	// hex!("9f7d07e0fdd6aa342f6defaade946b59bfeba8af45c243f86b208cd339b2c713421844e3007e0acafd0a529542ee050047b739fe5bfd311d884451542204e173d784e648eb55f4bd32da747f006120fadf4801c2b1c88f9745c50c2141b1d380"
-	// ); 	let signature = Signature::from_raw(signature);
-	// 	assert!(pair.sign(&message[..]) == signature);
-	// 	assert!(Pair::verify(&signature, &message[..], &public));
-	// }
+	// TODO FIXME Is this expected to be pass?
+	// Where the test vectors were taken?
+	#[test]
+	fn test_vector_by_string_should_work() {
+		let pair = Pair::from_string(
+			"0x9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+			None,
+		)
+		.unwrap();
+		let public = pair.public();
+		assert_eq!(
+			public,
+			Public::from_raw(hex!(
+				"6dc6be608fab3c6bd894a606be86db346cc170db85c733853a371f3db54ae1b12052c0888d472760c81b537572a26f00"
+			))
+		);
+		let message = b"";
+		let signature =
+	hex!("9f7d07e0fdd6aa342f6defaade946b59bfeba8af45c243f86b208cd339b2c713421844e3007e0acafd0a529542ee050047b739fe5bfd311d884451542204e173d784e648eb55f4bd32da747f006120fadf4801c2b1c88f9745c50c2141b1d380"
+	);
+		let signature = Signature::from_raw(signature);
+		assert!(pair.sign(&message[..]) == signature);
+		assert!(Pair::verify(&signature, &message[..], &public));
+	}
 
 	#[test]
 	fn generated_pair_should_work() {
@@ -772,60 +773,60 @@ mod test {
 		assert!(!Pair::verify(&signature, "Other message", &public));
 	}
 
-	// #[test]
-	// fn generate_with_phrase_recovery_possible() {
-	// 	let (pair1, phrase, _) = Pair::generate_with_phrase(None);
-	// 	let (pair2, _) = Pair::from_phrase(&phrase, None).unwrap();
+	#[test]
+	fn generate_with_phrase_recovery_possible() {
+		let (pair1, phrase, _) = Pair::generate_with_phrase(None);
+		let (pair2, _) = Pair::from_phrase(&phrase, None).unwrap();
 
-	// 	assert_eq!(pair1.public(), pair2.public());
-	// }
+		assert_eq!(pair1.public(), pair2.public());
+	}
 
-	// #[test]
-	// fn generate_with_password_phrase_recovery_possible() {
-	// 	let (pair1, phrase, _) = Pair::generate_with_phrase(Some("password"));
-	// 	let (pair2, _) = Pair::from_phrase(&phrase, Some("password")).unwrap();
+	#[test]
+	fn generate_with_password_phrase_recovery_possible() {
+		let (pair1, phrase, _) = Pair::generate_with_phrase(Some("password"));
+		let (pair2, _) = Pair::from_phrase(&phrase, Some("password")).unwrap();
 
-	// 	assert_eq!(pair1.public(), pair2.public());
-	// }
+		assert_eq!(pair1.public(), pair2.public());
+	}
 
-	// #[test]
-	// fn password_does_something() {
-	// 	let (pair1, phrase, _) = Pair::generate_with_phrase(Some("password"));
-	// 	let (pair2, _) = Pair::from_phrase(&phrase, None).unwrap();
+	#[test]
+	fn password_does_something() {
+		let (pair1, phrase, _) = Pair::generate_with_phrase(Some("password"));
+		let (pair2, _) = Pair::from_phrase(&phrase, None).unwrap();
 
-	// 	assert_ne!(pair1.public(), pair2.public());
-	// }
+		assert_ne!(pair1.public(), pair2.public());
+	}
 
-	// #[test]
-	// fn ss58check_roundtrip_works() {
-	// 	let pair = Pair::from_seed(b"12345678901234567890123456789012");
-	// 	let public = pair.public();
-	// 	let s = public.to_ss58check();
-	// 	println!("Correct: {}", s);
-	// 	let cmp = Public::from_ss58check(&s).unwrap();
-	// 	assert_eq!(cmp, public);
-	// }
+	#[test]
+	fn ss58check_roundtrip_works() {
+		let pair = Pair::from_seed(b"12345678901234567890123456789012");
+		let public = pair.public();
+		let s = public.to_ss58check();
+		println!("Correct: {}", s);
+		let cmp = Public::from_ss58check(&s).unwrap();
+		assert_eq!(cmp, public);
+	}
 
-	// #[test]
-	// fn signature_serialization_works() {
-	// 	let pair = Pair::from_seed(b"12345678901234567890123456789012");
-	// 	let message = b"Something important";
-	// 	let signature = pair.sign(&message[..]);
-	// 	let serialized_signature = serde_json::to_string(&signature).unwrap();
-	// 	// Signature is 96 bytes, so 192 chars + 2 quote chars
-	// 	assert_eq!(serialized_signature.len(), 194);
-	// 	let signature = serde_json::from_str(&serialized_signature).unwrap();
-	// 	assert!(Pair::verify(&signature, &message[..], &pair.public()));
-	// }
+	#[test]
+	fn signature_serialization_works() {
+		let pair = Pair::from_seed(b"12345678901234567890123456789012");
+		let message = b"Something important";
+		let signature = pair.sign(&message[..]);
+		let serialized_signature = serde_json::to_string(&signature).unwrap();
+		// Signature is 96 bytes, so 192 chars + 2 quote chars
+		assert_eq!(serialized_signature.len(), 194);
+		let signature = serde_json::from_str(&serialized_signature).unwrap();
+		assert!(Pair::verify(&signature, &message[..], &pair.public()));
+	}
 
-	// #[test]
-	// fn signature_serialization_doesnt_panic() {
-	// 	fn deserialize_signature(text: &str) -> Result<Signature, serde_json::error::Error> {
-	// 		serde_json::from_str(text)
-	// 	}
-	// 	assert!(deserialize_signature("Not valid json.").is_err());
-	// 	assert!(deserialize_signature("\"Not an actual signature.\"").is_err());
-	// 	// Poorly-sized
-	// 	assert!(deserialize_signature("\"abc123\"").is_err());
-	// }
+	#[test]
+	fn signature_serialization_doesnt_panic() {
+		fn deserialize_signature(text: &str) -> Result<Signature, serde_json::error::Error> {
+			serde_json::from_str(text)
+		}
+		assert!(deserialize_signature("Not valid json.").is_err());
+		assert!(deserialize_signature("\"Not an actual signature.\"").is_err());
+		// Poorly-sized
+		assert!(deserialize_signature("\"abc123\"").is_err());
+	}
 }
