@@ -167,7 +167,7 @@ macro_rules! app_crypto_pair {
 			}
 		}
 
-		impl $crate::AppKey for Pair {
+		impl $crate::AppCrypto for Pair {
 			type Public = Public;
 			type Pair = Pair;
 			type Signature = Signature;
@@ -234,7 +234,7 @@ macro_rules! app_crypto_public_full_crypto {
 			type Pair = Pair;
 		}
 
-		impl $crate::AppKey for Public {
+		impl $crate::AppCrypto for Public {
 			type Public = Public;
 			type Pair = Pair;
 			type Signature = Signature;
@@ -267,7 +267,7 @@ macro_rules! app_crypto_public_not_full_crypto {
 
 		impl $crate::CryptoType for Public {}
 
-		impl $crate::AppKey for Public {
+		impl $crate::AppCrypto for Public {
 			type Public = Public;
 			type Signature = Signature;
 			const ID: $crate::KeyTypeId = $key_type;
@@ -429,7 +429,7 @@ macro_rules! app_crypto_signature_full_crypto {
 			type Pair = Pair;
 		}
 
-		impl $crate::AppKey for Signature {
+		impl $crate::AppCrypto for Signature {
 			type Public = Public;
 			type Pair = Pair;
 			type Signature = Signature;
@@ -460,7 +460,7 @@ macro_rules! app_crypto_signature_not_full_crypto {
 
 		impl $crate::CryptoType for Signature {}
 
-		impl $crate::AppKey for Signature {
+		impl $crate::AppCrypto for Signature {
 			type Public = Public;
 			type Signature = Signature;
 			const ID: $crate::KeyTypeId = $key_type;

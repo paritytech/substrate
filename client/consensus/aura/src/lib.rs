@@ -45,7 +45,7 @@ use sc_consensus_slots::{
 };
 use sc_telemetry::TelemetryHandle;
 use sp_api::{Core, ProvideRuntimeApi};
-use sp_application_crypto::{AppKey, AppPublic};
+use sp_application_crypto::{AppCrypto, AppPublic};
 use sp_blockchain::{HeaderBackend, Result as CResult};
 use sp_consensus::{BlockOrigin, Environment, Error as ConsensusError, Proposer, SelectChain};
 use sp_consensus_slots::Slot;
@@ -449,8 +449,8 @@ where
 		let signature = self
 			.keystore
 			.sign_with(
-				<AuthorityId<P> as AppKey>::ID,
-				<AuthorityId<P> as AppKey>::CRYPTO_ID,
+				<AuthorityId<P> as AppCrypto>::ID,
+				<AuthorityId<P> as AppCrypto>::CRYPTO_ID,
 				&public,
 				header_hash.as_ref(),
 			)

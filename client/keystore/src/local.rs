@@ -18,7 +18,7 @@
 //! Local keystore implementation
 
 use parking_lot::RwLock;
-use sp_application_crypto::{ecdsa, ed25519, sr25519, AppKey, AppPair, IsWrappedBy};
+use sp_application_crypto::{ecdsa, ed25519, sr25519, AppCrypto, AppPair, IsWrappedBy};
 use sp_core::{
 	crypto::{ByteArray, ExposeSecret, KeyTypeId, Pair as PairT, SecretString},
 	sr25519::{Pair as Sr25519Pair, Public as Sr25519Public},
@@ -59,7 +59,7 @@ impl LocalKeystore {
 	/// `Err(_)` when something failed.
 	pub fn key_pair<Pair: AppPair>(
 		&self,
-		public: &<Pair as AppKey>::Public,
+		public: &<Pair as AppCrypto>::Public,
 	) -> Result<Option<Pair>> {
 		self.0.read().key_pair::<Pair>(public)
 	}
@@ -445,7 +445,7 @@ impl KeystoreInner {
 	/// when something failed.
 	pub fn key_pair<Pair: AppPair>(
 		&self,
-		public: &<Pair as AppKey>::Public,
+		public: &<Pair as AppCrypto>::Public,
 	) -> Result<Option<Pair>> {
 		self.key_pair_by_type::<Pair::Generic>(IsWrappedBy::from_ref(public), Pair::ID)
 			.map(|v| v.map(Into::into))

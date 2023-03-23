@@ -108,7 +108,7 @@ use sc_consensus_slots::{
 };
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_TRACE};
 use sp_api::{ApiExt, ProvideRuntimeApi};
-use sp_application_crypto::AppKey;
+use sp_application_crypto::AppCrypto;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::{
 	Backend as _, BlockStatus, Error as ClientError, ForkBackend, HeaderBackend, HeaderMetadata,
@@ -835,7 +835,11 @@ where
 	> {
 		let signature = self
 			.keystore
-			.sr25519_sign(<AuthorityId as AppKey>::ID, public.as_inner_ref(), header_hash.as_ref())
+			.sr25519_sign(
+				<AuthorityId as AppCrypto>::ID,
+				public.as_inner_ref(),
+				header_hash.as_ref(),
+			)
 			.map_err(|e| ConsensusError::CannotSign(public.to_raw_vec(), e.to_string()))?
 			.ok_or_else(|| {
 				ConsensusError::CannotSign(

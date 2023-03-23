@@ -451,7 +451,7 @@ where
 	H: Encode,
 	N: Encode,
 {
-	use sp_application_crypto::AppKey;
+	use sp_application_crypto::AppCrypto;
 	use sp_core::crypto::Wraps;
 
 	let encoded = localized_payload(round, set_id, &message);
