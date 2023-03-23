@@ -65,7 +65,8 @@ pub trait RuntimeVersionOf {
 /// The host functions Substrate provides for the Wasm runtime environment.
 ///
 /// All these host functions will be callable from inside the Wasm environment.
-pub type HostFunctions = (sp_io::SubstrateHostFunctions, sp_statement_store::runtime_api::HostFunctions);
+pub type HostFunctions =
+	(sp_io::SubstrateHostFunctions, sp_statement_store::runtime_api::HostFunctions);
 
 #[cfg(test)]
 mod tests {

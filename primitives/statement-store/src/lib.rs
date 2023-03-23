@@ -23,9 +23,9 @@
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_application_crypto::RuntimeAppPublic;
-use sp_runtime_interface::pass_by::PassByCodec;
 #[cfg(feature = "std")]
 use sp_core::Pair;
+use sp_runtime_interface::pass_by::PassByCodec;
 use sp_std::vec::Vec;
 
 /// Statement topic.
@@ -299,7 +299,8 @@ impl Statement {
 				let signature = sp_core::ecdsa::Signature(*signature);
 				let public = sp_core::ecdsa::Public(*signer);
 				if signature.verify(to_sign.as_slice(), &public) {
-					let sender_hash = <sp_runtime::traits::BlakeTwo256 as sp_core::Hasher>::hash(signer);
+					let sender_hash =
+						<sp_runtime::traits::BlakeTwo256 as sp_core::Hasher>::hash(signer);
 					SignatureVerificationResult::Valid(sender_hash.into())
 				} else {
 					SignatureVerificationResult::Invalid

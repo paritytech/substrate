@@ -176,7 +176,8 @@ where
 	fn collect_statements() {
 		// Find `NewStatement` events and submit them to the store
 		for (index, event) in frame_system::Pallet::<T>::read_events_no_consensus().enumerate() {
-			if let Ok(Event::<T>::NewStatement{ account, mut statement }) = event.event.try_into() {
+			if let Ok(Event::<T>::NewStatement { account, mut statement }) = event.event.try_into()
+			{
 				if statement.proof().is_none() {
 					let proof = Proof::OnChain {
 						who: account.into(),

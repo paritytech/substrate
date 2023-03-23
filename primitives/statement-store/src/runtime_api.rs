@@ -17,12 +17,12 @@
 
 //! Runtime support for the statement store.
 
-use crate::{Topic, Statement, Hash};
+use crate::{Hash, Statement, Topic};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
-use sp_runtime::RuntimeDebug;
-use sp_runtime_interface::{runtime_interface, pass_by::PassByEnum};
 use sp_externalities::ExternalitiesExt;
+use sp_runtime::RuntimeDebug;
+use sp_runtime_interface::{pass_by::PassByEnum, runtime_interface};
 use sp_std::vec::Vec;
 
 /// Information concerning a valid statement.
@@ -109,22 +109,20 @@ pub enum SubmitResult {
 
 /// Export functions for the WASM host.
 #[cfg(feature = "std")]
-pub type HostFunctions = (
-	io::HostFunctions,
-);
+pub type HostFunctions = (io::HostFunctions,);
 
 /// Host interface
 #[runtime_interface]
 pub trait Io {
 	/// Submit a new new statement. The statement will be broadcast to the network.
 	/// This is meant to be used by the offchain worker.
-	fn submit_statement(&mut self, statement: Statement) -> SubmitResult  {
+	fn submit_statement(&mut self, statement: Statement) -> SubmitResult {
 		if let Some(StatementStoreExt(store)) = self.extension::<StatementStoreExt>() {
 			match store.submit(statement, StatementSource::Chain) {
 				crate::SubmitResult::New(_) => SubmitResult::OkNew,
 				crate::SubmitResult::Known => SubmitResult::OkKnown,
-				// This should not happen for `StatementSource::Chain`. An existing statement will be
-				// overwritten.
+				// This should not happen for `StatementSource::Chain`. An existing statement will
+				// be overwritten.
 				crate::SubmitResult::KnownExpired => SubmitResult::Bad,
 				crate::SubmitResult::Bad(_) => SubmitResult::Bad,
 				crate::SubmitResult::InternalError(_) => SubmitResult::Bad,
