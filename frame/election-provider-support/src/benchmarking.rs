@@ -63,11 +63,11 @@ fn set_up_voters_targets<AccountId: Decode + Clone>(
 
 benchmarks! {
 	phragmen {
-		// number of votes in snapshot.
-		let v in (MIN_VOTERS) .. MAX_VOTERS;
 		// number of targets in snapshot. the minimum number of targets must be larger than
 		// `MAX_VOTES_PER_VOTER`.
 		let t in (MAX_VOTES_PER_VOTER + 1) .. MAX_CANDIDATES;
+		// number of votes in snapshot.
+		let v in (MIN_VOTERS) .. MAX_VOTERS;
 		// number of edges (total votes per voter).
 		let e in (MAX_VOTERS) .. MAX_VOTERS  * MAX_VOTES_PER_VOTER;
 
@@ -85,11 +85,11 @@ benchmarks! {
 	}
 
 	phragmms {
-		// number of votes in snapshot.
-		let v in (MIN_VOTERS) .. MAX_VOTERS;
 		// number of targets in snapshot. the minimum number of targets must be larger than
 		// `MAX_VOTES_PER_VOTER`.
 		let t in (MAX_VOTES_PER_VOTER + 1) .. MAX_CANDIDATES;
+		// number of votes in snapshot.
+		let v in (MIN_VOTERS) .. MAX_VOTERS;
 		// number of edges (total votes per voter).
 		let e in (MAX_VOTERS) .. MAX_VOTERS  * MAX_VOTES_PER_VOTER;
 
@@ -107,11 +107,11 @@ benchmarks! {
 	}
 
 	approval_voting {
-		// number of votes in snapshot.
-		let v in (MIN_VOTERS) .. MAX_VOTERS;
 		// number of targets in snapshot. the minimum number of targets must be larger than
 		// `MAX_VOTES_PER_VOTER`.
 		let t in (MAX_VOTES_PER_VOTER + 1) .. MAX_CANDIDATES;
+		// number of votes in snapshot.
+		let v in (MIN_VOTERS) .. MAX_VOTERS;
 		// number of edges (total votes per voter).
 		let e in (MAX_VOTERS) .. MAX_VOTERS  * MAX_VOTES_PER_VOTER;
 
