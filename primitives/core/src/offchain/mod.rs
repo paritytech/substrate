@@ -278,16 +278,8 @@ bitflags::bitflags! {
 		const NODE_AUTHORIZATION = 0b0000_1000_0000;
 		/// Access time related functionality
 		const TIME = 0b0001_0000_0000;
-	}
-}
-
-impl Capabilities {
-	/// Return capabilities for rich offchain calls.
-	///
-	/// Those calls should be allowed to sign and submit transactions
-	/// and access offchain workers database (but read only!).
-	pub fn rich_offchain_call() -> Self {
-		Capabilities::TRANSACTION_POOL | Capabilities::KEYSTORE | Capabilities::OFFCHAIN_DB_READ
+		/// Access the statement store.
+		const STATEMENT_STORE = 0b0010_0000_0000;
 	}
 }
 

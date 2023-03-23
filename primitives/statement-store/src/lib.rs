@@ -23,6 +23,7 @@
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_application_crypto::RuntimeAppPublic;
+use sp_runtime_interface::pass_by::PassByCodec;
 #[cfg(feature = "std")]
 use sp_core::Pair;
 use sp_std::vec::Vec;
@@ -76,7 +77,7 @@ pub fn hash_encoded(data: &[u8]) -> [u8; 32] {
 }
 
 /// Statement proof.
-#[derive(Encode, Decode, TypeInfo, sp_runtime::RuntimeDebug, Clone, PartialEq, Eq)]
+#[derive(Encode, Decode, TypeInfo, sp_core::RuntimeDebug, Clone, PartialEq, Eq)]
 pub enum Proof {
 	/// Sr25519 Signature.
 	Sr25519 {
@@ -110,7 +111,7 @@ pub enum Proof {
 	},
 }
 
-#[derive(Encode, Decode, TypeInfo, sp_runtime::RuntimeDebug, Clone, PartialEq, Eq)]
+#[derive(Encode, Decode, TypeInfo, sp_core::RuntimeDebug, Clone, PartialEq, Eq)]
 /// Statement attributes. Each statement is a list of 0 or more fields. Fields may only appear in
 /// the order declared here.
 #[repr(u8)]
@@ -131,7 +132,7 @@ pub enum Field {
 	Data(Vec<u8>) = 6,
 }
 
-#[derive(TypeInfo, sp_runtime::RuntimeDebug, Clone, PartialEq, Eq, Default)]
+#[derive(TypeInfo, sp_core::RuntimeDebug, PassByCodec, Clone, PartialEq, Eq, Default)]
 /// Statement structure.
 pub struct Statement {
 	proof: Option<Proof>,
@@ -296,7 +297,8 @@ impl Statement {
 				let signature = sp_core::ecdsa::Signature(*signature);
 				let public = sp_core::ecdsa::Public(*signer);
 				if signature.verify(to_sign.as_slice(), &public) {
-					SignatureVerificationResult::Valid(sp_io::hashing::blake2_256(signer))
+					let sender_hash = <sp_runtime::traits::BlakeTwo256 as sp_core::Hasher>::hash(signer);
+					SignatureVerificationResult::Valid(sender_hash.into())
 				} else {
 					SignatureVerificationResult::Invalid
 				}

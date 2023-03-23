@@ -351,7 +351,24 @@ impl Index {
 
 impl Store {
 	/// Create a new shared store instance. There should only be one per process.
-	pub fn new<Block, Client>(
+	pub fn new_shared<Block, Client>(
+		path: &std::path::Path,
+		client: Arc<Client>,
+		prometheus: Option<&PrometheusRegistry>,
+	) -> Result<Arc<Store>>
+	where
+		Block: BlockT,
+		Block::Hash: From<BlockHash>,
+		Client: ProvideRuntimeApi<Block> + HeaderBackend<Block> + sc_client_api::ExecutorProvider<Block> + Send + Sync + 'static,
+		Client::Api: ValidateStatement<Block>,
+	{
+		let store = Arc::new(Self::new(path, client.clone(), prometheus)?);
+		client.execution_extensions().register_statement_store(store.clone());
+		Ok(store)
+	}
+
+	/// Create a new instance.
+	fn new<Block, Client>(
 		path: &std::path::Path,
 		client: Arc<Client>,
 		prometheus: Option<&PrometheusRegistry>,
