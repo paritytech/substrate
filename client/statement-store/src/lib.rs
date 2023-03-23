@@ -23,19 +23,23 @@
 
 mod metrics;
 
-pub use sp_statement_store::{StatementStore, Error};
+pub use sp_statement_store::{Error, StatementStore};
 
-use std::{collections::{HashSet, HashMap, BinaryHeap}, sync::Arc};
-use parking_lot::RwLock;
 use metrics::MetricsLink as PrometheusMetrics;
+use parking_lot::RwLock;
 use prometheus_endpoint::Registry as PrometheusRegistry;
-use sp_statement_store::{Statement, Topic, DecryptionKey, Result, Hash, BlockHash, SubmitResult, NetworkPriority, Proof};
-use sp_statement_store::runtime_api::{ValidateStatement, ValidStatement, InvalidStatement, StatementSource};
-use sp_core::{Encode, Decode, hexdisplay::HexDisplay};
 use sp_api::ProvideRuntimeApi;
-use sp_runtime::traits::Block as BlockT;
 use sp_blockchain::HeaderBackend;
-
+use sp_core::{hexdisplay::HexDisplay, Decode, Encode};
+use sp_runtime::traits::Block as BlockT;
+use sp_statement_store::{
+	runtime_api::{InvalidStatement, StatementSource, ValidStatement, ValidateStatement},
+	BlockHash, DecryptionKey, Hash, NetworkPriority, Proof, Result, Statement, SubmitResult, Topic,
+};
+use std::{
+	collections::{BinaryHeap, HashMap, HashSet},
+	sync::Arc,
+};
 
 const KEY_VERSION: &[u8] = b"version".as_slice();
 const CURRENT_VERSION: u32 = 1;
@@ -66,13 +70,21 @@ struct EvictionPriority {
 
 impl PartialOrd for EvictionPriority {
 	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-		Some(self.priority.cmp(&other.priority).then_with(|| self.timestamp.cmp(&other.timestamp)).reverse())
+		Some(
+			self.priority
+				.cmp(&other.priority)
+				.then_with(|| self.timestamp.cmp(&other.timestamp))
+				.reverse(),
+		)
 	}
 }
 
 impl Ord for EvictionPriority {
 	fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-		self.priority.cmp(&other.priority).then_with(|| self.timestamp.cmp(&other.timestamp)).reverse()
+		self.priority
+			.cmp(&other.priority)
+			.then_with(|| self.timestamp.cmp(&other.timestamp))
+			.reverse()
 	}
 }
 
@@ -87,17 +99,17 @@ struct Index {
 	max_entries: usize,
 }
 
-struct ClientWrapper<Block, Client>  {
+struct ClientWrapper<Block, Client> {
 	client: Arc<Client>,
 	_block: std::marker::PhantomData<Block>,
 }
 
 impl<Block, Client> ClientWrapper<Block, Client>
-	where
-		Block: BlockT,
-		Block::Hash: From<BlockHash>,
-		Client: ProvideRuntimeApi<Block> + HeaderBackend<Block> + Send + Sync + 'static,
-		Client::Api: ValidateStatement<Block>,
+where
+	Block: BlockT,
+	Block::Hash: From<BlockHash>,
+	Client: ProvideRuntimeApi<Block> + HeaderBackend<Block> + Send + Sync + 'static,
+	Client::Api: ValidateStatement<Block>,
 {
 	fn validate_statement(
 		&self,
@@ -112,9 +124,7 @@ impl<Block, Client> ClientWrapper<Block, Client>
 		});
 		match api.validate_statement(block, source, statement) {
 			Ok(r) => r,
-			Err(_) => {
-				Err(InvalidStatement::InternalError)
-			}
+			Err(_) => Err(InvalidStatement::InternalError),
 		}
 	}
 }
@@ -123,7 +133,15 @@ impl<Block, Client> ClientWrapper<Block, Client>
 pub struct Store {
 	db: parity_db::Db,
 	index: RwLock<Index>,
-	validate_fn: Box<dyn Fn(Option<BlockHash>, StatementSource, Statement) -> std::result::Result<ValidStatement, InvalidStatement> + Send + Sync>,
+	validate_fn: Box<
+		dyn Fn(
+				Option<BlockHash>,
+				StatementSource,
+				Statement,
+			) -> std::result::Result<ValidStatement, InvalidStatement>
+			+ Send
+			+ Sync,
+	>,
 	time_override: Option<u64>,
 	metrics: PrometheusMetrics,
 }
@@ -175,10 +193,10 @@ impl Index {
 
 	fn query(&self, hash: &Hash) -> IndexQuery {
 		if let Some(meta) = self.entries.get(hash) {
-			return IndexQuery::Exists(meta.priority);
+			return IndexQuery::Exists(meta.priority)
 		}
 		if let Some(meta) = self.expired.get(hash) {
-			return IndexQuery::Expired(meta.priority);
+			return IndexQuery::Expired(meta.priority)
 		}
 		IndexQuery::Unknown
 	}
@@ -191,7 +209,12 @@ impl Index {
 		self.expired.contains_key(hash)
 	}
 
-	fn iter(&self, key: Option<DecryptionKey>, topics: &[Topic], mut f: impl FnMut(&Hash) -> Result<()>) -> Result<()> {
+	fn iter(
+		&self,
+		key: Option<DecryptionKey>,
+		topics: &[Topic],
+		mut f: impl FnMut(&Hash) -> Result<()>,
+	) -> Result<()> {
 		let mut sets: [Option<&HashSet<Hash>>; 4] = Default::default();
 		let mut num_sets = 0;
 		for t in topics {
@@ -210,17 +233,26 @@ impl Index {
 			// Start with the smallest topic set or the key set.
 			sets[0..num_sets].sort_by_key(|s| s.map_or(0, HashSet::len));
 			if let Some(key) = key {
-				let key_set = if let Some(set) = self.by_dec_key.get(&key) { set } else { return Ok(()) };
+				let key_set =
+					if let Some(set) = self.by_dec_key.get(&key) { set } else { return Ok(()) };
 				for item in key_set {
 					if sets.iter().all(|set| set.unwrap().contains(item)) {
-						log::trace!(target: LOG_TARGET, "Iterating by key: {:?}", HexDisplay::from(item));
+						log::trace!(
+							target: LOG_TARGET,
+							"Iterating by key: {:?}",
+							HexDisplay::from(item)
+						);
 						f(item)?
 					}
 				}
 			} else {
 				for item in sets[0].unwrap() {
-					if sets[1 .. num_sets].iter().all(|set| set.unwrap().contains(item)) {
-						log::trace!(target: LOG_TARGET, "Iterating by topic: {:?}", HexDisplay::from(item));
+					if sets[1..num_sets].iter().all(|set| set.unwrap().contains(item)) {
+						log::trace!(
+							target: LOG_TARGET,
+							"Iterating by topic: {:?}",
+							HexDisplay::from(item)
+						);
 						f(item)?
 					}
 				}
@@ -270,11 +302,15 @@ impl Index {
 		});
 		if num_expired > 0 {
 			// Rebuild the priority queue
-			self.by_priority = self.entries.iter().map(|(hash, meta)| EvictionPriority {
-				hash: hash.clone(),
-				priority: meta.priority,
-				timestamp: meta.timestamp,
-			}).collect();
+			self.by_priority = self
+				.entries
+				.iter()
+				.map(|(hash, meta)| EvictionPriority {
+					hash: hash.clone(),
+					priority: meta.priority,
+					timestamp: meta.timestamp,
+				})
+				.collect();
 		}
 		purged
 	}
@@ -284,7 +320,11 @@ impl Index {
 
 		while self.by_priority.len() >= self.max_entries {
 			if let Some(evicted) = self.by_priority.pop() {
-				log::trace!(target: LOG_TARGET, "Evicting statement {:?}", HexDisplay::from(&evicted.hash));
+				log::trace!(
+					target: LOG_TARGET,
+					"Evicting statement {:?}",
+					HexDisplay::from(&evicted.hash)
+				);
 				self.entries.remove(&evicted.hash);
 				if let Some((topics, key)) = self.all_topics.remove(&evicted.hash) {
 					for t in topics {
@@ -302,7 +342,7 @@ impl Index {
 				}
 				evicted_set.push((col::STATEMENTS, evicted.hash.to_vec(), None));
 			} else {
-				break;
+				break
 			}
 		}
 		evicted_set
@@ -335,23 +375,31 @@ impl Store {
 		let db = parity_db::Db::open_or_create(&config).map_err(|e| Error::Db(e.to_string()))?;
 		match db.get(col::META, &KEY_VERSION).map_err(|e| Error::Db(e.to_string()))? {
 			Some(version) => {
-				let version = u32::from_le_bytes(version.try_into()
-					.map_err(|_| Error::Db("Error reading database version".into()))?);
+				let version = u32::from_le_bytes(
+					version
+						.try_into()
+						.map_err(|_| Error::Db("Error reading database version".into()))?,
+				);
 				if version != CURRENT_VERSION {
-					return Err(Error::Db(format!("Unsupported database version: {version}")));
+					return Err(Error::Db(format!("Unsupported database version: {version}")))
 				}
 			},
 			None => {
-				db.commit(
-					[(col::META, KEY_VERSION.to_vec(),  Some(CURRENT_VERSION.to_le_bytes().to_vec()))]
-				).map_err(|e| Error::Db(e.to_string()))?;
-			}
+				db.commit([(
+					col::META,
+					KEY_VERSION.to_vec(),
+					Some(CURRENT_VERSION.to_le_bytes().to_vec()),
+				)])
+				.map_err(|e| Error::Db(e.to_string()))?;
+			},
 		}
 
 		let mut index = Index::default();
 		index.max_entries = MAX_LIVE_STATEMENTS;
 		let validator = ClientWrapper { client, _block: Default::default() };
-		let validate_fn = Box::new(move |block, source, statement| validator.validate_statement(block, source, statement));
+		let validate_fn = Box::new(move |block, source, statement| {
+			validator.validate_statement(block, source, statement)
+		});
 
 		let store = Store {
 			db,
@@ -368,27 +416,44 @@ impl Store {
 		let current_time = self.timestamp();
 		{
 			let mut index = self.index.write();
-			self.db.iter_column_while(col::STATEMENTS, |item| {
-				let statement = item.value;
-				if let Ok(statement_with_meta) = StatementWithMeta::decode(&mut statement.as_slice()) {
-					let hash = statement_with_meta.statement.hash();
-					if statement_with_meta.meta.timestamp + EXPIRE_AFTER < current_time {
-						log::trace!(target: LOG_TARGET, "Statement loaded (expired): {:?}", HexDisplay::from(&hash));
-						index.insert_expired(hash, statement_with_meta.meta);
-					} else {
-						log::trace!(target: LOG_TARGET, "Statement loaded {:?}", HexDisplay::from(&hash));
-						index.insert_with_meta(hash, statement_with_meta);
+			self.db
+				.iter_column_while(col::STATEMENTS, |item| {
+					let statement = item.value;
+					if let Ok(statement_with_meta) =
+						StatementWithMeta::decode(&mut statement.as_slice())
+					{
+						let hash = statement_with_meta.statement.hash();
+						if statement_with_meta.meta.timestamp + EXPIRE_AFTER < current_time {
+							log::trace!(
+								target: LOG_TARGET,
+								"Statement loaded (expired): {:?}",
+								HexDisplay::from(&hash)
+							);
+							index.insert_expired(hash, statement_with_meta.meta);
+						} else {
+							log::trace!(
+								target: LOG_TARGET,
+								"Statement loaded {:?}",
+								HexDisplay::from(&hash)
+							);
+							index.insert_with_meta(hash, statement_with_meta);
+						}
 					}
-				}
-				true
-			}).map_err(|e| Error::Db(e.to_string()))?;
+					true
+				})
+				.map_err(|e| Error::Db(e.to_string()))?;
 		}
 
 		self.maintain();
 		Ok(())
 	}
 
-	fn collect_statements<R>(&self, key: Option<DecryptionKey>, match_all_topics: &[Topic], mut f: impl FnMut(Statement) -> Option<R> ) -> Result<Vec<R>> {
+	fn collect_statements<R>(
+		&self,
+		key: Option<DecryptionKey>,
+		match_all_topics: &[Topic],
+		mut f: impl FnMut(Statement) -> Option<R>,
+	) -> Result<Vec<R>> {
 		let mut result = Vec::new();
 		let index = self.index.read();
 		index.iter(key, match_all_topics, |hash| {
@@ -400,14 +465,21 @@ impl Store {
 						}
 					} else {
 						// DB inconsistency
-						log::warn!(target: LOG_TARGET, "Corrupt statement {:?}", HexDisplay::from(hash));
+						log::warn!(
+							target: LOG_TARGET,
+							"Corrupt statement {:?}",
+							HexDisplay::from(hash)
+						);
 					}
-
-				}
+				},
 				None => {
 					// DB inconsistency
-					log::warn!(target: LOG_TARGET, "Missing statement {:?}", HexDisplay::from(hash));
-				}
+					log::warn!(
+						target: LOG_TARGET,
+						"Missing statement {:?}",
+						HexDisplay::from(hash)
+					);
+				},
 			}
 			Ok(())
 		})?;
@@ -424,14 +496,22 @@ impl Store {
 		} else {
 			self.metrics.report(|metrics| metrics.statements_pruned.inc_by(count));
 		}
-		log::trace!(target: LOG_TARGET, "Completed store maintenance. Purged: {}, Active: {}, Expired: {}",
-			count, self.index.read().entries.len(), self.index.read().expired.len()
+		log::trace!(
+			target: LOG_TARGET,
+			"Completed store maintenance. Purged: {}, Active: {}, Expired: {}",
+			count,
+			self.index.read().entries.len(),
+			self.index.read().expired.len()
 		);
 	}
 
 	fn timestamp(&self) -> u64 {
-		self.time_override.unwrap_or_else(||
-			std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs())
+		self.time_override.unwrap_or_else(|| {
+			std::time::SystemTime::now()
+				.duration_since(std::time::UNIX_EPOCH)
+				.unwrap_or_default()
+				.as_secs()
+		})
 	}
 
 	#[cfg(test)]
@@ -478,29 +558,51 @@ impl StatementStore for Store {
 
 	/// Returns a statement by hash.
 	fn statement(&self, hash: &Hash) -> Result<Option<Statement>> {
-		Ok(match self.db.get(col::STATEMENTS, hash.as_slice()).map_err(|e| Error::Db(e.to_string()))? {
-			Some(entry) => {
-				log::trace!(target: LOG_TARGET, "Queried statement {:?}", HexDisplay::from(hash));
-				Some(StatementWithMeta::decode(&mut entry.as_slice()).map_err(|e| Error::Decode(e.to_string()))?.statement)
-			}
-			None => {
-				log::trace!(target: LOG_TARGET, "Queried missing statement {:?}", HexDisplay::from(hash));
-				None
+		Ok(
+			match self
+				.db
+				.get(col::STATEMENTS, hash.as_slice())
+				.map_err(|e| Error::Db(e.to_string()))?
+			{
+				Some(entry) => {
+					log::trace!(
+						target: LOG_TARGET,
+						"Queried statement {:?}",
+						HexDisplay::from(hash)
+					);
+					Some(
+						StatementWithMeta::decode(&mut entry.as_slice())
+							.map_err(|e| Error::Decode(e.to_string()))?
+							.statement,
+					)
+				},
+				None => {
+					log::trace!(
+						target: LOG_TARGET,
+						"Queried missing statement {:?}",
+						HexDisplay::from(hash)
+					);
+					None
+				},
 			},
-		})
+		)
 	}
 
-	/// Return the data of all known statements which include all topics and have no `DecryptionKey` field.
+	/// Return the data of all known statements which include all topics and have no `DecryptionKey`
+	/// field.
 	fn broadcasts(&self, match_all_topics: &[Topic]) -> Result<Vec<Vec<u8>>> {
 		self.collect_statements(None, match_all_topics, |statement| statement.into_data())
 	}
 
-	/// Return the data of all known statements whose decryption key is identified as `dest` (this will generally be the public key or a hash thereof for symmetric ciphers, or a hash of the private key for symmetric ciphers).
+	/// Return the data of all known statements whose decryption key is identified as `dest` (this
+	/// will generally be the public key or a hash thereof for symmetric ciphers, or a hash of the
+	/// private key for symmetric ciphers).
 	fn posted(&self, match_all_topics: &[Topic], dest: [u8; 32]) -> Result<Vec<Vec<u8>>> {
 		self.collect_statements(Some(dest), match_all_topics, |statement| statement.into_data())
 	}
 
-	/// Return the decrypted data of all known statements whose decryption key is identified as `dest`. The key must be available to the client.
+	/// Return the decrypted data of all known statements whose decryption key is identified as
+	/// `dest`. The key must be available to the client.
 	fn posted_clear(&self, match_all_topics: &[Topic], dest: [u8; 32]) -> Result<Vec<Vec<u8>>> {
 		self.collect_statements(Some(dest), match_all_topics, |statement| statement.into_data())
 	}
@@ -511,19 +613,19 @@ impl StatementStore for Store {
 		let priority = match self.index.read().query(&hash) {
 			IndexQuery::Expired(priority) => {
 				if !source.can_be_resubmitted() {
-					return SubmitResult::KnownExpired;
+					return SubmitResult::KnownExpired
 				}
 				priority
-			}
+			},
 			IndexQuery::Exists(priority) => {
 				if !source.can_be_resubmitted() {
-					return SubmitResult::Known;
+					return SubmitResult::Known
 				}
 				priority
-			}
+			},
 			IndexQuery::Unknown => {
 				// Validate.
-				let at_block = if let Some(Proof::OnChain{block_hash, ..}) = statement.proof() {
+				let at_block = if let Some(Proof::OnChain { block_hash, .. }) = statement.proof() {
 					Some(block_hash.clone())
 				} else {
 					None
@@ -532,41 +634,51 @@ impl StatementStore for Store {
 				match validation_result {
 					Ok(ValidStatement { priority }) => priority,
 					Err(InvalidStatement::BadProof) => {
-						log::debug!(target: LOG_TARGET, "Statement validation failed: BadProof, {:?}", statement);
+						log::debug!(
+							target: LOG_TARGET,
+							"Statement validation failed: BadProof, {:?}",
+							statement
+						);
 						self.metrics.report(|metrics| metrics.validations_invalid.inc());
 						return SubmitResult::Bad("Bad statement proof")
 					},
-					Err(InvalidStatement::NoProof) =>{
-						log::debug!(target: LOG_TARGET, "Statement validation failed: NoProof, {:?}", statement);
+					Err(InvalidStatement::NoProof) => {
+						log::debug!(
+							target: LOG_TARGET,
+							"Statement validation failed: NoProof, {:?}",
+							statement
+						);
 						self.metrics.report(|metrics| metrics.validations_invalid.inc());
 						return SubmitResult::Bad("Missing statement proof")
 					},
-					Err(InvalidStatement::InternalError) => {
-						return SubmitResult::InternalError(Error::Runtime)
-					},
+					Err(InvalidStatement::InternalError) =>
+						return SubmitResult::InternalError(Error::Runtime),
 				}
-			}
+			},
 		};
 
 		// Commit to the db prior to locking the index.
 		let statement_with_meta = StatementWithMeta {
-			meta: StatementMeta {
-				priority,
-				timestamp: self.timestamp(),
-			},
+			meta: StatementMeta { priority, timestamp: self.timestamp() },
 			statement,
 		};
 
 		let mut commit = self.index.write().evict();
 		commit.push((col::STATEMENTS, hash.to_vec(), Some(statement_with_meta.encode())));
 		if let Err(e) = self.db.commit(commit) {
-			log::debug!(target: LOG_TARGET, "Statement validation failed: database error {}, {:?}", e, statement_with_meta.statement);
-			return SubmitResult::InternalError(Error::Db(e.to_string()));
+			log::debug!(
+				target: LOG_TARGET,
+				"Statement validation failed: database error {}, {:?}",
+				e,
+				statement_with_meta.statement
+			);
+			return SubmitResult::InternalError(Error::Db(e.to_string()))
 		}
 		self.metrics.report(|metrics| metrics.submitted_statements.inc());
 		let mut index = self.index.write();
 		index.insert_with_meta(hash, statement_with_meta);
-		let network_priority = if priority > 0 { NetworkPriority::High } else { NetworkPriority::Low };
+		let network_priority =
+			if priority > 0 { NetworkPriority::High } else { NetworkPriority::Low };
 		log::trace!(target: LOG_TARGET, "Statement submitted: {:?}", HexDisplay::from(&hash));
 		SubmitResult::New(network_priority)
 	}
@@ -576,21 +688,26 @@ impl StatementStore for Store {
 		match Statement::decode(&mut statement) {
 			Ok(decoded) => self.submit(decoded, source),
 			Err(e) => {
-				log::debug!(target: LOG_TARGET, "Error decoding submitted statement. Failed with: {}", e);
+				log::debug!(
+					target: LOG_TARGET,
+					"Error decoding submitted statement. Failed with: {}",
+					e
+				);
 				SubmitResult::Bad("Bad SCALE encoding")
-			}
+			},
 		}
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use sp_statement_store::runtime_api::{ValidateStatement, ValidStatement, InvalidStatement};
-	use sp_statement_store::{Statement, Topic,
-		SignatureVerificationResult, Proof, StatementStore, StatementSource, NetworkPriority, SubmitResult,
-	};
 	use crate::Store;
 	use sp_core::Pair;
+	use sp_statement_store::{
+		runtime_api::{InvalidStatement, ValidStatement, ValidateStatement},
+		NetworkPriority, Proof, SignatureVerificationResult, Statement, StatementSource,
+		StatementStore, SubmitResult, Topic,
+	};
 
 	type Extrinsic = sp_runtime::OpaqueExtrinsic;
 	type Hash = sp_core::H256;
@@ -658,7 +775,7 @@ mod tests {
 		fn status(&self, _hash: Hash) -> sp_blockchain::Result<sp_blockchain::BlockStatus> {
 			unimplemented!()
 		}
-		fn number( &self, _hash: Hash) -> sp_blockchain::Result<Option<BlockNumber>> {
+		fn number(&self, _hash: Hash) -> sp_blockchain::Result<Option<BlockNumber>> {
 			unimplemented!()
 		}
 		fn hash(&self, _number: BlockNumber) -> sp_blockchain::Result<Option<Hash>> {
@@ -668,9 +785,7 @@ mod tests {
 
 	fn test_store() -> (Store, tempfile::TempDir) {
 		let _ = env_logger::try_init();
-		let temp_dir = tempfile::Builder::new()
-			.tempdir()
-			.expect("Error creating test dir");
+		let temp_dir = tempfile::Builder::new().tempdir().expect("Error creating test dir");
 
 		let client = std::sync::Arc::new(TestClient);
 		let mut path: std::path::PathBuf = temp_dir.path().into();
@@ -686,7 +801,7 @@ mod tests {
 	fn signed_statement_with_topics(data: u8, topics: &[Topic]) -> Statement {
 		let mut statement = Statement::new();
 		statement.set_plain_data(vec![data]);
-		for i in 0 .. topics.len() {
+		for i in 0..topics.len() {
 			statement.set_topic(i, topics[i].clone());
 		}
 		let kp = sp_core::ed25519::Pair::from_string("//Alice", None).unwrap();
@@ -697,7 +812,7 @@ mod tests {
 	fn onchain_statement_with_topics(data: u8, topics: &[Topic]) -> Statement {
 		let mut statement = Statement::new();
 		statement.set_plain_data(vec![data]);
-		for i in 0 .. topics.len() {
+		for i in 0..topics.len() {
 			statement.set_topic(i, topics[i].clone());
 		}
 		statement.set_proof(Proof::OnChain {
@@ -718,9 +833,15 @@ mod tests {
 	fn submit_one() {
 		let (store, _temp) = test_store();
 		let statement0 = signed_statement(0);
-		assert_eq!(store.submit(statement0, StatementSource::Network), SubmitResult::New(NetworkPriority::High));
+		assert_eq!(
+			store.submit(statement0, StatementSource::Network),
+			SubmitResult::New(NetworkPriority::High)
+		);
 		let unsigned = Statement::new();
-		assert_eq!(store.submit(unsigned, StatementSource::Network), SubmitResult::New(NetworkPriority::Low));
+		assert_eq!(
+			store.submit(unsigned, StatementSource::Network),
+			SubmitResult::New(NetworkPriority::Low)
+		);
 	}
 
 	#[test]
@@ -729,9 +850,18 @@ mod tests {
 		let statement0 = signed_statement(0);
 		let statement1 = signed_statement(1);
 		let statement2 = signed_statement(2);
-		assert_eq!(store.submit(statement0.clone(), StatementSource::Network), SubmitResult::New(NetworkPriority::High));
-		assert_eq!(store.submit(statement1.clone(), StatementSource::Network), SubmitResult::New(NetworkPriority::High));
-		assert_eq!(store.submit(statement2.clone(), StatementSource::Network), SubmitResult::New(NetworkPriority::High));
+		assert_eq!(
+			store.submit(statement0.clone(), StatementSource::Network),
+			SubmitResult::New(NetworkPriority::High)
+		);
+		assert_eq!(
+			store.submit(statement1.clone(), StatementSource::Network),
+			SubmitResult::New(NetworkPriority::High)
+		);
+		assert_eq!(
+			store.submit(statement2.clone(), StatementSource::Network),
+			SubmitResult::New(NetworkPriority::High)
+		);
 		assert_eq!(store.dump().unwrap().len(), 3);
 		assert_eq!(store.broadcasts(&[]).unwrap().len(), 3);
 		assert_eq!(store.statement(&statement1.hash()).unwrap(), Some(statement1.clone()));
@@ -753,7 +883,8 @@ mod tests {
 		let statement1 = signed_statement_with_topics(1, &[topic(0)]);
 		let statement2 = signed_statement_with_topics(2, &[topic(0), topic(1)]);
 		let statement3 = signed_statement_with_topics(3, &[topic(0), topic(1), topic(2)]);
-		let statement4 = signed_statement_with_topics(4, &[topic(0), topic(42), topic(2), topic(3)]);
+		let statement4 =
+			signed_statement_with_topics(4, &[topic(0), topic(42), topic(2), topic(3)]);
 		let statements = vec![statement0, statement1, statement2, statement3, statement4];
 		for s in &statements {
 			store.submit(s.clone(), StatementSource::Network);
@@ -761,31 +892,32 @@ mod tests {
 
 		let assert_topics = |topics: &[u64], expected: &[u8]| {
 			let topics: Vec<_> = topics.iter().map(|t| topic(*t)).collect();
-			let mut got_vals: Vec<_> = store.broadcasts(&topics).unwrap().into_iter().map(|d| d[0]).collect();
+			let mut got_vals: Vec<_> =
+				store.broadcasts(&topics).unwrap().into_iter().map(|d| d[0]).collect();
 			got_vals.sort();
 			assert_eq!(expected.to_vec(), got_vals);
 		};
 
-		assert_topics(&[], &[0,1,2,3,4]);
-		assert_topics(&[0], &[1,2,3,4]);
-		assert_topics(&[1], &[2,3]);
-		assert_topics(&[2], &[3,4]);
+		assert_topics(&[], &[0, 1, 2, 3, 4]);
+		assert_topics(&[0], &[1, 2, 3, 4]);
+		assert_topics(&[1], &[2, 3]);
+		assert_topics(&[2], &[3, 4]);
 		assert_topics(&[3], &[4]);
 		assert_topics(&[42], &[4]);
 
-		assert_topics(&[0,1], &[2, 3]);
-		assert_topics(&[1,2], &[3]);
+		assert_topics(&[0, 1], &[2, 3]);
+		assert_topics(&[1, 2], &[3]);
 	}
 
 	#[test]
 	fn maintenance() {
-		use super::{MAX_LIVE_STATEMENTS, EXPIRE_AFTER, PURGE_AFTER};
+		use super::{EXPIRE_AFTER, MAX_LIVE_STATEMENTS, PURGE_AFTER};
 		// Check test assumptions
 		assert!((MAX_LIVE_STATEMENTS as u64) < EXPIRE_AFTER);
 
 		// first 10 statements are high priority, the rest is low.
 		let (mut store, _temp) = test_store();
-		for time in 0 .. MAX_LIVE_STATEMENTS as u64 {
+		for time in 0..MAX_LIVE_STATEMENTS as u64 {
 			store.set_time(time);
 			let statement = if time < 10 {
 				signed_statement_with_topics(0, &[topic(time)])
@@ -803,14 +935,19 @@ mod tests {
 
 		let first_to_be_evicted = onchain_statement_with_topics(0, &[topic(10)]);
 		assert_eq!(store.index.read().entries.len(), MAX_LIVE_STATEMENTS);
-		assert_eq!(store.statement(&first_to_be_evicted.hash()).unwrap().unwrap(), first_to_be_evicted);
+		assert_eq!(
+			store.statement(&first_to_be_evicted.hash()).unwrap().unwrap(),
+			first_to_be_evicted
+		);
 
 		// Check that the new statement replaces the old.
-		store.submit(signed_statement_with_topics(0, &[topic(MAX_LIVE_STATEMENTS as u64 + 1)]) , StatementSource::Network);
+		store.submit(
+			signed_statement_with_topics(0, &[topic(MAX_LIVE_STATEMENTS as u64 + 1)]),
+			StatementSource::Network,
+		);
 		assert_eq!(store.statement(&first_to_be_evicted.hash()).unwrap(), None);
 
-
-		store.set_time(EXPIRE_AFTER + (MAX_LIVE_STATEMENTS as u64)/ 2);
+		store.set_time(EXPIRE_AFTER + (MAX_LIVE_STATEMENTS as u64) / 2);
 		store.maintain();
 		// Half statements should be expired.
 		assert_eq!(store.index.read().entries.len(), MAX_LIVE_STATEMENTS / 2);
@@ -819,7 +956,7 @@ mod tests {
 		// The high-priority statement should survive.
 		assert_eq!(store.statement(&first.hash()).unwrap().unwrap(), first);
 
-		store.set_time(PURGE_AFTER + (MAX_LIVE_STATEMENTS as u64)/ 2);
+		store.set_time(PURGE_AFTER + (MAX_LIVE_STATEMENTS as u64) / 2);
 		store.maintain();
 		assert_eq!(store.index.read().entries.len(), 0);
 		assert_eq!(store.index.read().expired.len(), MAX_LIVE_STATEMENTS / 2);

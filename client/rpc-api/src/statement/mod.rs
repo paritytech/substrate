@@ -28,19 +28,27 @@ pub mod error;
 pub trait StatementApi {
 	/// Return all statements, SCALE-encoded.
 	#[method(name = "statement_dump")]
-	fn dump(&self, ) -> RpcResult<Vec<Bytes>>;
+	fn dump(&self) -> RpcResult<Vec<Bytes>>;
 
-	/// Return the data of all known statements which include all topics and have no `DecryptionKey` field.
+	/// Return the data of all known statements which include all topics and have no `DecryptionKey`
+	/// field.
 	#[method(name = "statement_broadcasts")]
 	fn broadcasts(&self, match_all_topics: Vec<[u8; 32]>) -> RpcResult<Vec<Bytes>>;
 
-	/// Return the data of all known statements whose decryption key is identified as `dest` (this will generally be the public key or a hash thereof for symmetric ciphers, or a hash of the private key for symmetric ciphers).
+	/// Return the data of all known statements whose decryption key is identified as `dest` (this
+	/// will generally be the public key or a hash thereof for symmetric ciphers, or a hash of the
+	/// private key for symmetric ciphers).
 	#[method(name = "statement_posted")]
 	fn posted(&self, match_all_topics: Vec<[u8; 32]>, dest: [u8; 32]) -> RpcResult<Vec<Bytes>>;
 
-	/// Return the decrypted data of all known statements whose decryption key is identified as `dest`. The key must be available to the client.
+	/// Return the decrypted data of all known statements whose decryption key is identified as
+	/// `dest`. The key must be available to the client.
 	#[method(name = "statement_postedClear")]
-	fn posted_clear(&self, match_all_topics: Vec<[u8; 32]>, dest: [u8; 32]) -> RpcResult<Vec<Bytes>>;
+	fn posted_clear(
+		&self,
+		match_all_topics: Vec<[u8; 32]>,
+		dest: [u8; 32],
+	) -> RpcResult<Vec<Bytes>>;
 
 	/// Submit a pre-encoded statement.
 	#[method(name = "statement_submit")]

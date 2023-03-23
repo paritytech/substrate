@@ -20,12 +20,12 @@
 
 //! A crate which contains statement-store primitives.
 
-use sp_std::vec::Vec;
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_application_crypto::RuntimeAppPublic;
 #[cfg(feature = "std")]
 use sp_core::Pair;
+use sp_std::vec::Vec;
 
 /// Statement topic.
 pub type Topic = [u8; 32];
@@ -37,7 +37,9 @@ pub type Hash = [u8; 32];
 pub type BlockHash = [u8; 32];
 
 #[cfg(feature = "std")]
-pub use store_api::{StatementStore, SubmitResult, Error, Result, NetworkPriority, StatementSource};
+pub use store_api::{
+	Error, NetworkPriority, Result, StatementSource, StatementStore, SubmitResult,
+};
 
 pub mod runtime_api;
 #[cfg(feature = "std")]
@@ -45,7 +47,7 @@ mod store_api;
 
 mod sr25519 {
 	mod app_sr25519 {
-		use sp_application_crypto::{app_crypto, sr25519, key_types::STATEMENT};
+		use sp_application_crypto::{app_crypto, key_types::STATEMENT, sr25519};
 		app_crypto!(sr25519, STATEMENT);
 	}
 	pub type Public = app_sr25519::Public;
@@ -81,21 +83,21 @@ pub enum Proof {
 		/// Signature.
 		signature: [u8; 64],
 		/// Public key.
-		signer: [u8; 32]
+		signer: [u8; 32],
 	},
 	/// Ed25519 Signature.
 	Ed25519 {
 		/// Signature.
 		signature: [u8; 64],
 		/// Public key.
-		signer: [u8; 32]
+		signer: [u8; 32],
 	},
 	/// Secp256k1 Signature.
 	Secp256k1Ecdsa {
 		/// Signature.
 		signature: [u8; 65],
 		/// Public key.
-		signer: [u8; 33]
+		signer: [u8; 33],
 	},
 	/// On-chain event proof.
 	OnChain {
@@ -104,7 +106,7 @@ pub enum Proof {
 		/// Hash of block that contains the event.
 		block_hash: BlockHash,
 		/// Index of the event in the event list.
-		event_index: u64
+		event_index: u64,
 	},
 }
 
@@ -145,7 +147,7 @@ impl Decode for Statement {
 		// will be a prefix of vector length.
 		let num_fields: codec::Compact<u32> = Decode::decode(input)?;
 		let mut statement = Statement::new();
-		for _ in 0 .. num_fields.into() {
+		for _ in 0..num_fields.into() {
 			let field: Field = Decode::decode(input)?;
 			match field {
 				Field::AuthenticityProof(p) => statement.set_proof(p),
@@ -210,10 +212,8 @@ impl Statement {
 	#[cfg(feature = "std")]
 	pub fn sign_sr25519_private(&mut self, key: &sp_core::sr25519::Pair) {
 		let to_sign = self.signature_material();
-		let proof = Proof::Sr25519 {
-			signature: key.sign(&to_sign).into(),
-			signer: key.public().into(),
-		};
+		let proof =
+			Proof::Sr25519 { signature: key.sign(&to_sign).into(), signer: key.public().into() };
 		self.set_proof(proof);
 	}
 
@@ -236,10 +236,8 @@ impl Statement {
 	#[cfg(feature = "std")]
 	pub fn sign_ed25519_private(&mut self, key: &sp_core::ed25519::Pair) {
 		let to_sign = self.signature_material();
-		let proof = Proof::Ed25519 {
-			signature: key.sign(&to_sign).into(),
-			signer: key.public().into(),
-		};
+		let proof =
+			Proof::Ed25519 { signature: key.sign(&to_sign).into(), signer: key.public().into() };
 		self.set_proof(proof);
 	}
 
@@ -262,10 +260,8 @@ impl Statement {
 	#[cfg(feature = "std")]
 	pub fn sign_ecdsa_private(&mut self, key: &sp_core::ecdsa::Pair) {
 		let to_sign = self.signature_material();
-		let proof = Proof::Secp256k1Ecdsa {
-			signature: key.sign(&to_sign).into(),
-			signer: key.public().0,
-		};
+		let proof =
+			Proof::Secp256k1Ecdsa { signature: key.sign(&to_sign).into(), signer: key.public().0 };
 		self.set_proof(proof);
 	}
 
@@ -274,12 +270,10 @@ impl Statement {
 		use sp_runtime::traits::Verify;
 
 		match self.proof() {
-			Some(Proof::OnChain{..}) | None => {
-				SignatureVerificationResult::NoSignature
-			},
+			Some(Proof::OnChain { .. }) | None => SignatureVerificationResult::NoSignature,
 			Some(Proof::Sr25519 { signature, signer }) => {
 				let to_sign = self.signature_material();
-				let signature =  sp_core::sr25519::Signature(*signature);
+				let signature = sp_core::sr25519::Signature(*signature);
 				let public = sp_core::sr25519::Public(*signer);
 				if signature.verify(to_sign.as_slice(), &public) {
 					SignatureVerificationResult::Valid(signer.clone())
@@ -289,7 +283,7 @@ impl Statement {
 			},
 			Some(Proof::Ed25519 { signature, signer }) => {
 				let to_sign = self.signature_material();
-				let signature =  sp_core::ed25519::Signature(*signature);
+				let signature = sp_core::ed25519::Signature(*signature);
 				let public = sp_core::ed25519::Public(*signer);
 				if signature.verify(to_sign.as_slice(), &public) {
 					SignatureVerificationResult::Valid(signer.clone())
@@ -299,14 +293,14 @@ impl Statement {
 			},
 			Some(Proof::Secp256k1Ecdsa { signature, signer }) => {
 				let to_sign = self.signature_material();
-				let signature =  sp_core::ecdsa::Signature(*signature);
+				let signature = sp_core::ecdsa::Signature(*signature);
 				let public = sp_core::ecdsa::Public(*signer);
 				if signature.verify(to_sign.as_slice(), &public) {
 					SignatureVerificationResult::Valid(sp_io::hashing::blake2_256(signer))
 				} else {
 					SignatureVerificationResult::Invalid
 				}
-			}
+			},
 		}
 	}
 
@@ -382,8 +376,7 @@ impl Statement {
 	fn encoded(&self, with_proof: bool) -> Vec<u8> {
 		// Encoding matches that of Vec<Field>. Basically this just means accepting that there
 		// will be a prefix of vector length.
-		let num_fields =
-			if with_proof && self.proof.is_some() { 1 } else { 0 } +
+		let num_fields = if with_proof && self.proof.is_some() { 1 } else { 0 } +
 			if self.decryption_key.is_some() { 1 } else { 0 } +
 			if self.data.is_some() { 1 } else { 0 } +
 			self.num_topics as u32;
@@ -402,7 +395,7 @@ impl Statement {
 			1u8.encode_to(&mut output);
 			decryption_key.encode_to(&mut output);
 		}
-		for t in 0 .. self.num_topics {
+		for t in 0..self.num_topics {
 			(2u8 + t).encode_to(&mut output);
 			self.topics[t as usize].encode_to(&mut output);
 		}
@@ -416,24 +409,20 @@ impl Statement {
 
 #[cfg(test)]
 mod test {
-	use crate::{Statement, Proof, Field, SignatureVerificationResult, hash_encoded};
-	use codec::{Encode, Decode};
+	use crate::{hash_encoded, Field, Proof, SignatureVerificationResult, Statement};
+	use codec::{Decode, Encode};
 	use sp_application_crypto::Pair;
 
 	#[test]
 	fn statement_encoding_matches_vec() {
 		let mut statement = Statement::new();
 		assert!(statement.proof().is_none());
-		let proof = Proof::OnChain {
-			who: [42u8; 32],
-			block_hash: [24u8; 32],
-			event_index: 66,
-		};
+		let proof = Proof::OnChain { who: [42u8; 32], block_hash: [24u8; 32], event_index: 66 };
 
 		let decryption_key = [0xde; 32];
 		let topic1 = [0x01; 32];
 		let topic2 = [0x02; 32];
-		let data = vec![55,99];
+		let data = vec![55, 99];
 
 		statement.set_proof(proof.clone());
 		statement.set_decryption_key(decryption_key.clone());
@@ -467,23 +456,30 @@ mod test {
 		let secp256k1_kp = sp_core::ecdsa::Pair::from_string("//Alice", None).unwrap();
 
 		statement.sign_sr25519_private(&sr25519_kp);
-		assert_eq!(statement.verify_signature(), SignatureVerificationResult::Valid(sr25519_kp.public().0));
+		assert_eq!(
+			statement.verify_signature(),
+			SignatureVerificationResult::Valid(sr25519_kp.public().0)
+		);
 
 		statement.sign_ed25519_private(&ed25519_kp);
-		assert_eq!(statement.verify_signature(), SignatureVerificationResult::Valid(ed25519_kp.public().0));
+		assert_eq!(
+			statement.verify_signature(),
+			SignatureVerificationResult::Valid(ed25519_kp.public().0)
+		);
 
 		statement.sign_ecdsa_private(&secp256k1_kp);
-		assert_eq!(statement.verify_signature(), SignatureVerificationResult::Valid(sp_core::hashing::blake2_256(&secp256k1_kp.public().0)));
+		assert_eq!(
+			statement.verify_signature(),
+			SignatureVerificationResult::Valid(sp_core::hashing::blake2_256(
+				&secp256k1_kp.public().0
+			))
+		);
 
 		// set an invalid signature
-		statement.set_proof(Proof::Sr25519 {
-			signature: [0u8; 64],
-			signer: [0u8; 32],
-		});
+		statement.set_proof(Proof::Sr25519 { signature: [0u8; 64], signer: [0u8; 32] });
 		assert_eq!(statement.verify_signature(), SignatureVerificationResult::Invalid);
 
 		statement = statement.strip_proof();
 		assert_eq!(statement.verify_signature(), SignatureVerificationResult::NoSignature);
 	}
 }
-

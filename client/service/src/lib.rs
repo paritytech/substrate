@@ -85,10 +85,10 @@ pub use sc_network_transactions::config::{TransactionImport, TransactionImportFu
 pub use sc_rpc::{
 	RandomIntegerSubscriptionId, RandomStringSubscriptionId, RpcSubscriptionIdProvider,
 };
+pub use sc_statement_store::Store as StatementStore;
 pub use sc_tracing::TracingReceiver;
 pub use sc_transaction_pool::Options as TransactionPoolOptions;
 pub use sc_transaction_pool_api::{error::IntoPoolError, InPoolTransaction, TransactionPool};
-pub use sc_statement_store::Store as StatementStore;
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 pub use task_manager::{SpawnTaskHandle, Task, TaskManager, TaskRegistry, DEFAULT_GROUP_NAME};

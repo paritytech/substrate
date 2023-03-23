@@ -28,7 +28,7 @@
 
 use crate::config::*;
 use codec::{Decode, Encode};
-use futures::{prelude::*, stream::FuturesUnordered, channel::oneshot};
+use futures::{channel::oneshot, prelude::*, stream::FuturesUnordered};
 use libp2p::{multiaddr, PeerId};
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sc_network::{
@@ -43,8 +43,10 @@ use sc_network_common::{
 	role::ObservedRole,
 	sync::{SyncEvent, SyncEventStream},
 };
-use sp_statement_store::{Hash, Statement, StatementSource, StatementStore, SubmitResult, NetworkPriority};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use sp_statement_store::{
+	Hash, NetworkPriority, Statement, StatementSource, StatementStore, SubmitResult,
+};
 use std::{
 	collections::{hash_map::Entry, HashMap},
 	iter,
@@ -181,21 +183,26 @@ impl StatementHandlerPrototype {
 		let net_event_stream = network.event_stream("statement-handler-net");
 		let sync_event_stream = sync.event_stream("statement-handler-sync");
 		let (to_handler, from_controller) = tracing_unbounded("mpsc_statement_handler", 100_000);
-		let (queue_sender, mut queue_receiver) = tracing_unbounded("mpsc_statement_validator", 100_000);
+		let (queue_sender, mut queue_receiver) =
+			tracing_unbounded("mpsc_statement_validator", 100_000);
 
 		let store = statement_store.clone();
 		executor(
 			async move {
 				loop {
-					let task: Option<(Statement, oneshot::Sender<SubmitResult>)> = queue_receiver.next().await;
+					let task: Option<(Statement, oneshot::Sender<SubmitResult>)> =
+						queue_receiver.next().await;
 					match task {
 						None => return,
 						Some((statement, completion)) => {
 							let result = store.submit(statement, StatementSource::Network);
 							if let Err(_) = completion.send(result) {
-								log::debug!(target: LOG_TARGET, "Error sending validation completion");
+								log::debug!(
+									target: LOG_TARGET,
+									"Error sending validation completion"
+								);
 							}
-						}
+						},
 					}
 				}
 			}
@@ -397,15 +404,19 @@ where
 					}
 					// Accept statements only when node is not major syncing
 					if self.sync.is_major_syncing() {
-						log::trace!(target: LOG_TARGET, "{remote}: Ignoring statements while major syncing");
+						log::trace!(
+							target: LOG_TARGET,
+							"{remote}: Ignoring statements while major syncing"
+						);
 						continue
 					}
-					if let Ok(statements) =
-						<Statements as Decode>::decode(&mut message.as_ref())
-					{
+					if let Ok(statements) = <Statements as Decode>::decode(&mut message.as_ref()) {
 						self.on_statements(remote, statements);
 					} else {
-						log::debug!(target: LOG_TARGET, "Failed to decode statement list from {remote}");
+						log::debug!(
+							target: LOG_TARGET,
+							"Failed to decode statement list from {remote}"
+						);
 					}
 				}
 			},
@@ -438,10 +449,8 @@ where
 					Entry::Vacant(entry) => {
 						let (completion_sender, completion_receiver) = oneshot::channel();
 						if let Ok(()) = self.queue_sender.unbounded_send((s, completion_sender)) {
-							self.pending_statements.push(PendingStatement {
-								validation: completion_receiver,
-								hash,
-							});
+							self.pending_statements
+								.push(PendingStatement { validation: completion_receiver, hash });
 							entry.insert(vec![who]);
 						}
 					},
@@ -479,10 +488,7 @@ where
 		}
 	}
 
-	fn do_propagate_statements(
-		&mut self,
-		statements: &[(Hash, Statement)],
-	) {
+	fn do_propagate_statements(&mut self, statements: &[(Hash, Statement)]) {
 		let mut propagated_statements = 0;
 
 		for (who, peer) in self.peers.iter_mut() {

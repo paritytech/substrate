@@ -59,9 +59,9 @@ use sc_rpc::{
 	DenyUnsafe, SubscriptionTaskExecutor,
 };
 use sc_rpc_spec_v2::{chain_head::ChainHeadApiServer, transaction::TransactionApiServer};
+use sc_statement_store::Store as StatementStore;
 use sc_telemetry::{telemetry, ConnectionMessage, Telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sc_transaction_pool_api::MaintainedTransactionPool;
-use sc_statement_store::Store as StatementStore;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_api::{CallApiAt, ProvideRuntimeApi};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
@@ -463,17 +463,13 @@ where
 
 	// Perform periodic statement store maintenance
 	let store = statement_store.clone();
-	spawn_handle.spawn(
-		"statement-store-notifications",
-		Some("statement-store"),
-		async move {
-			let mut interval = tokio::time::interval(sc_statement_store::MAINTENANCE_PERIOD);
-			loop {
-				interval.tick().await;
-				store.maintain();
-			}
+	spawn_handle.spawn("statement-store-notifications", Some("statement-store"), async move {
+		let mut interval = tokio::time::interval(sc_statement_store::MAINTENANCE_PERIOD);
+		loop {
+			interval.tick().await;
+			store.maintain();
 		}
-	);
+	});
 
 	// Prometheus metrics.
 	let metrics_service =
@@ -954,7 +950,8 @@ where
 			spawn_handle.spawn("network-statement-validator", Some("networking"), fut);
 		})
 	};
-	// crate statement goissip protocol and add it to the list of supported protocols of `network_params`
+	// crate statement goissip protocol and add it to the list of supported protocols of
+	// `network_params`
 	let (statement_handler, statement_handler_controller) = statement_handler_proto.build(
 		network.clone(),
 		sync_service.clone(),

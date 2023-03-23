@@ -17,10 +17,10 @@
 
 //! Runtime support for the statement store.
 
+use crate::Statement;
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_runtime::RuntimeDebug;
-use crate::Statement;
 
 /// Information concerning a valid statement.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
@@ -75,4 +75,3 @@ sp_api::decl_runtime_apis! {
 		) -> Result<ValidStatement, InvalidStatement>;
 	}
 }
-

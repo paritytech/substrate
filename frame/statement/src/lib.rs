@@ -22,18 +22,20 @@
 //! ## Overview
 //!
 //! The Statement pallet provides means to create and validate statements for the statement store.
-//!
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
 //use codec::{Decode, Encode, MaxEncodedLen};
-use sp_statement_store::{Proof, Statement, SignatureVerificationResult};
-use sp_statement_store::runtime_api::{StatementSource, ValidStatement, InvalidStatement};
-use frame_support::sp_tracing::{enter_span, Level};
-use frame_support::sp_runtime::traits::Zero;
-use frame_support::sp_runtime::SaturatedConversion;
-use frame_support::traits::Currency;
-use frame_support::pallet_prelude::*;
+use frame_support::{
+	pallet_prelude::*,
+	sp_runtime::{traits::Zero, SaturatedConversion},
+	sp_tracing::{enter_span, Level},
+	traits::Currency,
+};
+use sp_statement_store::{
+	runtime_api::{InvalidStatement, StatementSource, ValidStatement},
+	Proof, SignatureVerificationResult, Statement,
+};
 
 #[cfg(test)]
 mod mock;
@@ -54,8 +56,7 @@ pub mod pallet {
 		<Self as frame_system::Config>::AccountId: From<[u8; 32]>,
 	{
 		/// The overarching event type.
-		type RuntimeEvent: From<Event<Self>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// Account balance.
 		type Currency: Currency<<Self as frame_system::Config>::AccountId>;
 		/// Min balance for priority statements.
@@ -80,12 +81,11 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T>
-	where
-		<T as frame_system::Config>::AccountId: From<[u8; 32]>,
-		[u8; 32]: From<<T as frame_system::Config>::AccountId>,
-		<T as frame_system::Config>::RuntimeEvent: From<pallet::Event<T>>,
+where
+	<T as frame_system::Config>::AccountId: From<[u8; 32]>,
+	[u8; 32]: From<<T as frame_system::Config>::AccountId>,
+	<T as frame_system::Config>::RuntimeEvent: From<pallet::Event<T>>,
 {
-
 	/// Validate a statement against current state. This is supposed ti be called by the statement
 	/// store on the host side.
 	pub fn validate_statement(
@@ -101,47 +101,50 @@ impl<T: Config> Pallet<T>
 				// block_hash and event_index should be checked by the host
 				if frame_system::Pallet::<T>::parent_hash().as_ref() != block_hash.as_slice() {
 					log::debug!(target: LOG_TARGET, "Bad block hash.");
-					return Err(InvalidStatement::BadProof);
+					return Err(InvalidStatement::BadProof)
 				}
 				let account: T::AccountId = who.clone().into();
 				match frame_system::Pallet::<T>::event_no_consensus(*event_index as usize) {
 					Some(e) => {
-						if e != (Event::NewStatement { account: account.clone(), statement: statement.strip_proof() }).into() {
+						if e != (Event::NewStatement {
+							account: account.clone(),
+							statement: statement.strip_proof(),
+						})
+						.into()
+						{
 							log::debug!(target: LOG_TARGET, "Event mismatch");
-							return Err(InvalidStatement::BadProof);
+							return Err(InvalidStatement::BadProof)
 						}
 					},
 					_ => {
 						log::debug!(target: LOG_TARGET, "Bad event index");
-						return Err(InvalidStatement::BadProof);
-					}
+						return Err(InvalidStatement::BadProof)
+					},
 				}
 				account
-			}
+			},
 			_ => match statement.verify_signature() {
 				SignatureVerificationResult::Valid(account) => account.into(),
 				SignatureVerificationResult::Invalid => {
 					log::debug!(target: LOG_TARGET, "Bad statement signature.");
-					return Err(InvalidStatement::BadProof);
+					return Err(InvalidStatement::BadProof)
 				},
 				SignatureVerificationResult::NoSignature => {
 					log::debug!(target: LOG_TARGET, "Missing statement signature.");
-					return Err(InvalidStatement::NoProof);
-				}
-			}
+					return Err(InvalidStatement::NoProof)
+				},
+			},
 		};
 		let priority_cost = T::PriorityBalance::get();
 		let priority: u64 = if priority_cost.is_zero() {
-				0
+			0
 		} else {
 			let balance = T::Currency::free_balance(&account);
 			let priority = balance / priority_cost;
 			priority.saturated_into()
 		};
 
-		Ok(ValidStatement {
-			priority,
-		})
+		Ok(ValidStatement { priority })
 	}
 
 	pub fn submit_statement(account: T::AccountId, statement: Statement) {
