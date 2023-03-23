@@ -607,9 +607,8 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 		let is_stable = f.is_stable;
 		let not_deprecated = f.not_deprecated;
 
-		// wrapped host function body call with traces when target is`runtime::contracts::strace` and level is `trace`
-        // e.g ./target/release/substrate-contracts-node -l "fatal,runtime::contracts::strace=trace" --dev
-		//WIP(pg): replace comment above with link once the doc has been added to the readme
+		// wrapped host function body call with host function traces
+		// see https://github.com/paritytech/substrate/tree/master/frame/contracts#host-function-tracing
 		let wrapped_body_with_trace = {
 			let params_fmt_str = params.clone().filter_map(|arg| match arg {
 				syn::FnArg::Receiver(_) => None,
