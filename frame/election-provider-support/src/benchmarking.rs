@@ -18,9 +18,6 @@
 //! Election provider support pallet benchmarking.
 //! This is separated into its own crate to avoid bloating the size of the runtime.
 
-#![cfg(feature = "runtime-benchmarks")]
-#![cfg_attr(not(feature = "std"), no_std)]
-
 use crate::{ApprovalVoting, NposSolver, PhragMMS, SequentialPhragmen};
 use codec::Decode;
 use frame_benchmarking::v1::{benchmarks, Vec};
@@ -31,6 +28,7 @@ pub trait Config: frame_system::Config {}
 const MAX_CANDIDATES: u32 = 2000;
 const MIN_VOTERS: u32 = 1000;
 const MAX_VOTERS: u32 = 10 * 1000;
+const MIN_VOTES_PER_VOTER: u32 = 5;
 const MAX_VOTES_PER_VOTER: u32 = 16;
 const DESIRED_MEMBERS: u32 = 16;
 
@@ -63,18 +61,18 @@ fn set_up_voters_targets<AccountId: Decode + Clone>(
 
 benchmarks! {
 	phragmen {
-		// number of targets in snapshot. the minimum number of targets must be larger than
+		// number of targets in the snapshot. the minimum number of targets must be larger than
 		// `MAX_VOTES_PER_VOTER`.
 		let t in (MAX_VOTES_PER_VOTER + 1) .. MAX_CANDIDATES;
 		// number of votes in snapshot.
 		let v in (MIN_VOTERS) .. MAX_VOTERS;
-		// number of edges (total votes per voter).
+		// number of edges (total votes for all voters).
 		let e in (MAX_VOTERS) .. MAX_VOTERS  * MAX_VOTES_PER_VOTER;
 
 		// when v is being iterated, e is set to max and that's a problem. thus, we calculate the
 		// total edges as MAX_VOTERS .. MAX_VOTERS * MAX_VOTES_PER_VOTER and extract the votes
 		// per voter, capped by MAX_VOTES_PER_VOTER.
-		let votes_per_voter = (e / v).min(MAX_VOTES_PER_VOTER);
+		let votes_per_voter = (e / v).clamp(MIN_VOTES_PER_VOTER, MAX_VOTES_PER_VOTER);
 
 		let (voters, total_targets) = set_up_voters_targets::<T::AccountId>(v, t, votes_per_voter as usize);
 	}: {
@@ -85,18 +83,18 @@ benchmarks! {
 	}
 
 	phragmms {
-		// number of targets in snapshot. the minimum number of targets must be larger than
+		// number of targets in the snapshot. the minimum number of targets must be larger than
 		// `MAX_VOTES_PER_VOTER`.
 		let t in (MAX_VOTES_PER_VOTER + 1) .. MAX_CANDIDATES;
 		// number of votes in snapshot.
 		let v in (MIN_VOTERS) .. MAX_VOTERS;
-		// number of edges (total votes per voter).
+		// number of edges (total votes for all voters).
 		let e in (MAX_VOTERS) .. MAX_VOTERS  * MAX_VOTES_PER_VOTER;
 
 		// when v is being iterated, e is set to max and that's a problem. thus, we calculate the
 		// total edges as MAX_VOTERS .. MAX_VOTERS * MAX_VOTES_PER_VOTER and extract the votes
 		// per voter, capped by MAX_VOTES_PER_VOTER.
-		let votes_per_voter = (e / v).min(MAX_VOTES_PER_VOTER);
+		let votes_per_voter = (e / v).clamp(MIN_VOTES_PER_VOTER, MAX_VOTES_PER_VOTER);
 
 		let (voters, total_targets) = set_up_voters_targets::<T::AccountId>(v, t, votes_per_voter as usize);
 	}: {
@@ -107,18 +105,18 @@ benchmarks! {
 	}
 
 	approval_voting {
-		// number of targets in snapshot. the minimum number of targets must be larger than
+		// number of targets in the snapshot. the minimum number of targets must be larger than
 		// `MAX_VOTES_PER_VOTER`.
 		let t in (MAX_VOTES_PER_VOTER + 1) .. MAX_CANDIDATES;
 		// number of votes in snapshot.
 		let v in (MIN_VOTERS) .. MAX_VOTERS;
-		// number of edges (total votes per voter).
+		// number of edges (total votes for all voters).
 		let e in (MAX_VOTERS) .. MAX_VOTERS  * MAX_VOTES_PER_VOTER;
 
 		// when v is being iterated, e is set to max and that's a problem. thus, we calculate the
 		// total edges as MAX_VOTERS .. MAX_VOTERS * MAX_VOTES_PER_VOTER and extract the votes
 		// per voter, capped by MAX_VOTES_PER_VOTER.
-		let votes_per_voter = (e / v).min(MAX_VOTES_PER_VOTER);
+		let votes_per_voter = (e / v).clamp(MIN_VOTES_PER_VOTER, MAX_VOTES_PER_VOTER);
 
 		let (voters, total_targets) = set_up_voters_targets::<T::AccountId>(v, t, votes_per_voter as usize);
 	}: {
