@@ -162,6 +162,7 @@ impl<T: Config> InstantElectionProvider for OnChainExecution<T> {
 			.max_voters(forced_input_voters_bounds)
 			.max_targets(forced_input_targets_bounds)
 			.build();
+
 		elect_with_input_bounds::<T>(elections_bounds)
 	}
 }

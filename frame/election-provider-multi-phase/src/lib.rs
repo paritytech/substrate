@@ -1085,6 +1085,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 			ensure!(Self::current_phase().is_emergency(), <Error<T>>::CallNotAllowed);
+
 			let election_bounds = ElectionBoundsBuilder::new()
 				.voters_count(maybe_max_voters.unwrap_or(0).into())
 				.targets_count(maybe_max_targets.unwrap_or(0).into())
@@ -1542,9 +1543,12 @@ impl<T: Config> Pallet<T> {
 		// - signed phase was complete or not started, in which case finalization is idempotent and
 		//   inexpensive (1 read of an empty vector).
 		let _ = Self::finalize_signed_phase();
+
 		<QueuedSolution<T>>::take()
 			.ok_or(ElectionError::<T>::NothingQueued)
 			.or_else(|_| {
+                // calling `instant_elect` with unbounded data provider bounds means that the
+                // on-chain `T:Bounds` configs will *not* be overwritten.
 				T::Fallback::instant_elect(
 					DataProviderBounds::new_unbounded(),
 					DataProviderBounds::new_unbounded(),

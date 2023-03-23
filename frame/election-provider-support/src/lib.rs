@@ -854,15 +854,17 @@ impl ElectionBoundsBuilder {
 		self
 	}
 
-	/// Caps the maximum number of the voters bounds to `voters`. If `voters` bounds are less than
-	/// the current value, keeps it.
+	/// Caps the number of the voters bounds in self to `voters` bounds. If `voters` bounds are
+	/// higher than the self bounds, keeps it. Note that `None` bounds are equivalent to maximum
+    /// and should be treated as such.
 	pub fn max_voters(mut self, voters: DataProviderBounds) -> Self {
 		self.voters = self.voters.map_or(None, |v| Some(v.max(voters)));
 		self
 	}
 
-	/// Caps the maximum number of the targets to `targets`. If `targets` bounds are less than the
-	/// current value, keeps it.
+	/// Caps the number of the voters bounds in self to `voters` bounds. If `voters` bounds are
+	/// higher than the self bounds, keeps it. Note that `None` bounds are equivalent to maximum
+    /// and should be treated as such.
 	pub fn max_targets(mut self, targets: DataProviderBounds) -> Self {
 		self.targets = self.targets.map_or(None, |t| Some(t.max(targets)));
 		self

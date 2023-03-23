@@ -509,6 +509,23 @@ mod elections_bounds {
 		assert_eq!(bounds.voters.count.unwrap(), CountBound(5));
 		assert_eq!(bounds.voters.size.unwrap(), SizeBound(10));
 		assert_eq!(bounds.targets.count.unwrap(), CountBound(20));
-		assert_eq!(bounds.targets.size, None);
+		assert_eq!(bounds.targets.size.unwrap(), SizeBound(30));
+
+		// note that unbounded bounds (None) are equivalent to maximum value.
+		let bounds = ElectionBoundsBuilder::new()
+			.max_voters(DataProviderBounds {
+				count: CountBound(5).into(),
+				size: SizeBound(20).into(),
+			})
+			.max_targets(DataProviderBounds {
+				count: CountBound(10).into(),
+				size: SizeBound(10).into(),
+			})
+			.build();
+
+		assert_eq!(bounds.voters.count.unwrap(), CountBound(5));
+		assert_eq!(bounds.voters.size.unwrap(), SizeBound(20));
+		assert_eq!(bounds.targets.count.unwrap(), CountBound(10));
+		assert_eq!(bounds.targets.size.unwrap(), SizeBound(10));
 	}
 }
