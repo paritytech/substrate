@@ -238,7 +238,12 @@ where
 	) -> Result<BuiltBlock<Block, backend::StateBackendFor<B, Block>>, Error> {
 		let block_id = self.block_id;
 
-		let mut valid_txs = if self.api.can_enqueue_txs(&block_id).unwrap() {
+		let previous_block_txs = self.api.get_previous_block_txs(&block_id).unwrap();
+
+		let mut valid_txs = if self.extrinsics.len() == 0 && previous_block_txs.len() > 0 {
+			log::info!(target:"block_builder", "Not enough room for (any) StoragQeueue enqueue inherent, producing empty block");
+			vec![]
+		} else if self.api.can_enqueue_txs(&block_id).unwrap() {
 			self.api.execute_in_transaction(|api| {
 				let next_header = api
 					.finalize_block_with_context(&block_id, ExecutionContext::BlockConstruction)
