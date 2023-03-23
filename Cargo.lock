@@ -8828,6 +8828,7 @@ dependencies = [
  "sp-runtime",
  "sp-runtime-interface",
  "sp-state-machine",
+ "sp-statement-store",
  "sp-tracing",
  "sp-trie",
  "sp-version",

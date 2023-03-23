@@ -191,7 +191,7 @@ pub fn run() -> sc_cli::Result<()> {
 
 				Ok((
 					cmd.run::<Block, ExtendedHostFunctions<
-						sp_io::SubstrateHostFunctions,
+						sc_executor::HostFunctions,
 						<ExecutorDispatch as NativeExecutionDispatch>::ExtendHostFunctions,
 					>, _>(Some(info_provider)),
 					task_manager,

@@ -107,6 +107,12 @@ pub enum SubmitResult {
 	NotAvailable,
 }
 
+/// Export functions for the WASM host.
+#[cfg(feature = "std")]
+pub type HostFunctions = (
+	io::HostFunctions,
+);
+
 /// Host interface
 #[runtime_interface]
 pub trait Io {
