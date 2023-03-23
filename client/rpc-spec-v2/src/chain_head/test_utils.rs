@@ -35,10 +35,6 @@ use sp_runtime::{
 use std::sync::Arc;
 use substrate_test_runtime::{Block, Hash, Header};
 
-/// The number of retries to ensure the client subscribed to block events.
-const NUM_RETRIES: u64 = 5;
-/// The number of seconds to sleep between each retry.
-const SLEEP_SECS: u64 = 1;
 
 pub struct ChainHeadMockClient<Client> {
 	client: Arc<Client>,
