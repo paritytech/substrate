@@ -20,7 +20,7 @@ use either::Either;
 use fnv::FnvHashMap;
 use futures::prelude::*;
 use libp2p::{
-	core::{ConnectedPoint, Endpoint, PeerId, PublicKey},
+	core::{ConnectedPoint, Endpoint},
 	identify::{
 		Behaviour as Identify, Config as IdentifyConfig, Event as IdentifyEvent,
 		Info as IdentifyInfo,
@@ -37,6 +37,7 @@ use libp2p::{
 	},
 	Multiaddr,
 };
+use libp2p_identity::{PeerId, PublicKey};
 use log::{debug, error, trace};
 use sc_network_common::utils::interval;
 use smallvec::SmallVec;

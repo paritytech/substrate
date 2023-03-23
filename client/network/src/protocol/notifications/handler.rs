@@ -69,12 +69,13 @@ use futures::{
 	prelude::*,
 };
 use libp2p::{
-	core::{ConnectedPoint, PeerId},
+	core::ConnectedPoint,
 	swarm::{
 		handler::ConnectionEvent, ConnectionHandler, ConnectionHandlerEvent, KeepAlive,
 		NegotiatedSubstream, SubstreamProtocol,
 	},
 };
+use libp2p_identity::PeerId;
 use log::error;
 use parking_lot::{Mutex, RwLock};
 use sc_network_common::protocol::ProtocolName;
@@ -826,91 +827,88 @@ pub mod tests {
 		Multiaddr,
 	};
 	use multistream_select::{dialer_select_proto, listener_select_proto, Negotiated, Version};
-	use std::{
-		collections::HashMap,
-		io::{Error, IoSlice, IoSliceMut},
-	};
+	use std::io::{Error, IoSlice, IoSliceMut};
 	use tokio::sync::mpsc;
 	use unsigned_varint::codec::UviBytes;
 
-	struct OpenSubstream {
-		notifications: stream::Peekable<
-			stream::Select<
-				stream::Fuse<futures::channel::mpsc::Receiver<NotificationsSinkMessage>>,
-				stream::Fuse<futures::channel::mpsc::Receiver<NotificationsSinkMessage>>,
-			>,
-		>,
-		_in_substream: MockSubstream,
-		_out_substream: MockSubstream,
-	}
+	// struct OpenSubstream {
+	// 	notifications: stream::Peekable<
+	// 		stream::Select<
+	// 			stream::Fuse<futures::channel::mpsc::Receiver<NotificationsSinkMessage>>,
+	// 			stream::Fuse<futures::channel::mpsc::Receiver<NotificationsSinkMessage>>,
+	// 		>,
+	// 	>,
+	// 	_in_substream: MockSubstream,
+	// 	_out_substream: MockSubstream,
+	// }
 
-	pub struct ConnectionYielder {
-		connections: HashMap<(PeerId, usize), OpenSubstream>,
-	}
+	// pub struct ConnectionYielder {
+	// 	connections: HashMap<(PeerId, usize), OpenSubstream>,
+	// }
 
-	impl ConnectionYielder {
-		/// Create new [`ConnectionYielder`].
-		pub fn new() -> Self {
-			Self { connections: HashMap::new() }
-		}
+	// impl ConnectionYielder {
+	// 	/// Create new [`ConnectionYielder`].
+	// 	pub fn new() -> Self {
+	// 		Self { connections: HashMap::new() }
+	// 	}
 
-		/// Open a new substream for peer.
-		pub fn open_substream(
-			&mut self,
-			peer: PeerId,
-			protocol_index: usize,
-			endpoint: ConnectedPoint,
-			received_handshake: Vec<u8>,
-		) -> NotifsHandlerOut {
-			let (async_tx, async_rx) =
-				futures::channel::mpsc::channel(ASYNC_NOTIFICATIONS_BUFFER_SIZE);
-			let (sync_tx, sync_rx) =
-				futures::channel::mpsc::channel(SYNC_NOTIFICATIONS_BUFFER_SIZE);
-			let notifications_sink = NotificationsSink {
-				inner: Arc::new(NotificationsSinkInner {
-					peer_id: peer,
-					async_channel: FuturesMutex::new(async_tx),
-					sync_channel: Mutex::new(Some(sync_tx)),
-				}),
-			};
-			let (in_substream, out_substream) = MockSubstream::new();
+	// 	/// Open a new substream for peer.
+	// 	pub fn open_substream(
+	// 		&mut self,
+	// 		peer: PeerId,
+	// 		protocol_index: usize,
+	// 		endpoint: ConnectedPoint,
+	// 		received_handshake: Vec<u8>,
+	// 	) -> NotifsHandlerOut {
+	// 		let (async_tx, async_rx) =
+	// 			futures::channel::mpsc::channel(ASYNC_NOTIFICATIONS_BUFFER_SIZE);
+	// 		let (sync_tx, sync_rx) =
+	// 			futures::channel::mpsc::channel(SYNC_NOTIFICATIONS_BUFFER_SIZE);
+	// 		let notifications_sink = NotificationsSink {
+	// 			inner: Arc::new(NotificationsSinkInner {
+	// 				peer_id: peer,
+	// 				async_channel: FuturesMutex::new(async_tx),
+	// 				sync_channel: Mutex::new(Some(sync_tx)),
+	// 			}),
+	// 		};
+	// 		let (in_substream, out_substream) = MockSubstream::new();
 
-			self.connections.insert(
-				(peer, protocol_index),
-				OpenSubstream {
-					notifications: stream::select(async_rx.fuse(), sync_rx.fuse()).peekable(),
-					_in_substream: in_substream,
-					_out_substream: out_substream,
-				},
-			);
+	// 		self.connections.insert(
+	// 			(peer, protocol_index),
+	// 			OpenSubstream {
+	// 				notifications: stream::select(async_rx.fuse(), sync_rx.fuse()).peekable(),
+	// 				_in_substream: in_substream,
+	// 				_out_substream: out_substream,
+	// 			},
+	// 		);
 
-			NotifsHandlerOut::OpenResultOk {
-				protocol_index,
-				negotiated_fallback: None,
-				endpoint,
-				received_handshake,
-				notifications_sink,
-			}
-		}
+	// 		NotifsHandlerOut::OpenResultOk {
+	// 			protocol_index,
+	// 			negotiated_fallback: None,
+	// 			endpoint,
+	// 			received_handshake,
+	// 			notifications_sink,
+	// 		}
+	// 	}
 
-		/// Attempt to get next pending event from one of the notification sinks.
-		pub async fn get_next_event(&mut self, peer: PeerId, set: usize) -> Option<Vec<u8>> {
-			let substream = if let Some(info) = self.connections.get_mut(&(peer, set)) {
-				info
-			} else {
-				return None
-			};
+	// 	/// Attempt to get next pending event from one of the notification sinks.
+	// 	pub async fn get_next_event(&mut self, peer: PeerId, set: usize) -> Option<Vec<u8>> {
+	// 		let substream = if let Some(info) = self.connections.get_mut(&(peer, set)) {
+	// 			info
+	// 		} else {
+	// 			return None
+	// 		};
 
-			futures::future::poll_fn(|cx| match substream.notifications.poll_next_unpin(cx) {
-				Poll::Ready(Some(NotificationsSinkMessage::Notification { message })) =>
-					Poll::Ready(Some(message)),
-				Poll::Pending => Poll::Ready(None),
-				Poll::Ready(Some(NotificationsSinkMessage::ForceClose)) | Poll::Ready(None) =>
-					panic!("sink closed"),
-			})
-			.await
-		}
-	}
+	// 		futures::future::poll_fn(|cx| match substream.notifications.poll_next_unpin(cx) {
+	// 			Poll::Ready(Some(NotificationsSinkMessage::Notification { message })) =>
+	// 				Poll::Ready(Some(message)),
+	// 			Poll::Pending => Poll::Ready(None),
+	// 			Poll::Ready(Some(NotificationsSinkMessage::ForceClose)) | Poll::Ready(None) =>
+	// 				panic!("sink closed"),
+	// 		})
+	// 		.await
+	// 	}
+	// }
 
 	struct MockSubstream {
 		pub rx: mpsc::Receiver<Vec<u8>>,

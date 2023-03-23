@@ -31,7 +31,8 @@ pub use sc_network_common::{
 	ExHashT,
 };
 
-pub use libp2p::{build_multiaddr, core::PublicKey, identity};
+pub use libp2p::{build_multiaddr, identity};
+pub use libp2p_identity::PublicKey;
 
 use prometheus_endpoint::Registry;
 use sc_network_common::config::NonDefaultSetConfig;

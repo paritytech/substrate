@@ -24,10 +24,13 @@ use crate::{
 	request_responses::{IfDisconnected, RequestFailure},
 };
 use futures::{channel::oneshot, Stream};
-pub use libp2p::{identity::error::SigningError, kad::record::Key as KademliaKey};
 use libp2p::{Multiaddr, PeerId};
 use sc_peerset::ReputationChange;
+
+pub use libp2p::kad::record::Key as KademliaKey;
+pub use libp2p_identity::SigningError;
 pub use signature::Signature;
+
 use std::{collections::HashSet, future::Future, pin::Pin, sync::Arc};
 
 mod signature;

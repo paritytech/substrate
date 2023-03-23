@@ -256,7 +256,8 @@ pub mod config;
 pub mod network_state;
 
 #[doc(inline)]
-pub use libp2p::{multiaddr, Multiaddr, PeerId};
+pub use libp2p::{multiaddr, Multiaddr};
+pub use libp2p_identity::PeerId;
 pub use sc_network_common::{
 	protocol::{
 		event::{DhtEvent, Event},

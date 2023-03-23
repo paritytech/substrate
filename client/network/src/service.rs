@@ -50,8 +50,9 @@ use libp2p::{
 		AddressScore, ConnectionError, ConnectionLimits, DialError, Executor, ListenError,
 		NetworkBehaviour, Swarm, SwarmBuilder, SwarmEvent, THandlerErr,
 	},
-	Multiaddr, PeerId,
+	Multiaddr,
 };
+use libp2p_identity::PeerId;
 use log::{debug, error, info, trace, warn};
 use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
@@ -96,7 +97,7 @@ mod out_events;
 #[cfg(test)]
 mod tests;
 
-pub use libp2p::identity::{error::DecodingError, Keypair, PublicKey};
+pub use libp2p_identity::{DecodingError, Keypair, PublicKey};
 use sc_network_common::service::NetworkRequest;
 
 /// Substrate network service. Handles network IO and manages connectivity.
@@ -266,7 +267,7 @@ where
 			);
 
 			let discovery_config = {
-				let mut config = DiscoveryConfig::new(local_public.clone());
+				let mut config = DiscoveryConfig::new(local_public.to_peer_id());
 				config.with_permanent_addresses(known_addresses);
 				config.discovery_limit(
 					u64::from(params.network_config.default_peers_set.out_peers) + 15,

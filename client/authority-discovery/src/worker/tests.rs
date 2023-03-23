@@ -29,7 +29,8 @@ use futures::{
 	sink::SinkExt,
 	task::LocalSpawn,
 };
-use libp2p::{core::multiaddr, identity::Keypair, PeerId};
+use libp2p::{core::multiaddr, identity::Keypair};
+use libp2p_identity::PeerId;
 use prometheus_endpoint::prometheus::default_registry;
 
 use sc_client_api::HeaderBackend;

@@ -40,7 +40,7 @@ use futures::{
 	prelude::*,
 };
 use libp2p::{
-	core::{Endpoint, Multiaddr, PeerId},
+	core::{Endpoint, Multiaddr},
 	request_response::{self, Behaviour, Codec, Config, Message, ProtocolSupport, ResponseChannel},
 	swarm::{
 		behaviour::{ConnectionClosed, FromSwarm},
@@ -49,6 +49,7 @@ use libp2p::{
 		THandler, THandlerInEvent, THandlerOutEvent,
 	},
 };
+use libp2p_identity::PeerId;
 use sc_network_common::{
 	protocol::ProtocolName,
 	request_responses::{

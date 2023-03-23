@@ -51,7 +51,7 @@ use futures::prelude::*;
 use futures_timer::Delay;
 use ip_network::IpNetwork;
 use libp2p::{
-	core::{Endpoint, Multiaddr, PeerId, PublicKey},
+	core::{Endpoint, Multiaddr},
 	kad::{
 		handler::KademliaHandler,
 		record::{
@@ -72,6 +72,7 @@ use libp2p::{
 		PollParameters, THandler, THandlerInEvent, THandlerOutEvent,
 	},
 };
+use libp2p_identity::PeerId;
 use log::{debug, info, trace, warn};
 use sc_network_common::{config::ProtocolId, utils::LruHashSet};
 use sp_core::hexdisplay::HexDisplay;
@@ -106,9 +107,9 @@ pub struct DiscoveryConfig {
 
 impl DiscoveryConfig {
 	/// Create a default configuration with the given public key.
-	pub fn new(local_public_key: PublicKey) -> Self {
+	pub fn new(local_peer_id: PeerId) -> Self {
 		Self {
-			local_peer_id: local_public_key.to_peer_id(),
+			local_peer_id,
 			permanent_addresses: Vec::new(),
 			dht_random_walk: true,
 			allow_private_ip: true,
@@ -966,7 +967,7 @@ mod tests {
 			transport::{MemoryTransport, Transport},
 			upgrade,
 		},
-		identity::{ed25519, Keypair},
+		identity::Keypair,
 		noise,
 		swarm::{Executor, Swarm, SwarmEvent},
 		yamux, Multiaddr,
@@ -1006,7 +1007,7 @@ mod tests {
 					.boxed();
 
 				let behaviour = {
-					let mut config = DiscoveryConfig::new(keypair.public());
+					let mut config = DiscoveryConfig::new(keypair.public().to_peer_id());
 					config
 						.with_permanent_addresses(first_swarm_peer_id_and_addr.clone())
 						.allow_private_ip(true)
@@ -1125,7 +1126,7 @@ mod tests {
 
 		let mut discovery = {
 			let keypair = Keypair::generate_ed25519();
-			let mut config = DiscoveryConfig::new(keypair.public());
+			let mut config = DiscoveryConfig::new(keypair.public().to_peer_id());
 			config
 				.allow_private_ip(true)
 				.allow_non_globals_in_dht(true)
@@ -1135,11 +1136,7 @@ mod tests {
 		};
 
 		let predictable_peer_id = |bytes: &[u8; 32]| {
-			Keypair::Ed25519(ed25519::Keypair::from(
-				ed25519::SecretKey::from_bytes(bytes.to_owned()).unwrap(),
-			))
-			.public()
-			.to_peer_id()
+			Keypair::ed25519_from_bytes(bytes.to_owned()).unwrap().public().to_peer_id()
 		};
 
 		let remote_peer_id = predictable_peer_id(b"00000000000000000000000000000001");

@@ -26,11 +26,9 @@ use crate::{
 use bytes::Bytes;
 use futures::channel::oneshot;
 use libp2p::{
-	core::{Multiaddr, PeerId, PublicKey},
-	identify::Info as IdentifyInfo,
-	kad::record,
-	swarm::NetworkBehaviour,
+	core::Multiaddr, identify::Info as IdentifyInfo, kad::record, swarm::NetworkBehaviour,
 };
+use libp2p_identity::{PeerId, PublicKey};
 
 use sc_network_common::{
 	protocol::{

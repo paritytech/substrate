@@ -123,7 +123,7 @@ fn parse_ed25519_secret(hex: &str) -> error::Result<sc_network_common::config::E
 mod tests {
 	use super::*;
 	use clap::ValueEnum;
-	use sc_network_common::config::identity::{ed25519, Keypair};
+	use libp2p_identity::{ed25519, Keypair};
 	use std::fs;
 
 	#[test]
@@ -166,9 +166,12 @@ mod tests {
 				.into_keypair()
 				.expect("Creates node key pair");
 
-			match node_key {
-				Keypair::Ed25519(ref pair) if pair.secret().as_ref() == key.as_ref() => {},
-				_ => panic!("Invalid key"),
+			if let Some(pair) = node_key.into_ed25519() {
+				if pair.secret().as_ref() != key.as_ref() {
+					panic!("Invalid key")
+				}
+			} else {
+				panic!("Invalid key")
 			}
 		}
 

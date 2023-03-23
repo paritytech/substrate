@@ -26,13 +26,12 @@ pub use crate::{
 	sync::warp::WarpSyncProvider,
 	ExHashT,
 };
-pub use libp2p::{build_multiaddr, core::PublicKey, identity};
+pub use libp2p::{build_multiaddr, identity};
+pub use libp2p_identity::PublicKey;
 
 use codec::Encode;
-use libp2p::{
-	identity::{ed25519, Keypair},
-	multiaddr, Multiaddr, PeerId,
-};
+use libp2p::{multiaddr, Multiaddr};
+use libp2p_identity::{ed25519, Keypair, PeerId};
 use zeroize::Zeroize;
 
 use std::{
@@ -581,7 +580,7 @@ impl NodeKeyConfig {
 		match self {
 			Ed25519(Secret::New) => Ok(Keypair::generate_ed25519()),
 
-			Ed25519(Secret::Input(k)) => Ok(Keypair::Ed25519(k.into())),
+			Ed25519(Secret::Input(k)) => Ok(ed25519::Keypair::from(k).into()),
 
 			Ed25519(Secret::File(f)) => get_secret(
 				f,
@@ -599,7 +598,7 @@ impl NodeKeyConfig {
 				|b| b.as_ref().to_vec(),
 			)
 			.map(ed25519::Keypair::from)
-			.map(Keypair::Ed25519),
+			.map(Keypair::from),
 		}
 	}
 }
@@ -670,9 +669,14 @@ mod tests {
 		tempfile::Builder::new().prefix(prefix).tempdir().unwrap()
 	}
 
-	fn secret_bytes(kp: &Keypair) -> Vec<u8> {
-		let Keypair::Ed25519(p) = kp;
-		p.secret().as_ref().iter().cloned().collect()
+	fn secret_bytes(kp: Keypair) -> Vec<u8> {
+		kp.into_ed25519()
+			.expect("ed25519 keypair")
+			.secret()
+			.as_ref()
+			.iter()
+			.cloned()
+			.collect()
 	}
 
 	#[test]
@@ -682,7 +686,7 @@ mod tests {
 		let file = tmp.path().join("x").to_path_buf();
 		let kp1 = NodeKeyConfig::Ed25519(Secret::File(file.clone())).into_keypair().unwrap();
 		let kp2 = NodeKeyConfig::Ed25519(Secret::File(file.clone())).into_keypair().unwrap();
-		assert!(file.is_file() && secret_bytes(&kp1) == secret_bytes(&kp2))
+		assert!(file.is_file() && secret_bytes(kp1) == secret_bytes(kp2))
 	}
 
 	#[test]
@@ -690,13 +694,13 @@ mod tests {
 		let sk = ed25519::SecretKey::generate();
 		let kp1 = NodeKeyConfig::Ed25519(Secret::Input(sk.clone())).into_keypair().unwrap();
 		let kp2 = NodeKeyConfig::Ed25519(Secret::Input(sk)).into_keypair().unwrap();
-		assert!(secret_bytes(&kp1) == secret_bytes(&kp2));
+		assert!(secret_bytes(kp1) == secret_bytes(kp2));
 	}
 
 	#[test]
 	fn test_secret_new() {
 		let kp1 = NodeKeyConfig::Ed25519(Secret::New).into_keypair().unwrap();
 		let kp2 = NodeKeyConfig::Ed25519(Secret::New).into_keypair().unwrap();
-		assert!(secret_bytes(&kp1) != secret_bytes(&kp2));
+		assert!(secret_bytes(kp1) != secret_bytes(kp2));
 	}
 }

@@ -37,8 +37,10 @@ use ip_network::IpNetwork;
 use libp2p::{
 	core::multiaddr,
 	multihash::{Multihash, MultihashDigest},
-	Multiaddr, PeerId,
+	Multiaddr,
 };
+use libp2p_identity::PeerId;
+
 use log::{debug, error, log_enabled};
 use prometheus_endpoint::{register, Counter, CounterVec, Gauge, Opts, U64};
 use prost::Message;
@@ -547,7 +549,7 @@ where
 				// properly signed by the owner of the PeerId
 
 				if let Some(peer_signature) = peer_signature {
-					let public_key = libp2p::identity::PublicKey::from_protobuf_encoding(
+					let public_key = libp2p_identity::PublicKey::from_protobuf_encoding(
 						&peer_signature.public_key,
 					)
 					.map_err(Error::ParsingLibp2pIdentity)?;
