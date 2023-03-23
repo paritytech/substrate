@@ -643,18 +643,16 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 					{
 						use sp_std::fmt::Write;
 						let mut w = sp_std::Writer::default();
-						let _ = ::core::write!(&mut w, #debug_buffer_fmt_str, #( #debug_buffer_fmt_args, )* result); 
+						let _ = core::write!(&mut w, #debug_buffer_fmt_str, #( #debug_buffer_fmt_args, )* result);
 						let msg = core::str::from_utf8(&w.inner()).unwrap_or_default();
 						ctx.ext.append_debug_buffer(msg);
 					}
 					result
-				
 				} else {
 					#body
-				} 
+				}
 			}
 		};
-
 
 		// If we don't expand blocks (implementing for `()`) we change a few things:
 		// - We replace any code by unreachable!
