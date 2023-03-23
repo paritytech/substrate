@@ -394,7 +394,7 @@ mod v9 {
 				initial: old.initial,
 				maximum: old.maximum,
 				code: old.code,
-				determinism: Determinism::Deterministic,
+				determinism: Determinism::Enforced,
 			})
 		});
 	}
@@ -464,7 +464,7 @@ mod post_checks {
 	fn v9<T: Config>() -> Result<(), &'static str> {
 		for value in CodeStorage::<T>::iter_values() {
 			ensure!(
-				value.determinism == Determinism::Deterministic,
+				value.determinism == Determinism::Enforced,
 				"All pre-existing codes need to be deterministic."
 			);
 		}
