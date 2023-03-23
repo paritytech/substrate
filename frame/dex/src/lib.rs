@@ -788,7 +788,7 @@ pub mod pallet {
 			Self::mul_div(amount, reserve2, reserve1)
 		}
 
-		fn calc_lp_amount_for_zero_supply(
+		pub(super) fn calc_lp_amount_for_zero_supply(
 			amount1: &AssetBalanceOf<T>,
 			amount2: &AssetBalanceOf<T>,
 		) -> Result<AssetBalanceOf<T>, Error<T>> {

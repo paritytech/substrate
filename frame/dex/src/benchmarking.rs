@@ -26,7 +26,7 @@ use frame_support::{
 	storage::bounded_vec::BoundedVec,
 	traits::{
 		fungible::{Inspect, Unbalanced},
-		fungibles::{Create, Mutate},
+		fungibles::{Create, Inspect as InspectFungibles, Mutate},
 	},
 };
 use frame_system::RawOrigin as SystemOrigin;
@@ -35,7 +35,7 @@ use sp_std::prelude::*;
 
 use crate::Pallet as Dex;
 
-const INITIAL_ASSET_BALANCE: u64 = 1_000_000_000_000;
+const INITIAL_ASSET_BALANCE: u128 = 1_000_000_000_000;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 fn get_lp_token_id<T: Config>() -> T::PoolAssetId
@@ -48,7 +48,7 @@ where
 
 fn create_asset<T: Config>(asset: T::MultiAssetId) -> (T::AccountId, AccountIdLookupOf<T>)
 where
-	T::AssetBalance: From<u64>,
+	T::AssetBalance: From<u128>,
 	T::Currency: Unbalanced<T::AccountId>,
 	T::Assets: Create<T::AccountId> + Mutate<T::AccountId>,
 {
@@ -70,7 +70,7 @@ fn create_asset_and_pool<T: Config>(
 	asset2: T::MultiAssetId,
 ) -> (T::PoolAssetId, T::AccountId, AccountIdLookupOf<T>)
 where
-	T::AssetBalance: From<u64>,
+	T::AssetBalance: From<u128>,
 	T::Currency: Unbalanced<T::AccountId>,
 	T::Assets: Create<T::AccountId> + Mutate<T::AccountId>,
 	T::PoolAssetId: Into<u32>,
@@ -95,8 +95,9 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) {
 benchmarks! {
 	where_clause {
 		where
-			T::AssetBalance: From<u64>,
+			T::AssetBalance: From<u128> + Into<u128>,
 			T::Currency: Unbalanced<T::AccountId>,
+			T::Balance: From<u128> + Into<u128>,
 			T::Assets: Create<T::AccountId> + Mutate<T::AccountId>,
 			T::PoolAssetId: Into<u32>,
 			T::AssetId: From<u32>,
@@ -117,47 +118,53 @@ benchmarks! {
 		let asset1 = T::MultiAssetIdConverter::get_native();
 		let asset2 = T::MultiAssetIdConverter::into_multiasset_id(0.into());
 		let (lp_token, caller, _) = create_asset_and_pool::<T>(asset1, asset2);
-	}: _(SystemOrigin::Signed(caller.clone()), asset1, asset2, 10.into(), 10.into(), 10.into(), 10.into(), caller.clone())
+		let ed: u128 = T::Currency::minimum_balance().into();
+		let add_amount = ed * 10;
+	}: _(SystemOrigin::Signed(caller.clone()), asset1, asset2, add_amount.into(), 1000.into(), 0.into(), 0.into(), caller.clone())
 	verify {
 		let pool_id = (asset1, asset2);
-		assert_last_event::<T>(Event::LiquidityAdded {
-			who: caller.clone(),
-			mint_to: caller.clone(),
-			pool_id,
-			amount1_provided: 10.into(),
-			amount2_provided: 10.into(),
-			lp_token,
-			lp_token_minted: 9.into(),
-		}.into());
+		let lp_minted = Dex::<T>::calc_lp_amount_for_zero_supply(&add_amount.into(), &1000.into()).unwrap().into();
+		assert_eq!(
+			T::PoolAssets::balance(lp_token, &caller),
+			lp_minted.into()
+		);
+		assert_eq!(
+			T::Currency::balance(&Dex::<T>::get_pool_account(pool_id)),
+			add_amount.into()
+		);
+		assert_eq!(
+			T::Assets::balance(0.into(), &Dex::<T>::get_pool_account(pool_id)),
+			1000.into()
+		);
 	}
 
 	remove_liquidity {
 		let asset1 = T::MultiAssetIdConverter::get_native();
 		let asset2 = T::MultiAssetIdConverter::into_multiasset_id(0.into());
 		let (lp_token, caller, _) = create_asset_and_pool::<T>(asset1, asset2);
+		let ed: u128 = T::Currency::minimum_balance().into();
+		let add_amount = ed * 10;
+		let lp_minted = Dex::<T>::calc_lp_amount_for_zero_supply(&add_amount.into(), &1000.into()).unwrap().into();
+		let remove_lp_amount = lp_minted - 4;
 
 		Dex::<T>::add_liquidity(
 			SystemOrigin::Signed(caller.clone()).into(),
 			asset1,
 			asset2,
-			10.into(),
-			10.into(),
-			10.into(),
-			10.into(),
+			add_amount.into(),
+			1000.into(),
+			0.into(),
+			0.into(),
 			caller.clone(),
 		)?;
-	}: _(SystemOrigin::Signed(caller.clone()), asset1, asset2, 8.into(), 1.into(), 1.into(), caller.clone())
+		let total_supply = <T::PoolAssets as InspectFungibles<T::AccountId>>::total_issuance(lp_token);
+	}: _(SystemOrigin::Signed(caller.clone()), asset1, asset2, remove_lp_amount.into(), 0.into(), 0.into(), caller.clone())
 	verify {
-		let pool_id = (asset1, asset2);
-		assert_last_event::<T>(Event::LiquidityRemoved {
-			who: caller.clone(),
-			withdraw_to: caller.clone(),
-			pool_id,
-			amount1: 8.into(),
-			amount2: 8.into(),
-			lp_token,
-			lp_token_burned: 8.into(),
-		}.into());
+		let new_total_supply = <T::PoolAssets as InspectFungibles<T::AccountId>>::total_issuance(lp_token);
+		assert_eq!(
+			new_total_supply,
+			total_supply - remove_lp_amount.into()
+		);
 	}
 
 	swap_exact_tokens_for_tokens {
@@ -169,15 +176,17 @@ benchmarks! {
 		Dex::<T>::create_pool(SystemOrigin::Signed(caller.clone()).into(), asset2, asset3)?;
 		let path: BoundedVec<_, T::MaxSwapPathLength> =
 			BoundedVec::try_from(vec![asset1, asset2, asset3]).unwrap();
+		let ed: u128 = T::Currency::minimum_balance().into();
+		let add_amount1 = ed * 100;
 
 		Dex::<T>::add_liquidity(
 			SystemOrigin::Signed(caller.clone()).into(),
 			asset1,
 			asset2,
-			10000.into(),
+			add_amount1.into(),
 			200.into(),
-			10.into(),
-			10.into(),
+			0.into(),
+			0.into(),
 			caller.clone(),
 		)?;
 		Dex::<T>::add_liquidity(
@@ -186,20 +195,18 @@ benchmarks! {
 			asset3,
 			200.into(),
 			2000.into(),
-			10.into(),
-			10.into(),
+			0.into(),
+			0.into(),
 			caller.clone(),
 		)?;
-	}: _(SystemOrigin::Signed(caller.clone()), path.clone(), 500.into(), 80.into(), caller.clone(), false)
+		let asset1_balance = T::Currency::balance(&caller);
+	}: _(SystemOrigin::Signed(caller.clone()), path.clone(), ed.into(), 1.into(), caller.clone(), false)
 	verify {
-		let pool_id = (asset1, asset2);
-		assert_last_event::<T>(Event::SwapExecuted {
-			who: caller.clone(),
-			send_to: caller.clone(),
-			path,
-			amount_in: 500.into(),
-			amount_out: 85.into(),
-		}.into());
+		let new_asset1_balance = T::Currency::balance(&caller);
+		assert_eq!(
+			new_asset1_balance,
+			asset1_balance - ed.into()
+		);
 	}
 
 	swap_tokens_for_exact_tokens {
@@ -211,15 +218,17 @@ benchmarks! {
 		Dex::<T>::create_pool(SystemOrigin::Signed(caller.clone()).into(), asset2, asset3)?;
 		let path: BoundedVec<_, T::MaxSwapPathLength> =
 			BoundedVec::try_from(vec![asset1, asset2, asset3]).unwrap();
+		let ed: u128 = T::Currency::minimum_balance().into();
+		let add_amount1 = ed * 100;
 
 		Dex::<T>::add_liquidity(
 			SystemOrigin::Signed(caller.clone()).into(),
 			asset1,
 			asset2,
-			10000.into(),
+			add_amount1.into(),
 			200.into(),
-			10.into(),
-			10.into(),
+			0.into(),
+			0.into(),
 			caller.clone(),
 		)?;
 		Dex::<T>::add_liquidity(
@@ -228,20 +237,18 @@ benchmarks! {
 			asset3,
 			200.into(),
 			2000.into(),
-			10.into(),
-			10.into(),
+			0.into(),
+			0.into(),
 			caller.clone(),
 		)?;
-	}: _(SystemOrigin::Signed(caller.clone()), path.clone(), 100.into(), 1000.into(), caller.clone(), false)
+		let asset3_balance = T::Assets::balance(1.into(), &caller);
+	}: _(SystemOrigin::Signed(caller.clone()), path.clone(), 100.into(), add_amount1.into(), caller.clone(), false)
 	verify {
-		let pool_id = (asset1, asset2);
-		assert_last_event::<T>(Event::SwapExecuted {
-			who: caller.clone(),
-			send_to: caller.clone(),
-			path,
-			amount_in: 584.into(),
-			amount_out: 100.into(),
-		}.into());
+		let new_asset3_balance = T::Assets::balance(1.into(), &caller);
+		assert_eq!(
+			new_asset3_balance,
+			asset3_balance + 100.into()
+		);
 	}
 
 	impl_benchmark_test_suite!(Dex, crate::mock::new_test_ext(), crate::mock::Test);
