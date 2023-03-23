@@ -32,7 +32,6 @@ const MAX_CANDIDATES: u32 = 2000;
 const MIN_VOTERS: u32 = 1000;
 const MAX_VOTERS: u32 = 10 * 1000;
 const MAX_VOTES_PER_VOTER: u32 = 16;
-const MIN_VOTES_PER_VOTER: u32 = 5;
 const DESIRED_MEMBERS: u32 = 16;
 
 const SEED: u32 = 999;
@@ -69,14 +68,13 @@ benchmarks! {
 		// number of targets in snapshot. the minimum number of targets must be larger than
 		// `MAX_VOTES_PER_VOTER`.
 		let t in (MAX_VOTES_PER_VOTER + 1) .. MAX_CANDIDATES;
-		// number of votes per voter (ie the degree).
-		let d in (MAX_VOTERS) .. MAX_VOTERS * MAX_VOTES_PER_VOTER;
+		// number of edges (total votes per voter).
+		let e in (MAX_VOTERS) .. MAX_VOTERS  * MAX_VOTES_PER_VOTER;
 
-		// we want to set the a voting degree per voter between the number of targets and the
-		// maximum votes allowed per voter. with the current benchmarking framework, `t` cannot be
-		// used as a parameter. thus, we try to use `d` as the voting degree, clamped between the
-		// minimum and maximum number of votes per voter.
-		let votes_per_voter = d.clamp(MIN_VOTES_PER_VOTER, MAX_VOTES_PER_VOTER);
+		// when v is being iterated, e is set to max and that's a problem. thus, we calculate the
+		// total edges as MAX_VOTERS .. MAX_VOTERS * MAX_VOTES_PER_VOTER and extract the votes
+		// per voter, capped by MAX_VOTES_PER_VOTER.
+		let votes_per_voter = (e / v).min(MAX_VOTES_PER_VOTER);
 
 		let (voters, total_targets) = set_up_voters_targets::<T::AccountId>(v, t, votes_per_voter as usize);
 	}: {
@@ -92,14 +90,13 @@ benchmarks! {
 		// number of targets in snapshot. the minimum number of targets must be larger than
 		// `MAX_VOTES_PER_VOTER`.
 		let t in (MAX_VOTES_PER_VOTER + 1) .. MAX_CANDIDATES;
-		// number of votes per voter (ie the degree).
-		let d in (MAX_VOTERS) .. MAX_VOTERS * MAX_VOTES_PER_VOTER;
+		// number of edges (total votes per voter).
+		let e in (MAX_VOTERS) .. MAX_VOTERS  * MAX_VOTES_PER_VOTER;
 
-		// we want to set the a voting degree per voter between the number of targets and the
-		// maximum votes allowed per voter. with the current benchmarking framework, `t` cannot be
-		// used as a parameter. thus, we try to use `d` as the voting degree, clamped between the
-		// minimum and maximum number of votes per voter.
-		let votes_per_voter = d.clamp(MIN_VOTES_PER_VOTER, MAX_VOTES_PER_VOTER);
+		// when v is being iterated, e is set to max and that's a problem. thus, we calculate the
+		// total edges as MAX_VOTERS .. MAX_VOTERS * MAX_VOTES_PER_VOTER and extract the votes
+		// per voter, capped by MAX_VOTES_PER_VOTER.
+		let votes_per_voter = (e / v).min(MAX_VOTES_PER_VOTER);
 
 		let (voters, total_targets) = set_up_voters_targets::<T::AccountId>(v, t, votes_per_voter as usize);
 	}: {
@@ -115,14 +112,13 @@ benchmarks! {
 		// number of targets in snapshot. the minimum number of targets must be larger than
 		// `MAX_VOTES_PER_VOTER`.
 		let t in (MAX_VOTES_PER_VOTER + 1) .. MAX_CANDIDATES;
-		// number of votes per voter (ie the degree).
-		let d in (MAX_VOTERS) .. MAX_VOTERS * MAX_VOTES_PER_VOTER;
+		// number of edges (total votes per voter).
+		let e in (MAX_VOTERS) .. MAX_VOTERS  * MAX_VOTES_PER_VOTER;
 
-		// we want to set the a voting degree per voter between the number of targets and the
-		// maximum votes allowed per voter. with the current benchmarking framework, `t` cannot be
-		// used as a parameter. thus, we try to use `d` as the voting degree, clamped between the
-		// minimum and maximum number of votes per voter.
-		let votes_per_voter = d.clamp(MIN_VOTES_PER_VOTER, MAX_VOTES_PER_VOTER);
+		// when v is being iterated, e is set to max and that's a problem. thus, we calculate the
+		// total edges as MAX_VOTERS .. MAX_VOTERS * MAX_VOTES_PER_VOTER and extract the votes
+		// per voter, capped by MAX_VOTES_PER_VOTER.
+		let votes_per_voter = (e / v).min(MAX_VOTES_PER_VOTER);
 
 		let (voters, total_targets) = set_up_voters_targets::<T::AccountId>(v, t, votes_per_voter as usize);
 	}: {
