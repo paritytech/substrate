@@ -83,13 +83,15 @@ impl Keystore for LocalKeystore {
 	/// If the `[seed]` is `Some` then the key will be ephemeral and stored in memory.
 	fn sr25519_generate_new(
 		&self,
-		id: KeyTypeId,
+		key_type: KeyTypeId,
 		seed: Option<&str>,
 	) -> std::result::Result<sr25519::Public, TraitError> {
 		let pair = match seed {
-			Some(seed) =>
-				self.0.write().insert_ephemeral_from_seed_by_type::<sr25519::Pair>(seed, id),
-			None => self.0.write().generate_by_type::<sr25519::Pair>(id),
+			Some(seed) => self
+				.0
+				.write()
+				.insert_ephemeral_from_seed_by_type::<sr25519::Pair>(seed, key_type),
+			None => self.0.write().generate_by_type::<sr25519::Pair>(key_type),
 		}
 		.map_err(|e| -> TraitError { e.into() })?;
 
@@ -98,14 +100,14 @@ impl Keystore for LocalKeystore {
 
 	fn sr25519_sign(
 		&self,
-		id: KeyTypeId,
+		key_type: KeyTypeId,
 		public: &sr25519::Public,
 		msg: &[u8],
 	) -> std::result::Result<Option<sr25519::Signature>, TraitError> {
 		let res = self
 			.0
 			.read()
-			.key_pair_by_type::<sr25519::Pair>(public, id)?
+			.key_pair_by_type::<sr25519::Pair>(public, key_type)?
 			.map(|pair| pair.sign(msg));
 		Ok(res)
 	}
@@ -141,13 +143,15 @@ impl Keystore for LocalKeystore {
 	/// If the `[seed]` is `Some` then the key will be ephemeral and stored in memory.
 	fn ed25519_generate_new(
 		&self,
-		id: KeyTypeId,
+		key_type: KeyTypeId,
 		seed: Option<&str>,
 	) -> std::result::Result<ed25519::Public, TraitError> {
 		let pair = match seed {
-			Some(seed) =>
-				self.0.write().insert_ephemeral_from_seed_by_type::<ed25519::Pair>(seed, id),
-			None => self.0.write().generate_by_type::<ed25519::Pair>(id),
+			Some(seed) => self
+				.0
+				.write()
+				.insert_ephemeral_from_seed_by_type::<ed25519::Pair>(seed, key_type),
+			None => self.0.write().generate_by_type::<ed25519::Pair>(key_type),
 		}
 		.map_err(|e| -> TraitError { e.into() })?;
 
@@ -156,14 +160,14 @@ impl Keystore for LocalKeystore {
 
 	fn ed25519_sign(
 		&self,
-		id: KeyTypeId,
+		key_type: KeyTypeId,
 		public: &ed25519::Public,
 		msg: &[u8],
 	) -> std::result::Result<Option<ed25519::Signature>, TraitError> {
 		let res = self
 			.0
 			.read()
-			.key_pair_by_type::<ed25519::Pair>(public, id)?
+			.key_pair_by_type::<ed25519::Pair>(public, key_type)?
 			.map(|pair| pair.sign(msg));
 		Ok(res)
 	}
@@ -185,13 +189,13 @@ impl Keystore for LocalKeystore {
 	/// If the `[seed]` is `Some` then the key will be ephemeral and stored in memory.
 	fn ecdsa_generate_new(
 		&self,
-		id: KeyTypeId,
+		key_type: KeyTypeId,
 		seed: Option<&str>,
 	) -> std::result::Result<ecdsa::Public, TraitError> {
 		let pair = match seed {
 			Some(seed) =>
-				self.0.write().insert_ephemeral_from_seed_by_type::<ecdsa::Pair>(seed, id),
-			None => self.0.write().generate_by_type::<ecdsa::Pair>(id),
+				self.0.write().insert_ephemeral_from_seed_by_type::<ecdsa::Pair>(seed, key_type),
+			None => self.0.write().generate_by_type::<ecdsa::Pair>(key_type),
 		}
 		.map_err(|e| -> TraitError { e.into() })?;
 
@@ -200,28 +204,28 @@ impl Keystore for LocalKeystore {
 
 	fn ecdsa_sign(
 		&self,
-		id: KeyTypeId,
+		key_type: KeyTypeId,
 		public: &ecdsa::Public,
 		msg: &[u8],
 	) -> std::result::Result<Option<ecdsa::Signature>, TraitError> {
 		let res = self
 			.0
 			.read()
-			.key_pair_by_type::<ecdsa::Pair>(public, id)?
+			.key_pair_by_type::<ecdsa::Pair>(public, key_type)?
 			.map(|pair| pair.sign(msg));
 		Ok(res)
 	}
 
 	fn ecdsa_sign_prehashed(
 		&self,
-		id: KeyTypeId,
+		key_type: KeyTypeId,
 		public: &ecdsa::Public,
 		msg: &[u8; 32],
 	) -> std::result::Result<Option<ecdsa::Signature>, TraitError> {
 		let res = self
 			.0
 			.read()
-			.key_pair_by_type::<ecdsa::Pair>(public, id)?
+			.key_pair_by_type::<ecdsa::Pair>(public, key_type)?
 			.map(|pair| pair.sign_prehashed(msg));
 		Ok(res)
 	}
@@ -235,8 +239,8 @@ impl Keystore for LocalKeystore {
 		self.0.write().insert(key_type, suri, public).map_err(|_| ())
 	}
 
-	fn keys(&self, id: KeyTypeId) -> std::result::Result<Vec<Vec<u8>>, TraitError> {
-		self.0.read().raw_public_keys(id).map_err(|e| e.into())
+	fn keys(&self, key_type: KeyTypeId) -> std::result::Result<Vec<Vec<u8>>, TraitError> {
+		self.0.read().raw_public_keys(key_type).map_err(|e| e.into())
 	}
 
 	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
@@ -407,12 +411,12 @@ impl KeystoreInner {
 	}
 
 	/// Returns a list of raw public keys filtered by `KeyTypeId`
-	fn raw_public_keys(&self, id: KeyTypeId) -> Result<Vec<Vec<u8>>> {
+	fn raw_public_keys(&self, key_type: KeyTypeId) -> Result<Vec<Vec<u8>>> {
 		let mut public_keys: Vec<Vec<u8>> = self
 			.additional
 			.keys()
 			.into_iter()
-			.filter_map(|k| if k.0 == id { Some(k.1.clone()) } else { None })
+			.filter_map(|k| if k.0 == key_type { Some(k.1.clone()) } else { None })
 			.collect();
 
 		if let Some(path) = &self.path {
@@ -424,7 +428,7 @@ impl KeystoreInner {
 				if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
 					match array_bytes::hex2bytes(name) {
 						Ok(ref hex) if hex.len() > 4 => {
-							if hex[0..4] != id.0 {
+							if hex[0..4] != key_type.0 {
 								continue
 							}
 							let public = hex[4..].to_vec();

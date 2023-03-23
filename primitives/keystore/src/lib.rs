@@ -45,40 +45,44 @@ pub enum Error {
 
 /// Something that generates, stores and provides access to secret keys.
 pub trait Keystore: Send + Sync {
-	/// Returns all sr25519 public keys for the given key type.
-	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public>;
+	/// Returns all the sr25519 public keys for the given key type.
+	fn sr25519_public_keys(&self, key_type: KeyTypeId) -> Vec<sr25519::Public>;
 
 	/// Generate a new sr25519 key pair for the given key type and an optional seed.
 	///
-	/// If the given seed is `Some(_)`, the key pair will only be stored in memory.
-	///
-	/// Returns the public key of the generated key pair.
+	/// Returns an `sr25519::Public` key of the generated key pair or an `Err` if
+	/// something failed during key generation.
 	fn sr25519_generate_new(
 		&self,
-		id: KeyTypeId,
+		key_type: KeyTypeId,
 		seed: Option<&str>,
 	) -> Result<sr25519::Public, Error>;
 
-	/// TODO
+	/// Generate an sr25519 signature for a given message.
+	///
+	/// Receives [`KeyTypeId`] and an [`sr25519::Public`] key to be able to map
+	/// them to a private key that exists in the keystore.
+	///
+	/// Returns an [`sr25519::Signature`] or `None` in case the given `key_type`
+	/// and `public` combination doesn't exist in the keystore.
+	/// An `Err` will be returned if generating the signature itself failed.
 	fn sr25519_sign(
 		&self,
-		id: KeyTypeId,
+		key_type: KeyTypeId,
 		public: &sr25519::Public,
 		msg: &[u8],
 	) -> Result<Option<sr25519::Signature>, Error>;
 
-	/// Generate VRF signature  for given transcript data.
+	/// Generate an sr25519 VRF signature for a given transcript data.
 	///
-	/// Receives KeyTypeId and Public key to be able to map
-	/// them to a private key that exists in the keystore which
-	/// is, in turn, used for signing the provided transcript.
+	/// Receives [`KeyTypeId`] and an [`sr25519::Public`] key to be able to map
+	/// them to a private key that exists in the keystore.
 	///
 	/// Returns a result containing the signature data.
-	/// Namely, VRFOutput and VRFProof which are returned
-	/// inside the `VRFSignature` container struct.
-	///
-	/// This function will return `None` if the given `key_type` and `public` combination
-	/// doesn't exist in the keystore or an `Err` when something failed.
+	/// Namely, VRFOutput and VRFProof which are returned inside the `VRFSignature`
+	/// container struct.
+	/// Returns `None` if the given `key_type` and `public` combination doesn't
+	/// exist in the keystore or an `Err` when something failed.
 	fn sr25519_vrf_sign(
 		&self,
 		key_type: KeyTypeId,
@@ -87,69 +91,72 @@ pub trait Keystore: Send + Sync {
 	) -> Result<Option<VRFSignature>, Error>;
 
 	/// Returns all ed25519 public keys for the given key type.
-	fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public>;
+	fn ed25519_public_keys(&self, key_type: KeyTypeId) -> Vec<ed25519::Public>;
 
 	/// Generate a new ed25519 key pair for the given key type and an optional seed.
 	///
-	/// If the given seed is `Some(_)`, the key pair will only be stored in memory.
-	///
-	/// Returns the public key of the generated key pair.
+	/// Returns an `ed25519::Public` key of the generated key pair or an `Err` if
+	/// something failed during key generation.
 	fn ed25519_generate_new(
 		&self,
-		id: KeyTypeId,
+		key_type: KeyTypeId,
 		seed: Option<&str>,
 	) -> Result<ed25519::Public, Error>;
 
-	/// TODO
+	/// Generate an ed25519 signature for a given message.
+	///
+	/// Receives [`KeyTypeId`] and an [`ed25519::Public`] key to be able to map
+	/// them to a private key that exists in the keystore.
+	///
+	/// Returns an [`ed25519::Signature`] or `None` in case the given `key_type`
+	/// and `public` combination doesn't exist in the keystore.
+	/// An `Err` will be returned if generating the signature itself failed.
 	fn ed25519_sign(
 		&self,
-		id: KeyTypeId,
+		key_type: KeyTypeId,
 		public: &ed25519::Public,
 		msg: &[u8],
 	) -> Result<Option<ed25519::Signature>, Error>;
 
 	/// Returns all ecdsa public keys for the given key type.
-	fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public>;
+	fn ecdsa_public_keys(&self, key_type: KeyTypeId) -> Vec<ecdsa::Public>;
 
 	/// Generate a new ecdsa key pair for the given key type and an optional seed.
 	///
-	/// If the given seed is `Some(_)`, the key pair will only be stored in memory.
-	///
-	/// Returns the public key of the generated key pair.
-	fn ecdsa_generate_new(&self, id: KeyTypeId, seed: Option<&str>)
-		-> Result<ecdsa::Public, Error>;
+	/// Returns an `ecdsa::Public` key of the generated key pair or an `Err` if
+	/// something failed during key generation.
+	fn ecdsa_generate_new(
+		&self,
+		key_type: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<ecdsa::Public, Error>;
 
-	/// Generate an ECDSA signature for a given message.
+	/// Generate an ecdsa signature for a given message.
 	///
 	/// Receives [`KeyTypeId`] and an [`ecdsa::Public`] key to be able to map
-	/// them to a private key that exists in the keystore. This private key is,
-	/// in turn, used for signing the provided pre-hashed message.
+	/// them to a private key that exists in the keystore.
 	///
-	/// Returns an [`ecdsa::Signature`] or `None` in case the given `id` and
-	/// `public` combination doesn't exist in the keystore. An `Err` will be
-	/// returned if generating the signature itself failed.
+	/// Returns an [`ecdsa::Signature`] or `None` in case the given `key_type`
+	/// and `public` combination doesn't exist in the keystore.
+	/// An `Err` will be returned if generating the signature itself failed.
 	fn ecdsa_sign(
 		&self,
-		id: KeyTypeId,
+		key_type: KeyTypeId,
 		public: &ecdsa::Public,
 		msg: &[u8],
 	) -> Result<Option<ecdsa::Signature>, Error>;
 
-	/// Generate an ECDSA signature for a given pre-hashed message.
+	/// Generate an ecdsa signature for a given pre-hashed message.
 	///
 	/// Receives [`KeyTypeId`] and an [`ecdsa::Public`] key to be able to map
-	/// them to a private key that exists in the keystore. This private key is,
-	/// in turn, used for signing the provided pre-hashed message.
+	/// them to a private key that exists in the keystore.
 	///
-	/// The `msg` argument provided should be a hashed message for which an
-	/// ECDSA signature should be generated.
-	///
-	/// Returns an [`ecdsa::Signature`] or `None` in case the given `id` and
-	/// `public` combination doesn't exist in the keystore. An `Err` will be
-	/// returned if generating the signature itself failed.
+	/// Returns an [`ecdsa::Signature`] or `None` in case the given `key_type`
+	/// and `public` combination doesn't exist in the keystore.
+	/// An `Err` will be returned if generating the signature itself failed.
 	fn ecdsa_sign_prehashed(
 		&self,
-		id: KeyTypeId,
+		key_type: KeyTypeId,
 		public: &ecdsa::Public,
 		msg: &[u8; 32],
 	) -> Result<Option<ecdsa::Signature>, Error>;
@@ -157,19 +164,20 @@ pub trait Keystore: Send + Sync {
 	/// Insert a new secret key.
 	fn insert(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()>;
 
-	/// List all supported keys
+	/// List all supported keys of a given type.
 	///
-	/// Returns a set of public keys the signer supports.
-	fn keys(&self, id: KeyTypeId) -> Result<Vec<Vec<u8>>, Error>;
+	/// Returns a set of public keys the signer supports in raw format.
+	fn keys(&self, key_type: KeyTypeId) -> Result<Vec<Vec<u8>>, Error>;
 
 	/// Checks if the private keys for the given public key and key type combinations exist.
 	///
 	/// Returns `true` iff all private keys could be found.
 	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool;
 
-	/// Convenience method to sign a message using an opaque key type.
+	/// Convenience method to sign a message using the given key type and a raw public key
+	/// for secret lookup.
 	///
-	/// The message is signed using the cryptographic primitive specified by `KeyCryptoId`.
+	/// The message is signed using the cryptographic primitive specified by `crypto_id`.
 	///
 	/// Schemes supported by the default trait implementation: sr25519, ed25519 and ecdsa.
 	/// To support more schemes you can overwrite this method.
