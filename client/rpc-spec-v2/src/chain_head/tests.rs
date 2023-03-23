@@ -1351,6 +1351,9 @@ async fn follow_finalized_before_new_block() {
 
 	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
 
+	// Trigger the `FinalizedNotification` for block 1 before the `BlockImportNotification`, and
+	// expect for the `chainHead` to generate `NewBlock`, `BestBlock` and `Finalized` events.
+
 	// Trigger the Finalized notification before the NewBlock one.
 	run_with_timeout(client_mock.trigger_finality_stream(block_1.header.clone())).await;
 
@@ -1390,6 +1393,11 @@ async fn follow_finalized_before_new_block() {
 	let block_2 = client.new_block(Default::default()).unwrap().build().unwrap().block;
 	let block_2_hash = block_2.header.hash();
 	client.import(BlockOrigin::Own, block_2.clone()).await.unwrap();
+
+	// Triggering the `BlockImportNotification` notification for block 1 should have no effect
+	// on the notification because the events were handled by the `FinalizedNotification`.
+	// Also trigger the `BlockImportNotification` notification for block 2 to ensure
+	// `NewBlock and `BestBlock` events are generated.
 
 	// Trigger NewBlock notification for block 1 and block 2.
 	run_with_timeout(client_mock.trigger_import_stream(block_1.header)).await;
