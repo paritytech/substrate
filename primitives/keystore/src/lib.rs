@@ -21,7 +21,7 @@ pub mod vrf;
 
 use crate::vrf::{VRFSignature, VRFTranscriptData};
 use sp_core::{
-	bls,
+	bls377,
 	crypto::{CryptoTypePublicPair, KeyTypeId},
 	ecdsa, ed25519, sr25519,
 };
@@ -152,14 +152,18 @@ pub trait Keystore: Send + Sync {
 	) -> Result<Option<ecdsa::Signature>, Error>;
 
 	/// Returns all bls public keys for the given key type.
-	fn bls_public_keys(&self, id: KeyTypeId) -> Vec<bls::Public>;
+	fn bls377_public_keys(&self, id: KeyTypeId) -> Vec<bls377::Public>;
 
 	/// Generate a new bls key pair for the given key type and an optional seed.
 	///
 	/// If the given seed is `Some(_)`, the key pair will only be stored in memory.
 	///
 	/// Returns the public key of the generated key pair.
-	fn bls_generate_new(&self, id: KeyTypeId, seed: Option<&str>) -> Result<bls::Public, Error>;
+	fn bls377_generate_new(
+		&self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<bls377::Public, Error>;
 
 	/// Generate an BLS signature for a given message.
 	///
@@ -173,12 +177,12 @@ pub trait Keystore: Send + Sync {
 	/// Returns an [`bls::Signature`] or `None` in case the given `id` and
 	/// `public` combination doesn't exist in the keystore. An `Err` will be
 	/// returned if generating the signature itself failed.
-	fn bls_sign(
+	fn bls377_sign(
 		&self,
 		id: KeyTypeId,
-		public: &bls::Public,
+		public: &bls377::Public,
 		msg: &[u8],
-	) -> Result<Option<bls::Signature>, Error>;
+	) -> Result<Option<bls377::Signature>, Error>;
 }
 
 /// A shared pointer to a keystore implementation.

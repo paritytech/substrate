@@ -18,12 +18,11 @@
 //! Local keystore implementation
 
 use parking_lot::RwLock;
-use sp_application_crypto::{bls, ecdsa, ed25519, sr25519, AppKey, AppPair, IsWrappedBy};
+use sp_application_crypto::{bls377, ecdsa, ed25519, sr25519, AppKey, AppPair, IsWrappedBy};
 use sp_core::{
 	crypto::{
 		ByteArray, CryptoTypePublicPair, ExposeSecret, KeyTypeId, Pair as PairT, SecretString,
 	},
-	sr25519::{Pair as Sr25519Pair, Public as Sr25519Public},
 	Encode,
 };
 use sp_keystore::{
@@ -231,11 +230,11 @@ impl Keystore for LocalKeystore {
 	fn sr25519_vrf_sign(
 		&self,
 		key_type: KeyTypeId,
-		public: &Sr25519Public,
+		public: &sr25519::Public,
 		transcript_data: VRFTranscriptData,
 	) -> std::result::Result<Option<VRFSignature>, TraitError> {
 		let transcript = make_transcript(transcript_data);
-		let pair = self.0.read().key_pair_by_type::<Sr25519Pair>(public, key_type)?;
+		let pair = self.0.read().key_pair_by_type::<sr25519::Pair>(public, key_type)?;
 
 		if let Some(pair) = pair {
 			let (inout, proof, _) = pair.as_ref().vrf_sign(transcript);
@@ -257,7 +256,7 @@ impl Keystore for LocalKeystore {
 	}
 
 	/// Returns all bls public keys for the given key type.
-	fn bls_public_keys(&self, _id: KeyTypeId) -> Vec<bls::Public> {
+	fn bls377_public_keys(&self, _id: KeyTypeId) -> Vec<bls377::Public> {
 		unimplemented!()
 	}
 
@@ -266,11 +265,11 @@ impl Keystore for LocalKeystore {
 	/// If the given seed is `Some(_)`, the key pair will only be stored in memory.
 	///
 	/// Returns the public key of the generated key pair.
-	fn bls_generate_new(
+	fn bls377_generate_new(
 		&self,
 		_id: KeyTypeId,
 		_seed: Option<&str>,
-	) -> std::result::Result<bls::Public, TraitError> {
+	) -> std::result::Result<bls377::Public, TraitError> {
 		unimplemented!()
 	}
 
@@ -286,12 +285,12 @@ impl Keystore for LocalKeystore {
 	/// Returns an [`bls::Signature`] or `None` in case the given `id` and
 	/// `public` combination doesn't exist in the keystore. An `Err` will be
 	/// returned if generating the signature itself failed.
-	fn bls_sign(
+	fn bls377_sign(
 		&self,
 		_id: KeyTypeId,
-		_public: &bls::Public,
+		_public: &bls377::Public,
 		_msg: &[u8],
-	) -> std::result::Result<Option<bls::Signature>, TraitError> {
+	) -> std::result::Result<Option<bls377::Signature>, TraitError> {
 		unimplemented!()
 	}
 }
