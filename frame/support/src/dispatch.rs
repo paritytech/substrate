@@ -709,7 +709,7 @@ impl<T> PaysFee<T> for (u64, Pays) {
 /// ```
 /// # #[macro_use]
 /// # extern crate frame_support;
-/// # use frame_support::{weights::Weight, dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo}};
+/// # use frame_support::{weights::Weight, dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo, PostDispatchInfo}};
 /// # use frame_system::{Config, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
@@ -723,7 +723,7 @@ impl<T> PaysFee<T> for (u64, Pays) {
 /// 				return Ok(None::<Weight>.into());
 /// 			}
 /// 			// expensive calculation not executed: use only a portion of the weight
-/// 			Ok(Some(100_000).into())
+/// 			Ok(PostDispatchInfo { actual_weight: Some(Weight::from_parts(100_000, 0)), ..Default::default() })
 /// 		}
 /// 	}
 /// }
