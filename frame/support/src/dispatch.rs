@@ -550,27 +550,6 @@ impl<T> ClassifyDispatch<T> for (Weight, DispatchClass, Pays) {
 
 // TODO: Eventually remove these
 
-impl From<Option<u64>> for PostDispatchInfo {
-	fn from(maybe_actual_computation: Option<u64>) -> Self {
-		let actual_weight = match maybe_actual_computation {
-			Some(actual_computation) => Some(Weight::from_parts(actual_computation, 0)),
-			None => None,
-		};
-		Self { actual_weight, pays_fee: Default::default() }
-	}
-}
-
-impl From<(Option<u64>, Pays)> for PostDispatchInfo {
-	fn from(post_weight_info: (Option<u64>, Pays)) -> Self {
-		let (maybe_actual_time, pays_fee) = post_weight_info;
-		let actual_weight = match maybe_actual_time {
-			Some(actual_time) => Some(Weight::from_parts(actual_time, 0)),
-			None => None,
-		};
-		Self { actual_weight, pays_fee }
-	}
-}
-
 impl<T> ClassifyDispatch<T> for u64 {
 	fn classify_dispatch(&self, _: T) -> DispatchClass {
 		DispatchClass::Normal
