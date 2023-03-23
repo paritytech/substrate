@@ -49,100 +49,100 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for frame_election_provider_support.
 pub trait WeightInfo {
-	fn phragmen(v: u32, t: u32, e: u32, ) -> Weight;
-	fn phragmms(v: u32, t: u32, e: u32, ) -> Weight;
-	fn approval_voting(v: u32, t: u32, e: u32, ) -> Weight;
+	fn phragmen(t: u32, v: u32, e: u32, ) -> Weight;
+	fn phragmms(t: u32, v: u32, e: u32, ) -> Weight;
+	fn approval_voting(t: u32, v: u32, e: u32, ) -> Weight;
 }
 
 /// Weights for frame_election_provider_support using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
-	/// The range of component `v` is `[1000, 10000]`.
 	/// The range of component `t` is `[17, 2000]`.
+	/// The range of component `v` is `[1000, 10000]`.
 	/// The range of component `e` is `[10000, 160000]`.
-	fn phragmen(v: u32, _t: u32, e: u32, ) -> Weight {
+	fn phragmen(_t: u32, v: u32, e: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 16_149_617_000 picoseconds.
-		Weight::from_parts(16_947_913_000, 0)
-			// Standard Error: 176_584
-			.saturating_add(Weight::from_parts(8_577_441, 0).saturating_mul(v.into()))
-			// Standard Error: 10_861
-			.saturating_add(Weight::from_parts(775_617, 0).saturating_mul(e.into()))
+		// Minimum execution time: 14_722_277_000 picoseconds.
+		Weight::from_parts(14_915_100_000, 0)
+			// Standard Error: 174_311
+			.saturating_add(Weight::from_parts(8_441_626, 0).saturating_mul(v.into()))
+			// Standard Error: 10_722
+			.saturating_add(Weight::from_parts(745_376, 0).saturating_mul(e.into()))
 	}
-	/// The range of component `v` is `[1000, 10000]`.
 	/// The range of component `t` is `[17, 2000]`.
+	/// The range of component `v` is `[1000, 10000]`.
 	/// The range of component `e` is `[10000, 160000]`.
-	fn phragmms(v: u32, _t: u32, e: u32, ) -> Weight {
+	fn phragmms(_t: u32, v: u32, e: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 9_333_066_000 picoseconds.
-		Weight::from_parts(9_421_750_000, 0)
-			// Standard Error: 172_142
-			.saturating_add(Weight::from_parts(8_792_110, 0).saturating_mul(v.into()))
-			// Standard Error: 10_588
-			.saturating_add(Weight::from_parts(801_984, 0).saturating_mul(e.into()))
+		// Minimum execution time: 9_354_820_000 picoseconds.
+		Weight::from_parts(9_464_776_000, 0)
+			// Standard Error: 175_639
+			.saturating_add(Weight::from_parts(9_028_742, 0).saturating_mul(v.into()))
+			// Standard Error: 10_803
+			.saturating_add(Weight::from_parts(768_472, 0).saturating_mul(e.into()))
 	}
-	/// The range of component `v` is `[1000, 10000]`.
 	/// The range of component `t` is `[17, 2000]`.
+	/// The range of component `v` is `[1000, 10000]`.
 	/// The range of component `e` is `[10000, 160000]`.
-	fn approval_voting(v: u32, _t: u32, e: u32, ) -> Weight {
+	fn approval_voting(_t: u32, v: u32, e: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 3_962_036_000 picoseconds.
-		Weight::from_parts(3_989_759_000, 0)
-			// Standard Error: 35_105
-			.saturating_add(Weight::from_parts(2_035_777, 0).saturating_mul(v.into()))
-			// Standard Error: 2_159
-			.saturating_add(Weight::from_parts(124_045, 0).saturating_mul(e.into()))
+		// Minimum execution time: 4_023_239_000 picoseconds.
+		Weight::from_parts(4_060_112_000, 0)
+			// Standard Error: 36_201
+			.saturating_add(Weight::from_parts(2_054_426, 0).saturating_mul(v.into()))
+			// Standard Error: 2_226
+			.saturating_add(Weight::from_parts(126_762, 0).saturating_mul(e.into()))
 	}
 }
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	/// The range of component `v` is `[1000, 10000]`.
 	/// The range of component `t` is `[17, 2000]`.
+	/// The range of component `v` is `[1000, 10000]`.
 	/// The range of component `e` is `[10000, 160000]`.
-	fn phragmen(v: u32, _t: u32, e: u32, ) -> Weight {
+	fn phragmen(_t: u32, v: u32, e: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 16_149_617_000 picoseconds.
-		Weight::from_parts(16_947_913_000, 0)
-			// Standard Error: 176_584
-			.saturating_add(Weight::from_parts(8_577_441, 0).saturating_mul(v.into()))
-			// Standard Error: 10_861
-			.saturating_add(Weight::from_parts(775_617, 0).saturating_mul(e.into()))
+		// Minimum execution time: 14_722_277_000 picoseconds.
+		Weight::from_parts(14_915_100_000, 0)
+			// Standard Error: 174_311
+			.saturating_add(Weight::from_parts(8_441_626, 0).saturating_mul(v.into()))
+			// Standard Error: 10_722
+			.saturating_add(Weight::from_parts(745_376, 0).saturating_mul(e.into()))
 	}
-	/// The range of component `v` is `[1000, 10000]`.
 	/// The range of component `t` is `[17, 2000]`.
+	/// The range of component `v` is `[1000, 10000]`.
 	/// The range of component `e` is `[10000, 160000]`.
-	fn phragmms(v: u32, _t: u32, e: u32, ) -> Weight {
+	fn phragmms(_t: u32, v: u32, e: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 9_333_066_000 picoseconds.
-		Weight::from_parts(9_421_750_000, 0)
-			// Standard Error: 172_142
-			.saturating_add(Weight::from_parts(8_792_110, 0).saturating_mul(v.into()))
-			// Standard Error: 10_588
-			.saturating_add(Weight::from_parts(801_984, 0).saturating_mul(e.into()))
+		// Minimum execution time: 9_354_820_000 picoseconds.
+		Weight::from_parts(9_464_776_000, 0)
+			// Standard Error: 175_639
+			.saturating_add(Weight::from_parts(9_028_742, 0).saturating_mul(v.into()))
+			// Standard Error: 10_803
+			.saturating_add(Weight::from_parts(768_472, 0).saturating_mul(e.into()))
 	}
-	/// The range of component `v` is `[1000, 10000]`.
 	/// The range of component `t` is `[17, 2000]`.
+	/// The range of component `v` is `[1000, 10000]`.
 	/// The range of component `e` is `[10000, 160000]`.
-	fn approval_voting(v: u32, _t: u32, e: u32, ) -> Weight {
+	fn approval_voting(_t: u32, v: u32, e: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 3_962_036_000 picoseconds.
-		Weight::from_parts(3_989_759_000, 0)
-			// Standard Error: 35_105
-			.saturating_add(Weight::from_parts(2_035_777, 0).saturating_mul(v.into()))
-			// Standard Error: 2_159
-			.saturating_add(Weight::from_parts(124_045, 0).saturating_mul(e.into()))
+		// Minimum execution time: 4_023_239_000 picoseconds.
+		Weight::from_parts(4_060_112_000, 0)
+			// Standard Error: 36_201
+			.saturating_add(Weight::from_parts(2_054_426, 0).saturating_mul(v.into()))
+			// Standard Error: 2_226
+			.saturating_add(Weight::from_parts(126_762, 0).saturating_mul(e.into()))
 	}
 }
