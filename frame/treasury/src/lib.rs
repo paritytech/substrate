@@ -149,7 +149,7 @@ pub struct PendingPayment<AccountId, Balance, AssetKind, AssetBalance, PaymentId
 	value: AssetBalance,
 	/// The amount to be paid, but normalized to the native asset class
 	normalized_value: Balance,
-	// the identifier for tracking the status of a payment which is in flight.
+	/// the identifier for tracking the status of a payment which is in flight.
 	payment_id: Option<PaymentId>,
 }
 
