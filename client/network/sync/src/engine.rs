@@ -77,11 +77,6 @@ use std::{
 /// Interval at which we perform time based maintenance
 const TICK_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(1100);
 
-/// When light node connects to the full node and the full node is behind light node
-/// for at least `LIGHT_MAXIMAL_BLOCKS_DIFFERENCE` blocks, we consider it not useful
-/// and disconnect to free connection slot.
-const LIGHT_MAXIMAL_BLOCKS_DIFFERENCE: u64 = 8192;
-
 /// Maximum number of known block hashes to keep for a peer.
 const MAX_KNOWN_BLOCKS: usize = 1024; // ~32kb per peer + LruHashSet overhead
 
@@ -832,31 +827,6 @@ where
 			}
 
 			return Err(())
-		}
-
-		if self.roles.is_light() {
-			// we're not interested in light peers
-			if status.roles.is_light() {
-				log::debug!(target: "sync", "Peer {} is unable to serve light requests", who);
-				self.network_service.report_peer(who, rep::BAD_ROLE);
-				self.network_service
-					.disconnect_peer(who, self.block_announce_protocol_name.clone());
-				return Err(())
-			}
-
-			// we don't interested in peers that are far behind us
-			let self_best_block = self.client.info().best_number;
-			let blocks_difference = self_best_block
-				.checked_sub(&status.best_number)
-				.unwrap_or_else(Zero::zero)
-				.saturated_into::<u64>();
-			if blocks_difference > LIGHT_MAXIMAL_BLOCKS_DIFFERENCE {
-				log::debug!(target: "sync", "Peer {} is far behind us and will unable to serve light requests", who);
-				self.network_service.report_peer(who, rep::PEER_BEHIND_US_LIGHT);
-				self.network_service
-					.disconnect_peer(who, self.block_announce_protocol_name.clone());
-				return Err(())
-			}
 		}
 
 		let no_slot_peer = self.default_peers_set_no_slot_peers.contains(&who);
