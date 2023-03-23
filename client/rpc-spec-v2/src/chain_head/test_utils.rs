@@ -69,10 +69,8 @@ impl<Client> ChainHeadMockClient<Client> {
 
 	pub async fn trigger_finality_stream(&self, header: Header) {
 		// Ensure the client called the `finality_notification_stream`.
-		let mut retries = NUM_RETRIES;
-		while retries > 0 && self.finality_sinks.lock().is_empty() {
-			retries -= 1;
-			tokio::time::sleep(tokio::time::Duration::from_secs(SLEEP_SECS)).await;
+		while self.finality_sinks.lock().is_empty() {
+			tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 		}
 
 		// Build the notification.
