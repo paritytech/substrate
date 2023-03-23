@@ -285,8 +285,8 @@ parameter_types! {
 	pub static DesiredTargets: u32 = 2;
 	pub static SignedPhase: BlockNumber = 10;
 	pub static UnsignedPhase: BlockNumber = 5;
-	// We expect a successful election to take at least 15 blocks (i.e. a round).
-	pub static MinBlocksBeforeEmergency: BlockNumber = 15;
+	// We expect a successful election to take at least one round.
+	pub static MinBlocksBeforeEmergency: BlockNumber = SignedPhase::get() + UnsignedPhase::get();
 	pub static SignedMaxSubmissions: u32 = 5;
 	pub static SignedMaxRefunds: u32 = 1;
 	pub static SignedDepositBase: Balance = 5;
