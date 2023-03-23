@@ -141,7 +141,7 @@ impl pallet_treasury::Config for Test {
 impl pallet_treasury::Config<Instance1> for Test {
 	type PalletId = TreasuryPalletId2;
 	type AssetKind = ();
-	type Paymaster = PayFromAccount<Balances, TreasuryAccount>;
+	type Paymaster = PayFromAccount<Balances, TreasuryAccount1>;
 	type BalanceConverter = ();
 	type Currency = pallet_balances::Pallet<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
