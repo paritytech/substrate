@@ -654,7 +654,7 @@ fn sign_record_with_peer_id(
 ) -> Result<schema::PeerSignature> {
 	let signature = network
 		.sign_with_local_identity(serialized_record)
-		.map_err(|_| Error::Signing)?;
+		.map_err(|e| Error::CannotSignNetwork(e.to_string()))?;
 	let public_key = signature.public_key.to_protobuf_encoding();
 	let signature = signature.bytes;
 	Ok(schema::PeerSignature { signature, public_key })
@@ -671,8 +671,10 @@ fn sign_record_with_authority_ids(
 	for key in keys.iter() {
 		let auth_signature = key_store
 			.sr25519_sign(key_types::AUTHORITY_DISCOVERY, key.as_inner_ref(), &serialized_record)
-			.map_err(|_| Error::Signing)?
-			.ok_or_else(|| Error::MissingSignature(key.to_raw_vec()))?;
+			.map_err(|e| Error::CannotSign(key.to_raw_vec(), e.to_string()))?
+			.ok_or_else(|| {
+				Error::CannotSign(key.to_raw_vec(), "Could not find key in keystore".into())
+			})?;
 
 		// Scale encode
 		let auth_signature = auth_signature.encode();
