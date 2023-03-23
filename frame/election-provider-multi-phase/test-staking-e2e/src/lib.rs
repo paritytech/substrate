@@ -164,7 +164,7 @@ fn forcing_before_elect_with_emergency_throttling() {
 		roll_to_epm_off();
 		assert!(ElectionProviderMultiPhase::current_phase().is_off());
 
-		assert_eq!(<MinBlocksBeforeEmergency>::get(), 20);
+		assert_eq!(<MinElectingBlocks>::get(), 20);
 
 		assert_eq!(pallet_staking::ForceEra::<Runtime>::get(), pallet_staking::Forcing::NotForcing);
 		// slashes so that staking goes into `Forcing::ForceNew`.
@@ -174,7 +174,7 @@ fn forcing_before_elect_with_emergency_throttling() {
 		assert_eq!(ElectionProviderMultiPhase::current_phase(), Phase::Off);
 		advance_session_delayed_solution();
 
-		// since `EPM::MinBlocksBeforeEmergency` blocks haven't passed in the signed phase, the
+		// since `EPM::MinElectingBlocks` blocks haven't passed in the signed phase, the
 		// emergency phase is throttled..
 		assert_eq!(ElectionProviderMultiPhase::current_phase(), Phase::Unsigned((true, 20)));
 		// .. session validator set remains the same..
@@ -183,7 +183,7 @@ fn forcing_before_elect_with_emergency_throttling() {
 		assert_eq!(Session::current_index(), era_before + 1);
 
 		// progress to block in signed phase when emergency phase is not throttled anymore.
-		roll_to(System::block_number() + MinBlocksBeforeEmergency::get(), true);
+		roll_to(System::block_number() + MinElectingBlocks::get(), true);
 
 		// slashes so that staking goes into `Forcing::ForceNew` again.
 		advance_session_delayed_solution();
@@ -192,14 +192,6 @@ fn forcing_before_elect_with_emergency_throttling() {
 		// .. and the era progressed as expected.
 		assert_eq!(Session::current_index(), era_before + 2);
 	});
-
-	// TODO(gpestana) comment. test emergency throttling after not enough blocks have passed
-	// signed phase.
-	ExtBuilder::default().build_and_execute(|| {});
-
-	// TODO(gpestana) comment. test emergency throttling after not enough blocks have passed
-	// unsigned phase.
-	ExtBuilder::default().build_and_execute(|| {});
 }
 
 #[test]

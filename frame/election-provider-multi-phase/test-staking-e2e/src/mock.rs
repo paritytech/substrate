@@ -176,7 +176,7 @@ parameter_types! {
 	pub static UnsignedPhase: BlockNumber = 10;
 	// if the election fails, we expect a minimum of one round to have passed before entering in
 	// emergency phase.
-	pub static MinBlocksBeforeEmergency: BlockNumber = SignedPhase::get() + UnsignedPhase::get();
+	pub static MinElectingBlocks: BlockNumber = SignedPhase::get() + UnsignedPhase::get();
 	pub static MaxElectingVoters: VoterIndex = 1000;
 	pub static MaxElectableTargets: TargetIndex = 1000;
 	pub static MaxActiveValidators: u32 = 1000;
@@ -195,7 +195,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type EstimateCallFee = frame_support::traits::ConstU32<8>;
 	type SignedPhase = SignedPhase;
 	type UnsignedPhase = UnsignedPhase;
-	type MinBlocksBeforeEmergency = MinBlocksBeforeEmergency;
+	type MinElectingBlocks = MinElectingBlocks;
 	type BetterSignedThreshold = ();
 	type BetterUnsignedThreshold = ();
 	type OffchainRepeat = OffchainRepeat;
@@ -413,7 +413,7 @@ impl Default for EpmExtBuilder {
 
 impl EpmExtBuilder {
 	pub fn disable_emergency_throttling(self) -> Self {
-		<MinBlocksBeforeEmergency>::set(0);
+		<MinElectingBlocks>::set(0);
 		self
 	}
 

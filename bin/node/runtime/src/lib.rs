@@ -599,8 +599,7 @@ parameter_types! {
 	// phase durations. 1/4 of the last session for each.
 	pub const SignedPhase: u32 = EPOCH_DURATION_IN_BLOCKS / 4;
 	pub const UnsignedPhase: u32 = EPOCH_DURATION_IN_BLOCKS / 4;
-	// minimum blocks before emergency is half of the signed and unsigned phases.
-	pub MinBlocksBeforeEmergency: BlockNumber = EPOCH_DURATION_IN_BLOCKS / 8;
+	pub MinElectingBlocks: BlockNumber = SignedPhase::get() + UnsignedPhase::get();
 
 	// signed config
 	pub const SignedRewardBase: Balance = 1 * DOLLARS;
@@ -723,7 +722,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type EstimateCallFee = TransactionPayment;
 	type SignedPhase = SignedPhase;
 	type UnsignedPhase = UnsignedPhase;
-	type MinBlocksBeforeEmergency = MinBlocksBeforeEmergency;
+	type MinElectingBlocks = MinElectingBlocks;
 	type BetterUnsignedThreshold = BetterUnsignedThreshold;
 	type BetterSignedThreshold = ();
 	type OffchainRepeat = OffchainRepeat;

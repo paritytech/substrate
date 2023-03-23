@@ -126,12 +126,13 @@
 //! 2. Any other unforeseen internal error
 //!
 //! A call to `T::ElectionProvider::elect` is made, and `Ok(_)` cannot be returned, then the pallet
-//! proceeds to the [`Phase::Emergency`]. During this phase, any solution can be submitted from
-//! [`Config::ForceOrigin`], without any checking, via [`Pallet::set_emergency_election_result`]
-//! transaction. Hence, `[`Config::ForceOrigin`]` should only be set to a trusted origin, such as
-//! the council or root. Once submitted, the forced solution is kept in [`QueuedSolution`] until the
-//! next call to `T::ElectionProvider::elect`, where it is returned and [`Phase`] goes back to
-//! `Off`.
+//! proceeds to the [`Phase::Emergency`], if enough "electing" blocks have passed since the last
+//! successfull election (see more details below under subsection "Emergency Phase Throttling").
+//! During this phase, any solution can be submitted from [`Config::ForceOrigin`], without any
+//! checking, via [`Pallet::set_emergency_election_result`] transaction. Hence,
+//! `[`Config::ForceOrigin`]` should only be set to a trusted origin, such as the council or root.
+//! Once submitted, the forced solution is kept in [`QueuedSolution`] until the next call to
+//! `T::ElectionProvider::elect`, where it is returned and [`Phase`] goes back to `Off`.
 //!
 //! This implies that the user of this pallet (i.e. a staking pallet) should re-try calling
 //! `T::ElectionProvider::elect` in case of error, until `OK(_)` is returned.
@@ -150,6 +151,16 @@
 //! against any substrate-based chain.
 //!
 //! See the `staking-miner` documentation in the Polkadot repository for more information.
+//!
+//! #### Emergency Phase Throttling
+//!
+//! It is possible to set a minimum number of "electing" blocks before an election failure tries
+//! the fallback election and/or triggers a transition to the emergency phase. In this context,
+//! "electing" blocks refer to both signed and unsigned blocks. The config
+//! [`pallet::Config::MinElectingBlocks`] sets the minimum number of electing blocks that must pass
+//! in each election round *before* a failed election tries the fallback election and/or triggers
+//! the emergency phase. If [`pallet::Config::MinElectingBlocks`] is 0, the emergency throttling
+//! phase is disabled.
 //!
 //! ## Feasible Solution (correct solution)
 //!
@@ -597,9 +608,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type SignedPhase: Get<Self::BlockNumber>;
 
-		/// Minimum number of signed and unsigned blocks before trying `T::Fallback` election
-		/// and potentially entering in `Phase::Emergency` in case of election error.
-		type MinBlocksBeforeEmergency: Get<Self::BlockNumber>;
+		/// Minimum number of signed and unsigned blocks that EPM expects for a successful
+		/// election. If an election fails before `MinElectionBlocks` have passed, the fallback
+		/// election and emergency phase are throttled.
+		type MinElectingBlocks: Get<Self::BlockNumber>;
 
 		/// The minimum amount of improvement to the solution score that defines a solution as
 		/// "better" in the Signed phase.
@@ -1558,15 +1570,15 @@ impl<T: Config> Pallet<T> {
 	/// The emergency phase should be throttled when an election fails with the following
 	/// conditions:
 	///
-	/// - phase is off and emergency throttling is enabled (i.e. `T::MinBlocksBeforeEmergency` > 0)
+	/// - phase is off and emergency throttling is enabled (i.e. `T::MinElectingBlocks` > 0)
 	/// - signed or unsigned phases were active but the election failed before
-	///   `T::MinBlocksBeforeEmergency` blocks have passed since the round started, i.e.
-	///   `T::ElectionBlocksCount`.
+	///   `T::MinElectingBlocks` blocks have passed since the round started, i.e.
+	///   `T::MinElectingBlocks` > `T::ElectionBlocksCount`.
 	fn emergency_phase_throttling() -> bool {
 		match Self::current_phase() {
-			Phase::Off => T::MinBlocksBeforeEmergency::get() > T::BlockNumber::zero(),
+			Phase::Off => T::MinElectingBlocks::get() > T::BlockNumber::zero(),
 			Phase::Signed | Phase::Unsigned(_) =>
-				ElectionBlocksCount::<T>::get() < T::MinBlocksBeforeEmergency::get(),
+				ElectionBlocksCount::<T>::get() < T::MinElectingBlocks::get(),
 			Phase::Emergency => false,
 		}
 	}
@@ -1580,12 +1592,9 @@ impl<T: Config> Pallet<T> {
 		// - signed phase was complete or not started, in which case finalization is idempotent and
 		//   inexpensive (1 read of an empty vector).
 		//
-		// If there is no queued solution, there are two possibilities:
-		//
-		// - EPM has been in `Phase::Signed` for long enough blocks, try the fallback election.
-		// - EPM is in `Phase::Off` or not enough blocks have passed since the transition to the
-		//   signed phase, return an election error without trying the fallback election.
-		//
+		// If the election fails, `fn emergency_throttling` checks if EPM should enter in the
+		// emergency phase. The emergency phase is throttled if not enough "electing" (i.e. signed
+		// phase and unsigned phase) blocks have passed since last successful election.
 		let _ = Self::finalize_signed_phase();
 		<QueuedSolution<T>>::take()
 			.ok_or(ElectionError::<T>::NothingQueued)
@@ -1884,8 +1893,8 @@ mod tests {
 	use crate::{
 		mock::{
 			multi_phase_events, raw_solution, roll_one, roll_to, roll_to_signed, roll_to_unsigned,
-			AccountId, ExtBuilder, MinBlocksBeforeEmergency, MockWeightInfo, MockedWeightInfo,
-			MultiPhase, Runtime, RuntimeOrigin, SignedMaxSubmissions, System, TargetIndex, Targets,
+			AccountId, ExtBuilder, MinElectingBlocks, MockWeightInfo, MockedWeightInfo, MultiPhase,
+			Runtime, RuntimeOrigin, SignedMaxSubmissions, System, TargetIndex, Targets,
 		},
 		Phase,
 	};
@@ -2140,11 +2149,11 @@ mod tests {
 				assert_err!(MultiPhase::elect(), ElectionError::NothingQueued);
 				assert!(MultiPhase::current_phase().is_signed());
 
-				// however, if `MinBlocksBeforeEmergency` have passed since the start of the
+				// however, if `MinElectingBlocks` have passed since the start of the
 				// current round and the election fails during, EPM transitions to emergency phase.
 				loop {
 					roll_one();
-					if MinBlocksBeforeEmergency::get() < ElectionBlocksCount::<Runtime>::get() {
+					if MinElectingBlocks::get() < ElectionBlocksCount::<Runtime>::get() {
 						break
 					}
 				}
@@ -2166,8 +2175,8 @@ mod tests {
 			.build_and_execute(|| {
 				assert!(MultiPhase::current_phase().is_off());
 
-				// if `T::MinBlocksBeforeEmergency` is 0, the emergency throttling is disabled.
-				<MinBlocksBeforeEmergency>::set(0);
+				// if `T::MinElectingBlocks` is 0, the emergency throttling is disabled.
+				<MinElectingBlocks>::set(0);
 				assert_eq!(MultiPhase::emergency_phase_throttling(), false);
 				assert_err!(MultiPhase::elect(), ElectionError::Fallback("NoFallback."));
 				assert!(MultiPhase::current_phase().is_emergency());
@@ -2199,7 +2208,7 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_signed());
 			assert_eq!(MultiPhase::round(), 1);
 
-			// An unexpected call to elect before `T::MinBlocksBeforeEmergency` should fail and not
+			// An unexpected call to elect before `T::MinElectingBlocks` should fail and not
 			// run the fallback election.
 			assert_err!(MultiPhase::elect(), ElectionError::NothingQueued);
 
@@ -2211,9 +2220,9 @@ mod tests {
 				],
 			);
 
-			// An unexpected call to elect after `T::MinBlocksBeforeEmergency` will try the
+			// An unexpected call to elect after `T::MinElectingBlocks` will try the
 			// fallback election.
-			roll_to(System::block_number() + MinBlocksBeforeEmergency::get());
+			roll_to(System::block_number() + MinElectingBlocks::get());
 			assert_ok!(MultiPhase::elect());
 
 			// We surely can't have any feasible solutions. This will cause an on-chain election.
@@ -2274,7 +2283,7 @@ mod tests {
 				));
 			}
 
-			// an unexpected call to elect before `T::MinBlocksBeforeEmergency` should fail but not
+			// an unexpected call to elect before `T::MinElectingBlocks` should fail but not
 			// enter in emergency phase.
 			assert_err!(MultiPhase::elect(), ElectionError::NothingQueued);
 			assert!(MultiPhase::current_phase().is_signed());
@@ -2282,12 +2291,12 @@ mod tests {
 			// roll to block after emergency throttling.
 			loop {
 				roll_one();
-				if MinBlocksBeforeEmergency::get() < ElectionBlocksCount::<Runtime>::get() {
+				if MinElectingBlocks::get() < ElectionBlocksCount::<Runtime>::get() {
 					break
 				}
 			}
 
-			// an unexpected call to elect after `T::MinBlocksBeforeEmergency`.
+			// an unexpected call to elect after `T::MinElectingBlocks`.
 			assert_ok!(MultiPhase::elect());
 
 			// all storage items must be cleared.
@@ -2466,12 +2475,12 @@ mod tests {
 			roll_to_unsigned();
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 
-			// `T::MinBlocksBeforeEmergency` blocks hasn't passed since the start of the current
+			// `T::MinElectingBlocks` blocks hasn't passed since the start of the current
 			// round.
 			assert_err!(MultiPhase::elect(), ElectionError::NothingQueued);
 
 			// progress until end of emergency throttling and bypassing the fallback election.
-			roll_to(System::block_number() + MinBlocksBeforeEmergency::get());
+			roll_to(System::block_number() + MinElectingBlocks::get());
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 
 			// Zilch solutions thus far, but we get a result.
@@ -2517,12 +2526,12 @@ mod tests {
 			roll_to_unsigned();
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 
-			// `T::MinBlocksBeforeEmergency` blocks hasn't passed since the start of the current
+			// `T::MinElectingBlocks` blocks hasn't passed since the start of the current
 			// round.
 			assert_err!(MultiPhase::elect(), ElectionError::NothingQueued);
 
 			// progress until end of emergency throttling and bypassing the fallback election.
-			roll_to(System::block_number() + MinBlocksBeforeEmergency::get());
+			roll_to(System::block_number() + MinElectingBlocks::get());
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 
 			// Zilch solutions thus far.

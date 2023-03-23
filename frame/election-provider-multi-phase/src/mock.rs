@@ -286,7 +286,7 @@ parameter_types! {
 	pub static SignedPhase: BlockNumber = 10;
 	pub static UnsignedPhase: BlockNumber = 5;
 	// We expect a successful election to take at least one round.
-	pub static MinBlocksBeforeEmergency: BlockNumber = SignedPhase::get() + UnsignedPhase::get();
+	pub static MinElectingBlocks: BlockNumber = SignedPhase::get() + UnsignedPhase::get();
 	pub static SignedMaxSubmissions: u32 = 5;
 	pub static SignedMaxRefunds: u32 = 1;
 	pub static SignedDepositBase: Balance = 5;
@@ -390,7 +390,7 @@ impl crate::Config for Runtime {
 	type EstimateCallFee = frame_support::traits::ConstU32<8>;
 	type SignedPhase = SignedPhase;
 	type UnsignedPhase = UnsignedPhase;
-	type MinBlocksBeforeEmergency = MinBlocksBeforeEmergency;
+	type MinElectingBlocks = MinElectingBlocks;
 	type BetterUnsignedThreshold = BetterUnsignedThreshold;
 	type BetterSignedThreshold = BetterSignedThreshold;
 	type OffchainRepeat = OffchainRepeat;
@@ -536,7 +536,7 @@ impl ExtBuilder {
 		self
 	}
 	pub fn min_electing_blocks(self, bn: BlockNumber) -> Self {
-		<MinBlocksBeforeEmergency>::set(bn);
+		<MinElectingBlocks>::set(bn);
 		self
 	}
 	pub fn onchain_fallback(self, onchain: bool) -> Self {
