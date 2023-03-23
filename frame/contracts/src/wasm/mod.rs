@@ -18,6 +18,8 @@
 //! This module provides a means for executing contracts
 //! represented in wasm.
 
+#![allow(deprecated)] // OldWeight
+
 mod code_cache;
 mod prepare;
 mod runtime;
