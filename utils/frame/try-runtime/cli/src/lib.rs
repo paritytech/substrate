@@ -831,7 +831,7 @@ pub(crate) fn build_executor<H: HostFunctions>(shared: &SharedParams) -> WasmExe
 	let runtime_cache_size = 2;
 
 	WasmExecutor::new(
-		sc_executor::WasmExecutionMethod::Interpreted,
+		shared.wasm_method,
 		heap_pages,
 		max_runtime_instances,
 		None,
