@@ -60,7 +60,7 @@ frame_support::construct_runtime!(
 parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 	pub TreasuryAccount: u128 = Treasury::account_id();
-	pub Treasury1Account: u128 = Treasury1::account_id();
+	pub TreasuryAccount1: u128 = Treasury1::account_id();
 }
 
 type Balance = u64;
