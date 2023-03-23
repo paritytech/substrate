@@ -68,14 +68,14 @@ fn create_tokens(owner: u64, tokens: Vec<NativeOrAssetId<u32>>) {
 	}
 }
 
-fn balance(owner: u64, token_id: NativeOrAssetId<u32>) -> u64 {
+fn balance(owner: u64, token_id: NativeOrAssetId<u32>) -> u128 {
 	match token_id {
 		NativeOrAssetId::Native => <<Test as Config>::Currency>::free_balance(owner),
 		NativeOrAssetId::Asset(token_id) => <<Test as Config>::Assets>::balance(token_id, owner),
 	}
 }
 
-fn pool_balance(owner: u64, token_id: u32) -> u64 {
+fn pool_balance(owner: u64, token_id: u32) -> u128 {
 	<<Test as Config>::PoolAssets>::balance(token_id, owner)
 }
 
@@ -86,14 +86,14 @@ macro_rules! bvec {
 }
 
 #[test]
-fn check_u64() {
+fn check_max_numbers() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(Dex::quote(&3u64, &u64::MAX, &u64::MAX).ok().unwrap(), 3);
-		assert!(Dex::quote(&u64::MAX, &3u64, &u64::MAX).is_err());
-		assert_eq!(Dex::quote(&u64::MAX, &u64::MAX, &1u64).ok().unwrap(), 1);
+		assert_eq!(Dex::quote(&3u128, &u128::MAX, &u128::MAX).ok().unwrap(), 3);
+		assert!(Dex::quote(&u128::MAX, &3u128, &u128::MAX).is_err());
+		assert_eq!(Dex::quote(&u128::MAX, &u128::MAX, &1u128).ok().unwrap(), 1);
 
-		assert_eq!(Dex::get_amount_out(&100u64, &u64::MAX, &u64::MAX).ok().unwrap(), 99);
-		assert_eq!(Dex::get_amount_in(&100u64, &u64::MAX, &u64::MAX).ok().unwrap(), 101);
+		assert_eq!(Dex::get_amount_out(&100u128, &u128::MAX, &u128::MAX).ok().unwrap(), 99);
+		assert_eq!(Dex::get_amount_in(&100u128, &u128::MAX, &u128::MAX).ok().unwrap(), 101);
 	});
 }
 
@@ -484,7 +484,7 @@ fn can_swap_with_realistic_values() {
 		create_tokens(user, vec![usd]);
 		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), dot, usd));
 
-		const UNIT: u64 = 1_000_000_000;
+		const UNIT: u128 = 1_000_000_000;
 
 		assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), user, 300_000 * UNIT));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 2, user, 1_100_000 * UNIT));

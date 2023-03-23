@@ -24,7 +24,7 @@ use frame_support::{
 	construct_runtime,
 	instances::{Instance1, Instance2},
 	ord_parameter_types, parameter_types,
-	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64},
+	traits::{AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64},
 	PalletId,
 };
 use frame_system::{EnsureSigned, EnsureSignedBy};
@@ -69,7 +69,7 @@ impl frame_system::Config for Test {
 	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = pallet_balances::AccountData<u64>;
+	type AccountData = pallet_balances::AccountData<u128>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
@@ -79,10 +79,10 @@ impl frame_system::Config for Test {
 }
 
 impl pallet_balances::Config for Test {
-	type Balance = u64;
+	type Balance = u128;
 	type DustRemoval = ();
 	type RuntimeEvent = RuntimeEvent;
-	type ExistentialDeposit = ConstU64<1>;
+	type ExistentialDeposit = ConstU128<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 	type MaxLocks = ();
@@ -96,18 +96,18 @@ impl pallet_balances::Config for Test {
 
 impl pallet_assets::Config<Instance1> for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Balance = u64;
+	type Balance = u128;
 	type RemoveItemsLimit = ConstU32<1000>;
 	type AssetId = u32;
 	type AssetIdParameter = u32;
 	type Currency = Balances;
 	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<u64>>;
 	type ForceOrigin = frame_system::EnsureRoot<u64>;
-	type AssetDeposit = ConstU64<1>;
-	type AssetAccountDeposit = ConstU64<10>;
-	type MetadataDepositBase = ConstU64<1>;
-	type MetadataDepositPerByte = ConstU64<1>;
-	type ApprovalDeposit = ConstU64<1>;
+	type AssetDeposit = ConstU128<1>;
+	type AssetAccountDeposit = ConstU128<10>;
+	type MetadataDepositBase = ConstU128<1>;
+	type MetadataDepositPerByte = ConstU128<1>;
+	type ApprovalDeposit = ConstU128<1>;
 	type StringLimit = ConstU32<50>;
 	type Freezer = ();
 	type Extra = ();
@@ -120,18 +120,18 @@ impl pallet_assets::Config<Instance1> for Test {
 
 impl pallet_assets::Config<Instance2> for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Balance = u64;
+	type Balance = u128;
 	type RemoveItemsLimit = ConstU32<1000>;
 	type AssetId = u32;
 	type AssetIdParameter = u32;
 	type Currency = Balances;
 	type CreateOrigin = AsEnsureOriginWithArg<EnsureSignedBy<DexOrigin, u64>>;
 	type ForceOrigin = frame_system::EnsureRoot<u64>;
-	type AssetDeposit = ConstU64<0>;
-	type AssetAccountDeposit = ConstU64<0>;
-	type MetadataDepositBase = ConstU64<0>;
-	type MetadataDepositPerByte = ConstU64<0>;
-	type ApprovalDeposit = ConstU64<0>;
+	type AssetDeposit = ConstU128<0>;
+	type AssetAccountDeposit = ConstU128<0>;
+	type MetadataDepositBase = ConstU128<0>;
+	type MetadataDepositPerByte = ConstU128<0>;
+	type ApprovalDeposit = ConstU128<0>;
 	type StringLimit = ConstU32<50>;
 	type Freezer = ();
 	type Extra = ();
@@ -162,13 +162,13 @@ impl Config for Test {
 	type PalletId = DexPalletId;
 	type WeightInfo = ();
 	type LPFee = ConstU32<3>;
-	type PoolSetupFee = ConstU64<5>;
+	type PoolSetupFee = ConstU128<5>;
 	type PoolSetupFeeReceiver = DexOrigin;
 	type AllowMultiAssetPools = AllowMultiAssetPools;
 	type MaxSwapPathLength = ConstU32<4>;
 
-	type Balance = u64;
-	type HigherPrecisionBalance = u128;
+	type Balance = u128;
+	type HigherPrecisionBalance = sp_core::U256;
 
 	type MultiAssetId = NativeOrAssetId<u32>;
 	type MultiAssetIdConverter = NativeOrAssetIdConverter<u32>;
