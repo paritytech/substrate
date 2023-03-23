@@ -123,7 +123,7 @@ fn parse_ed25519_secret(hex: &str) -> error::Result<sc_network_common::config::E
 mod tests {
 	use super::*;
 	use clap::ValueEnum;
-	use libp2p_identity::{ed25519, Keypair};
+	use libp2p_identity::ed25519;
 	use std::fs;
 
 	#[test]

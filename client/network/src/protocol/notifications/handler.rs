@@ -831,6 +831,10 @@ pub mod tests {
 	use tokio::sync::mpsc;
 	use unsigned_varint::codec::UviBytes;
 
+	/////////////////////////////////////////////////
+	// TODO: uncomment when 0.51.2 libp2p is released
+	/////////////////////////////////////////////////
+
 	// struct OpenSubstream {
 	// 	notifications: stream::Peekable<
 	// 		stream::Select<

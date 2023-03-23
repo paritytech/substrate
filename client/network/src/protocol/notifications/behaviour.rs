@@ -2248,6 +2248,10 @@ mod tests {
 		));
 	}
 
+	/////////////////////////////////////////////////
+	// TODO: uncomment when 0.51.2 libp2p is released
+	/////////////////////////////////////////////////
+
 	// #[test]
 	// fn remote_opens_connection_and_substream() {
 	// 	let (mut notif, _peerset) = development_notifs();
