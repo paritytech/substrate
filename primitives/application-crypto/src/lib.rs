@@ -301,11 +301,7 @@ macro_rules! app_crypto_public_common {
 			const LEN: usize = <$public>::LEN;
 		}
 
-		impl $crate::Public for Public {
-			fn crypto_id(&self) -> $crate::CryptoTypeId {
-				$crypto_type
-			}
-		}
+		impl $crate::Public for Public {}
 
 		impl $crate::AppPublic for Public {
 			type Generic = $public;

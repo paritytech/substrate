@@ -102,11 +102,7 @@ impl ByteArray for Public {
 	const LEN: usize = 33;
 }
 
-impl TraitPublic for Public {
-	fn crypto_id(&self) -> CryptoTypeId {
-		CRYPTO_ID
-	}
-}
+impl TraitPublic for Public {}
 
 impl Derive for Public {}
 

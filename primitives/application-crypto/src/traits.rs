@@ -80,7 +80,8 @@ pub trait AppPublic:
 pub trait AppPair: AppKey + Pair<Public = <Self as AppKey>::Public> {
 	/// The wrapped type which is just a plain instance of `Pair`.
 	type Generic: IsWrappedBy<Self>
-		+ Pair<Public = <<Self as AppKey>::Public as AppPublic>::Generic>;
+		+ Pair<Public = <<Self as AppKey>::Public as AppPublic>::Generic>
+		+ Pair<Signature = <<Self as AppKey>::Signature as AppSignature>::Generic>;
 }
 
 /// A application's signature.

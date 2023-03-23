@@ -383,11 +383,7 @@ impl ByteArray for Public {
 	const LEN: usize = 32;
 }
 
-impl TraitPublic for Public {
-	fn crypto_id(&self) -> CryptoTypeId {
-		CRYPTO_ID
-	}
-}
+impl TraitPublic for Public {}
 
 #[cfg(feature = "std")]
 impl From<MiniSecretKey> for Pair {

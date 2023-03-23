@@ -485,10 +485,7 @@ pub trait ByteArray: AsRef<[u8]> + AsMut<[u8]> + for<'a> TryFrom<&'a [u8], Error
 }
 
 /// Trait suitable for typical cryptographic PKI key public type.
-pub trait Public: ByteArray + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync {
-	/// Return `CryptoTypeId` from public key.
-	fn crypto_id(&self) -> CryptoTypeId;
-}
+pub trait Public: ByteArray + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync {}
 
 /// An opaque 32-byte cryptographic identifier.
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, TypeInfo)]
@@ -687,11 +684,7 @@ mod dummy {
 			b""
 		}
 	}
-	impl Public for Dummy {
-		fn crypto_id(&self) -> CryptoTypeId {
-			CryptoTypeId(*b"dumm")
-		}
-	}
+	impl Public for Dummy {}
 
 	impl Pair for Dummy {
 		type Public = Dummy;
@@ -1203,11 +1196,7 @@ mod tests {
 			vec![]
 		}
 	}
-	impl Public for TestPublic {
-		fn crypto_id(&self) -> CryptoTypeId {
-			CryptoTypeId(*b"dumm")
-		}
-	}
+	impl Public for TestPublic {}
 	impl Pair for TestPair {
 		type Public = TestPublic;
 		type Seed = [u8; 8];
