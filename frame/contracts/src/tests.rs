@@ -21,7 +21,7 @@ use crate::{
 		ChainExtension, Environment, Ext, InitState, RegisteredChainExtension,
 		Result as ExtensionResult, RetVal, ReturnFlags, SysConfig,
 	},
-	exec::{FixSizedKey, Frame},
+	exec::{Frame, Key},
 	tests::test_utils::{get_contract, get_contract_checked},
 	wasm::{Determinism, PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
@@ -37,7 +37,7 @@ use frame_support::{
 	storage::child,
 	traits::{
 		ConstU32, ConstU64, Contains, Currency, ExistenceRequirement, Get, LockableCurrency,
-		OnIdle, OnInitialize, ReservableCurrency, WithdrawReasons,
+		OnIdle, OnInitialize, WithdrawReasons,
 	},
 	weights::{constants::WEIGHT_REF_TIME_PER_SECOND, Weight},
 };
@@ -48,9 +48,9 @@ use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
 use sp_runtime::{
 	testing::{Header, H256},
 	traits::{BlakeTwo256, Convert, Hash, IdentityLookup},
-	AccountId32,
+	AccountId32, TokenError,
 };
-use std::{ops::Deref, sync::Arc};
+use std::ops::Deref;
 
 use crate as pallet_contracts;
 
@@ -318,6 +318,10 @@ impl pallet_balances::Config for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 	type WeightInfo = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type HoldIdentifier = ();
+	type MaxHolds = ();
 }
 
 impl pallet_timestamp::Config for Test {
@@ -440,7 +444,7 @@ impl ExtBuilder {
 			.assimilate_storage(&mut t)
 			.unwrap();
 		let mut ext = sp_io::TestExternalities::new(t);
-		ext.register_extension(KeystoreExt(Arc::new(MemoryKeystore::new())));
+		ext.register_extension(KeystoreExt::new(MemoryKeystore::new()));
 		ext.execute_with(|| System::set_block_number(1));
 		ext
 	}
@@ -525,7 +529,7 @@ fn instantiate_and_call_and_deposit_event() {
 			RuntimeOrigin::signed(ALICE),
 			wasm,
 			None,
-			Determinism::Deterministic
+			Determinism::Enforced
 		));
 
 		// Drop previous events
@@ -722,13 +726,8 @@ fn instantiate_unique_trie_id() {
 
 	ExtBuilder::default().existential_deposit(500).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
-		Contracts::upload_code(
-			RuntimeOrigin::signed(ALICE),
-			wasm,
-			None,
-			Determinism::Deterministic,
-		)
-		.unwrap();
+		Contracts::upload_code(RuntimeOrigin::signed(ALICE), wasm, None, Determinism::Enforced)
+			.unwrap();
 
 		// Instantiate the contract and store its trie id for later comparison.
 		let addr = Contracts::bare_instantiate(
@@ -856,7 +855,7 @@ fn deploy_and_call_other_contract() {
 		.result
 		.unwrap()
 		.account_id;
-		Contracts::bare_upload_code(ALICE, callee_wasm, None, Determinism::Deterministic).unwrap();
+		Contracts::bare_upload_code(ALICE, callee_wasm, None, Determinism::Enforced).unwrap();
 
 		let callee_addr = Contracts::contract_address(
 			&caller_addr,
@@ -1007,7 +1006,7 @@ fn delegate_call() {
 			RuntimeOrigin::signed(ALICE),
 			callee_wasm,
 			Some(codec::Compact(100_000)),
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		));
 
 		assert_ok!(Contracts::call(
@@ -1054,7 +1053,7 @@ fn transfer_allow_death_cannot_kill_account() {
 				total_balance,
 				ExistenceRequirement::AllowDeath,
 			),
-			pallet_balances::Error::<Test>::KeepAlive,
+			TokenError::Frozen,
 		);
 
 		assert_eq!(<Test as Config>::Currency::total_balance(&addr), total_balance);
@@ -1317,7 +1316,7 @@ fn destroy_contract_and_transfer_funds() {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create code hash for bob to instantiate
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
-		Contracts::bare_upload_code(ALICE, callee_wasm, None, Determinism::Deterministic).unwrap();
+		Contracts::bare_upload_code(ALICE, callee_wasm, None, Determinism::Enforced).unwrap();
 
 		// This deploys the BOB contract, which in turn deploys the CHARLIE contract during
 		// construction.
@@ -1427,7 +1426,7 @@ fn crypto_hashes() {
 				None,
 				params,
 				false,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			)
 			.result
 			.unwrap();
@@ -1469,26 +1468,7 @@ fn transfer_return_code() {
 			None,
 			vec![],
 			false,
-			Determinism::Deterministic,
-		)
-		.result
-		.unwrap();
-		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
-
-		// Contract has enough total balance in order to not go below the min balance
-		// threshold when transfering 100 balance but this balance is reserved so
-		// the transfer still fails.
-		Balances::make_free_balance_be(&addr, min_balance + 100);
-		Balances::reserve(&addr, min_balance + 100).unwrap();
-		let result = Contracts::bare_call(
-			ALICE,
-			addr,
-			0,
-			GAS_LIMIT,
-			None,
-			vec![],
-			false,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -1529,7 +1509,7 @@ fn call_return_code() {
 			None,
 			AsRef::<[u8]>::as_ref(&DJANGO).to_vec(),
 			false,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -1563,30 +1543,7 @@ fn call_return_code() {
 				.cloned()
 				.collect(),
 			false,
-			Determinism::Deterministic,
-		)
-		.result
-		.unwrap();
-		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
-
-		// Contract has enough total balance in order to not go below the min balance
-		// threshold when transfering 100 balance but this balance is reserved so
-		// the transfer still fails.
-		Balances::make_free_balance_be(&addr_bob, min_balance + 100);
-		Balances::reserve(&addr_bob, min_balance + 100).unwrap();
-		let result = Contracts::bare_call(
-			ALICE,
-			addr_bob.clone(),
-			0,
-			GAS_LIMIT,
-			None,
-			AsRef::<[u8]>::as_ref(&addr_django)
-				.iter()
-				.chain(&0u32.to_le_bytes())
-				.cloned()
-				.collect(),
-			false,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -1606,7 +1563,7 @@ fn call_return_code() {
 				.cloned()
 				.collect(),
 			false,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -1625,7 +1582,7 @@ fn call_return_code() {
 				.cloned()
 				.collect(),
 			false,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -1677,26 +1634,7 @@ fn instantiate_return_code() {
 			None,
 			callee_hash.clone(),
 			false,
-			Determinism::Deterministic,
-		)
-		.result
-		.unwrap();
-		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
-
-		// Contract has enough total balance in order to not go below the min_balance
-		// threshold when transfering the balance but this balance is reserved so
-		// the transfer still fails.
-		Balances::make_free_balance_be(&addr, min_balance + 10_000);
-		Balances::reserve(&addr, min_balance + 10_000).unwrap();
-		let result = Contracts::bare_call(
-			ALICE,
-			addr.clone(),
-			0,
-			GAS_LIMIT,
-			None,
-			callee_hash.clone(),
-			false,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -1712,7 +1650,7 @@ fn instantiate_return_code() {
 			None,
 			vec![0; 33],
 			false,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -1727,7 +1665,7 @@ fn instantiate_return_code() {
 			None,
 			callee_hash.iter().chain(&1u32.to_le_bytes()).cloned().collect(),
 			false,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -1742,7 +1680,7 @@ fn instantiate_return_code() {
 			None,
 			callee_hash.iter().chain(&2u32.to_le_bytes()).cloned().collect(),
 			false,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -1829,7 +1767,7 @@ fn chain_extension_works() {
 			None,
 			input.clone(),
 			false,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		);
 		assert_eq!(TestExtension::last_seen_buffer(), input);
 		assert_eq!(result.result.unwrap().data, input);
@@ -1843,7 +1781,7 @@ fn chain_extension_works() {
 			None,
 			ExtensionInput { extension_id: 0, func_id: 1, extra: &[] }.into(),
 			false,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -1859,7 +1797,7 @@ fn chain_extension_works() {
 			None,
 			ExtensionInput { extension_id: 0, func_id: 2, extra: &[0] }.into(),
 			false,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		);
 		assert_ok!(result.result);
 		let gas_consumed = result.gas_consumed;
@@ -1871,7 +1809,7 @@ fn chain_extension_works() {
 			None,
 			ExtensionInput { extension_id: 0, func_id: 2, extra: &[42] }.into(),
 			false,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		);
 		assert_ok!(result.result);
 		assert_eq!(result.gas_consumed.ref_time(), gas_consumed.ref_time() + 42);
@@ -1883,7 +1821,7 @@ fn chain_extension_works() {
 			None,
 			ExtensionInput { extension_id: 0, func_id: 2, extra: &[95] }.into(),
 			false,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		);
 		assert_ok!(result.result);
 		assert_eq!(result.gas_consumed.ref_time(), gas_consumed.ref_time() + 95);
@@ -1897,7 +1835,7 @@ fn chain_extension_works() {
 			None,
 			ExtensionInput { extension_id: 0, func_id: 3, extra: &[] }.into(),
 			false,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -1915,7 +1853,7 @@ fn chain_extension_works() {
 			None,
 			ExtensionInput { extension_id: 1, func_id: 0, extra: &[] }.into(),
 			false,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -1976,7 +1914,7 @@ fn chain_extension_temp_storage_works() {
 				None,
 				input.clone(),
 				false,
-				Determinism::Deterministic
+				Determinism::Enforced
 			)
 			.result
 		);
@@ -2145,7 +2083,7 @@ fn lazy_removal_partial_remove_works() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			info.write(&val.0 as &FixSizedKey, Some(val.2.clone()), None, false).unwrap();
+			info.write(&Key::Fix(val.0), Some(val.2.clone()), None, false).unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
@@ -2330,7 +2268,7 @@ fn lazy_removal_does_not_use_all_weight() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			info.write(&val.0 as &FixSizedKey, Some(val.2.clone()), None, false).unwrap();
+			info.write(&Key::Fix(val.0), Some(val.2.clone()), None, false).unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
@@ -2537,7 +2475,7 @@ fn reinstrument_does_charge() {
 			None,
 			zero.clone(),
 			false,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		);
 		assert!(!result0.result.unwrap().did_revert());
 
@@ -2549,7 +2487,7 @@ fn reinstrument_does_charge() {
 			None,
 			zero.clone(),
 			false,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		);
 		assert!(!result1.result.unwrap().did_revert());
 
@@ -2571,7 +2509,7 @@ fn reinstrument_does_charge() {
 			None,
 			zero.clone(),
 			false,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		);
 		assert!(!result2.result.unwrap().did_revert());
 		assert!(result2.gas_consumed.ref_time() > result1.gas_consumed.ref_time());
@@ -2610,7 +2548,7 @@ fn debug_message_works() {
 			None,
 			vec![],
 			true,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		);
 
 		assert_matches!(result.result, Ok(_));
@@ -2646,7 +2584,7 @@ fn debug_message_logging_disabled() {
 			None,
 			vec![],
 			false,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		);
 		assert_matches!(result.result, Ok(_));
 		// the dispatchables always run without debugging
@@ -2682,7 +2620,7 @@ fn debug_message_invalid_utf8() {
 			None,
 			vec![],
 			true,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		);
 		assert_ok!(result.result);
 		assert!(result.debug_message.is_empty());
@@ -2741,7 +2679,7 @@ fn gas_estimation_nested_call_fixed_limit() {
 			None,
 			input.clone(),
 			false,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		);
 		assert_ok!(&result.result);
 
@@ -2758,7 +2696,7 @@ fn gas_estimation_nested_call_fixed_limit() {
 				Some(result.storage_deposit.charge_or_zero()),
 				input,
 				false,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			)
 			.result
 		);
@@ -2805,7 +2743,7 @@ fn gas_estimation_call_runtime() {
 
 		// Call something trivial with a huge gas limit so that we can observe the effects
 		// of pre-charging. This should create a difference between consumed and required.
-		let call = RuntimeCall::Balances(pallet_balances::Call::transfer {
+		let call = RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death {
 			dest: addr_callee,
 			value: min_balance * 10,
 		});
@@ -2817,7 +2755,7 @@ fn gas_estimation_call_runtime() {
 			None,
 			call.encode(),
 			false,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		);
 		// contract encodes the result of the dispatch runtime
 		let outcome = u32::decode(&mut result.result.unwrap().data.as_ref()).unwrap();
@@ -2834,7 +2772,7 @@ fn gas_estimation_call_runtime() {
 				None,
 				call.encode(),
 				false,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			)
 			.result
 		);
@@ -2897,7 +2835,7 @@ fn gas_call_runtime_reentrancy_guarded() {
 			None,
 			call.encode(),
 			false,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -2959,7 +2897,7 @@ fn ecdsa_recover() {
 			None,
 			params,
 			false,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -2983,7 +2921,7 @@ fn upload_code_works() {
 			RuntimeOrigin::signed(ALICE),
 			wasm,
 			Some(codec::Compact(1_000)),
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		));
 		assert!(<CodeStorage<Test>>::contains_key(code_hash));
 
@@ -3023,7 +2961,7 @@ fn upload_code_limit_too_low() {
 				RuntimeOrigin::signed(ALICE),
 				wasm,
 				Some(codec::Compact(100)),
-				Determinism::Deterministic
+				Determinism::Enforced
 			),
 			<Error<Test>>::StorageDepositLimitExhausted,
 		);
@@ -3047,7 +2985,7 @@ fn upload_code_not_enough_balance() {
 				RuntimeOrigin::signed(ALICE),
 				wasm,
 				Some(codec::Compact(1_000)),
-				Determinism::Deterministic
+				Determinism::Enforced
 			),
 			<Error<Test>>::StorageDepositNotEnoughFunds,
 		);
@@ -3070,7 +3008,7 @@ fn remove_code_works() {
 			RuntimeOrigin::signed(ALICE),
 			wasm,
 			Some(codec::Compact(1_000)),
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		));
 
 		assert!(<CodeStorage<Test>>::contains_key(code_hash));
@@ -3125,7 +3063,7 @@ fn remove_code_wrong_origin() {
 			RuntimeOrigin::signed(ALICE),
 			wasm,
 			Some(codec::Compact(1_000)),
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		));
 
 		assert_noop!(
@@ -3595,7 +3533,7 @@ fn set_code_extrinsic() {
 			RuntimeOrigin::signed(ALICE),
 			new_wasm,
 			None,
-			Determinism::Deterministic
+			Determinism::Enforced
 		));
 
 		// Drop previous events
@@ -3715,7 +3653,7 @@ fn contract_reverted() {
 			RuntimeOrigin::signed(ALICE),
 			wasm.clone(),
 			None,
-			Determinism::Deterministic
+			Determinism::Enforced
 		));
 
 		// Calling extrinsic: revert leads to an error
@@ -3803,7 +3741,7 @@ fn contract_reverted() {
 			None,
 			input,
 			false,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -3823,7 +3761,7 @@ fn code_rejected_error_works() {
 				RuntimeOrigin::signed(ALICE),
 				wasm.clone(),
 				None,
-				Determinism::Deterministic
+				Determinism::Enforced
 			),
 			<Error<Test>>::CodeRejected,
 		);
@@ -3849,7 +3787,7 @@ fn code_rejected_error_works() {
 				RuntimeOrigin::signed(ALICE),
 				wasm.clone(),
 				None,
-				Determinism::Deterministic
+				Determinism::Enforced
 			),
 			<Error<Test>>::CodeRejected,
 		);
@@ -3899,7 +3837,7 @@ fn set_code_hash() {
 			RuntimeOrigin::signed(ALICE),
 			new_wasm.clone(),
 			None,
-			Determinism::Deterministic
+			Determinism::Enforced
 		));
 
 		System::reset_events();
@@ -3913,7 +3851,7 @@ fn set_code_hash() {
 			None,
 			new_code_hash.as_ref().to_vec(),
 			true,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -3928,7 +3866,7 @@ fn set_code_hash() {
 			None,
 			vec![],
 			true,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -4325,7 +4263,7 @@ fn cannot_instantiate_indeterministic_code() {
 				RuntimeOrigin::signed(ALICE),
 				wasm.clone(),
 				None,
-				Determinism::Deterministic
+				Determinism::Enforced
 			),
 			<Error<Test>>::CodeRejected,
 		);
@@ -4335,7 +4273,7 @@ fn cannot_instantiate_indeterministic_code() {
 			RuntimeOrigin::signed(ALICE),
 			wasm,
 			None,
-			Determinism::AllowIndeterminism,
+			Determinism::Relaxed,
 		));
 		assert_err_ignore_postinfo!(
 			Contracts::instantiate(
@@ -4389,7 +4327,7 @@ fn cannot_instantiate_indeterministic_code() {
 				None,
 				code_hash.encode(),
 				false,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			)
 			.result,
 			<Error<Test>>::Indeterministic,
@@ -4405,7 +4343,7 @@ fn cannot_instantiate_indeterministic_code() {
 				None,
 				code_hash.encode(),
 				false,
-				Determinism::AllowIndeterminism,
+				Determinism::Relaxed,
 			)
 			.result,
 			<Error<Test>>::Indeterministic,
@@ -4425,7 +4363,7 @@ fn cannot_set_code_indeterministic_code() {
 			RuntimeOrigin::signed(ALICE),
 			wasm,
 			None,
-			Determinism::AllowIndeterminism,
+			Determinism::Relaxed,
 		));
 
 		// Create the contract that will call `seal_set_code_hash`
@@ -4453,7 +4391,7 @@ fn cannot_set_code_indeterministic_code() {
 				None,
 				code_hash.encode(),
 				false,
-				Determinism::AllowIndeterminism,
+				Determinism::Relaxed,
 			)
 			.result,
 			<Error<Test>>::Indeterministic,
@@ -4473,7 +4411,7 @@ fn delegate_call_indeterministic_code() {
 			RuntimeOrigin::signed(ALICE),
 			wasm,
 			None,
-			Determinism::AllowIndeterminism,
+			Determinism::Relaxed,
 		));
 
 		// Create the contract that will call `seal_delegate_call`
@@ -4501,7 +4439,7 @@ fn delegate_call_indeterministic_code() {
 				None,
 				code_hash.encode(),
 				false,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			)
 			.result,
 			<Error<Test>>::Indeterministic,
@@ -4517,7 +4455,7 @@ fn delegate_call_indeterministic_code() {
 				None,
 				code_hash.encode(),
 				false,
-				Determinism::AllowIndeterminism,
+				Determinism::Relaxed,
 			)
 			.result
 		);
@@ -4556,7 +4494,7 @@ fn reentrance_count_works_with_call() {
 			None,
 			input,
 			true,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -4595,7 +4533,7 @@ fn reentrance_count_works_with_delegated_call() {
 			None,
 			input,
 			true,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -4647,7 +4585,7 @@ fn account_reentrance_count_works() {
 			None,
 			contract_addr.encode(),
 			true,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -4660,7 +4598,7 @@ fn account_reentrance_count_works() {
 			None,
 			another_contract_addr.encode(),
 			true,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();

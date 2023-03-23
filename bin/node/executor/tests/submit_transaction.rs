@@ -22,7 +22,6 @@ use sp_application_crypto::AppKey;
 use sp_core::offchain::{testing::TestTransactionPoolExt, TransactionPoolExt};
 use sp_keyring::sr25519::Keyring::Alice;
 use sp_keystore::{testing::MemoryKeystore, Keystore, KeystoreExt};
-use std::sync::Arc;
 
 pub mod common;
 use self::common::*;
@@ -63,30 +62,21 @@ fn should_submit_signed_transaction() {
 	t.register_extension(TransactionPoolExt::new(pool));
 
 	let keystore = MemoryKeystore::new();
-	Keystore::sr25519_generate_new(
-		&keystore,
-		sr25519::AuthorityId::ID,
-		Some(&format!("{}/hunter1", PHRASE)),
-	)
-	.unwrap();
-	Keystore::sr25519_generate_new(
-		&keystore,
-		sr25519::AuthorityId::ID,
-		Some(&format!("{}/hunter2", PHRASE)),
-	)
-	.unwrap();
-	Keystore::sr25519_generate_new(
-		&keystore,
-		sr25519::AuthorityId::ID,
-		Some(&format!("{}/hunter3", PHRASE)),
-	)
-	.unwrap();
-	t.register_extension(KeystoreExt(Arc::new(keystore)));
+	keystore
+		.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE)))
+		.unwrap();
+	keystore
+		.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter2", PHRASE)))
+		.unwrap();
+	keystore
+		.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter3", PHRASE)))
+		.unwrap();
+	t.register_extension(KeystoreExt::new(keystore));
 
 	t.execute_with(|| {
 		let results =
 			Signer::<Runtime, TestAuthorityId>::all_accounts().send_signed_transaction(|_| {
-				pallet_balances::Call::transfer {
+				pallet_balances::Call::transfer_allow_death {
 					dest: Alice.to_account_id().into(),
 					value: Default::default(),
 				}
@@ -106,24 +96,18 @@ fn should_submit_signed_twice_from_the_same_account() {
 	t.register_extension(TransactionPoolExt::new(pool));
 
 	let keystore = MemoryKeystore::new();
-	Keystore::sr25519_generate_new(
-		&keystore,
-		sr25519::AuthorityId::ID,
-		Some(&format!("{}/hunter1", PHRASE)),
-	)
-	.unwrap();
-	Keystore::sr25519_generate_new(
-		&keystore,
-		sr25519::AuthorityId::ID,
-		Some(&format!("{}/hunter2", PHRASE)),
-	)
-	.unwrap();
-	t.register_extension(KeystoreExt(Arc::new(keystore)));
+	keystore
+		.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE)))
+		.unwrap();
+	keystore
+		.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter2", PHRASE)))
+		.unwrap();
+	t.register_extension(KeystoreExt::new(keystore));
 
 	t.execute_with(|| {
 		let result =
 			Signer::<Runtime, TestAuthorityId>::any_account().send_signed_transaction(|_| {
-				pallet_balances::Call::transfer {
+				pallet_balances::Call::transfer_allow_death {
 					dest: Alice.to_account_id().into(),
 					value: Default::default(),
 				}
@@ -135,7 +119,7 @@ fn should_submit_signed_twice_from_the_same_account() {
 		// submit another one from the same account. The nonce should be incremented.
 		let result =
 			Signer::<Runtime, TestAuthorityId>::any_account().send_signed_transaction(|_| {
-				pallet_balances::Call::transfer {
+				pallet_balances::Call::transfer_allow_death {
 					dest: Alice.to_account_id().into(),
 					value: Default::default(),
 				}
@@ -169,12 +153,12 @@ fn should_submit_signed_twice_from_all_accounts() {
 	keystore
 		.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter2", PHRASE)))
 		.unwrap();
-	t.register_extension(KeystoreExt(Arc::new(keystore)));
+	t.register_extension(KeystoreExt::new(keystore));
 
 	t.execute_with(|| {
 		let results = Signer::<Runtime, TestAuthorityId>::all_accounts()
 			.send_signed_transaction(|_| {
-				pallet_balances::Call::transfer { dest: Alice.to_account_id().into(), value: Default::default() }
+				pallet_balances::Call::transfer_allow_death { dest: Alice.to_account_id().into(), value: Default::default() }
 			});
 
 		let len = results.len();
@@ -185,7 +169,7 @@ fn should_submit_signed_twice_from_all_accounts() {
 		// submit another one from the same account. The nonce should be incremented.
 		let results = Signer::<Runtime, TestAuthorityId>::all_accounts()
 			.send_signed_transaction(|_| {
-				pallet_balances::Call::transfer { dest: Alice.to_account_id().into(), value: Default::default() }
+				pallet_balances::Call::transfer_allow_death { dest: Alice.to_account_id().into(), value: Default::default() }
 			});
 
 		let len = results.len();
@@ -227,18 +211,15 @@ fn submitted_transaction_should_be_valid() {
 	t.register_extension(TransactionPoolExt::new(pool));
 
 	let keystore = MemoryKeystore::new();
-	Keystore::sr25519_generate_new(
-		&keystore,
-		sr25519::AuthorityId::ID,
-		Some(&format!("{}/hunter1", PHRASE)),
-	)
-	.unwrap();
-	t.register_extension(KeystoreExt(Arc::new(keystore)));
+	keystore
+		.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE)))
+		.unwrap();
+	t.register_extension(KeystoreExt::new(keystore));
 
 	t.execute_with(|| {
 		let results =
 			Signer::<Runtime, TestAuthorityId>::all_accounts().send_signed_transaction(|_| {
-				pallet_balances::Call::transfer {
+				pallet_balances::Call::transfer_allow_death {
 					dest: Alice.to_account_id().into(),
 					value: Default::default(),
 				}

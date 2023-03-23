@@ -22,7 +22,7 @@ use scale_info::TypeInfo;
 use sp_core::{RuntimeDebug, TypedGet};
 use sp_std::fmt::Debug;
 
-use super::{fungible, Balance};
+use super::{fungible, Balance, Preservation::Expendable};
 
 /// Can be implemented by `PayFromAccount` using a `fungible` impl, but can also be implemented with
 /// XCM/MultiAsset and made generic over assets.
@@ -76,9 +76,7 @@ pub enum PaymentStatus {
 
 /// Simple implementation of `Pay` which makes a payment from a "pot" - i.e. a single account.
 pub struct PayFromAccount<F, A>(sp_std::marker::PhantomData<(F, A)>);
-impl<A: TypedGet, F: fungible::Transfer<A::Type> + fungible::Mutate<A::Type>> Pay
-	for PayFromAccount<F, A>
-{
+impl<A: TypedGet, F: fungible::Mutate<A::Type>> Pay for PayFromAccount<F, A> {
 	type Balance = F::Balance;
 	type Beneficiary = A::Type;
 	type AssetKind = ();
@@ -88,7 +86,7 @@ impl<A: TypedGet, F: fungible::Transfer<A::Type> + fungible::Mutate<A::Type>> Pa
 		_: Self::AssetKind,
 		amount: Self::Balance,
 	) -> Result<Self::Id, ()> {
-		<F as fungible::Transfer<_>>::transfer(&A::get(), who, amount, false).map_err(|_| ())?;
+		<F as fungible::Mutate<_>>::transfer(&A::get(), who, amount, Expendable).map_err(|_| ())?;
 		Ok(())
 	}
 	fn check_payment(_: ()) -> PaymentStatus {

@@ -40,12 +40,12 @@ pub enum SubscriptionManagementError {
 	/// Error originated from the blockchain (client or backend).
 	#[error("Blockchain error {0}")]
 	Blockchain(Error),
-	/// The database does not contain a block number.
-	#[error("Block number is absent")]
-	BlockNumberAbsent,
 	/// The database does not contain a block hash.
 	#[error("Block hash is absent")]
 	BlockHashAbsent,
+	/// The database does not contain a block header.
+	#[error("Block header is absent")]
+	BlockHeaderAbsent,
 	/// The specified subscription ID is not present.
 	#[error("Subscription is absent")]
 	SubscriptionAbsent,
@@ -61,7 +61,6 @@ impl PartialEq for SubscriptionManagementError {
 			(Self::ExceededLimits, Self::ExceededLimits) |
 			// Not needed for testing.
 			(Self::Blockchain(_), Self::Blockchain(_)) |
-			(Self::BlockNumberAbsent, Self::BlockNumberAbsent) |
 			(Self::BlockHashAbsent, Self::BlockHashAbsent) |
 			(Self::SubscriptionAbsent, Self::SubscriptionAbsent) => true,
 			(Self::Custom(lhs), Self::Custom(rhs)) => lhs == rhs,

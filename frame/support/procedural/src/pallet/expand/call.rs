@@ -324,6 +324,21 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 		}
 
+		impl<#type_impl_gen> #frame_support::dispatch::GetCallIndex for #call_ident<#type_use_gen>
+			#where_clause
+		{
+			fn get_call_index(&self) -> u8 {
+				match *self {
+					#( Self::#fn_name { .. } => #call_index, )*
+					Self::__Ignore(_, _) => unreachable!("__PhantomItem cannot be used."),
+				}
+			}
+
+			fn get_call_indices() -> &'static [u8] {
+				&[ #( #call_index, )* ]
+			}
+		}
+
 		impl<#type_impl_gen> #frame_support::traits::UnfilteredDispatchable
 			for #call_ident<#type_use_gen>
 			#where_clause
