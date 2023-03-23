@@ -282,11 +282,11 @@ pub fn new_partial(
 		(rpc_extensions_builder, shared_voter_state2)
 	};
 
-	let statement_store = sc_statement_store::Store::new(
+	let statement_store = Arc::new(sc_statement_store::Store::new(
 		config.database.path().unwrap(),
 		client.clone(),
 		config.prometheus_registry(),
-	)?;
+	)?);
 
 	Ok(sc_service::PartialComponents {
 		client,
