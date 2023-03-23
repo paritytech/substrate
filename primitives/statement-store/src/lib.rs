@@ -36,6 +36,8 @@ pub type DecryptionKey = [u8; 32];
 pub type Hash = [u8; 32];
 /// Block hash.
 pub type BlockHash = [u8; 32];
+/// Account id
+pub type AccountId = [u8; 32];
 
 #[cfg(feature = "std")]
 pub use store_api::{
@@ -103,7 +105,7 @@ pub enum Proof {
 	/// On-chain event proof.
 	OnChain {
 		/// Account identifier associated with the event.
-		who: [u8; 32],
+		who: AccountId,
 		/// Hash of block that contains the event.
 		block_hash: BlockHash,
 		/// Index of the event in the event list.
@@ -342,14 +344,8 @@ impl Statement {
 	}
 
 	/// Return a copy of this statement with proof removed
-	pub fn strip_proof(&self) -> Statement {
-		Statement {
-			proof: None,
-			decryption_key: self.decryption_key.clone(),
-			topics: self.topics.clone(),
-			num_topics: self.num_topics,
-			data: self.data.clone(),
-		}
+	pub fn strip_proof(&mut self) {
+		self.proof = None;
 	}
 
 	/// Set statement proof. Any existing proof is overwritten.
@@ -481,7 +477,7 @@ mod test {
 		statement.set_proof(Proof::Sr25519 { signature: [0u8; 64], signer: [0u8; 32] });
 		assert_eq!(statement.verify_signature(), SignatureVerificationResult::Invalid);
 
-		statement = statement.strip_proof();
+		statement.strip_proof();
 		assert_eq!(statement.verify_signature(), SignatureVerificationResult::NoSignature);
 	}
 }
