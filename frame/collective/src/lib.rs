@@ -1018,8 +1018,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 		});
 
+		let mut proposal_indices = vec![];
 		Self::proposals().into_iter().for_each(|proposal| {
-			let mut proposal_indices = vec![];
 			if let Some(votes) = Self::voting(proposal) {
 				let proposal_index = votes.index;
 				assert!(!proposal_indices.contains(&proposal_index));
