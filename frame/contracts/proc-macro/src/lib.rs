@@ -641,8 +641,7 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 			quote! {
 				if ::log::log_enabled!(target: "runtime::contracts::strace", ::log::Level::Trace) {
 					let result = #body;
-					
-					::log::trace!(target: "runtime::contracts::strace", #trace_fmt_str, #( #trace_fmt_args, )* result);
+				    	
 					#[cfg(feature = "std")]
 					ctx.ext.append_debug_buffer(&format!(#debug_buffer_fmt_str, #( #debug_buffer_fmt_args, )* result));
 					result
