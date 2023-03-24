@@ -1788,6 +1788,7 @@ dependencies = [
  "serde",
  "sp-application-crypto",
  "sp-io",
+ "sp-npos-elections",
  "sp-runtime",
  "sp-staking",
  "sp-std",
