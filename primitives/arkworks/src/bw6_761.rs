@@ -19,12 +19,9 @@
 
 #![warn(missing_docs)]
 
-use crate::{
-	utils::{
-		deserialize_argument, final_exponentiation_generic, msm_g1_generic, msm_g2_generic,
-		multi_miller_loop_generic, serialize_result,
-	},
-	PairingError,
+use crate::utils::{
+	deserialize_argument, final_exponentiation_generic, msm_g1_generic, msm_g2_generic,
+	multi_miller_loop_generic, serialize_result,
 };
 use ark_bw6_761::{G1Affine, G1Projective, G2Affine, G2Projective, BW6_761};
 use ark_ec::{

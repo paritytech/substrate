@@ -1,4 +1,3 @@
-use sp_arkworks::PairingError;
 use ark_algebra_test_templates::*;
 use ark_ff::{fields::Field, UniformRand, Zero};
 use sp_ark_models::{AffineRepr, CurveGroup, Group};

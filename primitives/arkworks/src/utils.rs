@@ -1,4 +1,3 @@
-use crate::PairingError;
 use ark_ec::pairing::{MillerLoopOutput, Pairing};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use ark_std::{io::Cursor, vec, vec::Vec};
@@ -33,16 +32,14 @@ pub fn multi_miller_loop_generic<Curve: Pairing>(
 	Ok(serialize_result(result.0))
 }
 
-pub fn final_exponentiation_generic<Curve: Pairing>(
-	target: Vec<u8>,
-) -> Result<Vec<u8>, ()> {
+pub fn final_exponentiation_generic<Curve: Pairing>(target: Vec<u8>) -> Result<Vec<u8>, ()> {
 	let target = deserialize_argument::<<Curve as Pairing>::TargetField>(&target);
 
 	let result = Curve::final_exponentiation(MillerLoopOutput(target));
 
 	match result {
 		Some(result) => Ok(serialize_result(result)),
-		None => Err(PairingError::FinalExpInverse),
+		None => Err(()),
 	}
 }
 

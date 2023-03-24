@@ -29,7 +29,6 @@
 	doc = "Substrate's runtime standard library as compiled without Rust's standard library."
 )]
 
-use sp_arkworks::PairingError;
 use sp_std::vec::Vec;
 
 #[cfg(feature = "std")]
@@ -1120,10 +1119,7 @@ pub trait Crypto {
 #[runtime_interface]
 pub trait EllipticCurves {
 	/// Compute a multi Miller loop on bls12_381
-	fn bls12_381_multi_miller_loop(
-		a: Vec<Vec<u8>>,
-		b: Vec<Vec<u8>>,
-	) -> Result<Vec<u8>, ()> {
+	fn bls12_381_multi_miller_loop(a: Vec<Vec<u8>>, b: Vec<Vec<u8>>) -> Result<Vec<u8>, ()> {
 		sp_arkworks::bls12_381::multi_miller_loop(a, b)
 	}
 
@@ -1163,10 +1159,7 @@ pub trait EllipticCurves {
 	}
 
 	/// Compute a multi Miller loop for bls12_377
-	fn bls12_377_multi_miller_loop(
-		a: Vec<Vec<u8>>,
-		b: Vec<Vec<u8>>,
-	) -> Result<Vec<u8>, ()> {
+	fn bls12_377_multi_miller_loop(a: Vec<Vec<u8>>, b: Vec<Vec<u8>>) -> Result<Vec<u8>, ()> {
 		sp_arkworks::bls12_377::multi_miller_loop(a, b)
 	}
 
@@ -1206,10 +1199,7 @@ pub trait EllipticCurves {
 	}
 
 	/// Compute a multi Miller loop on bw6_761
-	fn bw6_761_multi_miller_loop(
-		a: Vec<Vec<u8>>,
-		b: Vec<Vec<u8>>,
-	) -> Result<Vec<u8>, ()> {
+	fn bw6_761_multi_miller_loop(a: Vec<Vec<u8>>, b: Vec<Vec<u8>>) -> Result<Vec<u8>, ()> {
 		sp_arkworks::bw6_761::multi_miller_loop(a, b)
 	}
 
