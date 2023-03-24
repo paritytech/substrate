@@ -100,9 +100,10 @@ pub type OnChainBoundedSupportsOf<E> = BoundedSupports<
 fn elect_with_input_bounds<T: Config>(
 	bounds: ElectionBounds,
 ) -> Result<OnChainBoundedSupportsOf<T>, Error> {
-	let voters = T::DataProvider::electing_voters(bounds.voters).map_err(Error::DataProvider)?;
-	let targets =
-		T::DataProvider::electable_targets(bounds.targets).map_err(Error::DataProvider)?;
+	let (voters, targets) = T::DataProvider::electing_voters(bounds.voters)
+		.and_then(|voters| Ok((voters, T::DataProvider::electable_targets(bounds.targets)?)))
+		.map_err(Error::DataProvider)?;
+
 	let desired_targets = T::DataProvider::desired_targets().map_err(Error::DataProvider)?;
 
 	if desired_targets > T::MaxWinners::get() {
