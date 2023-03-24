@@ -16,7 +16,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::config;
+use crate::{
+	config::{self, NonReservedPeerMode},
+	error,
+	types::ProtocolName,
+};
 
 use bytes::Bytes;
 use codec::{DecodeAll, Encode};
@@ -29,26 +33,24 @@ use libp2p::{
 	Multiaddr, PeerId,
 };
 use log::{debug, error, warn};
-use message::{generic::Message as GenericMessage, Message};
-use notifications::{Notifications, NotificationsOut};
-use sc_network_common::{
-	config::NonReservedPeerMode,
-	error,
-	protocol::{role::Roles, ProtocolName},
-	sync::message::BlockAnnouncesHandshake,
-};
+
+use sc_network_common::{role::Roles, sync::message::BlockAnnouncesHandshake};
 use sp_runtime::traits::Block as BlockT;
+
 use std::{
 	collections::{HashMap, HashSet, VecDeque},
 	iter,
 	task::Poll,
 };
 
+use message::{generic::Message as GenericMessage, Message};
+use notifications::{Notifications, NotificationsOut};
+
+pub use notifications::{NotificationsSink, NotifsHandlerError, Ready};
+
 mod notifications;
 
 pub mod message;
-
-pub use notifications::{NotificationsSink, NotifsHandlerError, Ready};
 
 /// Maximum size used for notifications in the block announce and transaction protocols.
 // Must be equal to `max(MAX_BLOCK_ANNOUNCE_SIZE, MAX_TRANSACTIONS_SIZE)`.
@@ -93,7 +95,7 @@ impl<B: BlockT> Protocol<B> {
 	pub fn new(
 		roles: Roles,
 		network_config: &config::NetworkConfiguration,
-		block_announces_protocol: sc_network_common::config::NonDefaultSetConfig,
+		block_announces_protocol: config::NonDefaultSetConfig,
 	) -> error::Result<(Self, sc_peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
 		let mut known_addresses = Vec::new();
 

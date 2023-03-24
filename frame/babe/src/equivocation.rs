@@ -95,14 +95,16 @@ impl<Offender: Clone> Offence<Offender> for EquivocationOffence<Offender> {
 	}
 }
 
-/// Babe equivocation offence system.
+/// BABE equivocation offence report system.
 ///
-/// This type implements `OffenceReportSystem`
+/// This type implements `OffenceReportSystem` such that:
+/// - Equivocation reports are published on-chain as unsigned extrinsic via
+///   `offchain::SendTransactioinsTypes`.
+/// - On-chain validity checks and processing are mostly delegated to the user provided generic
+///   types implementing `KeyOwnerProofSystem` and `ReportOffence` traits.
+/// - Offence reporter for unsigned transactions is fetched via the the authorship pallet.
 pub struct EquivocationReportSystem<T, R, P, L>(sp_std::marker::PhantomData<(T, R, P, L)>);
 
-// We use the authorship pallet to fetch the current block author and use
-// `offchain::SendTransactionTypes` for unsigned extrinsic creation and
-// submission.
 impl<T, R, P, L>
 	OffenceReportSystem<Option<T::AccountId>, (EquivocationProof<T::Header>, T::KeyOwnerProof)>
 	for EquivocationReportSystem<T, R, P, L>
@@ -131,7 +133,7 @@ where
 		};
 		let res = SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into());
 		match res {
-			Ok(()) => info!(target: LOG_TARGET, "Submitted equivocation report."),
+			Ok(_) => info!(target: LOG_TARGET, "Submitted equivocation report"),
 			Err(e) => error!(target: LOG_TARGET, "Error submitting equivocation report: {:?}", e),
 		}
 		res

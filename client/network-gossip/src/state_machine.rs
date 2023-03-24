@@ -22,7 +22,8 @@ use ahash::AHashSet;
 use libp2p::PeerId;
 use lru::LruCache;
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
-use sc_network_common::protocol::{role::ObservedRole, ProtocolName};
+use sc_network::types::ProtocolName;
+use sc_network_common::role::ObservedRole;
 use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
 use std::{collections::HashMap, iter, num::NonZeroUsize, sync::Arc, time, time::Instant};
 
@@ -525,13 +526,10 @@ mod tests {
 	use super::*;
 	use crate::multiaddr::Multiaddr;
 	use futures::prelude::*;
-	use sc_network_common::{
-		config::MultiaddrWithPeerId,
-		protocol::event::Event,
-		service::{
-			NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
-			NotificationSender, NotificationSenderError,
-		},
+	use sc_network::{
+		config::MultiaddrWithPeerId, event::Event, NetworkBlock, NetworkEventStream,
+		NetworkNotification, NetworkPeers, NotificationSenderError,
+		NotificationSenderT as NotificationSender,
 	};
 	use sc_peerset::ReputationChange;
 	use sp_runtime::{

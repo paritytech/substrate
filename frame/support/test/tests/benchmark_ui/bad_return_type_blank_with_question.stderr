@@ -7,4 +7,4 @@ error[E0277]: the `?` operator can only be used in a function that returns `Resu
 15 |         something()?;
    |                    ^ cannot use the `?` operator in a function that returns `()`
    |
-   = help: the trait `FromResidual<Result<std::convert::Infallible, frame_benchmarking::BenchmarkError>>` is not implemented for `()`
+   = help: the trait `FromResidual<Result<Infallible, frame_benchmarking::BenchmarkError>>` is not implemented for `()`

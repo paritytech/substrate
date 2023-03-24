@@ -2,10 +2,10 @@
 
 A fresh [Substrate](https://substrate.io/) node, ready for hacking :rocket:
 
-A standalone version of this template is available  for each release of Polkadot in the [Substrate Developer Hub  Parachain Template](https://github.com/substrate-developer-hub/substrate-parachain-template/) repository.
-The parachain template is generated directly at each Polkadot release branch form the [Node Template in Substreate](https://github.com/paritytech/substrate/tree/master/bin/node-template) upstream
+A standalone version of this template is available for each release of Polkadot in the [Substrate Developer Hub Parachain Template](https://github.com/substrate-developer-hub/substrate-parachain-template/) repository.
+The parachain template is generated directly at each Polkadot release branch from the [Node Template in Substrate](https://github.com/paritytech/substrate/tree/master/bin/node-template) upstream
 
-It is usually best to to use the stand-alone version to start a new project.
+It is usually best to use the stand-alone version to start a new project.
 All bugs, suggestions, and feature requests should be made upstream in the [Substrate](https://github.com/paritytech/substrate/tree/master/bin/node-template) repository.
 
 ## Getting Started
@@ -158,25 +158,4 @@ To get all the correct dependencies, activate direnv `direnv allow` and lorri `l
 
 ### Docker
 
-First, install [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/).
-
-Then run the following command to start a single node development chain.
-
-```sh
-./scripts/docker_run.sh
-```
-
-This command compiles the code and starts a local development network.
-You can also replace the default command (`cargo build --release && ./target/release/node-template --dev --ws-external`) by appending your own.
-For example:
-
-```sh
-# Run Substrate node without re-compiling
-./scripts/docker_run.sh ./target/release/node-template --dev --ws-external
-
-# Purge the local dev chain
-./scripts/docker_run.sh ./target/release/node-template purge-chain --dev
-
-# Check whether the code is compilable
-./scripts/docker_run.sh cargo check
-```
+Please follow the [Substrate Docker instructions here](https://github.com/paritytech/substrate/blob/master/docker/README.md) to build the Docker container with the Substrate Node Template binary.

@@ -29,13 +29,27 @@
 
 use crate::{
 	behaviour::{self, Behaviour, BehaviourOut},
-	config::Params,
+	config::{MultiaddrWithPeerId, Params, TransportConfig},
 	discovery::DiscoveryConfig,
+	error::Error,
+	event::{DhtEvent, Event},
 	network_state::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
 	protocol::{self, NotificationsSink, NotifsHandlerError, Protocol, Ready},
-	transport, ReputationChange,
+	request_responses::{IfDisconnected, RequestFailure},
+	service::{
+		signature::{Signature, SigningError},
+		traits::{
+			NetworkDHTProvider, NetworkEventStream, NetworkNotification, NetworkPeers,
+			NetworkRequest, NetworkSigner, NetworkStateInfo, NetworkStatus, NetworkStatusProvider,
+			NotificationSender as NotificationSenderT, NotificationSenderError,
+			NotificationSenderReady as NotificationSenderReadyT,
+		},
+	},
+	transport,
+	types::ProtocolName,
+	ReputationChange,
 };
 
 use either::Either;
@@ -56,26 +70,13 @@ use libp2p_identity::PeerId;
 use log::{debug, error, info, trace, warn};
 use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
-use sc_network_common::{
-	config::{MultiaddrWithPeerId, TransportConfig},
-	error::Error,
-	protocol::{
-		event::{DhtEvent, Event},
-		ProtocolName,
-	},
-	request_responses::{IfDisconnected, RequestFailure},
-	service::{
-		NetworkDHTProvider, NetworkEventStream, NetworkNotification, NetworkPeers, NetworkSigner,
-		NetworkStateInfo, NetworkStatus, NetworkStatusProvider,
-		NotificationSender as NotificationSenderT, NotificationSenderError,
-		NotificationSenderReady as NotificationSenderReadyT, Signature, SigningError,
-	},
-	ExHashT,
-};
+
+use sc_network_common::ExHashT;
 use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain::HeaderBackend;
 use sp_runtime::traits::{Block as BlockT, Zero};
+
 use std::{
 	cmp,
 	collections::{HashMap, HashSet},
@@ -91,14 +92,13 @@ use std::{
 };
 
 pub use behaviour::{InboundFailure, OutboundFailure, ResponseFailure};
+pub use libp2p_identity::{DecodingError, Keypair, PublicKey};
 
 mod metrics;
 mod out_events;
-#[cfg(test)]
-mod tests;
 
-pub use libp2p_identity::{DecodingError, Keypair, PublicKey};
-use sc_network_common::service::NetworkRequest;
+pub mod signature;
+pub mod traits;
 
 /// Substrate network service. Handles network IO and manages connectivity.
 pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
@@ -1430,10 +1430,11 @@ where
 						},
 					}
 				},
-			SwarmEvent::Behaviour(BehaviourOut::ReputationChanges { peer, changes }) =>
+			SwarmEvent::Behaviour(BehaviourOut::ReputationChanges { peer, changes }) => {
 				for change in changes {
 					self.network_service.behaviour().user_protocol().report_peer(peer, change);
-				},
+				}
+			},
 			SwarmEvent::Behaviour(BehaviourOut::PeerIdentify {
 				peer_id,
 				info:
@@ -1465,10 +1466,11 @@ where
 					.user_protocol_mut()
 					.add_default_set_discovered_nodes(iter::once(peer_id));
 			},
-			SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted) =>
+			SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted) => {
 				if let Some(metrics) = self.metrics.as_ref() {
 					metrics.kademlia_random_queries_total.inc();
-				},
+				}
+			},
 			SwarmEvent::Behaviour(BehaviourOut::NotificationStreamOpened {
 				remote,
 				protocol,

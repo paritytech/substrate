@@ -41,7 +41,7 @@ use futures::{
 
 use libp2p::Multiaddr;
 use libp2p_identity::PeerId;
-use sc_network_common::protocol::event::DhtEvent;
+use sc_network::event::DhtEvent;
 use sp_authority_discovery::AuthorityId;
 use sp_blockchain::HeaderBackend;
 use sp_runtime::traits::Block as BlockT;
