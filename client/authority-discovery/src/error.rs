@@ -57,11 +57,8 @@ pub enum Error {
 	#[error("Failed to parse a libp2p key.")]
 	ParsingLibp2pIdentity(#[from] libp2p::identity::error::DecodingError),
 
-	#[error("Failed to sign network message. Reason: {0}.")]
-	CannotSignNetwork(String),
-
-	#[error("Failed to sign using key: {0:?}. Reason: {1}.")]
-	CannotSign(Vec<u8>, String),
+	#[error("Failed to sign: {0}.")]
+	CannotSign(String),
 
 	#[error("Failed to register Prometheus metric.")]
 	Prometheus(#[from] prometheus_endpoint::PrometheusError),

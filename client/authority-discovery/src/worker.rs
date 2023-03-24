@@ -43,6 +43,7 @@ use log::{debug, error, log_enabled};
 use prometheus_endpoint::{register, Counter, CounterVec, Gauge, Opts, U64};
 use prost::Message;
 use rand::{seq::SliceRandom, thread_rng};
+
 use sc_network::{
 	event::DhtEvent, KademliaKey, NetworkDHTProvider, NetworkSigner, NetworkStateInfo, Signature,
 };
@@ -51,7 +52,6 @@ use sp_authority_discovery::{
 	AuthorityDiscoveryApi, AuthorityId, AuthorityPair, AuthoritySignature,
 };
 use sp_blockchain::HeaderBackend;
-
 use sp_core::crypto::{key_types, ByteArray, Pair, Wraps};
 use sp_keystore::{Keystore, KeystorePtr};
 use sp_runtime::traits::Block as BlockT;
@@ -654,7 +654,7 @@ fn sign_record_with_peer_id(
 ) -> Result<schema::PeerSignature> {
 	let signature = network
 		.sign_with_local_identity(serialized_record)
-		.map_err(|e| Error::CannotSignNetwork(e.to_string()))?;
+		.map_err(|e| Error::CannotSign(format!("{} (network packet)", e)))?;
 	let public_key = signature.public_key.to_protobuf_encoding();
 	let signature = signature.bytes;
 	Ok(schema::PeerSignature { signature, public_key })
@@ -671,9 +671,9 @@ fn sign_record_with_authority_ids(
 	for key in keys.iter() {
 		let auth_signature = key_store
 			.sr25519_sign(key_types::AUTHORITY_DISCOVERY, key.as_inner_ref(), &serialized_record)
-			.map_err(|e| Error::CannotSign(key.to_raw_vec(), e.to_string()))?
+			.map_err(|e| Error::CannotSign(format!("{}. Key: {:?}", e, key)))?
 			.ok_or_else(|| {
-				Error::CannotSign(key.to_raw_vec(), "Could not find key in keystore".into())
+				Error::CannotSign(format!("Could not find key in keystore. Key: {:?}", key))
 			})?;
 
 		// Scale encode
