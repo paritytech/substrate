@@ -116,9 +116,9 @@ use frame_support::{
 		ReservableCurrency, Time,
 	},
 	weights::{OldWeight, Weight},
-	BoundedVec, WeakBoundedVec,
+	BoundedVec, WeakBoundedVec
 };
-use frame_system::Pallet as System;
+use frame_system::{Pallet as System, ensure_signed_or_root};
 use pallet_contracts_primitives::{
 	Code, CodeUploadResult, CodeUploadReturnValue, ContractAccessError, ContractExecResult,
 	ContractInstantiateResult, ExecReturnValue, GetStorageResult, InstantiateReturnValue,
@@ -126,7 +126,7 @@ use pallet_contracts_primitives::{
 };
 use scale_info::TypeInfo;
 use smallvec::Array;
-use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup};
+use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup, BadOrigin};
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 pub use crate::{
@@ -615,7 +615,7 @@ pub mod pallet {
 			data: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			let gas_limit: Weight = gas_limit.into();
-			let origin = ensure_signed(origin)?;
+			let origin = contract_ensure_signed_or_root(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 			let common = CommonInput {
 				origin,
@@ -675,7 +675,7 @@ pub mod pallet {
 			data: Vec<u8>,
 			salt: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
-			let origin = ensure_signed(origin)?;
+			let origin = ContractOrigin::from_account_id(ensure_signed(origin)?);
 			let code_len = code.len() as u32;
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
@@ -718,7 +718,7 @@ pub mod pallet {
 			data: Vec<u8>,
 			salt: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
-			let origin = ensure_signed(origin)?;
+			let origin = ContractOrigin::from_account_id(ensure_signed(origin)?);
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
 			let common = CommonInput {
@@ -899,6 +899,8 @@ pub mod pallet {
 		CodeRejected,
 		/// An indetermistic code was used in a context where this is not permitted.
 		Indeterministic,
+		/// Root origin is not allowed here.
+		RootOriginNotAllowed,
 	}
 
 	/// A mapping from an original code hash to the original code, untouched by instrumentation.
@@ -955,9 +957,59 @@ pub mod pallet {
 		StorageValue<_, BoundedVec<DeletedContract, T::DeletionQueueDepth>, ValueQuery>;
 }
 
+/// The types of origin supported by the contracts pallet.
+#[derive(Clone)]
+pub enum ContractOrigin<T: Config> {
+	/// The origin is a regular signed account.
+	Signed(T::AccountId),
+	/// The origin is root.
+	Root,	
+}
+
+impl<T: Config> ContractOrigin<T> {
+	/// Returns the account id of the origin if it is a signed origin.
+	pub fn account_id(&self) -> Option<&T::AccountId> {
+		match self {
+			ContractOrigin::Signed(account) => Some(account),
+			ContractOrigin::Root => None,
+		}
+	}
+	/// Check if the origin is root
+	pub fn is_root(&self) -> bool {
+		matches!(self, ContractOrigin::Root)
+	}
+	/// Creates a new Signed ContractOrigin from an AccountId
+	pub fn from_account_id(account_id: T::AccountId) -> Self {
+		ContractOrigin::Signed(account_id)
+	}
+}
+// todo: this is not working, need to figure out why
+// impl<T: Config> TryFrom<T::RuntimeOrigin> for ContractOrigin<T> {
+// 	type Error = BadOrigin;
+
+// 	fn try_from(origin: T::RuntimeOrigin) -> Result<Self, Self::Error> {
+// 		match origin {
+// 			Ok(T::RuntimeOrigin::Root) => Ok(ContractOrigin::Root),
+// 			Ok(T::RuntimeOrigin::Signed(t)) => Ok(ContractOrigin::Signed(t)),
+// 			_ => Err(BadOrigin),
+// 		}
+// 	}
+// }
+
+/// Helper function to ensure that the origin is either a regular signed account or root
+/// and return the origin as a `ContractOrigin`.
+fn contract_ensure_signed_or_root<T: Config>(
+	origin: T::RuntimeOrigin,
+) -> Result<ContractOrigin<T>, BadOrigin> {
+	match ensure_signed_or_root(origin)? {
+		Some(t) => Ok(ContractOrigin::Signed(t)),
+		None => Ok(ContractOrigin::Root),
+	}
+}
+
 /// Context of a contract invocation.
 struct CommonInput<'a, T: Config> {
-	origin: T::AccountId,
+	origin: ContractOrigin<T>,
 	value: BalanceOf<T>,
 	data: Vec<u8>,
 	gas_limit: Weight,
@@ -1089,13 +1141,21 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 	) -> InternalOutput<T, Self::Output> {
 		let mut storage_deposit = Default::default();
 		let try_exec = || {
+			// Root origin is not allowed here
+			let origin = match common.origin {
+				ContractOrigin::Signed(t) => t,
+				ContractOrigin::Root => return Err(ExecError {
+					error: <Error<T>>::RootOriginNotAllowed.into(),
+					origin: ErrorOrigin::Caller,
+				}),
+			};
 			let schedule = T::Schedule::get();
 			let (extra_deposit, executable) = match &self.code {
 				Code::Upload(binary) => {
 					let executable = PrefabWasmModule::from_code(
 						binary.clone(),
 						&schedule,
-						common.origin.clone(),
+						origin.clone(),
 						Determinism::Deterministic,
 						TryInstantiate::Skip,
 					)
@@ -1124,7 +1184,7 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 			)?;
 
 			let InstantiateInput { salt, .. } = self;
-			let CommonInput { origin, value, data, debug_message, .. } = common;
+			let CommonInput { origin: _, value, data, debug_message, .. } = common;
 			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
 				origin.clone(),
 				executable,
@@ -1137,7 +1197,7 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 				debug_message,
 			);
 			storage_deposit = storage_meter
-				.into_deposit(&origin)
+				.into_deposit(&common.origin)
 				.saturating_add(&StorageDeposit::Charge(extra_deposit));
 			result
 		};
@@ -1169,6 +1229,7 @@ impl<T: Config> Pallet<T> {
 		determinism: Determinism,
 	) -> ContractExecResult<BalanceOf<T>> {
 		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
+		let origin = ContractOrigin::from_account_id(origin);
 		let common = CommonInput {
 			origin,
 			value,
@@ -1210,6 +1271,7 @@ impl<T: Config> Pallet<T> {
 		debug: bool,
 	) -> ContractInstantiateResult<T::AccountId, BalanceOf<T>> {
 		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
+		let origin = ContractOrigin::from_account_id(origin);
 		let common = CommonInput {
 			origin,
 			value,

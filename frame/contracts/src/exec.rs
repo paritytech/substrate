@@ -19,7 +19,7 @@ use crate::{
 	gas::GasMeter,
 	storage::{self, DepositAccount, WriteOutcome},
 	BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, DebugBufferVec, Determinism, Error,
-	Event, Nonce, Pallet as Contracts, Schedule, System,
+	Event, Nonce, Pallet as Contracts, Schedule, System, ContractOrigin
 };
 use frame_support::{
 	crypto::ecdsa::ECDSAExt,
@@ -231,6 +231,9 @@ pub trait Ext: sealing::Sealed {
 	/// However, this function does not require any storage lookup and therefore uses less weight.
 	fn caller_is_origin(&self) -> bool;
 
+	/// Check if the origin is the root origin.
+	fn caller_is_root(&self) -> bool;
+
 	/// Returns a reference to the account id of the current contract.
 	fn address(&self) -> &AccountIdOf<Self::T>;
 
@@ -385,7 +388,7 @@ pub struct Stack<'a, T: Config, E> {
 	/// Please note that it is possible that the id belongs to a contract rather than a plain
 	/// account when being called through one of the contract RPCs where the client can freely
 	/// choose the origin. This usually makes no sense but is still possible.
-	origin: T::AccountId,
+	origin: ContractOrigin<T>,
 	/// The cost schedule used when charging from the gas meter.
 	schedule: &'a Schedule<T>,
 	/// The gas meter where costs are charged to.
@@ -622,7 +625,7 @@ where
 	///
 	/// Result<(ExecReturnValue, CodeSize), (ExecError, CodeSize)>
 	pub fn run_call(
-		origin: T::AccountId,
+		origin: ContractOrigin<T>,
 		dest: T::AccountId,
 		gas_meter: &'a mut GasMeter<T>,
 		storage_meter: &'a mut storage::meter::Meter<T>,
@@ -674,7 +677,7 @@ where
 				salt,
 				input_data: input_data.as_ref(),
 			},
-			origin,
+			ContractOrigin::from_account_id(origin),
 			gas_meter,
 			storage_meter,
 			schedule,
@@ -689,7 +692,7 @@ where
 	/// Create a new call stack.
 	fn new(
 		args: FrameArgs<T, E>,
-		origin: T::AccountId,
+		origin: ContractOrigin<T>,
 		gas_meter: &'a mut GasMeter<T>,
 		storage_meter: &'a mut storage::meter::Meter<T>,
 		schedule: &'a Schedule<T>,
@@ -848,8 +851,13 @@ where
 			// it can create the account in case the initial transfer is < ed.
 			if entry_point == ExportedFunction::Constructor {
 				let frame = top_frame_mut!(self);
+				// Root origin is not allowed here
+				let origin = match &self.origin {
+					ContractOrigin::Signed(origin) => origin,
+					ContractOrigin::Root => return Err(Error::<T>::RootOriginNotAllowed.into()),
+				};
 				frame.nested_storage.charge_instantiate(
-					&self.origin,
+					origin,
 					&frame.account_id,
 					frame.contract_info.get(&frame.account_id),
 				)?;
@@ -1308,6 +1316,11 @@ where
 
 	fn caller_is_origin(&self) -> bool {
 		self.caller() == &self.origin
+	}
+
+	fn caller_is_root(&self) -> bool {
+		// self.origin
+		true
 	}
 
 	fn balance(&self) -> BalanceOf<T> {
