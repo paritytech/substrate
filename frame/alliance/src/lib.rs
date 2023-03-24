@@ -539,7 +539,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		// Index 2 was close_old_weight
+		// Index 2 was `close_old_weight`; it was removed due to weights v1 deprecation.
 
 		/// Initialize the Alliance, onboard fellows and allies.
 		///
