@@ -100,7 +100,7 @@ We use https://github.com/paritytech/labels/blob/main/docs/doc_substrate.md[labe
 Please label issues with the following labels:
 
 . `I-*` or `J-*` Issue severity and type. EXACTLY ONE REQUIRED.
-. `U-*` Issue urgency, suggesting in what time manner does this issue need to be resolved . AT MOST ONE ALLOWED.
+. `U-*` Issue urgency, suggesting in what time manner does this issue need to be resolved. AT MOST ONE ALLOWED.
 . `Z-*` Issue difficulty. AT MOST ONE ALLOWED.
 
 == Releases
