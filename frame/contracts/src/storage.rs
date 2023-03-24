@@ -263,10 +263,11 @@ impl<T: Config> ContractInfo<T> {
 			);
 			let keys_removed = match outcome {
 				// This happens when our budget wasn't large enough to remove all keys.
-				KillStorageResult::SomeRemaining(c) => c,
+				KillStorageResult::SomeRemaining(c) => {
+					// TODO revisit this ensure that we break, after this since
+					c
+				},
 				KillStorageResult::AllRemoved(c) => {
-					// We do not care to preserve order. The contract is deleted already and
-					// no one waits for the trie to be deleted.
 					entry.remove();
 					c
 				},
