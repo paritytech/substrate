@@ -72,14 +72,14 @@ use sc_network::types::ProtocolName;
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sp_api::ProvideRuntimeApi;
-use sp_application_crypto::AppKey;
+use sp_application_crypto::AppCrypto;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult};
 use sp_consensus::SelectChain;
 use sp_consensus_grandpa::{
 	AuthorityList, AuthoritySignature, SetId, CLIENT_LOG_TARGET as LOG_TARGET,
 };
 use sp_core::{crypto::ByteArray, traits::CallContext};
-use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::KeystorePtr;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, NumberFor, Zero},
@@ -228,7 +228,7 @@ pub struct Config {
 	/// Some local identifier of the voter.
 	pub name: Option<String>,
 	/// The keystore that manages the keys of this node.
-	pub keystore: Option<SyncCryptoStorePtr>,
+	pub keystore: Option<KeystorePtr>,
 	/// TelemetryHandle instance.
 	pub telemetry: Option<TelemetryHandle>,
 	/// Chain specific GRANDPA protocol name. See [`crate::protocol_standard_name`].
@@ -623,7 +623,7 @@ fn global_communication<BE, Block: BlockT, C, N, S>(
 	voters: &Arc<VoterSet<AuthorityId>>,
 	client: Arc<C>,
 	network: &NetworkBridge<Block, N, S>,
-	keystore: Option<&SyncCryptoStorePtr>,
+	keystore: Option<&KeystorePtr>,
 	metrics: Option<until_imported::Metrics>,
 ) -> (
 	impl Stream<
@@ -1136,14 +1136,12 @@ where
 /// available.
 fn local_authority_id(
 	voters: &VoterSet<AuthorityId>,
-	keystore: Option<&SyncCryptoStorePtr>,
+	keystore: Option<&KeystorePtr>,
 ) -> Option<AuthorityId> {
 	keystore.and_then(|keystore| {
 		voters
 			.iter()
-			.find(|(p, _)| {
-				SyncCryptoStore::has_keys(&**keystore, &[(p.to_raw_vec(), AuthorityId::ID)])
-			})
+			.find(|(p, _)| keystore.has_keys(&[(p.to_raw_vec(), AuthorityId::ID)]))
 			.map(|(p, _)| p.clone())
 	})
 }

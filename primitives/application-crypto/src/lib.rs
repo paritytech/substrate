@@ -23,14 +23,11 @@
 pub use sp_core::crypto::{key_types, CryptoTypeId, KeyTypeId};
 #[doc(hidden)]
 #[cfg(feature = "full_crypto")]
-pub use sp_core::crypto::{DeriveJunction, Pair, SecretStringError, Ss58Codec};
+pub use sp_core::crypto::{DeriveError, DeriveJunction, Pair, SecretStringError, Ss58Codec};
 #[doc(hidden)]
 pub use sp_core::{
 	self,
-	crypto::{
-		ByteArray, CryptoType, CryptoTypePublicPair, Derive, IsWrappedBy, Public, UncheckedFrom,
-		Wraps,
-	},
+	crypto::{ByteArray, CryptoType, Derive, IsWrappedBy, Public, UncheckedFrom, Wraps},
 	RuntimeDebug,
 };
 
@@ -129,7 +126,6 @@ macro_rules! app_crypto_pair {
 			type Public = Public;
 			type Seed = <$pair as $crate::Pair>::Seed;
 			type Signature = Signature;
-			type DeriveError = <$pair as $crate::Pair>::DeriveError;
 
 			$crate::app_crypto_pair_functions_if_std!($pair);
 
@@ -137,7 +133,7 @@ macro_rules! app_crypto_pair {
 				&self,
 				path: Iter,
 				seed: Option<Self::Seed>,
-			) -> Result<(Self, Option<Self::Seed>), Self::DeriveError> {
+			) -> Result<(Self, Option<Self::Seed>), $crate::DeriveError> {
 				self.0.derive(path, seed).map(|x| (Self(x.0), x.1))
 			}
 			fn from_seed(seed: &Self::Seed) -> Self {
@@ -171,8 +167,7 @@ macro_rules! app_crypto_pair {
 			}
 		}
 
-		impl $crate::AppKey for Pair {
-			type UntypedGeneric = $pair;
+		impl $crate::AppCrypto for Pair {
 			type Public = Public;
 			type Pair = Pair;
 			type Signature = Signature;
@@ -239,8 +234,7 @@ macro_rules! app_crypto_public_full_crypto {
 			type Pair = Pair;
 		}
 
-		impl $crate::AppKey for Public {
-			type UntypedGeneric = $public;
+		impl $crate::AppCrypto for Public {
 			type Public = Public;
 			type Pair = Pair;
 			type Signature = Signature;
@@ -273,8 +267,7 @@ macro_rules! app_crypto_public_not_full_crypto {
 
 		impl $crate::CryptoType for Public {}
 
-		impl $crate::AppKey for Public {
-			type UntypedGeneric = $public;
+		impl $crate::AppCrypto for Public {
 			type Public = Public;
 			type Signature = Signature;
 			const ID: $crate::KeyTypeId = $key_type;
@@ -307,11 +300,8 @@ macro_rules! app_crypto_public_common {
 		impl $crate::ByteArray for Public {
 			const LEN: usize = <$public>::LEN;
 		}
-		impl $crate::Public for Public {
-			fn to_public_crypto_pair(&self) -> $crate::CryptoTypePublicPair {
-				$crate::CryptoTypePublicPair($crypto_type, $crate::ByteArray::to_raw_vec(self))
-			}
-		}
+
+		impl $crate::Public for Public {}
 
 		impl $crate::AppPublic for Public {
 			type Generic = $public;
@@ -348,18 +338,6 @@ macro_rules! app_crypto_public_common {
 
 			fn to_raw_vec(&self) -> $crate::Vec<u8> {
 				<$public as $crate::RuntimePublic>::to_raw_vec(&self.0)
-			}
-		}
-
-		impl From<Public> for $crate::CryptoTypePublicPair {
-			fn from(key: Public) -> Self {
-				(&key).into()
-			}
-		}
-
-		impl From<&Public> for $crate::CryptoTypePublicPair {
-			fn from(key: &Public) -> Self {
-				$crate::CryptoTypePublicPair($crypto_type, $crate::ByteArray::to_raw_vec(key))
 			}
 		}
 
@@ -451,8 +429,7 @@ macro_rules! app_crypto_signature_full_crypto {
 			type Pair = Pair;
 		}
 
-		impl $crate::AppKey for Signature {
-			type UntypedGeneric = $sig;
+		impl $crate::AppCrypto for Signature {
 			type Public = Public;
 			type Pair = Pair;
 			type Signature = Signature;
@@ -483,8 +460,7 @@ macro_rules! app_crypto_signature_not_full_crypto {
 
 		impl $crate::CryptoType for Signature {}
 
-		impl $crate::AppKey for Signature {
-			type UntypedGeneric = $sig;
+		impl $crate::AppCrypto for Signature {
 			type Public = Public;
 			type Signature = Signature;
 			const ID: $crate::KeyTypeId = $key_type;
