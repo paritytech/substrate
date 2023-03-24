@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -29,13 +29,12 @@ use sc_consensus_babe::{
 use sc_consensus_epochs::{
 	descendent_query, EpochHeader, SharedEpochChanges, ViableEpochDescriptor,
 };
-use sp_keystore::SyncCryptoStorePtr;
+use sp_keystore::KeystorePtr;
 use std::{marker::PhantomData, sync::Arc};
 
 use sc_consensus::{BlockImportParams, ForkChoiceStrategy, Verifier};
 use sp_api::{ProvideRuntimeApi, TransactionFor};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
-use sp_consensus::CacheKeyId;
 use sp_consensus_babe::{
 	digests::{NextEpochDescriptor, PreDigest, SecondaryPlainPreDigest},
 	inherents::BabeInherentData,
@@ -54,7 +53,7 @@ use sp_timestamp::TimestampInherentData;
 /// Intended for use with BABE runtimes.
 pub struct BabeConsensusDataProvider<B: BlockT, C, P> {
 	/// shared reference to keystore
-	keystore: SyncCryptoStorePtr,
+	keystore: KeystorePtr,
 
 	/// Shared reference to the client.
 	client: Arc<C>,
@@ -99,7 +98,7 @@ where
 	async fn verify(
 		&mut self,
 		mut import_params: BlockImportParams<B, ()>,
-	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> Result<BlockImportParams<B, ()>, String> {
 		import_params.finalized = false;
 		import_params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
@@ -128,7 +127,7 @@ where
 		import_params
 			.insert_intermediate(INTERMEDIATE_KEY, BabeIntermediate::<B> { epoch_descriptor });
 
-		Ok((import_params, None))
+		Ok(import_params)
 	}
 }
 
@@ -144,7 +143,7 @@ where
 {
 	pub fn new(
 		client: Arc<C>,
-		keystore: SyncCryptoStorePtr,
+		keystore: KeystorePtr,
 		epoch_changes: SharedEpochChanges<B, Epoch>,
 		authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 	) -> Result<Self, Error> {

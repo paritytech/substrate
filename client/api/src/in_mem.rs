@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -40,7 +40,7 @@ use std::{
 
 use crate::{
 	backend::{self, NewBlockState},
-	blockchain::{self, well_known_cache_keys::Id as CacheKeyId, BlockStatus, HeaderBackend},
+	blockchain::{self, BlockStatus, HeaderBackend},
 	leaves::LeafSet,
 	UsageInfo,
 };
@@ -549,8 +549,6 @@ where
 		Ok(())
 	}
 
-	fn update_cache(&mut self, _cache: HashMap<CacheKeyId, Vec<u8>>) {}
-
 	fn update_db_storage(
 		&mut self,
 		update: <InMemoryBackend<HashFor<Block>> as StateBackend<HashFor<Block>>>::Transaction,
@@ -788,6 +786,12 @@ where
 	fn requires_full_sync(&self) -> bool {
 		false
 	}
+
+	fn pin_block(&self, _: <Block as BlockT>::Hash) -> blockchain::Result<()> {
+		Ok(())
+	}
+
+	fn unpin_block(&self, _: <Block as BlockT>::Hash) {}
 }
 
 impl<Block: BlockT> backend::LocalBackend<Block> for Backend<Block> where Block::Hash: Ord {}

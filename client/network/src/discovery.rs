@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -46,6 +46,8 @@
 //! active mechanism that asks nodes for the addresses they are listening on. Whenever we learn
 //! of a node's address, you must call `add_self_reported_address`.
 
+use crate::{config::ProtocolId, utils::LruHashSet};
+
 use array_bytes::bytes2hex;
 use futures::prelude::*;
 use futures_timer::Delay;
@@ -73,11 +75,10 @@ use libp2p::{
 	},
 };
 use log::{debug, info, trace, warn};
-use sc_network_common::{config::ProtocolId, utils::LruHashSet};
 use sp_core::hexdisplay::HexDisplay;
 use std::{
 	cmp,
-	collections::{HashMap, HashSet, VecDeque},
+	collections::{hash_map::Entry, HashMap, HashSet, VecDeque},
 	num::NonZeroUsize,
 	task::{Context, Poll},
 	time::Duration,
@@ -96,7 +97,7 @@ pub struct DiscoveryConfig {
 	local_peer_id: PeerId,
 	permanent_addresses: Vec<(PeerId, Multiaddr)>,
 	dht_random_walk: bool,
-	allow_private_ipv4: bool,
+	allow_private_ip: bool,
 	allow_non_globals_in_dht: bool,
 	discovery_only_if_under_num: u64,
 	enable_mdns: bool,
@@ -111,7 +112,7 @@ impl DiscoveryConfig {
 			local_peer_id: local_public_key.to_peer_id(),
 			permanent_addresses: Vec::new(),
 			dht_random_walk: true,
-			allow_private_ipv4: true,
+			allow_private_ip: true,
 			allow_non_globals_in_dht: false,
 			discovery_only_if_under_num: std::u64::MAX,
 			enable_mdns: false,
@@ -142,9 +143,9 @@ impl DiscoveryConfig {
 		self
 	}
 
-	/// Should private IPv4 addresses be reported?
-	pub fn allow_private_ipv4(&mut self, value: bool) -> &mut Self {
-		self.allow_private_ipv4 = value;
+	/// Should private IPv4/IPv6 addresses be reported?
+	pub fn allow_private_ip(&mut self, value: bool) -> &mut Self {
+		self.allow_private_ip = value;
 		self
 	}
 
@@ -189,7 +190,7 @@ impl DiscoveryConfig {
 			local_peer_id,
 			permanent_addresses,
 			dht_random_walk,
-			allow_private_ipv4,
+			allow_private_ip,
 			allow_non_globals_in_dht,
 			discovery_only_if_under_num,
 			enable_mdns,
@@ -231,7 +232,7 @@ impl DiscoveryConfig {
 			pending_events: VecDeque::new(),
 			local_peer_id,
 			num_connections: 0,
-			allow_private_ipv4,
+			allow_private_ip,
 			discovery_only_if_under_num,
 			mdns: if enable_mdns {
 				match TokioMdns::new(mdns::Config::default()) {
@@ -278,9 +279,9 @@ pub struct DiscoveryBehaviour {
 	local_peer_id: PeerId,
 	/// Number of nodes we're currently connected to.
 	num_connections: u64,
-	/// If false, `addresses_of_peer` won't return any private IPv4 address, except for the ones
-	/// stored in `permanent_addresses` or `ephemeral_addresses`.
-	allow_private_ipv4: bool,
+	/// If false, `addresses_of_peer` won't return any private IPv4/IPv6 address, except for the
+	/// ones stored in `permanent_addresses` or `ephemeral_addresses`.
+	allow_private_ip: bool,
 	/// Number of active connections over which we interrupt the discovery process.
 	discovery_only_if_under_num: u64,
 	/// Should non-global addresses be added to the DHT?
@@ -318,14 +319,16 @@ impl DiscoveryBehaviour {
 	/// If we didn't know this address before, also generates a `Discovered` event.
 	pub fn add_known_address(&mut self, peer_id: PeerId, addr: Multiaddr) {
 		let addrs_list = self.ephemeral_addresses.entry(peer_id).or_default();
-		if !addrs_list.iter().any(|a| *a == addr) {
-			if let Some(k) = self.kademlia.as_mut() {
-				k.add_address(&peer_id, addr.clone());
-			}
-
-			self.pending_events.push_back(DiscoveryOut::Discovered(peer_id));
-			addrs_list.push(addr);
+		if addrs_list.contains(&addr) {
+			return
 		}
+
+		if let Some(k) = self.kademlia.as_mut() {
+			k.add_address(&peer_id, addr.clone());
+		}
+
+		self.pending_events.push_back(DiscoveryOut::Discovered(peer_id));
+		addrs_list.push(addr);
 	}
 
 	/// Add a self-reported address of a remote peer to the k-buckets of the DHT
@@ -456,7 +459,7 @@ pub enum DiscoveryOut {
 
 	/// The DHT yielded results for the record request.
 	///
-	/// Returning the result grouped in (key, value) pairs as well as the request duration..
+	/// Returning the result grouped in (key, value) pairs as well as the request duration.
 	ValueFound(Vec<(record::Key, Vec<u8>)>, Duration),
 
 	/// The record requested was not found in the DHT.
@@ -506,7 +509,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 				list_to_filter.extend(mdns.addresses_of_peer(peer_id));
 			}
 
-			if !self.allow_private_ipv4 {
+			if !self.allow_private_ip {
 				list_to_filter.retain(|addr| match addr.iter().next() {
 					Some(Protocol::Ip4(addr)) if !IpNetwork::from(addr).is_global() => false,
 					Some(Protocol::Ip6(addr)) if !IpNetwork::from(addr).is_global() => false,
@@ -535,9 +538,13 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			FromSwarm::DialFailure(e @ DialFailure { peer_id, error, .. }) => {
 				if let Some(peer_id) = peer_id {
 					if let DialError::Transport(errors) = error {
-						if let Some(list) = self.ephemeral_addresses.get_mut(&peer_id) {
+						if let Entry::Occupied(mut entry) = self.ephemeral_addresses.entry(peer_id)
+						{
 							for (addr, _error) in errors {
-								list.retain(|a| a != addr);
+								entry.get_mut().retain(|a| a != addr);
+							}
+							if entry.get().is_empty() {
+								entry.remove();
 							}
 						}
 					}
@@ -898,6 +905,7 @@ mod tests {
 	use super::{
 		kademlia_protocol_name, legacy_kademlia_protocol_name, DiscoveryConfig, DiscoveryOut,
 	};
+	use crate::config::ProtocolId;
 	use futures::prelude::*;
 	use libp2p::{
 		core::{
@@ -909,7 +917,6 @@ mod tests {
 		swarm::{Executor, Swarm, SwarmEvent},
 		yamux, Multiaddr,
 	};
-	use sc_network_common::config::ProtocolId;
 	use sp_core::hash::H256;
 	use std::{collections::HashSet, pin::Pin, task::Poll};
 
@@ -947,7 +954,7 @@ mod tests {
 					let mut config = DiscoveryConfig::new(keypair.public());
 					config
 						.with_permanent_addresses(first_swarm_peer_id_and_addr.clone())
-						.allow_private_ipv4(true)
+						.allow_private_ip(true)
 						.allow_non_globals_in_dht(true)
 						.discovery_limit(50)
 						.with_kademlia(genesis_hash, fork_id, &protocol_id);
@@ -1065,7 +1072,7 @@ mod tests {
 			let keypair = Keypair::generate_ed25519();
 			let mut config = DiscoveryConfig::new(keypair.public());
 			config
-				.allow_private_ipv4(true)
+				.allow_private_ip(true)
 				.allow_non_globals_in_dht(true)
 				.discovery_limit(50)
 				.with_kademlia(supported_genesis_hash, None, &supported_protocol_id);

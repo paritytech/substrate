@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,18 +24,25 @@ mod runtime;
 
 #[cfg(feature = "runtime-benchmarks")]
 pub use crate::wasm::code_cache::reinstrument;
-pub use crate::wasm::{
-	prepare::TryInstantiate,
-	runtime::{CallFlags, Environment, ReturnCode, Runtime, RuntimeCosts},
-};
 
 #[cfg(doc)]
 pub use crate::wasm::runtime::api_doc;
 
+#[cfg(test)]
+pub use tests::MockExt;
+
+pub use crate::wasm::{
+	prepare::TryInstantiate,
+	runtime::{
+		AllowDeprecatedInterface, AllowUnstableInterface, CallFlags, Environment, ReturnCode,
+		Runtime, RuntimeCosts,
+	},
+};
+
 use crate::{
 	exec::{ExecResult, Executable, ExportedFunction, Ext},
 	gas::GasMeter,
-	AccountIdOf, BalanceOf, CodeHash, CodeStorage, CodeVec, Config, Error, RelaxedCodeVec,
+	AccountIdOf, BalanceOf, CodeHash, CodeVec, Config, Error, OwnerInfoOf, RelaxedCodeVec,
 	Schedule,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -43,8 +50,6 @@ use frame_support::dispatch::{DispatchError, DispatchResult};
 use sp_core::Get;
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
-#[cfg(test)]
-pub use tests::MockExt;
 use wasmi::{
 	Config as WasmiConfig, Engine, Instance, Linker, Memory, MemoryType, Module, StackLimits, Store,
 };
@@ -122,7 +127,7 @@ pub enum Determinism {
 	/// allowed.
 	///
 	/// Dispatchables always use this mode in order to make on-chain execution deterministic.
-	Deterministic,
+	Enforced,
 	/// Allow calling or uploading an indeterministic code.
 	///
 	/// This is only possible when calling into `pallet-contracts` directly via
@@ -131,7 +136,7 @@ pub enum Determinism {
 	/// # Note
 	///
 	/// **Never** use this mode for on-chain execution.
-	AllowIndeterminism,
+	Relaxed,
 }
 
 impl ExportedFunction {
@@ -181,12 +186,12 @@ impl<T: Config> PrefabWasmModule<T> {
 		code_cache::try_remove::<T>(origin, code_hash)
 	}
 
-	/// Returns whether there is a deposit to be payed for this module.
+	/// Returns whether there is a deposit to be paid for this module.
 	///
 	/// Returns `0` if the module is already in storage and hence no deposit will
 	/// be charged when storing it.
 	pub fn open_deposit(&self) -> BalanceOf<T> {
-		if <CodeStorage<T>>::contains_key(&self.code_hash) {
+		if <OwnerInfoOf<T>>::contains_key(&self.code_hash) {
 			0u32.into()
 		} else {
 			// Only already in-storage contracts have their `owner_info` set to `None`.
@@ -205,6 +210,7 @@ impl<T: Config> PrefabWasmModule<T> {
 		host_state: H,
 		memory: (u32, u32),
 		stack_limits: StackLimits,
+		allow_deprecated: AllowDeprecatedInterface,
 	) -> Result<(Store<H>, Memory, Instance), wasmi::Error>
 	where
 		E: Environment<H>,
@@ -219,8 +225,17 @@ impl<T: Config> PrefabWasmModule<T> {
 		let engine = Engine::new(&config);
 		let module = Module::new(&engine, code)?;
 		let mut store = Store::new(&engine, host_state);
-		let mut linker = Linker::new();
-		E::define(&mut store, &mut linker, T::UnsafeUnstableInterface::get())?;
+		let mut linker = Linker::new(&engine);
+		E::define(
+			&mut store,
+			&mut linker,
+			if T::UnsafeUnstableInterface::get() {
+				AllowUnstableInterface::Yes
+			} else {
+				AllowUnstableInterface::No
+			},
+			allow_deprecated,
+		)?;
 		let memory = Memory::new(&mut store, MemoryType::new(memory.0, Some(memory.1))?).expect(
 			"The limits defined in our `Schedule` limit the amount of memory well below u32::MAX; qed",
 		);
@@ -233,20 +248,14 @@ impl<T: Config> PrefabWasmModule<T> {
 		Ok((store, memory, instance))
 	}
 
-	/// Create and store the module without checking nor instrumenting the passed code.
-	///
-	/// # Note
-	///
-	/// This is useful for benchmarking where we don't want instrumentation to skew
-	/// our results. This also does not collect any deposit from the `owner`.
+	/// See [`Self::from_code_unchecked`].
 	#[cfg(feature = "runtime-benchmarks")]
 	pub fn store_code_unchecked(
 		original_code: Vec<u8>,
 		schedule: &Schedule<T>,
 		owner: T::AccountId,
 	) -> DispatchResult {
-		let executable = prepare::benchmarking::prepare(original_code, schedule, owner)
-			.map_err::<DispatchError, _>(Into::into)?;
+		let executable = Self::from_code_unchecked(original_code, schedule, owner)?;
 		code_cache::store(executable, false)
 	}
 
@@ -254,6 +263,23 @@ impl<T: Config> PrefabWasmModule<T> {
 	#[cfg(test)]
 	pub fn decrement_version(&mut self) {
 		self.instruction_weights_version = self.instruction_weights_version.checked_sub(1).unwrap();
+	}
+
+	/// Create the module without checking nor instrumenting the passed code.
+	///
+	/// # Note
+	///
+	/// This is useful for benchmarking where we don't want instrumentation to skew
+	/// our results. This also does not collect any deposit from the `owner`. Also useful
+	/// during testing when we want to deploy codes that do not pass the instantiation checks.
+	#[cfg(any(test, feature = "runtime-benchmarks"))]
+	fn from_code_unchecked(
+		original_code: Vec<u8>,
+		schedule: &Schedule<T>,
+		owner: T::AccountId,
+	) -> Result<Self, DispatchError> {
+		prepare::benchmarking::prepare(original_code, schedule, owner)
+			.map_err::<DispatchError, _>(Into::into)
 	}
 }
 
@@ -294,12 +320,16 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 			runtime,
 			(self.initial, self.maximum),
 			StackLimits::default(),
+			match function {
+				ExportedFunction::Constructor => AllowDeprecatedInterface::No,
+				ExportedFunction::Call => AllowDeprecatedInterface::Yes,
+			},
 		)
 		.map_err(|msg| {
 			log::debug!(target: "runtime::contracts", "failed to instantiate code: {}", msg);
 			Error::<T>::CodeRejected
 		})?;
-		store.state_mut().set_memory(memory);
+		store.data_mut().set_memory(memory);
 
 		let exported_func = instance
 			.get_export(&store, function.identifier())
@@ -316,7 +346,7 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 
 		let result = exported_func.call(&mut store, &[], &mut []);
 
-		store.into_state().to_execution_result(result)
+		store.into_data().to_execution_result(result)
 	}
 
 	fn code_hash(&self) -> &CodeHash<T> {
@@ -328,7 +358,7 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 	}
 
 	fn is_deterministic(&self) -> bool {
-		matches!(self.determinism, Determinism::Deterministic)
+		matches!(self.determinism, Determinism::Enforced)
 	}
 }
 
@@ -336,10 +366,7 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 mod tests {
 	use super::*;
 	use crate::{
-		exec::{
-			AccountIdOf, BlockNumberOf, ErrorOrigin, ExecError, Executable, Ext, FixSizedKey,
-			SeedOf, VarSizedKey,
-		},
+		exec::{AccountIdOf, BlockNumberOf, ErrorOrigin, ExecError, Executable, Ext, Key, SeedOf},
 		gas::GasMeter,
 		storage::WriteOutcome,
 		tests::{RuntimeCall, Test, ALICE, BOB},
@@ -430,7 +457,7 @@ mod tests {
 				events: Default::default(),
 				runtime_calls: Default::default(),
 				schedule: Default::default(),
-				gas_meter: GasMeter::new(Weight::from_ref_time(10_000_000_000)),
+				gas_meter: GasMeter::new(Weight::from_parts(10_000_000_000, 10 * 1024 * 1024)),
 				debug_buffer: Default::default(),
 				ecdsa_recover: Default::default(),
 			}
@@ -491,40 +518,15 @@ mod tests {
 			self.terminations.push(TerminationEntry { beneficiary: beneficiary.clone() });
 			Ok(())
 		}
-		fn get_storage(&mut self, key: &FixSizedKey) -> Option<Vec<u8>> {
+		fn get_storage(&mut self, key: &Key<Self::T>) -> Option<Vec<u8>> {
 			self.storage.get(&key.to_vec()).cloned()
 		}
-		fn get_storage_transparent(&mut self, key: &VarSizedKey<Self::T>) -> Option<Vec<u8>> {
-			self.storage.get(&key.to_vec()).cloned()
-		}
-		fn get_storage_size(&mut self, key: &FixSizedKey) -> Option<u32> {
-			self.storage.get(&key.to_vec()).map(|val| val.len() as u32)
-		}
-		fn get_storage_size_transparent(&mut self, key: &VarSizedKey<Self::T>) -> Option<u32> {
+		fn get_storage_size(&mut self, key: &Key<Self::T>) -> Option<u32> {
 			self.storage.get(&key.to_vec()).map(|val| val.len() as u32)
 		}
 		fn set_storage(
 			&mut self,
-			key: &FixSizedKey,
-			value: Option<Vec<u8>>,
-			take_old: bool,
-		) -> Result<WriteOutcome, DispatchError> {
-			let key = key.to_vec();
-			let entry = self.storage.entry(key.clone());
-			let result = match (entry, take_old) {
-				(Entry::Vacant(_), _) => WriteOutcome::New,
-				(Entry::Occupied(entry), false) =>
-					WriteOutcome::Overwritten(entry.remove().len() as u32),
-				(Entry::Occupied(entry), true) => WriteOutcome::Taken(entry.remove()),
-			};
-			if let Some(value) = value {
-				self.storage.insert(key, value);
-			}
-			Ok(result)
-		}
-		fn set_storage_transparent(
-			&mut self,
-			key: &VarSizedKey<Self::T>,
+			key: &Key<Self::T>,
 			value: Option<Vec<u8>>,
 			take_old: bool,
 		) -> Result<WriteOutcome, DispatchError> {
@@ -629,38 +631,77 @@ mod tests {
 		}
 	}
 
+	/// Execute the supplied code.
+	///
+	/// Not used directly but through the wrapper functions defined below.
 	fn execute_internal<E: BorrowMut<MockExt>>(
 		wat: &str,
 		input_data: Vec<u8>,
 		mut ext: E,
+		entry_point: &ExportedFunction,
 		unstable_interface: bool,
+		skip_checks: bool,
 	) -> ExecResult {
 		type RuntimeConfig = <MockExt as Ext>::T;
 		RuntimeConfig::set_unstable_interface(unstable_interface);
 		let wasm = wat::parse_str(wat).unwrap();
 		let schedule = crate::Schedule::default();
-		let executable = PrefabWasmModule::<RuntimeConfig>::from_code(
-			wasm,
-			&schedule,
-			ALICE,
-			Determinism::Deterministic,
-			TryInstantiate::Skip,
-		)
-		.map_err(|err| err.0)?;
-		executable.execute(ext.borrow_mut(), &ExportedFunction::Call, input_data)
+		let executable = if skip_checks {
+			PrefabWasmModule::<RuntimeConfig>::from_code_unchecked(wasm, &schedule, ALICE)?
+		} else {
+			PrefabWasmModule::<RuntimeConfig>::from_code(
+				wasm,
+				&schedule,
+				ALICE,
+				Determinism::Enforced,
+				TryInstantiate::Instantiate,
+			)
+			.map_err(|err| err.0)?
+		};
+		executable.execute(ext.borrow_mut(), entry_point, input_data)
 	}
 
+	/// Execute the supplied code.
 	fn execute<E: BorrowMut<MockExt>>(wat: &str, input_data: Vec<u8>, ext: E) -> ExecResult {
-		execute_internal(wat, input_data, ext, true)
+		execute_internal(wat, input_data, ext, &ExportedFunction::Call, true, false)
 	}
 
+	/// Execute the supplied code with disabled unstable functions.
+	///
+	/// In our test config unstable functions are disabled so that we can test them.
+	/// In order to test that code using them is properly rejected we temporarily disable
+	/// them when this test is run.
 	#[cfg(not(feature = "runtime-benchmarks"))]
 	fn execute_no_unstable<E: BorrowMut<MockExt>>(
 		wat: &str,
 		input_data: Vec<u8>,
 		ext: E,
 	) -> ExecResult {
-		execute_internal(wat, input_data, ext, false)
+		execute_internal(wat, input_data, ext, &ExportedFunction::Call, false, false)
+	}
+
+	/// Execute code without validating it first.
+	///
+	/// This is mainly useful in order to test code which uses deprecated functions. Those
+	/// would fail when validating the code.
+	fn execute_unvalidated<E: BorrowMut<MockExt>>(
+		wat: &str,
+		input_data: Vec<u8>,
+		ext: E,
+	) -> ExecResult {
+		execute_internal(wat, input_data, ext, &ExportedFunction::Call, false, true)
+	}
+
+	/// Execute instantiation entry point of code without validating it first.
+	///
+	/// Same as `execute_unvalidated` except that the `deploy` entry point is ran.
+	#[cfg(not(feature = "runtime-benchmarks"))]
+	fn execute_instantiate_unvalidated<E: BorrowMut<MockExt>>(
+		wat: &str,
+		input_data: Vec<u8>,
+		ext: E,
+	) -> ExecResult {
+		execute_internal(wat, input_data, ext, &ExportedFunction::Constructor, false, true)
 	}
 
 	const CODE_TRANSFER: &str = r#"
@@ -1002,14 +1043,14 @@ mod tests {
 "#;
 
 		let mut ext = MockExt::default();
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([1u8; 64].to_vec()).unwrap(),
 			Some(vec![42u8]),
 			false,
 		)
 		.unwrap();
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([2u8; 19].to_vec()).unwrap(),
 			Some(vec![]),
 			false,
 		)
@@ -1861,7 +1902,7 @@ mod tests {
 
 	#[test]
 	fn random() {
-		let output = execute(CODE_RANDOM, vec![], MockExt::default()).unwrap();
+		let output = execute_unvalidated(CODE_RANDOM, vec![], MockExt::default()).unwrap();
 
 		// The mock ext just returns the same data that was passed as the subject.
 		assert_eq!(
@@ -1931,7 +1972,7 @@ mod tests {
 
 	#[test]
 	fn random_v1() {
-		let output = execute(CODE_RANDOM_V1, vec![], MockExt::default()).unwrap();
+		let output = execute_unvalidated(CODE_RANDOM_V1, vec![], MockExt::default()).unwrap();
 
 		// The mock ext just returns the same data that was passed as the subject.
 		assert_eq!(
@@ -1988,6 +2029,52 @@ mod tests {
 		assert!(mock_ext.gas_meter.gas_left().ref_time() > 0);
 	}
 
+	const CODE_DEPOSIT_EVENT_DUPLICATES: &str = r#"
+(module
+	(import "seal0" "seal_deposit_event" (func $seal_deposit_event (param i32 i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func (export "call")
+		(call $seal_deposit_event
+			(i32.const 32) ;; Pointer to the start of topics buffer
+			(i32.const 129) ;; The length of the topics buffer.
+			(i32.const 8) ;; Pointer to the start of the data buffer
+			(i32.const 13) ;; Length of the buffer
+		)
+	)
+	(func (export "deploy"))
+
+	(data (i32.const 8) "\00\01\2A\00\00\00\00\00\00\00\E5\14\00")
+
+	;; Encoded Vec<TopicOf<T>>, the buffer has length of 129 bytes.
+	(data (i32.const 32) "\10"
+"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+"\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02"
+"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+"\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04")
+)
+"#;
+
+	/// Checks that the runtime allows duplicate topics.
+	#[test]
+	fn deposit_event_duplicates_allowed() {
+		let mut mock_ext = MockExt::default();
+		assert_ok!(execute(CODE_DEPOSIT_EVENT_DUPLICATES, vec![], &mut mock_ext,));
+
+		assert_eq!(
+			mock_ext.events,
+			vec![(
+				vec![
+					H256::repeat_byte(0x01),
+					H256::repeat_byte(0x02),
+					H256::repeat_byte(0x01),
+					H256::repeat_byte(0x04)
+				],
+				vec![0x00, 0x01, 0x2a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe5, 0x14, 0x00]
+			)]
+		);
+	}
+
 	const CODE_DEPOSIT_EVENT_MAX_TOPICS: &str = r#"
 (module
 	(import "seal0" "seal_deposit_event" (func $seal_deposit_event (param i32 i32 i32 i32)))
@@ -2022,44 +2109,6 @@ mod tests {
 			execute(CODE_DEPOSIT_EVENT_MAX_TOPICS, vec![], MockExt::default(),),
 			Err(ExecError {
 				error: Error::<Test>::TooManyTopics.into(),
-				origin: ErrorOrigin::Caller,
-			})
-		);
-	}
-
-	const CODE_DEPOSIT_EVENT_DUPLICATES: &str = r#"
-(module
-	(import "seal0" "seal_deposit_event" (func $seal_deposit_event (param i32 i32 i32 i32)))
-	(import "env" "memory" (memory 1 1))
-
-	(func (export "call")
-		(call $seal_deposit_event
-			(i32.const 32) ;; Pointer to the start of topics buffer
-			(i32.const 129) ;; The length of the topics buffer.
-			(i32.const 8) ;; Pointer to the start of the data buffer
-			(i32.const 13) ;; Length of the buffer
-		)
-	)
-	(func (export "deploy"))
-
-	(data (i32.const 8) "\00\01\2A\00\00\00\00\00\00\00\E5\14\00")
-
-	;; Encoded Vec<TopicOf<T>>, the buffer has length of 129 bytes.
-	(data (i32.const 32) "\10"
-"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
-"\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02"
-"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
-"\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04")
-)
-"#;
-
-	/// Checks that the runtime traps if there are duplicates.
-	#[test]
-	fn deposit_event_duplicates() {
-		assert_eq!(
-			execute(CODE_DEPOSIT_EVENT_DUPLICATES, vec![], MockExt::default(),),
-			Err(ExecError {
-				error: Error::<Test>::DuplicateTopics.into(),
 				origin: ErrorOrigin::Caller,
 			})
 		);
@@ -2286,13 +2335,8 @@ mod tests {
 "#;
 		let mut ext = MockExt::default();
 		let result = execute(CODE_DEBUG_MESSAGE_FAIL, vec![], &mut ext);
-		assert_eq!(
-			result,
-			Err(ExecError {
-				error: Error::<Test>::DebugMessageInvalidUTF8.into(),
-				origin: ErrorOrigin::Caller,
-			})
-		);
+		assert_ok!(result);
+		assert!(ext.debug_buffer.is_empty());
 	}
 
 	const CODE_CALL_RUNTIME: &str = r#"
@@ -2475,15 +2519,15 @@ mod tests {
 
 		let mut ext = MockExt::default();
 
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([1u8; 64].to_vec()).unwrap(),
 			Some(vec![42u8]),
 			false,
 		)
 		.unwrap();
 
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([2u8; 19].to_vec()).unwrap(),
 			Some(vec![]),
 			false,
 		)
@@ -2559,14 +2603,14 @@ mod tests {
 
 		let mut ext = MockExt::default();
 
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([1u8; 64].to_vec()).unwrap(),
 			Some(vec![42u8]),
 			false,
 		)
 		.unwrap();
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([2u8; 19].to_vec()).unwrap(),
 			Some(vec![]),
 			false,
 		)
@@ -2656,15 +2700,15 @@ mod tests {
 
 		let mut ext = MockExt::default();
 
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([1u8; 64].to_vec()).unwrap(),
 			Some(vec![42u8]),
 			false,
 		)
 		.unwrap();
 
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([2u8; 19].to_vec()).unwrap(),
 			Some(vec![]),
 			false,
 		)
@@ -2999,6 +3043,25 @@ mod tests {
 		execute(CODE, vec![], &mut mock_ext).unwrap();
 	}
 
+	/// Code with deprecated functions cannot be uploaded or instantiated. However, we
+	/// need to make sure that it still can be re-instrumented.
+	#[test]
+	fn can_reinstrument_deprecated() {
+		const CODE_RANDOM: &str = r#"
+(module
+	(import "seal0" "random" (func $seal_random (param i32 i32 i32 i32)))
+	(func (export "call"))
+	(func (export "deploy"))
+)
+	"#;
+		let wasm = wat::parse_str(CODE_RANDOM).unwrap();
+		let schedule = crate::Schedule::<Test>::default();
+		#[cfg(not(feature = "runtime-benchmarks"))]
+		assert_err!(execute(CODE_RANDOM, vec![], MockExt::default()), <Error<Test>>::CodeRejected);
+		self::prepare::reinstrument::<runtime::Env, Test>(&wasm, &schedule, Determinism::Enforced)
+			.unwrap();
+	}
+
 	/// This test check that an unstable interface cannot be deployed. In case of runtime
 	/// benchmarks we always allow unstable interfaces. This is why this test does not
 	/// work when this feature is enabled.
@@ -3017,5 +3080,81 @@ mod tests {
 			<Error<Test>>::CodeRejected,
 		);
 		assert_ok!(execute(CANNOT_DEPLOY_UNSTABLE, vec![], MockExt::default()));
+	}
+
+	/// The random interface is deprecated and hence new contracts using it should not be deployed.
+	/// In case of runtime benchmarks we always allow deprecated interfaces. This is why this
+	/// test doesn't work if this feature is enabled.
+	#[cfg(not(feature = "runtime-benchmarks"))]
+	#[test]
+	fn cannot_deploy_deprecated() {
+		const CODE_RANDOM_0: &str = r#"
+(module
+	(import "seal0" "seal_random" (func $seal_random (param i32 i32 i32 i32)))
+	(func (export "call"))
+	(func (export "deploy"))
+)
+	"#;
+		const CODE_RANDOM_1: &str = r#"
+(module
+	(import "seal1" "seal_random" (func $seal_random (param i32 i32 i32 i32)))
+	(func (export "call"))
+	(func (export "deploy"))
+)
+	"#;
+		const CODE_RANDOM_2: &str = r#"
+(module
+	(import "seal0" "random" (func $seal_random (param i32 i32 i32 i32)))
+	(func (export "call"))
+	(func (export "deploy"))
+)
+	"#;
+		const CODE_RANDOM_3: &str = r#"
+(module
+	(import "seal1" "random" (func $seal_random (param i32 i32 i32 i32)))
+	(func (export "call"))
+	(func (export "deploy"))
+)
+	"#;
+
+		assert_ok!(execute_unvalidated(CODE_RANDOM_0, vec![], MockExt::default()));
+		assert_err!(
+			execute_instantiate_unvalidated(CODE_RANDOM_0, vec![], MockExt::default()),
+			<Error<Test>>::CodeRejected,
+		);
+		assert_err!(
+			execute(CODE_RANDOM_0, vec![], MockExt::default()),
+			<Error<Test>>::CodeRejected,
+		);
+
+		assert_ok!(execute_unvalidated(CODE_RANDOM_1, vec![], MockExt::default()));
+		assert_err!(
+			execute_instantiate_unvalidated(CODE_RANDOM_1, vec![], MockExt::default()),
+			<Error<Test>>::CodeRejected,
+		);
+		assert_err!(
+			execute(CODE_RANDOM_1, vec![], MockExt::default()),
+			<Error<Test>>::CodeRejected,
+		);
+
+		assert_ok!(execute_unvalidated(CODE_RANDOM_2, vec![], MockExt::default()));
+		assert_err!(
+			execute_instantiate_unvalidated(CODE_RANDOM_2, vec![], MockExt::default()),
+			<Error<Test>>::CodeRejected,
+		);
+		assert_err!(
+			execute(CODE_RANDOM_2, vec![], MockExt::default()),
+			<Error<Test>>::CodeRejected,
+		);
+
+		assert_ok!(execute_unvalidated(CODE_RANDOM_3, vec![], MockExt::default()));
+		assert_err!(
+			execute_instantiate_unvalidated(CODE_RANDOM_3, vec![], MockExt::default()),
+			<Error<Test>>::CodeRejected,
+		);
+		assert_err!(
+			execute(CODE_RANDOM_3, vec![], MockExt::default()),
+			<Error<Test>>::CodeRejected,
+		);
 	}
 }

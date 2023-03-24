@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +22,9 @@
 use crate::{
 	chain_extension::ChainExtension,
 	storage::meter::Diff,
-	wasm::{Determinism, Environment, OwnerInfo, PrefabWasmModule},
+	wasm::{
+		runtime::AllowDeprecatedInterface, Determinism, Environment, OwnerInfo, PrefabWasmModule,
+	},
 	AccountIdOf, CodeVec, Config, Error, Schedule,
 };
 use codec::{Encode, MaxEncodedLen};
@@ -48,10 +50,18 @@ pub enum TryInstantiate {
 	Instantiate,
 	/// Skip the instantiation during preparation.
 	///
-	/// This makes sense when the preparation takes place as part of an instantation. Then
+	/// This makes sense when the preparation takes place as part of an instantiation. Then
 	/// this instantiation would fail the whole transaction and an extra check is not
 	/// necessary.
 	Skip,
+}
+
+/// The reason why a contract is instrumented.
+enum InstrumentReason {
+	/// A new code is uploaded.
+	New,
+	/// Existing code is re-instrumented.
+	Reinstrument,
 }
 
 struct ContractModule<'a, T: Config> {
@@ -145,52 +155,6 @@ impl<'a, T: Config> ContractModule<'a, T> {
 		Ok(())
 	}
 
-	/// Ensures that no floating point types are in use.
-	fn ensure_no_floating_types(&self) -> Result<(), &'static str> {
-		if let Some(global_section) = self.module.global_section() {
-			for global in global_section.entries() {
-				match global.global_type().content_type() {
-					ValueType::F32 | ValueType::F64 =>
-						return Err("use of floating point type in globals is forbidden"),
-					_ => {},
-				}
-			}
-		}
-
-		if let Some(code_section) = self.module.code_section() {
-			for func_body in code_section.bodies() {
-				for local in func_body.locals() {
-					match local.value_type() {
-						ValueType::F32 | ValueType::F64 =>
-							return Err("use of floating point type in locals is forbidden"),
-						_ => {},
-					}
-				}
-			}
-		}
-
-		if let Some(type_section) = self.module.type_section() {
-			for wasm_type in type_section.types() {
-				match wasm_type {
-					Type::Function(func_type) => {
-						let return_type = func_type.results().get(0);
-						for value_type in func_type.params().iter().chain(return_type) {
-							match value_type {
-								ValueType::F32 | ValueType::F64 =>
-									return Err(
-										"use of floating point type in function types is forbidden",
-									),
-								_ => {},
-							}
-						}
-					},
-				}
-			}
-		}
-
-		Ok(())
-	}
-
 	/// Ensure that no function exists that has more parameters than allowed.
 	fn ensure_parameter_limit(&self, limit: u32) -> Result<(), &'static str> {
 		let type_section = if let Some(type_section) = self.module.type_section() {
@@ -209,7 +173,7 @@ impl<'a, T: Config> ContractModule<'a, T> {
 	}
 
 	fn inject_gas_metering(self, determinism: Determinism) -> Result<Self, &'static str> {
-		let gas_rules = self.schedule.rules(&self.module, determinism);
+		let gas_rules = self.schedule.rules(determinism);
 		let backend = gas_metering::host_function::Injector::new("seal0", "gas");
 		let contract_module = gas_metering::inject(self.module, backend, &gas_rules)
 			.map_err(|_| "gas instrumentation failed")?;
@@ -366,7 +330,7 @@ fn get_memory_limits<T: Config>(
 			},
 		}
 	} else {
-		// If none memory imported then just crate an empty placeholder.
+		// If none memory imported then just create an empty placeholder.
 		// Any access to it will lead to out of bounds trap.
 		Ok((0, 0))
 	}
@@ -381,6 +345,7 @@ fn instrument<E, T>(
 	schedule: &Schedule<T>,
 	determinism: Determinism,
 	try_instantiate: TryInstantiate,
+	reason: InstrumentReason,
 ) -> Result<(Vec<u8>, (u32, u32)), (DispatchError, &'static str)>
 where
 	E: Environment<()>,
@@ -400,10 +365,9 @@ where
 		memory64: false,
 		extended_const: false,
 		component_model: false,
-		// This is not our only defense: We check for float types later in the preparation
-		// process. Additionally, all instructions explictily  need to have weights assigned
+		// This is not our only defense: All instructions explicitly need to have weights assigned
 		// or the deployment will fail. We have none assigned for float instructions.
-		deterministic_only: matches!(determinism, Determinism::Deterministic),
+		floats: matches!(determinism, Determinism::Relaxed),
 		mutable_global: false,
 		saturating_float_to_int: false,
 		sign_extension: false,
@@ -411,6 +375,7 @@ where
 		multi_value: false,
 		reference_types: false,
 		simd: false,
+		memory_control: false,
 	})
 	.validate_all(original_code)
 	.map_err(|err| {
@@ -427,10 +392,6 @@ where
 		contract_module.ensure_local_variable_limit(schedule.limits.locals)?;
 		contract_module.ensure_parameter_limit(schedule.limits.parameters)?;
 		contract_module.ensure_br_table_size_limit(schedule.limits.br_table_size)?;
-
-		if matches!(determinism, Determinism::Deterministic) {
-			contract_module.ensure_no_floating_types()?;
-		}
 
 		// We disallow importing `gas` function here since it is treated as implementation detail.
 		let disallowed_imports = [b"gas".as_ref()];
@@ -454,11 +415,20 @@ where
 		// We don't actually ever run any code so we can get away with a minimal stack which
 		// reduces the amount of memory that needs to be zeroed.
 		let stack_limits = StackLimits::new(1, 1, 0).expect("initial <= max; qed");
-		PrefabWasmModule::<T>::instantiate::<E, _>(&code, (), (initial, maximum), stack_limits)
-			.map_err(|err| {
-				log::debug!(target: "runtime::contracts", "{}", err);
-				(Error::<T>::CodeRejected.into(), "new code rejected after instrumentation")
-			})?;
+		PrefabWasmModule::<T>::instantiate::<E, _>(
+			&code,
+			(),
+			(initial, maximum),
+			stack_limits,
+			match reason {
+				InstrumentReason::New => AllowDeprecatedInterface::No,
+				InstrumentReason::Reinstrument => AllowDeprecatedInterface::Yes,
+			},
+		)
+		.map_err(|err| {
+			log::debug!(target: "runtime::contracts", "{}", err);
+			(Error::<T>::CodeRejected.into(), "new code rejected after instrumentation")
+		})?;
 	}
 
 	Ok((code, (initial, maximum)))
@@ -486,8 +456,13 @@ where
 	E: Environment<()>,
 	T: Config,
 {
-	let (code, (initial, maximum)) =
-		instrument::<E, T>(original_code.as_ref(), schedule, determinism, try_instantiate)?;
+	let (code, (initial, maximum)) = instrument::<E, T>(
+		original_code.as_ref(),
+		schedule,
+		determinism,
+		try_instantiate,
+		InstrumentReason::New,
+	)?;
 
 	let original_code_len = original_code.len();
 
@@ -532,21 +507,30 @@ where
 	E: Environment<()>,
 	T: Config,
 {
-	instrument::<E, T>(original_code, schedule, determinism, TryInstantiate::Skip)
-		.map_err(|(err, msg)| {
-			log::error!(target: "runtime::contracts", "CodeRejected during reinstrument: {}", msg);
-			err
-		})
-		.map(|(code, _)| code)
+	instrument::<E, T>(
+		original_code,
+		schedule,
+		determinism,
+		// This function was triggered by an interaction with an existing contract code
+		// that will try to instantiate anyways. Failing here would not help
+		// as the contract is already on chain.
+		TryInstantiate::Skip,
+		InstrumentReason::Reinstrument,
+	)
+	.map_err(|(err, msg)| {
+		log::error!(target: "runtime::contracts", "CodeRejected during reinstrument: {}", msg);
+		err
+	})
+	.map(|(code, _)| code)
 }
 
-/// Alternate (possibly unsafe) preparation functions used only for benchmarking.
+/// Alternate (possibly unsafe) preparation functions used only for benchmarking and testing.
 ///
 /// For benchmarking we need to construct special contracts that might not pass our
 /// sanity checks or need to skip instrumentation for correct results. We hide functions
-/// allowing this behind a feature that is only set during benchmarking to prevent usage
-/// in production code.
-#[cfg(feature = "runtime-benchmarks")]
+/// allowing this behind a feature that is only set during benchmarking or testing to
+/// prevent usage in production code.
+#[cfg(any(test, feature = "runtime-benchmarks"))]
 pub mod benchmarking {
 	use super::*;
 
@@ -574,7 +558,7 @@ pub mod benchmarking {
 				deposit: Default::default(),
 				refcount: 0,
 			}),
-			determinism: Determinism::Deterministic,
+			determinism: Determinism::Enforced,
 		})
 	}
 }
@@ -600,7 +584,7 @@ mod tests {
 	#[allow(unreachable_code)]
 	mod env {
 		use super::*;
-		use crate::wasm::runtime::TrapReason;
+		use crate::wasm::runtime::{AllowDeprecatedInterface, AllowUnstableInterface, TrapReason};
 
 		// Define test environment for tests. We need ImportSatisfyCheck
 		// implementation from it. So actual implementations doesn't matter.
@@ -648,7 +632,7 @@ mod tests {
 					wasm,
 					&schedule,
 					ALICE,
-					Determinism::Deterministic,
+					Determinism::Enforced,
 					TryInstantiate::Instantiate,
 				);
 				assert_matches::assert_matches!(r.map_err(|(_, msg)| msg), $($expected)*);
@@ -670,7 +654,7 @@ mod tests {
 			)
 			(func (export "deploy"))
 		)"#,
-		Err("gas instrumentation failed")
+		Err("validation of new code failed")
 	);
 
 	mod functions {
@@ -1180,7 +1164,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("use of floating point type in globals is forbidden")
+			Err("validation of new code failed")
 		);
 
 		prepare_test!(
@@ -1192,7 +1176,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("use of floating point type in locals is forbidden")
+			Err("validation of new code failed")
 		);
 
 		prepare_test!(
@@ -1204,7 +1188,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("use of floating point type in function types is forbidden")
+			Err("validation of new code failed")
 		);
 
 		prepare_test!(
@@ -1216,7 +1200,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("use of floating point type in function types is forbidden")
+			Err("validation of new code failed")
 		);
 	}
 }

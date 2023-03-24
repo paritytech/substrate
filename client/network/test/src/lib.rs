@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -20,6 +20,8 @@
 #[cfg(test)]
 mod block_import;
 #[cfg(test)]
+mod service;
+#[cfg(test)]
 mod sync;
 
 use std::{
@@ -31,7 +33,7 @@ use std::{
 	time::Duration,
 };
 
-use futures::{future::BoxFuture, prelude::*};
+use futures::{channel::oneshot, future::BoxFuture, pin_mut, prelude::*};
 use libp2p::{build_multiaddr, PeerId};
 use log::trace;
 use parking_lot::Mutex;
@@ -47,25 +49,30 @@ use sc_consensus::{
 	LongestChain, Verifier,
 };
 use sc_network::{
-	config::{NetworkConfiguration, RequestResponseConfig, Role, SyncMode},
-	Multiaddr, NetworkService, NetworkWorker,
+	config::{
+		MultiaddrWithPeerId, NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode,
+		ProtocolId, Role, SyncMode, TransportConfig,
+	},
+	request_responses::ProtocolConfig as RequestResponseConfig,
+	types::ProtocolName,
+	Multiaddr, NetworkBlock, NetworkEventStream, NetworkService, NetworkStateInfo,
+	NetworkSyncForkRequest, NetworkWorker,
 };
 use sc_network_common::{
-	config::{
-		MultiaddrWithPeerId, NonDefaultSetConfig, NonReservedPeerMode, ProtocolId, TransportConfig,
+	role::Roles,
+	sync::warp::{
+		AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncParams, WarpSyncProvider,
 	},
-	protocol::{role::Roles, ProtocolName},
-	service::{NetworkBlock, NetworkStateInfo, NetworkSyncForkRequest},
-	sync::warp::{AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncProvider},
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
-	block_request_handler::BlockRequestHandler, service::network::NetworkServiceProvider,
-	state_request_handler::StateRequestHandler, warp_request_handler, ChainSync,
+	block_request_handler::BlockRequestHandler,
+	service::{chain_sync::SyncingService, network::NetworkServiceProvider},
+	state_request_handler::StateRequestHandler,
+	warp_request_handler,
 };
 use sc_service::client::Client;
 use sp_blockchain::{
-	well_known_cache_keys::{self, Id as CacheKeyId},
 	Backend as BlockchainBackend, HeaderBackend, Info as BlockchainInfo, Result as ClientResult,
 };
 use sp_consensus::{
@@ -75,13 +82,13 @@ use sp_consensus::{
 use sp_core::H256;
 use sp_runtime::{
 	codec::{Decode, Encode},
-	generic::{BlockId, OpaqueDigestItemId},
+	generic::BlockId,
 	traits::{Block as BlockT, Header as HeaderT, NumberFor},
 	Justification, Justifications,
 };
 use substrate_test_runtime_client::AccountKeyring;
 pub use substrate_test_runtime_client::{
-	runtime::{Block, Extrinsic, Hash, Transfer},
+	runtime::{Block, Extrinsic, Hash, Header, Transfer},
 	TestClient, TestClientBuilder, TestClientBuilderExt,
 };
 use tokio::time::timeout;
@@ -110,20 +117,12 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 	async fn verify(
 		&mut self,
 		mut block: BlockImportParams<B, ()>,
-	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-		let maybe_keys = block
-			.header
-			.digest()
-			.log(|l| {
-				l.try_as_raw(OpaqueDigestItemId::Consensus(b"aura"))
-					.or_else(|| l.try_as_raw(OpaqueDigestItemId::Consensus(b"babe")))
-			})
-			.map(|blob| vec![(well_known_cache_keys::AUTHORITIES, blob.to_vec())]);
+	) -> Result<BlockImportParams<B, ()>, String> {
 		if block.fork_choice.is_none() {
 			block.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 		};
 		block.finalized = self.finalized;
-		Ok((block, maybe_keys))
+		Ok(block)
 	}
 }
 
@@ -222,9 +221,8 @@ impl BlockImport<Block> for PeersClient {
 	async fn import_block(
 		&mut self,
 		block: BlockImportParams<Block, ()>,
-		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		self.client.import_block(block.clear_storage_changes_and_mutate(), cache).await
+		self.client.import_block(block.clear_storage_changes_and_mutate()).await
 	}
 }
 
@@ -239,7 +237,8 @@ pub struct Peer<D, BlockImport> {
 	block_import: BlockImportAdapter<BlockImport>,
 	select_chain: Option<LongestChain<substrate_test_runtime_client::Backend, Block>>,
 	backend: Option<Arc<substrate_test_runtime_client::Backend>>,
-	network: NetworkWorker<Block, <Block as BlockT>::Hash, PeersFullClient>,
+	network: NetworkWorker<Block, <Block as BlockT>::Hash>,
+	sync_service: Arc<SyncingService<Block>>,
 	imported_blocks_stream: Pin<Box<dyn Stream<Item = BlockImportNotification<Block>> + Send>>,
 	finality_notification_stream: Pin<Box<dyn Stream<Item = FinalityNotification<Block>> + Send>>,
 	listen_addr: Multiaddr,
@@ -257,7 +256,7 @@ where
 
 	/// Returns true if we're major syncing.
 	pub fn is_major_syncing(&self) -> bool {
-		self.network.service().is_major_syncing()
+		self.sync_service.is_major_syncing()
 	}
 
 	// Returns a clone of the local SelectChain, only available on full nodes
@@ -273,23 +272,23 @@ where
 	}
 
 	/// Returns the number of downloaded blocks.
-	pub fn num_downloaded_blocks(&self) -> usize {
-		self.network.num_downloaded_blocks()
+	pub async fn num_downloaded_blocks(&self) -> usize {
+		self.sync_service.num_downloaded_blocks().await.unwrap()
 	}
 
 	/// Returns true if we have no peer.
 	pub fn is_offline(&self) -> bool {
-		self.num_peers() == 0
+		self.sync_service.is_offline()
 	}
 
 	/// Request a justification for the given block.
 	pub fn request_justification(&self, hash: &<Block as BlockT>::Hash, number: NumberFor<Block>) {
-		self.network.service().request_justification(hash, number);
+		self.sync_service.request_justification(hash, number);
 	}
 
 	/// Announces an important block on the network.
 	pub fn announce_block(&self, hash: <Block as BlockT>::Hash, data: Option<Vec<u8>>) {
-		self.network.service().announce_block(hash, data);
+		self.sync_service.announce_block(hash, data);
 	}
 
 	/// Request explicit fork sync.
@@ -299,7 +298,7 @@ where
 		hash: <Block as BlockT>::Hash,
 		number: NumberFor<Block>,
 	) {
-		self.network.service().set_sync_fork_request(peers, hash, number);
+		self.sync_service.set_sync_fork_request(peers, hash, number);
 	}
 
 	/// Add blocks to the peer -- edit the block before adding
@@ -375,8 +374,7 @@ where
 		let full_client = self.client.as_client();
 		let mut at = full_client.block_hash_from_id(&at).unwrap().unwrap();
 		for _ in 0..count {
-			let builder =
-				full_client.new_block_at(&BlockId::Hash(at), Default::default(), false).unwrap();
+			let builder = full_client.new_block_at(at, Default::default(), false).unwrap();
 			let block = edit_block(builder);
 			let hash = block.header.hash();
 			trace!(
@@ -390,25 +388,20 @@ where
 			let mut import_block = BlockImportParams::new(origin, header.clone());
 			import_block.body = if headers_only { None } else { Some(block.extrinsics) };
 			import_block.fork_choice = Some(fork_choice);
-			let (import_block, cache) =
+			let import_block =
 				futures::executor::block_on(self.verifier.verify(import_block)).unwrap();
-			let cache = if let Some(cache) = cache {
-				cache.into_iter().collect()
-			} else {
-				Default::default()
-			};
 
-			futures::executor::block_on(self.block_import.import_block(import_block, cache))
+			futures::executor::block_on(self.block_import.import_block(import_block))
 				.expect("block_import failed");
 			if announce_block {
-				self.network.service().announce_block(hash, None);
+				self.sync_service.announce_block(hash, None);
 			}
 			hashes.push(hash);
 			at = hash;
 		}
 
 		if inform_sync_about_new_best_block {
-			self.network.new_best_block_imported(
+			self.sync_service.new_best_block_imported(
 				at,
 				*full_client.header(at).ok().flatten().unwrap().number(),
 			);
@@ -524,8 +517,12 @@ where
 		self.network.service()
 	}
 
+	pub fn sync_service(&self) -> &Arc<SyncingService<Block>> {
+		&self.sync_service
+	}
+
 	/// Get a reference to the network worker.
-	pub fn network(&self) -> &NetworkWorker<Block, <Block as BlockT>::Hash, PeersFullClient> {
+	pub fn network(&self) -> &NetworkWorker<Block, <Block as BlockT>::Hash> {
 		&self.network
 	}
 
@@ -627,9 +624,8 @@ where
 	async fn import_block(
 		&mut self,
 		block: BlockImportParams<Block, Self::Transaction>,
-		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		self.inner.import_block(block.clear_storage_changes_and_mutate(), cache).await
+		self.inner.import_block(block.clear_storage_changes_and_mutate()).await
 	}
 }
 
@@ -644,7 +640,7 @@ impl<B: BlockT> Verifier<B> for VerifierAdapter<B> {
 	async fn verify(
 		&mut self,
 		block: BlockImportParams<B, ()>,
-	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> Result<BlockImportParams<B, ()>, String> {
 		let hash = block.header.hash();
 		self.verifier.lock().await.verify(block).await.map_err(|e| {
 			self.failed_verifications.lock().insert(hash, e.clone());
@@ -722,16 +718,18 @@ pub struct FullPeerConfig {
 	pub extra_storage: Option<sp_core::storage::Storage>,
 	/// Enable transaction indexing.
 	pub storage_chain: bool,
+	/// Optional target block header to sync to
+	pub target_block: Option<<Block as BlockT>::Header>,
 }
 
 #[async_trait::async_trait]
-pub trait TestNetFactory: Default + Sized
+pub trait TestNetFactory: Default + Sized + Send
 where
 	<Self::BlockImport as BlockImport<Block>>::Transaction: Send,
 {
 	type Verifier: 'static + Verifier<Block>;
 	type BlockImport: BlockImport<Block, Error = ConsensusError> + Clone + Send + Sync + 'static;
-	type PeerData: Default;
+	type PeerData: Default + Send;
 
 	/// This one needs to be implemented!
 	fn make_verifier(&self, client: PeersClient, peer_data: &Self::PeerData) -> Self::Verifier;
@@ -739,6 +737,7 @@ where
 	/// Get reference to peer.
 	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData, Self::BlockImport>;
 	fn peers(&self) -> &Vec<Peer<Self::PeerData, Self::BlockImport>>;
+	fn peers_mut(&mut self) -> &mut Vec<Peer<Self::PeerData, Self::BlockImport>>;
 	fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData, Self::BlockImport>>)>(
 		&mut self,
 		closure: F,
@@ -867,6 +866,15 @@ where
 
 		let warp_sync = Arc::new(TestWarpSyncProvider(client.clone()));
 
+		let warp_sync_params = match config.target_block {
+			Some(target_block) => {
+				let (sender, receiver) = oneshot::channel::<<Block as BlockT>::Header>();
+				let _ = sender.send(target_block);
+				WarpSyncParams::WaitForTarget(receiver)
+			},
+			_ => WarpSyncParams::WithProvider(warp_sync.clone()),
+		};
+
 		let warp_protocol_config = {
 			let (handler, protocol_config) = warp_request_handler::RequestHandler::new(
 				protocol_id.clone(),
@@ -887,31 +895,26 @@ where
 			.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator));
 		let (chain_sync_network_provider, chain_sync_network_handle) =
 			NetworkServiceProvider::new();
-		let (chain_sync, chain_sync_service, block_announce_config) = ChainSync::new(
-			match network_config.sync_mode {
-				SyncMode::Full => sc_network_common::sync::SyncMode::Full,
-				SyncMode::Fast { skip_proofs, storage_chain_mode } =>
-					sc_network_common::sync::SyncMode::LightState {
-						skip_proofs,
-						storage_chain_mode,
-					},
-				SyncMode::Warp => sc_network_common::sync::SyncMode::Warp,
-			},
-			client.clone(),
-			protocol_id.clone(),
-			&fork_id,
-			Roles::from(if config.is_authority { &Role::Authority } else { &Role::Full }),
-			block_announce_validator,
-			network_config.max_parallel_downloads,
-			Some(warp_sync),
-			None,
-			chain_sync_network_handle,
-			import_queue.service(),
-			block_request_protocol_config.name.clone(),
-			state_request_protocol_config.name.clone(),
-			Some(warp_protocol_config.name.clone()),
-		)
-		.unwrap();
+
+		let (engine, sync_service, block_announce_config) =
+			sc_network_sync::engine::SyncingEngine::new(
+				Roles::from(if config.is_authority { &Role::Authority } else { &Role::Full }),
+				client.clone(),
+				None,
+				&network_config,
+				protocol_id.clone(),
+				&fork_id,
+				block_announce_validator,
+				Some(warp_sync_params),
+				chain_sync_network_handle,
+				import_queue.service(),
+				block_request_protocol_config.name.clone(),
+				state_request_protocol_config.name.clone(),
+				Some(warp_protocol_config.name.clone()),
+			)
+			.unwrap();
+		let sync_service_import_queue = Box::new(sync_service.clone());
+		let sync_service = Arc::new(sync_service.clone());
 
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: if config.is_authority { Role::Authority } else { Role::Full },
@@ -922,8 +925,6 @@ where
 			chain: client.clone(),
 			protocol_id,
 			fork_id,
-			chain_sync: Box::new(chain_sync),
-			chain_sync_service: Box::new(chain_sync_service.clone()),
 			metrics_registry: None,
 			block_announce_config,
 			request_response_protocol_configs: [
@@ -942,8 +943,14 @@ where
 		tokio::spawn(async move {
 			chain_sync_network_provider.run(service).await;
 		});
+
 		tokio::spawn(async move {
-			import_queue.run(Box::new(chain_sync_service)).await;
+			import_queue.run(sync_service_import_queue).await;
+		});
+
+		let service = network.service().clone();
+		tokio::spawn(async move {
+			engine.run(service.event_stream("syncing")).await;
 		});
 
 		self.mut_peers(move |peers| {
@@ -966,6 +973,7 @@ where
 				block_import,
 				verifier,
 				network,
+				sync_service,
 				listen_addr,
 			});
 		});
@@ -974,48 +982,6 @@ where
 	/// Used to spawn background tasks, e.g. the block request protocol handler.
 	fn spawn_task(&self, f: BoxFuture<'static, ()>) {
 		tokio::spawn(f);
-	}
-
-	/// Polls the testnet until all nodes are in sync.
-	///
-	/// Must be executed in a task context.
-	fn poll_until_sync(&mut self, cx: &mut FutureContext) -> Poll<()> {
-		self.poll(cx);
-
-		// Return `NotReady` if there's a mismatch in the highest block number.
-		let mut highest = None;
-		for peer in self.peers().iter() {
-			if peer.is_major_syncing() || peer.network.num_queued_blocks() != 0 {
-				return Poll::Pending
-			}
-			if peer.network.num_sync_requests() != 0 {
-				return Poll::Pending
-			}
-			match (highest, peer.client.info().best_hash) {
-				(None, b) => highest = Some(b),
-				(Some(ref a), ref b) if a == b => {},
-				(Some(_), _) => return Poll::Pending,
-			}
-		}
-		Poll::Ready(())
-	}
-
-	/// Polls the testnet until theres' no activiy of any kind.
-	///
-	/// Must be executed in a task context.
-	fn poll_until_idle(&mut self, cx: &mut FutureContext) -> Poll<()> {
-		self.poll(cx);
-
-		for peer in self.peers().iter() {
-			if peer.is_major_syncing() || peer.network.num_queued_blocks() != 0 {
-				return Poll::Pending
-			}
-			if peer.network.num_sync_requests() != 0 {
-				return Poll::Pending
-			}
-		}
-
-		Poll::Ready(())
 	}
 
 	/// Polls the testnet until all peers are connected to each other.
@@ -1032,15 +998,61 @@ where
 		Poll::Pending
 	}
 
-	/// Run the network until we are sync'ed.
+	async fn is_in_sync(&mut self) -> bool {
+		let mut highest = None;
+		let peers = self.peers_mut();
+
+		for peer in peers {
+			if peer.sync_service.is_major_syncing() ||
+				peer.sync_service.num_queued_blocks().await.unwrap() != 0
+			{
+				return false
+			}
+			if peer.sync_service.num_sync_requests().await.unwrap() != 0 {
+				return false
+			}
+			match (highest, peer.client.info().best_hash) {
+				(None, b) => highest = Some(b),
+				(Some(ref a), ref b) if a == b => {},
+				(Some(_), _) => return false,
+			}
+		}
+
+		true
+	}
+
+	async fn is_idle(&mut self) -> bool {
+		let peers = self.peers_mut();
+		for peer in peers {
+			if peer.sync_service.num_queued_blocks().await.unwrap() != 0 {
+				return false
+			}
+			if peer.sync_service.num_sync_requests().await.unwrap() != 0 {
+				return false
+			}
+		}
+
+		true
+	}
+
+	/// Blocks the current thread until we are sync'ed.
+	/// Wait until we are sync'ed.
 	///
-	/// Calls `poll_until_sync` repeatedly.
 	/// (If we've not synced within 10 mins then panic rather than hang.)
 	async fn run_until_sync(&mut self) {
-		timeout(
-			Duration::from_secs(10 * 60),
-			futures::future::poll_fn::<(), _>(|cx| self.poll_until_sync(cx)),
-		)
+		timeout(Duration::from_secs(10 * 60), async {
+			loop {
+				futures::future::poll_fn::<(), _>(|cx| {
+					self.poll(cx);
+					Poll::Ready(())
+				})
+				.await;
+
+				if self.is_in_sync().await {
+					break
+				}
+			}
+		})
 		.await
 		.expect("sync didn't happen within 10 mins");
 	}
@@ -1049,7 +1061,17 @@ where
 	///
 	/// Calls `poll_until_idle` repeatedly with the runtime passed as parameter.
 	async fn run_until_idle(&mut self) {
-		futures::future::poll_fn::<(), _>(|cx| self.poll_until_idle(cx)).await;
+		loop {
+			futures::future::poll_fn::<(), _>(|cx| {
+				self.poll(cx);
+				Poll::Ready(())
+			})
+			.await;
+
+			if self.is_idle().await {
+				break
+			}
+		}
 	}
 
 	/// Run the network until all peers are connected to each other.
@@ -1064,8 +1086,17 @@ where
 		self.mut_peers(|peers| {
 			for (i, peer) in peers.iter_mut().enumerate() {
 				trace!(target: "sync", "-- Polling {}: {}", i, peer.id());
-				if let Poll::Ready(()) = peer.network.poll_unpin(cx) {
-					panic!("NetworkWorker has terminated unexpectedly.")
+				loop {
+					// The code below is not quite correct, because we are polling a different
+					// instance of the future every time. But as long as
+					// `NetworkWorker::next_action()` contains just streams polling not interleaved
+					// with other `.await`s, dropping the future and recreating it works the same as
+					// polling a single instance.
+					let net_poll_future = peer.network.next_action();
+					pin_mut!(net_poll_future);
+					if let Poll::Pending = net_poll_future.poll(cx) {
+						break
+					}
 				}
 				trace!(target: "sync", "-- Polling complete {}: {}", i, peer.id());
 
@@ -1073,14 +1104,14 @@ where
 				while let Poll::Ready(Some(notification)) =
 					peer.imported_blocks_stream.as_mut().poll_next(cx)
 				{
-					peer.network.service().announce_block(notification.hash, None);
+					peer.sync_service.announce_block(notification.hash, None);
 				}
 
 				// We poll `finality_notification_stream`.
 				while let Poll::Ready(Some(notification)) =
 					peer.finality_notification_stream.as_mut().poll_next(cx)
 				{
-					peer.network.on_block_finalized(notification.hash, notification.header);
+					peer.sync_service.on_block_finalized(notification.hash, notification.header);
 				}
 			}
 		});
@@ -1118,6 +1149,10 @@ impl TestNetFactory for TestNet {
 
 	fn peers(&self) -> &Vec<Peer<(), Self::BlockImport>> {
 		&self.peers
+	}
+
+	fn peers_mut(&mut self) -> &mut Vec<Peer<(), Self::BlockImport>> {
+		&mut self.peers
 	}
 
 	fn mut_peers<F: FnOnce(&mut Vec<Peer<(), Self::BlockImport>>)>(&mut self, closure: F) {
@@ -1165,6 +1200,10 @@ impl TestNetFactory for JustificationTestNet {
 
 	fn peers(&self) -> &Vec<Peer<Self::PeerData, Self::BlockImport>> {
 		self.0.peers()
+	}
+
+	fn peers_mut(&mut self) -> &mut Vec<Peer<Self::PeerData, Self::BlockImport>> {
+		self.0.peers_mut()
 	}
 
 	fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData, Self::BlockImport>>)>(

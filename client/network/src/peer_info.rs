@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -15,6 +15,8 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+use crate::utils::interval;
 
 use fnv::FnvHashMap;
 use futures::prelude::*;
@@ -36,8 +38,8 @@ use libp2p::{
 	Multiaddr,
 };
 use log::{debug, error, trace};
-use sc_network_common::utils::interval;
 use smallvec::SmallVec;
+
 use std::{
 	collections::hash_map::Entry,
 	pin::Pin,
@@ -89,7 +91,9 @@ impl PeerInfoBehaviour {
 	pub fn new(user_agent: String, local_public_key: PublicKey) -> Self {
 		let identify = {
 			let cfg = IdentifyConfig::new("/substrate/1.0".to_string(), local_public_key)
-				.with_agent_version(user_agent);
+				.with_agent_version(user_agent)
+				// We don't need any peer information cached.
+				.with_cache_size(0);
 			Identify::new(cfg)
 		};
 
@@ -182,10 +186,10 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 		IntoConnectionHandler::select(self.ping.new_handler(), self.identify.new_handler())
 	}
 
-	fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
-		let mut list = self.ping.addresses_of_peer(peer_id);
-		list.extend_from_slice(&self.identify.addresses_of_peer(peer_id));
-		list
+	fn addresses_of_peer(&mut self, _: &PeerId) -> Vec<Multiaddr> {
+		// Only `Discovery::addresses_of_peer` must be returning addresses to ensure that we
+		// don't return unwanted addresses.
+		Vec::new()
 	}
 
 	fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {

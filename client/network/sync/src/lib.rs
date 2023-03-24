@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -28,25 +28,13 @@
 //! the network, or whenever a block has been successfully verified, call the appropriate method in
 //! order to update it.
 
-pub mod block_request_handler;
-pub mod blocks;
-pub mod mock;
-mod schema;
-pub mod service;
-pub mod state;
-pub mod state_request_handler;
-#[cfg(test)]
-mod tests;
-pub mod warp;
-pub mod warp_request_handler;
-
 use crate::{
 	blocks::BlockCollection,
 	schema::v1::{StateRequest, StateResponse},
-	service::chain_sync::{ChainSyncInterfaceHandle, ToServiceCommand},
 	state::StateSync,
 	warp::{WarpProofImportResult, WarpSync},
 };
+
 use codec::{Decode, DecodeAll, Encode};
 use extra_requests::ExtraRequests;
 use futures::{
@@ -54,31 +42,34 @@ use futures::{
 };
 use libp2p::{request_response::OutboundFailure, PeerId};
 use log::{debug, error, info, trace, warn};
-use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use prost::Message;
+
+use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{
 	import_queue::ImportQueueService, BlockImportError, BlockImportStatus, IncomingBlock,
 };
-use sc_network_common::{
+use sc_network::{
 	config::{
 		NonDefaultSetConfig, NonReservedPeerMode, NotificationHandshake, ProtocolId, SetConfig,
 	},
-	protocol::{role::Roles, ProtocolName},
 	request_responses::{IfDisconnected, RequestFailure},
+	types::ProtocolName,
+};
+use sc_network_common::{
+	role::Roles,
 	sync::{
 		message::{
 			BlockAnnounce, BlockAnnouncesHandshake, BlockAttributes, BlockData, BlockRequest,
 			BlockResponse, Direction, FromBlock,
 		},
-		warp::{EncodedProof, WarpProofRequest, WarpSyncPhase, WarpSyncProgress, WarpSyncProvider},
+		warp::{EncodedProof, WarpProofRequest, WarpSyncParams, WarpSyncPhase, WarpSyncProgress},
 		BadPeer, ChainSync as ChainSyncT, ImportResult, Metrics, OnBlockData, OnBlockJustification,
 		OnStateData, OpaqueBlockRequest, OpaqueBlockResponse, OpaqueStateRequest,
 		OpaqueStateResponse, PeerInfo, PeerRequest, PollBlockAnnounceValidation, SyncMode,
 		SyncState, SyncStatus,
 	},
 };
-use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sp_arithmetic::traits::Saturating;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata};
 use sp_consensus::{
@@ -92,6 +83,7 @@ use sp_runtime::{
 	},
 	EncodedJustification, Justifications,
 };
+
 use std::{
 	collections::{hash_map::Entry, HashMap, HashSet},
 	iter,
@@ -99,9 +91,21 @@ use std::{
 	pin::Pin,
 	sync::Arc,
 };
-use warp::TargetBlockImportResult;
+
+pub use service::chain_sync::SyncingService;
 
 mod extra_requests;
+mod schema;
+
+pub mod block_request_handler;
+pub mod blocks;
+pub mod engine;
+pub mod mock;
+pub mod service;
+pub mod state;
+pub mod state_request_handler;
+pub mod warp;
+pub mod warp_request_handler;
 
 /// Maximum blocks to request in a single packet.
 const MAX_BLOCKS_TO_REQUEST: usize = 64;
@@ -318,15 +322,15 @@ pub struct ChainSync<B: BlockT, Client> {
 	state_sync: Option<StateSync<B, Client>>,
 	/// Warp sync in progress, if any.
 	warp_sync: Option<WarpSync<B, Client>>,
-	/// Warp sync provider.
-	warp_sync_provider: Option<Arc<dyn WarpSyncProvider<B>>>,
+	/// Warp sync params.
+	///
+	/// Will be `None` after `self.warp_sync` is `Some(_)`.
+	warp_sync_params: Option<WarpSyncParams<B>>,
 	/// Enable importing existing blocks. This is used used after the state download to
 	/// catch up to the latest state while re-importing blocks.
 	import_existing: bool,
 	/// Gap download process.
 	gap_sync: Option<GapSync<B>>,
-	/// Channel for receiving service commands
-	service_rx: TracingUnboundedReceiver<ToServiceCommand<B>>,
 	/// Handle for communicating with `NetworkService`
 	network_service: service::network::NetworkServiceHandle,
 	/// Protocol name used for block announcements
@@ -565,6 +569,7 @@ where
 					info!("💔 New peer with unknown genesis hash {} ({}).", best_hash, best_number);
 					return Err(BadPeer(who, rep::GENESIS_MISMATCH))
 				}
+
 				// If there are more than `MAJOR_SYNC_BLOCKS` in the import queue then we have
 				// enough to do in the import queue that it's not worth kicking off
 				// an ancestor search, which is what we do in the next match case below.
@@ -630,17 +635,15 @@ where
 					},
 				);
 
-				if let SyncMode::Warp = &self.mode {
+				if let SyncMode::Warp = self.mode {
 					if self.peers.len() >= MIN_PEERS_TO_START_WARP_SYNC && self.warp_sync.is_none()
 					{
 						log::debug!(target: "sync", "Starting warp state sync.");
-						if let Some(provider) = &self.warp_sync_provider {
-							self.warp_sync =
-								Some(WarpSync::new(self.client.clone(), provider.clone()));
+						if let Some(params) = self.warp_sync_params.take() {
+							self.warp_sync = Some(WarpSync::new(self.client.clone(), params));
 						}
 					}
 				}
-
 				Ok(req)
 			},
 			Ok(BlockStatus::Queued) |
@@ -930,9 +933,9 @@ where
 								match warp_sync.import_target_block(
 									blocks.pop().expect("`blocks` len checked above."),
 								) {
-									TargetBlockImportResult::Success =>
+									warp::TargetBlockImportResult::Success =>
 										return Ok(OnBlockData::Continue),
-									TargetBlockImportResult::BadResponse =>
+									warp::TargetBlockImportResult::BadResponse =>
 										return Err(BadPeer(*who, rep::VERIFICATION_FAIL)),
 								}
 							} else if blocks.is_empty() {
@@ -1014,7 +1017,7 @@ where
 		let peer = if let Some(peer) = self.peers.get_mut(&who) {
 			peer
 		} else {
-			error!(target: "sync", "💔 Called on_block_justification with a bad peer ID");
+			error!(target: "sync", "💔 Called on_block_justification with a peer ID of an unknown peer");
 			return Ok(OnBlockJustification::Nothing)
 		};
 
@@ -1325,40 +1328,12 @@ where
 		&mut self,
 		cx: &mut std::task::Context,
 	) -> Poll<PollBlockAnnounceValidation<B::Header>> {
-		while let Poll::Ready(Some(event)) = self.service_rx.poll_next_unpin(cx) {
-			match event {
-				ToServiceCommand::SetSyncForkRequest(peers, hash, number) => {
-					self.set_sync_fork_request(peers, &hash, number);
-				},
-				ToServiceCommand::RequestJustification(hash, number) =>
-					self.request_justification(&hash, number),
-				ToServiceCommand::ClearJustificationRequests => self.clear_justification_requests(),
-				ToServiceCommand::BlocksProcessed(imported, count, results) => {
-					for result in self.on_blocks_processed(imported, count, results) {
-						match result {
-							Ok((id, req)) => self.send_block_request(id, req),
-							Err(BadPeer(id, repu)) => {
-								self.network_service
-									.disconnect_peer(id, self.block_announce_protocol_name.clone());
-								self.network_service.report_peer(id, repu)
-							},
-						}
-					}
-				},
-				ToServiceCommand::JustificationImported(peer, hash, number, success) => {
-					self.on_justification_import(hash, number, success);
-					if !success {
-						info!(target: "sync", "💔 Invalid justification provided by {} for #{}", peer, hash);
-						self.network_service
-							.disconnect_peer(peer, self.block_announce_protocol_name.clone());
-						self.network_service.report_peer(
-							peer,
-							sc_peerset::ReputationChange::new_fatal("Invalid justification"),
-						);
-					}
-				},
-			}
+		// Should be called before `process_outbound_requests` to ensure
+		// that a potential target block is directly leading to requests.
+		if let Some(warp_sync) = &mut self.warp_sync {
+			let _ = warp_sync.poll(cx);
 		}
+
 		self.process_outbound_requests();
 
 		while let Poll::Ready(result) = self.poll_pending_responses(cx) {
@@ -1427,15 +1402,14 @@ where
 		roles: Roles,
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 		max_parallel_downloads: u32,
-		warp_sync_provider: Option<Arc<dyn WarpSyncProvider<B>>>,
+		warp_sync_params: Option<WarpSyncParams<B>>,
 		metrics_registry: Option<&Registry>,
 		network_service: service::network::NetworkServiceHandle,
 		import_queue: Box<dyn ImportQueueService<B>>,
 		block_request_protocol_name: ProtocolName,
 		state_request_protocol_name: ProtocolName,
 		warp_sync_protocol_name: Option<ProtocolName>,
-	) -> Result<(Self, ChainSyncInterfaceHandle<B>, NonDefaultSetConfig), ClientError> {
-		let (tx, service_rx) = tracing_unbounded("mpsc_chain_sync", 100_000);
+	) -> Result<(Self, NonDefaultSetConfig), ClientError> {
 		let block_announce_config = Self::get_block_announce_proto_config(
 			protocol_id,
 			fork_id,
@@ -1467,13 +1441,12 @@ where
 			block_announce_validation_per_peer_stats: Default::default(),
 			state_sync: None,
 			warp_sync: None,
-			warp_sync_provider,
 			import_existing: false,
 			gap_sync: None,
-			service_rx,
 			network_service,
 			block_request_protocol_name,
 			state_request_protocol_name,
+			warp_sync_params,
 			warp_sync_protocol_name,
 			block_announce_protocol_name: block_announce_config
 				.notifications_protocol
@@ -1495,7 +1468,7 @@ where
 		};
 
 		sync.reset_sync_start_point()?;
-		Ok((sync, ChainSyncInterfaceHandle::new(tx), block_announce_config))
+		Ok((sync, block_announce_config))
 	}
 
 	/// Returns the median seen block number.
@@ -3193,12 +3166,11 @@ mod test {
 	use futures::{executor::block_on, future::poll_fn};
 	use sc_block_builder::BlockBuilderProvider;
 	use sc_network_common::{
-		protocol::role::Role,
+		role::Role,
 		sync::message::{BlockData, BlockState, FromBlock},
 	};
 	use sp_blockchain::HeaderBackend;
 	use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
-	use sp_runtime::generic::BlockId;
 	use substrate_test_runtime_client::{
 		runtime::{Block, Hash, Header},
 		BlockBuilderExt, ClientBlockImportExt, ClientExt, DefaultTestClientBuilderExt, TestClient,
@@ -3218,7 +3190,7 @@ mod test {
 		let import_queue = Box::new(sc_consensus::import_queue::mock::MockImportQueueHandle::new());
 		let (_chain_sync_network_provider, chain_sync_network_handle) =
 			NetworkServiceProvider::new();
-		let (mut sync, _, _) = ChainSync::new(
+		let (mut sync, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -3284,7 +3256,7 @@ mod test {
 		let (_chain_sync_network_provider, chain_sync_network_handle) =
 			NetworkServiceProvider::new();
 
-		let (mut sync, _, _) = ChainSync::new(
+		let (mut sync, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -3435,8 +3407,7 @@ mod test {
 	fn build_block(client: &mut Arc<TestClient>, at: Option<Hash>, fork: bool) -> Block {
 		let at = at.unwrap_or_else(|| client.info().best_hash);
 
-		let mut block_builder =
-			client.new_block_at(&BlockId::Hash(at), Default::default(), false).unwrap();
+		let mut block_builder = client.new_block_at(at, Default::default(), false).unwrap();
 
 		if fork {
 			block_builder.push_storage_change(vec![1, 2, 3], Some(vec![4, 5, 6])).unwrap();
@@ -3466,7 +3437,7 @@ mod test {
 		let (_chain_sync_network_provider, chain_sync_network_handle) =
 			NetworkServiceProvider::new();
 
-		let (mut sync, _, _) = ChainSync::new(
+		let (mut sync, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -3489,8 +3460,7 @@ mod test {
 
 		let mut client2 = client.clone();
 		let mut build_block_at = |at, import| {
-			let mut block_builder =
-				client2.new_block_at(&BlockId::Hash(at), Default::default(), false).unwrap();
+			let mut block_builder = client2.new_block_at(at, Default::default(), false).unwrap();
 			// Make sure we generate a different block as fork
 			block_builder.push_storage_change(vec![1, 2, 3], Some(vec![4, 5, 6])).unwrap();
 
@@ -3593,7 +3563,7 @@ mod test {
 			NetworkServiceProvider::new();
 		let info = client.info();
 
-		let (mut sync, _, _) = ChainSync::new(
+		let (mut sync, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -3749,7 +3719,7 @@ mod test {
 
 		let info = client.info();
 
-		let (mut sync, _, _) = ChainSync::new(
+		let (mut sync, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -3890,7 +3860,7 @@ mod test {
 
 		let info = client.info();
 
-		let (mut sync, _, _) = ChainSync::new(
+		let (mut sync, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -4031,7 +4001,7 @@ mod test {
 		let mut client = Arc::new(TestClientBuilder::new().build());
 		let blocks = (0..3).map(|_| build_block(&mut client, None, false)).collect::<Vec<_>>();
 
-		let (mut sync, _, _) = ChainSync::new(
+		let (mut sync, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -4076,7 +4046,7 @@ mod test {
 
 		let empty_client = Arc::new(TestClientBuilder::new().build());
 
-		let (mut sync, _, _) = ChainSync::new(
+		let (mut sync, _) = ChainSync::new(
 			SyncMode::Full,
 			empty_client.clone(),
 			ProtocolId::from("test-protocol-name"),

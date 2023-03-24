@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,8 +20,8 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_benchmarking::{
-	account, benchmarks_instance_pallet, whitelist_account, whitelisted_caller,
+use frame_benchmarking::v1::{
+	account, benchmarks_instance_pallet, whitelist_account, whitelisted_caller, BenchmarkError,
 };
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
@@ -105,14 +105,18 @@ fn add_sufficients<T: Config<I>, I: 'static>(minter: T::AccountId, n: u32) {
 
 fn add_approvals<T: Config<I>, I: 'static>(minter: T::AccountId, n: u32) {
 	let asset_id = default_asset_id::<T, I>();
-	T::Currency::deposit_creating(&minter, T::ApprovalDeposit::get() * n.into());
+	T::Currency::deposit_creating(
+		&minter,
+		T::ApprovalDeposit::get() * n.into() + T::Currency::minimum_balance(),
+	);
 	let minter_lookup = T::Lookup::unlookup(minter.clone());
 	let origin = SystemOrigin::Signed(minter);
 	Assets::<T, I>::mint(origin.clone().into(), asset_id, minter_lookup, (100 * (n + 1)).into())
 		.unwrap();
+	let enough = T::Currency::minimum_balance();
 	for i in 0..n {
 		let target = account("approval", i, SEED);
-		T::Currency::make_free_balance_be(&target, T::Currency::minimum_balance());
+		T::Currency::make_free_balance_be(&target, enough);
 		let target_lookup = T::Lookup::unlookup(target);
 		Assets::<T, I>::approve_transfer(
 			origin.clone().into(),
@@ -135,7 +139,8 @@ fn assert_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Runti
 benchmarks_instance_pallet! {
 	create {
 		let asset_id = default_asset_id::<T, I>();
-		let origin = T::CreateOrigin::successful_origin(&asset_id.into());
+		let origin = T::CreateOrigin::try_successful_origin(&asset_id.into())
+			.map_err(|_| BenchmarkError::Weightless)?;
 		let caller = T::CreateOrigin::ensure_origin(origin, &asset_id.into()).unwrap();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
@@ -220,7 +225,7 @@ benchmarks_instance_pallet! {
 		let amount = T::Balance::from(100u32);
 	}: _(SystemOrigin::Signed(caller.clone()), asset_id, caller_lookup, amount)
 	verify {
-		assert_last_event::<T, I>(Event::Issued { asset_id: asset_id.into(), owner: caller, total_supply: amount }.into());
+		assert_last_event::<T, I>(Event::Issued { asset_id: asset_id.into(), owner: caller, amount }.into());
 	}
 
 	burn {
@@ -362,7 +367,8 @@ benchmarks_instance_pallet! {
 
 		let (asset_id, _, _) = create_default_asset::<T, I>(true);
 
-		let origin = T::ForceOrigin::successful_origin();
+		let origin =
+			T::ForceOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		let call = Call::<T, I>::force_set_metadata {
 			id: asset_id,
 			name: name.clone(),
@@ -382,7 +388,8 @@ benchmarks_instance_pallet! {
 		let origin = SystemOrigin::Signed(caller).into();
 		Assets::<T, I>::set_metadata(origin, asset_id, dummy.clone(), dummy, 12)?;
 
-		let origin = T::ForceOrigin::successful_origin();
+		let origin =
+			T::ForceOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		let call = Call::<T, I>::force_clear_metadata { id: asset_id };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
@@ -392,7 +399,8 @@ benchmarks_instance_pallet! {
 	force_asset_status {
 		let (asset_id, caller, caller_lookup) = create_default_asset::<T, I>(true);
 
-		let origin = T::ForceOrigin::successful_origin();
+		let origin =
+			T::ForceOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		let call = Call::<T, I>::force_asset_status {
 			id: asset_id,
 			owner: caller_lookup.clone(),
@@ -465,6 +473,13 @@ benchmarks_instance_pallet! {
 	}: _(SystemOrigin::Signed(caller.clone()), asset_id, caller_lookup, delegate_lookup)
 	verify {
 		assert_last_event::<T, I>(Event::ApprovalCancelled { asset_id: asset_id.into(), owner: caller, delegate }.into());
+	}
+
+	set_min_balance {
+		let (asset_id, caller, caller_lookup) = create_default_asset::<T, I>(false);
+	}: _(SystemOrigin::Signed(caller.clone()), asset_id, 50u32.into())
+	verify {
+		assert_last_event::<T, I>(Event::AssetMinBalanceChanged { asset_id: asset_id.into(), new_min_balance: 50u32.into() }.into());
 	}
 
 	impl_benchmark_test_suite!(Assets, crate::mock::new_test_ext(), crate::mock::Test)
