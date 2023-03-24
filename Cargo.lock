@@ -5892,8 +5892,6 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log",
- "pallet-ranked-collective",
- "pallet-salary",
  "parity-scale-codec",
  "scale-info",
  "sp-arithmetic",
@@ -9325,6 +9323,7 @@ dependencies = [
  "sc-chain-spec",
  "sc-client-api",
  "sc-transaction-pool-api",
+ "sc-utils",
  "serde",
  "serde_json",
  "sp-api",
@@ -12046,7 +12045,7 @@ checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
  "digest 0.10.6",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
