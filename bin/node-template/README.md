@@ -153,8 +153,10 @@ Instead of installing dependencies and building this source directly, consider t
 
 ### Nix
 
-Install [nix](https://nixos.org/), and optionally [direnv](https://github.com/direnv/direnv) and [lorri](https://github.com/nix-community/lorri) for a fully plug-and-play experience for setting up the development environment.
-To get all the correct dependencies, activate direnv `direnv allow` and lorri `lorri shell`.
+Install [nix](https://nixos.org/) and
+[nix-direnv](https://github.com/nix-community/nix-direnv) for a fully plug-and-play
+experience for setting up the development environment.
+To get all the correct dependencies, activate direnv `direnv allow`.
 
 ### Docker
 
