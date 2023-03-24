@@ -133,10 +133,10 @@
 //! given the right flag:
 //!
 //! ```ignore
-//! #[cfg(feature = try-runtime)]
+//! #[cfg(feature = "try-runtime")]
 //! fn pre_upgrade() -> Result<Vec<u8>, &'static str> {}
 //!
-//! #[cfg(feature = try-runtime)]
+//! #[cfg(feature = "try-runtime")]
 //! fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {}
 //! ```
 //!
@@ -151,9 +151,9 @@
 //!
 //! Similarly, each pallet can expose a function in `#[pallet::hooks]` section as follows:
 //!
-//! ```
-//! #[cfg(feature = try-runtime)]
-//! fn try_state(_) -> Result<(), &'static str> {}
+//! ```ignore
+//! #[cfg(feature = "try-runtime")]
+//! fn try_state(_: BlockNumber) -> Result<(), &'static str> {}
 //! ```
 //!
 //! which is called on numerous code paths in the try-runtime tool. These checks should ensure that
