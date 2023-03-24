@@ -1109,5 +1109,10 @@ fn validate_pool_id_sorting() {
 		assert_eq!(Dex::get_pool_id(Asset(2), Native), (Native, Asset(2)));
 		assert_eq!(Dex::get_pool_id(Native, Native), (Native, Native));
 		assert_eq!(Dex::get_pool_id(Asset(2), Asset(1)), (Asset(1), Asset(2)));
+		assert!(Asset(2) > Asset(1));
+		assert!(Asset(1) <= Asset(1));
+		assert_eq!(Asset(1), Asset(1));
+		assert_eq!(Native::<u32>, Native::<u32>);
+		assert!(Native < Asset(1));
 	});
 }
