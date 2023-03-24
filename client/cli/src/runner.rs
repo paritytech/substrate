@@ -154,7 +154,8 @@ impl<C: SubstrateCli> Runner<C> {
 	{
 		let (future, task_manager) = runner(self.config)?;
 		self.tokio_runtime.block_on(self.signals.run_until_signal(future.fuse()))?;
-		// Drop the task manager before dropping the rest, to ensure that all futures were informed about the shut down.
+		// Drop the task manager before dropping the rest, to ensure that all futures were informed
+		// about the shut down.
 		drop(task_manager);
 		Ok(())
 	}
