@@ -14,10 +14,10 @@ use sp_ark_bls12_381::{
 pub struct Host {}
 
 impl HostFunctions for Host {
-	fn bls12_381_multi_miller_loop(a: Vec<Vec<u8>>, b: Vec<Vec<u8>> ) -> Result<Vec<u8>, PairingError> {
+	fn bls12_381_multi_miller_loop(a: Vec<Vec<u8>>, b: Vec<Vec<u8>> ) -> Result<Vec<u8>, ()> {
 		sp_io::elliptic_curves::bls12_381_multi_miller_loop(a, b)
 	}
-	fn bls12_381_final_exponentiation(f12: Vec<u8>) -> Result<Vec<u8>, PairingError> {
+	fn bls12_381_final_exponentiation(f12: Vec<u8>) -> Result<Vec<u8>, ()> {
 		sp_io::elliptic_curves::bls12_381_final_exponentiation(f12)
 	}
 	fn bls12_381_msm_g1(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {

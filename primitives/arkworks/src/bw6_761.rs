@@ -35,12 +35,12 @@ use ark_ec::{
 use sp_std::vec::Vec;
 
 /// Compute multi miller loop through arkworks
-pub fn multi_miller_loop(a: Vec<Vec<u8>>, b: Vec<Vec<u8>>) -> Result<Vec<u8>, PairingError> {
+pub fn multi_miller_loop(a: Vec<Vec<u8>>, b: Vec<Vec<u8>>) -> Result<Vec<u8>, ()> {
 	multi_miller_loop_generic::<BW6_761>(a, b)
 }
 
 /// Compute final exponentiation through arkworks
-pub fn final_exponentiation(target: Vec<u8>) -> Result<Vec<u8>, PairingError> {
+pub fn final_exponentiation(target: Vec<u8>) -> Result<Vec<u8>, ()> {
 	final_exponentiation_generic::<BW6_761>(target)
 }
 

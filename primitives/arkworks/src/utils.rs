@@ -18,7 +18,7 @@ pub fn deserialize_argument<Field: CanonicalDeserialize>(argument: &Vec<u8>) -> 
 pub fn multi_miller_loop_generic<Curve: Pairing>(
 	a_vec: Vec<Vec<u8>>,
 	b_vec: Vec<Vec<u8>>,
-) -> Result<Vec<u8>, PairingError> {
+) -> Result<Vec<u8>, ()> {
 	let g1: Vec<_> = a_vec
 		.iter()
 		.map(|elem| deserialize_argument::<<Curve as Pairing>::G1Affine>(elem))
@@ -35,7 +35,7 @@ pub fn multi_miller_loop_generic<Curve: Pairing>(
 
 pub fn final_exponentiation_generic<Curve: Pairing>(
 	target: Vec<u8>,
-) -> Result<Vec<u8>, PairingError> {
+) -> Result<Vec<u8>, ()> {
 	let target = deserialize_argument::<<Curve as Pairing>::TargetField>(&target);
 
 	let result = Curve::final_exponentiation(MillerLoopOutput(target));
