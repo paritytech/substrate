@@ -17,6 +17,7 @@ pallet-staking = { path = "../../staking", default-features = false }
 pallet-stake-tracker = { path = "../", default-features = false }
 sp-std = { version = "5.0.0", default-features = false, path = "../../../primitives/std" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-staking = { default-features = false, path = "../../../primitives/staking" }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }

@@ -6740,6 +6740,7 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "sp-runtime",
+ "sp-staking",
  "sp-std",
 ]
 
