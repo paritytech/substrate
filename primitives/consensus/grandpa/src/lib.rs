@@ -452,11 +452,10 @@ where
 	N: Encode,
 {
 	use sp_application_crypto::AppCrypto;
-	use sp_core::crypto::Wraps;
 
 	let encoded = localized_payload(round, set_id, &message);
 	let signature = keystore
-		.ed25519_sign(AuthorityId::ID, public.as_inner_ref(), &encoded[..])
+		.ed25519_sign(AuthorityId::ID, public.as_ref(), &encoded[..])
 		.ok()
 		.flatten()?
 		.try_into()

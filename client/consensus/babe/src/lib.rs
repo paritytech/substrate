@@ -117,7 +117,7 @@ use sp_blockchain::{
 use sp_consensus::{BlockOrigin, Environment, Error as ConsensusError, Proposer, SelectChain};
 use sp_consensus_babe::inherents::BabeInherentData;
 use sp_consensus_slots::Slot;
-use sp_core::{crypto::Wraps, ExecutionContext};
+use sp_core::ExecutionContext;
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
 use sp_keystore::KeystorePtr;
 use sp_runtime::{
@@ -832,11 +832,7 @@ where
 	> {
 		let signature = self
 			.keystore
-			.sr25519_sign(
-				<AuthorityId as AppCrypto>::ID,
-				public.as_inner_ref(),
-				header_hash.as_ref(),
-			)
+			.sr25519_sign(<AuthorityId as AppCrypto>::ID, public.as_ref(), header_hash.as_ref())
 			.map_err(|e| ConsensusError::CannotSign(format!("{}. Key: {:?}", e, public)))?
 			.ok_or_else(|| {
 				ConsensusError::CannotSign(format!(

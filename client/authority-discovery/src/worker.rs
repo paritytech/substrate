@@ -52,7 +52,7 @@ use sp_authority_discovery::{
 	AuthorityDiscoveryApi, AuthorityId, AuthorityPair, AuthoritySignature,
 };
 use sp_blockchain::HeaderBackend;
-use sp_core::crypto::{key_types, ByteArray, Pair, Wraps};
+use sp_core::crypto::{key_types, ByteArray, Pair};
 use sp_keystore::{Keystore, KeystorePtr};
 use sp_runtime::traits::Block as BlockT;
 
@@ -670,7 +670,7 @@ fn sign_record_with_authority_ids(
 
 	for key in keys.iter() {
 		let auth_signature = key_store
-			.sr25519_sign(key_types::AUTHORITY_DISCOVERY, key.as_inner_ref(), &serialized_record)
+			.sr25519_sign(key_types::AUTHORITY_DISCOVERY, key.as_ref(), &serialized_record)
 			.map_err(|e| Error::CannotSign(format!("{}. Key: {:?}", e, key)))?
 			.ok_or_else(|| {
 				Error::CannotSign(format!("Could not find key in keystore. Key: {:?}", key))

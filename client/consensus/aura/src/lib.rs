@@ -441,13 +441,12 @@ where
 		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
 		ConsensusError,
 	> {
-		let public = public.to_raw_vec();
 		let signature = self
 			.keystore
 			.sign_with(
 				<AuthorityId<P> as AppCrypto>::ID,
 				<AuthorityId<P> as AppCrypto>::CRYPTO_ID,
-				&public,
+				public.as_slice(),
 				header_hash.as_ref(),
 			)
 			.map_err(|e| ConsensusError::CannotSign(format!("{}. Key: {:?}", e, public)))?
@@ -460,7 +459,7 @@ where
 		let signature = signature
 			.clone()
 			.try_into()
-			.map_err(|_| ConsensusError::InvalidSignature(signature, public))?;
+			.map_err(|_| ConsensusError::InvalidSignature(signature, public.to_raw_vec()))?;
 
 		let signature_digest_item =
 			<DigestItem as CompatibleDigestItem<P::Signature>>::aura_seal(signature);
