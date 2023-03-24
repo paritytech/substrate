@@ -205,20 +205,20 @@ impl<T: Config> ContractInfo<T> {
 	///
 	/// You must make sure that the contract is also removed when queuing the trie for deletion.
 	pub fn queue_trie_for_deletion(&self) -> DispatchResult {
-		<DeletionQueue<T>>::try_append(DeletedContract { trie_id: self.trie_id.clone() })
-			.map_err(|_| <Error<T>>::DeletionQueueFull.into())
+		DeletionQueue::<T>::load().insert(DeletedContract { trie_id: self.trie_id.clone() });
+		Ok(())
 	}
 
 	/// Calculates the weight that is necessary to remove one key from the trie and how many
 	/// of those keys can be deleted from the deletion queue given the supplied queue length
 	/// and weight limit.
-	pub fn deletion_budget(queue_len: usize, weight_limit: Weight) -> (Weight, u32) {
+	pub fn deletion_budget(queue_len: u64, weight_limit: Weight) -> (Weight, u32) {
 		let base_weight = T::WeightInfo::on_process_deletion_queue_batch();
 		let weight_per_queue_item = T::WeightInfo::on_initialize_per_queue_item(1) -
 			T::WeightInfo::on_initialize_per_queue_item(0);
 		let weight_per_key = T::WeightInfo::on_initialize_per_trie_key(1) -
 			T::WeightInfo::on_initialize_per_trie_key(0);
-		let decoding_weight = weight_per_queue_item.saturating_mul(queue_len as u64);
+		let decoding_weight = weight_per_queue_item.saturating_mul(queue_len);
 
 		// `weight_per_key` being zero makes no sense and would constitute a failure to
 		// benchmark properly. We opt for not removing any keys at all in this case.
@@ -235,11 +235,13 @@ impl<T: Config> ContractInfo<T> {
 	///
 	/// It returns the amount of weight used for that task.
 	pub fn process_deletion_queue_batch(weight_limit: Weight) -> Weight {
-		let queue_len = <DeletionQueue<T>>::decode_len().unwrap_or(0);
+		let mut queue = <DeletionQueue<T>>::load();
+		let queue_len = queue.len();
+
 		if queue_len == 0 {
 			return Weight::zero()
 		}
-
+		//
 		let (weight_per_key, mut remaining_key_budget) =
 			Self::deletion_budget(queue_len, weight_limit);
 
@@ -250,14 +252,11 @@ impl<T: Config> ContractInfo<T> {
 			return weight_limit
 		}
 
-		let mut queue = <DeletionQueue<T>>::get();
-
 		while !queue.is_empty() && remaining_key_budget > 0 {
-			// Cannot panic due to loop condition
-			let trie = &mut queue[0];
+			let entry = queue.next();
 			#[allow(deprecated)]
 			let outcome = child::kill_storage(
-				&ChildInfo::new_default(&trie.trie_id),
+				&ChildInfo::new_default(&entry.get().trie_id),
 				Some(remaining_key_budget),
 			);
 			let keys_removed = match outcome {
@@ -266,14 +265,12 @@ impl<T: Config> ContractInfo<T> {
 				KillStorageResult::AllRemoved(c) => {
 					// We do not care to preserve order. The contract is deleted already and
 					// no one waits for the trie to be deleted.
-					queue.swap_remove(0);
+					entry.remove();
 					c
 				},
 			};
 			remaining_key_budget = remaining_key_budget.saturating_sub(keys_removed);
 		}
-
-		<DeletionQueue<T>>::put(queue);
 		weight_limit.saturating_sub(weight_per_key.saturating_mul(u64::from(remaining_key_budget)))
 	}
 

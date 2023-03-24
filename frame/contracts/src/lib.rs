@@ -106,7 +106,7 @@ use crate::{
 	wasm::{OwnerInfo, PrefabWasmModule, TryInstantiate},
 	weights::WeightInfo,
 };
-use codec::{Codec, Encode, HasCompact};
+use codec::{Codec, Decode, Encode, HasCompact, MaxEncodedLen};
 use environmental::*;
 use frame_support::{
 	dispatch::{Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo},
@@ -245,24 +245,6 @@ pub mod pallet {
 		/// memory usage of your runtime.
 		type CallStack: Array<Item = Frame<Self>>;
 
-		/// The maximum number of contracts that can be pending for deletion.
-		///
-		/// When a contract is deleted by calling `seal_terminate` it becomes inaccessible
-		/// immediately, but the deletion of the storage items it has accumulated is performed
-		/// later. The contract is put into the deletion queue. This defines how many
-		/// contracts can be queued up at the same time. If that limit is reached `seal_terminate`
-		/// will fail. The action must be retried in a later block in that case.
-		///
-		/// The reasons for limiting the queue depth are:
-		///
-		/// 1. The queue is in storage in order to be persistent between blocks. We want to limit
-		/// 	the amount of storage that can be consumed.
-		/// 2. The queue is stored in a vector and needs to be decoded as a whole when reading
-		///		it at the end of each block. Longer queues take more weight to decode and hence
-		///		limit the amount of items that can be deleted per block.
-		#[pallet::constant]
-		type DeletionQueueDepth: Get<u32>;
-
 		/// The maximum amount of weight that can be consumed per block for lazy trie removal.
 		///
 		/// The amount of weight that is dedicated per block to work on the deletion queue. Larger
@@ -327,25 +309,6 @@ pub mod pallet {
 		fn on_idle(_block: T::BlockNumber, remaining_weight: Weight) -> Weight {
 			ContractInfo::<T>::process_deletion_queue_batch(remaining_weight)
 				.saturating_add(T::WeightInfo::on_process_deletion_queue_batch())
-		}
-
-		fn on_initialize(_block: T::BlockNumber) -> Weight {
-			// We want to process the deletion_queue in the on_idle hook. Only in the case
-			// that the queue length has reached its maximal depth, we process it here.
-			let max_len = T::DeletionQueueDepth::get() as usize;
-			let queue_len = <DeletionQueue<T>>::decode_len().unwrap_or(0);
-			if queue_len >= max_len {
-				// We do not want to go above the block limit and rather avoid lazy deletion
-				// in that case. This should only happen on runtime upgrades.
-				let weight_limit = T::BlockWeights::get()
-					.max_block
-					.saturating_sub(System::<T>::block_weight().total())
-					.min(T::DeletionWeightLimit::get());
-				ContractInfo::<T>::process_deletion_queue_batch(weight_limit)
-					.saturating_add(T::WeightInfo::on_process_deletion_queue_batch())
-			} else {
-				T::WeightInfo::on_process_deletion_queue_batch()
-			}
 		}
 
 		fn integrity_test() {
@@ -860,12 +823,6 @@ pub mod pallet {
 		/// in this error. Note that this usually  shouldn't happen as deploying such contracts
 		/// is rejected.
 		NoChainExtension,
-		/// Removal of a contract failed because the deletion queue is full.
-		///
-		/// This can happen when calling `seal_terminate`.
-		/// The queue is filled by deleting contracts and emptied by a fixed amount each block.
-		/// Trying again during another block is the only way to resolve this issue.
-		DeletionQueueFull,
 		/// A contract with the same AccountId already exists.
 		DuplicateContract,
 		/// A contract self destructed in its constructor.
@@ -951,8 +908,75 @@ pub mod pallet {
 	/// Child trie deletion is a heavy operation depending on the amount of storage items
 	/// stored in said trie. Therefore this operation is performed lazily in `on_initialize`.
 	#[pallet::storage]
-	pub(crate) type DeletionQueue<T: Config> =
-		StorageValue<_, BoundedVec<DeletedContract, T::DeletionQueueDepth>, ValueQuery>;
+	pub(crate) type DeletionQueueMap<T: Config> = StorageMap<_, Twox64Concat, u64, DeletedContract>;
+
+	#[pallet::storage]
+	pub(crate) type DeletionQueueNonce<T: Config> =
+		StorageValue<_, DeletionQueueNonces, ValueQuery>;
+}
+
+#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, Default)]
+struct DeletionQueueNonces {
+	insert_nonce: u64,
+	delete_nonce: u64,
+}
+
+impl DeletionQueueNonces {
+	fn delete_plus_one(&mut self) -> &mut Self {
+		self.delete_nonce.saturating_plus_one();
+		self
+	}
+
+	fn insert_plus_one(&mut self) -> &mut Self {
+		self.insert_nonce.saturating_plus_one();
+		self
+	}
+}
+
+struct DeletionQueue<T: Config> {
+	nonces: DeletionQueueNonces,
+	_phantom: PhantomData<T>,
+}
+//
+struct DeletionQueueEntry<'a, T: Config> {
+	contract: DeletedContract,
+	queue: &'a mut DeletionQueue<T>,
+}
+
+impl<'a, T: Config> DeletionQueueEntry<'a, T> {
+	fn get(&self) -> &DeletedContract {
+		&self.contract
+	}
+
+	fn remove(self) {
+		<DeletionQueueMap<T>>::remove(self.queue.nonces.delete_nonce);
+		<DeletionQueueNonce<T>>::set(self.queue.nonces.delete_plus_one().clone());
+	}
+}
+
+impl<T: Config> DeletionQueue<T> {
+	fn load() -> Self {
+		let nonces = <DeletionQueueNonce<T>>::get();
+		Self { nonces, _phantom: PhantomData }
+	}
+
+	fn len(&self) -> u64 {
+		self.nonces.insert_nonce - self.nonces.delete_nonce
+	}
+
+	fn is_empty(&self) -> bool {
+		self.nonces.insert_nonce == self.nonces.delete_nonce
+	}
+
+	fn insert(&mut self, contract: DeletedContract) {
+		<DeletionQueueMap<T>>::insert(self.nonces.insert_nonce, contract);
+		<DeletionQueueNonce<T>>::set(self.nonces.insert_plus_one().clone());
+	}
+
+	fn next(&mut self) -> DeletionQueueEntry<T> {
+		let contract = <DeletionQueueMap<T>>::get(self.nonces.delete_nonce).unwrap(); // TODO
+		DeletionQueueEntry { contract, queue: self }
+	}
 }
 
 /// Context of a contract invocation.
