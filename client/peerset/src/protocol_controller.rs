@@ -510,6 +510,7 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 
 		// Fill available slots with non-reserved nodes
 		let available_slots = (self.max_out - self.num_out).saturated_into();
+
 		// Ignore reserved nodes (connected above) and already connected nodes.
 		let ignored = self
 			.reserved_nodes
@@ -519,29 +520,38 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 			.cloned()
 			.collect();
 
-		self.peer_store
+		let candidates = self
+			.peer_store
 			.outgoing_candidates(available_slots, ignored)
-			.iter()
+			.into_iter()
 			.filter_map(|peer_id| {
-				if self.reserved_nodes.contains_key(peer_id) || self.nodes.contains_key(peer_id) {
-					debug_assert!(false, "`PeerStore` returned a node we asked to ignore.");
-					error!(
-						target: "peerset",
-						"`PeerStore` returned a node we asked to ignore: {}.",
-						peer_id
-					);
-					None
-				} else {
-					self.num_out += 1;
-					self.nodes.insert(*peer_id, Direction::Outbound);
-					Some(peer_id)
-				}
+				(!self.reserved_nodes.contains_key(&peer_id) && !self.nodes.contains_key(&peer_id))
+					.then_some(peer_id)
+					.or_else(|| {
+						debug_assert!(false, "`PeerStore` returned a node we asked to ignore.");
+						error!(
+							target: "peerset",
+							"`PeerStore` returned a node we asked to ignore: {}.",
+							peer_id
+						);
+						None
+					})
 			})
-			.take(available_slots)
-			.cloned()
-			.collect::<Vec<_>>()
-			.iter()
-			.for_each(|peer_id| self.start_connection(*peer_id));
+			.collect::<Vec<_>>();
+
+		if candidates.len() > available_slots {
+			debug_assert!(false, "`PeerStore` returned more nodes than there are slots available.");
+			error!(
+				target: "peerset",
+				"`PeerStore` returned more nodes than there are slots available.",
+			)
+		}
+
+		candidates.into_iter().take(available_slots).for_each(|peer_id| {
+			self.num_out += 1;
+			self.nodes.insert(peer_id, Direction::Outbound);
+			self.start_connection(peer_id);
+		})
 	}
 }
 
@@ -738,7 +748,7 @@ mod tests {
 		let peer1 = PeerId::random();
 		let peer2 = PeerId::random();
 		let peer3 = PeerId::random();
-		let candidates = vec![peer1, peer2, peer3];
+		let candidates = vec![peer1, peer2];
 
 		let config = SetConfig {
 			in_peers: 0,
@@ -826,8 +836,8 @@ mod tests {
 		let peer1 = PeerId::random();
 		let peer2 = PeerId::random();
 		let peer3 = PeerId::random();
-		let candidates1 = vec![peer1.clone(), peer2.clone(), peer3.clone()];
-		let candidates2 = vec![peer3.clone()];
+		let candidates1 = vec![peer1, peer2];
+		let candidates2 = vec![peer3];
 
 		let config = SetConfig {
 			in_peers: 0,
