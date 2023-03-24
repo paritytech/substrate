@@ -18,8 +18,8 @@
 use crate::{
 	gas::GasMeter,
 	storage::{self, DepositAccount, WriteOutcome},
-	BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, DebugBufferVec, Determinism, Error,
-	Event, Nonce, Pallet as Contracts, Schedule, System, ContractOrigin
+	BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, ContractOrigin, DebugBufferVec,
+	Determinism, Error, Event, Nonce, Pallet as Contracts, Schedule, System,
 };
 use frame_support::{
 	crypto::ecdsa::ECDSAExt,
@@ -783,11 +783,11 @@ where
 
 		// `AllowIndeterminism` will only be ever set in case of off-chain execution.
 		// Instantiations are never allowed even when executing off-chain.
-		if !(executable.is_deterministic() ||
-			(matches!(determinism, Determinism::AllowIndeterminism) &&
-				matches!(entry_point, ExportedFunction::Call)))
+		if !(executable.is_deterministic()
+			|| (matches!(determinism, Determinism::AllowIndeterminism)
+				&& matches!(entry_point, ExportedFunction::Call)))
 		{
-			return Err(Error::<T>::Indeterministic.into())
+			return Err(Error::<T>::Indeterministic.into());
 		}
 
 		let frame = Frame {
@@ -812,7 +812,7 @@ where
 		gas_limit: Weight,
 	) -> Result<E, ExecError> {
 		if self.frames.len() == T::CallStack::size() {
-			return Err(Error::<T>::MaxCallDepthReached.into())
+			return Err(Error::<T>::MaxCallDepthReached.into());
 		}
 
 		// We need to make sure that changes made to the contract info are not discarded.
@@ -877,7 +877,7 @@ where
 
 			// Avoid useless work that would be reverted anyways.
 			if output.did_revert() {
-				return Ok(output)
+				return Ok(output);
 			}
 
 			// Storage limit is enforced as late as possible (when the last frame returns) so that
@@ -895,7 +895,7 @@ where
 				(ExportedFunction::Constructor, _) => {
 					// It is not allowed to terminate a contract inside its constructor.
 					if matches!(frame.contract_info, CachedContract::Terminated(_)) {
-						return Err(Error::<T>::TerminatedInConstructor.into())
+						return Err(Error::<T>::TerminatedInConstructor.into());
 					}
 
 					let caller = self.ensure_caller()?;
@@ -937,8 +937,9 @@ where
 			with_transaction(|| -> TransactionOutcome<Result<_, DispatchError>> {
 				let output = do_transaction();
 				match &output {
-					Ok(result) if !result.did_revert() =>
-						TransactionOutcome::Commit(Ok((true, output))),
+					Ok(result) if !result.did_revert() => {
+						TransactionOutcome::Commit(Ok((true, output)))
+					},
 					_ => TransactionOutcome::Rollback(Ok((false, output))),
 				}
 			});
@@ -980,7 +981,7 @@ where
 
 			// Only gas counter changes are persisted in case of a failure.
 			if !persist {
-				return
+				return;
 			}
 
 			// Record the storage meter changes of the nested call into the parent meter.
@@ -1009,7 +1010,7 @@ where
 				// trigger a rollback.
 				if prev.account_id == *account_id {
 					prev.contract_info = CachedContract::Cached(contract);
-					return
+					return;
 				}
 
 				// Predecessor is a different contract: We persist the info and invalidate the first
@@ -1032,7 +1033,7 @@ where
 			}
 			self.gas_meter.absorb_nested(mem::take(&mut self.first_frame.nested_gas));
 			if !persist {
-				return
+				return;
 			}
 			let deposit_account = self.first_frame.contract_info.deposit_account().expect(
 				"Is only `None` when the info is invalidated. The first frame can't be invalidated.
@@ -1072,7 +1073,7 @@ where
 		// If it is a delegate call, then we've already transferred tokens in the
 		// last non-delegate frame.
 		if frame.delegate_caller.is_some() {
-			return Ok(())
+			return Ok(());
 		}
 
 		let value = frame.value_transferred;
@@ -1143,7 +1144,7 @@ where
 
 		let try_call = || {
 			if !self.allows_reentry(&to) {
-				return Err(<Error<T>>::ReentranceDenied.into())
+				return Err(<Error<T>>::ReentranceDenied.into());
 			}
 			// We ignore instantiate frames in our search for a cached contract.
 			// Otherwise it would be possible to recursively call a contract from its own
@@ -1223,7 +1224,7 @@ where
 	fn terminate(&mut self, beneficiary: &AccountIdOf<Self::T>) -> Result<(), DispatchError> {
 		use frame_support::traits::fungible::Inspect;
 		if self.is_recursive() {
-			return Err(Error::<T>::TerminatedWhileReentrant.into())
+			return Err(Error::<T>::TerminatedWhileReentrant.into());
 		}
 		let frame = self.top_frame_mut();
 		let info = frame.terminate();
@@ -1428,7 +1429,7 @@ where
 	fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError> {
 		let frame = top_frame_mut!(self);
 		if !E::from_storage(hash, self.schedule, &mut frame.nested_gas)?.is_deterministic() {
-			return Err(<Error<T>>::Indeterministic.into())
+			return Err(<Error<T>>::Indeterministic.into());
 		}
 		E::add_user(hash)?;
 		let prev_hash = frame.contract_info().code_hash;
@@ -1664,7 +1665,9 @@ mod tests {
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, exec_ch);
-			let mut storage_meter = storage::meter::Meter::new(&ContractOrigin::from_account_id(ALICE), Some(0), value).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&ContractOrigin::from_account_id(ALICE), Some(0), value)
+					.unwrap();
 
 			assert_matches!(
 				MockStack::run_call(
@@ -1720,7 +1723,8 @@ mod tests {
 			set_balance(&origin, 100);
 			let balance = get_balance(&dest);
 			let contract_origin = ContractOrigin::from_account_id(origin.clone());
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, Some(0), 55).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 55).unwrap();
 
 			let _ = MockStack::run_call(
 				contract_origin.clone(),
@@ -1763,7 +1767,8 @@ mod tests {
 			set_balance(&origin, 100);
 			let balance = get_balance(&dest);
 			let contract_origin = ContractOrigin::from_account_id(origin.clone());
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, Some(0), 55).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 55).unwrap();
 
 			let _ = MockStack::run_call(
 				contract_origin.clone(),
@@ -1800,7 +1805,8 @@ mod tests {
 			set_balance(&origin, 100);
 			let balance = get_balance(&dest);
 			let contract_origin = ContractOrigin::from_account_id(origin.clone());
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, Some(0), 55).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 55).unwrap();
 
 			let output = MockStack::run_call(
 				contract_origin.clone(),
@@ -1852,7 +1858,8 @@ mod tests {
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
 			let contract_origin = ContractOrigin::from_account_id(origin);
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 			place_contract(&BOB, return_ch);
 
 			let result = MockStack::run_call(
@@ -1887,7 +1894,8 @@ mod tests {
 			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, return_ch);
 			let contract_origin = ContractOrigin::from_account_id(origin);
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 
 			let result = MockStack::run_call(
 				contract_origin,
@@ -1919,7 +1927,8 @@ mod tests {
 			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, input_data_ch);
 			let contract_origin = ContractOrigin::from_account_id(ALICE);
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 
 			let result = MockStack::run_call(
 				contract_origin,
@@ -1952,7 +1961,8 @@ mod tests {
 				MockExecutable::from_storage(input_data_ch, &schedule, &mut gas_meter).unwrap();
 			set_balance(&ALICE, min_balance * 10_000);
 			let contract_origin = ContractOrigin::from_account_id(ALICE);
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, None, min_balance).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, None, min_balance).unwrap();
 
 			let result = MockStack::run_instantiate(
 				ALICE,
@@ -2001,7 +2011,8 @@ mod tests {
 			set_balance(&BOB, 1);
 			place_contract(&BOB, recurse_ch);
 			let contract_origin = ContractOrigin::from_account_id(ALICE);
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, Some(0), value).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), value).unwrap();
 
 			let result = MockStack::run_call(
 				contract_origin,
@@ -2039,7 +2050,9 @@ mod tests {
 		});
 		let charlie_ch = MockLoader::insert(Call, |ctx, _| {
 			// Record the caller for charlie.
-			WitnessedCallerCharlie::mutate(|caller| *caller = Some(ctx.ext.caller().unwrap().clone()));
+			WitnessedCallerCharlie::mutate(|caller| {
+				*caller = Some(ctx.ext.caller().unwrap().clone())
+			});
 			exec_success()
 		});
 
@@ -2048,7 +2061,8 @@ mod tests {
 			place_contract(&dest, bob_ch);
 			place_contract(&CHARLIE, charlie_ch);
 			let contract_origin = ContractOrigin::from_account_id(origin.clone());
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 
 			let result = MockStack::run_call(
 				contract_origin.clone(),
@@ -2084,7 +2098,8 @@ mod tests {
 			place_contract(&BOB, bob_ch);
 
 			let contract_origin = ContractOrigin::from_account_id(ALICE);
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 			let result = MockStack::run_call(
 				contract_origin,
 				BOB,
@@ -2114,7 +2129,8 @@ mod tests {
 			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, code_bob);
 			let contract_origin = ContractOrigin::from_account_id(ALICE);
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 			// ALICE (not contract) -> BOB (contract)
 			let result = MockStack::run_call(
 				contract_origin,
@@ -2143,7 +2159,8 @@ mod tests {
 			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, bob_ch);
 			let contract_origin = ContractOrigin::from_account_id(ALICE);
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 			// ALICE (not contract) -> BOB (contract)
 			let result = MockStack::run_call(
 				contract_origin,
@@ -2180,7 +2197,8 @@ mod tests {
 			place_contract(&BOB, code_bob);
 			place_contract(&CHARLIE, code_charlie);
 			let contract_origin = ContractOrigin::from_account_id(ALICE);
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 			// ALICE -> BOB (caller is origin) -> CHARLIE (caller is not origin)
 			let result = MockStack::run_call(
 				contract_origin,
@@ -2217,7 +2235,8 @@ mod tests {
 			place_contract(&BOB, code_bob);
 			place_contract(&CHARLIE, code_charlie);
 			let contract_origin = ContractOrigin::Root;
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 			// root -> BOB (caller is root) -> CHARLIE (caller is not origin)
 			let result = MockStack::run_call(
 				contract_origin,
@@ -2254,7 +2273,8 @@ mod tests {
 			place_contract(&BOB, bob_ch);
 			place_contract(&CHARLIE, charlie_ch);
 			let contract_origin = ContractOrigin::from_account_id(ALICE);
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 
 			let result = MockStack::run_call(
 				contract_origin,
@@ -2282,7 +2302,8 @@ mod tests {
 			let executable =
 				MockExecutable::from_storage(dummy_ch, &schedule, &mut gas_meter).unwrap();
 			let contract_origin = ContractOrigin::from_account_id(ALICE);
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 
 			assert_matches!(
 				MockStack::run_instantiate(
@@ -2316,7 +2337,8 @@ mod tests {
 			set_balance(&ALICE, min_balance * 1000);
 			let contract_origin = ContractOrigin::from_account_id(ALICE);
 			let mut storage_meter =
-				storage::meter::Meter::new(&contract_origin, Some(min_balance * 100), min_balance).unwrap();
+				storage::meter::Meter::new(&contract_origin, Some(min_balance * 100), min_balance)
+					.unwrap();
 
 			let instantiated_contract_address = assert_matches!(
 				MockStack::run_instantiate(
@@ -2361,7 +2383,8 @@ mod tests {
 			set_balance(&ALICE, min_balance * 1000);
 			let contract_origin = ContractOrigin::from_account_id(ALICE);
 			let mut storage_meter =
-				storage::meter::Meter::new(&contract_origin, Some(min_balance * 100), min_balance).unwrap();
+				storage::meter::Meter::new(&contract_origin, Some(min_balance * 100), min_balance)
+					.unwrap();
 
 			let instantiated_contract_address = assert_matches!(
 				MockStack::run_instantiate(
@@ -2414,9 +2437,12 @@ mod tests {
 			set_balance(&ALICE, min_balance * 100);
 			place_contract(&BOB, instantiator_ch);
 			let contract_origin = ContractOrigin::from_account_id(ALICE);
-			let mut storage_meter =
-				storage::meter::Meter::new(&contract_origin, Some(min_balance * 10), min_balance * 10)
-					.unwrap();
+			let mut storage_meter = storage::meter::Meter::new(
+				&contract_origin,
+				Some(min_balance * 10),
+				min_balance * 10,
+			)
+			.unwrap();
 
 			assert_matches!(
 				MockStack::run_call(
@@ -2482,7 +2508,8 @@ mod tests {
 			set_balance(&BOB, 100);
 			place_contract(&BOB, instantiator_ch);
 			let contract_origin = ContractOrigin::from_account_id(ALICE);
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, Some(200), 0).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(200), 0).unwrap();
 
 			assert_matches!(
 				MockStack::run_call(
@@ -2519,7 +2546,8 @@ mod tests {
 				MockExecutable::from_storage(terminate_ch, &schedule, &mut gas_meter).unwrap();
 			set_balance(&ALICE, 10_000);
 			let contract_origin = ContractOrigin::from_account_id(ALICE);
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, None, 100).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, None, 100).unwrap();
 
 			assert_eq!(
 				MockStack::run_instantiate(
@@ -2571,7 +2599,8 @@ mod tests {
 			place_contract(&BOB, code_bob);
 			place_contract(&CHARLIE, code_charlie);
 			let contract_origin = ContractOrigin::from_account_id(ALICE);
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 
 			let result = MockStack::run_call(
 				contract_origin,
@@ -2606,7 +2635,8 @@ mod tests {
 			let executable = MockExecutable::from_storage(code, &schedule, &mut gas_meter).unwrap();
 			set_balance(&ALICE, min_balance * 10_000);
 			let contract_origin = ContractOrigin::from_account_id(ALICE);
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, None, min_balance).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, None, min_balance).unwrap();
 
 			let result = MockStack::run_instantiate(
 				ALICE,
@@ -2640,7 +2670,8 @@ mod tests {
 			set_balance(&ALICE, min_balance * 10);
 			place_contract(&BOB, code_hash);
 			let contract_origin = ContractOrigin::from_account_id(ALICE);
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 			MockStack::run_call(
 				contract_origin,
 				BOB,
@@ -2675,7 +2706,8 @@ mod tests {
 			set_balance(&ALICE, min_balance * 10);
 			place_contract(&BOB, code_hash);
 			let contract_origin = ContractOrigin::from_account_id(ALICE);
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 			let result = MockStack::run_call(
 				contract_origin,
 				BOB,
@@ -2713,7 +2745,8 @@ mod tests {
 			set_balance(&ALICE, min_balance * 10);
 			place_contract(&BOB, code_hash);
 			let contract_origin = ContractOrigin::from_account_id(ALICE);
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 			MockStack::run_call(
 				contract_origin,
 				BOB,
@@ -2745,7 +2778,8 @@ mod tests {
 			place_contract(&BOB, code_bob);
 			place_contract(&CHARLIE, code_charlie);
 			let contract_origin = ContractOrigin::from_account_id(ALICE);
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 
 			// Calling another contract should succeed
 			assert_ok!(MockStack::run_call(
@@ -2798,7 +2832,8 @@ mod tests {
 			place_contract(&BOB, code_bob);
 			place_contract(&CHARLIE, code_charlie);
 			let contract_origin = ContractOrigin::from_account_id(ALICE);
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 
 			// BOB -> CHARLIE -> BOB fails as BOB denies reentry.
 			assert_err!(
@@ -2836,7 +2871,8 @@ mod tests {
 			set_balance(&ALICE, min_balance * 10);
 			place_contract(&BOB, code_hash);
 			let contract_origin = ContractOrigin::from_account_id(ALICE);
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 			System::reset_events();
 			MockStack::run_call(
 				contract_origin,
@@ -2920,7 +2956,8 @@ mod tests {
 			set_balance(&ALICE, min_balance * 10);
 			place_contract(&BOB, code_hash);
 			let contract_origin = ContractOrigin::from_account_id(ALICE);
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 			System::reset_events();
 			MockStack::run_call(
 				contract_origin,
@@ -3487,7 +3524,8 @@ mod tests {
 			place_contract(&BOB, bob_ch);
 
 			let contract_origin = ContractOrigin::from_account_id(ALICE);
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 			let result = MockStack::run_call(
 				contract_origin,
 				BOB,
@@ -3565,7 +3603,8 @@ mod tests {
 			place_contract(&BOB, code_hash);
 
 			let contract_origin = ContractOrigin::from_account_id(ALICE);
-			let mut storage_meter = storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 			let result = MockStack::run_call(
 				contract_origin,
 				BOB,

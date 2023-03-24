@@ -116,9 +116,9 @@ use frame_support::{
 		ReservableCurrency, Time,
 	},
 	weights::{OldWeight, Weight},
-	BoundedVec, WeakBoundedVec
+	BoundedVec, WeakBoundedVec,
 };
-use frame_system::{Pallet as System, ensure_signed_or_root};
+use frame_system::{ensure_signed_or_root, Pallet as System};
 use pallet_contracts_primitives::{
 	Code, CodeUploadResult, CodeUploadReturnValue, ContractAccessError, ContractExecResult,
 	ContractInstantiateResult, ExecReturnValue, GetStorageResult, InstantiateReturnValue,
@@ -126,7 +126,7 @@ use pallet_contracts_primitives::{
 };
 use scale_info::TypeInfo;
 use smallvec::Array;
-use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup, BadOrigin};
+use sp_runtime::traits::{BadOrigin, Convert, Hash, Saturating, StaticLookup};
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 pub use crate::{
@@ -571,7 +571,7 @@ pub mod pallet {
 				let contract = if let Some(contract) = contract {
 					contract
 				} else {
-					return Err(<Error<T>>::ContractNotFound.into())
+					return Err(<Error<T>>::ContractNotFound.into());
 				};
 				<PrefabWasmModule<T>>::add_user(code_hash)?;
 				<PrefabWasmModule<T>>::remove_user(contract.code_hash);
@@ -965,7 +965,7 @@ pub enum ContractOrigin<T: Config> {
 	/// The origin is a regular signed account.
 	Signed(T::AccountId),
 	/// The origin is root.
-	Root,	
+	Root,
 }
 
 impl<T: Config> ContractOrigin<T> {
@@ -1096,12 +1096,13 @@ impl<T: Config> Invokable<T> for CallInput<T> {
 		let mut storage_meter =
 			match StorageMeter::new(&common.origin, common.storage_deposit_limit, common.value) {
 				Ok(meter) => meter,
-				Err(err) =>
+				Err(err) => {
 					return InternalOutput {
 						result: Err(err.into()),
 						gas_meter,
 						storage_deposit: Default::default(),
-					},
+					}
+				},
 			};
 		let schedule = T::Schedule::get();
 		let CallInput { dest, determinism } = self;
@@ -1134,10 +1135,12 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 			// Root origin is not allowed here
 			let origin = match &common.origin {
 				ContractOrigin::Signed(t) => t,
-				ContractOrigin::Root => return Err(ExecError {
-					error: <Error<T>>::RootOriginNotAllowed.into(),
-					origin: ErrorOrigin::Caller,
-				}),
+				ContractOrigin::Root => {
+					return Err(ExecError {
+						error: <Error<T>>::RootOriginNotAllowed.into(),
+						origin: ErrorOrigin::Caller,
+					})
+				},
 			};
 			let schedule = T::Schedule::get();
 			let (extra_deposit, executable) = match &self.code {
