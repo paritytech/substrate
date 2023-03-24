@@ -22,10 +22,7 @@ use crate::crypto::Ss58Codec;
 #[cfg(feature = "full_crypto")]
 use crate::crypto::{DeriveError, DeriveJunction, Pair as TraitPair, SecretStringError};
 use crate::{
-	crypto::{
-		ByteArray, CryptoType, CryptoTypeId, CryptoTypePublicPair, Derive, Public as TraitPublic,
-		UncheckedFrom,
-	},
+	crypto::{ByteArray, CryptoType, Derive, Public as TraitPublic, UncheckedFrom},
 	hash::{H384, H768},
 };
 
@@ -92,10 +89,6 @@ const PUBLIC_KEY_SERIALIZED_SIZE: usize = 48;
 
 // Signature serialized size
 const SIGNATURE_SERIALIZED_SIZE: usize = 96;
-
-// TODO DAVXY REMOVE-ME (REMOVED FROM UPSTREAM)
-/// Temporary crypto id
-pub const TEMPORARY_CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"TEMP");
 
 /// A secret seed.
 ///
@@ -306,25 +299,9 @@ impl<'de, T: BlsBound> Deserialize<'de> for Public<T> {
 	}
 }
 
-impl<T: BlsBound> TraitPublic for Public<T> {
-	fn to_public_crypto_pair(&self) -> CryptoTypePublicPair {
-		CryptoTypePublicPair(TEMPORARY_CRYPTO_ID, self.to_raw_vec())
-	}
-}
+impl<T: BlsBound> TraitPublic for Public<T> {}
 
 impl<T> Derive for Public<T> {}
-
-impl<T> From<Public<T>> for CryptoTypePublicPair {
-	fn from(key: Public<T>) -> Self {
-		(&key).into()
-	}
-}
-
-impl<T> From<&Public<T>> for CryptoTypePublicPair {
-	fn from(key: &Public<T>) -> Self {
-		CryptoTypePublicPair(TEMPORARY_CRYPTO_ID, key.to_raw_vec())
-	}
-}
 
 impl<T: BlsBound> CryptoType for Public<T> {
 	#[cfg(feature = "full_crypto")]
