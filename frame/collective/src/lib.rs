@@ -557,7 +557,7 @@ pub mod pallet {
 			}
 		}
 
-		// Index 4 was `close_old_weight`
+		// Index 4 was `close_old_weight`; it was removed due to weights v1 deprecation.
 
 		/// Disapprove a proposal, close, and remove it from the system, regardless of its current
 		/// state.
